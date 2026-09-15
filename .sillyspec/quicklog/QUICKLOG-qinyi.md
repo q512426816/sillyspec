@@ -274,3 +274,18 @@
 状态：进行中
 关联变更：（无）
 文件：（见实际改动）
+
+## ql-20260915-005-d3e7 | 2026-09-15 11:51:49 | 修复 knowledge 命令 flag-as-value 参数缺陷并清理 INDEX 垃圾路由
+状态：已完成
+关联变更：（无）
+文件：
+- src/knowledge-classify.js（pick() 增 flag-as-value 防护，flag_as_value 报错拦截（坑 knowledge-flag-as-value））
+- src/stages/knowledge.js（search/inspect 同型防护 + validate 新增 flag_like_keyword 告警）
+- .sillyspec/knowledge/INDEX.md（重写 9 条字面量 --file 垃圾路由关键词（a49e7a5 引入），锚点不动）
+- test/knowledge-classify.test.mjs（Test 13 flag-as-value 拦截回归）
+- test/knowledge-validate-uncategorized.test.mjs（flag_like_keyword 告警用例）
+需求：修复 knowledge 命令 flag-as-value 参数缺陷并清理 INDEX 垃圾路由
+根因：pick() 朴素 indexOf 取值把紧跟 flag 当 --keywords 值，字面量 --file 被写成 INDEX 路由行关键词（a49e7a5 实证 9 条），validate 对其放行，且污染 execute/quick 的知识注入匹配
+方案：classify 五个取值参数（--ql/--title/--file/--section/--keywords）统一 flag_as_value 报错拦截；search/inspect 值以 -- 开头按缺参处理；validate 新增 flag_like_keyword 告警；按条目正文重写 9 条存量路由关键词；补 3 组回归测试
+结果：classify 84/84、validate 8/8 单跑绿；全量 npm test 485/0（scan-refresh/scan-staleness 并发假红被串行复核吸收，既有已知 flake）；lint 622 文件 0 告警；CLI 实测五项行为符合预期（垃圾路由消除、validate 0 告警、classify 拦截、search 缺参报错、新关键词可检索）
+审计：[gate] L1（跨 2 模块 · 5 文件：2 代码/2 测试）advisory；每文件注记已全覆盖；测试增量已含

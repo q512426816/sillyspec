@@ -423,6 +423,42 @@ console.log('\n=== Test 12: --file 路径归一容错 ===')
   } finally { clean(base) }
 }
 
+// ── Test 13: CLI flag-as-value 拦截（坑 knowledge-flag-as-value，2026-09-15 实证） ──
+// 事故形态：--keywords 后紧跟 --file，朴素 indexOf 把 flag 当值 → 字面量 '--file' 写成
+// INDEX 路由行关键词（a49e7a5 产生 9 条垃圾路由）。锁：显式报错拦截 + 零写盘 + 正常调用不受影响
+console.log('\n=== Test 13: flag-as-value 参数拦截 ===')
+{
+  const base = setup('t13')
+  try {
+    const knowledgeDir = makeKnowledge(base)
+    const opts = { specDir: base }
+    const before = {
+      uncat: read(join(knowledgeDir, 'uncategorized.md')),
+      idx: read(join(knowledgeDir, 'INDEX.md')),
+      ki: read(join(knowledgeDir, 'known-issues.md')),
+    }
+
+    const out = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeClassify(base, ['--ql', 'ql-20260901-001-ab12', '--keywords', '--file', 'known-issues.md'], opts)))
+    assert(out.ok === false && out.error.code === 'flag_as_value' && out.error.flag === '--keywords',
+      '--keywords 后紧跟 flag → flag_as_value 报错并指明参数名')
+    assert(read(join(knowledgeDir, 'uncategorized.md')) === before.uncat
+      && read(join(knowledgeDir, 'INDEX.md')) === before.idx
+      && read(join(knowledgeDir, 'known-issues.md')) === before.ki,
+      '拦截发生在写盘前：三个知识文件字节不变')
+    assert(!existsSync(join(base, '.runtime', 'knowledge-hits.jsonl')), '失败路径零审计')
+
+    const out2 = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeClassify(base, ['--ql', '--dry-run', '--file', 'known-issues.md'], opts)))
+    assert(out2.ok === false && out2.error.code === 'flag_as_value' && out2.error.flag === '--ql',
+      '--ql 后紧跟 flag 同样被拦截（五个取值参数统一防护）')
+
+    const out3 = JSON.parse(await captureOutput(() =>
+      cmdKnowledgeClassify(base, ['--ql', 'ql-20260901-001-ab12', '--file', 'known-issues.md', '--dry-run'], opts)))
+    assert(out3.ok === true && out3.dryRun === true, '正常调用不受影响（布尔 flag --dry-run 照常）')
+  } finally { clean(base) }
+}
+
 // ── 汇总 ──
 console.log(`\n${'='.repeat(40)}`)
 console.log(`knowledge-classify tests: ${passed} passed, ${failed} failed, ${passed + failed} total`)

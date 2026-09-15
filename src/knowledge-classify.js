@@ -316,9 +316,28 @@ export async function cmdKnowledgeClassify(dir, args, opts = {}) {
   const base = opts.specDir || join(dir, '.sillyspec')
   const knowledgeDir = join(base, 'knowledge')
 
+  // flag-as-value 防护（坑 knowledge-flag-as-value，2026-09-15 实证）：朴素 indexOf 取值会把
+  // 紧随的 flag 当本参数值（--keywords --file known-issues.md → 关键词写成字面量 '--file'
+  // 落进 INDEX 路由行，a49e7a5 批量迁移产生 9 条垃圾路由且 validate 放行）。值以 '--' 开头
+  // 一律视为漏传，由下方统一报错拦截——不静默降级成标题分词（会掩盖调用方参数错误）。
   const pick = (name) => {
     const i = args.indexOf(name)
-    return i >= 0 && args[i + 1] ? args[i + 1] : ''
+    const v = i >= 0 ? args[i + 1] : ''
+    return v && !v.startsWith('--') ? v : ''
+  }
+  const flagAsValue = ['--ql', '--title', '--file', '--section', '--keywords']
+    .find(name => {
+      const i = args.indexOf(name)
+      return i >= 0 && args[i + 1] !== undefined && String(args[i + 1]).startsWith('--')
+    })
+
+  if (flagAsValue) {
+    output(false, {}, {
+      code: 'flag_as_value',
+      flag: flagAsValue,
+      message: `${flagAsValue} 的值缺失（后随 token 是 flag，不能作值）——请补参数值后重跑`,
+    })
+    return
   }
   const qlId = pick('--ql')
   const targetFile = pick('--file')

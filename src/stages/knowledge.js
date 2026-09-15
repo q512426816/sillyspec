@@ -76,10 +76,15 @@ function extractTitle(content) {
 
 export async function cmdSearch(dir, args, opts = {}) {
   const knowledgeDir = resolveKnowledgeDir(dir, opts.specDir)
+  // flag-as-value 防护（坑 knowledge-flag-as-value）：值以 '--' 开头视为漏传（只读命令，
+  // 按缺参处理落入既有 required 校验/默认值，不静默拿 flag 字面量当查询词）
   const queryIdx = args.indexOf('--query')
-  const query = queryIdx >= 0 && args[queryIdx + 1] ? args[queryIdx + 1] : ''
+  const queryRaw = queryIdx >= 0 ? args[queryIdx + 1] : ''
+  const query = queryRaw && !queryRaw.startsWith('--') ? queryRaw : ''
   const limitIdx = args.indexOf('--limit')
-  const limit = limitIdx >= 0 && args[limitIdx + 1] ? parseInt(args[limitIdx + 1]) : 10
+  const limitRaw = limitIdx >= 0 ? args[limitIdx + 1] : ''
+  const parsedLimit = limitRaw && !limitRaw.startsWith('--') ? parseInt(limitRaw, 10) : NaN
+  const limit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10
 
   if (!query) {
     output(false, {}, '--query is required')
@@ -130,8 +135,10 @@ export async function cmdSearch(dir, args, opts = {}) {
 
 export async function cmdInspect(dir, args, opts = {}) {
   const knowledgeDir = resolveKnowledgeDir(dir, opts.specDir)
+  // flag-as-value 防护同 cmdSearch（坑 knowledge-flag-as-value）
   const idIdx = args.indexOf('--id')
-  const id = idIdx >= 0 && args[idIdx + 1] ? args[idIdx + 1] : ''
+  const idRaw = idIdx >= 0 ? args[idIdx + 1] : ''
+  const id = idRaw && !idRaw.startsWith('--') ? idRaw : ''
 
   if (!id) {
     output(false, {}, '--id is required')
@@ -212,6 +219,20 @@ export async function cmdValidate(dir, args, opts = {}) {
           path: join('knowledge', entry.file),
           referenced_in: 'INDEX.md',
           display: entry.display,
+        })
+      }
+    }
+
+    // 2b. flag 形态关键词（坑 knowledge-flag-as-value）：classify 曾把 flag-as-value 的
+    // 字面量 '--file' 写进路由行——目标文件存在、行格式合法，既有检查放行，此处补侦测
+    for (const entry of entries) {
+      const flagKw = entry.keywords.find(kw => kw.startsWith('--'))
+      if (flagKw) {
+        warnings.push({
+          code: 'flag_like_keyword',
+          path: 'knowledge/INDEX.md',
+          display: entry.display,
+          keyword: flagKw,
         })
       }
     }

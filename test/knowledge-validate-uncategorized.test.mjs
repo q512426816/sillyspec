@@ -3,7 +3,9 @@
  *
  * uncategorized.md 是暂存区语义：条目归类即迁出（knowledge classify），永不注册 INDEX 路由——
  * validate 把它当未注册文件告警是误报（2026-09-14 knowledge-loop-close verify 遗留观察①）。
- * 本测试锁：①uncategorized.md 不再产生 unregistered_file 警告；②正常未注册文件仍告警（豁免不扩大）。
+ * 本测试锁：①uncategorized.md 不再产生 unregistered_file 警告；②正常未注册文件仍告警（豁免不扩大）；
+ * ③INDEX 路由行关键词为 flag 形态（如 classify flag-as-value 事故写出的字面量 '--file'，
+ * 坑 knowledge-flag-as-value）→ flag_like_keyword 告警。
  */
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -27,7 +29,7 @@ const runValidate = (root) => JSON.parse(execFileSync(process.execPath,
   { encoding: 'utf8', cwd: root }))
 
 describe('knowledge validate uncategorized 豁免', () => {
-  const a = makeSpecRoot(), b = makeSpecRoot(), c = makeSpecRoot()
+  const a = makeSpecRoot(), b = makeSpecRoot(), c = makeSpecRoot(), d = makeSpecRoot()
   it('uncategorized.md 存在且未注册 → 无 unregistered_file 警告', () => {
     writeFileSync(join(a.kd, 'uncategorized.md'), '---\nauthor: t\n---\n# 未分类知识\n', 'utf8')
     const r = runValidate(a.root)
@@ -43,5 +45,16 @@ describe('knowledge validate uncategorized 豁免', () => {
     const r = runValidate(c.root)
     assert.deepEqual(r.warnings, [])
   })
-  for (const x of [a, b, c]) it('teardown ' + x.root.slice(-6), () => rmSync(x.root, { recursive: true, force: true }))
+  it('INDEX 路由行关键词为 flag 形态 → flag_like_keyword 告警', () => {
+    writeFileSync(join(d.kd, 'known-issues.md'), '---\nauthor: t\n---\n# K\n\n## X\n\n正文。\n', 'utf8')
+    writeFileSync(join(d.kd, 'INDEX.md'),
+      '---\nauthor: t\ncreated_at: 2026-09-15T00:00:00+08:00\n---\n\n# Knowledge Index\n\n## Known Issues\n- --file → [known-issues.md#X](known-issues.md#X)\n', 'utf8')
+    const r = runValidate(d.root)
+    const w = r.warnings.find(x => x.code === 'flag_like_keyword')
+    assert.ok(w, `应报 flag_like_keyword：${JSON.stringify(r.warnings)}`)
+    assert.equal(w.keyword, '--file')
+    assert.equal(w.display, 'known-issues.md#X')
+    assert.equal(r.ok, true, '告警不阻断（validate 只报不拦）')
+  })
+  for (const x of [a, b, c, d]) it('teardown ' + x.root.slice(-6), () => rmSync(x.root, { recursive: true, force: true }))
 })

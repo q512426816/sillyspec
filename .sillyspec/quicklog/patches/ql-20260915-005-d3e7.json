@@ -1,0 +1,95 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-53f07c19",
+  "totals": {
+    "files": 5,
+    "additions": 105,
+    "deletions": 16
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/knowledge/INDEX.md",
+      "declared": true,
+      "additions": 9,
+      "deletions": 9,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/knowledge-classify.js",
+      "declared": true,
+      "additions": 20,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/knowledge.js",
+      "declared": true,
+      "additions": 24,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knowledge-classify.test.mjs",
+      "declared": true,
+      "additions": 36,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knowledge-validate-uncategorized.test.mjs",
+      "declared": true,
+      "additions": 16,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 5,
+    "codeFileCount": 2,
+    "testFileCount": 2,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/knowledge-classify.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/knowledge.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/knowledge-classify.test.mjs",
+      "test/knowledge-validate-uncategorized.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260915-005-d3e7",
+  "sessionId": "quick-53f07c19",
+  "savedAt": "2026-09-15T04:02:32.566Z",
+  "patchSha256": "86ede6d6fffe8f449c0eae6b716b96f2e01d3b73186aedaeaf3c211783641ae2",
+  "patchStatus": "ok"
+}
