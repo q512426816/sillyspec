@@ -137,6 +137,14 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'worktree',
+      title: 'worktree 生成物供给',
+      note: 'gitignore 生成物（如构建期产出的 src/build-id.ts）不在 git 树也不进 untracked overlay（ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸 Failed to load url——create 期按本清单从主仓复制供给（2026-09-15-worktree-dual-truth-gates 坑③，D-003@v1）。块列表或 inline flow 数组均可解析。',
+      keys: [
+        { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
+      ],
+    },
+    {
       id: 'auto_mode',
       title: '变更规模自动分类',
       note: 'sillyspec run auto 时，readAutoModeFromLocalYaml 读本段传 classifyChange 的 localConfig，force_*_patterns 匹配需求描述则强制对应模式。',
@@ -348,6 +356,12 @@ worktree-hook:
   readonlyCommands:
     - rg
     - fd
+
+# ── worktree 生成物供给（gitignore 生成物不随 git 树/untracked overlay 进 worktree，create 期从主仓复制）──
+# 精确路径或 glob（* 单层 / ** 多层），相对仓根；展开上限 200 文件超出截断警告；缺省不供给零行为变化。
+# worktree:
+#   supplyFiles:
+#     - src/build-id.ts
 
 # ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
 auto_mode:

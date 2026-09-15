@@ -16,7 +16,10 @@ import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape, sweepFo
 import { resolveRuntimeRoot } from './run/shared.js';
 import { writeAtomicSync } from './fs-atomic.js';
 import { openDatabase } from './db-engine.js';
-import { git, gitQuiet } from './git-helper.js';
+import { git, gitQuiet, unquoteGitPath } from './git-helper.js';
+// foreign-declared 零环独立模块（仅依赖 change-list/git-helper/stages/plan-postcheck，
+// 链上无回边）——contract-matrix/verify-probes/task-review 等处已有同款 import 先例
+import { splitOwnVsForeignDiffFiles } from './foreign-declared.js';
 
 // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
 // 必须原子写：半截 JSON 会让 getMeta 返回 null → 触发幽灵 worktree 强删（可能丢 gitignored 改动）。
@@ -42,6 +45,85 @@ function _chunkPathsPrivate(paths, maxChars = 8000) {
     len += l
   }
   return batches
+}
+
+// ── supplyFiles 生成物供给（坑③ / FR-03 / D-003@v1）──
+// .gitignore 生成物（如 src/build-id.ts）不在 git 树也不进 untracked overlay
+// （ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸
+// Failed to load url——create step 5.9 按 local.yaml worktree.supplyFiles 从主仓复制供给。
+const SUPPLY_FILES_MAX = 200;     // R-04 展开上限帽：超出警告并截断（防 dist/** 类误配展开风暴）
+const SUPPLY_WALK_MAX_DEPTH = 6;  // glob 枚举递归深度帽（跳过 node_modules/.git 后的务实兜底）
+
+/**
+ * supplyFiles glob → 锚定全路径的 RegExp（自实现，零新依赖——D-003@v1）。
+ * 分隔符统一 /；正则元字符先转义，再还原通配语义：** → .*（跨层）、* → [^/]*（单层）。
+ * @param {string} pattern 相对仓根的 glob（如 src/build-*.ts、dist/** 、gen 目录多层 id.ts）
+ * @returns {RegExp} 锚定（^…$）的全路径匹配
+ */
+function supplyGlobToRegExp(pattern) {
+  const norm = String(pattern).replace(/\\/g, '/');
+  let re = '^';
+  for (let i = 0; i < norm.length; i++) {
+    const ch = norm[i];
+    if (ch === '*' && norm[i + 1] === '*') { re += '.*'; i++; }
+    else if (ch === '*') re += '[^/]*';
+    else re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(re + '$');
+}
+
+/**
+ * 读主仓 .sillyspec/local.yaml 的 worktree.supplyFiles（string[]）。
+ * 沿 hooks/worktree-guard.js parseSimpleYaml 同款轻量手写解析（本文件不引新 reader）：
+ * 只取这一个白名单键路径（worktree: 段 → supplyFiles: 子键 → 缩进块列表 / inline flow 数组），
+ * 其余段一概不碰（无原型污染面）。文件缺失/解析异常/形态不符 → []（供给步空转，fail-open）。
+ * @param {string} mainCwd 主仓根
+ * @returns {string[]} 供给清单（配置原文，未展开）
+ */
+function readSupplyFilesConfig(mainCwd) {
+  let content;
+  try {
+    content = readFileSync(join(mainCwd, '.sillyspec', 'local.yaml'), 'utf8');
+  } catch {
+    return [];
+  }
+  const items = [];
+  const stripQuotes = (v) => (
+    v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) ? v.slice(1, -1) : v
+  );
+  let inWorktree = false;
+  let inList = false;
+  for (const raw of content.split('\n')) {
+    const noComment = raw.replace(/\s+#.*$/, ''); // 尾注释剥离（与 worktree-guard 同口径）
+    const trimmed = noComment.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const indent = noComment.length - noComment.trimStart().length;
+    if (indent === 0) {
+      inWorktree = /^worktree:\s*$/.test(trimmed); // worktree-hook: 等其他段不误入
+      inList = false;
+      continue;
+    }
+    if (!inWorktree) continue;
+    if (indent === 2) {
+      const m = trimmed.match(/^supplyFiles:\s*(.*)$/);
+      if (!m) { inList = false; continue; }
+      inList = true;
+      const rest = m[1].trim();
+      if (rest.startsWith('[') && rest.endsWith(']')) {
+        // inline flow 数组（supplyFiles: [a, b]）——块列表之外的另一种常见写法，一并兼容
+        for (const part of rest.slice(1, -1).split(',')) {
+          const v = stripQuotes(part.trim());
+          if (v) items.push(v);
+        }
+      }
+      continue;
+    }
+    if (inList && trimmed.startsWith('- ')) {
+      const v = stripQuotes(trimmed.slice(2).trim());
+      if (v) items.push(v);
+    }
+  }
+  return items;
 }
 
 /**
@@ -722,7 +804,8 @@ export class WorktreeManager {
     printSyncReport(syncDiagnostic, baseHash, name);
 
     // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
-    const baselineResult = this._overlayBaseline(this.cwd, worktreePath);
+    // （传变更名启用并行会话声明隔离——他者在途文件不进本变更 baseline，D-001@v1）
+    const baselineResult = this._overlayBaseline(this.cwd, worktreePath, name);
     const baselineFiles = baselineResult.files;
     const baselineHash = baselineResult.baselineHash;
 
@@ -746,6 +829,18 @@ export class WorktreeManager {
       deps = { depsStatus: 'failed', depsError: `provisionDeps crashed: ${e.message}` };
     }
 
+    // 5.9 生成物供给（坑③ / FR-03 / D-003@v1）：.gitignore 生成物不在 git 树也不进 untracked
+    // overlay（ls-files --exclude-standard 遵循 .gitignore），worktree 缺失致构建炸
+    // Failed to load url——按 local.yaml worktree.supplyFiles 从主仓复制供给，实供清单记
+    // meta.supplyFiles。未配置时供给步空转零行为变化；供给物天然不进 assess/apply 面。
+    let suppliedFiles = [];
+    try {
+      suppliedFiles = this._supplyGeneratedFiles(worktreePath);
+    } catch (e) {
+      // fail-open：供给步整体异常只警告，绝不阻断 create（R-04 约束）
+      console.warn(`⚠️ worktree supplyFiles 供给步异常（fail-open 不阻断 create）：${e.message}`);
+    }
+
     // 6. 写入 meta.json
     const meta = {
       name_zh: 'worktree 元数据',
@@ -767,6 +862,8 @@ export class WorktreeManager {
       depsLockHash: deps.depsLockHash || null,
       depsCheckedAt: deps.depsCheckedAt || null,
       ...(deps.depsError ? { depsError: deps.depsError } : {}),
+      // 5.9 实供清单（纯记录面，doctor/审计可读；空供给省略字段——存量 meta 缺省兼容）
+      ...(suppliedFiles.length > 0 ? { supplyFiles: suppliedFiles } : {}),
       ...(adoptedBranch ? { adoptedBranch: true } : {}),
     };
 
@@ -865,7 +962,7 @@ export class WorktreeManager {
       baseHash = git(this.cwd, ['rev-parse', 'HEAD']);
     }
 
-    const baselineResult = this._overlayBaseline(this.cwd, this.cwd);
+    const baselineResult = this._overlayBaseline(this.cwd, this.cwd, name);
     const baselineFiles = baselineResult.files;
     const baselineHash = baselineResult.baselineHash;
 
@@ -902,6 +999,117 @@ export class WorktreeManager {
     writeMetaAtomic(metaPath, meta);
 
     return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode };
+  }
+
+  /**
+   * 生成物供给步（create step 5.9，坑③ / FR-03 / D-003@v1）。
+   *
+   * 读主仓 local.yaml 的 worktree.supplyFiles（string[]，精确路径 + glob * 单层 / ** 多层，
+   * 相对仓根），主仓侧展开枚举后逐文件复制进 worktree（mkdir 父目录 + copyFileSync）。
+   * 约束：
+   * - 未配置 / 零匹配：完全静默空转（零行为变化）；glob 零命中按缺失警告（不阻断）。
+   * - 展开上限帽 SUPPLY_FILES_MAX=200：超出警告并截断（R-04，防 dist/** 误配展开风暴）。
+   * - 单文件复制异常：warn 后继续，绝不阻断 create（fail-open，不回滚已复制文件）。
+   * - 目标已存在且内容不同：警告后覆盖（baseline overlay / 已检出版本可能已在场）。
+   * - 枚举跳过 node_modules/.git，递归深度帽 SUPPLY_WALK_MAX_DEPTH=6；匹配源只列文件
+   *   （statSync 跟随 junction/symlink，与供给语义一致）。
+   * - 供给物是 gitignore 物，天然不进 assess/apply 面（ls-files --exclude-standard），无需过滤。
+   *
+   * @private
+   * @param {string} worktreePath worktree 根目录（源恒为主仓 this.cwd）
+   * @returns {string[]} 实供清单（POSIX 相对路径，写入 meta.supplyFiles）
+   */
+  _supplyGeneratedFiles(worktreePath) {
+    const patterns = readSupplyFilesConfig(this.cwd);
+    if (!Array.isArray(patterns) || patterns.length === 0) return [];
+    const mainCwd = this.cwd;
+    const matches = []; // 展开命中（去重后，跨配置项合并）
+    const missing = []; // 精确路径缺失 / glob 零命中 / 越界形态
+    const seen = new Set();
+    for (const raw of patterns) {
+      if (typeof raw !== 'string' || !raw.trim()) continue;
+      const pattern = raw.trim().replace(/\\/g, '/').replace(/^\.\//, '');
+      // 越界形态（绝对路径 / 盘符 / .. 段）不供给——供给面必须落在主仓根内
+      if (!pattern || pattern.startsWith('/') || /^[a-zA-Z]:/.test(pattern) || pattern.split('/').includes('..')) {
+        missing.push(pattern || JSON.stringify(raw));
+        continue;
+      }
+      if (!pattern.includes('*')) {
+        // 精确路径：直接查主仓存在性（只列文件）
+        let isFile = false;
+        try { isFile = statSync(join(mainCwd, pattern)).isFile(); } catch {}
+        if (isFile) {
+          if (!seen.has(pattern)) { seen.add(pattern); matches.push(pattern); }
+        } else {
+          missing.push(pattern);
+        }
+        continue;
+      }
+      // glob：静态前缀（首个含 * 段之前）作枚举根，正则锚定全路径匹配。
+      // 深度帽：** 限静态根下 SUPPLY_WALK_MAX_DEPTH 层；纯 * 模式路径段数固定，超段即停。
+      const segs = pattern.split('/');
+      let baseLen = 0;
+      while (baseLen < segs.length && !segs[baseLen].includes('*')) baseLen++;
+      const baseRel = segs.slice(0, baseLen).join('/');
+      const re = supplyGlobToRegExp(pattern);
+      const depthCap = pattern.includes('**') ? baseLen + SUPPLY_WALK_MAX_DEPTH : segs.length;
+      const found = [];
+      const walk = (absDir, relDir, segCount) => {
+        if (segCount >= depthCap) return;
+        let entries;
+        try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (e.name === 'node_modules' || e.name === '.git') continue;
+          const rel = relDir ? `${relDir}/${e.name}` : e.name;
+          if (e.isDirectory()) {
+            walk(join(absDir, e.name), rel, segCount + 1);
+            continue;
+          }
+          let isFile = false;
+          try { isFile = statSync(join(absDir, e.name)).isFile(); } catch {}
+          if (isFile && re.test(rel)) found.push(rel);
+        }
+      };
+      walk(join(mainCwd, baseRel), baseRel, baseLen);
+      if (found.length === 0) {
+        missing.push(pattern); // glob 零命中同缺失口径（GWT-2）
+        continue;
+      }
+      for (const rel of found) {
+        if (!seen.has(rel)) { seen.add(rel); matches.push(rel); }
+      }
+    }
+    if (missing.length > 0) {
+      console.warn(`⚠️ worktree supplyFiles 主仓侧未命中 ${missing.length} 项（不阻断 create，按需核对清单）：${missing.join('、')}`);
+    }
+    // R-04 展开上限帽：排序保截断稳定可复现
+    matches.sort();
+    const capped = matches.slice(0, SUPPLY_FILES_MAX);
+    if (matches.length > SUPPLY_FILES_MAX) {
+      console.warn(`⚠️ worktree supplyFiles 展开命中 ${matches.length} 文件超上限 ${SUPPLY_FILES_MAX}，已截断只供给前 ${SUPPLY_FILES_MAX}（检查 glob 是否误配，如 dist/** 全量展开）`);
+    }
+    const supplied = [];
+    for (const rel of capped) {
+      const srcAbs = join(mainCwd, rel);
+      const dstAbs = join(worktreePath, rel);
+      try {
+        if (existsSync(dstAbs)) {
+          // 目标已存在且内容不同 → 警告后覆盖（内容比对失败不拦复制）
+          try {
+            if (!readFileSync(dstAbs).equals(readFileSync(srcAbs))) {
+              console.warn(`⚠️ worktree supplyFiles 覆盖 worktree 内已存在且内容不同的文件：${rel}`);
+            }
+          } catch {}
+        }
+        mkdirSync(dirname(dstAbs), { recursive: true });
+        copyFileSync(srcAbs, dstAbs);
+        supplied.push(rel);
+      } catch (e) {
+        // fail-open：单文件复制异常 warn 继续，不回滚已复制文件（R-04 约束）
+        console.warn(`⚠️ worktree supplyFiles 复制失败（跳过继续）：${rel} — ${e.message}`);
+      }
+    }
+    return supplied;
   }
 
   /**
@@ -1899,11 +2107,18 @@ export class WorktreeManager {
    * baseline，apply 回 main 即随本变更交付，需人工隔离。spec 文档不参与 worktree 内
    * 构建/测试（execute 的 spec 读写经 specDriftAnchor 锚回主仓），排除零功能损失；
    * 排除清单显式打印保持可见（哪些跨变更文件被隔离、去哪了）。
+   *
+   * 并行会话声明隔离（坑 execute-baseline-overlay-carries-broken-parallel-wip，D-001@v1）：
+   * changeName 非空时，他者**显式声明**（他 quick 会话 guard.allowedFiles / 他变更 design
+   * §6，own 优先）的在途文件三道剔除——staged/unstaged patch 道 :(exclude) pathspec 收窄
+   * （worktree 保持基线 HEAD 版本）、untracked 道不复制；隔离清单（文件←归属者）显式打印
+   * 一行。oracle 异常 fail-open 退回现状全量 overlay，绝不让 create 抛错。
    * @param {string} mainCwd - 主工作区路径
    * @param {string} worktreePath - worktree 路径
+   * @param {string} [changeName] - 本变更名；缺省/空串不切分（存量两参直调路径零回归）
    * @returns {Array<string>} overlay 的文件列表
    */
-  _overlayBaseline(mainCwd, worktreePath) {
+  _overlayBaseline(mainCwd, worktreePath, changeName = null) {
     const files = [];
     const errors = [];
     // git pathspec 排除（execFileSync 数组传参不经 shell，字面安全）：.sillyspec/ 整目录
@@ -1914,18 +2129,53 @@ export class WorktreeManager {
         if (norm === '.sillyspec' || norm.startsWith('.sillyspec/')) excluded.push(f)
       }
     }
+    // quotepath 归一：diff --name-only / ls-files 输出的非 ASCII 路径带双引号包裹，
+    // 与声明集比对、生成 pathspec 排除串前先按 unquoteGitPath 口径剥引号再反斜杠→正斜杠
+    const normalizeGitPath = (raw) => {
+      let p = raw;
+      if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) p = unquoteGitPath(p.slice(1, -1));
+      return p.replace(/\\/g, '/');
+    }
+    const isSpecPath = (n) => n === '.sillyspec' || n.startsWith('.sillyspec/');
+    // 他者声明文件的每道切分（staged/unstaged/untracked 各调一次，非逐文件）：
+    // 对该道全量输出的非 .sillyspec 集跑 own/foreign oracle，foreign → pathspec 排除串 +
+    // Map（路径→owners[]）+ 隔离明细；oracle 抛错 fail-open 退回该道全量（不阻断 create）
+    const foreignIsolated = []; // 「文件←归属者」明细（三道汇总，尾部去重打印）
+    const splitForeignLane = (rawAll) => {
+      const excludeSpecs = [];
+      const foreignSet = new Map();
+      if (!changeName) return { excludeSpecs, foreignSet };
+      try {
+        const candidates = rawAll.split('\n').filter(Boolean).map(normalizeGitPath).filter(n => !isSpecPath(n));
+        if (candidates.length === 0) return { excludeSpecs, foreignSet };
+        const { foreign } = splitOwnVsForeignDiffFiles(mainCwd, changeName, candidates);
+        for (const e of foreign) {
+          foreignSet.set(e.file, e.owners);
+          // 剥引号后的实际路径入 pathspec（git() 数组传参字面安全，与 :(exclude).sillyspec 同机制）
+          excludeSpecs.push(':(exclude)' + e.file);
+          foreignIsolated.push(`${e.file}←${e.owners.join(',')}`);
+        }
+      } catch (e) {
+        console.warn(`⚠️ baseline overlay 并行会话声明切分失败（${e.message}），本道退回全量 overlay`);
+      }
+      return { excludeSpecs, foreignSet };
+    }
 
     try {
       const excludedSpecFiles = [];
-      // staged 变更（pathspec 排除 .sillyspec/——跨变更 spec 文档不进 baseline）
-      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only', '--', '.', EXCLUDE_PATHSPEC], { timeout: 30000 }) || ''
+      // staged 变更（pathspec 排除 .sillyspec/——跨变更 spec 文档不进 baseline；
+      // 他者声明文件切分后一并排除，--name-only 与 --binary 两组 diff 命令同步收窄，
+      // files 清单只收 own——staged 输出即已剔除 foreign 的剩余部分）
       const stagedAll = gitQuiet(mainCwd, ['diff', '--cached', '--name-only'], { timeout: 30000 }) || ''
       collectExcluded(stagedAll, excludedSpecFiles)
+      const stagedForeign = splitForeignLane(stagedAll)
+      const stagedPathspec = ['--', '.', EXCLUDE_PATHSPEC, ...stagedForeign.excludeSpecs]
+      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only', ...stagedPathspec], { timeout: 30000 }) || ''
       if (staged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
           // QUAL-01 收口：git-helper 新增 encoding:'buffer' 支持（二进制输出专用，跳过 trim）
-          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary', '--', '.', EXCLUDE_PATHSPEC], { encoding: 'buffer', timeout: 30000 });
+          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary', ...stagedPathspec], { encoding: 'buffer', timeout: 30000 });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
             try {
@@ -1943,14 +2193,16 @@ export class WorktreeManager {
         files.push(...staged.split('\n').filter(Boolean));
       }
 
-      // unstaged 变更（同上 pathspec 排除）
-      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only', '--', '.', EXCLUDE_PATHSPEC], { timeout: 30000 }) || ''
+      // unstaged 变更（同上 pathspec 排除 + 他者声明剔除；--binary 不带 --cached）
       const unstagedAll = gitQuiet(mainCwd, ['diff', '--name-only'], { timeout: 30000 }) || ''
       collectExcluded(unstagedAll, excludedSpecFiles)
+      const unstagedForeign = splitForeignLane(unstagedAll)
+      const unstagedPathspec = ['--', '.', EXCLUDE_PATHSPEC, ...unstagedForeign.excludeSpecs]
+      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only', ...unstagedPathspec], { timeout: 30000 }) || ''
       if (unstaged) {
         try {
           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏（QUAL-01 收口，同上）
-          const patchBuf = git(mainCwd, ['diff', '--binary', '--', '.', EXCLUDE_PATHSPEC], { encoding: 'buffer', timeout: 30000 });
+          const patchBuf = git(mainCwd, ['diff', '--binary', ...unstagedPathspec], { encoding: 'buffer', timeout: 30000 });
           if (patchBuf && patchBuf.length > 0) {
             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
             try {
@@ -1971,6 +2223,8 @@ export class WorktreeManager {
       const untracked = gitQuiet(mainCwd, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '';
       const skippedDirs = [];
       const skippedArtifacts = [];
+      // untracked 道 foreign 切分（一次全量非 .sillyspec 集，循环内仅 Map 查询）
+      const untrackedForeign = splitForeignLane(untracked)
       if (untracked) {
         for (const f of untracked.split('\n').filter(Boolean)) {
           const norm = f.replace(/\\/g, '/')
@@ -1979,6 +2233,9 @@ export class WorktreeManager {
           // baseline checkpoint——289MB tar.gz 入分支（FF 破坏 + 二进制永久入 git）的实际代价兜底
           const artifactWhy = isCheckpointSkippableArtifact(join(mainCwd, f));
           if (artifactWhy) { skippedArtifacts.push(`${f}（${artifactWhy}）`); continue }
+          // 他者会话声明的在途文件不复制（与 skipped-dir/artifact 同型跳过；明细已在切分时
+          // 计入隔离清单）——quotepath 引号路径先剥引号归一再比对
+          if (untrackedForeign.foreignSet.has(normalizeGitPath(f))) continue;
           const r = copyUntrackedEntry(join(mainCwd, f), join(worktreePath, f));
           if (r.status === 'copied') files.push(f);
           else if (r.status === 'skipped-dir') skippedDirs.push(f);
@@ -1998,6 +2255,13 @@ export class WorktreeManager {
       if (excludedUnique.length > 0) {
         const preview = excludedUnique.slice(0, 8).join(', ') + (excludedUnique.length > 8 ? ` …（共 ${excludedUnique.length} 个）` : '')
         console.log(`🧹 baseline overlay 已隔离 ${excludedUnique.length} 个 .sillyspec/ 未提交文件（跨变更 spec 文档不进本变更 baseline，留在主仓各自归属）：${preview}`)
+      }
+      // 并行会话声明隔离可见性：foreign 文件去重截断一行（对齐上方 .sillyspec/ 隔离打印
+      // 样式）——哪些在途文件被隔离、归属谁，create 时刻可查，不需事后考古
+      const foreignUnique = [...new Set(foreignIsolated)]
+      if (foreignUnique.length > 0) {
+        const preview = foreignUnique.slice(0, 8).join(', ') + (foreignUnique.length > 8 ? ` …（共 ${foreignUnique.length} 个）` : '')
+        console.log(`🧹 baseline overlay 已隔离 ${foreignUnique.length} 个并行会话声明的在途文件（worktree 取基线 HEAD 版本，不随本变更 apply）：${preview}`)
       }
 
       if (files.length > 0) {

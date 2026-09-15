@@ -1,0 +1,1644 @@
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index 2cb1946..e2227ab 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -953,3 +953,36 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent 
+ **护栏（立项方向，四条全在 sillyspec 管辖内、不涉拦裸 git）**：①change 所有权+心跳——changes 表记 owner（会话/pid），run 命令刷新心跳；apply/cleanup/archive 发现 owner 为另一活跃会话（心跳 N 分钟内）即拒绝，--takeover 显式接管留痕；②归档收口——worktree 有未 apply 交付物时归档硬拦（或锁内自动 apply），消灭悬空状态；③review 放行通道收紧——review 声明只放行与该 task allowed_paths/design 清单相交的文件，外来文件只报告不 admitted；④归因源切换——worktree 模式下 changedFiles 一律取 worktree 分支 diff，不看主仓脏窗口。行为侧规则即刻生效：归档后立即 apply+显式 pathspec 提交当固定第六步；并行会话不代劳他者 change（见残留提醒而不是动手）。
+ 
+ **证据**：时间线在 ql-20260914-015 会话（apply 报 worktree not found→git log 发现 09943ff 对方提交含本变更代码→grep HEAD 确认 collectActiveQuickGuardFiles/writeApplyManifest 在盘→仅提交归档命名空间 b89180f 收尾）；②的 11 文件清单在 apply 输出与 reconcile-result.json（.sillyspec/.runtime/verify-runs/20260914081048/）；ROADMAP「文件所有权登记」观察项的复潮证据挂本节两事件——证明的是 change 级所有权缺失（文件级+拦裸 git 仍不做）。
++
++## 66. 五坑：execute 双真相门禁口径（worktree 感知收敛）（2026-09-15 用户实证，已修复）
++
++**现象（五坑各一行，坑文档 `execute-baseline-overlay-carries-broken-parallel-wip`）**：execute 期改动在 apply 前只存在于 worktree，而五处门禁的判定基准仍锚在主仓或 worktree 的单一形态上（「双真相」判定基准漂移）——
++①**overlay 带入并行半成品**：create 的 baseline overlay 只排除 `.sillyspec/`，他 quick 会话/他变更语法坏的在途半成品被固化进本变更 baseline checkpoint，worktree 内 import 该文件链的测试全炸，人工「同步主仓修复版进 worktree」自救又连锁触发坑②；
++②**assess 把 no-op 判超范围**：主仓 HEAD 在 execute 期间前进后，worktree 内自救/重同步成主仓最新内容的文件对 baseline checkpoint diff 非空（apply 回主仓实为 no-op），被 assess 误判「变更文件超出 allowed_paths」恒 BLOCKED；
++③**gitignore 生成物不随 worktree 供给**：`src/build-id.ts` 类构建生成物不在 git 树也不进 untracked overlay（`ls-files --others --exclude-standard` 尊重 .gitignore），worktree 构建炸 `Failed to load url`；
++④**task 自动勾选漏计**：勾选守卫 `prefetchDiffFileSet` 只算 base..head（已提交），子代理默认不 commit 时 diffFileSet 恒空 → 草稿零 diff 守卫跳过全部勾选；同文件多 task 时 `attributeSuspectTasks`「首个命中即止」吞掉后续归属；
++⑤**required-evidence 误报不存在**：逐文件核验单查主仓 `join(cwd, vf)`，apply 前新文件只在 worktree → 「文件不存在」错误阻断 verify 完成。
++
++**修复口径（2026-09-15-worktree-dual-truth-gates，FR-01~05 / D-001~D-005@v1）**：
++①`_overlayBaseline` 第三参 changeName 启用 own/foreign oracle（`splitOwnVsForeignDiffFiles`）三道剔除——他 quick 会话 guard.allowedFiles / 他变更 design §6 声明（own 优先）的 staged/unstaged/untracked 在途文件不进 worktree（保留基线 HEAD 版本），隔离清单「文件←归属者」一行打印，`meta.baselineFiles` 与 checkpoint message 不含该文件；未声明与双方声明文件照常 overlay，oracle 异常 fail-open 退全量。
++②`applyWorktree` step 2 单点 choke point 调 `detectNoOpFiles`（worktree 工作区 `hash-object` vs 主仓 HEAD `ls-tree` blob，argv 分批对齐）：内容一致的文件从 changedFiles/deletedFiles/absentAfterMerge 剔除 + warnings 列 no-op 清单，apply 与 assess checkOnly 自动同口径；hash 失败保守不剔（宁可误报不误放行）。
++③local.yaml 新键 `worktree.supplyFiles`（精确路径 + glob `*` 单层 / `**` 多层，展开上限 200 超出截断警告）：create step 5.9 从主仓复制进 worktree（父目录按需创建），实供清单记 `meta.supplyFiles`；缺失 warn 不阻断；未配置供给步空转零行为变化。
++④`collectWorktreeChangedFiles`（task-review.js 单一真相 helper：porcelain 未提交 ∪ committed merge-base 补齐，in-place 退化取主仓 cwd）——勾选守卫与草稿归属并入段自此同口径，再剔 `meta.baselineFiles`（防「声明未做恰被 baseline checkpoint 夹带」误勾，防伪底线）；`attributeSuspectTasks` 改全命中收集（string[]），③类报告组装边界 join('、')，gates/archive-delta 下游零改动。
++⑤`runRequiredEvidenceCheckV2` 候选根 [主仓 cwd, worktree 根]（meta 解析与 resolveVerifyChangedFiles 同口径）：任一根存在即 filesExist=true，mtime 取命中根（双根都在取 worktree 根），核验明细带 root 字段；meta 缺失/in-place/损坏退单根（零回归）。
++
++**已知边界（两条）**：
++①**未声明在途文件仍可能带坏基线**——隔离面=显式声明面（guard.json / 他变更 design §6），他者未走声明的裸在途改动仍会进 baseline checkpoint（fail-closed 取舍：无主文件不放大放行面，语法校验属语言工具链不进 CLI）。绕过：把主仓 HEAD 版同步进 worktree（`git -C 主仓 show HEAD:<file> > <worktree>/<file>`）或等并行会话提交/收尾后再 create。
++②**resolveVerifyChangedFiles 内补齐段未统一**——verify-postcheck.js 内另有同型 porcelain∪committed 并入段（form A 专属变体：滤网保 `.sillyspec/docs/**` 交付物），与 `collectWorktreeChangedFiles` 口径同源但未收敛到 helper（R-09 残留），待该函数下次触碰时统一，两处现行为一致。
++
++**supplyFiles 配置示例**（坑③ `src/build-id.ts` 实案——构建期产出、.gitignore 排除、worktree 缺失即炸）：
++
++```yaml
++# .sillyspec/local.yaml
++worktree:
++  supplyFiles:
++    - src/build-id.ts   # 精确路径（相对仓根）
++    - gen/**/*.ts       # glob（* 单层 / ** 多层）；展开上限 200，超出截断并警告
++```
++
++**证据**：五坑实证与决策见 changes/2026-09-15-worktree-dual-truth-gates/（requirements FR-01~FR-05 GWT 对账 + decisions D-001~D-005@v1）；回归锁定 test/worktree-dual-truth-gates.test.mjs 五组用例（每组正向 + 零回归各至少一条）。
++
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 28e5426..693ce57 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -136,6 +136,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'worktree-hook.readonlyCommands', type: 'array', optional: true, status: 'live', readers: ['loadLocalConfig (src/hooks/worktree-guard.js)'], desc: '额外放行的只读命令名列表（如 rg/fd），绕过 worktree-guard 写操作拦截。', example: 'rg' },
+       ],
+     },
++    {
++      id: 'worktree',
++      title: 'worktree 生成物供给',
++      note: 'gitignore 生成物（如构建期产出的 src/build-id.ts）不在 git 树也不进 untracked overlay（ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸 Failed to load url——create 期按本清单从主仓复制供给（2026-09-15-worktree-dual-truth-gates 坑③，D-003@v1）。块列表或 inline flow 数组均可解析。',
++      keys: [
++        { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
++      ],
++    },
+     {
+       id: 'auto_mode',
+       title: '变更规模自动分类',
+@@ -349,6 +357,12 @@ worktree-hook:
+     - rg
+     - fd
+ 
++# ── worktree 生成物供给（gitignore 生成物不随 git 树/untracked overlay 进 worktree，create 期从主仓复制）──
++# 精确路径或 glob（* 单层 / ** 多层），相对仓根；展开上限 200 文件超出截断警告；缺省不供给零行为变化。
++# worktree:
++#   supplyFiles:
++#     - src/build-id.ts
++
+ # ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
+ auto_mode:
+   force_full_patterns:
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 601a644..f204f1a 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -23,7 +23,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { withFileLock } from '../quicklog.js'
+ import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
+-import { isExplicitReviewWrite } from '../task-review.js'
++import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
+ 
+ // auto 模式 brainstorm 步骤表感知解析（2026-09-08 E2E 实证 bug：--done/--wait 推进主模式 8 步表，
+ // 与 runAutoMode getAutoSteps 的 4 步 auto 表双轨互踩——ensureAutoStage 判非 auto 表重种清零，
+@@ -931,7 +931,11 @@ function readTaskCardText(changeDir, taskNum) {
+  * 用于 autoCheckPlanFromReviews（勾选层）和 detectExecuteBatchFinish（批量层）。
+  * 失败返回 null（调用方降级：勾选层不勾、批量层不过滤——向后兼容）。
+  *
+- * @returns {Promise<{gitDir:string, base:string, head:string}|null>}
++ * 2026-09-15-worktree-dual-truth-gates task-04（坑④/D-004@v1）：ctx 增透传 cwd/changeName/meta/
++ * baselineFiles——prefetchDiffFileSet 消费 collectWorktreeChangedFiles（与草稿归因同口径）并剔
++ * baseline 夹带。扩展字段对 shouldAutoCheckTask 只读 gitDir/base/head/diffFileSet 零影响。
++ *
++ * @returns {Promise<{gitDir:string, base:string, head:string, cwd:string, changeName:string, meta:object|null, baselineFiles:string[]}|null>}
+  */
+ async function buildDraftContext(cwd, changeName) {
+   try {
+@@ -952,7 +956,13 @@ async function buildDraftContext(cwd, changeName) {
+       }
+     }
+     if (base && head && gitDir) {
+-      return { gitDir, base, head }
++      return {
++        gitDir, base, head,
++        cwd, changeName,
++        meta: meta || null,
++        // baselineFiles 缺失/非数组按 [] 容错（prefetchDiffFileSet 剔除夹带用）
++        baselineFiles: Array.isArray(meta?.baselineFiles) ? meta.baselineFiles : [],
++      }
+     }
+     return null
+   } catch (e) {
+@@ -962,16 +972,39 @@ async function buildDraftContext(cwd, changeName) {
+ }
+ 
+ /**
+- * 预取 base..head 全量 diff 文件集（一次 git spawn），供草稿零 diff 守卫按 task 内存归属判定。
++ * 预取草稿零 diff 守卫用的全量 diff 文件集，供 shouldAutoCheckTask 按 task 内存归属判定。
+  * 此前每草稿 task 一次 `git diff --name-only base..head -- <files>`（同一对 base..head 查 N 次，
+- * 8 task ≈ 8-16 次串行 spawn）。失败返回 null → 调用方回退逐 task 实测路径。
++ * 8 task ≈ 8-16 次串行 spawn）。失败返回 ctx 原样 → 调用方回退逐 task 实测路径。
++ *
++ * 2026-09-15-worktree-dual-truth-gates task-04（坑④ worktree-tick-guard-commit-only / D-004@v1）：
++ * 单算 base..head（已提交）在子代理默认不 commit 时恒空/缺文件 → 守卫全跳过勾选。现并入
++ * collectWorktreeChangedFiles（task-review.js 单一真相：porcelain 未提交 ∪ committed
++ * merge-base 补齐，与草稿归因同口径），再剔 meta.baselineFiles（R-07 防伪底线：merge-base..
++ * wtHEAD 含 baseline checkpoint 提交，夹带文件=非本变更改动，不剔则「声明未做恰被夹带」的
++ * task 误勾）。全空时仍不设 diffFileSet（退回逐 task 实测路径，原语义）。
+  */
+ function prefetchDiffFileSet(ctx) {
+   if (!ctx?.gitDir || !ctx.base || !ctx.head) return ctx
+   try {
+     const out = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`], { trim: true })
+-    if (!out) return ctx
+-    return { ...ctx, diffFileSet: new Set(out.split('\n').filter(Boolean)) }
++    const diffFileSet = new Set(out ? out.split('\n').filter(Boolean) : [])
++    // D-004@v1 并入：porcelain 未提交 ∪ committed 补齐（helper 自身 fail-open，git 失败返 []
++    // → 退回 base..head 现状，不放大勾选面）；独立 try 防 helper 意外拖垮既有 base..head 集
++    try {
++      if (ctx.cwd && ctx.changeName) {
++        for (const f of collectWorktreeChangedFiles(ctx.cwd, ctx.changeName, ctx.meta)) {
++          if (f) diffFileSet.add(f)
++        }
++      }
++    } catch { /* helper 异常 → 退回 base..head 现状（fail-open） */ }
++    // 剔 baseline 夹带：按正斜杠归一 exact 匹配（两侧同 git 口径路径）；baselineFiles 缺失按 [] 容错
++    const baselineFiles = Array.isArray(ctx.baselineFiles) ? ctx.baselineFiles : []
++    for (const b of baselineFiles) {
++      const n = String(b).replace(/\\/g, '/').trim()
++      if (n) diffFileSet.delete(n)
++    }
++    if (diffFileSet.size === 0) return ctx
++    return { ...ctx, diffFileSet }
+   } catch {
+     return ctx
+   }
+diff --git a/src/task-review.js b/src/task-review.js
+index 8fa9a52..81282ff 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -1249,6 +1249,70 @@ function resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts =
+   return { mode: 'main-window', diffFiles: resolveVerifyChangedFiles(cwd, changeName, null, { specBase }), notes, meta, mergeGitDir }
+ }
+ 
++/**
++ * worktree/in-place 改动文件集：porcelain 未提交 ∪ committed merge-base 补齐——口径单一化。
++ * 口径出处：D-004@v1（worktree 归因唯一事实源 = worktree 分支 diff + porcelain，决策库
++ * decisions/worktree.md）+ 变更 2026-09-15-worktree-dual-truth-gates §4 / FR-04；坑④
++ * worktree-tick-guard-commit-only（2026-09-15 实证）：勾选守卫 prefetchDiffFileSet
++ * （run/complete.js）只算 base..head（已提交），子代理默认不 commit 时守卫恒空跳过勾选——
++ * 本 helper 是「草稿归属并入段（generateTaskReviewDrafts）」与「勾选守卫（prefetchDiffFileSet）」
++ * 两处的单一真相。已知残留 R-09：resolveVerifyChangedFiles（verify-postcheck.js）内另有同型
++ * 补齐段（form A 专属：滤网保 .sillyspec/docs/** 交付物，与本 helper 的整前缀滤网不同），
++ * 本次不动，待该函数下次触碰时统一。
++ *
++ * 行为契约：
++ *   - meta 缺省时内部 WorktreeManager.getMeta 自取（try/catch → null）。
++ *   - gitDir = meta.worktreePath（mode 非 in-place-fallback 且目录存在）否则 cwd——
++ *     in-place 退化取 cwd（保住现状 in-place 主仓 porcelain 并入，不丢，R-08）；
++ *     meta 完全缺失时同样取 cwd（与被并入段 mergeGitDir 语义一致）。
++ *   - porcelain：status --porcelain --untracked-files=all（parsePorcelainFiles 解析），
++ *     滤 .sillyspec 前缀（与被替换的草稿并入段同口径）。
++ *   - committed 补齐（仅 gitDir !== cwd，防双并）：merge-base(主仓 HEAD, wtHEAD)..wtHEAD
++ *     的 diff --name-only——worktree 内已 commit 的改动对主仓 base..head 与 status 双不可见
++ *     （「先提交则 diff 空」时序两难）；git 失败 fail-open 忽略。
++ *   - 返回正斜杠归一去重数组；任何 git 异常 → 已收集部分或 []（fail-open，不阻断调用方）。
++ *
++ * @param {string} cwd 主仓根
++ * @param {string} changeName 变更名
++ * @param {object|null} [meta] 预取的 worktree meta（缺省内部 getMeta 自取）
++ * @param {object} [opts] 预留（对齐 design 接口签名）
++ * @returns {string[]} 正斜杠归一文件集（git 失败 → 已收集部分或 []，fail-open）
++ */
++export function collectWorktreeChangedFiles(cwd, changeName, meta = null, opts = {}) {
++  const files = new Set()
++  if (!cwd || !changeName) return []
++  let m = meta
++  if (m == null) {
++    try { m = new WorktreeManager({ cwd }).getMeta(changeName) } catch { m = null }
++  }
++  const gitDir = (m?.worktreePath && m.mode !== 'in-place-fallback' && existsSync(m.worktreePath))
++    ? m.worktreePath
++    : cwd
++  const keep = (p) => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/')
++  // 未提交：worktree（in-place 退化=主仓）porcelain 全量（含 untracked）
++  try {
++    const st = runGit(gitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
++    for (const p of parsePorcelainFiles(st)) if (keep(p)) files.add(p)
++  } catch { /* porcelain 失败 → 返回已收集部分（fail-open） */ }
++  // 已提交补齐：merge-base(主仓 HEAD, wtHEAD)（= 创建锚点）..wtHEAD 的 commit diff。
++  // in-place（gitDir===cwd）时已提交改动在主仓 diff 内，跳过防双并；失败 fail-open 忽略。
++  if (gitDir !== cwd) {
++    try {
++      const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
++      const wtHead = runGit(gitDir, ['rev-parse', 'HEAD'])
++      const mb = (mainHead && wtHead) ? runGit(gitDir, ['merge-base', wtHead, mainHead]) : null
++      if (mb) {
++        const out = String(runGit(gitDir, ['diff', '--name-only', mb, wtHead]) || '')
++        for (let p of out.split('\n')) {
++          p = p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim()
++          if (keep(p)) files.add(p)
++        }
++      }
++    } catch { /* 已提交补齐失败忽略（fail-open，不拖垮未提交并入） */ }
++  }
++  return [...files]
++}
++
+ /**
+  * worktree execute「主 agent 直接实现」模式收尾兜底：per-task review.json 缺失时，
+  * 据 git diff base..head 按 task allowed_paths 归属，自动落盘 cannot_verify 草稿。
+@@ -1339,32 +1403,17 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
+   // worktree-branch/cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
+   if (attribution.mergeGitDir) {
+     try {
+-      const wtGitDir = attribution.mergeGitDir
+-      const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
+-      const wtFiles = parsePorcelainFiles(wtStatus)
+-        .map(p => String(p).replace(/\\/g, '/'))
+-        .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+-      // 已提交口径补齐（2026-09-10 用户反馈②「先提交则 diff 空」：worktree 内已 commit 的改动
+-      // 对主仓 base..head 与 status 双不可见，草稿 changedFiles 恒空）——merge-base(主仓 HEAD,
+-      // worktree HEAD)（= 创建锚点）..worktree HEAD 的 commit diff 并入，与
+-      // resolveVerifyChangedFiles 的同款补齐同源（verify-postcheck.js，两处口径须同步改）。
+-      // in-place 退化（wtGitDir===cwd）时已提交改动在主仓 diff 内，跳过防双并；git 失败 fail-open。
+-      let committedFiles = []
+-      if (wtGitDir !== cwd) {
+-        try {
+-          const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
+-          const wtHead = runGit(wtGitDir, ['rev-parse', 'HEAD'])
+-          const mb = (mainHead && wtHead) ? runGit(wtGitDir, ['merge-base', wtHead, mainHead]) : null
+-          if (mb) {
+-            committedFiles = String(runGit(wtGitDir, ['diff', '--name-only', mb, wtHead]) || '')
+-              .split('\n').map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
+-              .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
+-          }
+-        } catch { /* 已提交补齐失败退回 status-only（fail-open，不拖垮未提交并入） */ }
+-      }
+-      if (wtFiles.length > 0 || committedFiles.length > 0) {
+-        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles, ...committedFiles])]
+-        console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${wtFiles.length + committedFiles.length} 个（未提交 ${wtFiles.length} + 已提交 ${committedFiles.length}，按 allowed_paths 归属）`)
++      // D-004@v1 口径单一化（坑④ worktree-tick-guard-commit-only，2026-09-15 实证）：原手写
++      // 并入段（porcelain 未提交 + committed merge-base 补齐两段）收口为
++      // collectWorktreeChangedFiles 单一真相——勾选守卫 prefetchDiffFileSet（run/complete.js）
++      // 与本草稿归属自此消费同一口径（原「两处口径须同步改」注记就此作废，单一真相在 helper）。
++      // in-place（mergeGitDir===cwd）时 helper 同取 cwd porcelain（现状主仓并入不丢）。
++      // resolveVerifyChangedFiles（verify-postcheck.js）内另有同型补齐段（form A 专属，滤网保
++      // .sillyspec/docs/** 交付物），已知残留 R-09，本次不动。
++      const mergedFiles = collectWorktreeChangedFiles(cwd, changeName, attribution.meta)
++      if (mergedFiles.length > 0) {
++        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...mergedFiles])]
++        console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${mergedFiles.length} 个（未提交 porcelain + 已提交 merge-base 补齐，按 allowed_paths 归属）`)
+       }
+     } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
+   }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 0525109..f03e331 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -28,9 +28,9 @@ import { IR_STRICT_SINCE } from './constants.js'
+ import { gitQuiet } from './git-helper.js'
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+-import { verifyApiParity } from './contract-matrix.js'
++import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+-import { filterDeliverableFiles } from './worktree-apply.js'
++import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
+ // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
+ // 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
+ import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
+@@ -1049,20 +1049,20 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+ 
+   // 并入 worktree 未提交改动（坑 module-subset-zero-hit-uncommitted，2026-08-21 实证：
+   // 子代理默认不 commit，真实改动全在 worktree working-tree——只看 base..HEAD commit diff
+-  // 时 module 映射 0 命中直接跳过（frontend/** 变更未命中 frontend 模块）。与
+-  // generateTaskReviewDrafts 的并入口径同源：meta.worktreePath 下 status --porcelain 文件
++  // 时 module 映射 0 命中直接跳过（frontend/** 变更未命中 frontend 模块）。口径与
++  // collectWorktreeChangedFiles（task-review.js，D-004@v1 单一真相 helper）同源，但本段是
++  // form A 专属变体（滤网保 .sillyspec/docs/** 交付物）——已知残留 R-09，待下次触碰统一。
+   // （排除 .sillyspec/ 运行时产物）。opt-in（默认关）：d drafts 有自己的并入点，避免双并。
+   if (includeWorkingTree && mainFiles !== null) {
+     try {
+-      // P1 修复（2026-09-07）：metaPath 吃 opts.specBase——此前硬编码 join(cwd,'.sillyspec')，
+-      // 平台模式（specRoot 与 source_root 分离）下 worktree meta 静默读不到 → 形态 A 并入失效 → ②类假红。
+-      // 与下方 resolveMainChangedFiles 的 specBase 兜底同口径。
+-      const metaPath = join(opts.specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
+-      if (changeName && existsSync(metaPath)) {
+-        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+-        const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+-          ? meta.worktreePath
+-          : cwd
++      // 双根读取（坑 platform-dual-root-form-misjudge，2026-09-15 复盘实证）：P1 修复
++      // （2026-09-07）只吃 opts.specBase 单路径——平台模式（specRoot 与 source_root 分离）下
++      // meta 若落项目侧 .sillyspec/.runtime（resolveRuntimeRoot 的 localSpecBase 兜底形）仍读
++      // 不到 → 形态 A 并入失效 → ②类假红。_readWorktreeMeta 双候选（specBase 优先 +
++      // cwd/.sillyspec 兜底，contract-matrix 既有样板）两形全覆盖。
++      const found = changeName ? _readWorktreeMeta(opts.specBase || null, cwd, changeName) : null
++      if (found) {
++        const wtGitDir = found.gitDir
+         const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
+         // P1 修复（2026-09-07）：过滤器改 filterDeliverableFiles 口径（worktree-apply.js 同款）——
+         // 此前 `.sillyspec/` 一刀切把 docs 交付物也滤掉，声明了模块文档的 task 在形态 A 下落②类假红
+@@ -1152,16 +1152,16 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
+   const sb = specBase || join(cwd, '.sillyspec')
+   if (changeName) {
+-    const metaPath = join(sb, '.runtime', 'worktrees', changeName, 'meta.json')
+-    if (existsSync(metaPath)) {
+-      let meta = null
+-      try { meta = JSON.parse(readFileSync(metaPath, 'utf8')) } catch {}
++    // 双根读取（坑 platform-dual-root-form-misjudge）：specBase（平台模式=specRoot）单路径在
++    // meta 落项目侧 .sillyspec 时静默 miss → 锚点 diff 整链失效落主仓 fallback。双候选
++    // （specBase 优先 + cwd/.sillyspec 兜底）两形全覆盖；sb 仍作他者声明过滤根（原语义不动）。
++    const found = _readWorktreeMeta(specBase || null, cwd, changeName)
++    if (found) {
++      const meta = found.meta
+       // 优先 baselineCommit/actualBaseHash（baseline checkpoint 之后），回退 baseHash
+       const diffBase = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash
+       if (diffBase) {
+-        const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+-          ? meta.worktreePath
+-          : cwd
++        const gitDir = found.gitDir
+         const files = runGitDiffNameOnly(gitDir, `${diffBase}..HEAD`)
+         // 坑 verify-evidence-account-diff-misses-committed-changes（2026-09-13 实证）：
+         // wt-commit 流程把本变更提交落在**主仓 HEAD**，worktree 分支不前移——仅查 worktree
+@@ -2094,6 +2094,8 @@ export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = nul
+  * 天然不覆盖该类路径，硬要求交集必假红）。verifyStartAt 缺省走 R-05 fallback（design.md
+  * created_at 之后宽容 + warning）。status 语义扩 'blocked'（missing 无豁免 / satisfied 核验
+  * 不过）——gates 接线（task-03）据此阻断 verify 完成。
++ * 逐文件存在性/mtime 双根取数（坑⑤ / D-005@v1）：候选根 [cwd, worktree 根]——apply 前
++ * 新文件只在 worktree，单查主仓必误报「文件不存在」；meta 缺失/in-place 退单根（零回归）。
+  */
+ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, verifyStartAt }) {
+   const warnings = []
+@@ -2121,6 +2123,26 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
+     changedSet = new Set((changed || []).map(p => String(p).replace(/\\/g, '/')))
+   } catch { changedSet = null }
+ 
++  // ── 候选根解析（坑⑤ / D-005@v1，消费侧双根）：apply 前新文件只在 worktree，逐文件核验
++  // 单查主仓 join(cwd, vf) 必误报「文件不存在」错误阻断 verify。worktree 根口径与
++  // resolveVerifyChangedFiles（~1061 metaPath 段）同源：meta 在场 && 非 in-place-fallback
++  // && worktreePath 目录存在 → roots = [cwd, worktreePath]；任一不满足退 [cwd] 单根
++  // （零回归）。解析异常 fail-open 退单根 + warning（不新增阻断路径）。静默双根——对齐
++  // buildAcceptanceHints（verify-probes.js:223）双根先例，核验明细 root 字段已可辨。──
++  let roots = [cwd]
++  try {
++    const metaPath = join(specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
++    if (existsSync(metaPath)) {
++      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
++        roots = [cwd, meta.worktreePath]
++      }
++    }
++  } catch (e) {
++    roots = [cwd]
++    warnings.push(`worktree meta 解析失败（${e.message}），evidence 双根核验退主仓单根`)
++  }
++
+   const detailed = []
+   let blockedCount = 0
+   for (const item of items) {
+@@ -2143,11 +2165,17 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
+       }
+       for (const vf of slot.verifiedFiles) {
+         const pathClass = classifyVerifiedFile(vf)
+-        const abs = join(cwd, vf)
+-        const filesExist = existsSync(abs)
++        // 双根取数（坑⑤ / D-005@v1，形态沿 buildAcceptanceHints 双根先例）：任一根存在即
++        // filesExist=true；双根都在取 worktree 根（R-05：新改动所在，主仓旧 mtime 不误判
++        // 过期）——倒序找命中根（roots=[cwd] 时即单根现状；roots=[cwd, wt] 时先试 wt 再回退）。
++        let hitRoot = null
++        for (let i = roots.length - 1; i >= 0; i--) {
++          if (existsSync(join(roots[i], vf))) { hitRoot = roots[i]; break }
++        }
++        const filesExist = hitRoot !== null
+         let mtimeOk = null
+         if (filesExist && startAt) {
+-          try { mtimeOk = statSync(abs).mtimeMs >= startAt - 60_000 } catch { mtimeOk = null }
++          try { mtimeOk = statSync(join(hitRoot, vf)).mtimeMs >= startAt - 60_000 } catch { mtimeOk = null }
+         }
+         let diffHit = null
+         if (pathClass === 'code') {
+@@ -2157,7 +2185,7 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
+         }
+         const ok = filesExist && mtimeOk !== false && diffHit !== false
+         if (!ok) allOk = false
+-        perFile.push({ path: vf, pathClass, filesExist, mtimeOk, diffHit,
++        perFile.push({ path: vf, pathClass, filesExist, mtimeOk, diffHit, root: hitRoot,
+           reason: !filesExist ? '文件不存在'
+             : (mtimeOk === false ? `mtime 早于 verifyStartAt（${new Date(startAt).toISOString()}）`
+             : (diffHit === false ? '不在本变更 git diff 内' : null)) })
+@@ -2324,14 +2352,22 @@ function parsePorcelainFilePaths(raw) {
+  * resolveMainChangedFiles 同口径，三锚全缺 null）；形态 B 取 merge-base hash（分支不存在/
+  * merge-base 不可得 null）；降级返回恒 null。
+  *
+- * @returns={{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, degradedReason: string|null, baseAnchor: string|null }}
++ * @returns={{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, foreignExcludedFiles: string[], degradedReason: string|null, baseAnchor: string|null }}
+  */
+ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName }) {
+-  const metaPath = join(specBase, '.runtime', 'worktrees', changeName, 'meta.json')
+-  const form = existsSync(metaPath) ? 'worktree' : 'post-apply'
++  // 形态判定双根化（坑 platform-dual-root-form-misjudge，2026-09-15 复盘实证：平台模式
++  // specBase=specRoot 时项目侧 .sillyspec 的 meta 读不到 → 误判 post-apply → 按主仓 git
++  // 三源对账 → ②类 21 条全量假红阻断 verify 收尾）。_readWorktreeMeta 双候选（specBase
++  // 优先 + cwd/.sillyspec 兜底，contract-matrix 既有样板）为形态判定的唯一权威入口。
++  const wtMeta = _readWorktreeMeta(specBase || null, cwd, changeName)
++  const form = wtMeta ? 'worktree' : 'post-apply'
+   const sources = []
+   const union = new Set()
+   let foreignExcluded = 0
++  // 退栈文件名单（scope-audit-cross-repo-blindness 改进点 3）：原只回计数，scope-audit 侧
++  // 无法区分「真未动」与「已写盘但被退栈」——补名单（仅文件名，owners 不重复携带），
++  // 消费方按「planned ∩ excluded ∩ 盘面存在」标「疑似他者已实现」。
++  const foreignExcludedFiles = []
+   let baseAnchor = null
+ 
+   if (form === 'worktree') {
+@@ -2339,15 +2375,12 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+     // working-tree 并入、fail-open 均为该函数既有语义，不另造口径）——
+     const files = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+     if (files === null) {
+-      return { ok: false, form, files: [], sources, foreignExcluded,
++      return { ok: false, form, files: [], sources, foreignExcluded, foreignExcludedFiles,
+         degradedReason: 'worktree 锚点 diff 与主仓 fallback 均失败（git 不可用 / 非仓库）', baseAnchor: null }
+     }
+-    // baseAnchor：读同一份 worktree meta.json 锚点（baselineCommit>actualBaseHash>baseHash，
+-    // resolveMainChangedFiles 同口径；解析失败/三锚全缺 → null）
+-    try {
+-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+-      baseAnchor = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash || null
+-    } catch {}
++    // baseAnchor：读形态判定命中的同一份 worktree meta.json 锚点（baselineCommit>
++    // actualBaseHash>baseHash，resolveMainChangedFiles 同口径；三锚全缺 → null）
++    baseAnchor = wtMeta?.meta?.baselineCommit || wtMeta?.meta?.actualBaseHash || wtMeta?.meta?.baseHash || null
+     sources.push('worktree:diff-base..HEAD', 'worktree:status-porcelain(uncommitted)')
+     for (const f of files) union.add(normalizeReconcilePath(f))
+   } else {
+@@ -2386,7 +2419,10 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+       let files = parsePorcelainFilePaths(statusRaw)
+       if (files.length > 0) {
+         const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, files, { specBase })
+-        if (foreign.length > 0) foreignExcluded = foreign.length
++        if (foreign.length > 0) {
++          foreignExcluded = foreign.length
++          for (const fo of foreign) foreignExcludedFiles.push(normalizeReconcilePath(fo.file))
++        }
+         files = own
+       }
+       for (const f of files) union.add(normalizeReconcilePath(f))
+@@ -2403,13 +2439,13 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+       } catch { /* 兜底源失败 → 忽略 */ }
+     }
+     if (!diffOk && !statusOk) {
+-      return { ok: false, form, files: [], sources, foreignExcluded,
++      return { ok: false, form, files: [], sources, foreignExcluded, foreignExcludedFiles,
+         degradedReason: 'merge-base 锚定 diff 未得且主仓 status 失败（git 不可用 / 非仓库 / 无锚点分支）', baseAnchor: null }
+     }
+   }
+ 
+   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
+-  return { ok: true, form, files, sources, foreignExcluded, degradedReason: null, baseAnchor }
++  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor }
+ }
+ 
+ /**
+@@ -2419,13 +2455,15 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+  * - 归属过滤：run 目录带 change 戳且不等值 → 他变更的 run 跳过（task-NN 跨变更同名，混扫必
+  *   错归因；无戳旧 run 保留——向后兼容，task-review.js resolveLatestExecuteRunIdWithTasks 同款）。
+  * - runId 形如 exec-YYYY-MM-DD-HHMMSS：字典序倒序 = 新 run 优先（review 以最新执行为准）。
+- * - changedFiles 是 agent 手写（注记/相对路径常态），归一后 exact match、首个命中即止——
+- *   归因只是③类报告的附注，错比漏代价低，不追求穷举。
++ * - changedFiles 是 agent 手写（注记/相对路径常态），归一后 exact match、全命中收集（多归属，
++ *   坑④ worktree-tick-guard-commit-only：原「首个命中即止」吞掉同文件多 task 的归属）——
++ *   归因只是③类报告的附注，错比漏代价低；同一 taskId 去重，顺序 = 扫描序（run 倒序新优先 +
++ *   task 目录字典序）。
+  *
+  * @param {string} runtimeRoot .sillyspec/.runtime
+  * @param {string} changeName
+  * @param {string[]} paths 待归因的③类路径（git 口径的干净路径）
+- * @returns {Map<string, string>} normalized(path) → taskId
++ * @returns {Map<string, string[]>} normalized(path) → taskId[]（全命中收集，保序去重）
+  */
+ function attributeSuspectTasks(runtimeRoot, changeName, paths) {
+   const map = new Map()
+@@ -2452,7 +2490,10 @@ function attributeSuspectTasks(runtimeRoot, changeName, paths) {
+       const taskId = (typeof review.task === 'string' && review.task.trim()) || t
+       for (const cf of Array.isArray(review.changedFiles) ? review.changedFiles : []) {
+         const n = normalizeReviewChangedFile(cf)
+-        if (n && wantSet.has(n) && !map.has(n)) map.set(n, taskId)
++        if (!n || !wantSet.has(n)) continue
++        // 多归属：同文件被多 task 声明时全收集（D-004@v1，坑④）——旧单归属在此吞掉后续 task
++        const list = map.get(n)
++        if (list) { if (!list.includes(taskId)) list.push(taskId) } else map.set(n, [taskId])
+       }
+     }
+   }
+@@ -2477,7 +2518,7 @@ function attributeSuspectTasks(runtimeRoot, changeName, paths) {
+  *   status: 'ok'|'missing_declared'|'undeclared'|'skipped'|'degraded',
+  *   matched: string[],                    // ①交集（唯一路径排序）
+  *   missing: Array<{task: string, path: string, isNew?: boolean}>, // ②声明没做（isNew 标 NEW: 声明，剥前缀 path）
+- *   undeclared: Array<{path: string, suspectTask?: string}>,       // ③做了没声明（suspectTask=review.json 尽力归因）
++ *   undeclared: Array<{path: string, suspectTask?: string}>,       // ③做了没声明（suspectTask=review.json 尽力归因，多归属 join('、') 后的 string）
+  *   skipReason: string|null,              // skipped/degraded 的原因（其余状态为 null）
+  *   notes: string[],                      // 跨仓卡剔除 / 并行 WIP 剔除等提示（additive）
+  *   form: 'worktree'|'post-apply'|null,   // actual 形态（skipped 无 actual 时为 null；additive）
+@@ -2567,17 +2608,36 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null,
+       missing.push(d.isNew ? { task: d.task, path: d.path, isNew: true } : { task: d.task, path: d.path })
+     }
+   }
+-  // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）
++  // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）。
++  // 归因多归属（attributeSuspectTasks 返 string[]，坑④）：组装边界 join('、') 成 string——
++  // gates.js / archive-delta.js 等下游渲染零改动（suspectTask 对外形态保持 string）。
+   const suspect = attributeSuspectTasks(rt, changeName, actual.files.filter(p => !declaredKeySet.has(pathKey(p))))
++  // 脚手架软桶（坑 reconcile-undeclared-scaffold-flood，2026-09-15 复盘实证：worktree baseline
++  // 拷入的 .claude/skills、attachments 等设施文件 58 条逐条进③类、每轮 verify 重复刷屏）：
++  // classifyToolScaffold（worktree-apply / scope-audit 同款口径）命中的工具/平台设施文件聚合
++  // 为一行 note——环境设施面非交付物，逐条列③类只会淹没真 scope creep。全为脚手架时③类
++  // 判 ok（脚手架不构成 scope creep 语义）。
++  const scaffoldBuckets = { platform: 0, tool: 0 }
++  const scaffoldSamples = []
+   for (const path of actual.files) {
+     if (declaredKeySet.has(pathKey(path))) continue
++    const bucket = classifyToolScaffold(path)
++    if (bucket) {
++      scaffoldBuckets[bucket] = (scaffoldBuckets[bucket] || 0) + 1
++      if (scaffoldSamples.length < 5) scaffoldSamples.push(path)
++      continue
++    }
+     const s = suspect.get(normalizeReviewChangedFile(path))
+-    undeclared.push(s ? { path, suspectTask: s } : { path })
++    undeclared.push(Array.isArray(s) && s.length > 0 ? { path, suspectTask: s.join('、') } : { path })
++  }
++  const scaffoldTotal = scaffoldBuckets.platform + scaffoldBuckets.tool
++  if (scaffoldTotal > 0) {
++    notes.push(`③类另有 ${scaffoldTotal} 个工具/平台脚手架文件（platform ${scaffoldBuckets.platform} / tool ${scaffoldBuckets.tool}，如 ${scaffoldSamples.join('、')}${scaffoldTotal > scaffoldSamples.length ? ' 等' : ''}）已聚合不逐条列——非交付物（scope-audit 设施桶同口径）`)
+   }
+ 
+   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
+   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
+-  return { status, matched, missing, undeclared, skipReason: null, notes, form: actual.form, sources: actual.sources }
++  return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources }
+ }
+ 
+ // ─────────────────────────────────────────────────────────────────────────────
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index 01675fa..d1efc55 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -20,7 +20,7 @@ import { WorktreeManager } from './worktree.js';
+ import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js';
+ import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
+ import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
+-import { git, gitQuiet, safeGit } from './git-helper.js';
++import { git, gitQuiet, safeGit, unquoteGitPath } from './git-helper.js';
+ import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
+ import { collectActiveQuickGuardFiles } from './quicklog.js';
+ import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
+@@ -43,6 +43,40 @@ function consumeCleanupResult(cr, result) {
+   return cr;
+ }
+ 
++/**
++ * 工具/平台脚手架分类（scope-audit-cross-repo-blindness 改进点 1，2026-09-15）：
++ * CLI/平台自己写进仓的文件，不是本变更的交付改动。分硬排（filterDeliverableFiles
++ * 直接滤除）与软桶（classifyToolScaffold 打标、scope-audit 归入「工具/平台设施」
++ * 不占「计划外」）两档——区分依据是 apply 语义：filterDeliverableFiles 的滤除会让
++ * apply 不回放该文件（坑 apply-glob-manifest 静默丢失类），故只有「绝无交付语义、
++ * 回放反而有害」的进硬排；可能被 design 清单正当声明的（SKILL.md/CLAUDE.md 改写
++ * 本身是合法交付）只打标不滤除。
++ *
++ *   硬排（platform 设施，绝不交付）：
++ *     - .worktrees/：嵌套 worktree 目录（cp 回放会把整个 worktree 副本塞进主仓）
++ *     - .sillyspec-platform 系根标记文件（含 -cleaned / -managed / .json 变体）：平台元数据
++ *     - .sillyspec/knowledge/：CLI 自维护知识库（路由 INDEX 等，机器本地态）
++ *     - .sillyspec/local.yaml：机器本地配置（gitignore 约定；回放会覆盖主仓本地配置）
++ *   软桶（tool 脚手架，可能正当交付 → 只打标）：
++ *     - .claude/skills/（含 sillyspec-*）：CLI 自装 skill 脚手架
++ *     - CLAUDE.md：CLI/平台维护的 agent 指引
++ *     - attachments/：brainstorm 需求附件（docx/html/截图等流程产物）
++ * @param {string} f 仓库根相对路径（正斜杠）
++ * @returns {'platform'|'tool'|null}
++ */
++export function classifyToolScaffold(f) {
++  const p = String(f || '').replace(/\\/g, '/');
++  if (!p) return null;
++  if (p.startsWith('.worktrees/')
++    || /^\.sillyspec-platform(?:-cleaned|-managed)?(?:\.json)?$/.test(p)
++    || p.startsWith('.sillyspec/knowledge/')
++    || p === '.sillyspec/local.yaml') return 'platform';
++  if (p.startsWith('.claude/skills/')
++    || p === 'CLAUDE.md'
++    || p.startsWith('attachments/')) return 'tool';
++  return null;
++}
++
+ /**
+  * 过滤掉 worktree 基础设施文件（非交付物），让 apply 只关心真正的变更产出：
+  *   - meta.json：worktree 元数据，baseline commit 中被跟踪、working-tree 被 CLI 改写
+@@ -54,14 +88,19 @@ function consumeCleanupResult(cr, result) {
+  *   - .sillyspec/.runtime/：运行时产物（进度库/锁/review 产物，非源码）。
+  *   - .sillyspec/quicklog/：quicklog 条目（worktree 进度，非交付物）。
+  *   保留 .sillyspec/docs/（dogfood 模块规范文档 = 交付物，apply 回主仓）。
+- * 对 modified-tracked（git diff）与 untracked（ls-files --others）一视同仁。
++ *   - classifyToolScaffold 的 platform 档（.worktrees/、.sillyspec-platform 系根标记、
++ *     .sillyspec/knowledge/、.sillyspec/local.yaml）：工具/平台设施，绝无交付语义
++ *     （scope-audit-cross-repo-blindness 改进点 1——锚点窗口内 CLI 自装文件曾全量
++ *     落「计划外」；回放有害类直接硬排）。
++ *   对 modified-tracked（git diff）与 untracked（ls-files --others）一视同仁。
+  */
+ export function filterDeliverableFiles(files) {
+   return files.filter(f =>
+     !f.startsWith('.sillyspec/changes/') &&
+     !f.startsWith('.sillyspec/.runtime/') &&
+     !f.startsWith('.sillyspec/quicklog/') &&
+-    f !== 'meta.json'
++    f !== 'meta.json' &&
++    classifyToolScaffold(f) !== 'platform'
+   );
+ }
+ 
+@@ -424,6 +463,69 @@ export function chunkPaths(paths, maxChars = 8000) {
+   return batches
+ }
+ 
++/**
++ * no-op 文件检测（FR-02 / D-002@v1，坑② assess-noop-blocked）：判定候选文件中
++ * 「worktree 工作区内容 = 主仓 HEAD blob」者。execute 期主仓 HEAD 前进后，worktree 内
++ * 自救/重同步成主仓最新内容的文件对 baseline checkpoint diff 非空，apply 回主仓实为
++ * no-op，却被 assess 误判「变更文件超出 allowed_paths」BLOCKED——由 applyWorktree
++ * step 2 单点 choke point 调用（apply 与 assess checkOnly 复用同函数，自动同口径）。
++ *
++ * 比对：worktree 工作区 `git hash-object`（默认带 clean filter，与 tree blob 同口径）
++ * 按 argv 分批（chunkPaths，worktree.js _changesAlreadyOnMain 同型），批次输出按行序
++ * 拼接与候选索引对齐；主仓 HEAD blob 复用 getBlobHashMap（ls-tree）。路径对照键统一
++ * quotepath 剥引号（unquoteGitPath）+ 反斜杠归一正斜杠，仅用于比对不回写（changedFiles
++ * 路径字面保持现状口径，下游 pathMatches/gates/archive-delta 零改动）。
++ *
++ * fail-safe（D-002 故障面契约）：hash-object 某批失败 / 行数不齐 / 整段异常 → 该批
++ * （或全部）保守不剔，保留 changed——退回现状误报而非误放行。每调用现算不缓存（主仓
++ * HEAD 在 assess 与 apply 间可能推进，以各自当下事实为准）。
++ *
++ * @param {string} projectRoot 主仓根（HEAD blob 读取处）
++ * @param {string} worktreePath worktree 根（工作区 hash-object 执行处）
++ * @param {string[]} candidates 候选文件（调用方已保证 worktree 工作区存在——删除类天然出局）
++ * @returns {string[]} 判定为 no-op 的文件子集（candidates 原字面）；判定不可得时返回 []
++ */
++function detectNoOpFiles(projectRoot, worktreePath, candidates) {
++  try {
++    if (!candidates || candidates.length === 0) return [];
++    // 主仓 HEAD 树 blob map：路径不在 HEAD 树 → 不在 Map → 主仓无该路径的新文件天然非 no-op
++    const mainBlobs = getBlobHashMap(projectRoot, 'HEAD', candidates);
++    if (mainBlobs.size === 0) return [];
++    const pathKey = (p) => {
++      let s = String(p);
++      if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) s = unquoteGitPath(s.slice(1, -1));
++      return s.replace(/\\/g, '/');
++    };
++    const mainBlobByKey = new Map();
++    for (const [p, h] of mainBlobs) mainBlobByKey.set(pathKey(p), h);
++    const present = candidates.filter(f => mainBlobByKey.has(pathKey(f)));
++    if (present.length === 0) return [];
++
++    // worktree 工作区 blob：hash-object 按 argv 顺序逐行输出；某批失败（文件被并发删/权限等）
++    // → 占位空串填充保批次间索引对齐（空串永不等于 blob hash → 该批各文件保守不剔）
++    const wtHashes = [];
++    for (const batch of chunkPaths(present)) {
++      const out = gitQuiet(worktreePath, ['hash-object', '--', ...batch], { timeout: 30000 });
++      const lines = out === null ? null : out.split('\n');
++      if (!lines || lines.length !== batch.length) {
++        console.warn(`⚠️  no-op 检测：hash-object 批失败/行数不齐，该批 ${batch.length} 个文件保守保留在 changedFiles`);
++        for (let i = 0; i < batch.length; i++) wtHashes.push('');
++        continue;
++      }
++      wtHashes.push(...lines);
++    }
++    const noopFiles = [];
++    for (let i = 0; i < present.length; i++) {
++      if (wtHashes[i] && wtHashes[i] === mainBlobByKey.get(pathKey(present[i]))) noopFiles.push(present[i]);
++    }
++    return noopFiles;
++  } catch (e) {
++    // 意外异常整体保守不剔（fail-safe：宁可误报 BLOCKED，不可误放行剔除）
++    console.warn(`⚠️  no-op 文件检测失败（保守保留 changedFiles）：${(e.message || '').split('\n')[0]}`);
++    return [];
++  }
++}
++
+ /**
+  * apply 的文件清单 = design §6 清单 ∪ plan TaskCard allowed_paths（execute 复盘 c）。
+  *
+@@ -879,7 +981,14 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
+         }
+       }
+       const untrackedRaw = gitQuiet(cm.worktreePath, ['ls-files', '--others', '--exclude-standard']) || '';
+-      changedFiles = filterDeliverableFiles([...new Set([...statusFiles, ...untrackedRaw.split('\n').filter(Boolean)])]);
++      const allFiles = [...new Set([...statusFiles, ...untrackedRaw.split('\n').filter(Boolean)])];
++      changedFiles = filterDeliverableFiles(allFiles);
++      // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：被滤除的平台设施文件列
++      // warning 不静默——apply 不回放它们；若某文件确为交付物（极少），人工落主仓。
++      const dropped = allFiles.filter(f => !changedFiles.includes(f) && classifyToolScaffold(f) === 'platform');
++      if (dropped.length > 0) {
++        out.warnings.push(`跨仓 ${repoKey}：${dropped.length} 个工具/平台设施文件未纳入 apply（${dropped.slice(0, 5).join(', ')}${dropped.length > 5 ? ' 等' : ''}）——非交付物不回放，确需交付请人工处理`);
++      }
+     } catch (e) {
+       out.errors.push(`跨仓 ${repoKey}：获取变更文件列表失败（${cm.worktreePath}）: ${e.message}`);
+       continue;
+@@ -1159,7 +1268,41 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+     // 排除 worktree 基础设施文件（meta.json / .sillyspec/，见 filterDeliverableFiles）。
+     // 对 modified-tracked（statusFiles）与 untracked 一视同仁——否则 modified 的 meta.json
+     // 会被误算入 changedFiles，触发 design.md 清单校验失败（assess 恒 BLOCKED）。
+-    changedFiles = filterDeliverableFiles([...new Set([...statusFiles, ...untrackedFiles])]);
++    const allChangedRaw = [...new Set([...statusFiles, ...untrackedFiles])];
++    changedFiles = filterDeliverableFiles(allChangedRaw);
++
++    // no-op 文件剔除（FR-02 / D-002@v1）：主仓 HEAD 在 execute 期间前进后，worktree 内
++    // 「内容=主仓 HEAD」的自救/重同步文件对 deliverableBase diff 非空，apply 回主仓实为
++    // no-op，却被 assess 误判「变更文件超出 allowed_paths」BLOCKED。候选收窄：allChangedRaw
++    // 中 worktree 工作区存在者（existsSync，删除类天然出局）∩ 主仓 HEAD 树存在者（helper
++    // 内反查）；判定失败保守不剔。diff-size/Gate 判定消费的 changedFiles 自然跟随收窄，
++    // patch 面（resolvePatchFiles ⊆ changedFiles）同步不再回放该类文件。
++    const noopCandidates = allChangedRaw.filter(f => existsSync(join(worktreePath, f)));
++    const noopFiles = noopCandidates.length > 0 ? detectNoOpFiles(projectRoot, worktreePath, noopCandidates) : [];
++    // 只报实际从三集剔出的文件（候选含 filterDeliverableFiles 已硬排的平台设施时，
++    // 那部分本就不在 changedFiles，不计入告警面）
++    const changedSetForNoop = new Set([...changedFiles, ...deletedFiles, ...absentAfterMerge]);
++    const removedNoopFiles = noopFiles.filter(f => changedSetForNoop.has(f));
++    if (removedNoopFiles.length > 0) {
++      const noopSet = new Set(removedNoopFiles);
++      changedFiles = changedFiles.filter(f => !noopSet.has(f));
++      // 防御性剔除（候选已限工作区存在，正常不命中后两集；过滤保三集不变式）
++      for (let i = deletedFiles.length - 1; i >= 0; i--) if (noopSet.has(deletedFiles[i])) deletedFiles.splice(i, 1);
++      for (let i = absentAfterMerge.length - 1; i >= 0; i--) if (noopSet.has(absentAfterMerge[i])) absentAfterMerge.splice(i, 1);
++      result.warnings = result.warnings || [];
++      result.warnings.push(
++        `${removedNoopFiles.length} 个文件内容与主仓 HEAD 一致（apply 为 no-op，不计入 changedFiles）：${removedNoopFiles.slice(0, 5).join(', ')}${removedNoopFiles.length > 5 ? ' 等' : ''}`
++      );
++    }
++
++    // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：平台设施被滤出不静默——
++    // apply 不回放它们（.worktrees//.sillyspec-platform*/knowledge/local.yaml）；确为交付物
++    // 的极少数场景（如刻意改 knowledge 模板）人工落主仓。
++    const droppedScaffold = allChangedRaw.filter(f => !changedFiles.includes(f) && classifyToolScaffold(f) === 'platform');
++    if (droppedScaffold.length > 0) {
++      result.warnings = result.warnings || [];
++      result.warnings.push(`${droppedScaffold.length} 个工具/平台设施文件未纳入 apply（${droppedScaffold.slice(0, 5).join(', ')}${droppedScaffold.length > 5 ? ' 等' : ''}）——非交付物不回放，确需交付请人工处理`);
++    }
+   } catch (e) {
+     result.errors.push(`获取变更文件列表失败: ${e.message}`);
+     return result;
+diff --git a/src/worktree.js b/src/worktree.js
+index e236314..4e77d6a 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -16,7 +16,10 @@ import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape, sweepFo
+ import { resolveRuntimeRoot } from './run/shared.js';
+ import { writeAtomicSync } from './fs-atomic.js';
+ import { openDatabase } from './db-engine.js';
+-import { git, gitQuiet } from './git-helper.js';
++import { git, gitQuiet, unquoteGitPath } from './git-helper.js';
++// foreign-declared 零环独立模块（仅依赖 change-list/git-helper/stages/plan-postcheck，
++// 链上无回边）——contract-matrix/verify-probes/task-review 等处已有同款 import 先例
++import { splitOwnVsForeignDiffFiles } from './foreign-declared.js';
+ 
+ // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
+ // 必须原子写：半截 JSON 会让 getMeta 返回 null → 触发幽灵 worktree 强删（可能丢 gitignored 改动）。
+@@ -44,6 +47,85 @@ function _chunkPathsPrivate(paths, maxChars = 8000) {
+   return batches
+ }
+ 
++// ── supplyFiles 生成物供给（坑③ / FR-03 / D-003@v1）──
++// .gitignore 生成物（如 src/build-id.ts）不在 git 树也不进 untracked overlay
++// （ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸
++// Failed to load url——create step 5.9 按 local.yaml worktree.supplyFiles 从主仓复制供给。
++const SUPPLY_FILES_MAX = 200;     // R-04 展开上限帽：超出警告并截断（防 dist/** 类误配展开风暴）
++const SUPPLY_WALK_MAX_DEPTH = 6;  // glob 枚举递归深度帽（跳过 node_modules/.git 后的务实兜底）
++
++/**
++ * supplyFiles glob → 锚定全路径的 RegExp（自实现，零新依赖——D-003@v1）。
++ * 分隔符统一 /；正则元字符先转义，再还原通配语义：** → .*（跨层）、* → [^/]*（单层）。
++ * @param {string} pattern 相对仓根的 glob（如 src/build-*.ts、dist/** 、gen 目录多层 id.ts）
++ * @returns {RegExp} 锚定（^…$）的全路径匹配
++ */
++function supplyGlobToRegExp(pattern) {
++  const norm = String(pattern).replace(/\\/g, '/');
++  let re = '^';
++  for (let i = 0; i < norm.length; i++) {
++    const ch = norm[i];
++    if (ch === '*' && norm[i + 1] === '*') { re += '.*'; i++; }
++    else if (ch === '*') re += '[^/]*';
++    else re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++  }
++  return new RegExp(re + '$');
++}
++
++/**
++ * 读主仓 .sillyspec/local.yaml 的 worktree.supplyFiles（string[]）。
++ * 沿 hooks/worktree-guard.js parseSimpleYaml 同款轻量手写解析（本文件不引新 reader）：
++ * 只取这一个白名单键路径（worktree: 段 → supplyFiles: 子键 → 缩进块列表 / inline flow 数组），
++ * 其余段一概不碰（无原型污染面）。文件缺失/解析异常/形态不符 → []（供给步空转，fail-open）。
++ * @param {string} mainCwd 主仓根
++ * @returns {string[]} 供给清单（配置原文，未展开）
++ */
++function readSupplyFilesConfig(mainCwd) {
++  let content;
++  try {
++    content = readFileSync(join(mainCwd, '.sillyspec', 'local.yaml'), 'utf8');
++  } catch {
++    return [];
++  }
++  const items = [];
++  const stripQuotes = (v) => (
++    v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) ? v.slice(1, -1) : v
++  );
++  let inWorktree = false;
++  let inList = false;
++  for (const raw of content.split('\n')) {
++    const noComment = raw.replace(/\s+#.*$/, ''); // 尾注释剥离（与 worktree-guard 同口径）
++    const trimmed = noComment.trim();
++    if (!trimmed || trimmed.startsWith('#')) continue;
++    const indent = noComment.length - noComment.trimStart().length;
++    if (indent === 0) {
++      inWorktree = /^worktree:\s*$/.test(trimmed); // worktree-hook: 等其他段不误入
++      inList = false;
++      continue;
++    }
++    if (!inWorktree) continue;
++    if (indent === 2) {
++      const m = trimmed.match(/^supplyFiles:\s*(.*)$/);
++      if (!m) { inList = false; continue; }
++      inList = true;
++      const rest = m[1].trim();
++      if (rest.startsWith('[') && rest.endsWith(']')) {
++        // inline flow 数组（supplyFiles: [a, b]）——块列表之外的另一种常见写法，一并兼容
++        for (const part of rest.slice(1, -1).split(',')) {
++          const v = stripQuotes(part.trim());
++          if (v) items.push(v);
++        }
++      }
++      continue;
++    }
++    if (inList && trimmed.startsWith('- ')) {
++      const v = stripQuotes(trimmed.slice(2).trim());
++      if (v) items.push(v);
++    }
++  }
++  return items;
++}
++
+ /**
+  * 解除 worktree 内全部 node_modules junction/symlink（根 + meta.depsModules 各子模块）。
+  *
+@@ -722,7 +804,8 @@ export class WorktreeManager {
+     printSyncReport(syncDiagnostic, baseHash, name);
+ 
+     // 5.6 Dirty baseline overlay：将主工作区未提交变更同步到 worktree
+-    const baselineResult = this._overlayBaseline(this.cwd, worktreePath);
++    // （传变更名启用并行会话声明隔离——他者在途文件不进本变更 baseline，D-001@v1）
++    const baselineResult = this._overlayBaseline(this.cwd, worktreePath, name);
+     const baselineFiles = baselineResult.files;
+     const baselineHash = baselineResult.baselineHash;
+ 
+@@ -746,6 +829,18 @@ export class WorktreeManager {
+       deps = { depsStatus: 'failed', depsError: `provisionDeps crashed: ${e.message}` };
+     }
+ 
++    // 5.9 生成物供给（坑③ / FR-03 / D-003@v1）：.gitignore 生成物不在 git 树也不进 untracked
++    // overlay（ls-files --exclude-standard 遵循 .gitignore），worktree 缺失致构建炸
++    // Failed to load url——按 local.yaml worktree.supplyFiles 从主仓复制供给，实供清单记
++    // meta.supplyFiles。未配置时供给步空转零行为变化；供给物天然不进 assess/apply 面。
++    let suppliedFiles = [];
++    try {
++      suppliedFiles = this._supplyGeneratedFiles(worktreePath);
++    } catch (e) {
++      // fail-open：供给步整体异常只警告，绝不阻断 create（R-04 约束）
++      console.warn(`⚠️ worktree supplyFiles 供给步异常（fail-open 不阻断 create）：${e.message}`);
++    }
++
+     // 6. 写入 meta.json
+     const meta = {
+       name_zh: 'worktree 元数据',
+@@ -767,6 +862,8 @@ export class WorktreeManager {
+       depsLockHash: deps.depsLockHash || null,
+       depsCheckedAt: deps.depsCheckedAt || null,
+       ...(deps.depsError ? { depsError: deps.depsError } : {}),
++      // 5.9 实供清单（纯记录面，doctor/审计可读；空供给省略字段——存量 meta 缺省兼容）
++      ...(suppliedFiles.length > 0 ? { supplyFiles: suppliedFiles } : {}),
+       ...(adoptedBranch ? { adoptedBranch: true } : {}),
+     };
+ 
+@@ -865,7 +962,7 @@ export class WorktreeManager {
+       baseHash = git(this.cwd, ['rev-parse', 'HEAD']);
+     }
+ 
+-    const baselineResult = this._overlayBaseline(this.cwd, this.cwd);
++    const baselineResult = this._overlayBaseline(this.cwd, this.cwd, name);
+     const baselineFiles = baselineResult.files;
+     const baselineHash = baselineResult.baselineHash;
+ 
+@@ -904,6 +1001,117 @@ export class WorktreeManager {
+     return { branch: meta.branch, worktreePath, baseHash, mode: meta.mode };
+   }
+ 
++  /**
++   * 生成物供给步（create step 5.9，坑③ / FR-03 / D-003@v1）。
++   *
++   * 读主仓 local.yaml 的 worktree.supplyFiles（string[]，精确路径 + glob * 单层 / ** 多层，
++   * 相对仓根），主仓侧展开枚举后逐文件复制进 worktree（mkdir 父目录 + copyFileSync）。
++   * 约束：
++   * - 未配置 / 零匹配：完全静默空转（零行为变化）；glob 零命中按缺失警告（不阻断）。
++   * - 展开上限帽 SUPPLY_FILES_MAX=200：超出警告并截断（R-04，防 dist/** 误配展开风暴）。
++   * - 单文件复制异常：warn 后继续，绝不阻断 create（fail-open，不回滚已复制文件）。
++   * - 目标已存在且内容不同：警告后覆盖（baseline overlay / 已检出版本可能已在场）。
++   * - 枚举跳过 node_modules/.git，递归深度帽 SUPPLY_WALK_MAX_DEPTH=6；匹配源只列文件
++   *   （statSync 跟随 junction/symlink，与供给语义一致）。
++   * - 供给物是 gitignore 物，天然不进 assess/apply 面（ls-files --exclude-standard），无需过滤。
++   *
++   * @private
++   * @param {string} worktreePath worktree 根目录（源恒为主仓 this.cwd）
++   * @returns {string[]} 实供清单（POSIX 相对路径，写入 meta.supplyFiles）
++   */
++  _supplyGeneratedFiles(worktreePath) {
++    const patterns = readSupplyFilesConfig(this.cwd);
++    if (!Array.isArray(patterns) || patterns.length === 0) return [];
++    const mainCwd = this.cwd;
++    const matches = []; // 展开命中（去重后，跨配置项合并）
++    const missing = []; // 精确路径缺失 / glob 零命中 / 越界形态
++    const seen = new Set();
++    for (const raw of patterns) {
++      if (typeof raw !== 'string' || !raw.trim()) continue;
++      const pattern = raw.trim().replace(/\\/g, '/').replace(/^\.\//, '');
++      // 越界形态（绝对路径 / 盘符 / .. 段）不供给——供给面必须落在主仓根内
++      if (!pattern || pattern.startsWith('/') || /^[a-zA-Z]:/.test(pattern) || pattern.split('/').includes('..')) {
++        missing.push(pattern || JSON.stringify(raw));
++        continue;
++      }
++      if (!pattern.includes('*')) {
++        // 精确路径：直接查主仓存在性（只列文件）
++        let isFile = false;
++        try { isFile = statSync(join(mainCwd, pattern)).isFile(); } catch {}
++        if (isFile) {
++          if (!seen.has(pattern)) { seen.add(pattern); matches.push(pattern); }
++        } else {
++          missing.push(pattern);
++        }
++        continue;
++      }
++      // glob：静态前缀（首个含 * 段之前）作枚举根，正则锚定全路径匹配。
++      // 深度帽：** 限静态根下 SUPPLY_WALK_MAX_DEPTH 层；纯 * 模式路径段数固定，超段即停。
++      const segs = pattern.split('/');
++      let baseLen = 0;
++      while (baseLen < segs.length && !segs[baseLen].includes('*')) baseLen++;
++      const baseRel = segs.slice(0, baseLen).join('/');
++      const re = supplyGlobToRegExp(pattern);
++      const depthCap = pattern.includes('**') ? baseLen + SUPPLY_WALK_MAX_DEPTH : segs.length;
++      const found = [];
++      const walk = (absDir, relDir, segCount) => {
++        if (segCount >= depthCap) return;
++        let entries;
++        try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return; }
++        for (const e of entries) {
++          if (e.name === 'node_modules' || e.name === '.git') continue;
++          const rel = relDir ? `${relDir}/${e.name}` : e.name;
++          if (e.isDirectory()) {
++            walk(join(absDir, e.name), rel, segCount + 1);
++            continue;
++          }
++          let isFile = false;
++          try { isFile = statSync(join(absDir, e.name)).isFile(); } catch {}
++          if (isFile && re.test(rel)) found.push(rel);
++        }
++      };
++      walk(join(mainCwd, baseRel), baseRel, baseLen);
++      if (found.length === 0) {
++        missing.push(pattern); // glob 零命中同缺失口径（GWT-2）
++        continue;
++      }
++      for (const rel of found) {
++        if (!seen.has(rel)) { seen.add(rel); matches.push(rel); }
++      }
++    }
++    if (missing.length > 0) {
++      console.warn(`⚠️ worktree supplyFiles 主仓侧未命中 ${missing.length} 项（不阻断 create，按需核对清单）：${missing.join('、')}`);
++    }
++    // R-04 展开上限帽：排序保截断稳定可复现
++    matches.sort();
++    const capped = matches.slice(0, SUPPLY_FILES_MAX);
++    if (matches.length > SUPPLY_FILES_MAX) {
++      console.warn(`⚠️ worktree supplyFiles 展开命中 ${matches.length} 文件超上限 ${SUPPLY_FILES_MAX}，已截断只供给前 ${SUPPLY_FILES_MAX}（检查 glob 是否误配，如 dist/** 全量展开）`);
++    }
++    const supplied = [];
++    for (const rel of capped) {
++      const srcAbs = join(mainCwd, rel);
++      const dstAbs = join(worktreePath, rel);
++      try {
++        if (existsSync(dstAbs)) {
++          // 目标已存在且内容不同 → 警告后覆盖（内容比对失败不拦复制）
++          try {
++            if (!readFileSync(dstAbs).equals(readFileSync(srcAbs))) {
++              console.warn(`⚠️ worktree supplyFiles 覆盖 worktree 内已存在且内容不同的文件：${rel}`);
++            }
++          } catch {}
++        }
++        mkdirSync(dirname(dstAbs), { recursive: true });
++        copyFileSync(srcAbs, dstAbs);
++        supplied.push(rel);
++      } catch (e) {
++        // fail-open：单文件复制异常 warn 继续，不回滚已复制文件（R-04 约束）
++        console.warn(`⚠️ worktree supplyFiles 复制失败（跳过继续）：${rel} — ${e.message}`);
++      }
++    }
++    return supplied;
++  }
++
+   /**
+    * 构建 isolation 信息对象，用于写入 sillyspec.db（_writeIsolationToDB，isolation_status 列）
+    * @param {string} changeName
+@@ -1899,11 +2107,18 @@ export class WorktreeManager {
+    * baseline，apply 回 main 即随本变更交付，需人工隔离。spec 文档不参与 worktree 内
+    * 构建/测试（execute 的 spec 读写经 specDriftAnchor 锚回主仓），排除零功能损失；
+    * 排除清单显式打印保持可见（哪些跨变更文件被隔离、去哪了）。
++   *
++   * 并行会话声明隔离（坑 execute-baseline-overlay-carries-broken-parallel-wip，D-001@v1）：
++   * changeName 非空时，他者**显式声明**（他 quick 会话 guard.allowedFiles / 他变更 design
++   * §6，own 优先）的在途文件三道剔除——staged/unstaged patch 道 :(exclude) pathspec 收窄
++   * （worktree 保持基线 HEAD 版本）、untracked 道不复制；隔离清单（文件←归属者）显式打印
++   * 一行。oracle 异常 fail-open 退回现状全量 overlay，绝不让 create 抛错。
+    * @param {string} mainCwd - 主工作区路径
+    * @param {string} worktreePath - worktree 路径
++   * @param {string} [changeName] - 本变更名；缺省/空串不切分（存量两参直调路径零回归）
+    * @returns {Array<string>} overlay 的文件列表
+    */
+-  _overlayBaseline(mainCwd, worktreePath) {
++  _overlayBaseline(mainCwd, worktreePath, changeName = null) {
+     const files = [];
+     const errors = [];
+     // git pathspec 排除（execFileSync 数组传参不经 shell，字面安全）：.sillyspec/ 整目录
+@@ -1914,18 +2129,53 @@ export class WorktreeManager {
+         if (norm === '.sillyspec' || norm.startsWith('.sillyspec/')) excluded.push(f)
+       }
+     }
++    // quotepath 归一：diff --name-only / ls-files 输出的非 ASCII 路径带双引号包裹，
++    // 与声明集比对、生成 pathspec 排除串前先按 unquoteGitPath 口径剥引号再反斜杠→正斜杠
++    const normalizeGitPath = (raw) => {
++      let p = raw;
++      if (p.length >= 2 && p.startsWith('"') && p.endsWith('"')) p = unquoteGitPath(p.slice(1, -1));
++      return p.replace(/\\/g, '/');
++    }
++    const isSpecPath = (n) => n === '.sillyspec' || n.startsWith('.sillyspec/');
++    // 他者声明文件的每道切分（staged/unstaged/untracked 各调一次，非逐文件）：
++    // 对该道全量输出的非 .sillyspec 集跑 own/foreign oracle，foreign → pathspec 排除串 +
++    // Map（路径→owners[]）+ 隔离明细；oracle 抛错 fail-open 退回该道全量（不阻断 create）
++    const foreignIsolated = []; // 「文件←归属者」明细（三道汇总，尾部去重打印）
++    const splitForeignLane = (rawAll) => {
++      const excludeSpecs = [];
++      const foreignSet = new Map();
++      if (!changeName) return { excludeSpecs, foreignSet };
++      try {
++        const candidates = rawAll.split('\n').filter(Boolean).map(normalizeGitPath).filter(n => !isSpecPath(n));
++        if (candidates.length === 0) return { excludeSpecs, foreignSet };
++        const { foreign } = splitOwnVsForeignDiffFiles(mainCwd, changeName, candidates);
++        for (const e of foreign) {
++          foreignSet.set(e.file, e.owners);
++          // 剥引号后的实际路径入 pathspec（git() 数组传参字面安全，与 :(exclude).sillyspec 同机制）
++          excludeSpecs.push(':(exclude)' + e.file);
++          foreignIsolated.push(`${e.file}←${e.owners.join(',')}`);
++        }
++      } catch (e) {
++        console.warn(`⚠️ baseline overlay 并行会话声明切分失败（${e.message}），本道退回全量 overlay`);
++      }
++      return { excludeSpecs, foreignSet };
++    }
+ 
+     try {
+       const excludedSpecFiles = [];
+-      // staged 变更（pathspec 排除 .sillyspec/——跨变更 spec 文档不进 baseline）
+-      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only', '--', '.', EXCLUDE_PATHSPEC], { timeout: 30000 }) || ''
++      // staged 变更（pathspec 排除 .sillyspec/——跨变更 spec 文档不进 baseline；
++      // 他者声明文件切分后一并排除，--name-only 与 --binary 两组 diff 命令同步收窄，
++      // files 清单只收 own——staged 输出即已剔除 foreign 的剩余部分）
+       const stagedAll = gitQuiet(mainCwd, ['diff', '--cached', '--name-only'], { timeout: 30000 }) || ''
+       collectExcluded(stagedAll, excludedSpecFiles)
++      const stagedForeign = splitForeignLane(stagedAll)
++      const stagedPathspec = ['--', '.', EXCLUDE_PATHSPEC, ...stagedForeign.excludeSpecs]
++      const staged = gitQuiet(mainCwd, ['diff', '--cached', '--name-only', ...stagedPathspec], { timeout: 30000 }) || ''
+       if (staged) {
+         try {
+           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏
+           // QUAL-01 收口：git-helper 新增 encoding:'buffer' 支持（二进制输出专用，跳过 trim）
+-          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary', '--', '.', EXCLUDE_PATHSPEC], { encoding: 'buffer', timeout: 30000 });
++          const patchBuf = git(mainCwd, ['diff', '--cached', '--binary', ...stagedPathspec], { encoding: 'buffer', timeout: 30000 });
+           if (patchBuf && patchBuf.length > 0) {
+             const patchFile = join(worktreePath, '.sillyspec-baseline-staged.patch');
+             try {
+@@ -1943,14 +2193,16 @@ export class WorktreeManager {
+         files.push(...staged.split('\n').filter(Boolean));
+       }
+ 
+-      // unstaged 变更（同上 pathspec 排除）
+-      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only', '--', '.', EXCLUDE_PATHSPEC], { timeout: 30000 }) || ''
++      // unstaged 变更（同上 pathspec 排除 + 他者声明剔除；--binary 不带 --cached）
+       const unstagedAll = gitQuiet(mainCwd, ['diff', '--name-only'], { timeout: 30000 }) || ''
+       collectExcluded(unstagedAll, excludedSpecFiles)
++      const unstagedForeign = splitForeignLane(unstagedAll)
++      const unstagedPathspec = ['--', '.', EXCLUDE_PATHSPEC, ...unstagedForeign.excludeSpecs]
++      const unstaged = gitQuiet(mainCwd, ['diff', '--name-only', ...unstagedPathspec], { timeout: 30000 }) || ''
+       if (unstaged) {
+         try {
+           // 用 Buffer 模式读取，避免二进制 patch 被 UTF-8 解码损坏（QUAL-01 收口，同上）
+-          const patchBuf = git(mainCwd, ['diff', '--binary', '--', '.', EXCLUDE_PATHSPEC], { encoding: 'buffer', timeout: 30000 });
++          const patchBuf = git(mainCwd, ['diff', '--binary', ...unstagedPathspec], { encoding: 'buffer', timeout: 30000 });
+           if (patchBuf && patchBuf.length > 0) {
+             const patchFile = join(worktreePath, '.sillyspec-baseline-unstaged.patch');
+             try {
+@@ -1971,6 +2223,8 @@ export class WorktreeManager {
+       const untracked = gitQuiet(mainCwd, ['ls-files', '--others', '--exclude-standard'], { timeout: 30000 }) || '';
+       const skippedDirs = [];
+       const skippedArtifacts = [];
++      // untracked 道 foreign 切分（一次全量非 .sillyspec 集，循环内仅 Map 查询）
++      const untrackedForeign = splitForeignLane(untracked)
+       if (untracked) {
+         for (const f of untracked.split('\n').filter(Boolean)) {
+           const norm = f.replace(/\\/g, '/')
+@@ -1979,6 +2233,9 @@ export class WorktreeManager {
+           // baseline checkpoint——289MB tar.gz 入分支（FF 破坏 + 二进制永久入 git）的实际代价兜底
+           const artifactWhy = isCheckpointSkippableArtifact(join(mainCwd, f));
+           if (artifactWhy) { skippedArtifacts.push(`${f}（${artifactWhy}）`); continue }
++          // 他者会话声明的在途文件不复制（与 skipped-dir/artifact 同型跳过；明细已在切分时
++          // 计入隔离清单）——quotepath 引号路径先剥引号归一再比对
++          if (untrackedForeign.foreignSet.has(normalizeGitPath(f))) continue;
+           const r = copyUntrackedEntry(join(mainCwd, f), join(worktreePath, f));
+           if (r.status === 'copied') files.push(f);
+           else if (r.status === 'skipped-dir') skippedDirs.push(f);
+@@ -1999,6 +2256,13 @@ export class WorktreeManager {
+         const preview = excludedUnique.slice(0, 8).join(', ') + (excludedUnique.length > 8 ? ` …（共 ${excludedUnique.length} 个）` : '')
+         console.log(`🧹 baseline overlay 已隔离 ${excludedUnique.length} 个 .sillyspec/ 未提交文件（跨变更 spec 文档不进本变更 baseline，留在主仓各自归属）：${preview}`)
+       }
++      // 并行会话声明隔离可见性：foreign 文件去重截断一行（对齐上方 .sillyspec/ 隔离打印
++      // 样式）——哪些在途文件被隔离、归属谁，create 时刻可查，不需事后考古
++      const foreignUnique = [...new Set(foreignIsolated)]
++      if (foreignUnique.length > 0) {
++        const preview = foreignUnique.slice(0, 8).join(', ') + (foreignUnique.length > 8 ? ` …（共 ${foreignUnique.length} 个）` : '')
++        console.log(`🧹 baseline overlay 已隔离 ${foreignUnique.length} 个并行会话声明的在途文件（worktree 取基线 HEAD 版本，不随本变更 apply）：${preview}`)
++      }
+ 
+       if (files.length > 0) {
+         console.log(`📁 baseline overlay: ${files.length} 个未提交文件已同步到 worktree`);
+diff --git a/test/worktree-dual-truth-gates.test.mjs b/test/worktree-dual-truth-gates.test.mjs
+new file mode 100644
+index 0000000..8ccdf31
+--- /dev/null
++++ b/test/worktree-dual-truth-gates.test.mjs
+@@ -0,0 +1,467 @@
++/**
++ * 2026-09-15-worktree-dual-truth-gates 五坑回归收口（task-06 / FR-01~FR-05 / D-001~D-005@v1）。
++ *
++ * 五坑各一组用例（正向修复行为 + 零回归锚），断言行为契约不触内部符号（私有方法
++ * _overlayBaseline/_supplyGeneratedFiles 为任务卡明示直调面）：
++ *   组1 FR-01：baseline overlay 三道剔除并行会话声明文件（quick guard / 他变更 design §6，
++ *      own 优先）；无声明与两参直调路径零回归。
++ *   组2 FR-02：applyWorktree step 2 no-op 文件剔除（worktree 内容=主仓 HEAD blob）+ warnings
++ *      清单；≠HEAD 文件与主仓 HEAD 无路径新文件不受影响。
++ *   组3 FR-03：worktree.supplyFiles 生成物供给（精确+glob 复制 / meta.supplyFiles 记录 /
++ *      缺失 warn 不阻断 / 未配置静默空转）。
++ *   组4 FR-04：勾选守卫口径统一（collectWorktreeChangedFiles 单一真相 + baselineFiles 剔除，
++ *      经 autoCheckPlanFromReviews 集成面）+ attributeSuspectTasks 多归属（reconcileTargetFiles
++ *      消费面，suspectTask 边界 join 成 string）。
++ *   组5 FR-05：required-evidence 逐文件核验双根（wt-only 新文件不再误报不存在）；meta 缺失
++ *      退单根零回归。
++ *
++ * fixture 沿 test/verify-evidence-triple.test.mjs 的 makeFx + test/baseline-overlay-isolation.test.mjs
++ * 的临时 git 仓搭法（node:test + node:assert/strict，Windows 路径 join + 正斜杠归一）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync } from 'node:child_process'
++import { WorktreeManager } from '../src/worktree.js'
++import { applyWorktree } from '../src/worktree-apply.js'
++import { collectWorktreeChangedFiles } from '../src/task-review.js'
++import { autoCheckPlanFromReviews } from '../src/run/complete.js'
++import { reconcileTargetFiles, runVerifyRequiredEvidenceCheck } from '../src/verify-postcheck.js'
++
++function sh(cmd, cwd) { execSync(cmd, { cwd, stdio: 'pipe' }) }
++function gitOut(cmd, cwd) { return execSync(cmd, { cwd, encoding: 'utf8' }).trim() }
++
++/**
++ * 临时 git 仓 fixture：init -b main + 身份 + core.autocrlf false（内容断言按 LF 精确比对），
++ * .gitignore 预置 .sillyspec/.runtime/ 与 meta.json（runtime 产物与手写 meta 不进 untracked 道）。
++ * files：{ 相对路径: 内容 }，全部进 base 提交。
++ */
++function makeRepo(files = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'sillyspec-dtg-'))
++  sh('git init -b main -q', cwd)
++  sh('git config user.email t@t && git config user.name t && git config core.autocrlf false', cwd)
++  writeFileSync(join(cwd, '.gitignore'), '.sillyspec/.runtime/\nmeta.json\n')
++  for (const [rel, content] of Object.entries(files)) {
++    const p = join(cwd, rel)
++    mkdirSync(dirname(p), { recursive: true })
++    writeFileSync(p, content)
++  }
++  sh('git add -A && git commit -qm base', cwd)
++  return cwd
++}
++
++/** design.md §6 文件变更清单（表格形态，change-list.js 双写法之一） */
++function writeDesignWithList(specBase, changeName, paths, extra = '') {
++  const dir = join(specBase, 'changes', changeName)
++  mkdirSync(dir, { recursive: true })
++  const rows = paths.map(p => `| 修改 | ${p} | 声明 |`)
++  writeFileSync(join(dir, 'design.md'),
++    `---\nauthor: t\ncreated_at: 2026-09-15T00:00:00\n---\n\n# ${changeName}\n${extra}\n## 6. 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n${rows.join('\n')}\n`)
++}
++
++/** 他 quick 会话 guard.json（--files 显式声明面） */
++function writeQuickGuard(specBase, sessionId, allowedFiles) {
++  const dir = join(specBase, '.runtime', 'quick-sessions', sessionId)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'guard.json'), JSON.stringify({ allowedFiles }))
++}
++
++/** worktree meta.json（手搭形态，对齐 baseline-overlay-isolation.test.mjs 的 writeMeta 惯例） */
++function writeMeta(wtDir, meta) {
++  writeFileSync(join(wtDir, 'meta.json'), JSON.stringify({
++    name_zh: 'm', mode: 'worktree', baseBranch: 'main', baselineFiles: [], ...meta,
++  }))
++}
++
++/** 真实注册 git worktree（porcelain / hash-object / patch apply 都要真 git 环境） */
++function addWorktree(cwd, changeName) {
++  const wt = join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName)
++  sh(`git worktree add "${wt}" -b sillyspec/${changeName}`, cwd)
++  return wt
++}
++
++/** 收集 console.log/warn（隔离清单打印 / 缺失告警等可见性断言用） */
++function captureConsole(fn) {
++  const logs = []
++  const warns = []
++  const origLog = console.log
++  const origWarn = console.warn
++  console.log = (...a) => { logs.push(a.map(String).join(' ')) }
++  console.warn = (...a) => { warns.push(a.map(String).join(' ')) }
++  try {
++    return { logs, warns, result: fn() }
++  } finally {
++    console.log = origLog
++    console.warn = origWarn
++  }
++}
++
++function cleanupRepo(cwd, wtPath) {
++  try { if (wtPath) sh(`git worktree remove --force "${wtPath}"`, cwd) } catch { /* 尽力而为，仓随 rmSync 一并消亡 */ }
++  try { rmSync(cwd, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }) } catch { /* Windows 句柄释放延迟容忍 */ }
++}
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 组1 FR-01：baseline overlay 隔离并行会话声明文件（D-001@v1）
++// ─────────────────────────────────────────────────────────────────────────────
++
++test('FR-01 正向：create 三道剔除他者声明在途文件（guard/design §6），own 优先照常 overlay', () => {
++  const d = makeRepo({
++    'feature.js': 'base\n',        // 未声明 → own 默认道，照常 overlay
++    'foreign-staged.js': 'base\n', // 他变更 design §6 声明 + 主仓 staged → staged patch 道剔除
++    'foreign-design.js': 'base\n', // 他变更 design §6 声明 + 主仓 unstaged → unstaged patch 道剔除
++    'shared.js': 'base\n',         // 双方声明 → own 优先，照常 overlay
++  })
++  const cn = '2026-09-15-dtg1'
++  const specBase = join(d, '.sillyspec')
++  let wt = null
++  try {
++    // 本变更 own 声明 shared.js（design §6）；他变更声明三个 foreign 文件
++    writeDesignWithList(specBase, cn, ['shared.js'])
++    writeDesignWithList(specBase, '2026-09-15-other', ['foreign-design.js', 'foreign-staged.js', 'shared.js'])
++    writeQuickGuard(specBase, 'quick-1a2b3c4d', ['foreign-quick.js'])
++    // 主仓在途：own 两文件 unstaged、他者 staged/unstaged/untracked 各一
++    writeFileSync(join(d, 'feature.js'), 'dirty-own\n')
++    writeFileSync(join(d, 'shared.js'), 'dirty-shared\n')
++    writeFileSync(join(d, 'foreign-design.js'), 'dirty-design\n')
++    writeFileSync(join(d, 'foreign-staged.js'), 'dirty-staged\n')
++    sh('git add foreign-staged.js', d)
++    writeFileSync(join(d, 'foreign-quick.js'), 'quick-wip\n')
++
++    const wm = new WorktreeManager({ cwd: d })
++    const { logs, result } = captureConsole(() => wm.create(cn))
++    wt = result.worktreePath
++
++    // 剔除面：worktree 保留基线 HEAD 版本（staged/unstaged patch 道未回放）、untracked 不复制
++    assert.equal(readFileSync(join(wt, 'foreign-staged.js'), 'utf8'), 'base\n', 'staged 声明文件不回放（保持 HEAD 版）')
++    assert.equal(readFileSync(join(wt, 'foreign-design.js'), 'utf8'), 'base\n', 'unstaged 声明文件不回放（保持 HEAD 版）')
++    assert.ok(!existsSync(join(wt, 'foreign-quick.js')), 'guard 声明 untracked 文件不复制进 worktree')
++    // 保留面：未声明与 own 优先文件照常 overlay
++    assert.equal(readFileSync(join(wt, 'feature.js'), 'utf8'), 'dirty-own\n', '未声明文件照常 overlay')
++    assert.equal(readFileSync(join(wt, 'shared.js'), 'utf8'), 'dirty-shared\n', '双方声明 own 优先，照常 overlay')
++    // meta.baselineFiles：只收 own 面
++    const meta = wm.getMeta(cn)
++    assert.ok((meta.baselineFiles || []).includes('feature.js') && (meta.baselineFiles || []).includes('shared.js'),
++      `baselineFiles 含 own 文件（实际 ${JSON.stringify(meta.baselineFiles)}）`)
++    assert.ok(!(meta.baselineFiles || []).some(f => String(f).startsWith('foreign-')), 'baselineFiles 不含他者声明文件')
++    // checkpoint message 不夹带他者文件
++    const ckptMsg = gitOut('git log --grep "baseline checkpoint" -1 --format=%B', wt)
++    assert.ok(ckptMsg.includes('- feature.js') && ckptMsg.includes('- shared.js'), '夹带清单点名 own 文件')
++    assert.ok(!ckptMsg.includes('foreign-'), '隔离的他者文件不进夹带清单')
++    // 隔离清单可见性：一行打印（文件←归属者）
++    assert.ok(logs.some(l => l.includes('已隔离 3 个并行会话声明的在途文件') && l.includes('foreign-quick.js←quick-1a2b3c4d')),
++      `隔离清单打印（实际 ${logs.find(l => l.includes('并行会话声明')) || '无'}）`)
++  } finally { cleanupRepo(d, wt) }
++})
++
++test('FR-01 零回归：无并行声明（foreign=[]）时 overlay 行为与现状完全一致', () => {
++  const d = makeRepo({ 'feature.js': 'base\n' })
++  const cn = '2026-09-15-dtg1z'
++  let wt = null
++  try {
++    writeFileSync(join(d, 'feature.js'), 'dirty-own\n')   // unstaged
++    writeFileSync(join(d, 'own-new.js'), 'new-own\n')     // untracked
++    const wm = new WorktreeManager({ cwd: d })
++    const { logs, result } = captureConsole(() => wm.create(cn))
++    wt = result.worktreePath
++    assert.equal(readFileSync(join(wt, 'feature.js'), 'utf8'), 'dirty-own\n', 'unstaged 改动照常 overlay')
++    assert.ok(existsSync(join(wt, 'own-new.js')), 'untracked 新文件照常复制')
++    const meta = wm.getMeta(cn)
++    assert.deepEqual((meta.baselineFiles || []).slice().sort(), ['feature.js', 'own-new.js'], 'baselineFiles 全量收录')
++    assert.ok(!logs.some(l => l.includes('并行会话声明')), '无声明时无隔离清单打印')
++  } finally { cleanupRepo(d, wt) }
++})
++
++test('FR-01 零回归：_overlayBaseline 两参直调（不传 changeName）不切分——声明在场也全量 overlay', () => {
++  const d = makeRepo({ 'feature.js': 'base\n', 'foreign-design.js': 'base\n' })
++  const specBase = join(d, '.sillyspec')
++  const wt = join(d, 'wt-legacy')
++  try {
++    // 声明面在场（证明下文全量 overlay 是「缺省不切分」而非「无处可剔」）
++    writeQuickGuard(specBase, 'quick-1a2b3c4d', ['foreign-quick.js'])
++    writeDesignWithList(specBase, '2026-09-15-other', ['foreign-design.js'])
++    writeFileSync(join(d, 'feature.js'), 'dirty-own\n')
++    writeFileSync(join(d, 'foreign-design.js'), 'dirty-design\n')
++    writeFileSync(join(d, 'foreign-quick.js'), 'quick-wip\n')
++    sh(`git worktree add "${wt}" -b tmp-legacy`, d)
++
++    const wm = new WorktreeManager({ cwd: d })
++    const r = wm._overlayBaseline(d, wt) // 两参：存量直调路径，changeName 缺省
++
++    assert.ok(r.files.includes('feature.js') && r.files.includes('foreign-design.js') && r.files.includes('foreign-quick.js'),
++      `返回 files 全量（实际 ${JSON.stringify(r.files)}）`)
++    assert.ok(r.files.every(f => !String(f).includes('\\')), '返回路径正斜杠口径')
++    assert.equal(readFileSync(join(wt, 'feature.js'), 'utf8'), 'dirty-own\n', 'unstaged patch 照常应用')
++    assert.equal(readFileSync(join(wt, 'foreign-design.js'), 'utf8'), 'dirty-design\n', '他者声明文件照常应用（不隔离）')
++    assert.ok(existsSync(join(wt, 'foreign-quick.js')), '他者 untracked 照常复制（不隔离）')
++  } finally { cleanupRepo(d, wt) }
++})
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 组2 FR-02：assess/apply 剔除 no-op 文件（D-002@v1）
++// ─────────────────────────────────────────────────────────────────────────────
++
++test('FR-02 正向：主仓 HEAD 前进后 worktree 重同步文件剔除 changedFiles + warnings 清单；非 no-op 保留', () => {
++  const d = makeRepo({ 'x.js': 'base\n', 'y.js': 'base\n' })
++  const cn = '2026-09-15-dtg2'
++  const wt = addWorktree(d, cn)
++  try {
++    const base = gitOut('git rev-parse HEAD', d)
++    // 主仓 HEAD 前进：x.js 推进到新内容
++    writeFileSync(join(d, 'x.js'), 'main-v2\n')
++    sh('git add -A && git commit -qm advance', d)
++    // worktree 自救：x.js 重同步成主仓 HEAD 同内容（对 baseline diff 非空、apply 实为 no-op）；
++    // y.js 独立改动（≠主仓 HEAD）；z.js 主仓 HEAD 无路径的新文件
++    writeFileSync(join(wt, 'x.js'), 'main-v2\n')
++    writeFileSync(join(wt, 'y.js'), 'wt-y\n')
++    writeFileSync(join(wt, 'z.js'), 'new\n')
++    writeMeta(wt, { changeName: cn, branch: `sillyspec/${cn}`, baseHash: base, baselineCommit: base, worktreePath: wt })
++
++    const r = applyWorktree(cn, { cwd: d, checkOnly: true })
++
++    assert.equal(r.ok, true, `assess checkOnly ok（errors=${JSON.stringify(r.errors)}）`)
++    assert.ok(!r.changedFiles.includes('x.js'), `no-op 文件剔除（实际 ${JSON.stringify(r.changedFiles)}）`)
++    assert.ok(r.changedFiles.includes('y.js'), '内容 ≠ 主仓 HEAD 的文件保留')
++    assert.ok(r.changedFiles.includes('z.js'), '主仓 HEAD 无路径的新文件保留')
++    assert.ok((r.warnings || []).some(w => w.includes('no-op') && w.includes('x.js')),
++      `warnings 含 no-op 清单（实际 ${JSON.stringify(r.warnings)}）`)
++    assert.ok(!(r.warnings || []).some(w => w.includes('no-op') && (w.includes('y.js') || w.includes('z.js'))),
++      '非 no-op 文件不进 no-op 告警')
++  } finally { cleanupRepo(d, wt) }
++})
++
++test('FR-02 零回归：主仓未推进（HEAD==baseline）时无 no-op 剔除，改动文件判定不受影响', () => {
++  const d = makeRepo({ 'w.js': 'base\n' })
++  const cn = '2026-09-15-dtg2z'
++  const wt = addWorktree(d, cn)
++  try {
++    const base = gitOut('git rev-parse HEAD', d)
++    writeFileSync(join(wt, 'w.js'), 'wt-change\n') // worktree 独立改动，主仓 HEAD 仍是 base
++    writeMeta(wt, { changeName: cn, branch: `sillyspec/${cn}`, baseHash: base, baselineCommit: base, worktreePath: wt })
++
++    const r = applyWorktree(cn, { cwd: d, checkOnly: true })
++
++    assert.equal(r.ok, true)
++    assert.ok(r.changedFiles.includes('w.js'), '非 no-op 改动保留在 changedFiles')
++    assert.ok(!(r.warnings || []).some(w => w.includes('no-op')), '无 no-op 告警')
++  } finally { cleanupRepo(d, wt) }
++})
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 组3 FR-03：worktree.supplyFiles 生成物供给（D-003@v1）
++// ─────────────────────────────────────────────────────────────────────────────
++
++test('FR-03 正向：精确+glob 供给复制就位；缺失 warn 不阻断；glob 不越类匹配', () => {
++  const d = makeRepo({ 'gen/two.js': 'js\n' })
++  const target = mkdtempSync(join(tmpdir(), 'sillyspec-dtg-supply-'))
++  const silent = mkdtempSync(join(tmpdir(), 'sillyspec-dtg-supply2-'))
++  try {
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'build-id.ts'), 'id-1\n')
++    writeFileSync(join(d, 'gen', 'one.ts'), 'g1\n')
++    mkdirSync(join(d, '.sillyspec'), { recursive: true })
++    writeFileSync(join(d, '.sillyspec', 'local.yaml'),
++      'worktree:\n  supplyFiles:\n    - src/build-id.ts\n    - gen/*.ts\n    - missing/absent.js\n')
++
++    const wm = new WorktreeManager({ cwd: d })
++    const { warns, result } = captureConsole(() => wm._supplyGeneratedFiles(target))
++
++    assert.deepEqual(result, ['gen/one.ts', 'src/build-id.ts'], `实供清单（排序稳定，实际 ${JSON.stringify(result)}）`)
++    assert.equal(readFileSync(join(target, 'src', 'build-id.ts'), 'utf8'), 'id-1\n', '精确路径复制就位（父目录按需创建）')
++    assert.equal(readFileSync(join(target, 'gen', 'one.ts'), 'utf8'), 'g1\n', 'glob 命中复制就位')
++    assert.ok(!existsSync(join(target, 'gen', 'two.js')), 'glob *.ts 不越类匹配 .js')
++    assert.ok(warns.some(w => w.includes('supplyFiles') && w.includes('missing/absent.js')), '缺失项 warn 提示')
++
++    // 零回归：未配置（无 local.yaml）→ 静默空转，无输出无文件
++    const d2 = makeRepo({ 'a.js': 'a\n' })
++    try {
++      const wm2 = new WorktreeManager({ cwd: d2 })
++      const cap = captureConsole(() => wm2._supplyGeneratedFiles(silent))
++      assert.deepEqual(cap.result, [], '未配置返回空清单')
++      assert.ok(!cap.warns.some(w => w.includes('supplyFiles')), '未配置无供给告警')
++      assert.ok(!cap.logs.some(l => l.includes('supplyFiles')), '未配置无供给日志')
++      assert.ok(!existsSync(join(silent, 'a.js')), '未配置零复制')
++    } finally { cleanupRepo(d2, null) }
++  } finally {
++    try { rmSync(target, { recursive: true, force: true }) } catch { /* best-effort */ }
++    try { rmSync(silent, { recursive: true, force: true }) } catch { /* best-effort */ }
++  }
++})
++
++test('FR-03 正向（create 集成）：gitignore 生成物经供给步进 worktree + meta.supplyFiles 记录（缺命中不阻断）', () => {
++  const d = mkdtempSync(join(tmpdir(), 'sillyspec-dtg-'))
++  const cn = '2026-09-15-dtg3'
++  let wt = null
++  try {
++    sh('git init -b main -q', d)
++    sh('git config user.email t@t && git config user.name t && git config core.autocrlf false', d)
++    // build-id.ts 是 gitignore 生成物：不在 git 树、也不进 untracked overlay（exclude-standard 尊重 .gitignore）
++    writeFileSync(join(d, '.gitignore'), '.sillyspec/.runtime/\nmeta.json\nsrc/build-id.ts\n')
++    writeFileSync(join(d, 'a.js'), 'a\n')
++    sh('git add -A && git commit -qm base', d)
++    mkdirSync(join(d, 'src'), { recursive: true })
++    writeFileSync(join(d, 'src', 'build-id.ts'), 'id-1\n')
++    mkdirSync(join(d, '.sillyspec'), { recursive: true })
++    writeFileSync(join(d, '.sillyspec', 'local.yaml'),
++      'worktree:\n  supplyFiles:\n    - src/build-id.ts\n    - no-such.js\n')
++
++    const wm = new WorktreeManager({ cwd: d })
++    const result = wm.create(cn) // no-such.js 缺失 → warn 但不阻断
++    wt = result.worktreePath
++
++    assert.equal(readFileSync(join(wt, 'src', 'build-id.ts'), 'utf8'), 'id-1\n', '生成物复制进 worktree')
++    assert.deepEqual(wm.getMeta(cn).supplyFiles, ['src/build-id.ts'], 'meta.supplyFiles 记录实供清单')
++  } finally { cleanupRepo(d, wt) }
++})
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 组4 FR-04：勾选守卫口径统一 + 归因多归属（D-004@v1）
++// ─────────────────────────────────────────────────────────────────────────────
++
++test('FR-04 helper 面：collectWorktreeChangedFiles = porcelain 未提交 ∪ committed 补齐；in-place 退化取 cwd', () => {
++  const d = makeRepo({ 'a.js': 'a\n', 'b.js': 'b\n' })
++  const cn = '2026-09-15-dtg4'
++  const wt = addWorktree(d, cn)
++  try {
++    // worktree 内：b.js 已 commit（对主仓 base..HEAD 与 porcelain 双不可见），a.js 未提交（子代理默认不 commit 形态）
++    writeFileSync(join(wt, 'b.js'), 'b-wt\n')
++    sh('git add -A && git commit -qm "baseline checkpoint"', wt)
++    writeFileSync(join(wt, 'a.js'), 'a-wt\n')
++
++    const files = collectWorktreeChangedFiles(d, cn, { worktreePath: wt, mode: 'worktree' })
++    assert.ok(files.includes('a.js'), `porcelain 未提交文件并入（实际 ${JSON.stringify(files)}）`)
++    assert.ok(files.includes('b.js'), 'worktree 内已提交文件经 merge-base 补齐并入')
++    assert.ok(files.every(f => !String(f).includes('\\')), '返回路径正斜杠口径')
++
++    // 零回归（GWT3）：meta 缺失 → in-place 退化取主仓 cwd porcelain（现状并入行为不丢）
++    writeFileSync(join(d, 'c.js'), 'c-inplace\n')
++    const inplace = collectWorktreeChangedFiles(d, cn, null)
++    assert.ok(inplace.includes('c.js'), `in-place 退化取主仓 porcelain（实际 ${JSON.stringify(inplace)}）`)
++  } finally { cleanupRepo(d, wt) }
++})
++
++test('FR-04 集成面：未提交 worktree 改动命中勾选；baselineFiles 夹带文件不误勾（防伪底线）', async () => {
++  const d = makeRepo({ 'a.js': 'a\n', 'b.js': 'b\n' })
++  const cn = 'c1'
++  const wt = addWorktree(d, cn)
++  try {
++    const base = gitOut('git rev-parse HEAD', d)
++    // b.js 被 baseline checkpoint 夹带（commit 进 worktree 分支）；a.js 是本变更真实未提交改动
++    writeFileSync(join(wt, 'b.js'), 'b-carried\n')
++    sh('git add -A && git commit -qm "baseline checkpoint"', wt)
++    writeFileSync(join(wt, 'a.js'), 'a-real\n')
++    const wtHead = gitOut('git rev-parse HEAD', wt)
++    writeMeta(wt, { changeName: cn, branch: `sillyspec/${cn}`, baseHash: base, baselineCommit: base, worktreePath: wt, baselineFiles: ['b.js'] })
++
++    const specBase = join(d, '.sillyspec')
++    const changeDir = join(specBase, 'changes', cn)
++    const rt = join(specBase, '.runtime')
++    const runId = 'exec-2026-09-15-010101-x1'
++    for (const t of ['task-01', 'task-02']) mkdirSync(join(rt, 'execute-runs', runId, 'tasks', t), { recursive: true })
++    writeFileSync(join(rt, `current-execute-run-id-${cn}`), `${runId}\n`)
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'tasks.md'), '# tasks\n\n- [ ] task-01: 甲改文件\n- [ ] task-02: 乙声明未做\n')
++    const draft = (task, changedFiles) => JSON.stringify({
++      schemaVersion: 1, task, base, head: wtHead, changedFiles,
++      specVerdict: 'cannot_verify', qualityVerdict: 'cannot_verify',
++      requiredEvidence: ['auto-generated draft: 待复核'],
++      reviewerNotes: `auto-generated draft from git diff ${base.slice(0, 8)}..${wtHead.slice(0, 8)};verdict=未评审`,
++    })
++    writeFileSync(join(rt, 'execute-runs', runId, 'tasks', 'task-01', 'review.json'), draft('task-01', ['a.js']))
++    writeFileSync(join(rt, 'execute-runs', runId, 'tasks', 'task-02', 'review.json'), draft('task-02', ['b.js']))
++
++    const r = await autoCheckPlanFromReviews({ stageName: 'execute', changeName: cn, cwd: d, platformOpts: {} })
++
++    const after = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
++    assert.ok(/- \[x\] task-01/.test(after), '未提交 worktree 改动命中勾选（GWT1：旧口径 base..head 恒空必跳过）')
++    assert.ok(/- \[ \] task-02/.test(after), 'baseline 夹带文件被剔出 diffFileSet，声明未做不误勾（GWT2 防伪底线）')
++    assert.equal(r.checkedCount, 1, `checkedCount（实际 ${JSON.stringify(r)}）`)
++    assert.equal(r.skippedCount, 1, 'skippedCount')
++  } finally { cleanupRepo(d, wt) }
++})
++
++test('FR-04 归因面：同文件双 task 全归属（suspectTask join 成 string）；单归属形态不变', () => {
++  const d = makeRepo({ 'src/a.js': 'a\n', 'src/shared.js': 's\n', 'src/extra.js': 'e\n' })
++  const cn = 'c2'
++  try {
++    const specBase = join(d, '.sillyspec')
++    // 声明侧：task-01 声明 src/a.js（已做）；shared/extra 未声明 → ③类
++    const tasksDir = join(specBase, 'changes', cn, 'tasks')
++    mkdirSync(tasksDir, { recursive: true })
++    writeFileSync(join(tasksDir, 'task-01.md'), '---\nid: task-01\ntarget_files:\n  - src/a.js\n---\n\n# task-01\n')
++    // 归因侧：两个 task 的 review 都声明 src/shared.js；src/extra.js 仅 task-04
++    const runId = 'exec-2026-09-15-020202'
++    const runTasks = join(specBase, '.runtime', 'execute-runs', runId, 'tasks')
++    for (const t of ['task-04', 'task-05']) mkdirSync(join(runTasks, t), { recursive: true })
++    writeFileSync(join(specBase, '.runtime', 'execute-runs', runId, 'change'), `${cn}\n`)
++    writeFileSync(join(runTasks, 'task-04', 'review.json'), JSON.stringify({ task: 'task-04', changedFiles: ['src/shared.js', 'src/extra.js'] }))
++    writeFileSync(join(runTasks, 'task-05', 'review.json'), JSON.stringify({ task: 'task-05', changedFiles: ['src/shared.js'] }))
++    // actual 侧（形态 B porcelain）：三个文件均未提交改动
++    writeFileSync(join(d, 'src', 'a.js'), 'a2\n')
++    writeFileSync(join(d, 'src', 'shared.js'), 's2\n')
++    writeFileSync(join(d, 'src', 'extra.js'), 'e2\n')
++
++    const r = reconcileTargetFiles({ cwd: d, changeName: cn })
++
++    assert.equal(r.status, 'undeclared', `状态（实际 ${JSON.stringify(r)}）`)
++    assert.ok(r.matched.includes('src/a.js'), '①交集命中')
++    const shared = r.undeclared.find(u => u.path === 'src/shared.js')
++    const extra = r.undeclared.find(u => u.path === 'src/extra.js')
++    assert.equal(shared && shared.suspectTask, 'task-04、task-05', '多归属：全部命中 task 收集（旧「首个命中即止」吞归属）')
++    assert.equal(typeof (shared && shared.suspectTask), 'string', '边界 join 成 string（gates/archive-delta 下游零改动形态）')
++    assert.equal(extra && extra.suspectTask, 'task-04', '单归属归因形态不变（零回归）')
++  } finally { cleanupRepo(d, null) }
++})
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 组5 FR-05：required-evidence 消费侧双根核验（D-005@v1）
++// ─────────────────────────────────────────────────────────────────────────────
++
++/** evidence 双根 fixture：主仓 + 真 worktree（可选 meta）+ 证据账/报告槽 */
++function makeEvidenceFx({ withMeta }) {
++  const d = makeRepo({ 'src/code.js': 'old\n' })
++  const cn = 'c1'
++  const wt = addWorktree(d, cn)
++  // 证据文件只存在于 worktree（apply 前新文件形态）
++  writeFileSync(join(wt, 'src', 'wt-only.js'), 'new\n')
++  const specBase = join(d, '.sillyspec')
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  // design created_at 设过去（R-05 fallback 宽容基准——mtime 核验不误判）
++  writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2020-01-01T00:00:00\n---\n\n# d\n')
++  writeFileSync(join(changeDir, 'verify-required-evidence.json'),
++    JSON.stringify({ generatedAt: '2026-09-15T00:00:00', schemaVersion: 1, items: [{ task: 'task-02', verdict: 'cannot_verify', evidence: ['x'] }] }))
++  writeFileSync(join(changeDir, 'verify-result.md'),
++    ['# 报告', '## 证据账（cannot_verify 任务）', '[层：人工判断——CLI 核验]', '', '- task-02: satisfied | verifiedFiles: src/wt-only.js', ''].join('\n'))
++  if (withMeta) {
++    const base = gitOut('git rev-parse HEAD', d)
++    writeMeta(wt, { changeName: cn, branch: `sillyspec/${cn}`, baseHash: base, baselineCommit: base, worktreePath: wt })
++  }
++  return { d, cn, wt, specBase }
++}
++
++test('FR-05 正向：wt-only 新文件双根核验不再误报「文件不存在」（root 命中 worktree）', () => {
++  const fx = makeEvidenceFx({ withMeta: true })
++  try {
++    const r = runVerifyRequiredEvidenceCheck({ cwd: fx.d, specBase: fx.specBase, changeName: fx.cn })
++    assert.equal(r.status, 'passed', `双根核验通过（实际 ${JSON.stringify(r.detailed)}）`)
++    const v = r.detailed[0].verification[0]
++    assert.equal(v.filesExist, true, '任一根存在即 filesExist=true（不再误报不存在）')
++    assert.equal(v.root, fx.wt, `命中根=worktree（实际 ${v.root}）`)
++    assert.equal(v.diffHit, true, 'worktree porcelain 并入 diff 集，代码类交集命中')
++  } finally { cleanupRepo(fx.d, fx.wt) }
++})
++
++test('FR-05 零回归：meta 缺失退单根——wt-only 文件仍报不存在（blocked）', () => {
++  const fx = makeEvidenceFx({ withMeta: false })
++  try {
++    const r = runVerifyRequiredEvidenceCheck({ cwd: fx.d, specBase: fx.specBase, changeName: fx.cn })
++    assert.equal(r.status, 'blocked', '单根现状：主仓无该文件 → blocked')
++    const v = r.detailed[0].verification[0]
++    assert.equal(v.filesExist, false, '单查主仓 filesExist=false')
++    assert.match(v.reason, /不存在/, '误报「文件不存在」形态保持（零回归锚）')
++    assert.equal(v.root, null, '无命中根')
++  } finally { cleanupRepo(fx.d, fx.wt) }
++})

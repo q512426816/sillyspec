@@ -1049,8 +1049,9 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
 
   // 并入 worktree 未提交改动（坑 module-subset-zero-hit-uncommitted，2026-08-21 实证：
   // 子代理默认不 commit，真实改动全在 worktree working-tree——只看 base..HEAD commit diff
-  // 时 module 映射 0 命中直接跳过（frontend/** 变更未命中 frontend 模块）。与
-  // generateTaskReviewDrafts 的并入口径同源：meta.worktreePath 下 status --porcelain 文件
+  // 时 module 映射 0 命中直接跳过（frontend/** 变更未命中 frontend 模块）。口径与
+  // collectWorktreeChangedFiles（task-review.js，D-004@v1 单一真相 helper）同源，但本段是
+  // form A 专属变体（滤网保 .sillyspec/docs/** 交付物）——已知残留 R-09，待下次触碰统一。
   // （排除 .sillyspec/ 运行时产物）。opt-in（默认关）：d drafts 有自己的并入点，避免双并。
   if (includeWorkingTree && mainFiles !== null) {
     try {
@@ -2093,6 +2094,8 @@ export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = nul
  * 天然不覆盖该类路径，硬要求交集必假红）。verifyStartAt 缺省走 R-05 fallback（design.md
  * created_at 之后宽容 + warning）。status 语义扩 'blocked'（missing 无豁免 / satisfied 核验
  * 不过）——gates 接线（task-03）据此阻断 verify 完成。
+ * 逐文件存在性/mtime 双根取数（坑⑤ / D-005@v1）：候选根 [cwd, worktree 根]——apply 前
+ * 新文件只在 worktree，单查主仓必误报「文件不存在」；meta 缺失/in-place 退单根（零回归）。
  */
 function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, verifyStartAt }) {
   const warnings = []
@@ -2120,6 +2123,26 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
     changedSet = new Set((changed || []).map(p => String(p).replace(/\\/g, '/')))
   } catch { changedSet = null }
 
+  // ── 候选根解析（坑⑤ / D-005@v1，消费侧双根）：apply 前新文件只在 worktree，逐文件核验
+  // 单查主仓 join(cwd, vf) 必误报「文件不存在」错误阻断 verify。worktree 根口径与
+  // resolveVerifyChangedFiles（~1061 metaPath 段）同源：meta 在场 && 非 in-place-fallback
+  // && worktreePath 目录存在 → roots = [cwd, worktreePath]；任一不满足退 [cwd] 单根
+  // （零回归）。解析异常 fail-open 退单根 + warning（不新增阻断路径）。静默双根——对齐
+  // buildAcceptanceHints（verify-probes.js:223）双根先例，核验明细 root 字段已可辨。──
+  let roots = [cwd]
+  try {
+    const metaPath = join(specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
+    if (existsSync(metaPath)) {
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+        roots = [cwd, meta.worktreePath]
+      }
+    }
+  } catch (e) {
+    roots = [cwd]
+    warnings.push(`worktree meta 解析失败（${e.message}），evidence 双根核验退主仓单根`)
+  }
+
   const detailed = []
   let blockedCount = 0
   for (const item of items) {
@@ -2142,11 +2165,17 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
       }
       for (const vf of slot.verifiedFiles) {
         const pathClass = classifyVerifiedFile(vf)
-        const abs = join(cwd, vf)
-        const filesExist = existsSync(abs)
+        // 双根取数（坑⑤ / D-005@v1，形态沿 buildAcceptanceHints 双根先例）：任一根存在即
+        // filesExist=true；双根都在取 worktree 根（R-05：新改动所在，主仓旧 mtime 不误判
+        // 过期）——倒序找命中根（roots=[cwd] 时即单根现状；roots=[cwd, wt] 时先试 wt 再回退）。
+        let hitRoot = null
+        for (let i = roots.length - 1; i >= 0; i--) {
+          if (existsSync(join(roots[i], vf))) { hitRoot = roots[i]; break }
+        }
+        const filesExist = hitRoot !== null
         let mtimeOk = null
         if (filesExist && startAt) {
-          try { mtimeOk = statSync(abs).mtimeMs >= startAt - 60_000 } catch { mtimeOk = null }
+          try { mtimeOk = statSync(join(hitRoot, vf)).mtimeMs >= startAt - 60_000 } catch { mtimeOk = null }
         }
         let diffHit = null
         if (pathClass === 'code') {
@@ -2156,7 +2185,7 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
         }
         const ok = filesExist && mtimeOk !== false && diffHit !== false
         if (!ok) allOk = false
-        perFile.push({ path: vf, pathClass, filesExist, mtimeOk, diffHit,
+        perFile.push({ path: vf, pathClass, filesExist, mtimeOk, diffHit, root: hitRoot,
           reason: !filesExist ? '文件不存在'
             : (mtimeOk === false ? `mtime 早于 verifyStartAt（${new Date(startAt).toISOString()}）`
             : (diffHit === false ? '不在本变更 git diff 内' : null)) })
@@ -2426,13 +2455,15 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
  * - 归属过滤：run 目录带 change 戳且不等值 → 他变更的 run 跳过（task-NN 跨变更同名，混扫必
  *   错归因；无戳旧 run 保留——向后兼容，task-review.js resolveLatestExecuteRunIdWithTasks 同款）。
  * - runId 形如 exec-YYYY-MM-DD-HHMMSS：字典序倒序 = 新 run 优先（review 以最新执行为准）。
- * - changedFiles 是 agent 手写（注记/相对路径常态），归一后 exact match、首个命中即止——
- *   归因只是③类报告的附注，错比漏代价低，不追求穷举。
+ * - changedFiles 是 agent 手写（注记/相对路径常态），归一后 exact match、全命中收集（多归属，
+ *   坑④ worktree-tick-guard-commit-only：原「首个命中即止」吞掉同文件多 task 的归属）——
+ *   归因只是③类报告的附注，错比漏代价低；同一 taskId 去重，顺序 = 扫描序（run 倒序新优先 +
+ *   task 目录字典序）。
  *
  * @param {string} runtimeRoot .sillyspec/.runtime
  * @param {string} changeName
  * @param {string[]} paths 待归因的③类路径（git 口径的干净路径）
- * @returns {Map<string, string>} normalized(path) → taskId
+ * @returns {Map<string, string[]>} normalized(path) → taskId[]（全命中收集，保序去重）
  */
 function attributeSuspectTasks(runtimeRoot, changeName, paths) {
   const map = new Map()
@@ -2459,7 +2490,10 @@ function attributeSuspectTasks(runtimeRoot, changeName, paths) {
       const taskId = (typeof review.task === 'string' && review.task.trim()) || t
       for (const cf of Array.isArray(review.changedFiles) ? review.changedFiles : []) {
         const n = normalizeReviewChangedFile(cf)
-        if (n && wantSet.has(n) && !map.has(n)) map.set(n, taskId)
+        if (!n || !wantSet.has(n)) continue
+        // 多归属：同文件被多 task 声明时全收集（D-004@v1，坑④）——旧单归属在此吞掉后续 task
+        const list = map.get(n)
+        if (list) { if (!list.includes(taskId)) list.push(taskId) } else map.set(n, [taskId])
       }
     }
   }
@@ -2484,7 +2518,7 @@ function attributeSuspectTasks(runtimeRoot, changeName, paths) {
  *   status: 'ok'|'missing_declared'|'undeclared'|'skipped'|'degraded',
  *   matched: string[],                    // ①交集（唯一路径排序）
  *   missing: Array<{task: string, path: string, isNew?: boolean}>, // ②声明没做（isNew 标 NEW: 声明，剥前缀 path）
- *   undeclared: Array<{path: string, suspectTask?: string}>,       // ③做了没声明（suspectTask=review.json 尽力归因）
+ *   undeclared: Array<{path: string, suspectTask?: string}>,       // ③做了没声明（suspectTask=review.json 尽力归因，多归属 join('、') 后的 string）
  *   skipReason: string|null,              // skipped/degraded 的原因（其余状态为 null）
  *   notes: string[],                      // 跨仓卡剔除 / 并行 WIP 剔除等提示（additive）
  *   form: 'worktree'|'post-apply'|null,   // actual 形态（skipped 无 actual 时为 null；additive）
@@ -2574,7 +2608,9 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
       missing.push(d.isNew ? { task: d.task, path: d.path, isNew: true } : { task: d.task, path: d.path })
     }
   }
-  // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）
+  // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）。
+  // 归因多归属（attributeSuspectTasks 返 string[]，坑④）：组装边界 join('、') 成 string——
+  // gates.js / archive-delta.js 等下游渲染零改动（suspectTask 对外形态保持 string）。
   const suspect = attributeSuspectTasks(rt, changeName, actual.files.filter(p => !declaredKeySet.has(pathKey(p))))
   // 脚手架软桶（坑 reconcile-undeclared-scaffold-flood，2026-09-15 复盘实证：worktree baseline
   // 拷入的 .claude/skills、attachments 等设施文件 58 条逐条进③类、每轮 verify 重复刷屏）：
@@ -2592,7 +2628,7 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
       continue
     }
     const s = suspect.get(normalizeReviewChangedFile(path))
-    undeclared.push(s ? { path, suspectTask: s } : { path })
+    undeclared.push(Array.isArray(s) && s.length > 0 ? { path, suspectTask: s.join('、') } : { path })
   }
   const scaffoldTotal = scaffoldBuckets.platform + scaffoldBuckets.tool
   if (scaffoldTotal > 0) {

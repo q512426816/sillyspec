@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-15-worktree-dual-truth-gates",
+  "generatedAt": "2026-09-15T15:53:20.861Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-15-worktree-dual-truth-gates",
+      "metrics": {
+        "matches": 5,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-15-worktree-dual-truth-gates",
+      "metrics": {
+        "tasks": 6,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-15-worktree-dual-truth-gates",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-15-worktree-dual-truth-gates",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "requiredEvidence": [
+    {
+      "task": "task-01",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/worktree.js",
+        "test/worktree-dual-truth-gates.test.mjs"
+      ]
+    },
+    {
+      "task": "task-02",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/worktree-apply.js",
+        "test/worktree-dual-truth-gates.test.mjs"
+      ]
+    },
+    {
+      "task": "task-03",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/config-schema.js",
+        "src/worktree.js",
+        "test/worktree-dual-truth-gates.test.mjs"
+      ]
+    },
+    {
+      "task": "task-04",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/task-review.js",
+        "src/run/complete.js",
+        "src/verify-postcheck.js",
+        "test/worktree-dual-truth-gates.test.mjs"
+      ]
+    },
+    {
+      "task": "task-05",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/verify-postcheck.js",
+        "test/worktree-dual-truth-gates.test.mjs"
+      ]
+    },
+    {
+      "task": "task-06",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "test/worktree-dual-truth-gates.test.mjs",
+        "docs/sillyspec/troubleshooting.md"
+      ]
+    }
+  ],
+  "tests": {
+    "command": "module[cli-core,run-gates]",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-15T16:10:06.477Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

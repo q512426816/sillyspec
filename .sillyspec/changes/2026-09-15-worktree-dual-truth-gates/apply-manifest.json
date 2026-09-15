@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-15-worktree-dual-truth-gates",
+  "appliedAt": "2026-09-15T15:44:29.315Z",
+  "baseHash": "819c497a512bdfa8ebb4f3022c4232134e25eb34",
+  "files": [
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "sha256": "a4142157fe21c6c8cbeb9448d2577fdc86dbef5808d918bdc3702c0eaff7ca73"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "8d545b170bd98dad8cbe063d7e3e130b8838552282eec55ecb21e2e750c620e7"
+    },
+    {
+      "path": "src/run/complete.js",
+      "sha256": "6f439f3a756c893db85a02b383b6fe0b385830373e6e22199b82c86695e7f026"
+    },
+    {
+      "path": "src/task-review.js",
+      "sha256": "b6cf8bbd4f7c0be983036ea35f0a04e2d0d2f108d9a997c1b871f3115599cdde"
+    },
+    {
+      "path": "src/worktree.js",
+      "sha256": "1c3e392537fc830390f1a884b9129a0568f969505bec4ec5abc3c965fc4312d8"
+    },
+    {
+      "path": "test/worktree-dual-truth-gates.test.mjs",
+      "sha256": "0d65423a32642db03506ce690222f6385101fa14a0017972801b3fe67d9457c7"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "sha256": "69ad6a797b1aaae3b3ba0eb664a9c55547ea83302e1bdd6c39a1eb54efd7922f"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "e017e8ec0748b4ed7fa3ee9d31cec2a6c5a8f46ca06740f32947cc4437ec9a31"
+    }
+  ]
+}

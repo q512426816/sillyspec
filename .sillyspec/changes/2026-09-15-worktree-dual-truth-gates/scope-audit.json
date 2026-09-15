@@ -1,0 +1,84 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "0090b5000d9ad11746a1c0f3dfc3cab83d775e7d",
+  "totals": {
+    "files": 8,
+    "additions": 1156,
+    "deletions": 93
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "additions": 33,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 14,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete.js",
+      "additions": 40,
+      "deletions": 7,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/task-review.js",
+      "additions": 75,
+      "deletions": 26,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "additions": 105,
+      "deletions": 45,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "additions": 148,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/worktree.js",
+      "additions": 274,
+      "deletions": 10,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/worktree-dual-truth-gates.test.mjs",
+      "additions": 467,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "6cc906b24490397e686f1e5adbcf4f2092b7eee3d683eb9c5f027e35d09a9942",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-15T15:49:19.033Z"
+}

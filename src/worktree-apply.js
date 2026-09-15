@@ -20,7 +20,7 @@ import { WorktreeManager } from './worktree.js';
 import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js';
 import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
 import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
-import { git, gitQuiet, safeGit } from './git-helper.js';
+import { git, gitQuiet, safeGit, unquoteGitPath } from './git-helper.js';
 import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
 import { collectActiveQuickGuardFiles } from './quicklog.js';
 import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
@@ -461,6 +461,69 @@ export function chunkPaths(paths, maxChars = 8000) {
     len += l
   }
   return batches
+}
+
+/**
+ * no-op 文件检测（FR-02 / D-002@v1，坑② assess-noop-blocked）：判定候选文件中
+ * 「worktree 工作区内容 = 主仓 HEAD blob」者。execute 期主仓 HEAD 前进后，worktree 内
+ * 自救/重同步成主仓最新内容的文件对 baseline checkpoint diff 非空，apply 回主仓实为
+ * no-op，却被 assess 误判「变更文件超出 allowed_paths」BLOCKED——由 applyWorktree
+ * step 2 单点 choke point 调用（apply 与 assess checkOnly 复用同函数，自动同口径）。
+ *
+ * 比对：worktree 工作区 `git hash-object`（默认带 clean filter，与 tree blob 同口径）
+ * 按 argv 分批（chunkPaths，worktree.js _changesAlreadyOnMain 同型），批次输出按行序
+ * 拼接与候选索引对齐；主仓 HEAD blob 复用 getBlobHashMap（ls-tree）。路径对照键统一
+ * quotepath 剥引号（unquoteGitPath）+ 反斜杠归一正斜杠，仅用于比对不回写（changedFiles
+ * 路径字面保持现状口径，下游 pathMatches/gates/archive-delta 零改动）。
+ *
+ * fail-safe（D-002 故障面契约）：hash-object 某批失败 / 行数不齐 / 整段异常 → 该批
+ * （或全部）保守不剔，保留 changed——退回现状误报而非误放行。每调用现算不缓存（主仓
+ * HEAD 在 assess 与 apply 间可能推进，以各自当下事实为准）。
+ *
+ * @param {string} projectRoot 主仓根（HEAD blob 读取处）
+ * @param {string} worktreePath worktree 根（工作区 hash-object 执行处）
+ * @param {string[]} candidates 候选文件（调用方已保证 worktree 工作区存在——删除类天然出局）
+ * @returns {string[]} 判定为 no-op 的文件子集（candidates 原字面）；判定不可得时返回 []
+ */
+function detectNoOpFiles(projectRoot, worktreePath, candidates) {
+  try {
+    if (!candidates || candidates.length === 0) return [];
+    // 主仓 HEAD 树 blob map：路径不在 HEAD 树 → 不在 Map → 主仓无该路径的新文件天然非 no-op
+    const mainBlobs = getBlobHashMap(projectRoot, 'HEAD', candidates);
+    if (mainBlobs.size === 0) return [];
+    const pathKey = (p) => {
+      let s = String(p);
+      if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) s = unquoteGitPath(s.slice(1, -1));
+      return s.replace(/\\/g, '/');
+    };
+    const mainBlobByKey = new Map();
+    for (const [p, h] of mainBlobs) mainBlobByKey.set(pathKey(p), h);
+    const present = candidates.filter(f => mainBlobByKey.has(pathKey(f)));
+    if (present.length === 0) return [];
+
+    // worktree 工作区 blob：hash-object 按 argv 顺序逐行输出；某批失败（文件被并发删/权限等）
+    // → 占位空串填充保批次间索引对齐（空串永不等于 blob hash → 该批各文件保守不剔）
+    const wtHashes = [];
+    for (const batch of chunkPaths(present)) {
+      const out = gitQuiet(worktreePath, ['hash-object', '--', ...batch], { timeout: 30000 });
+      const lines = out === null ? null : out.split('\n');
+      if (!lines || lines.length !== batch.length) {
+        console.warn(`⚠️  no-op 检测：hash-object 批失败/行数不齐，该批 ${batch.length} 个文件保守保留在 changedFiles`);
+        for (let i = 0; i < batch.length; i++) wtHashes.push('');
+        continue;
+      }
+      wtHashes.push(...lines);
+    }
+    const noopFiles = [];
+    for (let i = 0; i < present.length; i++) {
+      if (wtHashes[i] && wtHashes[i] === mainBlobByKey.get(pathKey(present[i]))) noopFiles.push(present[i]);
+    }
+    return noopFiles;
+  } catch (e) {
+    // 意外异常整体保守不剔（fail-safe：宁可误报 BLOCKED，不可误放行剔除）
+    console.warn(`⚠️  no-op 文件检测失败（保守保留 changedFiles）：${(e.message || '').split('\n')[0]}`);
+    return [];
+  }
 }
 
 /**
@@ -1207,6 +1270,31 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // 会被误算入 changedFiles，触发 design.md 清单校验失败（assess 恒 BLOCKED）。
     const allChangedRaw = [...new Set([...statusFiles, ...untrackedFiles])];
     changedFiles = filterDeliverableFiles(allChangedRaw);
+
+    // no-op 文件剔除（FR-02 / D-002@v1）：主仓 HEAD 在 execute 期间前进后，worktree 内
+    // 「内容=主仓 HEAD」的自救/重同步文件对 deliverableBase diff 非空，apply 回主仓实为
+    // no-op，却被 assess 误判「变更文件超出 allowed_paths」BLOCKED。候选收窄：allChangedRaw
+    // 中 worktree 工作区存在者（existsSync，删除类天然出局）∩ 主仓 HEAD 树存在者（helper
+    // 内反查）；判定失败保守不剔。diff-size/Gate 判定消费的 changedFiles 自然跟随收窄，
+    // patch 面（resolvePatchFiles ⊆ changedFiles）同步不再回放该类文件。
+    const noopCandidates = allChangedRaw.filter(f => existsSync(join(worktreePath, f)));
+    const noopFiles = noopCandidates.length > 0 ? detectNoOpFiles(projectRoot, worktreePath, noopCandidates) : [];
+    // 只报实际从三集剔出的文件（候选含 filterDeliverableFiles 已硬排的平台设施时，
+    // 那部分本就不在 changedFiles，不计入告警面）
+    const changedSetForNoop = new Set([...changedFiles, ...deletedFiles, ...absentAfterMerge]);
+    const removedNoopFiles = noopFiles.filter(f => changedSetForNoop.has(f));
+    if (removedNoopFiles.length > 0) {
+      const noopSet = new Set(removedNoopFiles);
+      changedFiles = changedFiles.filter(f => !noopSet.has(f));
+      // 防御性剔除（候选已限工作区存在，正常不命中后两集；过滤保三集不变式）
+      for (let i = deletedFiles.length - 1; i >= 0; i--) if (noopSet.has(deletedFiles[i])) deletedFiles.splice(i, 1);
+      for (let i = absentAfterMerge.length - 1; i >= 0; i--) if (noopSet.has(absentAfterMerge[i])) absentAfterMerge.splice(i, 1);
+      result.warnings = result.warnings || [];
+      result.warnings.push(
+        `${removedNoopFiles.length} 个文件内容与主仓 HEAD 一致（apply 为 no-op，不计入 changedFiles）：${removedNoopFiles.slice(0, 5).join(', ')}${removedNoopFiles.length > 5 ? ' 等' : ''}`
+      );
+    }
+
     // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：平台设施被滤出不静默——
     // apply 不回放它们（.worktrees//.sillyspec-platform*/knowledge/local.yaml）；确为交付物
     // 的极少数场景（如刻意改 knowledge 模板）人工落主仓。

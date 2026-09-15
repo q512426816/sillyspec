@@ -1250,6 +1250,70 @@ function resolveAttributionDiffFiles({ cwd, changeName, specBase, platformOpts =
 }
 
 /**
+ * worktree/in-place 改动文件集：porcelain 未提交 ∪ committed merge-base 补齐——口径单一化。
+ * 口径出处：D-004@v1（worktree 归因唯一事实源 = worktree 分支 diff + porcelain，决策库
+ * decisions/worktree.md）+ 变更 2026-09-15-worktree-dual-truth-gates §4 / FR-04；坑④
+ * worktree-tick-guard-commit-only（2026-09-15 实证）：勾选守卫 prefetchDiffFileSet
+ * （run/complete.js）只算 base..head（已提交），子代理默认不 commit 时守卫恒空跳过勾选——
+ * 本 helper 是「草稿归属并入段（generateTaskReviewDrafts）」与「勾选守卫（prefetchDiffFileSet）」
+ * 两处的单一真相。已知残留 R-09：resolveVerifyChangedFiles（verify-postcheck.js）内另有同型
+ * 补齐段（form A 专属：滤网保 .sillyspec/docs/** 交付物，与本 helper 的整前缀滤网不同），
+ * 本次不动，待该函数下次触碰时统一。
+ *
+ * 行为契约：
+ *   - meta 缺省时内部 WorktreeManager.getMeta 自取（try/catch → null）。
+ *   - gitDir = meta.worktreePath（mode 非 in-place-fallback 且目录存在）否则 cwd——
+ *     in-place 退化取 cwd（保住现状 in-place 主仓 porcelain 并入，不丢，R-08）；
+ *     meta 完全缺失时同样取 cwd（与被并入段 mergeGitDir 语义一致）。
+ *   - porcelain：status --porcelain --untracked-files=all（parsePorcelainFiles 解析），
+ *     滤 .sillyspec 前缀（与被替换的草稿并入段同口径）。
+ *   - committed 补齐（仅 gitDir !== cwd，防双并）：merge-base(主仓 HEAD, wtHEAD)..wtHEAD
+ *     的 diff --name-only——worktree 内已 commit 的改动对主仓 base..head 与 status 双不可见
+ *     （「先提交则 diff 空」时序两难）；git 失败 fail-open 忽略。
+ *   - 返回正斜杠归一去重数组；任何 git 异常 → 已收集部分或 []（fail-open，不阻断调用方）。
+ *
+ * @param {string} cwd 主仓根
+ * @param {string} changeName 变更名
+ * @param {object|null} [meta] 预取的 worktree meta（缺省内部 getMeta 自取）
+ * @param {object} [opts] 预留（对齐 design 接口签名）
+ * @returns {string[]} 正斜杠归一文件集（git 失败 → 已收集部分或 []，fail-open）
+ */
+export function collectWorktreeChangedFiles(cwd, changeName, meta = null, opts = {}) {
+  const files = new Set()
+  if (!cwd || !changeName) return []
+  let m = meta
+  if (m == null) {
+    try { m = new WorktreeManager({ cwd }).getMeta(changeName) } catch { m = null }
+  }
+  const gitDir = (m?.worktreePath && m.mode !== 'in-place-fallback' && existsSync(m.worktreePath))
+    ? m.worktreePath
+    : cwd
+  const keep = (p) => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/')
+  // 未提交：worktree（in-place 退化=主仓）porcelain 全量（含 untracked）
+  try {
+    const st = runGit(gitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
+    for (const p of parsePorcelainFiles(st)) if (keep(p)) files.add(p)
+  } catch { /* porcelain 失败 → 返回已收集部分（fail-open） */ }
+  // 已提交补齐：merge-base(主仓 HEAD, wtHEAD)（= 创建锚点）..wtHEAD 的 commit diff。
+  // in-place（gitDir===cwd）时已提交改动在主仓 diff 内，跳过防双并；失败 fail-open 忽略。
+  if (gitDir !== cwd) {
+    try {
+      const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
+      const wtHead = runGit(gitDir, ['rev-parse', 'HEAD'])
+      const mb = (mainHead && wtHead) ? runGit(gitDir, ['merge-base', wtHead, mainHead]) : null
+      if (mb) {
+        const out = String(runGit(gitDir, ['diff', '--name-only', mb, wtHead]) || '')
+        for (let p of out.split('\n')) {
+          p = p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim()
+          if (keep(p)) files.add(p)
+        }
+      }
+    } catch { /* 已提交补齐失败忽略（fail-open，不拖垮未提交并入） */ }
+  }
+  return [...files]
+}
+
+/**
  * worktree execute「主 agent 直接实现」模式收尾兜底：per-task review.json 缺失时，
  * 据 git diff base..head 按 task allowed_paths 归属，自动落盘 cannot_verify 草稿。
  *
@@ -1339,32 +1403,17 @@ export async function generateTaskReviewDrafts({ changeName, cwd, platformOpts =
   // worktree-branch/cleaned 归因的未提交并入已在 resolveAttributionDiffFiles 内按同口径完成。
   if (attribution.mergeGitDir) {
     try {
-      const wtGitDir = attribution.mergeGitDir
-      const wtStatus = runGit(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { trim: false })
-      const wtFiles = parsePorcelainFiles(wtStatus)
-        .map(p => String(p).replace(/\\/g, '/'))
-        .filter(p => p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
-      // 已提交口径补齐（2026-09-10 用户反馈②「先提交则 diff 空」：worktree 内已 commit 的改动
-      // 对主仓 base..head 与 status 双不可见，草稿 changedFiles 恒空）——merge-base(主仓 HEAD,
-      // worktree HEAD)（= 创建锚点）..worktree HEAD 的 commit diff 并入，与
-      // resolveVerifyChangedFiles 的同款补齐同源（verify-postcheck.js，两处口径须同步改）。
-      // in-place 退化（wtGitDir===cwd）时已提交改动在主仓 diff 内，跳过防双并；git 失败 fail-open。
-      let committedFiles = []
-      if (wtGitDir !== cwd) {
-        try {
-          const mainHead = runGit(cwd, ['rev-parse', 'HEAD'])
-          const wtHead = runGit(wtGitDir, ['rev-parse', 'HEAD'])
-          const mb = (mainHead && wtHead) ? runGit(wtGitDir, ['merge-base', wtHead, mainHead]) : null
-          if (mb) {
-            committedFiles = String(runGit(wtGitDir, ['diff', '--name-only', mb, wtHead]) || '')
-              .split('\n').map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
-              .filter(p => p && p !== '.sillyspec' && !p.startsWith('.sillyspec/'))
-          }
-        } catch { /* 已提交补齐失败退回 status-only（fail-open，不拖垮未提交并入） */ }
-      }
-      if (wtFiles.length > 0 || committedFiles.length > 0) {
-        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...wtFiles, ...committedFiles])]
-        console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${wtFiles.length + committedFiles.length} 个（未提交 ${wtFiles.length} + 已提交 ${committedFiles.length}，按 allowed_paths 归属）`)
+      // D-004@v1 口径单一化（坑④ worktree-tick-guard-commit-only，2026-09-15 实证）：原手写
+      // 并入段（porcelain 未提交 + committed merge-base 补齐两段）收口为
+      // collectWorktreeChangedFiles 单一真相——勾选守卫 prefetchDiffFileSet（run/complete.js）
+      // 与本草稿归属自此消费同一口径（原「两处口径须同步改」注记就此作废，单一真相在 helper）。
+      // in-place（mergeGitDir===cwd）时 helper 同取 cwd porcelain（现状主仓并入不丢）。
+      // resolveVerifyChangedFiles（verify-postcheck.js）内另有同型补齐段（form A 专属，滤网保
+      // .sillyspec/docs/** 交付物），已知残留 R-09，本次不动。
+      const mergedFiles = collectWorktreeChangedFiles(cwd, changeName, attribution.meta)
+      if (mergedFiles.length > 0) {
+        diffFiles = [...new Set([...(Array.isArray(diffFiles) ? diffFiles : []), ...mergedFiles])]
+        console.log(`[sillyspec] 草稿归属并入 worktree 改动 ${mergedFiles.length} 个（未提交 porcelain + 已提交 merge-base 补齐，按 allowed_paths 归属）`)
       }
     } catch { /* working-tree 并入失败退回 commit diff 口径（fail-open，不阻断草稿） */ }
   }

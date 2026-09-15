@@ -23,7 +23,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { withFileLock } from '../quicklog.js'
 import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
-import { isExplicitReviewWrite } from '../task-review.js'
+import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
 
 // auto 模式 brainstorm 步骤表感知解析（2026-09-08 E2E 实证 bug：--done/--wait 推进主模式 8 步表，
 // 与 runAutoMode getAutoSteps 的 4 步 auto 表双轨互踩——ensureAutoStage 判非 auto 表重种清零，
@@ -931,7 +931,11 @@ function readTaskCardText(changeDir, taskNum) {
  * 用于 autoCheckPlanFromReviews（勾选层）和 detectExecuteBatchFinish（批量层）。
  * 失败返回 null（调用方降级：勾选层不勾、批量层不过滤——向后兼容）。
  *
- * @returns {Promise<{gitDir:string, base:string, head:string}|null>}
+ * 2026-09-15-worktree-dual-truth-gates task-04（坑④/D-004@v1）：ctx 增透传 cwd/changeName/meta/
+ * baselineFiles——prefetchDiffFileSet 消费 collectWorktreeChangedFiles（与草稿归因同口径）并剔
+ * baseline 夹带。扩展字段对 shouldAutoCheckTask 只读 gitDir/base/head/diffFileSet 零影响。
+ *
+ * @returns {Promise<{gitDir:string, base:string, head:string, cwd:string, changeName:string, meta:object|null, baselineFiles:string[]}|null>}
  */
 async function buildDraftContext(cwd, changeName) {
   try {
@@ -952,7 +956,13 @@ async function buildDraftContext(cwd, changeName) {
       }
     }
     if (base && head && gitDir) {
-      return { gitDir, base, head }
+      return {
+        gitDir, base, head,
+        cwd, changeName,
+        meta: meta || null,
+        // baselineFiles 缺失/非数组按 [] 容错（prefetchDiffFileSet 剔除夹带用）
+        baselineFiles: Array.isArray(meta?.baselineFiles) ? meta.baselineFiles : [],
+      }
     }
     return null
   } catch (e) {
@@ -962,16 +972,39 @@ async function buildDraftContext(cwd, changeName) {
 }
 
 /**
- * 预取 base..head 全量 diff 文件集（一次 git spawn），供草稿零 diff 守卫按 task 内存归属判定。
+ * 预取草稿零 diff 守卫用的全量 diff 文件集，供 shouldAutoCheckTask 按 task 内存归属判定。
  * 此前每草稿 task 一次 `git diff --name-only base..head -- <files>`（同一对 base..head 查 N 次，
- * 8 task ≈ 8-16 次串行 spawn）。失败返回 null → 调用方回退逐 task 实测路径。
+ * 8 task ≈ 8-16 次串行 spawn）。失败返回 ctx 原样 → 调用方回退逐 task 实测路径。
+ *
+ * 2026-09-15-worktree-dual-truth-gates task-04（坑④ worktree-tick-guard-commit-only / D-004@v1）：
+ * 单算 base..head（已提交）在子代理默认不 commit 时恒空/缺文件 → 守卫全跳过勾选。现并入
+ * collectWorktreeChangedFiles（task-review.js 单一真相：porcelain 未提交 ∪ committed
+ * merge-base 补齐，与草稿归因同口径），再剔 meta.baselineFiles（R-07 防伪底线：merge-base..
+ * wtHEAD 含 baseline checkpoint 提交，夹带文件=非本变更改动，不剔则「声明未做恰被夹带」的
+ * task 误勾）。全空时仍不设 diffFileSet（退回逐 task 实测路径，原语义）。
  */
 function prefetchDiffFileSet(ctx) {
   if (!ctx?.gitDir || !ctx.base || !ctx.head) return ctx
   try {
     const out = gitQuiet(ctx.gitDir, ['diff', '--name-only', `${ctx.base}..${ctx.head}`], { trim: true })
-    if (!out) return ctx
-    return { ...ctx, diffFileSet: new Set(out.split('\n').filter(Boolean)) }
+    const diffFileSet = new Set(out ? out.split('\n').filter(Boolean) : [])
+    // D-004@v1 并入：porcelain 未提交 ∪ committed 补齐（helper 自身 fail-open，git 失败返 []
+    // → 退回 base..head 现状，不放大勾选面）；独立 try 防 helper 意外拖垮既有 base..head 集
+    try {
+      if (ctx.cwd && ctx.changeName) {
+        for (const f of collectWorktreeChangedFiles(ctx.cwd, ctx.changeName, ctx.meta)) {
+          if (f) diffFileSet.add(f)
+        }
+      }
+    } catch { /* helper 异常 → 退回 base..head 现状（fail-open） */ }
+    // 剔 baseline 夹带：按正斜杠归一 exact 匹配（两侧同 git 口径路径）；baselineFiles 缺失按 [] 容错
+    const baselineFiles = Array.isArray(ctx.baselineFiles) ? ctx.baselineFiles : []
+    for (const b of baselineFiles) {
+      const n = String(b).replace(/\\/g, '/').trim()
+      if (n) diffFileSet.delete(n)
+    }
+    if (diffFileSet.size === 0) return ctx
+    return { ...ctx, diffFileSet }
   } catch {
     return ctx
   }

@@ -953,3 +953,36 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **护栏（立项方向，四条全在 sillyspec 管辖内、不涉拦裸 git）**：①change 所有权+心跳——changes 表记 owner（会话/pid），run 命令刷新心跳；apply/cleanup/archive 发现 owner 为另一活跃会话（心跳 N 分钟内）即拒绝，--takeover 显式接管留痕；②归档收口——worktree 有未 apply 交付物时归档硬拦（或锁内自动 apply），消灭悬空状态；③review 放行通道收紧——review 声明只放行与该 task allowed_paths/design 清单相交的文件，外来文件只报告不 admitted；④归因源切换——worktree 模式下 changedFiles 一律取 worktree 分支 diff，不看主仓脏窗口。行为侧规则即刻生效：归档后立即 apply+显式 pathspec 提交当固定第六步；并行会话不代劳他者 change（见残留提醒而不是动手）。
 
 **证据**：时间线在 ql-20260914-015 会话（apply 报 worktree not found→git log 发现 09943ff 对方提交含本变更代码→grep HEAD 确认 collectActiveQuickGuardFiles/writeApplyManifest 在盘→仅提交归档命名空间 b89180f 收尾）；②的 11 文件清单在 apply 输出与 reconcile-result.json（.sillyspec/.runtime/verify-runs/20260914081048/）；ROADMAP「文件所有权登记」观察项的复潮证据挂本节两事件——证明的是 change 级所有权缺失（文件级+拦裸 git 仍不做）。
+
+## 66. 五坑：execute 双真相门禁口径（worktree 感知收敛）（2026-09-15 用户实证，已修复）
+
+**现象（五坑各一行，坑文档 `execute-baseline-overlay-carries-broken-parallel-wip`）**：execute 期改动在 apply 前只存在于 worktree，而五处门禁的判定基准仍锚在主仓或 worktree 的单一形态上（「双真相」判定基准漂移）——
+①**overlay 带入并行半成品**：create 的 baseline overlay 只排除 `.sillyspec/`，他 quick 会话/他变更语法坏的在途半成品被固化进本变更 baseline checkpoint，worktree 内 import 该文件链的测试全炸，人工「同步主仓修复版进 worktree」自救又连锁触发坑②；
+②**assess 把 no-op 判超范围**：主仓 HEAD 在 execute 期间前进后，worktree 内自救/重同步成主仓最新内容的文件对 baseline checkpoint diff 非空（apply 回主仓实为 no-op），被 assess 误判「变更文件超出 allowed_paths」恒 BLOCKED；
+③**gitignore 生成物不随 worktree 供给**：`src/build-id.ts` 类构建生成物不在 git 树也不进 untracked overlay（`ls-files --others --exclude-standard` 尊重 .gitignore），worktree 构建炸 `Failed to load url`；
+④**task 自动勾选漏计**：勾选守卫 `prefetchDiffFileSet` 只算 base..head（已提交），子代理默认不 commit 时 diffFileSet 恒空 → 草稿零 diff 守卫跳过全部勾选；同文件多 task 时 `attributeSuspectTasks`「首个命中即止」吞掉后续归属；
+⑤**required-evidence 误报不存在**：逐文件核验单查主仓 `join(cwd, vf)`，apply 前新文件只在 worktree → 「文件不存在」错误阻断 verify 完成。
+
+**修复口径（2026-09-15-worktree-dual-truth-gates，FR-01~05 / D-001~D-005@v1）**：
+①`_overlayBaseline` 第三参 changeName 启用 own/foreign oracle（`splitOwnVsForeignDiffFiles`）三道剔除——他 quick 会话 guard.allowedFiles / 他变更 design §6 声明（own 优先）的 staged/unstaged/untracked 在途文件不进 worktree（保留基线 HEAD 版本），隔离清单「文件←归属者」一行打印，`meta.baselineFiles` 与 checkpoint message 不含该文件；未声明与双方声明文件照常 overlay，oracle 异常 fail-open 退全量。
+②`applyWorktree` step 2 单点 choke point 调 `detectNoOpFiles`（worktree 工作区 `hash-object` vs 主仓 HEAD `ls-tree` blob，argv 分批对齐）：内容一致的文件从 changedFiles/deletedFiles/absentAfterMerge 剔除 + warnings 列 no-op 清单，apply 与 assess checkOnly 自动同口径；hash 失败保守不剔（宁可误报不误放行）。
+③local.yaml 新键 `worktree.supplyFiles`（精确路径 + glob `*` 单层 / `**` 多层，展开上限 200 超出截断警告）：create step 5.9 从主仓复制进 worktree（父目录按需创建），实供清单记 `meta.supplyFiles`；缺失 warn 不阻断；未配置供给步空转零行为变化。
+④`collectWorktreeChangedFiles`（task-review.js 单一真相 helper：porcelain 未提交 ∪ committed merge-base 补齐，in-place 退化取主仓 cwd）——勾选守卫与草稿归属并入段自此同口径，再剔 `meta.baselineFiles`（防「声明未做恰被 baseline checkpoint 夹带」误勾，防伪底线）；`attributeSuspectTasks` 改全命中收集（string[]），③类报告组装边界 join('、')，gates/archive-delta 下游零改动。
+⑤`runRequiredEvidenceCheckV2` 候选根 [主仓 cwd, worktree 根]（meta 解析与 resolveVerifyChangedFiles 同口径）：任一根存在即 filesExist=true，mtime 取命中根（双根都在取 worktree 根），核验明细带 root 字段；meta 缺失/in-place/损坏退单根（零回归）。
+
+**已知边界（两条）**：
+①**未声明在途文件仍可能带坏基线**——隔离面=显式声明面（guard.json / 他变更 design §6），他者未走声明的裸在途改动仍会进 baseline checkpoint（fail-closed 取舍：无主文件不放大放行面，语法校验属语言工具链不进 CLI）。绕过：把主仓 HEAD 版同步进 worktree（`git -C 主仓 show HEAD:<file> > <worktree>/<file>`）或等并行会话提交/收尾后再 create。
+②**resolveVerifyChangedFiles 内补齐段未统一**——verify-postcheck.js 内另有同型 porcelain∪committed 并入段（form A 专属变体：滤网保 `.sillyspec/docs/**` 交付物），与 `collectWorktreeChangedFiles` 口径同源但未收敛到 helper（R-09 残留），待该函数下次触碰时统一，两处现行为一致。
+
+**supplyFiles 配置示例**（坑③ `src/build-id.ts` 实案——构建期产出、.gitignore 排除、worktree 缺失即炸）：
+
+```yaml
+# .sillyspec/local.yaml
+worktree:
+  supplyFiles:
+    - src/build-id.ts   # 精确路径（相对仓根）
+    - gen/**/*.ts       # glob（* 单层 / ** 多层）；展开上限 200，超出截断并警告
+```
+
+**证据**：五坑实证与决策见 changes/2026-09-15-worktree-dual-truth-gates/（requirements FR-01~FR-05 GWT 对账 + decisions D-001~D-005@v1）；回归锁定 test/worktree-dual-truth-gates.test.mjs 五组用例（每组正向 + 零回归各至少一条）。
+
