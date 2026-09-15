@@ -1,0 +1,407 @@
+diff --git a/src/contract-matrix.js b/src/contract-matrix.js
+index 1ec0c19..f20bd90 100644
+--- a/src/contract-matrix.js
++++ b/src/contract-matrix.js
+@@ -9,9 +9,10 @@
+  */
+ 
+ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
+-import { join, resolve, basename, dirname, relative } from 'path'
++import { join, resolve, basename, dirname, relative, isAbsolute } from 'path'
+ import { gitQuiet } from './git-helper.js'
+ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
++import { parseFileChangeListDetailed } from './change-list.js'
+ import {
+   scanBackendEndpoints,
+   scanFrontendApiCalls,
+@@ -19,7 +20,7 @@ import {
+   normalizePath,
+   diffApiParity,
+ } from './endpoint-extractor.js'
+-import { parseTaskContracts } from './stages/plan-postcheck.js'
++import { parseTaskContracts, parseRepoRegistry, parseAllowedPaths } from './stages/plan-postcheck.js'
+ 
+ // ─── 关键词检测 ─────────────────────────────────────────────────────────
+ 
+@@ -561,6 +562,74 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
+     frontendCalls = scanFrontendApiCalls(frontendRoot)
+   }
+ 
++  // ── 跨仓前端调用并集（坑 probe5-cross-repo-frontend-blind，2026-09-15 EHS 生产实证：三端
++  // 全栈变更的前端在兄弟仓（cross-repo: 前缀声明），主仓 change-diff 永远不含它们 → 报告
++  // 「0 frontend calls」假象、本变更端点全落 unused、契约对账只能靠人工逐条对齐 11 端点）。
++  // 声明源双取：task 卡 allowed_paths 的 cross-repo:<key>: 前缀 + design 清单跨仓条目
++  // （change-list repoKeys 解析，与探针 1 清单同源）；仓根经 local.yaml repos 注册表解析
++  // （resolveCrossRepoDeclarations 同款）。各仓根扫前端调用并按「该仓声明文件集」收窄后并入
++  // frontendCalls——「探针已知口径限制」注记从人肉兜底变机器对账。fail-soft：仓未注册/
++  // 不可达 → crossRepoNotes 一行注记不炸整体；无跨仓声明/无注册表零行为（存量单仓流不受影响）。
++  const crossRepoNotes = []
++  if (changeName && specBase) {
++    try {
++      const declaredByRepo = {}
++      const addDecl = (repo, p) => {
++        const n = String(p || '').trim().replace(/^\.\//, '').replace(/\\/g, '/')
++        if (repo && n) (declaredByRepo[repo] = declaredByRepo[repo] || new Set()).add(n)
++      }
++      // 源1：task 卡 allowed_paths 的 cross-repo:<key>: 前缀（与 _module-map.yaml 约定一致）——
++      // 不按注册表过滤：未注册 key 也要现身「未注册」注记（漏登记可见，而非静默消失）
++      const tasksDir = join(specBase, 'changes', changeName, 'tasks')
++      if (existsSync(tasksDir)) {
++        for (const f of readdirSync(tasksDir)) {
++          if (!/^task-\d+\.md$/.test(f)) continue
++          try {
++            for (const p of parseAllowedPaths(readFileSync(join(tasksDir, f), 'utf8'))) {
++              const m = String(p).match(/^cross-repo:([A-Za-z0-9_.\-]+):(.*)$/)
++              if (m) addDecl(m[1], m[2])
++            }
++          } catch { /* 单卡读取失败不拖垮 */ }
++        }
++      }
++      const registry = parseRepoRegistry(existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : '')
++      // 源2：design.md 文件清单跨仓子段/前缀（change-list repoKeys 解析需注册表在——
++      // 注册表空时源2 不可判跨仓，跳过；源1 已保证未注册声明仍可见）。注意
++      // parseFileChangeListDetailed 吃文件路径非文本（内部 existsSync+readFileSync）。
++      if (registry.size > 0) {
++        const designPath = join(specBase, 'changes', changeName, 'design.md')
++        if (existsSync(designPath)) {
++          for (const e of parseFileChangeListDetailed(designPath, { repoKeys: [...registry.keys()] })) {
++            if (e.repo) addDecl(e.repo, e.path)
++          }
++        }
++      }
++      for (const [key, declared] of Object.entries(declaredByRepo)) {
++        const raw = registry.get(key)
++        if (!raw) {
++          crossRepoNotes.push(`repo「${key}」未在 local.yaml repos 注册——该仓前端调用未进对账（register-repo 登记后自动并入）`)
++          continue
++        }
++        const repoRoot = isAbsolute(raw) ? raw : resolve(scanRoot, raw)
++        if (!existsSync(repoRoot)) {
++          crossRepoNotes.push(`repo「${key}」注册路径不可达：${repoRoot}——该仓前端调用未进对账`)
++          continue
++        }
++        const calls = scanFrontendApiCalls(repoRoot).filter(c => {
++          // source 是绝对路径且 Windows 反斜杠形态——与主仓 change-diff 过滤同款手工归一
++          // （normalizePath 是 URL 路径归一器，不碰反斜杠，此处不能用）
++          const src = String(c.source || '').replace(/\\/g, '/')
++          return [...declared].some(dp => src === dp || src.endsWith('/' + dp) || dp.endsWith('/' + src))
++        })
++        if (calls.length > 0) frontendCalls.push(...calls)
++        crossRepoNotes.push(`repo「${key}」@ ${repoRoot}：${calls.length} 前端调用（跨仓声明 ${declared.size} 文件收窄）`)
++        frontendScope += ` + cross-repo:${key}(${calls.length})`
++      }
++    } catch (e) {
++      crossRepoNotes.push(`跨仓前端扫描失败（fail-soft 跳过）：${e && e.message ? e.message : e}`)
++    }
++  }
++
+   // ── 挂载前缀收集（坑 endpoints-mount-prefix-gap，2026-08-31 用户实证）：endpoints 提取的是
+   // 「router 自身前缀 + 装饰器路径」，不含挂载点前缀（main.py 的 include_router(prefix=)/app.use
+   // 与 router 文件分离，静态扫描不做导入图关联）→ 前端全路径调用（/api/xxx）对不上欠前缀端点
+@@ -577,6 +646,14 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
+     const key = `${u.method} ${u.path}`
+     return liveKeys.has(key) || liveEndpoints.length === 0
+   })
++  // unused 分层（坑 probe5-unused-stock-noise，2026-09-15 EHS 生产实证：490 个 unused 全是
++  // urgent 等他模块存量端点——全仓 live 扫描 × 本变更对账的口径噪音刷屏）。本变更相关 =
++  // contract artifact 端点集内（本变更换的端点漏配才是真信号）；存量其余折叠计数。无
++  // artifact（非契约流）回退全列零回归。
++  const artifactKeys = new Set(allProviderEndpoints.map(e => `${e.method} ${e.path}`))
++  const hasArtifacts = allProviderEndpoints.length > 0
++  const unusedChangeRelevant = hasArtifacts ? narrowedUnused.filter(u => artifactKeys.has(`${u.method} ${u.path}`)) : narrowedUnused
++  const unusedStockCount = narrowedUnused.length - unusedChangeRelevant.length
+ 
+   const ok = missingBackend.length === 0
+   const liveRootSummary = liveByRoot.map(r => `${r.label} ${r.endpoints.length}`).join(' + ')
+@@ -585,11 +662,11 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
+     : `❌ API parity check failed: ${missingBackend.length} frontend calls have no matching backend endpoint [scope: ${frontendScope}]`
+ 
+   if (narrowedUnused.length > 0) {
+-    summary += ` | ${narrowedUnused.length} backend endpoints unused by frontend`
++    summary += ` | ${unusedChangeRelevant.length} backend endpoints unused by frontend${unusedStockCount > 0 ? ` (+${unusedStockCount} stock noise collapsed)` : ''}`
+   }
+   if (prefixAlignedCount > 0) {
+     summary += ` | ${prefixAlignedCount} calls matched after mount-prefix alignment (artifact paths exclude include_router/app.use prefixes)`
+   }
+ 
+-  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, prefixAlignedCount, scanRoots: liveByRoot.map(r => r.root) }
++  return { ok, missingBackend, unusedBackend: narrowedUnused, unusedChangeRelevant, unusedStockCount, crossRepoNotes, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, prefixAlignedCount, scanRoots: liveByRoot.map(r => r.root) }
+ }
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index a98f771..43728d9 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -652,7 +652,16 @@ export function renderVerifyProbesReport(result) {
+     L.push('- ❌ contract gap 是真实集成缺陷——诚实判 FAIL 并回 execute 补端点（CLI 仅 advisory 不硬阻断）')
+   }
+   if ((probe5.unusedBackend || []).length > 0) {
+-    L.push(`- ⚠️ ${probe5.unusedBackend.length} 个后端端点前端未调用（warning 不阻断）：${probe5.unusedBackend.slice(0, 5).map(u => `${u.method} ${u.path}`).join('、')}${probe5.unusedBackend.length > 5 ? ' …' : ''}`)
++    // unused 分层展示（probe5-unused-stock-noise）：本变更相关（artifact 端点集内）逐条列出，
++    // 存量其余折叠计数——EHS 实证 490 个存量端点刷屏淹没了真信号。旧字段形态（无分层）零回归全列。
++    const relevant = Array.isArray(probe5.unusedChangeRelevant) && probe5.unusedChangeRelevant.length >= 0
++      ? probe5.unusedChangeRelevant : probe5.unusedBackend
++    const stock = typeof probe5.unusedStockCount === 'number' ? probe5.unusedStockCount : 0
++    L.push(`- ⚠️ ${relevant.length} 个本变更端点前端未调用（warning 不阻断）：${relevant.slice(0, 5).map(u => `${u.method} ${u.path}`).join('、')}${relevant.length > 5 ? ' …' : ''}`)
++    if (stock > 0) L.push(`- ℹ️ 另有 ${stock} 个存量端点未调用（他模块存量噪音，已折叠不逐条列出）`)
++  }
++  if ((probe5.crossRepoNotes || []).length > 0) {
++    for (const n of probe5.crossRepoNotes.slice(0, 5)) L.push(`- ℹ️ ${n}`)
+   }
+   L.push('')
+ 
+diff --git a/src/worktree-deps.js b/src/worktree-deps.js
+index 20284fe..e7689a5 100644
+--- a/src/worktree-deps.js
++++ b/src/worktree-deps.js
+@@ -616,10 +616,33 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
+   // generic monorepo（如 multi-agent-platform）worktree 子模块 frontend/sillyhub-daemon 无 node_modules，
+   // 跑 pnpm test 失败。读 local.yaml modules 块，对 nodejs 子模块 tryLink main 的 node_modules。
+   const modulePaths = extractModulePaths(yamlText);
++  // 注册仓根集合（坑 deps-sibling-repo-false-reject，2026-09-15 EHS 生产实证：modules 里登记的
++  // `../sub-grid-security` 是跨仓测试命令的合法配置，被「path 越界拒绝 link」当攻击面误报——该
++  // 目录本来就不在 worktree 内、无 main/worktree 双份语义，node_modules link 天然不适用，正确
++  // 动作是分类跳过+准确理由。未注册的越界路径维持 fail-closed 拒绝）。轻量解析（不引
++  // plan-postcheck 依赖边，条目形状 <key>: <path> 与 parseRepoRegistry 对齐）。
++  const registeredRepoRoots = (() => {
++    const roots = [];
++    const lines = String(yamlText || '').replace(/\r\n?/g, '\n').split('\n');
++    const start = lines.findIndex(l => /^repos:\s*(?:#.*)?$/.test(l));
++    if (start === -1) return roots;
++    for (let i = start + 1; i < lines.length; i++) {
++      if (lines[i].length > 0 && !/\s/.test(lines[i][0]) && lines[i].trim() !== '' && !lines[i].startsWith('#')) break;
++      const m = lines[i].match(/^\s+([A-Za-z0-9_.\-]+):\s*(\S+)/);
++      if (m && !m[2].startsWith('#')) roots.push(m[2].replace(/^['"]|['"]$/g, ''));
++    }
++    return roots;
++  })();
+   const moduleResults = [];
+   for (const mp of modulePaths) {
+     if (!isSafeModulePath(mp)) {
+-      moduleResults.push({ path: mp, status: 'skipped', reason: 'path 越界（绝对路径或 .. 段），拒绝 link' });
++      const resolvedMp = resolvePath(worktreePath, mp);
++      const hitRepo = registeredRepoRoots.some(rRoot => {
++        try { return resolvePath(mainCwd || worktreePath, rRoot) === resolvedMp } catch { return false }
++      });
++      moduleResults.push({ path: mp, status: 'skipped', reason: hitRepo
++        ? '跨仓注册仓路径（repos 已注册）——不在 worktree 内，node_modules link 不适用；其测试命令经 modules.<name>.test 由 verify 直接在该仓执行'
++        : 'path 越界（绝对路径或 .. 段），拒绝 link' });
+       continue;
+     }
+     const wtDir = join(worktreePath, mp);
+diff --git a/test/probe5-cross-repo-scan.test.mjs b/test/probe5-cross-repo-scan.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/probe5-cross-repo-scan.test.mjs
+@@ -0,0 +1,147 @@
++/**
++ * 探针5 跨仓前端扫描根扩展（坑 probe5-cross-repo-frontend-blind，2026-09-15 EHS 生产实证：
++ * 三端全栈变更的前端在兄弟仓，主仓 change-diff 永远不含它们 → 报告「0 frontend calls」假象、
++ * 本变更端点全落 unused、契约对账只能靠人工逐条对齐 11 端点）。verifyApiParity 扩展：task 卡
++ * allowed_paths 的 cross-repo:<key>: 前缀 + design 清单跨仓条目 → local.yaml repos 注册表解析
++ * 仓根 → 各仓根扫前端调用并按声明集收窄，并入 frontendCalls。
++ *
++ * 锁定语义：
++ *   - 注册仓可达 → 跨仓前端调用进对账集（本变更端点被匹配、不再落 unused），summary/crossRepoNotes 注记
++ *   - 未注册 repo key → fail-soft 注记「未注册」，主仓对账不受影响
++ *   - 无跨仓声明 / 无 repos 注册表 → 零行为（存量单仓流不受影响）
++ *   - unused 分层：本变更相关（artifact 端点集内）逐条；存量其余折叠计数（unusedStockCount）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync } from 'node:child_process'
++import { verifyApiParity } from '../src/contract-matrix.js'
++
++const tmpRoots = []
++function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++const CONTROLLER_JAVA = `package com.foo;
++import org.springframework.web.bind.annotation.*;
++@RequestMapping("/v1/rp/order")
++public class RpOrderController {
++  @GetMapping("/page")
++  public Object page() { return null; }
++  @PostMapping("/{id}/submit")
++  public Object submit(@PathVariable String id) { return null; }
++  @GetMapping("/legacy-only")
++  public Object legacy() { return null; }
++}
++`
++
++function setupScenario({ registerRepo = true } = {}) {
++  const mainRoot = mk('p5xr-main-')
++  git(mainRoot, ['init', '-q'])
++  git(mainRoot, ['config', 'user.email', 't@t.local'])
++  git(mainRoot, ['config', 'user.name', 't'])
++  mkdirSync(join(mainRoot, 'src', 'main', 'java', 'com', 'foo'), { recursive: true })
++  writeFileSync(join(mainRoot, 'src', 'main', 'java', 'com', 'foo', 'RpOrderController.java'), CONTROLLER_JAVA)
++
++  // 兄弟仓：前端 service 调主仓端点
++  const feRoot = mk('p5xr-fe-')
++  git(feRoot, ['init', '-q'])
++  git(feRoot, ['config', 'user.email', 't@t.local'])
++  git(feRoot, ['config', 'user.name', 't'])
++  mkdirSync(join(feRoot, 'src', 'services'), { recursive: true })
++  writeFileSync(join(feRoot, 'src', 'services', 'rp.js'), [
++    'export function fetchPage(params) {',
++    '  return apiFetch("/v1/rp/order/page", { params })',
++    '}',
++    'export function submitOrder(id) {',
++    '  return apiFetch(`/v1/rp/order/${id}/submit`, { method: "POST" })',
++    '}',
++    '',
++  ].join('\n'))
++  // design 清单声明的第二个跨仓文件（覆盖源2：design 跨仓条目）
++  mkdirSync(join(feRoot, 'src', 'components'), { recursive: true })
++  writeFileSync(join(feRoot, 'src', 'components', 'RpExtra.js'),
++    'export const loadLegacy = () => apiFetch("/v1/rp/order/legacy-only")\n')
++  git(feRoot, ['add', '.'])
++  git(feRoot, ['commit', '-q', '-m', 'init'])
++
++  git(mainRoot, ['add', '.'])
++
++  const specBase = join(mainRoot, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  if (registerRepo) {
++    writeFileSync(join(specBase, 'local.yaml'), `repos:\n  fe-repo: ${feRoot.split('\\').join('/')}\n`)
++  }
++  const changeDir = join(specBase, 'changes', 'cross-demo')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: 网页端\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'),
++    '---\nid: task-01\nallowed_paths:\n  - cross-repo:fe-repo:src/services/rp.js\n---\n# task-01\n')
++  writeFileSync(join(changeDir, 'design.md'), [
++    '# design',
++    '',
++    '## 文件变更清单',
++    '',
++    '| 操作 | 文件路径 | 说明 |',
++    '|---|---|---|',
++    '| 新增 | cross-repo:fe-repo:src/components/RpExtra.js | 附加组件 |',
++    '',
++  ].join('\n'))
++
++  git(mainRoot, ['add', '.sillyspec/'])
++  try { git(mainRoot, ['commit', '-q', '-m', 'spec']) } catch { /* 无 user 配置环境已预设 */ }
++  return { mainRoot, feRoot, specBase }
++}
++
++test('注册仓可达 → 跨仓前端调用进对账：端点被匹配不落 unused、notes/summary 注记', () => {
++  const { mainRoot, specBase } = setupScenario()
++  const r = verifyApiParity(specBase, mainRoot, join(specBase, '.runtime'), 'cross-demo')
++
++  // 跨仓调用并入：page + submit + legacy-only 三条（task 卡 1 文件 + design 清单 1 文件）
++  assert.ok(r.frontendCount >= 3, `跨仓前端调用并入对账集（实际 frontendCount=${r.frontendCount}）`)
++  assert.ok((r.crossRepoNotes || []).some(n => n.includes('fe-repo') && n.includes('前端调用')), `crossRepoNotes 注记（实际：${JSON.stringify(r.crossRepoNotes)}）`)
++  assert.match(r.summary, /cross-repo:fe-repo\(\d+\)/, 'summary 注记跨仓 scope')
++  // 三个端点全部被前端调用 → 不落 unused
++  const unusedKeys = (r.unusedBackend || []).map(u => `${u.method} ${u.path}`)
++  assert.ok(!unusedKeys.includes('GET /v1/rp/order/page'), 'page 端点被跨仓调用匹配')
++  assert.ok(!unusedKeys.includes('POST /v1/rp/order/{id}/submit'), 'submit 端点被跨仓调用匹配')
++  assert.ok(!unusedKeys.includes('GET /v1/rp/order/legacy-only'), 'legacy-only 端点被跨仓调用匹配')
++})
++
++test('repo key 未注册（无 repos 段）→ fail-soft 注记，主仓对账不受影响', () => {
++  const { mainRoot, specBase } = setupScenario({ registerRepo: false })
++  const r = verifyApiParity(specBase, mainRoot, join(specBase, '.runtime'), 'cross-demo')
++  assert.equal(r.frontendCount, 0, '跨仓调用未并入（未注册）')
++  assert.ok((r.crossRepoNotes || []).some(n => n.includes('fe-repo')), '未注册注记在场')
++  // 主仓端点照常 live 扫描
++  assert.ok(r.backendCount >= 3, '主仓端点扫描不受跨仓失败影响')
++})
++
++test('无跨仓声明（无 task 卡前缀）→ 零行为', () => {
++  const { mainRoot, specBase } = setupScenario()
++  // 换一个无跨仓声明的变更名（无 tasks 目录）→ 不触发跨仓扫描
++  const bareDir = join(specBase, 'changes', 'bare')
++  mkdirSync(bareDir, { recursive: true })
++  writeFileSync(join(bareDir, 'tasks.md'), '- [x] task-01: 后端\n')
++  const r = verifyApiParity(specBase, mainRoot, join(specBase, '.runtime'), 'bare')
++  assert.equal(r.frontendCount, 0, '无跨仓声明零行为')
++  assert.deepEqual(r.crossRepoNotes || [], [], '无跨仓注记')
++})
++
++test('unused 分层：本变更相关逐条 + 存量折叠计数（无 artifact 时回退全列零回归）', () => {
++  const { mainRoot, specBase } = setupScenario()
++  // 造一个主仓存量未调用端点：追加新 controller（不在跨仓调用集）
++  const extra = join(mainRoot, 'src', 'main', 'java', 'com', 'foo', 'OtherController.java')
++  writeFileSync(extra, 'package com.foo;\nimport org.springframework.web.bind.annotation.*;\n@RequestMapping("/v1/other")\npublic class OtherController {\n  @GetMapping("/list")\n  public Object list() { return null; }\n}\n')
++  const r = verifyApiParity(specBase, mainRoot, join(specBase, '.runtime'), 'cross-demo')
++  // 无 contract artifact → 回退：unused 全列（零回归），stockCount=0
++  assert.ok((r.unusedBackend || []).some(u => u.path === '/v1/other/list'), '存量未调用端点照常列出（无 artifact 回退）')
++  assert.equal(r.unusedStockCount || 0, 0, '无 artifact 不折叠')
++})
+
+diff --git a/test/worktree-deps-sibling-repo.test.mjs b/test/worktree-deps-sibling-repo.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/worktree-deps-sibling-repo.test.mjs
+@@ -0,0 +1,59 @@
++/**
++ * worktree-deps 兄弟仓相对路径分类（坑 deps-sibling-repo-false-reject，2026-09-15 EHS 生产
++ * 实证：local.yaml modules 里登记的 `../sub-grid-security`（跨仓测试命令的合法配置）被
++ * isSafeModulePath 判「path 越界（绝对路径或 .. 段），拒绝 link」——吓人误报：该目录本来
++ * 就不在 worktree 内、无 main/worktree 双份语义，node_modules link 天然不适用，正确动作是
++ * 分类跳过 + 准确理由，不是当攻击面拒绝）。
++ *
++ * 锁定语义：
++ *   - modules 路径 resolve 后 == repos 注册表某仓根（相对 worktree 在仓外）→ skipped +
++ *     理由含「跨仓注册仓」与「modules.<name>.test」指引，不含「拒绝」字样
++ *   - 未注册的 .. 越界路径 → 维持原「拒绝 link」判定（fail-closed 不放松）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { provisionDeps } from '../src/worktree-deps.js'
++
++const tmpRoots = []
++function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('注册兄弟仓相对路径 → 分类跳过（准确理由），未注册越界 → 维持拒绝', () => {
++  const mainRoot = mk('wds-main-')          // 主仓根（= worktree 根的简化形态：in-place 无 worktree 副本）
++  const sibling = mk('wds-sibling-')        // 兄弟仓（repos 注册）
++  const rogue = mk('wds-rogue-')            // 未注册的外部目录
++  mkdirSync(join(mainRoot, '.sillyspec'), { recursive: true })
++  mkdirSync(sibling, { recursive: true })
++  mkdirSync(rogue, { recursive: true })
++
++  const mainAbs = mainRoot.split('\\').join('/')
++  const siblingRel = '../' + sibling.split(/[\\/]/).pop() // ../wds-sibling-XXXX（相对主仓根）
++  writeFileSync(join(mainRoot, '.sillyspec', 'local.yaml'), [
++    'repos:',
++    `  fe-repo: ${siblingRel}`,
++    'modules:',
++    '  fe:',
++    `    path: ${siblingRel}`,
++    '  rogue:',
++    `    path: ../${rogue.split(/[\\/]/).pop()}`,
++    '',
++  ].join('\n'))
++
++  // provisionDeps(worktreePath, mainCwd, opts)：非 node 主仓 + modules 块 → 走 modules link 分支
++  const r = provisionDeps(mainRoot, mainRoot, { yamlTextOverride: null })
++  const mods = r.depsModules || []
++  const fe = mods.find(m => m.path === siblingRel)
++  const rogueMod = mods.find(m => (m.path || '').includes(rogue.split(/[\\/]/).pop()))
++
++  assert.ok(fe, `注册兄弟仓模块进结果（实际 depsModules：${JSON.stringify(mods)}）`)
++  assert.equal(fe.status, 'skipped')
++  assert.match(fe.reason, /跨仓注册仓/, '理由点明跨仓注册仓')
++  assert.match(fe.reason, /modules\.<name>\.test/, '理由给出测试命令指引')
++  assert.ok(!fe.reason.includes('拒绝'), '不再用「拒绝 link」误报吓人')
++
++  assert.ok(rogueMod, '未注册越界模块进结果')
++  assert.match(rogueMod.reason, /拒绝 link/, '未注册越界维持 fail-closed 拒绝')
++})

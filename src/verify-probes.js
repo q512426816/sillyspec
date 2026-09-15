@@ -652,7 +652,16 @@ export function renderVerifyProbesReport(result) {
     L.push('- ❌ contract gap 是真实集成缺陷——诚实判 FAIL 并回 execute 补端点（CLI 仅 advisory 不硬阻断）')
   }
   if ((probe5.unusedBackend || []).length > 0) {
-    L.push(`- ⚠️ ${probe5.unusedBackend.length} 个后端端点前端未调用（warning 不阻断）：${probe5.unusedBackend.slice(0, 5).map(u => `${u.method} ${u.path}`).join('、')}${probe5.unusedBackend.length > 5 ? ' …' : ''}`)
+    // unused 分层展示（probe5-unused-stock-noise）：本变更相关（artifact 端点集内）逐条列出，
+    // 存量其余折叠计数——EHS 实证 490 个存量端点刷屏淹没了真信号。旧字段形态（无分层）零回归全列。
+    const relevant = Array.isArray(probe5.unusedChangeRelevant) && probe5.unusedChangeRelevant.length >= 0
+      ? probe5.unusedChangeRelevant : probe5.unusedBackend
+    const stock = typeof probe5.unusedStockCount === 'number' ? probe5.unusedStockCount : 0
+    L.push(`- ⚠️ ${relevant.length} 个本变更端点前端未调用（warning 不阻断）：${relevant.slice(0, 5).map(u => `${u.method} ${u.path}`).join('、')}${relevant.length > 5 ? ' …' : ''}`)
+    if (stock > 0) L.push(`- ℹ️ 另有 ${stock} 个存量端点未调用（他模块存量噪音，已折叠不逐条列出）`)
+  }
+  if ((probe5.crossRepoNotes || []).length > 0) {
+    for (const n of probe5.crossRepoNotes.slice(0, 5)) L.push(`- ℹ️ ${n}`)
   }
   L.push('')
 

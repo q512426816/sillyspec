@@ -1,0 +1,96 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-f8bb9742",
+  "totals": {
+    "files": 5,
+    "additions": 321,
+    "deletions": 6
+  },
+  "rows": [
+    {
+      "path": "src/contract-matrix.js",
+      "declared": true,
+      "additions": 81,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 10,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-deps.js",
+      "declared": true,
+      "additions": 24,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/probe5-cross-repo-scan.test.mjs",
+      "declared": true,
+      "additions": 147,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/worktree-deps-sibling-repo.test.mjs",
+      "declared": true,
+      "additions": 59,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 5,
+    "codeFileCount": 3,
+    "testFileCount": 2,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/contract-matrix.js",
+          "src/verify-probes.js"
+        ]
+      },
+      {
+        "id": "worktree",
+        "files": [
+          "src/worktree-deps.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/probe5-cross-repo-scan.test.mjs",
+      "test/worktree-deps-sibling-repo.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-006-0756",
+  "sessionId": "quick-f8bb9742",
+  "savedAt": "2026-09-15T16:57:54.308Z",
+  "patchSha256": "d7c8a8fc5b748c71d9243d2d0da2374177fb7256a35f1245e5df2bc40d19f6f9",
+  "patchStatus": "ok"
+}

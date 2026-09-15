@@ -616,10 +616,33 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
   // generic monorepo（如 multi-agent-platform）worktree 子模块 frontend/sillyhub-daemon 无 node_modules，
   // 跑 pnpm test 失败。读 local.yaml modules 块，对 nodejs 子模块 tryLink main 的 node_modules。
   const modulePaths = extractModulePaths(yamlText);
+  // 注册仓根集合（坑 deps-sibling-repo-false-reject，2026-09-15 EHS 生产实证：modules 里登记的
+  // `../sub-grid-security` 是跨仓测试命令的合法配置，被「path 越界拒绝 link」当攻击面误报——该
+  // 目录本来就不在 worktree 内、无 main/worktree 双份语义，node_modules link 天然不适用，正确
+  // 动作是分类跳过+准确理由。未注册的越界路径维持 fail-closed 拒绝）。轻量解析（不引
+  // plan-postcheck 依赖边，条目形状 <key>: <path> 与 parseRepoRegistry 对齐）。
+  const registeredRepoRoots = (() => {
+    const roots = [];
+    const lines = String(yamlText || '').replace(/\r\n?/g, '\n').split('\n');
+    const start = lines.findIndex(l => /^repos:\s*(?:#.*)?$/.test(l));
+    if (start === -1) return roots;
+    for (let i = start + 1; i < lines.length; i++) {
+      if (lines[i].length > 0 && !/\s/.test(lines[i][0]) && lines[i].trim() !== '' && !lines[i].startsWith('#')) break;
+      const m = lines[i].match(/^\s+([A-Za-z0-9_.\-]+):\s*(\S+)/);
+      if (m && !m[2].startsWith('#')) roots.push(m[2].replace(/^['"]|['"]$/g, ''));
+    }
+    return roots;
+  })();
   const moduleResults = [];
   for (const mp of modulePaths) {
     if (!isSafeModulePath(mp)) {
-      moduleResults.push({ path: mp, status: 'skipped', reason: 'path 越界（绝对路径或 .. 段），拒绝 link' });
+      const resolvedMp = resolvePath(worktreePath, mp);
+      const hitRepo = registeredRepoRoots.some(rRoot => {
+        try { return resolvePath(mainCwd || worktreePath, rRoot) === resolvedMp } catch { return false }
+      });
+      moduleResults.push({ path: mp, status: 'skipped', reason: hitRepo
+        ? '跨仓注册仓路径（repos 已注册）——不在 worktree 内，node_modules link 不适用；其测试命令经 modules.<name>.test 由 verify 直接在该仓执行'
+        : 'path 越界（绝对路径或 .. 段），拒绝 link' });
       continue;
     }
     const wtDir = join(worktreePath, mp);

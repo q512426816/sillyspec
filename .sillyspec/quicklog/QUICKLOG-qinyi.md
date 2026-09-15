@@ -436,3 +436,18 @@
 根因：C（eda9434）漏了 config-schema 既有守卫「live 键必须出现在 renderExample 策展模板」；D（50242df）新增移交项章节改骨架 12→13 章但 verify-probes-facts 计数断言未同步——D 的 quick 门禁 test_strategy 走了 module[cli-core,run-gates] 收窄，全量断言漏网到合并态才暴露
 方案：src/config-schema.js renderExample 补 verify_precedents 中性示例段（id/standard_command/reason/equivalent/established_by 用占位值，不引 EHS 真实变更名）；test/verify-probes-facts.test.mjs 两处 12→13 + 移交项段在场断言（章节清单如实更新非改测试凑过）
 结果：config-schema 311/0；verify-probes-facts 全过；全量 npm test exit 0（scan-staleness/refresh 并发轮失败系已知 flake 串行复核清）；lint 633 文件 0 告警
+
+## ql-20260916-006-0756 | 2026-09-16 00:48:47 | 探针5跨仓前端扫描根扩展+unused分层+兄弟仓deps分类
+状态：已完成
+关联变更：（无）
+文件：
+- src/contract-matrix.js（跨仓前端并集+unused分层）
+- src/worktree-deps.js（兄弟仓注册根分类）
+- src/verify-probes.js（probe5渲染分层+跨仓注记）
+- test/probe5-cross-repo-scan.test.mjs（四组用例）
+- test/worktree-deps-sibling-repo.test.mjs（兄弟仓分类用例）
+需求：探针5跨仓前端扫描根扩展+unused分层+兄弟仓deps分类
+根因：EHS生产实证：①前端在兄弟仓主仓diff永不含→「0 frontend calls」假象+对账靠人工②490存量unused刷屏③modules的../sub-grid-security被「越界拒绝link」误报
+方案：verifyApiParity跨仓前端并集（task卡源不滤注册表+design源路径参+repos仓根+声明集收窄+source反斜杠手工归一）+unused分层（artifact内逐条/存量折叠/无artifact回退）；worktree-deps兄弟仓先查repos注册根（轻量解析）命中→skipped准确理由未注册维持拒绝；verify-probes渲染分层+跨仓注记
+结果：新增两测试文件五组用例全绿；probe5回归3文件绿；全量npm test exit 0
+审计：[gate] L1（跨 2 模块 · 5 文件：3 代码/2 测试）advisory；每文件注记已全覆盖；测试增量已含

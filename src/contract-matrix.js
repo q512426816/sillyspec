@@ -9,9 +9,10 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
-import { join, resolve, basename, dirname, relative } from 'path'
+import { join, resolve, basename, dirname, relative, isAbsolute } from 'path'
 import { gitQuiet } from './git-helper.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+import { parseFileChangeListDetailed } from './change-list.js'
 import {
   scanBackendEndpoints,
   scanFrontendApiCalls,
@@ -19,7 +20,7 @@ import {
   normalizePath,
   diffApiParity,
 } from './endpoint-extractor.js'
-import { parseTaskContracts } from './stages/plan-postcheck.js'
+import { parseTaskContracts, parseRepoRegistry, parseAllowedPaths } from './stages/plan-postcheck.js'
 
 // ─── 关键词检测 ─────────────────────────────────────────────────────────
 
@@ -561,6 +562,74 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     frontendCalls = scanFrontendApiCalls(frontendRoot)
   }
 
+  // ── 跨仓前端调用并集（坑 probe5-cross-repo-frontend-blind，2026-09-15 EHS 生产实证：三端
+  // 全栈变更的前端在兄弟仓（cross-repo: 前缀声明），主仓 change-diff 永远不含它们 → 报告
+  // 「0 frontend calls」假象、本变更端点全落 unused、契约对账只能靠人工逐条对齐 11 端点）。
+  // 声明源双取：task 卡 allowed_paths 的 cross-repo:<key>: 前缀 + design 清单跨仓条目
+  // （change-list repoKeys 解析，与探针 1 清单同源）；仓根经 local.yaml repos 注册表解析
+  // （resolveCrossRepoDeclarations 同款）。各仓根扫前端调用并按「该仓声明文件集」收窄后并入
+  // frontendCalls——「探针已知口径限制」注记从人肉兜底变机器对账。fail-soft：仓未注册/
+  // 不可达 → crossRepoNotes 一行注记不炸整体；无跨仓声明/无注册表零行为（存量单仓流不受影响）。
+  const crossRepoNotes = []
+  if (changeName && specBase) {
+    try {
+      const declaredByRepo = {}
+      const addDecl = (repo, p) => {
+        const n = String(p || '').trim().replace(/^\.\//, '').replace(/\\/g, '/')
+        if (repo && n) (declaredByRepo[repo] = declaredByRepo[repo] || new Set()).add(n)
+      }
+      // 源1：task 卡 allowed_paths 的 cross-repo:<key>: 前缀（与 _module-map.yaml 约定一致）——
+      // 不按注册表过滤：未注册 key 也要现身「未注册」注记（漏登记可见，而非静默消失）
+      const tasksDir = join(specBase, 'changes', changeName, 'tasks')
+      if (existsSync(tasksDir)) {
+        for (const f of readdirSync(tasksDir)) {
+          if (!/^task-\d+\.md$/.test(f)) continue
+          try {
+            for (const p of parseAllowedPaths(readFileSync(join(tasksDir, f), 'utf8'))) {
+              const m = String(p).match(/^cross-repo:([A-Za-z0-9_.\-]+):(.*)$/)
+              if (m) addDecl(m[1], m[2])
+            }
+          } catch { /* 单卡读取失败不拖垮 */ }
+        }
+      }
+      const registry = parseRepoRegistry(existsSync(join(specBase, 'local.yaml')) ? readFileSync(join(specBase, 'local.yaml'), 'utf8') : '')
+      // 源2：design.md 文件清单跨仓子段/前缀（change-list repoKeys 解析需注册表在——
+      // 注册表空时源2 不可判跨仓，跳过；源1 已保证未注册声明仍可见）。注意
+      // parseFileChangeListDetailed 吃文件路径非文本（内部 existsSync+readFileSync）。
+      if (registry.size > 0) {
+        const designPath = join(specBase, 'changes', changeName, 'design.md')
+        if (existsSync(designPath)) {
+          for (const e of parseFileChangeListDetailed(designPath, { repoKeys: [...registry.keys()] })) {
+            if (e.repo) addDecl(e.repo, e.path)
+          }
+        }
+      }
+      for (const [key, declared] of Object.entries(declaredByRepo)) {
+        const raw = registry.get(key)
+        if (!raw) {
+          crossRepoNotes.push(`repo「${key}」未在 local.yaml repos 注册——该仓前端调用未进对账（register-repo 登记后自动并入）`)
+          continue
+        }
+        const repoRoot = isAbsolute(raw) ? raw : resolve(scanRoot, raw)
+        if (!existsSync(repoRoot)) {
+          crossRepoNotes.push(`repo「${key}」注册路径不可达：${repoRoot}——该仓前端调用未进对账`)
+          continue
+        }
+        const calls = scanFrontendApiCalls(repoRoot).filter(c => {
+          // source 是绝对路径且 Windows 反斜杠形态——与主仓 change-diff 过滤同款手工归一
+          // （normalizePath 是 URL 路径归一器，不碰反斜杠，此处不能用）
+          const src = String(c.source || '').replace(/\\/g, '/')
+          return [...declared].some(dp => src === dp || src.endsWith('/' + dp) || dp.endsWith('/' + src))
+        })
+        if (calls.length > 0) frontendCalls.push(...calls)
+        crossRepoNotes.push(`repo「${key}」@ ${repoRoot}：${calls.length} 前端调用（跨仓声明 ${declared.size} 文件收窄）`)
+        frontendScope += ` + cross-repo:${key}(${calls.length})`
+      }
+    } catch (e) {
+      crossRepoNotes.push(`跨仓前端扫描失败（fail-soft 跳过）：${e && e.message ? e.message : e}`)
+    }
+  }
+
   // ── 挂载前缀收集（坑 endpoints-mount-prefix-gap，2026-08-31 用户实证）：endpoints 提取的是
   // 「router 自身前缀 + 装饰器路径」，不含挂载点前缀（main.py 的 include_router(prefix=)/app.use
   // 与 router 文件分离，静态扫描不做导入图关联）→ 前端全路径调用（/api/xxx）对不上欠前缀端点
@@ -577,6 +646,14 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     const key = `${u.method} ${u.path}`
     return liveKeys.has(key) || liveEndpoints.length === 0
   })
+  // unused 分层（坑 probe5-unused-stock-noise，2026-09-15 EHS 生产实证：490 个 unused 全是
+  // urgent 等他模块存量端点——全仓 live 扫描 × 本变更对账的口径噪音刷屏）。本变更相关 =
+  // contract artifact 端点集内（本变更换的端点漏配才是真信号）；存量其余折叠计数。无
+  // artifact（非契约流）回退全列零回归。
+  const artifactKeys = new Set(allProviderEndpoints.map(e => `${e.method} ${e.path}`))
+  const hasArtifacts = allProviderEndpoints.length > 0
+  const unusedChangeRelevant = hasArtifacts ? narrowedUnused.filter(u => artifactKeys.has(`${u.method} ${u.path}`)) : narrowedUnused
+  const unusedStockCount = narrowedUnused.length - unusedChangeRelevant.length
 
   const ok = missingBackend.length === 0
   const liveRootSummary = liveByRoot.map(r => `${r.label} ${r.endpoints.length}`).join(' + ')
@@ -585,11 +662,11 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     : `❌ API parity check failed: ${missingBackend.length} frontend calls have no matching backend endpoint [scope: ${frontendScope}]`
 
   if (narrowedUnused.length > 0) {
-    summary += ` | ${narrowedUnused.length} backend endpoints unused by frontend`
+    summary += ` | ${unusedChangeRelevant.length} backend endpoints unused by frontend${unusedStockCount > 0 ? ` (+${unusedStockCount} stock noise collapsed)` : ''}`
   }
   if (prefixAlignedCount > 0) {
     summary += ` | ${prefixAlignedCount} calls matched after mount-prefix alignment (artifact paths exclude include_router/app.use prefixes)`
   }
 
-  return { ok, missingBackend, unusedBackend: narrowedUnused, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, prefixAlignedCount, scanRoots: liveByRoot.map(r => r.root) }
+  return { ok, missingBackend, unusedBackend: narrowedUnused, unusedChangeRelevant, unusedStockCount, crossRepoNotes, summary, backendCount: mergedProviderEndpoints.length, frontendCount: frontendCalls.length, prefixAlignedCount, scanRoots: liveByRoot.map(r => r.root) }
 }
