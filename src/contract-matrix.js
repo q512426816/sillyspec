@@ -382,7 +382,9 @@ export function _readWorktreeMeta(specBase, scanRoot, changeName) {
   for (const metaPath of candidates) {
     try {
       if (!existsSync(metaPath)) continue
-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      // BOM 容错（worktree.js:283 同坑）：Windows 编辑器写入的 UTF-8 BOM 会让 JSON.parse
+      // 失败——双候选下会静默跳根，先剥 BOM 再解析
+      const meta = JSON.parse(String(readFileSync(metaPath, 'utf8')).replace(/^\uFEFF/, ''))
       const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
         ? meta.worktreePath : scanRoot
       return { meta, gitDir }

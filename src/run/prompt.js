@@ -1129,13 +1129,14 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // 推荐组合、无从否决——故在 prompt 时点经 {EVIDENCE_AUTO_RECOMMENDATION} 把 task-11
   // resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt（含推荐
   // 理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径），供用户否决（FR-11）。
-  // 仅 test_strategy=evidence-auto 且 recommendation 非空时渲染；full/module/skip/未配置
-  // （recommendation=null）替换为空串零输出。fail-soft：读取/解析异常降级单行说明不抛，
+  // 仅 test_strategy=evidence-auto 且 recommendation 非空时渲染推荐；full/module/skip/已配置
+  // 替换为空串零输出；**未配置**且 commands.test 已配时渲染 test_strategy 预检提示（2026-09-15
+  // 复盘：环境硬伤的全量实测打回返工，提前在 prompt 时点给配置指引）。fail-soft：读取/解析异常降级单行说明不抛，
   // 绝不阻断 verify prompt 输出（对齐上方 {WORKTREE_BASELINE_INFO} 注入先例）。
   if (stageName === 'verify' && promptText.includes('{EVIDENCE_AUTO_RECOMMENDATION}')) {
     let eaInjected = ''
     try {
-      const { resolveTestStrategy } = await import('../verify-postcheck.js')
+      const { resolveTestStrategy, extractTestCommand, extractTestStrategy } = await import('../verify-postcheck.js')
       const eaSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       // 信任边界：local.yaml 只读 specBase（平台 specRoot / 漂移锚定主仓 / cwd 本地），与
       // runVerifyTestCheck 的 specBase 来源同口径，不读 agent 可写的 worktree 副本。
@@ -1144,7 +1145,15 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       const eaChangeDir = changeName ? join(eaSpecBase, 'changes', changeName) : null
       const resolution = resolveTestStrategy({ yamlText: eaYamlText, changeDir: eaChangeDir })
       const rec = resolution.evidence_auto_recommendation
-      if (rec && rec.summary) eaInjected = rec.summary
+      if (rec && rec.summary) {
+        eaInjected = rec.summary
+      } else if (eaYamlText && extractTestCommand(eaYamlText) && !extractTestStrategy(eaYamlText)) {
+        // test_strategy 预检提示（2026-09-15 复盘教训「test_strategy 该在进 verify 前配好，
+        // 而不是被 verify-test gate 打回后才补」）：已配 commands.test 但顶层 test_strategy
+        // 未设（缺省=全量实测对账），prompt 时点先给配置指引——环境注定跑不了全量时省一轮
+        // 「--done 实测打回 → 补配置 → 重跑」返工
+        eaInjected = '【test_strategy 预检提示】local.yaml 已配置 commands.test 但未设顶层 test_strategy（缺省=全量实测对账）。若该命令在当前环境无法真实执行（框架/环境硬伤，如测试框架硬编码 skip、依赖外部服务），先在 local.yaml 显式配 `test_strategy: skip`（或 `module` + modules 映射收窄）并注释理由再继续——避免 verify --done 实测对账打回后返工。'
+      }
     } catch (e) {
       eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
     }

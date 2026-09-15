@@ -28,9 +28,9 @@ import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
-import { verifyApiParity } from './contract-matrix.js'
+import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
-import { filterDeliverableFiles } from './worktree-apply.js'
+import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
 // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
 // 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
 import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
@@ -1054,15 +1054,14 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
   // （排除 .sillyspec/ 运行时产物）。opt-in（默认关）：d drafts 有自己的并入点，避免双并。
   if (includeWorkingTree && mainFiles !== null) {
     try {
-      // P1 修复（2026-09-07）：metaPath 吃 opts.specBase——此前硬编码 join(cwd,'.sillyspec')，
-      // 平台模式（specRoot 与 source_root 分离）下 worktree meta 静默读不到 → 形态 A 并入失效 → ②类假红。
-      // 与下方 resolveMainChangedFiles 的 specBase 兜底同口径。
-      const metaPath = join(opts.specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
-      if (changeName && existsSync(metaPath)) {
-        const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
-        const wtGitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
-          ? meta.worktreePath
-          : cwd
+      // 双根读取（坑 platform-dual-root-form-misjudge，2026-09-15 复盘实证）：P1 修复
+      // （2026-09-07）只吃 opts.specBase 单路径——平台模式（specRoot 与 source_root 分离）下
+      // meta 若落项目侧 .sillyspec/.runtime（resolveRuntimeRoot 的 localSpecBase 兜底形）仍读
+      // 不到 → 形态 A 并入失效 → ②类假红。_readWorktreeMeta 双候选（specBase 优先 +
+      // cwd/.sillyspec 兜底，contract-matrix 既有样板）两形全覆盖。
+      const found = changeName ? _readWorktreeMeta(opts.specBase || null, cwd, changeName) : null
+      if (found) {
+        const wtGitDir = found.gitDir
         const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
         // P1 修复（2026-09-07）：过滤器改 filterDeliverableFiles 口径（worktree-apply.js 同款）——
         // 此前 `.sillyspec/` 一刀切把 docs 交付物也滤掉，声明了模块文档的 task 在形态 A 下落②类假红
@@ -1152,16 +1151,16 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
 function resolveMainChangedFiles(cwd, changeName, specBase = null) {
   const sb = specBase || join(cwd, '.sillyspec')
   if (changeName) {
-    const metaPath = join(sb, '.runtime', 'worktrees', changeName, 'meta.json')
-    if (existsSync(metaPath)) {
-      let meta = null
-      try { meta = JSON.parse(readFileSync(metaPath, 'utf8')) } catch {}
+    // 双根读取（坑 platform-dual-root-form-misjudge）：specBase（平台模式=specRoot）单路径在
+    // meta 落项目侧 .sillyspec 时静默 miss → 锚点 diff 整链失效落主仓 fallback。双候选
+    // （specBase 优先 + cwd/.sillyspec 兜底）两形全覆盖；sb 仍作他者声明过滤根（原语义不动）。
+    const found = _readWorktreeMeta(specBase || null, cwd, changeName)
+    if (found) {
+      const meta = found.meta
       // 优先 baselineCommit/actualBaseHash（baseline checkpoint 之后），回退 baseHash
       const diffBase = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash
       if (diffBase) {
-        const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
-          ? meta.worktreePath
-          : cwd
+        const gitDir = found.gitDir
         const files = runGitDiffNameOnly(gitDir, `${diffBase}..HEAD`)
         // 坑 verify-evidence-account-diff-misses-committed-changes（2026-09-13 实证）：
         // wt-commit 流程把本变更提交落在**主仓 HEAD**，worktree 分支不前移——仅查 worktree
@@ -2324,14 +2323,22 @@ function parsePorcelainFilePaths(raw) {
  * resolveMainChangedFiles 同口径，三锚全缺 null）；形态 B 取 merge-base hash（分支不存在/
  * merge-base 不可得 null）；降级返回恒 null。
  *
- * @returns={{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, degradedReason: string|null, baseAnchor: string|null }}
+ * @returns={{ ok: boolean, form: 'worktree'|'post-apply', files: string[], sources: string[], foreignExcluded: number, foreignExcludedFiles: string[], degradedReason: string|null, baseAnchor: string|null }}
  */
 export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, changeName }) {
-  const metaPath = join(specBase, '.runtime', 'worktrees', changeName, 'meta.json')
-  const form = existsSync(metaPath) ? 'worktree' : 'post-apply'
+  // 形态判定双根化（坑 platform-dual-root-form-misjudge，2026-09-15 复盘实证：平台模式
+  // specBase=specRoot 时项目侧 .sillyspec 的 meta 读不到 → 误判 post-apply → 按主仓 git
+  // 三源对账 → ②类 21 条全量假红阻断 verify 收尾）。_readWorktreeMeta 双候选（specBase
+  // 优先 + cwd/.sillyspec 兜底，contract-matrix 既有样板）为形态判定的唯一权威入口。
+  const wtMeta = _readWorktreeMeta(specBase || null, cwd, changeName)
+  const form = wtMeta ? 'worktree' : 'post-apply'
   const sources = []
   const union = new Set()
   let foreignExcluded = 0
+  // 退栈文件名单（scope-audit-cross-repo-blindness 改进点 3）：原只回计数，scope-audit 侧
+  // 无法区分「真未动」与「已写盘但被退栈」——补名单（仅文件名，owners 不重复携带），
+  // 消费方按「planned ∩ excluded ∩ 盘面存在」标「疑似他者已实现」。
+  const foreignExcludedFiles = []
   let baseAnchor = null
 
   if (form === 'worktree') {
@@ -2339,15 +2346,12 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
     // working-tree 并入、fail-open 均为该函数既有语义，不另造口径）——
     const files = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
     if (files === null) {
-      return { ok: false, form, files: [], sources, foreignExcluded,
+      return { ok: false, form, files: [], sources, foreignExcluded, foreignExcludedFiles,
         degradedReason: 'worktree 锚点 diff 与主仓 fallback 均失败（git 不可用 / 非仓库）', baseAnchor: null }
     }
-    // baseAnchor：读同一份 worktree meta.json 锚点（baselineCommit>actualBaseHash>baseHash，
-    // resolveMainChangedFiles 同口径；解析失败/三锚全缺 → null）
-    try {
-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
-      baseAnchor = meta?.baselineCommit || meta?.actualBaseHash || meta?.baseHash || null
-    } catch {}
+    // baseAnchor：读形态判定命中的同一份 worktree meta.json 锚点（baselineCommit>
+    // actualBaseHash>baseHash，resolveMainChangedFiles 同口径；三锚全缺 → null）
+    baseAnchor = wtMeta?.meta?.baselineCommit || wtMeta?.meta?.actualBaseHash || wtMeta?.meta?.baseHash || null
     sources.push('worktree:diff-base..HEAD', 'worktree:status-porcelain(uncommitted)')
     for (const f of files) union.add(normalizeReconcilePath(f))
   } else {
@@ -2386,7 +2390,10 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
       let files = parsePorcelainFilePaths(statusRaw)
       if (files.length > 0) {
         const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, files, { specBase })
-        if (foreign.length > 0) foreignExcluded = foreign.length
+        if (foreign.length > 0) {
+          foreignExcluded = foreign.length
+          for (const fo of foreign) foreignExcludedFiles.push(normalizeReconcilePath(fo.file))
+        }
         files = own
       }
       for (const f of files) union.add(normalizeReconcilePath(f))
@@ -2403,13 +2410,13 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
       } catch { /* 兜底源失败 → 忽略 */ }
     }
     if (!diffOk && !statusOk) {
-      return { ok: false, form, files: [], sources, foreignExcluded,
+      return { ok: false, form, files: [], sources, foreignExcluded, foreignExcludedFiles,
         degradedReason: 'merge-base 锚定 diff 未得且主仓 status 失败（git 不可用 / 非仓库 / 无锚点分支）', baseAnchor: null }
     }
   }
 
   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
-  return { ok: true, form, files, sources, foreignExcluded, degradedReason: null, baseAnchor }
+  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor }
 }
 
 /**
@@ -2569,15 +2576,32 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   }
   // ③做了没声明（scope creep，WARNING）：actual − 声明集；suspectTask 尽力归因仅报告（D-002）
   const suspect = attributeSuspectTasks(rt, changeName, actual.files.filter(p => !declaredKeySet.has(pathKey(p))))
+  // 脚手架软桶（坑 reconcile-undeclared-scaffold-flood，2026-09-15 复盘实证：worktree baseline
+  // 拷入的 .claude/skills、attachments 等设施文件 58 条逐条进③类、每轮 verify 重复刷屏）：
+  // classifyToolScaffold（worktree-apply / scope-audit 同款口径）命中的工具/平台设施文件聚合
+  // 为一行 note——环境设施面非交付物，逐条列③类只会淹没真 scope creep。全为脚手架时③类
+  // 判 ok（脚手架不构成 scope creep 语义）。
+  const scaffoldBuckets = { platform: 0, tool: 0 }
+  const scaffoldSamples = []
   for (const path of actual.files) {
     if (declaredKeySet.has(pathKey(path))) continue
+    const bucket = classifyToolScaffold(path)
+    if (bucket) {
+      scaffoldBuckets[bucket] = (scaffoldBuckets[bucket] || 0) + 1
+      if (scaffoldSamples.length < 5) scaffoldSamples.push(path)
+      continue
+    }
     const s = suspect.get(normalizeReviewChangedFile(path))
     undeclared.push(s ? { path, suspectTask: s } : { path })
+  }
+  const scaffoldTotal = scaffoldBuckets.platform + scaffoldBuckets.tool
+  if (scaffoldTotal > 0) {
+    notes.push(`③类另有 ${scaffoldTotal} 个工具/平台脚手架文件（platform ${scaffoldBuckets.platform} / tool ${scaffoldBuckets.tool}，如 ${scaffoldSamples.join('、')}${scaffoldTotal > scaffoldSamples.length ? ' 等' : ''}）已聚合不逐条列——非交付物（scope-audit 设施桶同口径）`)
   }
 
   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
-  return { status, matched, missing, undeclared, skipReason: null, notes, form: actual.form, sources: actual.sources }
+  return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

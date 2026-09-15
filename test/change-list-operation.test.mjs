@@ -197,3 +197,68 @@ import { pathMatches } from '../src/change-list.js'
     assert('不产生整行脏条目', entries.every(e => !e.path.includes('：') && !e.path.includes('注入')))
   } finally { rmSync(root, { recursive: true, force: true }) }
 }
+
+// scope-audit-cross-repo-blindness 改进点 2（2026-09-15）：repoKeys 传入时识别跨仓子段
+// （### <注册 key> / ### <key> 仓）与 `cross-repo:<key>:` 路径前缀——条目标 repo 字段；
+// 未注册 key 不剥前缀不标仓（fail-closed）；缺省 repoKeys 全按主仓（零回归）。
+{
+  const root = mkdtempSync(join(tmpdir(), 'clop-repo-'))
+  try {
+    const specDir = join(root, '.sillyspec')
+    mkdirSync(specDir, { recursive: true })
+    writeFileSync(join(specDir, 'design.md'), `# d
+## 文件变更清单
+
+| 操作 | 文件路径 | 说明 |
+|--|--|--|
+| 修改 | src/main.js | 主仓 |
+
+### sub-grid-security
+
+| 操作 | 文件路径 | 说明 |
+|--|--|--|
+| 新增 | src/auth.py | 跨仓段表格 |
+
+### spdemo 仓
+
+- src/demo.py
+- cross-repo:sub-grid-security:src/shared.py
+- src/unknown-x.py：描述带冒号不受影响
+
+### 修改文件
+
+- src/back-in-main.py
+`, 'utf8')
+    const designPath = join(specDir, 'design.md')
+    const keys = ['sub-grid-security', 'spdemo']
+
+    // 缺省 repoKeys：零回归（全部主仓，cross-repo: 前缀原样保留不剥）
+    const def = parseFileChangeListDetailed(designPath)
+    assert('缺省 repoKeys：全部 repo=undefined/null（零回归）',
+      def.every(e => !e.repo))
+    assert('缺省 repoKeys：cross-repo: 前缀不剥（原样路径）',
+      def.some(e => e.path === 'cross-repo:sub-grid-security:src/shared.py') === true)
+
+    // 注册 repoKeys：子段标题 / 仓后缀 / 显式前缀三种形态全部识别
+    const entries = parseFileChangeListDetailed(designPath, { repoKeys: keys })
+    const byPath = Object.fromEntries(entries.map(x => [x.path, x.repo]))
+    assert('主仓表格条目 repo=null', byPath['src/main.js'] === null)
+    assert('跨仓子段（纯 key 标题）表格条目 repo=sub-grid-security',
+      byPath['src/auth.py'] === 'sub-grid-security')
+    assert('跨仓子段（<key> 仓 后缀标题）列表条目 repo=spdemo',
+      byPath['src/demo.py'] === 'spdemo')
+    assert('cross-repo: 前缀剥前缀标 repo（优先级高于子段）',
+      byPath['src/shared.py'] === 'sub-grid-security')
+    assert('冒号描述剥离在前缀判定之后（cross-repo 项不被砍成 head）',
+      byPath['src/unknown-x.py'] === 'spdemo')
+    assert('子段切换回主仓操作段 → repo 重置 null',
+      byPath['src/back-in-main.py'] === null)
+
+    // 未注册 key：不剥前缀不标仓（fail-closed）
+    const regOnly = parseFileChangeListDetailed(designPath, { repoKeys: ['spdemo'] })
+    assert('未注册 key 前缀不剥不标',
+      regOnly.some(e => e.path === 'cross-repo:sub-grid-security:src/shared.py' && !e.repo) === true)
+    assert('注册 key 前缀照常识别（注册表子集）',
+      regOnly.some(e => e.path === 'src/demo.py' && e.repo === 'spdemo') === true)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+}

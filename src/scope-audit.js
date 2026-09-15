@@ -31,6 +31,9 @@ import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, coll
 import { computeGateProfile, resolveGateThresholds } from './quick-gate-profile.js'
 import { safeGit } from './git-helper.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+import { classifyToolScaffold } from './worktree-apply.js'
+import { parseRepoRegistry } from './stages/plan-postcheck.js'
+import { _readWorktreeMeta } from './contract-matrix.js'
 
 /** quick 会话 id 形态（与 run/command.js :652 QUICK_SID_RE 同款——crypto.randomUUID 前 8 hex） */
 const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
@@ -211,10 +214,11 @@ function resolveChangeDir(sb, changeName) {
 function resolveDiffRoot(sb, changeName, form, cwd) {
   if (form === 'worktree') {
     try {
-      const meta = JSON.parse(readFileSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'), 'utf8'))
-      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
-        return meta.worktreePath
-      }
+      // 双根读取（坑 platform-dual-root-form-misjudge）：平台模式 sb=specRoot 时项目侧
+      // .sillyspec 的 meta 读不到 → worktree 根错落 cwd。_readWorktreeMeta 双候选（contract-matrix
+      // 既有样板，gitDir 已含 worktreePath/mode 判定）。
+      const found = _readWorktreeMeta(sb || null, cwd, changeName)
+      if (found) return found.gitDir
     } catch { /* 读失败 → cwd 兜底（advisory） */ }
   }
   return cwd
@@ -375,6 +379,22 @@ function findQuickPatchRecord(cwd, sessionId) {
 
 /** QUICKLOG 条目号形态（ql-20260914-001-abcd：日期-序号-短 hash，短 hash 4 hex） */
 const QL_ID_RE = /^ql-\d{8}-\d{3}-[0-9a-f]{4}$/
+
+/**
+ * 注册仓 key 清单（scope-audit-cross-repo-blindness 改进点 2）：读 <specBase>/local.yaml 的
+ * repos 段（parseRepoRegistry 同源，D-003 不另造解析）——design 清单跨仓子段 / `cross-repo:`
+ * 前缀只认注册 key（fail-closed，防普通路径误判）。local.yaml 缺失/坏 → 空清单（全部按主仓
+ * 解析，行为同改进前）。
+ * @param {string} specBase .sillyspec 根
+ * @returns {string[]} repoKey 清单
+ */
+function loadRegisteredRepoKeys(specBase) {
+  try {
+    const p = join(specBase || '', 'local.yaml')
+    if (!specBase || !existsSync(p)) return []
+    return [...parseRepoRegistry(readFileSync(p, 'utf8')).keys()]
+  } catch { /* 读取/解析失败 → 空清单（主仓口径兜底） */ return [] }
+}
 
 /**
  * ql-xxx → quick-xxx 反查（用户「为什么不直接用 ql-xxx 查」根治，ql-20260910-014 设计：
@@ -704,7 +724,8 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   // 审计 tag）全无 = 尚未进入 execute——实际侧不存在（B2 会吞整个工作区脏文件误归属本变更，
   // 2026-09-11-cross-change-decision-guard 实证 28 个「计划外」全是并行在途）。出计划清单
   // 视图：rows=design 清单 untouched（待实现），工作区改动归属各自会话不进表。
-  const hasWorktreeMeta = existsSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json'))
+  // 双根（坑 platform-dual-root-form-misjudge）：平台模式 sb=specRoot 时项目侧 meta 单路径读不到
+  const hasWorktreeMeta = !!_readWorktreeMeta(sb || null, cwd, changeName)
   const hasBranch = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
   const hasAuditTag = !!safeGit(cwd, ['rev-parse', '--verify', '--quiet', `sillyspec-audit/sillyspec/${changeName}^{commit}`], { timeout: 15 * 1000 }).value
   // 审查 C-F02：预执行判定必须排除归档（归档=流程走完，58/77 归档变更三信号全缺被误判
@@ -740,11 +761,12 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
     try {
       prePlanned = parseFileChangeListDetailed(
         join(changeDirInfo ? changeDirInfo.dir : join(sb, 'changes', changeName), 'design.md'),
-        { keepSillyspecDocs: true })
+        { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(sb) })
     } catch { /* 清单解析失败 → 空清单 + 说明 */ }
     const preRows = prePlanned.map(e => ({
       path: e.path, planned: e.operation || null, additions: 0, deletions: 0,
       kind: 'modified', verdict: 'untouched',
+      ...(e.repo ? { crossRepo: e.repo } : {}),
     }))
     return {
       ...emptyBase,
@@ -762,8 +784,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   let planDegraded = null
   try {
     // keepSillyspecDocs=true：与 actual 侧 filterDeliverableFiles 保留 .sillyspec/docs/** 交付物
-    // 的口径对齐（dogfood 模块文档=交付物）
-    plannedEntries = parseFileChangeListDetailed(designMdPath, { keepSillyspecDocs: true })
+    // 的口径对齐（dogfood 模块文档=交付物）；repoKeys=注册仓清单——跨仓子段/`cross-repo:` 前缀
+    // 条目带 repo 字段（改进点 2，标注「跨仓（本表不含）」的数据源）
+    plannedEntries = parseFileChangeListDetailed(designMdPath, { keepSillyspecDocs: true, repoKeys: loadRegisteredRepoKeys(sb) })
   } catch (e) {
     planDegraded = `design.md 清单解析异常: ${e && e.message ? String(e.message).split('\n')[0] : e}`
   }
@@ -783,13 +806,10 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   let actual = null
   let actualFailure = null
   try {
-    const metaPath = join(sb, '.runtime', 'worktrees', changeName, 'meta.json')
-    if (existsSync(metaPath)) {
-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
-      const wtRoot = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
-        ? meta.worktreePath
-        : cwd
-      const anchor = meta.baselineCommit || meta.actualBaseHash || meta.baseHash || null
+    const found = _readWorktreeMeta(sb || null, cwd, changeName)
+    if (found) {
+      const wtRoot = found.gitDir
+      const anchor = found.meta.baselineCommit || found.meta.actualBaseHash || found.meta.baseHash || null
       if (anchor) {
         const diffOut = safeGit(wtRoot, ['diff', '--name-only', anchor], { timeout: 30 * 1000 })
         if (!diffOut.error && typeof diffOut.value === 'string') {
@@ -811,9 +831,9 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
               if (wtFilter(p) && !files.includes(p)) files.push(p)
             }
           }
-          actual = { ok: true, form: 'worktree', files, sources: ['worktree:diff-anchor..worktree', 'worktree:status-untracked'], foreignExcluded: 0, degradedReason: null, baseAnchor: anchor }
+          actual = { ok: true, form: 'worktree', files, sources: ['worktree:diff-anchor..worktree', 'worktree:status-untracked'], foreignExcluded: 0, foreignExcludedFiles: [], degradedReason: null, baseAnchor: anchor }
         } else {
-          actual = { ok: false, form: 'worktree', files: [], sources: [], foreignExcluded: 0, degradedReason: 'worktree 锚定 diff 失败', baseAnchor: null }
+          actual = { ok: false, form: 'worktree', files: [], sources: [], foreignExcluded: 0, foreignExcludedFiles: [], degradedReason: 'worktree 锚定 diff 失败', baseAnchor: null }
         }
       } else {
         // 无锚 meta（baseHash 等字段缺失）：退 HEAD 未提交窗口口径——文件集=status 全量
@@ -829,7 +849,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
               && !p.startsWith('.sillyspec/quicklog/')) files.push(p)
           }
         }
-        actual = { ok: true, form: 'worktree', files, sources: ['worktree:status-porcelain(HEAD-window)'], foreignExcluded: 0, degradedReason: null, baseAnchor: null }
+        actual = { ok: true, form: 'worktree', files, sources: ['worktree:status-porcelain(HEAD-window)'], foreignExcluded: 0, foreignExcludedFiles: [], degradedReason: null, baseAnchor: null }
       }
     } else {
       const mod = await import('./verify-postcheck.js')
@@ -983,10 +1003,20 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
     notes.push('baseAnchor 缺失——行数按 HEAD 未提交窗口采集（不含已提交改动，quick 模式同口径；numstat 采集失败时行列为 —）')
   }
 
-  // 他者声明排除面可见（R-04 同精神）：resolveReconcileActualFiles 只回计数不回名单，退栈的
-  // 计划内文件会误显「计划未动」——note 点破归属重叠可能性，让 ⚠️ 行可解释。
+  // 他者声明排除面可见（R-04 同精神）+ 退栈名单消费（scope-audit-cross-repo-blindness 改进点 3）：
+  // planned 文件被退栈排除但已写盘 → 该行标 suspectedForeignDone「疑似他者已实现·已退栈」，
+  // 与真未动区分（名单来自 resolveReconcileActualFiles 新增的 foreignExcludedFiles）。
+  const foreignExcludedSet = new Set((Array.isArray(actual.foreignExcludedFiles) ? actual.foreignExcludedFiles : []).map(toPosix))
   if (actual.foreignExcluded > 0) {
-    notes.push(`实际侧另有 ${actual.foreignExcluded} 个文件按他者会话声明退栈未进本表——「计划未动」行先怀疑归属重叠（声明即归属，git diff 核实）`)
+    notes.push(`实际侧另有 ${actual.foreignExcluded} 个文件按他者会话声明退栈未进本表——「计划未动」行标注「疑似他者已实现·已退栈」者即此类（声明即归属，git diff 核实）`)
+  }
+
+  // 计划侧跨仓段汇总（改进点 2）：跨仓条目不进本仓对账（actual 只采主仓 git），行级标
+  // crossRepo + note 交代去对应仓对账。
+  const crossRepoKeys = [...new Set(plannedEntries.map(e => e.repo).filter(Boolean))]
+  if (crossRepoKeys.length > 0) {
+    const crossCount = plannedEntries.filter(e => e.repo).length
+    notes.push(`计划侧含 ${crossCount} 个跨仓文件（repo：${crossRepoKeys.join('、')}）——⊘ 行不在本仓对账面（实际侧只采主仓 git），请到对应仓跑 scope-audit 对账`)
   }
 
   // —— 三态判定 ——
@@ -1006,6 +1036,12 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
       } else {
         row.planned = null
         row.verdict = 'unplanned'
+        // 工具/平台脚手架（改进点 1 软桶）：CLI/平台自装文件不占「计划外」——硬排档
+        // （.worktrees//.sillyspec-platform*/knowledge/local.yaml）已被 filterDeliverableFiles
+        // 滤出不进 actual；此处打标的是可能正当交付的软档（.claude/skills/、CLAUDE.md、
+        // attachments/），范围视图归入「工具/平台设施」桶。
+        const facility = classifyToolScaffold(path)
+        if (facility) row.facility = facility
       }
     }
     rows.push(row)
@@ -1013,7 +1049,16 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   // 计划未动：清单文件无实际改动 → 补行（行数 0/0）；计划侧降级时不产（plannedEntries 为空天然不跑）
   for (const e of plannedEntries) {
     if (matchedPlanned.has(e.path)) continue
-    rows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched' })
+    const row = { path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched' }
+    if (e.repo) {
+      // 跨仓条目（改进点 2）：不是「未动」是「本表不含」
+      row.crossRepo = e.repo
+    } else {
+      // 退栈排除 + 盘面已存在 → 他者会话已写盘（改进点 3）；NEW: 前缀剥除后比对（pathMatches 同款口径）
+      const norm = toPosix(e.path).replace(/^NEW:/, '')
+      if (foreignExcludedSet.has(norm) && existsSync(join(numstatRoot, norm))) row.suspectedForeignDone = true
+    }
+    rows.push(row)
   }
 
   // 冻结 patch（collectPatch，execute --done 落盘方消费）：与行数同根同锚（numstatRoot +
@@ -1054,7 +1099,11 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
  *   rows: Array<{ path: string, planned?: string|null, declared?: boolean,
  *                 additions: number|null, deletions: number|null,
  *                 kind: 'binary'|'new'|'modified'|'deleted',
- *                 verdict?: 'planned'|'unplanned'|'untouched', attribution?: 'declared'|'soft'|'undeclared' }>,
+ *                 verdict?: 'planned'|'unplanned'|'untouched', attribution?: 'declared'|'soft'|'undeclared',
+ *                 crossRepo?: string, suspectedForeignDone?: boolean, facility?: 'tool'|'platform' }>,
+ *   （crossRepo/suspectedForeignDone/facility 为 scope-audit-cross-repo-blindness 改进点 1/2/3
+ *     增量字段：跨仓条目标 repoKey / 退栈排除但已写盘的 planned 文件 / 计划外行里的工具平台
+ *     脚手架桶——均为按存在性读取，缺省无字段零回归）
  *   excluded: { foreignDeclared: Array<{ file: string, sessions: string[] }> },
  *   note?: string|null,
  *   gateProfile?: object|null }>}
@@ -1187,7 +1236,7 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
       const located = locateQuickSessionGuard(cwd, changeName)
       if (located) root = dirname(located.specBase)
     } else {
-      const form = existsSync(join(sb, '.runtime', 'worktrees', changeName, 'meta.json')) ? 'worktree' : 'post-apply'
+      const form = _readWorktreeMeta(sb || null, cwd, changeName) ? 'worktree' : 'post-apply'
       root = resolveDiffRoot(sb, changeName, form, cwd)
     }
 
@@ -1210,12 +1259,16 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
   }
 }
 
-/** verdict / attribution → 展示标记（人类可读面；BIN 为 binary 行数占位，— 为降级占位） */
+/** verdict / attribution → 展示标记（人类可读面；BIN 为 binary 行数占位，— 为降级占位）。
+ *  行级标注优先（scope-audit-cross-repo-blindness 改进点 1/2/3）：跨仓 > 疑似他者已实现 > 设施桶 */
 const VERDICT_LABEL = {
   planned: '✓ 计划内',
   unplanned: '⚠️ 计划外',
   untouched: '⚠️ 计划未动',
 }
+const CROSS_REPO_LABEL = '⊘ 跨仓（本表不含）'
+const SUSPECTED_FOREIGN_LABEL = '⚠️ 计划未动（疑似他者已实现·已退栈）'
+const FACILITY_LABEL = '⚠️ 计划外（工具/平台设施）'
 const ATTRIBUTION_LABEL = {
   declared: '✓ 已声明',
   soft: '🔍 软归属',
@@ -1278,7 +1331,10 @@ export function renderScopeAuditTable(result, opts = {}) {
     const stat = row.kind === 'binary'
       ? { a: 'BIN', d: 'BIN' }
       : { a: fmtCount(row.additions) ?? '—', d: fmtCount(row.deletions) ?? '—' }
-    const label = VERDICT_LABEL[row.verdict] || ATTRIBUTION_LABEL[row.attribution] || ''
+    const label = row.crossRepo ? CROSS_REPO_LABEL
+      : row.suspectedForeignDone ? SUSPECTED_FOREIGN_LABEL
+      : row.facility ? FACILITY_LABEL
+      : VERDICT_LABEL[row.verdict] || ATTRIBUTION_LABEL[row.attribution] || ''
     lines.push(`   ${row.path || '(未知路径)'}${' '.repeat(Math.max(1, 40 - String(row.path || '').length))}${label}${' '.repeat(Math.max(1, 12 - label.length))}${String(stat.a).padStart(5)} ${String(stat.d).padStart(5)}   ${row.kind || ''}`)
   }
   if (rows.length > shown.length) {
@@ -1287,14 +1343,28 @@ export function renderScopeAuditTable(result, opts = {}) {
 
   lines.push(`   合计：${totals.files ?? rows.length} 文件  +${totals.additions ?? 0} / -${totals.deletions ?? 0}`)
 
-  // ⚠️ 出口指引（full-flow 三态面）：计划外补声明、计划未动确认遗漏
-  const unplanned = rows.filter(x => x && x.verdict === 'unplanned').length
-  const untouched = rows.filter(x => x && x.verdict === 'untouched').length
-  if (unplanned > 0 || untouched > 0) {
+  // ⚠️ 出口指引（full-flow 三态面）：计划外补声明、计划未动确认遗漏。
+  // 行级标注三分（scope-audit-cross-repo-blindness 改进点 1/2/3）：跨仓行/疑似他者已实现行/
+  // 工具设施桶各有去向说明，不混入笼统的「计划外/计划未动」计数逼用户排查噪音。
+  const unplanned = rows.filter(x => x && x.verdict === 'unplanned' && !x.facility).length
+  const facility = rows.filter(x => x && x.verdict === 'unplanned' && x.facility).length
+  const untouchedReal = rows.filter(x => x && x.verdict === 'untouched' && !x.suspectedForeignDone && !x.crossRepo).length
+  const suspectedForeign = rows.filter(x => x && x.suspectedForeignDone).length
+  const crossRepo = rows.filter(x => x && x.crossRepo).length
+  if (unplanned > 0 || untouchedReal > 0) {
     const parts = []
     if (unplanned > 0) parts.push(`计划外 ${unplanned} 文件`)
-    if (untouched > 0) parts.push(`计划未动 ${untouched} 文件`)
+    if (untouchedReal > 0) parts.push(`计划未动 ${untouchedReal} 文件`)
     lines.push(`   ⚠️ ${parts.join('、')}——计划外请补 design.md 声明或 --output 注明原因；计划未动请确认是否遗漏`)
+  }
+  if (suspectedForeign > 0) {
+    lines.push(`   ℹ️ 疑似他者已实现 ${suspectedForeign} 文件（已写盘但被退栈——他者会话声明归属，本表不计未动；git diff 核实归属）`)
+  }
+  if (facility > 0) {
+    lines.push(`   ℹ️ 工具/平台设施 ${facility} 文件（CLI/平台自装脚手架，非本变更改动，不占计划外）`)
+  }
+  if (crossRepo > 0) {
+    lines.push(`   ℹ️ 跨仓 ${crossRepo} 文件（⊘ 行——本表不含，请到对应仓跑 scope-audit 对账）`)
   }
   const undeclared = rows.filter(x => x && x.attribution === 'undeclared').length
   if (undeclared > 0) lines.push(`   ⚠️ 未声明 ${undeclared} 文件——超出 allowedFiles 声明面，补 --files 声明或注明原因`)

@@ -18,7 +18,7 @@ import { safeGit } from './git-helper.js';
 import { openDatabase } from './db-engine.js';
 import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
 import { syncSpecTree } from './spec-sync.js';
-import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved } from './sync-noise.js';
+import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved, syncSelfHealWarn } from './sync-noise.js';
 
 // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
 function safePlatformSpecDir(cwd) {
@@ -844,7 +844,9 @@ export class SyncManager {
       // 说明赢者是本机自己人——刷新 base_ts 重试一次即收敛，不落冲突文件（外来推送不可能
       // 推进本机 DB 的 base_ts，不满足条件自然落回下方真冲突分支，零误放行）
       if (attempt < MAX_PUSH_ATTEMPTS && await this._localBaseTsCovers(changeName, platformLastPushedAt)) {
-        console.warn(`⚠️ [sync] push 409 自竞态判定：本机并发推送已回填 base_ts（平台 ts=${platformLastPushedAt}），刷新后自动重试`);
+        // 409 自愈键控闸（2026-09-15 复盘：自愈不阻断但每步刷屏）——首报可见、窗口内同变更
+        // 同类型静默；手动 platform sync（manual）旁路
+        syncSelfHealWarn(changeName, 'self-race', `⚠️ [sync] push 409 自竞态判定：本机并发推送已回填 base_ts（平台 ts=${platformLastPushedAt}），刷新后自动重试`, { noMute: manual });
         continue;
       }
 
@@ -863,7 +865,8 @@ export class SyncManager {
               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
             ).run(platformLastPushedAt || pushedAt, platformLastPushedAt || pushedAt, changeName);
           } catch {}
-          console.warn(`⚠️ [sync] push 409 内容一致自愈: 平台 ts=${platformLastPushedAt} 为外来噪声重推（六表内容与本地一致），base_ts 已推进，不落冲突文件`);
+          // 409 自愈键控闸同上（kind=content-equal）
+          syncSelfHealWarn(changeName, 'content-equal', `⚠️ [sync] push 409 内容一致自愈: 平台 ts=${platformLastPushedAt} 为外来噪声重推（六表内容与本地一致），base_ts 已推进，不落冲突文件`, { noMute: manual });
           return { synced: 1, errors: [], selfHealed: true, reason: 'push 409 平台内容与本地一致（外来噪声重推），base_ts 已推进' };
         }
       } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
@@ -895,7 +898,8 @@ export class SyncManager {
             pm._ensureDB(this.cwd).getDb().prepare(
               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
             ).run(healTs, healTs, changeName);
-            console.warn(`⚠️ [sync] push 409 自回声判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformLastPusher || '未回传·窗口判定'}），base_ts 已推进到 ${healTs}，自动重推`);
+            // 409 自愈键控闸同上（kind=self-echo）
+            syncSelfHealWarn(changeName, 'self-echo', `⚠️ [sync] push 409 自回声判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformLastPusher || '未回传·窗口判定'}），base_ts 已推进到 ${healTs}，自动重推`, { noMute: manual });
             if (attempt < MAX_PUSH_ATTEMPTS) continue;
             // 重试额度耗尽（attempt=2 仍进此分支，理论少见）：不落冲突文件——base 已推进，
             // 下次常规同步按新 base 直接推送收敛

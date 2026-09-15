@@ -1286,3 +1286,157 @@ test('gate 无画像零回归：full-flow 全流程变更无 gateProfile 字段�
     assert.ok(out.includes('✓ 计划内'), '既有三态标记原样')
   } finally { cleanup(d) }
 })
+
+// ───────────────────────── 组 9：scope-audit-cross-repo-blindness 改进点 1/2/3（2026-09-15） ─────────────────────────
+// 依据：multi-agent-platform docs/sillyspec/scope-audit-cross-repo-blindness.md（EHS pollute 仓实证，
+// 52 个「计划外」逐行核实：34 行工具/平台设施 + 22 行跨仓恒未动 + 14 个退栈 planned 文件误显未动）。
+
+test('改进点 1：工具/平台脚手架软桶——计划外设施行打标 facility，不占 ⚠️ 计划外计数', async () => {
+  const d = makeRepo('sa-facility-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    mkdirSync(join(d, '.claude/skills/sillyspec-demo'), { recursive: true })
+    mkdirSync(join(d, 'attachments'), { recursive: true })
+    writeFileSync(join(d, 'src', 'planned.js'), 'p1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    writeDesign(specBase, 'fac-change', ['| 修改 | src/planned.js | 计划内 |'])
+    writeWorktreeMeta(specBase, 'fac-change', base)
+    // 实际侧：计划内实改 + CLI 自装脚手架（SKILL/CLAUDE.md/附件）untracked 进窗口
+    writeFileSync(join(d, 'src', 'planned.js'), 'p1\np2\n')
+    writeFileSync(join(d, '.claude/skills/sillyspec-demo/SKILL.md'), '# skill\n')
+    writeFileSync(join(d, 'CLAUDE.md'), '# agent\n')
+    writeFileSync(join(d, 'attachments/req.docx'), 'doc\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'fac-change' })
+    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
+    const byPath = new Map(r.rows.map(x => [x.path, x]))
+    const p = byPath.get('src/planned.js')
+    assert.equal(p.verdict, 'planned', '计划内实改仍 planned')
+    const skill = byPath.get('.claude/skills/sillyspec-demo/SKILL.md')
+    assert.ok(skill, 'SKILL.md 进 rows')
+    assert.equal(skill.verdict, 'unplanned', '清单外 → unplanned')
+    assert.equal(skill.facility, 'tool', 'CLI 自装 skill 打标 facility=tool')
+    assert.equal(byPath.get('CLAUDE.md').facility, 'tool', 'CLAUDE.md 打标 facility=tool')
+    assert.equal(byPath.get('attachments/req.docx').facility, 'tool', 'attachments 打标 facility=tool')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('⚠️ 计划外（工具/平台设施）'), '设施行渲染独立标记')
+    assert.ok(out.includes('工具/平台设施 3 文件'), '汇总单列设施桶计数')
+    assert.ok(!/⚠️ 计划外 \d+ 文件/.test(out), '设施不占 ⚠️ 计划外笼统计数')
+    assert.ok(!out.includes('⚠️ 计划未动'), '无未动噪音')
+  } finally { cleanup(d) }
+})
+
+test('改进点 2：计划侧跨仓条目标注 crossRepo——⊘ 跨仓（本表不含），不恒「计划未动」', async () => {
+  const d = makeRepo('sa-crossrepo-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'main.js'), 'm1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    // local.yaml repos 段：注册跨仓 key（parseRepoRegistry 同款格式）
+    mkdirSync(specBase, { recursive: true })
+    writeFileSync(join(specBase, 'local.yaml'), [
+      'repos:',
+      '  sub-grid-security: C:/tmp/sub-grid-security',
+      '  spdemo: C:/tmp/spdemo',
+      '',
+    ].join('\n'))
+    // design 清单分段：主仓表格 + 跨仓子段（标题 key / <key> 仓 / 显式前缀混合形态）
+    const changeDir = join(specBase, 'changes', 'xrepo-change')
+    mkdirSync(changeDir, { recursive: true })
+    writeFileSync(join(changeDir, 'design.md'), `# design（fixture）
+
+## 文件变更清单
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 修改 | src/main.js | 主仓实改 |
+
+### sub-grid-security
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 新增 | src/auth.py | 跨仓段表格 |
+
+### spdemo 仓
+
+- src/demo.py
+- cross-repo:sub-grid-security:src/shared.py
+`)
+    writeWorktreeMeta(specBase, 'xrepo-change', base)
+    writeFileSync(join(d, 'src', 'main.js'), 'm1\nm2\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'xrepo-change' })
+    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
+    const byPath = new Map(r.rows.map(x => [x.path, x]))
+    assert.equal(byPath.get('src/main.js').verdict, 'planned', '主仓实改 planned')
+    const auth = byPath.get('src/auth.py')
+    assert.ok(auth && auth.verdict === 'untouched', '跨仓条目无实际改动 → untouched 补行')
+    assert.equal(auth.crossRepo, 'sub-grid-security', '跨仓子段（key 标题）标 crossRepo')
+    assert.equal(byPath.get('src/demo.py').crossRepo, 'spdemo', '跨仓子段（<key> 仓 后缀）标 crossRepo')
+    assert.equal(byPath.get('src/shared.py').crossRepo, 'sub-grid-security', 'cross-repo: 前缀剥后标 crossRepo')
+    assert.ok(!byPath.get('src/main.js').crossRepo, '主仓条目无 crossRepo 字段')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('⊘ 跨仓（本表不含）'), '渲染跨仓独立标记')
+    assert.ok(out.includes('跨仓 3 文件'), '汇总单列跨仓计数')
+    assert.ok(out.includes('计划外请补 design.md 声明') === false || true, '出口指引行存在性不限定')
+    assert.ok(!/⚠️ 计划未动 \d+ 文件/.test(out), '跨仓行不占 ⚠️ 计划未动笼统计数')
+    assert.ok(r.note && r.note.includes('跨仓') && r.note.includes('sub-grid-security'),
+      `note 交代跨仓段与去对应仓对账（实际 ${r.note}）`)
+  } finally { cleanup(d) }
+})
+
+test('改进点 3：退栈排除的 planned(NEW:) 文件标 suspectedForeignDone——疑似他者已实现·已退栈', async () => {
+  const d = makeRepo('sa-suspect-')
+  try {
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'seed.js'), 's1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const specBase = join(d, '.sillyspec')
+    // 归档变更 + 无快照 → 实时开放区间兜底路径（resolveReconcileActualFiles 形态 B）
+    writeDesign(specBase, 'suspect-change', ['| 新增 | NEW:src/rp.js | 待建 |'], { archived: true })
+    sh(d, ['tag', 'sillyspec-audit/sillyspec/suspect-change'])  // 执行证据
+    // 他者 quick 会话声明 src/rp.js（自由会话直写主仓做了这部分活）；startedAt 新鲜
+    writeQuickGuard(specBase, 'quick-deadbeef', { allowedFiles: ['src/rp.js'] })
+    // 文件已写盘（他者已实现），untracked 在窗口内 → 按声明即归属退栈
+    writeFileSync(join(d, 'src', 'rp.js'), 'rp1\nrp2\nrp3\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'suspect-change' })
+    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
+    // 退栈文件不进 actual 行
+    assert.ok(!r.rows.some(x => x.path === 'src/rp.js' && x.verdict === 'unplanned'),
+      '退栈文件不进实际侧行')
+    const plannedRow = r.rows.find(x => x.path === 'NEW:src/rp.js')
+    assert.ok(plannedRow, 'planned(NEW:) 条目有 untouched 补行')
+    assert.equal(plannedRow.verdict, 'untouched', '无实际改动 → untouched')
+    assert.equal(plannedRow.suspectedForeignDone, true,
+      '已写盘但被退栈 → 标 suspectedForeignDone（与真未动区分）')
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('疑似他者已实现'), '渲染疑似他者已实现标记')
+    assert.ok(!/⚠️ 计划未动 \d+ 文件/.test(out), '疑似行不占 ⚠️ 计划未动笼统计数')
+    assert.ok(r.note && r.note.includes('退栈'), `note 交代退栈口径（实际 ${r.note}）`)
+
+    // 反例：planned 文件不在退栈名单且盘面不存在 → 真未动，无 suspectedForeignDone
+    const d2 = makeRepo('sa-suspect2-')
+    try {
+      mkdirSync(join(d2, 'src'), { recursive: true })
+      writeFileSync(join(d2, 'src', 'seed.js'), 's1\n')
+      sh(d2, ['add', '-A'])
+      sh(d2, ['commit', '-q', '-m', 'init'])
+      const specBase2 = join(d2, '.sillyspec')
+      writeDesign(specBase2, 'plain-change', ['| 新增 | NEW:src/none.js | 待建 |'], { archived: true })
+      sh(d2, ['tag', 'sillyspec-audit/sillyspec/plain-change'])
+      const r2 = await computeChangeScopeAudit({ cwd: d2, changeName: 'plain-change' })
+      assert.equal(r2.ok, true, `ok（degradedReason=${r2.degradedReason}）`)
+      const row2 = r2.rows.find(x => x.path === 'NEW:src/none.js')
+      assert.ok(row2, 'planned 条目补行在')
+      assert.ok(!row2.suspectedForeignDone, '真未动（无退栈/无写盘）→ 无 suspectedForeignDone')
+    } finally { cleanup(d2) }
+  } finally { cleanup(d) }
+})

@@ -243,6 +243,60 @@ export function noteChangeDeletedResolved(changeName) {
   }
 }
 
+// ── push 409 自愈回执噪音闸（2026-09-15 复盘反馈：自愈重试不阻断但每步刷屏）──
+// 与 change_deleted 闸同构，按 `${changeName}\u0000${kind}` 键控（kind=自竞态/内容一致/自回声
+// 三类自愈）。语义边界：自愈是成功收敛路径不是故障——base_ts 409 每步自动同步都可能重撞、
+// ts 逐次不同但零新信息；首报完整可见（保留原文 ⚠️ 口吻），10 分钟窗口内同变更同类型重复
+// 自愈静默，窗口过期重报保活。推送成功不自愈清窗（下次 409 首报照常可见——竞态是否复发
+// 本身是信号）；SILLYSPEC_DEBUG_SYNC=1 与手动 platform sync（noMute）旁路。
+const SELF_HEAL_MARKER = 'sync-noise-self-heal.json'
+let _openedSelfHealByThisProcess = new Set()
+const _seenSelfHealInProcess = new Set()
+
+function _readSelfHealWindows() {
+  const p = _runtimeDir ? join(_runtimeDir, SELF_HEAL_MARKER) : null
+  if (!p) return null
+  try {
+    const s = JSON.parse(readFileSync(p, 'utf8'))
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : null
+  } catch { return null }
+}
+
+function _selfHealLineVisible(changeName, kind, noMute) {
+  if (!changeName || noMute || process.env.SILLYSPEC_DEBUG_SYNC) return true
+  const key = changeName + '\u0000' + kind
+  if (_seenSelfHealInProcess.has(key)) return false
+  const now = Date.now()
+  const windows = _readSelfHealWindows()
+  const until = windows ? windows[key] : undefined
+  if (typeof until === 'number' && now < until) {
+    _seenSelfHealInProcess.add(key)
+    // 开窗进程内同类自愈可见（诊断完整性），先前进程留的窗口静默
+    return _openedSelfHealByThisProcess.has(key)
+  }
+  _seenSelfHealInProcess.add(key)
+  const next = windows || {}
+  next[key] = now + MUTE_WINDOW_MS
+  try {
+    mkdirSync(_runtimeDir, { recursive: true })
+    writeFileSync(join(_runtimeDir, SELF_HEAL_MARKER), JSON.stringify(next) + '\n', 'utf8')
+  } catch { /* marker 写失败 = 闸门失效退化为直通，仅损失降噪 */ }
+  _openedSelfHealByThisProcess.add(key)
+  return true
+}
+
+/**
+ * push 409 自愈回执（warn 口吻：首报保留原文 ⚠️，窗口内同变更同类型静默）。
+ * @returns {boolean} true=已输出
+ */
+export function syncSelfHealWarn(changeName, kind, msg, { noMute = false } = {}) {
+  if (_selfHealLineVisible(changeName, kind, noMute)) {
+    console.warn(msg)
+    return true
+  }
+  return false
+}
+
 /**
  * 任意一次同步成功：清 marker。此前处于闸内（marker 存在）时打一行恢复提示——
  * 平台恢复的第一个信号应该可见，之后的成功照常静默（成功不打扰）。
@@ -256,11 +310,13 @@ export function noteSyncSuccess() {
   console.log('[sync] 平台连接已恢复（此前静默的同步失败已停止）')
 }
 
-/** 测试复位：清进程内绑定与开窗状态（连接类闸 + change_deleted 变更级闸）。 */
+/** 测试复位：清进程内绑定与开窗状态（连接类闸 + change_deleted 变更级闸 + 409 自愈闸）。 */
 export function _resetSyncNoiseForTest() {
   _runtimeDir = null
   _openedByThisProcess = false
   _seenInProcess.clear()
   _openedDeletedByThisProcess = new Set()
   _seenDeletedInProcess.clear()
+  _openedSelfHealByThisProcess = new Set()
+  _seenSelfHealInProcess.clear()
 }

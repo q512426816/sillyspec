@@ -300,7 +300,50 @@
 结果：全量 npm test 486/486 通过（新增 session-friction-crossrepo-fixes 19 项 + enforce-deps-gate-diagnostic 补 B2 自救/B3 仍阻断）；npm run lint 623 文件 0 告警；docs check --fix 后 0 失效；受影响面专项回归全绿
 审计：[gate] L2（跨 4 模块 · 13 文件：5 代码/2 测试）advisory；模块文档认领已 --no-docs 显式豁免
 
-## ql-20260915-007-9b55 | 2026-09-15 16:51:14 | 知识库文件(.sillyspec/knowledge/)纳入 quick 元数据白名单：登记知识条目不再要 --force-baseline、--file-notes 不再强制覆盖知识文件
-状态：进行中
+## ql-20260915-007-9b55 | 2026-09-15 16:51:14 | 知识库文件(.sillyspec/knowledge/)纳入 quick 元数据白名单…
+状态：已完成
 关联变更：（无）
-文件：src/run/shared.js, test/audit-quick-completion.test.mjs, test/quick-gate-knowledge-whitelist.test.mjs
+文件：
+- src/run/shared.js（isQuickMetadata 加 .sillyspec/knowledge/ 前缀白名单（原 uncategorized 精确匹配并入前缀））
+- test/quick-gate-knowledge-whitelist.test.mjs（20 条白名单+门禁+回归锁定）
+需求：知识库文件(.sillyspec/knowledge/)纳入 quick 元数据白名单，登记知识条目不再要 --force-baseline、--file-notes 不再强制覆盖
+根因：isQuickMetadata 只豁免 uncategorized.md，INDEX/known-issues/patterns/conventions/decisions 属 .sillyspec/ 非元数据 → 危险门 blocked；知识文件留在 gateFiles → perFileNotes 逐文件强制注记
+方案：isQuickMetadata 纳入 .sillyspec/knowledge/ 整体前缀白名单（尾斜杠防 knowledge-base/ 误命中）；gateFiles/文件行/预告经既有谓词自动跟随；可追溯性靠 quicklog 结构化条目+git diff+knowledge validate
+结果：新增 test/quick-gate-knowledge-whitelist.test.mjs 20 条（白名单/预告/危险门/新增门/perFileNotes/回归不外溢）全绿；npm test 487/0；lint 624 文件 0 告警
+审计：📝 文档欠账（D-8）：2 个源码文件改动未同步任何模块文档（涉及模块：runtime）
+
+## ql-20260915-008-c5c7 | 2026-09-15 16:59:02 | scope-audit 跨仓清单盲区三改进：filterDeliverableFiles 扩排工具脚手架、计划侧跨仓条目标注、退栈 planned 文件标疑似他…
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree-apply.js（classifyToolScaffold 两档分类+filterDeliverableFiles 扩排 platform 硬排+apply 主/跨仓丢弃告警）
+- src/change-list.js（repoKeys 跨仓子段与 cross-repo: 前缀识别，条目带 repo 字段（缺省 null 零回归））
+- src/scope-audit.js（loadRegisteredRepoKeys 读 local.yaml repos 段；三态判定增 crossRepo/facility/suspectedForeignDone 标注；渲染与汇总分流）
+- src/verify-postcheck.js（resolveReconcileActualFiles 增 foreignExcludedFiles 退栈名单）
+- test/scope-audit.test.mjs（组 9 三集成测试（设施桶/跨仓标注/疑似他者已实现+真未动反例））
+- test/worktree-apply-meta-exclude.test.mjs（Case 9 硬排软桶逐条断言）
+- test/change-list-operation.test.mjs（repoKeys 解析断言（三形态/未注册/缺省零回归））
+需求：scope-audit 跨仓清单盲区三改进：filterDeliverableFiles 扩排工具脚手架、计划侧跨仓条目标注、退栈 planned 文件标疑似他者已实现
+根因：① filterDeliverableFiles 只排 changes/.runtime/quicklog/meta.json，CLI 自装脚手架（.claude/skills、knowledge、local.yaml、.sillyspec-platform 系、.worktrees、attachments）全落计划外（EHS 实证 52 计划外中 34 行设施）；② parseFileChangeListDetailed 把跨仓子段当主仓路径解析、实际侧只采主仓 git → 跨仓条目恒计划未动（22 行）；③ resolveReconcileActualFiles 退栈只回计数无名单，已写盘的 planned 文件被退栈后与真未动混显（14 个）
+方案：改进1：worktree-apply 增 classifyToolScaffold 两档——platform 档（.worktrees、.sillyspec-platform 系、knowledge、local.yaml，回放有害）入 filterDeliverableFiles 硬排+apply 主/跨仓两处丢弃可见性告警，tool 档（.claude/skills、CLAUDE.md、attachments，可正当交付）只打标不滤除。改进2：change-list 清单解析增 repoKeys（跨仓子段标题/<key>仓后缀/cross-repo: 前缀三形态，未注册 key fail-closed，缺省全主仓零回归），scope-audit 从 local.yaml repos 段读注册表传入，跨仓条目标 crossRepo 渲染 ⊘ 跨仓（本表不含）+note 指引对应仓对账。改进3：resolveReconcileActualFiles 增 foreignExcludedFiles 退栈名单，scope-audit 对 planned∩退栈∩盘面存在（NEW: 剥后比对）行标 suspectedForeignDone 渲染「疑似他者已实现·已退栈」；渲染层四处分流——跨仓/疑似他者/设施桶各自单列计数不占笼统 ⚠️ 计数
+结果：全量 npm test 1068/1070（scan-staleness/scan-refresh 既有并发 flake 单跑 31/0 绿）；lint 624 文件 0 告警；scope-audit 40/40 含新增组 9 三集成测试、worktree-apply-meta-exclude 增 Case 9、change-list-operation 增 repoKeys 断言组（23/0）
+审计：[gate] L1（跨 3 模块 · 7 文件：4 代码/3 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260915-009-f9b4 | 2026-09-15 22:34:11 | verify/archive 收尾摩擦六坑——平台模式对账形态判定双根化、探针1 词边界、③类脚手架聚合、探针5 跨仓注记、sync 409 自愈键控闸、tes…
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（含并行 ql-008 未提交 hunks（foreignExcludedFiles 族），本会话改动为 _readWorktreeMeta 双根 3 处+③类脚手架聚合）
+- src/scope-audit.js（含并行 ql-008 未提交 hunks（cross-repo-blindness 改进点 1-3），本会话改动为 _readWorktreeMeta 双根 4 处）
+- src/contract-matrix.js（_readWorktreeMeta 补 BOM 容错（双候选样板本在此））
+- src/verify-probes.js（probe1 词边界三级口径+probe5 跨仓计数注记+导出 isUnimplementedMarkerLine）
+- src/sync-noise.js（新增 syncSelfHealWarn 409 自愈键控闸+测试复位扩展）
+- src/sync.js（三类 409 自愈 warn 改走键控闸（自竞态/内容一致/自回声））
+- src/run/prompt.js（evidence-auto 注入块扩展 test_strategy 预检提示（危险文件已核，改动仅此块））
+- test/retro-verify-friction-fixes.test.mjs（新建，六坑回归 35 断言）
+- docs/sillyspec/platform-interface-map.md（仅 sync.js 行号锚重锚）
+需求：verify/archive 收尾摩擦六坑——平台模式对账形态判定双根化、探针1 词边界、③类脚手架聚合、探针5 跨仓注记、sync 409 自愈键控闸、test_strategy 预检提示
+根因：①meta.json 落盘根随 resolveRuntimeRoot 三态漂移，而 verify-postcheck 3 处与 scope-audit 4 处只查 specBase 单路径——源码已有同族 P1 记录且 contract-matrix._readWorktreeMeta 已双候选，唯这几处没修全（复盘 21 条②类假红根因）；②TODO_MARKER_RE 裸子串无词边界；③③类对 baseline 拷入的 .claude/skills、attachments 设施文件无软桶（58 条刷屏）；④parity 扫描根只含主仓但渲染无边界注记；⑤push 409 三类自愈分支逐次 console.warn；⑥verify prompt 仅 evidence-auto 形态注入测试策略指引
+方案：①统一改走 _readWorktreeMeta 双候选（specBase 优先+cwd/.sillyspec 兜底）并补 BOM 容错，覆盖 verify 形态判定/working-tree 并入/锚点 diff 与 scope-audit diff 根/预执行信号/actual 自采/getFileDiff；②isUnimplementedMarkerLine 三级口径（尚未实现子串保持、TODO/FIXME/HACK ASCII 标识符边界、XXX 边界+CJK 紧邻排除）；③classifyToolScaffold 软桶聚合一行 note+undeclaredScaffold 计数，全脚手架判 ok；④runVerifyProbes 计数跨仓 task 卡并渲染「扫描面只含主仓」注记；⑤sync-noise 新增 syncSelfHealWarn 按 change+kind 键控闸（首报可见、10 分钟窗静默、手动旁路）接管自竞态/内容一致/自回声三类自愈 warn；⑥evidence-auto 注入块扩展——已配 commands.test 未配 test_strategy 时渲染预检提示
+结果：新增 test/retro-verify-friction-fixes.test.mjs 35 断言全绿（双候选/形态判定/并入/probe1 词边界 14 形态/③类聚合/probe5 注记/409 键控闸 6 态）；npm test 488/0（含并行 ql-008 未提交改动基线）+ lint 625 文件 0 告警、未引用导出 0 项；platform-interface-map.md sync.js 锚 1058→1067 重锚
+审计：[gate] L1（跨 3 模块 · 7 文件：5 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

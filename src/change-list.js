@@ -169,19 +169,52 @@ function looksLikePath(p) {
 const INCIDENTAL_RE = /顺带修复|附带修复|顺带|drive-?by|incidental/i
 
 /**
+ * 从清单子段标题 / 路径前缀解析跨仓 repoKey（scope-audit-cross-repo-blindness 改进点 2，
+ * 2026-09-15）：多仓变更 design 清单按「main 仓 / sub-xxx / spdemo」分段书写，主仓跑
+ * scope-audit 时这些条目不是主仓路径，须识别出来标注「跨仓（本表不含）」而非恒「计划未动」。
+ *
+ * 两种书写形态：
+ *   ① 子段标题含注册 repoKey（`### sub-grid-security`、`### sub-grid-security 新增文件`、
+ *      `### spdemo 仓`）——标题 token 化后含 key，或以 key 开头且带「仓/仓库」后缀；
+ *   ② 路径 cell 显式前缀 `cross-repo:<repo-key>:`（_module-map.yaml 同款约定）。
+ * 只认调用方传入的注册表 repoKeys（local.yaml repos 段）——未注册的 key 不剥前缀不标仓，
+ * fail-closed 防把普通路径误判跨仓。repoKeys 缺省 null → 全部按主仓解析（零回归）。
+ */
+function detectRepoFromSubsection(title, repoKeys) {
+  if (!Array.isArray(repoKeys) || repoKeys.length === 0) return null
+  const tokens = String(title || '').split(/[\s（）()：:，,、/\\]+/)
+  for (const k of repoKeys) {
+    if (tokens.includes(k)) return k
+    if (new RegExp(`^${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s*仓|\\s*仓库)$`).test(String(title || '').trim())) return k
+  }
+  return null
+}
+
+/** `cross-repo:<key>:` 前缀拆分（key 须在注册表内）；无前缀/未注册 → null */
+function splitCrossRepoPrefix(rawPath, repoKeys) {
+  if (!Array.isArray(repoKeys) || repoKeys.length === 0) return null
+  const m = String(rawPath || '').match(/^cross-repo:([A-Za-z0-9_.\-]+):(.*)$/)
+  if (!m) return null
+  if (!repoKeys.includes(m[1])) return null
+  return { repo: m[1], path: m[2].trim() }
+}
+
+/**
  * 从 design.md 解析文件变更清单（含 incidental 标记）。兼容两种真实写法：
  *   ① 表格：`| 操作 | 文件路径 | 说明 |`（brainstorm 模板默认）
  *   ② 分类列表：`### 新增文件` / `### 修改文件` / `### 不修改文件` 下的 `- path`
  * 表头列顺序自适应（定位「文件/路径/file/path」列，列顺序写反时不会把操作名当路径）；
  * 忽略 `.sillyspec/`（keepSillyspecDocs=true 时保留 `.sillyspec/docs/`）与占位符（`—`/`-`/`N/A`/`无`）；「不修改/暂缓」子段下的路径会被排除；
  * CRLF 容错。incidental 嗅探：表格非路径列（说明列）+ 路径 cell 原始值（剥注释前的括号内容）+ 列表项原文。
+ * repoKeys 传入时识别跨仓子段 / `cross-repo:` 前缀（detectRepoFromSubsection），命中的条目
+ * repo 字段携带 repoKey（默认 null = 主仓）——scope-audit 计划侧跨仓标注的数据源。
  *
  * 内核函数：parseFileChangeList（Set 包装，向后兼容）与 parseFileChangeListDetailed 共用，
  * 单一真相源，避免两处各自重写清单解析漂移。
  * @param {string} designMdPath - design.md 文件路径
- * @returns {Array<{ path: string, operation: string|null, incidental: boolean }>}（顺序按首次出现，exclude 子段移除）
+ * @returns {Array<{ path: string, operation: string|null, incidental: boolean, repo: string|null }>}（顺序按首次出现，exclude 子段移除）
  */
-function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}) {
+function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoKeys = null } = {}) {
   if (!designMdPath || !existsSync(designMdPath)) return []
 
   const content = readFileSync(designMdPath, 'utf8').replace(/\r\n/g, '\n')
@@ -202,10 +235,11 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
   let opColIdx = -1             // 操作列下标（表头扫描后定位；-1 = 无操作列 → operation=null）
   let listMode = 'include'      // include | exclude（分类列表子段）
   let currentOp = null          // 分类列表子标题推导的 operation（表格模式不用）
-  const entries = new Map()     // path -> { path, operation, incidental }（exclude 子段 delete）
+  let currentRepo = null        // 分类列表子标题推导的跨仓 repoKey（detectRepoFromSubsection）
+  const entries = new Map()     // path -> { path, operation, incidental, repo }（exclude 子段 delete）
 
   for (const line of lines) {
-    // 分类列表子标题：### 新增文件 / ### 修改文件 / ### 不修改文件
+    // 分类列表子标题：### 新增文件 / ### 修改文件 / ### 不修改文件 / ### sub-grid-security（跨仓段）
     const subHeader = line.match(/^###\s+(.+?)\s*$/)
     if (subHeader) {
       // ⚠️ EXCLUDE 优先：「### 不修改文件」含「修改」二字，会被 classifySubsectionOp 误匹配。
@@ -213,9 +247,13 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
       if (EXCLUDE_SUBSECTION_RE.test(subHeader[1])) {
         listMode = 'exclude'
         currentOp = null
+        currentRepo = null
       } else {
         listMode = 'include'
         currentOp = classifySubsectionOp(subHeader[1])
+        // 跨仓段识别（scope-audit-cross-repo-blindness 改进点 2）：子段标题含注册 repoKey
+        // 或以「<key> 仓/仓库」收尾 → 其下条目标 repo；不含 key 的普通操作子段 → 回主仓。
+        currentRepo = detectRepoFromSubsection(subHeader[1], repoKeys)
       }
       continue
     }
@@ -237,7 +275,12 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
         continue
       }
 
-      const filePath = normalizePath(cells[pathColIdx] || '')
+      const filePathRaw = normalizePath(cells[pathColIdx] || '')
+      // 跨仓显式前缀（scope-audit-cross-repo-blindness 改进点 2）：`cross-repo:<key>:` 剥前缀
+      // 标 repo；无前缀/未注册 key → 按当前子段 repo（缺省主仓 null）
+      const crossRepo = splitCrossRepoPrefix(filePathRaw, repoKeys)
+      const filePath = crossRepo ? crossRepo.path : filePathRaw
+      const entryRepo = crossRepo ? crossRepo.repo : currentRepo
       // 列定位兜底：取到纯操作词（表头未命中且列顺序异常）→ 跳过，避免把「修改」当路径
       if (/^(新增|修改|删除|重命名|new|modify|update|delete|create|rename)$/i.test(filePath)) continue
       if (isPlaceholder(filePath) || (filePath.startsWith('.sillyspec/') && !(keepSillyspecDocs && filePath.startsWith('.sillyspec/docs/')))) continue
@@ -252,29 +295,37 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
       // 校验器）。拆分符：+ / ／ / | / 、 / ; / ；——每个 token 独立过校验入表；单路径零变化。
       const pathTokens = splitCombinedPaths(filePath)
       if (listMode === 'exclude') { for (const t of pathTokens) entries.delete(t); continue }
-      for (const t of pathTokens) entries.set(t, { path: t, operation, incidental })
+      for (const t of pathTokens) entries.set(t, { path: t, operation, incidental, repo: entryRepo })
       continue
     }
 
     // 分类列表项：`- path` / `- \`path\``
     const listItem = line.match(/^\s*-\s+(.+)/)
     if (listItem) {
-      // 坑 brainstorm-gate-agent-unavailable-and-list-path-parse 坑2：列表项「路径：描述」
-      // 整行当路径 existsSync 假阴性（文件存在却报幻觉路径）——剥首个中/英冒号及之后描述。
-      // 仅列表分支剥、且冒号前段须 looksLikePath：normalizePath 全局剥会毁 Windows 绝对路径
-      // （C:\...），列表项是仓根相对路径无盘符，安全。
+      // 跨仓显式前缀（改进点 2，同表格分支口径）须先于「路径：描述」剥离判——
+      // `cross-repo:<key>:<path>` 的首个冒号在 key 段内，先剥描述会把整条砍成 `cross-repo`。
+      const preCross = splitCrossRepoPrefix(normalizePath(listItem[1]), repoKeys)
       let rawItem = listItem[1]
-      const colonIdx = rawItem.search(/[：:]/)
-      if (colonIdx > 0) {
-        const head = rawItem.slice(0, colonIdx).trim()
-        if (looksLikePath(head)) rawItem = head
+      if (!preCross) {
+        // 坑 brainstorm-gate-agent-unavailable-and-list-path-parse 坑2：列表项「路径：描述」
+        // 整行当路径 existsSync 假阴性（文件存在却报幻觉路径）——剥首个中/英冒号及之后描述。
+        // 仅列表分支剥、且冒号前段须 looksLikePath：normalizePath 全局剥会毁 Windows 绝对路径
+        // （C:\...），列表项是仓根相对路径无盘符，安全。
+        const colonIdx = rawItem.search(/[：:]/)
+        if (colonIdx > 0) {
+          const head = rawItem.slice(0, colonIdx).trim()
+          if (looksLikePath(head)) rawItem = head
+        }
       }
-      const filePath = normalizePath(rawItem)
+      const itemNorm = normalizePath(rawItem)
+      const itemCross = preCross || splitCrossRepoPrefix(itemNorm, repoKeys)
+      const filePath = itemCross ? itemCross.path : itemNorm
+      const itemRepo = itemCross ? itemCross.repo : currentRepo
       if (isPlaceholder(filePath) || (filePath.startsWith('.sillyspec/') && !(keepSillyspecDocs && filePath.startsWith('.sillyspec/docs/')))) continue
       if (!looksLikePath(filePath)) continue // 脏描述兜底
       const incidental = INCIDENTAL_RE.test(listItem[1])
       if (listMode === 'exclude') { entries.delete(filePath); continue }
-      entries.set(filePath, { path: filePath, operation: currentOp, incidental })
+      entries.set(filePath, { path: filePath, operation: currentOp, incidental, repo: itemRepo })
     }
   }
 
@@ -285,8 +336,8 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false } = {}
  * 从 design.md 解析文件变更清单（路径集合，向后兼容）。
  * @param {string} designMdPath - design.md 文件路径
  * @param {string} designMdPath - design.md 文件路径
- * @param {{ keepSillyspecDocs?: boolean }} [opts] - keepSillyspecDocs=true 时保留 `.sillyspec/docs/`（dogfood 模块文档=交付物，apply gate 需识别；默认 false 跳过全部 .sillyspec/ 保持 fileCount 判档不变）
- * @returns {Set<string>} 文件路径集合（相对路径，如 "src/worktree.js"）
+ * @param {{ keepSillyspecDocs?: boolean, repoKeys?: string[]|null }} [opts] - keepSillyspecDocs=true 时保留 `.sillyspec/docs/`（dogfood 模块文档=交付物，apply gate 需识别；默认 false 跳过全部 .sillyspec/ 保持 fileCount 判档不变）；repoKeys=注册仓 key 清单（local.yaml repos 段）时识别跨仓子段 / `cross-repo:` 前缀
+ * @returns {Set<string>} 文件路径集合（相对路径，如 "src/worktree.js"；跨仓前缀已剥）
  */
 export function parseFileChangeList(designMdPath, opts) {
   return new Set(_parseFileListDetailed(designMdPath, opts).map(e => e.path))
@@ -296,9 +347,11 @@ export function parseFileChangeList(designMdPath, opts) {
  * 从 design.md 解析文件变更清单（含 operation + incidental 标记）。
  * operation 供 verify 删除探针对账（声明「新增/修改」却整文件删除 = 高风险）；
  * incidental 供 assess allowed_paths 豁免。
+ * repo（跨仓标注，scope-audit-cross-repo-blindness 改进点 2）：命中注册跨仓子段标题或
+ * `cross-repo:<key>:` 前缀的条目标 repoKey，否则 null（= 主仓）。
  * @param {string} designMdPath - design.md 文件路径
- * @param {{ keepSillyspecDocs?: boolean }} [opts] - 同 parseFileChangeList
- * @returns {Array<{ path: string, operation: string|null, incidental: boolean }>}
+ * @param {{ keepSillyspecDocs?: boolean, repoKeys?: string[]|null }} [opts] - 同 parseFileChangeList
+ * @returns {Array<{ path: string, operation: string|null, incidental: boolean, repo: string|null }>}
  */
 export function parseFileChangeListDetailed(designMdPath, opts) {
   return _parseFileListDetailed(designMdPath, opts)

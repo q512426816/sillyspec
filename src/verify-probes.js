@@ -29,12 +29,27 @@ import {
 } from './verify-facts-schema.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDecisions } from './decision-distill.js'
-import { parseAllowedPaths } from './stages/plan-postcheck.js'
+import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
 
-const TODO_MARKER_RE = /尚未实现|TODO|FIXME|HACK|XXX/
+// 探针1 未实现标记匹配（坑 probe1-literal-false-positive，2026-09-15 复盘实证：16 命中全
+// 字面误报——TODO_FLAG_TODO 业务常量、「XXX完成处置」中文占位模板）。口径分三级：
+// - 尚未实现：中文短语高置信，保持子串匹配；
+// - TODO/FIXME/HACK：ASCII 标识符边界匹配——TODO_FLAG_TODO / parseHackArgs 等标识符内部不再
+//   命中（两侧任一边贴 [A-Za-z0-9_] 即视为标识符成分）；
+// - XXX：边界匹配且前或后紧邻 CJK 表意字符即排除——「XXX完成处置」「订单XXX号」类中文占位
+//   模板不再命中（独立代码注释 `XXX:` / `// XXX fix` 紧邻标点空白，仍命中）。
+const CJK_IDEOGRAPH_CLASS = '\\u4e00-\\u9fff\\u3400-\\u4dbf'
+const TODO_ASCII_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_])(?:TODO|FIXME|HACK)(?![A-Za-z0-9_])`)
+const XXX_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])XXX(?![A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])`)
+export function isUnimplementedMarkerLine(line) {
+  if (line.includes('尚未实现')) return true
+  if (TODO_ASCII_MARKER_RE.test(line)) return true
+  if (XXX_MARKER_RE.test(line)) return true
+  return false
+}
 const TEST_FILE_RE = /test|spec/i
 const PROBE1_MAX_MATCHES = 200
 
@@ -394,7 +409,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
       const lines = readFileSync(abs, 'utf8').split('\n')
       lines.forEach((line, i) => {
         if (probe1.matches.length >= PROBE1_MAX_MATCHES) return
-        if (TODO_MARKER_RE.test(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
+        if (isUnimplementedMarkerLine(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
       })
     } catch {
       probe1.skippedFiles.push(e.path)
@@ -438,6 +453,19 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
   // ── 探针 5：API 契约对账（复用 verifyApiParity：endpoints.json × 前端调用）──
   const runtimeRoot = resolveRuntimeRoot({ specRoot: specDir }, specBase)
   const probe5 = verifyApiParity(specBase, cwd, runtimeRoot, changeName)
+  // 跨仓 task 卡计数（坑 probe5-cross-repo-scope-blindness，2026-09-15 复盘：跨仓仓的前端
+  // 调用不在 parity 扫描根内，「frontend 0 调用」会被误读为漏配——渲染侧显式注记扫描面
+  // 边界。计数失败按 0（不渲染注记，零新增失败面）。
+  try {
+    const tasksDir = join(changeDir, 'tasks')
+    if (changeName && existsSync(tasksDir)) {
+      let crossRepoCardCount = 0
+      for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n))) {
+        if (parseRepo(readFileSync(join(tasksDir, f), 'utf8'))) crossRepoCardCount++
+      }
+      if (crossRepoCardCount > 0) probe5.crossRepoCardCount = crossRepoCardCount
+    }
+  } catch { /* tasks 目录不可读 → 不注记 */ }
 
   // ── 探针 6：代码删除对账（git diff --name-status HEAD 的 D/R × design 声明三态）──
   const probe6 = { deletions: [], unavailable: false, note: '以 git 事实为准（真实 > 声明）；是否 FAIL blocker 由 agent 诚实判定' }
@@ -564,6 +592,9 @@ export function renderVerifyProbesReport(result) {
 
   L.push('#### 探针 5：API Contract Parity')
   L.push(`- ${probe5.summary || `backend ${probe5.backendCount ?? 0} 端点 / frontend ${probe5.frontendCount ?? 0} 调用`}`)
+  if (probe5.crossRepoCardCount > 0) {
+    L.push(`- ℹ️ parity 扫描面只含主仓——另有 ${probe5.crossRepoCardCount} 张跨仓 task 卡的仓不在扫描根内，跨仓前端调用/端点请到对应仓核对（D-004 跨仓对账不在本变更范围）`)
+  }
   if ((probe5.scanRoots || []).length > 1) {
     L.push(`- ℹ️ 后端端点比对集为多根并集（主仓既有 ∪ worktree 新增 ∪ 存量 artifact），共扫 ${probe5.scanRoots.length} 个根`)
   }

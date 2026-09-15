@@ -44,6 +44,40 @@ function consumeCleanupResult(cr, result) {
 }
 
 /**
+ * 工具/平台脚手架分类（scope-audit-cross-repo-blindness 改进点 1，2026-09-15）：
+ * CLI/平台自己写进仓的文件，不是本变更的交付改动。分硬排（filterDeliverableFiles
+ * 直接滤除）与软桶（classifyToolScaffold 打标、scope-audit 归入「工具/平台设施」
+ * 不占「计划外」）两档——区分依据是 apply 语义：filterDeliverableFiles 的滤除会让
+ * apply 不回放该文件（坑 apply-glob-manifest 静默丢失类），故只有「绝无交付语义、
+ * 回放反而有害」的进硬排；可能被 design 清单正当声明的（SKILL.md/CLAUDE.md 改写
+ * 本身是合法交付）只打标不滤除。
+ *
+ *   硬排（platform 设施，绝不交付）：
+ *     - .worktrees/：嵌套 worktree 目录（cp 回放会把整个 worktree 副本塞进主仓）
+ *     - .sillyspec-platform 系根标记文件（含 -cleaned / -managed / .json 变体）：平台元数据
+ *     - .sillyspec/knowledge/：CLI 自维护知识库（路由 INDEX 等，机器本地态）
+ *     - .sillyspec/local.yaml：机器本地配置（gitignore 约定；回放会覆盖主仓本地配置）
+ *   软桶（tool 脚手架，可能正当交付 → 只打标）：
+ *     - .claude/skills/（含 sillyspec-*）：CLI 自装 skill 脚手架
+ *     - CLAUDE.md：CLI/平台维护的 agent 指引
+ *     - attachments/：brainstorm 需求附件（docx/html/截图等流程产物）
+ * @param {string} f 仓库根相对路径（正斜杠）
+ * @returns {'platform'|'tool'|null}
+ */
+export function classifyToolScaffold(f) {
+  const p = String(f || '').replace(/\\/g, '/');
+  if (!p) return null;
+  if (p.startsWith('.worktrees/')
+    || /^\.sillyspec-platform(?:-cleaned|-managed)?(?:\.json)?$/.test(p)
+    || p.startsWith('.sillyspec/knowledge/')
+    || p === '.sillyspec/local.yaml') return 'platform';
+  if (p.startsWith('.claude/skills/')
+    || p === 'CLAUDE.md'
+    || p.startsWith('attachments/')) return 'tool';
+  return null;
+}
+
+/**
  * 过滤掉 worktree 基础设施文件（非交付物），让 apply 只关心真正的变更产出：
  *   - meta.json：worktree 元数据，baseline commit 中被跟踪、working-tree 被 CLI 改写
  *     （provisioning→linked 等）。它必须保持 modified（其 baselineCommit 字段是 apply diff
@@ -54,14 +88,19 @@ function consumeCleanupResult(cr, result) {
  *   - .sillyspec/.runtime/：运行时产物（进度库/锁/review 产物，非源码）。
  *   - .sillyspec/quicklog/：quicklog 条目（worktree 进度，非交付物）。
  *   保留 .sillyspec/docs/（dogfood 模块规范文档 = 交付物，apply 回主仓）。
- * 对 modified-tracked（git diff）与 untracked（ls-files --others）一视同仁。
+ *   - classifyToolScaffold 的 platform 档（.worktrees/、.sillyspec-platform 系根标记、
+ *     .sillyspec/knowledge/、.sillyspec/local.yaml）：工具/平台设施，绝无交付语义
+ *     （scope-audit-cross-repo-blindness 改进点 1——锚点窗口内 CLI 自装文件曾全量
+ *     落「计划外」；回放有害类直接硬排）。
+ *   对 modified-tracked（git diff）与 untracked（ls-files --others）一视同仁。
  */
 export function filterDeliverableFiles(files) {
   return files.filter(f =>
     !f.startsWith('.sillyspec/changes/') &&
     !f.startsWith('.sillyspec/.runtime/') &&
     !f.startsWith('.sillyspec/quicklog/') &&
-    f !== 'meta.json'
+    f !== 'meta.json' &&
+    classifyToolScaffold(f) !== 'platform'
   );
 }
 
@@ -879,7 +918,14 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
         }
       }
       const untrackedRaw = gitQuiet(cm.worktreePath, ['ls-files', '--others', '--exclude-standard']) || '';
-      changedFiles = filterDeliverableFiles([...new Set([...statusFiles, ...untrackedRaw.split('\n').filter(Boolean)])]);
+      const allFiles = [...new Set([...statusFiles, ...untrackedRaw.split('\n').filter(Boolean)])];
+      changedFiles = filterDeliverableFiles(allFiles);
+      // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：被滤除的平台设施文件列
+      // warning 不静默——apply 不回放它们；若某文件确为交付物（极少），人工落主仓。
+      const dropped = allFiles.filter(f => !changedFiles.includes(f) && classifyToolScaffold(f) === 'platform');
+      if (dropped.length > 0) {
+        out.warnings.push(`跨仓 ${repoKey}：${dropped.length} 个工具/平台设施文件未纳入 apply（${dropped.slice(0, 5).join(', ')}${dropped.length > 5 ? ' 等' : ''}）——非交付物不回放，确需交付请人工处理`);
+      }
     } catch (e) {
       out.errors.push(`跨仓 ${repoKey}：获取变更文件列表失败（${cm.worktreePath}）: ${e.message}`);
       continue;
@@ -1159,7 +1205,16 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     // 排除 worktree 基础设施文件（meta.json / .sillyspec/，见 filterDeliverableFiles）。
     // 对 modified-tracked（statusFiles）与 untracked 一视同仁——否则 modified 的 meta.json
     // 会被误算入 changedFiles，触发 design.md 清单校验失败（assess 恒 BLOCKED）。
-    changedFiles = filterDeliverableFiles([...new Set([...statusFiles, ...untrackedFiles])]);
+    const allChangedRaw = [...new Set([...statusFiles, ...untrackedFiles])];
+    changedFiles = filterDeliverableFiles(allChangedRaw);
+    // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：平台设施被滤出不静默——
+    // apply 不回放它们（.worktrees//.sillyspec-platform*/knowledge/local.yaml）；确为交付物
+    // 的极少数场景（如刻意改 knowledge 模板）人工落主仓。
+    const droppedScaffold = allChangedRaw.filter(f => !changedFiles.includes(f) && classifyToolScaffold(f) === 'platform');
+    if (droppedScaffold.length > 0) {
+      result.warnings = result.warnings || [];
+      result.warnings.push(`${droppedScaffold.length} 个工具/平台设施文件未纳入 apply（${droppedScaffold.slice(0, 5).join(', ')}${droppedScaffold.length > 5 ? ' 等' : ''}）——非交付物不回放，确需交付请人工处理`);
+    }
   } catch (e) {
     result.errors.push(`获取变更文件列表失败: ${e.message}`);
     return result;
