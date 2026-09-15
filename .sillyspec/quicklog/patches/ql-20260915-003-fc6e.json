@@ -1,0 +1,109 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-67e66cb0",
+  "totals": {
+    "files": 6,
+    "additions": 610,
+    "deletions": 12
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 10,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/task-review.js",
+      "declared": true,
+      "additions": 93,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-deps.js",
+      "declared": true,
+      "additions": 100,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree.js",
+      "declared": true,
+      "additions": 117,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/tooling-friction-fixes-003.test.mjs",
+      "declared": true,
+      "additions": 286,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 6,
+    "codeFileCount": 4,
+    "testFileCount": 1,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/task-review.js"
+        ]
+      },
+      {
+        "id": "worktree",
+        "files": [
+          "src/worktree-deps.js",
+          "src/worktree.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/tooling-friction-fixes-003.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260915-003-fc6e",
+  "sessionId": "quick-67e66cb0",
+  "savedAt": "2026-09-14T21:39:27.775Z",
+  "patchSha256": "f94785ee0bac5372a5a0ef33326a0572c2b27b814bb8f19e4780b554740183e6",
+  "patchStatus": "ok"
+}

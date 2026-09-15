@@ -1,0 +1,760 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 5291670..f316458 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,10 +134,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2346；shared.js:888 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2346/1855；shared.js:912 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3472；sync.js:1397/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3424；sync.js:2099 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3481；sync.js:1397/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3433；sync.js:2099 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3237/2847；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3246/2856；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:674/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -194,7 +194,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3334`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3343`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index 6e23d7f..1471ec5 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3145,7 +3145,16 @@ SillySpec worktree — git worktree 隔离管理
+               }
+             } else if (result.result === 'skipped') {
+               console.log(`⏭️  worktree 跳过清理: ${wtName} (mode: ${result.mode})`);
+-              console.log(`   原因: in-place 模式没有隔离目录需要清理`);
++              // ql-20260915-003 修复②（坑 cleanup-meta-fallback，2026-09-15 实证「mode: null
++              // 跳过清理」但 worktree 实际创建过）：早退跳过（meta/目录/git 注册三路探针全未
++              // 命中）时，误导性的「in-place 模式」文案升级为诊断式——列三路探针路径 + meta
++              // 丢失可能原因 + doctor 指引。probePaths 由 cleanup 兜底探测带回。
++              if (Array.isArray(result.probePaths) && result.probePaths.length > 0) {
++                for (const p of result.probePaths) console.log(`   探针: ${p}`);
++                console.log(`   meta 丢失可能原因：apply/cleanup 后随目录删除、并行会话已清理、cwd/specDir 漂移。可用 sillyspec worktree doctor 检查 git 注册与分支残留。`);
++              } else {
++                console.log(`   原因: in-place 模式没有隔离目录需要清理`);
++              }
+             } else if (result.result === 'blocked') {
+               console.error(`🚫 拒绝清理：有未落主仓交付变更，请先 sillyspec worktree apply ${wtName} 或 --force`);
+             } else if (result.result === 'partial') {
+diff --git a/src/task-review.js b/src/task-review.js
+index 0010f62..8fa9a52 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -10,6 +10,7 @@
+ 
+ import { existsSync, readFileSync, mkdirSync, writeFileSync, readdirSync, statSync } from 'fs'
+ import { join, resolve, basename, dirname } from 'path'
++import { execFileSync } from 'child_process'
+ import { git, unquoteGitPath } from './git-helper.js'
+ import { pathMatches } from './change-list.js'
+ import { parseAllowedPaths, parseRepo, parseBaseCommit, parseHeadCommit } from './stages/plan-postcheck.js'
+@@ -1822,6 +1823,89 @@ export async function adoptTaskReviewMechanics({ changeName, cwd, platformOpts =
+  * @param {object} [opts.platformOpts]
+  * @returns {Promise<{ok: boolean, reviewPath?: string, executeRunId?: string, errors: string[], warnings: string[]}>}
+  */
++// ── ql-20260915-003 修复③（坑 interrupted-residue-detect，2026-09-15 用户实证：中断的
++// execute 子代理在工作区留下半成品 import 语法坏文件，无自动检测靠人工 diff 发现）──
++//
++// 对 changedFiles 中的 .js/.mjs/.cjs 逐个 `node --check`（子进程数组形式不经 shell，单文件
++// 5s 超时；总数 >60 抽样前 60 并提示——大变更全量查的耗时不可接受）。
++//
++// 判定分层（Node v24 实测：.js 的 file-check 受最近 package.json type 影响——无 type 时
++// ESM 半成品可能静默通过、合法 ESM 又会报 import 语句误错）：
++//   - .mjs/.cjs：file-check 权威（对应 module/commonjs 全量解析）
++//   - .js：file-check **与** stdin `--input-type=module` check 双跑，两者都报 SyntaxError
++//     才判残留（合法 ESM / 合法 CJS（含 sloppy-mode）必有一路通过，零假阳；真断档半成品
++//     两路都挂）。stdin check 不可用/无 SyntaxError 字样 → fail-open 跳过该文件。
++//
++// 语法失败 → 返回「疑似中断残留」warning（advisory：只提醒，不改 verdict / 勾选语义 /
++// 落盘行为——quick --done 的 test/lint 实测硬门才是卡点，这里补「中断半成品」的可见性）。
++// 文件在候选根下不存在（diff 里的删除态文件等）直接跳过；超时（e.killed）无法定论不报警。
++// 仅 review write 时点执行一次，非热路径。
++const SYNTAX_CHECK_EXT_RE = /\.(?:js|mjs|cjs)$/
++const SYNTAX_CHECK_MAX_FILES = 60
++// 严格 .js（.mjs/.cjs 也 endsWith('.js')，须排除——否则 sloppy-mode .cjs 会误入 stdin ESM
++// 复核路径产生假阳）
++const isPlainJs = (f) => f.endsWith('.js') && !f.endsWith('.mjs') && !f.endsWith('.cjs')
++function _syntaxErrLine(e) {
++  const raw = String((e.stderr && e.stderr.toString()) || e.message || '')
++  const line = raw.split('\n').find(l => l.includes('SyntaxError'))
++  return line ? line.trim() : null
++}
++function detectInterruptedSyntaxResidue(changedFiles, candidateRoots) {
++  const warnings = []
++  const jsFiles = (Array.isArray(changedFiles) ? changedFiles : [])
++    .filter(f => typeof f === 'string' && SYNTAX_CHECK_EXT_RE.test(f))
++  if (jsFiles.length === 0) return warnings
++  const overCap = jsFiles.length > SYNTAX_CHECK_MAX_FILES
++  for (const f of overCap ? jsFiles.slice(0, SYNTAX_CHECK_MAX_FILES) : jsFiles) {
++    let abs = null
++    for (const root of candidateRoots) {
++      if (!root) continue
++      const p = join(root, f)
++      if (existsSync(p)) { abs = p; break }
++    }
++    if (!abs) continue
++    try {
++      execFileSync(process.execPath, ['--check', abs], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
++      if (isPlainJs(f)) {
++        // 无 type:module 上下文的 .js：file-check 通过不代表语法完整（Node v24 实测假阴），
++        // 再跑 stdin ESM 全量解析兜底——两路都挂才判残留
++        let src = ''
++        try { src = readFileSync(abs, 'utf8') } catch { continue }
++        try {
++          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
++        } catch (e2) {
++          if (e2 && e2.killed) continue
++          const line = _syntaxErrLine(e2)
++          if (!line) continue // 非 SyntaxError（如版本不支持 stdin check）→ fail-open
++          warnings.push(`⚠️ 疑似中断残留：${f} 语法错误（${line}）——子代理异常退出可能留下半成品，请 diff 该文件确认还原或补完`)
++        }
++      }
++    } catch (e) {
++      if (e && e.killed) continue // 单文件超时：无法定论，不产假阳 warning
++      if (!isPlainJs(f)) {
++        const line = _syntaxErrLine(e)
++        if (line) warnings.push(`⚠️ 疑似中断残留：${f} 语法错误（${line}）——子代理异常退出可能留下半成品，请 diff 该文件确认还原或补完`)
++        continue
++      }
++      // .js file-check 挂可能是模块口径误错（合法 ESM 在无 type 上下文报 import 语句）——
++      // stdin ESM 解析仲裁：也挂才算真残留
++      let src = ''
++      try { src = readFileSync(abs, 'utf8') } catch { continue }
++      try {
++        execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
++      } catch (e2) {
++        if (e2 && e2.killed) continue
++        const line = _syntaxErrLine(e2) || _syntaxErrLine(e)
++        if (line) warnings.push(`⚠️ 疑似中断残留：${f} 语法错误（${line}）——子代理异常退出可能留下半成品，请 diff 该文件确认还原或补完`)
++      }
++    }
++  }
++  if (overCap) {
++    warnings.push(`⚠️ 中断残留检测抽样：changedFiles 含 ${jsFiles.length} 个 .js 系文件，仅语法检查前 ${SYNTAX_CHECK_MAX_FILES} 个（interrupted-residue-detect）`)
++  }
++  return warnings
++}
++
+ export async function writeTaskReview({
+   changeName, cwd, taskId, specVerdict, qualityVerdict,
+   reviewerNotes = '', requiredEvidence = [],
+@@ -1969,6 +2053,15 @@ export async function writeTaskReview({
+     }
+   }
+ 
++  // ── ql-20260915-003 修复③（坑 interrupted-residue-detect）：changedFiles 定稿后的
++  // 语法检查（advisory warning，见 detectInterruptedSyntaxResidue 注释）。候选根依次试
++  // reviewGitDir（meta 活跃时的 worktree 根）、cwd、worktree-branch 归因的孤儿目录兜底。
++  for (const w of detectInterruptedSyntaxResidue(changedFiles, [
++    reviewGitDir,
++    cwd,
++    join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName),
++  ])) warnings.push(w)
++
+   // ── 组装 + schema 自检 + 落盘 ──
+   const review = {
+     schemaVersion: REVIEW_SCHEMA_VERSION,
+diff --git a/src/worktree-deps.js b/src/worktree-deps.js
+index 8983e8d..20284fe 100644
+--- a/src/worktree-deps.js
++++ b/src/worktree-deps.js
+@@ -13,8 +13,8 @@
+  * node 校验与 java 校验各说各话。新生态补一行表项即可；表外项目落 generic → n/a 不阻断。
+  */
+ 
+-import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync, unlinkSync } from 'fs';
+-import { join, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
++import { existsSync, readFileSync, realpathSync, lstatSync, readdirSync, readlinkSync, unlinkSync } from 'fs';
++import { join, dirname, isAbsolute, relative, resolve as resolvePath, sep as pathSep } from 'path';
+ import { fileURLToPath } from 'url';
+ import { execFileSync } from 'child_process';
+ import { createHash } from 'crypto';
+@@ -387,6 +387,86 @@ function isSafeModulePath(p) {
+   return !segs.includes('..');
+ }
+ 
++/**
++ * resolved 路径是否严格位于 root 目录之下（不含 root 自身）。win32 大小写不敏感比较由
++ * path.win32.relative 自带（与 detectEditableInstallEscape 的越界判定同口径）。
++ */
++function isUnderDir(child, root) {
++  if (!child || !root) return false;
++  const rel = relative(resolvePath(root), resolvePath(child));
++  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
++}
++
++/**
++ * ql-20260915-003 修复①（坑 junction-foreign-ownership，2026-09-15 用户实证：主仓
++ * frontend/node_modules 内部发现 junction 指向 session-export worktree 的 .pnpm——跨会话
++ * node_modules 污染，apply 后被迫 --force 重装）。
++ *
++ * 归属判定：链接方向 wt/node_modules → main 是 SillySpec 的正确设计（worktree 共享主仓
++ * 依赖）；反向——main node_modules 内出现指向 .sillyspec/.runtime/worktrees/ 之下目标的
++ * junction/symlink——是 install 兜底/包管理器穿透写坏留下的污染，任何合法流程都不依赖它，
++ * 一律视为外来（foreign）。pnpm 自建的包链接（node_modules/&lt;pkg&gt; → 同 node_modules 内
++ * .pnpm/...）与全局 store 链接目标都不在 worktrees 区之下，零误伤。
++ *
++ * 扫描口径：main 的 node_modules（根 + 各子模块 node_modules）**顶层目录项**——单层
++ * readdir+lstat，不递归 .pnpm 内部（顶层已覆盖包链接；递归大仓 node_modules 的性能与
++ * 误删面都不可接受）。子模块清单：submodules 直传相对路径列表，或给 specBase 自动读
++ * local.yaml modules 块。
++ *
++ * 删除安全：junction/symlink 删除不跟随目标（win32 cmd /c rmdir / POSIX unlinkSync——与
++ * worktree.js unlinkNodeModulesLinks :82 同款安全删法）；单个清理失败 fail-open 记入
++ * failed 不阻断（清扫是治理动作，不拦主流程）。
++ *
++ * @param {string} mainDir 主仓根目录（node_modules 所在）
++ * @param {{ worktreesRoot?: string, specBase?: string|null, submodules?: string[]|null, dryRun?: boolean, onlyUnder?: string|null }} opts
++ *   - worktreesRoot 外来边界：resolved target 落在其下才算外来（缺省直接空手而归）
++ *   - submodules 为 null 且给了 specBase 时，自动读 local.yaml modules 块补子模块清单
++ *   - dryRun=true 只报清单零写盘
++ *   - onlyUnder 进一步收窄：只认 target 落在该目录之下的（install 兜底前只清指向本 worktree 的）
++ * @returns {{ foreign: Array<{link: string, target: string}>, removed: Array<{link: string, target: string}>, failed: Array<{link: string, error: string}> }}
++ *   dryRun 时 foreign=将清清单、removed/failed 恒空；非 dryRun 时 removed=实际已清、failed=清理失败
++ */
++export function sweepForeignNodeModulesJunctions(mainDir, { worktreesRoot, specBase = null, submodules = null, dryRun = false, onlyUnder = null } = {}) {
++  const result = { foreign: [], removed: [], failed: [] };
++  if (!mainDir || !worktreesRoot || !existsSync(mainDir)) return result;
++  let mods = submodules;
++  if (mods === null && specBase) mods = extractModulePaths(readLocalYaml(specBase, null));
++  const nmDirs = [join(mainDir, 'node_modules')];
++  for (const sp of Array.isArray(mods) ? mods : []) {
++    if (!isSafeModulePath(sp)) continue;
++    nmDirs.push(join(mainDir, sp, 'node_modules'));
++  }
++  for (const nmDir of nmDirs) {
++    let names;
++    try { names = readdirSync(nmDir); } catch { continue; } // 目录不存在/不可读 → 该层跳过
++    for (const nm of names) {
++      const linkPath = join(nmDir, nm);
++      let st;
++      try { st = lstatSync(linkPath); } catch { continue; }
++      if (!st.isSymbolicLink()) continue; // junction（reparse point）与 symlink 的 lstat 均报 isSymbolicLink
++      let target;
++      try { target = readlinkSync(linkPath); } catch { continue; }
++      // 相对 target（pnpm 自建包链接常态）相对链接所在目录解析
++      const resolved = resolvePath(dirname(linkPath), target);
++      if (!isUnderDir(resolved, worktreesRoot)) continue;
++      if (onlyUnder && !isUnderDir(resolved, onlyUnder)) continue;
++      result.foreign.push({ link: linkPath, target: resolved });
++      if (dryRun) continue;
++      try {
++        if (process.platform === 'win32') {
++          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++        } else {
++          unlinkSync(linkPath);
++        }
++        result.removed.push({ link: linkPath, target: resolved });
++      } catch (e) {
++        result.failed.push({ link: linkPath, error: e.message });
++      }
++    }
++  }
++  return result;
++}
++
+ /**
+  * 对单个子模块目录 tryLink main 的 node_modules → wt 的 node_modules（modules 子模块专用）。
+  * 仅走 link 快路径（不 install——子模块 install 慢且易失败；lockfile 不一致时交给用户 pnpm install）。
+@@ -464,6 +544,24 @@ export function provisionDeps(worktreePath, mainCwd, opts = {}) {
+     }
+     if (!linked) {
+       // 兜底：install
++      // ql-20260915-003 修复①（坑 junction-foreign-ownership）防再犯：install 在 worktree cwd
++      // 执行，若 main node_modules 内残留指向**本次 worktree** 的外来 junction，包管理器会经
++      // 反向链接穿透写坏主仓 node_modules（2026-09-15 实证的污染源头）——先清再装。
++      // 只清指向本 worktree 的（onlyUnder），全量治理交给 create/cleanup 挂点
++      // （worktree.js _sweepMainForeignJunctionLinks）。
++      if (mainCwd && existsSync(join(mainCwd, 'node_modules'))) {
++        try {
++          const preSweep = sweepForeignNodeModulesJunctions(mainCwd, {
++            worktreesRoot: resolvePath(mainCwd, '.sillyspec', '.runtime', 'worktrees'),
++            submodules: extractModulePaths(yamlText),
++            onlyUnder: worktreePath,
++          });
++          if (preSweep.removed.length > 0) {
++            console.warn(`⚠️ install 前清理：主仓 node_modules 内检测到指向本 worktree 的外来 junction（坑 junction-foreign-ownership），已移除 ${preSweep.removed.length} 个`);
++            for (const r of preSweep.removed) console.warn(`   ${r.link} → ${r.target}`);
++          }
++        } catch { /* 清扫自身异常 fail-open，交 install 自然暴露问题 */ }
++      }
+       const installResult = tryInstall(installCmd, worktreePath, timeout);
+       result = installResult.ok
+         ? { depsStatus: 'installed', depsMethod: 'install', depsSource: 'install', depsLockHash: wtHash }
+diff --git a/src/worktree.js b/src/worktree.js
+index 3bf7e43..e236314 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -12,7 +12,8 @@ import { execFileSync } from 'child_process';
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
+ import { join, resolve, dirname, relative, isAbsolute, basename } from 'path';
+ import { createHash } from 'crypto';
+-import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape } from './worktree-deps.js';
++import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape, sweepForeignNodeModulesJunctions } from './worktree-deps.js';
++import { resolveRuntimeRoot } from './run/shared.js';
+ import { writeAtomicSync } from './fs-atomic.js';
+ import { openDatabase } from './db-engine.js';
+ import { git, gitQuiet } from './git-helper.js';
+@@ -478,6 +479,44 @@ export class WorktreeManager {
+     return resolve(this.worktreeBase, changeName);
+   }
+ 
++  /**
++   * ql-20260915-003 修复①（坑 junction-foreign-ownership，2026-09-15 用户实证：主仓
++   * frontend/node_modules 内 junction 指向历史 worktree 的 .pnpm——跨会话 node_modules
++   * 污染）：清扫主仓 node_modules（根 + local.yaml modules 子模块）内指向 worktrees 区的
++   * 外来 junction/symlink。正确链接方向只有 wt/node_modules → main；main 侧指向 worktrees
++   * 区的反向链接一律是 install 兜底/包管理器穿透写坏的污染，发现即清 + warn。
++   *
++   * 挂点：create 依赖供给前（5.7b，防新供给经污染链接写坏）与 cleanup（把本 worktree 可能
++   * 遗留的反向链接一并清）。清扫失败 fail-open 不阻断主流程（治理动作非卡点）。
++   *
++   * @param {string} label 调用场景（warn/details 文案用）
++   * @param {string[]|null} [details] 可选，cleanup details 兼容
++   * @returns {{ foreign: Array, removed: Array, failed: Array }} sweep 结果（异常时空集）
++   */
++  _sweepMainForeignJunctionLinks(label, details = null) {
++    try {
++      const mainRoot = this._resolveMainRepoRoot();
++      const sweep = sweepForeignNodeModulesJunctions(mainRoot, {
++        worktreesRoot: this.worktreeBase,
++        specBase: join(mainRoot, '.sillyspec'),
++      });
++      if (sweep.removed.length > 0) {
++        console.warn(`⚠️ 检测到主仓 node_modules 内指向历史 worktree 的外来 junction，已移除 ${sweep.removed.length} 个（坑 junction-foreign-ownership，${label}）`);
++        for (const r of sweep.removed) console.warn(`   ${r.link} → ${r.target}`);
++        if (details) details.push(`foreign junctions swept (${label}): ${sweep.removed.length}`);
++      }
++      if (sweep.failed.length > 0) {
++        console.warn(`⚠️ 主仓 node_modules 外来 junction 清理未全成（${sweep.failed.length} 个失败，可重跑 sillyspec worktree doctor 或手工 rmdir）: ${sweep.failed.map(f => f.link).join('、')}`);
++        if (details) details.push(`foreign junction sweep partial fail (${label}): ${sweep.failed.map(f => f.link).join('; ')}`);
++      }
++      return sweep;
++    } catch (e) {
++      // fail-open：清扫自身异常不阻断 create/cleanup 主流程
++      console.warn(`⚠️ 主仓 node_modules 外来 junction 清扫跳过（${e && e.message ? e.message : e}）`);
++      return { foreign: [], removed: [], failed: [] };
++    }
++  }
++
+   /**
+    * 读取 worktree 元数据
+    * @param {string} changeName
+@@ -696,6 +735,10 @@ export class WorktreeManager {
+ 
+     // 5.8 依赖供给（change 2026-06-28-worktree-deps-provision）
+     // baseline overlay 后让 worktree 立即可构建/测试；失败不阻断 create，只记 meta。
++    // 5.7b ql-20260915-003 修复①（坑 junction-foreign-ownership）：依赖供给前清扫主仓
++    // node_modules 内指向历史 worktree 的外来 junction（反向链接污染，install 兜底穿透
++    // 写坏的源头）——发现即清 + warn，防新供给再经污染链接写坏主仓依赖。
++    this._sweepMainForeignJunctionLinks('worktree create');
+     let deps = {};
+     try {
+       deps = provisionDeps(worktreePath, this.cwd, { specBase: join(this.cwd, '.sillyspec') }) || {};
+@@ -1046,16 +1089,76 @@ export class WorktreeManager {
+     }
+   }
+ 
++  /**
++   * ql-20260915-003 修复②（坑 cleanup-meta-fallback，2026-09-15 用户实证：cleanup 报
++   * 「mode: null 跳过清理」但 worktree 目录实际创建过——meta 在 apply 后丢失 + cwd/specRoot
++   * 漂移让 getWorktreePath 解析到别处时，meta/worktreePath/metaDir 三缺被误判「什么都不
++   * 存在」早退）：meta 缺失时的 worktree 残留兜底探测。两路探针（异常一律 fail-open 视为
++   * 未命中）：
++   *   (a) `git worktree list --porcelain` 中分支 refs/heads/sillyspec/<name> 的注册路径——
++   *       git 注册是权威口径，不受本进程 worktreeBase 解析漂移影响；目录在不在都算命中
++   *       （注册残留本身就该 prune，目录在则连目录一起清）
++   *   (b) resolveRuntimeRoot 口径（cwd/.sillyspec 为 localSpecBase）下 worktrees/<name>
++   *       目录存在性——平台 runtimeRoot / cwd 漂移时的第二解析口径
++   * 全不命中 → hit:null + candidates（三路探针描述，供 CLI 诊断式跳过输出）。
++   * @param {string} name changeName（已过 validateChangeName）
++   * @returns {{ hit: { path: string, via: string }|null, candidates: string[] }}
++   */
++  _probeWorktreeRemnants(name) {
++    const stdPath = this.getWorktreePath(name);
++    const candidates = [`meta/目录探针（getWorktreePath 口径）: ${stdPath} 不存在`];
++    try {
++      const out = gitQuiet(this.cwd, ['worktree', 'list', '--porcelain'], { timeout: 30000 });
++      const wantBranch = `branch refs/heads/${BRANCH_PREFIX}${name}`;
++      let curPath = null;
++      let regHit = null;
++      for (const line of String(out || '').split('\n')) {
++        if (line.startsWith('worktree ')) curPath = line.slice('worktree '.length).trim();
++        else if (curPath && line.trim() === wantBranch) { regHit = curPath; break; }
++      }
++      if (regHit) {
++        candidates.push(`git 分支探针: 分支 ${BRANCH_PREFIX}${name} 注册于 ${regHit} —— 命中`);
++        return { hit: { path: regHit, via: `git worktree list 分支 ${BRANCH_PREFIX}${name} 注册路径` }, candidates };
++      }
++      candidates.push(`git 分支探针: git worktree list 无分支 ${BRANCH_PREFIX}${name} 注册`);
++    } catch {
++      candidates.push(`git 分支探针: git worktree list 失败（fail-open 视为未命中）`);
++    }
++    try {
++      const alt = join(resolveRuntimeRoot(null, join(this.cwd, '.sillyspec')), 'worktrees', name);
++      if (existsSync(alt)) {
++        candidates.push(`runtimeRoot 口径目录探针: ${alt} 存在 —— 命中`);
++        return { hit: { path: alt, via: `resolveRuntimeRoot 口径目录 ${alt}` }, candidates };
++      }
++      candidates.push(`runtimeRoot 口径目录探针: ${alt} 不存在`);
++    } catch {
++      candidates.push('runtimeRoot 口径目录探针: 解析失败（fail-open 视为未命中）');
++    }
++    return { hit: null, candidates };
++  }
++
+   cleanup(changeName, { force = false, maxRetries = 3 } = {}) {
+     const name = validateChangeName(changeName);
+     const meta = this.getMeta(name);
+-    const worktreePath = this.getWorktreePath(name);
++    let worktreePath = this.getWorktreePath(name);
+     const metaDir = join(this.worktreeBase, name);
+     const details = [];
+ 
+-    // 幂等：什么都不存在 → 直接跳过
++    // 幂等：什么都不存在 → 直接跳过。
++    // ql-20260915-003 修复②（坑 cleanup-meta-fallback）：meta 缺失时不轻信「三缺 = 什么都不
++    // 存在」——先跑 _probeWorktreeRemnants 兜底（git 注册路径 + resolveRuntimeRoot 口径目录），
++    // 任一命中 → 不走早退，按命中路径继续清理（mode 推断 'worktree'，details 记兜底依据）；
++    // 全不命中才跳过，跳过结果带 probePaths 探针清单（CLI 诊断式输出 + doctor 指引）。
+     if (!meta && !existsSync(worktreePath) && !existsSync(metaDir)) {
+-      return { result: 'skipped', mode: null, details };
++      const probes = this._probeWorktreeRemnants(name);
++      if (probes.hit) {
++        worktreePath = probes.hit.path;
++        const note = `meta 缺失，目录/分支探测兜底（命中：${probes.hit.via}）`;
++        details.push(note);
++        console.warn(`⚠️ ${note}`);
++      } else {
++        return { result: 'skipped', mode: null, details, probePaths: probes.candidates };
++      }
+     }
+ 
+     const mode = meta?.mode || 'worktree';
+@@ -1076,7 +1179,11 @@ export class WorktreeManager {
+     if (!force) {
+       const check = this.hasUnappliedChanges(name);
+       if (check.hasChanges) {
+-        console.error(`🚫 worktree cleanup 拒绝：${check.changedFiles.length} 个交付变更未落地主工作区 HEAD，清理会丢失代码。`);
++        // ql-20260915-003 修复② 配套：no-meta fail-closed 拦截时 changedFiles 为空，裸报
++        // 「0 个交付变更」让人误解——0 文件时改报无法判定的原因（保守保留语义不变）。
++        console.error(check.changedFiles.length > 0
++          ? `🚫 worktree cleanup 拒绝：${check.changedFiles.length} 个交付变更未落地主工作区 HEAD，清理会丢失代码。`
++          : `🚫 worktree cleanup 拒绝：无法判定交付是否已全部落地（${check.reason || 'meta 缺失，保守保留'}），保守不清理。`);
+         for (const f of check.changedFiles) console.error(`   ${f}`);
+         console.error('   请先落地（sillyspec worktree apply <name>）或 commit 到分支，或显式 --force 强制清理。');
+         return { result: 'blocked', mode, details: [...details, 'blocked: uncommitted deliverable changes'], residual: [] };
+@@ -1098,6 +1205,11 @@ export class WorktreeManager {
+       unlinkNodeModulesLinks(worktreePath, meta, details)
+     }
+ 
++    // ql-20260915-003 修复①（坑 junction-foreign-ownership）：cleanup 时同款清扫主仓
++    // node_modules——把本 worktree（及其他历史 worktree）可能遗留的反向链接一并清，
++    // 否则污染 junction 永久滞留主仓，直到下次人工 --force 重装依赖才发现。
++    this._sweepMainForeignJunctionLinks('worktree cleanup', details);
++
+     // 1. git worktree remove（带 retry）—— in-place 跳过：无 git worktree 注册，且 worktreePath 即主工作区
+     let gitRemoveOk = false;
+     if (!isInPlace && existsSync(worktreePath)) {
+diff --git a/test/tooling-friction-fixes-003.test.mjs b/test/tooling-friction-fixes-003.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/tooling-friction-fixes-003.test.mjs
+@@ -0,0 +1,286 @@
++/**
++ * ql-20260915-003 —— 三个工具摩擦点修复的测试（多会话并行仓，2026-09-15 用户实证）。
++ *
++ * ① 坑 junction-foreign-ownership：主仓 frontend/node_modules 内 junction 指向
++ *    session-export worktree 的 .pnpm（跨会话 node_modules 污染，apply 后被迫 --force 重装）。
++ *    锁定语义（真目录构造，Windows junction / POSIX symlink 双平台）：
++ *      - sweepForeignNodeModulesJunctions：只清 target 落在 worktreesRoot 之下的外来链接；
++ *        正常包目录与指向 main node_modules 内部的 pnpm 自建链接保留；目标内容零穿透
++ *      - dryRun 只报清单零写盘
++ *      - onlyUnder 收窄（install 兜底前只清指向本 worktree 的）
++ *      - specBase 自动读 local.yaml modules 块补子模块清单
++ *      - provisionDeps install 兜底前防再犯：指向本 worktree 的外来 junction 先清再装
++ *      - WorktreeManager._sweepMainForeignJunctionLinks（create/cleanup 挂点同体）
++ *
++ * ② 坑 cleanup-meta-fallback：cleanup 报「mode: null 跳过清理」但 worktree 实际创建过
++ *    （meta 在 apply 后丢失 + 路径解析漂移 → 三缺早退误判「什么都不存在」）。锁定语义：
++ *      - git worktree list 分支 sillyspec/<name> 注册路径命中 → 不早退，按命中路径清
++ *        （force=false 仍被 no-meta fail-closed 拦 = blocked；force=true 真清）
++ *      - resolveRuntimeRoot 口径目录命中（worktreeBase 被漂移传参带偏时）→ 按命中目录清
++ *      - 全不命中 → skipped + probePaths 三路探针清单（诊断式输出数据源）
++ *
++ * ③ 坑 interrupted-residue-detect：中断的 execute 子代理留下半成品 import（语法坏文件），
++ *    无自动检测靠人工 diff 发现。锁定语义：
++ *      - writeTaskReview 代算 changedFiles 后 .js 语法检查：坏文件 → warnings 含
++ *        「疑似中断残留」+ 文件名；ok 仍 true（advisory，不改 verdict）
++ *      - 正常语法文件 → 零残留 warning（存量路径零变化）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, lstatSync, readFileSync } from 'node:fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync, execFileSync } from 'node:child_process'
++import { sweepForeignNodeModulesJunctions, provisionDeps } from '../src/worktree-deps.js'
++import { WorktreeManager } from '../src/worktree.js'
++import { writeTaskReview } from '../src/task-review.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++/** 目录链接工厂：win32 junction（mklink /J，无需管理员）/ POSIX symlink（ln -s） */
++function makeDirLink(linkPath, targetDir) {
++  if (process.platform === 'win32') {
++    execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, targetDir], { stdio: ['pipe', 'pipe', 'pipe'] })
++  } else {
++    execFileSync('ln', ['-s', targetDir, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] })
++  }
++}
++function isLink(p) { try { return lstatSync(p).isSymbolicLink() } catch { return false } }
++
++// ══════════════════════════ 修复① junction-foreign-ownership ══════════════════════════
++
++/** 场景工厂：临时 main（node_modules 根 + frontend 子模块）+ 伪造 worktree 目标区 + 三类链接 */
++function setupJunctionScene() {
++  const root = mk('jf-')
++  const main = join(root, 'main-repo')
++  const worktreesRoot = join(main, '.sillyspec', '.runtime', 'worktrees')
++  // 伪造两个 worktree 目标（session-export 是实证里的污染目标方；wt2 是另一活跃 worktree）
++  const wtA = join(worktreesRoot, 'session-export')
++  const wtB = join(worktreesRoot, 'another-wt')
++  mkdirSync(join(wtA, '.pnpm', 'node_modules', 'x'), { recursive: true })
++  writeFileSync(join(wtA, '.pnpm', 'node_modules', 'x', 'keep.js'), 'export const keep = 1\n')
++  mkdirSync(join(wtB, 'pkg'), { recursive: true })
++  // main 根 node_modules：正常真实包 + pnpm 自建链接（指向 main node_modules 内部）+ 外来 junction
++  mkdirSync(join(main, 'node_modules', 'real-pkg'), { recursive: true })
++  writeFileSync(join(main, 'node_modules', 'real-pkg', 'index.js'), 'x')
++  makeDirLink(join(main, 'node_modules', 'pnpm-style-link'), join(main, 'node_modules', 'real-pkg'))
++  makeDirLink(join(main, 'node_modules', 'polluted-pkg'), join(wtA, '.pnpm'))
++  // main/frontend/node_modules（子模块层）：同款外来 junction（实证里的实际位置）
++  mkdirSync(join(main, 'frontend', 'node_modules', 'fe-real'), { recursive: true })
++  writeFileSync(join(main, 'frontend', 'node_modules', 'fe-real', 'index.js'), 'x')
++  makeDirLink(join(main, 'frontend', 'node_modules', 'fe-foreign'), join(wtA, '.pnpm'))
++  makeDirLink(join(main, 'frontend', 'node_modules', 'other-wt-link'), join(wtB, 'pkg'))
++  return { root, main, worktreesRoot, wtA, wtB }
++}
++
++test('修复① sweep：只清指向 worktrees 区的外来链接，正常包/内部链接/目标内容零穿透', () => {
++  const { main, worktreesRoot, wtA } = setupJunctionScene()
++  const r = sweepForeignNodeModulesJunctions(main, {
++    worktreesRoot,
++    submodules: ['frontend'],
++  })
++  assert.deepEqual(r.removed.map(x => x.link).sort(), [
++    join(main, 'frontend', 'node_modules', 'fe-foreign'),
++    join(main, 'frontend', 'node_modules', 'other-wt-link'),
++    join(main, 'node_modules', 'polluted-pkg'),
++  ].sort(), '根 + 子模块层的外来 junction 全清（指向任一 worktree 都算外来）')
++  assert.equal(r.failed.length, 0, '无清理失败')
++  // 正常面保留
++  assert.ok(existsSync(join(main, 'node_modules', 'real-pkg', 'index.js')), '正常包目录保留')
++  assert.ok(isLink(join(main, 'node_modules', 'pnpm-style-link')), '指向 main node_modules 内部的 pnpm 自建链接保留（非外来）')
++  assert.ok(existsSync(join(main, 'frontend', 'node_modules', 'fe-real', 'index.js')), '子模块正常包保留')
++  // 删除不穿透：worktree 目标内容原封不动（rmdir 删 junction 不跟随 reparse）
++  assert.ok(existsSync(join(wtA, '.pnpm', 'node_modules', 'x', 'keep.js')), '外来 junction 已删但目标内容零穿透')
++  assert.ok(!isLink(join(main, 'node_modules', 'polluted-pkg')), '外来 junction 目录项已移除')
++})
++
++test('修复① sweep dryRun：只报清单零写盘；onlyUnder 收窄只清指定 worktree 的', () => {
++  const { main, worktreesRoot, wtA } = setupJunctionScene()
++
++  // dryRun：报出全部外来（根 1 + 子模块 2），零改动
++  const dry = sweepForeignNodeModulesJunctions(main, { worktreesRoot, submodules: ['frontend'], dryRun: true })
++  assert.equal(dry.foreign.length, 3, `dryRun 报出 3 个外来（实际 ${JSON.stringify(dry.foreign)}）`)
++  assert.equal(dry.removed.length, 0, 'dryRun 零删除')
++  assert.ok(isLink(join(main, 'node_modules', 'polluted-pkg')), 'dryRun 后外来 junction 仍在（未写盘）')
++
++  // onlyUnder=wtA：只清指向 session-export 的（fe-foreign + polluted-pkg），another-wt 的保留
++  const r = sweepForeignNodeModulesJunctions(main, { worktreesRoot, submodules: ['frontend'], onlyUnder: wtA })
++  assert.equal(r.removed.length, 2, `onlyUnder 只清指向本 worktree 的（实际 ${r.removed.length}）`)
++  assert.ok(isLink(join(main, 'frontend', 'node_modules', 'other-wt-link')), '指向另一 worktree 的链接在 onlyUnder 口径下保留')
++})
++
++test('修复① sweep specBase 自动读 local.yaml modules 块（等价 submodules 直传）', () => {
++  const { main, worktreesRoot } = setupJunctionScene()
++  const specBase = join(main, '.sillyspec')
++  writeFileSync(join(specBase, 'local.yaml'), 'modules:\n  frontend: { path: "frontend/" }\n')
++  const r = sweepForeignNodeModulesJunctions(main, { worktreesRoot, specBase })
++  assert.deepEqual(r.removed.map(x => x.link).sort(), [
++    join(main, 'frontend', 'node_modules', 'fe-foreign'),
++    join(main, 'frontend', 'node_modules', 'other-wt-link'),
++    join(main, 'node_modules', 'polluted-pkg'),
++  ].sort(), 'specBase 口径清全部 3 个外来（无 onlyUnder 收窄）')
++})
++
++test('修复① provisionDeps install 兜底前防再犯：指向本 worktree 的外来 junction 先清再装', () => {
++  const root = mk('jf-install-')
++  const main = join(root, 'main-repo')
++  const wtRoot = join(main, '.sillyspec', '.runtime', 'worktrees')
++  const wt = join(wtRoot, 'c1')           // 本次供给的 worktree（须在约定 worktrees 区下）
++  const wtOther = join(wtRoot, 'c2')      // 另一 worktree（onlyUnder 口径外，保留）
++  mkdirSync(join(wt, 'src'), { recursive: true })
++  mkdirSync(join(wtOther, 'pkg'), { recursive: true })
++  mkdirSync(join(main, 'node_modules', 'legit-pkg'), { recursive: true })
++  writeFileSync(join(main, 'node_modules', 'legit-pkg', 'index.js'), 'x')
++  makeDirLink(join(main, 'node_modules', 'evil-to-c1'), join(wt, 'src'))
++  makeDirLink(join(main, 'node_modules', 'other-to-c2'), join(wtOther, 'pkg'))
++  // lockfile 不一致 → 跳过 link 快路径落 install 兜底；commands.install 用白名单内速退命令
++  const specBase = join(main, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  install: "npm --version"\n')
++  writeFileSync(join(main, 'pnpm-lock.yaml'), 'lockversion: 1\n')
++  writeFileSync(join(main, 'package.json'), '{"name":"main"}')
++  writeFileSync(join(wt, 'pnpm-lock.yaml'), 'lockversion: 2\n')
++  writeFileSync(join(wt, 'package.json'), '{"name":"wt"}')
++
++  const r = provisionDeps(wt, main, { specBase })
++  assert.ok(!isLink(join(main, 'node_modules', 'evil-to-c1')), '指向本 worktree 的外来 junction 在 install 前被清')
++  assert.ok(isLink(join(main, 'node_modules', 'other-to-c2')), '指向其他 worktree 的链接不在 install 前清理面（onlyUnder 收窄）')
++  assert.ok(existsSync(join(main, 'node_modules', 'legit-pkg', 'index.js')), 'main 正常包不受影响')
++  assert.equal(r.depsStatus, 'installed', `install 兜底正常完成（实际 ${r.depsStatus}: ${r.depsError || ''}）`)
++})
++
++test('修复① WorktreeManager._sweepMainForeignJunctionLinks（create/cleanup 挂点同体）：清外来 + warn', () => {
++  const { main } = setupJunctionScene()
++  const wm = new WorktreeManager({ cwd: main }) // 无 git 环境 → worktreeBase=main/.sillyspec/.runtime/worktrees（约定区）
++  const warns = []
++  const origWarn = console.warn
++  console.warn = (...a) => warns.push(a.join(' '))
++  let sweep
++  try {
++    sweep = wm._sweepMainForeignJunctionLinks('test-hook')
++  } finally {
++    console.warn = origWarn
++  }
++  assert.ok(sweep.removed.length >= 1, `挂点清扫清掉外来 junction（实际 ${sweep.removed.length}）`)
++  assert.ok(warns.some(w => w.includes('已移除') && w.includes('外来 junction')), `warn 文案含移除数与坑名（实际 ${JSON.stringify(warns)}）`)
++})
++
++// ══════════════════════════ 修复② cleanup-meta-fallback ══════════════════════════
++
++function setupRepo(prefix) {
++  const proj = mk(prefix)
++  git(proj, ['init', '-q'])
++  git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(proj, 'a.txt'), 'base\n')
++  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'base'])
++  return proj
++}
++
++test('修复② 探针(a) git 注册命中：meta 缺失 + 标准路径缺失，cleanup 仍按注册路径清理（force）', () => {
++  const proj = setupRepo('cmf-git-')
++  // 真实注册的 worktree（分支 sillyspec/c1）挂在标准 worktrees 区之外——模拟 meta 丢失 +
++  // 目录在别处：旧实现三缺早退「mode: null 跳过清理」，注册与分支永久残留
++  const ext = join(mk('cmf-git-ext-'), 'ext-wt')
++  git(proj, ['worktree', 'add', '-q', ext, '-b', 'sillyspec/c1'])
++  writeFileSync(join(ext, 'deliver.ts'), 'export const wt = 1\n') // worktree 内产物（未 commit）
++
++  const wm = new WorktreeManager({ cwd: proj })
++  // force=false：no-meta fail-closed 保守拦截（语义不变，只是从「跳过」变「blocked」可见）
++  const blocked = wm.cleanup('c1')
++  assert.equal(blocked.result, 'blocked', `meta 缺失 force=false 保守拦截（实际 ${blocked.result}）`)
++
++  // force=true：探针命中 → 按注册路径真清
++  const r = wm.cleanup('c1', { force: true })
++  assert.equal(r.result, 'cleaned', `按 git 注册路径清理成功（实际 ${r.result}: ${(r.details || []).join('; ')}）`)
++  assert.ok((r.details || []).some(d => d.includes('探测兜底') && d.includes('git worktree list')), 'details 记录兜底命中依据')
++  assert.ok(!existsSync(ext), '外部 worktree 目录已删')
++  const regLeft = git(proj, ['worktree', 'list', '--porcelain'])
++  assert.ok(!regLeft.includes('sillyspec/c1'), 'git 注册已随 remove+prune 清除')
++  assert.equal(git(proj, ['branch', '--list', 'sillyspec/c1']), '', '分支已删')
++})
++
++test('修复② 探针(b) runtimeRoot 口径命中：worktreeBase 漂移时按命中目录清理', () => {
++  const proj = setupRepo('cmf-drift-')
++  // 漂移形态：WorktreeManager 被显式 worktreeDir 带偏（altBase），真实目录在 cwd/.sillyspec
++  // 的 resolveRuntimeRoot 口径下——旧实现 getWorktreePath 解析到 altBase 下三缺早退
++  const realDir = join(proj, '.sillyspec', '.runtime', 'worktrees', 'c2')
++  mkdirSync(realDir, { recursive: true })
++  writeFileSync(join(realDir, 'leftover.js'), 'export const orphan = 1\n')
++  const altBase = join(mk('cmf-drift-alt-'), 'worktrees')
++  const wm = new WorktreeManager({ cwd: proj, worktreeDir: altBase })
++
++  const r = wm.cleanup('c2', { force: true })
++  assert.ok(['cleaned', 'force-cleaned'].includes(r.result), `按 runtimeRoot 口径目录清理（实际 ${r.result}: ${(r.details || []).join('; ')}）`)
++  assert.ok((r.details || []).some(d => d.includes('探测兜底') && d.includes('resolveRuntimeRoot')), 'details 记录兜底命中依据')
++  assert.ok(!existsSync(realDir), '漂移目录已删')
++})
++
++test('修复② 全不命中：skipped 携带三路探针清单（诊断式输出数据源），零动作', () => {
++  const proj = setupRepo('cmf-miss-')
++  const wm = new WorktreeManager({ cwd: proj })
++  const r = wm.cleanup('c9', { force: true })
++  assert.equal(r.result, 'skipped', '真什么都不存在 → 仍跳过（幂等零回归）')
++  assert.equal(r.mode, null, 'mode null 保留')
++  assert.ok(Array.isArray(r.probePaths) && r.probePaths.length >= 3, `probePaths 三路探针（实际 ${JSON.stringify(r.probePaths)}）`)
++  assert.ok(r.probePaths.some(p => p.includes('git worktree list') || p.includes('git 分支探针')), '含 git 注册探针描述')
++  assert.ok(r.probePaths.some(p => p.includes('runtimeRoot') || p.includes('resolveRuntimeRoot')), '含 runtimeRoot 口径探针描述')
++  assert.ok(r.probePaths.some(p => p.includes('getWorktreePath')), '含标准路径探针描述')
++})
++
++// ══════════════════════════ 修复③ interrupted-residue-detect ══════════════════════════
++
++/** fixture：git 仓 + change/task 卡 + in-place 式 meta + 未提交 src/foo.js（可指定内容） */
++function setupReviewRepo(prefix, cn, fooContent) {
++  const proj = setupRepo(prefix)
++  const specBase = join(proj, '.sillyspec')
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'),
++    '---\ntask: task-01\ngoal: 测试任务\nallowed_paths:\n  - src/foo.js\n---\n\n# task-01\n')
++  const c1 = git(proj, ['rev-parse', 'HEAD'])
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'foo.js'), fooContent)
++  const metaDir = join(specBase, '.runtime', 'worktrees', cn)
++  mkdirSync(metaDir, { recursive: true })
++  writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({
++    branch: 'main', worktreePath: proj, baseHash: c1, baselineCommit: c1, mode: 'in-place',
++  }))
++  return { proj, specBase }
++}
++
++test('修复③ 坏 import 半成品 → review write warning 含「疑似中断残留」与文件名（ok 仍 true）', async () => {
++  const { proj, specBase } = setupReviewRepo('ird-bad-', '2026-09-15-ird-bad',
++    'import x from "y"\nexport const a = \n') // 中断的半成品 import（语法坏）
++  const r = await writeTaskReview({
++    changeName: '2026-09-15-ird-bad', cwd: proj, taskId: 'task-01',
++    specVerdict: 'pass', qualityVerdict: 'pass',
++  })
++  assert.equal(r.ok, true, 'advisory 不改落盘语义（ok 仍 true）')
++  const hit = r.warnings.find(w => w.includes('疑似中断残留'))
++  assert.ok(hit, `warnings 含疑似中断残留（实际 ${JSON.stringify(r.warnings)}）`)
++  assert.ok(hit.includes('src/foo.js'), 'warning 点名坏文件')
++  assert.ok(hit.includes('SyntaxError'), 'warning 带语法错误首行')
++  // 落盘的 review.json 不含检测注记（只进 CLI warnings，不污染评审数据）
++  const review = JSON.parse(readFileSync(r.reviewPath, 'utf8'))
++  assert.ok(review.changedFiles.includes('src/foo.js'), 'changedFiles 正常落盘')
++})
++
++test('修复③ 正常语法文件 → 零残留 warning（存量路径零变化）', async () => {
++  const { proj } = setupReviewRepo('ird-ok-', '2026-09-15-ird-ok',
++    'import x from "y"\nexport const a = 1\n')
++  const r = await writeTaskReview({
++    changeName: '2026-09-15-ird-ok', cwd: proj, taskId: 'task-01',
++    specVerdict: 'pass', qualityVerdict: 'pass',
++  })
++  assert.equal(r.ok, true, '正常路径 ok')
++  assert.ok(!r.warnings.some(w => w.includes('疑似中断残留')), `正常语法文件零残留 warning（实际 ${JSON.stringify(r.warnings)}）`)
++})
