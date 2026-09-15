@@ -1,0 +1,66 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-8db64248",
+  "totals": {
+    "files": 2,
+    "additions": 131,
+    "deletions": 3
+  },
+  "rows": [
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 52,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/module-subset-dependent-tests.test.mjs",
+      "declared": true,
+      "additions": 79,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 1,
+    "testFileCount": 3,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/verify-postcheck.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/scan-refresh.test.mjs",
+      "test/scan-staleness.test.mjs",
+      "test/module-subset-dependent-tests.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-010-5423",
+  "sessionId": "quick-8db64248",
+  "savedAt": "2026-09-15T23:50:42.857Z",
+  "patchSha256": "0ad94cd63306b7436ceca193daf29410aa759dca93b2a6dad224cb59b5726a11",
+  "patchStatus": "ok"
+}

@@ -483,3 +483,27 @@
 根因：EHS生产实证：全流程后平台行status=draft/current_stage空/title停提案书而updated_at在动——核查结论需留档给daemon仓
 方案：链路A节首插已知问题块：CLI载荷含current_stage/status（serializeForSync契约conformant）→daemon两嫌疑（§14.5投影覆盖未生效/progress POST被总预算熔断让路同环境实测）；title不在契约内需双边变更；MASTER行单变更交付exists=f正常态。自带论述锚brainstorm.js:109?降级纯位置锚
 结果：纯文档；docs check 570引用全过
+
+## ql-20260916-010-5423 | 2026-09-16 07:44:41 | module子集测试面依赖测试自动发现——deps(auto)伪模块
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（discoverModuleDependentTests+runModuleSubset接线）
+- test/module-subset-dependent-tests.test.mjs（五组用例）
+需求：module子集测试面依赖测试自动发现——deps(auto)伪模块
+根因：5325f55实证：modules的test命令硬编码清单不含变更src的断言测试→module收窄漏全量断言回归漏到合并态——清单必然腐烂
+方案：discoverModuleDependentTests（直接import测试∪变更test本体∪命令串覆盖排除）+runModuleSubset附加deps(auto)伪模块（cap 30）+调用方传changedFiles
+结果：五组用例5/5绿+module策略回归3文件绿；全量npm test由--done CLI实测
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/3 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量不适用（≤1 代码文件）
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：test/scan-refresh.test.mjs, test/scan-staleness.test.mjs
+
+## ql-20260916-011-5972 | 2026-09-16 07:48:08 | scan系测试套件内假flake根治——fixture分支名漂移
+状态：已完成
+关联变更：（无）
+文件：
+- test/scan-staleness.test.mjs（init -b main+checkout main）
+- test/scan-refresh.test.mjs（init -b main+checkout main）
+需求：scan系测试套件内假flake根治——fixture分支名漂移
+根因：套件runner隔离HOME预置defaultBranch=main，两fixture硬编码checkout master：套件内必挂单跑必绿串行复核环境又异——假flake实为环境确定性失败
+方案：init -q -b main显式分支名+checkout目标master→main（plan-target-files同款惯例）
+结果：GIT_CONFIG env模拟套件defaultBranch=main下31/31绿；全量npm test由--done CLI实测

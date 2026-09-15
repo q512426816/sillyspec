@@ -607,6 +607,46 @@ function parseFlowValue(flowText, key) {
 }
 
 /**
+ * module 子集测试面的依赖测试自动发现（坑 module-test-face-rot，2026-09-16 本会话 5325f55
+ * 实证：local.yaml modules 的 test 命令是硬编码文件清单，src/verify-probes.js 命中 cli-core
+ * 但其断言测试 verify-probes-facts.test.mjs 不在清单 → quick --done 的 module 收窄实测漏掉
+ * 全量断言，回归漏到合并态才暴露）。发现口径：变更 src 文件的**直接 import 测试**（test/
+ * 下 *.test.* 内含 `../src/<changed>` 引用——静态/动态 import 通吃，子串匹配只可能多跑不漏）
+ * ∪ 变更的 test 文件本身；已被命中模块命令串覆盖的（命令串含该文件名）排除防重复。
+ * @param {{cwd: string, changedFiles: string[], coveredCommands?: string[]}} args
+ * @returns {string[]} 相对 cwd 的测试文件路径（posix 形态，已排序；无可发现 → []）
+ */
+export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [] }) {
+  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
+  const norm = (p) => String(p).replace(/\\/g, '/')
+  const changedSrc = [...new Set(changedFiles.map(norm))]
+    .filter(p => p.startsWith('src/') && /\.(js|mjs|cjs|ts)$/.test(p))
+  const changedTests = [...new Set(changedFiles.map(norm))]
+    .filter(p => /^test\//.test(p) && /\.test\.[cm]?js$/.test(p))
+  if (changedSrc.length === 0 && changedTests.length === 0) return []
+  const covered = coveredCommands.filter(Boolean).join(' ')
+  const found = new Set()
+  const testDir = join(cwd, 'test')
+  let entries = []
+  try { entries = readdirSync(testDir) } catch { entries = [] }
+  for (const f of entries) {
+    if (!/\.test\.[cm]?js$/.test(f)) continue
+    if (covered.includes(f)) continue
+    let content = ''
+    try { content = readFileSync(join(testDir, f), 'utf8') } catch { continue }
+    for (const src of changedSrc) {
+      if (content.includes(`../${src}`)) { found.add(`test/${f}`); break }
+    }
+  }
+  for (const t of changedTests) {
+    const fname = t.split('/').pop()
+    if (covered.includes(fname)) continue
+    if (existsSync(join(cwd, t))) found.add(t)
+  }
+  return [...found].sort()
+}
+
+/**
  * 根据变更文件列表 + modules 映射，算出被命中的模块（去重保序）。
  * 文件路径以 module.path 为前缀（含子目录）即视为命中。
  *
@@ -1327,7 +1367,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       },
     })
   } else if (action === 'module-subset') {
-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures })
+    mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures, changedFiles: lastChangedFiles })
   } else if (action === 'module-zero-hit-skip') {
     // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
     // 据 verify-result.md 自报告判定；想跑全量请显式设 test_strategy: full。
@@ -1658,12 +1698,21 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
  * 串行跑命中的模块子集，聚合结果。
  * 返回 shape 与 runFullCommand 一致（status/command/exitCode/durationMs/outputTail/reason/resultPath）。
  */
-function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }) {
+function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [] }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
+  // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
+  // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
+  // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
+  const deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
+  if (deps.length > 0) {
+    perModule.push(runOneModule('deps(auto)', `node --test ${deps.slice(0, 30).join(' ')}`, cwd, knownFailures))
+    console.log(`ℹ️ module 子集已附加依赖测试伪模块 deps(auto)：${deps.length} 个（import 变更 src/变更的 test 本体，未被模块命令串覆盖——治硬编码清单腐烂）`)
+  }
   const status = aggregateStatus(perModule)
 
-  const command = `module[${hits.map(h => h.name).join(',')}]`
+  let command = `module[${hits.map(h => h.name).join(',')}]`
+  if (deps.length > 0) command += `+deps(${Math.min(deps.length, 30)})`
   const exitCode = status === 'passed' ? 0 : 1
   const durationMs = Date.now() - subsetStartedAt
 

@@ -1,0 +1,47 @@
+diff --git a/test/scan-refresh.test.mjs b/test/scan-refresh.test.mjs
+index af31484..2005aca 100644
+--- a/test/scan-refresh.test.mjs
++++ b/test/scan-refresh.test.mjs
+@@ -133,7 +133,8 @@ import { computeRefreshPlan } from '../src/scan-refresh.js'
+ function mkRefreshRepo({ docs, map = null } = {}) {
+   const root = mkdtempSync(join(tmpdir(), 'scan-refresh-repo-'))
+   const run = (a) => execSync(a, { cwd: root, stdio: 'pipe' }).toString().trim()
+-  run('git init -q')
++  // 显式 -b main（坑 scan-fixture-branch-drift）：套件隔离 gitconfig defaultBranch=main、本机 master
++  run('git init -q -b main')
+   run('git config user.email t@t.com')
+   run('git config user.name t')
+   mkdirSync(join(root, 'src'), { recursive: true })
+@@ -210,7 +211,7 @@ describe('computeRefreshPlan 门控与受影响集', () => {
+     f.run('git checkout -q --orphan other')
+     f.run('git commit -q --allow-empty -m orphan')
+     const orphan = f.run('git rev-parse HEAD')
+-    f.run('git checkout -q master')
++    f.run('git checkout -q main')
+     writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(orphan))
+     const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
+     assert.equal(r.ok, false)
+diff --git a/test/scan-staleness.test.mjs b/test/scan-staleness.test.mjs
+index c331cde..d53d5d2 100644
+--- a/test/scan-staleness.test.mjs
++++ b/test/scan-staleness.test.mjs
+@@ -16,7 +16,9 @@ import { parseSourceCommit, computeScanStaleness, STALENESS_THRESHOLDS } from '.
+ let root, specBase
+ beforeEach(() => {
+   root = mkdtempSync(join(tmpdir(), 'stale-'))
+-  execSync('git init -q', { cwd: root, stdio: 'pipe' })
++  // 显式 -b main：套件 runner 隔离 HOME 预置 defaultBranch=main、本机全局=master，两头不确定时
++  // 下方硬编码 checkout 目标会漂（坑 scan-fixture-branch-drift，2026-09-16 套件内必挂单跑绿）
++  execSync('git init -q -b main', { cwd: root, stdio: 'pipe' })
+   execSync('git config user.email t@t.com', { cwd: root, stdio: 'pipe' })
+   execSync('git config user.name t', { cwd: root, stdio: 'pipe' })
+   execSync('git commit -q --allow-empty -m base', { cwd: root, stdio: 'pipe' })
+@@ -164,7 +166,7 @@ describe('computeScanStaleness 全文档聚合取落后最多', () => {
+     execSync('git checkout -q --orphan detached', { cwd: root, stdio: 'pipe' })
+     execSync('git commit -q --allow-empty -m orphan', { cwd: root, stdio: 'pipe' })
+     const orphan = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
+-    execSync('git checkout -q master', { cwd: root, stdio: 'pipe' })
++    execSync('git checkout -q main', { cwd: root, stdio: 'pipe' })
+     writeFileSync(join(scanDir, 'B.md'), [
+       '---', 'author: t', `source_commit: ${orphan}`, '---', '', '# Y', '',
+     ].join('\n'))

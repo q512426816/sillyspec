@@ -133,7 +133,8 @@ import { computeRefreshPlan } from '../src/scan-refresh.js'
 function mkRefreshRepo({ docs, map = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scan-refresh-repo-'))
   const run = (a) => execSync(a, { cwd: root, stdio: 'pipe' }).toString().trim()
-  run('git init -q')
+  // 显式 -b main（坑 scan-fixture-branch-drift）：套件隔离 gitconfig defaultBranch=main、本机 master
+  run('git init -q -b main')
   run('git config user.email t@t.com')
   run('git config user.name t')
   mkdirSync(join(root, 'src'), { recursive: true })
@@ -210,7 +211,7 @@ describe('computeRefreshPlan 门控与受影响集', () => {
     f.run('git checkout -q --orphan other')
     f.run('git commit -q --allow-empty -m orphan')
     const orphan = f.run('git rev-parse HEAD')
-    f.run('git checkout -q master')
+    f.run('git checkout -q main')
     writeFileSync(join(f.scanDir, 'ARCHITECTURE.md'), refDoc(orphan))
     const r = computeRefreshPlan({ projectRoot: f.root, specBase: f.specBase, projectName: 'demo' })
     assert.equal(r.ok, false)

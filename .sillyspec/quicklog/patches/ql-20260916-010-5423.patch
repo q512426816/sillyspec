@@ -1,0 +1,168 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index b4dd303..bdd667f 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -606,6 +606,46 @@ function parseFlowValue(flowText, key) {
+   return v.length > 0 ? v : null
+ }
+ 
++/**
++ * module 子集测试面的依赖测试自动发现（坑 module-test-face-rot，2026-09-16 本会话 5325f55
++ * 实证：local.yaml modules 的 test 命令是硬编码文件清单，src/verify-probes.js 命中 cli-core
++ * 但其断言测试 verify-probes-facts.test.mjs 不在清单 → quick --done 的 module 收窄实测漏掉
++ * 全量断言，回归漏到合并态才暴露）。发现口径：变更 src 文件的**直接 import 测试**（test/
++ * 下 *.test.* 内含 `../src/<changed>` 引用——静态/动态 import 通吃，子串匹配只可能多跑不漏）
++ * ∪ 变更的 test 文件本身；已被命中模块命令串覆盖的（命令串含该文件名）排除防重复。
++ * @param {{cwd: string, changedFiles: string[], coveredCommands?: string[]}} args
++ * @returns {string[]} 相对 cwd 的测试文件路径（posix 形态，已排序；无可发现 → []）
++ */
++export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [] }) {
++  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
++  const norm = (p) => String(p).replace(/\\/g, '/')
++  const changedSrc = [...new Set(changedFiles.map(norm))]
++    .filter(p => p.startsWith('src/') && /\.(js|mjs|cjs|ts)$/.test(p))
++  const changedTests = [...new Set(changedFiles.map(norm))]
++    .filter(p => /^test\//.test(p) && /\.test\.[cm]?js$/.test(p))
++  if (changedSrc.length === 0 && changedTests.length === 0) return []
++  const covered = coveredCommands.filter(Boolean).join(' ')
++  const found = new Set()
++  const testDir = join(cwd, 'test')
++  let entries = []
++  try { entries = readdirSync(testDir) } catch { entries = [] }
++  for (const f of entries) {
++    if (!/\.test\.[cm]?js$/.test(f)) continue
++    if (covered.includes(f)) continue
++    let content = ''
++    try { content = readFileSync(join(testDir, f), 'utf8') } catch { continue }
++    for (const src of changedSrc) {
++      if (content.includes(`../${src}`)) { found.add(`test/${f}`); break }
++    }
++  }
++  for (const t of changedTests) {
++    const fname = t.split('/').pop()
++    if (covered.includes(fname)) continue
++    if (existsSync(join(cwd, t))) found.add(t)
++  }
++  return [...found].sort()
++}
++
+ /**
+  * 根据变更文件列表 + modules 映射，算出被命中的模块（去重保序）。
+  * 文件路径以 module.path 为前缀（含子目录）即视为命中。
+@@ -1327,7 +1367,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
+       },
+     })
+   } else if (action === 'module-subset') {
+-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures })
++    mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures, changedFiles: lastChangedFiles })
+   } else if (action === 'module-zero-hit-skip') {
+     // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
+     // 据 verify-result.md 自报告判定；想跑全量请显式设 test_strategy: full。
+@@ -1658,12 +1698,21 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
+  * 串行跑命中的模块子集，聚合结果。
+  * 返回 shape 与 runFullCommand 一致（status/command/exitCode/durationMs/outputTail/reason/resultPath）。
+  */
+-function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [] }) {
++function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [] }) {
+   const subsetStartedAt = Date.now()
+   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
++  // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
++  // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
++  // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
++  const deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
++  if (deps.length > 0) {
++    perModule.push(runOneModule('deps(auto)', `node --test ${deps.slice(0, 30).join(' ')}`, cwd, knownFailures))
++    console.log(`ℹ️ module 子集已附加依赖测试伪模块 deps(auto)：${deps.length} 个（import 变更 src/变更的 test 本体，未被模块命令串覆盖——治硬编码清单腐烂）`)
++  }
+   const status = aggregateStatus(perModule)
+ 
+-  const command = `module[${hits.map(h => h.name).join(',')}]`
++  let command = `module[${hits.map(h => h.name).join(',')}]`
++  if (deps.length > 0) command += `+deps(${Math.min(deps.length, 30)})`
+   const exitCode = status === 'passed' ? 0 : 1
+   const durationMs = Date.now() - subsetStartedAt
+ 
+diff --git a/test/module-subset-dependent-tests.test.mjs b/test/module-subset-dependent-tests.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/module-subset-dependent-tests.test.mjs
+@@ -0,0 +1,79 @@
++/**
++ * module 子集测试面依赖测试自动发现（坑 module-test-face-rot，2026-09-16 本会话 5325f55
++ * 实证：local.yaml modules 的 test 命令是硬编码文件清单，src/verify-probes.js 命中 cli-core
++ * 但其断言测试 verify-probes-facts.test.mjs 不在清单 → quick --done 的 module 收窄实测漏掉
++ * 全量断言（骨架章节计数），回归漏到合并态全量才暴露）。
++ *
++ * 锁定语义（discoverModuleDependentTests）：
++ *   - 变更 src 文件的直接 import 测试（test/*.test.* 内含 ../src/<changed> 引用）→ 发现
++ *   - 变更的 test 文件本身 → 发现（自身就该跑）
++ *   - 已被命中模块命令串覆盖（命令串含该文件名）→ 排除
++ *   - 无变更/无 test 目录/无可发现 → []（零行为）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { discoverModuleDependentTests } from '../src/verify-postcheck.js'
++
++const tmpRoots = []
++function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function setup(cwd) {
++  mkdirSync(join(cwd, 'test'), { recursive: true })
++  mkdirSync(join(cwd, 'src'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'foo.js'), 'export const a = 1\n')
++  writeFileSync(join(cwd, 'src', 'run'), '') // 占位防误用（目录形态由用例自建）
++  rmSync(join(cwd, 'src', 'run'))
++  writeFileSync(join(cwd, 'test', 'foo-assert.test.mjs'), "import { a } from '../src/foo.js'\nimport assert from 'node:assert/strict'\nassert.ok(a)\n")
++  writeFileSync(join(cwd, 'test', 'dynamic-import.test.mjs'), "const { a } = await import('../src/foo.js')\n")
++  writeFileSync(join(cwd, 'test', 'unrelated.test.mjs'), "import assert from 'node:assert/strict'\nassert.ok(true)\n")
++}
++
++test('变更 src 文件 → 直接 import 测试被发现（静态+动态 import）；无关测试不收', () => {
++  const cwd = mk('msd-1-')
++  setup(cwd)
++  const deps = discoverModuleDependentTests({ cwd, changedFiles: ['src/foo.js'], coveredCommands: [] })
++  assert.ok(deps.includes('test/foo-assert.test.mjs'), `静态 import 发现（实际 ${deps}）`)
++  assert.ok(deps.includes('test/dynamic-import.test.mjs'), '动态 import 发现')
++  assert.ok(!deps.includes('test/unrelated.test.mjs'), '无关测试不收')
++})
++
++test('已被命中模块命令串覆盖 → 排除（不重复跑）', () => {
++  const cwd = mk('msd-2-')
++  setup(cwd)
++  const deps = discoverModuleDependentTests({
++    cwd, changedFiles: ['src/foo.js'],
++    coveredCommands: ['node --test test/foo-assert.test.mjs test/other.test.mjs'],
++  })
++  assert.ok(!deps.includes('test/foo-assert.test.mjs'), '命令串已含 → 排除')
++  assert.ok(deps.includes('test/dynamic-import.test.mjs'), '未覆盖的仍发现')
++})
++
++test('变更 test 文件本身 → 发现（即使无 src 变更命中它）', () => {
++  const cwd = mk('msd-3-')
++  setup(cwd)
++  const deps = discoverModuleDependentTests({ cwd, changedFiles: ['test/unrelated.test.mjs'], coveredCommands: [] })
++  assert.deepEqual(deps, ['test/unrelated.test.mjs'])
++})
++
++test('无变更 / 无 test 目录 / 反斜杠路径形态 → 零行为或容错', () => {
++  const cwd = mk('msd-4-')
++  assert.deepEqual(discoverModuleDependentTests({ cwd, changedFiles: [], coveredCommands: [] }), [])
++  assert.deepEqual(discoverModuleDependentTests({ cwd, changedFiles: ['src/foo.js'], coveredCommands: [] }), [], '无 test 目录 → []')
++  setup(cwd)
++  const deps = discoverModuleDependentTests({ cwd, changedFiles: ['src\\foo.js'], coveredCommands: [] })
++  assert.ok(deps.includes('test/foo-assert.test.mjs'), 'Windows 反斜杠形态归一后命中')
++})
++
++test('src 内子目录路径（src/run/shared.js）→ 测试内 ../src/run/shared.js 引用命中', () => {
++  const cwd = mk('msd-5-')
++  mkdirSync(join(cwd, 'test'), { recursive: true })
++  mkdirSync(join(cwd, 'src', 'run'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'run', 'shared.js'), 'export const s = 1\n')
++  writeFileSync(join(cwd, 'test', 'shared-assert.test.mjs'), "import { s } from '../src/run/shared.js'\n")
++  const deps = discoverModuleDependentTests({ cwd, changedFiles: ['src/run/shared.js'], coveredCommands: [] })
++  assert.deepEqual(deps, ['test/shared-assert.test.mjs'])
++})

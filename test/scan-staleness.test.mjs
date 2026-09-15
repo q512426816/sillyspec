@@ -16,7 +16,9 @@ import { parseSourceCommit, computeScanStaleness, STALENESS_THRESHOLDS } from '.
 let root, specBase
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'stale-'))
-  execSync('git init -q', { cwd: root, stdio: 'pipe' })
+  // 显式 -b main：套件 runner 隔离 HOME 预置 defaultBranch=main、本机全局=master，两头不确定时
+  // 下方硬编码 checkout 目标会漂（坑 scan-fixture-branch-drift，2026-09-16 套件内必挂单跑绿）
+  execSync('git init -q -b main', { cwd: root, stdio: 'pipe' })
   execSync('git config user.email t@t.com', { cwd: root, stdio: 'pipe' })
   execSync('git config user.name t', { cwd: root, stdio: 'pipe' })
   execSync('git commit -q --allow-empty -m base', { cwd: root, stdio: 'pipe' })
@@ -164,7 +166,7 @@ describe('computeScanStaleness 全文档聚合取落后最多', () => {
     execSync('git checkout -q --orphan detached', { cwd: root, stdio: 'pipe' })
     execSync('git commit -q --allow-empty -m orphan', { cwd: root, stdio: 'pipe' })
     const orphan = execSync('git rev-parse HEAD', { cwd: root, stdio: 'pipe' }).toString().trim()
-    execSync('git checkout -q master', { cwd: root, stdio: 'pipe' })
+    execSync('git checkout -q main', { cwd: root, stdio: 'pipe' })
     writeFileSync(join(scanDir, 'B.md'), [
       '---', 'author: t', `source_commit: ${orphan}`, '---', '', '# Y', '',
     ].join('\n'))
