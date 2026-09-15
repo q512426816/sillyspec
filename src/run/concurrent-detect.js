@@ -12,6 +12,7 @@
  * 纯函数无副作用：不写盘、不 console（console 留给调用点 task-02/03）。
  */
 import { safeGit, parsePorcelainPath, isQuickMetadata } from './shared.js'
+import { basename } from 'node:path'
 
 /**
  * 内联解析 .sillyspec/changes/<dir>/ 路径取 <dir>。
@@ -153,4 +154,101 @@ export function formatConcurrentWarning(detected) {
 
   lines.push('提交请用显式 pathspec 隔离本变更文件，勿 git add . 扫入他者工作（execute task 内建议 sillyspec wt-commit 串行提交）。')
   return lines.join('\n')
+}
+
+// ── 坑 mixed-baseline-drift-hint（ql-20260915-004）committed-drift 混合基线检测 ──
+// 背景（用户 2026-09-15 实证）：并行会话合并断言不同步——worktree 内基于旧快照写的测试断言
+// （旧 id），主仓已合入 id 统一修复 → verify 测试门红——测试源=worktree 快照、被测源=主仓
+// HEAD 的混合基线漂移此前无任何提示。本函数算「主仓自本变更基点后的已提交推进 ∩ 本变更
+// 相关文件」，交两挂点（worktree-apply 成功尾声 / gates.js verify 测试门前）advisory 提示。
+
+/** 测试形态文件名：foo.test.mjs / foo.spec.js（与探针 7 isProbe7TestPath 的 .test. 口径同族） */
+const DRIFT_TEST_FORM_RE = /\.(?:test|spec)\.[A-Za-z0-9]+$/
+
+/** git 路径反斜杠归一（detectCommittedDrift 内部用，与 normalizeGitPath 同义独立小函数） */
+function toPosix(p) {
+  return String(p || '').replace(/\\/g, '/')
+}
+
+/**
+ * 文件名 stem 键：剥扩展名与 .test./.spec. 中缀（foo.js → foo；foo.test.mjs → foo；
+ * foo_test.js → foo_test——下划线形不在变体口径内，仅精确匹配兜底）。小写归一。
+ */
+function driftStemKey(p) {
+  const name = basename(toPosix(p))
+  const m = name.match(/^(.+?)\.(?:test|spec)\.[A-Za-z0-9]+$/)
+  if (m) return m[1].toLowerCase()
+  const dot = name.lastIndexOf('.')
+  return (dot > 0 ? name.slice(0, dot) : name).toLowerCase()
+}
+
+/**
+ * 检测混合基线漂移（非阻断 advisory 用）：主仓 `git diff --name-only <baseHash>..<head>`
+ * （基点后已提交推进面）∩ 本变更 touchedFiles（或其同 basename 的 .test./.spec. 变体）非空
+ * → drift。变体口径：stem 相同且至少一侧为测试形态（src/foo.js ↔ test/foo.test.mjs）——
+ * 换位覆盖两方向（他者推进我的源文件的测试变体 / 他者推进我测试文件对应的源文件）。
+ *
+ * fail-open：baseHash 缺失 / git 异常 → 返回 null（调用方视为未检测，零输出零阻断）；
+ * diff 空（基点后无推进）→ { drift:false, files:[] }。
+ *
+ * @param {{ projectRoot: string, baseHash: string, touchedFiles: string[],
+ *           excludeFiles?: string[], head?: string }} opts
+ *   - baseHash：worktree 基点（meta.baselineCommit || baseHash）
+ *   - touchedFiles：本变更交付文件面（apply-manifest files / changedFiles）
+ *   - excludeFiles：从推进面剔除的文件（verify 挂点传本变更自身面——apply 已提交时
+ *     baseHash..HEAD 含自身交付，不剔会把「自己合自己」误报成他者推进；apply 挂点用
+ *     精确 preMergeHead，无需剔除）
+ *   - head：推进面终点 ref（缺省 HEAD；merge 路径传 merge 前 HEAD）
+ * @returns {{ drift: boolean, files: string[], hint?: string }|null}
+ */
+export function detectCommittedDrift({ projectRoot, baseHash, touchedFiles, excludeFiles = [], head = 'HEAD' }) {
+  if (!projectRoot || !baseHash) return null
+  const touched = (Array.isArray(touchedFiles) ? touchedFiles : []).map(toPosix).filter(Boolean)
+  if (touched.length === 0) return null
+  // FR fail-open（与 detectConcurrentChanges 同族）：git 读不到不崩不误报
+  const diff = safeGit(projectRoot, ['diff', '--name-only', `${baseHash}..${head}`], { timeout: 30000 })
+  if (diff.error) return null
+  if (!diff.value) return { drift: false, files: [] }
+
+  const excl = new Set((Array.isArray(excludeFiles) ? excludeFiles : []).map(toPosix).filter(Boolean))
+  const touchedSet = new Set(touched)
+  const touchedStems = new Set(touched.map(driftStemKey).filter(Boolean))
+  const touchedHasTestForm = touched.some(f => DRIFT_TEST_FORM_RE.test(basename(f)))
+
+  const files = []
+  for (const raw of diff.value.split('\n').map(s => s.trim()).filter(Boolean)) {
+    const p = toPosix(raw)
+    if (excl.has(p)) continue
+    const exact = touchedSet.has(p)
+    // 变体：非精确命中时，stem 相同且至少一侧为测试形态（防 docs/foo.md ↔ test/foo.test.mjs
+    // 之外的松散同名误报——两侧都非测试形态的不同目录同名不算相关）
+    const variant = !exact
+      && touchedStems.has(driftStemKey(p))
+      && (DRIFT_TEST_FORM_RE.test(basename(p)) || touchedHasTestForm)
+    if (exact || variant) files.push(p)
+  }
+  if (files.length === 0) return { drift: false, files: [] }
+  return {
+    drift: true,
+    files,
+    hint: `主仓自基点 ${String(baseHash).slice(0, 8)} 后已合入触及 ${files.length} 个本变更相关文件的推进（${files.slice(0, 5).join('、')}${files.length > 5 ? ' 等' : ''}）——worktree 快照内验证过的断言可能漂移，建议合并态复跑相关测试`,
+  }
+}
+
+/**
+ * committed-drift 检测结果 → 多行 ⚠️ 提示串（两挂点共用文案，与 formatConcurrentWarning 同族）。
+ * @param {{ drift: boolean, files?: string[], hint?: string }|null} drift detectCommittedDrift 产物
+ * @param {{ tailNote?: string }} [opts] tailNote 追加在首行末的挂点语境注（如 verify 挂点的
+ *   「实测若红先做合并态归因」）；缺省无
+ * @returns {string|null} 无漂移/未检测返回 null
+ */
+export function formatCommittedDriftWarning(drift, opts = {}) {
+  if (!drift || !drift.drift) return null
+  const files = Array.isArray(drift.files) ? drift.files : []
+  const note = opts.tailNote ? `（${opts.tailNote}）` : ''
+  return [
+    '⚠️ 混合基线提示：主仓自本变更基点后已合入触及以下本变更相关文件的推进'
+      + `（${files.length} 个）——worktree 快照内验证过的断言可能漂移，建议合并态复跑相关测试${note}：`,
+    ...files.map(f => `  - ${f}`),
+  ].join('\n')
 }

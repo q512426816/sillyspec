@@ -27,7 +27,7 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
 import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
-import { detectConcurrentChanges, formatConcurrentWarning } from './concurrent-detect.js'
+import { detectConcurrentChanges, formatConcurrentWarning, detectCommittedDrift, formatCommittedDriftWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { normalizeTaskId } from '../taskcard.js'
 import { recordFrictionEvent } from '../friction-tally.js'
@@ -643,6 +643,28 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
   if (stageName === 'verify') {
+    // 坑 mixed-baseline-drift-hint（ql-20260915-004）：verify 实测门执行前的混合基线 advisory
+    //（提前预警不阻断）——apply-manifest 的基点后主仓已提交推进若触及本变更相关文件（含
+    // .test. 变体），worktree 快照内验证过的断言可能漂移，本次实测红先做合并态归因。推进面
+    // 剔除本变更自身文件面（apply 已提交时 baseHash..HEAD 含自身交付，不剔会自污染误报）；
+    // 剔除后精确命中信号由 apply 时点提示兜底，此处保变体方向（他者推进我源文件的测试变体 /
+    // 我测试文件对应的源文件）。无 manifest（in-place/quick）→ no-op 零行为变化。
+    try {
+      const driftManifestPath = join(specBase, 'changes', changeName, 'apply-manifest.json')
+      if (existsSync(driftManifestPath)) {
+        const driftManifest = JSON.parse(readFileSync(driftManifestPath, 'utf8'))
+        const driftFace = (driftManifest && Array.isArray(driftManifest.files)
+          ? driftManifest.files.map(f => f && f.path).filter(Boolean) : [])
+        if (driftManifest && driftManifest.baseHash && driftFace.length > 0) {
+          const drift = detectCommittedDrift({
+            projectRoot: cwd, baseHash: driftManifest.baseHash,
+            touchedFiles: driftFace, excludeFiles: driftFace,
+          })
+          const driftMsg = formatCommittedDriftWarning(drift, { tailNote: '本次实测若红，先做合并态归因' })
+          if (driftMsg) console.warn(driftMsg)
+        }
+      }
+    } catch { /* fail-soft：drift 检测异常不影响 verify 门 */ }
     const { runVerifyTestCheck, printVerifyTestCheck } = await import('../verify-postcheck.js')
     // P0-1 指纹复用（noai-ir-roadmap §3 前置一·防重复跑）：noAI 质量扫描步已实测且代码指纹
     // 未变 → 直接复用免重跑（长套件 2~10 分钟不再跑两遍）；无记录/失配/git 不可用 → 照旧

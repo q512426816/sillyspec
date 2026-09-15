@@ -2268,6 +2268,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         // usage 输出且 exit 0——gate 形同虚设（docs-signals 范围内文件+hook 已就位，仅此分支缺）。
         // B9（2026-08-16）：flag 白名单化（对齐 docs check 分支）——未知 --xxx 显式 exit 2
         // （interface-contract §1.3b 宣称），并接线 --paths 透传 runDocsGate.checkOpts（原被忽略）。
+        // 坑 docs-gate-stale-baseline（ql-20260915-004）：超基线分支实测 origin/main 兜底——
+        // 未劣于远端放行 + 提示重锚；--json 输出含 originCount 字段（null=未实测/快路径）。
         const GATE_BARE_FLAGS = ['--init-baseline'];
         const GATE_PAIRED_FLAGS = ['--paths', '--against'];
         const rawGateArgs = filteredArgs.slice(2);

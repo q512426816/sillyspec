@@ -106,6 +106,9 @@ const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0
 // 关键词提取：≥3 字符标识符（[A-Za-z_][A-Za-z0-9_]{2,}）∪ ≥2 字连续 CJK 片段，按出现顺序交错
 const PROBE7_TERM_RE = /[A-Za-z_][A-Za-z0-9_]{2,}|[\u4e00-\u9fff]{2,}/g
 const PROBE7_TERM_CAP = 5
+// 坑 probe7-prefill-evidence（ql-20260915-004）：无归属时的 non-testable 判别词（机械保守：
+// acceptance 文本命中即预填 non-testable，agent 复核可改写）
+const PROBE7_NONTESTABLE_RE = /文档|部署|doc|deploy|manual|config/i
 
 /**
  * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
@@ -211,7 +214,11 @@ function extractAcceptanceTerms(text) {
  * 命中≠判定（R-03，不参与门禁）——只有存在命中的条目才进 hints（键 = acceptance 条目下标）。
  * 测试文件读取双根回退（cwd → worktree 根，坑 probe1-worktree-path-blind / probe3 双根同族：
  * apply 前新测试只在 worktree）。读不到的文件计 null 跳过。
- * @returns {Record<number, {terms: string[], files: string[]}>} 普通对象，可 JSON 序列化
+ * 坑 probe7-prefill-evidence（ql-20260915-004）：anchors 逐词记录首命中 file:line（grep -n
+ * 语义——首个包含该词的测试文件内的首行号），供证据列机械预填；terms/files 键维持旧形态
+ * （既有消费方/测试零回归）。
+ * @returns {Record<number, {terms: string[], files: string[], anchors: Array<{term: string, file: string, line: number}>}>}
+ *   普通对象，可 JSON 序列化
  */
 function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot) {
   const hints = {}
@@ -228,17 +235,27 @@ function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot) {
     cache.set(rel, content)
     return content
   }
+  // 首命中行号（1-based）：indexOf 前缀行计数，CRLF 不影响（按 \n 切）
+  const firstHitLine = (content, term) => {
+    const idx = content.indexOf(term)
+    return idx === -1 ? null : content.slice(0, idx).split('\n').length
+  }
   acceptanceItems.forEach((item, idx) => {
     const hitTerms = []
     const hitFiles = new Set()
+    const anchors = []
     for (const term of extractAcceptanceTerms(item)) {
       const hits = testFiles.filter(f => { const c = readTest(f); return !!c && c.includes(term) })
       if (hits.length > 0) {
         hitTerms.push(term)
         for (const f of hits) hitFiles.add(f)
+        // 首命中文件内的首命中行（单文件 grep -n 首命中即可，机械保守）
+        const firstFile = hits[0]
+        const line = firstHitLine(readTest(firstFile) || '', term)
+        if (line !== null) anchors.push({ term, file: firstFile, line })
       }
     }
-    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles] }
+    if (hitTerms.length > 0) hints[idx] = { terms: hitTerms, files: [...hitFiles], anchors }
   })
   return hints
 }
@@ -251,8 +268,52 @@ function mdEscapeCell(text, cap = 200) {
 }
 
 /**
+ * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004）。
+ *
+ * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量
+ * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）：
+ *   - 无归属 → uncovered；acceptance 文本含 文档/部署/doc/deploy/manual/config 类词且无归属
+ *     → non-testable
+ *   - 有归属且命中 ≥1 → covered，证据 = 首命中 `file:line`（term）锚点（≤3 条防膨胀）
+ *   - 有归属零命中 → partial，证据 = 无机械命中提示 + 反引号归属文件（满足门禁测试锚点口径）
+ *
+ * 门禁兼容（stage-contract.js extractAcceptanceMatrixSlots / MATRIX_VERDICT_WHITELIST）：判定列
+ * 须为纯枚举（精确 trim 匹配白名单）——行内尾注「（预填，复核后可改）」会破坏枚举解析，故
+ * 尾注改置矩阵段头注记；covered/partial 证据须含测试锚点（file:line / 反引号 / .test.），
+ * non-testable 证据须非空——预填值均按此口径构造（预填即可过门，复核责任在段头注记明示）。
+ * @param {string} item acceptance 条目文本
+ * @param {string[]|undefined} testFiles 归属测试文件
+ * @param {{terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}|null} hint
+ * @returns {{verdict: string, evidence: string}}
+ */
+function prefillMatrixCells(item, testFiles, hint) {
+  const hasAttribution = Array.isArray(testFiles) && testFiles.length > 0
+  if (!hasAttribution) {
+    return {
+      verdict: PROBE7_NONTESTABLE_RE.test(String(item || '')) ? 'non-testable' : 'uncovered',
+      evidence: '（无归属测试）',
+    }
+  }
+  const anchors = (hint && Array.isArray(hint.anchors)) ? hint.anchors : []
+  if (anchors.length > 0) {
+    const evidence = anchors.slice(0, 3)
+      .map(a => `\`${mdEscapeCell(a.file, 120)}:${a.line}\`（${mdEscapeCell(a.term, 40)}）`)
+      .join('、')
+    return { verdict: 'covered', evidence }
+  }
+  return {
+    verdict: 'partial',
+    evidence: `（无机械命中——人工核验 \`${mdEscapeCell(testFiles[0], 120)}\`）`,
+  }
+}
+
+/**
  * 渲染探针 7 段（骨架与幂等补段共用单一实现）。
- * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[]}>}> }} p7
+ * 坑 probe7-prefill-evidence（ql-20260915-004）：判定/证据两列由 prefillMatrixCells 机械预填
+ * （原 `<待填：四选一>` / `<TODO>` 占位淘汰）——幂等保障沿用补段口径：段已在场（agent 已填/
+ * 未填）一律不触碰（ensureAcceptanceMatrixSection 段在场即 no-op），预填只在骨架生成与缺段补齐
+ * 两条新写路径生效，agent 已填内容永不被覆盖。
+ * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}>}> }} p7
  * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
  */
 function renderProbe7Lines(p7) {
@@ -262,6 +323,7 @@ function renderProbe7Lines(p7) {
     return L
   }
   L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles 结构归属承接面（每条 acceptance 由哪些测试承接）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。证据列给首命中 file:line 锚点或人工核验提示。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
   for (const t of (p7.tasks || [])) {
     L.push('')
     L.push(`**${t.task}**`)
@@ -279,7 +341,8 @@ function renderProbe7Lines(p7) {
       const hintCell = h
         ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).map(f => `\`${f}\``).join('、')}）`
         : '—'
-      L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | <待填：四选一> | <TODO> |`)
+      const pre = prefillMatrixCells(item, t.testFiles, h)
+      L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | ${pre.verdict} | ${pre.evidence} |`)
     })
   }
   return L

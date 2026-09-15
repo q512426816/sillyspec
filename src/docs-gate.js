@@ -11,10 +11,19 @@
  *
  * exit code：0 过（≤基线）/ 1 拦（>基线）/ 2 配置或 IO 错误（含无基线）。
  * 纯判定逻辑（evaluateRatchet）与 IO 面（runDocsGate）分离，前者可单测。
+ *
+ * 坑 docs-gate-stale-baseline（ql-20260915-004，2026-09-15 用户实证）：基线文件是静态快照，
+ * 远端 origin/main 已合入的失效消化/新增不会回流本地基线——出现「基线 371 < origin/main
+ * 实测 379、本地 current 379」时 ratchet 拦 379>371，但本次推送零增量（不劣于远端）——
+ * ratchet 本质=拦增量，被陈旧基线破坏成拦存量。修复：current > baseline 分支先实测
+ * origin/main 树（临时 detach worktree 跑 runDocsCheck），current ≤ 实测值即放行 + 提示
+ * 重锚；实测失败/无远端 ref fail-open 回原拦。快路径（current ≤ baseline）零成本零变化。
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { runDocsCheck, readDocsCheckConfig, DocsCheckConfigError } from './docs-check.js';
+import { safeGit } from './git-helper.js';
 
 /** 基线文件名（相对 specBase/.sillyspec 根；specBase 由调用方传入完整路径锚） */
 export const BASELINE_FILENAME = 'docs-check-baseline';
@@ -59,6 +68,73 @@ export function writeBaseline(specBase, value) {
 }
 
 /**
+ * 实测远端基准树的 docs check 失效数（坑 docs-gate-stale-baseline，ql-20260915-004）。
+ *
+ * 为什么临时 worktree 而非 runDocsCheck 的 --against reader：against reader 的干净文件
+ * 走磁盘直读（磁盘 == HEAD 才成立，docs-check.js createHeadReader :88）——ref=origin/main
+ * 时本地领先 origin 的已提交内容会被误当 origin 版，实测失真。临时 detach worktree
+ * （`git worktree add --detach <tmp> origin/main`）检出的是真远端树，磁盘即实测基。
+ *
+ * 配置口径：读树内 local.yaml（gitignored → 通常缺省 → DEFAULT_DOC_PATHS，与远端真实
+ * CI 口径一致——设备本地 skip 定制不污染远端实测）。清理含 .git 锁容错：worktree remove
+ * 失败 → prune + rmSync 兜底；仍失败 stderr 一行不抛（临时目录残留 OS 清理，不阻断 gate）。
+ *
+ * @param {string} projectRoot 源码仓根
+ * @param {string[]} [remoteRefs] 候选远端 ref（origin/main 优先；master 缺省仓兜底）
+ * @returns {Promise<{ originCount: number|null, ref: string|null, error: string|null }>}
+ *   originCount null = 未实测（无 ref / worktree 建/跑失败——调用方 fail-open 回原拦）
+ */
+export async function measureRemoteBaselineCount(projectRoot, remoteRefs = ['origin/main', 'origin/master']) {
+  let ref = null;
+  for (const r of remoteRefs) {
+    if ((safeGit(projectRoot, ['rev-parse', '--verify', '--quiet', r]) || {}).value) { ref = r; break; }
+  }
+  if (!ref) return { originCount: null, ref: null, error: 'no-remote-ref' };
+
+  const tmp = mkdtempSync(join(tmpdir(), 'sillyspec-docsgate-remote-'));
+  let originCount = null;
+  let error = null;
+  try {
+    // git worktree add 接受已存在的空目录（mkdtempSync 产物）；失败 fail-open 由调用方回原拦
+    const added = safeGit(projectRoot, ['worktree', 'add', '--detach', tmp, ref], { timeout: 120000 });
+    if (added.error) {
+      error = added.error;
+      return { originCount: null, ref, error };
+    }
+    try {
+      const cfg = readDocsCheckConfig(tmp);
+      const res = runDocsCheck({
+        projectRoot: tmp,
+        paths: cfg.paths,
+        skip: cfg.skip,
+        keywordAssert: cfg.keywordAssert,
+        crossRepoRoots: cfg.crossRepoRoots,
+      });
+      originCount = res.invalid.length;
+    } catch (e) {
+      if (e instanceof DocsCheckConfigError) {
+        error = e.message;
+        originCount = null;
+      } else {
+        throw e;
+      }
+    }
+  } finally {
+    try {
+      const removed = safeGit(projectRoot, ['worktree', 'remove', '--force', tmp]);
+      if (removed.error) {
+        // .git 锁/并发竞争容错：prune 清注册残留 + 直删目录兜底
+        safeGit(projectRoot, ['worktree', 'prune']);
+        try { rmSync(tmp, { recursive: true, force: true }); } catch { /* 目录已不在 */ }
+      }
+    } catch {
+      try { rmSync(tmp, { recursive: true, force: true }); } catch { /* 同上 */ }
+    }
+  }
+  return { originCount, ref, error };
+}
+
+/**
  * IO 入口：跑一次 gate。
  * @param {{ projectRoot: string, specBase: string, initBaseline?: boolean }} opts
  *   projectRoot 源码仓根（docs check 锚）；specBase .sillyspec 根（基线文件所在）
@@ -83,7 +159,7 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
     });
   } catch (e) {
     if (e instanceof DocsCheckConfigError) {
-      return { exitCode: 2, ok: false, current: null, baseline: null, delta: null, message: `docs gate 配置错误：${e.message}`, inited: false };
+      return { exitCode: 2, ok: false, current: null, baseline: null, delta: null, originCount: null, message: `docs gate 配置错误：${e.message}`, inited: false };
     }
     throw e;
   }
@@ -91,20 +167,43 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
 
   if (initBaseline) {
     writeBaseline(specBase, current);
-    return { exitCode: 0, ok: true, current, baseline: current, delta: 0, message: `📌 docs gate: 基线已初始化为当前实测 ${current} 处失效（${baselineDisplay(specBase)}）`, inited: true };
+    return { exitCode: 0, ok: true, current, baseline: current, delta: 0, originCount: null, message: `📌 docs gate: 基线已初始化为当前实测 ${current} 处失效（${baselineDisplay(specBase)}）`, inited: true };
   }
 
   const baseline = readBaseline(specBase);
   if (baseline === null) {
     return {
-      exitCode: 2, ok: false, current, baseline: null, delta: null,
+      exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null,
       message: `❌ docs gate: 无基线文件（${baselineDisplay(specBase)}）。首次使用先跑 sillyspec docs gate --init-baseline（以当前实测数立基线，存量既往不咎只拦增量）`,
       inited: false,
     };
   }
   if (Number.isNaN(baseline)) {
-    return { exitCode: 2, ok: false, current, baseline: null, delta: null, message: `❌ docs gate: 基线文件损坏（非非负整数），手工修正或 --init-baseline 重置`, inited: false };
+    return { exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null, message: `❌ docs gate: 基线文件损坏（非非负整数），手工修正或 --init-baseline 重置`, inited: false };
   }
   const v = evaluateRatchet({ current, baseline });
-  return { exitCode: v.ok ? 0 : 1, ok: v.ok, current, baseline, delta: v.delta, message: v.message, inited: false };
+  if (v.ok) {
+    // 快路径（current ≤ baseline）：原路零变化——不触远端实测（零 git 成本零行为漂移）
+    return { exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: null, message: v.message, inited: false };
+  }
+  // 坑 docs-gate-stale-baseline（ql-20260915-004）：current > baseline 时 origin 实测兜底——
+  // ratchet 本质=拦增量；基线是静态快照，远端已合入的失效增长不回流基线会造成「未劣于远端
+  // 也被拦」的假拦。实测 origin/main 树：current ≤ 实测值 = 本次不劣于远端 → 放行 + 提示
+  // 重锚；无远端 ref / 实测失败 fail-open 回原拦；current > 实测值 = 真增量劣于远端 → 拦。
+  const measured = await measureRemoteBaselineCount(projectRoot);
+  if (measured.originCount !== null && current <= measured.originCount) {
+    return {
+      exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: measured.originCount,
+      message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——建议 sillyspec docs gate --init-baseline 重锚锁定（以当前实测 ${current} 立线，存量既往不咎只拦增量）`,
+      inited: false,
+    };
+  }
+  const remoteNote = measured.originCount !== null
+    ? `，且劣于 ${measured.ref} 实测 ${measured.originCount} 处（真增量）`
+    : '';
+  return {
+    exitCode: 1, ok: false, current, baseline, delta: v.delta, originCount: measured.originCount,
+    message: `❌ docs gate: ${current} 处失效 > 基线 ${baseline}（新增 ${v.delta} 处）${remoteNote}，拦截。修掉新增引用或显式 --init-baseline 重置基线（需你确认存量合法）`,
+    inited: false,
+  };
 }

@@ -23,6 +23,7 @@ import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
 import { git, gitQuiet, safeGit } from './git-helper.js';
 import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
 import { collectActiveQuickGuardFiles } from './quicklog.js';
+import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -575,6 +576,26 @@ function writeApplyManifest({ projectRoot, specBase, changeName, baseHash, files
   const manifestPath = join(changeDir, 'apply-manifest.json');
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   return { written: true, file: manifestPath, files: entries };
+}
+
+/**
+ * 坑 mixed-baseline-drift-hint（ql-20260915-004）：apply 成功尾声混合基线 advisory。
+ *
+ * 主仓自本变更基点（baseHash）后的已提交推进若触及本变更相关文件（含 .test./.spec. 变体），
+ * worktree 快照内验证过的测试断言可能基于旧内容——apply 落地的是混合基线，提示 agent 合并态
+ * 复跑相关测试（非阻断，result.committedDrift 留痕）。head 缺省 HEAD：patch 路径自身交付
+ * staged 未提交，baseHash..HEAD 即纯他者推进面；merge 路径传 preMergeHead（merge 提交后
+ * HEAD 含自身交付，不剔会把「自己合自己」误报成他者推进）。fail-soft：异常零影响 apply。
+ */
+function annotateCommittedDrift(result, { projectRoot, baseHash, files, head }) {
+  try {
+    if (!baseHash || !files || files.length === 0) return;
+    const drift = detectCommittedDrift({ projectRoot, baseHash, touchedFiles: files, head });
+    if (drift && drift.drift) {
+      result.committedDrift = drift;
+      console.warn(formatCommittedDriftWarning(drift));
+    }
+  } catch { /* fail-soft：drift 检测异常不影响 apply 结果 */ }
 }
 
 /**
@@ -1663,6 +1684,8 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
             ]);
           }
         }
+        // 坑 mixed-baseline-drift-hint（ql-20260915-004）：三方合并消解型成功出口的混合基线提示
+        annotateCommittedDrift(result, { projectRoot, baseHash: deliverableBase, files: emptyPatchManifestFace });
         rmSync(tmpDir, { recursive: true, force: true });
         return result;
       }
@@ -1720,11 +1743,13 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       // patch 实际落盘集 ∪ 4.5 三方合并写回集（mergeDirtyFiles 已从 changedFiles 剔除，须并回）；
       // apply 删除的文件 staged/磁盘皆无，函数内自然跳过。fail-open：写失败不阻断 apply
       // （warning 留痕）。已存在则覆盖（重放 apply 以最新为准）。锁内（调用方 withMainRepoLock）。
+      // manifestFace 提升到 try 外（坑 mixed-baseline-drift-hint ql-20260915-004：drift 提示
+      // 在 manifest 写点后消费同面，try 内 const 出块即失域）
+      const manifestFace = [...new Set([...patchFiles, ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
       try {
         // ql-20260915-001 修复①：mergedMismatchFiles（4.5b 前置合并写回面）与 mergedDirtyFiles
         // 同为 staged 落盘集，一并进 manifest 指纹面与提交复用 pathspec（缺列 = doctor 漂移检测
         // 盲区 + agent 按 pathspec 提交漏文件）
-        const manifestFace = [...new Set([...patchFiles, ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
         const mf = writeApplyManifest({
           projectRoot, specBase: allowSpecBase, changeName,
           baseHash: deliverableBase, files: manifestFace,
@@ -1735,6 +1760,10 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
           `apply-manifest.json 写入失败（不影响 apply 结果；doctor 漂移检测将按无 manifest 跳过）: ${(e.message || '').split('\n')[0]}`
         ]);
       }
+
+      // 坑 mixed-baseline-drift-hint（ql-20260915-004）：patch 主路径成功出口的混合基线提示
+      //（自身交付 staged 未提交 → baseHash..HEAD 即纯他者推进面，精确/变体命中均为真信号）
+      annotateCommittedDrift(result, { projectRoot, baseHash: deliverableBase, files: manifestFace });
 
       // --- 7.5 提交复用 pathspec（坑 apply-commit-pathspec-sweep，2026-08-21 实证）---
       // apply 后主仓常混有无关未提交文件（他者会话/并行 quick），agent 习惯 `git add <目录>/`
@@ -2161,6 +2190,10 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
   // 它跳过 dirty 文件（不覆盖 WIP）且只提交对齐集；WIP commit 在后，两者不混提交 ---
   autoCommitWorktreeWip({ meta, result, changeName });
 
+  // 坑 mixed-baseline-drift-hint（ql-20260915-004）：merge 前 HEAD = 纯他者推进面锚点——
+  // merge 提交后 HEAD 含自身交付，drift 检测须以 preMergeHead 为推进面终点（防自污染误报）
+  const preMergeHead = gitQuiet(projectRoot, ['rev-parse', 'HEAD']);
+
   try {
     git(projectRoot, ['merge', '--no-ff', branch], { timeout: 30000 });
   } catch (e) {
@@ -2231,8 +2264,10 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
   // changedFiles（落地校验过的交付集）∪ mergedDirtyFiles（ENOBUFS 路径下 4.5 可能已写回）
   // ∪ mergedMismatchFiles（ql-20260915-001 修复①：4.5b 前置合并写回面，同口径并入），
   // merge 删除面 staged/磁盘皆无、函数内自然跳过。fail-open：写失败不阻断 merge（warning 留痕）。
+  // manifestFace 提升到 try 外（坑 mixed-baseline-drift-hint ql-20260915-004：drift 提示在
+  // manifest 写点后消费同面，try 内 const 出块即失域）
+  const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
   try {
-    const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
     const mf = writeApplyManifest({
       projectRoot, specBase, changeName,
       baseHash: meta.baselineCommit || meta.baseHash, files: manifestFace,
@@ -2243,6 +2278,12 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
       `apply-manifest.json 写入失败（不影响 merge 结果；doctor 漂移检测将按无 manifest 跳过）: ${(e.message || '').split('\n')[0]}`
     ]);
   }
+  // 坑 mixed-baseline-drift-hint（ql-20260915-004）：merge 成功出口的混合基线提示（推进面
+  // 终点 = preMergeHead，剥离本 merge 自身交付，保精确命中为真信号）
+  annotateCommittedDrift(result, {
+    projectRoot, baseHash: meta.baselineCommit || meta.baseHash,
+    files: manifestFace, head: preMergeHead || 'HEAD',
+  });
   try { result.mergeSummary = git(projectRoot, ['log', '--oneline', '-1']); } catch {}
   try {
     consumeCleanupResult(wm.cleanup(changeName, { force: true }), result);

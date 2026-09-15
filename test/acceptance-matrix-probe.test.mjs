@@ -93,6 +93,16 @@ function makeFixtureA() {
     '---',
     '# task-04', '',
   ].join('\n'))
+  // task-05：有归属测试但零关键词命中 → partial 预填形态（ql-20260915-004 probe7-prefill-evidence）
+  writeFileSync(join(changeDir, 'tasks', 'task-05.md'), [
+    '---',
+    'id: task-05',
+    'allowed_paths: [test/silent-attrib.test.mjs]',
+    'acceptance:',
+    '  - zqxv 零命中条目 wkj（归属在场但测试内容不含关键词）',
+    '---',
+    '# task-05', '',
+  ].join('\n'))
 
   // 源文件与归属测试文件（关键词 grep 的真实内容面）
   mkdirSync(join(proj, 'src'), { recursive: true })
@@ -106,6 +116,8 @@ function makeFixtureA() {
   ].join('\n'))
   writeFileSync(join(proj, 'test', 'acceptance-matrix-probe.test.mjs'), 'export const placeholder = 1 // 无关键词命中面\n')
   writeFileSync(join(proj, 'test', 'review-attributed.test.mjs'), '// ensureAcceptanceMatrixSection 幂等二跑零改动\nexport {}\n')
+  // task-05 归属面：内容刻意不含其 acceptance 关键词（zqxv/wkj/零命中条目——注释不含）→ 零命中
+  writeFileSync(join(proj, 'test', 'silent-attrib.test.mjs'), '// quiet placeholder content\nexport {}\n')
 
   // execute run：marker + review.json（task-02 双源第二例；其余 task 无 review → 空集防御）
   const runtimeRoot = join(specBase, '.runtime')
@@ -187,8 +199,17 @@ try {
   const i7 = report.indexOf('#### 探针 7：验收×测试覆盖矩阵')
   const i4 = report.indexOf('#### 探针 4：')
   assert(i3 !== -1 && i7 !== -1 && i4 !== -1 && i3 < i7 && i7 < i4, '探针 7 段位于探针 3 后、探针 4 前')
-  assert((report.match(/<待填：四选一>/g) || []).length === 4, `判定槽四枚举待填数=acceptance 条目数（实际 ${(report.match(/<待填：四选一>/g) || []).length}）`)
-  assert((report.match(/<TODO>/g) || []).length === 4, '证据槽与判定槽同数')
+  // ql-20260915-004 probe7-prefill-evidence：判定/证据两列机械预填——占位槽淘汰，四形态断言
+  assert((report.match(/<待填：四选一>/g) || []).length === 0, '判定槽占位淘汰（全预填）')
+  assert((report.match(/<TODO>/g) || []).length === 0, '证据槽占位淘汰（全预填）')
+  assert((report.match(/\| covered \|/g) || []).length === 3, `命中≥1 → covered ×3（t1×2 + t2）（实际 ${(report.match(/\| covered \|/g) || []).length}）`)
+  assert((report.match(/\| partial \|/g) || []).length === 1, '有归属零命中 → partial ×1（task-05）')
+  assert((report.match(/\| non-testable \|/g) || []).length === 1, '无归属 + 文档类词 → non-testable ×1（task-04）')
+  assert((report.match(/\| uncovered \|/g) || []).length === 0, '本 fixture 无「无归属非文档类」条目 → uncovered ×0')
+  assert(report.includes('`test/unit-foo.test.mjs:1`（probe7）'), 'covered 证据含首命中 file:line + 关键词锚点')
+  assert(report.includes('（无机械命中——人工核验 `test/silent-attrib.test.mjs`）'), 'partial 证据 = 人工核验提示 + 反引号归属文件')
+  assert(report.includes('（无归属测试）'), '无归属证据 = （无归属测试）')
+  assert(report.includes('判定列为 CLI 机械预填，agent 逐格复核改写'), '段头预填注记在场（枚举纯值的复核责任声明）')
   assert(report.includes('covered / partial / uncovered / non-testable'), '四枚举图例在场')
   assert(report.includes('命中≠判定'), '提示列头部标注命中≠判定')
   assert(report.includes('（卡无 acceptance——防御，plan-postcheck 已拦）'), 'task-03 防御行渲染且无待填槽')
@@ -197,10 +218,16 @@ try {
   const pipeRow = report.split('\n').find(l => l.includes('管道符') && l.startsWith('|'))
   assert(pipeRow && (pipeRow.match(/(?<!\\)\|/g) || []).length === 6 && pipeRow.includes('\\|'),
     'acceptance 含管道符 → 转义为 \\| 且行仍为五列六管')
-  assert(report.includes('**task-01**') && report.includes('**task-04**'), '每 task 一表（粗体 task 锚）')
+  assert(report.includes('**task-01**') && report.includes('**task-05**'), '每 task 一表（粗体 task 锚）')
   const sk = generateVerifyResultSkeleton(r)
   assert(sk.indexOf('#### 探针 3：') < sk.indexOf('#### 探针 7：验收×测试覆盖矩阵')
     && sk.indexOf('#### 探针 7：验收×测试覆盖矩阵') < sk.indexOf('#### 探针 4：'), '骨架内探针 7 序同报告')
+  // 门禁 round-trip：预填渲染直过 extractAcceptanceMatrixSlots（枚举纯值 + 证据锚点口径双合规）
+  const { extractAcceptanceMatrixSlots } = await import('../src/stage-contract.js')
+  const slots = extractAcceptanceMatrixSlots(sk)
+  assert(slots.present && slots.unfilled === 0, `预填判定全为合法枚举（unfilled=0，实际 ${slots.unfilled}）`)
+  assert(slots.missingEvidence === 0, `预填证据全过锚点口径（missingEvidence=0，实际 ${slots.missingEvidence}）`)
+  assert(slots.rows.length === 5, `五行数据行（实际 ${slots.rows.length}）`)
 
   console.log('--- 6. 无 tasks 目录不适用 ---')
   const fxB = makeFixtureB()
