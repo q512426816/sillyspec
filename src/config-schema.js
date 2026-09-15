@@ -359,6 +359,14 @@ semantic_guard:
 known_failures:
   - tests/some-old-stable-failure
 
+# ── 等效验证先例库（标准测试/构建命令在本仓不可用时的既有替代口径；verify prompt 自动注入）──
+verify_precedents:
+  - id: standard-test-command-blocked
+    standard_command: mvn test
+    reason: 框架 parent pom 硬编码 surefire skip=true，-D 覆盖无效
+    equivalent: mvn dependency:build-classpath + javac + JUnitCore 直跑
+    established_by: <确立该等效口径的变更名>
+
 # ── worktree-guard 只读命令扩展（execute worktree 隔离期内放行额外只读命令）──
 worktree-hook:
   readonlyCommands:

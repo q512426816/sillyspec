@@ -410,3 +410,14 @@
 方案：src/verify-probes.js：①骨架结论章节后新增「## 移交项（结构化） [层：人工判断——CLI 清单核验]」三列表格+四类型枚举注释（env-blocked复跑口径/manual-acceptance验收步骤/db-script执行环境顺序/other）②parseHandoverRows导出：段界解析+表行三列+表头分隔行跳过+占位行跳过+类型归一小写连字符+未知类型保留供agent复核③backfillFactsFromMdAndTests：有效行落facts.handover={count,items}；PASS WITH NOTES零有效行console.warn advisory不阻断（存量渐进采纳）
 结果：新增test/verify-handover-structured.test.mjs四组用例4/4绿；回归verify-probes/conclusion-slot/facts-v2/acceptance-matrix 18/0；docs check 569引用全过；全量npm test+lint由--done CLI实测
 审计：📝 文档欠账（D-8）：2 个源码文件改动未同步任何模块文档（涉及模块：core-engine）
+
+## ql-20260916-005-33bc | 2026-09-16 00:44:52 | C/D合并态回归修复——renderExample 补 verify_precedents + 章节计数 12→13
+状态：已完成
+关联变更：（无）
+文件：
+- src/config-schema.js（renderExample 补 verify_precedents 示例段）
+- test/verify-probes-facts.test.mjs（章节计数 12→13 两处+移交项断言）
+需求：C/D合并态回归修复——renderExample 补 verify_precedents + 章节计数 12→13
+根因：C（eda9434）漏了 config-schema 既有守卫「live 键必须出现在 renderExample 策展模板」；D（50242df）新增移交项章节改骨架 12→13 章但 verify-probes-facts 计数断言未同步——D 的 quick 门禁 test_strategy 走了 module[cli-core,run-gates] 收窄，全量断言漏网到合并态才暴露
+方案：src/config-schema.js renderExample 补 verify_precedents 中性示例段（id/standard_command/reason/equivalent/established_by 用占位值，不引 EHS 真实变更名）；test/verify-probes-facts.test.mjs 两处 12→13 + 移交项段在场断言（章节清单如实更新非改测试凑过）
+结果：config-schema 311/0；verify-probes-facts 全过；全量 npm test exit 0（scan-staleness/refresh 并发轮失败系已知 flake 串行复核清）；lint 633 文件 0 告警
