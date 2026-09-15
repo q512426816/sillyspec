@@ -788,6 +788,36 @@ export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
  * @param {{ verifyMd: string, testCheckResult?: object|null }} opts
  * @returns {{ facts: object, conclusion: string|null, evidenceCount: number, receiptCount: number, testsBackfilled: boolean }}
  */
+// 移交项结构化（坑 handover-only-in-prose，2026-09-15/16 EHS 生产实证）：verify 结论
+// PASS WITH NOTES 的移交条目（环境阻断复跑/人工验收/待执行脚本）此前只活在结论槽正文
+// 叙述——后续独立复核发现被环境阻断 deferred 的集成测试里正藏着 5 个 P1；「移交项没有
+// 结构化清单 = 没人兜」。骨架新增「## 移交项（结构化）」章节（三列表格 + 类型枚举注释），
+// 本函数解析其表行为机器可读 items（facts.handover 回填 + advisory 判定用）。
+// 容错：占位行（<待填…）跳过；类型归一小写连字符（ENV-BLOCKED→env-blocked）；未知类型
+// 保留原值（advisory 面向 agent 复核，不静默丢弃）；非表格行（prose/注释）忽略。
+const HANDOVER_HEADING_RE = /^## 移交项（结构化）[^\n]*$/m
+export function parseHandoverRows(md) {
+  const text = String(md || '').replace(/\r\n/g, '\n')
+  const m = text.match(HANDOVER_HEADING_RE)
+  if (!m) return []
+  const after = text.slice(m.index + m[0].length)
+  const nextSection = after.match(/\n## /)
+  const section = nextSection ? after.slice(0, nextSection.index) : after
+  const items = []
+  for (const line of section.split('\n')) {
+    const row = line.match(/^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*$/)
+    if (!row) continue
+    const type = row[1].trim()
+    const item = row[2].trim()
+    const condition = row[3].trim()
+    if (type === '类型' || /^-{2,}$/.test(type.replace(/\|/g, ''))) continue // 表头/分隔行
+    if (type.startsWith('<') || item.startsWith('<')) continue // 骨架占位行
+    if (!type || !item) continue
+    items.push({ type: type.toLowerCase().replace(/[\s_]+/g, '-'), item, condition })
+  }
+  return items
+}
+
 export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResult = null, conclusion = null }) {
   let facts = null
   try { facts = JSON.parse(readFileSync(factsPath, 'utf8')) } catch { /* 缺失见下 */ }
@@ -814,6 +844,17 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   }
   if (slots.hasReceiptSlot && slots.runtimeEvidence.length > 0) {
     facts.runtimeEvidence = slots.runtimeEvidence
+  }
+  // 移交项结构化回填（handover-only-in-prose）：有有效行 → facts.handover 落盘（机器可读）；
+  // PASS WITH NOTES 零有效行 → advisory 警告（不阻断——存量 PASS WITH NOTES 无此章节是常态，
+  // 渐进采纳）。EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1，清单化才有
+  // 「谁兜、怎么复跑」的可追溯面。
+  const handoverItems = parseHandoverRows(verifyMd || '')
+  if (handoverItems.length > 0) {
+    facts.handover = { count: handoverItems.length, items: handoverItems }
+  }
+  if (conclusionSlot === 'PASS WITH NOTES' && handoverItems.length === 0) {
+    console.warn('⚠️ 结论=PASS WITH NOTES 但「移交项（结构化）」章节零有效行——正文叙述的移交项（环境阻断复跑条件/人工验收步骤/待执行脚本）请结构化进 ## 移交项（结构化） 表格（类型枚举 env-blocked/manual-acceptance/db-script/other），避免移交项只活在 prose 里没人兜（2026-09-15 EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1）。')
   }
   let testsBackfilled = false
   if (testCheckResult && testCheckResult.status && testCheckResult.status !== 'skipped') {
@@ -1039,6 +1080,13 @@ export function generateVerifyResultSkeleton(result) {
     '## 结论 [层：人工判断]',
     '',
     '结论枚举：`<待填：三选一>`（把尖括号占位整体替换为 PASS / PASS WITH NOTES / FAIL 之一；一句话理由写在枚举后同行或下一行）',
+    '',
+    '## 移交项（结构化） [层：人工判断——CLI 清单核验]',
+    '<!-- 结论=PASS WITH NOTES 时本节必填（prose 移交叙述转结构化，复跑/验收有据可查、agent 可恢复复跑）；结论=PASS/FAIL 写「无」 -->',
+    '<!-- 类型枚举：env-blocked（环境阻断，条件列必填复跑口径）/ manual-acceptance（人工验收，条件列必填验收步骤）/ db-script（待执行脚本，条件列必填执行环境与顺序）/ other -->',
+    '| 类型 | 条目 | 复跑/验收条件 |',
+    '|---|---|---|',
+    '| <待填：env-blocked / manual-acceptance / db-script / other> | <待填：移交条目> | <待填：复跑/验收条件> |',
     '',
     '## 证据账（cannot_verify 任务） [层：人工判断——CLI 核验]',
     '<!-- 无 cannot_verify 任务时本节写「无」；有则逐 task 一行 -->',

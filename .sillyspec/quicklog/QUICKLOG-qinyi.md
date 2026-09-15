@@ -398,3 +398,15 @@
 方案：src/run/prompt.js：parseVerifyPrecedents行扫描解析（免YAML依赖+块界容错+残项过滤）+renderVerifyPrecedentHint（五要素+行动指引指向commands.test实测而非skip放行+超5截断）+EVIDENCE_AUTO注入块接线（与test_strategy预检同挂点）；config-schema.js登记verify_precedents段；锚维护2处重锚
 结果：新增test/verify-precedent-prompt.test.mjs五组用例5/5绿；docs check 569引用0失效；全量npm test+lint由--done CLI实测
 审计：[gate] L1（跨 2 模块 · 5 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260916-004-c1d4 | 2026-09-16 00:33:02 | verify移交项结构化——骨架「移交项（结构化）」章节+parseHandoverRows+facts.handover回填+零行advisory
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（parseHandoverRows+骨架移交项章节+backfill回填advisory）
+- test/verify-handover-structured.test.mjs（新增四组用例）
+需求：verify移交项结构化——骨架「移交项（结构化）」章节+parseHandoverRows+facts.handover回填+零行advisory
+根因：EHS生产实证（2026-09-15-ehs-reward-punishment + 09-16二次独立复核）：verify结论PASS WITH NOTES的三项移交（环境阻断集成测试/三端联调人工验收/待执行SQL）只活在结论槽正文叙述——复核发现被环境阻断deferred的集成测试里正藏着5个P1；移交项没有结构化清单=没人兜，后续agent也无从恢复复跑
+方案：src/verify-probes.js：①骨架结论章节后新增「## 移交项（结构化） [层：人工判断——CLI 清单核验]」三列表格+四类型枚举注释（env-blocked复跑口径/manual-acceptance验收步骤/db-script执行环境顺序/other）②parseHandoverRows导出：段界解析+表行三列+表头分隔行跳过+占位行跳过+类型归一小写连字符+未知类型保留供agent复核③backfillFactsFromMdAndTests：有效行落facts.handover={count,items}；PASS WITH NOTES零有效行console.warn advisory不阻断（存量渐进采纳）
+结果：新增test/verify-handover-structured.test.mjs四组用例4/4绿；回归verify-probes/conclusion-slot/facts-v2/acceptance-matrix 18/0；docs check 569引用全过；全量npm test+lint由--done CLI实测
+审计：📝 文档欠账（D-8）：2 个源码文件改动未同步任何模块文档（涉及模块：core-engine）
