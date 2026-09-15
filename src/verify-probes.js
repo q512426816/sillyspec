@@ -5,7 +5,8 @@
  * verify-probes.md 模板定义六个探针，agent 此前逐条手跑 grep/递归查找/git 对账再手工拼表格。
  * 本模块把纯机械的四个探针命令化（语义判断的留 agent，输出里显式标注）：
  *   探针1 未实现标记扫描：design §6 清单的具体文件逐行 grep TODO/FIXME/尚未实现 等
- *   探针3 测试覆盖：逐 task 按 allowed_paths 定位模块目录，递归找测试文件（co-located tests/ 陷阱）
+ *   探针3 测试覆盖：逐 task 按 allowed_paths 定位模块目录，递归找测试文件（co-located tests/ 陷阱
+ *        + JVM src/test/<lang> 同包镜像根——Maven/Gradle 布局测试与 main 侧永不 co-located）
  *   探针5 API 契约对账：复用 contract-matrix.verifyApiParity（endpoints.json × 前端调用）+ 表格渲染
  *   探针6 删除对账：git diff --name-status HEAD 的 D/R × design 声明操作三态判定
  *   探针7 验收×测试覆盖矩阵：task 卡 acceptance 自解析（jsYaml，string/array 双形态）+ 双源结构
@@ -50,7 +51,26 @@ export function isUnimplementedMarkerLine(line) {
   if (XXX_MARKER_RE.test(line)) return true
   return false
 }
-const TEST_FILE_RE = /test|spec/i
+// 测试文件名判定（坑 probe3-testname-false-positive，2026-09-15 EHS 生产实证：model 目录下
+// TestData.java 数据夹具被旧 /test|spec/i 子串命中 → task-01 假绿「找到 1 个测试文件」；
+// specification.md / contest.css 同族反向噪音）。三路命中，任一即测试文件：
+// - 分隔符分词（按非字母数字切段）含 test/tests/spec/specs —— foo.test.js、test_utils.py、foo-spec.ts
+// - 裸词文件名（去扩展名即上述词，大小写归一）—— test.js、Tests.java
+// - 驼峰末段后缀 Test/Tests/Spec/Specs/IT（Java/Kotlin 惯例 FooTest/FooIT）——只认末位驼峰段：
+//   RpFlowEngineTest 命中；TestData/TestUtil/TestMain（Test 是首段=夹具命名惯势）不命中
+// 取向：漏检罕见命名（FooTestCase/TestFoo 前缀式）→ ⚠️ 落 agent 手查（fail-visible 可接受）；
+// 假绿掩盖真缺测是 fail-hidden，更糟——宁紧勿松。
+const TEST_NAME_TOKENS = new Set(['test', 'tests', 'spec', 'specs'])
+const TEST_NAME_SUFFIXES = new Set(['Test', 'Tests', 'Spec', 'Specs', 'IT'])
+export function isTestFileName(name) {
+  const stem = String(name || '').replace(/\.[^.]+$/, '')
+  if (!stem) return false
+  if (TEST_NAME_TOKENS.has(stem.toLowerCase())) return true
+  const tokens = stem.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  if (tokens.some(t => TEST_NAME_TOKENS.has(t))) return true
+  const lastHump = stem.match(/(?:[A-Z][a-z0-9]*|[A-Z]+)$/)
+  return !!lastHump && TEST_NAME_SUFFIXES.has(lastHump[0])
+}
 const PROBE1_MAX_MATCHES = 200
 
 /**
@@ -104,7 +124,7 @@ function findTestFiles(rootDir, cwd, cap = 10) {
       const full = join(d, e.name)
       if (e.isDirectory()) {
         if (!skip.has(e.name)) walk(full)
-      } else if (e.isFile() && TEST_FILE_RE.test(basename(e.name))) {
+      } else if (e.isFile() && isTestFileName(e.name)) {
         found.push(full.split('\\').join('/').replace(cwd.split('\\').join('/').replace(/\/$/, '') + '/', ''))
         if (found.length >= cap) return
       }
@@ -152,7 +172,7 @@ export function parseTaskAcceptance(content) {
 /**
  * allowed_paths 条目是否测试形态（结构归属面）：test/ 前缀，或文件名含 .test. / _test. / spec
  * 惯例（(?:^|[._-])test(?:[._-]|$) 覆盖 foo.test.mjs / foo_test.js / test-foo.js 三形）。
- * 比探针 3 的存在性面（TEST_FILE_RE 子串宽松匹配）严格——这是 3/7 口径差异的落点。
+ * 比探针 3 的存在性面（isTestFileName 文件名形态判定，宽松存在性提示）严格——这是 3/7 口径差异的落点。
  */
 function isProbe7TestPath(p) {
   const posix = String(p).split('\\').join('/')
@@ -424,8 +444,23 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     let allowed = []
     if (existsSync(cardPath)) allowed = parseAllowedPaths(readFileSync(cardPath, 'utf8'))
     const moduleDirs = [...new Set(allowed.map(p => dirname(p.split('\\').join('/'))).filter(d => d && d !== '.'))]
-    const testFiles = []
+    // JVM 镜像测试根（坑 probe3-java-mirror-blind，2026-09-15 EHS 生产实证 task-02~06 五连
+    // 假⚠️）：Maven/Gradle 布局测试在 src/test/<lang> 同包镜像树，与 src/main 侧永不
+    // co-located——只递归 allowed_paths 目录（全在 main 侧）必然落空。对命中 src/main/<lang>
+    // 的目录补推镜像目录进扫描集（主仓或 worktree 任一侧存在才列/才扫——不存在的镜像根=
+    // 该包真无测试，保持 ⚠️ 真信号）。
+    const mirrorDirs = []
     for (const d of moduleDirs) {
+      const m = d.match(/^(.*\/src\/)main(\/(?:java|kotlin|scala|groovy)(?:\/.*)?)$/)
+      if (!m) continue
+      const mirror = `${m[1]}test${m[2]}`
+      if (mirrorDirs.includes(mirror) || moduleDirs.includes(mirror)) continue
+      if (existsSync(join(cwd, mirror)) || (wtRoot && wtRoot !== cwd && existsSync(join(wtRoot, mirror)))) {
+        mirrorDirs.push(mirror)
+      }
+    }
+    const testFiles = []
+    for (const d of [...moduleDirs, ...mirrorDirs]) {
       // 双根并集扫描（坑 probe3-worktree-test-false-negative，2026-09-10 驾驭小结第五批②，
       // 用户实证 5 条假 warning）：apply 前新测试文件只在 worktree（untracked），而模块目录在
       // 主仓**已存在**——旧「主仓目录缺失才回退 worktree」条件不触发，探针 3 报「未找到测试
@@ -443,6 +478,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe3.tasks.push({
       task: taskId,
       moduleDirs,
+      mirrorDirs,
       testFiles: testFiles.slice(0, 10),
       testFileCount: testFiles.length,
       hasTest: testFiles.length > 0,
@@ -571,9 +607,13 @@ export function renderVerifyProbesReport(result) {
       if (!t.located) {
         L.push(`- ⚠️ ${t.task}: 无 task 卡/allowed_paths，无法定位模块目录（agent 手查）`)
       } else if (t.hasTest) {
-        L.push(`- ✅ ${t.task}: 模块目录（${t.moduleDirs.join('、')}）找到 ${t.testFileCount} 个测试文件（${t.testFiles.slice(0, 5).join('、')}${t.testFileCount > 5 ? ' …' : ''}）`)
+        const mirrorNote = (t.mirrorDirs && t.mirrorDirs.length > 0)
+          ? `；JVM 镜像测试根（${t.mirrorDirs.join('、')}）` : ''
+        L.push(`- ✅ ${t.task}: 模块目录（${t.moduleDirs.join('、')}）${mirrorNote}找到 ${t.testFileCount} 个测试文件（${t.testFiles.slice(0, 5).join('、')}${t.testFileCount > 5 ? ' …' : ''}）`)
       } else {
-        L.push(`- ⚠️ ${t.task}: 模块目录（${t.moduleDirs.join('、')}）递归未找到测试文件（含 co-located tests/）`)
+        const mirrorNote = (t.mirrorDirs && t.mirrorDirs.length > 0)
+          ? '（含 co-located tests/ 与 JVM src/test 镜像根）' : '（含 co-located tests/）'
+        L.push(`- ⚠️ ${t.task}: 模块目录（${t.moduleDirs.join('、')}）递归未找到测试文件${mirrorNote}`)
       }
     }
   }
@@ -992,6 +1032,9 @@ export function generateVerifyResultSkeleton(result) {
     '',
     '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——',
     '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',
+    '>',
+    '> 「层」=证据可核验性分层（非执行者声明）：「人工判断」指本节为语义判断，由执行 agent 填写、',
+    '> CLI 不机械复跑（gate 抽查 + 人类审批点复核兜底）；「可复跑探针/确定性检查/CLI 一致性校验」= gate 可机械复核段。',
     '',
     '## 结论 [层：人工判断]',
     '',

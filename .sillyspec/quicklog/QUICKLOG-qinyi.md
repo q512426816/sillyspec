@@ -347,3 +347,16 @@
 方案：①统一改走 _readWorktreeMeta 双候选（specBase 优先+cwd/.sillyspec 兜底）并补 BOM 容错，覆盖 verify 形态判定/working-tree 并入/锚点 diff 与 scope-audit diff 根/预执行信号/actual 自采/getFileDiff；②isUnimplementedMarkerLine 三级口径（尚未实现子串保持、TODO/FIXME/HACK ASCII 标识符边界、XXX 边界+CJK 紧邻排除）；③classifyToolScaffold 软桶聚合一行 note+undeclaredScaffold 计数，全脚手架判 ok；④runVerifyProbes 计数跨仓 task 卡并渲染「扫描面只含主仓」注记；⑤sync-noise 新增 syncSelfHealWarn 按 change+kind 键控闸（首报可见、10 分钟窗静默、手动旁路）接管自竞态/内容一致/自回声三类自愈 warn；⑥evidence-auto 注入块扩展——已配 commands.test 未配 test_strategy 时渲染预检提示
 结果：新增 test/retro-verify-friction-fixes.test.mjs 35 断言全绿（双候选/形态判定/并入/probe1 词边界 14 形态/③类聚合/probe5 注记/409 键控闸 6 态）；npm test 488/0（含并行 ql-008 未提交改动基线）+ lint 625 文件 0 告警、未引用导出 0 项；platform-interface-map.md sync.js 锚 1058→1067 重锚
 审计：[gate] L1（跨 3 模块 · 7 文件：5 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260915-010-d65d | 2026-09-15 23:51:26 | 探针3 Java布局双向失真修复+verify骨架层标注语义footnote
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（isTestFileName三路判定替换TEST_FILE_RE子串+探针3镜像根推导与mirrorDirs字段+渲染注记+骨架层标注footnote）
+- test/verify-probes-probe3-java-layout.test.mjs（新增四组用例锁双向失真修复语义与零回归）
+需求：探针3 Java布局双向失真修复+verify骨架层标注语义footnote
+根因：EHS生产实证（2026-09-15-ehs-reward-punishment，第三方Java传统企业仓）暴露三处：①Maven/Gradle布局测试在src/test/java同包镜像树与main侧永不co-located，探针3只递归allowed_paths目录（全在src/main侧）→task-02~06五连假⚠️靠agent逐条人工消解②TestData.java数据夹具被/test|spec/i子串命中→task-01假绿「找到1个测试文件」掩盖真无测试③骨架「层：人工判断」被用户误读为人工执行（实为agent填写、CLI不机械复跑的语义判断层），缺语义说明
+方案：src/verify-probes.js：①探针3补JVM镜像测试根——moduleDirs命中src/main/(java|kotlin|scala|groovy)的目录补推src/test/<lang>同包镜像目录进扫描集（主仓∪worktree任一侧存在才列/才扫；不存在的镜像根保持⚠️真信号），task对象新增mirrorDirs字段，渲染✅行注记镜像根、⚠️行如实说明已扫②TEST_FILE_RE子串替换为isTestFileName三路命中：非字母数字分词含test/tests/spec/specs∪裸词文件名∪驼峰末段后缀Test/Tests/Spec/Specs/IT——TestData/TestUtil/TestMain（Test首段=夹具命名惯势）/specification.md/contest.css不再命中，RpFlowEngineTest/FooIT/foo.test.js/test_utils.py命中；取向宁紧勿松（漏检罕见命名落agent手查fail-visible，假绿fail-hidden更糟）③generateVerifyResultSkeleton头部blockquote补footnote：层=证据可核验性分层非执行者声明、人工判断=agent填写CLI不机械复跑gate抽查+人类审批兜底；层标注名不改（gate/存量锚定不动）
+结果：新增test/verify-probes-probe3-java-layout.test.mjs四组用例（isTestFileName正反例表12+11/Java镜像根命中+TestData不假绿+无镜像根保持⚠️/JS co-located零回归/骨架footnote）4/4绿；npm test全量493文件经flaky串行复核终判491通过0失败（scan-staleness/scan-refresh并发轮失败系b7eef46已知时序flake、串行复核通过、干净HEAD单跑亦绿，与本改无关）；lint 630文件0告警
+审计：[gate] L1（跨 1 模块 · 7 文件：3 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/cross-repo-reconcile.js, src/probe7-anchor-check.js, test/cross-repo-probe7-anchor.test.mjs
