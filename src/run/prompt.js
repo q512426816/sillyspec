@@ -316,6 +316,68 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
 // 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
+
+/**
+ * 等效验证先例库（坑 verify-precedent-only-in-prose，2026-09-15 EHS 生产实证：mvn test 被
+ * 公司框架 parent pom pluginManagement 硬编码 surefire skip=true、-D 覆盖无效——等效口径
+ * dependency:build-classpath+javac+JUnitCore 第二次复用靠 agent 翻旧 verify-result.md 正文
+ * 续命；先例只活在散文里 = 换个 agent/换个变更就断档）。结构化登记进 local.yaml
+ * verify_precedents 段，verify prompt 时点注入提示（与 test_strategy 预检提示同挂点）。
+ *
+ * 对象数组形态（行扫描，同 extractKnownFailures 免 YAML 依赖口径——注释/空行/块界容错）：
+ *   verify_precedents:
+ *     - id: mvn-test-surefire-skip
+ *       standard_command: mvn test
+ *       reason: <标准命令为何不可用>
+ *       equivalent: <已验证的等效口径>
+ *       established_by: <确立该口径的变更名>
+ *       notes: <可选补充>
+ * 残项（standard_command 与 equivalent 双缺）过滤——登记不完整的先例没有可执行口径。
+ * @param {string|null} yamlText local.yaml 全文
+ * @returns {Array<object>} 先例对象数组
+ */
+export function parseVerifyPrecedents(yamlText) {
+  const lines = String(yamlText || '').split(/\r?\n/)
+  const headIdx = lines.findIndex(l => /^verify_precedents:\s*(?:#.*)?$/.test(l))
+  if (headIdx < 0) return []
+  const items = []
+  let cur = null
+  const clean = (v) => String(v || '').replace(/\s+#.*$/, '').trim()
+  for (let i = headIdx + 1; i < lines.length; i++) {
+    const l = lines[i]
+    if (/^\S/.test(l)) break // 下一个顶层键 → 块结束
+    if (!l.trim() || /^\s*#/.test(l)) continue
+    const item = l.match(/^\s*-\s+([A-Za-z_][\w-]*):\s*(.*)$/)
+    if (item) {
+      cur = {}
+      items.push(cur)
+      cur[item[1]] = clean(item[2])
+      continue
+    }
+    const kv = l.match(/^\s*([A-Za-z_][\w-]*):\s*(.*)$/)
+    if (kv && cur) cur[kv[1]] = clean(kv[2])
+  }
+  return items.filter(x => x && (x.standard_command || x.equivalent))
+}
+
+/**
+ * 先例提示渲染（verify prompt 注入用；空输入 → ''，调用方零输出）。
+ * 行动指引刻意指向「把等效命令配进 commands.test 照常全量实测对账」而非 test_strategy: skip
+ * 放行——EHS 实证里被环境阻断 deferred 的集成测试正是 P1 缺陷藏身处，能实测就实测。
+ * @param {Array<object>|null} precedents
+ * @returns {string}
+ */
+export function renderVerifyPrecedentHint(precedents) {
+  if (!Array.isArray(precedents) || precedents.length === 0) return ''
+  const L = [`【验证先例提示】本仓已登记 ${precedents.length} 条等效验证先例（标准命令不可用时的既有替代口径）：`]
+  for (const p of precedents.slice(0, 5)) {
+    L.push(`- ${p.id || '（无 id）'}：\`${p.standard_command || '?'}\` 不可用（${p.reason || '原因未注'}）→ 等效口径 \`${p.equivalent || '?'}\`（确立于 ${p.established_by || '?'}${p.notes ? `；${p.notes}` : ''}）`)
+  }
+  if (precedents.length > 5) L.push(`- …另有 ${precedents.length - 5} 条未展开（读 local.yaml verify_precedents 段看全量）`)
+  L.push('适用时把等效命令配进 local.yaml commands.test（或 modules.<m>.test）后照常全量实测对账，而不是只靠 test_strategy: skip 放行；先例不适用（环境已变/口径失效）可忽略并在 verify-result 注记。')
+  return L.join('\n')
+}
+
 /**
  * 提示词路径根的单一解析：specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)。
  * 治 execute review.json 提示路径写 worktree 副本、--done 校验读主仓的分裂（坑 execute-prompt-spec-drift）：
@@ -1154,6 +1216,11 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         // 「--done 实测打回 → 补配置 → 重跑」返工
         eaInjected = '【test_strategy 预检提示】local.yaml 已配置 commands.test 但未设顶层 test_strategy（缺省=全量实测对账）。若该命令在当前环境无法真实执行（框架/环境硬伤，如测试框架硬编码 skip、依赖外部服务），先在 local.yaml 显式配 `test_strategy: skip`（或 `module` + modules 映射收窄）并注释理由再继续——避免 verify --done 实测对账打回后返工。'
       }
+      // 等效验证先例注入（verify-precedent-only-in-prose，2026-09-15 EHS 实证）：先例与
+      // 预检提示同挂点追加——标准命令不可用但已有验证过的等效口径时，指引优先配进
+      // commands.test 实测对账而非 skip 放行。
+      const _precHint = renderVerifyPrecedentHint(parseVerifyPrecedents(eaYamlText))
+      if (_precHint) eaInjected = eaInjected ? `${eaInjected}\n\n${_precHint}` : _precHint
     } catch (e) {
       eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
     }

@@ -383,3 +383,18 @@
 方案：src/run/shared.js新增writePlatformDocsPointer：平台模式（specRoot或runtimeRoot任一在）时在cwd/.sillyspec/写人类可读指针（specRoot/runtimeRoot物理路径+workspaceId+触发阶段时间戳+本变更.md文档清单mtime+tasks/任务卡计数+两种获取方式提示）；三豁免与writePlatformPointer三写同款口径——本地模式零行为/自指回环不写/temp残留形态不写；fail-soft写失败warn不阻断完成。src/run/complete.js两完成点挂钩（completeStep完成分支+wait解除continueStep完成分支）。锚维护：docs check --fix重锚9处（shared.js插入63行漂移platform-interface-map 7处+setup.md；并行会话在途src漂移顺手修复known-issues/worktree锚等），core-engine.md gates.js论述锚按校验器指引降级纯位置锚（1172?）
 结果：新增test/platform-docs-pointer.test.mjs五组用例（本地零行为/自指回环不写/平台模式全字段断言/变更目录缺仍写头/runtimeRoot-only）5/5绿；docs check 569处引用全通过；全量npm test+lint由本次--done CLI实测
 审计：[gate] L1（跨 1 模块 · 11 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260916-003-ccdc | 2026-09-16 00:29:10 | 等效验证先例库——local.yaml verify_precedents 段+verify prompt 自动注入
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/prompt.js（parseVerifyPrecedents/renderVerifyPrecedentHint新增+EVIDENCE_AUTO块注入接线）
+- src/config-schema.js（verify_precedents段登记）
+- test/verify-precedent-prompt.test.mjs（新增五组用例）
+- docs/sillyspec/prompt-control-debt.md（prompt.js插入67行锚重锚）
+- .sillyspec/docs/sillyspec/modules/setup.md（config-schema.js插入13行锚重锚）
+需求：等效验证先例库——local.yaml verify_precedents 段+verify prompt 自动注入
+根因：EHS生产实证：mvn test被框架parent pom硬编码surefire skip（-D覆盖无效），等效口径build-classpath+javac+JUnitCore第二次复用靠agent翻旧verify-result正文续命——先例只活在散文里换agent/换变更即断档（building-area确立→ehs-reward-punishment复用，两变更间零结构化传承）
+方案：src/run/prompt.js：parseVerifyPrecedents行扫描解析（免YAML依赖+块界容错+残项过滤）+renderVerifyPrecedentHint（五要素+行动指引指向commands.test实测而非skip放行+超5截断）+EVIDENCE_AUTO注入块接线（与test_strategy预检同挂点）；config-schema.js登记verify_precedents段；锚维护2处重锚
+结果：新增test/verify-precedent-prompt.test.mjs五组用例5/5绿；docs check 569引用0失效；全量npm test+lint由--done CLI实测
+审计：[gate] L1（跨 2 模块 · 5 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

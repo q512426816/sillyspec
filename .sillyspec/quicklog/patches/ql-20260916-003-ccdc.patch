@@ -1,0 +1,231 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.md b/.sillyspec/docs/sillyspec/modules/setup.md
+index 7e8c1eb..82de1de 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.md
+@@ -23,7 +23,7 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
+ **migrate.js** 提供文档迁移功能，migrateDocs 函数处理旧版本 SillySpec 的文档结构迁移，包括项目配置 YAML → SQLite、代码库文档、知识库文档、快速日志等格式的转换。
+ 
+ **config-schema.js** 是 local.yaml 配置键的单一数据源（LOCAL_YAML_SCHEMA 集中全部已知键 + 生效状态 + 读取点），供 `sillyspec config schema`（人类可读树 / --json 机读）打印与 `sillyspec init` 调 renderExample() 落盘脱敏 local.yaml.example。2026-08-23 起 test_strategy 枚举扩 skip / evidence-auto（`src/config-schema.js:120`，D-005@v2：skip=真跳过不回退全量、verify 输出显式标注留审计痕迹；evidence-auto=按变更 module-impact.md 影响面推荐检查组合，缺失/不可解析降级 module 并注记；full/module 语义不变），
+-新增 live 键 `decisions.behind_threshold`（`src/config-schema.js:173`，决策 behind 复核阈值缺省 10，reader 为 `readDecisionRulesConfig` src/docs-check.js）；renderExample 落盘段与示例注释同步扩。
++新增 live 键 `decisions.behind_threshold`（`src/config-schema.js:181`，决策 behind 复核阈值缺省 10，reader 为 `readDecisionRulesConfig` src/docs-check.js）；renderExample 落盘段与示例注释同步扩。
+ 
+ 2026-09-14-change-ownership-guards 新增 live 键 `change-ownership.heartbeat_minutes`（`src/config-schema.js`，optional integer，缺省 15）——change 所有权活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（`--takeover` 显式接管）；窗口外 → 放行并自动接管。reader 为 `resolveHeartbeatMs`（src/progress/change-registry.js 模块私有，唯一消费方 `assertChangeOwnership` 的心跳窗缺省解析——定向行扫描不引 YAML 依赖；值非正整数（含 0）回落缺省，防误配把活跃窗清零废掉护栏）；判级语义与接线见 progress / runtime / cli-entry 卡。`renderExample()` 落 local.yaml.example 注释段同步。
+ 
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index ea7b3e3..fd3f0c4 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -206,7 +206,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
+ 
+-- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:845）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:845）在写 review.json 时才建。marker 在 stage.js:121 / prompt.js:867 / gates.js:462 / task-review.js:845 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:112-133，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:273）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:845，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:273）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
++- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:845）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:845）在写 review.json 时才建。marker 在 stage.js:121 / prompt.js:861 / gates.js:462 / task-review.js:845 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:112-133，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:273）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:845，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:273）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
+ 
+ ---
+ 
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 693ce57..81f5ea8 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -128,6 +128,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'known_failures', type: 'array', optional: true, status: 'live', readers: ['extractKnownFailures (src/verify-postcheck.js)'], desc: '失败行模式列表（匹配测试输出失败行）。', example: 'tests/some-old-test' },
+       ],
+     },
++    {
++      id: 'verify_precedents',
++      title: '等效验证先例库',
++      note: '标准测试/构建命令在本仓不可用（框架硬编码 skip、依赖外部基础设施等）时，登记已验证的等效验证口径，verify prompt 自动注入提示复用（2026-09-15 EHS 实证：mvn test 被框架 parent pom 硬编码 surefire skip，等效口径第二次靠 agent 翻旧 verify-result 正文续命——先例只活在散文里换 agent 即断档）。',
++      keys: [
++        { path: 'verify_precedents', type: 'array', optional: true, status: 'live', readers: ['parseVerifyPrecedents (src/run/prompt.js)'], desc: '等效验证先例对象数组（id/standard_command/reason/equivalent/established_by/notes）。verify 阶段 prompt 与 test_strategy 预检提示同挂点注入；行动指引=把等效命令配进 commands.test 照常全量实测对账，而非只靠 test_strategy: skip 放行。', example: '- id: mvn-test-surefire-skip\n  standard_command: mvn test\n  reason: parent pom 硬编码 surefire skip=true\n  equivalent: dependency:build-classpath + javac + JUnitCore 直跑\n  established_by: 2026-08-26-building-area-ledger' },
++      ],
++    },
+     {
+       id: 'worktree-hook',
+       title: 'worktree-guard 扩展',
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 488529a..c4ec45d 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -316,6 +316,68 @@ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, quer
+ 
+ // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
+ // 无循环依赖：modules.js 仅 import fs/path/db.js，prompt.js → modules.js 单向）。
++
++/**
++ * 等效验证先例库（坑 verify-precedent-only-in-prose，2026-09-15 EHS 生产实证：mvn test 被
++ * 公司框架 parent pom pluginManagement 硬编码 surefire skip=true、-D 覆盖无效——等效口径
++ * dependency:build-classpath+javac+JUnitCore 第二次复用靠 agent 翻旧 verify-result.md 正文
++ * 续命；先例只活在散文里 = 换个 agent/换个变更就断档）。结构化登记进 local.yaml
++ * verify_precedents 段，verify prompt 时点注入提示（与 test_strategy 预检提示同挂点）。
++ *
++ * 对象数组形态（行扫描，同 extractKnownFailures 免 YAML 依赖口径——注释/空行/块界容错）：
++ *   verify_precedents:
++ *     - id: mvn-test-surefire-skip
++ *       standard_command: mvn test
++ *       reason: <标准命令为何不可用>
++ *       equivalent: <已验证的等效口径>
++ *       established_by: <确立该口径的变更名>
++ *       notes: <可选补充>
++ * 残项（standard_command 与 equivalent 双缺）过滤——登记不完整的先例没有可执行口径。
++ * @param {string|null} yamlText local.yaml 全文
++ * @returns {Array<object>} 先例对象数组
++ */
++export function parseVerifyPrecedents(yamlText) {
++  const lines = String(yamlText || '').split(/\r?\n/)
++  const headIdx = lines.findIndex(l => /^verify_precedents:\s*(?:#.*)?$/.test(l))
++  if (headIdx < 0) return []
++  const items = []
++  let cur = null
++  const clean = (v) => String(v || '').replace(/\s+#.*$/, '').trim()
++  for (let i = headIdx + 1; i < lines.length; i++) {
++    const l = lines[i]
++    if (/^\S/.test(l)) break // 下一个顶层键 → 块结束
++    if (!l.trim() || /^\s*#/.test(l)) continue
++    const item = l.match(/^\s*-\s+([A-Za-z_][\w-]*):\s*(.*)$/)
++    if (item) {
++      cur = {}
++      items.push(cur)
++      cur[item[1]] = clean(item[2])
++      continue
++    }
++    const kv = l.match(/^\s*([A-Za-z_][\w-]*):\s*(.*)$/)
++    if (kv && cur) cur[kv[1]] = clean(kv[2])
++  }
++  return items.filter(x => x && (x.standard_command || x.equivalent))
++}
++
++/**
++ * 先例提示渲染（verify prompt 注入用；空输入 → ''，调用方零输出）。
++ * 行动指引刻意指向「把等效命令配进 commands.test 照常全量实测对账」而非 test_strategy: skip
++ * 放行——EHS 实证里被环境阻断 deferred 的集成测试正是 P1 缺陷藏身处，能实测就实测。
++ * @param {Array<object>|null} precedents
++ * @returns {string}
++ */
++export function renderVerifyPrecedentHint(precedents) {
++  if (!Array.isArray(precedents) || precedents.length === 0) return ''
++  const L = [`【验证先例提示】本仓已登记 ${precedents.length} 条等效验证先例（标准命令不可用时的既有替代口径）：`]
++  for (const p of precedents.slice(0, 5)) {
++    L.push(`- ${p.id || '（无 id）'}：\`${p.standard_command || '?'}\` 不可用（${p.reason || '原因未注'}）→ 等效口径 \`${p.equivalent || '?'}\`（确立于 ${p.established_by || '?'}${p.notes ? `；${p.notes}` : ''}）`)
++  }
++  if (precedents.length > 5) L.push(`- …另有 ${precedents.length - 5} 条未展开（读 local.yaml verify_precedents 段看全量）`)
++  L.push('适用时把等效命令配进 local.yaml commands.test（或 modules.<m>.test）后照常全量实测对账，而不是只靠 test_strategy: skip 放行；先例不适用（环境已变/口径失效）可忽略并在 verify-result 注记。')
++  return L.join('\n')
++}
++
+ /**
+  * 提示词路径根的单一解析：specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)。
+  * 治 execute review.json 提示路径写 worktree 副本、--done 校验读主仓的分裂（坑 execute-prompt-spec-drift）：
+@@ -1154,6 +1216,11 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         // 「--done 实测打回 → 补配置 → 重跑」返工
+         eaInjected = '【test_strategy 预检提示】local.yaml 已配置 commands.test 但未设顶层 test_strategy（缺省=全量实测对账）。若该命令在当前环境无法真实执行（框架/环境硬伤，如测试框架硬编码 skip、依赖外部服务），先在 local.yaml 显式配 `test_strategy: skip`（或 `module` + modules 映射收窄）并注释理由再继续——避免 verify --done 实测对账打回后返工。'
+       }
++      // 等效验证先例注入（verify-precedent-only-in-prose，2026-09-15 EHS 实证）：先例与
++      // 预检提示同挂点追加——标准命令不可用但已有验证过的等效口径时，指引优先配进
++      // commands.test 实测对账而非 skip 放行。
++      const _precHint = renderVerifyPrecedentHint(parseVerifyPrecedents(eaYamlText))
++      if (_precHint) eaInjected = eaInjected ? `${eaInjected}\n\n${_precHint}` : _precHint
+     } catch (e) {
+       eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
+     }
+diff --git a/test/verify-precedent-prompt.test.mjs b/test/verify-precedent-prompt.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/verify-precedent-prompt.test.mjs
+@@ -0,0 +1,96 @@
++/**
++ * 等效验证先例库（坑 verify-precedent-only-in-prose，2026-09-15 EHS 生产实证：mvn test 被
++ * 公司框架 parent pom pluginManagement 硬编码 surefire skip=true、-D 覆盖无效——等效口径
++ * dependency:build-classpath+javac+JUnitCore 第二次复用靠 agent 翻旧 verify-result.md 正文
++ * 续命；先例只活在散文里 = 换个 agent/换个变更就断档）。结构化进 local.yaml verify_precedents
++ * 段，verify prompt 时点自动注入提示。
++ *
++ * 锁定语义：
++ *   - parseVerifyPrecedents：无段 → []；对象数组逐项解析（- key: 起项 + 续行 key: value）；
++ *     注释/空行容错；缺 standard_command+equivalent 的残项过滤
++ *   - renderVerifyPrecedentHint：空 → ''；非空含 id/标准命令/不可用原因/等效口径/确立变更
++ *     + 「配进 commands.test 照常实测对账而非只 skip 放行」行动指引
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { parseVerifyPrecedents, renderVerifyPrecedentHint } from '../src/run/prompt.js'
++
++const SAMPLE = `# local.yaml
++commands:
++  test: mvn test
++
++verify_precedents:
++  # 公司框架 parent pom 硬编码 surefire skip
++  - id: mvn-test-surefire-skip
++    standard_command: mvn test
++    reason: 框架 parent pom pluginManagement 硬编码 surefire skip=true，-D 覆盖无效
++    equivalent: mvn dependency:build-classpath + javac + JUnitCore 直跑
++    established_by: 2026-08-26-building-area-ledger
++    notes: 复跑条件固化在测试类头注释
++  - id: fe-no-test-infra
++    standard_command: npm test
++    reason: sub-grid-security 无测试基建（package.json 无 test 脚本）
++    equivalent: npx eslint + build 产物核验
++    established_by: 2026-09-15-ehs-reward-punishment
++
++known_failures: []
++`
++
++test('parseVerifyPrecedents：无段 → []；非 local.yaml 文本 → []', () => {
++  assert.deepEqual(parseVerifyPrecedents(null), [])
++  assert.deepEqual(parseVerifyPrecedents(''), [])
++  assert.deepEqual(parseVerifyPrecedents('commands:\n  test: npm test\n'), [])
++  assert.deepEqual(parseVerifyPrecedents('# verify_precedents: 注释里提到不算\n'), [])
++})
++
++test('parseVerifyPrecedents：对象数组逐项解析 + 注释空行容错', () => {
++  const items = parseVerifyPrecedents(SAMPLE)
++  assert.equal(items.length, 2, `应解析 2 条（实际 ${JSON.stringify(items)}）`)
++  assert.equal(items[0].id, 'mvn-test-surefire-skip')
++  assert.equal(items[0].standard_command, 'mvn test')
++  assert.match(items[0].reason, /surefire skip/)
++  assert.match(items[0].equivalent, /JUnitCore/)
++  assert.equal(items[0].established_by, '2026-08-26-building-area-ledger')
++  assert.equal(items[0].notes, '复跑条件固化在测试类头注释')
++  assert.equal(items[1].id, 'fe-no-test-infra')
++  // 块结束即止：known_failures 不吞
++  assert.equal(items[1].equivalent, 'npx eslint + build 产物核验')
++})
++
++test('parseVerifyPrecedents：残项（无 standard_command 且无 equivalent）过滤', () => {
++  const yaml = [
++    'verify_precedents:',
++    '  - id: only-id',
++    '  - id: ok-one',
++    '    equivalent: javac+JUnitCore',
++  ].join('\n')
++  const items = parseVerifyPrecedents(yaml)
++  assert.equal(items.length, 1)
++  assert.equal(items[0].id, 'ok-one')
++})
++
++test('renderVerifyPrecedentHint：空 → 空串；非空含五要素与行动指引', () => {
++  assert.equal(renderVerifyPrecedentHint([]), '')
++  assert.equal(renderVerifyPrecedentHint(null), '')
++  const items = parseVerifyPrecedents(SAMPLE)
++  const hint = renderVerifyPrecedentHint(items)
++  assert.match(hint, /【验证先例提示】/, '提示块标题')
++  assert.match(hint, /2 条等效验证先例/, '先例计数')
++  assert.match(hint, /mvn-test-surefire-skip/, '含 id')
++  assert.match(hint, /`mvn test`/, '含标准命令（反引号代码形态）')
++  assert.match(hint, /JUnitCore 直跑/, '含等效口径')
++  assert.match(hint, /2026-08-26-building-area-ledger/, '含确立变更')
++  assert.match(hint, /commands\.test/, '行动指引：配进 commands.test')
++  assert.match(hint, /test_strategy: skip/, '指引对照 skip 放行路径')
++  assert.match(hint, /fe-no-test-infra/, '第二条先例也在')
++})
++
++test('renderVerifyPrecedentHint：超 5 条截断提示不刷屏', () => {
++  const many = Array.from({ length: 8 }, (_, i) => ({
++    id: `prec-${i}`, standard_command: `cmd${i}`, reason: 'r', equivalent: `eq${i}`, established_by: 'chg',
++  }))
++  const hint = renderVerifyPrecedentHint(many)
++  assert.match(hint, /8 条等效验证先例/)
++  assert.match(hint, /prec-4/)
++  assert.ok(!hint.includes('prec-5：') && !hint.includes('- prec-5'), '第 6 条起截断')
++})

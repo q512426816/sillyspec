@@ -129,6 +129,14 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'verify_precedents',
+      title: '等效验证先例库',
+      note: '标准测试/构建命令在本仓不可用（框架硬编码 skip、依赖外部基础设施等）时，登记已验证的等效验证口径，verify prompt 自动注入提示复用（2026-09-15 EHS 实证：mvn test 被框架 parent pom 硬编码 surefire skip，等效口径第二次靠 agent 翻旧 verify-result 正文续命——先例只活在散文里换 agent 即断档）。',
+      keys: [
+        { path: 'verify_precedents', type: 'array', optional: true, status: 'live', readers: ['parseVerifyPrecedents (src/run/prompt.js)'], desc: '等效验证先例对象数组（id/standard_command/reason/equivalent/established_by/notes）。verify 阶段 prompt 与 test_strategy 预检提示同挂点注入；行动指引=把等效命令配进 commands.test 照常全量实测对账，而非只靠 test_strategy: skip 放行。', example: '- id: mvn-test-surefire-skip\n  standard_command: mvn test\n  reason: parent pom 硬编码 surefire skip=true\n  equivalent: dependency:build-classpath + javac + JUnitCore 直跑\n  established_by: 2026-08-26-building-area-ledger' },
+      ],
+    },
+    {
       id: 'worktree-hook',
       title: 'worktree-guard 扩展',
       note: 'execute worktree 隔离期内放行的额外只读命令。键名用 camelCase（parseSimpleYaml 原样保留）。',
