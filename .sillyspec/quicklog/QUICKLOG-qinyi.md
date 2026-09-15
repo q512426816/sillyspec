@@ -360,3 +360,26 @@
 结果：新增test/verify-probes-probe3-java-layout.test.mjs四组用例（isTestFileName正反例表12+11/Java镜像根命中+TestData不假绿+无镜像根保持⚠️/JS co-located零回归/骨架footnote）4/4绿；npm test全量493文件经flaky串行复核终判491通过0失败（scan-staleness/scan-refresh并发轮失败系b7eef46已知时序flake、串行复核通过、干净HEAD单跑亦绿，与本改无关）；lint 630文件0告警
 审计：[gate] L1（跨 1 模块 · 7 文件：3 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/cross-repo-reconcile.js, src/probe7-anchor-check.js, test/cross-repo-probe7-anchor.test.mjs
+
+## ql-20260916-002-d6dc | 2026-09-16 00:21:48 | 平台模式产物落点指针——阶段完成时工作树.sillyspec落PLATFORM-DOCS-POINTER.md
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（writePlatformDocsPointer新增（三豁免+fail-soft+文档清单渲染））
+- src/run/complete.js（两完成点挂钩+import扩展）
+- test/platform-docs-pointer.test.mjs（新增五组用例）
+- docs/sillyspec/platform-interface-map.md（shared.js插入63行致7锚重锚）
+- docs/sillyspec/architecture-4a.md（锚重锚）
+- docs/sillyspec/doc-consistency-debt.md（锚重锚）
+- docs/sillyspec/file-lifecycle.md（锚重锚）
+- docs/sillyspec/prompt-control-debt.md（锚重锚）
+- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（锚重锚）
+- .sillyspec/docs/sillyspec/scan/CONVENTIONS.md（锚重锚）
+- .sillyspec/docs/sillyspec/modules/setup.md（config-schema锚重锚）
+- .sillyspec/knowledge/decisions/core-engine.md（gates.js论述锚降级纯位置锚）
+- .sillyspec/knowledge/known-issues.md（worktree.js锚重锚）
+需求：平台模式产物落点指针——阶段完成时工作树.sillyspec落PLATFORM-DOCS-POINTER.md
+根因：EHS生产实证（2026-09-15-ehs-reward-punishment，说明文档§4.6）：变更9文档落daemon侧specs目录，工作树.sillyspec/只剩旧变更残留、worktree无.sillyspec——人类在工作树找变更文档扑空，只有平台changes files API能读，双位置造成「文件去哪了」困惑
+方案：src/run/shared.js新增writePlatformDocsPointer：平台模式（specRoot或runtimeRoot任一在）时在cwd/.sillyspec/写人类可读指针（specRoot/runtimeRoot物理路径+workspaceId+触发阶段时间戳+本变更.md文档清单mtime+tasks/任务卡计数+两种获取方式提示）；三豁免与writePlatformPointer三写同款口径——本地模式零行为/自指回环不写/temp残留形态不写；fail-soft写失败warn不阻断完成。src/run/complete.js两完成点挂钩（completeStep完成分支+wait解除continueStep完成分支）。锚维护：docs check --fix重锚9处（shared.js插入63行漂移platform-interface-map 7处+setup.md；并行会话在途src漂移顺手修复known-issues/worktree锚等），core-engine.md gates.js论述锚按校验器指引降级纯位置锚（1172?）
+结果：新增test/platform-docs-pointer.test.mjs五组用例（本地零行为/自指回环不写/平台模式全字段断言/变更目录缺仍写头/runtimeRoot-only）5/5绿；docs check 569处引用全通过；全量npm test+lint由本次--done CLI实测
+审计：[gate] L1（跨 1 模块 · 11 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

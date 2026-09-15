@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { withFileLock } from '../quicklog.js'
-import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir } from './shared.js'
+import { triggerSync, WAIT_MARKER_RE, getStageSteps, formatWaitOptions, resolveRuntimeRoot, getOrCreateMultiRepoContext, resolveChangeDir, writePlatformDocsPointer } from './shared.js'
 import { isExplicitReviewWrite, collectWorktreeChangedFiles } from '../task-review.js'
 
 // auto 模式 brainstorm 步骤表感知解析（2026-09-08 E2E 实证 bug：--done/--wait 推进主模式 8 步表，
@@ -665,6 +665,10 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
+
+    // 平台模式产物落点指针（platform-docs-dual-location，2026-09-15 EHS 实证）：完成时点在
+    // 工作树 .sillyspec/ 刷新人类可读指针（本地模式零行为，fail-soft 内部全兜）。
+    writePlatformDocsPointer(cwd, changeName, platformOpts, stageName)
 
     // task-04（2026-09-10-change-scope-audit）：execute 完成打范围对账全表+落 .runtime 快照 /
     // verify 完成出一行漂移确认。advisory fail-soft（D-006）——helper 内部全兜，绝不阻断完成。
@@ -1579,6 +1583,8 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     // gate 全过：persist completed（task-03 移后；此处无 triggerSync）。
     pm._write(cwd, progress, changeName)
     console.log(`\n✅ ${stageName} 阶段已完成（${stageData.steps.length}/${stageData.steps.length} 步）`)
+    // 平台模式产物落点指针：与 completeStep 完成分支同款（本路径不漏）。
+    writePlatformDocsPointer(cwd, changeName, platformOpts, stageName)
     // task-04：wait 解除完成路径与 completeStep 完成分支同源注入（Grill G-2：本路径不漏，
     // 否则 execute 快照缺失 → verify 假报「无快照可对比」）。
     await printStageCompletionScopeAudit({ stageName, cwd, changeName, specBase, platformOpts })

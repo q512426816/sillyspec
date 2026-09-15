@@ -636,6 +636,71 @@ export function checkPlatformManaged(cwd) {
 }
 
 /**
+ * 平台模式产物落点指针（坑 platform-docs-dual-location，2026-09-15 EHS 生产实证：
+ * 变更 9 文档落 daemon specs 目录，工作树 .sillyspec/ 只剩旧变更残留、worktree 无
+ * .sillyspec——人类在工作树里找变更文档扑空，只有平台 changes files API 能读，双位置
+ * 造成「文件去哪了」困惑）。阶段 --done 完成时在工作树 .sillyspec/ 落一份人类可读指针
+ * PLATFORM-DOCS-POINTER.md：specRoot/runtimeRoot 物理路径 + workspaceId + 本变更文档
+ * 清单（.md 文件名+mtime + tasks/ 计数）+ 获取方式提示。
+ *
+ * 口径与 writePlatformPointer 三写同款豁免：本地模式（无 specRoot/runtimeRoot）零行为；
+ * 自指回环（repo-native junction 指回 cwd/.sillyspec）不写；temp 残留形态（specRoot 在
+ * 系统 temp 而项目不在）不写。fail-soft：任何写失败只 warn 不抛（对齐 user-inputs.md
+ * 追加先例）——指针是便利件，绝不阻断阶段完成。
+ *
+ * @param {string} cwd 项目根（指针落 cwd/.sillyspec/）
+ * @param {string|null} changeName 变更名（可空——无变更上下文时只写根路径头部）
+ * @param {{specRoot?: string|null, runtimeRoot?: string|null, workspaceId?: string|null}} [platformOpts]
+ * @param {string|null} [stageName] 触发阶段（展示用）
+ * @returns {{written: boolean, reason?: string, path?: string, error?: string}}
+ */
+export function writePlatformDocsPointer(cwd, changeName, platformOpts = {}, stageName = null) {
+  try {
+    const specRoot = platformOpts?.specRoot || null
+    const runtimeRoot = platformOpts?.runtimeRoot || null
+    if (!specRoot && !runtimeRoot) return { written: false, reason: 'local-mode' }
+    if (specRoot && isSelfReferentialSpecRoot(cwd, specRoot)) return { written: false, reason: 'self-referential' }
+    if (isTempResidueSpecRoot(cwd, specRoot)) return { written: false, reason: 'temp-residue' }
+    const localSpecDir = join(cwd, '.sillyspec')
+    mkdirSync(localSpecDir, { recursive: true })
+    const ts = new Date().toLocaleString('zh-CN', { hour12: false })
+    const lines = [
+      '<!-- sillyspec 平台模式产物落点指针（CLI 在阶段 --done 完成时自动维护；本地模式不生成本文件） -->',
+      '# 变更文档实际落点（工作树 .sillyspec/ 不是本仓权威数据面）',
+      '',
+      `- 平台 spec 根（proposal/design/verify-result 等变更文档）: ${specRoot || '（未指定）'}`,
+      `- 运行时根（worktrees/contract-artifacts/verify-logs）: ${runtimeRoot || '（未指定）'}`,
+      platformOpts?.workspaceId ? `- 工作区 ID: ${platformOpts.workspaceId}` : null,
+      `- 最近更新: ${stageName || '?'} 阶段完成 @ ${ts}${changeName ? `（change: ${changeName}）` : ''}`,
+    ].filter(Boolean)
+    const changeDir = (specRoot && changeName) ? join(specRoot, 'changes', changeName) : null
+    if (changeDir && existsSync(changeDir)) {
+      const docs = []
+      for (const f of readdirSync(changeDir)) {
+        if (!f.endsWith('.md')) continue
+        try {
+          const mtime = statSync(join(changeDir, f)).mtime.toLocaleString('zh-CN', { hour12: false })
+          docs.push(`- ${f}（mtime ${mtime}）`)
+        } catch { docs.push(`- ${f}`) }
+      }
+      const tasksDir = join(changeDir, 'tasks')
+      if (existsSync(tasksDir)) {
+        const cards = readdirSync(tasksDir).filter(f => f.endsWith('.md'))
+        if (cards.length > 0) docs.push(`- tasks/（${cards.length} 张任务卡）`)
+      }
+      if (docs.length > 0) lines.push('', `## 本变更文档（${changeName}）`, ...docs)
+    }
+    lines.push('', '获取方式：直接读上行物理路径，或经平台 changes files API（/changes/{id}/files/raw?path=...）逐文件下载。')
+    const pointerPath = join(localSpecDir, 'PLATFORM-DOCS-POINTER.md')
+    writeFileSync(pointerPath, lines.join('\n') + '\n')
+    return { written: true, path: pointerPath }
+  } catch (e) {
+    console.warn('⚠️ 平台产物落点指针写入失败（不阻断）:', e && e.message ? e.message : e)
+    return { written: false, reason: 'error', error: e && e.message }
+  }
+}
+
+/**
  * 自指 specRoot 判定（repo-native junction 回环检测，变更 2026-08-23-repo-native-spec-backfill）。
  *
  * daemon repo-native 工作区把缓存目录（--spec-root 入参，~/.sillyhub/daemon/specs/{ws}）以
