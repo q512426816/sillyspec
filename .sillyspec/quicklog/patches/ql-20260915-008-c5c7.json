@@ -1,0 +1,119 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-2f964f75",
+  "totals": {
+    "files": 7,
+    "additions": 499,
+    "deletions": 48
+  },
+  "rows": [
+    {
+      "path": "src/change-list.js",
+      "declared": true,
+      "additions": 73,
+      "deletions": 20,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "declared": true,
+      "additions": 88,
+      "deletions": 18,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 12,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "declared": true,
+      "additions": 59,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/change-list-operation.test.mjs",
+      "declared": true,
+      "additions": 65,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "declared": true,
+      "additions": 154,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/worktree-apply-meta-exclude.test.mjs",
+      "declared": true,
+      "additions": 48,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 7,
+    "codeFileCount": 4,
+    "testFileCount": 3,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "change-management",
+        "files": [
+          "src/change-list.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/scope-audit.js",
+          "src/verify-postcheck.js"
+        ]
+      },
+      {
+        "id": "worktree",
+        "files": [
+          "src/worktree-apply.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/change-list-operation.test.mjs",
+      "test/scope-audit.test.mjs",
+      "test/worktree-apply-meta-exclude.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260915-008-c5c7",
+  "sessionId": "quick-2f964f75",
+  "savedAt": "2026-09-15T10:18:31.920Z",
+  "patchSha256": "bb0a19aa6ca5041a69f463c31bbc99656b36e23e074eecd0de530c8904eee5d4",
+  "patchStatus": "ok"
+}

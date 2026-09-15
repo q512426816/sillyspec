@@ -1,0 +1,517 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 52fdb57..f74f20b 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -66,7 +66,7 @@ mcp:
+ | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
+ | `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:461` |
+ | `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:460` |
+-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1058` |
++| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1067` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+ | `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1397` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+diff --git a/src/contract-matrix.js b/src/contract-matrix.js
+index 3559057..1ec0c19 100644
+--- a/src/contract-matrix.js
++++ b/src/contract-matrix.js
+@@ -382,7 +382,9 @@ export function _readWorktreeMeta(specBase, scanRoot, changeName) {
+   for (const metaPath of candidates) {
+     try {
+       if (!existsSync(metaPath)) continue
+-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++      // BOM 容错（worktree.js:283 同坑）：Windows 编辑器写入的 UTF-8 BOM 会让 JSON.parse
++      // 失败——双候选下会静默跳根，先剥 BOM 再解析
++      const meta = JSON.parse(String(readFileSync(metaPath, 'utf8')).replace(/^\uFEFF/, ''))
+       const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+         ? meta.worktreePath : scanRoot
+       return { meta, gitDir }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 9cfc499..488529a 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1129,13 +1129,14 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // 推荐组合、无从否决——故在 prompt 时点经 {EVIDENCE_AUTO_RECOMMENDATION} 把 task-11
+   // resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt（含推荐
+   // 理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径），供用户否决（FR-11）。
+-  // 仅 test_strategy=evidence-auto 且 recommendation 非空时渲染；full/module/skip/未配置
+-  // （recommendation=null）替换为空串零输出。fail-soft：读取/解析异常降级单行说明不抛，
++  // 仅 test_strategy=evidence-auto 且 recommendation 非空时渲染推荐；full/module/skip/已配置
++  // 替换为空串零输出；**未配置**且 commands.test 已配时渲染 test_strategy 预检提示（2026-09-15
++  // 复盘：环境硬伤的全量实测打回返工，提前在 prompt 时点给配置指引）。fail-soft：读取/解析异常降级单行说明不抛，
+   // 绝不阻断 verify prompt 输出（对齐上方 {WORKTREE_BASELINE_INFO} 注入先例）。
+   if (stageName === 'verify' && promptText.includes('{EVIDENCE_AUTO_RECOMMENDATION}')) {
+     let eaInjected = ''
+     try {
+-      const { resolveTestStrategy } = await import('../verify-postcheck.js')
++      const { resolveTestStrategy, extractTestCommand, extractTestStrategy } = await import('../verify-postcheck.js')
+       const eaSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       // 信任边界：local.yaml 只读 specBase（平台 specRoot / 漂移锚定主仓 / cwd 本地），与
+       // runVerifyTestCheck 的 specBase 来源同口径，不读 agent 可写的 worktree 副本。
+@@ -1144,7 +1145,15 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       const eaChangeDir = changeName ? join(eaSpecBase, 'changes', changeName) : null
+       const resolution = resolveTestStrategy({ yamlText: eaYamlText, changeDir: eaChangeDir })
+       const rec = resolution.evidence_auto_recommendation
+-      if (rec && rec.summary) eaInjected = rec.summary
++      if (rec && rec.summary) {
++        eaInjected = rec.summary
++      } else if (eaYamlText && extractTestCommand(eaYamlText) && !extractTestStrategy(eaYamlText)) {
++        // test_strategy 预检提示（2026-09-15 复盘教训「test_strategy 该在进 verify 前配好，
++        // 而不是被 verify-test gate 打回后才补」）：已配 commands.test 但顶层 test_strategy
++        // 未设（缺省=全量实测对账），prompt 时点先给配置指引——环境注定跑不了全量时省一轮
++        // 「--done 实测打回 → 补配置 → 重跑」返工
++        eaInjected = '【test_strategy 预检提示】local.yaml 已配置 commands.test 但未设顶层 test_strategy（缺省=全量实测对账）。若该命令在当前环境无法真实执行（框架/环境硬伤，如测试框架硬编码 skip、依赖外部服务），先在 local.yaml 显式配 `test_strategy: skip`（或 `module` + modules 映射收窄）并注释理由再继续——避免 verify --done 实测对账打回后返工。'
++      }
+     } catch (e) {
+       eaInjected = `（evidence-auto 推荐注入失败：${e.message}——请读 .sillyspec/local.yaml 确认 test_strategy；--done 时 CLI 仍会按 resolveTestStrategy 实测对账，推荐不可用时可显式设 test_strategy: full/module）`
+     }
+diff --git a/src/sync-noise.js b/src/sync-noise.js
+index c7a4ebf..10969e1 100644
+--- a/src/sync-noise.js
++++ b/src/sync-noise.js
+@@ -243,6 +243,60 @@ export function noteChangeDeletedResolved(changeName) {
+   }
+ }
+ 
++// ── push 409 自愈回执噪音闸（2026-09-15 复盘反馈：自愈重试不阻断但每步刷屏）──
++// 与 change_deleted 闸同构，按 `${changeName}\u0000${kind}` 键控（kind=自竞态/内容一致/自回声
++// 三类自愈）。语义边界：自愈是成功收敛路径不是故障——base_ts 409 每步自动同步都可能重撞、
++// ts 逐次不同但零新信息；首报完整可见（保留原文 ⚠️ 口吻），10 分钟窗口内同变更同类型重复
++// 自愈静默，窗口过期重报保活。推送成功不自愈清窗（下次 409 首报照常可见——竞态是否复发
++// 本身是信号）；SILLYSPEC_DEBUG_SYNC=1 与手动 platform sync（noMute）旁路。
++const SELF_HEAL_MARKER = 'sync-noise-self-heal.json'
++let _openedSelfHealByThisProcess = new Set()
++const _seenSelfHealInProcess = new Set()
++
++function _readSelfHealWindows() {
++  const p = _runtimeDir ? join(_runtimeDir, SELF_HEAL_MARKER) : null
++  if (!p) return null
++  try {
++    const s = JSON.parse(readFileSync(p, 'utf8'))
++    return s && typeof s === 'object' && !Array.isArray(s) ? s : null
++  } catch { return null }
++}
++
++function _selfHealLineVisible(changeName, kind, noMute) {
++  if (!changeName || noMute || process.env.SILLYSPEC_DEBUG_SYNC) return true
++  const key = changeName + '\u0000' + kind
++  if (_seenSelfHealInProcess.has(key)) return false
++  const now = Date.now()
++  const windows = _readSelfHealWindows()
++  const until = windows ? windows[key] : undefined
++  if (typeof until === 'number' && now < until) {
++    _seenSelfHealInProcess.add(key)
++    // 开窗进程内同类自愈可见（诊断完整性），先前进程留的窗口静默
++    return _openedSelfHealByThisProcess.has(key)
++  }
++  _seenSelfHealInProcess.add(key)
++  const next = windows || {}
++  next[key] = now + MUTE_WINDOW_MS
++  try {
++    mkdirSync(_runtimeDir, { recursive: true })
++    writeFileSync(join(_runtimeDir, SELF_HEAL_MARKER), JSON.stringify(next) + '\n', 'utf8')
++  } catch { /* marker 写失败 = 闸门失效退化为直通，仅损失降噪 */ }
++  _openedSelfHealByThisProcess.add(key)
++  return true
++}
++
++/**
++ * push 409 自愈回执（warn 口吻：首报保留原文 ⚠️，窗口内同变更同类型静默）。
++ * @returns {boolean} true=已输出
++ */
++export function syncSelfHealWarn(changeName, kind, msg, { noMute = false } = {}) {
++  if (_selfHealLineVisible(changeName, kind, noMute)) {
++    console.warn(msg)
++    return true
++  }
++  return false
++}
++
+ /**
+  * 任意一次同步成功：清 marker。此前处于闸内（marker 存在）时打一行恢复提示——
+  * 平台恢复的第一个信号应该可见，之后的成功照常静默（成功不打扰）。
+@@ -256,11 +310,13 @@ export function noteSyncSuccess() {
+   console.log('[sync] 平台连接已恢复（此前静默的同步失败已停止）')
+ }
+ 
+-/** 测试复位：清进程内绑定与开窗状态（连接类闸 + change_deleted 变更级闸）。 */
++/** 测试复位：清进程内绑定与开窗状态（连接类闸 + change_deleted 变更级闸 + 409 自愈闸）。 */
+ export function _resetSyncNoiseForTest() {
+   _runtimeDir = null
+   _openedByThisProcess = false
+   _seenInProcess.clear()
+   _openedDeletedByThisProcess = new Set()
+   _seenDeletedInProcess.clear()
++  _openedSelfHealByThisProcess = new Set()
++  _seenSelfHealInProcess.clear()
+ }
+diff --git a/src/sync.js b/src/sync.js
+index 9ab323d..c6336b2 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -18,7 +18,7 @@ import { safeGit } from './git-helper.js';
+ import { openDatabase } from './db-engine.js';
+ import { PLATFORM_MANAGED_FILENAME, QUICK_SID_RE } from './run/shared.js';
+ import { syncSpecTree } from './spec-sync.js';
+-import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved } from './sync-noise.js';
++import { bindSyncNoiseFromCwd, syncConnectionWarn, isConnectionClassStatus, noteSyncSuccess, syncChangeDeletedLog, syncChangeDeletedWarn, noteChangeDeletedResolved, syncSelfHealWarn } from './sync-noise.js';
+ 
+ // sync 是 best-effort（网络失败只 warn）：平台指针失效时不抛，跳过平台、回退本地。
+ function safePlatformSpecDir(cwd) {
+@@ -844,7 +844,9 @@ export class SyncManager {
+       // 说明赢者是本机自己人——刷新 base_ts 重试一次即收敛，不落冲突文件（外来推送不可能
+       // 推进本机 DB 的 base_ts，不满足条件自然落回下方真冲突分支，零误放行）
+       if (attempt < MAX_PUSH_ATTEMPTS && await this._localBaseTsCovers(changeName, platformLastPushedAt)) {
+-        console.warn(`⚠️ [sync] push 409 自竞态判定：本机并发推送已回填 base_ts（平台 ts=${platformLastPushedAt}），刷新后自动重试`);
++        // 409 自愈键控闸（2026-09-15 复盘：自愈不阻断但每步刷屏）——首报可见、窗口内同变更
++        // 同类型静默；手动 platform sync（manual）旁路
++        syncSelfHealWarn(changeName, 'self-race', `⚠️ [sync] push 409 自竞态判定：本机并发推送已回填 base_ts（平台 ts=${platformLastPushedAt}），刷新后自动重试`, { noMute: manual });
+         continue;
+       }
+ 
+@@ -863,7 +865,8 @@ export class SyncManager {
+               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+             ).run(platformLastPushedAt || pushedAt, platformLastPushedAt || pushedAt, changeName);
+           } catch {}
+-          console.warn(`⚠️ [sync] push 409 内容一致自愈: 平台 ts=${platformLastPushedAt} 为外来噪声重推（六表内容与本地一致），base_ts 已推进，不落冲突文件`);
++          // 409 自愈键控闸同上（kind=content-equal）
++          syncSelfHealWarn(changeName, 'content-equal', `⚠️ [sync] push 409 内容一致自愈: 平台 ts=${platformLastPushedAt} 为外来噪声重推（六表内容与本地一致），base_ts 已推进，不落冲突文件`, { noMute: manual });
+           return { synced: 1, errors: [], selfHealed: true, reason: 'push 409 平台内容与本地一致（外来噪声重推），base_ts 已推进' };
+         }
+       } catch { /* 比对失败维持原判（fail-closed 到真冲突分支） */ }
+@@ -895,7 +898,8 @@ export class SyncManager {
+             pm._ensureDB(this.cwd).getDb().prepare(
+               'UPDATE changes SET last_synced_platform_ts = MAX(?, COALESCE(last_synced_platform_ts, ?)) WHERE name = ?'
+             ).run(healTs, healTs, changeName);
+-            console.warn(`⚠️ [sync] push 409 自回声判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformLastPusher || '未回传·窗口判定'}），base_ts 已推进到 ${healTs}，自动重推`);
++            // 409 自愈键控闸同上（kind=self-echo）
++            syncSelfHealWarn(changeName, 'self-echo', `⚠️ [sync] push 409 自回声判定：平台 ts=${platformLastPushedAt} 为本机自推回声（血统 ${platLin}，推送者 ${platformLastPusher || '未回传·窗口判定'}），base_ts 已推进到 ${healTs}，自动重推`, { noMute: manual });
+             if (attempt < MAX_PUSH_ATTEMPTS) continue;
+             // 重试额度耗尽（attempt=2 仍进此分支，理论少见）：不落冲突文件——base 已推进，
+             // 下次常规同步按新 base 直接推送收敛
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 43387b9..8a127d3 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -29,12 +29,27 @@ import {
+ } from './verify-facts-schema.js'
+ import { parseFileChangeListDetailed } from './change-list.js'
+ import { parseDecisions } from './decision-distill.js'
+-import { parseAllowedPaths } from './stages/plan-postcheck.js'
++import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+ import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
+ 
+-const TODO_MARKER_RE = /尚未实现|TODO|FIXME|HACK|XXX/
++// 探针1 未实现标记匹配（坑 probe1-literal-false-positive，2026-09-15 复盘实证：16 命中全
++// 字面误报——TODO_FLAG_TODO 业务常量、「XXX完成处置」中文占位模板）。口径分三级：
++// - 尚未实现：中文短语高置信，保持子串匹配；
++// - TODO/FIXME/HACK：ASCII 标识符边界匹配——TODO_FLAG_TODO / parseHackArgs 等标识符内部不再
++//   命中（两侧任一边贴 [A-Za-z0-9_] 即视为标识符成分）；
++// - XXX：边界匹配且前或后紧邻 CJK 表意字符即排除——「XXX完成处置」「订单XXX号」类中文占位
++//   模板不再命中（独立代码注释 `XXX:` / `// XXX fix` 紧邻标点空白，仍命中）。
++const CJK_IDEOGRAPH_CLASS = '\\u4e00-\\u9fff\\u3400-\\u4dbf'
++const TODO_ASCII_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_])(?:TODO|FIXME|HACK)(?![A-Za-z0-9_])`)
++const XXX_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])XXX(?![A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])`)
++export function isUnimplementedMarkerLine(line) {
++  if (line.includes('尚未实现')) return true
++  if (TODO_ASCII_MARKER_RE.test(line)) return true
++  if (XXX_MARKER_RE.test(line)) return true
++  return false
++}
+ const TEST_FILE_RE = /test|spec/i
+ const PROBE1_MAX_MATCHES = 200
+ 
+@@ -394,7 +409,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+       const lines = readFileSync(abs, 'utf8').split('\n')
+       lines.forEach((line, i) => {
+         if (probe1.matches.length >= PROBE1_MAX_MATCHES) return
+-        if (TODO_MARKER_RE.test(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
++        if (isUnimplementedMarkerLine(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
+       })
+     } catch {
+       probe1.skippedFiles.push(e.path)
+@@ -438,6 +453,19 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+   // ── 探针 5：API 契约对账（复用 verifyApiParity：endpoints.json × 前端调用）──
+   const runtimeRoot = resolveRuntimeRoot({ specRoot: specDir }, specBase)
+   const probe5 = verifyApiParity(specBase, cwd, runtimeRoot, changeName)
++  // 跨仓 task 卡计数（坑 probe5-cross-repo-scope-blindness，2026-09-15 复盘：跨仓仓的前端
++  // 调用不在 parity 扫描根内，「frontend 0 调用」会被误读为漏配——渲染侧显式注记扫描面
++  // 边界。计数失败按 0（不渲染注记，零新增失败面）。
++  try {
++    const tasksDir = join(changeDir, 'tasks')
++    if (changeName && existsSync(tasksDir)) {
++      let crossRepoCardCount = 0
++      for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n))) {
++        if (parseRepo(readFileSync(join(tasksDir, f), 'utf8'))) crossRepoCardCount++
++      }
++      if (crossRepoCardCount > 0) probe5.crossRepoCardCount = crossRepoCardCount
++    }
++  } catch { /* tasks 目录不可读 → 不注记 */ }
+ 
+   // ── 探针 6：代码删除对账（git diff --name-status HEAD 的 D/R × design 声明三态）──
+   const probe6 = { deletions: [], unavailable: false, note: '以 git 事实为准（真实 > 声明）；是否 FAIL blocker 由 agent 诚实判定' }
+@@ -564,6 +592,9 @@ export function renderVerifyProbesReport(result) {
+ 
+   L.push('#### 探针 5：API Contract Parity')
+   L.push(`- ${probe5.summary || `backend ${probe5.backendCount ?? 0} 端点 / frontend ${probe5.frontendCount ?? 0} 调用`}`)
++  if (probe5.crossRepoCardCount > 0) {
++    L.push(`- ℹ️ parity 扫描面只含主仓——另有 ${probe5.crossRepoCardCount} 张跨仓 task 卡的仓不在扫描根内，跨仓前端调用/端点请到对应仓核对（D-004 跨仓对账不在本变更范围）`)
++  }
+   if ((probe5.scanRoots || []).length > 1) {
+     L.push(`- ℹ️ 后端端点比对集为多根并集（主仓既有 ∪ worktree 新增 ∪ 存量 artifact），共扫 ${probe5.scanRoots.length} 个根`)
+   }
+diff --git a/test/retro-verify-friction-fixes.test.mjs b/test/retro-verify-friction-fixes.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/retro-verify-friction-fixes.test.mjs
+@@ -0,0 +1,248 @@
++// 2026-09-15 复盘摩擦六坑回归锁定（quick quick-8c38a4b7）：
++//   A. P1 对账形态判定双根化（platform-dual-root-form-misjudge）：平台模式 specBase=specRoot
++//      时项目侧 .sillyspec 的 meta 单路径读不到 → 误判 post-apply → ②类全量假红。
++//      _readWorktreeMeta 双候选 + resolveReconcileActualFiles / resolveVerifyChangedFiles 集成。
++//   B. 探针1 词边界（probe1-literal-false-positive）：TODO_FLAG_TODO 业务常量、
++//      「XXX完成处置」中文占位模板不再命中；真标记（边界独立/标点相邻）仍命中。
++//   C. ③类脚手架聚合（reconcile-undeclared-scaffold-flood）：classifyToolScaffold 命中的
++//      工具/平台设施文件不逐条进③类，聚合 note + undeclaredScaffold 计数；全脚手架时 ok。
++//   D. 探针5 跨仓 scope 注记（probe5-cross-repo-scope-blindness）：有跨仓 task 卡时渲染
++//      「扫描面只含主仓」边界说明。
++//   E. push 409 自愈键控闸：首报可见、窗口内同变更同类型静默、异类型/手动旁路可见。
++import { execSync } from 'child_process'
++import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'fs'
++import { join, dirname } from 'path'
++import { tmpdir } from 'os'
++import { fileURLToPath } from 'url'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const { _readWorktreeMeta } = await import('../src/contract-matrix.js')
++const { resolveReconcileActualFiles, resolveVerifyChangedFiles, reconcileTargetFiles } = await import('../src/verify-postcheck.js')
++const { isUnimplementedMarkerLine, renderVerifyProbesReport } = await import('../src/verify-probes.js')
++const { bindSyncNoiseRoot, syncSelfHealWarn, _resetSyncNoiseForTest } = await import('../src/sync-noise.js')
++
++let failures = 0
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg)
++  else { console.error('  ❌ ' + msg); failures++ }
++}
++
++const sh = (cwd, cmd) => execSync(cmd, { cwd, stdio: 'ignore' })
++function initRepo(dir) {
++  mkdirSync(dir, { recursive: true })
++  sh(dir, 'git init -q')
++  sh(dir, 'git config user.email t@t.local')
++  sh(dir, 'git config user.name tester')
++  writeFileSync(join(dir, 'base.txt'), 'base\n')
++  sh(dir, 'git add .')
++  sh(dir, 'git commit -qm base')
++}
++
++function capture() {
++  const warns = [], logs = []
++  const ow = console.warn, ol = console.log
++  console.warn = (m) => warns.push(String(m))
++  console.log = (m) => logs.push(String(m))
++  return { warns, logs, restore() { console.warn = ow; console.log = ol } }
++}
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-retro-fixes-${process.pid}-`))
++const writeMeta = (root, change, obj) => {
++  const dir = join(root, '.runtime', 'worktrees', change)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'meta.json'), JSON.stringify(obj))
++}
++
++try {
++  // ─────────────────────────────────────────
++  console.log('\n[A] P1 形态判定双根化（platform-dual-root-form-misjudge）')
++
++  console.log('\n--- A1. _readWorktreeMeta 双候选 ---')
++  {
++    const specRoot = join(tmpRoot, 'plat-spec')        // 平台 specRoot（无 meta）
++    const proj = join(tmpRoot, 'proj')                 // 项目仓（meta 在项目侧 .sillyspec）
++    initRepo(proj)
++    const wtDir = join(tmpRoot, 'proj-wt')
++    initRepo(wtDir)
++    writeMeta(join(proj, '.sillyspec'), 'c1', { worktreePath: wtDir, mode: 'linked', baseHash: 'abc123' })
++
++    const found = _readWorktreeMeta(specRoot, proj, 'c1')
++    assert(found !== null, 'specRoot miss 时项目侧 meta 命中（双候选）')
++    assert(found && found.meta.baseHash === 'abc123', '命中 meta 内容正确')
++    assert(found && found.gitDir === wtDir, 'gitDir 解析到 worktreePath')
++
++    const foundSpec = (() => {
++      const specWithMeta = join(tmpRoot, 'plat-spec2')
++      writeMeta(specWithMeta, 'c1', { worktreePath: wtDir, mode: 'linked' })
++      return _readWorktreeMeta(specWithMeta, proj, 'c1')
++    })()
++    assert(foundSpec !== null && foundSpec.meta.mode === 'linked', 'specBase 侧 meta 优先命中（原行为不回归）')
++
++    assert(_readWorktreeMeta(specRoot, proj, 'nope') === null, '两根全无 → null')
++
++    // BOM 容错（worktree.js:283 同坑）：Windows 编辑器 BOM 不得让双候选静默跳根
++    const bomRoot = join(tmpRoot, 'bom-spec')
++    const bomDir = join(bomRoot, '.runtime', 'worktrees', 'c1')
++    mkdirSync(bomDir, { recursive: true })
++    writeFileSync(join(bomDir, 'meta.json'), '\uFEFF' + JSON.stringify({ worktreePath: wtDir, mode: 'linked', baseHash: 'bom1' }))
++    const foundBom = _readWorktreeMeta(bomRoot, proj, 'c1')
++    assert(foundBom !== null && foundBom.meta.baseHash === 'bom1', 'BOM meta 可解析（不静默跳根）')
++  }
++
++  console.log('\n--- A2. resolveReconcileActualFiles 形态判定（平台模式根分离） ---')
++  {
++    const specRoot = join(tmpRoot, 'plat-spec3')
++    const proj = join(tmpRoot, 'proj3')
++    initRepo(proj)
++    const wtDir = join(tmpRoot, 'proj3-wt')
++    initRepo(wtDir)
++    writeMeta(join(proj, '.sillyspec'), 'c1', { worktreePath: wtDir, mode: 'linked', baseHash: 'abc123' })
++
++    // 修复前：只查 specRoot → existsSync false → 误判 post-apply（复盘 21 条假红的根因）
++    const r = resolveReconcileActualFiles({ cwd: proj, specBase: specRoot, runtimeRoot: join(specRoot, '.runtime'), changeName: 'c1' })
++    assert(r.form === 'worktree', 'meta 在项目侧 → 形态判 worktree（修复前误判 post-apply）')
++
++    const r2 = resolveReconcileActualFiles({ cwd: proj, specBase: specRoot, runtimeRoot: join(specRoot, '.runtime'), changeName: 'ghost' })
++    assert(r2.form === 'post-apply', '两根全无 → post-apply（原语义）')
++
++    // 常规仓（specBase=cwd/.sillyspec，两候选同根）不回归
++    const r3 = resolveReconcileActualFiles({ cwd: proj, specBase: join(proj, '.sillyspec'), runtimeRoot: join(proj, '.sillyspec', '.runtime'), changeName: 'c1' })
++    assert(r3.form === 'worktree', '常规仓两候选同根 → worktree（零回归）')
++  }
++
++  console.log('\n--- A3. resolveVerifyChangedFiles working-tree 并入（平台模式根分离） ---')
++  {
++    const specRoot = join(tmpRoot, 'plat-spec4')
++    const proj = join(tmpRoot, 'proj4')
++    initRepo(proj)
++    const wtDir = join(tmpRoot, 'proj4-wt')
++    initRepo(wtDir)
++    mkdirSync(join(wtDir, 'src'), { recursive: true })
++    writeFileSync(join(wtDir, 'src', 'feature.js'), 'export const x = 1\n')
++    writeMeta(join(proj, '.sillyspec'), 'c1', { worktreePath: wtDir, mode: 'linked' })
++
++    // 修复前：metaPath=join(specBase) 单路径 miss → 未提交并入静默跳过（形态 A 并入失效）
++    const files = resolveVerifyChangedFiles(proj, 'c1', null, { includeWorkingTree: true, specBase: specRoot })
++    assert(Array.isArray(files) && files.includes('src/feature.js'), '平台模式下 worktree 未提交文件并入（修复前并入失效）')
++  }
++
++  // ─────────────────────────────────────────
++  console.log('\n[B] 探针1 词边界（probe1-literal-false-positive）')
++  {
++    // 复盘实证误报形态
++    assert(!isUnimplementedMarkerLine('const TODO_FLAG_TODO = window.CONST.TODO_FLAG_TODO'), 'TODO_FLAG_TODO 业务常量不命中（标识符内部）')
++    assert(!isUnimplementedMarkerLine('标题「XXX完成处置」模板行'), '「XXX完成处置」中文占位模板不命中（后邻 CJK）')
++    assert(!isUnimplementedMarkerLine('订单XXX号已创建'), '「订单XXX号」不命中（前邻 CJK）')
++    assert(!isUnimplementedMarkerLine('function parseHackArgs(input) {'), 'parseHackArgs 标识符内部不命中')
++    assert(!isUnimplementedMarkerLine('let myFIXMElist = []'), 'myFIXMElist 标识符内部不命中')
++    // 真标记仍命中
++    assert(isUnimplementedMarkerLine('// TODO: 后端接口未接'), '独立 TODO 注释命中')
++    assert(isUnimplementedMarkerLine('TODO at line start'), '行首 TODO 命中')
++    assert(isUnimplementedMarkerLine('    FIXME: broken'), 'FIXME 命中')
++    assert(isUnimplementedMarkerLine(' // HACK 临时绕过'), 'HACK 命中')
++    assert(isUnimplementedMarkerLine('// XXX: rewrite this'), '独立 XXX 注释命中')
++    assert(isUnimplementedMarkerLine('// XXX：待重构'), 'XXX 前是空白、后全角冒号命中（真标记形态）')
++    assert(!isUnimplementedMarkerLine('标记XXX：待重构'), 'XXX 前邻 CJK（标记XXX=占位语义）不命中')
++    assert(isUnimplementedMarkerLine('该功能尚未实现'), '「尚未实现」子串命中（中文高置信，零回归）')
++    assert(isUnimplementedMarkerLine('这行注释里有TODO标记'), '中文行内 TODO 命中（TODO 不做 CJK 排除）')
++  }
++
++  // ─────────────────────────────────────────
++  console.log('\n[C] ③类脚手架聚合（reconcile-undeclared-scaffold-flood）')
++  {
++    const proj = join(tmpRoot, 'proj5')
++    initRepo(proj)
++    const sb = join(proj, '.sillyspec')
++    const changeDir = join(sb, 'changes', 'c1')
++    mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++    writeFileSync(join(changeDir, 'tasks', 'task-01.md'), `---
++id: task-01
++target_files:
++  - src/feature.js
++---
++# task-01
++`)
++    // 实际侧（post-apply B2 untracked）：声明文件 + 真未声明 + 3 个脚手架设施文件
++    mkdirSync(join(proj, 'src'), { recursive: true })
++    writeFileSync(join(proj, 'src', 'feature.js'), 'x\n')
++    writeFileSync(join(proj, 'src', 'sneak.js'), 'x\n')
++    mkdirSync(join(proj, '.claude', 'skills', 'helper'), { recursive: true })
++    writeFileSync(join(proj, '.claude', 'skills', 'helper', 'SKILL.md'), 'x\n')
++    mkdirSync(join(proj, 'attachments'), { recursive: true })
++    writeFileSync(join(proj, 'attachments', 'spec-v2.md'), 'x\n')
++    writeFileSync(join(proj, 'CLAUDE.md'), 'x\n')
++
++    const r = reconcileTargetFiles({ cwd: proj, specBase: sb, changeName: 'c1', runtimeRoot: join(sb, '.runtime') })
++    assert(r.matched.includes('src/feature.js'), '①声明∩actual：feature.js matched')
++    assert(r.undeclared.length === 1 && r.undeclared[0].path === 'src/sneak.js', '③类只剩真未声明 sneak.js（脚手架不逐条进）')
++    assert(r.undeclaredScaffold === 3, `脚手架聚合计数=3（claude/skills+attachments+CLAUDE.md，实际 ${r.undeclaredScaffold}）`)
++    assert(r.notes.some(n => n.includes('3 个工具/平台脚手架文件') && n.includes('.claude/skills/helper/SKILL.md')), '聚合 note 带计数与样例')
++    assert(r.status === 'undeclared', '有真未声明 → status=undeclared（WARNING 语义保留）')
++
++    // 全脚手架形态：无真未声明 → ok（脚手架不构成 scope creep）
++    rmSync(join(proj, 'src', 'sneak.js'))
++    const r2 = reconcileTargetFiles({ cwd: proj, specBase: sb, changeName: 'c1', runtimeRoot: join(sb, '.runtime') })
++    assert(r2.status === 'ok' && r2.undeclared.length === 0, '仅剩脚手架 → status=ok（修复前 undeclared 刷屏）')
++    assert(r2.undeclaredScaffold === 3 && r2.notes.some(n => n.includes('脚手架文件')), 'ok 态仍留聚合 note（可见性不丢）')
++  }
++
++  // ─────────────────────────────────────────
++  console.log('\n[D] 探针5 跨仓 scope 注记（probe5-cross-repo-scope-blindness）')
++  {
++    const base = {
++      probe1: { matches: [], skippedFiles: [], worktreeHits: 0, globEntries: [] },
++      probe3: { results: [], tasks: [] },
++      probe5: { ok: true, missingBackend: [], unusedBackend: [], summary: 'backend 3 端点 / frontend 0 调用', backendCount: 3, frontendCount: 0, crossRepoCardCount: 2 },
++      probe6: { deletions: [], unavailable: false },
++      probe7: { applicable: false, tasks: [] },
++    }
++    const md = renderVerifyProbesReport(base)
++    assert(md.includes('parity 扫描面只含主仓') && md.includes('2 张跨仓 task 卡'), '有跨仓卡 → 渲染扫描面边界注记')
++
++    const md2 = renderVerifyProbesReport({ ...base, probe5: { ...base.probe5, crossRepoCardCount: undefined } })
++    assert(!md2.includes('parity 扫描面只含主仓'), '无跨仓卡 → 不渲染注记（零回归）')
++  }
++
++  // ─────────────────────────────────────────
++  console.log('\n[E] push 409 自愈键控闸（syncSelfHealWarn）')
++  {
++    const rt = join(tmpRoot, 'e', '.runtime')
++    bindSyncNoiseRoot(rt)
++    const change = 'my-change'
++
++    let cap = capture()
++    const v1 = syncSelfHealWarn(change, 'self-race', '⚠️ [sync] push 409 自竞态判定：平台 ts=t1')
++    cap.restore()
++    assert(v1 === true && cap.warns.length === 1, '首报完整可见（含 ⚠️ 原文）')
++
++    cap = capture()
++    const v2 = syncSelfHealWarn(change, 'self-race', '⚠️ [sync] push 409 自竞态判定：平台 ts=t2')
++    cap.restore()
++    assert(v2 === false && cap.warns.length === 0, '窗口内同变更同类型静默（ts 变了也静默——键不含 ts）')
++
++    cap = capture()
++    const v3 = syncSelfHealWarn(change, 'self-echo', '⚠️ [sync] push 409 自回声判定：ts=t2')
++    cap.restore()
++    assert(v3 === true && cap.warns.length === 1, '同变更不同类型（kind 键控）首报可见')
++
++    cap = capture()
++    const v4 = syncSelfHealWarn(change, 'self-race', '⚠️ [sync] push 409 自竞态判定：ts=t3', { noMute: true })
++    cap.restore()
++    assert(v4 === true && cap.warns.length === 1, '手动 platform sync（noMute）旁路可见')
++
++    // 模拟下一进程（marker 留存、进程内状态清空）：窗口内仍静默
++    _resetSyncNoiseForTest()
++    bindSyncNoiseRoot(rt)
++    cap = capture()
++    const v5 = syncSelfHealWarn(change, 'self-race', '⚠️ [sync] push 409 自竞态判定：ts=t4')
++    cap.restore()
++    assert(v5 === false && cap.warns.length === 0, '跨进程窗口内静默（每步命令重刷的正是这种）')
++    assert(existsSync(join(rt, 'sync-noise-self-heal.json')), 'marker 已落盘')
++  }
++} finally {
++  rmSync(tmpRoot, { recursive: true, force: true })
++  _resetSyncNoiseForTest()
++}
++
++console.log(failures === 0 ? `\n✅ 通过: 全部` : `\n❌ 失败: ${failures}`)
++process.exit(failures === 0 ? 0 : 1)

@@ -29,6 +29,7 @@ import { gitQuiet } from './git-helper.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+import { reconcileCrossRepoDeclarations } from './cross-repo-reconcile.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
 // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
@@ -2273,7 +2274,7 @@ function normalizeReviewChangedFile(p) {
  * @returns {{ cardCount: number, declarations: Array<{task:string, path:string, isNew:boolean, raw:string, invalid:string|null}>, crossRepoCards: string[], noDeclarationCount: number }}
  */
 function collectDeclaredTargetFiles(specBase, changeName) {
-  const out = { cardCount: 0, declarations: [], crossRepoCards: [], noDeclarationCount: 0 }
+  const out = { cardCount: 0, declarations: [], crossRepoCards: [], crossRepoDeclarations: {}, noDeclarationCount: 0 }
   const tasksDir = join(specBase, 'changes', changeName, 'tasks')
   if (!existsSync(tasksDir)) return out
   // task-NN.md 过滤 + 排序：与 plan-postcheck / task-review 的枚举口径一致，输出确定性
@@ -2285,7 +2286,18 @@ function collectDeclaredTargetFiles(specBase, changeName) {
     const fm = content.match(/^---\n([\s\S]*?)\n---/)?.[1] || ''
     const task = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim() || file.replace(/\.md$/, '')
     const repo = parseRepo(content)
-    if (repo) { out.crossRepoCards.push(`${task}（repo: ${repo}）`); continue }
+    if (repo) {
+      out.crossRepoCards.push(`${task}（repo: ${repo}）`)
+      // 跨仓声明留存（坑 cross-repo-reconcile-blindness，2026-09-15 复盘兑现 D-004 分期）：
+      // 主仓对账仍剔除跨仓卡（主仓 actual 永远对不上跨仓声明），但声明不丢弃——
+      // reconcileCrossRepoDeclarations 到各自仓对账（advisory）
+      const crossEntries = parseTargetFiles(content).entries || []
+      if (crossEntries.length > 0) {
+        ;(out.crossRepoDeclarations[repo] = out.crossRepoDeclarations[repo] || [])
+          .push(...crossEntries.map(e => ({ task, path: e.path, isNew: e.isNew })))
+      }
+      continue
+    }
     const { entries, missing } = parseTargetFiles(content)
     if (missing) { out.noDeclarationCount++; continue }
     for (const e of entries) {
@@ -2540,8 +2552,24 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
 
   // —— 声明侧 ——
   const decl = collectDeclaredTargetFiles(sb, changeName)
-  for (const label of decl.crossRepoCards) {
-    notes.push(`跨仓 task 卡 ${label} 已剔除——跨仓对账不在本变更范围（D-004），其声明留待后续分期`)
+  // —— 跨仓 per-repo 对账（坑 cross-repo-reconcile-blindness，2026-09-15 复盘兑现 D-004 分期：
+  // 此前 22 个跨仓文件在归档表全标「计划未动」、跨仓全靠人工到对应仓解释）——advisory 不阻断：
+  // 锚点是各仓 HEAD~1..HEAD 最近提交窗口（多 task 同仓只反映最近一笔，锚点脆弱期会产②类假
+  // 信号），只报告不翻转主仓状态。结果经 crossRepo 字段（gates 渲染明细）与 notes（摘要随
+  // 各状态出口流动）双通道出口。
+  let crossRepo = []
+  if (decl.crossRepoCards.length > 0) {
+    try {
+      crossRepo = reconcileCrossRepoDeclarations({ specBase: sb, cwd, declarationsByRepo: decl.crossRepoDeclarations })
+    } catch { crossRepo = [] /* 跨仓对账异常不拖垮主仓链（advisory 定位） */ }
+    for (const label of decl.crossRepoCards) {
+      notes.push(`跨仓 task 卡 ${label} 不进主仓对账（主仓 actual 对不上跨仓声明，D-004）——其声明已转 per-repo 对账（见下方跨仓对账段）`)
+    }
+    for (const r of crossRepo) {
+      notes.push(r.degradedReason
+        ? `跨仓 ${r.repo}：${r.degradedReason}`
+        : `跨仓 ${r.repo} 对账：声明 ${r.declaredCount} / 实测 ${r.actualCount} / 对上 ${r.matched.length} / ②缺 ${r.missing.length} / ③多 ${r.undeclared.length}${r.scaffoldCount > 0 ? `（另有 ${r.scaffoldCount} 脚手架已聚合）` : ''}——advisory（锚点=该仓最近提交窗口）`)
+    }
   }
   if (decl.cardCount === 0) {
     return { status: 'skipped', matched, missing, undeclared,
@@ -2555,7 +2583,7 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
       && decl.noDeclarationCount === decl.cardCount - decl.crossRepoCards.length) {
       return { status: 'skipped', matched, missing, undeclared,
         skipReason: `严格模式变更（created_at ≥ IR_STRICT_SINCE）主仓 task 卡全部未声明 target_files（${decl.noDeclarationCount}/${decl.cardCount - decl.crossRepoCards.length} 张主仓卡${decl.crossRepoCards.length > 0 ? `，另 ${decl.crossRepoCards.length} 张跨仓卡已剔除` : ''}）`,
-        notes, form: null, sources: [],
+        notes, form: null, sources: [], crossRepo,
         strictViolation: {
           code: 'target_files_all_missing_strict',
           message: `严格模式要求每个主仓 task 卡声明 target_files（计划改动的文件清单，taskcard 骨架已预置字段）——逐卡 Edit 填入：已存在文件写仓根相对精确路径，新建文件加 NEW: 前缀；填毕重跑 --done（进度不丢）`,
@@ -2567,7 +2595,7 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
       : `所有 task 卡均未声明 target_files（${decl.noDeclarationCount}/${decl.cardCount} 张无声明` +
         `${decl.crossRepoCards.length > 0 ? `，另 ${decl.crossRepoCards.length} 张跨仓卡已剔除` : ''}）` +
         `——存量卡可忽略；新卡请补：每条为仓根相对精确文件路径，不存在的文件加 NEW: 前缀`
-    return { status: 'skipped', matched, missing, undeclared, skipReason: reason, notes, form: null, sources: [] }
+    return { status: 'skipped', matched, missing, undeclared, skipReason: reason, notes, form: null, sources: [], crossRepo }
   }
 
   // —— actual 侧（三源并集，两形态）——
@@ -2579,7 +2607,7 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
     // 降级（fail-soft 不误红）：git 全部不可用 → actual 不可得，不产生 missing/undeclared
     return { status: 'degraded', matched, missing, undeclared,
       skipReason: `git 全部不可用，actual 不可得，对账降级跳过——${actual.degradedReason}`,
-      notes, form: actual.form, sources: actual.sources }
+      notes, form: actual.form, sources: actual.sources, crossRepo }
   }
 
   // —— 三类差集 ——
@@ -2637,7 +2665,7 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
 
   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
-  return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources }
+  return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources, crossRepo }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

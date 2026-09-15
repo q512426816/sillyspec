@@ -361,6 +361,21 @@
 审计：[gate] L1（跨 1 模块 · 7 文件：3 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
 审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/cross-repo-reconcile.js, src/probe7-anchor-check.js, test/cross-repo-probe7-anchor.test.mjs
 
+## ql-20260916-001-3ef8 | 2026-09-16 00:10:46 | 跨仓 per-repo 对账机器可见性 + 探针7 covered 锚点机器校验
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（含并行 dual-truth 会话在途 verify 改动（evidence V2 族），本会话改动为 collectDeclaredTargetFiles 跨仓声明留存+reconcileTargetFiles crossRepo 接线）
+- src/run/gates.js（printCrossRepoReconcile 渲染+探针7 锚点 advisory 接线（本会话独占））
+- src/cross-repo-reconcile.js（新建零环模块（注册表→仓根→双源 actual→三类差集+软桶））
+- src/probe7-anchor-check.js（新建零环模块（covered 行 :数字 锚点校验））
+- test/cross-repo-probe7-anchor.test.mjs（新建 26 断言）
+- .sillyspec/docs/sillyspec/modules/_module-map.yaml（补录两新模块路径）
+需求：跨仓 per-repo 对账机器可见性 + 探针7 covered 锚点机器校验
+根因：①D-004 分期一直未兑现——跨仓卡声明被剔除后零机器可见性，22 个跨仓文件归档表全标「计划未动」、探针5「frontend 0 调用」被误读，跨仓全靠人工到对应仓解释（2026-09-15 复盘）；②探针7 预填说明要求 covered 证据给 file:line 锚点，但无机器校验——复盘实证 7 行 covered 缺锚点被审查打回，人工往返一轮
+方案：①新建 src/cross-repo-reconcile.js 零环模块：local.yaml repos 注册表解析仓根，各仓 actual=diff HEAD~1..HEAD ∪ status untracked（resolveVerifyChangedFiles 跨仓分支同源口径），主仓同款三类差集+classifyToolScaffold 软桶，advisory 不阻断（锚点窗口脆弱期会假信号）；verify-postcheck 声明侧留存跨仓声明并接线（crossRepo 字段走 final/degraded/skip 各出口，notes 带摘要行），gates printCrossRepoReconcile 渲染逐仓明细+②缺/③多清单；②新建 src/probe7-anchor-check.js：解析正文探针7 段表格（列序与 renderProbe7Lines 骨架同源锚定），covered 行证据列须含 :数字 锚点，缺则报 task+acceptance+当前证据；gates verify 块 probe 一致性后 advisory 接线（fail-soft）
+结果：新增 test/cross-repo-probe7-anchor.test.mjs 26 断言全绿（注册仓三类差集/未注册不可达 degraded/空防御/reconcileTargetFiles 集成 3 态/锚点校验 9 态含段外行豁免）；npm test 491/0 + lint 630 文件 0 告警（module-map 补录两新模块）；git 提交让位给活跃 dual-truth 会话——同文件双方未提交改动交织，待其 verify 落地后一并入库
+
 ## ql-20260916-002-d6dc | 2026-09-16 00:21:48 | 平台模式产物落点指针——阶段完成时工作树.sillyspec落PLATFORM-DOCS-POINTER.md
 状态：已完成
 关联变更：（无）

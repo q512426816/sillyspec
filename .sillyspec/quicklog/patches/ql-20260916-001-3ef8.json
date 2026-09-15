@@ -1,0 +1,87 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-2a961810",
+  "totals": {
+    "files": 6,
+    "additions": 526,
+    "deletions": 21
+  },
+  "rows": [
+    {
+      "path": "src/cross-repo-reconcile.js",
+      "declared": true,
+      "additions": 134,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/probe7-anchor-check.js",
+      "declared": true,
+      "additions": 69,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 85,
+      "deletions": 21,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 51,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/cross-repo-probe7-anchor.test.mjs",
+      "declared": true,
+      "additions": 185,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-001-3ef8",
+  "sessionId": "quick-2a961810",
+  "savedAt": "2026-09-15T16:12:21.509Z",
+  "patchSha256": "2c5df5be7279c43e94638991d3c0bdd966c0d41421ebec9baede86e750736802",
+  "patchStatus": "ok"
+}

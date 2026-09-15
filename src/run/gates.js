@@ -878,6 +878,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     })
     const reconcileEnvelope = buildReconcileTargetFilesEnvelope(reconcileCheck)
     const reconcileBlocked = printReconcileTargetFilesCheck(reconcileCheck, reconcileEnvelope)
+    // 跨仓 per-repo 对账明细渲染（坑 cross-repo-reconcile-blindness，2026-09-15 复盘兑现 D-004
+    // 分期）：reconcileTargetFiles 的 crossRepo 字段（advisory 不阻断）——各仓 对上/②缺/③多
+    // 逐仓一行 + ②缺明细（跨仓声明落空是该去对应仓干活的信号，但不翻主仓状态——锚点窗口
+    // 脆弱期会假信号）。无跨仓卡时 crossRepo 为空数组零输出。
+    printCrossRepoReconcile(reconcileCheck.crossRepo)
     // 结果落盘（design Wave 2 承诺：对齐 .runtime/verify-runs/<ts>/ 先例）——五状态全落（含
     // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
     writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
@@ -905,6 +910,23 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     })
     const probeEnvelope = buildProbeConsistencyEnvelope(probeCheck)
     const probeBlocked = printProbeConsistencyCheck(probeCheck, probeEnvelope)
+    // 探针7 covered 证据锚点 advisory（坑 probe7-covered-anchor-missing，2026-09-15 复盘：7 行
+    // covered 证据缺 file:line 被审查打回——预填说明已载明口径，机器在 --done 时点再拦一道，
+    // 省一轮人工往返）。advisory 不阻断；独立模块零环（verify-probes 是多会话冲突面，不碰）。
+    try {
+      const { checkProbe7AnchorCoverage } = await import('../probe7-anchor-check.js')
+      const p7ReportPath = join(specBase, 'changes', changeName, 'verify-result.md')
+      if (existsSync(p7ReportPath)) {
+        const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
+        if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
+          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line 锚点（advisory 不阻断，审查会要求回补）：`)
+          for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
+            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点`)
+          }
+          if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
+        }
+      }
+    } catch { /* 锚点校验异常 fail-soft 不影响 gate */ }
     // 结果落盘（对齐 writeReconcileRunResult 先例）：独立文件 probe-consistency-result.json——
     // 与 reconcile-result.json 同 gate 运行同目录组织（verify-runs/<ts>/），但不并入后者：
     // reconcile-result.json 的 schema 已被 P3a 消费方锁定，塞探针字段（读改写/扩参）只会引入
@@ -1587,6 +1609,35 @@ export function writeReconcileRunResult({ runtimeRoot, changeName, envelope, res
  * @param {object} [envelope] 预构造信封（缺省现算；显式传入便于调用方先断言再打印）
  * @returns {boolean} true = 阻断（status='missing_declared'）
  */
+/**
+ * 打印跨仓 per-repo 对账结果（cross-repo-reconcile.js 产出的 advisory 明细，verify 块接线）。
+ * 恒不阻断（返回 void）：跨仓 diff 锚点=各仓最近提交窗口，锚点脆弱期（已 commit 多笔/全在
+ * working-tree）会产②类假信号——明细供人工裁决，不翻主仓对账状态。
+ * @param {Array<{repo:string,repoPath:string|null,declaredCount:number,actualCount:number,
+ *   matched:string[],missing:Array<{task:string,path:string,isNew?:boolean}>,
+ *   undeclared:string[],scaffoldCount:number,degradedReason:string|null}>|undefined} crossRepo
+ */
+function printCrossRepoReconcile(crossRepo) {
+  if (!Array.isArray(crossRepo) || crossRepo.length === 0) return
+  console.log(`\n🔀 跨仓 per-repo 对账（advisory 不阻断，锚点=各仓最近提交窗口）：`)
+  for (const r of crossRepo) {
+    if (r.degradedReason) {
+      console.warn(`   ⚠️ ${r.repo}：${r.degradedReason}`)
+      continue
+    }
+    const flag = (r.missing.length > 0 || r.undeclared.length > 0) ? '⚠️ ' : '✅ '
+    console.log(`   ${flag}${r.repo}（${r.repoPath}）：声明 ${r.declaredCount} / 实测 ${r.actualCount} / 对上 ${r.matched.length} / ②缺 ${r.missing.length} / ③多 ${r.undeclared.length}${r.scaffoldCount > 0 ? ` / 脚手架聚合 ${r.scaffoldCount}` : ''}`)
+    for (const m of r.missing.slice(0, 10)) {
+      console.warn(`      ②缺 ${m.task}: ${m.path}${m.isNew ? '（NEW: 声明新建，该仓未见）' : ''}——锚点窗口外已提交或多笔时可能假信号，到该仓 git log 核实`)
+    }
+    if (r.missing.length > 10) console.warn(`      …还有 ${r.missing.length - 10} 条②缺`)
+    for (const u of r.undeclared.slice(0, 10)) {
+      console.warn(`      ③多 ${u}（该仓最近窗口实际改动，未在任何跨仓卡声明）`)
+    }
+    if (r.undeclared.length > 10) console.warn(`      …还有 ${r.undeclared.length - 10} 条③多`)
+  }
+}
+
 export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTargetFilesEnvelope(r)) {
   // ②类（声明未做=计划落空）：ERROR 阻断
   if (r.status === 'missing_declared') {
