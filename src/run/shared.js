@@ -1035,7 +1035,12 @@ export function isQuickMetadata(p, linkedChanges = []) {
   const file = normalizeGitPath(p)
   if (file.startsWith('.sillyspec/quicklog/')
     || file.startsWith('.sillyspec/.runtime/')
-    || file === '.sillyspec/knowledge/uncategorized.md'
+    // 知识库整体白名单（2026-09-15 用户实测反馈：登记知识条目是 quick 收尾常规动作，此前
+    // INDEX/known-issues/patterns/conventions/decisions 非元数据 → 危险门 blocked 只能 --force-baseline，
+    // 且 perFileNotes 强制 --file-notes 覆盖）：knowledge/ 是 CLI 自管面（classify append-only +
+    // validate 守门），与 quicklog 同级。可追溯性靠 quicklog 结构化条目 + git diff，不靠文件行。
+    // 前缀带尾斜杠：knowledge-base/ 等相近目录不命中。
+    || file.startsWith('.sillyspec/knowledge/')
     || (/^\.sillyspec\/docs\/[^/]+\/modules\/[^/]+\.md$/.test(file))
     || (/^\.sillyspec\/docs\/[^/]+\/modules\/_module-map\.yaml$/.test(file))) return true
   if (file.startsWith('.sillyspec/changes/')) {

@@ -1,0 +1,108 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-4654605c",
+  "totals": {
+    "files": 2,
+    "additions": 159,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": "src/run/shared.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quick-gate-knowledge-whitelist.test.mjs",
+      "declared": true,
+      "additions": 153,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": [
+      {
+        "file": "src/change-list.js",
+        "sessions": [
+          "quick-2f964f75"
+        ]
+      },
+      {
+        "file": "src/scope-audit.js",
+        "sessions": [
+          "quick-2f964f75"
+        ]
+      },
+      {
+        "file": "src/verify-postcheck.js",
+        "sessions": [
+          "quick-2f964f75"
+        ]
+      },
+      {
+        "file": "src/worktree-apply.js",
+        "sessions": [
+          "quick-2f964f75",
+          "quick-2fabfb4a"
+        ]
+      },
+      {
+        "file": "test/change-list-operation.test.mjs",
+        "sessions": [
+          "quick-2f964f75"
+        ]
+      },
+      {
+        "file": "test/scope-audit.test.mjs",
+        "sessions": [
+          "quick-2f964f75"
+        ]
+      },
+      {
+        "file": "test/worktree-apply-meta-exclude.test.mjs",
+        "sessions": [
+          "quick-2f964f75"
+        ]
+      }
+    ]
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/shared.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/quick-gate-knowledge-whitelist.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260915-007-9b55",
+  "sessionId": "quick-4654605c",
+  "savedAt": "2026-09-15T09:24:39.144Z",
+  "patchSha256": "cf6fb837d487cebabb5c82f8bb7f56ffc69fafd06d40814aa2fb7e26bdd781d8",
+  "patchStatus": "ok"
+}
