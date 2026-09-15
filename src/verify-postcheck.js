@@ -1163,6 +1163,26 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
           ? meta.worktreePath
           : cwd
         const files = runGitDiffNameOnly(gitDir, `${diffBase}..HEAD`)
+        // 坑 verify-evidence-account-diff-misses-committed-changes（2026-09-13 实证）：
+        // wt-commit 流程把本变更提交落在**主仓 HEAD**，worktree 分支不前移——仅查 worktree
+        // 侧 diffBase..HEAD 时已提交文件全部 miss（7 task diffHit=false 连环假红，verify 两连
+        // 阻断只能走人工豁免）。并集**主仓同区间** diff（对齐 wt-commit 产出形态，坑文档建议的
+        // 「change 基线 commit..HEAD」口径）；主仓区间含并行会话提交 → 过他者声明过滤
+        //（splitOwnVsForeignDiffFiles，与下方 fallback 同款）防 diffHit 假阳。主仓查询失败
+        // 不损原 worktree 结果。
+        if (files !== null && gitDir !== cwd) {
+          try {
+            const mainFiles = runGitDiffNameOnly(cwd, `${diffBase}..HEAD`)
+            if (Array.isArray(mainFiles)) {
+              const merged = [...new Set([...files, ...mainFiles])]
+              const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, merged, { specBase: sb })
+              if (foreign.length > 0) {
+                console.warn(`⚠️ verify 对账（主仓区间并集）已排除 ${foreign.length} 个并行会话声明的文件：${foreign.slice(0, 5).map(x => `${x.file}←${x.owners[0]}`).join(', ')}${foreign.length > 5 ? ' 等' : ''}`)
+              }
+              return own
+            }
+          } catch { /* 主仓区间查询失败 → 保持 worktree 结果 */ }
+        }
         if (files !== null) return files
         // worktree diff 异常 → 落主仓兜底（保持与原 gitChangedFiles 相同的 null 语义）
       }

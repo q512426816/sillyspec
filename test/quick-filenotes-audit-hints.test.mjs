@@ -47,15 +47,19 @@ console.log('=== ① --file-notes 非末步前置 warn（坑 quick-file-notes-no
   const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
   assertTrue(sidM, 'quick 会话已启动（拿到 sessionId）')
   const sid = sidM[1]
-  // step1 --done 带 --file-notes（非末步：三步中还有 2 个 pending）→ 应 warn
+  // step1 --done 带 --file-notes（非末步：三步中还有 2 个 pending）→ 硬拒绝（坑 quick-sync-block
+  // 坑2 升级：2026-09-13 实证 warn 版仍「先收下再丢弃再告知」括注静默丢失，改 exit 2 拒绝）
   const r1 = run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --file-notes "src/a.js::测试" --output "step1 完成"`)
-  assertTrue(r1.status === 0, 'step1 --done 照常完成（warn 不阻断）')
-  assertTrue(r1.out.includes('--file-notes 本次不会生效'), `非末步 --done 带 --file-notes → 前置 warn（尾 200：${r1.out.slice(-200).replace(/\n/g, ' ')}）`)
-  assertTrue(r1.out.includes('末步 --done'), 'warn 指引在末步再传')
-  // 推进到末步后 --done 带 --file-notes → 不 warn（消费点）
+  assertTrue(r1.status === 2, `非末步 --done 带 --file-notes → 硬拒绝 exit 2（实际 ${r1.status}）`)
+  assertTrue(r1.out.includes('--file-notes 此时不生效'), `拒绝文案明确（尾 200：${r1.out.slice(-200).replace(/\n/g, ' ')}）`)
+  assertTrue(r1.out.includes('末步 --done'), '拒绝指引在末步再传')
+  // 被拒后去掉 --file-notes 重跑 → step1 照常完成（拒绝不吞进度）
+  const r1b = run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --output "step1 完成"`)
+  assertTrue(r1b.status === 0, '去掉 --file-notes 重跑照常完成')
+  // 推进到末步后 --done 带 --file-notes → 不拒绝（消费点）
   run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --output "step2 完成"`)
   const r3 = run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --file-notes "src/a.js::真括注" --output "需求：x 根因：y 方案：z 结果：w"`)
-  assertTrue(!r3.out.includes('--file-notes 本次不会生效'), '末步 --done 带 --file-notes 不再 warn（消费点）')
+  assertTrue(!r3.out.includes('--file-notes 此时不生效'), '末步 --done 带 --file-notes 正常消费不拒绝')
 }
 
 console.log('\n=== ② 危险文件拦截 + --files 追加不解锁 → 两套开关明示（坑 files-flag-not-unlock-protected）===\n')

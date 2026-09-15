@@ -696,6 +696,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       if (!quickSessionId) {
         quickSessionId = 'quick-' + randomUUID().slice(0, 8)
         quickSidFresh = true
+        // 坑 quick-sync-block-filenotes-and-quicklog-mixed-commit 坑1③：新会话 ID 生成即打印
+        // 第一行——后续 agent-log push / spec-sync 等 best-effort 网络动作（平台慢时分钟级）
+        // 若把命令拖过 exec 超时，调用方仍能从输出头部拿到 sessionId 续用（--status / guard.json
+        // 核对），不会误开空壳新会话。
+        console.log(`📌 quick 会话已建立: ${quickSessionId}（后续若超时/中断，用 --change ${quickSessionId} 续用）`)
       }
       changeName = quickSessionId
     } else {
@@ -1461,18 +1466,20 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     }
   }
 
-  // --file-notes 非末步静默忽略前置 warn（坑 quick-file-notes-nonfinal-ignored，2026-08-22 实证：
-  // step2 --done 传 --file-notes 被静默丢——CLI 短进程，注入随进程结束即丢，白传一轮）。
-  // 放此处：ensureStageSteps 之后 progress 已就绪可判步骤状态；仅 quick + 带了 --file-notes +
-  // 非「唯一 pending 的末步 --done」时提示。末步 --done 是消费点，不提示。
+  // --file-notes 非末步硬拒绝（坑 quick-file-notes-nonfinal-ignored → quick-sync-block
+  // 坑2 升级，2026-09-13 实证：warn 版仍「先收下再丢弃再告知」——9 条括注静默丢失需凭记忆
+  // 重传）。改为 exit 2 直接拒绝：调用方立刻知道参数传错了时机，不做静默丢弃。末步 --done
+  //（唯一 pending）是消费点，正常消费。
   if (quickFileNotes !== '' && stageName === 'quick' && !isStatus) {
     try {
       const qSteps = progress?.stages?.quick?.steps
       const pendingCount = Array.isArray(qSteps) ? qSteps.filter(st => ['pending', 'in-progress'].includes(st?.status)).length : 0
       if (!isDone || pendingCount > 1) {
-        console.warn(`⚠️ --file-notes 本次不会生效：它只在 quick 末步（暂存和更新记录）--done 时随收尾消费——CLI 是短进程，本次注入随进程结束即丢。请在末步 --done 时连同 --output 一起传。`)
+        console.error(`❌ --file-notes 此时不生效（拒绝执行而非静默丢弃）：它只在 quick 末步 --done 时随收尾消费——CLI 是短进程，非末步注入随进程结束即丢。`)
+        console.error(`   请去掉 --file-notes 重跑本条命令；括注内容留到末步 --done 时连同 --output 一起传。`)
+        process.exit(2)
       }
-    } catch { /* 判定失败不提示（fail-open） */ }
+    } catch { /* 判定失败不阻断（fail-open 维持旧行为） */ }
   }
 
   // --status
