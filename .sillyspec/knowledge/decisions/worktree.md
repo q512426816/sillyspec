@@ -83,3 +83,30 @@ created_at: 2026-08-23T22:40:00+08:00
 锚点：未记录
 最近确认：ee966ed
 理由：用户选 A（2026-09-14 对话轮单字确认）：changes 表加 owner_session 列（schema v6 迁移，四处版本号同步——db.js DDL/DB_SCHEMA_VERSION/shared.js CURRENT_VERSION/progress._version，附迁移测试）；last_active 既有刷新点即心跳（run 命令每次写操作更新，活跃窗 15 分钟可配 local.yaml change-ownership.heartbeat_minutes）；所有权校验内嵌 withMainRepoLock 锁内。拒绝 B（DB/文件双真相源+平台模式 specRoot 分裂锁易丢+与 last_active 重复）；拒绝 C（§65 实证 warn 挡不住代劳——对方会话不读 warn）。
+
+## D-001@v1 overlay 隔离消费既有 own/foreign oracle，不做语法校验
+状态：implemented
+变更：2026-09-15-worktree-dual-truth-gates
+锚点：src/worktree.js:_overlayBaseline
+最近确认：42cef77
+理由：消费既有归属 oracle（`src/foreign-declared.js` 的 `splitOwnVsForeignDiffFiles`，声明源=其他 quick 会话 guard.json allowedFiles + 其他变更 design §6 清单，own 优先）。foreign 声明文件在 staged/unstaged patch 道与 untracked 复制道全排除（worktree 取基线 HEAD 版本）。语法/esbuild 探测不做——语言特定、误报率高、CLI 不该带语言工具链依赖。
+故障面：oracle 误判（他者声明覆盖本变更文件）→ own 优先判据兜底（loadOwnDeclaredSet 声明过即归 own）；隔离后 worktree 缺并行会话已修 bug 的场景 → 主仓 HEAD 版本本就是干净基线
+退役判据：出现比显式声明面更完整的归属事实源（如文件级 mtime 会话锁）时
+
+## D-002@v1 no-op 过滤放 applyWorktree changedFiles choke point，apply/assess 同口径
+状态：implemented
+变更：2026-09-15-worktree-dual-truth-gates
+锚点：src/worktree-apply.js:applyWorktree
+最近确认：42cef77
+理由：`applyWorktree` step 2 的 changedFiles 计算处（filterDeliverableFiles 之后）一处过滤——apply 与 assess（assess 复用 applyWorktree checkOnly）自动同口径。比对方式：worktree 内 `git hash-object --stdin-paths`（分批，沿用 ql-20260912-010 分批先例）对照主仓 `git ls-tree -r HEAD` 一次取的 blob map；相等即 no-op，剔出 changedFiles/deletedFiles/absentAfterMerge，warnings 列清单。每调用现算不缓存（主仓 HEAD 在 assess 与 apply 间推进时安全）。
+故障面：hash-object/ls-tree 失败 → 该批文件保守不剔（保留 changed，退回现状误报而非误放行）
+退役判据：apply/assess 改为内容寻址交付（blob 级）时
+
+## D-003@v1 生成物供给走 local.yaml `worktree.supplyFiles`，不做 gitignore 自动探测
+状态：implemented
+变更：2026-09-15-worktree-dual-truth-gates
+锚点：src/config-schema.js
+最近确认：42cef77
+理由：local.yaml 新增 `worktree.supplyFiles`（string[]，精确路径 + glob `*`/`**`，默认空=零行为变化）。worktree create step 5.8（deps 供给）后新增供给步：glob 展开→主仓存在则复制（mkdir -p 父目录），缺失 console.warn；meta.supplyFiles 记录实供清单。gitignore 物天然不进 assess/apply 面（`ls-files --others --exclude-standard` 遵循 .gitignore）。自动探测 gitignore 生成物不做——无法判定哪些是构建必需，误供给噪声大。
+故障面：glob 误配展开风暴 → 展开上限帽截断 + 单文件失败不阻断 create；供给物过期（主仓重新生成前）→ 构建期自然报错，与主仓缺生成物同症状
+退役判据：项目自带构建输入 manifest 可机读时（自动探测复潮条件同）

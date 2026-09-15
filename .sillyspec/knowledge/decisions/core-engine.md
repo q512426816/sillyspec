@@ -215,3 +215,21 @@ supersedes：D-003@v1
 supersedes：D-001@v1
 故障面：台账坏文件=全量历史重启（容忍立场）；merge 写失败 fail-soft 丢本条不阻断收尾
 退役判据：台账积累 50+ 条后阈值提示从未触发行动，或字段覆盖率三个月 <50%，降级纯记录
+
+## D-004@v1 勾选守卫 diff 集对齐 D-004@v1（库内）worktree 分支 diff+porcelain 口径，抽公共 helper
+状态：implemented
+变更：2026-09-15-worktree-dual-truth-gates
+锚点：src/run/complete.js:prefetchDiffFileSet
+最近确认：42cef77
+理由：不降级。根因是 `prefetchDiffFileSet` 的 diffFileSet 只算 `git diff base..head`（worktree 已提交），而草稿归属（generateTaskReviewDrafts）并入了 porcelain 未提交 + merge-base committed 补齐——子代理默认不 commit 时 diffFileSet 恒空/缺文件，勾选守卫全部跳过。修法：把「worktree 改动文件集（porcelain ∪ committed merge-base 补齐）」抽成公共 helper，complete.js 勾选守卫与 task-review.js 草稿归因共用（两处既有「口径须同步改」注记正好收口）。同文件多 task 归属：`attributeSuspectTasks` 首中即止改全量多归属（map 值 string[]），③类报告渲染完整作者列表。
+故障面：helper 对 meta 缺失/in-place 返回 [] → 守卫退回 base..head 现状（fail-open 不放大勾选面）；多归属渲染膨胀 → 截断展示
+退役判据：review/勾选改为 per-task 锡点锚定（base/head 写进 task 卡）全量落地时
+
+## D-005@v1 required-evidence 消费侧双根核验，生成时机不动
+状态：implemented
+变更：2026-09-15-worktree-dual-truth-gates
+锚点：src/verify-postcheck.js:runRequiredEvidenceCheckV2
+最近确认：42cef77
+理由：消费侧。`runRequiredEvidenceCheckV2` 逐文件核验（存在性/mtime）从单根（主仓 cwd）改双根：候选根 = [cwd, worktree 根]（worktree 根经 `specBase/.runtime/worktrees/<change>/meta.json` 解析，与 resolveVerifyChangedFiles 同源）；文件在任一根存在即 filesExist=true，mtime 取所在根 stat。diffHit 不动（resolveVerifyChangedFiles 已 worktree-aware）。生成时机不动——execute 期 Task Review Gate 写入是既有契约（gates.js:1172）。
+故障面：worktree 根解析失败 → 退单根现状（误报回潮但不误放行）；双根同文件内容分叉取 worktree mtime → 主仓后写场景误判 mtimeOk=false → 属实报（主仓后写=apply 后态，不该在 verify 期）
+退役判据：verify 核验统一改在 worktree 内执行（单根化）时
