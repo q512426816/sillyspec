@@ -462,3 +462,14 @@
 根因：EHS二次独立复核实证：5个P1里4处是字段/载荷错位（leaderUserId↔rpLeaderUserId Jackson静默丢弃/小程序缺发reportOrgId/sourceShdId↔safelyHiddenId/report_org_name NOT NULL）——探针5只对URL级，载荷级零覆盖
 方案：三提取器（Java字段常量排除/SQL NOT NULL审计列豁免/请求调用邻近对象键）+runProbe8PayloadParity（design三面分类+NEW:剥除+未注册跨仓兜底注记+三根读取+小写剥分隔线归一化+子串∪token-Jaccard0.6双配对带长度差tie-break+NOT NULL缺送核对）+renderProbe8Lines advisory段+runVerifyProbes fail-soft接线+facts probe8 metrics
 结果：test/probe8-payload-parity.test.mjs五组5/5绿；verify-probes族回归全绿；lint 636文件0告警；全量npm test由--done CLI实测
+
+## ql-20260916-008-560d | 2026-09-16 01:08:28 | review覆盖定向+守卫一致性checklist+独立复核回流槽
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（probe7零承接尾注+代码审查五项checklist+独立复核回流槽）
+- test/verify-probes-facts.test.mjs（章节计数13→14+回流槽断言）
+需求：review覆盖定向+守卫一致性checklist+独立复核回流槽
+根因：EHS二次复核实证：①review走查面跟测试覆盖走，编辑路径/相关方支线零覆盖恰是5个P1藏身处②doSubmit无操作人校验而delete/withdraw有——守卫一致性无checklist③复核结论只活在聊天记录，档案仍写PASS WITH NOTES
+方案：renderProbe7Lines零/半承接计数尾注（uncovered/partial>0→强制显式走查指引）；骨架代码审查TODO扩五项走查清单（编辑更新链路/非主分支流/守卫一致性/探针8配对核实/分页并发事务原子性）；骨架新增独立复核可选回流槽（P1/P2/P3分级+证据链+结论枚举影响改写）；verify-probes-facts计数13→14+回流槽断言
+结果：verify-probes-facts/acceptance-matrix/handover回归全绿；lint+全量npm test由--done CLI实测

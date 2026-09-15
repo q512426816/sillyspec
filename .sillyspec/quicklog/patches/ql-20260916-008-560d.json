@@ -1,0 +1,64 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-e224188b",
+  "totals": {
+    "files": 2,
+    "additions": 23,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 19,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-probes-facts.test.mjs",
+      "declared": true,
+      "additions": 4,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/verify-probes.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/verify-probes-facts.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-008-560d",
+  "sessionId": "quick-e224188b",
+  "savedAt": "2026-09-15T17:11:20.418Z",
+  "patchSha256": "5cb7d90328e34da7cad188b7d889d11620ef09fdec843fb3396492d5eff3d5b4",
+  "patchStatus": "ok"
+}

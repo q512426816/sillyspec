@@ -531,6 +531,11 @@ function renderProbe7Lines(p7) {
   }
   L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles 结构归属承接面（每条 acceptance 由哪些测试承接）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
   L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。证据列给首命中 file:line 锚点或人工核验提示。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
+  // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
+  // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
+  // 零覆盖」恰是 5 个 P1 的藏身处。矩阵渲染时顺带计数零承接条目，verify 复核强制显式走查
+  // 这些路径并在「代码审查」节登记走查结论——把二次复核「提前兑现移交项」的打法固化）。
+  let zeroCoverage = 0
   for (const t of (p7.tasks || [])) {
     L.push('')
     L.push(`**${t.task}**`)
@@ -549,8 +554,13 @@ function renderProbe7Lines(p7) {
         ? `${h.terms.map(x => mdEscapeCell(x)).join('、')}（${(h.files || []).map(f => `\`${f}\``).join('、')}）`
         : '—'
       const pre = prefillMatrixCells(item, t.testFiles, h)
+      if (pre.verdict === 'uncovered' || pre.verdict === 'partial') zeroCoverage++
       L.push(`| ${mdEscapeCell(item)} | ${attribCell} | ${hintCell} | ${pre.verdict} | ${pre.evidence} |`)
     })
+  }
+  if (zeroCoverage > 0) {
+    L.push('')
+    L.push(`- ⚠️ 零/半自动化承接条目 ${zeroCoverage} 条——这些路径无测试兜底，verify 复核必须**显式走查**（尤其编辑/更新链路与非主分支流：二次复核实证它们正是 P1 藏身处），走查结论登记进「代码审查」节`)
   }
   return L
 }
@@ -1356,7 +1366,15 @@ export function generateVerifyResultSkeleton(result) {
     '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->',
     '',
     '## 代码审查 [层：人工判断]',
-    '<!--TODO: 问题列表 + 总体评价-->',
+    '<!--TODO: 问题列表 + 总体评价。走查清单（零覆盖路径必查——探针 7 ⚠️ 条目即定向面）：',
+    '     ① 编辑/更新链路（回显、字段映射、残留态）——非新增主链路，实证盲区；',
+    '     ② 非主分支流（相关方/旁路支线等未走查路径）；',
+    '     ③ 守卫一致性：同资源端点的操作人/权限校验模式对比（实证 doSubmit 无操作人校验而 delete/withdraw 有——越权）；',
+    '     ④ 载荷字段契约（探针 8 ⚠️ 配对逐条核实）；',
+    '     ⑤ 分页/并发/事务原子性（无测试基建端的纯逻辑面）-->',
+    '',
+    '## 独立复核（可选回流槽） [层：人工判断——复核后追加]',
+    '<!-- verify 完成后的深度复核（独立子代理/二次审查）结论回流至此：缺陷分级（P1 功能不可用 / P2 需求子项 / P3 建议修）+ 修复证据链 + 对「结论枚举」的影响改写。无复核时本节写「无」或删除。复核结论不再只活在聊天记录（2026-09-16 EHS 二次复核实证：5 个 P1 只有聊天可查，变更档案仍写 PASS WITH NOTES）。 -->',
     '',
   ]
   return L.join('\n')
