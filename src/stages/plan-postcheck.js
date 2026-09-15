@@ -785,12 +785,19 @@ export function parseLocalYamlModules(yamlText) {
  * modules 从 local.yaml 提取（monorepo 子包感知）：无 modules 块时仅查根 package.json
  * （与 scan-postcheck 历史行为一致）；有 modules 块时多候选子包 package.json 任一命中即通过。
  *
+ * 跨仓卡基准根切换（坑 verify-cmd-cross-repo-root，2026-09-15 wp 会话实证）：卡片声明
+ * repo: <key> 时其 verify/implementation 里的路径相对**该仓**根——此前恒用主仓 projectRoot，
+ * 跨仓卡的 `cd src && npm run lint`（src 在跨仓里）解析到主仓 → 误报死命令。repoRegistry
+ * 命中该 key 时以跨仓根为该卡的 projectRoot（modules 是主仓 local.yaml 的相对子包路径，
+ * 跨仓卡不适用，置 null）；repo 未注册时由检查 1 的注册校验报错，此处维持主仓根不重复报。
+ *
  * @param {string} changeDir - 变更目录
  * @param {string} projectRoot - 项目根目录（package.json 查找基准）
  * @param {object|null} modules - local.yaml modules 块（{ name: { path } }），可选
+ * @param {Map<string,string>|null} [repoRegistry=null] - local.yaml repos: 段（跨仓卡基准根解析）
  * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
  */
-export function validateTaskCommands(changeDir, projectRoot, modules = null) {
+export function validateTaskCommands(changeDir, projectRoot, modules = null, repoRegistry = null) {
   const errors = []
   const warnings = []
 
@@ -826,7 +833,16 @@ export function validateTaskCommands(changeDir, projectRoot, modules = null) {
     const text = `${verifyText}\n${implText}`
     if (!text.trim()) continue
 
-    const { invalid } = validateScriptCommands(text, { projectRoot, modules })
+    // 跨仓卡基准根切换（坑 verify-cmd-cross-repo-root）：repo: 命中注册表 → 该卡命令以跨仓
+    // 根解析；modules（主仓相对子包路径）对跨仓卡不适用置 null
+    const cardRepo = parseRepo(content)
+    let cardRoot = projectRoot
+    let cardModules = modules
+    if (cardRepo && cardRepo !== 'main' && repoRegistry && repoRegistry instanceof Map && repoRegistry.has(cardRepo)) {
+      cardRoot = repoRegistry.get(cardRepo)
+      cardModules = null
+    }
+    const { invalid } = validateScriptCommands(text, { projectRoot: cardRoot, modules: cardModules })
     for (const inv of invalid) {
       errors.push(`${taskId}: ${inv.cmd} 命令不存在（${inv.reason}）`)
     }
@@ -880,7 +896,7 @@ const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变�
  * @param {string} designPath - design.md 绝对路径
  * @returns {{ byRepo: Map<string, Set<string>>, hasSegmentHeader: boolean, allFiles: string[], malformedHeaders: string[] }}
  */
-function parseDesignCoverageByRepo(designPath) {
+export function parseDesignCoverageByRepo(designPath) {
   const byRepo = new Map()
   const allFiles = []
   const malformedHeaders = []
@@ -1619,9 +1635,20 @@ export async function executePlanPostcheck(context) {
   let taskModules = null
   let repoRegistry = null
   if (existsSync(localYamlPath)) {
-    const localYamlText = readFileSync(localYamlPath, 'utf8')
+    const localYamlText = _readFileSync(localYamlPath, 'utf8')
     taskModules = parseLocalYamlModules(localYamlText)
     repoRegistry = parseRepoRegistry(localYamlText)
+  }
+  // 坑 register-repo-specbase-split-brain（读侧对齐）：平台模式下 specDir=平台 spec 根，此处
+  // 读 spec 根 local.yaml 的 repos: 而 execute MultiRepoContext 恒读 <cwd>/.sillyspec/local.yaml
+  // ——plan gate 看得到注册、execute 启动却 fail-closed（2026-09-15 wp 会话实证）。项目侧
+  // local.yaml 存在时以它为 repos: 权威（register-repo 写侧已对齐项目侧）；不存在（纯平台
+  // 项目从未建过项目侧文件）维持 spec 根回退，零回归。
+  const projectLocalYamlPath = pJoin(cwd, '.sillyspec', 'local.yaml')
+  if (existsSync(projectLocalYamlPath)) {
+    try {
+      repoRegistry = parseRepoRegistry(_readFileSync(projectLocalYamlPath, 'utf8'))
+    } catch { /* 项目侧读失败维持 spec 根结果 */ }
   }
 
   // ── 1. 一致性校验 ──
@@ -1656,7 +1683,7 @@ export async function executePlanPostcheck(context) {
   // invalid → error 硬阻断，避免 execute 子代理跑死命令（design D-04 / 问题 3）。
   // modules 块可选：无块时仅查根 package.json（与 scan-postcheck 历史行为一致）。
   // local.yaml 已在检查 1 前预读（taskModules），此处直接消费。
-  const taskCmds = validateTaskCommands(changeDir, context.cwd, taskModules)
+  const taskCmds = validateTaskCommands(changeDir, context.cwd, taskModules, repoRegistry)
   if (taskCmds.errors.length > 0) {
     failures.push({
       name: 'TaskCard 命令存在性校验（verify/implementation 的 npm/pnpm/yarn run <script> 不存在）',

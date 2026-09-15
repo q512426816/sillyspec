@@ -4089,7 +4089,14 @@ SillySpec modules — 模块文档管理
           process.exit(1);
         }
         const { resolveLocalYamlWriteTarget } = await import('./config-cat.js');
-        const target = resolveLocalYamlWriteTarget(dir, { specBase: rrSpecBase });
+        // 坑 register-repo-specbase-split-brain（2026-09-15 wp 平台模式会话实证）：specBase
+        // 优先的写候选链在平台模式下命中平台 spec 根 local.yaml，而 repos: 段的全部读侧
+        // （execute MultiRepoContext / worktree-cross / run shared）恒读 <cwd>/.sillyspec/local.yaml
+        // ——注册写进 spec 根 = 死配置，execute 启动 fail-closed 报未注册，agent 只能试出
+        // --spec-dir 指向项目 .sillyspec 才能绕过。修复：默认（无显式 --spec-dir）写目标走
+        // 读侧对齐链（不喂 specBase，cwd 祖先链命中项目 local.yaml，worktree 自动反推主仓）；
+        // 显式 --spec-dir 是用户明示选择，仍尊重。
+        const target = resolveLocalYamlWriteTarget(dir, specDir ? { specBase: rrSpecBase } : {});
         const { registerRepoInLocalYaml } = await import('./local-register.js');
         let rrResult;
         try {
@@ -4101,6 +4108,16 @@ SillySpec modules — 模块文档管理
         const verb = rrResult.replaced ? '已更新（覆盖旧路径）' : '已注册';
         console.log(`✅ repos.${rrKey} ${verb}: ${absRepo.replace(/\\/g, '/')}`);
         console.log(`   写入: ${target.path}${rrResult.fileCreated ? '（新建文件）' : ''}${rrResult.sectionCreated ? '（新建 repos: 段）' : ''}`);
+        // 同坑提醒：平台 spec 根也躺着一份 local.yaml 时，其 repos: 段不生效（读侧只读项目侧）
+        // ——不Dual写（两份各自演化=再分裂），只提示用户那份是死配置可清理
+        if (!specDir && rrSpecBase) {
+          const altYaml = join(rrSpecBase, 'local.yaml');
+          try {
+            if (existsSync(altYaml) && resolve(altYaml) !== resolve(target.path)) {
+              console.warn(`⚠️  平台 spec 根另有一份 local.yaml（${altYaml}）——repos: 注册只在项目 local.yaml 生效（execute 等读侧只读项目侧），spec 根那份的 repos: 段是死配置`);
+            }
+          } catch { /* 提醒失败不影响注册结果 */ }
+        }
         console.log('   查看: sillyspec config cat（真实配置）; main 隐式=主仓不用注册');
         break;
       }

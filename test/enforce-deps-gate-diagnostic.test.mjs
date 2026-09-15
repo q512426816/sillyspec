@@ -201,7 +201,9 @@ console.log('\n--- (B) e2e：depsStatus=failed → 拒绝 exit 1 + fail-loud + �
     `# Plan\n\n## Wave 1\n\n- [x] task-01: do something\n`, 'utf8')
 
   // 3. 预创建 worktree 物理目录 + meta.json（depsStatus=failed，不在放行集合）
-  //    runCommand 中 existingMeta != null → 跳过 wm.create；ensureDepsFreshness 不重供给
+  //    runCommand 中 existingMeta != null → 跳过 wm.create；ensureDepsFreshness 不重供给。
+  //    注意：runCommand 启动清理会把 cwd/.sillyspec（含 worktree）当旧版残留删掉，本例
+  //    实际走 worktreeGone 诊断分支（重供给路径的失败/成功用例见 B2/B3）
   const wm = new WorktreeManager({ cwd })
   const wtPath = wm.getWorktreePath(changeName)
   mkdirSync(wtPath, { recursive: true })
@@ -265,6 +267,83 @@ console.log('\n--- (B) e2e：depsStatus=failed → 拒绝 exit 1 + fail-loud + �
   const anyCompleted = execSteps.some(s => s.status === 'completed')
   assert(execSteps.length > 0 && !anyCompleted,
     `门控拒绝时 execute 无 step 被标 completed（${execSteps.length} 步均 pending，进度未推进）`)
+}
+
+// ════════════════════════════════════════════════════════════
+// (B2) --done 重供给自救（坑 deps-gate-manual-retry-ineffective，2026-09-15 wp 会话实证）
+//      「在 worktree 内手动安装依赖后重试」承诺此前无法兑现：manual install 不改
+//      meta.depsStatus，failed 态重试 --done 永远撞墙，唯一出路 doctor --fix。
+//      修复后：阻断前门内重供给一次并写回 meta——generic worktree（无生态清单，
+//      重供给 n/a）+ failed meta → enforceDepsGate 直接放行（返回 true）+ meta 翻 n/a。
+// ════════════════════════════════════════════════════════════
+console.log('\n--- (B2) 重供给自救：generic worktree failed → 门放行 + meta 翻 n/a ---')
+{
+  const { enforceDepsGate } = await import('../src/run/gates.js')
+  const cwd = mkTmp('b2-cwd')
+  const specDir = mkTmp('b2-spec')
+  const changeName = 'b2-change'
+  const wm = new WorktreeManager({ cwd })
+  const wtPath = wm.getWorktreePath(changeName)
+  mkdirSync(wtPath, { recursive: true })
+  // 无 package.json/pom.xml 等任何清单 → generic → 重供给 n/a（无 install 成本，确定性）
+  writeFileSync(join(wtPath, 'meta.json'), JSON.stringify({
+    worktreePath: wtPath,
+    mode: 'native',
+    branch: `sillyspec/${changeName}`,
+    baseHash: 'deadbeef',
+    depsStatus: 'failed',
+    depsMethod: 'install',
+    depsError: 'mvn not on PATH（wp 会话同款）',
+    depsLockHash: null,
+  }, null, 2) + '\n')
+
+  const allowed = await enforceDepsGate('execute', cwd, changeName, null, null, 0, specDir, {}, async () => {})
+  assert(allowed === true, '重供给翻 n/a → 门放行（返回 true）')
+
+  const metaAfter = wm.getMeta(changeName)
+  assertEqual(metaAfter?.depsStatus, 'n/a', '重供给结果写回 meta（failed → n/a）')
+}
+
+// ════════════════════════════════════════════════════════════
+// (B3) 重供给救不回 → 仍阻断：nodejs worktree（坏 JSON package.json 让重供给的
+//      npm install 确定性失败）+ failed meta → 门 exit(1) + 输出含重供给日志 +
+//      doctor --fix 指引。子进程直调 enforceDepsGate（隔离 process.exit；不经
+//      runCommand，避开其启动清理删 worktree 的干扰）。
+// ════════════════════════════════════════════════════════════
+console.log('\n--- (B3) 重供给失败仍阻断：nodejs 坏清单 → exit 1 + 重供给日志 + doctor 指引 ---')
+{
+  const cwd = mkTmp('b3-cwd')
+  const specDir = mkTmp('b3-spec')
+  const changeName = 'b3-change'
+  const wm = new WorktreeManager({ cwd })
+  const wtPath = wm.getWorktreePath(changeName)
+  mkdirSync(wtPath, { recursive: true })
+  writeFileSync(join(wtPath, 'package.json'), '{invalid-json-forces-reprovision-failure')
+  writeFileSync(join(wtPath, 'meta.json'), JSON.stringify({
+    worktreePath: wtPath,
+    mode: 'native',
+    branch: `sillyspec/${changeName}`,
+    baseHash: 'deadbeef',
+    depsStatus: 'failed',
+    depsMethod: 'install',
+    depsError: 'test forced failure',
+    depsLockHash: null,
+  }, null, 2) + '\n')
+
+  const gatesUrl = JSON.stringify(pathToFileURL(join(repoRoot, 'src', 'run', 'gates.js')).href)
+  const helper = [
+    `const { enforceDepsGate } = await import(${gatesUrl})`,
+    `await enforceDepsGate('execute', ${JSON.stringify(cwd)}, ${JSON.stringify(changeName)}, null, null, 0, ${JSON.stringify(specDir)}, {}, async () => {})`,
+    `process.exit(0)`,
+  ].join('\n')
+  const helperPath = join(cwd, '_b3-helper.mjs')
+  writeFileSync(helperPath, helper, 'utf8')
+
+  const res = spawnSync(process.execPath, [helperPath], { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 120_000 })
+  const combined = (res.stdout || '') + (res.stderr || '')
+  assert(res.status === 1, `B3: 重供给失败 → 门 exit=1（实际 exit=${res.status}）`)
+  assert(/重供给/.test(combined), 'B3: 输出含「重供给」重试路径日志')
+  assert(/doctor\s+--fix|依赖未就绪/.test(combined), 'B3: 阻断输出含 doctor --fix 修复指引')
 }
 
 // ════════════════════════════════════════════════════════════

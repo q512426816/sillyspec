@@ -1,0 +1,171 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-7fb8cb49",
+  "totals": {
+    "files": 12,
+    "additions": 446,
+    "deletions": 44
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/architecture-4a.md",
+      "declared": true,
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/doc-consistency-debt.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/file-lifecycle.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/design-facts.js",
+      "declared": true,
+      "additions": 56,
+      "deletions": 17,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 18,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 40,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/cmd-existence.js",
+      "declared": true,
+      "additions": 9,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "declared": true,
+      "additions": 32,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/enforce-deps-gate-diagnostic.test.mjs",
+      "declared": true,
+      "additions": 80,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/session-friction-crossrepo-fixes.test.mjs",
+      "declared": true,
+      "additions": 201,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": [
+      {
+        "file": "test/quick-gate-knowledge-whitelist.test.mjs",
+        "sessions": [
+          "quick-4654605c"
+        ]
+      }
+    ]
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 13,
+    "codeFileCount": 5,
+    "testFileCount": 2,
+    "moduleSpan": 4,
+    "modules": [
+      {
+        "id": "docs-consistency",
+        "files": [
+          "src/design-facts.js"
+        ]
+      },
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/gates.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/cmd-existence.js",
+          "src/stages/plan-postcheck.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/enforce-deps-gate-diagnostic.test.mjs",
+      "test/session-friction-crossrepo-fixes.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L2",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260915-006-135f",
+  "sessionId": "quick-7fb8cb49",
+  "savedAt": "2026-09-15T08:54:55.400Z",
+  "patchSha256": "2a23345e0f52602c1668660e31124684870c2852ee6f9711eb9b6784cf67b7fe",
+  "patchStatus": "ok"
+}

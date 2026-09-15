@@ -322,12 +322,14 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
     // 下游已有物理目录存在性判定兜底（G2/R3），这里 warn 留下根因线索，避免静默误诊。
     console.warn(`⚠️ worktree meta 读取失败（deps gate 将走物理目录判定）: ${e.message}`)
   }
-  const depsStatus = meta?.depsStatus
-  const mainOk = ['linked', 'installed', 'n/a'].includes(depsStatus)
-  if (mainOk) {
-    // ── 跨仓 worktree deps 校验（坑 cross-repo-no-worktree-isolation）──
-    // 跨仓仓供给失败同样无构建/测试能力（前端仓无 node_modules 建不了 build）。只校验已建
-    // worktree 的跨仓仓（legacy 直写模式无 meta，维持原语义，下游 Task Review 兜底）。
+  const depsOk = (s) => ['linked', 'installed', 'n/a'].includes(s)
+  const changeDir = changeName ? join(specBase, 'changes', changeName) : null
+
+  // main 侧就绪后的跨仓 worktree deps 校验（坑 cross-repo-no-worktree-isolation）：
+  // 跨仓仓供给失败同样无构建/测试能力（前端仓无 node_modules 建不了 build）。只校验已建
+  // worktree 的跨仓仓（legacy 直写模式无 meta，维持原语义，下游 Task Review 兜底）。
+  // 放行返回 true；跨仓未就绪置 blocked + exit(1)。
+  const crossCheckOrExit = async () => {
     let crossFailed = []
     try {
       const crossSpecBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
@@ -351,8 +353,39 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
     if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
     process.exit(1)
   }
-  const changeDir = changeName ? join(specBase, 'changes', changeName) : null
+
+  if (depsOk(meta?.depsStatus)) return await crossCheckOrExit()
+
+  // wave 级 opt-out（先于重供给：无需 deps 能力的 wave 不花 install 成本）
   if (isCurrentWaveAllNoDepsVerify(step?.name, changeDir)) return true
+
+  // ── --done 重供给重试（坑 deps-gate-manual-retry-ineffective，2026-09-15 wp 会话实证）──
+  // 阻断提示承诺「在 worktree 内手动安装依赖后重试」，但 manual install 不改 meta.depsStatus，
+  // failed 态直读 meta 永不翻绿 → 重试 --done 必撞同一堵墙，唯一出路 doctor --fix（wp 会话
+  // 正是手动编译成功后重试仍被拦，被迫多跑一轮 doctor）。对齐 run execute 入口
+  // ensureDepsFreshness 的同款供给：阻断前重供给一次并写回 meta——PATH 已修好的 shell 里
+  // 重跑 --done 即等效 doctor --fix；marker 型生态（nodejs）手动安装补齐 node_modules 后
+  // 重供给的 install 也能自然通过。仍失败则维持阻断，不无限重试。
+  let depsStatus = meta?.depsStatus
+  if (wm && changeName) {
+    let wtPath = null
+    try { wtPath = wm.getWorktreePath(changeName) } catch { /* meta 缺失走物理目录判定 */ }
+    if (wtPath && existsSync(wtPath)) {
+      try {
+        const { provisionDeps } = await import('../worktree-deps.js')
+        console.log(`🔄 deps 门控：depsStatus=${depsStatus || 'unknown'}，阻断前按 --done 重试路径重供给一次（与 doctor --fix 同款）...`)
+        const deps = provisionDeps(wtPath, cwd, { specBase }) || {}
+        meta = { ...meta, ...deps }
+        writeAtomicSync(join(wtPath, 'meta.json'), JSON.stringify(meta, null, 2) + '\n')
+        depsStatus = meta.depsStatus
+        console.log(`   重供给完成：depsStatus=${depsStatus || 'unknown'}${meta.depsError ? `（${meta.depsError}）` : ''}`)
+        if (depsOk(depsStatus)) return await crossCheckOrExit()
+      } catch (e) {
+        console.warn(`⚠️ deps 门控重供给失败（维持阻断判定）：${e.message}`)
+      }
+    }
+  }
+
   if (steps && steps[currentIdx]) {
     steps[currentIdx].status = 'blocked'
     // 阻断原因持久化（坑 deps-gate-blocked-invisible）：--status/诊断时可见，不依赖阻断当刻的

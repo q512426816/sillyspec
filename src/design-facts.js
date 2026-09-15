@@ -25,6 +25,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseDecisions } from './decision-distill.js'
 import { parseFileChangeListDetailed } from './change-list.js'
+import { parseDesignCoverageByRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
 import { parseModuleMapSimple } from './modules.js'
 
 // ---------------------------------------------------------------------------
@@ -423,25 +424,63 @@ export function validateDesignFileList({ changeDir, cwd } = {}) {
     if (!existsSync(designPath)) {
       return { ok: true, errors, warnings: ['design 清单核验跳过：design.md 不存在'] }
     }
-    const entries = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true })
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return { ok: true, errors, warnings: ['design 清单核验跳过：design.md 无文件变更清单段（small 变更可无清单）'] }
-    }
-    for (const e of entries) {
-      const raw = String((e && e.path) || '').trim()
-      if (!raw) continue
-      if (raw.startsWith('NEW:')) continue // 计划新建豁免（与 validateTargetFiles 同语义）
-      if (raw.includes('*') || raw.includes('?')) {
-        warnings.push(`design 清单条目含 glob 字符跳过存在性核验：${raw}`)
-        continue
+
+    // 单段存在性核验内核：NEW:/glob/占位符口径与原实现一致，仅把「根」参数化
+    const checkAgainstRoot = (root, rawPaths, repoLabel) => {
+      for (const raw of rawPaths) {
+        const rawPath = String(raw || '').trim()
+        if (!rawPath) continue
+        if (rawPath.startsWith('NEW:')) continue // 计划新建豁免（与 validateTargetFiles 同语义）
+        if (rawPath.includes('*') || rawPath.includes('?')) {
+          warnings.push(`design 清单条目含 glob 字符跳过存在性核验：${rawPath}`)
+          continue
+        }
+        const normalized = stripPathPlaceholders(rawPath)
+        if (!normalized || normalized === '.') continue
+        if (!existsSync(join(root, normalized))) {
+          errors.push({
+            path: rawPath,
+            message: `design_file_ref_invalid：文件变更清单条目「${rawPath}」在${repoLabel}（${root}）下不存在且无 NEW: 前缀（幻觉路径/书写错误）——修正路径，或计划新建的文件改为 NEW:${rawPath} 前缀`,
+          })
+        }
       }
-      const normalized = stripPathPlaceholders(raw)
-      if (!normalized || normalized === '.') continue
-      if (!existsSync(join(cwd, normalized))) {
-        errors.push({
-          path: raw,
-          message: `design_file_ref_invalid：文件变更清单条目「${raw}」既不存在也无 NEW: 前缀（幻觉路径/书写错误）——修正路径，或计划新建的文件改为 NEW:${raw} 前缀`,
-        })
+    }
+
+    // 坑 design-file-ref-cross-repo-blind（2026-09-15 wp 会话实证，41 条误报）：存在性核验
+    // 此前恒以主仓 cwd 为根——design §6 按仓分段（D-014）下的跨仓「修改」条目（如
+    // sub-grid-security 的 src/common/router.js）在其自己仓里明明存在，却被逼标 NEW: 前缀
+    // 过 gate（标「修改」的既有文件被迫声明为计划新建，语义撒谎）。对齐
+    // validateDesignFileCoverage 的分段口径：复用 parseDesignCoverageByRepo 按 `## <repo>
+    // 仓变更` 段头切分，main 段核主仓根，跨仓段核 local.yaml repos: 注册根；无段头时
+    // 整章归 main（原行为零回归）。
+    const { byRepo, hasSegmentHeader, malformedHeaders } = parseDesignCoverageByRepo(designPath)
+    for (const h of malformedHeaders) {
+      warnings.push(`design 清单疑似仓变更段头格式异常（该段文件可能被记到上一段仓，覆盖对账会点名）：${h}`)
+    }
+
+    if (!hasSegmentHeader) {
+      const entries = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true })
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return { ok: true, errors, warnings: [...warnings, 'design 清单核验跳过：design.md 无文件变更清单段（small 变更可无清单）'] }
+      }
+      checkAgainstRoot(cwd, entries.map(e => e.path), '主仓')
+      return { ok: errors.length === 0, errors, warnings }
+    }
+
+    // 有段头：逐段按其仓根核验。跨仓注册表读侧口径 = <cwd>/.sillyspec/local.yaml
+    // （与 execute MultiRepoContext / register-repo 写侧一致，parseRepoRegistry 自带 CRLF 容差）
+    let registry = null
+    const localYamlPath = join(cwd, '.sillyspec', 'local.yaml')
+    if (existsSync(localYamlPath)) {
+      try { registry = parseRepoRegistry(readFileSync(localYamlPath, 'utf8')) } catch { registry = null }
+    }
+    for (const [repo, paths] of byRepo) {
+      if (repo === 'main') {
+        checkAgainstRoot(cwd, paths, '主仓')
+      } else if (registry && registry.has(repo)) {
+        checkAgainstRoot(registry.get(repo), paths, `${repo} 仓`)
+      } else {
+        warnings.push(`design 清单「${repo} 仓变更」段的 repo 未在 local.yaml repos: 注册，跳过该段存在性核验（execute 启动会 fail-closed 拦截，先跑 sillyspec local register-repo ${repo} <仓根路径>）`)
       }
     }
     return { ok: errors.length === 0, errors, warnings }

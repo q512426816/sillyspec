@@ -13,7 +13,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { join, isAbsolute } from 'path'
 
 // 提取 `npm|pnpm|yarn run <script>` 命令。
 // 对齐 scan-postcheck:136 的 `/npm run (\S+)/g`，扩展包管理器 + 容忍多空白。
@@ -50,7 +50,12 @@ function readScripts(pkgPath) {
  * 为单条命令计算候选 package.json 路径列表。
  *
  * 规则（blueprint task-02 + design §5 H2）：
- *   - 有 `cd <subdir> &&` 前缀 → 仅查 `<projectRoot>/<subdir>/package.json`（cd 锁定子目录，不回退根）
+ *   - 有 `cd <subdir> &&` 前缀 → 仅查 `<subdir>/package.json`（cd 锁定子目录，不回退根）。
+ *     subdir 为绝对路径（win 盘符 / posix 根）时不再拼 projectRoot——坑
+ *     verify-cmd-absolute-cd-path（2026-09-15 wp 会话实证）：跨仓 task 卡 verify 写
+ *     `cd E:/PZwangge/sub-grid-security && npm run lint`，join(主仓根, 'E:/...') 拼出
+ *     病态路径 → package.json 恒 missing → 真实命令被误判死命令，agent 只能改写成
+ *     ../ 相对路径绕过
  *   - 无前缀 + modules 块提供 → 查每个 module.path 的子包 + 根 package.json（多候选任一命中即视为存在）
  *   - 无前缀 + 无 modules → 仅查 `<projectRoot>/package.json`
  *
@@ -65,7 +70,8 @@ function resolveCandidates(text, matchIndex, projectRoot, modules) {
   const cdMatch = before.match(CD_PREFIX_RE)
   if (cdMatch) {
     const subdir = cdMatch[1].replace(/^["']|["']$/g, '')
-    return [join(projectRoot, subdir, 'package.json')]
+    const base = isAbsolute(subdir) ? subdir : join(projectRoot, subdir)
+    return [join(base, 'package.json')]
   }
   if (modules && typeof modules === 'object') {
     const candidates = []

@@ -289,3 +289,18 @@
 方案：classify 五个取值参数（--ql/--title/--file/--section/--keywords）统一 flag_as_value 报错拦截；search/inspect 值以 -- 开头按缺参处理；validate 新增 flag_like_keyword 告警；按条目正文重写 9 条存量路由关键词；补 3 组回归测试
 结果：classify 84/84、validate 8/8 单跑绿；全量 npm test 485/0（scan-refresh/scan-staleness 并发假红被串行复核吸收，既有已知 flake）；lint 622 文件 0 告警；CLI 实测五项行为符合预期（垃圾路由消除、validate 0 告警、classify 拦截、search 缺参报错、新关键词可检索）
 审计：[gate] L1（跨 2 模块 · 5 文件：2 代码/2 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260915-006-135f | 2026-09-15 16:27:39 | 修复跨仓/门控四坑——register-repo 平台模式写死配置 / design_file_ref 跨仓盲目 / verify 命令路径解析 / deps…
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/architecture-4a.md（+4/-4）, docs/sillyspec/doc-consistency-debt.md（+2/-2）, docs/sillyspec/file-lifecycle.md（+1/-1）, docs/sillyspec/platform-interface-map.md（+1/-1）, docs/sillyspec/prompt-control-debt.md（+2/-2）, src/design-facts.js（+56/-17）, src/index.js（+18/-1）, src/run/gates.js（+40/-7）, src/stages/cmd-existence.js（+9/-3）, src/stages/plan-postcheck.js（+32/-5）, test/enforce-deps-gate-diagnostic.test.mjs（+80/-1）, test/session-friction-crossrepo-fixes.test.mjs（+201/-0）
+需求：修复跨仓/门控四坑——register-repo 平台模式写死配置 / design_file_ref 跨仓盲目 / verify 命令路径解析 / deps 门控手动重试无效
+根因：wp 奖惩功能开发会话（2026-09-15）实证的四个 CLI 摩擦：①register-repo 平台模式写平台 spec 根 local.yaml，repos: 读侧（execute MultiRepoContext/worktree-cross）恒读项目侧，注册=死配置，agent 被迫试出 --spec-dir 绕过；②validateDesignFileList 只按主仓核验存在性，## <repo> 仓变更（D-014）段下跨仓修改既有文件被逼标 NEW: 过 gate（41 条误报，标修改语义撒谎）；③TaskCard verify 的 cd <绝对路径> 被 join(主仓根) 拼病态路径、卡片 repo: 声明未切换命令校验基准根，真实命令被误判死命令；④deps 门承诺『手动安装依赖后重试』但 manual install 不改 meta.depsStatus，failed 态重试 --done 必撞墙，唯一出路 doctor --fix
+方案：①无显式 --spec-dir 时 register-repo 写目标走读侧对齐链（<cwd>/.sillyspec/local.yaml），双份 local.yaml 时输出 spec 根 repos 死配置提醒；plan-postcheck repoRegistry 读侧同步对齐项目 local.yaml。②validateDesignFileList 复用 parseDesignCoverageByRepo 按 D-014 分段，main 段核主仓、跨仓段核 repos: 注册根，未注册仓段降级 warning+指引。③cmd-existence cd 绝对路径不拼根；validateTaskCommands 按卡片 repo: 以注册仓根为命令校验基准。④enforceDepsGate --done 阻断前重供给一次并写回 meta。docs check --fix 重锚 14 处行号（本改动行漂移，纯数字零逻辑）
+结果：全量 npm test 486/486 通过（新增 session-friction-crossrepo-fixes 19 项 + enforce-deps-gate-diagnostic 补 B2 自救/B3 仍阻断）；npm run lint 623 文件 0 告警；docs check --fix 后 0 失效；受影响面专项回归全绿
+审计：[gate] L2（跨 4 模块 · 13 文件：5 代码/2 测试）advisory；模块文档认领已 --no-docs 显式豁免
+
+## ql-20260915-007-9b55 | 2026-09-15 16:51:14 | 知识库文件(.sillyspec/knowledge/)纳入 quick 元数据白名单：登记知识条目不再要 --force-baseline、--file-notes 不再强制覆盖知识文件
+状态：进行中
+关联变更：（无）
+文件：src/run/shared.js, test/audit-quick-completion.test.mjs, test/quick-gate-knowledge-whitelist.test.mjs
