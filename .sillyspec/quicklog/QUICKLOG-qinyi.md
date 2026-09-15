@@ -269,3 +269,8 @@
 方案：sweepForeignNodeModulesJunctions 三挂点（create/cleanup/install 前零穿透删除）；_probeWorktreeRemnants 双探针兜底（git 分支注册+runtimeRoot 口径，全不命中输出诊断清单）；detectInterruptedSyntaxResidue 挂 writeTaskReview（.js 双跑仲裁防 Node v24 假阴，advisory）
 结果：npm test 483/483+lint 620 绿；新 10 用例双平台；--force-baseline 理由=worktree.js 受保护面的刻意机制修复（挂点+兜底探测，483 全绿实证）；--no-docs 理由=三卡当日已由 change-ownership task-04 更新且并行会话在途占用，避免冲突
 审计：[gate] L1（跨 3 模块 · 6 文件：4 代码/1 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+
+## ql-20260915-004-6701 | 2026-09-15 07:42:55 | 三坑修复：①docs gate 基线陈旧假拦（改对比 origin/main 实测而非本地基线文件）②探针 7 覆盖矩阵预填漏证据列 ③worktree 快照断言漂移的 committed-drift 提示
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
