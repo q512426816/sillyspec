@@ -451,3 +451,14 @@
 方案：verifyApiParity跨仓前端并集（task卡源不滤注册表+design源路径参+repos仓根+声明集收窄+source反斜杠手工归一）+unused分层（artifact内逐条/存量折叠/无artifact回退）；worktree-deps兄弟仓先查repos注册根（轻量解析）命中→skipped准确理由未注册维持拒绝；verify-probes渲染分层+跨仓注记
 结果：新增两测试文件五组用例全绿；probe5回归3文件绿；全量npm test exit 0
 审计：[gate] L1（跨 2 模块 · 5 文件：3 代码/2 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260916-007-5e1a | 2026-09-16 00:59:17 | 探针8载荷字段契约对账——前端载荷键×后端字段/NOT NULL列 advisory 比对
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（探针8三提取器+主体+渲染+接线+facts）
+- test/probe8-payload-parity.test.mjs（五组用例）
+需求：探针8载荷字段契约对账——前端载荷键×后端字段/NOT NULL列 advisory 比对
+根因：EHS二次独立复核实证：5个P1里4处是字段/载荷错位（leaderUserId↔rpLeaderUserId Jackson静默丢弃/小程序缺发reportOrgId/sourceShdId↔safelyHiddenId/report_org_name NOT NULL）——探针5只对URL级，载荷级零覆盖
+方案：三提取器（Java字段常量排除/SQL NOT NULL审计列豁免/请求调用邻近对象键）+runProbe8PayloadParity（design三面分类+NEW:剥除+未注册跨仓兜底注记+三根读取+小写剥分隔线归一化+子串∪token-Jaccard0.6双配对带长度差tie-break+NOT NULL缺送核对）+renderProbe8Lines advisory段+runVerifyProbes fail-soft接线+facts probe8 metrics
+结果：test/probe8-payload-parity.test.mjs五组5/5绿；verify-probes族回归全绿；lint 636文件0告警；全量npm test由--done CLI实测

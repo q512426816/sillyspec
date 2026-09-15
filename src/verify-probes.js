@@ -22,7 +22,7 @@
  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
-import { join, dirname, basename } from 'path'
+import { join, dirname, basename, resolve, isAbsolute } from 'path'
 import jsYaml from 'js-yaml'
 import { gitQuiet } from './git-helper.js'
 import {
@@ -30,7 +30,7 @@ import {
 } from './verify-facts-schema.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDecisions } from './decision-distill.js'
-import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js'
+import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
@@ -134,7 +134,179 @@ function findTestFiles(rootDir, cwd, cap = 10) {
   return found
 }
 
-// ── 探针 7（验收×测试覆盖矩阵，2026-09-14-acceptance-test-matrix FR-01）常量与纯函数 ──
+// ── 探针 8（载荷字段契约对账，2026-09-16 EHS 二次独立复核驱动）常量与纯函数 ──
+// 5 个 P1 里 4 处是字段/载荷错位（leaderUserId↔rpLeaderUserId 三处 Jackson 静默丢弃、小程序
+// 缺发 reportOrgId、sourceShdId↔safelyHiddenId、report_org_name NOT NULL 边界）——探针 5 只对
+// 账 method+path（URL 级），载荷级错位零覆盖。本探针三面启发式比对（advisory，命中≠结论）：
+// 前端请求载荷键 × 后端 Java 字段（归一化覆盖）∪ 子串疑似错位配对 ∪ SQL NOT NULL 列缺送核对。
+const PROBE8_HEADING = '#### 探针 8：载荷字段契约对账（advisory）'
+// 服务端填充/标准列豁免（NOT NULL 但不该由前端送）
+const PROBE8_SERVER_FILLED_RE = /^(id|create_by|create_date|update_by|update_date|remarks|dept_id|tenant_id|del_flag)$/i
+
+/**
+ * 归一化键：小写 + 剥全部分隔线（snake/连字符）——两侧同构（rp_category / rpCategory /
+ * rp-category → rpcategory）。注意不能「小写后再 camel 化」（会单侧引入大写不对称）。
+ */
+const normFieldKey = (s) => String(s || '').trim().toLowerCase().replace(/[_-]/g, '')
+
+/** Java private 字段名提取（全大写常量 TODO_FLAG_TODO 排除——EHS 探针1 同款教训） */
+export function extractJavaFields(text) {
+  const names = new Set()
+  const re = /private\s+(?:static\s+|final\s+)*[\w.$<>[\]]+\s+([A-Za-z_][A-Za-z0-9_]*)\s*[;=]/g
+  let m
+  while ((m = re.exec(String(text || ''))) !== null) {
+    if (!/^[A-Z0-9_]+$/.test(m[1])) names.add(m[1])
+  }
+  return names
+}
+
+/** SQL CREATE TABLE 行的 NOT NULL 业务列（审计列豁免） */
+export function extractSqlNotNullColumns(text) {
+  const cols = new Set()
+  for (const line of String(text || '').split('\n')) {
+    const m = line.match(/^\s*`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s+(?:varchar|char|int|integer|bigint|decimal|datetime|date|timestamp|text|double|float)\b[^,]*NOT NULL\b/i)
+    if (m && !PROBE8_SERVER_FILLED_RE.test(m[1])) cols.add(m[1])
+  }
+  return cols
+}
+
+/**
+ * 请求载荷键提取：apiFetch/request/axios/$http/fetch( 调用行后 8 行窗口内的对象键
+ * （key: 后随值起始为字面量/对象/数组/null/undefined/负号——排除 case/三元等形态）。
+ * UI 本地态对象（请求区外）天然不收。
+ */
+export function extractPayloadKeys(text) {
+  const keys = new Set()
+  const lines = String(text || '').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (!/\b(apiFetch|request|axios|\$http|fetch)\s*\(/.test(lines[i])) continue
+    for (let j = i; j < Math.min(i + 8, lines.length); j++) {
+      for (const m of lines[j].matchAll(/(?:^|[{,(\s])([A-Za-z_][A-Za-z0-9]*)\s*:\s(?:["'`\d{[tfn-]|null\b|undefined\b)/g)) {
+        keys.add(m[1])
+      }
+    }
+  }
+  return keys
+}
+
+/**
+ * 探针 8 主体：design 清单三面文件（Java/SQL/前端）→ 双根（主仓 ∪ worktree）∪ 跨仓注册仓根
+ * 读取 → 归一化比对。advisory：所有输出是「候选」不是结论（UI 本地态键/服务端填充列会自然
+ * 出现在差异里，agent 逐条复核——口径注记随渲染输出）。
+ * @param {{ specBase: string, cwd: string, wtRoot?: string|null, changeName: string }} args
+ * @returns {{applicable, backendFieldCount, feKeyCount, notNullCount, javaFileCount, sqlFileCount, feFileCount,
+ *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[]}}
+ */
+export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeName }) {
+  const out = {
+    applicable: false, backendFieldCount: 0, feKeyCount: 0, notNullCount: 0,
+    javaFileCount: 0, sqlFileCount: 0, feFileCount: 0,
+    mispairs: [], feOnly: [], missingNotNull: [], notes: [],
+  }
+  if (!specBase || !changeName) return out
+  const designPath = join(specBase, 'changes', changeName, 'design.md')
+  if (!existsSync(designPath)) return out
+  let registry = new Map()
+  try {
+    const yamlPath = join(specBase, 'local.yaml')
+    if (existsSync(yamlPath)) registry = parseRepoRegistry(readFileSync(yamlPath, 'utf8'))
+  } catch { /* 注册表不可读 → 跨仓条目落未注册注记 */ }
+  const detailed = parseFileChangeListDetailed(designPath, { repoKeys: [...registry.keys()] })
+
+  const readEntry = (e) => {
+    // NEW: 待建前缀剥离（坑 probe1-new-prefix-miss 同款）：design 清单的 NEW: 是新建意图标记，
+    // 文件系统实体无前缀——按目标路径读。
+    const probePath = String(e.path).replace(/^NEW:\s*/, '')
+    // 未注册跨仓前缀兜底识别（change-list 只对注册 key 落 e.repo；未注册 key 整条 path 保留
+    // cross-repo: 前缀原样）——现身「未注册」注记而非静默不可读。
+    const crPrefix = probePath.match(/^cross-repo:([A-Za-z0-9_.\-]+):(.*)$/)
+    if (e.repo || crPrefix) {
+      const key = e.repo || (crPrefix && crPrefix[1])
+      const relPath = e.repo ? probePath : crPrefix[2]
+      const raw = registry.get(key)
+      if (!raw) { out.notes.push(`repo「${key}」未在 local.yaml repos 注册——该仓前端文件未进探针 8 比对`); return null }
+      const root = isAbsolute(raw) ? raw : resolve(cwd, raw)
+      try { return readFileSync(join(root, relPath), 'utf8') } catch { out.notes.push(`跨仓文件不可读：${key}:${relPath}`); return null }
+    }
+    // 主仓 ∪ worktree 双根（与探针 1 同款回退）
+    for (const base of [cwd, wtRoot].filter(Boolean)) {
+      try { return readFileSync(join(base, probePath), 'utf8') } catch { /* 试下一根 */ }
+    }
+    return null
+  }
+
+  const backendFields = new Set()
+  const notNullCols = new Set()
+  const feKeys = new Set()
+  for (const e of detailed) {
+    if (!e.path || e.path.startsWith('.sillyspec/')) continue
+    const text = readEntry(e)
+    if (text == null) continue
+    if (e.path.endsWith('.java')) {
+      out.javaFileCount++
+      for (const f of extractJavaFields(text)) backendFields.add(f)
+    } else if (e.path.endsWith('.sql')) {
+      out.sqlFileCount++
+      for (const c of extractSqlNotNullColumns(text)) notNullCols.add(c)
+    } else if (/\.(js|jsx|ts|tsx)$/.test(e.path)) {
+      out.feFileCount++
+      for (const k of extractPayloadKeys(text)) feKeys.add(k)
+    }
+  }
+  // 后端零面（无 Java 无 SQL）→ 不适用（纯前端/文档变更不打扰）
+  if (out.javaFileCount === 0 && out.sqlFileCount === 0) return out
+  out.applicable = true
+
+  const backendNorm = new Map() // norm → 原名
+  for (const f of backendFields) backendNorm.set(normFieldKey(f), f)
+  const feNorm = new Map()
+  for (const k of feKeys) feNorm.set(normFieldKey(k), k)
+  // 配对 token（camelCase/snake 切词；单字符段只保留 id）——子串关系抓 leaderUserId⊂rpLeaderUserId，
+  // token 重叠（Jaccard≥0.6）抓语义近形 punishedDutyUserId↔punishedLeaderUserId（EHS 二次复核
+  // 两类实证形态）。并列取长度差最小者（leaderUserId 优先配 rpLeaderUserId 而非更长的
+  // punishedLeaderUserId）。
+  const fieldTokens = (s) => String(s).replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[^A-Za-z0-9]+/)
+    .map(t => t.toLowerCase()).filter(t => t.length > 1 || t === 'id')
+
+  for (const [nk, original] of feNorm) {
+    if (backendNorm.has(nk)) continue // 归一化覆盖（rpCategory ↔ rp_category）
+    const feToks = fieldTokens(original)
+    let best = null
+    let bestScore = 0
+    let bestLenPenalty = Infinity
+    for (const [bn, beOrig] of backendNorm) {
+      let score = 0
+      if ((bn.includes(nk) || nk.includes(bn)) && Math.min(bn.length, nk.length) >= 4) score = 1
+      else if (feToks.length >= 2) {
+        const bt = fieldTokens(beOrig)
+        if (bt.length >= 2) {
+          const inter = feToks.filter(t => bt.includes(t)).length
+          const union = new Set([...feToks, ...bt]).size
+          if (union > 0) score = inter / union
+        }
+      }
+      if (score <= 0) continue
+      const lenPenalty = Math.abs(bn.length - nk.length)
+      if (score > bestScore || (score === bestScore && lenPenalty < bestLenPenalty)) {
+        bestScore = score
+        bestLenPenalty = lenPenalty
+        best = beOrig
+      }
+    }
+    if (best && bestScore >= 0.6) out.mispairs.push({ fe: original, be: best })
+    else out.feOnly.push(original)
+  }
+  for (const col of notNullCols) {
+    const nc = normFieldKey(col)
+    if (!feNorm.has(nc) && !backendNorm.has(nc)) out.missingNotNull.push({ col })
+  }
+  out.backendFieldCount = backendFields.size
+  out.feKeyCount = feKeys.size
+  out.notNullCount = notNullCols.size
+  return out
+}
+
+
 const PROBE7_HEADING = '#### 探针 7：验收×测试覆盖矩阵'
 // execute run id 格式（与 task-review.js isValidExecuteRunId 同口径锚定，防提示词注入/路径穿越）
 const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0,2}$/
@@ -574,7 +746,16 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     }
   }
 
-  return { probe1, probe3, probe5, probe6, probe7 }
+  // ── 探针 8：载荷字段契约对账（advisory；2026-09-16 EHS 二次复核驱动——字段错位族 4 处
+  // P1 是 URL 级 parity 的真空带）。fail-soft：内部全兜，异常降级 not-applicable 不炸整体。──
+  let probe8 = { applicable: false, mispairs: [], feOnly: [], missingNotNull: [], notes: [] }
+  try {
+    probe8 = runProbe8PayloadParity({ specBase, cwd, wtRoot, changeName })
+  } catch (e) {
+    probe8.notes = [`探针 8 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+  }
+
+  return { probe1, probe3, probe5, probe6, probe7, probe8 }
 }
 
 /**
@@ -676,7 +857,41 @@ export function renderVerifyProbesReport(result) {
     }
   }
   L.push(`- ℹ️ ${probe6.note}`)
+  L.push('')
+  L.push(...(renderProbe8Lines(result.probe8 || { applicable: false, mispairs: [], feOnly: [], missingNotNull: [], notes: [] })))
   return L.join('\n')
+}
+
+/**
+ * 渲染探针 8 段（advisory 口径注记随段输出——命中≠结论，agent 逐条复核）。
+ * @param {{applicable: boolean, backendFieldCount?: number, feKeyCount?: number, notNullCount?: number,
+ *   javaFileCount?: number, sqlFileCount?: number, feFileCount?: number,
+ *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[]}} p8
+ * @returns {string[]} 行数组（含段标题）
+ */
+function renderProbe8Lines(p8) {
+  const L = [PROBE8_HEADING]
+  if (!p8 || !p8.applicable) {
+    L.push('- 不适用（清单无 Java/SQL 后端面，或 design.md 缺失）')
+    for (const n of (p8 && p8.notes) || []) L.push(`- ℹ️ ${n}`)
+    return L
+  }
+  L.push('<!-- 口径注记：静态启发式对账——前端请求载荷键（apiFetch/request/axios/fetch 调用邻近对象键）× 后端 Java private 字段（归一化覆盖）∪ 疑似错位配对 ∪ SQL NOT NULL 列缺送。命中≠结论：UI 本地态键/服务端填充列会自然出现在差异里，agent 逐条复核（2026-09-16 EHS 二次复核实证：leaderUserId↔rpLeaderUserId 字段错位致相关方支线三端不可用、缺发 reportOrgId 致小程序开立被拒——URL 级 parity 抓不住载荷级错位）。 -->')
+  L.push(`- ℹ️ 比对面：前端载荷键 ${p8.feKeyCount ?? 0}（${p8.feFileCount ?? 0} 前端文件）× 后端字段 ${p8.backendFieldCount ?? 0}（${p8.javaFileCount ?? 0} Java 文件）+ NOT NULL 列 ${p8.notNullCount ?? 0}（${p8.sqlFileCount ?? 0} SQL 文件）`)
+  if ((p8.mispairs || []).length > 0) {
+    L.push(`- ⚠️ 疑似字段错位配对（前后端名近形，人工核实一对一映射）：${p8.mispairs.slice(0, 8).map(p => `${p.fe} ↔ ${p.be}`).join('、')}${p8.mispairs.length > 8 ? ` …共 ${p8.mispairs.length} 对` : ''}`)
+  }
+  if ((p8.feOnly || []).length > 0) {
+    L.push(`- ℹ️ 前端独有键（候选 UI 本地态/字段错位/跨层无关）：${p8.feOnly.slice(0, 10).join('、')}${p8.feOnly.length > 10 ? ` …共 ${p8.feOnly.length} 个` : ''}`)
+  }
+  if ((p8.missingNotNull || []).length > 0) {
+    L.push(`- ⚠️ NOT NULL 列前端未见（候选必填缺送/服务端填充）：${p8.missingNotNull.slice(0, 8).map(c => c.col).join('、')}${p8.missingNotNull.length > 8 ? ` …共 ${p8.missingNotNull.length} 个` : ''}`)
+  }
+  if ((p8.mispairs || []).length === 0 && (p8.missingNotNull || []).length === 0) {
+    L.push('- ✅ 载荷字段面零疑似差异（归一化覆盖 + NOT NULL 全见）')
+  }
+  for (const n of p8.notes || []) L.push(`- ℹ️ ${n}`)
+  return L
 }
 
 /**
@@ -697,6 +912,7 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
   const p3 = (result && result.probe3) || {}
   const p5 = (result && result.probe5) || {}
   const p6 = (result && result.probe6) || {}
+  const p8 = (result && result.probe8) || {}
   // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
   // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
   // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
@@ -733,6 +949,16 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
         metrics: defined({
           deletions: len(p6.deletions),
           unavailable: typeof p6.unavailable === 'boolean' ? p6.unavailable : undefined,
+        }),
+      },
+      probe8: {
+        command,
+        metrics: defined({
+          mispairs: len(p8.mispairs),
+          feOnly: len(p8.feOnly),
+          missingNotNull: len(p8.missingNotNull),
+          feKeys: num(p8.feKeyCount),
+          backendFields: num(p8.backendFieldCount),
         }),
       },
     },
