@@ -189,19 +189,122 @@ export function extractPayloadKeys(text) {
   return keys
 }
 
+// ── 探针 8 契约维度（task-01，2026-09-16 跨层契约探针扩展）──
+// design.md 的契约类章节（接口定义/数据模型等）字段表是「文档契约面」——既有三面（Java 字段/
+// SQL NOT NULL/前端载荷键）对不上「文档 vs 实现」漂移：契约改了代码没跟上（orphan）、契约必填
+// 前端根本没送（EHS 实证小程序缺发 reportOrgId 必填被拒同族）。纯 advisory 不升硬门。
+const PROBE8_CONTRACT_SECTION_RE = /接口定义|数据模型|接口契约|字段/
+const PROBE8_FIELD_HEADER_RE = /字段|field/i
+const PROBE8_REQUIRED_CELL_RE = /必填|required|※/i
+const PROBE8_FIELD_IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+/** markdown 切章节（##/### 标题行；# 是题名、#### 归正文，均不切），返回 [{heading, lines}] */
+function splitMdSections(text) {
+  const sections = []
+  let cur = null
+  for (const line of String(text || '').split('\n')) {
+    const h = line.match(/^#{2,3}\s+(.*?)\s*#*\s*$/)
+    if (h) {
+      cur = { heading: h[1].trim(), lines: [] }
+      sections.push(cur)
+    } else if (cur) cur.lines.push(line)
+  }
+  return sections
+}
+
+/** 表格行切列（剥首尾竖线与空白） */
+const splitMdRow = (line) => String(line || '').trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+
+/** markdown 表格分隔行（|---|---| 形态：剥竖线后仅剩 :/-/空白即认定） */
+const isMdDividerRow = (line) => {
+  const s = String(line || '').replace(/\|/g, '').trim()
+  return s !== '' && /^[:\s-]+$/.test(s)
+}
+
+/**
+ * 契约字段首列清洗：剥反引号与类型注记尾缀——`` `fieldName` `` / `fieldName（String）` /
+ * `fieldName int` 等形态统一取标识符部分（类型混进字段名会破坏归一化比对）。
+ */
+const stripContractFieldName = (cell) => {
+  const s = String(cell || '').replace(/`/g, '').trim()
+  const paren = s.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[（(]/)
+  if (paren) return paren[1]
+  const tail = s.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+(?:String|Integer|Int|Long|Double|Float|Boolean|Date|BigDecimal|varchar|char|int|bigint|decimal|datetime|timestamp|text)\b/i)
+  if (tail) return tail[1]
+  return s
+}
+
+/**
+ * design.md 契约面解析（task-01）：契约类章节（标题含 接口定义/数据模型/接口契约/字段 之一）内
+ * 表头首个数据列含「字段/Field」的表格 → {name=章节名, fields, required}。防误判：文件清单表
+ * （首列「操作」）/风险表（首列「#」）不入面；数据行不足 2 行的噪声表跳过；章节含
+ * `<!-- probe8-skip -->` 整章跳过计 skippedSections（非契约字段表的逃生门）。
+ * @param {string} designPath
+ * @returns {{contracts: Array<{name: string, fields: Set<string>, required: Set<string>}>, skippedSections: number}|null}
+ */
+export function parseDesignContracts(designPath) {
+  if (!existsSync(designPath)) return null
+  let text
+  try { text = readFileSync(designPath, 'utf8') } catch { return null }
+  const contracts = []
+  let skippedSections = 0
+  for (const sec of splitMdSections(text)) {
+    if (!PROBE8_CONTRACT_SECTION_RE.test(sec.heading)) continue
+    if (sec.lines.some(l => l.includes('<!-- probe8-skip -->'))) { skippedSections++; continue }
+    let i = 0
+    while (i < sec.lines.length) {
+      const line = sec.lines[i]
+      if (!line.includes('|') || !isMdDividerRow(sec.lines[i + 1] || '')) { i++; continue }
+      // 表头首个数据列（首个非空列，剥反引号/空白）含 字段/Field 才入面；「操作」/「#」首列
+      // （文件清单表/风险表）显式排除——防表头措辞漂移误收。
+      const headerFirst = (splitMdRow(line).find(c => c !== '') || '').replace(/`/g, '').trim()
+      let j = i + 2
+      const dataRows = []
+      while (j < sec.lines.length && sec.lines[j].includes('|') && sec.lines[j].trim() !== '') { dataRows.push(sec.lines[j]); j++ }
+      if (PROBE8_FIELD_HEADER_RE.test(headerFirst) && headerFirst !== '操作' && headerFirst !== '#'
+        && dataRows.length >= 2) {
+        const fields = new Set()
+        const required = new Set()
+        for (const row of dataRows) {
+          const cells = splitMdRow(row)
+          const fname = stripContractFieldName(cells[0])
+          if (!fname || !PROBE8_FIELD_IDENT_RE.test(fname)) continue // 非标识符首列（子说明行）不收
+          fields.add(fname)
+          // required=该行任一列含 必填|required|※
+          if (cells.some(c => PROBE8_REQUIRED_CELL_RE.test(c))) required.add(fname)
+        }
+        if (fields.size > 0) contracts.push({ name: sec.heading, fields, required })
+      }
+      i = j
+    }
+  }
+  return { contracts, skippedSections }
+}
+
+/** design 是否声明提交端点：「接口定义」章节内含 POST/PUT 行（纯查询契约不苛求前端送全必填） */
+function designHasSubmitEndpoint(text) {
+  for (const sec of splitMdSections(text)) {
+    if (!/接口定义/.test(sec.heading)) continue
+    if (sec.lines.some(l => /\b(POST|PUT)\b/.test(l))) return true
+  }
+  return false
+}
+
 /**
  * 探针 8 主体：design 清单三面文件（Java/SQL/前端）→ 双根（主仓 ∪ worktree）∪ 跨仓注册仓根
  * 读取 → 归一化比对。advisory：所有输出是「候选」不是结论（UI 本地态键/服务端填充列会自然
  * 出现在差异里，agent 逐条复核——口径注记随渲染输出）。
  * @param {{ specBase: string, cwd: string, wtRoot?: string|null, changeName: string }} args
  * @returns {{applicable, backendFieldCount, feKeyCount, notNullCount, javaFileCount, sqlFileCount, feFileCount,
- *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[]}}
+ *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[],
+ *   contractCount: number, contractOrphans: Array<{fe, hint?}>, missingRequired: Array<{field, contract}>}}
  */
 export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeName }) {
   const out = {
     applicable: false, backendFieldCount: 0, feKeyCount: 0, notNullCount: 0,
     javaFileCount: 0, sqlFileCount: 0, feFileCount: 0,
     mispairs: [], feOnly: [], missingNotNull: [], notes: [],
+    contractCount: 0, contractOrphans: [], missingRequired: [],
   }
   if (!specBase || !changeName) return out
   const designPath = join(specBase, 'changes', changeName, 'design.md')
@@ -299,6 +402,65 @@ export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeNam
   for (const col of notNullCols) {
     const nc = normFieldKey(col)
     if (!feNorm.has(nc) && !backendNorm.has(nc)) out.missingNotNull.push({ col })
+  }
+
+  // ── 契约维度（task-01，advisory 不升硬门）：design.md 契约面（接口定义/数据模型章节字段表）
+  // × 前端载荷键第四面对账——文档 vs 实现漂移：契约外载荷键（候选契约滞后/跨层私加）+ 契约必填
+  // 漏发（EHS 小程序缺发 reportOrgId 被拒同族）。无契约面仅注记，既有三维度输出不动。──
+  const contractRes = parseDesignContracts(designPath)
+  const contracts = (contractRes && contractRes.contracts) || []
+  if (contracts.length > 0) {
+    out.contractCount = contracts.length
+    const contractUnion = new Map() // norm → 契约字段原名（hint 对账用原名）
+    for (const c of contracts) {
+      for (const f of c.fields) {
+        const nf = normFieldKey(f)
+        if (!contractUnion.has(nf)) contractUnion.set(nf, f)
+      }
+    }
+    // 契约外载荷键：已落 feOnly/mispairs 疑似面的 fe 键（归一正名键不扰）且契约面归一化未见。
+    // hint 用 fieldTokens token-Jaccard 对契约字段原名单独跑一遍，≥0.4 取最高分者（并列取长度
+    // 差最小——同 mispairs 择优口径），仅提示性可缺省。
+    const suspected = new Set(out.feOnly)
+    for (const p of out.mispairs) suspected.add(p.fe)
+    for (const [nk, original] of feNorm) {
+      if (contractUnion.has(nk) || !suspected.has(original)) continue
+      const feToks = fieldTokens(original)
+      let hint = null
+      let bestScore = 0
+      let bestLenPenalty = Infinity
+      if (feToks.length >= 2) {
+        for (const [cn, cOrig] of contractUnion) {
+          const ct = fieldTokens(cOrig)
+          if (ct.length < 2) continue
+          const inter = feToks.filter(t => ct.includes(t)).length
+          const union = new Set([...feToks, ...ct]).size
+          const score = union > 0 ? inter / union : 0
+          if (score <= 0) continue
+          const lenPenalty = Math.abs(cn.length - nk.length)
+          if (score > bestScore || (score === bestScore && lenPenalty < bestLenPenalty)) {
+            bestScore = score
+            bestLenPenalty = lenPenalty
+            hint = cOrig
+          }
+        }
+      }
+      if (hint && bestScore >= 0.4) out.contractOrphans.push({ fe: original, hint })
+      else out.contractOrphans.push({ fe: original })
+    }
+    // 必填漏发：仅 design「接口定义」章节声明提交端点（POST/PUT 行）时启用——查询型契约的
+    // required 不苛求前端送全（GET 无 body）。契约 required 归一化后 ∉ feNorm 全集即列。
+    let designText = ''
+    try { designText = readFileSync(designPath, 'utf8') } catch { /* 不可读 → 不启用 */ }
+    if (designHasSubmitEndpoint(designText)) {
+      for (const c of contracts) {
+        for (const f of c.required) {
+          if (!feNorm.has(normFieldKey(f))) out.missingRequired.push({ field: f, contract: c.name })
+        }
+      }
+    }
+  } else {
+    out.notes.push('design 无契约面——契约维度 skipped')
   }
   out.backendFieldCount = backendFields.size
   out.feKeyCount = feKeys.size
@@ -876,7 +1038,8 @@ export function renderVerifyProbesReport(result) {
  * 渲染探针 8 段（advisory 口径注记随段输出——命中≠结论，agent 逐条复核）。
  * @param {{applicable: boolean, backendFieldCount?: number, feKeyCount?: number, notNullCount?: number,
  *   javaFileCount?: number, sqlFileCount?: number, feFileCount?: number,
- *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[]}} p8
+ *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[],
+ *   contractCount?: number, contractOrphans?: Array<{fe, hint?}>, missingRequired?: Array<{field, contract}>}} p8
  * @returns {string[]} 行数组（含段标题）
  */
 function renderProbe8Lines(p8) {
@@ -897,7 +1060,16 @@ function renderProbe8Lines(p8) {
   if ((p8.missingNotNull || []).length > 0) {
     L.push(`- ⚠️ NOT NULL 列前端未见（候选必填缺送/服务端填充）：${p8.missingNotNull.slice(0, 8).map(c => c.col).join('、')}${p8.missingNotNull.length > 8 ? ` …共 ${p8.missingNotNull.length} 个` : ''}`)
   }
-  if ((p8.mispairs || []).length === 0 && (p8.missingNotNull || []).length === 0) {
+  // 契约维度两行（task-01，advisory）：契约外载荷键（design 契约面未见）/ 必填漏发（契约
+  // required 前端载荷未见）。无契约面时 notes 已有 skipped 注记（下方循环渲染），不空段。
+  if ((p8.contractOrphans || []).length > 0) {
+    L.push(`- ⚠️ 契约外载荷键 ${p8.contractOrphans.length} 条（design 契约面未见，候选契约滞后/跨层私加）：${p8.contractOrphans.slice(0, 8).map(o => o.hint ? `${o.fe}（疑似对应 ${o.hint}）` : o.fe).join('、')}${p8.contractOrphans.length > 8 ? ` …共 ${p8.contractOrphans.length} 条` : ''}`)
+  }
+  if ((p8.missingRequired || []).length > 0) {
+    L.push(`- ⚠️ 契约必填漏发 ${p8.missingRequired.length} 条（契约 required 前端载荷未见，人工核实提交链路）：${p8.missingRequired.slice(0, 8).map(r => `${r.field}←${r.contract}`).join('、')}${p8.missingRequired.length > 8 ? ` …共 ${p8.missingRequired.length} 条` : ''}`)
+  }
+  if ((p8.mispairs || []).length === 0 && (p8.missingNotNull || []).length === 0
+    && (p8.contractOrphans || []).length === 0 && (p8.missingRequired || []).length === 0) {
     L.push('- ✅ 载荷字段面零疑似差异（归一化覆盖 + NOT NULL 全见）')
   }
   for (const n of p8.notes || []) L.push(`- ℹ️ ${n}`)
@@ -967,6 +1139,9 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
           mispairs: len(p8.mispairs),
           feOnly: len(p8.feOnly),
           missingNotNull: len(p8.missingNotNull),
+          contractCount: num(p8.contractCount),
+          contractOrphans: len(p8.contractOrphans),
+          missingRequired: len(p8.missingRequired),
           feKeys: num(p8.feKeyCount),
           backendFields: num(p8.backendFieldCount),
         }),

@@ -2795,6 +2795,15 @@ export const PROBE5_MISSING_ROW_RE = /^\| ❌ missing \|/
  *  unavailable 行 / 无删除行 / ℹ️ note 行天然区分——后三者均无「反引号路径+状态尾缀」形态） */
 export const PROBE6_DELETION_LINE_RE = /^- (?:✅ 合规|❌ 高风险|⚠️ 未声明删除)[^`]* `[^`]+`（git 状态/
 
+/** probe8 契约外载荷键汇总行：`- ⚠️ 契约外载荷键 N 条（design 契约面未见，…）：…`
+ *  （renderProbe8Lines，verify-probes.js；N 条计数段与段内其它 ⚠️ 行（疑似字段错位配对/
+ *  NOT NULL 列前端未见）区分——契约行是汇总行非逐条行，锚点取行内 N 而非行计数） */
+export const PROBE8_CONTRACT_ORPHANS_LINE_RE = /^- ⚠️ 契约外载荷键 (\d+) 条/
+
+/** probe8 契约必填漏发汇总行：`- ⚠️ 契约必填漏发 N 条（契约 required 前端载荷未见，…）：…`
+ *  （同上汇总行口径，行内 N 为锚） */
+export const PROBE8_MISSING_REQUIRED_LINE_RE = /^- ⚠️ 契约必填漏发 (\d+) 条/
+
 /**
  * `#### 探针 N` 子节定界（G8/R-05）：子节 = 标题行起、下一任意 markdown 标题（下一探针
  * 子节 / `##` 章 / `#` 题）前止。探针 2/4 的 agent 补写内容天然落在本子节定界之外，其
@@ -2825,27 +2834,37 @@ function extractProbeSubsections(text) {
  * 导出供渲染→解析 round-trip 测试直接消费（R-01）。
  * @param {string} text verify-result.md 全文
  * @returns {{
- *   subsections: { probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, any: boolean },
+ *   subsections: { probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, probe8: boolean, any: boolean },
  *   probe1Hits: number,          // probe1 命中行计数（对比 probe1.matches.length）
  *   probe3HasTest: number,       // probe3 hasTest 行计数（对比 tasks.filter(hasTest).length）
  *   probe5SummaryPresent: boolean, // probe5 summary 锚行存在性（pass 形态锚）
  *   probe5Missing: number,       // `| ❌ missing |` 行计数（fail 形态锚，对比 missingBackend.length）
  *   probe6Deletions: number,     // probe6 删除条目行计数（对比 deletions.length）
+ *   probe8ContractOrphans: number, // probe8 契约外载荷键汇总行内 N 求和（无行=0；对比 contractOrphans.length）
+ *   probe8MissingRequired: number, // probe8 契约必填漏发汇总行内 N 求和（无行=0；对比 missingRequired.length）
  * }}
  */
 export function parseProbePrefillAnchors(text) {
   const sections = extractProbeSubsections(text)
   const count = (lines, re) => lines.reduce((n, l) => n + (re.test(l) ? 1 : 0), 0)
+  // 汇总行锚点（probe8 契约行是「一行含总数」非逐条行）：提取行内 N 求和，无行 → 0
+  // （渲染面恒只输出一行，重复撞形行累加——重复本身就会撞出 mismatch，同子节合并口径）
+  const sumGroupCount = (lines, re) => lines.reduce((n, l) => {
+    const m = l.match(re)
+    return n + (m ? Number(m[1]) : 0)
+  }, 0)
   const s1 = sections['1'] || []
   const s3 = sections['3'] || []
   const s5 = sections['5'] || []
   const s6 = sections['6'] || []
+  const s8 = sections['8'] || []
   return {
     subsections: {
       probe1: '1' in sections,
       probe3: '3' in sections,
       probe5: '5' in sections,
       probe6: '6' in sections,
+      probe8: '8' in sections,
       any: Object.keys(sections).length > 0,
     },
     probe1Hits: count(s1, PROBE1_HIT_LINE_RE),
@@ -2853,6 +2872,8 @@ export function parseProbePrefillAnchors(text) {
     probe5SummaryPresent: count(s5, PROBE5_SUMMARY_LINE_RE) > 0,
     probe5Missing: count(s5, PROBE5_MISSING_ROW_RE),
     probe6Deletions: count(s6, PROBE6_DELETION_LINE_RE),
+    probe8ContractOrphans: sumGroupCount(s8, PROBE8_CONTRACT_ORPHANS_LINE_RE),
+    probe8MissingRequired: sumGroupCount(s8, PROBE8_MISSING_REQUIRED_LINE_RE),
   }
 }
 
@@ -2901,7 +2922,10 @@ function detectHeadAdvanceSinceFacts(cwd, facts) {
  *    - HEAD 前进子案（R-06）：facts.generatedAt 之后有新 commit 时 probe6 的 `git diff HEAD`
  *      口径整体漂移 → 该 mismatch 降 WARNING 提示重跑 --init；
  *    - probe3 hasTest 数 / probe5 锚（summary 行存在性 + missing 行数）不符 = WARNING
- *      （测试文件布局与 parity 扫描根环境敏感）。
+ *      （测试文件布局与 parity 扫描根环境敏感）；
+ *    - probe8 契约锚（契约外载荷键/契约必填漏发汇总行内 N）不符 = WARNING（2026-09-16
+ *      task-02：契约面解析随 design 形态与清单文件读取环境敏感；重跑降级（fail-soft catch
+ *      兜底无契约键）时跳过该维度不误报）。
  *
  * 接线约定（task-03，gates.js）：status='mismatch' 且 severity='error' → 阻断回滚；
  * 'mismatch'+'warning' → 放行告警（envelope probe_consistency_drift）；'skipped'/'degraded' →
@@ -2922,7 +2946,7 @@ function detectHeadAdvanceSinceFacts(cwd, facts) {
  *   mismatches: Array<{probe: string, expected: *, actual: *, severity: 'error'|'warning', note: string}>,
  *     // expected = 当前重跑指标（应然），actual = 正文锚点解析值（agent 可篡改侧）
  *   skipReason: string|null,
- *   subsections: {probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, any: boolean}|null,
+ *   subsections: {probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, probe8: boolean, any: boolean}|null,
  *     // 诊断（additive）：探针子节在场性；报告未读到的早期 skip 为 null
  * }}
  */
@@ -3038,6 +3062,21 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
       note: 'contract gap（missing backend）行数与重跑不符（探针5 扫描根/缓存口径环境敏感，WARNING 不阻断）' })
   }
 
+  // probe8 契约锚（WARNING——2026-09-16 task-02：契约外载荷键/契约必填漏发汇总行内 N 对比
+  // 重跑数组长度；契约面解析随 design 形态与清单文件读取环境敏感，不阻断。fail-soft：重跑
+  // 降级（runVerifyProbes 的 catch 兜底对象无契约键）时 curP8*=null 跳过对比不误报）
+  const curProbe8 = current.probe8 || {}
+  const curP8Orphans = Array.isArray(curProbe8.contractOrphans) ? curProbe8.contractOrphans.length : null
+  const curP8MissingRequired = Array.isArray(curProbe8.missingRequired) ? curProbe8.missingRequired.length : null
+  if (curP8Orphans !== null && anchors.probe8ContractOrphans !== curP8Orphans) {
+    mismatches.push({ probe: 'probe8', expected: curP8Orphans, actual: anchors.probe8ContractOrphans, severity: 'warning',
+      note: '契约外载荷键条数与重跑不符（探针8 契约面解析对 design/清单文件形态环境敏感，WARNING 不阻断）——建议重跑 sillyspec verify-probes --change <变更名> --init 刷新预填段' })
+  }
+  if (curP8MissingRequired !== null && anchors.probe8MissingRequired !== curP8MissingRequired) {
+    mismatches.push({ probe: 'probe8', expected: curP8MissingRequired, actual: anchors.probe8MissingRequired, severity: 'warning',
+      note: '契约必填漏发条数与重跑不符（探针8 契约面解析对 design/清单文件形态环境敏感，WARNING 不阻断）——建议重跑 sillyspec verify-probes --change <变更名> --init 刷新预填段' })
+  }
+
   // —— facts 基线对比（2026-09-08-ir-verify-facts FR-05 / task-05）：重跑指标 vs
   // verify-facts.json probes 快照（init 时点）。md 锚点对账查「正文没被改」，本维度查
   // 「md 被手改对齐新代码后 facts 底稿过期」（P3d 数据源保鲜）。分级沿用现实现口径：
@@ -3070,8 +3109,25 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
       fm.push({ probe: 'probe5', snapshot: snap5, rerun: cur5, severity: 'warning',
         note: 'facts 快照 backend 端点数与重跑不符（扫描根口径环境敏感，WARNING）' })
     }
+    // probe8 契约指标（2026-09-16 task-02，WARNING 同 md 锚点维度口径；metrics fail-soft
+    // 少列键（旧 facts 无 probe8）或重跑降级时不对账不列 checked，不误报）
+    const snap8Metrics = (((factsSnapshot.probes.probe8 || {}).metrics) || {})
+    const p8MetricsAvailable = typeof snap8Metrics.contractOrphans === 'number' || typeof snap8Metrics.missingRequired === 'number'
+    const p8RerunAvailable = curP8Orphans !== null || curP8MissingRequired !== null
+    if (typeof snap8Metrics.contractOrphans === 'number' && curP8Orphans !== null
+      && snap8Metrics.contractOrphans !== curP8Orphans) {
+      fm.push({ probe: 'probe8', snapshot: snap8Metrics.contractOrphans, rerun: curP8Orphans, severity: 'warning',
+        note: 'facts 快照契约外载荷键数与重跑不符（契约面解析环境敏感，WARNING）——建议 verify-probes --init 刷新 facts + 同步 md 探针段' })
+    }
+    if (typeof snap8Metrics.missingRequired === 'number' && curP8MissingRequired !== null
+      && snap8Metrics.missingRequired !== curP8MissingRequired) {
+      fm.push({ probe: 'probe8', snapshot: snap8Metrics.missingRequired, rerun: curP8MissingRequired, severity: 'warning',
+        note: 'facts 快照契约必填漏发数与重跑不符（契约面解析环境敏感，WARNING）——建议 verify-probes --init 刷新 facts + 同步 md 探针段' })
+    }
     factsConsistency = {
-      checked: fm.length === 0 ? ['probe1', 'probe3', 'probe5', 'probe6'] : [...new Set(fm.map(x => x.probe))],
+      checked: fm.length === 0
+        ? ['probe1', 'probe3', 'probe5', 'probe6', ...((p8MetricsAvailable && p8RerunAvailable) ? ['probe8'] : [])]
+        : [...new Set(fm.map(x => x.probe))],
       verdict: fm.length === 0 ? 'match' : 'mismatch',
       detail: fm.length === 0 ? null : fm,
     }
