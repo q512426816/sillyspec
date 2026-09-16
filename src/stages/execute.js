@@ -404,6 +404,12 @@ worktree 路径 + 分支名 + 模式
 欠账处理：Wave 收尾时顺手同步对应模块卡，不必为此停下。变更索引类条目追加到卡同目录 \`<module>.changelog.md\` sidecar（无则创建；可先跑 \`sillyspec modules split-changelog\` 迁出历史段）——勿把历史条目堆回模块卡正文（卡是子代理的读取税）。
 ⚠️ **铁律：模块卡 / sidecar 一律写主仓绝对路径 \`{SPEC_ROOT}/docs/<project>/modules/\`（CLI 已替换为绝对路径）**——在 worktree 内执行时**绝不**写 worktree checkout 出来的 \`.sillyspec\` 副本（该副本随 worktree cleanup 整目录蒸发，主仓永远读不到；2026-09-10 实证 task-13 子代理写副本、归档阶段被迫 checkout 补救）。
 
+### 歧义裁决权限（非破坏性自行裁决+记录，破坏性停人）
+执行中撞到 plan/design 歧义或冲突（任务描述与代码现实不符、两任务契约打架、design 未覆盖的边界情况）时按破坏性分级处理，不要一律停下等用户、也不要静默猜测（外部实测：可控歧义一律停人导致执行会话停摆 9 小时）：
+- **非破坏性歧义**（可逆、局部、不改既有 D-xxx 决策语义、不越 allowed_paths 边界、不删不改他人模块）：自行裁决继续干。裁决落盘 \`{SPEC_ROOT}/changes/<变更名>/decisions.md\` 新条目（接续既有最大编号，格式 \`## D-xxx@v1: <短标题>\`，正文含歧义描述/选择/理由/影响 task），并在该 Wave 完成输出中披露「执行期裁决 N 条：D-xxx…」——review/verify 据此对账。⚠️ decisions.md 一律写**主仓** \`{SPEC_ROOT}\` 绝对路径（CLI 已替换），勿写 worktree checkout 的 \`.sillyspec\` 副本（随 cleanup 蒸发，同模块卡铁律）。
+- **破坏性/不可逆动作**（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩大 allowed_paths 边界、推翻既有 D-xxx 决策、跨仓联动）：禁止自行裁决，\`sillyspec run execute --wait --reason "<冲突描述>" --options "<裁决A>,<裁决B>,需要更多上下文"\` 停人。
+- 拿不准是否破坏性 → 按破坏性处理（fail-closed）；同一歧义重复出现 → 引用既有 D-xxx，不重复裁决。
+
 ### 铁律
 - **不要询问用户确认频率**，默认 wave 模式；用户已明确口头指定时遵从其指定`,
     outputHint: 'Wave 分组 + 模型分配',
@@ -1282,6 +1288,9 @@ ${waveStartItem1}
    - 🔥 热上下文：design.md 非目标/兼容策略 + 当前 Wave 任务（必须加载）
    - 🌡️ 温上下文：CONVENTIONS.md + ARCHITECTURE.md（需要时加载）
    - ❄️ 冷上下文：其他变更的 design.md、历史 plan.md（不要主动加载，除非明确需要）
+
+### 歧义裁决（撞到 plan/design 歧义或冲突时）
+非破坏性歧义（可逆、局部、不越界、不推翻 D-xxx）→ 主代理自行裁决继续：裁决写主仓 \`{SPEC_ROOT}/changes/<变更名>/decisions.md\` 新条目（\`## D-xxx@v1: <短标题>\` 接续编号，正文=歧义/选择/理由/影响 task），本 Wave 完成输出披露「执行期裁决 N 条」；review/verify 据此对账。破坏性/不可逆（删数据/重写他人模块、改共享配置或门禁、跳过测试、扩 allowed_paths、推翻既有决策、跨仓联动）→ \`sillyspec run execute --wait\` 停人。拿不准 → 按破坏性（fail-closed）；重复歧义引用既有 D-xxx。子代理报告的冲突（越界类）回主代理裁决，**子代理不自行记 decisions**。
 
 ### 中断续跑（如曾中断恢复）
 execute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。若本 Wave 曾因 429/API 配额/崩溃中断：

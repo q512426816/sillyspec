@@ -113,3 +113,21 @@
 方案：stage-review.js 新增 collectSameStagePriorReview（最近有效轮采集：跨变更过滤/骨架跳过/fail无明细notes合成）+renderPriorRoundFindingsMd（未决逐项核验+pass勿重复报告双向语义15条封顶）；prompt.js independent档注入拼进PRIOR_REVIEW_FACTS（self不注入）；brainstorm Design Grill 补占位符；docs/prompt 三md镜像同步
 结果：新增单测31断言绿；全量npm test EXIT 0；lint 过；CLI实测注入块渲染正确
 审计：[gate] L1（跨 3 模块 · 9 文件：3 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260917-001-7cd6 | 2026-09-17 05:27:09 | execute歧义裁决权限声明——非破坏性自行裁决+记录，破坏性停人
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（确认执行范围步歧义裁决权限段+Wave prompt裁决回呼）
+- test/execute-ambiguity-ruling.test.mjs（15断言（协议关键词面））
+- docs/prompt/execute.md（镜像同步两段）
+- docs/prompt/_extracted.json（提取重生成）
+- docs/sillyspec/platform-interface-map.md（execute.js行漂移重锚（docs check --fix））
+- docs/sillyspec/architecture-4a.md（同重锚）
+- docs/sillyspec/prompt-control-debt.md（同重锚）
+- .sillyspec/docs/sillyspec/modules/stages.changelog.md（变更索引行）
+需求：execute歧义裁决权限声明——非破坏性自行裁决+记录，破坏性停人
+根因：执行撞plan/design歧义无分级协议：可控歧义停人（外部实测9小时停摆）或静默猜测零记录（Superpowers v6.3 recorded rulings对照）
+方案：确认执行范围步新增裁决段（非破坏性=裁决落主仓decisions.md新条目D-xxx@v1接续编号+Wave完成披露；破坏性/不可逆=--wait停人；拿不准按破坏性fail-closed）；buildWavePrompt紧凑回呼（子代理冲突回主代理裁决不自行记）
+结果：新增单测15断言绿；全量npm test EXIT 0（行漂移重锚后）；lint过；CLI门禁实测通过
+审计：[gate] L1（跨 1 模块 · 8 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）

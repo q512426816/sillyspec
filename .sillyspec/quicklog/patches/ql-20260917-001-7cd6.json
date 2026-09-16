@@ -1,0 +1,112 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-83025fde",
+  "totals": {
+    "files": 8,
+    "additions": 90,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "declared": true,
+      "additions": 9,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/architecture-4a.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 9,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/execute-ambiguity-ruling.test.mjs",
+      "declared": true,
+      "additions": 63,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 8,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/execute.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/execute-ambiguity-ruling.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-001-7cd6",
+  "sessionId": "quick-83025fde",
+  "savedAt": "2026-09-16T21:36:04.793Z",
+  "patchSha256": "d16672a40e708aa0d9458b2f603a50a905f8bf5e32e83cd9adc774f936befb1b",
+  "patchStatus": "ok"
+}
