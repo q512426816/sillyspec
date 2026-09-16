@@ -124,6 +124,12 @@ export function resolvePromptIncludes(text) {
  * home 拒绝守卫：home 下的 .sillyspec 恒不命中——历史污染源（smoke 测试在 home 下临时目录
  * 跑 CLI，_ensureDB 读路径即建库，~/.sillyspec 长出一整套平行进度库后，任何 home 子目录
  * 跑命令都会向上撞它，污染自我延续）。撞 home 即停，回退 cwd/.sillyspec（子目录自建）。
+ * tmpdir 硬边界（坑 temp-root-stray-sillyspec，2026-09-16-friction5-hardening verify 移交项①
+ * 实证）：某次 cwd=%TEMP% 直系的调用在 Temp 根遗留游离 .sillyspec 后，所有 temp 夹具的祖先
+ * 链都被它劫持（agent-automation-batch4『add frontend 建档』/feedback-batch2 两测试假败的真
+ * 根因——specBase 解析到 Temp\.sillyspec，夹具内断言读自身路径 ENOENT）。temp 下合法的
+ * .sillyspec 只会在夹具自身内部：起点在 tmpdir 子树内时，tmpdir 层及其上永不检查、走到即停
+ * （比 home 守卫更硬：home 是「跳过一层继续走」，tmp 是「整段封顶」——tmpdir 之上无合法项目根）。
  * @param {string} cwd
  * @param {object} [opts]
  * @param {string} [opts.specDir] - 用户指定的 specDir（通过 --spec-dir 或 --spec-root）
@@ -132,11 +138,15 @@ export function resolvePromptIncludes(text) {
 export function resolveSpecDir(cwd, opts = {}) {
   if (opts.specDir) return resolve(opts.specDir)
   const home = os.homedir()
+  const tmp = os.tmpdir()
   const origin = resolve(cwd)
   const originBelowHome = origin.startsWith(home + sep) // 严格子目录，不含 home 自身
+  const originInTmp = origin === tmp || origin.startsWith(tmp + sep) // 含 tmpdir 自身
   let dir = origin
   let passedHome = false
   while (true) {
+    // tmpdir 硬边界：起点在 tmpdir 子树内时，走到 tmpdir 层即封顶（该层及其上是游离库温床，永不命中）
+    if (originInTmp && dir === tmp) break
     // home 拒绝守卫：起点在 home 子树内时，home 层不检查 .sillyspec，
     // 防止 home 子目录遍历经过 home 误命中 ~/.sillyspec；
     // passedHome：经过 home 后不再检查（覆盖遍历到真实 home 的场景）。

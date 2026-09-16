@@ -1,0 +1,429 @@
+diff --git a/src/machine-interface.js b/src/machine-interface.js
+index add991d..daaa0a0 100644
+--- a/src/machine-interface.js
++++ b/src/machine-interface.js
+@@ -168,6 +168,32 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       warnings: r.warnings || [],
+     });
+ 
++    // ── a2. design 文件清单行级核验（brainstorm；坑 design-file-ref-late-feedback，2026-09-15
++    //    wp EHS 会话实证：41 条 design_file_ref_invalid 只在 --done 末步爆出，gate 预检全绿——
++    //    前移进 gate 让写作期预检即可见，免「末步拦→改文档→重跑 --done」整轮往返。与 complete.js
++    //    --done 硬门同源实现（design-facts.js validateDesignFileList），gate 只读不写）──
++    if (stage === 'brainstorm') {
++      try {
++        const { validateDesignFileList } = await import('./design-facts.js');
++        const dfl = validateDesignFileList({ changeDir: join(specRoot, 'changes', changeName), cwd });
++        checks.push({
++          id: 'design-file-list',
++          ok: (dfl.errors || []).length === 0,
++          // errors 元素是 {path, message} 对象（与 complete.js --done 打印侧同源），gate check 面拍平为 message 字符串
++          errors: (dfl.errors || []).map(e => e && e.message ? e.message : String(e)),
++          warnings: dfl.warnings || [],
++        });
++      } catch (e) {
++        // fail-open 与 complete.js 同口径：核验自身异常不误拦，warning 留痕
++        checks.push({
++          id: 'design-file-list',
++          ok: true,
++          errors: [],
++          warnings: [`design 清单核验自身异常，跳过（${e && e.message ? e.message : e}）`],
++        });
++      }
++    }
++
+     // ── b. transition：状态转换合法性（参与综合 ok，与 completeStep 硬阻断一致）──
+     // 与 run.js runStage 同源：传 fromStageData 触发 failed_post_check 门控。
+     // transition 必须参与 ok：否则 gate 返回 ok=true、exit 0，Agent 据此 --done 却被
+diff --git a/src/run/gates.js b/src/run/gates.js
+index a4aac07..e7c2679 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1653,11 +1653,33 @@ export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTarge
+   // ③类（做了没声明=scope creep）：WARNING 放行，suspectTask 尽力归因随行列出
+   if (r.status === 'undeclared') {
+     console.warn(`\n⚠️  target_files 对账发现 ${r.undeclared.length} 个实际改动未在任何 task 卡声明（③类 scope creep，advisory 不阻断）：`)
+-    for (const u of r.undeclared.slice(0, 20)) {
++  if (r.undeclared.length <= 20) {
++    for (const u of r.undeclared) {
+       console.warn(`   - ${u.path}${u.suspectTask ? `（疑似 ${u.suspectTask} 的改动——该 task 的 review.json changedFiles 提及）` : ''}`)
+     }
+-    if (r.undeclared.length > 20) console.warn(`   …还有 ${r.undeclared.length - 20} 个`)
+-    console.warn(`   evidence: matched=${envelope.evidence.matched_count} missing=${envelope.evidence.missing_declared_count} undeclared=${envelope.evidence.undeclared_count}`)
++  } else {
++    // >20 条逐行刷屏改按顶层目录聚合（坑 reconcile-undeclared-noise，2026-09-15 wp EHS 会话
++    // 实证：58 条③类多为 worktree baseline 拷入的环境文件——agent 需要的是形状不是清单）：
++    // 目录计数降序 + 每目录至多 2 个样例；完整清单随后由 writeReconcileRunResult 落盘
++    // reconcile-result.json（gate 输出 📄 行含具体路径），suspectTask 归因以落盘为准。
++    const byDir = new Map()
++    for (const u of r.undeclared) {
++      const p = String(u.path || '')
++      const slash = p.indexOf('/')
++      const dir = slash > 0 ? p.slice(0, slash + 1) : '(仓根)'
++      const rec = byDir.get(dir) || { count: 0, samples: [] }
++      rec.count++
++      if (rec.samples.length < 2) rec.samples.push(p)
++      byDir.set(dir, rec)
++    }
++    const dirs = [...byDir.entries()].sort((a, b) => b[1].count - a[1].count)
++    for (const [dir, rec] of dirs.slice(0, 8)) {
++      console.warn(`   - ${dir} ×${rec.count}（样例：${rec.samples.join('、')}）`)
++    }
++    if (dirs.length > 8) console.warn(`   …另有 ${dirs.length - 8} 个目录`)
++    console.warn(`   共 ${r.undeclared.length} 条，>20 触发按目录聚合；完整逐条清单（含疑似 task 归因）见对账落盘 reconcile-result.json（下方 📄 行）。`)
++  }
++  console.warn(`   evidence: matched=${envelope.evidence.matched_count} missing=${envelope.evidence.missing_declared_count} undeclared=${envelope.evidence.undeclared_count}`)
+     for (const fix of envelope.supportedFixes) console.warn(`   提示：${fix}`)
+     console.warn(`   对账口径 actual=${(r.sources || []).join(' + ') || 'n/a'}（③类误报先核对 sources 与并行会话剔除提示）。`)
+     return false
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 46ecf09..b09aa1e 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -387,6 +387,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+ {REVIEW_JSON_CONTRACT}
+   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
++  **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：
++  - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。
++  - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
+ 
+ ### 默认行为
+ 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index d1bd861..f0e55e1 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -430,6 +430,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + item).join('\n')}
+ 
+   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
++  **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
+   **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\`。
+ 
+ ### 操作
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index a997add..76d50c0 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -344,6 +344,8 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
+ 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
+ {REVIEW_JSON_CONTRACT}
+ 4. verdict=fail 时在 reviewerNotes 写明阻断项
++5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。
++6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
+ 
+ ### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）
+ module-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index bdd667f..f4e8643 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -1457,7 +1457,7 @@ function mergeCrossRepoResults(mainResult, ctx) {
+ /**
+  * 在单个跨仓仓根跑 full npm test（跨仓仓不参与 module 子集，只跑 full）。
+  * 跨仓仓 own local.yaml 若存在且配 commands.test → 用之；否则 fallback `npm test`。
+- * 跨仓仓无 package.json → 跳过 + warn。
++ * 跨仓仓无 package.json，或有 package.json 但无 test 脚本（未被 own local.yaml 覆盖）→ 跳过 + warn。
+  *
+  * @param {object} entry - RepoEntry（isMain=false）
+  * @returns {object} 结果 shape 对齐 runFullCommand 返回
+@@ -1494,6 +1494,35 @@ function runCrossRepoFullTest(entry) {
+     } catch { /* 读取失败 fallback npm test */ }
+   }
+ 
++  // 跨仓仓有 package.json 但无 test 脚本，且未被 own local.yaml 覆盖 → 降级跳过 + warn
++  // （坑 cross-repo-no-test-script，2026-09-15 wp EHS 会话实证：spdemo 无 test script，
++  // fallback `npm test` 必 exit 1（npm missing-script）→ verify-test 环境性假红，agent 被迫
++  // 手工给该仓造 .sillyspec/local.yaml + 冒烟脚本。测试基建缺失是仓常态，非代码回归——
++  // 与「无 package.json」同款 skip 处理，hint 指向 own local.yaml 配置通道）。
++  // own local.yaml 显式配了命令 → 无条件执行（用户显式意图，即使无 test script 也跑）。
++  // package.json 解析失败 → 按原行为跑 `npm test`（fail-visible，不静默吞）。
++  if (command === 'npm test') {
++    let hasTestScript = true
++    try {
++      const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'))
++      hasTestScript = !!(pkg && pkg.scripts && Object.prototype.hasOwnProperty.call(pkg.scripts, 'test'))
++    } catch { /* 解析失败维持 npm test 原行为 */ }
++    if (!hasTestScript) {
++      console.warn(`⚠️  跨仓 repo "${entry.repoKey}"（${projectRoot}）package.json 无 test 脚本，跳过该仓测试（非代码回归，不阻断 verify）。如需纳入实测：在 ${join(projectRoot, '.sillyspec', 'local.yaml')} 配 commands.test（如轻量冒烟检查）。`)
++      return {
++        status: 'skipped',
++        command: null,
++        exitCode: null,
++        durationMs: null,
++        outputTail: null,
++        reason: `跨仓 repo "${entry.repoKey}" package.json 无 test 脚本，跳过测试（可配 own local.yaml commands.test 纳入）`,
++        resultPath: null,
++        mode: 'cross-repo-no-test-script',
++        repoKey: entry.repoKey,
++      }
++    }
++  }
++
+   const startedAt = Date.now()
+   let exitCode = 0
+   let output = ''
+diff --git a/test/cross-repo-verify.test.mjs b/test/cross-repo-verify.test.mjs
+index 5423462..69cfed7 100644
+--- a/test/cross-repo-verify.test.mjs
++++ b/test/cross-repo-verify.test.mjs
+@@ -142,6 +142,48 @@ test('跨仓仓无 package.json：跳过 + warn，主仓通过则整体通过',
+     `outputTail 应含 crossB + SKIP 标记（actual: ${(result.outputTail || '').slice(-200)}）`)
+ })
+ 
++// ──────────────────────────────────────────────────────────────────────────
++// 2b. 跨仓仓有 package.json 但无 test 脚本 → 跳过 + warn，不阻断
++//     （坑 cross-repo-no-test-script，2026-09-15 wp EHS 会话实证：fallback npm test
++//      必 missing-script exit 1 → verify-test 环境性假红）
++// ──────────────────────────────────────────────────────────────────────────
++test('跨仓仓 package.json 无 test 脚本：跳过不阻断，own local.yaml 显式覆盖则执行', () => {
++  const mainRepo = makeRepo(false)
++  const crossRepo = makeRepo(true, 'echo unused') // 占位，随后覆写为无 test 脚本
++  // 覆写 package.json：scripts 存在但无 test 键
++  writeFileSync(join(crossRepo, 'package.json'), JSON.stringify({
++    name: 'cross-repo-fixture-no-test',
++    version: '1.0.0',
++    scripts: { build: 'echo built' },
++  }) + '\n')
++  writeLocalYaml(mainRepo, 'echo main-ok')
++
++  const buildCtx = (repoKey) => {
++    const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
++    const wm = makeWm(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
++    return new MultiRepoContext({
++      cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', repoKey],
++      repoRegistry: new Map([[repoKey, crossRepo]]),
++      worktreeManager: wm,
++    })
++  }
++
++  // 无 own local.yaml：跳过 + 不阻断
++  const r1 = runVerifyTestCheck({ cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx: buildCtx('crossNT') })
++  assert.notEqual(r1.status, 'failed',
++    `无 test 脚本应跳过不阻断，而非 fallback npm test 假红（actual: ${r1.status} / ${r1.reason}）`)
++  assert.ok((r1.outputTail || '').includes('crossNT') && (r1.outputTail || '').includes('SKIP'),
++    `outputTail 应含 crossNT + SKIP 标记（actual: ${(r1.outputTail || '').slice(-200)}）`)
++
++  // own local.yaml 显式配 commands.test：无条件执行（用户显式意图优先于 test 脚本缺失）
++  writeLocalYaml(crossRepo, 'echo cross-explicit-ok')
++  const r2 = runVerifyTestCheck({ cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx: buildCtx('crossNT') })
++  assert.equal(r2.status, 'passed',
++    `own local.yaml 显式命令应被执行并通过（actual: ${r2.status} / ${r2.reason}）`)
++  assert.ok((r2.outputTail || '').includes('crossNT') && (r2.outputTail || '').includes('PASS'),
++    `outputTail 应含 crossNT + PASS 标记（actual: ${(r2.outputTail || '').slice(-200)}）`)
++})
++
+ // ──────────────────────────────────────────────────────────────────────────
+ // 3. 跨仓仓不参与 module 子集策略（design §6 + §5.4）
+ // ──────────────────────────────────────────────────────────────────────────
+diff --git a/test/design-file-list-gate.test.mjs b/test/design-file-list-gate.test.mjs
+index 278c19c..045b905 100644
+--- a/test/design-file-list-gate.test.mjs
++++ b/test/design-file-list-gate.test.mjs
+@@ -7,8 +7,9 @@
+  *  3. 清单缺失 → WARNING 不阻断；解析异常 fail-soft
+  *  4. CLI 级：brainstorm 末步 --done 对幻觉清单 exit 1 阻断（修复后放行）
+  */
+-import { writeFileSync, mkdirSync } from 'node:fs'
++import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+ import { join } from 'node:path'
++import { tmpdir } from 'node:os'
+ import { makeRepo, initChange, runCLI, runStage, cleanup, report } from './_cli-step-harness.mjs'
+ import { ProgressManager } from '../src/progress.js'
+ import { validateDesignFileList } from '../src/design-facts.js'
+@@ -88,5 +89,63 @@ console.log('\n--- ② CLI 级：brainstorm 末步幻觉清单阻断 ---')
+   assert(r2.status === 0 || !r2.combined.includes('design_file_ref_invalid'), `NEW: 修复后不再被清单核验拦（exit ${r2.status}；输出尾：${r2.combined.slice(-120)}）`)
+ }
+ 
++console.log('\n--- ③ gate 预检前移：幻觉清单在 gate brainstorm 即红（坑 design-file-ref-late-feedback，2026-09-15 wp EHS 41 条实证）---')
++{
++  const { cwd, specBase } = makeRepo('dfl-gate-')
++  const cn = '2026-09-08-dfl-gate'
++  const pm = await initChange(cwd, specBase, cn)
++  const changeDir = join(specBase, 'changes', cn)
++  writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-09-07T00:00:00\nscale: small\n---\n\n# Design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/ghost-gate.js | 幽灵 |\n')
++  // 推进到末步（同 ② 的 seeding 手法）
++  runStage('brainstorm', cn, cwd)
++  const pr = await pm.read(cwd, cn)
++  const seeded = pr.stages.brainstorm.steps.map(s => ({ name: s.name, status: s.name === '生成规范文件' ? 'pending' : 'completed' }))
++  await (async () => { const p = await pm.read(cwd, cn); p.currentChange = cn; p.currentStage = 'brainstorm'; p.stages.brainstorm = { status: 'in-progress', startedAt: '2026/9/8 00:00:00', completedAt: null, steps: seeded }; await pm._write(cwd, p, cn) })()
++
++  const g1 = runCLI(['gate', 'brainstorm', '--change', cn], { cwd })
++  assert(g1.combined.includes('design-file-list'), 'gate 输出含 design-file-list check（前移生效）')
++  assert(g1.combined.includes('design_file_ref_invalid'), 'gate 预检即报幻觉路径（不必等 --done 末步）')
++
++  // NEW: 修复 → 该 check 转绿（信号消失；整体 exit 可因其他 artifacts 未备而被其他 check 占用，只断言本 check 面）
++  writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-09-07T00:00:00\nscale: small\n---\n\n# Design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 新增 | NEW:src/ghost-gate.js | 修复为新建 |\n')
++  const g2 = runCLI(['gate', 'brainstorm', '--change', cn], { cwd })
++  assert(!g2.combined.includes('design_file_ref_invalid'), `NEW: 修复后 gate 清单信号消失（输出尾：${g2.combined.slice(-120)}）`)
++}
++
++console.log('\n--- ④ 跨仓分段核验（坑 design-file-ref-cross-repo-blind，2026-09-15 wp 会话 41 条误报回归）---')
++{
++  const { cwd, specBase } = makeRepo('dfl-xr-')
++  const cn = '2026-09-08-dfl-xrepo'
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  // 跨仓 fixture：独立仓根 + 真实既有文件（模拟 sub-grid-security 的 src/common/router.js）
++  const crossRoot = mkdtempSync(join(tmpdir(), 'dfl-cross-'))
++  mkdirSync(join(crossRoot, 'src', 'common'), { recursive: true })
++  writeFileSync(join(crossRoot, 'src', 'common', 'router.js'), 'x')
++  // 注册跨仓（validateDesignFileList 读侧口径 = <cwd>/.sillyspec/local.yaml repos:）
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `repos:\n  sub-grid-security: ${crossRoot.split('\\').join('/')}\n`)
++
++  const tbl = rows => '| 操作 | 文件路径 | 说明 |\n|---|---|---|\n' + rows.map(r => `| ${r[0]} | ${r[1]} | x |`).join('\n') + '\n'
++  writeFileSync(join(changeDir, 'design.md'),
++    FM + '\n## 文件变更清单\n\n' + tbl([['修改', 'README.md'], ['新增', 'NEW:src/new.js']])
++    + '\n## sub-grid-security 仓变更\n\n' + tbl([['修改', 'src/common/router.js'], ['修改', 'src/ghost.js']]))
++  const r = validateDesignFileList({ changeDir, cwd })
++  assert(r.ok === false, '跨仓段内幻觉路径仍报错')
++  assert(r.errors.length === 1 && r.errors[0].path === 'src/ghost.js', `仅跨仓幻觉报错（实际：${r.errors.map(e => e.path).join(',')}）`)
++  assert(r.errors[0].message.includes('sub-grid-security 仓'), '错误信息指明核验根为该跨仓仓')
++  assert(!r.errors.some(e => e.path === 'src/common/router.js'), '关键回归：跨仓「修改」既有文件不再被误报逼标 NEW:')
++
++  // 未注册 repo 段 → warning 跳过（指引 register-repo），不误报
++  writeFileSync(join(changeDir, 'design.md'),
++    FM + '\n## 文件变更清单\n\n' + tbl([['修改', 'README.md']])
++    + '\n## unregistered-repo 仓变更\n\n' + tbl([['修改', 'src/whatever.js']]))
++  const r2 = validateDesignFileList({ changeDir, cwd })
++  assert(r2.ok === true, '未注册段跳过核验不误报')
++  assert(r2.warnings.some(w => w.includes('unregistered-repo') && w.includes('register-repo')), 'warning 指引 register-repo')
++
++  try { rmSync(crossRoot, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ }
++}
++
+ cleanup()
+ report(count.passed, count.failed, count.failures)
+diff --git a/test/plan-target-files.test.mjs b/test/plan-target-files.test.mjs
+index 0797df9..31f219d 100644
+--- a/test/plan-target-files.test.mjs
++++ b/test/plan-target-files.test.mjs
+@@ -524,6 +524,36 @@ console.log('\n=== D. gates 接线阻断冒烟 ===\n')
+   }
+ }
+ 
++// ── D1b. ③类 >20 条按目录聚合（坑 reconcile-undeclared-noise，2026-09-15 wp EHS 实证 58 条刷屏）──
++{
++  // 25 条、3 个目录（skills/ ×15、attachments/ ×8、src/ ×2）→ 聚合输出：目录计数行 + 样例 + 落盘指引
++  const many = [
++    ...Array.from({ length: 15 }, (_, i) => ({ path: `skills/env-file-${i}.md`, suspectTask: null })),
++    ...Array.from({ length: 8 }, (_, i) => ({ path: `attachments/doc-${i}.bin` })),
++    ...Array.from({ length: 2 }, (_, i) => ({ path: `src/extra-${i}.js` })),
++  ]
++  const rMany = {
++    status: 'undeclared', matched: [], missing: [], undeclared: many,
++    skipReason: null, notes: [], form: 'post-apply', sources: ['main:status-porcelain(untracked-all)'],
++  }
++  const { ret, out } = captureConsole(() => printReconcileTargetFilesCheck(rMany))
++  assert(ret === false, '>20 ③类仍放行（WARNING 不阻断）')
++  assert(out.includes('skills/ ×15') && out.includes('attachments/ ×8') && out.includes('src/ ×2'),
++    '聚合输出含各目录计数')
++  assert(out.includes('共 25 条') && out.includes('reconcile-result.json'), '聚合输出含总数与落盘指引')
++  assert(!out.includes('skills/env-file-14.md'), '第 3+ 逐条路径不再刷屏（样例上限 2）')
++  assert((out.match(/样例：/g) || []).length === 3, '每个目录恰 1 行样例（3 目录 3 行）')
++
++  // ≤20 条：维持逐条清单（含 suspectTask 归因）
++  const few = Array.from({ length: 3 }, (_, i) => ({ path: `src/x-${i}.js`, suspectTask: i === 0 ? 'task-02' : null }))
++  const { out: outFew } = captureConsole(() => printReconcileTargetFilesCheck({
++    status: 'undeclared', matched: [], missing: [], undeclared: few,
++    skipReason: null, notes: [], form: 'post-apply', sources: [],
++  }))
++  assert(outFew.includes('src/x-0.js') && outFew.includes('疑似 task-02') && !outFew.includes('按目录聚合'),
++    '≤20 条逐条输出 + 归因，不聚合')
++}
++
+ // ── D2. 信封字段契约：severity 分级 / evidence 计数 / supportedFixes 可路由 ──
+ {
+   const err = buildReconcileTargetFilesEnvelope({
+diff --git a/test/register-repo-platform-split-brain.test.mjs b/test/register-repo-platform-split-brain.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/register-repo-platform-split-brain.test.mjs
+@@ -0,0 +1,85 @@
++/**
++ * register-repo 平台双根写目标回归（坑 register-repo-specbase-split-brain，2026-09-15 wp
++ * 平台模式会话实证）。
++ *
++ * 事故形态：平台模式（cwd 指针指向外部 specRoot）下 register-repo 的写候选链 specBase 优先
++ * → 写进平台 spec 根 local.yaml；而 repos: 段全部读侧（execute MultiRepoContext / worktree
++ * cross / run shared）恒读 <cwd>/.sillyspec/local.yaml —— 注册「成功」但 execute 启动
++ * fail-closed 报未注册，agent 三轮排查才试出 --spec-dir 绕过。
++ *
++ * 修复语义锁定：
++ *   1. 平台指针在场、无显式 --spec-dir → 写项目侧 <cwd>/.sillyspec/local.yaml（读侧对齐）
++ *   2. 平台 spec 根另有 local.yaml 时输出「死配置」提醒（不双写）
++ *   3. 显式 --spec-dir 是用户明示选择 → 仍写 specBase 侧（尊重）
++ */
++import { execSync, spawnSync } from 'node:child_process'
++import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++
++const binCLI = join(dirname(dirname(fileURLToPath(import.meta.url))), 'bin', 'sillyspec.js')
++
++let passed = 0, failed = 0
++const failures = []
++function assert(cond, msg) {
++  if (cond) { passed++; console.log(`  ✅ PASS: ${msg}`) }
++  else { failed++; failures.push(msg); console.log(`  ❌ FAIL: ${msg}`) }
++}
++function runCLI(args, cwd) {
++  const r = spawnSync(process.execPath, [binCLI, ...args], { cwd, encoding: 'utf8', timeout: 30000, stdio: ['pipe', 'pipe', 'pipe'] })
++  return { status: r.status, combined: (r.stdout || '') + (r.stderr || '') }
++}
++
++const tmpRoots = []
++function mkTmp(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(d)
++  return d
++}
++function git(cwd, args) { execSync(`git ${args}`, { cwd, stdio: 'pipe' }) }
++
++console.log('=== register-repo 平台双根写目标（register-repo-specbase-split-brain 回归）===\n')
++
++try {
++  // fixture：项目仓（cwd，含 .sillyspec-platform.json 指针）+ 外部 specRoot（躺着一份 local.yaml）+ 待注册 git 仓
++  const project = mkTmp('rrsb-proj-')
++  git(project, 'init -q -b main')
++  git(project, 'config user.email t@t.t')
++  git(project, 'config user.name t')
++  const platformRoot = mkTmp('rrsb-spec-')
++  mkdirSync(join(platformRoot, '.runtime'), { recursive: true })
++  writeFileSync(join(platformRoot, 'local.yaml'), '# 平台 spec 根既有 local.yaml（repos: 段读侧不消费）\nrepos:\n  stale-key: C:/dead/path\n')
++  const crossRepo = mkTmp('rrsb-cross-')
++  git(crossRepo, 'init -q -b main')
++  git(crossRepo, 'config user.email t@t.t')
++  git(crossRepo, 'config user.name t')
++  writeFileSync(join(crossRepo, 'README.md'), 'x')
++  git(crossRepo, 'add .')
++  git(crossRepo, 'commit -q -m init')
++  // 平台指针（progress.js resolvePlatformSpecDir 的指针协议）
++  writeFileSync(join(project, '.sillyspec-platform.json'), JSON.stringify({ specRoot: platformRoot }))
++
++  // 1. 无显式 --spec-dir：写项目侧（读侧对齐），不写平台 spec 根
++  const r1 = runCLI(['local', 'register-repo', 'shared-lib', crossRepo], project)
++  assert(r1.status === 0, `注册成功（exit ${r1.status}；输出：${r1.combined.slice(-150)}）`)
++  const projYaml = join(project, '.sillyspec', 'local.yaml')
++  assert(existsSync(projYaml), `默认写目标=项目侧 local.yaml（${projYaml}）`)
++  assert(readFileSync(projYaml, 'utf8').includes('shared-lib'), '项目侧 local.yaml 含注册条目')
++  assert(readFileSync(join(platformRoot, 'local.yaml'), 'utf8').includes('stale-key')
++    && !readFileSync(join(platformRoot, 'local.yaml'), 'utf8').includes('shared-lib'),
++    '平台 spec 根 local.yaml 不被双写（避免两份各自演化再分裂）')
++  assert(r1.combined.includes('死配置'), '平台根另有一份 local.yaml 时输出死配置提醒')
++
++  // 2. 显式 --spec-dir：用户明示选择 → 写 specBase 侧（尊重）
++  const r2 = runCLI(['local', 'register-repo', 'explicit-lib', crossRepo, '--spec-dir', join(platformRoot)], project)
++  assert(r2.status === 0, `显式 --spec-dir 注册成功（exit ${r2.status}）`)
++  assert(readFileSync(join(platformRoot, 'local.yaml'), 'utf8').includes('explicit-lib'),
++    '显式 --spec-dir 时写平台 spec 根 local.yaml（明示选择被尊重）')
++} finally {
++  for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } }
++}
++
++console.log(`\n=== 结果: ${passed} 通过 / ${failed} 失败 ===`)
++if (failures.length) { console.log('失败项:'); for (const f of failures) console.log('  - ' + f) }
++if (failed > 0) process.exitCode = 1

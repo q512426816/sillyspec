@@ -803,7 +803,21 @@ const PY_TEST_ID_RE = /^\S+::\S+$/
 // 通过行用例名恰含这些字样（如「✓ … 超时后 syncStatus=failed」）会被误判失败行——
 // 2710 用例套件 382 个"失败行"里 378 假阳性，known_failures 无法逐条枚举而实质失效。
 // 框架输出里通过行恒以通过标记开头、失败行恒以失败标记开头，行首判定即足以分离两类。
-const PASS_LINE_RE = /^\s*(?:[✓√✔]|PASS\b)/
+// ✅ 补入标记集（2026-09-16-friction5-hardening verify 移交项②实证）：本仓自定义 harness 用
+// 「✅ PASS: <断言名>」打印通过行，断言名高频含 fail-closed/failed/×3（乘号）——✅ 不在集内时
+// 整行落 \bFAIL\b/×/failed 子串命中成假失败行（一轮 verify 实测 20/27 未豁免行为此噪声）。
+const PASS_LINE_RE = /^\s*(?:[✓√✔✅]|PASS\b)/
+// CLI advisory 行（行首 emoji 前缀，剥 ANSI 后判定）：⚠️ warn / ℹ️ info / 🔄 进度是工具自身的
+// 提示通道（如 gate-snapshot 的「⚠️ 快照 overlay 冒烟：…import 失败」——warn 正文含 ModuleNotFoundError，
+// 被子串命中成失败行）。测试框架的失败行恒以 ✕✗✘×/FAIL/--- FAIL 开头，不用这些 emoji 前缀——
+// 行首判定零误伤；漏检风险由 judgeWithKnownFailures 的 fail-safe（检测不到失败行不判 pass）兜底。
+const ADVISORY_LINE_RE = /^[ \t]*(?:⚠️?|ℹ️?|🔄)/
+// 工具词汇 fail-<x> 复合词中和（判账前从行内剥除，2026-09-16 verify 移交项②）：fail-closed/
+// fail-open/fail-soft/fail-safe/fail-loud/fail-fast 是本工具的行为契约词汇，PER_TEST_FAIL_RE 的
+// \bFAIL\b（i 标志）会把「（fail-closed）」「--- 1.3 fail-open 三态 ---」整行误收；剥除后再测，
+// 行内其余真失败词（FAILED/assertionerror/error: 等）不受影响（如 AssertionError 断言消息里
+// 出现 fail-closed 仍照常命中）。
+const FAIL_COMPOUND_NEUTRALIZE_RE = /fail-(?:closed|open|soft|safe|loud|fast)/gi
 // ANSI 色码剥离（分类用）：TTY 捕获的输出里 ✓/× 前缀可能被色码包裹，行首锚定会失配。
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
 
@@ -848,8 +862,10 @@ export function partitionFailures(output, knownFailures) {
       else pyWarnCtx = false
     }
     if (PASS_LINE_RE.test(bare)) continue
+    if (ADVISORY_LINE_RE.test(bare)) continue
     if (ENV_NOISE_RE.test(bare)) continue
-    if (PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)) failureLines.push(l)
+    // fail-<x> 工具词汇中和后再测（见 FAIL_COMPOUND_NEUTRALIZE_RE 注释）：真失败词不被剥除
+    if (PER_TEST_FAIL_RE.test(bare.replace(FAIL_COMPOUND_NEUTRALIZE_RE, '')) && !SUMMARY_LINE_RE.test(bare)) failureLines.push(l)
   }
   // 豁免匹配同样在剥 ANSI 后的行上做（坑 verify-known-failures-ansi-exemption-split，2026-09-07
   // 工具复盘）：TTY 捕获的失败行里色码把可见词拦腰拆开（`× \x1b[31mtests/foo.test.ts\x1b[0m > case`

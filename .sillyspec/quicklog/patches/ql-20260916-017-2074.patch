@@ -1,0 +1,365 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 34d2e6b..a571dc0 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -79,10 +79,10 @@ mcp:
+ `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
+ 
+ ### run 流程里的三个触发器（`src/run/shared.js`）
+-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:765`）：包 `sync()` + **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:765`）。这是最常用的上推入口。
+-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:912`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:903`）：包 `syncMod.checkApproval`。
+-- **`triggerPullActiveChange`**（`shared.js:912`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
++- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:775`）：包 `sync()` + **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:775`）。这是最常用的上推入口。
++- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:922`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
++- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:913`）：包 `syncMod.checkApproval`。
++- **`triggerPullActiveChange`**（`shared.js:990`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+ 
+ ---
+ 
+@@ -134,8 +134,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1867/1913/1993 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:733（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2346；shared.js:956 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2346/1855；shared.js:912 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2346；shared.js:966 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2346/1855；shared.js:990 |
+ | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3530；sync.js:1397/986 |
+ | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3482；sync.js:2099 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+@@ -207,10 +207,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ ## 7. 关键开关与铁律
+ 
+-- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:662`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:845/834/902`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:662`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
++- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:672`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:855/834/902`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:672`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
+ - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:50`）。
+ - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
+-- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:765`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:765`，平台慢环境放宽用；放宽代价是 `--done` 最坏等待同比例变长）。
++- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:775`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:775`，平台慢环境放宽用；放宽代价是 `--done` 最坏等待同比例变长）。
+ - **MCP 不硬试**：路径A 未落地保守回退 Local（R-04）；CLI 不碰 DB 持久化 worktree_path（D-004 / client.js:18）。
+ - **派发不双写**：worker 不 commit，SillySpec 自己 apply（D-004），不调 SillyHub 合并 tool。
+ 
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 777f5f8..cbc8d36 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -116,7 +116,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ - ✅ **exec-a Task Review base..head 对账坑**：子代理不 commit 时 `git diff base..head` 为空，`verifyReviewGitEvidence`（task-review.js:625）的 changedFiles 交叉比对拿**空 diffFiles** 对非空 changedFiles 必判「完全不相交」伪造，逼 agent 强制 commit + 改 7 个 review head。此前已有 working-tree 回退（避开「零改动伪造」假阳性），但 diffFiles 只算 commit diff、**未并入 working-tree 文件**。**修法**：新增 `parsePorcelainFiles` 解析 `git status --porcelain`，working-tree 改动并入 diffFiles 后再做交叉比对（对齐 `checkExecuteCodeEvidence` 同时查 working-tree 语义）；回归 agent-gate-hardening 加未 commit 对账用例。
+ - ✅ **exec-b Stage Review run-id/marker 易错**：① marker 缺失时 `getLatestStageReviewRunId`（stage-review.js:377）fallback 扫描 `stage-reviews/<stage>-review-*` **全目录无 change 过滤** → 读到 proxy 等其他变更的 acceptance review 报错误导；② marker 内容若误写 execute 的 `exec-` 前缀 runId，按 `stage-reviews/<stage>-<runId>` 拼目录必找不到。**修法**：① fallback 按 review.json `reviewedFiles[0]`（契约=`changes/<change>/<mainDoc>`，renderReviewJsonContract）归属变更过滤，无归属 → null fail-closed + 显式 warn（不再跨变更取最新）；② marker 读取校验 `^review-` 前缀，非格式内容忽略 + warn + 退回扫描；回归 stage-review 加 marker 格式 + cross-change fallback 用例。
+-- ✅ **exec-c apply 校验 vs design §6 清单**：apply（worktree-apply.js:557）只认 design §6 清单硬卡「变更文件 ⊆ 清单」，而 assess（:565）用 task allowed_paths——**两 gate 口径不一致**——design §6 漏测试/产物文件时（task allowed_paths 已含）apply 卡住。**修法**：抽出 `resolveApplyAllowSet` = design 清单 ∪ 所有 task allowed_paths，applyWorktree 改用它；plan 已过 validateDesignFileCoverage 单向校验（design ⊆ plan），union 不放开 design/plan 之外的越界文件（仍拦）；回归 worktree-allow-list 加 union 用例（越界仍违规）。
++- ✅ **exec-c apply 校验 vs design §6 清单**：apply（worktree-apply.js:572）只认 design §6 清单硬卡「变更文件 ⊆ 清单」，而 assess（:565）用 task allowed_paths——**两 gate 口径不一致**——design §6 漏测试/产物文件时（task allowed_paths 已含）apply 卡住。**修法**：抽出 `resolveApplyAllowSet` = design 清单 ∪ 所有 task allowed_paths，applyWorktree 改用它；plan 已过 validateDesignFileCoverage 单向校验（design ⊆ plan），union 不放开 design/plan 之外的越界文件（仍拦）；回归 worktree-allow-list 加 union 用例（越界仍违规）。
+ 
+ ### 2026-08-04 verify 复盘增补（关键词判级 / 测试重复跑 / 后台无进度）
+ 状态：`a 评估保留；b/c 已修复`
+@@ -125,7 +125,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ - ⊘ **vrf-a 关键词判级不认否定语境**。**评估保留（已实现 + prompt 已充分告知）**：`detectChangeRisk`（change-risk-profile.js:233，显式豁免优先注释 :141）**显式豁免优先**——design.md frontmatter `risk_level:` 声明覆盖关键词判级，源码注释明确记载历史教训「与其在正则层做脆弱的否定识别，不如给一条显式、诚实、可审计（落在 design frontmatter + verify-result）的覆盖通道」；verify「输出验证报告」step prompt 已写「判级是机械字面匹配、不认否定语境」+「误判时的诚实出路（豁免级）：frontmatter risk_level 声明」+「留痕要求防逃逸」。用户实测用 `risk_level: contract-required` 豁免成功——机制正是设计意图，非缺陷。
+ - ✅ **vrf-b 测试重复跑（step6 手动跑 + CLI 对账又跑，198s×2）**。**修法（纯减法）**：CLI 对账是防谎报 enforcement（verify.js:176 明说「谎报测试结果没有意义」）不可删；复用 step6 结果 = 信任 agent 报告，破坏核心信任边界不可做。改为 verify.js「运行测试和质量扫描」step prompt **不重复手动跑全量测试**（测试实测统一由 CLI --done 对账执行一次，按变更命中模块子集），step 只做 lint/静态检查 + 可选针对性冒烟（非必需）；同步首段「进度确认」💡 说明 + docs/prompt 重提取（verify.md 两处）+ file-lifecycle.md 补一句。
+-- ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:250/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
++- ✅ **vrf-c 后台命令无进度提示（CLI 对账 execSync 同步静默 198s）**。**修法（轻量）**：`runVerifyTestCheck` 是同步 execSync，期间 stdout 全静默，`printVerifyTestCheck` 只在结束后打印耗时。gates.js verify 对账调用前加「⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）」预告。**放 gates.js 调用点而非 verify-postcheck.js 内部**——`runVerifyTestCheck` 也被 `machine-interface.js:278/369`（derive verify-test facet，--json）调用，内部裸 console.log 会污染 JSON 输出。
+ 
+ ### 2026-08-04 全流程复盘（集成层盲区 / Task Review 对账 / 中断续跑）
+ 状态：`①③ persuasion 补强已修复；②已修复（= exec-a）`
+@@ -175,7 +175,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ ### 2026-08-08 候选增补（多 agent 并发写预检）→ 已实现
+ 状态：`✅ 已实现（2026-08-08 主会话 in-place execute，task-01..05 全完成，npm test 全量 EXIT=0 + lint 73 文件；详见下方「实现落地」）`
+ 
+-来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1098`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
++来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1108`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
+ 
+ **钩子点（用户指定设计约束）**：并发检测应在 **quick / execute 写操作前**预检（`quick --done` 前、`execute --done` 前），而非仅作独立诊断命令——写操作是撞车高发点，预检才有拦截价值。
+ 
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 8e71f95..f3cf6fe 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -124,6 +124,12 @@ export function resolvePromptIncludes(text) {
+  * home 拒绝守卫：home 下的 .sillyspec 恒不命中——历史污染源（smoke 测试在 home 下临时目录
+  * 跑 CLI，_ensureDB 读路径即建库，~/.sillyspec 长出一整套平行进度库后，任何 home 子目录
+  * 跑命令都会向上撞它，污染自我延续）。撞 home 即停，回退 cwd/.sillyspec（子目录自建）。
++ * tmpdir 硬边界（坑 temp-root-stray-sillyspec，2026-09-16-friction5-hardening verify 移交项①
++ * 实证）：某次 cwd=%TEMP% 直系的调用在 Temp 根遗留游离 .sillyspec 后，所有 temp 夹具的祖先
++ * 链都被它劫持（agent-automation-batch4『add frontend 建档』/feedback-batch2 两测试假败的真
++ * 根因——specBase 解析到 Temp\.sillyspec，夹具内断言读自身路径 ENOENT）。temp 下合法的
++ * .sillyspec 只会在夹具自身内部：起点在 tmpdir 子树内时，tmpdir 层及其上永不检查、走到即停
++ * （比 home 守卫更硬：home 是「跳过一层继续走」，tmp 是「整段封顶」——tmpdir 之上无合法项目根）。
+  * @param {string} cwd
+  * @param {object} [opts]
+  * @param {string} [opts.specDir] - 用户指定的 specDir（通过 --spec-dir 或 --spec-root）
+@@ -132,11 +138,15 @@ export function resolvePromptIncludes(text) {
+ export function resolveSpecDir(cwd, opts = {}) {
+   if (opts.specDir) return resolve(opts.specDir)
+   const home = os.homedir()
++  const tmp = os.tmpdir()
+   const origin = resolve(cwd)
+   const originBelowHome = origin.startsWith(home + sep) // 严格子目录，不含 home 自身
++  const originInTmp = origin === tmp || origin.startsWith(tmp + sep) // 含 tmpdir 自身
+   let dir = origin
+   let passedHome = false
+   while (true) {
++    // tmpdir 硬边界：起点在 tmpdir 子树内时，走到 tmpdir 层即封顶（该层及其上是游离库温床，永不命中）
++    if (originInTmp && dir === tmp) break
+     // home 拒绝守卫：起点在 home 子树内时，home 层不检查 .sillyspec，
+     // 防止 home 子目录遍历经过 home 误命中 ~/.sillyspec；
+     // passedHome：经过 home 后不再检查（覆盖遍历到真实 home 的场景）。
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index f4e8643..7b853e6 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -803,7 +803,21 @@ const PY_TEST_ID_RE = /^\S+::\S+$/
+ // 通过行用例名恰含这些字样（如「✓ … 超时后 syncStatus=failed」）会被误判失败行——
+ // 2710 用例套件 382 个"失败行"里 378 假阳性，known_failures 无法逐条枚举而实质失效。
+ // 框架输出里通过行恒以通过标记开头、失败行恒以失败标记开头，行首判定即足以分离两类。
+-const PASS_LINE_RE = /^\s*(?:[✓√✔]|PASS\b)/
++// ✅ 补入标记集（2026-09-16-friction5-hardening verify 移交项②实证）：本仓自定义 harness 用
++// 「✅ PASS: <断言名>」打印通过行，断言名高频含 fail-closed/failed/×3（乘号）——✅ 不在集内时
++// 整行落 \bFAIL\b/×/failed 子串命中成假失败行（一轮 verify 实测 20/27 未豁免行为此噪声）。
++const PASS_LINE_RE = /^\s*(?:[✓√✔✅]|PASS\b)/
++// CLI advisory 行（行首 emoji 前缀，剥 ANSI 后判定）：⚠️ warn / ℹ️ info / 🔄 进度是工具自身的
++// 提示通道（如 gate-snapshot 的「⚠️ 快照 overlay 冒烟：…import 失败」——warn 正文含 ModuleNotFoundError，
++// 被子串命中成失败行）。测试框架的失败行恒以 ✕✗✘×/FAIL/--- FAIL 开头，不用这些 emoji 前缀——
++// 行首判定零误伤；漏检风险由 judgeWithKnownFailures 的 fail-safe（检测不到失败行不判 pass）兜底。
++const ADVISORY_LINE_RE = /^[ \t]*(?:⚠️?|ℹ️?|🔄)/
++// 工具词汇 fail-<x> 复合词中和（判账前从行内剥除，2026-09-16 verify 移交项②）：fail-closed/
++// fail-open/fail-soft/fail-safe/fail-loud/fail-fast 是本工具的行为契约词汇，PER_TEST_FAIL_RE 的
++// \bFAIL\b（i 标志）会把「（fail-closed）」「--- 1.3 fail-open 三态 ---」整行误收；剥除后再测，
++// 行内其余真失败词（FAILED/assertionerror/error: 等）不受影响（如 AssertionError 断言消息里
++// 出现 fail-closed 仍照常命中）。
++const FAIL_COMPOUND_NEUTRALIZE_RE = /fail-(?:closed|open|soft|safe|loud|fast)/gi
+ // ANSI 色码剥离（分类用）：TTY 捕获的输出里 ✓/× 前缀可能被色码包裹，行首锚定会失配。
+ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
+ 
+@@ -848,8 +862,10 @@ export function partitionFailures(output, knownFailures) {
+       else pyWarnCtx = false
+     }
+     if (PASS_LINE_RE.test(bare)) continue
++    if (ADVISORY_LINE_RE.test(bare)) continue
+     if (ENV_NOISE_RE.test(bare)) continue
+-    if (PER_TEST_FAIL_RE.test(bare) && !SUMMARY_LINE_RE.test(bare)) failureLines.push(l)
++    // fail-<x> 工具词汇中和后再测（见 FAIL_COMPOUND_NEUTRALIZE_RE 注释）：真失败词不被剥除
++    if (PER_TEST_FAIL_RE.test(bare.replace(FAIL_COMPOUND_NEUTRALIZE_RE, '')) && !SUMMARY_LINE_RE.test(bare)) failureLines.push(l)
+   }
+   // 豁免匹配同样在剥 ANSI 后的行上做（坑 verify-known-failures-ansi-exemption-split，2026-09-07
+   // 工具复盘）：TTY 捕获的失败行里色码把可见词拦腰拆开（`× \x1b[31mtests/foo.test.ts\x1b[0m > case`
+diff --git a/test/temp-boundary-spec-dir.test.mjs b/test/temp-boundary-spec-dir.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/temp-boundary-spec-dir.test.mjs
+@@ -0,0 +1,103 @@
++/**
++ * 防回归测试：resolveSpecDir tmpdir 硬边界（坑 temp-root-stray-sillyspec，
++ * 2026-09-16-friction5-hardening verify 移交项①实证）。
++ *
++ * 事故形态：某次 cwd=%TEMP% 直系的调用在 Temp 根遗留游离 .sillyspec，此后所有 temp 夹具的
++ * 祖先解析被劫持——agent-automation-batch4『add frontend 建档』与 feedback-batch2-hardening
++ * 两测试假败的真根因（specBase 解析到 Temp\.sillyspec，夹具内断言读自身路径 ENOENT）。
++ *
++ * 隔离手法：不动真 %TEMP%（测试自身会污染机器环境）——Node 的 os.tmpdir() 每次调用都读
++ * process.env（win32: TEMP/TMP，POSIX: TMPDIR），测试内把 env 指向自建可控目录再造游离库，
++ * finally 恢复 env 并清理。
++ */
++import { resolveSpecDir } from '../src/run/shared.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, resolve } from 'node:path'
++
++let passed = 0
++let failed = 0
++
++function assert(name, cond, detail = '') {
++  if (cond) {
++    console.log(`✅ PASS: ${name}`)
++    passed++
++  } else {
++    console.error(`❌ FAIL: ${name}${detail ? `（${detail}）` : ''}`)
++    failed++
++    process.exitCode = 1
++  }
++}
++
++// ── env 隔离：把 os.tmpdir() 指向自建 base ──
++const realTmp = tmpdir()
++const base = mkdtempSync(join(realTmp, 'tmpcap-'))
++const savedEnv = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR }
++const setTmpEnv = (dir) => {
++  if (process.platform === 'win32') { process.env.TEMP = dir; process.env.TMP = dir }
++  else process.env.TMPDIR = dir
++}
++const restoreTmpEnv = () => {
++  for (const [k, v] of Object.entries(savedEnv)) {
++    if (v === undefined) delete process.env[k]
++    else process.env[k] = v
++  }
++}
++
++try {
++  setTmpEnv(base)
++
++  // 游离库：tmp 根下的 .sillyspec（事故复刻）
++  mkdirSync(join(base, '.sillyspec', 'projects'), { recursive: true })
++  writeFileSync(join(base, '.sillyspec', 'projects', 'frontend.yaml'), 'name: frontend\n', 'utf8')
++
++  console.log('--- 1. tmp 根游离库不劫持 temp 夹具（事故形态）---')
++  {
++    const fixture = join(base, 'ws-GZwxhO')
++    mkdirSync(fixture, { recursive: true })
++    const got = resolveSpecDir(fixture)
++    assert('夹具无自身 .sillyspec → 回退夹具自身路径（不被 tmp 游离库劫持）',
++      got === join(fixture, '.sillyspec'), `got=${got}`)
++  }
++
++  console.log('--- 2. tmp 封顶不阻断夹具内部的合法祖先解析 ---')
++  {
++    const fixture = join(base, 'proj-ok')
++    mkdirSync(join(fixture, '.sillyspec'), { recursive: true })
++    mkdirSync(join(fixture, 'sub', 'deep'), { recursive: true })
++    const got = resolveSpecDir(join(fixture, 'sub', 'deep'))
++    assert('夹具自身 .sillyspec 仍可被深层子目录向上命中（封顶只在 tmp 层）',
++      got === join(fixture, '.sillyspec'), `got=${got}`)
++  }
++
++  console.log('--- 3. cwd 即 tmp 根：同样封顶（返回自身回退路径，不命中游离库）---')
++  {
++    const got = resolveSpecDir(base)
++    assert('origin===tmpdir → 回退 join(origin, .sillyspec)（与普通非项目目录回退语义一致）',
++      got === join(base, '.sillyspec'), `got=${got}`)
++  }
++
++  console.log('--- 4. specDir 显式指定优先级不变（封顶不吞 override）---')
++  {
++    const fixture = join(base, 'ws-x2')
++    mkdirSync(fixture, { recursive: true })
++    const explicit = join(base, 'explicit-spec')
++    const got = resolveSpecDir(fixture, { specDir: explicit })
++    assert('opts.specDir 显式指定恒优先', got === resolve(explicit), `got=${got}`)
++  }
++} finally {
++  restoreTmpEnv()
++  rmSync(base, { recursive: true, force: true })
++}
++
++console.log('--- 5. 非 tmp 场景零回归：真实仓祖先解析照常（env 已还原）---')
++{
++  const repoRoot = resolve(process.cwd())
++  const got = resolveSpecDir(process.cwd())
++  // 本仓根有 .sillyspec（无上移）——与既有行为一致；断言命中的是仓内真实目录
++  assert('真实仓 cwd 解析不受 tmp 封顶影响', got === join(repoRoot, '.sillyspec'), `got=${got}`)
++}
++
++console.log(`\n==================================================`)
++console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failed > 0) process.exit(1)
+
+diff --git a/test/verify-failure-ledger-noise.test.mjs b/test/verify-failure-ledger-noise.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/verify-failure-ledger-noise.test.mjs
+@@ -0,0 +1,105 @@
++/**
++ * 防回归测试：失败行账本去噪（2026-09-16-friction5-hardening verify 移交项②实证）。
++ *
++ * 事故形态：noAI 质量扫描的「未豁免失败行」账本把三类非失败行计入——
++ * ①✅ 前缀通过行（本仓自定义 harness 的「✅ PASS: <断言名>」——断言名高频含 fail-closed/
++ *   failed/×3 乘号，✅ 不在 PASS_LINE_RE 标记集内整行落子串命中）；
++ * ②CLI advisory 行（⚠️ warn/ℹ️ info/🔄 进度前缀——gate-snapshot 冒烟 warn 正文含
++ *   ModuleNotFoundError 被命中）；
++ * ③fail-<x> 工具词汇（\bFAIL\b i 标志命中「（fail-closed）」「--- fail-open 三态 ---」）。
++ * 一轮 verify 实测 20/27 未豁免行为此噪声，known_failures 无法逐条枚举。
++ *
++ * 修复口径（partitionFailures）：PASS_LINE_RE 补 ✅ / 新增 ADVISORY_LINE_RE 行首剔 /
++ * FAIL_COMPOUND_NEUTRALIZE_RE 判账前中和——真失败词（FAILED/AssertionError/error:/×/❌/--- FAIL）
++ * 不受影响，漏检由 judgeWithKnownFailures fail-safe（检测不到失败行不判 pass）兜底。
++ */
++import { partitionFailures, judgeWithKnownFailures } from '../src/verify-postcheck.js'
++
++let passed = 0
++let failed = 0
++
++function assert(name, cond, detail = '') {
++  if (cond) {
++    console.log(`✅ PASS: ${name}`)
++    passed++
++  } else {
++    console.error(`❌ FAIL: ${name}${detail ? `（${detail}）` : ''}`)
++    failed++
++    process.exitCode = 1
++  }
++}
++
++// 事故噪声行（verify 实测原文誊抄）
++const NOISE_LINES = [
++  '  ✅ PASS: 命中≥1 → covered ×3（t1×2 + t2）（实际 3）',
++  '  ✅ PASS: 有归属零命中 → partial ×1（task-05）',
++  '  ✅ PASS: 已完成条目拒绝取消（fail-closed）',
++  '  ✅ PASS: 退出码 1 → failed（实际 failed）',
++  '  ✅ PASS: 坏 ref → null（git 异常 fail-open）',
++  '  ✅ PASS: fail-soft 仍清占位符（无残留）',
++  '  ✅ 通过: 21  ❌ 失败: 0',
++  '✅ PASS: 改写后 getMeta 读取 depsStatus=failed',
++  '⚠️ 快照 overlay 冒烟：backend/mod_b.py import 失败（ModuleNotFoundError: No module named \'mod_a\'）——已回退 HEAD 版',
++  'ℹ️ 门禁快照：主仓未发现任何环境目录',
++  '🔄 deps 门控：depsStatus=failed，阻断前按 --done 重试路径重供给一次（与 doctor --fix 同款）...',
++  '[sillyspec] 归因注记：不可归因（worktree 已清理）——DB 判 worktree 但分支 ref 不存在，fail-closed 空集，不回退主仓窗口',
++  '--- 1.3 fail-open 三态 ---',
++  '坑 fail-safe 策略：默认空集',
++]
++
++// 真失败行（各框架/自研 harness 形态——修复后必须照常计入）
++const REAL_FAIL_LINES = [
++  '❌ FAIL: add frontend 建档',
++  "Error: ENOENT: no such file or directory, open 'C:\\ws-x\\.sillyspec\\projects\\frontend.yaml'",
++  '✕ test/foo.test.mjs > sub > case name',
++  'AssertionError: expected fail-closed guard, got fail-open pass-through',
++  '--- FAIL: TestDuplicateKeyGuard (0.00s)',
++  '× vitest 失败标记行',
++  'FAILED tests/unit/a.spec.ts',
++]
++
++console.log('--- 1. 噪声行零计入 ---')
++{
++  const { failureLines } = partitionFailures(NOISE_LINES.join('\n'), [])
++  assert(`事故噪声 ${NOISE_LINES.length} 行全部不计入失败行`, failureLines.length === 0,
++    `误收=${JSON.stringify(failureLines)}`)
++}
++
++console.log('--- 2. 真失败行照常计入 ---')
++{
++  const { failureLines } = partitionFailures(REAL_FAIL_LINES.join('\n'), [])
++  assert(`真失败 ${REAL_FAIL_LINES.length} 行全部计入`, failureLines.length === REAL_FAIL_LINES.length,
++    `实收=${failureLines.length}：${JSON.stringify(failureLines)}`)
++}
++
++console.log('--- 3. 混合输出只收真失败（含 fail-compound 断言消息行不丢）---')
++{
++  const mixed = [...NOISE_LINES, ...REAL_FAIL_LINES].join('\n')
++  const { failureLines } = partitionFailures(mixed, [])
++  assert('混合场景噪声剔净、真失败全收', failureLines.length === REAL_FAIL_LINES.length,
++    `实收=${failureLines.length}`)
++}
++
++console.log('--- 4. known_failures 豁免在去噪后照常工作 ---')
++{
++  const { exempted, remaining } = partitionFailures(REAL_FAIL_LINES.join('\n'), ['add frontend 建档'])
++  assert('豁免命中 1 条（add frontend 建档）', exempted.length === 1, `exempted=${exempted.length}`)
++  assert('未豁免剩 6 条', remaining.length === REAL_FAIL_LINES.length - 1, `remaining=${remaining.length}`)
++}
++
++console.log('--- 5. fail-safe 兜底不变：纯噪声 + exit≠0 仍判 failed（检测不到失败行绝不自动 pass）---')
++{
++  const judged = judgeWithKnownFailures(1, NOISE_LINES.join('\n'), 'exit 1', ['whatever'])
++  assert('纯噪声输出 + exit 1 → status=failed（保守兜底）', judged.status === 'failed', `status=${judged.status}`)
++}
++
++console.log('--- 6. 既有通过行口径零回归（✓/√/✔/PASS 前缀仍剔，含 failed 字样的通过用例名）---')
++{
++  const legacy = ['✓ 超时后 syncStatus=failed 仍重试', '√ case ok', '✔ another pass', 'PASS src/__tests__/ok.test.js']
++  const { failureLines } = partitionFailures(legacy.join('\n'), [])
++  assert('既有通过标记集照常剔除', failureLines.length === 0, `误收=${JSON.stringify(failureLines)}`)
++}
++
++console.log(`\n==================================================`)
++console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failed > 0) process.exit(1)
