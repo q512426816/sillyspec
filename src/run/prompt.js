@@ -1428,10 +1428,15 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // archive-batch-31-tool-notes ②：通用 --done 模板不带该 flag，agent 照抄执行撞
   // 「请添加 --confirm」确认门，误以为参数没带。
   const confirmFlag = step.requiresConfirm === true ? ' --confirm' : ''
-  // auto driver（2026-09-08-auto-driver D-002/P1-③）：auto 模式下命令一律 run auto 形态——
+  // auto driver（2026-09-08-auto-driver D-002/P1-Ⅲ）：auto 模式下命令一律 run auto 形态——
   // 与 SS-META 的 doneCommand 同源（同一 cmdStage 变量），消灭「正文 run <stage> / 元数据 run auto」双命令
   const cmdStage = autoMeta ? 'auto' : stageName
-  const doneCommand = `sillyspec run ${cmdStage} --done${confirmFlag}${changeFlag} --output "你的摘要"`
+  // 意图断言（坑 execute-concurrent-done-skips-next-wave 终解）：execute 的 Wave 步骤是动态
+  // 步骤表，并发 --done 会落到错误 Wave 且用旧摘要静默完成——完成命令带 --step "<本步名>"
+  //（CLI 校验一致才放行），照抄命令即得并发防护。仅 execute 注入（quick/静态阶段测试断言
+  // 提示格式，且静态步骤名稳定无漂移风险）。
+  const stepAssertFlag = (stageName === 'execute' && step?.name) ? ` --step "${step.name}"` : ''
+  const doneCommand = `sillyspec run ${cmdStage} --done${confirmFlag}${stepAssertFlag}${changeFlag} --output "你的摘要"`
   if (requiresWait) {
     console.log(`本步骤必须等待用户输入，不能直接 --done：`)
     console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)

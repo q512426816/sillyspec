@@ -14,7 +14,7 @@
  * 快照生命周期：一次门禁一批（create → run → cleanup）；崩溃残留由 git worktree prune /
  * 临时目录自然回收（OS tmp 清理），不进主仓 .runtime。
  */
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
 import { join, dirname, relative, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -24,11 +24,99 @@ function git(cwd, args) {
 }
 
 /**
+ * overlay import 冒烟多轮收敛（坑 verify-sandbox-overlay-partial-state-importerror）：
+ * 单轮回退有两个盲点——①坏的是依赖文件（缺名/缺模块），报错的是 importer，回退 importer
+ * 不解决问题；②一次回退后依赖关系变化。策略：最多 3 轮，每轮对未回退的 overlay .py 冒烟；
+ * 失败时解析报错点名的模块名 → 若能映射到**另一个 overlay .py 文件**则回退那个依赖文件
+ *（事故形态：crud.py 半成品缺名，importer 报错点名 crud → 回退 crud 的 HEAD 健版），
+ * 否则回退报错文件自身（语法坏/自身缺依赖）；HEAD 无版的新文件回退不了 → warn 保留。
+ */
+function runOverlayImportSmoke(pythonBin, snapshotRoot, overlaidFiles) {
+  const reverted = new Set()
+  const byModule = new Map() // 末段模块名 → 文件（映射报错点名）
+  for (const f of overlaidFiles) byModule.set(f.split('/').pop().replace(/\.py$/, ''), f)
+  const revertToHead = (f, why) => {
+    try {
+      writeFileSync(join(snapshotRoot, f), git(snapshotRoot, ['show', `HEAD:${f}`]))
+      reverted.add(f)
+      console.warn(`⚠️ 快照 overlay 冒烟：${f} ${why}——已回退 HEAD 版（并行会话半成品部分态不进沙箱）`)
+      return true
+    } catch {
+      console.warn(`⚠️ 快照 overlay 冒烟：${f} ${why}且 HEAD 无该文件（新增半成品）——保留原样，模块子集实测若红先查此文件`)
+      return false
+    }
+  }
+  for (let round = 0; round < 3; round++) {
+    let acted = false
+    for (const f of overlaidFiles) {
+      if (reverted.has(f)) continue
+      const bad = smokeImportPython(pythonBin, snapshotRoot, f)
+      if (!bad) continue
+      acted = true
+      // 依赖归因：报错点名另一 overlay 文件 → 回退依赖（ importer 自身往往无恙）
+      const named = bad.match(/(?:No module named|from)\s+['"]?([A-Za-z_][\w.]*)/i)
+      const depFile = named ? byModule.get(named[1].split('.').pop()) : null
+      if (depFile && depFile !== f && !reverted.has(depFile)) {
+        if (revertToHead(depFile, `被 ${f} 的 import 报错点名（${bad.slice(0, 60)}）`)) continue
+      }
+      revertToHead(f, `import 失败（${bad.slice(0, 60)}）`)
+    }
+    if (!acted) return
+  }
+}
+
+/**
+ * 快照内寻找 python 解释器（overlay 冒烟用）：环境目录发现集里的 venv 族
+ *（.venv/venv/env）在快照内已 junction——按平台拼 Scripts/bin 下的 python 路径。
+ * @returns {string|null} 解释器绝对路径；找不到返回 null
+ */
+function findSnapshotPython(envRelDirs, snapshotRoot) {
+  for (const rel of envRelDirs) {
+    if (!/(^|\/)(\.?venv|env)(\/|$)/.test(rel)) continue
+    const bin = process.platform === 'win32'
+      ? join(snapshotRoot, rel, 'Scripts', 'python.exe')
+      : join(snapshotRoot, rel, 'bin', 'python')
+    if (existsSync(bin)) return bin
+  }
+  return null
+}
+
+/**
+ * 单文件 import 冒烟：`python -c "import <mod>"`，cwd 取该文件所在包根（模块路径按
+ * 目录结构推导：剥 .py、/→.、丢 __init__；相对包根 import）。非 0 退出且 stderr 命中
+ * ImportError/ModuleNotFoundError/SyntaxError 才判坏（其余失败如缺第三方依赖是环境问题，
+ * 不回退——回退语义只针对「部分态坏文件」）。超时 10s 防挂。
+ * @returns {string|null} 失败原因（判坏时）；通过/环境性失败返回 null
+ */
+function smokeImportPython(pythonBin, snapshotRoot, relFile) {
+  const noExt = relFile.replace(/\.py$/, '')
+  const parts = noExt.split('/')
+  while (parts.length > 0 && parts[parts.length - 1] === '__init__') parts.pop()
+  if (parts.length === 0) return null
+  // 包根推导：从深到浅尝试（backend/app/x/y.py → 先 app.x.y（cwd=backend）再 x.y（cwd=backend/app））
+  for (let cut = 0; cut < parts.length; cut++) {
+    const mod = parts.slice(cut).join('.')
+    if (!mod || !/^[A-Za-z_][\w.]*$/.test(mod)) continue
+    const pkgRoot = join(snapshotRoot, ...parts.slice(0, cut))
+    const r = spawnSync(pythonBin, ['-c', `import ${mod}`], {
+      cwd: pkgRoot, encoding: 'utf-8', timeout: 10_000,
+    })
+    if (r.status === 0) return null
+    const err = String((r.stderr || '') + (r.stdout || ''))
+    if (/ImportError|ModuleNotFoundError|SyntaxError|cannot import name/i.test(err)) {
+      return (err.match(/(?:ImportError|ModuleNotFoundError|SyntaxError|cannot import name)[^\n]*/) || ['import 失败'])[0].slice(0, 120)
+    }
+    // 环境性失败（如缺第三方依赖、非模块入口冲突）→ 不判坏，继续试更浅包根
+  }
+  return null
+}
+
+/**
  * 创建隔离快照：HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml。
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
  */
-export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
+export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false }) {
   let snapshotRoot = null
   try {
     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
@@ -109,6 +197,26 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null }) {
       if (existsSync(src)) {
         mkdirSync(dirname(join(snapshotRoot, cfg)), { recursive: true })
         copyFileSync(src, join(snapshotRoot, cfg))
+      }
+    }
+
+    // ── overlay import 闭合冒烟（坑 verify-sandbox-overlay-partial-state-importerror，
+    // 2026-09-13 实证：in-place 变更的文件集含主仓未提交并行 WIP——「改了引用方没改被引用方」
+    // 的部分态进快照，模块子集测试 197 ERROR 只能人工三步排查）──
+    // 对 overlay 进快照的 .py 文件逐个 `python -c import`（用快照内链接的 venv 解释器）；
+    // ImportError/SyntaxError → 该文件回退 HEAD 版（git show）+ warn——半成品坏文件不进沙箱，
+    // HEAD 健版保证 import 图闭合。新增文件（HEAD 无版）无法回退 → 醒目 warn 保留。
+    // 全链 fail-open：找不到解释器/基建异常只 warn 不作废快照（主场景是 Python 项目，
+    // JS/TS 的 vitest load 冒烟成本高留后续）。
+    const overlaidPyFiles = files.filter(f => typeof f === 'string' && f.endsWith('.py')
+      && !f.startsWith('.sillyspec/')
+      && existsSync(join(snapshotRoot, f)))
+    if (overlaidPyFiles.length > 0 && !skipImportSmoke) {
+      const pythonBin = findSnapshotPython(envRelDirs, snapshotRoot)
+      if (pythonBin) {
+        runOverlayImportSmoke(pythonBin, snapshotRoot, overlaidPyFiles)
+      } else {
+        console.warn(`⚠️ 快照 overlay 冒烟跳过：快照内未找到 python 解释器（venv 族未链接）——并行半成品部分态可能引发 ImportError 假红，实测红先 SNAPSHOT_OFF 对照`)
       }
     }
 

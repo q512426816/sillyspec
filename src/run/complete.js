@@ -181,6 +181,29 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     console.log(`⚠️  Step "${steps[_resolvedWaitIdx].name}" 此前处于 waiting，--done --answer 已补回答并拉回待完成。`)
   }
 
+  // ── 意图断言（坑 execute-concurrent-done-skips-next-wave 终解，2026-09-08 实证）──
+  // --step <名|序号> 显式声明本次要完成的步骤；与当前待完成步不一致 → fail-closed 拒绝。
+  // 防并发 --done 主形态：会话 B 先推进 Wave N，会话 A 随后的 --done 落到 Wave N+1 且用
+  // Wave N 的旧摘要静默完成未实现步骤——CLI 短进程无法读心，只有显式声明能硬拦。
+  // 序号 1-based；名称精确或前缀匹配（Wave 名常带「Wave 3 — xxx」长尾，前缀够用且防呆）。
+  if (options.stepAssert) {
+    const declared = String(options.stepAssert).trim()
+    const currentName = steps[currentIdx]?.name || ''
+    let match = false
+    if (/^\d+$/.test(declared)) {
+      match = currentIdx === parseInt(declared, 10) - 1
+    } else {
+      match = currentName === declared || currentName.startsWith(declared)
+    }
+    if (!match) {
+      console.error(`❌ --step 意图断言不匹配：声明完成「${declared}」，当前待完成步骤是「${currentName}」（第 ${currentIdx + 1}/${steps.length} 步）。`)
+      console.error(`   不一致的最常见原因：并行会话刚推进了本变更的步骤（你读的是旧进度）。`)
+      console.error(`   核对：sillyspec progress show${changeName ? ` --change ${changeName}` : ''}；确认要做的是当前步则去掉 --step 重跑，确属误判自己想做的步则修正 --step 值。`)
+      process.exit(1)
+    }
+    console.log(`🛡️ 意图断言通过：--step「${declared}」= 当前步骤「${currentName}」`)
+  }
+
   // ── P0-2（noai-ir-roadmap §3）：--output 省略 → CLI 按事实合成步骤摘要 ──
   // agent 手打摘要是每步命中的幻觉源；事实面（步骤名 + 变更窗口 + 门禁以 CLI 校验为准）
   // CLI 本就持有，纯事实合成零编造（判断词留给 gate）。语义性说明（方案取舍/用户反馈）仍应

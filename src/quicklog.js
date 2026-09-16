@@ -1081,10 +1081,15 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId = 
   let quicklogFile = null
   let flipped = false
   await withFileLock(lockPath, async () => {
-    // 用户文件缺失时扫全部 QUICKLOG 文件（条目可能在别的 user 文件里，如 CI 场景 user 漂移）
-    const files = existsSync(join(quicklogDir, `QUICKLOG-${user}.md`))
-      ? [`QUICKLOG-${user}.md`]
-      : listQuicklogFiles(quicklogDir)
+    // 坑 quick-cancel-blind-after-quicklog-rotation（2026-09-16 实证）：主文件存在时旧逻辑
+    // 只扫主文件——轮转发生后历史条目在归档文件（QUICKLOG-<user>-<日期>.md）里永久不可达，
+    // 「提示清理 → 清理必失败」死循环。恒扫全部 QUICKLOG 文件（主文件优先，命中即停），
+    // 用户文件缺失的 CI user 漂移场景语义不变。
+    const allFiles = listQuicklogFiles(quicklogDir)
+    const mainFile = `QUICKLOG-${user}.md`
+    const files = existsSync(join(quicklogDir, mainFile))
+      ? [mainFile, ...allFiles.filter(f => f !== mainFile)]
+      : allFiles
     for (const f of files) {
       const p = join(quicklogDir, f)
       const content = existsSync(p) ? readFileSync(p, 'utf8') : ''

@@ -330,6 +330,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     process.exit(2)
   }
   const fromStepValue = getFlagValue('--from-step')
+  // 意图断言（坑 execute-concurrent-done-skips-next-wave 终解，2026-09-08 实证）：--done --step
+  // <名|序号> 显式声明本次要完成的步骤——CLI 校验与当前待完成步一致才放行。并发 --done 落到
+  // 错误 Wave（后到会话用旧摘要完成未实现的下一步）只有显式声明能硬拦（CLI 短进程无法读心）。
+  const stepAssertValue = getFlagValue('--step')
   const isConfirm = flags.includes('--confirm')
   const isSkipApproval = flags.includes('--skip-approval')
   const isWait = flags.includes('--wait')
@@ -1381,7 +1385,26 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       } catch { /* guard 损坏 → 下面按找不到报错 */ }
     }
     if (!qlId) {
-      console.error(`❌ 无法定位会话 ${cancelSessionRaw} 的 qlId（guard.json 缺失/损坏）——显式传 --ql <ql-xxx>（QUICKLOG 条目头）`)
+      // 坑 quick-cancel-blind-after-quicklog-rotation ②③（2026-09-16 实证）：空壳会话
+      //（启动即被拒/未写任何条目）无 ql-ID 可传，「显式传 --ql」指引逻辑上不可执行。
+      // 两层出口：① guard 缺失但进度库会话行零步骤完成 → 空壳直清（进度注销+目录清理即
+      // 成功，条目定位对无条目会话本无意义）；② 仍有疑虑时 --force 跳过条目清理强清。
+      const forceCancel = flags.includes('--force')
+      let emptyShell = false
+      try {
+        const sessProgress = pm.read(cwd, cancelSessionRaw)
+        const qSteps = sessProgress?.stages?.quick?.steps
+        const doneCount = Array.isArray(qSteps) ? qSteps.filter(s => s?.status === 'completed' || s?.status === 'skipped').length : 0
+        emptyShell = doneCount === 0
+      } catch { /* 读不到进度 → 按非空壳走原报错 */ }
+      if (forceCancel || emptyShell) {
+        try { pm.unregisterChange(cwd, cancelSessionRaw) } catch { /* 无行可注销不算失败 */ }
+        try { rmSync(join(resolveQuickSessionsDir(platformOpts, specBase), cancelSessionRaw), { recursive: true, force: true }) } catch { /* 目录不存在即无事 */ }
+        console.log(`🗑️ 已${emptyShell ? '清空壳会话（零步骤完成，无 QUICKLOG 条目可清）' : '强制取消（--force，跳过条目清理）'}: ${cancelSessionRaw}`)
+        console.log('   进度行注销 + 会话目录清理完成')
+        return
+      }
+      console.error(`❌ 无法定位会话 ${cancelSessionRaw} 的 qlId（guard.json 缺失/损坏）——显式传 --ql <ql-xxx>（QUICKLOG 条目头）；确认该会话确无条目可清时可用 --force 跳过条目清理`)
       process.exit(1)
     }
     let gitUser = 'unknown'
@@ -1526,7 +1549,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     const doneAnswer = getFlagValue('--answer')
     // isSkipApply/sessionFlag（task-03）：--skip-apply 归档收口跳过 + --session 所有权会话标识，
     // 随 completeStep options 透传（isNoDocs 同款链路）——消费点 archive/quick 收尾 handler。
-    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles })
+    return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles, stepAssert: stepAssertValue })
   }
 
   // 默认：输出当前步骤
