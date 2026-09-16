@@ -691,7 +691,7 @@ function renderProbe7Lines(p7) {
     L.push('- 不适用（无 TaskCard）')
     return L
   }
-  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles 结构归属承接面（每条 acceptance 由哪些测试承接）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
   L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。证据列给首命中 file:line 锚点或人工核验提示。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
   // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
   // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
@@ -907,12 +907,35 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
         }
       } catch { /* tasks 目录不可读 → applicable 维持 false */ }
       probe7.applicable = cards.length > 0
+      // 跨卡归属（坑 probe7-provider-tests-in-consumer-card，2026-09-16 E 变更 verify 实证：8 格
+      // 被机械预填 uncovered——task-03（测试卡）的用例测的是 task-01（provider）的导出函数，但归属
+      // 只看本卡 allowed_paths ∪ review changedFiles，provider 卡的 acceptance 永远连不上消费卡的
+      // 测试。修法：归属集扩为「本卡 ∪ 直接依赖本卡的卡」的测试文件——M depends_on N 则 M 的测试
+      // 可承接 N 的 acceptance（下游消费卡天然测上游产物）。只扩直接依赖（v1，传递闭包易把无关
+      // 测试卷进来放大 partial 噪音）。
+      const dependsOnOf = new Map()
+      for (const c of cards) {
+        const dm = String(c.raw).match(/^depends_on:\s*\[?([^\]\n]*)\]?/m)
+        const deps = (dm ? dm[1] : '').split(/[,\s]+/).map(s => s.trim()).filter(s => /^task-\d+$/.test(s))
+        dependsOnOf.set(c.task, deps)
+      }
       for (const card of cards) {
         const fromAllowed = parseAllowedPaths(card.raw)
           .map(p => String(p).replace(/^NEW:\s*/, '').trim())
           .filter(p => p && isProbe7TestPath(p))
         const fromReview = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task) : []
-        const testFiles = [...new Set([...fromAllowed, ...fromReview])]
+        // 直接下游卡的归属测试并入（provider acceptance 由消费卡测试承接）
+        const fromDependents = []
+        for (const other of cards) {
+          if (other.task === card.task) continue
+          const deps = dependsOnOf.get(other.task) || []
+          if (!deps.includes(card.task)) continue
+          for (const p of parseAllowedPaths(other.raw)) {
+            const t = String(p).replace(/^NEW:\s*/, '').trim()
+            if (t && isProbe7TestPath(t) && !fromDependents.includes(t)) fromDependents.push(t)
+          }
+        }
+        const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])]
         probe7.tasks.push({
           task: card.task,
           acceptance: card.acceptance,

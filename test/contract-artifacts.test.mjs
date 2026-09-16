@@ -503,6 +503,25 @@ describe('extractExpressEndpoints', () => {
     assert.equal(endpoints[2].method, 'DELETE')
   })
 
+  it('注释里的文档示例路由被掩、真路由保留（endpoint-extractor-selfdoc-noise，2026-09-16 E 变更实证）', () => {
+    mkdirSync(tmpDir, { recursive: true })
+    writeFileSync(routerFile, [
+      '/**',
+      ' * app.use("/api", router)',
+      ' * router.get("/api/xxx")',
+      ' */',
+      'app.use("/v1", router);',
+      'router.get("/users", listUsers);',
+      '// app.get("/api/path", h)',
+      'export {}',
+    ].join('\n'), 'utf8')
+    const endpoints = extractExpressEndpoints(routerFile)
+    // 注释里的 use 前缀 "/api" 与示例路由全掩；真 use("/v1") 前缀 + 真 /users 命中
+    assert.equal(endpoints.length, 1, `只留真路由（实际：${JSON.stringify(endpoints)}）`)
+    assert.equal(endpoints[0].method, 'GET')
+    assert.equal(endpoints[0].path, '/v1/users')
+  })
+
   it('app.use 前缀近似合并（同文件）', () => {
     mkdirSync(tmpDir, { recursive: true })
     writeFileSync(routerFile, [

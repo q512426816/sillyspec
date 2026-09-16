@@ -281,6 +281,42 @@ try {
       'verify-probes.js 全文件零 task-review 静态/动态 import（注释里的「禁 import」说明不算）')
     assert(!existsSync(join(__dirname, '..', 'src', 'verify-probes.js.bak')), '无备份残渣')
   }
+
+  console.log('--- 7. 跨卡归属（probe7-provider-tests-in-consumer-card，2026-09-16 E 变更实证）---')
+  {
+    // fixture：task-01 provider（allowed_paths 仅 src 文件、acceptance 有关键词）；task-03 测试卡
+    // depends_on: task-01（allowed_paths 为测试文件，内容含 provider acceptance 关键词）
+    const proj = mkdtempSync(join(tmpdir(), 'amx7x-'))
+    tmpRoots.push(proj)
+    const specBase = join(proj, '.sillyspec')
+    const changeDir = join(specBase, 'changes', 'cx')
+    const tasksDir = join(changeDir, 'tasks')
+    mkdirSync(tasksDir, { recursive: true })
+    writeFileSync(join(changeDir, 'design.md'), '## 文件变更清单\n\n| 操作 | 文件 | 说明 |\n|---|---|---|\n| 修改 | a.js | x |\n')
+    writeFileSync(join(proj, 'a.js'), 'export const f = 1\n')
+    mkdirSync(join(proj, 'test'), { recursive: true })
+    writeFileSync(join(proj, 'test', 'consumer-pivot.test.mjs'), '// crosscard kwvane providerPivot\nexport {}\n')
+    writeFileSync(join(tasksDir, 'task-01.md'), [
+      '---', 'id: task-01', 'allowed_paths: [src-feature.js]',
+      'acceptance:', '  - providerPivot 导出函数由 kwvane 场景覆盖', '---', '# t1', '',
+    ].join('\n'))
+    writeFileSync(join(tasksDir, 'task-03.md'), [
+      '---', 'id: task-03', 'depends_on: task-01', 'allowed_paths: [test/consumer-pivot.test.mjs]',
+      'acceptance:', '  - 五用例', '---', '# t3', '',
+    ].join('\n'))
+    const r = runVerifyProbes({ cwd: proj, changeName: 'cx' })
+    const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
+    const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
+    assert(t1 && t1.testFiles.includes('test/consumer-pivot.test.mjs'),
+      `task-01 归属含下游 task-03 的测试文件（实际：${JSON.stringify(t1 && t1.testFiles)}）`)
+    assert(t3 && t3.testFiles.includes('test/consumer-pivot.test.mjs'), 'task-03 自身归属不变')
+    // 关键词命中走下游测试内容 → task-01 首条 acceptance 预填 covered（anchor 在下游测试内）
+    const md = renderVerifyProbesReport(r)
+    const seg = md.split('**task-01**')[1] ? md.split('**task-01**')[1].split('**task-03**')[0] : ''
+    assert(seg.includes('covered'), `task-01 acceptance 预填 covered（不再假 uncovered；seg=${seg.slice(0, 120)}）`)
+    // 无依赖关系的卡不并入（task-03 不反向承接无关卡——用 fixture 内只两卡，反向断言：t3 归属不含 src-feature.js 类）
+    assert(!(t3.testFiles || []).some(f => f.includes('src-feature')), '依赖方向单向：下游不反向并入')
+  }
 } finally {
   for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }
 }

@@ -140,3 +140,15 @@ QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整
 ## archive 对账表跨仓文件恒标「计划未动」（live worktree 形态缺 per-repo advisory，待立项）
 
 archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**部分兑现**：verify 侧 per-repo advisory 已落地（113e19d：src/cross-repo-reconcile.js 注册表→仓根→双源 actual→三类差集+软桶，gates.js verify 块接线 printCrossRepoReconcile，test/cross-repo-probe7-anchor.test.mjs）。**剩余待立项**（收窄）：archive 对账表本身——归档表跨仓行仍标「计划未动」，方向改为复用 cross-repo-reconcile 结果在 archive 输出面渲染 per-repo 分组行（advisory），不再需要新建对账链路。（来源：2026-09-15 wp EHS 实证 + 2026-09-16 第二批登记 + 同日更正）
+
+## 能力域撞车无预警（quick 无声明面，文件冲突预警不触发，待立项）
+
+2026-09-16 实证：cross-layer-contract-probe 方案 A（design 契约枢纽探针）与凌晨 ed540c6（quick 落地的探针8 载荷字段契约对账）同族撞车——quick 无 design 声明面，现有「跨变更文件冲突预警」（按声明文件交集）不触发，靠 plan 独立审查子代理回读 git log 碰运气回收。若审查未抓到即双探针8 事故。**待立项方向**：brainstorm 方案步 / plan Step 1 启动时，CLI 按「目标模块 + 能力关键词」（--input/design 段落 token 化）扫近 24h 的 quicklog 条目标题与 git log --oneline，token 重叠 ≥阈值 → advisory 预警「近期已有同能力域落地/在途，先核对再开工」。（来源：2026-09-16 撞车实证 + 独立审查回收报告）
+
+## test_strategy: skip 只短路主仓、跨仓无条件跑（口径分裂，待立项）
+
+主仓 test_strategy: skip（真跳过留审计，D-005@v2）不作用于跨仓仓——mergeCrossRepoResults 无条件逐仓跑 own local.yaml commands.test / fallback npm test。2026-09-15 EHS 会话靠手工给 spdemo 造 own local.yaml 绕过（B2 已修「无 test script」形态，但「显式配 skip 仍跨仓照跑」的分裂仍在）。**待立项方向**：per-repo 覆盖（local.yaml repos:<key>: test_strategy:）或主仓 skip 语义透传跨仓（附 note）；注意跨仓测试可能是变更唯一测试面，透传需带「跨仓有 own local.yaml 显式命令时仍跑」的例外。（来源：EHS 复盘 B4 + 2026-09-16 二轮盘点）
+
+## worktree 内直跑全量测试的环境性失败族（stash 基线对照成本，待立项）
+
+execute 期在隔离 worktree 内跑 `npm test` 全量时，CLI 子进程类测试（spec-dir/mcp-server/init-*/platform-*/run-* 等族）被 src/index.js 顶层 worktree-cwd 硬拦守卫拦下——2026-09-16 cross-layer-contract-probe 实证 13 文件假红，实现子代理被迫 stash 基线对照自证 IDENTICAL-FAILURE-SETS（实打实的 token/时间成本）。--done 主路径已被隔离快照覆盖（gate-snapshot），但「worktree 内自验全量」仍是摩擦面。**待立项方向**：worktree cwd 下自动豁免该守卫族（known_failures 注入或 run-tests 探测 worktree 跳过守卫族文件），或 execute prompt 注入「worktree 内自验用定向测试面，全量留给 --done 快照」指引。（来源：2026-09-16 实现子代理基线对照报告）

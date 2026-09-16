@@ -25,6 +25,46 @@ function lineOfIndex(content, index) {
 }
 
 /**
+ * 注释掩码（坑 endpoint-extractor-selfdoc-noise，2026-09-16 E 变更 verify 实证）：JS/Java 的
+ * // 与 /* *\/ 注释区替换为等长空格（换行保留）——注释里的 `app.use("/api", router)`、
+ * `router.get("/api/xxx")`、`@GetMapping("/x")` 文档示例不再被全文正则当真路由（探针5 曾报
+ * 「GET /api/path、GET /api unused」假 advisory）。字符串字面量（' " `）原样保留（真路由在
+ * 字符串里）；正则字面量按字符串近似处理（端点正则里出现路由字符串形态极罕见，误掩概率低）。
+ * 保长度 = 索引/行号零漂移，lineOfIndex 与全部既有正则兼容。
+ * @param {string} content
+ * @returns {string} 等长掩码后内容
+ */
+function stripCommentsKeepLength(content) {
+  const src = String(content || '')
+  const out = src.split('')
+  let st = 'normal' // normal | block | sq | dq | tick
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i], n = src[i + 1]
+    if (st === 'normal') {
+      if (c === '/' && n === '/') {
+        // 行注释：掩到行尾（保留换行符本身）
+        let j = i
+        while (j < src.length && src[j] !== '\n') { out[j] = ' '; j++ }
+        i = j - 1
+      } else if (c === '/' && n === '*') {
+        out[i] = ' '; out[i + 1] = ' '
+        st = 'block'; i++
+      } else if (c === "'") st = 'sq'
+      else if (c === '"') st = 'dq'
+      else if (c === '`') st = 'tick'
+    } else if (st === 'block') {
+      if (c === '*' && n === '/') { out[i] = ' '; out[i + 1] = ' '; st = 'normal'; i++ }
+      else if (c !== '\n') out[i] = ' '
+    } else {
+      // 字符串内：转义跳过；闭合引号回 normal（内容原样保留）
+      if (c === '\\') i++
+      else if ((st === 'sq' && c === "'") || (st === 'dq' && c === '"') || (st === 'tick' && c === '`')) st = 'normal'
+    }
+  }
+  return out.join('')
+}
+
+/**
  * 从单个文件提取 FastAPI router 端点
  * 支持 APIRouter(prefix=...) 和 @router.get/post/put/delete/patch("/path")
  *
@@ -73,7 +113,13 @@ export function extractFastApiEndpoints(filePath) {
  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
  */
 export function extractExpressEndpoints(filePath) {
-  const content = readFileSync(filePath, 'utf8')
+  const rawContent = readFileSync(filePath, 'utf8')
+  // 注释掩码（坑 endpoint-extractor-selfdoc-noise，2026-09-16 E 变更 verify 实证：本模块自身
+  // JSDoc 示例 `app.use("/api", router)` / `router.get("/api/xxx")` 被全文正则当真路由——
+  // 探针5 报「GET /api/path、GET /api unused」假 advisory，agent 逐条裁定纯耗损）。掩码保长度
+  // 替换注释区为空格（换行保留）：字符串字面量不动（真路由在字符串里），索引/行号零漂移，
+  // 下游 lineOfIndex/正则全兼容。
+  const content = stripCommentsKeepLength(rawContent)
   const lines = content.split('\n')
   const endpoints = []
 
@@ -116,7 +162,9 @@ export function extractExpressEndpoints(filePath) {
  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
  */
 export function extractSpringEndpoints(filePath) {
-  const content = readFileSync(filePath, 'utf8')
+  // 注释掩码同 Express（坑 endpoint-extractor-selfdoc-noise；Java 与 JS 注释语法同族 // /* */
+  // ——掩码器共用。注解本体不在注释内，掩码零影响；注释里的 @GetMapping 示例不再入面）
+  const content = stripCommentsKeepLength(readFileSync(filePath, 'utf8'))
   const lines = content.split('\n')
   const endpoints = []
 
