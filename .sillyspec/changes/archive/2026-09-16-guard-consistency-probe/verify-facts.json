@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-16-guard-consistency-probe",
+  "generatedAt": "2026-09-16T12:56:20.700Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-16-guard-consistency-probe",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 1,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-16-guard-consistency-probe",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-16-guard-consistency-probe",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-16-guard-consistency-probe",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-16-guard-consistency-probe",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "runtimeEvidence": [
+    {
+      "claim": "探针9 五用例全绿（worktree 实测）",
+      "command": "node --test test/probe9-guard-consistency.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs/probe9-guard.log"
+    },
+    {
+      "claim": "既有探针8 契约维度零回归",
+      "command": "node --test test/probe8-contract-pivot.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs/probe8-regress.log"
+    },
+    {
+      "claim": "lint 全绿（三导出引用落地死码消除）",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs/guard-lint.log"
+    }
+  ],
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "worktree 内 13 个 CLI 子进程类测试环境性失败（index.js:334 守卫族，已知基线族）",
+        "condition": "apply 后主仓 npm test 全量复核"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "探针9 在真实 Java 变更上的首次实战（本变更为纯 JS，自判不适用）",
+        "condition": "下一个含 .java 改动的变更走 verify 时观察「#### 探针 9」输出与 advisory 裁定体验"
+      }
+    ]
+  },
+  "tests": {
+    "command": "module[cli-core]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-16T13:02:37.975Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

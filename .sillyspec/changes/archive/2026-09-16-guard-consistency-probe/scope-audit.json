@@ -1,0 +1,52 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "5aef01a2e54d0782445cd2341d924c85ac037e1c",
+  "totals": {
+    "files": 4,
+    "additions": 617,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": "meta.json",
+      "additions": 19,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "additions": 54,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 323,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/probe9-guard-consistency.test.mjs",
+      "additions": 221,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "60439c08fa60dc8e9f10a86336b37841b3fcab76cba6e3eabca5a38e56e1f812",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-16T12:55:58.206Z"
+}

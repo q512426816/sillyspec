@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-16-guard-consistency-probe",
+  "appliedAt": "2026-09-16T13:03:08.991Z",
+  "baseHash": "5aef01a2e54d0782445cd2341d924c85ac037e1c",
+  "files": [
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "ff4bc65c7aaed43accd303a037753c5650dc994674f42da545666c0c60e175d6"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "df422689e37adf8c77c7400d60f83a48f5cfd209bbe33464a2583cf1d3d1741d"
+    },
+    {
+      "path": "test/probe9-guard-consistency.test.mjs",
+      "sha256": "380feb76b38bf72fbd08a3bbbef2e92b4b897175009e9d4772cf5441324b2304"
+    }
+  ]
+}
