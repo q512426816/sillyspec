@@ -338,6 +338,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 
 ### tier=independent 时：启动 plan-review 子代理
+{PRIOR_REVIEW_FACTS}
 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
 1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据

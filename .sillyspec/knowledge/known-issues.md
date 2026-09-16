@@ -132,3 +132,11 @@ QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整
 **修法建议（中等完整流程变更，写入方/读取方/归档方全动）**：QUICKLOG 条目文件化——每 ql-ID 独立 sidecar 文件（`quicklog/entries/<ql-id>.md`），主文件退化为聚合渲染产物（命令重建或追加渲染）；提交按 sidecar 文件收编零剥离。可行性佐证：patches sidecar（`quicklog/patches/<ql>.json/.patch` 范围快照冻结件）已证明 per-ql 文件形态运转正常。注意轮转文件（QUICKLOG-qinyi-<日期>.md）也要一并纳入方案。（来源：2026-09-16 本会话 6 次剥离舞步 + 历史提交注记）
 
 **v1 已工具化**（9d299a6，2026-09-16 quick-deed7456 / ql-20260916-015-44dd）：`sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]` 一键收编——持用户 QUICKLOG 锁全程，恒扫主文件+轮转归档定位本会话条目（含已取消）→ 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG+patches sidecar+额外 pathspec）→ finally 恢复工作区全量（并行条目留未提交态；.runtime 落备份兜底；fail-fast 附人工四步舞文案）。测试 test/quicklog-commit-slice.test.mjs 7 用例。**完整文件化（entries sidecar 权威+聚合渲染）仍待立项**——v1 是止血不是根治：提交侧摩擦已消，文件仍是单文件追加形态，读侧/归档侧未动。
+
+## probe5 跨仓前端调用面不纳入扫描（parity 扫描根单仓，待立项）
+
+三端变更（EHS 形态：主仓后端 + 前端兄弟仓）verify 探针 5 的前端调用扫描根恒单仓（contract-matrix.js verifyApiParity frontendRoot :545——worktree 或 scan-root 二选一），跨仓 task 卡的仓不在扫描根内，跨端 API 契约对账实际只做了主仓半边（EHS 实证「0 frontend calls」误导性 advisory）。现仅渲染边界注记（verify-probes.js:993-994「parity 扫描面只含主仓——另有 N 张跨仓 task 卡的仓不在扫描根内」）。**待立项方向**：按跨仓 task 卡 repo ∪ local.yaml repos 注册根逐仓收窄扫描（复用探针8 readEntry 的跨仓根解析口径，contract-matrix.js:216-236），前端调用计数/missingBackend 对账按仓分组输出。注意与 D-004（archive 侧跨仓 diff 不并入主仓对账防③类噪音）区分：probe5 是 advisory 面不是 gate 阻断面，纳入跨仓不会引入阻断风险。（来源：2026-09-15 wp EHS 三仓会话实证 + 2026-09-16 第二批复盘登记）
+
+## archive 对账表跨仓文件恒标「计划未动」（live worktree 形态缺 per-repo advisory，待立项）
+
+archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**待立项方向**：对齐 verify 阶段 printCrossRepoReconcile 的 per-repo advisory 形态（声明/实测/对上/②缺/③多按仓分组、advisory 不阻断），归档表跨仓行从「计划未动」改为指向 per-repo 分组结果。（来源：同上）

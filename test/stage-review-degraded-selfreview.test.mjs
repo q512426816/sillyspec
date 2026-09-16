@@ -6,7 +6,7 @@
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { isDegradedSelfReview, validateStageReview, renderReviewJsonContract } from '../src/stage-review.js'
+import { isDegradedSelfReview, hasDelegatedWriteDisclosure, validateStageReview, renderReviewJsonContract } from '../src/stage-review.js'
 
 let total = 0
 let failed = 0
@@ -34,6 +34,14 @@ console.log('\n=== ② validateStageReview 缺 review.json 报错带降级出口
   assertTrue(r.ok === false, '缺 review.json → 不通过（fail-closed 不变）')
   assertTrue(r.errors.some(e => e.includes('宿主环境无 Agent tool（如 PI agent）时按 prompt 降级条款由当前 agent 自审产出')), '报错带降级出口指引（无 Agent 环境 agent 不再卡死/伪装）')
   assertTrue(r.errors.some(e => e.includes('「降级：环境无子代理可用」')), '指引点名 reviewerNotes 首行标记约定')
+}
+
+console.log('\n=== ②b C4 代落盘披露识别（2026-09-15 wp EHS 实证：平台写通道故障代落盘需 gate 可见）===\n')
+{
+  assertTrue(hasDelegatedWriteDisclosure({ reviewerNotes: '代落盘：子代理写通道故障\n结论原文回传' }) === true, '首行「代落盘：」→ true')
+  assertTrue(hasDelegatedWriteDisclosure({ reviewerNotes: '降级：环境无子代理可用' }) === false, '降级首行不算代落盘')
+  assertTrue(hasDelegatedWriteDisclosure({ reviewerNotes: '正文里提到但不在首行\n代落盘：x' }) === false, '只认首行（约定与降级标记同口径）')
+  assertTrue(hasDelegatedWriteDisclosure({}) === false && hasDelegatedWriteDisclosure(null) === false, '缺 reviewerNotes → false 不炸')
 }
 
 console.log('\n=== ③ renderReviewJsonContract 契约文档化降级约定 ===\n')

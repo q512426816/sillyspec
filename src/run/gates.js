@@ -1051,8 +1051,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         // 不在自动刷新范围，照常 fail-closed。
         const gated = validateStageReviewWithAutoRefresh({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs, autoRefresh: true })
         if (gated.autoRefreshed) {
-          console.warn(`\n🔄 stage review docHash 失配已自动刷新（主文档改版后机械重算，verdict/checklist 保留——结论是否仍适用于新文档需人工确认）`)
+          console.warn(`\n🔄 stage review docHash 失配已自动刷新（第 ${gated.refreshOrdinal || 1} 次；hash ${gated.hashDrift || 'n/a'}；主文档改版后机械重算，verdict/checklist 保留——结论是否仍适用于新文档需人工确认）`)
           console.warn(`   已就地更新: ${gated.refreshedPath}`)
+          // C3 升级提醒（2026-09-15 wp EHS 实证：NEW: 批注/需求调整/Reverse Sync 多次走此通道）：
+          // 同一 review 被反复刷新 = 主文档在审查通过后反复变更，「审查后的变更不再见审查」的
+          // 面积在累积——序数 ≥2 从一句注记升级为显式人工确认提醒（仍放行，不伪造重审）。
+          if ((gated.refreshOrdinal || 1) >= 2) {
+            console.warn(`   ⚠️ 该 review 已第 ${gated.refreshOrdinal} 次刷新——主文档在审查后反复变更，建议人工复核 verdict 结论续用性（涉及设计要点/接口变更时应重审，勿把自动放行当「新文档已审过」）`)
+          }
         }
         const reviewResult = gated.result
         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
@@ -1065,13 +1071,19 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         // channel 识别（2026-09-10 通道优先序批次）：reviewer.channel 结构化落款优先，兼容
         // reviewerNotes 首行「降级：」约定；platform 通道（P2 review-dispatch 落地后）ℹ️ 留痕
         // missionId 供追溯，其余通道正常放行。
-        const { classifyReviewerChannel } = await import('../stage-review.js')
+        const { classifyReviewerChannel, hasDelegatedWriteDisclosure } = await import('../stage-review.js')
         const reviewChannel = classifyReviewerChannel(reviewResult.review)
         if (reviewChannel === 'self') {
           console.warn(`\n⚠️ Stage Review 降级自审（tier=independent 但宿主无 Agent tool）：${stageName} review 按 prompt 降级条款由当前 agent 自审产出——独立性折损已留痕（reviewerNotes 首行「降级：」），结论应附源码锚点补偿，建议人工抽查关键结论。`)
         } else if (reviewChannel === 'platform') {
           const mid = reviewResult.review && reviewResult.review.reviewer && reviewResult.review.reviewer.missionId
           console.log(`\nℹ️ Stage Review 平台派发（channel=platform${mid ? `，missionId=${mid}` : '，missionId 未落款'}）：${stageName} review 由平台独立 worker 产出（独立进程/会话）。`)
+        }
+        // C4 代落盘审计行（2026-09-15 wp EHS 实证：平台写通道故障下主流程代子代理落盘 review，
+        // 独立性折损当时只在 notes 里、gate 不可见）：reviewerNotes 首行「代落盘：」披露 → ⚠️ 留痕
+        // （与降级自审同哲学：可见的折损优于静默伪装；首行约定识别，不阻断）。
+        if (hasDelegatedWriteDisclosure(reviewResult.review)) {
+          console.warn(`\n⚠️ Stage Review 代落盘披露：${stageName} review 的 reviewerNotes 首行标记「代落盘」——review.json 由主代理代（写通道故障的）审查者落盘，独立性依赖审查者结论回传的忠实性，建议人工抽查关键结论与回传文本一致性。`)
         }
       }
     } catch (e) {

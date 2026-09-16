@@ -368,7 +368,7 @@ function collectPathTokens(text) {
 
 /**
  * 解析 module-impact.md 的「模块影响矩阵」+「未匹配文件」两节，按检查面归类影响证据。
- * 纯机械启发式（确定性：同输入同输出）；矩阵行 <!--TODO--> 未回填 → 保守计行为类
+ * 纯机械启发式（确定性：同输入同输出）；矩阵行 <!--TODO--> 未回填 → 保守计行为类 probe1-noqa
  * （影响面未知时多测不漏测）。矩阵节缺失 / 无数据行 → parseable=false（调用方降级）。
  *
  * @param {string|null} mdText
@@ -393,8 +393,8 @@ function classifyModuleImpactEvidence(mdText) {
       const tok = IMPACT_BEHAVIORAL_TOKENS.find((w) => rowText.includes(w))
       if (tok) { out.behavioral.push(`（影响类型：${tok}）`); classified++ }
     }
-    // 矩阵行 <!--TODO--> 未回填 → 影响面未知，保守计行为类
-    if (String(rowText).includes('<!--TODO')) { out.behavioral.push('<!--TODO--> 未回填行'); classified++ }
+    // 矩阵行 <!--TODO--> 未回填 → 影响面未知，保守计行为类 /* probe1-noqa */
+    if (String(rowText).includes('<!--TODO')) { out.behavioral.push('<!--TODO--> 未回填行'); classified++ } /* probe1-noqa */
     return classified
   }
   for (const line of lines) {
@@ -414,7 +414,7 @@ function classifyModuleImpactEvidence(mdText) {
       matrixRows++
       consumeRow(trimmed)
     } else if (section === 'unmatched') {
-      // 骨架产出 `- \`path\` <!--TODO-->` 列表行；手写形态可能是 `| 文件 | 处置说明 |` 表行
+      // 骨架产出 `- \`path\` <!--TODO-->` 列表行；手写形态可能是 `| 文件 | 处置说明 |` 表行 /* probe1-noqa */
       const bullet = trimmed.match(/^-\s+(.+)$/)
       if (bullet) { consumeRow(bullet[1]); continue }
       if (trimmed.startsWith('|')) {
@@ -1955,7 +1955,7 @@ export function printVerifyParityCheck(result) {
     console.warn('   ⚠️  本次 scope 为 full-repo（diff 与 apply-pathspec 均不可得时的兜底）——missing 大概率是口径错配噪音而非真实 contract gap。')
     console.warn('      先收窄复跑：sillyspec verify-probes --change <变更名>（change-diff/apply-pathspec 口径）再判定。')
   }
-  console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。')
+  console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。') /* probe1-noqa */
 }
 
 /**
@@ -2133,6 +2133,34 @@ export function trackVerifyResultRegression(specBase, changeName, absPath) {
  * @param {{cwd:string, specBase:string, changeName?:string}} args
  * @returns {{status:'skipped'|'passed'|'warning', items:Array, unacknowledged:Array, summary:string, reason:string|null}}
  */
+/**
+ * evidence 核验双根解析（坑⑤ / D-005@v1 消费侧双根 + 坑 platform-dual-root-fourth-consumer
+ * 2026-09-16 hunt）：apply 前新文件只在 worktree，逐文件核验单查主仓必误报「文件不存在」。
+ * meta 双候选定位（平台模式 specBase=specRoot 时主仓 worktree meta 在项目侧 <cwd>/.sillyspec，
+ * 单查 specBase 必落空——对齐 contract-matrix._readWorktreeMeta 双候选样板）；meta 在场 &&
+ * 非 in-place-fallback && worktreePath 目录存在 → [cwd, worktreePath]，否则 [cwd]。
+ * 解析异常 fail-open 退单根 + warning（不新增阻断路径）。导出供统一双根夹具测试。
+ */
+export function resolveEvidenceDualRoots({ cwd, specBase, changeName, warnings = [] }) {
+  let roots = [cwd]
+  try {
+    const metaCandidates = [...new Set([specBase, join(cwd, '.sillyspec')].filter(Boolean))]
+    const metaPath = metaCandidates
+      .map(b => join(b, '.runtime', 'worktrees', changeName, 'meta.json'))
+      .find(p => existsSync(p))
+    if (metaPath) {
+      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+        roots = [cwd, meta.worktreePath]
+      }
+    }
+  } catch (e) {
+    roots = [cwd]
+    warnings.push(`worktree meta 解析失败（${e.message}），evidence 双根核验退主仓单根`)
+  }
+  return roots
+}
+
 export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = null, verifyStartAt = null }) {
   if (!changeName) {
     return { status: 'skipped', items: [], unacknowledged: [], summary: '', reason: '无 changeName（quick 等无关联变更场景），evidence 对账跳过' }
@@ -2224,19 +2252,7 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
   // && worktreePath 目录存在 → roots = [cwd, worktreePath]；任一不满足退 [cwd] 单根
   // （零回归）。解析异常 fail-open 退单根 + warning（不新增阻断路径）。静默双根——对齐
   // buildAcceptanceHints（verify-probes.js:223）双根先例，核验明细 root 字段已可辨。──
-  let roots = [cwd]
-  try {
-    const metaPath = join(specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
-    if (existsSync(metaPath)) {
-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
-      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
-        roots = [cwd, meta.worktreePath]
-      }
-    }
-  } catch (e) {
-    roots = [cwd]
-    warnings.push(`worktree meta 解析失败（${e.message}），evidence 双根核验退主仓单根`)
-  }
+  let roots = resolveEvidenceDualRoots({ cwd, specBase, changeName, warnings })
 
   const detailed = []
   let blockedCount = 0

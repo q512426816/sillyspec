@@ -45,23 +45,32 @@ function getMainDirtySet(cwd) {
  * 变更 worktree 活性速查（.runtime/worktrees/<change>/meta.json）。
  * isolated=true：有存活隔离 worktree（meta 在、非 in-place、worktreePath 目录在）——
  * 其 WIP 在 worktree 内主仓 porcelain 不可见，整份 design 声明按在途处理。
- * @returns {Map<string, { isolated: boolean }>|null} null = 读取失败（fail-closed）
+ * 双根扫描（坑 platform-dual-root-fourth-consumer，2026-09-16 hunt 实证）：平台模式
+ * specBase=specRoot 下只挂跨仓 worktree，主仓 worktree 在项目侧 <cwd>/.sillyspec——单扫
+ * specBase 会把主仓 worktree 变更误判 stale → 其声明失效 → 文件被误归属当前变更（③类
+ * 噪音/误扣）。specBase 与 cwd 项目侧两目录都扫，按变更名合并（specBase 先入）。
+ * @returns {Map<string, { isolated: boolean }>|null} null = 两目录均读取失败（fail-closed）
  */
-function loadWorktreeLiveness(specBase) {
+export function loadWorktreeLiveness(specBase, cwd) {
   const map = new Map()
-  try {
-    const dir = join(specBase, '.runtime', 'worktrees')
-    for (const e of readdirSync(dir, { withFileTypes: true })) {
-      if (!e.isDirectory()) continue
-      try {
-        const meta = JSON.parse(readFileSync(join(dir, e.name, 'meta.json'), 'utf8'))
-        const isolated = Boolean(meta && meta.mode !== 'in-place-fallback'
-          && meta.worktreePath && existsSync(meta.worktreePath))
-        map.set(meta.changeName || e.name, { isolated })
-      } catch { /* 单条损坏跳过（该变更走主仓 dirty 判定） */ }
-    }
-  } catch { return null }
-  return map
+  const roots = [...new Set([specBase, join(cwd || process.cwd(), '.sillyspec')].filter(Boolean))]
+  let anyDirOk = false
+  for (const base of roots) {
+    try {
+      const dir = join(base, '.runtime', 'worktrees')
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (!e.isDirectory()) continue
+        try {
+          const meta = JSON.parse(readFileSync(join(dir, e.name, 'meta.json'), 'utf8'))
+          const isolated = Boolean(meta && meta.mode !== 'in-place-fallback'
+            && meta.worktreePath && existsSync(meta.worktreePath))
+          map.set(meta.changeName || e.name, { isolated })
+        } catch { /* 单条损坏跳过（该变更走主仓 dirty 判定） */ }
+      }
+      anyDirOk = true
+    } catch { /* 该根不存在/不可读 → 试下一根 */ }
+  }
+  return anyDirOk ? map : null
 }
 
 /**
@@ -74,7 +83,7 @@ function loadWorktreeLiveness(specBase) {
 function filterStaleForeignDeclarations(foreign, cwd, specBase) {
   if (foreign.size === 0) return
   const dirty = getMainDirtySet(cwd)
-  const worktrees = loadWorktreeLiveness(specBase)
+  const worktrees = loadWorktreeLiveness(specBase, cwd)
   if (dirty === null && worktrees === null) return // 两个事实源全失败 → 原样保留
   for (const [file, owners] of [...foreign.entries()]) {
     const live = owners.filter(owner => {

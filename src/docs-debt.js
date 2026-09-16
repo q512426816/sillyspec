@@ -363,8 +363,13 @@ export function renderDecisionTouchFacts(touches) {
  * @returns {{ root: string, changedFiles: string[] }} root = 实际 git 锚（computeDocsDebt 的 projectRoot 同值）
  */
 export function collectExecuteChangedFiles({ specBase, changeName, cwd, projectRoot } = {}) {
-  const wtRoot = specBase ? join(specBase, '.runtime', 'worktrees', changeName || '') : null
-  const root = projectRoot || (wtRoot && changeName && existsSync(wtRoot) ? wtRoot : cwd) || process.cwd()
+  // 双候选 worktree 根（坑 platform-dual-root-fourth-consumer，2026-09-16 hunt 实证）：平台模式
+  // specBase=specRoot 时主仓 worktree 在项目侧 <cwd>/.sillyspec——单查 specBase 必落空 → root 退
+  // cwd → 收进的是主仓脏集而非 worktree 交付集，docs-debt 事实面错。对齐 contract-matrix 双候选。
+  const wtCandidates = [...new Set([specBase, join(cwd || process.cwd(), '.sillyspec')].filter(Boolean))]
+    .map(b => join(b, '.runtime', 'worktrees', changeName || ''))
+  const wtRoot = changeName ? (wtCandidates.find(p => existsSync(p)) || null) : null
+  const root = projectRoot || (wtRoot ? wtRoot : cwd) || process.cwd()
   const changed = new Set()
   const statusRes = safeGit(root, ['status', '--porcelain'], { trim: false })
   if (!statusRes.error && statusRes.value) {

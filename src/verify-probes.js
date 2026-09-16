@@ -4,7 +4,7 @@
  *
  * verify-probes.md 模板定义六个探针，agent 此前逐条手跑 grep/递归查找/git 对账再手工拼表格。
  * 本模块把纯机械的四个探针命令化（语义判断的留 agent，输出里显式标注）：
- *   探针1 未实现标记扫描：design §6 清单的具体文件逐行 grep TODO/FIXME/尚未实现 等
+ *   探针1 未实现标记扫描：design §6 清单的具体文件逐行 grep TODO/FIXME/尚未实现 等 probe1-noqa
  *   探针3 测试覆盖：逐 task 按 allowed_paths 定位模块目录，递归找测试文件（co-located tests/ 陷阱
  *        + JVM src/test/<lang> 同包镜像根——Maven/Gradle 布局测试与 main 侧永不 co-located）
  *   探针5 API 契约对账：复用 contract-matrix.verifyApiParity（endpoints.json × 前端调用）+ 表格渲染
@@ -14,7 +14,7 @@
  *        关键词命中提示（命中≠判定，不参与门禁；2026-09-14-acceptance-test-matrix）
  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
  *
- * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。
+ * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。 probe1-noqa
  * 结论走「结论枚举：」固定槽行（刀③）——占位符不含枚举词，槽未填 extractVerifyConclusionSlot
  * 返回 '' 即判不过，骨架不能直接过门（与 symbol-impact 骨架同款防偷懒语义）。
  * P3b 增量：①章节标题行末尾 claims 层标注（可复跑探针/确定性检查/人工判断，纯后缀不新增行）；
@@ -37,16 +37,16 @@ import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './r
 
 // 探针1 未实现标记匹配（坑 probe1-literal-false-positive，2026-09-15 复盘实证：16 命中全
 // 字面误报——TODO_FLAG_TODO 业务常量、「XXX完成处置」中文占位模板）。口径分三级：
-// - 尚未实现：中文短语高置信，保持子串匹配；
-// - TODO/FIXME/HACK：ASCII 标识符边界匹配——TODO_FLAG_TODO / parseHackArgs 等标识符内部不再
+// - 尚未实现：中文短语高置信，保持子串匹配； /* probe1-noqa */
+// - TODO/FIXME/HACK：ASCII 标识符边界匹配——TODO_FLAG_TODO / parseHackArgs 等标识符内部不再 /* probe1-noqa */
 //   命中（两侧任一边贴 [A-Za-z0-9_] 即视为标识符成分）；
-// - XXX：边界匹配且前或后紧邻 CJK 表意字符即排除——「XXX完成处置」「订单XXX号」类中文占位
-//   模板不再命中（独立代码注释 `XXX:` / `// XXX fix` 紧邻标点空白，仍命中）。
+// - XXX：边界匹配且前或后紧邻 CJK 表意字符即排除——「XXX完成处置」「订单XXX号」类中文占位 /* probe1-noqa */
+//   模板不再命中（独立代码注释 `XXX:` / `// XXX fix` 紧邻标点空白，仍命中）。 /* probe1-noqa */
 const CJK_IDEOGRAPH_CLASS = '\\u4e00-\\u9fff\\u3400-\\u4dbf'
-const TODO_ASCII_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_])(?:TODO|FIXME|HACK)(?![A-Za-z0-9_])`)
-const XXX_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])XXX(?![A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])`)
+const TODO_ASCII_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_])(?:TODO|FIXME|HACK)(?![A-Za-z0-9_])`) /* probe1-noqa */
+const XXX_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])XXX(?![A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])`) /* probe1-noqa */
 export function isUnimplementedMarkerLine(line) {
-  if (line.includes('尚未实现')) return true
+  if (line.includes('尚未实现')) return true /* probe1-noqa */
   if (TODO_ASCII_MARKER_RE.test(line)) return true
   if (XXX_MARKER_RE.test(line)) return true
   return false
@@ -639,7 +639,7 @@ function mdEscapeCell(text, cap = 200) {
 /**
  * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004）。
  *
- * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量
+ * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量 probe1-noqa
  * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）：
  *   - 无归属 → uncovered；acceptance 文本含 文档/部署/doc/deploy/manual/config 类词且无归属
  *     → non-testable
@@ -679,7 +679,7 @@ function prefillMatrixCells(item, testFiles, hint) {
 /**
  * 渲染探针 7 段（骨架与幂等补段共用单一实现）。
  * 坑 probe7-prefill-evidence（ql-20260915-004）：判定/证据两列由 prefillMatrixCells 机械预填
- * （原 `<待填：四选一>` / `<TODO>` 占位淘汰）——幂等保障沿用补段口径：段已在场（agent 已填/
+ * （原 `<待填：四选一>` / `<TODO>` 占位淘汰）——幂等保障沿用补段口径：段已在场（agent 已填/ probe1-noqa
  * 未填）一律不触碰（ensureAcceptanceMatrixSection 段在场即 no-op），预填只在骨架生成与缺段补齐
  * 两条新写路径生效，agent 已填内容永不被覆盖。
  * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}>}> }} p7
@@ -773,6 +773,11 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
       const lines = readFileSync(abs, 'utf8').split('\n')
       lines.forEach((line, i) => {
         if (probe1.matches.length >= PROBE1_MAX_MATCHES) return
+        // probe1-noqa 行级豁免（坑 probe1-self-referential-noise，2026-09-16 EHS 变更 verify 实证：
+        // 探针基础设施自身源码被扫描时 26 处命中全是匹配器定义/骨架模板字符串/修复注释引文——
+        // 逐条人工裁定纯耗损。行内含 `probe1-noqa` 即跳过（注释行加 `// probe1-noqa`、
+        // 字符串模板行在语句闭合后加 `/* probe1-noqa */` 不污染输出内容））。
+        if (line.includes('probe1-noqa')) return
         if (isUnimplementedMarkerLine(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
       })
     } catch {
@@ -939,7 +944,7 @@ export function renderVerifyProbesReport(result) {
 
   L.push('#### 探针 1：未实现标记扫描（design 清单文件）')
   if (probe1.matches.length === 0) {
-    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中')
+    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中') /* probe1-noqa */
   } else {
     for (const m of probe1.matches) L.push(`- ⚠️ \`${m.file}:${m.line}\` ${m.content}`)
   }
@@ -949,7 +954,7 @@ export function renderVerifyProbesReport(result) {
   L.push('')
 
   L.push('#### 探针 2：设计关键词覆盖')
-  L.push('<!--TODO: 半语义探针——从 design 提取能力关键词逐个 grep 确认实现（agent 执行）-->')
+  L.push('<!--TODO: 半语义探针——从 design 提取能力关键词逐个 grep 确认实现（agent 执行）-->') /* probe1-noqa */
   L.push('')
 
   L.push('#### 探针 3：验收标准测试覆盖')
@@ -980,7 +985,7 @@ export function renderVerifyProbesReport(result) {
   L.push('')
 
   L.push('#### 探针 4：决策追踪覆盖')
-  L.push('<!--TODO: 语义探针——D-xxx@vN → FR-xxx → plan/task 引用 → 证据回指闭环（agent 执行）-->')
+  L.push('<!--TODO: 语义探针——D-xxx@vN → FR-xxx → plan/task 引用 → 证据回指闭环（agent 执行）-->') /* probe1-noqa */
   L.push('')
 
   L.push('#### 探针 5：API Contract Parity')
@@ -1407,7 +1412,7 @@ export function applyConclusionDraftToText(text, draft = 'PASS') {
  * tasks.md 行内注解可靠）。Evidence / 状态两列是人工判断置 <待填>；D 无 task 回指 →
  * ⚠️ 未闭环显式列出（这正是矩阵要暴露的风险，不静默）。
  * @returns {{ rows: string[], decisionCount: number, taskCount: number }|null}
- *   null = 无 decisions.md / 解析 0 条（矩阵段留 TODO 不注入）
+ *   null = 无 decisions.md / 解析 0 条（矩阵段留 TODO 不注入） probe1-noqa
  */
 export function buildDecisionChainMatrix(changeDir) {
   let decisions
@@ -1449,9 +1454,9 @@ export function buildDecisionChainMatrix(changeDir) {
 
 /**
  * 矩阵机械半边注入 verify-result.md（--init 接线）：只在「决策追踪矩阵」段内仍是骨架
- * TODO 行（含 D-xxx 形态）且段内无既有表格时替换注入——幂等（agent 已写/前次注入零改动），
+ * TODO 行（含 D-xxx 形态）且段内无既有表格时替换注入——幂等（agent 已写/前次注入零改动）， probe1-noqa
  * 不触碰正文其余部分。落盘失败 fail-soft 返回 null。
- * @returns {{ decisions: number, tasks: number }|null} null = 无 decisions/无可替换 TODO/已注入
+ * @returns {{ decisions: number, tasks: number }|null} null = 无 decisions/无可替换 TODO/已注入 probe1-noqa
  */
 export function injectDecisionChainDraft(mdPath, changeDir) {
   let text
@@ -1462,8 +1467,8 @@ export function injectDecisionChainDraft(mdPath, changeDir) {
   const sectionEnd = nextHeading === -1 ? text.length : nextHeading
   const section = text.slice(headingIdx, sectionEnd)
   if (/^\|/m.test(section)) return null // 已有表格 → 尊重既有内容
-  const todoRe = /<!--TODO:[^\n]*D-xxx[^\n]*-->/
-  if (!todoRe.test(section)) return null // 无骨架 TODO（手写正文）→ 不动
+  const todoRe = /<!--TODO:[^\n]*D-xxx[^\n]*-->/ /* probe1-noqa */
+  if (!todoRe.test(section)) return null // 无骨架 TODO（手写正文）→ 不动 /* probe1-noqa */
   const matrix = buildDecisionChainMatrix(changeDir)
   if (!matrix || matrix.rows.length === 0) return null
   const block = [
@@ -1484,7 +1489,7 @@ export function injectDecisionChainDraft(mdPath, changeDir) {
 }
 
 /**
- * 生成 verify-result.md 骨架（七章节；探针结果机械预填，语义章节 <!--TODO--> 占位）。
+ * 生成 verify-result.md 骨架（七章节；探针结果机械预填，语义章节 <!--TODO--> 占位）。 probe1-noqa
  * 结论走「结论枚举：」固定槽行（刀③，2026-09-08）——占位符不含枚举词（<待填：三选一>），
  * 槽未填 → extractVerifyConclusionSlot 返回 '' → gate 判不过（fail-closed；旧占位符
  * `<待填：PASS 或 FAIL>` 含 PASS 字样会被窗口正则误读成已填 PASS，已修）。
@@ -1496,7 +1501,7 @@ export function generateVerifyResultSkeleton(result) {
   const L = [
     '# 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）',
     '',
-    '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——',
+    '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——', /* probe1-noqa */
     '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',
     '>',
     '> 「层」=证据可核验性分层（非执行者声明）：「人工判断」指本节为语义判断，由执行 agent 填写、',
@@ -1527,31 +1532,31 @@ export function generateVerifyResultSkeleton(result) {
     '  log: <待填：日志路径>',
     '',
     '## 任务完成度 [层：人工判断]',
-    '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->',
+    '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->', /* probe1-noqa */
     '',
     '## 设计一致性 [层：人工判断]',
-    '<!--TODO: 实现与 design.md 的偏差（无偏差也显式写「一致」）-->',
+    '<!--TODO: 实现与 design.md 的偏差（无偏差也显式写「一致」）-->', /* probe1-noqa */
     '',
     '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
     renderVerifyProbesReport(result),
     '',
     '## 测试结果 [层：确定性检查——CLI 实测对账]',
-    '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->',
+    '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->', /* probe1-noqa */
     '',
     '## 决策追踪矩阵（如存在 decisions.md；无则删本节） [层：人工判断]',
-    '<!--TODO: | 决策 ID | FR | Task | Evidence | 状态 |（D-xxx@vN → FR-xxx → task → 证据回指闭环）-->',
+    '<!--TODO: | 决策 ID | FR | Task | Evidence | 状态 |（D-xxx@vN → FR-xxx → task → 证据回指闭环）-->', /* probe1-noqa */
     '',
     '## 技术债务 [层：人工判断]',
-    '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->',
+    '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->', /* probe1-noqa */
     '',
     '## 变更风险等级 [层：人工判断]',
-    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->',
+    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->', /* probe1-noqa */
     '',
     '## Runtime Evidence [层：人工判断]',
-    '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->',
+    '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->', /* probe1-noqa */
     '',
     '## 代码审查 [层：人工判断]',
-    '<!--TODO: 问题列表 + 总体评价。走查清单（零覆盖路径必查——探针 7 ⚠️ 条目即定向面）：',
+    '<!--TODO: 问题列表 + 总体评价。走查清单（零覆盖路径必查——探针 7 ⚠️ 条目即定向面）：', /* probe1-noqa */
     '     ① 编辑/更新链路（回显、字段映射、残留态）——非新增主链路，实证盲区；',
     '     ② 非主分支流（相关方/旁路支线等未走查路径）；',
     '     ③ 守卫一致性：同资源端点的操作人/权限校验模式对比（实证 doSubmit 无操作人校验而 delete/withdraw 有——越权）；',

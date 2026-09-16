@@ -1042,7 +1042,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority } = await import('../stage-review.js')
+      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority, getLatestStageReviewRunId } = await import('../stage-review.js')
       const tierSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
@@ -1082,11 +1082,40 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 头部渲染「审查执行通道」段（按用户配置序，见 local.yaml review_dispatch.channel_priority）。
       const reviewChannelPriority = readReviewChannelPriority(cwd)
       const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier, channelPriority: reviewChannelPriority })
+      // C2 前阶段实证清单机械附带（坑 review-subagent-redundant-verify，2026-09-15 wp EHS 实证：
+      // plan 审查把 brainstorm 已两轮实证的三仓源码全量重验——94 分钟不收敛被用户三催。此前只有
+      // prompt 散文说「前序实证勿重验」，子代理并不知道前序具体审过了什么；现把前序 stage review
+      // 的 checklist pass 项机械注入派发 prompt（封顶 15 条防灌爆），审查子代理据此跳过已实证面。
+      let priorFactsMd = ''
+      if (tier.tier === 'independent') {
+        try {
+          const priorStages = stageName === 'plan' ? ['brainstorm'] : stageName === 'execute' ? ['brainstorm', 'plan'] : []
+          const factLines = []
+          for (const ps of priorStages) {
+            let priorRunId = null
+            try { priorRunId = getLatestStageReviewRunId(tierRuntimeRoot, ps, changeName) } catch {}
+            if (!priorRunId) continue
+            const priorReviewPath = join(tierRuntimeRoot, 'stage-reviews', `${ps}-${priorRunId}`, 'review.json')
+            if (!existsSync(priorReviewPath)) continue
+            try {
+              const priorReview = JSON.parse(readFileSync(priorReviewPath, 'utf8'))
+              for (const c of (Array.isArray(priorReview.checklist) ? priorReview.checklist : [])) {
+                if (c && c.result === 'pass' && c.item) factLines.push(`- [${ps}] ${String(c.item).replace(/\s+/g, ' ').slice(0, 100)}`)
+              }
+            } catch {}
+          }
+          if (factLines.length > 0) {
+            const shown = factLines.slice(0, 15)
+            priorFactsMd = `\n**前序阶段独立审查已实证（pass）结论——直接引用勿重验**（展示 ${shown.length}/${factLines.length} 条；EHS 复盘实证：重验已实证面 = 94 分钟不收敛的同款浪费；本阶段只审自己特有面，结论存疑时才定向补证）：\n${shown.join('\n')}\n`
+          }
+        } catch {}
+      }
       promptText = promptText
         .split('{REVIEW_TIER}').join(tier.tier)
         .split('{REVIEW_TIER_REASON}').join(tier.reason)
         .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
         .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
+        .split('{PRIOR_REVIEW_FACTS}').join(priorFactsMd)
     } catch (e) {
       // 降级 self，避免 prompt 残留占位符
       promptText = promptText
@@ -1094,6 +1123,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         .split('{REVIEW_TIER_REASON}').join('分级异常降级 self: ' + e.message)
         .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
         .split('{REVIEW_JSON_CONTRACT}').join('(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
+        .split('{PRIOR_REVIEW_FACTS}').join('')
     }
   }
 

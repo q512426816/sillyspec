@@ -438,6 +438,19 @@ export function isDegradedSelfReview(review) {
 }
 
 /**
+ * 代落盘披露识别（C4，坑 delegated-write-audit-blind，2026-09-15 wp EHS 会话实证：平台写通道
+ * 故障下主流程 4 次代子代理落盘 review.json/交付物——独立性全靠 agent 自觉 + notes 留痕，gate
+ * 无任何可见标记。审查派发 prompt 已要求代落盘时 reviewerNotes 首行记「代落盘：…」，本识别让
+ * gate 侧补 ⚠️ 审计行（与 isDegradedSelfReview 同哲学：可见的折损优于静默的伪装——首行约定
+ * 识别，不承诺全文语义判定）。
+ */
+export function hasDelegatedWriteDisclosure(review) {
+  const notes = review && typeof review.reviewerNotes === 'string' ? review.reviewerNotes : ''
+  const firstLine = notes.split(/\r?\n/, 1)[0].trim()
+  return /^代落盘[：:]/.test(firstLine)
+}
+
+/**
  * stage-level review 总校验（brainstorm/plan/execute-acceptance 的 done gate）
  *
  * 规则（与 task-review.validateTaskReviews 对称）：
@@ -572,10 +585,20 @@ export function validateStageReviewWithAutoRefresh(opts) {
   if (!docHash) return { result, autoRefreshed: false }
 
   const refreshedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  // C3 声明化（坑 dochash-autorefresh-silent-drift，2026-09-15 wp EHS 会话实证：审查通过后
+  // 主文档多次改版——NEW: 前缀批注、需求调整改名、Reverse Sync——gate 每次都静默机械重算放行，
+  // verdict 原样保留，「审查后的变更不再见审查」零痕迹可读。旧内容不可复原（只有 hash），改用
+  // 可实现且更贴风险的两个信号做声明：① hash 漂移（旧→新短前缀）② 刷新序数——同一 review 被
+  // 反复刷新 = 主文档在审查后反复变更，序数 ≥2 时 gate 侧升级提醒人工确认结论续用。
+  const priorNotes = String(result.review.reviewerNotes || '')
+  const refreshOrdinal = (priorNotes.match(/docHash auto-refreshed at /g) || []).length + 1
+  const oldHashShort = String(result.review.docHash || '').slice(0, 8)
+  const newHashShort = String(docHash).slice(0, 8)
+  const auditLine = `docHash auto-refreshed at ${refreshedAt}（第 ${refreshOrdinal} 次；hash ${oldHashShort}→${newHashShort}；gate 检测主文档改版，机械重算；verdict 保留，结论是否仍适用于新文档需人工确认${refreshOrdinal >= 2 ? '——已多次刷新：主文档在审查后反复变更，建议人工复核结论续用或重审' : ''}）`
   const refreshed = {
     ...result.review,
     docHash,
-    reviewerNotes: `${result.review.reviewerNotes || ''}\ndocHash auto-refreshed at ${refreshedAt}（gate 检测主文档改版，机械重算；verdict 保留，结论是否仍适用需人工确认）`.trim(),
+    reviewerNotes: `${priorNotes}\n${auditLine}`.trim(),
   }
   try {
     writeAtomicSync(reviewPath, JSON.stringify(refreshed, null, 2) + '\n')
@@ -583,7 +606,7 @@ export function validateStageReviewWithAutoRefresh(opts) {
     return { result, autoRefreshed: false } // 写失败回落原失败结果，不静默放行
   }
   const recheck = validateStageReview(opts)
-  return { result: recheck, autoRefreshed: recheck.ok, refreshedPath: reviewPath, previousErrors: result.errors }
+  return { result: recheck, autoRefreshed: recheck.ok, refreshedPath: reviewPath, previousErrors: result.errors, refreshOrdinal, hashDrift: `${oldHashShort}→${newHashShort}` }
 }
 
 /**

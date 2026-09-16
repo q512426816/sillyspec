@@ -118,6 +118,24 @@ function baseReview(overrides = {}) {
   assert(r.autoRefreshed === false && r.result.ok === false, 'schema 失败：不自动刷新')
 }
 
+// ── 5. C3 刷新序数声明化：重复刷新 → 序数递增 + hash 漂移 + 升级提醒语（2026-09-15 wp EHS 实证：审查后多次改版走此通道）──
+{
+  // 从干净态起：v1 审查通过 → v2 第一次刷新 → v3 第二次刷新
+  writeFileSync(designPath, '# design v1\n')
+  writeFileSync(reviewPath, JSON.stringify(baseReview({ docHash: computeDocHash(designPath) }), null, 2) + '\n')
+  writeFileSync(designPath, '# design v2\n')
+  const r1 = validateStageReviewWithAutoRefresh({ stage: 'brainstorm', reviewType: 'design', runtimeRoot, reviewRunId: runId, searchDirs, autoRefresh: true })
+  assert(r1.autoRefreshed === true && r1.refreshOrdinal === 1, '第一次刷新：refreshOrdinal=1')
+  assert(/→/.test(r1.hashDrift || ''), '返回 hashDrift（旧→新短前缀）')
+  assert(!(String(JSON.parse(readFileSync(reviewPath, 'utf8')).reviewerNotes).includes('已多次刷新')), '第一次不带升级提醒语')
+  writeFileSync(designPath, '# design v3\n')
+  const r2 = validateStageReviewWithAutoRefresh({ stage: 'brainstorm', reviewType: 'design', runtimeRoot, reviewRunId: runId, searchDirs, autoRefresh: true })
+  assert(r2.autoRefreshed === true && r2.refreshOrdinal === 2, '第二次刷新：refreshOrdinal=2')
+  const notes2 = String(JSON.parse(readFileSync(reviewPath, 'utf8')).reviewerNotes)
+  assert(notes2.includes('第 2 次'), '审计行含「第 2 次」序数')
+  assert(notes2.includes('已多次刷新'), '第二次起带升级提醒语（建议人工复核结论续用）')
+}
+
 // 清理
 try { rmSync(root, { recursive: true, force: true }) } catch {}
 
