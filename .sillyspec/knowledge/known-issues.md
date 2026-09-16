@@ -130,3 +130,5 @@ execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `
 QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整文件会夹带并行会话未完成条目（违反显式 pathspec 隔离纪律），只能"备份 → python 剥离并行条目 → commit pathspec → 恢复"四步舞。实证频次：2026-09-15/16 单个会话 6 次；e97251d（"QUICKLOG 与并行会话条目同文件未暂存，随其会话提交"）、42cef77（"以本变更暂存 blob 提交"）各自处理过同款。根因：单文件追加形态 × git 暂存按文件粒度 = 条目级归属无文件边界。
 
 **修法建议（中等完整流程变更，写入方/读取方/归档方全动）**：QUICKLOG 条目文件化——每 ql-ID 独立 sidecar 文件（`quicklog/entries/<ql-id>.md`），主文件退化为聚合渲染产物（命令重建或追加渲染）；提交按 sidecar 文件收编零剥离。可行性佐证：patches sidecar（`quicklog/patches/<ql>.json/.patch` 范围快照冻结件）已证明 per-ql 文件形态运转正常。注意轮转文件（QUICKLOG-qinyi-<日期>.md）也要一并纳入方案。（来源：2026-09-16 本会话 6 次剥离舞步 + 历史提交注记）
+
+**v1 已工具化**（9d299a6，2026-09-16 quick-deed7456 / ql-20260916-015-44dd）：`sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]` 一键收编——持用户 QUICKLOG 锁全程，恒扫主文件+轮转归档定位本会话条目（含已取消）→ 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG+patches sidecar+额外 pathspec）→ finally 恢复工作区全量（并行条目留未提交态；.runtime 落备份兜底；fail-fast 附人工四步舞文案）。测试 test/quicklog-commit-slice.test.mjs 7 用例。**完整文件化（entries sidecar 权威+聚合渲染）仍待立项**——v1 是止血不是根治：提交侧摩擦已消，文件仍是单文件追加形态，读侧/归档侧未动。

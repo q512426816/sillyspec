@@ -1,0 +1,604 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index fc5d296..34d2e6b 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -136,10 +136,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2346；shared.js:956 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2346/1855；shared.js:912 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3481；sync.js:1397/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3433；sync.js:2099 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3530；sync.js:1397/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3482；sync.js:2099 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3246/2856；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3295/3324；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:674/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -164,7 +164,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:236`）公共入口，flag 在 `command.js:381`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:231` 解析后经 `case 'init'`（`index.js:341`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:234` 解析后经 `case 'init'`（`index.js:345`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+ - **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:639（backfill-reviews）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+@@ -196,7 +196,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3343`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3392`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index 12669cb..9925b53 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -76,6 +76,9 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec wt-commit [--change <名>] -m <信息> [--pathspec-from-file <f>] -- <path...>
+                                       worktree 内 per-task 串行化提交（文件锁排队 + 强制显式 pathspec，
+                                       防 add -A 卷入并行兄弟 WIP；worktree 内可省 --change，从 cwd 推断）
++  sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]
++                                      一键收编本会话 QUICKLOG 条目（切片提交：HEAD 基线+本会话条目块，
++                                      patches sidecar 一并带上；并行会话条目恢复为工作区未提交态，不夹带）
+   sillyspec worktree <cmd>     git worktree 隔离管理（execute 阶段相关）
+     create <change> [--base <branch>]   创建隔离 worktree
+     apply <change> [--check-only]       校验并应用变更到主工作区
+@@ -2697,6 +2700,50 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       }
+       break;
+     }
++    case 'quicklog': {
++      // known-issues ④ v1（2026-09-16）：QUICKLOG 多会话条目交织——本会话提交 git add 整文件
++      // 会夹带并行会话未完成条目，只能手工四步舞（备份→剥离→commit→恢复）。本命令一键机制化：
++      // 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG 文件+patches sidecar+额外
++      // pathspec）→ 恢复工作区（并行条目留未提交态）。参数面照抄 wt-commit 先例（--change/-m/--
++      // pathspec）+ 可重复 --ql（guard 缺失/损坏时的显式逃生门；含已取消条目）。
++      if (filteredArgs[1] !== 'commit') {
++        console.error(`❌ 未知 quicklog 子命令: ${filteredArgs[1] || '(空)'}——当前支持: sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]`);
++        process.exit(1);
++      }
++      const qlRest = filteredArgs.slice(2);
++      const qlDd = qlRest.indexOf('--');
++      const qlFlags = qlDd === -1 ? qlRest : qlRest.slice(0, qlDd);
++      const qlExtra = qlDd === -1 ? [] : qlRest.slice(qlDd + 1);
++      let qlChange = null;
++      let qlMessage = null;
++      const qlIds = [];
++      for (let i = 0; i < qlFlags.length; i++) {
++        if (qlFlags[i] === '--change' && qlFlags[i + 1]) qlChange = qlFlags[++i];
++        else if ((qlFlags[i] === '-m' || qlFlags[i] === '--message') && qlFlags[i + 1]) qlMessage = qlFlags[++i];
++        else if (qlFlags[i] === '--ql' && qlFlags[i + 1]) qlIds.push(qlFlags[++i]);
++      }
++      try {
++        const { resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
++        const qlSpecBase = resolvePlatformSpecDir(dir, specDir);
++        const { resolveQuickSessionsDir } = await import('./run/shared.js');
++        const qlSessionsDir = resolveQuickSessionsDir(resolvePlatformOpts(dir, specDir), qlSpecBase);
++        let qlUser = 'unknown';
++        try { qlUser = (await import('./git-helper.js')).git(dir, ['config', 'user.name']) || 'unknown'; } catch {}
++        const { runQuicklogCommit } = await import('./quicklog.js');
++        const r = await runQuicklogCommit({
++          specBase: qlSpecBase, cwd: dir, gitUser: qlUser, qlIds,
++          changeName: qlChange, sessionsDir: qlSessionsDir,
++          message: qlMessage, extraPathspecs: qlExtra,
++        });
++        if (json) console.log(JSON.stringify({ command: 'quicklog commit', ...r }, null, 2));
++        else if (r.skipped) console.log(`⏭️  quicklog commit 无新内容跳过（HEAD 不动）：${r.shortHead}（条目均已收编：${(r.skippedQlIds || []).join(', ') || '（无）'}）`);
++        else console.log(`✅ quicklog commit 完成：${r.shortHead}（${r.files.length} 文件；收编 ${(r.committedQlIds || []).join(', ')}）\n   并行会话条目已恢复为工作区未提交态；备份：${(r.backupPaths || []).join(' , ')}`);
++      } catch (e) {
++        console.error(`❌ quicklog commit 失败：${e.message}`);
++        process.exit(1);
++      }
++      break;
++    }
+     case 'worktree': {
+       const { WorktreeManager } = await import('./worktree.js');
+       const { ProgressManager, resolveSessionIdentity } = await import('./progress.js');
+diff --git a/src/quicklog.js b/src/quicklog.js
+index a31e658..bfbd841 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -10,13 +10,14 @@
+  * 本模块把分配与写入下沉到 CLI 进程内，O_EXCL lockfile 串行化，彻底消除上述问题。
+  * 无新 npm 依赖（仅 fs/path/crypto）——匹配项目零 FS 工具依赖的风格。
+  */
+-import { join, dirname, basename } from 'path'
++import { join, dirname, basename, resolve, relative, isAbsolute } from 'path'
+ import { getRule } from './stage-contract-spec.js'
+ import {
+   openSync, closeSync, unlinkSync, statSync, mkdirSync, existsSync,
+   readFileSync, writeFileSync, writeSync, readdirSync, renameSync, appendFileSync, rmSync,
+ } from 'fs'
+ import { randomBytes } from 'crypto'
++import { safeGit } from './git-helper.js'
+ 
+ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+ 
+@@ -1168,3 +1169,232 @@ export async function cancelQuickSession({ specBase, gitUser, qlId, sessionId =
+ 
+   return { ok: true, quicklogFile, removedTaskRows }
+ }
++
++// ── quicklog commit（known-issues ④ v1：本会话条目切片提交，2026-09-16）──
++//
++// 坑 QUICKLOG 多会话条目交织：QUICKLOG 是多会话共享追加的单文件，某会话 `git add` 整文件
++// 会夹带并行会话未完成条目（违反显式 pathspec 隔离纪律，AGENTS.md 第 18 条），只能
++// 「备份 → 剥离并行条目 → commit pathspec → 恢复」四步舞（2026-09-15/16 单会话实证 6 次）。
++// 本命令把四步舞机制化：
++//   切片（工作区 = HEAD 基线 + 本会话条目块）→ git add/commit 显式 pathspec（含 patches
++//   sidecar 与额外 pathspec）→ finally 恢复工作区全量（并行条目留「未提交」预期态）。
++// 任一步失败 fail-fast 打印人工兜底；恢复在 finally，commit 失败也不留半态。
++// 「完整文件化」（entries sidecar 权威 + 聚合渲染）不在 v1 范围，见 known-issues 条目。
++
++// git 子操作退避重试：与 wt-commit.js gitWithLockRetry 同款（本文件锁只约束 quicklog 写方，
++// 锁队列外裸跑 git 的并行进程仍可能短暂持 index.lock/HEAD 锁，等待重试消化）。
++async function quicklogGitRetry(cwd, args, label, { retries = 6, waitMs = 1000 } = {}) {
++  for (let i = 0; ; i++) {
++    const { value, error } = safeGit(cwd, args, { timeout: 30000 })
++    if (!error) return value
++    const msg = String((error && error.message) || error)
++    if (/index\.lock|HEAD\.lock|cannot lock ref/i.test(msg) && i < retries) {
++      await sleep(waitMs)
++      continue
++    }
++    throw new Error(`${label} 失败：${msg.split('\n')[0].trim()}`)
++  }
++}
++
++// 行级条目头匹配（容错口径与 countQuicklogEntries 一致：## 后空白可省、ID 与 | 间空白可变）
++function findQuicklogEntryLineIdx(lines, qlId) {
++  const re = new RegExp(`^##[ \\t]*${escapeRe(qlId)}[ \\t]*\\|`)
++  return lines.findIndex(l => re.test(l))
++}
++
++/**
++ * 切片：工作区全量 → 「基线 + 指定条目块」。
++ * 块界 = `## ql-<id>` 头到下一个 `## ` 头/文件尾（extractRawBlock 同口径）；条目间补单空行
++ * 分隔（对齐 allocateQuicklogEntry 条目模板形态）。EOL 随工作区文件——HEAD blob 归一到
++ * 工作区 EOL 再拼（.gitattributes eol=lf + autocrlf=true 环境下 blob 是 LF、工作区 CRLF；
++ * git add 时按配置归一回去，不产生整文件行尾假差异）。条目头已在基线（先前提交过）→
++ * 跳过不重复（重跑幂等）。返回 null = 无任何目标条目；blocks 为空 = 全部已在基线
++ * （调用方不落盘不动文件，避免基线归一化重写制造假提交）。
++ */
++function sliceQuicklogFileContent(fullContent, baselineContent, qlIds) {
++  const eol = fullContent.includes('\r\n') ? '\r\n' : '\n'
++  const norm = (s) => String(s || '').replace(/\r\n/g, '\n')
++  const lines = norm(fullContent).split('\n')
++  const baseLines = norm(baselineContent).split('\n')
++  while (baseLines.length && baseLines[baseLines.length - 1].trim() === '') baseLines.pop()
++  const blocks = []
++  const blockIds = []
++  const alreadyIncluded = []
++  for (const qlId of qlIds) {
++    const startIdx = findQuicklogEntryLineIdx(lines, qlId)
++    if (startIdx === -1) continue
++    if (findQuicklogEntryLineIdx(baseLines, qlId) !== -1) { alreadyIncluded.push(qlId); continue }
++    let endIdx = lines.length
++    for (let i = startIdx + 1; i < lines.length; i++) {
++      if (/^##[ \t]*\S/.test(lines[i])) { endIdx = i; break }
++    }
++    const block = lines.slice(startIdx, endIdx)
++    while (block.length && block[block.length - 1].trim() === '') block.pop()
++    blocks.push(block)
++    blockIds.push(qlId)
++  }
++  if (blocks.length === 0 && alreadyIncluded.length === 0) return null
++  const outLines = [...baseLines]
++  for (const block of blocks) {
++    if (outLines.length > 0) outLines.push('') // 条目间空行分隔
++    outLines.push(...block)
++  }
++  let sliced = outLines.join('\n') + '\n'
++  if (eol === '\r\n') sliced = sliced.replace(/\n/g, '\r\n')
++  return { content: sliced, blockIds, alreadyIncluded }
++}
++
++const QUICKLOG_COMMIT_MANUAL_FALLBACK = [
++  '人工兜底（四步舞）：',
++  '  ① 备份 QUICKLOG 文件：cp <文件> /tmp/quicklog-backup.md',
++  '  ② 从工作区文件剥离并行会话条目（只留本会话条目，条目块 = "## ql-…" 行到下一个 "## " 头）',
++  '  ③ git add -- <QUICKLOG文件> .sillyspec/quicklog/patches/<ql-id>.* && git commit -m "..."',
++  '  ④ 从备份恢复工作区全量（并行条目回到未提交态）',
++].join('\n')
++
++/**
++ * 一键收编本会话 QUICKLOG 条目（`sillyspec quicklog commit`，known-issues ④ v1）。
++ *
++ * 持用户 QUICKLOG 锁（与 allocate/complete/cancel 同锁）跨「定位 → 切片 → 提交 → 恢复」
++ * 全程——锁内重读文件，并发追加的并行条目不丢（恢复用的就是锁内读到的最新全量）。
++ *
++ * @param {object} opts
++ * @param {string} opts.specBase .sillyspec 根目录
++ * @param {string} [opts.cwd] 调用方 cwd（git rev-parse --show-toplevel 的起点）
++ * @param {string} opts.gitUser git user.name（定位本用户 QUICKLOG 文件与锁）
++ * @param {string[]} [opts.qlIds] 显式 ql-ID（--ql，可含已取消条目——历史一并收编）
++ * @param {string|null} [opts.changeName] quick 会话 ID（缺 --ql 时读其 guard.json 的 quicklogId）
++ * @param {string|null} [opts.sessionsDir] quick-sessions 目录（平台模式异位时由 dispatch 传入）
++ * @param {string} opts.message 提交信息
++ * @param {string[]} [opts.extraPathspecs] 额外 pathspec（-- 后透传，随本次提交带上）
++ * @returns {Promise<{ok:boolean,skipped:boolean,head:string,shortHead:string,files:string[],
++ *   quicklogFiles:string[],committedQlIds:string[],skippedQlIds:string[],backupPaths:string[]}>}
++ */
++export async function runQuicklogCommit({ specBase, cwd = process.cwd(), gitUser, qlIds = [], changeName = null, sessionsDir = null, message = '', extraPathspecs = [] }) {
++  if (!message || !message.trim()) throw new Error('缺少 -m/--message <提交信息>（建议 "chore: 收编本会话 QUICKLOG 条目——<一句话>"）')
++  const ids = [...new Set((Array.isArray(qlIds) ? qlIds : []).filter(id => typeof id === 'string' && id.trim()).map(id => id.trim()))]
++
++  // ql-ID 解析优先级：--ql 显式 > 会话 guard.json（写侧字段 quicklogId，兼容旧 .qlId）
++  if (ids.length === 0 && changeName) {
++    const guardPath = join(sessionsDir || join(specBase, '.runtime', 'quick-sessions'), changeName, 'guard.json')
++    try {
++      if (existsSync(guardPath)) {
++        const g = JSON.parse(readFileSync(guardPath, 'utf8'))
++        const q = g.quicklogId || g.qlId
++        if (typeof q === 'string' && q.trim()) ids.push(q.trim())
++      }
++    } catch { /* guard 损坏 → 按缺失走下方 fail-fast */ }
++  }
++  if (ids.length === 0) {
++    throw new Error(`无法定位 ql-ID：--change 会话的 guard.json 缺失/损坏且未传 --ql——显式传 --ql <ql-xxx>（可重复传多个；含已取消条目，cancelled 也是历史一并收编；ID 即 QUICKLOG 条目头 "## ql-…" 的 ID）`)
++  }
++
++  const quicklogDir = join(specBase, 'quicklog')
++  const user = sanitizeQuicklogUser(gitUser) || 'unknown'
++  const lockPath = join(quicklogDir, `.QUICKLOG-${user}.md.lock`)
++  const repoRootRaw = safeGit(cwd, ['rev-parse', '--show-toplevel'], { timeout: 10000 }).value
++  if (!repoRootRaw) throw new Error(`git 仓库定位失败（cwd=${cwd} 的 git rev-parse --show-toplevel 无输出）`)
++  const repoRoot = resolve(repoRootRaw)
++  const toRel = (abs) => relative(repoRoot, abs).replace(/\\/g, '/')
++
++  const result = await withFileLock(lockPath, async () => {
++    // 锁内重扫（并发追加不丢）：主文件优先，恒扫全部 QUICKLOG 文件（含轮转归档——
++    // 2026-09-16 实证 ql-013 落轮转新文件、ql-014 又落回旧文件，新旧都可能有本会话条目）
++    const allFiles = listQuicklogFiles(quicklogDir)
++    const mainName = `QUICKLOG-${user}.md`
++    const ordered = existsSync(join(quicklogDir, mainName))
++      ? [mainName, ...allFiles.filter(f => f !== mainName)] : allFiles
++    const plans = []
++    const found = new Set()
++    for (const f of ordered) {
++      const p = join(quicklogDir, f)
++      let content = ''
++      try { content = readFileSync(p, 'utf8') } catch { continue }
++      const contentLines = content.split(/\r?\n/)
++      const hit = ids.filter(id => findQuicklogEntryLineIdx(contentLines, id) !== -1)
++      for (const id of hit) found.add(id)
++      if (hit.length > 0) plans.push({ file: p, rel: toRel(p), content, hitIds: hit })
++    }
++    // 工作区未命中者查 HEAD 基线：已在 = 幂等跳过；两边都无 = fail-fast（--ql 笔误防护）
++    const alreadyCommitted = []
++    for (const id of ids.filter(i => !found.has(i))) {
++      let inHead = false
++      for (const f of ordered) {
++        const blob = safeGit(repoRoot, ['show', `HEAD:${toRel(join(quicklogDir, f))}`], { trim: false, timeout: 10000 }).value
++        if (blob && findQuicklogEntryLineIdx(blob.replace(/\r\n/g, '\n').split('\n'), id) !== -1) { inHead = true; break }
++      }
++      if (inHead) alreadyCommitted.push(id)
++      else throw new Error(`条目 ${id} 在所有 QUICKLOG-*.md（含轮转归档）与 HEAD 中均未找到——核对 --ql 的 ql-ID。\n${QUICKLOG_COMMIT_MANUAL_FALLBACK}`)
++    }
++
++    // 切片 + 备份（.runtime 不入库，恢复失败时的最后兜底）。无新块的文件不动不落盘——
++    // 已收编条目重跑形态下按基线归一化重写会制造只差尾部空行的假提交。
++    const now = new Date()
++    const stamp = `${todayStamp(now)}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
++    mkdirSync(join(specBase, '.runtime'), { recursive: true })
++    const backups = []
++    const originals = []
++    const slicePlans = []
++    for (const plan of plans) {
++      const baseline = safeGit(repoRoot, ['show', `HEAD:${plan.rel}`], { trim: false, timeout: 10000 }).value || ''
++      const sliced = sliceQuicklogFileContent(plan.content, baseline, plan.hitIds)
++      if (!sliced) continue // 不可能（plan.hitIds 非空才进 plans），防御
++      for (const id of sliced.alreadyIncluded) alreadyCommitted.push(id)
++      if (sliced.blockIds.length === 0) continue // 全部已在基线：文件不动、不进提交
++      const backupPath = join(specBase, '.runtime', `quicklog-slice-${stamp}-${basename(plan.file)}`)
++      writeFileSync(backupPath, plan.content)
++      backups.push(backupPath)
++      originals.push({ file: plan.file, content: plan.content })
++      await writeAtomic(plan.file, sliced.content)
++      slicePlans.push(plan)
++    }
++
++    // pathspec 组装：QUICKLOG 文件 + patches sidecar（--done 冻结件，存在才加）+ 额外透传
++    const addPaths = slicePlans.map(pl => pl.rel)
++    for (const id of ids) {
++      for (const ext of ['.json', '.patch']) {
++        const sp = join(quicklogDir, 'patches', id + ext)
++        if (existsSync(sp)) addPaths.push(toRel(sp))
++      }
++    }
++    for (const extra of (Array.isArray(extraPathspecs) ? extraPathspecs : []).filter(Boolean)) {
++      addPaths.push(toRel(isAbsolute(extra) ? extra : resolve(cwd, extra)))
++    }
++    if (addPaths.length === 0) {
++      // 条目均已收编且无 sidecar/额外 pathspec → 无事可做（幂等重跑）
++      return { skipped: true, head: safeGit(repoRoot, ['rev-parse', 'HEAD'], { timeout: 10000 }).value || '', addPaths: [], backups, alreadyCommitted, quicklogFiles: slicePlans.map(pl => basename(pl.file)) }
++    }
++
++    try {
++      await quicklogGitRetry(repoRoot, ['add', '--', ...addPaths], 'git add')
++      // pathspec 范围内无 staged 变更 = 条目均已收编（幂等重跑），HEAD 不动不算失败
++      const staged = safeGit(repoRoot, ['diff', '--cached', '--name-only', '--', ...addPaths], { timeout: 10000 }).value || ''
++      if (!staged.trim()) {
++        return { skipped: true, head: safeGit(repoRoot, ['rev-parse', 'HEAD'], { timeout: 10000 }).value || '', addPaths, backups, alreadyCommitted, quicklogFiles: slicePlans.map(pl => basename(pl.file)) }
++      }
++      await quicklogGitRetry(repoRoot, ['commit', '-m', message, '--', ...addPaths], 'git commit')
++      const head = safeGit(repoRoot, ['rev-parse', 'HEAD'], { timeout: 10000 }).value || ''
++      return { skipped: false, head, addPaths, backups, alreadyCommitted, quicklogFiles: slicePlans.map(pl => basename(pl.file)) }
++    } finally {
++      // 恢复：切片前工作区全量写回（并行会话条目回到「未提交」预期态；原子写防轮询读半截）
++      for (const o of originals) await writeAtomic(o.file, o.content)
++    }
++  }, {
++    staleMs: 120000, // 临界区含 git add/commit（AV 扫描的 Windows 上秒级起步），30s 默认会被误偷锁
++    timeoutMs: 120000,
++    content: JSON.stringify({ pid: process.pid, purpose: 'quicklog-commit' }),
++  })
++
++  const already = [...new Set(result.alreadyCommitted)]
++  return {
++    ok: true,
++    skipped: !!result.skipped,
++    head: result.head,
++    shortHead: (result.head || '').slice(0, 8),
++    files: result.addPaths,
++    quicklogFiles: result.quicklogFiles,
++    committedQlIds: ids.filter(id => !already.includes(id)),
++    skippedQlIds: already,
++    backupPaths: result.backups,
++  }
++}
+diff --git a/test/quicklog-commit-slice.test.mjs b/test/quicklog-commit-slice.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/quicklog-commit-slice.test.mjs
+@@ -0,0 +1,245 @@
++// quicklog commit —— 本会话 QUICKLOG 条目切片提交（known-issues ④ v1）
++//
++// 坑（2026-09-16 立项，见 .sillyspec/knowledge/known-issues.md「QUICKLOG 多会话条目交织」）：
++// QUICKLOG 是多会话共享追加的单文件，某会话 `git add` 整文件会夹带并行会话未完成条目
++// （违反显式 pathspec 隔离纪律），只能「备份 → 剥离并行条目 → commit pathspec → 恢复」
++// 四步舞。本命令把四步舞机制化：切片（HEAD 基线 + 本会话条目块）→ 显式 pathspec 提交
++// （含 patches sidecar 与额外 pathspec）→ finally 恢复工作区全量（并行条目不丢）。
++//
++// 覆盖：①主文件切片 ②轮转双文件（含 HEAD 无文件的新主文件）③已提交条目幂等跳过
++// ④CRLF 兼容 ⑤ql-ID 缺失 fail-fast ⑥dispatch 参数面（未知子命令 / --ql 指引）
++// ⑦dispatch 端到端（guard.json quicklogId 解析）。
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'fs'
++import { join, relative } from 'path'
++import { tmpdir } from 'os'
++import { execFileSync, spawnSync } from 'child_process'
++import { fileURLToPath } from 'url'
++import { runQuicklogCommit } from '../src/quicklog.js'
++
++const cliBin = join(fileURLToPath(import.meta.url).replace(/[\\/]test[\\/].*$/, ''), 'src', 'index.js')
++const tmpRoots = []
++function makeFixture() {
++  const cwd = mkdtempSync(join(tmpdir(), `qlcommit-${process.pid}-`))
++  // 显式建 .sillyspec（walk-up 解析防 Temp 树残留 .sillyspec 劫持，见 quick-cancel-rotation 先例）
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  tmpRoots.push(cwd)
++  return cwd
++}
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++const git = (dir, args) => execFileSync('git', ['-C', dir, ...args], {
++  encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'],
++}).trim()
++
++function runCli(cwd, args) {
++  const res = spawnSync(process.execPath, [cliBin, ...args], { cwd, encoding: 'utf-8', timeout: 60_000 })
++  return { status: res.status, out: (res.stdout || '') + (res.stderr || '') }
++}
++
++function initRepo(cwd) {
++  git(cwd, ['init', '-q'])
++  git(cwd, ['config', 'user.name', 'tester'])
++  git(cwd, ['config', 'user.email', 't@t'])
++  git(cwd, ['config', 'core.autocrlf', 'false'])
++  // .runtime 运行时产物不入库（对齐主仓口径，backup 落此处不污染 status 断言）
++  writeFileSync(join(cwd, '.gitignore'), '.sillyspec/.runtime/\n', 'utf8')
++  git(cwd, ['add', '--', '.gitignore'])
++  git(cwd, ['commit', '-q', '-m', 'init'])
++}
++
++const entry = (id, title, status) => `## ${id} | 2026-09-16 12:00:00 | ${title}\n状态：${status}\n关联变更：（无）\n文件：（见实际改动）\n\n`
++
++test('① 主文件切片：基线+我的两条（含已取消）进提交，并行条目留工作区，patches sidecar 进暂存面', async () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const specBase = join(cwd, '.sillyspec')
++  const qlDir = join(specBase, 'quicklog')
++  mkdirSync(qlDir, { recursive: true })
++  const main = join(qlDir, 'QUICKLOG-tester.md')
++  // HEAD 基线：一条已提交的旧条目
++  const baseline = entry('ql-20260916-001-aaaa', '昨天的旧条目', '已完成')
++  writeFileSync(main, baseline, 'utf8')
++  git(cwd, ['add', '--', '.sillyspec/quicklog/QUICKLOG-tester.md'])
++  git(cwd, ['commit', '-q', '-m', 'baseline'])
++  // 工作区追加：我的已完成 + 我的已取消 + 并行会话进行中
++  writeFileSync(main, baseline
++    + entry('ql-20260916-002-bbbb', '我的已完成条目', '已完成')
++    + entry('ql-20260916-003-cccc', '我的已取消条目', '已取消')
++    + entry('ql-20260916-004-dddd', '并行会话的条目', '进行中'), 'utf8')
++  // patches sidecar（--done 冻结件）
++  mkdirSync(join(qlDir, 'patches'), { recursive: true })
++  writeFileSync(join(qlDir, 'patches', 'ql-20260916-002-bbbb.json'), '{"sessionId":"quick-11111111"}\n', 'utf8')
++  writeFileSync(join(qlDir, 'patches', 'ql-20260916-002-bbbb.patch', ), 'diff --git a/x b/x\n', 'utf8')
++
++  const headBefore = git(cwd, ['rev-parse', 'HEAD'])
++  const r = await runQuicklogCommit({
++    specBase, cwd, gitUser: 'tester',
++    qlIds: ['ql-20260916-002-bbbb', 'ql-20260916-003-cccc'],
++    message: 'chore: 收编本会话 QUICKLOG 条目',
++  })
++  assert.equal(r.ok, true, `ok（实际 ${JSON.stringify(r)}）`)
++  assert.equal(r.skipped, false, '有新条目不 skipped')
++  assert.notEqual(r.head, headBefore, 'HEAD 已推进')
++  assert.deepEqual([...r.committedQlIds].sort(), ['ql-20260916-002-bbbb', 'ql-20260916-003-cccc'])
++
++  // 提交内容 = 基线 + 我的两条；并行条目绝不进
++  const committed = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester.md'])
++  assert.ok(committed.includes('ql-20260916-001-aaaa'), '基线条目保留')
++  assert.ok(committed.includes('ql-20260916-002-bbbb'), '我的已完成条目进提交')
++  assert.ok(committed.includes('ql-20260916-003-cccc'), '我的已取消条目一并收编')
++  assert.ok(!committed.includes('ql-20260916-004-dddd'), '并行会话条目不被夹带')
++  // patches sidecar 进暂存面
++  const lsTree = git(cwd, ['ls-tree', '-r', '--name-only', 'HEAD'])
++  assert.ok(lsTree.includes('.sillyspec/quicklog/patches/ql-20260916-002-bbbb.json'), 'sidecar json 已提交')
++  assert.ok(lsTree.includes('.sillyspec/quicklog/patches/ql-20260916-002-bbbb.patch'), 'sidecar patch 已提交')
++  assert.equal(git(cwd, ['log', '-1', '--format=%s']).trim(), 'chore: 收编本会话 QUICKLOG 条目', '提交信息透传')
++
++  // 工作区恢复：并行条目回到未提交态，其余干净
++  const ws = readFileSync(main, 'utf8')
++  assert.ok(ws.includes('ql-20260916-004-dddd'), '并行条目恢复在工作区')
++  assert.ok(ws.includes('ql-20260916-002-bbbb'), '我的条目工作区仍在（不删档）')
++  const st = git(cwd, ['status', '--porcelain'])
++  assert.match(st, /M \.sillyspec\/quicklog\/QUICKLOG-tester\.md/, `QUICKLOG 回到「仅并行条目未提交」态（实际 ${st}）`)
++  assert.ok(!st.includes('patches'), 'sidecar 无未提交残留')
++
++  // 备份兜底落盘
++  const rt = join(specBase, '.runtime')
++  assert.ok(readdirSync(rt).some(f => f.startsWith('quicklog-slice-')), '备份文件落 .runtime')
++})
++
++test('② 轮转双文件：归档文件与 HEAD 无文件的新主文件都切片，两处并行条目都留工作区', async () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const specBase = join(cwd, '.sillyspec')
++  const qlDir = join(specBase, 'quicklog')
++  mkdirSync(qlDir, { recursive: true })
++  // HEAD：轮转归档已提交（含旧基线条目）
++  const arch = join(qlDir, 'QUICKLOG-tester-2026-09-15.md')
++  const archBase = entry('ql-20260915-091-eeee', '归档基线', '已完成')
++  writeFileSync(arch, archBase, 'utf8')
++  git(cwd, ['add', '--', '.sillyspec/quicklog/QUICKLOG-tester-2026-09-15.md'])
++  git(cwd, ['commit', '-q', '-m', 'archive baseline'])
++  // 工作区：归档追加我的条目（ql-014 落回旧文件的形态）+ 新主文件（未跟踪）我的 + 并行
++  writeFileSync(arch, archBase + entry('ql-20260916-012-ffff', '落回归档的我的条目', '已完成'), 'utf8')
++  const main = join(qlDir, 'QUICKLOG-tester.md')
++  writeFileSync(main,
++    entry('ql-20260916-013-aaaa', '新主文件里的我的条目', '已完成')
++    + entry('ql-20260916-014-bbbb', '新主文件里的并行条目', '进行中'), 'utf8')
++
++  const r = await runQuicklogCommit({
++    specBase, cwd, gitUser: 'tester',
++    qlIds: ['ql-20260916-012-ffff', 'ql-20260916-013-aaaa'],
++    message: 'chore: 双文件收编',
++  })
++  assert.equal(r.ok, true)
++  assert.deepEqual([...r.quicklogFiles].sort(),
++    ['QUICKLOG-tester-2026-09-15.md', 'QUICKLOG-tester.md'])
++
++  const archHead = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester-2026-09-15.md'])
++  assert.ok(archHead.includes('ql-20260915-091-eeee') && archHead.includes('ql-20260916-012-ffff'))
++  const mainHead = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester.md'])
++  assert.ok(mainHead.includes('ql-20260916-013-aaaa'), '新文件基线为空 → 只含我的条目')
++  assert.ok(!mainHead.includes('ql-20260916-014-bbbb'), '新文件里的并行条目不被夹带')
++  // 恢复：两文件并行/全部条目俱在
++  assert.ok(readFileSync(arch, 'utf8').includes('ql-20260916-012-ffff'))
++  const wsMain = readFileSync(main, 'utf8')
++  assert.ok(wsMain.includes('ql-20260916-013-aaaa') && wsMain.includes('ql-20260916-014-bbbb'), '新主文件恢复全量')
++  const st = git(cwd, ['status', '--porcelain'])
++  assert.match(st, /M \.sillyspec\/quicklog\/QUICKLOG-tester\.md/, '新主文件回到未提交并行条目态')
++})
++
++test('③ 幂等：条目已在 HEAD（重跑场景）→ skipped、HEAD 不动、工作区不动', async () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const specBase = join(cwd, '.sillyspec')
++  const qlDir = join(specBase, 'quicklog')
++  mkdirSync(qlDir, { recursive: true })
++  const main = join(qlDir, 'QUICKLOG-tester.md')
++  const content = entry('ql-20260916-001-aaaa', '已收编条目', '已完成')
++    + entry('ql-20260916-002-bbbb', '并行条目', '进行中')
++  writeFileSync(main, content, 'utf8')
++  git(cwd, ['add', '--', '.sillyspec/quicklog/QUICKLOG-tester.md'])
++  git(cwd, ['commit', '-q', '-m', 'baseline'])
++  // 工作区与 HEAD 同（无新增我的条目）→ 重跑收编同一 ql-ID
++  const headBefore = git(cwd, ['rev-parse', 'HEAD'])
++  const r = await runQuicklogCommit({
++    specBase, cwd, gitUser: 'tester', qlIds: ['ql-20260916-001-aaaa'], message: 're-run',
++  })
++  assert.equal(r.skipped, true, `无新内容 skipped（实际 ${JSON.stringify(r)}）`)
++  assert.equal(r.head, headBefore, 'HEAD 不动')
++  assert.equal(readFileSync(main, 'utf8'), content, '工作区原样')
++})
++
++test('④ CRLF 兼容：Windows 工作区 CRLF 切片提交后，恢复仍保持 CRLF 不污染', async () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const specBase = join(cwd, '.sillyspec')
++  const qlDir = join(specBase, 'quicklog')
++  mkdirSync(qlDir, { recursive: true })
++  const main = join(qlDir, 'QUICKLOG-tester.md')
++  const baseline = entry('ql-20260916-001-aaaa', '基线', '已完成')
++  writeFileSync(main, baseline, 'utf8')
++  git(cwd, ['add', '--', '.sillyspec/quicklog/QUICKLOG-tester.md'])
++  git(cwd, ['commit', '-q', '-m', 'baseline'])
++  const full = baseline + entry('ql-20260916-002-bbbb', '我的条目', '已完成')
++    + entry('ql-20260916-003-cccc', '并行条目', '进行中')
++  writeFileSync(main, full.replace(/\n/g, '\r\n'), 'utf8') // 全 CRLF 工作区
++
++  const r = await runQuicklogCommit({
++    specBase, cwd, gitUser: 'tester', qlIds: ['ql-20260916-002-bbbb'], message: 'crlf',
++  })
++  assert.equal(r.ok, true)
++  const committed = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester.md'])
++  assert.ok(committed.includes('ql-20260916-002-bbbb') && !committed.includes('ql-20260916-003-cccc'))
++  const ws = readFileSync(main, 'utf8')
++  assert.ok(ws.includes('\r\n'), '恢复后仍为 CRLF')
++  assert.ok(ws.includes('ql-20260916-003-cccc'), '并行条目恢复')
++})
++
++test('⑤ fail-fast：ql-ID 无法解析（无 --ql 无 guard）→ 报错含 --ql 指引；条目在任何文件都找不到 → 报错', async () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const specBase = join(cwd, '.sillyspec')
++  await assert.rejects(
++    runQuicklogCommit({ specBase, cwd, gitUser: 'tester', qlIds: [], changeName: 'quick-nonexist', message: 'x' }),
++    /--ql/, '缺 ql-ID 报错须含 --ql 指引')
++  await assert.rejects(
++    runQuicklogCommit({ specBase, cwd, gitUser: 'tester', qlIds: ['ql-20260916-999-zzzz'], message: 'x' }),
++    /999-zzzz/, '找不到条目报错须点名该 ql-ID')
++})
++
++test('⑥ dispatch：未知子命令报错；--change 无 guard 且无 --ql → exit 1 含指引', () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const r1 = runCli(cwd, ['quicklog', 'status'])
++  assert.notEqual(r1.status, 0, '未知子命令非零退出')
++  assert.match(r1.out, /commit/, '提示可用子命令')
++  const r2 = runCli(cwd, ['quicklog', 'commit', '--change', 'quick-nope', '-m', 'x'])
++  assert.equal(r2.status, 1, `缺 ql-ID exit 1（实际 ${r2.status}）`)
++  assert.match(r2.out, /--ql/, '报错含 --ql 指引')
++})
++
++test('⑦ dispatch 端到端：guard.json quicklogId 自动解析 → 命令收编成功', () => {
++  const cwd = makeFixture()
++  initRepo(cwd)
++  const specBase = join(cwd, '.sillyspec')
++  const qlDir = join(specBase, 'quicklog')
++  mkdirSync(qlDir, { recursive: true })
++  const main = join(qlDir, 'QUICKLOG-tester.md')
++  const full = entry('ql-20260916-021-aaaa', 'guard 指向的我的条目', '已完成')
++    + entry('ql-20260916-022-bbbb', '并行条目', '进行中')
++  writeFileSync(main, full, 'utf8')
++  // guard：quick 会话 quick-99999999 预留 ql-20260916-021-aaaa（写侧字段 quicklogId）
++  const guardDir = join(specBase, '.runtime', 'quick-sessions', 'quick-99999999')
++  mkdirSync(guardDir, { recursive: true })
++  writeFileSync(join(guardDir, 'guard.json'),
++    JSON.stringify({ sessionId: 'quick-99999999', quicklogId: 'ql-20260916-021-aaaa', startedAt: new Date().toISOString() }), 'utf8')
++
++  const r = runCli(cwd, ['quicklog', 'commit', '--change', 'quick-99999999', '-m', 'chore: guard 解析收编'])
++  assert.equal(r.status, 0, `CLI 成功（输出 ${r.out.slice(-300)}）`)
++  const committed = git(cwd, ['show', 'HEAD:.sillyspec/quicklog/QUICKLOG-tester.md'])
++  assert.ok(committed.includes('ql-20260916-021-aaaa') && !committed.includes('ql-20260916-022-bbbb'))
++  assert.ok(readFileSync(main, 'utf8').includes('ql-20260916-022-bbbb'), '并行条目留工作区')
++})

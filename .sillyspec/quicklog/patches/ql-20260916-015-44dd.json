@@ -1,0 +1,117 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-deed7456",
+  "totals": {
+    "files": 4,
+    "additions": 528,
+    "deletions": 6
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 47,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/quicklog.js",
+      "declared": true,
+      "additions": 231,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quicklog-commit-slice.test.mjs",
+      "declared": true,
+      "additions": 245,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": [
+      {
+        "file": "src/run/gates.js",
+        "sessions": [
+          "quick-2fabfb4a"
+        ]
+      }
+    ]
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 13,
+    "codeFileCount": 7,
+    "testFileCount": 5,
+    "moduleSpan": 5,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "machine-interface",
+        "files": [
+          "src/machine-interface.js"
+        ]
+      },
+      {
+        "id": "change-management",
+        "files": [
+          "src/quicklog.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/brainstorm.js",
+          "src/stages/execute.js",
+          "src/stages/plan.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/verify-postcheck.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/cross-repo-verify.test.mjs",
+      "test/design-file-list-gate.test.mjs",
+      "test/plan-target-files.test.mjs",
+      "test/register-repo-platform-split-brain.test.mjs",
+      "test/quicklog-commit-slice.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L2",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-015-44dd",
+  "sessionId": "quick-deed7456",
+  "savedAt": "2026-09-16T04:06:30.625Z",
+  "patchSha256": "df914a6fdd6eb922fe398ae0e81573eb60c2cea189a50a5b980ed6f6c5427bac",
+  "patchStatus": "ok"
+}
