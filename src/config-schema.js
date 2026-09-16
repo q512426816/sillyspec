@@ -153,6 +153,14 @@ export const LOCAL_YAML_SCHEMA = {
       ],
     },
     {
+      id: 'gate_snapshot',
+      title: '门禁隔离快照 copy 面',
+      note: '门禁快照（gate-snapshot）= HEAD worktree + 会话文件 overlay + 环境目录 junction——gitignored 生成物（api-types/generated 类）不进 HEAD 也不在会话集，快照内 lint/test 环境性假败（2026-09-16 驾驭小结④，friction5-hardening R4 / D-002@v1）。按本清单在快照构建期从主仓 junction 链接补齐（失败回退复制）；快照内 overlay 已覆盖的同名路径跳过（本变更最新态优先）。⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。',
+      keys: [
+        { path: 'gate_snapshot.copy', type: 'array', optional: true, status: 'live', readers: ['createGateSnapshot (src/run/gate-snapshot.js)'], desc: '门禁隔离快照的生成物/额外路径 copy 面（元素 string，相对仓根）：HEAD 快照缺 gitignored 生成物导致 lint/test 环境性假败；声明后快照构建期从主仓 junction 链接（失败回退复制）。⚠️ junction 是活链接，快照内再跑生成命令会写穿到主仓该目录。未配置/空清单 = 全段空转零行为变化。', example: 'gate_snapshot:\n  copy:\n    - src/generated' },
+      ],
+    },
+    {
       id: 'auto_mode',
       title: '变更规模自动分类',
       note: 'sillyspec run auto 时，readAutoModeFromLocalYaml 读本段传 classifyChange 的 localConfig，force_*_patterns 匹配需求描述则强制对应模式。',
@@ -378,6 +386,13 @@ worktree-hook:
 # worktree:
 #   supplyFiles:
 #     - src/build-id.ts
+
+# ── 门禁隔离快照 copy 面（HEAD 快照缺 gitignored 生成物 → 快照内 lint/test 环境性假败；构建期从主仓 junction 补齐）──
+# 相对仓根路径列表；失败回退复制；快照内 overlay 已覆盖的同名路径跳过。
+# ⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。
+# gate_snapshot:
+#   copy:
+#     - src/generated
 
 # ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
 auto_mode:

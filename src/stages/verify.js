@@ -206,7 +206,7 @@ export const definition = {
 
 结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（\`| 决策 ID | FR | Task | Evidence | 状态 |\`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
 
-**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
+**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
 
 **Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
 

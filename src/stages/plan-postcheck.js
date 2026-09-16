@@ -217,6 +217,32 @@ export function parseHeadCommit(content) {
 }
 
 /**
+ * frontmatter 顶层键重复检测（纯函数，无 IO，2026-09-16-friction5-hardening FR-02 / D-004@v1）。
+ *
+ * 坑锚定（用户 2026-09-16 驾驭小结②）：taskcard 骨架双来源反填 depends_on（tasks.md 行内
+ * 注解 + plan.md Wave 兜底）后 agent 又重复手填同键——js-yaml 4 对重复映射键 throw，本文件
+ * 四处 jsYaml.load 的 catch 全部静默降级（blueprint 契约空 / repo=null / 命令不校验 /
+ * Wave proposal best-effort 跳过 = 吞字段），parseDependsOn 正则又只取首个命中——重复键在
+ * 下游全链路静默失真，只能在 feasibility 入口单点拦截。行首 ^key: 顶格锚定：块列表项
+ * （- x）与缩进子键天然不匹配；goal: > 折叠块的缩进续行不匹配（顶格续行属罕见畸形，
+ * 宁报错不漏报——fail-closed）。
+ * @param {string} fmText frontmatter 文本（--- 之间的内容；CRLF 入口归一，同 parseDependsOn 惯例）
+ * @returns {Array<{key: string, lines: number[]}>} 出现 ≥2 次的顶层键及其行号（1-based，相对 fmText）
+ */
+export function detectDuplicateTopKeys(fmText) {
+  const keyLines = new Map()
+  String(fmText || '').replace(/\r\n/g, '\n').split('\n').forEach((line, idx) => {
+    const m = line.match(/^([A-Za-z_][\w-]*):/)
+    if (!m) return
+    if (!keyLines.has(m[1])) keyLines.set(m[1], [])
+    keyLines.get(m[1]).push(idx + 1)
+  })
+  return [...keyLines.entries()]
+    .filter(([, lines]) => lines.length >= 2)
+    .map(([key, lines]) => ({ key, lines }))
+}
+
+/**
  * 从 local.yaml 文本解析 repos: 段（跨仓 workspace 注册表）。
  * 与 parseLocalYamlModules 同风格（轻量行扫描，不引 yaml 依赖），结构 Map<repoKey, absolutePath>。
  *
@@ -1262,6 +1288,15 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     }
     const fm = fmMatch[1]
     const body = content.slice(fmMatch[0].length)
+
+    // 0. 顶层键重复检测（FR-02 / D-004@v1，坑见 detectDuplicateTopKeys jsdoc：骨架反填
+    // depends_on 后 agent 重复手填 → js-yaml throw 被四处 catch 静默吞字段，只能在入口拦截）。
+    // 先于必要字段检查——重复键会令下游 jsYaml.load 全链路失真，属最高优先级形态错误。
+    const dupTaskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
+    const dupKeys = detectDuplicateTopKeys(fm)
+    for (const dup of dupKeys) {
+      errors.push(`${dupTaskId || file}: frontmatter 顶层键 ${dup.key} 重复出现 ${dup.lines.length} 次（L${dup.lines.join('、L')}）——骨架已自动反填的键（如 depends_on）勿重复手填，保留正确一处删除其余`)
+    }
 
     // 1. 必要字段检查
     const taskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()

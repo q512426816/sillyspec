@@ -4,7 +4,14 @@
  * 坑 probe7-covered-anchor-missing（2026-09-15 复盘实证：探针7 矩阵第一轮 7 行 covered 判定的
  * 证据列缺 file:line 锚点被审查打回——预填说明写着「证据列给首命中 file:line 锚点」但模板要求
  * 没细读就交，人工往返一轮）。本模块把该口径机器化：verify --done 时点解析正文探针7 段，
- * 判定列=covered 的行必须含 `path:line` 形态锚点，缺则 advisory 提示回补。
+ * 判定列=covered 的行必须含 `path:line` 形态锚点或 `.test.` 测试文件名锚点，缺则 advisory
+ * 提示回补。
+ *
+ * 口径对齐（2026-09-16-friction5-hardening FR-05 / D-005@v1，用户 2026-09-16 驾驭小结⑤）：
+ * 锚点认 file:line 或 `.test.` 文件名两形态（对齐 stage-contract 硬门三形态中的两形态）——
+ * 行号随提交漂移场景 `.test.` 文件名锚过硬门仍被 advisory 提示回补是无效摩擦。file:line
+ * 侧本判定（/:\d+\b/）宽于 stage-contract 硬门形态集，advisory 宽于硬门是设计容差；
+ * 裸反引号不收（保持 advisory 增量价值）。
  *
  * 定位与边界：
  * - **advisory 不阻断**：covered 行缺锚点只 warn（证据可以是合法的人工核验形态，但 covered=
@@ -57,7 +64,9 @@ export function checkProbe7AnchorCoverage(reportText) {
     if (verdict !== 'covered') continue
     out.coveredRows++
     const evidence = cells[5] || ''
-    if (!ANCHOR_RE.test(evidence)) {
+    // 双口径锚点（FR-05）：file:line（ANCHOR_RE，本体不动）或 `.test.` 测试文件名——
+    // 后者对齐 stage-contract 硬门形态，消灭行号漂移场景的无效回补提示
+    if (!ANCHOR_RE.test(evidence) && !/\.test\./.test(evidence)) {
       out.missingAnchors.push({
         task: task || '(未知 task)',
         acceptance: (cells[1] || '').slice(0, 80),

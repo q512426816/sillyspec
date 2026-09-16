@@ -111,7 +111,9 @@ allowed_paths:
   // 单仓 change（task-01 无 repo:）→ Map 仅含 main 键，allowed_paths ∪ design 全归 main
   assertDeep([...allowMap.keys()], ['main'], '单仓 change → Map 仅 main 键（task-05 跨仓切片，零回归）')
   const allowSet = allowMap.get('main')
-  assertDeep([...allowSet].sort(), ['dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], 'main Set 并集 = design 清单 ∪ task allowed_paths（含测试/产物）')
+  // D-003@v2（2026-09-16-friction5-hardening R3）：main 声明面非空 → 条件加白 .sillyspec/docs/
+  //（断言语义从「design 清单集」变「清单 ∪ docs 白名单集」——有意语义变更的合法断言更新）
+  assertDeep([...allowSet].sort(), ['.sillyspec/docs/', 'dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], 'main Set = design 清单 ∪ task allowed_paths ∪ .sillyspec/docs/ 白名单（D-003@v2 条件加白，含测试/产物）')
   const viol = classifyAllowListViolations(['src/app.js', 'src/util.js', 'test/app.test.mjs', 'dist/types.d.ts'], allowSet)
   assertDeep(viol, [], 'test/产物文件不再被判「不在清单」（原 apply 只认 design §6 会拦）')
   // 完全越界文件仍拦（union 不放开水面）
@@ -149,7 +151,8 @@ allowed_paths:
   assertDeep([...allowMap.keys()].sort(), ['main', 'sillyspec'], '跨仓 change → Map 含 main + sillyspec 两键')
   const mainSet = allowMap.get('main')
   const sillyspecSet = allowMap.get('sillyspec')
-  assertDeep([...mainSet].sort(), ['src/main-only.js', 'test/main.test.mjs'], 'main Set = design §6 ∪ 主仓 task allowed_paths')
+  // D-003@v2：main 声明面非空 → 加白 .sillyspec/docs/ 只进 main Set，跨仓切片不受影响
+  assertDeep([...mainSet].sort(), ['.sillyspec/docs/', 'src/main-only.js', 'test/main.test.mjs'], 'main Set = design §6 ∪ 主仓 task allowed_paths ∪ .sillyspec/docs/ 白名单')
   assertDeep([...sillyspecSet].sort(), ['src/task-review.js', 'src/worktree-apply.js'], 'sillyspec Set = 跨仓 task allowed_paths（相对跨仓仓根，design §6 清单不进跨仓）')
   rmSync(tmpDir, { recursive: true, force: true })
 }

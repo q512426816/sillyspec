@@ -112,6 +112,150 @@ function smokeImportPython(pythonBin, snapshotRoot, relFile) {
 }
 
 /**
+ * local.yaml `gate_snapshot:` 段 `copy:` 列表的轻量行扫描（与 verify-postcheck
+ * extractLintCommand 同风格——单键定向取值，不引 js-yaml，本文件零新依赖）。
+ *
+ * 认块列表（缩进 `- <path>` 条目）与 inline flow（`copy: [a, b]`）两形态（对齐
+ * worktree.supplyFiles 等既有数组键的「块列表或 inline flow 均可解析」约定）；空行/注释行
+ * 跳过不破段；离开 gate_snapshot 段（缩进回收到段头及以下 / 新顶层键）即止。容错：值剥
+ * 尾注（` #…`）与成对引号。
+ * @param {string} yamlText local.yaml 原文
+ * @returns {string[]} copy 条目原始值（未规整，交 applyGateSnapshotCopy 逐条规整）
+ */
+function _stripYamlValue(v) {
+  let s = String(v).trim()
+  const hash = s.indexOf(' #')
+  if (hash >= 0) s = s.slice(0, hash).trim()
+  if ((s.startsWith('"') && s.endsWith('"') && s.length >= 2) || (s.startsWith("'") && s.endsWith("'") && s.length >= 2)) {
+    s = s.slice(1, -1).trim()
+  }
+  return s
+}
+
+function parseGateSnapshotCopy(yamlText) {
+  if (!yamlText) return []
+  const out = []
+  let inGate = false   // 位于 gate_snapshot: 段内
+  let gateIndent = -1
+  let inCopy = false   // 位于段内 copy: 列表内
+  let copyIndent = -1
+  for (const raw of String(yamlText).split(/\r?\n/)) {
+    const content = raw.trim()
+    if (!content || content.startsWith('#')) continue // 空行/注释行不破段
+    const indent = raw.match(/^[ \t]*/)[0].length
+    if (!inGate) {
+      if (/^gate_snapshot:\s*(?:#.*)?$/.test(content)) { inGate = true; gateIndent = indent; inCopy = false }
+      continue
+    }
+    if (indent <= gateIndent) { inGate = false; inCopy = false; continue } // 出段（新顶层键）
+    if (!inCopy) {
+      const flow = content.match(/^copy:\s*\[([^\]]*)\]/)
+      if (flow) {
+        for (const part of flow[1].split(',')) {
+          const v = _stripYamlValue(part)
+          if (v) out.push(v)
+        }
+        continue // inline flow 当行自洽，继续扫段内后续内容
+      }
+      if (/^copy:\s*(?:#.*)?$/.test(content)) { inCopy = true; copyIndent = indent }
+      continue // 段内其它子键忽略
+    }
+    if (indent < copyIndent) { inCopy = false; continue } // 缩进回收出列表
+    const item = content.match(/^-\s*(.+)$/)
+    if (!item) { inCopy = false; continue } // 同层非列表行 = 列表结束
+    const v = _stripYamlValue(item[1])
+    if (v) out.push(v)
+  }
+  return out
+}
+
+/** 目录递归复制（copy 面 junction 不可用时的回退）。符号链接条目跳过（生成物目录内不追链）。 */
+function copyDirRecursive(srcDir, dstDir) {
+  mkdirSync(dstDir, { recursive: true })
+  for (const e of readdirSync(srcDir, { withFileTypes: true })) {
+    const s = join(srcDir, e.name)
+    const d = join(dstDir, e.name)
+    if (e.isDirectory()) copyDirRecursive(s, d)
+    else if (e.isFile()) copyFileSync(s, d)
+  }
+}
+
+/**
+ * gate_snapshot.copy 面（2026-09-16-friction5-hardening R4 / FR-04 / D-002@v1，坑
+ * gate-snapshot-missing-generated-artifacts——用户 2026-09-16 驾驭小结④实证只能
+ * SNAPSHOT_OFF 对照）：HEAD 快照缺 gitignored 生成物（api-types/generated 类不进 HEAD
+ * 也不在会话文件集）→ 快照内 lint/test 环境性假败。按主仓 local.yaml 的 copy 清单把
+ * 生成物从主仓 junction 链接进快照（失败回退复制），消除环境性假败。
+ *
+ * 调用契约：cwd=**主仓**根（local.yaml 从主仓读——快照内 local.yaml 是稍后复制的复制件，
+ * copy 面必须先于复制生效）；在 overlay 之后调用（dst 已存在 = overlay 已覆盖本变更最新态，
+ * 跳过不覆盖）。
+ *
+ * 逐条容错（fail-open，与本文件快照基建策略一致，任何失败不作废快照）：路径规整
+ *（String、反斜杠→正斜杠、trim）；含 '..' 或绝对路径形态（POSIX / 与 Windows 盘符）拒绝
+ * warn 跳过；主仓不存在 warn 跳过；junction 抛错回退递归 copy（目录）/ copyFileSync（文件）；
+ * 再失败 warn 跳过。成功 ≥1 条 console.log 一行报备。未配置/空清单/读失败 → 全段空转
+ * 零输出零行为（存量 local.yaml 逐字节不变）。
+ *
+ * ⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录（constraints 明示，
+ * config-schema desc 与 renderExample 注释同步警告）。
+ *
+ * 新增内部导出（symbol-impact：内部测试直测边界条目用；createGateSnapshot 唯一运行时消费方）。
+ * @param {string} cwd 主仓根
+ * @param {string} snapshotRoot 快照根
+ * @returns {number} 成功链接/复制的条目数
+ */
+export function applyGateSnapshotCopy(cwd, snapshotRoot) {
+  let entries = []
+  try {
+    const cfgPath = join(cwd, '.sillyspec', 'local.yaml')
+    if (!existsSync(cfgPath)) return 0
+    entries = parseGateSnapshotCopy(readFileSync(cfgPath, 'utf8'))
+  } catch { return 0 } // 读侧容错：解析/读失败与未配置同兜底（空转，不连坐快照）
+  if (!Array.isArray(entries) || entries.length === 0) return 0
+  let linked = 0
+  for (const raw of entries) {
+    const p = String(raw).replace(/\\/g, '/').trim()
+    if (!p) continue
+    if (p.includes('..') || p.startsWith('/') || /^[A-Za-z]:\//.test(p)) {
+      console.warn(`⚠️ gate_snapshot.copy 条目「${p}」含 .. 或绝对路径形态，拒绝（快照外写面）——跳过`)
+      continue
+    }
+    let srcStat = null
+    try { srcStat = statSync(join(cwd, p)) } catch { /* 主仓不存在，下方 warn 跳过 */ }
+    if (!srcStat) {
+      console.warn(`⚠️ gate_snapshot.copy 条目主仓不存在，跳过：${p}`)
+      continue
+    }
+    const src = join(cwd, p)
+    const dst = join(snapshotRoot, p)
+    if (existsSync(dst)) continue // overlay 已覆盖（本变更最新态优先）
+    try {
+      mkdirSync(dirname(dst), { recursive: true })
+      let viaLink = false
+      try {
+        symlinkSync(src, dst, 'junction')
+        // Windows 文件 junction 可「建成但不解析」（重解析点指向非目录，symlinkSync 不抛、
+        // existsSync 为假）——链接后验真，假成功回退复制（平台差异实测坑）
+        viaLink = existsSync(dst)
+      } catch { viaLink = false }
+      if (!viaLink) {
+        try { rmSync(dst, { recursive: true, force: true }) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
+        if (srcStat.isDirectory()) copyDirRecursive(src, dst)
+        else copyFileSync(src, dst)
+      }
+      linked++
+    } catch (e) {
+      console.warn(`⚠️ gate_snapshot.copy 条目「${p}」junction/复制均失败：${e && e.message ? e.message : e}——跳过（不作废快照）`)
+    }
+  }
+  if (linked > 0) {
+    console.log(`🔬 门禁快照 copy 面：${linked} 个 gate_snapshot.copy 条目自主仓 junction/复制进快照（⚠️ junction 是活链接，快照内再跑生成命令会写穿到主仓该目录）`)
+  }
+  return linked
+}
+
+/**
  * 创建隔离快照：HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml。
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
@@ -190,6 +334,13 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
       try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch {}
       return null
     }
+
+    // gate_snapshot.copy 面（R4 / D-002@v1，2026-09-16-friction5-hardening）：gitignored
+    // 生成物从主仓 junction/复制进快照。位置=环境目录链接段之后（环境优先级最高）、
+    // local.yaml 复制段之前（从主仓 cwd 读原文——快照内 local.yaml 是稍后才复制的复制件，
+    // 且 copy 面必须先于复制生效）；overlay 已在上面完成（dst 已存在即跳过，本变更最新态优先）。
+    // 未配置 gate_snapshot.copy → 全段空转零行为（见 applyGateSnapshotCopy jsdoc）。
+    applyGateSnapshotCopy(cwd, snapshotRoot)
 
     // local.yaml（gitignore 不进 HEAD；门禁命令配置来源）+ package-lock 保持 HEAD 版（npm test 不装新依赖）
     for (const cfg of [join('.sillyspec', 'local.yaml')]) {

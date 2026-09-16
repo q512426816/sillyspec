@@ -53,6 +53,14 @@ const EVIDENCE_LINE_RE = /^- (task-\d+):\s*(satisfied|missing|partial)\b([^\n]*)
 const RECEIPT_LINE_RE = /^- claim:\s*([^|｜\n]+)[|｜]\s*command:\s*([^|｜\n]+)[|｜]\s*exit:\s*(\d+)\s*[|｜]\s*log:\s*(.+)$/
 
 /**
+ * 多行 YAML 形态续行：`  key: value`（缩进键值行，2026-09-16-friction5-hardening FR-01 / D-001@v1）。
+ * 单行管道形态 agent 手写时列错位/字段序调换/多行书写整行不命中 → 回执槽收 0 条 →
+ * integration-critical 误报无绿回执——多行聚合根除形态自由度问题；字段序无关（command 可在
+ * claim 前），聚合遇首个不匹配行（下一列表项/非缩进行/空行/标题）即止。
+ */
+const RECEIPT_CONT_LINE_RE = /^[ \t]+([A-Za-z_][\w-]*):\s*(.*)$/
+
+/**
  * 解析 verify-result.md 的两个受控槽段（D-001@v2 slot-backfill 录入界面）。
  * 占位形态（<待填：三选一> / <待填：0 或非 0>）不含枚举词，行首锚定 + 枚举词双保险 fail-closed。
  * @param {string} mdText verify-result.md 全文（LF 归一由调用方 readFileSync 层负责或此处容错）
@@ -101,15 +109,47 @@ export function parseEvidenceSlots(mdText) {
 
   const runtimeEvidence = []
   if (receiptBody) {
-    for (const line of receiptBody) {
-      const m = line.match(RECEIPT_LINE_RE)
-      if (!m) continue
-      runtimeEvidence.push({
-        claim: m[1].trim(),
-        command: m[2].trim(),
-        exitCode: Number(m[3]),
-        logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
-      })
+    // 回执双形态解析（FR-01 / D-001@v1）：①单行管道形态 RECEIPT_LINE_RE 命中即收（正则与
+    // 字段语义逐字节不变，存量回执零回归）；②不命中且行首 `- claim:` 起头时进入多行 YAML
+    // 聚合——收集缩进续行（RECEIPT_CONT_LINE_RE）为 key→value（值 trim、剥首尾成对反引号），
+    // 首行行内剩余只作 claim 值（claim 含管道符不截断）；四字段 = claim/command 非空（trim 后）
+    // + exit 纯数字 + log 非空（值内 ｜/| 尾注取首段，同单行口径），齐才 push——任一缺失/空
+    // 整条不收（fail-closed 宁漏不误收，坑 receipt-fullwidth-parse 形态自由度的根除收口）。
+    const stripPairedBackticks = (v) => {
+      const t = v.trim()
+      return t.length >= 2 && t.startsWith('`') && t.endsWith('`') ? t.slice(1, -1) : t
+    }
+    for (let i = 0; i < receiptBody.length; i++) {
+      const m = receiptBody[i].match(RECEIPT_LINE_RE)
+      if (m) {
+        runtimeEvidence.push({
+          claim: m[1].trim(),
+          command: m[2].trim(),
+          exitCode: Number(m[3]),
+          logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
+        })
+        continue
+      }
+      const head = receiptBody[i].match(/^-\s*claim:\s*(.*)$/)
+      if (!head) continue
+      const fields = {}
+      let j = i + 1
+      while (j < receiptBody.length) {
+        const cm = receiptBody[j].match(RECEIPT_CONT_LINE_RE)
+        if (!cm) break
+        if (!(cm[1] in fields)) fields[cm[1]] = stripPairedBackticks(cm[2])
+        j++
+      }
+      i = j - 1 // 聚合消费至 j-1，回退一格交还外层 for 推进
+      const claim = [head[1].trim(), typeof fields.claim === 'string' ? fields.claim.trim() : '']
+        .filter(s => s.length > 0).join(' ').trim()
+      const command = typeof fields.command === 'string' ? fields.command : ''
+      const exit = typeof fields.exit === 'string' ? fields.exit.trim() : ''
+      const log = typeof fields.log === 'string'
+        ? fields.log.split(/[|｜]/)[0].trim().replace(/^`|`$/g, '')
+        : ''
+      if (!claim || !command || !/^\d+$/.test(exit) || !log) continue
+      runtimeEvidence.push({ claim, command, exitCode: Number(exit), logPath: log })
     }
   }
 

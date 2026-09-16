@@ -1150,7 +1150,12 @@ export function backfillMissingEvidenceSlots(mdPath, requiredEvidenceItems = [])
     blocks.push([
       RECEIPT_SLOT_HEADING, '[层：自述声明——CLI 一致性校验]', '',
       '<!-- integration-critical/deployment-critical 变更必填；其余写「无」 -->',
-      '- claim: <待填：一句话> | command: <待填：命令> | exit: <待填：0 或非 0> | log: <待填：日志路径>',
+      '<!-- 回执双形态（2026-09-16-friction5-hardening FR-01）：下方多行 YAML 形态为推荐写法（字段序无关）；',
+      '     亦认单行管道形态：- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径> -->',
+      '- claim: <待填：一句话>',
+      '  command: <待填：命令>',
+      '  exit: <待填：0 或非 0>',
+      '  log: <待填：日志路径>',
       '',
     ].join('\n'))
     added.push(RECEIPT_SLOT_HEADING)
@@ -1339,7 +1344,12 @@ export function generateVerifyResultSkeleton(result) {
     '',
     '## 集成验证回执 [层：自述声明——CLI 一致性校验]',
     '<!-- integration-critical/deployment-critical 变更必填；其余写「无」 -->',
-    '- claim: <待填：一句话> | command: <待填：命令> | exit: <待填：0 或非 0> | log: <待填：日志路径>',
+    '<!-- 回执双形态（2026-09-16-friction5-hardening FR-01）：下方多行 YAML 形态为推荐写法（字段序无关）；',
+    '     亦认单行管道形态：- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径> -->',
+    '- claim: <待填：一句话>',
+    '  command: <待填：命令>',
+    '  exit: <待填：0 或非 0>',
+    '  log: <待填：日志路径>',
     '',
     '## 任务完成度 [层：人工判断]',
     '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->',

@@ -91,7 +91,9 @@ allowed_paths:
   const m = resolveApplyAllowSet(tmpDir, cn);
   assert.ok(m instanceof Map, '返回 Map');
   assert.deepEqual([...m.keys()], ['main'], '单仓 → 仅 main 键');
-  assert.deepEqual([...m.get('main')].sort(), ['src/a.js', 'test/a.test.mjs'], 'main Set = design ∪ task allowed_paths');
+  // D-003@v2（2026-09-16-friction5-hardening R3）：main 声明面非空 → 条件加白 .sillyspec/docs/
+  //（断言语义从「design 清单集」变「清单 ∪ docs 白名单集」——有意语义变更的合法断言更新）
+  assert.deepEqual([...m.get('main')].sort(), ['.sillyspec/docs/', 'src/a.js', 'test/a.test.mjs'], 'main Set = design ∪ task allowed_paths ∪ .sillyspec/docs/ 白名单');
 });
 
 test('resolveApplyAllowSet 跨仓 change 按 task 卡 repo: 切片到多键（A4）', () => {
@@ -119,7 +121,8 @@ allowed_paths:
 `);
   const m = resolveApplyAllowSet(tmpDir, cn);
   assert.deepEqual([...m.keys()].sort(), ['main', 'sillyspec'], 'Map 含 main + sillyspec');
-  assert.deepEqual([...m.get('main')].sort(), ['src/main.js'], 'main = design §6 ∪ 主仓 task allowed_paths');
+  // D-003@v2：main 声明面非空（design src/main.js）→ 加白 .sillyspec/docs/ 只进 main，跨仓键不受影响
+  assert.deepEqual([...m.get('main')].sort(), ['.sillyspec/docs/', 'src/main.js'], 'main = design §6 ∪ 主仓 task allowed_paths ∪ .sillyspec/docs/ 白名单');
   assert.deepEqual([...m.get('sillyspec')].sort(), ['src/cross.js', 'test/cross.test.mjs'], 'sillyspec = 跨仓 task allowed_paths（相对跨仓仓根）');
 });
 

@@ -549,10 +549,25 @@ function detectNoOpFiles(projectRoot, worktreePath, candidates) {
  * changes/ 实体在 specRoot，本地目录常为空——旧硬编码 CHANGES_REL 恒读空 → allow 集恒空 →
  * Gate1 整批误拦（sync.js BUG-01 同族）。
  *
+ * **.sillyspec/docs/ 条件白名单 + declaredFace 快照（D-003@v2，2026-09-16-friction5-hardening
+ * R3/FR-03）**：坑 apply-docs-sync-blocked（用户 2026-09-16 驾驭小结③）——filterDeliverableFiles
+ * 明确保留 `.sillyspec/docs/` 为交付物，而 allow 面（design §6 ∪ allowed_paths）不含 docs 时
+ * Gate1 又拦同一文件，「filter 保交付、Gate1 拦交付」两道口径矛盾，approved 文档同步照样 BLOCKED。
+ * 修正：聚合完成后仅当 main 仓声明面非空（mainSet.size > 0）才 mainSet.add('.sillyspec/docs/')
+ * （尾斜杠写法——pathMatches 目录前缀语义放行整目录，step3.5 getBlobHashMap 对目录条目 inert）。
+ * **必须条件加白**（design-grill M5）：无条件加白会把空清单翻转成非空——design 与任务卡全缺的
+ * 存量变更从「fail-open（Gate1 跳过、patch 全量）」变成「docs-only 单条目面 → 非 docs 交付全
+ * BLOCKED + patch 静默收窄」，故空清单维持空（零行为变化）。加白前快照 declaredFace = 原
+ * 声明面（design §6 ∪ allowed_paths，不含白名单条目），以 Map 附挂属性 repoMap.declaredFace
+ * 带出（Map 方法全保留，既有调用点零破坏）——Gate1 hasAllowList 判定与 docs 越权审计报备均以
+ * declaredFace 为口径（M3：allowed_paths 已声明的 docs 文件不误报越权）。白名单只进 main 仓
+ * Set（`.sillyspec/docs/` 是主仓 specRoot 概念），跨仓 Map 切片不受影响。
+ *
  * @param {string} projectRoot - 主仓库根
  * @param {string} changeName - 变更名
  * @param {{ specBase?: string }} [opts] specBase 显式传入（平台模式必传 specRoot）
- * @returns {Map<string, Set<string>>} repoKey → 并集清单 Set（无 design 清单且无 task 卡片时为空 Map）
+ * @returns {Map<string, Set<string>>} repoKey → 并集清单 Set（无 design 清单且无 task 卡片时为空 Map）；
+ *   附挂属性 declaredFace: Set<string>——main 仓加白前原声明面（审计口径，docs 白名单条目不在其中）
  */
 export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
   const repoMap = new Map();
@@ -583,6 +598,12 @@ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
       for (const p of parseAllowedPaths(content)) repoSet.add(p);
     }
   }
+
+  // D-003@v2：.sillyspec/docs/ 条件加白——仅 main 仓声明面非空才加（空清单维持 fail-open，
+  // 见函数头 jsdoc）。加白前快照 declaredFace（原声明面）供 Gate1 审计口径用（Map 附挂带出）。
+  const declaredFace = new Set(mainSet);
+  if (mainSet.size > 0) mainSet.add('.sillyspec/docs/');
+  repoMap.declaredFace = declaredFace;
   return repoMap;
 }
 
@@ -1359,7 +1380,29 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     ]);
   }
   const allowSet = allowMap.get('main') || new Set();
-  const hasAllowList = allowSet.size > 0;
+  // D-003@v2（R3/FR-03）：hasAllowList 与 docs 审计报备以 declaredFace（design §6 ∪
+  // allowed_paths 原面，resolveApplyAllowSet 加白前快照、Map 附挂带出）为口径——Gate1 违规
+  // 判定仍消费 allowSet（已含 .sillyspec/docs/ 白名单条目 = 放行 docs）。旧调用路径拿不到
+  // declaredFace 时回退 mainSet 判定保持兼容（条件加白下两者空性等价，纯口径统一）。
+  const declaredFace = (allowMap && allowMap.declaredFace instanceof Set) ? allowMap.declaredFace : allowSet;
+  const hasAllowList = declaredFace.size > 0;
+
+  // --- 3c. docs 白名单审计报备（D-003@v2，风险 R-01 应对）---
+  // 白名单放行是有意的语义放宽（approved 文档同步不再拦），审计面由此报备行保住：实际
+  // changedFiles 中以 .sillyspec/docs/ 开头且不被 declaredFace 任一条目 pathMatches 覆盖的
+  // 文件 = 纯靠白名单放行（design §6 / 任务卡 allowed_paths 均未声明）——逐名列出供追认/
+  // 审计，docs-check 独立校验内容质量。declaredFace 命中（已声明）不报备（M3 口径）。
+  // 无清单（fail-open）时白名单未生效，不报备（与旧版零行为差异）。
+  {
+    const docsAdmitted = hasAllowList
+      ? changedFiles.filter(f => f.startsWith('.sillyspec/docs/') && ![...declaredFace].some(ap => pathMatches(f, ap)))
+      : [];
+    if (docsAdmitted.length > 0) {
+      result.warnings = (result.warnings || []).concat([
+        `${docsAdmitted.length} 个 .sillyspec/docs/ 文件经模块文档白名单放行（未在 design §6/任务卡 allowed_paths 声明，docs-check 独立校验内容）：${docsAdmitted.join('、')}`
+      ]);
+    }
+  }
 
   // --- 3.5 主干已提交推进检测：hashMismatch 前移（Grill P0 修复，design §step 顺序修正）---
   // 原在 step5b，但 step4.5/5a dirty 拦截短路在 step5b 之前，致 rescue 拿不到 hashMismatchFiles
