@@ -1,0 +1,241 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 5b1cfbb..f362f6a 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -42,3 +42,4 @@
+ - 2026-09-14-knowledge-loop-close | knowledge classify/stats 子命令（动态 import）+ quick/execute prompt 知识注入段
+ - 2026-09-16-friction5-hardening | plan-postcheck 顶层重复键硬检测（FR-02/D-004@v1）：新导出 detectDuplicateTopKeys(fmText) 纯函数（^key: 顶格锚定+CRLF 归一+1-based 行号，块列表/缩进子键/goal 折叠块天然不误报）；validatePlanFeasibility 每卡在必要字段检查前接线，重复键 error 阻断（文案含键名/次数/行号/「保留正确一处删其余」指引）——根治骨架反填 depends_on 后 agent 重复手填时 js-yaml throw 被四处 catch 静默吞字段（repo=null/契约空/命令不校验/best-effort 跳过）的入口失真。新增 test/taskcard-duplicate-key.test.mjs（4）；stages/verify.js 回执槽说明同步双形态（R1 文案面）
+ | 2026-09-17 | ql-20260917-001-7cd6（quick） | execute 歧义裁决权限声明（Superpowers v6.3 recorded rulings 采纳⑤剩余）：「确认执行范围」步新增「歧义裁决权限」段——非破坏性歧义（可逆/局部/不越 allowed_paths/不推翻 D-xxx）主代理自行裁决+落盘主仓 decisions.md 新条目（## D-xxx@v1: 接续编号，正文=歧义/选择/理由/影响 task）+Wave 完成披露「执行期裁决 N 条」供 review/verify 对账；破坏性/不可逆（删数据/重写他人模块/改共享配置或门禁/跳过测试/扩边界/推翻决策/跨仓）--wait 停人；拿不准按破坏性（fail-closed）；重复歧义引用既有条目。buildWavePrompt 加紧凑回呼（子代理报告冲突回主代理裁决、子代理不自行记 decisions）。新增 test/execute-ambiguity-ruling.test.mjs（15 断言）；docs/prompt/execute.md 镜像同步；docs check --fix 顺带重锚 architecture-4a/platform-interface-map/prompt-control-debt 三文档 execute.js 行漂移。 |
++| 2026-09-17 | ql-20260917-002-5d8f（quick） | plan 全局硬约束段 + 实现者子代理触达（Superpowers v6.0 writing-plans 采纳④；Interfaces 半已完成——TaskCard provides/expects_from + postcheck 硬校验早已有，本项只补约束触达）：plan.js full 模板「## 任务总表/关键路径」后新增「## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）」段（版本底线/依赖限制/命名文案/精确值/兼容策略/非目标边界；无跨 task 硬约束可省略）+ 汇总指引句同步；execute.js buildWavePrompt 机械提取 plan.md 该段作子代理 prompt 要点第 9 条逐字下发（「与本 task 蓝图冲突时以本段为准并上报主代理」；designHotzone 只达 Wave 协调者层，本段补齐子代理触达）——advisory：段缺/空体/坏文件零注入零阻断（对齐 hotzone 模式），超 2400 字截断。新增 test/plan-global-constraints.test.mjs（14 断言）；docs/prompt/plan.md 镜像同步；platform-interface-map 行漂移重锚。plan-postcheck 存在性校验（warning 级）留账未做。 |
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index aaf1bf5..9e17491 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -479,7 +479,7 @@
+         "index": 1,
+         "id": "generate_plan",
+         "name": "生成分级计划",
+-        "prompt": "根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。\n\n### 操作\n1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）\n2. 读取 tasks.md 和 design.md 了解需求范围\n3. 按 plan_level 选择对应模板输出\n4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围\n5. 保存 plan.md（审查在下一步\"审查计划\"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）\n\n> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**\n> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）\n> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）\n> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）\n> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）\n\n---\n\n#### plan_level = none\n生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图。格式：\n```markdown\n---\nplan_level: none\n---\n\n# 计划跳过\n\n## 原因\n<一句话说明判定理由>\n\n## 建议直接 execute\n直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。\n\n## 验收\n- 修改范围符合用户需求\n- 不引入额外无关变更\n- 必要测试或检查通过\n```\n同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。\n**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。\n\n---\n\n#### plan_level = light\n生成轻量 plan.md，保存到变更目录。只包含以下四部分：\n\n```markdown\n---\nplan_level: light\n---\n\n# 轻量计划（Light Plan）：<需求简述>\n\n## 来源\n直接引用 brainstorm 结论或用户原始需求，不重新扩写。\n\n## 范围\n- 涉及的文件/模块清单\n\n## 验收\n- 具体可验证的验收条目\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。\n\nlight 计划的约束：\n- **禁止**生成 Mermaid 图\n- **禁止**估时\n- **禁止**泛泛风险分析（如\"需要充分测试\"）\n- **禁止**放实现细节（函数签名、代码示例）\n- 来源/目标直接引用已有文档，不重新生成\n- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md\n- 任务清单（tasks.md）控制在 10 条以内\n- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行\n\n---\n\n#### plan_level = full\n生成完整 plan.md，保存到变更目录。格式如下：\n\n```markdown\n---\nplan_level: full\n---\n\n# 实现计划（Plan）\n\n## Spike 前置验证（如需要）\n| Spike | 验证内容 | 不通过后果 |\n|---|---|---|\n| spike-01 | ... | task-XX 推翻重设计 |\n\n> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。\n\n## Wave 1（并行，无依赖）\n- task-01\n- task-02\n\n## Wave 2（依赖 Wave 1）\n- task-03\n\n## 任务总表\n| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |\n|---|---|---|---|---|---|---|\n| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |\n| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |\n| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |\n\n## 关键路径\ntask-01 → task-03（最长路径，决定最短交付周期）\n\n## 全局验收标准\n1. 所有单元测试通过\n2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确\n3. （brownfield）未配置新功能时行为不变\n\n> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n\nfull 计划的约束：\n- **禁止**估时（任务总表不含估时列）\n- **禁止**泛泛风险分析（\"需要充分测试\"类废话转为具体验收条目）\n- Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）\n- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）\n- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局验收标准，**不放实现细节**\n- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单\n- 实现细节写到后续的 tasks/task-NN.md 中\n- 每个任务编号格式：task-01、task-02 ...\n- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）\n- 总任务数控制在 15 个以内\n\n### Spike 前置验证（仅 full）\n当存在技术不确定性时，在 Wave 之前设计 Spike：\n- 涉及新技术栈/未经验证的集成 → 需要 Spike\n- 涉及安全隔离/性能瓶颈 → 需要 Spike\n- 纯业务逻辑/确定的技术方案 → 不需要 Spike\n- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果\n\n### 批量模式指引（仅 full）\n如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：\n- ❌ 不要列出每个实例作为独立任务\n- ❌ 不要在文档中嵌入数据\n- ✅ 设计通用架构，Wave 1 聚焦架构\n- ✅ 数据转换用脚本完成，单独一个 Wave\n- ✅ 总任务数控制在 10 个以内\n\n---\n\n### 通用操作（所有级别）\n1. 读取 tasks.md 获取任务列表（注册表唯一真相）\n2. 读取 design.md 获取文件变更清单\n3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）\n4. 按对应级别模板生成内容\n5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）\n6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）\n**plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**\n\n---\n\n### 输出\nplan_level + 计划内容（审查在下一步独立进行）",
++        "prompt": "根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。\n\n### 操作\n1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）\n2. 读取 tasks.md 和 design.md 了解需求范围\n3. 按 plan_level 选择对应模板输出\n4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围\n5. 保存 plan.md（审查在下一步\"审查计划\"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）\n\n> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**\n> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）\n> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）\n> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）\n> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）\n\n---\n\n#### plan_level = none\n生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图。格式：\n```markdown\n---\nplan_level: none\n---\n\n# 计划跳过\n\n## 原因\n<一句话说明判定理由>\n\n## 建议直接 execute\n直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。\n\n## 验收\n- 修改范围符合用户需求\n- 不引入额外无关变更\n- 必要测试或检查通过\n```\n同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。\n**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。\n\n---\n\n#### plan_level = light\n生成轻量 plan.md，保存到变更目录。只包含以下四部分：\n\n```markdown\n---\nplan_level: light\n---\n\n# 轻量计划（Light Plan）：<需求简述>\n\n## 来源\n直接引用 brainstorm 结论或用户原始需求，不重新扩写。\n\n## 范围\n- 涉及的文件/模块清单\n\n## 验收\n- 具体可验证的验收条目\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。\n\nlight 计划的约束：\n- **禁止**生成 Mermaid 图\n- **禁止**估时\n- **禁止**泛泛风险分析（如\"需要充分测试\"）\n- **禁止**放实现细节（函数签名、代码示例）\n- 来源/目标直接引用已有文档，不重新生成\n- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md\n- 任务清单（tasks.md）控制在 10 条以内\n- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行\n\n---\n\n#### plan_level = full\n生成完整 plan.md，保存到变更目录。格式如下：\n\n```markdown\n---\nplan_level: full\n---\n\n# 实现计划（Plan）\n\n## Spike 前置验证（如需要）\n| Spike | 验证内容 | 不通过后果 |\n|---|---|---|\n| spike-01 | ... | task-XX 推翻重设计 |\n\n> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。\n\n## Wave 1（并行，无依赖）\n- task-01\n- task-02\n\n## Wave 2（依赖 Wave 1）\n- task-03\n\n## 任务总表\n| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |\n|---|---|---|---|---|---|---|\n| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |\n| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |\n| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |\n\n## 关键路径\ntask-01 → task-03（最长路径，决定最短交付周期）\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）\n- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文\n\n## 全局验收标准\n1. 所有单元测试通过\n2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确\n3. （brownfield）未配置新功能时行为不变\n\n> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n\nfull 计划的约束：\n- **禁止**估时（任务总表不含估时列）\n- **禁止**泛泛风险分析（\"需要充分测试\"类废话转为具体验收条目）\n- Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）\n- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）\n- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**\n- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单\n- 实现细节写到后续的 tasks/task-NN.md 中\n- 每个任务编号格式：task-01、task-02 ...\n- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）\n- 总任务数控制在 15 个以内\n\n### Spike 前置验证（仅 full）\n当存在技术不确定性时，在 Wave 之前设计 Spike：\n- 涉及新技术栈/未经验证的集成 → 需要 Spike\n- 涉及安全隔离/性能瓶颈 → 需要 Spike\n- 纯业务逻辑/确定的技术方案 → 不需要 Spike\n- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果\n\n### 批量模式指引（仅 full）\n如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：\n- ❌ 不要列出每个实例作为独立任务\n- ❌ 不要在文档中嵌入数据\n- ✅ 设计通用架构，Wave 1 聚焦架构\n- ✅ 数据转换用脚本完成，单独一个 Wave\n- ✅ 总任务数控制在 10 个以内\n\n---\n\n### 通用操作（所有级别）\n1. 读取 tasks.md 获取任务列表（注册表唯一真相）\n2. 读取 design.md 获取文件变更清单\n3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）\n4. 按对应级别模板生成内容\n5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）\n6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）\n**plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**\n\n---\n\n### 输出\nplan_level + 计划内容（审查在下一步独立进行）",
+         "outputHint": "plan_level + 计划内容",
+         "optional": false
+       },
+diff --git a/docs/prompt/plan.md b/docs/prompt/plan.md
+index bfb3551..4eb5c1f 100644
+--- a/docs/prompt/plan.md
++++ b/docs/prompt/plan.md
+@@ -220,6 +220,10 @@ plan_level: full
+ ## 关键路径
+ task-01 → task-03（最长路径，决定最短交付周期）
+ 
++## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）
++- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）
++- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文
++
+ ## 全局验收标准
+ 1. 所有单元测试通过
+ 2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确
+@@ -238,7 +242,7 @@ full 计划的约束：
+ - **禁止**泛泛风险分析（"需要充分测试"类废话转为具体验收条目）
+ - Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）
+ - **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）
+-- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局验收标准，**不放实现细节**
++- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**
+ - 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）
+ - 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单
+ - 实现细节写到后续的 tasks/task-NN.md 中
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index e7ee138..87d0058 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -106,7 +106,7 @@ mcp:
+ ### 派发决策链
+ 1. **`probeSillyHub()`**（`dispatch/probe.js:133`）：no-config 同步快返回 → 负面缓存(TTL) → `probeDaemon` → `listTools` 预热路径A → root_path 越界校验 → `{available}`。
+ 2. **`renderDispatchInstruction(contract, probe)`**（`dispatch/strategy.js:69`）：`probe.available` → backend=`sillyhub`（注入 SillyHub 指令，含一 Wave 一 mission + dispatch_worker 参数 + 轮询 + kill lease + 回收约定）；否则 backend=`local`。**始终附 Local 兜底指令全文**。
+-   - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:682`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:1226`），probe 不参与。
++   - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:682`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:1246`），probe 不参与。
+ 3. **路径A 降级**（`backends/sillyhub-mcp.js:104` `isPathASupported`）：env `SILLYHUB_PATH_A=1` 强开 > probe 预热缓存；未支持则指令追加降级提示，per-worker 回退 Local，**绝不硬试 MCP**（R-04）。
+ 4. **回收**（D-004）：worker **绝不 git commit**，SillySpec 自己 diff worktree 写 review.json，**不调 SillyHub 合并 tool**（`backends/sillyhub-mcp.js:47` `SILLYHUB_RECYCLE_RULE`）。
+ 
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index d98c7b0..4d51f79 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -1021,6 +1021,30 @@ ${indexLines}
+     }
+   } catch { /* 热区提取 best-effort：失败不注入 */ }
+ 
++  // ── 全局硬约束段（ql-20260917-002，Superpowers v6.0 writing-plans 采纳④）：plan.md
++  // 「## 全局硬约束」段机械提取，作为子代理 prompt 要点第 9 条逐字下发——实现者子代理
++  // 只读自己的任务卡 + 本段，不重读 design 全文；designHotzone 只达 Wave 协调者层，本段
++  // 补齐子代理触达。advisory：段缺省/空体/提取失败零注入零阻断（对齐 hotzone 模式）；
++  // 超 2400 字截断（全文让子代理读 plan.md 该段）。
++  let globalConstraintsBlock = ''
++  try {
++    if (changeDir) {
++      const planLines = memo('planLines', () => {
++        const pp = path.join(changeDir, 'plan.md')
++        return existsSync(pp) ? readFileSync(pp, 'utf8').replace(/\r\n/g, '\n').split('\n') : []
++      })
++      const gcStart = planLines.findIndex(l => /^##\s*全局硬约束/.test(l))
++      if (gcStart >= 0) {
++        const gcEnd = planLines.findIndex((l, i) => i > gcStart && /^##\s+/.test(l))
++        const gcBody = planLines.slice(gcStart + 1, gcEnd < 0 ? planLines.length : gcEnd).join('\n').trim()
++        if (gcBody) {
++          const capped = gcBody.length > 2400 ? gcBody.slice(0, 2400) + '\n…（超 2400 字截断，全文读 plan.md 该段）' : gcBody
++          globalConstraintsBlock = `\n9. **全局硬约束（plan.md 逐字下发，每个子代理必须遵守——与本 task 蓝图冲突时以本段为准并上报主代理）**：\n\n${capped}\n`
++        }
++      }
++    }
++  } catch { /* 全局硬约束提取 best-effort：失败不注入 */ }
++
+   // ── 决策锚点触碰事实（W-A 主渲染点，D-003）：changedFiles 口径与 run/prompt.js {DOCS_DEBT}
+   // 现算同源——collectExecuteChangedFiles（porcelain 未提交 ∪ baseline..HEAD）唯一实现，勿双写。
+   // 单过流程前缀第 4 步渲染 {DOCS_DEBT} 时 changedFiles 恒空，Wave 步（重入/续跑时已含前置
+@@ -1275,7 +1299,7 @@ ${taskSummary}
+ 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
+ 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
+ 8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
+-
++${globalConstraintsBlock}
+ {{include: testcase-design}}
+ 
+ ${designHotzone}${decisionTouchSection}${waveKnowledgeSection}
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index cc74dbb..9c34dfc 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -245,6 +245,10 @@ plan_level: full
+ ## 关键路径
+ task-01 → task-03（最长路径，决定最短交付周期）
+ 
++## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）
++- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）
++- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文
++
+ ## 全局验收标准
+ 1. 所有单元测试通过
+ 2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确
+@@ -263,7 +267,7 @@ full 计划的约束：
+ - **禁止**泛泛风险分析（"需要充分测试"类废话转为具体验收条目）
+ - Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）
+ - **Wave 段 ID 引用行必须保留**（\`- task-XX\` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）
+-- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局验收标准，**不放实现细节**
++- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**
+ - 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）
+ - 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单
+ - 实现细节写到后续的 tasks/task-NN.md 中
+diff --git a/test/plan-global-constraints.test.mjs b/test/plan-global-constraints.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/plan-global-constraints.test.mjs
+@@ -0,0 +1,109 @@
++/**
++ * plan 全局硬约束段 + 实现者子代理触达单测（ql-20260917-002，Superpowers v6.0 writing-plans 采纳④）
++ *
++ * 背景：plan.md 原无「绑定所有 task 的硬约束」承载体（版本底线/依赖限制/命名/精确值/兼容策略），
++ * execute 的 designHotzone 只注入 Wave 协调者层——实现者子代理只读自己的任务卡，不被 design
++ * 硬约束触达（obra/superpowers v6.0：约束 verbatim 抄进 plan 才真正到达下游 implementer/reviewer，
++ * 实测如此写的 plan 一轮修复过、对照组 2-4 轮还漏真 bug）。
++ *
++ * 锁死契约：
++ * 1. plan.js Step「生成分级计划」prompt 的 full 模板含「## 全局硬约束（从 design.md 逐字抄录，
++ *    绑定所有 task）」段与「逐字抄录」语义指引
++ * 2. buildWavePrompt 机械提取 plan.md 该段随子代理 prompt 要点下发（第 9 条）：段在→注入正文
++ *    +「与本 task 蓝图冲突时以本段为准并上报」；段缺/空/坏→零注入零阻断（advisory）
++ * 3. 超 2400 字截断带提示；段在文件尾（无后续 ##）也能提取
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { buildWavePrompt, buildExecuteSteps } from '../src/stages/execute.js'
++import { buildPlanSteps } from '../src/stages/plan.js'
++
++let passed = 0
++let failed = 0
++function assert(cond, msg) {
++  if (cond) { console.log(`✅ ${msg}`); passed++ }
++  else { console.error(`❌ ${msg}`); failed++ }
++}
++
++function makeChangeDir(planMd) {
++  const changeDir = mkdtempSync(join(tmpdir(), 'plan-gc-'))
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), '# task-01 测试任务\n\n实现示例功能。\n')
++  if (planMd !== null) writeFileSync(join(changeDir, 'plan.md'), planMd)
++  return changeDir
++}
++
++const WAVE = { index: 0, tasks: [{ name: 'task-01 测试任务', file: 'tasks/task-01.md' }] }
++
++// ── 场景 1：plan.js 模板含全局硬约束段与逐字抄录指引 ─────────────────────────
++{
++  const steps = buildPlanSteps(null)
++  const genStep = steps.find(s => (s.name || '').includes('生成分级计划') || (s.name || '').includes('分级计划'))
++  assert(genStep !== undefined, '场景1：生成分级计划步骤存在')
++  const p = genStep.prompt
++  assert(p.includes('## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）'), '场景1：模板含段标题（逐字形态）')
++  assert(p.includes('逐字抄录'), '场景1：逐字抄录语义指引在位')
++  assert(p.includes('不重读 design 全文') || p.includes('子代理只读自己的任务卡'), '场景1：触达理由（子代理只读卡+本段）在位')
++}
++
++// ── 场景 2：plan.md 有段 → 注入第 9 条要点 ────────────────────────────────────
++{
++  const cd = makeChangeDir('# 计划\n\n## Wave 1\n- task-01\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- Node ≥ 20\n- 禁止新增运行时依赖\n- 错误文案一律中文\n\n## 全局验收标准\n1. 测试通过\n')
++  const wp = buildWavePrompt(WAVE, 1, cd, join(cd, 'wt'), {})
++  assert(wp.includes('全局硬约束（plan.md 逐字下发'), '场景2：第 9 条要点标题在位')
++  assert(wp.includes('Node ≥ 20') && wp.includes('禁止新增运行时依赖'), '场景2：约束正文逐字注入')
++  assert(wp.includes('以本段为准并上报主代理'), '场景2：冲突时以本段为准+上报语义在位')
++  rmSync(cd, { recursive: true, force: true })
++}
++
++// ── 场景 3：无段 / 无 plan.md → 零注入零阻断 ─────────────────────────────────
++{
++  const cdNoSec = makeChangeDir('# 计划\n\n## Wave 1\n- task-01\n\n## 全局验收标准\n1. 测试通过\n')
++  const wp1 = buildWavePrompt(WAVE, 1, cdNoSec, join(cdNoSec, 'wt'), {})
++  assert(!wp1.includes('全局硬约束（plan.md 逐字下发'), '场景3a：无段→不注入')
++  rmSync(cdNoSec, { recursive: true, force: true })
++
++  const cdNoPlan = makeChangeDir(null)
++  const wp2 = buildWavePrompt(WAVE, 1, cdNoPlan, join(cdNoPlan, 'wt'), {})
++  assert(!wp2.includes('全局硬约束（plan.md 逐字下发'), '场景3b：无 plan.md→不注入不抛')
++  rmSync(cdNoPlan, { recursive: true, force: true })
++}
++
++// ── 场景 4：空段体（只有标题）→ 不注入 ───────────────────────────────────────
++{
++  const cd = makeChangeDir('# 计划\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n\n## 全局验收标准\n1. 测试通过\n')
++  const wp = buildWavePrompt(WAVE, 1, cd, join(cd, 'wt'), {})
++  assert(!wp.includes('全局硬约束（plan.md 逐字下发'), '场景4：空段体→不注入')
++  rmSync(cd, { recursive: true, force: true })
++}
++
++// ── 场景 5：段在文件尾（无后续 ##）→ 可提取 ──────────────────────────────────
++{
++  const cd = makeChangeDir('# 计划\n\n## Wave 1\n- task-01\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- 约束甲：兼容旧配置\n')
++  const wp = buildWavePrompt(WAVE, 1, cd, join(cd, 'wt'), {})
++  assert(wp.includes('约束甲：兼容旧配置'), '场景5：文件尾段可提取')
++  rmSync(cd, { recursive: true, force: true })
++}
++
++// ── 场景 6：超 2400 字截断 ────────────────────────────────────────────────────
++{
++  const long = Array.from({ length: 60 }, (_, i) => `- 约束条目 ${i + 1}：${'很长的约束内容'.repeat(8)}`).join('\n')
++  const cd = makeChangeDir(`# 计划\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n${long}\n`)
++  const wp = buildWavePrompt(WAVE, 1, cd, join(cd, 'wt'), {})
++  assert(wp.includes('超 2400 字截断'), '场景6：截断提示在位')
++  assert(!wp.includes('约束条目 60'), '场景6：超界条目不注入')
++  rmSync(cd, { recursive: true, force: true })
++}
++
++// ── 场景 7：buildExecuteSteps 全链路不因该段存在而异常 ────────────────────────
++{
++  const cd = makeChangeDir('# 计划\n\n## Wave 1（并行，无依赖）\n- task-01\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- 约束乙：命名用 camelCase\n')
++  const steps = buildExecuteSteps(join(cd, 'plan.md'))
++  const waveStep = steps.find(s => (s.name || '').includes('Wave 1'))
++  assert(waveStep !== undefined && waveStep.prompt.includes('约束乙'), '场景7：全链路 wave 步含注入约束')
++  rmSync(cd, { recursive: true, force: true })
++}
++
++console.log(`\n${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)

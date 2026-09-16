@@ -1021,6 +1021,30 @@ ${indexLines}
     }
   } catch { /* 热区提取 best-effort：失败不注入 */ }
 
+  // ── 全局硬约束段（ql-20260917-002，Superpowers v6.0 writing-plans 采纳④）：plan.md
+  // 「## 全局硬约束」段机械提取，作为子代理 prompt 要点第 9 条逐字下发——实现者子代理
+  // 只读自己的任务卡 + 本段，不重读 design 全文；designHotzone 只达 Wave 协调者层，本段
+  // 补齐子代理触达。advisory：段缺省/空体/提取失败零注入零阻断（对齐 hotzone 模式）；
+  // 超 2400 字截断（全文让子代理读 plan.md 该段）。
+  let globalConstraintsBlock = ''
+  try {
+    if (changeDir) {
+      const planLines = memo('planLines', () => {
+        const pp = path.join(changeDir, 'plan.md')
+        return existsSync(pp) ? readFileSync(pp, 'utf8').replace(/\r\n/g, '\n').split('\n') : []
+      })
+      const gcStart = planLines.findIndex(l => /^##\s*全局硬约束/.test(l))
+      if (gcStart >= 0) {
+        const gcEnd = planLines.findIndex((l, i) => i > gcStart && /^##\s+/.test(l))
+        const gcBody = planLines.slice(gcStart + 1, gcEnd < 0 ? planLines.length : gcEnd).join('\n').trim()
+        if (gcBody) {
+          const capped = gcBody.length > 2400 ? gcBody.slice(0, 2400) + '\n…（超 2400 字截断，全文读 plan.md 该段）' : gcBody
+          globalConstraintsBlock = `\n9. **全局硬约束（plan.md 逐字下发，每个子代理必须遵守——与本 task 蓝图冲突时以本段为准并上报主代理）**：\n\n${capped}\n`
+        }
+      }
+    }
+  } catch { /* 全局硬约束提取 best-effort：失败不注入 */ }
+
   // ── 决策锚点触碰事实（W-A 主渲染点，D-003）：changedFiles 口径与 run/prompt.js {DOCS_DEBT}
   // 现算同源——collectExecuteChangedFiles（porcelain 未提交 ∪ baseline..HEAD）唯一实现，勿双写。
   // 单过流程前缀第 4 步渲染 {DOCS_DEBT} 时 changedFiles 恒空，Wave 步（重入/续跑时已含前置
@@ -1275,7 +1299,7 @@ ${taskSummary}
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
 8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
-
+${globalConstraintsBlock}
 {{include: testcase-design}}
 
 ${designHotzone}${decisionTouchSection}${waveKnowledgeSection}

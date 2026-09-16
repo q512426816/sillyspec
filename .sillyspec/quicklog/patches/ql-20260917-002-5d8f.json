@@ -1,0 +1,105 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-da290816",
+  "totals": {
+    "files": 7,
+    "additions": 147,
+    "deletions": 5
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "declared": true,
+      "additions": 5,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 25,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/plan-global-constraints.test.mjs",
+      "declared": true,
+      "additions": 109,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 7,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/execute.js",
+          "src/stages/plan.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/plan-global-constraints.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-002-5d8f",
+  "sessionId": "quick-da290816",
+  "savedAt": "2026-09-16T22:00:58.146Z",
+  "patchSha256": "4b1e0e93bc59eedd499e6f361ab052c605017040c4a8114ed151481f13412c1c",
+  "patchStatus": "ok"
+}

@@ -131,3 +131,20 @@
 方案：确认执行范围步新增裁决段（非破坏性=裁决落主仓decisions.md新条目D-xxx@v1接续编号+Wave完成披露；破坏性/不可逆=--wait停人；拿不准按破坏性fail-closed）；buildWavePrompt紧凑回呼（子代理冲突回主代理裁决不自行记）
 结果：新增单测15断言绿；全量npm test EXIT 0（行漂移重锚后）；lint过；CLI门禁实测通过
 审计：[gate] L1（跨 1 模块 · 8 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260917-002-5d8f | 2026-09-17 05:48:53 | plan全局硬约束段+实现者子代理触达
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（full模板全局硬约束段+汇总指引句）
+- src/stages/execute.js（buildWavePrompt机械提取注入子代理要点第9条）
+- test/plan-global-constraints.test.mjs（14断言）
+- docs/prompt/plan.md（镜像同步两处）
+- docs/prompt/_extracted.json（提取重生成）
+- docs/sillyspec/platform-interface-map.md（行漂移重锚）
+- .sillyspec/docs/sillyspec/modules/stages.changelog.md（变更索引行）
+需求：plan全局硬约束段+实现者子代理触达
+根因：plan.md无绑定所有task的硬约束承载体，designHotzone只达Wave协调者层，实现者子代理只读自己的卡不被design硬约束触达（Superpowers v6.0实测约束verbatim进plan才达下游，对照组2-4轮修复还漏真bug）
+方案：plan.js full模板新增「##全局硬约束（从design.md逐字抄录）」段+指引句；execute.js buildWavePrompt机械提取该段作子代理要点第9条（冲突以本段为准并上报），advisory缺省零注入，超2400截断
+结果：新增单测14断言绿；全量npm test EXIT 0（行漂移重锚后）；lint过；CLI门禁实测通过
+审计：[gate] L1（跨 1 模块 · 7 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
