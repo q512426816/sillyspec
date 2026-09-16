@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-16-cross-layer-contract-probe",
+  "generatedAt": "2026-09-16T08:05:48.580Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-16-cross-layer-contract-probe",
+      "metrics": {
+        "matches": 34,
+        "skippedFiles": 0,
+        "worktreeHits": 1,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-16-cross-layer-contract-probe",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-16-cross-layer-contract-probe",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-16-cross-layer-contract-probe",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-16-cross-layer-contract-probe",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "runtimeEvidence": [
+    {
+      "claim": "契约维度五用例全绿（worktree 实测）",
+      "command": "node --test test/probe8-contract-pivot.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs/probe8-contract-pivot.log"
+    },
+    {
+      "claim": "既有探针8 五组零回归（worktree 实测）",
+      "command": "node --test test/probe8-payload-parity.test.mjs",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs/probe8-payload-parity.log"
+    },
+    {
+      "claim": "lint 全绿（死码项已消除，644 文件）",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "logPath": ".sillyspec/.runtime/verify-logs/verify-lint.log"
+    }
+  ],
+  "handover": {
+    "count": 3,
+    "items": [
+      {
+        "type": "other",
+        "item": "与并行变更 2026-09-16-friction5-hardening 同改 src/verify-postcheck.js（其脏文件已现）——apply 必须串行，后 apply 方按对方已合入版本重锚",
+        "condition": "后 apply 方在 verify/design 记录锚点更新；建议本变更先 apply（变更面小）"
+      },
+      {
+        "type": "env-blocked",
+        "item": "worktree 内 13 个 CLI 子进程类测试环境性失败（index.js:334 worktree-cwd 守卫，stash 基线对照 IDENTICAL-FAILURE-SETS）",
+        "condition": "apply 后在主仓跑 npm test 全量复核（gate 快照口径已覆盖本会话文件）"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "探针8 契约维度在真实跨层变更上的首次实战验证（本变更为纯后端无契约面，自判不适用）",
+        "condition": "下一个含前后端契约表的变更走 verify 时观察「#### 探针 8」新两行输出与 advisory 裁定体验"
+      }
+    ]
+  },
+  "tests": {
+    "command": "module[cli-core]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-16T08:21:37.153Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

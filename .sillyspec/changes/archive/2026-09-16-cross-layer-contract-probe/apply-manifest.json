@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-16-cross-layer-contract-probe",
+  "appliedAt": "2026-09-16T08:36:31.760Z",
+  "baseHash": "b39ca1214d1a9a652a458c8c3a18dda496478d61",
+  "files": [
+    {
+      "path": "test/probe8-contract-pivot.test.mjs",
+      "sha256": "34d4b7ee3fe2af384f44163609b406a67e09793f925a2f1d8c228dd0f2529aff"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "70f1f31531c189cba436f99d3ffc97626cc4ffa1eabfe2940f1eb1f7cc8f102c"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "ca833a6378cbbf3e18b237be9364724305e636ec4ea65ec92262ba3d1792d57a"
+    }
+  ]
+}
