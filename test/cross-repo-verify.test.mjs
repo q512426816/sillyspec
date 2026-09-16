@@ -143,6 +143,48 @@ test('跨仓仓无 package.json：跳过 + warn，主仓通过则整体通过', 
 })
 
 // ──────────────────────────────────────────────────────────────────────────
+// 2b. 跨仓仓有 package.json 但无 test 脚本 → 跳过 + warn，不阻断
+//     （坑 cross-repo-no-test-script，2026-09-15 wp EHS 会话实证：fallback npm test
+//      必 missing-script exit 1 → verify-test 环境性假红）
+// ──────────────────────────────────────────────────────────────────────────
+test('跨仓仓 package.json 无 test 脚本：跳过不阻断，own local.yaml 显式覆盖则执行', () => {
+  const mainRepo = makeRepo(false)
+  const crossRepo = makeRepo(true, 'echo unused') // 占位，随后覆写为无 test 脚本
+  // 覆写 package.json：scripts 存在但无 test 键
+  writeFileSync(join(crossRepo, 'package.json'), JSON.stringify({
+    name: 'cross-repo-fixture-no-test',
+    version: '1.0.0',
+    scripts: { build: 'echo built' },
+  }) + '\n')
+  writeLocalYaml(mainRepo, 'echo main-ok')
+
+  const buildCtx = (repoKey) => {
+    const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+    const wm = makeWm(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+    return new MultiRepoContext({
+      cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', repoKey],
+      repoRegistry: new Map([[repoKey, crossRepo]]),
+      worktreeManager: wm,
+    })
+  }
+
+  // 无 own local.yaml：跳过 + 不阻断
+  const r1 = runVerifyTestCheck({ cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx: buildCtx('crossNT') })
+  assert.notEqual(r1.status, 'failed',
+    `无 test 脚本应跳过不阻断，而非 fallback npm test 假红（actual: ${r1.status} / ${r1.reason}）`)
+  assert.ok((r1.outputTail || '').includes('crossNT') && (r1.outputTail || '').includes('SKIP'),
+    `outputTail 应含 crossNT + SKIP 标记（actual: ${(r1.outputTail || '').slice(-200)}）`)
+
+  // own local.yaml 显式配 commands.test：无条件执行（用户显式意图优先于 test 脚本缺失）
+  writeLocalYaml(crossRepo, 'echo cross-explicit-ok')
+  const r2 = runVerifyTestCheck({ cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx: buildCtx('crossNT') })
+  assert.equal(r2.status, 'passed',
+    `own local.yaml 显式命令应被执行并通过（actual: ${r2.status} / ${r2.reason}）`)
+  assert.ok((r2.outputTail || '').includes('crossNT') && (r2.outputTail || '').includes('PASS'),
+    `outputTail 应含 crossNT + PASS 标记（actual: ${(r2.outputTail || '').slice(-200)}）`)
+})
+
+// ──────────────────────────────────────────────────────────────────────────
 // 3. 跨仓仓不参与 module 子集策略（design §6 + §5.4）
 // ──────────────────────────────────────────────────────────────────────────
 test('跨仓仓不参与 module 子集：主仓 test_strategy:module 命中走子集，跨仓仓仍跑 full npm test', () => {

@@ -344,6 +344,8 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
+5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。
+6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
 
 ### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）
 module-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。

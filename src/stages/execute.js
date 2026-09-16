@@ -430,6 +430,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + item).join('\n')}
 
   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
+  **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
   **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\`。
 
 ### 操作

@@ -1653,11 +1653,33 @@ export function printReconcileTargetFilesCheck(r, envelope = buildReconcileTarge
   // ③类（做了没声明=scope creep）：WARNING 放行，suspectTask 尽力归因随行列出
   if (r.status === 'undeclared') {
     console.warn(`\n⚠️  target_files 对账发现 ${r.undeclared.length} 个实际改动未在任何 task 卡声明（③类 scope creep，advisory 不阻断）：`)
-    for (const u of r.undeclared.slice(0, 20)) {
+  if (r.undeclared.length <= 20) {
+    for (const u of r.undeclared) {
       console.warn(`   - ${u.path}${u.suspectTask ? `（疑似 ${u.suspectTask} 的改动——该 task 的 review.json changedFiles 提及）` : ''}`)
     }
-    if (r.undeclared.length > 20) console.warn(`   …还有 ${r.undeclared.length - 20} 个`)
-    console.warn(`   evidence: matched=${envelope.evidence.matched_count} missing=${envelope.evidence.missing_declared_count} undeclared=${envelope.evidence.undeclared_count}`)
+  } else {
+    // >20 条逐行刷屏改按顶层目录聚合（坑 reconcile-undeclared-noise，2026-09-15 wp EHS 会话
+    // 实证：58 条③类多为 worktree baseline 拷入的环境文件——agent 需要的是形状不是清单）：
+    // 目录计数降序 + 每目录至多 2 个样例；完整清单随后由 writeReconcileRunResult 落盘
+    // reconcile-result.json（gate 输出 📄 行含具体路径），suspectTask 归因以落盘为准。
+    const byDir = new Map()
+    for (const u of r.undeclared) {
+      const p = String(u.path || '')
+      const slash = p.indexOf('/')
+      const dir = slash > 0 ? p.slice(0, slash + 1) : '(仓根)'
+      const rec = byDir.get(dir) || { count: 0, samples: [] }
+      rec.count++
+      if (rec.samples.length < 2) rec.samples.push(p)
+      byDir.set(dir, rec)
+    }
+    const dirs = [...byDir.entries()].sort((a, b) => b[1].count - a[1].count)
+    for (const [dir, rec] of dirs.slice(0, 8)) {
+      console.warn(`   - ${dir} ×${rec.count}（样例：${rec.samples.join('、')}）`)
+    }
+    if (dirs.length > 8) console.warn(`   …另有 ${dirs.length - 8} 个目录`)
+    console.warn(`   共 ${r.undeclared.length} 条，>20 触发按目录聚合；完整逐条清单（含疑似 task 归因）见对账落盘 reconcile-result.json（下方 📄 行）。`)
+  }
+  console.warn(`   evidence: matched=${envelope.evidence.matched_count} missing=${envelope.evidence.missing_declared_count} undeclared=${envelope.evidence.undeclared_count}`)
     for (const fix of envelope.supportedFixes) console.warn(`   提示：${fix}`)
     console.warn(`   对账口径 actual=${(r.sources || []).join(' + ') || 'n/a'}（③类误报先核对 sources 与并行会话剔除提示）。`)
     return false

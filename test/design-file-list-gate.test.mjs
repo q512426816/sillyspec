@@ -7,8 +7,9 @@
  *  3. 清单缺失 → WARNING 不阻断；解析异常 fail-soft
  *  4. CLI 级：brainstorm 末步 --done 对幻觉清单 exit 1 阻断（修复后放行）
  */
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { makeRepo, initChange, runCLI, runStage, cleanup, report } from './_cli-step-harness.mjs'
 import { ProgressManager } from '../src/progress.js'
 import { validateDesignFileList } from '../src/design-facts.js'
@@ -86,6 +87,64 @@ console.log('\n--- ② CLI 级：brainstorm 末步幻觉清单阻断 ---')
   writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-09-07T00:00:00\nscale: small\n---\n\n# Design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 新增 | NEW:src/ghost-path.js | 修复为新建 |\n')
   const r2 = runStage('brainstorm', cn, cwd, { done: true, output: '修复后收尾' })
   assert(r2.status === 0 || !r2.combined.includes('design_file_ref_invalid'), `NEW: 修复后不再被清单核验拦（exit ${r2.status}；输出尾：${r2.combined.slice(-120)}）`)
+}
+
+console.log('\n--- ③ gate 预检前移：幻觉清单在 gate brainstorm 即红（坑 design-file-ref-late-feedback，2026-09-15 wp EHS 41 条实证）---')
+{
+  const { cwd, specBase } = makeRepo('dfl-gate-')
+  const cn = '2026-09-08-dfl-gate'
+  const pm = await initChange(cwd, specBase, cn)
+  const changeDir = join(specBase, 'changes', cn)
+  writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-09-07T00:00:00\nscale: small\n---\n\n# Design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/ghost-gate.js | 幽灵 |\n')
+  // 推进到末步（同 ② 的 seeding 手法）
+  runStage('brainstorm', cn, cwd)
+  const pr = await pm.read(cwd, cn)
+  const seeded = pr.stages.brainstorm.steps.map(s => ({ name: s.name, status: s.name === '生成规范文件' ? 'pending' : 'completed' }))
+  await (async () => { const p = await pm.read(cwd, cn); p.currentChange = cn; p.currentStage = 'brainstorm'; p.stages.brainstorm = { status: 'in-progress', startedAt: '2026/9/8 00:00:00', completedAt: null, steps: seeded }; await pm._write(cwd, p, cn) })()
+
+  const g1 = runCLI(['gate', 'brainstorm', '--change', cn], { cwd })
+  assert(g1.combined.includes('design-file-list'), 'gate 输出含 design-file-list check（前移生效）')
+  assert(g1.combined.includes('design_file_ref_invalid'), 'gate 预检即报幻觉路径（不必等 --done 末步）')
+
+  // NEW: 修复 → 该 check 转绿（信号消失；整体 exit 可因其他 artifacts 未备而被其他 check 占用，只断言本 check 面）
+  writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-09-07T00:00:00\nscale: small\n---\n\n# Design\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 新增 | NEW:src/ghost-gate.js | 修复为新建 |\n')
+  const g2 = runCLI(['gate', 'brainstorm', '--change', cn], { cwd })
+  assert(!g2.combined.includes('design_file_ref_invalid'), `NEW: 修复后 gate 清单信号消失（输出尾：${g2.combined.slice(-120)}）`)
+}
+
+console.log('\n--- ④ 跨仓分段核验（坑 design-file-ref-cross-repo-blind，2026-09-15 wp 会话 41 条误报回归）---')
+{
+  const { cwd, specBase } = makeRepo('dfl-xr-')
+  const cn = '2026-09-08-dfl-xrepo'
+  const changeDir = join(specBase, 'changes', cn)
+  mkdirSync(changeDir, { recursive: true })
+  // 跨仓 fixture：独立仓根 + 真实既有文件（模拟 sub-grid-security 的 src/common/router.js）
+  const crossRoot = mkdtempSync(join(tmpdir(), 'dfl-cross-'))
+  mkdirSync(join(crossRoot, 'src', 'common'), { recursive: true })
+  writeFileSync(join(crossRoot, 'src', 'common', 'router.js'), 'x')
+  // 注册跨仓（validateDesignFileList 读侧口径 = <cwd>/.sillyspec/local.yaml repos:）
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), `repos:\n  sub-grid-security: ${crossRoot.split('\\').join('/')}\n`)
+
+  const tbl = rows => '| 操作 | 文件路径 | 说明 |\n|---|---|---|\n' + rows.map(r => `| ${r[0]} | ${r[1]} | x |`).join('\n') + '\n'
+  writeFileSync(join(changeDir, 'design.md'),
+    FM + '\n## 文件变更清单\n\n' + tbl([['修改', 'README.md'], ['新增', 'NEW:src/new.js']])
+    + '\n## sub-grid-security 仓变更\n\n' + tbl([['修改', 'src/common/router.js'], ['修改', 'src/ghost.js']]))
+  const r = validateDesignFileList({ changeDir, cwd })
+  assert(r.ok === false, '跨仓段内幻觉路径仍报错')
+  assert(r.errors.length === 1 && r.errors[0].path === 'src/ghost.js', `仅跨仓幻觉报错（实际：${r.errors.map(e => e.path).join(',')}）`)
+  assert(r.errors[0].message.includes('sub-grid-security 仓'), '错误信息指明核验根为该跨仓仓')
+  assert(!r.errors.some(e => e.path === 'src/common/router.js'), '关键回归：跨仓「修改」既有文件不再被误报逼标 NEW:')
+
+  // 未注册 repo 段 → warning 跳过（指引 register-repo），不误报
+  writeFileSync(join(changeDir, 'design.md'),
+    FM + '\n## 文件变更清单\n\n' + tbl([['修改', 'README.md']])
+    + '\n## unregistered-repo 仓变更\n\n' + tbl([['修改', 'src/whatever.js']]))
+  const r2 = validateDesignFileList({ changeDir, cwd })
+  assert(r2.ok === true, '未注册段跳过核验不误报')
+  assert(r2.warnings.some(w => w.includes('unregistered-repo') && w.includes('register-repo')), 'warning 指引 register-repo')
+
+  try { rmSync(crossRoot, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ }
 }
 
 cleanup()

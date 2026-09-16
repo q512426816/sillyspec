@@ -1457,7 +1457,7 @@ function mergeCrossRepoResults(mainResult, ctx) {
 /**
  * 在单个跨仓仓根跑 full npm test（跨仓仓不参与 module 子集，只跑 full）。
  * 跨仓仓 own local.yaml 若存在且配 commands.test → 用之；否则 fallback `npm test`。
- * 跨仓仓无 package.json → 跳过 + warn。
+ * 跨仓仓无 package.json，或有 package.json 但无 test 脚本（未被 own local.yaml 覆盖）→ 跳过 + warn。
  *
  * @param {object} entry - RepoEntry（isMain=false）
  * @returns {object} 结果 shape 对齐 runFullCommand 返回
@@ -1492,6 +1492,35 @@ function runCrossRepoFullTest(entry) {
       if (extracted) command = extracted
       crossKnownFailures = extractKnownFailures(crossYaml)
     } catch { /* 读取失败 fallback npm test */ }
+  }
+
+  // 跨仓仓有 package.json 但无 test 脚本，且未被 own local.yaml 覆盖 → 降级跳过 + warn
+  // （坑 cross-repo-no-test-script，2026-09-15 wp EHS 会话实证：spdemo 无 test script，
+  // fallback `npm test` 必 exit 1（npm missing-script）→ verify-test 环境性假红，agent 被迫
+  // 手工给该仓造 .sillyspec/local.yaml + 冒烟脚本。测试基建缺失是仓常态，非代码回归——
+  // 与「无 package.json」同款 skip 处理，hint 指向 own local.yaml 配置通道）。
+  // own local.yaml 显式配了命令 → 无条件执行（用户显式意图，即使无 test script 也跑）。
+  // package.json 解析失败 → 按原行为跑 `npm test`（fail-visible，不静默吞）。
+  if (command === 'npm test') {
+    let hasTestScript = true
+    try {
+      const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'))
+      hasTestScript = !!(pkg && pkg.scripts && Object.prototype.hasOwnProperty.call(pkg.scripts, 'test'))
+    } catch { /* 解析失败维持 npm test 原行为 */ }
+    if (!hasTestScript) {
+      console.warn(`⚠️  跨仓 repo "${entry.repoKey}"（${projectRoot}）package.json 无 test 脚本，跳过该仓测试（非代码回归，不阻断 verify）。如需纳入实测：在 ${join(projectRoot, '.sillyspec', 'local.yaml')} 配 commands.test（如轻量冒烟检查）。`)
+      return {
+        status: 'skipped',
+        command: null,
+        exitCode: null,
+        durationMs: null,
+        outputTail: null,
+        reason: `跨仓 repo "${entry.repoKey}" package.json 无 test 脚本，跳过测试（可配 own local.yaml commands.test 纳入）`,
+        resultPath: null,
+        mode: 'cross-repo-no-test-script',
+        repoKey: entry.repoKey,
+      }
+    }
   }
 
   const startedAt = Date.now()

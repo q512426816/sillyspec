@@ -387,6 +387,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+  **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：
+  - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。
+  - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
 
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。

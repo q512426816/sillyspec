@@ -168,6 +168,32 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       warnings: r.warnings || [],
     });
 
+    // ── a2. design 文件清单行级核验（brainstorm；坑 design-file-ref-late-feedback，2026-09-15
+    //    wp EHS 会话实证：41 条 design_file_ref_invalid 只在 --done 末步爆出，gate 预检全绿——
+    //    前移进 gate 让写作期预检即可见，免「末步拦→改文档→重跑 --done」整轮往返。与 complete.js
+    //    --done 硬门同源实现（design-facts.js validateDesignFileList），gate 只读不写）──
+    if (stage === 'brainstorm') {
+      try {
+        const { validateDesignFileList } = await import('./design-facts.js');
+        const dfl = validateDesignFileList({ changeDir: join(specRoot, 'changes', changeName), cwd });
+        checks.push({
+          id: 'design-file-list',
+          ok: (dfl.errors || []).length === 0,
+          // errors 元素是 {path, message} 对象（与 complete.js --done 打印侧同源），gate check 面拍平为 message 字符串
+          errors: (dfl.errors || []).map(e => e && e.message ? e.message : String(e)),
+          warnings: dfl.warnings || [],
+        });
+      } catch (e) {
+        // fail-open 与 complete.js 同口径：核验自身异常不误拦，warning 留痕
+        checks.push({
+          id: 'design-file-list',
+          ok: true,
+          errors: [],
+          warnings: [`design 清单核验自身异常，跳过（${e && e.message ? e.message : e}）`],
+        });
+      }
+    }
+
     // ── b. transition：状态转换合法性（参与综合 ok，与 completeStep 硬阻断一致）──
     // 与 run.js runStage 同源：传 fromStageData 触发 failed_post_check 门控。
     // transition 必须参与 ok：否则 gate 返回 ok=true、exit 0，Agent 据此 --done 却被

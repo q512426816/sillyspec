@@ -524,6 +524,36 @@ console.log('\n=== D. gates 接线阻断冒烟 ===\n')
   }
 }
 
+// ── D1b. ③类 >20 条按目录聚合（坑 reconcile-undeclared-noise，2026-09-15 wp EHS 实证 58 条刷屏）──
+{
+  // 25 条、3 个目录（skills/ ×15、attachments/ ×8、src/ ×2）→ 聚合输出：目录计数行 + 样例 + 落盘指引
+  const many = [
+    ...Array.from({ length: 15 }, (_, i) => ({ path: `skills/env-file-${i}.md`, suspectTask: null })),
+    ...Array.from({ length: 8 }, (_, i) => ({ path: `attachments/doc-${i}.bin` })),
+    ...Array.from({ length: 2 }, (_, i) => ({ path: `src/extra-${i}.js` })),
+  ]
+  const rMany = {
+    status: 'undeclared', matched: [], missing: [], undeclared: many,
+    skipReason: null, notes: [], form: 'post-apply', sources: ['main:status-porcelain(untracked-all)'],
+  }
+  const { ret, out } = captureConsole(() => printReconcileTargetFilesCheck(rMany))
+  assert(ret === false, '>20 ③类仍放行（WARNING 不阻断）')
+  assert(out.includes('skills/ ×15') && out.includes('attachments/ ×8') && out.includes('src/ ×2'),
+    '聚合输出含各目录计数')
+  assert(out.includes('共 25 条') && out.includes('reconcile-result.json'), '聚合输出含总数与落盘指引')
+  assert(!out.includes('skills/env-file-14.md'), '第 3+ 逐条路径不再刷屏（样例上限 2）')
+  assert((out.match(/样例：/g) || []).length === 3, '每个目录恰 1 行样例（3 目录 3 行）')
+
+  // ≤20 条：维持逐条清单（含 suspectTask 归因）
+  const few = Array.from({ length: 3 }, (_, i) => ({ path: `src/x-${i}.js`, suspectTask: i === 0 ? 'task-02' : null }))
+  const { out: outFew } = captureConsole(() => printReconcileTargetFilesCheck({
+    status: 'undeclared', matched: [], missing: [], undeclared: few,
+    skipReason: null, notes: [], form: 'post-apply', sources: [],
+  }))
+  assert(outFew.includes('src/x-0.js') && outFew.includes('疑似 task-02') && !outFew.includes('按目录聚合'),
+    '≤20 条逐条输出 + 归因，不聚合')
+}
+
 // ── D2. 信封字段契约：severity 分级 / evidence 计数 / supportedFixes 可路由 ──
 {
   const err = buildReconcileTargetFilesEnvelope({
