@@ -66,3 +66,31 @@
 结果：新测 12 断言全过（temp-boundary-spec-dir 5：env 注入隔离复刻事故；verify-failure-ledger-noise 7：事故噪声 14 行零计入/真失败 7 行全收/豁免照常/fail-safe 不变）；回归 resolveSpecDir 消费方 23/23 + ledger 既有系全绿；docs check 修复回执 20→0
 审计：[gate] L1（跨 2 模块 · 9 文件：2 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/architecture-4a.md, docs/sillyspec/doc-consistency-debt.md
+
+## ql-20260916-018-b5e3 | 2026-09-16 16:38:42 | EHS复盘第二批信任链加固与降噪
+状态：已完成
+关联变更：（无）
+文件：src/docs-debt.js（+7/-2）, src/foreign-declared.js（+25/-16）, src/run/gates.js（+14/-2）, src/run/prompt.js（+31/-1）, src/stage-review.js（+25/-2）, src/stages/execute.js（+1/-0）, src/stages/plan.js（+1/-0）, src/verify-postcheck.js（+34/-18）, src/verify-probes.js（+34/-29）, test/stage-review-degraded-selfreview.test.mjs（+9/-1）, test/stage-review-doc-hash-auto-refresh.test.mjs（+18/-0）, test/temp-boundary-spec-dir.test.mjs（+7/-3）, test/platform-dual-root-fixture.test.mjs（+111/-0）
+需求：EHS复盘第二批信任链加固与降噪
+根因：docHash放行零痕迹/代落盘不可见/probe1自指噪声/审查重验94分钟/双根hunt三新消费方——EHS会话复盘遗留
+方案：刷新序数+hash漂移声明化与升级提醒;代落盘gate审计行;probe1-noqa行级豁免+34处噪声标记;前序review pass清单机械注入派发prompt;evidence双根/声明活性/docs-debt双候选修复+统一夹具;B3登记待立项;修temp-boundary测试cwd缺陷
+结果：npm test 513文件0失败+lint过;新夹具4/4;扩展两测试文件用例全绿
+审计：[gate] L2（跨 4 模块 · 13 文件：9 代码/4 测试）advisory；模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）
+
+## ql-20260916-019-a95c | 2026-09-16 18:54:00 | EHS复盘收尾批：review status 只读查询命令+B3 登记更正+锚定修复
+状态：已完成
+关联变更：（无）
+文件：src/index.js, test/review-status-command.test.mjs, test/temp-boundary-spec-dir.test.mjs, docs/sillyspec/platform-interface-map.md, .sillyspec/knowledge/known-issues.md
+需求：EHS复盘收尾批：review status 只读查询命令+B3 登记更正+锚定修复
+根因：C1 审查94分钟无收敛期间宿主无只读探针可查状态；B3 登记核实发现 probe5 跨仓已被 368c7e2 兑现（原登记基于 head 截断 grep 误判）；review status 插入致 doc-ref 7 锚漂移；temp-boundary 锚定上跳两层在 runner HOME 重定向下撞真实主目录
+方案：index.js review case 新增 status 子命令（verdict/通道/刷新序数/代落盘·降级标记/docHash 现势，文本+json，平台解析同源）；known-issues B3-1 改已兑现、B3-2 收窄为 archive 表侧；temp-boundary case5 改一层上跳锚定；platform-interface-map.md 7 处行号重锚
+结果：npm test 全量 514 文件 0 失败（新增 review-status-command 3/3）+lint 过 653 文件；doc-ref-check 88 处全过
+
+## ql-20260916-020-2476 | 2026-09-16 20:03:00 | 探针7跨卡归属+端点提取注释掩码+三条知识登记
+状态：已完成
+关联变更：（无）
+文件：src/verify-probes.js, src/endpoint-extractor.js, test/acceptance-matrix-probe.test.mjs, test/contract-artifacts.test.mjs, .sillyspec/knowledge/known-issues.md
+需求：探针7跨卡归属+端点提取注释掩码+三条知识登记
+根因：E变更verify实证8格假uncovered（provider acceptance连不上消费卡测试）；端点提取器JSDoc示例被当真路由；撞车预警/per-repo skip/worktree环境失败无登记
+方案：probe7归属扩为本卡∪直接下游卡测试（depends_on反向单向）；stripCommentsKeepLength掩码接入Express/Spring提取器；known-issues三条登记
+结果：npm test 514文件0失败+lint过；acceptance-matrix-probe 60/60新增跨卡用例；contract-artifacts 41/41新增掩码用例；probe5族10/10零回归

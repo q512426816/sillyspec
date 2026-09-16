@@ -1,0 +1,186 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-444d6851",
+  "totals": {
+    "files": 14,
+    "additions": 325,
+    "deletions": 74
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/knowledge/known-issues.md",
+      "declared": true,
+      "additions": 8,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/docs-debt.js",
+      "declared": true,
+      "additions": 7,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/foreign-declared.js",
+      "declared": true,
+      "additions": 25,
+      "deletions": 16,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "declared": true,
+      "additions": 31,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-review.js",
+      "declared": true,
+      "additions": 25,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 34,
+      "deletions": 18,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 34,
+      "deletions": 29,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/stage-review-degraded-selfreview.test.mjs",
+      "declared": true,
+      "additions": 9,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/stage-review-doc-hash-auto-refresh.test.mjs",
+      "declared": true,
+      "additions": 18,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/temp-boundary-spec-dir.test.mjs",
+      "declared": true,
+      "additions": 7,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-dual-root-fixture.test.mjs",
+      "declared": true,
+      "additions": 111,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 13,
+    "codeFileCount": 9,
+    "testFileCount": 4,
+    "moduleSpan": 4,
+    "modules": [
+      {
+        "id": "docs-consistency",
+        "files": [
+          "src/docs-debt.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/foreign-declared.js",
+          "src/stage-review.js",
+          "src/verify-postcheck.js",
+          "src/verify-probes.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/gates.js",
+          "src/run/prompt.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/execute.js",
+          "src/stages/plan.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/stage-review-degraded-selfreview.test.mjs",
+      "test/stage-review-doc-hash-auto-refresh.test.mjs",
+      "test/temp-boundary-spec-dir.test.mjs",
+      "test/platform-dual-root-fixture.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L2",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-018-b5e3",
+  "sessionId": "quick-444d6851",
+  "savedAt": "2026-09-16T10:26:40.905Z",
+  "patchSha256": "f18cc7f397aa889ea18774d1128ad86eb477323335acbed06fa54630ed8ffa20",
+  "patchStatus": "ok"
+}

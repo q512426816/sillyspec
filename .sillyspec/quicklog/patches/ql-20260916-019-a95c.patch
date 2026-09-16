@@ -1,0 +1,278 @@
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index 1959892..eef439f 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -133,10 +133,10 @@ QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整
+ 
+ **v1 已工具化**（9d299a6，2026-09-16 quick-deed7456 / ql-20260916-015-44dd）：`sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]` 一键收编——持用户 QUICKLOG 锁全程，恒扫主文件+轮转归档定位本会话条目（含已取消）→ 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG+patches sidecar+额外 pathspec）→ finally 恢复工作区全量（并行条目留未提交态；.runtime 落备份兜底；fail-fast 附人工四步舞文案）。测试 test/quicklog-commit-slice.test.mjs 7 用例。**完整文件化（entries sidecar 权威+聚合渲染）仍待立项**——v1 是止血不是根治：提交侧摩擦已消，文件仍是单文件追加形态，读侧/归档侧未动。
+ 
+-## probe5 跨仓前端调用面不纳入扫描（parity 扫描根单仓，待立项）
++## probe5 跨仓前端调用面不纳入扫描（parity 扫描根单仓）——**已兑现更正**
+ 
+-三端变更（EHS 形态：主仓后端 + 前端兄弟仓）verify 探针 5 的前端调用扫描根恒单仓（contract-matrix.js verifyApiParity frontendRoot :545——worktree 或 scan-root 二选一），跨仓 task 卡的仓不在扫描根内，跨端 API 契约对账实际只做了主仓半边（EHS 实证「0 frontend calls」误导性 advisory）。现仅渲染边界注记（verify-probes.js:993-994「parity 扫描面只含主仓——另有 N 张跨仓 task 卡的仓不在扫描根内」）。**待立项方向**：按跨仓 task 卡 repo ∪ local.yaml repos 注册根逐仓收窄扫描（复用探针8 readEntry 的跨仓根解析口径，contract-matrix.js:216-236），前端调用计数/missingBackend 对账按仓分组输出。注意与 D-004（archive 侧跨仓 diff 不并入主仓对账防③类噪音）区分：probe5 是 advisory 面不是 gate 阻断面，纳入跨仓不会引入阻断风险。（来源：2026-09-15 wp EHS 三仓会话实证 + 2026-09-16 第二批复盘登记）
++三端变更（EHS 形态：主仓后端 + 前端兄弟仓）verify 探针 5 的前端调用扫描根恒单仓（contract-matrix.js verifyApiParity frontendRoot :545——worktree 或 scan-root 二选一），跨仓 task 卡的仓不在扫描根内，跨端 API 契约对账实际只做了主仓半边（EHS 实证「0 frontend calls」误导性 advisory）。现仅渲染边界注记（verify-probes.js:993-994「parity 扫描面只含主仓——另有 N 张跨仓 task 卡的仓不在扫描根内」）。**已兑现**（368c7e2，2026-09-16 00:58——早于本条 17:00 的「待立项」登记；登记时基于 head 截断的 grep 误判现状，特此更正）：contract-matrix.js 跨仓前端调用并集落地——声明源双取（task 卡 cross-repo: 前缀 + design 清单 repoKeys 解析）、仓根经 repos 注册表解析、各仓按声明文件集收窄后并入 frontendCalls、未注册/不可达现身注记不静默；配套 unused 分层与兄弟仓 deps 分类。测试 test/probe5-cross-repo-scan.test.mjs 4/4。
+ 
+ ## archive 对账表跨仓文件恒标「计划未动」（live worktree 形态缺 per-repo advisory，待立项）
+ 
+-archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**待立项方向**：对齐 verify 阶段 printCrossRepoReconcile 的 per-repo advisory 形态（声明/实测/对上/②缺/③多按仓分组、advisory 不阻断），归档表跨仓行从「计划未动」改为指向 per-repo 分组结果。（来源：同上）
++archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**部分兑现**：verify 侧 per-repo advisory 已落地（113e19d：src/cross-repo-reconcile.js 注册表→仓根→双源 actual→三类差集+软桶，gates.js verify 块接线 printCrossRepoReconcile，test/cross-repo-probe7-anchor.test.mjs）。**剩余待立项**（收窄）：archive 对账表本身——归档表跨仓行仍标「计划未动」，方向改为复用 cross-repo-reconcile 结果在 archive 输出面渲染 per-repo 分组行（advisory），不再需要新建对账链路。（来源：2026-09-15 wp EHS 实证 + 2026-09-16 第二批登记 + 同日更正）
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index a571dc0..17bf93e 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1867/1913/1993 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:733（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2346；shared.js:966 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2346/1855；shared.js:990 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3530；sync.js:1397/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3482；sync.js:2099 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2429；shared.js:966 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2429/2705；shared.js:990 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3608；sync.js:1397/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3560；sync.js:2099 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3295/3324；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3373/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:674/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -165,7 +165,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:236`）公共入口，flag 在 `command.js:381`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:234` 解析后经 `case 'init'`（`index.js:345`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:639（backfill-reviews）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:720（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:381-387` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 383）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -196,7 +196,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3392`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3470`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index 9925b53..e5a3986 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -609,6 +609,84 @@ async function main() {
+       //     [--changed-files a,b]（归属切片为空或纯验证任务时显式给出；""=空覆盖）
+       //     [--base <rev> --head <rev>]（无 worktree meta 时显式锡点）[--force]
+       const rwSub = filteredArgs[1];
++      // ── review status（C1 轻量硬机制，坑 review-liveness-opaque，2026-09-15 wp EHS 实证：
++      // 独立审查 94 分钟无收敛、用户三催——宿主/agent 无只读探针可查「审查到哪了、审完没有、
++      // 审完之后文档又改过几版」。agent-tool 通道的子代理进程归宿主管（CLI 无 kill 面），但
++      // 「状态可见」这一半可以闭环：各 stage review 的 verdict/通道/刷新序数/代落盘·降级标记/
++      // docHash 现势一行可见，供催问时一查即答、也供派发前查前序审查复用（C2 互补）。──
++      if (rwSub === 'status') {
++        const rsVal = (flag) => {
++          const i = filteredArgs.indexOf(flag);
++          return i >= 0 && filteredArgs[i + 1] && !String(filteredArgs[i + 1]).startsWith("--") ? filteredArgs[i + 1] : null;
++        };
++        const rsChange = rsVal('--change');
++        if (!rsChange) {
++          console.error('用法: sillyspec review status --change <名> [--json]\n  只读查询各阶段 stage review 状态：verdict/执行通道/刷新序数/代落盘·降级标记/docHash 现势（主文档改版未刷新时提示）');
++          process.exit(2);
++        }
++        assertSafeChangeName(rsChange, '--change 变更名');
++        const { getLatestStageReviewRunId, computeDocHash, isDegradedSelfReview, hasDelegatedWriteDisclosure, classifyReviewerChannel } = await import('./stage-review.js');
++        const { resolveRuntimeRoot } = await import('./run/shared.js');
++        const rsPlatformOpts = {};
++        const rsResolved = resolvePlatformOpts(dir, specDir);
++        if (rsResolved) {
++          rsPlatformOpts.specRoot = rsResolved.specRoot;
++          if (rsResolved.runtimeRoot) rsPlatformOpts.runtimeRoot = rsResolved.runtimeRoot;
++        }
++        const rsSpecBase = rsPlatformOpts.specRoot || join(dir, '.sillyspec');
++        const rsRuntimeRoot = resolveRuntimeRoot(rsPlatformOpts, rsSpecBase);
++        const rows = [];
++        for (const st of ['brainstorm', 'plan', 'execute']) {
++          let runId = null;
++          try { runId = getLatestStageReviewRunId(rsRuntimeRoot, st, rsChange) } catch {}
++          if (!runId) { rows.push({ stage: st, status: 'none' }); continue }
++          const rjPath = join(rsRuntimeRoot, 'stage-reviews', `${st}-${runId}`, 'review.json');
++          let rev = null;
++          try { rev = JSON.parse(readFileSync(rjPath, 'utf8')) } catch {
++            rows.push({ stage: st, status: 'unreadable', runId, reviewPath: rjPath }); continue
++          }
++          const notes = typeof rev.reviewerNotes === 'string' ? rev.reviewerNotes : '';
++          const refreshCount = (notes.match(/docHash auto-refreshed at /g) || []).length;
++          // docHash 现势：主文档在 [specBase, changeDir, cwd] 基准解析后重算对比
++          let docState = 'unknown';
++          const primaryRel = Array.isArray(rev.reviewedFiles) ? rev.reviewedFiles[0] : null;
++          if (primaryRel) {
++            for (const base of [rsSpecBase, join(rsSpecBase, 'changes', rsChange), dir]) {
++              const abs = join(base, primaryRel);
++              if (existsSync(abs)) {
++                docState = computeDocHash(abs) === rev.docHash ? 'match' : 'stale(改版未刷新——gate 将自动重算放行，verdict 续用需人工确认)';
++                break
++              }
++            }
++            if (docState === 'unknown') docState = '主文档缺失';
++          }
++          rows.push({
++            stage: st, status: 'present', runId, reviewPath: rjPath,
++            specVerdict: rev.specVerdict, qualityVerdict: rev.qualityVerdict,
++            channel: classifyReviewerChannel(rev),
++            degradedSelf: isDegradedSelfReview(rev), delegatedWrite: hasDelegatedWriteDisclosure(rev),
++            refreshCount, docState,
++          });
++        }
++        if (json) {
++          process.stdout.write(JSON.stringify({ ok: true, command: 'review status', change: rsChange, stages: rows }) + '\n');
++        } else {
++          console.log(`📋 stage review 状态 [${rsChange}]：`);
++          for (const r of rows) {
++            if (r.status === 'none') { console.log(`  ⬜ ${r.stage}: 无 review 记录`); continue }
++            if (r.status === 'unreadable') { console.log(`  ⚠️ ${r.stage}: review.json 不可读（${r.reviewPath}）`); continue }
++            const flags = [
++              r.channel !== 'agent-tool' && r.channel !== 'platform' ? `通道=${r.channel}` : null,
++              r.degradedSelf ? '⚠️降级自审' : null,
++              r.delegatedWrite ? '⚠️代落盘' : null,
++              r.refreshCount > 0 ? `已刷新×${r.refreshCount}${r.refreshCount >= 2 ? '（反复改版，人工确认结论续用）' : ''}` : null,
++              r.docState !== 'match' && r.docState !== 'unknown' ? `docHash=${r.docState}` : null,
++            ].filter(Boolean).join('，');
++            console.log(`  ${r.specVerdict === 'pass' && r.qualityVerdict === 'pass' ? '✅' : '❌'} ${r.stage}: spec=${r.specVerdict} quality=${r.qualityVerdict}（${r.channel}${flags ? '；' + flags : ''}）`);
++          }
++        }
++        break;
++      }
+       if (rwSub !== 'write') {
+         console.error('用法: sillyspec review write --change <名> --task task-NN --spec <pass|fail|cannot_verify> --quality <verdict>\n  [--notes "评审备注"] [--evidence "cannot_verify 证据说明"] [--changed-files a,b] [--base <rev> --head <rev>] [--force] [--json]\n  单 task review.json 命令式写入：verdict/notes 由你给，executeRunId/base/head/changedFiles/diffPaths 由 CLI 从 git + task 卡代算；已存在默认拒覆盖（--force 越过）');
+         process.exit(2);
+diff --git a/test/temp-boundary-spec-dir.test.mjs b/test/temp-boundary-spec-dir.test.mjs
+index 5d57129..e7fa4e3 100644
+--- a/test/temp-boundary-spec-dir.test.mjs
++++ b/test/temp-boundary-spec-dir.test.mjs
+@@ -93,10 +93,10 @@ try {
+ 
+ console.log('--- 5. 非 tmp 场景零回归：真实仓祖先解析照常（env 已还原）---')
+ {
+-  // 仓根按测试文件位置锚定（cwd 无关）：run-tests.mjs 以 cwd=<repo>/test 执行子进程，
+-  // process.cwd() 依执行方式漂移（runner=仓/test、直跑=仓根）——用 cwd 锚定时祖先解析会上移
+-  // 一层命中仓内 .sillyspec、期望值却拼在 test/ 下，断言随执行方式假败（2026-09-16 套件实证）。
+-  const repoRoot = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..'))
++  // 仓根按测试文件位置锚定（cwd 无关，且只上跳一层：test/ 直属仓根——上跳两层会落到
++  // IdeaProjects，祖先游走在 runner 重定向 HOME 时可撞真实主目录 ~/.sillyspec 假败）。
++  // run-tests.mjs 以 cwd=<repo>/test 执行子进程，process.cwd() 依执行方式漂移（2026-09-16 套件实证）。
++  const repoRoot = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'))
+   const got = resolveSpecDir(repoRoot)
+   // 本仓根有 .sillyspec（无上移）——与既有行为一致；断言命中的是仓内真实目录
+   assert('真实仓 cwd 解析不受 tmp 封顶影响', got === join(repoRoot, '.sillyspec'), `got=${got}`)
+diff --git a/test/review-status-command.test.mjs b/test/review-status-command.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/review-status-command.test.mjs
+@@ -0,0 +1,107 @@
++/**
++ * review status 子命令测试（C1 轻量硬机制，坑 review-liveness-opaque——EHS 复盘：审查 94 分钟
++ * 无收敛期间宿主无只读探针可查状态）。
++ *
++ * 覆盖：
++ *   1. 无 review → 三阶段「无 review 记录」
++ *   2. 有 review：verdict/通道/刷新序数（×2 触发反复改版提示）/代落盘标记/docHash 现势
++ *   3. --json 机器口径（stages 数组同构）
++ *   4. 缺 --change → exit 2 用法提示
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { execSync } from 'node:child_process'
++import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++import { createHash } from 'node:crypto'
++import { runCLI } from './_cli-step-harness.mjs'
++
++const repoRoot = join(dirname(dirname(fileURLToPath(import.meta.url))))
++const tempDirs = []
++after(() => { for (const d of tempDirs) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } } })
++
++function mkRepo(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  tempDirs.push(d)
++  execSync('git init -q -b main', { cwd: d, stdio: 'pipe' })
++  execSync('git config user.email t@t.t && git config user.name t', { cwd: d, stdio: 'pipe' })
++  writeFileSync(join(d, 'README.md'), 'init\n')
++  execSync('git add . && git commit -q -m init', { cwd: d, stdio: 'pipe' })
++  return d
++}
++
++const sha256 = (p) => createHash('sha256').update(readFileSync(p)).digest('hex')
++
++test('① 无 review → 三阶段无记录', () => {
++  const cwd = mkRepo('rstatus-none-')
++  const r = runCLI(['review', 'status', '--change', '2026-09-16-x'], { cwd })
++  assert.equal(r.status, 0, `exit 0（只读查询不因无记录报错；输出：${r.combined.slice(-200)}）`)
++  assert.ok(r.combined.includes('无 review 记录'), '三阶段均报无记录')
++})
++
++test('②③ 有 review → verdict/通道/刷新序数/代落盘/docHash 现势（文本 + --json）', () => {
++  const cwd = mkRepo('rstatus-full-')
++  const change = '2026-09-16-rstatus-x'
++  const specBase = join(cwd, '.sillyspec')
++  const runtimeRoot = join(specBase, '.runtime')
++  // 变更目录 + 主文档（design.md）
++  const changeDir = join(specBase, 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  const designPath = join(changeDir, 'design.md')
++  writeFileSync(designPath, '# design v1\n')
++  // plan review：双 pass、channel=agent-tool、被自动刷新 2 次（notes 含两条审计行）→ 反复改版提示
++  const planRunDir = join(runtimeRoot, 'stage-reviews', 'plan-review-2026-09-16-010000')
++  mkdirSync(planRunDir, { recursive: true })
++  writeFileSync(join(planRunDir, 'review.json'), JSON.stringify({
++    schemaVersion: 1, reviewType: 'plan', specVerdict: 'pass', qualityVerdict: 'pass',
++    reviewedFiles: [`changes/${change}/plan.md`], docHash: 'will-be-stale',
++    checklist: [], reviewer: { channel: 'agent-tool', missionId: null, model: null },
++    reviewerNotes: 'docHash auto-refreshed at 2026-09-16 01:00:00（第 1 次）\ndocHash auto-refreshed at 2026-09-16 02:00:00（第 2 次）',
++  }))
++  mkdirSync(join(specBase, 'changes', change, '.'), { recursive: true })
++  writeFileSync(join(changeDir, 'plan.md'), '# plan\n')
++  // execute review：代落盘披露（首行）→ ⚠️代落盘
++  const execRunDir = join(runtimeRoot, 'stage-reviews', 'execute-review-2026-09-16-030000')
++  mkdirSync(execRunDir, { recursive: true })
++  writeFileSync(join(execRunDir, 'review.json'), JSON.stringify({
++    schemaVersion: 1, reviewType: 'acceptance', specVerdict: 'pass', qualityVerdict: 'pass',
++    reviewedFiles: [`changes/${change}/design.md`], docHash: sha256(designPath),
++    checklist: [], reviewer: { channel: 'agent-tool', missionId: null, model: null },
++    reviewerNotes: '代落盘：子代理写通道故障，结论文本回传',
++  }))
++  // marker（getLatestStageReviewRunId 优先读 marker）
++  mkdirSync(runtimeRoot, { recursive: true })
++  writeFileSync(join(runtimeRoot, 'current-stage-review-run-id-plan-' + change), 'review-2026-09-16-010000')
++  writeFileSync(join(runtimeRoot, 'current-stage-review-run-id-execute-' + change), 'review-2026-09-16-030000')
++
++  const r = runCLI(['review', 'status', '--change', change], { cwd })
++  console.log('DBG-OUTPUT>>>', r.combined)
++  assert.equal(r.status, 0)
++  const planLine = r.combined.split('\n').find(l => l.includes('plan:'))
++  assert.ok(planLine && planLine.includes('spec=pass') && planLine.includes('quality=pass'), `plan 行含双 verdict（实际行：${planLine}；全输出尾：${r.combined.slice(-400)}）`)
++  assert.ok(planLine.includes('已刷新×2'), 'plan 行含刷新序数 ×2')
++  assert.ok(planLine.includes('反复改版'), '×2 触发反复改版提示')
++  assert.ok(planLine.includes('docHash=stale'), 'plan 主文档改版未刷新 → stale 现势提示')
++  const execLine = r.combined.split('\n').find(l => l.includes('execute:'))
++  assert.ok(execLine.includes('⚠️代落盘'), 'execute 行含代落盘标记')
++  assert.ok(!execLine.includes('docHash=stale'), 'execute docHash 现势 match 不提示')
++
++  // --json 机器口径
++  const rj = runCLI(['review', 'status', '--change', change, '--json'], { cwd })
++  const parsed = JSON.parse(rj.stdout.trim().split('\n').pop())
++  assert.equal(parsed.ok, true)
++  const planRow = parsed.stages.find(s => s.stage === 'plan')
++  assert.equal(planRow.refreshCount, 2)
++  assert.equal(planRow.status, 'present')
++  const execRow = parsed.stages.find(s => s.stage === 'execute')
++  assert.equal(execRow.delegatedWrite, true)
++})
++
++test('④ 缺 --change → exit 2', () => {
++  const cwd = mkRepo('rstatus-usage-')
++  const r = runCLI(['review', 'status'], { cwd })
++  assert.equal(r.status, 2)
++  assert.ok(r.combined.includes('用法'), '用法提示')
++})

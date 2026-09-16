@@ -1,0 +1,79 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-964ac92f",
+  "totals": {
+    "files": 5,
+    "additions": 142,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 25,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/endpoint-extractor.js",
+      "declared": true,
+      "additions": 50,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/acceptance-matrix-probe.test.mjs",
+      "declared": true,
+      "additions": 36,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/contract-artifacts.test.mjs",
+      "declared": true,
+      "additions": 19,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/known-issues.md",
+      "declared": true,
+      "additions": 12,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-020-2476",
+  "sessionId": "quick-964ac92f",
+  "savedAt": "2026-09-16T12:04:09.035Z",
+  "patchSha256": "920694832e14312244d51989380f7a5695721e7382dd520831c330b4bf530e80",
+  "patchStatus": "ok"
+}

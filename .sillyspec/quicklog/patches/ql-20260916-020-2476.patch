@@ -1,0 +1,224 @@
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index eef439f..530888c 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -140,3 +140,15 @@ QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整
+ ## archive 对账表跨仓文件恒标「计划未动」（live worktree 形态缺 per-repo advisory，待立项）
+ 
+ archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**部分兑现**：verify 侧 per-repo advisory 已落地（113e19d：src/cross-repo-reconcile.js 注册表→仓根→双源 actual→三类差集+软桶，gates.js verify 块接线 printCrossRepoReconcile，test/cross-repo-probe7-anchor.test.mjs）。**剩余待立项**（收窄）：archive 对账表本身——归档表跨仓行仍标「计划未动」，方向改为复用 cross-repo-reconcile 结果在 archive 输出面渲染 per-repo 分组行（advisory），不再需要新建对账链路。（来源：2026-09-15 wp EHS 实证 + 2026-09-16 第二批登记 + 同日更正）
++
++## 能力域撞车无预警（quick 无声明面，文件冲突预警不触发，待立项）
++
++2026-09-16 实证：cross-layer-contract-probe 方案 A（design 契约枢纽探针）与凌晨 ed540c6（quick 落地的探针8 载荷字段契约对账）同族撞车——quick 无 design 声明面，现有「跨变更文件冲突预警」（按声明文件交集）不触发，靠 plan 独立审查子代理回读 git log 碰运气回收。若审查未抓到即双探针8 事故。**待立项方向**：brainstorm 方案步 / plan Step 1 启动时，CLI 按「目标模块 + 能力关键词」（--input/design 段落 token 化）扫近 24h 的 quicklog 条目标题与 git log --oneline，token 重叠 ≥阈值 → advisory 预警「近期已有同能力域落地/在途，先核对再开工」。（来源：2026-09-16 撞车实证 + 独立审查回收报告）
++
++## test_strategy: skip 只短路主仓、跨仓无条件跑（口径分裂，待立项）
++
++主仓 test_strategy: skip（真跳过留审计，D-005@v2）不作用于跨仓仓——mergeCrossRepoResults 无条件逐仓跑 own local.yaml commands.test / fallback npm test。2026-09-15 EHS 会话靠手工给 spdemo 造 own local.yaml 绕过（B2 已修「无 test script」形态，但「显式配 skip 仍跨仓照跑」的分裂仍在）。**待立项方向**：per-repo 覆盖（local.yaml repos:<key>: test_strategy:）或主仓 skip 语义透传跨仓（附 note）；注意跨仓测试可能是变更唯一测试面，透传需带「跨仓有 own local.yaml 显式命令时仍跑」的例外。（来源：EHS 复盘 B4 + 2026-09-16 二轮盘点）
++
++## worktree 内直跑全量测试的环境性失败族（stash 基线对照成本，待立项）
++
++execute 期在隔离 worktree 内跑 `npm test` 全量时，CLI 子进程类测试（spec-dir/mcp-server/init-*/platform-*/run-* 等族）被 src/index.js 顶层 worktree-cwd 硬拦守卫拦下——2026-09-16 cross-layer-contract-probe 实证 13 文件假红，实现子代理被迫 stash 基线对照自证 IDENTICAL-FAILURE-SETS（实打实的 token/时间成本）。--done 主路径已被隔离快照覆盖（gate-snapshot），但「worktree 内自验全量」仍是摩擦面。**待立项方向**：worktree cwd 下自动豁免该守卫族（known_failures 注入或 run-tests 探测 worktree 跳过守卫族文件），或 execute prompt 注入「worktree 内自验用定向测试面，全量留给 --done 快照」指引。（来源：2026-09-16 实现子代理基线对照报告）
+diff --git a/src/endpoint-extractor.js b/src/endpoint-extractor.js
+index 6971307..3fa5da6 100644
+--- a/src/endpoint-extractor.js
++++ b/src/endpoint-extractor.js
+@@ -24,6 +24,46 @@ function lineOfIndex(content, index) {
+   return content.slice(0, index).split('\n').length
+ }
+ 
++/**
++ * 注释掩码（坑 endpoint-extractor-selfdoc-noise，2026-09-16 E 变更 verify 实证）：JS/Java 的
++ * // 与 /* *\/ 注释区替换为等长空格（换行保留）——注释里的 `app.use("/api", router)`、
++ * `router.get("/api/xxx")`、`@GetMapping("/x")` 文档示例不再被全文正则当真路由（探针5 曾报
++ * 「GET /api/path、GET /api unused」假 advisory）。字符串字面量（' " `）原样保留（真路由在
++ * 字符串里）；正则字面量按字符串近似处理（端点正则里出现路由字符串形态极罕见，误掩概率低）。
++ * 保长度 = 索引/行号零漂移，lineOfIndex 与全部既有正则兼容。
++ * @param {string} content
++ * @returns {string} 等长掩码后内容
++ */
++function stripCommentsKeepLength(content) {
++  const src = String(content || '')
++  const out = src.split('')
++  let st = 'normal' // normal | block | sq | dq | tick
++  for (let i = 0; i < src.length; i++) {
++    const c = src[i], n = src[i + 1]
++    if (st === 'normal') {
++      if (c === '/' && n === '/') {
++        // 行注释：掩到行尾（保留换行符本身）
++        let j = i
++        while (j < src.length && src[j] !== '\n') { out[j] = ' '; j++ }
++        i = j - 1
++      } else if (c === '/' && n === '*') {
++        out[i] = ' '; out[i + 1] = ' '
++        st = 'block'; i++
++      } else if (c === "'") st = 'sq'
++      else if (c === '"') st = 'dq'
++      else if (c === '`') st = 'tick'
++    } else if (st === 'block') {
++      if (c === '*' && n === '/') { out[i] = ' '; out[i + 1] = ' '; st = 'normal'; i++ }
++      else if (c !== '\n') out[i] = ' '
++    } else {
++      // 字符串内：转义跳过；闭合引号回 normal（内容原样保留）
++      if (c === '\\') i++
++      else if ((st === 'sq' && c === "'") || (st === 'dq' && c === '"') || (st === 'tick' && c === '`')) st = 'normal'
++    }
++  }
++  return out.join('')
++}
++
+ /**
+  * 从单个文件提取 FastAPI router 端点
+  * 支持 APIRouter(prefix=...) 和 @router.get/post/put/delete/patch("/path")
+@@ -73,7 +113,13 @@ export function extractFastApiEndpoints(filePath) {
+  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
+  */
+ export function extractExpressEndpoints(filePath) {
+-  const content = readFileSync(filePath, 'utf8')
++  const rawContent = readFileSync(filePath, 'utf8')
++  // 注释掩码（坑 endpoint-extractor-selfdoc-noise，2026-09-16 E 变更 verify 实证：本模块自身
++  // JSDoc 示例 `app.use("/api", router)` / `router.get("/api/xxx")` 被全文正则当真路由——
++  // 探针5 报「GET /api/path、GET /api unused」假 advisory，agent 逐条裁定纯耗损）。掩码保长度
++  // 替换注释区为空格（换行保留）：字符串字面量不动（真路由在字符串里），索引/行号零漂移，
++  // 下游 lineOfIndex/正则全兼容。
++  const content = stripCommentsKeepLength(rawContent)
+   const lines = content.split('\n')
+   const endpoints = []
+ 
+@@ -116,7 +162,9 @@ export function extractExpressEndpoints(filePath) {
+  * @returns {Array<{ method: string, path: string, source: string, line: number }>}
+  */
+ export function extractSpringEndpoints(filePath) {
+-  const content = readFileSync(filePath, 'utf8')
++  // 注释掩码同 Express（坑 endpoint-extractor-selfdoc-noise；Java 与 JS 注释语法同族 // /* */
++  // ——掩码器共用。注解本体不在注释内，掩码零影响；注释里的 @GetMapping 示例不再入面）
++  const content = stripCommentsKeepLength(readFileSync(filePath, 'utf8'))
+   const lines = content.split('\n')
+   const endpoints = []
+ 
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 0b595a7..bc00d62 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -691,7 +691,7 @@ function renderProbe7Lines(p7) {
+     L.push('- 不适用（无 TaskCard）')
+     return L
+   }
+-  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles 结构归属承接面（每条 acceptance 由哪些测试承接）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
++  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+   L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。证据列给首命中 file:line 锚点或人工核验提示。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
+   // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
+   // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
+@@ -907,12 +907,35 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+         }
+       } catch { /* tasks 目录不可读 → applicable 维持 false */ }
+       probe7.applicable = cards.length > 0
++      // 跨卡归属（坑 probe7-provider-tests-in-consumer-card，2026-09-16 E 变更 verify 实证：8 格
++      // 被机械预填 uncovered——task-03（测试卡）的用例测的是 task-01（provider）的导出函数，但归属
++      // 只看本卡 allowed_paths ∪ review changedFiles，provider 卡的 acceptance 永远连不上消费卡的
++      // 测试。修法：归属集扩为「本卡 ∪ 直接依赖本卡的卡」的测试文件——M depends_on N 则 M 的测试
++      // 可承接 N 的 acceptance（下游消费卡天然测上游产物）。只扩直接依赖（v1，传递闭包易把无关
++      // 测试卷进来放大 partial 噪音）。
++      const dependsOnOf = new Map()
++      for (const c of cards) {
++        const dm = String(c.raw).match(/^depends_on:\s*\[?([^\]\n]*)\]?/m)
++        const deps = (dm ? dm[1] : '').split(/[,\s]+/).map(s => s.trim()).filter(s => /^task-\d+$/.test(s))
++        dependsOnOf.set(c.task, deps)
++      }
+       for (const card of cards) {
+         const fromAllowed = parseAllowedPaths(card.raw)
+           .map(p => String(p).replace(/^NEW:\s*/, '').trim())
+           .filter(p => p && isProbe7TestPath(p))
+         const fromReview = runId ? readReviewChangedTestFiles(runtimeRoot, runId, card.task) : []
+-        const testFiles = [...new Set([...fromAllowed, ...fromReview])]
++        // 直接下游卡的归属测试并入（provider acceptance 由消费卡测试承接）
++        const fromDependents = []
++        for (const other of cards) {
++          if (other.task === card.task) continue
++          const deps = dependsOnOf.get(other.task) || []
++          if (!deps.includes(card.task)) continue
++          for (const p of parseAllowedPaths(other.raw)) {
++            const t = String(p).replace(/^NEW:\s*/, '').trim()
++            if (t && isProbe7TestPath(t) && !fromDependents.includes(t)) fromDependents.push(t)
++          }
++        }
++        const testFiles = [...new Set([...fromAllowed, ...fromReview, ...fromDependents])]
+         probe7.tasks.push({
+           task: card.task,
+           acceptance: card.acceptance,
+diff --git a/test/acceptance-matrix-probe.test.mjs b/test/acceptance-matrix-probe.test.mjs
+index ad1a8a6..949c483 100644
+--- a/test/acceptance-matrix-probe.test.mjs
++++ b/test/acceptance-matrix-probe.test.mjs
+@@ -281,6 +281,42 @@ try {
+       'verify-probes.js 全文件零 task-review 静态/动态 import（注释里的「禁 import」说明不算）')
+     assert(!existsSync(join(__dirname, '..', 'src', 'verify-probes.js.bak')), '无备份残渣')
+   }
++
++  console.log('--- 7. 跨卡归属（probe7-provider-tests-in-consumer-card，2026-09-16 E 变更实证）---')
++  {
++    // fixture：task-01 provider（allowed_paths 仅 src 文件、acceptance 有关键词）；task-03 测试卡
++    // depends_on: task-01（allowed_paths 为测试文件，内容含 provider acceptance 关键词）
++    const proj = mkdtempSync(join(tmpdir(), 'amx7x-'))
++    tmpRoots.push(proj)
++    const specBase = join(proj, '.sillyspec')
++    const changeDir = join(specBase, 'changes', 'cx')
++    const tasksDir = join(changeDir, 'tasks')
++    mkdirSync(tasksDir, { recursive: true })
++    writeFileSync(join(changeDir, 'design.md'), '## 文件变更清单\n\n| 操作 | 文件 | 说明 |\n|---|---|---|\n| 修改 | a.js | x |\n')
++    writeFileSync(join(proj, 'a.js'), 'export const f = 1\n')
++    mkdirSync(join(proj, 'test'), { recursive: true })
++    writeFileSync(join(proj, 'test', 'consumer-pivot.test.mjs'), '// crosscard kwvane providerPivot\nexport {}\n')
++    writeFileSync(join(tasksDir, 'task-01.md'), [
++      '---', 'id: task-01', 'allowed_paths: [src-feature.js]',
++      'acceptance:', '  - providerPivot 导出函数由 kwvane 场景覆盖', '---', '# t1', '',
++    ].join('\n'))
++    writeFileSync(join(tasksDir, 'task-03.md'), [
++      '---', 'id: task-03', 'depends_on: task-01', 'allowed_paths: [test/consumer-pivot.test.mjs]',
++      'acceptance:', '  - 五用例', '---', '# t3', '',
++    ].join('\n'))
++    const r = runVerifyProbes({ cwd: proj, changeName: 'cx' })
++    const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
++    const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
++    assert(t1 && t1.testFiles.includes('test/consumer-pivot.test.mjs'),
++      `task-01 归属含下游 task-03 的测试文件（实际：${JSON.stringify(t1 && t1.testFiles)}）`)
++    assert(t3 && t3.testFiles.includes('test/consumer-pivot.test.mjs'), 'task-03 自身归属不变')
++    // 关键词命中走下游测试内容 → task-01 首条 acceptance 预填 covered（anchor 在下游测试内）
++    const md = renderVerifyProbesReport(r)
++    const seg = md.split('**task-01**')[1] ? md.split('**task-01**')[1].split('**task-03**')[0] : ''
++    assert(seg.includes('covered'), `task-01 acceptance 预填 covered（不再假 uncovered；seg=${seg.slice(0, 120)}）`)
++    // 无依赖关系的卡不并入（task-03 不反向承接无关卡——用 fixture 内只两卡，反向断言：t3 归属不含 src-feature.js 类）
++    assert(!(t3.testFiles || []).some(f => f.includes('src-feature')), '依赖方向单向：下游不反向并入')
++  }
+ } finally {
+   for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }
+ }
+diff --git a/test/contract-artifacts.test.mjs b/test/contract-artifacts.test.mjs
+index 26fcfb2..230f4a2 100644
+--- a/test/contract-artifacts.test.mjs
++++ b/test/contract-artifacts.test.mjs
+@@ -503,6 +503,25 @@ describe('extractExpressEndpoints', () => {
+     assert.equal(endpoints[2].method, 'DELETE')
+   })
+ 
++  it('注释里的文档示例路由被掩、真路由保留（endpoint-extractor-selfdoc-noise，2026-09-16 E 变更实证）', () => {
++    mkdirSync(tmpDir, { recursive: true })
++    writeFileSync(routerFile, [
++      '/**',
++      ' * app.use("/api", router)',
++      ' * router.get("/api/xxx")',
++      ' */',
++      'app.use("/v1", router);',
++      'router.get("/users", listUsers);',
++      '// app.get("/api/path", h)',
++      'export {}',
++    ].join('\n'), 'utf8')
++    const endpoints = extractExpressEndpoints(routerFile)
++    // 注释里的 use 前缀 "/api" 与示例路由全掩；真 use("/v1") 前缀 + 真 /users 命中
++    assert.equal(endpoints.length, 1, `只留真路由（实际：${JSON.stringify(endpoints)}）`)
++    assert.equal(endpoints[0].method, 'GET')
++    assert.equal(endpoints[0].path, '/v1/users')
++  })
++
+   it('app.use 前缀近似合并（同文件）', () => {
+     mkdirSync(tmpDir, { recursive: true })
+     writeFileSync(routerFile, [

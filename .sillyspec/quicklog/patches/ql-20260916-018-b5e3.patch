@@ -1,0 +1,772 @@
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index 12464a0..1959892 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -132,3 +132,11 @@ QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整
+ **修法建议（中等完整流程变更，写入方/读取方/归档方全动）**：QUICKLOG 条目文件化——每 ql-ID 独立 sidecar 文件（`quicklog/entries/<ql-id>.md`），主文件退化为聚合渲染产物（命令重建或追加渲染）；提交按 sidecar 文件收编零剥离。可行性佐证：patches sidecar（`quicklog/patches/<ql>.json/.patch` 范围快照冻结件）已证明 per-ql 文件形态运转正常。注意轮转文件（QUICKLOG-qinyi-<日期>.md）也要一并纳入方案。（来源：2026-09-16 本会话 6 次剥离舞步 + 历史提交注记）
+ 
+ **v1 已工具化**（9d299a6，2026-09-16 quick-deed7456 / ql-20260916-015-44dd）：`sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]` 一键收编——持用户 QUICKLOG 锁全程，恒扫主文件+轮转归档定位本会话条目（含已取消）→ 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG+patches sidecar+额外 pathspec）→ finally 恢复工作区全量（并行条目留未提交态；.runtime 落备份兜底；fail-fast 附人工四步舞文案）。测试 test/quicklog-commit-slice.test.mjs 7 用例。**完整文件化（entries sidecar 权威+聚合渲染）仍待立项**——v1 是止血不是根治：提交侧摩擦已消，文件仍是单文件追加形态，读侧/归档侧未动。
++
++## probe5 跨仓前端调用面不纳入扫描（parity 扫描根单仓，待立项）
++
++三端变更（EHS 形态：主仓后端 + 前端兄弟仓）verify 探针 5 的前端调用扫描根恒单仓（contract-matrix.js verifyApiParity frontendRoot :545——worktree 或 scan-root 二选一），跨仓 task 卡的仓不在扫描根内，跨端 API 契约对账实际只做了主仓半边（EHS 实证「0 frontend calls」误导性 advisory）。现仅渲染边界注记（verify-probes.js:993-994「parity 扫描面只含主仓——另有 N 张跨仓 task 卡的仓不在扫描根内」）。**待立项方向**：按跨仓 task 卡 repo ∪ local.yaml repos 注册根逐仓收窄扫描（复用探针8 readEntry 的跨仓根解析口径，contract-matrix.js:216-236），前端调用计数/missingBackend 对账按仓分组输出。注意与 D-004（archive 侧跨仓 diff 不并入主仓对账防③类噪音）区分：probe5 是 advisory 面不是 gate 阻断面，纳入跨仓不会引入阻断风险。（来源：2026-09-15 wp EHS 三仓会话实证 + 2026-09-16 第二批复盘登记）
++
++## archive 对账表跨仓文件恒标「计划未动」（live worktree 形态缺 per-repo advisory，待立项）
++
++archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**待立项方向**：对齐 verify 阶段 printCrossRepoReconcile 的 per-repo advisory 形态（声明/实测/对上/②缺/③多按仓分组、advisory 不阻断），归档表跨仓行从「计划未动」改为指向 per-repo 分组结果。（来源：同上）
+diff --git a/src/docs-debt.js b/src/docs-debt.js
+index 8a6dc46..bb6d81e 100644
+--- a/src/docs-debt.js
++++ b/src/docs-debt.js
+@@ -363,8 +363,13 @@ export function renderDecisionTouchFacts(touches) {
+  * @returns {{ root: string, changedFiles: string[] }} root = 实际 git 锚（computeDocsDebt 的 projectRoot 同值）
+  */
+ export function collectExecuteChangedFiles({ specBase, changeName, cwd, projectRoot } = {}) {
+-  const wtRoot = specBase ? join(specBase, '.runtime', 'worktrees', changeName || '') : null
+-  const root = projectRoot || (wtRoot && changeName && existsSync(wtRoot) ? wtRoot : cwd) || process.cwd()
++  // 双候选 worktree 根（坑 platform-dual-root-fourth-consumer，2026-09-16 hunt 实证）：平台模式
++  // specBase=specRoot 时主仓 worktree 在项目侧 <cwd>/.sillyspec——单查 specBase 必落空 → root 退
++  // cwd → 收进的是主仓脏集而非 worktree 交付集，docs-debt 事实面错。对齐 contract-matrix 双候选。
++  const wtCandidates = [...new Set([specBase, join(cwd || process.cwd(), '.sillyspec')].filter(Boolean))]
++    .map(b => join(b, '.runtime', 'worktrees', changeName || ''))
++  const wtRoot = changeName ? (wtCandidates.find(p => existsSync(p)) || null) : null
++  const root = projectRoot || (wtRoot ? wtRoot : cwd) || process.cwd()
+   const changed = new Set()
+   const statusRes = safeGit(root, ['status', '--porcelain'], { trim: false })
+   if (!statusRes.error && statusRes.value) {
+diff --git a/src/foreign-declared.js b/src/foreign-declared.js
+index e484899..a439d3b 100644
+--- a/src/foreign-declared.js
++++ b/src/foreign-declared.js
+@@ -45,23 +45,32 @@ function getMainDirtySet(cwd) {
+  * 变更 worktree 活性速查（.runtime/worktrees/<change>/meta.json）。
+  * isolated=true：有存活隔离 worktree（meta 在、非 in-place、worktreePath 目录在）——
+  * 其 WIP 在 worktree 内主仓 porcelain 不可见，整份 design 声明按在途处理。
+- * @returns {Map<string, { isolated: boolean }>|null} null = 读取失败（fail-closed）
++ * 双根扫描（坑 platform-dual-root-fourth-consumer，2026-09-16 hunt 实证）：平台模式
++ * specBase=specRoot 下只挂跨仓 worktree，主仓 worktree 在项目侧 <cwd>/.sillyspec——单扫
++ * specBase 会把主仓 worktree 变更误判 stale → 其声明失效 → 文件被误归属当前变更（③类
++ * 噪音/误扣）。specBase 与 cwd 项目侧两目录都扫，按变更名合并（specBase 先入）。
++ * @returns {Map<string, { isolated: boolean }>|null} null = 两目录均读取失败（fail-closed）
+  */
+-function loadWorktreeLiveness(specBase) {
++export function loadWorktreeLiveness(specBase, cwd) {
+   const map = new Map()
+-  try {
+-    const dir = join(specBase, '.runtime', 'worktrees')
+-    for (const e of readdirSync(dir, { withFileTypes: true })) {
+-      if (!e.isDirectory()) continue
+-      try {
+-        const meta = JSON.parse(readFileSync(join(dir, e.name, 'meta.json'), 'utf8'))
+-        const isolated = Boolean(meta && meta.mode !== 'in-place-fallback'
+-          && meta.worktreePath && existsSync(meta.worktreePath))
+-        map.set(meta.changeName || e.name, { isolated })
+-      } catch { /* 单条损坏跳过（该变更走主仓 dirty 判定） */ }
+-    }
+-  } catch { return null }
+-  return map
++  const roots = [...new Set([specBase, join(cwd || process.cwd(), '.sillyspec')].filter(Boolean))]
++  let anyDirOk = false
++  for (const base of roots) {
++    try {
++      const dir = join(base, '.runtime', 'worktrees')
++      for (const e of readdirSync(dir, { withFileTypes: true })) {
++        if (!e.isDirectory()) continue
++        try {
++          const meta = JSON.parse(readFileSync(join(dir, e.name, 'meta.json'), 'utf8'))
++          const isolated = Boolean(meta && meta.mode !== 'in-place-fallback'
++            && meta.worktreePath && existsSync(meta.worktreePath))
++          map.set(meta.changeName || e.name, { isolated })
++        } catch { /* 单条损坏跳过（该变更走主仓 dirty 判定） */ }
++      }
++      anyDirOk = true
++    } catch { /* 该根不存在/不可读 → 试下一根 */ }
++  }
++  return anyDirOk ? map : null
+ }
+ 
+ /**
+@@ -74,7 +83,7 @@ function loadWorktreeLiveness(specBase) {
+ function filterStaleForeignDeclarations(foreign, cwd, specBase) {
+   if (foreign.size === 0) return
+   const dirty = getMainDirtySet(cwd)
+-  const worktrees = loadWorktreeLiveness(specBase)
++  const worktrees = loadWorktreeLiveness(specBase, cwd)
+   if (dirty === null && worktrees === null) return // 两个事实源全失败 → 原样保留
+   for (const [file, owners] of [...foreign.entries()]) {
+     const live = owners.filter(owner => {
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 213c585..3ed4fb8 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1051,8 +1051,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         // 不在自动刷新范围，照常 fail-closed。
+         const gated = validateStageReviewWithAutoRefresh({ stage: stageName, reviewType, runtimeRoot, reviewRunId, searchDirs, autoRefresh: true })
+         if (gated.autoRefreshed) {
+-          console.warn(`\n🔄 stage review docHash 失配已自动刷新（主文档改版后机械重算，verdict/checklist 保留——结论是否仍适用于新文档需人工确认）`)
++          console.warn(`\n🔄 stage review docHash 失配已自动刷新（第 ${gated.refreshOrdinal || 1} 次；hash ${gated.hashDrift || 'n/a'}；主文档改版后机械重算，verdict/checklist 保留——结论是否仍适用于新文档需人工确认）`)
+           console.warn(`   已就地更新: ${gated.refreshedPath}`)
++          // C3 升级提醒（2026-09-15 wp EHS 实证：NEW: 批注/需求调整/Reverse Sync 多次走此通道）：
++          // 同一 review 被反复刷新 = 主文档在审查通过后反复变更，「审查后的变更不再见审查」的
++          // 面积在累积——序数 ≥2 从一句注记升级为显式人工确认提醒（仍放行，不伪造重审）。
++          if ((gated.refreshOrdinal || 1) >= 2) {
++            console.warn(`   ⚠️ 该 review 已第 ${gated.refreshOrdinal} 次刷新——主文档在审查后反复变更，建议人工复核 verdict 结论续用性（涉及设计要点/接口变更时应重审，勿把自动放行当「新文档已审过」）`)
++          }
+         }
+         const reviewResult = gated.result
+         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
+@@ -1065,7 +1071,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         // channel 识别（2026-09-10 通道优先序批次）：reviewer.channel 结构化落款优先，兼容
+         // reviewerNotes 首行「降级：」约定；platform 通道（P2 review-dispatch 落地后）ℹ️ 留痕
+         // missionId 供追溯，其余通道正常放行。
+-        const { classifyReviewerChannel } = await import('../stage-review.js')
++        const { classifyReviewerChannel, hasDelegatedWriteDisclosure } = await import('../stage-review.js')
+         const reviewChannel = classifyReviewerChannel(reviewResult.review)
+         if (reviewChannel === 'self') {
+           console.warn(`\n⚠️ Stage Review 降级自审（tier=independent 但宿主无 Agent tool）：${stageName} review 按 prompt 降级条款由当前 agent 自审产出——独立性折损已留痕（reviewerNotes 首行「降级：」），结论应附源码锚点补偿，建议人工抽查关键结论。`)
+@@ -1073,6 +1079,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+           const mid = reviewResult.review && reviewResult.review.reviewer && reviewResult.review.reviewer.missionId
+           console.log(`\nℹ️ Stage Review 平台派发（channel=platform${mid ? `，missionId=${mid}` : '，missionId 未落款'}）：${stageName} review 由平台独立 worker 产出（独立进程/会话）。`)
+         }
++        // C4 代落盘审计行（2026-09-15 wp EHS 实证：平台写通道故障下主流程代子代理落盘 review，
++        // 独立性折损当时只在 notes 里、gate 不可见）：reviewerNotes 首行「代落盘：」披露 → ⚠️ 留痕
++        // （与降级自审同哲学：可见的折损优于静默伪装；首行约定识别，不阻断）。
++        if (hasDelegatedWriteDisclosure(reviewResult.review)) {
++          console.warn(`\n⚠️ Stage Review 代落盘披露：${stageName} review 的 reviewerNotes 首行标记「代落盘」——review.json 由主代理代（写通道故障的）审查者落盘，独立性依赖审查者结论回传的忠实性，建议人工抽查关键结论与回传文本一致性。`)
++        }
+       }
+     } catch (e) {
+       // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 905f87c..b0a8831 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1042,7 +1042,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
+     try {
+       const { classifyReviewTier } = await import('../review-tier.js')
+-      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority } = await import('../stage-review.js')
++      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority, getLatestStageReviewRunId } = await import('../stage-review.js')
+       const tierSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
+       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
+@@ -1082,11 +1082,40 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       // 头部渲染「审查执行通道」段（按用户配置序，见 local.yaml review_dispatch.channel_priority）。
+       const reviewChannelPriority = readReviewChannelPriority(cwd)
+       const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier, channelPriority: reviewChannelPriority })
++      // C2 前阶段实证清单机械附带（坑 review-subagent-redundant-verify，2026-09-15 wp EHS 实证：
++      // plan 审查把 brainstorm 已两轮实证的三仓源码全量重验——94 分钟不收敛被用户三催。此前只有
++      // prompt 散文说「前序实证勿重验」，子代理并不知道前序具体审过了什么；现把前序 stage review
++      // 的 checklist pass 项机械注入派发 prompt（封顶 15 条防灌爆），审查子代理据此跳过已实证面。
++      let priorFactsMd = ''
++      if (tier.tier === 'independent') {
++        try {
++          const priorStages = stageName === 'plan' ? ['brainstorm'] : stageName === 'execute' ? ['brainstorm', 'plan'] : []
++          const factLines = []
++          for (const ps of priorStages) {
++            let priorRunId = null
++            try { priorRunId = getLatestStageReviewRunId(tierRuntimeRoot, ps, changeName) } catch {}
++            if (!priorRunId) continue
++            const priorReviewPath = join(tierRuntimeRoot, 'stage-reviews', `${ps}-${priorRunId}`, 'review.json')
++            if (!existsSync(priorReviewPath)) continue
++            try {
++              const priorReview = JSON.parse(readFileSync(priorReviewPath, 'utf8'))
++              for (const c of (Array.isArray(priorReview.checklist) ? priorReview.checklist : [])) {
++                if (c && c.result === 'pass' && c.item) factLines.push(`- [${ps}] ${String(c.item).replace(/\s+/g, ' ').slice(0, 100)}`)
++              }
++            } catch {}
++          }
++          if (factLines.length > 0) {
++            const shown = factLines.slice(0, 15)
++            priorFactsMd = `\n**前序阶段独立审查已实证（pass）结论——直接引用勿重验**（展示 ${shown.length}/${factLines.length} 条；EHS 复盘实证：重验已实证面 = 94 分钟不收敛的同款浪费；本阶段只审自己特有面，结论存疑时才定向补证）：\n${shown.join('\n')}\n`
++          }
++        } catch {}
++      }
+       promptText = promptText
+         .split('{REVIEW_TIER}').join(tier.tier)
+         .split('{REVIEW_TIER_REASON}').join(tier.reason)
+         .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
+         .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
++        .split('{PRIOR_REVIEW_FACTS}').join(priorFactsMd)
+     } catch (e) {
+       // 降级 self，避免 prompt 残留占位符
+       promptText = promptText
+@@ -1094,6 +1123,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         .split('{REVIEW_TIER_REASON}').join('分级异常降级 self: ' + e.message)
+         .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
+         .split('{REVIEW_JSON_CONTRACT}').join('(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
++        .split('{PRIOR_REVIEW_FACTS}').join('')
+     }
+   }
+ 
+diff --git a/src/stage-review.js b/src/stage-review.js
+index d150468..8d40c1c 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -437,6 +437,19 @@ export function isDegradedSelfReview(review) {
+   return /^降级[：:]/.test(firstLine)
+ }
+ 
++/**
++ * 代落盘披露识别（C4，坑 delegated-write-audit-blind，2026-09-15 wp EHS 会话实证：平台写通道
++ * 故障下主流程 4 次代子代理落盘 review.json/交付物——独立性全靠 agent 自觉 + notes 留痕，gate
++ * 无任何可见标记。审查派发 prompt 已要求代落盘时 reviewerNotes 首行记「代落盘：…」，本识别让
++ * gate 侧补 ⚠️ 审计行（与 isDegradedSelfReview 同哲学：可见的折损优于静默的伪装——首行约定
++ * 识别，不承诺全文语义判定）。
++ */
++export function hasDelegatedWriteDisclosure(review) {
++  const notes = review && typeof review.reviewerNotes === 'string' ? review.reviewerNotes : ''
++  const firstLine = notes.split(/\r?\n/, 1)[0].trim()
++  return /^代落盘[：:]/.test(firstLine)
++}
++
+ /**
+  * stage-level review 总校验（brainstorm/plan/execute-acceptance 的 done gate）
+  *
+@@ -572,10 +585,20 @@ export function validateStageReviewWithAutoRefresh(opts) {
+   if (!docHash) return { result, autoRefreshed: false }
+ 
+   const refreshedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
++  // C3 声明化（坑 dochash-autorefresh-silent-drift，2026-09-15 wp EHS 会话实证：审查通过后
++  // 主文档多次改版——NEW: 前缀批注、需求调整改名、Reverse Sync——gate 每次都静默机械重算放行，
++  // verdict 原样保留，「审查后的变更不再见审查」零痕迹可读。旧内容不可复原（只有 hash），改用
++  // 可实现且更贴风险的两个信号做声明：① hash 漂移（旧→新短前缀）② 刷新序数——同一 review 被
++  // 反复刷新 = 主文档在审查后反复变更，序数 ≥2 时 gate 侧升级提醒人工确认结论续用。
++  const priorNotes = String(result.review.reviewerNotes || '')
++  const refreshOrdinal = (priorNotes.match(/docHash auto-refreshed at /g) || []).length + 1
++  const oldHashShort = String(result.review.docHash || '').slice(0, 8)
++  const newHashShort = String(docHash).slice(0, 8)
++  const auditLine = `docHash auto-refreshed at ${refreshedAt}（第 ${refreshOrdinal} 次；hash ${oldHashShort}→${newHashShort}；gate 检测主文档改版，机械重算；verdict 保留，结论是否仍适用于新文档需人工确认${refreshOrdinal >= 2 ? '——已多次刷新：主文档在审查后反复变更，建议人工复核结论续用或重审' : ''}）`
+   const refreshed = {
+     ...result.review,
+     docHash,
+-    reviewerNotes: `${result.review.reviewerNotes || ''}\ndocHash auto-refreshed at ${refreshedAt}（gate 检测主文档改版，机械重算；verdict 保留，结论是否仍适用需人工确认）`.trim(),
++    reviewerNotes: `${priorNotes}\n${auditLine}`.trim(),
+   }
+   try {
+     writeAtomicSync(reviewPath, JSON.stringify(refreshed, null, 2) + '\n')
+@@ -583,7 +606,7 @@ export function validateStageReviewWithAutoRefresh(opts) {
+     return { result, autoRefreshed: false } // 写失败回落原失败结果，不静默放行
+   }
+   const recheck = validateStageReview(opts)
+-  return { result: recheck, autoRefreshed: recheck.ok, refreshedPath: reviewPath, previousErrors: result.errors }
++  return { result: recheck, autoRefreshed: recheck.ok, refreshedPath: reviewPath, previousErrors: result.errors, refreshOrdinal, hashDrift: `${oldHashShort}→${newHashShort}` }
+ }
+ 
+ /**
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index f0e55e1..9c311fc 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -422,6 +422,7 @@ const acceptanceSteps = [
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
+ - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
++{PRIOR_REVIEW_FACTS}
+   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+ {REVIEW_JSON_CONTRACT}
+   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 76d50c0..cc74dbb 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -338,6 +338,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
+ 
+ ### tier=independent 时：启动 plan-review 子代理
++{PRIOR_REVIEW_FACTS}
+ 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
+ 1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
+ 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index d977c79..41cbbe1 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -368,7 +368,7 @@ function collectPathTokens(text) {
+ 
+ /**
+  * 解析 module-impact.md 的「模块影响矩阵」+「未匹配文件」两节，按检查面归类影响证据。
+- * 纯机械启发式（确定性：同输入同输出）；矩阵行 <!--TODO--> 未回填 → 保守计行为类
++ * 纯机械启发式（确定性：同输入同输出）；矩阵行 <!--TODO--> 未回填 → 保守计行为类 probe1-noqa
+  * （影响面未知时多测不漏测）。矩阵节缺失 / 无数据行 → parseable=false（调用方降级）。
+  *
+  * @param {string|null} mdText
+@@ -393,8 +393,8 @@ function classifyModuleImpactEvidence(mdText) {
+       const tok = IMPACT_BEHAVIORAL_TOKENS.find((w) => rowText.includes(w))
+       if (tok) { out.behavioral.push(`（影响类型：${tok}）`); classified++ }
+     }
+-    // 矩阵行 <!--TODO--> 未回填 → 影响面未知，保守计行为类
+-    if (String(rowText).includes('<!--TODO')) { out.behavioral.push('<!--TODO--> 未回填行'); classified++ }
++    // 矩阵行 <!--TODO--> 未回填 → 影响面未知，保守计行为类 /* probe1-noqa */
++    if (String(rowText).includes('<!--TODO')) { out.behavioral.push('<!--TODO--> 未回填行'); classified++ } /* probe1-noqa */
+     return classified
+   }
+   for (const line of lines) {
+@@ -414,7 +414,7 @@ function classifyModuleImpactEvidence(mdText) {
+       matrixRows++
+       consumeRow(trimmed)
+     } else if (section === 'unmatched') {
+-      // 骨架产出 `- \`path\` <!--TODO-->` 列表行；手写形态可能是 `| 文件 | 处置说明 |` 表行
++      // 骨架产出 `- \`path\` <!--TODO-->` 列表行；手写形态可能是 `| 文件 | 处置说明 |` 表行 /* probe1-noqa */
+       const bullet = trimmed.match(/^-\s+(.+)$/)
+       if (bullet) { consumeRow(bullet[1]); continue }
+       if (trimmed.startsWith('|')) {
+@@ -1955,7 +1955,7 @@ export function printVerifyParityCheck(result) {
+     console.warn('   ⚠️  本次 scope 为 full-repo（diff 与 apply-pathspec 均不可得时的兜底）——missing 大概率是口径错配噪音而非真实 contract gap。')
+     console.warn('      先收窄复跑：sillyspec verify-probes --change <变更名>（change-diff/apply-pathspec 口径）再判定。')
+   }
+-  console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。')
++  console.warn('   提示：检查是否后端漏实现，或前端调用了尚未实现的端点。确认无误可在 design.md 标注豁免。') /* probe1-noqa */
+ }
+ 
+ /**
+@@ -2133,6 +2133,34 @@ export function trackVerifyResultRegression(specBase, changeName, absPath) {
+  * @param {{cwd:string, specBase:string, changeName?:string}} args
+  * @returns {{status:'skipped'|'passed'|'warning', items:Array, unacknowledged:Array, summary:string, reason:string|null}}
+  */
++/**
++ * evidence 核验双根解析（坑⑤ / D-005@v1 消费侧双根 + 坑 platform-dual-root-fourth-consumer
++ * 2026-09-16 hunt）：apply 前新文件只在 worktree，逐文件核验单查主仓必误报「文件不存在」。
++ * meta 双候选定位（平台模式 specBase=specRoot 时主仓 worktree meta 在项目侧 <cwd>/.sillyspec，
++ * 单查 specBase 必落空——对齐 contract-matrix._readWorktreeMeta 双候选样板）；meta 在场 &&
++ * 非 in-place-fallback && worktreePath 目录存在 → [cwd, worktreePath]，否则 [cwd]。
++ * 解析异常 fail-open 退单根 + warning（不新增阻断路径）。导出供统一双根夹具测试。
++ */
++export function resolveEvidenceDualRoots({ cwd, specBase, changeName, warnings = [] }) {
++  let roots = [cwd]
++  try {
++    const metaCandidates = [...new Set([specBase, join(cwd, '.sillyspec')].filter(Boolean))]
++    const metaPath = metaCandidates
++      .map(b => join(b, '.runtime', 'worktrees', changeName, 'meta.json'))
++      .find(p => existsSync(p))
++    if (metaPath) {
++      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
++      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
++        roots = [cwd, meta.worktreePath]
++      }
++    }
++  } catch (e) {
++    roots = [cwd]
++    warnings.push(`worktree meta 解析失败（${e.message}），evidence 双根核验退主仓单根`)
++  }
++  return roots
++}
++
+ export function runVerifyRequiredEvidenceCheck({ cwd, specBase, changeName = null, verifyStartAt = null }) {
+   if (!changeName) {
+     return { status: 'skipped', items: [], unacknowledged: [], summary: '', reason: '无 changeName（quick 等无关联变更场景），evidence 对账跳过' }
+@@ -2224,19 +2252,7 @@ function runRequiredEvidenceCheckV2({ items, slots, cwd, specBase, changeName, v
+   // && worktreePath 目录存在 → roots = [cwd, worktreePath]；任一不满足退 [cwd] 单根
+   // （零回归）。解析异常 fail-open 退单根 + warning（不新增阻断路径）。静默双根——对齐
+   // buildAcceptanceHints（verify-probes.js:223）双根先例，核验明细 root 字段已可辨。──
+-  let roots = [cwd]
+-  try {
+-    const metaPath = join(specBase || join(cwd, '.sillyspec'), '.runtime', 'worktrees', changeName, 'meta.json')
+-    if (existsSync(metaPath)) {
+-      const meta = JSON.parse(readFileSync(metaPath, 'utf8'))
+-      if (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+-        roots = [cwd, meta.worktreePath]
+-      }
+-    }
+-  } catch (e) {
+-    roots = [cwd]
+-    warnings.push(`worktree meta 解析失败（${e.message}），evidence 双根核验退主仓单根`)
+-  }
++  let roots = resolveEvidenceDualRoots({ cwd, specBase, changeName, warnings })
+ 
+   const detailed = []
+   let blockedCount = 0
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index f919aa7..0b595a7 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -4,7 +4,7 @@
+  *
+  * verify-probes.md 模板定义六个探针，agent 此前逐条手跑 grep/递归查找/git 对账再手工拼表格。
+  * 本模块把纯机械的四个探针命令化（语义判断的留 agent，输出里显式标注）：
+- *   探针1 未实现标记扫描：design §6 清单的具体文件逐行 grep TODO/FIXME/尚未实现 等
++ *   探针1 未实现标记扫描：design §6 清单的具体文件逐行 grep TODO/FIXME/尚未实现 等 probe1-noqa
+  *   探针3 测试覆盖：逐 task 按 allowed_paths 定位模块目录，递归找测试文件（co-located tests/ 陷阱
+  *        + JVM src/test/<lang> 同包镜像根——Maven/Gradle 布局测试与 main 侧永不 co-located）
+  *   探针5 API 契约对账：复用 contract-matrix.verifyApiParity（endpoints.json × 前端调用）+ 表格渲染
+@@ -14,7 +14,7 @@
+  *        关键词命中提示（命中≠判定，不参与门禁；2026-09-14-acceptance-test-matrix）
+  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
+  *
+- * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。
++ * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。 probe1-noqa
+  * 结论走「结论枚举：」固定槽行（刀③）——占位符不含枚举词，槽未填 extractVerifyConclusionSlot
+  * 返回 '' 即判不过，骨架不能直接过门（与 symbol-impact 骨架同款防偷懒语义）。
+  * P3b 增量：①章节标题行末尾 claims 层标注（可复跑探针/确定性检查/人工判断，纯后缀不新增行）；
+@@ -37,16 +37,16 @@ import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './r
+ 
+ // 探针1 未实现标记匹配（坑 probe1-literal-false-positive，2026-09-15 复盘实证：16 命中全
+ // 字面误报——TODO_FLAG_TODO 业务常量、「XXX完成处置」中文占位模板）。口径分三级：
+-// - 尚未实现：中文短语高置信，保持子串匹配；
+-// - TODO/FIXME/HACK：ASCII 标识符边界匹配——TODO_FLAG_TODO / parseHackArgs 等标识符内部不再
++// - 尚未实现：中文短语高置信，保持子串匹配； /* probe1-noqa */
++// - TODO/FIXME/HACK：ASCII 标识符边界匹配——TODO_FLAG_TODO / parseHackArgs 等标识符内部不再 /* probe1-noqa */
+ //   命中（两侧任一边贴 [A-Za-z0-9_] 即视为标识符成分）；
+-// - XXX：边界匹配且前或后紧邻 CJK 表意字符即排除——「XXX完成处置」「订单XXX号」类中文占位
+-//   模板不再命中（独立代码注释 `XXX:` / `// XXX fix` 紧邻标点空白，仍命中）。
++// - XXX：边界匹配且前或后紧邻 CJK 表意字符即排除——「XXX完成处置」「订单XXX号」类中文占位 /* probe1-noqa */
++//   模板不再命中（独立代码注释 `XXX:` / `// XXX fix` 紧邻标点空白，仍命中）。 /* probe1-noqa */
+ const CJK_IDEOGRAPH_CLASS = '\\u4e00-\\u9fff\\u3400-\\u4dbf'
+-const TODO_ASCII_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_])(?:TODO|FIXME|HACK)(?![A-Za-z0-9_])`)
+-const XXX_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])XXX(?![A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])`)
++const TODO_ASCII_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_])(?:TODO|FIXME|HACK)(?![A-Za-z0-9_])`) /* probe1-noqa */
++const XXX_MARKER_RE = new RegExp(`(^|[^A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])XXX(?![A-Za-z0-9_${CJK_IDEOGRAPH_CLASS}])`) /* probe1-noqa */
+ export function isUnimplementedMarkerLine(line) {
+-  if (line.includes('尚未实现')) return true
++  if (line.includes('尚未实现')) return true /* probe1-noqa */
+   if (TODO_ASCII_MARKER_RE.test(line)) return true
+   if (XXX_MARKER_RE.test(line)) return true
+   return false
+@@ -639,7 +639,7 @@ function mdEscapeCell(text, cap = 200) {
+ /**
+  * 探针 7 判定/证据两列机械预填（坑 probe7-prefill-evidence，ql-20260915-004）。
+  *
+- * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量
++ * 背景：此前骨架判定列 `<待填：四选一>` + 证据列 `<TODO>` 全占位，24 格矩阵 agent 全量 probe1-noqa
+  * 手填——CLI 已算出归属/关键词命中却弃之不用。预填规则（机械保守，agent 逐格复核改写）：
+  *   - 无归属 → uncovered；acceptance 文本含 文档/部署/doc/deploy/manual/config 类词且无归属
+  *     → non-testable
+@@ -679,7 +679,7 @@ function prefillMatrixCells(item, testFiles, hint) {
+ /**
+  * 渲染探针 7 段（骨架与幂等补段共用单一实现）。
+  * 坑 probe7-prefill-evidence（ql-20260915-004）：判定/证据两列由 prefillMatrixCells 机械预填
+- * （原 `<待填：四选一>` / `<TODO>` 占位淘汰）——幂等保障沿用补段口径：段已在场（agent 已填/
++ * （原 `<待填：四选一>` / `<TODO>` 占位淘汰）——幂等保障沿用补段口径：段已在场（agent 已填/ probe1-noqa
+  * 未填）一律不触碰（ensureAcceptanceMatrixSection 段在场即 no-op），预填只在骨架生成与缺段补齐
+  * 两条新写路径生效，agent 已填内容永不被覆盖。
+  * @param {{ applicable: boolean, tasks: Array<{task: string, acceptance: string[], testFiles: string[], hints: Record<number, {terms: string[], files: string[], anchors?: Array<{term: string, file: string, line: number}>}>}> }} p7
+@@ -773,6 +773,11 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+       const lines = readFileSync(abs, 'utf8').split('\n')
+       lines.forEach((line, i) => {
+         if (probe1.matches.length >= PROBE1_MAX_MATCHES) return
++        // probe1-noqa 行级豁免（坑 probe1-self-referential-noise，2026-09-16 EHS 变更 verify 实证：
++        // 探针基础设施自身源码被扫描时 26 处命中全是匹配器定义/骨架模板字符串/修复注释引文——
++        // 逐条人工裁定纯耗损。行内含 `probe1-noqa` 即跳过（注释行加 `// probe1-noqa`、
++        // 字符串模板行在语句闭合后加 `/* probe1-noqa */` 不污染输出内容））。
++        if (line.includes('probe1-noqa')) return
+         if (isUnimplementedMarkerLine(line)) probe1.matches.push({ file: probePath, line: i + 1, content: line.trim().slice(0, 160) })
+       })
+     } catch {
+@@ -939,7 +944,7 @@ export function renderVerifyProbesReport(result) {
+ 
+   L.push('#### 探针 1：未实现标记扫描（design 清单文件）')
+   if (probe1.matches.length === 0) {
+-    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中')
++    L.push('- ✅ 无 TODO/FIXME/尚未实现 标记命中') /* probe1-noqa */
+   } else {
+     for (const m of probe1.matches) L.push(`- ⚠️ \`${m.file}:${m.line}\` ${m.content}`)
+   }
+@@ -949,7 +954,7 @@ export function renderVerifyProbesReport(result) {
+   L.push('')
+ 
+   L.push('#### 探针 2：设计关键词覆盖')
+-  L.push('<!--TODO: 半语义探针——从 design 提取能力关键词逐个 grep 确认实现（agent 执行）-->')
++  L.push('<!--TODO: 半语义探针——从 design 提取能力关键词逐个 grep 确认实现（agent 执行）-->') /* probe1-noqa */
+   L.push('')
+ 
+   L.push('#### 探针 3：验收标准测试覆盖')
+@@ -980,7 +985,7 @@ export function renderVerifyProbesReport(result) {
+   L.push('')
+ 
+   L.push('#### 探针 4：决策追踪覆盖')
+-  L.push('<!--TODO: 语义探针——D-xxx@vN → FR-xxx → plan/task 引用 → 证据回指闭环（agent 执行）-->')
++  L.push('<!--TODO: 语义探针——D-xxx@vN → FR-xxx → plan/task 引用 → 证据回指闭环（agent 执行）-->') /* probe1-noqa */
+   L.push('')
+ 
+   L.push('#### 探针 5：API Contract Parity')
+@@ -1407,7 +1412,7 @@ export function applyConclusionDraftToText(text, draft = 'PASS') {
+  * tasks.md 行内注解可靠）。Evidence / 状态两列是人工判断置 <待填>；D 无 task 回指 →
+  * ⚠️ 未闭环显式列出（这正是矩阵要暴露的风险，不静默）。
+  * @returns {{ rows: string[], decisionCount: number, taskCount: number }|null}
+- *   null = 无 decisions.md / 解析 0 条（矩阵段留 TODO 不注入）
++ *   null = 无 decisions.md / 解析 0 条（矩阵段留 TODO 不注入） probe1-noqa
+  */
+ export function buildDecisionChainMatrix(changeDir) {
+   let decisions
+@@ -1449,9 +1454,9 @@ export function buildDecisionChainMatrix(changeDir) {
+ 
+ /**
+  * 矩阵机械半边注入 verify-result.md（--init 接线）：只在「决策追踪矩阵」段内仍是骨架
+- * TODO 行（含 D-xxx 形态）且段内无既有表格时替换注入——幂等（agent 已写/前次注入零改动），
++ * TODO 行（含 D-xxx 形态）且段内无既有表格时替换注入——幂等（agent 已写/前次注入零改动）， probe1-noqa
+  * 不触碰正文其余部分。落盘失败 fail-soft 返回 null。
+- * @returns {{ decisions: number, tasks: number }|null} null = 无 decisions/无可替换 TODO/已注入
++ * @returns {{ decisions: number, tasks: number }|null} null = 无 decisions/无可替换 TODO/已注入 probe1-noqa
+  */
+ export function injectDecisionChainDraft(mdPath, changeDir) {
+   let text
+@@ -1462,8 +1467,8 @@ export function injectDecisionChainDraft(mdPath, changeDir) {
+   const sectionEnd = nextHeading === -1 ? text.length : nextHeading
+   const section = text.slice(headingIdx, sectionEnd)
+   if (/^\|/m.test(section)) return null // 已有表格 → 尊重既有内容
+-  const todoRe = /<!--TODO:[^\n]*D-xxx[^\n]*-->/
+-  if (!todoRe.test(section)) return null // 无骨架 TODO（手写正文）→ 不动
++  const todoRe = /<!--TODO:[^\n]*D-xxx[^\n]*-->/ /* probe1-noqa */
++  if (!todoRe.test(section)) return null // 无骨架 TODO（手写正文）→ 不动 /* probe1-noqa */
+   const matrix = buildDecisionChainMatrix(changeDir)
+   if (!matrix || matrix.rows.length === 0) return null
+   const block = [
+@@ -1484,7 +1489,7 @@ export function injectDecisionChainDraft(mdPath, changeDir) {
+ }
+ 
+ /**
+- * 生成 verify-result.md 骨架（七章节；探针结果机械预填，语义章节 <!--TODO--> 占位）。
++ * 生成 verify-result.md 骨架（七章节；探针结果机械预填，语义章节 <!--TODO--> 占位）。 probe1-noqa
+  * 结论走「结论枚举：」固定槽行（刀③，2026-09-08）——占位符不含枚举词（<待填：三选一>），
+  * 槽未填 → extractVerifyConclusionSlot 返回 '' → gate 判不过（fail-closed；旧占位符
+  * `<待填：PASS 或 FAIL>` 含 PASS 字样会被窗口正则误读成已填 PASS，已修）。
+@@ -1496,7 +1501,7 @@ export function generateVerifyResultSkeleton(result) {
+   const L = [
+     '# 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）',
+     '',
+-    '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——',
++    '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——', /* probe1-noqa */
+     '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',
+     '>',
+     '> 「层」=证据可核验性分层（非执行者声明）：「人工判断」指本节为语义判断，由执行 agent 填写、',
+@@ -1527,31 +1532,31 @@ export function generateVerifyResultSkeleton(result) {
+     '  log: <待填：日志路径>',
+     '',
+     '## 任务完成度 [层：人工判断]',
+-    '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->',
++    '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->', /* probe1-noqa */
+     '',
+     '## 设计一致性 [层：人工判断]',
+-    '<!--TODO: 实现与 design.md 的偏差（无偏差也显式写「一致」）-->',
++    '<!--TODO: 实现与 design.md 的偏差（无偏差也显式写「一致」）-->', /* probe1-noqa */
+     '',
+     '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
+     renderVerifyProbesReport(result),
+     '',
+     '## 测试结果 [层：确定性检查——CLI 实测对账]',
+-    '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->',
++    '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->', /* probe1-noqa */
+     '',
+     '## 决策追踪矩阵（如存在 decisions.md；无则删本节） [层：人工判断]',
+-    '<!--TODO: | 决策 ID | FR | Task | Evidence | 状态 |（D-xxx@vN → FR-xxx → task → 证据回指闭环）-->',
++    '<!--TODO: | 决策 ID | FR | Task | Evidence | 状态 |（D-xxx@vN → FR-xxx → task → 证据回指闭环）-->', /* probe1-noqa */
+     '',
+     '## 技术债务 [层：人工判断]',
+-    '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->',
++    '<!--TODO: TODO/FIXME/HACK 统计（探针 1 的命中已预填在上方探针结果）-->', /* probe1-noqa */
+     '',
+     '## 变更风险等级 [层：人工判断]',
+-    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->',
++    '<!--TODO: doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical；若 design.md frontmatter 有 risk_level 显式声明，写明「显式声明 = <等级>」+ 理由；若有命中被同句否定语境抑制（如「不新增 daemon 协议」），写明被抑制关键词与理由（抑制可审计，不许用来静默降级）-->', /* probe1-noqa */
+     '',
+     '## Runtime Evidence [层：人工判断]',
+-    '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->',
++    '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->', /* probe1-noqa */
+     '',
+     '## 代码审查 [层：人工判断]',
+-    '<!--TODO: 问题列表 + 总体评价。走查清单（零覆盖路径必查——探针 7 ⚠️ 条目即定向面）：',
++    '<!--TODO: 问题列表 + 总体评价。走查清单（零覆盖路径必查——探针 7 ⚠️ 条目即定向面）：', /* probe1-noqa */
+     '     ① 编辑/更新链路（回显、字段映射、残留态）——非新增主链路，实证盲区；',
+     '     ② 非主分支流（相关方/旁路支线等未走查路径）；',
+     '     ③ 守卫一致性：同资源端点的操作人/权限校验模式对比（实证 doSubmit 无操作人校验而 delete/withdraw 有——越权）；',
+diff --git a/test/stage-review-degraded-selfreview.test.mjs b/test/stage-review-degraded-selfreview.test.mjs
+index d864943..f025b32 100644
+--- a/test/stage-review-degraded-selfreview.test.mjs
++++ b/test/stage-review-degraded-selfreview.test.mjs
+@@ -6,7 +6,7 @@
+ import { mkdtempSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { tmpdir } from 'node:os'
+-import { isDegradedSelfReview, validateStageReview, renderReviewJsonContract } from '../src/stage-review.js'
++import { isDegradedSelfReview, hasDelegatedWriteDisclosure, validateStageReview, renderReviewJsonContract } from '../src/stage-review.js'
+ 
+ let total = 0
+ let failed = 0
+@@ -36,6 +36,14 @@ console.log('\n=== ② validateStageReview 缺 review.json 报错带降级出口
+   assertTrue(r.errors.some(e => e.includes('「降级：环境无子代理可用」')), '指引点名 reviewerNotes 首行标记约定')
+ }
+ 
++console.log('\n=== ②b C4 代落盘披露识别（2026-09-15 wp EHS 实证：平台写通道故障代落盘需 gate 可见）===\n')
++{
++  assertTrue(hasDelegatedWriteDisclosure({ reviewerNotes: '代落盘：子代理写通道故障\n结论原文回传' }) === true, '首行「代落盘：」→ true')
++  assertTrue(hasDelegatedWriteDisclosure({ reviewerNotes: '降级：环境无子代理可用' }) === false, '降级首行不算代落盘')
++  assertTrue(hasDelegatedWriteDisclosure({ reviewerNotes: '正文里提到但不在首行\n代落盘：x' }) === false, '只认首行（约定与降级标记同口径）')
++  assertTrue(hasDelegatedWriteDisclosure({}) === false && hasDelegatedWriteDisclosure(null) === false, '缺 reviewerNotes → false 不炸')
++}
++
+ console.log('\n=== ③ renderReviewJsonContract 契约文档化降级约定 ===\n')
+ {
+   const md = renderReviewJsonContract({ stage: 'plan', changeDir: '/tmp/x/.sillyspec/changes/demo', reviewRunId: 'review-20990101-0000', tier: 'independent' })
+diff --git a/test/stage-review-doc-hash-auto-refresh.test.mjs b/test/stage-review-doc-hash-auto-refresh.test.mjs
+index afd6519..3b8cb5a 100644
+--- a/test/stage-review-doc-hash-auto-refresh.test.mjs
++++ b/test/stage-review-doc-hash-auto-refresh.test.mjs
+@@ -118,6 +118,24 @@ function baseReview(overrides = {}) {
+   assert(r.autoRefreshed === false && r.result.ok === false, 'schema 失败：不自动刷新')
+ }
+ 
++// ── 5. C3 刷新序数声明化：重复刷新 → 序数递增 + hash 漂移 + 升级提醒语（2026-09-15 wp EHS 实证：审查后多次改版走此通道）──
++{
++  // 从干净态起：v1 审查通过 → v2 第一次刷新 → v3 第二次刷新
++  writeFileSync(designPath, '# design v1\n')
++  writeFileSync(reviewPath, JSON.stringify(baseReview({ docHash: computeDocHash(designPath) }), null, 2) + '\n')
++  writeFileSync(designPath, '# design v2\n')
++  const r1 = validateStageReviewWithAutoRefresh({ stage: 'brainstorm', reviewType: 'design', runtimeRoot, reviewRunId: runId, searchDirs, autoRefresh: true })
++  assert(r1.autoRefreshed === true && r1.refreshOrdinal === 1, '第一次刷新：refreshOrdinal=1')
++  assert(/→/.test(r1.hashDrift || ''), '返回 hashDrift（旧→新短前缀）')
++  assert(!(String(JSON.parse(readFileSync(reviewPath, 'utf8')).reviewerNotes).includes('已多次刷新')), '第一次不带升级提醒语')
++  writeFileSync(designPath, '# design v3\n')
++  const r2 = validateStageReviewWithAutoRefresh({ stage: 'brainstorm', reviewType: 'design', runtimeRoot, reviewRunId: runId, searchDirs, autoRefresh: true })
++  assert(r2.autoRefreshed === true && r2.refreshOrdinal === 2, '第二次刷新：refreshOrdinal=2')
++  const notes2 = String(JSON.parse(readFileSync(reviewPath, 'utf8')).reviewerNotes)
++  assert(notes2.includes('第 2 次'), '审计行含「第 2 次」序数')
++  assert(notes2.includes('已多次刷新'), '第二次起带升级提醒语（建议人工复核结论续用）')
++}
++
+ // 清理
+ try { rmSync(root, { recursive: true, force: true }) } catch {}
+ 
+diff --git a/test/temp-boundary-spec-dir.test.mjs b/test/temp-boundary-spec-dir.test.mjs
+index 8ee0aca..5d57129 100644
+--- a/test/temp-boundary-spec-dir.test.mjs
++++ b/test/temp-boundary-spec-dir.test.mjs
+@@ -13,7 +13,8 @@
+ import { resolveSpecDir } from '../src/run/shared.js'
+ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+ import { tmpdir } from 'node:os'
+-import { join, resolve } from 'node:path'
++import { join, resolve, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
+ 
+ let passed = 0
+ let failed = 0
+@@ -92,8 +93,11 @@ try {
+ 
+ console.log('--- 5. 非 tmp 场景零回归：真实仓祖先解析照常（env 已还原）---')
+ {
+-  const repoRoot = resolve(process.cwd())
+-  const got = resolveSpecDir(process.cwd())
++  // 仓根按测试文件位置锚定（cwd 无关）：run-tests.mjs 以 cwd=<repo>/test 执行子进程，
++  // process.cwd() 依执行方式漂移（runner=仓/test、直跑=仓根）——用 cwd 锚定时祖先解析会上移
++  // 一层命中仓内 .sillyspec、期望值却拼在 test/ 下，断言随执行方式假败（2026-09-16 套件实证）。
++  const repoRoot = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..'))
++  const got = resolveSpecDir(repoRoot)
+   // 本仓根有 .sillyspec（无上移）——与既有行为一致；断言命中的是仓内真实目录
+   assert('真实仓 cwd 解析不受 tmp 封顶影响', got === join(repoRoot, '.sillyspec'), `got=${got}`)
+ }
+diff --git a/test/platform-dual-root-fixture.test.mjs b/test/platform-dual-root-fixture.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/platform-dual-root-fixture.test.mjs
+@@ -0,0 +1,111 @@
++/**
++ * 平台双根统一回归夹具（坑族 platform-dual-root-*，2026-09-15 wp EHS 会话三天实证 + 2026-09-16 hunt）。
++ *
++ * 平台模式 specRoot（specBase）与 source_root（项目 <cwd>/.sillyspec）分离时，主仓 worktree
++ * 的 meta.json/目录在项目侧、跨仓 worktree 在 specRoot 侧——单路径 join(specBase, ...) 的消费方
++ * 在平台模式下必落空。本夹具统一模拟「specRoot≠cwd + 主仓 worktree 在项目侧」的形态，逐消费方
++ * 断言双根感知。
++ *
++ * 消费方 → 覆盖地图（防第四个消费方再漏的锚点清单）：
++ *   ① contract-matrix._readWorktreeMeta（双候选样板本体）—— test/plan-target-files.test.mjs P1-3 + retro-verify-friction-fixes.test.mjs A
++ *   ② verify-postcheck resolveReconcileActualFiles（form 判定）—— 同上两处
++ *   ③ register-repo 写目标 —— test/register-repo-platform-split-brain.test.mjs
++ *   ④ design-facts validateDesignFileList 分仓核验 —— test/design-file-list-gate.test.mjs ④
++ *   ⑤ verify-postcheck resolveEvidenceDualRoots（evidence 双根，2026-09-16 hunt 第四消费方）—— 本文件 §1
++ *   ⑥ foreign-declared loadWorktreeLiveness（他者声明活性，hunt 第五消费方）—— 本文件 §2
++ *   ⑦ docs-debt collectExecuteChangedFiles（改动集根，hunt 第六消费方）—— 本文件 §3
++ *   ⑧ archive-delta —— 经 resolveVerifyChangedFiles 继承双候选（②同源），§4 同夹具下冒烟
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { execSync } from 'node:child_process'
++import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { resolveEvidenceDualRoots, resolveVerifyChangedFiles } from '../src/verify-postcheck.js'
++import { loadWorktreeLiveness } from '../src/foreign-declared.js'
++import { collectExecuteChangedFiles } from '../src/docs-debt.js'
++
++const tempDirs = []
++after(() => { for (const d of tempDirs) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } } })
++
++function mkTmp(prefix) {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  tempDirs.push(d)
++  return d
++}
++function git(cwd, args) { execSync(`git ${args}`, { cwd, stdio: 'pipe' }) }
++
++/**
++ * 统一双根形态夹具：项目仓（cwd，含平台指针）+ 外部 specRoot + 主仓 worktree（git worktree，
++ * meta 落项目侧 .sillyspec/.runtime/worktrees/<change>/，worktreePath 指向真实隔离工作区）。
++ */
++function makeDualRootFixture() {
++  const project = mkTmp('pdr-proj-')
++  git(project, 'init -q -b main')
++  git(project, 'config user.email t@t.t')
++  git(project, 'config user.name t')
++  writeFileSync(join(project, 'README.md'), 'base\n')
++  git(project, 'add .')
++  git(project, 'commit -q -m init')
++  const platformRoot = mkTmp('pdr-spec-')
++  mkdirSync(join(platformRoot, '.runtime'), { recursive: true })
++  // 主仓 worktree：真实 git worktree（分支 sillyspec/<change>），meta 落项目侧（平台模式主仓口径）
++  const change = '2026-09-16-pdr-x'
++  git(project, `worktree add -q -b sillyspec/${change} "${join(project, '.sillyspec', '.runtime', 'worktrees', change)}" HEAD`)
++  const wtPath = join(project, '.sillyspec', '.runtime', 'worktrees', change)
++  const metaDir = join(project, '.sillyspec', '.runtime', 'worktrees', change)
++  mkdirSync(metaDir, { recursive: true }) // worktree add 已建，幂等
++  writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({
++    changeName: change, mode: 'worktree', worktreePath: wtPath, baselineCommit: 'HEAD',
++  }))
++  // worktree 内放一个 apply 前新文件（仅 worktree 可见）
++  writeFileSync(join(wtPath, 'evidence-only-in-worktree.log'), 'ok\n')
++  // 平台指针（progress.js resolvePlatformSpecDir 协议）
++  writeFileSync(join(project, '.sillyspec-platform.json'), JSON.stringify({ specRoot: platformRoot }))
++  return { project, platformRoot, change, wtPath }
++}
++
++test('§1 evidence 双根（hunt 第四消费方）：平台 specBase 下 meta 落项目侧 → roots 含 worktreePath', () => {
++  const { project, platformRoot, change, wtPath } = makeDualRootFixture()
++  // 修复前：单查 join(specBase=platformRoot) 必落空 → roots 恒 [cwd]，worktree 内 evidence 误报缺失
++  const warnings = []
++  const roots = resolveEvidenceDualRoots({ cwd: project, specBase: platformRoot, changeName: change, warnings })
++  assert.deepEqual(roots, [project, wtPath], `双候选应命中项目侧 meta（实际：${roots}）`)
++  assert.equal(warnings.length, 0)
++  // 兜底回归：meta 不存在的变更 → 单根 [cwd]
++  const rootsNone = resolveEvidenceDualRoots({ cwd: project, specBase: platformRoot, changeName: '2026-09-16-no-such', warnings: [] })
++  assert.deepEqual(rootsNone, [project])
++})
++
++test('§2 他者声明活性（hunt 第五消费方）：主仓 worktree 只在项目侧 → 双根扫描可见 isolated', () => {
++  const { project, platformRoot, change } = makeDualRootFixture()
++  // 修复前：单扫 specRoot 目录 → 主仓 worktree 变更不可见 → 声明被误判 stale → 文件误归属当前变更
++  const liveness = loadWorktreeLiveness(platformRoot, project)
++  assert.notEqual(liveness, null, '项目侧目录可读 → 非 fail-closed null')
++  const entry = liveness.get(change)
++  assert.ok(entry && entry.isolated === true, `主仓 worktree（项目侧）应被识别为 isolated（实际：${JSON.stringify(entry)}）`)
++  // 无任何可读 worktrees 目录 → null（fail-closed：消费方保留全部声明，不放大放行面——语义锁定）
++  const none = loadWorktreeLiveness(platformRoot, platformRoot)
++  assert.equal(none, null, '两根均不可读应返回 null（fail-closed）')
++})
++
++test('§3 docs-debt 改动集根（hunt 第六消费方）：meta 在项目侧 → root 取 worktree 而非主仓 cwd', () => {
++  const { project, platformRoot, change, wtPath } = makeDualRootFixture()
++  // worktree 内制造脏文件（主仓保持干净）——修复前 root 退 cwd → 收进空集/主仓脏集
++  mkdirSync(join(wtPath, 'src'), { recursive: true })
++  writeFileSync(join(wtPath, 'src', 'only-in-worktree.js'), 'x')
++  const collected = collectExecuteChangedFiles({ specBase: platformRoot, changeName: change, cwd: project })
++  assert.ok(collected.changedFiles.some(f => String(f).includes('only-in-worktree')),
++    `worktree 脏文件应被收集（实际 root=${collected.root}，changed=${JSON.stringify([...collected.changedFiles])}）`)
++  assert.ok(collected.root.includes(join('.sillyspec', '.runtime', 'worktrees')), 'root 应锚到 worktree')
++})
++
++test('§4 archive-delta 继承冒烟：resolveVerifyChangedFiles 在同夹具下并入 worktree 面', () => {
++  const { project, platformRoot, change, wtPath } = makeDualRootFixture()
++  mkdirSync(join(wtPath, 'src2'), { recursive: true })
++  writeFileSync(join(wtPath, 'src2', 'delta-file.js'), 'x')
++  const files = resolveVerifyChangedFiles(project, change, null, { includeWorkingTree: true, specBase: platformRoot })
++  assert.ok((files || []).some(f => String(f).includes('evidence-only-in-worktree') || String(f).includes('delta-file')),
++    `worktree 内文件应进 changed 集（实际：${JSON.stringify(files)}）`)
++})
