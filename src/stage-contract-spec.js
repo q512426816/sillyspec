@@ -274,6 +274,20 @@ const PLAN_RULES = [
     spec: 'large 变更产出 `module-impact.md` 首版(plan review_plan 步生成;scale=small 豁免)',
     failMessage: 'module-impact.md 缺失: ${path}（large 变更应在 plan 审查计划步生成模块影响分析首版）',
   },
+  // 全局硬约束段存在性(ql-20260917-003,warning——ql-20260917-002 落地段的事后校验):plan_level=full
+  // 的 plan.md 应含「全局硬约束」段(design.md 跨 task 硬约束逐字抄录,执行期子代理只读自己的
+  // 任务卡+本段)。condition 生效依赖 validatePlanOutputs 把 plan.md frontmatter plan_level 传入
+  // ctx;读不到(无 frontmatter/旧格式/light)→ eq:'full' 不成立跳过(存量零误报 fail-safe)。
+  // 确无跨 task 硬约束时写一段「无」占位即可消警(段在场即过,不校验段体非空——空体由 execute
+  // 注入端容忍+审查目检)。
+  {
+    id: 'plan.global-constraints', stage: 'plan', source: 'validatePlanOutputs', severity: 'warning', kind: 'literal-any',
+    target: { root: 'change', path: 'plan.md', scope: 'full' },
+    data: { literals: ['全局硬约束'] },
+    condition: { ctxField: 'planLevel', eq: 'full' },
+    spec: 'plan_level=full 的 plan.md 含「全局硬约束」段(design.md 跨 task 硬约束逐字抄录;无跨 task 硬约束时写「无」占位消警)',
+    failMessage: 'plan.md 缺少「## 全局硬约束」段（plan_level=full：从 design.md 逐字抄录绑定所有 task 的硬约束，执行期子代理只读自己的任务卡+本段；确无跨 task 硬约束时写一段「无」占位消警）',
+  },
   // entry-point-wiring(custom):design.md 命中入口实例化/启动路径模式时,被提到的入口文件
   // (cli.ts/main.ts/server.(js|ts)/index.(js|ts))必须出现在某 task allowed_paths 或 plan.md
   // 文件变更清单中,否则需 design.md 紧邻写明豁免。判定算法(多源 allowed_paths 收集 + 逐文件对账 +

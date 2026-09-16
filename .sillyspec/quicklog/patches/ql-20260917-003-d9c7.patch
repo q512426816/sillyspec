@@ -1,0 +1,166 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index a06a484..c25d3c2 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -30,3 +30,4 @@
+ | 2026-09-15 | 2026-09-15-worktree-dual-truth-gates | execute 双真相门禁口径收敛（review 链面）：① 新导出 `collectWorktreeChangedFiles(cwd, changeName, meta, opts)`（task-review.js）——porcelain ∪ merge-base committed 补齐单一真相口径（in-place 退化取 cwd 保并入），generateTaskReviewDrafts 并入段与 run/complete.js prefetchDiffFileSet 双双改消费（勾选守卫 diffFileSet 并入后再剔 meta.baselineFiles 防「声明未做恰被夹带」误勾——R-07）；② attributeSuspectTasks（verify-postcheck.js）返回 Map<string,string[]> 全命中多归属（原首中即止吞同文件多 task），reconcileTargetFiles 组装 suspectTask 边界 join('、')，gates.js/archive-delta.js 下游零改动；③ runRequiredEvidenceCheckV2 逐文件核验双根化（roots=[cwd, worktree]，倒序命中根取 mtime，明细可选 root 字段；meta 缺失/in-place/损坏退单根 fail-open）——apply 前新文件不再误报「文件不存在」。resolveVerifyChangedFiles 补齐段本次未统一（R-09 已知残留，注记指向 helper 口径）。新增 test/worktree-dual-truth-gates.test.mjs 组4-5 |
+ | 2026-09-16 | 2026-09-16-friction5-hardening | 门禁摩擦五连修（core-engine 面）：① verify-facts-schema 回执双形态解析（FR-01/D-001@v1）——RECEIPT_LINE_RE 单行管道形态逐字节保留，新增多行 YAML 条目聚合（`- claim:` 起头+缩进续行 RECEIPT_CONT_LINE_RE，字段序无关，claim/command/log 非空+exit 纯数字四字段齐才 push fail-closed），根除列错位/字段序调换/多行书写导致的回执槽 0 条误报（坑 receipt-fullwidth-parse 形态自由度收口）；② probe7-anchor-check（FR-05/D-005@v1）covered 证据锚点口径扩 `.test.` 文件名（ANCHOR_RE file:line 本体不动，对齐 stage-contract 硬门形态；裸反引号刻意不收保 advisory 增量）。新增 test/receipt-multiline-parse.test.mjs（7）+ test/probe7-anchor-testfile.test.mjs（4） |
+ | 2026-09-16 | ql-20260916-021-64c5（quick） | 同阶段复审 findings 回灌（Superpowers scoped re-review 采纳①）：stage-review.js 新增 collectSameStagePriorReview（本变更最近一轮有效 review 采集——跨变更过滤/骨架轮跳过/坏 JSON 容错，checklist fail/gap→openFindings、pass→passItems、verdict=fail 无明细时 notes 合成）+ renderPriorRoundFindingsMd（未决项逐项核验修复 + pass 面勿重复报告的双向语义，各 15 条封顶）；run/prompt.js tier=independent 档注入同阶段上一轮复审基线块（拼进 {PRIOR_REVIEW_FACTS}，self 不注入——当前 agent 自带上一轮上下文）；stages/brainstorm.js Design Grill 补 {PRIOR_REVIEW_FACTS} 占位符（原仅 plan/execute 有，brainstorm 升 independent 时同享回灌）。docs/prompt 三 md 镜像逐字同步 + 占位符文档行。新增 test/stage-review-prior-round.test.mjs（31 断言）。 |
++| 2026-09-17 | ql-20260917-003-d9c7（quick） | plan.global-constraints 存在性 warning（ql-20260917-002 留账收口）：stage-contract-spec.js 清单新增 warning 条目（literal-any「全局硬约束」锚 plan.md，condition{ctxField:'planLevel', eq:'full'}）+ stage-contract.js validatePlanOutputs 读 plan.md frontmatter plan_level 传入引擎 ctx（读不到→eq 不成立→跳过，存量/旧格式/light 零误报 fail-safe；「无」占位段即可消警，段体非空不校验——execute 注入端容忍+审查目检）。新增 test/plan-global-constraints-warning.test.mjs（12 断言：清单形态/引擎四态/validator 接线）。 |
+diff --git a/src/stage-contract-spec.js b/src/stage-contract-spec.js
+index ffdb91d..9620589 100644
+--- a/src/stage-contract-spec.js
++++ b/src/stage-contract-spec.js
+@@ -274,6 +274,20 @@ const PLAN_RULES = [
+     spec: 'large 变更产出 `module-impact.md` 首版(plan review_plan 步生成;scale=small 豁免)',
+     failMessage: 'module-impact.md 缺失: ${path}（large 变更应在 plan 审查计划步生成模块影响分析首版）',
+   },
++  // 全局硬约束段存在性(ql-20260917-003,warning——ql-20260917-002 落地段的事后校验):plan_level=full
++  // 的 plan.md 应含「全局硬约束」段(design.md 跨 task 硬约束逐字抄录,执行期子代理只读自己的
++  // 任务卡+本段)。condition 生效依赖 validatePlanOutputs 把 plan.md frontmatter plan_level 传入
++  // ctx;读不到(无 frontmatter/旧格式/light)→ eq:'full' 不成立跳过(存量零误报 fail-safe)。
++  // 确无跨 task 硬约束时写一段「无」占位即可消警(段在场即过,不校验段体非空——空体由 execute
++  // 注入端容忍+审查目检)。
++  {
++    id: 'plan.global-constraints', stage: 'plan', source: 'validatePlanOutputs', severity: 'warning', kind: 'literal-any',
++    target: { root: 'change', path: 'plan.md', scope: 'full' },
++    data: { literals: ['全局硬约束'] },
++    condition: { ctxField: 'planLevel', eq: 'full' },
++    spec: 'plan_level=full 的 plan.md 含「全局硬约束」段(design.md 跨 task 硬约束逐字抄录;无跨 task 硬约束时写「无」占位消警)',
++    failMessage: 'plan.md 缺少「## 全局硬约束」段（plan_level=full：从 design.md 逐字抄录绑定所有 task 的硬约束，执行期子代理只读自己的任务卡+本段；确无跨 task 硬约束时写一段「无」占位消警）',
++  },
+   // entry-point-wiring(custom):design.md 命中入口实例化/启动路径模式时,被提到的入口文件
+   // (cli.ts/main.ts/server.(js|ts)/index.(js|ts))必须出现在某 task allowed_paths 或 plan.md
+   // 文件变更清单中,否则需 design.md 紧邻写明豁免。判定算法(多源 allowed_paths 收集 + 逐文件对账 +
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 55aa8e7..13b414f 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -403,8 +403,17 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
+     const sm = fm && fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
+     if (sm) scale = sm[1]
+   }
++  // plan.md frontmatter plan_level 传入引擎 ctx(ql-20260917-003)：plan.global-constraints warning
++  // 的 condition 用。读不到(无 frontmatter/旧格式)→ undefined → eq:'full' 不成立 → 规则跳过
++  // (存量零误报 fail-safe，同 scale 读取模式)。
++  let planLevel = null
++  if (existsSync(planFile)) {
++    const pfm = readFileSync(planFile, 'utf8').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
++    const plm = pfm && pfm[1].match(/^plan_level:[ \t]*['"]?(\w+)/m)
++    if (plm) planLevel = plm[1]
++  }
+   // plan.md 存在性由引擎消费 manifest。entryPoint/id-trace/decisions 为 custom kind(下方保留)。
+-  const engineResult = evaluateRules('plan', { changeDir, scale })
++  const engineResult = evaluateRules('plan', { changeDir, scale, planLevel })
+   const errors = [...engineResult.errors]
+   const warnings = [...engineResult.warnings]
+diff --git a/test/plan-global-constraints-warning.test.mjs b/test/plan-global-constraints-warning.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/plan-global-constraints-warning.test.mjs
+@@ -0,0 +1,105 @@
++/**
++ * plan.global-constraints 存在性 warning 校验单测（ql-20260917-003，ql-20260917-002 留账）
++ *
++ * 背景：plan.md「## 全局硬约束」段（ql-20260917-002 落地）此前只有模板指引与 execute 子代理
++ * 注入，无 postcheck 校验——plan 阶段收口时缺段零提示。本测锁死 stage-contract 清单新增的
++ * warning 条目：
++ * - 引擎级：literal-any「全局硬约束」+ condition{ctxField:'planLevel', eq:'full'}——
++ *   planLevel=full 且 plan.md 缺段 → 1 warning；有段 → 0；planLevel 缺失（存量/旧格式）→
++ *   条件不成立跳过（零误报 fail-safe）
++ * - validator 级：validatePlanOutputs 从 plan.md frontmatter 读 plan_level 传入引擎 ctx
++ */
++import { evaluateRules } from '../src/stage-contract-engine.js'
++import { getContract } from '../src/stage-contract.js'
++import { getRule } from '../src/stage-contract-spec.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++let passed = 0
++let failed = 0
++function assert(cond, msg) {
++  if (cond) { console.log(`✅ ${msg}`); passed++ }
++  else { console.error(`❌ ${msg}`); failed++ }
++}
++
++const CD = '/fake/change'
++function makeCtx(files = {}) {
++  const ctx = { changeDir: CD }
++  const norm = (p) => String(p).replace(/\\/g, '/')
++  const io = {
++    readFile: (p) => { const f = files[norm(p)]; return f != null ? { exists: true, content: f } : { exists: false, content: '' } },
++    readDir: () => ({ exists: false, files: [] }),
++  }
++  return { ctx, io }
++}
++
++// ── 清单条目形态 ──────────────────────────────────────────────────────────────
++{
++  const rule = getRule('plan.global-constraints')
++  assert(rule !== undefined, '清单：plan.global-constraints 条目存在')
++  assert(rule.severity === 'warning', '清单：severity=warning（不阻断）')
++  assert(rule.condition && rule.condition.ctxField === 'planLevel' && rule.condition.eq === 'full', '清单：condition 锚 planLevel eq full')
++  assert(Array.isArray(rule.data.literals) && rule.data.literals.includes('全局硬约束'), '清单：literal 锚「全局硬约束」')
++}
++
++// ── 引擎级：full 缺段 → 1 warning ────────────────────────────────────────────
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/plan.md`]: '---\nplan_level: full\n---\n\n# 计划\n\n## Wave 1\n- task-01\n',
++  })
++  ctx.planLevel = 'full'
++  const r = evaluateRules('plan', ctx, io)
++  assert(r.warnings.some(w => String(w).includes('全局硬约束')), '引擎：full 缺段 → warning 在位')
++  assert(!r.errors.some(e => String(e).includes('全局硬约束')), '引擎：warning 级不进 errors')
++}
++
++// ── 引擎级：full 有段 → 0 warning（该条目面） ────────────────────────────────
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/plan.md`]: '---\nplan_level: full\n---\n\n# 计划\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- Node ≥ 20\n',
++  })
++  ctx.planLevel = 'full'
++  const r = evaluateRules('plan', ctx, io)
++  assert(!r.warnings.some(w => String(w).includes('全局硬约束')), '引擎：full 有段 → 该 warning 消失')
++}
++
++// ── 引擎级：planLevel 缺失（存量/旧格式）→ 条件不成立跳过 ─────────────────────
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/plan.md`]: '# 计划（无 frontmatter 旧格式）\n\n## Wave 1\n- task-01\n',
++  })
++  const r = evaluateRules('plan', ctx, io)
++  assert(!r.warnings.some(w => String(w).includes('全局硬约束')), '引擎：planLevel 读不到 → 零误报（fail-safe）')
++}
++
++// ── 引擎级：light 档 → 跳过 ───────────────────────────────────────────────────
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/plan.md`]: '---\nplan_level: light\n---\n\n# 计划\n',
++  })
++  ctx.planLevel = 'light'
++  const r = evaluateRules('plan', ctx, io)
++  assert(!r.warnings.some(w => String(w).includes('全局硬约束')), '引擎：light 档跳过（full-only）')
++}
++
++// ── validator 级：validatePlanOutputs 读 frontmatter 接线 ──────────────────────
++{
++  const root = mkdtempSync(join(tmpdir(), 'plan-gc-warn-'))
++  const specBase = join(root, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'demo')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: full\n---\n\n# 计划\n\n## Wave 1\n- task-01\n')
++  const validator = getContract('plan').validators[0]
++  const res = validator(root, 'demo', { specBase })
++  assert(res && Array.isArray(res.warnings), 'validator：返回形态含 warnings 数组')
++  assert(res.warnings.some(w => String(w).includes('全局硬约束')), 'validator：full 缺段 → warning（frontmatter→ctx 接线生效）')
++
++  writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: full\n---\n\n# 计划\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- 无跨 task 硬约束\n')
++  const res2 = validator(root, 'demo', { specBase })
++  assert(!res2.warnings.some(w => String(w).includes('全局硬约束')), 'validator：补段后 warning 消失')
++  rmSync(root, { recursive: true, force: true })
++}
++
++console.log(`\n${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)

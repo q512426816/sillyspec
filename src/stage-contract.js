@@ -403,8 +403,17 @@ function validatePlanOutputs(cwd, changeName, context = {}) {
     const sm = fm && fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
     if (sm) scale = sm[1]
   }
+  // plan.md frontmatter plan_level 传入引擎 ctx(ql-20260917-003)：plan.global-constraints warning
+  // 的 condition 用。读不到(无 frontmatter/旧格式)→ undefined → eq:'full' 不成立 → 规则跳过
+  // (存量零误报 fail-safe，同 scale 读取模式)。
+  let planLevel = null
+  if (existsSync(planFile)) {
+    const pfm = readFileSync(planFile, 'utf8').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
+    const plm = pfm && pfm[1].match(/^plan_level:[ \t]*['"]?(\w+)/m)
+    if (plm) planLevel = plm[1]
+  }
   // plan.md 存在性由引擎消费 manifest。entryPoint/id-trace/decisions 为 custom kind(下方保留)。
-  const engineResult = evaluateRules('plan', { changeDir, scale })
+  const engineResult = evaluateRules('plan', { changeDir, scale, planLevel })
   const errors = [...engineResult.errors]
   const warnings = [...engineResult.warnings]
 

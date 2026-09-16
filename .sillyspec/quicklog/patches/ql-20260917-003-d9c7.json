@@ -1,0 +1,81 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-9c683d16",
+  "totals": {
+    "files": 4,
+    "additions": 130,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-contract-spec.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "declared": true,
+      "additions": 10,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/plan-global-constraints-warning.test.mjs",
+      "declared": true,
+      "additions": 105,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/stage-contract-spec.js",
+          "src/stage-contract.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/plan-global-constraints-warning.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-003-d9c7",
+  "sessionId": "quick-9c683d16",
+  "savedAt": "2026-09-16T22:07:35.883Z",
+  "patchSha256": "0d92d210d38e8945b77a7d555834e376d0c4e5c93a99c1c6f477b19346039adc",
+  "patchStatus": "ok"
+}

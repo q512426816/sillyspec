@@ -148,3 +148,17 @@
 方案：plan.js full模板新增「##全局硬约束（从design.md逐字抄录）」段+指引句；execute.js buildWavePrompt机械提取该段作子代理要点第9条（冲突以本段为准并上报），advisory缺省零注入，超2400截断
 结果：新增单测14断言绿；全量npm test EXIT 0（行漂移重锚后）；lint过；CLI门禁实测通过
 审计：[gate] L1（跨 1 模块 · 7 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260917-003-d9c7 | 2026-09-17 06:04:13 | plan全局硬约束段存在性warning校验
+状态：已完成
+关联变更：（无）
+文件：
+- src/stage-contract-spec.js（plan.global-constraints warning清单条目）
+- src/stage-contract.js（validatePlanOutputs读planLevel传ctx）
+- test/plan-global-constraints-warning.test.mjs（12断言）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（变更索引行）
+需求：plan全局硬约束段存在性warning校验
+根因：ql-20260917-002落地的段只有模板指引与execute注入，plan收口缺段零提示（留账收口）
+方案：stage-contract-spec清单加plan.global-constraints warning条目（literal-any+condition planLevel eq full）；validatePlanOutputs读plan.md frontmatter plan_level传入引擎ctx，读不到跳过零误报
+结果：新增12断言绿；stage-contract-spec/test契约回归双绿；全量npm test EXIT 0；lint过；CLI门禁实测通过
+审计：[gate] L1（跨 1 模块 · 4 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
