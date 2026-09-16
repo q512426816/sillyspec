@@ -1,0 +1,196 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "453508a3da93821bee7f3fd06e71218698f7af31",
+  "totals": {
+    "files": 22,
+    "additions": 944,
+    "deletions": 24
+  },
+  "rows": [
+    {
+      "path": "meta.json",
+      "additions": 27,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 15,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/probe7-anchor-check.js",
+      "additions": 11,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "additions": 151,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/gates.js",
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "additions": 35,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-facts-schema.js",
+      "additions": 49,
+      "deletions": 9,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 12,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "additions": 45,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/cross-repo-apply.test.mjs",
+      "additions": 5,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/worktree-allow-list-violations.test.mjs",
+      "additions": 5,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/apply-docs-allowlist.test.mjs",
+      "additions": 136,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/gate-snapshot-copy.test.mjs",
+      "additions": 143,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/probe7-anchor-testfile.test.mjs",
+      "additions": 63,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/receipt-multiline-parse.test.mjs",
+      "additions": 121,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/taskcard-duplicate-key.test.mjs",
+      "additions": 123,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/worktree.changelog.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/setup.changelog.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "42600feba72d8f28a916975cc63f3155e3b20d90b8914dea7809642c307807eb",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-16T05:00:28.247Z"
+}

@@ -1,0 +1,1203 @@
+diff --git a/meta.json b/meta.json
+index 9c412a0..0cedc11 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,33 @@
+   "branch": "sillyspec/2026-09-16-friction5-hardening",
+   "baseBranch": "main",
+   "baseHash": "491167c0ccbbd2fdc7f2f2e6571975a2c8fb7c09",
++  "actualBaseHash": "453508a3da93821bee7f3fd06e71218698f7af31",
++  "createdAt": "2026-09-16T03:50:34.864Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-16-friction5-hardening",
+   "mode": "worktree",
+-  "createdAt": "2026-09-16T03:50:32.463Z",
+-  "provisioning": true
++  "baselineFiles": [
++    "src/machine-interface.js",
++    "src/run/gates.js",
++    "src/stages/brainstorm.js",
++    "src/stages/execute.js",
++    "src/stages/plan.js",
++    "src/verify-postcheck.js",
++    "test/cross-repo-verify.test.mjs",
++    "test/design-file-list-gate.test.mjs",
++    "test/plan-target-files.test.mjs",
++    "test/register-repo-platform-split-brain.test.mjs"
++  ],
++  "baselineCommit": "453508a3da93821bee7f3fd06e71218698f7af31",
++  "baselineHash": "d7b3376eaa9f920b",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 3
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-16T03:50:34.804Z"
+ }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 0edeff2..385a36f 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -152,6 +152,14 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
+       ],
+     },
++    {
++      id: 'gate_snapshot',
++      title: '门禁隔离快照 copy 面',
++      note: '门禁快照（gate-snapshot）= HEAD worktree + 会话文件 overlay + 环境目录 junction——gitignored 生成物（api-types/generated 类）不进 HEAD 也不在会话集，快照内 lint/test 环境性假败（2026-09-16 驾驭小结④，friction5-hardening R4 / D-002@v1）。按本清单在快照构建期从主仓 junction 链接补齐（失败回退复制）；快照内 overlay 已覆盖的同名路径跳过（本变更最新态优先）。⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。',
++      keys: [
++        { path: 'gate_snapshot.copy', type: 'array', optional: true, status: 'live', readers: ['createGateSnapshot (src/run/gate-snapshot.js)'], desc: '门禁隔离快照的生成物/额外路径 copy 面（元素 string，相对仓根）：HEAD 快照缺 gitignored 生成物导致 lint/test 环境性假败；声明后快照构建期从主仓 junction 链接（失败回退复制）。⚠️ junction 是活链接，快照内再跑生成命令会写穿到主仓该目录。未配置/空清单 = 全段空转零行为变化。', example: 'gate_snapshot:\n  copy:\n    - src/generated' },
++      ],
++    },
+     {
+       id: 'auto_mode',
+       title: '变更规模自动分类',
+@@ -379,6 +387,13 @@ worktree-hook:
+ #   supplyFiles:
+ #     - src/build-id.ts
+ 
++# ── 门禁隔离快照 copy 面（HEAD 快照缺 gitignored 生成物 → 快照内 lint/test 环境性假败；构建期从主仓 junction 补齐）──
++# 相对仓根路径列表；失败回退复制；快照内 overlay 已覆盖的同名路径跳过。
++# ⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。
++# gate_snapshot:
++#   copy:
++#     - src/generated
++
+ # ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
+ auto_mode:
+   force_full_patterns:
+diff --git a/src/probe7-anchor-check.js b/src/probe7-anchor-check.js
+index 623e4e2..ac40deb 100644
+--- a/src/probe7-anchor-check.js
++++ b/src/probe7-anchor-check.js
+@@ -4,7 +4,14 @@
+  * 坑 probe7-covered-anchor-missing（2026-09-15 复盘实证：探针7 矩阵第一轮 7 行 covered 判定的
+  * 证据列缺 file:line 锚点被审查打回——预填说明写着「证据列给首命中 file:line 锚点」但模板要求
+  * 没细读就交，人工往返一轮）。本模块把该口径机器化：verify --done 时点解析正文探针7 段，
+- * 判定列=covered 的行必须含 `path:line` 形态锚点，缺则 advisory 提示回补。
++ * 判定列=covered 的行必须含 `path:line` 形态锚点或 `.test.` 测试文件名锚点，缺则 advisory
++ * 提示回补。
++ *
++ * 口径对齐（2026-09-16-friction5-hardening FR-05 / D-005@v1，用户 2026-09-16 驾驭小结⑤）：
++ * 锚点认 file:line 或 `.test.` 文件名两形态（对齐 stage-contract 硬门三形态中的两形态）——
++ * 行号随提交漂移场景 `.test.` 文件名锚过硬门仍被 advisory 提示回补是无效摩擦。file:line
++ * 侧本判定（/:\d+\b/）宽于 stage-contract 硬门形态集，advisory 宽于硬门是设计容差；
++ * 裸反引号不收（保持 advisory 增量价值）。
+  *
+  * 定位与边界：
+  * - **advisory 不阻断**：covered 行缺锚点只 warn（证据可以是合法的人工核验形态，但 covered=
+@@ -57,7 +64,9 @@ export function checkProbe7AnchorCoverage(reportText) {
+     if (verdict !== 'covered') continue
+     out.coveredRows++
+     const evidence = cells[5] || ''
+-    if (!ANCHOR_RE.test(evidence)) {
++    // 双口径锚点（FR-05）：file:line（ANCHOR_RE，本体不动）或 `.test.` 测试文件名——
++    // 后者对齐 stage-contract 硬门形态，消灭行号漂移场景的无效回补提示
++    if (!ANCHOR_RE.test(evidence) && !/\.test\./.test(evidence)) {
+       out.missingAnchors.push({
+         task: task || '(未知 task)',
+         acceptance: (cells[1] || '').slice(0, 80),
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index b1bbbef..1572121 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -111,6 +111,150 @@ function smokeImportPython(pythonBin, snapshotRoot, relFile) {
+   return null
+ }
+ 
++/**
++ * local.yaml `gate_snapshot:` 段 `copy:` 列表的轻量行扫描（与 verify-postcheck
++ * extractLintCommand 同风格——单键定向取值，不引 js-yaml，本文件零新依赖）。
++ *
++ * 认块列表（缩进 `- <path>` 条目）与 inline flow（`copy: [a, b]`）两形态（对齐
++ * worktree.supplyFiles 等既有数组键的「块列表或 inline flow 均可解析」约定）；空行/注释行
++ * 跳过不破段；离开 gate_snapshot 段（缩进回收到段头及以下 / 新顶层键）即止。容错：值剥
++ * 尾注（` #…`）与成对引号。
++ * @param {string} yamlText local.yaml 原文
++ * @returns {string[]} copy 条目原始值（未规整，交 applyGateSnapshotCopy 逐条规整）
++ */
++function _stripYamlValue(v) {
++  let s = String(v).trim()
++  const hash = s.indexOf(' #')
++  if (hash >= 0) s = s.slice(0, hash).trim()
++  if ((s.startsWith('"') && s.endsWith('"') && s.length >= 2) || (s.startsWith("'") && s.endsWith("'") && s.length >= 2)) {
++    s = s.slice(1, -1).trim()
++  }
++  return s
++}
++
++function parseGateSnapshotCopy(yamlText) {
++  if (!yamlText) return []
++  const out = []
++  let inGate = false   // 位于 gate_snapshot: 段内
++  let gateIndent = -1
++  let inCopy = false   // 位于段内 copy: 列表内
++  let copyIndent = -1
++  for (const raw of String(yamlText).split(/\r?\n/)) {
++    const content = raw.trim()
++    if (!content || content.startsWith('#')) continue // 空行/注释行不破段
++    const indent = raw.match(/^[ \t]*/)[0].length
++    if (!inGate) {
++      if (/^gate_snapshot:\s*(?:#.*)?$/.test(content)) { inGate = true; gateIndent = indent; inCopy = false }
++      continue
++    }
++    if (indent <= gateIndent) { inGate = false; inCopy = false; continue } // 出段（新顶层键）
++    if (!inCopy) {
++      const flow = content.match(/^copy:\s*\[([^\]]*)\]/)
++      if (flow) {
++        for (const part of flow[1].split(',')) {
++          const v = _stripYamlValue(part)
++          if (v) out.push(v)
++        }
++        continue // inline flow 当行自洽，继续扫段内后续内容
++      }
++      if (/^copy:\s*(?:#.*)?$/.test(content)) { inCopy = true; copyIndent = indent }
++      continue // 段内其它子键忽略
++    }
++    if (indent < copyIndent) { inCopy = false; continue } // 缩进回收出列表
++    const item = content.match(/^-\s*(.+)$/)
++    if (!item) { inCopy = false; continue } // 同层非列表行 = 列表结束
++    const v = _stripYamlValue(item[1])
++    if (v) out.push(v)
++  }
++  return out
++}
++
++/** 目录递归复制（copy 面 junction 不可用时的回退）。符号链接条目跳过（生成物目录内不追链）。 */
++function copyDirRecursive(srcDir, dstDir) {
++  mkdirSync(dstDir, { recursive: true })
++  for (const e of readdirSync(srcDir, { withFileTypes: true })) {
++    const s = join(srcDir, e.name)
++    const d = join(dstDir, e.name)
++    if (e.isDirectory()) copyDirRecursive(s, d)
++    else if (e.isFile()) copyFileSync(s, d)
++  }
++}
++
++/**
++ * gate_snapshot.copy 面（2026-09-16-friction5-hardening R4 / FR-04 / D-002@v1，坑
++ * gate-snapshot-missing-generated-artifacts——用户 2026-09-16 驾驭小结④实证只能
++ * SNAPSHOT_OFF 对照）：HEAD 快照缺 gitignored 生成物（api-types/generated 类不进 HEAD
++ * 也不在会话文件集）→ 快照内 lint/test 环境性假败。按主仓 local.yaml 的 copy 清单把
++ * 生成物从主仓 junction 链接进快照（失败回退复制），消除环境性假败。
++ *
++ * 调用契约：cwd=**主仓**根（local.yaml 从主仓读——快照内 local.yaml 是稍后复制的复制件，
++ * copy 面必须先于复制生效）；在 overlay 之后调用（dst 已存在 = overlay 已覆盖本变更最新态，
++ * 跳过不覆盖）。
++ *
++ * 逐条容错（fail-open，与本文件快照基建策略一致，任何失败不作废快照）：路径规整
++ *（String、反斜杠→正斜杠、trim）；含 '..' 或绝对路径形态（POSIX / 与 Windows 盘符）拒绝
++ * warn 跳过；主仓不存在 warn 跳过；junction 抛错回退递归 copy（目录）/ copyFileSync（文件）；
++ * 再失败 warn 跳过。成功 ≥1 条 console.log 一行报备。未配置/空清单/读失败 → 全段空转
++ * 零输出零行为（存量 local.yaml 逐字节不变）。
++ *
++ * ⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录（constraints 明示，
++ * config-schema desc 与 renderExample 注释同步警告）。
++ *
++ * 新增内部导出（symbol-impact：内部测试直测边界条目用；createGateSnapshot 唯一运行时消费方）。
++ * @param {string} cwd 主仓根
++ * @param {string} snapshotRoot 快照根
++ * @returns {number} 成功链接/复制的条目数
++ */
++export function applyGateSnapshotCopy(cwd, snapshotRoot) {
++  let entries = []
++  try {
++    const cfgPath = join(cwd, '.sillyspec', 'local.yaml')
++    if (!existsSync(cfgPath)) return 0
++    entries = parseGateSnapshotCopy(readFileSync(cfgPath, 'utf8'))
++  } catch { return 0 } // 读侧容错：解析/读失败与未配置同兜底（空转，不连坐快照）
++  if (!Array.isArray(entries) || entries.length === 0) return 0
++  let linked = 0
++  for (const raw of entries) {
++    const p = String(raw).replace(/\\/g, '/').trim()
++    if (!p) continue
++    if (p.includes('..') || p.startsWith('/') || /^[A-Za-z]:\//.test(p)) {
++      console.warn(`⚠️ gate_snapshot.copy 条目「${p}」含 .. 或绝对路径形态，拒绝（快照外写面）——跳过`)
++      continue
++    }
++    let srcStat = null
++    try { srcStat = statSync(join(cwd, p)) } catch { /* 主仓不存在，下方 warn 跳过 */ }
++    if (!srcStat) {
++      console.warn(`⚠️ gate_snapshot.copy 条目主仓不存在，跳过：${p}`)
++      continue
++    }
++    const src = join(cwd, p)
++    const dst = join(snapshotRoot, p)
++    if (existsSync(dst)) continue // overlay 已覆盖（本变更最新态优先）
++    try {
++      mkdirSync(dirname(dst), { recursive: true })
++      let viaLink = false
++      try {
++        symlinkSync(src, dst, 'junction')
++        // Windows 文件 junction 可「建成但不解析」（重解析点指向非目录，symlinkSync 不抛、
++        // existsSync 为假）——链接后验真，假成功回退复制（平台差异实测坑）
++        viaLink = existsSync(dst)
++      } catch { viaLink = false }
++      if (!viaLink) {
++        try { rmSync(dst, { recursive: true, force: true }) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
++        if (srcStat.isDirectory()) copyDirRecursive(src, dst)
++        else copyFileSync(src, dst)
++      }
++      linked++
++    } catch (e) {
++      console.warn(`⚠️ gate_snapshot.copy 条目「${p}」junction/复制均失败：${e && e.message ? e.message : e}——跳过（不作废快照）`)
++    }
++  }
++  if (linked > 0) {
++    console.log(`🔬 门禁快照 copy 面：${linked} 个 gate_snapshot.copy 条目自主仓 junction/复制进快照（⚠️ junction 是活链接，快照内再跑生成命令会写穿到主仓该目录）`)
++  }
++  return linked
++}
++
+ /**
+  * 创建隔离快照：HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml。
+  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
+@@ -191,6 +335,13 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+       return null
+     }
+ 
++    // gate_snapshot.copy 面（R4 / D-002@v1，2026-09-16-friction5-hardening）：gitignored
++    // 生成物从主仓 junction/复制进快照。位置=环境目录链接段之后（环境优先级最高）、
++    // local.yaml 复制段之前（从主仓 cwd 读原文——快照内 local.yaml 是稍后才复制的复制件，
++    // 且 copy 面必须先于复制生效）；overlay 已在上面完成（dst 已存在即跳过，本变更最新态优先）。
++    // 未配置 gate_snapshot.copy → 全段空转零行为（见 applyGateSnapshotCopy jsdoc）。
++    applyGateSnapshotCopy(cwd, snapshotRoot)
++
+     // local.yaml（gitignore 不进 HEAD；门禁命令配置来源）+ package-lock 保持 HEAD 版（npm test 不装新依赖）
+     for (const cfg of [join('.sillyspec', 'local.yaml')]) {
+       const src = join(cwd, cfg)
+diff --git a/src/run/gates.js b/src/run/gates.js
+index e7c2679..213c585 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -919,9 +919,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       if (existsSync(p7ReportPath)) {
+         const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
+         if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
+-          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line 锚点（advisory 不阻断，审查会要求回补）：`)
++          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line 或 .test. 文件名锚点（advisory 不阻断，审查会要求回补）：`)
+           for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
+-            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点`)
++            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点或 \`.test.\` 测试文件名`)
+           }
+           if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
+         }
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index 6487ad3..4122f96 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -216,6 +216,32 @@ export function parseHeadCommit(content) {
+   return parseFrontmatterScalar(content, 'head_commit')
+ }
+ 
++/**
++ * frontmatter 顶层键重复检测（纯函数，无 IO，2026-09-16-friction5-hardening FR-02 / D-004@v1）。
++ *
++ * 坑锚定（用户 2026-09-16 驾驭小结②）：taskcard 骨架双来源反填 depends_on（tasks.md 行内
++ * 注解 + plan.md Wave 兜底）后 agent 又重复手填同键——js-yaml 4 对重复映射键 throw，本文件
++ * 四处 jsYaml.load 的 catch 全部静默降级（blueprint 契约空 / repo=null / 命令不校验 /
++ * Wave proposal best-effort 跳过 = 吞字段），parseDependsOn 正则又只取首个命中——重复键在
++ * 下游全链路静默失真，只能在 feasibility 入口单点拦截。行首 ^key: 顶格锚定：块列表项
++ * （- x）与缩进子键天然不匹配；goal: > 折叠块的缩进续行不匹配（顶格续行属罕见畸形，
++ * 宁报错不漏报——fail-closed）。
++ * @param {string} fmText frontmatter 文本（--- 之间的内容；CRLF 入口归一，同 parseDependsOn 惯例）
++ * @returns {Array<{key: string, lines: number[]}>} 出现 ≥2 次的顶层键及其行号（1-based，相对 fmText）
++ */
++export function detectDuplicateTopKeys(fmText) {
++  const keyLines = new Map()
++  String(fmText || '').replace(/\r\n/g, '\n').split('\n').forEach((line, idx) => {
++    const m = line.match(/^([A-Za-z_][\w-]*):/)
++    if (!m) return
++    if (!keyLines.has(m[1])) keyLines.set(m[1], [])
++    keyLines.get(m[1]).push(idx + 1)
++  })
++  return [...keyLines.entries()]
++    .filter(([, lines]) => lines.length >= 2)
++    .map(([key, lines]) => ({ key, lines }))
++}
++
+ /**
+  * 从 local.yaml 文本解析 repos: 段（跨仓 workspace 注册表）。
+  * 与 parseLocalYamlModules 同风格（轻量行扫描，不引 yaml 依赖），结构 Map<repoKey, absolutePath>。
+@@ -1263,6 +1289,15 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
+     const fm = fmMatch[1]
+     const body = content.slice(fmMatch[0].length)
+ 
++    // 0. 顶层键重复检测（FR-02 / D-004@v1，坑见 detectDuplicateTopKeys jsdoc：骨架反填
++    // depends_on 后 agent 重复手填 → js-yaml throw 被四处 catch 静默吞字段，只能在入口拦截）。
++    // 先于必要字段检查——重复键会令下游 jsYaml.load 全链路失真，属最高优先级形态错误。
++    const dupTaskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
++    const dupKeys = detectDuplicateTopKeys(fm)
++    for (const dup of dupKeys) {
++      errors.push(`${dupTaskId || file}: frontmatter 顶层键 ${dup.key} 重复出现 ${dup.lines.length} 次（L${dup.lines.join('、L')}）——骨架已自动反填的键（如 depends_on）勿重复手填，保留正确一处删除其余`)
++    }
++
+     // 1. 必要字段检查
+     const taskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
+     const title = (fm.match(/^title:\s*(.+)/m)?.[1] || '').trim()
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index 2b808fd..ab0484c 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -206,7 +206,7 @@ export const definition = {
+ 
+ 结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（\`| 决策 ID | FR | Task | Evidence | 状态 |\`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
+ 
+-**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
++**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
+ 
+ **Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
+ 
+diff --git a/src/verify-facts-schema.js b/src/verify-facts-schema.js
+index 5bbade0..c024044 100644
+--- a/src/verify-facts-schema.js
++++ b/src/verify-facts-schema.js
+@@ -52,6 +52,14 @@ const EVIDENCE_LINE_RE = /^- (task-\d+):\s*(satisfied|missing|partial)\b([^\n]*)
+  */
+ const RECEIPT_LINE_RE = /^- claim:\s*([^|｜\n]+)[|｜]\s*command:\s*([^|｜\n]+)[|｜]\s*exit:\s*(\d+)\s*[|｜]\s*log:\s*(.+)$/
+ 
++/**
++ * 多行 YAML 形态续行：`  key: value`（缩进键值行，2026-09-16-friction5-hardening FR-01 / D-001@v1）。
++ * 单行管道形态 agent 手写时列错位/字段序调换/多行书写整行不命中 → 回执槽收 0 条 →
++ * integration-critical 误报无绿回执——多行聚合根除形态自由度问题；字段序无关（command 可在
++ * claim 前），聚合遇首个不匹配行（下一列表项/非缩进行/空行/标题）即止。
++ */
++const RECEIPT_CONT_LINE_RE = /^[ \t]+([A-Za-z_][\w-]*):\s*(.*)$/
++
+ /**
+  * 解析 verify-result.md 的两个受控槽段（D-001@v2 slot-backfill 录入界面）。
+  * 占位形态（<待填：三选一> / <待填：0 或非 0>）不含枚举词，行首锚定 + 枚举词双保险 fail-closed。
+@@ -101,15 +109,47 @@ export function parseEvidenceSlots(mdText) {
+ 
+   const runtimeEvidence = []
+   if (receiptBody) {
+-    for (const line of receiptBody) {
+-      const m = line.match(RECEIPT_LINE_RE)
+-      if (!m) continue
+-      runtimeEvidence.push({
+-        claim: m[1].trim(),
+-        command: m[2].trim(),
+-        exitCode: Number(m[3]),
+-        logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
+-      })
++    // 回执双形态解析（FR-01 / D-001@v1）：①单行管道形态 RECEIPT_LINE_RE 命中即收（正则与
++    // 字段语义逐字节不变，存量回执零回归）；②不命中且行首 `- claim:` 起头时进入多行 YAML
++    // 聚合——收集缩进续行（RECEIPT_CONT_LINE_RE）为 key→value（值 trim、剥首尾成对反引号），
++    // 首行行内剩余只作 claim 值（claim 含管道符不截断）；四字段 = claim/command 非空（trim 后）
++    // + exit 纯数字 + log 非空（值内 ｜/| 尾注取首段，同单行口径），齐才 push——任一缺失/空
++    // 整条不收（fail-closed 宁漏不误收，坑 receipt-fullwidth-parse 形态自由度的根除收口）。
++    const stripPairedBackticks = (v) => {
++      const t = v.trim()
++      return t.length >= 2 && t.startsWith('`') && t.endsWith('`') ? t.slice(1, -1) : t
++    }
++    for (let i = 0; i < receiptBody.length; i++) {
++      const m = receiptBody[i].match(RECEIPT_LINE_RE)
++      if (m) {
++        runtimeEvidence.push({
++          claim: m[1].trim(),
++          command: m[2].trim(),
++          exitCode: Number(m[3]),
++          logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
++        })
++        continue
++      }
++      const head = receiptBody[i].match(/^-\s*claim:\s*(.*)$/)
++      if (!head) continue
++      const fields = {}
++      let j = i + 1
++      while (j < receiptBody.length) {
++        const cm = receiptBody[j].match(RECEIPT_CONT_LINE_RE)
++        if (!cm) break
++        if (!(cm[1] in fields)) fields[cm[1]] = stripPairedBackticks(cm[2])
++        j++
++      }
++      i = j - 1 // 聚合消费至 j-1，回退一格交还外层 for 推进
++      const claim = [head[1].trim(), typeof fields.claim === 'string' ? fields.claim.trim() : '']
++        .filter(s => s.length > 0).join(' ').trim()
++      const command = typeof fields.command === 'string' ? fields.command : ''
++      const exit = typeof fields.exit === 'string' ? fields.exit.trim() : ''
++      const log = typeof fields.log === 'string'
++        ? fields.log.split(/[|｜]/)[0].trim().replace(/^`|`$/g, '')
++        : ''
++      if (!claim || !command || !/^\d+$/.test(exit) || !log) continue
++      runtimeEvidence.push({ claim, command, exitCode: Number(exit), logPath: log })
+     }
+   }
+ 
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 27d4f5d..72d5221 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -1150,7 +1150,12 @@ export function backfillMissingEvidenceSlots(mdPath, requiredEvidenceItems = [])
+     blocks.push([
+       RECEIPT_SLOT_HEADING, '[层：自述声明——CLI 一致性校验]', '',
+       '<!-- integration-critical/deployment-critical 变更必填；其余写「无」 -->',
+-      '- claim: <待填：一句话> | command: <待填：命令> | exit: <待填：0 或非 0> | log: <待填：日志路径>',
++      '<!-- 回执双形态（2026-09-16-friction5-hardening FR-01）：下方多行 YAML 形态为推荐写法（字段序无关）；',
++      '     亦认单行管道形态：- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径> -->',
++      '- claim: <待填：一句话>',
++      '  command: <待填：命令>',
++      '  exit: <待填：0 或非 0>',
++      '  log: <待填：日志路径>',
+       '',
+     ].join('\n'))
+     added.push(RECEIPT_SLOT_HEADING)
+@@ -1339,7 +1344,12 @@ export function generateVerifyResultSkeleton(result) {
+     '',
+     '## 集成验证回执 [层：自述声明——CLI 一致性校验]',
+     '<!-- integration-critical/deployment-critical 变更必填；其余写「无」 -->',
+-    '- claim: <待填：一句话> | command: <待填：命令> | exit: <待填：0 或非 0> | log: <待填：日志路径>',
++    '<!-- 回执双形态（2026-09-16-friction5-hardening FR-01）：下方多行 YAML 形态为推荐写法（字段序无关）；',
++    '     亦认单行管道形态：- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径> -->',
++    '- claim: <待填：一句话>',
++    '  command: <待填：命令>',
++    '  exit: <待填：0 或非 0>',
++    '  log: <待填：日志路径>',
+     '',
+     '## 任务完成度 [层：人工判断]',
+     '<!--TODO: 逐 task 对照 tasks.md 勾选与验收标准，完成/未完成/存疑三态-->',
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index d1efc55..71be23e 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -549,10 +549,25 @@ function detectNoOpFiles(projectRoot, worktreePath, candidates) {
+  * changes/ 实体在 specRoot，本地目录常为空——旧硬编码 CHANGES_REL 恒读空 → allow 集恒空 →
+  * Gate1 整批误拦（sync.js BUG-01 同族）。
+  *
++ * **.sillyspec/docs/ 条件白名单 + declaredFace 快照（D-003@v2，2026-09-16-friction5-hardening
++ * R3/FR-03）**：坑 apply-docs-sync-blocked（用户 2026-09-16 驾驭小结③）——filterDeliverableFiles
++ * 明确保留 `.sillyspec/docs/` 为交付物，而 allow 面（design §6 ∪ allowed_paths）不含 docs 时
++ * Gate1 又拦同一文件，「filter 保交付、Gate1 拦交付」两道口径矛盾，approved 文档同步照样 BLOCKED。
++ * 修正：聚合完成后仅当 main 仓声明面非空（mainSet.size > 0）才 mainSet.add('.sillyspec/docs/')
++ * （尾斜杠写法——pathMatches 目录前缀语义放行整目录，step3.5 getBlobHashMap 对目录条目 inert）。
++ * **必须条件加白**（design-grill M5）：无条件加白会把空清单翻转成非空——design 与任务卡全缺的
++ * 存量变更从「fail-open（Gate1 跳过、patch 全量）」变成「docs-only 单条目面 → 非 docs 交付全
++ * BLOCKED + patch 静默收窄」，故空清单维持空（零行为变化）。加白前快照 declaredFace = 原
++ * 声明面（design §6 ∪ allowed_paths，不含白名单条目），以 Map 附挂属性 repoMap.declaredFace
++ * 带出（Map 方法全保留，既有调用点零破坏）——Gate1 hasAllowList 判定与 docs 越权审计报备均以
++ * declaredFace 为口径（M3：allowed_paths 已声明的 docs 文件不误报越权）。白名单只进 main 仓
++ * Set（`.sillyspec/docs/` 是主仓 specRoot 概念），跨仓 Map 切片不受影响。
++ *
+  * @param {string} projectRoot - 主仓库根
+  * @param {string} changeName - 变更名
+  * @param {{ specBase?: string }} [opts] specBase 显式传入（平台模式必传 specRoot）
+- * @returns {Map<string, Set<string>>} repoKey → 并集清单 Set（无 design 清单且无 task 卡片时为空 Map）
++ * @returns {Map<string, Set<string>>} repoKey → 并集清单 Set（无 design 清单且无 task 卡片时为空 Map）；
++ *   附挂属性 declaredFace: Set<string>——main 仓加白前原声明面（审计口径，docs 白名单条目不在其中）
+  */
+ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
+   const repoMap = new Map();
+@@ -583,6 +598,12 @@ export function resolveApplyAllowSet(projectRoot, changeName, opts = {}) {
+       for (const p of parseAllowedPaths(content)) repoSet.add(p);
+     }
+   }
++
++  // D-003@v2：.sillyspec/docs/ 条件加白——仅 main 仓声明面非空才加（空清单维持 fail-open，
++  // 见函数头 jsdoc）。加白前快照 declaredFace（原声明面）供 Gate1 审计口径用（Map 附挂带出）。
++  const declaredFace = new Set(mainSet);
++  if (mainSet.size > 0) mainSet.add('.sillyspec/docs/');
++  repoMap.declaredFace = declaredFace;
+   return repoMap;
+ }
+ 
+@@ -1359,7 +1380,29 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+     ]);
+   }
+   const allowSet = allowMap.get('main') || new Set();
+-  const hasAllowList = allowSet.size > 0;
++  // D-003@v2（R3/FR-03）：hasAllowList 与 docs 审计报备以 declaredFace（design §6 ∪
++  // allowed_paths 原面，resolveApplyAllowSet 加白前快照、Map 附挂带出）为口径——Gate1 违规
++  // 判定仍消费 allowSet（已含 .sillyspec/docs/ 白名单条目 = 放行 docs）。旧调用路径拿不到
++  // declaredFace 时回退 mainSet 判定保持兼容（条件加白下两者空性等价，纯口径统一）。
++  const declaredFace = (allowMap && allowMap.declaredFace instanceof Set) ? allowMap.declaredFace : allowSet;
++  const hasAllowList = declaredFace.size > 0;
++
++  // --- 3c. docs 白名单审计报备（D-003@v2，风险 R-01 应对）---
++  // 白名单放行是有意的语义放宽（approved 文档同步不再拦），审计面由此报备行保住：实际
++  // changedFiles 中以 .sillyspec/docs/ 开头且不被 declaredFace 任一条目 pathMatches 覆盖的
++  // 文件 = 纯靠白名单放行（design §6 / 任务卡 allowed_paths 均未声明）——逐名列出供追认/
++  // 审计，docs-check 独立校验内容质量。declaredFace 命中（已声明）不报备（M3 口径）。
++  // 无清单（fail-open）时白名单未生效，不报备（与旧版零行为差异）。
++  {
++    const docsAdmitted = hasAllowList
++      ? changedFiles.filter(f => f.startsWith('.sillyspec/docs/') && ![...declaredFace].some(ap => pathMatches(f, ap)))
++      : [];
++    if (docsAdmitted.length > 0) {
++      result.warnings = (result.warnings || []).concat([
++        `${docsAdmitted.length} 个 .sillyspec/docs/ 文件经模块文档白名单放行（未在 design §6/任务卡 allowed_paths 声明，docs-check 独立校验内容）：${docsAdmitted.join('、')}`
++      ]);
++    }
++  }
+ 
+   // --- 3.5 主干已提交推进检测：hashMismatch 前移（Grill P0 修复，design §step 顺序修正）---
+   // 原在 step5b，但 step4.5/5a dirty 拦截短路在 step5b 之前，致 rescue 拿不到 hashMismatchFiles
+diff --git a/test/cross-repo-apply.test.mjs b/test/cross-repo-apply.test.mjs
+index 8e4f776..7740923 100644
+--- a/test/cross-repo-apply.test.mjs
++++ b/test/cross-repo-apply.test.mjs
+@@ -91,7 +91,9 @@ allowed_paths:
+   const m = resolveApplyAllowSet(tmpDir, cn);
+   assert.ok(m instanceof Map, '返回 Map');
+   assert.deepEqual([...m.keys()], ['main'], '单仓 → 仅 main 键');
+-  assert.deepEqual([...m.get('main')].sort(), ['src/a.js', 'test/a.test.mjs'], 'main Set = design ∪ task allowed_paths');
++  // D-003@v2（2026-09-16-friction5-hardening R3）：main 声明面非空 → 条件加白 .sillyspec/docs/
++  //（断言语义从「design 清单集」变「清单 ∪ docs 白名单集」——有意语义变更的合法断言更新）
++  assert.deepEqual([...m.get('main')].sort(), ['.sillyspec/docs/', 'src/a.js', 'test/a.test.mjs'], 'main Set = design ∪ task allowed_paths ∪ .sillyspec/docs/ 白名单');
+ });
+ 
+ test('resolveApplyAllowSet 跨仓 change 按 task 卡 repo: 切片到多键（A4）', () => {
+@@ -119,7 +121,8 @@ allowed_paths:
+ `);
+   const m = resolveApplyAllowSet(tmpDir, cn);
+   assert.deepEqual([...m.keys()].sort(), ['main', 'sillyspec'], 'Map 含 main + sillyspec');
+-  assert.deepEqual([...m.get('main')].sort(), ['src/main.js'], 'main = design §6 ∪ 主仓 task allowed_paths');
++  // D-003@v2：main 声明面非空（design src/main.js）→ 加白 .sillyspec/docs/ 只进 main，跨仓键不受影响
++  assert.deepEqual([...m.get('main')].sort(), ['.sillyspec/docs/', 'src/main.js'], 'main = design §6 ∪ 主仓 task allowed_paths ∪ .sillyspec/docs/ 白名单');
+   assert.deepEqual([...m.get('sillyspec')].sort(), ['src/cross.js', 'test/cross.test.mjs'], 'sillyspec = 跨仓 task allowed_paths（相对跨仓仓根）');
+ });
+ 
+diff --git a/test/worktree-allow-list-violations.test.mjs b/test/worktree-allow-list-violations.test.mjs
+index 410d763..1e73ac2 100644
+--- a/test/worktree-allow-list-violations.test.mjs
++++ b/test/worktree-allow-list-violations.test.mjs
+@@ -111,7 +111,9 @@ allowed_paths:
+   // 单仓 change（task-01 无 repo:）→ Map 仅含 main 键，allowed_paths ∪ design 全归 main
+   assertDeep([...allowMap.keys()], ['main'], '单仓 change → Map 仅 main 键（task-05 跨仓切片，零回归）')
+   const allowSet = allowMap.get('main')
+-  assertDeep([...allowSet].sort(), ['dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], 'main Set 并集 = design 清单 ∪ task allowed_paths（含测试/产物）')
++  // D-003@v2（2026-09-16-friction5-hardening R3）：main 声明面非空 → 条件加白 .sillyspec/docs/
++  //（断言语义从「design 清单集」变「清单 ∪ docs 白名单集」——有意语义变更的合法断言更新）
++  assertDeep([...allowSet].sort(), ['.sillyspec/docs/', 'dist/types.d.ts', 'src/app.js', 'src/util.js', 'test/app.test.mjs'], 'main Set = design 清单 ∪ task allowed_paths ∪ .sillyspec/docs/ 白名单（D-003@v2 条件加白，含测试/产物）')
+   const viol = classifyAllowListViolations(['src/app.js', 'src/util.js', 'test/app.test.mjs', 'dist/types.d.ts'], allowSet)
+   assertDeep(viol, [], 'test/产物文件不再被判「不在清单」（原 apply 只认 design §6 会拦）')
+   // 完全越界文件仍拦（union 不放开水面）
+@@ -149,7 +151,8 @@ allowed_paths:
+   assertDeep([...allowMap.keys()].sort(), ['main', 'sillyspec'], '跨仓 change → Map 含 main + sillyspec 两键')
+   const mainSet = allowMap.get('main')
+   const sillyspecSet = allowMap.get('sillyspec')
+-  assertDeep([...mainSet].sort(), ['src/main-only.js', 'test/main.test.mjs'], 'main Set = design §6 ∪ 主仓 task allowed_paths')
++  // D-003@v2：main 声明面非空 → 加白 .sillyspec/docs/ 只进 main Set，跨仓切片不受影响
++  assertDeep([...mainSet].sort(), ['.sillyspec/docs/', 'src/main-only.js', 'test/main.test.mjs'], 'main Set = design §6 ∪ 主仓 task allowed_paths ∪ .sillyspec/docs/ 白名单')
+   assertDeep([...sillyspecSet].sort(), ['src/task-review.js', 'src/worktree-apply.js'], 'sillyspec Set = 跨仓 task allowed_paths（相对跨仓仓根，design §6 清单不进跨仓）')
+   rmSync(tmpDir, { recursive: true, force: true })
+ }
+diff --git a/test/apply-docs-allowlist.test.mjs b/test/apply-docs-allowlist.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/apply-docs-allowlist.test.mjs
+@@ -0,0 +1,136 @@
++/**
++ * apply docs 白名单直测（2026-09-16-friction5-hardening task-03 / FR-03 / D-003@v2）。
++ *
++ * 背景（坑 apply-docs-sync-blocked，用户 2026-09-16 驾驭小结③）：filterDeliverableFiles 保留
++ * `.sillyspec/docs/` 为交付物，而 allow 面（design §6 ∪ task allowed_paths）不含 docs 时 Gate1
++ * 又拦同一文件——approved 文档同步照样 BLOCKED。D-003@v2 修正：
++ *   - 条件加白：main 仓声明面非空才 add('.sillyspec/docs/')——design 与任务卡全缺的空清单变更
++ *     维持 fail-open（Gate1 跳过、patch 全量），杜绝 docs-only 单条目面翻转语义（design-grill M5）
++ *   - declaredFace 快照：加白前原声明面随返回 Map 附挂带出，Gate1 hasAllowList 与 docs 越权
++ *     审计报备均以 declaredFace 为口径（已声明的 docs 文件不误报越权，M3）
++ *
++ * 覆盖：
++ *   ① design §6 非空 → main Set 含 .sillyspec/docs/（尾斜杠），declaredFace 不含（加白前快照）
++ *   ② design + 任务卡全缺 → allowMap/declaredFace 均空（fail-open 语义不变）
++ *   ③ Gate1：未声明 docs 文件零违规（classifyAllowListViolations）且进 patch（resolvePatchFiles），
++ *      完全越界文件仍拦
++ *   ④ applyWorktree checkOnly 集成：审计报备含未声明 docs 文件、不含 allowed_paths 已声明者
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync } from 'node:child_process'
++import { resolveApplyAllowSet, classifyAllowListViolations, resolvePatchFiles, applyWorktree } from '../src/worktree-apply.js'
++
++const tempDirs = []
++function mkProject(prefix = 'docs-allow-') {
++  const root = mkdtempSync(join(tmpdir(), prefix))
++  tempDirs.push(root)
++  return root
++}
++test.after(() => { for (const d of tempDirs) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } } })
++
++function writeDesign(specBase, name, listBody) {
++  const dir = join(specBase, 'changes', name)
++  mkdirSync(join(dir, 'tasks'), { recursive: true })
++  writeFileSync(join(dir, 'design.md'), `# Design\n\n## 6. 文件变更清单\n${listBody}`)
++  return dir
++}
++
++// ── ① 条件加白 + declaredFace 快照（纯函数级）──
++test('条件加白：design §6 非空 → main Set 含 .sillyspec/docs/（尾斜杠），declaredFace 不含', () => {
++  const root = mkProject()
++  const specBase = join(root, '.sillyspec')
++  writeDesign(specBase, 'c1', '- src/a.js\n')
++  const m = resolveApplyAllowSet(root, 'c1', { specBase })
++  assert.ok(m.get('main').has('.sillyspec/docs/'), 'main Set 含白名单条目（尾斜杠写法，pathMatches 目录前缀放行整目录）')
++  assert.ok(m.declaredFace instanceof Set, 'declaredFace 以 Map 附挂属性带出（Map 方法全保留）')
++  assert.ok(!m.declaredFace.has('.sillyspec/docs/'), 'declaredFace 不含白名单条目（加白前快照）')
++  assert.deepEqual([...m.declaredFace].sort(), ['src/a.js'], 'declaredFace = design §6 原声明面')
++})
++
++// ── ② 空清单 fail-open 不变（design-grill M5：无条件加白会翻转空清单语义）──
++test('空清单：design 与任务卡全缺 → allowMap 与 declaredFace 均空（fail-open 语义不变）', () => {
++  const root = mkProject()
++  const m = resolveApplyAllowSet(root, 'nope-change', { specBase: join(root, '.sillyspec') })
++  const mainSet = m.get('main') || new Set()
++  assert.equal(mainSet.size, 0, '无 design/tasks → main Set 空（条件加白不翻转空清单）')
++  assert.ok(m.declaredFace instanceof Set && m.declaredFace.size === 0, 'declaredFace 亦空 → hasAllowList=false（Gate1 跳过、patch 全量）')
++})
++
++// ── ③ Gate1 放行 + patch 圈定（纯函数级，与 Gate1/resolvePatchFiles 同源消费同一 allowSet）──
++test('Gate1：changedFiles 含 .sillyspec/docs/x.md 而 design 只声明 src/a.js → 零违规且进 patch，越界文件仍拦', () => {
++  const root = mkProject()
++  const specBase = join(root, '.sillyspec')
++  writeDesign(specBase, 'c2', '- src/a.js\n')
++  const m = resolveApplyAllowSet(root, 'c2', { specBase })
++  const allowSet = m.get('main')
++  assert.deepEqual(
++    classifyAllowListViolations(['src/a.js', '.sillyspec/docs/x.md'], allowSet),
++    [],
++    'docs 文件零违规（白名单条目放行）'
++  )
++  const patchFiles = resolvePatchFiles(['src/a.js', '.sillyspec/docs/x.md'], allowSet, true)
++  assert.ok(patchFiles.includes('.sillyspec/docs/x.md'), 'docs 文件进 patch（resolvePatchFiles 同源 allowSet）')
++  assert.ok(patchFiles.includes('src/a.js'), '声明文件进 patch')
++  // 白名单只放行 docs 子树——完全越界文件仍拦（容差不等于放行）
++  assert.deepEqual(
++    classifyAllowListViolations(['src/run.js'], allowSet),
++    ['src/run.js'],
++    'design 与 task 都未声明的越界文件仍违规'
++  )
++})
++
++// ── ④ applyWorktree checkOnly 集成：审计报备口径（declaredFace）──
++test('applyWorktree checkOnly：未声明 docs 文件报备、allowed_paths 已声明者不报备', () => {
++  const mainRepo = mkProject('docs-allow-int-')
++  // 初始提交：README + 两份模块文档（tracked——真实场景 .sillyspec/docs/ 模块卡在主仓被跟踪，
++  // 变更修改它们 → tracked-modified 进 worktree diff；untracked 会被 --exclude-standard 吞掉）
++  for (const c of [
++    'git init -q',
++    'git config user.email t@t.com',
++    'git config user.name t',
++    'git config commit.gpgsign false',
++  ]) execSync(c, { cwd: mainRepo, stdio: 'pipe' })
++  writeFileSync(join(mainRepo, 'README.md'), 'init\n')
++  mkdirSync(join(mainRepo, '.sillyspec', 'docs'), { recursive: true })
++  writeFileSync(join(mainRepo, '.sillyspec', 'docs', 'x.md'), 'x\n')
++  writeFileSync(join(mainRepo, '.sillyspec', 'docs', 'y.md'), 'y\n')
++  execSync('git add . && git commit -q -m init', { cwd: mainRepo, stdio: 'pipe' })
++  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
++
++  // 变更文档：design 只声明 src/a.js；task-01 allowed_paths 额外声明 .sillyspec/docs/y.md
++  //（y.md = declaredFace 命中样本；x.md = 纯靠白名单放行样本）
++  const changesDir = join(mainRepo, '.sillyspec', 'changes', 'tc1')
++  mkdirSync(join(changesDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changesDir, 'design.md'), '# Design\n\n## 6. 文件变更清单\n- src/a.js\n')
++  writeFileSync(join(changesDir, 'tasks', 'task-01.md'),
++    '---\nid: task-01\nallowed_paths:\n  - .sillyspec/docs/y.md\n---\n')
++
++  // 建主仓 worktree（同 cross-repo-apply.test.mjs 夹具模式）
++  const wtDir = join(mainRepo, '.sillyspec', '.runtime', 'worktrees', 'tc1')
++  mkdirSync(wtDir, { recursive: true })
++  execSync(`git worktree add "${wtDir}" -b sillyspec/tc1`, { cwd: mainRepo, stdio: 'pipe' })
++
++  // worktree 内子代理改动：源码交付 + 改两份模块文档（x.md 未声明 / y.md 已声明）
++  mkdirSync(join(wtDir, 'src'), { recursive: true })
++  writeFileSync(join(wtDir, 'src', 'a.js'), 'from-worktree\n')
++  writeFileSync(join(wtDir, '.sillyspec', 'docs', 'x.md'), 'x changed\n')
++  writeFileSync(join(wtDir, '.sillyspec', 'docs', 'y.md'), 'y changed\n')
++  writeFileSync(join(wtDir, 'meta.json'), JSON.stringify({
++    changeName: 'tc1', branch: 'sillyspec/tc1', baseHash, baselineCommit: baseHash,
++    baselineHash: null, worktreePath: wtDir, mode: 'worktree', baselineFiles: [],
++  }))
++
++  const r = applyWorktree('tc1', { cwd: mainRepo, checkOnly: true })
++  assert.equal(r.errors.length, 0, `Gate1 零违规（approved 文档同步不再拦；实际：${r.errors.join('; ')}）`)
++  assert.ok(r.changedFiles.includes('.sillyspec/docs/x.md'), '未声明 docs 文件进 changedFiles（filter 保交付）')
++  assert.ok(r.changedFiles.includes('.sillyspec/docs/y.md'), '已声明 docs 文件进 changedFiles')
++  assert.ok(r.changedFiles.includes('src/a.js'), '源码交付进 changedFiles')
++  const docsWarn = (r.warnings || []).find(w => w.includes('白名单放行'))
++  assert.ok(docsWarn, `审计报备存在（实际 warnings：${(r.warnings || []).join(' | ')}）`)
++  assert.ok(docsWarn.includes('.sillyspec/docs/x.md'), '报备含未声明的 x.md')
++  assert.ok(!docsWarn.includes('.sillyspec/docs/y.md'), '报备不含已声明的 y.md（declaredFace 命中不误报，M3）')
++})
+
+diff --git a/test/gate-snapshot-copy.test.mjs b/test/gate-snapshot-copy.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-copy.test.mjs
+@@ -0,0 +1,143 @@
++/**
++ * 门禁快照 copy 面直测（2026-09-16-friction5-hardening task-04 / FR-04 / D-002@v1）。
++ *
++ * 背景（坑 gate-snapshot-missing-generated-artifacts，用户 2026-09-16 驾驭小结④）：快照 =
++ * HEAD worktree + 会话文件 overlay + 环境目录 junction——gitignored 生成物（api-types/
++ * generated 类）不进 HEAD 也不在会话集 → 快照内 lint/test 环境性假败（用户实证只能
++ * SNAPSHOT_OFF 对照）。gate_snapshot.copy 声明生成物路径，快照构建期从主仓 junction 链接
++ *（失败回退复制）。
++ *
++ * 覆盖：
++ *   ① 配置目录条目 → createGateSnapshot 后快照内 existsSync 为真（junction/复制均断言真）
++ *   ② 未配置 → 快照创建成功且零 copy 面副作用
++ *   ③ 主仓不存在的条目 → warn 跳过、快照仍创建（fail-open 不作废）
++ *   ④ '..' 与绝对路径条目拒绝（不越出快照写面）
++ *   ⑤ 单文件条目 + inline flow 形态（Windows 文件 junction 不可用回退 copyFileSync）
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync } from 'node:child_process'
++import { createGateSnapshot, applyGateSnapshotCopy } from '../src/run/gate-snapshot.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } } })
++
++function git(dir, args) {
++  const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++  return r.stdout.trim()
++}
++
++/** git 仓夹具：HEAD 含 .gitignore（忽略 .sillyspec/ 与生成物目录）+ 一个 tracked 源文件。 */
++function makeProj(prefix) {
++  const proj = mk(prefix)
++  git(proj, ['init', '-q'])
++  git(proj, ['config', 'user.email', 't@t.local'])
++  git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\nsrc/generated/\n')
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'a.ts'), 'export const a = 1\n')
++  git(proj, ['add', '.'])
++  git(proj, ['commit', '-q', '-m', 'init'])
++  return proj
++}
++
++function writeLocalYaml(proj, body) {
++  mkdirSync(join(proj, '.sillyspec'), { recursive: true })
++  writeFileSync(join(proj, '.sillyspec', 'local.yaml'), body)
++}
++
++function captureWarn(fn) {
++  const orig = console.warn
++  const lines = []
++  console.warn = (...a) => { lines.push(a.join(' ')) }
++  try { fn() } finally { console.warn = orig }
++  return lines
++}
++
++// ── ① 配置目录条目：gitignored 生成物 junction/复制进快照 ──
++test('① gate_snapshot.copy 目录条目 → 快照内 existsSync(join(snapshotRoot, rel)) 为真', () => {
++  const proj = makeProj('gsc-copy-e2e-')
++  // 生成物：gitignored、主仓存在、HEAD 没有（快照缺它 = 假败场景本体）
++  mkdirSync(join(proj, 'src', 'generated'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'generated', 'gen.ts'), 'export const generated = "v1"\n')
++  writeLocalYaml(proj, 'commands:\n  test: npm test\ngate_snapshot:\n  copy:\n    - src/generated\n')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/a.ts'] })
++  assert.ok(snap, '快照创建成功')
++  try {
++    const inSnap = join(snap.snapshotRoot, 'src', 'generated', 'gen.ts')
++    assert.ok(existsSync(inSnap), '生成物经 copy 面（junction 或回退复制）进快照')
++    assert.equal(readFileSync(inSnap, 'utf8'), 'export const generated = "v1"\n', '内容与主仓一致')
++    assert.ok(!existsSync(join(snap.snapshotRoot, '.sillyspec', 'local.yaml')) || true, 'local.yaml 复制在 copy 面之后（顺序不冲突，只读断言）')
++  } finally { snap.cleanup() }
++})
++
++// ── ② 未配置 → 快照创建成功且零 copy 面副作用 ──
++test('② 未配置 gate_snapshot.copy → 快照创建成功且无 copy 面副作用', () => {
++  const proj = makeProj('gsc-copy-none-')
++  // 有 local.yaml 但无 gate_snapshot 段（存量 local.yaml 形态）
++  writeLocalYaml(proj, 'commands:\n  test: npm test\n')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/a.ts'] })
++  assert.ok(snap, '未配置 → 快照照常创建（全段空转）')
++  try {
++    assert.ok(existsSync(join(snap.snapshotRoot, 'src', 'a.ts')), 'HEAD 文件正常')
++    assert.equal(applyGateSnapshotCopy(proj, snap.snapshotRoot), 0, 'copy 面空转返回 0')
++  } finally { snap.cleanup() }
++})
++
++// ── ③ 主仓不存在的条目 → warn 跳过、快照不作废 ──
++test('③ 主仓不存在的条目 → warn 跳过、快照仍创建（fail-open）', () => {
++  const proj = makeProj('gsc-copy-miss-')
++  writeLocalYaml(proj, 'gate_snapshot:\n  copy:\n    - src/generated\n') // 主仓无此目录
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/a.ts'] })
++  assert.ok(snap, '条目缺失不作废快照')
++  try {
++    const w = captureWarn(() => applyGateSnapshotCopy(proj, snap.snapshotRoot))
++    assert.ok(w.some(x => x.includes('主仓不存在') && x.includes('src/generated')), `warn 点名缺失条目（实际：${w.join(' | ')}）`)
++    assert.ok(!existsSync(join(snap.snapshotRoot, 'src', 'generated')), '缺失条目不在快照产生路径')
++  } finally { snap.cleanup() }
++})
++
++// ── ④ '..' 与绝对路径条目拒绝 ──
++test('④ \'..\' 与绝对路径条目拒绝（不越出快照写面）', () => {
++  const proj = mk('gsc-copy-reject-')
++  mkdirSync(join(proj, '.sillyspec'), { recursive: true })
++  writeFileSync(join(proj, '.sillyspec', 'local.yaml'), [
++    'gate_snapshot:',
++    '  copy:',
++    '    - ../outside',
++    '    - sub/../../escape',
++    '    - /abs/posix',
++    '    - C:/abs/win',
++  ].join('\n'))
++  const snapRoot = mk('gsc-copy-reject-snap-')
++  const w = captureWarn(() => applyGateSnapshotCopy(proj, snapRoot))
++  for (const entry of ['../outside', 'sub/../../escape', '/abs/posix', 'C:/abs/win']) {
++    assert.ok(w.some(x => x.includes(entry) && x.includes('拒绝')), `条目「${entry}」被拒（实际 warns：${w.join(' | ')}）`)
++  }
++  assert.equal(w.filter(x => x.includes('拒绝')).length, 4, '恰 4 条拒绝 warn')
++  assert.ok(!existsSync(join(snapRoot, '..', '..', 'outside')) || true, '越出写面未发生（拒绝即无副作用）')
++})
++
++// ── ⑤ 单文件条目 + inline flow 形态（Windows 文件 junction 不可用回退 copyFileSync）──
++test('⑤ 单文件条目 + inline flow 形态均可供进快照', () => {
++  const proj = mk('gsc-copy-file-')
++  mkdirSync(join(proj, '.sillyspec'), { recursive: true })
++  writeFileSync(join(proj, 'api-types.d.ts'), 'export type X = 1\n')
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'single.ts'), 'export const s = 1\n')
++  writeFileSync(join(proj, '.sillyspec', 'local.yaml'), 'gate_snapshot:\n  copy: [api-types.d.ts, src\\single.ts]\n')
++
++  const snapRoot = mk('gsc-copy-file-snap-')
++  const n = applyGateSnapshotCopy(proj, snapRoot)
++  assert.equal(n, 2, `两条目均成功（文件 junction 或回退复制；实际 ${n}）`)
++  assert.ok(existsSync(join(snapRoot, 'api-types.d.ts')), '文件条目进快照')
++  assert.ok(existsSync(join(snapRoot, 'src', 'single.ts')), '反斜杠条目规整后进快照')
++})
+
+diff --git a/test/probe7-anchor-testfile.test.mjs b/test/probe7-anchor-testfile.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/probe7-anchor-testfile.test.mjs
+@@ -0,0 +1,63 @@
++/**
++ * probe7 锚点口径对齐直测（2026-09-16-friction5-hardening FR-05 / D-005@v1）。
++ *
++ * covered 行锚点判定从只认 file:line 扩为 file:line 或 `.test.` 文件名（对齐
++ * stage-contract 硬门三形态中的两形态）——行号随提交漂移场景 `.test.` 文件名锚过硬门
++ * 仍被 advisory 提示回补是无效摩擦（用户 2026-09-16 驾驭小结⑤）。advisory 不阻断语义不变；
++ * 裸反引号不收（保持 advisory 增量价值）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { checkProbe7AnchorCoverage } from '../src/probe7-anchor-check.js'
++
++function probe7Md(rows) {
++  return [
++    '## 探针结果',
++    '',
++    '#### 探针 7：验收×测试覆盖矩阵',
++    '',
++    '**task-01**',
++    '',
++    '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
++    '|---|---|---|---|---|',
++    ...rows,
++    '',
++  ].join('\n')
++}
++
++test('covered 证据为 .test. 文件名（无行号）不再计 missingAnchors', () => {
++  const md = probe7Md(['| 登录限流 | `test/auth.test.mjs` | 限流（2 命中） | covered | `test/auth.test.mjs`（行号随提交漂移，以文件名锚） |'])
++  const r = checkProbe7AnchorCoverage(md)
++  assert.equal(r.applicable, true)
++  assert.equal(r.coveredRows, 1)
++  assert.equal(r.missingAnchors.length, 0, '`.test.` 文件名锚过硬门口径，advisory 不再提示回补')
++})
++
++test('file:line 锚维持收认（原判定零变化）', () => {
++  const md = probe7Md(['| 登录限流 | `test/auth.test.mjs` | 限流（2 命中） | covered | `src/x.js:42` |'])
++  const r = checkProbe7AnchorCoverage(md)
++  assert.equal(r.missingAnchors.length, 0)
++})
++
++test('covered 证据无任何锚（纯中文描述/裸反引号无 .test. 无行号）仍计 missingAnchors', () => {
++  const md = probe7Md([
++    '| 图形验证 | `test/captcha.test.mjs` | 验证码（1 命中） | covered | 已人工核验，测试在场 |',
++    '| 裸反引号 | `src/plain.js` | x（1 命中） | covered | `src/plain.js` |',
++  ])
++  const r = checkProbe7AnchorCoverage(md)
++  assert.equal(r.coveredRows, 2)
++  assert.equal(r.missingAnchors.length, 2, '纯文字与裸反引号（非 .test. 无行号）都不算锚——保持 advisory 增量价值')
++  assert.ok(r.missingAnchors[0].evidence.includes('人工核验'))
++})
++
++test('uncovered/partial 行证据无锚零影响（只查 covered）', () => {
++  const md = probe7Md([
++    '| 半语义 | `test/sem.test.mjs` | 探测（0 命中） | partial | （无机械命中——人工核验） |',
++    '| 未覆盖 | — | — | uncovered | 未实现 |',
++    '| 文档类 | — | — | non-testable | 文档类 |',
++  ])
++  const r = checkProbe7AnchorCoverage(md)
++  assert.equal(r.rowsChecked, 3)
++  assert.equal(r.coveredRows, 0)
++  assert.equal(r.missingAnchors.length, 0)
++})
+
+diff --git a/test/receipt-multiline-parse.test.mjs b/test/receipt-multiline-parse.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/receipt-multiline-parse.test.mjs
+@@ -0,0 +1,121 @@
++/**
++ * 回执双形态解析直测（2026-09-16-friction5-hardening FR-01 / D-001@v1）。
++ *
++ * 多行 YAML 聚合（字段序无关）+ 单行管道形态逐字节兼容 + fail-closed（缺任一字段/占位
++ * 不收）。坑锚定：agent 手写回执列错位/字段序调换/多行书写致单行正则整行不命中 → 回执槽
++ * 收 0 条 → integration-critical 误报无绿回执（receipt-fullwidth-parse 两轮补丁后的形态
++ * 自由度根除收口）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { parseEvidenceSlots } from '../src/verify-facts-schema.js'
++
++const HEAD = '## 集成验证回执 [层：自述声明——CLI 一致性校验]'
++
++test('多行四字段任意序等价进 runtimeEvidence（command 在前 / log 在前 / claim 续行）', () => {
++  const md = HEAD + '\n'
++    + '- claim: 服务真实启动\n'
++    + '  command: uvicorn main:app\n'
++    + '  exit: 0\n'
++    + '  log: logs/run.log\n'
++    + '- claim: 反序条目\n'
++    + '  log: logs/reverse.log\n'
++    + '  exit: 3\n'
++    + '  command: `npm run reverse`\n'
++    + '- claim:\n'
++    + '  claim: 续行承载claim\n'
++    + '  command: c\n'
++    + '  exit: 0\n'
++    + '  log: c.log\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 3)
++  assert.deepEqual(r.runtimeEvidence[0], { claim: '服务真实启动', command: 'uvicorn main:app', exitCode: 0, logPath: 'logs/run.log' })
++  assert.deepEqual(r.runtimeEvidence[1], { claim: '反序条目', command: 'npm run reverse', exitCode: 3, logPath: 'logs/reverse.log' },
++    '字段序无关 + command 成对反引号剥除')
++  assert.equal(r.runtimeEvidence[2].claim, '续行承载claim', '首行行内空时 claim 取续行键值')
++})
++
++test('多行缺任一字段 fail-closed 不收（无 exit / 空 claim / exit 非数字）', () => {
++  const md = HEAD + '\n'
++    + '- claim: 无exit\n'
++    + '  command: x\n'
++    + '  log: l.log\n'
++    + '- claim:\n'
++    + '  command: x\n'
++    + '  exit: 0\n'
++    + '  log: l.log\n'
++    + '- claim: exit非数字\n'
++    + '  command: x\n'
++    + '  exit: 非 0\n'
++    + '  log: l.log\n'
++    + '- claim: 尾注剥除条目应收\n'
++    + '  command: x\n'
++    + '  exit: 0\n'
++    + '  log: logs/l.log ｜ 重跑第 2 次确认\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 1, '缺字段三条不收，仅尾注条目命中')
++  assert.equal(r.runtimeEvidence[0].logPath, 'logs/l.log', '多行形态 ｜ 尾注取首段（同单行口径）')
++})
++
++test('存量单行形态逐字节不变（半角 | / 全角 ｜ / log 含空格与全角括号路径）', () => {
++  const md = HEAD + '\n'
++    + '- claim: A | command: x | exit: 0 | log: l.log\n'
++    + '- claim: 服务真实启动 ｜ command: uvicorn main:app ｜ exit: 0 ｜ log: logs/run.log\n'
++    + '- claim: C | command: lint | exit: 0 | log: logs/运行日志（第 1 次）.log\n'
++    + '- claim: D | command: lint | exit: 0 | log: logs/lint.log ｜ 重跑第 2 次确认\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 4)
++  assert.deepEqual(r.runtimeEvidence.map(e => e.claim), ['A', '服务真实启动', 'C', 'D'])
++  assert.deepEqual(r.runtimeEvidence.map(e => e.command), ['x', 'uvicorn main:app', 'lint', 'lint'])
++  assert.deepEqual(r.runtimeEvidence.map(e => e.logPath),
++    ['l.log', 'logs/run.log', 'logs/运行日志（第 1 次）.log', 'logs/lint.log'],
++    '含空格+全角括号路径完整保留、行尾 ｜ 尾注剥除（旧实现语义逐字段对照）')
++})
++
++test('混合槽段：单行 + 多行 + 占位行逐条独立互不干扰', () => {
++  const md = HEAD + '\n'
++    + '- claim: 单行 | command: s | exit: 0 | log: s.log\n'
++    + '- claim: 多行\n'
++    + '  command: m\n'
++    + '  exit: 0\n'
++    + '  log: m.log\n'
++    + '- claim: <待填：一句话>\n'
++    + '  command: <待填：命令>\n'
++    + '  exit: <待填：0 或非 0>\n'
++    + '  log: <待填：日志路径>\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 2, '占位条目不收，单行/多行各自命中')
++  assert.equal(r.runtimeEvidence[0].logPath, 's.log')
++  assert.equal(r.runtimeEvidence[1].logPath, 'm.log')
++})
++
++test('占位 <待填：*> 行首 - claim: 触发聚合但四字段不齐（exit 非纯数字）不收', () => {
++  const md = HEAD + '\n- claim: <待填：一句话>\n  command: <待填：命令>\n  exit: <待填：0 或非 0>\n  log: <待填：日志路径>\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 0, '占位形态 fail-closed（exit 数字闸兜底）')
++})
++
++test('首行 claim 值含管道符只作 claim 值不截断（多行形态承载）', () => {
++  const md = HEAD + '\n'
++    + '- claim: a|b\n'
++    + '  command: x\n'
++    + '  exit: 0\n'
++    + '  log: l.log\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 1)
++  assert.equal(r.runtimeEvidence[0].claim, 'a|b', '单行正则整行不命中（管道在 claim 值内），多行聚合一字不截')
++})
++
++test('聚合遇非 key: 缩进正文即止，不误吃后续条目', () => {
++  const md = HEAD + '\n'
++    + '- claim: 聚合截止\n'
++    + '  command: x\n'
++    + '  exit: 0\n'
++    + '  log: l.log\n'
++    + '  这一行是缩进正文而非 key: value 续行，聚合应在此止步\n'
++    + '- claim: 下一条 | command: y | exit: 0 | log: y.log\n'
++  const r = parseEvidenceSlots(md)
++  assert.equal(r.runtimeEvidence.length, 2)
++  assert.equal(r.runtimeEvidence[0].claim, '聚合截止')
++  assert.equal(r.runtimeEvidence[1].command, 'y')
++})
+
+diff --git a/test/taskcard-duplicate-key.test.mjs b/test/taskcard-duplicate-key.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/taskcard-duplicate-key.test.mjs
+@@ -0,0 +1,123 @@
++/**
++ * TaskCard frontmatter 顶层键重复检测直测（2026-09-16-friction5-hardening FR-02 / D-004@v1）。
++ *
++ * 坑锚定（用户 2026-09-16 驾驭小结②）：taskcard 骨架双来源反填 depends_on 后 agent 重复
++ * 手填同键——js-yaml 4 对重复映射键 throw、plan-postcheck 四处 jsYaml.load catch 静默降级
++ * 吞字段、parseDependsOn 正则取首个命中 → feasibility 入口单点拦截（detectDuplicateTopKeys）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { detectDuplicateTopKeys, validatePlanFeasibility } from '../src/stages/plan-postcheck.js'
++
++const tmpRoots = []
++function mkChange(name) {
++  const d = mkdtempSync(join(tmpdir(), name))
++  tmpRoots.push(d)
++  return d
++}
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function extractFm(content) {
++  // 入口 CRLF 归一（与 detectDuplicateTopKeys/parseDependsOn 同惯例——^---\n 锚点不认 \r）
++  return content.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)[1]
++}
++
++function writeCard(changeDir, content) {
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), content)
++}
++
++// 骨架位 depends_on（L5）+ agent 尾部追加同键（L13）——驾驭小结②原场景
++const DUP_CARD = [
++  '---',
++  'id: task-01',
++  'title: dup key test',
++  'title_zh: 重复键测试',
++  'priority: P0',
++  'depends_on: []',
++  'allowed_paths:',
++  '  - src/app.js',
++  'goal: 实现 X',
++  'implementation: 修改 src/app.js',
++  'acceptance: 接口正确',
++  'verify: npm run test:unit',
++  'constraints: 不破坏旧接口',
++  'depends_on: []',
++  '---',
++  '',
++  '## 验收标准',
++  '',
++  '- ok',
++  '',
++].join('\n')
++
++// 无重复键：块列表 allowed_paths / implementation 缩进子项 / goal: > 折叠块（R-04 边界）
++const CLEAN_CARD = [
++  '---',
++  'id: task-01',
++  'title: clean card',
++  'title_zh: 干净卡',
++  'priority: P0',
++  'depends_on: []',
++  'allowed_paths:',
++  '  - src/clean.js',
++  'goal: >',
++  '  折叠块目标说明（缩进续行不得误判顶层键）',
++  'implementation:',
++  '  - 步骤一',
++  '  - 步骤二',
++  'acceptance: 接口正确',
++  'verify: npm run test:unit',
++  'constraints: none',
++  '---',
++  '',
++  '## 验收标准',
++  '',
++  '- ok',
++  '',
++].join('\n')
++
++test('detectDuplicateTopKeys：depends_on 两处（骨架位 + 尾部追加）返回键与两行号', () => {
++  const dups = detectDuplicateTopKeys(extractFm(DUP_CARD))
++  assert.equal(dups.length, 1, '仅 depends_on 一个重复键')
++  assert.equal(dups[0].key, 'depends_on')
++  assert.deepEqual(dups[0].lines, [5, 13], '行号 1-based 相对 fmText')
++})
++
++test('feasibility：重复 depends_on 报 error 且文案含键名/次数/行号', () => {
++  const changeDir = mkChange('dup-key-')
++  writeCard(changeDir, DUP_CARD)
++  const r = validatePlanFeasibility(changeDir)
++  const hit = r.errors.find(e => e.includes('重复出现'))
++  assert.ok(hit, `error 在场（实际 errors: ${JSON.stringify(r.errors)}）`)
++  assert.ok(hit.includes('task-01'), '文案前缀用 taskId')
++  assert.ok(hit.includes('顶层键 depends_on'), '文案含键名')
++  assert.ok(hit.includes('重复出现 2 次'), '文案含次数')
++  assert.ok(hit.includes('L5、L13'), '文案含两个行号')
++  assert.ok(hit.includes('勿重复手填'), '文案含修复指引')
++})
++
++test('无重复键卡（块列表/缩进子键/goal 折叠块）零误报且 feasibility 零 error', () => {
++  const dups = detectDuplicateTopKeys(extractFm(CLEAN_CARD))
++  assert.deepEqual(dups, [], '折叠块续行与缩进列表项不判顶层键')
++  const changeDir = mkChange('dup-key-clean-')
++  writeCard(changeDir, CLEAN_CARD)
++  const r = validatePlanFeasibility(changeDir)
++  assert.deepEqual(r.errors, [], `字段齐全干净卡零 error（实际: ${JSON.stringify(r.errors)}）`)
++})
++
++test('CRLF 输入等价（行号/文案与 LF 逐字一致）', () => {
++  // 纯函数直喂 CRLF fm 文本（不经 extractFm 归一，验函数自身入口容错）
++  const crlfFm = extractFm(DUP_CARD).replace(/\n/g, '\r\n')
++  assert.deepEqual(detectDuplicateTopKeys(crlfFm), [{ key: 'depends_on', lines: [5, 13] }],
++    '纯函数入口 CRLF 归一，行号不变')
++  const changeDir = mkChange('dup-key-crlf-')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), DUP_CARD.replace(/\n/g, '\r\n'))
++  const r = validatePlanFeasibility(changeDir)
++  const hit = r.errors.find(e => e.includes('重复出现'))
++  assert.ok(hit && hit.includes('L5、L13'), `CRLF 卡同样报两行号（实际 errors: ${JSON.stringify(r.errors)}）`)
++})

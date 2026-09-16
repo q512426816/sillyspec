@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-16-friction5-hardening",
+  "appliedAt": "2026-09-16T05:37:16.044Z",
+  "baseHash": "453508a3da93821bee7f3fd06e71218698f7af31",
+  "files": [
+    {
+      "path": "src/config-schema.js",
+      "sha256": "fbf8ff3059e76e275fdcfd2ad0b3c7cd45752dc046f54741dfbb2b47e022e200"
+    },
+    {
+      "path": "src/probe7-anchor-check.js",
+      "sha256": "57bd68a171e212799ac673c6b17b25f136467ea788a7d8876dd329aa86e6e9a0"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "sha256": "adc5b79637285387b8f5b769bb53eb5576732acfe8dd4adbbb1994801a7abaf1"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "sha256": "72fb66cf03613723e7b77b9ed4d7c11e97d4aeb12470025c8a36dc87678a242a"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "sha256": "ad1eb2b5c6801a454731f8e88f374d18513ed20ef594becc66fa8e177486fc29"
+    },
+    {
+      "path": "src/verify-facts-schema.js",
+      "sha256": "a1bf87a941b0a61f144bf5a7c1f61451df5c5e2e605a12ccea140c42d0b4e231"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "e0fcd019843022a7e020a25838a7a15e16ffcdbb61a468b0742e093597418264"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "sha256": "dd015d6df8882c7258fdeecc748050abf72e35d368033b3a6b21cbea4afb4de1"
+    },
+    {
+      "path": "test/cross-repo-apply.test.mjs",
+      "sha256": "2a4afa9c95c7ab14ec48cd60a336d3f3b11508ade1902555b7f38b0097d060a2"
+    },
+    {
+      "path": "test/worktree-allow-list-violations.test.mjs",
+      "sha256": "7ba482240a723e191df9c4b1ec225d63b2d8ffeadcffd54d088bdbcc076e62d8"
+    },
+    {
+      "path": "test/apply-docs-allowlist.test.mjs",
+      "sha256": "0beeb38bcaca2e21fe3e0b5f43228a1e07839e3c9aaf47e985e8f7bbcd39e70b"
+    },
+    {
+      "path": "test/gate-snapshot-copy.test.mjs",
+      "sha256": "80efacd7f4bfa9066ee90c2e22504823dc931ab3bd882591f4120bba102b50e8"
+    },
+    {
+      "path": "test/probe7-anchor-testfile.test.mjs",
+      "sha256": "57514f2997cb77911b49b2471d0f44bbefdaa6f956b49ec9a3587004ce719f10"
+    },
+    {
+      "path": "test/receipt-multiline-parse.test.mjs",
+      "sha256": "980801c460755df9d18609267192686d83e8d3537c2c3b6ed57ee2ab5b54344b"
+    },
+    {
+      "path": "test/taskcard-duplicate-key.test.mjs",
+      "sha256": "80be09b680fbb5630c9af3328142decd547174dd6d4e9f1365f4009513dd8548"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "2d60e9f2d52c984e4ef3003801b7ba17396692a8be8f81bcbe544155228e5f4f"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-16-friction5-hardening",
+  "generatedAt": "2026-09-16T05:30:59.661Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-16-friction5-hardening",
+      "metrics": {
+        "matches": 43,
+        "skippedFiles": 0,
+        "worktreeHits": 5,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-16-friction5-hardening",
+      "metrics": {
+        "tasks": 6,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-16-friction5-hardening",
+      "metrics": {
+        "backendEndpoints": 2,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-16-friction5-hardening",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-16-friction5-hardening",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "本机 `C:\\Users\\qinyi\\AppData\\Local\\Temp\\.sillyspec` 游离目录曾劫持所有 temp 夹具的 resolveSpecDir 祖先解析（2026-09-16 12:47 生成，已清除；两个「预存失败」agent-automation-batch4/feedback-batch2-hardening 的真根因，清除后 2/2 复绿）",
+        "condition": "任何 CLI 调用以 Temp 直系为 cwd 时可能再生成；复发时先查 `ls $TMP/.sillyspec`；根治方向（resolveSpecDir 对 tmpdir 直下起点不向上走）建议后续 quick 立项"
+      },
+      {
+        "type": "other",
+        "item": "失败行账本误收噪声（verify-quality-scan）：①快照 overlay 冒烟 ⚠️ warn 行含 ModuleNotFoundError 被计入未豁免失败行；②失败测试文件的 console 输出体中含 fail-closed/fail-open/failed 字样的 ✅ PASS 行被失败行正则收走（本轮 20/27 行为噪声）",
+        "condition": "后续 quick：partitionFailures 剔除行首 ✅ PASS 形态与 gate-snapshot 冒烟 ⚠️ 前缀行；本轮已用 SNAPSHOT_OFF+根因清除绕过，未改该代码"
+      }
+    ]
+  },
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-16T05:34:43.192Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
