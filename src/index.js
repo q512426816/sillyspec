@@ -609,6 +609,84 @@ async function main() {
       //     [--changed-files a,b]（归属切片为空或纯验证任务时显式给出；""=空覆盖）
       //     [--base <rev> --head <rev>]（无 worktree meta 时显式锡点）[--force]
       const rwSub = filteredArgs[1];
+      // ── review status（C1 轻量硬机制，坑 review-liveness-opaque，2026-09-15 wp EHS 实证：
+      // 独立审查 94 分钟无收敛、用户三催——宿主/agent 无只读探针可查「审查到哪了、审完没有、
+      // 审完之后文档又改过几版」。agent-tool 通道的子代理进程归宿主管（CLI 无 kill 面），但
+      // 「状态可见」这一半可以闭环：各 stage review 的 verdict/通道/刷新序数/代落盘·降级标记/
+      // docHash 现势一行可见，供催问时一查即答、也供派发前查前序审查复用（C2 互补）。──
+      if (rwSub === 'status') {
+        const rsVal = (flag) => {
+          const i = filteredArgs.indexOf(flag);
+          return i >= 0 && filteredArgs[i + 1] && !String(filteredArgs[i + 1]).startsWith("--") ? filteredArgs[i + 1] : null;
+        };
+        const rsChange = rsVal('--change');
+        if (!rsChange) {
+          console.error('用法: sillyspec review status --change <名> [--json]\n  只读查询各阶段 stage review 状态：verdict/执行通道/刷新序数/代落盘·降级标记/docHash 现势（主文档改版未刷新时提示）');
+          process.exit(2);
+        }
+        assertSafeChangeName(rsChange, '--change 变更名');
+        const { getLatestStageReviewRunId, computeDocHash, isDegradedSelfReview, hasDelegatedWriteDisclosure, classifyReviewerChannel } = await import('./stage-review.js');
+        const { resolveRuntimeRoot } = await import('./run/shared.js');
+        const rsPlatformOpts = {};
+        const rsResolved = resolvePlatformOpts(dir, specDir);
+        if (rsResolved) {
+          rsPlatformOpts.specRoot = rsResolved.specRoot;
+          if (rsResolved.runtimeRoot) rsPlatformOpts.runtimeRoot = rsResolved.runtimeRoot;
+        }
+        const rsSpecBase = rsPlatformOpts.specRoot || join(dir, '.sillyspec');
+        const rsRuntimeRoot = resolveRuntimeRoot(rsPlatformOpts, rsSpecBase);
+        const rows = [];
+        for (const st of ['brainstorm', 'plan', 'execute']) {
+          let runId = null;
+          try { runId = getLatestStageReviewRunId(rsRuntimeRoot, st, rsChange) } catch {}
+          if (!runId) { rows.push({ stage: st, status: 'none' }); continue }
+          const rjPath = join(rsRuntimeRoot, 'stage-reviews', `${st}-${runId}`, 'review.json');
+          let rev = null;
+          try { rev = JSON.parse(readFileSync(rjPath, 'utf8')) } catch {
+            rows.push({ stage: st, status: 'unreadable', runId, reviewPath: rjPath }); continue
+          }
+          const notes = typeof rev.reviewerNotes === 'string' ? rev.reviewerNotes : '';
+          const refreshCount = (notes.match(/docHash auto-refreshed at /g) || []).length;
+          // docHash 现势：主文档在 [specBase, changeDir, cwd] 基准解析后重算对比
+          let docState = 'unknown';
+          const primaryRel = Array.isArray(rev.reviewedFiles) ? rev.reviewedFiles[0] : null;
+          if (primaryRel) {
+            for (const base of [rsSpecBase, join(rsSpecBase, 'changes', rsChange), dir]) {
+              const abs = join(base, primaryRel);
+              if (existsSync(abs)) {
+                docState = computeDocHash(abs) === rev.docHash ? 'match' : 'stale(改版未刷新——gate 将自动重算放行，verdict 续用需人工确认)';
+                break
+              }
+            }
+            if (docState === 'unknown') docState = '主文档缺失';
+          }
+          rows.push({
+            stage: st, status: 'present', runId, reviewPath: rjPath,
+            specVerdict: rev.specVerdict, qualityVerdict: rev.qualityVerdict,
+            channel: classifyReviewerChannel(rev),
+            degradedSelf: isDegradedSelfReview(rev), delegatedWrite: hasDelegatedWriteDisclosure(rev),
+            refreshCount, docState,
+          });
+        }
+        if (json) {
+          process.stdout.write(JSON.stringify({ ok: true, command: 'review status', change: rsChange, stages: rows }) + '\n');
+        } else {
+          console.log(`📋 stage review 状态 [${rsChange}]：`);
+          for (const r of rows) {
+            if (r.status === 'none') { console.log(`  ⬜ ${r.stage}: 无 review 记录`); continue }
+            if (r.status === 'unreadable') { console.log(`  ⚠️ ${r.stage}: review.json 不可读（${r.reviewPath}）`); continue }
+            const flags = [
+              r.channel !== 'agent-tool' && r.channel !== 'platform' ? `通道=${r.channel}` : null,
+              r.degradedSelf ? '⚠️降级自审' : null,
+              r.delegatedWrite ? '⚠️代落盘' : null,
+              r.refreshCount > 0 ? `已刷新×${r.refreshCount}${r.refreshCount >= 2 ? '（反复改版，人工确认结论续用）' : ''}` : null,
+              r.docState !== 'match' && r.docState !== 'unknown' ? `docHash=${r.docState}` : null,
+            ].filter(Boolean).join('，');
+            console.log(`  ${r.specVerdict === 'pass' && r.qualityVerdict === 'pass' ? '✅' : '❌'} ${r.stage}: spec=${r.specVerdict} quality=${r.qualityVerdict}（${r.channel}${flags ? '；' + flags : ''}）`);
+          }
+        }
+        break;
+      }
       if (rwSub !== 'write') {
         console.error('用法: sillyspec review write --change <名> --task task-NN --spec <pass|fail|cannot_verify> --quality <verdict>\n  [--notes "评审备注"] [--evidence "cannot_verify 证据说明"] [--changed-files a,b] [--base <rev> --head <rev>] [--force] [--json]\n  单 task review.json 命令式写入：verdict/notes 由你给，executeRunId/base/head/changedFiles/diffPaths 由 CLI 从 git + task 卡代算；已存在默认拒覆盖（--force 越过）');
         process.exit(2);

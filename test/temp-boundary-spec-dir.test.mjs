@@ -93,10 +93,10 @@ try {
 
 console.log('--- 5. 非 tmp 场景零回归：真实仓祖先解析照常（env 已还原）---')
 {
-  // 仓根按测试文件位置锚定（cwd 无关）：run-tests.mjs 以 cwd=<repo>/test 执行子进程，
-  // process.cwd() 依执行方式漂移（runner=仓/test、直跑=仓根）——用 cwd 锚定时祖先解析会上移
-  // 一层命中仓内 .sillyspec、期望值却拼在 test/ 下，断言随执行方式假败（2026-09-16 套件实证）。
-  const repoRoot = resolve(join(dirname(fileURLToPath(import.meta.url)), '..', '..'))
+  // 仓根按测试文件位置锚定（cwd 无关，且只上跳一层：test/ 直属仓根——上跳两层会落到
+  // IdeaProjects，祖先游走在 runner 重定向 HOME 时可撞真实主目录 ~/.sillyspec 假败）。
+  // run-tests.mjs 以 cwd=<repo>/test 执行子进程，process.cwd() 依执行方式漂移（2026-09-16 套件实证）。
+  const repoRoot = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'))
   const got = resolveSpecDir(repoRoot)
   // 本仓根有 .sillyspec（无上移）——与既有行为一致；断言命中的是仓内真实目录
   assert('真实仓 cwd 解析不受 tmp 封顶影响', got === join(repoRoot, '.sillyspec'), `got=${got}`)
