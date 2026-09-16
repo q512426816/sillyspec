@@ -40,3 +40,4 @@
 - ql-20260912-003-b696 | stage-review 四处裸写改 writeAtomicSync（崩溃不留半截 review.json）+verify-postcheck bare 值引号容忍（Windows cd "..." 命令不再静默 skip test 硬门）
 - ql-20260912-004-afa2 | parseFlowValue bare 逗号终止改键形态判别（pytest -k a,b 不截断）；known_failures 流式贪婪捕获（嵌套 ] 不清空，docs-check 复刻同口径）
 - 2026-09-14-knowledge-loop-close | knowledge classify/stats 子命令（动态 import）+ quick/execute prompt 知识注入段
+- 2026-09-16-friction5-hardening | plan-postcheck 顶层重复键硬检测（FR-02/D-004@v1）：新导出 detectDuplicateTopKeys(fmText) 纯函数（^key: 顶格锚定+CRLF 归一+1-based 行号，块列表/缩进子键/goal 折叠块天然不误报）；validatePlanFeasibility 每卡在必要字段检查前接线，重复键 error 阻断（文案含键名/次数/行号/「保留正确一处删其余」指引）——根治骨架反填 depends_on 后 agent 重复手填时 js-yaml throw 被四处 catch 静默吞字段（repo=null/契约空/命令不校验/best-effort 跳过）的入口失真。新增 test/taskcard-duplicate-key.test.mjs（4）；stages/verify.js 回执槽说明同步双形态（R1 文案面）

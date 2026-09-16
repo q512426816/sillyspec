@@ -17,3 +17,4 @@ updated_at: 2026-08-24T00:40:00+08:00
 | 2026-09-11 | 2026-09-11-cross-change-decision-guard | config-schema 增 semantic_guard 段（enabled：boolean optional live，默认 true，fail-open——缺键/读取异常恒 true 不拦门禁）；readers 登记引 readSemanticGuardEnabled（src/semantic-guard.js）；renderExample yaml 块同步（friction_hint 同款形态，live 键 example 防漂耦合测试覆盖）。 |
 - ql-20260911-029-2892 | 紧急包小修：parseMakefileTestCommand 重写为行扫描——行内 prereq 按 make 语义回退 make test、新增 ; 同行配方、排除 test := 变量、配方边界=下一非缩进行（旧正则 \s* 吞换行可取错命令致门禁假通过）
 - ql-20260912-004-afa2 | registerRepoInLocalYaml async 化+RMW 持 .local.yaml.lock（并发 register 丢条目收口）
+| 2026-09-16 | 2026-09-16-friction5-hardening | config-schema 登记 gate_snapshot 段（FR-04/D-002@v1）：live 键 gate_snapshot.copy（array of string，optional，reader=createGateSnapshot）——门禁隔离快照的生成物/额外路径 copy 面，HEAD 快照缺 gitignored 生成物致 lint/test 环境性假败的声明式补齐通道；renderExample 示例段同步（含 ⚠️ junction 活链接写穿透警告），防漂耦合测试覆盖。未配置/空清单全段空转零行为变化。 |
