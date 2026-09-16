@@ -468,6 +468,274 @@ export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeNam
   return out
 }
 
+// ── 探针 9（守卫一致性，2026-09-15 EHS doSubmit 越权 P1 同族驱动）常量与纯函数 ──
+// 背景：同实体 CRUD 守卫不一致（deleteOrder/withdraw 有开立人校验、doSubmit 全链无操作人
+// 校验→任何登录用户可提交他人开立单）是编码式权限的典型漏洞形态——探针 5 只对账 URL 存在性、
+// 探针 8 只对账字段契约，权限守卫面零机器覆盖，全靠 verify 人工走查（EHS 恰是走查盲区）。
+// 本探针（advisory，⚠️ 不阻断）：同文件同实体变更方法组内有守卫/无守卫并存 → 定向复核提示。
+// 宁漏勿误（R-01/R-02）：≥2 方法才成组、纯标识符弱信号不计、只扫 design 清单 .java 文件。
+const PROBE9_HEADING = '#### 探针 9：守卫一致性（advisory）'
+// 变更动词前缀集（design §1 定稿）——方法名剥可选引导词后以前缀动词开头即变更方法
+const PROBE9_MUTATION_VERBS = new Set(['submit', 'delete', 'remove', 'withdraw', 'update', 'handle', 'confirm', 'reject', 'audit', 'save', 'cancel', 'approve'])
+// 引导前缀词（doSubmit/trySubmit 形态——EHS 真实方法名 doSubmit 的动词在第二词段）
+const PROBE9_LEAD_WORDS = new Set(['do', 'try'])
+// 方法签名行正则（design §1 定稿）：访问修饰符 + 类型段（泛型/数组/逗号空格）+ 方法名 + (
+// （构造器无「类型 空格 名」形态天然不命中；无访问修饰符的接口默认方法不收——宁漏勿误）
+const PROBE9_METHOD_SIG_RE = /(?:public|private|protected)\s+[\w<>\[\],. ]+\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/
+// 类名剥常见后缀（「实体取全类名」路径用：OrderController → Order）
+const PROBE9_CLASS_SUFFIX_RE = /(?:Controller|RestController|Service|ServiceImpl|Mapper|Repository|Api|Manager|Handler)$/
+
+/**
+ * Java 注释等长掩码（参照 endpoint-extractor.js stripCommentsKeepLength 思路在探针内自实现，
+ * 不跨模块 import——行注释/块注释替换为空格保留换行，字符串/char 字面量内容原样不动）。
+ * FR-02：注释里的守卫文档示例（// userId.equals(...) 之类）掩码后不再误报。
+ */
+function probe9MaskCommentsKeepLength(text) {
+  const src = String(text || '')
+  const out = src.split('')
+  let st = 'normal' // normal | block | dq | sq
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]
+    const n = src[i + 1]
+    if (st === 'normal') {
+      if (c === '/' && n === '/') {
+        // 行注释：掩到行尾（换行符本身保留）
+        let j = i
+        while (j < src.length && src[j] !== '\n') { out[j] = ' '; j++ }
+        i = j - 1
+      } else if (c === '/' && n === '*') {
+        out[i] = ' '; out[i + 1] = ' '
+        st = 'block'; i++
+      } else if (c === '"') st = 'dq'
+      else if (c === "'") st = 'sq'
+    } else if (st === 'block') {
+      if (c === '*' && n === '/') { out[i] = ' '; out[i + 1] = ' '; st = 'normal'; i++ }
+      else if (c !== '\n') out[i] = ' '
+    } else {
+      // 字符串/char 内：转义跳过；闭合引号回 normal（内容原样保留——字符串不动）
+      if (c === '\\') i++
+      else if ((st === 'dq' && c === '"') || (st === 'sq' && c === "'")) st = 'normal'
+    }
+  }
+  return out.join('')
+}
+
+/** 驼峰切词（doSubmit → [do, Submit]；submitOrder → [submit, Order]；snake/连字符一并切段） */
+const probe9SplitHumps = (s) => String(s || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[^A-Za-z0-9]+/).filter(Boolean)
+
+/**
+ * 类实体名词（「实体取全类名」路径）：首个 class/interface 声明名剥 Controller/Service 等
+ * 常见后缀后取尾段驼峰名词（PolluteRpOrderController → order、OrderController → order）——
+ * 纯动词方法名（submit/withdraw/handle/doSubmit）剥词后无从判实体，以类实体兜底归组（EHS
+ * 真实形态：deleteOrder 与 doSubmit 同在 PolluteRpOrderController，正是要聚上的一组）。
+ * @returns {{key: string, display: string}|null} key=小写归一键；类名不可解析 → null
+ */
+function probe9ClassEntity(sourceText) {
+  const m = String(sourceText || '').match(/\b(?:class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)/)
+  if (!m) return null
+  const bare = m[1].replace(PROBE9_CLASS_SUFFIX_RE, '') || m[1]
+  const words = probe9SplitHumps(bare)
+  return words.length > 0 ? { key: words[words.length - 1].toLowerCase(), display: words[words.length - 1] } : null
+}
+
+/**
+ * 方法名 → 实体键：驼峰切词后从头部剥引导词（do/try）与变更动词词段。
+ * - 首个有效词段既非引导词也非动词（getOrder 的 get）→ null（非变更方法，查询面不收）
+ * - 剥词后剩余词段非空 → 尾段驼峰名词为实体（submitOrder/deleteOrder → Order）
+ * - 剥词后空/纯动词（submit/doSubmit/handle）→ 类实体兜底（类名无从判 → null 跳过）
+ * @returns {{key: string, display: string}|null}
+ */
+function probe9EntityOfMethodName(name, classEntity) {
+  const words = probe9SplitHumps(name)
+  let i = 0
+  let sawVerb = false
+  while (i < words.length) {
+    const w = words[i].toLowerCase()
+    if (PROBE9_LEAD_WORDS.has(w)) { i++; continue }
+    if (PROBE9_MUTATION_VERBS.has(w)) { sawVerb = true; i++; continue }
+    break
+  }
+  if (!sawVerb) return null
+  if (i >= words.length) return classEntity || null
+  const tail = words[words.length - 1]
+  return { key: tail.toLowerCase(), display: tail }
+}
+
+/**
+ * 内部聚类（含单方法实体组与行数组——runProbe9 统计「单方法组 skipped」注记、构造签名前
+ * 3 行上下文用；导出面 clusterMutationMethods 只回 ≥2 方法组）。
+ * @returns {{lines: string[], groups: Array<{entity, methods}>, singletonCount: number}}
+ */
+function probe9ClusterInternal(sourceText) {
+  const normalized = String(sourceText || '').replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
+  const sigs = []
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(PROBE9_METHOD_SIG_RE)
+    if (m) sigs.push({ name: m[1], sigLine: i })
+  }
+  const cls = probe9ClassEntity(normalized)
+  const byKey = new Map() // 实体键(小写归一) → {entity(首见原形), methods}
+  sigs.forEach((s, i) => {
+    const ent = probe9EntityOfMethodName(s.name, cls)
+    if (!ent) return
+    // 方法体 = 签名行到下一签名行前（含签名行；文件尾方法到 EOF，类尾近似）。下一签名前的
+    // 注解块（@PreAuthorize 等）归属下一方法——从体尾回收，防注解内 hasRole( 等字样误判
+    // 上一方法有守卫（冒烟实证：@PreAuthorize("hasRole('admin')") 划进上一方法体误中角色判定）。
+    let endIdx = i + 1 < sigs.length ? sigs[i + 1].sigLine : lines.length
+    while (endIdx > s.sigLine && /^\s*@/.test(lines[endIdx - 1] || '')) endIdx--
+    if (!byKey.has(ent.key)) byKey.set(ent.key, { entity: ent.display, methods: [] })
+    byKey.get(ent.key).methods.push({
+      name: s.name,
+      startLine: s.sigLine + 1,
+      endLine: endIdx,
+      body: lines.slice(s.sigLine, endIdx).join('\n'),
+    })
+  })
+  const all = [...byKey.values()]
+  return { lines, groups: all.filter(g => g.methods.length >= 2), singletonCount: all.filter(g => g.methods.length === 1).length }
+}
+
+/**
+ * 聚类变更方法（探针 9 纯函数核心，design §1）：方法签名行定位 → 变更方法实体归组 →
+ * 同文件同实体（大小写归一）≥2 方法才成组（单方法不成组，R-01 宁漏勿误）。
+ * @param {string} sourceText 单个 .java 文件全文
+ * @returns {Array<{entity: string, methods: Array<{name: string, startLine: number, endLine: number, body: string}>}>}
+ */
+export function clusterMutationMethods(sourceText) {
+  return probe9ClusterInternal(sourceText).groups
+}
+
+// ── 四类守卫信号正则（design §2 / R-02：调用/比较形态优先，纯标识符弱信号不计）──
+// ① 当前用户比对：当前用户获取调用形态（词后随 ( 或 . 链式起点——SecurityContext.getContext()
+//   的 Holder 形态由 \w* 覆盖），或 createBy/create_by/openBy/userId 邻接 .equals( / == / !=
+const PROBE9_CURRENT_USER_CALL_RE = /\b(?:getCurrent\w*|currentUser|getUserId|getLoginUser\w*|SecurityContext\w*|ThreadLocal\w*Util)\s*[.(]/
+const PROBE9_OWNER_EQUALS_RE = /\b(?:createBy|create_by|openBy|userId)\s*\.\s*equals\s*\(/
+const PROBE9_OWNER_EQ_RE = /\b(?:createBy|create_by|openBy|userId)\s*(?:==|!=)/
+const PROBE9_OWNER_EQ_BACK_RE = /(?:==|!=)\s*[\w.\s()]{0,40}?\b(?:createBy|create_by|openBy|userId)\b/
+// ② 角色判定：hasRole/isCompany*/checkRole 调用形态，或签名里 boolean manager/isManager/isAdmin 布尔参数
+const PROBE9_ROLE_CALL_RE = /\b(?:hasRole\w*|isCompany\w*|checkRole\w*)\s*\(/
+const PROBE9_ROLE_PARAM_RE = /\bboolean\s+(?:is)?(?:[Mm]anager|[Aa]dmin)\b/
+// ③ 能力类调用：canHandle/checkPerm*/assert*Perm|Auth|Owner|User/validate*User 调用形态
+const PROBE9_CAPABILITY_CALL_RE = /\b(?:canHandle|checkPerm\w*|assert\w*(?:Perm|Auth|Owner|User)\w*|validate\w*User\w*)\s*\(/
+// ④ 注解式：签名上下文内权限注解（强信号，出现即中）
+const PROBE9_ANNOTATION_RE = /@(?:PreAuthorize|RolesAllowed|SaCheckPermission|RequiresPermissions)\b/
+
+/**
+ * 守卫信号检测（探针 9 纯函数，design §2）：方法体先做等长注释掩码（注释里的文档示例不
+ * 误报），再测四类信号——命中任一即该方法「有守卫」；返回空数组 = 无守卫。
+ * @param {string} methodBody 方法体文本（含签名行）
+ * @param {string} [signatureContext] 签名前 3 行 + 签名行（④注解式与②布尔参数的检测面）
+ * @returns {string[]} 命中信号类别列表（'当前用户比对' | '角色判定' | '能力类调用' | '注解式'）
+ */
+export function detectGuardSignals(methodBody, signatureContext = '') {
+  const body = probe9MaskCommentsKeepLength(methodBody)
+  const ctx = probe9MaskCommentsKeepLength(signatureContext)
+  const signals = []
+  if (PROBE9_CURRENT_USER_CALL_RE.test(body) || PROBE9_OWNER_EQUALS_RE.test(body)
+    || PROBE9_OWNER_EQ_RE.test(body) || PROBE9_OWNER_EQ_BACK_RE.test(body)) signals.push('当前用户比对')
+  if (PROBE9_ROLE_CALL_RE.test(body) || PROBE9_ROLE_PARAM_RE.test(ctx)) signals.push('角色判定')
+  if (PROBE9_CAPABILITY_CALL_RE.test(body)) signals.push('能力类调用')
+  if (PROBE9_ANNOTATION_RE.test(ctx)) signals.push('注解式')
+  return signals
+}
+
+/**
+ * 探针 9 主体：design 清单 .java 文件（主仓 ∪ worktree 双根 + 跨仓注册仓根回退，对齐探针 8
+ * readEntry 写法）逐文件聚类 + 信号比对——同实体组内有守卫与无守卫并存才进 inconsistentGroups
+ * （全有/全无不报，宁漏勿误；advisory：输出是定向复核提示不是结论）。无 .java → applicable=false
+ * + 不适用注记；.java 首行 `// probe9-skip` 整文件跳过；单文件解析异常 fail-soft 跳过不炸整体。
+ * @param {{ specBase: string, cwd: string, wtRoot?: string|null, changeName: string }} args
+ * @returns {{applicable: boolean, javaFileCount: number, groupCount: number,
+ *   inconsistentGroups: Array<{entity: string, guarded: string[], unguarded: string[], signals: Record<string, string[]>}>,
+ *   notes: string[]}}
+ */
+export function runProbe9GuardConsistency({ specBase, cwd, wtRoot = null, changeName }) {
+  const out = { applicable: false, javaFileCount: 0, groupCount: 0, inconsistentGroups: [], notes: [] }
+  if (!specBase || !changeName) return out
+  const designPath = join(specBase, 'changes', changeName, 'design.md')
+  if (!existsSync(designPath)) return out
+  let registry = new Map()
+  try {
+    const yamlPath = join(specBase, 'local.yaml')
+    if (existsSync(yamlPath)) registry = parseRepoRegistry(readFileSync(yamlPath, 'utf8'))
+  } catch { /* 注册表不可读 → 跨仓条目落未注册注记 */ }
+  const detailed = parseFileChangeListDetailed(designPath, { repoKeys: [...registry.keys()] })
+
+  // 双根读取（对齐探针 8 readEntry：NEW: 前缀剥离、未注册跨仓前缀兜底、主仓 ∪ worktree 回退）
+  const readEntry = (e) => {
+    const probePath = String(e.path).replace(/^NEW:\s*/, '')
+    const crPrefix = probePath.match(/^cross-repo:([A-Za-z0-9_.\-]+):(.*)$/)
+    if (e.repo || crPrefix) {
+      const key = e.repo || (crPrefix && crPrefix[1])
+      const relPath = e.repo ? probePath : crPrefix[2]
+      const raw = registry.get(key)
+      if (!raw) { out.notes.push(`repo「${key}」未在 local.yaml repos 注册——该仓 Java 文件未进探针 9 比对`); return null }
+      const root = isAbsolute(raw) ? raw : resolve(cwd, raw)
+      try { return readFileSync(join(root, relPath), 'utf8') } catch { out.notes.push(`跨仓文件不可读：${key}:${relPath}`); return null }
+    }
+    for (const base of [cwd, wtRoot].filter(Boolean)) {
+      try { return readFileSync(join(base, probePath), 'utf8') } catch { /* 试下一根 */ }
+    }
+    return null
+  }
+
+  let nonJavaCount = 0
+  let singletonCount = 0
+  for (const e of detailed) {
+    if (!e.path || e.path.startsWith('.sillyspec/')) continue
+    if (!e.path.endsWith('.java')) { nonJavaCount++; continue }
+    const text = readEntry(e)
+    if (text == null) continue
+    // 文件级豁免：首行 // probe9-skip 整文件跳过（守卫由上游统一拦截等形态的逃生门）
+    if (/^\s*\/\/\s*probe9-skip\b/.test(text)) {
+      out.notes.push(`${e.path}：首行 // probe9-skip 豁免——整文件跳过探针 9`)
+      continue
+    }
+    let clustered
+    try {
+      clustered = probe9ClusterInternal(text)
+    } catch (err) {
+      out.notes.push(`${e.path}：解析异常 fail-soft 跳过（${err && err.message ? err.message : err}）`)
+      continue
+    }
+    out.javaFileCount++
+    singletonCount += clustered.singletonCount
+    for (const g of clustered.groups) {
+      out.groupCount++
+      const signals = {}
+      const guarded = []
+      const unguarded = []
+      for (const m of g.methods) {
+        // signatureContext = 签名前 3 行 + 签名行（④注解式/②布尔参数的检测面）；窗口不跨
+        // 上一方法签名行——紧凑单行方法下上一方法的 @PreAuthorize 会串扰进本方法检测面
+        // （冒烟实证：相邻单行方法时无注解方法被注解行误判有守卫，用例 4 全守卫假象）。
+        const win = clustered.lines.slice(Math.max(0, m.startLine - 4), m.startLine)
+        // 只在除本方法签名行（窗口末行）外的行里找上一方法签名行（findIndex 会命中自身签名行）
+        const cut = win.slice(0, -1).findIndex((l) => PROBE9_METHOD_SIG_RE.test(l))
+        const ctx = (cut >= 0 ? win.slice(cut + 1) : win).join('\n')
+        const sig = detectGuardSignals(m.body, ctx)
+        signals[m.name] = sig
+        if (sig.length > 0) guarded.push(m.name)
+        else unguarded.push(m.name)
+      }
+      if (guarded.length > 0 && unguarded.length > 0) {
+        out.inconsistentGroups.push({ entity: g.entity, guarded, unguarded, signals })
+      }
+    }
+  }
+  if (out.javaFileCount === 0) {
+    out.notes.push(nonJavaCount > 0
+      ? `清单无 .java 文件（另有 ${nonJavaCount} 个非 Java 清单文件不在探针 9 扫描面）`
+      : '清单无 .java 文件')
+    return out
+  }
+  out.applicable = true
+  if (nonJavaCount > 0) out.notes.push(`${nonJavaCount} 个非 Java 清单文件不在探针 9 扫描面（v1 只扫 .java，design 非目标）`)
+  if (singletonCount > 0) out.notes.push(`单方法实体 ${singletonCount} 个不成组（≥2 方法才比对，宁漏勿误）`)
+  return out
+}
+
 
 const PROBE7_HEADING = '#### 探针 7：验收×测试覆盖矩阵'
 // execute run id 格式（与 task-review.js isValidExecuteRunId 同口径锚定，防提示词注入/路径穿越）
@@ -955,7 +1223,17 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe8.notes = [`探针 8 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
   }
 
-  return { probe1, probe3, probe5, probe6, probe7, probe8 }
+  // ── 探针 9：守卫一致性（advisory；2026-09-15 EHS doSubmit 越权 P1 驱动——同实体 CRUD
+  // 守卫不一致是编码式权限典型漏洞形态，探针 5/8 均零覆盖）。fail-soft 同探针 8：异常降级
+  // not-applicable 注记不炸整体。──
+  let probe9 = { applicable: false, javaFileCount: 0, groupCount: 0, inconsistentGroups: [], notes: [] }
+  try {
+    probe9 = runProbe9GuardConsistency({ specBase, cwd, wtRoot, changeName })
+  } catch (e) {
+    probe9.notes = [`探针 9 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+  }
+
+  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9 }
 }
 
 /**
@@ -1059,6 +1337,9 @@ export function renderVerifyProbesReport(result) {
   L.push(`- ℹ️ ${probe6.note}`)
   L.push('')
   L.push(...(renderProbe8Lines(result.probe8 || { applicable: false, mispairs: [], feOnly: [], missingNotNull: [], notes: [] })))
+  // 探针 9 紧随探针 8；旧 result 无 probe9 键（存量调用方/合成 result）→ applicable=false
+  // 渲染「不适用」行 + notes，零回归（探针 7 兜底口径同款）。
+  L.push(...(renderProbe9Lines(result.probe9 || { applicable: false, javaFileCount: 0, groupCount: 0, inconsistentGroups: [], notes: [] })))
   return L.join('\n')
 }
 
@@ -1105,6 +1386,38 @@ function renderProbe8Lines(p8) {
 }
 
 /**
+ * 渲染探针 9 段（renderProbe8Lines 同构；advisory 口径注记随段输出——存在性检查非语义审计，
+ * 聚类启发式由 agent 裁定）。汇总行「守卫不一致实体组 N 个」的 N 供 verify-postcheck 一致性
+ * 抽查锚点（对齐探针 8 先例，本卡只出 producer 侧）。
+ * @param {{applicable: boolean, javaFileCount?: number, groupCount?: number,
+ *   inconsistentGroups: Array<{entity: string, guarded: string[], unguarded: string[], signals: Record<string, string[]>}>,
+ *   notes: string[]}} p9
+ * @returns {string[]} 行数组（含段标题）
+ */
+function renderProbe9Lines(p9) {
+  const L = [PROBE9_HEADING]
+  if (!p9 || !p9.applicable) {
+    L.push('- 不适用（清单无 .java 改动文件，或 design.md 缺失）')
+    for (const n of (p9 && p9.notes) || []) L.push(`- ℹ️ ${n}`)
+    return L
+  }
+  L.push('<!-- 口径注记：存在性检查非语义审计——只查「守卫调用/注解模式存在」不查校验逻辑对错；聚类启发式由 agent 裁定（方法名前缀动词+尾段实体名词聚类，同文件同实体 ≥2 变更方法才比对，误组/漏组都可能——⚠️ 是定向复核提示不是结论）。 -->')
+  L.push(`- ℹ️ 比对面：${p9.javaFileCount ?? 0} Java 文件 × 同实体变更方法组 ${p9.groupCount ?? 0}（组内 ≥2 方法才比对）`)
+  if ((p9.inconsistentGroups || []).length > 0) {
+    L.push(`- ⚠️ 守卫不一致实体组 ${p9.inconsistentGroups.length} 个（同实体有守卫/无守卫并存——越权风险面，2026-09-15 EHS doSubmit 越权同族，agent 逐组裁定）`)
+    for (const g of p9.inconsistentGroups) {
+      const guardedPart = (g.guarded || []).map(m => `${m}（${((g.signals && g.signals[m]) || []).join('、') || '?'}）`).join('、')
+      const unguardedPart = (g.unguarded || []).join('、')
+      L.push(`- ⚠️ 实体 ${g.entity}：有守卫 [${guardedPart}] / 无守卫 [${unguardedPart}]`)
+    }
+  } else {
+    L.push('- ✅ 同实体守卫信号一致（无有守卫/无守卫并存的实体组）')
+  }
+  for (const n of p9.notes || []) L.push(`- ℹ️ ${n}`)
+  return L
+}
+
+/**
  * 从 runVerifyProbes 结果构造 verify-facts.json 机器底稿对象（P3b 可复跑审计底稿）。
  * 命令行统一 `sillyspec verify-probes --change <name>`；指标 fail-soft——字段不可得时少列
  * 该键而非报错（probe5 形态随 verifyApiParity 演进，宁可少列不可失真）。
@@ -1123,6 +1436,7 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
   const p5 = (result && result.probe5) || {}
   const p6 = (result && result.probe6) || {}
   const p8 = (result && result.probe8) || {}
+  const p9 = (result && result.probe9) || {}
   // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
   // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
   // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
@@ -1172,6 +1486,14 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
           missingRequired: len(p8.missingRequired),
           feKeys: num(p8.feKeyCount),
           backendFields: num(p8.backendFieldCount),
+        }),
+      },
+      probe9: {
+        command,
+        metrics: defined({
+          javaFileCount: num(p9.javaFileCount),
+          groupCount: num(p9.groupCount),
+          inconsistentGroups: len(p9.inconsistentGroups),
         }),
       },
     },

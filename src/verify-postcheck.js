@@ -2820,6 +2820,12 @@ export const PROBE8_CONTRACT_ORPHANS_LINE_RE = /^- ⚠️ 契约外载荷键 (\d
  *  （同上汇总行口径，行内 N 为锚） */
 export const PROBE8_MISSING_REQUIRED_LINE_RE = /^- ⚠️ 契约必填漏发 (\d+) 条/
 
+/** probe9 守卫不一致汇总行：`- ⚠️ 守卫不一致实体组 N 个（同实体有守卫/无守卫并存——…）`
+ *  （renderProbe9Lines，verify-probes.js；同 probe8 契约行汇总行口径——锚点取行内 N 而非
+ *  逐条实体组行计数；`实体组 N 个` 计数段与段内逐条行 `- ⚠️ 实体 X：有守卫 […] / 无守卫 […]`
+ *  及其它 ⚠️ 行（NOT NULL 列等）形态区分） */
+export const PROBE9_INCONSISTENT_LINE_RE = /^- ⚠️ 守卫不一致实体组 (\d+) 个/
+
 /**
  * `#### 探针 N` 子节定界（G8/R-05）：子节 = 标题行起、下一任意 markdown 标题（下一探针
  * 子节 / `##` 章 / `#` 题）前止。探针 2/4 的 agent 补写内容天然落在本子节定界之外，其
@@ -2850,7 +2856,7 @@ function extractProbeSubsections(text) {
  * 导出供渲染→解析 round-trip 测试直接消费（R-01）。
  * @param {string} text verify-result.md 全文
  * @returns {{
- *   subsections: { probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, probe8: boolean, any: boolean },
+ *   subsections: { probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, probe8: boolean, probe9: boolean, any: boolean },
  *   probe1Hits: number,          // probe1 命中行计数（对比 probe1.matches.length）
  *   probe3HasTest: number,       // probe3 hasTest 行计数（对比 tasks.filter(hasTest).length）
  *   probe5SummaryPresent: boolean, // probe5 summary 锚行存在性（pass 形态锚）
@@ -2858,12 +2864,13 @@ function extractProbeSubsections(text) {
  *   probe6Deletions: number,     // probe6 删除条目行计数（对比 deletions.length）
  *   probe8ContractOrphans: number, // probe8 契约外载荷键汇总行内 N 求和（无行=0；对比 contractOrphans.length）
  *   probe8MissingRequired: number, // probe8 契约必填漏发汇总行内 N 求和（无行=0；对比 missingRequired.length）
+ *   probe9InconsistentGroups: number, // probe9 守卫不一致汇总行内 N 求和（无行=0；对比 inconsistentGroups.length）
  * }}
  */
 export function parseProbePrefillAnchors(text) {
   const sections = extractProbeSubsections(text)
   const count = (lines, re) => lines.reduce((n, l) => n + (re.test(l) ? 1 : 0), 0)
-  // 汇总行锚点（probe8 契约行是「一行含总数」非逐条行）：提取行内 N 求和，无行 → 0
+  // 汇总行锚点（probe8 契约行/probe9 守卫行是「一行含总数」非逐条行）：提取行内 N 求和，无行 → 0
   // （渲染面恒只输出一行，重复撞形行累加——重复本身就会撞出 mismatch，同子节合并口径）
   const sumGroupCount = (lines, re) => lines.reduce((n, l) => {
     const m = l.match(re)
@@ -2874,6 +2881,7 @@ export function parseProbePrefillAnchors(text) {
   const s5 = sections['5'] || []
   const s6 = sections['6'] || []
   const s8 = sections['8'] || []
+  const s9 = sections['9'] || []
   return {
     subsections: {
       probe1: '1' in sections,
@@ -2881,6 +2889,7 @@ export function parseProbePrefillAnchors(text) {
       probe5: '5' in sections,
       probe6: '6' in sections,
       probe8: '8' in sections,
+      probe9: '9' in sections,
       any: Object.keys(sections).length > 0,
     },
     probe1Hits: count(s1, PROBE1_HIT_LINE_RE),
@@ -2890,6 +2899,7 @@ export function parseProbePrefillAnchors(text) {
     probe6Deletions: count(s6, PROBE6_DELETION_LINE_RE),
     probe8ContractOrphans: sumGroupCount(s8, PROBE8_CONTRACT_ORPHANS_LINE_RE),
     probe8MissingRequired: sumGroupCount(s8, PROBE8_MISSING_REQUIRED_LINE_RE),
+    probe9InconsistentGroups: sumGroupCount(s9, PROBE9_INCONSISTENT_LINE_RE),
   }
 }
 
@@ -2941,7 +2951,10 @@ function detectHeadAdvanceSinceFacts(cwd, facts) {
  *      （测试文件布局与 parity 扫描根环境敏感）；
  *    - probe8 契约锚（契约外载荷键/契约必填漏发汇总行内 N）不符 = WARNING（2026-09-16
  *      task-02：契约面解析随 design 形态与清单文件读取环境敏感；重跑降级（fail-soft catch
- *      兜底无契约键）时跳过该维度不误报）。
+ *      兜底无契约键）时跳过该维度不误报）；
+ *    - probe9 守卫锚（守卫不一致实体组汇总行内 N）不符 = WARNING（2026-09-16
+ *      guard-consistency-probe task-02：聚类/信号比对随 design 清单与 Java 文件读取环境
+ *      敏感；重跑降级时跳过该维度不误报）。
  *
  * 接线约定（task-03，gates.js）：status='mismatch' 且 severity='error' → 阻断回滚；
  * 'mismatch'+'warning' → 放行告警（envelope probe_consistency_drift）；'skipped'/'degraded' →
@@ -2962,7 +2975,7 @@ function detectHeadAdvanceSinceFacts(cwd, facts) {
  *   mismatches: Array<{probe: string, expected: *, actual: *, severity: 'error'|'warning', note: string}>,
  *     // expected = 当前重跑指标（应然），actual = 正文锚点解析值（agent 可篡改侧）
  *   skipReason: string|null,
- *   subsections: {probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, probe8: boolean, any: boolean}|null,
+ *   subsections: {probe1: boolean, probe3: boolean, probe5: boolean, probe6: boolean, probe8: boolean, probe9: boolean, any: boolean}|null,
  *     // 诊断（additive）：探针子节在场性；报告未读到的早期 skip 为 null
  * }}
  */
@@ -3093,6 +3106,22 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
       note: '契约必填漏发条数与重跑不符（探针8 契约面解析对 design/清单文件形态环境敏感，WARNING 不阻断）——建议重跑 sillyspec verify-probes --change <变更名> --init 刷新预填段' })
   }
 
+  // probe9 守卫锚（WARNING——2026-09-16 guard-consistency-probe task-02：守卫不一致实体组
+  // 汇总行内 N 对比重跑数组长度；聚类启发式与信号比对随 design 清单及 Java 文件读取环境
+  // 敏感，不阻断。fail-soft：重跑降级（runVerifyProbes 的 catch 兜底）时 probe9 兜底对象与
+  // probe8 不同——inconsistentGroups 恒为数组（[]），Array.isArray 判别失效，改以「探针 9
+  // 执行失败」注记判降级跳过对比，不误报）
+  const curProbe9 = current.probe9 || {}
+  const curP9Degraded = (curProbe9.notes || []).some(n => typeof n === 'string' && n.includes('探针 9 执行失败'))
+  const curP9Inconsistent = Array.isArray(curProbe9.inconsistentGroups) && !curP9Degraded
+    ? curProbe9.inconsistentGroups.length : null
+  const curP9GroupCount = typeof curProbe9.groupCount === 'number' && !curP9Degraded
+    ? curProbe9.groupCount : null
+  if (curP9Inconsistent !== null && anchors.probe9InconsistentGroups !== curP9Inconsistent) {
+    mismatches.push({ probe: 'probe9', expected: curP9Inconsistent, actual: anchors.probe9InconsistentGroups, severity: 'warning',
+      note: '守卫不一致实体组数与重跑不符（探针9 聚类/信号比对对 design 清单与 Java 文件形态环境敏感，WARNING 不阻断）——建议重跑 sillyspec verify-probes --change <变更名> --init 刷新预填段' })
+  }
+
   // —— facts 基线对比（2026-09-08-ir-verify-facts FR-05 / task-05）：重跑指标 vs
   // verify-facts.json probes 快照（init 时点）。md 锚点对账查「正文没被改」，本维度查
   // 「md 被手改对齐新代码后 facts 底稿过期」（P3d 数据源保鲜）。分级沿用现实现口径：
@@ -3140,9 +3169,29 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
       fm.push({ probe: 'probe8', snapshot: snap8Metrics.missingRequired, rerun: curP8MissingRequired, severity: 'warning',
         note: 'facts 快照契约必填漏发数与重跑不符（契约面解析环境敏感，WARNING）——建议 verify-probes --init 刷新 facts + 同步 md 探针段' })
     }
+    // probe9 守卫指标（2026-09-16 guard-consistency-probe task-02，WARNING 同 md 锚点维度口径；
+    // 双指标 = inconsistentGroups（命中面，同 md 锚点维度）+ groupCount（聚类组面，design 清单
+    // Java 文件内容变更的漂移信号）。javaFileCount 不入对账——文件读取受 worktree 存活态等
+    // 环境维度影响（R-02 同款排除口径，probe1 排除 worktreeHits 先例）；metrics fail-soft 少列
+    // 键（旧 facts 无 probe9）或重跑降级（curP9*=null）时不对账不列 checked，不误报）
+    const snap9Metrics = (((factsSnapshot.probes.probe9 || {}).metrics) || {})
+    const p9MetricsAvailable = typeof snap9Metrics.inconsistentGroups === 'number' || typeof snap9Metrics.groupCount === 'number'
+    const p9RerunAvailable = curP9Inconsistent !== null || curP9GroupCount !== null
+    if (typeof snap9Metrics.inconsistentGroups === 'number' && curP9Inconsistent !== null
+      && snap9Metrics.inconsistentGroups !== curP9Inconsistent) {
+      fm.push({ probe: 'probe9', snapshot: snap9Metrics.inconsistentGroups, rerun: curP9Inconsistent, severity: 'warning',
+        note: 'facts 快照守卫不一致组数与重跑不符（聚类/信号比对环境敏感，WARNING）——建议 verify-probes --init 刷新 facts + 同步 md 探针段' })
+    }
+    if (typeof snap9Metrics.groupCount === 'number' && curP9GroupCount !== null
+      && snap9Metrics.groupCount !== curP9GroupCount) {
+      fm.push({ probe: 'probe9', snapshot: snap9Metrics.groupCount, rerun: curP9GroupCount, severity: 'warning',
+        note: 'facts 快照同实体变更方法组数与重跑不符（聚类面随 design 清单 Java 文件内容漂移，WARNING）——建议 verify-probes --init 刷新 facts + 同步 md 探针段' })
+    }
     factsConsistency = {
       checked: fm.length === 0
-        ? ['probe1', 'probe3', 'probe5', 'probe6', ...((p8MetricsAvailable && p8RerunAvailable) ? ['probe8'] : [])]
+        ? ['probe1', 'probe3', 'probe5', 'probe6',
+          ...((p8MetricsAvailable && p8RerunAvailable) ? ['probe8'] : []),
+          ...((p9MetricsAvailable && p9RerunAvailable) ? ['probe9'] : [])]
         : [...new Set(fm.map(x => x.probe))],
       verdict: fm.length === 0 ? 'match' : 'mismatch',
       detail: fm.length === 0 ? null : fm,
