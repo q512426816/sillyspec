@@ -308,6 +308,8 @@ export {
   matchReadonlyWhitelist as _matchReadonlyWhitelistForTest,
   matchDangerBlacklist as _matchDangerBlacklistForTest,
   isSingleCommandReadonly as _isSingleCommandReadonlyForTest,
+  analyzeCrossRepoCd as _analyzeCrossRepoCdForTest,
+  CROSS_REPO_TEST_RE as _CROSS_REPO_TEST_REForTest,
 };
 /**
  * 从 sillyspec.db 读取 currentStage（直读 DB，task-10 废 gate-status.json 后为唯一来源）
@@ -835,6 +837,56 @@ export function shouldBlockWrite(filePath, cwd) {
 }
 
 /**
+ * 跨仓命令锚点感知（known-issues 2026-09-16 登记「worktree 隔离期跨仓命令锚定错位」兑现）：
+ * EHS 三仓形态（主仓 + repos 注册兄弟仓）两处摩擦——①worktree 内 `cd ../<注册仓>` 解析到
+ * `.sillyspec/.runtime/worktrees/` 存储目录而非真实兄弟仓（锚点错位，静默跑错地方）；②
+ * verify 等非 execute/quick 阶段从主仓跑 `cd ../注册仓 && npx eslint` 属合法只读跨仓操作，
+ * 但 cd 不在只读白名单 → 整条进 stage 门禁拦截。
+ * 处置：①worktree cwd 本就全放行——不拦，只 stderr 纠偏留痕（真实兄弟仓路径）；②从严放行
+ * （cd 目标命中 repos 注册根 + 其余片段全部测试/lint 类 + 危险黑名单不沾），写类/混合维持
+ * 原判 fail-closed。
+ */
+const CROSS_REPO_TEST_RE = /^(?:npm (?:test|run test[\w:.-]*)|npx (?:eslint|tsc|jest|vitest|mocha|stylelint|prettier)(?:\s|$)|node --test)/i
+
+/**
+ * 解析复合命令中的 cd 目标并比对 repos 注册仓根。
+ * @param {string} command 原始命令
+ * @param {string} callerCwd 调用方 cwd（相对 cd 目标的解析基准之一）
+ * @param {string} projectRoot 主仓根（worktree 形态下的正确锚点基准）
+ * @param {boolean} inWorktree 调用方是否在 worktree 内（决定 ../ 的解析基准）
+ * @returns {{hits: Array<{key:string,repoRoot:string,resolved:string,target:string}>, segments: string[]}|null}
+ *   无 cd 段 / 无 repos 注册 / 无命中 → null
+ */
+function analyzeCrossRepoCd(command, callerCwd, projectRoot, inWorktree) {
+  const segments = splitCommandParts(command)
+  const cdTargets = []
+  for (const seg of segments) {
+    const m = seg.match(/^cd\s+([^\s&|;]+)/i)
+    if (m) cdTargets.push(m[1])
+  }
+  if (cdTargets.length === 0) return null
+  const repos = loadLocalConfig(projectRoot).repos
+  if (!repos || typeof repos !== 'object') return null
+  const hits = []
+  for (const t of cdTargets) {
+    // 双基准：shell 实际解析（callerCwd——worktree 内 ../ 即存储目录错位形态）与意图解析
+    // （worktree 形态按主仓根、主仓 cwd 即 shell 本身）。注册命中按意图基准；纠偏提示按
+    // 「shell 解析落在 worktree 存储目录」判定。
+    const shellResolved = path.isAbsolute(t) ? t : path.resolve(callerCwd, t)
+    const intended = path.isAbsolute(t) ? t : path.resolve(inWorktree ? projectRoot : callerCwd, t)
+    for (const [key, raw] of Object.entries(repos)) {
+      if (typeof raw !== 'string' || !raw) continue
+      const repoRoot = path.isAbsolute(raw) ? raw : path.resolve(projectRoot, raw)
+      if (intended === repoRoot || isPathInside(intended, repoRoot)) {
+        hits.push({ key, repoRoot, resolved: intended, shellResolved, target: t })
+        break
+      }
+    }
+  }
+  return hits.length > 0 ? { hits, segments } : null
+}
+
+/**
  * 判断 Bash 命令是否应被拦截
  * @param {string} command - Bash 命令字符串
  * @param {string} cwd - 当前工作目录
@@ -846,8 +898,19 @@ function shouldBlockBash(command, cwd) {
   const callerCwd = cwd || process.cwd()
   const projectRoot = findProjectRoot(callerCwd)
 
-  // cwd 在 worktree 内 → 全部放行
-  if (isInsideRegisteredWorktree(callerCwd, projectRoot)) return { blocked: false }
+  // cwd 在 worktree 内 → 全部放行（跨仓锚点纠偏留痕：../注册仓 在 worktree 内解析到
+  // worktrees 存储目录——不拦只纠正，known-issues③）
+  if (isInsideRegisteredWorktree(callerCwd, projectRoot)) {
+    try {
+      const xr = analyzeCrossRepoCd(command, callerCwd, projectRoot, true)
+      for (const h of (xr && xr.hits) || []) {
+        if (isInsideWorktreeStorage(h.shellResolved, projectRoot)) {
+          console.error(`[sillyspec hook] ℹ️ 跨仓锚点纠偏：cd ${h.target} 在 worktree 内实际会解析到 ${h.shellResolved}（worktrees 存储目录，非真实兄弟仓）。注册仓 ${h.key} 的真实路径：${h.repoRoot}——跨仓测试/构建请改用真实路径。`)
+        }
+      }
+    } catch { /* 纠偏 fail-soft：解析异常不影响放行 */ }
+    return { blocked: false }
+  }
 
   // 阶段门禁（直读 sillyspec.db）
   const stage = readCurrentStage(projectRoot) || '(none)'
@@ -857,6 +920,16 @@ function shouldBlockBash(command, cwd) {
     const localConfig = loadLocalConfig(projectRoot)
     const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
     if (matchReadonlyWhitelist(command, extraReadonly)) return { blocked: false }
+    // 跨仓注册仓测试类放行（known-issues③）：verify 等阶段从主仓跑兄弟仓测试/lint 是合法
+    // 只读操作。从严三条件：cd 目标命中 repos 注册根 + 其余片段全部测试/lint 类 + 危险
+    // 黑名单不沾——写类/混合命令维持 stage 门禁原判（fail-closed）。
+    if (!matchDangerBlacklist(command)) {
+      const xr = analyzeCrossRepoCd(command, callerCwd, projectRoot, false)
+      if (xr && xr.segments.every(seg => /^cd\s+/i.test(seg) || CROSS_REPO_TEST_RE.test(seg))) {
+        console.error(`[sillyspec hook] 放行依据 = 跨仓注册仓（${xr.hits.map(h => h.key).join('、')}）测试/lint 类命令（known-issues③ 锚点感知，其余片段全测试类+黑名单不沾）`)
+        return { blocked: false }
+      }
+    }
     return {
       blocked: true,
       reason: buildStageHint(stage)

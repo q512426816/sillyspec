@@ -1,0 +1,252 @@
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index a58ccbf..db072d6 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -123,7 +123,7 @@ execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `
+ 
+ 三仓项目（EHS 形态：主仓 + sub-grid-security/spdemo 兄弟仓）execute 期在 worktree 内跑跨仓测试命令 `cd ../sub-grid-security && npx eslint` 有两重坑：①**锚点错位**——`../` 相对 worktree 根解析到 `.sillyspec/.runtime/worktrees/` 而非主仓侧真实兄弟仓，命令跑错地方或直接失败；②**审批摩擦**——worktree-guard 的 isSingleCommandReadonly 是命令名白名单制（READONLY_COMMANDS + local.yaml worktreeHook.readonlyCommands 扩展），不解析 cd 目标路径、不感知 repos 注册表，`cd` 不在白名单 → 整条复合命令进人工审批。
+ 
+-**修法建议（需完整流程立项，hook 语义变更勿 quick 赶工）**：guard 增加路径感知——复合命令中 `cd ../<name>`/`cd <相对>` 目标 resolve 后命中 local.yaml repos 注册仓根者：a) stderr 留痕提示锚点应为主仓侧真实路径；b) 测试/lint 类命令（npm test/npx eslint/node --test 等）在注册仓内放行+留痕；c) 写类命令维持拦截。同族症状参照：worktree-deps 侧 `../sub-grid-security` 越界误报已在 368c7e2 按 repos 注册根分类修复，guard 侧未动。（来源：2026-09-15 EHS 生产 depsModules 实证 + 2026-09-16 分析定性）
++**已兑现**（2026-09-16 quick-b54011b6，guard 路径感知三分支落齐）：①worktree cwd 全放行不变，`cd ../注册仓` 的 shell 实际解析（callerCwd 基准）落 worktrees 存储目录时 stderr 纠偏留痕（双基准备析：shell 基准 vs 主仓根意图基准，给出真实兄弟仓路径）；②非 execute/quick 阶段（verify 等）主仓 cwd 的 `cd 注册仓 && 测试/lint 类` 从严放行（三条件：cd 意图基准命中 repos 注册根 + 其余片段全部测试类（npm test/npx eslint|tsc|jest|vitest|mocha|stylelint|prettier/node --test）+ 危险黑名单不沾）；③写类/混合/未注册维持原判 fail-closed。测试 test/worktree-guard-cross-repo-cd.test.mjs 15 断言。同族参照：worktree-deps 侧 368c7e2。（来源：2026-09-15 EHS 生产实证 + 2026-09-16 落地）
+ 
+ ## QUICKLOG 多会话条目交织（提交需手工剥离并行条目，待立项）
+ 
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index 4f8e9c5..dfd4cac 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -308,6 +308,8 @@ export {
+   matchReadonlyWhitelist as _matchReadonlyWhitelistForTest,
+   matchDangerBlacklist as _matchDangerBlacklistForTest,
+   isSingleCommandReadonly as _isSingleCommandReadonlyForTest,
++  analyzeCrossRepoCd as _analyzeCrossRepoCdForTest,
++  CROSS_REPO_TEST_RE as _CROSS_REPO_TEST_REForTest,
+ };
+ /**
+  * 从 sillyspec.db 读取 currentStage（直读 DB，task-10 废 gate-status.json 后为唯一来源）
+@@ -834,6 +836,56 @@ export function shouldBlockWrite(filePath, cwd) {
+   }
+ }
+ 
++/**
++ * 跨仓命令锚点感知（known-issues 2026-09-16 登记「worktree 隔离期跨仓命令锚定错位」兑现）：
++ * EHS 三仓形态（主仓 + repos 注册兄弟仓）两处摩擦——①worktree 内 `cd ../<注册仓>` 解析到
++ * `.sillyspec/.runtime/worktrees/` 存储目录而非真实兄弟仓（锚点错位，静默跑错地方）；②
++ * verify 等非 execute/quick 阶段从主仓跑 `cd ../注册仓 && npx eslint` 属合法只读跨仓操作，
++ * 但 cd 不在只读白名单 → 整条进 stage 门禁拦截。
++ * 处置：①worktree cwd 本就全放行——不拦，只 stderr 纠偏留痕（真实兄弟仓路径）；②从严放行
++ * （cd 目标命中 repos 注册根 + 其余片段全部测试/lint 类 + 危险黑名单不沾），写类/混合维持
++ * 原判 fail-closed。
++ */
++const CROSS_REPO_TEST_RE = /^(?:npm (?:test|run test[\w:.-]*)|npx (?:eslint|tsc|jest|vitest|mocha|stylelint|prettier)(?:\s|$)|node --test)/i
++
++/**
++ * 解析复合命令中的 cd 目标并比对 repos 注册仓根。
++ * @param {string} command 原始命令
++ * @param {string} callerCwd 调用方 cwd（相对 cd 目标的解析基准之一）
++ * @param {string} projectRoot 主仓根（worktree 形态下的正确锚点基准）
++ * @param {boolean} inWorktree 调用方是否在 worktree 内（决定 ../ 的解析基准）
++ * @returns {{hits: Array<{key:string,repoRoot:string,resolved:string,target:string}>, segments: string[]}|null}
++ *   无 cd 段 / 无 repos 注册 / 无命中 → null
++ */
++function analyzeCrossRepoCd(command, callerCwd, projectRoot, inWorktree) {
++  const segments = splitCommandParts(command)
++  const cdTargets = []
++  for (const seg of segments) {
++    const m = seg.match(/^cd\s+([^\s&|;]+)/i)
++    if (m) cdTargets.push(m[1])
++  }
++  if (cdTargets.length === 0) return null
++  const repos = loadLocalConfig(projectRoot).repos
++  if (!repos || typeof repos !== 'object') return null
++  const hits = []
++  for (const t of cdTargets) {
++    // 双基准：shell 实际解析（callerCwd——worktree 内 ../ 即存储目录错位形态）与意图解析
++    // （worktree 形态按主仓根、主仓 cwd 即 shell 本身）。注册命中按意图基准；纠偏提示按
++    // 「shell 解析落在 worktree 存储目录」判定。
++    const shellResolved = path.isAbsolute(t) ? t : path.resolve(callerCwd, t)
++    const intended = path.isAbsolute(t) ? t : path.resolve(inWorktree ? projectRoot : callerCwd, t)
++    for (const [key, raw] of Object.entries(repos)) {
++      if (typeof raw !== 'string' || !raw) continue
++      const repoRoot = path.isAbsolute(raw) ? raw : path.resolve(projectRoot, raw)
++      if (intended === repoRoot || isPathInside(intended, repoRoot)) {
++        hits.push({ key, repoRoot, resolved: intended, shellResolved, target: t })
++        break
++      }
++    }
++  }
++  return hits.length > 0 ? { hits, segments } : null
++}
++
+ /**
+  * 判断 Bash 命令是否应被拦截
+  * @param {string} command - Bash 命令字符串
+@@ -846,8 +898,19 @@ function shouldBlockBash(command, cwd) {
+   const callerCwd = cwd || process.cwd()
+   const projectRoot = findProjectRoot(callerCwd)
+ 
+-  // cwd 在 worktree 内 → 全部放行
+-  if (isInsideRegisteredWorktree(callerCwd, projectRoot)) return { blocked: false }
++  // cwd 在 worktree 内 → 全部放行（跨仓锚点纠偏留痕：../注册仓 在 worktree 内解析到
++  // worktrees 存储目录——不拦只纠正，known-issues③）
++  if (isInsideRegisteredWorktree(callerCwd, projectRoot)) {
++    try {
++      const xr = analyzeCrossRepoCd(command, callerCwd, projectRoot, true)
++      for (const h of (xr && xr.hits) || []) {
++        if (isInsideWorktreeStorage(h.shellResolved, projectRoot)) {
++          console.error(`[sillyspec hook] ℹ️ 跨仓锚点纠偏：cd ${h.target} 在 worktree 内实际会解析到 ${h.shellResolved}（worktrees 存储目录，非真实兄弟仓）。注册仓 ${h.key} 的真实路径：${h.repoRoot}——跨仓测试/构建请改用真实路径。`)
++        }
++      }
++    } catch { /* 纠偏 fail-soft：解析异常不影响放行 */ }
++    return { blocked: false }
++  }
+ 
+   // 阶段门禁（直读 sillyspec.db）
+   const stage = readCurrentStage(projectRoot) || '(none)'
+@@ -857,6 +920,16 @@ function shouldBlockBash(command, cwd) {
+     const localConfig = loadLocalConfig(projectRoot)
+     const extraReadonly = localConfig.worktreeHook?.readonlyCommands || localConfig['worktree-hook']?.readonlyCommands || []
+     if (matchReadonlyWhitelist(command, extraReadonly)) return { blocked: false }
++    // 跨仓注册仓测试类放行（known-issues③）：verify 等阶段从主仓跑兄弟仓测试/lint 是合法
++    // 只读操作。从严三条件：cd 目标命中 repos 注册根 + 其余片段全部测试/lint 类 + 危险
++    // 黑名单不沾——写类/混合命令维持 stage 门禁原判（fail-closed）。
++    if (!matchDangerBlacklist(command)) {
++      const xr = analyzeCrossRepoCd(command, callerCwd, projectRoot, false)
++      if (xr && xr.segments.every(seg => /^cd\s+/i.test(seg) || CROSS_REPO_TEST_RE.test(seg))) {
++        console.error(`[sillyspec hook] 放行依据 = 跨仓注册仓（${xr.hits.map(h => h.key).join('、')}）测试/lint 类命令（known-issues③ 锚点感知，其余片段全测试类+黑名单不沾）`)
++        return { blocked: false }
++      }
++    }
+     return {
+       blocked: true,
+       reason: buildStageHint(stage)
+diff --git a/test/worktree-guard-cross-repo-cd.test.mjs b/test/worktree-guard-cross-repo-cd.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/worktree-guard-cross-repo-cd.test.mjs
+@@ -0,0 +1,125 @@
++/**
++ * worktree-guard 跨仓命令锚点感知（known-issues 2026-09-16「worktree 隔离期跨仓命令锚定
++ * 错位」条目兑现）：三仓形态两摩擦的守卫行为——
++ *   1. worktree 内 `cd ../注册仓`：放行不变 + stderr 纠偏留痕（shell 解析落 worktrees 存储
++ *      目录、真实兄弟仓路径给出）
++ *   2. 非 execute/quick 阶段（verify 等）主仓 cwd：`cd ../注册仓 && 测试/lint 类` 从严放行
++ *      （注册根命中 + 其余片段全测试类 + 黑名单不沾）；写类/混合/未注册维持 stage 门禁拦截
++ */
++import {
++  shouldBlock,
++  _analyzeCrossRepoCdForTest as analyzeCrossRepoCd,
++} from '../src/hooks/worktree-guard.js'
++import { DB } from '../src/db.js'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++let passed = 0, failed = 0
++function assert(condition, message) {
++  if (condition) { passed++; console.log('  ✅ ' + message) }
++  else { failed++; console.error('  ❌ ' + message) }
++}
++const cleanups = []
++
++function mkProject(prefix) {
++  const cwd = mkdtempSync(join(tmpdir(), prefix + '-'))
++  cleanups.push(() => { try { rmSync(cwd, { recursive: true, force: true }) } catch {} })
++  return cwd
++}
++
++function seedDb(cwd, { stage = 'verify' } = {}) {
++  const runtimeDir = join(cwd, '.sillyspec', '.runtime')
++  mkdirSync(runtimeDir, { recursive: true })
++  const db = new DB(join(runtimeDir, 'sillyspec.db'))
++  db.init()
++  const sq = db.getDb()
++  sq.prepare('DELETE FROM changes').run()
++  sq.prepare(`INSERT INTO changes (name, current_stage, status, no_worktree, created_at, last_active) VALUES (?, ?, ?, 0, datetime('now'), datetime('now'))`)
++    .run('c-xrepo', stage, 'active')
++  db.close()
++}
++
++function setupProject(prefix) {
++  const main = mkProject(prefix)
++  const sibling = mkProject(prefix + '-fe')
++  mkdirSync(join(main, '.sillyspec'), { recursive: true })
++  const sibAbs = sibling.split('\\').join('/')
++  writeFileSync(join(main, '.sillyspec', 'local.yaml'),
++    `repos:\n  fe-repo: ${sibAbs}\n`)
++  seedDb(main)
++  return { main, sibling }
++}
++
++console.log('=== ① verify 期主仓 cwd：跨仓注册仓测试类放行（从严三条件）===\n')
++{
++  const { main, sibling } = setupProject('xrg2')
++  const sibRel = '../' + sibling.split(/[\\/]/).pop()
++  const r = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npx eslint src`, cwd: main })
++  assert(r.blocked === false, `verify 期跨仓注册仓测试类放行（cd ${sibRel} && npx eslint）`)
++
++  const r2 = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npm test`, cwd: main })
++  assert(r2.blocked === false, 'npm test 形态放行')
++
++  const r3 = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npm run build`, cwd: main })
++  assert(r3.blocked === true, '写类（npm run build）维持 stage 门禁拦截（fail-closed）')
++
++  const r4 = shouldBlock({ tool: 'Bash', command: `cd ../nonexistent-repo && npx eslint .`, cwd: main })
++  assert(r4.blocked === true, '未注册仓不沾放行（维持拦截）')
++
++  const r5 = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && rm -rf src`, cwd: main })
++  assert(r5.blocked === true, '混合危险段（rm -rf）维持拦截')
++
++  const r6 = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npx eslint . && npm run deploy`, cwd: main })
++  assert(r6.blocked === true, '测试类后混非测试段（npm run deploy）不放行')
++}
++
++console.log('\n=== ② worktree cwd：锚点纠偏留痕（放行不变）===\n')
++{
++  const { main, sibling } = setupProject('xrg3')
++  // 真实形态：worktree 物理位于主仓 storage 下（findProjectRoot 从 worktree 向上命中主仓
++  // .sillyspec/local.yaml；native 模式 meta.worktreePath 指向该目录）
++  const wtDir = join(main, '.sillyspec', '.runtime', 'worktrees', 'c-xrepo', 'wt')
++  mkdirSync(wtDir, { recursive: true })
++  const metaDir = join(main, '.sillyspec', '.runtime', 'worktrees', 'c-xrepo')
++  writeFileSync(join(metaDir, 'meta.json'), JSON.stringify({
++    changeName: 'c-xrepo', mode: 'native-worktree', worktreePath: wtDir,
++  }))
++  const sibRel = '../' + sibling.split(/[\\/]/).pop()
++  const errs = []
++  const origErr = console.error
++  console.error = (...a) => errs.push(a.join(' '))
++  try {
++    const r = shouldBlock({ tool: 'Bash', command: `cd ${sibRel} && npx eslint src`, cwd: wtDir })
++    assert(r.blocked === false, 'worktree cwd 全放行不变')
++    assert(errs.some(e => e.includes('跨仓锚点纠偏') && e.includes('fe-repo') && e.includes('真实路径')),
++      `纠偏留痕命中（实际 stderr：${JSON.stringify(errs)}）`)
++    assert(errs.some(e => e.includes('worktrees 存储目录')), '留痕点明存储目录错位')
++    // 正确锚定（绝对路径直指真实兄弟仓）→ 不出纠偏
++    errs.length = 0
++    shouldBlock({ tool: 'Bash', command: `cd ${sibling.split('\\').join('/')} && npx eslint .`, cwd: wtDir })
++    assert(errs.every(e => !e.includes('跨仓锚点纠偏')), '绝对路径正确锚定不出纠偏')
++  } finally { console.error = origErr }
++}
++
++console.log('\n=== ③ analyzeCrossRepoCd 单元：双基准/未注册/null 形态 ===\n')
++{
++  const { main, sibling } = setupProject('xrg4')
++  const sibRel = '../' + sibling.split(/[\\/]/).pop()
++  const inWt = analyzeCrossRepoCd(`cd ${sibRel} && npx eslint .`, join(main, '.sillyspec', '.runtime', 'worktrees', 'c-xrepo'), main, true)
++  assert(inWt && inWt.hits.length === 1 && inWt.hits[0].key === 'fe-repo', '意图基准命中注册仓')
++  assert(inWt.hits[0].shellResolved !== inWt.hits[0].resolved, 'shell 基准与意图基准备析（worktree 错位形态）')
++
++  const inMain = analyzeCrossRepoCd(`cd ${sibRel} && npx eslint .`, main, main, false)
++  assert(inMain && inMain.hits[0].shellResolved === inMain.hits[0].resolved, '主仓 cwd 双基准合一')
++
++  assert(analyzeCrossRepoCd('ls -la', main, main, false) === null, '无 cd 段 → null')
++  assert(analyzeCrossRepoCd('cd ../nope && npx eslint .', main, main, false) === null, '未注册目标 → null')
++}
++
++if (failed > 0) {
++  console.error(`\n❌ ${failed} 失败 / ${passed} 通过`)
++  process.exit(1)
++}
++console.log(`\n✅ ${passed} 通过 / 0 失败`)
++for (const c of cleanups) c()

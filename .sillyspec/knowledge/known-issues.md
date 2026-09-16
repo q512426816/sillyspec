@@ -123,7 +123,7 @@ execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `
 
 三仓项目（EHS 形态：主仓 + sub-grid-security/spdemo 兄弟仓）execute 期在 worktree 内跑跨仓测试命令 `cd ../sub-grid-security && npx eslint` 有两重坑：①**锚点错位**——`../` 相对 worktree 根解析到 `.sillyspec/.runtime/worktrees/` 而非主仓侧真实兄弟仓，命令跑错地方或直接失败；②**审批摩擦**——worktree-guard 的 isSingleCommandReadonly 是命令名白名单制（READONLY_COMMANDS + local.yaml worktreeHook.readonlyCommands 扩展），不解析 cd 目标路径、不感知 repos 注册表，`cd` 不在白名单 → 整条复合命令进人工审批。
 
-**修法建议（需完整流程立项，hook 语义变更勿 quick 赶工）**：guard 增加路径感知——复合命令中 `cd ../<name>`/`cd <相对>` 目标 resolve 后命中 local.yaml repos 注册仓根者：a) stderr 留痕提示锚点应为主仓侧真实路径；b) 测试/lint 类命令（npm test/npx eslint/node --test 等）在注册仓内放行+留痕；c) 写类命令维持拦截。同族症状参照：worktree-deps 侧 `../sub-grid-security` 越界误报已在 368c7e2 按 repos 注册根分类修复，guard 侧未动。（来源：2026-09-15 EHS 生产 depsModules 实证 + 2026-09-16 分析定性）
+**已兑现**（2026-09-16 quick-b54011b6，guard 路径感知三分支落齐）：①worktree cwd 全放行不变，`cd ../注册仓` 的 shell 实际解析（callerCwd 基准）落 worktrees 存储目录时 stderr 纠偏留痕（双基准备析：shell 基准 vs 主仓根意图基准，给出真实兄弟仓路径）；②非 execute/quick 阶段（verify 等）主仓 cwd 的 `cd 注册仓 && 测试/lint 类` 从严放行（三条件：cd 意图基准命中 repos 注册根 + 其余片段全部测试类（npm test/npx eslint|tsc|jest|vitest|mocha|stylelint|prettier/node --test）+ 危险黑名单不沾）；③写类/混合/未注册维持原判 fail-closed。测试 test/worktree-guard-cross-repo-cd.test.mjs 15 断言。同族参照：worktree-deps 侧 368c7e2。（来源：2026-09-15 EHS 生产实证 + 2026-09-16 落地）
 
 ## QUICKLOG 多会话条目交织（提交需手工剥离并行条目，待立项）
 
