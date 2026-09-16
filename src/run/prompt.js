@@ -1042,7 +1042,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
-      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority, getLatestStageReviewRunId } = await import('../stage-review.js')
+      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority, getLatestStageReviewRunId, collectSameStagePriorReview, renderPriorRoundFindingsMd } = await import('../stage-review.js')
       const tierSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
@@ -1110,6 +1110,18 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           }
         } catch {}
       }
+      // 同阶段上一轮复审基线（ql-20260916-021，Superpowers scoped re-review 采纳①）：上一轮
+      // FAIL 的 findings 与已实证 pass 面机械回灌给复审子代理——复审以增量为主（核验修复 +
+      // 本次改版新增面），防全量重读与重复报告已修问题（独立复审子代理无对话历史，不知上一轮
+      // 审过什么/报过什么）。骨架轮/他变更轮由采集端过滤；tier=self 不注入（当前 agent 自带
+      // 上一轮上下文）。
+      try {
+        const priorRound = collectSameStagePriorReview(tierRuntimeRoot, stageName, changeName)
+        if (priorRound) {
+          const blockMd = renderPriorRoundFindingsMd(priorRound)
+          priorFactsMd = priorFactsMd ? priorFactsMd + blockMd : blockMd
+        }
+      } catch {}
       promptText = promptText
         .split('{REVIEW_TIER}').join(tier.tier)
         .split('{REVIEW_TIER_REASON}').join(tier.reason)

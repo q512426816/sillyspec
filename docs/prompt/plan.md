@@ -296,6 +296,7 @@ plan_level + 计划内容（审查在下一步独立进行）
 - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json），由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
 - `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法，主审查文档为 plan.md）
+- `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：①前序阶段已实证 pass 结论（勿重验，封顶 15 条）②同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
 
 > 注：prompt 正文中的 `<change>`（出现在 `{SPEC_ROOT}/changes/<change>/plan.md`）是源码里的内联占位文案，运行时不经全局 `<xxx>` 替换器，CLI 注入时保留字面，由 agent 自行解读为当前变更名。
 
@@ -328,6 +329,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
 
 ### tier=independent 时：启动 plan-review 子代理
+{PRIOR_REVIEW_FACTS}
 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
 1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据

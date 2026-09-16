@@ -1,0 +1,535 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index 337677a..a06a484 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -29,3 +29,4 @@
+ | 2026-09-14 | 2026-09-14-apply-conflict-hardening | doctor-diagnostics 新增 apply_manifest_drift 检查维（第十二维，advisory WARNING 不改退出码）：活跃∪归档 apply-manifest.json 扫描面按 appliedAt 降序取前 5；两态内容 sha256 vs 指纹三分支（落盘面漂移/暂存面漂移/丢失），worktree 态 CRLF→LF 归一防 autocrlf 误报，approx 条目跳过 staged 比对；无 manifest skipped 零告警。消费 worktree-apply writeApplyManifest 指纹（FR-04/D-005）。新增 test/apply-conflict-hardening.test.mjs 块② |
+ | 2026-09-15 | 2026-09-15-worktree-dual-truth-gates | execute 双真相门禁口径收敛（review 链面）：① 新导出 `collectWorktreeChangedFiles(cwd, changeName, meta, opts)`（task-review.js）——porcelain ∪ merge-base committed 补齐单一真相口径（in-place 退化取 cwd 保并入），generateTaskReviewDrafts 并入段与 run/complete.js prefetchDiffFileSet 双双改消费（勾选守卫 diffFileSet 并入后再剔 meta.baselineFiles 防「声明未做恰被夹带」误勾——R-07）；② attributeSuspectTasks（verify-postcheck.js）返回 Map<string,string[]> 全命中多归属（原首中即止吞同文件多 task），reconcileTargetFiles 组装 suspectTask 边界 join('、')，gates.js/archive-delta.js 下游零改动；③ runRequiredEvidenceCheckV2 逐文件核验双根化（roots=[cwd, worktree]，倒序命中根取 mtime，明细可选 root 字段；meta 缺失/in-place/损坏退单根 fail-open）——apply 前新文件不再误报「文件不存在」。resolveVerifyChangedFiles 补齐段本次未统一（R-09 已知残留，注记指向 helper 口径）。新增 test/worktree-dual-truth-gates.test.mjs 组4-5 |
+ | 2026-09-16 | 2026-09-16-friction5-hardening | 门禁摩擦五连修（core-engine 面）：① verify-facts-schema 回执双形态解析（FR-01/D-001@v1）——RECEIPT_LINE_RE 单行管道形态逐字节保留，新增多行 YAML 条目聚合（`- claim:` 起头+缩进续行 RECEIPT_CONT_LINE_RE，字段序无关，claim/command/log 非空+exit 纯数字四字段齐才 push fail-closed），根除列错位/字段序调换/多行书写导致的回执槽 0 条误报（坑 receipt-fullwidth-parse 形态自由度收口）；② probe7-anchor-check（FR-05/D-005@v1）covered 证据锚点口径扩 `.test.` 文件名（ANCHOR_RE file:line 本体不动，对齐 stage-contract 硬门形态；裸反引号刻意不收保 advisory 增量）。新增 test/receipt-multiline-parse.test.mjs（7）+ test/probe7-anchor-testfile.test.mjs（4） |
++| 2026-09-16 | ql-20260916-021-64c5（quick） | 同阶段复审 findings 回灌（Superpowers scoped re-review 采纳①）：stage-review.js 新增 collectSameStagePriorReview（本变更最近一轮有效 review 采集——跨变更过滤/骨架轮跳过/坏 JSON 容错，checklist fail/gap→openFindings、pass→passItems、verdict=fail 无明细时 notes 合成）+ renderPriorRoundFindingsMd（未决项逐项核验修复 + pass 面勿重复报告的双向语义，各 15 条封顶）；run/prompt.js tier=independent 档注入同阶段上一轮复审基线块（拼进 {PRIOR_REVIEW_FACTS}，self 不注入——当前 agent 自带上一轮上下文）；stages/brainstorm.js Design Grill 补 {PRIOR_REVIEW_FACTS} 占位符（原仅 plan/execute 有，brainstorm 升 independent 时同享回灌）。docs/prompt 三 md 镜像逐字同步 + 占位符文档行。新增 test/stage-review-prior-round.test.mjs（31 断言）。 |
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 0ebbcb3..62c8272 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -29,7 +29,7 @@
+       {
+         "index": 2,
+         "name": "对话式探索与需求澄清",
+-        "prompt": "通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。\n\n### A. 原型/设计图分析（如用户提供）\n如果用户提供了截图、图片或 HTML 原型，先分析提取：\n1. 识别图片中的页面结构（区域、组件、布局）\n2. 提取表单字段（名称、类型、必填、选项）\n3. 提取交互流程（页面跳转、按钮行为）\n4. 提取标注和备注（业务规则、权限说明）\n5. 展示分析结果，请用户确认遗漏\n- 没有原型则跳过本节\n- 图片信息 > 文字描述，不要忽略视觉信息\n\n### B. 对话式探索\n1. 从最核心的一个问题开始（用户到底想要什么？）\n2. **提出问题后必须暂停等待用户回答**，不要替用户回答\n3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答\n4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准\n5. 多选题优于开放式问题\n6. YAGNI — 砍掉不需要的功能\n\n### C. 需求范围评估（拆分/批量判断）\n1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：\n   - 3+ 个可独立交付的功能模块\n   - 3+ 种角色有不同权限和视图\n   - 跨页面状态流转（审批流、多步表单）\n   - 模块间耦合度低可独立开发\n2. 满足以下条件建议走**批量模式**：\n   - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）\n   - 本质是「模板 × 数据」而非 N 个独立功能\n   - 直接逐个开发会导致 plan.md 膨胀和上下文溢出\n3. 需要拆分 → 生成 MASTER.md，规划子阶段\n4. 检测到批量模式 → 输出提示并建议用户确认\n5. 都不需要 → 继续（简单 CRUD 不拆）\n\n**批量模式指引**（确认后，后续 plan/execute 按此调整）：\n- **不要**把每个实例列为独立任务（不要写 100 个 checkbox）\n- plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内\n- 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文\n- execute 每个 Wave 独立模块，Wave 间通过接口定义解耦\n- verify 用脚本全量验证 + AI 抽查边界案例\n\n**半批量场景**（大部分相似但有少量特殊任务）：\n- **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）\n- **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）\n- **孤立任务**（1 个）→ 走标准开发流程\n- 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码\n- 架构设计时预留扩展点（hooks/overrides）\n\n### D. 需求澄清 Grill（对仍未稳定的歧义点）\n汇总 B/C 后仍未稳定的歧义点，按类型列出：\n- 术语歧义：同一个词可能指向不同实体/角色/状态\n- 边界歧义：哪些场景做、哪些不做、失败怎么处理\n- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案\n- 代码冲突：用户描述与现有代码/scan/module 文档不一致\n\n**能通过代码或文档确认的不要问用户，先读取**：\n- `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n- `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n- `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n- 相关源码文件\n\n**给每个未解决歧义分级**：\n- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权\n- P1：影响用户场景、验收标准、错误处理、默认值\n- P2：文案、展示细节、低风险交互偏好\n\n**执行规则**：\n- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据\n- P1/P2 歧义 >= 3 个：按优先级逐个澄清\n- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题\n- 不要问用户\"要不要 Grill\"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答\n\n**追问策略**（进入澄清时）：\n1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义\n2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论\n3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term\n4. **模糊词精化**：把\"账户/任务/状态/会话/执行\"这类多义词拆成明确实体或状态\n5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）\n6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明\"可能不该新增\"\n\n**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：\n\n- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`\n- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`\n- 每条记录追加到文件末尾，格式如下：\n\n```markdown\n## D-001@v1: <短标题>\n- type: term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | rejected | superseded\n- source: user | code | docs\n- question: <被解决的问题>\n- answer: <用户确认或代码查证结果>\n- normalized_requirement: <可测试的约束>\n- impacts: [FR-?, task-?, verify-?]\n- evidence: <文件路径/代码位置/用户回答轮次>\n```\n\n- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）\n\n### 铁律 — 不要自问自答 / 等待用户\n- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说\"需求已明确\"**（命令由 CLI 在下方注入）\n- 需要拆分或批量模式时：列出方案并暂停等用户确认\n- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）\n- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问\n\n### 输出\n需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）\n\n### 注意\n- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清\n- 用户通过 `--continue --answer \"回答\"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出",
++        "prompt": "通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。\n\n### A. 原型/设计图分析（如用户提供）\n如果用户提供了截图、图片或 HTML 原型，先分析提取：\n1. 识别图片中的页面结构（区域、组件、布局）\n2. 提取表单字段（名称、类型、必填、选项）\n3. 提取交互流程（页面跳转、按钮行为）\n4. 提取标注和备注（业务规则、权限说明）\n5. 展示分析结果，请用户确认遗漏\n- 没有原型则跳过本节\n- 图片信息 > 文字描述，不要忽略视觉信息\n\n### B. 对话式探索\n1. 从最核心的一个问题开始（用户到底想要什么？）\n2. **提出问题后必须暂停等待用户回答**，不要替用户回答\n3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答\n4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准\n5. 多选题优于开放式问题\n6. YAGNI — 砍掉不需要的功能\n\n### C. 需求范围评估（拆分/批量判断）\n1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：\n   - 3+ 个可独立交付的功能模块\n   - 3+ 种角色有不同权限和视图\n   - 跨页面状态流转（审批流、多步表单）\n   - 模块间耦合度低可独立开发\n2. 满足以下条件建议走**批量模式**：\n   - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）\n   - 本质是「模板 × 数据」而非 N 个独立功能\n   - 直接逐个开发会导致 plan.md 膨胀和上下文溢出\n3. 需要拆分 → 生成 MASTER.md，规划子阶段\n4. 检测到批量模式 → 输出提示并建议用户确认\n5. 都不需要 → 继续（简单 CRUD 不拆）\n\n**批量模式指引**（确认后，后续 plan/execute 按此调整）：\n- **不要**把每个实例列为独立任务（不要写 100 个 checkbox）\n- plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内\n- 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文\n- execute 每个 Wave 独立模块，Wave 间通过接口定义解耦\n- verify 用脚本全量验证 + AI 抽查边界案例\n\n**半批量场景**（大部分相似但有少量特殊任务）：\n- **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）\n- **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）\n- **孤立任务**（1 个）→ 走标准开发流程\n- 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码\n- 架构设计时预留扩展点（hooks/overrides）\n\n### D. 需求澄清 Grill（对仍未稳定的歧义点）\n汇总 B/C 后仍未稳定的歧义点，按类型列出：\n- 术语歧义：同一个词可能指向不同实体/角色/状态\n- 边界歧义：哪些场景做、哪些不做、失败怎么处理\n- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案\n- 代码冲突：用户描述与现有代码/scan/module 文档不一致\n\n**能通过代码或文档确认的不要问用户，先读取**：\n- `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n- `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n- `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n- 相关源码文件\n\n**给每个未解决歧义分级**：\n- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权\n- P1：影响用户场景、验收标准、错误处理、默认值\n- P2：文案、展示细节、低风险交互偏好\n\n**执行规则**：\n- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据\n- P1/P2 歧义 >= 3 个：按优先级逐个澄清\n- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题\n- 不要问用户\"要不要 Grill\"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答\n\n**追问策略**（进入澄清时）：\n1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义\n2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论\n3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term\n4. **模糊词精化**：把\"账户/任务/状态/会话/执行\"这类多义词拆成明确实体或状态\n5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）\n6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明\"可能不该新增\"\n\n**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：\n\n- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`\n- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`\n- 每条记录追加到文件末尾，格式如下：\n\n```markdown\n## D-001@v1: <短标题>\n- type: term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | rejected | superseded\n- source: user | code | docs\n- question: <被解决的问题>\n- answer: <用户确认或代码查证结果>\n- normalized_requirement: <可测试的约束>\n- impacts: [FR-?, task-?, verify-?]\n- evidence: <文件路径/代码位置/用户回答轮次>\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n```\n\n- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）\n\n### 铁律 — 不要自问自答 / 等待用户\n- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说\"需求已明确\"**（命令由 CLI 在下方注入）\n- 需要拆分或批量模式时：列出方案并暂停等用户确认\n- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）\n- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问\n\n### 输出\n需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）\n\n### 注意\n- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清\n- 用户通过 `--continue --answer \"回答\"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出",
+         "outputHint": "需求理解与决策落盘清单",
+         "optional": false,
+         "conditionalWait": true,
+@@ -90,7 +90,7 @@
+       {
+         "index": 6,
+         "name": "Design Grill 交叉审查",
+-        "prompt": "默认执行 Design Grill，对已经写出的 design.md 做交叉审查。\n\n### 定位\n这是设计完成后的质量门，不是需求探索。目标不是继续发散，而是找出 design.md 内部、四件套之间、文档与外部约束之间的结构性矛盾。\n\n### 审查执行方式（CLI 按变更规模判定，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self：当前 agent 直接执行下方交叉审查（小变更）\n- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方\"交叉审查模型\"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:\n  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。\n{REVIEW_JSON_CONTRACT}\n  子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。\n\n### 默认行为\n1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定\"要不要 Grill\"。\n2. 只有以下情况可以轻量跳过，并必须记录原因：\n   - 用户明确要求 no-grill / 显式跳过\n   - 文档是一页以内、单模块、无状态流转、无 schema/API/兼容策略变更\n   - plan_level 明确为 none，且只改 1-2 个文件\n3. 即使跳过，也要输出\"Design Grill skipped\"和原因，不能静默跳过。\n\n### 输入材料\n1. 必须读取完整 `{SPEC_ROOT}/changes/<change-name>/design.md`\n2. 读取 proposal.md、requirements.md、tasks.md、decisions.md（如存在）\n3. 读取 scan/module docs：\n   - `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n   - `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n   - `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n   - 命中的模块文档\n4. 按 design.md 文件变更清单读取相关源码、测试、配置、schema 或样例数据；矛盾经常藏在设计与外部约束交叉处，素材宁可多读，不要只读摘要。\n\n### 交叉审查模型\n按三层检查并输出 cross-check matrix：\n1. **定义层**：模糊概念是否有可测试定义。例如\"高可用\"\"异常数据\"\"本地缓存\"\"重试\"。\n2. **一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。\n3. **可行性层**：关键假设是否有来源。例如 P99 延迟、上游 SLA、缓存 TTL、数据量、权限模型、兼容旧配置。\n\n### 交叉点抽取\n重点找这些交叉点：\n- 模块 A 依赖模块 B 的实体/状态/接口\n- requirements.md 的 FR 与 design.md 的数据模型/API/状态机\n- design.md 的容错策略与数据流、缓存、重试、回滚\n- tasks.md 的执行范围与 design.md 的非目标\n- decisions.md 的 D-xxx@vN 与 design.md 当前说法\n- scan/module docs 或源码中的真实约束与 design.md 假设\n\n### 问答处理\n1. 先自动交叉审查，不要一上来问用户。\n2. 没有结构性问题：正常完成，输出\"Design Grill passed\"，附 cross-check matrix。\n3. 发现问题：\n   - 对能从代码/文档确定的问题，直接给出推荐修正。\n   - 对需要业务判断的问题，每次只问一个最关键问题，然后等待用户。\n   - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。\n4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。\n\n### decisions.md 版本规则\n```markdown\n## D-001@v2: 缓存异常时的 fallback 语义\n- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | unresolved | rejected | superseded\n- supersedes: D-001@v1\n- source: design-grill\n- question: §3 数据流与 §7 容错策略冲突时以哪个为准？\n- answer: 采用 §7 的重试语义，缓存只作为只读 fallback。\n- normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。\n- impacts: [FR-02, task-03, verify-02]\n- evidence: design.md §3/§7, src/cache/...\n```\n\n### 输出格式\n```markdown\n## Design Grill Result\nstatus: passed | needs-user-input | blocked | skipped\n\n## Cross-Check Matrix\n| ID | 层级 | 交叉点 | 证据 A | 证据 B | 结论 | 决策 |\n|---|---|---|---|---|---|---|\n| X-001 | consistency | 数据流 vs 容错 | design §3 | design §7 | conflict | D-001@v2 |\n\n## Question Distribution\n| 分类 | 数量 | 含义 |\n|---|---|---|\n| immediately_answered | N | 心里清楚但文档缺失 |\n| needs_thinking | N | 需要用户判断 |\n| unresolved | N | 真正设计漏洞 |\n\n## Unresolved Blockers\n| ID | priority | 问题 | 阻塞原因 | 下一步 |\n|---|---|---|---|---|\n```\n\n### 铁律 — 等待用户\n- 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）\n- 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers\n- 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。",
++        "prompt": "默认执行 Design Grill，对已经写出的 design.md 做交叉审查。\n\n### 定位\n这是设计完成后的质量门，不是需求探索。目标不是继续发散，而是找出 design.md 内部、四件套之间、文档与外部约束之间的结构性矛盾。\n\n### 审查执行方式（CLI 按变更规模判定，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self：当前 agent 直接执行下方交叉审查（小变更）\n- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方\"交叉审查模型\"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:\n  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。\n{PRIOR_REVIEW_FACTS}\n{REVIEW_JSON_CONTRACT}\n  子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。\n  **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：\n  - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。\n  - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n\n### 默认行为\n1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定\"要不要 Grill\"。\n2. 只有以下情况可以轻量跳过，并必须记录原因：\n   - 用户明确要求 no-grill / 显式跳过\n   - 文档是一页以内、单模块、无状态流转、无 schema/API/兼容策略变更\n   - plan_level 明确为 none，且只改 1-2 个文件\n3. 即使跳过，也要输出\"Design Grill skipped\"和原因，不能静默跳过。\n\n### 输入材料\n1. 必须读取完整 `{SPEC_ROOT}/changes/<change-name>/design.md`\n2. 读取 proposal.md、requirements.md、tasks.md、decisions.md（如存在）\n3. 读取 scan/module docs：\n   - `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n   - `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n   - `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n   - 命中的模块文档\n4. 按 design.md 文件变更清单读取相关源码、测试、配置、schema 或样例数据；矛盾经常藏在设计与外部约束交叉处，素材宁可多读，不要只读摘要。\n\n### 交叉审查模型\n按三层检查并输出 cross-check matrix：\n1. **定义层**：模糊概念是否有可测试定义。例如\"高可用\"\"异常数据\"\"本地缓存\"\"重试\"。\n2. **一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。\n3. **可行性层**：关键假设是否有来源。例如 P99 延迟、上游 SLA、缓存 TTL、数据量、权限模型、兼容旧配置。\n\n### 交叉点抽取\n重点找这些交叉点：\n- 模块 A 依赖模块 B 的实体/状态/接口\n- requirements.md 的 FR 与 design.md 的数据模型/API/状态机\n- design.md 的容错策略与数据流、缓存、重试、回滚\n- tasks.md 的执行范围与 design.md 的非目标\n- decisions.md 的 D-xxx@vN 与 design.md 当前说法\n- scan/module docs 或源码中的真实约束与 design.md 假设\n\n### 问答处理\n1. 先自动交叉审查，不要一上来问用户。\n2. 没有结构性问题：正常完成，输出\"Design Grill passed\"，附 cross-check matrix。\n3. 发现问题：\n   - 对能从代码/文档确定的问题，直接给出推荐修正。\n   - 对需要业务判断的问题，每次只问一个最关键问题，然后等待用户。\n   - P0/P1 未决项必须进入 Unresolved Blockers，不能带着进入 plan。\n4. 用户回答后，更新 design.md 和 decisions.md；如果推翻旧决策，新增版本 D-xxx@v2，而不是覆盖 D-xxx@v1。\n\n### decisions.md 版本规则\n```markdown\n## D-001@v2: 缓存异常时的 fallback 语义\n- type: definition | consistency | feasibility | boundary | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | unresolved | rejected | superseded\n- supersedes: D-001@v1\n- source: design-grill\n- question: §3 数据流与 §7 容错策略冲突时以哪个为准？\n- answer: 采用 §7 的重试语义，缓存只作为只读 fallback。\n- normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。\n- impacts: [FR-02, task-03, verify-02]\n- evidence: design.md §3/§7, src/cache/...\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n```\n\n### 输出格式\n```markdown\n## Design Grill Result\nstatus: passed | needs-user-input | blocked | skipped\n\n## Cross-Check Matrix\n| ID | 层级 | 交叉点 | 证据 A | 证据 B | 结论 | 决策 |\n|---|---|---|---|---|---|---|\n| X-001 | consistency | 数据流 vs 容错 | design §3 | design §7 | conflict | D-001@v2 |\n\n## Question Distribution\n| 分类 | 数量 | 含义 |\n|---|---|---|\n| immediately_answered | N | 心里清楚但文档缺失 |\n| needs_thinking | N | 需要用户判断 |\n| unresolved | N | 真正设计漏洞 |\n\n## Unresolved Blockers\n| ID | priority | 问题 | 阻塞原因 | 下一步 |\n|---|---|---|---|---|\n```\n\n### 铁律 — 等待用户\n- 发现 P0/P1 结构性矛盾且需要用户判断时，暂停等用户（命令由 CLI 在下方注入）\n- 用户显式跳过时必须在 decisions.md 记录 accepted risk；P0/P1 skip 仍必须写入 Unresolved Blockers\n- 完成前必须确认没有 P0/P1 unresolved blocker，否则不能进入 plan。",
+         "outputHint": "Design Grill 交叉审查结果",
+         "optional": false,
+         "conditionalWait": true,
+@@ -104,7 +104,7 @@
+       {
+         "index": 7,
+         "name": "生成规范文件",
+-        "prompt": "按变更规模生成规范文件并给出实现路径建议（设计已在前置步骤确认过，本步不再暂停等确认，生成后展示摘要即可）。\n\n### 规模评估（展示前先做）\n读取 design.md 的「文件变更清单」，判断本次变更规模：\n- **small（小变更）**：改动 ≤ 2 个文件、单模块、无跨模块依赖、无状态机/schema/API 变更\n- **large（大变更）**：不满足上述任意一条\n在 design.md frontmatter 写入 `scale: small` 或 `scale: large`（frontmatter 不存在则补 `author`/`created_at`/`scale`）。规模决定下面的产物范围和实现路径。\n（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design.md 文件清单做精判兜底。）\n\n### 操作\n1. **按规模生成规范文件**：\n   - **scale=large**：在 `{SPEC_ROOT}/changes/<change-name>/` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → `sillyspec run plan --change <变更名>`\n   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → `sillyspec run quick --linked-changes <变更名>`\n   - 两种规模都执行 `git add {SPEC_ROOT}/changes/<change-name>/` — 暂存本变更的规范文件（精确到变更目录，勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）\n\n2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）\n\n所有规范文件头部必须包含 YAML frontmatter：\n```yaml\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n```\n\n### proposal.md 格式要求\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n# 提案书（Proposal）\n\n## 动机\n为什么做、解决什么核心问题\n\n## 关键问题\n为什么现有方案不够（展开 2-3 个具体痛点）\n\n## 变更范围\n本次做什么\n\n## 不在范围内（显式清单）\n- 不做 X\n- 不做 Y\n\n## 成功标准（可验证）\n- 旧配置默认行为不变\n- 新功能在配置后可用\n- ...\n```\n\n### requirements.md 格式要求\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n# 需求规格（Requirements）\n\n## 角色\n| 角色 | 说明 |\n|---|---|\n| 开发者 | ... |\n\n## 功能需求\n\n### FR-01: 需求名称\n覆盖决策：D-001@v1, D-002@v1（如适用）\nGiven 前提条件\nWhen 触发动作\nThen 期望结果\n\n（每个边界条件独立 GWT 块）\n\n## 非功能需求\n- 兼容性：...\n- 可回退：...\n- 可测试：...\n\n## 决策覆盖矩阵（如存在 decisions.md）\n| 决策 ID | 覆盖的 FR | 说明 |\n|---|---|---|\n| D-001@v1 | FR-01 | ... |\n```\n\n### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n# 任务清单（Tasks）\n\n- [ ] task-01: <任务名>\n- [ ] task-02: <任务名>\n```\n> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。\n\n### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n\n# 决策记录（Decisions）\n\n## D-001@v1: 决策短标题\n- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | unresolved | rejected | superseded\n- supersedes:\n- source: user | code | docs\n- question: 被解决的问题\n- answer: 用户确认或代码查证结果\n- normalized_requirement: 可测试的约束\n- impacts: [FR-01, task-01, verify-01]\n- evidence: 用户回答轮次或代码/文档路径\n```\n\n> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，`<src 路径>:<行号或符号>`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 `NEW:<名>` 前缀声明，冒号后不加空格：`NEW:foo` 合法、`NEW: foo` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）。\n\n### 后续变更包处理\n如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：\n1. 读取 MASTER.md 中的变更包列表（包名 + 边界描述）\n2. 为每个后续包创建目录：`mkdir -p {SPEC_ROOT}/changes/<后续包名>`\n3. 每个目录生成骨架文件：\n   - `proposal.md`：从 MASTER.md 中提取该包的动机和边界\n   - `design.md`：从 MASTER.md 中提取该包的职责描述（标记为「待设计 - 本包 design 在该包进入 brainstorm 时完善」）\n   - `requirements.md`：从 MASTER.md 中提取该包的需求范围（标记为「待完善」）\n   - `tasks.md`：创建空任务列表，标记为「待 plan 阶段展开」\n4. `git add {SPEC_ROOT}/changes/<本步骤创建的各变更包名>/` — 逐个暂存本步骤新建的变更包（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）\n5. 后续变更包的骨架文件同样必须包含 `author: <git-user>` 和 `created_at: <now-datetime>`\n\n### 输出\n所有规范文件路径（含后续变更包目录列表）\n\n### 注意\n- 本步不再等待用户确认，生成完成后直接 --done；用户事后提出修改/推翻时，修改对应文件或用 --reopen 回退重做\n- 禁止自动 commit\n- 推翻重来回到「对话式探索与需求澄清」步骤\n- 表名/字段名/类名必须来自真实代码或标注\"新增\"\n- 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险\n- 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan/quick\n- tasks.md 只列任务名，细节在 plan 阶段展开\n- **规范 md 文件标题用中文**（sillyhub 平台解析识别用，frontmatter 在标题之前）：tasks.md 标题用 # 任务清单（Tasks）（proposal/requirements/tasks/decisions 见各自模板 + design 见「写设计文档并自审」步；均含 frontmatter + 中文标题）",
++        "prompt": "按变更规模生成规范文件并给出实现路径建议（设计已在前置步骤确认过，本步不再暂停等确认，生成后展示摘要即可）。\n\n### 规模评估（展示前先做）\n读取 design.md 的「文件变更清单」，判断本次变更规模：\n- **small（小变更）**：改动 ≤ 2 个文件、单模块、无跨模块依赖、无状态机/schema/API 变更\n- **large（大变更）**：不满足上述任意一条\n在 design.md frontmatter 写入 `scale: small` 或 `scale: large`（frontmatter 不存在则补 `author`/`created_at`/`scale`）。规模决定下面的产物范围和实现路径。\n（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design.md 文件清单做精判兜底。）\n\n### 操作\n1. **按规模生成规范文件**：\n   - **scale=large**：在 `{SPEC_ROOT}/changes/<change-name>/` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → `sillyspec run plan --change <变更名>`\n   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → `sillyspec run quick --linked-changes <变更名>`\n   - 两种规模都执行 `git add {SPEC_ROOT}/changes/<change-name>/` — 暂存本变更的规范文件（精确到变更目录，勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）\n\n2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）\n\n所有规范文件头部必须包含 YAML frontmatter：\n```yaml\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n```\n\n### proposal.md 格式要求\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n# 提案书（Proposal）\n\n## 动机\n为什么做、解决什么核心问题\n\n## 关键问题\n为什么现有方案不够（展开 2-3 个具体痛点）\n\n## 变更范围\n本次做什么\n\n## 不在范围内（显式清单）\n- 不做 X\n- 不做 Y\n\n## 成功标准（可验证）\n- 旧配置默认行为不变\n- 新功能在配置后可用\n- ...\n```\n\n### requirements.md 格式要求\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n# 需求规格（Requirements）\n\n## 角色\n| 角色 | 说明 |\n|---|---|\n| 开发者 | ... |\n\n## 功能需求\n\n### FR-01: 需求名称\n覆盖决策：D-001@v1, D-002@v1（如适用）\nGiven 前提条件\nWhen 触发动作\nThen 期望结果\n\n（每个边界条件独立 GWT 块）\n\n## 非功能需求\n- 兼容性：...\n- 可回退：...\n- 可测试：...\n\n## 决策覆盖矩阵（如存在 decisions.md）\n| 决策 ID | 覆盖的 FR | 说明 |\n|---|---|---|\n| D-001@v1 | FR-01 | ... |\n```\n\n### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n# 任务清单（Tasks）\n\n- [ ] task-01: <任务名>\n- [ ] task-02: <任务名>\n```\n> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。\n\n### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）\n```markdown\n---\nauthor: <git-user>\ncreated_at: <now-datetime>\n---\n\n# 决策记录（Decisions）\n\n## D-001@v1: 决策短标题\n- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | unresolved | rejected | superseded\n- supersedes:\n- source: user | code | docs\n- question: 被解决的问题\n- answer: 用户确认或代码查证结果\n- normalized_requirement: 可测试的约束\n- impacts: [FR-01, task-01, verify-01]\n- evidence: 用户回答轮次或代码/文档路径\n```\n\n> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，`<src 路径>:<行号或符号>`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 `NEW:<名>` 前缀声明，冒号后不加空格：`NEW:foo` 合法、`NEW: foo` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。\n\n### 后续变更包处理\n如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：\n1. 读取 MASTER.md 中的变更包列表（包名 + 边界描述）\n2. 为每个后续包创建目录：`mkdir -p {SPEC_ROOT}/changes/<后续包名>`\n3. 每个目录生成骨架文件：\n   - `proposal.md`：从 MASTER.md 中提取该包的动机和边界\n   - `design.md`：从 MASTER.md 中提取该包的职责描述（标记为「待设计 - 本包 design 在该包进入 brainstorm 时完善」）\n   - `requirements.md`：从 MASTER.md 中提取该包的需求范围（标记为「待完善」）\n   - `tasks.md`：创建空任务列表，标记为「待 plan 阶段展开」\n4. `git add {SPEC_ROOT}/changes/<本步骤创建的各变更包名>/` — 逐个暂存本步骤新建的变更包（勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）\n5. 后续变更包的骨架文件同样必须包含 `author: <git-user>` 和 `created_at: <now-datetime>`\n\n### 输出\n所有规范文件路径（含后续变更包目录列表）\n\n### 注意\n- 本步不再等待用户确认，生成完成后直接 --done；用户事后提出修改/推翻时，修改对应文件或用 --reopen 回退重做\n- 禁止自动 commit\n- 推翻重来回到「对话式探索与需求澄清」步骤\n- 表名/字段名/类名必须来自真实代码或标注\"新增\"\n- 如果存在 decisions.md，requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的 D-xxx@vN 必须标注为剩余风险\n- 如果 Design Grill 产生 P0/P1 unresolved blocker，必须回到 design 修正，不能进入 plan/quick\n- tasks.md 只列任务名，细节在 plan 阶段展开\n- **规范 md 文件标题用中文**（sillyhub 平台解析识别用，frontmatter 在标题之前）：tasks.md 标题用 # 任务清单（Tasks）（proposal/requirements/tasks/decisions 见各自模板 + design 见「写设计文档并自审」步；均含 frontmatter + 中文标题）",
+         "migratedFrom": [
+           "用户确认并生成规范文件"
+         ]
+@@ -173,7 +173,7 @@
+       {
+         "index": 6,
+         "name": "输出验证报告",
+-        "prompt": "生成完整验证报告，并写入 verify-result.md。\n\n### 操作\n1. 汇总以上所有检查结果\n2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。\n   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。\n   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。\n   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。\n   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。\n   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）\n\n3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 `sillyspec verify-probes --change <change-name> --init`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 `{SPEC_ROOT}/changes/<change-name>/verify-result.md`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 `<!--TODO-->` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处\n4. **预填探针段不可篡改或删除**：verify `--done` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文\n5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义\n6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**\n7. **核对 module-impact.md**（若 `{SPEC_ROOT}/changes/<change>/module-impact.md` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。\n\n### verify-result.md 章节结构（骨架已含，占位替换即可）\n\n结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（`| 决策 ID | FR | Task | Evidence | 状态 |`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。\n\n**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）：`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。\n\n**Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。\n\n### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）\n「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：\n1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）。**优先登记服务本体（叶子）PID**——经 shell 包装启动（`sh -c` / `cmd /c` / uvicorn --reload 的 reloader）时 CLI 虽已按进程树击杀（2026-09-10 起连带子进程），但叶子 PID 最稳：包装 shell 退出后子进程 PID 不漂移、跨平台一致\n2. 每行一个 PID 追加到 `{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids`（`Add-Content` / `echo >>`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）\n3. verify `--done` 时 CLI 读该文件**逐进程树击杀**（包装进程连同子进程）并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可\n登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。\n\n### 输出\nverify-result.md 路径 + 验证报告摘要 + 下一步命令\n\n### 注意\n- PASS → 运行 `sillyspec run archive` 归档\n- FAIL → 修复后运行 `sillyspec run verify` 重新验证——注意重验时 CLI 会重新执行 commands.test 全量对账（长套件数分钟、同步无输出属正常；可 local.yaml test_strategy: module 收窄）\n- verify-result.md 是变更包的正式验收记录，归档后保留\n- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断",
++        "prompt": "生成完整验证报告，并写入 verify-result.md。\n\n### 操作\n1. 汇总以上所有检查结果\n2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。\n   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。\n   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。\n   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。\n   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。\n   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）\n\n3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 `sillyspec verify-probes --change <change-name> --init`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 `{SPEC_ROOT}/changes/<change-name>/verify-result.md`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 `<!--TODO-->` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处\n4. **预填探针段不可篡改或删除**：verify `--done` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文\n5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义\n6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**\n7. **核对 module-impact.md**（若 `{SPEC_ROOT}/changes/<change>/module-impact.md` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。\n\n### verify-result.md 章节结构（骨架已含，占位替换即可）\n\n结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（`| 决策 ID | FR | Task | Evidence | 状态 |`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。\n\n**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。\n\n**Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。\n\n### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）\n「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：\n1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）。**优先登记服务本体（叶子）PID**——经 shell 包装启动（`sh -c` / `cmd /c` / uvicorn --reload 的 reloader）时 CLI 虽已按进程树击杀（2026-09-10 起连带子进程），但叶子 PID 最稳：包装 shell 退出后子进程 PID 不漂移、跨平台一致\n2. 每行一个 PID 追加到 `{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids`（`Add-Content` / `echo >>`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）\n3. verify `--done` 时 CLI 读该文件**逐进程树击杀**（包装进程连同子进程）并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可\n登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。\n\n### 输出\nverify-result.md 路径 + 验证报告摘要 + 下一步命令\n\n### 注意\n- PASS → 运行 `sillyspec run archive` 归档\n- FAIL → 修复后运行 `sillyspec run verify` 重新验证——注意重验时 CLI 会重新执行 commands.test 全量对账（长套件数分钟、同步无输出属正常；可 local.yaml test_strategy: module 收窄）\n- verify-result.md 是变更包的正式验收记录，归档后保留\n- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断",
+         "outputHint": "验证报告",
+         "optional": false
+       }
+@@ -487,7 +487,7 @@
+         "index": 2,
+         "id": "review_plan",
+         "name": "审查计划",
+-        "prompt": "对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。\n\n### 执行前确认门（plan_level=full 时）\nplan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：\n- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）\n- 调用：`sillyspec run plan --wait --reason \"等待用户确认计划\" --options \"确认，进入执行,需要调整\" --output \"计划摘要\"`\n- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可\n\n### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）\n- tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json\n  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。\n\n### 审查清单（读取 plan.md 的 plan_level，逐条核对）\n- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务\n- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）\n- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）\n- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）\n- [ ] 不存在 P0/P1 unresolved blocker 残留\n- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）\n- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）\n- [ ] Wave 分组说明：依赖方向违规（depends_on 同 Wave / 后置 Wave）在 --done 时会按拓扑**自动修复**（提案经一致性+文件面验证后落盘）；共享文件的手工分 Wave 串行是合法安全模式，不会被自动改写\n- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）\n- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）\n\n### tier=independent 时：启动 plan-review 子代理\n用 Agent tool 启动子代理（subagent_type: general），prompt 要点：\n1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）\n2. 执行上方审查清单，每条给 pass/gap/fail + 证据\n3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):\n{REVIEW_JSON_CONTRACT}\n4. verdict=fail 时在 reviewerNotes 写明阻断项\n\n### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）\nmodule-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。\n仅当 --done 报 module-impact 缺失时（如无 module-map 的绿地项目生成降级失败），按 gate 报错提示手写兜底：两章节标题逐字用「## 模块影响矩阵」「## 未匹配文件」（未命中的文件归「未匹配文件」章节），并含「## 更新结果」表骨架（行：`modules/<id>.md`、`_module-map.yaml`，状态列 pending/skipped，末列是状态列，勿追加其他列）。\n\nexecute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。\n\n### 输出\n- tier=self：审查清单结果（每条状态 + 偏差说明）\n- tier=independent：子代理产出的 review.json 路径 + verdict 摘要",
++        "prompt": "对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。\n\n### 执行前确认门（plan_level=full 时）\nplan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/大变更），必须先向用户展示计划摘要并等待确认，不要让 AI 默认共识擅自开工：\n- 展示：Wave 分组 + task 总数 + 关键 allowed_paths 边界 + 依赖说明（一两屏内，不贴全文）\n- 调用：`sillyspec run plan --wait --reason \"等待用户确认计划\" --options \"确认，进入执行,需要调整\" --output \"计划摘要\"`\n- 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可\n\n### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）\n- tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json\n  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。\n\n### 审查清单（读取 plan.md 的 plan_level，逐条核对）\n- [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务\n- [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）\n- [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）\n- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）\n- [ ] 不存在 P0/P1 unresolved blocker 残留\n- [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）\n- [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）\n- [ ] Wave 分组说明：依赖方向违规（depends_on 同 Wave / 后置 Wave）在 --done 时会按拓扑**自动修复**（提案经一致性+文件面验证后落盘）；共享文件的手工分 Wave 串行是合法安全模式，不会被自动改写\n- [ ] 连带测试归属：本批改动是否会导致既有测试断言失效（改共享/被多 task 依赖源文件、改被测试精确匹配的值如 UI 文案/按钮文本/错误信息/常量/枚举字面量、改函数签名或返回结构等单文件场景）？此类 task 是否在 related_tests 声明了失效测试、且路径在 allowed_paths 内（或由独立测试 task 覆盖）？（漏声明 = execute 阶段测试债、主代理事后兜底）\n- [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）\n\n### tier=independent 时：启动 plan-review 子代理\n{PRIOR_REVIEW_FACTS}\n用 Agent tool 启动子代理（subagent_type: general），prompt 要点：\n1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）\n2. 执行上方审查清单，每条给 pass/gap/fail + 证据\n3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):\n{REVIEW_JSON_CONTRACT}\n4. verdict=fail 时在 reviewerNotes 写明阻断项\n5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。\n6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n\n### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）\nmodule-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。\n仅当 --done 报 module-impact 缺失时（如无 module-map 的绿地项目生成降级失败），按 gate 报错提示手写兜底：两章节标题逐字用「## 模块影响矩阵」「## 未匹配文件」（未命中的文件归「未匹配文件」章节），并含「## 更新结果」表骨架（行：`modules/<id>.md`、`_module-map.yaml`，状态列 pending/skipped，末列是状态列，勿追加其他列）。\n\nexecute/verify 阶段会按实际代码变更更新此文档；archive 阶段会最终确认它。\n\n### 输出\n- tier=self：审查清单结果（每条状态 + 偏差说明）\n- tier=independent：子代理产出的 review.json 路径 + verdict 摘要",
+         "outputHint": "plan 审查结果（self=清单 / independent=review.json 路径+verdict）",
+         "optional": false,
+         "conditionalWait": true,
+@@ -501,7 +501,7 @@
+         "index": 3,
+         "id": "generate_blueprints",
+         "name": "生成 TaskCard（子代理按 batch 并行）",
+-        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言假设单例，改归属键后需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`sub-grid-security/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-14-acceptance-test-matrix\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
++        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言假设单例，改归属键后需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`sub-grid-security/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
+         "outputHint": "TaskCard 生成结果",
+         "optional": false
+       },
+@@ -590,7 +590,7 @@
+         "index": 7,
+         "name": "对照设计检查",
+         "mode": "acceptance",
+-        "prompt": "对照 design.md 检查所有实现是否与设计一致。\n\n### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）\n- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:\n  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。\n{REVIEW_JSON_CONTRACT}\n  该 acceptance review 同时覆盖\"代码审查\"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。\n\n  **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是\"只看当前 task 的 diff\"，这三项是它覆盖不到、只有 stage review 能兜住的：\n  1. 跨 task 交界（A 产出的接口/数据结构与 B 的消费是否对得上）\n  2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）\n  3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）\n\n  **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 `checklist` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。\n  **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 `sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash`。\n\n### 操作\n1. 读取 design.md（技术方案）——按章节精准读（design-check 对照表可借 tasks 卡 §锚点定位），避免反复整读全文\n2. 逐一对照 design.md 中的设计要点与实际代码实现\n3. 检查接口签名、数据结构、模块划分是否一致\n4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）\n\n### 输出\nreview.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差说明；无独立长文产物",
++        "prompt": "对照 design.md 检查所有实现是否与设计一致。\n\n### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）\ntier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）\n- tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）\n- tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:\n{PRIOR_REVIEW_FACTS}\n  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。\n{REVIEW_JSON_CONTRACT}\n  该 acceptance review 同时覆盖\"代码审查\"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。\n\n  **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是\"只看当前 task 的 diff\"，这三项是它覆盖不到、只有 stage review 能兜住的：\n  1. 跨 task 交界（A 产出的接口/数据结构与 B 的消费是否对得上）\n  2. design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）\n  3. 组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）\n\n  **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 `checklist` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。\n  **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。\n  **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 `sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash`。\n\n### 操作\n1. 读取 design.md（技术方案）——按章节精准读（design-check 对照表可借 tasks 卡 §锚点定位），避免反复整读全文\n2. 逐一对照 design.md 中的设计要点与实际代码实现\n3. 检查接口签名、数据结构、模块划分是否一致\n4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）\n\n### 输出\nreview.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差说明；无独立长文产物",
+         "outputHint": "设计对照检查清单",
+         "optional": false
+       },
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index f55e6a8..720acf9 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -449,6 +449,7 @@ design.md 文件路径 + 自审结果
+ - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json），由 `review-tier.js` 按 plan_level / 变更文件数判定。映射见 README「占位符总表 — 动态块占位符」
+ - `{REVIEW_TIER_REASON}` → 分级理由文案（如「变更文件 3 ≤ 3」或「plan_level=none...」）。映射见 README
+ - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法；brainstorm 主审查文档为 design.md）。映射见 README
++- `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——brainstorm 无前序阶段，只有同阶段段。`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
+ 
+ > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符（详见 README）。
+ 
+@@ -465,6 +466,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self：当前 agent 直接执行下方交叉审查（小变更）
+ - tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
++{PRIOR_REVIEW_FACTS}
+ {REVIEW_JSON_CONTRACT}
+   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+ 
+diff --git a/docs/prompt/execute.md b/docs/prompt/execute.md
+index a7bbeeb..678a5d1 100644
+--- a/docs/prompt/execute.md
++++ b/docs/prompt/execute.md
+@@ -371,6 +371,7 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
+ - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
+ - `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
+ - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法）；execute 阶段主审查文档为 `design.md`
++- `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：①前序阶段已实证 pass 结论（勿重验，封顶 15 条）②同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
+ - `{SPEC_ROOT}`、`{EXECUTE_RUN_ID}` → 审查范围分级段引用 task review.json 路径时使用（同 Step 5）
+ 
+ **提示词原文**
+@@ -382,6 +383,7 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
+ - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
++{PRIOR_REVIEW_FACTS}
+ {REVIEW_JSON_CONTRACT}
+   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
+ 
+diff --git a/docs/prompt/plan.md b/docs/prompt/plan.md
+index 97e0e00..bfb3551 100644
+--- a/docs/prompt/plan.md
++++ b/docs/prompt/plan.md
+@@ -296,6 +296,7 @@ plan_level + 计划内容（审查在下一步独立进行）
+ - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json），由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
+ - `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
+ - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法，主审查文档为 plan.md）
++- `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：①前序阶段已实证 pass 结论（勿重验，封顶 15 条）②同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
+ 
+ > 注：prompt 正文中的 `<change>`（出现在 `{SPEC_ROOT}/changes/<change>/plan.md`）是源码里的内联占位文案，运行时不经全局 `<xxx>` 替换器，CLI 注入时保留字面，由 agent 自行解读为当前变更名。
+ 
+@@ -328,6 +329,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - [ ] acceptance 字段对照实际 schema/类型源文件核验存在性与形态，不凭 design.md 文字臆断（plan-postcheck best-effort grep 会给 allowed_paths 源文件未命中的 snake_case/camelCase 标识符提 warning，此处是语义层复查；臆断 = execute 阶段返工）
+ 
+ ### tier=independent 时：启动 plan-review 子代理
++{PRIOR_REVIEW_FACTS}
+ 用 Agent tool 启动子代理（subagent_type: general），prompt 要点：
+ 1. 独立读取 {SPEC_ROOT}/changes/<change>/plan.md + design.md + tasks/*.md（不要让生成者喂结论给你，自己读原始文件）
+ 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index b0a8831..19d5db4 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1042,7 +1042,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
+     try {
+       const { classifyReviewTier } = await import('../review-tier.js')
+-      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority, getLatestStageReviewRunId } = await import('../stage-review.js')
++      const { generateStageReviewRunId, renderReviewJsonContract, stageReviewMarkerPath, readReviewChannelPriority, getLatestStageReviewRunId, collectSameStagePriorReview, renderPriorRoundFindingsMd } = await import('../stage-review.js')
+       const tierSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       const tierChangeDir = changeName ? join(tierSpecBase, 'changes', changeName) : null
+       const designPath = tierChangeDir ? join(tierChangeDir, 'design.md') : null
+@@ -1110,6 +1110,18 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+           }
+         } catch {}
+       }
++      // 同阶段上一轮复审基线（ql-20260916-021，Superpowers scoped re-review 采纳①）：上一轮
++      // FAIL 的 findings 与已实证 pass 面机械回灌给复审子代理——复审以增量为主（核验修复 +
++      // 本次改版新增面），防全量重读与重复报告已修问题（独立复审子代理无对话历史，不知上一轮
++      // 审过什么/报过什么）。骨架轮/他变更轮由采集端过滤；tier=self 不注入（当前 agent 自带
++      // 上一轮上下文）。
++      try {
++        const priorRound = collectSameStagePriorReview(tierRuntimeRoot, stageName, changeName)
++        if (priorRound) {
++          const blockMd = renderPriorRoundFindingsMd(priorRound)
++          priorFactsMd = priorFactsMd ? priorFactsMd + blockMd : blockMd
++        }
++      } catch {}
+       promptText = promptText
+         .split('{REVIEW_TIER}').join(tier.tier)
+         .split('{REVIEW_TIER_REASON}').join(tier.reason)
+diff --git a/src/stage-review.js b/src/stage-review.js
+index 8d40c1c..5129588 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -422,6 +422,111 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
+   }
+ }
+ 
++/**
++ * 同阶段上一轮审查结论采集（ql-20260916-021，Superpowers scoped re-review 采纳①）。
++ *
++ * 复审派发 prompt 原本只有跨阶段 pass 结论注入（prompt.js {PRIOR_REVIEW_FACTS} 的前序阶段段），
++ * 同 stage 上一轮 FAIL 的 findings 与已实证 pass 面不回灌——独立复审子代理全量重读并重复报告
++ * 已修问题。本函数机械提取「该 stage 本变更最近一轮有效 review」的两份清单供回灌：
++ *   - openFindings：checklist result=fail/gap 的未决项（verdict=fail 但 checklist 无明细时以
++ *     reviewerNotes 合成一条，防 fail 轮零线索）；
++ *   - passItems：checklist result=pass 的已实证面（复审勿重复报告/重验，除非修复改动触及该面）。
++ *
++ * 采集规则：
++ *   - runId 字典序 = 时间序（generateStageReviewRunId 时间戳格式），取最新有效轮——含 marker
++ *     当前指向 run 的已写 review（同目录覆盖式复审路径下它就是最新轮，无需调用方区分）；
++ *   - 跨变更过滤：reviewedFiles[0] 不含 `changes/<changeName>/` 的轮不采（与
++ *     getLatestStageReviewRunId 的 cross-change 防护同口径）；
++ *   - 骨架轮跳过（register-stage-review 生成的双 cannot_verify 待审骨架）；
++ *   - 坏 JSON 轮跳过不抛（best-effort）；两者皆空（无未决也无 pass 面）→ null。
++ *
++ * @param {string} runtimeRoot - .runtime 绝对路径
++ * @param {string} stage - brainstorm|plan|execute
++ * @param {string} changeName - 变更名（跨变更过滤锚）
++ * @returns {{ priorRunId: string, verdicts: string, openFindings: string[], passItems: string[], notesPreview: string }|null}
++ */
++export function collectSameStagePriorReview(runtimeRoot, stage, changeName) {
++  if (!runtimeRoot || !stage || !changeName) return null
++  const dir = join(runtimeRoot, 'stage-reviews')
++  if (!existsSync(dir)) return null
++  let entries
++  try {
++    entries = readdirSync(dir, { withFileTypes: true })
++      .filter(e => e.isDirectory() && e.name.startsWith(`${stage}-review-`))
++      .map(e => e.name)
++  } catch { return null }
++  if (entries.length === 0) return null
++
++  const candidates = []
++  for (const name of entries) {
++    const rp = join(dir, name, 'review.json')
++    if (!existsSync(rp)) continue
++    try {
++      const review = JSON.parse(readFileSync(rp, 'utf8'))
++      const r0 = Array.isArray(review.reviewedFiles) ? String(review.reviewedFiles[0]) : ''
++      if (!r0.includes(`changes/${changeName}/`)) continue
++      // 骨架占位跳过（register-stage-review 待审骨架：双 cannot_verify + 骨架 notes 标记）
++      const isSkeleton = review.specVerdict === 'cannot_verify' && review.qualityVerdict === 'cannot_verify'
++        && String(review.reviewerNotes || '').includes('骨架由 register-stage-review')
++      if (isSkeleton) continue
++      candidates.push({ runId: name.slice(stage.length + 1), review })
++    } catch { continue }
++  }
++  if (candidates.length === 0) return null
++
++  candidates.sort((a, b) => a.runId.localeCompare(b.runId))
++  const latest = candidates[candidates.length - 1]
++  const openFindings = []
++  const passItems = []
++  for (const c of (Array.isArray(latest.review.checklist) ? latest.review.checklist : [])) {
++    if (!c || typeof c !== 'object' || !c.item) continue
++    const text = String(c.item).replace(/\s+/g, ' ').slice(0, 120)
++    if (c.result === 'fail' || c.result === 'gap') openFindings.push(`[${c.result}] ${text}`)
++    else if (c.result === 'pass') passItems.push(text)
++  }
++  // verdict=fail 但 checklist 无明细：fail 结论不丢线索——notes 合成一条（复审者据此核验）
++  if (openFindings.length === 0 && (latest.review.specVerdict === 'fail' || latest.review.qualityVerdict === 'fail')) {
++    const notes = String(latest.review.reviewerNotes || '').replace(/\s+/g, ' ').slice(0, 160)
++    openFindings.push(`[verdict-fail] verdict=fail 但 checklist 无明细——以 reviewerNotes 为准：${notes || '（无 notes）'}`)
++  }
++  if (openFindings.length === 0 && passItems.length === 0) return null
++  return {
++    priorRunId: latest.runId,
++    verdicts: `spec=${latest.review.specVerdict}, quality=${latest.review.qualityVerdict}`,
++    openFindings,
++    passItems,
++    notesPreview: String(latest.review.reviewerNotes || '').replace(/\s+/g, ' ').slice(0, 160),
++  }
++}
++
++/**
++ * renderPriorRoundFindingsMd——把 collectSameStagePriorReview 产物渲染为复审派发 prompt 的
++ * 回灌块（prompt.js 注入 {PRIOR_REVIEW_FACTS}，与前序阶段 pass 结论段同串拼接）。
++ *
++ * 语义双向：未决项**必须**逐项核验（已修给证据、未解决如实再次 fail——漏放行=假通过）；
++ * pass 面**勿重复报告/重验**（除非修复改动明确触及该面）——一堵一疏，复审以增量为主。
++ *
++ * @param {{ priorRunId: string, verdicts: string, openFindings: string[], passItems: string[] }|null} collected
++ * @param {number} [cap=15] 每段展示封顶（防 prompt 灌爆，对齐前序实证段的 15 条惯例）
++ * @returns {string} markdown 块；collected 空 → 空串
++ */
++export function renderPriorRoundFindingsMd(collected, cap = 15) {
++  if (!collected) return ''
++  const L = []
++  L.push(`**同阶段上一轮审查结论（run ${collected.priorRunId}，verdict ${collected.verdicts}）——本次为复审，以增量为主，不重演全量审查**：`)
++  if (collected.openFindings.length > 0) {
++    const shown = collected.openFindings.slice(0, cap)
++    L.push(`- **上一轮未决问题（逐项核验修复状态：已修给证据、未解决必须如实再次 fail——漏放行=假通过）**（${shown.length}/${collected.openFindings.length} 条）：`)
++    for (const f of shown) L.push(`  - ${f}`)
++  }
++  if (collected.passItems.length > 0) {
++    const shown = collected.passItems.slice(0, cap)
++    L.push(`- **上一轮已实证 pass 面（勿重复报告/重验——除非本次修复改动明确触及该面才定向复查）**（${shown.length}/${collected.passItems.length} 条）：`)
++    for (const p of shown) L.push(`  - ${p}`)
++  }
++  return `\n${L.join('\n')}\n`
++}
++
+ /**
+  * 降级自审检测（2026-09-10 用户反馈①：PI agent 等宿主环境无 Agent tool，tier=independent
+  * 硬要求子代理时只能降级自审——stage prompts 降级条款约定 reviewerNotes **首行**记
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index b09aa1e..d1b8e1d 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -385,6 +385,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self：当前 agent 直接执行下方交叉审查（小变更）
+ - tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
++{PRIOR_REVIEW_FACTS}
+ {REVIEW_JSON_CONTRACT}
+   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+   **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：
+diff --git a/test/stage-review-prior-round.test.mjs b/test/stage-review-prior-round.test.mjs
+new file mode 100644
+index 0000000..654efbb
+--- /dev/null
++++ b/test/stage-review-prior-round.test.mjs
+@@ -0,0 +1,233 @@
++/**
++ * 同阶段上一轮审查结论采集与回灌渲染单测（ql-20260916-021，Superpowers scoped re-review 采纳①）
++ *
++ * 背景：复审派发 prompt 原本只有跨阶段 pass 结论注入（{PRIOR_REVIEW_FACTS} 的前序阶段段），
++ * 同 stage 上一轮 FAIL 的 findings 与已实证 pass 面不回灌——独立复审子代理全量重读并重复
++ * 报告已修问题（obra/superpowers v6.2 scoped re-review 同款痛点）。
++ *
++ * 锁死契约：
++ * - collectSameStagePriorReview(runtimeRoot, stage, changeName)
++ *   - 取该 stage 本变更**最近一轮**有效 review（runId 字典序 = 时间序；含当前 marker 指向
++ *     run 的已写 review——同目录覆盖式复审路径下它就是最新轮）
++ *   - 跨变更过滤（reviewedFiles[0] 不含 changes/<changeName>/ 的轮不采）
++ *   - 骨架轮跳过（register-stage-review 生成的双 cannot_verify 待审骨架）
++ *   - 坏 JSON 轮跳过不抛
++ *   - checklist fail/gap → openFindings；pass → passItems；verdict=fail 但 checklist 无明细 →
++ *     reviewerNotes 合成一条；两者皆空 → null
++ * - renderPriorRoundFindingsMd(collected)
++ *   - 头行含 runId + verdicts + 增量复审指引
++ *   - openFindings 段（核验修复语义）与 passItems 段（勿重复报告语义）按存在渲染
++ *   - cap 截断展示「N/M 条」
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { collectSameStagePriorReview, renderPriorRoundFindingsMd } from '../src/stage-review.js'
++
++let passed = 0
++let failed = 0
++function assert(cond, msg) {
++  if (cond) { console.log(`✅ ${msg}`); passed++ }
++  else { console.error(`❌ ${msg}`); failed++ }
++}
++
++const CHANGE = 'demo-change'
++const STAGE = 'plan'
++
++/** 写一轮 stage review 到 runtimeRoot/stage-reviews/<stage>-<runId>/review.json */
++function writeRound(runtimeRoot, stage, runId, changeName, review) {
++  const dir = join(runtimeRoot, 'stage-reviews', `${stage}-${runId}`)
++  mkdirSync(dir, { recursive: true })
++  const base = { reviewedFiles: [`changes/${changeName}/plan.md`], ...review }
++  writeFileSync(join(dir, 'review.json'), JSON.stringify(base, null, 2))
++  return dir
++}
++
++// ── 场景 1：fail/gap/pass 拆分提取 + verdict 汇总 ─────────────────────────────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-1-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'pass',
++    checklist: [
++      { item: 'Wave 依赖成环：task-3 depends_on task-1', result: 'fail', note: '拓扑断裂' },
++      { item: 'plan_level 档位与复杂度不匹配', result: 'gap' },
++      { item: 'task 编号格式正确', result: 'pass' },
++    ],
++    reviewerNotes: 'fail：Wave 依赖成环需修复',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got !== null, '场景1：采到上一轮')
++  assert(got.priorRunId === 'review-2026-09-16-100000', '场景1：priorRunId 正确')
++  assert(got.verdicts === 'spec=fail, quality=pass', '场景1：verdicts 汇总正确')
++  assert(got.openFindings.length === 2, '场景1：openFindings=2（fail+gap）')
++  assert(got.openFindings[0].includes('[fail] Wave 依赖成环'), '场景1：fail 项带 [fail] 前缀')
++  assert(got.openFindings[1].includes('[gap] plan_level'), '场景1：gap 项带 [gap] 前缀')
++  assert(got.passItems.length === 1 && got.passItems[0].includes('task 编号格式'), '场景1：pass 面提取正确')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 2：多轮取最新 ────────────────────────────────────────────────────────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-2-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'fail',
++    checklist: [{ item: '旧问题A', result: 'fail' }],
++    reviewerNotes: '第一轮',
++  })
++  writeRound(rt, STAGE, 'review-2026-09-16-110000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'pass',
++    checklist: [{ item: '新问题B', result: 'gap' }, { item: '旧问题A 已修', result: 'pass' }],
++    reviewerNotes: '第二轮：A 已修，B 新发现',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got.priorRunId === 'review-2026-09-16-110000', '场景2：多轮取最新（110000）')
++  assert(got.openFindings.length === 1 && got.openFindings[0].includes('新问题B'), '场景2：openFindings 取最新轮的')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 3：跨变更过滤 ────────────────────────────────────────────────────────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-3-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'fail',
++    checklist: [{ item: '本变更问题', result: 'fail' }],
++    reviewerNotes: '本变更第一轮',
++  })
++  // 他变更的更新一轮（reviewedFiles 指向别的 change）——不得被采
++  writeRound(rt, STAGE, 'review-2026-09-16-120000', 'other-change', {
++    specVerdict: 'fail', qualityVerdict: 'fail',
++    checklist: [{ item: '他变更问题', result: 'fail' }],
++    reviewerNotes: '他变更',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got.priorRunId === 'review-2026-09-16-100000', '场景3：他变更的更新轮被过滤')
++  assert(got.openFindings[0].includes('本变更问题'), '场景3：采的是本变更轮')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 4：骨架轮跳过（取更早的真实轮） ─────────────────────────────────────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-4-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'fail',
++    checklist: [{ item: '骨架前真实问题', result: 'fail' }],
++    reviewerNotes: '真实第一轮',
++  })
++  // register-stage-review 生成的骨架（新 runId、双 cannot_verify、骨架 notes）
++  writeRound(rt, STAGE, 'review-2026-09-16-130000', CHANGE, {
++    specVerdict: 'cannot_verify', qualityVerdict: 'cannot_verify',
++    requiredEvidence: ['待独立审查子代理对照 plan.md 逐节核验（骨架由 register-stage-review 生成）'],
++    reviewerNotes: '骨架由 register-stage-review 生成，verdict 待独立审查子代理填写',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got.priorRunId === 'review-2026-09-16-100000', '场景4：骨架轮跳过，取更早真实轮')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 5：无效态 → null（无目录 / 全骨架 / 全他变更 / 坏 JSON） ────────────
++{
++  const rtEmpty = mkdtempSync(join(tmpdir(), 'sr-prior-round-5a-'))
++  assert(collectSameStagePriorReview(rtEmpty, STAGE, CHANGE) === null, '场景5a：无 stage-reviews 目录 → null')
++  rmSync(rtEmpty, { recursive: true, force: true })
++
++  const rtSkeleton = mkdtempSync(join(tmpdir(), 'sr-prior-round-5b-'))
++  writeRound(rtSkeleton, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'cannot_verify', qualityVerdict: 'cannot_verify',
++    reviewerNotes: '骨架由 register-stage-review 生成，verdict 待独立审查子代理填写',
++  })
++  assert(collectSameStagePriorReview(rtSkeleton, STAGE, CHANGE) === null, '场景5b：仅骨架轮 → null')
++  rmSync(rtSkeleton, { recursive: true, force: true })
++
++  const rtBad = mkdtempSync(join(tmpdir(), 'sr-prior-round-5c-'))
++  const badDir = join(rtBad, 'stage-reviews', `${STAGE}-review-2026-09-16-100000`)
++  mkdirSync(badDir, { recursive: true })
++  writeFileSync(join(badDir, 'review.json'), '{not valid json')
++  assert(collectSameStagePriorReview(rtBad, STAGE, CHANGE) === null, '场景5c：坏 JSON 轮跳过 → null（不抛）')
++  rmSync(rtBad, { recursive: true, force: true })
++}
++
++// ── 场景 6：marker 同 run 已写 review（同目录覆盖式复审）→ 它就是最新轮 ──────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-6-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-090000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'fail',
++    checklist: [{ item: '第一轮问题', result: 'fail' }],
++    reviewerNotes: '第一轮',
++  })
++  // 复审覆盖写同一 runId（prompt marker 复用 → 子代理再写同目录）
++  writeRound(rt, STAGE, 'review-2026-09-16-090000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'pass',
++    checklist: [{ item: '第二轮新问题', result: 'fail' }],
++    reviewerNotes: '同 run 覆盖复审',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got !== null && got.openFindings[0].includes('第二轮新问题'), '场景6：同 run 覆盖后采到的是最新内容')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 7：verdict=fail 但 checklist 无明细 → notes 合成 openFinding ─────────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-7-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'fail', qualityVerdict: 'fail',
++    reviewerNotes: 'fail：整体状态机与 design 冲突，需重写流转段',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got !== null && got.openFindings.length === 1, '场景7：无 checklist 时合成 1 条')
++  assert(got.openFindings[0].includes('状态机与 design 冲突'), '场景7：合成条目含 notes 内容')
++  assert(got.openFindings[0].includes('verdict-fail'), '场景7：合成条目带 [verdict-fail] 标记')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 8：全 pass 无未决（重开复审场景）→ pass 面仍回灌 ─────────────────────
++{
++  const rt = mkdtempSync(join(tmpdir(), 'sr-prior-round-8-'))
++  writeRound(rt, STAGE, 'review-2026-09-16-100000', CHANGE, {
++    specVerdict: 'pass', qualityVerdict: 'pass',
++    checklist: [{ item: '已实证结论X', result: 'pass' }],
++    reviewerNotes: '上一轮全过（变更重开后复审）',
++  })
++  const got = collectSameStagePriorReview(rt, STAGE, CHANGE)
++  assert(got !== null && got.openFindings.length === 0 && got.passItems.length === 1, '场景8：纯 pass 轮仍返回 pass 面')
++  rmSync(rt, { recursive: true, force: true })
++}
++
++// ── 场景 9：renderPriorRoundFindingsMd 渲染契约 ───────────────────────────────
++{
++  const md = renderPriorRoundFindingsMd({
++    priorRunId: 'review-2026-09-16-110000',
++    verdicts: 'spec=fail, quality=pass',
++    openFindings: ['[fail] Wave 依赖成环', '[gap] plan_level 档位'],
++    passItems: ['task 编号格式正确'],
++    notesPreview: '第二轮',
++  })
++  assert(md.includes('review-2026-09-16-110000'), '场景9：头行含 runId')
++  assert(md.includes('spec=fail, quality=pass'), '场景9：头行含 verdicts')
++  assert(md.includes('增量为主'), '场景9：含增量复审指引')
++  assert(md.includes('未决问题') && md.includes('[fail] Wave 依赖成环'), '场景9：未决段渲染')
++  assert(md.includes('勿重复报告') && md.includes('task 编号格式正确'), '场景9：pass 段渲染（勿重复报告语义）')
++  assert(md.includes('未解决必须如实再次 fail'), '场景9：未决项核验语义（漏放行=假通过防线）')
++
++  const mdPassOnly = renderPriorRoundFindingsMd({
++    priorRunId: 'review-2026-09-16-100000', verdicts: 'spec=pass, quality=pass',
++    openFindings: [], passItems: ['已实证结论X'], notesPreview: '',
++  })
++  assert(!mdPassOnly.includes('未决问题'), '场景9b：无未决不渲染未决段')
++  assert(mdPassOnly.includes('已实证结论X'), '场景9b：pass 段仍渲染')
++
++  assert(renderPriorRoundFindingsMd(null) === '', '场景9c：null → 空串')
++}
++
++// ── 场景 10：cap 截断（>15 条显示 15/N） ──────────────────────────────────────
++{
++  const many = Array.from({ length: 20 }, (_, i) => `[fail] 问题${i + 1}`)
++  const md = renderPriorRoundFindingsMd({
++    priorRunId: 'review-2026-09-16-100000', verdicts: 'spec=fail, quality=fail',
++    openFindings: many, passItems: [], notesPreview: '',
++  })
++  assert(md.includes('15/20 条'), '场景10：截断显示 15/20 条')
++  assert(!md.includes('问题20'), '场景10：第 20 条不进渲染')
++}
++
++console.log(`\n${passed} passed, ${failed} failed`)
++process.exit(failed > 0 ? 1 : 0)

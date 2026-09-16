@@ -94,3 +94,22 @@
 根因：E变更verify实证8格假uncovered（provider acceptance连不上消费卡测试）；端点提取器JSDoc示例被当真路由；撞车预警/per-repo skip/worktree环境失败无登记
 方案：probe7归属扩为本卡∪直接下游卡测试（depends_on反向单向）；stripCommentsKeepLength掩码接入Express/Spring提取器；known-issues三条登记
 结果：npm test 514文件0失败+lint过；acceptance-matrix-probe 60/60新增跨卡用例；contract-artifacts 41/41新增掩码用例；probe5族10/10零回归
+
+## ql-20260916-021-64c5 | 2026-09-16 22:55:41 | 同阶段复审findings回灌——复审prompt注入上一轮未决与已实证清单
+状态：已完成
+关联变更：（无）
+文件：
+- src/stage-review.js（collectSameStagePriorReview+renderPriorRoundFindingsMd 新导出（采集+渲染））
+- src/run/prompt.js（independent 档注入同阶段上一轮复审基线块）
+- src/stages/brainstorm.js（Design Grill 补 {PRIOR_REVIEW_FACTS} 占位符）
+- test/stage-review-prior-round.test.mjs（31 断言（采集/过滤/渲染契约））
+- docs/prompt/brainstorm.md（占位符镜像+文档行）
+- docs/prompt/plan.md（占位符镜像+文档行（补 ql-018 滞后））
+- docs/prompt/execute.md（占位符镜像+文档行（补 ql-018 滞后））
+- docs/prompt/_extracted.json（提取脚本重生成）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（变更索引行）
+需求：同阶段复审findings回灌——复审prompt注入上一轮未决与已实证清单
+根因：独立复审子代理无对话历史，同stage上一轮FAIL的findings与pass面不回灌，复审全量重读且重复报告已修问题（obra/superpowers v6.2 scoped re-review 对照采纳）
+方案：stage-review.js 新增 collectSameStagePriorReview（最近有效轮采集：跨变更过滤/骨架跳过/fail无明细notes合成）+renderPriorRoundFindingsMd（未决逐项核验+pass勿重复报告双向语义15条封顶）；prompt.js independent档注入拼进PRIOR_REVIEW_FACTS（self不注入）；brainstorm Design Grill 补占位符；docs/prompt 三md镜像同步
+结果：新增单测31断言绿；全量npm test EXIT 0；lint 过；CLI实测注入块渲染正确
+审计：[gate] L1（跨 3 模块 · 9 文件：3 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

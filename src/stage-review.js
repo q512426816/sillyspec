@@ -423,6 +423,111 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
 }
 
 /**
+ * 同阶段上一轮审查结论采集（ql-20260916-021，Superpowers scoped re-review 采纳①）。
+ *
+ * 复审派发 prompt 原本只有跨阶段 pass 结论注入（prompt.js {PRIOR_REVIEW_FACTS} 的前序阶段段），
+ * 同 stage 上一轮 FAIL 的 findings 与已实证 pass 面不回灌——独立复审子代理全量重读并重复报告
+ * 已修问题。本函数机械提取「该 stage 本变更最近一轮有效 review」的两份清单供回灌：
+ *   - openFindings：checklist result=fail/gap 的未决项（verdict=fail 但 checklist 无明细时以
+ *     reviewerNotes 合成一条，防 fail 轮零线索）；
+ *   - passItems：checklist result=pass 的已实证面（复审勿重复报告/重验，除非修复改动触及该面）。
+ *
+ * 采集规则：
+ *   - runId 字典序 = 时间序（generateStageReviewRunId 时间戳格式），取最新有效轮——含 marker
+ *     当前指向 run 的已写 review（同目录覆盖式复审路径下它就是最新轮，无需调用方区分）；
+ *   - 跨变更过滤：reviewedFiles[0] 不含 `changes/<changeName>/` 的轮不采（与
+ *     getLatestStageReviewRunId 的 cross-change 防护同口径）；
+ *   - 骨架轮跳过（register-stage-review 生成的双 cannot_verify 待审骨架）；
+ *   - 坏 JSON 轮跳过不抛（best-effort）；两者皆空（无未决也无 pass 面）→ null。
+ *
+ * @param {string} runtimeRoot - .runtime 绝对路径
+ * @param {string} stage - brainstorm|plan|execute
+ * @param {string} changeName - 变更名（跨变更过滤锚）
+ * @returns {{ priorRunId: string, verdicts: string, openFindings: string[], passItems: string[], notesPreview: string }|null}
+ */
+export function collectSameStagePriorReview(runtimeRoot, stage, changeName) {
+  if (!runtimeRoot || !stage || !changeName) return null
+  const dir = join(runtimeRoot, 'stage-reviews')
+  if (!existsSync(dir)) return null
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+      .filter(e => e.isDirectory() && e.name.startsWith(`${stage}-review-`))
+      .map(e => e.name)
+  } catch { return null }
+  if (entries.length === 0) return null
+
+  const candidates = []
+  for (const name of entries) {
+    const rp = join(dir, name, 'review.json')
+    if (!existsSync(rp)) continue
+    try {
+      const review = JSON.parse(readFileSync(rp, 'utf8'))
+      const r0 = Array.isArray(review.reviewedFiles) ? String(review.reviewedFiles[0]) : ''
+      if (!r0.includes(`changes/${changeName}/`)) continue
+      // 骨架占位跳过（register-stage-review 待审骨架：双 cannot_verify + 骨架 notes 标记）
+      const isSkeleton = review.specVerdict === 'cannot_verify' && review.qualityVerdict === 'cannot_verify'
+        && String(review.reviewerNotes || '').includes('骨架由 register-stage-review')
+      if (isSkeleton) continue
+      candidates.push({ runId: name.slice(stage.length + 1), review })
+    } catch { continue }
+  }
+  if (candidates.length === 0) return null
+
+  candidates.sort((a, b) => a.runId.localeCompare(b.runId))
+  const latest = candidates[candidates.length - 1]
+  const openFindings = []
+  const passItems = []
+  for (const c of (Array.isArray(latest.review.checklist) ? latest.review.checklist : [])) {
+    if (!c || typeof c !== 'object' || !c.item) continue
+    const text = String(c.item).replace(/\s+/g, ' ').slice(0, 120)
+    if (c.result === 'fail' || c.result === 'gap') openFindings.push(`[${c.result}] ${text}`)
+    else if (c.result === 'pass') passItems.push(text)
+  }
+  // verdict=fail 但 checklist 无明细：fail 结论不丢线索——notes 合成一条（复审者据此核验）
+  if (openFindings.length === 0 && (latest.review.specVerdict === 'fail' || latest.review.qualityVerdict === 'fail')) {
+    const notes = String(latest.review.reviewerNotes || '').replace(/\s+/g, ' ').slice(0, 160)
+    openFindings.push(`[verdict-fail] verdict=fail 但 checklist 无明细——以 reviewerNotes 为准：${notes || '（无 notes）'}`)
+  }
+  if (openFindings.length === 0 && passItems.length === 0) return null
+  return {
+    priorRunId: latest.runId,
+    verdicts: `spec=${latest.review.specVerdict}, quality=${latest.review.qualityVerdict}`,
+    openFindings,
+    passItems,
+    notesPreview: String(latest.review.reviewerNotes || '').replace(/\s+/g, ' ').slice(0, 160),
+  }
+}
+
+/**
+ * renderPriorRoundFindingsMd——把 collectSameStagePriorReview 产物渲染为复审派发 prompt 的
+ * 回灌块（prompt.js 注入 {PRIOR_REVIEW_FACTS}，与前序阶段 pass 结论段同串拼接）。
+ *
+ * 语义双向：未决项**必须**逐项核验（已修给证据、未解决如实再次 fail——漏放行=假通过）；
+ * pass 面**勿重复报告/重验**（除非修复改动明确触及该面）——一堵一疏，复审以增量为主。
+ *
+ * @param {{ priorRunId: string, verdicts: string, openFindings: string[], passItems: string[] }|null} collected
+ * @param {number} [cap=15] 每段展示封顶（防 prompt 灌爆，对齐前序实证段的 15 条惯例）
+ * @returns {string} markdown 块；collected 空 → 空串
+ */
+export function renderPriorRoundFindingsMd(collected, cap = 15) {
+  if (!collected) return ''
+  const L = []
+  L.push(`**同阶段上一轮审查结论（run ${collected.priorRunId}，verdict ${collected.verdicts}）——本次为复审，以增量为主，不重演全量审查**：`)
+  if (collected.openFindings.length > 0) {
+    const shown = collected.openFindings.slice(0, cap)
+    L.push(`- **上一轮未决问题（逐项核验修复状态：已修给证据、未解决必须如实再次 fail——漏放行=假通过）**（${shown.length}/${collected.openFindings.length} 条）：`)
+    for (const f of shown) L.push(`  - ${f}`)
+  }
+  if (collected.passItems.length > 0) {
+    const shown = collected.passItems.slice(0, cap)
+    L.push(`- **上一轮已实证 pass 面（勿重复报告/重验——除非本次修复改动明确触及该面才定向复查）**（${shown.length}/${collected.passItems.length} 条）：`)
+    for (const p of shown) L.push(`  - ${p}`)
+  }
+  return `\n${L.join('\n')}\n`
+}
+
+/**
  * 降级自审检测（2026-09-10 用户反馈①：PI agent 等宿主环境无 Agent tool，tier=independent
  * 硬要求子代理时只能降级自审——stage prompts 降级条款约定 reviewerNotes **首行**记
  * 「降级：环境无子代理可用」）。gate 侧配套：检测到该标记 → 放行但留 ⚠️ 审计行——独立性折损

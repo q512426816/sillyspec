@@ -449,6 +449,7 @@ design.md 文件路径 + 自审结果
 - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json），由 `review-tier.js` 按 plan_level / 变更文件数判定。映射见 README「占位符总表 — 动态块占位符」
 - `{REVIEW_TIER_REASON}` → 分级理由文案（如「变更文件 3 ≤ 3」或「plan_level=none...」）。映射见 README
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法；brainstorm 主审查文档为 design.md）。映射见 README
+- `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——brainstorm 无前序阶段，只有同阶段段。`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
 
 > **降级**：当 review-tier / stage-review 注入抛异常时，`{REVIEW_TIER}`→`self`、`{REVIEW_TIER_REASON}`→`分级异常降级 self: <err>`、`{REVIEW_JSON_CONTRACT}`→精简契约提示，避免 prompt 残留裸占位符（详见 README）。
 
@@ -465,6 +466,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 直接执行下方交叉审查（小变更）
 - tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+{PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
 

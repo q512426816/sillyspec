@@ -1,0 +1,132 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-3b4db40e",
+  "totals": {
+    "files": 9,
+    "additions": 366,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 7,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "declared": true,
+      "additions": 13,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-review.js",
+      "declared": true,
+      "additions": 105,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/stage-review-prior-round.test.mjs",
+      "declared": true,
+      "additions": 233,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 9,
+    "codeFileCount": 3,
+    "testFileCount": 1,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/prompt.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/stage-review.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/brainstorm.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/stage-review-prior-round.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-021-64c5",
+  "sessionId": "quick-3b4db40e",
+  "savedAt": "2026-09-16T15:11:04.565Z",
+  "patchSha256": "74c65f90cb2d310443afb4ed1862568d184ed5527112f7c070371058d4e5900f",
+  "patchStatus": "ok"
+}

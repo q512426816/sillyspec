@@ -371,6 +371,7 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
 - `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json）。由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
 - `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法）；execute 阶段主审查文档为 `design.md`
+- `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：①前序阶段已实证 pass 结论（勿重验，封顶 15 条）②同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
 - `{SPEC_ROOT}`、`{EXECUTE_RUN_ID}` → 审查范围分级段引用 task review.json 路径时使用（同 Step 5）
 
 **提示词原文**
@@ -382,6 +383,7 @@ Wave 3 的 prompt 结构与 Step 5（Wave 1）**完全相同**，由同一个 `b
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
 - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
+{PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
 
