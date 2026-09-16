@@ -1,0 +1,55 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-5d4805cd",
+  "totals": {
+    "files": 2,
+    "additions": 14,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/knowledge/INDEX.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/known-issues.md",
+      "declared": true,
+      "additions": 12,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260916-013-76ab",
+  "sessionId": "quick-5d4805cd",
+  "savedAt": "2026-09-16T03:02:14.059Z",
+  "patchSha256": "c981f339980ee09ab7f20fcbd7cceddf4373c1a823e81919563ce63049320157",
+  "patchStatus": "ok"
+}

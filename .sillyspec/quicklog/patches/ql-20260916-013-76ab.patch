@@ -1,0 +1,33 @@
+diff --git a/.sillyspec/knowledge/INDEX.md b/.sillyspec/knowledge/INDEX.md
+index 0356648..edf5548 100644
+--- a/.sillyspec/knowledge/INDEX.md
++++ b/.sillyspec/knowledge/INDEX.md
+@@ -40,6 +40,8 @@ created_at: 2026-06-19T12:40:00+08:00
+ - WASM|sql.js|native|native binding → [known-issues.md#sqljs-wasm-only](known-issues.md#sqljs-wasm-only)
+ - 子包|packages|dashboard → [known-issues.md#sub-package-isolation](known-issues.md#sub-package-isolation)
+ - hook|worktree-guard|npm-test → [known-issues.md#hook-import-restriction](known-issues.md#hook-import-restriction)
++- worktree|跨仓|隔离|锚点|cd ../|readonlyCommands|路径感知 → [known-issues.md#worktree-隔离期跨仓命令锚定错位guard-无路径感知待立项](known-issues.md#worktree-隔离期跨仓命令锚定错位guard-无路径感知待立项)
++- QUICKLOG|多会话|剥离|条目交织|git add → [known-issues.md#QUICKLOG-多会话条目交织提交需手工剥离并行条目待立项](known-issues.md#QUICKLOG-多会话条目交织提交需手工剥离并行条目待立项)
+ - propose|死代码|deprecated → [known-issues.md#propose-死代码](known-issues.md#propose-死代码)
+ - 平台审核|approve|reject|SillyHub → [known-issues.md#平台审核占位](known-issues.md#平台审核占位)
+ - 无build|无lint|check-syntax → [known-issues.md#无-buildlint-框架](known-issues.md#无-buildlint-框架)
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index 1ee447d..a58ccbf 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -118,3 +118,15 @@ task 卡 frontmatter 的列表标量中出现 `X: `（半角冒号+空格，如
+ execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324? 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
+ 
+ **已根治**（ql-20260914-016-8786，2026-09-14）：index.js 补 wt-commit dispatch case（--change/-m/--pathspec-from-file/-- pathspec 解析 + worktree cwd 推断 changeName）+ help 注册；新增 test/wt-commit-dispatch.test.mjs 5 断言锁三面（接通/参数面/豁免补强——原 worktree-cwd-guard 断言「未知命令也算过」的弱口已收紧为鬼命令回归哨兵）。
++
++## worktree 隔离期跨仓命令锚定错位（guard 无路径感知，待立项）
++
++三仓项目（EHS 形态：主仓 + sub-grid-security/spdemo 兄弟仓）execute 期在 worktree 内跑跨仓测试命令 `cd ../sub-grid-security && npx eslint` 有两重坑：①**锚点错位**——`../` 相对 worktree 根解析到 `.sillyspec/.runtime/worktrees/` 而非主仓侧真实兄弟仓，命令跑错地方或直接失败；②**审批摩擦**——worktree-guard 的 isSingleCommandReadonly 是命令名白名单制（READONLY_COMMANDS + local.yaml worktreeHook.readonlyCommands 扩展），不解析 cd 目标路径、不感知 repos 注册表，`cd` 不在白名单 → 整条复合命令进人工审批。
++
++**修法建议（需完整流程立项，hook 语义变更勿 quick 赶工）**：guard 增加路径感知——复合命令中 `cd ../<name>`/`cd <相对>` 目标 resolve 后命中 local.yaml repos 注册仓根者：a) stderr 留痕提示锚点应为主仓侧真实路径；b) 测试/lint 类命令（npm test/npx eslint/node --test 等）在注册仓内放行+留痕；c) 写类命令维持拦截。同族症状参照：worktree-deps 侧 `../sub-grid-security` 越界误报已在 368c7e2 按 repos 注册根分类修复，guard 侧未动。（来源：2026-09-15 EHS 生产 depsModules 实证 + 2026-09-16 分析定性）
++
++## QUICKLOG 多会话条目交织（提交需手工剥离并行条目，待立项）
++
++QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整文件会夹带并行会话未完成条目（违反显式 pathspec 隔离纪律），只能"备份 → python 剥离并行条目 → commit pathspec → 恢复"四步舞。实证频次：2026-09-15/16 单个会话 6 次；e97251d（"QUICKLOG 与并行会话条目同文件未暂存，随其会话提交"）、42cef77（"以本变更暂存 blob 提交"）各自处理过同款。根因：单文件追加形态 × git 暂存按文件粒度 = 条目级归属无文件边界。
++
++**修法建议（中等完整流程变更，写入方/读取方/归档方全动）**：QUICKLOG 条目文件化——每 ql-ID 独立 sidecar 文件（`quicklog/entries/<ql-id>.md`），主文件退化为聚合渲染产物（命令重建或追加渲染）；提交按 sidecar 文件收编零剥离。可行性佐证：patches sidecar（`quicklog/patches/<ql>.json/.patch` 范围快照冻结件）已证明 per-ql 文件形态运转正常。注意轮转文件（QUICKLOG-qinyi-<日期>.md）也要一并纳入方案。（来源：2026-09-16 本会话 6 次剥离舞步 + 历史提交注记）

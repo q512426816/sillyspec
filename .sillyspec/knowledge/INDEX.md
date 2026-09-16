@@ -40,6 +40,8 @@ created_at: 2026-06-19T12:40:00+08:00
 - WASM|sql.js|native|native binding → [known-issues.md#sqljs-wasm-only](known-issues.md#sqljs-wasm-only)
 - 子包|packages|dashboard → [known-issues.md#sub-package-isolation](known-issues.md#sub-package-isolation)
 - hook|worktree-guard|npm-test → [known-issues.md#hook-import-restriction](known-issues.md#hook-import-restriction)
+- worktree|跨仓|隔离|锚点|cd ../|readonlyCommands|路径感知 → [known-issues.md#worktree-隔离期跨仓命令锚定错位guard-无路径感知待立项](known-issues.md#worktree-隔离期跨仓命令锚定错位guard-无路径感知待立项)
+- QUICKLOG|多会话|剥离|条目交织|git add → [known-issues.md#QUICKLOG-多会话条目交织提交需手工剥离并行条目待立项](known-issues.md#QUICKLOG-多会话条目交织提交需手工剥离并行条目待立项)
 - propose|死代码|deprecated → [known-issues.md#propose-死代码](known-issues.md#propose-死代码)
 - 平台审核|approve|reject|SillyHub → [known-issues.md#平台审核占位](known-issues.md#平台审核占位)
 - 无build|无lint|check-syntax → [known-issues.md#无-buildlint-框架](known-issues.md#无-buildlint-框架)
