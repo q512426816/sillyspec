@@ -4,9 +4,9 @@ created_at: 2026-06-01T09:05:00
 ---
 
 # sync
-> 最后更新：2026-09-14
-> 最近变更：ql-20260914-007（quick，change_deleted 回执噪音闸：平台已删变更的 409 幂等回执按变更名跨进程降噪——首报可见/窗口静默/推送成功清窗/手动 platform sync 旁路）
-> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js
+> 最后更新：2026-09-17
+> 最近变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件（当日 fb5bc11 事故外科拆回 76de238）：husky pre-commit 调 src/commit-guard.js，S1 quick 声明面对账（staged 含 ql patch json 读 rows[].declared，超面即警）+S2 跨变更目录检测，fail-open 只警告 exit 恒 0 + 命中写 write-audit.jsonl（via=commit-guard）复用法证链，钩子侧 true 兜底绝不拦人提交；AGENTS.md 第 18 条同步加厚 add/commit 同 pathspec 纪律）
+> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
 
 ## 职责
 SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。

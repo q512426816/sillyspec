@@ -22,5 +22,5 @@
 15. **quicklog 结构化落盘**：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
 16. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
 17. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
-18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
+18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec，且 **add 与 commit 用同一份清单**：`git commit -m "..." -- 文件1 文件2`——带 pathspec 的 commit 只提交这些路径，他侧已 staged 的条目既不被带走、也原样留给对方；裸 `git commit` 提交的是整个共享暂存区，他会话 add 过的文件会被一并扫入（2026-09-17 实证：add 带 pathspec 但 commit 裸跑，并行会话 5 个 staged 文件被带入）。核对暂存面固定用 `git diff --cached --name-only` 全量读取，禁用 `git status | grep -v` 过滤式核对（过滤正是致盲原因）；核对与提交分开两条命令执行，不得链在同一命令里（链行没有拦截点）。`.husky/pre-commit` 的 commit-guard 会警告超声明面的 staged 文件（只警告不阻断，见 src/commit-guard.js）。
 19. **会话启动先立身份**：agent 会话启动时 `export SILLYSPEC_SESSION_ID=<唯一标识>`（如 agent 名+任务名）——多会话并行时 change 所有权判定（apply / cleanup / assess 自动 apply / 归档对他会话活跃变更的接管拒绝）依赖此标识；缺省降级为 `anon@<主机名>` 机器级标识（只拦他机，同机并行不设防）。部分 harness 的 Bash 工具 shell 状态不持久（env 随命令丢失），此时接管类命令每条显式带 flag 回退：`sillyspec worktree apply <change> --session <唯一标识>`（`--session` 优先级高于 env）。

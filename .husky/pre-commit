@@ -1,0 +1,4 @@
+#!/bin/sh
+# 提交边界守卫（2026-09-17 裸 commit 扫入并行会话 staged 文件事故，AGENTS.md 第 18 条工具化）：
+# fail-open 只警告不阻断——node 缺失/脚本异常一律放行（|| true 双保险），警告走 stderr。
+node src/commit-guard.js || true

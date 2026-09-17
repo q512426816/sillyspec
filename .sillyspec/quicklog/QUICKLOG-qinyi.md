@@ -226,3 +226,19 @@
 方案：doctor-diagnostics.js 新增 D14 archive_integrity——遍历 changes/archive 逐目录核验任务全勾+plan.md 在场+注册表不可读必报不静默（#205 教训）；完成源 tasks.md 优先回退 plan.md，legacy 切换规则=tasks 有行 0 勾且 plan 至少 1 勾时以 plan 为完成源；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）
 结果：新测试 23/23 断言全绿（13 组含 legacy 切换/不可读不静默/CLI e2e）；全量 npm test 修复前后两轮均全绿、CLI --done 实测门禁复跑；lint 绿；真实仓首扫 offenders 43→18 份（消 0/N 全误报），真欠账=16 份老归档缺 plan.md+2 份近期归档测试任务勾选簿记漏翻（6 个测试文件俱在，工作真实完成，补勾与否留用户裁决）
 审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260917-008-b66b | 2026-09-17 22:05:55 | 提交边界守卫落地——AGENTS.md第18条加厚(L1)+husky pre-commit commit-guard(L2)…
+状态：已完成
+关联变更：（无）
+文件：
+- src/commit-guard.js（analyzeStagedFace纯函数可直测+main fail-open，git调用stdio管道化防漏噪）
+- .husky/pre-commit（新钩子node调commit-guard加true兜底，形态对齐pre-push）
+- test/commit-guard.test.mjs（新文件19断言）
+- AGENTS.md（第18条加厚——commit同pathspec/cached全量核对/禁链行+守卫指引）
+- .sillyspec/docs/sillyspec/modules/_module-map.yaml（sync模块paths补录commit-guard（lint硬门要求））
+- .sillyspec/docs/sillyspec/modules/sync.md（最近变更行+模块路径补commit-guard）
+需求：提交边界守卫落地——AGENTS.md第18条加厚(L1)+husky pre-commit commit-guard(L2)，根治裸commit扫入并行会话staged文件的事故类
+根因：git暂存区是多会话共享状态，裸commit提交的是整个暂存区——今日实证add带pathspec但commit裸跑仍把他会话5个staged文件扫入fb5bc11（事后reset --soft+pathspec外科手术拆回76de238）；纪律层(AGENTS.md)与工具层(钩子)需同时补，纪律会漏钩子不会漏
+方案：L1第18条加厚——add/commit同清单pathspec（git commit -m ... -- 文件，他侧staged不被带走）/核对固定git diff --cached --name-only全量禁grep过滤（过滤正是致盲原因）/核对与提交禁链行；L2新增src/commit-guard.js两信号——S1 quick声明面对账（staged含ql patch json时读rows[].declared声明面，超面即警，quicklog账本自身豁免）+S2跨变更目录检测（≥2个changes/name即警），fail-open只警告exit恒0（非git/json损坏/任何异常全静默放行，钩子侧true兜底双保险——钩子挂全会话共享绝不拦人提交），命中写write-audit.jsonl（via=commit-guard）复用法证链；.husky/pre-commit形态对齐既有pre-push；commit-guard录进sync模块（write-audit法证链家族）
+结果：19/19断言全绿（6单元+4e2e组，含真实事故复现组——夹带changes文件时stderr指名+write-audit审计行落盘）；全量npm test exit 0；lint首轮被module-map硬门拦（新src文件必须录模块——修复后补录sync模块paths+卡片）；开发中顺带修守卫两缺陷——execFileSync默认透传子进程stderr漏git usage噪音（显式stdio管道化）+非git目录git落--no-index模式行为差异实证
+审计：[gate] L1（跨 1 模块 · 5 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

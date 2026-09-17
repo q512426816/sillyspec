@@ -1,0 +1,335 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 5a76b91..197694f 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -162,6 +162,7 @@ modules:
+       - src/spec-sync.js
+       - src/sync-noise.js
+       - src/write-audit.js
++      - src/commit-guard.js
+ 
+   sillyhub-mcp:
+     status: active
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index dac0672..41c3ad1 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -4,9 +4,9 @@ created_at: 2026-06-01T09:05:00
+ ---
+ 
+ # sync
+-> 最后更新：2026-09-14
+-> 最近变更：ql-20260914-007（quick，change_deleted 回执噪音闸：平台已删变更的 409 幂等回执按变更名跨进程降噪——首报可见/窗口静默/推送成功清窗/手动 platform sync 旁路）
+-> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js
++> 最后更新：2026-09-17
++> 最近变更：ql-20260917-008-b66b（quick，提交边界守卫 commit-guard——根治裸 commit 扫入并行会话 staged 文件（当日 fb5bc11 事故外科拆回 76de238）：husky pre-commit 调 src/commit-guard.js，S1 quick 声明面对账（staged 含 ql patch json 读 rows[].declared，超面即警）+S2 跨变更目录检测，fail-open 只警告 exit 恒 0 + 命中写 write-audit.jsonl（via=commit-guard）复用法证链，钩子侧 true 兜底绝不拦人提交；AGENTS.md 第 18 条同步加厚 add/commit 同 pathspec 纪律）
++> 模块路径：src/sync.js、src/spec-sync.js、src/sync-noise.js、src/commit-guard.js（write-audit 见法证链注记）
+ 
+ ## 职责
+ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同步变更进度和文档、管理审批流程。
+diff --git a/AGENTS.md b/AGENTS.md
+index 223e233..25cde99 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -22,5 +22,5 @@
+ 15. **quicklog 结构化落盘**：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
+ 16. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
+ 17. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
+-18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
++18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec，且 **add 与 commit 用同一份清单**：`git commit -m "..." -- 文件1 文件2`——带 pathspec 的 commit 只提交这些路径，他侧已 staged 的条目既不被带走、也原样留给对方；裸 `git commit` 提交的是整个共享暂存区，他会话 add 过的文件会被一并扫入（2026-09-17 实证：add 带 pathspec 但 commit 裸跑，并行会话 5 个 staged 文件被带入）。核对暂存面固定用 `git diff --cached --name-only` 全量读取，禁用 `git status | grep -v` 过滤式核对（过滤正是致盲原因）；核对与提交分开两条命令执行，不得链在同一命令里（链行没有拦截点）。`.husky/pre-commit` 的 commit-guard 会警告超声明面的 staged 文件（只警告不阻断，见 src/commit-guard.js）。
+ 19. **会话启动先立身份**：agent 会话启动时 `export SILLYSPEC_SESSION_ID=<唯一标识>`（如 agent 名+任务名）——多会话并行时 change 所有权判定（apply / cleanup / assess 自动 apply / 归档对他会话活跃变更的接管拒绝）依赖此标识；缺省降级为 `anon@<主机名>` 机器级标识（只拦他机，同机并行不设防）。部分 harness 的 Bash 工具 shell 状态不持久（env 随命令丢失），此时接管类命令每条显式带 flag 回退：`sillyspec worktree apply <change> --session <唯一标识>`（`--session` 优先级高于 env）。
+diff --git a/.husky/pre-commit b/.husky/pre-commit
+new file mode 100644
+--- /dev/null
++++ b/.husky/pre-commit
+@@ -0,0 +1,4 @@
++#!/bin/sh
++# 提交边界守卫（2026-09-17 裸 commit 扫入并行会话 staged 文件事故，AGENTS.md 第 18 条工具化）：
++# fail-open 只警告不阻断——node 缺失/脚本异常一律放行（|| true 双保险），警告走 stderr。
++node src/commit-guard.js || true
+
+diff --git a/src/commit-guard.js b/src/commit-guard.js
+new file mode 100644
+--- /dev/null
++++ b/src/commit-guard.js
+@@ -0,0 +1,119 @@
++/**
++ * commit-guard.js — pre-commit 提交边界守卫（fail-open，只警告不阻断）。
++ *
++ * 为什么需要（2026-09-17 实证）：多会话共享仓里 git 暂存区是共享状态——他会话 git add 过的
++ * 文件会被本会话的裸 git commit 一并带走（当日事故：add 带 pathspec 但 commit 裸跑，并行
++ * 会话 5 个 staged 文件被扫入 fb5bc11，事后 reset --soft + pathspec 重提交外科手术拆回）。
++ * AGENTS.md 第 18 条已加厚为「add/commit 同清单 pathspec」，本守卫是同一约束的工具化兜底：
++ * 纪理会漏，钩子卡点不会漏（与 write-audit / concurrent-detect 同族——确定性的事 CLI 兜）。
++ *
++ * 信号（只警告，exit 恒 0）：
++ *   S1 quick 声明面对账：staged 含 .sillyspec/quicklog/patches/ql-<id>.json 时，读其
++ *      rows[].declared 声明面——staged 中超出声明面的文件（quicklog 账本/补丁自身除外）
++ *      即警告「疑似扫入他者文件」。
++ *   S2 跨变更目录：staged 里 .sillyspec/changes/<name>/（含 archive/）命中 ≥2 个不同
++ *      name → 警告「正常提交只携带一个变更的面」。
++ * 命中即 stderr 警告 + appendWriteAudit 留痕（via: 'commit-guard'）。
++ *
++ * fail-open 硬约束（钩子挂在所有会话共享的 .husky/ 上，守卫自身绝不拦任何人的提交）：
++ *   非 git 仓 / git 失败 / ql json 损坏 / 任何异常 → 静默 exit 0；钩子侧再垫 || true 双保险。
++ */
++import { execFileSync } from 'child_process'
++import { readFileSync, existsSync } from 'fs'
++import { join } from 'path'
++import { pathToFileURL } from 'url'
++import { appendWriteAudit } from './write-audit.js'
++
++const QUICKLOG_PREFIX = '.sillyspec/quicklog/'
++const QL_PATCH_JSON_RE = /^\.sillyspec\/quicklog\/patches\/ql-[^/]+\.json$/
++const CHANGES_RE = /^\.sillyspec\/changes\/(?:archive\/)?([^/]+)\//
++
++/**
++ * S1+S2 纯函数：staged 面 + ql patch json 映射 → 警告数组（无 git/文件系统依赖，可直测）。
++ * @param {string[]} stagedFiles staged 相对路径
++ * @param {Record<string, any>} qlPatches { json路径 → 解析结果 }（损坏的已由调用方跳过）
++ * @returns {{signal: string, files: string[], message: string}[]}
++ */
++export function analyzeStagedFace(stagedFiles, qlPatches) {
++  const staged = Array.isArray(stagedFiles) ? stagedFiles.filter((f) => typeof f === 'string' && f) : []
++  const warnings = []
++  // S1 quick 声明面对账
++  const qlJsons = staged.filter((f) => QL_PATCH_JSON_RE.test(f))
++  if (qlJsons.length > 0) {
++    const declared = new Set()
++    for (const j of qlJsons) {
++      const parsed = (qlPatches || {})[j]
++      if (!parsed || !Array.isArray(parsed.rows)) continue
++      for (const r of parsed.rows) {
++        if (r && r.declared && typeof r.path === 'string') declared.add(r.path)
++      }
++    }
++    if (declared.size > 0) {
++      const offending = staged.filter((f) => !f.startsWith(QUICKLOG_PREFIX) && !declared.has(f))
++      if (offending.length > 0) {
++        warnings.push({
++          signal: 'quick_declared_face_exceeded',
++          files: offending,
++          message: `staged 超出 quick 声明面（${qlJsons.map((f) => f.split('/').pop()).join(', ')}）：${offending.join('、')}——疑似扫入他者文件，核对是否该随本提交带走`,
++        })
++      }
++    }
++  }
++  // S2 跨变更目录
++  const changeNames = new Set()
++  for (const f of staged) {
++    const m = f.match(CHANGES_RE)
++    if (m) changeNames.add(m[1])
++  }
++  if (changeNames.size >= 2) {
++    warnings.push({
++      signal: 'multi_change_dirs_staged',
++      files: staged.filter((f) => CHANGES_RE.test(f)),
++      message: `staged 同时含 ${changeNames.size} 个变更目录（${[...changeNames].join('、')}）——正常提交只携带一个变更的面，疑似夹带并行会话产物`,
++    })
++  }
++  return warnings
++}
++
++function main() {
++  const cwd = process.cwd()
++  let staged = []
++  try {
++    staged = execFileSync('git', ['diff', '--cached', '--name-only'], {
++      cwd,
++      encoding: 'utf8',
++      // stderr 必须管道化：execFileSync 默认把子进程 stderr 透传给父进程——非 git 目录下
++      // git 落 --no-index 模式报 unknown option 的 usage 长文会漏进守卫 stderr（噪声）。
++      stdio: ['ignore', 'pipe', 'pipe'],
++    })
++      .split(/\r?\n/)
++      .map((s) => s.trim())
++      .filter(Boolean)
++  } catch {
++    return 0 // 非 git 仓 / git 异常 → 放行
++  }
++  if (staged.length === 0) return 0
++  const qlPatches = {}
++  for (const f of staged) {
++    if (!QL_PATCH_JSON_RE.test(f)) continue
++    try {
++      qlPatches[f] = JSON.parse(readFileSync(join(cwd, f), 'utf8'))
++    } catch { /* 单个 json 损坏 → 跳过该信号源，不连坐 */ }
++  }
++  const warnings = analyzeStagedFace(staged, qlPatches)
++  if (warnings.length === 0) return 0
++  for (const w of warnings) process.stderr.write(`⚠️ [commit-guard] ${w.message}\n`)
++  const specDir = join(cwd, '.sillyspec')
++  if (existsSync(specDir)) {
++    appendWriteAudit(specDir, {
++      via: 'commit-guard',
++      files: [...new Set(warnings.flatMap((w) => w.files))].slice(0, 20),
++      detail: { signals: warnings.map((w) => ({ signal: w.signal, files: w.files.slice(0, 20) })) },
++    })
++  }
++  return 0
++}
++
++// 直接执行（node src/commit-guard.js）才跑 main；被 import 时不跑
++const invokedDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
++if (invokedDirectly) process.exit(main())
+
+diff --git a/test/commit-guard.test.mjs b/test/commit-guard.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/commit-guard.test.mjs
+@@ -0,0 +1,155 @@
++/**
++ * commit-guard 提交边界守卫测试（2026-09-17 裸 commit 扫入事故的工具化兜底）。
++ *
++ * 覆盖：
++ *   单元（analyzeStagedFace 纯函数，无 git 依赖）：
++ *     1. 空输入 / 普通提交（无 quicklog 无 changes）→ 无警告
++ *     2. quick 正常提交（staged ⊆ 声明面 ∪ quicklog 账本自身）→ 无警告
++ *     3. quick 超声明面（夹带 changes/other/ 文件）→ quick_declared_face_exceeded
++ *     4. quicklog 账本/补丁自身不告警（QUICKLOG.md / ql.patch / ql.json）
++ *     5. 跨两变更目录 → multi_change_dirs_staged；archive/ 前缀同名归并
++ *     6. ql json 无 declared rows（rows 非数组/缺 declared）→ 不产 S1 信号
++ *   端到端（tmp git 仓跑 node src/commit-guard.js）：
++ *     7. 无 staged → exit 0 静默
++ *     8. 超面 staged → exit 0 + stderr 警告 + write-audit.jsonl 留痕 via=commit-guard
++ *     9. 非 git 目录 → exit 0 静默（fail-open）
++ *     10. 真实仓钩子形态自检：.husky/pre-commit 存在且含 commit-guard 调用 + || true
++ *
++ * 风格：自研 assert + tmp git 仓 fixture（同 doctor-archive-integrity.test.mjs）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs'
++import { join, dirname } from 'path'
++import { tmpdir } from 'os'
++import { spawnSync, execFileSync } from 'child_process'
++import { fileURLToPath } from 'url'
++
++import { analyzeStagedFace } from '../src/commit-guard.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (!condition) {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  } else {
++    console.log(`  ✅ PASS: ${msg}`)
++  }
++}
++
++const cliRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++function sh(cmd, cwd) {
++  return execFileSync(cmd, { cwd, encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'pipe'] })
++}
++
++function runGuard(cwd) {
++  const r = spawnSync(process.execPath, [join(cliRoot, 'src', 'commit-guard.js')], {
++    cwd,
++    encoding: 'utf8',
++  })
++  return { code: r.status, stdout: r.stdout || '', stderr: r.stderr || '' }
++}
++
++const QL_JSON_OK = { rows: [
++  { path: 'src/a.js', declared: true },
++  { path: 'test/a.test.mjs', declared: true },
++] }
++
++// ── 1. 空输入 / 普通提交 → 无警告 ──
++assert(analyzeStagedFace([], {}).length === 0, '1a 空 staged → 无警告')
++assert(analyzeStagedFace(['src/a.js', 'test/a.test.mjs', 'README.md'], {}).length === 0, '1b 普通提交（无 quicklog/changes）→ 无警告')
++
++// ── 2. quick 正常提交 → 无警告 ──
++{
++  const staged = ['src/a.js', 'test/a.test.mjs', '.sillyspec/quicklog/QUICKLOG-x.md', '.sillyspec/quicklog/patches/ql-1.json', '.sillyspec/quicklog/patches/ql-1.patch']
++  assert(analyzeStagedFace(staged, { '.sillyspec/quicklog/patches/ql-1.json': QL_JSON_OK }).length === 0, '2 staged ⊆ 声明面 ∪ quicklog 自身 → 无警告')
++}
++
++// ── 3. quick 超声明面 → quick_declared_face_exceeded ──
++{
++  const staged = ['src/a.js', 'test/a.test.mjs', '.sillyspec/quicklog/QUICKLOG-x.md', '.sillyspec/quicklog/patches/ql-1.json', '.sillyspec/changes/2026-09-17-other/f.md']
++  const w = analyzeStagedFace(staged, { '.sillyspec/quicklog/patches/ql-1.json': QL_JSON_OK })
++  assert(w.length === 1 && w[0].signal === 'quick_declared_face_exceeded', '3a 超面 → S1 信号')
++  assert(w[0].files.join() === '.sillyspec/changes/2026-09-17-other/f.md', '3b 指名夹带文件（quicklog 自身与声明面不告）')
++}
++
++// ── 4. quicklog 账本/补丁自身不告警 ──
++{
++  const staged = ['.sillyspec/quicklog/QUICKLOG-x.md', '.sillyspec/quicklog/patches/ql-1.json', '.sillyspec/quicklog/patches/ql-1.patch']
++  assert(analyzeStagedFace(staged, { '.sillyspec/quicklog/patches/ql-1.json': QL_JSON_OK }).length === 0, '4 纯账本提交（无声明外文件）→ 无警告')
++}
++
++// ── 5. 跨两变更目录 → multi_change_dirs_staged ──
++{
++  const staged = ['.sillyspec/changes/change-a/f.md', '.sillyspec/changes/change-b/f.md', 'src/a.js']
++  const w = analyzeStagedFace(staged, {})
++  assert(w.length === 1 && w[0].signal === 'multi_change_dirs_staged', '5a 两变更目录 → S2 信号')
++  assert(w[0].files.length === 2, '5b files 只含 changes/ 面文件')
++  const wArch = analyzeStagedFace(['.sillyspec/changes/archive/change-a/f.md', '.sillyspec/changes/change-b/f.md'], {})
++  assert(wArch.length === 1 && wArch[0].signal === 'multi_change_dirs_staged', '5c archive/ 前缀也算变更名（a≠b 仍警告）')
++  const wSame = analyzeStagedFace(['.sillyspec/changes/change-a/f.md', '.sillyspec/changes/change-a/g.md'], {})
++  assert(wSame.length === 0, '5d 同一变更目录多文件 → 不警告')
++}
++
++// ── 6. ql json 缺 declared → S1 静默（不误报） ──
++assert(analyzeStagedFace(['.sillyspec/quicklog/patches/ql-1.json', 'src/a.js'], { '.sillyspec/quicklog/patches/ql-1.json': { rows: [{ path: 'src/a.js', declared: false }] } }).length === 0, '6a rows 全 undeclared（声明面空）→ 不对账')
++assert(analyzeStagedFace(['.sillyspec/quicklog/patches/ql-1.json', 'src/a.js'], { '.sillyspec/quicklog/patches/ql-1.json': { broken: true } }).length === 0, '6b rows 非数组 → 跳过该信号源')
++
++// ── 7. 端到端：无 staged → exit 0 静默 ──
++{
++  const root = makeTmpDir('cg-7-')
++  sh('git init -q', root)
++  const r = runGuard(root)
++  assert(r.code === 0 && r.stderr === '', '7 无 staged → exit 0 静默')
++}
++
++// ── 8. 端到端：超面 staged → exit 0 + 警告 + write-audit 留痕 ──
++{
++  const root = makeTmpDir('cg-8-')
++  sh('git init -q', root)
++  writeFileSync(join(root, 'src-a.js'), 'a\n')
++  mkdirSync(join(root, '.sillyspec', 'quicklog', 'patches'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'quicklog', 'patches', 'ql-20260917-001-aaaa.json'), JSON.stringify(QL_JSON_OK))
++  mkdirSync(join(root, '.sillyspec', 'changes', '2026-09-17-other'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'changes', '2026-09-17-other', 'f.md'), 'x\n')
++  sh('git add -A', root)
++  // 造声明面：把 src-a.js 换名进声明再改 staged——直接用 json 声明 src-a.js，夹带 changes/ 文件
++  writeFileSync(join(root, '.sillyspec', 'quicklog', 'patches', 'ql-20260917-001-aaaa.json'), JSON.stringify({ rows: [{ path: 'src-a.js', declared: true }, { path: '.sillyspec/quicklog/patches/ql-20260917-001-aaaa.json', declared: true }] }))
++  sh('git add -A', root)
++  const r = runGuard(root)
++  assert(r.code === 0, '8a 超面 staged → exit 0（只警告不阻断）')
++  assert(r.stderr.includes('[commit-guard]') && r.stderr.includes('2026-09-17-other'), '8b stderr 警告指名夹带文件')
++  const auditPath = join(root, '.sillyspec', '.runtime', 'write-audit.jsonl')
++  assert(existsSync(auditPath), '8c write-audit.jsonl 已留痕')
++  const auditLine = readFileSync(auditPath, 'utf8').trim().split('\n').pop()
++  const audit = JSON.parse(auditLine)
++  assert(audit.via === 'commit-guard' && Array.isArray(audit.files) && audit.files.length > 0, '8d 审计行 via=commit-guard 且含文件清单')
++}
++
++// ── 9. 端到端：非 git 目录 → exit 0 静默（fail-open） ──
++{
++  const root = makeTmpDir('cg-9-')
++  const r = runGuard(root)
++  assert(r.code === 0 && r.stderr === '', '9 非 git 目录 → exit 0 静默')
++}
++
++// ── 10. 真实仓钩子形态自检 ──
++{
++  const hook = readFileSync(join(cliRoot, '.husky', 'pre-commit'), 'utf8')
++  assert(hook.includes('commit-guard.js') && hook.includes('|| true'), '10 .husky/pre-commit 调 commit-guard 且 || true 兜底')
++}
++
++for (const dir of tmpRoots) {
++  try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)
