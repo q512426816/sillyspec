@@ -57,16 +57,29 @@ test('parseHandoverRows：无段→[]；有效表行解析+占位行跳过+类�
     '| env-blocked | 集成测试 5 用例（zk/eureka/redis 不可达） | dev 基础设施恢复后同口径直跑，条件固化在测试类头注释 |',
     '| manual-acceptance | 三端联调（网页双菜单+小程序分包） | 按需求 8.1-8.4 逐条人工验收 |',
     '| db-script | 2026-09-15-rp-fix.sql | dev 库手工执行（先库后码同批部署） |',
+    '| 无 | 无 | 无 |',
+    '| manual-acceptance | 无明确验收标准 | 人工通读需求文档逐条核对 |',
     '| <待填> | <待填> | <待填> |',
     'prose 行忽略',
   ].join('\n')
   const items = parseHandoverRows(md)
-  assert.equal(items.length, 3, `占位行不计（实际 ${JSON.stringify(items)}）`)
+  assert.equal(items.length, 4, `占位行/裸「无」行不计（实际 ${JSON.stringify(items)}）`)
   assert.equal(items[0].type, 'env-blocked')
   assert.match(items[0].item, /集成测试/)
   assert.match(items[0].condition, /同口径直跑/)
   assert.equal(items[1].type, 'manual-acceptance')
   assert.equal(items[2].type, 'db-script')
+  assert.equal(items[3].item, '无明确验收标准', '「无」字开头但非裸「无」的真条目不误杀（精确相等口径）')
+})
+
+test('parseHandoverRows：裸「无」空表占位行整行过滤（骨架指引「结论=PASS/FAIL 写『无』」不再凑有效行数）', () => {
+  const md = [
+    '## 移交项（结构化） [层：人工判断——CLI 清单核验]',
+    '| 类型 | 条目 | 复跑/验收条件 |',
+    '|---|---|---|',
+    '| 无 | 无 | 无 |',
+  ].join('\n')
+  assert.deepEqual(parseHandoverRows(md), [], '整表仅裸「无」行 → 零有效行（条件④「partial 须有去向」不再被空表糊弄）')
 })
 
 test('parseHandoverRows：全角表格线/杂类型容错（unknown 保留原值供 agent 复核）', () => {

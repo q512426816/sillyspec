@@ -1,0 +1,199 @@
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index e728e59..687cbf4 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -1344,10 +1344,12 @@ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
+ //
+ // 「要不要集成证据」（validateVerifyOutputs 的 requiresEvidence）与「能不能写 PASS」（本
+ // validator）解耦：结论=PASS 时四个已知未验证区任一在场即 error——
+-//   ① 集成实测未跑（facts.integrationRan=not-ran，D-006 判定表）
+-//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」）
++//   ① 集成实测未跑（facts.integrationRan≠ran，D-006 判定表——字段不在场按未跑处理，与⑤同族口径）
++//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」；
++//   facts.handover 不在场=无法核对 blocking 行，fail-closed 拦下）
+ //   ③ db 脚本未声明执行（verify 时点文件集 ∩ db/**/*.sql 对账 facts.dbScriptDeclarations，D-012）
+-//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover）
++//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover——
++//   matrixPartialRows 不在场=无法核对矩阵，按含 partial 处理，仍以「零有效移交行」为触发前提）
+ //   附加：runtimeEndpointExcluded=true 且判级 integration/deployment-critical 且 handover 零行
+ //   → 计入①事实面（D-004/FR-03，仅判级时计入）。
+ //   ⑤ 接口冒烟未跑（facts.smokeRan≠ran，仅判级 integration/deployment-critical 时计入，
+@@ -1417,6 +1419,8 @@ export function evaluatePassEligibility(args) {
+   const factsMissing = !a.facts || typeof a.facts !== 'object'
+   const facts = factsMissing ? {} : a.facts
+   const handoverItems = (facts.handover && Array.isArray(facts.handover.items)) ? facts.handover.items : []
++  const handoverFieldMissing = !factsMissing && !(facts.handover && Array.isArray(facts.handover.items))
++  const matrixPartialMissing = !factsMissing && facts.matrixPartialRows == null
+   const blockingRows = handoverItems.filter(it => it && it.severity === 'blocking')
+   const criticalLevel = a.changeRiskProfile && ['integration-critical', 'deployment-critical'].includes(a.changeRiskProfile.level)
+   const NOTES_FIX = '改写结论为 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）'
+@@ -1429,24 +1433,30 @@ export function evaluatePassEligibility(args) {
+     )
+   }
+ 
+-  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败）
+-  if (factsMissing || facts.integrationRan === 'not-ran') {
+-    triggered.push({ fact: 'integration-not-run', detail: factsMissing ? 'facts 缺失（fail-closed 按未跑处理）' : 'facts.integrationRan=not-ran' })
++  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败；
++  // 字段不在场 fail-closed 按未跑处理——⑤同族口径，防存量底稿缺字段静默 PASS）
++  if (factsMissing || facts.integrationRan !== 'ran') {
++    const integrationDetail = factsMissing
++      ? 'facts 缺失（fail-closed 按未跑处理）'
++      : `facts.integrationRan=${facts.integrationRan == null ? '不在场（按未跑处理）' : facts.integrationRan}`
++    triggered.push({ fact: 'integration-not-run', detail: integrationDetail })
+     errors.push(
+-      `[fact integration-not-run] 集成实测未跑（${factsMissing ? 'verify-facts.json 缺失，fail-closed 按未跑处理' : 'facts.integrationRan=not-ran'}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
+-      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts；仍未跑则${NOTES_FIX}承载（不算失败）。`
++      `[fact integration-not-run] 集成实测未跑（${integrationDetail}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
++      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts（字段不在场多为存量底稿未含新字段，重跑即刷新）；仍未跑则${NOTES_FIX}承载（不算失败）。`
+     )
+   }
+ 
+-  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥）
+-  if (factsMissing || blockingRows.length > 0) {
++  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥；facts.handover 不在场=无法核对，fail-closed）
++  if (factsMissing || handoverFieldMissing || blockingRows.length > 0) {
+     const list = blockingRows.map(it => `${it.type || '未知类型'}｜${String(it.item || '').slice(0, 60)}`).join('；')
+-    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : `${blockingRows.length} 条 blocking 行：${list}` })
++    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : handoverFieldMissing ? 'facts.handover 不在场（fail-closed 无法核对）' : `${blockingRows.length} 条 blocking 行：${list}` })
+     errors.push(
+       `[fact blocking-handover-present] ${factsMissing
+         ? '移交项 blocking 级行无法核对（verify-facts.json 缺失，fail-closed 按在场触发）'
+-        : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
+-      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : list}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
++        : handoverFieldMissing
++          ? '移交项 blocking 级行无法核对（facts.handover 不在场——存量底稿未含该字段或管线故障，fail-closed 拦下；重跑 verify-probes 幂等刷新 facts 即可消解）'
++          : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
++      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : (list || '（handover 不可核对，无行可列）')}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
+     )
+   }
+ 
+@@ -1462,11 +1472,18 @@ export function evaluatePassEligibility(args) {
+     )
+   }
+ 
+-  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向）
+-  if (factsMissing || ((facts.matrixPartialRows || 0) > 0 && handoverItems.length === 0)) {
+-    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
++  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向；
++  // matrixPartialRows 不在场=无法核对矩阵，fail-closed 按含 partial 处理，触发前提仍是零有效移交行——
++  // 有真移交行在场即「去向已承载」，不因字段缺失误拦）
++  if (factsMissing || ((matrixPartialMissing || facts.matrixPartialRows > 0) && handoverItems.length === 0)) {
++    const matrixDesc = factsMissing
++      ? '（facts 缺失，无法核对——fail-closed）'
++      : matrixPartialMissing
++        ? '（facts.matrixPartialRows 不在场，无法核对——fail-closed 按含 partial 处理；重跑 verify-probes 刷新 facts 即可消解）'
++        : `${facts.matrixPartialRows} 行 partial/uncovered`
++    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : matrixPartialMissing ? 'facts.matrixPartialRows 不在场（fail-closed 按含 partial 处理）且 handover 零有效行' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
+     errors.push(
+-      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : `${facts.matrixPartialRows} 行 partial/uncovered`} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
++      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${matrixDesc} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
+     )
+   }
+ 
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index dbce15f..0bea3c0 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -1779,6 +1779,8 @@ export function parseHandoverRows(md) {
+     const condition = row[3].trim()
+     if (type === '类型' || /^-{2,}$/.test(type.replace(/\|/g, ''))) continue // 表头/分隔行
+     if (type.startsWith('<') || item.startsWith('<')) continue // 骨架占位行
++    if (type === '无' || item === '无') continue // 裸「无」行=骨架指引的空表占位（结论=PASS/FAIL 写「无」）——
++    // 真「无可移交」的合法表达是矩阵干净+零有效行，不是一行无；精确相等防误杀「无明确去向」类真条目
+     if (!type || !item) continue
+     const normalizedType = type.toLowerCase().replace(/[\s_]+/g, '-')
+     items.push({
+diff --git a/test/acceptance-matrix-gate.test.mjs b/test/acceptance-matrix-gate.test.mjs
+index 3c35ab3..fcf5179 100644
+--- a/test/acceptance-matrix-gate.test.mjs
++++ b/test/acceptance-matrix-gate.test.mjs
+@@ -281,7 +281,7 @@ function verifyDoc(bodyLines, conclusion = 'PASS') {
+   const { root, cn } = makeChange('gate-notasks', {
+     strict: true, withTasks: false,
+     verifyMd: verifyDoc(['正文无矩阵段']),
+-    facts: { schemaVersion: 2, integrationRan: 'ran', dbScriptDeclarations: [], runtimeEndpointExcluded: false, matrixPartialRows: 0 },
++    facts: { schemaVersion: 2, integrationRan: 'ran', handover: { count: 0, items: [] }, dbScriptDeclarations: [], runtimeEndpointExcluded: false, matrixPartialRows: 0 },
+   })
+   const r = runValidators('verify', root, cn)
+   assert(r.ok === true
+diff --git a/test/pass-eligibility.test.mjs b/test/pass-eligibility.test.mjs
+index 80a20f9..2ce0cff 100644
+--- a/test/pass-eligibility.test.mjs
++++ b/test/pass-eligibility.test.mjs
+@@ -108,6 +108,40 @@ test('A. 封顶四态：结论=PASS 时四事实条件各一态独立触发，tr
+     `封顶 error 文案含修复指引（改写 PASS WITH NOTES + 补「## 移交项（结构化）」）（实际 ${JSON.stringify(all.errors.map(e => e.slice(0, 60)))}）`)
+ })
+ 
++// ═══════════════════════════════════════════════════════════════════
++// A2. 缺字段 fail-closed（批次A审核收口）：facts 在场但关键字段不在场——①②④对齐⑤同族口径
++// 拦下；真移交行在场时④不因字段缺失误拦（去向已承载）；factsExpected=false 存量边界不收窄
++// ═══════════════════════════════════════════════════════════════════
++test('A2. 缺字段 fail-closed：①integrationRan不在场按未跑；②handover不在场无法核对；④matrixPartialRows不在场按含partial；真移交行在场④不误拦', () => {
++  const base = { conclusion: 'PASS', factsExpected: true }
++  // ① facts 在场但 integrationRan 字段不在场 → 按未跑处理（批次A归档样本实证过的软开洞）
++  const factsNoIntegration = CLEAN_FACTS(); delete factsNoIntegration.integrationRan
++  const r1 = evaluatePassEligibility({ ...base, facts: factsNoIntegration })
++  assert.ok(r1.ok === false && r1.triggered.some(t => t.fact === 'integration-not-run'),
++    `①integrationRan 不在场 → fail-closed 按未跑触发（实际 ${JSON.stringify(r1.triggered)}）`)
++  assert.ok(r1.errors.some(e => e.includes('不在场（按未跑处理）')), '①文案标注字段不在场口径（⑤同族）')
++  // ② facts 在场但 handover 字段不在场 → blocking 行无法核对 → fail-closed
++  const factsNoHandover = CLEAN_FACTS(); delete factsNoHandover.handover
++  const r2 = evaluatePassEligibility({ ...base, facts: factsNoHandover })
++  assert.ok(r2.ok === false && r2.triggered.some(t => t.fact === 'blocking-handover-present'),
++    `②handover 不在场 → 无法核对 fail-closed 触发（实际 ${JSON.stringify(r2.triggered)}）`)
++  assert.ok(r2.errors.some(e => e.includes('facts.handover 不在场')), '②文案标注 handover 不可核对')
++  // ④ matrixPartialRows 不在场 + 零有效移交行 → 按含 partial 处理
++  const factsNoMatrix = CLEAN_FACTS(); delete factsNoMatrix.matrixPartialRows
++  const r4 = evaluatePassEligibility({ ...base, facts: factsNoMatrix })
++  assert.ok(r4.ok === false && r4.triggered.some(t => t.fact === 'matrix-partial-no-handover'),
++    `④matrixPartialRows 不在场 + 零移交行 → fail-closed 按含 partial 触发（实际 ${JSON.stringify(r4.triggered)}）`)
++  // 防误拦：matrixPartialRows 不在场但有真 advisory 移交行承载 → ④不触发（④管有无去向，有去向不因字段缺失升级为拦）
++  const r4b = evaluatePassEligibility({
++    ...base,
++    facts: { ...factsNoMatrix, handover: { count: 1, items: [{ type: 'manual-acceptance', item: '人工验收', condition: '按 8.1 逐条', severity: 'advisory' }] } },
++  })
++  assert.ok(r4b.ok === true, '④matrixPartialRows 不在场 + 真移交行在场 → 放行（去向已承载不误拦）')
++  // 存量边界：factsExpected=false → 缺字段同全缺，兼容 ok 不误伤（D-011 边界不因本收口收窄）
++  const legacy = evaluatePassEligibility({ conclusion: 'PASS', factsExpected: false, facts: {} })
++  assert.ok(legacy.ok === true, 'factsExpected=false 存量兼容边界不动')
++})
++
+ // ═══════════════════════════════════════════════════════════════════
+ // B. 全清态（FR-01 GWT2）——四条件全不成立放行；结论非 PASS 不封顶（零变化）
+ // ═══════════════════════════════════════════════════════════════════
+diff --git a/test/verify-handover-structured.test.mjs b/test/verify-handover-structured.test.mjs
+index fc2a6d2..2c4c4b8 100644
+--- a/test/verify-handover-structured.test.mjs
++++ b/test/verify-handover-structured.test.mjs
+@@ -57,16 +57,29 @@ test('parseHandoverRows：无段→[]；有效表行解析+占位行跳过+类
+     '| env-blocked | 集成测试 5 用例（zk/eureka/redis 不可达） | dev 基础设施恢复后同口径直跑，条件固化在测试类头注释 |',
+     '| manual-acceptance | 三端联调（网页双菜单+小程序分包） | 按需求 8.1-8.4 逐条人工验收 |',
+     '| db-script | 2026-09-15-rp-fix.sql | dev 库手工执行（先库后码同批部署） |',
++    '| 无 | 无 | 无 |',
++    '| manual-acceptance | 无明确验收标准 | 人工通读需求文档逐条核对 |',
+     '| <待填> | <待填> | <待填> |',
+     'prose 行忽略',
+   ].join('\n')
+   const items = parseHandoverRows(md)
+-  assert.equal(items.length, 3, `占位行不计（实际 ${JSON.stringify(items)}）`)
++  assert.equal(items.length, 4, `占位行/裸「无」行不计（实际 ${JSON.stringify(items)}）`)
+   assert.equal(items[0].type, 'env-blocked')
+   assert.match(items[0].item, /集成测试/)
+   assert.match(items[0].condition, /同口径直跑/)
+   assert.equal(items[1].type, 'manual-acceptance')
+   assert.equal(items[2].type, 'db-script')
++  assert.equal(items[3].item, '无明确验收标准', '「无」字开头但非裸「无」的真条目不误杀（精确相等口径）')
++})
++
++test('parseHandoverRows：裸「无」空表占位行整行过滤（骨架指引「结论=PASS/FAIL 写『无』」不再凑有效行数）', () => {
++  const md = [
++    '## 移交项（结构化） [层：人工判断——CLI 清单核验]',
++    '| 类型 | 条目 | 复跑/验收条件 |',
++    '|---|---|---|',
++    '| 无 | 无 | 无 |',
++  ].join('\n')
++  assert.deepEqual(parseHandoverRows(md), [], '整表仅裸「无」行 → 零有效行（条件④「partial 须有去向」不再被空表糊弄）')
+ })
+ 
+ test('parseHandoverRows：全角表格线/杂类型容错（unknown 保留原值供 agent 复核）', () => {

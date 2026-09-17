@@ -1779,6 +1779,8 @@ export function parseHandoverRows(md) {
     const condition = row[3].trim()
     if (type === '类型' || /^-{2,}$/.test(type.replace(/\|/g, ''))) continue // 表头/分隔行
     if (type.startsWith('<') || item.startsWith('<')) continue // 骨架占位行
+    if (type === '无' || item === '无') continue // 裸「无」行=骨架指引的空表占位（结论=PASS/FAIL 写「无」）——
+    // 真「无可移交」的合法表达是矩阵干净+零有效行，不是一行无；精确相等防误杀「无明确去向」类真条目
     if (!type || !item) continue
     const normalizedType = type.toLowerCase().replace(/[\s_]+/g, '-')
     items.push({

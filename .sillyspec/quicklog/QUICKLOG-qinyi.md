@@ -260,3 +260,42 @@
 方案：①doctor D14 增豁免账本 .sillyspec/archive-integrity-exempt.yaml（16 份逐份理由；账本内压红+账本外亮红+stale 提示+解析失败 fail-safe，新欠账禁止入账纪律钉头注释）②ir-hardening task-09 与 auto-driver task-06 补勾（六测试文件复核俱在直跑绿，补勾行内嵌审计注释引用本条 ql）③pre-push 追加 advisory 段（零阻断）④DB 漂移核实：listChanges 排除 archive，重激活归档行由 D4 ghostRows 覆盖，无缺口不加
 结果：D14 测试 23→33 断言全绿（+4 豁免组：压红/账本外仍红/stale/fail-safe）；真实仓复扫维度转绿（93 份完整+16 豁免，18→0）；全量 npm test exit 0+CLI 门禁实测复跑；模块卡+changelog 同步；ratchet 第二段待欠账稳定另裁
 审计：[gate] L1（跨 1 模块 · 6 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260918-001-5faf | 2026-09-18 06:49:35 | 批次A/C留档小债收口：①降级理由文法 HANDOVER_DOWNGRADE_REASON_RE 认 D-xxx@vN 带版本锚（现只认裸 D-\d+，批次A技术债务留档项）②test/check-syntax.mjs PENDING_EX…
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260918-002-8ad7 | 2026-09-18 06:50:50 | 批次A/C留档技术债务三项收口（降级文法vN锚/白名单清理/正则族单点）
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（降级文法正则增vN版本段+正则族收敛import消费）
+- src/change-risk-profile.js（三常量export单点化）
+- test/check-syntax.mjs（白名单清空）
+需求：批次A/C留档技术债务三项收口（降级文法vN锚/白名单清理/正则族单点）
+根因：批次A techdebt留档项+批次C QA N-2+批次A R-03长期项，均为范围明确局部修补无设计决策
+方案：①HANDOVER_DOWNGRADE_REASON_RE 增 (?:@\d+)? 可选版本段——D-005@v2 类带版本锚的降级理由文法现可命中（fail-closed 不变）②PENDING_EXPORT_WHITELIST Map 清空（五符号 18 处测试引用已全部落地，按白名单纪律删除条目留清空注释）③RECEIPT_SOURCE_CROSS_LAYER_RE/RECEIPT_SOURCE_UNIT_RE/CLI_SMOKE_SOURCE_MARK 三常量 export 单点化 change-risk-profile.js + verify-probes.js import 别名消费（RECEIPT_CROSS_LAYER_RE/RECEIPT_UNIT_RE/SMOKE_RECEIPT_SOURCE_MARK）——消灭双文件逐词同步口径漂移面（G-3 根因），后续增词只改一处
+结果：定向 50/0 全绿+lint 绿（671 文件未引用导出 0）；三项均验证通过
+审计：📝 文档欠账（D-8）：3 个源码文件改动未同步任何模块文档（涉及模块：core-engine · cli-entry）
+
+## ql-20260918-003-911c | 2026-09-18 07:37:35 | (quick 任务)
+状态：已取消
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260918-004-0e26 | 2026-09-18 07:38:37 | PASS封顶双软开洞修复——移交表裸「无」占位行被按有效行计数 + 封顶条件①②④对facts字段缺失fail-open（批次A验收审核P0/P1收口）
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（parseHandoverRows裸无行过滤（P0））
+- src/stage-contract.js（evaluatePassEligibility条件①②④缺字段fail-closed对齐⑤（P1））
+- test/pass-eligibility.test.mjs（A2缺字段块）
+- test/verify-handover-structured.test.mjs（裸无行回归钉）
+- test/acceptance-matrix-gate.test.mjs（夹具补handover字段）
+需求：PASS封顶双软开洞修复——移交表裸「无」占位行被按有效行计数 + 封顶条件①②④对facts字段缺失fail-open（批次A验收审核P0/P1收口）
+根因：骨架指引「结论=PASS/FAIL写『无』」与parseHandoverRows过滤规则存在契约缺口——裸无行被数成有效移交且未知类型保守映射成blocking（连带误伤apply门），批次A归档样本handover.count=1即一行无凑数；条件⑤已声明「字段不在场按未跑处理」同族口径但①只认等于not-ran、②④对handover/matrixPartialRows缺失零行为，A自身归档facts缺integrationRan/matrixPartialRows/smokeRan三字段仍PASS——门被自己的洞放行
+方案：verify-probes.js parseHandoverRows加裸「无」行过滤（type/item精确相等才跳过，防误杀「无明确去向」类真条目）；stage-contract.js条件①改为不等于ran并补不在场文案、②加handover字段缺失fail-closed分支、④matrixPartialRows缺失按含partial处理（触发前提仍是零有效移交行，真移交行在场不误拦）；factsExpected=false存量兼容边界零改动；测试三处——handover解析加整表裸无回归钉+精确相等防误杀、pass-eligibility加A2缺字段fail-closed块（含防误拦与存量边界断言）、acceptance-matrix-gate夹具补handover字段对齐新契约
+结果：定向45/45绿（pass-eligibility/verify-handover-structured/acceptance-matrix-gate/smoke-gate/verify-conclusion-slot五文件）；全量529/0绿；lint check-syntax 671文件绿
+审计：📝 文档欠账（D-8）：5 个源码文件改动未同步任何模块文档（涉及模块：core-engine）
+审计：[gate] L1（跨 1 模块 · 5 文件：2 代码/3 测试）advisory；每文件注记已全覆盖；测试增量已含

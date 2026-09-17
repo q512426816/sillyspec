@@ -281,7 +281,7 @@ function verifyDoc(bodyLines, conclusion = 'PASS') {
   const { root, cn } = makeChange('gate-notasks', {
     strict: true, withTasks: false,
     verifyMd: verifyDoc(['正文无矩阵段']),
-    facts: { schemaVersion: 2, integrationRan: 'ran', dbScriptDeclarations: [], runtimeEndpointExcluded: false, matrixPartialRows: 0 },
+    facts: { schemaVersion: 2, integrationRan: 'ran', handover: { count: 0, items: [] }, dbScriptDeclarations: [], runtimeEndpointExcluded: false, matrixPartialRows: 0 },
   })
   const r = runValidators('verify', root, cn)
   assert(r.ok === true

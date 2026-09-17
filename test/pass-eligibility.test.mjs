@@ -109,6 +109,40 @@ test('A. 封顶四态：结论=PASS 时四事实条件各一态独立触发，tr
 })
 
 // ═══════════════════════════════════════════════════════════════════
+// A2. 缺字段 fail-closed（批次A审核收口）：facts 在场但关键字段不在场——①②④对齐⑤同族口径
+// 拦下；真移交行在场时④不因字段缺失误拦（去向已承载）；factsExpected=false 存量边界不收窄
+// ═══════════════════════════════════════════════════════════════════
+test('A2. 缺字段 fail-closed：①integrationRan不在场按未跑；②handover不在场无法核对；④matrixPartialRows不在场按含partial；真移交行在场④不误拦', () => {
+  const base = { conclusion: 'PASS', factsExpected: true }
+  // ① facts 在场但 integrationRan 字段不在场 → 按未跑处理（批次A归档样本实证过的软开洞）
+  const factsNoIntegration = CLEAN_FACTS(); delete factsNoIntegration.integrationRan
+  const r1 = evaluatePassEligibility({ ...base, facts: factsNoIntegration })
+  assert.ok(r1.ok === false && r1.triggered.some(t => t.fact === 'integration-not-run'),
+    `①integrationRan 不在场 → fail-closed 按未跑触发（实际 ${JSON.stringify(r1.triggered)}）`)
+  assert.ok(r1.errors.some(e => e.includes('不在场（按未跑处理）')), '①文案标注字段不在场口径（⑤同族）')
+  // ② facts 在场但 handover 字段不在场 → blocking 行无法核对 → fail-closed
+  const factsNoHandover = CLEAN_FACTS(); delete factsNoHandover.handover
+  const r2 = evaluatePassEligibility({ ...base, facts: factsNoHandover })
+  assert.ok(r2.ok === false && r2.triggered.some(t => t.fact === 'blocking-handover-present'),
+    `②handover 不在场 → 无法核对 fail-closed 触发（实际 ${JSON.stringify(r2.triggered)}）`)
+  assert.ok(r2.errors.some(e => e.includes('facts.handover 不在场')), '②文案标注 handover 不可核对')
+  // ④ matrixPartialRows 不在场 + 零有效移交行 → 按含 partial 处理
+  const factsNoMatrix = CLEAN_FACTS(); delete factsNoMatrix.matrixPartialRows
+  const r4 = evaluatePassEligibility({ ...base, facts: factsNoMatrix })
+  assert.ok(r4.ok === false && r4.triggered.some(t => t.fact === 'matrix-partial-no-handover'),
+    `④matrixPartialRows 不在场 + 零移交行 → fail-closed 按含 partial 触发（实际 ${JSON.stringify(r4.triggered)}）`)
+  // 防误拦：matrixPartialRows 不在场但有真 advisory 移交行承载 → ④不触发（④管有无去向，有去向不因字段缺失升级为拦）
+  const r4b = evaluatePassEligibility({
+    ...base,
+    facts: { ...factsNoMatrix, handover: { count: 1, items: [{ type: 'manual-acceptance', item: '人工验收', condition: '按 8.1 逐条', severity: 'advisory' }] } },
+  })
+  assert.ok(r4b.ok === true, '④matrixPartialRows 不在场 + 真移交行在场 → 放行（去向已承载不误拦）')
+  // 存量边界：factsExpected=false → 缺字段同全缺，兼容 ok 不误伤（D-011 边界不因本收口收窄）
+  const legacy = evaluatePassEligibility({ conclusion: 'PASS', factsExpected: false, facts: {} })
+  assert.ok(legacy.ok === true, 'factsExpected=false 存量兼容边界不动')
+})
+
+// ═══════════════════════════════════════════════════════════════════
 // B. 全清态（FR-01 GWT2）——四条件全不成立放行；结论非 PASS 不封顶（零变化）
 // ═══════════════════════════════════════════════════════════════════
 test('B. 全清态：四条件全不成立 + PASS → 放行；NOTES/FAIL/未填时四条件在场也不封顶；②④分工', () => {

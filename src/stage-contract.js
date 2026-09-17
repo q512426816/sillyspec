@@ -1344,10 +1344,12 @@ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
 //
 // 「要不要集成证据」（validateVerifyOutputs 的 requiresEvidence）与「能不能写 PASS」（本
 // validator）解耦：结论=PASS 时四个已知未验证区任一在场即 error——
-//   ① 集成实测未跑（facts.integrationRan=not-ran，D-006 判定表）
-//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」）
+//   ① 集成实测未跑（facts.integrationRan≠ran，D-006 判定表——字段不在场按未跑处理，与⑤同族口径）
+//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」；
+//   facts.handover 不在场=无法核对 blocking 行，fail-closed 拦下）
 //   ③ db 脚本未声明执行（verify 时点文件集 ∩ db/**/*.sql 对账 facts.dbScriptDeclarations，D-012）
-//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover）
+//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover——
+//   matrixPartialRows 不在场=无法核对矩阵，按含 partial 处理，仍以「零有效移交行」为触发前提）
 //   附加：runtimeEndpointExcluded=true 且判级 integration/deployment-critical 且 handover 零行
 //   → 计入①事实面（D-004/FR-03，仅判级时计入）。
 //   ⑤ 接口冒烟未跑（facts.smokeRan≠ran，仅判级 integration/deployment-critical 时计入，
@@ -1417,6 +1419,8 @@ export function evaluatePassEligibility(args) {
   const factsMissing = !a.facts || typeof a.facts !== 'object'
   const facts = factsMissing ? {} : a.facts
   const handoverItems = (facts.handover && Array.isArray(facts.handover.items)) ? facts.handover.items : []
+  const handoverFieldMissing = !factsMissing && !(facts.handover && Array.isArray(facts.handover.items))
+  const matrixPartialMissing = !factsMissing && facts.matrixPartialRows == null
   const blockingRows = handoverItems.filter(it => it && it.severity === 'blocking')
   const criticalLevel = a.changeRiskProfile && ['integration-critical', 'deployment-critical'].includes(a.changeRiskProfile.level)
   const NOTES_FIX = '改写结论为 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）'
@@ -1429,24 +1433,30 @@ export function evaluatePassEligibility(args) {
     )
   }
 
-  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败）
-  if (factsMissing || facts.integrationRan === 'not-ran') {
-    triggered.push({ fact: 'integration-not-run', detail: factsMissing ? 'facts 缺失（fail-closed 按未跑处理）' : 'facts.integrationRan=not-ran' })
+  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败；
+  // 字段不在场 fail-closed 按未跑处理——⑤同族口径，防存量底稿缺字段静默 PASS）
+  if (factsMissing || facts.integrationRan !== 'ran') {
+    const integrationDetail = factsMissing
+      ? 'facts 缺失（fail-closed 按未跑处理）'
+      : `facts.integrationRan=${facts.integrationRan == null ? '不在场（按未跑处理）' : facts.integrationRan}`
+    triggered.push({ fact: 'integration-not-run', detail: integrationDetail })
     errors.push(
-      `[fact integration-not-run] 集成实测未跑（${factsMissing ? 'verify-facts.json 缺失，fail-closed 按未跑处理' : 'facts.integrationRan=not-ran'}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
-      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts；仍未跑则${NOTES_FIX}承载（不算失败）。`
+      `[fact integration-not-run] 集成实测未跑（${integrationDetail}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
+      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts（字段不在场多为存量底稿未含新字段，重跑即刷新）；仍未跑则${NOTES_FIX}承载（不算失败）。`
     )
   }
 
-  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥）
-  if (factsMissing || blockingRows.length > 0) {
+  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥；facts.handover 不在场=无法核对，fail-closed）
+  if (factsMissing || handoverFieldMissing || blockingRows.length > 0) {
     const list = blockingRows.map(it => `${it.type || '未知类型'}｜${String(it.item || '').slice(0, 60)}`).join('；')
-    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : `${blockingRows.length} 条 blocking 行：${list}` })
+    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : handoverFieldMissing ? 'facts.handover 不在场（fail-closed 无法核对）' : `${blockingRows.length} 条 blocking 行：${list}` })
     errors.push(
       `[fact blocking-handover-present] ${factsMissing
         ? '移交项 blocking 级行无法核对（verify-facts.json 缺失，fail-closed 按在场触发）'
-        : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
-      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : list}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
+        : handoverFieldMissing
+          ? '移交项 blocking 级行无法核对（facts.handover 不在场——存量底稿未含该字段或管线故障，fail-closed 拦下；重跑 verify-probes 幂等刷新 facts 即可消解）'
+          : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
+      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : (list || '（handover 不可核对，无行可列）')}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
     )
   }
 
@@ -1462,11 +1472,18 @@ export function evaluatePassEligibility(args) {
     )
   }
 
-  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向）
-  if (factsMissing || ((facts.matrixPartialRows || 0) > 0 && handoverItems.length === 0)) {
-    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
+  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向；
+  // matrixPartialRows 不在场=无法核对矩阵，fail-closed 按含 partial 处理，触发前提仍是零有效移交行——
+  // 有真移交行在场即「去向已承载」，不因字段缺失误拦）
+  if (factsMissing || ((matrixPartialMissing || facts.matrixPartialRows > 0) && handoverItems.length === 0)) {
+    const matrixDesc = factsMissing
+      ? '（facts 缺失，无法核对——fail-closed）'
+      : matrixPartialMissing
+        ? '（facts.matrixPartialRows 不在场，无法核对——fail-closed 按含 partial 处理；重跑 verify-probes 刷新 facts 即可消解）'
+        : `${facts.matrixPartialRows} 行 partial/uncovered`
+    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : matrixPartialMissing ? 'facts.matrixPartialRows 不在场（fail-closed 按含 partial 处理）且 handover 零有效行' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
     errors.push(
-      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : `${facts.matrixPartialRows} 行 partial/uncovered`} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
+      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${matrixDesc} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
     )
   }
 

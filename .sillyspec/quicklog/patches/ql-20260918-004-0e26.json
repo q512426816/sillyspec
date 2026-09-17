@@ -1,0 +1,91 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-4dc639bb",
+  "totals": {
+    "files": 5,
+    "additions": 85,
+    "deletions": 19
+  },
+  "rows": [
+    {
+      "path": "src/stage-contract.js",
+      "declared": true,
+      "additions": 34,
+      "deletions": 17,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/acceptance-matrix-gate.test.mjs",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/pass-eligibility.test.mjs",
+      "declared": true,
+      "additions": 34,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-handover-structured.test.mjs",
+      "declared": true,
+      "additions": 14,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 5,
+    "codeFileCount": 2,
+    "testFileCount": 3,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/stage-contract.js",
+          "src/verify-probes.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/acceptance-matrix-gate.test.mjs",
+      "test/pass-eligibility.test.mjs",
+      "test/verify-handover-structured.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260918-004-0e26",
+  "sessionId": "quick-4dc639bb",
+  "savedAt": "2026-09-17T23:48:08.719Z",
+  "patchSha256": "3bc8d608bc692e4a4d04d4540ee9cef4cf5011d875b0ccbc99eabf573d55ac59",
+  "patchStatus": "ok"
+}
