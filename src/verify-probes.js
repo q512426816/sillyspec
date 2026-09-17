@@ -32,6 +32,7 @@ import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDecisions } from './decision-distill.js'
 import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+import { RECEIPT_SOURCE_CROSS_LAYER_RE as RECEIPT_CROSS_LAYER_RE, RECEIPT_SOURCE_UNIT_RE as RECEIPT_UNIT_RE, CLI_SMOKE_SOURCE_MARK as SMOKE_RECEIPT_SOURCE_MARK } from './change-risk-profile.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
 
@@ -1748,7 +1749,7 @@ const HANDOVER_DEFAULT_SEVERITY = (type) =>
 // 降级理由文法（X-02）：（降级：<理由>，依据 <file:line 或 D-xxx>）——全角括号/冒号/逗号，
 // 依据锚点 D-xxx 或 file:line。JS 正则不转义全角括号（知识库坑）。blocking→advisory 降级
 // 未命中本文法 → 仍按 blocking（fail-closed，防「全标 advisory」钻空——D-005@v2）。
-const HANDOVER_DOWNGRADE_REASON_RE = /（降级：.+?，依据\s*(?:D-\d+|[^\s，）:]+:\d+)）/
+const HANDOVER_DOWNGRADE_REASON_RE = /（降级：.+?，依据\s*(?:D-\d+(?:@\d+)?|[^\s，）:]+:\d+)）/
 // severity 解析：显式 blocking 优先（混写保守）；显式 advisory 对 blocking 缺省类型构成降级，
 // 理由文法在第 4 列或条件列任一命中即认（骨架第 4 列定型前 producer 宽收两侧；抽查面归
 // checkProbeConsistency 消费侧后续任务）；两枚举都不含 → 缺省映射。
@@ -1839,17 +1840,10 @@ export function parseDbScriptDeclarations(md) {
 // 正则下全判 build 会误拦金路径，且脚本形态词表不可枚举（RECEIPT_CROSS_LAYER_RE 正则族
 // 零词变动）。对齐目标：change-risk-profile.js classifyReceiptSourceTag(sourceMark 参数与
 // CLI_SMOKE_SOURCE_MARK 常量)——**任一侧增改标记族必须双侧同步**（G-3 铁律）。
-const RECEIPT_CROSS_LAYER_RE = new RegExp([
-  '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
-  '\\biwr\\b', '\\birm\\b', 'https?://',
-  'spring-boot:run', '\\bjava\\b[^|\\n]*\\s-jar\\b',
-  '\\b(?:npm|pnpm|yarn|bun)\\s+(?:run\\s+)?(?:dev|start|serve|smoke)\\b',
-  '\\bdotnet\\s+run\\b', '\\bflask\\s+run\\b', '\\buvicorn\\b', '\\bgunicorn\\b',
-  '\\b(?:nc|netcat|telnet|socat)\\b',
-].join('|'), 'i')
-const RECEIPT_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+// （正则族单点收敛 ql-20260918-001：RECEIPT_CROSS_LAYER_RE/SMOKE_RECEIPT_SOURCE_MARK
+// 从 change-risk-profile.js 导入（RECEIPT_SOURCE_CROSS_LAYER_RE/CLI_SMOKE_SOURCE_MARK 别名）——
+// 消灭双文件逐词同步的口径漂移面（G-3 根因）。
 /** CLI 机器段来源标记（与 change-risk-profile.js CLI_SMOKE_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
-const SMOKE_RECEIPT_SOURCE_MARK = 'cli-noai-smoke'
 function classifyReceiptCommandSource(command, sourceMark) {
   if (sourceMark === SMOKE_RECEIPT_SOURCE_MARK) return 'cross-layer'
   const cmd = String(command || '')

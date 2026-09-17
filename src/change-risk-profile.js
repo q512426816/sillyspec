@@ -321,7 +321,7 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
 // 变动）。对齐目标：verify-probes.js classifyReceiptCommandSource（judgeIntegrationRan 消费）
 // 同款 sourceMark 参数与标记族——**任一侧增改标记族必须双侧同步**（G-3 先例：producer 侧
 // 曾漏 smoke 一词致口径分裂）。
-const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
+export const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
   '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
   '\\biwr\\b', '\\birm\\b', 'https?://',
   'spring-boot:run', '\\bjava\\b[^|\\n]*\\s-jar\\b',
@@ -329,9 +329,9 @@ const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
   '\\bdotnet\\s+run\\b', '\\bflask\\s+run\\b', '\\buvicorn\\b', '\\bgunicorn\\b',
   '\\b(?:nc|netcat|telnet|socat)\\b',
 ].join('|'), 'i')
-const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+export const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
 /** CLI 机器段来源标记（与 verify-probes.js SMOKE_RECEIPT_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
-const CLI_SMOKE_SOURCE_MARK = 'cli-noai-smoke'
+export const CLI_SMOKE_SOURCE_MARK = 'cli-noai-smoke'
 function classifyReceiptSourceTag(command, sourceMark) {
   if (sourceMark === CLI_SMOKE_SOURCE_MARK) return 'cross-layer'
   const cmd = String(command || '')

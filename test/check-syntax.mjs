@@ -57,17 +57,8 @@ const ENTRY_WHITELIST = new Set([
 // 分批落盘的契约导出——producer task 先落盘、consumer task 接线前零 src/+test 文本引用。
 // 条目必须带变更名与接线归期注释，接线落地（引用出现）后删除条目。
 const PENDING_EXPORT_WHITELIST = new Map([
-  // 2026-09-17-api-coverage-smoke task-04（api-face-parser 契约）：task-05 validator 经
-  // facts.apiFace/consumerHints 落盘通道消费（分层单向，不经 import）；ensure 补段与解析
-  // 五形态断言归 task-05 / task-07 test/api-coverage-matrix.test.mjs 接线。
-  ['parseDesignApiTable', 'src/verify-probes.js'],
-  ['classifyConsumerHints', 'src/verify-probes.js'],
-  ['ensureApiCoverageMatrixSection', 'src/verify-probes.js'],
-  // 2026-09-17-api-coverage-smoke task-05（api-coverage-validator 判定层契约）：X-09 双层形态
-  // 纯函数——壳 validateApiCoverageMatrix 在本文件注册面消费（注册行引用），纯函数导出供
-  // task-07 test/api-coverage-matrix.test.mjs 记账/锚点/降级断言接线，接线落地后删除条目。
-  ['extractApiCoverageMatrixSlots', 'src/stage-contract.js'],
-  ['judgeApiCoverageMatrix', 'src/stage-contract.js'],
+  // （清空——2026-09-17-api-coverage-smoke 五条目接线已全部落地：test/api-coverage-matrix.test.mjs
+  //  18 处引用覆盖全部符号，按白名单纪律删除。ql-20260918-001）
 ])
 const dynamicEntryPatterns = [
   /await import\('\.\/stages\/(\w+)\.js'\)/,   // stages/index.js registry
