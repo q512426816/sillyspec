@@ -212,3 +212,17 @@
 根因：静态枚举证实：sillyspec 自产文件一律 LF（taskcard/plan-adopt-waves 显式声明，fs.writeFileSync 字符串写盘跨平台 LF）；唯一的字节回放写入方=resolve --take-platform 的 _takePlatformSpecPaths（writeFileSync(full, data) 逐字节、循环内连写=毫秒级同 mtime、文件集=冲突集可恰为 3 个）与 pull --spec 整树解包；worktree apply 是主仓面批量写入（patch/merge）。三者的写入证据只有当次 console 打印（进程结束即蒸发）——法证级时间戳查询无落点
 方案：src/write-audit.js 新零依赖模块：appendWriteAudit(specDir, record) 追加 JSONL 到 .runtime/write-audit.jsonl（ts ISO/via/文件集/CRLF 画像，fail-open，WRITE_AUDIT_FILE_CAP=20 截断帽）+ detectCrlfFiles（Buffer.includes \r\n，string/Buffer 双形态）；三入口接线——_takePlatformSpecPaths 落 via:platform-resolve-take-platform（overwritten/removed/files/crlfPaths/crlfCount）+ CRLF 非空即时 warn（「他机编辑器产物按字节回放，autocrlf 提示属预期」防再误诊）；pullSpecBundle 解包落 via:pull-spec-bundle（fileCount/crlfCount，>4MB 大文件跳过采样）；applyWorktree merge 成功出口落 via:worktree-apply（manifestFace/删除面）；module-map sync 段补录 write-audit.js
 结果：test/write-audit.test.mjs 5 断言组全绿（JSONL 追加+目录自建/异常 fail-open/CRLF 混合面精确命中含二进制/三入口源文本锚/CAP 常量）；回归 12/12+17/17；全量 522/522 exit 0；lint 绿；下次「18:09 谁动了 design.md」查 write-audit.jsonl 一行即中
+
+## ql-20260917-007-b35d | 2026-09-17 21:45:44 | doctor 新增归档完整性重扫维度 archive_integrity（对标 OpenSpec validate --archived，能力先行钩子后置）
+状态：已完成
+关联变更：（无）
+文件：
+- src/doctor-diagnostics.js（D14 维度 detectArchiveIntegrity + runDoctorDiagnostics 注册，legacy 完成源切换规则钉在注释）
+- test/doctor-archive-integrity.test.mjs（新文件，13 断言组 23 断言）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（最近变更行+frontmatter 时间戳同步）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（边车追加 ql-007 行）
+需求：doctor 新增归档完整性重扫维度 archive_integrity（对标 OpenSpec validate --archived，能力先行钩子后置）
+根因：归档前门禁虽严，目录搬进 changes/archive 后无任何机制回头看——手工搬目录绕流程/归档后手改 tasks.md 无人发现；且 task-truth-unify 前旧归档完成态勾在 plan.md，朴素读 tasks.md 会全量误报
+方案：doctor-diagnostics.js 新增 D14 archive_integrity——遍历 changes/archive 逐目录核验任务全勾+plan.md 在场+注册表不可读必报不静默（#205 教训）；完成源 tasks.md 优先回退 plan.md，legacy 切换规则=tasks 有行 0 勾且 plan 至少 1 勾时以 plan 为完成源；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）
+结果：新测试 23/23 断言全绿（13 组含 legacy 切换/不可读不静默/CLI e2e）；全量 npm test 修复前后两轮均全绿、CLI --done 实测门禁复跑；lint 绿；真实仓首扫 offenders 43→18 份（消 0/N 全误报），真欠账=16 份老归档缺 plan.md+2 份近期归档测试任务勾选簿记漏翻（6 个测试文件俱在，工作真实完成，补勾与否留用户裁决）
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）

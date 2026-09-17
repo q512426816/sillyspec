@@ -1,0 +1,80 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-960d6e24",
+  "totals": {
+    "files": 4,
+    "additions": 317,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "declared": true,
+      "additions": 108,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/doctor-archive-integrity.test.mjs",
+      "declared": true,
+      "additions": 205,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/doctor-diagnostics.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/doctor-archive-integrity.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-007-b35d",
+  "sessionId": "quick-960d6e24",
+  "savedAt": "2026-09-17T13:57:02.629Z",
+  "patchSha256": "1f7ee70b5421d8d31f85fa285eb9eb8b87c59818c061d4cfaf212355eb569c76",
+  "patchStatus": "ok"
+}

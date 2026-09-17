@@ -1126,6 +1126,111 @@ export function detectSelfMaintenanceTax(cwd, authoritySpecDir) {
 }
 
 /**
+ * D14 归档完整性重扫（archive_integrity，2026-09-17 OpenSpec validate --archived 对标）。
+ *
+ * 为什么需要：归档前的完成门禁很严（review.json 驱动勾选 / Wave 断言 / verify 对账），
+ * 但目录搬进 changes/archive/ 后**没有任何机制回头看**——手工挪目录绕流程的自愈只在
+ * 下次 CLI 触碰时生效，归档后手改 tasks.md / 删 plan.md 无人发现。本维度补事后重扫：
+ *   ① 任务 checkbox 全勾（tasks.md 优先，回退 plan.md——读侧兼容同 D5/progress 口径；
+ *      归档后 runtime 工件已 prune，review.json 不可用，checkbox 是归档目录里唯一持久的完成面）
+ *   ② plan.md 在场（archive 自愈 findAlreadyArchivedDir 的基准文件）
+ *   ③ 注册表文件存在但读不了 → finding（OpenSpec #205 教训：读不了 ≠ 没任务，
+ *      检查不许在什么都没看的情况下静默通过）
+ * 语义：WARNING advisory 不阻断、只读无修复（钩子/门禁挂载是后续独立策略裁决）；
+ * 无 archive 目录 / 无 task 行 → pass（无任务视为完备，同 OpenSpec "nothing to complete"）。
+ */
+function detectArchiveIntegrity(cwd, authoritySpecDir) {
+  const base = { name: 'archive_integrity', label: '归档完整性重扫', safe_actions: [] };
+  if (!authoritySpecDir) {
+    return { ...base, pass: true, severity: null, findings: ['无权威 specDir，跳过'] };
+  }
+  const archiveDir = join(authoritySpecDir, 'changes', 'archive');
+  if (!existsSync(archiveDir)) {
+    return { ...base, pass: true, severity: null, findings: ['无 changes/archive 目录（未归档/新仓），跳过'] };
+  }
+  let entries;
+  try {
+    entries = readdirSync(archiveDir, { withFileTypes: true });
+  } catch (e) {
+    return { ...base, pass: false, severity: CHECK_SEVERITY.WARNING, findings: [`changes/archive 目录不可读（${e?.message || e}）——人工排查，不静默跳过`] };
+  }
+  const names = entries
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+    .map((d) => d.name)
+    .sort();
+  if (names.length === 0) {
+    return { ...base, pass: true, severity: null, findings: ['changes/archive 为空（无已归档变更）'], archive_count: 0, offenders: [] };
+  }
+  const offenders = [];
+  for (const name of names) {
+    const dir = join(archiveDir, name);
+    const reasons = [];
+    // ② plan.md 在场性
+    const planPath = join(dir, 'plan.md');
+    const hasPlan = existsSync(planPath);
+    if (!hasPlan) reasons.push('plan.md 缺失（归档自愈基准文件）');
+    // ①③ 任务注册表：tasks.md 优先回退 plan.md；存在但不可读必须显式报（区分「缺席」与「读不了」）。
+    // 2026-08-20-task-truth-unify 之前的旧归档完成态勾在 plan.md（tasks.md 是留给后人的未勾任务清单）——
+    // tasks.md 有 checkbox 行但 0 勾、而 plan.md 有 ≥1 勾时，完成证据在 plan.md，切 plan.md 为完成源
+    // （真实仓首扫实证：2026-05-31-sqlite-migration tasks 0/15 + plan 15/15，43 份 offenders 大半为此误报）。
+    const tasksPath = join(dir, 'tasks.md');
+    const readRegistry = (p) => {
+      const content = readFileSync(p, 'utf8');
+      // 与 progress.js readPlanCheckboxStatus 同正则（task- 前缀锚定，x/X 计勾）
+      const re = /^\s*[-*]\s+\[([ xX])\]\s+task-\d+/gm;
+      let t = 0;
+      let c = 0;
+      let m;
+      while ((m = re.exec(content)) !== null) {
+        t++;
+        if (m[1] !== ' ') c++;
+      }
+      return { total: t, checked: c };
+    };
+    const regPath = existsSync(tasksPath) ? tasksPath : hasPlan ? planPath : null;
+    if (regPath) {
+      try {
+        let stat = readRegistry(regPath);
+        if (regPath === tasksPath && stat.total > 0 && stat.checked === 0 && hasPlan) {
+          try {
+            const planStat = readRegistry(planPath);
+            if (planStat.total > 0 && planStat.checked > 0) stat = planStat;
+          } catch { /* plan.md 不可读 → 维持 tasks.md 0 勾口径（本就报未勾） */ }
+        }
+        if (stat.total > 0 && stat.checked < stat.total) {
+          reasons.push(`${stat.total - stat.checked} 个任务未勾（${stat.checked}/${stat.total}）`);
+        }
+      } catch (e) {
+        reasons.push(`任务注册表不可读（${relative(archiveDir, regPath)}：${e?.code || e?.message || e}）`);
+      }
+    }
+    if (reasons.length > 0) offenders.push({ name, reasons });
+  }
+  if (offenders.length === 0) {
+    return {
+      ...base,
+      pass: true,
+      severity: null,
+      findings: [`${names.length} 份归档完整（任务全勾 + plan.md 在场）`],
+      archive_count: names.length,
+      offenders: [],
+    };
+  }
+  const findings = offenders.slice(0, 10).map((o) => `${o.name}：${o.reasons.join('；')}`);
+  if (offenders.length > 10) findings.push(`…还有 ${offenders.length - 10} 份`);
+  findings.push('语义：归档=全勾终态；未勾/缺文件多为归档后手改或手工搬目录绕流程——git log 定位改动来源，doctor 只读不自动修');
+  return {
+    ...base,
+    pass: false,
+    severity: CHECK_SEVERITY.WARNING,
+    findings,
+    safe_actions: [{ dimension: 'archive_integrity', action: 'manual_inspect', risk: 'manual_edit', rationale: '归档完整性破损', next_step: '逐份核对 offenders：git log --follow .sillyspec/changes/archive/<name>/tasks.md 定位改动者与意图，确属历史遗留可补勾并注记，勿改语义' }],
+    archive_count: names.length,
+    offenders,
+  };
+}
+
+/**
  * renderDoctorSummary（FR-01，全新输出契约——2026-09-09-doctor-noai）：逐维
  * ✅/⚠️/❌ + label + findings 首行 + safe_actions 提示行。顶层非 --json 命令与
  * _cliAction 步共用。
@@ -1177,7 +1282,9 @@ export async function runDoctorDiagnostics({ cwd }) {
   const applyManifestDrift = detectApplyManifestDrift(cwd, authoritySpecDir)
   // task-02（2026-09-15-tax-governance）：自维护税面（活跃 tally 列示 + 台账聚合 + 税重阈值，只读）
   const selfMaintenanceTax = detectSelfMaintenanceTax(cwd, authoritySpecDir)
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax];
+  // D14（2026-09-17 archive-rescan，OpenSpec validate --archived 对标）：归档完整性事后重扫（只读 WARNING）
+  const archiveIntegrity = detectArchiveIntegrity(cwd, authoritySpecDir)
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity];
 
   return {
     dimensions,
