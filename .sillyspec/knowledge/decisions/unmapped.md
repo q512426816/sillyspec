@@ -64,3 +64,10 @@
 锚点：未记录
 最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
 理由：
+
+## D-004@v1 verify 阶段 prompt 锚点措辞三形态化（task-04 边界扩容）
+状态：implemented
+变更：2026-09-17-feedback-hardening
+锚点：未记录
+最近确认：60e90c1
+理由：扩 task-04 边界收口：src/stages/verify.js:163 措辞改三形态+行号可省；docs/prompt/verify.md 镜像 fence 手改同步（不跑 _extract.mjs——_extracted.json 正被并行会话 docs-bracket-reanchor 占用，避免 apply 面冲突；流水线刷新留其会话/后续统一跑）。
