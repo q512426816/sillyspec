@@ -1,0 +1,68 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "7e442af602ccd6f28845dce17d2046121f5154c2",
+  "totals": {
+    "files": 6,
+    "additions": 225,
+    "deletions": 34
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/interface-contract.md",
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 21,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/docs-check.js",
+      "additions": 14,
+      "deletions": 10,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/docs-gate.js",
+      "additions": 42,
+      "deletions": 15,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/docs-fix-capability.test.mjs",
+      "additions": 109,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/docs-gate.test.mjs",
+      "additions": 37,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "7f9a7323c2c2c89ad297120f68edaa7e9027af18fbe3c767196e7a3b10e3dadd",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-17T02:19:29.624Z"
+}

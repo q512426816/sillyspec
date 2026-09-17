@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-17-docs-bracket-reanchor",
+  "appliedAt": "2026-09-17T02:32:58.556Z",
+  "baseHash": "7e442af602ccd6f28845dce17d2046121f5154c2",
+  "files": [
+    {
+      "path": "docs/sillyspec/interface-contract.md",
+      "sha256": "6b929761a3559bbf0d019bc47e6dd1ae7a2b5167c892bf38c5524d8f5bd700b9"
+    },
+    {
+      "path": "src/docs-check.js",
+      "sha256": "933843451ebcad2eef31ac5e5f9316cceb7ca5898752b23809890962635d58c8"
+    },
+    {
+      "path": "src/docs-gate.js",
+      "sha256": "4ccf7b0e622199ad8dc96d82cef93fe98bb3db1ade0ec58023fe021b694f0dcb"
+    },
+    {
+      "path": "test/docs-fix-capability.test.mjs",
+      "sha256": "6a6908a5e8c7deff2db621727261c91d7686c35f4ed5417540b7ed690fb49e92"
+    },
+    {
+      "path": "test/docs-gate.test.mjs",
+      "sha256": "143c8a4912c265c2685107b15fc46e8f2d33006f8fced8e64feecb1d6b0fbe05"
+    }
+  ]
+}

@@ -83,8 +83,9 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
 
 - 基线文件 `.sillyspec/docs-check-baseline`（纯数字一行，可手工改）
 - 首次使用必须显式 `--init-baseline` 以当前实测数立基线（不悄悄合法化存量，fail-closed）；幂等，重跑覆盖——清偿后重跑即下调基线锁住成果
+- **陈旧基线自动重锚**（2026-09-17 docs-bracket-reanchor）：基线已存在且 current > baseline 时先实测远端基准（origin/main 优先）——本次不劣于实测值即放行（exit 0），并**自动以当前实测数重锚落盘 + 消息披露重锚前后值与依据**（棘轮只紧不松：新基线 = current ≤ 远端实测，每分增量都有实测背书；陈旧提示与远端实测各只发生一次，同态复跑即走快路径）。守卫边界：`--paths` 等 checkOpts 一次性口径覆盖（paths / skip / keywordAssert / crossRepoRoots 四键）不自动重锚——异口径计数写盘会错调基线，维持手动 `--init-baseline` 建议；local.yaml 持久口径不受限（远端实测与本次计数同读该配置）。红线不变：首次立线仍 fail-closed，快路径（≤基线）与真增量拦截（劣于远端实测或实测不可用，exit 1）语义不变
 - exit code：0 过（≤基线）/ 1 拦（>基线，报新增数）/ 2 无基线或基线损坏或配置错误
-- `--json` 输出 `{ exitCode, ok, current, baseline, delta, message, inited }`
+- `--json` 输出 `{ exitCode, ok, current, baseline, delta, message, inited, reanchored }`（reanchored：本次是否触发自动重锚；true 时 baseline 字段返回重锚后的新值）
 - 未知 flag 直接 exit 2（白名单：`--init-baseline` / `--paths` / 全局 `--json`）
 - 设计边界：**behind（commit 数）不参与 gate**——源码活跃不代表卡错，代理信号只配 advisory；gate 只信 docs check 的直接失效数
 - 实现：`src/docs-gate.js`（evaluateRatchet 纯判定 + runDocsGate IO 面）；文档引导挂接（不 init 自动注入 hook，往用户仓装 git hook 是侵入性动作）：`echo 'sillyspec docs gate' >> .husky/pre-push` 或 CI 一步

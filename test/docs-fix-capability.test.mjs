@@ -3,6 +3,8 @@
  *
  * 覆盖 FR-1/3/4（docs-check.js 内聚改动）：
  *   括号路径：Next.js 路由组 (dashboard) 全量提取+真实校验；markdown 链接零回归
+ *   方括号段：Next.js 动态路由 [id] 全量/圆方混合/段首/markdown 链接回归/嵌套与旧一致/ReDoS/
+ *     [...slug] 模糊跳过/方括号目录真实校验/符号锚（2026-09-17-docs-bracket-reanchor，FR-1.1c）
  *   ReDoS evil 用例：长 token 无 :N 后缀线性耗时（锁死 D-006 展开循环形）
  *   省略号模糊路径：skippedFuzzy 跳过校验
  *   顿号拆分：a.py:21、b.py:63 拆两条独立引用（字符集排除全角标点回归锁）
@@ -66,6 +68,113 @@ describe('FR-1.1 括号路径（Next.js 路由组）', () => {
       const r = runDocsCheck({ projectRoot: d, docs: ['docs/d.md'] })
       assert.equal(r.invalid.length, 0, `括号路径真实校验通过（实际 invalid=${JSON.stringify(r.invalid.map(i => i.ref))}）`)
     } finally { cleanup(d) }
+  })
+})
+
+describe('FR-1.1c 方括号段（Next.js 动态路由）', () => {
+  it('app/post/[id]/page.tsx:12 全量提取', () => {
+    const refs = collectDocRefs('见 `app/post/[id]/page.tsx:12` 的实现')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].file, 'app/post/[id]/page.tsx')
+    assert.equal(refs[0].start, 12)
+  })
+
+  it('app/chat/[cid]/route.ts:5 全量提取', () => {
+    const refs = collectDocRefs('`app/chat/[cid]/route.ts:5`')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].file, 'app/chat/[cid]/route.ts')
+    assert.equal(refs[0].start, 5)
+  })
+
+  it('app/(g)/[id]/z.tsx:3 圆方混合段全量提取（圆/方同权并列）', () => {
+    const refs = collectDocRefs('`app/(g)/[id]/z.tsx:3`')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].file, 'app/(g)/[id]/z.tsx')
+    assert.equal(refs[0].start, 3)
+  })
+
+  it('[id]/page.tsx:1 段首方括号全量提取', () => {
+    const refs = collectDocRefs('`[id]/page.tsx:1`')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].file, '[id]/page.tsx')
+    assert.equal(refs[0].start, 1)
+  })
+
+  it('markdown 链接方括号变体回归：[文档](foo.js:12) 与 [t] app/x.js:5 只提取路径', () => {
+    // [t] 方括号段后遇 `(` 或空格均截止（扩展名组要求 `.`），回落提取纯路径段
+    const a = collectDocRefs('[文档](foo.js:12)')
+    assert.equal(a.length, 1)
+    assert.equal(a[0].file, 'foo.js')
+    assert.equal(a[0].start, 12)
+
+    const b = collectDocRefs('[t] app/x.js:5')
+    assert.equal(b.length, 1)
+    assert.equal(b[0].file, 'app/x.js')
+    assert.equal(b[0].start, 5)
+  })
+
+  it('嵌套 [[x]] 部分提取（与旧正则残段行为一致，锁行为不锁零提取）', () => {
+    // 内容含 `[` 不属方括号段字符类 → 外层段不成立，回退提取 `/page.tsx` 残段（旧正则同款）
+    const refs = collectDocRefs('`[[x]]/page.tsx:1`')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].file, '/page.tsx')
+    assert.equal(refs[0].start, 1)
+  })
+
+  it('checkbox [ ] 与脚注 [^1] 不成立段（空格/^ 不在段字符类）', () => {
+    const cb = collectDocRefs('- [ ] docs/a.js:1')
+    assert.equal(cb.length, 1)
+    assert.equal(cb[0].file, 'docs/a.js')
+    assert.equal(cb[0].start, 1)
+
+    const fn = collectDocRefs('`[^1]src/x.js:2` 脚注后接路径不吞段')
+    assert.equal(fn.length, 1)
+    assert.equal(fn[0].file, 'src/x.js')
+    assert.equal(fn[0].start, 2)
+  })
+
+  it('ReDoS evil 方括号形线性耗时（无 :N 后缀 <100ms）', () => {
+    // 长路径段 + [id] 方括号段 + .ts 扩展名 + 无行号——展开循环形方括号侧同须锁死
+    const evil = 'https://x.com/o/r/blob/main/app/' + 'a'.repeat(30) + '/[id]/Widget.ts'
+    const t0 = Date.now()
+    collectDocRefs(evil)
+    const elapsed = Date.now() - t0
+    assert.ok(elapsed < 100, `evil 方括号形 n=30 耗时 ${elapsed}ms（阈值 100ms）`)
+  })
+
+  it('app/[...slug]/page.tsx:5 单层全量提取 + runDocsCheck 走 skippedFuzzy', () => {
+    // `.` 在段字符类内 → [...slug] 单层成立、全量提取；校验侧按含 `...` 走 FR-1.2 模糊跳过
+    const refs = collectDocRefs('见 `app/[...slug]/page.tsx:5` 的说明')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].file, 'app/[...slug]/page.tsx')
+    assert.equal(refs[0].start, 5)
+
+    const d = makeFixture({ 'docs/d.md': '见 `app/[...slug]/page.tsx:5` 说明\n' })
+    try {
+      const r = runDocsCheck({ projectRoot: d, docs: ['docs/d.md'] })
+      assert.equal(r.skippedFuzzy, 1, '[...slug] 含省略号走模糊跳过通道')
+      assert.equal(r.total, 0, '模糊路径不计 total')
+      assert.equal(r.invalid.length, 0, '模糊路径不计 invalid')
+    } finally { cleanup(d) }
+  })
+
+  it('方括号路径真实校验（fixture 存在 → 层1+层2 全链路通过）', () => {
+    const d = makeFixture({
+      'app/post/[id]/page.tsx': 'export const a = 1\n'.repeat(25),
+      'docs/d.md': '见 `app/post/[id]/page.tsx:20`（`a`）\n',
+    })
+    try {
+      const r = runDocsCheck({ projectRoot: d, docs: ['docs/d.md'] })
+      assert.equal(r.invalid.length, 0, `方括号路径真实校验通过（实际 invalid=${JSON.stringify(r.invalid.map(i => i.ref))}）`)
+    } finally { cleanup(d) }
+  })
+
+  it('符号锚 app/[lang]/layout.tsx::exportFn 提取', () => {
+    const refs = collectDocRefs('`app/[lang]/layout.tsx::exportFn`')
+    assert.equal(refs.length, 1)
+    assert.equal(refs[0].kind, 'symbol')
+    assert.equal(refs[0].file, 'app/[lang]/layout.tsx')
+    assert.equal(refs[0].symbol, 'exportFn')
   })
 })
 

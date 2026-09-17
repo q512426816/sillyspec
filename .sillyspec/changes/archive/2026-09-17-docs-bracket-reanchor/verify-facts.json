@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-17-docs-bracket-reanchor",
+  "generatedAt": "2026-09-17T02:22:04.045Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-17-docs-bracket-reanchor",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-17-docs-bracket-reanchor",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-17-docs-bracket-reanchor",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-17-docs-bracket-reanchor",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-17-docs-bracket-reanchor",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-17-docs-bracket-reanchor",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "other",
+        "item": "interface-contract.md §1.3b `--json` 字段清单缺 `originCount`（2026-09-15 陈旧基线实测兜底加入返回面时遗留文档漂移，本变更只按 task-05 范围补了 reanchored 未越权代改）",
+        "condition": "建议 quick 收口：§1.3b 字段行补 originCount（null=未实测/快路径）——一行文档改动"
+      },
+      {
+        "type": "other",
+        "item": "apply 回主仓后跑一次真仓 dogfood：`node bin/sillyspec.js docs check` 确认方括号扩展对存量文档零新失效（R-2 收口；worktree 内全量套件已绿但真仓文档面含 docs/prompt 等更广集合）",
+        "condition": "apply 后主仓跑 `node bin/sillyspec.js docs check`，invalid 数 ≤ 基线即闭环"
+      }
+    ]
+  },
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-17T02:28:56.522Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

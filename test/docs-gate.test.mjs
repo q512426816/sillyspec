@@ -1,9 +1,10 @@
 /**
  * docs gate 测试：ratchet 判定语义 + 基线 IO + runDocsGate 集成（无基线/损坏/init/拦/放）。
  * fixture 用 tmp git 仓 + 真文件（无 git 操作，纯 fs），跑完清理。
- * 坑 docs-gate-stale-baseline（ql-20260915-004）：origin/main 实测兜底——真 git 临时仓
- * 构造 origin/main 远端 ref，锁「未劣于远端放行 + 重锚提示 / 劣于远端拦 + 双参考值 /
- * 无远端回原拦 / 快路径零实测 / 临时 worktree 清理」五语义。
+ * 坑 docs-gate-stale-baseline（ql-20260915-004）+ 陈旧分支自动重锚（D-002@v1）：真 git 临时仓
+ * 构造 origin/main 远端 ref，锁「未劣于远端放行 + 自动重锚落盘披露 + 同态二跑快路径 /
+ * checkOpts 守卫不写盘 / 劣于远端拦 + 双参考值 / 无远端回原拦 / 快路径零实测 /
+ * 临时 worktree 清理」语义。
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
@@ -141,16 +142,46 @@ describe('runDocsGate origin/main 实测兜底（真 git 仓）', () => {
   })
   afterEach(() => { try { gitCli(repo, ['worktree', 'prune']); } catch {} /* 残留注册随目录删除 */ try { rmSync(repo, { recursive: true, force: true }) } catch {} })
 
-  it('current > baseline 且未劣于 origin/main 实测 → 放行 + 基线陈旧提示 + originCount', async () => {
-    // origin/main ← c2（远端与本地同为 3）；基线 0 → current 3 > 0 触发实测 → 3 ≤ 3 放行
+  it('current > baseline 且未劣于 origin/main 实测 → 放行 + 自动重锚落盘 + 披露（D-002@v1）', async () => {
+    // origin/main ← c2（远端与本地同为 3）；基线 0 → current 3 > 0 触发实测 → 3 ≤ 3 放行，
+    // 且自动重锚：writeBaseline(current) + 披露——手动 --init-baseline 建议已被自动行为取代
     gitCli(repo, ['update-ref', 'refs/remotes/origin/main', gitCli(repo, ['rev-parse', 'HEAD'])])
     writeBaseline(join(repo, '.sillyspec'), 0)
     const r = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') })
     assert.equal(r.exitCode, 0)
     assert.equal(r.originCount, 3)
+    assert.equal(r.reanchored, true, '陈旧分支自动重锚')
+    assert.equal(r.baseline, 3, 'baseline 返回新值（= current）')
+    assert.equal(readBaseline(join(repo, '.sillyspec')), 3, '基线落盘 = current')
     assert.ok(r.message.includes('基线陈旧'), `提示含「基线陈旧」（实际：${r.message}）`)
     assert.ok(r.message.includes('origin/main 实测 3'))
-    assert.ok(r.message.includes('--init-baseline 重锚'))
+    assert.ok(r.message.includes('已自动重锚 基线 0→3'), `披露含「已自动重锚 基线 0→3」（实际：${r.message}）`)
+  })
+
+  it('自动重锚后同态二跑走快路径（陈旧提示与远端实测成本各只付一次）', async () => {
+    // 同一 repo 状态连跑两次：首跑实测放行 + 落盘新基线；二跑 current 3 ≤ 新基线 3 → 快路径
+    gitCli(repo, ['update-ref', 'refs/remotes/origin/main', gitCli(repo, ['rev-parse', 'HEAD'])])
+    writeBaseline(join(repo, '.sillyspec'), 0)
+    const r1 = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') })
+    assert.equal(r1.reanchored, true)
+    assert.equal(readBaseline(join(repo, '.sillyspec')), 3, '首跑基线落盘 = current')
+    const r2 = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') })
+    assert.equal(r2.exitCode, 0)
+    assert.equal(r2.originCount, null, '快路径零远端实测')
+    assert.equal(r2.reanchored, false)
+  })
+
+  it('checkOpts 覆盖守卫：paths 显式传入 → 实测放行但不写盘 + 维持手动重锚建议', async () => {
+    // 一次性口径覆盖（paths）的计数口径 ≠ 持久口径——守卫只拦自动重锚写盘，实测仍发生
+    gitCli(repo, ['update-ref', 'refs/remotes/origin/main', gitCli(repo, ['rev-parse', 'HEAD'])])
+    writeBaseline(join(repo, '.sillyspec'), 0)
+    const r = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') }, { paths: ['docs/*.md'] })
+    assert.equal(r.exitCode, 0)
+    assert.equal(r.originCount, 3, '实测仍发生（守卫只拦写盘不拦实测）')
+    assert.equal(r.reanchored, false)
+    assert.equal(r.baseline, 0, 'baseline 维持旧值')
+    assert.equal(readBaseline(join(repo, '.sillyspec')), 0, '基线不写盘（仍为旧值）')
+    assert.ok(r.message.includes('--init-baseline 重锚'), `维持建议文案（实际：${r.message}）`)
   })
 
   it('current > origin/main 实测（真增量）→ 拦 + 双参考值', async () => {

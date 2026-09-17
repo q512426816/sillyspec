@@ -117,12 +117,15 @@ export function createHeadReader(projectRoot, ref = 'HEAD') {
  * 纯位置锚 `file.js:123?`（2026-09-11 用户实证 docs gate 误伤：跨文件引用+反话论述——锚 A
  * 文件而行内反引号 token 全是 B 概念，层 2 必失败，被迫删行号绕开）：`?` 显式声明本锚只做
  * 定位不做关键词断言，层 1（存在性+行界）照校——论述语境锚的一等语法，替代行号化绕开。
- * 文件段展开循环形（D-006，2026-09-08-docs-fix-capability）：普通段可选 + 零或多个「闭合括号段+普通段」
- * 迭代——支持 Next.js 路由组 (dashboard) 等括号路径；markdown 链接 [t](foo.js:12) 在 `(` 处括号段
- * 要求 `)` 先于 `:` 闭合而失败，回落 foo.js:12 零回归；嵌套 ((x)) 部分提取（与旧行为一致）。
- * ⚠ 不用原子序列 (?:A+|B+)+——经典嵌套量词 ReDoS（Grill 实证 n=30 长 token 73.8s），
- * 展开循环每次迭代必含括号段 → 划分唯一 → 线性。 */
-const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?(\?)?/g
+ * 文件段展开循环形（D-006，2026-09-08-docs-fix-capability；圆/方并列 2026-09-17-docs-bracket-reanchor）：
+ * 普通段可选 + 零或多个「闭合括号段（圆/方同权）+普通段」迭代——Next.js 路由组 (dashboard) 与
+ * 动态路由 [id]/[cid] 一等公民（D-001：完整开闭同形括号对并列，[ ] 不进普通段字符类）；markdown
+ * 链接 [t](foo.js:12) 的 [t] 匹配方括号段后遇 `(` 截止——后续圆括号段要求 `)` 先于 `:` 闭合、
+ * 扩展名组要求 `.` 均失败，回溯放弃 [t] 段回落提取 foo.js:12（与圆括号段同族回落，零回归）；嵌套
+ * ((x)) 与 [[x]]/[[...slug]] 内容含 `(`/`[` 不属括号段字符类 → 段不成立，部分提取残段（与旧正则
+ * 逐字节一致）。⚠ 不用原子序列 (?:A+|B+)+——经典嵌套量词 ReDoS（Grill 实证 n=30 长 token 73.8s），
+ * 展开循环每次迭代必含完整开闭同形括号对 → 划分唯一 → 线性。 */
+const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:(?:\([A-Za-z0-9_.\-\/]+\)|\[[A-Za-z0-9_.\-\/]+\])[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?(\?)?/g
 
 /** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八）
  * + .sillyspec/changes/ + .sillyspec/knowledge/（P1-1，noai-ir-roadmap §4：最活跃、最易产生
@@ -167,11 +170,12 @@ export class DocsCheckConfigError extends Error {}
 /**
  * 符号锚正则（P1-2，noai-ir-roadmap §4）：`file.js::symbol` 形态——校验时解析符号定义行，
  * 天然免疫行号漂移（重锚从「每次代码移动」降为「仅改名时」）。文件段与 REF_RE 同款（含
- * repo:// 跨仓前缀与括号路径组展开），`::` 后只认 ASCII 标识符（自然语言/中文括注不触发，
- * QUICKLOG file-notes 的 `path::注` 约定因注解非标识符而天然互斥）。与 REF_RE 互斥：
- * `::ident` 无数字不匹配行号式；`file.js:12` 无 `::` 不匹配符号式。
+ * repo:// 跨仓前缀与括号路径组展开；2026-09-17-docs-bracket-reanchor 起圆/方括号段并列
+ * 同权——动态路由 app/[lang]/layout.tsx 类路径可符号锚），`::` 后只认 ASCII 标识符（自然语言/
+ * 中文括注不触发，QUICKLOG file-notes 的 `path::注` 约定因注解非标识符而天然互斥）。
+ * 与 REF_RE 互斥：`::ident` 无数字不匹配行号式；`file.js:12` 无 `::` 不匹配符号式。
  */
-const SYMBOL_REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go))::([A-Za-z_$][A-Za-z0-9_$]*)/g
+const SYMBOL_REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:(?:\([A-Za-z0-9_.\-\/]+\)|\[[A-Za-z0-9_.\-\/]+\])[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go))::([A-Za-z_$][A-Za-z0-9_$]*)/g
 
 /**
  * 符号定义行定位（与 classifyFix 的 defRe 同款形态，单一判定口径）：function/const/let/

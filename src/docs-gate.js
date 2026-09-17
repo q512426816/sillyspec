@@ -16,8 +16,16 @@
  * 远端 origin/main 已合入的失效消化/新增不会回流本地基线——出现「基线 371 < origin/main
  * 实测 379、本地 current 379」时 ratchet 拦 379>371，但本次推送零增量（不劣于远端）——
  * ratchet 本质=拦增量，被陈旧基线破坏成拦存量。修复：current > baseline 分支先实测
- * origin/main 树（临时 detach worktree 跑 runDocsCheck），current ≤ 实测值即放行 + 提示
- * 重锚；实测失败/无远端 ref fail-open 回原拦。快路径（current ≤ baseline）零成本零变化。
+ * origin/main 树（临时 detach worktree 跑 runDocsCheck），current ≤ 实测值即放行；实测
+ * 失败/无远端 ref fail-open 回原拦。快路径（current ≤ baseline）零成本零变化。
+ *
+ * 陈旧分支自动重锚（2026-09-17-docs-bracket-reanchor，D-002@v1）：走到该分支即已实付
+ * 远端实测成本验证「本次不劣于远端」——已验证事实自动回流基线：口径守卫通过即
+ * writeBaseline(current) + 消息披露（陈旧提示出现一次即消失，棘轮只紧不松：新基线 =
+ * current ≤ 远端实测，每一分增量都有实测背书）。守卫只拦 checkOpts 一次性覆盖（paths/
+ * skip/keywordAssert/crossRepoRoots 四键——异口径计数写盘会错调基线），不拦 local.yaml
+ * 持久口径（measure 与 current 恒同读该配置，读写同源自洽）；首次立线 fail-closed 不变
+ * （无基线仍须显式 --init-baseline，自动重锚仅限基线已存在的陈旧分支）。
  */
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -138,12 +146,19 @@ export async function measureRemoteBaselineCount(projectRoot, remoteRefs = ['ori
  * IO 入口：跑一次 gate。
  * @param {{ projectRoot: string, specBase: string, initBaseline?: boolean }} opts
  *   projectRoot 源码仓根（docs check 锚）；specBase .sillyspec 根（基线文件所在）
- * @param {object} checkOpts 透传 runDocsCheck（paths/skip/keywordAssert 覆盖；缺省读 local.yaml）
+ * @param {object} checkOpts 透传 runDocsCheck（paths/skip/keywordAssert/crossRepoRoots 覆盖；缺省
+ *   读 local.yaml）——四键任一显式传入即触发陈旧分支口径守卫（不自动重锚，见头注）
  * @returns {Promise<{ exitCode: 0|1|2, ok: boolean, current: number, baseline: number|null,
- *                     delta: number|null, message: string, inited: boolean }>}
+ *                     delta: number|null, message: string, inited: boolean,
+ *                     reanchored: boolean }>} reanchored：陈旧分支自动重锚 true（baseline 返
+ *   新值 = current），其余分支缺省 false
  */
 export async function runDocsGate(opts = {}, checkOpts = {}) {
   const { projectRoot, specBase, initBaseline = false } = opts;
+  // 口径守卫：checkOpts 一次性子集/异口径覆盖时计数口径 ≠ 持久口径，写盘会错调基线——
+  // 陈旧分支不自动重锚（against 不算守卫键：与 --init-baseline --against 同写提交树
+  // 实测值语义一致，不新增口径）。不拦 local.yaml 持久口径（measure 与 current 恒同读）
+  const scopeGuarded = !!(checkOpts.paths || checkOpts.skip || checkOpts.keywordAssert != null || checkOpts.crossRepoRoots);
   let result;
   try {
     const cfg = readDocsCheckConfig(projectRoot);
@@ -159,7 +174,7 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
     });
   } catch (e) {
     if (e instanceof DocsCheckConfigError) {
-      return { exitCode: 2, ok: false, current: null, baseline: null, delta: null, originCount: null, message: `docs gate 配置错误：${e.message}`, inited: false };
+      return { exitCode: 2, ok: false, current: null, baseline: null, delta: null, originCount: null, message: `docs gate 配置错误：${e.message}`, inited: false, reanchored: false };
     }
     throw e;
   }
@@ -167,7 +182,7 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
 
   if (initBaseline) {
     writeBaseline(specBase, current);
-    return { exitCode: 0, ok: true, current, baseline: current, delta: 0, originCount: null, message: `📌 docs gate: 基线已初始化为当前实测 ${current} 处失效（${baselineDisplay(specBase)}）`, inited: true };
+    return { exitCode: 0, ok: true, current, baseline: current, delta: 0, originCount: null, message: `📌 docs gate: 基线已初始化为当前实测 ${current} 处失效（${baselineDisplay(specBase)}）`, inited: true, reanchored: false };
   }
 
   const baseline = readBaseline(specBase);
@@ -175,27 +190,39 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
     return {
       exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null,
       message: `❌ docs gate: 无基线文件（${baselineDisplay(specBase)}）。首次使用先跑 sillyspec docs gate --init-baseline（以当前实测数立基线，存量既往不咎只拦增量）`,
-      inited: false,
+      inited: false, reanchored: false,
     };
   }
   if (Number.isNaN(baseline)) {
-    return { exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null, message: `❌ docs gate: 基线文件损坏（非非负整数），手工修正或 --init-baseline 重置`, inited: false };
+    return { exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null, message: `❌ docs gate: 基线文件损坏（非非负整数），手工修正或 --init-baseline 重置`, inited: false, reanchored: false };
   }
   const v = evaluateRatchet({ current, baseline });
   if (v.ok) {
     // 快路径（current ≤ baseline）：原路零变化——不触远端实测（零 git 成本零行为漂移）
-    return { exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: null, message: v.message, inited: false };
+    return { exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: null, message: v.message, inited: false, reanchored: false };
   }
   // 坑 docs-gate-stale-baseline（ql-20260915-004）：current > baseline 时 origin 实测兜底——
   // ratchet 本质=拦增量；基线是静态快照，远端已合入的失效增长不回流基线会造成「未劣于远端
-  // 也被拦」的假拦。实测 origin/main 树：current ≤ 实测值 = 本次不劣于远端 → 放行 + 提示
-  // 重锚；无远端 ref / 实测失败 fail-open 回原拦；current > 实测值 = 真增量劣于远端 → 拦。
+  // 也被拦」的假拦。实测 origin/main 树：current ≤ 实测值 = 本次不劣于远端 → 放行 + 自动
+  // 重锚落盘（D-002@v1；口径守卫命中时不写盘、维持手动重锚建议）；无远端 ref / 实测失败
+  // fail-open 回原拦；current > 实测值 = 真增量劣于远端 → 拦。
   const measured = await measureRemoteBaselineCount(projectRoot);
   if (measured.originCount !== null && current <= measured.originCount) {
+    if (scopeGuarded) {
+      // 守卫：checkOpts 一次性覆盖（异口径计数）——基线文件不动，维持手动 --init-baseline 建议文案
+      return {
+        exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: measured.originCount,
+        message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——建议 sillyspec docs gate --init-baseline 重锚锁定（以当前实测 ${current} 立线，存量既往不咎只拦增量）`,
+        inited: false, reanchored: false,
+      };
+    }
+    // 自动重锚：已实付实测成本验证「本次不劣于远端」——事实回流基线，同态第二次跑走快路径
+    //（陈旧提示与远端实测各只发生一次）；新基线 = current ≤ 远端实测，棘轮只紧不松
+    writeBaseline(specBase, current);
     return {
-      exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: measured.originCount,
-      message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——建议 sillyspec docs gate --init-baseline 重锚锁定（以当前实测 ${current} 立线，存量既往不咎只拦增量）`,
-      inited: false,
+      exitCode: 0, ok: true, current, baseline: current, delta: v.delta, originCount: measured.originCount,
+      message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——📌 已自动重锚 基线 ${baseline}→${current}（实测不劣于远端，已落盘锁定；棘轮只紧不松）`,
+      inited: false, reanchored: true,
     };
   }
   const remoteNote = measured.originCount !== null
@@ -204,6 +231,6 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
   return {
     exitCode: 1, ok: false, current, baseline, delta: v.delta, originCount: measured.originCount,
     message: `❌ docs gate: ${current} 处失效 > 基线 ${baseline}（新增 ${v.delta} 处）${remoteNote}，拦截。修掉新增引用或显式 --init-baseline 重置基线（需你确认存量合法）`,
-    inited: false,
+    inited: false, reanchored: false,
   };
 }

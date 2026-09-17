@@ -1,0 +1,406 @@
+diff --git a/docs/sillyspec/interface-contract.md b/docs/sillyspec/interface-contract.md
+index 72880d3..16a83b4 100644
+--- a/docs/sillyspec/interface-contract.md
++++ b/docs/sillyspec/interface-contract.md
+@@ -83,8 +83,9 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
+ 
+ - 基线文件 `.sillyspec/docs-check-baseline`（纯数字一行，可手工改）
+ - 首次使用必须显式 `--init-baseline` 以当前实测数立基线（不悄悄合法化存量，fail-closed）；幂等，重跑覆盖——清偿后重跑即下调基线锁住成果
++- **陈旧基线自动重锚**（2026-09-17 docs-bracket-reanchor）：基线已存在且 current > baseline 时先实测远端基准（origin/main 优先）——本次不劣于实测值即放行（exit 0），并**自动以当前实测数重锚落盘 + 消息披露重锚前后值与依据**（棘轮只紧不松：新基线 = current ≤ 远端实测，每分增量都有实测背书；陈旧提示与远端实测各只发生一次，同态复跑即走快路径）。守卫边界：`--paths` 等 checkOpts 一次性口径覆盖（paths / skip / keywordAssert / crossRepoRoots 四键）不自动重锚——异口径计数写盘会错调基线，维持手动 `--init-baseline` 建议；local.yaml 持久口径不受限（远端实测与本次计数同读该配置）。红线不变：首次立线仍 fail-closed，快路径（≤基线）与真增量拦截（劣于远端实测或实测不可用，exit 1）语义不变
+ - exit code：0 过（≤基线）/ 1 拦（>基线，报新增数）/ 2 无基线或基线损坏或配置错误
+-- `--json` 输出 `{ exitCode, ok, current, baseline, delta, message, inited }`
++- `--json` 输出 `{ exitCode, ok, current, baseline, delta, message, inited, reanchored }`（reanchored：本次是否触发自动重锚；true 时 baseline 字段返回重锚后的新值）
+ - 未知 flag 直接 exit 2（白名单：`--init-baseline` / `--paths` / 全局 `--json`）
+ - 设计边界：**behind（commit 数）不参与 gate**——源码活跃不代表卡错，代理信号只配 advisory；gate 只信 docs check 的直接失效数
+ - 实现：`src/docs-gate.js`（evaluateRatchet 纯判定 + runDocsGate IO 面）；文档引导挂接（不 init 自动注入 hook，往用户仓装 git hook 是侵入性动作）：`echo 'sillyspec docs gate' >> .husky/pre-push` 或 CI 一步
+diff --git a/meta.json b/meta.json
+index ba7caf5..b2ca0f5 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,27 @@
+   "branch": "sillyspec/2026-09-17-docs-bracket-reanchor",
+   "baseBranch": "main",
+   "baseHash": "60e90c1d4a5c53a27c931626a741275612ca4cfb",
++  "actualBaseHash": "7e442af602ccd6f28845dce17d2046121f5154c2",
++  "createdAt": "2026-09-17T01:28:40.358Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-docs-bracket-reanchor",
+   "mode": "worktree",
+-  "createdAt": "2026-09-17T01:28:38.475Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".claude/skills/sillyspec-quick/SKILL.md",
++    "docs/prompt/_extracted.json",
++    "docs/prompt/quick.md",
++    "src/stages/quick.js"
++  ],
++  "baselineCommit": "7e442af602ccd6f28845dce17d2046121f5154c2",
++  "baselineHash": "cccca9feace5338a",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 4
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-17T01:28:40.316Z"
+ }
+diff --git a/src/docs-check.js b/src/docs-check.js
+index 954ebd6..17ea135 100644
+--- a/src/docs-check.js
++++ b/src/docs-check.js
+@@ -117,12 +117,15 @@ export function createHeadReader(projectRoot, ref = 'HEAD') {
+  * 纯位置锚 `file.js:123?`（2026-09-11 用户实证 docs gate 误伤：跨文件引用+反话论述——锚 A
+  * 文件而行内反引号 token 全是 B 概念，层 2 必失败，被迫删行号绕开）：`?` 显式声明本锚只做
+  * 定位不做关键词断言，层 1（存在性+行界）照校——论述语境锚的一等语法，替代行号化绕开。
+- * 文件段展开循环形（D-006，2026-09-08-docs-fix-capability）：普通段可选 + 零或多个「闭合括号段+普通段」
+- * 迭代——支持 Next.js 路由组 (dashboard) 等括号路径；markdown 链接 [t](foo.js:12) 在 `(` 处括号段
+- * 要求 `)` 先于 `:` 闭合而失败，回落 foo.js:12 零回归；嵌套 ((x)) 部分提取（与旧行为一致）。
+- * ⚠ 不用原子序列 (?:A+|B+)+——经典嵌套量词 ReDoS（Grill 实证 n=30 长 token 73.8s），
+- * 展开循环每次迭代必含括号段 → 划分唯一 → 线性。 */
+-const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?(\?)?/g
++ * 文件段展开循环形（D-006，2026-09-08-docs-fix-capability；圆/方并列 2026-09-17-docs-bracket-reanchor）：
++ * 普通段可选 + 零或多个「闭合括号段（圆/方同权）+普通段」迭代——Next.js 路由组 (dashboard) 与
++ * 动态路由 [id]/[cid] 一等公民（D-001：完整开闭同形括号对并列，[ ] 不进普通段字符类）；markdown
++ * 链接 [t](foo.js:12) 的 [t] 匹配方括号段后遇 `(` 截止——后续圆括号段要求 `)` 先于 `:` 闭合、
++ * 扩展名组要求 `.` 均失败，回溯放弃 [t] 段回落提取 foo.js:12（与圆括号段同族回落，零回归）；嵌套
++ * ((x)) 与 [[x]]/[[...slug]] 内容含 `(`/`[` 不属括号段字符类 → 段不成立，部分提取残段（与旧正则
++ * 逐字节一致）。⚠ 不用原子序列 (?:A+|B+)+——经典嵌套量词 ReDoS（Grill 实证 n=30 长 token 73.8s），
++ * 展开循环每次迭代必含完整开闭同形括号对 → 划分唯一 → 线性。 */
++const REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:(?:\([A-Za-z0-9_.\-\/]+\)|\[[A-Za-z0-9_.\-\/]+\])[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go)):(\d+)(?:-(\d+))?(\?)?/g
+ 
+ /** 缺省扫描范围：docs/ + .sillyspec/docs/（scan/modules 产物同是文档，失效即该暴露；2026-08-16 用户裁决改缺省，见 doc-consistency-debt.md §八）
+  * + .sillyspec/changes/ + .sillyspec/knowledge/（P1-1，noai-ir-roadmap §4：最活跃、最易产生
+@@ -167,11 +170,12 @@ export class DocsCheckConfigError extends Error {}
+ /**
+  * 符号锚正则（P1-2，noai-ir-roadmap §4）：`file.js::symbol` 形态——校验时解析符号定义行，
+  * 天然免疫行号漂移（重锚从「每次代码移动」降为「仅改名时」）。文件段与 REF_RE 同款（含
+- * repo:// 跨仓前缀与括号路径组展开），`::` 后只认 ASCII 标识符（自然语言/中文括注不触发，
+- * QUICKLOG file-notes 的 `path::注` 约定因注解非标识符而天然互斥）。与 REF_RE 互斥：
+- * `::ident` 无数字不匹配行号式；`file.js:12` 无 `::` 不匹配符号式。
++ * repo:// 跨仓前缀与括号路径组展开；2026-09-17-docs-bracket-reanchor 起圆/方括号段并列
++ * 同权——动态路由 app/[lang]/layout.tsx 类路径可符号锚），`::` 后只认 ASCII 标识符（自然语言/
++ * 中文括注不触发，QUICKLOG file-notes 的 `path::注` 约定因注解非标识符而天然互斥）。
++ * 与 REF_RE 互斥：`::ident` 无数字不匹配行号式；`file.js:12` 无 `::` 不匹配符号式。
+  */
+-const SYMBOL_REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:\([A-Za-z0-9_.\-\/]+\)[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go))::([A-Za-z_$][A-Za-z0-9_$]*)/g
++const SYMBOL_REF_RE = /(?:repo:\/\/([A-Za-z0-9_.\-]+)\/)?([A-Za-z0-9_.\-\/]*(?:(?:\([A-Za-z0-9_.\-\/]+\)|\[[A-Za-z0-9_.\-\/]+\])[A-Za-z0-9_.\-\/]*)*\.(?:js|mjs|cjs|ts|tsx|jsx|py|java|go))::([A-Za-z_$][A-Za-z0-9_$]*)/g
+ 
+ /**
+  * 符号定义行定位（与 classifyFix 的 defRe 同款形态，单一判定口径）：function/const/let/
+diff --git a/src/docs-gate.js b/src/docs-gate.js
+index 3c63093..9e4dae3 100644
+--- a/src/docs-gate.js
++++ b/src/docs-gate.js
+@@ -16,8 +16,16 @@
+  * 远端 origin/main 已合入的失效消化/新增不会回流本地基线——出现「基线 371 < origin/main
+  * 实测 379、本地 current 379」时 ratchet 拦 379>371，但本次推送零增量（不劣于远端）——
+  * ratchet 本质=拦增量，被陈旧基线破坏成拦存量。修复：current > baseline 分支先实测
+- * origin/main 树（临时 detach worktree 跑 runDocsCheck），current ≤ 实测值即放行 + 提示
+- * 重锚；实测失败/无远端 ref fail-open 回原拦。快路径（current ≤ baseline）零成本零变化。
++ * origin/main 树（临时 detach worktree 跑 runDocsCheck），current ≤ 实测值即放行；实测
++ * 失败/无远端 ref fail-open 回原拦。快路径（current ≤ baseline）零成本零变化。
++ *
++ * 陈旧分支自动重锚（2026-09-17-docs-bracket-reanchor，D-002@v1）：走到该分支即已实付
++ * 远端实测成本验证「本次不劣于远端」——已验证事实自动回流基线：口径守卫通过即
++ * writeBaseline(current) + 消息披露（陈旧提示出现一次即消失，棘轮只紧不松：新基线 =
++ * current ≤ 远端实测，每一分增量都有实测背书）。守卫只拦 checkOpts 一次性覆盖（paths/
++ * skip/keywordAssert/crossRepoRoots 四键——异口径计数写盘会错调基线），不拦 local.yaml
++ * 持久口径（measure 与 current 恒同读该配置，读写同源自洽）；首次立线 fail-closed 不变
++ * （无基线仍须显式 --init-baseline，自动重锚仅限基线已存在的陈旧分支）。
+  */
+ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+ import { join } from 'node:path';
+@@ -138,12 +146,19 @@ export async function measureRemoteBaselineCount(projectRoot, remoteRefs = ['ori
+  * IO 入口：跑一次 gate。
+  * @param {{ projectRoot: string, specBase: string, initBaseline?: boolean }} opts
+  *   projectRoot 源码仓根（docs check 锚）；specBase .sillyspec 根（基线文件所在）
+- * @param {object} checkOpts 透传 runDocsCheck（paths/skip/keywordAssert 覆盖；缺省读 local.yaml）
++ * @param {object} checkOpts 透传 runDocsCheck（paths/skip/keywordAssert/crossRepoRoots 覆盖；缺省
++ *   读 local.yaml）——四键任一显式传入即触发陈旧分支口径守卫（不自动重锚，见头注）
+  * @returns {Promise<{ exitCode: 0|1|2, ok: boolean, current: number, baseline: number|null,
+- *                     delta: number|null, message: string, inited: boolean }>}
++ *                     delta: number|null, message: string, inited: boolean,
++ *                     reanchored: boolean }>} reanchored：陈旧分支自动重锚 true（baseline 返
++ *   新值 = current），其余分支缺省 false
+  */
+ export async function runDocsGate(opts = {}, checkOpts = {}) {
+   const { projectRoot, specBase, initBaseline = false } = opts;
++  // 口径守卫：checkOpts 一次性子集/异口径覆盖时计数口径 ≠ 持久口径，写盘会错调基线——
++  // 陈旧分支不自动重锚（against 不算守卫键：与 --init-baseline --against 同写提交树
++  // 实测值语义一致，不新增口径）。不拦 local.yaml 持久口径（measure 与 current 恒同读）
++  const scopeGuarded = !!(checkOpts.paths || checkOpts.skip || checkOpts.keywordAssert != null || checkOpts.crossRepoRoots);
+   let result;
+   try {
+     const cfg = readDocsCheckConfig(projectRoot);
+@@ -159,7 +174,7 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
+     });
+   } catch (e) {
+     if (e instanceof DocsCheckConfigError) {
+-      return { exitCode: 2, ok: false, current: null, baseline: null, delta: null, originCount: null, message: `docs gate 配置错误：${e.message}`, inited: false };
++      return { exitCode: 2, ok: false, current: null, baseline: null, delta: null, originCount: null, message: `docs gate 配置错误：${e.message}`, inited: false, reanchored: false };
+     }
+     throw e;
+   }
+@@ -167,7 +182,7 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
+ 
+   if (initBaseline) {
+     writeBaseline(specBase, current);
+-    return { exitCode: 0, ok: true, current, baseline: current, delta: 0, originCount: null, message: `📌 docs gate: 基线已初始化为当前实测 ${current} 处失效（${baselineDisplay(specBase)}）`, inited: true };
++    return { exitCode: 0, ok: true, current, baseline: current, delta: 0, originCount: null, message: `📌 docs gate: 基线已初始化为当前实测 ${current} 处失效（${baselineDisplay(specBase)}）`, inited: true, reanchored: false };
+   }
+ 
+   const baseline = readBaseline(specBase);
+@@ -175,27 +190,39 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
+     return {
+       exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null,
+       message: `❌ docs gate: 无基线文件（${baselineDisplay(specBase)}）。首次使用先跑 sillyspec docs gate --init-baseline（以当前实测数立基线，存量既往不咎只拦增量）`,
+-      inited: false,
++      inited: false, reanchored: false,
+     };
+   }
+   if (Number.isNaN(baseline)) {
+-    return { exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null, message: `❌ docs gate: 基线文件损坏（非非负整数），手工修正或 --init-baseline 重置`, inited: false };
++    return { exitCode: 2, ok: false, current, baseline: null, delta: null, originCount: null, message: `❌ docs gate: 基线文件损坏（非非负整数），手工修正或 --init-baseline 重置`, inited: false, reanchored: false };
+   }
+   const v = evaluateRatchet({ current, baseline });
+   if (v.ok) {
+     // 快路径（current ≤ baseline）：原路零变化——不触远端实测（零 git 成本零行为漂移）
+-    return { exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: null, message: v.message, inited: false };
++    return { exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: null, message: v.message, inited: false, reanchored: false };
+   }
+   // 坑 docs-gate-stale-baseline（ql-20260915-004）：current > baseline 时 origin 实测兜底——
+   // ratchet 本质=拦增量；基线是静态快照，远端已合入的失效增长不回流基线会造成「未劣于远端
+-  // 也被拦」的假拦。实测 origin/main 树：current ≤ 实测值 = 本次不劣于远端 → 放行 + 提示
+-  // 重锚；无远端 ref / 实测失败 fail-open 回原拦；current > 实测值 = 真增量劣于远端 → 拦。
++  // 也被拦」的假拦。实测 origin/main 树：current ≤ 实测值 = 本次不劣于远端 → 放行 + 自动
++  // 重锚落盘（D-002@v1；口径守卫命中时不写盘、维持手动重锚建议）；无远端 ref / 实测失败
++  // fail-open 回原拦；current > 实测值 = 真增量劣于远端 → 拦。
+   const measured = await measureRemoteBaselineCount(projectRoot);
+   if (measured.originCount !== null && current <= measured.originCount) {
++    if (scopeGuarded) {
++      // 守卫：checkOpts 一次性覆盖（异口径计数）——基线文件不动，维持手动 --init-baseline 建议文案
++      return {
++        exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: measured.originCount,
++        message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——建议 sillyspec docs gate --init-baseline 重锚锁定（以当前实测 ${current} 立线，存量既往不咎只拦增量）`,
++        inited: false, reanchored: false,
++      };
++    }
++    // 自动重锚：已实付实测成本验证「本次不劣于远端」——事实回流基线，同态第二次跑走快路径
++    //（陈旧提示与远端实测各只发生一次）；新基线 = current ≤ 远端实测，棘轮只紧不松
++    writeBaseline(specBase, current);
+     return {
+-      exitCode: 0, ok: true, current, baseline, delta: v.delta, originCount: measured.originCount,
+-      message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——建议 sillyspec docs gate --init-baseline 重锚锁定（以当前实测 ${current} 立线，存量既往不咎只拦增量）`,
+-      inited: false,
++      exitCode: 0, ok: true, current, baseline: current, delta: v.delta, originCount: measured.originCount,
++      message: `⚠️ docs gate: 基线陈旧：基线 ${baseline} < ${measured.ref} 实测 ${measured.originCount}，本次 ${current} 处失效未劣于远端不拦——📌 已自动重锚 基线 ${baseline}→${current}（实测不劣于远端，已落盘锁定；棘轮只紧不松）`,
++      inited: false, reanchored: true,
+     };
+   }
+   const remoteNote = measured.originCount !== null
+@@ -204,6 +231,6 @@ export async function runDocsGate(opts = {}, checkOpts = {}) {
+   return {
+     exitCode: 1, ok: false, current, baseline, delta: v.delta, originCount: measured.originCount,
+     message: `❌ docs gate: ${current} 处失效 > 基线 ${baseline}（新增 ${v.delta} 处）${remoteNote}，拦截。修掉新增引用或显式 --init-baseline 重置基线（需你确认存量合法）`,
+-    inited: false,
++    inited: false, reanchored: false,
+   };
+ }
+diff --git a/test/docs-fix-capability.test.mjs b/test/docs-fix-capability.test.mjs
+index a72c76b..0722b4c 100644
+--- a/test/docs-fix-capability.test.mjs
++++ b/test/docs-fix-capability.test.mjs
+@@ -3,6 +3,8 @@
+  *
+  * 覆盖 FR-1/3/4（docs-check.js 内聚改动）：
+  *   括号路径：Next.js 路由组 (dashboard) 全量提取+真实校验；markdown 链接零回归
++ *   方括号段：Next.js 动态路由 [id] 全量/圆方混合/段首/markdown 链接回归/嵌套与旧一致/ReDoS/
++ *     [...slug] 模糊跳过/方括号目录真实校验/符号锚（2026-09-17-docs-bracket-reanchor，FR-1.1c）
+  *   ReDoS evil 用例：长 token 无 :N 后缀线性耗时（锁死 D-006 展开循环形）
+  *   省略号模糊路径：skippedFuzzy 跳过校验
+  *   顿号拆分：a.py:21、b.py:63 拆两条独立引用（字符集排除全角标点回归锁）
+@@ -69,6 +71,113 @@ describe('FR-1.1 括号路径（Next.js 路由组）', () => {
+   })
+ })
+ 
++describe('FR-1.1c 方括号段（Next.js 动态路由）', () => {
++  it('app/post/[id]/page.tsx:12 全量提取', () => {
++    const refs = collectDocRefs('见 `app/post/[id]/page.tsx:12` 的实现')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].file, 'app/post/[id]/page.tsx')
++    assert.equal(refs[0].start, 12)
++  })
++
++  it('app/chat/[cid]/route.ts:5 全量提取', () => {
++    const refs = collectDocRefs('`app/chat/[cid]/route.ts:5`')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].file, 'app/chat/[cid]/route.ts')
++    assert.equal(refs[0].start, 5)
++  })
++
++  it('app/(g)/[id]/z.tsx:3 圆方混合段全量提取（圆/方同权并列）', () => {
++    const refs = collectDocRefs('`app/(g)/[id]/z.tsx:3`')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].file, 'app/(g)/[id]/z.tsx')
++    assert.equal(refs[0].start, 3)
++  })
++
++  it('[id]/page.tsx:1 段首方括号全量提取', () => {
++    const refs = collectDocRefs('`[id]/page.tsx:1`')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].file, '[id]/page.tsx')
++    assert.equal(refs[0].start, 1)
++  })
++
++  it('markdown 链接方括号变体回归：[文档](foo.js:12) 与 [t] app/x.js:5 只提取路径', () => {
++    // [t] 方括号段后遇 `(` 或空格均截止（扩展名组要求 `.`），回落提取纯路径段
++    const a = collectDocRefs('[文档](foo.js:12)')
++    assert.equal(a.length, 1)
++    assert.equal(a[0].file, 'foo.js')
++    assert.equal(a[0].start, 12)
++
++    const b = collectDocRefs('[t] app/x.js:5')
++    assert.equal(b.length, 1)
++    assert.equal(b[0].file, 'app/x.js')
++    assert.equal(b[0].start, 5)
++  })
++
++  it('嵌套 [[x]] 部分提取（与旧正则残段行为一致，锁行为不锁零提取）', () => {
++    // 内容含 `[` 不属方括号段字符类 → 外层段不成立，回退提取 `/page.tsx` 残段（旧正则同款）
++    const refs = collectDocRefs('`[[x]]/page.tsx:1`')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].file, '/page.tsx')
++    assert.equal(refs[0].start, 1)
++  })
++
++  it('checkbox [ ] 与脚注 [^1] 不成立段（空格/^ 不在段字符类）', () => {
++    const cb = collectDocRefs('- [ ] docs/a.js:1')
++    assert.equal(cb.length, 1)
++    assert.equal(cb[0].file, 'docs/a.js')
++    assert.equal(cb[0].start, 1)
++
++    const fn = collectDocRefs('`[^1]src/x.js:2` 脚注后接路径不吞段')
++    assert.equal(fn.length, 1)
++    assert.equal(fn[0].file, 'src/x.js')
++    assert.equal(fn[0].start, 2)
++  })
++
++  it('ReDoS evil 方括号形线性耗时（无 :N 后缀 <100ms）', () => {
++    // 长路径段 + [id] 方括号段 + .ts 扩展名 + 无行号——展开循环形方括号侧同须锁死
++    const evil = 'https://x.com/o/r/blob/main/app/' + 'a'.repeat(30) + '/[id]/Widget.ts'
++    const t0 = Date.now()
++    collectDocRefs(evil)
++    const elapsed = Date.now() - t0
++    assert.ok(elapsed < 100, `evil 方括号形 n=30 耗时 ${elapsed}ms（阈值 100ms）`)
++  })
++
++  it('app/[...slug]/page.tsx:5 单层全量提取 + runDocsCheck 走 skippedFuzzy', () => {
++    // `.` 在段字符类内 → [...slug] 单层成立、全量提取；校验侧按含 `...` 走 FR-1.2 模糊跳过
++    const refs = collectDocRefs('见 `app/[...slug]/page.tsx:5` 的说明')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].file, 'app/[...slug]/page.tsx')
++    assert.equal(refs[0].start, 5)
++
++    const d = makeFixture({ 'docs/d.md': '见 `app/[...slug]/page.tsx:5` 说明\n' })
++    try {
++      const r = runDocsCheck({ projectRoot: d, docs: ['docs/d.md'] })
++      assert.equal(r.skippedFuzzy, 1, '[...slug] 含省略号走模糊跳过通道')
++      assert.equal(r.total, 0, '模糊路径不计 total')
++      assert.equal(r.invalid.length, 0, '模糊路径不计 invalid')
++    } finally { cleanup(d) }
++  })
++
++  it('方括号路径真实校验（fixture 存在 → 层1+层2 全链路通过）', () => {
++    const d = makeFixture({
++      'app/post/[id]/page.tsx': 'export const a = 1\n'.repeat(25),
++      'docs/d.md': '见 `app/post/[id]/page.tsx:20`（`a`）\n',
++    })
++    try {
++      const r = runDocsCheck({ projectRoot: d, docs: ['docs/d.md'] })
++      assert.equal(r.invalid.length, 0, `方括号路径真实校验通过（实际 invalid=${JSON.stringify(r.invalid.map(i => i.ref))}）`)
++    } finally { cleanup(d) }
++  })
++
++  it('符号锚 app/[lang]/layout.tsx::exportFn 提取', () => {
++    const refs = collectDocRefs('`app/[lang]/layout.tsx::exportFn`')
++    assert.equal(refs.length, 1)
++    assert.equal(refs[0].kind, 'symbol')
++    assert.equal(refs[0].file, 'app/[lang]/layout.tsx')
++    assert.equal(refs[0].symbol, 'exportFn')
++  })
++})
++
+ describe('FR-1.1b ReDoS 防护（D-006 展开循环形）', () => {
+   it('长 token 无 :N 后缀线性耗时（evil 用例锁死）', () => {
+     // GitHub 源码 URL 形态：长路径段 + .ts 扩展名 + 无行号——初稿原子序列形 n=30 → 73.8s
+diff --git a/test/docs-gate.test.mjs b/test/docs-gate.test.mjs
+index b8eaff5..9ae3a56 100644
+--- a/test/docs-gate.test.mjs
++++ b/test/docs-gate.test.mjs
+@@ -1,9 +1,10 @@
+ /**
+  * docs gate 测试：ratchet 判定语义 + 基线 IO + runDocsGate 集成（无基线/损坏/init/拦/放）。
+  * fixture 用 tmp git 仓 + 真文件（无 git 操作，纯 fs），跑完清理。
+- * 坑 docs-gate-stale-baseline（ql-20260915-004）：origin/main 实测兜底——真 git 临时仓
+- * 构造 origin/main 远端 ref，锁「未劣于远端放行 + 重锚提示 / 劣于远端拦 + 双参考值 /
+- * 无远端回原拦 / 快路径零实测 / 临时 worktree 清理」五语义。
++ * 坑 docs-gate-stale-baseline（ql-20260915-004）+ 陈旧分支自动重锚（D-002@v1）：真 git 临时仓
++ * 构造 origin/main 远端 ref，锁「未劣于远端放行 + 自动重锚落盘披露 + 同态二跑快路径 /
++ * checkOpts 守卫不写盘 / 劣于远端拦 + 双参考值 / 无远端回原拦 / 快路径零实测 /
++ * 临时 worktree 清理」语义。
+  */
+ import { describe, it, beforeEach, afterEach } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -141,16 +142,46 @@ describe('runDocsGate origin/main 实测兜底（真 git 仓）', () => {
+   })
+   afterEach(() => { try { gitCli(repo, ['worktree', 'prune']); } catch {} /* 残留注册随目录删除 */ try { rmSync(repo, { recursive: true, force: true }) } catch {} })
+ 
+-  it('current > baseline 且未劣于 origin/main 实测 → 放行 + 基线陈旧提示 + originCount', async () => {
+-    // origin/main ← c2（远端与本地同为 3）；基线 0 → current 3 > 0 触发实测 → 3 ≤ 3 放行
++  it('current > baseline 且未劣于 origin/main 实测 → 放行 + 自动重锚落盘 + 披露（D-002@v1）', async () => {
++    // origin/main ← c2（远端与本地同为 3）；基线 0 → current 3 > 0 触发实测 → 3 ≤ 3 放行，
++    // 且自动重锚：writeBaseline(current) + 披露——手动 --init-baseline 建议已被自动行为取代
+     gitCli(repo, ['update-ref', 'refs/remotes/origin/main', gitCli(repo, ['rev-parse', 'HEAD'])])
+     writeBaseline(join(repo, '.sillyspec'), 0)
+     const r = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') })
+     assert.equal(r.exitCode, 0)
+     assert.equal(r.originCount, 3)
++    assert.equal(r.reanchored, true, '陈旧分支自动重锚')
++    assert.equal(r.baseline, 3, 'baseline 返回新值（= current）')
++    assert.equal(readBaseline(join(repo, '.sillyspec')), 3, '基线落盘 = current')
+     assert.ok(r.message.includes('基线陈旧'), `提示含「基线陈旧」（实际：${r.message}）`)
+     assert.ok(r.message.includes('origin/main 实测 3'))
+-    assert.ok(r.message.includes('--init-baseline 重锚'))
++    assert.ok(r.message.includes('已自动重锚 基线 0→3'), `披露含「已自动重锚 基线 0→3」（实际：${r.message}）`)
++  })
++
++  it('自动重锚后同态二跑走快路径（陈旧提示与远端实测成本各只付一次）', async () => {
++    // 同一 repo 状态连跑两次：首跑实测放行 + 落盘新基线；二跑 current 3 ≤ 新基线 3 → 快路径
++    gitCli(repo, ['update-ref', 'refs/remotes/origin/main', gitCli(repo, ['rev-parse', 'HEAD'])])
++    writeBaseline(join(repo, '.sillyspec'), 0)
++    const r1 = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') })
++    assert.equal(r1.reanchored, true)
++    assert.equal(readBaseline(join(repo, '.sillyspec')), 3, '首跑基线落盘 = current')
++    const r2 = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') })
++    assert.equal(r2.exitCode, 0)
++    assert.equal(r2.originCount, null, '快路径零远端实测')
++    assert.equal(r2.reanchored, false)
++  })
++
++  it('checkOpts 覆盖守卫：paths 显式传入 → 实测放行但不写盘 + 维持手动重锚建议', async () => {
++    // 一次性口径覆盖（paths）的计数口径 ≠ 持久口径——守卫只拦自动重锚写盘，实测仍发生
++    gitCli(repo, ['update-ref', 'refs/remotes/origin/main', gitCli(repo, ['rev-parse', 'HEAD'])])
++    writeBaseline(join(repo, '.sillyspec'), 0)
++    const r = await runDocsGate({ projectRoot: repo, specBase: join(repo, '.sillyspec') }, { paths: ['docs/*.md'] })
++    assert.equal(r.exitCode, 0)
++    assert.equal(r.originCount, 3, '实测仍发生（守卫只拦写盘不拦实测）')
++    assert.equal(r.reanchored, false)
++    assert.equal(r.baseline, 0, 'baseline 维持旧值')
++    assert.equal(readBaseline(join(repo, '.sillyspec')), 0, '基线不写盘（仍为旧值）')
++    assert.ok(r.message.includes('--init-baseline 重锚'), `维持建议文案（实际：${r.message}）`)
+   })
+ 
+   it('current > origin/main 实测（真增量）→ 拦 + 双参考值', async () => {
