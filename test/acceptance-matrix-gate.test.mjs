@@ -323,12 +323,13 @@ function verifyDoc(bodyLines, conclusion = 'PASS') {
     'verify-result.md 未落盘 → 矩阵门禁 no-op（存在性归引擎 manifest，不提前拦中间步骤）')
 }
 
-// 2.8 注册面：contracts.verify.validators 含三个 validator（getContract 消费方可见；task-02 注册 validatePassEligibility）
+// 2.8 注册面：contracts.verify.validators 含四个 validator（getContract 消费方可见；task-02 注册
+// validatePassEligibility；2026-09-17-api-coverage-smoke task-05 注册 validateApiCoverageMatrix）
 {
   const { getContract } = await import('../src/stage-contract.js')
   const c = getContract('verify')
-  assert(c && Array.isArray(c.validators) && c.validators.length === 3,
-    `verify validator 链注册为 3（validateVerifyOutputs + validateAcceptanceMatrix + validatePassEligibility，实际 ${c && c.validators.length}）`)
+  assert(c && Array.isArray(c.validators) && c.validators.length === 4,
+    `verify validator 链注册为 4（validateVerifyOutputs + validateAcceptanceMatrix + validatePassEligibility + validateApiCoverageMatrix，实际 ${c && c.validators.length}）`)
 }
 
 // 2.9 partial/uncovered 联动（task-03 / D-003 / FR-04）：partial 行 + facts.handover 零有效行 → error。

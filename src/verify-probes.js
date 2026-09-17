@@ -290,6 +290,89 @@ function designHasSubmitEndpoint(text) {
   return false
 }
 
+// ── 接口面解析 + 消费端归类（2026-09-17-api-coverage-smoke task-04 / FR-05 / D-005~D-007）──
+// parseDesignApiTable：design.md 接口段 tolerant 解析（D-005：不做 normative 接口表格式硬
+// 契约）。双重防线：段头宽收（含 接口/端点/API/REST 子串、不区分大小写的 ##/### 段——宁多
+// 勿漏，R-01：漏端点→漏覆盖假绿比多端点更糟）+ 行级双条件紧守（R-02 误报防护）：HTTP 方法
+// token 词边界（GETTING/BUCKET 内嵌词形不误认）× 路径样式 token（/xxx 类路径或 {xxx}/:xxx
+// 模板段，取行内首个类路径串；?query 尾自然截断——端点身份是 path）。非接口段（非目标/
+// 先例引用段）内的表格/示例行靠段头过滤不计（「示例行跳过」的机制即此）。产物三面：
+//   endpoints [{method, path, rowIdx}]（rowIdx = 命中段内端点产出序号，1-based）；
+//   declared（「本变更接口面：N 端点」声明行提取的 N，全文首个命中，缺席 null——声明与
+//     解析并存以解析为准并注记，渲染侧体现）；
+//   sectionHint（命中的接口段头列表，审计注记）。
+// 落盘面（数据通道=落盘即消费，stage-contract 零 import 纪律）：backfillFactsFromMdAndTests
+// 主路径写 facts.apiFace / facts.consumerHints，task-05 validator 经 facts 消费不经函数调用。
+const API_FACE_SECTION_RE = /接口|端点|api|rest/i
+const API_FACE_METHOD_RE = /(?:^|[^A-Za-z])(GET|POST|PUT|DELETE|PATCH)(?![A-Za-z])/
+// 路径样式 token：/ 起始、前邻非字母数字（日期 2026/09/17 的 /09 前是数字段不认），
+// 首字符字母数字/_/-/{，后续段字符含 {}/: 模板形态（/orders/{id}、/orders/:id 全串命中）
+const API_FACE_PATH_RE = /(?:^|[^A-Za-z0-9])(\/[A-Za-z0-9_\-{}][\w\-./{}:]*)/
+const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
+
+/**
+ * design.md 接口段 tolerant 解析（task-04 / D-005）。纯函数、本地正则零新依赖；输入统一
+ * CRLF→LF 归一（parseRuntimeEndpointExcluded 同款，Windows/Linux/macOS 兼容）。
+ * @param {string} designMd design.md 全文
+ * @returns {{ endpoints: Array<{method: string, path: string, rowIdx: number}>,
+ *   declared: number|null, sectionHint: string[] }}
+ */
+export function parseDesignApiTable(designMd) {
+  const text = String(designMd || '').replace(/\r\n/g, '\n')
+  const dm = text.match(API_FACE_DECLARED_RE)
+  const declared = dm ? parseInt(dm[1], 10) : null
+  const endpoints = []
+  const sectionHint = []
+  for (const sec of splitMdSections(text)) {
+    if (!API_FACE_SECTION_RE.test(sec.heading)) continue
+    sectionHint.push(sec.heading)
+    let rowIdx = 0
+    for (const line of sec.lines) {
+      const t = line.trim()
+      if (!t || t.startsWith('#')) continue
+      const mm = t.match(API_FACE_METHOD_RE)
+      if (!mm) continue // 缺方法列（有路径无方法 token）不认——双条件缺一不可
+      const pm = t.match(API_FACE_PATH_RE)
+      if (!pm) continue // 有方法无路径样式 token（说明行/纯文档行）不认
+      rowIdx++
+      endpoints.push({ method: mm[1], path: pm[1], rowIdx })
+    }
+  }
+  return { endpoints, declared, sectionHint }
+}
+
+// ── 消费端归类启发式（task-04 / D-006 / FR-05，仅 advisory 提示面）──
+// design 清单文件面路径段归类 web/mp/script：routes/pages/model 目录词 → web；mp/miniapp →
+// mp；scripts/test → script。归类只用于 task-05 的「有消费端未填子行」warning 提示（R-05：
+// 启发式假提示无害）——不做语义判定。路径段级匹配非裸子串（'homepages.js' 文件名不命中
+// pages 段）；mp 检查先于 web（mp/pages/index 小程序页归 mp 不归 web）；NEW: 前缀剥除
+// （probe1-new-prefix-miss 同款）。
+const CONSUMER_WEB_SEGMENTS = new Set(['routes', 'pages', 'model'])
+const CONSUMER_MP_SEGMENT_RE = /^(?:mp|miniapp|miniprogram|weapp)$/i
+const CONSUMER_SCRIPT_SEGMENTS = new Set(['scripts', 'script', 'test', 'tests'])
+const CONSUMER_HINT_FILE_CAP = 20
+/**
+ * 清单路径 → 消费端归类（task-04，导出供 task-05 经落盘/传参双通道消费）。
+ * @param {string[]} paths design 清单文件路径（NEW: 前缀/CRLF 容忍）
+ * @returns {Record<string, string[]>} 命中类别的支撑文件（键 ∈ web/mp/script，零命中 {}）
+ */
+export function classifyConsumerHints(paths) {
+  const hints = {}
+  const push = (kind, p) => {
+    if (!hints[kind]) hints[kind] = []
+    if (hints[kind].length < CONSUMER_HINT_FILE_CAP && !hints[kind].includes(p)) hints[kind].push(p)
+  }
+  for (const raw of paths || []) {
+    const p = String(raw || '').replace(/^NEW:\s*/, '').split('\\').join('/')
+    if (!p || p.startsWith('.sillyspec/')) continue
+    const segs = p.toLowerCase().split('/')
+    if (segs.some(s => CONSUMER_MP_SEGMENT_RE.test(s))) push('mp', p)
+    else if (segs.some(s => CONSUMER_WEB_SEGMENTS.has(s))) push('web', p)
+    else if (segs.some(s => CONSUMER_SCRIPT_SEGMENTS.has(s))) push('script', p)
+  }
+  return hints
+}
+
 /**
  * 探针 8 主体：design 清单三面文件（Java/SQL/前端）→ 双根（主仓 ∪ worktree）∪ 跨仓注册仓根
  * 读取 → 归一化比对。advisory：所有输出是「候选」不是结论（UI 本地态键/服务端填充列会自然
@@ -1258,7 +1341,20 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe9.notes = [`探针 9 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
   }
 
-  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9 }
+  // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
+  // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
+  // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
+  // design 缺失/解析异常 → 空面（骨架渲染「无接口面」注记，validator 判 N=0 走零行为注记）。──
+  let apiFace = { endpoints: [], declared: null, sectionHint: [] }
+  let consumerHints = {}
+  try {
+    if (existsSync(designPath)) {
+      apiFace = parseDesignApiTable(readFileSync(designPath, 'utf8'))
+      consumerHints = classifyConsumerHints(detailed.map(e => String(e.path)))
+    }
+  } catch { /* design 读/解析异常 → 空面（fail-soft） */ }
+
+  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, apiFace, consumerHints }
 }
 
 /**
@@ -1439,6 +1535,54 @@ function renderProbe9Lines(p9) {
     L.push('- ✅ 同实体守卫信号一致（无有守卫/无守卫并存的实体组）')
   }
   for (const n of p9.notes || []) L.push(`- ℹ️ ${n}`)
+  return L
+}
+
+// ── 接口验证覆盖矩阵段渲染（task-04 / FR-05 / D-005~D-007）──
+// 骨架新写路径（generateVerifyResultSkeleton）与缺段补齐（ensureApiCoverageMatrixSection）
+// 共用单一实现——renderProbe7Lines 先例。不动 probe7 既有矩阵（独立 ## 章节并行存在，口径
+// 注记互指区分，D-009 非目标 / R-07）。预填口径同 probe7：CLI 机械预填、agent 逐格复核改写。
+const API_MATRIX_HEADING = '## 接口验证覆盖矩阵'
+// 写端点集合（D-007/FR-06 表间完备性 advisory 数据面）：method ∈ 此集的端点须在 design
+// 权限矩阵段有对应行或显式豁免（「无权限约束」）——warning 计算归 task-05，此处只定集合。
+const API_MATRIX_WRITE_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH'])
+
+/**
+ * 渲染「## 接口验证覆盖矩阵」段（task-04）。
+ * 三态：解析有端点 → 逐端点预填行（判定列 `<待填：四选一>` 占位，同 probe7 预填口径供 agent
+ * 复核）；解析零行有声明 → 声明占位行「本变更接口面：<N> 端点（agent 声明）」（D-005 零解析
+ * 降级，对账分母=声明数）；零解析零声明 → 「无接口面」注记行（非判级 critical 变更零行为
+ * 注记即可——判级 critical 的 error 拦截归 task-05 validator）。段尾 advisory 占位注记
+ * （消费面/表间完备性，warning 计算归 task-05，本段只留位）。
+ * @param {{endpoints?: Array<{method: string, path: string, rowIdx: number}>, declared?: number|null}|null} apiFace
+ * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
+ */
+function renderApiCoverageMatrixLines(apiFace) {
+  const face = apiFace && typeof apiFace === 'object' ? apiFace : null
+  const endpoints = face && Array.isArray(face.endpoints) ? face.endpoints : []
+  const declared = face && typeof face.declared === 'number' ? face.declared : null
+  const L = [`${API_MATRIX_HEADING} [层：人工判断——CLI 预填复核]`]
+  L.push('<!-- 口径注记（与探针 7 互指，R-07）：探针 7 = 验收项 × 测试承接面（每条 acceptance 由哪些测试承接）；本矩阵 = 接口端点 × 验证用例面（design 接口段每个端点由哪些验证用例/冒烟步骤覆盖）——两者并排互补，双矩阵并行存在。端点集来自 design.md 接口段 tolerant 解析（parseDesignApiTable：段头宽收 + 方法/路径双条件），预填≠结论，agent 逐行复核。判定枚举（四选一）：covered / partial / uncovered / non-testable。 -->')
+  L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态：design接口表#METHOD /path、权限矩阵[角色×动作]、契约表@行标识、DDL@列名、载荷@构造点路径（须真实命中对应表/段，防空指）。 -->')
+  L.push('<!-- 文法注释：子行 = 端点行下一行、两空格缩进、以「↳ <消费端>:」前缀书写（消费端细分承接面，不计矩阵行账）；探索行 = 判定 uncovered 且证据列含 [探索] 标记（探索性验证不算覆盖）。 -->')
+  if (endpoints.length === 0 && declared === null) {
+    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --init` 刷新本段；判级 critical 的零面拦截归 validator')
+    return L
+  }
+  if (endpoints.length > 0 && declared !== null && declared !== endpoints.length) {
+    L.push(`<!-- 声明与解析并存（声明 ${declared} 端点 / 解析 ${endpoints.length} 端点）——以解析为准，差异需复核（design 接口段与声明行不同步的漂移信号） -->`)
+  }
+  L.push('| 端点 | 判定 | 用例依据 ID | 结果 | 证据 |')
+  L.push('|---|---|---|---|---|')
+  if (endpoints.length > 0) {
+    for (const ep of endpoints) {
+      L.push(`| ${mdEscapeCell(`${ep.method} ${ep.path}`, 160)} | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
+    }
+  } else {
+    L.push(`| 本变更接口面：${declared} 端点（agent 声明） | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
+    L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init 刷新本段 -->')
+  }
+  L.push('<!-- advisory 尾注（warning 计算归 validator，本段只留位）：有消费端未填子行的端点将列于此（advisory——消费端归类=design 清单启发式，数据面 facts.consumerHints）；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段声明的将列于此（advisory——补行或显式豁免「无权限约束」，数据面 facts.apiFace.writeEndpoints；表缺行会让派生框架继承你的洞） -->')
   return L
 }
 
@@ -1687,6 +1831,14 @@ export function parseDbScriptDeclarations(md) {
 // 退役判据：批次 C commands.smoke 落地后由 smoke 回执一票判定「集成实测已跑」——起服务冒烟
 // 即跨层实测，不得默认 build 误拦金路径）；unit=单测 runner 直跑（JUnitCore/node --test/
 // mocha/jest/vitest/pytest 等）；其余（compile/lint/构建/mvn test 等混合形态）一律 build。
+//
+// 来源标记直判（2026-09-17-api-coverage-smoke task-02 / Grill B-1 修正，FR-03）：条目 source
+// 标记 'cli-noai-smoke'（parseEvidenceSlots additive 第五字段——本文件 ensureSmokeReceiptSection
+// 注入的机器段行尾注回填）→ 直判 cross-layer，**优先于命令词正则分类**——修正点在标记识别
+// 而非命令词增补：node scripts/smoke.mjs / bash smoke.sh / python smoke.py 等脚本形态在既有
+// 正则下全判 build 会误拦金路径，且脚本形态词表不可枚举（RECEIPT_CROSS_LAYER_RE 正则族
+// 零词变动）。对齐目标：change-risk-profile.js classifyReceiptSourceTag(sourceMark 参数与
+// CLI_SMOKE_SOURCE_MARK 常量)——**任一侧增改标记族必须双侧同步**（G-3 铁律）。
 const RECEIPT_CROSS_LAYER_RE = new RegExp([
   '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
   '\\biwr\\b', '\\birm\\b', 'https?://',
@@ -1696,7 +1848,10 @@ const RECEIPT_CROSS_LAYER_RE = new RegExp([
   '\\b(?:nc|netcat|telnet|socat)\\b',
 ].join('|'), 'i')
 const RECEIPT_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
-function classifyReceiptCommandSource(command) {
+/** CLI 机器段来源标记（与 change-risk-profile.js CLI_SMOKE_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
+const SMOKE_RECEIPT_SOURCE_MARK = 'cli-noai-smoke'
+function classifyReceiptCommandSource(command, sourceMark) {
+  if (sourceMark === SMOKE_RECEIPT_SOURCE_MARK) return 'cross-layer'
   const cmd = String(command || '')
   if (RECEIPT_CROSS_LAYER_RE.test(cmd)) return 'cross-layer'
   if (RECEIPT_UNIT_RE.test(cmd)) return 'unit'
@@ -1734,7 +1889,9 @@ function judgeIntegrationRan(factsPath, runtimeEvidence) {
   const scanRan = Boolean(record && record.testResult && record.testResult.status && record.testResult.status !== 'skipped')
   if (scanRan && ['full', 'module', 'evidence-auto'].includes(strategy)) return { ran: 'ran', notes: [] }
   const receipts = Array.isArray(runtimeEvidence) ? runtimeEvidence : []
-  if (receipts.some(r => classifyReceiptCommandSource(r && r.command) === 'cross-layer')) {
+  // 条目 source 标记透传（task-02 Grill B-1）：source='cli-noai-smoke' 直判 cross-layer——
+  // 机器段命令（node scripts/smoke.mjs 等脚本形态）不再落 build 误拦金路径。
+  if (receipts.some(r => classifyReceiptCommandSource(r && r.command, r && r.source) === 'cross-layer')) {
     return { ran: 'ran', notes: [] }
   }
   const notes = []
@@ -1778,6 +1935,22 @@ function countMatrixPartialRows(md) {
 }
 
 export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResult = null, conclusion = null }) {
+  // smoke 机器段 ensure（2026-09-17-api-coverage-smoke task-02，挂 backfill 合并时点——
+  // quality-scan step 6 noAI 亲跑落记录先于本步，读得到实录）：read-modify-write 盘上 md
+  // 最新态（不基于 verifyMd 快照写回，防覆盖多 agent 并发改动）；注入/态更新成功后解析源
+  // 切盘上最新内容——机器段行立即参与 slots 解析，judgeIntegrationRan 同轮即吃到
+  // source 标记直判 cross-layer。ensure 落盘失败/无记录 fail-soft，不阻断 facts 回填。
+  let verifyMdText = verifyMd
+  try {
+    const ensureDir = dirname(factsPath)
+    const ensured = ensureSmokeReceiptSection(join(ensureDir, 'verify-result.md'), {
+      specBase: dirname(dirname(ensureDir)),
+      changeName: basename(ensureDir),
+    })
+    if (ensured.changed) {
+      verifyMdText = readFileSync(join(ensureDir, 'verify-result.md'), 'utf8')
+    }
+  } catch { /* ensure 异常 fail-soft，按传入快照继续回填 */ }
   let facts = null
   try { facts = JSON.parse(readFileSync(factsPath, 'utf8')) } catch { /* 缺失见下 */ }
   // 只固化既有底稿，不无中生有（2026-09-08-ir-verify-facts 接线实证）：无 facts 的存量变更
@@ -1790,7 +1963,7 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   if (facts.schemaVersion !== FACTS_SCHEMA_VERSION) {
     facts = { ...facts, schemaVersion: FACTS_SCHEMA_VERSION, probes: (facts && facts.probes) || {} }
   }
-  const slots = parseEvidenceSlots(verifyMd || '')
+  const slots = parseEvidenceSlots(verifyMdText || '')
   // conclusion 由调用方传 stage-contract.extractVerifyConclusionSlot(verifyMd) 的结果
   // （避免 verify-probes → stage-contract 静态 import 的潜在环，分层单向）
   const conclusionSlot = conclusion || null
@@ -1808,7 +1981,7 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   // PASS WITH NOTES 零有效行 → advisory 警告（不阻断——存量 PASS WITH NOTES 无此章节是常态，
   // 渐进采纳）。EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1，清单化才有
   // 「谁兜、怎么复跑」的可追溯面。
-  const handoverItems = parseHandoverRows(verifyMd || '')
+  const handoverItems = parseHandoverRows(verifyMdText || '')
   if (handoverItems.length > 0) {
     facts.handover = { count: handoverItems.length, items: handoverItems }
   }
@@ -1820,12 +1993,45 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   // testCheckResult 时点（task-02 validator 在 runValidators 时点消费，已就位）；误挂二次
   // 回填的 testCheckResult 分支则消费时点读不到、恒误拦。判定输入自推导自读（quality-scan
   // 记录按 specBase 推导 / 矩阵经动态绑定），不依赖调用方传参。
-  facts.dbScriptDeclarations = parseDbScriptDeclarations(verifyMd || '')
-  facts.runtimeEndpointExcluded = parseRuntimeEndpointExcluded(verifyMd || '')
+  facts.dbScriptDeclarations = parseDbScriptDeclarations(verifyMdText || '')
+  facts.runtimeEndpointExcluded = parseRuntimeEndpointExcluded(verifyMdText || '')
   const integration = judgeIntegrationRan(factsPath, slots.runtimeEvidence)
   facts.integrationRan = integration.ran
   for (const note of integration.notes) console.warn(note)
-  facts.matrixPartialRows = countMatrixPartialRows(verifyMd || '')
+  facts.matrixPartialRows = countMatrixPartialRows(verifyMdText || '')
+  // ── facts.apiFace / facts.consumerHints（2026-09-17-api-coverage-smoke task-04 / FR-05 /
+  // D-005~D-007 producer 侧）──X-08 主路径无条件产出（同上口径，不依赖 testCheckResult
+  // 时点）：apiFace = design 接口段 tolerant 解析面（endpoints/declared + writeEndpoints
+  // 子集=表间完备性数据面），consumerHints = 清单消费端归类启发式（web/mp/script，仅
+  // warning 提示面）。数据通道=落盘即消费（stage-contract 零 import 纪律，分层单向）——
+  // task-05 validator 经 facts 读，不经函数调用。design.md 缺失 → 空面落盘（判定面稳定，
+  // validator 判 N=0 走零行为注记）；与 runVerifyProbes 同一解析器（单一产物源）。
+  {
+    const changeDir = dirname(factsPath)
+    const designPath = join(changeDir, 'design.md')
+    let designText = null
+    if (existsSync(designPath)) {
+      try { designText = readFileSync(designPath, 'utf8') } catch { designText = null }
+    }
+    const face = parseDesignApiTable(designText || '')
+    facts.apiFace = {
+      endpoints: face.endpoints,
+      declared: face.declared,
+      writeEndpoints: face.endpoints.filter(e => e && API_MATRIX_WRITE_METHODS.has(e.method)),
+    }
+    let designPaths = []
+    if (designText !== null) {
+      try { designPaths = parseFileChangeListDetailed(designPath).map(e => String(e.path)) } catch { designPaths = [] }
+    }
+    facts.consumerHints = classifyConsumerHints(designPaths)
+  }
+  // ── facts.smokeRan（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1 producer 侧）──
+  // X-08 主路径无条件产出（同上四字段口径，不依赖 testCheckResult 时点）：唯一事实源 =
+  // quality-scan 记录 smokeResult 段（judgeSmokeRan 五边界态封闭），不受 verify-result.md
+  // 篡改影响（R-06 双源兜底）。消费方 = evaluatePassEligibility 第五条件（smoke-not-run）。
+  const smokeRanJudge = judgeSmokeRan(factsPath)
+  facts.smokeRan = smokeRanJudge.value
+  for (const note of smokeRanJudge.notes) console.warn(note)
   let testsBackfilled = false
   if (testCheckResult && testCheckResult.status && testCheckResult.status !== 'skipped') {
     facts.tests = {
@@ -1929,6 +2135,235 @@ export function ensureAcceptanceMatrixSection(mdPath, probe7) {
     return { added: false, reason: '落盘失败' }
   }
   return { added: true }
+}
+
+/**
+ * 接口验证覆盖矩阵段幂等补齐（task-04；ensureAcceptanceMatrixSection 先例形态）：verify-
+ * result.md 已存在但缺「## 接口验证覆盖矩阵」段时补骨架段。幂等口径（renderProbe7Lines
+ * 补段同款）：段已在场（agent 已填/未填）一律不触碰——预填只在骨架生成与缺段补齐两条新写
+ * 路径生效，agent 已填内容永不被覆盖；二跑零改动。插入位置：「## 探针结果」章节之后（下一
+ * ## 标题前，保持骨架章节序），无探针章则文末追加（旧格式/手写正文）。
+ * @param {string} mdPath verify-result.md 路径
+ * @param {{endpoints?: Array<{method: string, path: string, rowIdx: number}>, declared?: number|null}|null} apiFace
+ * @returns {{ added: boolean, reason?: string }}
+ */
+export function ensureApiCoverageMatrixSection(mdPath, apiFace) {
+  let text
+  try { text = readFileSync(mdPath, 'utf8') } catch { return { added: false, reason: 'verify-result.md 不存在或不可读' } }
+  const normalized = text.replace(/\r\n/g, '\n')
+  if (/^## 接口验证覆盖矩阵/m.test(normalized)) return { added: false, reason: '接口验证覆盖矩阵段已在场' }
+  const blockLines = [...renderApiCoverageMatrixLines(apiFace), '']
+  try {
+    const lines = normalized.split('\n')
+    const probeIdx = lines.findIndex(l => /^## 探针结果/.test(l))
+    if (probeIdx === -1) {
+      writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + '\n' + blockLines.join('\n'))
+    } else {
+      // 探针结果章终点 = 下一个 ## 级标题行（矩阵段紧随其后，与骨架章节序一致）
+      let end = lines.length
+      for (let i = probeIdx + 1; i < lines.length; i++) {
+        if (/^## /.test(lines[i])) { end = i; break }
+      }
+      lines.splice(end, 0, ...blockLines)
+      writeFileSync(mdPath, lines.join('\n'))
+    }
+  } catch (e) {
+    console.warn(`⚠️ 接口验证覆盖矩阵段补齐落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
+    return { added: false, reason: '落盘失败' }
+  }
+  return { added: true }
+}
+
+// ============ smoke 回执槽机器段（2026-09-17-api-coverage-smoke task-02 / FR-03，design §3） ============
+//
+// 唯一事实源 = .runtime/verify-quality-scan-<change>.json 的 smokeResult 段（task-01 契约，
+// R-06 双源兜底——md 被篡改不影响 facts 推导）；本组函数把该记录 ensure 式渲染成
+// verify-result.md「## 集成验证回执」槽内 CLI 拥有的机器段行（source: cli-noai-smoke 标注
+// 识别），agent 只可追加段、不可改写机器段（改写/删除由 verify-postcheck
+// checkProbeConsistency 回执槽一致性对比打回，Grill #6 / R-06）。
+/** 机器段行首锚（ensure 幂等识别——claim 钦定文案；单行管道与多行 YAML 双形态首行均命中。
+ *  注意不可用 \b 锚中文词尾：CJK 不属 \w，「亲跑」后与「 |」之间无 word 边界恒 false（实证
+ *  幂等失效重复注入）——改前瞻断言（后随管道分隔或行尾）。 */
+const SMOKE_MACHINE_CLAIM_RE = /^- claim: commands\.smoke CLI 亲跑(?=\s*[|｜]|$)/
+/** 缺态注释行（态捕获 m[1]，not-configured / not-ran 两态——非回执行形态，parseEvidenceSlots 不收取） */
+const SMOKE_ABSENT_LINE_RE = /^<!--\s*smoke 机器段缺态：(not-configured|not-ran)\b[^>]*source: cli-noai-smoke[^>]*-->$/
+
+/**
+ * 读 quality-scan 记录的 smokeResult 段（路径规则同 judgeIntegrationRan：specBase/
+ * .runtime/verify-quality-scan-<changeName>.json）。共享读取点——ensure 注入与 postcheck
+ * 一致性对比同源取数，不各读各的。记录缺失/损坏/无 smokeResult 段 → null。
+ */
+export function readSmokeResultRecord(specBase, changeName) {
+  try {
+    const rec = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`), 'utf8'))
+    if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai'
+      && rec.smokeResult && typeof rec.smokeResult === 'object') {
+      return rec.smokeResult
+    }
+  } catch { /* 记录缺失/损坏 → null */ }
+  return null
+}
+
+/**
+ * 由 smokeResult 记录推导机器段目标态（ensure 与 postcheck 共享口径，不二算）：
+ * 'passed'（configured 且亲跑绿）| 'not-configured'（未配置）| 'not-ran'（配置但
+ * failed/超时——task-01 契约 timeout 归 status='failed'）。
+ */
+export function deriveSmokeSectionState(smoke) {
+  if (!smoke || typeof smoke !== 'object') return null
+  if (smoke.configured === false) return 'not-configured'
+  return smoke.status === 'passed' ? 'passed' : 'not-ran'
+}
+
+/**
+ * facts.smokeRan 判定（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1）：
+ * 唯一事实源 = quality-scan 记录 smokeResult 段（readSmokeResultRecord 共享读取点，R-06
+ * 双源兜底——不受 verify-result.md 篡改影响；judgeIntegrationRan 同款自读先例：specBase/
+ * changeName 自 factsPath 目录上推，不依赖调用方传参）。五边界态封闭：
+ *   configured=false（未配置键 / commands.smoke: unavailable / local.yaml 不可读）→
+ *     not-configured；status='passed'（exit 0）→ ran；status='failed'（exit 非 0/超时——
+ *     task-01 契约 timeout 归 failed，失败也是未通过）→ not-ran；记录在场但无 smokeResult
+ *     段（升级过渡期存量记录）→ not-ran + fail-open 注记；记录缺失/损坏 → not-ran +
+ *     fail-open 注记（X-01 口径，不阻断——出路=重跑质量扫描步或降级 NOTES）。
+ * @param {string} factsPath verify-facts.json 路径（<specBase>/changes/<name>/verify-facts.json）
+ * @returns {{ value: 'ran'|'not-ran'|'not-configured', notes: string[] }}
+ */
+function judgeSmokeRan(factsPath) {
+  const changeDir = dirname(factsPath)
+  const changeName = basename(changeDir)
+  const specBase = dirname(dirname(changeDir))
+  const recordPath = join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`)
+  const smoke = readSmokeResultRecord(specBase, changeName)
+  if (smoke) {
+    if (smoke.configured === false) return { value: 'not-configured', notes: [] }
+    return { value: smoke.status === 'passed' ? 'ran' : 'not-ran', notes: [] }
+  }
+  // readSmokeResultRecord null 两缺因区分注记：记录在场但无 smokeResult 段（升级过渡期
+  // 存量记录）vs 记录缺失/损坏——同判 not-ran，注记各自点名（X-01 fail-open，不阻断）。
+  let recordPresent = false
+  try {
+    const rec = JSON.parse(readFileSync(recordPath, 'utf8'))
+    if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai') recordPresent = true
+  } catch { recordPresent = false }
+  return {
+    value: 'not-ran',
+    notes: [recordPresent
+      ? `ℹ️ quality-scan 记录在场但无 smokeResult 段（${recordPath}，升级过渡期存量记录）——facts.smokeRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；出路=重跑质量扫描步或降级 NOTES）`
+      : `ℹ️ quality-scan 实测记录缺失（${recordPath}）——facts.smokeRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；--done 亲测替代扫描的场景记录时序不可得，出路=重跑质量扫描步或降级 NOTES）`],
+  }
+}
+
+/**
+ * 扫描 verify-result.md 回执槽内 CLI 拥有的 smoke 机器段标记（ensure 幂等判定与
+ * verify-postcheck 一致性对比共享解析点）：①机器段回执条目 = parseEvidenceSlots 收取且
+ * source='cli-noai-smoke' 的条目（含 agent 冒充行——冒充也是打回面）；②缺态注释行态。
+ * @param {string} mdText verify-result.md 全文（CRLF 归一内部处理）
+ * @returns {{ machineEntries: Array<{claim,command,exitCode,logPath,source}>, absentState: 'not-configured'|'not-ran'|null }}
+ */
+export function scanSmokeReceiptSection(mdText) {
+  const text = String(mdText || '').replace(/\r\n/g, '\n')
+  let machineEntries = []
+  try {
+    machineEntries = (parseEvidenceSlots(text).runtimeEvidence || [])
+      .filter(e => e && e.source === SMOKE_RECEIPT_SOURCE_MARK)
+  } catch { machineEntries = [] }
+  let absentState = null
+  for (const line of text.split('\n')) {
+    const am = line.match(SMOKE_ABSENT_LINE_RE)
+    if (am) { absentState = am[1]; break }
+  }
+  return { machineEntries, absentState }
+}
+
+/**
+ * 回执槽 smoke 机器段 ensure 式注入（ensureAcceptanceMatrixSection 先例形态，task-02）：
+ * 挂 backfill 合并时点（backfillFactsFromMdAndTests——quality-scan step 6 noAI 亲跑落记录
+ * 先于 verify 门禁，读得到实录）。行为：记录态 passed → 段内注入机器段行（单行管道形态，
+ * command 含 ｜/| 时降多行 YAML 防字段截断）+ 说明注释行；not-configured / not-ran →
+ * 注缺态注释行；无记录 → no-op（不注入，task-03 判 not-ran）。幂等——段内已有同态 CLI 行
+ * 零改动；态迁移（如配置后亲跑：not-configured → passed）时替换 CLI 拥有行为新态。
+ * read-modify-write 基于盘上 md 最新态（不基于调用方快照写回，防覆盖多 agent 并发改动）。
+ * @param {string} mdPath verify-result.md 路径
+ * @param {{ specBase?: string, changeName?: string }} [opts] 缺省自 mdPath 目录上推（judgeIntegrationRan 同款）
+ * @returns {{ changed: boolean, state?: string, reason?: string }}
+ */
+export function ensureSmokeReceiptSection(mdPath, opts = {}) {
+  const changeDir = dirname(String(mdPath || ''))
+  const changeName = opts.changeName || basename(changeDir)
+  const specBase = opts.specBase || dirname(dirname(changeDir))
+  let text
+  try { text = readFileSync(mdPath, 'utf8') } catch { return { changed: false, reason: 'verify-result.md 不存在或不可读' } }
+  const smoke = readSmokeResultRecord(specBase, changeName)
+  const state = deriveSmokeSectionState(smoke)
+  if (!state) return { changed: false, reason: '无 quality-scan smokeResult 记录（未跑质量扫描）——不注入机器段' }
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  const hIdx = lines.findIndex(l => l.startsWith(RECEIPT_SLOT_HEADING))
+  if (hIdx === -1) return { changed: false, reason: `回执槽段（${RECEIPT_SLOT_HEADING}）不在场——backfillMissingEvidenceSlots 先补段，下次 ensure 注入` }
+  // 段终点（parseEvidenceSlots sectionOf 同口径：下一 #/## 级标题或文末）
+  let end = lines.length
+  for (let i = hIdx + 1; i < lines.length; i++) {
+    if (/^#{1,2}\s/.test(lines[i])) { end = i; break }
+  }
+  let machineIdx = -1 // 机器段行（单行形态行或多行形态首行）
+  let absentIdx = -1 // 缺态注释行
+  for (let i = hIdx + 1; i < end; i++) {
+    if (machineIdx === -1 && SMOKE_MACHINE_CLAIM_RE.test(lines[i])) machineIdx = i
+    if (absentIdx === -1 && SMOKE_ABSENT_LINE_RE.test(lines[i])) absentIdx = i
+  }
+  // 目标行渲染（passed 双形态：command 含 ｜/| 时单行管道形态会字段截断 → 降多行 YAML 形态；
+  // exitCode/logPath 非法空值如实渲染——收取侧 fail-closed 不收，postcheck 对比兜底）
+  let targetLines
+  if (state === 'passed') {
+    const command = String(smoke.command || '')
+    const exitVal = typeof smoke.exitCode === 'number' ? smoke.exitCode : ''
+    const noteLine = `<!-- smoke 机器段（CLI ensure 注入，source: ${SMOKE_RECEIPT_SOURCE_MARK}）——唯一事实源是 .runtime/verify-quality-scan-${changeName}.json 的 smokeResult，agent 不可改写/删除（verify 一致性抽查会打回）；ranAt 实录：${smoke.ranAt || '未知'}，durationMs：${typeof smoke.durationMs === 'number' ? smoke.durationMs : '未知'} -->`
+    targetLines = /[|｜]/.test(command)
+      ? [
+        noteLine,
+        '- claim: commands.smoke CLI 亲跑',
+        `  command: ${command}`,
+        `  exit: ${exitVal}`,
+        `  log: ${smoke.logPath || ''}`,
+        `  source: ${SMOKE_RECEIPT_SOURCE_MARK}`,
+      ]
+      : [
+        noteLine,
+        `- claim: commands.smoke CLI 亲跑 | command: ${command} | exit: ${exitVal} | log: ${smoke.logPath || ''} | source: ${SMOKE_RECEIPT_SOURCE_MARK}`,
+      ]
+  } else {
+    const absentNote = state === 'not-configured'
+      ? 'commands.smoke 未配置——配置 local.yaml 后下次 verify 亲跑并自动注入机器段'
+      : `commands.smoke 已配置但未绿跑（${smoke.reason || '失败/超时'}）——修复后重跑 verify 亲测自动更新本段`
+    targetLines = [`<!-- smoke 机器段缺态：${state}（${absentNote}）source: ${SMOKE_RECEIPT_SOURCE_MARK} -->`]
+  }
+  // 幂等/态迁移：同态 CLI 行在场 → no-op；异态（含旧缺态行 / 机器段行）→ 原位替换；缺 → 段内末尾注入
+  const inPlaceIdx = machineIdx !== -1 ? machineIdx : absentIdx
+  if (state === 'passed' && machineIdx !== -1) return { changed: false, state, reason: '机器段已在场（幂等跳过）' }
+  if (state !== 'passed' && absentIdx !== -1) {
+    const am = lines[absentIdx].match(SMOKE_ABSENT_LINE_RE)
+    if (am && am[1] === state) return { changed: false, state, reason: `缺态标注已在场（${state}，幂等跳过）` }
+  }
+  try {
+    if (inPlaceIdx !== -1) {
+      // 原位替换（CLI 拥有行的态迁移；机器段行 1 行 ↔ 缺态行 1 行，多行 YAML 形态首行替换为整块）
+      let replaceEnd = inPlaceIdx + 1
+      if (SMOKE_MACHINE_CLAIM_RE.test(lines[inPlaceIdx]) && state !== 'passed') {
+        // 旧机器段是多行 YAML 形态时连带其缩进续行一并替换
+        while (replaceEnd < end && /^[ \t]+\w/.test(lines[replaceEnd])) replaceEnd++
+      }
+      lines.splice(inPlaceIdx, replaceEnd - inPlaceIdx, ...targetLines)
+    } else {
+      // 段内末尾注入（最后一个非空行之后）
+      let last = end - 1
+      while (last > hIdx && lines[last].trim() === '') last--
+      lines.splice(last + 1, 0, ...targetLines)
+    }
+    writeFileSync(mdPath, lines.join('\n'))
+  } catch (e) {
+    console.warn(`⚠️ smoke 机器段 ensure 落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
+    return { changed: false, state, reason: '落盘失败' }
+  }
+  return { changed: true, state }
 }
 
 /**
@@ -2084,6 +2519,10 @@ export function generateVerifyResultSkeleton(result) {
     '',
     '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
     renderVerifyProbesReport(result),
+    '',
+    // 接口验证覆盖矩阵段（task-04 / FR-05）：紧随探针结果章（probe7 矩阵渲染面之后的独立
+    // ## 章节）；result 无 apiFace 键（存量调用方/合成 result）→ 空面渲染「无接口面」注记，零回归。
+    ...renderApiCoverageMatrixLines(result.apiFace),
     '',
     '## 测试结果 [层：确定性检查——CLI 实测对账]',
     '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->', /* probe1-noqa */

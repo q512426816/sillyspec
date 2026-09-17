@@ -302,9 +302,10 @@ const skeleton = generateVerifyResultSkeleton(mkRoundTripResult())
 // ── C1. 十章节标题全部带 [层：…] 纯后缀 ──
 {
   const headings = skeleton.split('\n').filter(l => l.startsWith('## '))
-  assert(headings.length === 14, `十四章节齐全（v2 两槽段 + 移交项结构化段 + 独立复核回流槽；实际: ${headings.length}——${headings.map(h => h.slice(0, 12)).join('/')}）`)
+  assert(headings.length === 15, `十五章节齐全（v2 两槽段 + 移交项结构化段 + 独立复核回流槽 + 接口验证覆盖矩阵段 task-04；实际: ${headings.length}——${headings.map(h => h.slice(0, 12)).join('/')}）`)
   assert(headings.some(h => h.startsWith('## 移交项（结构化）')), '移交项结构化段在结论章节之后在场')
   assert(headings.some(h => h.startsWith('## 独立复核')), '独立复核回流槽在场（verify 后深度复核结论落档案不落聊天）')
+  assert(headings.some(h => h.startsWith('## 接口验证覆盖矩阵')), '接口验证覆盖矩阵段在场（task-04，probe7 矩阵之后的独立章节）')
   assert(headings.every(h => /^## .+ \[层：[^\]]+\]$/.test(h)), '每章标题行以 [层：…] 后缀收尾')
   assert(headings.filter(h => h.endsWith('[层：人工判断]')).length === 8, '八个语义章节层标注=人工判断')
   const probeHeading = headings.find(h => h.startsWith('## 探针结果'))
@@ -642,8 +643,8 @@ console.log('\n=== F. verify-probes --init CLI 集成 ===\n')
     assert(existsSync(reportPath), '骨架 verify-result.md 落盘')
     assert(existsSync(factsPath), '机器底稿 verify-facts.json 落盘')
     const sk1 = readFileSync(reportPath, 'utf8')
-    assert(sk1.includes('#### 探针 1：未实现标记扫描') && (sk1.match(/^## .+ \[层：[^\]]+\]$/gm) || []).length === 14,
-      'CLI 骨架含探针子节 + 十四章节层标注后缀（v2 两槽段 + 移交项结构化段 + 独立复核槽）')
+    assert(sk1.includes('#### 探针 1：未实现标记扫描') && (sk1.match(/^## .+ \[层：[^\]]+\]$/gm) || []).length === 15,
+      'CLI 骨架含探针子节 + 十五章节层标注后缀（v2 两槽段 + 移交项结构化段 + 独立复核槽 + 接口验证覆盖矩阵段 task-04）')
     const f1 = JSON.parse(readFileSync(factsPath, 'utf8'))
     assert(f1.schemaVersion === 2 && f1.change === fx.change && f1.probes.probe1.metrics.matches === 2,
       `CLI facts 底稿内容正确（实际: ${JSON.stringify(f1.probes.probe1.metrics)}）`)

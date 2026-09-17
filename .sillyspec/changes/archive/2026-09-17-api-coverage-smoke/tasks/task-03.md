@@ -21,8 +21,8 @@ target_files:
 provides:
   - contract: smoke-ran-fact
     fields:
-      - 'facts.smokeRan——三态枚举 ran/not-ran/not-configured（producer=backfillFactsFromMdAndTests 主路径无条件产出，五边界态封闭）'
-      - 'smoke-not-run-trigger——evaluatePassEligibility 第五条件 triggered 枚举（判级 integration/deployment-critical 限定，smokeRan≠ran 触发，不设 handover 豁免子句）'
+      - facts.smokeRan
+      - smoke-not-run-trigger
 goal: >
   把 smoke 执行事实接进 PASS 封顶链（D-002/FR-02）——producer 侧 backfillFactsFromMdAndTests
   从 quality-scan 实测记录推导 facts.smokeRan（五边界态封闭），consumer 侧

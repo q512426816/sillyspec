@@ -20,10 +20,15 @@
  *   4. evaluateConclusionDraft（前置三·结论草稿不进判定链）：机械事实全绿（实测通过 + lint
  *      非 failed + 探针 1/3/5/6 干净 + 风险门非 integration/deployment-critical）才给 PASS
  *      草稿；gate 对结论槽的独立复核逻辑不动——草稿只省打字成本，槽行仍由 agent 复核可改写。
+ *   5. smoke 亲跑执行段（2026-09-17-api-coverage-smoke task-01 / FR-01）：commands.smoke
+ *      显式配置才执行（300s 超时帽／快照内超时回退主仓复跑一次），stdout+stderr tee 实录落
+ *      .runtime/verify-logs/smoke-<change>.log；失败/超时只记 additive smokeResult 失败态
+ *      **不 throw**（封顶信号归 --done PASS 封顶消费，非崩溃——与 test failed 的 throw 语义
+ *      刻意区分）。指纹已含 commands 段原文——配置 smoke 前后指纹自动变化，代码未变不重跑。
  */
 import { createHash } from 'node:crypto'
-import { execSync } from 'node:child_process'
-import { existsSync, readFileSync, mkdirSync } from 'node:fs'
+import { execSync, spawnSync } from 'node:child_process'
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
@@ -88,8 +93,11 @@ export function computeQualityScanFingerprint({ cwd, specBase }) {
 /**
  * 实测结果 + 指纹落盘（noAI 动作调用；--done 复用读回）。fail-soft：落盘失败只 warn，
  * --done 将照旧亲测（复用是优化不是正确性依赖）。
+ * smokeResult（2026-09-17-api-coverage-smoke task-01）为 additive 段：RECORD_SCHEMA_VERSION
+ * 保持 1——存量记录无 smoke 段照常读回（smokeResult 兜底 null）；未配置 smoke 时段形态为
+ * configured=false（记录仍写，供 --done PASS 封顶判 not-configured）。
  */
-export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult }) {
+export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult }) {
   const path = qualityScanRecordPath(specBase, changeName)
   if (!path) return null
   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
@@ -103,6 +111,7 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
       ranAt: new Date().toISOString(),
       testResult,
       lintResult: lintResult || null,
+      smokeResult: smokeResult || null,
     }, null, 2) + '\n')
     return { path, fingerprint }
   } catch (e) {
@@ -114,6 +123,7 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
 /**
  * 读回复用记录：schema/source 校验 + 指纹当前匹配 + testResult 有效（passed/skipped；
  * failed 不复用——失败态指纹下步骤本就未完成，防御性兜底）。任一不满足 → null。
+ * 复用条件只判 testResult（smoke 段随整条记录复用，additive 读回 smokeResult）。
  */
 export function loadReusableQualityScan({ specBase, cwd, changeName }) {
   const path = qualityScanRecordPath(specBase, changeName)
@@ -125,7 +135,7 @@ export function loadReusableQualityScan({ specBase, cwd, changeName }) {
     if (rec.testResult.status === 'failed') return null
     const fp = computeQualityScanFingerprint({ cwd, specBase })
     if (!fp || fp !== rec.fingerprint) return null
-    return { testResult: rec.testResult, lintResult: rec.lintResult || null, ranAt: rec.ranAt || null, fingerprint: fp }
+    return { testResult: rec.testResult, lintResult: rec.lintResult || null, smokeResult: rec.smokeResult || null, ranAt: rec.ranAt || null, fingerprint: fp }
   } catch {
     return null
   }
@@ -245,6 +255,131 @@ export function renderCoverageExistenceReport(cov) {
 }
 
 
+// ── smoke 亲跑执行段（2026-09-17-api-coverage-smoke task-01，FR-01 / D-001@v1 / D-010@v1）──
+// 300s 超时帽与 gate-snapshot.js runGateSnapshotCommands 同款（300_000 先例）。
+const SMOKE_TIMEOUT_MS = 300_000
+
+/**
+ * 从 local.yaml 文本提取 commands.smoke。
+ * 与 extractTestCommand 同风格同容错（带引号/不带引号；'unavailable' 视为未配置——
+ * 未配置/unavailable 口径对齐 coverage 先例：执行段休眠，记录 configured=false）。
+ * 模块内私有（runSmokeCheck 消费）。
+ */
+function extractSmokeCommand(yamlText) {
+  if (!yamlText) return null
+  const doubleQuoted = yamlText.match(/^\s*smoke:\s*"([^"]+)"\s*(?:#.*)?$/m)
+  const singleQuoted = yamlText.match(/^\s*smoke:\s*'([^']+)'\s*(?:#.*)?$/m)
+  const quoted = doubleQuoted || singleQuoted
+  if (quoted && quoted[1]) {
+    return quoted[1].toLowerCase() === 'unavailable' ? null : quoted[1].trim()
+  }
+  // bare 值不排除引号字符（extractTestCommand 坑 verify-bare-quote-miss 同款修正）：
+  // 全引号形态已被上方 quoted 分支先行消费，此处引号只可能是嵌在值中部的。
+  const bare = yamlText.match(/^\s*smoke:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
+  if (bare && bare[1]) {
+    const cmd = bare[1].trim()
+    return cmd.toLowerCase() === 'unavailable' ? null : cmd
+  }
+  return null
+}
+
+/** spawnSync 结果的超时判定（gate-snapshot.js runGateSnapshotCommands 同款口径）。 */
+function isSyncTimeout(r) {
+  return Boolean(r && r.error && (r.error.code === 'ETIMEDOUT' || /ETIMEDOUT/i.test(String(r.error.message || ''))))
+}
+
+/**
+ * noAI smoke 亲跑：local.yaml 显式配置 commands.smoke 才执行（detect 不自动写，缺省零行为）。
+ * 命令脚本自理服务生命周期（后台起服+轮询就绪+finally 杀），CLI 只施加 300s 超时帽并 tee
+ * 实录 stdout+stderr 落 .runtime/verify-logs/smoke-<change>.log。失败语义与 test/lint 刻意
+ * 区分：非零退出/超时只记 smokeResult 失败态**不 throw**（封顶信号非崩溃——PASS 封顶消费
+ * 归 --done 第五条件 / task-03），本步推进语义不动。快照内超时 → 主仓 cwd 复跑一次
+ * （lint 快照超时回退同款策略：junction I/O 病态慢时保实测不假败）。
+ * 返回纯 JSON 可序列化（落进质量扫描记录 additive smokeResult 段）。
+ */
+function runSmokeCheck({ gateCwd, mainCwd, specBase, changeName, inSnapshot }) {
+  const ranAt = new Date().toISOString()
+  let yamlText = null
+  try { yamlText = readFileSync(join(specBase, 'local.yaml'), 'utf8') } catch { /* 无 local.yaml → 未配置 */ }
+  const command = extractSmokeCommand(yamlText)
+  if (!command) {
+    return {
+      configured: false, status: 'skipped', command: null,
+      exitCode: null, durationMs: null, logPath: null, ranAt,
+      timeout: false, fallbackMainRepo: false, source: 'cli-noai-smoke',
+      reason: yamlText ? '未配置 commands.smoke（或标记 unavailable）——执行段跳过（配置后 verify 自动亲跑）' : `local.yaml 不可读（${join(specBase, 'local.yaml')}）`,
+    }
+  }
+  const startedAt = Date.now()
+  let r = null
+  let spawnError = null
+  try {
+    r = spawnSync(command, { shell: true, cwd: gateCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+  } catch (e) { spawnError = e }
+  let timedOut = isSyncTimeout(r)
+  let fallbackMainRepo = false
+  let ranCwd = gateCwd
+  // 快照内超时回退主仓复跑一次（lint 快照超时回退先例同款策略，主仓复跑保实测不假败）
+  if (inSnapshot && timedOut) {
+    fallbackMainRepo = true
+    console.warn('⚠️ 快照 smoke 超时（node_modules junction I/O 慢）→ 主仓复跑 smoke（并行噪声可能混入——失败先做归属鉴定）')
+    try {
+      r = spawnSync(command, { shell: true, cwd: mainCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+      spawnError = null
+      ranCwd = mainCwd
+      timedOut = isSyncTimeout(r)
+    } catch (e) { spawnError = e; timedOut = false }
+  }
+  const durationMs = Date.now() - startedAt
+  const exitCode = r && typeof r.status === 'number' ? r.status : null
+  const failed = timedOut || Boolean(spawnError) || (r ? r.status !== 0 : true)
+  const reason = timedOut
+    ? `超时（>300s 帽${fallbackMainRepo ? '，主仓复跑仍超时' : ''}）`
+    : spawnError
+      ? `spawn 异常：${spawnError.message || spawnError}`
+      : (exitCode !== 0 ? `smoke 命令退出码 ${exitCode}` : null)
+  // log 实录落盘（fail-soft：写失败只 warn 置 logPath=null，不影响判定与步骤推进）
+  let logPath = null
+  if (changeName) {
+    try {
+      const logDir = join(specBase, '.runtime', 'verify-logs')
+      mkdirSync(logDir, { recursive: true })
+      logPath = join(logDir, `smoke-${changeName}.log`)
+      const head = [
+        '# smoke 实录（source: cli-noai-smoke）',
+        `# command: ${command}`,
+        `# cwd: ${ranCwd}${fallbackMainRepo ? '（快照超时回退主仓）' : ''}`,
+        `# ranAt: ${ranAt}   durationMs: ${durationMs}   timeout: ${timedOut}`,
+        `# exitCode: ${exitCode === null ? '（无——spawn 异常/被信号杀）' : exitCode}`,
+        '---- stdout + stderr ----',
+      ].join('\n')
+      writeFileSync(logPath, `${head}\n${String(r && r.stdout || '')}${String(r && r.stderr || '')}\n`)
+    } catch (e) {
+      logPath = null
+      console.warn(`⚠️  smoke 实录 log 落盘失败（fail-soft，判定不受影响）: ${e && e.message ? e.message : e}`)
+    }
+  }
+  return {
+    configured: true, status: failed ? 'failed' : 'passed', command,
+    exitCode, durationMs, logPath, ranAt,
+    timeout: timedOut, fallbackMainRepo, source: 'cli-noai-smoke',
+    reason,
+  }
+}
+
+/** smoke 结果一行报告（语义边界内建：失败=封顶信号非崩溃，不阻断本步） */
+function renderSmokeReport(s) {
+  if (!s || !s.configured) {
+    return `ℹ️  smoke 冒烟：${s && s.reason ? s.reason : '未配置 commands.smoke'}`
+  }
+  const logNote = s.logPath ? `——实录 ${s.logPath}` : ''
+  if (s.status === 'passed') {
+    return `✅ smoke 冒烟通过（exit 0，${s.durationMs}ms${s.fallbackMainRepo ? '；快照超时已回退主仓复跑' : ''}）${logNote}`
+  }
+  return `⚠️ smoke 冒烟失败（${s.reason || `退出码 ${s.exitCode}`}）——记失败态不阻断本步（PASS 封顶信号，--done 消费）${logNote}`
+}
+
+
 /** fallback 口径可见性（2026-09-11 驾驭第十二批）：快照不可用回退主仓且主仓存在非 .sillyspec
  * 脏文件时，明示实测判定面含并行 WIP——第三撞根因是「静默 fallback 看不出走了哪个口径」。 */
 function warnIfMainRepoDirtyForGate(cwd) {
@@ -289,6 +424,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   let testCheck
   let lintCheck
   let coverageCheck = null
+  let smokeResult = null
   try {
     testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
     printVerifyTestCheck(testCheck)
@@ -304,6 +440,16 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
   }
   printVerifyLintCheck(lintCheck)
+  // smoke 亲跑（2026-09-17-api-coverage-smoke task-01 / FR-01）：commands.smoke 配置才执行
+  // ——失败记失败态不 throw（与 test failed 的 throw 语义刻意区分：封顶信号非崩溃，PASS
+  // 封顶消费归 --done 第五条件 / task-03）。在快照 cleanup 前跑（cwd=gateCwd 隔离快照内），
+  // 配置从主仓 local.yaml 读（与 coverage 同口径）；未配置一行 ℹ️（coverage 同款噪音面）。
+  try {
+    smokeResult = runSmokeCheck({ gateCwd, mainCwd: cwd, specBase, changeName, inSnapshot: Boolean(snap) })
+    console.log(renderSmokeReport(smokeResult))
+  } catch (e) {
+    console.warn(`⚠️  smoke 冒烟执行异常（fail-soft，不影响本步推进）: ${e && e.message ? e.message : e}`)
+  }
   // P2（noai-ir-roadmap §5）：coverage 存在性事实——commands.coverage 显式配置才采集，
   // 只证「有覆盖记录」不证「覆盖了行为」（渲染自带语义边界），fail-soft 不阻断。
   try {
@@ -315,7 +461,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   } finally {
     if (snap) { try { snap.cleanup() } catch {} }
   }
-  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, coverageCheck })
+  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck })
   const testFailed = testCheck.status === 'failed'
   const lintBlocked = shouldBlockVerifyLint(lintCheck)
   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档

@@ -12,8 +12,12 @@ requirement_ids: [FR-04, FR-05, FR-06]
 decision_ids: [D-004@v1, D-005@v1, D-010@v1]
 allowed_paths:
   - src/stage-contract.js
+  - test/acceptance-matrix-gate.test.mjs
+  - test/verify-probes-facts.test.mjs
 target_files:
   - src/stage-contract.js
+  - test/acceptance-matrix-gate.test.mjs
+  - test/verify-probes-facts.test.mjs
 goal: >
   在 src/stage-contract.js 新增 validateApiCoverageMatrix(cwd, changeName, context) 并注册进 verify.validators——接口验证覆盖矩阵的 fail-closed 对账门（covered 记账/有效分母扣除 non-testable/锚点解析级校验/移交联动/探索性与子行不计账/声明降级/critical×零接口面 error），机械封住「接口层零派生」的 P1 缺陷面（design §4，FR-04）。
 implementation:
@@ -48,21 +52,21 @@ constraints:
 provides:
   - contract: api-coverage-validator
     fields:
-      - 'validateApiCoverageMatrix(cwd, changeName, context) → { ok, errors, warnings }（注册进 verify.validators）'
-      - 'context.apiFace 消费面（verify-probes 侧落盘/传参供给）'
-      - 'errors=行数不足/锚点空指/移交联动/critical×零接口面；warnings=消费面/表间/声明降级注记'
+      - validateApiCoverageMatrix
+      - apiFace-consumption
+      - errors-warnings
 expects_from:
   task-04:
     - contract: api-face-parser
       needs:
-        - 'endpoints——分母 N 与锚点解析级校验数据源（经 facts.apiFace/context 传参进入，stage-contract 不 import）'
-        - 'declared——声明降级对账数'
-        - '骨架矩阵段——MD 槽解析的落盘面（validator 壳读矩阵行的面）'
+        - endpoints
+        - declared
+        - 骨架矩阵段
   task-03:
     - contract: smoke-ran-fact
       needs:
-        - 'smoke-not-run-trigger——判级 critical 口径同源衔接（runtimeEndpointExcluded 判级限定先例）'
-        - 'facts.smokeRan——factsExpected fail-closed 口径复用其判定式'
+        - smoke-not-run-trigger
+        - facts.smokeRan
 ---
 
 <!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。

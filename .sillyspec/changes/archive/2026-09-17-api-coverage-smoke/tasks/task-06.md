@@ -51,8 +51,8 @@ constraints:
 provides:
   - contract: verify-smoke-prompt
     fields:
-      - 'stages/verify.js「输出验证报告」步 smoke 纪律段四段全文+两处改写后文案（:197/:210 口径）'
-      - 'REVIEW_CHECKLISTS 新增 verify 键（含 smoke 纪律条目，文本内嵌命中条件）——task-07 断言定位与文案锚点'
+      - verify-prompt-smoke-section
+      - review-checklists-verify-key
 ---
 
 <!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。

@@ -70,7 +70,10 @@ const RECEIPT_CONT_LINE_RE = /^[ \t]+([A-Za-z_][\w-]*):\s*(.*)$/
  * 解析 verify-result.md 的两个受控槽段（D-001@v2 slot-backfill 录入界面）。
  * 占位形态（<待填：三选一> / <待填：0 或非 0>）不含枚举词，行首锚定 + 枚举词双保险 fail-closed。
  * @param {string} mdText verify-result.md 全文（LF 归一由调用方 readFileSync 层负责或此处容错）
- * @returns {{ requiredEvidence: Array<{task,status,exempt:boolean,exemptionReason:string|null,verifiedFiles:string[]}>, runtimeEvidence: Array<{claim,command,exitCode,logPath}>, hasEvidenceSlot: boolean, hasReceiptSlot: boolean }}
+ * @returns {{ requiredEvidence: Array<{task,status,exempt:boolean,exemptionReason:string|null,verifiedFiles:string[]}>, runtimeEvidence: Array<{claim,command,exitCode,logPath,source?:string}>, hasEvidenceSlot: boolean, hasReceiptSlot: boolean }}
+ *   runtimeEvidence[].source（2026-09-17-api-coverage-smoke task-02，additive）：单行形态 ｜/|
+ *   尾注 `source: <token>` 或多行 YAML `source:` 字段回填（CLI 机器段标记 cli-noai-smoke 的
+ *   解析入口）；无标记条目不落键，四字段 fail-closed 语义不动。
  */
 export function parseEvidenceSlots(mdText) {
   const text = String(mdText || '').replace(/\r\n/g, '\n')
@@ -128,11 +131,17 @@ export function parseEvidenceSlots(mdText) {
     for (let i = 0; i < receiptBody.length; i++) {
       const m = receiptBody[i].match(RECEIPT_LINE_RE)
       if (m) {
+        // source 尾注提取（2026-09-17-api-coverage-smoke task-02，additive 第五字段）：log 是
+        // rest-of-line，行内 ｜/| 尾注段中认 `source: <token>`（CLI 机器段行尾注形态
+        // 「| source: cli-noai-smoke」）；首段 log 剥尾注口径零变化，四字段收取不动，无尾注
+        // 条目不落 source 键（存量回执零回归）。
+        const srcM = m[4].match(/[|｜]\s*source:\s*([^\s|｜]+)/)
         runtimeEvidence.push({
           claim: m[1].trim(),
           command: m[2].trim(),
           exitCode: Number(m[3]),
           logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
+          ...(srcM ? { source: srcM[1] } : {}),
         })
         continue
       }
@@ -155,7 +164,10 @@ export function parseEvidenceSlots(mdText) {
         ? fields.log.split(/[|｜]/)[0].trim().replace(/^`|`$/g, '')
         : ''
       if (!claim || !command || !/^\d+$/.test(exit) || !log) continue
-      runtimeEvidence.push({ claim, command, exitCode: Number(exit), logPath: log })
+      // source 字段回填（多行 YAML 形态，task-02 additive）：fields.source 聚合时已过
+      // stripPairedBackticks（同款口径），空值不落键——四字段 fail-closed 收取条件不动。
+      const src = typeof fields.source === 'string' ? fields.source.trim() : ''
+      runtimeEvidence.push({ claim, command, exitCode: Number(exit), logPath: log, ...(src ? { source: src } : {}) })
     }
   }
 
@@ -190,11 +202,15 @@ export function validateFactsV2(facts) {
       errors.push(`requiredEvidence[${item.task}] satisfied 但 verifiedFiles 为空`)
     }
   }
-  // PASS 封顶事实面五字段 additive 登记（2026-09-17-pass-cap-semantics task-01 / D-011 故障面）：
-  // 字段不在场一律不报错（存量 facts 零迁移通过，producer=backfillFactsFromMdAndTests 首次
-  // backfill 产出）；在场才校验类型/枚举。schemaVersion 保持 2。
+  // PASS 封顶事实面 additive 登记（2026-09-17-pass-cap-semantics task-01 / D-011 故障面；
+  // smokeRan 增 2026-09-17-api-coverage-smoke task-03 / FR-02）：字段不在场一律不报错
+  // （存量 facts 零迁移通过，producer=backfillFactsFromMdAndTests 首次 backfill 产出）；
+  // 在场才校验类型/枚举。schemaVersion 保持 2。
   if (facts.integrationRan != null && !['ran', 'not-ran'].includes(facts.integrationRan)) {
     errors.push(`integrationRan 非法枚举值：${facts.integrationRan}`)
+  }
+  if (facts.smokeRan != null && !['ran', 'not-ran', 'not-configured'].includes(facts.smokeRan)) {
+    errors.push(`smokeRan 非法枚举值：${facts.smokeRan}`)
   }
   if (facts.dbScriptDeclarations != null
     && (!Array.isArray(facts.dbScriptDeclarations) || !facts.dbScriptDeclarations.every(x => typeof x === 'string'))) {

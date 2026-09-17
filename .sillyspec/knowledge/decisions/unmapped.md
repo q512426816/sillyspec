@@ -231,3 +231,91 @@
 理由：OpenSpec 的 agent-contract.md 靠人工审计保真（文档头 capstone audit，仓内无文档↔代码 parity 测试），码漂移只能等下次审计或集成方挂掉——这是它的已实证弱点。
 故障面：码表膨胀失控——首期 10 码硬边界（D-002），二期扩面走变更流程追加。
 退役判据：v2 码表结构重构时冻结表键值迁移，parity 测试同步改写。
+
+## D-001@v1 commands.smoke 配置键——CLI 亲跑与 commands.test 同哲学
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：运行时验证需要真实执行冒烟脚本，执行主体是谁？agent 自报无核验（EHS 实证「集成证据自报告、CLI 只校验字面存在」的坑）；CLI 亲跑才与「不信口头」一致。
+故障面：冒烟脚本起服慢拖累 verify——prompt 指引并行起服（脚本内部后台起+轮询，墙钟增量≈冒烟本体）；脚本挂死——CLI 亲跑超时帽（与 gate_snapshot.commands 同款 300s 先例）+ 失败即封顶信号。
+退役判据：若未来 E2E 平台化（浏览器 Tier 2）统一接管运行时验证，smoke 键并入彼处。
+
+## D-002@v1 facts.smokeRan 第五事实条件——初版封顶不 fail
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：「smoke 缺失」如何进入批次 A 的封顶？直接 fail 过狠（存量变更无 smoke 基建会全炸）；不进封顶则键形同虚设。
+故障面：判级误伤（关键词误判 critical 的变更被要求 smoke）——既有显式 risk_level 降级逃生通道保留（unit-sufficient 不触发）。
+退役判据：smoke 回执判定面稳定后升 fail 档（D-001@v1 退役判据同源）。
+
+## D-003@v1 smoke 回执由 CLI 亲跑自动落盘——消灭 agent 手填伪造面
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：EHS 实证三条 compile+单测 log 混过回执四条件（批次 A 已用 sourceTag 堵口径）；但回执本身仍是 agent 手填路径——CLI 亲跑 smoke 的 log/mtime/exit 应机器落盘。
+故障面：CLI 亲跑与 agent 后续补跑的回执并存——机器段只认 CLI 记录（sourceTag='cross-layer' 标记），agent 追加段单独标注来源。
+退役判据：若回执槽整体重构为 facts-only，机器段并入 facts.smokeReceipt。
+
+## D-004@v1 接口验证覆盖矩阵——表驱动行数 fail-closed + 用例锚点
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：冒烟「测什么」无依据物则退回 agent 自由发挥（EHS 复盘：单测有转移表可依所以扎实，接口层无依据物所以没人派生用例——P1 全长在这层）。
+故障面：接口表写法千奇百怪解析不全 → 行数偏低漏覆盖——tolerant 解析 + 解析失败降级（D-005）；矩阵行与 probe7 行混淆——章节独立命名+骨架注释口径注记（同 probe3/probe7 并排先例）。
+退役判据：若接口定义迁入结构化产物（design-frontmatter/api.yaml 类），矩阵预填源切换。
+
+## D-005@v1 接口表 tolerant 解析 + 失败降级声明
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：design 接口定义表无 normative 格式（批次 A 复盘确认「探针 1 解析的是文件清单不是接口表」），强格式契约会打爆存量变更。
+故障面：agent 声明行数造假（声明 0 端点躲矩阵）——与 fix.sql 声明门同理定位「防遗忘非防伪造」；判级 critical 变更声明零端点时 warning 提示复核。
+退役判据：格式实证充分后升 normative（存量豁免窗口关闭）。
+
+## D-006@v1 消费面维度——端点×消费端展开，payload 构造点为锚
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：EHS 实证 P1-1/P1-2 抓不到的根因之一是「按 design 字段名发载荷接口当然通」——消费面（前端实际发的形状）才是字段漂移的暴露面；且提取点必须是 payload 构造处（model save effect/表单 handleSubmit），services 封装层零字段名（批次 C 设计讨论实证纠偏）。
+故障面：消费端归类错（文件面启发式）→ advisory 仅提示无阻断，假红无害。
+退役判据：批次 B（probe8 代码级直比）落地后消费面维度由 probe8 机械覆盖，矩阵消费行退役。
+
+## D-007@v1 表间交叉完备性校验（advisory）——治「表缺行」型缺陷
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：派生框架忠实继承 design 表的洞——EHS P1-4（submit 越权）大概率是权限矩阵缺 submit 行而非「格没人派生」；表自身完备性无机械检查。
+故障面：权限矩阵段识别不准 → 误报/漏报 warning——advisory 无阻断，格式实证后收紧。
+退役判据：权限矩阵结构化后升硬门。
+
+## D-008@v1 smoke 脚本纪律进 prompt——表驱动派生 + 负向下界 + 并行起服
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：脚本断言无依据物会退回自由发挥；起服串行会把 110s 冷启全算进墙钟。
+故障面：prompt 膨胀——纪律段仅在配置 commands.smoke 或判级 critical 时注入（命中条件注入，同 D-009 批次 A 条目形态）。
+退役判据：冒烟模板脚手架化（sillyspec init 生成模板脚本）后纪律段指向模板。
+
+## D-010@v1 方案 A——CLI 亲跑 + 矩阵行数 fail-closed
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：用户选 A——commands.smoke 由 CLI 亲跑（回执机器段落盘零伪造面）；接口矩阵行数对账 fail-closed（纯机械事实无假红面）；消费端行/表间完备性 advisory（语义关联后软）。B 否决理由：回执文本层伪造面（EHS compile log 混门实证）；C 否决理由：批次 A 已实证 advisory 无阻断力。
+故障面：CLI 亲跑超时/挂死——300s 超时帽（gate_snapshot.commands 先例）+ 失败定性为封顶信号非崩溃；存量 critical 变更首跑被拦——handover 承载出路。
+退役判据：执行面若平台化（SillyHub driver 统一跑命令），亲跑语义并入彼处。
+
+## D-009@v1 非目标（批次 C 边界）
+状态：implemented
+变更：2026-09-17-api-coverage-smoke
+锚点：未记录
+最近确认：cbc712f
+理由：范围蔓延风险——批次 C 是地板不是全家桶。

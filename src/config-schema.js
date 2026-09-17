@@ -70,6 +70,7 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'commands.build', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '构建命令。', example: 'npm run build' },
         { path: 'commands.test', type: 'string', optional: true, status: 'live', readers: ['extractTestCommand (src/verify-postcheck.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '测试命令——verify 阶段 CLI 亲自执行此命令与 verify-result.md 对账，实测失败即阻断；quick --done 触及 src/test 时同款实测（P0-2 门禁）。', example: 'npm test' },
         { path: 'commands.lint', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: 'lint 命令——quick --done 触及 src/test 时 CLI 亲自执行（P0-2 门禁，失败阻断完成）。', example: 'npm run lint' },
+        { path: 'commands.smoke', type: 'string', optional: true, status: 'live', readers: ['executeVerifyQualityScan (src/run/verify-quality-scan.js)'], desc: '接口冒烟命令——verify 阶段 CLI 亲跑（脚本自理服务生命周期：后台起服+轮询就绪+finally 杀），300s 超时帽，失败/超时只记失败态不阻断本步、触发 PASS 封顶（D-002）；指纹含此键，未变不重跑。', example: 'node scripts/smoke.mjs' },
         { path: 'commands.install', type: 'string', optional: true, status: 'live', readers: ['extractInstallCommand (src/worktree-deps.js)'], desc: '依赖安装命令（worktree 依赖 provisioning 用）。', example: 'npm install' },
       ],
     },
@@ -316,6 +317,7 @@ commands:
   build: npm run build
   test: npm test
   lint: npm run lint
+  # smoke: node scripts/smoke.mjs   # verify 冒烟命令（可选；脚本自理服务生命周期，失败只封顶 PASS 不阻断）
   # install: npm install   # worktree 依赖安装命令
 
 # ── SillyHub MCP 客户端凭据（派发到 worker 用）──

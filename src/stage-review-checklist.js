@@ -10,7 +10,11 @@
  * - brainstorm：前 3 条 =「交叉审查模型」三层检查（prompt 内渲染为「N. 」序号行），
  *   后 8 条 =「交叉点抽取」（渲染为「- 」列表行）；
  * - plan：渲染为「- [ ] 」checkbox 行（审查清单段）；
- * - execute：渲染为 2 空格缩进的「N. 」序号行（QA 段「以下三项始终必查」）。
+ * - execute：渲染为 2 空格缩进的「N. 」序号行（QA 段「以下三项始终必查」）；
+ * - verify（2026-09-17-api-coverage-smoke task-06 / FR-07 新增键）：smoke 纪律条目，
+ *   渲染为「输出验证报告」步「### 操作」第 8 条下的 3 空格缩进「- 」列表行；
+ *   命中条件以条目文本内嵌说明（local.yaml 配 commands.smoke 或判级 critical 时生效——
+ *   review-dispatch worker_prompt 单独消费条目，无 prompt 上下文，须自含）。
  */
 export const REVIEW_CHECKLISTS = {
   brainstorm: [
@@ -42,5 +46,13 @@ export const REVIEW_CHECKLISTS = {
     '跨 task 交界（A 产出的接口/数据结构与 B 的消费是否对得上）',
     'design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）',
     '组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）',
+  ],
+  // verify 键（2026-09-17-api-coverage-smoke task-06 / FR-07）：smoke 纪律四段，逐字照 design §6 ①~④；
+  // 首条内嵌命中条件说明（worker_prompt 单独消费条目，须自含）；②③④段尾分号/句号照 design 原文保留。
+  verify: [
+    'smoke 纪律（命中条件：local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时生效）——①断言派生表：design 接口表每行 ≥1 happy-path（含出参形状断言）/ 权限矩阵每行 ≥1 反例（非授权操作应拒）/ 契约表必填每项 ≥1 空值反例 / 转移表每边 ≥1 状态断言 / 需求字面（单号格式等）→ 格式断言；',
+    '②负向下界：每写端点 ≥1 权限反例（E4 类）+ 全链 ≥1 注错全量回滚断言（E5 类）；',
+    '③执行口径：脚本后台起服+轮询就绪+finally 杀（墙钟增量≈冒烟本体）、DB 会话自设严格 sql_mode、载荷从消费端构造点导出（手写正确字段的测试抓不住字段漂移）；',
+    '④断言锚点注释（每步挂依据 ID）与矩阵行一一对应。',
   ],
 }

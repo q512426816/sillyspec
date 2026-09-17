@@ -17,11 +17,11 @@ target_files:
 provides:
   - contract: api-face-parser
     fields:
-      - 'parseDesignApiTable(designMd)——tolerant 解析器导出，返回 {endpoints, declared, sectionHint}（design.md 接口定义节签名）'
-      - 'endpoints——[{method, path, rowIdx}] 端点集（段头过滤 + HTTP 方法/路径样式双 token）'
-      - 'declared——number|null 声明数（声明行在场时提取；与解析并存以解析为准并注记）'
-      - '骨架矩阵段——generateVerifyResultSkeleton 增「## 接口验证覆盖矩阵」段（预填端点行/口径注记 probe7 互指/声明占位行）'
-      - 'advisory输出——消费面（有消费端的端点未填子行→warning）与表间完备性（写端点未在权限矩阵段命中→warning）并入矩阵预填段尾部'
+      - parseDesignApiTable
+      - endpoints
+      - declared
+      - 骨架矩阵段
+      - advisory输出
 goal: >
   给接口冒烟定「测什么」的依据物（D-005/D-006/D-007，FR-05/FR-04/FR-06）——
   parseDesignApiTable tolerant 解析 design 接口表端点集，generateVerifyResultSkeleton

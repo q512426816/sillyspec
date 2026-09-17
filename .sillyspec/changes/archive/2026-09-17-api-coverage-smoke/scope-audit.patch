@@ -1,0 +1,2815 @@
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 32564c4..f4d46d9 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -173,7 +173,7 @@
+       {
+         "index": 6,
+         "name": "输出验证报告",
+-        "prompt": "生成完整验证报告，并写入 verify-result.md。\n\n### 操作\n1. 汇总以上所有检查结果\n2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。\n   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。\n   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。\n   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。\n   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。\n   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）\n\n3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 `sillyspec verify-probes --change <change-name> --init`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 `{SPEC_ROOT}/changes/<change-name>/verify-result.md`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 `<!--TODO-->` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处\n4. **预填探针段不可篡改或删除**：verify `--done` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文\n5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义\n6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**\n   - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」\n7. **核对 module-impact.md**（若 `{SPEC_ROOT}/changes/<change>/module-impact.md` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。\n\n### verify-result.md 章节结构（骨架已含，占位替换即可）\n\n结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（`| 决策 ID | FR | Task | Evidence | 状态 |`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。\n\n**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。\n\n**Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。\n\n### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）\n「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：\n1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）。**优先登记服务本体（叶子）PID**——经 shell 包装启动（`sh -c` / `cmd /c` / uvicorn --reload 的 reloader）时 CLI 虽已按进程树击杀（2026-09-10 起连带子进程），但叶子 PID 最稳：包装 shell 退出后子进程 PID 不漂移、跨平台一致\n2. 每行一个 PID 追加到 `{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids`（`Add-Content` / `echo >>`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）\n3. verify `--done` 时 CLI 读该文件**逐进程树击杀**（包装进程连同子进程）并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可\n登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。\n\n### 输出\nverify-result.md 路径 + 验证报告摘要 + 下一步命令\n\n### 注意\n- PASS → 运行 `sillyspec run archive` 归档\n- FAIL → 修复后运行 `sillyspec run verify` 重新验证——注意重验时 CLI 会重新执行 commands.test 全量对账（长套件数分钟、同步无输出属正常；可 local.yaml test_strategy: module 收窄）\n- verify-result.md 是变更包的正式验收记录，归档后保留\n- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断",
++        "prompt": "生成完整验证报告，并写入 verify-result.md。\n\n### 操作\n1. 汇总以上所有检查结果\n2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。\n   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。\n   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。\n   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。\n   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。\n   - **集成回执须真实执行——commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记，亲跑段谎报无效）**，其余形态仍须 agent 实跑后据实填写：CLI 对其余形态只校验**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）\n\n3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 `sillyspec verify-probes --change <change-name> --init`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 `{SPEC_ROOT}/changes/<change-name>/verify-result.md`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 `<!--TODO-->` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处\n4. **预填探针段不可篡改或删除**：verify `--done` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文\n5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义\n6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**\n   - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」\n7. **核对 module-impact.md**（若 `{SPEC_ROOT}/changes/<change>/module-impact.md` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。\n8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：\n   - smoke 纪律（命中条件：local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时生效）——①断言派生表：design 接口表每行 ≥1 happy-path（含出参形状断言）/ 权限矩阵每行 ≥1 反例（非授权操作应拒）/ 契约表必填每项 ≥1 空值反例 / 转移表每边 ≥1 状态断言 / 需求字面（单号格式等）→ 格式断言；\n   - ②负向下界：每写端点 ≥1 权限反例（E4 类）+ 全链 ≥1 注错全量回滚断言（E5 类）；\n   - ③执行口径：脚本后台起服+轮询就绪+finally 杀（墙钟增量≈冒烟本体）、DB 会话自设严格 sql_mode、载荷从消费端构造点导出（手写正确字段的测试抓不住字段漂移）；\n   - ④断言锚点注释（每步挂依据 ID）与矩阵行一一对应。\n\n### verify-result.md 章节结构（骨架已含，占位替换即可）\n\n结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（`| 决策 ID | FR | Task | Evidence | 状态 |`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。\n\n**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记的机器段即其产物）；其余形态仍须 agent 实跑后据实填写（CLI 不代跑其余集成进程——回执必须来自你真实执行过的命令）。\n\n**Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。\n\n### 🧹 服务进程登记与自动回收（真实启动验证必读，坑 verify-service-process-leak）\n「真实启动一次」起的长驻服务（uvicorn/node server 等）**必须登记 PID，CLI 在 verify 收尾自动回收**——不登记的进程会挂死机器（实测 uvicorn 漏挂一天多）：\n1. 后台启动服务并取 PID（PowerShell：`Start-Process -PassThru` 取 `.Id`；bash：`cmd & echo $!`）。**优先登记服务本体（叶子）PID**——经 shell 包装启动（`sh -c` / `cmd /c` / uvicorn --reload 的 reloader）时 CLI 虽已按进程树击杀（2026-09-10 起连带子进程），但叶子 PID 最稳：包装 shell 退出后子进程 PID 不漂移、跨平台一致\n2. 每行一个 PID 追加到 `{SPEC_ROOT}/.runtime/verify-services-<change-name>.pids`（`Add-Content` / `echo >>`；**按变更名分片**——多会话并发 verify 时各自的 --done 只回收自己的服务，互不误杀）\n3. verify `--done` 时 CLI 读该文件**逐进程树击杀**（包装进程连同子进程）并清空——你在 verify-result.md 的「生命周期终态断言」里写「PID 已登记，CLI 收尾回收」即可\n登记是硬要求：没有 PID 登记的「真实启动」证据在 deployment-critical 门控下视为不完整（进程无法证明被回收）。\n\n### 输出\nverify-result.md 路径 + 验证报告摘要 + 下一步命令\n\n### 注意\n- PASS → 运行 `sillyspec run archive` 归档\n- FAIL → 修复后运行 `sillyspec run verify` 重新验证——注意重验时 CLI 会重新执行 commands.test 全量对账（长套件数分钟、同步无输出属正常；可 local.yaml test_strategy: module 收窄）\n- verify-result.md 是变更包的正式验收记录，归档后保留\n- **CLI 对账机制**：本步骤 --done 时 CLI 会亲自执行 local.yaml 的 commands.test；结论写 PASS 但实测失败 → verify 完成被阻断",
+         "outputHint": "验证报告",
+         "optional": false
+       }
+@@ -501,7 +501,7 @@
+         "index": 3,
+         "id": "generate_blueprints",
+         "name": "生成 TaskCard（子代理按 batch 并行）",
+-        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-pass-cap-semantics\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-pass-cap-semantics\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-pass-cap-semantics\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-pass-cap-semantics\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-pass-cap-semantics\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言假设单例，改归属键后需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`sub-grid-security/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-pass-cap-semantics\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
++        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言假设单例，改归属键后需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`sub-grid-security/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
+         "outputHint": "TaskCard 生成结果",
+         "optional": false
+       },
+diff --git a/docs/prompt/verify.md b/docs/prompt/verify.md
+index 1849bae..fda0d8f 100644
+--- a/docs/prompt/verify.md
++++ b/docs/prompt/verify.md
+@@ -288,7 +288,7 @@
+    - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 `risk_level: <真实等级>`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
+    - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。
+    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
+-   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
++   - **集成回执须真实执行——commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记，亲跑段谎报无效）**，其余形态仍须 agent 实跑后据实填写：CLI 对其余形态只校验**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
+ 
+ 3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 `sillyspec verify-probes --change <change-name> --init`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 `{SPEC_ROOT}/changes/<change-name>/verify-result.md`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 `<!--TODO-->` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
+ 4. **预填探针段不可篡改或删除**：verify `--done` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文
+@@ -296,6 +296,11 @@
+ 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
+    - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」
+ 7. **核对 module-impact.md**（若 `{SPEC_ROOT}/changes/<change>/module-impact.md` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
++8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
++   - smoke 纪律（命中条件：local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时生效）——①断言派生表：design 接口表每行 ≥1 happy-path（含出参形状断言）/ 权限矩阵每行 ≥1 反例（非授权操作应拒）/ 契约表必填每项 ≥1 空值反例 / 转移表每边 ≥1 状态断言 / 需求字面（单号格式等）→ 格式断言；
++   - ②负向下界：每写端点 ≥1 权限反例（E4 类）+ 全链 ≥1 注错全量回滚断言（E5 类）；
++   - ③执行口径：脚本后台起服+轮询就绪+finally 杀（墙钟增量≈冒烟本体）、DB 会话自设严格 sql_mode、载荷从消费端构造点导出（手写正确字段的测试抓不住字段漂移）；
++   - ④断言锚点注释（每步挂依据 ID）与矩阵行一一对应。
+ 
+ ### verify-result.md 章节结构（骨架已含，占位替换即可）
+ 
+@@ -306,7 +311,7 @@
+   command: <命令>
+   exit: <0 或非 0>
+   log: <日志路径>
+-亦认单行管道形态：`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
++亦认单行管道形态：`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记的机器段即其产物）；其余形态仍须 agent 实跑后据实填写（CLI 不代跑其余集成进程——回执必须来自你真实执行过的命令）。
+ 
+ **Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
+ 
+diff --git a/meta.json b/meta.json
+index 3a02871..b9b62a5 100644
+--- a/meta.json
++++ b/meta.json
+@@ -1,11 +1,25 @@
+ {
+   "name_zh": "worktree 元数据",
+-  "changeName": "2026-09-11-cross-change-decision-guard",
+-  "branch": "sillyspec/2026-09-11-cross-change-decision-guard",
++  "changeName": "2026-09-17-api-coverage-smoke",
++  "branch": "sillyspec/2026-09-17-api-coverage-smoke",
+   "baseBranch": "main",
+-  "baseHash": "42aa9927f71b78c903709fadd681d71719855d66",
+-  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-11-cross-change-decision-guard",
++  "baseHash": "51225ae0f767c5511ffa233dfca8d03f762b0532",
++  "actualBaseHash": "51225ae0f767c5511ffa233dfca8d03f762b0532",
++  "createdAt": "2026-09-17T14:25:15.361Z",
++  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-api-coverage-smoke",
+   "mode": "worktree",
+-  "createdAt": "2026-09-11T06:50:20.659Z",
+-  "provisioning": true
++  "baselineFiles": [],
++  "baselineCommit": null,
++  "baselineHash": null,
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 4
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-17T14:25:15.290Z"
+ }
+diff --git a/src/change-risk-profile.js b/src/change-risk-profile.js
+index 7ea2ee2..846be3c 100644
+--- a/src/change-risk-profile.js
++++ b/src/change-risk-profile.js
+@@ -6,7 +6,7 @@
+  * integration-critical / deployment-critical），产出门控验证需求。
+  */
+ import { readFileSync, statSync } from 'fs'
+-import { join } from 'path'
++import { join, isAbsolute } from 'path'
+ 
+ // ============ 向后兼容：旧的 INTEGRATION_CRITICAL_PATTERNS ============
+ 
+@@ -312,6 +312,15 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
+ // classifyReceiptCommandSource（facts.integrationRan 判定）与本分类同族口径，两处正则族
+ // 保持同步演进）。smoke 冒烟命令族计 cross-layer（D-006 退役判据：批次 C commands.smoke
+ // 落地后由 smoke 回执一票判定「集成实测已跑」——起服务冒烟即跨层实测，不得默认 build 误拦金路径）。
++//
++// 来源标记直判（2026-09-17-api-coverage-smoke task-02 / Grill B-1 修正，FR-03）：条目 source
++// 标记 'cli-noai-smoke'（verify-probes ensureSmokeReceiptSection 注入的机器段行尾注，
++// parseEvidenceSlots additive 解析回填）→ 直判 cross-layer，**优先于命令词正则分类**——
++// 修正点在标记识别而非命令词增补：node scripts/smoke.mjs / bash smoke.sh / python smoke.py
++// 等脚本形态在既有正则下全判 build 会误拦金路径，且脚本形态词表不可枚举（正则族两文件零词
++// 变动）。对齐目标：verify-probes.js classifyReceiptCommandSource（judgeIntegrationRan 消费）
++// 同款 sourceMark 参数与标记族——**任一侧增改标记族必须双侧同步**（G-3 先例：producer 侧
++// 曾漏 smoke 一词致口径分裂）。
+ const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
+   '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
+   '\\biwr\\b', '\\birm\\b', 'https?://',
+@@ -321,7 +330,10 @@ const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
+   '\\b(?:nc|netcat|telnet|socat)\\b',
+ ].join('|'), 'i')
+ const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+-function classifyReceiptSourceTag(command) {
++/** CLI 机器段来源标记（与 verify-probes.js SMOKE_RECEIPT_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
++const CLI_SMOKE_SOURCE_MARK = 'cli-noai-smoke'
++function classifyReceiptSourceTag(command, sourceMark) {
++  if (sourceMark === CLI_SMOKE_SOURCE_MARK) return 'cross-layer'
+   const cmd = String(command || '')
+   if (RECEIPT_SOURCE_CROSS_LAYER_RE.test(cmd)) return 'cross-layer'
+   if (RECEIPT_SOURCE_UNIT_RE.test(cmd)) return 'unit'
+@@ -430,18 +442,28 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification, op
+  * 缺省按回执 command 来源就地分类（classifyReceiptSourceTag），未定类默认 'build'（向后
+  * 兼容的 fail-closed 缺省）；sourceTag ∈ {build, unit} 的回执不作集成实测绿判据（四条件
+  * 全过也只到 non-green，reason 点名来源）——verify-postcheck 不在本调用链上，不受影响。
++ *
++ * r.source（2026-09-17-api-coverage-smoke task-02 / FR-03，Grill B-1）：条目级来源标记
++ * （parseEvidenceSlots additive 第五字段，CLI 机器段行 'cli-noai-smoke' 尾注回填）透传给
++ * classifyReceiptSourceTag 直判 cross-layer——优先级在调用方 opts.sourceTag 声明源之下、
++ * 命令词正则分类之上；无标记条目分类路径逐字节不变。
+  */
+ function auditRuntimeReceipt(r, opts) {
+   const out = { claim: r && r.claim, logPath: r && r.logPath, sourceTag: null, green: false, logExists: null, mtimeInWindow: null, failSignatures: 0, exitCode: r && typeof r.exitCode === 'number' ? r.exitCode : null, reason: '' }
+   // 打标依据 = 命令来源声明（不解析日志内容，X-10）：opts.sourceTag 调用方声明源优先，
++  // 其次条目 source 标记直判（task-02 Grill B-1——'cli-noai-smoke' 直判 cross-layer），
+   // 否则按回执 command 分类；非法/缺省走分类，未定类默认 build。
+   const declaredSource = opts && typeof opts.sourceTag === 'string'
+     && ['cross-layer', 'build', 'unit'].includes(opts.sourceTag) ? opts.sourceTag : null
+-  out.sourceTag = declaredSource || classifyReceiptSourceTag(r && r.command)
++  out.sourceTag = declaredSource || classifyReceiptSourceTag(r && r.command, r && r.source)
+   if (!r || !r.logPath) { out.reason = '回执缺 logPath'; return out }
++  // 绝对路径直读（2026-09-17-api-coverage-smoke task-02）：CLI 机器段（source=cli-noai-smoke）
++  // 的 logPath 是 quality-scan 记录的绝对路径实录——join(cwd, 绝对路径) 会拼出破损路径
++  // 误报「日志不存在」，isAbsolute 时跳过 join（verify-postcheck 测试输出解析同款口径）。
++  const resolveLog = (p) => (opts.cwd && !isAbsolute(String(p)) ? join(opts.cwd, p) : p)
+   let content = null
+   try {
+-    const abs = opts.cwd ? join(opts.cwd, r.logPath) : r.logPath
++    const abs = resolveLog(r.logPath)
+     content = readFileSync(abs, 'utf8')
+     out.logExists = true
+   } catch {
+@@ -452,7 +474,7 @@ function auditRuntimeReceipt(r, opts) {
+   if (opts.verifyStartAt) {
+     try {
+       const startAt = new Date(opts.verifyStartAt).getTime()
+-      out.mtimeInWindow = statSync(opts.cwd ? join(opts.cwd, r.logPath) : r.logPath).mtimeMs >= startAt - 60_000
++      out.mtimeInWindow = statSync(resolveLog(r.logPath)).mtimeMs >= startAt - 60_000
+       if (!out.mtimeInWindow) { out.reason = `日志 mtime 早于 verifyStartAt（${r.logPath}）`; return out }
+     } catch { out.mtimeInWindow = null }
+   }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index a08ff6d..8f063ea 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -70,6 +70,7 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'commands.build', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '构建命令。', example: 'npm run build' },
+         { path: 'commands.test', type: 'string', optional: true, status: 'live', readers: ['extractTestCommand (src/verify-postcheck.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '测试命令——verify 阶段 CLI 亲自执行此命令与 verify-result.md 对账，实测失败即阻断；quick --done 触及 src/test 时同款实测（P0-2 门禁）。', example: 'npm test' },
+         { path: 'commands.lint', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: 'lint 命令——quick --done 触及 src/test 时 CLI 亲自执行（P0-2 门禁，失败阻断完成）。', example: 'npm run lint' },
++        { path: 'commands.smoke', type: 'string', optional: true, status: 'live', readers: ['executeVerifyQualityScan (src/run/verify-quality-scan.js)'], desc: '接口冒烟命令——verify 阶段 CLI 亲跑（脚本自理服务生命周期：后台起服+轮询就绪+finally 杀），300s 超时帽，失败/超时只记失败态不阻断本步、触发 PASS 封顶（D-002）；指纹含此键，未变不重跑。', example: 'node scripts/smoke.mjs' },
+         { path: 'commands.install', type: 'string', optional: true, status: 'live', readers: ['extractInstallCommand (src/worktree-deps.js)'], desc: '依赖安装命令（worktree 依赖 provisioning 用）。', example: 'npm install' },
+       ],
+     },
+@@ -316,6 +317,7 @@ commands:
+   build: npm run build
+   test: npm test
+   lint: npm run lint
++  # smoke: node scripts/smoke.mjs   # verify 冒烟命令（可选；脚本自理服务生命周期，失败只封顶 PASS 不阻断）
+   # install: npm install   # worktree 依赖安装命令
+ 
+ # ── SillyHub MCP 客户端凭据（派发到 worker 用）──
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index f80132d..9b2701c 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -20,10 +20,15 @@
+  *   4. evaluateConclusionDraft（前置三·结论草稿不进判定链）：机械事实全绿（实测通过 + lint
+  *      非 failed + 探针 1/3/5/6 干净 + 风险门非 integration/deployment-critical）才给 PASS
+  *      草稿；gate 对结论槽的独立复核逻辑不动——草稿只省打字成本，槽行仍由 agent 复核可改写。
++ *   5. smoke 亲跑执行段（2026-09-17-api-coverage-smoke task-01 / FR-01）：commands.smoke
++ *      显式配置才执行（300s 超时帽／快照内超时回退主仓复跑一次），stdout+stderr tee 实录落
++ *      .runtime/verify-logs/smoke-<change>.log；失败/超时只记 additive smokeResult 失败态
++ *      **不 throw**（封顶信号归 --done PASS 封顶消费，非崩溃——与 test failed 的 throw 语义
++ *      刻意区分）。指纹已含 commands 段原文——配置 smoke 前后指纹自动变化，代码未变不重跑。
+  */
+ import { createHash } from 'node:crypto'
+-import { execSync } from 'node:child_process'
+-import { existsSync, readFileSync, mkdirSync } from 'node:fs'
++import { execSync, spawnSync } from 'node:child_process'
++import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+@@ -88,8 +93,11 @@ export function computeQualityScanFingerprint({ cwd, specBase }) {
+ /**
+  * 实测结果 + 指纹落盘（noAI 动作调用；--done 复用读回）。fail-soft：落盘失败只 warn，
+  * --done 将照旧亲测（复用是优化不是正确性依赖）。
++ * smokeResult（2026-09-17-api-coverage-smoke task-01）为 additive 段：RECORD_SCHEMA_VERSION
++ * 保持 1——存量记录无 smoke 段照常读回（smokeResult 兜底 null）；未配置 smoke 时段形态为
++ * configured=false（记录仍写，供 --done PASS 封顶判 not-configured）。
+  */
+-export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult }) {
++export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult }) {
+   const path = qualityScanRecordPath(specBase, changeName)
+   if (!path) return null
+   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
+@@ -103,6 +111,7 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
+       ranAt: new Date().toISOString(),
+       testResult,
+       lintResult: lintResult || null,
++      smokeResult: smokeResult || null,
+     }, null, 2) + '\n')
+     return { path, fingerprint }
+   } catch (e) {
+@@ -114,6 +123,7 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
+ /**
+  * 读回复用记录：schema/source 校验 + 指纹当前匹配 + testResult 有效（passed/skipped；
+  * failed 不复用——失败态指纹下步骤本就未完成，防御性兜底）。任一不满足 → null。
++ * 复用条件只判 testResult（smoke 段随整条记录复用，additive 读回 smokeResult）。
+  */
+ export function loadReusableQualityScan({ specBase, cwd, changeName }) {
+   const path = qualityScanRecordPath(specBase, changeName)
+@@ -125,7 +135,7 @@ export function loadReusableQualityScan({ specBase, cwd, changeName }) {
+     if (rec.testResult.status === 'failed') return null
+     const fp = computeQualityScanFingerprint({ cwd, specBase })
+     if (!fp || fp !== rec.fingerprint) return null
+-    return { testResult: rec.testResult, lintResult: rec.lintResult || null, ranAt: rec.ranAt || null, fingerprint: fp }
++    return { testResult: rec.testResult, lintResult: rec.lintResult || null, smokeResult: rec.smokeResult || null, ranAt: rec.ranAt || null, fingerprint: fp }
+   } catch {
+     return null
+   }
+@@ -245,6 +255,131 @@ export function renderCoverageExistenceReport(cov) {
+ }
+ 
+ 
++// ── smoke 亲跑执行段（2026-09-17-api-coverage-smoke task-01，FR-01 / D-001@v1 / D-010@v1）──
++// 300s 超时帽与 gate-snapshot.js runGateSnapshotCommands 同款（300_000 先例）。
++const SMOKE_TIMEOUT_MS = 300_000
++
++/**
++ * 从 local.yaml 文本提取 commands.smoke。
++ * 与 extractTestCommand 同风格同容错（带引号/不带引号；'unavailable' 视为未配置——
++ * 未配置/unavailable 口径对齐 coverage 先例：执行段休眠，记录 configured=false）。
++ * 模块内私有（runSmokeCheck 消费）。
++ */
++function extractSmokeCommand(yamlText) {
++  if (!yamlText) return null
++  const doubleQuoted = yamlText.match(/^\s*smoke:\s*"([^"]+)"\s*(?:#.*)?$/m)
++  const singleQuoted = yamlText.match(/^\s*smoke:\s*'([^']+)'\s*(?:#.*)?$/m)
++  const quoted = doubleQuoted || singleQuoted
++  if (quoted && quoted[1]) {
++    return quoted[1].toLowerCase() === 'unavailable' ? null : quoted[1].trim()
++  }
++  // bare 值不排除引号字符（extractTestCommand 坑 verify-bare-quote-miss 同款修正）：
++  // 全引号形态已被上方 quoted 分支先行消费，此处引号只可能是嵌在值中部的。
++  const bare = yamlText.match(/^\s*smoke:[ \t]*([^\n#]+?)[ \t]*(?:#.*)?$/m)
++  if (bare && bare[1]) {
++    const cmd = bare[1].trim()
++    return cmd.toLowerCase() === 'unavailable' ? null : cmd
++  }
++  return null
++}
++
++/** spawnSync 结果的超时判定（gate-snapshot.js runGateSnapshotCommands 同款口径）。 */
++function isSyncTimeout(r) {
++  return Boolean(r && r.error && (r.error.code === 'ETIMEDOUT' || /ETIMEDOUT/i.test(String(r.error.message || ''))))
++}
++
++/**
++ * noAI smoke 亲跑：local.yaml 显式配置 commands.smoke 才执行（detect 不自动写，缺省零行为）。
++ * 命令脚本自理服务生命周期（后台起服+轮询就绪+finally 杀），CLI 只施加 300s 超时帽并 tee
++ * 实录 stdout+stderr 落 .runtime/verify-logs/smoke-<change>.log。失败语义与 test/lint 刻意
++ * 区分：非零退出/超时只记 smokeResult 失败态**不 throw**（封顶信号非崩溃——PASS 封顶消费
++ * 归 --done 第五条件 / task-03），本步推进语义不动。快照内超时 → 主仓 cwd 复跑一次
++ * （lint 快照超时回退同款策略：junction I/O 病态慢时保实测不假败）。
++ * 返回纯 JSON 可序列化（落进质量扫描记录 additive smokeResult 段）。
++ */
++function runSmokeCheck({ gateCwd, mainCwd, specBase, changeName, inSnapshot }) {
++  const ranAt = new Date().toISOString()
++  let yamlText = null
++  try { yamlText = readFileSync(join(specBase, 'local.yaml'), 'utf8') } catch { /* 无 local.yaml → 未配置 */ }
++  const command = extractSmokeCommand(yamlText)
++  if (!command) {
++    return {
++      configured: false, status: 'skipped', command: null,
++      exitCode: null, durationMs: null, logPath: null, ranAt,
++      timeout: false, fallbackMainRepo: false, source: 'cli-noai-smoke',
++      reason: yamlText ? '未配置 commands.smoke（或标记 unavailable）——执行段跳过（配置后 verify 自动亲跑）' : `local.yaml 不可读（${join(specBase, 'local.yaml')}）`,
++    }
++  }
++  const startedAt = Date.now()
++  let r = null
++  let spawnError = null
++  try {
++    r = spawnSync(command, { shell: true, cwd: gateCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
++  } catch (e) { spawnError = e }
++  let timedOut = isSyncTimeout(r)
++  let fallbackMainRepo = false
++  let ranCwd = gateCwd
++  // 快照内超时回退主仓复跑一次（lint 快照超时回退先例同款策略，主仓复跑保实测不假败）
++  if (inSnapshot && timedOut) {
++    fallbackMainRepo = true
++    console.warn('⚠️ 快照 smoke 超时（node_modules junction I/O 慢）→ 主仓复跑 smoke（并行噪声可能混入——失败先做归属鉴定）')
++    try {
++      r = spawnSync(command, { shell: true, cwd: mainCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
++      spawnError = null
++      ranCwd = mainCwd
++      timedOut = isSyncTimeout(r)
++    } catch (e) { spawnError = e; timedOut = false }
++  }
++  const durationMs = Date.now() - startedAt
++  const exitCode = r && typeof r.status === 'number' ? r.status : null
++  const failed = timedOut || Boolean(spawnError) || (r ? r.status !== 0 : true)
++  const reason = timedOut
++    ? `超时（>300s 帽${fallbackMainRepo ? '，主仓复跑仍超时' : ''}）`
++    : spawnError
++      ? `spawn 异常：${spawnError.message || spawnError}`
++      : (exitCode !== 0 ? `smoke 命令退出码 ${exitCode}` : null)
++  // log 实录落盘（fail-soft：写失败只 warn 置 logPath=null，不影响判定与步骤推进）
++  let logPath = null
++  if (changeName) {
++    try {
++      const logDir = join(specBase, '.runtime', 'verify-logs')
++      mkdirSync(logDir, { recursive: true })
++      logPath = join(logDir, `smoke-${changeName}.log`)
++      const head = [
++        '# smoke 实录（source: cli-noai-smoke）',
++        `# command: ${command}`,
++        `# cwd: ${ranCwd}${fallbackMainRepo ? '（快照超时回退主仓）' : ''}`,
++        `# ranAt: ${ranAt}   durationMs: ${durationMs}   timeout: ${timedOut}`,
++        `# exitCode: ${exitCode === null ? '（无——spawn 异常/被信号杀）' : exitCode}`,
++        '---- stdout + stderr ----',
++      ].join('\n')
++      writeFileSync(logPath, `${head}\n${String(r && r.stdout || '')}${String(r && r.stderr || '')}\n`)
++    } catch (e) {
++      logPath = null
++      console.warn(`⚠️  smoke 实录 log 落盘失败（fail-soft，判定不受影响）: ${e && e.message ? e.message : e}`)
++    }
++  }
++  return {
++    configured: true, status: failed ? 'failed' : 'passed', command,
++    exitCode, durationMs, logPath, ranAt,
++    timeout: timedOut, fallbackMainRepo, source: 'cli-noai-smoke',
++    reason,
++  }
++}
++
++/** smoke 结果一行报告（语义边界内建：失败=封顶信号非崩溃，不阻断本步） */
++function renderSmokeReport(s) {
++  if (!s || !s.configured) {
++    return `ℹ️  smoke 冒烟：${s && s.reason ? s.reason : '未配置 commands.smoke'}`
++  }
++  const logNote = s.logPath ? `——实录 ${s.logPath}` : ''
++  if (s.status === 'passed') {
++    return `✅ smoke 冒烟通过（exit 0，${s.durationMs}ms${s.fallbackMainRepo ? '；快照超时已回退主仓复跑' : ''}）${logNote}`
++  }
++  return `⚠️ smoke 冒烟失败（${s.reason || `退出码 ${s.exitCode}`}）——记失败态不阻断本步（PASS 封顶信号，--done 消费）${logNote}`
++}
++
++
+ /** fallback 口径可见性（2026-09-11 驾驭第十二批）：快照不可用回退主仓且主仓存在非 .sillyspec
+  * 脏文件时，明示实测判定面含并行 WIP——第三撞根因是「静默 fallback 看不出走了哪个口径」。 */
+ function warnIfMainRepoDirtyForGate(cwd) {
+@@ -289,6 +424,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   let testCheck
+   let lintCheck
+   let coverageCheck = null
++  let smokeResult = null
+   try {
+     testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+     printVerifyTestCheck(testCheck)
+@@ -304,6 +440,16 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+     console.log(`\n⏳ noAI 质量扫描：CLI 亲自实测 commands.lint…`)
+   }
+   printVerifyLintCheck(lintCheck)
++  // smoke 亲跑（2026-09-17-api-coverage-smoke task-01 / FR-01）：commands.smoke 配置才执行
++  // ——失败记失败态不 throw（与 test failed 的 throw 语义刻意区分：封顶信号非崩溃，PASS
++  // 封顶消费归 --done 第五条件 / task-03）。在快照 cleanup 前跑（cwd=gateCwd 隔离快照内），
++  // 配置从主仓 local.yaml 读（与 coverage 同口径）；未配置一行 ℹ️（coverage 同款噪音面）。
++  try {
++    smokeResult = runSmokeCheck({ gateCwd, mainCwd: cwd, specBase, changeName, inSnapshot: Boolean(snap) })
++    console.log(renderSmokeReport(smokeResult))
++  } catch (e) {
++    console.warn(`⚠️  smoke 冒烟执行异常（fail-soft，不影响本步推进）: ${e && e.message ? e.message : e}`)
++  }
+   // P2（noai-ir-roadmap §5）：coverage 存在性事实——commands.coverage 显式配置才采集，
+   // 只证「有覆盖记录」不证「覆盖了行为」（渲染自带语义边界），fail-soft 不阻断。
+   try {
+@@ -315,7 +461,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   } finally {
+     if (snap) { try { snap.cleanup() } catch {} }
+   }
+-  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, coverageCheck })
++  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck })
+   const testFailed = testCheck.status === 'failed'
+   const lintBlocked = shouldBlockVerifyLint(lintCheck)
+   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index e2f5380..e728e59 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -944,6 +944,402 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
+   return { ok: errors.length === 0, errors, warnings }
+ }
+ 
++// ============ 接口验证覆盖矩阵门禁（2026-09-17-api-coverage-smoke task-05 / FR-04~FR-06） ============
++//
++// 与探针 7（验收×测试承接面）并排互补的独立对账门（design §4，D-009 非目标 / R-07 口径注记
++// 互指）：探针 7 管「每条 acceptance 由哪些测试承接」，本矩阵管「design 接口段每个端点由哪些
++// 验证用例/冒烟步骤覆盖」——fail-closed 记账，机械封住「接口层零派生」的 P1 缺陷面：
++//   - covered 记账：分子=判定 covered 的端点行；有效分母=N−non-testable 行数（N=解析端点数
++//     或声明数，D-005）；分子<有效分母或解析面有未覆盖端点 → error 逐条列缺覆盖端点
++//   - 锚点五形态（design §4 Grill #10）：design接口表#<METHOD /path> 解析级（须命中
++//     facts.apiFace 解析产出集，防空指）；权限矩阵[...]/契约表@.../DDL@.../载荷@... 形态级
++//     存在即认；covered/partial 行缺锚点 → error（missingEvidence 口径同 probe7）
++//   - 移交联动（probe7 条件④同款形态）：partial/uncovered 端点行>0 且 facts.handover 零
++//     有效行 → error；blocking 是否封顶归 validatePassEligibility 条件②（④管有去向/②管去向级）
++//   - 探索行（uncovered+[探索] 标记）与消费端子行（两空格缩进 ↳ 前缀）不进分母分子
++//   - 声明降级（D-005）：解析零行按声明数对账；并存以解析为准并注记 warning；解析零行零
++//     声明×判级 critical → error（接口面不可静默为零）；判级 critical×声明 0 端点 → warning
++//   - advisory（D-006/D-007 第一版，不阻断不进 errors）：消费端归类在场而矩阵零子行 →
++//     warning 列端点；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段命中且无「无权限约束」
++//     豁免 → warning
++// 消费路径铁律（plan 全局硬约束 3）：本模块零 import verify-probes——apiFace/consumerHints
++// 数据经 facts 落盘面（readFactsForEligibility 同源读取，parseDesignApiTable 产出于
++// verify-probes 侧 backfill 落盘）进入；矩阵面经 verify-result.md MD 槽解析（X-05 防篡改锚点，
++// 锚定当前文档实态不读 producer 快照）。
++
++/** 矩阵段标题定位（## 级；骨架渲染带「[层：…]」后缀——前缀匹配容忍，renderApiCoverageMatrixLines 字面同源） */
++const API_COVERAGE_HEADING_RE = /^## 接口验证覆盖矩阵/m
++/** 端点单元格 method+path 提取（预填行 `GET /orders/{id}` 形态；宽匹配容忍注记后缀） */
++const API_ENDPOINT_CELL_RE = /(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|]+)/
++/** 声明占位行（D-005 零解析降级侧，骨架「本变更接口面：N 端点（agent 声明）」字面同源） */
++const API_DECLARED_ROW_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
++/** design接口表# 锚点提取（解析级校验用——防空指，Grill #10：非物理行号，METHOD /path 形态） */
++const API_ANCHOR_DESIGN_API_RE = /design接口表#\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|，。；;）)]+)/g
++/** 探索行标记（骨架文法注释字面同源：证据列含 [探索]） */
++const API_EXPLORATION_MARK_RE = /\[探索\]/
++
++/**
++ * 行级提取 verify-result.md「## 接口验证覆盖矩阵」段（task-05 壳层 MD 槽解析，纯字符串零 IO）。
++ * 段定位：## 标题（前缀匹配容忍后缀）到下个同级（##）或更高级（#）标题。行分类：
++ *   - 消费端子行：≥2 空白缩进 + ↳ 前缀（骨架文法字面同源）——只计数不进矩阵行账
++ *   - 五列表行（复用 splitMatrixRowCells 切列）：表头/分隔行跳过；端点列含声明行的 →
++ *     declaredRow 单列（不进端点行账）；其余 → 端点行（method/path 自端点列提取）
++ *   - 声明占位行与探索行判定见上注释；CRLF/LF 容忍（\r 剥离）。
++ * @param {string} verifyMd verify-result.md 全文
++ * @returns {{
++ *   present: boolean,
++ *   rows: Array<{endpoint: string, method: string, path: string, verdict: string,
++ *     caseId: string, result: string, evidence: string, unfilled?: boolean, exploration?: boolean}>,
++ *   subRowCount: number,
++ *   declaredRow: {declared: number, verdict: string, evidence: string}|null,
++ * }}
++ */
++export function extractApiCoverageMatrixSlots(verifyMd) {
++  const out = { present: false, rows: [], subRowCount: 0, declaredRow: null }
++  const md = String(verifyMd || '')
++  const hm = md.match(API_COVERAGE_HEADING_RE)
++  if (!hm) return out
++  out.present = true
++  const rest = md.slice(hm.index + hm[0].length)
++  const endMatch = rest.match(/^#{1,2}(?:[ \t]|$)/m)
++  const sectionText = endMatch ? rest.slice(0, endMatch.index) : rest
++
++  for (const rawLine of sectionText.split(/\r?\n/)) {
++    // 消费端子行（≥2 空白缩进 ↳ 前缀）：不计矩阵行账，只计数（advisory 消费面判据）
++    if (/^\s{2,}↳/.test(rawLine)) { out.subRowCount++; continue }
++    const cells = splitMatrixRowCells(rawLine)
++    if (!cells || cells.length !== 5) continue // 注记/防御/非五列表行不计槽
++    const c = cells.map(x => x.trim())
++    if (c.every(x => /^:?-{3,}:?$/.test(x))) continue // 分隔行
++    if (c[0] === '端点' && c[1] === '判定') continue // 表头行
++    const dm = c[0].match(API_DECLARED_ROW_RE)
++    if (dm) {
++      // 声明占位行（D-005 零解析降级侧）：单列不进端点行账，declared 供 N 兜底
++      out.declaredRow = { declared: parseInt(dm[1], 10), verdict: c[1], evidence: c[4] }
++      continue
++    }
++    const em = c[0].match(API_ENDPOINT_CELL_RE)
++    const row = {
++      endpoint: c[0], method: em ? em[1].toUpperCase() : '', path: em ? em[2] : '',
++      verdict: c[1], caseId: c[2], result: c[3], evidence: c[4],
++    }
++    if (!MATRIX_VERDICT_WHITELIST.has(row.verdict)) row.unfilled = true
++    row.exploration = row.verdict === 'uncovered' && API_EXPLORATION_MARK_RE.test(`${row.result} ${row.evidence}`)
++    out.rows.push(row)
++  }
++  return out
++}
++
++/**
++ * 证据锚点五形态命中（design §4 Grill #10）：design接口表# 须提取出 ≥1 个 METHOD /path
++ * 锚点才计命中（形态在而端点不可提取按缺锚计，fail-closed）；其余四形态存在即认。
++ * design接口表# 锚点是否命中解析产出集由调用侧逐锚核对（解析级校验），此处只管形态在场。
++ */
++function apiEvidenceHasAnchorForm(evidence) {
++  const e = String(evidence || '')
++  API_ANCHOR_DESIGN_API_RE.lastIndex = 0
++  if (API_ANCHOR_DESIGN_API_RE.test(e)) return true
++  if (/权限矩阵\[[^\]]+\]/.test(e)) return true
++  if (/契约表@\S/.test(e)) return true
++  if (/DDL@\S/.test(e)) return true
++  if (/载荷@\S/.test(e)) return true
++  return false
++}
++
++/**
++ * 接口验证覆盖矩阵记账判定纯函数（X-09 双层形态的判定层：零 MD 解析、零 IO——矩阵面经
++ * 壳层 extractApiCoverageMatrixSlots 解析传入，apiFace/consumerHints/handover 经 facts
++ * 落盘面传入）。task-07 断言消费契约。
++ * @param {{
++ *   matrix?: object|null,               // extractApiCoverageMatrixSlots 产物
++ *   apiFace?: {endpoints?: Array<{method,path,rowIdx}>, declared?: number|null, writeEndpoints?: Array}|null,
++ *   consumerHints?: Record<string, string[]>|null,
++ *   facts?: object|null,                // verify-facts.json（handover 联动用，缺 null）
++ *   factsExpected?: boolean,            // false（存量未跑管线）→ 兼容 ok 不误伤
++ *   strict?: boolean,                   // isIrStrictVerifyChange（段缺失分层用）
++ *   riskLevel?: string|null,            // detectChangeRisk().level
++ *   changeName?: string,
++ *   permSectionText?: string,           // design.md 权限段（段头含 权限/角色 的段合并文本，壳内提取）
++ *   designText?: string,                // design.md 全文（写端点豁免行级检测用）
++ * }} [args]
++ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
++ */
++export function judgeApiCoverageMatrix(args) {
++  const errors = []
++  const warnings = []
++  const a = args || {}
++  // factsExpected=false（存量未跑管线）→ 沿用存量兼容口径 ok 不误伤（evaluatePassEligibility 同款边界）
++  if (!a.factsExpected) return { ok: true, errors, warnings }
++
++  const changeName = a.changeName || '<变更名>'
++  const INIT_HINT = `\`sillyspec verify-probes --change ${changeName} --init\``
++  const matrix = a.matrix && typeof a.matrix === 'object' ? a.matrix : { present: false, rows: [], subRowCount: 0, declaredRow: null }
++  const rows = Array.isArray(matrix.rows) ? matrix.rows : []
++  const apiFace = a.apiFace && typeof a.apiFace === 'object' ? a.apiFace : null
++  const endpoints = apiFace && Array.isArray(apiFace.endpoints)
++    ? apiFace.endpoints.filter(e => e && e.method && e.path) : []
++  const declared = apiFace && typeof apiFace.declared === 'number' ? apiFace.declared : null
++  const writeEndpoints = apiFace && Array.isArray(apiFace.writeEndpoints)
++    ? apiFace.writeEndpoints.filter(e => e && e.method && e.path) : []
++  const consumerHints = a.consumerHints && typeof a.consumerHints === 'object' ? a.consumerHints : {}
++  const criticalLevel = ['integration-critical', 'deployment-critical'].includes(a.riskLevel)
++
++  // ── 段缺失分层（对齐 :896-903 双层形态 + 判级 critical fail-closed 防删段绕过）。
++  //    apiFace 在场性 = 特性时序锚（X-08 无条件产出面，task-04 起 backfill 落盘）：缺席说明
++  //    facts 最后一次回填早于本特性（特性间隙存量/旧管线 facts）→ warning 引导 --init 刷新
++  //    即可（刷新后 apiFace 落盘、矩阵骨架补段，删段面转入上门硬口径）；在场（新管线跑过，
++  //    骨架必曾渲染矩阵段）而段缺失 = 删段 → 严格档/critical error。删 facts.json 的对抗面
++  //    另由 checkProbeConsistency error 级 MD 锚点兜底（resolveFactsExpected 同口径注记）。──
++  const newPipeline = apiFace != null
++  if (!matrix.present) {
++    if (newPipeline && a.strict) {
++      errors.push(
++        `接口验证覆盖矩阵段缺失（严格档，created_at ≥ ${IR_STRICT_SINCE}）——verify-result.md 缺「## 接口验证覆盖矩阵」段。` +
++        `修复：跑 ${INIT_HINT} 幂等补段（已有正文不覆盖），再逐行填判定与证据。`
++      )
++    } else if (newPipeline && criticalLevel) {
++      errors.push(
++        `接口验证覆盖矩阵段缺失且判级 ${a.riskLevel}——critical 变更接口面对账面不可缺失（防删段绕过对账，FR-04）。` +
++        `修复：跑 ${INIT_HINT} 幂等补段后逐行填判定与证据。`
++      )
++    } else {
++      warnings.push(
++        `verify-result.md 缺「## 接口验证覆盖矩阵」段${newPipeline ? '（非严格档非判级 critical，存量不强制）' : '（facts.apiFace 缺席——特性前回填的存量底稿）'}——可跑 ${INIT_HINT} 幂等补段。`
++      )
++    }
++    return { ok: errors.length === 0, errors, warnings }
++  }
++
++  // ── 零接口面分层（D-005）：判级 critical → error（接口面不可静默为零——「变更有接口面」以
++  //    判级 critical 为机械代理）；非判级 critical → 零行为零打扰（brownfield 兼容）──
++  const declaredFromRow = matrix.declaredRow ? matrix.declaredRow.declared : null
++  const zeroFace = endpoints.length === 0 && declared === null && declaredFromRow === null
++  if (zeroFace && criticalLevel) {
++    errors.push(
++      `判级 ${a.riskLevel} 且接口面为零（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——critical 变更接口面不可静默为零（D-005/FR-04）。` +
++      `修复：design.md 补接口段表格（每端点一行 METHOD /path）或声明行「本变更接口面：N 端点」，重跑 ${INIT_HINT} 刷新矩阵段与 facts 后逐行填判定。`
++    )
++  }
++  // 判级 critical × 声明 0 端点 → warning 复核（D-005 故障面条款：显式零声明仍可能是漏写）
++  if (criticalLevel && (declared === 0 || declaredFromRow === 0)) {
++    warnings.push(
++      `判级 ${a.riskLevel} 且声明接口面为 0 端点——critical 变更声明零接口面请复核（D-005）：若实际触碰接口，补 design 接口段表格后重跑 ${INIT_HINT} 刷新对账面。`
++    )
++  }
++
++  const clip = (s) => { const t = String(s || ''); return t.length > 40 ? t.slice(0, 40) + '…' : t }
++  const rowLabel = (r) => `${r.method && r.path ? `${r.method} ${r.path}` : clip(r.endpoint || r.verdict)}`
++  const judgedRows = [...rows]
++  if (matrix.declaredRow) judgedRows.push({ ...matrix.declaredRow, endpoint: `本变更接口面：${matrix.declaredRow.declared} 端点（agent 声明）`, method: '', path: '', caseId: '', result: '' })
++
++  // ── 行级判定槽/锚点/non-testable 理由校验（missingEvidence 口径同 probe7 :896-903）──
++  const unfilledRows = judgedRows.filter(r => r.unfilled)
++  if (unfilledRows.length > 0) {
++    errors.push(
++      `接口验证覆盖矩阵有 ${unfilledRows.length} 行判定未填（四选一 covered/partial/uncovered/non-testable）：${unfilledRows.map(rowLabel).join('；')}。` +
++      `修复：编辑 verify-result.md 接口验证覆盖矩阵段，把 <待填：四选一> 替换为判定值。`
++    )
++  }
++  const parseSet = new Set(endpoints.map(e => `${e.method} ${e.path}`))
++  const anchorViolations = []
++  for (const r of judgedRows) {
++    if (r.verdict !== 'covered' && r.verdict !== 'partial') continue
++    const e = String(r.evidence || '')
++    // design接口表# 锚点解析级核对（防空指）：提取的 METHOD /path 须全部命中解析产出集
++    API_ANCHOR_DESIGN_API_RE.lastIndex = 0
++    for (const m of e.matchAll(API_ANCHOR_DESIGN_API_RE)) {
++      const key = `${m[1]} ${m[2]}`
++      if (!parseSet.has(key)) anchorViolations.push(`${rowLabel(r)}：design接口表#${key} 未命中 design 接口段解析面（空指）`)
++    }
++    if (!apiEvidenceHasAnchorForm(e)) anchorViolations.push(`${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
++  }
++  if (anchorViolations.length > 0) {
++    errors.push(
++      `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
++      `（covered/partial 证据须含锚点五形态之一：design接口表#METHOD /path（须命中 design 接口段解析面）/ 权限矩阵[角色×动作] / 契约表@行标识 / DDL@列名 / 载荷@构造点路径）：${anchorViolations.join('；')}。` +
++      `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
++    )
++  }
++  // non-testable 理由非空即合法（:900 先例「non-testable 证据须写一句理由」，理由空按违规计）
++  const ntMissing = judgedRows.filter(r => r.verdict === 'non-testable' && (String(r.evidence || '').trim() === '' || String(r.evidence).trim() === MATRIX_EVIDENCE_TODO || String(r.evidence).trim().startsWith('<待填')))
++  if (ntMissing.length > 0) {
++    errors.push(
++      `接口验证覆盖矩阵有 ${ntMissing.length} 行 non-testable 缺理由（non-testable 证据须写一句理由）：${ntMissing.map(rowLabel).join('；')}。` +
++      `修复：在证据列为 non-testable 端点写一句不适用理由。`
++    )
++  }
++
++  // ── covered 记账（D-005/D-008）：分子=covered 端点行；有效分母=N−non-testable 行数；
++  //    N=解析端点数，解析零行按声明数（declaredRow 优先——矩阵实态，facts.declared 兜底）。
++  //    缺覆盖清单解析集驱动：解析面端点 − covered 行命中 − non-testable 行命中（partial/
++  //    uncovered/unfilled 端点行不在 covered 命中集即自然进清单；探索行不进分母分子——其
++  //    uncovered 判定使之天然不计分子，且不计入 non-testable 扣减）。──
++  if (!zeroFace) {
++    const N = endpoints.length > 0 ? endpoints.length : (declaredFromRow != null ? declaredFromRow : (declared != null ? declared : 0))
++    const nonTestableCount = rows.filter(r => r.verdict === 'non-testable').length
++    const validDenominator = Math.max(0, N - nonTestableCount)
++    const coveredCount = rows.filter(r => r.verdict === 'covered').length
++    const coveredSet = new Set(rows.filter(r => r.verdict === 'covered' && r.method && r.path).map(r => `${r.method} ${r.path}`))
++    const nonTestSet = new Set(rows.filter(r => r.verdict === 'non-testable' && r.method && r.path).map(r => `${r.method} ${r.path}`))
++    const missingEndpoints = endpoints.filter(e => {
++      const k = `${e.method} ${e.path}`
++      return !coveredSet.has(k) && !nonTestSet.has(k)
++    })
++    if (coveredCount < validDenominator || missingEndpoints.length > 0) {
++      const list = missingEndpoints.length > 0
++        ? missingEndpoints.map(e => `${e.method} ${e.path}`).join('；')
++        : `声明 ${N} 端点而 covered 端点行仅 ${coveredCount}（解析零行降级，无法逐条列端点——按声明行拆出每端点行填判定）`
++      errors.push(
++        `接口验证覆盖矩阵覆盖不足：有效分母 ${validDenominator}（N=${N} − non-testable ${nonTestableCount}），covered 分子 ${coveredCount}——缺覆盖端点：${list}。` +
++        `修复：补验证用例/冒烟步骤后把端点行改 covered 并填五形态锚点；不适用端点改 non-testable 并写一句理由；确未覆盖的走「## 移交项（结构化）」承载并保持 partial/uncovered（FR-04）。`
++      )
++    }
++    // 声明与解析并存以解析为准并注记（骨架 :1573 漂移信号同款口径，数据面 facts.apiFace）
++    if (declared !== null && endpoints.length > 0 && declared !== endpoints.length) {
++      warnings.push(
++        `声明与解析并存（声明 ${declared} 端点 / 解析 ${endpoints.length} 端点）——以解析为准，差异需复核（design 接口段与声明行不同步的漂移信号，D-005）。`
++      )
++    }
++  }
++
++  // ── 移交联动（probe7 条件④ :1068-1073 同款形态）：partial/uncovered 端点行>0 且
++  //    facts.handover 零有效行 → error（已覆盖不足且有未验证端点无去向不可静默）；有行 →
++  //    放行，blocking 是否封顶归 validatePassEligibility 条件②（④管有去向/②管去向级）。
++  //    探索行属 uncovered 子集计入（探索性验证不算覆盖，同样须有去向）；facts 缺失 →
++  //    fail-closed 按零有效行处理（factsExpected 已在入口把关，此处只防 facts 消失面）。──
++  const partialRows = [
++    ...rows.filter(r => r.verdict === 'partial' || r.verdict === 'uncovered'),
++    ...(matrix.declaredRow && (matrix.declaredRow.verdict === 'partial' || matrix.declaredRow.verdict === 'uncovered')
++      ? [{ ...matrix.declaredRow, endpoint: `本变更接口面：${matrix.declaredRow.declared} 端点（agent 声明）`, method: '', path: '' }] : []),
++  ]
++  if (partialRows.length > 0) {
++    const factsMissing = !a.facts || typeof a.facts !== 'object'
++    const handoverItems = !factsMissing && a.facts.handover && Array.isArray(a.facts.handover.items)
++      ? a.facts.handover.items.filter(it => it && typeof it === 'object') : []
++    if (handoverItems.length === 0) {
++      errors.push(
++        `接口验证覆盖矩阵含 ${partialRows.length} 行 partial/uncovered 且「## 移交项（结构化）」零有效行（facts.handover）——接口未验证端点必须有移交去向：${partialRows.map(rowLabel).join('；')}。` +
++        `修复：在 verify-result.md 补「## 移交项（结构化）」有效行（任意 severity 均可，blocking 级另受 PASS 封顶约束），或修正矩阵判定（实际已覆盖的行改 covered），或降级结论为 PASS WITH NOTES 承载。` +
++        (factsMissing
++          ? `另：verify-facts.json 缺失/不可读而 factsExpected=true，fail-closed 按零有效行处理——重跑 verify-probes（${INIT_HINT} 幂等刷新底稿）。`
++          : '')
++      )
++    } else {
++      // 逐行关联 advisory（R-05 第一版，D-003 同款分工）：行标识未命中任何 handover 条目文本
++      // → console.warn 攒实证（文本命中弱关联，先 advisory 攒数据），不阻断不进 errors。
++      const itemTexts = handoverItems.map(it => `${it.item || ''}｜${it.condition || ''}`)
++      for (const r of partialRows) {
++        const keys = [r.method && r.path ? `${r.method} ${r.path}` : '', r.endpoint].map(k => String(k || '').trim()).filter(Boolean)
++        const hit = keys.some(k => itemTexts.some(t => t.includes(k)))
++        if (!hit) console.warn(`ℹ️ [advisory] 接口端点 ${rowLabel(r)} 的移交去向未在 handover 条目中命中——建议条目文本含该端点标识（advisory，攒实证；不阻断）`)
++      }
++    }
++  }
++
++  // ── advisory：消费面子行缺失（D-006 第一版）——consumerHints 有归类（design 清单启发式，
++  //    变更级归类）而矩阵零子行 → warning 列端点（不阻断、不进 errors）。──
++  const hintKinds = Object.keys(consumerHints).filter(k => Array.isArray(consumerHints[k]) && consumerHints[k].length > 0)
++  if (hintKinds.length > 0 && matrix.subRowCount === 0 && (endpoints.length > 0 || (declaredFromRow != null ? declaredFromRow : declared) > 0)) {
++    const list = endpoints.length > 0
++      ? endpoints.slice(0, 8).map(e => `${e.method} ${e.path}`).join('；') + (endpoints.length > 8 ? '…' : '')
++      : `声明 ${declaredFromRow != null ? declaredFromRow : declared} 端点（解析零行降级）`
++    warnings.push(
++      `[advisory] 消费端归类在场（${hintKinds.join('/')}，facts.consumerHints——design 清单启发式）但矩阵零消费端子行——建议为接口端点补子行细分承接面（两空格缩进「↳ <消费端>:」形态，D-006，不阻断）：${list}`
++    )
++  }
++
++  // ── advisory：写端点权限矩阵缺行（D-007/FR-06，文案照 design §5）——apiFace.writeEndpoints
++  //    中端点未在权限矩阵段（壳内提取：design 段头含 权限/角色）命中（路径原串或模板基径）
++  //    且无「无权限约束」豁免（design 行级/矩阵行级/权限段整体）→ warning。──
++  const permText = String(a.permSectionText || '')
++  const designLines = String(a.designText || '').replace(/\r\n/g, '\n').split('\n')
++  const exemptTexts = [
++    ...designLines,
++    ...rows.map(r => `${r.endpoint}|${r.caseId}|${r.result}|${r.evidence}`),
++  ]
++  if (!permText.includes('无权限约束')) {
++    for (const ep of writeEndpoints) {
++      const base = String(ep.path).split(/[{:]/)[0]
++      const hit = permText.includes(ep.path) || (base.length > 1 && permText.includes(base))
++      if (hit) continue
++      const rowExempt = exemptTexts.some(t => t.includes('无权限约束') && (t.includes(ep.path) || (base.length > 1 && t.includes(base))))
++      if (!rowExempt) {
++        warnings.push(
++          `[advisory] 写端点 ${ep.method} ${ep.path} 未在权限矩阵声明——补行或显式豁免（表缺行会让派生框架继承你的洞）（D-007/FR-06，不阻断）`
++        )
++      }
++    }
++  }
++
++  return { ok: errors.length === 0, errors, warnings }
++}
++
++/**
++ * design.md 权限矩阵段提取（task-05 壳层辅助，D-007 表间完备性数据面）：段头（#/##/###）
++ * 含 权限/角色 关键词的段体合并文本（含段头行——命中判据宽松侧，advisory 无害）。零段 → ''。
++ */
++function extractPermissionMatrixText(designMd) {
++  const text = String(designMd || '').replace(/\r\n/g, '\n')
++  if (!text) return ''
++  const out = []
++  let collecting = false
++  for (const line of text.split('\n')) {
++    const h = line.match(/^#{1,3}\s+(.*)$/)
++    if (h) {
++      collecting = /权限|角色/.test(h[1])
++      if (collecting) out.push(h[1])
++      continue
++    }
++    if (collecting) out.push(line)
++  }
++  return out.join('\n')
++}
++
++/**
++ * 接口验证覆盖矩阵 validator 注册壳（与 validateAcceptanceMatrix 同三参签名同构，D-010：
++ * 注册进 contracts.verify.validators 即覆盖 gates / machine-interface 等全部 runValidators
++ * 调用方，gates.js 零改动）。壳内取数组装（IO/MD 槽解析全在壳层，判定是
++ * judgeApiCoverageMatrix 纯函数——X-09 双层形态）：
++ *   - tasks/ 不存在（quick 会话/旧变更）或 verify-result.md 未落盘（中间步骤）→ no-op
++ *   - factsExpected=false（存量未跑管线，resolveFactsExpected 同源口径）→ no-op 零行为
++ *   - verify-facts.json（apiFace/consumerHints/handover，缺失容 null——fail-closed 归纯函数）
++ *   - 矩阵段 MD 槽解析（X-05 防篡改锚点：锚定当前文档实态）
++ *   - detectChangeRisk 判级（与 validatePassEligibility 壳同款 design/plan 双文件输入）
++ *   - design.md 权限矩阵段提取（fs 只读，壳非纯函数）
++ */
++export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
++  const { specRoot } = context
++  const errors = []
++  const warnings = []
++  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
++  // 无 TaskCard（tasks/ 不存在）→ 不校验（brownfield 零行为，validateAcceptanceMatrix 同门）
++  if (!existsSync(join(changeDir, 'tasks'))) return { ok: true, errors, warnings }
++  // verify-result.md 中间步骤未落盘 → 不校验（末步引擎存在性规则兜底）
++  const verifyResultPath = join(changeDir, 'verify-result.md')
++  if (!existsSync(verifyResultPath)) return { ok: true, errors, warnings }
++  // 存量未跑管线（无 facts 且非严格档）→ 矩阵段/apiFace 俱不可得，零行为零打扰
++  if (!resolveFactsExpected(changeDir)) return { ok: true, errors, warnings }
++
++  const facts = readFactsForEligibility(changeDir)
++  const designText = readIfExists(join(changeDir, 'design.md'))
++  const riskProfile = detectChangeRisk({
++    designContent: designText,
++    planContent: readIfExists(join(changeDir, 'plan.md')),
++  })
++  return judgeApiCoverageMatrix({
++    matrix: extractApiCoverageMatrixSlots(readFileSync(verifyResultPath, 'utf8')),
++    apiFace: facts && facts.apiFace && typeof facts.apiFace === 'object' ? facts.apiFace : null,
++    consumerHints: facts && facts.consumerHints && typeof facts.consumerHints === 'object' ? facts.consumerHints : null,
++    facts,
++    factsExpected: true,
++    strict: isIrStrictVerifyChange(changeDir),
++    riskLevel: riskProfile ? riskProfile.level : null,
++    changeName,
++    permSectionText: extractPermissionMatrixText(designText),
++    designText,
++  })
++}
++
+ // ============ PASS 封顶事实面 validator（2026-09-17-pass-cap-semantics task-02 / D-001@v2 / D-010 / D-011） ============
+ //
+ // 「要不要集成证据」（validateVerifyOutputs 的 requiresEvidence）与「能不能写 PASS」（本
+@@ -954,6 +1350,8 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
+ //   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover）
+ //   附加：runtimeEndpointExcluded=true 且判级 integration/deployment-critical 且 handover 零行
+ //   → 计入①事实面（D-004/FR-03，仅判级时计入）。
++//   ⑤ 接口冒烟未跑（facts.smokeRan≠ran，仅判级 integration/deployment-critical 时计入，
++//   FR-02/D-002@v1——2026-09-17-api-coverage-smoke task-03；不设 handover 豁免子句）。
+ //
+ // 分层纪律（D-011）：事实生产走 facts 管线（verify-probes backfillFactsFromMdAndTests 首次
+ // backfill 主路径无条件产出，X-08 时序——gates 收尾前置 backfill 先于 runValidators）；本壳只做
+@@ -1005,7 +1403,7 @@ function countFactsHandoverItems(changeDir) {
+  *   changeName?: string,
+  *   dbScriptCandidates?: string[],
+  * }} [args] dbScriptCandidates = 壳内取数的 verify 时点文件集（design 清单 ∪ worktree 变更）∩ db 目录任意层级 .sql
+- * @returns {{ ok: boolean, errors: string[], triggered: Array<{ fact: 'integration-not-run'|'blocking-handover-present'|'db-script-undeclared'|'matrix-partial-no-handover', detail: string }> }}
++ * @returns {{ ok: boolean, errors: string[], triggered: Array<{ fact: 'integration-not-run'|'blocking-handover-present'|'db-script-undeclared'|'matrix-partial-no-handover'|'smoke-not-run', detail: string }> }}
+  */
+ export function evaluatePassEligibility(args) {
+   const errors = []
+@@ -1086,6 +1484,29 @@ export function evaluatePassEligibility(args) {
+     )
+   }
+ 
++  // ── ⑤ smoke 冒烟未跑（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1，判级
++  // 限定——criticalLevel 在场才计入，runtimeEndpointExcluded 附加条件同款形态）：判级
++  // integration/deployment-critical 且 facts.smokeRan !== 'ran'（producer 自 quality-scan
++  // 记录 smokeResult 段推导）→ triggered 加枚举 smoke-not-run。不设 handover 豁免子句——
++  // advisory handover 在场不构成 smoke 缺失的 PASS 豁免（smoke 缺失的合法出路只有配
++  // commands.smoke 复跑质量扫描步 / 降级 PASS WITH NOTES 移交承载两条）；blocking handover
++  // 在场由条件②独立拦下（出口=NOTES），两条件各自触发不互斥。factsMissing 沿双源
++  // fail-closed 同族口径按触发处理（smokeRan 不可证伪）；facts 在场但字段不在场（升级
++  // 过渡期存量 facts，producer 重新 backfill 前）同 !== 'ran' 触发——fail-closed 侧，防
++  // 「判级 critical 未跑冒烟静默 PASS」。非判级（unit-sufficient 等）任意 smokeRan 零行为。
++  if (criticalLevel && (factsMissing || facts.smokeRan !== 'ran')) {
++    const smokeDetail = factsMissing
++      ? 'facts 缺失（fail-closed，smokeRan 不可证伪按未跑处理）'
++      : `facts.smokeRan=${facts.smokeRan == null ? '不在场（按未跑处理）' : facts.smokeRan}`
++    triggered.push({ fact: 'smoke-not-run', detail: `${smokeDetail}，判级 ${a.changeRiskProfile.level}` })
++    const configHint = facts.smokeRan === 'not-configured'
++      ? '（not-configured：先在 local.yaml 配置键 commands.smoke，如 smoke: "npm run smoke"）' : ''
++    errors.push(
++      `[fact smoke-not-run] 接口冒烟未跑（${smokeDetail}）且判级 ${a.changeRiskProfile.level}——critical 变更结论=PASS 须接口冒烟绿跑（facts.smokeRan=ran，FR-02/D-002）。` +
++      `出路：①配 commands.smoke 并复跑质量扫描步${configHint}；②降级承载——${NOTES_FIX}（不算失败）。`
++    )
++  }
++
+   return { ok: errors.length === 0, errors, triggered }
+ }
+ 
+@@ -1370,7 +1791,10 @@ const contracts = {
+     // 注册进 validator 链即覆盖 gates / machine-interface 等全部 runValidators 调用方（gates.js 零改动）。
+     // validatePassEligibility：PASS 封顶事实面（2026-09-17-pass-cap-semantics task-02 / D-001@v2 /
+     // D-010）——注册即覆盖同上；回退 = 移除本注册行（纯加法，未触发四条件行为零变化）。
+-    validators: [validateVerifyOutputs, validateAcceptanceMatrix, validatePassEligibility],
++    // validateApiCoverageMatrix：接口验证覆盖矩阵对账门（2026-09-17-api-coverage-smoke task-05 /
++    // FR-04~FR-06，与探针 7 并排互补的独立章节）——注册即覆盖同上；回退 = 移除本注册行（纯加法，
++    // factsExpected=false / 无矩阵段的存量变更零行为）。
++    validators: [validateVerifyOutputs, validateAcceptanceMatrix, validatePassEligibility, validateApiCoverageMatrix],
+   },
+   archive: {
+     stage: 'archive',
+diff --git a/src/stage-review-checklist.js b/src/stage-review-checklist.js
+index 0429d74..b5c37d2 100644
+--- a/src/stage-review-checklist.js
++++ b/src/stage-review-checklist.js
+@@ -10,7 +10,11 @@
+  * - brainstorm：前 3 条 =「交叉审查模型」三层检查（prompt 内渲染为「N. 」序号行），
+  *   后 8 条 =「交叉点抽取」（渲染为「- 」列表行）；
+  * - plan：渲染为「- [ ] 」checkbox 行（审查清单段）；
+- * - execute：渲染为 2 空格缩进的「N. 」序号行（QA 段「以下三项始终必查」）。
++ * - execute：渲染为 2 空格缩进的「N. 」序号行（QA 段「以下三项始终必查」）；
++ * - verify（2026-09-17-api-coverage-smoke task-06 / FR-07 新增键）：smoke 纪律条目，
++ *   渲染为「输出验证报告」步「### 操作」第 8 条下的 3 空格缩进「- 」列表行；
++ *   命中条件以条目文本内嵌说明（local.yaml 配 commands.smoke 或判级 critical 时生效——
++ *   review-dispatch worker_prompt 单独消费条目，无 prompt 上下文，须自含）。
+  */
+ export const REVIEW_CHECKLISTS = {
+   brainstorm: [
+@@ -43,4 +47,12 @@ export const REVIEW_CHECKLISTS = {
+     'design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）',
+     '组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）',
+   ],
++  // verify 键（2026-09-17-api-coverage-smoke task-06 / FR-07）：smoke 纪律四段，逐字照 design §6 ①~④；
++  // 首条内嵌命中条件说明（worker_prompt 单独消费条目，须自含）；②③④段尾分号/句号照 design 原文保留。
++  verify: [
++    'smoke 纪律（命中条件：local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时生效）——①断言派生表：design 接口表每行 ≥1 happy-path（含出参形状断言）/ 权限矩阵每行 ≥1 反例（非授权操作应拒）/ 契约表必填每项 ≥1 空值反例 / 转移表每边 ≥1 状态断言 / 需求字面（单号格式等）→ 格式断言；',
++    '②负向下界：每写端点 ≥1 权限反例（E4 类）+ 全链 ≥1 注错全量回滚断言（E5 类）；',
++    '③执行口径：脚本后台起服+轮询就绪+finally 杀（墙钟增量≈冒烟本体）、DB 会话自设严格 sql_mode、载荷从消费端构造点导出（手写正确字段的测试抓不住字段漂移）；',
++    '④断言锚点注释（每步挂依据 ID）与矩阵行一一对应。',
++  ],
+ }
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index d4adbd2..3934c6a 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -1,3 +1,5 @@
++import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
++
+ export const definition = {
+   name: 'verify',
+   title: '验证确认',
+@@ -194,7 +196,7 @@ export const definition = {
+    - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 \`risk_level: <真实等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
+    - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。
+    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
+-   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
++   - **集成回执须真实执行——commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记，亲跑段谎报无效）**，其余形态仍须 agent 实跑后据实填写：CLI 对其余形态只校验**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
+ 
+ 3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
+ 4. **预填探针段不可篡改或删除**：verify \`--done\` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文
+@@ -202,12 +204,14 @@ export const definition = {
+ 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
+    - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」
+ 7. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
++8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
++${REVIEW_CHECKLISTS.verify.map((item) => '   - ' + item).join('\n')}
+ 
+ ### verify-result.md 章节结构（骨架已含，占位替换即可）
+ 
+ 结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（\`| 决策 ID | FR | Task | Evidence | 状态 |\`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
+ 
+-**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
++**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记的机器段即其产物）；其余形态仍须 agent 实跑后据实填写（CLI 不代跑其余集成进程——回执必须来自你真实执行过的命令）。
+ 
+ **Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
+ 
+diff --git a/src/verify-facts-schema.js b/src/verify-facts-schema.js
+index 6ea40ec..7f50758 100644
+--- a/src/verify-facts-schema.js
++++ b/src/verify-facts-schema.js
+@@ -70,7 +70,10 @@ const RECEIPT_CONT_LINE_RE = /^[ \t]+([A-Za-z_][\w-]*):\s*(.*)$/
+  * 解析 verify-result.md 的两个受控槽段（D-001@v2 slot-backfill 录入界面）。
+  * 占位形态（<待填：三选一> / <待填：0 或非 0>）不含枚举词，行首锚定 + 枚举词双保险 fail-closed。
+  * @param {string} mdText verify-result.md 全文（LF 归一由调用方 readFileSync 层负责或此处容错）
+- * @returns {{ requiredEvidence: Array<{task,status,exempt:boolean,exemptionReason:string|null,verifiedFiles:string[]}>, runtimeEvidence: Array<{claim,command,exitCode,logPath}>, hasEvidenceSlot: boolean, hasReceiptSlot: boolean }}
++ * @returns {{ requiredEvidence: Array<{task,status,exempt:boolean,exemptionReason:string|null,verifiedFiles:string[]}>, runtimeEvidence: Array<{claim,command,exitCode,logPath,source?:string}>, hasEvidenceSlot: boolean, hasReceiptSlot: boolean }}
++ *   runtimeEvidence[].source（2026-09-17-api-coverage-smoke task-02，additive）：单行形态 ｜/|
++ *   尾注 `source: <token>` 或多行 YAML `source:` 字段回填（CLI 机器段标记 cli-noai-smoke 的
++ *   解析入口）；无标记条目不落键，四字段 fail-closed 语义不动。
+  */
+ export function parseEvidenceSlots(mdText) {
+   const text = String(mdText || '').replace(/\r\n/g, '\n')
+@@ -128,11 +131,17 @@ export function parseEvidenceSlots(mdText) {
+     for (let i = 0; i < receiptBody.length; i++) {
+       const m = receiptBody[i].match(RECEIPT_LINE_RE)
+       if (m) {
++        // source 尾注提取（2026-09-17-api-coverage-smoke task-02，additive 第五字段）：log 是
++        // rest-of-line，行内 ｜/| 尾注段中认 `source: <token>`（CLI 机器段行尾注形态
++        // 「| source: cli-noai-smoke」）；首段 log 剥尾注口径零变化，四字段收取不动，无尾注
++        // 条目不落 source 键（存量回执零回归）。
++        const srcM = m[4].match(/[|｜]\s*source:\s*([^\s|｜]+)/)
+         runtimeEvidence.push({
+           claim: m[1].trim(),
+           command: m[2].trim(),
+           exitCode: Number(m[3]),
+           logPath: m[4].split(/[|｜]/)[0].trim().replace(/^`|`$/g, ''),
++          ...(srcM ? { source: srcM[1] } : {}),
+         })
+         continue
+       }
+@@ -155,7 +164,10 @@ export function parseEvidenceSlots(mdText) {
+         ? fields.log.split(/[|｜]/)[0].trim().replace(/^`|`$/g, '')
+         : ''
+       if (!claim || !command || !/^\d+$/.test(exit) || !log) continue
+-      runtimeEvidence.push({ claim, command, exitCode: Number(exit), logPath: log })
++      // source 字段回填（多行 YAML 形态，task-02 additive）：fields.source 聚合时已过
++      // stripPairedBackticks（同款口径），空值不落键——四字段 fail-closed 收取条件不动。
++      const src = typeof fields.source === 'string' ? fields.source.trim() : ''
++      runtimeEvidence.push({ claim, command, exitCode: Number(exit), logPath: log, ...(src ? { source: src } : {}) })
+     }
+   }
+ 
+@@ -190,12 +202,16 @@ export function validateFactsV2(facts) {
+       errors.push(`requiredEvidence[${item.task}] satisfied 但 verifiedFiles 为空`)
+     }
+   }
+-  // PASS 封顶事实面五字段 additive 登记（2026-09-17-pass-cap-semantics task-01 / D-011 故障面）：
+-  // 字段不在场一律不报错（存量 facts 零迁移通过，producer=backfillFactsFromMdAndTests 首次
+-  // backfill 产出）；在场才校验类型/枚举。schemaVersion 保持 2。
++  // PASS 封顶事实面 additive 登记（2026-09-17-pass-cap-semantics task-01 / D-011 故障面；
++  // smokeRan 增 2026-09-17-api-coverage-smoke task-03 / FR-02）：字段不在场一律不报错
++  // （存量 facts 零迁移通过，producer=backfillFactsFromMdAndTests 首次 backfill 产出）；
++  // 在场才校验类型/枚举。schemaVersion 保持 2。
+   if (facts.integrationRan != null && !['ran', 'not-ran'].includes(facts.integrationRan)) {
+     errors.push(`integrationRan 非法枚举值：${facts.integrationRan}`)
+   }
++  if (facts.smokeRan != null && !['ran', 'not-ran', 'not-configured'].includes(facts.smokeRan)) {
++    errors.push(`smokeRan 非法枚举值：${facts.smokeRan}`)
++  }
+   if (facts.dbScriptDeclarations != null
+     && (!Array.isArray(facts.dbScriptDeclarations) || !facts.dbScriptDeclarations.every(x => typeof x === 'string'))) {
+     errors.push('dbScriptDeclarations 应为 string[]')
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 740b6ac..b042981 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -37,8 +37,10 @@ import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.j
+ import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
+ // 探针重跑（P3b task-02 一致性抽查）：依赖方向已核实无环——verify-probes 只依赖
+ // fs/path/git-helper/change-list/plan-postcheck/contract-matrix/foreign-declared/run-shared，
+-// 不反向依赖本模块，此处直连不引入循环
+-import { runVerifyProbes } from './verify-probes.js'
++// 不反向依赖本模块，此处直连不引入循环。smoke 机器段一致性（2026-09-17-api-coverage-smoke
++// task-02）复用同向 import：记录读取/态推导/标记扫描解析单点在 verify-probes
++// （readSmokeResultRecord/deriveSmokeSectionState/scanSmokeReceiptSection，与 ensure 注入同源）。
++import { runVerifyProbes, readSmokeResultRecord, deriveSmokeSectionState, scanSmokeReceiptSection } from './verify-probes.js'
+ import { parseEvidenceSlots, classifyVerifiedFile } from './verify-facts-schema.js'
+ 
+ // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
+@@ -3060,6 +3062,69 @@ export function isStrictChange({ pm, cwd, changeName } = {}) {
+   return createdAt >= IR_STRICT_SINCE
+ }
+ 
++/**
++ * smoke 回执槽机器段一致性对比（2026-09-17-api-coverage-smoke task-02 / FR-03 / Grill #6 /
++ * R-06）：机器段唯一事实源 = .runtime/verify-quality-scan-<change>.json 的 smokeResult 段
++ * （verify-probes ensure 注入的同源记录），md 侧 agent 只可追加段、不可改写/删除机器段。
++ * 时序保障：backfillFactsFromMdAndTests 的 ensure 注入（gates verify 收尾前置 + 二次回填）
++ * 先于本对比（checkProbeConsistency 在 gates 后段），此刻仍不符 = 机器段被改写/删除/冒充。
++ * 对比口径（全 ERROR——数值面防篡改，非环境敏感维度）：
++ * - 记录 passed：md 须有标记回执条目（无 = 被删除）；每条 command/exit/log 与记录逐字段比对
++ *   （trim 后严格相等——ensure 注入原样、解析侧 trim，正常链路恒一致），任一不符 = 被改写；
++ * - 记录 not-configured / not-ran：md 出现标记回执条目 = 冒充（未配置/未绿跑却有绿回执行）；
++ *   缺态注释行在场但态与记录不符 = 被改写；
++ * - 无记录：md 出现任何 CLI 标记行（回执条目或缺态注释）= 冒充——标记行唯一合法来源是
++ *   ensure，而 ensure 只在有记录时注入。
++ * export 说明（2026-09-17-api-coverage-smoke task-07）：供 test/smoke-gate.test.mjs
++ * 直接断言（task-02 偏离①挂账的接线正主——checkProbeConsistency 内部消费不变）。
++ * @param {string} reportText verify-result.md 全文
++ * @param {string} specBase .sillyspec 根
++ * @param {string} changeName 变更名
++ * @returns {{ state: string|null, absentState: string|null, machineCount: number, mismatches: Array<{probe:string,expected:*,actual:*,severity:'error',note:string}> }}
++ */
++export function auditSmokeReceiptConsistency(reportText, specBase, changeName) {
++  const smoke = readSmokeResultRecord(specBase, changeName)
++  const state = deriveSmokeSectionState(smoke)
++  const scan = scanSmokeReceiptSection(reportText)
++  const mismatches = []
++  const push = (expected, actual, note) =>
++    mismatches.push({ probe: 'smoke-receipt', expected, actual, severity: 'error', note })
++  const fixHint = '机器段唯一事实源是 .runtime/verify-quality-scan 记录 json 的 smokeResult（R-06），禁止手改——记录已过期则重跑 verify 质量扫描步（sillyspec run verify），CLI 会重新 ensure 机器段'
++  if (!state) {
++    if (scan.machineEntries.length > 0) {
++      push('无 smokeResult 记录（无 CLI 标记行）', `md 回执槽 ${scan.machineEntries.length} 条 source=cli-noai-smoke 标记条目`, `无 quality-scan smokeResult 记录而回执槽出现 CLI 机器段标记行——标记行唯一合法来源是 CLI ensure 注入（ensure 只在有记录时注入），疑似 agent 手写冒充。${fixHint}`)
++    } else if (scan.absentState) {
++      push('无 smokeResult 记录（无 CLI 标记行）', `缺态注释行 ${scan.absentState}`, `无 quality-scan smokeResult 记录而回执槽出现 CLI 缺态标注行——疑似 agent 手写冒充。${fixHint}`)
++    }
++    return { state, absentState: scan.absentState, machineCount: scan.machineEntries.length, mismatches }
++  }
++  if (state === 'passed') {
++    if (scan.machineEntries.length === 0) {
++      push('passed 机器段在场（command/exit/log 实录）', '回执槽无 source=cli-noai-smoke 标记条目', `quality-scan 记录 smokeResult.status='passed' 而回执槽机器段缺失/被删除（ensure 已在 backfill 时点先行注入，此刻仍缺 = 正文被改）。${fixHint}`)
++    }
++    for (const [i, e] of scan.machineEntries.entries()) {
++      const cmdOk = String((smoke && smoke.command) || '').trim() === String(e.command || '').trim()
++      const exitOk = (typeof (smoke && smoke.exitCode) === 'number' ? smoke.exitCode : null)
++        === (typeof e.exitCode === 'number' ? e.exitCode : null)
++      const logOk = String((smoke && smoke.logPath) || '').trim() === String(e.logPath || '').trim()
++      if (!cmdOk || !exitOk || !logOk) {
++        push(
++          `command=${smoke.command} / exit=${smoke.exitCode} / log=${smoke.logPath}`,
++          `第 ${i + 1} 条标记条目 command=${e.command} / exit=${e.exitCode} / log=${e.logPath}`,
++          `机器段数值与 quality-scan 记录 smokeResult 不符（command/exit/log 任一字段被改写即打回；多出的重复标记条目按同口径逐条比对）。${fixHint}`)
++      }
++    }
++  } else {
++    if (scan.machineEntries.length > 0) {
++      push(`缺态标注 ${state}（无绿跑机器段）`, `${scan.machineEntries.length} 条 source=cli-noai-smoke 标记回执条目`, `quality-scan 记录为 ${state}（未配置/未绿跑）而回执槽出现 CLI 机器段标记回执行——疑似 agent 手写冒充绿回执（ensure 已按记录态对齐，此刻仍在 = 正文被改）。${fixHint}`)
++    }
++    if (scan.absentState && scan.absentState !== state) {
++      push(`缺态标注 ${state}`, `缺态注释行 ${scan.absentState}`, `缺态注释行态与 quality-scan 记录不符——疑似被改写。${fixHint}`)
++    }
++  }
++  return { state, absentState: scan.absentState, machineCount: scan.machineEntries.length, mismatches }
++}
++
+ export function checkProbeConsistency({ cwd, specBase = null, changeName = null, runtimeRoot = null, strictMode = false }) {
+   if (!changeName) {
+     return { status: 'skipped', severity: null, mismatches: [],
+@@ -3190,6 +3255,15 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
+       note: '守卫不一致实体组数与重跑不符（探针9 聚类/信号比对对 design 清单与 Java 文件形态环境敏感，WARNING 不阻断）——建议重跑 sillyspec verify-probes --change <变更名> --init 刷新预填段' })
+   }
+ 
++  // —— smoke 回执槽机器段一致性（ERROR——2026-09-17-api-coverage-smoke task-02 / FR-03 /
++  //    Grill #6 / R-06）：现 parseProbePrefillAnchors 只对比探针子节计数、不覆盖回执槽，
++  //    本维度补回执槽机器段防篡改——md 标记条目（source=cli-noai-smoke）command/exit/log
++  //    对 quality-scan 记录 json smokeResult 逐字段比对，agent 改写/删除/冒充 → ERROR 打回
++  //    （时序：backfill ensure 已先行注入/态对齐）。解析与记录读取单点在 verify-probes
++  //    （auditSmokeReceiptConsistency），与 ensure 注入同源不二算。——
++  const smokeAudit = auditSmokeReceiptConsistency(reportText, sb, changeName)
++  for (const sm of smokeAudit.mismatches) mismatches.push(sm)
++
+   // —— facts 基线对比（2026-09-08-ir-verify-facts FR-05 / task-05）：重跑指标 vs
+   // verify-facts.json probes 快照（init 时点）。md 锚点对账查「正文没被改」，本维度查
+   // 「md 被手改对齐新代码后 facts 底稿过期」（P3d 数据源保鲜）。分级沿用现实现口径：
+@@ -3276,13 +3350,23 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
+     } catch { /* 固化失败不阻断对账 */ }
+   }
+ 
++  // smoke 机器段诊断（additive，factsConsistency 同款先例：状态/条目计数随结果透传，供
++  // gates 侧 envelope 落盘与排查；不参与判定——判定由上方 mismatches 收集完成）
++  const smokeConsistency = {
++    state: smokeAudit.state, absentState: smokeAudit.absentState,
++    machineCount: smokeAudit.machineCount,
++    verdict: smokeAudit.mismatches.length === 0 ? 'match' : 'mismatch',
++  }
++
+   if (mismatches.length === 0) {
+     const okResult = finish('ok', null, [], null)
+     okResult.factsConsistency = factsConsistency
++    okResult.smokeConsistency = smokeConsistency
+     return okResult
+   }
+   const severity = mismatches.some(m => m.severity === 'error') ? 'error' : 'warning'
+   const mismatchResult = finish('mismatch', severity, mismatches, null)
+   mismatchResult.factsConsistency = factsConsistency
++  mismatchResult.smokeConsistency = smokeConsistency
+   return mismatchResult
+ }
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 37fb1b3..49fd2ea 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -290,6 +290,89 @@ function designHasSubmitEndpoint(text) {
+   return false
+ }
+ 
++// ── 接口面解析 + 消费端归类（2026-09-17-api-coverage-smoke task-04 / FR-05 / D-005~D-007）──
++// parseDesignApiTable：design.md 接口段 tolerant 解析（D-005：不做 normative 接口表格式硬
++// 契约）。双重防线：段头宽收（含 接口/端点/API/REST 子串、不区分大小写的 ##/### 段——宁多
++// 勿漏，R-01：漏端点→漏覆盖假绿比多端点更糟）+ 行级双条件紧守（R-02 误报防护）：HTTP 方法
++// token 词边界（GETTING/BUCKET 内嵌词形不误认）× 路径样式 token（/xxx 类路径或 {xxx}/:xxx
++// 模板段，取行内首个类路径串；?query 尾自然截断——端点身份是 path）。非接口段（非目标/
++// 先例引用段）内的表格/示例行靠段头过滤不计（「示例行跳过」的机制即此）。产物三面：
++//   endpoints [{method, path, rowIdx}]（rowIdx = 命中段内端点产出序号，1-based）；
++//   declared（「本变更接口面：N 端点」声明行提取的 N，全文首个命中，缺席 null——声明与
++//     解析并存以解析为准并注记，渲染侧体现）；
++//   sectionHint（命中的接口段头列表，审计注记）。
++// 落盘面（数据通道=落盘即消费，stage-contract 零 import 纪律）：backfillFactsFromMdAndTests
++// 主路径写 facts.apiFace / facts.consumerHints，task-05 validator 经 facts 消费不经函数调用。
++const API_FACE_SECTION_RE = /接口|端点|api|rest/i
++const API_FACE_METHOD_RE = /(?:^|[^A-Za-z])(GET|POST|PUT|DELETE|PATCH)(?![A-Za-z])/
++// 路径样式 token：/ 起始、前邻非字母数字（日期 2026/09/17 的 /09 前是数字段不认），
++// 首字符字母数字/_/-/{，后续段字符含 {}/: 模板形态（/orders/{id}、/orders/:id 全串命中）
++const API_FACE_PATH_RE = /(?:^|[^A-Za-z0-9])(\/[A-Za-z0-9_\-{}][\w\-./{}:]*)/
++const API_FACE_DECLARED_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
++
++/**
++ * design.md 接口段 tolerant 解析（task-04 / D-005）。纯函数、本地正则零新依赖；输入统一
++ * CRLF→LF 归一（parseRuntimeEndpointExcluded 同款，Windows/Linux/macOS 兼容）。
++ * @param {string} designMd design.md 全文
++ * @returns {{ endpoints: Array<{method: string, path: string, rowIdx: number}>,
++ *   declared: number|null, sectionHint: string[] }}
++ */
++export function parseDesignApiTable(designMd) {
++  const text = String(designMd || '').replace(/\r\n/g, '\n')
++  const dm = text.match(API_FACE_DECLARED_RE)
++  const declared = dm ? parseInt(dm[1], 10) : null
++  const endpoints = []
++  const sectionHint = []
++  for (const sec of splitMdSections(text)) {
++    if (!API_FACE_SECTION_RE.test(sec.heading)) continue
++    sectionHint.push(sec.heading)
++    let rowIdx = 0
++    for (const line of sec.lines) {
++      const t = line.trim()
++      if (!t || t.startsWith('#')) continue
++      const mm = t.match(API_FACE_METHOD_RE)
++      if (!mm) continue // 缺方法列（有路径无方法 token）不认——双条件缺一不可
++      const pm = t.match(API_FACE_PATH_RE)
++      if (!pm) continue // 有方法无路径样式 token（说明行/纯文档行）不认
++      rowIdx++
++      endpoints.push({ method: mm[1], path: pm[1], rowIdx })
++    }
++  }
++  return { endpoints, declared, sectionHint }
++}
++
++// ── 消费端归类启发式（task-04 / D-006 / FR-05，仅 advisory 提示面）──
++// design 清单文件面路径段归类 web/mp/script：routes/pages/model 目录词 → web；mp/miniapp →
++// mp；scripts/test → script。归类只用于 task-05 的「有消费端未填子行」warning 提示（R-05：
++// 启发式假提示无害）——不做语义判定。路径段级匹配非裸子串（'homepages.js' 文件名不命中
++// pages 段）；mp 检查先于 web（mp/pages/index 小程序页归 mp 不归 web）；NEW: 前缀剥除
++// （probe1-new-prefix-miss 同款）。
++const CONSUMER_WEB_SEGMENTS = new Set(['routes', 'pages', 'model'])
++const CONSUMER_MP_SEGMENT_RE = /^(?:mp|miniapp|miniprogram|weapp)$/i
++const CONSUMER_SCRIPT_SEGMENTS = new Set(['scripts', 'script', 'test', 'tests'])
++const CONSUMER_HINT_FILE_CAP = 20
++/**
++ * 清单路径 → 消费端归类（task-04，导出供 task-05 经落盘/传参双通道消费）。
++ * @param {string[]} paths design 清单文件路径（NEW: 前缀/CRLF 容忍）
++ * @returns {Record<string, string[]>} 命中类别的支撑文件（键 ∈ web/mp/script，零命中 {}）
++ */
++export function classifyConsumerHints(paths) {
++  const hints = {}
++  const push = (kind, p) => {
++    if (!hints[kind]) hints[kind] = []
++    if (hints[kind].length < CONSUMER_HINT_FILE_CAP && !hints[kind].includes(p)) hints[kind].push(p)
++  }
++  for (const raw of paths || []) {
++    const p = String(raw || '').replace(/^NEW:\s*/, '').split('\\').join('/')
++    if (!p || p.startsWith('.sillyspec/')) continue
++    const segs = p.toLowerCase().split('/')
++    if (segs.some(s => CONSUMER_MP_SEGMENT_RE.test(s))) push('mp', p)
++    else if (segs.some(s => CONSUMER_WEB_SEGMENTS.has(s))) push('web', p)
++    else if (segs.some(s => CONSUMER_SCRIPT_SEGMENTS.has(s))) push('script', p)
++  }
++  return hints
++}
++
+ /**
+  * 探针 8 主体：design 清单三面文件（Java/SQL/前端）→ 双根（主仓 ∪ worktree）∪ 跨仓注册仓根
+  * 读取 → 归一化比对。advisory：所有输出是「候选」不是结论（UI 本地态键/服务端填充列会自然
+@@ -1258,7 +1341,20 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+     probe9.notes = [`探针 9 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+   }
+ 
+-  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9 }
++  // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
++  // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
++  // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
++  // design 缺失/解析异常 → 空面（骨架渲染「无接口面」注记，validator 判 N=0 走零行为注记）。──
++  let apiFace = { endpoints: [], declared: null, sectionHint: [] }
++  let consumerHints = {}
++  try {
++    if (existsSync(designPath)) {
++      apiFace = parseDesignApiTable(readFileSync(designPath, 'utf8'))
++      consumerHints = classifyConsumerHints(detailed.map(e => String(e.path)))
++    }
++  } catch { /* design 读/解析异常 → 空面（fail-soft） */ }
++
++  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, apiFace, consumerHints }
+ }
+ 
+ /**
+@@ -1442,6 +1538,54 @@ function renderProbe9Lines(p9) {
+   return L
+ }
+ 
++// ── 接口验证覆盖矩阵段渲染（task-04 / FR-05 / D-005~D-007）──
++// 骨架新写路径（generateVerifyResultSkeleton）与缺段补齐（ensureApiCoverageMatrixSection）
++// 共用单一实现——renderProbe7Lines 先例。不动 probe7 既有矩阵（独立 ## 章节并行存在，口径
++// 注记互指区分，D-009 非目标 / R-07）。预填口径同 probe7：CLI 机械预填、agent 逐格复核改写。
++const API_MATRIX_HEADING = '## 接口验证覆盖矩阵'
++// 写端点集合（D-007/FR-06 表间完备性 advisory 数据面）：method ∈ 此集的端点须在 design
++// 权限矩阵段有对应行或显式豁免（「无权限约束」）——warning 计算归 task-05，此处只定集合。
++const API_MATRIX_WRITE_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH'])
++
++/**
++ * 渲染「## 接口验证覆盖矩阵」段（task-04）。
++ * 三态：解析有端点 → 逐端点预填行（判定列 `<待填：四选一>` 占位，同 probe7 预填口径供 agent
++ * 复核）；解析零行有声明 → 声明占位行「本变更接口面：<N> 端点（agent 声明）」（D-005 零解析
++ * 降级，对账分母=声明数）；零解析零声明 → 「无接口面」注记行（非判级 critical 变更零行为
++ * 注记即可——判级 critical 的 error 拦截归 task-05 validator）。段尾 advisory 占位注记
++ * （消费面/表间完备性，warning 计算归 task-05，本段只留位）。
++ * @param {{endpoints?: Array<{method: string, path: string, rowIdx: number}>, declared?: number|null}|null} apiFace
++ * @returns {string[]} 行数组（含段标题；调用方自理前后空行）
++ */
++function renderApiCoverageMatrixLines(apiFace) {
++  const face = apiFace && typeof apiFace === 'object' ? apiFace : null
++  const endpoints = face && Array.isArray(face.endpoints) ? face.endpoints : []
++  const declared = face && typeof face.declared === 'number' ? face.declared : null
++  const L = [`${API_MATRIX_HEADING} [层：人工判断——CLI 预填复核]`]
++  L.push('<!-- 口径注记（与探针 7 互指，R-07）：探针 7 = 验收项 × 测试承接面（每条 acceptance 由哪些测试承接）；本矩阵 = 接口端点 × 验证用例面（design 接口段每个端点由哪些验证用例/冒烟步骤覆盖）——两者并排互补，双矩阵并行存在。端点集来自 design.md 接口段 tolerant 解析（parseDesignApiTable：段头宽收 + 方法/路径双条件），预填≠结论，agent 逐行复核。判定枚举（四选一）：covered / partial / uncovered / non-testable。 -->')
++  L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态：design接口表#METHOD /path、权限矩阵[角色×动作]、契约表@行标识、DDL@列名、载荷@构造点路径（须真实命中对应表/段，防空指）。 -->')
++  L.push('<!-- 文法注释：子行 = 端点行下一行、两空格缩进、以「↳ <消费端>:」前缀书写（消费端细分承接面，不计矩阵行账）；探索行 = 判定 uncovered 且证据列含 [探索] 标记（探索性验证不算覆盖）。 -->')
++  if (endpoints.length === 0 && declared === null) {
++    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --init` 刷新本段；判级 critical 的零面拦截归 validator')
++    return L
++  }
++  if (endpoints.length > 0 && declared !== null && declared !== endpoints.length) {
++    L.push(`<!-- 声明与解析并存（声明 ${declared} 端点 / 解析 ${endpoints.length} 端点）——以解析为准，差异需复核（design 接口段与声明行不同步的漂移信号） -->`)
++  }
++  L.push('| 端点 | 判定 | 用例依据 ID | 结果 | 证据 |')
++  L.push('|---|---|---|---|---|')
++  if (endpoints.length > 0) {
++    for (const ep of endpoints) {
++      L.push(`| ${mdEscapeCell(`${ep.method} ${ep.path}`, 160)} | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
++    }
++  } else {
++    L.push(`| 本变更接口面：${declared} 端点（agent 声明） | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
++    L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init 刷新本段 -->')
++  }
++  L.push('<!-- advisory 尾注（warning 计算归 validator，本段只留位）：有消费端未填子行的端点将列于此（advisory——消费端归类=design 清单启发式，数据面 facts.consumerHints）；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段声明的将列于此（advisory——补行或显式豁免「无权限约束」，数据面 facts.apiFace.writeEndpoints；表缺行会让派生框架继承你的洞） -->')
++  return L
++}
++
+ /**
+  * 从 runVerifyProbes 结果构造 verify-facts.json 机器底稿对象（P3b 可复跑审计底稿）。
+  * 命令行统一 `sillyspec verify-probes --change <name>`；指标 fail-soft——字段不可得时少列
+@@ -1687,6 +1831,14 @@ export function parseDbScriptDeclarations(md) {
+ // 退役判据：批次 C commands.smoke 落地后由 smoke 回执一票判定「集成实测已跑」——起服务冒烟
+ // 即跨层实测，不得默认 build 误拦金路径）；unit=单测 runner 直跑（JUnitCore/node --test/
+ // mocha/jest/vitest/pytest 等）；其余（compile/lint/构建/mvn test 等混合形态）一律 build。
++//
++// 来源标记直判（2026-09-17-api-coverage-smoke task-02 / Grill B-1 修正，FR-03）：条目 source
++// 标记 'cli-noai-smoke'（parseEvidenceSlots additive 第五字段——本文件 ensureSmokeReceiptSection
++// 注入的机器段行尾注回填）→ 直判 cross-layer，**优先于命令词正则分类**——修正点在标记识别
++// 而非命令词增补：node scripts/smoke.mjs / bash smoke.sh / python smoke.py 等脚本形态在既有
++// 正则下全判 build 会误拦金路径，且脚本形态词表不可枚举（RECEIPT_CROSS_LAYER_RE 正则族
++// 零词变动）。对齐目标：change-risk-profile.js classifyReceiptSourceTag(sourceMark 参数与
++// CLI_SMOKE_SOURCE_MARK 常量)——**任一侧增改标记族必须双侧同步**（G-3 铁律）。
+ const RECEIPT_CROSS_LAYER_RE = new RegExp([
+   '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
+   '\\biwr\\b', '\\birm\\b', 'https?://',
+@@ -1696,7 +1848,10 @@ const RECEIPT_CROSS_LAYER_RE = new RegExp([
+   '\\b(?:nc|netcat|telnet|socat)\\b',
+ ].join('|'), 'i')
+ const RECEIPT_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+-function classifyReceiptCommandSource(command) {
++/** CLI 机器段来源标记（与 change-risk-profile.js CLI_SMOKE_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
++const SMOKE_RECEIPT_SOURCE_MARK = 'cli-noai-smoke'
++function classifyReceiptCommandSource(command, sourceMark) {
++  if (sourceMark === SMOKE_RECEIPT_SOURCE_MARK) return 'cross-layer'
+   const cmd = String(command || '')
+   if (RECEIPT_CROSS_LAYER_RE.test(cmd)) return 'cross-layer'
+   if (RECEIPT_UNIT_RE.test(cmd)) return 'unit'
+@@ -1734,7 +1889,9 @@ function judgeIntegrationRan(factsPath, runtimeEvidence) {
+   const scanRan = Boolean(record && record.testResult && record.testResult.status && record.testResult.status !== 'skipped')
+   if (scanRan && ['full', 'module', 'evidence-auto'].includes(strategy)) return { ran: 'ran', notes: [] }
+   const receipts = Array.isArray(runtimeEvidence) ? runtimeEvidence : []
+-  if (receipts.some(r => classifyReceiptCommandSource(r && r.command) === 'cross-layer')) {
++  // 条目 source 标记透传（task-02 Grill B-1）：source='cli-noai-smoke' 直判 cross-layer——
++  // 机器段命令（node scripts/smoke.mjs 等脚本形态）不再落 build 误拦金路径。
++  if (receipts.some(r => classifyReceiptCommandSource(r && r.command, r && r.source) === 'cross-layer')) {
+     return { ran: 'ran', notes: [] }
+   }
+   const notes = []
+@@ -1778,6 +1935,22 @@ function countMatrixPartialRows(md) {
+ }
+ 
+ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResult = null, conclusion = null }) {
++  // smoke 机器段 ensure（2026-09-17-api-coverage-smoke task-02，挂 backfill 合并时点——
++  // quality-scan step 6 noAI 亲跑落记录先于本步，读得到实录）：read-modify-write 盘上 md
++  // 最新态（不基于 verifyMd 快照写回，防覆盖多 agent 并发改动）；注入/态更新成功后解析源
++  // 切盘上最新内容——机器段行立即参与 slots 解析，judgeIntegrationRan 同轮即吃到
++  // source 标记直判 cross-layer。ensure 落盘失败/无记录 fail-soft，不阻断 facts 回填。
++  let verifyMdText = verifyMd
++  try {
++    const ensureDir = dirname(factsPath)
++    const ensured = ensureSmokeReceiptSection(join(ensureDir, 'verify-result.md'), {
++      specBase: dirname(dirname(ensureDir)),
++      changeName: basename(ensureDir),
++    })
++    if (ensured.changed) {
++      verifyMdText = readFileSync(join(ensureDir, 'verify-result.md'), 'utf8')
++    }
++  } catch { /* ensure 异常 fail-soft，按传入快照继续回填 */ }
+   let facts = null
+   try { facts = JSON.parse(readFileSync(factsPath, 'utf8')) } catch { /* 缺失见下 */ }
+   // 只固化既有底稿，不无中生有（2026-09-08-ir-verify-facts 接线实证）：无 facts 的存量变更
+@@ -1790,7 +1963,7 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
+   if (facts.schemaVersion !== FACTS_SCHEMA_VERSION) {
+     facts = { ...facts, schemaVersion: FACTS_SCHEMA_VERSION, probes: (facts && facts.probes) || {} }
+   }
+-  const slots = parseEvidenceSlots(verifyMd || '')
++  const slots = parseEvidenceSlots(verifyMdText || '')
+   // conclusion 由调用方传 stage-contract.extractVerifyConclusionSlot(verifyMd) 的结果
+   // （避免 verify-probes → stage-contract 静态 import 的潜在环，分层单向）
+   const conclusionSlot = conclusion || null
+@@ -1808,7 +1981,7 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
+   // PASS WITH NOTES 零有效行 → advisory 警告（不阻断——存量 PASS WITH NOTES 无此章节是常态，
+   // 渐进采纳）。EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1，清单化才有
+   // 「谁兜、怎么复跑」的可追溯面。
+-  const handoverItems = parseHandoverRows(verifyMd || '')
++  const handoverItems = parseHandoverRows(verifyMdText || '')
+   if (handoverItems.length > 0) {
+     facts.handover = { count: handoverItems.length, items: handoverItems }
+   }
+@@ -1820,12 +1993,45 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
+   // testCheckResult 时点（task-02 validator 在 runValidators 时点消费，已就位）；误挂二次
+   // 回填的 testCheckResult 分支则消费时点读不到、恒误拦。判定输入自推导自读（quality-scan
+   // 记录按 specBase 推导 / 矩阵经动态绑定），不依赖调用方传参。
+-  facts.dbScriptDeclarations = parseDbScriptDeclarations(verifyMd || '')
+-  facts.runtimeEndpointExcluded = parseRuntimeEndpointExcluded(verifyMd || '')
++  facts.dbScriptDeclarations = parseDbScriptDeclarations(verifyMdText || '')
++  facts.runtimeEndpointExcluded = parseRuntimeEndpointExcluded(verifyMdText || '')
+   const integration = judgeIntegrationRan(factsPath, slots.runtimeEvidence)
+   facts.integrationRan = integration.ran
+   for (const note of integration.notes) console.warn(note)
+-  facts.matrixPartialRows = countMatrixPartialRows(verifyMd || '')
++  facts.matrixPartialRows = countMatrixPartialRows(verifyMdText || '')
++  // ── facts.apiFace / facts.consumerHints（2026-09-17-api-coverage-smoke task-04 / FR-05 /
++  // D-005~D-007 producer 侧）──X-08 主路径无条件产出（同上口径，不依赖 testCheckResult
++  // 时点）：apiFace = design 接口段 tolerant 解析面（endpoints/declared + writeEndpoints
++  // 子集=表间完备性数据面），consumerHints = 清单消费端归类启发式（web/mp/script，仅
++  // warning 提示面）。数据通道=落盘即消费（stage-contract 零 import 纪律，分层单向）——
++  // task-05 validator 经 facts 读，不经函数调用。design.md 缺失 → 空面落盘（判定面稳定，
++  // validator 判 N=0 走零行为注记）；与 runVerifyProbes 同一解析器（单一产物源）。
++  {
++    const changeDir = dirname(factsPath)
++    const designPath = join(changeDir, 'design.md')
++    let designText = null
++    if (existsSync(designPath)) {
++      try { designText = readFileSync(designPath, 'utf8') } catch { designText = null }
++    }
++    const face = parseDesignApiTable(designText || '')
++    facts.apiFace = {
++      endpoints: face.endpoints,
++      declared: face.declared,
++      writeEndpoints: face.endpoints.filter(e => e && API_MATRIX_WRITE_METHODS.has(e.method)),
++    }
++    let designPaths = []
++    if (designText !== null) {
++      try { designPaths = parseFileChangeListDetailed(designPath).map(e => String(e.path)) } catch { designPaths = [] }
++    }
++    facts.consumerHints = classifyConsumerHints(designPaths)
++  }
++  // ── facts.smokeRan（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1 producer 侧）──
++  // X-08 主路径无条件产出（同上四字段口径，不依赖 testCheckResult 时点）：唯一事实源 =
++  // quality-scan 记录 smokeResult 段（judgeSmokeRan 五边界态封闭），不受 verify-result.md
++  // 篡改影响（R-06 双源兜底）。消费方 = evaluatePassEligibility 第五条件（smoke-not-run）。
++  const smokeRanJudge = judgeSmokeRan(factsPath)
++  facts.smokeRan = smokeRanJudge.value
++  for (const note of smokeRanJudge.notes) console.warn(note)
+   let testsBackfilled = false
+   if (testCheckResult && testCheckResult.status && testCheckResult.status !== 'skipped') {
+     facts.tests = {
+@@ -1931,6 +2137,235 @@ export function ensureAcceptanceMatrixSection(mdPath, probe7) {
+   return { added: true }
+ }
+ 
++/**
++ * 接口验证覆盖矩阵段幂等补齐（task-04；ensureAcceptanceMatrixSection 先例形态）：verify-
++ * result.md 已存在但缺「## 接口验证覆盖矩阵」段时补骨架段。幂等口径（renderProbe7Lines
++ * 补段同款）：段已在场（agent 已填/未填）一律不触碰——预填只在骨架生成与缺段补齐两条新写
++ * 路径生效，agent 已填内容永不被覆盖；二跑零改动。插入位置：「## 探针结果」章节之后（下一
++ * ## 标题前，保持骨架章节序），无探针章则文末追加（旧格式/手写正文）。
++ * @param {string} mdPath verify-result.md 路径
++ * @param {{endpoints?: Array<{method: string, path: string, rowIdx: number}>, declared?: number|null}|null} apiFace
++ * @returns {{ added: boolean, reason?: string }}
++ */
++export function ensureApiCoverageMatrixSection(mdPath, apiFace) {
++  let text
++  try { text = readFileSync(mdPath, 'utf8') } catch { return { added: false, reason: 'verify-result.md 不存在或不可读' } }
++  const normalized = text.replace(/\r\n/g, '\n')
++  if (/^## 接口验证覆盖矩阵/m.test(normalized)) return { added: false, reason: '接口验证覆盖矩阵段已在场' }
++  const blockLines = [...renderApiCoverageMatrixLines(apiFace), '']
++  try {
++    const lines = normalized.split('\n')
++    const probeIdx = lines.findIndex(l => /^## 探针结果/.test(l))
++    if (probeIdx === -1) {
++      writeFileSync(mdPath, normalized.replace(/\n?$/, '\n') + '\n' + blockLines.join('\n'))
++    } else {
++      // 探针结果章终点 = 下一个 ## 级标题行（矩阵段紧随其后，与骨架章节序一致）
++      let end = lines.length
++      for (let i = probeIdx + 1; i < lines.length; i++) {
++        if (/^## /.test(lines[i])) { end = i; break }
++      }
++      lines.splice(end, 0, ...blockLines)
++      writeFileSync(mdPath, lines.join('\n'))
++    }
++  } catch (e) {
++    console.warn(`⚠️ 接口验证覆盖矩阵段补齐落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
++    return { added: false, reason: '落盘失败' }
++  }
++  return { added: true }
++}
++
++// ============ smoke 回执槽机器段（2026-09-17-api-coverage-smoke task-02 / FR-03，design §3） ============
++//
++// 唯一事实源 = .runtime/verify-quality-scan-<change>.json 的 smokeResult 段（task-01 契约，
++// R-06 双源兜底——md 被篡改不影响 facts 推导）；本组函数把该记录 ensure 式渲染成
++// verify-result.md「## 集成验证回执」槽内 CLI 拥有的机器段行（source: cli-noai-smoke 标注
++// 识别），agent 只可追加段、不可改写机器段（改写/删除由 verify-postcheck
++// checkProbeConsistency 回执槽一致性对比打回，Grill #6 / R-06）。
++/** 机器段行首锚（ensure 幂等识别——claim 钦定文案；单行管道与多行 YAML 双形态首行均命中。
++ *  注意不可用 \b 锚中文词尾：CJK 不属 \w，「亲跑」后与「 |」之间无 word 边界恒 false（实证
++ *  幂等失效重复注入）——改前瞻断言（后随管道分隔或行尾）。 */
++const SMOKE_MACHINE_CLAIM_RE = /^- claim: commands\.smoke CLI 亲跑(?=\s*[|｜]|$)/
++/** 缺态注释行（态捕获 m[1]，not-configured / not-ran 两态——非回执行形态，parseEvidenceSlots 不收取） */
++const SMOKE_ABSENT_LINE_RE = /^<!--\s*smoke 机器段缺态：(not-configured|not-ran)\b[^>]*source: cli-noai-smoke[^>]*-->$/
++
++/**
++ * 读 quality-scan 记录的 smokeResult 段（路径规则同 judgeIntegrationRan：specBase/
++ * .runtime/verify-quality-scan-<changeName>.json）。共享读取点——ensure 注入与 postcheck
++ * 一致性对比同源取数，不各读各的。记录缺失/损坏/无 smokeResult 段 → null。
++ */
++export function readSmokeResultRecord(specBase, changeName) {
++  try {
++    const rec = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`), 'utf8'))
++    if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai'
++      && rec.smokeResult && typeof rec.smokeResult === 'object') {
++      return rec.smokeResult
++    }
++  } catch { /* 记录缺失/损坏 → null */ }
++  return null
++}
++
++/**
++ * 由 smokeResult 记录推导机器段目标态（ensure 与 postcheck 共享口径，不二算）：
++ * 'passed'（configured 且亲跑绿）| 'not-configured'（未配置）| 'not-ran'（配置但
++ * failed/超时——task-01 契约 timeout 归 status='failed'）。
++ */
++export function deriveSmokeSectionState(smoke) {
++  if (!smoke || typeof smoke !== 'object') return null
++  if (smoke.configured === false) return 'not-configured'
++  return smoke.status === 'passed' ? 'passed' : 'not-ran'
++}
++
++/**
++ * facts.smokeRan 判定（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1）：
++ * 唯一事实源 = quality-scan 记录 smokeResult 段（readSmokeResultRecord 共享读取点，R-06
++ * 双源兜底——不受 verify-result.md 篡改影响；judgeIntegrationRan 同款自读先例：specBase/
++ * changeName 自 factsPath 目录上推，不依赖调用方传参）。五边界态封闭：
++ *   configured=false（未配置键 / commands.smoke: unavailable / local.yaml 不可读）→
++ *     not-configured；status='passed'（exit 0）→ ran；status='failed'（exit 非 0/超时——
++ *     task-01 契约 timeout 归 failed，失败也是未通过）→ not-ran；记录在场但无 smokeResult
++ *     段（升级过渡期存量记录）→ not-ran + fail-open 注记；记录缺失/损坏 → not-ran +
++ *     fail-open 注记（X-01 口径，不阻断——出路=重跑质量扫描步或降级 NOTES）。
++ * @param {string} factsPath verify-facts.json 路径（<specBase>/changes/<name>/verify-facts.json）
++ * @returns {{ value: 'ran'|'not-ran'|'not-configured', notes: string[] }}
++ */
++function judgeSmokeRan(factsPath) {
++  const changeDir = dirname(factsPath)
++  const changeName = basename(changeDir)
++  const specBase = dirname(dirname(changeDir))
++  const recordPath = join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`)
++  const smoke = readSmokeResultRecord(specBase, changeName)
++  if (smoke) {
++    if (smoke.configured === false) return { value: 'not-configured', notes: [] }
++    return { value: smoke.status === 'passed' ? 'ran' : 'not-ran', notes: [] }
++  }
++  // readSmokeResultRecord null 两缺因区分注记：记录在场但无 smokeResult 段（升级过渡期
++  // 存量记录）vs 记录缺失/损坏——同判 not-ran，注记各自点名（X-01 fail-open，不阻断）。
++  let recordPresent = false
++  try {
++    const rec = JSON.parse(readFileSync(recordPath, 'utf8'))
++    if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai') recordPresent = true
++  } catch { recordPresent = false }
++  return {
++    value: 'not-ran',
++    notes: [recordPresent
++      ? `ℹ️ quality-scan 记录在场但无 smokeResult 段（${recordPath}，升级过渡期存量记录）——facts.smokeRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；出路=重跑质量扫描步或降级 NOTES）`
++      : `ℹ️ quality-scan 实测记录缺失（${recordPath}）——facts.smokeRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；--done 亲测替代扫描的场景记录时序不可得，出路=重跑质量扫描步或降级 NOTES）`],
++  }
++}
++
++/**
++ * 扫描 verify-result.md 回执槽内 CLI 拥有的 smoke 机器段标记（ensure 幂等判定与
++ * verify-postcheck 一致性对比共享解析点）：①机器段回执条目 = parseEvidenceSlots 收取且
++ * source='cli-noai-smoke' 的条目（含 agent 冒充行——冒充也是打回面）；②缺态注释行态。
++ * @param {string} mdText verify-result.md 全文（CRLF 归一内部处理）
++ * @returns {{ machineEntries: Array<{claim,command,exitCode,logPath,source}>, absentState: 'not-configured'|'not-ran'|null }}
++ */
++export function scanSmokeReceiptSection(mdText) {
++  const text = String(mdText || '').replace(/\r\n/g, '\n')
++  let machineEntries = []
++  try {
++    machineEntries = (parseEvidenceSlots(text).runtimeEvidence || [])
++      .filter(e => e && e.source === SMOKE_RECEIPT_SOURCE_MARK)
++  } catch { machineEntries = [] }
++  let absentState = null
++  for (const line of text.split('\n')) {
++    const am = line.match(SMOKE_ABSENT_LINE_RE)
++    if (am) { absentState = am[1]; break }
++  }
++  return { machineEntries, absentState }
++}
++
++/**
++ * 回执槽 smoke 机器段 ensure 式注入（ensureAcceptanceMatrixSection 先例形态，task-02）：
++ * 挂 backfill 合并时点（backfillFactsFromMdAndTests——quality-scan step 6 noAI 亲跑落记录
++ * 先于 verify 门禁，读得到实录）。行为：记录态 passed → 段内注入机器段行（单行管道形态，
++ * command 含 ｜/| 时降多行 YAML 防字段截断）+ 说明注释行；not-configured / not-ran →
++ * 注缺态注释行；无记录 → no-op（不注入，task-03 判 not-ran）。幂等——段内已有同态 CLI 行
++ * 零改动；态迁移（如配置后亲跑：not-configured → passed）时替换 CLI 拥有行为新态。
++ * read-modify-write 基于盘上 md 最新态（不基于调用方快照写回，防覆盖多 agent 并发改动）。
++ * @param {string} mdPath verify-result.md 路径
++ * @param {{ specBase?: string, changeName?: string }} [opts] 缺省自 mdPath 目录上推（judgeIntegrationRan 同款）
++ * @returns {{ changed: boolean, state?: string, reason?: string }}
++ */
++export function ensureSmokeReceiptSection(mdPath, opts = {}) {
++  const changeDir = dirname(String(mdPath || ''))
++  const changeName = opts.changeName || basename(changeDir)
++  const specBase = opts.specBase || dirname(dirname(changeDir))
++  let text
++  try { text = readFileSync(mdPath, 'utf8') } catch { return { changed: false, reason: 'verify-result.md 不存在或不可读' } }
++  const smoke = readSmokeResultRecord(specBase, changeName)
++  const state = deriveSmokeSectionState(smoke)
++  if (!state) return { changed: false, reason: '无 quality-scan smokeResult 记录（未跑质量扫描）——不注入机器段' }
++  const lines = text.replace(/\r\n/g, '\n').split('\n')
++  const hIdx = lines.findIndex(l => l.startsWith(RECEIPT_SLOT_HEADING))
++  if (hIdx === -1) return { changed: false, reason: `回执槽段（${RECEIPT_SLOT_HEADING}）不在场——backfillMissingEvidenceSlots 先补段，下次 ensure 注入` }
++  // 段终点（parseEvidenceSlots sectionOf 同口径：下一 #/## 级标题或文末）
++  let end = lines.length
++  for (let i = hIdx + 1; i < lines.length; i++) {
++    if (/^#{1,2}\s/.test(lines[i])) { end = i; break }
++  }
++  let machineIdx = -1 // 机器段行（单行形态行或多行形态首行）
++  let absentIdx = -1 // 缺态注释行
++  for (let i = hIdx + 1; i < end; i++) {
++    if (machineIdx === -1 && SMOKE_MACHINE_CLAIM_RE.test(lines[i])) machineIdx = i
++    if (absentIdx === -1 && SMOKE_ABSENT_LINE_RE.test(lines[i])) absentIdx = i
++  }
++  // 目标行渲染（passed 双形态：command 含 ｜/| 时单行管道形态会字段截断 → 降多行 YAML 形态；
++  // exitCode/logPath 非法空值如实渲染——收取侧 fail-closed 不收，postcheck 对比兜底）
++  let targetLines
++  if (state === 'passed') {
++    const command = String(smoke.command || '')
++    const exitVal = typeof smoke.exitCode === 'number' ? smoke.exitCode : ''
++    const noteLine = `<!-- smoke 机器段（CLI ensure 注入，source: ${SMOKE_RECEIPT_SOURCE_MARK}）——唯一事实源是 .runtime/verify-quality-scan-${changeName}.json 的 smokeResult，agent 不可改写/删除（verify 一致性抽查会打回）；ranAt 实录：${smoke.ranAt || '未知'}，durationMs：${typeof smoke.durationMs === 'number' ? smoke.durationMs : '未知'} -->`
++    targetLines = /[|｜]/.test(command)
++      ? [
++        noteLine,
++        '- claim: commands.smoke CLI 亲跑',
++        `  command: ${command}`,
++        `  exit: ${exitVal}`,
++        `  log: ${smoke.logPath || ''}`,
++        `  source: ${SMOKE_RECEIPT_SOURCE_MARK}`,
++      ]
++      : [
++        noteLine,
++        `- claim: commands.smoke CLI 亲跑 | command: ${command} | exit: ${exitVal} | log: ${smoke.logPath || ''} | source: ${SMOKE_RECEIPT_SOURCE_MARK}`,
++      ]
++  } else {
++    const absentNote = state === 'not-configured'
++      ? 'commands.smoke 未配置——配置 local.yaml 后下次 verify 亲跑并自动注入机器段'
++      : `commands.smoke 已配置但未绿跑（${smoke.reason || '失败/超时'}）——修复后重跑 verify 亲测自动更新本段`
++    targetLines = [`<!-- smoke 机器段缺态：${state}（${absentNote}）source: ${SMOKE_RECEIPT_SOURCE_MARK} -->`]
++  }
++  // 幂等/态迁移：同态 CLI 行在场 → no-op；异态（含旧缺态行 / 机器段行）→ 原位替换；缺 → 段内末尾注入
++  const inPlaceIdx = machineIdx !== -1 ? machineIdx : absentIdx
++  if (state === 'passed' && machineIdx !== -1) return { changed: false, state, reason: '机器段已在场（幂等跳过）' }
++  if (state !== 'passed' && absentIdx !== -1) {
++    const am = lines[absentIdx].match(SMOKE_ABSENT_LINE_RE)
++    if (am && am[1] === state) return { changed: false, state, reason: `缺态标注已在场（${state}，幂等跳过）` }
++  }
++  try {
++    if (inPlaceIdx !== -1) {
++      // 原位替换（CLI 拥有行的态迁移；机器段行 1 行 ↔ 缺态行 1 行，多行 YAML 形态首行替换为整块）
++      let replaceEnd = inPlaceIdx + 1
++      if (SMOKE_MACHINE_CLAIM_RE.test(lines[inPlaceIdx]) && state !== 'passed') {
++        // 旧机器段是多行 YAML 形态时连带其缩进续行一并替换
++        while (replaceEnd < end && /^[ \t]+\w/.test(lines[replaceEnd])) replaceEnd++
++      }
++      lines.splice(inPlaceIdx, replaceEnd - inPlaceIdx, ...targetLines)
++    } else {
++      // 段内末尾注入（最后一个非空行之后）
++      let last = end - 1
++      while (last > hIdx && lines[last].trim() === '') last--
++      lines.splice(last + 1, 0, ...targetLines)
++    }
++    writeFileSync(mdPath, lines.join('\n'))
++  } catch (e) {
++    console.warn(`⚠️ smoke 机器段 ensure 落盘失败（fail-soft，不阻断）: ${e && e.message ? e.message : e}`)
++    return { changed: false, state, reason: '落盘失败' }
++  }
++  return { changed: true, state }
++}
++
+ /**
+  * 结论草稿槽行预填（P0-1 前置三，noai-ir-roadmap §3）：机械事实全绿时把骨架「结论枚举：」
+  * 待填槽替换为 PASS 草稿——显式「草稿待确认」内联标注（非默认值语义），agent 复核后可改写；
+@@ -2085,6 +2520,10 @@ export function generateVerifyResultSkeleton(result) {
+     '## 探针结果（CLI 机械预填） [层：可复跑探针——gate 抽查防篡改]',
+     renderVerifyProbesReport(result),
+     '',
++    // 接口验证覆盖矩阵段（task-04 / FR-05）：紧随探针结果章（probe7 矩阵渲染面之后的独立
++    // ## 章节）；result 无 apiFace 键（存量调用方/合成 result）→ 空面渲染「无接口面」注记，零回归。
++    ...renderApiCoverageMatrixLines(result.apiFace),
++    '',
+     '## 测试结果 [层：确定性检查——CLI 实测对账]',
+     '<!--TODO: 测试命令 + 结果（通过数/失败数；known_failures 豁免逐条注明）-->', /* probe1-noqa */
+     '',
+diff --git a/test/acceptance-matrix-gate.test.mjs b/test/acceptance-matrix-gate.test.mjs
+index b3be965..3c35ab3 100644
+--- a/test/acceptance-matrix-gate.test.mjs
++++ b/test/acceptance-matrix-gate.test.mjs
+@@ -323,12 +323,13 @@ function verifyDoc(bodyLines, conclusion = 'PASS') {
+     'verify-result.md 未落盘 → 矩阵门禁 no-op（存在性归引擎 manifest，不提前拦中间步骤）')
+ }
+ 
+-// 2.8 注册面：contracts.verify.validators 含三个 validator（getContract 消费方可见；task-02 注册 validatePassEligibility）
++// 2.8 注册面：contracts.verify.validators 含四个 validator（getContract 消费方可见；task-02 注册
++// validatePassEligibility；2026-09-17-api-coverage-smoke task-05 注册 validateApiCoverageMatrix）
+ {
+   const { getContract } = await import('../src/stage-contract.js')
+   const c = getContract('verify')
+-  assert(c && Array.isArray(c.validators) && c.validators.length === 3,
+-    `verify validator 链注册为 3（validateVerifyOutputs + validateAcceptanceMatrix + validatePassEligibility，实际 ${c && c.validators.length}）`)
++  assert(c && Array.isArray(c.validators) && c.validators.length === 4,
++    `verify validator 链注册为 4（validateVerifyOutputs + validateAcceptanceMatrix + validatePassEligibility + validateApiCoverageMatrix，实际 ${c && c.validators.length}）`)
+ }
+ 
+ // 2.9 partial/uncovered 联动（task-03 / D-003 / FR-04）：partial 行 + facts.handover 零有效行 → error。
+diff --git a/test/check-syntax.mjs b/test/check-syntax.mjs
+index f8f6891..87e0b8c 100644
+--- a/test/check-syntax.mjs
++++ b/test/check-syntax.mjs
+@@ -53,6 +53,22 @@ const ENTRY_WHITELIST = new Set([
+   'src/fs-atomic.js', 'src/git-helper.js', 'src/version.js',
+   'src/docs-check.js', // applyFixes 经 CLI index.js docs 子命令消费（task-03 接线前零文本引用，2026-08-18-platform-map-auto-anchors）
+ ])
++// 符号级 pending 白名单（22e-b「收进白名单」通道，docs-check.js 先例的符号粒度形态）：跨 task
++// 分批落盘的契约导出——producer task 先落盘、consumer task 接线前零 src/+test 文本引用。
++// 条目必须带变更名与接线归期注释，接线落地（引用出现）后删除条目。
++const PENDING_EXPORT_WHITELIST = new Map([
++  // 2026-09-17-api-coverage-smoke task-04（api-face-parser 契约）：task-05 validator 经
++  // facts.apiFace/consumerHints 落盘通道消费（分层单向，不经 import）；ensure 补段与解析
++  // 五形态断言归 task-05 / task-07 test/api-coverage-matrix.test.mjs 接线。
++  ['parseDesignApiTable', 'src/verify-probes.js'],
++  ['classifyConsumerHints', 'src/verify-probes.js'],
++  ['ensureApiCoverageMatrixSection', 'src/verify-probes.js'],
++  // 2026-09-17-api-coverage-smoke task-05（api-coverage-validator 判定层契约）：X-09 双层形态
++  // 纯函数——壳 validateApiCoverageMatrix 在本文件注册面消费（注册行引用），纯函数导出供
++  // task-07 test/api-coverage-matrix.test.mjs 记账/锚点/降级断言接线，接线落地后删除条目。
++  ['extractApiCoverageMatrixSlots', 'src/stage-contract.js'],
++  ['judgeApiCoverageMatrix', 'src/stage-contract.js'],
++])
+ const dynamicEntryPatterns = [
+   /await import\('\.\/stages\/(\w+)\.js'\)/,   // stages/index.js registry
+ ]
+@@ -74,6 +90,7 @@ for (const [file, content] of srcContents) {
+   const isStageIndex = file === 'src/stages/index.js'
+   if (isStageIndex) continue // registry 自身
+   for (const sym of namedExports) {
++    if (PENDING_EXPORT_WHITELIST.get(sym) === file) continue // pending 契约导出（接线归期见白名单注释）
+     // 宽松文本级判定：符号名出现在其他任一 src/+test/ 文件即算引用（防误报优先；
+     // 动态 import 字符串路径、destructure、注释提及都会命中——代价是漏报，可接受）
+     const refRe = new RegExp(`\\b${sym}\\b`)
+diff --git a/test/pass-eligibility.test.mjs b/test/pass-eligibility.test.mjs
+index c600986..80a20f9 100644
+--- a/test/pass-eligibility.test.mjs
++++ b/test/pass-eligibility.test.mjs
+@@ -21,6 +21,9 @@
+  *      blocking；三列存量行零迁移。
+  *   G. Runtime Evidence 收口（FR-03 GWT1/GWT2，D-004）：判级 critical + 服务端点行
+  *      「不涉及」+ 无 handover → 计入事实面封顶；有 handover / 非判级 → 不计入。
++ *   S. 第五条件 smoke-not-run（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1）：
++ *      枚举触发 + 两出路修复指引；判级限定（deployment 计入/contract-required 不触发）；
++ *      facts 缺失 × critical fail-closed（smokeRan 不可证伪）。
+  *   H. fix.sql 双门（FR-05 GWT2 / D-012）：apply 文件集 ∩ db/*.sql ⊄ 声明集 → 阻断；
+  *      verify 之后新增 sql（verify-result 无对应声明）→ archive --confirm 前置兜底阻断；
+  *      声明齐备（声明行 / 回执 command 双形态）→ 双门放行；db-script 行与声明门互斥。
+@@ -336,7 +339,10 @@ test('G. runtimeEndpointExcluded：判级 critical + 无 handover → 计入①
+ 
+   const r2 = evaluatePassEligibility({
+     conclusion: 'PASS', factsExpected: true,
+-    facts: { ...excludedFacts(), handover: { count: 1, items: [{ type: 'other', item: '端点人工核验', condition: '部署后核', severity: 'advisory' }] } },
++    // smokeRan:'ran' 前置补齐（2026-09-17-api-coverage-smoke task-03 additive 调整）：本断言
++    // 聚焦端点免检×handover 承载语义；第五条件（smoke-not-run）不设 handover 豁免子句，
++    // 缺省 smokeRan 会另触发与本题无关的封顶——断言本意与强度不变（ok=true 仍锁端点面）。
++    facts: { ...excludedFacts(), smokeRan: 'ran', handover: { count: 1, items: [{ type: 'other', item: '端点人工核验', condition: '部署后核', severity: 'advisory' }] } },
+     changeRiskProfile: { level: 'integration-critical' },
+   })
+   assert.ok(r2.ok === true, '有对应 handover（任意级）承载 → 不计入（端点免检须移交兜底）')
+@@ -382,6 +388,37 @@ test('G. producer：parseRuntimeEndpointExcluded 表格行「不涉及」识别
+   } finally { cap.restore() }
+ })
+ 
++// ═══════════════════════════════════════════════════════════════════
++// S. 第五条件 smoke-not-run（2026-09-17-api-coverage-smoke task-03/task-07 / FR-02 / D-002@v1）
++// ═══════════════════════════════════════════════════════════════════
++test('S. 第五条件：smoke-not-run 枚举触发 + 两出路修复指引；判级限定（deployment 计入/非判级不触发）；facts 缺失 fail-closed', () => {
++  const CLEAN = () => ({
++    integrationRan: 'ran', handover: { count: 0, items: [] },
++    dbScriptDeclarations: [], matrixPartialRows: 0, runtimeEndpointExcluded: false,
++  })
++  const base = (facts, level) => ({ conclusion: 'PASS', factsExpected: true, facts, changeRiskProfile: { level } })
++
++  // 枚举触发 + 两出路修复指引文案（①配 commands.smoke 复跑 ②降级 NOTES 移交承载）
++  const r1 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'integration-critical'))
++  const err1 = r1.errors.find((e) => e.includes('[fact smoke-not-run]')) || ''
++  assert.ok(r1.triggered.some((t) => t.fact === 'smoke-not-run')
++    && err1.includes('①配 commands.smoke 并复跑质量扫描步') && err1.includes('②降级承载'),
++    `smoke-not-run 触发且 error 含两出路（①配置复跑 ②降级 PASS WITH NOTES 承载——不算失败）（实际 triggered=${JSON.stringify(r1.triggered.map((t) => t.fact))} err=${err1.slice(0, 100)}）`)
++
++  // 判级限定形态：deployment-critical 同计入；contract-required 非判级零行为
++  const r2 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'deployment-critical'))
++  assert.ok(r2.triggered.some((t) => t.fact === 'smoke-not-run'),
++    'deployment-critical 计入（判级限定两档：integration/deployment-critical）')
++  const r3 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'contract-required'))
++  assert.ok(r3.ok === true && !r3.triggered.some((t) => t.fact === 'smoke-not-run'),
++    'contract-required 非判级 → smoke-not-run 不触发（判级限定形态，brownfield 零打扰）')
++
++  // facts 缺失 × critical → smoke-not-run 同按触发（smokeRan 不可证伪，双源 fail-closed 同族口径）
++  const r4 = evaluatePassEligibility({ conclusion: 'PASS', factsExpected: true, facts: null, changeRiskProfile: { level: 'integration-critical' } })
++  assert.ok(r4.triggered.some((t) => t.fact === 'smoke-not-run' && t.detail.includes('fail-closed')),
++    `facts 缺失 × critical → smoke-not-run 按 fail-closed 触发（smokeRan 不可证伪按未跑处理）（实际 ${JSON.stringify(r4.triggered.filter((t) => t.fact === 'smoke-not-run'))}）`)
++})
++
+ // ═══════════════════════════════════════════════════════════════════
+ // H. fix.sql 双门（FR-05 GWT2 / D-007 / D-012）——checkDbScriptDeclarationGate + archive --confirm 兜底
+ // ═══════════════════════════════════════════════════════════════════
+diff --git a/test/stage-review-checklist.test.mjs b/test/stage-review-checklist.test.mjs
+index dc61047..c85d9d8 100644
+--- a/test/stage-review-checklist.test.mjs
++++ b/test/stage-review-checklist.test.mjs
+@@ -9,11 +9,15 @@
+  *    review-dispatch worker_prompt 与 stage prompt 同源的前置保证（事前给的 == 事后查的）。
+  *
+  * 期望块由「迁移前快照 + 迁移前前缀形态」构造，不引用常量渲染（防自证）。
++ * 【2026-09-17-api-coverage-smoke task-06 / FR-07】verify 键随行：smoke 纪律四段
++ * 新增键（非迁移——迁移前无此键），快照逐字照 design §6 ①~④，渲染为「输出验证报告」
++ * 步「### 操作」第 8 条下 3 空格缩进「- 」列表行。
+  */
+ import { REVIEW_CHECKLISTS } from '../src/stage-review-checklist.js'
+ import { definition as brainstormDefinition } from '../src/stages/brainstorm.js'
+ import { buildPlanSteps } from '../src/stages/plan.js'
+ import { buildExecuteSteps } from '../src/stages/execute.js'
++import { definition as verifyDefinition } from '../src/stages/verify.js'
+ 
+ let passed = 0
+ let failed = 0
+@@ -69,13 +73,21 @@ const SNAPSHOT_EXECUTE = [
+   'design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）',
+   '组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）',
+ ]
++// verify = smoke 纪律四段（2026-09-17-api-coverage-smoke task-06 / FR-07 新增键，逐字照 design §6 ①~④；
++// 首条内嵌命中条件说明——review-dispatch worker_prompt 单独消费条目须自含；渲染为「### 操作」第 8 条下 3 空格缩进「- 」列表行）
++const SNAPSHOT_VERIFY = [
++  'smoke 纪律（命中条件：local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时生效）——①断言派生表：design 接口表每行 ≥1 happy-path（含出参形状断言）/ 权限矩阵每行 ≥1 反例（非授权操作应拒）/ 契约表必填每项 ≥1 空值反例 / 转移表每边 ≥1 状态断言 / 需求字面（单号格式等）→ 格式断言；',
++  '②负向下界：每写端点 ≥1 权限反例（E4 类）+ 全链 ≥1 注错全量回滚断言（E5 类）；',
++  '③执行口径：脚本后台起服+轮询就绪+finally 杀（墙钟增量≈冒烟本体）、DB 会话自设严格 sql_mode、载荷从消费端构造点导出（手写正确字段的测试抓不住字段漂移）；',
++  '④断言锚点注释（每步挂依据 ID）与矩阵行一一对应。',
++]
+ 
+-console.log('=== 常量形态（task-03 消费契约：三键非空 string[]）===')
++console.log('=== 常量形态（task-03 消费契约：四键非空 string[]）===')
+ {
+   assert(REVIEW_CHECKLISTS != null && typeof REVIEW_CHECKLISTS === 'object', 'REVIEW_CHECKLISTS 是对象')
+   const keys = Object.keys(REVIEW_CHECKLISTS).sort().join(',')
+-  assert(keys === 'brainstorm,execute,plan', `三键齐全且无多余键（实际: ${keys}）`)
+-  for (const stage of ['brainstorm', 'plan', 'execute']) {
++  assert(keys === 'brainstorm,execute,plan,verify', `四键齐全且无多余键（实际: ${keys}）`)
++  for (const stage of ['brainstorm', 'plan', 'execute', 'verify']) {
+     const items = REVIEW_CHECKLISTS[stage]
+     assert(Array.isArray(items) && items.length > 0, `${stage}: 非空 string[]（条目数 ${Array.isArray(items) ? items.length : 'N/A'}）`)
+     assert(items.every(it => typeof it === 'string' && it.trim().length > 0), `${stage}: 每条为非空字符串`)
+@@ -98,16 +110,22 @@ console.log('\n=== 内嵌迁移前快照逐条比对（钉死「迁移=逐字」
+     'FR-11: 清单含「用户入口 × 菜单/注册 DML 对账」条目（新页面/前端路由场景）')
+   assertDeepEqual(REVIEW_CHECKLISTS.plan, SNAPSHOT_PLAN, 'plan: 常量 == 迁移前审查清单(10 条) 快照（逐字）')
+   assertDeepEqual(REVIEW_CHECKLISTS.execute, SNAPSHOT_EXECUTE, 'execute: 常量 == 迁移前三项必查(3 条) 快照（逐字）')
++  // FR-07（task-06）：verify 键新增形态——快照逐字照 design §6 四段，首条内嵌命中条件
++  assertDeepEqual(REVIEW_CHECKLISTS.verify, SNAPSHOT_VERIFY, 'verify: 常量 == smoke 纪律四段(4 条) 快照（逐字照 design §6，task-06/FR-07 新增键）')
++  assert(REVIEW_CHECKLISTS.verify.some(it => it.includes('local.yaml 配置 commands.smoke') && it.includes('integration/deployment-critical')),
++    'FR-07: verify 首条内嵌命中条件说明（commands.smoke 配置或判级 critical 时生效）')
+ }
+ 
+-console.log('\n=== 三 stage prompt 渲染产物含全部条目字面（期望块由快照构造，防自证）===')
++console.log('\n=== 四 stage prompt 渲染产物含全部条目字面（期望块由快照构造，防自证）===')
+ {
+   const grill = brainstormDefinition.steps.find(s => s.name === 'Design Grill 交叉审查')
+   const planReview = buildPlanSteps(null).find(s => s.name === '审查计划')
+   const acceptance = buildExecuteSteps(null).find(s => s.name === '对照设计检查')
++  const verifyReport = verifyDefinition.steps.find(s => s.name === '输出验证报告')
+   assert(!!grill && typeof grill.prompt === 'string', 'brainstorm: 定位「Design Grill 交叉审查」step')
+   assert(!!planReview && typeof planReview.prompt === 'string', 'plan: 定位「审查计划」step')
+   assert(!!acceptance && typeof acceptance.prompt === 'string', 'execute: 定位「对照设计检查」step')
++  assert(!!verifyReport && typeof verifyReport.prompt === 'string', 'verify: 定位「输出验证报告」step')
+ 
+   const layerBlock = SNAPSHOT_BRAINSTORM_LAYERS.map((it, i) => `${i + 1}. ${it}`).join('\n')
+   const crossBlock = SNAPSHOT_BRAINSTORM_CROSS_POINTS.map(it => `- ${it}`).join('\n')
+@@ -123,6 +141,19 @@ console.log('\n=== 三 stage prompt 渲染产物含全部条目字面（期望
+   assert(acceptance.prompt.includes(execBlock), 'execute prompt: 三项必查齐全（2 空格缩进序号行形态，逐字）')
+   assert(acceptance.prompt.split(execBlock).length - 1 === 1, 'execute prompt: 三项块恰好出现一次（无双重渲染）')
+ 
++  const verifyBlock = SNAPSHOT_VERIFY.map(it => '   - ' + it).join('\n')
++  assert(verifyReport.prompt.includes(verifyBlock), 'verify prompt: smoke 纪律四条齐全（3 空格缩进列表行形态，逐字）')
++  assert(verifyReport.prompt.split(verifyBlock).length - 1 === 1, 'verify prompt: 纪律块恰好出现一次（无双重渲染）')
++  assert(verifyReport.prompt.includes('local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律'),
++    'verify prompt: 段首命中条件说明在场（commands.smoke 配置或判级 critical）')
++  // 【task-07 增量】verify 纪律段渲染形态锚：编号条目挂靠 + ①~④ 段编号 + 段尾标点（照 design §6 原文）
++  assert(verifyReport.prompt.includes('8. **smoke 纪律'),
++    'verify prompt: 纪律段挂靠「### 操作」第 8 条编号条目（8. **smoke 纪律 锚——静态导出段的结构位置）')
++  assert(REVIEW_CHECKLISTS.verify[0].includes('①') && ['②', '③', '④'].every((n, i) => REVIEW_CHECKLISTS.verify[i + 1].startsWith(n)),
++    'verify 四段编号形态：①嵌于首条（命中条件说明后）、②③④各段段首（照 design §6 ①~④ 分段）')
++  assert(REVIEW_CHECKLISTS.verify.slice(0, 3).every(it => it.endsWith('；')) && REVIEW_CHECKLISTS.verify[3].endsWith('。'),
++    'verify 段尾标点形态：前三段以；收尾、末段以。收尾（design §6 原文标点，条目自含语义完整）')
++
+   // 常量侧逐条字面断言：REVIEW_CHECKLISTS 每条都在对应 stage prompt 里
+   for (const it of REVIEW_CHECKLISTS.brainstorm) {
+     assert(grill.prompt.includes(it), `brainstorm prompt 含条目字面: ${it.slice(0, 16)}...`)
+@@ -133,6 +164,9 @@ console.log('\n=== 三 stage prompt 渲染产物含全部条目字面（期望
+   for (const it of REVIEW_CHECKLISTS.execute) {
+     assert(acceptance.prompt.includes(it), `execute prompt 含条目字面: ${it.slice(0, 16)}...`)
+   }
++  for (const it of REVIEW_CHECKLISTS.verify) {
++    assert(verifyReport.prompt.includes(it), `verify prompt 含条目字面: ${it.slice(0, 16)}...`)
++  }
+ }
+ 
+ console.log(`\n${failed === 0 ? '✅ 全部通过' : `❌ ${failed} 项失败`}`)
+diff --git a/test/verify-conclusion-slot.test.mjs b/test/verify-conclusion-slot.test.mjs
+index 266d43d..9c336d8 100644
+--- a/test/verify-conclusion-slot.test.mjs
++++ b/test/verify-conclusion-slot.test.mjs
+@@ -11,6 +11,8 @@
+  *   骨架：含槽行、占位符不含枚举词（旧自通过缺陷回归锁）、整骨架喂解析器得 ''
+  *   劫持回归：槽 FAIL + 诱饵「## 结论：PASS」标题 → 槽赢
+  *   legacy 兼容：无槽自由格式不再本测试直接测（test/stage-contract.test.mjs 集成 4/5 全走 legacy 路径回归）
++ *   smoke-not-run（2026-09-17-api-coverage-smoke task-07 / FR-02）：判级 critical ×
++ *   facts.smokeRan=not-ran × 槽 PASS → 第五条件拦截文案；槽 NOTES 放行
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -78,6 +80,39 @@ test('骨架：含槽行且占位符不含枚举词（旧 `<待填：PASS 或 FA
+   assert.equal(extractVerifyConclusionSlot(sk), '')
+ })
+ 
++// ── smoke-not-run 触发文案（2026-09-17-api-coverage-smoke task-03/task-07 / FR-02）──
++// 壳层接线：detectChangeRisk 判级 critical（design frontmatter risk_level）× facts.smokeRan=not-ran
++// × 结论槽 PASS → 第五条件 [fact smoke-not-run] 拦截；槽改 NOTES 放行（封顶只管 PASS 的联动）。
++test('FR-02 文案：结论槽 PASS + 判级 critical + smokeRan=not-ran → [fact smoke-not-run] 拦截；槽 NOTES 放行', () => {
++  const root = mkdtempSync(join(tmpdir(), 'slot-smoke-'))
++  tmpRoots.push(root)
++  const changeDir = join(root, '.sillyspec', 'changes', 'slot-smoke')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), [
++    '---', 'author: t', 'risk_level: integration-critical', 'created_at: 2026-01-01 08:00:00', '---',
++    '# 设计', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify({
++    schemaVersion: 2,
++    integrationRan: 'ran',
++    handover: { count: 0, items: [] },
++    dbScriptDeclarations: [],
++    runtimeEndpointExcluded: false,
++    matrixPartialRows: 0,
++    smokeRan: 'not-ran',
++  }, null, 2))
++  writeFileSync(join(changeDir, 'verify-result.md'),
++    '# 验证报告\n\n## 结论 [层：人工判断]\n\n结论枚举：`PASS`——全绿\n\n单测全过。\n')
++  const capped = validatePassEligibility(root, 'slot-smoke', {})
++  assert.ok(capped.ok === false
++    && capped.errors.some((e) => e.includes('[fact smoke-not-run]') && e.includes('commands.smoke')),
++    `封顶 error 含 [fact smoke-not-run] 枚举行与 commands.smoke 出路（实际 ${JSON.stringify(capped.errors.map((e) => e.slice(0, 60)))}）`)
++  writeFileSync(join(changeDir, 'verify-result.md'),
++    '# 验证报告\n\n## 结论 [层：人工判断]\n\n结论枚举：`PASS WITH NOTES`——冒烟移交承载\n')
++  const notes = validatePassEligibility(root, 'slot-smoke', {})
++  assert.ok(notes.ok === true, '结论槽 PASS WITH NOTES → 第五条件不生效（NOTES 由移交项承载路径接管）')
++})
++
+ // ── 封顶文案联动（2026-09-17-pass-cap-semantics task-07 / FR-01 Then 文案）──
+ // 结论槽值 PASS 被四事实封顶拦截时，error 文案含触发行枚举与「改写 PASS WITH NOTES +
+ // 补『## 移交项（结构化）』」修复指引；结论槽 NOTES 放行（封顶只管 PASS 的联动口径）。
+diff --git a/test/verify-probes-facts.test.mjs b/test/verify-probes-facts.test.mjs
+index 098889d..38b8a5e 100644
+--- a/test/verify-probes-facts.test.mjs
++++ b/test/verify-probes-facts.test.mjs
+@@ -302,9 +302,10 @@ const skeleton = generateVerifyResultSkeleton(mkRoundTripResult())
+ // ── C1. 十章节标题全部带 [层：…] 纯后缀 ──
+ {
+   const headings = skeleton.split('\n').filter(l => l.startsWith('## '))
+-  assert(headings.length === 14, `十四章节齐全（v2 两槽段 + 移交项结构化段 + 独立复核回流槽；实际: ${headings.length}——${headings.map(h => h.slice(0, 12)).join('/')}）`)
++  assert(headings.length === 15, `十五章节齐全（v2 两槽段 + 移交项结构化段 + 独立复核回流槽 + 接口验证覆盖矩阵段 task-04；实际: ${headings.length}——${headings.map(h => h.slice(0, 12)).join('/')}）`)
+   assert(headings.some(h => h.startsWith('## 移交项（结构化）')), '移交项结构化段在结论章节之后在场')
+   assert(headings.some(h => h.startsWith('## 独立复核')), '独立复核回流槽在场（verify 后深度复核结论落档案不落聊天）')
++  assert(headings.some(h => h.startsWith('## 接口验证覆盖矩阵')), '接口验证覆盖矩阵段在场（task-04，probe7 矩阵之后的独立章节）')
+   assert(headings.every(h => /^## .+ \[层：[^\]]+\]$/.test(h)), '每章标题行以 [层：…] 后缀收尾')
+   assert(headings.filter(h => h.endsWith('[层：人工判断]')).length === 8, '八个语义章节层标注=人工判断')
+   const probeHeading = headings.find(h => h.startsWith('## 探针结果'))
+@@ -642,8 +643,8 @@ console.log('\n=== F. verify-probes --init CLI 集成 ===\n')
+     assert(existsSync(reportPath), '骨架 verify-result.md 落盘')
+     assert(existsSync(factsPath), '机器底稿 verify-facts.json 落盘')
+     const sk1 = readFileSync(reportPath, 'utf8')
+-    assert(sk1.includes('#### 探针 1：未实现标记扫描') && (sk1.match(/^## .+ \[层：[^\]]+\]$/gm) || []).length === 14,
+-      'CLI 骨架含探针子节 + 十四章节层标注后缀（v2 两槽段 + 移交项结构化段 + 独立复核槽）')
++    assert(sk1.includes('#### 探针 1：未实现标记扫描') && (sk1.match(/^## .+ \[层：[^\]]+\]$/gm) || []).length === 15,
++      'CLI 骨架含探针子节 + 十五章节层标注后缀（v2 两槽段 + 移交项结构化段 + 独立复核槽 + 接口验证覆盖矩阵段 task-04）')
+     const f1 = JSON.parse(readFileSync(factsPath, 'utf8'))
+     assert(f1.schemaVersion === 2 && f1.change === fx.change && f1.probes.probe1.metrics.matches === 2,
+       `CLI facts 底稿内容正确（实际: ${JSON.stringify(f1.probes.probe1.metrics)}）`)
+diff --git a/test/api-coverage-matrix.test.mjs b/test/api-coverage-matrix.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/api-coverage-matrix.test.mjs
+@@ -0,0 +1,334 @@
++/**
++ * 接口验证覆盖矩阵测试（2026-09-17-api-coverage-smoke task-07 / FR-04~FR-06 / D-005~D-007 / D-009）。
++ *
++ * 覆盖面（解析层 extractApiCoverageMatrixSlots / 判定层 judgeApiCoverageMatrix 纯函数 + 
++ * producer parseDesignApiTable / classifyConsumerHints / ensureApiCoverageMatrixSection）：
++ *   1. design 接口段 tolerant 解析五形态：规范表 / 缺方法列·缺路径列（双条件缺一不可）/
++ *      {id} 模板路径 / 段头过滤（非接口段示例行不计）/ 声明行提取（夹具为真实 design.md 形态）
++ *   2. 矩阵 MD 槽行分类：消费端子行（↳ 两空格缩进）只计数不进行账 / unfilled 占位 /
++ *      探索行（uncovered+[探索]）标记
++ *   3. covered 记账：分子只认判定=covered（partial/uncovered 不计）；non-testable 理由
++ *      非空从分母扣除、理由空违规；子行/探索行不计分母分子
++ *   4. 移交联动：partial/uncovered 端点行 × facts.handover 零有效行 → error，有移交放行
++ *   5. 锚点：design接口表# 解析级（空指打回）；其余四形态（权限矩阵[]/契约表@/DDL@/载荷@）存在即认
++ *   6. 声明降级（D-005）：解析零行按声明数对账；并存以解析为准注记；critical×零接口面 error；
++ *      critical×声明 0 端点 warning；段缺失分层（严格档/critical error、apiFace 缺席 warning）；
++ *      factsExpected=false 存量零行为
++ *   7. advisory 两 warning（不阻断）：消费端归类在场而矩阵零子行；写端点未在权限矩阵声明
++ *      （「无权限约束」豁免 / 权限段命中放行）
++ *
++ * 确定性纪律：mkdtempSync 临时目录 + test.after 清理；纯函数直测（零 IO 面全部经参数传入），
++ * 矩阵面一律经 extractApiCoverageMatrixSlots 真实解析构造（钉 X-05 防篡改锚点口径）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++import {
++  parseDesignApiTable, classifyConsumerHints, ensureApiCoverageMatrixSection,
++} from '../src/verify-probes.js'
++import { extractApiCoverageMatrixSlots, judgeApiCoverageMatrix } from '../src/stage-contract.js'
++
++const tmpRoots = []
++function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++// ═══════════════════════════════════════════════════════════════════
++// 夹具构造（真实 design.md / verify-result.md 形态片段）
++// ═══════════════════════════════════════════════════════════════════
++
++/** design.md 接口段夹具：规范表 + 缺列双条件行 + 非接口段示例行 + 声明行 */
++const DESIGN_MD = [
++  '---', 'author: t', 'created_at: 2026-09-17 10:00:00', '---',
++  '# 订单导出设计', '',
++  '## 接口设计', '',
++  '| 方法 | 路径 | 说明 |',
++  '|---|---|---|',
++  '| GET | /api/orders | 订单列表（?status 过滤） |',
++  '| POST | /api/orders | 创建订单 |',
++  '| DELETE | /api/orders/{id} | 删除订单（模板路径） |',
++  '| /api/orders | 缺方法列行（双条件缺一不认） |',
++  '| GET | 查询订单说明行（无路径样式 token） |',
++  '',
++  '## 非目标', '',
++  '| 方法 | 路径 | 说明 |',
++  '|---|---|---|',
++  '| GET | /internal/diag | 非目标段示例行（不属本变更接口面） |',
++  '',
++  '## 先例引用', '',
++  '旧版示例：`GET /legacy/orders` 仅作对照，不在本变更接口面。',
++  '',
++  '本变更接口面：3 端点',
++].join('\n')
++
++/** 矩阵段 md 构造（行 = [端点, 判定, 用例ID, 结果, 证据]；opts.declaredRow 声明占位行；opts.note 无表注记行） */
++function matrixMd(rows, opts = {}) {
++  const lines = ['## 接口验证覆盖矩阵 [层：人工判断——CLI 预填复核]', '']
++  if (opts.note) { lines.push(opts.note, '') }
++  if (rows.length > 0 || opts.declaredRow) {
++    lines.push('| 端点 | 判定 | 用例依据 ID | 结果 | 证据 |', '|---|---|---|---|---|')
++    for (const r of rows) lines.push(`| ${r[0]} | ${r[1]} | ${r[2] || ''} | ${r[3] || ''} | ${r[4] || ''} |`)
++    if (opts.declaredRow) {
++      lines.push(`| 本变更接口面：${opts.declaredRow.n} 端点（agent 声明） | ${opts.declaredRow.verdict} | ${opts.declaredRow.caseId || ''} | ${opts.declaredRow.result || ''} | ${opts.declaredRow.evidence || ''} |`)
++    }
++  }
++  lines.push('', '## 后续章节', '')
++  return lines.join('\n')
++}
++
++const EP = (method, path, rowIdx = 1) => ({ method, path, rowIdx })
++const FACE = (endpoints, declared = null, writeEndpoints = []) => ({ endpoints, declared, writeEndpoints })
++const HANDOVER_FACTS = () => ({
++  handover: { count: 1, items: [{ type: 'env-blocked', item: '冒烟环境阻断', condition: '恢复后复跑', severity: 'advisory' }] },
++})
++const NO_HANDOVER_FACTS = () => ({ handover: { count: 0, items: [] } })
++
++/** 判定层组装（矩阵面一律经真实解析构造，钉 X-05 锚点口径） */
++function judgeWith({ rows, opts, face, facts, riskLevel = 'unit-sufficient', strict = false, factsExpected = true, matrix, ...extra }) {
++  return judgeApiCoverageMatrix({
++    matrix: matrix || extractApiCoverageMatrixSlots(matrixMd(rows || [], opts)),
++    apiFace: face, facts: facts === undefined ? NO_HANDOVER_FACTS() : facts,
++    factsExpected, riskLevel, strict, changeName: 'acm-x', ...extra,
++  })
++}
++
++// ═══════════════════════════════════════════════════════════════════
++// 1. design 接口段 tolerant 解析（producer 层）
++// ═══════════════════════════════════════════════════════════════════
++test('1. parseDesignApiTable 五形态：规范表/{id} 模板认；缺方法列·缺路径列双条件缺一不认；非接口段示例行不计；声明行提取', () => {
++  const face = parseDesignApiTable(DESIGN_MD)
++  assert.deepEqual(face.endpoints, [
++    { method: 'GET', path: '/api/orders', rowIdx: 1 },
++    { method: 'POST', path: '/api/orders', rowIdx: 2 },
++    { method: 'DELETE', path: '/api/orders/{id}', rowIdx: 3 },
++  ], '端点 = 方法×路径双条件命中：缺方法列/缺路径行不计；{id} 模板路径整段认；?query 尾自然截断；非目标/先例引用段（段头不含接口关键词）示例行不计')
++  assert.equal(face.declared, 3, '「本变更接口面：3 端点」声明行提取 declared=3（全文首个命中；对照无接口段无声明 → 空面，判定层走零接口面分层）')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// 2. 矩阵 MD 槽行分类（extractApiCoverageMatrixSlots）
++// ═══════════════════════════════════════════════════════════════════
++test('2. 行分类：消费端子行只计数不进行账；unfilled 占位标记；探索行（uncovered+[探索]）标记', () => {
++  const ex = extractApiCoverageMatrixSlots([
++    '## 接口验证覆盖矩阵 [层：人工判断——CLI 预填复核]', '',
++    '| 端点 | 判定 | 用例依据 ID | 结果 | 证据 |',
++    '|---|---|---|---|---|',
++    '| GET /api/a | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |',
++    '| POST /api/b | uncovered | E1 | 探索走查 | 步骤 [探索] 手工核对 |',
++    '  ↳ web: 列表页承接（消费端子行）', '',
++    '## 后续章节', '',
++  ].join('\n'))
++  assert.deepEqual(
++    {
++      present: ex.present, subRowCount: ex.subRowCount, rowsCount: ex.rows.length,
++      unfilled: ex.rows.filter((r) => r.unfilled).length,
++      exploration: ex.rows.filter((r) => r.exploration).length,
++    },
++    { present: true, subRowCount: 1, rowsCount: 2, unfilled: 1, exploration: 1 },
++    '子行（两空格缩进 ↳）只计数不进行账；判定占位行 unfilled；uncovered+证据/结果含 [探索] 标记探索行')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// 3. covered 记账与移交联动（判定层核心）
++// ═══════════════════════════════════════════════════════════════════
++const TWO_FACE = () => FACE([EP('GET', '/api/a', 1), EP('POST', '/api/b', 2)])
++const BOTH_COVERED_ROWS = () => ([
++  ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
++  ['POST /api/b', 'covered', 'C2', 'ok', 'design接口表#POST /api/b'],
++])
++
++test('3. 两端点全 covered + 锚点命中解析面 → ok 零 errors 零 warnings', () => {
++  const r = judgeWith({ rows: BOTH_COVERED_ROWS(), face: TWO_FACE(), facts: NO_HANDOVER_FACTS() })
++  assert.deepEqual({ ok: r.ok, errors: r.errors, warnings: r.warnings }, { ok: true, errors: [], warnings: [] },
++    '全 covered + design接口表# 锚点命中解析集 → 分子=分母放行')
++})
++
++test('3b. partial 不计分子：分子只认 covered（1<2 覆盖不足 error 列缺覆盖端点）；有移交不另报', () => {
++  const rows = [
++    ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
++    ['POST /api/b', 'partial', 'C2', '部分', 'design接口表#POST /api/b'],
++  ]
++  const r = judgeWith({ rows, face: TWO_FACE(), facts: HANDOVER_FACTS() })
++  assert.ok(r.ok === false && r.errors.length === 1
++    && r.errors[0].includes('有效分母 2') && r.errors[0].includes('covered 分子 1') && r.errors[0].includes('POST /api/b'),
++    `partial 行不计分子 → 覆盖不足 error 报分母/分子与缺覆盖端点（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 80)))}）`)
++})
++
++test('3c. 移交联动：partial/uncovered 端点行 × facts.handover 零有效行 → error；有移交放行（该面不另报）', () => {
++  const rows = [
++    ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
++    ['POST /api/b', 'partial', 'C2', '部分', 'design接口表#POST /api/b'],
++  ]
++  const r = judgeWith({ rows, face: TWO_FACE(), facts: NO_HANDOVER_FACTS() })
++  assert.ok(r.errors.some((e) => e.includes('移交去向') && e.includes('零有效行') && e.includes('POST /api/b')),
++    `partial 端点行无移交去向 → error「接口未验证端点必须有移交去向」（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 60)))}）`)
++})
++
++test('3d. non-testable：理由非空从分母扣除（1/1 放行）；理由空 → 缺理由违规', () => {
++  const okR = judgeWith({
++    rows: [
++      ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
++      ['POST /api/b', 'non-testable', '-', '不适用', '只读代理转发不落本库（人工核对）'],
++    ],
++    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(okR.ok === true && okR.errors.length === 0,
++    `non-testable 理由非空 → 从有效分母扣除（N=2−1=1，分子 1）放行（实际 ${JSON.stringify(okR.errors)}）`)
++  const badR = judgeWith({
++    rows: [
++      ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
++      ['POST /api/b', 'non-testable', '-', '不适用', ''],
++    ],
++    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(badR.errors.some((e) => e.includes('non-testable 缺理由')),
++    `non-testable 理由空 → 违规（non-testable 证据须写一句理由）（实际 ${JSON.stringify(badR.errors.map((e) => e.slice(0, 60)))}）`)
++})
++
++test('3e. 探索行不算覆盖：uncovered+[探索] 端点仍进缺覆盖清单（探索性验证不计分子）', () => {
++  const r = judgeWith({
++    rows: [['GET /api/a', 'uncovered', 'E1', '探索走查', '步骤 [探索] 手工核对']],
++    face: FACE([EP('GET', '/api/a', 1)]), facts: HANDOVER_FACTS(),
++  })
++  assert.ok(r.ok === false && r.errors.some((e) => e.includes('覆盖不足') && e.includes('GET /api/a')),
++    `探索行不进分子不进 non-testable 扣减 → 缺覆盖端点照列（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 60)))}）`)
++})
++
++test('3f. 判定未填占位 → 行级违规（四选一）', () => {
++  const r = judgeWith({
++    rows: [['GET /api/a', '<待填：四选一>', '<待填：用例 ID>', '<待填>', '<待填：锚点>']],
++    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(r.errors.some((e) => e.includes('判定未填') && e.includes('四选一')),
++    `判定槽占位未替换 → 行级违规（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 60)))}）`)
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// 4. 证据锚点五形态（design §4 Grill #10）
++// ═══════════════════════════════════════════════════════════════════
++test('4. design接口表# 锚点解析级：端点不在解析面 → 空指打回', () => {
++  const r = judgeWith({
++    rows: [['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /ghost']],
++    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(r.ok === false && r.errors.some((e) => e.includes('空指') && e.includes('GET /ghost')),
++    `design接口表# 锚点指向解析面外端点 → 空指打回（防编造端点）（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 70)))}）`)
++})
++
++test('4b. 其余四形态存在即认：权限矩阵[]/契约表@/DDL@/载荷@', () => {
++  const forms = ['权限矩阵[admin×delete]', '契约表@订单创建行', 'DDL@created_at', '载荷@/order/create']
++  const results = forms.map((evidence) => judgeWith({
++    rows: [['GET /api/a', 'covered', 'C1', 'ok', evidence]],
++    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
++  }))
++  assert.ok(results.every((r) => r.ok === true && r.errors.length === 0),
++    `四形态级锚点存在即认（形态级不空指——存在性口径）（实际 ${results.map((r, i) => `${forms[i]}→${r.ok}`).join(' / ')}）`)
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// 5. 声明降级 / 零接口面分层 / 段缺失分层（D-005）
++// ═══════════════════════════════════════════════════════════════════
++test('5. 声明降级：解析零行按声明数对账（N=2 分子 2 放行）；并存以解析为准注记 warning', () => {
++  const declaredOnly = judgeWith({
++    rows: [
++      ['GET /api/a', 'covered', 'C1', 'ok', '权限矩阵[admin×read]'],
++      ['POST /api/b', 'covered', 'C2', 'ok', '契约表@订单创建行'],
++    ],
++    face: FACE([], 2), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(declaredOnly.ok === true && declaredOnly.errors.length === 0,
++    `解析零行 × 声明 2 → 按声明行拆出的每端点行 covered（N=2 分子 2）放行（实际 ${JSON.stringify(declaredOnly.errors)}）`)
++  const both = judgeWith({
++    rows: [['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a']],
++    face: FACE([EP('GET', '/api/a', 1)], 2), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(both.ok === true && both.warnings.some((w) => w.includes('声明与解析并存（声明 2 端点 / 解析 1 端点）') && w.includes('以解析为准')),
++    `声明与解析并存 → 以解析为准 + 漂移信号注记 warning（实际 ${JSON.stringify(both.warnings)}）`)
++})
++
++test('5b. critical×零接口面 → error（接口面不可静默为零）；critical×声明 0 端点 → warning 复核', () => {
++  const zeroFace = judgeWith({
++    matrix: extractApiCoverageMatrixSlots(matrixMd([], { note: '- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——注记行' })),
++    face: null, facts: NO_HANDOVER_FACTS(), riskLevel: 'integration-critical',
++  })
++  const declaredZero = judgeWith({
++    rows: [['GET /api/a', 'covered', 'C1', 'ok', '权限矩阵[admin×read]']],
++    face: FACE([], 0), facts: NO_HANDOVER_FACTS(), riskLevel: 'integration-critical',
++  })
++  assert.ok(zeroFace.errors.some((e) => e.includes('接口面不可静默为零'))
++    && declaredZero.warnings.some((w) => w.includes('声明接口面为 0 端点')) && declaredZero.ok === true,
++    `判级 critical：零面 error（D-005/FR-04）/ 显式零声明 warning 复核（故障面条款）（实际 zero=${JSON.stringify(zeroFace.errors.map((e) => e.slice(0, 50)))} zero-warn=${JSON.stringify(declaredZero.warnings.map((w) => w.slice(0, 50)))}）`)
++})
++
++test('5c. 段缺失分层：apiFace 在场×严格档 error / ×critical error / apiFace 缺席 warning；factsExpected=false 零行为', () => {
++  const absent = { present: false, rows: [], subRowCount: 0, declaredRow: null }
++  const strictR = judgeWith({ matrix: absent, face: FACE([]), facts: NO_HANDOVER_FACTS(), strict: true })
++  const criticalR = judgeWith({ matrix: absent, face: FACE([]), facts: NO_HANDOVER_FACTS(), riskLevel: 'integration-critical' })
++  const legacyR = judgeWith({ matrix: absent, face: null, facts: NO_HANDOVER_FACTS() })
++  assert.ok(strictR.errors.some((e) => e.includes('段缺失') && e.includes('严格档'))
++    && criticalR.errors.some((e) => e.includes('段缺失') && e.includes('判级'))
++    && legacyR.warnings.some((w) => w.includes('facts.apiFace 缺席')),
++    `段缺失分层：新管线（apiFace 在场）删段 → 严格档/critical error；apiFace 缺席（特性前存量底稿）→ warning 引导 --init（实际 strict=${JSON.stringify(strictR.errors.length)} critical=${JSON.stringify(criticalR.errors.length)} legacy=${JSON.stringify(legacyR.warnings.length)}）`)
++  assert.deepEqual(judgeApiCoverageMatrix({ factsExpected: false }),
++    { ok: true, errors: [], warnings: [] },
++    'factsExpected=false（存量未跑管线）→ 兼容零行为不误伤')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// 6. advisory 两 warning（D-006/D-007，不阻断不进 errors）
++// ═══════════════════════════════════════════════════════════════════
++test('6. 消费端归类在场而矩阵零子行 → advisory warning 列端点（D-006）', () => {
++  const r = judgeWith({
++    rows: BOTH_COVERED_ROWS(), face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
++    consumerHints: { web: ['src/routes/list.js'] },
++  })
++  assert.ok(r.ok === true && r.warnings.some((w) => w.includes('[advisory] 消费端归类在场') && w.includes('web') && w.includes('零消费端子行')),
++    `consumerHints 有归类而矩阵零子行 → warning 建议补「↳ <消费端>:」子行（不阻断）（实际 ${JSON.stringify(r.warnings)}）`)
++})
++
++test('6b. 写端点未在权限矩阵声明 → advisory warning；权限段命中 /「无权限约束」豁免 → 不告', () => {
++  const rows = [['POST /api/things', 'covered', 'C1', 'ok', 'design接口表#POST /api/things']]
++  const face = FACE([EP('POST', '/api/things', 1)], null, [EP('POST', '/api/things', 1)])
++  const missing = judgeWith({
++    rows, face, facts: NO_HANDOVER_FACTS(),
++    permSectionText: '| 角色 | 动作 |\n|---|---|\n| admin | 全部操作 |',
++  })
++  assert.ok(missing.warnings.some((w) => w.includes('写端点 POST /api/things 未在权限矩阵声明')),
++    `写端点（POST/PUT/DELETE/PATCH）不在权限矩阵段 → advisory warning（表缺行会让派生框架继承你的洞）（实际 ${JSON.stringify(missing.warnings)}）`)
++  const permHit = judgeWith({
++    rows, face, facts: NO_HANDOVER_FACTS(),
++    permSectionText: '| 角色 | 动作 | 端点 |\n|---|---|---|\n| admin | 写 | /api/things |',
++  })
++  const exempt = judgeWith({
++    rows, face, facts: NO_HANDOVER_FACTS(),
++    permSectionText: '| 角色 | 动作 |\n|---|---|\n| admin | 全部操作 |',
++    designText: 'POST /api/things 无权限约束（公开健康检查端点）',
++  })
++  assert.ok(!permHit.warnings.some((w) => w.includes('写端点')) && !exempt.warnings.some((w) => w.includes('写端点')),
++    `权限矩阵段命中路径 / 行级「无权限约束」显式豁免 → 均不告（实际 hit=${JSON.stringify(permHit.warnings.length)} exempt=${JSON.stringify(exempt.warnings.length)}）`)
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// 7. 消费端归类启发式与补段（producer 层）
++// ═══════════════════════════════════════════════════════════════════
++test('7. classifyConsumerHints：路径段归类 web/mp/script；NEW: 前缀剥除；文件名子串不误命中', () => {
++  assert.deepEqual(
++    classifyConsumerHints(['src/routes/a.js', 'NEW: src/pages/b.js', 'mp/pages/index.js', 'scripts/gen.js', 'docs/x.md', 'homepages.js']),
++    { web: ['src/routes/a.js', 'src/pages/b.js'], mp: ['mp/pages/index.js'], script: ['scripts/gen.js'] },
++    '段级归类（routes/pages/model→web、mp/miniapp→mp 先于 web、scripts/test→script）；NEW: 前缀剥除；homepages.js 文件名不含 pages 段；docs 不归类')
++})
++
++test('7b. ensureApiCoverageMatrixSection 补段：预填端点行 + 幂等二跑零改动', () => {
++  const dir = mk('acm-ens-')
++  const mdPath = join(dir, 'verify-result.md')
++  writeFileSync(mdPath, '# 验证报告\n\n## 探针结果\n\n无\n')
++  const face = FACE([EP('GET', '/api/a', 1)])
++  const r1 = ensureApiCoverageMatrixSection(mdPath, face)
++  const r2 = ensureApiCoverageMatrixSection(mdPath, face)
++  const md = readFileSync(mdPath, 'utf8')
++  assert.ok(r1.added === true && r2.added === false && String(r2.reason || '').includes('已在场')
++    && md.includes('## 接口验证覆盖矩阵') && md.includes('| GET /api/a | <待填：四选一> |'),
++    `缺段 → 补骨架段（端点行 CLI 机械预填 <待填：四选一> 供 agent 逐格复核）；段已在场幂等不触碰（实际 ${JSON.stringify(r1)}/${JSON.stringify(r2)}）`)
++})
+
+diff --git a/test/smoke-gate.test.mjs b/test/smoke-gate.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/smoke-gate.test.mjs
+@@ -0,0 +1,481 @@
++/**
++ * smoke 冒烟门禁测试（2026-09-17-api-coverage-smoke task-07 / FR-01~FR-03 / FR-07 / D-001@v1 /
++ * D-002@v1 / D-010@v1）。
++ *
++ * 九组锁定语义（断言钉行为契约，不钉实现细节）：
++ *   ① 执行三态：commands.smoke 配置后 exit 0 记 passed / 非 0 / 超时记 failed **不 throw**
++ *      （封顶信号非崩溃——与 test failed 的 throw 语义刻意区分）；未配置 skipped+配置指引。
++ *      mock 策略：mock.module('node:child_process') 转发包装——仅拦截含唯一标记的 smoke
++ *      命令返回罐头结果（超时态注入 ETIMEDOUT 错误对象，不真等 300s 帽），其余调用原样
++ *      转发真实 child_process（跨平台：Windows Git Bash / Linux 同径）。
++ *   ② 快照内超时回退主仓复跑一次（fallbackMainRepo；主仓仍超时记双重超时态）；smoke 配置
++ *      读主仓 local.yaml（隔离快照内无配置不阻断）。快照供给经 mock.module(gate-snapshot
++ *      绝对 URL) 注入假 snap（真实快照创建重且走 junction，非本组断言面）。
++ *   ③ 指纹含 commands 段：配置 smoke 前后指纹变化 → 复用失配亲测；additive smokeResult 段
++ *      随整条记录复用读回。
++ *   ④ 机器段 ensure 三态（passed 单行/含管道降多行 YAML/缺态注释行）+ parseEvidenceSlots
++ *      逐条 source 提取 + 幂等/态迁移；deriveSmokeSectionState 口径（ensure 与 postcheck 共享）。
++ *   ⑤ 一致性对比（auditSmokeReceiptConsistency，task-02 挂账导出接线）：一致零打回；
++ *      改写 exit / 删机器段 / not-ran 冒充 / 无记录冒充 → ERROR 打回。
++ *   ⑥ 分类器 B-1 回归（双侧）：脚本形态三命令（node scripts/smoke.mjs / bash smoke.sh /
++ *      python smoke.py）无标记判 build 不绿、cli-noai-smoke 标记直判 cross-layer 绿
++ *      （change-risk-profile 侧 checkIntegrationEvidence 绿判据）；producer 侧
++ *      judgeIntegrationRan 同族口径（facts.integrationRan）。
++ *   ⑦ smokeRan producer 五边界（judgeSmokeRan 经 backfillFactsFromMdAndTests 落盘面）：
++ *      passed→ran / failed→not-ran / 记录在场无 smokeResult 段→not-ran+注记 / 记录缺失→
++ *      not-ran+注记（X-01 fail-open）/ configured=false→not-configured。
++ *   ⑧ 第五条件 smoke-not-run：critical×三值 / 字段不在场 fail-closed / advisory handover
++ *      不豁免 / 非判级零行为（判级限定与 deployment 计入的壳层形态归 pass-eligibility 增量组）。
++ *   ⑨ config-schema：commands.smoke 键登记（live 可选 / reader=executeVerifyQualityScan /
++ *      example 含脚本形态）。
++ *
++ * mock 自举：mock.module 需 --experimental-test-module-mocks，裸跑时 respawn 自己一次
++ * （test/backlog-batch-a.test.mjs 先例——run-tests.mjs 直跑与 node --test 两径均兼容）。
++ */
++import { test, mock } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawnSync as rawSpawnSync } from 'node:child_process'
++
++// 自举：mock.module 需 --experimental-test-module-mocks，裸跑时 respawn 自己一次
++if (typeof mock.module !== 'function') {
++  if (process.env.SILLYSPEC_MOCK_RESPAWNED === '1') {
++    console.error('mock.module 在加旗标 respawn 后仍不可用，放弃')
++    process.exit(1)
++  }
++  const r = rawSpawnSync(process.execPath,
++    ['--experimental-test-module-mocks', '--disable-warning=ExperimentalWarning', ...process.argv.slice(1)],
++    { stdio: 'inherit', env: { ...process.env, SILLYSPEC_MOCK_RESPAWNED: '1' } })
++  process.exit(r.status ?? 0)
++}
++
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++import { parseEvidenceSlots } from '../src/verify-facts-schema.js'
++import { ensureSmokeReceiptSection, scanSmokeReceiptSection, backfillFactsFromMdAndTests, deriveSmokeSectionState } from '../src/verify-probes.js'
++import { checkIntegrationEvidence } from '../src/change-risk-profile.js'
++import { evaluatePassEligibility } from '../src/stage-contract.js'
++import { auditSmokeReceiptConsistency } from '../src/verify-postcheck.js'
++import { LOCAL_YAML_SCHEMA, renderExample } from '../src/config-schema.js'
++
++// ── mock 供给（转发式：唯一标记命令返回罐头结果，其余原样转发真实 child_process）──
++const MOCK_MARK = '__ss_smoke_gate_mock__'
++const SNAP_DIR_MARK = '__ss_fake_snap__'
++const smokeMock = { mode: 'exit0' }
++const snapMock = { enabled: false }
++
++const cpReal = await import('node:child_process')
++const cpMockExports = { ...cpReal }
++cpMockExports.spawnSync = (command, opts) => {
++  if (typeof command === 'string' && command.includes(MOCK_MARK)) {
++    const TIMEOUT_RESULT = { status: null, error: { code: 'ETIMEDOUT', message: 'spawnSync ETIMEDOUT' }, stdout: '', stderr: '' }
++    if (smokeMock.mode === 'exit0') return { status: 0, error: undefined, stdout: 'smoke endpoint ok', stderr: '' }
++    if (smokeMock.mode === 'exit3') return { status: 3, error: undefined, stdout: '', stderr: 'smoke boom' }
++    if (smokeMock.mode === 'timeout') return TIMEOUT_RESULT
++    if (smokeMock.mode === 'snap-fallback') {
++      // 快照 cwd 内超时 → 主仓 cwd 复跑 exit 0（回退分支的两侧输入）
++      return opts && String(opts.cwd || '').includes(SNAP_DIR_MARK) ? TIMEOUT_RESULT
++        : { status: 0, error: undefined, stdout: 'smoke endpoint ok', stderr: '' }
++    }
++    if (smokeMock.mode === 'snap-both') return TIMEOUT_RESULT
++  }
++  return cpReal.spawnSync(command, opts)
++}
++await mock.module('node:child_process', { exports: cpMockExports })
++
++// 快照供给 mock：executeVerifyQualityScan 动态 import('./gate-snapshot.js') 按解析 URL 拦截
++await mock.module(new URL('../src/run/gate-snapshot.js', import.meta.url).href, {
++  exports: {
++    createVerifyGateSnapshot: async ({ cwd }) => (snapMock.enabled
++      ? { snapshotRoot: join(cwd, SNAP_DIR_MARK), changeFileCount: 1, sourceRoot: null, cleanup() {} }
++      : null),
++    printSnapshotFailureHint() {},
++  },
++})
++
++// mock 注册后再动态 import：拿绑定了 mock 的模块副本（转发式包装对指纹 git 调用等无害）
++const qscan = await import('../src/run/verify-quality-scan.js?smoke-gate=1')
++
++// ── 夹具 ──
++const tmpRoots = []
++function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function captureWarn() {
++  const caught = []
++  const orig = console.warn
++  console.warn = (...a) => caught.push(a.join(' '))
++  return { caught, restore: () => { console.warn = orig } }
++}
++
++/** 落 quality-scan 记录（readSmokeResultRecord 口径：schemaVersion 1 + source cli-noai） */
++function writeScanRecord(specBase, change, smokeResult, { withSmoke = true } = {}) {
++  mkdirSync(join(specBase, '.runtime'), { recursive: true })
++  const rec = { schemaVersion: 1, source: 'cli-noai', testResult: { status: 'passed', command: 'npm test', exitCode: 0 } }
++  if (withSmoke) rec.smokeResult = smokeResult
++  writeFileSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`), JSON.stringify(rec, null, 2))
++}
++
++/** 经 executeVerifyQualityScan 亲跑 smoke 并读回记录（三态/回退组的统一入口） */
++async function runSmokeScan({ mode, snapEnabled = false, smokeLine = null, change }) {
++  smokeMock.mode = mode
++  snapMock.enabled = snapEnabled
++  const root = mk('sg-scan-')
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  const lines = ['commands:']
++  if (smokeLine) lines.push('  smoke: ' + smokeLine)
++  lines.push('')
++  writeFileSync(join(specBase, 'local.yaml'), lines.join('\n'))
++  const cap = captureWarn()
++  let threw = null
++  try {
++    await qscan.executeVerifyQualityScan({ cwd: root, specBase, changeName: change })
++  } catch (e) { threw = e }
++  cap.restore()
++  const record = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`), 'utf8'))
++  return { root, specBase, change, record, threw, caught: cap.caught }
++}
++
++// ═══════════════════════════════════════════════════════════════════
++// ① 执行三态（FR-01 GWT1 / D-001@v1）：失败记失败态不 throw——封顶信号非崩溃
++// ═══════════════════════════════════════════════════════════════════
++test('① 执行三态：exit 0 记 passed 实录（log 落盘）；exit 非 0 / 超时记 failed 不 throw；未配置 skipped', async () => {
++  const ok = await runSmokeScan({ mode: 'exit0', smokeLine: `node ${MOCK_MARK} exit0`, change: 'sg-exec-ok' })
++  assert.deepEqual(
++    {
++      configured: ok.record.smokeResult.configured, status: ok.record.smokeResult.status,
++      exitCode: ok.record.smokeResult.exitCode, timeout: ok.record.smokeResult.timeout,
++      source: ok.record.smokeResult.source, reason: ok.record.smokeResult.reason,
++    },
++    { configured: true, status: 'passed', exitCode: 0, timeout: false, source: 'cli-noai-smoke', reason: null },
++    'exit 0 → smokeResult passed 实录（command/exit/duration 落记录，source=cli-noai-smoke）')
++
++  const bad = await runSmokeScan({ mode: 'exit3', smokeLine: `node ${MOCK_MARK} exit3`, change: 'sg-exec-bad' })
++  const s3 = bad.record.smokeResult
++  assert.ok(s3.status === 'failed' && s3.exitCode === 3 && s3.reason.includes('退出码 3') && bad.threw === null,
++    `exit 3 → failed + reason 含退出码，且不 throw（封顶信号非崩溃，PASS 封顶归 --done 消费）（实际 ${JSON.stringify(s3)} / threw=${bad.threw && bad.threw.message}）`)
++
++  const tmo = await runSmokeScan({ mode: 'timeout', smokeLine: `node ${MOCK_MARK} hang`, change: 'sg-exec-tmo' })
++  const st = tmo.record.smokeResult
++  assert.ok(st.status === 'failed' && st.timeout === true && st.exitCode === null && st.reason.includes('超时') && tmo.threw === null,
++    `超时 → failed 态（timeout=true / exitCode 无值 / reason 含超时帽说明）且不 throw（实际 ${JSON.stringify(st)}）`)
++
++  const nc = await runSmokeScan({ mode: 'exit0', smokeLine: null, change: 'sg-exec-nc' })
++  const sn = nc.record.smokeResult
++  assert.ok(sn.configured === false && sn.status === 'skipped' && sn.reason.includes('未配置 commands.smoke'),
++    `未配置 → configured=false + skipped + 配置指引（记录仍写，供 --done 判 not-configured）（实际 ${JSON.stringify(sn)}）`)
++
++  assert.ok(ok.record.smokeResult.logPath && existsSync(ok.record.smokeResult.logPath)
++    && readFileSync(ok.record.smokeResult.logPath, 'utf8').includes('# smoke 实录（source: cli-noai-smoke）'),
++    '实录 log 落 .runtime/verify-logs/smoke-<change>.log 且头行标注 source: cli-noai-smoke')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ② 快照内超时回退主仓复跑（D-010@v1；lint 快照超时回退先例同款策略）
++// ═══════════════════════════════════════════════════════════════════
++test('② 快照内超时 → 主仓复跑（fallbackMainRepo）；主仓仍超时记双重超时态；配置读主仓 local.yaml', async () => {
++  const fb = await runSmokeScan({ mode: 'snap-fallback', snapEnabled: true, smokeLine: `node ${MOCK_MARK} fb`, change: 'sg-snap-fb' })
++  const s = fb.record.smokeResult
++  assert.ok(s.configured === true && s.status === 'passed' && s.fallbackMainRepo === true && s.timeout === false && s.exitCode === 0
++    && fb.caught.some((w) => w.includes('主仓复跑')),
++    `快照超时 → 主仓复跑 exit 0 → passed + fallbackMainRepo=true + 警示「主仓复跑」（口径可见性）；配置取主仓 local.yaml（快照内无配置不阻断）（实际 ${JSON.stringify(s)} / warn=${fb.caught.length}）`)
++
++  const both = await runSmokeScan({ mode: 'snap-both', snapEnabled: true, smokeLine: `node ${MOCK_MARK} fb2`, change: 'sg-snap-both' })
++  const s2 = both.record.smokeResult
++  assert.ok(s2.status === 'failed' && s2.fallbackMainRepo === true && s2.timeout === true && s2.reason.includes('主仓复跑仍超时'),
++    `主仓复跑仍超时 → failed + fallbackMainRepo=true + reason 注明主仓复跑仍超时（实际 ${JSON.stringify(s2)}）`)
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ③ 指纹含 commands 段（FR-01 / D-001@v1）：配置 smoke 前后指纹变化 → 复用失配
++// ═══════════════════════════════════════════════════════════════════
++test('③ 指纹：配置 commands.smoke 前后指纹变化→复用失配亲测；additive smokeResult 随记录复用读回', () => {
++  const root = mk('sg-fp-')
++  const git = (args) => {
++    const r = rawSpawnSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++    if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`)
++    return String(r.stdout || '').trim()
++  }
++  git(['init', '-q'])
++  git(['config', 'user.email', 't@t.local'])
++  git(['config', 'user.name', 't'])
++  writeFileSync(join(root, 'a.txt'), 'x')
++  git(['add', '.'])
++  git(['commit', '-qm', 'init'])
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  const writeYaml = (smokeLine) => writeFileSync(join(specBase, 'local.yaml'),
++    ['commands:', '  test: npm test', ...(smokeLine ? [smokeLine] : []), ''].join('\n'))
++
++  writeYaml(null)
++  qscan.storeQualityScan({
++    specBase, cwd: root, changeName: 'sg-fp',
++    testResult: { status: 'passed', command: 'npm test' }, lintResult: null,
++    smokeResult: { configured: true, status: 'passed', exitCode: 0, source: 'cli-noai-smoke' },
++  })
++  const reuse = qscan.loadReusableQualityScan({ specBase, cwd: root, changeName: 'sg-fp' })
++  assert.ok(reuse && reuse.smokeResult && reuse.smokeResult.status === 'passed',
++    '代码与配置未变 → 复用记录 additive smokeResult 段读回（不重跑）')
++
++  writeYaml('  smoke: "node scripts/smoke.mjs"')
++  assert.equal(qscan.loadReusableQualityScan({ specBase, cwd: root, changeName: 'sg-fp' }), null,
++    '配置 commands.smoke 后指纹变化 → 复用失配（--done 照旧亲测）')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ④ 机器段 ensure 三态 + parseEvidenceSlots source 提取（FR-03 / D-001@v1）
++// ═══════════════════════════════════════════════════════════════════
++test('④ 机器段 passed 单行形态：注入 + parseEvidenceSlots source 尾注提取 + 幂等', () => {
++  const specBase = mk('sg-ens1-')
++  const change = 'sg-ens-1'
++  const changeDir = join(specBase, 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeScanRecord(specBase, change, {
++    configured: true, status: 'passed', command: 'node scripts/smoke.mjs', exitCode: 0,
++    durationMs: 12, logPath: 'logs/smoke.log', ranAt: '2026-09-17T00:00:00Z',
++    timeout: false, fallbackMainRepo: false, source: 'cli-noai-smoke',
++  })
++  const mdPath = join(changeDir, 'verify-result.md')
++  writeFileSync(mdPath, ['# 验证报告', '', '## 集成验证回执 [层：自述声明——CLI 一致性校验]', '', '无', ''].join('\n'))
++
++  const r1 = ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
++  const r2 = ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
++  assert.ok(r1.changed === true && r1.state === 'passed' && r2.changed === false,
++    `passed 记录 → 注入机器段；二跑幂等零改动（实际 ${JSON.stringify(r1)} / ${JSON.stringify(r2)}）`)
++
++  const md = readFileSync(mdPath, 'utf8')
++  assert.ok(md.includes('- claim: commands.smoke CLI 亲跑 | command: node scripts/smoke.mjs | exit: 0 | log: logs/smoke.log | source: cli-noai-smoke'),
++    '机器段单行形态：claim 钦定文案 + command/exit/log 实录 + source: cli-noai-smoke 尾注')
++
++  assert.deepEqual(parseEvidenceSlots(md).runtimeEvidence[0],
++    { claim: 'commands.smoke CLI 亲跑', command: 'node scripts/smoke.mjs', exitCode: 0, logPath: 'logs/smoke.log', source: 'cli-noai-smoke' },
++    'parseEvidenceSlots 逐条 source 提取（单行尾注形态，第五字段 additive，四字段 fail-closed 不动）')
++})
++
++test('④b command 含管道 → 降多行 YAML 机器段 + source 字段回填', () => {
++  const specBase = mk('sg-ens2-')
++  const change = 'sg-ens-2'
++  const changeDir = join(specBase, 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeScanRecord(specBase, change, {
++    configured: true, status: 'passed', command: 'node scripts/smoke.mjs ｜ stage=gray', exitCode: 0,
++    durationMs: 8, logPath: 'logs/smoke.log', ranAt: '2026-09-17T00:00:00Z',
++    timeout: false, fallbackMainRepo: false, source: 'cli-noai-smoke',
++  })
++  const mdPath = join(changeDir, 'verify-result.md')
++  writeFileSync(mdPath, ['# 验证报告', '', '## 集成验证回执 [层：自述声明——CLI 一致性校验]', '', '无', ''].join('\n'))
++  const r = ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
++  const md = readFileSync(mdPath, 'utf8')
++  const entry = parseEvidenceSlots(md).runtimeEvidence[0]
++  assert.ok(r.changed === true && md.includes('\n  source: cli-noai-smoke') && entry && entry.source === 'cli-noai-smoke'
++    && entry.command === 'node scripts/smoke.mjs ｜ stage=gray' && entry.exitCode === 0 && entry.logPath === 'logs/smoke.log',
++    `command 含 ｜ 时降多行 YAML 形态（防单行字段截断）且 source 字段被 parseEvidenceSlots 回填（实际 ${JSON.stringify(entry)}）`)
++})
++
++test('④c 缺态注释行两态 + 态迁移原位替换 + 无记录 no-op；deriveSmokeSectionState 共享口径', () => {
++  const specBase = mk('sg-ens3-')
++  const change = 'sg-ens-3'
++  const changeDir = join(specBase, 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeScanRecord(specBase, change, { configured: false, status: 'skipped', command: null, exitCode: null, reason: '未配置 commands.smoke', source: 'cli-noai-smoke' })
++  const mdPath = join(changeDir, 'verify-result.md')
++  writeFileSync(mdPath, ['# 验证报告', '', '## 集成验证回执 [层：自述声明——CLI 一致性校验]', '', '无', ''].join('\n'))
++
++  ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
++  const scan1 = scanSmokeReceiptSection(readFileSync(mdPath, 'utf8'))
++  assert.ok(scan1.absentState === 'not-configured' && scan1.machineEntries.length === 0,
++    `未配置 → 缺态注释行（非回执行形态，parseEvidenceSlots 不收取）（实际 ${JSON.stringify(scan1)}）`)
++
++  writeScanRecord(specBase, change, {
++    configured: true, status: 'passed', command: 'node scripts/smoke.mjs', exitCode: 0,
++    durationMs: 5, logPath: 'logs/smoke.log', ranAt: '2026-09-17T00:00:00Z',
++    timeout: false, fallbackMainRepo: false, source: 'cli-noai-smoke',
++  })
++  const r2 = ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
++  const scan2 = scanSmokeReceiptSection(readFileSync(mdPath, 'utf8'))
++  assert.ok(r2.changed === true && scan2.machineEntries.length === 1 && scan2.absentState === null,
++    '态迁移 not-configured → passed：缺态行原位替换为机器段条目（配置后亲跑自动更新）')
++
++  rmSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`))
++  const r3 = ensureSmokeReceiptSection(mdPath, { specBase, changeName: change })
++  assert.ok(r3.changed === false && String(r3.reason || '').includes('不注入'),
++    '无 quality-scan smokeResult 记录 → ensure no-op 不注入（facts.smokeRan 由 task-03 判 not-ran）')
++
++  assert.deepEqual(
++    [deriveSmokeSectionState(null), deriveSmokeSectionState({ configured: false }),
++      deriveSmokeSectionState({ configured: true, status: 'passed' }),
++      deriveSmokeSectionState({ configured: true, status: 'failed' }),
++      deriveSmokeSectionState({ configured: true, status: 'failed', timeout: true })],
++    [null, 'not-configured', 'passed', 'not-ran', 'not-ran'],
++    'deriveSmokeSectionState 五输入态：无记录 null / 未配置 / 绿跑 passed / 失败与超时并归 not-ran（超时归 failed 契约）——ensure 与 postcheck 共享口径')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ⑤ 一致性对比三态（FR-03 / Grill #6 / R-06）：改写/删除/冒充打回
++// ═══════════════════════════════════════════════════════════════════
++test('⑤ 一致性对比：一致零打回；改写 exit / 删机器段 / not-ran 冒充 / 无记录冒充 → ERROR', () => {
++  const specBase = mk('sg-audit-')
++  const change = 'sg-audit'
++  const smokeRec = {
++    configured: true, status: 'passed', command: 'node scripts/smoke.mjs', exitCode: 0,
++    logPath: 'logs/smoke.log', ranAt: '2026-09-17T00:00:00Z', durationMs: 9,
++    timeout: false, fallbackMainRepo: false, source: 'cli-noai-smoke',
++  }
++  writeScanRecord(specBase, change, smokeRec)
++  const md = (receiptLine) => ['# 验证报告', '', '## 集成验证回执 [层：自述声明——CLI 一致性校验]', '', receiptLine, ''].join('\n')
++  const okLine = '- claim: commands.smoke CLI 亲跑 | command: node scripts/smoke.mjs | exit: 0 | log: logs/smoke.log | source: cli-noai-smoke'
++
++  const a1 = auditSmokeReceiptConsistency(md(okLine), specBase, change)
++  assert.ok(a1.state === 'passed' && a1.mismatches.length === 0,
++    `机器段与记录逐字段一致 → 零 mismatch（实际 ${JSON.stringify(a1)}）`)
++
++  const a2 = auditSmokeReceiptConsistency(md(okLine.replace('exit: 0', 'exit: 1')), specBase, change)
++  assert.ok(a2.mismatches.length === 1 && a2.mismatches[0].severity === 'error' && a2.mismatches[0].note.includes('不符'),
++    'agent 改写 exit → ERROR 打回（command/exit/log 任一字段被改写即不符）')
++
++  const a3 = auditSmokeReceiptConsistency(md('- claim: 别的回执 | command: curl -s http://127.0.0.1:18080/api/health | exit: 0 | log: logs/a.log'), specBase, change)
++  assert.ok(a3.mismatches.length === 1 && a3.mismatches.some((x) => x.note.includes('缺失')),
++    '删除机器段（回执槽仅剩他条）→ ERROR 打回')
++
++  writeScanRecord(specBase, change, { ...smokeRec, status: 'failed', exitCode: 3, reason: 'smoke 命令退出码 3' })
++  const a4 = auditSmokeReceiptConsistency(md(okLine), specBase, change)
++  const okA4 = a4.mismatches.length >= 1 && a4.mismatches.some((x) => x.note.includes('冒充'))
++  rmSync(join(specBase, '.runtime', `verify-quality-scan-${change}.json`))
++  const a5 = auditSmokeReceiptConsistency(md(okLine), specBase, change)
++  const okA5 = a5.mismatches.length >= 1 && a5.mismatches.some((x) => x.note.includes('冒充'))
++  assert.ok(okA4 && okA5,
++    `记录 not-ran 而 md 有标记条目 = 冒充绿回执；无记录而 md 有标记行 = 冒充（标记行唯一合法来源是 CLI ensure）（实际 ${JSON.stringify(a4.mismatches.length)}/${a5.mismatches.length}）`)
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ⑥ 分类器 B-1 回归（双侧）：脚本形态三命令 × 标记两态（FR-03 / Grill B-1）
++// ═══════════════════════════════════════════════════════════════════
++test('⑥ 脚本形态三命令：无标记判 build 不绿；cli-noai-smoke 标记直判 cross-layer 绿；producer 侧同口径', async () => {
++  const root = mk('sg-cls-')
++  mkdirSync(join(root, 'logs'), { recursive: true })
++  writeFileSync(join(root, 'logs', 'smoke.log'), 'smoke endpoint ok\n')
++  const scriptCmds = ['node scripts/smoke.mjs', 'bash smoke.sh', 'python smoke.py']
++  const judge = (command, source) => checkIntegrationEvidence('', ['real_daemon_backend_integration'], {
++    runtimeEvidence: [{ claim: '接口冒烟', command, exitCode: 0, logPath: 'logs/smoke.log', ...(source ? { source } : {}) }],
++    cwd: root,
++  })
++
++  const noMark = scriptCmds.map((c) => ({ c, r: judge(c, null) }))
++  assert.ok(noMark.every(({ r }) => r.ok === false && r.errors.some((e) => e.includes('build'))),
++    `B-1 回归：三脚本命令无标记全判 build 不作集成绿判据（${noMark.map(({ c, r }) => `${c}→${r.ok}`).join(' / ')}——词表不可枚举，修正点在标记识别）`)
++
++  const marked = scriptCmds.map((c) => ({ c, r: judge(c, 'cli-noai-smoke') }))
++  assert.ok(marked.every(({ r }) => r.ok === true),
++    `B-1 金路径：三脚本命令 + cli-noai-smoke 标记全直判 cross-layer 绿（${marked.map(({ c, r }) => `${c}→${r.ok}`).join(' / ')}）`)
++
++  // producer 侧（judgeIntegrationRan 消费 classifyReceiptCommandSource 同族口径，G-3 双侧同步）
++  const mkProducer = async (withMark) => {
++    const specBase = mk('sg-prod-')
++    const change = 'sg-prod-' + (withMark ? 'a' : 'b')
++    const changeDir = join(specBase, 'changes', change)
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify({ schemaVersion: 2, probes: {} }, null, 2))
++    const line = `- claim: 接口冒烟 | command: node scripts/smoke.mjs | exit: 0 | log: logs/smoke.log${withMark ? ' | source: cli-noai-smoke' : ''}`
++    const verifyMd = ['# 验证报告', '', '## 集成验证回执 [层：自述声明——CLI 一致性校验]', '', line, ''].join('\n')
++    const cap = captureWarn()
++    try {
++      await backfillFactsFromMdAndTests(join(changeDir, 'verify-facts.json'), { verifyMd, conclusion: 'PASS WITH NOTES' })
++    } finally { cap.restore() }
++    return JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
++  }
++  assert.equal((await mkProducer(true)).integrationRan, 'ran', 'producer 侧：机器段标记条目 → facts.integrationRan=ran（金路径不误拦）')
++  assert.equal((await mkProducer(false)).integrationRan, 'not-ran', 'producer 侧对照：同命令无标记 → not-ran（build 不计入集成实测）')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ⑦ smokeRan producer 五边界（FR-02 / D-002@v1）：唯一事实源=quality-scan 记录
++// ═══════════════════════════════════════════════════════════════════
++test('⑦ smokeRan 五边界：passed→ran / failed→not-ran / 无段→not-ran+注记 / 记录缺失→not-ran+注记 / 未配置→not-configured', async () => {
++  const run = async ({ smoke, withSmoke = true, record = true, tag }) => {
++    const specBase = mk('sg-ran-')
++    const change = 'sg-ran-' + tag
++    const changeDir = join(specBase, 'changes', change)
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify({ schemaVersion: 2, probes: {} }, null, 2))
++    if (record) writeScanRecord(specBase, change, smoke, { withSmoke })
++    const cap = captureWarn()
++    try {
++      await backfillFactsFromMdAndTests(join(changeDir, 'verify-facts.json'),
++        { verifyMd: '# 验证报告\n\n结论枚举：`PASS WITH NOTES`\n', conclusion: 'PASS WITH NOTES' })
++    } finally { cap.restore() }
++    const facts = JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
++    return { facts, caught: cap.caught }
++  }
++  const SM = { configured: true, status: 'passed', command: 'node scripts/smoke.mjs', exitCode: 0, source: 'cli-noai-smoke' }
++
++  const r1 = await run({ smoke: SM, tag: 'p1' })
++  assert.equal(r1.facts.smokeRan, 'ran', '记录在场 status=passed → ran')
++
++  const r2 = await run({ smoke: { ...SM, status: 'failed', exitCode: 3 }, tag: 'p2' })
++  assert.equal(r2.facts.smokeRan, 'not-ran', 'status=failed（exit 非 0 / 超时归 failed）→ not-ran')
++
++  const r3 = await run({ smoke: null, withSmoke: false, tag: 'p3' })
++  assert.ok(r3.facts.smokeRan === 'not-ran' && r3.caught.some((w) => w.includes('无 smokeResult 段')),
++    `记录在场但无 smokeResult 段（升级过渡期存量）→ not-ran + fail-open 注记（实际 ${JSON.stringify(r3.caught)}）`)
++
++  const r4 = await run({ record: false, tag: 'p4' })
++  assert.ok(r4.facts.smokeRan === 'not-ran' && r4.caught.some((w) => w.includes('quality-scan 实测记录缺失')),
++    '记录缺失 → not-ran + fail-open 注记（X-01：--done 亲测替代扫描场景记录时序不可得）')
++
++  const r5 = await run({ smoke: { configured: false, status: 'skipped', source: 'cli-noai-smoke' }, tag: 'p5' })
++  assert.equal(r5.facts.smokeRan, 'not-configured', 'configured=false（未配置 / unavailable）→ not-configured')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ⑧ 第五条件 smoke-not-run（FR-02 / D-002@v1）：critical×三值 / handover 不豁免 / 非判级零行为
++// ═══════════════════════════════════════════════════════════════════
++test('⑧ 第五条件：critical×三值；字段不在场 fail-closed；advisory handover 不豁免；非判级零行为', () => {
++  const CLEAN = () => ({
++    integrationRan: 'ran', handover: { count: 0, items: [] },
++    dbScriptDeclarations: [], matrixPartialRows: 0, runtimeEndpointExcluded: false,
++  })
++  const base = (facts, level) => ({ conclusion: 'PASS', factsExpected: true, facts, changeRiskProfile: { level } })
++
++  const r1 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'ran' }, 'integration-critical'))
++  assert.ok(r1.ok === true && !r1.triggered.some((t) => t.fact === 'smoke-not-run'),
++    'critical × ran → 放行不触发（绿跑即满足）')
++
++  const r2 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'integration-critical'))
++  assert.ok(r2.ok === false && r2.triggered.some((t) => t.fact === 'smoke-not-run')
++    && r2.errors.some((e) => e.includes('[fact smoke-not-run]') && e.includes('接口冒烟未跑')),
++    'critical × not-ran → smoke-not-run 触发 + 文案点名接口冒烟未跑')
++
++  const r3 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-configured' }, 'integration-critical'))
++  assert.ok(r3.triggered.some((t) => t.fact === 'smoke-not-run')
++    && r3.errors.some((e) => e.includes('先在 local.yaml 配置键 commands.smoke')),
++    'critical × not-configured → 触发 + 配置键指引文案（not-configured 出路的操作面）')
++
++  const r4 = evaluatePassEligibility(base(CLEAN(), 'integration-critical'))
++  assert.ok(r4.triggered.some((t) => t.fact === 'smoke-not-run' && t.detail.includes('不在场')),
++    'facts 在场但 smokeRan 字段不在场（升级过渡期存量 backfill 前）→ 同未跑触发（fail-closed 侧）')
++
++  const r5 = evaluatePassEligibility(base({
++    ...CLEAN(), smokeRan: 'not-ran',
++    handover: { count: 1, items: [{ type: 'env-blocked', item: '冒烟环境阻断', condition: '恢复后复跑', severity: 'advisory' }] },
++  }, 'integration-critical'))
++  assert.ok(r5.triggered.some((t) => t.fact === 'smoke-not-run'),
++    'advisory handover 在场仍触发（不豁免——smoke 缺失的合法出路只有配 commands.smoke 复跑 / 降级 NOTES 两条）')
++
++  const r6 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'unit-sufficient'))
++  assert.ok(r6.ok === true && r6.triggered.length === 0,
++    '非判级（unit-sufficient）× not-ran → 零行为不触发（判级限定，brownfield 兼容）')
++})
++
++// ═══════════════════════════════════════════════════════════════════
++// ⑨ config-schema：commands.smoke 键登记（FR-01 配置面 / D-001@v1）
++// ═══════════════════════════════════════════════════════════════════
++test('⑨ config-schema：commands.smoke 登记为 live 可选键，reader=executeVerifyQualityScan，example 含脚本形态', () => {
++  const cmdSection = LOCAL_YAML_SCHEMA.sections.find((s) => s.id === 'commands')
++  const key = cmdSection && cmdSection.keys.find((k) => k.path === 'commands.smoke')
++  assert.ok(key && key.status === 'live' && key.optional === true && key.readers.some((r) => r.includes('executeVerifyQualityScan')),
++    `commands.smoke 登记为 live 可选键且 reader=executeVerifyQualityScan（verify 阶段 CLI 亲跑，配置生效面可追溯）（实际 ${JSON.stringify(key && { status: key.status, optional: key.optional, readers: key.readers })}）`)
++  assert.ok(renderExample().includes('smoke: node scripts/smoke.mjs'),
++    'local.yaml.example 模板含 smoke 示例行（每个 live 键必现于 example 的耦合不漂移）')
++})

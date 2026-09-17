@@ -9,11 +9,15 @@
  *    review-dispatch worker_prompt 与 stage prompt 同源的前置保证（事前给的 == 事后查的）。
  *
  * 期望块由「迁移前快照 + 迁移前前缀形态」构造，不引用常量渲染（防自证）。
+ * 【2026-09-17-api-coverage-smoke task-06 / FR-07】verify 键随行：smoke 纪律四段
+ * 新增键（非迁移——迁移前无此键），快照逐字照 design §6 ①~④，渲染为「输出验证报告」
+ * 步「### 操作」第 8 条下 3 空格缩进「- 」列表行。
  */
 import { REVIEW_CHECKLISTS } from '../src/stage-review-checklist.js'
 import { definition as brainstormDefinition } from '../src/stages/brainstorm.js'
 import { buildPlanSteps } from '../src/stages/plan.js'
 import { buildExecuteSteps } from '../src/stages/execute.js'
+import { definition as verifyDefinition } from '../src/stages/verify.js'
 
 let passed = 0
 let failed = 0
@@ -69,13 +73,21 @@ const SNAPSHOT_EXECUTE = [
   'design.md 整体对照（最终实现拼起来是否仍符合设计意图，而非仅各 task 局部合规）',
   '组装行为（全量测试/构建/启动通过——单 task 测试全绿 ≠ 组装正确）',
 ]
+// verify = smoke 纪律四段（2026-09-17-api-coverage-smoke task-06 / FR-07 新增键，逐字照 design §6 ①~④；
+// 首条内嵌命中条件说明——review-dispatch worker_prompt 单独消费条目须自含；渲染为「### 操作」第 8 条下 3 空格缩进「- 」列表行）
+const SNAPSHOT_VERIFY = [
+  'smoke 纪律（命中条件：local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时生效）——①断言派生表：design 接口表每行 ≥1 happy-path（含出参形状断言）/ 权限矩阵每行 ≥1 反例（非授权操作应拒）/ 契约表必填每项 ≥1 空值反例 / 转移表每边 ≥1 状态断言 / 需求字面（单号格式等）→ 格式断言；',
+  '②负向下界：每写端点 ≥1 权限反例（E4 类）+ 全链 ≥1 注错全量回滚断言（E5 类）；',
+  '③执行口径：脚本后台起服+轮询就绪+finally 杀（墙钟增量≈冒烟本体）、DB 会话自设严格 sql_mode、载荷从消费端构造点导出（手写正确字段的测试抓不住字段漂移）；',
+  '④断言锚点注释（每步挂依据 ID）与矩阵行一一对应。',
+]
 
-console.log('=== 常量形态（task-03 消费契约：三键非空 string[]）===')
+console.log('=== 常量形态（task-03 消费契约：四键非空 string[]）===')
 {
   assert(REVIEW_CHECKLISTS != null && typeof REVIEW_CHECKLISTS === 'object', 'REVIEW_CHECKLISTS 是对象')
   const keys = Object.keys(REVIEW_CHECKLISTS).sort().join(',')
-  assert(keys === 'brainstorm,execute,plan', `三键齐全且无多余键（实际: ${keys}）`)
-  for (const stage of ['brainstorm', 'plan', 'execute']) {
+  assert(keys === 'brainstorm,execute,plan,verify', `四键齐全且无多余键（实际: ${keys}）`)
+  for (const stage of ['brainstorm', 'plan', 'execute', 'verify']) {
     const items = REVIEW_CHECKLISTS[stage]
     assert(Array.isArray(items) && items.length > 0, `${stage}: 非空 string[]（条目数 ${Array.isArray(items) ? items.length : 'N/A'}）`)
     assert(items.every(it => typeof it === 'string' && it.trim().length > 0), `${stage}: 每条为非空字符串`)
@@ -98,16 +110,22 @@ console.log('\n=== 内嵌迁移前快照逐条比对（钉死「迁移=逐字」
     'FR-11: 清单含「用户入口 × 菜单/注册 DML 对账」条目（新页面/前端路由场景）')
   assertDeepEqual(REVIEW_CHECKLISTS.plan, SNAPSHOT_PLAN, 'plan: 常量 == 迁移前审查清单(10 条) 快照（逐字）')
   assertDeepEqual(REVIEW_CHECKLISTS.execute, SNAPSHOT_EXECUTE, 'execute: 常量 == 迁移前三项必查(3 条) 快照（逐字）')
+  // FR-07（task-06）：verify 键新增形态——快照逐字照 design §6 四段，首条内嵌命中条件
+  assertDeepEqual(REVIEW_CHECKLISTS.verify, SNAPSHOT_VERIFY, 'verify: 常量 == smoke 纪律四段(4 条) 快照（逐字照 design §6，task-06/FR-07 新增键）')
+  assert(REVIEW_CHECKLISTS.verify.some(it => it.includes('local.yaml 配置 commands.smoke') && it.includes('integration/deployment-critical')),
+    'FR-07: verify 首条内嵌命中条件说明（commands.smoke 配置或判级 critical 时生效）')
 }
 
-console.log('\n=== 三 stage prompt 渲染产物含全部条目字面（期望块由快照构造，防自证）===')
+console.log('\n=== 四 stage prompt 渲染产物含全部条目字面（期望块由快照构造，防自证）===')
 {
   const grill = brainstormDefinition.steps.find(s => s.name === 'Design Grill 交叉审查')
   const planReview = buildPlanSteps(null).find(s => s.name === '审查计划')
   const acceptance = buildExecuteSteps(null).find(s => s.name === '对照设计检查')
+  const verifyReport = verifyDefinition.steps.find(s => s.name === '输出验证报告')
   assert(!!grill && typeof grill.prompt === 'string', 'brainstorm: 定位「Design Grill 交叉审查」step')
   assert(!!planReview && typeof planReview.prompt === 'string', 'plan: 定位「审查计划」step')
   assert(!!acceptance && typeof acceptance.prompt === 'string', 'execute: 定位「对照设计检查」step')
+  assert(!!verifyReport && typeof verifyReport.prompt === 'string', 'verify: 定位「输出验证报告」step')
 
   const layerBlock = SNAPSHOT_BRAINSTORM_LAYERS.map((it, i) => `${i + 1}. ${it}`).join('\n')
   const crossBlock = SNAPSHOT_BRAINSTORM_CROSS_POINTS.map(it => `- ${it}`).join('\n')
@@ -123,6 +141,19 @@ console.log('\n=== 三 stage prompt 渲染产物含全部条目字面（期望�
   assert(acceptance.prompt.includes(execBlock), 'execute prompt: 三项必查齐全（2 空格缩进序号行形态，逐字）')
   assert(acceptance.prompt.split(execBlock).length - 1 === 1, 'execute prompt: 三项块恰好出现一次（无双重渲染）')
 
+  const verifyBlock = SNAPSHOT_VERIFY.map(it => '   - ' + it).join('\n')
+  assert(verifyReport.prompt.includes(verifyBlock), 'verify prompt: smoke 纪律四条齐全（3 空格缩进列表行形态，逐字）')
+  assert(verifyReport.prompt.split(verifyBlock).length - 1 === 1, 'verify prompt: 纪律块恰好出现一次（无双重渲染）')
+  assert(verifyReport.prompt.includes('local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律'),
+    'verify prompt: 段首命中条件说明在场（commands.smoke 配置或判级 critical）')
+  // 【task-07 增量】verify 纪律段渲染形态锚：编号条目挂靠 + ①~④ 段编号 + 段尾标点（照 design §6 原文）
+  assert(verifyReport.prompt.includes('8. **smoke 纪律'),
+    'verify prompt: 纪律段挂靠「### 操作」第 8 条编号条目（8. **smoke 纪律 锚——静态导出段的结构位置）')
+  assert(REVIEW_CHECKLISTS.verify[0].includes('①') && ['②', '③', '④'].every((n, i) => REVIEW_CHECKLISTS.verify[i + 1].startsWith(n)),
+    'verify 四段编号形态：①嵌于首条（命中条件说明后）、②③④各段段首（照 design §6 ①~④ 分段）')
+  assert(REVIEW_CHECKLISTS.verify.slice(0, 3).every(it => it.endsWith('；')) && REVIEW_CHECKLISTS.verify[3].endsWith('。'),
+    'verify 段尾标点形态：前三段以；收尾、末段以。收尾（design §6 原文标点，条目自含语义完整）')
+
   // 常量侧逐条字面断言：REVIEW_CHECKLISTS 每条都在对应 stage prompt 里
   for (const it of REVIEW_CHECKLISTS.brainstorm) {
     assert(grill.prompt.includes(it), `brainstorm prompt 含条目字面: ${it.slice(0, 16)}...`)
@@ -132,6 +163,9 @@ console.log('\n=== 三 stage prompt 渲染产物含全部条目字面（期望�
   }
   for (const it of REVIEW_CHECKLISTS.execute) {
     assert(acceptance.prompt.includes(it), `execute prompt 含条目字面: ${it.slice(0, 16)}...`)
+  }
+  for (const it of REVIEW_CHECKLISTS.verify) {
+    assert(verifyReport.prompt.includes(it), `verify prompt 含条目字面: ${it.slice(0, 16)}...`)
   }
 }
 

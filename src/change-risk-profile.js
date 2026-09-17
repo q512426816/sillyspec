@@ -6,7 +6,7 @@
  * integration-critical / deployment-critical），产出门控验证需求。
  */
 import { readFileSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, isAbsolute } from 'path'
 
 // ============ 向后兼容：旧的 INTEGRATION_CRITICAL_PATTERNS ============
 
@@ -312,6 +312,15 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
 // classifyReceiptCommandSource（facts.integrationRan 判定）与本分类同族口径，两处正则族
 // 保持同步演进）。smoke 冒烟命令族计 cross-layer（D-006 退役判据：批次 C commands.smoke
 // 落地后由 smoke 回执一票判定「集成实测已跑」——起服务冒烟即跨层实测，不得默认 build 误拦金路径）。
+//
+// 来源标记直判（2026-09-17-api-coverage-smoke task-02 / Grill B-1 修正，FR-03）：条目 source
+// 标记 'cli-noai-smoke'（verify-probes ensureSmokeReceiptSection 注入的机器段行尾注，
+// parseEvidenceSlots additive 解析回填）→ 直判 cross-layer，**优先于命令词正则分类**——
+// 修正点在标记识别而非命令词增补：node scripts/smoke.mjs / bash smoke.sh / python smoke.py
+// 等脚本形态在既有正则下全判 build 会误拦金路径，且脚本形态词表不可枚举（正则族两文件零词
+// 变动）。对齐目标：verify-probes.js classifyReceiptCommandSource（judgeIntegrationRan 消费）
+// 同款 sourceMark 参数与标记族——**任一侧增改标记族必须双侧同步**（G-3 先例：producer 侧
+// 曾漏 smoke 一词致口径分裂）。
 const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
   '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
   '\\biwr\\b', '\\birm\\b', 'https?://',
@@ -321,7 +330,10 @@ const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
   '\\b(?:nc|netcat|telnet|socat)\\b',
 ].join('|'), 'i')
 const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
-function classifyReceiptSourceTag(command) {
+/** CLI 机器段来源标记（与 verify-probes.js SMOKE_RECEIPT_SOURCE_MARK / task-01 记录 source 同值，双侧同步） */
+const CLI_SMOKE_SOURCE_MARK = 'cli-noai-smoke'
+function classifyReceiptSourceTag(command, sourceMark) {
+  if (sourceMark === CLI_SMOKE_SOURCE_MARK) return 'cross-layer'
   const cmd = String(command || '')
   if (RECEIPT_SOURCE_CROSS_LAYER_RE.test(cmd)) return 'cross-layer'
   if (RECEIPT_SOURCE_UNIT_RE.test(cmd)) return 'unit'
@@ -430,18 +442,28 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification, op
  * 缺省按回执 command 来源就地分类（classifyReceiptSourceTag），未定类默认 'build'（向后
  * 兼容的 fail-closed 缺省）；sourceTag ∈ {build, unit} 的回执不作集成实测绿判据（四条件
  * 全过也只到 non-green，reason 点名来源）——verify-postcheck 不在本调用链上，不受影响。
+ *
+ * r.source（2026-09-17-api-coverage-smoke task-02 / FR-03，Grill B-1）：条目级来源标记
+ * （parseEvidenceSlots additive 第五字段，CLI 机器段行 'cli-noai-smoke' 尾注回填）透传给
+ * classifyReceiptSourceTag 直判 cross-layer——优先级在调用方 opts.sourceTag 声明源之下、
+ * 命令词正则分类之上；无标记条目分类路径逐字节不变。
  */
 function auditRuntimeReceipt(r, opts) {
   const out = { claim: r && r.claim, logPath: r && r.logPath, sourceTag: null, green: false, logExists: null, mtimeInWindow: null, failSignatures: 0, exitCode: r && typeof r.exitCode === 'number' ? r.exitCode : null, reason: '' }
   // 打标依据 = 命令来源声明（不解析日志内容，X-10）：opts.sourceTag 调用方声明源优先，
+  // 其次条目 source 标记直判（task-02 Grill B-1——'cli-noai-smoke' 直判 cross-layer），
   // 否则按回执 command 分类；非法/缺省走分类，未定类默认 build。
   const declaredSource = opts && typeof opts.sourceTag === 'string'
     && ['cross-layer', 'build', 'unit'].includes(opts.sourceTag) ? opts.sourceTag : null
-  out.sourceTag = declaredSource || classifyReceiptSourceTag(r && r.command)
+  out.sourceTag = declaredSource || classifyReceiptSourceTag(r && r.command, r && r.source)
   if (!r || !r.logPath) { out.reason = '回执缺 logPath'; return out }
+  // 绝对路径直读（2026-09-17-api-coverage-smoke task-02）：CLI 机器段（source=cli-noai-smoke）
+  // 的 logPath 是 quality-scan 记录的绝对路径实录——join(cwd, 绝对路径) 会拼出破损路径
+  // 误报「日志不存在」，isAbsolute 时跳过 join（verify-postcheck 测试输出解析同款口径）。
+  const resolveLog = (p) => (opts.cwd && !isAbsolute(String(p)) ? join(opts.cwd, p) : p)
   let content = null
   try {
-    const abs = opts.cwd ? join(opts.cwd, r.logPath) : r.logPath
+    const abs = resolveLog(r.logPath)
     content = readFileSync(abs, 'utf8')
     out.logExists = true
   } catch {
@@ -452,7 +474,7 @@ function auditRuntimeReceipt(r, opts) {
   if (opts.verifyStartAt) {
     try {
       const startAt = new Date(opts.verifyStartAt).getTime()
-      out.mtimeInWindow = statSync(opts.cwd ? join(opts.cwd, r.logPath) : r.logPath).mtimeMs >= startAt - 60_000
+      out.mtimeInWindow = statSync(resolveLog(r.logPath)).mtimeMs >= startAt - 60_000
       if (!out.mtimeInWindow) { out.reason = `日志 mtime 早于 verifyStartAt（${r.logPath}）`; return out }
     } catch { out.mtimeInWindow = null }
   }

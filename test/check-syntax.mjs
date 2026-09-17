@@ -53,6 +53,22 @@ const ENTRY_WHITELIST = new Set([
   'src/fs-atomic.js', 'src/git-helper.js', 'src/version.js',
   'src/docs-check.js', // applyFixes 经 CLI index.js docs 子命令消费（task-03 接线前零文本引用，2026-08-18-platform-map-auto-anchors）
 ])
+// 符号级 pending 白名单（22e-b「收进白名单」通道，docs-check.js 先例的符号粒度形态）：跨 task
+// 分批落盘的契约导出——producer task 先落盘、consumer task 接线前零 src/+test 文本引用。
+// 条目必须带变更名与接线归期注释，接线落地（引用出现）后删除条目。
+const PENDING_EXPORT_WHITELIST = new Map([
+  // 2026-09-17-api-coverage-smoke task-04（api-face-parser 契约）：task-05 validator 经
+  // facts.apiFace/consumerHints 落盘通道消费（分层单向，不经 import）；ensure 补段与解析
+  // 五形态断言归 task-05 / task-07 test/api-coverage-matrix.test.mjs 接线。
+  ['parseDesignApiTable', 'src/verify-probes.js'],
+  ['classifyConsumerHints', 'src/verify-probes.js'],
+  ['ensureApiCoverageMatrixSection', 'src/verify-probes.js'],
+  // 2026-09-17-api-coverage-smoke task-05（api-coverage-validator 判定层契约）：X-09 双层形态
+  // 纯函数——壳 validateApiCoverageMatrix 在本文件注册面消费（注册行引用），纯函数导出供
+  // task-07 test/api-coverage-matrix.test.mjs 记账/锚点/降级断言接线，接线落地后删除条目。
+  ['extractApiCoverageMatrixSlots', 'src/stage-contract.js'],
+  ['judgeApiCoverageMatrix', 'src/stage-contract.js'],
+])
 const dynamicEntryPatterns = [
   /await import\('\.\/stages\/(\w+)\.js'\)/,   // stages/index.js registry
 ]
@@ -74,6 +90,7 @@ for (const [file, content] of srcContents) {
   const isStageIndex = file === 'src/stages/index.js'
   if (isStageIndex) continue // registry 自身
   for (const sym of namedExports) {
+    if (PENDING_EXPORT_WHITELIST.get(sym) === file) continue // pending 契约导出（接线归期见白名单注释）
     // 宽松文本级判定：符号名出现在其他任一 src/+test/ 文件即算引用（防误报优先；
     // 动态 import 字符串路径、destructure、注释提及都会命中——代价是漏报，可接受）
     const refRe = new RegExp(`\\b${sym}\\b`)

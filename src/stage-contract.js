@@ -944,6 +944,402 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
   return { ok: errors.length === 0, errors, warnings }
 }
 
+// ============ 接口验证覆盖矩阵门禁（2026-09-17-api-coverage-smoke task-05 / FR-04~FR-06） ============
+//
+// 与探针 7（验收×测试承接面）并排互补的独立对账门（design §4，D-009 非目标 / R-07 口径注记
+// 互指）：探针 7 管「每条 acceptance 由哪些测试承接」，本矩阵管「design 接口段每个端点由哪些
+// 验证用例/冒烟步骤覆盖」——fail-closed 记账，机械封住「接口层零派生」的 P1 缺陷面：
+//   - covered 记账：分子=判定 covered 的端点行；有效分母=N−non-testable 行数（N=解析端点数
+//     或声明数，D-005）；分子<有效分母或解析面有未覆盖端点 → error 逐条列缺覆盖端点
+//   - 锚点五形态（design §4 Grill #10）：design接口表#<METHOD /path> 解析级（须命中
+//     facts.apiFace 解析产出集，防空指）；权限矩阵[...]/契约表@.../DDL@.../载荷@... 形态级
+//     存在即认；covered/partial 行缺锚点 → error（missingEvidence 口径同 probe7）
+//   - 移交联动（probe7 条件④同款形态）：partial/uncovered 端点行>0 且 facts.handover 零
+//     有效行 → error；blocking 是否封顶归 validatePassEligibility 条件②（④管有去向/②管去向级）
+//   - 探索行（uncovered+[探索] 标记）与消费端子行（两空格缩进 ↳ 前缀）不进分母分子
+//   - 声明降级（D-005）：解析零行按声明数对账；并存以解析为准并注记 warning；解析零行零
+//     声明×判级 critical → error（接口面不可静默为零）；判级 critical×声明 0 端点 → warning
+//   - advisory（D-006/D-007 第一版，不阻断不进 errors）：消费端归类在场而矩阵零子行 →
+//     warning 列端点；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段命中且无「无权限约束」
+//     豁免 → warning
+// 消费路径铁律（plan 全局硬约束 3）：本模块零 import verify-probes——apiFace/consumerHints
+// 数据经 facts 落盘面（readFactsForEligibility 同源读取，parseDesignApiTable 产出于
+// verify-probes 侧 backfill 落盘）进入；矩阵面经 verify-result.md MD 槽解析（X-05 防篡改锚点，
+// 锚定当前文档实态不读 producer 快照）。
+
+/** 矩阵段标题定位（## 级；骨架渲染带「[层：…]」后缀——前缀匹配容忍，renderApiCoverageMatrixLines 字面同源） */
+const API_COVERAGE_HEADING_RE = /^## 接口验证覆盖矩阵/m
+/** 端点单元格 method+path 提取（预填行 `GET /orders/{id}` 形态；宽匹配容忍注记后缀） */
+const API_ENDPOINT_CELL_RE = /(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|]+)/
+/** 声明占位行（D-005 零解析降级侧，骨架「本变更接口面：N 端点（agent 声明）」字面同源） */
+const API_DECLARED_ROW_RE = /本变更接口面[：:]\s*(\d+)\s*端点/
+/** design接口表# 锚点提取（解析级校验用——防空指，Grill #10：非物理行号，METHOD /path 形态） */
+const API_ANCHOR_DESIGN_API_RE = /design接口表#\s*(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/[^\s|，。；;）)]+)/g
+/** 探索行标记（骨架文法注释字面同源：证据列含 [探索]） */
+const API_EXPLORATION_MARK_RE = /\[探索\]/
+
+/**
+ * 行级提取 verify-result.md「## 接口验证覆盖矩阵」段（task-05 壳层 MD 槽解析，纯字符串零 IO）。
+ * 段定位：## 标题（前缀匹配容忍后缀）到下个同级（##）或更高级（#）标题。行分类：
+ *   - 消费端子行：≥2 空白缩进 + ↳ 前缀（骨架文法字面同源）——只计数不进矩阵行账
+ *   - 五列表行（复用 splitMatrixRowCells 切列）：表头/分隔行跳过；端点列含声明行的 →
+ *     declaredRow 单列（不进端点行账）；其余 → 端点行（method/path 自端点列提取）
+ *   - 声明占位行与探索行判定见上注释；CRLF/LF 容忍（\r 剥离）。
+ * @param {string} verifyMd verify-result.md 全文
+ * @returns {{
+ *   present: boolean,
+ *   rows: Array<{endpoint: string, method: string, path: string, verdict: string,
+ *     caseId: string, result: string, evidence: string, unfilled?: boolean, exploration?: boolean}>,
+ *   subRowCount: number,
+ *   declaredRow: {declared: number, verdict: string, evidence: string}|null,
+ * }}
+ */
+export function extractApiCoverageMatrixSlots(verifyMd) {
+  const out = { present: false, rows: [], subRowCount: 0, declaredRow: null }
+  const md = String(verifyMd || '')
+  const hm = md.match(API_COVERAGE_HEADING_RE)
+  if (!hm) return out
+  out.present = true
+  const rest = md.slice(hm.index + hm[0].length)
+  const endMatch = rest.match(/^#{1,2}(?:[ \t]|$)/m)
+  const sectionText = endMatch ? rest.slice(0, endMatch.index) : rest
+
+  for (const rawLine of sectionText.split(/\r?\n/)) {
+    // 消费端子行（≥2 空白缩进 ↳ 前缀）：不计矩阵行账，只计数（advisory 消费面判据）
+    if (/^\s{2,}↳/.test(rawLine)) { out.subRowCount++; continue }
+    const cells = splitMatrixRowCells(rawLine)
+    if (!cells || cells.length !== 5) continue // 注记/防御/非五列表行不计槽
+    const c = cells.map(x => x.trim())
+    if (c.every(x => /^:?-{3,}:?$/.test(x))) continue // 分隔行
+    if (c[0] === '端点' && c[1] === '判定') continue // 表头行
+    const dm = c[0].match(API_DECLARED_ROW_RE)
+    if (dm) {
+      // 声明占位行（D-005 零解析降级侧）：单列不进端点行账，declared 供 N 兜底
+      out.declaredRow = { declared: parseInt(dm[1], 10), verdict: c[1], evidence: c[4] }
+      continue
+    }
+    const em = c[0].match(API_ENDPOINT_CELL_RE)
+    const row = {
+      endpoint: c[0], method: em ? em[1].toUpperCase() : '', path: em ? em[2] : '',
+      verdict: c[1], caseId: c[2], result: c[3], evidence: c[4],
+    }
+    if (!MATRIX_VERDICT_WHITELIST.has(row.verdict)) row.unfilled = true
+    row.exploration = row.verdict === 'uncovered' && API_EXPLORATION_MARK_RE.test(`${row.result} ${row.evidence}`)
+    out.rows.push(row)
+  }
+  return out
+}
+
+/**
+ * 证据锚点五形态命中（design §4 Grill #10）：design接口表# 须提取出 ≥1 个 METHOD /path
+ * 锚点才计命中（形态在而端点不可提取按缺锚计，fail-closed）；其余四形态存在即认。
+ * design接口表# 锚点是否命中解析产出集由调用侧逐锚核对（解析级校验），此处只管形态在场。
+ */
+function apiEvidenceHasAnchorForm(evidence) {
+  const e = String(evidence || '')
+  API_ANCHOR_DESIGN_API_RE.lastIndex = 0
+  if (API_ANCHOR_DESIGN_API_RE.test(e)) return true
+  if (/权限矩阵\[[^\]]+\]/.test(e)) return true
+  if (/契约表@\S/.test(e)) return true
+  if (/DDL@\S/.test(e)) return true
+  if (/载荷@\S/.test(e)) return true
+  return false
+}
+
+/**
+ * 接口验证覆盖矩阵记账判定纯函数（X-09 双层形态的判定层：零 MD 解析、零 IO——矩阵面经
+ * 壳层 extractApiCoverageMatrixSlots 解析传入，apiFace/consumerHints/handover 经 facts
+ * 落盘面传入）。task-07 断言消费契约。
+ * @param {{
+ *   matrix?: object|null,               // extractApiCoverageMatrixSlots 产物
+ *   apiFace?: {endpoints?: Array<{method,path,rowIdx}>, declared?: number|null, writeEndpoints?: Array}|null,
+ *   consumerHints?: Record<string, string[]>|null,
+ *   facts?: object|null,                // verify-facts.json（handover 联动用，缺 null）
+ *   factsExpected?: boolean,            // false（存量未跑管线）→ 兼容 ok 不误伤
+ *   strict?: boolean,                   // isIrStrictVerifyChange（段缺失分层用）
+ *   riskLevel?: string|null,            // detectChangeRisk().level
+ *   changeName?: string,
+ *   permSectionText?: string,           // design.md 权限段（段头含 权限/角色 的段合并文本，壳内提取）
+ *   designText?: string,                // design.md 全文（写端点豁免行级检测用）
+ * }} [args]
+ * @returns {{ ok: boolean, errors: string[], warnings: string[] }}
+ */
+export function judgeApiCoverageMatrix(args) {
+  const errors = []
+  const warnings = []
+  const a = args || {}
+  // factsExpected=false（存量未跑管线）→ 沿用存量兼容口径 ok 不误伤（evaluatePassEligibility 同款边界）
+  if (!a.factsExpected) return { ok: true, errors, warnings }
+
+  const changeName = a.changeName || '<变更名>'
+  const INIT_HINT = `\`sillyspec verify-probes --change ${changeName} --init\``
+  const matrix = a.matrix && typeof a.matrix === 'object' ? a.matrix : { present: false, rows: [], subRowCount: 0, declaredRow: null }
+  const rows = Array.isArray(matrix.rows) ? matrix.rows : []
+  const apiFace = a.apiFace && typeof a.apiFace === 'object' ? a.apiFace : null
+  const endpoints = apiFace && Array.isArray(apiFace.endpoints)
+    ? apiFace.endpoints.filter(e => e && e.method && e.path) : []
+  const declared = apiFace && typeof apiFace.declared === 'number' ? apiFace.declared : null
+  const writeEndpoints = apiFace && Array.isArray(apiFace.writeEndpoints)
+    ? apiFace.writeEndpoints.filter(e => e && e.method && e.path) : []
+  const consumerHints = a.consumerHints && typeof a.consumerHints === 'object' ? a.consumerHints : {}
+  const criticalLevel = ['integration-critical', 'deployment-critical'].includes(a.riskLevel)
+
+  // ── 段缺失分层（对齐 :896-903 双层形态 + 判级 critical fail-closed 防删段绕过）。
+  //    apiFace 在场性 = 特性时序锚（X-08 无条件产出面，task-04 起 backfill 落盘）：缺席说明
+  //    facts 最后一次回填早于本特性（特性间隙存量/旧管线 facts）→ warning 引导 --init 刷新
+  //    即可（刷新后 apiFace 落盘、矩阵骨架补段，删段面转入上门硬口径）；在场（新管线跑过，
+  //    骨架必曾渲染矩阵段）而段缺失 = 删段 → 严格档/critical error。删 facts.json 的对抗面
+  //    另由 checkProbeConsistency error 级 MD 锚点兜底（resolveFactsExpected 同口径注记）。──
+  const newPipeline = apiFace != null
+  if (!matrix.present) {
+    if (newPipeline && a.strict) {
+      errors.push(
+        `接口验证覆盖矩阵段缺失（严格档，created_at ≥ ${IR_STRICT_SINCE}）——verify-result.md 缺「## 接口验证覆盖矩阵」段。` +
+        `修复：跑 ${INIT_HINT} 幂等补段（已有正文不覆盖），再逐行填判定与证据。`
+      )
+    } else if (newPipeline && criticalLevel) {
+      errors.push(
+        `接口验证覆盖矩阵段缺失且判级 ${a.riskLevel}——critical 变更接口面对账面不可缺失（防删段绕过对账，FR-04）。` +
+        `修复：跑 ${INIT_HINT} 幂等补段后逐行填判定与证据。`
+      )
+    } else {
+      warnings.push(
+        `verify-result.md 缺「## 接口验证覆盖矩阵」段${newPipeline ? '（非严格档非判级 critical，存量不强制）' : '（facts.apiFace 缺席——特性前回填的存量底稿）'}——可跑 ${INIT_HINT} 幂等补段。`
+      )
+    }
+    return { ok: errors.length === 0, errors, warnings }
+  }
+
+  // ── 零接口面分层（D-005）：判级 critical → error（接口面不可静默为零——「变更有接口面」以
+  //    判级 critical 为机械代理）；非判级 critical → 零行为零打扰（brownfield 兼容）──
+  const declaredFromRow = matrix.declaredRow ? matrix.declaredRow.declared : null
+  const zeroFace = endpoints.length === 0 && declared === null && declaredFromRow === null
+  if (zeroFace && criticalLevel) {
+    errors.push(
+      `判级 ${a.riskLevel} 且接口面为零（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——critical 变更接口面不可静默为零（D-005/FR-04）。` +
+      `修复：design.md 补接口段表格（每端点一行 METHOD /path）或声明行「本变更接口面：N 端点」，重跑 ${INIT_HINT} 刷新矩阵段与 facts 后逐行填判定。`
+    )
+  }
+  // 判级 critical × 声明 0 端点 → warning 复核（D-005 故障面条款：显式零声明仍可能是漏写）
+  if (criticalLevel && (declared === 0 || declaredFromRow === 0)) {
+    warnings.push(
+      `判级 ${a.riskLevel} 且声明接口面为 0 端点——critical 变更声明零接口面请复核（D-005）：若实际触碰接口，补 design 接口段表格后重跑 ${INIT_HINT} 刷新对账面。`
+    )
+  }
+
+  const clip = (s) => { const t = String(s || ''); return t.length > 40 ? t.slice(0, 40) + '…' : t }
+  const rowLabel = (r) => `${r.method && r.path ? `${r.method} ${r.path}` : clip(r.endpoint || r.verdict)}`
+  const judgedRows = [...rows]
+  if (matrix.declaredRow) judgedRows.push({ ...matrix.declaredRow, endpoint: `本变更接口面：${matrix.declaredRow.declared} 端点（agent 声明）`, method: '', path: '', caseId: '', result: '' })
+
+  // ── 行级判定槽/锚点/non-testable 理由校验（missingEvidence 口径同 probe7 :896-903）──
+  const unfilledRows = judgedRows.filter(r => r.unfilled)
+  if (unfilledRows.length > 0) {
+    errors.push(
+      `接口验证覆盖矩阵有 ${unfilledRows.length} 行判定未填（四选一 covered/partial/uncovered/non-testable）：${unfilledRows.map(rowLabel).join('；')}。` +
+      `修复：编辑 verify-result.md 接口验证覆盖矩阵段，把 <待填：四选一> 替换为判定值。`
+    )
+  }
+  const parseSet = new Set(endpoints.map(e => `${e.method} ${e.path}`))
+  const anchorViolations = []
+  for (const r of judgedRows) {
+    if (r.verdict !== 'covered' && r.verdict !== 'partial') continue
+    const e = String(r.evidence || '')
+    // design接口表# 锚点解析级核对（防空指）：提取的 METHOD /path 须全部命中解析产出集
+    API_ANCHOR_DESIGN_API_RE.lastIndex = 0
+    for (const m of e.matchAll(API_ANCHOR_DESIGN_API_RE)) {
+      const key = `${m[1]} ${m[2]}`
+      if (!parseSet.has(key)) anchorViolations.push(`${rowLabel(r)}：design接口表#${key} 未命中 design 接口段解析面（空指）`)
+    }
+    if (!apiEvidenceHasAnchorForm(e)) anchorViolations.push(`${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
+  }
+  if (anchorViolations.length > 0) {
+    errors.push(
+      `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
+      `（covered/partial 证据须含锚点五形态之一：design接口表#METHOD /path（须命中 design 接口段解析面）/ 权限矩阵[角色×动作] / 契约表@行标识 / DDL@列名 / 载荷@构造点路径）：${anchorViolations.join('；')}。` +
+      `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
+    )
+  }
+  // non-testable 理由非空即合法（:900 先例「non-testable 证据须写一句理由」，理由空按违规计）
+  const ntMissing = judgedRows.filter(r => r.verdict === 'non-testable' && (String(r.evidence || '').trim() === '' || String(r.evidence).trim() === MATRIX_EVIDENCE_TODO || String(r.evidence).trim().startsWith('<待填')))
+  if (ntMissing.length > 0) {
+    errors.push(
+      `接口验证覆盖矩阵有 ${ntMissing.length} 行 non-testable 缺理由（non-testable 证据须写一句理由）：${ntMissing.map(rowLabel).join('；')}。` +
+      `修复：在证据列为 non-testable 端点写一句不适用理由。`
+    )
+  }
+
+  // ── covered 记账（D-005/D-008）：分子=covered 端点行；有效分母=N−non-testable 行数；
+  //    N=解析端点数，解析零行按声明数（declaredRow 优先——矩阵实态，facts.declared 兜底）。
+  //    缺覆盖清单解析集驱动：解析面端点 − covered 行命中 − non-testable 行命中（partial/
+  //    uncovered/unfilled 端点行不在 covered 命中集即自然进清单；探索行不进分母分子——其
+  //    uncovered 判定使之天然不计分子，且不计入 non-testable 扣减）。──
+  if (!zeroFace) {
+    const N = endpoints.length > 0 ? endpoints.length : (declaredFromRow != null ? declaredFromRow : (declared != null ? declared : 0))
+    const nonTestableCount = rows.filter(r => r.verdict === 'non-testable').length
+    const validDenominator = Math.max(0, N - nonTestableCount)
+    const coveredCount = rows.filter(r => r.verdict === 'covered').length
+    const coveredSet = new Set(rows.filter(r => r.verdict === 'covered' && r.method && r.path).map(r => `${r.method} ${r.path}`))
+    const nonTestSet = new Set(rows.filter(r => r.verdict === 'non-testable' && r.method && r.path).map(r => `${r.method} ${r.path}`))
+    const missingEndpoints = endpoints.filter(e => {
+      const k = `${e.method} ${e.path}`
+      return !coveredSet.has(k) && !nonTestSet.has(k)
+    })
+    if (coveredCount < validDenominator || missingEndpoints.length > 0) {
+      const list = missingEndpoints.length > 0
+        ? missingEndpoints.map(e => `${e.method} ${e.path}`).join('；')
+        : `声明 ${N} 端点而 covered 端点行仅 ${coveredCount}（解析零行降级，无法逐条列端点——按声明行拆出每端点行填判定）`
+      errors.push(
+        `接口验证覆盖矩阵覆盖不足：有效分母 ${validDenominator}（N=${N} − non-testable ${nonTestableCount}），covered 分子 ${coveredCount}——缺覆盖端点：${list}。` +
+        `修复：补验证用例/冒烟步骤后把端点行改 covered 并填五形态锚点；不适用端点改 non-testable 并写一句理由；确未覆盖的走「## 移交项（结构化）」承载并保持 partial/uncovered（FR-04）。`
+      )
+    }
+    // 声明与解析并存以解析为准并注记（骨架 :1573 漂移信号同款口径，数据面 facts.apiFace）
+    if (declared !== null && endpoints.length > 0 && declared !== endpoints.length) {
+      warnings.push(
+        `声明与解析并存（声明 ${declared} 端点 / 解析 ${endpoints.length} 端点）——以解析为准，差异需复核（design 接口段与声明行不同步的漂移信号，D-005）。`
+      )
+    }
+  }
+
+  // ── 移交联动（probe7 条件④ :1068-1073 同款形态）：partial/uncovered 端点行>0 且
+  //    facts.handover 零有效行 → error（已覆盖不足且有未验证端点无去向不可静默）；有行 →
+  //    放行，blocking 是否封顶归 validatePassEligibility 条件②（④管有去向/②管去向级）。
+  //    探索行属 uncovered 子集计入（探索性验证不算覆盖，同样须有去向）；facts 缺失 →
+  //    fail-closed 按零有效行处理（factsExpected 已在入口把关，此处只防 facts 消失面）。──
+  const partialRows = [
+    ...rows.filter(r => r.verdict === 'partial' || r.verdict === 'uncovered'),
+    ...(matrix.declaredRow && (matrix.declaredRow.verdict === 'partial' || matrix.declaredRow.verdict === 'uncovered')
+      ? [{ ...matrix.declaredRow, endpoint: `本变更接口面：${matrix.declaredRow.declared} 端点（agent 声明）`, method: '', path: '' }] : []),
+  ]
+  if (partialRows.length > 0) {
+    const factsMissing = !a.facts || typeof a.facts !== 'object'
+    const handoverItems = !factsMissing && a.facts.handover && Array.isArray(a.facts.handover.items)
+      ? a.facts.handover.items.filter(it => it && typeof it === 'object') : []
+    if (handoverItems.length === 0) {
+      errors.push(
+        `接口验证覆盖矩阵含 ${partialRows.length} 行 partial/uncovered 且「## 移交项（结构化）」零有效行（facts.handover）——接口未验证端点必须有移交去向：${partialRows.map(rowLabel).join('；')}。` +
+        `修复：在 verify-result.md 补「## 移交项（结构化）」有效行（任意 severity 均可，blocking 级另受 PASS 封顶约束），或修正矩阵判定（实际已覆盖的行改 covered），或降级结论为 PASS WITH NOTES 承载。` +
+        (factsMissing
+          ? `另：verify-facts.json 缺失/不可读而 factsExpected=true，fail-closed 按零有效行处理——重跑 verify-probes（${INIT_HINT} 幂等刷新底稿）。`
+          : '')
+      )
+    } else {
+      // 逐行关联 advisory（R-05 第一版，D-003 同款分工）：行标识未命中任何 handover 条目文本
+      // → console.warn 攒实证（文本命中弱关联，先 advisory 攒数据），不阻断不进 errors。
+      const itemTexts = handoverItems.map(it => `${it.item || ''}｜${it.condition || ''}`)
+      for (const r of partialRows) {
+        const keys = [r.method && r.path ? `${r.method} ${r.path}` : '', r.endpoint].map(k => String(k || '').trim()).filter(Boolean)
+        const hit = keys.some(k => itemTexts.some(t => t.includes(k)))
+        if (!hit) console.warn(`ℹ️ [advisory] 接口端点 ${rowLabel(r)} 的移交去向未在 handover 条目中命中——建议条目文本含该端点标识（advisory，攒实证；不阻断）`)
+      }
+    }
+  }
+
+  // ── advisory：消费面子行缺失（D-006 第一版）——consumerHints 有归类（design 清单启发式，
+  //    变更级归类）而矩阵零子行 → warning 列端点（不阻断、不进 errors）。──
+  const hintKinds = Object.keys(consumerHints).filter(k => Array.isArray(consumerHints[k]) && consumerHints[k].length > 0)
+  if (hintKinds.length > 0 && matrix.subRowCount === 0 && (endpoints.length > 0 || (declaredFromRow != null ? declaredFromRow : declared) > 0)) {
+    const list = endpoints.length > 0
+      ? endpoints.slice(0, 8).map(e => `${e.method} ${e.path}`).join('；') + (endpoints.length > 8 ? '…' : '')
+      : `声明 ${declaredFromRow != null ? declaredFromRow : declared} 端点（解析零行降级）`
+    warnings.push(
+      `[advisory] 消费端归类在场（${hintKinds.join('/')}，facts.consumerHints——design 清单启发式）但矩阵零消费端子行——建议为接口端点补子行细分承接面（两空格缩进「↳ <消费端>:」形态，D-006，不阻断）：${list}`
+    )
+  }
+
+  // ── advisory：写端点权限矩阵缺行（D-007/FR-06，文案照 design §5）——apiFace.writeEndpoints
+  //    中端点未在权限矩阵段（壳内提取：design 段头含 权限/角色）命中（路径原串或模板基径）
+  //    且无「无权限约束」豁免（design 行级/矩阵行级/权限段整体）→ warning。──
+  const permText = String(a.permSectionText || '')
+  const designLines = String(a.designText || '').replace(/\r\n/g, '\n').split('\n')
+  const exemptTexts = [
+    ...designLines,
+    ...rows.map(r => `${r.endpoint}|${r.caseId}|${r.result}|${r.evidence}`),
+  ]
+  if (!permText.includes('无权限约束')) {
+    for (const ep of writeEndpoints) {
+      const base = String(ep.path).split(/[{:]/)[0]
+      const hit = permText.includes(ep.path) || (base.length > 1 && permText.includes(base))
+      if (hit) continue
+      const rowExempt = exemptTexts.some(t => t.includes('无权限约束') && (t.includes(ep.path) || (base.length > 1 && t.includes(base))))
+      if (!rowExempt) {
+        warnings.push(
+          `[advisory] 写端点 ${ep.method} ${ep.path} 未在权限矩阵声明——补行或显式豁免（表缺行会让派生框架继承你的洞）（D-007/FR-06，不阻断）`
+        )
+      }
+    }
+  }
+
+  return { ok: errors.length === 0, errors, warnings }
+}
+
+/**
+ * design.md 权限矩阵段提取（task-05 壳层辅助，D-007 表间完备性数据面）：段头（#/##/###）
+ * 含 权限/角色 关键词的段体合并文本（含段头行——命中判据宽松侧，advisory 无害）。零段 → ''。
+ */
+function extractPermissionMatrixText(designMd) {
+  const text = String(designMd || '').replace(/\r\n/g, '\n')
+  if (!text) return ''
+  const out = []
+  let collecting = false
+  for (const line of text.split('\n')) {
+    const h = line.match(/^#{1,3}\s+(.*)$/)
+    if (h) {
+      collecting = /权限|角色/.test(h[1])
+      if (collecting) out.push(h[1])
+      continue
+    }
+    if (collecting) out.push(line)
+  }
+  return out.join('\n')
+}
+
+/**
+ * 接口验证覆盖矩阵 validator 注册壳（与 validateAcceptanceMatrix 同三参签名同构，D-010：
+ * 注册进 contracts.verify.validators 即覆盖 gates / machine-interface 等全部 runValidators
+ * 调用方，gates.js 零改动）。壳内取数组装（IO/MD 槽解析全在壳层，判定是
+ * judgeApiCoverageMatrix 纯函数——X-09 双层形态）：
+ *   - tasks/ 不存在（quick 会话/旧变更）或 verify-result.md 未落盘（中间步骤）→ no-op
+ *   - factsExpected=false（存量未跑管线，resolveFactsExpected 同源口径）→ no-op 零行为
+ *   - verify-facts.json（apiFace/consumerHints/handover，缺失容 null——fail-closed 归纯函数）
+ *   - 矩阵段 MD 槽解析（X-05 防篡改锚点：锚定当前文档实态）
+ *   - detectChangeRisk 判级（与 validatePassEligibility 壳同款 design/plan 双文件输入）
+ *   - design.md 权限矩阵段提取（fs 只读，壳非纯函数）
+ */
+export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const errors = []
+  const warnings = []
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
+  // 无 TaskCard（tasks/ 不存在）→ 不校验（brownfield 零行为，validateAcceptanceMatrix 同门）
+  if (!existsSync(join(changeDir, 'tasks'))) return { ok: true, errors, warnings }
+  // verify-result.md 中间步骤未落盘 → 不校验（末步引擎存在性规则兜底）
+  const verifyResultPath = join(changeDir, 'verify-result.md')
+  if (!existsSync(verifyResultPath)) return { ok: true, errors, warnings }
+  // 存量未跑管线（无 facts 且非严格档）→ 矩阵段/apiFace 俱不可得，零行为零打扰
+  if (!resolveFactsExpected(changeDir)) return { ok: true, errors, warnings }
+
+  const facts = readFactsForEligibility(changeDir)
+  const designText = readIfExists(join(changeDir, 'design.md'))
+  const riskProfile = detectChangeRisk({
+    designContent: designText,
+    planContent: readIfExists(join(changeDir, 'plan.md')),
+  })
+  return judgeApiCoverageMatrix({
+    matrix: extractApiCoverageMatrixSlots(readFileSync(verifyResultPath, 'utf8')),
+    apiFace: facts && facts.apiFace && typeof facts.apiFace === 'object' ? facts.apiFace : null,
+    consumerHints: facts && facts.consumerHints && typeof facts.consumerHints === 'object' ? facts.consumerHints : null,
+    facts,
+    factsExpected: true,
+    strict: isIrStrictVerifyChange(changeDir),
+    riskLevel: riskProfile ? riskProfile.level : null,
+    changeName,
+    permSectionText: extractPermissionMatrixText(designText),
+    designText,
+  })
+}
+
 // ============ PASS 封顶事实面 validator（2026-09-17-pass-cap-semantics task-02 / D-001@v2 / D-010 / D-011） ============
 //
 // 「要不要集成证据」（validateVerifyOutputs 的 requiresEvidence）与「能不能写 PASS」（本
@@ -954,6 +1350,8 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
 //   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover）
 //   附加：runtimeEndpointExcluded=true 且判级 integration/deployment-critical 且 handover 零行
 //   → 计入①事实面（D-004/FR-03，仅判级时计入）。
+//   ⑤ 接口冒烟未跑（facts.smokeRan≠ran，仅判级 integration/deployment-critical 时计入，
+//   FR-02/D-002@v1——2026-09-17-api-coverage-smoke task-03；不设 handover 豁免子句）。
 //
 // 分层纪律（D-011）：事实生产走 facts 管线（verify-probes backfillFactsFromMdAndTests 首次
 // backfill 主路径无条件产出，X-08 时序——gates 收尾前置 backfill 先于 runValidators）；本壳只做
@@ -1005,7 +1403,7 @@ function countFactsHandoverItems(changeDir) {
  *   changeName?: string,
  *   dbScriptCandidates?: string[],
  * }} [args] dbScriptCandidates = 壳内取数的 verify 时点文件集（design 清单 ∪ worktree 变更）∩ db 目录任意层级 .sql
- * @returns {{ ok: boolean, errors: string[], triggered: Array<{ fact: 'integration-not-run'|'blocking-handover-present'|'db-script-undeclared'|'matrix-partial-no-handover', detail: string }> }}
+ * @returns {{ ok: boolean, errors: string[], triggered: Array<{ fact: 'integration-not-run'|'blocking-handover-present'|'db-script-undeclared'|'matrix-partial-no-handover'|'smoke-not-run', detail: string }> }}
  */
 export function evaluatePassEligibility(args) {
   const errors = []
@@ -1083,6 +1481,29 @@ export function evaluatePassEligibility(args) {
     errors.push(
       `[fact integration-not-run] 判级 ${a.changeRiskProfile.level} 且 Runtime Evidence 服务端点行自声明「不涉及」（facts.runtimeEndpointExcluded=true）且无移交项承载——端点不得以「不涉及」免检（D-004）。` +
       `出路：提供真实端点回执（跨层实测）后重跑 verify-probes，或${NOTES_FIX}承载。`
+    )
+  }
+
+  // ── ⑤ smoke 冒烟未跑（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1，判级
+  // 限定——criticalLevel 在场才计入，runtimeEndpointExcluded 附加条件同款形态）：判级
+  // integration/deployment-critical 且 facts.smokeRan !== 'ran'（producer 自 quality-scan
+  // 记录 smokeResult 段推导）→ triggered 加枚举 smoke-not-run。不设 handover 豁免子句——
+  // advisory handover 在场不构成 smoke 缺失的 PASS 豁免（smoke 缺失的合法出路只有配
+  // commands.smoke 复跑质量扫描步 / 降级 PASS WITH NOTES 移交承载两条）；blocking handover
+  // 在场由条件②独立拦下（出口=NOTES），两条件各自触发不互斥。factsMissing 沿双源
+  // fail-closed 同族口径按触发处理（smokeRan 不可证伪）；facts 在场但字段不在场（升级
+  // 过渡期存量 facts，producer 重新 backfill 前）同 !== 'ran' 触发——fail-closed 侧，防
+  // 「判级 critical 未跑冒烟静默 PASS」。非判级（unit-sufficient 等）任意 smokeRan 零行为。
+  if (criticalLevel && (factsMissing || facts.smokeRan !== 'ran')) {
+    const smokeDetail = factsMissing
+      ? 'facts 缺失（fail-closed，smokeRan 不可证伪按未跑处理）'
+      : `facts.smokeRan=${facts.smokeRan == null ? '不在场（按未跑处理）' : facts.smokeRan}`
+    triggered.push({ fact: 'smoke-not-run', detail: `${smokeDetail}，判级 ${a.changeRiskProfile.level}` })
+    const configHint = facts.smokeRan === 'not-configured'
+      ? '（not-configured：先在 local.yaml 配置键 commands.smoke，如 smoke: "npm run smoke"）' : ''
+    errors.push(
+      `[fact smoke-not-run] 接口冒烟未跑（${smokeDetail}）且判级 ${a.changeRiskProfile.level}——critical 变更结论=PASS 须接口冒烟绿跑（facts.smokeRan=ran，FR-02/D-002）。` +
+      `出路：①配 commands.smoke 并复跑质量扫描步${configHint}；②降级承载——${NOTES_FIX}（不算失败）。`
     )
   }
 
@@ -1370,7 +1791,10 @@ const contracts = {
     // 注册进 validator 链即覆盖 gates / machine-interface 等全部 runValidators 调用方（gates.js 零改动）。
     // validatePassEligibility：PASS 封顶事实面（2026-09-17-pass-cap-semantics task-02 / D-001@v2 /
     // D-010）——注册即覆盖同上；回退 = 移除本注册行（纯加法，未触发四条件行为零变化）。
-    validators: [validateVerifyOutputs, validateAcceptanceMatrix, validatePassEligibility],
+    // validateApiCoverageMatrix：接口验证覆盖矩阵对账门（2026-09-17-api-coverage-smoke task-05 /
+    // FR-04~FR-06，与探针 7 并排互补的独立章节）——注册即覆盖同上；回退 = 移除本注册行（纯加法，
+    // factsExpected=false / 无矩阵段的存量变更零行为）。
+    validators: [validateVerifyOutputs, validateAcceptanceMatrix, validatePassEligibility, validateApiCoverageMatrix],
   },
   archive: {
     stage: 'archive',

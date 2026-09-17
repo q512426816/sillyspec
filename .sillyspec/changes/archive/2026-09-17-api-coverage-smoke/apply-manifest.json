@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-17-api-coverage-smoke",
+  "appliedAt": "2026-09-17T16:30:01.348Z",
+  "baseHash": "51225ae0f767c5511ffa233dfca8d03f762b0532",
+  "files": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "sha256": "de913376a853580fbe97baee558aadbdab16de47788ff2724783d1e855927d75"
+    },
+    {
+      "path": "docs/prompt/verify.md",
+      "sha256": "589cbb8760705f0ac21ad49b19202f20cf558d0dc611f741be021703100935f0"
+    },
+    {
+      "path": "src/change-risk-profile.js",
+      "sha256": "8879d5fd0732c6d5c3360b1b4e677569562d9c49fe4ff342da66bc2aad6b807b"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "810c8b1f95471b7f0343c4d4d8c9cd752bcf6f52d78151afd237c6040b162ae0"
+    },
+    {
+      "path": "src/run/verify-quality-scan.js",
+      "sha256": "7c46b2b44312b64fc61218273821d3fd6777cdfc1d4d6ded234a9eb6dcb37e05"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "sha256": "c3a7217bf41e3a5c3989b8c3b3fe08ba4186c23a29528b49bf23d84d4810b2fe"
+    },
+    {
+      "path": "src/stage-review-checklist.js",
+      "sha256": "9d14b45926fb913978d8cda62d2c6a9cf7b934c0d4928aee5621d995fcfb3a5f"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "sha256": "3de738c19e03567e4c4489e6736564d692065b3bee1964ad06b4bc23fbcc6437"
+    },
+    {
+      "path": "src/verify-facts-schema.js",
+      "sha256": "2970e14596ff98563a97b93e0e3d0efe1b79994ae42622232dd9b48f82d26ca9"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "7e2d2539e03c3b8fac484086ed75c080dadf23d81f37d0818ee9d6d19065182c"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "c3ae12dd2f0d3825133dd43d51fb85e4f7dd6212a702f4c8573df1f9c8e1dee8"
+    },
+    {
+      "path": "test/acceptance-matrix-gate.test.mjs",
+      "sha256": "3f3f568c0d9ada25dff015534a0aca9bae77faeba7ebbefda69d9be45de6325c"
+    },
+    {
+      "path": "test/check-syntax.mjs",
+      "sha256": "cbf19badffcfe8e964366f2594f98bafb766ee76db0e6a7bd0d78ae21e994fc9"
+    },
+    {
+      "path": "test/pass-eligibility.test.mjs",
+      "sha256": "cc1ee4bdfbed4fae99ca7bde32c80018f4aa4834beed19e925b00ece776e58af"
+    },
+    {
+      "path": "test/stage-review-checklist.test.mjs",
+      "sha256": "704ab225daeeb8ed6c6cf192ee9fa45726d3863243aded351b132a2f1df6e8d9"
+    },
+    {
+      "path": "test/verify-conclusion-slot.test.mjs",
+      "sha256": "6059d669591ffac068ed13f83cd3d3434537935e0d34c54d5109db15bc9770c7"
+    },
+    {
+      "path": "test/verify-probes-facts.test.mjs",
+      "sha256": "8bcc54c6f72cee20ca55f9b31df5607446b6fcfb496238d0b0c2dac717b47bad"
+    },
+    {
+      "path": "test/api-coverage-matrix.test.mjs",
+      "sha256": "517dbc7942079183d199b2b1a10676b7a1fa3a5aabea3d1a08013ba41b9b83af"
+    },
+    {
+      "path": "test/smoke-gate.test.mjs",
+      "sha256": "5eb790f232f91364a5e1f61fcdaf961d3e24237aa2347c6928b0ad2a46952367"
+    }
+  ]
+}

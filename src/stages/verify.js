@@ -1,3 +1,5 @@
+import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
+
 export const definition = {
   name: 'verify',
   title: '验证确认',
@@ -194,7 +196,7 @@ export const definition = {
    - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 \`risk_level: <真实等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
    - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。
    你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
-   - **集成证据是自报告、CLI 不独立运行时核验**：「Runtime Evidence」由你如实填写，CLI 只校验其**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过。务必实跑后据实填写，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
+   - **集成回执须真实执行——commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记，亲跑段谎报无效）**，其余形态仍须 agent 实跑后据实填写：CLI 对其余形态只校验**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
 
 3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
 4. **预填探针段不可篡改或删除**：verify \`--done\` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文
@@ -202,12 +204,14 @@ export const definition = {
 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
    - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」
 7. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
+8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
+${REVIEW_CHECKLISTS.verify.map((item) => '   - ' + item).join('\n')}
 
 ### verify-result.md 章节结构（骨架已含，占位替换即可）
 
 结论（PASS / PASS WITH NOTES / FAIL）→ 证据账（cannot_verify 任务，槽段）→ 集成验证回执（槽段）→ 任务完成度 → 设计一致性 → 探针结果（已预填）→ 测试结果 → 决策追踪矩阵（\`| 决策 ID | FR | Task | Evidence | 状态 |\`，存在 decisions.md 才留）→ 技术债务 → 变更风险等级 → Runtime Evidence → 代码审查。
 
-**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。CLI 不代跑集成进程——回执必须来自你真实执行过的命令。
+**「## 集成验证回执」槽行结构**（integration/deployment-critical 变更必填；其余写「无」）双形态二选一（多行 YAML 形态推荐，字段序无关）：\n- claim: <一句话>\n  command: <命令>\n  exit: <0 或非 0>\n  log: <日志路径>\n亦认单行管道形态：\`- claim: <一句话> | command: <命令> | exit: <0 或非 0> | log: <日志路径>\`——CLI 一致性校验四条件：log 存在 × mtime 在 verify 窗口内 × 日志尾无失败签名（error/exception/traceback/fatal 行首，剔除「0 errors」类良性行）× exit 0；全绿才算在场证据，字面措辞不再参与判定（v2 起 literals 仅存量回退）。commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记的机器段即其产物）；其余形态仍须 agent 实跑后据实填写（CLI 不代跑其余集成进程——回执必须来自你真实执行过的命令）。
 
 **Runtime Evidence 行结构**（integration/deployment-critical 必填；按实际触碰的运行时组件写，未涉及的行写「不涉及」勿堆关键词）：长驻进程启动命令 / 触碰的服务端点 / 触发核心路径的请求（附关键响应）/ 进程日志关键片段（证明走了新路径）/ 生命周期终态断言（初始态→运行态→终态）/ 失败模式排除（逐条说明为何未触发）。
 

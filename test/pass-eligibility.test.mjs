@@ -21,6 +21,9 @@
  *      blocking；三列存量行零迁移。
  *   G. Runtime Evidence 收口（FR-03 GWT1/GWT2，D-004）：判级 critical + 服务端点行
  *      「不涉及」+ 无 handover → 计入事实面封顶；有 handover / 非判级 → 不计入。
+ *   S. 第五条件 smoke-not-run（2026-09-17-api-coverage-smoke task-03 / FR-02 / D-002@v1）：
+ *      枚举触发 + 两出路修复指引；判级限定（deployment 计入/contract-required 不触发）；
+ *      facts 缺失 × critical fail-closed（smokeRan 不可证伪）。
  *   H. fix.sql 双门（FR-05 GWT2 / D-012）：apply 文件集 ∩ db/*.sql ⊄ 声明集 → 阻断；
  *      verify 之后新增 sql（verify-result 无对应声明）→ archive --confirm 前置兜底阻断；
  *      声明齐备（声明行 / 回执 command 双形态）→ 双门放行；db-script 行与声明门互斥。
@@ -336,7 +339,10 @@ test('G. runtimeEndpointExcluded：判级 critical + 无 handover → 计入①�
 
   const r2 = evaluatePassEligibility({
     conclusion: 'PASS', factsExpected: true,
-    facts: { ...excludedFacts(), handover: { count: 1, items: [{ type: 'other', item: '端点人工核验', condition: '部署后核', severity: 'advisory' }] } },
+    // smokeRan:'ran' 前置补齐（2026-09-17-api-coverage-smoke task-03 additive 调整）：本断言
+    // 聚焦端点免检×handover 承载语义；第五条件（smoke-not-run）不设 handover 豁免子句，
+    // 缺省 smokeRan 会另触发与本题无关的封顶——断言本意与强度不变（ok=true 仍锁端点面）。
+    facts: { ...excludedFacts(), smokeRan: 'ran', handover: { count: 1, items: [{ type: 'other', item: '端点人工核验', condition: '部署后核', severity: 'advisory' }] } },
     changeRiskProfile: { level: 'integration-critical' },
   })
   assert.ok(r2.ok === true, '有对应 handover（任意级）承载 → 不计入（端点免检须移交兜底）')
@@ -380,6 +386,37 @@ test('G. producer：parseRuntimeEndpointExcluded 表格行「不涉及」识别�
     const onDisk2 = JSON.parse(readFileSync(factsPath, 'utf8'))
     assert.equal(onDisk2.runtimeEndpointExcluded, false, '仅非端点关键词表格行 / prose 行「不涉及」→ false（X-18 只认端点类表格行）')
   } finally { cap.restore() }
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// S. 第五条件 smoke-not-run（2026-09-17-api-coverage-smoke task-03/task-07 / FR-02 / D-002@v1）
+// ═══════════════════════════════════════════════════════════════════
+test('S. 第五条件：smoke-not-run 枚举触发 + 两出路修复指引；判级限定（deployment 计入/非判级不触发）；facts 缺失 fail-closed', () => {
+  const CLEAN = () => ({
+    integrationRan: 'ran', handover: { count: 0, items: [] },
+    dbScriptDeclarations: [], matrixPartialRows: 0, runtimeEndpointExcluded: false,
+  })
+  const base = (facts, level) => ({ conclusion: 'PASS', factsExpected: true, facts, changeRiskProfile: { level } })
+
+  // 枚举触发 + 两出路修复指引文案（①配 commands.smoke 复跑 ②降级 NOTES 移交承载）
+  const r1 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'integration-critical'))
+  const err1 = r1.errors.find((e) => e.includes('[fact smoke-not-run]')) || ''
+  assert.ok(r1.triggered.some((t) => t.fact === 'smoke-not-run')
+    && err1.includes('①配 commands.smoke 并复跑质量扫描步') && err1.includes('②降级承载'),
+    `smoke-not-run 触发且 error 含两出路（①配置复跑 ②降级 PASS WITH NOTES 承载——不算失败）（实际 triggered=${JSON.stringify(r1.triggered.map((t) => t.fact))} err=${err1.slice(0, 100)}）`)
+
+  // 判级限定形态：deployment-critical 同计入；contract-required 非判级零行为
+  const r2 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'deployment-critical'))
+  assert.ok(r2.triggered.some((t) => t.fact === 'smoke-not-run'),
+    'deployment-critical 计入（判级限定两档：integration/deployment-critical）')
+  const r3 = evaluatePassEligibility(base({ ...CLEAN(), smokeRan: 'not-ran' }, 'contract-required'))
+  assert.ok(r3.ok === true && !r3.triggered.some((t) => t.fact === 'smoke-not-run'),
+    'contract-required 非判级 → smoke-not-run 不触发（判级限定形态，brownfield 零打扰）')
+
+  // facts 缺失 × critical → smoke-not-run 同按触发（smokeRan 不可证伪，双源 fail-closed 同族口径）
+  const r4 = evaluatePassEligibility({ conclusion: 'PASS', factsExpected: true, facts: null, changeRiskProfile: { level: 'integration-critical' } })
+  assert.ok(r4.triggered.some((t) => t.fact === 'smoke-not-run' && t.detail.includes('fail-closed')),
+    `facts 缺失 × critical → smoke-not-run 按 fail-closed 触发（smokeRan 不可证伪按未跑处理）（实际 ${JSON.stringify(r4.triggered.filter((t) => t.fact === 'smoke-not-run'))}）`)
 })
 
 // ═══════════════════════════════════════════════════════════════════

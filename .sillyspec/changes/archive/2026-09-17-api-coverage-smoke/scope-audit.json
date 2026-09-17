@@ -1,0 +1,180 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "51225ae0f767c5511ffa233dfca8d03f762b0532",
+  "totals": {
+    "files": 20,
+    "additions": 2159,
+    "deletions": 51
+  },
+  "rows": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/verify.md",
+      "additions": 7,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 20,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/change-risk-profile.js",
+      "additions": 27,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/verify-quality-scan.js",
+      "additions": 151,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "additions": 426,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stage-review-checklist.js",
+      "additions": 13,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "additions": 6,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-facts-schema.js",
+      "additions": 21,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "additions": 86,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 447,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/acceptance-matrix-gate.test.mjs",
+      "additions": 4,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/check-syntax.mjs",
+      "additions": 17,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/pass-eligibility.test.mjs",
+      "additions": 38,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/stage-review-checklist.test.mjs",
+      "additions": 38,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/verify-conclusion-slot.test.mjs",
+      "additions": 35,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/verify-probes-facts.test.mjs",
+      "additions": 4,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/api-coverage-matrix.test.mjs",
+      "additions": 334,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/smoke-gate.test.mjs",
+      "additions": 481,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "94e982ecfbec5489de51586ab643d599aab3d7e943491a53b3b3983e96646450",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-17T16:29:23.909Z"
+}

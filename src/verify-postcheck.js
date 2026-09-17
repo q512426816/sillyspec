@@ -37,8 +37,10 @@ import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.j
 import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
 // 探针重跑（P3b task-02 一致性抽查）：依赖方向已核实无环——verify-probes 只依赖
 // fs/path/git-helper/change-list/plan-postcheck/contract-matrix/foreign-declared/run-shared，
-// 不反向依赖本模块，此处直连不引入循环
-import { runVerifyProbes } from './verify-probes.js'
+// 不反向依赖本模块，此处直连不引入循环。smoke 机器段一致性（2026-09-17-api-coverage-smoke
+// task-02）复用同向 import：记录读取/态推导/标记扫描解析单点在 verify-probes
+// （readSmokeResultRecord/deriveSmokeSectionState/scanSmokeReceiptSection，与 ensure 注入同源）。
+import { runVerifyProbes, readSmokeResultRecord, deriveSmokeSectionState, scanSmokeReceiptSection } from './verify-probes.js'
 import { parseEvidenceSlots, classifyVerifiedFile } from './verify-facts-schema.js'
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
@@ -3060,6 +3062,69 @@ export function isStrictChange({ pm, cwd, changeName } = {}) {
   return createdAt >= IR_STRICT_SINCE
 }
 
+/**
+ * smoke 回执槽机器段一致性对比（2026-09-17-api-coverage-smoke task-02 / FR-03 / Grill #6 /
+ * R-06）：机器段唯一事实源 = .runtime/verify-quality-scan-<change>.json 的 smokeResult 段
+ * （verify-probes ensure 注入的同源记录），md 侧 agent 只可追加段、不可改写/删除机器段。
+ * 时序保障：backfillFactsFromMdAndTests 的 ensure 注入（gates verify 收尾前置 + 二次回填）
+ * 先于本对比（checkProbeConsistency 在 gates 后段），此刻仍不符 = 机器段被改写/删除/冒充。
+ * 对比口径（全 ERROR——数值面防篡改，非环境敏感维度）：
+ * - 记录 passed：md 须有标记回执条目（无 = 被删除）；每条 command/exit/log 与记录逐字段比对
+ *   （trim 后严格相等——ensure 注入原样、解析侧 trim，正常链路恒一致），任一不符 = 被改写；
+ * - 记录 not-configured / not-ran：md 出现标记回执条目 = 冒充（未配置/未绿跑却有绿回执行）；
+ *   缺态注释行在场但态与记录不符 = 被改写；
+ * - 无记录：md 出现任何 CLI 标记行（回执条目或缺态注释）= 冒充——标记行唯一合法来源是
+ *   ensure，而 ensure 只在有记录时注入。
+ * export 说明（2026-09-17-api-coverage-smoke task-07）：供 test/smoke-gate.test.mjs
+ * 直接断言（task-02 偏离①挂账的接线正主——checkProbeConsistency 内部消费不变）。
+ * @param {string} reportText verify-result.md 全文
+ * @param {string} specBase .sillyspec 根
+ * @param {string} changeName 变更名
+ * @returns {{ state: string|null, absentState: string|null, machineCount: number, mismatches: Array<{probe:string,expected:*,actual:*,severity:'error',note:string}> }}
+ */
+export function auditSmokeReceiptConsistency(reportText, specBase, changeName) {
+  const smoke = readSmokeResultRecord(specBase, changeName)
+  const state = deriveSmokeSectionState(smoke)
+  const scan = scanSmokeReceiptSection(reportText)
+  const mismatches = []
+  const push = (expected, actual, note) =>
+    mismatches.push({ probe: 'smoke-receipt', expected, actual, severity: 'error', note })
+  const fixHint = '机器段唯一事实源是 .runtime/verify-quality-scan 记录 json 的 smokeResult（R-06），禁止手改——记录已过期则重跑 verify 质量扫描步（sillyspec run verify），CLI 会重新 ensure 机器段'
+  if (!state) {
+    if (scan.machineEntries.length > 0) {
+      push('无 smokeResult 记录（无 CLI 标记行）', `md 回执槽 ${scan.machineEntries.length} 条 source=cli-noai-smoke 标记条目`, `无 quality-scan smokeResult 记录而回执槽出现 CLI 机器段标记行——标记行唯一合法来源是 CLI ensure 注入（ensure 只在有记录时注入），疑似 agent 手写冒充。${fixHint}`)
+    } else if (scan.absentState) {
+      push('无 smokeResult 记录（无 CLI 标记行）', `缺态注释行 ${scan.absentState}`, `无 quality-scan smokeResult 记录而回执槽出现 CLI 缺态标注行——疑似 agent 手写冒充。${fixHint}`)
+    }
+    return { state, absentState: scan.absentState, machineCount: scan.machineEntries.length, mismatches }
+  }
+  if (state === 'passed') {
+    if (scan.machineEntries.length === 0) {
+      push('passed 机器段在场（command/exit/log 实录）', '回执槽无 source=cli-noai-smoke 标记条目', `quality-scan 记录 smokeResult.status='passed' 而回执槽机器段缺失/被删除（ensure 已在 backfill 时点先行注入，此刻仍缺 = 正文被改）。${fixHint}`)
+    }
+    for (const [i, e] of scan.machineEntries.entries()) {
+      const cmdOk = String((smoke && smoke.command) || '').trim() === String(e.command || '').trim()
+      const exitOk = (typeof (smoke && smoke.exitCode) === 'number' ? smoke.exitCode : null)
+        === (typeof e.exitCode === 'number' ? e.exitCode : null)
+      const logOk = String((smoke && smoke.logPath) || '').trim() === String(e.logPath || '').trim()
+      if (!cmdOk || !exitOk || !logOk) {
+        push(
+          `command=${smoke.command} / exit=${smoke.exitCode} / log=${smoke.logPath}`,
+          `第 ${i + 1} 条标记条目 command=${e.command} / exit=${e.exitCode} / log=${e.logPath}`,
+          `机器段数值与 quality-scan 记录 smokeResult 不符（command/exit/log 任一字段被改写即打回；多出的重复标记条目按同口径逐条比对）。${fixHint}`)
+      }
+    }
+  } else {
+    if (scan.machineEntries.length > 0) {
+      push(`缺态标注 ${state}（无绿跑机器段）`, `${scan.machineEntries.length} 条 source=cli-noai-smoke 标记回执条目`, `quality-scan 记录为 ${state}（未配置/未绿跑）而回执槽出现 CLI 机器段标记回执行——疑似 agent 手写冒充绿回执（ensure 已按记录态对齐，此刻仍在 = 正文被改）。${fixHint}`)
+    }
+    if (scan.absentState && scan.absentState !== state) {
+      push(`缺态标注 ${state}`, `缺态注释行 ${scan.absentState}`, `缺态注释行态与 quality-scan 记录不符——疑似被改写。${fixHint}`)
+    }
+  }
+  return { state, absentState: scan.absentState, machineCount: scan.machineEntries.length, mismatches }
+}
+
 export function checkProbeConsistency({ cwd, specBase = null, changeName = null, runtimeRoot = null, strictMode = false }) {
   if (!changeName) {
     return { status: 'skipped', severity: null, mismatches: [],
@@ -3190,6 +3255,15 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
       note: '守卫不一致实体组数与重跑不符（探针9 聚类/信号比对对 design 清单与 Java 文件形态环境敏感，WARNING 不阻断）——建议重跑 sillyspec verify-probes --change <变更名> --init 刷新预填段' })
   }
 
+  // —— smoke 回执槽机器段一致性（ERROR——2026-09-17-api-coverage-smoke task-02 / FR-03 /
+  //    Grill #6 / R-06）：现 parseProbePrefillAnchors 只对比探针子节计数、不覆盖回执槽，
+  //    本维度补回执槽机器段防篡改——md 标记条目（source=cli-noai-smoke）command/exit/log
+  //    对 quality-scan 记录 json smokeResult 逐字段比对，agent 改写/删除/冒充 → ERROR 打回
+  //    （时序：backfill ensure 已先行注入/态对齐）。解析与记录读取单点在 verify-probes
+  //    （auditSmokeReceiptConsistency），与 ensure 注入同源不二算。——
+  const smokeAudit = auditSmokeReceiptConsistency(reportText, sb, changeName)
+  for (const sm of smokeAudit.mismatches) mismatches.push(sm)
+
   // —— facts 基线对比（2026-09-08-ir-verify-facts FR-05 / task-05）：重跑指标 vs
   // verify-facts.json probes 快照（init 时点）。md 锚点对账查「正文没被改」，本维度查
   // 「md 被手改对齐新代码后 facts 底稿过期」（P3d 数据源保鲜）。分级沿用现实现口径：
@@ -3276,13 +3350,23 @@ export function checkProbeConsistency({ cwd, specBase = null, changeName = null,
     } catch { /* 固化失败不阻断对账 */ }
   }
 
+  // smoke 机器段诊断（additive，factsConsistency 同款先例：状态/条目计数随结果透传，供
+  // gates 侧 envelope 落盘与排查；不参与判定——判定由上方 mismatches 收集完成）
+  const smokeConsistency = {
+    state: smokeAudit.state, absentState: smokeAudit.absentState,
+    machineCount: smokeAudit.machineCount,
+    verdict: smokeAudit.mismatches.length === 0 ? 'match' : 'mismatch',
+  }
+
   if (mismatches.length === 0) {
     const okResult = finish('ok', null, [], null)
     okResult.factsConsistency = factsConsistency
+    okResult.smokeConsistency = smokeConsistency
     return okResult
   }
   const severity = mismatches.some(m => m.severity === 'error') ? 'error' : 'warning'
   const mismatchResult = finish('mismatch', severity, mismatches, null)
   mismatchResult.factsConsistency = factsConsistency
+  mismatchResult.smokeConsistency = smokeConsistency
   return mismatchResult
 }

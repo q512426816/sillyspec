@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-17-api-coverage-smoke",
+  "generatedAt": "2026-09-17T16:31:08.610Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-17-api-coverage-smoke",
+      "metrics": {
+        "matches": 33,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-17-api-coverage-smoke",
+      "metrics": {
+        "tasks": 7,
+        "hasTest": 7
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-17-api-coverage-smoke",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-17-api-coverage-smoke",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-17-api-coverage-smoke",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-17-api-coverage-smoke",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "other",
+        "item": "全量 npm test 回归（用户指令留 CI，定向 57 tests+lint 已全绿）",
+        "condition": "CI 管道跑 npm test 全量——已知 13 个 worktree 环境性失败文件在主仓运行即绿（批次 A 同款实证）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-17T16:35:34.206Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

@@ -54,36 +54,37 @@ expects_from:
   task-01:
     - contract: smoke-exec-record
       needs:
-        - 'smokeExit——执行三态断言数据源（exit0/非0/超时失败态）'
-        - 'smokeLog——回执 log 落盘路径断言'
-        - 'smokeRanSource——实测记录 additive smoke 段形态'
+        - smokeExit
+        - smokeLog
+        - smokeRanSource
   task-02:
     - contract: smoke-receipt-marker
       needs:
-        - 'parseEvidenceSlots.source——机器段 source 提取断言'
-        - 'classifier-cross-layer——脚本形态 smoke 命令直判 cross-layer 断言（B-1 回归）'
-        - 'receipt-slot-machine-segment——机器段形态与缺态标注断言'
-        - 'consistency-check——改写打回断言'
+        - parseEvidenceSlots.source
+        - classifier-cross-layer
+        - receipt-slot-machine-segment
+        - consistency-check
   task-03:
     - contract: smoke-ran-fact
       needs:
-        - 'facts.smokeRan——五边界态断言'
-        - 'smoke-not-run-trigger——第五条件 critical×三值+advisory handover 不豁免断言'
+        - facts.smokeRan
+        - smoke-not-run-trigger
   task-04:
     - contract: api-face-parser
       needs:
-        - 'parseDesignApiTable——解析五形态断言'
-        - '骨架矩阵段——预填/声明占位断言'
-        - 'advisory输出——消费面/表间 warning 断言'
+        - parseDesignApiTable
+        - 骨架矩阵段
+        - advisory输出
   task-05:
     - contract: api-coverage-validator
       needs:
-        - 'validateApiCoverageMatrix——covered 记账/锚点空指/移交联动/critical 两形态断言'
+        - validateApiCoverageMatrix
+        - errors-warnings
   task-06:
     - contract: verify-smoke-prompt
       needs:
-        - 'stages/verify.js 纪律段与改写文案——断言锚点'
-        - 'REVIEW_CHECKLISTS verify 键——清单断言增量'
+        - verify-prompt-smoke-section
+        - review-checklists-verify-key
 ---
 
 <!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。
