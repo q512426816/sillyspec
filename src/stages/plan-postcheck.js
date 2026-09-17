@@ -423,7 +423,8 @@ export function topoSortWaves(depMap) {
  *   - `## Wave N` 标题下的 task-XX checkbox 归入 Wave N；
  *   - 非 Wave 标题行（## 自检 等）退出当前 Wave 段，避免其 checkbox 混入。
  * 返回 null = plan.md 不存在或无显式 Wave 标题 → execute 会把所有 task 放进单个隐式 Wave
- * 全并行（execute.js:402-408），调用方据此判「同文件即冲突」。
+ * 串行执行（共享文件安全，2026-09-17-feedback-hardening D-003@v1），调用方据此降为 warning
+ * （显式划分 Wave 才有按组并行收益；同 Wave 内共享文件仍 error）。
  *
  * @param {string} planPath - plan.md 绝对路径
  * @returns {Map<string, number>|null} taskId → waveIndex；null = 无显式 Wave
@@ -588,15 +589,16 @@ export function validateBlueprintConsistency(changeDir, opts = {}) {
   // 子代理会互相覆盖该文件 → error。跨 Wave 同文件 → 串行执行安全 → warning。
   // 按 (repo, path) 二元组判冲突（约束③）：跨仓 task 与主仓 task 同名路径不误判（不同 repo → 不同键）。
   // Wave 口径 = plan.md 显式 `## Wave N`（parseTaskWavesFromPlan，与 execute 同源，非 topoSort 建议值）；
-  // plan.md 无显式 Wave → execute 全并行（隐式单 Wave，execute.js:402-408）→ 同 repo 同文件即冲突。
+  // plan.md 无显式 Wave → execute 按单个隐式 Wave 串行执行（2026-09-17-feedback-hardening
+  // D-003@v1，共享文件安全）→ warning（显式划分 Wave 可获并行收益；同 Wave 内共享仍 error）。
   const waveOfTask = parseTaskWavesFromPlan(pJoin(changeDir, 'plan.md'))
   for (const [, { repo, path: p, owners }] of pathOwners) {
     if (owners.length < 2) continue
     if (waveOfTask === null) {
-      errors.push(
+      warnings.push(
         `路径 ${p} 被 ${owners.length} 个 task 修改: ${owners.join(', ')} — plan.md 无显式 Wave 划分，` +
-        `execute 会把它们放进同一隐式 Wave 全并行（execute.js:402-408），子代理互相覆盖。` +
-        `解法：拆到不同 Wave（串行），或合并为单个 task。`
+        `execute 将按单个隐式 Wave 串行执行（共享文件安全）。` +
+        `显式划分 Wave 可获并行收益（同 Wave 内仍禁止共享文件）；或合并为单个 task`
       )
       continue
     }

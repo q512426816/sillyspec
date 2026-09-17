@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-17-feedback-hardening",
+  "generatedAt": "2026-09-17T02:00:40.433Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-17-feedback-hardening",
+      "metrics": {
+        "matches": 27,
+        "skippedFiles": 0,
+        "worktreeHits": 1,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-17-feedback-hardening",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-17-feedback-hardening",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-17-feedback-hardening",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-17-feedback-hardening",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-17-feedback-hardening",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "docs/prompt/_extracted.json 与 verify.md 手改 fence 的流水线对账（D-004@v1 裁决推迟——_extracted.json 正被并行会话 docs-bracket-reanchor 占用）",
+        "condition": "并行会话收尾后统一跑 `node docs/prompt/_extract.mjs && node docs/prompt/_sync.mjs && node docs/prompt/_verify.mjs`，确认 verify.md fence 与 _extracted.json 收敛"
+      },
+      {
+        "type": "other",
+        "item": "探针 5 报 3 个「前端未调用端点」（GET /api/path、GET /api、GET /api/api/xxx）——系端点提取器扫到文档示例字符串（本变更 docs 镜像/prompt 内的示例 URL），非真实后端路由，advisory 不阻断",
+        "condition": "无需复跑；如后续端点提取器支持 docs 排除面可顺带收口"
+      }
+    ]
+  },
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-17T02:12:40.540Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

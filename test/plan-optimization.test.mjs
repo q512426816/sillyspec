@@ -362,14 +362,14 @@ console.log('\n--- Test 5e: 跨 Wave 同文件 → 警告不阻断 ---')
 }
 
 // ─────────────────────────────────────────
-// Test 5f: 无 plan.md + 共享路径 → 阻断（execute 隐式单 Wave 全并行）
+// Test 5f: 无 plan.md + 共享路径 → 警告不阻断（execute 隐式单 Wave 串行执行，D-003@v1 error→warning）
 // ─────────────────────────────────────────
-console.log('\n--- Test 5f: 无 plan.md 共享路径 → 失败（全并行口径）---')
+console.log('\n--- Test 5f: 无 plan.md 共享路径 → 警告（隐式 Wave 串行口径）---')
 {
   const tmpDir = setupSharedPathChange(undefined)
   const result = validateBlueprintConsistency(tmpDir)
-  assert(!result.ok, `无 plan.md 共享路径应失败（全并行），errors: ${JSON.stringify(result.errors)}`)
-  assert(result.errors.some(e => e.includes('无显式 Wave') && e.includes('src/service.py')), `error 应提到无显式 Wave + service.py`)
+  assert(result.ok, `无 plan.md 共享路径应通过（隐式 Wave 串行，共享文件安全），errors: ${JSON.stringify(result.errors)}`)
+  assert(result.warnings.some(w => w.includes('隐式') && w.includes('src/service.py')), `warning 应提到隐式 Wave + service.py`)
   rmSync(tmpDir, { recursive: true, force: true })
 }
 

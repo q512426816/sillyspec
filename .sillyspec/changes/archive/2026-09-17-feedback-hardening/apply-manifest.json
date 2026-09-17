@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-17-feedback-hardening",
+  "appliedAt": "2026-09-17T02:14:50.121Z",
+  "baseHash": "d584c7711faf4f31c9afeda046f3b561eed8a5b5",
+  "files": [
+    {
+      "path": ".claude/skills/sillyspec-execute/SKILL.md",
+      "sha256": "69d0a0404a8e1cc8d3e2d3206ffc4e54712d85f1cfd5ff3d280d53ecb1208e64"
+    },
+    {
+      "path": ".claude/skills/sillyspec-plan/SKILL.md",
+      "sha256": "03aac12e9586c3263d51df477bb5bd4eb3a925329b9968cd13a65fd0a7d777f4"
+    },
+    {
+      "path": ".claude/skills/sillyspec-verify/SKILL.md",
+      "sha256": "c8ae572d609bbf59f8b2547d0353d13a2f1f5dfbdaf8ad13d91c9b576d1d8ff4"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "sha256": "4eec51a9db3e7656a824f004827f25f5f38e1173e2cd4fdef27e48facfa7b0f0"
+    },
+    {
+      "path": "docs/prompt/verify.md",
+      "sha256": "5dc61f64fd308d0ffa4bd437aff38a83bee8f9d3feafdcae2291cd385aee1cb5"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "sha256": "00f085623c8293a0f2d58538dcdba8b7daf32ef5bf4a2bbb197eeccaa7626258"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "56bd74442dfc9189f22b5e6f9a15c9d5e474c867a27ebd20a2a322e77a42c3f3"
+    },
+    {
+      "path": "src/probe7-anchor-check.js",
+      "sha256": "2b5362a91f58801fd234c4891b85b142fe8673107e32591d0e997d549a91f72e"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "sha256": "08b5cf41f82d90c66664cb18a81e96daeac872e54b569ee608cf66ed2f30f710"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "c887ccabdd1ce9307e870778d0386862ee55eb98ffabd7694cebaf56d3da3e0c"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "sha256": "b3834ef49ec993b38cabe55cb0a93466080f65f9183ff6564f9d59fbdc20db73"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "sha256": "07fb9fc5b67b1a55a8fc0902979fb97524ba1bc1361256ebef4197eb5d4e96a3"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "sha256": "fe85390a34083f22219cf5aa4f2d5ca82aa694ab78ac3be24246bb1eaeb8b2a0"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "d56e9374ce3002d932b4bb804fcc62088546ae345b42f5f7ff77dc788bfd24bb"
+    },
+    {
+      "path": "test/gate-snapshot-commands.test.mjs",
+      "sha256": "ed44803640a39040731788ea86a002bec63da736d2ca87a996090cd2f00a3b6b"
+    },
+    {
+      "path": "test/plan-execute-contract.test.mjs",
+      "sha256": "3e2fb4364019dd40a3b54c30d07437ff20bdc1464588abe4594d6b3757a53813"
+    },
+    {
+      "path": "test/plan-optimization.test.mjs",
+      "sha256": "7ae1193939a945901078805254e530622918b1e7c98bc097b104e2b6436d2bad"
+    },
+    {
+      "path": "test/plan-postcheck-cross-repo.test.mjs",
+      "sha256": "a921281364ae758567b6cfebafee6827e0fa6831f23fc11c827d32f6061a1b94"
+    },
+    {
+      "path": "test/probe7-anchor-testfile.test.mjs",
+      "sha256": "9eb80ae43131c53d12cd3749357219e140eae0f6ccc0a9ba25f2792597b458a8"
+    }
+  ]
+}

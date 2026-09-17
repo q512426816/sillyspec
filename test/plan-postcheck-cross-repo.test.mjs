@@ -126,8 +126,8 @@ console.log('\n--- 场景 4：单仓跨 Wave 同文件 → 警告不阻断（零
   rmSync(tmpDir, { recursive: true, force: true })
 }
 
-// ── 5: 单仓零回归 — 无 plan.md 共享路径 → 阻断（全并行口径，Test 5f 同款）──
-console.log('\n--- 场景 5：单仓无 plan.md 共享路径 → 阻断（全并行口径，零回归）---')
+// ── 5: 单仓零回归 — 无 plan.md 共享路径 → 警告不阻断（隐式 Wave 串行口径，Test 5f 同款）──
+console.log('\n--- 场景 5：单仓无 plan.md 共享路径 → 警告（隐式 Wave 串行口径，零回归）---')
 {
   const tmpDir = setupTasks(
     [
@@ -137,9 +137,9 @@ console.log('\n--- 场景 5：单仓无 plan.md 共享路径 → 阻断（全并
     undefined,
   )
   const r = validateBlueprintConsistency(tmpDir)
-  assert(!r.ok, `无 plan.md 共享路径应阻断（全并行），errors: ${JSON.stringify(r.errors)}`)
-  assert(r.errors.some(e => e.includes('无显式 Wave') && e.includes('src/service.py')),
-    `error 应提到无显式 Wave + service.py`)
+  assert(r.ok, `无 plan.md 共享路径应通过（隐式 Wave 串行，共享文件安全），errors: ${JSON.stringify(r.errors)}`)
+  assert(r.warnings.some(w => w.includes('无显式 Wave') && w.includes('src/service.py')),
+    `warning 应提到无显式 Wave + service.py`)
   rmSync(tmpDir, { recursive: true, force: true })
 }
 

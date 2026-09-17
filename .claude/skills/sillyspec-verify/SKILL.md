@@ -54,6 +54,10 @@ verify 是只读阶段（**禁止改代码/改 git 状态**，只检查 + 写报
 > 🔧 **机械探针 + 报告骨架一条命令**：`sillyspec verify-probes --change <变更名> --init`——探针 1（TODO 标记）/3（测试覆盖）/5（API 契约对账）/6（删除对账）CLI 跑完并预填进 verify-result.md 骨架（七章节、已存在不覆盖）；探针 2/4（关键词/决策追踪）与断言抽查、集成盲区标注是语义判断，替换骨架里的 `<!--TODO-->` 完成。结论必须写明 PASS/FAIL——留「待填」会被 gate 判不过。
 >
 > 🔧 **test/lint 实测对账**：`--done` 时 CLI 亲自执行 local.yaml 的 `commands.test`（实测失败阻断 verify 完成）与 `commands.lint`（advisory 对账，实测失败会明示）——自报告与实测不符时以实测为准，勿谎报跑过。
+>
+> 🔧 探针 7 矩阵 covered/partial 证据锚点三形态：file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名——行号可省（D-005@v2，与硬门/advisory/预填说明四处同口径）。
+>
+> 🔧 verify lint/test 门禁隔离快照缺 gitignored 生成物时，主仓 local.yaml 配 gate_snapshot.copy（junction/复制）与 gate_snapshot.commands（快照内跑生成命令，只放生成物命令——环境目录是活链接，勿改写 node_modules/venv）（D-002@v2）。
 
 ```markdown
 # 验证报告

@@ -158,6 +158,7 @@ export const LOCAL_YAML_SCHEMA = {
       note: '门禁快照（gate-snapshot）= HEAD worktree + 会话文件 overlay + 环境目录 junction——gitignored 生成物（api-types/generated 类）不进 HEAD 也不在会话集，快照内 lint/test 环境性假败（2026-09-16 驾驭小结④，friction5-hardening R4 / D-002@v1）。按本清单在快照构建期从主仓 junction 链接补齐（失败回退复制）；快照内 overlay 已覆盖的同名路径跳过（本变更最新态优先）。⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。',
       keys: [
         { path: 'gate_snapshot.copy', type: 'array', optional: true, status: 'live', readers: ['createGateSnapshot (src/run/gate-snapshot.js)'], desc: '门禁隔离快照的生成物/额外路径 copy 面（元素 string，相对仓根）：HEAD 快照缺 gitignored 生成物导致 lint/test 环境性假败；声明后快照构建期从主仓 junction 链接（失败回退复制）。⚠️ junction 是活链接，快照内再跑生成命令会写穿到主仓该目录。未配置/空清单 = 全段空转零行为变化。', example: 'gate_snapshot:\n  copy:\n    - src/generated' },
+        { path: 'gate_snapshot.commands', type: 'array', optional: true, status: 'live', readers: ['parseGateSnapshotCommands + runGateSnapshotCommands (src/run/gate-snapshot.js — createGateSnapshot 环境预检后 copy 面前)'], desc: '门禁隔离快照的命令面（元素 string）：快照构建期在环境目录链接后、copy 面前于快照根逐条执行（cwd=快照根、300s/条超时帽、非零退出/超时只 warn 继续——fail-open 不作废快照），产出「本仓应然态」生成物，收口主仓生成物缺失/过期（fresh clone 未跑 postinstall / build-id 类产物）时快照内全量 lint/test 必挂的坑（D-002@v2，2026-09-17-feedback-hardening FR-01）。⚠️ 环境目录（node_modules/venv）是活链接，命令写它们会穿透主仓——只放生成物命令（npm run gen:build-id 类），不放 install/build 全家桶。未配置 = 全段空转零行为。', example: 'npm run gen:build-id' },
       ],
     },
     {
@@ -390,9 +391,14 @@ worktree-hook:
 # ── 门禁隔离快照 copy 面（HEAD 快照缺 gitignored 生成物 → 快照内 lint/test 环境性假败；构建期从主仓 junction 补齐）──
 # 相对仓根路径列表；失败回退复制；快照内 overlay 已覆盖的同名路径跳过。
 # ⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。
+# commands 面（D-002@v2）：快照构建期在快照根逐条执行的生成物命令（postinstall/build-id 类，
+# 产出本仓应然态；300s/条超时帽，失败 warn 继续）。⚠️ 命令不得改写 node_modules/venv 等
+# 环境目录（活链接，写穿透主仓）——只放生成物命令。
 # gate_snapshot:
 #   copy:
 #     - src/generated
+#   commands:
+#     - npm run gen:build-id
 
 # ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
 auto_mode:

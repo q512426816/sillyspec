@@ -197,14 +197,14 @@ export function validatePlanForExecute(tasksContent, planContent) {
   }
 
   // 检查 0.8: Wave 标题格式不对（W1/波次1 等）→ 引用行不被收容，静默退化隐式单 Wave
-  // 全并行——串行意图失效且无提示（原「标题格式不对」诊断的新契约承接）。仅在确有疑似标题
+  // 串行执行——Wave 分组意图丢失且无提示（原「标题格式不对」诊断的新契约承接）。仅在确有疑似标题
   // 且无任何显式 Wave 被解析时报，正常 Wave 10/带括号标题不误伤。
   const hasExplicitWave = waves.some(w => !w.implicit)
   const waveLikeHeading = /^#+\s*(?:wave\s*\d+|w\d+|波次\s*\d+)/im
   if (!hasExplicitWave && waveLikeHeading.test(plan)) {
     errors.push(
       `Wave 标题格式不对：必须字面 "## Wave N"（Wave + 空格 + 数字），"## W1" / "## Wave1" / "## 波次1" 都不被识别。` +
-      `其下的 "- task-XX" 引用行不会被收容——任务将退化为单个隐式 Wave 全并行，串行意图失效`
+      `其下的 "- task-XX" 引用行不会被收容——所有任务将退化为单个隐式 Wave 串行执行（Wave 分组意图丢失，无法按组并行/验收）`
     )
   }
   // 检查 0.9（坑 wave-heading-undercount，2026-08-21 实证）：部分 Wave 被识别 + 部分
@@ -660,7 +660,8 @@ function parseWavesFromPlan(planContent, registry = []) {
   } catch { /* 告警失败不阻断解析 */ }
 
   // 无显式 Wave 结构但注册表非空（light 级：任务全在 tasks.md、plan.md 只留策略）→
-  // 合成单隐式 Wave 收容全部任务（与旧 light `## Tasks` 隐式收容语义对齐，单 Wave 串行执行）
+  // 合成单隐式 Wave 收容全部任务（与旧 light `## Tasks` 隐式收容语义对齐，单 Wave 串行
+  // 执行——现为真实行为：buildWavePrompt 对 implicit Wave 下发串行调度指令，2026-09-17-feedback-hardening D-003@v1）
   if (waves.length === 0 && registry.length > 0) {
     waves.push({ index: 1, implicit: true, tasks: registry.map(t => ({ ...t })) })
   }
@@ -1263,7 +1264,25 @@ ${workdirLines}
   }
   // dispatchMode === 'local'（无配置）或 worktreePath 为空 → dispatchSection = '' → 输出与改前字节一致（零回归）
 
-  return `## Wave ${waveIndex}: 执行以下任务
+  // ── 隐式 Wave 串行化（2026-09-17-feedback-hardening D-003@v1）：plan.md 无显式 Wave 划分时
+  // parseWavesFromPlan 合成的 implicit Wave 未做过文件正交/契约链核查，并行不安全——prompt 层
+  // 下发串行调度指令（头标注 + 角色清单 + 调度要求铁律 + batch 条件 2 括注收敛，防同 prompt
+  // 自相矛盾）。显式 Wave 走原文条件变量，输出与改前逐字节一致（零回归）。
+  const implicit = wave.implicit === true
+  const waveHeader = implicit
+    ? `## Wave ${waveIndex}（隐式合成——plan.md 无显式 Wave 划分，串行执行）: 执行以下任务`
+    : `## Wave ${waveIndex}: 执行以下任务`
+  const batchCond2 = implicit
+    ? `- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理逐个（串行）处理或落在不同批次）`
+    : `- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理并行处理或落在不同 Wave）`
+  const roleItem1 = implicit
+    ? `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，逐个完成（串行——启动一个、等它完成并审查后再启动下一个，见「调度要求」串行铁律）`
+    : `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行`
+  const scheduleItem1 = implicit
+    ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
+    : `1. **同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中）。`
+
+  return `${waveHeader}
 
 ## 执行方式
 
@@ -1271,13 +1290,13 @@ ${workdirLines}
 
 可选 batch（合并实现）：同一 Wave 内，若一组任务同时满足以下三个条件，可把它们合并为一个 batch（最多 3 个 task），交给单个子代理串行逐个完成实现：
 - 组内任意两个 task 的 allowed_paths 无交集（文件正交）
-- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理并行处理或落在不同 Wave）
+${batchCond2}
 - 组大小不超过 3 个 task
 
 任一条件不满足，该 task 走独立子代理（默认形态）；拿不准就不合并。无论独立还是 batch，实现一律由子代理完成，你不要自己写代码。
 
 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
-1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行
+${roleItem1}
 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
 3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
 4. 记录改动文件和测试结果
@@ -1327,7 +1346,7 @@ ${contractInjection}${prototypeInjection}
 ${taskList}
 
 ### 调度要求
-1. **同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中）。
+${scheduleItem1}
 2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏
 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
    - 写了大量代码后需要验证语法正确性

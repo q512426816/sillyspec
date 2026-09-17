@@ -1,0 +1,792 @@
+diff --git a/.claude/skills/sillyspec-execute/SKILL.md b/.claude/skills/sillyspec-execute/SKILL.md
+index 74571bb..2a8ceab 100644
+--- a/.claude/skills/sillyspec-execute/SKILL.md
++++ b/.claude/skills/sillyspec-execute/SKILL.md
+@@ -162,6 +162,7 @@ execute 还有**第二道**独立的 stage 级审查：除逐 task review.json 
+ - **主仓 task**：子代理 workdir = 主仓 worktree 路径（CLI 自动创建的隔离 worktree）。
+ - **跨仓 task**：子代理 workdir = 跨仓仓根目录（**直接在跨仓仓主干工作区改+commit，不经主仓 worktree、不建分支**）。commit 到跨仓仓主干即落盘。
+ - 同一个 Wave 内允许混合主仓 + 跨仓 task。默认每 task 独立子代理（各传各的 workdir，Wave prompt 注入 per-task workdir 表，按表选）；同 Wave 内满足**文件正交 / 无契约链 / 组 ≤3** 三个条件的 task 可合并为一个 batch 子代理串行实现——batch 只合并实现，task 审查、review.json 产出与 checkbox 勾选仍归主 agent（子代理返回后逐 task 进行）。
++- 无显式 Wave 划分的 plan（light 级无任务区）→ 单隐式 Wave **串行执行**（Wave prompt 下发串行铁律，禁止并行启动——未做过文件正交/契约链核查）；需要并行收益须在 plan.md 显式划分 Wave（2026-09-17-feedback-hardening D-003@v1）。
+ 
+ ### 跨仓 task 的双锡点（CLI 写入，子代理不改）
+ 
+diff --git a/.claude/skills/sillyspec-plan/SKILL.md b/.claude/skills/sillyspec-plan/SKILL.md
+index e149341..e603bd4 100644
+--- a/.claude/skills/sillyspec-plan/SKILL.md
++++ b/.claude/skills/sillyspec-plan/SKILL.md
+@@ -135,7 +135,7 @@ plan 完成校验会按仓分段对账：跨仓仓路径相对跨仓仓根校验
+ 
+ ### Wave 划分
+ 
+-同 Wave 内允许混合主仓 + 跨仓 task（execute 按 per-task workdir 派发，不强制同 Wave 同 repo）。共享文件的 task 仍须分到不同 Wave（同 Wave 共享文件会被强制并行，子代理互相覆盖）。
++同 Wave 内允许混合主仓 + 跨仓 task（execute 按 per-task workdir 派发，不强制同 Wave 同 repo）。共享文件的 task 仍须分到不同 Wave（同 Wave 共享文件会被强制并行，子代理互相覆盖）。plan.md 无显式 Wave 划分（light 级无任务区）不再被 postcheck 硬拦——execute 按单隐式 Wave 串行执行（共享文件安全，仅 warning 提示）；显式 Wave 的同 Wave 共享文件硬拦维持。
+ 
+ ## 阶段流转
+ 
+diff --git a/.claude/skills/sillyspec-verify/SKILL.md b/.claude/skills/sillyspec-verify/SKILL.md
+index 2828f73..8c8fd26 100644
+--- a/.claude/skills/sillyspec-verify/SKILL.md
++++ b/.claude/skills/sillyspec-verify/SKILL.md
+@@ -54,6 +54,10 @@ verify 是只读阶段（**禁止改代码/改 git 状态**，只检查 + 写报
+ > 🔧 **机械探针 + 报告骨架一条命令**：`sillyspec verify-probes --change <变更名> --init`——探针 1（TODO 标记）/3（测试覆盖）/5（API 契约对账）/6（删除对账）CLI 跑完并预填进 verify-result.md 骨架（七章节、已存在不覆盖）；探针 2/4（关键词/决策追踪）与断言抽查、集成盲区标注是语义判断，替换骨架里的 `<!--TODO-->` 完成。结论必须写明 PASS/FAIL——留「待填」会被 gate 判不过。
+ >
+ > 🔧 **test/lint 实测对账**：`--done` 时 CLI 亲自执行 local.yaml 的 `commands.test`（实测失败阻断 verify 完成）与 `commands.lint`（advisory 对账，实测失败会明示）——自报告与实测不符时以实测为准，勿谎报跑过。
++>
++> 🔧 探针 7 矩阵 covered/partial 证据锚点三形态：file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名——行号可省（D-005@v2，与硬门/advisory/预填说明四处同口径）。
++>
++> 🔧 verify lint/test 门禁隔离快照缺 gitignored 生成物时，主仓 local.yaml 配 gate_snapshot.copy（junction/复制）与 gate_snapshot.commands（快照内跑生成命令，只放生成物命令——环境目录是活链接，勿改写 node_modules/venv）（D-002@v2）。
+ 
+ ```markdown
+ # 验证报告
+diff --git a/docs/prompt/execute.md b/docs/prompt/execute.md
+index dd59c29..191b2f2 100644
+--- a/docs/prompt/execute.md
++++ b/docs/prompt/execute.md
+@@ -594,6 +594,8 @@ execute 是**动态阶段**，steps 由 `buildExecuteSteps(planFilePath, options
+ - 真实 plan.md 有 M 个 Wave：总步骤数 = 4 + M + 3 + 2 = 9 + M。
+ - light/none plan.md（`## Tasks` 下直接列 task、无 `## Wave N` 标题）：`parseWavesFromPlan` 识别隐式任务区，**遇含 task-XX 编号的 checkbox 时惰性创建隐式 Wave** 收容，详见 `src/stages/execute.js` 的注释与 `docs/sillyspec/plan-light-needs-wave-heading.md`。
+ 
++> 注（2026-09-17-feedback-hardening D-003@v1）：plan.md 无显式 Wave 划分时 parseWavesFromPlan 合成单隐式 Wave，buildWavePrompt 对其下发串行调度指令（禁止并行启动）；上方 fence 为显式 Wave 示例。
++
+ ### Wave prompt 含契约 / 原型注入（示例中为空）
+ 
+ `buildWavePrompt` 会根据 plan.md / changeDir 动态插入以下段落（位置：`### Wave 开始前` 与 `### 本 Wave 任务` 之间）：
+diff --git a/docs/prompt/verify.md b/docs/prompt/verify.md
+index 8c00b97..be32477 100644
+--- a/docs/prompt/verify.md
++++ b/docs/prompt/verify.md
+@@ -211,7 +211,7 @@
+ 2. 如果存在：
+    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 `acceptance:` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
+    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
+-   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）
++   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 `sillyspec verify-probes --change <change-name> --init`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify `--done` 门禁阻断（fail-closed）
+ 3. 如果不存在：跳过此步骤
+ 
+ ### 输出
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index e2227ab..3846e76 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -959,7 +959,7 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent 
+ **现象（五坑各一行，坑文档 `execute-baseline-overlay-carries-broken-parallel-wip`）**：execute 期改动在 apply 前只存在于 worktree，而五处门禁的判定基准仍锚在主仓或 worktree 的单一形态上（「双真相」判定基准漂移）——
+ ①**overlay 带入并行半成品**：create 的 baseline overlay 只排除 `.sillyspec/`，他 quick 会话/他变更语法坏的在途半成品被固化进本变更 baseline checkpoint，worktree 内 import 该文件链的测试全炸，人工「同步主仓修复版进 worktree」自救又连锁触发坑②；
+ ②**assess 把 no-op 判超范围**：主仓 HEAD 在 execute 期间前进后，worktree 内自救/重同步成主仓最新内容的文件对 baseline checkpoint diff 非空（apply 回主仓实为 no-op），被 assess 误判「变更文件超出 allowed_paths」恒 BLOCKED；
+-③**gitignore 生成物不随 worktree 供给**：`src/build-id.ts` 类构建生成物不在 git 树也不进 untracked overlay（`ls-files --others --exclude-standard` 尊重 .gitignore），worktree 构建炸 `Failed to load url`；
++③**gitignore 生成物不随 worktree 供给**：`src/build-id.ts` 类构建生成物不在 git 树也不进 untracked overlay（`ls-files --others --exclude-standard` 尊重 .gitignore），worktree 构建炸 `Failed to load url`（verify lint/test 门禁隔离快照链独立存在同类生成物缺口，供给口径见下方 gate_snapshot 配置示例——D-002@v2，与 worktree supplyFiles 是两条链）；
+ ④**task 自动勾选漏计**：勾选守卫 `prefetchDiffFileSet` 只算 base..head（已提交），子代理默认不 commit 时 diffFileSet 恒空 → 草稿零 diff 守卫跳过全部勾选；同文件多 task 时 `attributeSuspectTasks`「首个命中即止」吞掉后续归属；
+ ⑤**required-evidence 误报不存在**：逐文件核验单查主仓 `join(cwd, vf)`，apply 前新文件只在 worktree → 「文件不存在」错误阻断 verify 完成。
+ 
+@@ -984,5 +984,20 @@ worktree:
+     - gen/**/*.ts       # glob（* 单层 / ** 多层）；展开上限 200，超出截断并警告
+ ```
+ 
++**gate_snapshot 配置示例**（verify lint/test **门禁隔离快照**链，与上方 execute worktree supplyFiles 是两条链勿混写——坑③同类生成物缺口在门禁快照独立存在，D-002@v2）：
++
++```yaml
++# .sillyspec/local.yaml
++gate_snapshot:
++  copy:
++    - src/generated           # copy 面：主仓生成物 junction（失败回退复制）进快照——搬的是主仓现态
++  commands:
++    - npm run gen:build-id    # commands 面：快照构建期在快照根逐条执行生成命令，产出本仓应然态
++                              #（环境目录链接后、copy 面前跑；300s/条超时帽，非零退出/超时只 warn 继续——fail-open）
++# ⚠️ junction 与环境目录（node_modules/venv）都是活链接，commands 写它们会穿透主仓——只放生成物命令（npm run gen:build-id 类），不放 install/build 全家桶。
++```
++
++主仓缺/过期时 copy 面搬的是现态，commands 面产出应然态（D-002@v2）——fresh clone 未跑 postinstall、build-id 类产物随版本漂移时 copy 面救不了门禁，commands 面双保险。
++
+ **证据**：五坑实证与决策见 changes/2026-09-15-worktree-dual-truth-gates/（requirements FR-01~FR-05 GWT 对账 + decisions D-001~D-005@v1）；回归锁定 test/worktree-dual-truth-gates.test.mjs 五组用例（每组正向 + 零回归各至少一条）。
+ 
+diff --git a/meta.json b/meta.json
+index 647e006..059f64f 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,27 @@
+   "branch": "sillyspec/2026-09-17-feedback-hardening",
+   "baseBranch": "main",
+   "baseHash": "60e90c1d4a5c53a27c931626a741275612ca4cfb",
++  "actualBaseHash": "d584c7711faf4f31c9afeda046f3b561eed8a5b5",
++  "createdAt": "2026-09-17T01:13:17.045Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-feedback-hardening",
+   "mode": "worktree",
+-  "createdAt": "2026-09-17T01:13:14.878Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".claude/skills/sillyspec-quick/SKILL.md",
++    "docs/prompt/_extracted.json",
++    "docs/prompt/quick.md",
++    "src/stages/quick.js"
++  ],
++  "baselineCommit": "d584c7711faf4f31c9afeda046f3b561eed8a5b5",
++  "baselineHash": "cccca9feace5338a",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 4
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-17T01:13:17.012Z"
+ }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 385a36f..a08ff6d 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -158,6 +158,7 @@ export const LOCAL_YAML_SCHEMA = {
+       note: '门禁快照（gate-snapshot）= HEAD worktree + 会话文件 overlay + 环境目录 junction——gitignored 生成物（api-types/generated 类）不进 HEAD 也不在会话集，快照内 lint/test 环境性假败（2026-09-16 驾驭小结④，friction5-hardening R4 / D-002@v1）。按本清单在快照构建期从主仓 junction 链接补齐（失败回退复制）；快照内 overlay 已覆盖的同名路径跳过（本变更最新态优先）。⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。',
+       keys: [
+         { path: 'gate_snapshot.copy', type: 'array', optional: true, status: 'live', readers: ['createGateSnapshot (src/run/gate-snapshot.js)'], desc: '门禁隔离快照的生成物/额外路径 copy 面（元素 string，相对仓根）：HEAD 快照缺 gitignored 生成物导致 lint/test 环境性假败；声明后快照构建期从主仓 junction 链接（失败回退复制）。⚠️ junction 是活链接，快照内再跑生成命令会写穿到主仓该目录。未配置/空清单 = 全段空转零行为变化。', example: 'gate_snapshot:\n  copy:\n    - src/generated' },
++        { path: 'gate_snapshot.commands', type: 'array', optional: true, status: 'live', readers: ['parseGateSnapshotCommands + runGateSnapshotCommands (src/run/gate-snapshot.js — createGateSnapshot 环境预检后 copy 面前)'], desc: '门禁隔离快照的命令面（元素 string）：快照构建期在环境目录链接后、copy 面前于快照根逐条执行（cwd=快照根、300s/条超时帽、非零退出/超时只 warn 继续——fail-open 不作废快照），产出「本仓应然态」生成物，收口主仓生成物缺失/过期（fresh clone 未跑 postinstall / build-id 类产物）时快照内全量 lint/test 必挂的坑（D-002@v2，2026-09-17-feedback-hardening FR-01）。⚠️ 环境目录（node_modules/venv）是活链接，命令写它们会穿透主仓——只放生成物命令（npm run gen:build-id 类），不放 install/build 全家桶。未配置 = 全段空转零行为。', example: 'npm run gen:build-id' },
+       ],
+     },
+     {
+@@ -390,9 +391,14 @@ worktree-hook:
+ # ── 门禁隔离快照 copy 面（HEAD 快照缺 gitignored 生成物 → 快照内 lint/test 环境性假败；构建期从主仓 junction 补齐）──
+ # 相对仓根路径列表；失败回退复制；快照内 overlay 已覆盖的同名路径跳过。
+ # ⚠️ junction 是活链接：快照内再跑生成命令会写穿到主仓该目录。
++# commands 面（D-002@v2）：快照构建期在快照根逐条执行的生成物命令（postinstall/build-id 类，
++# 产出本仓应然态；300s/条超时帽，失败 warn 继续）。⚠️ 命令不得改写 node_modules/venv 等
++# 环境目录（活链接，写穿透主仓）——只放生成物命令。
+ # gate_snapshot:
+ #   copy:
+ #     - src/generated
++#   commands:
++#     - npm run gen:build-id
+ 
+ # ── 变更规模自动分类（sillyspec run auto 时按需求描述强制 quick/full；正则数组，i 大小写无关）──
+ auto_mode:
+diff --git a/src/probe7-anchor-check.js b/src/probe7-anchor-check.js
+index ac40deb..966c595 100644
+--- a/src/probe7-anchor-check.js
++++ b/src/probe7-anchor-check.js
+@@ -4,14 +4,18 @@
+  * 坑 probe7-covered-anchor-missing（2026-09-15 复盘实证：探针7 矩阵第一轮 7 行 covered 判定的
+  * 证据列缺 file:line 锚点被审查打回——预填说明写着「证据列给首命中 file:line 锚点」但模板要求
+  * 没细读就交，人工往返一轮）。本模块把该口径机器化：verify --done 时点解析正文探针7 段，
+- * 判定列=covered 的行必须含 `path:line` 形态锚点或 `.test.` 测试文件名锚点，缺则 advisory
+- * 提示回补。
++ * 判定列=covered 的行必须含 file:line / `.test.` 测试文件名 / 反引号包裹路径或测试名三形态
++ * 之一，缺则 advisory 提示回补。
+  *
+  * 口径对齐（2026-09-16-friction5-hardening FR-05 / D-005@v1，用户 2026-09-16 驾驭小结⑤）：
+  * 锚点认 file:line 或 `.test.` 文件名两形态（对齐 stage-contract 硬门三形态中的两形态）——
+  * 行号随提交漂移场景 `.test.` 文件名锚过硬门仍被 advisory 提示回补是无效摩擦。file:line
+- * 侧本判定（/:\d+\b/）宽于 stage-contract 硬门形态集，advisory 宽于硬门是设计容差；
+- * 裸反引号不收（保持 advisory 增量价值）。
++ * 侧本判定（/:\d+\b/）宽于 stage-contract 硬门形态集，advisory 宽于硬门是设计容差。
++ *
++ * 口径再对齐（2026-09-17-feedback-hardening FR-02 / D-005@v2，supersedes D-005@v1 的
++ * 「裸反引号不收」，用户 2026-09-17 驾驭小结②）：反引号包裹的路径/测试名与硬门
++ * matrixEvidenceHasAnchor 同权收认——硬门已保证锚点存在，advisory 多要行号在行号漂移
++ * 场景零正确性收益纯摩擦。
+  *
+  * 定位与边界：
+  * - **advisory 不阻断**：covered 行缺锚点只 warn（证据可以是合法的人工核验形态，但 covered=
+@@ -27,6 +31,10 @@
+ // file:line 锚点：冒号后跟数字（`test/x.test.mjs:42`、`src/a.py:12-18` 均命中）
+ const ANCHOR_RE = /:\d+\b/
+ 
++// 反引号包裹的路径/测试名（`test/x.mjs`、`src/plain.js` 等——D-005@v2 第三形态，
++// 与 stage-contract 硬门 matrixEvidenceHasAnchor 的 /`[^`]+`/ 同权）
++const BACKTICK_RE = /`[^`]+`/
++
+ // 判定枚举纯值（骨架四枚举；容忍反引号包裹——门禁层 extractAcceptanceMatrixSlots 另有纯值校验）
+ function normalizeVerdict(cell) {
+   return String(cell || '').trim().replace(/^`|`$/g, '').toLowerCase()
+@@ -64,9 +72,10 @@ export function checkProbe7AnchorCoverage(reportText) {
+     if (verdict !== 'covered') continue
+     out.coveredRows++
+     const evidence = cells[5] || ''
+-    // 双口径锚点（FR-05）：file:line（ANCHOR_RE，本体不动）或 `.test.` 测试文件名——
+-    // 后者对齐 stage-contract 硬门形态，消灭行号漂移场景的无效回补提示
+-    if (!ANCHOR_RE.test(evidence) && !/\.test\./.test(evidence)) {
++    // 三形态锚点（FR-05 / D-005@v2）：file:line（ANCHOR_RE，本体不动）、`.test.` 测试文件名、
++    // 反引号包裹路径/测试名（BACKTICK_RE）——三者对齐 stage-contract 硬门形态，消灭行号漂移
++    // 场景的无效回补提示
++    if (!ANCHOR_RE.test(evidence) && !/\.test\./.test(evidence) && !BACKTICK_RE.test(evidence)) {
+       out.missingAnchors.push({
+         task: task || '(未知 task)',
+         acceptance: (cells[1] || '').slice(0, 80),
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 1572121..3d31942 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -169,6 +169,98 @@ function parseGateSnapshotCopy(yamlText) {
+   return out
+ }
+ 
++/**
++ * local.yaml `gate_snapshot:` 段 `commands:` 列表扫描（2026-09-17-feedback-hardening
++ * R1 / FR-01 / D-002@v2，坑 gate-snapshot-missing-generated-artifacts 二阶——copy 面只搬
++ * 「主仓现有态」，主仓侧生成物缺失（fresh clone 未跑 postinstall）或过期（build-id 类
++ * 构建期产物随版本变）时供给缺失/陈旧态，快照内全量 lint/test 必挂，用户 2026-09-17
++ * 负面①实证）。与 parseGateSnapshotCopy 同风格段内单键扫描（本文件零新依赖，不引
++ * js-yaml）；认块列表（缩进 `- <cmd>` 条目）与 inline flow（`commands: [a, b]`）双形态
++ *（对齐 supplyFiles/copy 既有数组键约定）；空行/注释行不破段；缩进回收到段头及以下/
++ * 新顶层键即出段——段外同名键（顶层 `commands:` 命令段 / 其它段内嵌 commands）不误收。
++ * @param {string} yamlText local.yaml 原文
++ * @returns {string[]} 命令串（未配置/空段/读失败 → []）
++ */
++export function parseGateSnapshotCommands(yamlText) {
++  if (!yamlText) return []
++  const out = []
++  let inGate = false    // 位于 gate_snapshot: 段内
++  let gateIndent = -1
++  let inCmds = false    // 位于段内 commands: 列表内
++  let cmdsIndent = -1
++  for (const raw of String(yamlText).split(/\r?\n/)) {
++    const content = raw.trim()
++    if (!content || content.startsWith('#')) continue // 空行/注释行不破段
++    const indent = raw.match(/^[ \t]*/)[0].length
++    if (!inGate) {
++      if (/^gate_snapshot:\s*(?:#.*)?$/.test(content)) { inGate = true; gateIndent = indent; inCmds = false }
++      continue
++    }
++    if (indent <= gateIndent) { inGate = false; inCmds = false; continue } // 出段（新顶层键）
++    if (!inCmds) {
++      const flow = content.match(/^commands:\s*\[([^\]]*)\]/)
++      if (flow) {
++        for (const part of flow[1].split(',')) {
++          const v = _stripYamlValue(part)
++          if (v) out.push(v)
++        }
++        continue // inline flow 当行自洽，继续扫段内后续内容
++      }
++      if (/^commands:\s*(?:#.*)?$/.test(content)) { inCmds = true; cmdsIndent = indent }
++      continue // 段内其它子键（copy 等）忽略
++    }
++    if (indent < cmdsIndent) { inCmds = false; continue } // 缩进回收出列表
++    const item = content.match(/^-\s*(.+)$/)
++    if (!item) { inCmds = false; continue } // 同层非列表行 = 列表结束
++    const v = _stripYamlValue(item[1])
++    if (v) out.push(v)
++  }
++  return out
++}
++
++/**
++ * gate_snapshot.commands 执行段（D-002@v2）：快照构建期在快照根逐条执行生成物命令，产出
++ * 「本仓应然态」。调用契约：cwd=**快照根**（环境目录 junction 已就位；命令产出真实文件
++ * → 后续 copy 面对已存在 dst 跳过，新鲜度优先）。每条 300s 超时帽；非零退出/超时只
++ * warn（含 cmd 与输出尾 ≤300 字）继续下一条——fail-open 与 copy 面同策略，不作废快照；
++ * 执行结果不落 meta（快照即用即弃，console 输出即审计面）。信任级与
++ * commands.install/test/lint 同：主仓 local.yaml 用户自持配置，不加命令白名单。
++ * 内部导出（createGateSnapshot 唯一运行时消费方；直测断言返回值）。
++ * @param {string} snapshotRoot 快照根（命令 cwd）
++ * @param {string[]} commands 命令串列表（parseGateSnapshotCommands 产物）
++ * @returns {{ ran: number, failed: Array<{cmd: string, reason: string}> }} ran=实际执行条数（含失败），failed=逐条失败记录
++ */
++export function runGateSnapshotCommands(snapshotRoot, commands) {
++  if (!Array.isArray(commands) || commands.length === 0) return { ran: 0, failed: [] }
++  let ran = 0
++  const failed = []
++  for (const raw of commands) {
++    const cmd = String(raw).trim()
++    if (!cmd) continue
++    ran++
++    let r = null
++    try {
++      r = spawnSync(cmd, { shell: true, cwd: snapshotRoot, timeout: 300_000, encoding: 'utf8' })
++    } catch (e) {
++      const reason = `spawn 异常：${e && e.message ? e.message : e}`
++      failed.push({ cmd, reason })
++      console.warn(`⚠️ gate_snapshot.commands 条目失败（${reason}，不作废快照）：${cmd}`)
++      continue
++    }
++    const timedOut = r && r.error && (r.error.code === 'ETIMEDOUT' || /ETIMEDOUT/i.test(String(r.error.message || '')))
++    if (r.error || r.status !== 0) {
++      const reason = timedOut
++        ? '超时（>300s 帽）'
++        : (r.error ? `spawn 失败：${r.error.message}` : `非零退出码 ${r.status}`)
++      failed.push({ cmd, reason })
++      const tail = String((r.stdout || '') + (r.stderr || '')).trim().slice(-300)
++      console.warn(`⚠️ gate_snapshot.commands 条目失败（${reason}，不作废快照继续下一条）：${cmd}${tail ? `｜输出尾：${tail}` : ''}`)
++      continue
++    }
++  }
++  return { ran, failed }
++}
++
+ /** 目录递归复制（copy 面 junction 不可用时的回退）。符号链接条目跳过（生成物目录内不追链）。 */
+ function copyDirRecursive(srcDir, dstDir) {
+   mkdirSync(dstDir, { recursive: true })
+@@ -335,6 +427,25 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+       return null
+     }
+ 
++    // gate_snapshot.commands 命令面（D-002@v2，2026-09-17-feedback-hardening R1，用户
++    // 2026-09-17 负面①实证「全量快照必挂」）：主仓侧生成物缺失（fresh clone 未跑
++    // postinstall）或过期时，copy 面只搬「主仓现有态」供给缺失/陈旧态——本段在环境链接
++    // 就位后、copy 面前于快照根逐条执行 postinstall 类生成命令，产出「本仓应然态」（命令
++    // 产出真实文件 → copy 面对已存在 dst 跳过，新鲜度优先）。配置恒从主仓 cwd 读原文
++    //（local.yaml 复制段在后面，快照内副本不采信——与 copy 键同源）。未配置 → 全段空转
++    // 零输出（存量快照逐字节不变）；整段 try/catch fail-open：任何异常只 warn 不作废快照。
++    try {
++      const gsCfgPath = join(cwd, '.sillyspec', 'local.yaml')
++      const gsCommands = existsSync(gsCfgPath) ? parseGateSnapshotCommands(readFileSync(gsCfgPath, 'utf8')) : []
++      if (gsCommands.length > 0) {
++        console.log(`🔬 门禁快照 commands 面：${gsCommands.length} 条 gate_snapshot.commands 在快照内逐条执行（cwd=快照根，产出本仓应然态生成物）`)
++        console.warn(`⚠️ 环境目录是活链接：命令不得改写 node_modules/venv 等环境目录（写会穿透到主仓）——只放生成物命令（npm run gen:build-id 类）`)
++        runGateSnapshotCommands(snapshotRoot, gsCommands)
++      }
++    } catch (e) {
++      console.warn(`⚠️ gate_snapshot.commands 执行段异常（不作废快照）：${e && e.message ? e.message : e}`)
++    }
++
+     // gate_snapshot.copy 面（R4 / D-002@v1，2026-09-16-friction5-hardening）：gitignored
+     // 生成物从主仓 junction/复制进快照。位置=环境目录链接段之后（环境优先级最高）、
+     // local.yaml 复制段之前（从主仓 cwd 读原文——快照内 local.yaml 是稍后才复制的复制件，
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 3ed4fb8..3e87730 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -919,9 +919,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       if (existsSync(p7ReportPath)) {
+         const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
+         if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
+-          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line 或 .test. 文件名锚点（advisory 不阻断，审查会要求回补）：`)
++          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line / \`.test.\` 文件名 / 反引号路径锚点（advisory 不阻断，审查会要求回补）：`)
+           for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
+-            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点或 \`.test.\` 测试文件名`)
++            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点、\`.test.\` 测试文件名或反引号包裹的路径/测试名（行号可省）`)
+           }
+           if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
+         }
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 4d51f79..456d5ba 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -197,14 +197,14 @@ export function validatePlanForExecute(tasksContent, planContent) {
+   }
+ 
+   // 检查 0.8: Wave 标题格式不对（W1/波次1 等）→ 引用行不被收容，静默退化隐式单 Wave
+-  // 全并行——串行意图失效且无提示（原「标题格式不对」诊断的新契约承接）。仅在确有疑似标题
++  // 串行执行——Wave 分组意图丢失且无提示（原「标题格式不对」诊断的新契约承接）。仅在确有疑似标题
+   // 且无任何显式 Wave 被解析时报，正常 Wave 10/带括号标题不误伤。
+   const hasExplicitWave = waves.some(w => !w.implicit)
+   const waveLikeHeading = /^#+\s*(?:wave\s*\d+|w\d+|波次\s*\d+)/im
+   if (!hasExplicitWave && waveLikeHeading.test(plan)) {
+     errors.push(
+       `Wave 标题格式不对：必须字面 "## Wave N"（Wave + 空格 + 数字），"## W1" / "## Wave1" / "## 波次1" 都不被识别。` +
+-      `其下的 "- task-XX" 引用行不会被收容——任务将退化为单个隐式 Wave 全并行，串行意图失效`
++      `其下的 "- task-XX" 引用行不会被收容——所有任务将退化为单个隐式 Wave 串行执行（Wave 分组意图丢失，无法按组并行/验收）`
+     )
+   }
+   // 检查 0.9（坑 wave-heading-undercount，2026-08-21 实证）：部分 Wave 被识别 + 部分
+@@ -660,7 +660,8 @@ function parseWavesFromPlan(planContent, registry = []) {
+   } catch { /* 告警失败不阻断解析 */ }
+ 
+   // 无显式 Wave 结构但注册表非空（light 级：任务全在 tasks.md、plan.md 只留策略）→
+-  // 合成单隐式 Wave 收容全部任务（与旧 light `## Tasks` 隐式收容语义对齐，单 Wave 串行执行）
++  // 合成单隐式 Wave 收容全部任务（与旧 light `## Tasks` 隐式收容语义对齐，单 Wave 串行
++  // 执行——现为真实行为：buildWavePrompt 对 implicit Wave 下发串行调度指令，2026-09-17-feedback-hardening D-003@v1）
+   if (waves.length === 0 && registry.length > 0) {
+     waves.push({ index: 1, implicit: true, tasks: registry.map(t => ({ ...t })) })
+   }
+@@ -1263,7 +1264,25 @@ ${workdirLines}
+   }
+   // dispatchMode === 'local'（无配置）或 worktreePath 为空 → dispatchSection = '' → 输出与改前字节一致（零回归）
+ 
+-  return `## Wave ${waveIndex}: 执行以下任务
++  // ── 隐式 Wave 串行化（2026-09-17-feedback-hardening D-003@v1）：plan.md 无显式 Wave 划分时
++  // parseWavesFromPlan 合成的 implicit Wave 未做过文件正交/契约链核查，并行不安全——prompt 层
++  // 下发串行调度指令（头标注 + 角色清单 + 调度要求铁律 + batch 条件 2 括注收敛，防同 prompt
++  // 自相矛盾）。显式 Wave 走原文条件变量，输出与改前逐字节一致（零回归）。
++  const implicit = wave.implicit === true
++  const waveHeader = implicit
++    ? `## Wave ${waveIndex}（隐式合成——plan.md 无显式 Wave 划分，串行执行）: 执行以下任务`
++    : `## Wave ${waveIndex}: 执行以下任务`
++  const batchCond2 = implicit
++    ? `- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理逐个（串行）处理或落在不同批次）`
++    : `- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理并行处理或落在不同 Wave）`
++  const roleItem1 = implicit
++    ? `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，逐个完成（串行——启动一个、等它完成并审查后再启动下一个，见「调度要求」串行铁律）`
++    : `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行`
++  const scheduleItem1 = implicit
++    ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
++    : `1. **同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中）。`
++
++  return `${waveHeader}
+ 
+ ## 执行方式
+ 
+@@ -1271,13 +1290,13 @@ ${workdirLines}
+ 
+ 可选 batch（合并实现）：同一 Wave 内，若一组任务同时满足以下三个条件，可把它们合并为一个 batch（最多 3 个 task），交给单个子代理串行逐个完成实现：
+ - 组内任意两个 task 的 allowed_paths 无交集（文件正交）
+-- 组内任意两个 task 之间无 provides / expects_from 契约链（契约 task 禁止同批——串行实现会读到半成品，契约 task 由独立子代理并行处理或落在不同 Wave）
++${batchCond2}
+ - 组大小不超过 3 个 task
+ 
+ 任一条件不满足，该 task 走独立子代理（默认形态）；拿不准就不合并。无论独立还是 batch，实现一律由子代理完成，你不要自己写代码。
+ 
+ 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
+-1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行
++${roleItem1}
+ 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
+ 3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
+ 4. 记录改动文件和测试结果
+@@ -1327,7 +1346,7 @@ ${contractInjection}${prototypeInjection}
+ ${taskList}
+ 
+ ### 调度要求
+-1. **同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中）。
++${scheduleItem1}
+ 2. **Reverse Sync**：子代理报告实现与 design.md 不一致时，先检查是代码错了还是文档有遗漏
+ 3. **不要频繁编译！** 编译很慢，只在以下情况运行：
+    - 写了大量代码后需要验证语法正确性
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index 4122f96..3ec6aba 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -423,7 +423,8 @@ export function topoSortWaves(depMap) {
+  *   - `## Wave N` 标题下的 task-XX checkbox 归入 Wave N；
+  *   - 非 Wave 标题行（## 自检 等）退出当前 Wave 段，避免其 checkbox 混入。
+  * 返回 null = plan.md 不存在或无显式 Wave 标题 → execute 会把所有 task 放进单个隐式 Wave
+- * 全并行（execute.js:402-408），调用方据此判「同文件即冲突」。
++ * 串行执行（共享文件安全，2026-09-17-feedback-hardening D-003@v1），调用方据此降为 warning
++ * （显式划分 Wave 才有按组并行收益；同 Wave 内共享文件仍 error）。
+  *
+  * @param {string} planPath - plan.md 绝对路径
+  * @returns {Map<string, number>|null} taskId → waveIndex；null = 无显式 Wave
+@@ -588,15 +589,16 @@ export function validateBlueprintConsistency(changeDir, opts = {}) {
+   // 子代理会互相覆盖该文件 → error。跨 Wave 同文件 → 串行执行安全 → warning。
+   // 按 (repo, path) 二元组判冲突（约束③）：跨仓 task 与主仓 task 同名路径不误判（不同 repo → 不同键）。
+   // Wave 口径 = plan.md 显式 `## Wave N`（parseTaskWavesFromPlan，与 execute 同源，非 topoSort 建议值）；
+-  // plan.md 无显式 Wave → execute 全并行（隐式单 Wave，execute.js:402-408）→ 同 repo 同文件即冲突。
++  // plan.md 无显式 Wave → execute 按单个隐式 Wave 串行执行（2026-09-17-feedback-hardening
++  // D-003@v1，共享文件安全）→ warning（显式划分 Wave 可获并行收益；同 Wave 内共享仍 error）。
+   const waveOfTask = parseTaskWavesFromPlan(pJoin(changeDir, 'plan.md'))
+   for (const [, { repo, path: p, owners }] of pathOwners) {
+     if (owners.length < 2) continue
+     if (waveOfTask === null) {
+-      errors.push(
++      warnings.push(
+         `路径 ${p} 被 ${owners.length} 个 task 修改: ${owners.join(', ')} — plan.md 无显式 Wave 划分，` +
+-        `execute 会把它们放进同一隐式 Wave 全并行（execute.js:402-408），子代理互相覆盖。` +
+-        `解法：拆到不同 Wave（串行），或合并为单个 task。`
++        `execute 将按单个隐式 Wave 串行执行（共享文件安全）。` +
++        `显式划分 Wave 可获并行收益（同 Wave 内仍禁止共享文件）；或合并为单个 task`
+       )
+       continue
+     }
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index ab0484c..89c4b17 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -160,7 +160,7 @@ export const definition = {
+ 2. 如果存在：
+    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 \`acceptance:\` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
+    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
+-   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（\`.test.\` 文件或 file:line），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
++   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（file:line / \`.test.\` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
+ 3. 如果不存在：跳过此步骤
+ 
+ ### 输出
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 6da4b34..3a26ecb 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -960,7 +960,7 @@ function renderProbe7Lines(p7) {
+     return L
+   }
+   L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+-  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。证据列给首命中 file:line 锚点或人工核验提示。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
++  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。covered/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
+   // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
+   // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
+   // 零覆盖」恰是 5 个 P1 的藏身处。矩阵渲染时顺带计数零承接条目，verify 复核强制显式走查
+diff --git a/test/gate-snapshot-commands.test.mjs b/test/gate-snapshot-commands.test.mjs
+new file mode 100644
+index 0000000..e571a57
+--- /dev/null
++++ b/test/gate-snapshot-commands.test.mjs
+@@ -0,0 +1,136 @@
++/**
++ * 门禁快照 commands 面直测（2026-09-17-feedback-hardening task-01 / FR-01 / D-002@v2）。
++ *
++ * 背景（坑 gate-snapshot-missing-generated-artifacts 二阶，用户 2026-09-17 负面①）：copy 面
++ * 只搬「主仓现有态」——主仓侧生成物缺失（fresh clone 未跑 postinstall）或过期（build-id 类
++ * 构建期产物）时供给缺失/陈旧态，快照内全量 lint/test 必挂。gate_snapshot.commands 声明
++ * postinstall 类生成命令，快照构建期（环境链接后、copy 面前）在快照根逐条执行，产出
++ * 「本仓应然态」。
++ *
++ * 覆盖：
++ *   ① 块列表形态解析（段内 copy 键不干扰）
++ *   ② inline flow 形态解析（commands: [a, b]）
++ *   ③ 条目尾注/成对引号剥离（_stripYamlValue 复用）
++ *   ④ 未配置/空段 → []（存量 local.yaml 形态空转）
++ *   ⑤ 段外顶层 commands: 与其它段内嵌 commands: 不误收
++ *   ⑥ runGateSnapshotCommands 在快照根 cwd 执行并产出真实文件
++ *   ⑦ 非零退出 fail-open：failed 记录 + warn + 后续命令继续
++ *   ⑧ 未配置空转：parse [] + run(root, []) → ran:0（createGateSnapshot 零行为）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { parseGateSnapshotCommands, runGateSnapshotCommands } from '../src/run/gate-snapshot.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } } })
++
++function captureWarn(fn) {
++  const orig = console.warn
++  const lines = []
++  console.warn = (...a) => { lines.push(a.join(' ')) }
++  try { fn() } finally { console.warn = orig }
++  return lines
++}
++
++// ── ① 块列表形态 ──
++test('① gate_snapshot.commands 块列表形态解析（段内 copy 键不干扰）', () => {
++  const yaml = [
++    'commands:',
++    '  test: npm test',
++    'gate_snapshot:',
++    '  copy:',
++    '    - src/generated',
++    '  commands:',
++    '    - npm run gen:build-id',
++    '    - python scripts/gen_api.py',
++  ].join('\n')
++  assert.deepEqual(parseGateSnapshotCommands(yaml), ['npm run gen:build-id', 'python scripts/gen_api.py'])
++})
++
++// ── ② inline flow 形态 ──
++test('② inline flow 形态解析（commands: [a, b]）', () => {
++  const yaml = 'gate_snapshot:\n  copy: [src/generated]\n  commands: [npm run gen:build-id, python scripts/gen_api.py]\n'
++  assert.deepEqual(parseGateSnapshotCommands(yaml), ['npm run gen:build-id', 'python scripts/gen_api.py'])
++})
++
++// ── ③ 尾注/引号剥离 ──
++test('③ 条目尾注与成对引号剥离（_stripYamlValue 复用）', () => {
++  const yaml = [
++    'gate_snapshot:',
++    '  commands:',
++    '    - npm run gen:build-id # 生成 build-id（构建期产物）',
++    '    - "npm run gen:api" # 带引号形态',
++    "    - 'python scripts/gen.py'",
++  ].join('\n')
++  assert.deepEqual(parseGateSnapshotCommands(yaml), ['npm run gen:build-id', 'npm run gen:api', 'python scripts/gen.py'])
++})
++
++// ── ④ 未配置/空段 → [] ──
++test('④ 未配置/空段 → []（存量 local.yaml 形态空转）', () => {
++  assert.deepEqual(parseGateSnapshotCommands(''), [])
++  assert.deepEqual(parseGateSnapshotCommands(null), [])
++  assert.deepEqual(parseGateSnapshotCommands(undefined), [])
++  assert.deepEqual(parseGateSnapshotCommands('commands:\n  test: npm test\n'), [], '无 gate_snapshot 段')
++  assert.deepEqual(parseGateSnapshotCommands('gate_snapshot:\n  copy:\n    - src/generated\n'), [], '有 gate_snapshot 段但无 commands 键')
++  assert.deepEqual(parseGateSnapshotCommands('gate_snapshot:\n  commands: []\n'), [], '空 inline flow')
++})
++
++// ── ⑤ 段外 commands 不误收 ──
++test('⑤ 段外顶层 commands: 与其它段内嵌 commands: 不误收', () => {
++  const yaml = [
++    'commands:',          // 顶层命令段（gate_snapshot 之前）
++    '  test: npm test',
++    '  lint: npm run lint',
++    'gate_snapshot:',
++    '  commands:',
++    '    - npm run real-gen',
++    'other_section:',     // gate_snapshot 之后新顶层键出段
++    '  commands:',
++    '    - should-not-collect',
++    'commands_after:',    // 顶层命令段（gate_snapshot 之后）
++    '  build: npm run build',
++  ].join('\n')
++  assert.deepEqual(parseGateSnapshotCommands(yaml), ['npm run real-gen'])
++})
++
++// ── ⑥ 执行段：cwd=快照根，产出真实文件 ──
++test('⑥ runGateSnapshotCommands 在快照根 cwd 执行并产出真实文件', () => {
++  const root = mk('gscmd-run-')
++  const r = runGateSnapshotCommands(root, ['node -e "require(\'fs\').writeFileSync(\'cmd-face.txt\',\'ok\')"'])
++  assert.equal(r.ran, 1)
++  assert.deepEqual(r.failed, [])
++  assert.ok(existsSync(join(root, 'cmd-face.txt')), '命令在快照根 cwd 执行（产物落在 root）')
++  assert.equal(readFileSync(join(root, 'cmd-face.txt'), 'utf8'), 'ok')
++})
++
++// ── ⑦ 非零退出 fail-open ──
++test('⑦ 非零退出 fail-open：failed 记录 + warn + 后续命令继续', () => {
++  const root = mk('gscmd-fail-')
++  const w = captureWarn(() => {
++    const r = runGateSnapshotCommands(root, [
++      'node -e "process.exit(1)"',
++      'node -e "require(\'fs\').writeFileSync(\'after-fail.txt\',\'ok\')"',
++    ])
++    assert.equal(r.ran, 2, '两条都执行（ran 含失败条）')
++    assert.equal(r.failed.length, 1)
++    assert.equal(r.failed[0].cmd, 'node -e "process.exit(1)"')
++    assert.ok(/非零退出码 1/.test(r.failed[0].reason), `reason 记录退出码（实际：${r.failed[0].reason}）`)
++  })
++  assert.ok(w.some(x => x.includes('gate_snapshot.commands') && x.includes('process.exit(1)')), `warn 点名失败命令（实际：${w.join(' | ')}）`)
++  assert.ok(existsSync(join(root, 'after-fail.txt')), '失败后后续命令继续执行')
++})
++
++// ── ⑧ 未配置空转 ──
++test('⑧ 未配置空转：parse [] + run(root, []) → ran:0（createGateSnapshot 零行为）', () => {
++  const root = mk('gscmd-none-')
++  const parsed = parseGateSnapshotCommands('commands:\n  test: npm test\n')
++  assert.deepEqual(parsed, [])
++  const r = runGateSnapshotCommands(root, parsed)
++  assert.equal(r.ran, 0)
++  assert.deepEqual(r.failed, [])
++  assert.equal(readdirSync(root).length, 0, '空清单零副作用（快照根无命令产物）')
++})
+diff --git a/test/plan-execute-contract.test.mjs b/test/plan-execute-contract.test.mjs
+index d5e0123..ca2d839 100644
+--- a/test/plan-execute-contract.test.mjs
++++ b/test/plan-execute-contract.test.mjs
+@@ -11,7 +11,7 @@
+  * warning、plan 内子行 修改/参考 解析、`## Tasks` 隐式任务区）由 parseTaskRegistry 的
+  * 对应用例（task-truth-contract.test.mjs ⑧/⑨）与本文对应新场景承接。
+  */
+-import { validatePlanForExecute } from '../src/stages/execute.js'
++import { validatePlanForExecute, buildWavePrompt } from '../src/stages/execute.js'
+ 
+ let failed = 0
+ let total = 0
+@@ -250,6 +250,34 @@ console.log('\n--- light plan（无 Wave 结构）隐式 Wave 通过 ---')
+   assert(result.waves[0].tasks[0].index === 1, '首个 task index 应为 1')
+ }
+ 
++// ─────────────────────────────────────────
++// buildWavePrompt 调度指令（2026-09-17-feedback-hardening D-003@v1）：
++// implicit Wave 下发串行铁律（禁并行启动），显式 Wave 保留「必须并行启动」并行原文
++// ─────────────────────────────────────────
++console.log('\n--- buildWavePrompt：implicit Wave 串行指令 / 显式 Wave 并行原文 ---')
++{
++  const mkTasks = () => [
++    { index: 1, name: '添加 API 端点', file: 'src/api.js' },
++    { index: 2, name: '前端调用', file: 'src/ui.js' },
++  ]
++  // 隐式 Wave（parseWavesFromPlan 合成形态：plan.md 无显式划分 → implicit:true 单 Wave）
++  const implicitPrompt = buildWavePrompt({ index: 1, implicit: true, tasks: mkTasks() }, 1, null, null)
++  assert(implicitPrompt.includes('## Wave 1（隐式合成——plan.md 无显式 Wave 划分，串行执行）'),
++    'implicit 头应含「隐式合成」+「串行执行」标注')
++  assert(implicitPrompt.includes('隐式 Wave 串行铁律') && implicitPrompt.includes('禁止并行启动'),
++    'implicit 调度要求应含串行铁律与「禁止并行启动」')
++  assert(!implicitPrompt.includes('必须并行启动'), 'implicit Wave 不应含「必须并行启动」')
++  assert(!implicitPrompt.includes('同 Wave 内可并行'), 'implicit 角色清单不应含「同 Wave 内可并行」')
++  assert(implicitPrompt.includes('契约 task 由独立子代理逐个（串行）处理或落在不同批次'),
++    'implicit batch 条件 2 括注应收敛为串行口径（防同 prompt 自相矛盾）')
++  // 显式 Wave（无 implicit 标记）→ 并行原文不变
++  const explicitPrompt = buildWavePrompt({ index: 1, tasks: mkTasks() }, 1, null, null)
++  assert(explicitPrompt.includes('必须并行启动'), '显式 Wave 调度要求仍含「必须并行启动」')
++  assert(explicitPrompt.includes('同 Wave 内可并行'), '显式 Wave 角色清单仍含「同 Wave 内可并行」')
++  assert(!explicitPrompt.includes('隐式合成'), '显式 Wave 不应含「隐式合成」头标注')
++  assert(!explicitPrompt.includes('禁止并行启动'), '显式 Wave 不应含「禁止并行启动」')
++}
++
+ // ─────────────────────────────────────────
+ // 旧格式拦：plan.md 任务 checkbox 行 → 指路迁移（原各级模板用例的旧形态反例）
+ // ─────────────────────────────────────────
+diff --git a/test/plan-optimization.test.mjs b/test/plan-optimization.test.mjs
+index 4dbd9a8..c442bb1 100644
+--- a/test/plan-optimization.test.mjs
++++ b/test/plan-optimization.test.mjs
+@@ -362,14 +362,14 @@ console.log('\n--- Test 5e: 跨 Wave 同文件 → 警告不阻断 ---')
+ }
+ 
+ // ─────────────────────────────────────────
+-// Test 5f: 无 plan.md + 共享路径 → 阻断（execute 隐式单 Wave 全并行）
++// Test 5f: 无 plan.md + 共享路径 → 警告不阻断（execute 隐式单 Wave 串行执行，D-003@v1 error→warning）
+ // ─────────────────────────────────────────
+-console.log('\n--- Test 5f: 无 plan.md 共享路径 → 失败（全并行口径）---')
++console.log('\n--- Test 5f: 无 plan.md 共享路径 → 警告（隐式 Wave 串行口径）---')
+ {
+   const tmpDir = setupSharedPathChange(undefined)
+   const result = validateBlueprintConsistency(tmpDir)
+-  assert(!result.ok, `无 plan.md 共享路径应失败（全并行），errors: ${JSON.stringify(result.errors)}`)
+-  assert(result.errors.some(e => e.includes('无显式 Wave') && e.includes('src/service.py')), `error 应提到无显式 Wave + service.py`)
++  assert(result.ok, `无 plan.md 共享路径应通过（隐式 Wave 串行，共享文件安全），errors: ${JSON.stringify(result.errors)}`)
++  assert(result.warnings.some(w => w.includes('隐式') && w.includes('src/service.py')), `warning 应提到隐式 Wave + service.py`)
+   rmSync(tmpDir, { recursive: true, force: true })
+ }
+ 
+diff --git a/test/plan-postcheck-cross-repo.test.mjs b/test/plan-postcheck-cross-repo.test.mjs
+index c4799ba..e11fd1e 100644
+--- a/test/plan-postcheck-cross-repo.test.mjs
++++ b/test/plan-postcheck-cross-repo.test.mjs
+@@ -126,8 +126,8 @@ console.log('\n--- 场景 4：单仓跨 Wave 同文件 → 警告不阻断（零
+   rmSync(tmpDir, { recursive: true, force: true })
+ }
+ 
+-// ── 5: 单仓零回归 — 无 plan.md 共享路径 → 阻断（全并行口径，Test 5f 同款）──
+-console.log('\n--- 场景 5：单仓无 plan.md 共享路径 → 阻断（全并行口径，零回归）---')
++// ── 5: 单仓零回归 — 无 plan.md 共享路径 → 警告不阻断（隐式 Wave 串行口径，Test 5f 同款）──
++console.log('\n--- 场景 5：单仓无 plan.md 共享路径 → 警告（隐式 Wave 串行口径，零回归）---')
+ {
+   const tmpDir = setupTasks(
+     [
+@@ -137,9 +137,9 @@ console.log('\n--- 场景 5：单仓无 plan.md 共享路径 → 阻断（全并
+     undefined,
+   )
+   const r = validateBlueprintConsistency(tmpDir)
+-  assert(!r.ok, `无 plan.md 共享路径应阻断（全并行），errors: ${JSON.stringify(r.errors)}`)
+-  assert(r.errors.some(e => e.includes('无显式 Wave') && e.includes('src/service.py')),
+-    `error 应提到无显式 Wave + service.py`)
++  assert(r.ok, `无 plan.md 共享路径应通过（隐式 Wave 串行，共享文件安全），errors: ${JSON.stringify(r.errors)}`)
++  assert(r.warnings.some(w => w.includes('无显式 Wave') && w.includes('src/service.py')),
++    `warning 应提到无显式 Wave + service.py`)
+   rmSync(tmpDir, { recursive: true, force: true })
+ }
+ 
+diff --git a/test/probe7-anchor-testfile.test.mjs b/test/probe7-anchor-testfile.test.mjs
+index 1c464fe..b28b23f 100644
+--- a/test/probe7-anchor-testfile.test.mjs
++++ b/test/probe7-anchor-testfile.test.mjs
+@@ -3,8 +3,12 @@
+  *
+  * covered 行锚点判定从只认 file:line 扩为 file:line 或 `.test.` 文件名（对齐
+  * stage-contract 硬门三形态中的两形态）——行号随提交漂移场景 `.test.` 文件名锚过硬门
+- * 仍被 advisory 提示回补是无效摩擦（用户 2026-09-16 驾驭小结⑤）。advisory 不阻断语义不变；
+- * 裸反引号不收（保持 advisory 增量价值）。
++ * 仍被 advisory 提示回补是无效摩擦（用户 2026-09-16 驾驭小结⑤）。advisory 不阻断语义不变。
++ *
++ * 口径再对齐（2026-09-17-feedback-hardening FR-02 / D-005@v2，supersedes D-005@v1 的
++ * 「裸反引号不收」）：反引号包裹的路径/测试名与硬门 matrixEvidenceHasAnchor 同权收认
++ * ——硬门已保证锚点存在，advisory 多要行号在行号漂移场景零正确性收益纯摩擦
++ * （用户 2026-09-17 驾驭小结②）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -39,15 +43,26 @@ test('file:line 锚维持收认（原判定零变化）', () => {
+   assert.equal(r.missingAnchors.length, 0)
+ })
+ 
+-test('covered 证据无任何锚（纯中文描述/裸反引号无 .test. 无行号）仍计 missingAnchors', () => {
++test('covered 证据为反引号包裹的路径（无行号无 .test.）不再计 missingAnchors（D-005@v2 反转）', () => {
+   const md = probe7Md([
+-    '| 图形验证 | `test/captcha.test.mjs` | 验证码（1 命中） | covered | 已人工核验，测试在场 |',
+     '| 裸反引号 | `src/plain.js` | x（1 命中） | covered | `src/plain.js` |',
+   ])
+   const r = checkProbe7AnchorCoverage(md)
++  assert.equal(r.applicable, true)
++  assert.equal(r.coveredRows, 1)
++  assert.equal(r.missingAnchors.length, 0, '反引号路径锚与硬门三形态同权、行号可省——D-005@v2 supersedes D-005@v1 裸反引号不收')
++})
++
++test('covered 证据为裸文本无任何三形态（人工核验通过）仍计 missingAnchors', () => {
++  const md = probe7Md([
++    '| 图形验证 | `test/captcha.test.mjs` | 验证码（1 命中） | covered | 已人工核验，测试在场 |',
++    '| 人工复核 | `src/manual-check.js` | 复核（1 命中） | covered | 人工核验通过 |',
++  ])
++  const r = checkProbe7AnchorCoverage(md)
+   assert.equal(r.coveredRows, 2)
+-  assert.equal(r.missingAnchors.length, 2, '纯文字与裸反引号（非 .test. 无行号）都不算锚——保持 advisory 增量价值')
++  assert.equal(r.missingAnchors.length, 2, '无 file:line 无 .test. 无反引号——advisory 增量保护面不丢')
+   assert.ok(r.missingAnchors[0].evidence.includes('人工核验'))
++  assert.ok(r.missingAnchors[1].evidence.includes('人工核验通过'))
+ })
+ 
+ test('uncovered/partial 行证据无锚零影响（只查 covered）', () => {

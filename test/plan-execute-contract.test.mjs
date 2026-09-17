@@ -11,7 +11,7 @@
  * warning、plan 内子行 修改/参考 解析、`## Tasks` 隐式任务区）由 parseTaskRegistry 的
  * 对应用例（task-truth-contract.test.mjs ⑧/⑨）与本文对应新场景承接。
  */
-import { validatePlanForExecute } from '../src/stages/execute.js'
+import { validatePlanForExecute, buildWavePrompt } from '../src/stages/execute.js'
 
 let failed = 0
 let total = 0
@@ -248,6 +248,34 @@ console.log('\n--- light plan（无 Wave 结构）隐式 Wave 通过 ---')
   assert(result.waves.length === 1, `应合成 1 个隐式 Wave，实际 ${result.waves.length}`)
   assert(result.waves[0].implicit === true, '隐式 Wave 应标记 implicit: true')
   assert(result.waves[0].tasks[0].index === 1, '首个 task index 应为 1')
+}
+
+// ─────────────────────────────────────────
+// buildWavePrompt 调度指令（2026-09-17-feedback-hardening D-003@v1）：
+// implicit Wave 下发串行铁律（禁并行启动），显式 Wave 保留「必须并行启动」并行原文
+// ─────────────────────────────────────────
+console.log('\n--- buildWavePrompt：implicit Wave 串行指令 / 显式 Wave 并行原文 ---')
+{
+  const mkTasks = () => [
+    { index: 1, name: '添加 API 端点', file: 'src/api.js' },
+    { index: 2, name: '前端调用', file: 'src/ui.js' },
+  ]
+  // 隐式 Wave（parseWavesFromPlan 合成形态：plan.md 无显式划分 → implicit:true 单 Wave）
+  const implicitPrompt = buildWavePrompt({ index: 1, implicit: true, tasks: mkTasks() }, 1, null, null)
+  assert(implicitPrompt.includes('## Wave 1（隐式合成——plan.md 无显式 Wave 划分，串行执行）'),
+    'implicit 头应含「隐式合成」+「串行执行」标注')
+  assert(implicitPrompt.includes('隐式 Wave 串行铁律') && implicitPrompt.includes('禁止并行启动'),
+    'implicit 调度要求应含串行铁律与「禁止并行启动」')
+  assert(!implicitPrompt.includes('必须并行启动'), 'implicit Wave 不应含「必须并行启动」')
+  assert(!implicitPrompt.includes('同 Wave 内可并行'), 'implicit 角色清单不应含「同 Wave 内可并行」')
+  assert(implicitPrompt.includes('契约 task 由独立子代理逐个（串行）处理或落在不同批次'),
+    'implicit batch 条件 2 括注应收敛为串行口径（防同 prompt 自相矛盾）')
+  // 显式 Wave（无 implicit 标记）→ 并行原文不变
+  const explicitPrompt = buildWavePrompt({ index: 1, tasks: mkTasks() }, 1, null, null)
+  assert(explicitPrompt.includes('必须并行启动'), '显式 Wave 调度要求仍含「必须并行启动」')
+  assert(explicitPrompt.includes('同 Wave 内可并行'), '显式 Wave 角色清单仍含「同 Wave 内可并行」')
+  assert(!explicitPrompt.includes('隐式合成'), '显式 Wave 不应含「隐式合成」头标注')
+  assert(!explicitPrompt.includes('禁止并行启动'), '显式 Wave 不应含「禁止并行启动」')
 }
 
 // ─────────────────────────────────────────

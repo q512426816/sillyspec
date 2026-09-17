@@ -919,9 +919,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       if (existsSync(p7ReportPath)) {
         const p7Anchor = checkProbe7AnchorCoverage(readFileSync(p7ReportPath, 'utf8'))
         if (p7Anchor.applicable && p7Anchor.missingAnchors.length > 0) {
-          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line 或 .test. 文件名锚点（advisory 不阻断，审查会要求回补）：`)
+          console.warn(`\n⚠️ 探针7 锚点校验：${p7Anchor.missingAnchors.length}/${p7Anchor.coveredRows} 行判定为 covered 但证据列缺 file:line / \`.test.\` 文件名 / 反引号路径锚点（advisory 不阻断，审查会要求回补）：`)
           for (const m of p7Anchor.missingAnchors.slice(0, 10)) {
-            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点或 \`.test.\` 测试文件名`)
+            console.warn(`   - ${m.task}：${m.acceptance || '(空 acceptance)'}——证据当前为「${m.evidence || '(空)'}」，应给 \`测试文件路径:行号\` 首命中锚点、\`.test.\` 测试文件名或反引号包裹的路径/测试名（行号可省）`)
           }
           if (p7Anchor.missingAnchors.length > 10) console.warn(`   …还有 ${p7Anchor.missingAnchors.length - 10} 行`)
         }

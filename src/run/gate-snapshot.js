@@ -169,6 +169,98 @@ function parseGateSnapshotCopy(yamlText) {
   return out
 }
 
+/**
+ * local.yaml `gate_snapshot:` 段 `commands:` 列表扫描（2026-09-17-feedback-hardening
+ * R1 / FR-01 / D-002@v2，坑 gate-snapshot-missing-generated-artifacts 二阶——copy 面只搬
+ * 「主仓现有态」，主仓侧生成物缺失（fresh clone 未跑 postinstall）或过期（build-id 类
+ * 构建期产物随版本变）时供给缺失/陈旧态，快照内全量 lint/test 必挂，用户 2026-09-17
+ * 负面①实证）。与 parseGateSnapshotCopy 同风格段内单键扫描（本文件零新依赖，不引
+ * js-yaml）；认块列表（缩进 `- <cmd>` 条目）与 inline flow（`commands: [a, b]`）双形态
+ *（对齐 supplyFiles/copy 既有数组键约定）；空行/注释行不破段；缩进回收到段头及以下/
+ * 新顶层键即出段——段外同名键（顶层 `commands:` 命令段 / 其它段内嵌 commands）不误收。
+ * @param {string} yamlText local.yaml 原文
+ * @returns {string[]} 命令串（未配置/空段/读失败 → []）
+ */
+export function parseGateSnapshotCommands(yamlText) {
+  if (!yamlText) return []
+  const out = []
+  let inGate = false    // 位于 gate_snapshot: 段内
+  let gateIndent = -1
+  let inCmds = false    // 位于段内 commands: 列表内
+  let cmdsIndent = -1
+  for (const raw of String(yamlText).split(/\r?\n/)) {
+    const content = raw.trim()
+    if (!content || content.startsWith('#')) continue // 空行/注释行不破段
+    const indent = raw.match(/^[ \t]*/)[0].length
+    if (!inGate) {
+      if (/^gate_snapshot:\s*(?:#.*)?$/.test(content)) { inGate = true; gateIndent = indent; inCmds = false }
+      continue
+    }
+    if (indent <= gateIndent) { inGate = false; inCmds = false; continue } // 出段（新顶层键）
+    if (!inCmds) {
+      const flow = content.match(/^commands:\s*\[([^\]]*)\]/)
+      if (flow) {
+        for (const part of flow[1].split(',')) {
+          const v = _stripYamlValue(part)
+          if (v) out.push(v)
+        }
+        continue // inline flow 当行自洽，继续扫段内后续内容
+      }
+      if (/^commands:\s*(?:#.*)?$/.test(content)) { inCmds = true; cmdsIndent = indent }
+      continue // 段内其它子键（copy 等）忽略
+    }
+    if (indent < cmdsIndent) { inCmds = false; continue } // 缩进回收出列表
+    const item = content.match(/^-\s*(.+)$/)
+    if (!item) { inCmds = false; continue } // 同层非列表行 = 列表结束
+    const v = _stripYamlValue(item[1])
+    if (v) out.push(v)
+  }
+  return out
+}
+
+/**
+ * gate_snapshot.commands 执行段（D-002@v2）：快照构建期在快照根逐条执行生成物命令，产出
+ * 「本仓应然态」。调用契约：cwd=**快照根**（环境目录 junction 已就位；命令产出真实文件
+ * → 后续 copy 面对已存在 dst 跳过，新鲜度优先）。每条 300s 超时帽；非零退出/超时只
+ * warn（含 cmd 与输出尾 ≤300 字）继续下一条——fail-open 与 copy 面同策略，不作废快照；
+ * 执行结果不落 meta（快照即用即弃，console 输出即审计面）。信任级与
+ * commands.install/test/lint 同：主仓 local.yaml 用户自持配置，不加命令白名单。
+ * 内部导出（createGateSnapshot 唯一运行时消费方；直测断言返回值）。
+ * @param {string} snapshotRoot 快照根（命令 cwd）
+ * @param {string[]} commands 命令串列表（parseGateSnapshotCommands 产物）
+ * @returns {{ ran: number, failed: Array<{cmd: string, reason: string}> }} ran=实际执行条数（含失败），failed=逐条失败记录
+ */
+export function runGateSnapshotCommands(snapshotRoot, commands) {
+  if (!Array.isArray(commands) || commands.length === 0) return { ran: 0, failed: [] }
+  let ran = 0
+  const failed = []
+  for (const raw of commands) {
+    const cmd = String(raw).trim()
+    if (!cmd) continue
+    ran++
+    let r = null
+    try {
+      r = spawnSync(cmd, { shell: true, cwd: snapshotRoot, timeout: 300_000, encoding: 'utf8' })
+    } catch (e) {
+      const reason = `spawn 异常：${e && e.message ? e.message : e}`
+      failed.push({ cmd, reason })
+      console.warn(`⚠️ gate_snapshot.commands 条目失败（${reason}，不作废快照）：${cmd}`)
+      continue
+    }
+    const timedOut = r && r.error && (r.error.code === 'ETIMEDOUT' || /ETIMEDOUT/i.test(String(r.error.message || '')))
+    if (r.error || r.status !== 0) {
+      const reason = timedOut
+        ? '超时（>300s 帽）'
+        : (r.error ? `spawn 失败：${r.error.message}` : `非零退出码 ${r.status}`)
+      failed.push({ cmd, reason })
+      const tail = String((r.stdout || '') + (r.stderr || '')).trim().slice(-300)
+      console.warn(`⚠️ gate_snapshot.commands 条目失败（${reason}，不作废快照继续下一条）：${cmd}${tail ? `｜输出尾：${tail}` : ''}`)
+      continue
+    }
+  }
+  return { ran, failed }
+}
+
 /** 目录递归复制（copy 面 junction 不可用时的回退）。符号链接条目跳过（生成物目录内不追链）。 */
 function copyDirRecursive(srcDir, dstDir) {
   mkdirSync(dstDir, { recursive: true })
@@ -333,6 +425,25 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
       try { git(cwd, ['worktree', 'remove', '--force', '--quiet', snapshotRoot]) } catch {}
       try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch {}
       return null
+    }
+
+    // gate_snapshot.commands 命令面（D-002@v2，2026-09-17-feedback-hardening R1，用户
+    // 2026-09-17 负面①实证「全量快照必挂」）：主仓侧生成物缺失（fresh clone 未跑
+    // postinstall）或过期时，copy 面只搬「主仓现有态」供给缺失/陈旧态——本段在环境链接
+    // 就位后、copy 面前于快照根逐条执行 postinstall 类生成命令，产出「本仓应然态」（命令
+    // 产出真实文件 → copy 面对已存在 dst 跳过，新鲜度优先）。配置恒从主仓 cwd 读原文
+    //（local.yaml 复制段在后面，快照内副本不采信——与 copy 键同源）。未配置 → 全段空转
+    // 零输出（存量快照逐字节不变）；整段 try/catch fail-open：任何异常只 warn 不作废快照。
+    try {
+      const gsCfgPath = join(cwd, '.sillyspec', 'local.yaml')
+      const gsCommands = existsSync(gsCfgPath) ? parseGateSnapshotCommands(readFileSync(gsCfgPath, 'utf8')) : []
+      if (gsCommands.length > 0) {
+        console.log(`🔬 门禁快照 commands 面：${gsCommands.length} 条 gate_snapshot.commands 在快照内逐条执行（cwd=快照根，产出本仓应然态生成物）`)
+        console.warn(`⚠️ 环境目录是活链接：命令不得改写 node_modules/venv 等环境目录（写会穿透到主仓）——只放生成物命令（npm run gen:build-id 类）`)
+        runGateSnapshotCommands(snapshotRoot, gsCommands)
+      }
+    } catch (e) {
+      console.warn(`⚠️ gate_snapshot.commands 执行段异常（不作废快照）：${e && e.message ? e.message : e}`)
     }
 
     // gate_snapshot.copy 面（R4 / D-002@v1，2026-09-16-friction5-hardening）：gitignored

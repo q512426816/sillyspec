@@ -594,6 +594,8 @@ execute 是**动态阶段**，steps 由 `buildExecuteSteps(planFilePath, options
 - 真实 plan.md 有 M 个 Wave：总步骤数 = 4 + M + 3 + 2 = 9 + M。
 - light/none plan.md（`## Tasks` 下直接列 task、无 `## Wave N` 标题）：`parseWavesFromPlan` 识别隐式任务区，**遇含 task-XX 编号的 checkbox 时惰性创建隐式 Wave** 收容，详见 `src/stages/execute.js` 的注释与 `docs/sillyspec/plan-light-needs-wave-heading.md`。
 
+> 注（2026-09-17-feedback-hardening D-003@v1）：plan.md 无显式 Wave 划分时 parseWavesFromPlan 合成单隐式 Wave，buildWavePrompt 对其下发串行调度指令（禁止并行启动）；上方 fence 为显式 Wave 示例。
+
 ### Wave prompt 含契约 / 原型注入（示例中为空）
 
 `buildWavePrompt` 会根据 plan.md / changeDir 动态插入以下段落（位置：`### Wave 开始前` 与 `### 本 Wave 任务` 之间）：

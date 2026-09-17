@@ -959,7 +959,7 @@ dogfood 实战中反复出现的工具使用坑 + 根因 + 解法。新 agent �
 **现象（五坑各一行，坑文档 `execute-baseline-overlay-carries-broken-parallel-wip`）**：execute 期改动在 apply 前只存在于 worktree，而五处门禁的判定基准仍锚在主仓或 worktree 的单一形态上（「双真相」判定基准漂移）——
 ①**overlay 带入并行半成品**：create 的 baseline overlay 只排除 `.sillyspec/`，他 quick 会话/他变更语法坏的在途半成品被固化进本变更 baseline checkpoint，worktree 内 import 该文件链的测试全炸，人工「同步主仓修复版进 worktree」自救又连锁触发坑②；
 ②**assess 把 no-op 判超范围**：主仓 HEAD 在 execute 期间前进后，worktree 内自救/重同步成主仓最新内容的文件对 baseline checkpoint diff 非空（apply 回主仓实为 no-op），被 assess 误判「变更文件超出 allowed_paths」恒 BLOCKED；
-③**gitignore 生成物不随 worktree 供给**：`src/build-id.ts` 类构建生成物不在 git 树也不进 untracked overlay（`ls-files --others --exclude-standard` 尊重 .gitignore），worktree 构建炸 `Failed to load url`；
+③**gitignore 生成物不随 worktree 供给**：`src/build-id.ts` 类构建生成物不在 git 树也不进 untracked overlay（`ls-files --others --exclude-standard` 尊重 .gitignore），worktree 构建炸 `Failed to load url`（verify lint/test 门禁隔离快照链独立存在同类生成物缺口，供给口径见下方 gate_snapshot 配置示例——D-002@v2，与 worktree supplyFiles 是两条链）；
 ④**task 自动勾选漏计**：勾选守卫 `prefetchDiffFileSet` 只算 base..head（已提交），子代理默认不 commit 时 diffFileSet 恒空 → 草稿零 diff 守卫跳过全部勾选；同文件多 task 时 `attributeSuspectTasks`「首个命中即止」吞掉后续归属；
 ⑤**required-evidence 误报不存在**：逐文件核验单查主仓 `join(cwd, vf)`，apply 前新文件只在 worktree → 「文件不存在」错误阻断 verify 完成。
 
@@ -983,6 +983,21 @@ worktree:
     - src/build-id.ts   # 精确路径（相对仓根）
     - gen/**/*.ts       # glob（* 单层 / ** 多层）；展开上限 200，超出截断并警告
 ```
+
+**gate_snapshot 配置示例**（verify lint/test **门禁隔离快照**链，与上方 execute worktree supplyFiles 是两条链勿混写——坑③同类生成物缺口在门禁快照独立存在，D-002@v2）：
+
+```yaml
+# .sillyspec/local.yaml
+gate_snapshot:
+  copy:
+    - src/generated           # copy 面：主仓生成物 junction（失败回退复制）进快照——搬的是主仓现态
+  commands:
+    - npm run gen:build-id    # commands 面：快照构建期在快照根逐条执行生成命令，产出本仓应然态
+                              #（环境目录链接后、copy 面前跑；300s/条超时帽，非零退出/超时只 warn 继续——fail-open）
+# ⚠️ junction 与环境目录（node_modules/venv）都是活链接，commands 写它们会穿透主仓——只放生成物命令（npm run gen:build-id 类），不放 install/build 全家桶。
+```
+
+主仓缺/过期时 copy 面搬的是现态，commands 面产出应然态（D-002@v2）——fresh clone 未跑 postinstall、build-id 类产物随版本漂移时 copy 面救不了门禁，commands 面双保险。
 
 **证据**：五坑实证与决策见 changes/2026-09-15-worktree-dual-truth-gates/（requirements FR-01~FR-05 GWT 对账 + decisions D-001~D-005@v1）；回归锁定 test/worktree-dual-truth-gates.test.mjs 五组用例（每组正向 + 零回归各至少一条）。
 
