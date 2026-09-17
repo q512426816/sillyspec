@@ -50,7 +50,7 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等�
 4. 构建命令（CLI 自 local.yaml 注入，勿再读文件）：
 {LOCAL_COMMANDS}
 5. 若有关联变更，加载每个变更的设计文档：`cat {SPEC_ROOT}/changes/<c>/design.md 2>/dev/null`（理解设计意图）
-6. 如有需要，查询知识库：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`
+6. 知识库：CLI 已按本会话任务描述（--input）机械匹配知识库——命中时本 prompt 末尾注入「📚 命中知识」段（top-3 文件正文截断），直接阅读即可，勿自行重跑 INDEX 匹配；段未出现（无命中或未带 --input）且确有需要时才查询：`cat {SPEC_ROOT}/knowledge/INDEX.md 2>/dev/null`
 
 ### 模块上下文（CLI 按任务描述匹配注入）
 按本会话任务描述从 _module-map.yaml 匹配的模块已注入本 prompt 开头「📦 模块上下文」段（职责/核心文件/风险/最近变更）——**不要再 cat _module-map.yaml 挑卡**；开头无该段 = 无命中模块，需要跨模块全局视野时才读 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml` 自查。
@@ -165,7 +165,7 @@ sillyspec run quick --done --change <id> --req "…" --cause "…" --solution "�
 
 格式：`path::括注` 一条，`||` 分隔多条（括注可省略只留 `path`）。不传则「文件：」行回填审计到的实际改动文件单行（仍可事后手改）。
 
-> ⚠️ --file-notes 只随 step3 --done 同一命令传才生效。CLI 是短进程，run 与 done 是独立进程——step1/step2 的 sillyspec run quick（仅拿提示词）即使带了 --file-notes，也只写进那个短进程的内存、进程结束即丢，不会带到 step3 --done。请在 step3 收尾时连同 --output 一起传。
+> ⚠️ --file-notes 只随 step3 --done 同一命令传才生效。CLI 是短进程，run 与 done 是独立进程——step1/step2 的 sillyspec run quick（仅拿提示词）带 --file-notes 会被直接拒绝执行（去掉该参数重跑本条命令即可，进度不丢）。请在 step3 收尾时连同四字段一起传。
 
 ### 收尾推荐顺序（模块文档在 --done 前，QUICKLOG 在 --done 后，别记混）
 1. 【--done 前】命中模块 → 改模块文档 → `git add -- <模块文档>`（见下方「模块文档同步」）
@@ -204,13 +204,13 @@ sillyspec run quick --done --change <id> --req "…" --cause "…" --solution "�
 CLI 落盘的条目已是结构化产物（非简版骨架）：标题从「需求：」自动提取、正文四字段自动分行、文件行用 --file-notes 时为多行括注。--done 后只需核对，多数情况无需手改：
 
 1. 标题：CLI 已从「需求：」提取（截到首个标点、超 80 字截断）；按 step3 模板写成一句语义化短标题则无需手改，写成长句被截断时才手改。
-2. 文件：用了 --file-notes 已是多行括注；没传则回填审计到的实际文件单行，可事后补括注（示例见下）。
+2. 文件：用了 --file-notes 已是多行括注；没传则回填审计到的实际文件单行，可事后补括注（格式见下）。
 3. 正文：四字段已分行落盘，按需扩写充实（不允许只留一段「结果：」）。
 
-补括注示例（仅当没用 --file-notes、想事后补时）：
+补括注格式（**虚构占位示例，非任何会话的真实条目**——多会话并行时勿把下面两行误认成本 quick 的改动文件，核对对象永远是 QUICKLOG 中本会话 <quicklog-id> 条目的「文件：」行；仅当没用 --file-notes、想事后补时参照此格式）：
    文件：
-   - backend/app/modules/auth/router.py（登录端点串 check_rate_limit→assert_captcha_if_needed）
-   - backend/app/modules/auth/captcha_service.py（新建：限流 INCR + 失败计数 + Pillow 滑块生成/校验）
+   - <path/to/改动文件>（一句话括注：该文件改了什么，可含串入的调用链）
+   - <path/to/新建文件>（新建：职责一句话）
 
 一条 quick = 一条独立 ql 条目；核对只动本次 <quicklog-id> 条目，不追加到旧条目。QUICKLOG 在 .sillyspec/quicklog/（git 跟踪，--done 后需提交），核对不影响 --done 已通过的边界审计。
 ````

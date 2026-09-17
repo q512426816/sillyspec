@@ -1,0 +1,86 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-f861472a",
+  "totals": {
+    "files": 5,
+    "additions": 21,
+    "deletions": 22
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/quick.md",
+      "declared": true,
+      "additions": 6,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/quick.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".claude/skills/sillyspec-quick/SKILL.md",
+      "declared": true,
+      "additions": 8,
+      "deletions": 10,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 1,
+    "testFileCount": 0,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/quick.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-004-1a8a",
+  "sessionId": "quick-f861472a",
+  "savedAt": "2026-09-17T01:06:55.496Z",
+  "patchSha256": "0a0d34a42cf16b81c585bb28a3f9780246cd65180b2b5c65fde16f87a30ba6b5",
+  "patchStatus": "ok"
+}

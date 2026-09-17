@@ -162,3 +162,53 @@
 方案：stage-contract-spec清单加plan.global-constraints warning条目（literal-any+condition planLevel eq full）；validatePlanOutputs读plan.md frontmatter plan_level传入引擎ctx，读不到跳过零误报
 结果：新增12断言绿；stage-contract-spec/test契约回归双绿；全量npm test EXIT 0；lint过；CLI门禁实测通过
 审计：[gate] L1（跨 1 模块 · 4 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260917-004-1a8a | 2026-09-17 08:59:47 | quick流程反馈两修复——SKILL文档--input标必带+step3核对示例虚构占位化
+状态：已完成
+关联变更：（无）
+文件：
+- .claude/skills/sillyspec-quick/SKILL.md（--input升必带+示例命令全补；并行会话的两条要点删除经hunk分离留在工作区未暂存）
+- src/stages/quick.js（step3补括注示例虚构占位化+--file-notes时效描述修正）
+- docs/prompt/quick.md（镜像同步+step1存量漂移修复）
+- docs/prompt/_extracted.json（镜像流水线再生成）
+- .sillyspec/docs/sillyspec/modules/stages.changelog.md（ql-20260917-004变更索引）
+需求：quick流程反馈两修复——SKILL文档--input标必带+step3核对示例虚构占位化
+根因：用户2026-09-17工具使用小结两条摩擦：①漏--input启动触发CLI警告劝重启白跑一轮，根因是skill文档启动示例未把--input标为必带；②step3核对说明嵌auth/captcha仿真路径示例，多会话并行时可误认成本会话QUICKLOG条目
+方案：①SKILL.md参数表--input升「启动必带（agent视角必填）」并补漏带代价，生命周期命令与全部典型用法示例补--input（保留两豁免：关联变更自动提取标题、CI无语义）；②quick.js step3补括注示例改带「虚构占位示例，非任何会话的真实条目」标注的<path/to/…>占位符并明示核对对象是本会话<quicklog-id>条目；③顺带修正quick.js --file-notes非末步行为描述（静默丢→硬拒绝重跑，依CLI实证）；docs/prompt/quick.md+_extracted.json镜像流水线同步（顺带修step1知识库段存量漂移）；stages.changelog.md追加变更索引
+结果：定向测试8/8通过（quick-step1-injection/quick-testcase-design-include/quicklog-cli-managed/quick-session-guard-cleanup），lint 658文件全绿，docs/prompt/_verify.mjs exit 0，末步--done门禁CLI亲测npm test+lint通过
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/0 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260917-005-fe92 | 2026-09-17 10:39:14 | 用户驾驭小结（六）负面三修：①brainstorm「新建文件需 NEW: 前缀」核验在第 8 步末才拦（Step 6 写清单时无提示浪费一轮返工）②平台同步会话…
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（Step6 清单段 NEW: 前缀铁律）
+- src/design-facts.js（骨架清单段示例行+铁律注释）
+- src/sync.js（syncDocuments 指纹去重（manual 旁路））
+- src/stage-review.js（refresh-hash noop-unchanged 幂等分支）
+- src/progress/stage-machine.js（show 信号优先折叠（CAP=8））
+- src/progress.js（show 三参透传）
+- src/index.js（--all 解析+帮助行+noop 打印）
+- docs/prompt/brainstorm.md（镜像 fence 手改）
+- docs/sillyspec/platform-interface-map.md + docs/sillyspec/architecture-4a.md + docs/sillyspec/prompt-control-debt.md + .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（sync.js 行漂移 docs check --fix 重锚）
+- test/feedback2-quickfix.test.mjs（新增直测）
+需求：用户驾驭小结（六）负面三修：①brainstorm「新建文件需 NEW: 前缀」核验在第 8 步末才拦（Step 6 写清单时无提示浪费一轮返工）②平台同步会话中反复回写变更文件（两次撞 file modified since read、LF/CRLF 归一）③progress show 输出 29 个滞留变更完整清单噪音大
+根因：①规则只在 design-facts validateDesignFileList 的 --done 门禁与 machine-interface gate 预检（不主动跑预检则写作期零提示）②静态排查证实平台侧无自动回写本地 md 路径（pull 只写 DB/spec 树只推/bundle 恢复显式）——干扰源是 CLI 就地重写（register-stage-review --refresh-hash 整文件重写 bump mtime 打断 Read→Edit，上批会话两次实证）+ 每条命令 syncDocuments 全量 POST 刷「已同步 N 个文档」放大体感③stage-machine.show 多变更分支逐变更 3-5 行详情无折叠
+方案：①brainstorm.js Step6 清单段+design-facts 骨架清单段双面新增「路径存在性核验（NEW: 前缀铁律）」（示例行同步 NEW: 前缀）；brainstorm.md 镜像 fence 手改（_extracted 让路并行会话）②syncDocuments 四件套 sha256 指纹 marker 去重（未变跳过 POST deduped:true，成功才落 marker，manual 旁路）+ register-stage-review --refresh-hash docHash 已一致 noop-unchanged（不写盘不 bump mtime）③stage-machine.show 信号优先折叠（有信号保持详情/无信号单行超 8 折叠计数/--all 展开；progress.js+index.js 透传；--json 不动）
+结果：feedback2-quickfix.test.mjs 5 断言组全绿；全量 521/521 exit 0；lint exit 0；docs check --fix 重锚 4 份活文档行号锚（sync.js 插入段漂移的机械修复）；cli-top-level-aliases 一次状态性 flake 经配对复现+HEAD 对照证实非本次引入。--no-docs 豁免理由：三修均为提示文案/输出格式/幂等去重级内部行为，模块契约面零变化（NEW: 规则自证于 prompt+骨架两写作面；折叠不改 progress 数据契约；去重不改同步协议）；模块 changelog 正被并行会话暂存占用，避免同文件冲突。--force-baseline 理由：progress.js/stage-machine.js 受保护面正是反馈③的修复目标本体（输出折叠），ARCHITECTURE.md 为重锚机械修复。
+审计：[gate] L2（跨 6 模块 · 13 文件：7 代码/1 测试）advisory；模块文档认领已 --no-docs 显式豁免
+
+## ql-20260917-006-1deb | 2026-09-17 18:50:28 | 用户法证复现撤回「平台同步回写」归因后暴露的真实工具缺口：take-platform 回放/pull --spec 解包/worktree apply 三个批量…
+状态：已完成
+关联变更：2026-09-17-pass-cap-semantics
+文件：
+- src/write-audit.js（新模块 appendWriteAudit+detectCrlfFiles+CAP）
+- src/sync.js（take-platform 落盘循环审计+CRLF 即时 warn+pull 解包审计）
+- src/worktree-apply.js（merge 成功出口审计行）
+- test/write-audit.test.mjs（5 断言组）
+- .sillyspec/docs/sillyspec/modules/_module-map.yaml（sync 段补录）
+- docs/sillyspec/platform-interface-map.md（sync.js 行漂移重锚（6 处））
+需求：用户法证复现撤回「平台同步回写」归因后暴露的真实工具缺口：take-platform 回放/pull --spec 解包/worktree apply 三个批量写入口「单命令批量整文件重写+逐字节保留来源行尾+零持久留痕」——他机 CRLF 内容原样落盘且事后无任何日志可查（实证只能靠 3 文件毫秒级同 mtime 考古，用户按时间戳找 daemon 日志必然落空，因日志根本不存在）
+根因：静态枚举证实：sillyspec 自产文件一律 LF（taskcard/plan-adopt-waves 显式声明，fs.writeFileSync 字符串写盘跨平台 LF）；唯一的字节回放写入方=resolve --take-platform 的 _takePlatformSpecPaths（writeFileSync(full, data) 逐字节、循环内连写=毫秒级同 mtime、文件集=冲突集可恰为 3 个）与 pull --spec 整树解包；worktree apply 是主仓面批量写入（patch/merge）。三者的写入证据只有当次 console 打印（进程结束即蒸发）——法证级时间戳查询无落点
+方案：src/write-audit.js 新零依赖模块：appendWriteAudit(specDir, record) 追加 JSONL 到 .runtime/write-audit.jsonl（ts ISO/via/文件集/CRLF 画像，fail-open，WRITE_AUDIT_FILE_CAP=20 截断帽）+ detectCrlfFiles（Buffer.includes \r\n，string/Buffer 双形态）；三入口接线——_takePlatformSpecPaths 落 via:platform-resolve-take-platform（overwritten/removed/files/crlfPaths/crlfCount）+ CRLF 非空即时 warn（「他机编辑器产物按字节回放，autocrlf 提示属预期」防再误诊）；pullSpecBundle 解包落 via:pull-spec-bundle（fileCount/crlfCount，>4MB 大文件跳过采样）；applyWorktree merge 成功出口落 via:worktree-apply（manifestFace/删除面）；module-map sync 段补录 write-audit.js
+结果：test/write-audit.test.mjs 5 断言组全绿（JSONL 追加+目录自建/异常 fail-open/CRLF 混合面精确命中含二进制/三入口源文本锚/CAP 常量）；回归 12/12+17/17；全量 522/522 exit 0；lint 绿；下次「18:09 谁动了 design.md」查 write-audit.jsonl 一行即中

@@ -25,7 +25,7 @@ quick 阶段的 `--change` 语义是「关联变更」**且会触发步骤重置
 > `sillyspec quick` 是 `sillyspec run quick` 的顶层别名，两者等价。
 
 ```bash
-sillyspec run quick                            # 输出当前步骤 prompt（首次会记录 baseline）
+sillyspec run quick --input "<一句话任务描述>"  # 启动新会话（首次启动必带 --input，见下方参数表；输出当前步骤 prompt + 记录 baseline）
 sillyspec run quick --done --output "摘要"     # 完成当前步骤
 sillyspec run quick --status                   # 查看阶段进度
 sillyspec run quick --skip                     # 跳过可选步骤
@@ -50,7 +50,7 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 | 参数 | 说明 |
 |---|---|
 | `--spec-dir <path>` | 指定规范目录（默认 `<项目>/.sillyspec`） |
-| `--input "<一句话任务描述>"` | 通用参数，**quick 启动时强烈建议带**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。不带则落「(quick 任务)」占位标题——平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 `--done` 才回填（关联变更有 proposal/design 标题时可自动提取，免传） |
+| `--input "<一句话任务描述>"` | 通用参数，**quick 启动必带（agent 视角必填）**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。漏带则落「(quick 任务)」占位标题——CLI 启动即警告并建议放弃重启补带（长任务白跑一轮）、平台「快速修复」列表默认隐藏进行中的占位条目、语义标题要到最终 `--done` 才回填。仅两豁免可免传：关联变更有 proposal/design 标题可自动提取；CI/脚本确无语义可描述 |
 | `--non-interactive` | CI/脚本下禁用交互式 prompt |
 | `--interactive` | 强制交互（即便 stdin 非 TTY） |
 | `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
@@ -84,21 +84,21 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 # 推荐启动：带一句话语义标题（QUICKLOG/平台快速修复列表进行中即可见可读）
 sillyspec run quick --input "修复登录限流 INCR 计数误清" --linked-changes none --files src/auth.ts
 
-# 单变更项目，直接开始
-sillyspec run quick
+# 单变更项目，直接开始（--input 必带）
+sillyspec run quick --input "<一句话任务描述>"
 
 # 多变更项目，显式不关联
-sillyspec run quick --linked-changes none
+sillyspec run quick --input "<一句话任务描述>" --linked-changes none
 
-# 多变更项目，关联到指定变更
+# 多变更项目，关联到指定变更（关联变更有 proposal/design 标题时可免 --input）
 sillyspec run quick --linked-changes 2026-07-03-add-login
 
-# CI/脚本（非交互，避免 prompt 崩溃）
+# CI/脚本（非交互，避免 prompt 崩溃；无语义可描述时是唯一可省 --input 的场景）
 sillyspec run quick --non-interactive
 sillyspec run quick --done --linked-changes none --output "修复手机号校验"
 
 # 限定修改文件范围
-sillyspec run quick --files src/phone.ts,src/phone.test.ts
+sillyspec run quick --input "<一句话任务描述>" --files src/phone.ts,src/phone.test.ts
 ```
 
 ## 铁律
@@ -108,8 +108,6 @@ sillyspec run quick --files src/phone.ts,src/phone.test.ts
 - 完成后立即 `--done`，不跳过
 - QUICKLOG 记录的**骨架由 CLI 接管**：启动时 CLI 自动分配 ql-ID 并在 `.sillyspec/quicklog/QUICKLOG-<user>.md` 写「进行中」条目（含关联变更 tasks.md），`--done` 时 CLI 自动翻「已完成」+ 勾选 task + 回填文件路径。ql-ID 分配/状态/task 你无需手写，只需用注入的 `<quicklog-id>` 在模块文档变更索引引用
 - **QUICKLOG 落盘已结构化（`--done` 后按需核对，多数无需手改）**：CLI 已落盘结构化条目——标题从 `--output` 的「需求：」自动提取、正文四字段自动分行、文件行用 `--file-notes` 时为多行带括注。`--done` 后只需核对：标题弱才改（禁留 `(quick 任务)` 占位）；没用 `--file-notes` 时文件行是单行、可事后补括注（参照同文件早期丰富条目）；正文 `需求：`/`根因：`/`方案：`/`结果：` 四段按需充实（禁只留一段「结果：」）。一条 quick = 一条独立 ql，不追加到旧条目
-- **QUICKLOG 是共享追加日志，提交夹带他者条目为既定惯例（无需分离）**：多会话共享仓里 `.sillyspec/quicklog/QUICKLOG-<user>.md` 的文件级 `git add` 必然带上并行会话未提交条目——条目自带 ql-ID 归属、最终各自收敛，无害；commit message 对账以 ql-ID 为准即可。提交前可用 `git diff -- <QUICKLOG 文件>` 确认夹带面并在 message 声明（可选）。勿为"只提交自己的 hunk"做交互式拆分（追加式日志拆 hunk 易错）
-- **`--file-notes` 只在末步 `--done` 生效（非末步带它会被 CLI 硬拒绝 exit 2）**：括注内容留到末步连同四字段一起传；被拒后去掉该参数重跑本条命令即可（进度不丢）
 - **收尾顺序（模块文档在 `--done` 前，QUICKLOG 在 `--done` 后，别记混）**：① 命中模块→改模块文档→`git add`；② `sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文；若 `--linked-changes` 关联的真实变更其 tasks.md 已全部勾选**且该变更未进入完整流程**（进度库阶段停在 brainstorm 及之前），CLI 会自动将其归档到 `changes/archive/`；已走到 plan/execute/verify/archive 的变更不自动归档（tasks.md 全勾不等于流程收尾），须走原流程收尾）；③ 核对 QUICKLOG 标题（CLI 已从「需求：」提取并截断，写成短标题则无需改）→若改了再 `git add`
 - **最后一步 `--done` 必须给全四字段**（逐项一句话）：🔧 **推荐四参数形式**（CLI 自动合成结构化模板，无格式事故面）：`--done --change <id> --req "一句语义化短标题" --cause "为什么改" --solution "怎么改的" --result "验证结果"`。兼容旧形式 `--output "需求：… 根因：… 方案：… 结果：…"`（手拼须懂截断规则、禁嵌套全角冒号，缺字段被拒 exit 1）。这是 QUICKLOG「结果：」归档的唯一来源。**`--req` 写一句语义化短标题**（写「改了什么」，如「登录限流修复——INCR 计数误清」）——CLI 把它提取为 QUICKLOG 条目标题，截到首个标点、超 80 字截断；写完整需求长句会被截成语义不完整的状语前半段，需求背景放 `--cause`/`--solution`。前两个 step 的 `--output` 是中间摘要，不用此模板
 - **禁止**在没有运行 CLI 的情况下自行决定流程
