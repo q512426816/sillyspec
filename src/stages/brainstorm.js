@@ -418,6 +418,7 @@ ${REVIEW_CHECKLISTS.brainstorm.slice(0, 3).map((item, index) => (index + 1) + '.
 ### 交叉点抽取
 重点找这些交叉点：
 ${REVIEW_CHECKLISTS.brainstorm.slice(3).map((item) => '- ' + item).join('\n')}
+后两条为命中条件注入项：变更涉及角色/权限/字典类数据或新页面/前端路由时必查。
 
 ### 问答处理
 1. 先自动交叉审查，不要一上来问用户。

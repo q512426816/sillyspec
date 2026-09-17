@@ -15,7 +15,8 @@ import { tmpdir } from 'os'
 import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
 
-import { validateReviewSchema, verifyReviewGitEvidence } from '../src/task-review.js'
+import { validateReviewSchema, verifyReviewGitEvidence, isExplicitReviewWrite } from '../src/task-review.js'
+import { shouldAutoCheckTask } from '../src/run/complete.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
@@ -118,6 +119,30 @@ try {
     assert(Array.isArray(rv2.requiredEvidence) && rv2.requiredEvidence.length > 0, 'task-02 降级后补 requiredEvidence')
     assert(String(rv2.reviewerNotes).includes('adopt:'), 'task-02 reviewerNotes 追加降级标记')
     assert(r.combined.includes('task-02'), '输出警告点名降级的 task')
+
+    console.log('--- 2b. FR-08：adopt 通道写入溯源进 isExplicitReviewWrite 白名单（跨仓 task 自动勾选解锁）---')
+    // adopt 产物带 writtenBy=adoptTaskReviewMechanics#pid 溯源戳（reviewProvenanceStamp）
+    assert(typeof rv1.writtenBy === 'string' && rv1.writtenBy.startsWith('adoptTaskReviewMechanics'),
+      `adopt 重算写入落 writtenBy 溯源戳（实际 ${JSON.stringify(rv1.writtenBy)}）`)
+    // 白名单判定：两显式通道前缀均认，草稿/未知通道不认（task-05 / FR-08 补入 adopt 前缀）
+    assert(isExplicitReviewWrite(rv1) === true
+      && isExplicitReviewWrite({ writtenBy: 'writeTaskReview:force#pid1' }) === true
+      && isExplicitReviewWrite({ writtenBy: 'generateTaskReviewDrafts#pid1' }) === false
+      && isExplicitReviewWrite({ reviewerNotes: 'auto-generated draft' }) === false,
+      'isExplicitReviewWrite：writeTaskReview / adoptTaskReviewMechanics 双显式通道在册，草稿与其余通道不在册')
+    // 跨仓形态：adopt 写入（带 agent 供给 verdict=pass）+ 草稿式 notes/changedFiles 不在主仓
+    // diff 集内 → 显式白名单优先于草稿零 diff 守卫，自动勾选生效（此前被判草稿断链）
+    const crossRepoLike = {
+      ok: true,
+      review: {
+        specVerdict: 'pass', qualityVerdict: 'pass',
+        reviewerNotes: 'auto-generated draft 复述（agent 升级草稿引用旧文案形态）',
+        changedFiles: ['pkg/cross-only/x.js'],
+        task: 'task-01', writtenBy: 'adoptTaskReviewMechanics#pid123',
+      },
+    }
+    assert(shouldAutoCheckTask(crossRepoLike, false, { gitDir: 'x', base: 'b', head: 'h', diffFileSet: new Set() }, 'c1') === true,
+      'adopt 显式写入 + 跨仓 changedFiles 不在主仓 diff 集 → 自动勾选仍生效（白名单层修复）')
 
     console.log('--- 2. adopt 产物过 gate 同源校验 ---')
     for (const [taskId, rv] of [['task-01', rv1], ['task-02', rv2]]) {

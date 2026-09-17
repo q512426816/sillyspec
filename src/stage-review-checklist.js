@@ -8,7 +8,7 @@
  *
  * 条目为纯文本，不含序号/checkbox/缩进等结构性前缀（渲染层负责前缀形态）：
  * - brainstorm：前 3 条 =「交叉审查模型」三层检查（prompt 内渲染为「N. 」序号行），
- *   后 6 条 =「交叉点抽取」（渲染为「- 」列表行）；
+ *   后 8 条 =「交叉点抽取」（渲染为「- 」列表行）；
  * - plan：渲染为「- [ ] 」checkbox 行（审查清单段）；
  * - execute：渲染为 2 空格缩进的「N. 」序号行（QA 段「以下三项始终必查」）。
  */
@@ -23,6 +23,8 @@ export const REVIEW_CHECKLISTS = {
     'tasks.md 的执行范围与 design.md 的非目标',
     'decisions.md 的 D-xxx@vN 与 design.md 当前说法',
     'scan/module docs 或源码中的真实约束与 design.md 假设',
+    '涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过',
+    '涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）',
   ],
   plan: [
     'task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务',

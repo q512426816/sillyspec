@@ -20,6 +20,7 @@ import { tmpdir } from 'os'
 import {
   generateVerifyResultSkeleton, parseHandoverRows, backfillFactsFromMdAndTests,
 } from '../src/verify-probes.js'
+import { checkDbScriptDeclarationGate } from '../src/worktree-apply.js'
 
 const tmpRoots = []
 function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
@@ -131,4 +132,70 @@ test('backfillFacts：PASS WITH NOTES 零有效移交行 → advisory 警告；�
     })
     assert.ok(!warns3.some(w => /移交项/.test(w)), 'PASS 结论零移交不警告')
   } finally { console.warn = origWarn }
+})
+
+// ── severity 四列（2026-09-17-pass-cap-semantics task-07 / FR-06 / D-005@v2）──
+// 四列表头（类型/条目/复跑或验收条件/severity）解析 severity 列值；存量三列表格行零迁移
+// （缺省按类型映射）；backfill 后 facts.handover.items[] 带 severity 字段落盘；db-script
+// 行与 db 声明门互斥（写 db-script = 承认未执行，恒 blocking 且不得与「已对目标库执行」并存）。
+test('FR-06 severity 四列解析：显式列值/三列零迁移/backfill 落盘/db-script 声明门互斥', () => {
+  // 四列表头 + 显式 severity 列值（大小写归一由 /blocking|advisory/i 容错）
+  const four = parseHandoverRows([
+    '## 移交项（结构化）',
+    '| 类型 | 条目 | 复跑/验收条件 | severity |',
+    '|---|---|---|---|',
+    '| db-script | fix.sql | dev 库执行 | blocking |',
+    '| manual-acceptance | 三端联调 | 按 8.1 逐条 | ADVISORY |',
+  ].join('\n'))
+  assert.deepEqual(four.map(i => i.severity), ['blocking', 'advisory'],
+    '四列表 severity 列值解析（db-script 显式 blocking；ADVISORY 大写容错归 advisory——manual-acceptance 缺省本就 advisory）')
+
+  // 存量三列表格样例零迁移回归（缺省按类型映射，与四列缺省一致）
+  const three = parseHandoverRows([
+    '## 移交项（结构化）',
+    '| 类型 | 条目 | 复跑/验收条件 |',
+    '|---|---|---|',
+    '| db-script | 2026-09-15-rp-fix.sql | dev 库手工执行 |',
+    '| other | 杂项 | 说明 |',
+  ].join('\n'))
+  assert.deepEqual(three.map(i => i.severity), ['blocking', 'advisory'],
+    '存量三列表格行零迁移：db-script→blocking、other→advisory（severity 字段照常产出）')
+
+  // backfill 后 facts.handover.items[] 带 severity 字段落盘
+  const dir = mk('hov-sev-')
+  const factsPath = join(dir, 'verify-facts.json')
+  writeFileSync(factsPath, JSON.stringify({ schemaVersion: 2, probes: {} }, null, 2))
+  const origWarn = console.warn
+  const warns = []
+  console.warn = (...a) => { warns.push(a.join(' ')) }
+  try {
+    backfillFactsFromMdAndTests(factsPath, {
+      verifyMd: [
+        '## 结论', '结论枚举：`PASS WITH NOTES`', '',
+        '## 移交项（结构化）',
+        '| 类型 | 条目 | 复跑/验收条件 | severity |',
+        '|---|---|---|---|',
+        '| env-blocked | 集成用例 | 恢复后复跑 | blocking |',
+      ].join('\n'),
+      conclusion: 'PASS WITH NOTES',
+    })
+    const onDisk = JSON.parse(readFileSync(factsPath, 'utf8'))
+    assert.equal(onDisk.handover.items[0].severity, 'blocking', 'backfill 后 facts.handover.items[] 带 severity 字段落盘')
+  } finally { console.warn = origWarn }
+
+  // db-script handover 行与 db 声明门互斥不可同真（声明齐 × db-script 行 → 两面矛盾拦截）
+  const root = mk('hov-mutex-')
+  const specBase = join(root, '.sillyspec')
+  const changeDir = join(specBase, 'changes', 'mutex-1')
+  mkdirSync(changeDir, { recursive: true })
+  writeFileSync(join(changeDir, 'verify-result.md'), [
+    '已对目标库执行：db/fix.sql', '',
+    '## 移交项（结构化）',
+    '| 类型 | 条目 | 复跑/验收条件 |',
+    '|---|---|---|',
+    '| db-script | db/fix.sql | dev 库手工执行 |',
+  ].join('\n'))
+  const gate = checkDbScriptDeclarationGate({ projectRoot: root, specBase, changeName: 'mutex-1', files: ['db/fix.sql'] })
+  assert.ok(gate.ok === false && gate.error.includes('互斥'),
+    `声明「已执行」× db-script 移交行「待执行」两面矛盾 → 门拦截（实际 ${JSON.stringify(gate.error && gate.error.slice(0, 80))}）`)
 })

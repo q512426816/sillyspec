@@ -1423,6 +1423,9 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   // 跨仓仓不参与 module 子集策略，只跑 full npm test（design §6 + §5.4）；
   // 跨仓仓无 package.json → 跳过 + warn 不阻断（design §9 兼容策略）。
   // 任一跨仓仓 fail → 整体 fail（合并语义）。
+  // 主仓 skipped（test_strategy: skip / evidence-auto 推荐跳过 / module 0 命中）→ 进短路档：
+  // 未自配 commands.test 的跨仓不再 fallback npm test 假败（task-05 / FR-07，见
+  // runCrossRepoTestUnderMainSkip 逐仓三态）。
   return mergeCrossRepoResults(mainResult, ctx)
 }
 
@@ -1435,6 +1438,9 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
  *   - 跨仓仓无 package.json → 跳过 + console.warn（不阻断 verify）
  *   - 跨仓仓只跑 full npm test，不参与 module 子集策略（module 映射主仓强相关）
  *   - 任一仓 fail → 整体 fail；主仓 skipped + 跨仓仓 passed → 整体 passed（跨仓仓有测试即有效）
+ *   - 主仓 skipped → 短路档（task-05 / FR-07）：未自配 commands.test 的跨仓随主仓 skip 短路
+ *     （不跑 fallback npm test 假败），自配了 commands.test 的仍跑，own test_strategy: skip
+ *     的单独 skip（runCrossRepoTestUnderMainSkip 逐仓三态）
  *
  * 单仓 ctx（无跨仓 entry）→ 直接返主仓结果，零行为变化（GOAL-2）。
  *
@@ -1450,9 +1456,15 @@ function mergeCrossRepoResults(mainResult, ctx) {
   }
   if (crossEntries.length === 0) return mainResult
 
+  // 主仓 skip 短路档（task-05 / FR-07 / design §5）：主仓 skipped（test_strategy: skip /
+  // evidence-auto 推荐跳过 / module 0 命中）时，未自配 commands.test 的跨仓不再 fallback
+  // `npm test`（无 test script 的仓必 exit 1 → npm missing-script 假败打回整批）——随主仓
+  // skip 短路；自配了 commands.test 的跨仓仍跑（用户显式意图，主仓 skip 不连带豁免）；own
+  // local.yaml 配 test_strategy: skip 的跨仓单独 skip（逐仓生效）。主仓 passed/failed 零变化。
+  const mainSkipped = !!(mainResult && mainResult.status === 'skipped')
   const crossResults = []
   for (const entry of crossEntries) {
-    const crossResult = runCrossRepoFullTest(entry)
+    const crossResult = mainSkipped ? runCrossRepoTestUnderMainSkip(entry) : runCrossRepoFullTest(entry)
     crossResults.push({ repoKey: entry.repoKey, projectRoot: entry.projectRoot, result: crossResult })
   }
 
@@ -1468,6 +1480,62 @@ function mergeCrossRepoResults(mainResult, ctx) {
   }
   // 跨仓仓全 passed 或 skipped（无 package.json）→ 主仓 status 不变（合并跨仓信息到 outputTail）
   return mergeResultInfo(mainResult, crossResults)
+}
+
+/**
+ * 主仓 skip 短路档下跑单个跨仓仓测试（task-05 / FR-07，逐仓三态判定）：
+ *   - own local.yaml（<projectRoot>/.sillyspec/local.yaml）配 test_strategy: skip → 该仓
+ *     单独 skip（逐仓生效，独立于主仓策略）
+ *   - own local.yaml 配 commands.test → 仍走 runCrossRepoFullTest 执行（用户显式意图，
+ *     主仓 skip 不连带豁免实测）
+ *   - 未自配 commands.test（无 local.yaml / 读取失败 / 无 commands.test）→ 随主仓 skip
+ *     短路，不跑 fallback `npm test`（无 test script 的仓必 exit 1 → npm missing-script
+ *     假败，与坑 cross-repo-no-test-script 同族的环境性假红——但那是主仓非 skip 时的豁免
+ *     通道，语义不动）。出路注记：配 own local.yaml 的 commands.test 即可纳入实测。
+ *
+ * 合并语义（上游 mergeCrossRepoResults）：跨仓全 skipped → 整体保持主仓 skipped（reason
+ * 带短路与出路注记）；自配 commands.test 的跨仓 failed → 整体 fail（真败非假败，合理打回）。
+ *
+ * @param {object} entry - RepoEntry（isMain=false）
+ * @returns {object} 结果 shape 对齐 runCrossRepoFullTest 返回
+ */
+function runCrossRepoTestUnderMainSkip(entry) {
+  const crossLocalYaml = join(entry.projectRoot, '.sillyspec', 'local.yaml')
+  let yamlText = null
+  if (existsSync(crossLocalYaml)) {
+    try { yamlText = readFileSync(crossLocalYaml, 'utf8') } catch { yamlText = null }
+  }
+  if (yamlText) {
+    // own test_strategy: skip → 该仓单独 skip（显式声明优先于 commands.test）
+    if (extractTestStrategy(yamlText) === 'skip') {
+      return {
+        status: 'skipped',
+        command: null,
+        exitCode: null,
+        durationMs: null,
+        outputTail: null,
+        reason: `跨仓 repo "${entry.repoKey}" own local.yaml test_strategy: skip，该仓单独跳过测试（逐仓生效）`,
+        resultPath: null,
+        mode: 'cross-repo-skip-strategy',
+        repoKey: entry.repoKey,
+      }
+    }
+    // 自配 commands.test → 仍执行（原路径原语义）
+    if (extractTestCommand(yamlText)) return runCrossRepoFullTest(entry)
+  }
+  // 未自配 → 随主仓 skip 短路（不再 fallback npm test 假败）
+  console.warn(`⚠️  主仓 test_strategy skip 短路档：跨仓 repo "${entry.repoKey}"（${entry.projectRoot}）未自配 commands.test，不跑 fallback npm test（假败消除）。如需纳入实测：在 ${crossLocalYaml} 配 commands.test。`)
+  return {
+    status: 'skipped',
+    command: null,
+    exitCode: null,
+    durationMs: null,
+    outputTail: null,
+    reason: `主仓 skip 短路：跨仓 repo "${entry.repoKey}" 未自配 commands.test，随主仓跳过（可配 own local.yaml commands.test 纳入实测）`,
+    resultPath: null,
+    mode: 'cross-repo-main-skip',
+    repoKey: entry.repoKey,
+  }
 }
 
 /**

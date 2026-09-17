@@ -851,13 +851,20 @@ function extractAcceptanceTerms(text) {
  * 命中≠判定（R-03，不参与门禁）——只有存在命中的条目才进 hints（键 = acceptance 条目下标）。
  * 测试文件读取双根回退（cwd → worktree 根，坑 probe1-worktree-path-blind / probe3 双根同族：
  * apply 前新测试只在 worktree）。读不到的文件计 null 跳过。
+ * task-05 / FR-09：双根扩多根——并入 local.yaml repos 注册的跨仓仓根（调用方解析传入，
+ * probe8 :314-316 同款读法），跨仓仓根下的新测试文件可读、命中不再恒空（矩阵不因跨仓恒
+ * 预填 partial）；根列表去重保序（主仓根优先命中），无跨仓注册的单仓调用行为零变化。
  * 坑 probe7-prefill-evidence（ql-20260915-004）：anchors 逐词记录首命中 file:line（grep -n
  * 语义——首个包含该词的测试文件内的首行号），供证据列机械预填；terms/files 键维持旧形态
  * （既有消费方/测试零回归）。
+ * @param {Array<string>} testFiles 归属测试文件（仓根相对路径）
+ * @param {string} cwd 主仓 cwd
+ * @param {string|null} wtRoot worktree 根
+ * @param {string[]} [crossRoots] 跨仓仓根（local.yaml repos 注册根，绝对路径）
  * @returns {Record<number, {terms: string[], files: string[], anchors: Array<{term: string, file: string, line: number}>}>}
  *   普通对象，可 JSON 序列化
  */
-function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot) {
+function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot, crossRoots = []) {
   const hints = {}
   if (!testFiles || testFiles.length === 0) return hints
   const cache = new Map()
@@ -865,8 +872,7 @@ function buildAcceptanceHints(acceptanceItems, testFiles, cwd, wtRoot) {
     if (cache.has(rel)) return cache.get(rel)
     let content = null
     const posix = String(rel).split('\\').join('/')
-    for (const root of [cwd, wtRoot]) {
-      if (!root) continue
+    for (const root of [...new Set([cwd, wtRoot, ...crossRoots].filter(Boolean))]) {
       try { content = readFileSync(join(root, posix), 'utf8'); break } catch { /* 换根重试 */ }
     }
     cache.set(rel, content)
@@ -1175,6 +1181,25 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
         }
       } catch { /* tasks 目录不可读 → applicable 维持 false */ }
       probe7.applicable = cards.length > 0
+      // 跨仓仓根解析（task-05 / FR-09）：测试文件内容读取双根扩多根——跨仓卡（repo: <key>）
+      // 的 allowed_paths/review changedFiles 相对其仓根，cwd/wtRoot 双根读不到 → 关键词命中
+      // 恒空、矩阵恒预填 partial。读法同探针 8 先例：join(specBase, 'local.yaml') +
+      // parseRepoRegistry，相对路径按 cwd resolve；注册表不可读 fail-open 空表（单仓双根
+      // 行为零变化）。
+      const probe7CrossRoots = []
+      try {
+        const localYamlPath = join(specBase, 'local.yaml')
+        if (existsSync(localYamlPath)) {
+          const registry = parseRepoRegistry(readFileSync(localYamlPath, 'utf8'))
+          if (registry) {
+            for (const raw of registry.values()) {
+              if (!raw) continue
+              const root = isAbsolute(raw) ? raw : resolve(cwd, raw)
+              if (root && existsSync(root) && !probe7CrossRoots.includes(root)) probe7CrossRoots.push(root)
+            }
+          }
+        }
+      } catch { /* 注册表不可读 → 无跨仓根（fail-open） */ }
       // 跨卡归属（坑 probe7-provider-tests-in-consumer-card，2026-09-16 E 变更 verify 实证：8 格
       // 被机械预填 uncovered——task-03（测试卡）的用例测的是 task-01（provider）的导出函数，但归属
       // 只看本卡 allowed_paths ∪ review changedFiles，provider 卡的 acceptance 永远连不上消费卡的
@@ -1208,7 +1233,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
           task: card.task,
           acceptance: card.acceptance,
           testFiles,
-          hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot),
+          hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
         })
       }
     }
@@ -1566,6 +1591,33 @@ export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
 // 容错：占位行（<待填…）跳过；类型归一小写连字符（ENV-BLOCKED→env-blocked）；未知类型
 // 保留原值（advisory 面向 agent 复核，不静默丢弃）；非表格行（prose/注释）忽略。
 const HANDOVER_HEADING_RE = /^## 移交项（结构化）[^\n]*$/m
+// severity 第 4 列（2026-09-17-pass-cap-semantics task-01 / D-005@v2 / FR-06）：三列正则扩
+// 四列，存量三列表格行零迁移兼容（四列/三列正则互斥命中——四列行 5 管道段、三列行 4 管道段，
+// [^|] 组不含管道无回溯交叠）。缺省按类型映射：db-script/env-blocked→blocking（X-07：集成
+// 复跑与 fix.sql 恒 blocking，分层不削弱封顶）；manual-acceptance/other→advisory；未知类型
+// 保守取 blocking（fail-closed 侧——severity 低标会漏封顶，宁可多拦；未知类型本就该 agent
+// 复核，advisory 面向复核但封顶语义优先）。
+const HANDOVER_ROW4_RE = /^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$/
+const HANDOVER_ROW3_RE = /^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*$/
+const HANDOVER_DEFAULT_SEVERITY = (type) =>
+  (type === 'manual-acceptance' || type === 'other') ? 'advisory' : 'blocking'
+// 降级理由文法（X-02）：（降级：<理由>，依据 <file:line 或 D-xxx>）——全角括号/冒号/逗号，
+// 依据锚点 D-xxx 或 file:line。JS 正则不转义全角括号（知识库坑）。blocking→advisory 降级
+// 未命中本文法 → 仍按 blocking（fail-closed，防「全标 advisory」钻空——D-005@v2）。
+const HANDOVER_DOWNGRADE_REASON_RE = /（降级：.+?，依据\s*(?:D-\d+|[^\s，）:]+:\d+)）/
+// severity 解析：显式 blocking 优先（混写保守）；显式 advisory 对 blocking 缺省类型构成降级，
+// 理由文法在第 4 列或条件列任一命中即认（骨架第 4 列定型前 producer 宽收两侧；抽查面归
+// checkProbeConsistency 消费侧后续任务）；两枚举都不含 → 缺省映射。
+function resolveHandoverSeverity(type, severityCol, condition) {
+  const col = String(severityCol || '')
+  if (/blocking/i.test(col)) return 'blocking'
+  if (/advisory/i.test(col)) {
+    if (HANDOVER_DEFAULT_SEVERITY(type) !== 'blocking') return 'advisory'
+    return (HANDOVER_DOWNGRADE_REASON_RE.test(col) || HANDOVER_DOWNGRADE_REASON_RE.test(String(condition || '')))
+      ? 'advisory' : 'blocking'
+  }
+  return HANDOVER_DEFAULT_SEVERITY(type)
+}
 export function parseHandoverRows(md) {
   const text = String(md || '').replace(/\r\n/g, '\n')
   const m = text.match(HANDOVER_HEADING_RE)
@@ -1575,7 +1627,7 @@ export function parseHandoverRows(md) {
   const section = nextSection ? after.slice(0, nextSection.index) : after
   const items = []
   for (const line of section.split('\n')) {
-    const row = line.match(/^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]*?)\s*\|\s*$/)
+    const row = line.match(HANDOVER_ROW4_RE) || line.match(HANDOVER_ROW3_RE)
     if (!row) continue
     const type = row[1].trim()
     const item = row[2].trim()
@@ -1583,9 +1635,146 @@ export function parseHandoverRows(md) {
     if (type === '类型' || /^-{2,}$/.test(type.replace(/\|/g, ''))) continue // 表头/分隔行
     if (type.startsWith('<') || item.startsWith('<')) continue // 骨架占位行
     if (!type || !item) continue
-    items.push({ type: type.toLowerCase().replace(/[\s_]+/g, '-'), item, condition })
+    const normalizedType = type.toLowerCase().replace(/[\s_]+/g, '-')
+    items.push({
+      type: normalizedType,
+      item,
+      condition,
+      severity: resolveHandoverSeverity(normalizedType, row[4], condition),
+    })
   }
   return items
+}
+
+// ── stage-contract 动态绑定（D-011 producer 侧取数；分层单向——全局硬约束 3）──
+// extractAcceptanceMatrixSlots 经顶层 await 动态 import 绑定（非静态 import-from 语句，
+// 不造 import 环：stage-contract 静态闭包不含 verify-probes，加载序任一方向均无环）。
+// conclusion 先例是调用侧传参形态；此处选零 gates 改动形态——首次（gates.js 收尾前置）与
+// 二次（testCheckResult 后）两调用点自动覆盖，主路径无条件产出（X-08）不依赖调用方传参。
+// 加载失败降级 null：matrixPartialRows 计 0 + fail-soft 注记（additive 字段缺省不炸）。
+let extractAcceptanceMatrixSlotsFn = null
+try {
+  ;({ extractAcceptanceMatrixSlots: extractAcceptanceMatrixSlotsFn } = await import('./stage-contract.js'))
+} catch { extractAcceptanceMatrixSlotsFn = null }
+
+/**
+ * db/<file>.sql 执行声明解析（X-03 文法，2026-09-17-pass-cap-semantics task-01 / D-007 声明面）：
+ * 两类来源——①回执槽（## 集成验证回执）条目 command 含 db/<file>.sql（复用 parseEvidenceSlots
+ * 现成解析，不自造第二套）；②声明行「已对目标库执行：db/<file>.sql」（全/半角冒号均认）。
+ * @param {string} md verify-result.md 全文
+ * @returns {string[]} 去重排序后的 db/<file>.sql 路径（posix 形态，与 apply 文件集直接可比）
+ */
+const DB_SCRIPT_REF_RE = /(?:^|[^\w/])(db\/[\w./-]+\.sql)/g
+const DB_SCRIPT_DECLARE_RE = /已对目标库执行[：:]\s*`?(db\/[\w./-]+\.sql)/g
+export function parseDbScriptDeclarations(md) {
+  const text = String(md || '').replace(/\r\n/g, '\n')
+  const found = new Set()
+  const slots = parseEvidenceSlots(text)
+  for (const receipt of slots.runtimeEvidence || []) {
+    for (const m of String((receipt && receipt.command) || '').matchAll(DB_SCRIPT_REF_RE)) found.add(m[1])
+  }
+  for (const m of text.matchAll(DB_SCRIPT_DECLARE_RE)) found.add(m[1])
+  return [...found].sort()
+}
+
+// 回执 command 来源分类（X-10 / D-006：只认命令来源声明、不解析日志内容；枚举
+// cross-layer|build|unit，未定类默认 build——fail-closed 侧：build 不构成「集成实测已跑」，
+// 宁可触发封顶要求 handover）。对齐目标：change-risk-profile.js classifyReceiptSourceTag
+// （RECEIPT_SOURCE_CROSS_LAYER_RE/RECEIPT_SOURCE_UNIT_RE）——两侧正则族逐词保持同步演进
+// （打标单点归 change-risk-profile 侧，本函数是 producer 判定侧；G-3 收口：producer 侧
+// 曾漏 smoke 一词致 facts.integrationRan 偏 not-ran 误触封顶，已对齐，后续任一侧增词必须
+// 双侧同步）。cross-layer=起服务/HTTP/进程对进程；smoke 冒烟命令族计 cross-layer（D-006
+// 退役判据：批次 C commands.smoke 落地后由 smoke 回执一票判定「集成实测已跑」——起服务冒烟
+// 即跨层实测，不得默认 build 误拦金路径）；unit=单测 runner 直跑（JUnitCore/node --test/
+// mocha/jest/vitest/pytest 等）；其余（compile/lint/构建/mvn test 等混合形态）一律 build。
+const RECEIPT_CROSS_LAYER_RE = new RegExp([
+  '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
+  '\\biwr\\b', '\\birm\\b', 'https?://',
+  'spring-boot:run', '\\bjava\\b[^|\\n]*\\s-jar\\b',
+  '\\b(?:npm|pnpm|yarn|bun)\\s+(?:run\\s+)?(?:dev|start|serve|smoke)\\b',
+  '\\bdotnet\\s+run\\b', '\\bflask\\s+run\\b', '\\buvicorn\\b', '\\bgunicorn\\b',
+  '\\b(?:nc|netcat|telnet|socat)\\b',
+].join('|'), 'i')
+const RECEIPT_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+function classifyReceiptCommandSource(command) {
+  const cmd = String(command || '')
+  if (RECEIPT_CROSS_LAYER_RE.test(cmd)) return 'cross-layer'
+  if (RECEIPT_UNIT_RE.test(cmd)) return 'unit'
+  return 'build'
+}
+
+/**
+ * facts.integrationRan 判定（D-006 判定表，2026-09-17-pass-cap-semantics task-01）：
+ * 已跑 = ①quality-scan 实测记录在场（路径规则同 run/verify-quality-scan.js:36
+ * qualityScanRecordPath：specBase/.runtime/verify-quality-scan-<changeName>.json，specBase/
+ * changeName 自 factsPath 目录上推，不依赖调用方传参）且 commands.test 实跑（status 非
+ * skipped）且 test_strategy ∈ {full, module, evidence-auto}（evidence-auto 降级 module 已跑
+ * 子集按 module 档算已跑；local.yaml 未配置默认 full）；或 ②回执槽存在命令来源含跨层调用的
+ * 条目。未跑 = test_strategy=skip / 无记录 / 回执仅 compile·lint·纯单测来源。记录缺失
+ * （X-01：--done 亲测替代扫描场景时序不可得）→ not-ran + fail-open 注记（不阻断）。
+ * @param {string} factsPath verify-facts.json 路径（<specBase>/changes/<name>/verify-facts.json）
+ * @param {Array<{command: string}>} runtimeEvidence 回执槽解析结果（parseEvidenceSlots 产出）
+ * @returns {{ ran: 'ran'|'not-ran', notes: string[] }}
+ */
+function judgeIntegrationRan(factsPath, runtimeEvidence) {
+  const changeDir = dirname(factsPath)
+  const changeName = basename(changeDir)
+  const specBase = dirname(dirname(changeDir))
+  let record = null
+  try {
+    const rec = JSON.parse(readFileSync(join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`), 'utf8'))
+    if (rec && rec.schemaVersion === 1 && rec.source === 'cli-noai') record = rec
+  } catch { record = null }
+  let strategy = 'full' // 未配置 test_strategy 默认全量（verify-postcheck resolveTestStrategy 同口径）
+  try {
+    const yamlText = readFileSync(join(specBase, 'local.yaml'), 'utf8').replace(/\r\n?/g, '\n')
+    const sm = yamlText.match(/^\s*test_strategy:\s*([A-Za-z_-]+)\s*(?:#.*)?$/m)
+    if (sm) strategy = sm[1]
+  } catch { /* local.yaml 不可读 → 按 full 缺省 */ }
+  const scanRan = Boolean(record && record.testResult && record.testResult.status && record.testResult.status !== 'skipped')
+  if (scanRan && ['full', 'module', 'evidence-auto'].includes(strategy)) return { ran: 'ran', notes: [] }
+  const receipts = Array.isArray(runtimeEvidence) ? runtimeEvidence : []
+  if (receipts.some(r => classifyReceiptCommandSource(r && r.command) === 'cross-layer')) {
+    return { ran: 'ran', notes: [] }
+  }
+  const notes = []
+  if (!record) {
+    notes.push(`ℹ️ quality-scan 实测记录缺失（${join(specBase, '.runtime', `verify-quality-scan-${changeName}.json`)}）——facts.integrationRan 按 not-ran 判定（X-01 fail-open 注记，不阻断；--done 亲测替代扫描的场景记录时序不可得，出路=重跑质量扫描步或降级 NOTES）`)
+  }
+  return { ran: 'not-ran', notes }
+}
+
+/**
+ * Runtime Evidence「不涉及」行识别（X-18 文法，2026-09-17-pass-cap-semantics task-01 / D-004）：
+ * 「## Runtime Evidence」节内匹配「行含 端点|请求-响应|服务端点 关键词且以 不涉及 收尾」的
+ * 表格行——收尾判定剥行尾管道（含全角｜）后 endswith（表格行末格「不涉及」）；至少一行命中
+ * → true；无节/无命中 → false。骨架注释渲染归 task-03，本函数只做解析。
+ * @param {string} md verify-result.md 全文
+ * @returns {boolean}
+ */
+function parseRuntimeEndpointExcluded(md) {
+  const text = String(md || '').replace(/\r\n/g, '\n')
+  const lines = text.split('\n')
+  const start = lines.findIndex(l => l.startsWith('## Runtime Evidence'))
+  if (start === -1) return false
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^#{1,2}\s/.test(lines[i])) break // 同 parseEvidenceSlots sectionOf 口径：到下一 #/## 级标题止
+    const t = lines[i].trim()
+    if (!t.startsWith('|')) continue // 只认表格行（X-18 文法）
+    const stripped = t.replace(/[|｜]\s*$/, '').trim()
+    if (/端点|请求-响应|服务端点/.test(t) && stripped.endsWith('不涉及')) return true
+  }
+  return false
+}
+
+/** facts.matrixPartialRows：探针 7 矩阵 verdict∈{partial, uncovered} 行数（无段 → 0） */
+function countMatrixPartialRows(md) {
+  if (!extractAcceptanceMatrixSlotsFn) {
+    console.warn('⚠️ extractAcceptanceMatrixSlots 动态绑定不可用（stage-contract 加载失败，fail-soft）——facts.matrixPartialRows 本次计 0')
+    return 0
+  }
+  const matrix = extractAcceptanceMatrixSlotsFn(md)
+  return matrix.rows.filter(r => r && (r.verdict === 'partial' || r.verdict === 'uncovered')).length
 }
 
 export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResult = null, conclusion = null }) {
@@ -1626,6 +1815,17 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   if (conclusionSlot === 'PASS WITH NOTES' && handoverItems.length === 0) {
     console.warn('⚠️ 结论=PASS WITH NOTES 但「移交项（结构化）」章节零有效行——正文叙述的移交项（环境阻断复跑条件/人工验收步骤/待执行脚本）请结构化进 ## 移交项（结构化） 表格（类型枚举 env-blocked/manual-acceptance/db-script/other），避免移交项只活在 prose 里没人兜（2026-09-15 EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1）。')
   }
+  // ── PASS 封顶事实面四字段（2026-09-17-pass-cap-semantics task-01 / D-011 producer 侧）──
+  // X-08 时序纪律：全部在函数主路径无条件产出——首次 backfill = gates.js 收尾前置调用、无
+  // testCheckResult 时点（task-02 validator 在 runValidators 时点消费，已就位）；误挂二次
+  // 回填的 testCheckResult 分支则消费时点读不到、恒误拦。判定输入自推导自读（quality-scan
+  // 记录按 specBase 推导 / 矩阵经动态绑定），不依赖调用方传参。
+  facts.dbScriptDeclarations = parseDbScriptDeclarations(verifyMd || '')
+  facts.runtimeEndpointExcluded = parseRuntimeEndpointExcluded(verifyMd || '')
+  const integration = judgeIntegrationRan(factsPath, slots.runtimeEvidence)
+  facts.integrationRan = integration.ran
+  for (const note of integration.notes) console.warn(note)
+  facts.matrixPartialRows = countMatrixPartialRows(verifyMd || '')
   let testsBackfilled = false
   if (testCheckResult && testCheckResult.status && testCheckResult.status !== 'skipped') {
     facts.tests = {
@@ -1899,6 +2099,7 @@ export function generateVerifyResultSkeleton(result) {
     '',
     '## Runtime Evidence [层：人工判断]',
     '<!--TODO: 关键命令输出/时间戳/commit hash 证据链；integration/deployment-critical 必填，按实际触碰的运行时组件写（启动命令/端点/请求响应/日志片段/生命周期终态断言/失败模式排除），未涉及的行写「不涉及」-->', /* probe1-noqa */
+    '<!-- 降级路径（design §3.2，D-004 收口）：服务起不来时：Controller 直调冒烟（mock 下游，验绑定+校验+路由）/ 基础设施恢复后复跑固化用例——不要空填不涉及 -->',
     '',
     '## 代码审查 [层：人工判断]',
     '<!--TODO: 问题列表 + 总体评价。走查清单（零覆盖路径必查——探针 7 ⚠️ 条目即定向面）：', /* probe1-noqa */

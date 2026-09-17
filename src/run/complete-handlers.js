@@ -9,6 +9,9 @@
  *     srcDir 缺失时走 findAlreadyArchivedDir 幂等自愈（issue archive-stage-physical-tracking-desync）；
  *     archiveChangeDirectory + findAlreadyArchivedDir 已 export 供 test 直接 import
  *   - sanitizeProjectName / validateParsedProjects：项目名清洗 + 列表校验纯函数（handleScanProjectListStep 专用）
+ *   - assertWaveTasksComplete：execute「Wave N 执行」步骤 --done 前的完成度门（task-08 / FR-12——
+ *     本 Wave 任一 task 的 tasks.md checkbox 未勾 → exit 1；completeStep 在 status='completed' 赋值前
+ *     调用，异常 fail-open），实现收拢文件尾（同知识闭环段先例）
  *
  * 安全锚：run.js 始终 barrel。3 handler 由 run.js import 回来；sanitizeProjectName + validateParsedProjects
  * 被 test 直接 import（run-sanitize-project-name / run-scan-project-parse），run.js barrel re-export 契约保留。
@@ -46,7 +49,9 @@ import { resolveSessionIdentity } from '../progress.js'
 // ql-20260915-001 修复④：chunkPaths（argv 分批）供归档窄化 add / minePaths 精确补暂存用。
 // 无环：worktree-apply 静态闭包（worktree/task-review/quicklog 等）不引本文件；既有
 // withMainRepoLock 走动态 import 是归档链防环的历史形态，chunkPaths 纯函数无此约束。
-import { chunkPaths } from '../worktree-apply.js'
+// checkDbScriptDeclarationGate（task-04 / FR-05）同排静态引入：门函数自身纯文件集 ×
+// 文本声明对账（verify-probes 文法经 worktree-apply 顶层动态绑定），同样无环约束。
+import { chunkPaths, checkDbScriptDeclarationGate } from '../worktree-apply.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -784,6 +789,32 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
     pm._write(cwd, progress, changeName)
     console.log('⚠️  请添加 --confirm 确认归档，例如：sillyspec run archive --done --confirm --output "确认归档"')
     return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+  }
+  // ── db/*.sql 声明门·归档前置（2026-09-17-pass-cap-semantics task-04 / FR-05 / D-007/D-012
+  // 兜底第二门）── --confirm 已过、目录移动前：apply-manifest.json 的 files 过 worktree-apply
+  // 同款门（对账 verify-result.md 声明，含 db-script handover 互斥）。缺失/互斥 → 复用 !
+  // confirm 早退形态（status 回 pending + pm._write + early return），变更目录不动、输出修复
+  // 指引；apply-manifest.json 缺失 → 门空转不阻断（无 apply 面，主门在 verify 侧事实③）；
+  // manifest 读取/解析异常 → fail-open warn 放行（门异常不锁死归档）。
+  const dbGateManifestPath = join(specBase, 'changes', changeName, 'apply-manifest.json')
+  if (existsSync(dbGateManifestPath)) {
+    try {
+      const dbGateManifest = JSON.parse(readFileSync(dbGateManifestPath, 'utf8'))
+      const dbGateFiles = (dbGateManifest && Array.isArray(dbGateManifest.files) ? dbGateManifest.files : [])
+        .map((e) => (e && typeof e === 'object' ? e.path : e)).filter(Boolean)
+      const dbGate = checkDbScriptDeclarationGate({ projectRoot: cwd, specBase, changeName, files: dbGateFiles })
+      if (!dbGate.ok) {
+        steps[currentIdx].status = 'pending'
+        steps[currentIdx].completedAt = null
+        if (outputText) steps[currentIdx].output = null
+        pm._write(cwd, progress, changeName)
+        console.error(`⛔ db 脚本执行声明对账未过（归档阻断，变更目录未移动）：\n${dbGate.error}`)
+        return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
+      }
+      if (dbGate.warning) console.warn(`⚠️  ${dbGate.warning}`)
+    } catch (e) {
+      console.warn(`⚠️  db 声明门异常降级放行（apply-manifest.json 读取/解析失败，fail-open）: ${(e && e.message) || e}`)
+    }
   }
   // ── 归档前 delta.md 自动生成（P3d task-02，fail-soft 零阻断）──
   // 目录移走前在 changes/<name>/ 落一份 Before/Delta/After 三段式快照（四源采集容缺，
@@ -2479,5 +2510,145 @@ export function extractQuickCauseField(outputText) {
   const m = text.match(/根因\s*[：:]\s*([\s\S]*?)(?=(?:^|\n|\s)(?:方案|结果)\s*[：:]|$)/)
   if (!m) return ''
   return m[1].replace(/\s+/g, ' ').trim()
+}
+
+// ── Wave 步骤完成度门（2026-09-17-pass-cap-semantics task-08 / FR-12 / D-013@v1）──
+// 动机锚：2026-09-17 本变更执行中 Wave 2 越位实证——review write 退出码被 shell 管道吞掉后
+// --done 落在下一 Wave，「Wave 2 执行」步骤被静默标 completed；既有防护（--step 意图断言
+// 可选、并发 60s 横幅仅 warn）均非阻断。本门 fail-closed 补执行期缺口，放文件尾（函数声明
+// 提升 + B1 源码文本级断言窗口约束，同知识闭环段先例——门内含 process.exit，收拢在此避免
+// 推挪 handleQuickStageCompletion 附近 detectConcurrentChanges ±[200,600] 的断言锚）。
+
+/**
+ * 解析 plan.md 第 seq 个显式 Wave 段的任务 ID 列表。
+ *
+ * 同源口径孪生（不造第二套解析）：src/stages/execute.js 的 parseWavesFromPlan 未导出，且
+ * execute.js 不在本任务 allowed_paths，无法直接 import——正则与段边界守卫逐字对齐：
+ *   - Wave 标题 /^#+\s*Wave\s*(\d+)/i（空格可选、编号后缀任意——解析侧宁可多收不可静默丢）
+ *   - 引用行 /^[-*]\s+task-(\d+)\s*$/i → 归一 task-NN（padStart(2,'0')）
+ *   - 任何非 Wave 标题行（/^#{1,6}\s+/）退出当前段（「## 自检」等后续段的行不收）
+ *   - 段序 = 出现顺序（buildExecuteSteps 的步骤名 `Wave ${i+1} 执行` 取 waves 数组位次，
+ *     非段内编号——显式段存在时两者通常一致，乱序编号时位次与 prompt 实际下发任务一致）
+ * 差异（有意）：不做 parseWavesFromPlan 的隐式 Wave 合成——门只核对显式段，plan 无显式段
+ * 一律 null 交由调用方 warn 放行（D-003@v1 隐式串行语义无段可核对，不误伤）。
+ * 漂移风险由 test/wave-task-complete-gate.test.mjs 断言锁定。
+ *
+ * @param {string} planContent plan.md 全文
+ * @param {number} seq 1-based 显式段位次（步骤名编号同源）
+ * @returns {string[]|null} 该段 task ID 列表；null = 显式段不足 seq 个（隐式/light/兜底形态）
+ */
+function parseExplicitWaveTaskIds(planContent, seq) {
+  const WAVE_HEADING_RE = /^#+\s*Wave\s*(\d+)/i   // ← execute.js parseWavesFromPlan 同源正则
+  const waveRefRe = /^[-*]\s+task-(\d+)\s*$/i     // ← execute.js parseWavesFromPlan 同源正则
+  const sections = []   // [{ index, ids }] 按出现顺序（不合成隐式 Wave）
+  let current = null
+  for (const rawLine of String(planContent || '').split('\n')) {
+    const line = rawLine.replace(/\r$/, '')
+    const waveMatch = line.match(WAVE_HEADING_RE)
+    if (waveMatch) {
+      current = { index: parseInt(waveMatch[1], 10), ids: [] }
+      sections.push(current)
+      continue
+    }
+    if (/^#{1,6}\s+/.test(line)) { current = null; continue }
+    const refMatch = line.match(waveRefRe)
+    if (refMatch && current) current.ids.push(`task-${refMatch[1].padStart(2, '0')}`)
+  }
+  const target = sections[seq - 1]
+  return target ? target.ids : null
+}
+
+/**
+ * Wave 步骤完成度门（task-08 / FR-12 / D-013@v1）：execute 阶段名为「Wave N 执行」的步骤
+ * --done 时 fail-closed 核对本 Wave 全部 task 的 tasks.md checkbox 已勾（勾选唯一真源是
+ * CLI：review write 落盘即勾 + autoCheckPlanFromReviews 兜底）。任一未勾 → console.error
+ * 列未勾清单与两条出路 + process.exit(1)，步骤保持待完成（接线点在 completeStep 的
+ * status='completed' 赋值之前，exit 时 DB 不落假完成态）。
+ *
+ * 生效面与放行面：
+ *   - 仅 steps[currentIdx].name 匹配 /^Wave (\d+) 执行$/ 时生效，其他步骤名直接 return（零行为）
+ *   - ① autoCheckPlanFromReviews 幂等先行（review pass 自动勾选——先补勾再核对，「review 已
+ *     pass 但 checkbox 未回填」形态不误拦；该函数自身全路径 try/catch 从不抛）
+ *   - plan.md 无第 N 个显式 Wave 段（隐式 Wave/light 计划）→ warn 放行（D-003@v1 不误伤）
+ *   - plan.md/tasks.md 缺失或读取失败 → warn 放行（fail-open，文档瞬态不锁死流程）
+ *   - 门自身意外异常不在本函数内吞——上抛给接线层（complete.js）fail-open warn 放行；
+ *     正常判定路径（读到未勾）必须硬拦，process.exit 不受 try/catch 影响
+ *
+ * @param {{ steps: Array<{name:string}>, currentIdx: number, changeName: string, cwd: string, specBase?: string, platformOpts?: object }} opts
+ *   changeDir 锚定与 autoCheckPlanFromReviews 写入侧同口径（driftAnchor > specRoot > specBase >
+ *   cwd/.sillyspec）——tasks.md 是 autoCheck 写的，门必须读同一份，防双真源分裂。
+ */
+export async function assertWaveTasksComplete({ steps, currentIdx, changeName, cwd, specBase, platformOpts = {} }) {
+  const stepName = String(steps?.[currentIdx]?.name || '')
+  const waveMatch = /^Wave (\d+) 执行$/.exec(stepName)
+  if (!waveMatch) return   // 非「Wave N 执行」步骤：零行为（其他 execute 步骤 / 其他阶段不门）
+  const waveSeq = parseInt(waveMatch[1], 10)
+  if (!changeName || !cwd) {
+    console.warn(`⚠️ [wave-complete-gate] 缺 changeName/cwd，跳过「${stepName}」完成度核对（fail-open）`)
+    return
+  }
+
+  // ① autoCheck 幂等先行（D-013）：兜底 catch 仅防动态 import 自身失败——warn 后继续核对
+  //   （checkbox 才是门的判定依据；勾选补偿失败留给两条出路①重跑 --done 再试，不锁死）。
+  //   autoCheckPlanFromReviews 定义于 ./complete.js（grep 实证 :1172 export；任务卡原文写
+  //   ../task-review.js 系定位笔误，该文件仅有引用注释无定义）；动态 import 防顶层环
+  //   （complete.js 静态 import 本文件，运行时调用时 complete.js 已在模块缓存，无死锁）。
+  try {
+    const { autoCheckPlanFromReviews } = await import('./complete.js')
+    await autoCheckPlanFromReviews({ stageName: 'execute', changeName, cwd, platformOpts })
+  } catch (e) {
+    console.warn(`⚠️ [wave-complete-gate] autoCheck 先行勾选失败，按 tasks.md 现状继续核对: ${(e && e.message) || e}`)
+  }
+
+  const gateSpecBase = platformOpts?.specDriftAnchor || platformOpts?.specRoot || specBase || join(cwd, '.sillyspec')
+  const changeDir = join(gateSpecBase, 'changes', changeName)
+  const planPath = join(changeDir, 'plan.md')
+  const tasksPath = join(changeDir, 'tasks.md')
+
+  let planContent, tasksContent
+  try {
+    if (!existsSync(planPath) || !existsSync(tasksPath)) {
+      console.warn(`⚠️ [wave-complete-gate] plan.md/tasks.md 缺失（${changeDir}），跳过「${stepName}」完成度核对（fail-open 放行）`)
+      return
+    }
+    planContent = readFileSync(planPath, 'utf8')
+    tasksContent = readFileSync(tasksPath, 'utf8')
+  } catch (e) {
+    console.warn(`⚠️ [wave-complete-gate] plan.md/tasks.md 读取失败（${(e && e.message) || e}），跳过核对（fail-open 放行）`)
+    return
+  }
+
+  // ② 本 Wave 任务 ID 列表（parseExplicitWaveTaskIds：execute.js parseWavesFromPlan 同源孪生）
+  const waveTaskIds = parseExplicitWaveTaskIds(planContent, waveSeq)
+  if (waveTaskIds === null) {
+    console.warn(`⚠️ [wave-complete-gate] plan.md 无第 ${waveSeq} 个显式 Wave 段（隐式 Wave/light 计划无显式段头），跳过完成度核对（fail-open 放行——D-003@v1 隐式串行语义不误伤）`)
+    return
+  }
+  if (waveTaskIds.length === 0) {
+    // 段在但无引用行：execute 启动时 validatePlanForExecute 已拦（空 Wave 段诊断），不重复拦
+    return
+  }
+
+  // ③ tasks.md checkbox 逐 ID 核对（parseTaskRegistry 是 execute.js 导出的同源解析，复用不另造）
+  const { parseTaskRegistry } = await import('../stages/execute.js')
+  const registry = parseTaskRegistry(tasksContent)
+  const regById = new Map(registry.map(t => [t.id, t]))
+  const unchecked = waveTaskIds.filter(id => regById.get(id)?.done !== true)
+
+  if (unchecked.length > 0) {
+    // ④ fail-closed 硬拦：沿用仓内 console.error + process.exit(1) 既有形态（错误信息
+    //    process.exit 前同步打印完整——Windows 下 UV_HANDLE_CLOSING 退出码坑不复现）
+    console.error(`❌ Wave ${waveSeq} 完成度门未过：本 Wave ${waveTaskIds.length} 个 task 中 ${unchecked.length} 个的 tasks.md checkbox 未勾——本次 --done 未完成，步骤「${stepName}」保持待完成。`)
+    console.error('   未勾任务：')
+    for (const id of unchecked) {
+      const reg = regById.get(id)
+      console.error(`   - ${id}${reg && reg.name ? `（${reg.name}）` : '（tasks.md 注册表无此行——plan 悬空引用）'}`)
+    }
+    console.error('   两条出路：')
+    console.error(`   ① 任务确未完成：补实现与 review write（sillyspec review write --change ${changeName} --task <task-NN> --spec pass --quality pass --force --changed-files <文件>）后重跑 --done——review pass 落盘即自动勾选`)
+    console.error(`   ② 确属误推进（步骤被越位标完成）：sillyspec run execute --reopen --from-step ${currentIdx + 1}${changeName ? ` --change ${changeName}` : ''} 退回本步重走完成`)
+    process.exit(1)
+  }
+  console.log(`🛡️ 「${stepName}」完成度门通过：${waveTaskIds.length} 个 task checkbox 全勾（${waveTaskIds.join('、')}）`)
 }
 

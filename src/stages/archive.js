@@ -75,13 +75,17 @@ export const definition = {
 
 {SCOPE_AUDIT_TABLE}
 
-3. 确保任务清单（tasks.md）所有 task checkbox 都已勾选；对照下方完成度快照做归档前最后注视（未完成/存疑 → 停下勿确认）：
+3. 展示移交项清单（verify 阶段 facts.handover——CLI 机械注入如下，勿手改勿手算；blocking 置顶 + severity 标注，超封顶截断；确认前逐项核对 blocking 移交项已有处置安排（db-script 类须先在 verify-result.md 补执行声明——归档门会拦未声明/互斥态，env-blocked 确认复跑条件已登记，manual-acceptance 确认验收安排），advisory 项记录备查；无移交项时本区为空，注入异常时置换单行降级指引，全量见 changes/<变更名>/verify-facts.json）：
+
+{HANDOVER_SUMMARY}
+
+4. 确保任务清单（tasks.md）所有 task checkbox 都已勾选；对照下方完成度快照做归档前最后注视（未完成/存疑 → 停下勿确认）：
 {TASK_COMPLETION_REPORT}
-4. 若上一步机械决策提炼输出「⚠️ rejected 决策缺否决理由/复潮条件（needsWait）」：先按其指引处理——补录 decisions.md 缺失字段后重跑提炼命令（幂等），或经用户裁决跳过该条；处理结果写进本步 --output
-5. **git 暂存已由 CLI 自动完成**（归档完成时自动 add：\`.sillyspec/changes/archive/\`、本次同步的模块文档、\`.sillyspec/knowledge/decisions/\`——未提交，由用户通过统一提交工具处理）——你不需要也不应该手动 git add
-6. 让用户确认后，用 \`--confirm\` 完成本步骤：
+5. 若上一步机械决策提炼输出「⚠️ rejected 决策缺否决理由/复潮条件（needsWait）」：先按其指引处理——补录 decisions.md 缺失字段后重跑提炼命令（幂等），或经用户裁决跳过该条；处理结果写进本步 --output
+6. **git 暂存已由 CLI 自动完成**（归档完成时自动 add：\`.sillyspec/changes/archive/\`、本次同步的模块文档、\`.sillyspec/knowledge/decisions/\`——未提交，由用户通过统一提交工具处理）——你不需要也不应该手动 git add
+7. 让用户确认后，用 \`--confirm\` 完成本步骤：
    \`sillyspec run archive --done --confirm --output "确认归档"\`
-7. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
+8. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
 
 ### 输出
 归档完成 + archive 目录路径`,

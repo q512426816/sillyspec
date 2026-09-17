@@ -341,8 +341,11 @@ export function readReview(reviewPath) {
  * （ql-20260915-001 修复②，坑 review-write-draft-marker-stuck：execute 期间反复
  * 「草稿 review changedFiles 为空，跳过自动勾选」，主仓文档面任务自动勾选断链。）
  *
- * 判据：reviewProvenanceStamp 落的 writtenBy 以 'writeTaskReview' 开头（含 ':force' 变体）。
- * 显式写入带 agent 供给的 verdict（非草稿兜底通道），即使 reviewerNotes 字面残留
+ * 判据：reviewProvenanceStamp 落的 writtenBy 以显式写入通道前缀开头——writeTaskReview
+ * （`sillyspec review write`，含 ':force' 变体）或 adoptTaskReviewMechanics（adopt 通道
+ * 一键重算代填，落 writtenBy=adoptTaskReviewMechanics#pid；task-05 / FR-08 补入：该通道
+ * 合并写入的 review 带 agent 供给 verdict，此前被判草稿、跨仓 task 自动勾选断链）。
+ * 两通道均为显式写入（非草稿兜底通道），即使 reviewerNotes 字面残留
  * 'auto-generated draft'（agent 升级草稿时 --notes 引用/复述草稿文案、或 adopt 通道合并
  * 保留旧 notes 的变体）也一律按非草稿处理——verdict 判定不再受草稿零 diff 守卫限制。
  *
@@ -352,8 +355,11 @@ export function readReview(reviewPath) {
  * @param {object|null} review readReview 返回的 review 对象
  * @returns {boolean}
  */
+const EXPLICIT_REVIEW_WRITE_PREFIXES = ['writeTaskReview', 'adoptTaskReviewMechanics']
+
 export function isExplicitReviewWrite(review) {
-  return typeof review?.writtenBy === 'string' && review.writtenBy.startsWith('writeTaskReview')
+  if (typeof review?.writtenBy !== 'string') return false
+  return EXPLICIT_REVIEW_WRITE_PREFIXES.some(p => review.writtenBy.startsWith(p))
 }
 
 /**

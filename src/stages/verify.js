@@ -200,6 +200,7 @@ export const definition = {
 4. **预填探针段不可篡改或删除**：verify \`--done\` gate 会重跑探针对比 verify-result.md 正文，不符即拦（ERROR）；对探针结果有异议只能在预填段旁追加说明，不得改写原文
 5. **verify-facts.json 为机器底稿，勿手改**：防篡改对比的基准是正文，改底稿无意义
 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
+   - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」
 7. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
 
 ### verify-result.md 章节结构（骨架已含，占位替换即可）

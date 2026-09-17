@@ -16,7 +16,7 @@
  *   - stages/plan-postcheck.js: executePlanPostcheck（noAI 硬门）
  *   - node: join(path) + existsSync/readdirSync/readFileSync/mkdirSync/writeFileSync/appendFileSync/statSync(fs)
  */
-import { join } from 'node:path'
+import { join, isAbsolute, resolve } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { writeAtomicSync } from '../fs-atomic.js'
@@ -43,10 +43,10 @@ async function getStageStepsAutoAware(stageName, cwd, progress, specDir) {
 import { executeScanPreflight, executeScanPostcheck, computeScanProfile, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
 import { AUXILIARY_STAGES } from '../constants.js'
-import { executePlanPostcheck as runPlanPostcheckLib } from '../stages/plan-postcheck.js'
+import { executePlanPostcheck as runPlanPostcheckLib, parseRepoRegistry } from '../stages/plan-postcheck.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
 import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
-import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact } from './complete-handlers.js'
+import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, assertWaveTasksComplete } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
 import { validateDecisionModuleRefs } from '../design-facts.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
@@ -486,6 +486,19 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     console.error(`❌ 步骤「${steps[currentIdx].name}」刚被并行会话完成（本命令读库后被推进），拒绝重复推进——防把下一步误标完成。`)
     console.error(`   排查：sillyspec progress show${changeName ? ` --change ${changeName}` : ''} 确认当前步；你若也完成了同一 Wave，无需再次 --done；若要完成的是下一步，重跑 --done（此时它会落在正确的当前步）。`)
     process.exit(1)
+  }
+
+  // ── Wave 步骤完成度门（2026-09-17-pass-cap-semantics task-08 / FR-12 / D-013@v1）──
+  // 动机锚：2026-09-17 本变更执行中 Wave 2 越位实证——review write 退出码被 shell 管道吞掉后
+  // --done 落在下一 Wave，步骤被静默标 completed；既有防护（--step 可选断言 / 60s 并发横幅）
+  // 均非阻断。本门 fail-closed：名为「Wave N 执行」的步骤 --done 时本 Wave 任一 task 的
+  // tasks.md checkbox 未勾 → exit 1（先 autoCheckPlanFromReviews 幂等补勾再核对，见
+  // complete-handlers.js assertWaveTasksComplete）。门自身异常 fail-open warn——门 bug 不
+  // 锁死完成路径，正常判定路径硬拦；exit 时 status 尚未赋 completed，DB 不落假完成态。
+  try {
+    await assertWaveTasksComplete({ steps, currentIdx, changeName, cwd, specBase, platformOpts })
+  } catch (e) {
+    console.warn(`⚠️ Wave 完成度门异常，fail-open 放行（不阻断本次完成）: ${(e && e.message) || e}`)
   }
 
   steps[currentIdx].status = 'completed'
@@ -1009,7 +1022,33 @@ async function buildDraftContext(cwd, changeName) {
  * merge-base 补齐，与草稿归因同口径），再剔 meta.baselineFiles（R-07 防伪底线：merge-base..
  * wtHEAD 含 baseline checkpoint 提交，夹带文件=非本变更改动，不剔则「声明未做恰被夹带」的
  * task 误勾）。全空时仍不设 diffFileSet（退回逐 task 实测路径，原语义）。
+ *
+ * task-05 FR-08：另并入跨仓仓根双源（diff HEAD~1..HEAD ∪ status porcelain，见函数体
+ * collectCrossRepoDiffRoots 注记）——跨仓 task 的 changedFiles 按其仓根相对路径命中。
  */
+/**
+ * 跨仓仓根收集（task-05 / FR-08 diff 源层）：读侧口径 = <cwd>/.sillyspec/local.yaml 的
+ * parseRepoRegistry（与 design-facts.js 有段头分支 / execute MultiRepoContext 同款）；相对
+ * 注册路径按 cwd resolve，绝对路径原样，根不存在跳过。local.yaml 不可读/解析失败 fail-open
+ * 返回 []（不炸勾选主流程、不放大勾选面）。
+ */
+function collectCrossRepoDiffRoots(cwd) {
+  const roots = []
+  try {
+    if (!cwd) return roots
+    const localYamlPath = join(cwd, '.sillyspec', 'local.yaml')
+    if (!existsSync(localYamlPath)) return roots
+    const registry = parseRepoRegistry(readFileSync(localYamlPath, 'utf8'))
+    if (!registry) return roots
+    for (const raw of registry.values()) {
+      if (!raw) continue
+      const root = isAbsolute(raw) ? raw : resolve(cwd, raw)
+      if (root && existsSync(root)) roots.push(root)
+    }
+  } catch { /* registry 不可读 → 空表（fail-open） */ }
+  return roots
+}
+
 function prefetchDiffFileSet(ctx) {
   if (!ctx?.gitDir || !ctx.base || !ctx.head) return ctx
   try {
@@ -1030,6 +1069,37 @@ function prefetchDiffFileSet(ctx) {
       const n = String(b).replace(/\\/g, '/').trim()
       if (n) diffFileSet.delete(n)
     }
+    // task-05 FR-08：跨仓仓根 diff 双源并入（adopt 通道跨仓 review 的 changedFiles 是其仓根
+    // 相对路径，只算主仓源时 shouldAutoCheckTask 的 ctx.diffFileSet.has(f) 恒 miss → 跨仓
+    // task 自动勾选断链）。双源 = git diff --name-only HEAD~1..HEAD ∪ git status --porcelain
+    // --untracked-files=all（cross-repo-reconcile.js:94-106 双源口径只读复用，数组参数防
+    // shell 拆词），产物正斜杠归一；置于剔 baseline 之后（跨仓仓不含主仓 baseline checkpoint
+    // 提交，不被主仓夹带清单误剔）。git 失败/registry 不可读 fail-open 跳过该仓不炸主流程。
+    try {
+      for (const root of collectCrossRepoDiffRoots(ctx.cwd)) {
+        let anySource = false
+        const diffOut = gitQuiet(root, ['diff', '--name-only', 'HEAD~1..HEAD'], { timeout: 30 * 1000 })
+        if (diffOut !== null) {
+          anySource = true
+          for (const f of String(diffOut).split('\n')) {
+            const n = String(f || '').trim().replace(/^\.\//, '').replace(/\\/g, '/')
+            if (n) diffFileSet.add(n)
+          }
+        }
+        const statusOut = gitQuiet(root, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30 * 1000, trim: false })
+        if (statusOut !== null) {
+          anySource = true
+          for (const line of String(statusOut).split('\n')) {
+            // porcelain 行 = XY<space>path（剥前 3 列）；rename 取 -> 后新路径；剥引号、正斜杠归一
+            let p = line.slice(3).trim()
+            if (p.includes(' -> ')) p = p.slice(p.lastIndexOf(' -> ') + 4).trim()
+            p = p.replace(/^"|"$/g, '').replace(/\\/g, '/')
+            if (p) diffFileSet.add(p)
+          }
+        }
+        if (!anySource) console.warn(`⚠️ 跨仓仓根 ${root} git 不可用/非仓库（diff 与 status 双失败），跳过该仓 diff 源（fail-open，不阻断勾选主流程）`)
+      }
+    } catch { /* 跨仓源异常 → 不炸主流程（fail-open） */ }
     if (diffFileSet.size === 0) return ctx
     return { ...ctx, diffFileSet }
   } catch {

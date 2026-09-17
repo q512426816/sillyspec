@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   runVerifyProbes, renderVerifyProbesReport, generateVerifyResultSkeleton,
-  ensureAcceptanceMatrixSection, parseTaskAcceptance,
+  ensureAcceptanceMatrixSection, parseTaskAcceptance, backfillFactsFromMdAndTests,
 } from '../src/verify-probes.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -316,6 +316,53 @@ try {
     assert(seg.includes('covered'), `task-01 acceptance 预填 covered（不再假 uncovered；seg=${seg.slice(0, 120)}）`)
     // 无依赖关系的卡不并入（task-03 不反向承接无关卡——用 fixture 内只两卡，反向断言：t3 归属不含 src-feature.js 类）
     assert(!(t3.testFiles || []).some(f => f.includes('src-feature')), '依赖方向单向：下游不反向并入')
+  }
+  console.log('--- 9. FR-04 producer 增量：matrixPartialRows × handover 双输入同 md 产出（2026-09-17-pass-cap-semantics task-07）---')
+  {
+    // 门侧 error/放行分支（partial×handover 联动）已在 test/acceptance-matrix-gate.test.mjs 2.9~2.12
+    // 覆盖（task-03）；此处钉 producer 半边：verify-probes backfill 对同一份 verify-result.md 产出
+    // facts.matrixPartialRows（partial+uncovered 行计数）与 facts.handover.items[].severity（四列
+    // 解析）——封顶条件④与联动门的两个消费输入同源落盘。
+    const proj = mkdtempSync(join(tmpdir(), 'amx7p4-'))
+    tmpRoots.push(proj)
+    const specBase = join(proj, '.sillyspec')
+    const changeDir = join(specBase, 'changes', 'cp4')
+    mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+    writeFileSync(join(changeDir, 'design.md'), '## 文件变更清单\n\n| 操作 | 文件 | 说明 |\n|---|---|---|\n| 修改 | a.js | x |\n')
+    const factsPath = join(changeDir, 'verify-facts.json')
+    writeFileSync(factsPath, JSON.stringify({ schemaVersion: 2, probes: {} }, null, 2))
+    const md = [
+      '# 验证报告', '',
+      '#### 探针 7：验收×测试覆盖矩阵', '',
+      '**task-01**',
+      '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |',
+      '|---|---|---|---|---|',
+      '| 半承接 | `test/a.test.mjs` | — | partial | 断言见 src/a.js:42 |',
+      '| 未承接 | 无归属测试 | — | uncovered | — |',
+      '| 全承接 | `test/a.test.mjs` | — | covered | `test/a.test.mjs` |',
+      '',
+      '## 移交项（结构化） [层：人工判断——CLI 清单核验]', '',
+      '| 类型 | 条目 | 复跑/验收条件 | severity |',
+      '|---|---|---|---|',
+      '| manual-acceptance | 集成用例人工核验 | 按 8.1 逐条 | advisory |',
+      '',
+      '## 结论', '', '结论枚举：`PASS WITH NOTES`', '',
+    ].join('\n')
+    const capWarn = console.warn
+    const warns = []
+    console.warn = (...a) => { warns.push(a.join(' ')) }
+    try {
+      backfillFactsFromMdAndTests(factsPath, { verifyMd: md, conclusion: 'PASS WITH NOTES' })
+      const onDisk = JSON.parse(readFileSync(factsPath, 'utf8'))
+      assert(onDisk.matrixPartialRows === 2,
+        `facts.matrixPartialRows = partial∪uncovered 行数（1 partial + 1 uncovered = 2；covered 不计；实际 ${onDisk.matrixPartialRows}）`)
+      assert(onDisk.handover && onDisk.handover.items[0].severity === 'advisory' && onDisk.handover.items[0].type === 'manual-acceptance',
+        '同 md 的 handover 四列行 → facts.handover.items[].severity 落盘（封顶④「有去向」消费输入同源产出）')
+      writeFileSync(factsPath, JSON.stringify({ schemaVersion: 2, probes: {} }, null, 2))
+      backfillFactsFromMdAndTests(factsPath, { verifyMd: '# 验证报告\n\n无矩阵段\n', conclusion: 'PASS WITH NOTES' })
+      const zero = JSON.parse(readFileSync(factsPath, 'utf8'))
+      assert(zero.matrixPartialRows === 0, '无矩阵段 md → facts.matrixPartialRows=0（联动/封顶分支不误触发）')
+    } finally { console.warn = capWarn }
   }
 } finally {
   for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch {} }

@@ -380,3 +380,79 @@ test('runVerifyTestCheck ctx=null：与不传 ctx 等价（显式 null 防御）
   // 验证 wm 不会被误用（这里只是确认 r1 可用）
   assert.ok(wm.getMeta('c1'), 'wm fixture 正常')
 })
+
+// ──────────────────────────────────────────────────────────────────────────
+// 9. 主仓 test_strategy: skip 短路档（task-05 / FR-07 / design §5）：
+//    未自配 commands.test 的跨仓不再 fallback `npm test` 假败——随主仓 skip 短路
+// ──────────────────────────────────────────────────────────────────────────
+test('FR-07 主仓 skip 短路档：未自配 commands.test 的跨仓随主仓跳过（不跑 fallback npm test 假败）', () => {
+  const mainRepo = makeRepo(false)
+  // 跨仓仓有 package.json 且带 test 脚本——短路档下也不该执行（命令带哨兵串证明未跑）
+  const crossRepo = makeRepo(true, 'echo sentinel-cross-should-not-run')
+  // 主仓 local.yaml 只配 test_strategy: skip（不配 commands.test）
+  mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
+  writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'), 'test_strategy: skip\n')
+
+  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+  const wm = makeWm(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+  const ctx = new MultiRepoContext({
+    cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', 'crossSK'],
+    repoRegistry: new Map([['crossSK', crossRepo]]),
+    worktreeManager: wm,
+  })
+  const result = runVerifyTestCheck({
+    cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx,
+  })
+  assert.equal(result.status, 'skipped', `主仓 skip + 跨仓未自配 → 整体 skipped 不假败（actual: ${result.status}）`)
+  assert.ok((result.outputTail || '').includes('未自配 commands.test') && !result.outputTail.includes('sentinel-cross-should-not-run'),
+    `跨仓随主仓短路（SKIP reason 注记）且 fallback npm test 未执行（tail：${(result.outputTail || '').slice(-220)}）`)
+})
+
+test('FR-07 主仓 skip 短路档：自配 commands.test 的跨仓仍执行（用户显式意图，主仓 skip 不连带豁免）', () => {
+  const mainRepo = makeRepo(false)
+  const crossRepo = makeRepo(true, 'echo unused')
+  mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
+  writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'), 'test_strategy: skip\n')
+  writeLocalYaml(crossRepo, 'echo cross-tier-explicit-ok')
+
+  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+  const wm = makeWm(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+  const ctx = new MultiRepoContext({
+    cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', 'crossEC'],
+    repoRegistry: new Map([['crossEC', crossRepo]]),
+    worktreeManager: wm,
+  })
+  const result = runVerifyTestCheck({
+    cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx,
+  })
+  assert.ok((result.outputTail || '').includes('cross-repo crossEC: PASS'),
+    `自配 commands.test 的跨仓在短路档仍实测并 PASS（tail：${(result.outputTail || '').slice(-220)}）`)
+  assert.ok(result.mode && result.mode.includes('cross-repo'), `合并 mode 含 cross-repo 标记（actual: ${result.mode}）`)
+})
+
+test('FR-07 跨仓 own local.yaml test_strategy: skip → 该仓单独跳过（逐仓生效，独立于主仓策略）', () => {
+  const mainRepo = makeRepo(false)
+  const crossRepo = makeRepo(true, 'echo sentinel-own-skip-not-run')
+  // 主仓也 skip（短路档）——跨仓 own local.yaml 同时配 commands.test 与 test_strategy: skip，
+  // 显式 skip 优先于自配命令（逐仓生效；实现口径：own skip 判定位于 runCrossRepoTestUnderMainSkip
+  // 短路档内，见 verify-postcheck.js task-05 注记）
+  mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
+  writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'), 'test_strategy: skip\n')
+  mkdirSync(join(crossRepo, '.sillyspec'), { recursive: true })
+  writeFileSync(join(crossRepo, '.sillyspec', 'local.yaml'), 'test_strategy: skip\ncommands:\n  test: echo cross-own-cmd\n')
+
+  const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
+  const wm = makeWm(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
+  const ctx = new MultiRepoContext({
+    cwd: mainRepo, changeName: 'c1', declaredRepos: ['main', 'crossOS'],
+    repoRegistry: new Map([['crossOS', crossRepo]]),
+    worktreeManager: wm,
+  })
+  const result = runVerifyTestCheck({
+    cwd: mainRepo, specBase: join(mainRepo, '.sillyspec'), changeName: 'c1', ctx,
+  })
+  assert.ok((result.outputTail || '').includes('逐仓生效'),
+    `own test_strategy: skip 的跨仓单独跳过（SKIP reason 注记逐仓生效；tail：${(result.outputTail || '').slice(-220)}）`)
+  assert.ok(!result.outputTail.includes('sentinel-own-skip-not-run') && !result.outputTail.includes('cross-own-cmd'),
+    '该仓测试命令未被执行（skip 声明优先于自配 commands.test）')
+})

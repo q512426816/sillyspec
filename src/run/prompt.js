@@ -1312,6 +1312,42 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.split('{SCOPE_AUDIT_TABLE}').join(scopeTable)
   }
 
+  // {HANDOVER_SUMMARY}（2026-09-17-pass-cap-semantics task-04，FR-06 注入态）：archive「确认
+  // 归档」步的移交项清单注入——读 changes/<name>/verify-facts.json 的 facts.handover（task-01
+  // 产出 { count, items[] }，items 行含 type/item/condition/severity），blocking 置顶 + severity
+  // 标注 + 封顶渲染（maxRows 8，对齐 {SCOPE_AUDIT_TABLE} 60/量级收窄——移交项是裁决面不是
+  // 对账面），表尾指路 verify-facts.json 看全量。fail-soft：handover 段缺失/零条目/facts.json
+  // 缺失 → 空串（正常态零输出）；读取异常降级单行指引——注入永不阻断归档 prompt 输出
+  //（与门阻断语义分离，对齐 {SCOPE_AUDIT_TABLE} 注入先例）。
+  if (stageName === 'archive' && promptText.includes('{HANDOVER_SUMMARY}')) {
+    let handoverBlock = ''
+    try {
+      const hsSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const hsFactsPath = changeName ? join(hsSpecBase, 'changes', changeName, 'verify-facts.json') : null
+      if (hsFactsPath && existsSync(hsFactsPath)) {
+        const hsFacts = JSON.parse(readFileSync(hsFactsPath, 'utf8'))
+        const hsItems = (hsFacts && hsFacts.handover && Array.isArray(hsFacts.handover.items)) ? hsFacts.handover.items : []
+        if (hsItems.length > 0) {
+          const HS_MAX_ROWS = 8
+          const sevOf = (it) => (it && it.severity === 'blocking') ? 'blocking' : 'advisory'
+          const sorted = [...hsItems].sort((a, b) => (sevOf(a) === 'blocking' ? 0 : 1) - (sevOf(b) === 'blocking' ? 0 : 1))
+          const rows = sorted.slice(0, HS_MAX_ROWS).map((it) => {
+            const cond = it && it.condition ? ` | 条件: ${it.condition}` : ''
+            return `- [${sevOf(it)}] ${(it && it.type) || 'unknown'} | ${(it && it.item) || ''}${cond}`
+          })
+          handoverBlock = [
+            `【移交项清单（CLI 机械注入，共 ${hsItems.length} 条，blocking 置顶）】`,
+            ...rows,
+            ...(sorted.length > HS_MAX_ROWS ? [`……（其余 ${sorted.length - HS_MAX_ROWS} 条略——全量见 verify-facts.json）`] : []),
+          ].join(String.fromCharCode(10))
+        }
+      }
+    } catch (e) {
+      handoverBlock = '（移交项清单注入失败：' + (e && e.message ? e.message : e) + '——回退读 changes/<变更名>/verify-facts.json 的 handover 段核对后再确认归档，注入失败不阻断归档）'
+    }
+    promptText = promptText.split('{HANDOVER_SUMMARY}').join(handoverBlock)
+  }
+
   // 注入模块上下文（brainstorm/plan/execute 阶段全步 + quick 首步「理解任务」——刀①：quick
   // step1 原让 agent cat module-map 再挑模块卡读，改为按任务描述匹配后注入，基于 Module Context Index）
   const quickFirstStep = stageName === 'quick' && step && step.name === '理解任务'

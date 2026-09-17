@@ -33,6 +33,8 @@ function assertDeepEqual(actual, expected, msg) {
 
 // ═══ 内嵌迁移前快照：2026-09-10 自 stages 三件 prompt 原文字节级摘录（单源化当日基线）═══
 // brainstorm =「交叉审查模型」三层检查（渲染为「N. 」序号行）+「交叉点抽取」（渲染为「- 」列表行）
+// 【快照随 2026-09-17-pass-cap-semantics task-06 / FR-11 同步更新】交叉点自 6 条扩 8 条：
+// 新增「角色/字典生产查询口径」与「新页面 × 菜单/注册 DML 对账」两条（stages prompt 源同步）。
 const SNAPSHOT_BRAINSTORM_LAYERS = [
   '**定义层**：模糊概念是否有可测试定义。例如"高可用""异常数据""本地缓存""重试"。',
   '**一致性层**：跨章节/跨产物是否打架。例如数据流 vs 容错策略、schema vs 输入格式、非目标 vs tasks。',
@@ -45,6 +47,8 @@ const SNAPSHOT_BRAINSTORM_CROSS_POINTS = [
   'tasks.md 的执行范围与 design.md 的非目标',
   'decisions.md 的 D-xxx@vN 与 design.md 当前说法',
   'scan/module docs 或源码中的真实约束与 design.md 假设',
+  '涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过',
+  '涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）',
 ]
 // plan =「审查清单（读取 plan.md 的 plan_level，逐条核对）」下方条目（渲染为「- [ ] 」checkbox 行）
 const SNAPSHOT_PLAN = [
@@ -85,8 +89,13 @@ console.log('\n=== 内嵌迁移前快照逐条比对（钉死「迁移=逐字」
   assertDeepEqual(
     REVIEW_CHECKLISTS.brainstorm,
     [...SNAPSHOT_BRAINSTORM_LAYERS, ...SNAPSHOT_BRAINSTORM_CROSS_POINTS],
-    'brainstorm: 常量 == 迁移前三层检查(3) + 交叉点(6) 快照（逐字）'
+    'brainstorm: 常量 == 迁移前三层检查(3) + 交叉点(8) 快照（逐字；task-06/FR-11 两条新交叉点同步在册）'
   )
+  // FR-11 两条新条目字面钉住（角色/字典→生产查询口径；新页面→菜单/注册 DML 对账）
+  assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('以生产查询口径可解析到目标结果') && it.includes('enname+tenant')),
+    'FR-11: 清单含「以生产查询口径可解析到目标结果」条目（角色/权限/字典命中场景）')
+  assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('用户入口 × 菜单/注册 DML 对账') && it.includes('菜单/注册 SQL')),
+    'FR-11: 清单含「用户入口 × 菜单/注册 DML 对账」条目（新页面/前端路由场景）')
   assertDeepEqual(REVIEW_CHECKLISTS.plan, SNAPSHOT_PLAN, 'plan: 常量 == 迁移前审查清单(10 条) 快照（逐字）')
   assertDeepEqual(REVIEW_CHECKLISTS.execute, SNAPSHOT_EXECUTE, 'execute: 常量 == 迁移前三项必查(3 条) 快照（逐字）')
 }

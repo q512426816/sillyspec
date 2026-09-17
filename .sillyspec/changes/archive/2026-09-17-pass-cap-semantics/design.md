@@ -119,6 +119,7 @@ execute 完成名为 `Wave N 执行` 的步骤时 **fail-closed 校验本 Wave �
 | 修改 | src/run/complete.js | prefetchDiffFileSet 并跨仓 diff 源（cross-repo-reconcile 双源复用）——adopt/手写跨仓 review 的 changedFiles 命中主仓外 diff；Wave 完成度门前置接线（§7） |
 | 修改 | src/run/complete-handlers.js | 新增 assertWaveTasksComplete（Wave 完成度 fail-closed 门，D-013/task-08） |
 | 新增 | NEW:test/wave-task-complete-gate.test.mjs | Wave 门断言（全勾放行/任一未勾 exit 1/无 Wave 段 warn 放行/autoCheck 先行幂等） |
+| 修改 | test/run-complete-step-execute-batch.test.mjs | Case 2 夹具双 Wave 适配（旧单 Wave 未全勾仍完成步骤=FR-12 堵的洞，D-013 锚） |
 | 修改 | src/design-facts.js | 无段头清单行含跨仓注册路径时降 warning（不再逼 NEW:）；供 §1 事实③复用的清单解析已在 |
 | 修改 | src/worktree-apply.js | apply 尾声 db/*.sql 兜底声明门（文件集 ∩ db/*.sql ⊆ parseDbScriptDeclarations(verifyMd)） |
 | 修改 | src/stages/archive.js | Step 3 门控 definition（requiresConfirm/提示文案，纯 prompt 模板无逻辑挂点） |

@@ -14,10 +14,12 @@ allowed_paths:
   - src/run/complete-handlers.js
   - src/run/complete.js
   - NEW:test/wave-task-complete-gate.test.mjs
+  - test/run-complete-step-execute-batch.test.mjs
 target_files:
   - src/run/complete-handlers.js
   - src/run/complete.js
   - NEW:test/wave-task-complete-gate.test.mjs
+  - test/run-complete-step-execute-batch.test.mjs
 goal: >
   execute 完成名为「Wave N 执行」的步骤时 fail-closed 校验本 Wave 任务完成度（先幂等
   autoCheckPlanFromReviews，再核对 plan.md Wave N 段全部 task 的 tasks.md checkbox），

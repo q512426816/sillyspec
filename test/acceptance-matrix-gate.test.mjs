@@ -18,6 +18,10 @@
  *    - 无 tasks/ 目录 → no-op（严格档 + 无段也不产矩阵 error/warning——brownfield 零行为变化）
  *    - 有 tasks/ + 无段 + 严格档（真实 IR_STRICT_SINCE 常量构造 created_at）→ ERROR
  *    - 有 tasks/ + 无段 + 非严格档 → warning 不阻断
+ *    - partial/uncovered × facts.handover 联动（D-003/FR-04，task-03）：矩阵含 partial/uncovered
+ *      行且 facts.handover 零有效行 → error（部分实现必须有移交去向）；有 advisory 有效行放行；
+ *      严格档无 verify-facts.json → fail-closed（含重跑 verify-probes 出路）；非严格档存量零行为；
+ *      放行路径逐行关联 advisory（R-05 第一版：行标识未命中条目文本 → console.warn 不阻断）
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -176,8 +180,9 @@ console.log('\n=== 2. validateAcceptanceMatrix（runValidators verify 链） ===
 const tmpRoot = mkdtempSync(join(tmpdir(), 'amx-gate-'))
 tmpRoots.push(tmpRoot)
 
-/** 造一个能过 validateVerifyOutputs 基线的变更目录（结论槽 PASS + 低风险 design/plan） */
-function makeChange(cn, { strict = true, withTasks = true, verifyMd } = {}) {
+/** 造一个能过 validateVerifyOutputs 基线的变更目录（结论槽 PASS + 低风险 design/plan）。
+ *  facts 传对象时落 verify-facts.json（task-03 联动分支与 task-02 封顶校验的消费输入）。 */
+function makeChange(cn, { strict = true, withTasks = true, verifyMd, facts } = {}) {
   const root = mkdtempSync(join(tmpRoot, cn + '-'))
   tmpRoots.push(root)
   const changeDir = join(root, '.sillyspec', 'changes', cn)
@@ -198,6 +203,7 @@ function makeChange(cn, { strict = true, withTasks = true, verifyMd } = {}) {
       'acceptance:', '  - 判定枚举解析', '  - 证据锚点核验', '---', '',
     ].join('\n'))
   }
+  if (facts) writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify(facts, null, 2) + '\n')
   if (verifyMd !== null) writeFileSync(join(changeDir, 'verify-result.md'), verifyMd)
   return { root, cn }
 }
@@ -207,8 +213,8 @@ const MATRIX_HEAD = [
   '| acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |', '|---|---|---|---|---|',
 ].join('\n')
 
-function verifyDoc(bodyLines) {
-  return ['# 验证报告', '', '结论枚举：PASS', '', bodyLines.join('\n'), ''].join('\n')
+function verifyDoc(bodyLines, conclusion = 'PASS') {
+  return ['# 验证报告', '', `结论枚举：${conclusion}`, '', bodyLines.join('\n'), ''].join('\n')
 }
 
 // 2.1 未填槽 → errors 阻断
@@ -244,6 +250,8 @@ function verifyDoc(bodyLines) {
 }
 
 // 2.3 全填放行（四枚举各一 + 证据齐 → 整链 ok=true，不误伤既有正常流）
+// task-03 夹具同步：矩阵含 partial/uncovered 行 → 补 verify-facts.json（四条件全清形态，
+// handover 有 advisory 行承载 partial/uncovered 去向）——新契约下「正常流不误伤」语义不变。
 {
   const { root, cn } = makeChange('gate-allfilled', {
     verifyMd: verifyDoc([
@@ -253,16 +261,27 @@ function verifyDoc(bodyLines) {
       '| 枚举三 uncovered | 无归属测试 | — | uncovered | — |',
       '| 枚举四 non-testable | 无归属测试 | — | non-testable | 文档类条目无测试面 |',
     ]),
+    facts: {
+      schemaVersion: 2,
+      integrationRan: 'ran',
+      handover: { count: 1, items: [{ type: 'env-blocked', item: '边界用例环境阻断', condition: '环境恢复后复跑 test/x.test.mjs', severity: 'advisory' }] },
+      dbScriptDeclarations: [],
+      runtimeEndpointExcluded: false,
+      matrixPartialRows: 2,
+    },
   })
   const r = runValidators('verify', root, cn)
   assert(r.ok === true, `四枚举 + 证据齐 → verify 整链放行（实际 errors=${JSON.stringify(r.errors)}）`)
 }
 
 // 2.4 无 tasks/ → no-op（严格档 + 无段零新增 error/warning——brownfield 零行为变化）
+// task-03 夹具同步：严格档 + 结论 PASS 会触发 task-02 封顶 fail-closed——补全清 facts 使本用例
+// 回归「矩阵门禁 no-op」原测语义。
 {
   const { root, cn } = makeChange('gate-notasks', {
     strict: true, withTasks: false,
     verifyMd: verifyDoc(['正文无矩阵段']),
+    facts: { schemaVersion: 2, integrationRan: 'ran', dbScriptDeclarations: [], runtimeEndpointExcluded: false, matrixPartialRows: 0 },
   })
   const r = runValidators('verify', root, cn)
   assert(r.ok === true
@@ -304,12 +323,115 @@ function verifyDoc(bodyLines) {
     'verify-result.md 未落盘 → 矩阵门禁 no-op（存在性归引擎 manifest，不提前拦中间步骤）')
 }
 
-// 2.8 注册面：contracts.verify.validators 含两个 validator（getContract 消费方可见）
+// 2.8 注册面：contracts.verify.validators 含三个 validator（getContract 消费方可见；task-02 注册 validatePassEligibility）
 {
   const { getContract } = await import('../src/stage-contract.js')
   const c = getContract('verify')
-  assert(c && Array.isArray(c.validators) && c.validators.length === 2,
-    `verify validator 链注册为 2（validateVerifyOutputs + validateAcceptanceMatrix，实际 ${c && c.validators.length}）`)
+  assert(c && Array.isArray(c.validators) && c.validators.length === 3,
+    `verify validator 链注册为 3（validateVerifyOutputs + validateAcceptanceMatrix + validatePassEligibility，实际 ${c && c.validators.length}）`)
+}
+
+// 2.9 partial/uncovered 联动（task-03 / D-003 / FR-04）：partial 行 + facts.handover 零有效行 → error。
+// 结论取 PASS WITH NOTES 隔离 task-02 封顶校验（其只管 PASS），本分支不依赖结论独立生效。
+{
+  const { root, cn } = makeChange('gate-partial-nohandover', {
+    verifyMd: verifyDoc([
+      MATRIX_HEAD,
+      '| 部分承接 | `test/x.test.mjs` | — | partial | 断言见 src/feature.js:42 |',
+    ], 'PASS WITH NOTES'),
+    facts: { schemaVersion: 2, integrationRan: 'ran', dbScriptDeclarations: [], runtimeEndpointExcluded: false, matrixPartialRows: 1 },
+  })
+  const r = runValidators('verify', root, cn)
+  const err = r.errors.find(e => e.includes('部分实现必须有移交去向'))
+  assert(r.ok === false && !!err, '矩阵含 partial 行且 facts.handover 零有效行 → 阻断（部分实现必须有移交去向）')
+  assert(err && err.includes('task-01') && err.includes(clip40('部分承接')) && err.includes('## 移交项（结构化）'),
+    '联动 error 文案点名触发行（task+acceptance 40 字截断）与「## 移交项（结构化）」修复指引')
+}
+
+// 2.10 partial 行 + facts.handover 有 advisory 有效行 → 联动分支放行（封顶与否归 blocking 行判定，④与②分工）
+{
+  const { root, cn } = makeChange('gate-partial-handover', {
+    verifyMd: verifyDoc([
+      MATRIX_HEAD,
+      '| 部分承接 | `test/x.test.mjs` | — | partial | 断言见 src/feature.js:42 |',
+    ], 'PASS WITH NOTES'),
+    facts: {
+      schemaVersion: 2,
+      integrationRan: 'ran',
+      handover: { count: 1, items: [{ type: 'env-blocked', item: '边界用例环境阻断', condition: '环境恢复后复跑 test/x.test.mjs', severity: 'advisory' }] },
+      dbScriptDeclarations: [],
+      runtimeEndpointExcluded: false,
+      matrixPartialRows: 1,
+    },
+  })
+  const r = runValidators('verify', root, cn)
+  assert(r.ok === true && !r.errors.some(e => e.includes('部分实现必须有移交去向')),
+    '矩阵含 partial 行且 facts.handover 有 advisory 有效行 → 联动分支放行（有去向的部分实现不误伤）')
+}
+
+// 2.11 uncovered 行 + 严格档无 verify-facts.json（factsExpected=true 而 facts 缺失）→ fail-closed
+// 按零有效行拦下，文案含「重跑 verify-probes」出路
+{
+  const { root, cn } = makeChange('gate-uncovered-nofacts', {
+    verifyMd: verifyDoc([
+      MATRIX_HEAD,
+      '| 未承接声明 | 无归属测试 | — | uncovered | — |',
+    ], 'PASS WITH NOTES'),
+  })
+  const r = runValidators('verify', root, cn)
+  const err = r.errors.find(e => e.includes('部分实现必须有移交去向'))
+  assert(r.ok === false && !!err && err.includes('重跑 verify-probes') && err.includes(clip40('未承接声明')),
+    '矩阵含 uncovered 行且 factsExpected=true 而 verify-facts.json 缺失 → fail-closed 拦下（uncovered 同理 + 重跑 verify-probes 出路）')
+}
+
+// 2.12 存量口径：非严格档（factsExpected=false）partial 行 + 无 facts → 联动分支空转零行为变化
+{
+  const { root, cn } = makeChange('gate-legacy-partial', {
+    strict: false,
+    verifyMd: verifyDoc([
+      MATRIX_HEAD,
+      '| 部分承接 | `test/x.test.mjs` | — | partial | 断言见 src/feature.js:42 |',
+    ], 'PASS WITH NOTES'),
+  })
+  const r = runValidators('verify', root, cn)
+  assert(r.ok === true && !r.errors.some(e => e.includes('部分实现必须有移交去向')),
+    '存量变更（非严格档、未跑管线）partial 行 → 联动分支零行为变化（fail-open 不打爆存量）')
+}
+
+// 2.13 逐行关联 advisory（R-05 第一版/D-003）：行标识命中 handover 条目文本 → 不告警；
+// 未命中 → console.warn advisory（不阻断、不进 errors）。spy console.warn 验证。
+{
+  const warns = []
+  const origWarn = console.warn
+  console.warn = (...a) => { warns.push(a.join(' ')) }
+  let r
+  try {
+    const { root, cn } = makeChange('gate-advisory-link', {
+      verifyMd: verifyDoc([
+        MATRIX_HEAD,
+        '| 边界用例承接 | `test/x.test.mjs` | — | partial | 断言见 src/feature.js:42 |',
+        '**task-02**',
+        '| 日志脱敏复跑 | `test/y.test.mjs` | — | partial | 断言见 src/feature.js:43 |',
+      ], 'PASS WITH NOTES'),
+      facts: {
+        schemaVersion: 2,
+        integrationRan: 'ran',
+        handover: { count: 1, items: [{ type: 'env-blocked', item: '边界用例承接 环境阻断', condition: '环境恢复后复跑 test/x.test.mjs', severity: 'advisory' }] },
+        dbScriptDeclarations: [],
+        runtimeEndpointExcluded: false,
+        matrixPartialRows: 2,
+      },
+    })
+    r = runValidators('verify', root, cn)
+  } finally {
+    console.warn = origWarn
+  }
+  assert(r.ok === true && r.errors.length === 0
+    && warns.some(w => w.includes('日志脱敏复跑') && w.includes('advisory')),
+    '未命中行 → console.warn advisory 且不阻断不进 errors（整链 ok=true）')
+  assert(!warns.some(w => w.includes('边界用例承接'))
+    && warns.filter(w => w.includes('移交去向未在 handover 条目中命中')).length === 1,
+    '命中行（acceptance 文本进 handover 条目）不告警——仅未命中行一条 advisory')
 }
 
 for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch { /* 清理尽力 */ } }

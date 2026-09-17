@@ -29,6 +29,7 @@ import {
   loadModuleMap,
   validateDecisionModuleRefs,
   generateDesignSkeleton,
+  validateDesignFileList,
 } from '../src/design-facts.js'
 import { parseDecisions } from '../src/decision-distill.js'
 import { parseFileChangeListDetailed } from '../src/change-list.js'
@@ -623,6 +624,39 @@ const FACTS_PROMPT_STEPS = [{ name: '加载项目上下文', prompt: '读项目�
   assert(!r3.error, `读取异常被吞、渲染不阻断（error=${r3.error}）`)
   assert(!r3.stdout.includes('### 🧾 机械事实底稿'), '异常 → 无底稿注入段')
   assert(!r3.stdout.includes('{SCAN_FACTS}'), 'fail-soft 仍清占位符（无残留）')
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FR-10：design 清单无仓变更段头 × 跨仓注册路径 → 降 warning 提示补段头
+// （2026-09-17-pass-cap-semantics task-07；实现 task-05——design-file-ref-cross-repo-blind
+//  无段头形态：不按主仓根逼 NEW: 前缀，主仓真幻觉路径仍按主仓根核验暴露）
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  console.log('=== FR-10：无段头跨仓注册路径降 warning（不逼 NEW: 前缀）===\n')
+  const { cwd } = makeRepo('df-noseg-')
+  const changeDir = join(cwd, '.sillyspec', 'changes', '2026-09-17-df-noseg')
+  mkdirSync(changeDir, { recursive: true })
+  // 注册跨仓（相对路径按 cwd resolve——真实使用形态：basename 前缀命中）
+  mkdirSync(join(cwd, 'cross', 'be-svc', 'src', 'common'), { recursive: true })
+  writeFileSync(join(cwd, 'cross', 'be-svc', 'src', 'common', 'router.js'), 'x')
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'repos:\n  be-svc: cross/be-svc\n')
+  // 无「## be-svc 仓变更」段头：跨仓路径行 + 主仓真幻觉行混排
+  writeFileSync(join(changeDir, 'design.md'), [
+    '# 设计', '',
+    '## 文件变更清单', '',
+    '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
+    '| 修改 | README.md | 主仓既有 |',
+    '| 修改 | be-svc/src/common/router.js | 跨仓既有 |',
+    '| 修改 | ghost-main.js | 主仓幻觉 |', '',
+  ].join('\n'))
+  writeFileSync(join(cwd, 'README.md'), 'x\n')
+  const r = validateDesignFileList({ changeDir, cwd })
+  assert(r.errors.length === 1 && r.errors[0].path === 'ghost-main.js',
+    `无段头跨仓行不报 design_file_ref_invalid、主仓幻觉路径仍按主仓根报（errors=${JSON.stringify(r.errors.map(e => e.path))}）`)
+  assert(r.warnings.some(w => w.includes('be-svc') && w.includes('补「## be-svc 仓变更」段头')),
+    `跨仓注册路径行降 warning 提示补段头（warnings=${JSON.stringify(r.warnings)}）`)
+  assert(!r.warnings.some(w => w.includes('ghost-main.js')) && r.errors[0].message.includes('design_file_ref_invalid'),
+    '分工：跨仓疑似行只 warning、主仓幻觉行 error（只消除假红、不引入假绿）')
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -14,8 +14,14 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractVerifyConclusionSlot } from '../src/stage-contract.js'
+import { extractVerifyConclusionSlot, validatePassEligibility } from '../src/stage-contract.js'
 import { generateVerifyResultSkeleton } from '../src/verify-probes.js'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+const tmpRoots = []
+test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
 
 test('槽解析：填 PASS', () => {
   assert.equal(extractVerifyConclusionSlot('## 结论 [层：人工判断]\n\n结论枚举：`PASS`——全绿'), 'PASS')
@@ -70,4 +76,35 @@ test('骨架：含槽行且占位符不含枚举词（旧 `<待填：PASS 或 FA
   assert.ok(!sk.includes('<待填：PASS'), '旧占位符形态已消灭（不再被窗口正则误读成 PASS）')
   // 整骨架喂槽解析器：槽存在未填 → ''（fail-closed，骨架不能直接过结论门）
   assert.equal(extractVerifyConclusionSlot(sk), '')
+})
+
+// ── 封顶文案联动（2026-09-17-pass-cap-semantics task-07 / FR-01 Then 文案）──
+// 结论槽值 PASS 被四事实封顶拦截时，error 文案含触发行枚举与「改写 PASS WITH NOTES +
+// 补『## 移交项（结构化）』」修复指引；结论槽 NOTES 放行（封顶只管 PASS 的联动口径）。
+test('FR-01 Then 文案：结论槽 PASS 被封顶 → error 含触发行枚举 + 修复指引；槽 NOTES 放行', () => {
+  const root = mkdtempSync(join(tmpdir(), 'slot-cap-'))
+  tmpRoots.push(root)
+  const changeDir = join(root, '.sillyspec', 'changes', 'slot-cap')
+  mkdirSync(changeDir, { recursive: true })
+  writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify({
+    schemaVersion: 2,
+    integrationRan: 'not-ran',
+    handover: { count: 0, items: [] },
+    dbScriptDeclarations: [],
+    runtimeEndpointExcluded: false,
+    matrixPartialRows: 0,
+  }, null, 2))
+  writeFileSync(join(changeDir, 'verify-result.md'),
+    '# 验证报告\n\n## 结论 [层：人工判断]\n\n结论枚举：`PASS`——全绿\n\n单测全过。\n')
+  const capped = validatePassEligibility(root, 'slot-cap', {})
+  assert.ok(capped.ok === false
+    && capped.errors.some(e => e.includes('[fact integration-not-run]') && e.includes('facts.integrationRan=not-ran')),
+    `封顶 error 含触发行枚举（[fact integration-not-run] × facts.integrationRan=not-ran）（实际 ${JSON.stringify(capped.errors.map(e => e.slice(0, 60)))}）`)
+  assert.ok(capped.errors.some(e => e.includes('改写结论为 PASS WITH NOTES') && e.includes('## 移交项（结构化）')),
+    '封顶 error 含修复指引：改写 PASS WITH NOTES + 补「## 移交项（结构化）」')
+  // 结论槽改 NOTES → 同 facts 不封顶（NOTES 由移交项承载路径接管——联动口径）
+  writeFileSync(join(changeDir, 'verify-result.md'),
+    '# 验证报告\n\n## 结论 [层：人工判断]\n\n结论枚举：`PASS WITH NOTES`——移交承载\n')
+  const notes = validatePassEligibility(root, 'slot-cap', {})
+  assert.ok(notes.ok === true, '结论槽 PASS WITH NOTES → 封顶不生效（放行联动）')
 })

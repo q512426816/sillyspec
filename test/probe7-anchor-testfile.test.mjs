@@ -13,6 +13,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { checkProbe7AnchorCoverage } from '../src/probe7-anchor-check.js'
+import { runVerifyProbes, renderVerifyProbesReport } from '../src/verify-probes.js'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+const tmpRoots = []
+test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
 
 function probe7Md(rows) {
   return [
@@ -75,4 +82,43 @@ test('uncovered/partial 行证据无锚零影响（只查 covered）', () => {
   assert.equal(r.rowsChecked, 3)
   assert.equal(r.coveredRows, 0)
   assert.equal(r.missingAnchors.length, 0)
+})
+
+// ── FR-09 多根（2026-09-17-pass-cap-semantics task-07 / task-05 实现）：buildAcceptanceHints
+// 双根扩多根——并入 local.yaml repos 注册的跨仓仓根后，跨仓仓根下的测试文件内容可读、
+// 命中不再恒空（矩阵不因跨仓恒预填 partial）。
+test('FR-09 多根：测试文件位于跨仓仓根 → 内容可读命中非空，矩阵预填 covered（不恒 partial）', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'p7-crossroot-'))
+  tmpRoots.push(proj)
+  const crossRoot = mkdtempSync(join(tmpdir(), 'p7-crossrepo-'))
+  tmpRoots.push(crossRoot)
+  const specBase = join(proj, '.sillyspec')
+  const changeDir = join(specBase, 'changes', 'cxr')
+  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
+  writeFileSync(join(changeDir, 'design.md'), '## 文件变更清单\n\n| 操作 | 文件 | 说明 |\n|---|---|---|\n| 修改 | a.js | x |\n')
+  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), [
+    '---', 'id: task-01', 'allowed_paths: [test/crossroot-attrib.test.mjs]',
+    'acceptance:', '  - kwCrossRoot7 场景由跨仓测试承接', '---', '# t1', '',
+  ].join('\n'))
+  // 测试文件内容只存在于跨仓仓根（主仓 cwd/wtRoot 双根均读不到——FR-09 修复前的恒空形态）
+  mkdirSync(join(crossRoot, 'test'), { recursive: true })
+  writeFileSync(join(crossRoot, 'test', 'crossroot-attrib.test.mjs'), '// kwCrossRoot7 case\nexport {}\n')
+
+  // 对照态：未注册跨仓（单仓双根）→ 读不到内容 → 零命中 → partial 预填
+  const before = runVerifyProbes({ cwd: proj, changeName: 'cxr' })
+  const t1b = before.probe7.tasks.find(t => t.task === 'task-01')
+  assert.ok(t1b && (!t1b.hints || !t1b.hints[0]),
+    `未注册跨仓根 → 关键词命中恒空（实际 hints=${JSON.stringify(t1b && t1b.hints)}）`)
+  assert.ok(renderVerifyProbesReport(before).includes('| partial |'), '对照态：矩阵预填 partial（跨仓内容不可读）')
+
+  // 注册跨仓根（local.yaml repos，相对路径按 cwd resolve）→ 多根读取 → 命中 + covered 预填
+  mkdirSync(specBase, { recursive: true })
+  writeFileSync(join(specBase, 'local.yaml'), `repos:\n  crossrepo: ${crossRoot.split('\\').join('/')}\n`)
+  const after = runVerifyProbes({ cwd: proj, changeName: 'cxr' })
+  const t1a = after.probe7.tasks.find(t => t.task === 'task-01')
+  assert.ok(t1a && t1a.hints && t1a.hints[0] && t1a.hints[0].terms.includes('kwCrossRoot7'),
+    `注册跨仓根后命中非空（实际 hints=${JSON.stringify(t1a && t1a.hints)}）`)
+  const report = renderVerifyProbesReport(after)
+  assert.ok(report.includes('| covered |') && !report.includes('| partial |'),
+    '多根读取后矩阵预填 covered（不再因跨仓恒预填 partial）')
 })

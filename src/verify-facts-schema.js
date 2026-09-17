@@ -8,6 +8,12 @@
  * 双层写入模型（D-001@v2）：机器数据（probes/tests/factsConsistency）CLI 直写；判断层
  * （结论枚举/证据状态/回执声明）经 verify-result.md 受控槽段录入、--done 时 CLI 解析固化
  * （slot-backfill），单向渲染约束对象是机器数据。
+ *
+ * PASS 封顶事实面扩展（2026-09-17-pass-cap-semantics task-01 / D-011）：db 脚本执行声明的
+ * 录入文法（X-03）= 回执槽条目 command 含 db/<file>.sql，或声明行「已对目标库执行：db/<file>.sql」，
+ * 解析器 parseDbScriptDeclarations 落 verify-probes.js（producer：backfillFactsFromMdAndTests
+ * 产出 facts.dbScriptDeclarations；跨仓消费方：worktree-apply 兜底声明门按「文件集 ∩ db/*.sql
+ * ⊆ parseDbScriptDeclarations(verifyMd)」对账）。
  */
 export const FACTS_SCHEMA_VERSION = 2
 
@@ -182,6 +188,29 @@ export function validateFactsV2(facts) {
     if (!EVIDENCE_STATUS.includes(item.status)) errors.push(`requiredEvidence[${item.task}] status 非法：${item.status}`)
     if (item.status === 'satisfied' && (!Array.isArray(item.verifiedFiles) || item.verifiedFiles.length === 0)) {
       errors.push(`requiredEvidence[${item.task}] satisfied 但 verifiedFiles 为空`)
+    }
+  }
+  // PASS 封顶事实面五字段 additive 登记（2026-09-17-pass-cap-semantics task-01 / D-011 故障面）：
+  // 字段不在场一律不报错（存量 facts 零迁移通过，producer=backfillFactsFromMdAndTests 首次
+  // backfill 产出）；在场才校验类型/枚举。schemaVersion 保持 2。
+  if (facts.integrationRan != null && !['ran', 'not-ran'].includes(facts.integrationRan)) {
+    errors.push(`integrationRan 非法枚举值：${facts.integrationRan}`)
+  }
+  if (facts.dbScriptDeclarations != null
+    && (!Array.isArray(facts.dbScriptDeclarations) || !facts.dbScriptDeclarations.every(x => typeof x === 'string'))) {
+    errors.push('dbScriptDeclarations 应为 string[]')
+  }
+  if (facts.matrixPartialRows != null
+    && (!Number.isInteger(facts.matrixPartialRows) || facts.matrixPartialRows < 0)) {
+    errors.push(`matrixPartialRows 应为非负整数，实际 ${facts.matrixPartialRows}`)
+  }
+  if (facts.runtimeEndpointExcluded != null && typeof facts.runtimeEndpointExcluded !== 'boolean') {
+    errors.push(`runtimeEndpointExcluded 应为 boolean，实际 ${typeof facts.runtimeEndpointExcluded}`)
+  }
+  const handoverItems = (facts.handover && Array.isArray(facts.handover.items)) ? facts.handover.items : []
+  for (const [i, item] of handoverItems.entries()) {
+    if (item && item.severity != null && !['blocking', 'advisory'].includes(item.severity)) {
+      errors.push(`handover.items[${i}] severity 非法枚举值：${item.severity}`)
     }
   }
   return { ok: errors.length === 0, errors }

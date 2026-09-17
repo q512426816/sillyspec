@@ -4,7 +4,8 @@
  * 从 _completeStepForTest 内部函数迁移为 CLI 子进程测试。锁住 execute 批量完成分支：
  *   - happy：plan 全勾 + 主工作区未提交改动（checkExecuteCodeEvidence→changed）+ 多个 pending step
  *     → 一次 --done 批量标 completed，阶段完成（治"3 Wave 做完仍逐次 +1、需重走多次 --done"）
- *   - 拒绝批量：plan 未全勾 → 仅当前 step completed，仍有 pending
+ *   - 拒绝批量：plan 未全勾 → 仅当前 step completed，仍有 pending（双 Wave：Wave 1 全勾 + Wave 2
+ *     未勾——D-013@v1/task-08，Wave 完成度门后单 Wave 未全勾形态会被门拦截，见 writePlan 注释）
  *   - 拒绝批量：plan 全勾但代码零变更（unchanged）→ 不批量（防手动勾选伪造空完成）
  *
  * execute 步骤随 plan.md 动态生成（buildExecuteSteps），用 seed-real-steps：init 后读真实步骤，
@@ -20,13 +21,19 @@ import { ProgressManager } from '../src/progress.js'
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
-function writePlan(changeDir, allChecked) {
+function writePlan(changeDir, allChecked, twoWaves = false) {
   const t3 = allChecked ? '[x]' : '[ ]'
   // 2026-08-20-task-truth-unify：勾选态在 tasks.md（注册表），plan.md 只留 Wave 引用行
   writeFileSync(join(changeDir, 'tasks.md'),
     `- [x] task-01: a\n- [x] task-02: b\n- ${t3} task-03: c\n`, 'utf8')
-  writeFileSync(join(changeDir, 'plan.md'),
-    '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n- task-03\n', 'utf8')
+  // D-013@v1（2026-09-17-pass-cap-semantics task-08）：twoWaves 双 Wave 形态供 Case 2——Wave 1
+  // 全勾 + Wave 2 未勾。Wave 步完成度门（assertWaveTasksComplete）上线后，旧单 Wave 夹具
+  // 「Wave 1 含未勾 task 仍 --done 完成 Wave 1 步」会被门 fail-closed 拦截（FR-12 正是要堵该
+  // 越位形态），「plan 未全勾 → 不批量、单步推进」的测试意图改由双 Wave 承载：Wave 1 本 Wave
+  // 全勾 → 门放行、步推进；Wave 2 未勾 → plan 未全勾 → 批量不触发。
+  writeFileSync(join(changeDir, 'plan.md'), twoWaves
+    ? '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n\n## Wave 2\n\n- task-03\n'
+    : '# Plan\n\n## Wave 1\n\n- task-01\n- task-02\n- task-03\n', 'utf8')
 }
 // worktree meta：depsStatus:'n/a' 让 enforceDepsGate 放行；无 baseHash → code evidence 走路径 3（working tree）
 function writeWorktreeMeta(specBase, cn, baseHash) {
@@ -95,7 +102,9 @@ console.log('\n--- plan 未全勾 → 不批量，单步推进 ---')
   const { cwd, specBase } = makeRepo('cli-exec-batch-partial-')
   const cn = '2026-07-25-exec-batch-partial'
   const pm = await initChange(cwd, specBase, cn)
-  writePlan(join(specBase, 'changes', cn), false)
+  // 双 Wave（D-013@v1 / task-08，见 writePlan 注释）：Wave 1 全勾过门，Wave 2 的 task-03 未勾挡批量。
+  // 只写 task-01/02 的 pass review（task-03 无 review → 不被 autoCheck 自动勾选 → plan 未全勾）
+  writePlan(join(specBase, 'changes', cn), false, true)
   writeWorktreeMeta(specBase, cn)
   mkdirSync(join(cwd, 'src'), { recursive: true })
   writeFileSync(join(cwd, 'src', 'app.js'), 'module.exports = 1\n')

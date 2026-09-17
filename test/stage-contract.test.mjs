@@ -490,7 +490,11 @@ console.log('\n=== risk_level 显式豁免 ===')
     failed++
   }
 
-  // 集成 4：显式声明 integration-critical + 结论 PASS WITH NOTES（无集成证据）→ 放行（显式等级放宽 PWN）
+  // 集成 4：显式声明 integration-critical + 结论 PASS WITH NOTES（无 handover 无集成证据）→ 拦截
+  // 【语义翻转，D-002@v1 / 2026-09-17-pass-cap-semantics task-02】原断言期望「显式等级放宽 PWN 放行」
+  // ——豁免洞封死后的新契约：显式 critical + NOTES 必须携带结构化 handover（facts.handover 有效行）
+  // 或齐全集成证据，二选一；两者皆缺 → error（不弱化校验，翻转到新契约，直测面在
+  // test/pass-eligibility.test.mjs 态二/态三）。
   writeFileSync(join(exDir, 'design.md'), [
     '---', 'author: qinyi', 'risk_level: integration-critical', '---',
     '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
@@ -502,10 +506,16 @@ console.log('\n=== risk_level 显式豁免 ===')
     '单测全过。', ''
   ].join('\n'))
   const exPwn = runValidators('verify', exRoot, 'risktag')
-  if (!exPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
-    console.log('✅ 门控：显式 integration-critical + PASS WITH NOTES → 放宽，不强制集成证据')
+  if (exPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
+    console.log('✅ 门控：显式 integration-critical + PASS WITH NOTES 无 handover 无证据 → 拦截（D-002 二选一缺位）')
   } else {
-    console.log('❌ 显式等级下 PASS WITH NOTES 仍被拦', exPwn.errors)
+    console.log('❌ 显式 critical + NOTES 豁免洞未封死（应要求 handover 或证据二选一）', exPwn.errors)
+    failed++
+  }
+  if (exPwn.warnings.some(w => w.includes('零有效行') && w.includes('二选一'))) {
+    console.log('✅ 门控：二选一出路 warning 在场（补结构化移交项 或 提供齐全集成证据）')
+  } else {
+    console.log('❌ 二选一出路 warning 缺失', exPwn.warnings)
     failed++
   }
 

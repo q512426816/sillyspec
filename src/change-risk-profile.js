@@ -301,6 +301,33 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
   return { level, triggers, suppressedTriggers, requiredVerification }
 }
 
+// ============ 回执来源分类打标（X-10 / D-002 / D-006，2026-09-17-pass-cap-semantics task-02） ============
+//
+// EHS 实证（D-002）：mvn compile + JUnitCore 纯单测的三条 log 通过了集成回执四条件校验——
+// 单测/编译类回执被当成集成实测。打标口径：只认回执 command 的命令来源声明（quality-scan
+// 记录的命令与 verify_precedents 声明同思想），不解析日志内容猜测（X-10）；未定类默认
+// 'build'（fail-closed 侧：build/unit 回执不构成「集成实测已跑」绿判据，宁可触发封顶要求
+// handover——stage-contract 侧 validatePassEligibility（evaluatePassEligibility 纯函数 +
+// resolveFactsExpected 判定）消费本口径对结论=PASS 封顶；verify-probes producer 侧
+// classifyReceiptCommandSource（facts.integrationRan 判定）与本分类同族口径，两处正则族
+// 保持同步演进）。smoke 冒烟命令族计 cross-layer（D-006 退役判据：批次 C commands.smoke
+// 落地后由 smoke 回执一票判定「集成实测已跑」——起服务冒烟即跨层实测，不得默认 build 误拦金路径）。
+const RECEIPT_SOURCE_CROSS_LAYER_RE = new RegExp([
+  '\\bcurl\\b', '\\bwget\\b', '\\bhttpie\\b', '\\bInvoke-WebRequest\\b', '\\bInvoke-RestMethod\\b',
+  '\\biwr\\b', '\\birm\\b', 'https?://',
+  'spring-boot:run', '\\bjava\\b[^|\\n]*\\s-jar\\b',
+  '\\b(?:npm|pnpm|yarn|bun)\\s+(?:run\\s+)?(?:dev|start|serve|smoke)\\b',
+  '\\bdotnet\\s+run\\b', '\\bflask\\s+run\\b', '\\buvicorn\\b', '\\bgunicorn\\b',
+  '\\b(?:nc|netcat|telnet|socat)\\b',
+].join('|'), 'i')
+const RECEIPT_SOURCE_UNIT_RE = /\bJUnitCore\b|\bnode\s+--test\b|\bmocha\b|\bjest\b|\bvitest\b|\bpytest\b|\bphpunit\b|\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b/i
+function classifyReceiptSourceTag(command) {
+  const cmd = String(command || '')
+  if (RECEIPT_SOURCE_CROSS_LAYER_RE.test(cmd)) return 'cross-layer'
+  if (RECEIPT_SOURCE_UNIT_RE.test(cmd)) return 'unit'
+  return 'build'
+}
+
 /**
  * 检查 verify-result.md 是否包含集成验证证据
  *
@@ -308,6 +335,10 @@ export function detectChangeRisk({ designContent = '', planContent = '', changed
  * CLI 结构化回执文本（如 verify-services.receipt.json 的服务回收回执）——它随 verifyContent
  * 一起参与 literals 匹配，agent 真实起过服务且 CLI 回收过（有回执）时不再依赖其自然语言
  * 措辞恰好含字面词，表述差异不再误拦。
+ *
+ * opts.sourceTag（X-10 / D-006，2026-09-17-pass-cap-semantics task-02）：可选回执来源声明
+ * （'cross-layer' | 'build' | 'unit'），透传给 auditRuntimeReceipt 优先于按 command 就地
+ * 分类；非法值忽略。build/unit 回执不作集成实测绿判据（缺省按 command 分类，未定类 build）。
  */
 export function checkIntegrationEvidence(verifyContent, requiredVerification, opts = {}) {
   const errors = []
@@ -333,7 +364,7 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification, op
     const hasGreen = greenReceipts.length > 0
     if (needsIntegration && !hasGreen) {
       const bad = receiptAudit.filter(a => !a.green)
-      errors.push(`integration-critical 变更无绿回执（${bad.length} 条回执校验不过：${bad.map(a => a.reason).join('；') || '无有效回执'}）——绿判据：log 存在 × mtime ∈ verify 窗口 × 日志无失败签名 × exit 0`)
+      errors.push(`integration-critical 变更无绿回执（${bad.length} 条回执校验不过：${bad.map(a => a.reason).join('；') || '无有效回执'}）——绿判据：log 存在 × mtime ∈ verify 窗口 × 日志无失败签名 × exit 0 × 来源 cross-layer（build/unit 回执不作集成实测判据，D-006）`)
     }
     if (needsLogEvidence && !hasGreen) {
       errors.push('integration-critical 变更的回执未通过一致性校验（Runtime Evidence 等价物）')
@@ -394,9 +425,19 @@ export function checkIntegrationEvidence(verifyContent, requiredVerification, op
  * 单条回执一致性校验（FR-04 绿判据）。噪声剔除：签名行首匹配 + 剔除「0 errors」类良性行
  * （本仓 verify-postcheck.js 测试输出解析先例同款）。fail-soft：校验依赖缺失（opts 无
  * cwd/verifyStartAt）时只核 exitCode 与日志可读性，不假装跑了文件校验。
+ *
+ * opts.sourceTag（X-10 / D-006，2026-09-17-pass-cap-semantics task-02）：可选回执来源声明，
+ * 缺省按回执 command 来源就地分类（classifyReceiptSourceTag），未定类默认 'build'（向后
+ * 兼容的 fail-closed 缺省）；sourceTag ∈ {build, unit} 的回执不作集成实测绿判据（四条件
+ * 全过也只到 non-green，reason 点名来源）——verify-postcheck 不在本调用链上，不受影响。
  */
 function auditRuntimeReceipt(r, opts) {
-  const out = { claim: r && r.claim, logPath: r && r.logPath, green: false, logExists: null, mtimeInWindow: null, failSignatures: 0, exitCode: r && typeof r.exitCode === 'number' ? r.exitCode : null, reason: '' }
+  const out = { claim: r && r.claim, logPath: r && r.logPath, sourceTag: null, green: false, logExists: null, mtimeInWindow: null, failSignatures: 0, exitCode: r && typeof r.exitCode === 'number' ? r.exitCode : null, reason: '' }
+  // 打标依据 = 命令来源声明（不解析日志内容，X-10）：opts.sourceTag 调用方声明源优先，
+  // 否则按回执 command 分类；非法/缺省走分类，未定类默认 build。
+  const declaredSource = opts && typeof opts.sourceTag === 'string'
+    && ['cross-layer', 'build', 'unit'].includes(opts.sourceTag) ? opts.sourceTag : null
+  out.sourceTag = declaredSource || classifyReceiptSourceTag(r && r.command)
   if (!r || !r.logPath) { out.reason = '回执缺 logPath'; return out }
   let content = null
   try {
@@ -424,7 +465,14 @@ function auditRuntimeReceipt(r, opts) {
   }
   if (out.failSignatures > 0) { out.reason = `日志含 ${out.failSignatures} 行失败签名（行首 error/exception/traceback/fatal，已剔除良性计数行）`; return out }
   if (out.exitCode !== 0) { out.reason = `exitCode=${out.exitCode}（非 0 不可用作在场证据）`; return out }
+  // 来源门（D-002/D-006，2026-09-17-pass-cap-semantics task-02）：四条件全过但来源 build/unit
+  // （编译/单测/构建类命令）→ 不作集成实测绿判据（EHS 实证口径），排在前置硬伤（缺日志/
+  // 出窗/签名/exit≠0）之后不抢 reason 优先级。
+  if (out.sourceTag !== 'cross-layer') {
+    out.reason = `回执来源 ${out.sourceTag}（command：${(r && r.command) || ''}）不构成「集成实测已跑」——build/unit 类命令（编译/单测/构建）不作集成绿判据（D-006）。出路：提供跨层实测回执（起服务/HTTP/进程对进程/smoke 冒烟命令），或降级 PASS WITH NOTES 并在「## 移交项（结构化）」承载缺口`
+    return out
+  }
   out.green = true
-  out.reason = '绿回执（log 存在 × mtime 窗口 × 无失败签名 × exit 0）'
+  out.reason = '绿回执（log 存在 × mtime 窗口 × 无失败签名 × exit 0 × 来源 cross-layer）'
   return out
 }

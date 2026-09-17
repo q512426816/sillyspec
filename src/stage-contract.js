@@ -17,6 +17,9 @@ import { evaluateRules } from './stage-contract-engine.js'
 import { getRule } from './stage-contract-spec.js'
 import { backfillFrontmatter } from './scan-postcheck.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
+// design.md 文件清单解析（2026-09-17-pass-cap-semantics task-02 事实③）：change-list 是纯 fs
+// 叶子模块（design-facts / scope-audit / verify-probes 等同款直连惯例），静态引入无环。
+import { parseFileChangeListDetailed } from './change-list.js'
 
 /**
  * 校验结果
@@ -643,12 +646,23 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
           `若属关键词误伤（实际未触碰 daemon/session/启动入口/跨进程），可在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。`
         )
       }
-      // 显式 risk_level 声明（design frontmatter，非关键词误判）下，PASS WITH NOTES 视为对残留项的
-      // 诚实声明，不强求全量集成证据——豁免本就来自 design 的明确判断。自动关键词判级维持严格：
-      // PASS WITH NOTES 仍要求证据齐全，防 agent 用 PASS WITH NOTES 绕证据门控。
-      const requiresEvidence = conclusion === 'PASS' || (conclusion === 'PASS WITH NOTES' && !changeRiskProfile.explicit)
-      if (conclusion === 'PASS WITH NOTES' && changeRiskProfile.explicit) {
-        warnings.push(`[${changeRiskProfile.level}] 结论 PASS WITH NOTES：design frontmatter 显式声明 risk_level=${changeRiskProfile.level}，残留项须为真实集成证据缺口，并在 verify-result.md 如实说明`)
+      // ── 显式 risk_level 豁免洞分层（D-002@v1，2026-09-17-pass-cap-semantics task-02）──
+      // ① explicit + 降级 unit-sufficient/contract-required：不进本 critical 块（上方 level 门），
+      //   PASS WITH NOTES 维持免证据——关键词误伤逃生保留；
+      // ② explicit 且仍 integration/deployment-critical + PASS WITH NOTES：必须携带结构化 handover
+      //   （facts.handover 有效行；blocking 级计入封顶口径同 validatePassEligibility 条件②）或齐全
+      //   集成证据，二选一——无 handover 即挂证据门（checkIntegrationEvidence 不过 → error）；
+      // ③ 非显式（关键词判级）判定式一字不动（防 PASS WITH NOTES 绕证据门控）。
+      const notesExplicitCritical = conclusion === 'PASS WITH NOTES' && changeRiskProfile.explicit
+      const handoverRows = notesExplicitCritical ? countFactsHandoverItems(changeDir) : 0
+      const requiresEvidence = conclusion === 'PASS'
+        || (conclusion === 'PASS WITH NOTES' && (!changeRiskProfile.explicit || handoverRows === 0))
+      if (notesExplicitCritical) {
+        if (handoverRows > 0) {
+          warnings.push(`[${changeRiskProfile.level}] 结论 PASS WITH NOTES：design frontmatter 显式声明 risk_level=${changeRiskProfile.level}，缺口由结构化移交项承载（facts.handover ${handoverRows} 行，「## 移交项（结构化）」）——blocking 级行在结论=PASS 时按封顶口径拦截（validatePassEligibility 条件②），请如实分行勿漏报。`)
+        } else {
+          warnings.push(`[${changeRiskProfile.level}] 结论 PASS WITH NOTES：显式声明 risk_level=${changeRiskProfile.level} 且「## 移交项（结构化）」零有效行——按齐全集成证据口径校验（二选一：补结构化移交项承载缺口，或提供齐全集成证据；两者皆缺将 error）。`)
+        }
       }
       if (requiresEvidence) {
         // CLI 回执注入（坑 verify-literal-evidence-mismatch，2026-08-22 实证：证据第一轮就齐
@@ -686,6 +700,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
           extraEvidenceText: receiptText,
           ...(runtimeEvidence ? { runtimeEvidence } : {}),
           ...(context.verifyStartAt ? { verifyStartAt: context.verifyStartAt } : {}),
+          // 回执来源声明透传（X-10 / D-006，2026-09-17-pass-cap-semantics task-02）：调用侧只透传
+          // context 携带的声明源（quality-scan 记录的命令 / verify_precedents 声明同思想），不在
+          // 本侧做任何分类——分类打标单点在 change-risk-profile（auditRuntimeReceipt 内按回执
+          // command 来源 classifyReceiptSourceTag）；未透传时按各回执 command 就地分类。
+          ...(context.receiptSourceTag ? { sourceTag: context.receiptSourceTag } : {}),
           cwd,
           specBase: context.specRoot || join(cwd, '.sillyspec'),
         })
@@ -829,6 +848,12 @@ export function extractAcceptanceMatrixSlots(verifyMd) {
  *   - 段缺失：严格档（isIrStrictVerifyChange / IR_STRICT_SINCE 同源常量，与结论槽
  *     「删槽回退已关闭」同口径）ERROR；非严格（存量变更）warning 提示补段不阻断
  *   - 段在场：unfilled / missingEvidence > 0 → ERROR 列出违规行（task+acceptance 截断 40 字）
+ *   - 段在场：partial/uncovered 行 >0 且 facts.handover 零有效行（任意 severity）→ ERROR
+ *     「部分实现必须有移交去向」（D-003/FR-04，task-03；矩阵 MD 槽解析即防篡改锚点 X-05——
+ *     不读 facts.matrixPartialRows producer 快照，锚定当前文档实态；factsExpected=false 存量
+ *     零行为变化，factsExpected=true 而 facts 缺失 → fail-closed 按零有效行处理）
+ *   - 同分支放行路径 advisory（R-05 第一版）：handover 有效行在场时逐行核对行标识（task 锚 /
+ *     acceptance 文本）↔ 条目 item/condition 文本命中，未命中 → console.warn 攒实证，不阻断
  */
 function validateAcceptanceMatrix(cwd, changeName, context = {}) {
   const { specRoot } = context
@@ -876,7 +901,277 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
       `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由。`
     )
   }
+
+  // ── partial/uncovered × facts.handover 联动（D-003/FR-04，2026-09-17-pass-cap-semantics task-03）──
+  // 部分实现必须有移交去向：矩阵含 partial/uncovered 行且 facts.handover 零有效行（任意
+  // severity）→ error；有行 → 本分支放行，blocking 级是否封顶归 validatePassEligibility 条件②
+  // （④管「有去向」、②管「去向是否 blocking」）。handover 数据只读 facts.handover（task-01
+  // producer 四列产出；不在此重复解析 MD 移交项表——防篡改锚点由上方矩阵 MD 槽解析承担，X-05）。
+  // factsExpected 口径复用 task-02 判定式：false（存量未跑管线）→ 分支空转零行为变化；
+  // true 而 facts 缺失 → 按零有效行 fail-closed，文案附「重跑 verify-probes」出路。
+  // 放行路径上做逐行关联 advisory（R-05 第一版：验收项 ID ↔ handover 条目文本命中，只攒实证
+  // 不做硬门）：行标识（task / acceptance 文本）未命中任何条目 → console.warn 提示，不阻断不进 errors。
+  const partialRows = matrix.rows.filter(r => r.verdict === 'partial' || r.verdict === 'uncovered')
+  if (partialRows.length > 0 && resolveFactsExpected(changeDir)) {
+    const facts = readFactsForEligibility(changeDir)
+    const factsMissing = facts === null
+    // 有效行口径同 countFactsHandoverItems（task-02）：只计对象行；此处需逐条取文本故就地展开
+    const handoverItems = facts && facts.handover && Array.isArray(facts.handover.items)
+      ? facts.handover.items.filter(it => it && typeof it === 'object') : []
+    if (handoverItems.length === 0) {
+      const list = partialRows.map(rowLabel).join('；')
+      errors.push(
+        `探针 7 验收×测试覆盖矩阵含 ${partialRows.length} 行 partial/uncovered 且「## 移交项（结构化）」零有效行（facts.handover）——部分实现必须有移交去向：${list}。` +
+        `修复：在 verify-result.md 补「## 移交项（结构化）」有效行（任意 severity 均可，blocking 级另受 PASS 封顶约束），或修正矩阵判定（实际已覆盖的行改 covered），或降级结论为 PASS WITH NOTES 承载。` +
+        (factsMissing
+          ? `另：verify-facts.json 缺失/不可读而 factsExpected=true，fail-closed 按零有效行处理——重跑 verify-probes（\`sillyspec verify-probes --change ${changeName} --init\` 幂等刷新底稿）。`
+          : '')
+      )
+    } else {
+      // 逐行关联 advisory（R-05 第一版，D-003）：行标识（task 锚 / acceptance 文本）命中任一
+      // handover 条目的 item/condition 文本即视为有去向；未命中 → console.warn 攒实证（文本
+      // 命中是弱关联，误报/漏报均可能——先 advisory 攒数据，硬门等实证后再议），不阻断。
+      const itemTexts = handoverItems.map(it => `${it.item || ''}｜${it.condition || ''}`)
+      for (const r of partialRows) {
+        const keys = [r.task, r.acceptance].map(k => String(k || '').trim()).filter(Boolean)
+        const hit = keys.some(k => itemTexts.some(t => t.includes(k)))
+        if (!hit) {
+          console.warn(`ℹ️ [advisory] 验收项 ${rowLabel(r)} 的移交去向未在 handover 条目中命中——建议条目文本含该标识（advisory，攒实证，D-003/R-05；不阻断）`)
+        }
+      }
+    }
+  }
   return { ok: errors.length === 0, errors, warnings }
+}
+
+// ============ PASS 封顶事实面 validator（2026-09-17-pass-cap-semantics task-02 / D-001@v2 / D-010 / D-011） ============
+//
+// 「要不要集成证据」（validateVerifyOutputs 的 requiresEvidence）与「能不能写 PASS」（本
+// validator）解耦：结论=PASS 时四个已知未验证区任一在场即 error——
+//   ① 集成实测未跑（facts.integrationRan=not-ran，D-006 判定表）
+//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」）
+//   ③ db 脚本未声明执行（verify 时点文件集 ∩ db/**/*.sql 对账 facts.dbScriptDeclarations，D-012）
+//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover）
+//   附加：runtimeEndpointExcluded=true 且判级 integration/deployment-critical 且 handover 零行
+//   → 计入①事实面（D-004/FR-03，仅判级时计入）。
+//
+// 分层纪律（D-011）：事实生产走 facts 管线（verify-probes backfillFactsFromMdAndTests 首次
+// backfill 主路径无条件产出，X-08 时序——gates 收尾前置 backfill 先于 runValidators）；本壳只做
+// 取数组装，判定是 evaluatePassEligibility 纯函数（零 MD 解析、零 IO——MD 锚点防篡改兜底并入
+// checkProbeConsistency 抽查面属 task-03）。双源 fail-closed：factsExpected=true 而 facts 缺失
+// （篡改/管线故障）→ 全条件按触发拦下；factsExpected=false（存量未跑 --init）→ 兼容 ok 不误伤。
+
+/**
+ * 读 <changeDir>/verify-facts.json（缺失/不可解析/非对象 → null）——与 checkProbeConsistency
+ * 的 readVerifyFacts（verify-postcheck.js）同口径「有 facts」判别。不静态 import
+ * verify-postcheck/verify-probes（verify-probes 顶层 await 动态 import 回指本模块，静态依赖
+ * 会在其 TLA 上成环死锁；分层单向，全局硬约束 3），就地等价实现。
+ */
+function readFactsForEligibility(changeDir) {
+  const factsPath = join(changeDir, 'verify-facts.json')
+  if (!existsSync(factsPath)) return null
+  try {
+    const parsed = JSON.parse(readFileSync(factsPath, 'utf8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch { return null }
+}
+
+/**
+ * factsExpected 判定（D-011 双源 fail-closed 的「应写」侧）：isIrStrictVerifyChange（严格档
+ * 变更删 facts.json 另由 checkProbeConsistency error 级 MD 锚点兜底拦，通道 gates probeBlocked）
+ * || verify-facts.json 在场（readVerifyFacts 同口径，含探针子节判别的「有 facts」面）。
+ * factsExpected=false（存量未跑管线）→ 封顶兼容 skip 不误伤。
+ * @param {string} changeDir 变更目录
+ * @returns {boolean}
+ */
+export function resolveFactsExpected(changeDir) {
+  return isIrStrictVerifyChange(changeDir) || readFactsForEligibility(changeDir) !== null
+}
+
+/** facts.handover 有效行数（producer parseHandoverRows 已滤占位/表头行；无 facts/handover → 0） */
+function countFactsHandoverItems(changeDir) {
+  const facts = readFactsForEligibility(changeDir)
+  const items = facts && facts.handover && Array.isArray(facts.handover.items) ? facts.handover.items : []
+  return items.filter(it => it && typeof it === 'object').length
+}
+
+/**
+ * PASS 资格事实面封顶纯函数（X-09 双层形态的判定层：零 MD 解析、零 IO，消费 task-01 契约字段）。
+ * @param {{
+ *   conclusion?: string|null,
+ *   facts?: object|null,
+ *   factsExpected?: boolean,
+ *   changeRiskProfile?: { level?: string }|null,
+ *   changeName?: string,
+ *   dbScriptCandidates?: string[],
+ * }} [args] dbScriptCandidates = 壳内取数的 verify 时点文件集（design 清单 ∪ worktree 变更）∩ db 目录任意层级 .sql
+ * @returns {{ ok: boolean, errors: string[], triggered: Array<{ fact: 'integration-not-run'|'blocking-handover-present'|'db-script-undeclared'|'matrix-partial-no-handover', detail: string }> }}
+ */
+export function evaluatePassEligibility(args) {
+  const errors = []
+  const triggered = []
+  const a = args || {}
+  // factsExpected=false（存量未跑管线）→ 沿用存量兼容口径 ok 不误伤（checkProbeConsistency 同款边界）
+  if (!a.factsExpected) return { ok: true, errors, triggered }
+  // 封顶只管 PASS：结论 ≠ PASS（FAIL / PASS WITH NOTES / 未识别未填）→ 直接 ok
+  if (a.conclusion !== 'PASS') return { ok: true, errors, triggered }
+
+  const factsMissing = !a.facts || typeof a.facts !== 'object'
+  const facts = factsMissing ? {} : a.facts
+  const handoverItems = (facts.handover && Array.isArray(facts.handover.items)) ? facts.handover.items : []
+  const blockingRows = handoverItems.filter(it => it && it.severity === 'blocking')
+  const criticalLevel = a.changeRiskProfile && ['integration-critical', 'deployment-critical'].includes(a.changeRiskProfile.level)
+  const NOTES_FIX = '改写结论为 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）'
+
+  // ── factsExpected=true 而 facts 缺失 → 双源 fail-closed：全条件按触发（D-011），附重跑 verify-probes 出路（R-07）──
+  if (factsMissing) {
+    errors.push(
+      `[pass-eligibility] verify-facts.json 缺失/不可读但 factsExpected=true（严格档或底稿曾在场后消失——疑似删除/管线故障），按双源 fail-closed 全条件触发拦下。` +
+      `出路：重跑 verify-probes（sillyspec verify-probes --change ${a.changeName || '<变更名>'} --init 幂等刷新底稿后重跑 --done 回填），或${NOTES_FIX}降级承载。`
+    )
+  }
+
+  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败）
+  if (factsMissing || facts.integrationRan === 'not-ran') {
+    triggered.push({ fact: 'integration-not-run', detail: factsMissing ? 'facts 缺失（fail-closed 按未跑处理）' : 'facts.integrationRan=not-ran' })
+    errors.push(
+      `[fact integration-not-run] 集成实测未跑（${factsMissing ? 'verify-facts.json 缺失，fail-closed 按未跑处理' : 'facts.integrationRan=not-ran'}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
+      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts；仍未跑则${NOTES_FIX}承载（不算失败）。`
+    )
+  }
+
+  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥）
+  if (factsMissing || blockingRows.length > 0) {
+    const list = blockingRows.map(it => `${it.type || '未知类型'}｜${String(it.item || '').slice(0, 60)}`).join('；')
+    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : `${blockingRows.length} 条 blocking 行：${list}` })
+    errors.push(
+      `[fact blocking-handover-present] ${factsMissing
+        ? '移交项 blocking 级行无法核对（verify-facts.json 缺失，fail-closed 按在场触发）'
+        : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
+      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : list}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
+    )
+  }
+
+  // ③ db 脚本未声明执行（D-012：verify 时点按声明面/diff 对账，apply/archive 兜底门归 task-04；零连库）
+  const candidates = Array.isArray(a.dbScriptCandidates) ? a.dbScriptCandidates : []
+  const declared = factsMissing ? [] : (Array.isArray(facts.dbScriptDeclarations) ? facts.dbScriptDeclarations : [])
+  const undeclared = candidates.filter(f => !declared.includes(f))
+  if (undeclared.length > 0) {
+    triggered.push({ fact: 'db-script-undeclared', detail: `${undeclared.join('、')} 未进 facts.dbScriptDeclarations` })
+    errors.push(
+      `[fact db-script-undeclared] db 脚本在 verify 时点文件集（design 清单 ∪ worktree 变更）∩ db/**/*.sql 中但未声明执行：${undeclared.join('、')}。` +
+      `修复：已对目标库执行则在 verify-result.md 补声明（「已对目标库执行：db/<file>.sql」或回执槽 command 含该文件）后重跑 verify-probes 刷新 facts；未执行则${NOTES_FIX}承载（db-script 类恒 blocking）。`
+    )
+  }
+
+  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向）
+  if (factsMissing || ((facts.matrixPartialRows || 0) > 0 && handoverItems.length === 0)) {
+    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
+    errors.push(
+      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : `${facts.matrixPartialRows} 行 partial/uncovered`} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
+    )
+  }
+
+  // ── 附加条件（D-004/FR-03，仅判级 integration/deployment-critical 时计入①事实面）：
+  // Runtime Evidence「服务端点」行自声明「不涉及」（facts.runtimeEndpointExcluded，X-18 文法）
+  // 且移交项零行——端点不得以「不涉及」免检，须真实回执或 handover 承载。
+  if (criticalLevel && (factsMissing || facts.runtimeEndpointExcluded === true) && handoverItems.length === 0) {
+    triggered.push({
+      fact: 'integration-not-run',
+      detail: factsMissing ? 'facts 缺失（fail-closed，runtimeEndpointExcluded 不可证伪）' : 'facts.runtimeEndpointExcluded=true 且 handover 零行',
+    })
+    errors.push(
+      `[fact integration-not-run] 判级 ${a.changeRiskProfile.level} 且 Runtime Evidence 服务端点行自声明「不涉及」（facts.runtimeEndpointExcluded=true）且无移交项承载——端点不得以「不涉及」免检（D-004）。` +
+      `出路：提供真实端点回执（跨层实测）后重跑 verify-probes，或${NOTES_FIX}承载。`
+    )
+  }
+
+  return { ok: errors.length === 0, errors, triggered }
+}
+
+/**
+ * 事实③文件集取数（D-012，纯声明面/diff 对账零连库）：design.md 文件清单
+ * （change-list.parseFileChangeListDetailed——design-facts.validateDesignFileList 同源解析器）
+ * ∪ worktree changed files（worktree meta baseHash..HEAD diff ∪ porcelain——checkExecuteCodeEvidence
+ * 同款取数形态，与 task-review resolveAttributionDiffFiles 内 resolveVerifyChangedFiles 同源口径；
+ * 本模块不静态 import verify-postcheck/verify-probes，TLA 动态环，就地等价实现）∩ db 目录任意层级 .sql。
+ * @param {{ cwd: string, changeName: string, specRoot?: string|null, changeDir: string }} opts
+ * @returns {string[]} 排序后的候选 db 脚本（posix 相对路径）
+ */
+function collectDbScriptCandidates({ cwd, changeName, specRoot, changeDir }) {
+  const files = new Set()
+  const add = (p) => {
+    const n = String(p || '').trim().replace(/^"|"$/g, '').replace(/\\/g, '/')
+    if (n && n !== '.sillyspec' && !n.startsWith('.sillyspec/')) files.add(n)
+  }
+  // design 清单半边（design.md 缺失/无清单段 → 空集，fail-soft，diff 半边仍覆盖）
+  try {
+    for (const entry of parseFileChangeListDetailed(join(changeDir, 'design.md'))) add(entry && entry.path)
+  } catch { /* 解析异常退 diff 半边 */ }
+  // worktree 变更半边：meta 双根候选（specBase 优先 + cwd/.sillyspec 兜底，_readWorktreeMeta 样板）
+  try {
+    const specBase = specRoot || join(cwd, '.sillyspec')
+    const metaCandidates = [
+      join(specBase, '.runtime', 'worktrees', changeName, 'meta.json'),
+      join(cwd, '.sillyspec', '.runtime', 'worktrees', changeName, 'meta.json'),
+    ]
+    let meta = null
+    for (const p of metaCandidates) {
+      if (existsSync(p)) {
+        try { meta = JSON.parse(readFileSync(p, 'utf8')) } catch { meta = null }
+        if (meta) break
+      }
+    }
+    if (meta && meta.baseHash) {
+      const gitDir = (meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath))
+        ? meta.worktreePath
+        : cwd
+      const diff = gitTry(gitDir, ['diff', '--name-only', `${meta.baseHash}..HEAD`])
+      if (diff.ok) for (const f of diff.out.split('\n')) add(f)
+      const status = gitTry(gitDir, ['status', '--porcelain'])
+      if (status.ok) {
+        for (const line of status.out.split('\n')) {
+          if (!line.trim()) continue
+          add(line.slice(3).trim().split(' -> ').pop())
+        }
+      }
+    }
+  } catch { /* meta/git 取数失败退 design 清单半边（fail-soft） */ }
+  return [...files].filter(p => /^db\/.+\.sql$/i.test(p)).sort()
+}
+
+/**
+ * PASS 封顶 validator 注册壳（与 validateAcceptanceMatrix 同三参签名同构，D-010：注册进
+ * contracts.verify.validators 即覆盖 gates / machine-interface 等全部 runValidators 调用方，
+ * gates.js 零改动）。壳内取数组装：verify-result.md 结论（槽优先，legacy 回退）、
+ * verify-facts.json（缺失容 null）、detectChangeRisk 判级、事实③文件集；判定调
+ * evaluatePassEligibility 纯函数。
+ */
+export function validatePassEligibility(cwd, changeName, context = {}) {
+  const { specRoot } = context
+  const errors = []
+  const warnings = []
+  const changeDir = resolveChangeDir(cwd, changeName, specRoot)
+  // 变更目录缺失 → 引擎 manifest 存在性规则兜底（validateVerifyOutputs 同名 error），此处 no-op
+  if (!existsSync(changeDir)) return { ok: true, errors, warnings }
+  // verify-result.md 中间步骤未落盘 → no-op（同 validateAcceptanceMatrix：存在性归引擎末步规则）
+  const verifyResultPath = join(changeDir, 'verify-result.md')
+  if (!existsSync(verifyResultPath)) return { ok: true, errors, warnings }
+
+  const conclusion = resolveVerifyConclusion(readFileSync(verifyResultPath, 'utf8'))
+  const facts = readFactsForEligibility(changeDir)
+  const result = evaluatePassEligibility({
+    conclusion,
+    facts,
+    factsExpected: isIrStrictVerifyChange(changeDir) || facts !== null,
+    changeRiskProfile: detectChangeRisk({
+      designContent: readIfExists(join(changeDir, 'design.md')),
+      planContent: readIfExists(join(changeDir, 'plan.md')),
+    }),
+    changeName,
+    dbScriptCandidates: collectDbScriptCandidates({ cwd, changeName, specRoot, changeDir }),
+  })
+  return { ok: result.ok, errors: result.errors, warnings }
 }
 
 /**
@@ -1073,7 +1368,9 @@ const contracts = {
     allowedTo: ['archive'],
     // validateAcceptanceMatrix：探针 7 矩阵槽 fail-closed（2026-09-14-acceptance-test-matrix FR-02），
     // 注册进 validator 链即覆盖 gates / machine-interface 等全部 runValidators 调用方（gates.js 零改动）。
-    validators: [validateVerifyOutputs, validateAcceptanceMatrix],
+    // validatePassEligibility：PASS 封顶事实面（2026-09-17-pass-cap-semantics task-02 / D-001@v2 /
+    // D-010）——注册即覆盖同上；回退 = 移除本注册行（纯加法，未触发四条件行为零变化）。
+    validators: [validateVerifyOutputs, validateAcceptanceMatrix, validatePassEligibility],
   },
   archive: {
     stage: 'archive',

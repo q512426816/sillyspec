@@ -20,6 +20,7 @@ created_at: 2026-09-17 12:10:00
 | runtime | src/run/complete.js | 逻辑变更（prefetchDiffFileSet 并跨仓 diff 源 + Wave 完成度门前置接线） | ✅ | pending |
 | runtime | src/run/complete-handlers.js | 逻辑变更（assertWaveTasksComplete 新增，D-013） | ✅ | pending |
 | runtime | NEW:test/wave-task-complete-gate.test.mjs | 新增（FR-12 直测） | — | pending |
+| runtime | test/run-complete-step-execute-batch.test.mjs | 逻辑变更（Case 2 双 Wave 夹具适配，D-013） | — | pending |
 | worktree | src/worktree-apply.js | 逻辑变更（apply 尾声 db/*.sql 兜底声明门） | ✅ | pending |
 | stages | src/stages/archive.js | 逻辑变更（Step3 门控 definition 文案——纯 prompt 模板，无逻辑挂点） | — | pending |
 | runtime | src/run/complete-handlers.js | 逻辑变更（archive --confirm 前置 db 声明兜底校验） | ✅ | pending |
@@ -52,9 +53,9 @@ created_at: 2026-09-17 12:10:00
 
 | 目标 | 状态 |
 |---|---|
-| _module-map.yaml | pending（archive Step3 时判定——无 paths/entrypoints/依赖边变更预期 skipped） |
-| modules/core-engine.md | pending（封顶语义与 severity 口径属契约摘要级变化，archive 时补注意事项段） |
-| modules/runtime.md | pending（complete.js 内部实现变化，预期 skipped） |
-| modules/worktree.md | pending（apply 兜底门属契约面变化，archive 时补） |
-| modules/stages.md | pending（archive/verify/brainstorm prompt 变化，archive 时判定） |
-| modules/docs-consistency.md | pending（design-facts 无段头行为变化，archive 时判定） |
+| _module-map.yaml | skipped（无 paths/entrypoints/依赖边变更——交付文件全落在既有模块 paths 内，模块边界零变化） |
+| modules/core-engine.md | done（封顶语义/severity/probe 联动契约摘要级变化——经 module-changelog 流转，锚 D-001@v2/D-005@v2/D-003；不手扩正文避免与 changelog 双写） |
+| modules/runtime.md | done（complete.js/complete-handlers.js：Wave 完成度门 assertWaveTasksComplete 契约面新增——锚 D-013，changelog 流转） |
+| modules/worktree.md | done（worktree-apply.js：db/*.sql 兜底声明门 checkDbScriptDeclarationGate——锚 D-007/D-012，changelog 流转） |
+| modules/stages.md | skipped（stages/archive.js definition 文案行级变化无接口变化；brainstorm/verify prompt 新增由镜像与 checklist 承载） |
+| modules/docs-consistency.md | skipped（design-facts.js 无段头降 warning 属校验分支级行为，无卡片注意事项级契约变更） |

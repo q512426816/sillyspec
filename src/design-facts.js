@@ -459,22 +459,58 @@ export function validateDesignFileList({ changeDir, cwd } = {}) {
       warnings.push(`design 清单疑似仓变更段头格式异常（该段文件可能被记到上一段仓，覆盖对账会点名）：${h}`)
     }
 
-    if (!hasSegmentHeader) {
-      const entries = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true })
-      if (!Array.isArray(entries) || entries.length === 0) {
-        return { ok: true, errors, warnings: [...warnings, 'design 清单核验跳过：design.md 无文件变更清单段（small 变更可无清单）'] }
-      }
-      checkAgainstRoot(cwd, entries.map(e => e.path), '主仓')
-      return { ok: errors.length === 0, errors, warnings }
-    }
-
-    // 有段头：逐段按其仓根核验。跨仓注册表读侧口径 = <cwd>/.sillyspec/local.yaml
-    // （与 execute MultiRepoContext / register-repo 写侧一致，parseRepoRegistry 自带 CRLF 容差）
+    // 跨仓注册表读侧口径 = <cwd>/.sillyspec/local.yaml（与 execute MultiRepoContext /
+    // register-repo 写侧一致，parseRepoRegistry 自带 CRLF 容差）——有段头/无段头两分支
+    // 共用（task-05 / FR-10 上移：无段头分支也要做跨仓注册路径前缀命中判定）
     let registry = null
     const localYamlPath = join(cwd, '.sillyspec', 'local.yaml')
     if (existsSync(localYamlPath)) {
       try { registry = parseRepoRegistry(readFileSync(localYamlPath, 'utf8')) } catch { registry = null }
     }
+
+    if (!hasSegmentHeader) {
+      const entries = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true })
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return { ok: true, errors, warnings: [...warnings, 'design 清单核验跳过：design.md 无文件变更清单段（small 变更可无清单）'] }
+      }
+      // task-05 / FR-10 无段头缺口：清单行含跨仓注册路径（注册值/basename 前缀命中）时不按
+      // 主仓根打 design_file_ref_invalid 逼 NEW: 前缀（跨仓既有文件被逼声明计划新建=语义撒谎，
+      // 坑 design-file-ref-cross-repo-blind 同族的无段头形态），降 warning 提示补段头——补
+      // 「## <repo> 仓变更」段头后该段按仓根核验，真幻觉路径仍会在仓根核验下暴露（只消除
+      // 假红、不引入假绿）。纯主仓行（无前缀命中）走原主仓根核验，行为零变化。
+      const crossPrefixes = []
+      if (registry) {
+        for (const [repoKey, rootRaw] of registry) {
+          const root = String(rootRaw || '').replace(/\\/g, '/').replace(/\/+$/, '')
+          if (!root) continue
+          const bn = root.split('/').pop()
+          crossPrefixes.push({ repoKey, prefixes: bn && bn !== root ? [root, bn] : [root] })
+        }
+      }
+      const hitCrossRepo = (rawPath) => {
+        const n = String(rawPath || '').trim().replace(/\\/g, '/')
+        if (!n) return null
+        for (const c of crossPrefixes) {
+          for (const pre of c.prefixes) {
+            if (n === pre || n.startsWith(pre + '/')) return c.repoKey
+          }
+        }
+        return null
+      }
+      const mainPaths = []
+      for (const e of entries) {
+        const hit = hitCrossRepo(e.path)
+        if (hit) {
+          warnings.push(`design 清单无仓变更段头且该行疑似跨仓 ${hit} 仓路径：${e.path}——补「## ${hit} 仓变更」段头后按该仓根核验（暂不按主仓根核验/逼 NEW: 前缀）`)
+        } else {
+          mainPaths.push(e.path)
+        }
+      }
+      checkAgainstRoot(cwd, mainPaths, '主仓')
+      return { ok: errors.length === 0, errors, warnings }
+    }
+
+    // 有段头：逐段按其仓根核验。
     for (const [repo, paths] of byRepo) {
       if (repo === 'main') {
         checkAgainstRoot(cwd, paths, '主仓')

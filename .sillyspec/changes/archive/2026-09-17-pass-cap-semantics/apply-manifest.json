@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-17-pass-cap-semantics",
+  "appliedAt": "2026-09-17T12:29:21.324Z",
+  "baseHash": "e5cf4abe65b29463408c11a26694ba16745e51cf",
+  "files": [
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "sha256": "7b780c6cf1cc1f4c76d5a11e03327862c83e6c70f7853c0ace1b75dde7c03d0c"
+    },
+    {
+      "path": "docs/prompt/verify.md",
+      "sha256": "402b9b69d5c30357683f21781312e1156aa641b367d4d1ce5a52d93d1c7c4fa4"
+    },
+    {
+      "path": "src/change-risk-profile.js",
+      "sha256": "09df6d7f6058066af2a9c15d501f930b3a91a287815dc8ec197909f91f8e5271"
+    },
+    {
+      "path": "src/design-facts.js",
+      "sha256": "ff85276195942b75409bfe1a7a05b640ab5c2dff7ff0bf94dbb36bc77ded38c0"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "sha256": "780722fd6095ee26d2f3ea18d417a1af4454852fd9e64aa50f161ce35089706b"
+    },
+    {
+      "path": "src/run/complete.js",
+      "sha256": "587c6529a2bb41715f4ab02aa99dafa64c5167212dbaa01bf3bac5010d87e5d7"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "sha256": "9666f4930eeb715659363e568f5cd6c6d526538d4be5032921b31676d0074dd3"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "sha256": "d430167226aac4cc71572627c2f84ee38dfef14a12d9d386d1b245095d4b6e7e"
+    },
+    {
+      "path": "src/stage-review-checklist.js",
+      "sha256": "f568ac03ec994d769417e0e1eab7634a1149af9c45e7a4dd81c73e35d2a92d47"
+    },
+    {
+      "path": "src/stages/archive.js",
+      "sha256": "7e90bd0b5d3cf40e615d107c3602142c3c3d6fd92ad39715442d43700938fcd0"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "c70ea2dce77604297e189c3ac786ab708633cbf36626943884bf0983547c900f"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "sha256": "1e2b7feb917cd8e8c233b7b9f1fa13a7e56d1ada53761ea9d697f79e4c24f502"
+    },
+    {
+      "path": "src/task-review.js",
+      "sha256": "591dd55c29affddce0d403de2f5a6cc8626441fd301282a89b66acf3150c500a"
+    },
+    {
+      "path": "src/verify-facts-schema.js",
+      "sha256": "0bf6c0f90ed5099ec38b5db2168a148602c5bf97e11f8db65d2a737a4a3be7fd"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "d91b9478347c1de047ad25903cf74bf9f2f7cf797f5f97600c8e087259dff3d1"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "9b1f681c4ef60669c2758efea87dd6fb60280857af5f3bbdd9708c7062b8fc65"
+    },
+    {
+      "path": "test/acceptance-matrix-gate.test.mjs",
+      "sha256": "0833d9aedab7ecd0e1a173a54c9638e3a696ecc6c2b14903cf8cbd308cdfde71"
+    },
+    {
+      "path": "test/acceptance-matrix-probe.test.mjs",
+      "sha256": "7eec212eb5518dabcf82aa0d7d0eaa78025a26f621f3926548c0cc3a433bcf97"
+    },
+    {
+      "path": "test/cross-repo-verify.test.mjs",
+      "sha256": "7127c6a69a1925061aed13f879ed17f1044039ea2b137c09bc82f91aac0929d9"
+    },
+    {
+      "path": "test/design-facts.test.mjs",
+      "sha256": "6abc088b972cc49bcd93c7489846a9f94904720e3ff58efda708f585f599c46a"
+    },
+    {
+      "path": "test/probe7-anchor-testfile.test.mjs",
+      "sha256": "d00b2eb0cb52024aed586f2ed889140a90dd0b07ee6b3135c400ecbb0457df86"
+    },
+    {
+      "path": "test/run-complete-step-execute-batch.test.mjs",
+      "sha256": "03cd7cd5e741cdbd75ba86474a36a633abbef9d7b29be1a3694cce4c91caf2bc"
+    },
+    {
+      "path": "test/stage-contract.test.mjs",
+      "sha256": "5d8344fa0f952ec6284252cb10f049effd5756a683823a4806886a85478e445d"
+    },
+    {
+      "path": "test/stage-review-checklist.test.mjs",
+      "sha256": "265c7c5be35e458d204065c0afa421b9f1a5f105ab231613e5b6836589aadff0"
+    },
+    {
+      "path": "test/task-review-adopt.test.mjs",
+      "sha256": "83235e7fdfb7cb07adb1f4146da5b9a2d888f5005aa3317c816c892fad93ee38"
+    },
+    {
+      "path": "test/verify-conclusion-slot.test.mjs",
+      "sha256": "fe6daf080abd96e230be505d25b47c3ee15ce397b1cf66b0af406f6dee126a9c"
+    },
+    {
+      "path": "test/verify-handover-structured.test.mjs",
+      "sha256": "aa3039b0e0c90a2ea564ab84f9b9c64ab7ff9ca9350601372067f12511e7e428"
+    },
+    {
+      "path": "test/pass-eligibility.test.mjs",
+      "sha256": "7ce1ba5a993a41ac9968d26d521c044bf747d879ed193749b35b02ab2a24a8f7"
+    },
+    {
+      "path": "test/wave-task-complete-gate.test.mjs",
+      "sha256": "3973517086c2c97791fbe4a03876f67868fe689ca1bf1d5911ef2112c22cfcf0"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "sha256": "3bbcecb5d7bd5569cad2ac0a7b4d4672dc11f768987dfcacfdee0ccac60989d9"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "sha256": "be78f835e651149e8923628402f9f6369f34aa9dc34a18dc1b8f1a662821a84d"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "sha256": "7aad950f6f2a27f3f7bbb5fe44702824b79243d5f8e6cf535c3ebd2ec1b11230"
+    }
+  ]
+}

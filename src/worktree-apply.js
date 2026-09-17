@@ -702,8 +702,87 @@ function writeApplyManifest({ projectRoot, specBase, changeName, baseHash, files
   return { written: true, file: manifestPath, files: entries };
 }
 
+// ── db/*.sql 声明门（2026-09-17-pass-cap-semantics task-04 / FR-05 / FR-06 / D-007 / D-012）──
+// 文法实现单点：verify-probes 的 parseDbScriptDeclarations（X-03 双形态：声明行 + 回执
+// command）/ parseHandoverRows（task-01 导出），禁二份副本。顶层 await 动态绑定
+// （verify-probes :1630 stage-contract 同款先例；已核 verify-probes 静态闭包与其顶层
+// await 链均不回指本文件，任一加载序无环）。绑定失败降级 null → 门 fail-open（warn
+// 放行）——门自身异常不锁死 apply/归档主流程。
+let dbScriptDeclareParser = null
+let handoverRowsParser = null
+try {
+  ;({ parseDbScriptDeclarations: dbScriptDeclareParser, parseHandoverRows: handoverRowsParser } = await import('./verify-probes.js'))
+} catch { /* fail-open：绑定失败时下方门函数降级 warn 放行 */ }
+
 /**
- * 坑 mixed-baseline-drift-hint（ql-20260915-004）：apply 成功尾声混合基线 advisory。
+ * db/*.sql 执行声明对账门（task-04 兜底侧，apply 尾声与 archive --confirm 前置共用同一函数）。
+ * 纯「文件集 × 文本声明」对账，零连库（design 非目标——不做 information_schema 对账）。
+ *
+ * 口径：
+ *   - 入参文件集 posix 化后取 ^db/ 开头且 .sql 结尾者（与声明文法产出 db/<file>.sql 同形，
+ *     对账零变换；深路径 src/.../db/x.sql 不进门——声明文法同样不认该形态，两侧一致无死锁）；
+ *   - 声明集 = parseDbScriptDeclarations(verifyMd)，verifyMd 自 <changeDir>/verify-result.md
+ *     读取（changeDir 经 resolveActiveOrArchiveChangeDir 归档感知，specBase 缺省时与
+ *     writeApplyManifest 同链兜底：透传 specBase > 平台指针 > 本地 .sillyspec）；
+ *   - verify-result.md 缺失（ENOENT）= 空声明集 → 有 db 交付即拦（fail-closed 正常判定路径）；
+ *   - 互斥分支（D-005@v2：db-script 恒 blocking）：声明集全命中 × handover 存在 db-script
+ *     类型行 → 两面矛盾 error。数据源 facts.handover（verify-facts.json，{ count, items[] }
+ *     形态）优先，缺 facts 时 parseHandoverRows(verifyMd) 兜底，两源任一命中即拦。
+ *
+ * fail 分布：正常判定路径 fail-closed（缺声明/互斥 → ok:false + 修复指引）；门自身异常
+ * （绑定失败 / verifyMd 读取抛非 ENOENT 异常 / facts 解析异常走 md 兜底）fail-open
+ * （ok:true + warning）。
+ *
+ * @param {{ projectRoot: string, specBase?: string, changeName: string, files: string[] }} p
+ * @returns {{ ok: true, warning?: string } | { ok: false, error: string }}
+ */
+export function checkDbScriptDeclarationGate({ projectRoot, specBase, changeName, files }) {
+  const dbFiles = [...new Set((Array.isArray(files) ? files : [])
+    .map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean))]
+    .filter((f) => /^db\/[\w./-]+\.sql$/.test(f)).sort()
+  if (dbFiles.length === 0) return { ok: true } // 无 db/*.sql 交集 → 零行为变化（存量兼容）
+  if (!dbScriptDeclareParser) {
+    return { ok: true, warning: `db 声明门降级放行（fail-open）：verify-probes 文法绑定不可用——本次未对账以下 db 脚本执行声明，请人工确认已对目标库执行：${dbFiles.join(', ')}` }
+  }
+  const base = specBase || _silentPointerSpecRoot(projectRoot) || join(projectRoot, '.sillyspec')
+  const changeDir = resolveActiveOrArchiveChangeDir(base, changeName)
+  let verifyMd = ''
+  try {
+    verifyMd = readFileSync(join(changeDir, 'verify-result.md'), 'utf8')
+  } catch (e) {
+    if (e && e.code === 'ENOENT') verifyMd = '' // verify-result.md 缺失 = 空声明集（走下方缺声明拦截）
+    else return { ok: true, warning: `db 声明门降级放行（fail-open）：verify-result.md 读取异常（${(e && e.message) || e}）——本次未对账以下 db 脚本执行声明，请人工确认：${dbFiles.join(', ')}` }
+  }
+  const declared = new Set(dbScriptDeclareParser(verifyMd))
+  const missing = dbFiles.filter((f) => !declared.has(f))
+  if (missing.length > 0) {
+    return { ok: false, error: [
+      `db 脚本执行声明缺失：以下 ${missing.length} 个 db/*.sql 交付文件未在 verify-result.md 声明已对目标库执行（fix.sql 双门兜底，D-007/D-012——覆盖 verify 后新增 sql 的时序窗口）：`,
+      ...missing.map((f) => `  - ${f}`),
+      `修复：先在 ${join(changeDir, 'verify-result.md').replace(/\\/g, '/')} 声明已执行——补「已对目标库执行：db/<file>.sql」声明行，或「## 集成验证回执」条目 command 含 db/<file>.sql（X-03 双形态，含 log 路径可选），补后重跑本命令。`,
+    ].join('\n') }
+  }
+  // 互斥分支：声明全在场 × handover db-script 行在场 = 「已执行」vs「移交待执行」两面矛盾
+  let handoverItems = null
+  try {
+    const facts = JSON.parse(readFileSync(join(changeDir, 'verify-facts.json'), 'utf8'))
+    if (facts && facts.handover && Array.isArray(facts.handover.items)) handoverItems = facts.handover.items
+  } catch { /* facts 缺失/损坏 → parseHandoverRows(verifyMd) 兜底 */ }
+  if (!handoverItems) {
+    try { handoverItems = handoverRowsParser ? handoverRowsParser(verifyMd) : [] } catch { handoverItems = [] }
+  }
+  if (handoverItems.some((h) => h && String(h.type || '').toLowerCase().replace(/[\s_]+/g, '-') === 'db-script')) {
+    return { ok: false, error: [
+      `db-script 移交项与执行声明互斥（D-005@v2）：verify-result.md 已声明以下 db 脚本对目标库执行，但「移交项（结构化）」存在 type=db-script 行（承认该脚本待执行）——两面矛盾，二选一以真实状态为准：`,
+      ...dbFiles.map((f) => `  - ${f}`),
+      `修复：确已执行 → 从 verify-result.md「## 移交项（结构化）」删除该 db-script 行后重跑；确未执行 → 删除对应「已对目标库执行」声明行/回执条目后重跑（届时按缺声明门指引处理）。`,
+    ].join('\n') }
+  }
+  return { ok: true }
+}
+
+/**
+ * 坑 mixed-baseline-drift-hint（ql-20260915-004）：apply 尾声混合基线 advisory。
  *
  * 主仓自本变更基点（baseHash）后的已提交推进若触及本变更相关文件（含 .test./.spec. 变体），
  * worktree 快照内验证过的测试断言可能基于旧内容——apply 落地的是混合基线，提示 agent 合并态
@@ -1210,6 +1289,16 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         result.errors.push(...crossApplied.errors);
         return result; // 跨仓未落地 = 该仓 task 实际未完成，主仓 apply 不可继续
       }
+      // --- db/*.sql 声明门·跨仓面（task-04 / FR-05）：跨仓 apply 成功面 out.applied[].changedFiles
+      // 统一过同一门（声明文法跨仓同源——verify-result.md 仍在主仓 changes/<name>/ 下）。跨仓
+      // apply 物理动作已发生，门拦的是流程收口（ok 不置 true + 修复指引，补声明重跑幂等）。
+      const crossDbFiles = crossApplied.applied.flatMap((a) => (a && Array.isArray(a.changedFiles) ? a.changedFiles : []))
+      const dbGateCross = checkDbScriptDeclarationGate({
+        projectRoot, changeName, files: crossDbFiles,
+        specBase: (ctx.platformOpts && ctx.platformOpts.specRoot) || undefined,
+      })
+      if (!dbGateCross.ok) { result.errors.push(dbGateCross.error); return result }
+      if (dbGateCross.warning) result.warnings = (result.warnings || []).concat([dbGateCross.warning])
     }
     const cross = validateCrossRepoNoOp(ctx, projectRoot, changeName);
     for (const e of cross.errors) result.errors.push(e);
@@ -1852,6 +1941,15 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       const patchContent = Buffer.concat(patchParts);
       if (patchContent.length === 0) {
         // patch 为空（清单中部分文件可能没实际变更）
+        // --- db/*.sql 声明门·出口①（task-04 / FR-05）：空 patch 出口的 merge 写回面过门 ---
+        //（写回批末 add 已先行，本出口唯一落盘面 = mergedDirtyFiles ∪ mergedMismatchFiles，
+        //与下方 manifest files 同口径；门失败 → result.ok 不置 true，走既有 error 通道）
+        const dbGateEmpty = checkDbScriptDeclarationGate({
+          projectRoot, specBase: allowSpecBase, changeName,
+          files: [...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])],
+        })
+        if (!dbGateEmpty.ok) { result.errors.push(dbGateEmpty.error); return result }
+        if (dbGateEmpty.warning) result.warnings = (result.warnings || []).concat([dbGateEmpty.warning])
         result.ok = true;
         // apply-manifest（task-01 出口③变体）：4.5 三方合并全部消解重叠时，merge 写回面是
         // 本出口唯一落盘面——manifest 仍须覆盖（写回批末 add 已先行，指纹取 staged 态）。
@@ -1920,6 +2018,18 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
         if (rollback.error) result.warnings = (result.warnings || []).concat([`回滚警告: ${rollback.error}`]);
         return result;
       }
+
+      // --- 7.1 db/*.sql 声明门·出口②（task-04 / FR-05 / D-007 / D-012 兜底第一门）---
+      // patch 主路径 apply 文件集（patch 实际落盘集 ∪ 4.5 三方合并写回集，与 7.2 manifestFace
+      // 同口径）∩ db/*.sql 逐文件对账 verify-result.md 执行声明（X-03 双形态文法，verify-probes
+      // 单点实现）——缺失/与 db-script handover 互斥 → result.errors 阻断（result.ok 不置 true，
+      // 走既有 apply error 通道，不抛异常）；无 db/*.sql 交集零行为变化；门异常 fail-open。
+      const dbGateMain = checkDbScriptDeclarationGate({
+        projectRoot, specBase: allowSpecBase, changeName,
+        files: [...patchFiles, ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])],
+      })
+      if (!dbGateMain.ok) { result.errors.push(dbGateMain.error); return result }
+      if (dbGateMain.warning) result.warnings = (result.warnings || []).concat([dbGateMain.warning])
 
       result.ok = true;
 
@@ -2443,6 +2553,17 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
     );
     return result;
   }
+
+  // --- db/*.sql 声明门·出口③（task-04 / FR-05）：merge 成功出口——changedFiles（落地校验过
+  // 的交付集）∪ 两个三方合并写回面（与下方 manifestFace 同口径）过同一门；门失败 →
+  // result.ok 不置 true，走既有 error 通道。specBase 为 applyWorktree 透传值（可能 undefined，
+  // 门函数内 projectRoot 兜底链）。---
+  const dbGateMerge = checkDbScriptDeclarationGate({
+    projectRoot, specBase, changeName,
+    files: [...(result.changedFiles || []), ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])],
+  })
+  if (!dbGateMerge.ok) { result.errors.push(dbGateMerge.error); return result }
+  if (dbGateMerge.warning) result.warnings = (result.warnings || []).concat([dbGateMerge.warning])
 
   result.ok = true;
   // apply 成功尾声写 apply-manifest.json（task-01 出口②：applyWorktree 显式 --merge 与

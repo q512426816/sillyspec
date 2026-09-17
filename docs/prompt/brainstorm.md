@@ -201,6 +201,8 @@
 - normalized_requirement: <可测试的约束>
 - impacts: [FR-?, task-?, verify-?]
 - evidence: <文件路径/代码位置/用户回答轮次>
+- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
 ```
 
 - 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）
@@ -470,6 +472,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 {PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+  **子代理执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：独立审查 94 分钟无收敛被用户三催、写通道故障空转 35 分钟）**：
+  - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。
+  - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
 
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
@@ -503,6 +508,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tasks.md 的执行范围与 design.md 的非目标
 - decisions.md 的 D-xxx@vN 与 design.md 当前说法
 - scan/module docs 或源码中的真实约束与 design.md 假设
+- 涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过
+- 涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）
+后两条为命中条件注入项：变更涉及角色/权限/字典类数据或新页面/前端路由时必查。
 
 ### 问答处理
 1. 先自动交叉审查，不要一上来问用户。
@@ -526,6 +534,8 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - normalized_requirement: TTL 过期且上游仍异常时返回 stale 标记，不刷新缓存。
 - impacts: [FR-02, task-03, verify-02]
 - evidence: design.md §3/§7, src/cache/...
+- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
+- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
 ```
 
 ### 输出格式
@@ -695,7 +705,7 @@ created_at: <now-datetime>
 - evidence: 用户回答轮次或代码/文档路径
 ```
 
-> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，`<src 路径>:<行号或符号>`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 `NEW:<名>` 前缀声明，冒号后不加空格：`NEW:foo` 合法、`NEW: foo` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）。
+> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，`<src 路径>:<行号或符号>`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 `NEW:<名>` 前缀声明，冒号后不加空格：`NEW:foo` 合法、`NEW: foo` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
 
 ### 后续变更包处理
 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：
