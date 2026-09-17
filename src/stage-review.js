@@ -836,6 +836,13 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
     } catch (e) {
       throw new Error(`register-stage-review: 既有 review.json 解析失败 ${existingPath}: ${e.message}`)
     }
+    // 幂等跳过（2026-09-17 用户反馈⑥-②，ql-20260917-005）：docHash 已一致时 refresh 仍整文件
+    // 重写 + 追加审计行——会话内多次 refresh 每次都 bump mtime/改内容，agent 的 Read→Edit 窗口
+    // 被「file modified since read」打断（本会话两次实证）。hash 未变 = 无可刷新内容，直接
+    // no-op 返回（不写盘不 bump mtime）；行为差异只在「少一次无意义重写」。
+    if (existing.docHash === docHash && JSON.stringify(existing.reviewedFiles) === JSON.stringify(reviewedFiles)) {
+      return { ok: true, reviewRunId: existingRunId, reviewPath: existingPath, markerPath: stageReviewMarkerPath(runtimeRoot, stage, changeName), mode: 'noop-unchanged', mainDoc, review: existing }
+    }
     const refreshedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
     const review = {
       ...existing,

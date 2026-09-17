@@ -170,6 +170,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
   sillyspec run quick --non-interactive --done --output "CI 内的快修"  # 脚本/CI
   sillyspec progress show
+  sillyspec progress show --all         # 多变更汇总时无信号变更全量单行列出（默认折叠超 8 个）
   sillyspec progress show --json        # 全局总览 envelope（面板/脚本消费）
   sillyspec worktree apply 2026-07-03-add-login
 `);
@@ -375,7 +376,7 @@ async function main() {
             process.exitCode = exitCode;
             break;
           }
-          pm.show(progDir, progChangeName);
+          pm.show(progDir, progChangeName, { all: filteredArgs.includes('--all') });
           break;
         }
         case 'check': {
@@ -2060,6 +2061,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
             console.log(`   marker → ${result.markerPath}`);
             if (result.mode === 'refreshed') {
               console.log(`   docHash 已按当前 ${result.mainDoc} 重算（verdict 结论是否仍适用需人工确认）`);
+            } else if (result.mode === 'noop-unchanged') {
+              console.log(`   docHash 已与当前 ${result.mainDoc} 一致，跳过重写（幂等 no-op，不动文件）`);
             } else {
               console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
             }

@@ -1120,6 +1120,28 @@ export class SyncManager {
       return { synced: 0, errors: [...errors, '无可用文档'] };
     }
 
+    // 无变化推送去重（2026-09-17 用户反馈⑥-②，ql-20260917-005）：每条 CLI 命令的自动同步都
+    // 全量 POST 四件套 + 打「已同步 N 个文档」——内容未变时的重复推送是纯噪音/流量，也放大
+    // 「同步在反复回写」的干扰体感。四件套内容集合的 sha256 与上次成功推送比对，一致即跳过
+    // （debug 一行）；marker 读取失败/缺失按「有变化」处理（多推一次无害，fail-open）。
+    // manual 路径不去重（显式意图，允许空跑确认链路）。
+    let docsFingerprint = null;
+    try {
+      docsFingerprint = createHash('sha256')
+        .update(DOCUMENT_FILES.map(f => `${f}\u0000${documents[f] ?? ''}`).join('\u0001'))
+        .digest('hex');
+    } catch { /* 指纹失败按有变化处理 */ }
+    if (!manual && docsFingerprint) {
+      const markerPath = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime', `sync-docs-lastpush-${changeName}.json`);
+      try {
+        const prev = JSON.parse(readFileSync(markerPath, 'utf8'));
+        if (prev && prev.hash === docsFingerprint) {
+          debugLog(`[sync] 四件套内容与上次成功推送一致，跳过文档直推: ${changeName}`);
+          return { synced: 0, errors, deduped: true };
+        }
+      } catch { /* 无 marker / 损坏 = 首推或按有变化处理 */ }
+    }
+
     const docUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/documents`;
     const result = await fetchJson(docUrl, {
       method: 'POST',
@@ -1135,6 +1157,14 @@ export class SyncManager {
       return { synced: 0, errors: [...errors, '文档同步请求失败'] };
     }
 
+    // 推送成功才落指纹 marker（失败不落——下轮重推）
+    if (docsFingerprint) {
+      try {
+        const runtimeDir = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime');
+        mkdirSync(runtimeDir, { recursive: true });
+        writeFileSync(join(runtimeDir, `sync-docs-lastpush-${changeName}.json`), JSON.stringify({ hash: docsFingerprint, at: Date.now() }) + '\n', 'utf8');
+      } catch { /* marker 失败只损失去重（下轮多推一次），不影响同步 */ }
+    }
     console.log(`[sync] 已同步 ${syncedCount} 个文档: ${changeName}`);
     return { synced: syncedCount, errors };
   }

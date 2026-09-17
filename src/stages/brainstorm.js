@@ -286,10 +286,11 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 
 | 操作 | 文件路径 | 说明 |
 |---|---|---|
-| 新增 | src/xxx/NewFile.java | ... |
+| 新增 | NEW:src/xxx/NewFile.java | ... |
 | 修改 | src/xxx/ExistingFile.java | 新增 xx 方法 |
 | 删除 | src/xxx/OldFile.java | 已被 xx 替代 |
 
+   **路径存在性核验（NEW: 前缀铁律，2026-09-17 用户反馈⑥-①前移）**：清单条目在「生成规范文件」步 \`--done\` 门禁会逐一核验仓内存在性——**计划新建的文件必须在路径前加 \`NEW:\` 前缀**（冒号后不加空格，\`NEW:src/foo.js\` 合法、\`NEW: src/foo.js\` 属书写错误）；未加前缀的新建路径会以 \`design_file_ref_invalid\`（幻觉路径/书写错误）在末步被拦，返工一轮。已有文件写仓根相对正斜杠路径，禁绝对路径/glob。
    **字段数据流标注**（避免新增字段到 execute 才发现没透传）：当清单含「新增/修改对外字段、接口、DTO、响应体、事件 payload、配置键」时，对应行「说明」列必须交代 producer→consumer 数据流——产出方（producer）→ 每跳流转/归一化点（序列化/反序列化/字段映射/默认值兜底）→ 消费方（consumer）。漏标 = 字段在某跳 dormant（声明了却没透传），到 execute/verify 才暴露，属设计层缺口。
    - 示例：「修改 daemon.ts：新增 budget_tokens，producer=backend/api-types.ts → ws_hub envelope 透传 → daemon.ts normalizeUsage（snake→camel）→ consumer=runtime/lease.ts 写 lease」
    - 仅改内部实现、无对外字段变动时，说明列照常写「新增 xx 方法」即可，无需数据流。

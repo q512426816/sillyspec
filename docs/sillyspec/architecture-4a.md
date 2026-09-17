@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI �
 
 ### 1.2 流程状态机
 
-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1137`），契约转换图（`src/stage-contract.js:1137`）：
+**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1146`），契约转换图（`src/stage-contract.js:1146`）：
 
 ```
 brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
@@ -60,9 +60,9 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 **推进不是自动的，分三层**：
 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
 2. **步骤内推进** `completeStep`（`src/run/complete.js:120`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
-3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:440`）按状态机推荐下一阶段命令。
+3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:469`）按状态机推荐下一阶段命令。
 
-**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:590`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
+**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:619`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
 
 ### 1.3 校验门与审批点
 
@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1137` |
+| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1146` |
 | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:157` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
@@ -79,7 +79,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
 **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:576`，统一收尾管线）顺序：
-1. `runValidators`（客观产物校验，`src/stage-contract.js:1207`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+1. `runValidators`（客观产物校验，`src/stage-contract.js:1216`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:731`）。
 3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:988`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:240`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。

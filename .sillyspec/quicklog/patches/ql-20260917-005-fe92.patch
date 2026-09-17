@@ -1,0 +1,514 @@
+diff --git a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+index bb34c89..288df0a 100644
+--- a/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
++++ b/.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md
+@@ -204,7 +204,7 @@ SQLite Schema（grep 自 `db.js`，仅记表名 + 用途 + 字段数）：
+   - `POST {platform.url}/api/changes/{changeName}/documents` 同步文档（`sync.js:501`）；
+   - 同步完更新 `changes.platform_last_sync`。
+ - 审批链路：`GET /api/changes/{name}/approval` 查询（`sync.js:36`，`checkApproval`）+ `approve` / `reject`
+-  入口（`sync.js:2229`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
++  入口（`sync.js:2259`，共用 `_submitApproval`，端点契约 TBD-hub-api）。
+ - 配置读 `.sillyspec/local.yaml` platform 段（connect/disconnect 用文本级改写保留注释）。
+ - platform 子命令（connect / disconnect / sync / sync-docs / status / pull / resolve /
+   approve / reject / pointer）见 `src/index.js:1263`。主 CLI 无 WebSocket 依赖。
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index 720acf9..d1ce1f0 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -347,10 +347,11 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
+ 
+ | 操作 | 文件路径 | 说明 |
+ |---|---|---|
+-| 新增 | src/xxx/NewFile.java | ... |
++| 新增 | NEW:src/xxx/NewFile.java | ... |
+ | 修改 | src/xxx/ExistingFile.java | 新增 xx 方法 |
+ | 删除 | src/xxx/OldFile.java | 已被 xx 替代 |
+ 
++   **路径存在性核验（NEW: 前缀铁律，2026-09-17 用户反馈⑥-①前移）**：清单条目在「生成规范文件」步 `--done` 门禁会逐一核验仓内存在性——**计划新建的文件必须在路径前加 `NEW:` 前缀**（冒号后不加空格，`NEW:src/foo.js` 合法、`NEW: src/foo.js` 属书写错误）；未加前缀的新建路径会以 `design_file_ref_invalid`（幻觉路径/书写错误）在末步被拦，返工一轮。已有文件写仓根相对正斜杠路径，禁绝对路径/glob。
+    **字段数据流标注**（避免新增字段到 execute 才发现没透传）：当清单含「新增/修改对外字段、接口、DTO、响应体、事件 payload、配置键」时，对应行「说明」列必须交代 producer→consumer 数据流——产出方（producer）→ 每跳流转/归一化点（序列化/反序列化/字段映射/默认值兜底）→ 消费方（consumer）。漏标 = 字段在某跳 dormant（声明了却没透传），到 execute/verify 才暴露，属设计层缺口。
+    - 示例：「修改 daemon.ts：新增 budget_tokens，producer=backend/api-types.ts → ws_hub envelope 透传 → daemon.ts normalizeUsage（snake→camel）→ consumer=runtime/lease.ts 写 lease」
+    - 仅改内部实现、无对外字段变动时，说明列照常写「新增 xx 方法」即可，无需数据流。
+diff --git a/docs/sillyspec/architecture-4a.md b/docs/sillyspec/architecture-4a.md
+index 2c5ca4e..2e9dffc 100644
+--- a/docs/sillyspec/architecture-4a.md
++++ b/docs/sillyspec/architecture-4a.md
+@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI 
+ 
+ ### 1.2 流程状态机
+ 
+-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1137`），契约转换图（`src/stage-contract.js:1137`）：
++**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1146`），契约转换图（`src/stage-contract.js:1146`）：
+ 
+ ```
+ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+@@ -60,9 +60,9 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ **推进不是自动的，分三层**：
+ 1. **进入阶段** `runStage`（`src/run/stage.js:30`）→ `checkTransition` → 设 `currentStage`。execute 启动期自动创建 worktree（`stage.js:37`）、固定 `executeRunId`、审批检查。
+ 2. **步骤内推进** `completeStep`（`src/run/complete.js:120`）处理 `--done`：标记 step completed → 找下一个 pending → 无 pending 则进阶段完成分支。
+-3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:440`）按状态机推荐下一阶段命令。
++3. **下一步建议** `_getNextSuggestion`（`src/progress/stage-machine.js:469`）按状态机推荐下一阶段命令。
+ 
+-**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:590`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
++**重开与级联**：`reopenStage`（`src/progress/stage-machine.js:619`）`--reopen --from-step N` 把 N 置 pending、其后置 stale，阶段转 `revising`，并级联把下游主链阶段标 `stale`。
+ 
+ ### 1.3 校验门与审批点
+ 
+@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ | 门 | 触发 | 阻断 | 依据 |
+ |---|---|---|---|
+-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1137` |
++| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1146` |
+ | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:157` |
+ | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
+ | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
+@@ -79,7 +79,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
+ 
+ **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:576`，统一收尾管线）顺序：
+-1. `runValidators`（客观产物校验，`src/stage-contract.js:1207`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
++1. `runValidators`（客观产物校验，`src/stage-contract.js:1216`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+ 2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:731`）。
+ 3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:988`）。
+ 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:240`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 87d0058..0500640 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -70,9 +70,9 @@ mcp:
+ | `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:460` |
+ | `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1067` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+-| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1397` |
++| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1431` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2225` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2225` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2259` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2259` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -136,8 +136,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2429；shared.js:966 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2429/2705；shared.js:990 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3608；sync.js:1397/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3560；sync.js:2099 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3608；sync.js:1431/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3560；sync.js:2133 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3373/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:682/1058-1070 |
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 4f10579..299ebbb 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -318,7 +318,7 @@ P2 遗留（按优先级登记）：
+ 
+ **批次② 状态机 fail-open 组 → 完整流程 brainstorm（行为语义变更，单一 change 立项）**
+ - **A5** `--done` 阶段产物 gate 失败只打 ❌ 但 exit 0：`src/run/complete.js:328-329` gate 早退 return 不设 process.exitCode——与 quick 审计 blocked→exit 1 同仓惯例分裂，agent/CI/hook 按 exit code 消费即 fail-open。
+-- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:817` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:1031 `AUXILIARY_STAGES` 一律放行）。
++- **B6** `--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage：`src/run/command.js:817` --done 直接进 `completeStep` 不查 `checkTransition`（stage.js:27-44 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:233）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:1040 `AUXILIARY_STAGES` 一律放行）。
+ - **B7** status/doctor 自称只读实则写库：`src/run/command.js:1130` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage，与 SKILL「status 只读」矛盾，多 agent 并发 lastActive 互相覆盖。
+ - **B8** `run brainstorm` 无 --change 多活跃变更仓静默建幽灵变更：`src/run/command.js:717-731` 无条件 initChange（DB 实锤 08-15 一小时 4 个 `*-new-change-*` 活跃行）。
+ - 裁决理由：四者共性强——状态机守卫 fail-open + 幽灵变更/幽灵阶段污染，属行为语义变更（多命令交互路径），非单点行修复。走完整流程 brainstorm → plan → execute，含 8b（新项目首跑 auxiliary 幽灵 default 变更）一并评估。
+diff --git a/src/design-facts.js b/src/design-facts.js
+index ffe53f9..eada678 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -332,7 +332,8 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+   lines.push('')
+   lines.push('| 操作 | 文件路径 | 说明 |')
+   lines.push('|---|---|---|')
+-  lines.push('<!-- 示例行（替换为实际清单后删除本注释）：| 新增 | src/xxx/NewFile.java | 说明（含对外字段时交代 producer→consumer 数据流） | -->')
++  lines.push('<!-- 示例行（替换为实际清单后删除本注释）：| 新增 | NEW:src/xxx/NewFile.java | 说明（含对外字段时交代 producer→consumer 数据流） | -->')
++  lines.push('<!-- 路径存在性核验铁律：计划新建的文件路径必须带 NEW: 前缀（如上例），已有文件写仓根相对正斜杠路径——末步 --done 门禁逐一核验存在性，无前缀的新建路径按 design_file_ref_invalid 拦截返工（2026-09-17 用户反馈⑥-①，写作期即提示） -->')
+   lines.push('')
+ 
+   lines.push('## 接口定义')
+diff --git a/src/index.js b/src/index.js
+index e5a3986..a3652a2 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -170,6 +170,7 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
+   sillyspec run quick --non-interactive --done --output "CI 内的快修"  # 脚本/CI
+   sillyspec progress show
++  sillyspec progress show --all         # 多变更汇总时无信号变更全量单行列出（默认折叠超 8 个）
+   sillyspec progress show --json        # 全局总览 envelope（面板/脚本消费）
+   sillyspec worktree apply 2026-07-03-add-login
+ `);
+@@ -375,7 +376,7 @@ async function main() {
+             process.exitCode = exitCode;
+             break;
+           }
+-          pm.show(progDir, progChangeName);
++          pm.show(progDir, progChangeName, { all: filteredArgs.includes('--all') });
+           break;
+         }
+         case 'check': {
+@@ -2060,6 +2061,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+             console.log(`   marker → ${result.markerPath}`);
+             if (result.mode === 'refreshed') {
+               console.log(`   docHash 已按当前 ${result.mainDoc} 重算（verdict 结论是否仍适用需人工确认）`);
++            } else if (result.mode === 'noop-unchanged') {
++              console.log(`   docHash 已与当前 ${result.mainDoc} 一致，跳过重写（幂等 no-op，不动文件）`);
+             } else {
+               console.log(`   下一步：独立审查子代理对照 ${result.mainDoc} 填 verdict/checklist 后重跑 --done`);
+             }
+diff --git a/src/progress.js b/src/progress.js
+index c3f5ac4..d423968 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -1163,7 +1163,7 @@ export class ProgressManager {
+ 
+   completeStage(cwd, stage, changeName = null, opts = {}) { return this._stageMachine.completeStage(cwd, stage, changeName, opts); }
+ 
+-  show(cwd, changeName = null) { return this._stageMachine.show(cwd, changeName); }
++  show(cwd, changeName = null, opts = {}) { return this._stageMachine.show(cwd, changeName, opts); }
+ 
+   // 只读全局总览（show 多变更汇总的机器版，2026-09-02 单一状态源）：纯数据，machine-interface 包装
+   overview(cwd) { return this._stageMachine.overview(cwd); }
+diff --git a/src/progress/stage-machine.js b/src/progress/stage-machine.js
+index e8ab0bd..0fdac2c 100644
+--- a/src/progress/stage-machine.js
++++ b/src/progress/stage-machine.js
+@@ -185,7 +185,7 @@ export class StageMachine {
+     console.log(`✅ 阶段 ${stage} 已标记为完成（不自动推进，下一步由你决定）`);
+   }
+ 
+-  show(cwd, changeName = null) {
++  show(cwd, changeName = null, opts = {}) {
+     // 如果指定了变更名，只显示该变更
+     if (changeName) {
+       return this._showChange(cwd, changeName);
+@@ -218,20 +218,36 @@ export class StageMachine {
+     const changesRoot = join(this.pm._getSpecDir(cwd), 'changes');
+     // P2-2-①：未决同步冲突标红（overview 同源 _listPendingConflicts；该变更命中 → 🔴 行）
+     const pendingConflicts = this._listPendingConflicts(this.pm._getSpecDir(cwd));
++    // 折叠显示（2026-09-17 用户反馈⑥-③，ql-20260917-005）：29 个滞留变更的全量逐条输出
++    // （每条 3-5 行 + 空行）把真正需要看的信号淹掉。口径：**有信号的变更**（未决冲突/滞留/
++    // 疑似完成/目录缺失/无法读取）保持原有详情渲染——它们就是该看的东西；**无信号变更**压成
++    // 单行，且超过 CLEAN_SHOW_CAP 个时折叠为计数行（--all 展开全量单行；单变更详情恒走
++    // --change <名>）。--json envelope（机器面）不受影响。
++    const CLEAN_SHOW_CAP = 8;
++    const withSignals = [];
++    const clean = [];
+     for (const cn of changes) {
+       const data = this.pm.read(cwd, cn);
+       const dirMissing = _isGhostChange(changesRoot, cn);
++      const cnConflicts = pendingConflicts.filter(c => c.change === cn);
++      const stall = data ? this._stallSignal(cwd, data, cn) : null;
++      if (!data || dirMissing || cnConflicts.length > 0 || stall) {
++        withSignals.push({ cn, data, dirMissing, cnConflicts, stall });
++      } else {
++        clean.push({ cn, data });
++      }
++    }
++
++    for (const { cn, data, dirMissing, cnConflicts, stall } of withSignals) {
+       if (!data) {
+         console.log(`  📂 ${cn} — (无法读取)${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
+         continue;
+       }
+-      const currentStage = data.currentStage || '(无)';
+-      const stageLabel = STAGE_LABELS[data.currentStage] || currentStage;
++      const stageLabel = STAGE_LABELS[data.currentStage] || data.currentStage || '(无)';
+       const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
+ 
+       console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
+       // 变更级未决冲突标红（冲突可见性，2026-09-02 P2-2-①）：不再靠 agent 自己撞上才发现
+-      const cnConflicts = pendingConflicts.filter(c => c.change === cn);
+       if (cnConflicts.length > 0) {
+         for (const cf of cnConflicts) {
+           console.log(`     🔴 未决同步冲突（${cf.type === 'progress' ? '进度' : 'spec 树'}${cf.created_at ? `，${cf.created_at}` : ''}）——请 sillyspec platform resolve 处理后再推进`);
+@@ -239,7 +255,6 @@ export class StageMachine {
+       }
+       console.log(`     当前阶段: ${stageLabel}  最近活跃: ${lastActive}`);
+       // 滞留/疑似完成信号（2026-08-30 用户反馈②）：多变更汇总逐行透出，无需逐个 --change 看详情
+-      const stall = this._stallSignal(cwd, data, cn);
+       if (stall) {
+         console.log(`     ⏳ ${stall.text}`);
+         console.log(stall.kind === 'likely-complete'
+@@ -249,6 +264,20 @@ export class StageMachine {
+       console.log('');
+     }
+ 
++    // 无信号变更：单行压缩（名 + 阶段 + 最近活跃），超帽折叠（--all 展开）
++    clean.sort((a, b) => String(b.data?.lastActive || '').localeCompare(String(a.data?.lastActive || '')));
++    const shown = opts.all ? clean : clean.slice(0, CLEAN_SHOW_CAP);
++    for (const { cn, data } of shown) {
++      const stageLabel = STAGE_LABELS[data.currentStage] || data.currentStage || '(无)';
++      const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
++      console.log(`  📂 ${cn} — ${stageLabel} · 最近活跃 ${lastActive}`);
++    }
++    if (!opts.all && clean.length > shown.length) {
++      console.log(`  … 另有 ${clean.length - shown.length} 个无信号活跃变更已折叠（progress show --change <名> 看单变更详情；全量单行列出加 --all）`);
++    } else if (clean.length > 0) {
++      console.log('');
++    }
++
+     // P2-2-① 补丁（2026-09-02 晚）：全局未决冲突汇总段——逐变更行只显示「对上活跃变更」的冲突，
+     // 挂在 ghost/非活跃变更上的冲突会漏（huber 面板联调实证 11 条只显示 0）。此处按
+     // pending_conflicts 全量兜底显示，与 --json envelope 顶层字段同口径。
+diff --git a/src/stage-review.js b/src/stage-review.js
+index 5129588..0add7c9 100644
+--- a/src/stage-review.js
++++ b/src/stage-review.js
+@@ -836,6 +836,13 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
+     } catch (e) {
+       throw new Error(`register-stage-review: 既有 review.json 解析失败 ${existingPath}: ${e.message}`)
+     }
++    // 幂等跳过（2026-09-17 用户反馈⑥-②，ql-20260917-005）：docHash 已一致时 refresh 仍整文件
++    // 重写 + 追加审计行——会话内多次 refresh 每次都 bump mtime/改内容，agent 的 Read→Edit 窗口
++    // 被「file modified since read」打断（本会话两次实证）。hash 未变 = 无可刷新内容，直接
++    // no-op 返回（不写盘不 bump mtime）；行为差异只在「少一次无意义重写」。
++    if (existing.docHash === docHash && JSON.stringify(existing.reviewedFiles) === JSON.stringify(reviewedFiles)) {
++      return { ok: true, reviewRunId: existingRunId, reviewPath: existingPath, markerPath: stageReviewMarkerPath(runtimeRoot, stage, changeName), mode: 'noop-unchanged', mainDoc, review: existing }
++    }
+     const refreshedAt = new Date().toISOString().slice(0, 19).replace('T', ' ')
+     const review = {
+       ...existing,
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index d1b8e1d..acee5ee 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -286,10 +286,11 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
+ 
+ | 操作 | 文件路径 | 说明 |
+ |---|---|---|
+-| 新增 | src/xxx/NewFile.java | ... |
++| 新增 | NEW:src/xxx/NewFile.java | ... |
+ | 修改 | src/xxx/ExistingFile.java | 新增 xx 方法 |
+ | 删除 | src/xxx/OldFile.java | 已被 xx 替代 |
+ 
++   **路径存在性核验（NEW: 前缀铁律，2026-09-17 用户反馈⑥-①前移）**：清单条目在「生成规范文件」步 \`--done\` 门禁会逐一核验仓内存在性——**计划新建的文件必须在路径前加 \`NEW:\` 前缀**（冒号后不加空格，\`NEW:src/foo.js\` 合法、\`NEW: src/foo.js\` 属书写错误）；未加前缀的新建路径会以 \`design_file_ref_invalid\`（幻觉路径/书写错误）在末步被拦，返工一轮。已有文件写仓根相对正斜杠路径，禁绝对路径/glob。
+    **字段数据流标注**（避免新增字段到 execute 才发现没透传）：当清单含「新增/修改对外字段、接口、DTO、响应体、事件 payload、配置键」时，对应行「说明」列必须交代 producer→consumer 数据流——产出方（producer）→ 每跳流转/归一化点（序列化/反序列化/字段映射/默认值兜底）→ 消费方（consumer）。漏标 = 字段在某跳 dormant（声明了却没透传），到 execute/verify 才暴露，属设计层缺口。
+    - 示例：「修改 daemon.ts：新增 budget_tokens，producer=backend/api-types.ts → ws_hub envelope 透传 → daemon.ts normalizeUsage（snake→camel）→ consumer=runtime/lease.ts 写 lease」
+    - 仅改内部实现、无对外字段变动时，说明列照常写「新增 xx 方法」即可，无需数据流。
+diff --git a/src/sync.js b/src/sync.js
+index c6336b2..4e1ef67 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -1120,6 +1120,28 @@ export class SyncManager {
+       return { synced: 0, errors: [...errors, '无可用文档'] };
+     }
+ 
++    // 无变化推送去重（2026-09-17 用户反馈⑥-②，ql-20260917-005）：每条 CLI 命令的自动同步都
++    // 全量 POST 四件套 + 打「已同步 N 个文档」——内容未变时的重复推送是纯噪音/流量，也放大
++    // 「同步在反复回写」的干扰体感。四件套内容集合的 sha256 与上次成功推送比对，一致即跳过
++    // （debug 一行）；marker 读取失败/缺失按「有变化」处理（多推一次无害，fail-open）。
++    // manual 路径不去重（显式意图，允许空跑确认链路）。
++    let docsFingerprint = null;
++    try {
++      docsFingerprint = createHash('sha256')
++        .update(DOCUMENT_FILES.map(f => `${f}\u0000${documents[f] ?? ''}`).join('\u0001'))
++        .digest('hex');
++    } catch { /* 指纹失败按有变化处理 */ }
++    if (!manual && docsFingerprint) {
++      const markerPath = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime', `sync-docs-lastpush-${changeName}.json`);
++      try {
++        const prev = JSON.parse(readFileSync(markerPath, 'utf8'));
++        if (prev && prev.hash === docsFingerprint) {
++          debugLog(`[sync] 四件套内容与上次成功推送一致，跳过文档直推: ${changeName}`);
++          return { synced: 0, errors, deduped: true };
++        }
++      } catch { /* 无 marker / 损坏 = 首推或按有变化处理 */ }
++    }
++
+     const docUrl = `${platform.url}/api/changes/${encodeURIComponent(changeName)}/documents`;
+     const result = await fetchJson(docUrl, {
+       method: 'POST',
+@@ -1135,6 +1157,14 @@ export class SyncManager {
+       return { synced: 0, errors: [...errors, '文档同步请求失败'] };
+     }
+ 
++    // 推送成功才落指纹 marker（失败不落——下轮重推）
++    if (docsFingerprint) {
++      try {
++        const runtimeDir = join(safePlatformSpecDir(this.cwd) || join(this.cwd, '.sillyspec'), '.runtime');
++        mkdirSync(runtimeDir, { recursive: true });
++        writeFileSync(join(runtimeDir, `sync-docs-lastpush-${changeName}.json`), JSON.stringify({ hash: docsFingerprint, at: Date.now() }) + '\n', 'utf8');
++      } catch { /* marker 失败只损失去重（下轮多推一次），不影响同步 */ }
++    }
+     console.log(`[sync] 已同步 ${syncedCount} 个文档: ${changeName}`);
+     return { synced: syncedCount, errors };
+   }
+diff --git a/test/feedback2-quickfix.test.mjs b/test/feedback2-quickfix.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/feedback2-quickfix.test.mjs
+@@ -0,0 +1,174 @@
++/**
++ * feedback2-quickfix 直测（2026-09-17 用户驾驭小结⑥负面三修，ql-20260917-005）：
++ *   ① NEW: 前缀规则前移——brainstorm Step6 prompt 与 design-init 骨架在写作期即提示
++ *      （坑 design-file-ref-late-feedback 二阶：末步才拦浪费一轮返工）。
++ *   ② 同步干扰收口——syncDocuments 无变化推送去重（指纹 marker 跳过重复 POST）+
++ *      register-stage-review --refresh-hash docHash 已一致时幂等跳过（不重写不 bump mtime，
++ *      防 agent Read→Edit 窗口被 CLI 就地重写打断）。
++ *   ③ progress show 多变更折叠——无信号变更单行压缩 + 超 8 个折叠计数行（--all 展开），
++ *      有信号变更（冲突/滞留/目录缺失）保持详情渲染。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { generateDesignSkeleton } from '../src/design-facts.js'
++import { SyncManager } from '../src/sync.js'
++import { registerStageReview } from '../src/stage-review.js'
++import { ProgressManager } from '../src/progress.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const root = join(__dirname, '..')
++const tmpDirs = []
++const tmp = (prefix) => { const d = mkdtempSync(join(tmpdir(), `fb2-${prefix}-`)); tmpDirs.push(d); return d }
++process.on('exit', () => { for (const d of tmpDirs) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++// ── ① NEW: 前缀规则前移 ──
++
++test('①a generateDesignSkeleton 清单段含 NEW: 前缀铁律提示（写作期即见）', () => {
++  const md = generateDesignSkeleton({ changeName: '2026-09-17-x', decisionsText: '', author: 't', now: new Date() })
++  assert.ok(md.includes('| 新增 | NEW:src/xxx/NewFile.java |'), '示例行的「新增」操作应带 NEW: 路径前缀')
++  assert.ok(md.includes('路径存在性核验铁律'), '清单段应含铁律注释行')
++  assert.ok(md.includes('design_file_ref_invalid'), '铁律注释应点名门禁错误码（锚定末步核验行为）')
++})
++
++test('①b brainstorm Step6 prompt 含 NEW: 前缀规则（prompt 源文本）', () => {
++  const src = readFileSync(join(root, 'src', 'stages', 'brainstorm.js'), 'utf8')
++  assert.ok(src.includes('路径存在性核验（NEW: 前缀铁律'), 'Step6 文件变更清单要求段应含 NEW: 前缀铁律')
++  assert.ok(src.includes('NEW:src/xxx/NewFile.java'), '清单示例行「新增」应带 NEW: 前缀')
++})
++
++// ── ②a syncDocuments 无变化推送去重 ──
++
++test('②a syncDocuments 内容未变跳过重复 POST，变化后重推，manual 旁路', async (t) => {
++  const d = tmp('syncdoc')
++  const cn = '2026-09-17-x'
++  const changeDir = join(d, '.sillyspec', 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'proposal.md'), '# p v1\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '# t v1\n')
++
++  const savedEnv = { u: process.env.SILLYHUB_PLATFORM_URL, k: process.env.SILLYHUB_PLATFORM_TOKEN }
++  const savedFetch = globalThis.fetch
++  t.after(() => {
++    process.env.SILLYHUB_PLATFORM_URL = savedEnv.u
++    process.env.SILLYHUB_PLATFORM_TOKEN = savedEnv.k
++    globalThis.fetch = savedFetch
++  })
++  process.env.SILLYHUB_PLATFORM_URL = 'http://hub.test'
++  process.env.SILLYHUB_PLATFORM_TOKEN = 'tok'
++
++  let posts = 0
++  globalThis.fetch = async () => {
++    posts++
++    return { ok: true, headers: { get: () => 'application/json' }, json: async () => ({}) }
++  }
++
++  const sm = new SyncManager(d)
++  const r1 = await sm.syncDocuments(cn)
++  assert.equal(r1.synced, 2, '首次推送 synced=2')
++  assert.equal(posts, 1, '首次推送 POST 一次')
++  assert.ok(existsSync(join(d, '.sillyspec', '.runtime', `sync-docs-lastpush-${cn}.json`)), '成功后落指纹 marker')
++
++  const r2 = await sm.syncDocuments(cn)
++  assert.equal(r2.synced, 0, '内容未变 → 跳过（synced=0）')
++  assert.equal(r2.deduped, true, '去重命中标记 deduped=true')
++  assert.equal(posts, 1, '未变化不重复 POST')
++
++  writeFileSync(join(changeDir, 'proposal.md'), '# p v2\n')
++  const r3 = await sm.syncDocuments(cn)
++  assert.equal(r3.synced, 2, '内容变化 → 重新推送')
++  assert.equal(posts, 2, '变化后 POST 第二次')
++
++  const r4 = await sm.syncDocuments(cn, { manual: true })
++  assert.equal(r4.synced, 2, 'manual=true 显式意图旁路去重')
++  assert.equal(posts, 3, 'manual 路径照常 POST')
++})
++
++// ── ②b register-stage-review --refresh-hash 幂等跳过 ──
++
++test('②b refresh-hash：docHash 已一致 → noop-unchanged 不重写文件', async () => {
++  const d = tmp('rsrnoop')
++  const cn = '2026-09-17-x'
++  const specBase = join(d, '.sillyspec')
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), '# Design v1\n\n## 背景\n原版\n')
++
++  // 首跑生成骨架——register-stage-review 骨架的 docHash 本就自动按主文档算好（非占位），
++  // 因此紧接着的 refresh 应直接命中幂等跳过（这正是 2026-09-17 反馈②的修复面：
++  // 旧实现此处会整文件重写 + 追加审计行，bump mtime 打断 agent 的 Read→Edit 窗口）
++  const reg = await registerStageReview({ cwd: d, specBase, changeName: cn, stage: 'brainstorm' })
++  assert.equal(reg.mode, 'skeleton', '首跑生成骨架')
++
++  const before = readFileSync(reg.reviewPath, 'utf8')
++  const beforeMtime = statSync(reg.reviewPath).mtimeMs
++  const ref1 = await registerStageReview({ cwd: d, specBase, changeName: cn, stage: 'brainstorm', refreshHash: true })
++  assert.equal(ref1.mode, 'noop-unchanged', 'hash 已一致（骨架自动算好）→ noop-unchanged')
++  assert.equal(readFileSync(ref1.reviewPath, 'utf8'), before, '文件内容逐字节不变')
++  assert.equal(statSync(ref1.reviewPath).mtimeMs, beforeMtime, 'mtime 不 bump（agent Read→Edit 窗口不被打断）')
++
++  // 主文档改版 → 不再 noop，真刷新
++  writeFileSync(join(changeDir, 'design.md'), '# Design v2\n\n## 背景\n改版\n')
++  const ref2 = await registerStageReview({ cwd: d, specBase, changeName: cn, stage: 'brainstorm', refreshHash: true })
++  assert.equal(ref2.mode, 'refreshed', '主文档改版 → 真刷新')
++  assert.notEqual(readFileSync(ref2.reviewPath, 'utf8'), before, '刷新写盘生效')
++
++  // 再改回 v1 内容（hash 回到与上次刷新不同即真刷新）后重复 refresh 两次：第二次 noop
++  writeFileSync(join(changeDir, 'design.md'), '# Design v3\n\n## 背景\n再改\n')
++  const ref3 = await registerStageReview({ cwd: d, specBase, changeName: cn, stage: 'brainstorm', refreshHash: true })
++  assert.equal(ref3.mode, 'refreshed', 'v3 → 真刷新')
++  const after3 = readFileSync(ref3.reviewPath, 'utf8')
++  const mtime3 = statSync(ref3.reviewPath).mtimeMs
++  const ref4 = await registerStageReview({ cwd: d, specBase, changeName: cn, stage: 'brainstorm', refreshHash: true })
++  assert.equal(ref4.mode, 'noop-unchanged', '紧跟的重复 refresh → 幂等跳过')
++  assert.equal(statSync(ref4.reviewPath).mtimeMs, mtime3, '重复 refresh 不 bump mtime')
++  assert.equal(readFileSync(ref4.reviewPath, 'utf8'), after3, '重复 refresh 不改内容')
++})
++
++// ── ③ progress show 多变更折叠 ──
++
++async function makeProgressRepo(prefix, names) {
++  const d = tmp(prefix)
++  const pm = new ProgressManager({ specDir: join(d, '.sillyspec') })
++  for (const n of names) await pm.initChange(d, n)
++  return { d, pm }
++}
++
++test('③ progress show：无信号变更单行 + 超帽折叠 + --all 展开 + 信号变更保持详情', async () => {
++  const names = Array.from({ length: 11 }, (_, i) => `2026-09-17-clean-${String(i).padStart(2, '0')}`)
++  const { d, pm } = await makeProgressRepo('pshow', [...names, '2026-09-17-stalled-old'])
++  // 滞留信号：brainstorm 停留 10 天
++  const db = pm._ensureDB(d).getDb()
++  db.prepare('UPDATE changes SET last_active = ? WHERE name = ?').run(new Date(Date.now() - 10 * 86400_000).toISOString(), '2026-09-17-stalled-old')
++
++  const capture = (fn) => {
++    const chunks = []
++    const orig = { log: console.log, warn: console.warn }
++    console.log = (...a) => chunks.push(a.join(' ')), console.warn = () => {}
++    try { return fn(() => chunks.join('\n')) } finally { console.log = orig.log, console.warn = orig.warn }
++  }
++
++  let out = ''
++  capture((get) => { pm.show(d, null); out = get() })
++  assert.ok(out.includes('⏳'), '滞留变更保持详情渲染（信号不被折叠吞掉）')
++  assert.ok(out.includes('change-delete --change 2026-09-17-stalled-old'), '滞留建议行在场')
++  assert.ok(out.includes('已折叠'), '无信号超帽折叠计数行在场')
++  const oneLiners = out.split('\n').filter(l => /^  📂 2026-09-17-clean-/.test(l))
++  assert.equal(oneLiners.length, 8, `无信号变更默认只列前 8 个单行（实际 ${oneLiners.length}）`)
++  assert.ok(oneLiners.every(l => l.includes('· 最近活跃')), '无信号变更为单行压缩形态（名+阶段+活跃）')
++  assert.ok(!out.includes('2026-09-17-clean-00\n     当前阶段'), '无信号变更不再展开多行详情块（详情块只属于信号变更）')
++  assert.match(out, /另有 3 个无信号活跃变更已折叠/, '折叠计数 = 11 - 8 = 3')
++
++  out = ''
++  capture((get) => { pm.show(d, null, { all: true }); out = get() })
++  const allLines = out.split('\n').filter(l => /^  📂 2026-09-17-clean-/.test(l))
++  assert.equal(allLines.length, 11, '--all 展开全量单行（实际 ' + allLines.length + '）')
++  assert.ok(!out.includes('已折叠'), '--all 时无折叠计数行')
++
++  out = ''
++  capture((get) => { pm.show(d, '2026-09-17-stalled-old'); out = get() })
++  assert.ok(out.includes('2026-09-17-stalled-old'), '--change 单变更详情恒可用')
++})

@@ -185,7 +185,7 @@ export class StageMachine {
     console.log(`✅ 阶段 ${stage} 已标记为完成（不自动推进，下一步由你决定）`);
   }
 
-  show(cwd, changeName = null) {
+  show(cwd, changeName = null, opts = {}) {
     // 如果指定了变更名，只显示该变更
     if (changeName) {
       return this._showChange(cwd, changeName);
@@ -218,20 +218,36 @@ export class StageMachine {
     const changesRoot = join(this.pm._getSpecDir(cwd), 'changes');
     // P2-2-①：未决同步冲突标红（overview 同源 _listPendingConflicts；该变更命中 → 🔴 行）
     const pendingConflicts = this._listPendingConflicts(this.pm._getSpecDir(cwd));
+    // 折叠显示（2026-09-17 用户反馈⑥-③，ql-20260917-005）：29 个滞留变更的全量逐条输出
+    // （每条 3-5 行 + 空行）把真正需要看的信号淹掉。口径：**有信号的变更**（未决冲突/滞留/
+    // 疑似完成/目录缺失/无法读取）保持原有详情渲染——它们就是该看的东西；**无信号变更**压成
+    // 单行，且超过 CLEAN_SHOW_CAP 个时折叠为计数行（--all 展开全量单行；单变更详情恒走
+    // --change <名>）。--json envelope（机器面）不受影响。
+    const CLEAN_SHOW_CAP = 8;
+    const withSignals = [];
+    const clean = [];
     for (const cn of changes) {
       const data = this.pm.read(cwd, cn);
       const dirMissing = _isGhostChange(changesRoot, cn);
+      const cnConflicts = pendingConflicts.filter(c => c.change === cn);
+      const stall = data ? this._stallSignal(cwd, data, cn) : null;
+      if (!data || dirMissing || cnConflicts.length > 0 || stall) {
+        withSignals.push({ cn, data, dirMissing, cnConflicts, stall });
+      } else {
+        clean.push({ cn, data });
+      }
+    }
+
+    for (const { cn, data, dirMissing, cnConflicts, stall } of withSignals) {
       if (!data) {
         console.log(`  📂 ${cn} — (无法读取)${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
         continue;
       }
-      const currentStage = data.currentStage || '(无)';
-      const stageLabel = STAGE_LABELS[data.currentStage] || currentStage;
+      const stageLabel = STAGE_LABELS[data.currentStage] || data.currentStage || '(无)';
       const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
 
       console.log(`  📂 ${cn}${dirMissing ? ' ⚠️ 目录缺失（残留记录，sillyspec doctor --cleanup-ghosts --confirm 可归档清理）' : ''}`);
       // 变更级未决冲突标红（冲突可见性，2026-09-02 P2-2-①）：不再靠 agent 自己撞上才发现
-      const cnConflicts = pendingConflicts.filter(c => c.change === cn);
       if (cnConflicts.length > 0) {
         for (const cf of cnConflicts) {
           console.log(`     🔴 未决同步冲突（${cf.type === 'progress' ? '进度' : 'spec 树'}${cf.created_at ? `，${cf.created_at}` : ''}）——请 sillyspec platform resolve 处理后再推进`);
@@ -239,13 +255,26 @@ export class StageMachine {
       }
       console.log(`     当前阶段: ${stageLabel}  最近活跃: ${lastActive}`);
       // 滞留/疑似完成信号（2026-08-30 用户反馈②）：多变更汇总逐行透出，无需逐个 --change 看详情
-      const stall = this._stallSignal(cwd, data, cn);
       if (stall) {
         console.log(`     ⏳ ${stall.text}`);
         console.log(stall.kind === 'likely-complete'
           ? `        → 建议：${stall.command ? `${stall.command} 收口后走 verify，或 ` : ''}sillyspec doctor --align-execute-progress 对齐派生戳`
           : `        → 若已放弃：sillyspec change-delete --change ${cn}（默认 dry-run）`);
       }
+      console.log('');
+    }
+
+    // 无信号变更：单行压缩（名 + 阶段 + 最近活跃），超帽折叠（--all 展开）
+    clean.sort((a, b) => String(b.data?.lastActive || '').localeCompare(String(a.data?.lastActive || '')));
+    const shown = opts.all ? clean : clean.slice(0, CLEAN_SHOW_CAP);
+    for (const { cn, data } of shown) {
+      const stageLabel = STAGE_LABELS[data.currentStage] || data.currentStage || '(无)';
+      const lastActive = data.lastActive ? this._timeAgo(data.lastActive) : '未知';
+      console.log(`  📂 ${cn} — ${stageLabel} · 最近活跃 ${lastActive}`);
+    }
+    if (!opts.all && clean.length > shown.length) {
+      console.log(`  … 另有 ${clean.length - shown.length} 个无信号活跃变更已折叠（progress show --change <名> 看单变更详情；全量单行列出加 --all）`);
+    } else if (clean.length > 0) {
       console.log('');
     }
 

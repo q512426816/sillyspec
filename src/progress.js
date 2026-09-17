@@ -1163,7 +1163,7 @@ export class ProgressManager {
 
   completeStage(cwd, stage, changeName = null, opts = {}) { return this._stageMachine.completeStage(cwd, stage, changeName, opts); }
 
-  show(cwd, changeName = null) { return this._stageMachine.show(cwd, changeName); }
+  show(cwd, changeName = null, opts = {}) { return this._stageMachine.show(cwd, changeName, opts); }
 
   // 只读全局总览（show 多变更汇总的机器版，2026-09-02 单一状态源）：纯数据，machine-interface 包装
   overview(cwd) { return this._stageMachine.overview(cwd); }

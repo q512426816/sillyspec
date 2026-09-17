@@ -332,7 +332,8 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   lines.push('')
   lines.push('| 操作 | 文件路径 | 说明 |')
   lines.push('|---|---|---|')
-  lines.push('<!-- 示例行（替换为实际清单后删除本注释）：| 新增 | src/xxx/NewFile.java | 说明（含对外字段时交代 producer→consumer 数据流） | -->')
+  lines.push('<!-- 示例行（替换为实际清单后删除本注释）：| 新增 | NEW:src/xxx/NewFile.java | 说明（含对外字段时交代 producer→consumer 数据流） | -->')
+  lines.push('<!-- 路径存在性核验铁律：计划新建的文件路径必须带 NEW: 前缀（如上例），已有文件写仓根相对正斜杠路径——末步 --done 门禁逐一核验存在性，无前缀的新建路径按 design_file_ref_invalid 拦截返工（2026-09-17 用户反馈⑥-①，写作期即提示） -->')
   lines.push('')
 
   lines.push('## 接口定义')
