@@ -1,0 +1,271 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index df3161d..5a76b91 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -161,6 +161,7 @@ modules:
+       - src/sync.js
+       - src/spec-sync.js
+       - src/sync-noise.js
++      - src/write-audit.js
+ 
+   sillyhub-mcp:
+     status: active
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 0500640..f0c750d 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -72,7 +72,7 @@ mcp:
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+ | `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1431` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2259` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2259` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2298` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2298` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -137,7 +137,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2429；shared.js:966 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2429/2705；shared.js:990 |
+ | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3608；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3560；sync.js:2133 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3560；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3373/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:682/1058-1070 |
+diff --git a/src/sync.js b/src/sync.js
+index 4e1ef67..52e9baf 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -1756,6 +1756,8 @@ export class SyncManager {
+       return { ok: false, pulled: false, specDir, reason: `删除本地 specDir 失败${holdHint}: ${err.message}` };
+     }
+     try {
++      let pulledFiles = 0;
++      const crlfEntries = [];
+       for (const e of entries) {
+         _assertSafeTarName(e.name.replace(/\/+$/, ''), specDir);
+         const fullPath = join(specDir, e.name);
+@@ -1764,8 +1766,23 @@ export class SyncManager {
+         } else {
+           mkdirSync(dirname(fullPath), { recursive: true });
+           writeFileSync(fullPath, e.data);
++          pulledFiles++;
++          if (e.data && e.data.length < 4 * 1024 * 1024) crlfEntries.push([e.name, e.data]); // CRLF 画像采样（超 4MB 大文件跳过采样，写入不受影响）
+         }
+       }
++      // 批量写入留痕（2026-09-17 反馈⑥②法证收口）：整树解包=逐字节回放，他机 CRLF 内容
++      // 原样落盘——审计行记 时间/触发面/文件数/CRLF 命中数（fail-open）。
++      try {
++        const { appendWriteAudit, detectCrlfFiles, WRITE_AUDIT_FILE_CAP } = await import('./write-audit.js');
++        const crlfPaths = detectCrlfFiles(crlfEntries);
++        appendWriteAudit(specDir, {
++          via: 'pull-spec-bundle',
++          files: pulledFiles,
++          crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
++          crlfCount: crlfPaths.length,
++          force: opts.force === true,
++        });
++      } catch { /* 审计 fail-open */ }
+       if (localYamlSaved !== null) {
+         mkdirSync(specDir, { recursive: true }); // 空 bundle（零条目）时树根未被条目重建
+         writeAtomicSync(localYamlPath, localYamlSaved); // fs-atomic 契约：hook/probe 并发读 local.yaml
+@@ -1846,6 +1863,7 @@ export class SyncManager {
+     let overwritten = 0;
+     let removed = 0;
+     const skipped = [];
++    const writtenEntries = []; // [path, data] 对——写后审计 CRLF 画像用（2026-09-17 反馈⑥②法证收口）
+     for (const p of normalized) {
+       try {
+         _assertSafeTarName(p, specDir);
+@@ -1855,6 +1873,7 @@ export class SyncManager {
+           mkdirSync(dirname(full), { recursive: true });
+           writeFileSync(full, data);
+           overwritten++;
++          writtenEntries.push([p, data]);
+         } else if (existsSync(join(specDir, p))) {
+           // 服务器已无该文件（远端删除）→ 接受服务器 = 删本地
+           rmSync(join(specDir, p), { force: true });
+@@ -1865,6 +1884,26 @@ export class SyncManager {
+       }
+     }
+ 
++    // 批量写入留痕（2026-09-17 用户反馈⑥②法证收口）：take-platform 是「单命令批量整文件
++    // 重写 + 逐字节保留来源行尾」的回放面——他机 CRLF 内容会原样落盘且事后无任何日志可查
++    // （console 打印即蒸发，实证只能靠 mtime 考古）。落一条审计行：时间/触发面/文件集/CRLF
++    // 命中。fail-open：审计失败不影响覆盖结果。
++    try {
++      const { appendWriteAudit, detectCrlfFiles, WRITE_AUDIT_FILE_CAP } = await import('./write-audit.js');
++      const crlfPaths = detectCrlfFiles(writtenEntries);
++      if (crlfPaths.length > 0) {
++        console.warn(`⚠️ [sync] take-platform 覆盖的 ${crlfPaths.length} 个文件内容为 CRLF 行尾（他机编辑器产物按字节回放，本仓自产文件一律 LF）——git add 时 autocrlf 会提示转换，属预期：${crlfPaths.slice(0, 5).join('、')}${crlfPaths.length > 5 ? ' 等' : ''}（明细见 .runtime/write-audit.jsonl）`);
++      }
++      appendWriteAudit(specDir, {
++        via: 'platform-resolve-take-platform',
++        overwritten, removed,
++        files: writtenEntries.map(([p]) => p).slice(0, WRITE_AUDIT_FILE_CAP)
++          .concat(writtenEntries.length > WRITE_AUDIT_FILE_CAP ? [`…+${writtenEntries.length - WRITE_AUDIT_FILE_CAP}`] : []),
++        crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
++        crlfCount: crlfPaths.length,
++      });
++    } catch { /* 审计 fail-open */ }
++
+     // 基线快照刷新（best-effort）：被覆盖路径回写当前盘面 hash（= 服务器内容 hash）、被删
+     // 路径移除条目——下次同步这些路径按「本地未改动」豁免回推（take-platform 语义闭环）。
+     try {
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index 71be23e..1946412 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -23,6 +23,7 @@ import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
+ import { git, gitQuiet, safeGit, unquoteGitPath } from './git-helper.js';
+ import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
+ import { collectActiveQuickGuardFiles } from './quicklog.js';
++import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
+ import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
+ 
+ const CHANGES_REL = '.sillyspec/changes';
+@@ -2453,6 +2454,13 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
+   // manifestFace 提升到 try 外（坑 mixed-baseline-drift-hint ql-20260915-004：drift 提示在
+   // manifest 写点后消费同面，try 内 const 出块即失域）
+   const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
++  // 批量写入留痕（2026-09-17 用户反馈⑥②法证收口）：apply 是主仓面的批量写入（patch/merge
++  // 落盘）——审计行记 时间/触发面/交付文件集/删除面（fail-open，specBase 与 manifest 同源）。
++  try {
++    const auditFace = manifestFace.slice(0, WRITE_AUDIT_FILE_CAP)
++      .concat(manifestFace.length > WRITE_AUDIT_FILE_CAP ? [`…+${manifestFace.length - WRITE_AUDIT_FILE_CAP}`] : []);
++    appendWriteAudit(specBase, { via: 'worktree-apply', change: changeName, files: auditFace, deleted: (result.deletedFiles || []).length, merge: true });
++  } catch { /* 审计 fail-open */ }
+   try {
+     const mf = writeApplyManifest({
+       projectRoot, specBase, changeName,
+diff --git a/src/write-audit.js b/src/write-audit.js
+new file mode 100644
+--- /dev/null
++++ b/src/write-audit.js
+@@ -0,0 +1,55 @@
++/**
++ * write-audit.js — 批量写入方留痕（2026-09-17 用户驾驭小结⑥②法证收口，ql 20260917-006）。
++ *
++ * 背景：平台内容回放（platform resolve --take-platform / pull --spec）与 worktree apply 都是
++ * 「单命令内批量整文件重写、逐字节保留来源行尾」——sillyspec 自产文件一律 LF，而回放路径会把
++ * 他机编辑器写出的 CRLF 内容原样落盘。事后定位只能靠 mtime 考古（2026-09-17 实证：3 文件毫秒
++ * 级同 mtime + CRLF + 内容增量，「平台同步回写」被冤枉一整天后才还原真凶候选）。本模块在每个
++ * 批量写入口追加一条 JSONL 审计行（.sillyspec/.runtime/write-audit.jsonl）：时间 / 触发命令 /
++ * 文件集 / CRLF 命中——下次「18:09 谁动了 design.md」查一行即中。
++ *
++ * 约束：fail-open（任何异常只丢审计不改写入行为）；零依赖；单行 appendFileSync（并行会话
++ * 各自整行写入，Windows 下最坏交错按行丢失计，不损主行为）。
++ */
++import { appendFileSync, mkdirSync } from 'fs'
++import { join, dirname } from 'path'
++
++const CRLF_BUF = Buffer.from('\r\n')
++
++/**
++ * 追加一条批量写入审计记录。
++ * @param {string} specDir .sillyspec 根（审计落 .runtime/write-audit.jsonl）
++ * @param {{ via: string, change?: string, files?: string[], crlfPaths?: string[], detail?: object }} record
++ *   via=触发命令锚（'platform-resolve-take-platform' | 'pull-spec-bundle' | 'worktree-apply'）
++ * @returns {boolean} 是否落盘成功（fail-open：false 只损失审计）
++ */
++export function appendWriteAudit(specDir, record) {
++  try {
++    const p = join(specDir, '.runtime', 'write-audit.jsonl')
++    mkdirSync(dirname(p), { recursive: true })
++    appendFileSync(p, JSON.stringify({ ts: new Date().toISOString(), ...record }) + '\n', 'utf8')
++    return true
++  } catch { return false }
++}
++
++/**
++ * CRLF 命中探测（法证关键字段：本仓 sillyspec 自产文件一律 LF——落盘后呈 CRLF 的文件
++ * 几乎必来自「他机内容逐字节回放」或仓外工具写入）。
++ * @param {Array<[string, Buffer|string]>} entries [path, 写入内容] 对
++ * @returns {string[]} 含 \r\n 的路径（探测失败的条目不连坐）
++ */
++export function detectCrlfFiles(entries) {
++  const out = []
++  for (const pair of Array.isArray(entries) ? entries : []) {
++    if (!Array.isArray(pair)) continue
++    const [path, data] = pair
++    try {
++      const buf = Buffer.isBuffer(data) ? data : Buffer.from(String(data))
++      if (buf.includes(CRLF_BUF)) out.push(path)
++    } catch { /* 单条探测失败跳过 */ }
++  }
++  return out
++}
++
++/** 文件清单截断帽（防大树/大面把审计行撑爆；截断时附 +N 标记由调用方自理） */
++export const WRITE_AUDIT_FILE_CAP = 20
+
+diff --git a/test/write-audit.test.mjs b/test/write-audit.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/write-audit.test.mjs
+@@ -0,0 +1,65 @@
++/**
++ * write-audit 直测（2026-09-17 用户驾驭小结⑥②法证收口）：
++ * 批量写入方留痕——take-platform 回放 / pull --spec 解包 / worktree apply 三个批量写入口
++ * 落一条 JSONL 审计行（.runtime/write-audit.jsonl），含 CRLF 画像。背景实证：3 文件毫秒级
++ * 同 mtime + CRLF 的批量写入事后只能靠 mtime 考古定位写入方，审计行让「18:09 谁动了
++ * design.md」查一行即中。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { appendWriteAudit, detectCrlfFiles, WRITE_AUDIT_FILE_CAP } from '../src/write-audit.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const root = join(__dirname, '..')
++const tmpDirs = []
++const tmp = (prefix) => { const d = mkdtempSync(join(tmpdir(), `wa-${prefix}-`)); tmpDirs.push(d); return d }
++process.on('exit', () => { for (const d of tmpDirs) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('appendWriteAudit：JSONL 追加 + 目录自建 + 多行追加', () => {
++  const specDir = join(tmp('basic'), '.sillyspec')
++  assert.equal(appendWriteAudit(specDir, { via: 'platform-resolve-take-platform', overwritten: 3, files: ['changes/x/design.md'], crlfPaths: ['changes/x/design.md'], crlfCount: 1 }), true, '首条落盘成功')
++  assert.equal(appendWriteAudit(specDir, { via: 'worktree-apply', change: 'c2', files: ['src/a.js'] }), true, '第二条落盘成功')
++  const lines = readFileSync(join(specDir, '.runtime', 'write-audit.jsonl'), 'utf8').trim().split('\n')
++  assert.equal(lines.length, 2, '两行审计')
++  const first = JSON.parse(lines[0])
++  assert.equal(first.via, 'platform-resolve-take-platform', 'via 字段保留')
++  assert.ok(/^\d{4}-\d{2}-\d{2}T/.test(first.ts), 'ts 为 ISO 时间戳（法证对表用）')
++  assert.deepEqual(first.crlfPaths, ['changes/x/design.md'], 'CRLF 画像字段保留')
++})
++
++test('appendWriteAudit：异常路径 fail-open 返回 false 不抛', () => {
++  // 只读父目录下建 .sillyspec 子路径必失败（EACCES/ENOTDIR 因平台而异）——断言不抛 + false
++  const ok = appendWriteAudit(join(tmp('ro'), 'file-not-dir', '.sillyspec'), { via: 'x' })
++  assert.equal(typeof ok, 'boolean', '返回布尔不抛异常')
++})
++
++test('detectCrlfFiles：CRLF/LF 混合面精确命中（Buffer 与 string 双形态）', () => {
++  const entries = [
++    ['a.md', 'line1\r\nline2\r\n'],           // CRLF string
++    ['b.md', Buffer.from('x\r\ny')],            // CRLF Buffer
++    ['c.md', 'pure lf\nonly\n'],                // 纯 LF
++    ['d.md', Buffer.from('pure lf\n')],         // 纯 LF Buffer
++    ['e.bin', Buffer.from([0x0d, 0x0a, 0x00])], // 二进制含 CRLF 字节
++  ]
++  assert.deepEqual(detectCrlfFiles(entries), ['a.md', 'b.md', 'e.bin'], 'CRLF 命中三件，LF 不误报')
++  assert.deepEqual(detectCrlfFiles([]), [], '空面零命中')
++  assert.deepEqual(detectCrlfFiles(null), [], 'null 容错')
++})
++
++test('三个批量写入口均已接线（源文本锚——take-platform 回放/pull 解包/worktree apply）', () => {
++  const syncSrc = readFileSync(join(root, 'src', 'sync.js'), 'utf8')
++  const applySrc = readFileSync(join(root, 'src', 'worktree-apply.js'), 'utf8')
++  assert.ok(syncSrc.includes("via: 'platform-resolve-take-platform'"), 'take-platform 落地循环写审计行')
++  assert.ok(syncSrc.includes("via: 'pull-spec-bundle'"), 'pull --spec 解包写审计行')
++  assert.ok(applySrc.includes("via: 'worktree-apply'"), 'worktree apply 成功出口写审计行')
++  assert.ok(syncSrc.includes('CRLF 行尾（他机编辑器产物按字节回放'), 'take-platform CRLF 即时警示在场')
++})
++
++test('WRITE_AUDIT_FILE_CAP 截断帽为常量（防大树撑爆审计行）', () => {
++  assert.equal(typeof WRITE_AUDIT_FILE_CAP, 'number', '数值常量')
++  assert.ok(WRITE_AUDIT_FILE_CAP >= 5 && WRITE_AUDIT_FILE_CAP <= 50, '合理区间')
++})

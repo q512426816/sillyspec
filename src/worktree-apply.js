@@ -23,6 +23,7 @@ import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
 import { git, gitQuiet, safeGit, unquoteGitPath } from './git-helper.js';
 import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readReview, normalizeRepoKey } from './task-review.js';
 import { collectActiveQuickGuardFiles } from './quicklog.js';
+import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
 import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
 
 const CHANGES_REL = '.sillyspec/changes';
@@ -2453,6 +2454,13 @@ export function applyByMerge(result, changeName, projectRoot, wm, opts = {}) {
   // manifestFace 提升到 try 外（坑 mixed-baseline-drift-hint ql-20260915-004：drift 提示在
   // manifest 写点后消费同面，try 内 const 出块即失域）
   const manifestFace = [...new Set([...(result.changedFiles || []), ...(result.mergedDirtyFiles || []), ...(result.mergedMismatchFiles || [])])];
+  // 批量写入留痕（2026-09-17 用户反馈⑥②法证收口）：apply 是主仓面的批量写入（patch/merge
+  // 落盘）——审计行记 时间/触发面/交付文件集/删除面（fail-open，specBase 与 manifest 同源）。
+  try {
+    const auditFace = manifestFace.slice(0, WRITE_AUDIT_FILE_CAP)
+      .concat(manifestFace.length > WRITE_AUDIT_FILE_CAP ? [`…+${manifestFace.length - WRITE_AUDIT_FILE_CAP}`] : []);
+    appendWriteAudit(specBase, { via: 'worktree-apply', change: changeName, files: auditFace, deleted: (result.deletedFiles || []).length, merge: true });
+  } catch { /* 审计 fail-open */ }
   try {
     const mf = writeApplyManifest({
       projectRoot, specBase, changeName,

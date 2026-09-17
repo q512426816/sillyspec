@@ -1756,6 +1756,8 @@ export class SyncManager {
       return { ok: false, pulled: false, specDir, reason: `删除本地 specDir 失败${holdHint}: ${err.message}` };
     }
     try {
+      let pulledFiles = 0;
+      const crlfEntries = [];
       for (const e of entries) {
         _assertSafeTarName(e.name.replace(/\/+$/, ''), specDir);
         const fullPath = join(specDir, e.name);
@@ -1764,8 +1766,23 @@ export class SyncManager {
         } else {
           mkdirSync(dirname(fullPath), { recursive: true });
           writeFileSync(fullPath, e.data);
+          pulledFiles++;
+          if (e.data && e.data.length < 4 * 1024 * 1024) crlfEntries.push([e.name, e.data]); // CRLF 画像采样（超 4MB 大文件跳过采样，写入不受影响）
         }
       }
+      // 批量写入留痕（2026-09-17 反馈⑥②法证收口）：整树解包=逐字节回放，他机 CRLF 内容
+      // 原样落盘——审计行记 时间/触发面/文件数/CRLF 命中数（fail-open）。
+      try {
+        const { appendWriteAudit, detectCrlfFiles, WRITE_AUDIT_FILE_CAP } = await import('./write-audit.js');
+        const crlfPaths = detectCrlfFiles(crlfEntries);
+        appendWriteAudit(specDir, {
+          via: 'pull-spec-bundle',
+          files: pulledFiles,
+          crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
+          crlfCount: crlfPaths.length,
+          force: opts.force === true,
+        });
+      } catch { /* 审计 fail-open */ }
       if (localYamlSaved !== null) {
         mkdirSync(specDir, { recursive: true }); // 空 bundle（零条目）时树根未被条目重建
         writeAtomicSync(localYamlPath, localYamlSaved); // fs-atomic 契约：hook/probe 并发读 local.yaml
@@ -1846,6 +1863,7 @@ export class SyncManager {
     let overwritten = 0;
     let removed = 0;
     const skipped = [];
+    const writtenEntries = []; // [path, data] 对——写后审计 CRLF 画像用（2026-09-17 反馈⑥②法证收口）
     for (const p of normalized) {
       try {
         _assertSafeTarName(p, specDir);
@@ -1855,6 +1873,7 @@ export class SyncManager {
           mkdirSync(dirname(full), { recursive: true });
           writeFileSync(full, data);
           overwritten++;
+          writtenEntries.push([p, data]);
         } else if (existsSync(join(specDir, p))) {
           // 服务器已无该文件（远端删除）→ 接受服务器 = 删本地
           rmSync(join(specDir, p), { force: true });
@@ -1864,6 +1883,26 @@ export class SyncManager {
         skipped.push(p);
       }
     }
+
+    // 批量写入留痕（2026-09-17 用户反馈⑥②法证收口）：take-platform 是「单命令批量整文件
+    // 重写 + 逐字节保留来源行尾」的回放面——他机 CRLF 内容会原样落盘且事后无任何日志可查
+    // （console 打印即蒸发，实证只能靠 mtime 考古）。落一条审计行：时间/触发面/文件集/CRLF
+    // 命中。fail-open：审计失败不影响覆盖结果。
+    try {
+      const { appendWriteAudit, detectCrlfFiles, WRITE_AUDIT_FILE_CAP } = await import('./write-audit.js');
+      const crlfPaths = detectCrlfFiles(writtenEntries);
+      if (crlfPaths.length > 0) {
+        console.warn(`⚠️ [sync] take-platform 覆盖的 ${crlfPaths.length} 个文件内容为 CRLF 行尾（他机编辑器产物按字节回放，本仓自产文件一律 LF）——git add 时 autocrlf 会提示转换，属预期：${crlfPaths.slice(0, 5).join('、')}${crlfPaths.length > 5 ? ' 等' : ''}（明细见 .runtime/write-audit.jsonl）`);
+      }
+      appendWriteAudit(specDir, {
+        via: 'platform-resolve-take-platform',
+        overwritten, removed,
+        files: writtenEntries.map(([p]) => p).slice(0, WRITE_AUDIT_FILE_CAP)
+          .concat(writtenEntries.length > WRITE_AUDIT_FILE_CAP ? [`…+${writtenEntries.length - WRITE_AUDIT_FILE_CAP}`] : []),
+        crlfPaths: crlfPaths.slice(0, WRITE_AUDIT_FILE_CAP),
+        crlfCount: crlfPaths.length,
+      });
+    } catch { /* 审计 fail-open */ }
 
     // 基线快照刷新（best-effort）：被覆盖路径回写当前盘面 hash（= 服务器内容 hash）、被删
     // 路径移除条目——下次同步这些路径按「本地未改动」豁免回推（take-platform 语义闭环）。

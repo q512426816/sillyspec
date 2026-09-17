@@ -1,0 +1,95 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-8ed39c1e",
+  "totals": {
+    "files": 7,
+    "additions": 268,
+    "deletions": 2
+  },
+  "rows": [
+    {
+      "path": "src/write-audit.js",
+      "declared": true,
+      "additions": 55,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/sync.js",
+      "declared": true,
+      "additions": 39,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "declared": true,
+      "additions": 8,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/write-audit.test.mjs",
+      "declared": true,
+      "additions": 65,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/sync.md",
+      "declared": true,
+      "additions": 98,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-006-1deb",
+  "sessionId": "quick-8ed39c1e",
+  "savedAt": "2026-09-17T10:52:30.999Z",
+  "patchSha256": "794664989e7f4e9c2e5a340faca8eb34e7e63d4f795f649c979eaeaa016ce150",
+  "patchStatus": "ok"
+}

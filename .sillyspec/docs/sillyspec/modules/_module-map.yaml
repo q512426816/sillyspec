@@ -161,6 +161,7 @@ modules:
       - src/sync.js
       - src/spec-sync.js
       - src/sync-noise.js
+      - src/write-audit.js
 
   sillyhub-mcp:
     status: active
