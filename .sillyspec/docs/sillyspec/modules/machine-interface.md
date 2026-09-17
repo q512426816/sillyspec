@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: machine-interface
 author: qinyi
 created_at: 2026-07-09T14:20:00+08:00
-updated_at: 2026-09-07T12:30:00+08:00
+updated_at: 2026-09-17T22:45:00+08:00
 ---
 
 # machine-interface
@@ -18,24 +18,25 @@ SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验�
 - `sillyspec gate <stage> --change <name> [--json]`：聚合门控（回答「该阶段此刻能否标记完成」，一次调用出综合结论 + checks 数组）
 - `sillyspec derive <facet> --change <name> [--json]`：单项事实核验，facet ∈ {execute-evidence, verify-test, task-reviews, artifacts}
 - `sillyspec progress show --json`（runStatusOverview，2026-09-02 单一状态源）：全局总览——全部活跃变更列表 + 各自阶段/步骤计数 + ghost（目录缺失；quick-<8hex> 会话行按设计无实体目录，2026-09-07 起豁免 ghost 判定，进行中 quick 不再误报）/stall 标记 + pending_conflicts（未决同步冲突，P2-2-① 起冲突升 warnings）；与 dump（单变更视角、daemon 轮询）互补。数据组装单点在 StageMachine.overview（与 show 汇总同源）
-- envelope：`schema_version=1` + 固定字段（command/change/ok/errors/warnings/generated_at）+ 按需（stage/facet/checks/data）
+- envelope：`schema_version=1` + 固定字段（command/change/ok/errors/warnings/generated_at）+ 按需（stage/facet/checks/data/codes）
+- 诊断码（2026-09-17-mi-diagnostic-codes 加法式增补）：顶层 `codes: string[]`（gate=失败 check 的 code 按出现序**去重聚合，非与 errors 1:1**；derive=facet 失败面单码；信封级错误路径单码；成功空数组）+ `checks[].code`（**恒在场，身份码非失败标志**）；码表单一源 `src/diagnostic-codes.js`（恰 10 码，与契约 §8 目录双向 parity——`test/diagnostic-codes-parity.test.mjs`）；errors 仍 string[] 中文散文、退出码/schema_version 不变，现网消费方（SillyHub 只读 exit_code+errors，已实证）零破坏
 - 退出码：0 通过（可含 warnings）/ 1 事实阻断（JSON 含 errors）/ 2 无法核验（用法/环境/变更不存在/内部异常）
 - 只读语义（D-002）：不写 sillyspec.db、不 triggerSync、不推进 step/stage（原阶段状态缓存文件双源已废，不再列入只读边界；只读性为语义级断言——本模块自身不发 write 语句，WAL 引擎层 close/checkpoint 对主库的合并属 better-sqlite3 行为非本模块写入）；唯一例外是 verify-test 落盘 `.runtime/verify-runs/` 取证
 - 契约基准：`docs/sillyspec/interface-contract.md`（SillySpec↔SillyHub 对账）
 
 ## 关键逻辑
 
-- `runGate(stage, changeName, {cwd, specBase, runtimeRoot, specDriftAnchor})` → `{envelope, exitCode}`：聚合 artifacts / transition(informational，不参与综合 ok) / execute 阶段加 task-reviews + execute-evidence / verify 阶段加 verify-test；D-008 execute-evidence 单次调用去重；异常 try/catch 兜底输出合法 JSON + exit 2
+- `runGate(stage, changeName, {cwd, specBase, runtimeRoot, specDriftAnchor})` → `{envelope, exitCode}`：聚合 artifacts / design-file-list（brainstorm 条件性，fail-open） / transition（**参与综合 ok**，与 completeStep 硬阻断同源——2026-09-17 语义对账收口，旧 informational 说法作废，变更溯源见契约 §9） / execute 阶段加 task-reviews + execute-evidence / verify 阶段加 verify-test；D-008 execute-evidence 单次调用去重；异常 try/catch 兜底输出合法 JSON + exit 2
 - `runStatusOverview({cwd, specBase})` → `{envelope, exitCode}`：全局总览封装；DB 不存在 fail-closed exit 2，ghost 升 warnings 不阻断 ok；同步函数（无 git/网络调用）
 - `runDerive(facet, changeName, {cwd, specBase, runtimeRoot, specDriftAnchor})` → `{envelope, exitCode}`：单 facet 结构化 data 返回；非法 facet / 变更不存在 → exit 2
-- `buildEnvelope({command, stage, facet, change, ok, errors, warnings, checks, data})`：统一 envelope 组装，按需字段用 `!== undefined` 判断
+- `buildEnvelope({command, stage, facet, change, ok, errors, warnings, checks, data, codes})`：统一 envelope 组装，按需字段用 `!== undefined` 判断（codes 同约定）；check 的 code 经 `checkCode(checkId)`（`src/diagnostic-codes.js`）映射，表外 id 不挂键
 - 复用既有策略引擎（不重写校验）：stage-contract（runValidators / checkTransition / checkExecuteCodeEvidence）、task-review（validateTaskReviews）、verify-postcheck（runVerifyTestCheck）
 - `--json` 输出纪律由 CLI 层 `src/index.js` 的 `withJsonOutput` 处理（调用期间劫持 console.log/info → stderr，stdout 留给最终 JSON）；本模块只返回 `{envelope, exitCode}` 不直接写 stdout
 
 ## 注意事项
 
 - gate/derive 无状态单次调用（D-007，不引入 session/lease/lifecycle 状态机；文中 daemon 指 SillyHub 侧调用方，本仓库不实现守护进程）
-- `validateTaskReviews` 真实签名是**单 opts 解构** `{planContent, runtimeRoot, executeRunId, allowCannotVerify, changeDir, gitDir}`（非 `(changeDir, {gitDir})`）；调用需自行组装这些参数，现成范式见 `src/task-review.js:452`（validateTaskReviews 定义）与本模块 runGate/runDerive
+- `validateTaskReviews` 真实签名是**单 opts 解构** `{planContent, runtimeRoot, executeRunId, allowCannotVerify, changeDir, gitDir}`（非 `(changeDir, {gitDir})`）；调用需自行组装这些参数，现成范式见 `src/task-review.js:459`（validateTaskReviews 定义）与本模块 runGate/runDerive
 - runGate/runDerive 的 task-reviews 段 runtimeRoot 解析统一调 `resolveRuntimeRoot({runtimeRoot, specDriftAnchor}, specRoot)`（`src/run/shared.js`，三级优先级 runtimeRoot > specDriftAnchor > 本地 specBase/.runtime，坑 execute-runs-isolation）：drift 场景调用方传 specDriftAnchor=主仓 specBase 时，execute-run-id marker 读主仓 .runtime 而非 worktree 副本；未传则行为同旧公式（向后兼容）。调用方职责是据 drift 场景传入 anchor，本模块只消费
 - transition check 须传 `fromStageData`（`progress.stages[currentStage]`）以触发 failed_post_check 门控，与 completeStep 保持同源（design §8 风险对策）
 - Windows 下退出用 `process.exitCode` + 自然退出（非 `process.exit`），避免 UV_HANDLE_CLOSING assertion 覆盖退出码

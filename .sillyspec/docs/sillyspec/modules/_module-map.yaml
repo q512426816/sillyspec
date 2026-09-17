@@ -142,6 +142,7 @@ modules:
     review_reasons: []
     paths:
       - src/machine-interface.js
+      - src/diagnostic-codes.js
 
   dispatch:
     status: active

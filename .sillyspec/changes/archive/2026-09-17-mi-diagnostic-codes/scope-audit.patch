@@ -1,0 +1,1010 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/machine-interface.md b/.sillyspec/docs/sillyspec/modules/machine-interface.md
+index 4c1eb97..7b81b63 100644
+--- a/.sillyspec/docs/sillyspec/modules/machine-interface.md
++++ b/.sillyspec/docs/sillyspec/modules/machine-interface.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: machine-interface
+ author: qinyi
+ created_at: 2026-07-09T14:20:00+08:00
+-updated_at: 2026-09-07T12:30:00+08:00
++updated_at: 2026-09-17T22:45:00+08:00
+ ---
+ 
+ # machine-interface
+@@ -18,17 +18,18 @@ SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验
+ - `sillyspec gate <stage> --change <name> [--json]`：聚合门控（回答「该阶段此刻能否标记完成」，一次调用出综合结论 + checks 数组）
+ - `sillyspec derive <facet> --change <name> [--json]`：单项事实核验，facet ∈ {execute-evidence, verify-test, task-reviews, artifacts}
+ - `sillyspec progress show --json`（runStatusOverview，2026-09-02 单一状态源）：全局总览——全部活跃变更列表 + 各自阶段/步骤计数 + ghost（目录缺失；quick-<8hex> 会话行按设计无实体目录，2026-09-07 起豁免 ghost 判定，进行中 quick 不再误报）/stall 标记 + pending_conflicts（未决同步冲突，P2-2-① 起冲突升 warnings）；与 dump（单变更视角、daemon 轮询）互补。数据组装单点在 StageMachine.overview（与 show 汇总同源）
+-- envelope：`schema_version=1` + 固定字段（command/change/ok/errors/warnings/generated_at）+ 按需（stage/facet/checks/data）
++- envelope：`schema_version=1` + 固定字段（command/change/ok/errors/warnings/generated_at）+ 按需（stage/facet/checks/data/codes）
++- 诊断码（2026-09-17-mi-diagnostic-codes 加法式增补）：顶层 `codes: string[]`（gate=失败 check 的 code 按出现序**去重聚合，非与 errors 1:1**；derive=facet 失败面单码；信封级错误路径单码；成功空数组）+ `checks[].code`（**恒在场，身份码非失败标志**）；码表单一源 `src/diagnostic-codes.js`（恰 10 码，与契约 §8 目录双向 parity——`test/diagnostic-codes-parity.test.mjs`）；errors 仍 string[] 中文散文、退出码/schema_version 不变，现网消费方（SillyHub 只读 exit_code+errors，已实证）零破坏
+ - 退出码：0 通过（可含 warnings）/ 1 事实阻断（JSON 含 errors）/ 2 无法核验（用法/环境/变更不存在/内部异常）
+ - 只读语义（D-002）：不写 sillyspec.db、不 triggerSync、不推进 step/stage（原阶段状态缓存文件双源已废，不再列入只读边界；只读性为语义级断言——本模块自身不发 write 语句，WAL 引擎层 close/checkpoint 对主库的合并属 better-sqlite3 行为非本模块写入）；唯一例外是 verify-test 落盘 `.runtime/verify-runs/` 取证
+ - 契约基准：`docs/sillyspec/interface-contract.md`（SillySpec↔SillyHub 对账）
+ 
+ ## 关键逻辑
+ 
+-- `runGate(stage, changeName, {cwd, specBase, runtimeRoot, specDriftAnchor})` → `{envelope, exitCode}`：聚合 artifacts / transition(informational，不参与综合 ok) / execute 阶段加 task-reviews + execute-evidence / verify 阶段加 verify-test；D-008 execute-evidence 单次调用去重；异常 try/catch 兜底输出合法 JSON + exit 2
++- `runGate(stage, changeName, {cwd, specBase, runtimeRoot, specDriftAnchor})` → `{envelope, exitCode}`：聚合 artifacts / design-file-list（brainstorm 条件性，fail-open） / transition（**参与综合 ok**，与 completeStep 硬阻断同源——2026-09-17 语义对账收口，旧 informational 说法作废，变更溯源见契约 §9） / execute 阶段加 task-reviews + execute-evidence / verify 阶段加 verify-test；D-008 execute-evidence 单次调用去重；异常 try/catch 兜底输出合法 JSON + exit 2
+ - `runStatusOverview({cwd, specBase})` → `{envelope, exitCode}`：全局总览封装；DB 不存在 fail-closed exit 2，ghost 升 warnings 不阻断 ok；同步函数（无 git/网络调用）
+ - `runDerive(facet, changeName, {cwd, specBase, runtimeRoot, specDriftAnchor})` → `{envelope, exitCode}`：单 facet 结构化 data 返回；非法 facet / 变更不存在 → exit 2
+-- `buildEnvelope({command, stage, facet, change, ok, errors, warnings, checks, data})`：统一 envelope 组装，按需字段用 `!== undefined` 判断
++- `buildEnvelope({command, stage, facet, change, ok, errors, warnings, checks, data, codes})`：统一 envelope 组装，按需字段用 `!== undefined` 判断（codes 同约定）；check 的 code 经 `checkCode(checkId)`（`src/diagnostic-codes.js`）映射，表外 id 不挂键
+ - 复用既有策略引擎（不重写校验）：stage-contract（runValidators / checkTransition / checkExecuteCodeEvidence）、task-review（validateTaskReviews）、verify-postcheck（runVerifyTestCheck）
+ - `--json` 输出纪律由 CLI 层 `src/index.js` 的 `withJsonOutput` 处理（调用期间劫持 console.log/info → stderr，stdout 留给最终 JSON）；本模块只返回 `{envelope, exitCode}` 不直接写 stdout
+ 
+diff --git a/docs/sillyspec/interface-contract.md b/docs/sillyspec/interface-contract.md
+index 16a83b4..250cdef 100644
+--- a/docs/sillyspec/interface-contract.md
++++ b/docs/sillyspec/interface-contract.md
+@@ -1,7 +1,7 @@
+ ---
+ author: qinyi
+ created_at: 2026-07-09T13:05:00+08:00
+-updated_at: 2026-08-16T14:07:52+08:00
++updated_at: 2026-09-17T22:40:00+08:00
+ schema_version: 1
+ ---
+ 
+@@ -10,13 +10,14 @@ schema_version: 1
+ > 本文档是 SillySpec ↔ SillyHub 两仓库的**对账基准**（decisions.md D-005@v1）。
+ > 它冻结机器接口 v1 的命令面、envelope schema、退出码、副作用声明、演进规则与待对账清单。
+ > 所有 JSON 示例均来自真实 CLI 输出（见每段末尾「来源命令」），非手编。
+-> 对应实现：`src/machine-interface.js`（buildEnvelope / runGate / runDerive / FACETS）+ `src/index.js` 路由。
++> 对应实现：`src/machine-interface.js`（buildEnvelope / runGate / runDerive / runStatusOverview / FACETS）+ `src/diagnostic-codes.js`（码表单一源）+ `src/index.js` 路由。
++> v1 存续期内的语义变更公开记账于 §9（Known-inconsistencies 式披露）。
+ 
+ ---
+ 
+ ## 1. 命令面（command surface）
+ 
+-机器接口对外暴露两个顶层子命令，均为**纯 CLI 子命令、无状态单次调用**（D-001@v1：不做长驻进程；D-007@v1：无生命周期契约）。
++机器接口对外暴露三个顶层子命令，均为**纯 CLI 子命令、无状态单次调用**（D-001@v1：不做长驻进程；D-007@v1：无生命周期契约）：`gate` / `derive` / `progress show`（后者经 `sillyspec progress show --json` 出口，见 §1.4）。
+ 
+ ### 1.1 `sillyspec gate <stage> --change <name> [--json]`
+ 
+@@ -35,12 +36,13 @@ schema_version: 1
+   | check id | 适用阶段 | 复用实现 | 是否参与综合 ok |
+   |---|---|---|---|
+   | `artifacts` | 全部 | `runValidators(stage, cwd, change, { projectName, specRoot })` | 是 |
+-  | `transition` | 全部 | `checkTransition(currentStage, stage)` | 否（`informational: true`） |
++  | `design-file-list` | brainstorm | `validateDesignFileList`（design 文件清单行级核验；核验自身异常 fail-open 不误拦） | 是 |
++  | `transition` | 全部 | `checkTransition(currentStage, stage, { fromStageData })` | **是**（与 `completeStep` 硬阻断一致——语义变更记录见 §9 条目 1） |
+   | `task-reviews` | execute | `validateTaskReviews`（含 git 真实性交叉校验，gitDir 优先 worktree） | 是 |
+   | `execute-evidence` | execute | `checkExecuteCodeEvidence`（真实代码变更核验） | 是 |
+   | `verify-test` | verify | `runVerifyTestCheck`（CLI 实测 local.yaml commands.test） | 是 |
+ 
+-- **综合结论**：`ok = 所有「非 informational」check 均 ok`。`transition` 标 `informational: true`，不参与综合 `ok`——daemon 可能在阶段推进前预查下一阶段，转换不合法不应把产物核验判为失败。
++- **综合结论**：`ok = 所有「非 informational」check 均 ok`。现行实现没有任何 check 标 `informational`——`transition` **参与**综合 `ok`（与 `run <stage> --done` 的 `checkTransition` 硬阻断同源：gate 绿则 --done 不应因转换被拦，防 gate/run 判定分裂）。
+ - **重叠去重（D-008@v1）**：execute 的 `artifacts` check 内部（`validateExecuteOutputs`）已含代码变更核验，与 `execute-evidence` 同源。实现层对 `checkExecuteCodeEvidence` 只调用一次、结果复用；两个 check 的结论不得矛盾。
+ 
+ ### 1.2 `sillyspec derive <facet> --change <name> [--json]`
+@@ -63,9 +65,7 @@ schema_version: 1
+   | `task-reviews` | `validateTaskReviews` | `{ ok, errors, warnings, requiredEvidence }` |
+   | `artifacts` | `runValidators(currentStage, ...)` | `{ ok, errors, warnings }`；仅此 facet 会回填顶层 `stage`（产物校验绑定阶段语义） |
+ 
+-  非 `FACETS` 内的值（如 `nope`）属**非法 facet → exit 2**（见 §3、§5 真实示例）。
+-
+----
++  非 `FACETS` 内的值（如 `nope`）属**非法 facet → exit 2**（见 §3、§3.1 真实示例）。
+ 
+ ### 1.3 `sillyspec docs check [--paths <glob,...>] [--json]`（2026-08-15 docs-check-productize）
+ 
+@@ -90,6 +90,20 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
+ - 设计边界：**behind（commit 数）不参与 gate**——源码活跃不代表卡错，代理信号只配 advisory；gate 只信 docs check 的直接失效数
+ - 实现：`src/docs-gate.js`（evaluateRatchet 纯判定 + runDocsGate IO 面）；文档引导挂接（不 init 自动注入 hook，往用户仓装 git hook 是侵入性动作）：`echo 'sillyspec docs gate' >> .husky/pre-push` 或 CI 一步
+ 
++### 1.4 `sillyspec progress show [--json]`（全局状态总览，2026-09-02 跨 agent 协作改进 P0-1；2026-09-17-mi-diagnostic-codes 入约）
++
++全局状态总览：全部活跃变更列表 + 各自阶段/步骤进度 + ghost/stall 标记。与 gate/derive（单变更粒度）互补——回答「这个项目现在有谁在动哪些变更」，供 SillyHub 面板 / 跨 agent 消费。
++
++```
++用法: sillyspec progress show [--json] [--change <name>]
++  --json  选填；给出时 stdout 输出单段 envelope JSON（command: "progress show"）
++```
++
++- **信封**：`ok` 恒为 true（总览本身成功即成功，exit 0）；ghost 变更与未决同步冲突升 `warnings`（不阻断 ok——它们是待清理事实，不是总览失败）。
++- **data 形状**（组装单点 `StageMachine.overview`）：`{ project, active_changes, changes: [{ name, readable, ghost, current_stage, stage_label, last_active, stages: {<stage>: {status, steps_total, steps_completed}}, steps, stall? }], pending_conflicts }`。
++- **退出码**：0 总览成功（含空列表）/ 2 无法核验（进度库不存在——只读契约不建库，codes `db_missing`）。
++- **只读契约**：同 gate/derive（§4），仅 ProgressManager 读路径。
++
+ ## 2. envelope schema v1
+ 
+ 所有机器接口 `--json` 的 stdout 输出统一结构（D-005@v1）。`--json` 模式下 stdout 无任何装饰文本；被调模块的人类可读打印在输出期间被局部劫持到 stderr（实现：`machine-interface.js emitJson`，try/finally 必然恢复）。
+@@ -99,68 +113,79 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
+ | 字段 | 类型 | 必出 | 说明 |
+ |---|---|---|---|
+ | `schema_version` | number | 是 | 固定 `1`（D-005@v1，演进见 §6） |
+-| `command` | string | 是 | `"gate"` 或 `"derive"` |
+-| `change` | string | 是 | 请求的变更名（即使不存在也原样回显） |
+-| `ok` | boolean | 是 | 综合结论（gate）或单项事实结论（derive） |
+-| `errors` | string[] | 是 | 各 check 的扁平汇总；非空 ⇒ exit 1/2 |
++| `command` | string | 是 | `"gate"` / `"derive"` / `"progress show"` |
++| `change` | string | gate/derive 必出 | 请求的变更名（即使不存在也原样回显）；`progress show` 无此键 |
++| `ok` | boolean | 是 | 综合结论（gate）或单项事实结论（derive）或总览成功（progress show） |
++| `errors` | string[] | 是 | 各 check 的扁平汇总；非空 ⇒ exit 1/2。**中文散文，非稳定契约面——程序化分支请用 `codes`** |
+ | `warnings` | string[] | 是 | 各 check 的扁平汇总；非空时仍可 exit 0 |
++| `codes` | string[] | 三面主路径 | 稳定诊断码（snake_case，见 §8 目录）：gate=失败 check 的 code 按出现序**去重聚合**（**非与 errors 逐下标 1:1**——多条 errors 可共享一个 check 级码，逐条归因读 `checks[].code`）；derive=facet 失败面单码、成功空数组；信封级错误路径（exit 2）单码。成功且无失败时为 `[]`。2026-09-17 加法式增补，可选键遵循 optional-once（`!== undefined` 才挂） |
+ | `generated_at` | string | 是 | ISO-8601，`new Date().toISOString()` |
+ | `stage` | string | 按需 | gate 总出现；derive 仅 `artifacts` facet 出现 |
+ | `facet` | string | 按需 | derive 总出现（含非法 facet 回显） |
+ | `checks` | object[] | 按需 | 仅 gate 出现（见 §2.2） |
+-| `data` | object | 按需 | 仅 derive 出现（见 §1.2 各 facet 返回要点） |
++| `data` | object | 按需 | 仅 derive / progress show 出现 |
+ 
+-> `errors` / `warnings` 是各 check 的扁平汇总——daemon 想省事可只看顶层 `ok` / `errors` / `warnings`，不必解析 `checks`。
++> `errors` / `warnings` 是各 check 的扁平汇总——daemon 想省事可只看顶层 `ok` / `errors` / `warnings`，不必解析 `checks`。需要按错误类型分支时消费 `codes`（稳定身份，文案演进不影响）。
+ 
+ ### 2.2 checks 元素结构（gate）
+ 
+ | 字段 | 类型 | 说明 |
+ |---|---|---|
+-| `id` | string | `artifacts` / `transition` / `task-reviews` / `execute-evidence` / `verify-test` |
++| `id` | string | `artifacts` / `design-file-list` / `transition` / `task-reviews` / `execute-evidence` / `verify-test` |
++| `code` | string | 该 check 的失败身份码（见 §8）——**恒在场（通过时也在场），是身份码不是失败标志；失败判定唯一看 `ok`** |
+ | `ok` | boolean | 该项独立结论 |
+ | `errors` | string[] | 该项错误（非空 ⇒ 汇入顶层 errors） |
+ | `warnings` | string[] | 该项警告（非空 ⇒ 汇入顶层 warnings） |
+-| `informational` | boolean | 可选；仅 `transition` 标 `true` |
+ | `data` | object | 可选；`execute-evidence` / `verify-test` 携带结构化事实 |
+ 
+-### 2.3 informational 语义
++### 2.3 transition 参与综合 ok（2026-09-17 语义，变更溯源见 §9 条目 1）
++
++`transition` check **参与综合 `ok`**（现行实现不写 `informational` 键）：
+ 
+-`transition` check 标 `informational: true`：
+-- **不参与综合 `ok`**——综合结论只看 `!informational` 的 check（`ok = checks.filter(c => !c.informational).every(c => c.ok)`）。
+-- **但 `errors` 仍汇入顶层**——转换不合法时顶层 `errors` 会含转换原因（即便 `ok=true`）。daemon 若把顶层 errors 当硬阻断，需对 informational 项自行甄别；若只看 `ok`/退出码，则不受影响。
++- **综合结论只看全部 check**——`transition` 不合法 ⇒ `ok=false`、exit 1，与 `run <stage> --done` 的 `checkTransition` 硬阻断**同源一致**（防「gate 绿、--done 红」判定分裂：daemon 据 gate exit 0 让 agent 推进，却被子进程硬阻断）。
++- **daemon 预查下一阶段**：若只想预查产物完备性而容忍当前转换不合法，请自行忽略 `transition` check 的结论（按 `checks[].id === 'transition'` 过滤），不要依赖不存在的 informational 语义。
+ 
+-### 2.4 真实 JSON 示例（gate）
++### 2.4 真实 JSON 示例（gate，transition 阻断）
+ 
+-> 来源命令：`node "<WT>/bin/sillyspec.js" gate brainstorm --change 2026-07-09-machine-interface-v1 --json`
+-> 退出码：**exit 0**（ok=true，warnings 非空，informational transition 错误被汇入顶层但综合结论仍通过——印证 §2.3）
++> 来源命令：`node "<WT>/bin/sillyspec.js" gate brainstorm --change 2026-09-17-mi-diagnostic-codes --json --dir <主仓根>`（2026-09-17 采样）
++> 退出码：**exit 1**（ok=false——transition 参与 ok：变更在 execute 阶段，brainstorm 转换不合法；artifacts 与 design-file-list 两 check 通过但 code 恒在场）
+ 
+ ```json
+ {
+   "schema_version": 1,
+   "command": "gate",
+-  "change": "2026-07-09-machine-interface-v1",
+-  "ok": true,
++  "change": "2026-09-17-mi-diagnostic-codes",
++  "ok": false,
+   "errors": [
+     "brainstorm 的前置阶段是 ，不能从 execute 跳转"
+   ],
+   "warnings": [
+     "design.md 显式声明不涉及生命周期契约 — 已豁免「生命周期契约表」要求"
+   ],
+-  "generated_at": "2026-07-09T13:04:17.908Z",
++  "codes": ["transition_blocked"],
++  "generated_at": "2026-09-17T14:36:12.000Z",
+   "stage": "brainstorm",
+   "checks": [
+     {
+       "id": "artifacts",
++      "code": "artifacts_invalid",
+       "ok": true,
+       "errors": [],
+       "warnings": [
+         "design.md 显式声明不涉及生命周期契约 — 已豁免「生命周期契约表」要求"
+       ]
+     },
++    {
++      "id": "design-file-list",
++      "code": "design_file_ref_invalid",
++      "ok": true,
++      "errors": [],
++      "warnings": []
++    },
+     {
+       "id": "transition",
++      "code": "transition_blocked",
+       "ok": false,
+-      "informational": true,
+       "errors": [
+         "brainstorm 的前置阶段是 ，不能从 execute 跳转"
+       ],
+@@ -170,34 +195,36 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
+ }
+ ```
+ 
+-> 说明：`errors[0]` 来自 `transition`（informational，不参与综合 ok），故顶层虽有 error 但 `ok=true`、exit 0。
++> 说明：`codes` 只含失败 check 的码（聚合非 1:1）；通过的 check（artifacts/design-file-list）也带 `code`（身份码恒在场）。exit 1 ⇒ daemon 反馈修复后重试（§3）。
+ 
+ ### 2.5 真实 JSON 示例（derive execute-evidence）
+ 
+-> 来源命令：`node "<WT>/bin/sillyspec.js" derive execute-evidence --change 2026-07-09-machine-interface-v1 --json`
+-> 退出码：**exit 0**（status=changed）
++> 来源命令：`node "<WT>/bin/sillyspec.js" derive execute-evidence --change 2026-09-17-mi-diagnostic-codes --json --dir <主仓根>`（2026-09-17 采样）
++> 退出码：**exit 0**（status=changed；成功路径 `codes` 为空数组）
+ 
+ ```json
+ {
+   "schema_version": 1,
+   "command": "derive",
+-  "change": "2026-07-09-machine-interface-v1",
++  "change": "2026-09-17-mi-diagnostic-codes",
+   "ok": true,
+   "errors": [],
+   "warnings": [],
+-  "generated_at": "2026-07-09T13:04:18.125Z",
++  "generated_at": "2026-09-17T14:36:12.631Z",
+   "facet": "execute-evidence",
+   "data": {
+     "status": "changed",
+-    "detail": "11 个已提交变更文件 + 未提交改动（base 7a99ddc2）"
+-  }
++    "detail": "0 个已提交变更文件 + 未提交改动（base 51225ae0）"
++  },
++  "codes": []
+ }
+ ```
+ 
+-### 2.6 真实 JSON 示例（derive task-reviews，事实性阻断）
++### 2.6 真实 JSON 示例（derive task-reviews，事实性阻断；v1 初期历史采样）
+ 
+-> 来源命令：`node "<WT>/bin/sillyspec.js" derive task-reviews --change 2026-07-09-machine-interface-v1 --json`
++> 来源命令：`node "<WT>/bin/sillyspec.js" derive task-reviews --change 2026-07-09-machine-interface-v1 --json`（2026-07-09 历史采样）
+ > 退出码：**exit 1**（ok=false，errors 非空，事实性阻断）
++> 历史注记：本示例采样于 2026-07-09（v1 初期），**早于 `codes` 键增补（2026-09-17）**——现行同场景发射 `codes: ["task_reviews_invalid"]`，现行成功/阻断/exit-2 面的带码示例见 §2.4/§2.5/§3.1/§3.2。
+ 
+ ```json
+ {
+@@ -234,39 +261,40 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
+ 
+ ## 3. 退出码语义表（D-004@v1）
+ 
+-`gate` / `derive` 的进程退出码只允许三值（实现：`machine-interface.js` `process.exitCode = exitCode`）。
++`gate` / `derive` / `progress show` 的进程退出码只允许三值（实现：`machine-interface.js` `process.exitCode = exitCode`）。
+ 
+ | 码 | 语义 | envelope 特征 | daemon 典型处置（design §3.5） |
+ |---|---|---|---|
+-| `0` | 核验通过（可含 warnings） | `ok=true`；errors 空（或仅 informational 项） | 推进到下一步 |
+-| `1` | 事实性阻断（JSON 含 errors） | `ok=false`；errors 非空（真实校验失败） | 反馈给子 agent 修复后重试 |
+-| `2` | 无法核验（用法错/变更不存在/环境错/内部异常） | `ok=false`；errors 含用法/环境/`internal:` 文案 | 报警人工介入，不盲目重试 |
++| `0` | 核验通过（可含 warnings） | `ok=true`；errors 空；`codes` 空数组 | 推进到下一步 |
++| `1` | 事实性阻断（JSON 含 errors） | `ok=false`；errors 非空（真实校验失败）；`codes` 含失败面码 | 反馈给子 agent 修复后重试 |
++| `2` | 无法核验（用法错/变更不存在/环境错/内部异常） | `ok=false`；errors 含用法/环境/`internal:` 文案；`codes` 为单码（`db_missing`/`change_not_found`/`unknown_facet`/`internal_error`，见 §8） | 报警人工介入，不盲目重试 |
+ 
+ **区分 1 与 2 是 driver 模式的关键**：1 是「事实上不通过」（重试有意义，改了代码/补了产物可能转 0）；2 是「没得出结论」（重试无意义，需先修用法/环境）。
+ 
+ ### 3.1 exit 2 真实示例（非法 facet）
+ 
+-> 来源命令：`node "<WT>/bin/sillyspec.js" derive nope --change 2026-07-09-machine-interface-v1 --json`
++> 来源命令：`node "<WT>/bin/sillyspec.js" derive nope --change 2026-09-17-mi-diagnostic-codes --json --dir <主仓根>`（2026-09-17 采样）
+ > 退出码：**exit 2**（facet 不在白名单）
+ 
+ ```json
+ {
+   "schema_version": 1,
+   "command": "derive",
+-  "change": "2026-07-09-machine-interface-v1",
++  "change": "2026-09-17-mi-diagnostic-codes",
+   "ok": false,
+   "errors": [
+     "非法 facet: nope，合法值: execute-evidence, verify-test, task-reviews, artifacts"
+   ],
+   "warnings": [],
+-  "generated_at": "2026-07-09T13:04:34.173Z",
+-  "facet": "nope"
++  "generated_at": "2026-09-17T14:36:54.635Z",
++  "facet": "nope",
++  "codes": ["unknown_facet"]
+ }
+ ```
+ 
+ ### 3.2 exit 2 真实示例（变更不存在）
+ 
+-> 来源命令：`node "<WT>/bin/sillyspec.js" gate brainstorm --change nonexistent-xyz --json`
++> 来源命令：`node "<WT>/bin/sillyspec.js" gate brainstorm --change nonexistent-xyz --json --dir <主仓根>`（2026-09-17 采样）
+ > 退出码：**exit 2**（`ProgressManager.read` 返回 null）
+ 
+ ```json
+@@ -279,24 +307,25 @@ docs check 的 ratchet 门：**欠账只许减少不许增加**。挂进 pre-pus
+     "变更不存在: nonexistent-xyz"
+   ],
+   "warnings": [],
+-  "generated_at": "2026-07-09T13:04:34.319Z",
+-  "stage": "brainstorm"
++  "generated_at": "2026-09-17T14:37:02.900Z",
++  "stage": "brainstorm",
++  "codes": ["change_not_found"]
+ }
+ ```
+ 
+ ### 3.3 内部异常兜底（D-004@v1 / design §3.5）
+ 
+-`runGate` / `runDerive` 均包 `try/catch`，异常时仍产出合法 envelope：`{ ok: false, errors: ["internal: <message>"], ... }` 写到 stdout，**exit 2**。这保证 **stdout 永远是可 `JSON.parse` 的合法 JSON**——即便在内部异常场景下 daemon 也能解析 envelope（验收 design §9.4）。
++`runGate` / `runDerive` / `runStatusOverview` 均包 `try/catch`，异常时仍产出合法 envelope：`{ ok: false, errors: ["internal: <message>"], codes: ["internal_error"], ... }` 写到 stdout，**exit 2**。这保证 **stdout 永远是可 `JSON.parse` 的合法 JSON**——即便在内部异常场景下 daemon 也能解析 envelope（验收 design §9.4）。
+ 
+ ---
+ 
+ ## 4. 副作用声明（只读语义边界，D-002@v1）
+ 
+-`gate` / `derive` 是**只读核验**，实现上只调 `ProgressManager` 的读路径（`read` / `listChanges`），不调 `_write` / `completeStage`：
++`gate` / `derive` / `progress show` 是**只读核验**，实现上只调 `ProgressManager` 的读路径（`read` / `listChanges` / `overview`），不调 `_write` / `completeStage`：
+ 
+-| 行为 | gate / derive | 说明 |
++| 行为 | gate / derive / progress show | 说明 |
+ |---|---|---|
+-| 写 `sillyspec.db` | ❌ 不写 | 调用前后 db 文件 byte-identical（验收 design §9.3） |
++| 写 `sillyspec.db` | ❌ 不写 | 调用前后 db 文件 byte-identical（验收 design §9.3）；db 不存在时 fail-closed 返回 exit 2（codes `db_missing`），不为其建库 |
+ | `triggerSync` | ❌ 不触发 | 无自动同步副作用 |
+ | 推进 step / stage | ❌ 不推进 | 状态推进仍走 `run <stage> --done`（agent）或平台显式调用（driver） |
+ 
+@@ -333,8 +362,8 @@ driver 流程中可能出现「daemon 先 `gate verify`（跑一次测试）→
+ 
+ | 变更类型 | 是否允许 | 要求 |
+ |---|---|---|
+-| 新增字段 | ✅ 随时 | 不 bump 版本；daemon 对未知字段应忽略（forward-compatible） |
+-| 改语义 / 删字段 | ⚠️ 受限 | 必须 bump `schema_version`；旧版本**至少保留一个 minor 周期** |
++| 新增字段 | ✅ 随时 | 不 bump 版本；daemon 对未知字段应忽略（forward-compatible）。先例：`codes` / `checks[].code`（2026-09-17 加法式增补，本文件 §2.1/§2.2/§8） |
++| 改语义 / 删字段 | ⚠️ 受限 | 必须 bump `schema_version`；旧版本**至少保留一个 minor 周期**。语义级变更在 v1 存续期内已发生的一例（transition 参与 ok）公开记账于 §9，冻结版内不静默改语义 |
+ 
+ - 当前版本：`schema_version = 1`（常量 `SCHEMA_VERSION`，`machine-interface.js`）。
+ - 先例：`manifest.json` / `review.json` 均沿用 `schema_version` 模式。
+@@ -357,22 +386,51 @@ driver 流程中可能出现「daemon 先 `gate verify`（跑一次测试）→
+ 
+ ---
+ 
++## 8. 诊断码目录（Diagnostic Codes）
++
++> 单一源：`src/diagnostic-codes.js`（`DIAGNOSTIC_CODES` 冻结表）。本目录与码表**双向 parity**（`test/diagnostic-codes-parity.test.mjs`：注册码 ⊆ 本目录 ∧ 本目录码 ⊆ 注册表）——单侧漂移即 CI 红。扩码走变更流程追加，本表外不得出现新码。
++> 覆盖边界（首期）：machine-interface 三面（gate/derive/progress show）**自产错误**。check 内部逐条 validator 的中文散文不逐条编码（码标识失败面，不标识每条消息）。
++
++| 诊断码 | surface | exit 语义 | 触发条件 |
++|---|---|---|---|
++| `db_missing` | gate / derive / progress show | 2 | 进度库不存在（只读契约：不为其建库，fail-closed） |
++| `change_not_found` | gate / derive | 2 | 变更名在进度库无记录 |
++| `unknown_facet` | derive | 2 | facet ∉ FACETS 白名单（用法错） |
++| `internal_error` | gate / derive / progress show | 2 | 内部异常兜底（stdout 仍为合法 JSON） |
++| `artifacts_invalid` | gate / derive | 1 | runValidators 失败（gate artifacts check 与 derive artifacts facet 同源） |
++| `design_file_ref_invalid` | gate | 1 | design 文件清单行级核验失败（直承 design-facts 既有稳定码） |
++| `transition_blocked` | gate | 1 | checkTransition 不允许（含 failed_post_check 门控） |
++| `execute_evidence_unchanged` | gate / derive | 1 | base..head 无代码变更（checkbox ≠ implementation） |
++| `task_reviews_invalid` | gate / derive | 1 | validateTaskReviews 失败（review.json 缺失/schema/verdict=fail） |
++| `verify_test_failed` | gate / derive | 1 | commands.test 实测失败 |
++
++---
++
++## 9. v1 存续期语义变更记录（Known-inconsistencies 式披露）
++
++> 冻结版内不静默改语义：凡 v1 存续期内「行为可观察差异」的语义级变更在此逐条记账（格式类勘误不入本节）。正文（§1–§8）永远描述现行语义，本节是变更溯源。
++
++**条目 1：transition 从「informational 不参与综合 ok」改为「参与综合 ok」（2026-09-17 对账收口，change 2026-09-17-mi-diagnostic-codes）**
++
++- **旧语义**（本文档 2026-07-09 初版 §2.3）：`transition` check 标 `informational: true`，不参与综合 `ok`——转换不合法时 `ok=true`、exit 0，顶层 errors 仍含转换原因。
++- **新语义**（现行，§2.3）：`transition` 参与综合 `ok`——转换不合法 ⇒ `ok=false`、**exit 1**。
++- **变更动因**：实现侧（`machine-interface.js`）与 `run <stage> --done` 的 `checkTransition` 硬阻断对齐——旧语义下 daemon 据 gate exit 0 判「可推进」，agent 执行 `--done` 却被 runStage 硬阻断（exit 1），gate/run 判定分裂（原 change design §8 已记此漂移）。
++- **消费侧影响评估（SillyHub，2026-09-17 实证）**：`backend/app/modules/daemon/run_sync/service/gate.py` 按 `exit_code` 三分支（0 推进 / 1 打回 / 2 卡住，design §5.4），不读 `informational`、无 transition 特判、errors 按不透明串转发——**旧语义下非法转移会被 exit 0 判「推进」属错决策，新语义（exit 1 → 打回）与消费方决策模型一致且更有利**；全仓 grep 证实无按旧语义分支的隐藏消费点。
++- **实现时间线**：代码先行（2026-07-26 refactor W0-W5 期间已按参与 ok 实现，注释钉死动因），本文档 2026-09-17 对账跟改——漂移窗口内本文档 §2.3 旧描述不作为消费依据。
++
++---
++
+ ## 附：真实 CLI 输出来源（证明示例非手编）
+ 
+-以下命令在主仓库 `C:/Users/qinyi/IdeaProjects/sillyspec` 下、调用 worktree 的 bin 执行，输出即本文档 §2.4–§2.6、§3.1–§3.2 示例来源：
++§2.4/§2.5/§3.1/§3.2 示例在主仓库 `C:/Users/qinyi/IdeaProjects/sillyspec` 下、调用 worktree 的 bin 执行（2026-09-17 采样）；§2.6 为 2026-07-09 历史采样（含历史注记）：
+ 
+ ```bash
+-WT="C:/Users/qinyi/IdeaProjects/sillyspec/.sillyspec/.runtime/worktrees/2026-07-09-machine-interface-v1"
+-node "$WT/bin/sillyspec.js" gate brainstorm --change 2026-07-09-machine-interface-v1 --json       # exit 0
+-node "$WT/bin/sillyspec.js" derive execute-evidence --change 2026-07-09-machine-interface-v1 --json  # exit 0
+-node "$WT/bin/sillyspec.js" derive task-reviews --change 2026-07-09-machine-interface-v1 --json     # exit 1
+-node "$WT/bin/sillyspec.js" derive nope --change 2026-07-09-machine-interface-v1 --json             # exit 2（非法 facet）
+-node "$WT/bin/sillyspec.js" gate brainstorm --change nonexistent-xyz --json                         # exit 2（变更不存在）
++WT="C:/Users/qinyi/IdeaProjects/sillyspec/.sillyspec/.runtime/worktrees/2026-09-17-mi-diagnostic-codes"
++node "$WT/bin/sillyspec.js" gate brainstorm --change 2026-09-17-mi-diagnostic-codes --json --dir "$MAIN"    # exit 1（transition 阻断，参与 ok）
++node "$WT/bin/sillyspec.js" derive execute-evidence --change 2026-09-17-mi-diagnostic-codes --json --dir "$MAIN"  # exit 0
++node "$WT/bin/sillyspec.js" derive nope --change 2026-09-17-mi-diagnostic-codes --json --dir "$MAIN"       # exit 2（非法 facet，codes=unknown_facet）
++node "$WT/bin/sillyspec.js" gate brainstorm --change nonexistent-xyz --json --dir "$MAIN"                   # exit 2（变更不存在，codes=change_not_found）
++node "$WT/bin/sillyspec.js" progress show --json --dir "$MAIN"                                             # exit 0（command=progress show，codes=[]）
+ ```
+ 
+-退出码独立捕获确认（重定向到 `/dev/null` 后取 `$?`）：
+-- `gate brainstorm`（ok=true）→ `exit=0`
+-- `derive execute-evidence`（ok=true）→ `exit=0`
+-- `derive task-reviews`（ok=false，阻断）→ `exit=1`
+-- `derive nope`（非法 facet）→ `exit=2`
+-- `gate brainstorm nonexistent-xyz`（变更不存在）→ `exit=2`
++退出码独立捕获确认（重定向后取 `$?`）：gate brainstorm（ok=false，transition 阻断）→ `exit=1`；derive execute-evidence（ok=true）→ `exit=0`；derive nope → `exit=2`；gate nonexistent-xyz → `exit=2`；progress show → `exit=0`。
+diff --git a/meta.json b/meta.json
+index 3a02871..7c9b623 100644
+--- a/meta.json
++++ b/meta.json
+@@ -1,11 +1,25 @@
+ {
+   "name_zh": "worktree 元数据",
+-  "changeName": "2026-09-11-cross-change-decision-guard",
+-  "branch": "sillyspec/2026-09-11-cross-change-decision-guard",
++  "changeName": "2026-09-17-mi-diagnostic-codes",
++  "branch": "sillyspec/2026-09-17-mi-diagnostic-codes",
+   "baseBranch": "main",
+-  "baseHash": "42aa9927f71b78c903709fadd681d71719855d66",
+-  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-11-cross-change-decision-guard",
++  "baseHash": "51225ae0f767c5511ffa233dfca8d03f762b0532",
++  "actualBaseHash": "51225ae0f767c5511ffa233dfca8d03f762b0532",
++  "createdAt": "2026-09-17T14:30:26.342Z",
++  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-17-mi-diagnostic-codes",
+   "mode": "worktree",
+-  "createdAt": "2026-09-11T06:50:20.659Z",
+-  "provisioning": true
++  "baselineFiles": [],
++  "baselineCommit": null,
++  "baselineHash": null,
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 4
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-17T14:30:26.298Z"
+ }
+diff --git a/src/diagnostic-codes.js b/src/diagnostic-codes.js
+new file mode 100644
+index 0000000..936b684
+--- /dev/null
++++ b/src/diagnostic-codes.js
+@@ -0,0 +1,95 @@
++/**
++ * diagnostic-codes.js — machine-interface 族诊断码表单一源
++ *
++ * 为什么需要：信封 errors/warnings 是自由文本中文句子，程序化消费方（SillyHub/未来 MCP
++ * 消费者）无法按错误类型稳定分支——提示语改一个字就是一次静默破坏性变更。本表给
++ * gate/derive/progress show 三面的自产错误配稳定 snake_case 身份码（2026-09-17
++ * OpenSpec 源码对比三轮评审②号项，change 2026-09-17-mi-diagnostic-codes）。
++ *
++ * 纪律（D-002@v1 硬边界）：
++ *   - 恰 10 码：信封级 4（exit 2 面）+ check 级 6（gate/derive 失败面）。
++ *   - 只码 machine-interface 族自产错误——stage-contract 校验器散文、doctor/validate/
++ *     scope-audit 面首期不碰（码标识失败面，不标识每条消息）。
++ *   - 扩码走变更流程追加；本表是码身份唯一源——契约文档诊断码目录（interface-contract.md）
++ *     与运行时发射不得出现表外码，test/diagnostic-codes-parity.test.mjs 双向钉死
++ *     （OpenSpec 的 agent-contract 无 parity 测试，此为反超点）。
++ *
++ * 零依赖叶子模块（不 import 仓内任何其他 src 模块，防环）。
++ */
++
++/**
++ * 码 → { surface: 消费命令面, exit: 该失败面的退出码语义, trigger: 触发条件 }。
++ * surface 取值 ∈ gate / derive / progress show（CLI 子命令视角）。
++ */
++export const DIAGNOSTIC_CODES = Object.freeze({
++  // ── 信封级（无法核验，exit 2）──
++  db_missing: {
++    surface: ['gate', 'derive', 'progress show'],
++    exit: 2,
++    trigger: '进度库不存在（只读契约：不为其建库，fail-closed）',
++  },
++  change_not_found: {
++    surface: ['gate', 'derive'],
++    exit: 2,
++    trigger: '变更名在进度库无记录',
++  },
++  unknown_facet: {
++    surface: ['derive'],
++    exit: 2,
++    trigger: 'facet ∉ FACETS 白名单（用法错）',
++  },
++  internal_error: {
++    surface: ['gate', 'derive', 'progress show'],
++    exit: 2,
++    trigger: '内部异常兜底（stdout 仍为合法 JSON）',
++  },
++  // ── check 级（事实性阻断，exit 1）──
++  artifacts_invalid: {
++    surface: ['gate', 'derive'],
++    exit: 1,
++    trigger: 'runValidators 失败（gate artifacts check 与 derive artifacts facet 同源）',
++  },
++  design_file_ref_invalid: {
++    surface: ['gate'],
++    exit: 1,
++    trigger: 'design 文件清单行级核验失败（直承 design-facts.js 既有稳定码）',
++  },
++  transition_blocked: {
++    surface: ['gate'],
++    exit: 1,
++    trigger: 'checkTransition 不允许（含 failed_post_check 门控）',
++  },
++  execute_evidence_unchanged: {
++    surface: ['gate', 'derive'],
++    exit: 1,
++    trigger: 'base..head 无代码变更（checkbox ≠ implementation）',
++  },
++  task_reviews_invalid: {
++    surface: ['gate', 'derive'],
++    exit: 1,
++    trigger: 'validateTaskReviews 失败（review.json 缺失/schema/verdict=fail）',
++  },
++  verify_test_failed: {
++    surface: ['gate', 'derive'],
++    exit: 1,
++    trigger: 'commands.test 实测失败',
++  },
++});
++
++/** gate check id → 失败码（六 check 全覆盖；表外 id 返回 undefined，调用方不挂键）。 */
++const CHECK_ID_TO_CODE = Object.freeze({
++  artifacts: 'artifacts_invalid',
++  'design-file-list': 'design_file_ref_invalid',
++  transition: 'transition_blocked',
++  'execute-evidence': 'execute_evidence_unchanged',
++  'task-reviews': 'task_reviews_invalid',
++  'verify-test': 'verify_test_failed',
++});
++
++/**
++ * @param {string} checkId - gate check id（artifacts/design-file-list/transition/execute-evidence/task-reviews/verify-test）
++ * @returns {string|undefined} 对应失败码；表外 id 返回 undefined（信封不挂 code 键）
++ */
++export function checkCode(checkId) {
++  return CHECK_ID_TO_CODE[checkId];
++}
+diff --git a/src/machine-interface.js b/src/machine-interface.js
+index daaa0a0..dd03329 100644
+--- a/src/machine-interface.js
++++ b/src/machine-interface.js
+@@ -22,6 +22,7 @@ import { resolveRuntimeRoot } from './run/shared.js';
+ import { runValidators, checkTransition, checkExecuteCodeEvidence } from './stage-contract.js';
+ import { validateTaskReviews, resolveLatestExecuteRunId } from './task-review.js';
+ import { runVerifyTestCheck } from './verify-postcheck.js';
++import { checkCode } from './diagnostic-codes.js';
+ 
+ // ============ 退出码常量（D-004@v1）============
+ 
+@@ -52,6 +53,9 @@ export const SCHEMA_VERSION = 1;
+  * @param {string[]} [fields.warnings=[]]
+  * @param {Array<object>|undefined} [fields.checks]
+  * @param {object|undefined} [fields.data]
++ * @param {string[]|undefined} [fields.codes] - 诊断码聚合（2026-09-17-mi-diagnostic-codes
++ *   加法式：失败 check 的 code 按出现序去重；信封级错误路径单码。可选键遵循 optional-once：
++ *   !== undefined 才挂。errors 仍 string[]，中文 message 不变，schema_version 仍 1。
+  * @returns {object} 可直接 JSON.stringify 的 envelope 对象
+  */
+ export function buildEnvelope({
+@@ -64,6 +68,7 @@ export function buildEnvelope({
+   warnings = [],
+   checks,
+   data,
++  codes,
+ }) {
+   const envelope = {
+     schema_version: SCHEMA_VERSION,
+@@ -80,6 +85,7 @@ export function buildEnvelope({
+   if (facet !== undefined) envelope.facet = facet;
+   if (checks !== undefined) envelope.checks = checks;
+   if (data !== undefined) envelope.data = data;
++  if (codes !== undefined) envelope.codes = codes;
+ 
+   return envelope;
+ }
+@@ -130,6 +136,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+         change: changeName,
+         ok: false,
+         errors: [`无法核验：进度库不存在（${dbPath}）——变更 ${changeName} 尚未运行过任何阶段，只读 gate 不会为其建库`],
++        codes: ['db_missing'],
+       });
+       return { envelope, exitCode: EXIT_UNKNOWN };
+     }
+@@ -143,6 +150,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+         change: changeName,
+         ok: false,
+         errors: [`变更不存在: ${changeName}`],
++        codes: ['change_not_found'],
+       });
+       return { envelope, exitCode: EXIT_UNKNOWN };
+     }
+@@ -163,6 +171,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+     });
+     checks.push({
+       id: 'artifacts',
++      code: checkCode('artifacts'),
+       ok: r.ok,
+       errors: r.errors || [],
+       warnings: r.warnings || [],
+@@ -178,6 +187,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+         const dfl = validateDesignFileList({ changeDir: join(specRoot, 'changes', changeName), cwd });
+         checks.push({
+           id: 'design-file-list',
++          code: checkCode('design-file-list'),
+           ok: (dfl.errors || []).length === 0,
+           // errors 元素是 {path, message} 对象（与 complete.js --done 打印侧同源），gate check 面拍平为 message 字符串
+           errors: (dfl.errors || []).map(e => e && e.message ? e.message : String(e)),
+@@ -187,6 +197,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+         // fail-open 与 complete.js 同口径：核验自身异常不误拦，warning 留痕
+         checks.push({
+           id: 'design-file-list',
++          code: checkCode('design-file-list'),
+           ok: true,
+           errors: [],
+           warnings: [`design 清单核验自身异常，跳过（${e && e.message ? e.message : e}）`],
+@@ -202,6 +213,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+     const t = checkTransition(currentStage, stage, fromStageData ? { fromStageData } : {});
+     checks.push({
+       id: 'transition',
++      code: checkCode('transition'),
+       ok: t.allowed,
+       errors: t.allowed ? [] : [t.reason].filter(Boolean),
+       warnings: [],
+@@ -214,6 +226,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       const ev = sharedEvidence;
+       checks.push({
+         id: 'execute-evidence',
++        code: checkCode('execute-evidence'),
+         ok: ev.status !== 'unchanged',
+         errors: ev.status === 'unchanged' ? [`base..head 无代码变更: ${ev.detail}`] : [],
+         warnings: ev.status === 'unknown' ? [`无法判定代码变更: ${ev.detail}`] : [],
+@@ -267,6 +280,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       });
+       checks.push({
+         id: 'task-reviews',
++        code: checkCode('task-reviews'),
+         ok: tr.ok,
+         errors: tr.errors || [],
+         warnings: tr.warnings || [],
+@@ -291,6 +305,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       }
+       checks.push({
+         id: 'verify-test',
++        code: checkCode('verify-test'),
+         ok: vt.status !== 'failed',
+         errors: vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [],
+         warnings: vtWarnings,
+@@ -309,6 +324,10 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+     const ok = checks.filter((c) => !c.informational).every((c) => c.ok);
+     const exitCode = ok ? EXIT_OK : EXIT_BLOCKED;
+ 
++    // 诊断码聚合（加法式）：失败 check 的 code 按出现序（push 序）去重；成功为空数组。
++    // 非 1:1：多条 errors 可共享一个 check 级码，逐条归因请读 checks[].code。
++    const codes = [...new Set(checks.filter((c) => !c.ok && c.code).map((c) => c.code))];
++
+     const errors = [];
+     const warnings = [];
+     for (const c of checks) {
+@@ -324,6 +343,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       errors,
+       warnings,
+       checks,
++      codes,
+     });
+ 
+     return { envelope, exitCode };
+@@ -335,6 +355,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       change: changeName,
+       ok: false,
+       errors: [`internal: ${e.message}`],
++      codes: ['internal_error'],
+     });
+     return { envelope, exitCode: EXIT_UNKNOWN };
+   }
+@@ -379,6 +400,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+       change: changeName,
+       ok: false,
+       errors: [`非法 facet: ${facet}，合法值: ${FACETS.join(', ')}`],
++      codes: ['unknown_facet'],
+     });
+     return { envelope, exitCode: EXIT_UNKNOWN };
+   }
+@@ -397,6 +419,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+         change: changeName,
+         ok: false,
+         errors: [`无法核验：进度库不存在（${dbPath}）——变更 ${changeName} 尚未运行过任何阶段，只读 derive 不会为其建库`],
++        codes: ['db_missing'],
+       });
+       return { envelope, exitCode: EXIT_UNKNOWN };
+     }
+@@ -410,6 +433,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+         change: changeName,
+         ok: false,
+         errors: [`变更不存在: ${changeName}`],
++        codes: ['change_not_found'],
+       });
+       return { envelope, exitCode: EXIT_UNKNOWN };
+     }
+@@ -537,12 +561,20 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+           change: changeName,
+           ok: false,
+           errors: [`非法 facet: ${facet}，合法值: ${FACETS.join(', ')}`],
++          codes: ['unknown_facet'],
+         });
+         return { envelope, exitCode: EXIT_UNKNOWN };
+       }
+     }
+ 
+     // stage 仅 artifacts 时出现（产物校验绑定阶段语义）；其余 facet 不传 stage。
++    // 诊断码（加法式）：facet 失败面单码（execute-test 类 facet 失败即对应码），成功为空数组。
++    const FACET_FAILURE_CODE = {
++      'execute-evidence': 'execute_evidence_unchanged',
++      'verify-test': 'verify_test_failed',
++      'task-reviews': 'task_reviews_invalid',
++      artifacts: 'artifacts_invalid',
++    };
+     const envelope = buildEnvelope({
+       command: 'derive',
+       facet,
+@@ -551,6 +583,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+       errors,
+       warnings,
+       data,
++      codes: ok ? [] : [FACET_FAILURE_CODE[facet]].filter(Boolean),
+       stage: facet === 'artifacts' ? currentStage : undefined,
+     });
+ 
+@@ -563,6 +596,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+       change: changeName,
+       ok: false,
+       errors: [`internal: ${e.message}`],
++      codes: ['internal_error'],
+     });
+     return { envelope, exitCode: EXIT_UNKNOWN };
+   }
+@@ -597,6 +631,7 @@ export function runStatusOverview({ cwd, specBase } = {}) {
+         command: 'progress show',
+         ok: false,
+         errors: [`无法核验：进度库不存在（${dbPath}）——项目尚未初始化进度，只读总览不会为其建库`],
++        codes: ['db_missing'],
+       });
+       return { envelope, exitCode: EXIT_UNKNOWN };
+     }
+@@ -618,6 +653,7 @@ export function runStatusOverview({ cwd, specBase } = {}) {
+       ok: true,
+       warnings,
+       data,
++      codes: [],
+     });
+     return { envelope, exitCode: EXIT_OK };
+   } catch (e) {
+@@ -626,6 +662,7 @@ export function runStatusOverview({ cwd, specBase } = {}) {
+       command: 'progress show',
+       ok: false,
+       errors: [`internal: ${e.message}`],
++      codes: ['internal_error'],
+     });
+     return { envelope, exitCode: EXIT_UNKNOWN };
+   }
+diff --git a/test/diagnostic-codes-parity.test.mjs b/test/diagnostic-codes-parity.test.mjs
+new file mode 100644
+index 0000000..edffc52
+--- /dev/null
++++ b/test/diagnostic-codes-parity.test.mjs
+@@ -0,0 +1,194 @@
++/**
++ * 诊断码 parity 测试（2026-09-17-mi-diagnostic-codes，OpenSpec agent-contract 无 parity 的反超点）
++ *
++ * 三段：
++ *   1. 双向 parity：DIAGNOSTIC_CODES 注册码 ⊆ 契约 §8 目录 token ∧ 目录 token ⊆ 注册码
++ *      ——单侧漂移任一方向都不许静默通过（文档加码码表没有、码表加码文档没写，都红）
++ *   2. 发射抽查（hermetic tmp fixture）：信封级三码（db_missing/change_not_found/unknown_facet）
++ *      + gate check.code 恒在场（含通过项，身份码非失败标志）+ 顶层 codes 聚合
++ *      （push 序去重、非与 errors 逐条 1:1）
++ *   3. 文档语义抽查：契约 §2.3 已改「参与综合 ok」（旧 informational 断言不得回潮，§9 记账节除外）
++ *
++ * 风格：自研 assert + mkdtempSync（同 test/machine-interface.test.mjs）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs'
++import { join, dirname } from 'path'
++import { tmpdir } from 'os'
++import { execFileSync } from 'child_process'
++import { fileURLToPath } from 'url'
++
++import { DIAGNOSTIC_CODES, checkCode } from '../src/diagnostic-codes.js'
++import { runGate, runDerive, runStatusOverview } from '../src/machine-interface.js'
++import { ProgressManager } from '../src/progress.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (!condition) {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  } else {
++    console.log(`  ✅ PASS: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++function git(cwd, args) {
++  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
++}
++
++/** 契约 §8 目录节的码 token 集（锚定标题 + 首列反引号 token） */
++function readCatalogTokens(contractPath) {
++  const text = readFileSync(contractPath, 'utf8')
++  const lines = text.split(/\r?\n/)
++  const tokens = []
++  let inCatalog = false
++  for (const line of lines) {
++    if (/^##\s+8\.\s*诊断码目录/.test(line)) { inCatalog = true; continue }
++    if (inCatalog && /^##\s/.test(line)) break
++    if (!inCatalog) continue
++    const m = line.match(/^\|\s*`([a-z_]+)`\s*\|/)
++    if (m) tokens.push(m[1])
++  }
++  return tokens
++}
++
++// ─────────────────────────────────────────
++// 1. 双向 parity（码表 ↔ 契约目录）
++// ─────────────────────────────────────────
++console.log('--- 1. 双向 parity ---')
++{
++  const here = dirname(fileURLToPath(import.meta.url))
++  const contractPath = join(here, '..', 'docs', 'sillyspec', 'interface-contract.md')
++  const registryKeys = Object.keys(DIAGNOSTIC_CODES)
++  const tokens = readCatalogTokens(contractPath)
++
++  assert(tokens.length > 0, `1a 契约 §8 目录节可解析（token 数 ${tokens.length} > 0——解析脆断=目录锚定标题/行格式漂移，先修格式）`)
++  const tokenSet = new Set(tokens)
++  const regSet = new Set(registryKeys)
++  const docMissing = registryKeys.filter((k) => !tokenSet.has(k))
++  const regMissing = tokens.filter((t) => !regSet.has(t))
++  assert(docMissing.length === 0, `1b 注册码全在目录（缺失：${docMissing.join(', ') || '无'}）`)
++  assert(regMissing.length === 0, `1c 目录码全在码表（表外码：${regMissing.join(', ') || '无'}）`)
++  assert(new Set(tokens).size === tokens.length, '1d 目录无重复 token')
++  assert(registryKeys.length === 10, `1e 码表恰 10 码（实际 ${registryKeys.length}——扩码须走变更流程并同步目录`)
++}
++
++// ─────────────────────────────────────────
++// 2. 发射抽查
++// ─────────────────────────────────────────
++console.log('--- 2. 发射抽查 ---')
++
++// 2a. db_missing ×3（空 spec 目录，无 db——只读契约不建库）
++{
++  const proj = makeTmpDir('dcp-empty-')
++  const specBase = join(proj, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++
++  const g = await runGate('brainstorm', 'x', { cwd: proj, specBase })
++  assert(g.envelope.codes && g.envelope.codes.length === 1 && g.envelope.codes[0] === 'db_missing', '2a-1 gate 无 db → codes=["db_missing"]')
++  assert(g.exitCode === 2, '2a-2 gate 无 db → exit 2')
++
++  const d = await runDerive('artifacts', 'x', { cwd: proj, specBase })
++  assert(d.envelope.codes && d.envelope.codes[0] === 'db_missing', '2a-3 derive 无 db → codes=["db_missing"]')
++
++  const p = runStatusOverview({ cwd: proj, specBase })
++  assert(p.envelope.codes && p.envelope.codes[0] === 'db_missing', '2a-4 progress show 无 db → codes=["db_missing"]')
++}
++
++// fixture：真 db + 变更行（同 machine-interface.test.mjs makeProjectFixture 手法，精简版）
++async function makeFixture(changeName = 'c1') {
++  const proj = makeTmpDir('dcp-fx-')
++  const specBase = join(proj, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n')
++  writeFileSync(join(proj, 'main.js'), 'console.log(1)\n')
++  git(proj, ['init', '-q'])
++  git(proj, ['add', '.'])
++  git(proj, ['commit', '-q', '-m', 'init'])
++  const baseHash = git(proj, ['rev-parse', 'HEAD'])
++  const wtMetaDir = join(specBase, '.runtime', 'worktrees', changeName)
++  mkdirSync(wtMetaDir, { recursive: true })
++  writeFileSync(join(wtMetaDir, 'meta.json'), JSON.stringify({ changeName, baseHash, mode: 'in-place-fallback', worktreePath: proj }))
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.init('p1')
++  await pm.initChange('p1', changeName)
++  return { cwd: proj, specBase, changeName }
++}
++
++// 2b. change_not_found（有 db 无该变更行）
++{
++  const f = await makeFixture()
++  const g = await runGate('execute', 'no-such-change', { cwd: f.cwd, specBase: f.specBase })
++  assert(g.envelope.codes && g.envelope.codes.length === 1 && g.envelope.codes[0] === 'change_not_found', '2b-1 gate 变更不存在 → codes=["change_not_found"]')
++  assert(g.exitCode === 2, '2b-2 exit 2')
++}
++
++// 2c. unknown_facet（入口白名单先于 db 守卫）
++{
++  const f = await makeFixture()
++  const d = await runDerive('nope', f.changeName, { cwd: f.cwd, specBase: f.specBase })
++  assert(d.envelope.codes && d.envelope.codes[0] === 'unknown_facet', '2c-1 非法 facet → codes=["unknown_facet"]')
++  assert(d.exitCode === 2, '2c-2 exit 2')
++}
++
++// 2d. check.code 恒在场 + codes 聚合（push 序去重、非 1:1）
++{
++  const f = await makeFixture()
++  // 双失败场景：写 plan.md（task-01 checkbox）但不写 review.json、不产代码变更 →
++  //   execute-evidence 失败（unchanged，check push 先）+ task-reviews 失败（缺 review.json，push 后）
++  //   transition（brainstorm→execute 合法）通过 → 不产 transition_blocked
++  //   （裸夹具下 artifacts 通过——其失败前提由 2e-2 derive artifacts 覆盖）
++  writeFileSync(join(f.specBase, 'changes', f.changeName, 'plan.md'),
++    '# Plan\n\n## Wave 1\n\n- [x] task-01: 实现\n')
++  const g = await runGate('execute', f.changeName, { cwd: f.cwd, specBase: f.specBase })
++  const checks = g.envelope.checks || []
++  assert(checks.length >= 3, `2d-1 gate execute checks ≥3（实际 ${checks.length}）`)
++  assert(checks.every((c) => typeof c.code === 'string' && c.code.length > 0), '2d-2 check.code 恒在场（含通过项——身份码非失败标志）')
++  const failing = checks.filter((c) => !c.ok)
++  const expected = [...new Set(failing.map((c) => c.code))]
++  assert(JSON.stringify(g.envelope.codes) === JSON.stringify(expected), `2d-3 顶层 codes=失败 check 的 code 按出现序去重（${JSON.stringify(g.envelope.codes)}）`)
++  assert(expected[0] === 'artifacts_invalid' && expected[1] === 'execute_evidence_unchanged' && expected[2] === 'task_reviews_invalid',
++    `2d-4 push 序：artifacts → execute-evidence → task-reviews（check 声明序，非字母序；实际 ${JSON.stringify(expected)}）`)
++  assert(!g.envelope.codes.includes('transition_blocked'), '2d-5 通过的 transition 不产码')
++  assert(g.envelope.codes.length <= (g.envelope.errors || []).length, '2d-6 聚合非膨胀（多条 errors 共享 check 级码——非 1:1）')
++  assert(g.exitCode === 1, '2d-7 有失败 check → exit 1')
++}
++
++// 2e. derive facet 失败面单码
++{
++  const f = await makeFixture()
++  const d = await runDerive('execute-evidence', f.changeName, { cwd: f.cwd, specBase: f.specBase })
++  assert(d.envelope.ok === false && d.envelope.codes && d.envelope.codes.length === 1 && d.envelope.codes[0] === 'execute_evidence_unchanged', '2e-1 derive execute-evidence unchanged → codes=["execute_evidence_unchanged"]')
++  const d2 = await runDerive('artifacts', f.changeName, { cwd: f.cwd, specBase: f.specBase })
++  if (d2.envelope.ok === false) {
++    assert(d2.envelope.codes && d2.envelope.codes[0] === 'artifacts_invalid', '2e-2 derive artifacts 失败 → codes=["artifacts_invalid"]')
++  }
++}
++
++// ─────────────────────────────────────────
++// 3. 文档语义抽查（§2.3 现行语义钉死，防 informational 旧断言回潮）
++// ─────────────────────────────────────────
++console.log('--- 3. 文档语义抽查 ---')
++{
++  const here = dirname(fileURLToPath(import.meta.url))
++  const text = readFileSync(join(here, '..', 'docs', 'sillyspec', 'interface-contract.md'), 'utf8')
++  const sec23 = text.split(/^#{2,3}\s+2\.3\s/m)[1]?.split(/^#{2,3}\s/m)[0] || ''
++  assert(sec23.includes('参与') && !sec23.includes('不参与综合'), '3a §2.3 现行语义=transition 参与综合 ok（无「不参与综合」旧断言）')
++  assert(/^##\s+9\.\s*v1 存续期语义变更记录/m.test(text), '3b §9 语义变更记录节在场（冻结版内不静默改语义）')
++}
++
++for (const dir of tmpRoots) {
++  try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)
+diff --git a/test/machine-interface.test.mjs b/test/machine-interface.test.mjs
+index b141388..c3a4a3b 100644
+--- a/test/machine-interface.test.mjs
++++ b/test/machine-interface.test.mjs
+@@ -778,6 +778,30 @@ console.log('--- 10. runStatusOverview（progress show --json）---')
+   }
+ }
+ 
++// ─────────────────────────────────────────
++// 11. codes 键加法式行为（2026-09-17-mi-diagnostic-codes）
++// 深度断言在 test/diagnostic-codes-parity.test.mjs；此处钉「不破坏既有信封预期 + 基本在场」
++// ─────────────────────────────────────────
++console.log('--- 11. codes 键加法式行为 ---')
++{
++  const f = await makeProjectFixture({ changeName: 'codes-k1' })
++  const { envelope, exitCode } = await runGate('execute', 'codes-k1', { cwd: f.cwd, specBase: f.specBase })
++
++  assert(Array.isArray(envelope.codes), '11a gate 信封 codes 键在场且为数组')
++  assert((envelope.checks || []).every((c) => typeof c.code === 'string' && c.code.length > 0),
++    '11b 全部 check 恒挂 code（身份码，含通过项）')
++  const failing = (envelope.checks || []).filter((c) => !c.ok)
++  if (failing.length > 0) {
++    assert(envelope.codes.length > 0 && envelope.codes.length <= new Set(failing.map((c) => c.code)).size,
++      '11c 失败时 codes 非空且为失败码去重集')
++    assert(exitCode === EXIT_BLOCKED, '11d 失败 → exit 1（加码不改变退出码语义）')
++  }
++  // 既有键不受影响：schema_version/ok/errors/warnings 类型不变
++  assert(envelope.schema_version === 1 && typeof envelope.ok === 'boolean'
++    && Array.isArray(envelope.errors) && Array.isArray(envelope.warnings),
++    '11e 既有固定键类型零回归（schema_version=1/ok bool/errors/warnings string[]）')
++}
++
+ // ─────────────────────────────────────────
+ // 清理 & 汇总
+ // ─────────────────────────────────────────

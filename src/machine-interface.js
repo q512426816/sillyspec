@@ -22,6 +22,7 @@ import { resolveRuntimeRoot } from './run/shared.js';
 import { runValidators, checkTransition, checkExecuteCodeEvidence } from './stage-contract.js';
 import { validateTaskReviews, resolveLatestExecuteRunId } from './task-review.js';
 import { runVerifyTestCheck } from './verify-postcheck.js';
+import { checkCode } from './diagnostic-codes.js';
 
 // ============ 退出码常量（D-004@v1）============
 
@@ -52,6 +53,9 @@ export const SCHEMA_VERSION = 1;
  * @param {string[]} [fields.warnings=[]]
  * @param {Array<object>|undefined} [fields.checks]
  * @param {object|undefined} [fields.data]
+ * @param {string[]|undefined} [fields.codes] - 诊断码聚合（2026-09-17-mi-diagnostic-codes
+ *   加法式：失败 check 的 code 按出现序去重；信封级错误路径单码。可选键遵循 optional-once：
+ *   !== undefined 才挂。errors 仍 string[]，中文 message 不变，schema_version 仍 1。
  * @returns {object} 可直接 JSON.stringify 的 envelope 对象
  */
 export function buildEnvelope({
@@ -64,6 +68,7 @@ export function buildEnvelope({
   warnings = [],
   checks,
   data,
+  codes,
 }) {
   const envelope = {
     schema_version: SCHEMA_VERSION,
@@ -80,6 +85,7 @@ export function buildEnvelope({
   if (facet !== undefined) envelope.facet = facet;
   if (checks !== undefined) envelope.checks = checks;
   if (data !== undefined) envelope.data = data;
+  if (codes !== undefined) envelope.codes = codes;
 
   return envelope;
 }
@@ -130,6 +136,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         change: changeName,
         ok: false,
         errors: [`无法核验：进度库不存在（${dbPath}）——变更 ${changeName} 尚未运行过任何阶段，只读 gate 不会为其建库`],
+        codes: ['db_missing'],
       });
       return { envelope, exitCode: EXIT_UNKNOWN };
     }
@@ -143,6 +150,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         change: changeName,
         ok: false,
         errors: [`变更不存在: ${changeName}`],
+        codes: ['change_not_found'],
       });
       return { envelope, exitCode: EXIT_UNKNOWN };
     }
@@ -163,6 +171,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     });
     checks.push({
       id: 'artifacts',
+      code: checkCode('artifacts'),
       ok: r.ok,
       errors: r.errors || [],
       warnings: r.warnings || [],
@@ -178,6 +187,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         const dfl = validateDesignFileList({ changeDir: join(specRoot, 'changes', changeName), cwd });
         checks.push({
           id: 'design-file-list',
+          code: checkCode('design-file-list'),
           ok: (dfl.errors || []).length === 0,
           // errors 元素是 {path, message} 对象（与 complete.js --done 打印侧同源），gate check 面拍平为 message 字符串
           errors: (dfl.errors || []).map(e => e && e.message ? e.message : String(e)),
@@ -187,6 +197,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         // fail-open 与 complete.js 同口径：核验自身异常不误拦，warning 留痕
         checks.push({
           id: 'design-file-list',
+          code: checkCode('design-file-list'),
           ok: true,
           errors: [],
           warnings: [`design 清单核验自身异常，跳过（${e && e.message ? e.message : e}）`],
@@ -202,6 +213,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     const t = checkTransition(currentStage, stage, fromStageData ? { fromStageData } : {});
     checks.push({
       id: 'transition',
+      code: checkCode('transition'),
       ok: t.allowed,
       errors: t.allowed ? [] : [t.reason].filter(Boolean),
       warnings: [],
@@ -214,6 +226,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       const ev = sharedEvidence;
       checks.push({
         id: 'execute-evidence',
+        code: checkCode('execute-evidence'),
         ok: ev.status !== 'unchanged',
         errors: ev.status === 'unchanged' ? [`base..head 无代码变更: ${ev.detail}`] : [],
         warnings: ev.status === 'unknown' ? [`无法判定代码变更: ${ev.detail}`] : [],
@@ -267,6 +280,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       });
       checks.push({
         id: 'task-reviews',
+        code: checkCode('task-reviews'),
         ok: tr.ok,
         errors: tr.errors || [],
         warnings: tr.warnings || [],
@@ -291,6 +305,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       }
       checks.push({
         id: 'verify-test',
+        code: checkCode('verify-test'),
         ok: vt.status !== 'failed',
         errors: vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [],
         warnings: vtWarnings,
@@ -309,6 +324,10 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
     const ok = checks.filter((c) => !c.informational).every((c) => c.ok);
     const exitCode = ok ? EXIT_OK : EXIT_BLOCKED;
 
+    // 诊断码聚合（加法式）：失败 check 的 code 按出现序（push 序）去重；成功为空数组。
+    // 非 1:1：多条 errors 可共享一个 check 级码，逐条归因请读 checks[].code。
+    const codes = [...new Set(checks.filter((c) => !c.ok && c.code).map((c) => c.code))];
+
     const errors = [];
     const warnings = [];
     for (const c of checks) {
@@ -324,6 +343,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       errors,
       warnings,
       checks,
+      codes,
     });
 
     return { envelope, exitCode };
@@ -335,6 +355,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       change: changeName,
       ok: false,
       errors: [`internal: ${e.message}`],
+      codes: ['internal_error'],
     });
     return { envelope, exitCode: EXIT_UNKNOWN };
   }
@@ -379,6 +400,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
       change: changeName,
       ok: false,
       errors: [`非法 facet: ${facet}，合法值: ${FACETS.join(', ')}`],
+      codes: ['unknown_facet'],
     });
     return { envelope, exitCode: EXIT_UNKNOWN };
   }
@@ -397,6 +419,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
         change: changeName,
         ok: false,
         errors: [`无法核验：进度库不存在（${dbPath}）——变更 ${changeName} 尚未运行过任何阶段，只读 derive 不会为其建库`],
+        codes: ['db_missing'],
       });
       return { envelope, exitCode: EXIT_UNKNOWN };
     }
@@ -410,6 +433,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
         change: changeName,
         ok: false,
         errors: [`变更不存在: ${changeName}`],
+        codes: ['change_not_found'],
       });
       return { envelope, exitCode: EXIT_UNKNOWN };
     }
@@ -537,12 +561,20 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
           change: changeName,
           ok: false,
           errors: [`非法 facet: ${facet}，合法值: ${FACETS.join(', ')}`],
+          codes: ['unknown_facet'],
         });
         return { envelope, exitCode: EXIT_UNKNOWN };
       }
     }
 
     // stage 仅 artifacts 时出现（产物校验绑定阶段语义）；其余 facet 不传 stage。
+    // 诊断码（加法式）：facet 失败面单码（execute-test 类 facet 失败即对应码），成功为空数组。
+    const FACET_FAILURE_CODE = {
+      'execute-evidence': 'execute_evidence_unchanged',
+      'verify-test': 'verify_test_failed',
+      'task-reviews': 'task_reviews_invalid',
+      artifacts: 'artifacts_invalid',
+    };
     const envelope = buildEnvelope({
       command: 'derive',
       facet,
@@ -551,6 +583,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
       errors,
       warnings,
       data,
+      codes: ok ? [] : [FACET_FAILURE_CODE[facet]].filter(Boolean),
       stage: facet === 'artifacts' ? currentStage : undefined,
     });
 
@@ -563,6 +596,7 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
       change: changeName,
       ok: false,
       errors: [`internal: ${e.message}`],
+      codes: ['internal_error'],
     });
     return { envelope, exitCode: EXIT_UNKNOWN };
   }
@@ -597,6 +631,7 @@ export function runStatusOverview({ cwd, specBase } = {}) {
         command: 'progress show',
         ok: false,
         errors: [`无法核验：进度库不存在（${dbPath}）——项目尚未初始化进度，只读总览不会为其建库`],
+        codes: ['db_missing'],
       });
       return { envelope, exitCode: EXIT_UNKNOWN };
     }
@@ -618,6 +653,7 @@ export function runStatusOverview({ cwd, specBase } = {}) {
       ok: true,
       warnings,
       data,
+      codes: [],
     });
     return { envelope, exitCode: EXIT_OK };
   } catch (e) {
@@ -626,6 +662,7 @@ export function runStatusOverview({ cwd, specBase } = {}) {
       command: 'progress show',
       ok: false,
       errors: [`internal: ${e.message}`],
+      codes: ['internal_error'],
     });
     return { envelope, exitCode: EXIT_UNKNOWN };
   }

@@ -1,0 +1,76 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "51225ae0f767c5511ffa233dfca8d03f762b0532",
+  "totals": {
+    "files": 7,
+    "additions": 499,
+    "deletions": 76
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/machine-interface.md",
+      "additions": 5,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/sillyspec/interface-contract.md",
+      "additions": 124,
+      "deletions": 66,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 20,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/diagnostic-codes.js",
+      "additions": 95,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/machine-interface.js",
+      "additions": 37,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/diagnostic-codes-parity.test.mjs",
+      "additions": 194,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/machine-interface.test.mjs",
+      "additions": 24,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "b691f569788bf24c15bb59bee1c947d0f6c523f1e7cf7fccf35dc0d1bac72141",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-17T14:59:23.789Z"
+}

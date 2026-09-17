@@ -213,3 +213,21 @@
 理由：brainstorm 实证清单「角色 enname 存在」深度不够——EHS 的 RpLeader 等三角色 tenant_id=NULL，存在但按生产口径（tenant 过滤查询）解析不到人，联调时领导下拉全空；另需求入口（菜单一/菜单二）被解读为路由，design 漏了 sys_menu DML，grill 抓了页面组件缺失没抓菜单注册。
 故障面：清单条目增多拉长审查——仅对命中条件（涉及角色/新页面）注入。
 退役判据：若 brainstorm 探针化（自动核角色可解析性）落地，条目退役。
+
+## D-001@v1 信封加法式可选 code，不升 schema_version 2
+状态：implemented
+变更：2026-09-17-mi-diagnostic-codes
+锚点：未记录
+最近确认：51225ae
+理由：errors 是 string[]（中文散文），消费方要分支只能正则匹配散文；但 interface-contract.md 是冻结的 v1 对账基准，errors 升对象数组 {code,message} 属破坏性语义变更，需 SillyHub 协同改造。
+故障面：codes 与 errors 的对应关系被消费方误读为逐下标映射——契约明示 codes 是去重聚合非 1:1；check.code 恒在场（含通过时）消除「有时无」的歧义。
+退役判据：v2 升版（errors 对象化）落地时，codes[] 聚合键退役，check.code 并入对象元素。
+
+## D-004@v1 码表单一源模块 + parity 双向测试
+状态：implemented
+变更：2026-09-17-mi-diagnostic-codes
+锚点：未记录
+最近确认：51225ae
+理由：OpenSpec 的 agent-contract.md 靠人工审计保真（文档头 capstone audit，仓内无文档↔代码 parity 测试），码漂移只能等下次审计或集成方挂掉——这是它的已实证弱点。
+故障面：码表膨胀失控——首期 10 码硬边界（D-002），二期扩面走变更流程追加。
+退役判据：v2 码表结构重构时冻结表键值迁移，parity 测试同步改写。

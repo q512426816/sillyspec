@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-17-mi-diagnostic-codes",
+  "appliedAt": "2026-09-17T14:59:32.075Z",
+  "baseHash": "51225ae0f767c5511ffa233dfca8d03f762b0532",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/machine-interface.md",
+      "sha256": "54576f544d30d6db5c4ef5dacfc03a9e6674209230613bdccb7eb8e86910e734"
+    },
+    {
+      "path": "docs/sillyspec/interface-contract.md",
+      "sha256": "592d496f7d5a2b25c0f70e050f4e2cf05060554ae6e652c6b305c8c3338d234f"
+    },
+    {
+      "path": "src/diagnostic-codes.js",
+      "sha256": "27b10797958b02b37b7a28091bba9aa022aa2cc638a64d547f71b8e6554d6404"
+    },
+    {
+      "path": "src/machine-interface.js",
+      "sha256": "42e3ca98b852da478a7ad055891442ca23d14e9cc079fa60e708a7c1f8c92fdb"
+    },
+    {
+      "path": "test/diagnostic-codes-parity.test.mjs",
+      "sha256": "84b3f4060a048f503f7bd9d190ac024a6ec87c4050736856e753417871a60eff"
+    },
+    {
+      "path": "test/machine-interface.test.mjs",
+      "sha256": "ffc1ec91067386fc288cd70111d31c685dc791d72d85706b2f18b7626a9ea222"
+    }
+  ]
+}

@@ -779,6 +779,30 @@ console.log('--- 10. runStatusOverview（progress show --json）---')
 }
 
 // ─────────────────────────────────────────
+// 11. codes 键加法式行为（2026-09-17-mi-diagnostic-codes）
+// 深度断言在 test/diagnostic-codes-parity.test.mjs；此处钉「不破坏既有信封预期 + 基本在场」
+// ─────────────────────────────────────────
+console.log('--- 11. codes 键加法式行为 ---')
+{
+  const f = await makeProjectFixture({ changeName: 'codes-k1' })
+  const { envelope, exitCode } = await runGate('execute', 'codes-k1', { cwd: f.cwd, specBase: f.specBase })
+
+  assert(Array.isArray(envelope.codes), '11a gate 信封 codes 键在场且为数组')
+  assert((envelope.checks || []).every((c) => typeof c.code === 'string' && c.code.length > 0),
+    '11b 全部 check 恒挂 code（身份码，含通过项）')
+  const failing = (envelope.checks || []).filter((c) => !c.ok)
+  if (failing.length > 0) {
+    assert(envelope.codes.length > 0 && envelope.codes.length <= new Set(failing.map((c) => c.code)).size,
+      '11c 失败时 codes 非空且为失败码去重集')
+    assert(exitCode === EXIT_BLOCKED, '11d 失败 → exit 1（加码不改变退出码语义）')
+  }
+  // 既有键不受影响：schema_version/ok/errors/warnings 类型不变
+  assert(envelope.schema_version === 1 && typeof envelope.ok === 'boolean'
+    && Array.isArray(envelope.errors) && Array.isArray(envelope.warnings),
+    '11e 既有固定键类型零回归（schema_version=1/ok bool/errors/warnings string[]）')
+}
+
+// ─────────────────────────────────────────
 // 清理 & 汇总
 // ─────────────────────────────────────────
 for (const dir of tmpRoots) {
