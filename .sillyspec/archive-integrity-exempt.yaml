@@ -1,0 +1,60 @@
+# archive_integrity（doctor D14）豁免账本
+#
+# 纪律（2026-09-17 用户裁决）：
+#   - 仅限历史形态豁免：本账本全部条目为早于 plan.md 流程 / 手工搬目录时代的远古归档，
+#     回头伪造 plan.md 是篡改历史，故以账本显式豁免（照 docs-check skip 清单先例）。
+#   - 账本外继续亮红；新欠账禁止入账（入账须走变更流程裁决，不许拿账本抹平新账）。
+#   - 条目失效（对应归档修复/移除）时应清理，doctor 会提示 stale 条目。
+#   - 两份「任务未勾」类欠账不走本账本（簿记补勾 + quicklog 审计痕，见 ql-20260917-009）。
+
+entries:
+  # —— 带日期但早于 plan.md 约定落地的归档 ——
+  - name: 2026-06-09-waiting-state-machine
+    reason: 远古归档，目录仅存 design.md，早于四件套/plan.md 流程约定
+    exempted_at: 2026-09-17
+  - name: 2026-07-06-kanban-better-board
+    reason: 早于 plan.md 流程约定的归档（无任务注册表时代产物）
+    exempted_at: 2026-09-17
+  - name: 2026-08-02-init-claude-md
+    reason: 文档类变更归档，早于 plan.md 基准文件约定
+    exempted_at: 2026-09-17
+  - name: 2026-08-14-doc-ref-check
+    reason: 文档校验类变更归档，早于 plan.md 基准文件约定
+    exempted_at: 2026-09-17
+  # —— 无日期前缀的远古命名（早于 YYYY-MM-DD-<slug> 命名约定）——
+  - name: archive-impact-validation
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: auto-flow-optimization
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: auto-mode
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: brainstorm-archive
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: modules-as-development-context
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: run-command-design
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: scan-knowledge-producer-v1
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: test-quick-2026-06-02
+    reason: 测试性归档（quick 早期实验产物），无完整流程四件套
+    exempted_at: 2026-09-17
+  - name: unified-docs-design
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: workflow-spec
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: workflow-system-archive
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17
+  - name: worktree-isolation-harding
+    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
+    exempted_at: 2026-09-17

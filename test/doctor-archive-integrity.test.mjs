@@ -186,6 +186,53 @@ const LEGACY_PLAN_ALL_CHECKED = '# 计划\n\n- [x] task-01: 实现功能\n- [x] 
   assert(dim && dim.pass === true, '13 无 tasks.md + plan 全勾 → pass（同 5，防回归）')
 }
 
+// ── 14. 豁免账本：账本内 offender 压红（历史形态豁免，账本在案注记） ──
+{
+  const root = makeTmpDir('dr-arch-14-')
+  makeArchive(root, '2026-06-09-ancient-no-plan', { tasks: ALL_CHECKED_TASKS }) // 缺 plan.md
+  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'),
+    'entries:\n  - name: 2026-06-09-ancient-no-plan\n    reason: 早于 plan.md 流程\n    exempted_at: 2026-09-17\n')
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === true, '14a 账本内 offender → pass（豁免压红）')
+  assert((dim.offenders || []).length === 0 && dim.exempted_count === 1, '14b offenders 空 + exempted_count=1')
+  assert((dim.findings || []).some((f) => f.includes('豁免在案')), '14c 豁免在案注记')
+}
+
+// ── 15. 豁免账本：账本外 offender 仍红（账本不许抹平新账） ──
+{
+  const root = makeTmpDir('dr-arch-15-')
+  makeArchive(root, '2026-06-09-exempted-one', { tasks: ALL_CHECKED_TASKS })
+  makeArchive(root, '2026-09-10-new-offender', { tasks: PARTIAL_TASKS, plan: true })
+  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'),
+    'entries:\n  - name: 2026-06-09-exempted-one\n    reason: 历史形态\n    exempted_at: 2026-09-17\n')
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === false, '15a 账本外 offender 仍红')
+  const offender = (dim.offenders || [])[0]
+  assert(offender && offender.name === '2026-09-10-new-offender', '15b offender 只列账本外那份')
+  assert(dim.exempted_count === 1, '15c 豁免计数独立')
+}
+
+// ── 16. 豁免账本：失效条目提示清理（stale hint） ──
+{
+  const root = makeTmpDir('dr-arch-16-')
+  makeArchive(root, '2026-01-09-fine', { tasks: ALL_CHECKED_TASKS, plan: true })
+  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'),
+    'entries:\n  - name: gone-archive\n    reason: 对应归档已不欠账\n    exempted_at: 2026-09-17\n')
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === true, '16a 无 offender → pass')
+  assert((dim.findings || []).some((f) => f.includes('失效')) && (dim.stale_exemptions || []).includes('gone-archive'), '16b stale 条目提示清理')
+}
+
+// ── 17. 豁免账本解析失败 → fail-safe 红灯保持（按无豁免处理） ──
+{
+  const root = makeTmpDir('dr-arch-17-')
+  makeArchive(root, '2026-06-09-ancient-no-plan', { tasks: ALL_CHECKED_TASKS })
+  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'), '{oops: [unclosed')
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === false, '17a 账本损坏 → 红灯保持（fail-safe）')
+  assert((dim.findings || []).some((f) => f.includes('解析失败')), '17b 解析失败注记在场')
+}
+
 // ── 10. CLI 端到端：doctor --json 含维度 ──
 {
   const root = makeTmpDir('dr-arch-10-')

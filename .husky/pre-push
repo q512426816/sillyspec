@@ -19,4 +19,7 @@ if [ $? -ne 0 ]; then
   echo "❌ pre-push: docs gate failed, aborting push"
   exit 1
 fi
+# archive_integrity advisory（2026-09-17 D14 收尾裁决第一段）：零阻断只露出——
+# 欠账清零并稳定后另裁第二段（镜像 docs-gate 的 ratchet 棘轮，只拦新增劣化）。
+node bin/sillyspec.js doctor --json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);const d=(j.dimensions||[]).find(x=>x&&x.name==='archive_integrity');if(d&&d.pass===false){console.log('⚠️ [advisory·不阻断] archive_integrity: '+String(d.evidence).split('；')[0]);}}catch(e){/* doctor JSON 异常不干扰 push */}})"
 echo "✅ pre-push: lint + test + docs gate passed"

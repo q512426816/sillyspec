@@ -1,0 +1,258 @@
+diff --git a/.husky/pre-push b/.husky/pre-push
+index f081e54..a33c83e 100755
+--- a/.husky/pre-push
++++ b/.husky/pre-push
+@@ -19,4 +19,7 @@ if [ $? -ne 0 ]; then
+   echo "❌ pre-push: docs gate failed, aborting push"
+   exit 1
+ fi
++# archive_integrity advisory（2026-09-17 D14 收尾裁决第一段）：零阻断只露出——
++# 欠账清零并稳定后另裁第二段（镜像 docs-gate 的 ratchet 棘轮，只拦新增劣化）。
++node bin/sillyspec.js doctor --json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const j=JSON.parse(s);const d=(j.dimensions||[]).find(x=>x&&x.name==='archive_integrity');if(d&&d.pass===false){console.log('⚠️ [advisory·不阻断] archive_integrity: '+String(d.evidence).split('；')[0]);}}catch(e){/* doctor JSON 异常不干扰 push */}})"
+ echo "✅ pre-push: lint + test + docs gate passed"
+diff --git a/.sillyspec/changes/archive/2026-09-07-ir-hardening/tasks.md b/.sillyspec/changes/archive/2026-09-07-ir-hardening/tasks.md
+index fafeba4..9a4ac8f 100644
+--- a/.sillyspec/changes/archive/2026-09-07-ir-hardening/tasks.md
++++ b/.sillyspec/changes/archive/2026-09-07-ir-hardening/tasks.md
+@@ -15,5 +15,6 @@ created_at: 2026-09-07T23:02:00+08:00
+ - [x] task-06: buildDeltaReport withSummary + last-delta sidecar 两路径写入 + scanResumeCheck advisory (depends_on: task-05)
+ - [x] task-07: docs check --fix 修复回执（前/重锚/后失效数） (depends_on: )
+ - [x] task-08: 引用类诊断 supportedFixes 可执行化（--suggest no-op 清理） (depends_on: )
+-- [ ] task-09: 测试四件——ir-strict-mode / design-file-list-gate / delta-scan-feedback / docs-fix-receipt（含 grill 补的 4 场景） (depends_on: task-02, task-03, task-04, task-06, task-07)
++- [x] task-09: 测试四件——ir-strict-mode / design-file-list-gate / delta-scan-feedback / docs-fix-receipt（含 grill 补的 4 场景） (depends_on: task-02, task-03, task-04, task-06, task-07)
++  <!-- 2026-09-17 补勾（ql-20260917-009）：四测试文件俱在仓（ir-strict-mode 直跑 23/0 绿），系归档时勾选簿记漏翻——archive_integrity D14 首扫发现，逐份裁决补勾留痕，非事后补工 -->
+ - [x] task-10: 文档同步——file-lifecycle 注记 + module-impact + 全量 lint/test 回归 (depends_on: task-09)
+diff --git a/.sillyspec/changes/archive/2026-09-08-auto-driver/tasks.md b/.sillyspec/changes/archive/2026-09-08-auto-driver/tasks.md
+index a7f8408..7ec830a 100644
+--- a/.sillyspec/changes/archive/2026-09-08-auto-driver/tasks.md
++++ b/.sillyspec/changes/archive/2026-09-08-auto-driver/tasks.md
+@@ -12,5 +12,6 @@ created_at: 2026-09-08T06:55:00+08:00
+ - [x] task-03: --wait-interactive TTY 直通（readline + 既有 wait/continue 状态机复用） (depends_on: task-01)
+ - [x] task-04: CLI 收尾总结（:1726 挂点 + :1616 复用 helper + last-delta 消费） (depends_on: )
+ - [x] task-05: auto SKILL.md 瘦身重写（三段退役 + SS-META 消费 + 终止条件修正） (depends_on: task-01)
+-- [ ] task-06: 测试两件——auto-driver-meta（四源/单阶段零输出/三态/收尾）+ auto-wait-interactive（TTY stub/回退/缺省零变化）+ 既有套件回归 (depends_on: task-01, task-02, task-03, task-04)
++- [x] task-06: 测试两件——auto-driver-meta（四源/单阶段零输出/三态/收尾）+ auto-wait-interactive（TTY stub/回退/缺省零变化）+ 既有套件回归 (depends_on: task-01, task-02, task-03, task-04)
++  <!-- 2026-09-17 补勾（ql-20260917-009）：两测试文件俱在仓（直跑 20/0 与 5/0 绿），系归档时勾选簿记漏翻——archive_integrity D14 首扫发现，逐份裁决补勾留痕，非事后补工 -->
+ - [x] task-07: 文档同步——file-lifecycle 注记 + docs/prompt/README SS-META 条目 + 全量回归 (depends_on: task-06)
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index 2424510..c87cec0 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -32,3 +32,4 @@
+ | 2026-09-16 | ql-20260916-021-64c5（quick） | 同阶段复审 findings 回灌（Superpowers scoped re-review 采纳①）：stage-review.js 新增 collectSameStagePriorReview（本变更最近一轮有效 review 采集——跨变更过滤/骨架轮跳过/坏 JSON 容错，checklist fail/gap→openFindings、pass→passItems、verdict=fail 无明细时 notes 合成）+ renderPriorRoundFindingsMd（未决项逐项核验修复 + pass 面勿重复报告的双向语义，各 15 条封顶）；run/prompt.js tier=independent 档注入同阶段上一轮复审基线块（拼进 {PRIOR_REVIEW_FACTS}，self 不注入——当前 agent 自带上一轮上下文）；stages/brainstorm.js Design Grill 补 {PRIOR_REVIEW_FACTS} 占位符（原仅 plan/execute 有，brainstorm 升 independent 时同享回灌）。docs/prompt 三 md 镜像逐字同步 + 占位符文档行。新增 test/stage-review-prior-round.test.mjs（31 断言）。 |
+ | 2026-09-17 | ql-20260917-003-d9c7（quick） | plan.global-constraints 存在性 warning（ql-20260917-002 留账收口）：stage-contract-spec.js 清单新增 warning 条目（literal-any「全局硬约束」锚 plan.md，condition{ctxField:'planLevel', eq:'full'}）+ stage-contract.js validatePlanOutputs 读 plan.md frontmatter plan_level 传入引擎 ctx（读不到→eq 不成立→跳过，存量/旧格式/light 零误报 fail-safe；「无」占位段即可消警，段体非空不校验——execute 注入端容忍+审查目检）。新增 test/plan-global-constraints-warning.test.mjs（12 断言：清单形态/引擎四态/validator 接线）。 |
+ | 2026-09-17 | ql-20260917-007-b35d（quick） | doctor 新增 D14 archive_integrity 归档完整性重扫（OpenSpec validate --archived 对标）：遍历 changes/archive 逐目录核验任务全勾+plan.md 在场+注册表不可读不静默；完成源判定含 legacy 切换（tasks 0勾+plan≥1勾→以 plan 为完成源，消 task-truth-unify 前 0/N 误报，真实仓 43→18）；WARNING advisory 只读；首扫真欠账：16 份老归档缺 plan.md + 2 份近期归档测试任务勾选簿记漏翻（ir-hardening task-09 / auto-driver task-06，测试文件俱在）；test/doctor-archive-integrity.test.mjs 23 断言 |
++| 2026-09-17 | ql-20260917-009-2ec3（quick） | D14 收尾：豁免账本 archive-integrity-exempt.yaml（16 份远古归档历史形态，账本外亮红/stale 提示/fail-safe）+ ir-hardening task-09 与 auto-driver task-06 簿记补勾（测试俱在直跑绿，留审计痕）+ pre-push advisory 露出（零阻断）+ DB 漂移核实结论（D4 ghostRows 已覆盖无缺口）；真实仓维度转绿 93 完整+16 豁免；测试 23→33 断言 |
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index 0d1b860..db12d34 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -1,12 +1,12 @@
+ ---
+-updated_at: 2026-09-17T21:55:00+08:00
++updated_at: 2026-09-17T23:55:00+08:00
+ author: qinyi
+ created_at: 2026-06-01T09:05:00
+ ---
+ 
+ # core-engine
+ > 最后更新：2026-09-17
+-> 最近变更：ql-20260917-007-b35d（doctor 新增 D14 archive_integrity 归档完整性重扫——补「归档后无人回头看」缺口（对标 OpenSpec validate --archived）：①任务全勾（tasks.md 优先回退 plan.md，**legacy 完成源切换**：tasks 有行 0 勾而 plan ≥1 勾 → 完成证据在 plan.md，真实仓首扫 43→18 份消 0/N 全误报——2026-08-20-task-truth-unify 前完成态勾在 plan）②plan.md 在场性（自愈基准文件）③注册表存在但不可读必须报、不许当无任务放行（#205 教训）；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）；test/doctor-archive-integrity.test.mjs 23 断言）/ 2026-09-16-guard-consistency-probe（探针9 守卫一致性——clusterMutationMethods 同实体方法组聚类 + detectGuardSignals 四类守卫信号（编码式调用形态+注解式）+ runProbe9GuardConsistency advisory + 一致性抽查 probe9 维度 WARNING 级接线）/ 2026-09-16-cross-layer-contract-probe（探针8 扩展 design 契约维度——parseDesignContracts 契约面解析 + contractOrphans/missingRequired 两 advisory 维度 + 一致性抽查 probe8 WARNING 级接线）/ 2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
++> 最近变更：ql-20260917-009-2ec3（D14 archive_integrity 收尾三件套——①豁免账本：.sillyspec/archive-integrity-exempt.yaml 逐份记理由压红 16 份远古归档（早于 plan.md 流程，照 docs-check skip 先例不伪造历史），账本外继续亮红/stale 提示清理/解析失败 fail-safe 红灯保持，+4 测试组；②两份近期归档测试任务簿记补勾（ir-hardening task-09 / auto-driver task-06，对应测试文件俱在且直跑绿——D14 首扫发现的真实簿记漂移，补勾留 ql 审计痕；③pre-push 挂 advisory 零阻断露出（ratchet 门待欠账稳定后另裁）；④DB 漂移核实：listChanges 排除 archive，手工重激活归档行由 D4 ghostRows 覆盖，无缺口不加；真实仓维度转绿 93 完整+16 豁免）/ ql-20260917-007-b35d（doctor 新增 D14 archive_integrity 归档完整性重扫——补「归档后无人回头看」缺口（对标 OpenSpec validate --archived）：①任务全勾（tasks.md 优先回退 plan.md，**legacy 完成源切换**：tasks 有行 0 勾而 plan ≥1 勾 → 完成证据在 plan.md，真实仓首扫 43→18 份消 0/N 全误报——2026-08-20-task-truth-unify 前完成态勾在 plan）②plan.md 在场性（自愈基准文件）③注册表存在但不可读必须报、不许当无任务放行（#205 教训）；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）；test/doctor-archive-integrity.test.mjs 23 断言）/ 2026-09-16-guard-consistency-probe（探针9 守卫一致性——clusterMutationMethods 同实体方法组聚类 + detectGuardSignals 四类守卫信号（编码式调用形态+注解式）+ runProbe9GuardConsistency advisory + 一致性抽查 probe9 维度 WARNING 级接线）/ 2026-09-16-cross-layer-contract-probe（探针8 扩展 design 契约维度——parseDesignContracts 契约面解析 + contractOrphans/missingRequired 两 advisory 维度 + 一致性抽查 probe8 WARNING 级接线）/ 2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+ > 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
+ 
+ ## 职责
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index 6daaf0a..f206584 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -1206,27 +1206,60 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
+     }
+     if (reasons.length > 0) offenders.push({ name, reasons });
+   }
+-  if (offenders.length === 0) {
++
++  // 豁免账本（2026-09-17 收尾裁决）：老归档历史形态（早于 plan.md 流程的手工归档/远古命名）逐份豁免——
++  // 照 docs-check skip 清单先例（39 处历史快照冻结），不伪造 plan.md 篡改历史；账本外继续亮红；
++  // 纪律：新欠账禁止入账（入账须变更流程裁决）；账本解析失败按无豁免 fail-safe。
++  const exemptPath = join(authoritySpecDir, 'archive-integrity-exempt.yaml');
++  let exemptNames = new Set();
++  const exemptNotes = [];
++  if (existsSync(exemptPath)) {
++    try {
++      const doc = jsYaml.load(readFileSync(exemptPath, 'utf8'));
++      const entries = Array.isArray(doc && doc.entries) ? doc.entries : [];
++      exemptNames = new Set(entries.filter((e) => e && typeof e.name === 'string').map((e) => e.name));
++    } catch (e) {
++      exemptNotes.push(`豁免账本解析失败（${e?.message || e}）——按无豁免处理，红灯保持`);
++    }
++  }
++  const exempted = offenders.filter((o) => exemptNames.has(o.name));
++  const effective = offenders.filter((o) => !exemptNames.has(o.name));
++  const staleExemptions = [...exemptNames].filter((n) => !offenders.some((o) => o.name === n));
++  if (exempted.length > 0) {
++    exemptNotes.push(`${exempted.length} 份豁免在案（历史形态，账本 archive-integrity-exempt.yaml）`);
++  }
++  if (staleExemptions.length > 0) {
++    exemptNotes.push(`${staleExemptions.length} 条豁免已失效（对应归档不再欠账）可清理：${staleExemptions.slice(0, 5).join(', ')}${staleExemptions.length > 5 ? ' …' : ''}`);
++  }
++
++  if (effective.length === 0) {
++    const findings = [`${names.length} 份归档完整（任务全勾 + plan.md 在场${exempted.length > 0 ? `，另有 ${exempted.length} 份豁免在案` : ''}）`];
++    findings.push(...exemptNotes);
+     return {
+       ...base,
+       pass: true,
+       severity: null,
+-      findings: [`${names.length} 份归档完整（任务全勾 + plan.md 在场）`],
++      findings,
+       archive_count: names.length,
+       offenders: [],
++      exempted_count: exempted.length,
++      stale_exemptions: staleExemptions,
+     };
+   }
+-  const findings = offenders.slice(0, 10).map((o) => `${o.name}：${o.reasons.join('；')}`);
+-  if (offenders.length > 10) findings.push(`…还有 ${offenders.length - 10} 份`);
++  const findings = effective.slice(0, 10).map((o) => `${o.name}：${o.reasons.join('；')}`);
++  if (effective.length > 10) findings.push(`…还有 ${effective.length - 10} 份`);
++  findings.push(...exemptNotes);
+   findings.push('语义：归档=全勾终态；未勾/缺文件多为归档后手改或手工搬目录绕流程——git log 定位改动来源，doctor 只读不自动修');
+   return {
+     ...base,
+     pass: false,
+     severity: CHECK_SEVERITY.WARNING,
+     findings,
+-    safe_actions: [{ dimension: 'archive_integrity', action: 'manual_inspect', risk: 'manual_edit', rationale: '归档完整性破损', next_step: '逐份核对 offenders：git log --follow .sillyspec/changes/archive/<name>/tasks.md 定位改动者与意图，确属历史遗留可补勾并注记，勿改语义' }],
++    safe_actions: [{ dimension: 'archive_integrity', action: 'manual_inspect', risk: 'manual_edit', rationale: '归档完整性破损', next_step: '逐份核对 offenders：git log --follow .sillyspec/changes/archive/<name>/tasks.md 定位改动者与意图，确属历史遗留走变更流程裁决入豁免账本（新欠账禁止入账），勿改语义' }],
+     archive_count: names.length,
+-    offenders,
++    offenders: effective,
++    exempted_count: exempted.length,
++    stale_exemptions: staleExemptions,
+   };
+ }
+ 
+diff --git a/test/doctor-archive-integrity.test.mjs b/test/doctor-archive-integrity.test.mjs
+index 8d94e18..aee22f4 100644
+--- a/test/doctor-archive-integrity.test.mjs
++++ b/test/doctor-archive-integrity.test.mjs
+@@ -186,6 +186,53 @@ const LEGACY_PLAN_ALL_CHECKED = '# 计划\n\n- [x] task-01: 实现功能\n- [x]
+   assert(dim && dim.pass === true, '13 无 tasks.md + plan 全勾 → pass（同 5，防回归）')
+ }
+ 
++// ── 14. 豁免账本：账本内 offender 压红（历史形态豁免，账本在案注记） ──
++{
++  const root = makeTmpDir('dr-arch-14-')
++  makeArchive(root, '2026-06-09-ancient-no-plan', { tasks: ALL_CHECKED_TASKS }) // 缺 plan.md
++  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'),
++    'entries:\n  - name: 2026-06-09-ancient-no-plan\n    reason: 早于 plan.md 流程\n    exempted_at: 2026-09-17\n')
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === true, '14a 账本内 offender → pass（豁免压红）')
++  assert((dim.offenders || []).length === 0 && dim.exempted_count === 1, '14b offenders 空 + exempted_count=1')
++  assert((dim.findings || []).some((f) => f.includes('豁免在案')), '14c 豁免在案注记')
++}
++
++// ── 15. 豁免账本：账本外 offender 仍红（账本不许抹平新账） ──
++{
++  const root = makeTmpDir('dr-arch-15-')
++  makeArchive(root, '2026-06-09-exempted-one', { tasks: ALL_CHECKED_TASKS })
++  makeArchive(root, '2026-09-10-new-offender', { tasks: PARTIAL_TASKS, plan: true })
++  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'),
++    'entries:\n  - name: 2026-06-09-exempted-one\n    reason: 历史形态\n    exempted_at: 2026-09-17\n')
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === false, '15a 账本外 offender 仍红')
++  const offender = (dim.offenders || [])[0]
++  assert(offender && offender.name === '2026-09-10-new-offender', '15b offender 只列账本外那份')
++  assert(dim.exempted_count === 1, '15c 豁免计数独立')
++}
++
++// ── 16. 豁免账本：失效条目提示清理（stale hint） ──
++{
++  const root = makeTmpDir('dr-arch-16-')
++  makeArchive(root, '2026-01-09-fine', { tasks: ALL_CHECKED_TASKS, plan: true })
++  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'),
++    'entries:\n  - name: gone-archive\n    reason: 对应归档已不欠账\n    exempted_at: 2026-09-17\n')
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === true, '16a 无 offender → pass')
++  assert((dim.findings || []).some((f) => f.includes('失效')) && (dim.stale_exemptions || []).includes('gone-archive'), '16b stale 条目提示清理')
++}
++
++// ── 17. 豁免账本解析失败 → fail-safe 红灯保持（按无豁免处理） ──
++{
++  const root = makeTmpDir('dr-arch-17-')
++  makeArchive(root, '2026-06-09-ancient-no-plan', { tasks: ALL_CHECKED_TASKS })
++  writeFileSync(join(root, '.sillyspec', 'archive-integrity-exempt.yaml'), '{oops: [unclosed')
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === false, '17a 账本损坏 → 红灯保持（fail-safe）')
++  assert((dim.findings || []).some((f) => f.includes('解析失败')), '17b 解析失败注记在场')
++}
++
+ // ── 10. CLI 端到端：doctor --json 含维度 ──
+ {
+   const root = makeTmpDir('dr-arch-10-')
+diff --git a/.sillyspec/archive-integrity-exempt.yaml b/.sillyspec/archive-integrity-exempt.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/archive-integrity-exempt.yaml
+@@ -0,0 +1,60 @@
++# archive_integrity（doctor D14）豁免账本
++#
++# 纪律（2026-09-17 用户裁决）：
++#   - 仅限历史形态豁免：本账本全部条目为早于 plan.md 流程 / 手工搬目录时代的远古归档，
++#     回头伪造 plan.md 是篡改历史，故以账本显式豁免（照 docs-check skip 清单先例）。
++#   - 账本外继续亮红；新欠账禁止入账（入账须走变更流程裁决，不许拿账本抹平新账）。
++#   - 条目失效（对应归档修复/移除）时应清理，doctor 会提示 stale 条目。
++#   - 两份「任务未勾」类欠账不走本账本（簿记补勾 + quicklog 审计痕，见 ql-20260917-009）。
++
++entries:
++  # —— 带日期但早于 plan.md 约定落地的归档 ——
++  - name: 2026-06-09-waiting-state-machine
++    reason: 远古归档，目录仅存 design.md，早于四件套/plan.md 流程约定
++    exempted_at: 2026-09-17
++  - name: 2026-07-06-kanban-better-board
++    reason: 早于 plan.md 流程约定的归档（无任务注册表时代产物）
++    exempted_at: 2026-09-17
++  - name: 2026-08-02-init-claude-md
++    reason: 文档类变更归档，早于 plan.md 基准文件约定
++    exempted_at: 2026-09-17
++  - name: 2026-08-14-doc-ref-check
++    reason: 文档校验类变更归档，早于 plan.md 基准文件约定
++    exempted_at: 2026-09-17
++  # —— 无日期前缀的远古命名（早于 YYYY-MM-DD-<slug> 命名约定）——
++  - name: archive-impact-validation
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: auto-flow-optimization
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: auto-mode
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: brainstorm-archive
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: modules-as-development-context
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: run-command-design
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: scan-knowledge-producer-v1
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: test-quick-2026-06-02
++    reason: 测试性归档（quick 早期实验产物），无完整流程四件套
++    exempted_at: 2026-09-17
++  - name: unified-docs-design
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: workflow-spec
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: workflow-system-archive
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17
++  - name: worktree-isolation-harding
++    reason: 远古命名归档（早于日期命名约定），早于 plan.md 流程
++    exempted_at: 2026-09-17

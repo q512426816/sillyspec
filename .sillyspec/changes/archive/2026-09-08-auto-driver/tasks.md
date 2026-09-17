@@ -12,5 +12,6 @@ created_at: 2026-09-08T06:55:00+08:00
 - [x] task-03: --wait-interactive TTY 直通（readline + 既有 wait/continue 状态机复用） (depends_on: task-01)
 - [x] task-04: CLI 收尾总结（:1726 挂点 + :1616 复用 helper + last-delta 消费） (depends_on: )
 - [x] task-05: auto SKILL.md 瘦身重写（三段退役 + SS-META 消费 + 终止条件修正） (depends_on: task-01)
-- [ ] task-06: 测试两件——auto-driver-meta（四源/单阶段零输出/三态/收尾）+ auto-wait-interactive（TTY stub/回退/缺省零变化）+ 既有套件回归 (depends_on: task-01, task-02, task-03, task-04)
+- [x] task-06: 测试两件——auto-driver-meta（四源/单阶段零输出/三态/收尾）+ auto-wait-interactive（TTY stub/回退/缺省零变化）+ 既有套件回归 (depends_on: task-01, task-02, task-03, task-04)
+  <!-- 2026-09-17 补勾（ql-20260917-009）：两测试文件俱在仓（直跑 20/0 与 5/0 绿），系归档时勾选簿记漏翻——archive_integrity D14 首扫发现，逐份裁决补勾留痕，非事后补工 -->
 - [x] task-07: 文档同步——file-lifecycle 注记 + docs/prompt/README SS-META 条目 + 全量回归 (depends_on: task-06)

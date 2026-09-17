@@ -242,3 +242,21 @@
 方案：L1第18条加厚——add/commit同清单pathspec（git commit -m ... -- 文件，他侧staged不被带走）/核对固定git diff --cached --name-only全量禁grep过滤（过滤正是致盲原因）/核对与提交禁链行；L2新增src/commit-guard.js两信号——S1 quick声明面对账（staged含ql patch json时读rows[].declared声明面，超面即警，quicklog账本自身豁免）+S2跨变更目录检测（≥2个changes/name即警），fail-open只警告exit恒0（非git/json损坏/任何异常全静默放行，钩子侧true兜底双保险——钩子挂全会话共享绝不拦人提交），命中写write-audit.jsonl（via=commit-guard）复用法证链；.husky/pre-commit形态对齐既有pre-push；commit-guard录进sync模块（write-audit法证链家族）
 结果：19/19断言全绿（6单元+4e2e组，含真实事故复现组——夹带changes文件时stderr指名+write-audit审计行落盘）；全量npm test exit 0；lint首轮被module-map硬门拦（新src文件必须录模块——修复后补录sync模块paths+卡片）；开发中顺带修守卫两缺陷——execFileSync默认透传子进程stderr漏git usage噪音（显式stdio管道化）+非git目录git落--no-index模式行为差异实证
 审计：[gate] L1（跨 1 模块 · 5 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260917-009-2ec3 | 2026-09-17 23:43:33 | archive_integrity D14 收尾——豁免账本+簿记补勾+advisory 挂载+DB 漂移核实（用户裁决三件套…
+状态：已完成
+关联变更：2026-09-17-api-coverage-smoke
+文件：
+- src/doctor-diagnostics.js（D14 豁免账本三态（exempted/effective/stale））
+- test/doctor-archive-integrity.test.mjs（+4 测试组 10 断言）
+- .sillyspec/archive-integrity-exempt.yaml（16 份豁免账本（新文件，纪律在头注释））
+- .sillyspec/changes/archive/2026-09-07-ir-hardening/tasks.md（task-09 补勾+审计注释）
+- .sillyspec/changes/archive/2026-09-08-auto-driver/tasks.md（task-06 补勾+审计注释）
+- .husky/pre-push（advisory 段（零阻断））
+- .sillyspec/docs/sillyspec/modules/core-engine.md（最近变更行+frontmatter）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（ql-009 行）
+需求：archive_integrity D14 收尾——豁免账本+簿记补勾+advisory 挂载+DB 漂移核实（用户裁决三件套，warning 常红即无 warning 先清账）
+根因：D14 首扫 18 份欠账两类异质不能同动作：16 份远古归档缺 plan.md 系早于流程约定（伪造文件=篡改历史），2 份近期未勾系归档时勾选簿记漏翻（工作真实完成）；门禁分两段（advisory 先行，ratchet 待清账）
+方案：①doctor D14 增豁免账本 .sillyspec/archive-integrity-exempt.yaml（16 份逐份理由；账本内压红+账本外亮红+stale 提示+解析失败 fail-safe，新欠账禁止入账纪律钉头注释）②ir-hardening task-09 与 auto-driver task-06 补勾（六测试文件复核俱在直跑绿，补勾行内嵌审计注释引用本条 ql）③pre-push 追加 advisory 段（零阻断）④DB 漂移核实：listChanges 排除 archive，重激活归档行由 D4 ghostRows 覆盖，无缺口不加
+结果：D14 测试 23→33 断言全绿（+4 豁免组：压红/账本外仍红/stale/fail-safe）；真实仓复扫维度转绿（93 份完整+16 豁免，18→0）；全量 npm test exit 0+CLI 门禁实测复跑；模块卡+changelog 同步；ratchet 第二段待欠账稳定另裁
+审计：[gate] L1（跨 1 模块 · 6 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

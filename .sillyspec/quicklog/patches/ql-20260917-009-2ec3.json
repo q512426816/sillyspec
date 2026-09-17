@@ -1,0 +1,113 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-cecc99d9",
+  "totals": {
+    "files": 8,
+    "additions": 156,
+    "deletions": 10
+  },
+  "rows": [
+    {
+      "path": ".husky/pre-push",
+      "declared": true,
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/changes/archive/2026-09-07-ir-hardening/tasks.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/changes/archive/2026-09-08-auto-driver/tasks.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "declared": true,
+      "additions": 39,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/doctor-archive-integrity.test.mjs",
+      "declared": true,
+      "additions": 47,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/archive-integrity-exempt.yaml",
+      "declared": true,
+      "additions": 60,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 6,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/doctor-diagnostics.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      ".husky/pre-push",
+      "test/doctor-archive-integrity.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260917-009-2ec3",
+  "sessionId": "quick-cecc99d9",
+  "savedAt": "2026-09-17T15:50:40.271Z",
+  "patchSha256": "c0b57006c138d3caf5d36ed104573416f50bbb60dd029642026b902e1c282814",
+  "patchStatus": "ok"
+}

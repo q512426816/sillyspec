@@ -1206,27 +1206,60 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
     }
     if (reasons.length > 0) offenders.push({ name, reasons });
   }
-  if (offenders.length === 0) {
+
+  // 豁免账本（2026-09-17 收尾裁决）：老归档历史形态（早于 plan.md 流程的手工归档/远古命名）逐份豁免——
+  // 照 docs-check skip 清单先例（39 处历史快照冻结），不伪造 plan.md 篡改历史；账本外继续亮红；
+  // 纪律：新欠账禁止入账（入账须变更流程裁决）；账本解析失败按无豁免 fail-safe。
+  const exemptPath = join(authoritySpecDir, 'archive-integrity-exempt.yaml');
+  let exemptNames = new Set();
+  const exemptNotes = [];
+  if (existsSync(exemptPath)) {
+    try {
+      const doc = jsYaml.load(readFileSync(exemptPath, 'utf8'));
+      const entries = Array.isArray(doc && doc.entries) ? doc.entries : [];
+      exemptNames = new Set(entries.filter((e) => e && typeof e.name === 'string').map((e) => e.name));
+    } catch (e) {
+      exemptNotes.push(`豁免账本解析失败（${e?.message || e}）——按无豁免处理，红灯保持`);
+    }
+  }
+  const exempted = offenders.filter((o) => exemptNames.has(o.name));
+  const effective = offenders.filter((o) => !exemptNames.has(o.name));
+  const staleExemptions = [...exemptNames].filter((n) => !offenders.some((o) => o.name === n));
+  if (exempted.length > 0) {
+    exemptNotes.push(`${exempted.length} 份豁免在案（历史形态，账本 archive-integrity-exempt.yaml）`);
+  }
+  if (staleExemptions.length > 0) {
+    exemptNotes.push(`${staleExemptions.length} 条豁免已失效（对应归档不再欠账）可清理：${staleExemptions.slice(0, 5).join(', ')}${staleExemptions.length > 5 ? ' …' : ''}`);
+  }
+
+  if (effective.length === 0) {
+    const findings = [`${names.length} 份归档完整（任务全勾 + plan.md 在场${exempted.length > 0 ? `，另有 ${exempted.length} 份豁免在案` : ''}）`];
+    findings.push(...exemptNotes);
     return {
       ...base,
       pass: true,
       severity: null,
-      findings: [`${names.length} 份归档完整（任务全勾 + plan.md 在场）`],
+      findings,
       archive_count: names.length,
       offenders: [],
+      exempted_count: exempted.length,
+      stale_exemptions: staleExemptions,
     };
   }
-  const findings = offenders.slice(0, 10).map((o) => `${o.name}：${o.reasons.join('；')}`);
-  if (offenders.length > 10) findings.push(`…还有 ${offenders.length - 10} 份`);
+  const findings = effective.slice(0, 10).map((o) => `${o.name}：${o.reasons.join('；')}`);
+  if (effective.length > 10) findings.push(`…还有 ${effective.length - 10} 份`);
+  findings.push(...exemptNotes);
   findings.push('语义：归档=全勾终态；未勾/缺文件多为归档后手改或手工搬目录绕流程——git log 定位改动来源，doctor 只读不自动修');
   return {
     ...base,
     pass: false,
     severity: CHECK_SEVERITY.WARNING,
     findings,
-    safe_actions: [{ dimension: 'archive_integrity', action: 'manual_inspect', risk: 'manual_edit', rationale: '归档完整性破损', next_step: '逐份核对 offenders：git log --follow .sillyspec/changes/archive/<name>/tasks.md 定位改动者与意图，确属历史遗留可补勾并注记，勿改语义' }],
+    safe_actions: [{ dimension: 'archive_integrity', action: 'manual_inspect', risk: 'manual_edit', rationale: '归档完整性破损', next_step: '逐份核对 offenders：git log --follow .sillyspec/changes/archive/<name>/tasks.md 定位改动者与意图，确属历史遗留走变更流程裁决入豁免账本（新欠账禁止入账），勿改语义' }],
     archive_count: names.length,
-    offenders,
+    offenders: effective,
+    exempted_count: exempted.length,
+    stale_exemptions: staleExemptions,
   };
 }
 
