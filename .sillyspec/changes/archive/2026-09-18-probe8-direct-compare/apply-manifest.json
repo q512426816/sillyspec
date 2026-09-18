@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-18-probe8-direct-compare",
+  "appliedAt": "2026-09-18T05:40:31.646Z",
+  "baseHash": "6bc3b9dbf6cac2869e13fb46d446b4fffecde9c9",
+  "files": [
+    {
+      "path": "test/check-syntax.mjs",
+      "sha256": "b24314a4386c2f416e6f101999a612e6a18f707a9ff90790a934b8e85bc2367d"
+    },
+    {
+      "path": "test/probe8-contract-pivot.test.mjs",
+      "sha256": "4df3dad48c61292d32576420ca17ad05ba2102e44aeb8de6f551b9dcbcf624c4"
+    },
+    {
+      "path": "test/probe8-payload-parity.test.mjs",
+      "sha256": "1d935ced9597be7048a17ab0c344daec6390a33072ee3b9dbfa17f8f05a85af1"
+    },
+    {
+      "path": "test/probe8-direct-compare.test.mjs",
+      "sha256": "1a911300da70b1be50a8155abcac9755cd64da978a7098789c47894ac50963bb"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "724a6feaa65266964a2ecf85664faa69b38ff3fd2e4a4263a36d77d74a1e44ee"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "5471c3773a1bde24f2a3df4a04acf1a7a27fe3fc5308a0fcdab00df05de273d7"
+    }
+  ]
+}

@@ -143,6 +143,13 @@ test('端到端：错位配对 + NOT NULL 缺送 + 跨仓前端经注册仓根',
 
   // 正确键 rpCategory 归一命中 → 不在 feOnly
   assert.ok(!r.feOnly.includes('rpCategory'), '正确键不落前端独有清单')
+
+  // task-05 接线随行（2026-09-18-probe8-direct-compare）：diff 源内部三态采集——本夹具非 git 仓
+  // → design-list 兜底态，directCompare 面随组装（跨仓前端路径经采集器剥前缀后按主仓双根读不
+  // 到 → 前端空面零漂移，属已知 fail-soft 边界）；design 清单三面/契约面既有断言零变化。
+  assert.ok(r.directCompare, 'direct-compare 面随内部采集组装（design-list 兜底态）')
+  assert.ok((r.notes || []).some(n => n.includes('direct-compare 面可能不全')),
+    `design-list 兜底风险注记（实际 ${JSON.stringify(r.notes)}）`)
 })
 
 test('无 Java/SQL/前端面 → 不适用零输出；跨仓未注册 → 注记跳过', () => {

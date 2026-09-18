@@ -1,0 +1,68 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "6bc3b9dbf6cac2869e13fb46d446b4fffecde9c9",
+  "totals": {
+    "files": 6,
+    "additions": 1462,
+    "deletions": 9
+  },
+  "rows": [
+    {
+      "path": "meta.json",
+      "additions": 20,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 835,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/check-syntax.mjs",
+      "additions": 18,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/probe8-contract-pivot.test.mjs",
+      "additions": 24,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/probe8-payload-parity.test.mjs",
+      "additions": 7,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/probe8-direct-compare.test.mjs",
+      "additions": 558,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "3408cad07dc969116b7175bd8e596970a3017ece4d4ea9879911a08ea99715f1",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-18T01:51:39.562Z"
+}

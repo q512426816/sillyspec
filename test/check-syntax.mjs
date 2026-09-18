@@ -57,8 +57,27 @@ const ENTRY_WHITELIST = new Set([
 // 分批落盘的契约导出——producer task 先落盘、consumer task 接线前零 src/+test 文本引用。
 // 条目必须带变更名与接线归期注释，接线落地（引用出现）后删除条目。
 const PENDING_EXPORT_WHITELIST = new Map([
-  // （清空——2026-09-17-api-coverage-smoke 五条目接线已全部落地：test/api-coverage-matrix.test.mjs
-  //  18 处引用覆盖全部符号，按白名单纪律删除。ql-20260918-001）
+  // （2026-09-17-api-coverage-smoke 五条目接线已全部落地后清空过一轮：test/api-coverage-matrix
+  //  .test.mjs 18 处引用覆盖全部符号，按白名单纪律删除。ql-20260918-001）
+  // collectProbe8DiffFiles：2026-09-18-probe8-direct-compare task-01 provides 契约
+  // （diff-files-collector：diffFiles/fileClassification/designOnlyPaths/fallbackMode），
+  // 接线归期=本变更 task-05（runProbe8PayloadParity 文件源切换）——落地引用后删除本条目。
+  // extractFrontendPayloadFields / isSegmentSuffix：2026-09-18-probe8-direct-compare task-02
+  // provides 契约（frontend-extractor：fields/fieldLines/urlsByCall；isSegmentSuffix 为段边界
+  // 后缀匹配 helper，供 task-04 URL×端点关联消费），接线归期=本变更 task-04（前端面提取器
+  // 接入对账）——落地引用后删除本条目。
+  // extractBackendFields / createTypeResolver：2026-09-18-probe8-direct-compare task-03 provides
+  // 契约（backend-extractor：extractBackendFields/backendAllFields/requiredFields；createTypeResolver
+  // 为二趟全仓类型解析回调工厂），接线归期=本变更 task-04（对账消费）/ task-05（runVerifyProbes
+  // 调用侧组装）——落地引用后删除本条目。
+  // comparePayloadFields / renderDirectCompareSection：2026-09-18-probe8-direct-compare task-04
+  // provides 契约（compare-and-render：漂移嫌疑/必填漏发嫌疑对账 + direct-compare 子段渲染），
+  // 同文件内消费（runProbe8PayloadParity 组装块/renderProbe8Lines 尾部子段）不计引用（检查器
+  // 排除待检文件自身），接线归期=本变更 task-06（test/probe8-direct-compare.test.mjs 落地跨文件
+  // 引用）——落地后删除本条目。
+  // 并行会话在途文件（2026-09-18-probe8-direct-compare verify 期发现）：src/fr-index.js 是主仓并行
+  // 会话未完成产物（baseline 6bc3b9d 已注明排除归因），其测试归该会话——接线后删条目。
+  ['resolveTouchedDomains', 'src/fr-index.js'],
 ])
 const dynamicEntryPatterns = [
   /await import\('\.\/stages\/(\w+)\.js'\)/,   // stages/index.js registry

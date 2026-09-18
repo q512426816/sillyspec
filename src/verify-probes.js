@@ -24,7 +24,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { join, dirname, basename, resolve, isAbsolute } from 'path'
 import jsYaml from 'js-yaml'
-import { gitQuiet } from './git-helper.js'
+import { gitQuiet, unquoteGitPath } from './git-helper.js'
 import {
   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
 } from './verify-facts-schema.js'
@@ -189,6 +189,768 @@ export function extractPayloadKeys(text) {
   }
   return keys
 }
+
+// ── probe8 diff 源采集器（task-01，2026-09-18-probe8-direct-compare / D-001@v1：文件源从
+//    design 清单声明面切到 diff 实际面——三态 fallback 链 + 文件分类 + design 差集 advisory）──
+// 文件分类规则（Grill B-10）：.java→backend；.js/.jsx/.wxml/.vue→frontend（.vue 无条件
+// frontend，N-2）；.ts/.tsx 按目录启发式裁决——目录段词（驼峰拆词，只看目录部分、文件名不
+// 参与——classifyConsumerHints 段级匹配同哲学，'homepages.js' 文件名不命中 pages 段）含
+// routes/pages/components/models→frontend；含 controller/service/mapper/entity/dto/api（含
+// 常见复数形）→backend；目录两不中再看文件头 10 行含 @RequestMapping/@RestController/@Service
+// →backend；仍两不中→other。.css/.less/.json/.md/.sql 等→other。
+const PROBE8_FE_DIR_WORDS = new Set(['routes', 'pages', 'components', 'models'])
+const PROBE8_BE_DIR_WORDS = new Set(['controller', 'controllers', 'service', 'services', 'mapper', 'mappers', 'entity', 'entities', 'dto', 'dtos', 'api', 'apis'])
+const PROBE8_BE_HEAD_RE = /@(?:RequestMapping|RestController|Service)\b/
+
+/** 目录段词化（驼峰拆词 + 非字母数字切段；只取目录部分，根级文件无目录词） */
+function probe8DirWords(p) {
+  const posix = String(p || '').split('\\').join('/')
+  const cut = posix.lastIndexOf('/')
+  return (cut === -1 ? '' : posix.slice(0, cut))
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+}
+
+/**
+ * probe8 文件分类（task-01，纯函数——采集器内部消费；task-02/03 经 collectProbe8DiffFiles 的
+ * fileClassification 字段消费，不直接引用本函数）。
+ * @param {string} filePath 仓根相对路径（反斜杠容忍）
+ * @param {string|null} [headText] 文件头文本（调用方传头 10 行；.ts/.tsx 目录启发式未裁决时消费）
+ * @returns {'frontend'|'backend'|'other'}
+ */
+function classifyProbe8FilePath(filePath, headText = null) {
+  const p = String(filePath || '').split('\\').join('/')
+  const lower = p.toLowerCase()
+  if (lower.endsWith('.java')) return 'backend'
+  if (/\.(js|jsx|wxml|vue)$/.test(lower)) return 'frontend'
+  if (/\.(ts|tsx)$/.test(lower)) {
+    const words = probe8DirWords(p)
+    if (words.some(w => PROBE8_FE_DIR_WORDS.has(w))) return 'frontend'
+    if (words.some(w => PROBE8_BE_DIR_WORDS.has(w))) return 'backend'
+    if (headText && PROBE8_BE_HEAD_RE.test(headText)) return 'backend'
+  }
+  return 'other'
+}
+
+/**
+ * collectProbe8DiffFiles——probe8 文件源 diff 实际面采集器（task-01，D-001@v1）。三态 fallback 链
+ * （各级 fail-open 不抛）：
+ *   ① diff——worktree 可用（_readWorktreeMeta 命中且 gitDir≠主仓 cwd；in-place-fallback/仓
+ *      已删的 meta 落回 ②）：gitQuiet 数组参数取 diff baseline..HEAD ∪ status --porcelain
+ *      （-uall 防目录折叠，同构先例 _resolveDiffFilesForParity，contract-matrix.js）；
+ *   ② in-place——worktree 缺失：主仓 diff HEAD~1..HEAD ∪ porcelain（含已提交窗口，Grill B-9）；
+ *   ③ design-list——主仓两路 git 取数全失败：退 design 清单声明面（parseFileChangeListDetailed）
+ *      + 模式注记「文件源=design 清单（diff 不可用）」（fail-open 不抛）。
+ * 跨仓双源直采（①②态启用，不 import run/ 目录）：parseRepoRegistry 读 local.yaml repos →
+ * 每注册仓根 git diff HEAD~1..HEAD ∪ porcelain（复刻 collectCrossRepoDiffRoots 只读口径，
+ * run/complete.js 同款）；仓根不存在/取数失败跳过不炸；产物仓根相对路径。
+ * design 差集（advisory，不参与对账不阻断）：design 清单有但 diff 面无的路径收 designOnlyPaths
+ * （跨仓条目带 cross-repo:<key>: 前缀消歧）；design-list 态文件源即清单面 → 差集恒空。
+ * 产物路径一律 unquoteGitPath + 正斜杠归一（quotepath=false 下仍防控制字符引号形态）。
+ * @param {{ cwd: string, changeName: string, specBase: string, repoKeys?: string[]|null }} args
+ * @returns {{ source: 'diff'|'in-place'|'design-list', fallbackMode: 'diff'|'in-place'|'design-list',
+ *   diffFiles: string[], fileClassification: {frontend: string[], backend: string[], other: string[]},
+ *   frontend: string[], backend: string[], other: string[], designOnlyPaths: string[], notes: string[] }}
+ */
+export function collectProbe8DiffFiles({ cwd, changeName, specBase, repoKeys = null }) {
+  const out = {
+    source: 'design-list', fallbackMode: 'design-list', diffFiles: [],
+    fileClassification: { frontend: [], backend: [], other: [] },
+    frontend: [], backend: [], other: [], designOnlyPaths: [], notes: [],
+  }
+  if (!cwd || !specBase || !changeName) {
+    out.notes.push('collectProbe8DiffFiles 入参缺失（cwd/specBase/changeName）——文件源空面')
+    return out
+  }
+
+  // 路径归一：剥外层引号 → unquoteGitPath 解码转义（八进制/\"/\\）→ 正斜杠归一
+  const normGitPath = (raw) => unquoteGitPath(String(raw || '').trim().replace(/^"|"$/g, '')).split('\\').join('/')
+  // porcelain 行：XY <path>（前 3 字符状态码，trim:false 保前导空格；重命名 old -> new 取 new）
+  // ——口径同 _resolveDiffFilesForParity（contract-matrix.js）
+  const fromPorcelain = (stOut) => {
+    const files = []
+    for (const line of String(stOut || '').split('\n')) {
+      if (!line || line.length < 4) continue
+      const p = line.slice(3).trim().split(' -> ').pop() || ''
+      if (p) files.push(normGitPath(p))
+    }
+    return files
+  }
+  // git 双源采集：diff --name-only ∪ status --porcelain -uall；两取数任一成功即 ok（全失败
+  // 返 null 交 fallback 链降级）；产物 Set 去重
+  const gitFace = (gitDir, diffSpec) => {
+    let ok = false
+    const files = new Set()
+    const d = gitQuiet(gitDir, ['diff', '--name-only', diffSpec], { timeout: 30000 })
+    if (d !== null) {
+      ok = true
+      for (const line of String(d).split('\n')) {
+        const f = normGitPath(line)
+        if (f) files.add(f)
+      }
+    }
+    const st = gitQuiet(gitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
+    if (st !== null) {
+      ok = true
+      for (const f of fromPorcelain(st)) files.add(f)
+    }
+    return ok ? [...files] : null
+  }
+
+  // ── 主仓三态 fallback ──
+  let source = null
+  let mainRoot = cwd
+  const mainFiles = []
+  const wt = _readWorktreeMeta(specBase, cwd, changeName)
+  if (wt && resolve(wt.gitDir) !== resolve(cwd)) {
+    // baseline 口径同 _resolveDiffFilesForParity：baselineCommit / actualBaseHash / baseHash
+    const diffBase = wt.meta.baselineCommit || wt.meta.actualBaseHash || wt.meta.baseHash
+    if (diffBase) {
+      const face = gitFace(wt.gitDir, `${diffBase}..HEAD`)
+      if (face) {
+        source = 'diff'
+        mainRoot = wt.gitDir
+        mainFiles.push(...face)
+        out.notes.push(`文件源=worktree diff（${diffBase.slice(0, 8)}..HEAD ∪ porcelain）`)
+      }
+    }
+  }
+  if (!source) {
+    // in-place（Grill B-9 含已提交窗口）：HEAD~1..HEAD ∪ porcelain（初提交仓 HEAD~1 不存在时
+    // 两取数全失败 → 落 design-list）
+    const face = gitFace(cwd, 'HEAD~1..HEAD')
+    if (face) {
+      source = 'in-place'
+      mainFiles.push(...face)
+      out.notes.push('文件源=in-place diff（HEAD~1..HEAD ∪ porcelain，含已提交窗口）')
+    }
+  }
+
+  // ── local.yaml 注册表（跨仓直采 + design 清单 repoKeys 解析共用；specBase/local.yaml 优先，
+  //    兼容 cwd/.sillyspec/local.yaml——runProbe8PayloadParity / collectCrossRepoDiffRoots 双读点合一）──
+  let registry = new Map()
+  try {
+    for (const yamlPath of [join(specBase, 'local.yaml'), join(cwd, '.sillyspec', 'local.yaml')]) {
+      if (!existsSync(yamlPath)) continue
+      registry = parseRepoRegistry(readFileSync(yamlPath, 'utf8'))
+      if (registry.size > 0) break
+    }
+  } catch { /* 注册表不可读 → 跨仓空面（fail-open） */ }
+  const repoRootOf = (raw) => (isAbsolute(raw) ? raw : resolve(cwd, raw))
+
+  // ── design 清单声明面（③态文件源 + 差集基准；NEW: 待建前缀剥除，probe1-new-prefix-miss 同款）──
+  const designPath = join(specBase, 'changes', changeName, 'design.md')
+  let designList = []
+  try {
+    if (existsSync(designPath)) designList = parseFileChangeListDetailed(designPath, { repoKeys: repoKeys || [...registry.keys()] })
+  } catch { designList = [] }
+  const designNorm = []
+  for (const e of designList) {
+    let p = String((e && e.path) || '').replace(/^NEW:\s*/, '').split('\\').join('/').trim()
+    let repo = (e && e.repo) || null
+    if (!p || p.startsWith('.sillyspec/')) continue
+    // 未注册跨仓前缀兜底识别（change-list 只对注册 key 落 e.repo）：前缀剥掉按路径启发式
+    // 分类 + 未注册注记（runProbe8 readEntry 同款现身原则，不静默吞）
+    if (!repo) {
+      const cr = p.match(/^cross-repo:([A-Za-z0-9_.\-]+):(.*)$/)
+      if (cr) {
+        p = cr[2]
+        out.notes.push(`repo「${cr[1]}」未在 local.yaml repos 注册——该仓文件不进 diff 面，按路径启发式分类`)
+      }
+    }
+    if (p) designNorm.push({ repo, path: p })
+  }
+
+  // ── 跨仓双源直采（diff/in-place 态；design-list 态文件源即清单面不直采）──
+  const fileEntries = [] // { path, roots[] }（roots = 文件头 10 行读取候选根，先主后次）
+  if (source === 'diff' || source === 'in-place') {
+    for (const f of mainFiles) fileEntries.push({ path: f, roots: [mainRoot] })
+    for (const [key, raw] of registry.entries()) {
+      try {
+        if (!raw) continue
+        const root = repoRootOf(raw)
+        if (!root || !existsSync(root) || resolve(root) === resolve(cwd)) continue // 主仓自身不重复计
+        const face = gitFace(root, 'HEAD~1..HEAD')
+        if (!face) { out.notes.push(`跨仓「${key}」diff 取数失败——跳过`); continue }
+        for (const f of face) fileEntries.push({ path: f, roots: [root] })
+      } catch { out.notes.push(`跨仓「${key}」采集异常——跳过`) }
+    }
+  } else {
+    out.notes.push('文件源=design 清单（diff 不可用）')
+    for (const e of designNorm) {
+      const roots = e.repo && registry.has(e.repo)
+        ? [repoRootOf(registry.get(e.repo))]
+        : [wt && resolve(wt.gitDir) !== resolve(cwd) ? wt.gitDir : null, cwd].filter(Boolean)
+      fileEntries.push({ path: e.path, roots })
+    }
+  }
+
+  // ── design 差集（advisory）：design 清单有但 diff 面无（design-list 态清单即面 → 恒空）──
+  if (source === 'diff' || source === 'in-place') {
+    // 主仓面直接对集合；跨仓面按 roots[0] 反查仓根对应的 fileEntries 集合（多仓同根退化为主
+    // 仓口径，advisory 可接受；未注册 repo 无根可查 → 其条目恒落 design-only，如实现身不静默吞）
+    const mainFace = new Set(mainFiles)
+    const faceByRoot = new Map()
+    const faceAt = (root) => {
+      const abs = resolve(root)
+      if (!faceByRoot.has(abs)) {
+        faceByRoot.set(abs, new Set(fileEntries.filter(fe => resolve(fe.roots[0]) === abs).map(fe => fe.path)))
+      }
+      return faceByRoot.get(abs)
+    }
+    for (const e of designNorm) {
+      if (e.repo) {
+        const face = registry.has(e.repo) ? faceAt(repoRootOf(registry.get(e.repo))) : new Set()
+        if (!face.has(e.path)) out.designOnlyPaths.push(`cross-repo:${e.repo}:${e.path}`)
+      } else if (!mainFace.has(e.path)) {
+        out.designOnlyPaths.push(e.path)
+      }
+    }
+  }
+
+  // ── 分类（.ts/.tsx 目录启发式未裁决时才读文件头 10 行，省 IO；读不到按无头处理）──
+  const head10 = (roots, relPath) => {
+    for (const r of roots || []) {
+      try { return readFileSync(join(r, relPath), 'utf8').split('\n').slice(0, 10).join('\n') } catch { /* 试下一根 */ }
+    }
+    return null
+  }
+  const cls = { frontend: [], backend: [], other: [] }
+  const seen = new Set()
+  for (const fe of fileEntries) {
+    if (seen.has(fe.path)) continue
+    seen.add(fe.path)
+    let c
+    if (/\.(ts|tsx)$/i.test(fe.path)) {
+      const words = probe8DirWords(fe.path)
+      const dirResolved = words.some(w => PROBE8_FE_DIR_WORDS.has(w) || PROBE8_BE_DIR_WORDS.has(w))
+      c = classifyProbe8FilePath(fe.path, dirResolved ? null : head10(fe.roots, fe.path))
+    } else {
+      c = classifyProbe8FilePath(fe.path)
+    }
+    cls[c].push(fe.path)
+  }
+  out.source = source || 'design-list'
+  out.fallbackMode = out.source
+  out.diffFiles = [...seen].sort()
+  out.frontend = cls.frontend
+  out.backend = cls.backend
+  out.other = cls.other
+  out.fileClassification = { frontend: cls.frontend, backend: cls.backend, other: cls.other }
+  out.designOnlyPaths.sort()
+  return out
+}
+
+// ── probe8 前端载荷字段提取器（task-02，2026-09-18-probe8-direct-compare / D-002@v1）──
+// 前端面从「单文件键集」（extractPayloadKeys）升级为「字段 + 首命中行号 + URL 关联素材」三元组，
+// 供 task-04 前端×后端直查对账。三后缀选匹配族（.js/.ts/.jsx/.tsx 基础四形态；.vue 追加
+// v-model/prop；.wxml 追加 value 插值/data- 前缀）；DTO 键仅收请求调用 8 行邻近窗口
+// （R-08/Grill B-5：全文件字面量键污染防线，窗口机制对齐 extractPayloadKeys）。
+// 请求调用定位族——词边界前置防 myDelete(/onSearch( 类标识符内误命中（EHS onDelete 形态）
+const PROBE8_REQUEST_CALL_RE = /\b(?:fetch|post|put|delete|getRequest|postRequest|putRequest|deleteRequest|search)\s*\(/
+// DTO 对象字面量起始键（{ key: 形态，{ 与键同行）；控制流/声明关键字经保留字 Set 排除
+const PROBE8_DTO_KEY_RE = /[{]\s*([a-zA-Z]\w+)\s*:/g
+const PROBE8_DTO_KEY_RESERVED = new Set([
+  'if', 'for', 'while', 'switch', 'return', 'function', 'const', 'let', 'var', 'new', 'typeof',
+  'await', 'try', 'catch', 'else', 'do', 'case', 'default', 'export', 'import', 'class',
+  'extends', 'super', 'this', 'null', 'undefined', 'true', 'false',
+])
+// js 族基础三正则（+ 上方 DTO 邻近窗口族）；带 g 供 matchAll（matchAll 不推进原正则 lastIndex）
+const PROBE8_FE_FORMDATA_RE = /formData\.([a-zA-Z]\w+)/g
+const PROBE8_FE_PAYLOAD_RE = /payload\.([a-zA-Z]\w+)/g
+const PROBE8_FE_NAME_RE = /name="(\w+)"/g
+// vue 追加：v-model 绑定值 + prop 属性值（(?<![:\w]) 排 vue 动态绑定 :prop= 与连写词内 prop=）
+const PROBE8_FE_VMODEL_RE = /v-model="(\w+)"/g
+const PROBE8_FE_PROP_RE = /(?<![:\w])prop="(\w+)"/g
+// wxml 追加：value 插值绑定值 + data- 前缀属性名（事件传参 data-xxx= 形态）
+const PROBE8_FE_WXML_VALUE_RE = /value="{{(\w+)}}"/g
+const PROBE8_FE_WXML_DATA_RE = /data-(\w+)=/g
+// URL 捕获：请求调用首参（引号/反引号/斜杠起始；变量首参不收，fail-visible 保守面）
+const PROBE8_URL_CALL_RE = /\b(?:fetch|post|put|delete|getRequest|postRequest|putRequest|deleteRequest|search)\s*\(\s*['"`/]([^'"`,\s]+)/g
+
+/** 字段名归一：snake_case → lowerCamel（_x → X，_ 后随字母数字大写化） */
+const camelProbe8Field = (s) => String(s || '').replace(/_([A-Za-z0-9])/g, (_, c) => c.toUpperCase())
+
+/** URL 归一化三步：去 ?query → 去首 /api/ 前缀 → 去尾斜杠（task-04 段边界匹配消费口径） */
+const normalizeProbe8Url = (u) => String(u || '')
+  .split('?')[0]
+  .replace(/^\/?api\//, '')
+  .replace(/\/+$/, '')
+
+/**
+ * 段边界后缀匹配（task-02）：前端归一 URL 是否为后端完整 path 的路径段边界后缀——
+ * backendPath === frontendUrl ‖ 以 '/'+frontendUrl 收尾 ‖ 以 frontendUrl+'/' 收尾。
+ * 段首对齐：'/orders' 命中 '/api/v1/orders' 不命中 '/rporders'（裸 endsWith 的段中假阳防线）。
+ * @param {string} frontendUrl 前端归一 URL
+ * @param {string} backendPath 后端完整 path（类级+方法级 @RequestMapping 拼接形态）
+ * @returns {boolean}
+ */
+export function isSegmentSuffix(frontendUrl, backendPath) {
+  // 前后都归一去前导/尾随斜杠再比——修前导斜杠缺口（task-06 发现：'/' + '/orders'
+  // 拼成 '//orders' 永不命中，非 /api/ 前缀前端 URL 对 /api 前缀后端端点静默失联）
+  const fe = String(frontendUrl || '').trim().replace(/^\/+|\/+$/g, '')
+  const be = String(backendPath || '').trim().replace(/^\/+|\/+$/g, '')
+  if (!fe || !be) return false
+  return be === fe || be.endsWith('/' + fe)
+}
+
+/**
+ * extractFrontendPayloadFields——前端载荷构造点字段提取（task-02）。
+ *   - 逃生门：文件前 5 行任意一行含 probe8-skip → escapeHatch=true 整文件跳过
+ *     （probe9-skip 文件级豁免同款先例；不限定注释形态——js/vue/wxml 注释语法各异）。
+ *   - fields：归一（snake→lowerCamel）后字段名数组（首命中序，Set 语义去重）；
+ *   - fieldLines：Map<归一字段, 首命中行号（1-based，多族命中取最小行号）>——task-04
+ *     driftWarnings 行号来源；
+ *   - urlsByCall：{ url, normalizedUrl, line }[] 逐请求调用记录——无 URL 文件产出空数组
+ *     （未关联端点面处置归 task-04）。
+ * 三后缀之外的文件返回空面（escapeHatch=false）。
+ * @param {string} filePath 仓根相对路径（反斜杠/大小写容忍）
+ * @param {string} content 文件全文
+ * @returns {{ escapeHatch: boolean, fields: string[], fieldLines: Map<string, number>,
+ *   urlsByCall: Array<{ url: string, normalizedUrl: string, line: number}> }}
+ */
+export function extractFrontendPayloadFields(filePath, content) {
+  const text = String(content || '')
+  // 前 5 行逃生门（slice(0,5) 即第 1-5 行）
+  if (text.split('\n').slice(0, 5).some(l => l.includes('probe8-skip'))) {
+    return { escapeHatch: true, fields: [], fieldLines: new Map(), urlsByCall: [] }
+  }
+  const p = String(filePath || '').split('\\').join('/').toLowerCase()
+  const isJs = /\.(?:js|ts|jsx|tsx)$/.test(p)
+  const isVue = p.endsWith('.vue')
+  const isWxml = p.endsWith('.wxml')
+  if (!isJs && !isVue && !isWxml) {
+    return { escapeHatch: false, fields: [], fieldLines: new Map(), urlsByCall: [] }
+  }
+
+  const lines = text.split('\n')
+  const fieldLines = new Map() // 归一字段 → 首命中行号（行级族与 DTO 族独立扫描，合并取最小）
+  const record = (raw, line) => {
+    const f = camelProbe8Field(raw)
+    if (!f) return
+    const prev = fieldLines.get(f)
+    if (prev === undefined || line < prev) fieldLines.set(f, line)
+  }
+
+  // ── 行级匹配族：js 基础三正则（formData./payload./name=）+ vue/wxml 追加族 ──
+  const lineRes = [PROBE8_FE_FORMDATA_RE, PROBE8_FE_PAYLOAD_RE, PROBE8_FE_NAME_RE]
+  if (isVue) lineRes.push(PROBE8_FE_VMODEL_RE, PROBE8_FE_PROP_RE)
+  if (isWxml) lineRes.push(PROBE8_FE_WXML_VALUE_RE, PROBE8_FE_WXML_DATA_RE)
+  for (let i = 0; i < lines.length; i++) {
+    for (const re of lineRes) {
+      for (const m of lines[i].matchAll(re)) record(m[1], i + 1)
+    }
+  }
+
+  // ── 请求调用：调用行起 8 行窗口 DTO 键（窗口口径对齐 extractPayloadKeys）+ 首参 URL 捕获 ──
+  const urlsByCall = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!PROBE8_REQUEST_CALL_RE.test(lines[i])) continue
+    for (let j = i; j < Math.min(i + 8, lines.length); j++) {
+      for (const m of lines[j].matchAll(PROBE8_DTO_KEY_RE)) {
+        if (!PROBE8_DTO_KEY_RESERVED.has(m[1])) record(m[1], j + 1)
+      }
+    }
+    for (const um of lines[i].matchAll(PROBE8_URL_CALL_RE)) {
+      urlsByCall.push({ url: um[1], normalizedUrl: normalizeProbe8Url(um[1]), line: i + 1 })
+    }
+  }
+  return { escapeHatch: false, fields: [...fieldLines.keys()], fieldLines, urlsByCall }
+}
+
+// ── probe8 后端字段两趟提取器（task-03，2026-09-18-probe8-direct-compare / D-003@v1）──
+// 后端面两趟结构（Grill B-4——@RequestBody 类型名跨文件解析，单文件签名不可行）：一趟 Controller
+// 定位（类级 @RequestMapping 前缀 × 方法级动词注解 path 拼接完整端点）+ 方法签名区参数提取
+// （Grill B-3 修正正则）；二趟 @RequestBody 类型名经 resolveTypeContent 全仓回调解析出字段集
+// （R-07——变更不动实体时不再全量假阳：只解析被引用类型非全仓字段；全仓性体现在检索面由回调
+// 承担）。函数本体零文件系统 IO（纯函数可测）——全仓检索经回调注入，工厂 createTypeResolver
+// 另行导出供调用侧组装（task-05 接线）。
+// 类级前缀：@RequestMapping(value = "/x") 且位置在 class 声明前（首个命中）
+const PROBE8_CLASS_PREFIX_RE = /@RequestMapping\(\s*(?:value\s*=\s*)?["']([^"']+)["']/
+// class 声明锚（前缀只认首个 class/interface/enum 声明之前；方法级注解按 index 与之比较）
+const PROBE8_CLASS_DECL_RE = /\b(?:class|interface|enum)\s+\w+/
+// 含任一 mapping 注解 → 本文件进一趟端点提取（service/entity 的 .java 不含，天然排除）
+const PROBE8_CONTROLLER_RE = /@(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\b/
+// 方法级端点（动词组含 Request → 无动词时 'REQUEST'）：注解 path → 注解余段 [^)]* → 方法签名
+// 可见性修饰符。m[2]=方法子路径；m[0] 尾部止于可见性修饰符后（签名区起点 = m.index+m[0].length）
+const PROBE8_METHOD_MAPPING_RE = /@(Get|Post|Put|Delete|Patch|Request)Mapping\(\s*(?:value\s*=\s*)?["']([^"']+)["'][^)]*\)\s*(?:public|protected|private)\s+/g
+// 方法参数三注解（Grill B-3 修正——捕获组 2=参数名：可选注解参数串 + 可选 final + 泛型/数组
+// 类型（Grill F-6——String[]/List<String> 方括号泛型边界不误捕）+ 最后一个标识符；@RequestParam
+// 注解参数串含 required=false → 该参数非必填）
+const PROBE8_REQUEST_PARAM_RE = /@RequestParam\s*(?:\(([^)]*)\))?\s+(?:final\s+)?(?:\w+(?:<[^>]+>)?(?:\[\])?)\s+(\w+)/g
+// @RequestParam 注解显式 value 名命中时参数名取它（括号紧邻裸串或 value= 形态；defaultValue=
+// 等其他键不命中——括号紧邻约束保证）
+const PROBE8_REQUEST_PARAM_VALUE_RE = /@RequestParam\(\s*(?:value\s*=\s*)?["'](\w+)["']/
+const PROBE8_REQUIRED_FALSE_RE = /required\s*=\s*false/
+const PROBE8_PATH_VARIABLE_RE = /@PathVariable\s+(?:final\s+)?(?:\w+\s+)?(\w+)/g
+const PROBE8_REQUEST_BODY_RE = /@RequestBody\s+(?:final\s+)?(\w+)/g
+// 必填形态①（D-003）：校验注解行起向下 5 行窗口内首个 private 字段声明
+const PROBE8_NOT_NULL_RE = /@(?:NotNull|NotBlank|NotEmpty)\b/
+const PROBE8_PRIVATE_FIELD_RE = /private\s+\w+(?:<[^>]+>)?(?:\[\])?\s+(\w+)\s*;/
+// 必填形态③：方法体前 30 行校验调用三模式（StringBlankValidator 首参 / Valid.valid 同行或
+// 上一行字段名 / if 判空字段名）
+const PROBE8_SBV_RE = /StringBlankValidator\s*\(\s*["'](\w+)["']/
+const PROBE8_VALID_LINE_RE = /\bValid\.valid/
+const PROBE8_VALID_ARG_RE = /\bValid\.valid\w*\(\s*(\w+)/
+// 上一行标识符宽收（形态③「上一行字段名」落点）：小写起始 + 不紧邻 `(`（排调用名）+ 停用词集
+const PROBE8_VALID_IDENT_RE = /\b([a-z][A-Za-z0-9]*)\b(?!\s*\()/g
+const PROBE8_VALID_IDENT_STOP = new Set([
+  'valid', 'final', 'new', 'return', 'if', 'else', 'while', 'for', 'switch', 'case', 'catch',
+  'null', 'true', 'false', 'this', 'super', 'static', 'public', 'private', 'protected',
+  'string', 'integer', 'int', 'long', 'double', 'float', 'boolean', 'date', 'object',
+])
+const PROBE8_IF_NULL_RE = /if\s*\(\s*(\w+)\s*==\s*null/
+// 实体/dto 文件形（diff 面直接解析不依赖 @RequestBody 引用链）
+const PROBE8_ENTITY_CLASS_RE = /class\s+\w+\s*(?:extends|implements|\{)/
+
+/** 端点 path 拼接：prefix × 方法子路径，去重复 /（"/api/" + "/add" → "/api/add"） */
+function joinProbe8Path(prefix, methodPath) {
+  const p = String(prefix || '')
+  const m = String(methodPath || '')
+  if (!p) return m
+  if (!m) return p
+  return (p.endsWith('/') ? p.slice(0, -1) : p) + (m.startsWith('/') ? m : '/' + m)
+}
+
+/** private 字段声明名集（二趟 DTO / diff 面实体共用；g 正则局部化 matchAll，无共享 lastIndex 风险） */
+function probe8PrivateFieldNames(content) {
+  const out = new Set()
+  for (const m of String(content || '').matchAll(/private\s+\w+(?:<[^>]+>)?(?:\[\])?\s+(\w+)\s*;/g)) out.add(m[1])
+  return out
+}
+
+/** 必填形态①（D-003）：@(NotNull|NotBlank|NotEmpty) 行起向下 5 行窗口内首个 private 字段声明名集 */
+function probe8NotNullFields(content) {
+  const lines = String(content || '').split('\n')
+  const out = new Set()
+  for (let i = 0; i < lines.length; i++) {
+    if (!PROBE8_NOT_NULL_RE.test(lines[i])) continue
+    for (let j = i; j < Math.min(i + 5, lines.length); j++) {
+      const fm = lines[j].match(PROBE8_PRIVATE_FIELD_RE)
+      if (fm) { out.add(fm[1]); break }
+    }
+  }
+  return out
+}
+
+/**
+ * 必填形态③（D-003）：方法体前 30 行校验调用三模式字段名集——
+ * StringBlankValidator("x") 首参 / Valid.valid 同行首参 + 上一行标识符宽收（R-02 宁多勿漏）/
+ * if (x == null) 判空字段。
+ */
+function probe8BodyCheckFields(winLines) {
+  const out = new Set()
+  for (let k = 0; k < winLines.length; k++) {
+    const line = winLines[k]
+    const sbv = line.match(PROBE8_SBV_RE)
+    if (sbv) out.add(sbv[1])
+    const ifn = line.match(PROBE8_IF_NULL_RE)
+    if (ifn) out.add(ifn[1])
+    if (PROBE8_VALID_LINE_RE.test(line)) {
+      const arg = line.match(PROBE8_VALID_ARG_RE)
+      if (arg) out.add(arg[1])
+      if (k > 0) {
+        for (const idm of winLines[k - 1].matchAll(PROBE8_VALID_IDENT_RE)) {
+          if (!PROBE8_VALID_IDENT_STOP.has(idm[1])) out.add(idm[1])
+        }
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * extractBackendFields——后端面两趟提取（task-03，D-003@v1）。
+ *   - 逃生门：文件前 5 行任意一行含 probe8-skip → escapeHatchCount++ 整文件跳过（与前端
+ *     task-02 同门，不限定注释形态；优先于非 Java 判定——hatch 是整文件主动退出）；
+ *   - 非 Java：分类面 backend 但非 .java（目录启发式命中的 .ts 等）→ nonJavaSkipCount++；
+ *   - 一趟 Controller（含六个 mapping 注解任一）：类级 @RequestMapping 前缀 × 方法级动词注解
+ *     path 拼接完整端点（去重复 /）；方法级 @RequestMapping → method='REQUEST'；prefix 存在
+ *     但零方法级端点 → 类级通配 {prefix, 'REQUEST'}；方法签名区（注解尾至方法体首 `{`）提取
+ *     @RequestParam（三态：正常参数名 / required=false 非必填 / value 注解显式名）/ @PathVariable
+ *     （URL 段参数，非载荷字段只进参数集）/ @RequestBody（类型名收二趟待解析集）；
+ *   - 必填三形态（D-003）：①校验注解 5 行窗口（二趟类型内容上扫，命中归引用该类型的端点）；
+ *     ②@RequestParam 排除 required=false 后全必填（Spring 缺省 true）；③方法体前 30 行校验
+ *     调用三模式；
+ *   - 二趟：@RequestBody 类型名经 resolveTypeContent(typeName) 全仓回调解析（返 null / 抛错
+ *     均 fail-soft 不炸）→ private 字段集 = 端点 bodyFields（并入 entityFields）+ ①必填扫描；
+ *     diff 面非 Controller 实体文件（class 声明形）直接解析（不依赖 @RequestBody 引用链）；
+ *   - backendAllFields = 二趟类型字段 ∪ 一趟 Controller 方法参数名 ∪ diff 面实体字段
+ *     （全仓并集非仅 diff 面，Grill B-7）。
+ * @param {Array<{path: string, content: string}>} files 分类面 backend 文件集
+ * @param {(typeName: string) => string|null} [resolveTypeContent] 二趟全仓类型定义查找回调
+ * @returns {{ entityFields: string[], endpoints: Array<{path: string, method: string,
+ *   requiredFields: string[], bodyFields: string[]}>, backendAllFields: string[],
+ *   escapeHatchCount: number, nonJavaSkipCount: number }}
+ */
+export function extractBackendFields(files, resolveTypeContent) {
+  const resolve = typeof resolveTypeContent === 'function' ? resolveTypeContent : () => null
+  const entityFields = new Set() // 二趟类型字段 ∪ diff 面实体字段
+  const controllerParams = new Set() // 一趟全部 Controller 方法参数名
+  const endpoints = [] // {path, method, required:Set, bodyFields:Set, bodyTypes:string[]}
+  let escapeHatchCount = 0
+  let nonJavaSkipCount = 0
+
+  for (const f of Array.isArray(files) ? files : []) {
+    const path = String((f && f.path) || '').split('\\').join('/')
+    const text = String((f && f.content) || '')
+    if (text.split('\n').slice(0, 5).some(l => l.includes('probe8-skip'))) { escapeHatchCount++; continue }
+    if (!path.toLowerCase().endsWith('.java')) { nonJavaSkipCount++; continue }
+
+    if (!PROBE8_CONTROLLER_RE.test(text)) {
+      // 非 Controller：diff 面实体/dto 直接解析（class 声明形，不依赖 @RequestBody 引用链）
+      if (PROBE8_ENTITY_CLASS_RE.test(text)) {
+        for (const name of probe8PrivateFieldNames(text)) entityFields.add(name)
+      }
+      continue
+    }
+
+    // ── 一趟：类级前缀 + 方法级端点 ──
+    const lines = text.split('\n')
+    const classDecl = text.match(PROBE8_CLASS_DECL_RE)
+    const classIdx = classDecl ? classDecl.index : -1
+    let prefix = ''
+    const pm = text.match(PROBE8_CLASS_PREFIX_RE)
+    if (pm && (classIdx < 0 || pm.index < classIdx)) prefix = pm[1]
+
+    let fileEndpointCount = 0
+    for (const m of text.matchAll(PROBE8_METHOD_MAPPING_RE)) {
+      if (classIdx >= 0 && m.index < classIdx) continue // 类级 @RequestMapping 非方法端点
+      const method = m[1] === 'Request' ? 'REQUEST' : m[1].toUpperCase()
+      // 方法签名区：注解尾（m[0] 止于可见性修饰符）至方法体首 `{`；无 `{`（抽象/接口）取到文末
+      const sigStart = m.index + m[0].length
+      const braceIdx = text.indexOf('{', sigStart)
+      const sigText = text.slice(sigStart, braceIdx < 0 ? text.length : braceIdx)
+      const ep = {
+        path: joinProbe8Path(prefix, m[2]),
+        method,
+        required: new Set(),
+        bodyFields: new Set(),
+        bodyTypes: [],
+      }
+      // @RequestParam 三态（数组/泛型边界不误捕；value 注解显式名优先于声明参数名）
+      for (const rp of sigText.matchAll(PROBE8_REQUEST_PARAM_RE)) {
+        const annoSeg = rp[1] === undefined ? '' : `@RequestParam(${rp[1]})`
+        const vm = annoSeg ? annoSeg.match(PROBE8_REQUEST_PARAM_VALUE_RE) : null
+        const name = vm ? vm[1] : rp[2]
+        controllerParams.add(name)
+        if (!(rp[1] && PROBE8_REQUIRED_FALSE_RE.test(rp[1]))) ep.required.add(name) // ② Spring 缺省必填
+      }
+      // @PathVariable 参数名进一趟参数集（URL 段非载荷字段，不计端点必填）
+      for (const pv of sigText.matchAll(PROBE8_PATH_VARIABLE_RE)) controllerParams.add(pv[1])
+      // @RequestBody 类型名收二趟待解析集
+      for (const rb of sigText.matchAll(PROBE8_REQUEST_BODY_RE)) ep.bodyTypes.push(rb[1])
+      // ③ 方法体前 30 行校验调用三模式 → 端点必填
+      if (braceIdx >= 0) {
+        const braceLine = text.slice(0, braceIdx).split('\n').length // `{` 所在行（1-based）
+        const win = lines.slice(braceLine - 1, braceLine - 1 + 30)
+        for (const name of probe8BodyCheckFields(win)) ep.required.add(name)
+      }
+      endpoints.push(ep)
+      fileEndpointCount++
+    }
+    // prefix 存在但零方法级端点 → 类级通配（无动词可判，method='REQUEST'）
+    if (prefix && fileEndpointCount === 0) {
+      endpoints.push({ path: prefix, method: 'REQUEST', required: new Set(), bodyFields: new Set(), bodyTypes: [] })
+    }
+  }
+
+  // ── 二趟：@RequestBody 类型名经全仓回调解析（typeCache 去重同名类型重复解析）──
+  const typeCache = new Map()
+  for (const ep of endpoints) {
+    for (const tn of ep.bodyTypes) {
+      if (!typeCache.has(tn)) {
+        let c = null
+        try { c = resolve(tn) } catch { c = null } // 回调抛错 fail-soft 视为 null
+        typeCache.set(tn, typeof c === 'string' ? c : null)
+      }
+      const content = typeCache.get(tn)
+      if (!content) continue // 类型不可解析（null）不炸——bodyFields 留空
+      for (const name of probe8PrivateFieldNames(content)) { ep.bodyFields.add(name); entityFields.add(name) }
+      // ① 校验注解 5 行窗口必填 → 归引用该类型的端点
+      for (const name of probe8NotNullFields(content)) ep.required.add(name)
+    }
+  }
+
+  const backendAllFields = new Set([...entityFields, ...controllerParams])
+  return {
+    entityFields: [...entityFields].sort(),
+    endpoints: endpoints.map(e => ({
+      path: e.path,
+      method: e.method,
+      requiredFields: [...e.required].sort(),
+      bodyFields: [...e.bodyFields].sort(),
+    })),
+    backendAllFields: [...backendAllFields].sort(),
+    escapeHatchCount,
+    nonJavaSkipCount,
+  }
+}
+
+// 二趟全仓检索的 .java 文件大小上限（Grill F-6——超大生成文件不进类型表）
+const PROBE8_JAVA_FILE_CAP = 500 * 1024
+
+/**
+ * createTypeResolver——二趟全仓类型解析回调工厂（task-05 调用侧组装）。readdirSync 递归扫
+ * srcRoot 下 .java（statSync 大小 cap 500KB，超限跳过），内容首个 class/interface/enum 声明名
+ * （缺失退文件名 stem）→ Map<className, content>；同名类先见先留（不覆写不炸）。srcRoot 不可
+ * 读/不存在 → 空表闭包（恒返 null，fail-soft）。做 IO 的是本工厂非 extractBackendFields 本体
+ * （纯函数约束）。
+ * @param {string} srcRoot 扫描根（仓根的 src/ 或 src/main/java 等——由调用侧定）
+ * @returns {(typeName: string) => string|null}
+ */
+export function createTypeResolver(srcRoot) {
+  const typeMap = new Map()
+  const walk = (dir) => {
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      const full = join(dir, e.name)
+      try {
+        if (e.isDirectory()) { walk(full); continue }
+        if (!e.isFile() || !e.name.toLowerCase().endsWith('.java')) continue
+        if (statSync(full).size > PROBE8_JAVA_FILE_CAP) continue
+        const content = readFileSync(full, 'utf8')
+        const decl = content.match(/\b(?:class|interface|enum)\s+([A-Za-z_]\w*)/)
+        const name = (decl && decl[1]) || e.name.replace(/\.java$/, '')
+        if (!typeMap.has(name)) typeMap.set(name, content)
+      } catch { /* 单文件不可读——跳过 */ }
+    }
+  }
+  walk(String(srcRoot || ''))
+  return (typeName) => typeMap.get(typeName) || null
+}
+
+// ── probe8 direct-compare 对账+渲染（task-04，2026-09-18-probe8-direct-compare / D-002@v1·D-004@v1）──
+// 消费 task-02 前端提取面（fields/fieldLines/urlsByCall）× task-03 后端提取面（endpoints/
+// backendAllFields）做代码级字段直比，两嫌疑面（Grill B-7——backendAllFields 全仓并集防全量假阳）：
+//   - 漂移嫌疑：前端发送字段 ∉ backendAllFields（Jackson 静默丢弃风险面）；
+//   - 必填漏发嫌疑：端点 requiredFields ∉ 该端点关联前端文件发送集（EHS 缺发 reportOrgId 同族）。
+// 纯函数零 IO、advisory 档（D-004——不进 errors/warnings，独立渲染子段，命中统计供后续批次
+// 评估升格）。
+
+/**
+ * comparePayloadFields——前端×后端字段直比对账（task-04，纯函数零 IO）。
+ *   - 漂移嫌疑：非 escapeHatch 前端文件的每个 field ∉ backendAllFields → driftWarnings 逐条
+ *     {file, line（fieldLines 首命中行号，缺失 null）, field}；
+ *   - 必填漏发嫌疑：端点 requiredFields ∉ 该端点关联前端文件发送集 → missingRequiredWarnings
+ *     逐条 {endpoint, method, field, frontendFiles}。关联判定 = 端点 path 与文件 urlsByCall 的
+ *     normalizedUrl 满足 isSegmentSuffix（段边界后缀，Grill B-8——/orders 命中 /api/v1/orders
+ *     不误命中 /rporders；全等分支容忍无 /api 前缀可剥的归一原值如 /rporders）。无 URL 文件归
+ *     「未关联端点」面——仅漂移参与、漏发不参与（design §2 口径）；端点零关联文件 → 跳过漏发
+ *     判定（无发送集可比，「端点无人调用」属覆盖面非载荷面）；
+ *   - escapeHatchCount = 前端面 escapeHatch 文件聚合 + backendStats.escapeHatchCount（后端 hatch
+ *     自两提取面透传）；nonJavaSkipCount 自 backendStats 透传（后端提取面计数，三主参无承载点
+ *     → 第四可选参，缺省零）。
+ * @param {Array<{filePath: string, extract: {escapeHatch: boolean, fields: string[],
+ *   fieldLines: Map<string, number>, urlsByCall: Array<{url: string, normalizedUrl: string, line: number}>}}>} frontendByFile
+ *   逐前端文件提取面（task-02 产物按文件包装）
+ * @param {Array<{path: string, method: string, requiredFields: string[], bodyFields: string[]}>} backendEndpoints
+ *   后端端点集（task-03 产物 endpoints）
+ * @param {string[]} backendAllFields 后端全字段并集（task-03 产物 backendAllFields）
+ * @param {{escapeHatchCount?: number, nonJavaSkipCount?: number}} [backendStats]
+ *   后端提取面计数透传（缺省 {escapeHatchCount: 0, nonJavaSkipCount: 0}）
+ * @returns {{ driftWarnings: Array<{file: string, line: number|null, field: string}>,
+ *   missingRequiredWarnings: Array<{endpoint: string, method: string, field: string, frontendFiles: string[]}>,
+ *   escapeHatchCount: number, nonJavaSkipCount: number }}
+ */
+export function comparePayloadFields(frontendByFile, backendEndpoints, backendAllFields, backendStats) {
+  const feFiles = Array.isArray(frontendByFile) ? frontendByFile : []
+  const eps = Array.isArray(backendEndpoints) ? backendEndpoints : []
+  const beFields = new Set(Array.isArray(backendAllFields) ? backendAllFields : [])
+  const stats = backendStats && typeof backendStats === 'object' ? backendStats : {}
+  const statCount = (v) => (Number.isInteger(v) && v > 0 ? v : 0)
+
+  const driftWarnings = []
+  let feEscapeCount = 0
+  const urlLinkedFiles = [] // 有 URL 调用的文件 {filePath, fieldSet, urls}——漏发关联面
+  for (const fe of feFiles) {
+    const filePath = String((fe && fe.filePath) || '')
+    const ex = (fe && fe.extract) || {}
+    if (ex.escapeHatch) { feEscapeCount++; continue }
+    const fields = Array.isArray(ex.fields) ? ex.fields : []
+    for (const f of fields) {
+      if (!beFields.has(f)) {
+        const line = ex.fieldLines instanceof Map ? ex.fieldLines.get(f) : undefined
+        driftWarnings.push({ file: filePath, line: typeof line === 'number' ? line : null, field: f })
+      }
+    }
+    const urlsByCall = Array.isArray(ex.urlsByCall) ? ex.urlsByCall : []
+    if (urlsByCall.length === 0) continue // 无 URL 文件：未关联端点面——仅上方漂移参与
+    urlLinkedFiles.push({
+      filePath,
+      fieldSet: new Set(fields),
+      urls: urlsByCall.map(u => u && u.normalizedUrl).filter(Boolean),
+    })
+  }
+
+  const missingRequiredWarnings = []
+  for (const ep of eps) {
+    const path = String((ep && ep.path) || '')
+    const method = String((ep && ep.method) || '')
+    const required = Array.isArray(ep && ep.requiredFields) ? ep.requiredFields : []
+    if (required.length === 0) continue
+    const linked = urlLinkedFiles.filter(f => f.urls.some(u => isSegmentSuffix(u, path)))
+    if (linked.length === 0) continue // 零关联文件：无发送集可比，漏发不判（覆盖面归 API 矩阵）
+    const sentUnion = new Set()
+    for (const f of linked) for (const x of f.fieldSet) sentUnion.add(x)
+    for (const field of required) {
+      if (!sentUnion.has(field)) {
+        missingRequiredWarnings.push({ endpoint: path, method, field, frontendFiles: linked.map(f => f.filePath) })
+      }
+    }
+  }
+
+  return {
+    driftWarnings,
+    missingRequiredWarnings,
+    escapeHatchCount: feEscapeCount + statCount(stats.escapeHatchCount),
+    nonJavaSkipCount: statCount(stats.nonJavaSkipCount),
+  }
+}
+
+/** direct-compare 子段标题前缀（renderProbe8Lines 尾部子段调用锚） */
+const PROBE8_DIRECT_COMPARE_PREFIX = '- direct-compare:'
+
+/**
+ * renderDirectCompareSection——direct-compare 子段渲染（task-04，advisory 独立面）。
+ * 命中统计行 + 逐条明细行（漂移/漏发各一节）；全零态输出「无命中」行。防撞约束（task 卡
+ * acceptance）：明细行以 `` - ⚠️ ` `` 反引号开头，行首字面与 verify-postcheck.js 的
+ * PROBE8_CONTRACT_ORPHANS_LINE_RE / PROBE8_MISSING_REQUIRED_LINE_RE（`- ⚠️ 契约外载荷键 N 条`/
+ * `- ⚠️ 契约必填漏发 N 条` 字面前缀）严格不同——渲染行永不进两锚点的 N 求和（负例断言归
+ * task-06）；PROBE1_HIT_LINE_RE 虽同形但按探针子节定界只统计 s1，本子段落 s8 不进其计数。
+ * @param {{ driftWarnings?: Array<{file: string, line: number|null, field: string}>,
+ *   missingRequiredWarnings?: Array<{endpoint: string, method: string, field: string, frontendFiles: string[]}>,
+ *   escapeHatchCount?: number, nonJavaSkipCount?: number }} compareResult
+ * @returns {string[]} 行数组（不含段标题——拼进探针 8 段尾部）
+ */
+export function renderDirectCompareSection(compareResult) {
+  const r = compareResult && typeof compareResult === 'object' ? compareResult : {}
+  const drift = Array.isArray(r.driftWarnings) ? r.driftWarnings : []
+  const missing = Array.isArray(r.missingRequiredWarnings) ? r.missingRequiredWarnings : []
+  const esc = r.escapeHatchCount ?? 0
+  const nonJava = r.nonJavaSkipCount ?? 0
+  const L = []
+  if (drift.length === 0 && missing.length === 0) {
+    L.push(`${PROBE8_DIRECT_COMPARE_PREFIX} 无命中（漂移 0 / 漏发 0）`)
+    // 全零态仍保全跳过面计数（advisory 信息不丢——hatch/非 Java 跳过与命中数是独立维度）
+    if (esc > 0 || nonJava > 0) {
+      L.push(`- ℹ️ direct-compare: escape hatch ${esc} 文件 / 非 Java 后端跳过 ${nonJava} 文件`)
+    }
+    return L
+  }
+  L.push(`${PROBE8_DIRECT_COMPARE_PREFIX} 漂移嫌疑 ${drift.length} 条 / 必填漏发嫌疑 ${missing.length} 条 / escape hatch ${esc} 文件 / 非 Java 后端跳过 ${nonJava} 文件`)
+  for (const d of drift) {
+    L.push(`- ⚠️ \`${d.file}:${d.line ?? '?'}\` ${d.field} —— 不在后端字段集（漂移嫌疑）`)
+  }
+  for (const m of missing) {
+    L.push(`- ⚠️ \`${m.endpoint} ${m.method} ${m.field}\` —— 后端必填但前端未发送（必填漏发嫌疑，关联面：${(m.frontendFiles || []).join('、') || '?'}）`)
+  }
+  return L
+}
+
 
 // ── 探针 8 契约维度（task-01，2026-09-16 跨层契约探针扩展）──
 // design.md 的契约类章节（接口定义/数据模型等）字段表是「文档契约面」——既有三面（Java 字段/
@@ -378,12 +1140,20 @@ export function classifyConsumerHints(paths) {
  * 探针 8 主体：design 清单三面文件（Java/SQL/前端）→ 双根（主仓 ∪ worktree）∪ 跨仓注册仓根
  * 读取 → 归一化比对。advisory：所有输出是「候选」不是结论（UI 本地态键/服务端填充列会自然
  * 出现在差异里，agent 逐条复核——口径注记随渲染输出）。
- * @param {{ specBase: string, cwd: string, wtRoot?: string|null, changeName: string }} args
+ * @param {{ specBase: string, cwd: string, wtRoot?: string|null, changeName: string,
+ *   diffFiles?: {frontend?: string[], backend?: string[]}|null }} args
+ *   diffFiles（task-04 参数化预留，task-05 已接线）：显式传入时优先（测试注入口）直接组装
+ *   direct-compare；缺省 null → 内部 collectProbe8DiffFiles 三态采集（worktree diff /
+ *   in-place diff / design-list 兜底）喂同一组装块，并落模式注记（design-list 态含
+ *   「direct-compare 面可能不全」）与 designOnlyPaths advisory 行（详见函数尾接线块）。
  * @returns {{applicable, backendFieldCount, feKeyCount, notNullCount, javaFileCount, sqlFileCount, feFileCount,
  *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[],
- *   contractCount: number, contractOrphans: Array<{fe, hint?}>, missingRequired: Array<{field, contract}>}}
+ *   contractCount: number, contractOrphans: Array<{fe, hint?}>, missingRequired: Array<{field, contract}>,
+ *   directCompare?: {driftWarnings: Array<{file, line: number|null, field}>,
+ *     missingRequiredWarnings: Array<{endpoint, method, field, frontendFiles: string[]}>,
+ *     escapeHatchCount: number, nonJavaSkipCount: number}}}
  */
-export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeName }) {
+export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeName, diffFiles = null }) {
   const out = {
     applicable: false, backendFieldCount: 0, feKeyCount: 0, notNullCount: 0,
     javaFileCount: 0, sqlFileCount: 0, feFileCount: 0,
@@ -549,6 +1319,57 @@ export function runProbe8PayloadParity({ specBase, cwd, wtRoot = null, changeNam
   out.backendFieldCount = backendFields.size
   out.feKeyCount = feKeys.size
   out.notNullCount = notNullCols.size
+
+  // ── probe8 diff 源接线（task-05，D-001@v1）：direct-compare 维度的文件面从 design 清单
+  // 切换为 collectProbe8DiffFiles 三态采集（worktree diff / in-place diff / design-list 兜底），
+  // 分类面（frontend/backend）喂 task-04 组装块；上文 design 清单三面/契约面对账（readEntry
+  // 消费 detailed 的既有逻辑 + contractOrphans/missingRequired）零改动——diff 源只替换
+  // direct-compare 维度文件面，不替换契约面文件面。外部 diffFiles 显式传入时优先（测试注
+  // 入口，跳过采集零注记）。采集器 notes 全量转发（三态模式注记/跨仓失败注记 fail-visible）；
+  // design-list 态补「direct-compare 面可能不全」风险注记；designOnlyPaths 非空落 advisory
+  // 行（design 声明但 diff 面无——不参与对账不阻断，供人工复核）。跨仓 diff 面产物是仓根相对
+  // 路径且无 repo 标记，readEntry 按主仓双根读不到即跳过（fail-soft，直比面跨仓缺位是已知
+  // 边界；主仓恰有同名路径时读主仓文件，advisory 面可接受）。──
+  let diffFace = diffFiles
+  if (!diffFace) {
+    const collected = collectProbe8DiffFiles({ cwd, changeName, specBase, repoKeys: [...registry.keys()] })
+    for (const n of collected.notes) out.notes.push(n)
+    if (collected.source === 'design-list') {
+      out.notes.push('文件源=design 清单（diff 不可用）——direct-compare 面可能不全')
+    }
+    if (collected.designOnlyPaths.length > 0) {
+      out.notes.push(`design 声明但 diff 无的路径（advisory，不阻断）：${collected.designOnlyPaths.join('、')}`)
+    }
+    diffFace = { frontend: collected.frontend, backend: collected.backend }
+  }
+
+  // ── direct-compare 组装（task-04 参数化，task-05 接线）：diffFace（外部注入或内部采集，
+  // collectProbe8DiffFiles 产物形态 {frontend, backend} 路径数组）时组装代码级直比面挂
+  // out.directCompare（渲染经 renderProbe8Lines 尾部子段消费）；两数组全缺 → 键恒缺省。
+  // 读取复用 readEntry（主仓∪worktree 双根 + 跨仓注册，fail-visible 注记）；二趟类型解析
+  // wtRoot/src→cwd/src 串行 miss-chain（createTypeResolver 各自 fail-soft，零新增 IO 边）。──
+  if (diffFace && (Array.isArray(diffFace.frontend) || Array.isArray(diffFace.backend))) {
+    const frontendByFile = []
+    for (const p of Array.isArray(diffFace.frontend) ? diffFace.frontend : []) {
+      const content = readEntry({ path: p })
+      if (content == null) continue
+      frontendByFile.push({ filePath: p, extract: extractFrontendPayloadFields(p, content) })
+    }
+    const backendFiles = []
+    for (const p of Array.isArray(diffFace.backend) ? diffFace.backend : []) {
+      const content = readEntry({ path: p })
+      if (content == null) continue
+      backendFiles.push({ path: p, content })
+    }
+    const resolvers = [wtRoot, cwd].filter(Boolean).map(b => createTypeResolver(join(b, 'src')))
+    const be = extractBackendFields(backendFiles, (tn) => {
+      for (const r of resolvers) { const c = r(tn); if (c) return c }
+      return null
+    })
+    out.directCompare = comparePayloadFields(frontendByFile, be.endpoints, be.backendAllFields, {
+      escapeHatchCount: be.escapeHatchCount, nonJavaSkipCount: be.nonJavaSkipCount,
+    })
+  }
   return out
 }
 
@@ -1470,7 +2291,12 @@ export function renderVerifyProbesReport(result) {
  * @param {{applicable: boolean, backendFieldCount?: number, feKeyCount?: number, notNullCount?: number,
  *   javaFileCount?: number, sqlFileCount?: number, feFileCount?: number,
  *   mispairs: Array<{fe,be}>, feOnly: string[], missingNotNull: Array<{col}>, notes: string[],
- *   contractCount?: number, contractOrphans?: Array<{fe, hint?}>, missingRequired?: Array<{field, contract}>}} p8
+ *   contractCount?: number, contractOrphans?: Array<{fe, hint?}>, missingRequired?: Array<{field, contract}>,
+ *   directCompare?: {driftWarnings: Array<{file, line: number|null, field}>,
+ *     missingRequiredWarnings: Array<{endpoint, method, field, frontendFiles: string[]}>,
+ *     escapeHatchCount: number, nonJavaSkipCount: number}}} p8
+ *   directCompare（task-04）：runProbe8PayloadParity 在外部传入 diffFiles 时组装的代码级直比
+ *   面——缺失（存量调用/兜底形态）时子段 if 块静默跳过，零回归。
  * @returns {string[]} 行数组（含段标题）
  */
 function renderProbe8Lines(p8) {
@@ -1504,6 +2330,10 @@ function renderProbe8Lines(p8) {
     L.push('- ✅ 载荷字段面零疑似差异（归一化覆盖 + NOT NULL 全见）')
   }
   for (const n of p8.notes || []) L.push(`- ℹ️ ${n}`)
+  // direct-compare 子段（task-04）：代码级直比面（漂移嫌疑/必填漏发嫌疑，advisory 独立面——
+  // 不进 errors/warnings）。独立 if 块，删除即整体回退；p8.directCompare 缺失（存量调用/兜底
+  // 形态）时静默跳过零回归。明细行防撞 verify-postcheck PROBE8 锚点（行首字面前缀不同）。
+  if (p8.directCompare) L.push(...renderDirectCompareSection(p8.directCompare))
   return L
 }
 

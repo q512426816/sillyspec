@@ -91,6 +91,7 @@ modules:
       - src/knowledge-hits.js
       - src/knowledge-classify.js
       - src/knowledge-stats.js
+      - src/fr-index.js
       - src/doctor-diagnostics.js
       - src/fr-index.js
       - src/fs-atomic.js

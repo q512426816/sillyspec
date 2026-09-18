@@ -122,6 +122,30 @@ test('契约外键命中：sourceShdId ∉ 契约面 → contractOrphans；既�
   assert.ok(!PROBE8_CONTRACT_ORPHANS_LINE_RE.test('- ⚠️ 疑似字段错位配对（前后端名近形，人工核实一对一映射）：a ↔ b'), '不认错位配对行（形态区分）')
   assert.ok(!PROBE8_CONTRACT_ORPHANS_LINE_RE.test('  - ⚠️ 契约外载荷键 2 条（缩进行）'), '行首锚定（缩进不命中）')
   assert.ok(!PROBE8_MISSING_REQUIRED_LINE_RE.test('- ⚠️ NOT NULL 列前端未见（候选必填缺送/服务端填充）：c'), '不认 NOT NULL 行（形态区分）')
+
+  // task-05 接线随行（2026-09-18-probe8-direct-compare）：探针 8 段尾追加 direct-compare 子段
+  // （本 fixture 内部采集产全零面，此处注入非零 directCompare 钉渲染集成）——子段在场时两锚值
+  // 仍=契约面机械计数（direct-compare 明细行行首字面与锚点前缀不同，防撞契约的 round-trip 侧）。
+  const withDc = renderVerifyProbesReport({
+    probe1: { matches: [], globEntries: [], worktreeHits: 0, skippedFiles: [] },
+    probe3: { tasks: [], note: '语义判断留 agent' },
+    probe5: { summary: 'No scan root for parity check' },
+    probe6: { unavailable: false, deletions: [], note: 'git diff 对账' },
+    probe8: {
+      ...r,
+      directCompare: {
+        driftWarnings: [{ file: 'src/services/rp.js', line: 4, field: 'leaderUserId' }],
+        missingRequiredWarnings: [{ endpoint: '/v1/rp/order', method: 'POST', field: 'reportOrgId', frontendFiles: ['src/services/rp.js'] }],
+        escapeHatchCount: 1, nonJavaSkipCount: 0,
+      },
+    },
+  })
+  assert.ok(withDc.includes('- direct-compare: 漂移嫌疑 1 条 / 必填漏发嫌疑 1 条'), 'direct-compare 子段落进探针 8 段尾')
+  const anchorsDc = parseProbePrefillAnchors(withDc)
+  assert.equal(anchorsDc.probe8ContractOrphans, r.contractOrphans.length,
+    `direct-compare 子段在场不扰契约外载荷键锚（实际 ${anchorsDc.probe8ContractOrphans} vs ${r.contractOrphans.length}）`)
+  assert.equal(anchorsDc.probe8MissingRequired, r.missingRequired.length,
+    `direct-compare 漏发明细行不计入契约必填漏发锚（实际 ${anchorsDc.probe8MissingRequired} vs ${r.missingRequired.length}）`)
 })
 
 test('必填漏发命中：契约「必填」+ 接口定义 POST 行 → missingRequired；去 POST 行重跑不报', () => {

@@ -56,7 +56,7 @@
 变更：2026-08-08-concurrent-write-preflight
 锚点：未记录
 最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
-理由：complete-handlers.js:1262 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
+理由：complete-handlers.js:1293 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
 
 ## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
 状态：implemented
@@ -382,3 +382,55 @@
 理由：「归档 change 的 FR 索引条目在场+取代已标记」需要事后可查，但 93 份存量归档不回填（评审裁决不补历史）。
 故障面：本变更自身归档即首个 epoch 后样本——索引写入失败会当场被 D14 新检查抓到（自举验证）。
 退役判据：L3 活规格落地后此检查并入树完整性检查。
+
+## D-001@v1 probe8 diff 源替换——design 清单声明面 → worktree diff 实际面
+状态：implemented
+变更：2026-09-18-probe8-direct-compare
+锚点：未记录
+最近确认：1fd78d4
+理由：probe8 现读 design 文件清单（声明面）——design 清单漏写/路径写错时整条探针静默失明（EHS 实证 C-07：design 清单与实际交付面错位是常态）。
+故障面：worktree 缺失/非 worktree 模式（in-place）→ fallback design 清单源（fail-open 注记模式）；跨仓 diff 双失败 → 探针跳过注记。
+退役判据：若前后端元数据标准化（OpenAPI 生成等），直比面切换标准产物。
+
+## D-002@v1 probe8 代码级字段直比——前端 payload 构造点字段集 vs 后端实体/DTO 字段集
+状态：implemented
+变更：2026-09-18-probe8-direct-compare
+锚点：未记录
+最近确认：1fd78d4
+理由：现行 probe8 只对账 design 契约面声明的字段（agent 声明什么对什么），不碰代码——EHS P1-1（leaderUserId≠rpLeaderUserId）三处字段错位正是代码与代码的错位，声明面对账天然盲。
+故障面：提取正则假阳/假阴（动态字段名 obj[key] 不可枚举）→ advisory 档不阻断+escape hatch；前端框架 DSL 差异（Vue/React/原生）→ 按文件后缀选匹配族+未识别后缀跳过注记。
+退役判据：批次 C smoke 落地后运行时抓字段漂移（payload 从构造点导出），静态直比降为早期预警补充。
+
+## D-003@v1 Controller 必填校验器提取——@NotNull/@NotBlank/@RequestParam(required) 三形态
+状态：implemented
+变更：2026-09-18-probe8-direct-compare
+锚点：未记录
+最近确认：1fd78d4
+理由：后端「必填」面在 Controller/Service/DTO 三层分散（注解+显式校验+DB NOT NULL），probe8 需要机械可提取的必填集做漏发对账。
+故障面：自定义校验框架不识别 → 必填集不完整（漏报侧，advisory 可接受）；校验调用误匹配（假阳）→ warning 多一条，escape hatch 兜底。
+退役判据：若后端元数据标准产物（OpenAPI spec）可用，三形态提取退役。
+
+## D-004@v1 advisory 档起步——硬门升格为后续独立决策
+状态：implemented
+变更：2026-09-18-probe8-direct-compare
+锚点：未记录
+最近确认：1fd78d4
+理由：直比 warning 的假阳率未实证——升硬门（warning→error）需要一轮真实变更的攒证。
+故障面：advisory 无阻断力（批次 A 已实证）——但直比本批定位「预警+攒证」，运行时兜底归批次 C smoke。
+退役判据：一轮实证假阳率 < 5% 后升硬门（后续变更）。
+
+## D-005@v1 非目标
+状态：implemented
+变更：2026-09-18-probe8-direct-compare
+锚点：未记录
+最近确认：1fd78d4
+理由：
+
+## D-006@v1 方案 A——probe8 内新增 direct-compare 子段
+状态：implemented
+变更：2026-09-18-probe8-direct-compare
+锚点：未记录
+最近确认：1fd78d4
+理由：用户选 A——probe8 载荷字段契约对账探针内新增 direct-compare 子段（现有 design 契约面 advisory 保留，代码直比为并行新增维度）；extractFrontendPayloadFields/extractBackendRequiredFields 独立导出，未来升 probe10/plugin 只挪注册不改逻辑。B 否决：探针膨胀+碎片化；C 否决：当前 Java+JS 两族用不上插件接口（D-005 违背）。
+故障面：probe8 文件膨胀——提取函数+对账逻辑独立区块注释锚定，膨胀可控。
+退役判据：若直比面升独立探针（攒证后），提取函数整体迁出。
