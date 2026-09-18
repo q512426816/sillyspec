@@ -427,3 +427,13 @@
 根因：摩擦#5 修复链已在 e47ab3a（ql-20260918-010）resolve 层落地并经 tmp 仓端到端实证（untracked b.js 内容进快照），但回归钉只落在 resolve 层（§5/§5b）——快照层端到端链条靠隐式维持，未来重构 resolveVerifyChangedFiles 可能静默再断
 方案：test/verify-gate-snapshot.test.mjs 追加第 4 测：meta 缺席+cwd 即 linked worktree（收养形态）跑 createVerifyGateSnapshot，断言 untracked 新文件内容进快照（ERR_MODULE_NOT_FOUND 守卫）+未提交修改 overlay 工作区版+sourceRoot 不切源；runtime.changelog.md 登记 ql-20260919-004-cbd8
 结果：node --test test/verify-gate-snapshot.test.mjs 4/4 绿（新增钉通过、既有 3 测零回归）；无 src 改动（测试-only）
+
+## ql-20260919-005-d56a | 2026-09-19 07:16:33 | 修复 core-engine 边账拼接残行——ql-20260918-005-435a 收敛为完整单行
+状态：已完成
+关联变更：（无）
+文件：
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（ql-20260918-005-435a 拼接残行收敛为完整单行）
+需求：修复 core-engine 边账拼接残行——ql-20260918-005-435a 收敛为完整单行
+根因：并行会话某次编辑把同一行追加成两截：前半截在「率 0」处截断、后半截是完整修正版（含「率 0%（第零天）」），拼在一行破坏表格形态——上轮 quick 遗留项③
+方案：删除截断残片、保留完整修正版单行；条目信息零丢失（同一 ql-ID 只出现一次）
+结果：纯 doc 改动无测试面；边账该行恢复规范表格行
