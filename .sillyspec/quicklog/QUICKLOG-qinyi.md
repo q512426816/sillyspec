@@ -404,3 +404,15 @@
 方案：注入期 join+source 遥测+stats 分组+三测试文件增量
 结果：core-engine 实测 14 条截 5+溢出+遥测 count；6/0+4 断言+10/0+lint 绿
 审计：[gate] L1（跨 2 模块 · 4 文件：2 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+
+## ql-20260919-003-d678 | 2026-09-19 06:54:00 | 修复决策追踪矩阵 linker 不剥引号——task 卡 frontmatter 引号数组全量静默失配
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-probes.js（buildDecisionChainMatrix token 归一化剥首尾成对引号（stripQuotes））
+- test/verify-quality-scan.test.mjs（追加引号形态测试：单/双/混合+反向钉（无回指 D 仍 ⚠️ 未闭环））
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（登记 ql-20260919-003-d678（含引号策略并存裁决））
+需求：修复决策追踪矩阵 linker 不剥引号——task 卡 frontmatter 引号数组全量静默失配
+根因：buildDecisionChainMatrix 解析 decision_ids/requirement_ids 流式数组 token 只 trim 不剥引号：引号写法是合法 YAML 且 agent Edit 填值主流形态，带引号字面量与 decisions.md 裸 id 永不相等，矩阵静默全量 ⚠️ 未闭环/未映射（真风险被噪声淹没）；2026-09-18 回放实验五条 D 全误报实证
+方案：src/verify-probes.js token 归一化剥首尾成对引号（单/双都收，行为只放宽不收紧，未引号卡零变化）；test/verify-quality-scan.test.mjs 补单/双/混合引号三形态+反向钉（无回指 D 仍 ⚠️，漏报检测不失效）；引号策略裁决入档 core-engine 边车——与 plan-postcheck target_files 显式拒引号的严格口径有意并存，矩阵侧禁静默错优先
+结果：verify-quality-scan.test.mjs 7/7 绿（先红后绿钉住原 bug）；回放归档夹具复跑五行全闭环（修复前五全 ⚠️）；npm run lint 过（680 文件，未引用导出 0）；local.yaml cli-core 模块测试列表补入本测试文件（gitignored）

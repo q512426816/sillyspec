@@ -179,6 +179,68 @@ test('决策链矩阵：D→FR→task 自 decisions.md × task 卡 frontmatter �
   }
 })
 
+test('决策链矩阵引号形态：单/双/混合引号 token 剥引号后与裸 id 同匹配；无回指 D 仍 ⚠️', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vqs-chain-q-'))
+  try {
+    mkdirSync(join(dir, 'tasks'), { recursive: true })
+    writeFileSync(join(dir, 'decisions.md'), [
+      '---',
+      'author: t',
+      'created_at: 2026-09-19 00:00:00',
+      '---',
+      '',
+      '## D-001@v1 决策一',
+      '- 状态：implemented',
+      '',
+      '## D-002@v1 决策二',
+      '- 状态：implemented',
+      '',
+      '## D-003@v1 决策三',
+      '- 状态：implemented',
+      '',
+      '## D-004@v1 决策四',
+      '- 状态：implemented',
+      '',
+    ].join('\n'))
+    // 回放实验实证形态：requirement_ids 未引号、decision_ids 引号（agent Edit 填值主流写法，合法 YAML）
+    writeFileSync(join(dir, 'tasks', 'task-01.md'), [
+      '---',
+      'id: task-01',
+      'title: 做 A',
+      "decision_ids: ['D-001@v1', 'D-003@v1']",
+      'requirement_ids: [FR-01]',
+      'allowed_paths: [src/a.js]',
+      '---',
+      '正文',
+    ].join('\n'))
+    writeFileSync(join(dir, 'tasks', 'task-02.md'), [
+      '---',
+      'id: task-02',
+      'title: 做 B',
+      'decision_ids: ["D-002@v1"]',
+      'requirement_ids: ["FR-02", FR-03]',
+      '---',
+      '正文',
+    ].join('\n'))
+    const matrix = buildDecisionChainMatrix(dir)
+    assert.ok(matrix, '有 decisions → 矩阵')
+    assert.equal(matrix.decisionCount, 4)
+    const row1 = matrix.rows.find((r) => r.startsWith('| D-001@v1 '))
+    assert.ok(row1.includes('task-01'), "单引号 token 剥引号后命中（'D-001@v1' ≠ D-001@v1 是原 bug）")
+    assert.ok(row1.includes('FR-01'), '未引号 requirement_ids 不受影响')
+    const row2 = matrix.rows.find((r) => r.startsWith('| D-002@v1 '))
+    assert.ok(row2.includes('task-02'), '双引号 token 剥引号后命中（"D-002@v1"）')
+    assert.ok(row2.includes('FR-02、FR-03'), 'requirement_ids 引号/裸值混合全聚合')
+    const row3 = matrix.rows.find((r) => r.startsWith('| D-003@v1 '))
+    assert.ok(row3.includes('task-01'), '同行多 token 各自剥引号')
+    // 反向钉：无任何 task 回指的 D 仍 ⚠️（剥引号只放宽匹配，不制造假闭环）
+    const row4 = matrix.rows.find((r) => r.startsWith('| D-004@v1 '))
+    assert.ok(row4.includes('未闭环') && row4.includes('未映射'), '无回指 D 仍显式标风险（漏报检测不失效）')
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }) } catch {}
+  }
+})
+
 const CLEAN_PROBES = {
   probe1: { matches: [] },
   probe3: { tasks: [{ task: 'task-01', hasTest: true, located: true }] },

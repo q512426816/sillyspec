@@ -1,0 +1,102 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+index 8d5c034..9706dcc 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.changelog.md
+@@ -35,3 +35,4 @@
+ | 2026-09-17 | ql-20260917-009-2ec3（quick） | D14 收尾：豁免账本 archive-integrity-exempt.yaml（16 份远古归档历史形态，账本外亮红/stale 提示/fail-safe）+ ir-hardening task-09 与 auto-driver task-06 簿记补勾（测试俱在直跑绿，留审计痕）+ pre-push advisory 露出（零阻断）+ DB 漂移核实结论（D4 ghostRows 已覆盖无缺口）；真实仓维度转绿 93 完整+16 豁免；测试 23→33 断言 |
+ | 2026-09-18 | 2026-09-18-fr-index-l1 | FR 稳定索引 L1（L3 证据发生器）：fr-index 五导出+distill 参数化+archive 挂载+step8 注入软门+D14 四检+handover 死锁修复；自举 FR-core-engine-001..004；证伪条款/指标可算性/探针三护栏入档 |
+ | 2026-09-18 | ql-20260918-005-435a（quick） | knowledge-stats 接入 FR 索引实验聚合（L3 裁决仪表盘）：四事件计数+按域 unreferenced+索引面统计+承接引用率；真实仓活视图：4 条/1 来源/率 0| 2026-09-18 | ql-20260918-005-435a（quick） | knowledge-stats 接入 FR 索引实验聚合（L3 裁决仪表盘）：四事件计数+按域 unreferenced+索引面统计+承接引用率；真实仓活视图 4 条/1 来源/率 0%（第零天） |
++| 2026-09-19 | ql-20260919-003-d678（quick） | 决策链矩阵 linker 引号失配修复：buildDecisionChainMatrix 对 task 卡 frontmatter decision_ids/requirement_ids token 归一化剥首尾成对引号（单/双都收，只放宽不收紧）——引号流式数组（合法 YAML，agent Edit 填值主流形态）此前与 decisions.md 裸 id 永不相等，矩阵静默全量 ⚠️ 未闭环/未映射（2026-09-18 回放实验五条 D 全误报实证）；引号策略裁决入档：plan-postcheck target_files 对引号显式拒绝（严格口径报错）与本 linker 剥引号宽松收有意并存——矩阵侧禁静默错优先；test/verify-quality-scan.test.mjs 引号三形态+混合+反向钉（无回指 D 仍 ⚠️）；回放归档夹具复跑五行全闭环 |
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index f36228e..87943c1 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -3341,10 +3341,13 @@ export function buildDecisionChainMatrix(changeDir) {
+         const id = (raw.match(/^id:\s*(\S+)/m) || [])[1] || f.replace(/\.md$/, '')
+         const decLine = (raw.match(/^decision_ids:\s*\[([^\]]*)\]/m) || [])[1] || ''
+         const reqLine = (raw.match(/^requirement_ids:\s*\[([^\]]*)\]/m) || [])[1] || ''
++        // token 剥首尾成对引号：流式数组的引号写法（['D-001@v1']）是合法 YAML 且 agent Edit 填值
++        // 主流形态，只 trim 不剥会让引号卡与 decisions.md 裸 id 永不相等（矩阵静默全量 ⚠️）
++        const stripQuotes = (s) => s.trim().replace(/^['"](.*)['"]$/, '$1').trim()
+         taskRefs.push({
+           task: id,
+-          decisions: new Set(decLine.split(',').map((s) => s.trim()).filter(Boolean)),
+-          reqs: new Set(reqLine.split(',').map((s) => s.trim()).filter(Boolean)),
++          decisions: new Set(decLine.split(',').map(stripQuotes).filter(Boolean)),
++          reqs: new Set(reqLine.split(',').map(stripQuotes).filter(Boolean)),
+         })
+       }
+     }
+diff --git a/test/verify-quality-scan.test.mjs b/test/verify-quality-scan.test.mjs
+index e334f66..d415e16 100644
+--- a/test/verify-quality-scan.test.mjs
++++ b/test/verify-quality-scan.test.mjs
+@@ -179,6 +179,68 @@ test('决策链矩阵：D→FR→task 自 decisions.md × task 卡 frontmatter 
+   }
+ })
+ 
++test('决策链矩阵引号形态：单/双/混合引号 token 剥引号后与裸 id 同匹配；无回指 D 仍 ⚠️', () => {
++  const dir = mkdtempSync(join(tmpdir(), 'vqs-chain-q-'))
++  try {
++    mkdirSync(join(dir, 'tasks'), { recursive: true })
++    writeFileSync(join(dir, 'decisions.md'), [
++      '---',
++      'author: t',
++      'created_at: 2026-09-19 00:00:00',
++      '---',
++      '',
++      '## D-001@v1 决策一',
++      '- 状态：implemented',
++      '',
++      '## D-002@v1 决策二',
++      '- 状态：implemented',
++      '',
++      '## D-003@v1 决策三',
++      '- 状态：implemented',
++      '',
++      '## D-004@v1 决策四',
++      '- 状态：implemented',
++      '',
++    ].join('\n'))
++    // 回放实验实证形态：requirement_ids 未引号、decision_ids 引号（agent Edit 填值主流写法，合法 YAML）
++    writeFileSync(join(dir, 'tasks', 'task-01.md'), [
++      '---',
++      'id: task-01',
++      'title: 做 A',
++      "decision_ids: ['D-001@v1', 'D-003@v1']",
++      'requirement_ids: [FR-01]',
++      'allowed_paths: [src/a.js]',
++      '---',
++      '正文',
++    ].join('\n'))
++    writeFileSync(join(dir, 'tasks', 'task-02.md'), [
++      '---',
++      'id: task-02',
++      'title: 做 B',
++      'decision_ids: ["D-002@v1"]',
++      'requirement_ids: ["FR-02", FR-03]',
++      '---',
++      '正文',
++    ].join('\n'))
++    const matrix = buildDecisionChainMatrix(dir)
++    assert.ok(matrix, '有 decisions → 矩阵')
++    assert.equal(matrix.decisionCount, 4)
++    const row1 = matrix.rows.find((r) => r.startsWith('| D-001@v1 '))
++    assert.ok(row1.includes('task-01'), "单引号 token 剥引号后命中（'D-001@v1' ≠ D-001@v1 是原 bug）")
++    assert.ok(row1.includes('FR-01'), '未引号 requirement_ids 不受影响')
++    const row2 = matrix.rows.find((r) => r.startsWith('| D-002@v1 '))
++    assert.ok(row2.includes('task-02'), '双引号 token 剥引号后命中（"D-002@v1"）')
++    assert.ok(row2.includes('FR-02、FR-03'), 'requirement_ids 引号/裸值混合全聚合')
++    const row3 = matrix.rows.find((r) => r.startsWith('| D-003@v1 '))
++    assert.ok(row3.includes('task-01'), '同行多 token 各自剥引号')
++    // 反向钉：无任何 task 回指的 D 仍 ⚠️（剥引号只放宽匹配，不制造假闭环）
++    const row4 = matrix.rows.find((r) => r.startsWith('| D-004@v1 '))
++    assert.ok(row4.includes('未闭环') && row4.includes('未映射'), '无回指 D 仍显式标风险（漏报检测不失效）')
++  } finally {
++    try { rmSync(dir, { recursive: true, force: true }) } catch {}
++  }
++})
++
+ const CLEAN_PROBES = {
+   probe1: { matches: [] },
+   probe3: { tasks: [{ task: 'task-01', hasTest: true, located: true }] },

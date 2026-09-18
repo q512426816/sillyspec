@@ -1,0 +1,72 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-0f68f2ec",
+  "totals": {
+    "files": 3,
+    "additions": 68,
+    "deletions": 2
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-quality-scan.test.mjs",
+      "declared": true,
+      "additions": 62,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/verify-probes.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/verify-quality-scan.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-003-d678",
+  "sessionId": "quick-0f68f2ec",
+  "savedAt": "2026-09-18T22:58:53.914Z",
+  "patchSha256": "ef3695b436eded3975153fbeb8286a123816c86d59f6f507baeff7ed672fe318",
+  "patchStatus": "ok"
+}

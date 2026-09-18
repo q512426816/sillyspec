@@ -3341,10 +3341,13 @@ export function buildDecisionChainMatrix(changeDir) {
         const id = (raw.match(/^id:\s*(\S+)/m) || [])[1] || f.replace(/\.md$/, '')
         const decLine = (raw.match(/^decision_ids:\s*\[([^\]]*)\]/m) || [])[1] || ''
         const reqLine = (raw.match(/^requirement_ids:\s*\[([^\]]*)\]/m) || [])[1] || ''
+        // token 剥首尾成对引号：流式数组的引号写法（['D-001@v1']）是合法 YAML 且 agent Edit 填值
+        // 主流形态，只 trim 不剥会让引号卡与 decisions.md 裸 id 永不相等（矩阵静默全量 ⚠️）
+        const stripQuotes = (s) => s.trim().replace(/^['"](.*)['"]$/, '$1').trim()
         taskRefs.push({
           task: id,
-          decisions: new Set(decLine.split(',').map((s) => s.trim()).filter(Boolean)),
-          reqs: new Set(reqLine.split(',').map((s) => s.trim()).filter(Boolean)),
+          decisions: new Set(decLine.split(',').map(stripQuotes).filter(Boolean)),
+          reqs: new Set(reqLine.split(',').map(stripQuotes).filter(Boolean)),
         })
       }
     }
