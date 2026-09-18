@@ -358,3 +358,12 @@
 根因：双根因：①native 收养不写 worktrees/<change>/meta.json → resolveVerifyChangedFiles 未提交/已提交两段全跳过，文件集只剩主 fallback 未提交再生文件（回放实测仅 4 个 .claude/skills）；②已提交补齐主锚点在 cwd=worktree 时取自身 HEAD → merge-base 恒自身 → committed diff 恒空。危险文件说明：verify-postcheck.js 是验证核心，本次只在 resolveVerifyChangedFiles 内加 native 分支（git-dir≠git-common-dir 识别+common-dir HEAD 锚点），meta 在场的标准流程代码路径零改动
 方案：①cwd 是 linked worktree 且无 meta 时按 native 态处理（wtGitDir=cwd，两段照走）；②native 态已提交补齐锚点改取 common dir HEAD（主仓检出）与 worktree HEAD 的 merge-base=分叉锚点；fail-open 双保留
 结果：端到端纠账实测：同一回放 worktree 文件集 4→31（machine-interface/diagnostic-codes/契约/测试全量现身）→ 模块必命中→integrationRan 链路恢复；§5/§5b 永久回归钉（tmp仓+linked worktree 无 meta 场景+普通仓零回归）；dual-root 6/0+cross-repo/plan-target 13/0+conclusion-slot/pass-eligibility 27/0+lint 全绿；纠账附录落 cost-baseline 文档（归档终态不改写，账面更正有据）
+
+## ql-20260918-011-26fb | 2026-09-18 23:20:06 | 批2 收尾义务：两模块卡契约摘要补齐
+状态：已完成
+关联变更：（无）
+文件：.sillyspec/docs/sillyspec/modules/runtime.md（+1/-0）, .sillyspec/docs/sillyspec/modules/stages.md（+2/-0）
+需求：批2 收尾义务：两模块卡契约摘要补齐
+根因：module-impact 更新结果记 done 待补
+方案：runtime 卡补注入分叉与 wait 盖章摘要条；stages 卡补 preflightValidators 声明说明
+结果：两卡契约摘要与实现一致；纯文档

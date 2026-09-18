@@ -1,0 +1,25 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 214a81d..cb500df 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -21,6 +21,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
+ - **MultiRepoContext** (`src/run/multi-repo-context.js`) — 跨仓 task 支持的运行时多仓执行上下文（2026-08-12 新增）。进程级内存对象（随 CLI 进程生死，不入库不持久化，无状态机），`Map<repoKey, RepoEntry{repoKey,gitDir,worktreePath,projectRoot,isMain,resolveHead(),resolveBase(taskBaseCommit?)}>`。execute 启动由 `shared.js:getOrCreateMultiRepoContext` 构造一次贯穿 execute/apply/verify（D-013 G2），收口 7 单仓假设点（task-review/worktree-apply/verify-postcheck/gates/execute/index/machine-interface/complete 经 `ctx.resolve(repo)` 取 gitDir/base/head/projectRoot）。约束② fail-closed（未注册 repo / 跨仓 git 不可用抛错阻断 execute，不降级）。单仓 change 退化为 `{main:{...}}` 单值 map 零回归。head 经 resolveHead 实时 git rev-parse（不缓存）；task review 的 base/head 用 task 卡 base_commit/head_commit 双锡点（非 resolveHead）。declaredRepos 聚合双源：plan.md 内联 frontmatter 块 + tasks/task-NN.md 独立卡片（`collectTaskCardReposFallback` 兜底扫，坑7——plan.md 只留 checkbox 时跨仓仓仍注册进 ctx，不再误报 review 疑似伪造）
+ 
+ - **quick-audit.js**（`src/run/quick-audit.js`，W6 Step2 从 run.js 抽出）— quick 审计结论打印 + quick 多变更关联选择（resolveQuickLinkedChanges 动态 import quick-recommend.js 打分 + safeGit 脏文件信号，交互式 checkbox 默认勾选关联目标；**单候选信号门控**——坑 quick-single-change-auto-link，2026-09-14 实证：原「唯一活跃变更无条件关联」在多 agent 仓库误挂他者遗留变更（tasks.md 污染 + --done 僵尸清理可误归档），改单候选也跑双信号打分 score>0 才自动关联并返回 autoLinked 溯源（guard 落 linkedChangesAuto，closeQuickLinkedChanges 对这类变更不触发轻量归档）；顺带关掉单候选绕过 quick-<hex8> 会话过滤的互挂洞）+ **quick --done test+lint 硬门禁**（runQuickTestLintGate/printQuickTestLintGate，2026-09-02 P0-2：changedFiles 触及 src/test 才实测 local.yaml commands.test/lint（动态 import verify-postcheck，不进通用启动路径），未配置/doc-only/brownfield 自动跳过，fail 阻断 --done，env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip）
++- **prompt 注入分叉与 wait 继承盖章**（2026-09-18-preflight-slimming 批2）— `src/run/prompt.js` outputStep 渲染双机制：①{PREFLIGHT_FAILURES} 前置失败清单（renderPreflightFailures 只读快跑步骤声明 validators，条数帽 5/超时帽 3s/fail-open，防应试头行「已知失败项（非全部要求）」）②阶段感知注入（shouldInjectFullContext 读 .runtime/prompt-inject-<change>.json 账本：首步全量+withFileLock 落账，后续摘要行 digest 8 位+Read 路径；异常回退全量）。`src/run/command.js/complete.js` wait 继承盖章：--inherit-from D-xxx@vN 字面校验（decisions-io hasDecisionId，fail-closed exit 2 防伪造锚点）→同命令落盖章轮进 wait_answers（回放链不动，后续 --done 免 --answer）。
+ - **scan-profile.js**（`src/run/scan-profile.js`，W6 Step2 从 run.js 抽出）— scan profile 数据生成 + quick scan CLI preflight/postcheck（executeScanPostcheck 动态 import scan-postcheck.js 做 CLI 确定性校验，不依赖 agent 自检报告）
+ - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
+ - **friction-tally.js**（`src/friction-tally.js`，根级文件归 runtime，friction-signal-hint Phase 1）— 摩擦信号计数数据层：gate 失败回滚（rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件计数（events 按 type 记 count/lastAt + history 截尾 20 条），quick/verify --done 收尾 `consumeFrictionHint` 计数非零才输出一行 advisory（提示后删计数文件清零，全零零输出、每次收尾最多一行）；落点红线（D-002）——计数文件只落 .runtime 树（quick 会话 `quick-sessions/<sessionId>/friction-tally.json`、真实变更 `<runtimeRoot>/friction-tally-<changeName>.json`，路径统一走 resolveRuntimeRoot/resolveQuickSessionsDir），永不落 changes/（目录上平台同步，本机计数污染他机即事故）；隐私红线（D-005）——落盘字段只含 count/lastAt/at/type/detail（type ∈ 三值枚举、detail ∈ 预定义标签集），永不接触提示词与对话原文；local.yaml `friction_hint.enabled` 默认 true（仅显式 false 关，缺键/读失败同默认开）；读写全程 try/catch 静默降级返回 null/空 hint，绝不反向阻断收尾（同 verify-lint-tally「计数器不许反向阻断」立场）
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.md b/.sillyspec/docs/sillyspec/modules/stages.md
+index 4ac82ec..b99300a 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.md
+@@ -22,6 +22,8 @@ updated_at: 2026-09-14T21:40:00+08:00
+ | `buildExecuteSteps(planFile)` | 动态生成 execute 步骤 | run.js |
+ | `buildPlanSteps(changeDir)` | 动态生成 plan 步骤 | run.js |
+ 
++**preflightValidators 声明**（2026-09-18-preflight-slimming 批2）：产出型步骤可选键（数组，值 ∈ prompt.js PREFLIGHT_VALIDATORS 已收录键 design-file-list/four-piece-rules）——brainstorm 写设计文档/生成规范两步已声明，plan 生成计划步声明 four-piece-rules，execute 任务步键位就位留 v2（allowed-paths-scan 收录归期 D-006@v1）；另有「中间验证定向优先」引导行（execute 任务步+taskcard-rules）。
++
+ ## 关键逻辑
+ 
+ 每个阶段由 `export const definition = { name, title, description, steps: [...] }` 导出。steps 数组中每个 step 包含 name、prompt、outputHint、optional 字段。CLI 通过 `ProgressManager` 写入 SQLite，并以兼容旧 progress JSON 的对象跟踪每个 step 的执行状态。

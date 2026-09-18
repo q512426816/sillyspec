@@ -1,0 +1,55 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-47a3c6b2",
+  "totals": {
+    "files": 2,
+    "additions": 3,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260918-011-26fb",
+  "sessionId": "quick-47a3c6b2",
+  "savedAt": "2026-09-18T15:21:15.584Z",
+  "patchSha256": "38533649af33afc5a7bd30b6743ad3dfca18322225633cbb0e3eff5b2814d99e",
+  "patchStatus": "ok"
+}

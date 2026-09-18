@@ -22,6 +22,8 @@ updated_at: 2026-09-14T21:40:00+08:00
 | `buildExecuteSteps(planFile)` | 动态生成 execute 步骤 | run.js |
 | `buildPlanSteps(changeDir)` | 动态生成 plan 步骤 | run.js |
 
+**preflightValidators 声明**（2026-09-18-preflight-slimming 批2）：产出型步骤可选键（数组，值 ∈ prompt.js PREFLIGHT_VALIDATORS 已收录键 design-file-list/four-piece-rules）——brainstorm 写设计文档/生成规范两步已声明，plan 生成计划步声明 four-piece-rules，execute 任务步键位就位留 v2（allowed-paths-scan 收录归期 D-006@v1）；另有「中间验证定向优先」引导行（execute 任务步+taskcard-rules）。
+
 ## 关键逻辑
 
 每个阶段由 `export const definition = { name, title, description, steps: [...] }` 导出。steps 数组中每个 step 包含 name、prompt、outputHint、optional 字段。CLI 通过 `ProgressManager` 写入 SQLite，并以兼容旧 progress JSON 的对象跟踪每个 step 的执行状态。
