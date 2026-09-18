@@ -713,6 +713,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         } catch {}
       }
       if (!quickSessionId) {
+        // 坑 quick-no-input-placeholder-title（2026-08-24 二期①；2026-09-19 上移）：全新 quick 会话
+        // （即将生成新 sessionId）缺 --input 且无可取标题的 --linked-changes → 拒绝启动（exit 2，
+        // 零沉没成本）。原位置在 flag 校验之后，但 sessionId 生成/「已建立」公告与 agent-log 平台
+        // 上报都在其之前——先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了一条
+        // 永不启动的 agent 日志（2026-09-19 实测踩）；上移到 id 生成前，拒绝路径零输出副作用。
+        // --help/-h 豁免：帮助查询不该被拦——原实现靠「--help 短路在本门之前」保证，上移后 flag
+        // 短路尚未到达，此处显式豁免。done-like（--done/--status/--skip/--reset/--reopen）与
+        // --cancel 不受限（isDoneLike 含前五者）；--linked-changes 非空可从关联变更提标题。
+        if (!(isDoneLike || isCancel) && !inputText
+          && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)
+          && !flags.includes('--help') && !flags.includes('-h')) {
+          console.error('❌ 新 quick 会话必须带 --input "<一句话任务描述>"（或 --linked-changes <a,b> 从关联变更取标题）。')
+          console.error('   不带描述启动会落「(quick 任务)」占位标题：平台「快速修复」列表隐藏占位条目、语义标题要拖到最终 --done 才回填，长任务全程不可见。')
+          console.error('   用法: sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
+          process.exit(2) // 用法错（新会话无任务描述）→ exit 2
+        }
         quickSessionId = 'quick-' + randomUUID().slice(0, 8)
         quickSidFresh = true
         // 坑 quick-sync-block-filenotes-and-quicklog-mixed-commit 坑1③：新会话 ID 生成即打印
@@ -909,21 +925,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     process.exit(0)
   }
 
-  // 坑 quick-no-input-placeholder-title（2026-08-24 用户反馈二期①）：全新 quick 会话（上方
-  // 刚生成新 sessionId）不带 --input 且无 --linked-changes 可取标题 → 拒绝启动（exit 2）。
-  // 旧行为只 warn 提示「建议放弃重启」，占位标题「(quick 任务)」已落盘、只能 reset 重来——
-  // 语义标题要拖到最终 --done 才回填，平台「快速修复」列表全程隐藏。此刻零沉没成本（progress
-  // 行/QUICKLOG/guard 均未创建），直接拒掉最便宜。放在 --help 短路之后（help 查询不该被拦）、
-  // 任何会话副作用之前。精确恢复（--change quick-<hex>）与 done-like（--done/--reset/--cancel/
-  // --status/--skip/--reopen）不受限；--linked-changes 启动可从关联变更 proposal/design 提取标题。
-  if (stageName === 'quick' && quickSidFresh
-    && !(isDone || isStatus || isSkip || isReset || isReopen || isCancel)
-    && !inputText && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)) {
-    console.error('❌ 新 quick 会话必须带 --input "<一句话任务描述>"（或 --linked-changes <a,b> 从关联变更取标题）。')
-    console.error('   不带描述启动会落「(quick 任务)」占位标题：平台「快速修复」列表隐藏占位条目、语义标题要拖到最终 --done 才回填，长任务全程不可见。')
-    console.error('   用法: sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
-    process.exit(2) // 用法错（新会话无任务描述）→ exit 2
-  }
+  // （--input 启动门原在此处，2026-09-19 上移到 quick sessionId 生成/公告之前——原位置会先
+  //  打印「会话已建立+续用提示」并上报 agent 日志再 exit(2)，留幻影会话观感；见上方坑注。）
 
   const isAuxiliary = auxiliaryStages.includes(stageName)
   // scan 元数据追踪（存储在 stageData.scanMeta 中，completeStep 通过 progress 访问）

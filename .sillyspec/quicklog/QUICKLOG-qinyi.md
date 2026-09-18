@@ -437,3 +437,17 @@
 根因：并行会话某次编辑把同一行追加成两截：前半截在「率 0」处截断、后半截是完整修正版（含「率 0%（第零天）」），拼在一行破坏表格形态——上轮 quick 遗留项③
 方案：删除截断残片、保留完整修正版单行；条目信息零丢失（同一 ql-ID 只出现一次）
 结果：纯 doc 改动无测试面；边账该行恢复规范表格行
+
+## ql-20260919-006-120b | 2026-09-19 07:17:42 | quick --input 启动门上移到会话 id 生成前——拒绝路径不再宣告幻影会话、不再上报 agent 日志
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（--input 门上移至 sessionId 生成前（含 --help 豁免与坑注））
+- test/quick-start-input-hint.test.mjs（补幻影公告/日志上报两断言+--help 用例）
+- .sillyspec/docs/sillyspec/modules/runtime.changelog.md（登记 ql-20260919-006-120b）
+- docs/sillyspec/platform-interface-map.md（command.js 锚点 733→768（门上移行号漂移））
+需求：quick --input 启动门上移到会话 id 生成前——拒绝路径不再宣告幻影会话、不再上报 agent 日志
+根因：原门在 flag 校验后（command.js 旧 :919），但 sessionId 生成+「已建立」公告+agent-log 平台上报都在其之前——缺 --input 的拒绝路径先宣告「已建立+续用提示」再 exit(2)，留幻影会话观感且给平台报了永不启动的会话日志（2026-09-19 实测踩，上轮工具负面①）
+方案：门整块上移到 sessionId 生成前（--help/-h 显式豁免保住帮助查询，done-like/--cancel/linked-changes 语义原样）；原位置留指针注释；test/quick-start-input-hint.test.mjs 补拒绝路径无公告/无日志上报断言+--help exit 0 新用例；platform-interface-map.md 锚点 733→768 随行号漂移更新
+结果：quick-start-input-hint 15/15 绿；quick-cancel-rotation 回归绿；lint 过（680 文件）；docs 锚点校验随 --done 复核
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）

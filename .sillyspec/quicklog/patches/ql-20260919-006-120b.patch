@@ -1,0 +1,100 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 7ecc75f..bf0e140 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -34,3 +34,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-09-14-knowledge-loop-close | 📚 命中知识机械注入 + 归类提议/棘轮 + hits.jsonl 遥测
+ - 2026-09-16-friction5-hardening | 门禁快照 copy 面（FR-04/D-002@v1，用户驾驭小结④）：gate-snapshot 新增 parseGateSnapshotCopy（主仓 local.yaml 轻量行扫描，块列表+inline flow 双形态）+ 导出 applyGateSnapshotCopy(cwd, snapshotRoot)——createGateSnapshot 环境目录链接段后调用，逐条规整→拒 ../绝对路径→主仓不存在 warn 跳过→overlay 已覆盖跳过→symlinkSync junction→existsSync 后验（Windows 文件 junction 假成功坑：不抛错但产不可解析重解析点）→回退递归 copy/copyFileSync→再失败 warn 不作废快照；未配置全段空转。run/gates.js probe7 advisory 文案双口径（R5）；verify-probes 回执骨架双形态示例两处（R1）。新增 test/gate-snapshot-copy.test.mjs（5）
+ - ql-20260919-004-cbd8 | 快照层回归钉（回放 2026-09-18 摩擦#5 收口核验）：createVerifyGateSnapshot native 收养态（meta 缺席、cwd 即 linked worktree）untracked 新文件内容进快照——修复链已在 e47ab3a（ql-20260918-010）resolve 层落地（native 分支 porcelain --untracked-files=all 并入），本钉补快照层端到端守卫（修复前 untracked 不进文件集→overlay 漏拷→快照内 ERR_MODULE_NOT_FOUND 裸崩）；test/verify-gate-snapshot.test.mjs 3→4，实证 tmp 仓 native worktree 复跑通过
++- ql-20260919-006-120b | quick --input 启动门上移（2026-09-19 实测踩）：原位置在 flag 校验后，但 sessionId 生成/「已建立」公告与 agent-log 平台上报都在其之前——缺 --input 的拒绝路径先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了永不启动的 agent 日志；上移至 id 生成前（--help/-h 显式豁免保住帮助查询），拒绝路径零输出副作用。test/quick-start-input-hint.test.mjs 13→15 断言（拒绝路径无公告/无日志上报 + --help exit 0 不被拦）
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index a42ccdc..7ff720f 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -132,7 +132,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+ | **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:268/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1332/1471/1713/1776/1977 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1900/1913/1993 |
+-| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:733（`recordAgentLogInvocation`） |
++| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:768（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:966 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:990 |
+diff --git a/src/run/command.js b/src/run/command.js
+index 7e545d8..62bf186 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -713,6 +713,22 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         } catch {}
+       }
+       if (!quickSessionId) {
++        // 坑 quick-no-input-placeholder-title（2026-08-24 二期①；2026-09-19 上移）：全新 quick 会话
++        // （即将生成新 sessionId）缺 --input 且无可取标题的 --linked-changes → 拒绝启动（exit 2，
++        // 零沉没成本）。原位置在 flag 校验之后，但 sessionId 生成/「已建立」公告与 agent-log 平台
++        // 上报都在其之前——先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了一条
++        // 永不启动的 agent 日志（2026-09-19 实测踩）；上移到 id 生成前，拒绝路径零输出副作用。
++        // --help/-h 豁免：帮助查询不该被拦——原实现靠「--help 短路在本门之前」保证，上移后 flag
++        // 短路尚未到达，此处显式豁免。done-like（--done/--status/--skip/--reset/--reopen）与
++        // --cancel 不受限（isDoneLike 含前五者）；--linked-changes 非空可从关联变更提标题。
++        if (!(isDoneLike || isCancel) && !inputText
++          && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)
++          && !flags.includes('--help') && !flags.includes('-h')) {
++          console.error('❌ 新 quick 会话必须带 --input "<一句话任务描述>"（或 --linked-changes <a,b> 从关联变更取标题）。')
++          console.error('   不带描述启动会落「(quick 任务)」占位标题：平台「快速修复」列表隐藏占位条目、语义标题要拖到最终 --done 才回填，长任务全程不可见。')
++          console.error('   用法: sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
++          process.exit(2) // 用法错（新会话无任务描述）→ exit 2
++        }
+         quickSessionId = 'quick-' + randomUUID().slice(0, 8)
+         quickSidFresh = true
+         // 坑 quick-sync-block-filenotes-and-quicklog-mixed-commit 坑1③：新会话 ID 生成即打印
+@@ -909,21 +925,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     process.exit(0)
+   }
+ 
+-  // 坑 quick-no-input-placeholder-title（2026-08-24 用户反馈二期①）：全新 quick 会话（上方
+-  // 刚生成新 sessionId）不带 --input 且无 --linked-changes 可取标题 → 拒绝启动（exit 2）。
+-  // 旧行为只 warn 提示「建议放弃重启」，占位标题「(quick 任务)」已落盘、只能 reset 重来——
+-  // 语义标题要拖到最终 --done 才回填，平台「快速修复」列表全程隐藏。此刻零沉没成本（progress
+-  // 行/QUICKLOG/guard 均未创建），直接拒掉最便宜。放在 --help 短路之后（help 查询不该被拦）、
+-  // 任何会话副作用之前。精确恢复（--change quick-<hex>）与 done-like（--done/--reset/--cancel/
+-  // --status/--skip/--reopen）不受限；--linked-changes 启动可从关联变更 proposal/design 提取标题。
+-  if (stageName === 'quick' && quickSidFresh
+-    && !(isDone || isStatus || isSkip || isReset || isReopen || isCancel)
+-    && !inputText && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)) {
+-    console.error('❌ 新 quick 会话必须带 --input "<一句话任务描述>"（或 --linked-changes <a,b> 从关联变更取标题）。')
+-    console.error('   不带描述启动会落「(quick 任务)」占位标题：平台「快速修复」列表隐藏占位条目、语义标题要拖到最终 --done 才回填，长任务全程不可见。')
+-    console.error('   用法: sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
+-    process.exit(2) // 用法错（新会话无任务描述）→ exit 2
+-  }
++  // （--input 启动门原在此处，2026-09-19 上移到 quick sessionId 生成/公告之前——原位置会先
++  //  打印「会话已建立+续用提示」并上报 agent 日志再 exit(2)，留幻影会话观感；见上方坑注。）
+ 
+   const isAuxiliary = auxiliaryStages.includes(stageName)
+   // scan 元数据追踪（存储在 stageData.scanMeta 中，completeStep 通过 progress 访问）
+diff --git a/test/quick-start-input-hint.test.mjs b/test/quick-start-input-hint.test.mjs
+index 1428304..b87f806 100644
+--- a/test/quick-start-input-hint.test.mjs
++++ b/test/quick-start-input-hint.test.mjs
+@@ -34,6 +34,8 @@ console.log('--- ① 新会话缺 --input → 拒绝启动（exit 2），不落
+   assert(r.combined.includes('必须带 --input'), '报错点名必须带 --input')
+   assert(r.combined.includes('(quick 任务)'), '报错说明占位标题后果')
+   assert(r.combined.includes('--linked-changes'), '给出关联变更取标题的替代出路')
++  assert(!r.combined.includes('quick 会话已建立'), '拒绝路径不打印会话公告（门在 id 生成前——无幻影会话观感）')
++  assert(!r.combined.includes('agent 日志已登记'), '拒绝路径不上报 agent 日志（不给平台报永不启动的会话）')
+   assert(!existsSync(join(specBase, 'quicklog', 'QUICKLOG-test.md')) || !readQuicklog(specBase).includes('| (quick 任务)'),
+     'QUICKLOG 未落占位标题条目（零沉没成本）')
+ }
+@@ -58,5 +60,13 @@ console.log('\n--- ③ 关联变更 proposal 有标题 → 免传不警告（兜
+   assert(readQuicklog(specBase).includes('关联变更语义标题'), 'QUICKLOG 标题 = proposal 首个 # 标题')
+ }
+ 
++console.log('\n--- ④ --help 缺 --input → 帮助查询不被启动门拦（exit 0） ---')
++{
++  const { cwd } = makeRepo('qs-input-help-')
++  const r = runCLI(['--dir', cwd, 'run', 'quick', '--help'], { cwd })
++  assert(r.status === 0, `帮助查询 exit 0（实际 ${r.status}，尾：${r.combined.slice(-160)}）`)
++  assert(!r.combined.includes('必须带 --input'), '帮助查询不触发 --input 门（门上移后靠 flag 豁免保住）')
++}
++
+ cleanup()
+ report(count.passed, count.failed, count.failures)

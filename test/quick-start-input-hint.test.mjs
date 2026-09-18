@@ -34,6 +34,8 @@ console.log('--- ① 新会话缺 --input → 拒绝启动（exit 2），不落�
   assert(r.combined.includes('必须带 --input'), '报错点名必须带 --input')
   assert(r.combined.includes('(quick 任务)'), '报错说明占位标题后果')
   assert(r.combined.includes('--linked-changes'), '给出关联变更取标题的替代出路')
+  assert(!r.combined.includes('quick 会话已建立'), '拒绝路径不打印会话公告（门在 id 生成前——无幻影会话观感）')
+  assert(!r.combined.includes('agent 日志已登记'), '拒绝路径不上报 agent 日志（不给平台报永不启动的会话）')
   assert(!existsSync(join(specBase, 'quicklog', 'QUICKLOG-test.md')) || !readQuicklog(specBase).includes('| (quick 任务)'),
     'QUICKLOG 未落占位标题条目（零沉没成本）')
 }
@@ -56,6 +58,14 @@ console.log('\n--- ③ 关联变更 proposal 有标题 → 免传不警告（兜
   assert(r.status === 0, `启动成功（实际 ${r.status}）`)
   assert(!r.combined.includes(WARN_MARK), '关联变更标题已提取，不出占位警告')
   assert(readQuicklog(specBase).includes('关联变更语义标题'), 'QUICKLOG 标题 = proposal 首个 # 标题')
+}
+
+console.log('\n--- ④ --help 缺 --input → 帮助查询不被启动门拦（exit 0） ---')
+{
+  const { cwd } = makeRepo('qs-input-help-')
+  const r = runCLI(['--dir', cwd, 'run', 'quick', '--help'], { cwd })
+  assert(r.status === 0, `帮助查询 exit 0（实际 ${r.status}，尾：${r.combined.slice(-160)}）`)
+  assert(!r.combined.includes('必须带 --input'), '帮助查询不触发 --input 门（门上移后靠 flag 豁免保住）')
 }
 
 cleanup()
