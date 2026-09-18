@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-18-preflight-slimming",
+  "generatedAt": "2026-09-18T14:56:55.461Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-18-preflight-slimming",
+      "metrics": {
+        "matches": 41,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-18-preflight-slimming",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-18-preflight-slimming",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-18-preflight-slimming",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-18-preflight-slimming",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-18-preflight-slimming",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "tests": {
+    "command": "npm test",
+    "exitCode": 0,
+    "strategy": "full",
+    "failedRemaining": [],
+    "passedAt": "2026-09-18T14:57:31.173Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  },
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "commands.smoke 未配置且本变更无可冒烟接口面（接口面 0 端点已显式声明）——critical 档冒烟门按降级承载走 NOTES",
+        "condition": "配置 commands.smoke 后复跑质量扫描（本变更无运行时接口，属仪式性补课非真实缺口）",
+        "severity": "blocking"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "v2 validator 收录（execute 任务步 allowed-paths-scan/plan postcheck-lite——D-006@v1 边界，friction-ledger 首个真实案例驱动归期）",
+        "condition": "归期触发时映射表增量收录+声明补值",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 14,
+  "apiFace": {
+    "endpoints": [],
+    "declared": 0,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/preflight-slimming.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured"
+}

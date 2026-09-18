@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-18-preflight-slimming",
+  "appliedAt": "2026-09-18T14:32:17.540Z",
+  "baseHash": "35f92f884e421db15bda9c2345697af9458408cd",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+      "sha256": "63a5b0d1a95a3f3c40d3eb15659a2d8f2db96a94ff96754d3710d35bfcb11e73"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.md",
+      "sha256": "77b8029fc0ece61bc6ca3d828ff41b921ef3d25ebf1df1156b31cf8733524907"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+      "sha256": "c8838b21058e41e55fde2eddeff785158f2f93ab7ef393a0c70b5c19847989ba"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/scan/TESTING.md",
+      "sha256": "c919ad1d07c88c27b5a7e191e999aa1b728d9c9783527dcf429a3b8e677b8d72"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "sha256": "5c1f7f8a97f2b729bd77ad5e584767f02139dde86473ace31ab9b422cf78cc4d"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "sha256": "9b66bdc93c0afb623d31376f2321c610f8459c91646dd3d41a44eb6ec44c136a"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "sha256": "f64948c239d6d51613f27b526fcc855953173f8fb5e5c890f9723c8194885180"
+    },
+    {
+      "path": "src/decisions-io.js",
+      "sha256": "cfbad082391158f1c2946e340e57a3c0730a331e9c4b9298461c1fc393d45798"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "d712ad242d62e3e1c3d0e73f5b68e3de76550050bd99fbe47d4fe11df8112087"
+    },
+    {
+      "path": "src/run/command.js",
+      "sha256": "262e1f27582c97f1b8e3a2e3f540937844fab4c99d01f9d3d2cd1c37f1485a86"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "sha256": "559c096f648f6621ad50aed16c36bbaa4dd5553fcd5c3cabd16750b56b9adef1"
+    },
+    {
+      "path": "src/run/complete.js",
+      "sha256": "66bac5715f15a7ff61d37f0db5f895eab23f5d3580bcea2eac74e358f984f769"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "sha256": "cb87e1914a35483153b6fdd13f73642b7a83451a7920dcc7b12924e7f12c86dd"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "faf69eab71ecdd6d5aae5743e3550425e4a65d0f0e77ac88ac169b2358bddcbf"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "sha256": "addd18064b9110a987711dea8d095ee823b90093e67ecb4e7137c72684cfedd4"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "sha256": "f649eccfda7370bdee83cb72ac77a435f4bd9cd6ee3584ece8f3b08bb2ad7e12"
+    },
+    {
+      "path": "templates/prompts/taskcard-rules.md",
+      "sha256": "c6c2ff48ecd2208f59a3fb95047eb02b8f11d6ee01ee8897709880dbcbcf3bec"
+    },
+    {
+      "path": "test/preflight-slimming.test.mjs",
+      "sha256": "5bbd76c5c0b61f17cf5da705d464a77cb55f98fb4f15813afb46770eae0301f9"
+    }
+  ]
+}
