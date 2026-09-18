@@ -1,0 +1,63 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-18c08d63",
+  "totals": {
+    "files": 3,
+    "additions": 88,
+    "deletions": 2
+  },
+  "rows": [
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 40,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-dual-root-fixture.test.mjs",
+      "declared": true,
+      "additions": 39,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/cost-baseline-2026-09-18.md",
+      "declared": true,
+      "additions": 9,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260918-010-762a",
+  "sessionId": "quick-18c08d63",
+  "savedAt": "2026-09-18T12:25:50.786Z",
+  "patchSha256": "f41740d4baf69d86480ee8c76db7638aa051744d62c6808aa8437815626fcdcc",
+  "patchStatus": "ok"
+}

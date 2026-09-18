@@ -44,3 +44,12 @@ created_at: 2026-09-18 20:05:00
 | 4 | 步骤合并（状态机契约）——仅当批 2/3 后轮次仍 >140 再议 | 另开 brainstorm |
 
 批后对表：同题前后对比（zcode db token + 摩擦账 + 步数），每批归因写回本文件附录。
+
+## 附录 A：批 1-1 纠账记录（quality-scan 模块命中断链，2026-09-18）
+
+回放实验（replay/task2-pricing）的 PASS WITH NOTES 唯一移交项=「native-worktree 模式模块命中 0」——**根因已修（ql-20260918-010）**：
+- 根因①：native 收养态不写 worktrees/<change>/meta.json → resolveVerifyChangedFiles 的未提交/已提交两段全跳过，文件集只剩主 fallback 的未提交 CLI 再生文件（回放实测 4 个 .claude/skills/*.md）；
+- 根因②：已提交补齐的主锚点在 cwd=worktree 时取自身 HEAD → merge-base 恒自身 → committed diff 恒空。
+- 修复后实测同一回放 worktree：文件集 4 → **31**（含 machine-interface.js/diagnostic-codes.js/契约/测试全量）→ machine-interface 模块必命中 → integrationRan 链路恢复。
+- **纠账结论**：该次 NOTES 的触发源是工具缺陷而非真实集成缺失；归档结论为终态不改写，本记录即为账面更正依据。同类场景由 §5/§5b 永久回归钉死（platform-dual-root-fixture.test.mjs）。
+

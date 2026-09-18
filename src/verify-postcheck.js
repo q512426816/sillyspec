@@ -1127,8 +1127,22 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
       // 不到 → 形态 A 并入失效 → ②类假红。_readWorktreeMeta 双候选（specBase 优先 +
       // cwd/.sillyspec 兜底，contract-matrix 既有样板）两形全覆盖。
       const found = changeName ? _readWorktreeMeta(opts.specBase || null, cwd, changeName) : null
-      if (found) {
-        const wtGitDir = found.gitDir
+      // native-worktree 收养态（ql-20260918-010，回放实验实证）：meta 缺席但 cwd 自身就是
+      // linked worktree（git-dir ≠ git-common-dir）——cwd 即工作区，未提交+已提交补齐两段
+      // 照走；否则模块命中面只剩未提交的 CLI 再生文件（回放：4 个 .claude/skills/*.md），
+      // 真实已提交改动全盲 → 0 命中 → integrationRan=not-ran 误触发 PASS 封顶（假 NOTES）。
+      let wtGitDir = found ? found.gitDir : null
+      let nativeWorktree = false
+      if (!wtGitDir) {
+        const gd = gitQuiet(cwd, ['rev-parse', '--git-dir'], { timeout: 15000 })
+        const gcd = gitQuiet(cwd, ['rev-parse', '--git-common-dir'], { timeout: 15000 })
+        const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+        if (gd && gcd && norm(gd) !== norm(gcd) && norm(gcd) !== '.git') {
+          wtGitDir = cwd
+          nativeWorktree = true
+        }
+      }
+      if (wtGitDir) {
         const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
         // P1 修复（2026-09-07）：过滤器改 filterDeliverableFiles 口径（worktree-apply.js 同款）——
         // 此前 `.sillyspec/` 一刀切把 docs 交付物也滤掉，声明了模块文档的 task 在形态 A 下落②类假红
@@ -1163,6 +1177,30 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
                   !p.startsWith('.sillyspec/quicklog/'))
             }
           } catch { /* 已提交补齐失败退回 status-only（fail-open，不拖垮未提交并入） */ }
+        } else if (nativeWorktree) {
+          // native 态已提交补齐（ql-20260918-010 根因②）：主锚点必须取主仓检出（common dir）
+          // HEAD——原口径在 cwd 跑 rev-parse HEAD 取到 worktree 自身 HEAD，merge-base(wtHead,
+          // wtHead) 恒自身 → committed diff 恒空。common dir HEAD（主仓当前分支）与 worktree
+          // HEAD 的 merge-base = 分叉锚点，回放场景 = 收养基线。fail-open 同上。
+          try {
+            const gcd = gitQuiet(cwd, ['rev-parse', '--git-common-dir'], { timeout: 15000 })
+            const wtHead = gitQuiet(cwd, ['rev-parse', 'HEAD'], { timeout: 15000 })
+            const mainHead = gcd
+              ? gitQuiet(cwd, ['--git-dir=' + String(gcd).trim(), 'rev-parse', 'HEAD'], { timeout: 15000 })
+              : null
+            const mb = (mainHead && wtHead)
+              ? gitQuiet(cwd, ['merge-base', wtHead, String(mainHead).trim()], { timeout: 15000 })
+              : null
+            if (mb) {
+              const diffOut = gitQuiet(cwd, ['diff', '--name-only', String(mb).trim(), wtHead], { timeout: 30000 })
+              committedFiles = String(diffOut || '').split('\n')
+                .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
+                .filter(p => p && p !== '.sillyspec' &&
+                  !p.startsWith('.sillyspec/changes/') &&
+                  !p.startsWith('.sillyspec/.runtime/') &&
+                  !p.startsWith('.sillyspec/quicklog/'))
+            }
+          } catch { /* native 已提交补齐失败退回 status-only（fail-open） */ }
         }
         const merged = [...new Set([...(mainFiles || []), ...wtFiles, ...committedFiles])]
         if (wtFiles.length > 0 || committedFiles.length > 0) {

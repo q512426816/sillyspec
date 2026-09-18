@@ -1,0 +1,124 @@
+diff --git a/docs/sillyspec/cost-baseline-2026-09-18.md b/docs/sillyspec/cost-baseline-2026-09-18.md
+index ee509e8..1f8dcac 100644
+--- a/docs/sillyspec/cost-baseline-2026-09-18.md
++++ b/docs/sillyspec/cost-baseline-2026-09-18.md
+@@ -44,3 +44,12 @@ created_at: 2026-09-18 20:05:00
+ | 4 | 步骤合并（状态机契约）——仅当批 2/3 后轮次仍 >140 再议 | 另开 brainstorm |
+ 
+ 批后对表：同题前后对比（zcode db token + 摩擦账 + 步数），每批归因写回本文件附录。
++
++## 附录 A：批 1-1 纠账记录（quality-scan 模块命中断链，2026-09-18）
++
++回放实验（replay/task2-pricing）的 PASS WITH NOTES 唯一移交项=「native-worktree 模式模块命中 0」——**根因已修（ql-20260918-010）**：
++- 根因①：native 收养态不写 worktrees/<change>/meta.json → resolveVerifyChangedFiles 的未提交/已提交两段全跳过，文件集只剩主 fallback 的未提交 CLI 再生文件（回放实测 4 个 .claude/skills/*.md）；
++- 根因②：已提交补齐的主锚点在 cwd=worktree 时取自身 HEAD → merge-base 恒自身 → committed diff 恒空。
++- 修复后实测同一回放 worktree：文件集 4 → **31**（含 machine-interface.js/diagnostic-codes.js/契约/测试全量）→ machine-interface 模块必命中 → integrationRan 链路恢复。
++- **纠账结论**：该次 NOTES 的触发源是工具缺陷而非真实集成缺失；归档结论为终态不改写，本记录即为账面更正依据。同类场景由 §5/§5b 永久回归钉死（platform-dual-root-fixture.test.mjs）。
++
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 2d885f4..95b5ac5 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -1127,8 +1127,22 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+       // 不到 → 形态 A 并入失效 → ②类假红。_readWorktreeMeta 双候选（specBase 优先 +
+       // cwd/.sillyspec 兜底，contract-matrix 既有样板）两形全覆盖。
+       const found = changeName ? _readWorktreeMeta(opts.specBase || null, cwd, changeName) : null
+-      if (found) {
+-        const wtGitDir = found.gitDir
++      // native-worktree 收养态（ql-20260918-010，回放实验实证）：meta 缺席但 cwd 自身就是
++      // linked worktree（git-dir ≠ git-common-dir）——cwd 即工作区，未提交+已提交补齐两段
++      // 照走；否则模块命中面只剩未提交的 CLI 再生文件（回放：4 个 .claude/skills/*.md），
++      // 真实已提交改动全盲 → 0 命中 → integrationRan=not-ran 误触发 PASS 封顶（假 NOTES）。
++      let wtGitDir = found ? found.gitDir : null
++      let nativeWorktree = false
++      if (!wtGitDir) {
++        const gd = gitQuiet(cwd, ['rev-parse', '--git-dir'], { timeout: 15000 })
++        const gcd = gitQuiet(cwd, ['rev-parse', '--git-common-dir'], { timeout: 15000 })
++        const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
++        if (gd && gcd && norm(gd) !== norm(gcd) && norm(gcd) !== '.git') {
++          wtGitDir = cwd
++          nativeWorktree = true
++        }
++      }
++      if (wtGitDir) {
+         const wtStatus = gitQuiet(wtGitDir, ['status', '--porcelain', '--untracked-files=all'], { timeout: 30000, trim: false })
+         // P1 修复（2026-09-07）：过滤器改 filterDeliverableFiles 口径（worktree-apply.js 同款）——
+         // 此前 `.sillyspec/` 一刀切把 docs 交付物也滤掉，声明了模块文档的 task 在形态 A 下落②类假红
+@@ -1163,6 +1177,30 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+                   !p.startsWith('.sillyspec/quicklog/'))
+             }
+           } catch { /* 已提交补齐失败退回 status-only（fail-open，不拖垮未提交并入） */ }
++        } else if (nativeWorktree) {
++          // native 态已提交补齐（ql-20260918-010 根因②）：主锚点必须取主仓检出（common dir）
++          // HEAD——原口径在 cwd 跑 rev-parse HEAD 取到 worktree 自身 HEAD，merge-base(wtHead,
++          // wtHead) 恒自身 → committed diff 恒空。common dir HEAD（主仓当前分支）与 worktree
++          // HEAD 的 merge-base = 分叉锚点，回放场景 = 收养基线。fail-open 同上。
++          try {
++            const gcd = gitQuiet(cwd, ['rev-parse', '--git-common-dir'], { timeout: 15000 })
++            const wtHead = gitQuiet(cwd, ['rev-parse', 'HEAD'], { timeout: 15000 })
++            const mainHead = gcd
++              ? gitQuiet(cwd, ['--git-dir=' + String(gcd).trim(), 'rev-parse', 'HEAD'], { timeout: 15000 })
++              : null
++            const mb = (mainHead && wtHead)
++              ? gitQuiet(cwd, ['merge-base', wtHead, String(mainHead).trim()], { timeout: 15000 })
++              : null
++            if (mb) {
++              const diffOut = gitQuiet(cwd, ['diff', '--name-only', String(mb).trim(), wtHead], { timeout: 30000 })
++              committedFiles = String(diffOut || '').split('\n')
++                .map(p => p.replace(/^"|"$/g, '').replace(/\\/g, '/').trim())
++                .filter(p => p && p !== '.sillyspec' &&
++                  !p.startsWith('.sillyspec/changes/') &&
++                  !p.startsWith('.sillyspec/.runtime/') &&
++                  !p.startsWith('.sillyspec/quicklog/'))
++            }
++          } catch { /* native 已提交补齐失败退回 status-only（fail-open） */ }
+         }
+         const merged = [...new Set([...(mainFiles || []), ...wtFiles, ...committedFiles])]
+         if (wtFiles.length > 0 || committedFiles.length > 0) {
+diff --git a/test/platform-dual-root-fixture.test.mjs b/test/platform-dual-root-fixture.test.mjs
+index c43629d..49a81cd 100644
+--- a/test/platform-dual-root-fixture.test.mjs
++++ b/test/platform-dual-root-fixture.test.mjs
+@@ -109,3 +109,42 @@ test('§4 archive-delta 继承冒烟：resolveVerifyChangedFiles 在同夹具下
+   assert.ok((files || []).some(f => String(f).includes('evidence-only-in-worktree') || String(f).includes('delta-file')),
+     `worktree 内文件应进 changed 集（实际：${JSON.stringify(files)}）`)
+ })
++
++// ── §5 native-worktree 收养态双回归（ql-20260918-010，回放实验实证：无 meta + cwd 即 worktree）──
++// 场景：cwd 自身是 linked worktree（git-dir ≠ git-common-dir）、worktrees/<change>/meta.json 缺席
++// （native 收养不落 meta）、真实改动已 commit 在 worktree 分支、未提交面只有干扰文件。
++// 修复前：meta miss → 未提交/已提交两段全跳 → 文件集只有主 fallback 的未提交干扰 → 0 模块命中
++// → integrationRan=not-ran 假触发 PASS 封顶（回放假 NOTES 根因）。
++test('§5 native-worktree：无 meta 时 cwd 即 worktree，已提交改动进模块命中面', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'native-wt-'))
++  after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* Windows 句柄残留容忍 */ } })
++  const git = (dir, args) => execSync(['git', ...args].join(' '), { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  git(tmp, ['init', '-q', '-b', 'main'])
++  git(tmp, ['config', 'user.email', 't@t.local']); git(tmp, ['config', 'user.name', 't'])
++  writeFileSync(join(tmp, 'base.txt'), 'base')
++  git(tmp, ['add', '.']); git(tmp, ['commit', '-q', '-m', 'base'])
++  const wt = join(tmp, 'native-replay')
++  git(tmp, ['worktree', 'add', '-q', '-b', 'replay/x', wt])  // linked worktree，无任何 sillyspec meta
++  mkdirSync(join(wt, 'src'), { recursive: true })
++  writeFileSync(join(wt, 'src', 'machine-interface.js'), 'committed-real-change')
++  writeFileSync(join(wt, '.claude'), '') // 未提交干扰面（再生文件形态）
++  git(wt, ['add', '.']); git(wt, ['commit', '-q', '-m', 'real-change'])
++  writeFileSync(join(wt, 'regen-noise.md'), 'cli regen')  // 收养后未提交噪声
++  const files = resolveVerifyChangedFiles(wt, 'c-native', null, { includeWorkingTree: true, specBase: join(wt, '.sillyspec') })
++  assert.ok((files || []).includes('src/machine-interface.js'),
++    `native 态已提交文件必须进命中面（实际：${JSON.stringify(files)}）——缺失即回放假 NOTES 根因回归`)
++  assert.ok((files || []).includes('regen-noise.md'), '未提交噪声照常并入（两形态全覆盖）')
++})
++
++test('§5b native-worktree 主仓零回归：非 worktree 的 cwd（普通仓）不触发 native 分支', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'plain-repo-'))
++  after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 同上 */ } })
++  const git = (dir, args) => execSync(['git', ...args].join(' '), { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  git(tmp, ['init', '-q', '-b', 'main'])
++  git(tmp, ['config', 'user.email', 't@t.local']); git(tmp, ['config', 'user.name', 't'])
++  writeFileSync(join(tmp, 'a.txt'), 'a')
++  git(tmp, ['add', '.']); git(tmp, ['commit', '-q', '-m', 'a'])
++  // 普通仓：git-dir === git-common-dir → native 分支不触发，行为与修复前一致（无 crash 无双并）
++  const files = resolveVerifyChangedFiles(tmp, 'no-change', null, { includeWorkingTree: true, specBase: join(tmp, '.sillyspec') })
++  assert.ok(Array.isArray(files), `普通仓应正常返回数组（实际：${JSON.stringify(files)}）`)
++})
