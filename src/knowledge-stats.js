@@ -23,10 +23,11 @@
  * 「窗口内无命中」两种空矩阵——后者死重对照无意义，人类可读模式同样略过 neverHit 段）。
  */
 
-import { existsSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { readKnowledgeHits } from './knowledge-hits.js'
 import { parseKnowledgeIndex } from './knowledge-match.js'
+import { scanFrIndex } from './fr-index.js'
 
 // ── 聚合核心 ──
 
@@ -95,6 +96,85 @@ export function buildHitMatrix(knowledgeDir, runtimeDir, { sinceDays = 30 } = {}
   return { matrix, neverHit, totalInjects, totalClassifies }
 }
 
+// ── FR 索引实验聚合（2026-09-18-fr-index-l1 后续钩子·L3 裁决仪表盘）──
+
+/**
+ * 聚合 L1 四类 fr-* 遥测事件 + knowledge/fr/ 索引面统计——L3 裁决（design 实验证伪条款）
+ * 的出数面：观察期满一眼读出 注入命中/取代链跟随/重复拦截/删除缺口信号 与 承接引用率。
+ *
+ * 口径：
+ * - 事件面（jsonl，sinceDays 窗口）：fr-inject 计数+涉及变更数；fr-supersede 计数+涉及变更数；
+ *   fr-duplicate-warning 计数+命中候选数；fr-unreferenced 按域聚合 count 总和；
+ * - 索引面（knowledge/fr/*.md，全量——索引是累积账本非窗口流）：条目/active/superseded 计数、
+ *   来源变更数（承接引用率分母——事件流无 fr-added 事件，分母从索引读，不加归档管线事件）；
+ * - 承接引用率 = fr-supersede 涉及变更数 / 索引来源变更数（分母 0 → null）。
+ *   注意分子是 sinceDays 窗口内、分母是全量——窗口≠全量时比率偏低是口径事实，
+ *   裁决时用大窗口（--since-days 9999）读全口径。
+ *
+ * @returns {{ present: boolean, events: {...}, index: {...}, supersedeRate: number|null }}
+ *   present=false（无 fr/ 目录且零 fr-* 事件）→ 其余字段零值，消费方可整体略过。
+ */
+export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } = {}) {
+  const records = readKnowledgeHits(runtimeDir, { sinceDays })
+  const frEvents = records.filter((r) => typeof r.type === 'string' && r.type.startsWith('fr-'))
+
+  const injectChanges = new Set()
+  const supersedeChanges = new Set()
+  const duplicateCandidates = new Set()
+  const unreferencedByDomain = new Map()
+  let frInject = 0
+  let frSupersede = 0
+  let frDuplicateWarning = 0
+  for (const r of frEvents) {
+    if (r.type === 'fr-inject') {
+      frInject += 1
+      if (r.change) injectChanges.add(r.change)
+    } else if (r.type === 'fr-supersede') {
+      frSupersede += 1
+      if (r.change) supersedeChanges.add(r.change)
+    } else if (r.type === 'fr-duplicate-warning') {
+      frDuplicateWarning += 1
+      if (r.candidate) duplicateCandidates.add(r.candidate)
+    } else if (r.type === 'fr-unreferenced') {
+      const domain = r.domain || 'unknown'
+      const row = unreferencedByDomain.get(domain) || { domain, events: 0, count: 0 }
+      row.events += 1
+      row.count += Number.isFinite(Number(r.count)) ? Number(r.count) : 0
+      unreferencedByDomain.set(domain, row)
+    }
+  }
+
+  const frDir = join(knowledgeDir, 'fr')
+  const frDirExists = existsSync(frDir)
+  const entries = frDirExists ? scanFrIndex(knowledgeDir) : []
+  const sourceChanges = new Set(entries.map((e) => e.change).filter(Boolean))
+  const supersededCount = entries.filter((e) => e.supersededBy).length
+
+  const denominator = sourceChanges.size
+  const supersedeRate = denominator > 0 ? supersedeChanges.size / denominator : null
+
+  return {
+    present: frDirExists || frEvents.length > 0,
+    events: {
+      frInject,
+      frInjectChanges: injectChanges.size,
+      frSupersede,
+      frSupersedeChanges: supersedeChanges.size,
+      frDuplicateWarning,
+      frDuplicateCandidates: duplicateCandidates.size,
+      frUnreferenced: [...unreferencedByDomain.values()].sort((a, b) => b.count - a.count),
+    },
+    index: {
+      entries: entries.length,
+      active: entries.length - supersededCount,
+      superseded: supersededCount,
+      sourceChanges: denominator,
+      domains: frDirExists ? readdirSync(frDir).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, '')) : [],
+    },
+    supersedeRate,
+  }
+}
+
 // ── CLI 入口（形态对齐 src/stages/knowledge.js cmdSearch / src/knowledge-classify.js cmdKnowledgeClassify）──
 
 function outputJson(ok, data, error) {
@@ -139,9 +219,10 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
   // 遥测在场判定用全量读取（不加窗口）：文件缺失/只有坏行 → 无遥测
   const hasTelemetry = readKnowledgeHits(runtimeDir).length > 0
   const result = buildHitMatrix(knowledgeDir, runtimeDir, { sinceDays })
+  const frIndex = buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays })
 
   if (asJson) {
-    outputJson(true, { sinceDays, hasTelemetry, ...result })
+    outputJson(true, { sinceDays, hasTelemetry, ...result, frIndex })
     return
   }
 
@@ -176,5 +257,21 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
   }
 
   lines.push(`遥测计数（窗口内）：注入 ${result.totalInjects} 次 | 归类 ${result.totalClassifies} 次`)
+
+  // FR 索引实验（L3 裁决仪表盘——证伪条款出数面；裁决时建议 --since-days 大窗口读全口径）
+  if (frIndex.present) {
+    const e = frIndex.events
+    const i = frIndex.index
+    lines.push('')
+    lines.push(`🔬 FR 索引实验（窗口内事件 / 索引面全量——L3 裁决指标，证伪条款见 2026-09-18-fr-index-l1 design）`)
+    lines.push(`  注入 fr-inject ${e.frInject} 次（${e.frInjectChanges} 变更） | 取代链 fr-supersede ${e.frSupersede} 次（${e.frSupersedeChanges} 变更） | 重复拦截 fr-duplicate-warning ${e.frDuplicateWarning} 次（${e.frDuplicateCandidates} 候选）`)
+    if (e.frUnreferenced.length > 0) {
+      const top = e.frUnreferenced.slice(0, 5).map((u) => `${u.domain}×${u.count}`).join('，')
+      lines.push(`  删除缺口信号 fr-unreferenced：${top}${e.frUnreferenced.length > 5 ? ' …' : ''}（观察信号·不算 L3 门禁）`)
+    }
+    lines.push(`  索引面：${i.entries} 条（active ${i.active} / superseded ${i.superseded}）| 来源变更 ${i.sourceChanges} 个 | 域 ${i.domains.join(', ') || '—'}`)
+    lines.push(`  承接引用率：${frIndex.supersedeRate === null ? '—（索引空）' : `${(frIndex.supersedeRate * 100).toFixed(0)}%（${e.frSupersedeChanges}/${i.sourceChanges}，分子窗口内/分母全量——裁决用大窗口）`}`)
+  }
+
   console.log(lines.join('\n'))
 }

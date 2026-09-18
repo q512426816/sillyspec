@@ -299,3 +299,17 @@
 结果：定向45/45绿（pass-eligibility/verify-handover-structured/acceptance-matrix-gate/smoke-gate/verify-conclusion-slot五文件）；全量529/0绿；lint check-syntax 671文件绿
 审计：📝 文档欠账（D-8）：5 个源码文件改动未同步任何模块文档（涉及模块：core-engine）
 审计：[gate] L1（跨 1 模块 · 5 文件：2 代码/3 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260918-005-435a | 2026-09-18 08:40:26 | knowledge-stats 接入 L1 仪表盘——四类 fr-* 事件聚合+索引面扫描+承接引用率（L1 后续钩子 D-006 落地…
+状态：已完成
+关联变更：（无）
+文件：
+- src/knowledge-stats.js（buildFrIndexStats+CLI 两面）
+- test/knowledge-fr-stats.test.mjs（新文件 15 断言）
+- .sillyspec/docs/sillyspec/modules/core-engine.md（最近变更+frontmatter）
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（ql-005 行）
+需求：knowledge-stats 接入 L1 仪表盘——四类 fr-* 事件聚合+索引面扫描+承接引用率（L1 后续钩子 D-006 落地，观察期满直接出数裁决 L3）
+根因：L1 设计只落事件流（D-006：聚合后续变更）——裁决时手数 jsonl 则实验失真；分母从索引文件读不往归档管线加事件
+方案：buildFrIndexStats 四事件计数去重+unreferenced 按域+scanFrIndex 索引面+承接引用率（口径差异标注裁决用大窗口）；present 三态+前向兼容；CLI --json frIndex 键+人类模式实验段
+结果：15/15 新断言+既有 stats 36/0+全量 531/0+CLI 门禁实测；真实仓活视图：4 条 active/1 来源/率 0%（第零天基线）；模块卡+changelog 同步
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
