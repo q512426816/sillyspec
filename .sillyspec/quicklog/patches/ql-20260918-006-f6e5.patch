@@ -1,0 +1,47 @@
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 4c5071b..c413656 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1415,18 +1415,33 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+   //    建议挂点），S0/S1 轻档变更在 brainstorm/plan/execute 完成时向平台派重仪式影子审查做轻/重
+   //    对照——只记账不阻断（FR-04：影子结论只落 stage-reviews-shadow/ 命名空间，函数内部已隔离，
+   //    绝不写主线 marker、不进 gate/verify/archive 判定面）。前置校验（档位∈S0/S1、ceremony.shadow
+-  //    开关、幂等闸、平台 client 可用性）全在函数内部，不满足 → skip 留痕对照账（零噪音）；
+-  //    本层不组装 client（CLI 进程无平台会话——agent-tool/host-mcp 宿主通道由宿主自行派发，结论
+-  //    不入本账）。specBase 平台接管优先（与上方 Stage Review Gate effectiveSpecBase 同口径）。
+-  //    异常双保险：函数自身 catch-all 永不抛 + 外层 try-catch/promise.catch 吞掉（影子是旁路
+-  //    数据面，任何异常绝不影响门判定与完成）。──
++  //    开关、幂等闸、平台 client 可用性）全在函数内部，不满足 → skip 留痕对照账（零噪音）。
++  //    client 供给面（P3-1 收口，ql-20260918-006）：复用 review-dispatch 命令先例（index.js:1273）
++  //    懒加载 SillyHubMcpClient 注入——构造只读 local.yaml 配置不联网；未配平台的仓在函数内
++  //    probe no-config 仍走 skip 留痕（合理：影子只在配了平台的仓积累对照数据）。specBase 平台
++  //    接管优先（与上方 Stage Review Gate effectiveSpecBase 同口径）。异常双保险：函数自身
++  //    catch-all 永不抛 + 外层 try-catch/promise.catch 吞掉（影子是旁路数据面，任何异常绝不影响
++  //    门判定与完成）。──
+   if (['brainstorm', 'plan', 'execute'].includes(stageName) && changeName) {
+     try {
+       const shadowSpecBase = platformOpts?.specRoot || specBase
+-      import('../review-dispatch.js')
+-        .then(({ dispatchShadowReview }) => dispatchShadowReview({
+-          mode: 'create', cwd, specBase: shadowSpecBase, changeName, stage: stageName,
+-        }))
++      Promise.all([
++        import('../review-dispatch.js'),
++        import('../sillyhub-mcp/client.js'),
++      ])
++        .then(async ([{ dispatchShadowReview }, { SillyHubMcpClient }]) => {
++          // 构造失败（local.yaml 损坏等）传 undefined → 函数内部 skip 留痕，不报错不阻断
++          let shadowClient;
++          try {
++            shadowClient = new SillyHubMcpClient({ cwd });
++          } catch {
++            shadowClient = undefined;
++          }
++          return dispatchShadowReview({
++            mode: 'create', cwd, specBase: shadowSpecBase, changeName, stage: stageName,
++            client: shadowClient,
++          });
++        })
+         .then((r) => {
+           if (r && r.ok && !r.skipped && r.missionId) {
+             console.log(`\nℹ️ 影子审查已后台派发（mission ${r.missionId}，fire-and-forget 只记账不阻断——回收随主线检查点 status 模式或 doctor 影子对照维度）`)

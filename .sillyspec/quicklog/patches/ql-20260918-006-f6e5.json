@@ -1,0 +1,54 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-9d4f920e",
+  "totals": {
+    "files": 1,
+    "additions": 24,
+    "deletions": 9
+  },
+  "rows": [
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 24,
+      "deletions": 9,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 1,
+    "testFileCount": 0,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/gates.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260918-006-f6e5",
+  "sessionId": "quick-9d4f920e",
+  "savedAt": "2026-09-18T09:36:44.508Z",
+  "patchSha256": "d4288fefb5511dfd8f600f83f162441ec5812bcc574a301a9a84e7e1b6c95159",
+  "patchStatus": "ok"
+}

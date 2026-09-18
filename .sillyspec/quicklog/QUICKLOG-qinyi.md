@@ -313,3 +313,12 @@
 方案：buildFrIndexStats 四事件计数去重+unreferenced 按域+scanFrIndex 索引面+承接引用率（口径差异标注裁决用大窗口）；present 三态+前向兼容；CLI --json frIndex 键+人类模式实验段
 结果：15/15 新断言+既有 stats 36/0+全量 531/0+CLI 门禁实测；真实仓活视图：4 条 active/1 来源/率 0%（第零天基线）；模块卡+changelog 同步
 审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260918-006-f6e5 | 2026-09-18 17:32:28 | 影子 client 供给面接入（ceremony-risk-pricing 移交项 P3-1）：CLI 进程影子派发永不组装平台 client…
+状态：已完成
+关联变更：（无）
+文件：src/run/gates.js（+24/-9）
+需求：影子 client 供给面接入（ceremony-risk-pricing 移交项 P3-1）：CLI 进程影子派发永不组装平台 client，每次轻档完成必走 platform-client-missing skip，影子期对照数据无法积累——定价变更的防暗降兜底为空
+根因：task-06 接线时设计取舍「本层不组装 client」，execute 独立评审定为 gap（client 供给面）复审收窄为移交项；平台 client 构造先例（index.js:1273）一直存在，属一行接线成本。危险文件判定说明：gates.js 命中门禁核心路径，但本次改动是影子派发 fire-and-forget 旁路段（新增 client 组装），不触碰任何门判定逻辑——定向回归（stage-completion-atomicity/noai-completion-gate）+lint 全绿佐证
+方案：gates.js 影子接线处懒加载 SillyHubMcpClient 注入（Promise.all 双动态 import + 构造失败传 undefined 走函数内 skip）；构造只读 local.yaml 不联网，未配平台仓仍 probe no-config 合理 skip
+结果：端到端实证：S1 档位+注入 client → 真实派发成功（mission cbb27116/worker 7386f671/shadowRunId 落账）——影子链路首次真实开火；无档位变更仍 tier-file-missing skip（前置链不回归）；定向绿+lint 全绿（677 文件未引用导出 0）；影子期对照数据自此开始积累，doctor ceremony_shadow 维度不再恒空
