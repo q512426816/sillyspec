@@ -12,6 +12,9 @@
  *   探针7 验收×测试覆盖矩阵：task 卡 acceptance 自解析（jsYaml，string/array 双形态）+ 双源结构
  *        归属（allowed_paths 测试模式 ∪ execute-runs review.json changedFiles test/ 前缀）+
  *        关键词命中提示（命中≠判定，不参与门禁；2026-09-14-acceptance-test-matrix）
+ *   探针10 预填注清零（error 门）：design.md + tasks/task-*.md 白名单槽宿主文件集逐个
+ *        hasUnconfirmedPrefill（注在场=未确认）——--init 预填进探针段 + gates.js verify 收尾
+ *        复跑同一实现阻断（门禁梯度 error 档；2026-09-18-artifact-prefill task-03）
  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
  *
  * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。 probe1-noqa
@@ -22,9 +25,10 @@
  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
-import { join, dirname, basename, resolve, isAbsolute } from 'path'
+import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
 import jsYaml from 'js-yaml'
 import { gitQuiet, unquoteGitPath } from './git-helper.js'
+import { hasUnconfirmedPrefill } from './prefill.js'
 import {
   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
 } from './verify-facts-schema.js'
@@ -1642,6 +1646,58 @@ export function runProbe9GuardConsistency({ specBase, cwd, wtRoot = null, change
 }
 
 
+// ── 探针 10（预填注清零，2026-09-18-artifact-prefill task-03 / FR-03 / D-003@v1 门禁梯度·error 档）──
+// 背景：三槽预填（src/prefill.js，task-01）的确认动作是「删注」——注在场 = 白名单槽未确认
+// （预填≠结论）。brainstorm/plan --done 是 advisory（忘删=提示，gates.js 轻档），本探针是梯度
+// 收口的 error 档：--init 预填进 verify-result.md 探针段（agent 在 verify 阶段看到 ❌ 面），
+// gates.js verify 收尾复跑本函数同源阻断（verify 完成是 archive 前置——「归档前注清零」的落点）。
+// 检测复用 task-01 的 hasUnconfirmedPrefill（PREFILL_NOTE 字面包含即未确认）；已知误报面：
+// 散文引用注字面量（如设计文档描述注协议本身）会命中——不追求语义区分，❌ 面向 agent 核对
+// （真未确认 → 删注；纯散文 → 改写措辞），gate 侧文案同口径。
+const PROBE10_HEADING = '#### 探针 10：预填注清零（error 门）'
+
+/**
+ * 探针 10 主体：changeDir 的 design.md + tasks/task-*.md（预填白名单槽宿主文件集——与
+ * gates.js advisory 门 / verify 收尾 error 门同一检测面）逐文件 hasUnconfirmedPrefill。
+ *   - applicable：至少一个在检文件存在（变更目录缺失 / 全缺席 → false + 注记，纯骨架零红门禁）；
+ *   - unclearedFiles：含未删预填注的文件（changeDir 相对、正斜杠，design.md 在前、task 卡按名序）；
+ *   - 只读不写、无 git 依赖（与 probe8/9 的 design 清单解析面独立——design.md 缺失仍可查
+ *     task 卡，反之亦然）。
+ * @param {{ specBase: string, changeName: string }} args
+ * @returns {{applicable: boolean, checkedFiles: number, unclearedFiles: string[], notes: string[]}}
+ */
+export function runProbe10PrefillNoteClearance({ specBase, changeName }) {
+  const out = { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] }
+  if (!specBase || !changeName) {
+    out.notes.push('入参缺失（specBase/changeName）——检测面空')
+    return out
+  }
+  const changeDir = join(specBase, 'changes', changeName)
+  if (!existsSync(changeDir)) {
+    out.notes.push(`变更目录不存在（${changeDir}）`)
+    return out
+  }
+  const candidates = [join(changeDir, 'design.md')]
+  try {
+    const tasksDir = join(changeDir, 'tasks')
+    if (existsSync(tasksDir)) {
+      candidates.push(...readdirSync(tasksDir).filter(n => /^task-.+\.md$/.test(n)).sort().map(n => join(tasksDir, n)))
+    }
+  } catch { /* tasks 目录不可读 → 只检 design.md */ }
+  for (const p of candidates) {
+    if (!existsSync(p)) continue
+    out.checkedFiles++
+    if (hasUnconfirmedPrefill(p)) out.unclearedFiles.push(relative(changeDir, p).split('\\').join('/'))
+  }
+  if (out.checkedFiles === 0) {
+    out.notes.push('无在检文件（design.md 与 tasks/task-*.md 均缺席——纯骨架/中间态）')
+    return out
+  }
+  out.applicable = true
+  return out
+}
+
+
 const PROBE7_HEADING = '#### 探针 7：验收×测试覆盖矩阵'
 // execute run id 格式（与 task-review.js isValidExecuteRunId 同口径锚定，防提示词注入/路径穿越）
 const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0,2}$/
@@ -2163,6 +2219,16 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe9.notes = [`探针 9 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
   }
 
+  // ── 探针 10：预填注清零（error 门；2026-09-18-artifact-prefill task-03——门禁梯度 error 档
+  // 的检测单点：--init 预填本段 + gates.js verify 收尾 error 门 / brainstorm·plan advisory 复跑
+  // 同一实现，不二算。fail-soft 同探针 8/9：异常降级 not-applicable 注记不炸整体。──
+  let probe10 = { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] }
+  try {
+    probe10 = runProbe10PrefillNoteClearance({ specBase, changeName })
+  } catch (e) {
+    probe10.notes = [`探针 10 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+  }
+
   // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
   // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
   // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
@@ -2176,7 +2242,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     }
   } catch { /* design 读/解析异常 → 空面（fail-soft） */ }
 
-  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, apiFace, consumerHints }
+  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, probe10, apiFace, consumerHints }
 }
 
 /**
@@ -2283,6 +2349,9 @@ export function renderVerifyProbesReport(result) {
   // 探针 9 紧随探针 8；旧 result 无 probe9 键（存量调用方/合成 result）→ applicable=false
   // 渲染「不适用」行 + notes，零回归（探针 7 兜底口径同款）。
   L.push(...(renderProbe9Lines(result.probe9 || { applicable: false, javaFileCount: 0, groupCount: 0, inconsistentGroups: [], notes: [] })))
+  // 探针 10 紧随探针 9；旧 result 无 probe10 键（存量调用方/合成 result）→ applicable=false
+  // 渲染「不适用」行 + notes，零回归（探针 8/9 兜底口径同款）。
+  L.push(...(renderProbe10Lines(result.probe10 || { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] })))
   return L.join('\n')
 }
 
@@ -2369,6 +2438,31 @@ function renderProbe9Lines(p9) {
   return L
 }
 
+/**
+ * 渲染探针 10 段（renderProbe9Lines 同构；error 门口径注记随段输出——❌ 面是 verify 完成
+ * 前须清零的死信，不是 advisory 复核面）。汇总行「预填注未清 N 处」的 N 为后续一致性抽查
+ * 锚点扩展留位（verify-postcheck 锚点面归后续任务，本卡只出 producer 侧——probe9 先例同款）。
+ * @param {{applicable: boolean, checkedFiles?: number, unclearedFiles: string[], notes: string[]}} p10
+ * @returns {string[]} 行数组（含段标题）
+ */
+function renderProbe10Lines(p10) {
+  const L = [PROBE10_HEADING]
+  if (!p10 || !p10.applicable) {
+    L.push('- 不适用（design.md 与 tasks/task-*.md 均缺席——纯骨架/中间态，预填注无从在场）')
+    for (const n of (p10 && p10.notes) || []) L.push(`- ℹ️ ${n}`)
+    return L
+  }
+  L.push('<!-- 口径注记：预填注（来源注协议）在场 = 白名单槽未确认（预填≠结论）；删注 = 确认动作。本探针是门禁梯度 error 档——verify --done 时 gate 复跑同源检测，注未清零阻断完成（归档前清零兜底）。已知误报面：散文引用注字面量会命中（如文档描述注协议本身）——核对后真未确认则删注，纯散文则改写措辞，不得删探针段。 -->')
+  if ((p10.unclearedFiles || []).length > 0) {
+    L.push(`- ❌ 预填注未清 ${p10.unclearedFiles.length} 处（error 门——verify 完成前须逐槽核对后删注）：`)
+    for (const f of p10.unclearedFiles) L.push(`- ❌ \`${mdEscapeCell(f, 120)}\` 仍含未删预填注`)
+  } else {
+    L.push(`- ✅ 预填注清零（${p10.checkedFiles ?? 0} 个在检文件无未确认预填）`)
+  }
+  for (const n of p10.notes || []) L.push(`- ℹ️ ${n}`)
+  return L
+}
+
 // ── 接口验证覆盖矩阵段渲染（task-04 / FR-05 / D-005~D-007）──
 // 骨架新写路径（generateVerifyResultSkeleton）与缺段补齐（ensureApiCoverageMatrixSection）
 // 共用单一实现——renderProbe7Lines 先例。不动 probe7 既有矩阵（独立 ## 章节并行存在，口径
@@ -2437,6 +2531,7 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
   const p6 = (result && result.probe6) || {}
   const p8 = (result && result.probe8) || {}
   const p9 = (result && result.probe9) || {}
+  const p10 = (result && result.probe10) || {}
   // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
   // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
   // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
@@ -2494,6 +2589,13 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
           javaFileCount: num(p9.javaFileCount),
           groupCount: num(p9.groupCount),
           inconsistentGroups: len(p9.inconsistentGroups),
+        }),
+      },
+      probe10: {
+        command,
+        metrics: defined({
+          checkedFiles: num(p10.checkedFiles),
+          unclearedFiles: len(p10.unclearedFiles),
         }),
       },
     },

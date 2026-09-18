@@ -109,6 +109,7 @@ SillySpec CLI — 规范驱动开发工具包
                                       单 task review.json 命令式写入：verdict/notes 你给，base/head/changedFiles/diffPaths CLI 代算
   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
   sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
+  sillyspec prefill-refresh --change <name> [--json]  重放三槽预填（design 文件清单/决策追踪表 + task 卡 ids；已确认槽不覆盖，幂等）
   sillyspec fourpiece-init --change <name>     生成 proposal/requirements/decisions 骨架（frontmatter+章节+模板占位；已存在不覆盖）
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
@@ -1885,12 +1886,13 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       // 从零手写整份设计文档，章节漏项到 stage-contract/plan 门禁才暴露。本命令从 decisions.md
       // 当前版本 D 条目预填决策追踪表，章节标题逐字取自 brainstorm Step 6 模板（R-03，渲染本体在
       // design-facts.js generateDesignSkeleton——本 case 只负责读盘/幂等保护/落盘）。已存在不覆盖
-      // （幂等，agent 产出优先），--force 覆盖重生成。
+      // （幂等，agent 产出优先），--force 覆盖重生成。task-02（2026-09-18-artifact-prefill）：追踪
+      // 表行落盘前经 prefill.js prefillDecisionTable 替换为带来源注的预填行（见下方接线块）。
       const diChangeIdx = args.indexOf('--change');
       const diChange = diChangeIdx >= 0 && args[diChangeIdx + 1] && !String(args[diChangeIdx + 1]).startsWith("--") ? args[diChangeIdx + 1] : null;
       const diForce = args.includes('--force');
       if (!diChange) {
-        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按当前版本 D 条目预填；已存在不覆盖，--force 覆盖）');
+        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按 D 条目预填、行带来源注；已存在不覆盖，--force 覆盖）');
         process.exit(2);
       }
       assertSafeChangeName(diChange, '--change 变更名');
@@ -1908,12 +1910,35 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       let diAuthor = 'unknown';
       try { diAuthor = git(dir, ['config', 'user.name']) || 'unknown' } catch { /* git 不可用 → unknown */ }
       const { nowWallClock } = await import('./datetime.js');
-      const diSkeleton = generateDesignSkeleton({
+      const diSkeletonBase = generateDesignSkeleton({
         changeName: diChange,
         decisionsText: readFileSync(diDecisionsPath, 'utf8'),
         author: diAuthor,
         now: nowWallClock(),
       });
+      // task-02（2026-09-18-artifact-prefill）决策追踪表接线：design-facts 骨架行（无注）替换为
+      // prefillDecisionTable 预填行（状态列带来源注——D-003 预填≠结论，agent 逐行核对后删注=确认）。
+      // 推导单点在 prefill.js（与 prefill-refresh 重放同源，两处不各自重写防漂移）。decisions.md
+      // 无 canonical「## D-xxx@vN」条目时返回 [] → 骨架原样落盘（design-facts 自带「未解析出条目」
+      // 注释行，现状不变）。段定位对齐 prefill.js DECISION_SECTION_RE 同义词集；骨架十三章节形态
+      // 固定（表头|分隔行|内容行），定位失败 fail-soft 回退原骨架——预填是 advisory 能力不阻断。
+      const { prefillDecisionTable } = await import('./prefill.js');
+      const diDecisionRows = prefillDecisionTable({ changeDir: diChangeDir });
+      let diSkeleton = diSkeletonBase;
+      if (diDecisionRows.length > 0) {
+        const diLines = diSkeletonBase.split('\n');
+        const diSecIdx = diLines.findIndex((l) => /^#{2,3}\s*(?:\d+[.)]\s*)?决策追踪/.test(l));
+        if (diSecIdx !== -1) {
+          let diSepIdx = diSecIdx + 1;
+          while (diSepIdx < diLines.length && !(diLines[diSepIdx].startsWith('|') && /^\|[-:\s|]+\|$/.test(diLines[diSepIdx]))) diSepIdx++;
+          if (diSepIdx < diLines.length) {
+            let diRowEnd = diSepIdx + 1;
+            while (diRowEnd < diLines.length && diLines[diRowEnd].startsWith('|') && !/^\|[-:\s|]+\|$/.test(diLines[diRowEnd])) diRowEnd++;
+            diLines.splice(diSepIdx + 1, diRowEnd - diSepIdx - 1, ...diDecisionRows);
+            diSkeleton = diLines.join('\n');
+          }
+        }
+      }
       const diDesignPath = join(diChangeDir, 'design.md');
       const diExisted = existsSync(diDesignPath);
       if (diExisted && !diForce) {
@@ -1941,7 +1966,35 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         break;
       }
       console.log(`✅ 已生成 design.md 骨架: ${diDesignPath}${diExisted ? '（--force 覆盖既有文件）' : ''}`);
-      console.log('   决策追踪表已按 decisions.md 当前版本 D 条目预填；回到 brainstorm Step 6（写设计文档并自审）逐节填散文，填毕删除生成注释。');
+      console.log('   决策追踪表已按 decisions.md D 条目预填（状态列带「(预填：核对后删本注)」来源注——预填≠结论，逐行核对后删注确认）；回到 brainstorm Step 6（写设计文档并自审）逐节填散文，填毕删除生成注释。');
+      break;
+    }
+    case 'prefill-refresh': {
+      // Phase 3（2026-09-18-artifact-prefill task-02，D-005）：三槽预填重放——design.md 文件变更
+      // 清单/决策追踪两表槽 + tasks/*.md 的 requirement_ids/decision_ids。仅白名单槽（D-001）；
+      // 已确认槽（预填注已删/人工内容）跳过不覆盖；幂等可重跑。骨架生成时源未就绪（task 卡先于
+      // requirements/decisions 落盘等）的槽由此命令补齐——plan 阶段后主通道。CLI 单一写入方
+      // 不变（D-002）：本路由只透传 runPrefillRefresh 的结果与计数，不自建写盘逻辑。
+      const prChangeIdx = args.indexOf('--change');
+      const prChange = prChangeIdx >= 0 && args[prChangeIdx + 1] && !String(args[prChangeIdx + 1]).startsWith("--") ? args[prChangeIdx + 1] : null;
+      if (!prChange) {
+        console.error('用法: sillyspec prefill-refresh --change <name> [--spec-dir <path>] [--json]\n  重放三槽预填（design 文件变更清单/决策追踪表行 + task 卡 requirement_ids/decision_ids）；已确认槽（预填注已删）跳过不覆盖；幂等可重跑');
+        process.exit(2);
+      }
+      assertSafeChangeName(prChange, '--change 变更名');
+      const prSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      if (!existsSync(join(prSpecBase, 'changes', prChange))) {
+        console.error(`❌ 变更目录不存在: ${join(prSpecBase, 'changes', prChange)}`);
+        process.exit(1);
+      }
+      const { runPrefillRefresh } = await import('./prefill.js');
+      const prResult = await runPrefillRefresh({ cwd: dir, specBase: prSpecBase, changeName: prChange });
+      if (json) {
+        console.log(JSON.stringify({ command: 'prefill-refresh', change: prChange, ok: true, ...prResult }, null, 2));
+        break;
+      }
+      for (const l of prResult.lines) console.log(l);
+      console.log(`📊 预填重放完成：filled ${prResult.filled} / skipped ${prResult.skipped} / confirmed ${prResult.confirmed}（已确认跳过）`);
       break;
     }
     case 'delta': {
@@ -3888,6 +3941,36 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
         // 对齐 endpoints 等命令：先 resolvePlatformSpecDir（指针 fail-closed 语义同源）。
         const tcPlatformSpecDir = resolvePlatformSpecDir(dir, specDir) || specDir;
         const result = cmdTaskcard(tcName, { cwd: dir, specDir: tcPlatformSpecDir, taskIds, title: titleVal, titleZh: titleZhVal, force, sets });
+        // task-02（2026-09-18-artifact-prefill）taskcard ids 直填接线：本次 created 的骨架卡，
+        // 占位行「requirement_ids: [FR-XX] / decision_ids: [D-XXX@vN]」立即改写为 prefillCardIds
+        // 推导值——行格式与 runPrefillRefresh 重放逐字一致（后续 refresh 幂等零改写）。源文件在场
+        // → 直填+来源注（D-003 预填≠结论，核对后删注=确认）；源缺/推导为空 → 空数组+提示行
+        // （D-005：plan 阶段源就绪后跑 prefill-refresh 重放补齐）。只整行替换占位字面量：
+        // --set 显式覆盖过的行已非占位形态天然不动；skipped（已存在）卡不触碰，幂等纪律不变。
+        // 须在下方平台镜像块之前完成——镜像 readFileSync 回读的是改写后的终稿。
+        const { prefillCardIds, PREFILL_NOTE } = await import('./prefill.js');
+        const tcPrefillIds = prefillCardIds({ changeDir: join(tcPlatformSpecDir, 'changes', tcName) });
+        const tcIdLine = (field, ids) => ids.length > 0
+          ? `${field}: [${ids.join(', ')}]  # ${PREFILL_NOTE}`
+          : `${field}: []  # (预填源未就绪：plan 阶段后跑 prefill-refresh)`;
+        for (const f of result.created) {
+          try {
+            const tcRaw = readFileSync(f, 'utf8');
+            // 替换值经函数返回：避免 String.replace 替换串里 $ 序列的转义歧义
+            const tcNext = tcRaw
+              .replace('requirement_ids: [FR-XX]', () => tcIdLine('requirement_ids', tcPrefillIds.requirementIds))
+              .replace('decision_ids: [D-XXX@vN]', () => tcIdLine('decision_ids', tcPrefillIds.decisionIds));
+            if (tcNext !== tcRaw) writeFileSync(f, tcNext);
+          } catch { /* 单卡预填改写失败不连坐（骨架已落盘，prefill-refresh 可补） */ }
+        }
+        if (result.created.length > 0) {
+          const tcSetKeys = new Set(Object.keys(sets));
+          const tcIdSummary = (field, ids) => {
+            if (tcSetKeys.has(field)) return '（--set 显式覆盖，预填不碰）';
+            return ids.length > 0 ? `[${ids.join(', ')}]` : '（源未就绪留 [] + 提示行）';
+          };
+          console.log(`   ids 预填：requirement_ids ${tcIdSummary('requirement_ids', tcPrefillIds.requirementIds)} / decision_ids ${tcIdSummary('decision_ids', tcPrefillIds.decisionIds)}——预填≠结论，核对后删注。`);
+        }
         // 平台模式产物双写镜像（坑 platform-init-artifact-daemon-dir-only 同族，2026-09-10 驾驭
         // 小结第六批①，用户实证 taskcard --all 落 daemon 镜像「中间一度两份副本」）：agent 本地
         // （pointer 态、非显式 --spec-dir）生成的卡片即时镜像主仓 changeDir——不再等 spec-sync

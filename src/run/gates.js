@@ -820,6 +820,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } catch { /* 预检失败不阻断 plan 完成 */ }
   }
 
+  // ── 预填注未删 advisory（2026-09-18-artifact-prefill task-03 / FR-03 / D-003@v1 门禁梯度·
+  //    轻档）：brainstorm/plan --done 时对白名单槽宿主文件（design.md + tasks/task-*.md）查
+  //    未删预填注——注在场 = 未确认（预填≠结论），提示核对后删注（删注=确认动作）。advisory
+  //    不阻断（忘删注=未确认提示，task 卡 constraints「旧路径零新硬门」）；error 档挂 verify
+  //    收尾（归档前注清零）。检测单点 = verify-probes 探针面 runProbe10PrefillNoteClearance
+  //    （探针 10 --init 预填与 verify 收尾 error 门同一实现，不二算）。已知误报面：散文引用
+  //    注字面量（如本变更 design.md 协议描述）会命中——warning 文案注明核对语义，不追求
+  //    字面区分。──
+  if (['brainstorm', 'plan'].includes(stageName) && changeName) {
+    try {
+      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
+      const noteAdvisory = runProbe10PrefillNoteClearance({ specBase, changeName })
+      if (noteAdvisory.unclearedFiles.length > 0) {
+        console.warn(`\n⚠️ 预填注未清（白名单槽未确认，${noteAdvisory.unclearedFiles.length} 处：${noteAdvisory.unclearedFiles.join('、')}）——核对后删注；归档前注清零为 error 门（散文含注字面量会命中——核对是否真有未确认预填槽）`)
+      }
+    } catch { /* advisory 失败不阻断完成（fail-soft，facade 预检先例同款） */ }
+  }
+
   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
@@ -1140,6 +1158,25 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
         }
       }
+    }
+    // ── 预填注清零 error 门（归档前最后一道；2026-09-18-artifact-prefill task-03 / FR-03 /
+    //    D-003@v1 门禁梯度·error 档）：白名单槽宿主文件（design.md + tasks/task-*.md）仍含
+    //    未删预填注 → 阻断 verify 完成（verify 完成是 archive 前置——「归档前注清零」的落点；
+    //    brainstorm/plan --done 的 advisory 在此收口为硬门，注在场=预填未确认）。检测单点 =
+    //    verify-probes 探针面 runProbe10PrefillNoteClearance（探针 10 --init 预填与本门同一
+    //    实现，不二算）。已知误报面：散文引用注字面量会命中——修法是核对后删注/改写散文
+    //    措辞，不是绕门。──
+    try {
+      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
+      const noteClearance = runProbe10PrefillNoteClearance({ specBase, changeName })
+      if (noteClearance.unclearedFiles.length > 0) {
+        console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
+        for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
+        console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
+        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+      }
+    } catch (e) {
+      console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
     }
     // ── verify 服务进程回收（坑 verify-service-process-leak；坑 verify-pids-cross-session-kill
     // 见 reapVerifyServices 注释）──
