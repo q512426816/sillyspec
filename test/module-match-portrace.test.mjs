@@ -80,6 +80,44 @@ console.log('\n=== ①-b 0 命中诊断输出（黑箱可见化）===\n')
   fs.rmSync(d, { recursive: true, force: true })
 }
 
+console.log('\n=== ①-c 0 命中但 diff 含测试文件 → 变更测试子集兜底（不再裸 skip）===\n')
+// 本文件被 node --test 跑时处于 runner 派生进程（env 带 NODE_TEST_CONTEXT），内层
+// `node --test`（runModuleSubset 的 deps(auto) 命令）继承该变量会静默不跑任何用例
+// （exit 0 假绿、标记不落——实测证）——摘除后内层 runner 才真正执行，标记断言才有效
+delete process.env.NODE_TEST_CONTEXT
+{
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'zerohit-test-'))
+  sh('git init -q -b main', d)
+  sh('git config user.email t@t && git config user.name t', d)
+  sh('git config core.autocrlf false', d)
+  fs.writeFileSync(path.join(d, 'base.txt'), 'x\n')
+  fs.mkdirSync(path.join(d, 'test'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'test', 'feature-x.test.mjs'), "import { test } from 'node:test'\nimport assert from 'node:assert/strict'\ntest('x', () => { assert.equal(1, 1) })\n")
+  sh('git add -A && git commit -qm base', d)
+  // test-only 未提交修改（tracked 改动进 diff；modules 只配 frontend/ → 0 模块命中）。
+  // 修改版用例落 ran-marker.txt 标记——断言不依赖内层 node --test 的输出形态（本文件被
+  // node --test 跑时子进程继承 NODE_TEST_CONTEXT，stdout 是事件流而非人类可读输出，咬
+  // outputTail 会假红）
+  fs.writeFileSync(path.join(d, 'test', 'feature-x.test.mjs'), "import { test } from 'node:test'\nimport { writeFileSync } from 'node:fs'\ntest('x-modified', () => { writeFileSync('ran-marker.txt', 'x-modified-ran') })\n")
+  const specBase = path.join(d, '.sillyspec')
+  fs.mkdirSync(specBase, { recursive: true })
+  fs.writeFileSync(path.join(specBase, 'local.yaml'),
+    'commands:\n  test: node -e "1"\n\ntest_strategy: module\n\nmodules:\n  frontend: { path: "frontend/", test: "cd frontend && npm test" }\n')
+  const cap = []
+  const ow = console.warn
+  console.warn = (...a) => cap.push(a.join(' '))
+  let r
+  try { r = runVerifyTestCheck({ cwd: d, specBase, changeName: 'zht' }) }
+  finally { console.warn = ow }
+  assertTrue(r.mode === 'module-subset', `0 命中+diff 含测试文件 → 变更测试子集兜底（mode=${r.mode}）`)
+  assertTrue(String(r.command).includes('deps(1)'), `命令含 deps(auto) 变更测试（command=${r.command}）`)
+  assertTrue(r.status === 'passed', `变更测试实测通过而非裸 skip（status=${r.status}${r.reason ? '，' + r.reason : ''}）`)
+  assertTrue(fs.existsSync(path.join(d, 'ran-marker.txt')) && fs.readFileSync(path.join(d, 'ran-marker.txt'), 'utf8') === 'x-modified-ran',
+    '跑的是工作区当前版测试（x-modified 版用例落了标记文件）')
+  assertTrue(cap.some(m => m.includes('已配置 modules')), '0 命中诊断仍输出（兜底不吞黑箱可见性）')
+  fs.rmSync(d, { recursive: true, force: true })
+}
+
 console.log('\n=== ② dev server 端口竞争预警 + EADDRINUSE 鉴别（坑 verify-devserver-port-race）===\n')
 {
   // 2a：起一个真实监听服务占端口，测试命令带 --port → 实测前 warn 资源竞争

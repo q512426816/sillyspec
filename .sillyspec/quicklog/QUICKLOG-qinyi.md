@@ -451,3 +451,15 @@
 方案：门整块上移到 sessionId 生成前（--help/-h 显式豁免保住帮助查询，done-like/--cancel/linked-changes 语义原样）；原位置留指针注释；test/quick-start-input-hint.test.mjs 补拒绝路径无公告/无日志上报断言+--help exit 0 新用例；platform-interface-map.md 锚点 733→768 随行号漂移更新
 结果：quick-start-input-hint 15/15 绿；quick-cancel-rotation 回归绿；lint 过（680 文件）；docs 锚点校验随 --done 复核
 审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260919-007-4e23 | 2026-09-19 07:24:41 | verify 0 模块命中但 diff 含测试文件时按变更测试子集兜底——不再裸 skip
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（零命中分支加变更测试兜底（discoverModuleDependentTests+runModuleSubset(hits:[])））
+- test/module-match-portrace.test.mjs（①-c 兜底断言+NODE_TEST_CONTEXT 摘除（内层 runner 假绿机理注））
+- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（登记 ql-20260919-007-4e23）
+需求：verify 0 模块命中但 diff 含测试文件时按变更测试子集兜底——不再裸 skip
+根因：test-only 变更不命中任何 modules path 前缀时（如只改 test/*.test.mjs），零命中分支直接 skip 且 reason 写「据 verify-result.md 自报告判定」——quick --done 的 test 门禁对纯测试改动形同虚设（2026-09-19 ql-004 实测踩），上轮工具负面②
+方案：runVerifyTestCheck 零命中分支先经 discoverModuleDependentTests（deps(auto) 同款谓词）探测 diff 内测试文件：有则 runModuleSubset(hits:[]) 直接实测变更测试（范围仍限本次变更、不回退全量，0 命中防超时初衷不变）；无测试文件（docs-only 等）维持裸 skip 零变化；0 命中诊断输出保留；测试夹具摘 NODE_TEST_CONTEXT（runner 派生进程内内层 node --test 继承会静默零跑假绿——实测证）
+结果：module-match-portrace 16/16 绿双跑法（直跑+node --test：①-c 兜底四断言 mode=module-subset/deps(1)/passed/标记文件；①-b 维持 skip 反向钉）；verify-postcheck-module 回归绿；lint 过

@@ -1465,17 +1465,28 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     ]
     console.warn(`⚠️ 模块 0 命中诊断（对照 path 前缀与 diff 布局是否一致，如 packages/<name> vs <name>/）：`)
     for (const l of diagLines) console.warn(`   ${l}`)
-    mainResult = {
-      status: 'skipped',
-      command: null,
-      exitCode: null,
-      durationMs: null,
-      outputTail: null,
-      reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
-        ` 诊断：${diagLines.join('；')}` + eaNote,
-      resultPath: null,
-      mode: 'module-zero-hit',
-      fallbackReason: null,
+    // 变更测试兜底（ql-20260919-007，2026-09-19 实测踩：test-only 变更 0 模块命中时裸 skip，
+    // quick --done 的 test 门禁沦为「据自报告判定」虚设）：diff 含测试文件时按 deps(auto)
+    // 同款口径（discoverModuleDependentTests）直接跑「变更的测试文件」——范围仍限本次变更
+    // 不回退全量（0 命中防超时/预存失败的初衷不变）；无测试文件维持裸 skip（docs-only 等
+    // 变更无测试面）。hits 传空数组：runModuleSubset 内部同样经 deps(auto) 执行并落台账。
+    const zeroHitDeps = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [] })
+    if (zeroHitDeps.length > 0) {
+      console.log(`ℹ️ 模块 0 命中但 diff 含 ${zeroHitDeps.length} 个测试文件——按变更测试子集实测（不回退全量、不再裸 skip）`)
+      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles })
+    } else {
+      mainResult = {
+        status: 'skipped',
+        command: null,
+        exitCode: null,
+        durationMs: null,
+        outputTail: null,
+        reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
+          ` 诊断：${diagLines.join('；')}` + eaNote,
+        resultPath: null,
+        mode: 'module-zero-hit',
+        fallbackReason: null,
+      }
     }
   } else {
     // —— 全量路径（full / module 无块 / module git 不可用）——
