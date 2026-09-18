@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-18-artifact-prefill",
+  "generatedAt": "2026-09-18T17:21:57.448Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "matches": 43,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-18-artifact-prefill",
+      "metrics": {
+        "checkedFiles": 5,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 3,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "commands.smoke 未配置且接口面 0 端点已显式声明——critical 判级冒烟门按降级承载走 NOTES（friction 升档所致判级，无真实运行时面）",
+        "condition": "配置后复跑（仪式性）",
+        "severity": "blocking"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "对表数字（附录 B）归档后 zcode db 填入",
+        "condition": "24h 内",
+        "severity": "advisory"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "槽级注检测（v2 防散文误报）",
+        "condition": "下个 prefill 变更",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 8,
+  "apiFace": {
+    "endpoints": [],
+    "declared": 0,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/prefill.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "npm test",
+    "exitCode": 0,
+    "strategy": "full",
+    "failedRemaining": [],
+    "passedAt": "2026-09-18T17:21:59.896Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

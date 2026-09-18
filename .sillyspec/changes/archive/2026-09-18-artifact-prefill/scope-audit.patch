@@ -1,0 +1,1686 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 85e6fb9..e934647 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -77,6 +77,7 @@ modules:
+       - src/verify-postcheck.js
+       - src/review-tier.js
+       - src/ceremony-tier.js
++      - src/prefill.js
+       - src/change-risk-profile.js
+       - src/quick-gate-profile.js
+       - src/scope-audit.js
+diff --git a/docs/sillyspec/architecture-4a.md b/docs/sillyspec/architecture-4a.md
+index a04551f..bfd1106 100644
+--- a/docs/sillyspec/architecture-4a.md
++++ b/docs/sillyspec/architecture-4a.md
+@@ -80,8 +80,8 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
+ 
+ **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:724`，统一收尾管线）顺序：
+ 1. `runValidators`（客观产物校验，`src/stage-contract.js:1336`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:824`）。
+-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1158`）。
++2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:842`）。
++3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1195`）。
+ 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:253`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
+ 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
+ 
+diff --git a/docs/sillyspec/cost-baseline-2026-09-18.md b/docs/sillyspec/cost-baseline-2026-09-18.md
+index 1f8dcac..ce5b420 100644
+--- a/docs/sillyspec/cost-baseline-2026-09-18.md
++++ b/docs/sillyspec/cost-baseline-2026-09-18.md
+@@ -53,3 +53,31 @@ created_at: 2026-09-18 20:05:00
+ - 修复后实测同一回放 worktree：文件集 4 → **31**（含 machine-interface.js/diagnostic-codes.js/契约/测试全量）→ machine-interface 模块必命中 → integrationRan 链路恢复。
+ - **纠账结论**：该次 NOTES 的触发源是工具缺陷而非真实集成缺失；归档结论为终态不改写，本记录即为账面更正依据。同类场景由 §5/§5b 永久回归钉死（platform-dual-root-fixture.test.mjs）。
+ 
++## 附录 B：批 3 对表（产物预填，2026-09-18-artifact-prefill）
++
++批 3（产物预填：三槽白名单预填引擎+生成器接线+prefill-refresh+注清零门禁梯度）是批 1/2 机制的首个全流程实测变更。过程事实（主仓 git log + runtime 账本直核）：
++
++**消费批 2 机制的实证**：
++- 注入瘦身（10a6ee7 ①）：`.sillyspec/.runtime/prompt-inject-2026-09-18-artifact-prefill.json` 在账——brainstorm/plan/execute 三阶段全部走「首步全量注入+后续摘要行」分叉（digest 18b0a06e/0f8f054a/7c3ae27f），全程无全量重注入。
++- 门禁前置 {PREFLIGHT_FAILURES}（10a6ee7 ②）：三阶段 --done 一次通过，无「带失败清单进下一步」的重试轮。
++- 测选路引导（10a6ee7 ④）本变更**未被采纳为窄面**：task-01~03 卡 verify 均声明全量 npm test + npm run lint（引擎/接线/门禁三面都触全局面，窄面不适用）——守恒红线②CLI 亲测照跑因此全量保真。
++
++**消费批 1/定价面机制的实证**：
++- 摩擦账本（ceremony 第三键源，7c7a85c）：`friction-tally-2026-09-18-artifact-prefill.json` 记 3 次 review_rejected（均 stage-review——brainstorm/plan 收尾两次+execute 期一次），无 verify_run_failed。
++- 档位文件兜底（1899f80）：本变更无 `ceremony-tier-2026-09-18-artifact-prefill.json`（无升降档事件，纯 blast/span/friction 定价）——兜底通道在场未被触发即为其零成本证据。
++- 批 1-1 纠账（e47ab3a）惠及面：本变更在 worktree（`.sillyspec/.runtime/worktrees/`）内推进，native 收养态双根因修复后 verify 文件集不再归零（quality-scan 模块命中不盲）。
++
++**批 3 自身机制的 dogfood 边界（如实记录）**：本变更自身的四任务卡（23:50）与 design.md（23:55）生成于 task-02 接线落地**之前**（plan 阶段产物，execute 23:58 才启动）——ids/决策表行走的仍是旧路径（骨架占位+agent 填写），预填直填的受益面是**后续变更**；本变更对机制的验证走 task-04 的 test/prefill.test.mjs（60 断言七组，含 CLI 层门双态与生成器回归）。三 task 落盘提交 ee1afd0 / ddc3eec / 20acbbb，stage-review 与 execute run 全程走链（review-2026-09-18-234813 / exec-2026-09-18-235859-79836b）。
++
++**对表数据（验收线：写作轮次 -10%+；预填槽越界=fail）**：
++
++| 指标 | 数值 | 备注 |
++|---|---|---|
++| 主会话请求 | 待填 | 归档后由 zcode db 对表填充（主代理收尾时填真实数字） |
++| 主会话 token | 待填 | 同上 |
++| 核心耗时 | 待填 | 同上 |
++| 写作轮次（design/tasks/taskcard 三产物） | 待填 | 同上；批 3 验收主指标 |
++| 预填槽越界计数 | 0 | D-001 白名单红线——全流程无越界记录（违反即 fail，非降级项） |
++
++（占位说明：上表数字归档后由主代理从 `~/.zcode/cli/db/db.sqlite` model_usage 直核填入，与附录 A 同口径；本附录先落过程事实，数字缺位不是豁免。）
++
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 487f75a..e60cc1f 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -288,7 +288,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+ - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+ - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+-- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1158（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
++- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1195（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
+ - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
+ - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续；2026-08-24 坑 taskcard-placeholder-slip 起**骨架占位符硬拦**——`FR-XX`/`D-XXX`/`src/example/file.ts`/`一句话说明这个 task`/`具体步骤 1`/`可验证的验收条件 1`/`边界约束 1` 未替换视同缺字段，标记清单 `src/taskcard-placeholders.js` 与骨架同源、先剥 HTML 注释再匹配防骨架自述误伤）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改；2026-08-15 D-2 起 `.sillyspec/docs/` 模块文档亦须认领）、`validateBlueprintConsistency` 内含任务声明 ↔ tasks/ 卡片双向对账（2026-08-15 D-2b；2026-08-20-task-truth-unify 起声明源=tasks.md 注册表，plan.md 旧 checkbox 声明回退兼容：声明任务漏生成卡片——典型尾部文档同步任务——阻断，孤儿卡亦阻断）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）；Wave 段比对（坑 wave-dep-direction-unchecked，2026-08-24）：**依赖方向硬拦**（depends_on 落同 Wave——execute 同 Wave 强制并行——或后置 Wave → throw 阻断，报错指向 `sillyspec plan-adopt-waves --change <名>` 一键重排；plan-adopt-waves.js：tasks/*.md depends_on → topoSortWaves → 重写 `## Wave N` 段块 + best-effort 同步任务总表 W 列 + 写后复跑 validateBlueprintConsistency；--dry-run 只预览；幂等），仅分组数差异（手工过度串行化）合法保留 warning。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 非 docs 子路径与「不修改文件」子段，CRLF 容错（2026-08-15 D-2 起 plan 覆盖对账传 `keepSillyspecDocs: true`：`.sillyspec/docs/` 模块文档 = 交付物，须被 task `allowed_paths` 认领，与 worktree apply `resolveApplyAllowSet` 口径一致）；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
+ - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+diff --git a/docs/sillyspec/multi-agent-review-2026-08-08.md b/docs/sillyspec/multi-agent-review-2026-08-08.md
+index bddba45..9a0a223 100644
+--- a/docs/sillyspec/multi-agent-review-2026-08-08.md
++++ b/docs/sillyspec/multi-agent-review-2026-08-08.md
+@@ -33,9 +33,9 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ 
+ #### 【S1·高·真 bug】noAI 步骤收尾绕过所有阶段完成 gate
+ - **位置**：`src/run/stage.js:315-345`
+-- **现象**：`runStage` 处理 `noAI: true` 步骤时，自动执行 `_cliAction` 后直接把 `stageData.status='completed'` 并落盘，**从不调用 `runStageCompletionGates`**。`runStageCompletionGates` 只在 `complete.js:384` 的 `completeStep` 阶段完成分支被调用——noAI 自动收尾与人工 `--done` 收尾走两套完全不同的逻辑。
++- **现象**：`runStage` 处理 `noAI: true` 步骤时，自动执行 `_cliAction` 后直接把 `stageData.status='completed'` 并落盘，**从不调用 `runStageCompletionGates`**。`runStageCompletionGates` 只在 `complete.js:421` 的 `completeStep` 阶段完成分支被调用——noAI 自动收尾与人工 `--done` 收尾走两套完全不同的逻辑。
+ - **直接受害者**：
+-  - **plan 阶段**：`buildPlanSteps` 返回 `[..., postcheck]`，postcheck 是 noAI 末步（`src/stages/plan.js:604`）。agent 完成 coordinator 后 `--done` → CLI 自动跑 postcheck → 直接标 plan completed。被绕过的 gate：Stage Review Gate（tier=independent 的 plan 审查 verdict=fail **不再阻断**）、`validatePlanOutputs`（FR 覆盖 / decision blocker / entry-point-wiring）、Plan→Execute Contract（`validatePlanForExecute`）。
++  - **plan 阶段**：`buildPlanSteps` 返回 `[..., postcheck]`，postcheck 是 noAI 末步（`src/stages/plan.js:626`）。agent 完成 coordinator 后 `--done` → CLI 自动跑 postcheck → 直接标 plan completed。被绕过的 gate：Stage Review Gate（tier=independent 的 plan 审查 verdict=fail **不再阻断**）、`validatePlanOutputs`（FR 覆盖 / decision blocker / entry-point-wiring）、Plan→Execute Contract（`validatePlanForExecute`）。
+   - **平台 quick scan**：`scan-profile.js:161` 把 step3 设为 noAI `scanPostcheck` 末步。平台模式 quick scan 完成 → 跳过 `handleScanStageCompleted` → manifest.json / postcheck-result.json / SCAN_COMPLETED 指针全部不落盘，**SillyHub 看不到 scan 完成**。
+ - **根因**："阶段完成"判定与"跑 gate"分散在 `completeStep` / `runStage-noAI` / `continueStep` 三处，没收敛到单一入口。
+ - **建议修法**：在 `runStage` 的 noAI 自动收尾分支标记 completed 前，调用 `runStageCompletionGates`（失败回滚不标 completed，与 completeStep 同范式）；或更稳妥——noAI 步骤只标自身 completed + 推进下一步，**不直接标阶段 completed**，把阶段完成决策权交还 `completeStep`。
+@@ -58,30 +58,30 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ ### 2.2 quick·progress 一致性类
+ 
+ #### 【Q1·中高·真 bug】quick 会话 change 行永不注销，listChanges 累积污染
+-- **位置**：`src/run/complete-handlers.js:470`（`handleQuickStageCompletion` 全函数无 `unregisterChange`）；`src/run/command.js:979`（quick 启动 `registerChange` 对 `quick-<hex>` 也执行）；`src/progress/change-registry.js:354`（`unregisterChange` 仅被 archive 调用）。
++- **位置**：`src/run/complete-handlers.js:597`（`handleQuickStageCompletion` 全函数无 `unregisterChange`）；`src/run/command.js:1032`（quick 启动 `registerChange` 对 `quick-<hex>` 也执行）；`src/progress/change-registry.js:276`（`unregisterChange` 仅被 archive 调用）。
+ - **现象**：每个 quick sessionId（`quick-<8hex>`）启动时写入 `changes` 表 `status='active'`。`--done` 成功后只清 session 目录 + 重置 steps，**从不调用 `unregisterChange`**，归档也永远不走。结果 DB 里 active 的 `quick-<hex>` 行随每次 quick 单调累积。
+ - **后果**：
+   1. `resolveQuickLinkedChanges` 累积 ≥2 条后，新 quick 非交互环境返回 `[]`（不关联真正活跃变更），交互环境把僵尸 `quick-<hex>` 当可关联变更列出。
+   2. `progress.js` 的 `listChanges().length===1` 自动择一降级失效 → 不带 `--change` 时退到"无法确定当前变更"。
+-  3. doctor 孤儿检查（`doctor.js:65-78`）只遍历 `changes/` 目录、不遍历 DB active 集；quick-<hex> 无目录 → **既不被孤儿检查发现，也不被 consistency-doctor 发现**（quick 不在 STAGE_ORDER，定义已迁 `src/progress/shared.js:22`）。
++  3. doctor 孤儿检查（`doctor.js:65-66?`）只遍历 `changes/` 目录、不遍历 DB active 集；quick-<hex> 无目录 → **既不被孤儿检查发现，也不被 consistency-doctor 发现**（quick 不在 STAGE_ORDER，定义已迁 `src/progress/shared.js:22`）。
+ - **建议修法**：`handleQuickStageCompletion` 成功路径补 `await pm.unregisterChange(cwd, changeName)`；doctor 孤儿检查增加反向遍历"active 但无目录且匹配 `quick-<hex>`"的行并提示/自动归档。
+ - **档位**：quick（修收尾 + 扩 doctor 检查）。
+ 
+ #### 【Q2·中】多 agent 并发下他者源码改动被算进本 quick 审计
+-- **位置**：`src/run/shared.js:370`（`auditQuickCompletion`）+ `src/run/stage.js:382`（baseline 录入）。
++- **位置**：`src/run/shared.js:410`（`auditQuickCompletion`）+ `src/run/stage.js:382`（baseline 录入）。
+ - **现象**：baseline 只在 quick 启动那一刻快照"已脏文件"。会话期间另一 agent 改了 `src/business.js`（非 `.sillyspec/`），到本 quick `--done` 时该文件不在 baseline、又非元数据 → 进 `changedFiles`，按危险模式/新增文件规则计入本会话审计，可能触发 BLOCKED 或被回填进本 quick 的 QUICKLOG "文件："行。
+ - **根因**：quick 用"整工作区"当审计域，无 per-session inflight 锚点。
+ - **建议修法**：长期看向 worktree-apply 的"锚 commit diff"范式靠拢（quick 启动落一个 inflight 锚 commit，`--done` 时 `git diff <anchor>..HEAD` 归属）。短期至少先修 Q3（裸 git status 静默降级）。
+ - **档位**：长期项走完整流程（需 design）；Q3 可 quick。
+ 
+ #### 【Q3·中·真 bug】baseline/audit 用裸 `git status` 未带 safe.directory，失败静默降级
+-- **位置**：`src/run/stage.js:291`、`src/run/shared.js:172`（裸 `execSync('git status --porcelain')`）；对比同文件 `safeGit(cwd, ['config','user.name'])`（stage.js:291）带 safe.directory。
++- **位置**：`src/run/stage.js:291`、`src/run/shared.js:185`（裸 `execSync('git status --porcelain')`）；对比同文件 `safeGit(cwd, ['config','user.name'])`（stage.js:291）带 safe.directory。
+ - **现象**：两处不走 `safeGit`，在 cwd 存在 safe.directory 问题（linked worktree / 容器异 uid / Windows 挂载点）时抛错。stage.js baseline 抛错被 `catch` 吞（`:279` `console.warn('baseline 记录失败')`）→ `progress.quickGuard` 不写 → `--done` 时 guard=null → brownfield 跳过审计（同 Q4 后果）。
+ - **建议修法**：两处改 `safeGit(cwd, ['status','--porcelain'])`；baseline 捕获失败时不应静默继续，应 fail-loud 或显式阻断。
+ - **档位**：quick。
+ 
+ #### 【Q4·中·真 bug】平台模式 quick guard 写入路径与读取路径不一致
+-- **位置**：写 `src/run/stage.js:123`（`specBase/.runtime/quick-sessions/<change>`）；漂移检测读 `src/run/shared.js:338`（同 `specBase/.runtime`）；收尾读 `src/run/complete-handlers.js:909`（`resolveRuntimeRoot` → 设了 `runtimeRoot` 时返回 `runtimeRoot`，否则 `specBase/.runtime`）。
++- **位置**：写 `src/run/stage.js:123`（`specBase/.runtime/quick-sessions/<change>`）；漂移检测读 `src/run/shared.js:375`（同 `specBase/.runtime`）；收尾读 `src/run/complete-handlers.js:909`（`resolveRuntimeRoot` → 设了 `runtimeRoot` 时返回 `runtimeRoot`，否则 `specBase/.runtime`）。
+ - **现象**：stage.js 与 shared.js 恒用 `specBase/.runtime`，complete-handlers.js 用 `resolveRuntimeRoot`。当 `runtimeRoot` 被设且与 `specBase/.runtime` 不同时，guard 写到 specBase/.runtime、收尾从 runtimeRoot 读 → 读不到 → `handleQuickStageCompletion` 走 guard=null brownfield 分支 → **完全跳过边界审计** + 兜底重分配 qlId + session 目录清错位置。
+ - **建议修法**：把"quick-sessions 目录"位置抽成单一函数（`resolveQuickSessionsDir`），三处共用。
+ - **档位**：quick。
+@@ -174,7 +174,7 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ - **建议**：先做 self-audit「遗留」段建议的"AI 中继帧单独计数"（CLI 可机械判定），再考虑是否对 Step 3 / plan full 加硬门。**属定位决策，需 brainstorm**。
+ 
+ #### 【D2】plan.md / tasks.md 共享写竞态（lost update）
+-- **位置**：`src/run/complete.js:907`（`autoCheckPlanFromReviews` 持 `.plan.md.lock` 但 agent Edit/Write 不持锁）；tasks.md 无同款锁。
++- **位置**：`src/run/complete.js:971`（`autoCheckPlanFromReviews` 持 `.plan.md.lock` 但 agent Edit/Write 不持锁）；tasks.md 无同款锁。
+ - **现象**：CLI 的 read-modify-write 与 agent 写入存在 lost update；`enforceReviewJsonGate` 早跑只校验已勾 task，`autoCheckPlanFromReviews` 新勾的不复查。多 agent / 并发 session 撞同一 change 时高频。
+ - **根因**：agent 侧无法加锁是根本限制。
+ - **建议**：plan.md 的勾选权威收归 CLI（agent 只写 review.json，CLI 自动勾），彻底消除共享写；或 doctor 自检加"plan.md checkbox vs review.json verdict 对账"阻断型检查。
+@@ -208,20 +208,20 @@ SillySpec 在 **Grill-Me v1.1 三大原则**上：原则 3（Facts/Decisions 区
+ | L1 | `complete.js:857` | continueStep nextPendingIdx 只查 'pending' 漏 'in-progress'（latent，无现行触发路径） | 统一为 `pending \|\| in-progress` | quick |
+ | L2 | `quicklog.js:30-62` | withFileLock stale 30s 偏紧，偷锁后无 predicate 校验 | staleMs 提到 60-120s 或 CAS 语义 | quick |
+ | L3 | `command.js:172,689,781` | `--from-step`+`--done` 可同时传，前者被静默忽略 | 加入互斥校验 fail-fast | quick |
+-| L4 | `complete.js:321` | `status='blocked'` 后 exit 不落盘是隐式不变量，一旦有路径 `_write` 就卡死 | runStage findIndex 显式排除 'blocked' | quick |
++| L4 | `complete.js:346` | `status='blocked'` 后 exit 不落盘是隐式不变量，一旦有路径 `_write` 就卡死 | runStage findIndex 显式排除 'blocked' | quick |
+ | L5 | `shared.js:485-487` | 删除文件无 override flag，合法删除永久 BLOCKED | 显式声明"quick 禁删"或 `--force-baseline` 同时降级删除 | quick |
+-| L6 | `quicklog.js:496` | `rotateIfNeeded` 裸 renameSync，Windows 读端占用会崩 | 复用 writeAtomic 重试机制 | quick |
++| L6 | `quicklog.js:519` | `rotateIfNeeded` 裸 renameSync，Windows 读端占用会崩 | 复用 writeAtomic 重试机制 | quick |
+ | L7 | `quicklog.js:226-244` | tasks.md 无独立锁，跨 git-user 关联同一 change 有竞态 | 加 `.tasks.md.lock`（同 plan.md 范式） | quick |
+ | L8 | `shared.js:466` | 死分支 `status === ' D'`（trim 后永不命中） | 删或注释说明 | quick |
+ | L9 | `brainstorm.js:79,180` | maxWaitRounds=8 vs "2-3 轮即进入"张力 | 改"按 P0 歧义数决定轮次，P0 全澄清后即进入" | quick |
+-| L10 | `prompt.js:334,178` | persona 含"不猜"但只注入 step0，context 压缩后失效 | 抽成 brainstorm `_globalGuardrails` 享每步提醒 | quick |
++| L10 | `prompt.js:821,178` | persona 含"不猜"但只注入 step0，context 压缩后失效 | 抽成 brainstorm `_globalGuardrails` 享每步提醒 | quick |
+ | L11 | `brainstorm.md:547` | Step 8 缺 outputHint（其它 7 步都有） | 补 `outputHint: '规范文件路径列表'` | quick |
+ | L12 | `brainstorm-auto.js:152-162` | AUTO_DECIDED 丢失 source 区分 | 规定 source 必填 code/docs 并附 evidence | quick |
+ | L13 | `brainstorm-auto.js:154` | NEEDS_REVIEW 是无触发条件的死状态 | 定义触发条件或从枚举删除 | quick |
+ | L14 | `execute/SKILL.md:91` | reviewType 残留 propose 对照 | 改为"区别于 brainstorm/plan 的 design" | quick |
+ | L15 | `execute/SKILL.md:45` | "不要自行检查 git 状态"过度绝对（apply 阶段实际校验 dirty） | 限定为"worktree 创建/进入不依赖 git 状态；apply 步以命令输出为准" | quick |
+ | L16 | `knowledge/SKILL.md:42,79` | JSON 示例暴露内部 `src/stages/` 路径 | 改为不涉及实现路径的描述 | quick |
+-| L17 | `doctor.js:59-76` + `consistency-doctor.js:44` | 僵尸 quick 会话无检测（与 Q1 同源） | doctor 增"active 但无目录且匹配 quick-<hex>"检查 | quick |
++| L17 | `doctor.js:59-66?` + `consistency-doctor.js:44` | 僵尸 quick 会话无检测（与 Q1 同源） | doctor 增"active 但无目录且匹配 quick-<hex>"检查 | quick |
+ 
+ ---
+ 
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 98b5245..a42ccdc 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1900/1913/1993 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:733（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2429；shared.js:966 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2429/2705；shared.js:990 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3608；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3560；sync.js:2129 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:966 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:990 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3666；sync.js:1431/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3618；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3373/3402；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3431/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:682/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -196,7 +196,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3470`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3528`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 8015023..d1a8db7 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -216,7 +216,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 来源：两轮工具驾驭复盘（brainstorm 跑通 + plan 跑通），6 条逐条对源码核实裁决（先查本债单 + 实证，不重复已决策项）。
+ 
+ **brainstorm 复盘**
+-- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1531）= advisory 打印不阻断（gates.js:1531 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1531）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
++- ⊘ **bs-a step7 四件套门时机错配（裁决：用户误判，代码无此 gate）**。`validateFileLocations`（gates.js:1568）= advisory 打印不阻断（gates.js:1568 注释 + stage-artifacts.md:57），守卫 `settledCount===total && total>0`（gates.js:1568）仅阶段全部步骤完成时跑，step7（Design Grill）--done 时 step8 还 pending 不触发。「step7 被拦补三件」与代码不符，疑似把 step8（生成规范文件）--done 的 advisory `⬜ 未找到` 误读为硬拦 / 混淆 Stage Review Gate（查 design.md docHash 不查四件套）。**搁置**：待用户贴现场 CLI 输出（⚠️/❌/⬜ 标记 + exit code）再定 advisory 可读性优化（⬜→ℹ️ 提示不阻断）。
+ - ⏭ **bs-b platform sync 10s 超时反复 warn（登记 defer）**。`sync.js:28` REQUEST_TIMEOUT_MS=10_000 + `:204-208` 超时 console.warn。契约 sillyhub-progress-sync-contract.md §10 明确「超时 → warn 不阻断」intentional（网络失败可见性，否决静默）。根因 sillyhub 后端 POST progress 端点未就绪（契约 §11 P0 待排期）→ 每步完成触发 sync 干等 10s + warn。**真新建议（债单+契约均无）**：客户端连续失败 N 次后该 session 退避降频（首失败仍 warn 保可见性）。defer——根治在 sillyhub 后端落地，客户端降频是缓解候选单独排。
+ - ✅ **bs-c _module-map.yaml schema_version warn 缺升级路径（已修 ql-20260811-006-a73f）**。`prompt.js:44-46` 两行 warn（B2 advisory）只报问题不给 CLI 出路，预存 v1 漂移文件每个读 map 的 step（brainstorm step2/3/7）都刷屏。修法（纯文案）：两行各追加「跑 sillyspec modules rebuild 升级到 schema_version: 2 可消除此警告」。node --check + lint 250 文件 + npm test（除 pre-existing db-concurrency 无关失败）全绿。
+ 
+diff --git a/docs/sillyspec/review-2026-08-08.md b/docs/sillyspec/review-2026-08-08.md
+index 11a81eb..684a37b 100644
+--- a/docs/sillyspec/review-2026-08-08.md
++++ b/docs/sillyspec/review-2026-08-08.md
+@@ -30,7 +30,7 @@ status: 待决策
+ 
+ ### 【架构/性能】_write export-on-write + gate-status 无条件重复写
+ 
+-- **位置**：src/progress.js:809 `_write`、:475 `_updateGateStatus`；src/db.js:58-75 `_save`
++- **位置**：src/progress.js:890 `_write`、:475 `_updateGateStatus`；src/db.js:58-75 `_save`
+ - **问题**：每次 `_write` = 315KB 整库 export + ~5 次 fs op；`_updateGateStatus` 跟在每次 `_write` 后无条件重写 gate-status.json（单条 `--done` 估 3-5 次 `_write`，产物只被下次 hook 异步读，纯冗余）。
+ - **决策建议**：lazy 化子项（`_gateStatusDirty` 标记 + 退出前 flush 一次）可走 quick；DB export-on-write 是 sql.js 固有，换引擎属架构级。
+ 
+diff --git a/docs/sillyspec/review-2026-08-09.md b/docs/sillyspec/review-2026-08-09.md
+index 08e2636..d24e379 100644
+--- a/docs/sillyspec/review-2026-08-09.md
++++ b/docs/sillyspec/review-2026-08-09.md
+@@ -63,8 +63,8 @@ status: 第一批修复中
+ 
+ ### #2 [P1][共识：F+C] 先 persist completed → 再跑 gate 崩溃窗口 + complete-stage 后门
+ - **位置**：`src/run/complete.js:262-278`（及 `:720-726`）、`src/run/stage.js:352-358`、`src/progress/stage-machine.js:36-117`
+-- **问题**：完成分支先把 `stageData.status='completed'` 落盘（complete.js:649），之后才跑 `completeStageGates`（:278）。硬中断（Ctrl+C/OOM/CI 超时）落在中间 → DB 永久留 completed 而 review gate 从未跑。**verify 阶段窗口最宽**（`runVerifyTestCheck` gates.js:632 同步跑全量测试 2~10 分钟），agent 自报「测试通过」的谎话无校验落地
+-- **叠加**：`runStageCompletionGates` 里 `runValidators`(gates.js:27)、`runVerifyTestCheck`(:208) 两段**无 try/catch**——抛非结构化异常直冒顶层 exit 1，`rollbackStageCompletion` 触达不到 → 同样卡死 completed
++- **问题**：完成分支先把 `stageData.status='completed'` 落盘（complete.js:689），之后才跑 `completeStageGates`（:278）。硬中断（Ctrl+C/OOM/CI 超时）落在中间 → DB 永久留 completed 而 review gate 从未跑。**verify 阶段窗口最宽**（`runVerifyTestCheck` gates.js:867 同步跑全量测试 2~10 分钟），agent 自报「测试通过」的谎话无校验落地
++- **叠加**：`runStageCompletionGates` 里 `runValidators`(gates.js:34)、`runVerifyTestCheck`(:208) 两段**无 try/catch**——抛非结构化异常直冒顶层 exit 1，`rollbackStageCompletion` 触达不到 → 同样卡死 completed
+ - **后门**：`complete-stage`（stage-machine.js:9）只跑 `runValidators` 不跑 Stage Review/Task Review/verify-test，产物齐时**不需要 `--force`** 即可标 completed；崩溃恢复路径（stage.js:313 经 `completeStage`）也经此函数
+ - **建议**：① 落盘 completed 移到 gate 成功之后；② `runStageCompletionGates` 整体包 try/catch 触发 rollback；③ `complete-stage` 收敛到同一 gate 级联或显式 `--skip-review-gates` opt-in
+ 
+@@ -85,7 +85,7 @@ status: 第一批修复中
+ 
+ ### #7 [P1] complete.js 三处 appendFileSync(user-inputs.md) 在 pm._write 后裸跑 ✅ 已修复（commit 10fba18，三处包 try/catch+console.warn best-effort，对齐 shared.js:330 triggerSync，历史日志写失败不阻断主流程）
+ - **位置**：`src/run/complete.js:272/345/692`
+-- **问题**：Windows AV/索引占用偶发 EPERM → 抛错 → :272（阶段完成分支）与 #2 叠加致卡死。同文件 `triggerSync`（shared.js:325）已 best-effort，口径不一致
++- **问题**：Windows AV/索引占用偶发 EPERM → 抛错 → :272（阶段完成分支）与 #2 叠加致卡死。同文件 `triggerSync`（shared.js:365）已 best-effort，口径不一致
+ - **建议**：三处包 try/catch + warn，历史日志写失败不阻断主流程
+ 
+ ### #8 [P2] 测试用 console.assert（失败只打印不抛）→ 静默绿
+@@ -105,12 +105,12 @@ status: 第一批修复中
+ ### 数据/IO 健壮性（B/C）
+ | 编号 | 位置 | 问题 |
+ |------|------|------|
+-| #10 | `src/progress.js:473` | DB 句柄从不 close（无 `close()`），WAL 不 checkpoint + Windows teardown exit 127 风险迁移后未验证；`sync.js` 单次 sync 连 new 2 个 PM。共识 B+C |
+-| #11 | `src/progress.js:707-820` | `read()` 5 个 SELECT 跑在事务外，并发 `_write` 插中间拿拼凑态快照；包一层只读事务零成本修复 |
++| #10 | `src/progress.js:530` | DB 句柄从不 close（无 `close()`），WAL 不 checkpoint + Windows teardown exit 127 风险迁移后未验证；`sync.js` 单次 sync 连 new 2 个 PM。共识 B+C |
++| #11 | `src/progress.js:890` | `read()` 5 个 SELECT 跑在事务外，并发 `_write` 插中间拿拼凑态快照；包一层只读事务零成本修复 |
+ | #12 | `src/progress/step-store.js:117` | `updateStep` 阶段自动完成 TOCTOU（两事务间可被加新 pending 步），第二事务 UPDATE 不复查全 completed |
+-| #13 | `src/progress/change-registry.js:274` | `renameChange` 裸 `renameSync`（未用 renameSyncRetry）+ 回滚失败自认「DB/目录分裂无恢复」 |
+-| #14 | `src/sync.js:66` | `local.yaml` 非原子写，与 `index.js:1971`（已原子写）口径分裂；写一半被读 → 半截 YAML |
+-| #15 | `src/run/shared.js:983` | `auditQuickCompletion` 外层 catch 把**未知错误**判 warning（fail-open 放行），与 git-unavailable 的 fail-closed 矛盾 |
++| #13 | `src/progress/change-registry.js:481` | `renameChange` 裸 `renameSync`（未用 renameSyncRetry）+ 回滚失败自认「DB/目录分裂无恢复」 |
++| #14 | `src/sync.js:66` | `local.yaml` 非原子写，与 `index.js:2225`（已原子写）口径分裂；写一半被读 → 半截 YAML |
++| #15 | `src/run/shared.js:1093` | `auditQuickCompletion` 外层 catch 把**未知错误**判 warning（fail-open 放行），与 git-unavailable 的 fail-closed 矛盾 |
+ | #16 | `src/worktree.js` 多处 | git `execSync` 无 timeout → git 挂起（credential/NFS/index lock）无限期阻塞 CLI；对照 safeGit 有 5000ms |
+ 
+ ### 代码质量（D）
+@@ -126,11 +126,11 @@ status: 第一批修复中
+ ### 架构（A）
+ | 编号 | 位置 | 问题 |
+ |------|------|------|
+-| #23 | progress.js:30 vs run/shared.js:129 | `resolveSpecDir` 同名两份实现（签名不同），消费方各取一份 |
++| #23 | progress.js:30 vs run/shared.js:138 | `resolveSpecDir` 同名两份实现（签名不同），消费方各取一份 |
+ | #24 | src/run/shared.js（664 行） | 名实不符杂烩 + 静态 import `stages/*`（把整张 stage 图拽进任何引用方），上层倒手伸进 run/ 取工具 |
+ | #25 | src/progress.js facade | 抽取半截：DB CRUD（read/_write/init ~300 行）留 facade，子模块反回调 facade |
+ | #26 | src/index.js（1507 行） | god-file 手写 switch/case 调度，无 commander、未按命令族拆 |
+-| #27 | machine-interface.js:192-241 / 425-478 | `validateTaskReviews` 参数块 ~50 行重复两处 |
++| #27 | machine-interface.js:273 / 425-478 | `validateTaskReviews` 参数块 ~50 行重复两处 |
+ 
+ ### 安全（E）
+ | 编号 | 位置 | 问题 |
+@@ -147,7 +147,7 @@ status: 第一批修复中
+ - `workflow.js:546 generateRetryPrompt` @deprecated 零调用死代码
+ - `db.js:73-83` schema-version 用 sidecar 戳而非 `PRAGMA user_version`（.bak 回退不同步戳）
+ - `fs-atomic.js:7-8` 头注释指向已删除的 `db.js _atomicWriteSync`
+-- `progress.js:809` `_write` 无 changeName 时静默跳过（应 fail-loud）
++- `progress.js:890` `_write` 无 changeName 时静默跳过（应 fail-loud）
+ - `index.js:1505` `main().catch` 打印全 stack 噪音淹没 stderr
+ - `stage.js:104` executeRunId 非原子写；`command.js:286` 平台指针写失败静默吞
+ - 根级 ~40 文件可归 `worktree/`、`contract/`、`postcheck/` 子目录（postcheck 家族分居 stages/ 和根级）
+diff --git a/docs/sillyspec/self-audit-2026-08-16.md b/docs/sillyspec/self-audit-2026-08-16.md
+index bfdaf86..01a2db3 100644
+--- a/docs/sillyspec/self-audit-2026-08-16.md
++++ b/docs/sillyspec/self-audit-2026-08-16.md
+@@ -16,7 +16,7 @@ updated_at: 2026-08-16 14:45:00
+ 1. **engines `>=22.11.0` 虚低 + db.js 静态闭包 → Node 22.11/22.12 全 CLI 崩溃（含 --version）**
+    `package.json:16` engines 写 `>=22.11.0`，`src/db-engine.js:5` 注释断言「v22.11.0+ 无需 flag」错误——Node 官方 v22.13.0 才解除 `--experimental-sqlite` flag；且 db.js 在 index.js 静态 import 闭包内（性能发现 2），import 即崩。修法：engines 抬 `>=22.13.0` + 修注释。【性能#1，已亲验】
+ 2. **Windows 下 `runPostCheck` 占位符替换炸 JSON → scan 质量门 fail-open + `workflow check` 崩**
+-   `src/workflow.js:286`：`JSON.stringify` 后用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠的 Windows 路径裸替换进 JSON 再 parse；`complete-handlers.js:793` catch 吞错放行。实测 `workflow check` 报「Bad escaped character」，scan 深度扫描门静默失效。【上手#1，已亲验】
++   `src/workflow.js:286`：`JSON.stringify` 后用 `new RegExp('{SPEC_ROOT}')` 把含反斜杠的 Windows 路径裸替换进 JSON 再 parse；`complete-handlers.js:812` catch 吞错放行。实测 `workflow check` 报「Bad escaped character」，scan 深度扫描门静默失效。【上手#1，已亲验】
+ 3. **dashboard 在 Windows 永不启动**：`packages/dashboard/server/index.js:567-580` listen 排在同步全盘扫描后（homedir/Temp/桌面，深度 2 readdirSync），每项目 3 次 execSync('git') stderr 裸刷。实测 150s+ 假死。【上手#2】
+ 4. **gate/derive 的 specBase 只对一半路径生效——平台模式机器门控不可用**
+    `src/machine-interface.js:114-136`：runGate 守卫与 pm.read 用 `resolveSpecDir(cwd)`，planContent/changeDir 用传入 specBase——同一 envelope 两套事实源混拼；daemon 平台模式调 gate 恒 exit 2「无法核验」。index.js gate/derive case 也不读平台指针（对比 runCommand :290-313）。与 JSDoc/platform-interface-map.md 宣称矛盾。【CLI#1，已亲验】
+@@ -24,10 +24,10 @@ updated_at: 2026-08-16 14:45:00
+ 
+ ### B. 状态机与守卫 fail-open（P1）
+ 
+-6. **`--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage**：`command.js:977` --done 直接进 `completeStep` 不查 checkTransition（stage.js:27-44 `checkTransition` 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:227 写库）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:850 `AUXILIARY_STAGES` 一律放行）。代理实测：brainstorm 仓跑 `run verify --done` 输出「Step 2/7 完成」无拦截。【驾驭#1，已亲验】
+-7. **status/doctor 自称只读实则写库**：`command.js:950` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
++6. **`--done` 完全绕过阶段转换守卫 + 辅助阶段污染 currentStage**：`command.js:1040` --done 直接进 `completeStep` 不查 checkTransition（stage.js:27-44 `checkTransition` 只在 runStage 调）；status/doctor 等 auxiliary 跑一次即写 `progress.currentStage`（stage.js:227 写库）→ fromStage 变 status 后跳阶段静默放行（stage-contract.js:1961? `AUXILIARY_STAGES` 一律放行）。代理实测：brainstorm 仓跑 `run verify --done` 输出「Step 2/7 完成」无拦截。【驾驭#1，已亲验】
++7. **status/doctor 自称只读实则写库**：`command.js:1003` auxiliary fallback `initChange` 建 default 行 + 落盘 currentStage；与 SKILL「status 只读」矛盾；多 agent 并发 lastActive 互相覆盖。【驾驭#2，已亲验】
+ 8. **`run brainstorm` 无 --change 在多活跃变更仓静默建幽灵变更**：`command.js:717-731` 无条件 initChange。DB 实锤：08-15 一小时内 4 个 `*-new-change-*` 活跃行。审计代理自身触发一次（已精确清理 2026-08-16-new-change-6307433e）。【驾驭#3，已亲验】
+-8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:291）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:223 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
++8b. **新项目首跑 auxiliary 即产生幽灵 default 变更 + doctor 清理指引落空**：`_ensureChangeDir`（progress.js:346）建空 `changes/default/`；单变更视图（_showChange）无 dirMissing 警告，仅多变更视图有（stage-machine.js:231 的 `dirMissing` 检查）；doctor change_db_consistency 容差放行、「可用 doctor 清理」承诺不存在。【上手#3】
+ 9. **docs gate 未知 flag 静默吞 + `--paths` 未接线**：`index.js:638-649` 只解析 --init-baseline；interface-contract.md §1.3b 宣称的「未知 flag exit 2」未实现，实测 `--nonexistent-flag` exit 0 放行；`--paths` 被 docs-gate.js:69 忽略。与 docs check 分支白名单治理口径不一致。【CLI#2，已亲验】
+ 10. **`docs <未知子命令>` / `progress <未知子命令>/缺参` usage 后 exit 0**：`index.js:650-652`/`:367-369`/`:311+`——typo 静默成功，hook 拼错即 fail-open；worktree/modules/runtime 家族均 exit 1/2 + didYouMean，口径分裂。【CLI#4，已亲验】
+ 11. **safeGit 未设 stdio，子进程 stderr 裸刷终端**：`git-helper.js:37` 无 stdio 配置，空仓跑 quick 冒出无上下文 `fatal:`；同仓其他调用点均显式 `stdio:['ignore','pipe','pipe']`。【驾驭#6】
+@@ -46,7 +46,7 @@ updated_at: 2026-08-16 14:45:00
+ 
+ 15. **module-impact「更新结果」表格式无任何上游 prompt 定义**：gates.js:313-330 死信门控按严格正则收（`^#{2,3} 更新结果` + 末列精确 pending/待办/未同步/not-done/todo），但 plan step2 首版模板（plan.js:353-358）只有影响矩阵，唯一提及在 verify 之后执行的 archive step2——agent 只能从 gate 报错反推格式；实证一例无该节静默穿透归档。修法：plan step2 模板落空表骨架。【prompt#1，已亲验】
+ 16. **verify step4 检查「验收标准 checkbox」与 TaskCard 协议矛盾**：verify.js:152-153 要求 checkbox，但 TaskCard 协议 acceptance 在 frontmatter YAML，正文无 checkbox（实测产物两例均无）。修法：改「对照 frontmatter acceptance 列表逐条核验」。【prompt#2，已亲验】
+-17. **consumer 专有词硬编码进通用 prompt**：verify.js:238-243 Runtime Evidence 模板整段 sillyhub 形状（daemon/session_control_no_manager/422），verify-probes.md:53 示例行含 consumer 仓路径——npm 分发给任意项目即错配，且自我拆台（step6 警告不得堆关键词，模板恰教堆关键词过字面 gate）。【prompt#3】
++17. **consumer 专有词硬编码进通用 prompt**：verify.js:233-237? Runtime Evidence 模板整段 sillyhub 形状（daemon/session_control_no_manager/422），verify-probes.md:53 示例行含 consumer 仓路径——npm 分发给任意项目即错配，且自我拆台（step6 警告不得堆关键词，模板恰教堆关键词过字面 gate）。【prompt#3】
+ 18. **`node -e "import('./src/...')"` 内部源码单行命令注入 prompt**：scan.js:141 / execute.js:326，相对 cwd 解析，consumer 项目必炸 ERR_MODULE_NOT_FOUND；同功能 CLI 子命令已存在（workflow check / worktree meta）。【prompt#4】
+ 19. **三份字段自检清单并存互不一致**：plan.js:473 主 agent 清单 13 项（无 title_zh）vs taskcard-rules.md 硬校验 9 字段（含 title_zh）vs postcheck 硬拦——plan-b 翻车正是从这条缝漏的，B5 只对齐了两份。【prompt#5】
+ 20. **指令强度通胀**：execute 18K 字符「必须」×30+「不要」×32，单 Wave prompt 9 必须+9 否定；「（必须严格遵守）」标题五处复用——强度信号退化为噪音。verify（8K 仅 6 必须）已示范收敛标准。【prompt#6】
+diff --git a/meta.json b/meta.json
+index fadccc3..266b925 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,28 @@
+   "branch": "sillyspec/2026-09-18-artifact-prefill",
+   "baseBranch": "main",
+   "baseHash": "7f9eb55127a20ffb718d85ba889262b157d06d8f",
++  "actualBaseHash": "389d8fc6198632d1ef4f09c6fba9df9c999d7332",
++  "createdAt": "2026-09-18T15:58:59.397Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-18-artifact-prefill",
+   "mode": "worktree",
+-  "createdAt": "2026-09-18T15:58:57.458Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".claude/CLAUDE.md",
++    ".claude/skills/sillyspec-execute/SKILL.md",
++    ".claude/skills/sillyspec-plan/SKILL.md",
++    ".claude/skills/sillyspec-quick/SKILL.md",
++    ".claude/skills/sillyspec-verify/SKILL.md"
++  ],
++  "baselineCommit": "389d8fc6198632d1ef4f09c6fba9df9c999d7332",
++  "baselineHash": "c6b9b85e38843127",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 32
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-18T15:58:59.362Z"
+ }
+diff --git a/src/index.js b/src/index.js
+index 105e56e..d0be84a 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -109,6 +109,7 @@ SillySpec CLI — 规范驱动开发工具包
+                                       单 task review.json 命令式写入：verdict/notes 你给，base/head/changedFiles/diffPaths CLI 代算
+   sillyspec symbol-impact --change <name>      生成 symbol-impact.md 逐 task <!--TODO--> 骨架（gate 拒绝未替换占位，防骨架直接过门）
+   sillyspec design-init --change <name> [--force]  从 decisions.md 生成 design.md 十三章节骨架（决策追踪表预填；已存在不覆盖）
++  sillyspec prefill-refresh --change <name> [--json]  重放三槽预填（design 文件清单/决策追踪表 + task 卡 ids；已确认槽不覆盖，幂等）
+   sillyspec fourpiece-init --change <name>     生成 proposal/requirements/decisions 骨架（frontmatter+章节+模板占位；已存在不覆盖）
+   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
+   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
+@@ -1885,12 +1886,13 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       // 从零手写整份设计文档，章节漏项到 stage-contract/plan 门禁才暴露。本命令从 decisions.md
+       // 当前版本 D 条目预填决策追踪表，章节标题逐字取自 brainstorm Step 6 模板（R-03，渲染本体在
+       // design-facts.js generateDesignSkeleton——本 case 只负责读盘/幂等保护/落盘）。已存在不覆盖
+-      // （幂等，agent 产出优先），--force 覆盖重生成。
++      // （幂等，agent 产出优先），--force 覆盖重生成。task-02（2026-09-18-artifact-prefill）：追踪
++      // 表行落盘前经 prefill.js prefillDecisionTable 替换为带来源注的预填行（见下方接线块）。
+       const diChangeIdx = args.indexOf('--change');
+       const diChange = diChangeIdx >= 0 && args[diChangeIdx + 1] && !String(args[diChangeIdx + 1]).startsWith("--") ? args[diChangeIdx + 1] : null;
+       const diForce = args.includes('--force');
+       if (!diChange) {
+-        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按当前版本 D 条目预填；已存在不覆盖，--force 覆盖）');
++        console.error('用法: sillyspec design-init --change <name> [--force] [--json] [--spec-dir <path>]\n  从变更 decisions.md 生成 design.md 十三章节骨架（决策追踪表按 D 条目预填、行带来源注；已存在不覆盖，--force 覆盖）');
+         process.exit(2);
+       }
+       assertSafeChangeName(diChange, '--change 变更名');
+@@ -1908,12 +1910,35 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       let diAuthor = 'unknown';
+       try { diAuthor = git(dir, ['config', 'user.name']) || 'unknown' } catch { /* git 不可用 → unknown */ }
+       const { nowWallClock } = await import('./datetime.js');
+-      const diSkeleton = generateDesignSkeleton({
++      const diSkeletonBase = generateDesignSkeleton({
+         changeName: diChange,
+         decisionsText: readFileSync(diDecisionsPath, 'utf8'),
+         author: diAuthor,
+         now: nowWallClock(),
+       });
++      // task-02（2026-09-18-artifact-prefill）决策追踪表接线：design-facts 骨架行（无注）替换为
++      // prefillDecisionTable 预填行（状态列带来源注——D-003 预填≠结论，agent 逐行核对后删注=确认）。
++      // 推导单点在 prefill.js（与 prefill-refresh 重放同源，两处不各自重写防漂移）。decisions.md
++      // 无 canonical「## D-xxx@vN」条目时返回 [] → 骨架原样落盘（design-facts 自带「未解析出条目」
++      // 注释行，现状不变）。段定位对齐 prefill.js DECISION_SECTION_RE 同义词集；骨架十三章节形态
++      // 固定（表头|分隔行|内容行），定位失败 fail-soft 回退原骨架——预填是 advisory 能力不阻断。
++      const { prefillDecisionTable } = await import('./prefill.js');
++      const diDecisionRows = prefillDecisionTable({ changeDir: diChangeDir });
++      let diSkeleton = diSkeletonBase;
++      if (diDecisionRows.length > 0) {
++        const diLines = diSkeletonBase.split('\n');
++        const diSecIdx = diLines.findIndex((l) => /^#{2,3}\s*(?:\d+[.)]\s*)?决策追踪/.test(l));
++        if (diSecIdx !== -1) {
++          let diSepIdx = diSecIdx + 1;
++          while (diSepIdx < diLines.length && !(diLines[diSepIdx].startsWith('|') && /^\|[-:\s|]+\|$/.test(diLines[diSepIdx]))) diSepIdx++;
++          if (diSepIdx < diLines.length) {
++            let diRowEnd = diSepIdx + 1;
++            while (diRowEnd < diLines.length && diLines[diRowEnd].startsWith('|') && !/^\|[-:\s|]+\|$/.test(diLines[diRowEnd])) diRowEnd++;
++            diLines.splice(diSepIdx + 1, diRowEnd - diSepIdx - 1, ...diDecisionRows);
++            diSkeleton = diLines.join('\n');
++          }
++        }
++      }
+       const diDesignPath = join(diChangeDir, 'design.md');
+       const diExisted = existsSync(diDesignPath);
+       if (diExisted && !diForce) {
+@@ -1941,7 +1966,35 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         break;
+       }
+       console.log(`✅ 已生成 design.md 骨架: ${diDesignPath}${diExisted ? '（--force 覆盖既有文件）' : ''}`);
+-      console.log('   决策追踪表已按 decisions.md 当前版本 D 条目预填；回到 brainstorm Step 6（写设计文档并自审）逐节填散文，填毕删除生成注释。');
++      console.log('   决策追踪表已按 decisions.md D 条目预填（状态列带「(预填：核对后删本注)」来源注——预填≠结论，逐行核对后删注确认）；回到 brainstorm Step 6（写设计文档并自审）逐节填散文，填毕删除生成注释。');
++      break;
++    }
++    case 'prefill-refresh': {
++      // Phase 3（2026-09-18-artifact-prefill task-02，D-005）：三槽预填重放——design.md 文件变更
++      // 清单/决策追踪两表槽 + tasks/*.md 的 requirement_ids/decision_ids。仅白名单槽（D-001）；
++      // 已确认槽（预填注已删/人工内容）跳过不覆盖；幂等可重跑。骨架生成时源未就绪（task 卡先于
++      // requirements/decisions 落盘等）的槽由此命令补齐——plan 阶段后主通道。CLI 单一写入方
++      // 不变（D-002）：本路由只透传 runPrefillRefresh 的结果与计数，不自建写盘逻辑。
++      const prChangeIdx = args.indexOf('--change');
++      const prChange = prChangeIdx >= 0 && args[prChangeIdx + 1] && !String(args[prChangeIdx + 1]).startsWith("--") ? args[prChangeIdx + 1] : null;
++      if (!prChange) {
++        console.error('用法: sillyspec prefill-refresh --change <name> [--spec-dir <path>] [--json]\n  重放三槽预填（design 文件变更清单/决策追踪表行 + task 卡 requirement_ids/decision_ids）；已确认槽（预填注已删）跳过不覆盖；幂等可重跑');
++        process.exit(2);
++      }
++      assertSafeChangeName(prChange, '--change 变更名');
++      const prSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
++      if (!existsSync(join(prSpecBase, 'changes', prChange))) {
++        console.error(`❌ 变更目录不存在: ${join(prSpecBase, 'changes', prChange)}`);
++        process.exit(1);
++      }
++      const { runPrefillRefresh } = await import('./prefill.js');
++      const prResult = await runPrefillRefresh({ cwd: dir, specBase: prSpecBase, changeName: prChange });
++      if (json) {
++        console.log(JSON.stringify({ command: 'prefill-refresh', change: prChange, ok: true, ...prResult }, null, 2));
++        break;
++      }
++      for (const l of prResult.lines) console.log(l);
++      console.log(`📊 预填重放完成：filled ${prResult.filled} / skipped ${prResult.skipped} / confirmed ${prResult.confirmed}（已确认跳过）`);
+       break;
+     }
+     case 'delta': {
+@@ -3888,6 +3941,36 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
+         // 对齐 endpoints 等命令：先 resolvePlatformSpecDir（指针 fail-closed 语义同源）。
+         const tcPlatformSpecDir = resolvePlatformSpecDir(dir, specDir) || specDir;
+         const result = cmdTaskcard(tcName, { cwd: dir, specDir: tcPlatformSpecDir, taskIds, title: titleVal, titleZh: titleZhVal, force, sets });
++        // task-02（2026-09-18-artifact-prefill）taskcard ids 直填接线：本次 created 的骨架卡，
++        // 占位行「requirement_ids: [FR-XX] / decision_ids: [D-XXX@vN]」立即改写为 prefillCardIds
++        // 推导值——行格式与 runPrefillRefresh 重放逐字一致（后续 refresh 幂等零改写）。源文件在场
++        // → 直填+来源注（D-003 预填≠结论，核对后删注=确认）；源缺/推导为空 → 空数组+提示行
++        // （D-005：plan 阶段源就绪后跑 prefill-refresh 重放补齐）。只整行替换占位字面量：
++        // --set 显式覆盖过的行已非占位形态天然不动；skipped（已存在）卡不触碰，幂等纪律不变。
++        // 须在下方平台镜像块之前完成——镜像 readFileSync 回读的是改写后的终稿。
++        const { prefillCardIds, PREFILL_NOTE } = await import('./prefill.js');
++        const tcPrefillIds = prefillCardIds({ changeDir: join(tcPlatformSpecDir, 'changes', tcName) });
++        const tcIdLine = (field, ids) => ids.length > 0
++          ? `${field}: [${ids.join(', ')}]  # ${PREFILL_NOTE}`
++          : `${field}: []  # (预填源未就绪：plan 阶段后跑 prefill-refresh)`;
++        for (const f of result.created) {
++          try {
++            const tcRaw = readFileSync(f, 'utf8');
++            // 替换值经函数返回：避免 String.replace 替换串里 $ 序列的转义歧义
++            const tcNext = tcRaw
++              .replace('requirement_ids: [FR-XX]', () => tcIdLine('requirement_ids', tcPrefillIds.requirementIds))
++              .replace('decision_ids: [D-XXX@vN]', () => tcIdLine('decision_ids', tcPrefillIds.decisionIds));
++            if (tcNext !== tcRaw) writeFileSync(f, tcNext);
++          } catch { /* 单卡预填改写失败不连坐（骨架已落盘，prefill-refresh 可补） */ }
++        }
++        if (result.created.length > 0) {
++          const tcSetKeys = new Set(Object.keys(sets));
++          const tcIdSummary = (field, ids) => {
++            if (tcSetKeys.has(field)) return '（--set 显式覆盖，预填不碰）';
++            return ids.length > 0 ? `[${ids.join(', ')}]` : '（源未就绪留 [] + 提示行）';
++          };
++          console.log(`   ids 预填：requirement_ids ${tcIdSummary('requirement_ids', tcPrefillIds.requirementIds)} / decision_ids ${tcIdSummary('decision_ids', tcPrefillIds.decisionIds)}——预填≠结论，核对后删注。`);
++        }
+         // 平台模式产物双写镜像（坑 platform-init-artifact-daemon-dir-only 同族，2026-09-10 驾驭
+         // 小结第六批①，用户实证 taskcard --all 落 daemon 镜像「中间一度两份副本」）：agent 本地
+         // （pointer 态、非显式 --spec-dir）生成的卡片即时镜像主仓 changeDir——不再等 spec-sync
+diff --git a/src/prefill.js b/src/prefill.js
+new file mode 100644
+index 0000000..e3db52f
+--- /dev/null
++++ b/src/prefill.js
+@@ -0,0 +1,491 @@
++/**
++ * prefill.js — 三槽预填引擎（change: 2026-09-18-artifact-prefill，task-01，FR-01/FR-02，
++ * D-001@v1 / D-003@v1 / D-005@v1）
++ *
++ * 背景：verify-result 已实证的「机械预填模式」（预填≠结论，agent 逐格核对改写）推广到
++ * design/tasks/taskcard 三产物——agent 从「从零写」变「核对改写」。本模块是预填的单点
++ * 推导引擎：三个纯函数 + 注检测 + refresh 重放，供生成器接线（design-init/taskcard，
++ * Phase 2）与 prefill-refresh 命令（Phase 3）复用，禁止两处各自重写推导漂移。
++ *
++ * 来源注协议（D-003）：所有预填输出行尾附加 PREFILL_NOTE。注在场 = 未确认（--done 门
++ * advisory warning / refresh 可重放）；删注 = 确认动作（人工内容，refresh 不覆盖——
++ * D-005 已确认跳过）。非白名单槽零触碰（D-001 红线）：本模块只产出行/值，落槽范围由
++ * 调用方（生成器/refresh）限定在三槽内——①design.md 文件变更清单表、②design.md 决策
++ * 追踪表、③task 卡 frontmatter requirement_ids/decision_ids。
++ *
++ * 解析对齐（零外部依赖手写，不引 js-yaml——decisions-io/change-list 家族先例）：
++ *   - task 卡 target_files：语义对齐 src/stages/plan-postcheck.js parseTargetFiles——
++ *     inline [] + 块列表双形态、NEW: 前缀拆剥、严格口径非法判定（glob/目录前缀/引号/
++ *     绝对路径），但为守「零依赖手写」不做跨模块 import（该模块顶层 import js-yaml）；
++ *   - decisions.md 标题：对齐 src/decisions-io.js 单一写入者的 canonical 形态
++ *     （`## D-xxx@vN 标题` / 整行恰为 `## D-xxx@vN`，版本必在、无版本不收）；
++ *   - requirements.md FR：对齐 src/fr-index.js 的标题式形态（`### FR-NN: 标题`，
++ *     放宽标题级 #2~#6 容手写漂移）；
++ *   - design.md 章节定位：对齐 src/change-list.js FILE_LIST_SECTION_RE 同义词集
++ *     （该常量未导出，此处带出处复制，改一处须同步另一处）。
++ *
++ * 纯度口径（task-01 constraints「三纯函数与 hasUnconfirmedPrefill 纯函数零 IO」）：
++ * 签名即含目录/文件入参，读取是推导的固有部分——此四函数只读不写（无副作用、同输入
++ * 同输出）；runPrefillRefresh 是唯一写入口（writeAtomicSync 原子落盘，fs-atomic 先例）。
++ */
++import { existsSync, readFileSync, readdirSync } from 'node:fs'
++import { join } from 'node:path'
++import { writeAtomicSync } from './fs-atomic.js'
++
++/**
++ * 来源注协议常量（D-003）：所有预填值行尾附加的本注。
++ * hasUnconfirmedPrefill 按此字面检测；门禁（Phase 4 gates/verify-probes）同源引用。
++ * @type {string}
++ */
++export const PREFILL_NOTE = '(预填：核对后删本注)'
++
++/** decisions.md canonical 决策标题（decisions-io 单一写入者唯一产出形态）：`## D-xxx@vN 标题` 或整行恰为 `## D-xxx@vN`（后随标题须有空白分隔，与 hasDecisionId 的双形态匹配逐字同源）。 */
++const DECISION_HEADING_RE = /^## (D-\d+)@v(\d+)(?:\s.*)?$/
++
++/** requirements.md 功能需求标题（fr-index 先例 `### FR-NN: 标题`，放宽标题级 #2~#6；FR-<域>-NNN 全局 id 无「FR-紧邻数字」形态，天然不误收）。 */
++const FR_HEADING_RE = /^#{2,6}\s+(FR-\d+)\s*[:：]/
++
++/** design.md「文件变更清单」章节标题同义词集——逐字复制自 change-list.js FILE_LIST_SECTION_RE（该常量未导出；两处须同步）。 */
++const FILE_LIST_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?(文件变更清单|变更文件清单|文件清单|File Changes|Files to Change)/
++
++/** design.md「决策追踪」章节标题（design-facts 骨架形态，容忍可选编号前缀）。 */
++const DECISION_SECTION_RE = /^#{2,3}\s*(?:\d+[.)]\s*)?决策追踪/
++
++/**
++ * 读文件并归一 CRLF；文件不存在 / 不可读 / 入参非法 → null（调用方按空源处理：
++ * 预填留空、现状骨架行为不变——design 兼容策略）。所有只读路径共用此入口。
++ * @param {string} filePath
++ * @returns {string|null}
++ */
++function readTextIfExists(filePath) {
++  if (typeof filePath !== 'string' || filePath === '') return null
++  if (!existsSync(filePath)) return null
++  try {
++    return readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n')
++  } catch {
++    return null // 目录 / 权限等读失败按空源降级（fail-soft，预填是 advisory 能力）
++  }
++}
++
++/**
++ * 解析 task 卡 frontmatter target_files 条目（手写零依赖，语义对齐
++ * stages/plan-postcheck.js parseTargetFiles：inline [] + 块列表双形态、NEW: 前缀拆剥、
++ * 反斜杠与 ./ 前缀归一、严格口径非法判定）。
++ * @param {string} content task 卡全文（自提取 frontmatter）
++ * @returns {Array<{ raw: string, isNew: boolean, path: string, invalid: string|null }>}
++ */
++function parseTargetFileEntries(content) {
++  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
++  if (!fmMatch) return []
++  const fm = fmMatch[1]
++  let raws = null
++  const inlineMatch = fm.match(/target_files:[ \t]*\[([^\]]*)\]/)
++  if (inlineMatch) {
++    raws = inlineMatch[1].split(',').map((s) => s.trim()).filter(Boolean)
++  } else {
++    // 块列表：[ \t]*\n 不吃换行（parseTargetFiles 坑6① 家族教训——\s* 贪婪吞顶格列表静默判空）
++    const blockMatch = fm.match(/target_files:[ \t]*\n((?:[ \t]*-[ \t]+.+\n?)+)/)
++    if (blockMatch) {
++      raws = blockMatch[1].match(/[ \t]*-[ \t]+(.+)/g)
++        ?.map((s) => s.replace(/^[ \t]*-[ \t]+/, '').trim()).filter(Boolean) || []
++    }
++  }
++  if (raws === null || raws.length === 0) return []
++  return raws.map((raw) => {
++    let path = raw
++    let isNew = false
++    if (path.startsWith('NEW:')) { isNew = true; path = path.slice('NEW:'.length).trim() }
++    path = path.replace(/\\/g, '/').replace(/^(\.\/)+/, '')
++    let invalid = null
++    if (path === '') invalid = '剥 NEW: / ./ 前缀后为空'
++    else if (/[*?]/.test(path)) invalid = '含通配符（禁 glob）'
++    else if (path.endsWith('/')) invalid = '目录前缀（须精确到文件）'
++    else if (/["'`]/.test(path)) invalid = '含引号/反引号（须裸路径书写）'
++    else if (path.startsWith('/') || /^[A-Za-z]:/.test(path)) invalid = '绝对路径（须仓根相对）'
++    return { raw, isNew, path, invalid }
++  })
++}
++
++/**
++ * 槽一（纯函数）：扫 tasksDir 下 task-*.md 的 frontmatter target_files，并集去重排序，
++ * 产出 design.md 文件变更清单表行。
++ *
++ * 语义：
++ *   - 去重键 = 剥 NEW: 后的归一路径；任一卡声明 NEW: → 输出保形 NEW: 前缀（待建文件
++ *     标记不因他卡无前缀声明而丢失），操作列按 NEW: 推导（NEW:→新增，其余→修改——
++ *     target_files 语义 = 本 task 计划改动的文件）。
++ *   - 排序 = 归一路径码点升序（跨平台确定序，多 agent 并行下重放结果稳定）。
++ *   - 非法条目（glob/目录前缀/引号/绝对路径——parseTargetFiles 同款严格口径）跳过
++ *     不进清单：预填行会被 agent 核对后转正，带非法形态只会把 gate 错误提前嫁接。
++ *   - 无 tasksDir / 无 task 卡 / 全空声明 → []（槽留空，生成器侧给提示行，骨架行为不变）。
++ *
++ * @param {{ tasksDir?: string }} opts
++ * @returns {string[]} design 清单表行（形如 `| 新增 | NEW:src/foo.js | 预填自 task 卡 target_files 并集 (预填：核对后删本注) |`）
++ */
++export function prefillFileChangeList({ tasksDir } = {}) {
++  if (typeof tasksDir !== 'string' || tasksDir === '' || !existsSync(tasksDir)) return []
++  let files
++  try {
++    files = readdirSync(tasksDir).filter((f) => /^task-.+\.md$/.test(f)).sort()
++  } catch {
++    return []
++  }
++  // 归一路径 → { isNew }；同路径多卡声明时 NEW: 取并（任一声明待建即待建）
++  const union = new Map()
++  for (const f of files) {
++    const text = readTextIfExists(join(tasksDir, f))
++    if (!text) continue
++    for (const e of parseTargetFileEntries(text)) {
++      if (e.invalid) continue
++      const prev = union.get(e.path)
++      if (!prev) union.set(e.path, { isNew: e.isNew })
++      else if (e.isNew) prev.isNew = true
++    }
++  }
++  return [...union.keys()]
++    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
++    .map((p) => {
++      const isNew = union.get(p).isNew
++      return `| ${isNew ? '新增' : '修改'} | ${isNew ? 'NEW:' : ''}${p} | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`
++    })
++}
++
++/**
++ * 槽二（纯函数）：解析 changeDir/decisions.md 的 canonical 决策标题（## D-xxx@vN，
++ * decisions-io 单一写入者形态），产出 design.md 决策追踪表行（状态列「待确认」）。
++ *
++ * 排序 = D 编号数字升序、同号版本升序；重复标题去重。无 decisions.md / 无 canonical
++ * 标题（扁平列表、### 级手写漂移形态不收——对齐 hasDecisionId 的 fail-closed 口径）
++ * → []。
++ * @param {{ changeDir?: string }} opts
++ * @returns {string[]} 决策追踪表行（形如 `| D-001@v1 | （待填覆盖点） | 待确认 (预填：核对后删本注) |`——三列对齐 design-facts 骨架「决策|覆盖点|状态」，待确认落状态列）
++ */
++export function prefillDecisionTable({ changeDir } = {}) {
++  const text = readTextIfExists(typeof changeDir === 'string' ? join(changeDir, 'decisions.md') : null)
++  if (!text) return []
++  const seen = new Set()
++  const entries = []
++  for (const line of text.split('\n')) {
++    const m = line.match(DECISION_HEADING_RE)
++    if (!m) continue
++    const id = `${m[1]}@v${m[2]}`
++    if (seen.has(id)) continue
++    seen.add(id)
++    entries.push({ id, number: parseInt(m[1].slice(2), 10), version: parseInt(m[2], 10) })
++  }
++  entries.sort((a, b) => a.number - b.number || a.version - b.version || (a.id < b.id ? -1 : 1))
++  return entries.map((e) => `| ${e.id} | （待填覆盖点） | 待确认 ${PREFILL_NOTE} |`)
++}
++
++/**
++ * 槽三（纯函数）：从 changeDir 的 requirements.md（标题式 FR-NN）与 decisions.md
++ * （canonical D-xxx@vN）抽取 TaskCard frontmatter 的 requirement_ids / decision_ids。
++ *
++ * 各自去重排序（FR 按数字升序、D 按编号+版本升序）；源文件缺失 → 对应数组留空
++ * （生成器侧按在场文件预填、缺则留空数组+提示行——design Phase 2 语义）。
++ * @param {{ changeDir?: string }} opts
++ * @returns {{ requirementIds: string[], decisionIds: string[] }}
++ */
++export function prefillCardIds({ changeDir } = {}) {
++  const requirementIds = []
++  const decisionIds = []
++  const base = typeof changeDir === 'string' ? changeDir : null
++  const reqText = readTextIfExists(base ? join(base, 'requirements.md') : null)
++  if (reqText) {
++    const seen = new Set()
++    for (const line of reqText.split('\n')) {
++      const m = line.match(FR_HEADING_RE)
++      if (m) seen.add(m[1])
++    }
++    requirementIds.push(...[...seen].sort((a, b) =>
++      parseInt(a.slice(3), 10) - parseInt(b.slice(3), 10) || (a < b ? -1 : 1)))
++  }
++  const decText = readTextIfExists(base ? join(base, 'decisions.md') : null)
++  if (decText) {
++    const seen = new Set()
++    for (const line of decText.split('\n')) {
++      const m = line.match(DECISION_HEADING_RE)
++      if (m) seen.add(`${m[1]}@v${m[2]}`)
++    }
++    decisionIds.push(...[...seen].sort((a, b) => {
++      const [an, av] = a.slice(2).split('@v')
++      const [bn, bv] = b.slice(2).split('@v')
++      return parseInt(an, 10) - parseInt(bn, 10) || parseInt(av, 10) - parseInt(bv, 10) || (a < b ? -1 : 1)
++    }))
++  }
++  return { requirementIds, decisionIds }
++}
++
++/**
++ * 预填注在场检测（门禁与 refresh 共用的确认判据，D-003/D-005）：文件内容含 PREFILL_NOTE
++ * 即存在未确认预填。文件不存在 / 不可读 → false（无注可删即无未确认项，不误报）。
++ * @param {string} filePath
++ * @returns {boolean}
++ */
++export function hasUnconfirmedPrefill(filePath) {
++  const text = readTextIfExists(filePath)
++  return text !== null && text.includes(PREFILL_NOTE)
++}
++
++/* ---------------------------------------------------------------------------
++ * runPrefillRefresh —— 三槽重放（唯一写入口；D-005：已确认跳过，注已删=人工内容不覆盖）
++ * ------------------------------------------------------------------------- */
++
++/**
++ * design.md 表格槽重放：在章节表格的内容区尾部追加预填行（查重——已在位的行不重复追加）。
++ * 有人工内容（内容行含未带注行，或章节内有非表格非注释非空的正文/列表行——分类列表
++ * 写法的人类产出同样受保护）→ confirmed 跳过；无源可预填 → skipped；预填就位
++ * （本次写入或已在位）→ filled。
++ *
++ * 行坐标视角约定：章节内首个表格行视为表头（骨架与 brainstorm 模板的既定形态），
++ * 表头与分隔行不参与人工判定，内容行 = 表头之后的表格行。
++ * @param {string[]} lines 全文行（已归一 \n）
++ * @param {{ slotLabel: string, sectionRe: RegExp, headerLines: string[], prefillRows: string[] }} opts
++ * @param {{ filled: number, skipped: number, confirmed: number, lines: string[] }} result
++ * @returns {boolean} 是否发生写入（调用方统一落盘）
++ */
++function refreshDesignTableSlot(lines, opts, result) {
++  const { slotLabel, sectionRe, headerLines, prefillRows } = opts
++  const start = lines.findIndex((l) => sectionRe.test(l))
++  if (start === -1) {
++    result.skipped += 1
++    result.lines.push(`⏭️ ${slotLabel}：design.md 无该章节，跳过（现状骨架行为不变）`)
++    return false
++  }
++  let end = lines.length
++  for (let i = start + 1; i < lines.length; i++) {
++    if (/^##\s/.test(lines[i])) { end = i; break }
++  }
++  // 表格行定位（含表头；分隔行排除——change-list 同款判定）
++  const tableRowIdxs = []
++  for (let i = start + 1; i < end; i++) {
++    if (lines[i].startsWith('|') && !/^\|[-:\s|]+\|$/.test(lines[i])) tableRowIdxs.push(i)
++  }
++  const contentRowIdxs = tableRowIdxs.slice(1) // 首表格行 = 表头
++  const hasHumanContent = contentRowIdxs.some((i) => !lines[i].includes(PREFILL_NOTE))
++    || lines.slice(start + 1, end).some((l) => {
++      const t = l.trim()
++      return t !== '' && !t.startsWith('<!--') && !t.startsWith('|') // 散文/分类列表 = 人工产出
++    })
++  if (hasHumanContent) {
++    result.confirmed += 1
++    result.lines.push(`🔒 ${slotLabel}：已有人工内容（预填注已删/非预填行），确认态跳过不覆盖`)
++    return false
++  }
++  if (prefillRows.length === 0) {
++    result.skipped += 1
++    result.lines.push(`⏭️ ${slotLabel}：无源可预填（推导为空），跳过`)
++    return false
++  }
++  const existing = new Set(contentRowIdxs.map((i) => lines[i].trim()))
++  const toAdd = prefillRows.filter((r) => !existing.has(r.trim()))
++  if (toAdd.length === 0) {
++    result.filled += 1
++    result.lines.push(`✅ ${slotLabel}：预填 ${prefillRows.length} 行已在位（幂等，0 追加，注在场待核对）`)
++    return false
++  }
++  if (tableRowIdxs.length > 0) {
++    // 追加位置：最后一个内容行后；无内容行（仅表头）则表头/分隔行后
++    let insertAt
++    if (contentRowIdxs.length > 0) {
++      insertAt = contentRowIdxs[contentRowIdxs.length - 1] + 1
++    } else {
++      insertAt = tableRowIdxs[0] + 1
++      if (insertAt < end && /^\|[-:\s|]+\|$/.test(lines[insertAt])) insertAt += 1
++    }
++    lines.splice(insertAt, 0, ...toAdd)
++  } else {
++    // 章节内全无表格（兜底）：表头 + 预填行整体插在标题行后
++    lines.splice(start + 1, 0, '', ...headerLines, ...toAdd)
++  }
++  result.filled += 1
++  result.lines.push(`✅ ${slotLabel}：预填追加 ${toAdd.length} 行（未确认——注在场，核对后删注）`)
++  return true
++}
++
++/**
++ * task 卡 ids 槽重放（requirement_ids / decision_ids 各计一槽）：
++ *   - 值非空且注在场 → 未确认预填 → 按最新推导重放（源更新语义，R-01：requirements/
++ *     decisions 变更后 refresh 刷新值；与在位值一致则零写入）；
++ *   - 值非空且无注 → 人工内容（确认态）→ confirmed 跳过不覆盖；
++ *   - 值空/占位（[] 或 taskcard 骨架 [FR-XX]/[D-XXX@vN]）且推导非空 → 直填+注；
++ *   - 值空且推导为空（源缺失）→ 留空跳过。
++ * @param {string[]} lines task 卡全文行（已归一 \n）
++ * @param {number} fmEnd frontmatter 闭合 --- 的行下标
++ * @param {string} field 字段名（requirement_ids / decision_ids）
++ * @param {string[]} derived 预填值（prefillCardIds 对应数组）
++ * @param {string} basename 文件名（advisory 行标注用）
++ * @param {{ filled: number, skipped: number, confirmed: number, lines: string[] }} result
++ * @returns {boolean} 是否发生写入
++ */
++function refreshTaskIdSlot(lines, fmEnd, field, derived, basename, result) {
++  const slotLabel = `${basename} ${field}`
++  const fieldRe = new RegExp(`^${field}:`)
++  let fi = -1
++  for (let i = 0; i < fmEnd; i++) {
++    if (fieldRe.test(lines[i])) { fi = i; break }
++  }
++  let fe = fi + 1
++  if (fi >= 0) {
++    while (fe < fmEnd && /^\s*-[ \t]/.test(lines[fe])) fe++ // 块列表形态占用区
++  }
++  const valueText = fi >= 0 ? lines.slice(fi, fe).join('\n') : ''
++  // 值条目收集（inline [] / 块列表 / 标量兜底；注释不入条目）
++  const entries = []
++  const firstLine = valueText.split('\n', 1)[0] || ''
++  const inline = firstLine.match(new RegExp(`^${field}:\\s*\\[([^\\]]*)\\]`))
++  if (inline) {
++    entries.push(...inline[1].split(',').map((s) => s.trim()).filter(Boolean))
++  } else {
++    const scalar = firstLine.slice(firstLine.indexOf(':') + 1).replace(/#.*$/, '').trim().replace(/^\[|\]$/g, '')
++    if (scalar) entries.push(scalar)
++  }
++  for (const l of valueText.split('\n').slice(1)) {
++    const m = l.match(/^\s*-\s+(.+)/)
++    if (m) entries.push(m[1].trim())
++  }
++  const placeholderRe = field === 'requirement_ids' ? /^FR-XX$/i : /^D-XXX@vN$/i
++  const isEmptyValue = entries.length === 0 || entries.every((e) => placeholderRe.test(e))
++
++  if (!isEmptyValue) {
++    if (!valueText.includes(PREFILL_NOTE)) {
++      result.confirmed += 1
++      result.lines.push(`🔒 ${slotLabel}：人工值在场（注已删），确认态跳过不覆盖`)
++      return false
++    }
++    if (derived.length === 0) {
++      result.skipped += 1
++      result.lines.push(`⏭️ ${slotLabel}：注在场但源缺失（无可推导值），保留原预填值跳过`)
++      return false
++    }
++    const newline = `${field}: [${derived.join(', ')}]  # ${PREFILL_NOTE}`
++    if (fi >= 0 && fe - fi === 1 && lines[fi] === newline) {
++      result.filled += 1
++      result.lines.push(`✅ ${slotLabel}：预填值已在位（幂等，0 改写，注在场待核对）`)
++      return false
++    }
++    lines.splice(fi, fe - fi, newline)
++    result.filled += 1
++    result.lines.push(`✅ ${slotLabel}：未确认（注在场），按最新源重放预填`)
++    return true
++  }
++  if (derived.length === 0) {
++    result.skipped += 1
++    result.lines.push(`⏭️ ${slotLabel}：无可预填源（推导为空），留空跳过`)
++    return false
++  }
++  const newline = `${field}: [${derived.join(', ')}]  # ${PREFILL_NOTE}`
++  if (fi >= 0) lines.splice(fi, fe - fi, newline)
++  else lines.splice(fmEnd, 0, newline) // 字段缺失（存量卡）→ 闭合 --- 前补写
++  result.filled += 1
++  result.lines.push(`✅ ${slotLabel}：空/占位 → 预填 ${derived.length} 项（注在场，核对后删注）`)
++  return true
++}
++
++/**
++ * 三槽重放（唯一 IO 写入口；D-005）：对 changeDir 的 design.md 两表槽（文件变更清单 /
++ * 决策追踪——均「在表后追加预填行，有人工行=已确认跳过」）与 tasks/*.md ids 槽执行预填。
++ *
++ * 计数语义（advisory，每槽累计；lines 每槽一行结果供 CLI 透出）：
++ *   - filled：槽未确认（无人工内容）且预填内容就位——含幂等重放时「已在位零改写」的槽，
++ *     保证同输入二次重放 { filled, skipped, confirmed } 逐字段一致（幂等契约）；
++ *   - skipped：槽无源可预填（源文件/章节缺失、推导为空、注在场但源缺失保留原值）；
++ *   - confirmed：槽有人工内容（预填注已删 / 非预填行 / 人工值）→ 保护跳过不覆盖。
++ *
++ * 写入：writeAtomicSync 原子落盘（fs-atomic 先例）；仅在内容变化时写；文件 EOL 跟随原文件。
++ * 变更目录不存在：三计数归零 + 一行告警（fail-soft，CLI 侧自行决定 exit code）。
++ *
++ * @param {{ cwd?: string, specBase?: string, changeName?: string }} opts
++ *   cwd/specBase 同 change-delete/archive-delta 口径：specBase 缺省 = join(cwd, '.sillyspec')
++ * @returns {Promise<{ filled: number, skipped: number, confirmed: number, lines: string[] }>}
++ */
++export async function runPrefillRefresh({ cwd, specBase, changeName } = {}) {
++  const base = specBase || join(cwd || process.cwd(), '.sillyspec')
++  const changeDir = join(base, 'changes', String(changeName || ''))
++  const result = { filled: 0, skipped: 0, confirmed: 0, lines: [] }
++  if (!changeName || !existsSync(changeDir)) {
++    result.lines.push(`⚠️ 变更目录不存在: ${changeDir}（三槽均无法预填）`)
++    return result
++  }
++
++  // 槽一/槽二：design.md 文件变更清单 + 决策追踪（单次读盘，两槽共一份行数组后统一落盘）
++  const designPath = join(changeDir, 'design.md')
++  const designRaw = readTextIfExists(designPath)
++  if (designRaw === null) {
++    result.skipped += 2
++    result.lines.push('⏭️ design.md 文件变更清单：design.md 不存在，跳过')
++    result.lines.push('⏭️ design.md 决策追踪：design.md 不存在，跳过')
++  } else {
++    // EOL 探测回读原文（readTextIfExists 返回的是 CRLF 归一文本，探测不了原始 EOL——
++    // upsertDecision 同款「原文探测 + 归一编辑 + 原 EOL 回写」口径）
++    let eolProbe = '\n'
++    try { eolProbe = readFileSync(designPath, 'utf8').includes('\r\n') ? '\r\n' : '\n' } catch { /* 保持 \n */ }
++    const lines = designRaw.split('\n')
++    const listRows = prefillFileChangeList({ tasksDir: join(changeDir, 'tasks') })
++    const decisionRows = prefillDecisionTable({ changeDir })
++    let dirty = false
++    dirty = refreshDesignTableSlot(lines, {
++      slotLabel: 'design.md 文件变更清单',
++      sectionRe: FILE_LIST_SECTION_RE,
++      headerLines: ['| 操作 | 文件路径 | 说明 |', '|---|---|---|'],
++      prefillRows: listRows,
++    }, result) || dirty
++    dirty = refreshDesignTableSlot(lines, {
++      slotLabel: 'design.md 决策追踪',
++      sectionRe: DECISION_SECTION_RE,
++      headerLines: ['| 决策 | 覆盖点 | 状态 |', '|---|---|---|'],
++      prefillRows: decisionRows,
++    }, result) || dirty
++    if (dirty) writeAtomicSync(designPath, lines.join(eolProbe))
++  }
++
++  // 槽三：tasks/*.md 的 requirement_ids / decision_ids
++  const tasksDir = join(changeDir, 'tasks')
++  if (!existsSync(tasksDir)) {
++    result.skipped += 1
++    result.lines.push('⏭️ tasks/*.md ids 槽：tasks 目录不存在，跳过')
++    return result
++  }
++  const { requirementIds, decisionIds } = prefillCardIds({ changeDir })
++  let taskFiles = []
++  try {
++    taskFiles = readdirSync(tasksDir).filter((f) => /^task-.+\.md$/.test(f)).sort()
++  } catch {
++    taskFiles = []
++  }
++  for (const f of taskFiles) {
++    const taskPath = join(tasksDir, f)
++    const raw = readTextIfExists(taskPath)
++    if (raw === null) continue
++    // frontmatter 边界：首行 --- 与其闭合 ---（无 frontmatter 的存量文件跳过——两槽各计 skipped）
++    const lines = raw.split('\n')
++    let fmEnd = -1
++    if (lines[0] !== undefined && lines[0].trim() === '---') {
++      for (let i = 1; i < lines.length; i++) {
++        if (lines[i].trim() === '---') { fmEnd = i; break }
++      }
++    }
++    if (fmEnd === -1) {
++      result.skipped += 2
++      result.lines.push(`⏭️ ${f} requirement_ids：无 frontmatter，跳过`)
++      result.lines.push(`⏭️ ${f} decision_ids：无 frontmatter，跳过`)
++      continue
++    }
++    let eolProbe = '\n'
++    try { eolProbe = readFileSync(taskPath, 'utf8').includes('\r\n') ? '\r\n' : '\n' } catch { /* 保持 \n */ }
++    let dirty = false
++    dirty = refreshTaskIdSlot(lines, fmEnd, 'requirement_ids', requirementIds, f, result) || dirty
++    // decision_ids 插行可能移动 fmEnd（字段缺失时在 fmEnd 处插入）——插入点在 fmEnd 本身，闭合 --- 后移，重定位
++    let fmEndNow = fmEnd
++    if (dirty) {
++      fmEndNow = -1
++      for (let i = 1; i < lines.length; i++) {
++        if (lines[i].trim() === '---') { fmEndNow = i; break }
++      }
++      if (fmEndNow === -1) fmEndNow = lines.length
++    }
++    dirty = refreshTaskIdSlot(lines, fmEndNow, 'decision_ids', decisionIds, f, result) || dirty
++    if (dirty) writeAtomicSync(taskPath, lines.join(eolProbe))
++  }
++  return result
++}
+diff --git a/src/run/gates.js b/src/run/gates.js
+index c413656..3629bf3 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -820,6 +820,24 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     } catch { /* 预检失败不阻断 plan 完成 */ }
+   }
+ 
++  // ── 预填注未删 advisory（2026-09-18-artifact-prefill task-03 / FR-03 / D-003@v1 门禁梯度·
++  //    轻档）：brainstorm/plan --done 时对白名单槽宿主文件（design.md + tasks/task-*.md）查
++  //    未删预填注——注在场 = 未确认（预填≠结论），提示核对后删注（删注=确认动作）。advisory
++  //    不阻断（忘删注=未确认提示，task 卡 constraints「旧路径零新硬门」）；error 档挂 verify
++  //    收尾（归档前注清零）。检测单点 = verify-probes 探针面 runProbe10PrefillNoteClearance
++  //    （探针 10 --init 预填与 verify 收尾 error 门同一实现，不二算）。已知误报面：散文引用
++  //    注字面量（如本变更 design.md 协议描述）会命中——warning 文案注明核对语义，不追求
++  //    字面区分。──
++  if (['brainstorm', 'plan'].includes(stageName) && changeName) {
++    try {
++      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
++      const noteAdvisory = runProbe10PrefillNoteClearance({ specBase, changeName })
++      if (noteAdvisory.unclearedFiles.length > 0) {
++        console.warn(`\n⚠️ 预填注未清（白名单槽未确认，${noteAdvisory.unclearedFiles.length} 处：${noteAdvisory.unclearedFiles.join('、')}）——核对后删注；归档前注清零为 error 门（散文含注字面量会命中——核对是否真有未确认预填槽）`)
++      }
++    } catch { /* advisory 失败不阻断完成（fail-soft，facade 预检先例同款） */ }
++  }
++
+   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
+   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
+   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
+@@ -1141,6 +1159,25 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         }
+       }
+     }
++    // ── 预填注清零 error 门（归档前最后一道；2026-09-18-artifact-prefill task-03 / FR-03 /
++    //    D-003@v1 门禁梯度·error 档）：白名单槽宿主文件（design.md + tasks/task-*.md）仍含
++    //    未删预填注 → 阻断 verify 完成（verify 完成是 archive 前置——「归档前注清零」的落点；
++    //    brainstorm/plan --done 的 advisory 在此收口为硬门，注在场=预填未确认）。检测单点 =
++    //    verify-probes 探针面 runProbe10PrefillNoteClearance（探针 10 --init 预填与本门同一
++    //    实现，不二算）。已知误报面：散文引用注字面量会命中——修法是核对后删注/改写散文
++    //    措辞，不是绕门。──
++    try {
++      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
++      const noteClearance = runProbe10PrefillNoteClearance({ specBase, changeName })
++      if (noteClearance.unclearedFiles.length > 0) {
++        console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
++        for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
++        console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
++        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++      }
++    } catch (e) {
++      console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
++    }
+     // ── verify 服务进程回收（坑 verify-service-process-leak；坑 verify-pids-cross-session-kill
+     // 见 reapVerifyServices 注释）──
+     try {
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 460f0dd..f36228e 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -12,6 +12,9 @@
+  *   探针7 验收×测试覆盖矩阵：task 卡 acceptance 自解析（jsYaml，string/array 双形态）+ 双源结构
+  *        归属（allowed_paths 测试模式 ∪ execute-runs review.json changedFiles test/ 前缀）+
+  *        关键词命中提示（命中≠判定，不参与门禁；2026-09-14-acceptance-test-matrix）
++ *   探针10 预填注清零（error 门）：design.md + tasks/task-*.md 白名单槽宿主文件集逐个
++ *        hasUnconfirmedPrefill（注在场=未确认）——--init 预填进探针段 + gates.js verify 收尾
++ *        复跑同一实现阻断（门禁梯度 error 档；2026-09-18-artifact-prefill task-03）
+  * 探针2（关键词提取半语义）/探针3.4 集成盲区/3.5 断言抽查/探针4（决策追踪语义）留 agent。
+  *
+  * verify-result.md 骨架：七章节固定结构 + 探针结果机械预填 + 其余章节 <!--TODO--> 占位。 probe1-noqa
+@@ -22,9 +25,10 @@
+  * 供事后独立复跑审计；重复 --init 覆盖为最近一次 init 快照）。
+  */
+ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
+-import { join, dirname, basename, resolve, isAbsolute } from 'path'
++import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
+ import jsYaml from 'js-yaml'
+ import { gitQuiet, unquoteGitPath } from './git-helper.js'
++import { hasUnconfirmedPrefill } from './prefill.js'
+ import {
+   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
+ } from './verify-facts-schema.js'
+@@ -1642,6 +1646,58 @@ export function runProbe9GuardConsistency({ specBase, cwd, wtRoot = null, change
+ }
+ 
+ 
++// ── 探针 10（预填注清零，2026-09-18-artifact-prefill task-03 / FR-03 / D-003@v1 门禁梯度·error 档）──
++// 背景：三槽预填（src/prefill.js，task-01）的确认动作是「删注」——注在场 = 白名单槽未确认
++// （预填≠结论）。brainstorm/plan --done 是 advisory（忘删=提示，gates.js 轻档），本探针是梯度
++// 收口的 error 档：--init 预填进 verify-result.md 探针段（agent 在 verify 阶段看到 ❌ 面），
++// gates.js verify 收尾复跑本函数同源阻断（verify 完成是 archive 前置——「归档前注清零」的落点）。
++// 检测复用 task-01 的 hasUnconfirmedPrefill（PREFILL_NOTE 字面包含即未确认）；已知误报面：
++// 散文引用注字面量（如设计文档描述注协议本身）会命中——不追求语义区分，❌ 面向 agent 核对
++// （真未确认 → 删注；纯散文 → 改写措辞），gate 侧文案同口径。
++const PROBE10_HEADING = '#### 探针 10：预填注清零（error 门）'
++
++/**
++ * 探针 10 主体：changeDir 的 design.md + tasks/task-*.md（预填白名单槽宿主文件集——与
++ * gates.js advisory 门 / verify 收尾 error 门同一检测面）逐文件 hasUnconfirmedPrefill。
++ *   - applicable：至少一个在检文件存在（变更目录缺失 / 全缺席 → false + 注记，纯骨架零红门禁）；
++ *   - unclearedFiles：含未删预填注的文件（changeDir 相对、正斜杠，design.md 在前、task 卡按名序）；
++ *   - 只读不写、无 git 依赖（与 probe8/9 的 design 清单解析面独立——design.md 缺失仍可查
++ *     task 卡，反之亦然）。
++ * @param {{ specBase: string, changeName: string }} args
++ * @returns {{applicable: boolean, checkedFiles: number, unclearedFiles: string[], notes: string[]}}
++ */
++export function runProbe10PrefillNoteClearance({ specBase, changeName }) {
++  const out = { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] }
++  if (!specBase || !changeName) {
++    out.notes.push('入参缺失（specBase/changeName）——检测面空')
++    return out
++  }
++  const changeDir = join(specBase, 'changes', changeName)
++  if (!existsSync(changeDir)) {
++    out.notes.push(`变更目录不存在（${changeDir}）`)
++    return out
++  }
++  const candidates = [join(changeDir, 'design.md')]
++  try {
++    const tasksDir = join(changeDir, 'tasks')
++    if (existsSync(tasksDir)) {
++      candidates.push(...readdirSync(tasksDir).filter(n => /^task-.+\.md$/.test(n)).sort().map(n => join(tasksDir, n)))
++    }
++  } catch { /* tasks 目录不可读 → 只检 design.md */ }
++  for (const p of candidates) {
++    if (!existsSync(p)) continue
++    out.checkedFiles++
++    if (hasUnconfirmedPrefill(p)) out.unclearedFiles.push(relative(changeDir, p).split('\\').join('/'))
++  }
++  if (out.checkedFiles === 0) {
++    out.notes.push('无在检文件（design.md 与 tasks/task-*.md 均缺席——纯骨架/中间态）')
++    return out
++  }
++  out.applicable = true
++  return out
++}
++
++
+ const PROBE7_HEADING = '#### 探针 7：验收×测试覆盖矩阵'
+ // execute run id 格式（与 task-review.js isValidExecuteRunId 同口径锚定，防提示词注入/路径穿越）
+ const PROBE7_EXEC_RUN_ID_RE = /^exec-\d{4}-\d{2}-\d{2}-\d{6}(?:-[a-z0-9]{1,8}){0,2}$/
+@@ -2163,6 +2219,16 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+     probe9.notes = [`探针 9 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+   }
+ 
++  // ── 探针 10：预填注清零（error 门；2026-09-18-artifact-prefill task-03——门禁梯度 error 档
++  // 的检测单点：--init 预填本段 + gates.js verify 收尾 error 门 / brainstorm·plan advisory 复跑
++  // 同一实现，不二算。fail-soft 同探针 8/9：异常降级 not-applicable 注记不炸整体。──
++  let probe10 = { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] }
++  try {
++    probe10 = runProbe10PrefillNoteClearance({ specBase, changeName })
++  } catch (e) {
++    probe10.notes = [`探针 10 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
++  }
++
+   // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
+   // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
+   // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
+@@ -2176,7 +2242,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+     }
+   } catch { /* design 读/解析异常 → 空面（fail-soft） */ }
+ 
+-  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, apiFace, consumerHints }
++  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, probe10, apiFace, consumerHints }
+ }
+ 
+ /**
+@@ -2283,6 +2349,9 @@ export function renderVerifyProbesReport(result) {
+   // 探针 9 紧随探针 8；旧 result 无 probe9 键（存量调用方/合成 result）→ applicable=false
+   // 渲染「不适用」行 + notes，零回归（探针 7 兜底口径同款）。
+   L.push(...(renderProbe9Lines(result.probe9 || { applicable: false, javaFileCount: 0, groupCount: 0, inconsistentGroups: [], notes: [] })))
++  // 探针 10 紧随探针 9；旧 result 无 probe10 键（存量调用方/合成 result）→ applicable=false
++  // 渲染「不适用」行 + notes，零回归（探针 8/9 兜底口径同款）。
++  L.push(...(renderProbe10Lines(result.probe10 || { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] })))
+   return L.join('\n')
+ }
+ 
+@@ -2369,6 +2438,31 @@ function renderProbe9Lines(p9) {
+   return L
+ }
+ 
++/**
++ * 渲染探针 10 段（renderProbe9Lines 同构；error 门口径注记随段输出——❌ 面是 verify 完成
++ * 前须清零的死信，不是 advisory 复核面）。汇总行「预填注未清 N 处」的 N 为后续一致性抽查
++ * 锚点扩展留位（verify-postcheck 锚点面归后续任务，本卡只出 producer 侧——probe9 先例同款）。
++ * @param {{applicable: boolean, checkedFiles?: number, unclearedFiles: string[], notes: string[]}} p10
++ * @returns {string[]} 行数组（含段标题）
++ */
++function renderProbe10Lines(p10) {
++  const L = [PROBE10_HEADING]
++  if (!p10 || !p10.applicable) {
++    L.push('- 不适用（design.md 与 tasks/task-*.md 均缺席——纯骨架/中间态，预填注无从在场）')
++    for (const n of (p10 && p10.notes) || []) L.push(`- ℹ️ ${n}`)
++    return L
++  }
++  L.push('<!-- 口径注记：预填注（来源注协议）在场 = 白名单槽未确认（预填≠结论）；删注 = 确认动作。本探针是门禁梯度 error 档——verify --done 时 gate 复跑同源检测，注未清零阻断完成（归档前清零兜底）。已知误报面：散文引用注字面量会命中（如文档描述注协议本身）——核对后真未确认则删注，纯散文则改写措辞，不得删探针段。 -->')
++  if ((p10.unclearedFiles || []).length > 0) {
++    L.push(`- ❌ 预填注未清 ${p10.unclearedFiles.length} 处（error 门——verify 完成前须逐槽核对后删注）：`)
++    for (const f of p10.unclearedFiles) L.push(`- ❌ \`${mdEscapeCell(f, 120)}\` 仍含未删预填注`)
++  } else {
++    L.push(`- ✅ 预填注清零（${p10.checkedFiles ?? 0} 个在检文件无未确认预填）`)
++  }
++  for (const n of p10.notes || []) L.push(`- ℹ️ ${n}`)
++  return L
++}
++
+ // ── 接口验证覆盖矩阵段渲染（task-04 / FR-05 / D-005~D-007）──
+ // 骨架新写路径（generateVerifyResultSkeleton）与缺段补齐（ensureApiCoverageMatrixSection）
+ // 共用单一实现——renderProbe7Lines 先例。不动 probe7 既有矩阵（独立 ## 章节并行存在，口径
+@@ -2437,6 +2531,7 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
+   const p6 = (result && result.probe6) || {}
+   const p8 = (result && result.probe8) || {}
+   const p9 = (result && result.probe9) || {}
++  const p10 = (result && result.probe10) || {}
+   // v2（2026-09-08-ir-verify-facts）：probes 机器段原样；conclusion/tests/requiredEvidence/
+   // runtimeEvidence/factsConsistency 五段是 slot-backfill/实测回填段（D-001@v2），--init 快照
+   // 不落键（writeVerifyFacts 分段合并时保留既有固化段），由 backfillFactsFromMdAndTests 填。
+@@ -2496,6 +2591,13 @@ export function buildVerifyFacts(result, { changeName, now } = {}) {
+           inconsistentGroups: len(p9.inconsistentGroups),
+         }),
+       },
++      probe10: {
++        command,
++        metrics: defined({
++          checkedFiles: num(p10.checkedFiles),
++          unclearedFiles: len(p10.unclearedFiles),
++        }),
++      },
+     },
+   }
+ }
+diff --git a/test/design-facts.test.mjs b/test/design-facts.test.mjs
+index c24f4c4..0566e83 100644
+--- a/test/design-facts.test.mjs
++++ b/test/design-facts.test.mjs
+@@ -549,7 +549,7 @@ console.log('\n=== 6. design-init CLI（骨架落盘接线）===\n')
+   assert(r1.status === 0, `首次生成 exit 0（实际 ${r1.status}，输出：${r1.combined.slice(-150)}）`)
+   const gen = readFileSync(designPath, 'utf8')
+   assert(gen.includes('# 设计文档（Design）— ' + cn), 'design.md H1 含变更名')
+-  assert(gen.includes('| D-001@v1 | （待填覆盖点） | 待确认 |'), '决策追踪表按当前版本预填')
++  assert(gen.includes('| D-001@v1 | （待填覆盖点） | 待确认 (预填：核对后删本注) |'), '决策追踪表按当前版本预填（task-02 接线：行带来源注——D-003 预填≠结论，D-006 裁决改新格式）')
+   assert(gen.includes('## 自审') && gen.includes('## 风险登记'), '十三章节骨架落盘')
+   assert(gen.includes('author: test'), 'author 取 git user.name（makeRepo 配置为 test）')
+ 
+@@ -573,7 +573,7 @@ console.log('\n=== 6. design-init CLI（骨架落盘接线）===\n')
+   assert(r3.status === 0, `--force exit 0（实际 ${r3.status}）`)
+   const forced = readFileSync(designPath, 'utf8')
+   assert(!forced.includes('AGENT FILLED'), '--force 覆盖既有填充内容')
+-  assert(forced.includes('| D-001@v1 | （待填覆盖点） | 待确认 |'), '--force 重生成后追踪表仍预填')
++  assert(forced.includes('| D-001@v1 | （待填覆盖点） | 待确认 (预填：核对后删本注) |'), '--force 重生成后追踪表仍预填（带来源注新格式）')
+   assert(r3.combined.includes('--force 覆盖'), '--force 输出注明覆盖')
+ 
+   console.log('--- 缺 decisions.md → exit 1 + 指引先跑 brainstorm ---')
+diff --git a/test/prefill.test.mjs b/test/prefill.test.mjs
+new file mode 100644
+index 0000000..355ec4c
+--- /dev/null
++++ b/test/prefill.test.mjs
+@@ -0,0 +1,437 @@
++/**
++ * prefill 测试套件（change: 2026-09-18-artifact-prefill，task-04，FR-01/FR-02/FR-03，
++ * D-001@v1 / D-002@v1 / D-003@v1 / D-005@v1）
++ *
++ * 被测对象（task-01 引擎 + task-02 接线 + task-03 门禁的全语义收口）：
++ *   - src/prefill.js 六导出：PREFILL_NOTE / prefillFileChangeList / prefillDecisionTable /
++ *     prefillCardIds / hasUnconfirmedPrefill / runPrefillRefresh（本文件消费全部导出——
++ *     消 check-syntax 的 prefillFileChangeList 死导出项，prefill.js 自身调用不计引用）。
++ *   - src/verify-probes.js 探针 10（runProbe10PrefillNoteClearance + runVerifyProbes/
++ *     renderVerifyProbesReport 的探针 10 输出形态——gates advisory/error 门同源检测面）。
++ *   - src/run/gates.js 门禁梯度双态（CLI 子进程层）：brainstorm --done advisory 不阻断 /
++ *     verify --done 注清零 error 阻断（task-03 接线）。
++ *   - src/index.js 定向生成器回归：design-init 决策追踪表注行 + taskcard ids 直填
++ *     （task-02 接线；test/design-facts.test.mjs L552/L576 同步更新为新格式，此处独立钉住）。
++ *
++ * fixture 全部用临时目录（mkdtempSync / makeRepo），断言兼容 Windows/Linux/macOS：
++ * 行比较在 CRLF 归一后进行（readAll 统一 \r\n → \n），路径断言用正斜杠字面量。
++ */
++import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import {
++  PREFILL_NOTE,
++  prefillFileChangeList,
++  prefillDecisionTable,
++  prefillCardIds,
++  hasUnconfirmedPrefill,
++  runPrefillRefresh,
++} from '../src/prefill.js'
++import {
++  runProbe10PrefillNoteClearance,
++  runVerifyProbes,
++  renderVerifyProbesReport,
++} from '../src/verify-probes.js'
++import { ProgressManager } from '../src/progress.js'
++import { makeRepo, initChange, seedStage, runCLI, runStage, cleanup, report } from './_cli-step-harness.mjs'
++
++const count = { passed: 0, failed: 0, failures: [] }
++const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
++const tmpRoots = []
++const deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
++
++/** CRLF 归一读文件（断言侧行比较统一在 \n 形态做，跨平台行尾不炸）。 */
++function readAll(p) { return readFileSync(p, 'utf8').replace(/\r\n/g, '\n') }
++
++/** 建一个三槽全源的 change fixture（tasks/ + decisions.md + requirements.md 均在场）。 */
++function makeChangeFixture(prefix, { decisions, requirements, design, tasks = {} } = {}) {
++  const root = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(root)
++  const specBase = join(root, '.sillyspec')
++  const changeName = 'demo-change'
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  if (decisions != null) writeFileSync(join(changeDir, 'decisions.md'), decisions)
++  if (requirements != null) writeFileSync(join(changeDir, 'requirements.md'), requirements)
++  if (design != null) writeFileSync(join(changeDir, 'design.md'), design)
++  for (const [name, text] of Object.entries(tasks)) {
++    writeFileSync(join(changeDir, 'tasks', name), text)
++  }
++  return { root, specBase, changeName, changeDir, tasksDir: join(changeDir, 'tasks') }
++}
++
++/** 骨架态 design.md：文件变更清单 + 决策追踪两节均只有表头/分隔行（待预填的空槽）。 */
++const EMPTY_SLOT_DESIGN = [
++  '# 设计文档（Design）— demo-change', '',
++  '## 文件变更清单', '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '',
++  '## 决策追踪', '| 决策 | 覆盖点 | 状态 |', '|---|---|---|', '',
++  '## 风险登记', '',
++].join('\n')
++
++// ═══════════════════════════════════════════════════════════════════════════
++// 1-3 组·三槽直测（纯函数：形态 / NEW: 保形 / 非法跳过 / 排序 / 缺源空）
++// ═══════════════════════════════════════════════════════════════════════════
++console.log('\n=== 1. 槽一 prefillFileChangeList：并集/NEW: 保形/非法跳过/来源注 ===\n')
++{
++  const fx = makeChangeFixture('pf-slot1-', {
++    tasks: {
++      // 块列表形态 + NEW: 前缀 + 全谱非法条目（glob/目录前缀/引号/绝对路径/空剥）
++      'task-01.md': [
++        '---', 'id: task-01', 'target_files:', '  - NEW:src/new.js', '  - src/existing.js',
++        '  - src/glob/*', '  - src/dir/', '  - NEW:', '---', '', 'body', '',
++      ].join('\n'),
++      // inline [] 形态 + 无前缀声明同一文件（NEW: 并集保形判据）+ 反斜杠/./ 归一 + 非法谱
++      'task-02.md': [
++        '---', 'id: task-02', 'target_files: [src/shared.js, src/new.js, "src/quoted.js", /abs/path.js, C:/win/abs.js, ./norm.js, src\\win.js]', '---', '', 'body', '',
++      ].join('\n'),
++    },
++  })
++  const rows = prefillFileChangeList({ tasksDir: fx.tasksDir })
++  assert(deepEq(rows, [
++    `| 修改 | norm.js | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`,
++    `| 修改 | src/existing.js | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`,
++    `| 新增 | NEW:src/new.js | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`,
++    `| 修改 | src/shared.js | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`,
++    `| 修改 | src/win.js | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`,
++  ]), `清单=并集去重排序（NEW: 并集保形 + ./ 与反斜杠归一；got ${JSON.stringify(rows)}）`)
++  assert(rows.every((r) => r.includes(PREFILL_NOTE)), '来源注协议：所有清单行行尾带 PREFILL_NOTE')
++  assert(rows.some((r) => r.startsWith('| 新增 | NEW:src/new.js |')), 'NEW: 保形：任一卡声明 NEW: → 输出新增+NEW: 前缀（他卡无前缀声明不丢失待建标记）')
++  assert(!rows.some((r) => r.includes('glob') || r.includes('dir/') || r.includes('quoted') || r.includes('abs') || r.includes('C:')),
++    '非法条目（glob/目录前缀/引号/绝对路径/空剥）全部跳过不进清单')
++  assert(deepEq(prefillFileChangeList({ tasksDir: join(fx.root, 'no-such-dir') }), []), 'tasksDir 缺失 → []（槽留空，骨架行为不变——design 兼容策略）')
++  assert(deepEq(prefillFileChangeList({}), []), '入参缺省 → []（fail-soft 不抛）')
++}
++
++console.log('\n=== 2. 槽二 prefillDecisionTable：canonical 标题/排序/非 canonical 不收 ===\n')
++{
++  const fx = makeChangeFixture('pf-slot2-', {
++    decisions: [
++      '# 决策记录', '',
++      '## D-002@v1 排序判据（数字升序而非字典序——D-010 须排在它后）', '',
++      '## D-010@v1 字典序陷阱条目', '',
++      '## D-001@v2 当前版本', '',
++      '## D-001@v1 旧版条目（canonical 全收，不筛 superseded——与骨架生成器口径独立）', '',
++      '## D-001@v2 重复标题（去重判据）', '',
++      '### D-020@v1 手写漂移层级（### 级不收）', '',
++      '## D-030 无版本（不收）', '',
++      '## D-040@v2', '',
++    ].join('\n'),
++  })
++  const rows = prefillDecisionTable({ changeDir: fx.changeDir })
++  assert(deepEq(rows.map((r) => r.split(' | ')[0].replace('| ', '')), ['D-001@v1', 'D-001@v2', 'D-002@v1', 'D-010@v1', 'D-040@v2']),
++    `D 编号数字升序、同号版本升序、重复去重；### 级/无版本不收（got ${JSON.stringify(rows)}）`)
++  assert(rows.every((r) => r === `| ${r.split(' | ')[0].replace('| ', '')} | （待填覆盖点） | 待确认 ${PREFILL_NOTE} |`),
++    '表行三列对齐 design 骨架「决策|覆盖点|状态」：状态列=待确认+来源注')
++  assert(rows.every((r) => r.includes(PREFILL_NOTE)), '来源注协议：所有决策表行带 PREFILL_NOTE')
++  const fxEmpty = makeChangeFixture('pf-slot2-empty-')
++  assert(deepEq(prefillDecisionTable({ changeDir: fxEmpty.changeDir }), []), 'decisions.md 缺失 → []')
++}
++
++console.log('\n=== 3. 槽三 prefillCardIds：FR/D 抽取/排序/域式 id 不误收/缺源留空 ===\n')
++{
++  const fx = makeChangeFixture('pf-slot3-', {
++    requirements: [
++      '# 需求', '',
++      '### FR-02: 数字排序判据', '',
++      '#### FR-01: 标题级 #2~#6 容手写漂移', '',
++      '### FR-10: 字典序陷阱（FR-10 须排在 FR-02 后）', '',
++      '### FR-core-engine-001: 全局域式 id（无「FR-紧邻数字」形态，不误收）', '',
++      '正文行提及 FR-99 不在标题（不收）', '',
++    ].join('\n'),
++    decisions: '## D-002@v1 b\n\n## D-001@v2 a\n\n## D-001@v1 a0\n',
++  })
++  const ids = prefillCardIds({ changeDir: fx.changeDir })
++  assert(deepEq(ids.requirementIds, ['FR-01', 'FR-02', 'FR-10']),
++    `FR 按数字升序（非字典序）、域式 FR-<域>-NNN 不误收（got ${JSON.stringify(ids.requirementIds)}）`)
++  assert(deepEq(ids.decisionIds, ['D-001@v1', 'D-001@v2', 'D-002@v1']), 'D 按编号+版本升序')
++  const fxPart = makeChangeFixture('pf-slot3-part-', { requirements: '### FR-01: x\n' })
++  const partIds = prefillCardIds({ changeDir: fxPart.changeDir })
++  assert(deepEq(partIds.decisionIds, []), 'decisions.md 缺失 → decisionIds 留空（生成器侧按在场文件预填）')
++  const fxNone = makeChangeFixture('pf-slot3-none-')
++  const noneIds = prefillCardIds({ changeDir: fxNone.changeDir })
++  assert(deepEq(noneIds, { requirementIds: [], decisionIds: [] }), '两源全缺 → 双空数组（不抛）')
++}
++
++// ═══════════════════════════════════════════════════════════════════════════
++// 4 组·refresh 幂等（同输入二次重放：计数逐字段一致 + 产物零改写）
++// ═══════════════════════════════════════════════════════════════════════════
++console.log('\n=== 4. runPrefillRefresh：三槽重放 + 幂等契约 ===\n')
++{
++  const fx = makeChangeFixture('pf-refresh-', {
++    decisions: '## D-001@v1 a\n',
++    requirements: '### FR-01: x\n\n### FR-02: y\n',
++    design: EMPTY_SLOT_DESIGN,
++    tasks: {
++      // 占位双槽（直填路径）+ 块列表 target_files（喂槽一并集源）
++      'task-01.md': [
++        '---', 'id: task-01', 'requirement_ids: [FR-XX]', 'decision_ids: [D-XXX@vN]',
++        'target_files:', '  - NEW:src/a.js', '---', '', 'body', '',
++      ].join('\n'),
++      // 人工 requirement_ids（无注=确认态）+ decision_ids 字段缺失（存量卡补写路径）+ CRLF 行尾（EOL 保真判据）
++      'task-02.md': '---\r\nid: task-02\r\nrequirement_ids: [FR-999]\r\ntarget_files: [src/b.js]\r\n---\r\n\r\nbody2\r\n',
++    },
++  })
++  const r1 = await runPrefillRefresh({ cwd: fx.root, specBase: fx.specBase, changeName: fx.changeName })
++  assert(r1.filled === 5 && r1.skipped === 0 && r1.confirmed === 1,
++    `首轮计数 filled=5（清单/决策表/task-01 双 ids/task-02 缺失字段）+confirmed=1（task-02 人工值）（got ${JSON.stringify({ filled: r1.filled, skipped: r1.skipped, confirmed: r1.confirmed })}）`)
++  const designAfter1 = readAll(join(fx.changeDir, 'design.md'))
++  const t1After1 = readAll(join(fx.changeDir, 'tasks', 'task-01.md'))
++  const t2After1 = readAll(join(fx.changeDir, 'tasks', 'task-02.md'))
++  assert(designAfter1.includes(`| 新增 | NEW:src/a.js | 预填自 task 卡 target_files 并集 ${PREFILL_NOTE} |`),
++    '槽一落盘：design.md 清单节追加预填行（NEW: 保形）')
++  assert(designAfter1.includes(`| D-001@v1 | （待填覆盖点） | 待确认 ${PREFILL_NOTE} |`),
++    '槽二落盘：design.md 决策追踪节追加预填行（状态=待确认+注）')
++  assert(t1After1.includes(`requirement_ids: [FR-01, FR-02]  # ${PREFILL_NOTE}`)
++    && t1After1.includes(`decision_ids: [D-001@v1]  # ${PREFILL_NOTE}`),
++    '槽三落盘：占位 [FR-XX]/[D-XXX@vN] 直填为推导值+注（行格式与 taskcard 直填/refresh 重放一致）')
++  assert(t2After1.includes('requirement_ids: [FR-999]') && !t2After1.includes(`requirement_ids: [FR-999]  # ${PREFILL_NOTE}`),
++    'D-005 已确认跳过：task-02 人工 requirement_ids（注不在场）不被覆盖')
++  assert(t2After1.includes(`decision_ids: [D-001@v1]  # ${PREFILL_NOTE}`),
++    '存量卡字段缺失 → 闭合 --- 前补写预填行')
++  assert(readFileSync(join(fx.changeDir, 'tasks', 'task-02.md'), 'utf8').includes('\r\n'),
++    'EOL 保真：CRLF 原文的卡重放后仍 CRLF（Windows 兼容）')
++
++  const r2 = await runPrefillRefresh({ cwd: fx.root, specBase: fx.specBase, changeName: fx.changeName })
++  assert(deepEq([r1.filled, r1.skipped, r1.confirmed], [r2.filled, r2.skipped, r2.confirmed]),
++    `幂等契约：二次重放 { filled, skipped, confirmed } 逐字段一致（r2=${JSON.stringify({ filled: r2.filled, skipped: r2.skipped, confirmed: r2.confirmed })}）`)
++  const unchanged = readAll(join(fx.changeDir, 'design.md')) === designAfter1
++    && readAll(join(fx.changeDir, 'tasks', 'task-01.md')) === t1After1
++    && readAll(join(fx.changeDir, 'tasks', 'task-02.md')) === t2After1
++  assert(unchanged, '幂等契约：二次重放三产物字节零改写（已在位不重复追加/不改写）')
++
++  const rMiss = await runPrefillRefresh({ cwd: fx.root, specBase: fx.specBase, changeName: 'no-such' })
++  assert(rMiss.filled === 0 && rMiss.skipped === 0 && rMiss.confirmed === 0 && rMiss.lines.some((l) => l.includes('变更目录不存在')),
++    '变更目录不存在：三计数归零+告警行（fail-soft 不抛）')
++}
++
++// ═══════════════════════════════════════════════════════════════════════════
++// 5 组·已确认跳过（人工内容保护：design 人工行 / ids 人工值全 confirmed）
++// ═══════════════════════════════════════════════════════════════════════════
++console.log('\n=== 5. runPrefillRefresh：已确认槽（注已删=人工内容）跳过不覆盖 ===\n')
++{
++  const humanDesign = [
++    '# 设计文档（Design）— demo-change', '',
++    '## 文件变更清单', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++    '| 修改 | src/human.js | 人工行（注已删=确认） |', '',
++    '## 决策追踪', '| 决策 | 覆盖点 | 状态 |', '|---|---|---|',
++    '| D-001@v1 | 人工覆盖点 | 已落实 |', '',
++  ].join('\n')
++  const humanTask = '---\nid: task-01\nrequirement_ids: [FR-007]\ndecision_ids: [D-009@v2]\ntarget_files: [src/a.js]\n---\n\nbody\n'
++  const fx = makeChangeFixture('pf-confirmed-', {
++    decisions: '## D-001@v1 a\n', requirements: '### FR-01: x\n',
++    design: humanDesign, tasks: { 'task-01.md': humanTask },
++  })
++  const before = { d: readAll(join(fx.changeDir, 'design.md')), t: readAll(join(fx.changeDir, 'tasks', 'task-01.md')) }
++  const r = await runPrefillRefresh({ cwd: fx.root, specBase: fx.specBase, changeName: fx.changeName })
++  assert(r.filled === 0 && r.skipped === 0 && r.confirmed === 4,
++    `全人工槽 confirmed=4（design 两表槽+task-01 双 ids）、零写入（got ${JSON.stringify({ filled: r.filled, skipped: r.skipped, confirmed: r.confirmed })}）`)
++  assert(readAll(join(fx.changeDir, 'design.md')) === before.d, 'design.md 人工表行原样保留（字节不变）')
++  const tAfter = readAll(join(fx.changeDir, 'tasks', 'task-01.md'))
++  assert(tAfter.includes('requirement_ids: [FR-007]') && tAfter.includes('decision_ids: [D-009@v2]') && !tAfter.includes(PREFILL_NOTE),
++    'task 卡人工 ids 值（FR-007/D-009@v2 非推导值）不被覆盖、不注入注')
++  assert(r.lines.every((l) => l.includes('确认态跳过') || l.includes('人工')), '每槽结果行注明人工内容保护语义')
++}
++
++// ═══════════════════════════════════════════════════════════════════════════
++// 6 组·注清零双态（hasUnconfirmedPrefill + 探针 10 输出形态 + 门双态 CLI 层）
++// ═══════════════════════════════════════════════════════════════════════════
++console.log('\n=== 6a. hasUnconfirmedPrefill + 探针 10（runProbe10PrefillNoteClearance）===\n')
++{
++  const fx = makeChangeFixture('pf-probe10-', {
++    design: `# d\n\n## 决策追踪\n| 决策 | 覆盖点 | 状态 |\n|---|---|---|\n| D-001@v1 | x | 待确认 ${PREFILL_NOTE} |\n`,
++    tasks: {
++      'task-01.md': `---\nid: task-01\nrequirement_ids: [FR-001]  # ${PREFILL_NOTE}\n---\n`,
++      'task-02.md': '---\nid: task-02\nrequirement_ids: [FR-001]\n---\n',
++    },
++  })
++  const withNote = join(fx.changeDir, 'design.md')
++  const cleanFile = join(fx.changeDir, 'tasks', 'task-02.md')
++  assert(hasUnconfirmedPrefill(withNote) === true, '注在场 → true（未确认）')
++  assert(hasUnconfirmedPrefill(cleanFile) === false, '注不在场 → false（确认态）')
++  assert(hasUnconfirmedPrefill(join(fx.changeDir, 'no-such.md')) === false, '文件缺失 → false（无注可删不误报）')
++
++  const p = runProbe10PrefillNoteClearance({ specBase: fx.specBase, changeName: fx.changeName })
++  assert(p.applicable === true && p.checkedFiles === 3, `在检文件 3（design.md+两 task 卡）（got ${JSON.stringify(p)}）`)
++  assert(deepEq(p.unclearedFiles, ['design.md', 'tasks/task-01.md']),
++    `unclearedFiles=changeDir 相对正斜杠、design 在前 task 卡按名序（got ${JSON.stringify(p.unclearedFiles)}）`)
++
++  const probes = runVerifyProbes({ cwd: fx.root, changeName: fx.changeName, specDir: fx.specBase })
++  const md = renderVerifyProbesReport(probes)
++  const p10sec = md.slice(md.indexOf('#### 探针 10'))
++  assert(p10sec.includes('#### 探针 10：预填注清零（error 门）'), '探针 10 段标题（error 门口径）')
++  assert(p10sec.includes('❌ 预填注未清 2 处') && p10sec.includes('`design.md` 仍含未删预填注') && p10sec.includes('`tasks/task-01.md` 仍含未删预填注'),
++    '❌ 面：未清文件逐名列出（verify-result.md 探针段形态）')
++
++  // 清零态：删净注 → 探针 ✅ 过
++  writeFileSync(withNote, readAll(withNote).split(PREFILL_NOTE).join('').replace('待确认  |', '已落实 |'))
++  writeFileSync(join(fx.changeDir, 'tasks', 'task-01.md'), `---\nid: task-01\nrequirement_ids: [FR-001]\n---\n`)
++  const pClean = runProbe10PrefillNoteClearance({ specBase: fx.specBase, changeName: fx.changeName })
++  assert(pClean.applicable === true && pClean.unclearedFiles.length === 0, '注删净 → unclearedFiles 空（error 门过）')
++  const mdClean = renderVerifyProbesReport(runVerifyProbes({ cwd: fx.root, changeName: fx.changeName, specDir: fx.specBase }))
++  const secClean = mdClean.slice(mdClean.indexOf('#### 探针 10'))
++  assert(secClean.includes('✅ 预填注清零'), '✅ 面形态（删净过门）')
++
++  const pMiss = runProbe10PrefillNoteClearance({ specBase: fx.specBase, changeName: 'no-such' })
++  assert(pMiss.applicable === false && pMiss.notes.length > 0, '变更目录缺失 → 不适用+注记（纯骨架零红门禁）')
++}
++
++console.log('\n=== 6b. 门双态（CLI 层）：brainstorm --done advisory / verify --done error ===\n')
++// ── brainstorm --done：注在场 → advisory warning 不阻断（旧路径零新硬门）──
++const BRAINSTORM_STEPS = ['进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案', '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件']
++async function seedBrainstormToLast(cwd, specBase, cn) {
++  const pm = await initChange(cwd, specBase, cn)
++  runCLI(['--dir', cwd, 'run', 'brainstorm', '--change', cn], { cwd })
++  return seedStage(pm, cwd, cn, 'brainstorm',
++    BRAINSTORM_STEPS.map((name, i) => ({ name, status: i < BRAINSTORM_STEPS.length - 1 ? 'completed' : 'pending' })))
++}
++function writeCompleteArtifacts(specBase, cn, cwd) {
++  const changeDir = join(specBase, 'changes', cn)
++  writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\n\n## 不在范围内\n无\n')
++  writeFileSync(join(changeDir, 'requirements.md'), '# Requirements\n\n- FR-001: 模块域核验\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
++  writeFileSync(join(changeDir, 'design.md'),
++    `# 设计文档（Design）— ${cn}\n\n## 背景\n决策模块域需核验。\n\n## 总体方案\ndesign-facts 纯函数核验。\n\n## 决策\nD-001@v1: 模块域登记。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/a/x.js | a 改动 |\n\n## 风险登记\n低风险。\n\n## 自审\n已核对。\n`)
++  writeFileSync(join(changeDir, 'decisions.md'), '## D-001@v1 域声明\n- type: architecture\n- status: confirmed\n- 模块域: mod-a\n')
++  mkdirSync(join(cwd, 'src', 'a'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'a', 'x.js'), '// fixture stub')
++  const mapDir = join(specBase, 'docs', 'pfmap', 'modules')
++  mkdirSync(mapDir, { recursive: true })
++  writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  mod-a:\n    paths:\n      - src/a/\n')
++}
++{
++  const { cwd, specBase } = makeRepo('pf-gate-adv-')
++  const cn = '2026-09-18-pf-adv'
++  await seedBrainstormToLast(cwd, specBase, cn)
++  writeCompleteArtifacts(specBase, cn, cwd)
++  mkdirSync(join(specBase, 'changes', cn, 'tasks'), { recursive: true })
++  writeFileSync(join(specBase, 'changes', cn, 'tasks', 'task-01.md'), `---\nid: task-01\nrequirement_ids: [FR-001]  # ${PREFILL_NOTE}\n---\n`)
++  const r = runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认' })
++  assert(r.status === 0, `注在场 --done exit 0（advisory 不阻断；实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
++  assert(r.combined.includes('⚠️ 预填注未清') && r.combined.includes('tasks/task-01.md'),
++    'advisory 文案：点名列出未清文件+核对语义')
++  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
++  assert(after.stages.brainstorm.status === 'completed', 'advisory 路径阶段正常 completed（忘删注=提示非阻断）')
++
++  // 清零态：无注 → 无 warning 正常完成
++  const { cwd: cwd2, specBase: sb2 } = makeRepo('pf-gate-adv-clean-')
++  const cn2 = '2026-09-18-pf-adv-clean'
++  await seedBrainstormToLast(cwd2, sb2, cn2)
++  writeCompleteArtifacts(sb2, cn2, cwd2)
++  mkdirSync(join(sb2, 'changes', cn2, 'tasks'), { recursive: true })
++  writeFileSync(join(sb2, 'changes', cn2, 'tasks', 'task-01.md'), '---\nid: task-01\nrequirement_ids: [FR-001]\n---\n')
++  const r2 = runStage('brainstorm', cn2, cwd2, { done: true, output: '生成规范完成', answer: '确认' })
++  assert(r2.status === 0 && !r2.combined.includes('预填注未清'), '注删净 → 无 advisory 噪音、正常完成')
++}
++// ── verify --done：注在场 → error 阻断（归档前注清零收口）；删净 → 过 ──
++const VERIFY_STEPS = ['状态检查', '加载规范并锚定', '逐项检查任务', '对照设计检查', '任务蓝图验收', '运行测试和质量扫描', '输出验证报告']
++async function seedVerifyToLast(cwd, specBase, cn) {
++  const pm = await initChange(cwd, specBase, cn)
++  try {
++    const db = pm._ensureDB(cwd)
++    db.getDb().prepare("UPDATE changes SET created_at = '2026-01-01T00:00:00.000Z' WHERE name = ?").run(cn)
++  } catch { /* 存量豁免回填失败不阻断（ir-hardening 同款 fail-open） */ }
++  runCLI(['--dir', cwd, 'run', 'verify', '--change', cn], { cwd })
++  return seedStage(pm, cwd, cn, 'verify', VERIFY_STEPS.map((name, i) => ({ name, status: i < VERIFY_STEPS.length - 1 ? 'completed' : 'pending' })))
++}
++function writeVerifyDocs(changeDir, extraDesign = '') {
++  writeFileSync(join(changeDir, 'design.md'),
++    '# Design: 列表排序\n\n## 背景\n列表需默认最新在前。\n\n## 总体方案\nservice 兜底。\n\n## 决策\nD-001@v1: 直接改。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|------|---------|------|\n| 修改 | src/list.js | 排序 |\n' + extraDesign)
++  writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
++  writeFileSync(join(changeDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n所有任务通过。\n')
++}
++{
++  const { cwd, specBase } = makeRepo('pf-gate-err-')
++  const cn = '2026-09-18-pf-err'
++  await seedVerifyToLast(cwd, specBase, cn)
++  writeVerifyDocs(join(specBase, 'changes', cn), `\n<!-- 槽状态：待确认 ${PREFILL_NOTE} -->\n`)
++  const r = runStage('verify', cn, cwd, { done: true, output: '报告已输出' })
++  assert(r.combined.includes('❌ verify 阶段被阻断：预填注清零校验未过'),
++    `注在场 → error 阻断（输出尾：${r.combined.slice(-150)}）`)
++  assert(r.combined.includes('design.md') && r.combined.includes('删注=确认动作'),
++    'error 文案：点名未清文件+删注=确认动作指引')
++  const after = await new ProgressManager({ specDir: specBase }).read(cwd, cn)
++  assert(after.stages.verify.status !== 'completed' && after.stages.verify.steps[after.stages.verify.steps.length - 1].status === 'pending',
++    '阻断回滚：阶段不 completed、末步回退 pending（归档前置守死）')
++
++  const { cwd: cwd2, specBase: sb2 } = makeRepo('pf-gate-err-clean-')
++  const cn2 = '2026-09-18-pf-err-clean'
++  await seedVerifyToLast(cwd2, sb2, cn2)
++  writeVerifyDocs(join(sb2, 'changes', cn2))
++  const r2 = runStage('verify', cn2, cwd2, { done: true, output: '报告已输出' })
++  assert(r2.status === 0 && r2.combined.includes('验证通过'), '注删净 → verify 正常完成（error 门过）')
++  const after2 = await new ProgressManager({ specDir: sb2 }).read(cwd2, cn2)
++  assert(after2.stages.verify.status === 'completed', '清零态阶段 completed')
++}
++
++// ═══════════════════════════════════════════════════════════════════════════
++// 7 组·定向生成器回归（design-init 决策表注行 / taskcard ids 直填三态）
++// ═══════════════════════════════════════════════════════════════════════════
++console.log('\n=== 7. 定向生成器回归：design-init 注行 + taskcard ids 直填 ===\n')
++{
++  // design-init：决策追踪表行带来源注（task-02 接线；design-facts L552/L576 同格式）
++  const { cwd, specBase } = makeRepo('pf-gen-design-')
++  const cn = '2026-09-18-pf-gen-design'
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'decisions.md'), '## D-001@v1 采用骨架生成\n- type: architecture\n- status: confirmed\n')
++  const r1 = runCLI(['--dir', cwd, 'design-init', '--change', cn], { cwd })
++  assert(r1.status === 0, `design-init exit 0（实际 ${r1.status}，输出：${r1.combined.slice(-150)}）`)
++  const gen = readAll(join(changeDir, 'design.md'))
++  assert(gen.includes(`| D-001@v1 | （待填覆盖点） | 待确认 ${PREFILL_NOTE} |`),
++    '决策追踪表预填行带来源注（D-003 预填≠结论）')
++  assert(!gen.includes('| D-001@v1 | （待填覆盖点） | 待确认 |'),
++    '无裸「待确认」行残留（骨架旧行形态被预填行整体替换）')
++  const r2 = runCLI(['--dir', cwd, 'design-init', '--change', cn, '--force'], { cwd })
++  assert(r2.status === 0 && readAll(join(changeDir, 'design.md')).includes(`| D-001@v1 | （待填覆盖点） | 待确认 ${PREFILL_NOTE} |`),
++    '--force 重生成后注行仍在（幂等）')
++}
++{
++  // taskcard：源在场 → ids 直填+注；源缺 → 留空+提示行；--set 显式覆盖 → 预填不碰
++  const { cwd, specBase } = makeRepo('pf-gen-card-')
++  const cn = '2026-09-18-pf-gen-card'
++  const changeDir = join(specBase, 'changes', cn)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n- [ ] task-02: 改 b\n- [ ] task-03: 改 c\n')
++  writeFileSync(join(changeDir, 'requirements.md'), '# 需求\n\n### FR-001: x\n\n### FR-02: y\n')
++  writeFileSync(join(changeDir, 'decisions.md'), '## D-001@v1 a\n')
++  const r = runCLI(['--dir', cwd, 'taskcard', cn, '--all'], { cwd })
++  assert(r.status === 0, `taskcard --all exit 0（实际 ${r.status}，输出：${r.combined.slice(-200)}）`)
++  const card = readAll(join(changeDir, 'tasks', 'task-01.md'))
++  assert(card.includes(`requirement_ids: [FR-001, FR-02]  # ${PREFILL_NOTE}`) && card.includes(`decision_ids: [D-001@v1]  # ${PREFILL_NOTE}`),
++    '源在场 → 占位 [FR-XX]/[D-XXX@vN] 直填推导值+来源注（行格式与 refresh 重放逐字一致）')
++  assert(!card.includes('[FR-XX]') && !card.includes('[D-XXX@vN]'), '占位字面量零残留（plan --done 硬校验面不遗留）')
++  assert(r.combined.includes('ids 预填：requirement_ids [FR-001, FR-02] / decision_ids [D-001@v1]'),
++    'CLI 汇总行透出预填值+核对语义')
++
++  const { cwd: cwd2, specBase: sb2 } = makeRepo('pf-gen-card-empty-')
++  const cn2 = '2026-09-18-pf-gen-card-empty'
++  const cd2 = join(sb2, 'changes', cn2)
++  mkdirSync(cd2, { recursive: true })
++  writeFileSync(join(cd2, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
++  const r2 = runCLI(['--dir', cwd2, 'taskcard', cn2, '--all'], { cwd: cwd2 })
++  assert(r2.status === 0, `无源 taskcard exit 0（实际 ${r2.status}）`)
++  const card2 = readAll(join(cd2, 'tasks', 'task-01.md'))
++  assert(card2.includes('requirement_ids: []  # (预填源未就绪：plan 阶段后跑 prefill-refresh)')
++    && card2.includes('decision_ids: []  # (预填源未就绪：plan 阶段后跑 prefill-refresh)'),
++    '源未就绪 → 空数组+提示行（D-005：plan 阶段后 prefill-refresh 补齐）')
++
++  const { cwd: cwd3, specBase: sb3 } = makeRepo('pf-gen-card-set-')
++  const cn3 = '2026-09-18-pf-gen-card-set'
++  const cd3 = join(sb3, 'changes', cn3)
++  mkdirSync(cd3, { recursive: true })
++  writeFileSync(join(cd3, 'tasks.md'), '# Tasks\n\n- [ ] task-01: 改 a\n')
++  writeFileSync(join(cd3, 'requirements.md'), '### FR-001: x\n')
++  const r3 = runCLI(['--dir', cwd3, 'taskcard', cn3, '--all', '--set', 'requirement_ids=[FR-009]'], { cwd: cwd3 })
++  assert(r3.status === 0, `--set taskcard exit 0（实际 ${r3.status}）`)
++  const card3 = readAll(join(cd3, 'tasks', 'task-01.md'))
++  assert(card3.includes("requirement_ids: '[FR-009]'") && !card3.includes(`requirement_ids: '[FR-009]'  # ${PREFILL_NOTE}`),
++    '--set 显式覆盖优先：占位字面量已不在 → 预填改写不触碰（人工注入值保形）')
++  assert(card3.includes('decision_ids: []  # (预填源未就绪：plan 阶段后跑 prefill-refresh)'),
++    '--set 未覆盖的字段照常走直填/提示行逻辑（豁免只限被覆盖字段，非整体跳过）')
++}
++
++// ═══════════════════════════════════════════════════════════════════════════
++// 收尾
++// ═══════════════════════════════════════════════════════════════════════════
++for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
++cleanup()
++report(count.passed, count.failed, count.failures)

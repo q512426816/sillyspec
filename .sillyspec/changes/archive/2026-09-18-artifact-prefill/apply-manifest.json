@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-18-artifact-prefill",
+  "appliedAt": "2026-09-18T17:13:10.984Z",
+  "baseHash": "389d8fc6198632d1ef4f09c6fba9df9c999d7332",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "b13e60c6f78f72b0ca9e411a5bc695d53f80217084fba151deeba34e801821e2"
+    },
+    {
+      "path": "docs/sillyspec/architecture-4a.md",
+      "sha256": "61dc0e353d2e6f536ba4db6e1338ca53b200f4c0e359f2369fb8ab64f85170c1"
+    },
+    {
+      "path": "docs/sillyspec/cost-baseline-2026-09-18.md",
+      "sha256": "a539f8d536662c27466ef6a213f54be22bbdaa865bed3cc5750680cecb3519e3"
+    },
+    {
+      "path": "docs/sillyspec/file-lifecycle.md",
+      "sha256": "d72051d279008aa47606979512e231e5249180a943e7ada37c43929eddee1247"
+    },
+    {
+      "path": "docs/sillyspec/multi-agent-review-2026-08-08.md",
+      "sha256": "b80677caa3a188e8d7ba0228d8a43ac8261e627431de0213f6d867766202cf75"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "sha256": "b3f309b7e1a89be63b6e004f4f15e9213d6046c6b179925d9e4907228cbb4693"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "sha256": "25897de5715e8b59cfce145ba08fd5e467ac36eb74099c17274819e7aae918b9"
+    },
+    {
+      "path": "docs/sillyspec/review-2026-08-08.md",
+      "sha256": "17c1d399717e53ca8467885ad0f4c79d19654a6a0e0be4bcea662634e8bc51b7"
+    },
+    {
+      "path": "docs/sillyspec/review-2026-08-09.md",
+      "sha256": "ceb6158779a59cba795a27d5a08ec35657b19e2cf954fa575d6a203b0e9cbd7e"
+    },
+    {
+      "path": "docs/sillyspec/self-audit-2026-08-16.md",
+      "sha256": "0c058fd3045efafd6c24358ce14d044bb22c36331e3d9a138df1911d0f1e6b3e"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "128ca3974771215991ddc4b577cb893df61760b6cc6f54da4b34cf21fd3a6a7e"
+    },
+    {
+      "path": "src/prefill.js",
+      "sha256": "63e5ad14e9f22f24c1892d6f2c5cbda62e30105855bf8c4bdbfe8d8134e66949"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "ae4da1ed3ca396121dfc4f99a623b3eced46d41989a21a577b1467f1d963d920"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "c429c8f52cd17c02e3261a55493dd8be39935efe9c449806d5baa30b950fdd3f"
+    },
+    {
+      "path": "test/design-facts.test.mjs",
+      "sha256": "8cc0048e245f769293b00500445802aa0556f9a0621509706eb674e04164edcc"
+    },
+    {
+      "path": "test/prefill.test.mjs",
+      "sha256": "6cb0ee280bad55e74bc891fd8a7ca8d92ac9bb4c99809e8fd43960b22da260fe"
+    }
+  ]
+}
