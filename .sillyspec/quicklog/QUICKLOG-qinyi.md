@@ -416,3 +416,14 @@
 根因：buildDecisionChainMatrix 解析 decision_ids/requirement_ids 流式数组 token 只 trim 不剥引号：引号写法是合法 YAML 且 agent Edit 填值主流形态，带引号字面量与 decisions.md 裸 id 永不相等，矩阵静默全量 ⚠️ 未闭环/未映射（真风险被噪声淹没）；2026-09-18 回放实验五条 D 全误报实证
 方案：src/verify-probes.js token 归一化剥首尾成对引号（单/双都收，行为只放宽不收紧，未引号卡零变化）；test/verify-quality-scan.test.mjs 补单/双/混合引号三形态+反向钉（无回指 D 仍 ⚠️，漏报检测不失效）；引号策略裁决入档 core-engine 边车——与 plan-postcheck target_files 显式拒引号的严格口径有意并存，矩阵侧禁静默错优先
 结果：verify-quality-scan.test.mjs 7/7 绿（先红后绿钉住原 bug）；回放归档夹具复跑五行全闭环（修复前五全 ⚠️）；npm run lint 过（680 文件，未引用导出 0）；local.yaml cli-core 模块测试列表补入本测试文件（gitignored）
+
+## ql-20260919-004-cbd8 | 2026-09-19 07:03:13 | 补 verify 门快照层回归钉——native 收养态 untracked 新文件内容进快照（回放摩擦#5 永久钉）
+状态：已完成
+关联变更：（无）
+文件：
+- test/verify-gate-snapshot.test.mjs（追加 native 收养态回归钉（回放摩擦#5：untracked 新文件内容进快照））
+- .sillyspec/docs/sillyspec/modules/runtime.changelog.md（登记 ql-20260919-004-cbd8）
+需求：补 verify 门快照层回归钉——native 收养态 untracked 新文件内容进快照（回放摩擦#5 永久钉）
+根因：摩擦#5 修复链已在 e47ab3a（ql-20260918-010）resolve 层落地并经 tmp 仓端到端实证（untracked b.js 内容进快照），但回归钉只落在 resolve 层（§5/§5b）——快照层端到端链条靠隐式维持，未来重构 resolveVerifyChangedFiles 可能静默再断
+方案：test/verify-gate-snapshot.test.mjs 追加第 4 测：meta 缺席+cwd 即 linked worktree（收养形态）跑 createVerifyGateSnapshot，断言 untracked 新文件内容进快照（ERR_MODULE_NOT_FOUND 守卫）+未提交修改 overlay 工作区版+sourceRoot 不切源；runtime.changelog.md 登记 ql-20260919-004-cbd8
+结果：node --test test/verify-gate-snapshot.test.mjs 4/4 绿（新增钉通过、既有 3 测零回归）；无 src 改动（测试-only）

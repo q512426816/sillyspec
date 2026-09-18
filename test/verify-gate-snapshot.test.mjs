@@ -120,3 +120,24 @@ test('非 git / 无变更文件集 → null（fallback 主仓现行为）', asyn
   assert.equal(await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase: join(proj, '.sillyspec') }), null,
     '无变更文件集 → null（无从定向）')
 })
+
+test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked 新文件内容进快照——回放摩擦#5 永久钉', async () => {
+  const proj = mk('vgs-adopt-')
+  const { specBase, wtDir } = setupBase(proj, 'native')
+  // 回放 2026-09-18 摩擦#5 形态：worktree 收养但不写 meta.json，verify --done 在 worktree 内跑。
+  // 修复前（e47ab3a 之前）untracked 新文件不进 resolveVerifyChangedFiles 文件集 → 快照 overlay
+  // 漏拷 → 快照内 import 该文件 ERR_MODULE_NOT_FOUND 裸崩；修复链=native 分支 porcelain
+  // --untracked-files=all 并入（resolve 层 §5/§5b 已钉，本测试钉快照层端到端）
+  rmSync(join(specBase, '.runtime', 'worktrees', 'c1', 'meta.json'), { force: true })
+  const snap = await createVerifyGateSnapshot({ cwd: wtDir, changeName: 'c1', specBase: join(wtDir, '.sillyspec') })
+  assert.ok(snap, 'native 收养态快照可用（文件集经 native 分支含 untracked）')
+  try {
+    assert.equal(snap.sourceRoot, null, 'overlay 源=cwd（worktree 自身，meta 缺席不切源）')
+    assert.ok(existsSync(join(snap.snapshotRoot, 'src', 'feature.test.js')),
+      'untracked 新文件进快照（NEW: 未 commit 形态——摩擦#5 的 ERR_MODULE_NOT_FOUND 守卫）')
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.test.js'), 'utf8'), 'test("f2", () => {})\n',
+      'untracked 新文件内容是工作区版本（非 HEAD 缺席态）')
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 2 // 本变更交付\n',
+      '未提交修改 overlay 工作区版本')
+  } finally { snap.cleanup() }
+})

@@ -1,0 +1,55 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-6dc73c53",
+  "totals": {
+    "files": 2,
+    "additions": 22,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-gate-snapshot.test.mjs",
+      "declared": true,
+      "additions": 21,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 0,
+    "testFileCount": 1,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-004-cbd8",
+  "sessionId": "quick-6dc73c53",
+  "savedAt": "2026-09-18T23:06:18.840Z",
+  "patchSha256": "f2b27a8904513852dcef553a08a8a4c4c054fa76b0b727a8d8915066dd957163",
+  "patchStatus": "ok"
+}
