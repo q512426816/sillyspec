@@ -73,3 +73,21 @@ created_at: 2026-09-18T00:26:28.615Z
 状态：active
 摘要：（无场景名）
 最近确认：
+
+## FR-core-engine-012 三槽预填引擎
+变更：2026-09-18-artifact-prefill
+状态：active
+摘要：核对改写
+最近确认：6786025
+
+## FR-core-engine-013 refresh 重放与已确认保护
+变更：2026-09-18-artifact-prefill
+状态：active
+摘要：人工保护
+最近确认：6786025
+
+## FR-core-engine-014 门禁梯度与对表
+变更：2026-09-18-artifact-prefill
+状态：active
+摘要：注清零校验
+最近确认：6786025
