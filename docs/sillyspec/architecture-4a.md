@@ -47,7 +47,7 @@ SillySpec 是给 AI Agent 调用的 **CLI 流程状态机**：Agent 通过 CLI �
 
 ### 1.2 流程状态机
 
-**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1146`），契约转换图（`src/stage-contract.js:1146`）：
+**转换合法性**由 `checkTransition(fromStage, toStage)` 仲裁（`src/stage-contract.js:1920`），契约转换图（`src/stage-contract.js:1920`）：
 
 ```
 brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
@@ -70,7 +70,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 | 门 | 触发 | 阻断 | 依据 |
 |---|---|---|---|
-| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1146` |
+| 转换门 `checkTransition` | 阶段跳转不符合 allowedFrom / scan failed | `exit(1)` | `src/stage-contract.js:1920` |
 | WAIT 门 | `--done` output 含等待标记 / step `requiresWait` 未答 | `exit(1)` | `src/run/complete.js:157` |
 | execute deps 门 | worktree `depsStatus` 未达标 | step blocked + `exit(1)` | `src/run/gates.js:369` |
 | execute review.json 门 | 已勾 task 缺 review.json | step blocked + `exit(1)` | `src/run/gates.js:273` |
@@ -78,11 +78,11 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 | archive `--confirm` | 归档步缺 `--confirm` | 回退该步 pending | `src/run/complete-handlers.js:262` |
 | quick 边界审计 | 命中受保护/危险文件或删除 | BLOCKED `exit(1)` | `src/run/shared.js:497` |
 
-**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:576`，统一收尾管线）顺序：
-1. `runValidators`（客观产物校验，`src/stage-contract.js:1216`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:731`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:988`）。
-4. Stage Review Gate（brainstorm/plan/execute，`gates.js:240`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
+**阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:724`，统一收尾管线）顺序：
+1. `runValidators`（客观产物校验，`src/stage-contract.js:1336`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:824`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1158`）。
+4. Stage Review Gate（brainstorm/plan/execute，`gates.js:253`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 
 ### 1.4 多 change 隔离
@@ -180,7 +180,7 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **dispatch 双后端 —— "派发策略生成器，不是 JS 执行体"**（`dispatch/strategy.js:4-9`）：它**不调任何 tool，只生成注入 prompt 的"派发指令文本"**——因为本机 Agent tool 和 SillyHub MCP tool 都只有 agent 能调，CLI（Node）调不了。后端选择纯由 `probe.available` 驱动（available→sillyhub，否则 local）。execute 三态派发（派发段注入起 `stages/execute.js:682` `getDispatchMode`）：`local`/`local-fallback`/`sillyhub`。回收约定（R-07）：无论哪个后端，worker **绝不 git commit**，SillySpec 主体自己 `git diff` worktree 写 review.json。
 
-**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:964` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:97`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
+**worktree-apply —— 跨仓 task 合并回主干**（`applyWorktree` `src/worktree-apply.js:1044` 起，变更文件列表经 `filterDeliverableFiles` `src/worktree-apply.js:97`）：跨仓 task no-op 校验 → meta 校验 → 变更文件列表（`filterDeliverableFiles` 排除 `.sillyspec/`）→ allowList 校验（从 task 卡 `allowed_paths` 读）→ `assessApplyRisk` 风险审计（SAFE/WARNING 自动 apply 到 main）。
 
 **MCP 客户端**（`src/sillyhub-mcp/`）：`config.js` 统一凭据读源（local.yaml mcp 段 > env > null）；`client.js` 封装 `probeDaemon`/`listTools`/`dispatchWorker` 等。
 
