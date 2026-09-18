@@ -56,7 +56,7 @@
 变更：2026-08-08-concurrent-write-preflight
 锚点：未记录
 最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
-理由：complete-handlers.js:1293 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
+理由：complete-handlers.js:1305 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
 
 ## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
 状态：implemented
@@ -78,7 +78,7 @@
 锚点：未记录
 最近确认：3ec09b3
 理由：文件段展开循环迭代体并列第三种段形态 `\[类+\]`（与圆括号段同位同权），不把 `[`/`]` 加进普通段字符类。
-故障面：散文形如 `arr[0].js:12` 从残段提取变全量提取（Grill CC-10 实测 invalid 计数 1→1 不变，无净增面）
+故障面：散文形如「arr[0] 点 js 行 12」从残段提取变全量提取（Grill CC-10 实测 invalid 计数 1→1 不变，无净增面）
 退役判据：引用锚迁移到结构化解析器（非正则）时本形态随 REF_RE 一并退役
 
 ## D-002@v1 陈旧基线自动重锚（已实测不劣于远端即落盘），守卫拦 checkOpts 一次性覆盖
