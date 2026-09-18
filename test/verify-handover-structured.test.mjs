@@ -110,7 +110,10 @@ test('backfillFacts：PASS WITH NOTES 零有效移交行 → advisory 警告；�
       conclusion: 'PASS WITH NOTES',
     })
     assert.ok(warns1.some(w => /移交项/.test(w) && /PASS WITH NOTES/.test(w)), `advisory 应命中（实际 warns：${JSON.stringify(warns1)}）`)
-    assert.equal(r1.facts.handover, undefined, '零有效行不落空 handover 段')
+    // 2026-09-18-fr-index-l1 死锁修复后契约：facts.handover 恒落盘（零行={count:0,items:[]}）——
+    // 原「零行不落」使 零移交+结论PASS 被 evaluatePassEligibility 条件② handoverFieldMissing
+    // fail-closed 拦死；对齐 pass-eligibility 测试 CLEAN_FACTS 形态
+    assert.deepEqual(r1.facts.handover, { count: 0, items: [] }, '零有效行落 count:0 空 handover 段（恒在场契约）')
   } finally { console.warn = origWarn }
 
   // 场景二：PASS WITH NOTES + 有效移交行 → facts.handover 落盘、无 advisory
