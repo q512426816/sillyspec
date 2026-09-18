@@ -1,0 +1,68 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 95b5ac5..9b22095 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -26,6 +26,7 @@ import { execSync, spawnSync } from 'child_process'
+ import { createHash } from 'crypto'
+ import { IR_STRICT_SINCE } from './constants.js'
+ import { gitQuiet } from './git-helper.js'
++import { resolveRuntimeRoot } from './run/shared.js'
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+@@ -1211,7 +1212,27 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
+   }
+ 
+   // 无 ctx / ctx 无跨仓 entry → 主仓 diff 即结果（零回归）
+-  if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) return mainFiles
++  // ql-20260918-012 主仓形态补源：apply 后 meta/diff 链在主仓可双双落空（变更已提交进 HEAD、
++  // meta 已被 execute 收尾清理）→ 文件集退化为 porcelain（被并行会话未提交文件污染，批2 verify
++  // 实证 5 个 .claude 假面+0 命中假 skip）。对齐 resolveReconcileActualFiles 的 B3 兜底：apply-pathspec
++  // 清单存在则并入（读取失败静默；该清单由 worktree apply 落盘，apply 后必在，是主仓形态最可靠的声明面）。
++  if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) {
++    try {
++      const rtRoot = resolveRuntimeRoot({ runtimeRoot: opts.runtimeRoot, specDriftAnchor: opts.specDriftAnchor }, opts.specBase || join(cwd, '.sillyspec'))
++      const pathspecFile = join(rtRoot, `apply-pathspec-${changeName}.txt`)
++      if (existsSync(pathspecFile)) {
++        const declared = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean)
++          .map(p => p.replace(/\\/g, '/'))
++          .filter(p => p && !p.startsWith('.sillyspec/changes/') && !p.startsWith('.sillyspec/.runtime/'))
++        if (declared.length > 0) {
++          // mainFiles 为 null（meta/diff 双落空、git 不可用）时声明面直接成为文件集——
++          // 否则 0 命中假 skip 复发（ql-20260918-012 直测实证）；为数组则并集
++          mainFiles = Array.isArray(mainFiles) ? [...new Set([...mainFiles, ...declared])] : declared
++        }
++      }
++    } catch { /* apply-pathspec 补源失败退回原集（fail-open） */ }
++    return mainFiles
++  }
+   const crossEntries = []
+   for (const entry of ctx.repos.values()) {
+     if (entry && entry.isMain === false) crossEntries.push(entry)
+diff --git a/test/platform-dual-root-fixture.test.mjs b/test/platform-dual-root-fixture.test.mjs
+index 49a81cd..65a37bc 100644
+--- a/test/platform-dual-root-fixture.test.mjs
++++ b/test/platform-dual-root-fixture.test.mjs
+@@ -136,6 +136,22 @@ test('§5 native-worktree：无 meta 时 cwd 即 worktree，已提交改动进
+   assert.ok((files || []).includes('regen-noise.md'), '未提交噪声照常并入（两形态全覆盖）')
+ })
+ 
++test('§5c 主仓形态 apply-pathspec 补源（ql-20260918-012）：meta/diff 双落空时声明面成为文件集', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'mainhit-src-'))
++  after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 同上 */ } })
++  const git = (dir, args) => execSync(['git', ...args].join(' '), { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  git(tmp, ['init', '-q', '-b', 'main'])
++  git(tmp, ['config', 'user.email', 't@t.local']); git(tmp, ['config', 'user.name', 't'])
++  writeFileSync(join(tmp, 'base.txt'), 'b')
++  git(tmp, ['add', '.']); git(tmp, ['commit', '-q', '-m', 'b'])
++  writeFileSync(join(tmp, 'noise.md'), 'uncommitted')  // 并行会话噪声（porcelain 形态）
++  mkdirSync(join(tmp, '.sillyspec', '.runtime'), { recursive: true })
++  writeFileSync(join(tmp, '.sillyspec', '.runtime', 'apply-pathspec-c-src.txt'), 'src/machine-interface.js' + String.fromCharCode(10) + 'docs/contract.md' + String.fromCharCode(10))
++  const files = resolveVerifyChangedFiles(tmp, 'c-src', null, { includeWorkingTree: true, specBase: join(tmp, '.sillyspec') })
++  assert.ok((files || []).includes('src/machine-interface.js'),
++    `apply-pathspec 声明面必须进文件集（实际：${JSON.stringify(files)}）——缺失即主仓 0 命中假 skip 回归`)
++})
++
+ test('§5b native-worktree 主仓零回归：非 worktree 的 cwd（普通仓）不触发 native 分支', () => {
+   const tmp = mkdtempSync(join(tmpdir(), 'plain-repo-'))
+   after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 同上 */ } })

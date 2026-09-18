@@ -367,3 +367,12 @@
 根因：module-impact 更新结果记 done 待补
 方案：runtime 卡补注入分叉与 wait 盖章摘要条；stages 卡补 preflightValidators 声明说明
 结果：两卡契约摘要与实现一致；纯文档
+
+## ql-20260918-012-8ff2 | 2026-09-18 23:21:40 | 主仓形态模块 0 命中：quality-scan diff 集在 apply 后只捕未提交 porcelain
+状态：已完成
+关联变更：（无）
+文件：src/verify-postcheck.js（+22/-1）, test/platform-dual-root-fixture.test.mjs（+16/-0）
+需求：主仓形态模块 0 命中：quality-scan diff 集在 apply 后只捕未提交 porcelain
+根因：批2 verify 实证 5 个 .claude 噪声假面致 0 命中假 skip（meta 收尾清理后空窗）；危险文件说明：判定逻辑零触碰，只加声明面补源+修自身 import 遗漏
+方案：resolveVerifyChangedFiles 返回前并入 apply-pathspec 清单（B3 同款；null 时声明面直接成为文件集）；§5c 回归钉
+结果：§5c+全组 7/0+39/0+lint 绿

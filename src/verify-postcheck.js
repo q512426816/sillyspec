@@ -26,6 +26,7 @@ import { execSync, spawnSync } from 'child_process'
 import { createHash } from 'crypto'
 import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
+import { resolveRuntimeRoot } from './run/shared.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
@@ -1211,7 +1212,27 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
   }
 
   // 无 ctx / ctx 无跨仓 entry → 主仓 diff 即结果（零回归）
-  if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) return mainFiles
+  // ql-20260918-012 主仓形态补源：apply 后 meta/diff 链在主仓可双双落空（变更已提交进 HEAD、
+  // meta 已被 execute 收尾清理）→ 文件集退化为 porcelain（被并行会话未提交文件污染，批2 verify
+  // 实证 5 个 .claude 假面+0 命中假 skip）。对齐 resolveReconcileActualFiles 的 B3 兜底：apply-pathspec
+  // 清单存在则并入（读取失败静默；该清单由 worktree apply 落盘，apply 后必在，是主仓形态最可靠的声明面）。
+  if (!ctx || typeof ctx.repos !== 'object' || ctx.repos === null) {
+    try {
+      const rtRoot = resolveRuntimeRoot({ runtimeRoot: opts.runtimeRoot, specDriftAnchor: opts.specDriftAnchor }, opts.specBase || join(cwd, '.sillyspec'))
+      const pathspecFile = join(rtRoot, `apply-pathspec-${changeName}.txt`)
+      if (existsSync(pathspecFile)) {
+        const declared = readFileSync(pathspecFile, 'utf8').split('\n').map(l => l.trim()).filter(Boolean)
+          .map(p => p.replace(/\\/g, '/'))
+          .filter(p => p && !p.startsWith('.sillyspec/changes/') && !p.startsWith('.sillyspec/.runtime/'))
+        if (declared.length > 0) {
+          // mainFiles 为 null（meta/diff 双落空、git 不可用）时声明面直接成为文件集——
+          // 否则 0 命中假 skip 复发（ql-20260918-012 直测实证）；为数组则并集
+          mainFiles = Array.isArray(mainFiles) ? [...new Set([...mainFiles, ...declared])] : declared
+        }
+      }
+    } catch { /* apply-pathspec 补源失败退回原集（fail-open） */ }
+    return mainFiles
+  }
   const crossEntries = []
   for (const entry of ctx.repos.values()) {
     if (entry && entry.isMain === false) crossEntries.push(entry)

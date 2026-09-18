@@ -136,6 +136,22 @@ test('§5 native-worktree：无 meta 时 cwd 即 worktree，已提交改动进�
   assert.ok((files || []).includes('regen-noise.md'), '未提交噪声照常并入（两形态全覆盖）')
 })
 
+test('§5c 主仓形态 apply-pathspec 补源（ql-20260918-012）：meta/diff 双落空时声明面成为文件集', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'mainhit-src-'))
+  after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 同上 */ } })
+  const git = (dir, args) => execSync(['git', ...args].join(' '), { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  git(tmp, ['init', '-q', '-b', 'main'])
+  git(tmp, ['config', 'user.email', 't@t.local']); git(tmp, ['config', 'user.name', 't'])
+  writeFileSync(join(tmp, 'base.txt'), 'b')
+  git(tmp, ['add', '.']); git(tmp, ['commit', '-q', '-m', 'b'])
+  writeFileSync(join(tmp, 'noise.md'), 'uncommitted')  // 并行会话噪声（porcelain 形态）
+  mkdirSync(join(tmp, '.sillyspec', '.runtime'), { recursive: true })
+  writeFileSync(join(tmp, '.sillyspec', '.runtime', 'apply-pathspec-c-src.txt'), 'src/machine-interface.js' + String.fromCharCode(10) + 'docs/contract.md' + String.fromCharCode(10))
+  const files = resolveVerifyChangedFiles(tmp, 'c-src', null, { includeWorkingTree: true, specBase: join(tmp, '.sillyspec') })
+  assert.ok((files || []).includes('src/machine-interface.js'),
+    `apply-pathspec 声明面必须进文件集（实际：${JSON.stringify(files)}）——缺失即主仓 0 命中假 skip 回归`)
+})
+
 test('§5b native-worktree 主仓零回归：非 worktree 的 cwd（普通仓）不触发 native 分支', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'plain-repo-'))
   after(() => { try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 同上 */ } })
