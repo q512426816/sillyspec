@@ -1,0 +1,1171 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index c8d77d8..a5000f9 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -196,7 +196,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:44`、枚举消费在 `index.js:3470`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3470`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index b8076d2..1664217 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -211,8 +211,9 @@ function parseModulePathsSubset(content) {
+ /** 未注入 moduleIndex 时的尽力发现：knowledgeRoot 同级 docs/<项目>/modules/_module-map.yaml。
+  * 多子项目仓（如本仓 sillyspec+dashboard）各项目有自己的 map——dogfood 实证（2026-08-24）：
+  * 只取首个命中会把主项目条目全部误落 unmapped（dashboard 的 map 按字母序先命中）。
+- * 改为合并全部项目的 map（同名模块合并 paths/core_files 去重），失败归 null → 全部 unmapped。 */
+-function discoverModuleIndex(knowledgeRoot) {
++ * 改为合并全部项目的 map（同名模块合并 paths/core_files 去重），失败归 null → 全部 unmapped。
++ * 2026-09-18-fr-index-l1：导出供 fr-index 域解析复用。 */
++export function discoverModuleIndex(knowledgeRoot) {
+   try {
+     const docsDir = join(dirname(knowledgeRoot), 'docs')
+     if (!existsSync(docsDir)) return null
+@@ -319,15 +320,19 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
+   return lines
+ }
+ 
+-/** 知识文件切段：preamble 行 + D-xxx@vN 条目段（段边界 = 下一 `## D-` 头）。
++/** 知识文件切段：preamble 行 + 条目段（段边界 = 下一节头）。
+  * 段的变更归属取段内 `变更：<name>` 行；无该行的历史条目 → change=null（legacy：
+- * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。 */
+-function splitKnowledgeSections(content) {
++ * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。
++ * 2026-09-18-fr-index-l1 参数化：sectionRegex/buildId 经参（decisions 缺省不变；fr 侧传 FR 节头
++ * 正则与恒等 id），decisions 调用点零改动。 */
++export function splitKnowledgeSections(content, opts = {}) {
++  const sectionRegex = opts.sectionRegex || /^## (D-\d+)@v(\d+)\s*(.*)$/
++  const buildId = opts.buildId || ((n, v) => `${n}@v${v}`)
+   const sections = []
+   const preamble = []
+   let cur = null
+   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+-    const m = line.match(/^## (D-\d+)@v(\d+)\s*(.*)$/)
++    const m = line.match(sectionRegex)
+     if (m) {
+       if (cur) sections.push(cur)
+       cur = { number: m[1], version: parseInt(m[2], 10), title: m[3].trim(), lines: [line] }
+@@ -338,7 +343,7 @@ function splitKnowledgeSections(content) {
+   }
+   if (cur) sections.push(cur)
+   for (const s of sections) {
+-    s.id = `${s.number}@v${s.version}`
++    s.id = buildId(s.number, s.version)
+     const cm = s.lines.find(l => /^变更[：:]/.test(l))
+     s.change = cm ? cm.replace(/^变更[：:]\s*/, '').trim() || null : null
+   }
+@@ -346,7 +351,7 @@ function splitKnowledgeSections(content) {
+ }
+ 
+ /** 段落重组落盘文本（幂等归一：段间恰好一个空行 + 文件单一尾换行） */
+-function joinKnowledgeFile(preamble, sections) {
++export function joinKnowledgeFile(preamble, sections) {
+   const parts = []
+   const pre = preamble.join('\n').replace(/\s+$/, '')
+   if (pre) parts.push(pre)
+@@ -394,19 +399,21 @@ function applyEntryToSections(sections, entry, headHash) {
+ // INDEX.md decisions 路由行幂等维护（FR-05：写入责任在本模块；只动 ## Decisions 段内指向 decisions/ 的行）
+ // ---------------------------------------------------------------------------
+ 
+-/** INDEX 路由行格式与 knowledge-match 解析口径一致：`- <域>|decision|决策 → [decisions/<域>.md](decisions/<域>.md)` */
+-function routingLine(domain) {
+-  return `- ${domain}|decision|决策 → [decisions/${domain}.md](decisions/${domain}.md)`
+-}
+-
+-const ROUTING_TARGET_RE = /^-\s+.*→\s*\[[^\]]*\]\(decisions\/([^)#]+?)(?:\.md)?(?:#[^)]*)?\)\s*$/
+-
+-/** 域文件实况 ↔ ## Decisions 段路由行对账：缺行补、失效行删、重复行去重；不动其他类别行 */
+-function syncIndexRoutingLines(knowledgeRoot) {
+-  const decisionsDir = join(knowledgeRoot, 'decisions')
++/**
++ * 域文件实况 ↔ INDEX 段路由行对账：缺行补、失效行删、重复行去重；不动其他类别行。
++ * 2026-09-18-fr-index-l1 参数化：section/subdir/makeLine/matchTarget 经参（decisions 缺省不变），
++ * fr 侧传 'FR 需求索引' 段与 fr/ 子目录——两类路由行各守各段互不干扰。
++ */
++export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
++  const sectionName = opts.section || 'Decisions'
++  const subdir = opts.subdir || 'decisions'
++  const makeLine = opts.makeLine || ((d) => `- ${d}|decision|决策 → [${subdir}/${d}.md](${subdir}/${d}.md)`)
++  const esc = subdir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
++  const targetRe = opts.matchTarget || new RegExp(`^-\\s+.*→\\s*\\[[^\\]]*\\]\\(${esc}/([^)#]+?)(?:\\.md)?(?:#[^)]*)?\\)\\s*$`)
++  const domainDir = join(knowledgeRoot, subdir)
+   let domains
+   try {
+-    domains = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, ''))
++    domains = readdirSync(domainDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, ''))
+   } catch { return false }
+   if (domains.length === 0) return false
+ 
+@@ -417,29 +424,29 @@ function syncIndexRoutingLines(knowledgeRoot) {
+   }
+   const lines = original ? original.replace(/\r\n/g, '\n').split('\n') : ['# Knowledge Index', '']
+ 
+-  // 定位 ## Decisions 段边界
++  // 定位段边界（参数化段名）
+   let secStart = -1
+   let secEnd = lines.length
+   for (let i = 0; i < lines.length; i++) {
+     const h = lines[i].match(/^##\s+(.+?)\s*$/)
+     if (!h) continue
+     if (secStart === -1) {
+-      if (h[1] === 'Decisions') secStart = i + 1
++      if (h[1] === sectionName) secStart = i + 1
+     } else { secEnd = i; break }
+   }
+ 
+-  const desired = domains.map(routingLine)
++  const desired = domains.map(makeLine)
+   if (secStart === -1) {
+     // 无段则追加（保留原文件其余内容）
+     while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
+-    lines.push('', '## Decisions', ...desired)
++    lines.push('', `## ${sectionName}`, ...desired)
+   } else {
+     const body = lines.slice(secStart, secEnd)
+     const kept = []
+     const seen = new Set()
+     const domainSet = new Set(domains)
+     for (const l of body) {
+-      const m = l.match(ROUTING_TARGET_RE)
++      const m = l.match(targetRe)
+       if (!m) { kept.push(l); continue } // 非路由行（注释/空行）原样保留
+       // 目标域文件仍存在的路由行原样保留（关键词可能被人工扩充）；失效行（文件已不存在）与重复行删
+       if (domainSet.has(m[1]) && !seen.has(m[1])) { seen.add(m[1]); kept.push(l) }
+@@ -448,7 +455,7 @@ function syncIndexRoutingLines(knowledgeRoot) {
+     const tail = []
+     while (kept.length > 0 && kept[kept.length - 1].trim() === '') tail.unshift(kept.pop())
+     for (const d of desired) {
+-      const m = d.match(ROUTING_TARGET_RE)
++      const m = d.match(targetRe)
+       if (m && !seen.has(m[1])) kept.push(d) // 缺行补
+     }
+     kept.push(...tail)
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index f206584..939e956 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -33,6 +33,9 @@ import { pruneTimestampedEntries } from './runtime-hygiene.js';
+ import { CHECK_SEVERITY } from './constants.js';
+ import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
+ import { readFrictionLedger } from './friction-ledger.js';
++// FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
++// fr-index 是纯 fs 叶子链（仅 decision-distill 底座），doctor 静态引入无环。
++import { FR_INDEX_EPOCH, scanFrIndex, parseChangeRequirements } from './fr-index.js';
+ 
+ // db 角色标签
+ const DB_ROLE = {
+@@ -1162,6 +1165,10 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
+     return { ...base, pass: true, severity: null, findings: ['changes/archive 为空（无已归档变更）'], archive_count: 0, offenders: [] };
+   }
+   const offenders = [];
++  // FR 索引面（D14 第四检查数据源，循环外一次扫描复用；fr/ 不存在=仓未启用，全跳不误报）
++  const frKnowledgeRoot = join(authoritySpecDir, 'knowledge');
++  const frEnabled = existsSync(join(frKnowledgeRoot, 'fr'));
++  const frEntries = frEnabled ? scanFrIndex(frKnowledgeRoot) : [];
+   for (const name of names) {
+     const dir = join(archiveDir, name);
+     const reasons = [];
+@@ -1204,6 +1211,28 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
+         reasons.push(`任务注册表不可读（${relative(archiveDir, regPath)}：${e?.code || e?.message || e}）`);
+       }
+     }
++    // ── ④ FR 索引在场与取代完整（2026-09-18-fr-index-l1 L1，D-007：epoch 分界第四检查）──
++    // 豁免面：fr/ 目录不存在（仓未启用索引，全跳）；无日期前缀/epoch 前归档（存量不回填）；
++    // quick-* 与无 requirements.md（quick/scale:small 无索引义务）。违者并入 offenders（豁免走既有账本）。
++    if (frEnabled) {
++      const dm = name.match(/^(\d{4}-\d{2}-\d{2})-/);
++      if (dm && dm[1] >= FR_INDEX_EPOCH && existsSync(join(dir, 'requirements.md'))) {
++        if (!frEntries.some((e) => e.change === name)) {
++          reasons.push('FR 索引缺失（epoch 后归档应有索引条目——归档时 indexRequirements 未落，查 archive 步降级日志）');
++        } else {
++          try {
++            const reqParsed = parseChangeRequirements(dir);
++            const refIds = new Set();
++            for (const fr of reqParsed.frs) for (const r of fr.supersedes) refIds.add(r);
++            for (const refId of refIds) {
++              if (!frEntries.some((e) => e.id === refId && e.supersededBy)) {
++                reasons.push(`承接未翻取代（${refId} 被引用但索引中未标 superseded）`);
++              }
++            }
++          } catch { /* requirements 解析失败归任务注册表口径，此处不重复报 */ }
++        }
++      }
++    }
+     if (reasons.length > 0) offenders.push({ name, reasons });
+   }
+ 
+diff --git a/src/fr-index.js b/src/fr-index.js
+new file mode 100644
+index 0000000..836721b
+--- /dev/null
++++ b/src/fr-index.js
+@@ -0,0 +1,359 @@
++/**
++ * fr-index.js — FR 稳定索引核心（L1：稳定 id + knowledge 索引 + 取代标记）
++ *
++ * 2026-09-18-fr-index-l1（三轮评审+战略定位定稿）：requirements.md 归档后首次被语义消费——
++ * 全局稳定 id（FR-<域>-NNN，archive 时 CLI 发号）+ knowledge/fr/<域>.md 索引 + 承接引用驱动的
++ * 取代链。定位=**L3 的证据发生器**：四类遥测事件（fr-inject/fr-supersede/fr-duplicate-warning/
++ * fr-unreferenced，由消费方经 knowledge-hits.js 落盘）供 20-30 change 后裁决活规格真源——
++ * 含证伪出口（design 实验裁决条款：承接引用率趋零/链无人跟/重复靠人眼 ⇒ 可杀可冻 L3，索引降级检索面）。
++ *
++ * 纪律：
++ *   - CLI 单一写入方：索引只在 indexRequirements 内部写（archive noAI 步调用）；
++ *   - 幂等键=全局 id（「来源变更」字段变更名命中即 no-op——同变更重跑零新增零漂移）；
++ *   - 承接 id 不存在 → warnings 收集不阻断（typo 不炸归档）；
++ *   - 未引用旧 FR 的删除/修改零判定（D-002 边界——undeclared deletion 是 L3 合并门禁领地，
++ *     L1 只经 unreferenced 计数采观察信号，显式「不算 L3 门禁」）；
++ *   - 域文件读写复用 decision-distill 参数化底座（splitKnowledgeSections/joinKnowledgeFile/
++ *     syncIndexRoutingLines/discoverModuleIndex），不复制实现。
++ */
++
++import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
++import { join } from 'path';
++import {
++  splitKnowledgeSections,
++  joinKnowledgeFile,
++  syncIndexRoutingLines,
++  discoverModuleIndex,
++} from './decision-distill.js';
++
++/** epoch：此前归档不检查/不索引（存量 93 份不回填——不伪造历史，D-007）。 */
++export const FR_INDEX_EPOCH = '2026-09-18';
++
++const FR_DIR = 'fr';
++/** FR 节头：## FR-<域>-NNN 标题（域=[a-z0-9-] **含连字符**——真实模块 id 多为 cli-entry/core-engine 等连字符形态，
++ *  R1 审查阻断①实证：漏 - 会让连字符域的发号/幂等/解析/承接全断。第二组为非捕获可选占位，
++ *  三组结构与底座 splitKnowledgeSections 的 decisions 正则对齐（m[3]=标题，勿改组序）。 */
++const FR_SECTION_RE = /^## (FR-[a-z0-9-]+-\d+)(?:@v(\d+))?\s*(.*)$/;
++const FR_GLOBAL_ID_RE = /^FR-[a-z0-9-]+-\d+$/;
++
++/**
++ * 解析变更 requirements.md 的 FR 块。
++ * 形态（brainstorm step8 指引）：`### FR-NN: 标题` + 可选 `承接: FR-<域>-NNN[, ...]` 行 +
++ * Given/When/Then 块（场景名取 `#### 场景：X` 或 `**场景：X**` 行；无场景名的 GWT 块按序号占位）。
++ * @returns {{ missing: boolean, frs: Array<{local:string,title:string,supersedes:string[],scenarios:string[]}>, malformed: string[] }}
++ */
++export function parseChangeRequirements(changeDir) {
++  const p = join(changeDir, 'requirements.md');
++  if (!existsSync(p)) return { missing: true, frs: [], malformed: [] };
++  let content;
++  try {
++    content = readFileSync(p, 'utf8');
++  } catch {
++    return { missing: true, frs: [], malformed: [] };
++  }
++  const frs = [];
++  const malformed = [];
++  const lines = content.replace(/\r\n/g, '\n').split('\n');
++  let cur = null;
++  for (const line of lines) {
++    const h = line.match(/^###\s+(FR-\d+)\s*[:：]\s*(.*)$/);
++    if (h) {
++      if (cur) frs.push(cur);
++      cur = { local: h[1], title: (h[2] || '').trim(), supersedes: [], scenarios: [] };
++      continue;
++    }
++    if (!cur) continue;
++    const s = line.match(/^\s*承接\s*[:：]\s*(.+)$/);
++    if (s) {
++      for (const tok of s[1].split(/[,，、]/)) {
++        const id = tok.trim();
++        if (!id) continue;
++        if (FR_GLOBAL_ID_RE.test(id)) cur.supersedes.push(id);
++        else malformed.push(`${cur.local} 的承接行含非全局 id 形态「${id}」（应为 FR-<域>-NNN）`);
++      }
++      continue;
++    }
++    const sc = line.match(/^\s*(?:#{2,4}\s*场景\s*[:：]\s*(.+)|\*\*场景\s*[:：]\s*([^*]+)\*\*)\s*$/);
++    if (sc) {
++      const name = ((sc[1] || sc[2] || '')).trim();
++      cur.scenarios.push(name || `场景${cur.scenarios.length + 1}`);
++    }
++  }
++  if (cur) frs.push(cur);
++  return { missing: false, frs, malformed };
++}
++
++/** 域解析（导出供注入/软门消费）：变更自身 design.md 文件变更清单表行（剥 NEW: 前缀）× moduleIndex paths 前缀匹配；无匹配 → unmapped。 */
++export function resolveTouchedDomains(changeDir, moduleIndex) {
++  const domains = new Set();
++  const designPath = join(changeDir, 'design.md');
++  if (moduleIndex && existsSync(designPath)) {
++    let design;
++    try {
++      design = readFileSync(designPath, 'utf8');
++    } catch {
++      design = '';
++    }
++    for (const line of design.replace(/\r\n/g, '\n').split('\n')) {
++      const m = line.match(/^\|\s*(?:新增|修改|删除)\s*\|\s*(?:NEW:)?([^\s|]+)\s*\|/);
++      if (!m) continue;
++      const filePath = m[1].trim();
++      for (const [modId, mod] of Object.entries(moduleIndex)) {
++        const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
++        if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
++          domains.add(modId);
++        }
++      }
++    }
++  }
++  if (domains.size === 0) domains.add('unmapped');
++  return [...domains];
++}
++
++/** 域文件路径与域索引读写（复用参数化底座；FR 节无版本段，id 恒等）。 */
++function frDirPath(knowledgeRoot) {
++  return join(knowledgeRoot, FR_DIR);
++}
++
++function loadDomainSections(knowledgeRoot, domain) {
++  const p = join(frDirPath(knowledgeRoot), `${domain}.md`);
++  if (!existsSync(p)) {
++    return {
++      preamble: [
++        '---',
++        `author: sillyspec-fr-index`,
++        `created_at: ${new Date().toISOString()}`,
++        '---',
++        '',
++        `# FR 索引 — ${domain}`,
++        '',
++        '> fr-index 从归档变更 requirements.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为机械解析契约，勿手改。',
++        '> superseded 条目保留供取代链回溯；brainstorm 注入默认只给 active。',
++        '',
++      ],
++      sections: [],
++    };
++  }
++  try {
++    return splitKnowledgeSections(readFileSync(p, 'utf8'), {
++      sectionRegex: FR_SECTION_RE,
++      buildId: (n) => n,
++    });
++  } catch {
++    return { preamble: [], sections: [] };
++  }
++}
++
++function renderFrLines(entry, headHash) {
++  const lines = [`## ${entry.id} ${entry.title}`];
++  // 归属行键用「变更：」——与 decision-distill splitKnowledgeSections 的机械解析契约对齐
++  // （design 接口定义示例中的「来源变更」即本字段，语义等价，取解析器认的字面）
++  lines.push(`变更：${entry.change}`);
++  lines.push(`状态：${entry.supersededBy ? 'superseded' : 'active'}`);
++  if (entry.supersededBy) lines.push(`superseded_by：${entry.supersededBy}`);
++  if (entry.supersededOf) lines.push(`取代链：${entry.supersededOf} ← 本条目（${entry.change} 承接）`);
++  lines.push(`摘要：${(entry.scenarios || []).slice(0, 5).join('；') || '（无场景名）'}`);
++  lines.push(`最近确认：${headHash || ''}`);
++  return lines;
++}
++
++/** 全域条目扫描：domain → sections（供发号取 max、承接翻链、在场性检查）。 */
++function scanAllDomains(knowledgeRoot) {
++  const out = new Map();
++  try {
++    for (const f of readdirSync(frDirPath(knowledgeRoot))) {
++      if (!f.endsWith('.md')) continue;
++      const domain = f.replace(/\.md$/, '');
++      out.set(domain, loadDomainSections(knowledgeRoot, domain));
++    }
++  } catch { /* 目录不存在 → 空索引 */ }
++  return out;
++}
++
++function nextIdForDomain(domain, allSections) {
++  let max = 0;
++  const re = new RegExp(`^FR-${domain.replace(/[-]/g, '-')}-(\\d+)$`);
++  for (const st of allSections.values()) {
++    for (const s of st.sections) {
++      const m = (s.number || '').match(re);
++      if (m) max = Math.max(max, parseInt(m[1], 10));
++    }
++  }
++  return `FR-${domain}-${String(max + 1).padStart(3, '0')}`;
++}
++
++/**
++ * 归档索引主入口（幂等）：解析 → 域解析 → 发号 → 承接翻链 → 写域文件 → INDEX 路由。
++ * @param {{ changeDir: string, knowledgeRoot: string, headHash?: string, cwd?: string }} args
++ * @returns {{ skipped?: string, written: Array<{file,id,action}>, superseded: Array<{from,to,change}>, unreferenced: Array<{domain,count}>, warnings: string[] }}
++ */
++export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
++  const changeName = changeDir.split(/[\\/]/).pop();
++  const parsed = parseChangeRequirements(changeDir);
++  if (parsed.missing) {
++    return { skipped: 'requirements.md 不存在（quick/scale:small 无索引义务）', written: [], superseded: [], unreferenced: [], warnings: [] };
++  }
++  if (parsed.frs.length === 0) {
++    return { skipped: 'requirements.md 无 FR 块', written: [], superseded: [], unreferenced: [], warnings: [] };
++  }
++
++  const warnings = [...parsed.malformed];
++  const moduleIndex = discoverModuleIndex(knowledgeRoot);
++  const domains = resolveTouchedDomains(changeDir, moduleIndex);
++  const all = scanAllDomains(knowledgeRoot);
++
++  // 幂等闸门：任一域文件已有本变更「来源变更」条目 → 全量 no-op（同变更重跑零新增零漂移）
++  for (const st of all.values()) {
++    if (st.sections.some((s) => s.change === changeName)) {
++      return { written: [], superseded: [], unreferenced: [], warnings };
++    }
++  }
++
++  // 承接校验：引用的全局 id 必须在现有索引中存在（typo → warn 不阻断）
++  const knownIds = new Set();
++  for (const st of all.values()) for (const s of st.sections) knownIds.add(s.number);
++  const refIds = new Set();
++  for (const fr of parsed.frs) for (const id of fr.supersedes) refIds.add(id);
++  for (const id of refIds) {
++    if (!knownIds.has(id)) warnings.push(`承接引用的 ${id} 不在索引中（域拼错或号不存在）——该引用不翻链，请核对`);
++  }
++
++  // 发号 + 写入（每 FR 落其首个触达域；多域变更按域去重逐条落）
++  const written = [];
++  const superseded = [];
++  const perDomainCounter = new Map();
++  const ensureDomain = (domain) => {
++    if (!all.has(domain)) all.set(domain, loadDomainSections(knowledgeRoot, domain));
++    return all.get(domain);
++  };
++  // 发号与翻链：每条 FR 落**首个触达域**（primary domain）取一个全局 id——幂等键=全局 id 单一身份
++  // （R1 审查缺口：per-domain × per-FR 会给同一 FR 发 N 个 id，违背 D-001 单一身份）；
++  // 承接翻链可跨全域命中目标条目（新条目在 primary 域，旧条目可在任何域）。
++  const dirtyDomains = new Set();
++  const primaryDomain = domains[0];
++  const st = ensureDomain(primaryDomain);
++  for (const fr of parsed.frs) {
++    const id = nextIdForDomain(primaryDomain, all);
++    perDomainCounter.set(primaryDomain, (perDomainCounter.get(primaryDomain) || 0) + 1);
++    st.sections.push({
++      number: id,
++      version: NaN,
++      id,
++      title: fr.title,
++      change: changeName,
++      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios }, headHash),
++    });
++    dirtyDomains.add(primaryDomain);
++    written.push({ file: `${FR_DIR}/${primaryDomain}.md`, id, action: 'added' });
++    // 本 FR 的承接引用 → 翻旧条目（跨全域扫描目标段；就地补丁不动原摘要——R1 审查缺口：整段重写会抹掉摘要）
++    for (const refId of fr.supersedes) {
++      if (!knownIds.has(refId)) continue;
++      for (const [st2Domain, st2] of all.entries()) {
++        const target = st2.sections.find((s) => s.number === refId && !s.lines.some((l) => l.startsWith('superseded_by：')));
++        if (!target) continue;
++        // 就地补丁：状态翻 superseded + 插 superseded_by + 追取代链注记 + 刷新最近确认（摘要/标题保留）
++        target.lines = target.lines
++          .map((l) => (l.startsWith('状态：') ? `状态：superseded` : l.startsWith('最近确认：') ? `最近确认：${headHash || ''}` : l))
++          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：'));
++        const stateIdx = target.lines.findIndex((l) => l.startsWith('状态：'));
++        target.lines.splice(stateIdx + 1, 0, `superseded_by：${id}`, `取代链：${refId} ← ${id}（${changeName} 承接）`);
++        dirtyDomains.add(st2Domain);
++        superseded.push({ from: refId, to: id, change: changeName });
++      }
++    }
++  }
++
++  // unreferenced 探针（D-008 护栏③）：触达域 active 条目未被本次承接引用的计数——观察信号，不算 L3 门禁
++  const unreferenced = [];
++  for (const domain of domains) {
++    const stx = all.get(domain);
++    if (!stx) continue;
++    const activeIds = stx.sections
++      .filter((s) => !s.lines.some((l) => l.startsWith('superseded_by：')))
++      .map((s) => s.number)
++      .filter((n) => n && !written.some((w) => w.id === n));
++    const count = activeIds.filter((id) => !refIds.has(id)).length;
++    if (count > 0) unreferenced.push({ domain, count });
++  }
++
++  // 落盘（dirty 集=新条目域 ∪ 翻链命中域——R1 审查阻断②：漏翻链域会返回值谎报成功但盘上丢失）
++  mkdirSync(frDirPath(knowledgeRoot), { recursive: true });
++  for (const d of dirtyDomains) {
++    const stx = all.get(d);
++    writeFileSync(join(frDirPath(knowledgeRoot), `${d}.md`), joinKnowledgeFile(stx.preamble, stx.sections));
++  }
++  if (written.length > 0 || superseded.length > 0) {
++    syncIndexRoutingLines(knowledgeRoot, {
++      section: 'FR 需求索引',
++      subdir: FR_DIR,
++      makeLine: (d) => `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
++    });
++  }
++
++  return { written, superseded, unreferenced, warnings };
++}
++
++/**
++ * 全量索引扫描（doctor D14 第四检查消费）：全部域的全部条目（含 superseded）拍平。
++ * @returns {Array<{domain,id,title,change,supersededBy:string|null}>} fr/ 目录不存在 → []
++ */
++export function scanFrIndex(knowledgeRoot) {
++  const out = [];
++  let files = [];
++  try {
++    files = readdirSync(frDirPath(knowledgeRoot)).filter((f) => f.endsWith('.md'));
++  } catch {
++    return out;
++  }
++  for (const f of files) {
++    const domain = f.replace(/\.md$/, '');
++    const st = loadDomainSections(knowledgeRoot, domain);
++    for (const s of st.sections) {
++      const sup = s.lines.find((l) => l.startsWith('superseded_by：'));
++      out.push({
++        domain,
++        id: s.number,
++        title: s.title || '',
++        change: s.change || '',
++        supersededBy: sup ? sup.replace(/^superseded_by：\s*/, '').trim() : null,
++      });
++    }
++  }
++  return out;
++}
++
++/**
++ * 注入源：触达域的 active 条目（superseded 默认藏——D-004）。
++ * @returns {Array<{domain,id,title,change,scenarios:string[]}>}
++ */
++export function readActiveFrDigest(knowledgeRoot, domains) {
++  const out = [];
++  for (const domain of domains || []) {
++    const st = loadDomainSections(knowledgeRoot, domain);
++    for (const s of st.sections) {
++      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue;
++      const scenarioLine = s.lines.find((l) => l.startsWith('摘要：'));
++      const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
++      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios });
++    }
++  }
++  return out;
++}
++
++/**
++ * 标题 bigram 重叠率（中英混排零依赖）：字符 bigram 集合 |A∩B| / |A∪B|。
++ */
++export function frTitleOverlap(a, b) {
++  const grams = (s) => {
++    const t = String(s || '').replace(/\s+/g, '');
++    const set = new Set();
++    for (let i = 0; i < t.length - 1; i++) set.add(t.slice(i, i + 2));
++    return set;
++  };
++  const A = grams(a);
++  const B = grams(b);
++  if (A.size === 0 || B.size === 0) return 0;
++  let inter = 0;
++  for (const g of A) if (B.has(g)) inter++;
++  return inter / (A.size + B.size - inter);
++}
+diff --git a/src/run/archive-distill.js b/src/run/archive-distill.js
+index 1144f97..6d5c737 100644
+--- a/src/run/archive-distill.js
++++ b/src/run/archive-distill.js
+@@ -45,4 +45,33 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
+   } catch (e) {
+     console.warn(`\n⚠️  决策提炼执行异常，降级跳过（best-effort，不阻断归档——同旧步降级语义）: ${e && e.message ? e.message : e}`)
+   }
++
++  // ── FR 索引提炼（2026-09-18-fr-index-l1 L1：稳定 id 发号+承接翻链；同 best-effort 降级语义）──
++  try {
++    const { indexRequirements } = await import('../fr-index.js')
++    const fr = indexRequirements({ changeDir, knowledgeRoot, headHash })
++    const frWritten = Array.isArray(fr && fr.written) ? fr.written : []
++    if (fr && fr.skipped) {
++      console.log(`\nℹ️  FR 索引零输出：${fr.skipped}`)
++    } else if (frWritten.length > 0) {
++      console.log(`\n📌 FR 索引（CLI 机械执行，幂等）：${frWritten.length} 条已发号入库——`)
++      for (const w of frWritten) console.log(`   - ${w.id} → ${w.file}`)
++    }
++    for (const w of (fr && fr.warnings) || []) {
++      console.warn(`   ⚠️  ${w}`)
++    }
++    // 遥测（L3 证据发生器指标，D-006/D-008）：取代链跟随事件
++    const { appendKnowledgeHit } = await import('../knowledge-hits.js')
++    const runtimeRoot = join(specBase, '.runtime')
++    for (const s of (fr && fr.superseded) || []) {
++      appendKnowledgeHit(runtimeRoot, { type: 'fr-supersede', change: changeName, from: s.from, to: s.to })
++    }
++    // 删除缺口探针（D-008 护栏③）：观察信号，不算 L3 门禁——L1 无删除声明义务，只采趋势数据
++    for (const u of (fr && fr.unreferenced) || []) {
++      appendKnowledgeHit(runtimeRoot, { type: 'fr-unreferenced', change: changeName, domain: u.domain, count: u.count })
++      console.log(`   ℹ️  [观察信号·不算 L3 门禁] 触达域 ${u.domain} 有 ${u.count} 条 active FR 未被本次承接引用（fr-unreferenced 遥测，L3 裁决趋势数据）`)
++    }
++  } catch (e) {
++    console.warn(`\n⚠️  FR 索引执行异常，降级跳过（best-effort，不阻断归档）: ${e && e.message ? e.message : e}`)
++  }
+ }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 6492982..389f5ae 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -831,7 +831,38 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // fail-soft 同三件套；无 quick 占位符自然零输出。
+   if (stageName === 'quick' && promptText.includes('{QUICK_CONTEXT_DIGEST}')) {
+     const digestSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+-    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST\}/g, buildQuickContextDigest(digestSpecBase, projectName))
++    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST}/g, buildQuickContextDigest(digestSpecBase, projectName))
++  }
++
++  // ①c {FR_INDEX_DIGEST}（2026-09-18-fr-index-l1 L1，D-004）：brainstorm step8 的触达域现行 FR 注入
++  // ——写作期防重复 FR 的确定性清单（superseded 默认藏）；无触达域索引/索引空 → 段消隐。
++  // fr-inject 遥测（L3 证据发生器指标①）fail-soft；token 本体在 stages/brainstorm.js step8 模板。
++  if (stageName === 'brainstorm' && promptText.includes('{FR_INDEX_DIGEST}')) {
++    try {
++      const frSpecBase = resolvePromptSpecBase(platformOpts, cwd)
++      const { discoverModuleIndex } = await import('../decision-distill.js')
++      const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
++      const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
++      const knowledgeRoot = join(frSpecBase, 'knowledge')
++      const domains = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
++      const entries = readActiveFrDigest(knowledgeRoot, domains)
++      if (entries.length === 0) {
++        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
++      } else {
++        const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}）`)
++        lines.push('')
++        lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。')
++        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
++      }
++      try {
++        const { appendKnowledgeHit } = await import('../knowledge-hits.js')
++        appendKnowledgeHit(join(frSpecBase, '.runtime'), {
++          type: 'fr-inject', change: changeName, domains, count: entries.length,
++        })
++      } catch { /* 遥测 fail-soft */ }
++    } catch (e) {
++      promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
++    }
+   }
+ 
+   // ② {GIT_DIRTY}：工作区脏文件清单（git status --porcelain，quick 收尾步消费）
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index e728e59..e502c22 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -17,6 +17,11 @@ import { evaluateRules } from './stage-contract-engine.js'
+ import { getRule } from './stage-contract-spec.js'
+ import { backfillFrontmatter } from './scan-postcheck.js'
+ import { parseAllowedPaths } from './stages/plan-postcheck.js'
++// FR 索引消费（2026-09-18-fr-index-l1 L1）：重复嫌疑软门（advisory）——fr-index 是纯 fs+decision-distill
++// 叶子链，静态引入无环；knowledge-hits 同为叶子。
++import { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap } from './fr-index.js'
++import { discoverModuleIndex } from './decision-distill.js'
++import { appendKnowledgeHit } from './knowledge-hits.js'
+ // design.md 文件清单解析（2026-09-17-pass-cap-semantics task-02 事实③）：change-list 是纯 fs
+ // 叶子模块（design-facts / scope-audit / verify-probes 等同款直连惯例），静态引入无环。
+ import { parseFileChangeListDetailed } from './change-list.js'
+@@ -321,6 +326,37 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
+   const errors = [...engineResult.errors]
+   const warnings = [...engineResult.warnings]
+ 
++  // ── FR 重复嫌疑软门（2026-09-18-fr-index-l1 L1，D-005：advisory 永不阻断）──
++  // 新 requirements 的无承接 FR × 同域 active 索引条目标题 bigram 重叠 ≥0.6 → warning
++  // （双出路：加承接行或改标题区分）+ fr-duplicate-warning 遥测（L3 证据发生器指标③）。
++  // fail-soft 全包：索引不存在/解析失败零打扰（同步实现——全部叶子静态导入）。
++  try {
++    const frKnowledgeRoot = specRoot ? join(specRoot, 'knowledge') : join(cwd, '.sillyspec', 'knowledge')
++    const req = parseChangeRequirements(changeDir)
++    if (!req.missing && req.frs.length > 0) {
++      const domains = resolveTouchedDomains(changeDir, discoverModuleIndex(frKnowledgeRoot))
++      const active = readActiveFrDigest(frKnowledgeRoot, domains)
++      if (active.length > 0) {
++        for (const fr of req.frs) {
++          if (fr.supersedes.length > 0 || !fr.title) continue
++          let hit = null
++          for (const a of active) {
++            const o = frTitleOverlap(fr.title, a.title)
++            if (!hit || o > hit.o) hit = { a, o }
++          }
++          if (hit && hit.o >= 0.6) {
++            warnings.push(`疑似重复 FR：新「${fr.local} ${fr.title}」与现行 ${hit.a.id}「${hit.a.title}」标题重叠度 ${(hit.o * 100).toFixed(0)}%——若为改写/取代请在该 FR 块加承接行 \`承接: ${hit.a.id}\`，若为不同需求请改标题区分（advisory，L1 观察指标）`)
++            try {
++              appendKnowledgeHit(join(specRoot || join(cwd, '.sillyspec'), '.runtime'), {
++                type: 'fr-duplicate-warning', change: changeName, title: fr.title, candidate: hit.a.id, overlap: Number(hit.o.toFixed(2)),
++              })
++            } catch { /* 遥测 fail-soft */ }
++          }
++        }
++      }
++    }
++  } catch { /* FR 软门 fail-soft：索引/解析异常零打扰 */ }
++
+   if (designContent) {
+     const content = designContent
+ 
+@@ -1344,10 +1380,12 @@ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
+ //
+ // 「要不要集成证据」（validateVerifyOutputs 的 requiresEvidence）与「能不能写 PASS」（本
+ // validator）解耦：结论=PASS 时四个已知未验证区任一在场即 error——
+-//   ① 集成实测未跑（facts.integrationRan=not-ran，D-006 判定表）
+-//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」）
++//   ① 集成实测未跑（facts.integrationRan≠ran，D-006 判定表——字段不在场按未跑处理，与⑤同族口径）
++//   ② blocking 级移交项在场（facts.handover[].severity，D-005@v2——④管「有去向」、②管「去向是否 blocking」；
++//   facts.handover 不在场=无法核对 blocking 行，fail-closed 拦下）
+ //   ③ db 脚本未声明执行（verify 时点文件集 ∩ db/**/*.sql 对账 facts.dbScriptDeclarations，D-012）
+-//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover）
++//   ④ 矩阵含 partial/uncovered 且移交项零有效行（facts.matrixPartialRows × facts.handover——
++//   matrixPartialRows 不在场=无法核对矩阵，按含 partial 处理，仍以「零有效移交行」为触发前提）
+ //   附加：runtimeEndpointExcluded=true 且判级 integration/deployment-critical 且 handover 零行
+ //   → 计入①事实面（D-004/FR-03，仅判级时计入）。
+ //   ⑤ 接口冒烟未跑（facts.smokeRan≠ran，仅判级 integration/deployment-critical 时计入，
+@@ -1417,6 +1455,8 @@ export function evaluatePassEligibility(args) {
+   const factsMissing = !a.facts || typeof a.facts !== 'object'
+   const facts = factsMissing ? {} : a.facts
+   const handoverItems = (facts.handover && Array.isArray(facts.handover.items)) ? facts.handover.items : []
++  const handoverFieldMissing = !factsMissing && !(facts.handover && Array.isArray(facts.handover.items))
++  const matrixPartialMissing = !factsMissing && facts.matrixPartialRows == null
+   const blockingRows = handoverItems.filter(it => it && it.severity === 'blocking')
+   const criticalLevel = a.changeRiskProfile && ['integration-critical', 'deployment-critical'].includes(a.changeRiskProfile.level)
+   const NOTES_FIX = '改写结论为 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）'
+@@ -1429,24 +1469,30 @@ export function evaluatePassEligibility(args) {
+     )
+   }
+ 
+-  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败）
+-  if (factsMissing || facts.integrationRan === 'not-ran') {
+-    triggered.push({ fact: 'integration-not-run', detail: factsMissing ? 'facts 缺失（fail-closed 按未跑处理）' : 'facts.integrationRan=not-ran' })
++  // ① 集成实测未跑（时序口径 X-01：validator 时点只认已落盘 quality-scan 记录，被拦出路=重跑质量扫描步或降级 NOTES，不算失败；
++  // 字段不在场 fail-closed 按未跑处理——⑤同族口径，防存量底稿缺字段静默 PASS）
++  if (factsMissing || facts.integrationRan !== 'ran') {
++    const integrationDetail = factsMissing
++      ? 'facts 缺失（fail-closed 按未跑处理）'
++      : `facts.integrationRan=${facts.integrationRan == null ? '不在场（按未跑处理）' : facts.integrationRan}`
++    triggered.push({ fact: 'integration-not-run', detail: integrationDetail })
+     errors.push(
+-      `[fact integration-not-run] 集成实测未跑（${factsMissing ? 'verify-facts.json 缺失，fail-closed 按未跑处理' : 'facts.integrationRan=not-ran'}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
+-      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts；仍未跑则${NOTES_FIX}承载（不算失败）。`
++      `[fact integration-not-run] 集成实测未跑（${integrationDetail}）——结论=PASS 须集成实测已跑（D-006 判定表：quality-scan 实测记录（skip 除外）或跨层回执条目）。` +
++      `出路：重跑质量扫描步落实测记录，或提供跨层实测回执后重跑 verify-probes 刷新 facts（字段不在场多为存量底稿未含新字段，重跑即刷新）；仍未跑则${NOTES_FIX}承载（不算失败）。`
+     )
+   }
+ 
+-  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥）
+-  if (factsMissing || blockingRows.length > 0) {
++  // ② blocking 级移交项在场（blocking 移交项与结论 PASS 互斥；facts.handover 不在场=无法核对，fail-closed）
++  if (factsMissing || handoverFieldMissing || blockingRows.length > 0) {
+     const list = blockingRows.map(it => `${it.type || '未知类型'}｜${String(it.item || '').slice(0, 60)}`).join('；')
+-    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : `${blockingRows.length} 条 blocking 行：${list}` })
++    triggered.push({ fact: 'blocking-handover-present', detail: factsMissing ? 'facts 缺失（fail-closed）' : handoverFieldMissing ? 'facts.handover 不在场（fail-closed 无法核对）' : `${blockingRows.length} 条 blocking 行：${list}` })
+     errors.push(
+       `[fact blocking-handover-present] ${factsMissing
+         ? '移交项 blocking 级行无法核对（verify-facts.json 缺失，fail-closed 按在场触发）'
+-        : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
+-      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : list}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
++        : handoverFieldMissing
++          ? '移交项 blocking 级行无法核对（facts.handover 不在场——存量底稿未含该字段或管线故障，fail-closed 拦下；重跑 verify-probes 幂等刷新 facts 即可消解）'
++          : `移交项含 ${blockingRows.length} 条 blocking 级行——承认有必须兜底的未竟事项即不是 PASS（④管「有去向」、②管「去向是否 blocking」）`}。` +
++      `触发行：${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : (list || '（handover 不可核对，无行可列）')}。修复：${NOTES_FIX}；确属 advisory 的按降级文法「（降级：<理由>，依据 <file:line 或 D-xxx>）」显式降级。`
+     )
+   }
+ 
+@@ -1462,11 +1508,18 @@ export function evaluatePassEligibility(args) {
+     )
+   }
+ 
+-  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向）
+-  if (factsMissing || ((facts.matrixPartialRows || 0) > 0 && handoverItems.length === 0)) {
+-    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
++  // ④ 矩阵含 partial/uncovered 且移交项零有效行（任意 severity——部分实现必须有移交去向；
++  // matrixPartialRows 不在场=无法核对矩阵，fail-closed 按含 partial 处理，触发前提仍是零有效移交行——
++  // 有真移交行在场即「去向已承载」，不因字段缺失误拦）
++  if (factsMissing || ((matrixPartialMissing || facts.matrixPartialRows > 0) && handoverItems.length === 0)) {
++    const matrixDesc = factsMissing
++      ? '（facts 缺失，无法核对——fail-closed）'
++      : matrixPartialMissing
++        ? '（facts.matrixPartialRows 不在场，无法核对——fail-closed 按含 partial 处理；重跑 verify-probes 刷新 facts 即可消解）'
++        : `${facts.matrixPartialRows} 行 partial/uncovered`
++    triggered.push({ fact: 'matrix-partial-no-handover', detail: factsMissing ? 'facts 缺失（fail-closed）' : matrixPartialMissing ? 'facts.matrixPartialRows 不在场（fail-closed 按含 partial 处理）且 handover 零有效行' : `matrixPartialRows=${facts.matrixPartialRows} 且 handover 零有效行` })
+     errors.push(
+-      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${factsMissing ? '（facts 缺失，无法核对——fail-closed）' : `${facts.matrixPartialRows} 行 partial/uncovered`} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
++      `[fact matrix-partial-no-handover] 验收×测试覆盖矩阵含 ${matrixDesc} 且「## 移交项（结构化）」零有效行——部分实现必须有移交去向。修复：${NOTES_FIX}承载（任意 severity 均可，blocking 级另受条件②约束）。`
+     )
+   }
+ 
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index e802451..5ef1af9 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -531,6 +531,10 @@ created_at: <now-datetime>
+ - ...
+ \`\`\`
+ 
++### 触达域现行 FR（FR 索引注入，2026-09-18-fr-index-l1）
++{FR_INDEX_DIGEST}
++写作纪律（防重复 FR——L1 索引实验的承接数据源）：改写/取代上列已有行为 → 对应新 FR 块**必须加承接行**引用全局 id（如 \`承接: FR-core-engine-003\`，多个逗号分隔）；全新行为 → 新 FR 块不加承接。承接行在归档时由 CLI 翻旧条目 superseded 并建取代链。
++
+ ### requirements.md 格式要求
+ \`\`\`markdown
+ ---
+@@ -548,11 +552,12 @@ created_at: <now-datetime>
+ 
+ ### FR-01: 需求名称
+ 覆盖决策：D-001@v1, D-002@v1（如适用）
++承接: FR-<域>-NNN（如适用——改写/取代上列注入清单中的已有行为时必填，全新行为省略本行）
+ Given 前提条件
+ When 触发动作
+ Then 期望结果
+ 
+-（每个边界条件独立 GWT 块）
++（每个边界条件独立 GWT 块；场景名行 \`#### 场景：X\` 会被归档索引用作摘要，建议保留）
+ 
+ ## 非功能需求
+ - 兼容性：...
+diff --git a/test/doctor-archive-integrity.test.mjs b/test/doctor-archive-integrity.test.mjs
+index aee22f4..428412d 100644
+--- a/test/doctor-archive-integrity.test.mjs
++++ b/test/doctor-archive-integrity.test.mjs
+@@ -233,6 +233,87 @@ const LEGACY_PLAN_ALL_CHECKED = '# 计划\n\n- [x] task-01: 实现功能\n- [x]
+   assert((dim.findings || []).some((f) => f.includes('解析失败')), '17b 解析失败注记在场')
+ }
+ 
++// ── 18-21. D14 第四检查（FR 索引在场+取代完整，epoch=2026-09-18 分界，2026-09-18-fr-index-l1） ──
++async function frCase(prefix, { archiveName, requirements, indexChange, indexWithSupersede }) {
++  const root = makeTmpDir(prefix)
++  const specBase = join(root, '.sillyspec')
++  const knowledgeRoot = join(specBase, 'knowledge')
++  mkdirSync(knowledgeRoot, { recursive: true })
++  const dir = makeArchive(root, archiveName, { tasks: ALL_CHECKED_TASKS, plan: true })
++  if (requirements) writeFileSync(join(dir, 'requirements.md'), requirements)
++  if (indexChange) {
++    const { indexRequirements } = await import('../src/fr-index.js')
++    const srcDir = join(specBase, 'changes', indexChange)
++    mkdirSync(srcDir, { recursive: true })
++    writeFileSync(join(srcDir, 'requirements.md'), requirements || '# R\n')
++    indexRequirements({ changeDir: srcDir, knowledgeRoot })
++  }
++  if (indexWithSupersede) {
++    // 直接构造含 superseded 标记的索引条目（不走 indexRequirements——本组测 doctor 读侧）
++    const frDir = join(knowledgeRoot, 'fr')
++    mkdirSync(frDir, { recursive: true })
++    writeFileSync(join(frDir, 'unmapped.md'),
++      `## FR-unmapped-001 老需求\n变更：${indexWithSupersede}\n状态：superseded\nsuperseded_by：FR-unmapped-002\n摘要：x\n最近确认：\n`)
++  }
++  return getDim(await runDoctorDiagnostics({ cwd: root }))
++}
++
++{
++  const dim = await frCase('dr-arch-18-', {
++    archiveName: '2026-01-01-pre-epoch',
++    requirements: '# R\n### FR-01: 老需求\n',
++    indexChange: '2026-09-18-idx-src',
++  })
++  assert(dim && dim.pass === true, '18 epoch 前归档（2026-01-01）零 FR 检查（存量不回填）')
++}
++{
++  const dim = await frCase('dr-arch-19-', {
++    archiveName: '2026-09-19-post-epoch',
++    requirements: '# R\n### FR-01: 新需求\n',
++    indexChange: '2026-09-19-idx-src', // 索引条目归属另一变更名 → 本归档在场性缺失
++  })
++  assert(dim && dim.pass === false, '19a epoch 后归档索引缺失 → offender')
++  const offender = (dim.offenders || [])[0]
++  assert(offender && offender.reasons.some((r) => r.includes('FR 索引缺失')), `19b reason 指名索引缺失（实际 ${JSON.stringify(offender && offender.reasons)}）`)
++}
++{
++  // 手写索引：归档在场（002 归属本归档）+ 001 被 requirements 承接但未翻 superseded → 精确取代缺口
++  const root = makeTmpDir('dr-arch-20-')
++  const knowledgeRoot = join(root, '.sillyspec', 'knowledge')
++  mkdirSync(join(knowledgeRoot, 'fr'), { recursive: true })
++  writeFileSync(join(knowledgeRoot, 'fr', 'unmapped.md'),
++    '## FR-unmapped-001 老需求\n变更：older\n状态：active\n摘要：x\n最近确认：\n\n## FR-unmapped-002 改造\n变更：2026-09-19-sup-bad\n状态：active\n摘要：y\n最近确认：\n')
++  const dir = makeArchive(root, '2026-09-19-sup-bad', { tasks: ALL_CHECKED_TASKS, plan: true })
++  writeFileSync(join(dir, 'requirements.md'), '# R\n### FR-01: 改造\n承接: FR-unmapped-001\n')
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === false && (dim.offenders || [])[0]?.reasons.some((r) => r.includes('承接未翻取代')), `20 在场但承接未翻 → 精确报取代缺口（实际 ${JSON.stringify((dim.offenders || [])[0])}）`)
++}
++{
++  // 21 quick/无 requirements 豁免 + fr/ 目录不存在（仓未启用）
++  const root = makeTmpDir('dr-arch-21-')
++  makeArchive(root, '2026-09-19-no-req', { tasks: ALL_CHECKED_TASKS, plan: true }) // 无 requirements.md
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === true, '21a 无 requirements（quick/scale:small 面）→ 零索引义务绿')
++  const root2 = makeTmpDir('dr-arch-21b-')
++  const dir2 = makeArchive(root2, '2026-09-19-x', { tasks: ALL_CHECKED_TASKS, plan: true })
++  writeFileSync(join(dir2, 'requirements.md'), '# R\n### FR-01: q\n')
++  const dim2 = getDim(await runDoctorDiagnostics({ cwd: root2 }))
++  assert(dim2 && dim2.pass === true, '21b fr/ 目录不存在（仓未启用）→ 全跳不误报')
++}
++
++{
++  // 20b 正向：epoch 后归档在场 + 承接已翻取代 → 零 offender（R1 缺口：doctor 套件缺正向组）
++  const root = makeTmpDir('dr-arch-20b-')
++  const knowledgeRoot = join(root, '.sillyspec', 'knowledge')
++  mkdirSync(join(knowledgeRoot, 'fr'), { recursive: true })
++  writeFileSync(join(knowledgeRoot, 'fr', 'unmapped.md'),
++    '## FR-unmapped-001 老需求\n变更：older\n状态：superseded\nsuperseded_by：FR-unmapped-002\n取代链：FR-unmapped-001 ← FR-unmapped-002\n摘要：x\n最近确认：\n\n## FR-unmapped-002 改造\n变更：2026-09-19-sup-ok\n状态：active\n摘要：y\n最近确认：\n')
++  const dir = makeArchive(root, '2026-09-19-sup-ok', { tasks: ALL_CHECKED_TASKS, plan: true })
++  writeFileSync(join(dir, 'requirements.md'), '# R\n### FR-01: 改造\n承接: FR-unmapped-001\n')
++  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
++  assert(dim && dim.pass === true, `20b 在场+承接已翻 → 零 offender（正向闭环，实际 ${dim && dim.evidence}）`)
++}
++
+ // ── 10. CLI 端到端：doctor --json 含维度 ──
+ {
+   const root = makeTmpDir('dr-arch-10-')
+diff --git a/test/fr-index.test.mjs b/test/fr-index.test.mjs
+new file mode 100644
+index 0000000..596d368
+--- /dev/null
++++ b/test/fr-index.test.mjs
+@@ -0,0 +1,252 @@
++/**
++ * fr-index 测试（2026-09-18-fr-index-l1 L1——稳定 FR id/索引/取代链/注入源/重叠检测）
++ *
++ * 覆盖（fixture 全态，不触真实 .sillyspec）：
++ *   1. 发号：域计数器 max+1 跨变更递增（001→002→003）；unmapped 域兜底
++ *   2. 幂等重放：同变更第二次调用 written/superseded 皆空（幂等键=全局 id）
++ *   3. 承接翻链：旧条目 superseded + superseded_by=新 id；取代链事件返回完整
++ *   4. 坏承接：引用不存在的 id → warnings 收集不抛不翻链
++ *   5. digest：readActiveFrDigest 只出 active（superseded 藏）+ 场景名摘要
++ *   6. overlap 纯函数：高相似 ≥0.6 / 低相似 <0.2 / 空串安全
++ *   7. unreferenced 探针：触达域 active 未被承接引用计数（D-008 护栏③）
++ *   8. 解析：承接行全角冒号/多 id 逗号分隔/场景名两种写法
++ *   9. INDEX 路由：FR 需求索引段生成；scanFrIndex 全量含 superseded
++ *  10. 归档挂载端到端：executeArchiveDistill → 索引+fr-supersede/fr-unreferenced 遥测落盘读回
++ *
++ * 风格：自研 assert + mkdtempSync（同 machine-interface.test.mjs）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
++import { join, dirname } from 'path'
++import { tmpdir } from 'os'
++import { fileURLToPath } from 'url'
++import { execFileSync } from 'child_process'
++
++import {
++  FR_INDEX_EPOCH,
++  parseChangeRequirements,
++  indexRequirements,
++  readActiveFrDigest,
++  frTitleOverlap,
++  scanFrIndex,
++} from '../src/fr-index.js'
++import { readKnowledgeHits } from '../src/knowledge-hits.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (!condition) {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  } else {
++    console.log(`  ✅ PASS: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++function makeFixture() {
++  const root = makeTmpDir('fri-t-')
++  const specBase = join(root, '.sillyspec')
++  const knowledgeRoot = join(specBase, 'knowledge')
++  mkdirSync(knowledgeRoot, { recursive: true })
++  const mkChange = (name, req) => {
++    const d = join(specBase, 'changes', name)
++    mkdirSync(d, { recursive: true })
++    writeFileSync(join(d, 'requirements.md'), req)
++    return d
++  }
++  return { root, specBase, knowledgeRoot, mkChange }
++}
++
++// ── 1+2. 发号与幂等 ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  const d1 = mkChange('2026-09-18-aaa', '# R\n\n### FR-01: 用户登录\n#### 场景：正常登录\n')
++  const r1 = indexRequirements({ changeDir: d1, knowledgeRoot, headHash: 'h1' })
++  assert(r1.written.length === 1 && r1.written[0].id === 'FR-unmapped-001', `1a 域计数器首发 FR-unmapped-001（实际 ${r1.written[0] && r1.written[0].id}）`)
++  assert(FR_INDEX_EPOCH === '2026-09-18', '1b epoch 常量')
++  const r1b = indexRequirements({ changeDir: d1, knowledgeRoot })
++  assert(r1b.written.length === 0 && r1b.superseded.length === 0, '2 幂等重放：第二次零写入零翻链')
++}
++
++// ── 3+4. 承接翻链与坏引用 ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  mkChange('2026-09-18-a1', '# R\n### FR-01: 用户登录\n')
++  indexRequirements({ changeDir: join(knowledgeRoot, '..', 'changes', '2026-09-18-a1'), knowledgeRoot })
++  const d2 = mkChange('2026-09-18-a2', '# R\n### FR-01: 用户登录双因子\n承接: FR-unmapped-001, FR-unmapped-999\n')
++  const r2 = indexRequirements({ changeDir: d2, knowledgeRoot })
++  assert(r2.superseded.length === 1 && r2.superseded[0].from === 'FR-unmapped-001' && r2.superseded[0].to === 'FR-unmapped-002', `3a 承接翻链（实际 ${JSON.stringify(r2.superseded)}）`)
++  assert(r2.warnings.some((w) => w.includes('FR-unmapped-999')), '4a 坏承接 id 进 warnings 不抛')
++  assert(!r2.superseded.some((s) => s.from === 'FR-unmapped-999'), '4b 坏 id 不产生翻链事件')
++  const file = readFileSync(join(knowledgeRoot, 'fr', 'unmapped.md'), 'utf8')
++  assert(/## FR-unmapped-001 用户登录\n变更：2026-09-18-a1\n状态：superseded\nsuperseded_by：FR-unmapped-002/.test(file.replace(/\r/g, '')), '3b 旧条目 superseded+superseded_by 落盘（归属行对齐底座解析器）')
++}
++
++// ── 5+9. digest 与 scanFrIndex ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  const d1 = mkChange('2026-09-18-b1', '# R\n### FR-01: 导出数据\n#### 场景：CSV导出\n')
++  indexRequirements({ changeDir: d1, knowledgeRoot })
++  const d2 = mkChange('2026-09-18-b2', '# R\n### FR-01: 导出数据JSON\n承接: FR-unmapped-001\n**场景：JSON导出**\n')
++  indexRequirements({ changeDir: d2, knowledgeRoot })
++  const digest = readActiveFrDigest(knowledgeRoot, ['unmapped'])
++  assert(digest.length === 1 && digest[0].id === 'FR-unmapped-002' && digest[0].scenarios.includes('JSON导出'), `5a digest active-only+场景名（实际 ${JSON.stringify(digest)}）`)
++  const all = scanFrIndex(knowledgeRoot)
++  assert(all.length === 2 && all.some((e) => e.id === 'FR-unmapped-001' && e.supersededBy === 'FR-unmapped-002') && all.some((e) => e.id === 'FR-unmapped-002' && !e.supersededBy), '9a scanFrIndex 全量含 superseded 链')
++  const idx = readFileSync(join(knowledgeRoot, 'INDEX.md'), 'utf8')
++  assert(idx.includes('## FR 需求索引') && idx.includes('fr/unmapped.md'), '9b INDEX FR 路由段生成')
++  const decisionsIdx = idx.includes('## Decisions') ? idx : '（本 fixture 无 decisions 段，合法）'
++  assert(typeof decisionsIdx === 'string', '9c decisions 段互不干扰（fr 段独立）')
++}
++
++// ── 6. overlap 纯函数 ──
++{
++  assert(frTitleOverlap('导出数据', '导出数据增强') >= 0.6, '6a 高相似过阈值（3/5=0.6 边界命中）')
++  assert(frTitleOverlap('导出数据功能', '用户登录功能') < 0.2, '6b 低相似不过阈值')
++  assert(frTitleOverlap('', 'x') === 0 && frTitleOverlap(undefined, null) === 0, '6c 空值安全')
++}
++
++// ── 7. unreferenced 探针 ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  mkChange('2026-09-18-c1', '# R\n### FR-01: 需求A\n### FR-02: 需求B\n')
++  indexRequirements({ changeDir: join(knowledgeRoot, '..', 'changes', '2026-09-18-c1'), knowledgeRoot })
++  const d2 = mkChange('2026-09-18-c2', '# R\n### FR-01: 需求A改造\n承接: FR-unmapped-001\n')
++  const r2 = indexRequirements({ changeDir: d2, knowledgeRoot })
++  assert(r2.unreferenced.length === 1 && r2.unreferenced[0].domain === 'unmapped' && r2.unreferenced[0].count === 1, `7a 未引用计数=active(001翻链+003新增)−承接引用（实际 ${JSON.stringify(r2.unreferenced)}）`)
++}
++
++// ── 8. 解析形态 ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  const d = mkChange('2026-09-18-p', '# R\n### FR-01: 全角承接\n承接：FR-x-001，FR-x-002\n#### 场景：甲\n**场景：乙**\n')
++  const p = parseChangeRequirements(d)
++  assert(p.frs.length === 1 && p.frs[0].supersedes.length === 2 && p.frs[0].supersedes[0] === 'FR-x-001', '8a 全角冒号+全角逗号多 id')
++  assert(p.frs[0].scenarios.includes('甲') && p.frs[0].scenarios.includes('乙'), '8b 场景名两种写法（#### 与 **加粗**）')
++  assert(parseChangeRequirements(join(knowledgeRoot, 'no-such')).missing === true, '8c requirements 缺失 → missing')
++}
++
++// ── 10. 归档挂载端到端（executeArchiveDistill → 索引 + 遥测读回）──
++{
++  const { root, specBase, mkChange } = makeFixture()
++  mkChange('2026-09-18-e1', '# R\n### FR-01: 归档端到端\n### FR-02: 独立需求\n')
++  const { executeArchiveDistill } = await import('../src/run/archive-distill.js')
++  // executeArchiveDistill 会先跑决策提炼（无 decisions.md → skipped 零输出），再跑 FR 索引
++  let out = ''
++  const origLog = console.log
++  const origWarn = console.warn
++  console.log = (...a) => { out += a.join(' ') + '\n' }
++  console.warn = () => {}
++  try {
++    await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-e1' })
++  } finally {
++    console.log = origLog
++    console.warn = origWarn
++  }
++  assert(out.includes('FR 索引') && out.includes('FR-unmapped-001'), `10a 归档步打印发号（${out.includes('FR-unmapped-001') ? '含 id' : '缺 id'}）`)
++  assert(existsSync(join(specBase, 'knowledge', 'fr', 'unmapped.md')), '10b 索引文件落盘')
++  // 二次归档带承接（001→003，002 保持 active 未被引用）→ fr-supersede + fr-unreferenced 遥测
++  mkChange('2026-09-18-e2', '# R\n### FR-01: 归档端到端v2\n承接: FR-unmapped-001\n')
++  await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-e2' })
++  const hits = readKnowledgeHits(join(specBase, '.runtime'))
++  const sup = hits.find((h) => h.type === 'fr-supersede' && h.from === 'FR-unmapped-001')
++  assert(sup && sup.to === 'FR-unmapped-003' && sup.change === '2026-09-18-e2', `10c fr-supersede 遥测落盘可读回（实际 ${JSON.stringify(sup)}）`)
++  const unref = hits.filter((h) => h.type === 'fr-unreferenced')
++  assert(unref.length >= 1 && unref.some((u) => u.domain === 'unmapped' && u.count === 1), `10d fr-unreferenced 探针事件（002 独立需求未被引用，实际 ${JSON.stringify(unref)}）`)
++}
++
++// ── 10e. CLI 端到端：软门 warning 经 validateBrainstormOutputs 面透出（不阻断）──
++{
++  const { root, specBase, mkChange } = makeFixture()
++  mkChange('2026-09-18-soft', '# R\n### FR-01: 归档端到端\n')
++  const { executeArchiveDistill } = await import('../src/run/archive-distill.js')
++  await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-soft' })
++  // 新变更标题与 active 条目高相似（bigram 重叠 0.8）、无承接 → 软门 warn 不 error
++  const d = mkChange('2026-09-18-soft2', '# R\n### FR-01: 归档端到端增强\n')
++  const { runValidators } = await import('../src/stage-contract.js')
++  const r = runValidators('brainstorm', root, '2026-09-18-soft2', { specRoot: specBase })
++  assert((r.errors || []).every((e) => !String(e).includes('疑似重复 FR')), '10e-1 疑似重复永不进 errors 面（advisory 永不阻断的硬证据）')
++  assert((r.warnings || []).some((w) => w.includes('疑似重复 FR')), `10e-2 疑似重复 warning 透出（实际 warnings=${(r.warnings || []).length} 条）`)
++  const hits2 = readKnowledgeHits(join(specBase, '.runtime'))
++  assert(hits2.some((h) => h.type === 'fr-duplicate-warning' && h.candidate === 'FR-unmapped-001'), '10e-3 fr-duplicate-warning 遥测落盘')
++}
++
++// ── 11. 注入渲染端到端（outputStep → {FR_INDEX_DIGEST} 替换 + fr-inject 遥测）──
++{
++  const { root, specBase, mkChange } = makeFixture()
++  const d1 = mkChange('2026-09-18-i1', '# R\n### FR-01: 注入渲染\n')
++  indexRequirements({ changeDir: d1, knowledgeRoot: join(specBase, 'knowledge') })
++  // 受注入变更：有 design.md（域解析面）与 requirements.md
++  const d2 = mkChange('2026-09-18-i2', '# R\n### FR-01: 新需求\n')
++  writeFileSync(join(d2, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/foo.js | x |\n')
++  const { outputStep } = await import('../src/run/prompt.js')
++  const steps = [{ name: '生成规范文件', prompt: '写作前列现行 FR：\n{FR_INDEX_DIGEST}\n然后生成四件套。' }]
++  let rendered = ''
++  const origRenderLog = console.log
++  console.log = (...a) => { rendered += a.join(' ') + '\n' }
++  try {
++    await outputStep('brainstorm', 0, steps, root, '2026-09-18-i2', null, { specRoot: specBase })
++  } finally {
++    console.log = origRenderLog
++  }
++  assert(rendered.includes('FR-unmapped-001') && rendered.includes('注入渲染'), `11a digest 段替换注入（含 active 条目）`)
++  assert(!rendered.includes('{FR_INDEX_DIGEST}'), '11b 占位符消隐')
++  const hits = readKnowledgeHits(join(specBase, '.runtime'))
++  assert(hits.some((h) => h.type === 'fr-inject' && h.count >= 1 && Array.isArray(h.domains)), `11c fr-inject 遥测落盘（指标①发生器闭环）`)
++}
++
++// ── 12. 连字符域 + 跨域翻链落盘 + 摘要保留（R1 审查阻断①②回归钉死） ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  // 手播连字符域索引（真实模块 id 形态：core-engine）
++  const frDir = join(knowledgeRoot, 'fr')
++  mkdirSync(frDir, { recursive: true })
++  writeFileSync(join(frDir, 'core-engine.md'),
++    '## FR-core-engine-001 老需求\n变更：older\n状态：active\n摘要：原始场景A；原始场景B\n最近确认：old\n')
++  // 新变更（落 unmapped primary 域）承接引用连字符 id
++  const d = mkChange('2026-09-18-hy', '# R\n### FR-01: 老需求改造\n承接: FR-core-engine-001\n')
++  const r = indexRequirements({ changeDir: d, knowledgeRoot, headHash: 'new' })
++  assert(r.superseded.length === 1 && r.superseded[0].from === 'FR-core-engine-001', `12a 连字符 id 承接可解析翻链（实际 ${JSON.stringify(r.superseded)}）`)
++  const ce = readFileSync(join(frDir, 'core-engine.md'), 'utf8')
++  assert(/状态：superseded/.test(ce) && /superseded_by：FR-unmapped-001/.test(ce.replace(/\r/g, '')), '12b 跨域翻链落盘（阻断②回归：目标域文件真实持久化）')
++  assert(/摘要：原始场景A；原始场景B/.test(ce), '12c 翻链就地补丁保留原摘要（R1 缺口：整段重写抹摘要）')
++  const r2 = indexRequirements({ changeDir: d, knowledgeRoot })
++  assert(r2.written.length === 0, '12d 连字符域幂等（阻断①回归：重跑零写入）')
++  const parsed = parseChangeRequirements(d)
++  assert(parsed.frs[0].supersedes[0] === 'FR-core-engine-001', '12e 承接行连字符 id 解析（阻断①：字符集）')
++}
++
++// ── 13. 多域变更单 id 钉死（D-001 单一身份——R2 残留：无直接测试锚） ──
++{
++  const root = makeTmpDir('fri-md-')
++  const specBase = join(root, '.sillyspec')
++  const knowledgeRoot = join(specBase, 'knowledge')
++  // 双模块索引：discoverModuleIndex 扫 docs/<project>/modules/_module-map.yaml
++  const mapDir = join(specBase, 'docs', 'p1', 'modules')
++  mkdirSync(mapDir, { recursive: true })
++  mkdirSync(knowledgeRoot, { recursive: true })
++  writeFileSync(join(mapDir, '_module-map.yaml'),
++    'schema_version: 2\nmodules:\n  alpha:\n    status: active\n    doc: modules/alpha.md\n    paths:\n      - src/alpha\n  beta:\n    status: active\n    doc: modules/beta.md\n    paths:\n      - src/beta\n')
++  const d = join(specBase, 'changes', '2026-09-18-multi')
++  mkdirSync(d, { recursive: true })
++  writeFileSync(join(d, 'requirements.md'), '# R\n### FR-01: 跨两模块的需求\n')
++  writeFileSync(join(d, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/alpha/a.js |\n| 修改 | src/beta/b.js |\n')
++  const r = indexRequirements({ changeDir: d, knowledgeRoot })
++  assert(r.written.length === 1, `13a 触达两域仍只发一个全局 id（D-001 单一身份，实际 ${JSON.stringify(r.written.map(w => w.id))}）`)
++  assert(r.written[0].file === 'fr/alpha.md', '13b 落 primary 域（首个触达域）')
++}
++
++for (const dir of tmpRoots) {
++  try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)

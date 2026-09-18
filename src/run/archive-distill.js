@@ -45,4 +45,33 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
   } catch (e) {
     console.warn(`\n⚠️  决策提炼执行异常，降级跳过（best-effort，不阻断归档——同旧步降级语义）: ${e && e.message ? e.message : e}`)
   }
+
+  // ── FR 索引提炼（2026-09-18-fr-index-l1 L1：稳定 id 发号+承接翻链；同 best-effort 降级语义）──
+  try {
+    const { indexRequirements } = await import('../fr-index.js')
+    const fr = indexRequirements({ changeDir, knowledgeRoot, headHash })
+    const frWritten = Array.isArray(fr && fr.written) ? fr.written : []
+    if (fr && fr.skipped) {
+      console.log(`\nℹ️  FR 索引零输出：${fr.skipped}`)
+    } else if (frWritten.length > 0) {
+      console.log(`\n📌 FR 索引（CLI 机械执行，幂等）：${frWritten.length} 条已发号入库——`)
+      for (const w of frWritten) console.log(`   - ${w.id} → ${w.file}`)
+    }
+    for (const w of (fr && fr.warnings) || []) {
+      console.warn(`   ⚠️  ${w}`)
+    }
+    // 遥测（L3 证据发生器指标，D-006/D-008）：取代链跟随事件
+    const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+    const runtimeRoot = join(specBase, '.runtime')
+    for (const s of (fr && fr.superseded) || []) {
+      appendKnowledgeHit(runtimeRoot, { type: 'fr-supersede', change: changeName, from: s.from, to: s.to })
+    }
+    // 删除缺口探针（D-008 护栏③）：观察信号，不算 L3 门禁——L1 无删除声明义务，只采趋势数据
+    for (const u of (fr && fr.unreferenced) || []) {
+      appendKnowledgeHit(runtimeRoot, { type: 'fr-unreferenced', change: changeName, domain: u.domain, count: u.count })
+      console.log(`   ℹ️  [观察信号·不算 L3 门禁] 触达域 ${u.domain} 有 ${u.count} 条 active FR 未被本次承接引用（fr-unreferenced 遥测，L3 裁决趋势数据）`)
+    }
+  } catch (e) {
+    console.warn(`\n⚠️  FR 索引执行异常，降级跳过（best-effort，不阻断归档）: ${e && e.message ? e.message : e}`)
+  }
 }

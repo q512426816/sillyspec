@@ -831,7 +831,38 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // fail-soft 同三件套；无 quick 占位符自然零输出。
   if (stageName === 'quick' && promptText.includes('{QUICK_CONTEXT_DIGEST}')) {
     const digestSpecBase = resolvePromptSpecBase(platformOpts, cwd)
-    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST\}/g, buildQuickContextDigest(digestSpecBase, projectName))
+    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST}/g, buildQuickContextDigest(digestSpecBase, projectName))
+  }
+
+  // ①c {FR_INDEX_DIGEST}（2026-09-18-fr-index-l1 L1，D-004）：brainstorm step8 的触达域现行 FR 注入
+  // ——写作期防重复 FR 的确定性清单（superseded 默认藏）；无触达域索引/索引空 → 段消隐。
+  // fr-inject 遥测（L3 证据发生器指标①）fail-soft；token 本体在 stages/brainstorm.js step8 模板。
+  if (stageName === 'brainstorm' && promptText.includes('{FR_INDEX_DIGEST}')) {
+    try {
+      const frSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      const { discoverModuleIndex } = await import('../decision-distill.js')
+      const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
+      const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
+      const knowledgeRoot = join(frSpecBase, 'knowledge')
+      const domains = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
+      const entries = readActiveFrDigest(knowledgeRoot, domains)
+      if (entries.length === 0) {
+        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
+      } else {
+        const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}）`)
+        lines.push('')
+        lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。')
+        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
+      }
+      try {
+        const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+        appendKnowledgeHit(join(frSpecBase, '.runtime'), {
+          type: 'fr-inject', change: changeName, domains, count: entries.length,
+        })
+      } catch { /* 遥测 fail-soft */ }
+    } catch (e) {
+      promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
+    }
   }
 
   // ② {GIT_DIRTY}：工作区脏文件清单（git status --porcelain，quick 收尾步消费）

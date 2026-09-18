@@ -92,6 +92,7 @@ modules:
       - src/knowledge-classify.js
       - src/knowledge-stats.js
       - src/doctor-diagnostics.js
+      - src/fr-index.js
       - src/fs-atomic.js
       - src/datetime.js
       - src/constants.js

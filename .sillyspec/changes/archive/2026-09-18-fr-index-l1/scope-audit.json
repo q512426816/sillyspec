@@ -1,0 +1,100 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "b49992981ce570f8085caacfdaefa09e79992004",
+  "totals": {
+    "files": 10,
+    "additions": 891,
+    "deletions": 45
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "additions": 32,
+      "deletions": 25,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 29,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/fr-index.js",
+      "additions": 359,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/archive-distill.js",
+      "additions": 29,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "additions": 32,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "additions": 70,
+      "deletions": 17,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "additions": 6,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/doctor-archive-integrity.test.mjs",
+      "additions": 81,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/fr-index.test.mjs",
+      "additions": 252,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "23395ca0fd7f7972fc361fc50329451af86222136ca065f1ebc5dd4f85fe2de7",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-18T00:05:06.231Z"
+}

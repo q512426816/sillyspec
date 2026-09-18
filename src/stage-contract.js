@@ -17,6 +17,11 @@ import { evaluateRules } from './stage-contract-engine.js'
 import { getRule } from './stage-contract-spec.js'
 import { backfillFrontmatter } from './scan-postcheck.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
+// FR 索引消费（2026-09-18-fr-index-l1 L1）：重复嫌疑软门（advisory）——fr-index 是纯 fs+decision-distill
+// 叶子链，静态引入无环；knowledge-hits 同为叶子。
+import { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap } from './fr-index.js'
+import { discoverModuleIndex } from './decision-distill.js'
+import { appendKnowledgeHit } from './knowledge-hits.js'
 // design.md 文件清单解析（2026-09-17-pass-cap-semantics task-02 事实③）：change-list 是纯 fs
 // 叶子模块（design-facts / scope-audit / verify-probes 等同款直连惯例），静态引入无环。
 import { parseFileChangeListDetailed } from './change-list.js'
@@ -320,6 +325,37 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
   const engineResult = evaluateRules('brainstorm', { changeDir, scale })
   const errors = [...engineResult.errors]
   const warnings = [...engineResult.warnings]
+
+  // ── FR 重复嫌疑软门（2026-09-18-fr-index-l1 L1，D-005：advisory 永不阻断）──
+  // 新 requirements 的无承接 FR × 同域 active 索引条目标题 bigram 重叠 ≥0.6 → warning
+  // （双出路：加承接行或改标题区分）+ fr-duplicate-warning 遥测（L3 证据发生器指标③）。
+  // fail-soft 全包：索引不存在/解析失败零打扰（同步实现——全部叶子静态导入）。
+  try {
+    const frKnowledgeRoot = specRoot ? join(specRoot, 'knowledge') : join(cwd, '.sillyspec', 'knowledge')
+    const req = parseChangeRequirements(changeDir)
+    if (!req.missing && req.frs.length > 0) {
+      const domains = resolveTouchedDomains(changeDir, discoverModuleIndex(frKnowledgeRoot))
+      const active = readActiveFrDigest(frKnowledgeRoot, domains)
+      if (active.length > 0) {
+        for (const fr of req.frs) {
+          if (fr.supersedes.length > 0 || !fr.title) continue
+          let hit = null
+          for (const a of active) {
+            const o = frTitleOverlap(fr.title, a.title)
+            if (!hit || o > hit.o) hit = { a, o }
+          }
+          if (hit && hit.o >= 0.6) {
+            warnings.push(`疑似重复 FR：新「${fr.local} ${fr.title}」与现行 ${hit.a.id}「${hit.a.title}」标题重叠度 ${(hit.o * 100).toFixed(0)}%——若为改写/取代请在该 FR 块加承接行 \`承接: ${hit.a.id}\`，若为不同需求请改标题区分（advisory，L1 观察指标）`)
+            try {
+              appendKnowledgeHit(join(specRoot || join(cwd, '.sillyspec'), '.runtime'), {
+                type: 'fr-duplicate-warning', change: changeName, title: fr.title, candidate: hit.a.id, overlap: Number(hit.o.toFixed(2)),
+              })
+            } catch { /* 遥测 fail-soft */ }
+          }
+        }
+      }
+    }
+  } catch { /* FR 软门 fail-soft：索引/解析异常零打扰 */ }
 
   if (designContent) {
     const content = designContent

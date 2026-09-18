@@ -211,8 +211,9 @@ function parseModulePathsSubset(content) {
 /** 未注入 moduleIndex 时的尽力发现：knowledgeRoot 同级 docs/<项目>/modules/_module-map.yaml。
  * 多子项目仓（如本仓 sillyspec+dashboard）各项目有自己的 map——dogfood 实证（2026-08-24）：
  * 只取首个命中会把主项目条目全部误落 unmapped（dashboard 的 map 按字母序先命中）。
- * 改为合并全部项目的 map（同名模块合并 paths/core_files 去重），失败归 null → 全部 unmapped。 */
-function discoverModuleIndex(knowledgeRoot) {
+ * 改为合并全部项目的 map（同名模块合并 paths/core_files 去重），失败归 null → 全部 unmapped。
+ * 2026-09-18-fr-index-l1：导出供 fr-index 域解析复用。 */
+export function discoverModuleIndex(knowledgeRoot) {
   try {
     const docsDir = join(dirname(knowledgeRoot), 'docs')
     if (!existsSync(docsDir)) return null
@@ -319,15 +320,19 @@ function renderBlockLines(entry, headHash, supersedesNote, changeName) {
   return lines
 }
 
-/** 知识文件切段：preamble 行 + D-xxx@vN 条目段（段边界 = 下一 `## D-` 头）。
+/** 知识文件切段：preamble 行 + 条目段（段边界 = 下一节头）。
  * 段的变更归属取段内 `变更：<name>` 行；无该行的历史条目 → change=null（legacy：
- * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。 */
-function splitKnowledgeSections(content) {
+ * 升级前落库的条目，不参与新条目的同号匹配/supersede——只共存不误删）。
+ * 2026-09-18-fr-index-l1 参数化：sectionRegex/buildId 经参（decisions 缺省不变；fr 侧传 FR 节头
+ * 正则与恒等 id），decisions 调用点零改动。 */
+export function splitKnowledgeSections(content, opts = {}) {
+  const sectionRegex = opts.sectionRegex || /^## (D-\d+)@v(\d+)\s*(.*)$/
+  const buildId = opts.buildId || ((n, v) => `${n}@v${v}`)
   const sections = []
   const preamble = []
   let cur = null
   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
-    const m = line.match(/^## (D-\d+)@v(\d+)\s*(.*)$/)
+    const m = line.match(sectionRegex)
     if (m) {
       if (cur) sections.push(cur)
       cur = { number: m[1], version: parseInt(m[2], 10), title: m[3].trim(), lines: [line] }
@@ -338,7 +343,7 @@ function splitKnowledgeSections(content) {
   }
   if (cur) sections.push(cur)
   for (const s of sections) {
-    s.id = `${s.number}@v${s.version}`
+    s.id = buildId(s.number, s.version)
     const cm = s.lines.find(l => /^变更[：:]/.test(l))
     s.change = cm ? cm.replace(/^变更[：:]\s*/, '').trim() || null : null
   }
@@ -346,7 +351,7 @@ function splitKnowledgeSections(content) {
 }
 
 /** 段落重组落盘文本（幂等归一：段间恰好一个空行 + 文件单一尾换行） */
-function joinKnowledgeFile(preamble, sections) {
+export function joinKnowledgeFile(preamble, sections) {
   const parts = []
   const pre = preamble.join('\n').replace(/\s+$/, '')
   if (pre) parts.push(pre)
@@ -394,19 +399,21 @@ function applyEntryToSections(sections, entry, headHash) {
 // INDEX.md decisions 路由行幂等维护（FR-05：写入责任在本模块；只动 ## Decisions 段内指向 decisions/ 的行）
 // ---------------------------------------------------------------------------
 
-/** INDEX 路由行格式与 knowledge-match 解析口径一致：`- <域>|decision|决策 → [decisions/<域>.md](decisions/<域>.md)` */
-function routingLine(domain) {
-  return `- ${domain}|decision|决策 → [decisions/${domain}.md](decisions/${domain}.md)`
-}
-
-const ROUTING_TARGET_RE = /^-\s+.*→\s*\[[^\]]*\]\(decisions\/([^)#]+?)(?:\.md)?(?:#[^)]*)?\)\s*$/
-
-/** 域文件实况 ↔ ## Decisions 段路由行对账：缺行补、失效行删、重复行去重；不动其他类别行 */
-function syncIndexRoutingLines(knowledgeRoot) {
-  const decisionsDir = join(knowledgeRoot, 'decisions')
+/**
+ * 域文件实况 ↔ INDEX 段路由行对账：缺行补、失效行删、重复行去重；不动其他类别行。
+ * 2026-09-18-fr-index-l1 参数化：section/subdir/makeLine/matchTarget 经参（decisions 缺省不变），
+ * fr 侧传 'FR 需求索引' 段与 fr/ 子目录——两类路由行各守各段互不干扰。
+ */
+export function syncIndexRoutingLines(knowledgeRoot, opts = {}) {
+  const sectionName = opts.section || 'Decisions'
+  const subdir = opts.subdir || 'decisions'
+  const makeLine = opts.makeLine || ((d) => `- ${d}|decision|决策 → [${subdir}/${d}.md](${subdir}/${d}.md)`)
+  const esc = subdir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const targetRe = opts.matchTarget || new RegExp(`^-\\s+.*→\\s*\\[[^\\]]*\\]\\(${esc}/([^)#]+?)(?:\\.md)?(?:#[^)]*)?\\)\\s*$`)
+  const domainDir = join(knowledgeRoot, subdir)
   let domains
   try {
-    domains = readdirSync(decisionsDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, ''))
+    domains = readdirSync(domainDir).filter(f => f.endsWith('.md')).map(f => f.replace(/\.md$/, ''))
   } catch { return false }
   if (domains.length === 0) return false
 
@@ -417,29 +424,29 @@ function syncIndexRoutingLines(knowledgeRoot) {
   }
   const lines = original ? original.replace(/\r\n/g, '\n').split('\n') : ['# Knowledge Index', '']
 
-  // 定位 ## Decisions 段边界
+  // 定位段边界（参数化段名）
   let secStart = -1
   let secEnd = lines.length
   for (let i = 0; i < lines.length; i++) {
     const h = lines[i].match(/^##\s+(.+?)\s*$/)
     if (!h) continue
     if (secStart === -1) {
-      if (h[1] === 'Decisions') secStart = i + 1
+      if (h[1] === sectionName) secStart = i + 1
     } else { secEnd = i; break }
   }
 
-  const desired = domains.map(routingLine)
+  const desired = domains.map(makeLine)
   if (secStart === -1) {
     // 无段则追加（保留原文件其余内容）
     while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
-    lines.push('', '## Decisions', ...desired)
+    lines.push('', `## ${sectionName}`, ...desired)
   } else {
     const body = lines.slice(secStart, secEnd)
     const kept = []
     const seen = new Set()
     const domainSet = new Set(domains)
     for (const l of body) {
-      const m = l.match(ROUTING_TARGET_RE)
+      const m = l.match(targetRe)
       if (!m) { kept.push(l); continue } // 非路由行（注释/空行）原样保留
       // 目标域文件仍存在的路由行原样保留（关键词可能被人工扩充）；失效行（文件已不存在）与重复行删
       if (domainSet.has(m[1]) && !seen.has(m[1])) { seen.add(m[1]); kept.push(l) }
@@ -448,7 +455,7 @@ function syncIndexRoutingLines(knowledgeRoot) {
     const tail = []
     while (kept.length > 0 && kept[kept.length - 1].trim() === '') tail.unshift(kept.pop())
     for (const d of desired) {
-      const m = d.match(ROUTING_TARGET_RE)
+      const m = d.match(targetRe)
       if (m && !seen.has(m[1])) kept.push(d) // 缺行补
     }
     kept.push(...tail)

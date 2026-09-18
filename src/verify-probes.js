@@ -1973,14 +1973,15 @@ export function backfillFactsFromMdAndTests(factsPath, { verifyMd, testCheckResu
   if (slots.hasReceiptSlot && slots.runtimeEvidence.length > 0) {
     facts.runtimeEvidence = slots.runtimeEvidence
   }
-  // 移交项结构化回填（handover-only-in-prose）：有有效行 → facts.handover 落盘（机器可读）；
+  // 移交项结构化回填（handover-only-in-prose）：facts.handover **恒落盘**（零行= {count:0, items:[]}——
+  // 2026-09-18-fr-index-l1 verify 期实证死锁修复：原「有行才写」使 零移交+结论 PASS 被
+  // evaluatePassEligibility 条件② handoverFieldMissing fail-closed 拦死（PASS+真零移交结构性不可能）；
+  // eligibility 测试的 CLEAN_FACTS 本就是 count:0 形态——字段在场零行=净，本行只是对齐既有契约）；
   // PASS WITH NOTES 零有效行 → advisory 警告（不阻断——存量 PASS WITH NOTES 无此章节是常态，
   // 渐进采纳）。EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1，清单化才有
   // 「谁兜、怎么复跑」的可追溯面。
   const handoverItems = parseHandoverRows(verifyMdText || '')
-  if (handoverItems.length > 0) {
-    facts.handover = { count: handoverItems.length, items: handoverItems }
-  }
+  facts.handover = { count: handoverItems.length, items: handoverItems }
   if (conclusionSlot === 'PASS WITH NOTES' && handoverItems.length === 0) {
     console.warn('⚠️ 结论=PASS WITH NOTES 但「移交项（结构化）」章节零有效行——正文叙述的移交项（环境阻断复跑条件/人工验收步骤/待执行脚本）请结构化进 ## 移交项（结构化） 表格（类型枚举 env-blocked/manual-acceptance/db-script/other），避免移交项只活在 prose 里没人兜（2026-09-15 EHS 实证：被环境阻断 deferred 的集成测试里藏着 5 个 P1）。')
   }

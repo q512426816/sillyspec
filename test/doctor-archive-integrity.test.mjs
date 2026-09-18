@@ -233,6 +233,87 @@ const LEGACY_PLAN_ALL_CHECKED = '# 计划\n\n- [x] task-01: 实现功能\n- [x] 
   assert((dim.findings || []).some((f) => f.includes('解析失败')), '17b 解析失败注记在场')
 }
 
+// ── 18-21. D14 第四检查（FR 索引在场+取代完整，epoch=2026-09-18 分界，2026-09-18-fr-index-l1） ──
+async function frCase(prefix, { archiveName, requirements, indexChange, indexWithSupersede }) {
+  const root = makeTmpDir(prefix)
+  const specBase = join(root, '.sillyspec')
+  const knowledgeRoot = join(specBase, 'knowledge')
+  mkdirSync(knowledgeRoot, { recursive: true })
+  const dir = makeArchive(root, archiveName, { tasks: ALL_CHECKED_TASKS, plan: true })
+  if (requirements) writeFileSync(join(dir, 'requirements.md'), requirements)
+  if (indexChange) {
+    const { indexRequirements } = await import('../src/fr-index.js')
+    const srcDir = join(specBase, 'changes', indexChange)
+    mkdirSync(srcDir, { recursive: true })
+    writeFileSync(join(srcDir, 'requirements.md'), requirements || '# R\n')
+    indexRequirements({ changeDir: srcDir, knowledgeRoot })
+  }
+  if (indexWithSupersede) {
+    // 直接构造含 superseded 标记的索引条目（不走 indexRequirements——本组测 doctor 读侧）
+    const frDir = join(knowledgeRoot, 'fr')
+    mkdirSync(frDir, { recursive: true })
+    writeFileSync(join(frDir, 'unmapped.md'),
+      `## FR-unmapped-001 老需求\n变更：${indexWithSupersede}\n状态：superseded\nsuperseded_by：FR-unmapped-002\n摘要：x\n最近确认：\n`)
+  }
+  return getDim(await runDoctorDiagnostics({ cwd: root }))
+}
+
+{
+  const dim = await frCase('dr-arch-18-', {
+    archiveName: '2026-01-01-pre-epoch',
+    requirements: '# R\n### FR-01: 老需求\n',
+    indexChange: '2026-09-18-idx-src',
+  })
+  assert(dim && dim.pass === true, '18 epoch 前归档（2026-01-01）零 FR 检查（存量不回填）')
+}
+{
+  const dim = await frCase('dr-arch-19-', {
+    archiveName: '2026-09-19-post-epoch',
+    requirements: '# R\n### FR-01: 新需求\n',
+    indexChange: '2026-09-19-idx-src', // 索引条目归属另一变更名 → 本归档在场性缺失
+  })
+  assert(dim && dim.pass === false, '19a epoch 后归档索引缺失 → offender')
+  const offender = (dim.offenders || [])[0]
+  assert(offender && offender.reasons.some((r) => r.includes('FR 索引缺失')), `19b reason 指名索引缺失（实际 ${JSON.stringify(offender && offender.reasons)}）`)
+}
+{
+  // 手写索引：归档在场（002 归属本归档）+ 001 被 requirements 承接但未翻 superseded → 精确取代缺口
+  const root = makeTmpDir('dr-arch-20-')
+  const knowledgeRoot = join(root, '.sillyspec', 'knowledge')
+  mkdirSync(join(knowledgeRoot, 'fr'), { recursive: true })
+  writeFileSync(join(knowledgeRoot, 'fr', 'unmapped.md'),
+    '## FR-unmapped-001 老需求\n变更：older\n状态：active\n摘要：x\n最近确认：\n\n## FR-unmapped-002 改造\n变更：2026-09-19-sup-bad\n状态：active\n摘要：y\n最近确认：\n')
+  const dir = makeArchive(root, '2026-09-19-sup-bad', { tasks: ALL_CHECKED_TASKS, plan: true })
+  writeFileSync(join(dir, 'requirements.md'), '# R\n### FR-01: 改造\n承接: FR-unmapped-001\n')
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === false && (dim.offenders || [])[0]?.reasons.some((r) => r.includes('承接未翻取代')), `20 在场但承接未翻 → 精确报取代缺口（实际 ${JSON.stringify((dim.offenders || [])[0])}）`)
+}
+{
+  // 21 quick/无 requirements 豁免 + fr/ 目录不存在（仓未启用）
+  const root = makeTmpDir('dr-arch-21-')
+  makeArchive(root, '2026-09-19-no-req', { tasks: ALL_CHECKED_TASKS, plan: true }) // 无 requirements.md
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === true, '21a 无 requirements（quick/scale:small 面）→ 零索引义务绿')
+  const root2 = makeTmpDir('dr-arch-21b-')
+  const dir2 = makeArchive(root2, '2026-09-19-x', { tasks: ALL_CHECKED_TASKS, plan: true })
+  writeFileSync(join(dir2, 'requirements.md'), '# R\n### FR-01: q\n')
+  const dim2 = getDim(await runDoctorDiagnostics({ cwd: root2 }))
+  assert(dim2 && dim2.pass === true, '21b fr/ 目录不存在（仓未启用）→ 全跳不误报')
+}
+
+{
+  // 20b 正向：epoch 后归档在场 + 承接已翻取代 → 零 offender（R1 缺口：doctor 套件缺正向组）
+  const root = makeTmpDir('dr-arch-20b-')
+  const knowledgeRoot = join(root, '.sillyspec', 'knowledge')
+  mkdirSync(join(knowledgeRoot, 'fr'), { recursive: true })
+  writeFileSync(join(knowledgeRoot, 'fr', 'unmapped.md'),
+    '## FR-unmapped-001 老需求\n变更：older\n状态：superseded\nsuperseded_by：FR-unmapped-002\n取代链：FR-unmapped-001 ← FR-unmapped-002\n摘要：x\n最近确认：\n\n## FR-unmapped-002 改造\n变更：2026-09-19-sup-ok\n状态：active\n摘要：y\n最近确认：\n')
+  const dir = makeArchive(root, '2026-09-19-sup-ok', { tasks: ALL_CHECKED_TASKS, plan: true })
+  writeFileSync(join(dir, 'requirements.md'), '# R\n### FR-01: 改造\n承接: FR-unmapped-001\n')
+  const dim = getDim(await runDoctorDiagnostics({ cwd: root }))
+  assert(dim && dim.pass === true, `20b 在场+承接已翻 → 零 offender（正向闭环，实际 ${dim && dim.evidence}）`)
+}
+
 // ── 10. CLI 端到端：doctor --json 含维度 ──
 {
   const root = makeTmpDir('dr-arch-10-')

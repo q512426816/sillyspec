@@ -71,3 +71,6 @@ created_at: 2026-06-19T12:40:00+08:00
 - runtime|decision|决策 → [decisions/runtime.md](decisions/runtime.md)
 - cli-entry|decision|决策 → [decisions/cli-entry.md](decisions/cli-entry.md)
 - progress|decision|决策 → [decisions/progress.md](decisions/progress.md)
+
+## FR 需求索引
+- core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)

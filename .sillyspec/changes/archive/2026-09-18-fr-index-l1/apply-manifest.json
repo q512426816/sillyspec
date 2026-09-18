@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-18-fr-index-l1",
+  "appliedAt": "2026-09-18T00:04:59.944Z",
+  "baseHash": "c52aad0a2703eb660dd32b214e3bfb6a488ba6e3",
+  "files": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "sha256": "6cb62a3fb117b3bbf25055c41c69d5a08b68c2074a2667fb8d36864fef39d8d3"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "sha256": "6e1989a4c4de895da8bb05da006807ff562332b97680c0ef32f109c144769ad9"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "sha256": "c4e644dbcc2871f314bb78d0a2c09e8272770a0d1f085a84d1b418461c038d63"
+    },
+    {
+      "path": "src/fr-index.js",
+      "sha256": "2944f457bab1b237eebec589dc1ecaa6655cbfd338d18fd1c83c94ea6995ba74"
+    },
+    {
+      "path": "src/run/archive-distill.js",
+      "sha256": "11f2f5f1382b275d20e67693b93ddb625b27ca6abe25978aba2a87e49240a570"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "sha256": "3748803a189a40c95c09076477c8ad19cee5941a2f890d626485be7d880433c0"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "297957cda933a2baceb804c3b4d1852cf307856eacb9191d5e7c6481772c06ee"
+    },
+    {
+      "path": "test/doctor-archive-integrity.test.mjs",
+      "sha256": "367f6a9c85e5cb4c966af72461fa06b406a66c23177cd6a58810966a21d47eb2"
+    },
+    {
+      "path": "test/fr-index.test.mjs",
+      "sha256": "1f81d3be702aae8929a64cfbf26135406a57b703555cf29644a8da897c4541b1"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "sha256": "32416b7a95292b68d211692bb8fede2686f96f0fc26627849bbe828608af7eec"
+    }
+  ]
+}

@@ -33,6 +33,9 @@ import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
 import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
 import { readFrictionLedger } from './friction-ledger.js';
+// FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
+// fr-index 是纯 fs 叶子链（仅 decision-distill 底座），doctor 静态引入无环。
+import { FR_INDEX_EPOCH, scanFrIndex, parseChangeRequirements } from './fr-index.js';
 
 // db 角色标签
 const DB_ROLE = {
@@ -1162,6 +1165,10 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
     return { ...base, pass: true, severity: null, findings: ['changes/archive 为空（无已归档变更）'], archive_count: 0, offenders: [] };
   }
   const offenders = [];
+  // FR 索引面（D14 第四检查数据源，循环外一次扫描复用；fr/ 不存在=仓未启用，全跳不误报）
+  const frKnowledgeRoot = join(authoritySpecDir, 'knowledge');
+  const frEnabled = existsSync(join(frKnowledgeRoot, 'fr'));
+  const frEntries = frEnabled ? scanFrIndex(frKnowledgeRoot) : [];
   for (const name of names) {
     const dir = join(archiveDir, name);
     const reasons = [];
@@ -1202,6 +1209,28 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
         }
       } catch (e) {
         reasons.push(`任务注册表不可读（${relative(archiveDir, regPath)}：${e?.code || e?.message || e}）`);
+      }
+    }
+    // ── ④ FR 索引在场与取代完整（2026-09-18-fr-index-l1 L1，D-007：epoch 分界第四检查）──
+    // 豁免面：fr/ 目录不存在（仓未启用索引，全跳）；无日期前缀/epoch 前归档（存量不回填）；
+    // quick-* 与无 requirements.md（quick/scale:small 无索引义务）。违者并入 offenders（豁免走既有账本）。
+    if (frEnabled) {
+      const dm = name.match(/^(\d{4}-\d{2}-\d{2})-/);
+      if (dm && dm[1] >= FR_INDEX_EPOCH && existsSync(join(dir, 'requirements.md'))) {
+        if (!frEntries.some((e) => e.change === name)) {
+          reasons.push('FR 索引缺失（epoch 后归档应有索引条目——归档时 indexRequirements 未落，查 archive 步降级日志）');
+        } else {
+          try {
+            const reqParsed = parseChangeRequirements(dir);
+            const refIds = new Set();
+            for (const fr of reqParsed.frs) for (const r of fr.supersedes) refIds.add(r);
+            for (const refId of refIds) {
+              if (!frEntries.some((e) => e.id === refId && e.supersededBy)) {
+                reasons.push(`承接未翻取代（${refId} 被引用但索引中未标 superseded）`);
+              }
+            }
+          } catch { /* requirements 解析失败归任务注册表口径，此处不重复报 */ }
+        }
       }
     }
     if (reasons.length > 0) offenders.push({ name, reasons });
