@@ -376,3 +376,12 @@
 根因：批2 verify 实证 5 个 .claude 噪声假面致 0 命中假 skip（meta 收尾清理后空窗）；危险文件说明：判定逻辑零触碰，只加声明面补源+修自身 import 遗漏
 方案：resolveVerifyChangedFiles 返回前并入 apply-pathspec 清单（B3 同款；null 时声明面直接成为文件集）；§5c 回归钉
 结果：§5c+全组 7/0+39/0+lint 绿
+
+## ql-20260918-013-cd01 | 2026-09-18 23:34:39 | probe8 FR 索引缺失：归档时降级无留痕
+状态：已完成
+关联变更：（无）
+文件：src/run/archive-distill.js（+6/-0）
+需求：probe8 FR 索引缺失：归档时降级无留痕
+根因：indexRequirements 归档异常被 best-effort catch 只 warn 蒸发——D14 只能事后推断缺号。危险文件说明：archive-distill.js 归档蒸馏入口，本次只在 FR 索引 catch 段加死信标记写入（降级路径内的留痕），蒸馏主逻辑零触碰
+方案：①手工重放补号（FR-core-engine-009~011）②降级 catch 加 fr-index-skipped.md 死信（时间/原因/重放指引），合法零输出不触发
+结果：端到端双态实证：坏 knowledgeRoot→异常→死信落盘；requirements 缺席→零输出无死信；probe8 号已补，③号全清

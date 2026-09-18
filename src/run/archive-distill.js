@@ -73,5 +73,11 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
     }
   } catch (e) {
     console.warn(`\n⚠️  FR 索引执行异常，降级跳过（best-effort，不阻断归档）: ${e && e.message ? e.message : e}`)
+    // 死信留痕（ql-20260918-013）：降级只 warn 会蒸发（probe8 实证——D14 只能事后推断缺号）。
+    // change 目录留标记，doctor/人工可见；手工重放 indexRequirements 补号后可删。
+    try {
+      const { writeFileSync: wf } = await import('node:fs')
+      wf(join(changeDir, 'fr-index-skipped.md'), `# FR 索引降级死信\n\n- 时间：${new Date().toISOString()}\n- 原因：${e && e.message ? e.message : e}\n- 处置：node 重放 indexRequirements({changeDir, knowledgeRoot, headHash}) 补号后删本标记\n`)
+    } catch { /* 死信写入失败不再降级（已在降级路径） */ }
   }
 }

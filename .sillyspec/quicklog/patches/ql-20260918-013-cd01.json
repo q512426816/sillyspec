@@ -1,0 +1,54 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-fb2fbd07",
+  "totals": {
+    "files": 1,
+    "additions": 6,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/run/archive-distill.js",
+      "declared": true,
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 1,
+    "testFileCount": 0,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/archive-distill.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260918-013-cd01",
+  "sessionId": "quick-fb2fbd07",
+  "savedAt": "2026-09-18T15:40:08.808Z",
+  "patchSha256": "55df6fcf9dd1d082c9d3f14d4f632e909c7f14d2c95184d9e64429bd24ea24fb",
+  "patchStatus": "ok"
+}

@@ -55,3 +55,21 @@ created_at: 2026-09-18T00:26:28.615Z
 状态：active
 摘要：影子产物不污染主线
 最近确认：7c7a85c
+
+## FR-core-engine-009 probe8 diff 源替换
+变更：2026-09-18-probe8-direct-compare
+状态：active
+摘要：（无场景名）
+最近确认：
+
+## FR-core-engine-010 代码级字段直比
+变更：2026-09-18-probe8-direct-compare
+状态：active
+摘要：（无场景名）
+最近确认：
+
+## FR-core-engine-011 骨架渲染与 advisory 档
+变更：2026-09-18-probe8-direct-compare
+状态：active
+摘要：（无场景名）
+最近确认：
