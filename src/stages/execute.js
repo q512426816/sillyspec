@@ -1316,6 +1316,7 @@ ${taskSummary}
 4. ${moduleDocPoint}
 5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
+   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
 8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
 ${globalConstraintsBlock}
@@ -1463,6 +1464,10 @@ export function buildExecuteSteps(planFilePath = null, options = {}) {
   const waveSteps = waves.map((wave, i) => ({
     name: `Wave ${i + 1} 执行`,
     mode: 'implementation',
+    // 前置失败清单声明（2026-09-18-preflight-slimming task-04，D-001@v1）：任务步预留键位——
+    // allowed_paths 越界速查（allowed-paths-scan）留 v2 扩展点（run/prompt.js PREFLIGHT_VALIDATORS
+    // 未收录键安全跳过），本期显式空声明锚定 shape，渲染行为与未声明同态（恒空清单零注入）。
+    preflightValidators: [],
     prompt: buildWavePrompt(wave, i + 1, changeDir, worktreePath, { dispatchMode: options.dispatchMode, branch: options.branch, ctx, _execCache: execCache }),
     outputHint: `Wave ${i + 1} 执行结果`,
     optional: false

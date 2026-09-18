@@ -107,6 +107,7 @@ needs_human_review: true | false
 - id：`generate_plan`
 - optional：false
 - outputHint：plan_level + 计划内容
+- preflightValidators：`['four-piece-rules']`（前置失败清单声明，2026-09-18-preflight-slimming task-04——brainstorm 四件套规则轻查，与本步门禁同源；postcheck 轻子集 postcheck-lite 为 v2 扩展点未收录；`_extracted.json` 不含该键，以源码步骤定义为准）
 - 等待配置：无（可直接 --done）
 
 **本步出现的运行时占位符**
@@ -301,6 +302,7 @@ plan_level + 计划内容（审查在下一步独立进行）
 - id：`review_plan`
 - optional：false
 - outputHint：plan 审查结果（self=清单 / independent=review.json 路径+verdict）
+- preflightValidators：`[]`（前置失败清单声明，2026-09-18-preflight-slimming task-04——审查步无 --done 门禁面要前置快查，显式空声明锚定键位，渲染与未声明同态；`_extracted.json` 不含该键，以源码步骤定义为准）
 - 等待配置：
   - conditionalWait：true
   - waitReason：等待用户确认计划后进入执行

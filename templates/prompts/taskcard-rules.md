@@ -6,6 +6,7 @@ TaskCard 格式规则（必须严格遵守）：
 - implementation: 列表，每条一个具体步骤
 - acceptance: 列表，每条可独立验证（不是表格）
 - verify: 列表，实际可执行的命令
+  - 中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done
 - constraints: 列表，明确边界（含 brownfield 兼容、异常处理）
 - 不需要：修改文件章节、覆盖来源章节、接口定义章节、TDD 步骤章节、参考章节
 - frontmatter 必须以三减号结尾闭合（开头和结尾各一行 ---）。缺结尾会让 postcheck 提取不到 frontmatter，误报「字段缺失 / allowed_paths 为空」

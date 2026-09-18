@@ -41,6 +41,8 @@ SillySpec CLI — 规范驱动开发工具包
     --reset                            重置阶段（从头开始）
     --reopen --from-step <序号|名称>   重新打开已完成阶段进入修订
     --wait --reason "..." --options "A,B"          暂停等用户决策
+    --wait --inherit-from <D-xxx@vN>               决策继承盖章：答案轮由 decisions.md 既有决策盖印
+                                                    （仅 --wait 场景合法；ID 不存在则 exit 2 fail-closed）
     --continue --answer "..."                      恢复等待中的步骤
     --done --answer "..." --output "..."           一步完成 wait+done
     --change <名>                      指定变更名（多活跃变更必填，单变更可省）

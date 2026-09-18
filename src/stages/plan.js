@@ -134,6 +134,11 @@ needs_human_review: true | false
 const stepGeneratePlan = {
   id: 'generate_plan',
   name: '生成分级计划',
+  // 前置失败清单声明（2026-09-18-preflight-slimming task-04，D-001@v1）：产出 plan.md 前置快查
+  // brainstorm 四件套规则轻子集（与生成分级计划 --done 消费的门禁同源；postcheck 轻子集
+  // postcheck-lite 为 v2 扩展点——PREFLIGHT_VALIDATORS 未收录，勿用）。声明键位随步骤定义
+  // 分发（键名消费见 run/prompt.js renderPreflightFailures）。
+  preflightValidators: ['four-piece-rules'],
   prompt: `根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。
 
 ### 操作
@@ -328,6 +333,9 @@ const stepReviewPlan = {
   id: 'review_plan',
   name: '审查计划',
   conditionalWait: true,
+  // 前置失败清单声明（2026-09-18-preflight-slimming task-04）：审查步不产出规范文件、无
+  // --done 门禁面要前置快查——显式空声明锚定键位（renderPreflightFailures 空/未声明同态返 ''）。
+  preflightValidators: [],
   waitReason: '等待用户确认计划后进入执行',
   waitOptions: ['确认，进入执行', '需要调整'],
   prompt: `对上一步生成的 plan.md 做审查。生成与审查分离——不在生成 plan 的同一上下文里自审，避免确认偏差。

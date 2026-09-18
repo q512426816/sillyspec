@@ -94,3 +94,35 @@ export function upsertDecision(changeDir, decision) {
   writeAtomicSync(filePath, eol === '\n' ? next : next.replace(/\n/g, '\r\n'))
   return { path: filePath, action: 'replaced' }
 }
+
+/**
+ * hasDecisionId —— decisions.md 内决策 ID 的字面存在性校验（机械零语义）。
+ * （2026-09-18-preflight-slimming Phase 3，D-003@v2：`--wait --inherit-from D-xxx@vN` 的
+ * fail-closed 锚点校验——防伪造决策锚点完成 wait 记录态，R-04。）
+ *
+ * 语义边界（机械，本模块无现成标题解析器可复用——upsertDecision 是写入者，读取侧解析归
+ * decision-distill；此处只做字面存在性，对齐 upsertDecision 块定位的双形态匹配）：
+ *   - 只认 canonical 标题行 `## D-xxx@vN`（upsertDecision 的唯一产出格式），匹配形态与其
+ *     块定位逐字同源：行前缀 `## <id> `（后随标题）或整行恰为 `## <id>`。
+ *   - 不做版本归一（D-1@v1 不匹配 D-001@v1）、不做别名展开、不做标题级漂移容收（###/####
+ *     形态归 distill parseDecisions 的知识库提炼语义，锚点校验不放宽——fail-closed 保守）。
+ *   - 文件不存在 / 不可读 / 参数形态非法 → 一律 false 不抛错（调用方 exit 2 即可）。
+ *
+ * @param {string} changeDir 变更目录（其下 decisions.md）
+ * @param {string} id 决策 ID 字面（如 `D-001@v2`）
+ * @returns {boolean} 标题行字面存在与否
+ */
+export function hasDecisionId(changeDir, id) {
+  if (typeof changeDir !== 'string' || !changeDir) return false
+  if (typeof id !== 'string' || id === '') return false
+  try {
+    const filePath = join(changeDir, 'decisions.md')
+    if (!existsSync(filePath)) return false
+    const raw = readFileSync(filePath, 'utf8')
+    // CRLF 归一（Windows 换行防御，与 upsertDecision 同款口径）
+    const lines = raw.replace(/\r\n/g, '\n').split('\n')
+    return lines.some((l) => l.startsWith(`## ${id} `) || l.trim() === `## ${id}`)
+  } catch {
+    return false
+  }
+}

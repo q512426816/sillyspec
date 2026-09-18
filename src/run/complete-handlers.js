@@ -160,6 +160,7 @@ function ownerFromReviewedFiles(reviewedFiles) {
  *
  * 归属 fail-closed（禁 mtime 猜、禁后缀匹配）：
  *   apply-pathspec-<change>.txt 精确文件名
+ *   prompt-inject-<change>.json 精确文件名（2026-09-18-preflight-slimming：注入分叉账本回收登记）
  *   execute-runs/<runId>/ 仅当 `change` 戳全等（无戳旧 run 留下，不按覆盖度启发式删）
  *   stage-reviews/<dir>/ 仅当 review.json reviewedFiles 首段 === changeName
  *   verify-runs/<ts>/ 仅当目录内 JSON 的 change 字段集合 size=1 且等于本变更
@@ -193,6 +194,15 @@ export function pruneArchivedChangeRuntime(runtimeRoot, changeName) {
   try {
     const pathspec = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
     if (existsSync(pathspec)) gone(pathspec)
+  } catch {}
+
+  // prompt-inject 账本（2026-09-18-preflight-slimming Phase 2 / D-002，Grill 评审 fail②）：
+  // .runtime/prompt-inject-<change>.json 是 change 级派生文件（阶段感知注入分叉的账本），
+  // 变更归档/删除后无读者——不登记回收则按变更数累积孤儿。精确文件名，对齐上方
+  // apply-pathspec / 下方 friction-tally 同款形态（禁 glob/后缀匹配）。
+  try {
+    const ledger = join(runtimeRoot, `prompt-inject-${changeName}.json`)
+    if (existsSync(ledger)) gone(ledger)
   } catch {}
 
   // friction tally（friction-signal-hint FR-05）：摩擦计数随变更终态一并回收——真实变更的
@@ -322,7 +332,7 @@ export async function archiveWorktreeCleanup(cwd, archiveChangeName, specBase, p
       // （apply 已 cleanup），漏接就会让 execute-runs/verify-runs 继续按变更数累积。
       const pruned = pruneArchivedChangeRuntime(runtimeRoot, archiveChangeName)
       if (pruned.removed > 0) {
-        console.log(`🧹 归档回收 ${pruned.removed} 项 runtime 取证（execute-runs/stage-reviews/verify-runs/apply-pathspec，按 change 精确匹配）`)
+        console.log(`🧹 归档回收 ${pruned.removed} 项 runtime 取证（execute-runs/stage-reviews/verify-runs/apply-pathspec/prompt-inject，按 change 精确匹配）`)
       }
     }
   } catch (e) {

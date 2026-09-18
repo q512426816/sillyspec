@@ -36,6 +36,7 @@ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
 import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
 import { setQuickFileNotes } from '../quicklog.js'
+import { hasDecisionId } from '../decisions-io.js'
 
 // F2/F4: 哪些 flag 吃下一个 token 作「值」（其余 --flag 都是布尔，不吞值）。
 // 校验循环只对 VALUE_FLAGS 跳下一个 token（否则 --done 后跟 typo 会被当 --done 的值吞掉）。
@@ -49,6 +50,7 @@ const VALUE_FLAGS = new Set([
   '--ql', // quick --cancel 显式指定 qlId（缺省读会话 guard.json）
   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
   '--session', // 显式会话标识（吃值；2026-09-14-change-ownership-guards task-02 所有权三级解析最高优先级层，启动 claim 消费）
+  '--inherit-from', // wait 继承盖章锚点 <D-xxx@vN>（吃值；2026-09-18-preflight-slimming task-03 / D-003@v2：仅 --wait 场景合法，--wait 分发点校验消费）
 ])
 
 /**
@@ -225,6 +227,7 @@ sillyspec run ${stageName}${stage && stage.title ? ` — ${stage.title}` : ''}${
   通用参数: --done --output --input --status --skip --reset --reopen --from-step
             --wait --continue --answer --change --spec-dir --non-interactive
             --interactive --skip-approval --json(不支持)
+            --wait --inherit-from <D-xxx@vN>  决策继承盖章（仅 --wait 场景合法，ID 须存在于 decisions.md）
   quick 专属: --linked-changes none|a,b --files a.js,b.js --allow-new
              --allow-delete --force-baseline --confirm --file-notes
   scan  专属: --quick --standard --deep --force-rescan --diff [--base <commit>] [--full] [--report]
@@ -377,6 +380,18 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 作为全局 flag 吞掉、不透传到此处，故 isInteractive 在此恒为 false）。
   const waitReason = getFlagValue('--reason')
   const waitOptions = getFlagValue('--options')
+  // ── --inherit-from <D-xxx@vN>（2026-09-18-preflight-slimming task-03 / D-003@v2 / FR-03）──
+  // wait 继承盖章锚点：照 --reason/--options 同款解析（值类 flag，getFlagValue F4 守卫）。
+  // 仅 --wait 场景合法——不带 --wait 时出现即用法错 exit 2（该参数语义是给 wait 补答案轮，
+  // 脱离 --wait 无消费点，静默吞会让 agent 误以为已盖章）。存在性校验（hasDecisionId
+  // fail-closed）在下方 --wait 分发点做（彼时 changeDir/specRoot 才解析完）。
+  const waitInheritFrom = getFlagValue('--inherit-from')
+  if (waitInheritFrom !== null && !isWait) {
+    console.error('❌ --inherit-from 仅在 --wait 场景合法（决策继承盖章：wait 答案轮由 decisions.md 既有决策盖印）')
+    console.error(`   用法: sillyspec run ${stageName} --wait --reason "..." --inherit-from D-xxx@vN`)
+    console.error('   不需要继承盖章时去掉 --inherit-from，--wait 行为与现状一致')
+    process.exit(2) // 用法错 → exit 2
+  }
   const continueAnswer = getFlagValue('--answer')
   const resolvedSpecDir = specDir || getFlagValue('--spec-dir') || getFlagValue('--spec-root')
   const platformOpts = {
@@ -861,6 +876,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
     '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
+    '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -1521,7 +1537,24 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
 
   // --wait: 将 step 设为 waiting（独立于 --done）
   if (isWait) {
-    return await waitStep(pm, progress, stageName, cwd, outputText, waitReason, waitOptions, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts })
+    // ── wait 继承盖章锚点校验（2026-09-18-preflight-slimming task-03 / D-003@v2 / FR-03）──
+    // --inherit-from <D-xxx@vN> 必须字面存在于变更 decisions.md 的 ## D-xxx@vN 标题
+    // （hasDecisionId——task-01 契约，机械零语义）；为假 fail-closed exit 2（R-04 防伪造
+    // 锚点），且校验先于 waitStep 任何状态写入——不落任何 wait 状态。changeDir 走命令
+    // 上下文既有解析（resolveChangeDir 同款：currentChange 优先、唯一目录兜底）；
+    // quick 会话无 changes/ 目录 → changeDir=null → hasDecisionId 恒 false → 同样 exit 2。
+    let inheritFrom = null
+    if (waitInheritFrom !== null) {
+      const inheritChangeDir = resolveChangeDir(cwd, progress, specRoot)
+      if (!hasDecisionId(inheritChangeDir, waitInheritFrom)) {
+        console.error('❌ 决策 ID 不存在于 decisions.md——继承盖章 fail-closed（防伪造锚点）')
+        console.error(`   --inherit-from ${waitInheritFrom}：${inheritChangeDir ? `${join(inheritChangeDir, 'decisions.md')} 内无「## ${waitInheritFrom}」标题` : '当前上下文解析不到变更目录（quick 会话无 decisions.md，继承盖章不适用）'}`)
+        console.error('   核对决策编号与版本号（查看 decisions.md 的 ## D-xxx@vN 标题，或 sillyspec derive decisions）后原样重跑本命令')
+        process.exit(2) // 用法错（伪造/漂移锚点）→ exit 2
+      }
+      inheritFrom = waitInheritFrom
+    }
+    return await waitStep(pm, progress, stageName, cwd, outputText, waitReason, waitOptions, { changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, inheritFrom })
   }
 
   // --continue: 从 waiting 恢复

@@ -20,6 +20,7 @@
  */
 import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
@@ -35,6 +36,14 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge } from '../knowledge-match.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
+// 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
+// stage-contract-engine 均为 src/ 叶子方向（不反向 import 本模块），静态 import 不引入环。
+import { validateDesignFileList } from '../design-facts.js'
+import { evaluateRules } from '../stage-contract-engine.js'
+// 注入账本锁（2026-09-18-preflight-slimming task-02，R-06）：withFileLock（quicklog.js:40 先例，
+// 防多会话 read-modify-write 丢更新）——quicklog.js 仅 import path/fs/crypto/git-helper/
+// stage-contract-spec，不反向引用本模块，静态 import 不引入环。
+import { withFileLock } from '../quicklog.js'
 
 // ═══════════════════════════════════════════════════════════════
 // ceremony 档位仪式菜单（2026-09-18-ceremony-risk-pricing task-05，D-002/D-005）
@@ -531,6 +540,198 @@ export function requiresUser(step, promptText) {
   if (!step) return false
   if (step.requiresWait === true || step.conditionalWait === true || step.requiresConfirm === true) return true
   return WAIT_MARKER_RE.test(String(promptText || ''))
+}
+
+// ── 前置失败清单 + 注入账本分叉（2026-09-18-preflight-slimming task-01，D-001@v1 / D-002@v1）──
+// 纯函数面三导出之二/之三（hasDecisionId 在 src/decisions-io.js）。本节只打底零接线：
+// {PREFLIGHT_FAILURES} 占位符渲染与模块/scan 注入分叉归 task-02，stages 步骤定义上的
+// preflightValidators 声明归 task-04——声明落地前 renderPreflightFailures 恒返 ''，旧 prompt
+// 逐字节不变（design 兼容策略第一条）。
+
+/** 前置清单聚合条数帽（R-01 防打架三约束：条数帽 5——截断防清单全文顶回上下文） */
+const PREFLIGHT_MAX_ITEMS = 5
+
+/** 单 validator 超时帽 ms（R-02：只读快跑不拖慢 prompt 渲染；超时该 validator 计为跳过） */
+const PREFLIGHT_VALIDATOR_TIMEOUT_MS = 3000
+
+/** 超时哨兵（Promise.race 输出侧标记；Symbol 防与 validator 返回值撞车） */
+const PREFLIGHT_TIMEOUT = Symbol('preflight-validator-timeout')
+
+/**
+ * 已声明 validator 名 → 只读校验函数映射（分发骨架的映射表）。
+ *
+ * 步骤定义在 stages/* 上声明 `preflightValidators: ['<键名>', ...]`（task-04 落地），渲染时按
+ * 声明序查本表调用。本表收录键：
+ *   - `design-file-list`：design-facts.validateDesignFileList 只读快查（design.md 文件清单
+ *     幻觉路径 gate 前置）——errors 项为 {path, message}，取 message。
+ *   - `four-piece-rules`：stage-contract 引擎轻查 brainstorm 四件套规则（evaluateRules 纯 kind
+ *     dispatch，existsSync/readFileSync 量级）。scale 读取与 stage-contract.js
+ *     validateBrainstormOutputs 同源（design.md frontmatter，fail-safe 无 scale → 四件套全
+ *     要求），保证「事前给的 == 事后查的」。v2 扩展点：若内容类规则实测拖慢渲染，可按
+ *     rule.id 白名单只跑四件套 file-exists 子集。
+ *   - `postcheck-lite`（plan postcheck 轻子集）/ `allowed-paths-scan`（execute allowed_paths
+ *     越界速查）：v2 扩展点——task-04 先声明亦安全跳过（未收录键零贡献，不报错）。
+ *
+ * 每个 validator 返回 { errors: string[] }（error 级失败消息；warning 不入清单——帽 5 内
+ * 只放会拦 --done 的项，防噪声挤占）。
+ */
+const PREFLIGHT_VALIDATORS = {
+  'design-file-list': ({ changeDir, cwd }) => {
+    const r = validateDesignFileList({ changeDir, cwd })
+    const errors = (r && Array.isArray(r.errors)) ? r.errors : []
+    return { errors: errors.map((e) => (e && e.message) ? e.message : String(e)) }
+  },
+  'four-piece-rules': ({ changeDir }) => {
+    let scale = null
+    const designPath = join(changeDir, 'design.md')
+    if (existsSync(designPath)) {
+      const fm = readFileSync(designPath, 'utf8').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n/)
+      const sm = fm && fm[1].match(/^scale:[ \t]*['"]?(\w+)/m)
+      if (sm) scale = sm[1]
+    }
+    const r = evaluateRules('brainstorm', { changeDir, scale })
+    return { errors: (r && Array.isArray(r.errors)) ? r.errors : [] }
+  },
+}
+
+/**
+ * 单 validator 只读快跑（带 3s 超时帽）：Promise.race 模式——超时计为跳过（零贡献）；
+ * validator 抛错原样上抛（由 renderPreflightFailures 外层 catch 整体 fail-open 返 ''——
+ * 验收口径「validator 抛错或无失败返回空串」）。finally clearTimeout 防 3s 定时器
+ * 拖住 CLI 短进程退出（prompt 渲染完即退，悬挂 handle 会多挂 3s）。
+ *
+ * @param {string} name PREFLIGHT_VALIDATORS 键名
+ * @param {{ changeDir: string|null, cwd: string, specBase: string, stageName: string, stepName: string, changeName: string|null }} ctx
+ * @returns {Promise<string[]>} 该 validator 的 error 级失败消息（超时/未收录键 → []）
+ */
+async function runPreflightValidator(name, ctx) {
+  const fn = PREFLIGHT_VALIDATORS[name]
+  if (typeof fn !== 'function') return [] // 未收录键安全跳过（v2 扩展点见 PREFLIGHT_VALIDATORS 注释）
+  let timerId = null
+  try {
+    const timeout = new Promise((resolve) => { timerId = setTimeout(() => resolve(PREFLIGHT_TIMEOUT), PREFLIGHT_VALIDATOR_TIMEOUT_MS) })
+    const result = await Promise.race([Promise.resolve().then(() => fn(ctx)), timeout])
+    if (result === PREFLIGHT_TIMEOUT) return []
+    return (result && Array.isArray(result.errors)) ? result.errors : []
+  } finally {
+    if (timerId != null) clearTimeout(timerId)
+  }
+}
+
+/**
+ * renderPreflightFailures —— 产出型步骤 prompt 的前置失败清单渲染（D-001@v1 Phase 1 纯函数面）。
+ *
+ * 只读快跑本步骤 --done 将消费的 validator 子集，聚合 error 级失败为清单文本：
+ *   - 分发骨架：从 stages 注册表步骤定义读 `preflightValidators` 键（task-04 落声明；无声明/
+ *     无该 stage/无该步骤名 → 返 ''——渐进兼容，声明落地前零注入）。
+ *   - 聚合帽：条数帽 5 截断，截断时加「…另 N 项见 gate」行（完整判定归 gate，清单是预检
+ *     不是替身）；单 validator 超时帽 3s 计跳过；任何异常整体返 ''（fail-open 注入面——
+ *     绝不阻塞 prompt 渲染与门判定，R-02）。
+ *   - 防应试头行（R-07/FR-01）：清单头固定「已知失败项（非全部要求）」明示，防清单被当
+ *     待办清单应试打磨致清单外质量失查；尾行指路 gate 完整清单。
+ *
+ * 零副作用：只读不写（validator 全部只读函数），不碰 stages 定义与 outputStep 渲染路径。
+ *
+ * @param {{ stageName?: string, stepName?: string, cwd?: string, specBase?: string, changeName?: string }} args
+ * @returns {Promise<string>} 清单文本；无失败 / 无声明 / 异常 → ''
+ */
+export async function renderPreflightFailures({ stageName, stepName, cwd, specBase, changeName } = {}) {
+  try {
+    const stageDef = stageRegistry[stageName]
+    const steps = (stageDef && Array.isArray(stageDef.steps)) ? stageDef.steps : []
+    const step = steps.find((s) => s && s.name === stepName)
+    const declared = (step && Array.isArray(step.preflightValidators)) ? step.preflightValidators : []
+    if (declared.length === 0) return ''
+    const changeDir = (specBase && changeName) ? join(specBase, 'changes', changeName) : null
+    const ctx = { changeDir, cwd, specBase, stageName, stepName, changeName }
+    // 并行只读快跑（R-02）：validator 抛错 → Promise.all 整体 reject → 外层 catch 返 ''
+    const outcomes = await Promise.all(declared.map(async (name) => ({ name, errors: await runPreflightValidator(name, ctx) })))
+    // 聚合（声明序）+ 折行压平（gate failMessage 可能含换行，清单一项一行）
+    const items = []
+    for (const o of outcomes) {
+      for (const msg of o.errors) items.push(`- ${o.name}: ${String(msg).replace(/\s*\n\s*/g, ' ')}`)
+    }
+    if (items.length === 0) return ''
+    const shown = items.slice(0, PREFLIGHT_MAX_ITEMS)
+    const hidden = items.length - shown.length
+    return [
+      '⚠️ 已知失败项（非全部要求），清单外仍需按步骤说明自检：',
+      ...shown,
+      ...(hidden > 0 ? [`…另 ${hidden} 项见 gate`] : []),
+      `完整清单：sillyspec gate ${stageName} --json`,
+    ].join('\n')
+  } catch {
+    return '' // fail-open：任何异常静默不注（不阻 prompt 渲染）
+  }
+}
+
+/**
+ * shouldInjectFullContext —— 阶段注入账本分叉判定（D-002@v1 Phase 2 纯函数面）。
+ *
+ * 读 `<runtimeRoot>/prompt-inject-<changeName>.json` 账本（{stages:{[stage]:{firstStep,digest,at}}}）：
+ *   - 文件不存在 / JSON 坏 / 无该 stage 记录 → { full: true }（首步语义：本阶段尚未注过全量）
+ *   - 有记录 → { full: false, digest, firstStep }（同阶段后续步骤注摘要行的判定输入——
+ *     「本阶段上下文已于步骤 N 注入（digest 前 8 位）」）
+ *   - 账本读/解析异常 → { full: true }（design 兼容策略：分叉失败回退每步全量现状）
+ *
+ * 纯读不写：账本写入（首步全量注入后 withFileLock 幂等落盘）归 task-02；archive 回收
+ * （pruneArchivedChangeRuntime 枚举登记）归 task-03。
+ *
+ * @param {{ changeName?: string, stageName?: string, runtimeRoot?: string }} args
+ * @returns {{ full: boolean, digest?: string, firstStep?: number }}
+ */
+export function shouldInjectFullContext({ changeName, stageName, runtimeRoot } = {}) {
+  try {
+    if (!runtimeRoot || !changeName || !stageName) return { full: true }
+    const ledgerPath = join(runtimeRoot, `prompt-inject-${changeName}.json`)
+    if (!existsSync(ledgerPath)) return { full: true }
+    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8'))
+    const rec = (ledger && ledger.stages && typeof ledger.stages === 'object') ? ledger.stages[stageName] : null
+    if (!rec || typeof rec !== 'object') return { full: true }
+    return { full: false, digest: rec.digest, firstStep: rec.firstStep }
+  } catch {
+    return { full: true }
+  }
+}
+
+/**
+ * 阶段注入摘要行渲染（task-02 接线，D-002@v1 Phase 2）：shouldInjectFullContext 判 full=false
+ * 时的一行替代注入——同阶段后续步骤不再重注全量模块/scan 上下文，改指路（首步步骤号 + digest
+ * 前 8 位 + 可 Read 路径，R-03 摘要丢上下文风险的对冲：该读可读回）。firstStep/digest 缺失
+ * （账本记录不完整）给占位符不抛（渲染层永不因账本数据炸）。
+ *
+ * @param {{ firstStep?: number, digest?: string, specBase: string, projectName: string }} args
+ * @returns {string} 单行摘要（「> 」引语形态）
+ */
+function renderPromptInjectSummaryLine({ firstStep, digest, specBase, projectName }) {
+  const moduleMapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+  const scanDocsDir = join(specBase, 'docs', projectName, 'scan')
+  return `> 本阶段模块/scan 上下文已于步骤 ${firstStep ?? '?'} 注入（digest ${digest || 'unknown'}）；需要时 Read ${moduleMapPath}（模块索引）或 ${scanDocsDir}/ 下 scan 文档（ARCHITECTURE.md / _facts.md）`
+}
+
+/**
+ * 阶段注入账本落账（task-02 接线，D-002@v1 Phase 2 / R-06）：首步全量注入后写
+ * `<runtimeRoot>/prompt-inject-<changeName>.json`（{stages:{[stage]:{firstStep,digest,at}}}，
+ * design 数据模型节）。withFileLock 串行化 read-modify-write（quicklog.js:40 先例——多会话
+ * 并行写同账本防丢更新）；幂等：已有该 stage 记录不覆盖（并发首步/同步重渲染不改写首步锚点）。
+ * digest=全量注入内容 sha256 前 8 位（摘要行可核对的指纹）。异常上抛由调用方 catch 静默
+ * （fail-open：账本写失败 → 后续步仍判 full 全量注入，绝不阻塞渲染）；archive 回收登记
+ * （pruneArchivedChangeRuntime 枚举补本文件名）归 task-03。
+ *
+ * @param {{ runtimeRoot: string, changeName: string, stageName: string, firstStep: number, digest: string }} args
+ */
+async function recordPromptInjectLedger({ runtimeRoot, changeName, stageName, firstStep, digest }) {
+  const ledgerPath = join(runtimeRoot, `prompt-inject-${changeName}.json`)
+  await withFileLock(ledgerPath + '.lock', () => {
+    let ledger = null
+    try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { ledger = null }
+    if (!ledger || typeof ledger !== 'object' || Array.isArray(ledger)) ledger = {}
+    if (!ledger.stages || typeof ledger.stages !== 'object' || Array.isArray(ledger.stages)) ledger.stages = {}
+    if (ledger.stages[stageName] && typeof ledger.stages[stageName] === 'object') return // 幂等：已有该 stage 记录不覆盖
+    ledger.stages[stageName] = { firstStep, digest, at: new Date().toISOString() }
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
+  })
 }
 
 export async function outputStep(stageName, stepIndex, steps, cwd, changeName, dbProjectName, platformOpts = {}, prevStepAnswer = null, waitHistory = null, autoMeta = null) {
@@ -1471,22 +1672,62 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     promptText = promptText.split('{HANDOVER_SUMMARY}').join(handoverBlock)
   }
 
-  // 注入模块上下文（brainstorm/plan/execute 阶段全步 + quick 首步「理解任务」——刀①：quick
+  // 注入模块上下文（brainstorm/plan/execute 阶段 + quick 首步「理解任务」——刀①：quick
   // step1 原让 agent cat module-map 再挑模块卡读，改为按任务描述匹配后注入，基于 Module Context Index）
+  // ── 阶段感知注入分叉（2026-09-18-preflight-slimming task-02，D-002@v1 Phase 2）──
+  // 三主阶段由「每步全注」改「每阶段首步全量、后续摘要行」：shouldInjectFullContext（task-01）
+  // 读 .runtime/prompt-inject-<change>.json 账本判定——full=真注全量（现状）并在注入后
+  // recordPromptInjectLedger 落账（withFileLock 幂等，R-06）；full=假改注一行摘要（首步步骤号 +
+  // digest 前 8 位 + 可 Read 路径，R-03）。quick 不分叉：仅首步注入，本无重注面（现状逐字保留）。
+  // fail-open 红线（design 兼容策略）：分叉判定/账本读写任何异常 → 回退全量注入（现状），
+  // 绝不阻塞渲染。
   const quickFirstStep = stageName === 'quick' && step && step.name === '理解任务'
-  if ((['brainstorm', 'plan', 'execute'].includes(stageName) || quickFirstStep) && projectName) {
+  const mainStageModuleInject = ['brainstorm', 'plan', 'execute'].includes(stageName)
+  if ((mainStageModuleInject || quickFirstStep) && projectName) {
     const effectiveSpecBase = resolvePromptSpecBase(platformOpts, cwd)
     const moduleIndex = loadModuleContextIndex(effectiveSpecBase, projectName)
     if (moduleIndex && Object.keys(moduleIndex).length > 0) {
-      // 尝试从 step prompt / changeName 匹配模块；quick 用 guard.taskDescription（启动 --input）——
-      // changeName 是 quick-<hash> 无语义、step.prompt 全文噪音大（刀①）
-      let taskDesc = step.prompt || changeName || ''
-      if (stageName === 'quick') {
-        taskDesc = readQuickGuardField(changeName, effectiveSpecBase, 'taskDescription') || taskDesc
+      // runtimeRoot 与 {EXECUTE_RUN_ID}/{REVIEW_TIER} 段同源解析（resolveRuntimeRoot(platformOpts, specBase)）
+      let injectFork = { full: true } // 缺省=现状全量（quick / 无 changeName / 分叉判定异常）
+      if (mainStageModuleInject && changeName) {
+        try {
+          injectFork = shouldInjectFullContext({
+            changeName, stageName,
+            runtimeRoot: resolveRuntimeRoot(platformOpts, effectiveSpecBase),
+          })
+        } catch { injectFork = { full: true } } // fail-open：判定异常回退全量（现状）
       }
-      const injection = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName)
-      if (injection) {
-        promptText = injection + '\n' + promptText
+      if (!injectFork.full) {
+        // 同阶段后续步骤：不重注全量，改摘要行（digest 前 8 位 + 可 Read 路径）
+        promptText = renderPromptInjectSummaryLine({
+          firstStep: injectFork.firstStep, digest: injectFork.digest,
+          specBase: effectiveSpecBase, projectName,
+        }) + '\n' + promptText
+      } else {
+        // 尝试从 step prompt / changeName 匹配模块；quick 用 guard.taskDescription（启动 --input）——
+        // changeName 是 quick-<hash> 无语义、step.prompt 全文噪音大（刀①）
+        let taskDesc = step.prompt || changeName || ''
+        if (stageName === 'quick') {
+          taskDesc = readQuickGuardField(changeName, effectiveSpecBase, 'taskDescription') || taskDesc
+        }
+        const injection = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName)
+        if (injection) {
+          promptText = injection + '\n' + promptText
+          // 首步全量注入后落账：本阶段首个非空注入即「首步」锚点（记 firstStep/digest/at——后续
+          // 步骤摘要行的判定输入）。只在真注入非空内容时落账——空注入不占首步位（防摘要行
+          // 「已于步骤 N 注入」指向一个实际没注入任何模块内容的步骤，丢真上下文）。fail-open：
+          // 落账异常静默（语义=后续步仍全量注入），绝不阻塞渲染。
+          if (mainStageModuleInject && changeName) {
+            try {
+              await recordPromptInjectLedger({
+                runtimeRoot: resolveRuntimeRoot(platformOpts, effectiveSpecBase),
+                changeName, stageName,
+                firstStep: stepIndex + 1,
+                digest: createHash('sha256').update(injection, 'utf8').digest('hex').slice(0, 8),
+              })
+            } catch { /* fail-open：账本写失败 → 后续步仍全量注入（现状），不阻塞渲染 */ }
+          }
+        }
       }
     }
   }
@@ -1568,6 +1809,28 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     if (stageContract) {
       promptText = `${promptText}\n\n${stageContract}`
     }
+  }
+
+  // ── {PREFLIGHT_FAILURES} 前置失败清单接线（2026-09-18-preflight-slimming task-02，D-001@v1 Phase 1）──
+  // renderPreflightFailures（task-01 纯函数）从 stageRegistry 步骤定义读 preflightValidators
+  // 声明（三 stages 声明统一归 task-04）只读快跑本步骤 --done 将消费的 validator 子集：
+  // 未声明/无失败/超时/异常 → ''。注入位（计划锚点）：步骤说明之后、门禁提示（铁律/完成后
+  // 执行/gate 预检）之前——非空且模板无字面占位符时追加到 promptText 末尾；模板含字面
+  // {PREFLIGHT_FAILURES} 时按既有占位符替换机制原位替换（空串替换零残留——「空串时占位符
+  // 零出现」）。空串零注入：声明落地（task-04）前恒 ''——旧 prompt 逐字节不变（design 兼容
+  // 策略第一条，knowledge-inject A/B 双渲染字节一致金丝雀守护）。接线层再包一层 try：
+  // 任何异常静默不注不阻（fail-open 注入面，plan 全局硬约束 2）。
+  let preflightFailuresMd = ''
+  try {
+    const pfSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+    preflightFailuresMd = await renderPreflightFailures({
+      stageName, stepName: step.name, cwd, specBase: pfSpecBase, changeName,
+    })
+  } catch { preflightFailuresMd = '' }
+  if (promptText.includes('{PREFLIGHT_FAILURES}')) {
+    promptText = promptText.split('{PREFLIGHT_FAILURES}').join(preflightFailuresMd)
+  } else if (preflightFailuresMd) {
+    promptText = `${promptText}\n\n${preflightFailuresMd}`
   }
 
   console.log(promptText)

@@ -271,6 +271,11 @@ export const definition = {
     },
     {
       name: '写设计文档并自审',
+      // 前置失败清单声明（2026-09-18-preflight-slimming task-04，D-001@v1）：本步产出 design.md，
+      // prompt 渲染时 renderPreflightFailures 按 run/prompt.js PREFLIGHT_VALIDATORS 映射表只读快跑
+      // 声明的 validator 子集（design-file-list=design.md 文件清单幻觉路径快查；
+      // four-piece-rules=brainstorm 四件套规则轻查），无失败/异常恒空串零注入。
+      preflightValidators: ['design-file-list', 'four-piece-rules'],
       prompt: `撰写 design 文档并进行 AI 自审。
 
 ### 文件标题规则（sillyhub 平台解析识别用）
@@ -486,6 +491,10 @@ status: passed | needs-user-input | blocked | skipped
       name: '生成规范文件',
       // 重命名自「用户确认并生成规范文件」（去确认门控：设计已在「分段展示设计」步确认过，末步再问纯冗余），老进度 completed 由迁移逻辑承接
       migratedFrom: ['用户确认并生成规范文件'],
+      // 前置失败清单声明（2026-09-18-preflight-slimming task-04，D-001@v1）：本步 --done 消费
+      // brainstorm.design.* 门禁（含 design-file-list 文件清单核验与四件套规则）——事前清单与
+      // 事后门禁同源（validator 子集映射见 run/prompt.js PREFLIGHT_VALIDATORS 注释）。
+      preflightValidators: ['design-file-list', 'four-piece-rules'],
       prompt: `按变更规模生成规范文件并给出实现路径建议（设计已在前置步骤确认过，本步不再暂停等确认，生成后展示摘要即可）。
 
 ### 规模评估（展示前先做）

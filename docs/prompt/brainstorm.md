@@ -325,6 +325,7 @@
 **元数据**
 - optional：false
 - outputHint：design.md 文件路径 + 自审结果
+- preflightValidators：`['design-file-list', 'four-piece-rules']`（前置失败清单声明，2026-09-18-preflight-slimming task-04——prompt 渲染时 `renderPreflightFailures` 按 `run/prompt.js` `PREFLIGHT_VALIDATORS` 映射表只读快跑声明子集，无失败/异常恒空串零注入；`_extracted.json` 不含该键，以源码步骤定义为准）
 - 等待配置：无（可直接 `--done`）
 
 **本步出现的运行时占位符**
@@ -580,6 +581,7 @@ status: passed | needs-user-input | blocked | skipped
 **元数据**
 - migratedFrom：用户确认并生成规范文件（去确认门控：设计已在 Step 5 确认过，末步不再暂停等确认）
 - outputHint：无（源码 step 对象未定义）
+- preflightValidators：`['design-file-list', 'four-piece-rules']`（前置失败清单声明，2026-09-18-preflight-slimming task-04——本步 `--done` 消费 brainstorm.design.* 门禁，事前清单与事后门禁同源；`_extracted.json` 不含该键，以源码步骤定义为准）
 - 等待配置：无（可直接 `--done`）
 
 **本步出现的运行时占位符**

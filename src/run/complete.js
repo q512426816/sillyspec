@@ -1412,7 +1412,7 @@ function formatWaitHistory(step) {
 }
 
 export async function waitStep(pm, progress, stageName, cwd, outputText, waitReason, waitOptions, options = {}) {
-  const { changeName, nonInteractive = false, platformOpts = {} } = options
+  const { changeName, nonInteractive = false, platformOpts = {}, inheritFrom = null } = options
   const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
   const stageData = progress.stages[stageName]
 
@@ -1483,9 +1483,45 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
     }
   }
 
+  // ── wait 继承盖章（2026-09-18-preflight-slimming task-03 / D-003@v2 / FR-03）──
+  // --wait --inherit-from <D-xxx@vN>：wait 记录（上方 waiting 字段）落成后，同命令追加盖章
+  // 答案轮进 waitAnswers（照 continueStep 既有答案轮数据形态 {round, answer, question,
+  // answeredAt}——协议通道不改结构，回放链照常回放），wait 语义从「等待用户」翻转为
+  // 「已盖章待续跑」：清 waiting 标记字段 + 回 pending（照 continueStep 对 waiting 态的
+  // 清理形态）。消费路径最小侵入：completeStep 的 waiting 前置守卫见无 waiting 步骤直过、
+  // requiresWait 硬门见 waitAnswer 已置不阻断——后续普通 --done 不再要求 --answer。
+  // 锚点存在性已由 command.js --wait 分发点 hasDecisionId fail-closed 校验（此处收到的
+  // inheritFrom 必为 decisions.md 内真实存在的 ID），答案文本自带来源标注（R-04 可审计）。
+  if (inheritFrom) {
+    const step = stageData.steps[currentIdx]
+    const prevOutput = step.output || ''
+    const stampRound = (step.waitRound || 0) + 1
+    const stampAnswer = `由 ${inheritFrom} 继承确认（CLI 盖章）`
+    step.waitRound = stampRound
+    step.waitAnswer = stampAnswer
+    step.waitAnswers = Array.isArray(step.waitAnswers) ? step.waitAnswers : []
+    step.waitAnswers.push({ round: stampRound, answer: stampAnswer, question: prevOutput || null, answeredAt: now })
+    step.maxWaitRounds = stepDef.maxWaitRounds ?? step.maxWaitRounds
+    step.output = prevOutput ? `${prevOutput} | ${stampAnswer}` : stampAnswer
+    delete step.waitReason
+    delete step.waitOptions
+    delete step.waitedAt
+    step.status = 'pending'
+    step.completedAt = null
+  }
+
   progress.lastActive = now
   pm._write(cwd, progress, changeName)
   triggerSync(cwd, changeName, platformOpts)
+
+  // 盖章路径的收尾提示独立分叉：wait 已在记录态完成（非等待用户），提示 --done 直接收尾；
+  // 无 --inherit-from 路径输出与现状逐字节一致（兼容红线）。
+  if (inheritFrom) {
+    console.log(`✅ Step ${currentIdx + 1}/${stageData.steps.length} wait 已由决策继承盖章：${stageData.steps[currentIdx].name}`)
+    console.log(`   盖章轮：由 ${inheritFrom} 继承确认（CLI 盖章）——wait 已完成记录，本步回到待执行`)
+    console.log(`   后续 --done 不再要求 --answer，直接收尾：sillyspec run ${stageName} --done${changeName ? ` --change ${changeName}` : ''} --output "你的摘要"`)
+    return
+  }
 
   console.log(`⏸️  Step ${currentIdx + 1}/${stageData.steps.length} 已暂停等待：${stageData.steps[currentIdx].name}`)
   if (waitReason) console.log(`   原因：${waitReason}`)
