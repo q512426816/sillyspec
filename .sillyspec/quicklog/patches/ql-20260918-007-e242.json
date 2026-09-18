@@ -1,0 +1,64 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-e65ac5fa",
+  "totals": {
+    "files": 2,
+    "additions": 121,
+    "deletions": 37
+  },
+  "rows": [
+    {
+      "path": "src/review-tier.js",
+      "declared": true,
+      "additions": 67,
+      "deletions": 22,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/stage-review.test.mjs",
+      "declared": true,
+      "additions": 54,
+      "deletions": 15,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/review-tier.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/stage-review.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260918-007-e242",
+  "sessionId": "quick-e65ac5fa",
+  "savedAt": "2026-09-18T11:45:15.488Z",
+  "patchSha256": "475da611788ba5a3034aad85bf1290f948c7a952df26e0db202746099fc66ae4",
+  "patchStatus": "ok"
+}

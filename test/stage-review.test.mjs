@@ -76,17 +76,18 @@ console.log('=== 1. classifyReviewTier（规模分级）===\n')
   const t3 = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
   assert(t3.tier === 'self', `plan_level=light + 2 文件 → self`)
 
-  // plan_level=full → independent（无论文件数——full 语义即大变更，CLI 确定性映射）
+  // ql-20260918-007 双轨修复：full 不再独自推档——design 可读即实判（benign 内容 → doc-only → S0 self）
   const tFull = classifyReviewTier({ planLevel: 'full', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
-  assert(tFull.tier === 'independent', `plan_level=full + 2 文件 → independent（文件数不推翻）`)
+  assert(tFull.tier === 'self' && tFull.ceremonyTier === 'S0' && tFull.reason.includes('实判'),
+    `plan_level=full + benign 2 文件 → self/S0（实判压过代理——双轨修复回归钉，实际 ${tFull.tier}/${tFull.ceremonyTier}）`)
 
   // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm 场景，启发式）
   const t4 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
   assert(t4.tier === 'self', `无 planLevel + 1 文件 → self`)
 
-  // 无 planLevel + 文件 > 阈值 → independent（启发式保留）
+  // ql-20260918-007：4 文件 + benign 实判 → self（文件数启发式只保 brownfield 无 design 态，实判接管）
   const t4b = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
-  assert(t4b.tier === 'independent', `无 planLevel + 4 文件 → independent（启发式）`)
+  assert(t4b.tier === 'self' && t4b.reason.includes('实判'), `benign 4 文件 → self（实判接管文件数启发式）`)
   assert(t4b.fileCount === 4, `fileCount 正确返回 4`)
 
   // 阈值边界：恰好 = 阈值 → self
@@ -111,21 +112,19 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
 
 {
   // 双字段并存：ceremonyTier 新增且 tier/reason/fileCount 现字段保留（消费方零适配）
+  // ql-20260918-007：design 可读即实判（benign→doc-only/S0）；S1 面用显式 riskDetection 钉（r1 行）
   const t = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
-  assert(t.tier === 'self' && t.ceremonyTier === 'S1' && typeof t.reason === 'string' && t.reason.length > 0 && 'fileCount' in t,
+  assert(t.tier === 'self' && typeof t.reason === 'string' && t.reason.length > 0 && 'fileCount' in t && typeof t.ceremonyTier === 'string',
     `双字段并存：{ tier, ceremonyTier, reason, fileCount } 齐全（实际 tier=${t.tier} ceremonyTier=${t.ceremonyTier}）`)
-
-  // S1 档附 CLI 清单核验提示文案（D-005 轻仪菜单）
-  assert(t.reason.includes('CLI 清单核验'), `S1 reason 附 CLI 清单核验提示（实际：${t.reason}）`)
 
   // brownfield（无 risk 输入）→ ceremonyTier='S2' 保守缺省；≤3 文件旧断路器保兼容 self
   const b1 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
-  assert(b1.ceremonyTier === 'S2' && b1.tier === 'self',
-    `brownfield 无 risk 输入 → ceremonyTier='S2'（缺省保守）＋ 文件数≤3 断路器 → self`)
+  assert(b1.ceremonyTier === 'S0' && b1.tier === 'self' && b1.reason.includes('实判'),
+    `benign 1 文件 → 实判 doc-only → S0 self（旧断路器面被实判接管）`)
 
   const b2 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
-  assert(b2.ceremonyTier === 'S2' && b2.tier === 'independent' && b2.fileCount === 4,
-    `brownfield 4 文件 → ceremonyTier='S2' → independent（>3 断路器不命中）`)
+  assert(b2.tier === 'self' && b2.fileCount === 4,
+    `benign 4 文件 → self（实判接管；fileCount 仍正确返回 4）`)
 
   // 真实 risk 输入接管：档位随 RISK_TO_TIER 映射，文件数断路器不再适用（引擎档强制）
   const r0 = classifyReviewTier({ riskDetection: { level: 'doc-only' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
@@ -148,10 +147,10 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
   assert(px.ceremonyTier === 'S3' && px.tier === 'independent',
     `riskDetection 优先于 plan_level 代理（light + integration-critical → S3 → independent）`)
 
-  // friction 透传起爆：brownfield 缺省 S2 基础上 +1 → S3；断路器被真实信号压过
-  const fx = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']), frictionCounts: { gate_rollback: 1, review_rejected: 1 } })
+  // friction 透传起爆：S2 基础上 +1 → S3（ql-20260918-007：实判接管后需真实 S2 底座，显式 risk 钉）
+  const fx = classifyReviewTier({ riskDetection: { level: 'contract-required' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']), frictionCounts: { gate_rollback: 1, review_rejected: 1 } })
   assert(fx.ceremonyTier === 'S3' && fx.tier === 'independent',
-    `friction 起爆（两键合计 2 ≥ 阈值）→ S2+1=S3 → independent（≤3 断路器不适用）`)
+    `friction 起爆（两键合计 2 ≥ 阈值）→ S2+1=S3 → independent（真实信号底座）`)
 
   // span 起爆：声明文件 ≥ SPAN_FILES_THRESHOLD(8) → 至少 S2 → independent（brownfield 之上叠加）
   const sx = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), Array(8).fill(0).map((_, i) => `f${i}.js`)) })
@@ -178,6 +177,46 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
   const q1 = classifyReviewTier({ riskDetection: { level: 'unit-sufficient' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
   assert(q1.ceremonyTier === 'S1' && q1.tier === 'self' && q1.fileCount === 4,
     `risk=unit-sufficient + 4 文件 → S1 → self（S1 档内文件数不推翻）`)
+}
+
+// ────────────────────────────────────────────────────────────
+console.log('\n=== 1c. 双轨修复回归组（ql-20260918-007：实判/档位文件/显式声明）===\n')
+
+{
+  // 高风险内容实判升档：contract 关键词 → S2 independent（不受 plan_level 影响）
+  const dirR = makeTmpDir('rt-')
+  const dR = join(dirR, 'design.md')
+  writeFileSync(dR, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
+  const c1 = classifyReviewTier({ planLevel: 'full', designPath: dR })
+  assert(c1.ceremonyTier === 'S2' && c1.tier === 'independent' && c1.reason.includes('实判'),
+    `contract 内容实判 → S2 independent（实际 ${c1.ceremonyTier}/${c1.tier}）`)
+
+  // 档位文件兜底并入：specBase/.runtime/ceremony-tier-<change>.json S2 + benign 实判 S0 → S2
+  const dirT = makeTmpDir('rt-')
+  const changeDir = join(dirT, 'changes', 'c-demo')
+  mkdirSync(changeDir, { recursive: true })
+  const dT = join(changeDir, 'design.md')
+  writeFileSync(dT, '# Design\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
+  mkdirSync(join(dirT, '.runtime'), { recursive: true })
+  writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S2', components: {}, reasons: [], transitions: [] }))
+  const c2 = classifyReviewTier({ planLevel: 'full', designPath: dT })
+  assert(c2.ceremonyTier === 'S2' && c2.tier === 'independent' && c2.reason.includes('档位文件 S2 兜底并入'),
+    `档位文件 S2 + benign 实判 → S2 independent（兜底并入，实际 ${c2.ceremonyTier}）`)
+
+  // 档位文件低于实判不生效：file S1 + http client 实判 S2 → 取高 S2（只升不降）
+  writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S1', components: {}, reasons: [], transitions: [] }))
+  writeFileSync(dT, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
+  const c3 = classifyReviewTier({ planLevel: 'full', designPath: dT })
+  assert(c3.ceremonyTier === 'S2' && c3.reason.includes('在场（未高于实判'),
+    `档位文件 S1 < 实判 S2 → 取高 S2（只升不降，实际 ${c3.ceremonyTier}）`)
+
+  // 显式 risk_level frontmatter 并入实判链：声明 unit-sufficient + full → S1 self（升档尊重）
+  const dirE = makeTmpDir('rt-')
+  const dE = join(dirE, 'design.md')
+  writeFileSync(dE, '---\nrisk_level: unit-sufficient\n---\n# Design\n涉及 api contract\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
+  const c4 = classifyReviewTier({ planLevel: 'full', designPath: dE })
+  assert(c4.ceremonyTier === 'S1' && c4.tier === 'self' && c4.reason.includes('CLI 清单核验'),
+    `frontmatter unit-sufficient 显式并入 → S1 self（实际 ${c4.ceremonyTier}/${c4.tier}）`)
 }
 
 // ────────────────────────────────────────────────────────────

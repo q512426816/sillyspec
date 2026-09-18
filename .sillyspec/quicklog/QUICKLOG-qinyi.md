@@ -322,3 +322,12 @@
 根因：task-06 接线时设计取舍「本层不组装 client」，execute 独立评审定为 gap（client 供给面）复审收窄为移交项；平台 client 构造先例（index.js:1273）一直存在，属一行接线成本。危险文件判定说明：gates.js 命中门禁核心路径，但本次改动是影子派发 fire-and-forget 旁路段（新增 client 组装），不触碰任何门判定逻辑——定向回归（stage-completion-atomicity/noai-completion-gate）+lint 全绿佐证
 方案：gates.js 影子接线处懒加载 SillyHubMcpClient 注入（Promise.all 双动态 import + 构造失败传 undefined 走函数内 skip）；构造只读 local.yaml 不联网，未配平台仓仍 probe no-config 合理 skip
 结果：端到端实证：S1 档位+注入 client → 真实派发成功（mission cbb27116/worker 7386f671/shadowRunId 落账）——影子链路首次真实开火；无档位变更仍 tier-file-missing skip（前置链不回归）；定向绿+lint 全绿（677 文件未引用导出 0）；影子期对照数据自此开始积累，doctor ceremony_shadow 维度不再恒空
+
+## ql-20260918-007-e242 | 2026-09-18 19:34:49 | 消灭定价双轨：classifyReviewTier 未喂真实判级，plan_level=full 代理映射把实判 S1 的变更推成 S2 independent…
+状态：已完成
+关联变更：（无）
+文件：src/review-tier.js（+67/-22）, test/stage-review.test.mjs（+54/-15）
+需求：消灭定价双轨：classifyReviewTier 未喂真实判级，plan_level=full 代理映射把实判 S1 的变更推成 S2 independent（回放实验实证：档位文件 S1 vs 审查面 S2，同一变更两个价）
+根因：task-02 委托时调用侧未透传 riskDetection（task-05 遗留#4），三调用点全走 plan_level 代理兜底链
+方案：classifyReviewTier 内部升级组装链：riskDetection ＞ design/plan 实判（真跑 detectChangeRisk+显式 frontmatter 并入）＞ plan_level 代理降兜底；档位文件在场且更高时只升不降并入；三调用点零改动
+结果：回放 design 实测 S2→S1/self（CLI 清单核验）；测试翻新 4 断言+新增 1c 回归组；stage-review/spec-drift/gate 回归+lint 全绿；S1 轻仪自此真实生效

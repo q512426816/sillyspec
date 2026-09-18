@@ -35,7 +35,10 @@
  */
 
 import { parseFileChangeList } from './change-list.js'
-import { computeCeremonyTier } from './ceremony-tier.js'
+import { computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+import { detectChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
+import { readFileSync, existsSync } from 'fs'
+import { join, dirname, basename } from 'path'
 
 /**
  * 审查分级阈值：变更文件数 ≤ 此值 → 旧启发式断路器命中（brownfield 兼容倾向 self）。
@@ -60,8 +63,10 @@ function normalizePlanLevel(planLevel) {
  * 审查分级（评审档由 computeCeremonyTier 三轴定价决定）
  *
  * 判定顺序：
- *   1. 组装 blast 输入：riskDetection（调用侧透传）＞ plan_level 代理映射 ＞ 引擎 brownfield
- *      保守缺省 S2；declaredFiles 取 design.md 变更清单；frictionCounts 缺省空账
+ *   1. 组装 blast 输入（ql-20260918-007 双轨修复）：riskDetection（调用侧透传）＞ design/plan
+ *      实判（designPath 可读即真跑 detectChangeRisk + extractExplicitRiskLevel 并入）＞ plan_level
+ *      代理映射（无 designPath 兜底）＞ 引擎 brownfield 保守缺省 S2；档位文件（阶段门已结算价，
+ *      含摩擦升档）在场且更高时兜底并入；declaredFiles 取 design.md 变更清单；frictionCounts 缺省空账
  *   2. 委托 computeCeremonyTier 取档 → ceremonyTier（S0~S3）
  *   3. 档位映射评审 tier：S0/S1 → self（S1 附 CLI 清单核验提示）；S2 → independent×1；
  *      S3 → independent（多轮语义由 prompt 侧渲染）
@@ -94,35 +99,75 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
     fileCount = declaredFiles.length
   }
 
-  // blast 输入组装：riskDetection ＞ plan_level 代理 ＞ undefined（引擎 brownfield 缺省 S2）
-  const blastInput = hasRiskDetection
-    ? riskDetection
-    : normalizedPlanLevel
-      ? { level: PLAN_LEVEL_BLAST_PROXY[normalizedPlanLevel] }
-      : undefined
+  // blast 输入组装（ql-20260918-007 双轨修复）：riskDetection ＞ design/plan 实判 ＞ plan_level 代理 ＞ undefined。
+  // 实判优先治「full 代理把 S1 推成 S2」的双轨（回放实验实证：档位文件 S1 vs 审查面 S2）——
+  // designPath 可读即真跑 detectChangeRisk（显式 risk_level frontmatter 经 extractExplicitRiskLevel 并入），
+  // plan_level 代理降为无 designPath 的 brownfield 兜底（plan_level 仅编排，D-002）。
+  let blastInput = null
+  let blastSource = null
+  let explicitInput = null
+  if (hasRiskDetection) {
+    blastInput = riskDetection
+    blastSource = `riskDetection.level=${riskDetection.level}`
+  } else if (designPath) {
+    try {
+      const designContent = readFileSync(designPath, 'utf8')
+      let planContent = ''
+      const siblingPlan = join(dirname(designPath), 'plan.md')
+      if (existsSync(siblingPlan)) planContent = readFileSync(siblingPlan, 'utf8')
+      blastInput = detectChangeRisk({ designContent, planContent, changedFiles: declaredFiles })
+      explicitInput = extractExplicitRiskLevel(designContent)
+      blastSource = `riskDetection.level=${blastInput.level}（design/plan 实判，ql-20260918-007）`
+    } catch {
+      // design 读失败 → 降回代理链（不因 IO 异常拦审查分级）
+      blastInput = null
+    }
+  }
+  if (blastInput === null) {
+    if (normalizedPlanLevel) {
+      blastInput = { level: PLAN_LEVEL_BLAST_PROXY[normalizedPlanLevel] }
+      blastSource = `plan_level=${normalizedPlanLevel} 代理映射 ${PLAN_LEVEL_BLAST_PROXY[normalizedPlanLevel]}`
+    } else {
+      blastInput = undefined
+      blastSource = '无 risk 输入，brownfield 保守缺省'
+    }
+  }
+
+  // 档位文件兜底（canon 真相源，含摩擦升档）：designPath 推导 <specBase>/.runtime/ceremony-tier-<change>.json，
+  // 在场且高于实判档时并入（只升不降语义——档位文件是阶段门已结算的权威价，实判只补内容升级面）
+  let tierFileTier = null
+  if (designPath) {
+    try {
+      const changeDir = dirname(designPath)
+      const tierPath = join(dirname(dirname(changeDir)), '.runtime', `ceremony-tier-${basename(changeDir)}.json`)
+      if (existsSync(tierPath)) {
+        const tf = JSON.parse(readFileSync(tierPath, 'utf8'))
+        if (tf && CEREMONY_TIERS.includes(tf.tier)) tierFileTier = tf.tier
+      }
+    } catch { /* 坏档当无档（实判仍兜底） */ }
+  }
 
   // 委托三轴定价引擎取档（ceremony-tier.js 单点真相源）
-  const priced = computeCeremonyTier({ riskDetection: blastInput, declaredFiles, frictionCounts })
-  const ceremonyTier = priced.tier
+  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, frictionCounts })
+  let ceremonyTier = priced.tier
+  if (tierFileTier && CEREMONY_TIERS.indexOf(tierFileTier) > CEREMONY_TIERS.indexOf(ceremonyTier)) {
+    ceremonyTier = tierFileTier
+  }
+  const tierFileNote = tierFileTier ? `；档位文件 ${tierFileTier} 兜底${tierFileTier === ceremonyTier ? '并入' : '在场（未高于实判，不生效）'}` : ''
 
   // brownfield 纯缺省判定：档位完全来自 blast 保守缺省（无 risk 输入、无 plan_level 代理、
-  // span/friction 均未起爆）——旧文件数断路器的唯一适用面
+  // 无档位文件、span/friction 均未起爆）——旧文件数断路器的唯一适用面
   const brownfieldPureDefault =
-    blastInput === undefined && priced.components.span === 'S0' && priced.components.friction === 'S0'
+    blastInput === undefined && tierFileTier === null && priced.components.span === 'S0' && priced.components.friction === 'S0'
 
-  // blast 来源文案（审计可读：区分真实判级 / plan_level 代理 / brownfield 缺省）
-  const blastSource = hasRiskDetection
-    ? `riskDetection.level=${riskDetection.level}`
-    : normalizedPlanLevel
-      ? `plan_level=${normalizedPlanLevel} 代理映射 ${PLAN_LEVEL_BLAST_PROXY[normalizedPlanLevel]}`
-      : '无 risk 输入，brownfield 保守缺省'
+  // blast 来源文案已在组装段生成（blastSource，含实判/代理/缺省三态）；此处仅追加档位文件注记
 
   // ── 旧文件数断路器（降级兼容，R-05 过渡期形态）──
   if (brownfieldPureDefault && fileCount !== null && fileCount <= SELF_REVIEW_FILE_THRESHOLD) {
     return {
       tier: 'self',
       ceremonyTier,
-      reason: `无 plan_level，变更文件 ${fileCount} ≤ ${SELF_REVIEW_FILE_THRESHOLD}（启发式断路器保兼容）；ceremony 档 ${ceremonyTier}（blast：${blastSource}，span/friction 未起爆不升仪）`,
+      reason: `无 plan_level，变更文件 ${fileCount} ≤ ${SELF_REVIEW_FILE_THRESHOLD}（启发式断路器保兼容）；ceremony 档 ${ceremonyTier}（blast：${blastSource}，span/friction 未起爆不升仪）${tierFileNote}`,
       fileCount,
     }
   }
@@ -140,7 +185,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
     return {
       tier: 'self',
       ceremonyTier,
-      reason: `${base}；ceremony 档 ${ceremonyTier}（blast：${blastSource}）${s1Hint}`,
+      reason: `${base}；ceremony 档 ${ceremonyTier}（blast：${blastSource}）${s1Hint}${tierFileNote}`,
       fileCount,
     }
   }
@@ -159,7 +204,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
   return {
     tier: 'independent',
     ceremonyTier,
-    reason: `${base}；ceremony 档 ${ceremonyTier}（blast：${blastSource}）→ ${independentForm}`,
+    reason: `${base}；ceremony 档 ${ceremonyTier}（blast：${blastSource}）→ ${independentForm}${tierFileNote}`,
     fileCount,
   }
 }
