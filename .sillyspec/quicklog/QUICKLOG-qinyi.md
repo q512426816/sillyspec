@@ -331,3 +331,12 @@
 根因：task-02 委托时调用侧未透传 riskDetection（task-05 遗留#4），三调用点全走 plan_level 代理兜底链
 方案：classifyReviewTier 内部升级组装链：riskDetection ＞ design/plan 实判（真跑 detectChangeRisk+显式 frontmatter 并入）＞ plan_level 代理降兜底；档位文件在场且更高时只升不降并入；三调用点零改动
 结果：回放 design 实测 S2→S1/self（CLI 清单核验）；测试翻新 4 断言+新增 1c 回归组；stage-review/spec-drift/gate 回归+lint 全绿；S1 轻仪自此真实生效
+
+## ql-20260918-008-5134 | 2026-09-18 20:03:31 | 成本优化波批1-0：基线锚落盘
+状态：已完成
+关联变更：（无）
+文件：docs/sillyspec/cost-baseline-2026-09-18.md（+46/-0）
+需求：成本优化波批1-0：基线锚落盘
+根因：评审要求度量与批1同批埋——无批前基线则批后目标无法归因
+方案：docs/sillyspec/cost-baseline-2026-09-18.md：DB直核三方刻度冻结+守恒红线三条进每批验收+非目标章程+批次验收表
+结果：基线冻结于任何批1修复之前；纯文档零测试面
