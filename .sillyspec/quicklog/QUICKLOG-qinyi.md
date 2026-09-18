@@ -385,3 +385,12 @@
 根因：indexRequirements 归档异常被 best-effort catch 只 warn 蒸发——D14 只能事后推断缺号。危险文件说明：archive-distill.js 归档蒸馏入口，本次只在 FR 索引 catch 段加死信标记写入（降级路径内的留痕），蒸馏主逻辑零触碰
 方案：①手工重放补号（FR-core-engine-009~011）②降级 catch 加 fr-index-skipped.md 死信（时间/原因/重放指引），合法零输出不触发
 结果：端到端双态实证：坏 knowledgeRoot→异常→死信落盘；requirements 缺席→零输出无死信；probe8 号已补，③号全清
+
+## ql-20260919-001-3018 | 2026-09-19 05:45:23 | heredoc 教训进 conventions（scan 文档=知识根，危险文件判定合理但本次纯增第 10 节——scan 产物本就该随实证更新）
+状态：已完成
+关联变更：（无）
+文件：.sillyspec/docs/sillyspec/scan/CONVENTIONS.md（+8/-0）
+需求：heredoc 教训进 conventions（scan 文档=知识根，危险文件判定合理但本次纯增第 10 节——scan 产物本就该随实证更新）
+根因：五次实证转义坑（批3 FR 块静默替换/§5c 语法错等）
+方案：CONVENTIONS 第 10 节：坑形态+三纪律（Edit 优先/assert 必带/replace 后验证）+隐形规则
+结果：docs check 578/578 绿；教训可被后续会话命中

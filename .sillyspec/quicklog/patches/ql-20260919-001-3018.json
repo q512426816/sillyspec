@@ -1,0 +1,47 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-e0332b4a",
+  "totals": {
+    "files": 1,
+    "additions": 8,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/scan/CONVENTIONS.md",
+      "declared": true,
+      "additions": 8,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-001-3018",
+  "sessionId": "quick-e0332b4a",
+  "savedAt": "2026-09-18T21:46:47.714Z",
+  "patchSha256": "a8deab6763803cc62df8630212bf7eab276cbd1366aa69538ba80b51c760cc5d",
+  "patchStatus": "ok"
+}

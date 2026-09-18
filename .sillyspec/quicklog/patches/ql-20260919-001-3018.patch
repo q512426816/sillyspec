@@ -1,0 +1,19 @@
+diff --git a/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md b/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
+index e2c36a3..9d2ecd7 100644
+--- a/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
++++ b/.sillyspec/docs/sillyspec/scan/CONVENTIONS.md
+@@ -110,6 +110,14 @@ src/init.js:301    // ⚠️ 必须保护真实资产：若本地 .sillyspec 含
+ 
+ **隐形规则**：文档引用源码一律带实测行号（`worktree.js:325` 形态）；改源码后同步受影响文档的行号引用；失效数走 ratchet 门只许减少不许增加（基线 `.sillyspec/docs-check-baseline`）。
+ 
++### 10. 多行/转义内容的文件编辑禁用 python heredoc——用 Edit 工具或 Escaped heredoc（2026-09-19 五次实证）
++
++**坑的形态**：`python -c "..."` 在 Git Bash 双引号内写含 `\n`/`\` 的多行替换——反斜杠被 shell 层吃掉一层，python 源码里变成裸换行/残缺转义 → `.replace()` 目标字符串与文件实际内容不匹配 → **静默返回原串（python replace 无错不抛）** → 文件看似改了实际没改。同族坑：python heredoc `<< 'PYEOF'` 里写 JS 模板字符串 `\n`（python 层吃掉）→ 生成的测试文件含真换行 → SyntaxError（§5c 实证）。
++
++**纪律**：①多行/含反斜杠的文件编辑一律用 Edit 工具（精确 old/new）或 python heredoc `<< 'PYEOF'` + heredoc 内部纯 ASCII 双反斜杠；②**每次 python replace 后必须验证**（`assert old in s` 或改后 grep 计数）——不验证的 replace 等于没跑；③简单键值替换可用 `python -c` 但同样带 assert。
++
++**隐形规则**：python `str.replace()` 找不到目标不报错——这就是它比 Edit 工具危险的原因（Edit 工具的 old_string 不匹配会 hard fail）。
++
+ ## 代码风格
+ 
+ - **模块系统**：ESM only（`"type":"module"`），顶层 `import/export`，例外见上方「框架隐形规则 #1」。入口 `bin/sillyspec.js` 仅 2 行：`#!/usr/bin/env node` + `import '../src/index.js'`。
