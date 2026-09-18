@@ -74,3 +74,4 @@ created_at: 2026-06-19T12:40:00+08:00
 
 ## FR 需求索引
 - core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)
+- runtime|FR|需求|承接 → [fr/runtime.md](fr/runtime.md)
