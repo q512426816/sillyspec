@@ -10,6 +10,11 @@ import { join, isAbsolute } from 'path'
 
 // ============ 向后兼容：旧的 INTEGRATION_CRITICAL_PATTERNS ============
 
+// 文件名型模式边界（ql-20260918-009，回放实验实证）：\b 对 `-`/`_`/`.` 前缀漏界——design 非目标
+// 行写 mcp-server.js、changedFiles 含 src/mcp-server.js 均被误判 deployment-critical（触发 D-004
+// 人肉降级）。行级用负向后顾 (?<![\w\-._]) 排除定界符前缀；路径级用行首/分隔符边界。
+// 真阳面（src/server.js、行首/空格/中文紧邻 server.js、bin/server.js）双回归钉在
+// test/quick-gate-profile.test.mjs——判级输入面，假修=静默降 risk 主价。
 const INTEGRATION_CRITICAL_PATTERNS = [
   /\bdaemon\b/i,
   /\bbackend\b/i,
@@ -28,10 +33,10 @@ const INTEGRATION_CRITICAL_PATTERNS = [
   /\bipc\b/i,
   /\bmessage.?queue\b/i,
   /\bpub.?sub\b/i,
-  /\bcli\.ts\b/i,
-  /\bmain\.ts\b/i,
+  /(?<![\w\-._])cli\.ts\b/i,
+  /(?<![\w\-._])main\.ts\b/i,
   /\bentrypoint\b/i,
-  /\bserver\.(js|ts)\b/i,
+  /(?<![\w\-._])server\.(js|ts)\b/i,
   /\bbootstrap\b/i,
   /\bdockerfile\b/i,
   /\bdocker.?compose\b/i,
@@ -44,9 +49,9 @@ const INTEGRATION_FILE_PATTERNS = [
   /lifecycle/i,
   /state.?machine/i,
   /lease/i,
-  /cli\.(js|ts)$/,
-  /main\.(js|ts)$/,
-  /server\.(js|ts)$/,
+  /(?:^|[\/\\])cli\.(js|ts)$/,
+  /(?:^|[\/\\])main\.(js|ts)$/,
+  /(?:^|[\/\\])server\.(js|ts)$/,
   /bootstrap/i,
   /startup/i,
 ]

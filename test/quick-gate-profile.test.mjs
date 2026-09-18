@@ -382,4 +382,20 @@ test('detectChangeRisk 判级零变化：quick 表新增不影响 verify 侧语�
   // 两表互不掺和：auth 路径只进 quick 风险表，不触发 detectChangeRisk 判级
   const authOnly = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/auth/login.js'] })
   assert.equal(authOnly.level, 'doc-only')
+
+  // ── 9. 文件名型模式定界符前缀双回归（ql-20260918-009，回放实验实证 mcp-server.js 误判）──
+  // 假阳面：`-`/`_` 等定界符前缀的相似名不得触发 deployment（此前 \b 对非\w定界符漏界）
+  const fpLine = detectChangeRisk({ designContent: '# D\n## 非目标\n- mcp-server.js 错误面透传\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+  assert.equal(fpLine.level, 'doc-only', 'mcp-server.js 非目标行（无同句否定词）不再误判 deployment')
+  const fpPath = detectChangeRisk({ designContent: '# D\n## 清单\n| 修改 | x | y |', planContent: '', changedFiles: ['src/mcp-server.js'] })
+  assert.notEqual(fpPath.level, 'deployment-critical', 'src/mcp-server.js 路径不再误判 deployment')
+  const fpUnderscore = detectChangeRisk({ designContent: '# D\n- my_cli.ts 不在范围\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+  assert.notEqual(fpUnderscore.level, 'deployment-critical', 'my_cli.ts 前缀不误判 deployment')
+  // 真阳面：真实入口文件/行内提及/中文紧邻必须仍然命中（判级输入面，漏报=静默降 risk 主价）
+  const tpLine = detectChangeRisk({ designContent: '# D\n入口 server.js 修改\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+  assert.equal(tpLine.level, 'deployment-critical', '行内 server.js 仍判 deployment')
+  const tpCn = detectChangeRisk({ designContent: '# D\n修改server.js入口\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+  assert.equal(tpCn.level, 'deployment-critical', '中文紧邻 修改server.js 仍判 deployment（边界不误伤非\\w邻接）')
+  const tpPath = detectChangeRisk({ designContent: '# D\n## 清单\n| 修改 | x | y |', planContent: '', changedFiles: ['bin/server.js'] })
+  assert.equal(tpPath.level, 'deployment-critical', 'bin/server.js 路径仍判 deployment')
 })

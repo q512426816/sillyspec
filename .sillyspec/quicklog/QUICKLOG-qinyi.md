@@ -340,3 +340,12 @@
 根因：评审要求度量与批1同批埋——无批前基线则批后目标无法归因
 方案：docs/sillyspec/cost-baseline-2026-09-18.md：DB直核三方刻度冻结+守恒红线三条进每批验收+非目标章程+批次验收表
 结果：基线冻结于任何批1修复之前；纯文档零测试面
+
+## ql-20260918-009-a081 | 2026-09-18 20:08:04 | server.js 词边界：文件名型风险模式对定界符前缀漏界
+状态：已完成
+关联变更：（无）
+文件：src/change-risk-profile.js, test/quick-gate-profile.test.mjs
+需求：server.js 词边界：文件名型风险模式对定界符前缀漏界
+根因：\b 对 -/_/. 前缀漏界——design 非目标行写 mcp-server.js（无同句否定词时）、changedFiles 含 src/mcp-server.js 均误判 deployment-critical，回放实验与 ceremony 变更两次触发 D-004 人肉降级通道。危险文件说明：change-risk-profile.js 是判级输入面，本次只改六个正则的边界（三行级+三路径级），判级逻辑零触碰，双回归钉+三套件绿佐证
+方案：行级三模式加负向后顾 (?<![\w\-._])；路径级三模式加行首/分隔符边界 (?:^|[\/\])——前缀相似名不命中，真实入口（含中文紧邻等非\w邻接形态）保持命中
+结果：七案例双回归全过（假阳三：mcp-server.js 行/路径、my_cli.ts；真阳四：行内/中文紧邻/bin/server.js/src/cli.ts）；钉进 quick-gate-profile.test.mjs 第9节永久回归；quick-gate 27/0+stage-contract/pass-eligibility 19/0+lint 全绿——判级输入面假修防护就位，下个变更的非目标节不再触发人肉降级
