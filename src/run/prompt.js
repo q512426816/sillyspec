@@ -36,6 +36,7 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge } from '../knowledge-match.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
+import { readActiveFrDigest } from '../fr-index.js'
 // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
 // stage-contract-engine 均为 src/ 叶子方向（不反向 import 本模块），静态 import 不引入环。
 import { validateDesignFileList } from '../design-facts.js'
@@ -162,10 +163,9 @@ export function loadModuleContextIndex(specBase, projectName) {
  * @param {object} moduleIndex - loadModuleContextIndex 返回值
  * @param {string} specBase - 规范目录
  * @param {string} projectName - 项目名
- * @returns {string} 上下文注入文本，空字符串表示无匹配模块
+ * @returns {{text: string, frModules: Array<{id: string, count: number}>}} 上下文注入文本（空=无匹配模块）+ 有活需求的模块清单（供遥测）
  */
-function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {
-  if (!moduleIndex || !taskDescription) return ''
+export function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {  if (!moduleIndex || !taskDescription) return { text: '', frModules: [] }
 
   const taskLower = taskDescription.toLowerCase()
   const matched = []
@@ -185,15 +185,22 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
     if (score > 0) matched.push({ moduleId, data, score, matchReasons })
   }
 
-  if (matched.length === 0) return ''
+  if (matched.length === 0) return { text: '', frModules: [] }
 
   matched.sort((a, b) => b.score - a.score)
 
   let injection = '\n### 📦 模块上下文（按相关性排序，来自 Module Context Index）\n\n'
   injection += `> 以下模块上下文由 scan 阶段生成的 _module-map.yaml 自动匹配。\n`
+  injection += `> 活需求来自 knowledge/fr 索引（active 以索引为准，现场 join）——承接/取代指引见 step8 digest\n`
   injection += `> Matched modules: ${matched.map(m => m.moduleId).join(', ')}\n`
   injection += `> Reasons: ${matched.map(m => m.matchReasons.join(', ')).join('; ')}\n\n`
 
+  // FR 活需求注入期 join（ql-20260919-002，L2 替代形态）：join 键 = 域≡模块 id
+  // （fr-index.js resolveTouchedDomains 同键），现场查 active 条目——id+标题紧凑行（场景名
+  // 留给 brainstorm step8 digest：此处设计期感知，digest 写作期指引——**有意冗余勿当重复
+  // 优化掉**）。截前 5 条+溢出指针行；空段消隐（与 digest 空态同款）。fail-open：读失败该
+  // 模块无活需求行，绝不阻塞注入。
+  const frModules = []
   for (const { moduleId, data } of matched) {
     injection += `#### ${moduleId}\n`
     if (data.role) injection += `- **职责**: ${String(data.role).slice(0, 100)}\n`
@@ -216,10 +223,21 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
     if (recentChanges.length > 0) {
       injection += `- **最近变更**: ${recentChanges.slice(0, 3).map(e => e.name).join('、')}\n`
     }
+    // 活需求行（注入期 join 本体）
+    try {
+      const frs = readActiveFrDigest(join(specBase, 'knowledge'), [moduleId])
+      if (frs.length > 0) {
+        const top = frs.slice(0, 5).map(f => `${f.id} ${f.title}`.trim()).join('；')
+        injection += `- **活需求**: ${top}`
+        if (frs.length > 5) injection += `；+${frs.length - 5} 条见 knowledge/fr/${moduleId}.md`
+        injection += '\n'
+        frModules.push({ id: moduleId, count: frs.length })
+      }
+    } catch { /* fail-open：FR 读失败该模块无活需求行 */ }
     injection += '\n'
   }
 
-  return injection
+  return { text: injection, frModules }
 }
 
 /**
@@ -1141,7 +1159,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       try {
         const { appendKnowledgeHit } = await import('../knowledge-hits.js')
         appendKnowledgeHit(join(frSpecBase, '.runtime'), {
-          type: 'fr-inject', change: changeName, domains, count: entries.length,
+          type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
         })
       } catch { /* 遥测 fail-soft */ }
     } catch (e) {
@@ -1710,9 +1728,23 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         if (stageName === 'quick') {
           taskDesc = readQuickGuardField(changeName, effectiveSpecBase, 'taskDescription') || taskDesc
         }
-        const injection = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName)
+        const injRes = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName) || { text: '', frModules: [] }
+        const injection = injRes.text
         if (injection) {
           promptText = injection + '\n' + promptText
+          // fr-inject 遥测（module-inject 源，ql-20260919-002）：仅 count>0 模块发事件（防 jsonl
+          // 堆 count-0 噪音）；type 不变+source 归因（新 type 会静默漏过 knowledge-stats 的 if 链
+          // 缩水 D-006 总数——source 字段保口径）。与 step8 digest 侧可能对同一变更各发一次，
+          // frInjectChanges 按 change 去重不受双发影响。fail-soft。
+          if (injRes.frModules && injRes.frModules.length > 0 && changeName) {
+            try {
+              for (const fm of injRes.frModules) {
+                appendKnowledgeHit(join(effectiveSpecBase, '.runtime'), {
+                  type: 'fr-inject', change: changeName, domains: [fm.id], count: fm.count, source: 'module-inject',
+                })
+              }
+            } catch { /* 遥测 fail-soft */ }
+          }
           // 首步全量注入后落账：本阶段首个非空注入即「首步」锚点（记 firstStep/digest/at——后续
           // 步骤摘要行的判定输入）。只在真注入非空内容时落账——空注入不占首步位（防摘要行
           // 「已于步骤 N 注入」指向一个实际没注入任何模块内容的步骤，丢真上下文）。fail-open：

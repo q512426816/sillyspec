@@ -1,0 +1,87 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-964eb1d4",
+  "totals": {
+    "files": 4,
+    "additions": 121,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": "src/knowledge-stats.js",
+      "declared": true,
+      "additions": 7,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "declared": true,
+      "additions": 39,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knowledge-fr-stats.test.mjs",
+      "declared": true,
+      "additions": 18,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quick-step1-injection.test.mjs",
+      "declared": true,
+      "additions": 57,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 2,
+    "testFileCount": 2,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/knowledge-stats.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/prompt.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/knowledge-fr-stats.test.mjs",
+      "test/quick-step1-injection.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-002-771f",
+  "sessionId": "quick-964eb1d4",
+  "savedAt": "2026-09-18T22:38:00.889Z",
+  "patchSha256": "083ba62ad32b10e62f575a171cd56fa311426ed57bead24465a005f5b59474f1",
+  "patchStatus": "ok"
+}

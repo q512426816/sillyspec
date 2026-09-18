@@ -394,3 +394,13 @@
 根因：五次实证转义坑（批3 FR 块静默替换/§5c 语法错等）
 方案：CONVENTIONS 第 10 节：坑形态+三纪律（Edit 优先/assert 必带/replace 后验证）+隐形规则
 结果：docs check 578/578 绿；教训可被后续会话命中
+
+## ql-20260919-002-771f | 2026-09-19 06:24:18 | FR 活需求注入期 join：四面消费（brainstorm/plan/execute 首步+quick step1）
+状态：已完成
+关联变更：（无）
+文件：src/knowledge-stats.js（+7/-0）, src/run/prompt.js（+39/-7）, test/knowledge-fr-stats.test.mjs（+18/-0）, test/quick-step1-injection.test.mjs（+57/-1）
+需求：FR 活需求注入期 join：四面消费（brainstorm/plan/execute 首步+quick step1）
+根因：L2 指针节否决（第二真相）；join 键现成（域≡模块 id）。危险文件裁量：渲染层追加行+返回形状适配，门判定零改动
+方案：注入期 join+source 遥测+stats 分组+三测试文件增量
+结果：core-engine 实测 14 条截 5+溢出+遥测 count；6/0+4 断言+10/0+lint 绿
+审计：[gate] L1（跨 2 模块 · 4 文件：2 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含

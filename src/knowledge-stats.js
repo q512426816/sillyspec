@@ -122,12 +122,18 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
   const supersedeChanges = new Set()
   const duplicateCandidates = new Set()
   const unreferencedByDomain = new Map()
+  // fr-inject 按来源分组（ql-20260919-002 口径：source='module-inject'（注入期 join，四面消费）
+  // vs 'digest'（brainstorm step8 写作期）。存量事件无 source 读数归 digest 桶——保总数口径稳定，
+  // 只增归因维度；新发射面一律带 source 勿开新 type（未知 fr-* 类型静默漏过下方 if 链）。
+  const frInjectBySource = new Map()
   let frInject = 0
   let frSupersede = 0
   let frDuplicateWarning = 0
   for (const r of frEvents) {
     if (r.type === 'fr-inject') {
       frInject += 1
+      const src = typeof r.source === 'string' && r.source ? r.source : 'digest'
+      frInjectBySource.set(src, (frInjectBySource.get(src) || 0) + 1)
       if (r.change) injectChanges.add(r.change)
     } else if (r.type === 'fr-supersede') {
       frSupersede += 1
@@ -157,6 +163,7 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
     present: frDirExists || frEvents.length > 0,
     events: {
       frInject,
+      frInjectBySource: Object.fromEntries(frInjectBySource),
       frInjectChanges: injectChanges.size,
       frSupersede,
       frSupersedeChanges: supersedeChanges.size,

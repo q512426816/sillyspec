@@ -1,0 +1,239 @@
+diff --git a/src/knowledge-stats.js b/src/knowledge-stats.js
+index a95fc9b..66716ec 100644
+--- a/src/knowledge-stats.js
++++ b/src/knowledge-stats.js
+@@ -122,12 +122,18 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+   const supersedeChanges = new Set()
+   const duplicateCandidates = new Set()
+   const unreferencedByDomain = new Map()
++  // fr-inject 按来源分组（ql-20260919-002 口径：source='module-inject'（注入期 join，四面消费）
++  // vs 'digest'（brainstorm step8 写作期）。存量事件无 source 读数归 digest 桶——保总数口径稳定，
++  // 只增归因维度；新发射面一律带 source 勿开新 type（未知 fr-* 类型静默漏过下方 if 链）。
++  const frInjectBySource = new Map()
+   let frInject = 0
+   let frSupersede = 0
+   let frDuplicateWarning = 0
+   for (const r of frEvents) {
+     if (r.type === 'fr-inject') {
+       frInject += 1
++      const src = typeof r.source === 'string' && r.source ? r.source : 'digest'
++      frInjectBySource.set(src, (frInjectBySource.get(src) || 0) + 1)
+       if (r.change) injectChanges.add(r.change)
+     } else if (r.type === 'fr-supersede') {
+       frSupersede += 1
+@@ -157,6 +163,7 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+     present: frDirExists || frEvents.length > 0,
+     events: {
+       frInject,
++      frInjectBySource: Object.fromEntries(frInjectBySource),
+       frInjectChanges: injectChanges.size,
+       frSupersede,
+       frSupersedeChanges: supersedeChanges.size,
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 380d0ac..ce58b0e 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -36,6 +36,7 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
+ // buildKnowledgeInjection docstring）。
+ import { matchKnowledge } from '../knowledge-match.js'
+ import { appendKnowledgeHit } from '../knowledge-hits.js'
++import { readActiveFrDigest } from '../fr-index.js'
+ // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
+ // stage-contract-engine 均为 src/ 叶子方向（不反向 import 本模块），静态 import 不引入环。
+ import { validateDesignFileList } from '../design-facts.js'
+@@ -162,10 +163,9 @@ export function loadModuleContextIndex(specBase, projectName) {
+  * @param {object} moduleIndex - loadModuleContextIndex 返回值
+  * @param {string} specBase - 规范目录
+  * @param {string} projectName - 项目名
+- * @returns {string} 上下文注入文本，空字符串表示无匹配模块
++ * @returns {{text: string, frModules: Array<{id: string, count: number}>}} 上下文注入文本（空=无匹配模块）+ 有活需求的模块清单（供遥测）
+  */
+-function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {
+-  if (!moduleIndex || !taskDescription) return ''
++export function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {  if (!moduleIndex || !taskDescription) return { text: '', frModules: [] }
+ 
+   const taskLower = taskDescription.toLowerCase()
+   const matched = []
+@@ -185,15 +185,22 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
+     if (score > 0) matched.push({ moduleId, data, score, matchReasons })
+   }
+ 
+-  if (matched.length === 0) return ''
++  if (matched.length === 0) return { text: '', frModules: [] }
+ 
+   matched.sort((a, b) => b.score - a.score)
+ 
+   let injection = '\n### 📦 模块上下文（按相关性排序，来自 Module Context Index）\n\n'
+   injection += `> 以下模块上下文由 scan 阶段生成的 _module-map.yaml 自动匹配。\n`
++  injection += `> 活需求来自 knowledge/fr 索引（active 以索引为准，现场 join）——承接/取代指引见 step8 digest\n`
+   injection += `> Matched modules: ${matched.map(m => m.moduleId).join(', ')}\n`
+   injection += `> Reasons: ${matched.map(m => m.matchReasons.join(', ')).join('; ')}\n\n`
+ 
++  // FR 活需求注入期 join（ql-20260919-002，L2 替代形态）：join 键 = 域≡模块 id
++  // （fr-index.js resolveTouchedDomains 同键），现场查 active 条目——id+标题紧凑行（场景名
++  // 留给 brainstorm step8 digest：此处设计期感知，digest 写作期指引——**有意冗余勿当重复
++  // 优化掉**）。截前 5 条+溢出指针行；空段消隐（与 digest 空态同款）。fail-open：读失败该
++  // 模块无活需求行，绝不阻塞注入。
++  const frModules = []
+   for (const { moduleId, data } of matched) {
+     injection += `#### ${moduleId}\n`
+     if (data.role) injection += `- **职责**: ${String(data.role).slice(0, 100)}\n`
+@@ -216,10 +223,21 @@ function buildModuleContextInjection(taskDescription, moduleIndex, specBase, pro
+     if (recentChanges.length > 0) {
+       injection += `- **最近变更**: ${recentChanges.slice(0, 3).map(e => e.name).join('、')}\n`
+     }
++    // 活需求行（注入期 join 本体）
++    try {
++      const frs = readActiveFrDigest(join(specBase, 'knowledge'), [moduleId])
++      if (frs.length > 0) {
++        const top = frs.slice(0, 5).map(f => `${f.id} ${f.title}`.trim()).join('；')
++        injection += `- **活需求**: ${top}`
++        if (frs.length > 5) injection += `；+${frs.length - 5} 条见 knowledge/fr/${moduleId}.md`
++        injection += '\n'
++        frModules.push({ id: moduleId, count: frs.length })
++      }
++    } catch { /* fail-open：FR 读失败该模块无活需求行 */ }
+     injection += '\n'
+   }
+ 
+-  return injection
++  return { text: injection, frModules }
+ }
+ 
+ /**
+@@ -1141,7 +1159,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       try {
+         const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+         appendKnowledgeHit(join(frSpecBase, '.runtime'), {
+-          type: 'fr-inject', change: changeName, domains, count: entries.length,
++          type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
+         })
+       } catch { /* 遥测 fail-soft */ }
+     } catch (e) {
+@@ -1710,9 +1728,23 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         if (stageName === 'quick') {
+           taskDesc = readQuickGuardField(changeName, effectiveSpecBase, 'taskDescription') || taskDesc
+         }
+-        const injection = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName)
++        const injRes = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName) || { text: '', frModules: [] }
++        const injection = injRes.text
+         if (injection) {
+           promptText = injection + '\n' + promptText
++          // fr-inject 遥测（module-inject 源，ql-20260919-002）：仅 count>0 模块发事件（防 jsonl
++          // 堆 count-0 噪音）；type 不变+source 归因（新 type 会静默漏过 knowledge-stats 的 if 链
++          // 缩水 D-006 总数——source 字段保口径）。与 step8 digest 侧可能对同一变更各发一次，
++          // frInjectChanges 按 change 去重不受双发影响。fail-soft。
++          if (injRes.frModules && injRes.frModules.length > 0 && changeName) {
++            try {
++              for (const fm of injRes.frModules) {
++                appendKnowledgeHit(join(effectiveSpecBase, '.runtime'), {
++                  type: 'fr-inject', change: changeName, domains: [fm.id], count: fm.count, source: 'module-inject',
++                })
++              }
++            } catch { /* 遥测 fail-soft */ }
++          }
+           // 首步全量注入后落账：本阶段首个非空注入即「首步」锚点（记 firstStep/digest/at——后续
+           // 步骤摘要行的判定输入）。只在真注入非空内容时落账——空注入不占首步位（防摘要行
+           // 「已于步骤 N 注入」指向一个实际没注入任何模块内容的步骤，丢真上下文）。fail-open：
+diff --git a/test/knowledge-fr-stats.test.mjs b/test/knowledge-fr-stats.test.mjs
+index 33aef87..f6f5bb0 100644
+--- a/test/knowledge-fr-stats.test.mjs
++++ b/test/knowledge-fr-stats.test.mjs
+@@ -133,6 +133,24 @@ const CE = [
+   assert(m.matrix.length === 1 && m.matrix[0].hits === 1 && m.totalInjects === 1, `7 fr-* 事件不进命中矩阵（fr-inject 的 matchedFiles 不计——type 过滤面零回归，实际 hits=${m.matrix[0] && m.matrix[0].hits} injects=${m.totalInjects}）`)
+ }
+ 
++// ── fr-inject source 分组（ql-20260919-002）：module-inject vs digest vs 存量无 source 归 digest ──
++{
++  const fx = makeFixture()
++  const NL = String.fromCharCode(10)
++  const hits = [
++    JSON.stringify({ type: 'fr-inject', change: 'c1', domains: ['core-engine'], count: 3, source: 'module-inject', at: new Date().toISOString() }),
++    JSON.stringify({ type: 'fr-inject', change: 'c1', domains: ['core-engine'], count: 14, source: 'digest', at: new Date().toISOString() }),
++    JSON.stringify({ type: 'fr-inject', change: 'c2', domains: ['runtime'], count: 4, at: new Date().toISOString() }),  // 存量无 source
++  ].join(NL) + NL
++  writeFileSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'), hits)
++  const st = buildFrIndexStats(fx.knowledgeDir, fx.runtimeDir, {})
++  assert(st.events.frInject === 3, `frInject 总数=3（source 维度不裂口径，实际 ${st.events.frInject}）`)
++  assert(st.events.frInjectBySource && st.events.frInjectBySource['module-inject'] === 1, 'module-inject 桶=1')
++  assert(st.events.frInjectBySource && st.events.frInjectBySource['digest'] === 2, 'digest 桶=2（含存量无 source 归桶）')
++  assert(st.events.frInjectChanges === 2, `changes 按 change 去重=2（c1 双发不虚增，实际 ${st.events.frInjectChanges}）`)
++  rmSyncSafe(fx.root)
++}
++
+ for (const dir of tmpRoots) {
+   try { rmSyncSafe(dir) } catch { /* Windows 句柄延迟 */ }
+ }
+diff --git a/test/quick-step1-injection.test.mjs b/test/quick-step1-injection.test.mjs
+index 6ce6558..fb99db3 100644
+--- a/test/quick-step1-injection.test.mjs
++++ b/test/quick-step1-injection.test.mjs
+@@ -17,7 +17,7 @@ import assert from 'node:assert/strict'
+ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
+ import { join } from 'path'
+ import { tmpdir } from 'os'
+-import { buildQuickContextDigest, readQuickGuardField } from '../src/run/prompt.js'
++import { buildQuickContextDigest, readQuickGuardField, loadModuleContextIndex, buildModuleContextInjection } from '../src/run/prompt.js'
+ import { definition as quickDef } from '../src/stages/quick.js'
+ 
+ function makeSpecBase({ projects = true, conventions = true, conventionsBody = null } = {}) {
+@@ -84,3 +84,59 @@ test('step1 prompt 结构：注入占位在场、cat 指令退场、语义出口
+   assert.ok(step1.prompt.includes('模糊则问一个问题确认'), '语义出口保留（不删成启动横幅）')
+   assert.ok(step1.prompt.includes('changes/<c>/design.md'), '关联变更 design.md 按需读保留')
+ })
++
++
++// ── FR 活需求注入期 join（ql-20260919-002，L2 替代形态）：buildModuleContextInjection 直驱 ──
++test('FR join：匹配模块的活需求行注入（id+标题、截 5、溢出指针、来源注记）', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'frjoin-'))
++  try {
++    const specBase = join(tmp, '.sillyspec')
++    // 造 module-map（两模块：一个有 FR 一个无）
++    mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++    writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'),
++      'schema_version: 2' + String.fromCharCode(10) + 'modules:' + String.fromCharCode(10) +
++      '  core-engine:' + String.fromCharCode(10) + '    status: active' + String.fromCharCode(10) +
++      '    doc: modules/core-engine.md' + String.fromCharCode(10) + '    paths: [src/ceremony-tier.js]' + String.fromCharCode(10) +
++      '  bare-mod:' + String.fromCharCode(10) + '    status: active' + String.fromCharCode(10) +
++      '    doc: modules/bare.md' + String.fromCharCode(10) + '    paths: [src/bare.js]' + String.fromCharCode(10))
++    // 造 FR 索引（core-engine 域 7 条 active+1 superseded；bare-mod 域无文件）
++    mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++    const frLines = ['# FR 索引 — core-engine', '']
++    for (let i = 1; i <= 7; i++) {
++      frLines.push('## FR-core-engine-00' + i + ' 需求' + i)
++      frLines.push('变更：2026-09-18-c1')
++      frLines.push('状态：active')
++      frLines.push('摘要：s' + i)
++      frLines.push('')
++    }
++    frLines.push('## FR-core-engine-008 被取代的')
++    frLines.push('变更：2026-09-18-c1')
++    frLines.push('状态：superseded')
++    frLines.push('superseded_by：2026-09-18-c2')
++    frLines.push('')
++    writeFileSync(join(specBase, 'knowledge', 'fr', 'core-engine.md'), frLines.join(String.fromCharCode(10)))
++
++    const idx = loadModuleContextIndex(specBase, 'proj')
++    const r = buildModuleContextInjection('修改 core-engine 与 bare-mod', idx, specBase, 'proj')
++    // 活需求行：前 5 条 id+标题+溢出指针；superseded 不进
++    const NL = String.fromCharCode(10)
++    const frLine = r.text.split(NL).find(l => l.startsWith('- **活需求**'))
++    assert.ok(frLine, '活需求行在场')
++    assert.ok(frLine.includes('FR-core-engine-001 需求1'), 'id+标题形态')
++    assert.ok(frLine.includes('FR-core-engine-005 需求5'), '截前 5')
++    assert.ok(!frLine.includes('需求6；') || frLine.includes('条见'), '第 6 条只以溢出行出现')
++    assert.ok(frLine.includes('+2 条见 knowledge/fr/core-engine.md'), '溢出指针行（7 active−5=2）')
++    assert.ok(!r.text.includes('被取代的'), 'superseded 不注入')
++    // 无 FR 模块空段消隐（bare-mod 段无活需求行）
++    const bareSection = r.text.split('#### bare-mod')[1] || ''
++    assert.ok(!bareSection.includes('活需求'), '无 FR 模块空段消隐')
++    // 来源注记（全局一行）
++    assert.ok(r.text.includes('活需求来自 knowledge/fr 索引'), '来源注记在场')
++    // frModules 遥测清单：count=7（不含 superseded）
++    assert.deepEqual(r.frModules, [{ id: 'core-engine', count: 7 }])
++    // 无匹配任务：空 text+空 frModules
++    const none = buildModuleContextInjection('完全不相关的任务描述', idx, specBase, 'proj')
++    assert.equal(none.text, '')
++    assert.deepEqual(none.frModules, [])
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})

@@ -133,6 +133,24 @@ const CE = [
   assert(m.matrix.length === 1 && m.matrix[0].hits === 1 && m.totalInjects === 1, `7 fr-* 事件不进命中矩阵（fr-inject 的 matchedFiles 不计——type 过滤面零回归，实际 hits=${m.matrix[0] && m.matrix[0].hits} injects=${m.totalInjects}）`)
 }
 
+// ── fr-inject source 分组（ql-20260919-002）：module-inject vs digest vs 存量无 source 归 digest ──
+{
+  const fx = makeFixture()
+  const NL = String.fromCharCode(10)
+  const hits = [
+    JSON.stringify({ type: 'fr-inject', change: 'c1', domains: ['core-engine'], count: 3, source: 'module-inject', at: new Date().toISOString() }),
+    JSON.stringify({ type: 'fr-inject', change: 'c1', domains: ['core-engine'], count: 14, source: 'digest', at: new Date().toISOString() }),
+    JSON.stringify({ type: 'fr-inject', change: 'c2', domains: ['runtime'], count: 4, at: new Date().toISOString() }),  // 存量无 source
+  ].join(NL) + NL
+  writeFileSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'), hits)
+  const st = buildFrIndexStats(fx.knowledgeDir, fx.runtimeDir, {})
+  assert(st.events.frInject === 3, `frInject 总数=3（source 维度不裂口径，实际 ${st.events.frInject}）`)
+  assert(st.events.frInjectBySource && st.events.frInjectBySource['module-inject'] === 1, 'module-inject 桶=1')
+  assert(st.events.frInjectBySource && st.events.frInjectBySource['digest'] === 2, 'digest 桶=2（含存量无 source 归桶）')
+  assert(st.events.frInjectChanges === 2, `changes 按 change 去重=2（c1 双发不虚增，实际 ${st.events.frInjectChanges}）`)
+  rmSyncSafe(fx.root)
+}
+
 for (const dir of tmpRoots) {
   try { rmSyncSafe(dir) } catch { /* Windows 句柄延迟 */ }
 }
