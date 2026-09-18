@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-18-ceremony-risk-pricing",
+  "appliedAt": "2026-09-18T09:20:27.870Z",
+  "baseHash": "37eff323dd0f23877087d319391f38ba0ca6d217",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "76bf419ed9fcd5166ec4499404ce9c061d1d453e167274f9e016d84db13c4ce5"
+    },
+    {
+      "path": "docs/prompt/README.md",
+      "sha256": "510c182d8085c619c590272dbf55e5d75310ab335e51ddfb80bf0d7cac46737a"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "sha256": "25a629f778649afa368a2c7f1e8ca00ea9c6853d59c4e0d6517c9287a041463d"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "sha256": "a725a7041536b0db766861ef3de6ded04a9a94d1754cb08309a07ae6e56f78f4"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "sha256": "9385c4161b9e068ea3bf2dffaadb630663f38c44bc4356fb96f58c427c01022e"
+    },
+    {
+      "path": "src/ceremony-tier.js",
+      "sha256": "3642d8b365bb180d7b3b1c751b45523ace6ad54619947aa49873e3edbf6d660d"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "a772fb7195658dc85e5726cde740790e74713c81cfe857e785e1682e464e5292"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "sha256": "89ce6cddb87f8ed499d878d57c42d3d1dd8e6ac5d1110b2ada664ad3ae614b47"
+    },
+    {
+      "path": "src/review-dispatch.js",
+      "sha256": "d44de17ac44af8875e978c7aade71a5dc76a6239d1e1f0e9443670817e6a61ce"
+    },
+    {
+      "path": "src/review-tier.js",
+      "sha256": "203ebc425a933311407956187d9f5579584f94e216348409781b5e65970a5260"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "sha256": "a6c76fbcd49c06d721249069703b75f6ac285a1a59057cff8296ab46d9083c55"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "12f4a0ffc87fd8b896e98523db6b8d00fefcd752e4874fb91dd2b24581cb82fe"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "sha256": "a0c3a61166cf9f458c1795604ec474604174667ecd2e30d135a282cce8d530b6"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "65040e791385ada3b78bd4552a80921293cf3373e7f89c894f4418b7c62c767d"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "sha256": "dffe54c3171b320575a5d155bacd841ca889f956d3a2efb762c8e055f123baef"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "b83df77c5d0858aca9e890722f71a364f1f844d6b01005b794af7b21db91f1e7"
+    },
+    {
+      "path": "test/ceremony-tier.test.mjs",
+      "sha256": "fa224d03b6d6ecd968e90d9d7c5b8672a483c9fa29f2c362e1c173dc864fe108"
+    },
+    {
+      "path": "test/stage-review.test.mjs",
+      "sha256": "a508c1265de943a98f0d25f27433bfa797602a10f738b2ca0715851b7484d51f"
+    }
+  ]
+}

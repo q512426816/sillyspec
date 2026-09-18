@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-18-ceremony-risk-pricing",
+  "generatedAt": "2026-09-18T09:23:26.744Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-18-ceremony-risk-pricing",
+      "metrics": {
+        "matches": 16,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-18-ceremony-risk-pricing",
+      "metrics": {
+        "tasks": 7,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-18-ceremony-risk-pricing",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-18-ceremony-risk-pricing",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-18-ceremony-risk-pricing",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-18-ceremony-risk-pricing",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "影子期 client 供给面：CLI 进程无平台 client，影子重仪式实际派发需平台/宿主侧带 client 调用（review-dispatch 命令 SillyHubMcpClient 先例可复用）",
+        "condition": "平台侧接入后 shadow-ledger 出现 completed 条目，doctor ceremony_shadow 维度有对照数据",
+        "severity": "advisory"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "影子期转正判据需 N=10 轻档样本积累",
+        "condition": "doctor ceremony_shadow 报 N≥10 且漏检=0 或均 advisory 后人工置 ceremony.shadow: off",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 23,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/ceremony-tier.test.mjs",
+      "test/stage-review.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-18T09:26:20.164Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
