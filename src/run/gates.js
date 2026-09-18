@@ -3,7 +3,13 @@
  *
  * 阶段完成校验 gate 级联 + execute deps 硬门 + 完成回滚（自洽叶子模块，仅被 completeStep 调用）：
  *   - runStageCompletionGates：runValidators → verify-test 对账 → Plan→Execute contract →
- *     Stage Review Gate → Execute Task Review Gate，任一失败走 rollbackCompletionAndReturn
+ *     Stage Review Gate → Execute Task Review Gate，任一失败走 rollbackCompletionAndReturn；
+ *     级联末位追仪式档位摩擦升档检查点（2026-09-18-ceremony-risk-pricing task-03：读
+ *     friction-ledger 累计账 → escalateByFriction → .runtime/ceremony-tier-<change>.json
+ *     迁移留痕，只升不降、fail-soft 不阻断完成）；verify 检查族末位接 ceremony 双跑收口第一
+ *     出口（runCeremonyDualRunCheck：声明档 vs 实际 diff 事实档，mismatch=errors 硬 flag 阻断，
+ *     task-04 接线 / execute 评审 FAIL 修复）；升档检查块后 fire-and-forget 影子审查派发
+ *     （dispatchShadowReview，task-06 接线 / execute 评审 GAP 修复，只记账不阻断）
  *   - enforceDepsGate：execute depsStatus 不达标且非 wave 级 opt-out 时阻断 --done（exit 1）
  *   - rollbackCompletionAndReturn / rollbackStageCompletion：统一回滚 stage/step 状态 + 落盘 + sync
  *   - isCurrentWaveAllNoDepsVerify：enforceDepsGate 的私有 helper（wave 级 no_deps_verify opt-out 判定）
@@ -31,6 +37,11 @@ import { detectConcurrentChanges, formatConcurrentWarning, detectCommittedDrift,
 import { stageRegistry } from '../stages/index.js'
 import { normalizeTaskId } from '../taskcard.js'
 import { recordFrictionEvent } from '../friction-tally.js'
+import { readFrictionLedger } from '../friction-ledger.js'
+import { computeCeremonyTier, escalateByFriction, CEREMONY_TIERS } from '../ceremony-tier.js'
+import { withFileLock } from '../quicklog.js'
+import { detectChangeRisk, extractExplicitRiskLevel } from '../change-risk-profile.js'
+import { parseModuleMapSimple } from '../modules.js'
 
 /**
  * 从任务注册表（tasks.md）提取全部 task id（task-XX）——符号影响面覆盖度校验用。
@@ -565,6 +576,143 @@ function rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx,
   triggerSync(cwd, changeName, platformOpts)
   return { stageCompleted: false, currentIdx, nextPendingIdx: currentIdx }
 }
+
+// ════════ 仪式档位摩擦升档（2026-09-18-ceremony-risk-pricing task-03 / D-008）════════
+// 依据：design.md「总体方案 Phase 1 friction 段」+「生命周期契约表」。四阶段完成门（brainstorm/
+// plan/execute/verify）各钉一个升档检查点：读 friction-ledger 按 change 过滤的累计账（禁读
+// friction-tally——其 consumeFrictionHint 消费即删 + verify 收尾清零，读它会给 verify 门引入
+// 隐式次序依赖，plan 全局硬约束 1），escalateByFriction 超阈 min(S3, tier+1) 只升不降，迁移记录
+// 追加写 .runtime/ceremony-tier-<change>.json。档位文件是纯派生数据（与 friction-ledger 同目录
+// 同生命周期，archive 时随 runtime 清理，不进 git）；读改写整段持 withFileLock（先例 complete.js
+// .tasks.md.lock / friction-tally.js tally+.lock）+ writeAtomicSync 原子写（先例 fs-atomic.js /
+// local-register.js .local.yaml.lock），多会话并发下「只升不降」不变量成立。
+
+/** 档位状态文件路径（runtimeRoot 下 per-change；命名对齐 apply-pathspec-<change>.txt 先例） */
+function ceremonyTierFilePath(runtimeRoot, changeName) {
+  return join(runtimeRoot, `ceremony-tier-${changeName}.json`)
+}
+
+/**
+ * 读档位文件：缺失 / 坏 JSON / 非对象 / tier 不在 S0~S3 序 → null（档位是派生数据，坏档按无档
+ * 重定价，不修复不报错——容忍立场同 readFrictionLedger）。
+ */
+function readCeremonyTierDoc(path) {
+  try {
+    const doc = JSON.parse(readFileSync(path, 'utf8'))
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null
+    if (!CEREMONY_TIERS.includes(doc.tier)) return null
+    return doc
+  } catch {
+    return null
+  }
+}
+
+/** 落档位文件：writeAtomicSync 原子写（tmp+rename，读者见旧版或新版不见半截），JSON 两空格
+ *  缩进（friction-ledger 落盘同口径）；调用方须已持 tier 文件锁。 */
+function writeCeremonyTierDoc(path, doc) {
+  mkdirSync(dirname(path), { recursive: true })
+  writeAtomicSync(path, JSON.stringify(doc, null, 2))
+}
+
+/**
+ * 开跑定价（design 生命周期契约表首行「无 → 初始档」——计划评审发现①补认领）：档位文件首见
+ * （首阶段完成门，或坏档重定价）时以当时可得的 blast/span 信号算初始档。
+ *   blast ＝ detectChangeRisk 的 design/plan 双文件判级 + frontmatter 显式声明（升降规则由
+ *           computeCeremonyTier 统一裁：升档尊重、降档须理由）；design.md 缺失 → 不传
+ *           riskDetection → 保守缺省 S2（brownfield 不静默降级）。
+ *   span  ＝ design §6「文件变更清单」反引号路径（readDesignOwnFiles 既有解析，无清单容空退化）
+ *           + _module-map.yaml 跨模块口径（moduleIndex 缺失/空 → 该维跳过不缺省不拦截）。
+ * frictionCounts 不进初始定价——摩擦轴归 escalateByFriction 检查点（超阈升一档封顶语义），
+ * 两处重复计价会让 transitions 审计口径失真。
+ */
+function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName }) {
+  const changeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+  const designContent = changeDir && existsSync(join(changeDir, 'design.md')) ? readFileSync(join(changeDir, 'design.md'), 'utf8') : ''
+  const planContent = changeDir && existsSync(join(changeDir, 'plan.md')) ? readFileSync(join(changeDir, 'plan.md'), 'utf8') : ''
+  const riskDetection = designContent ? detectChangeRisk({ designContent, planContent, changedFiles: [] }) : undefined
+  const explicitRiskLevel = designContent ? extractExplicitRiskLevel(designContent) : null
+  const declaredFiles = readDesignOwnFiles(specBase, changeName)
+  let moduleIndex = null
+  const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+  if (existsSync(mapPath)) {
+    try { moduleIndex = parseModuleMapSimple(readFileSync(mapPath, 'utf8')) || null } catch { moduleIndex = null }
+  }
+  const priced = computeCeremonyTier({ riskDetection, explicitRiskLevel, declaredFiles, moduleIndex })
+  return {
+    tier: priced.tier,
+    components: priced.components,
+    reasons: [
+      ...priced.reasons,
+      `初始档（开跑定价事件：${stageName} 完成门首见该 change 无档位文件，按当时可得的 blast/span 信号定价——design 生命周期契约表「无 → 初始档」行）`,
+    ],
+    transitions: [],
+  }
+}
+
+/**
+ * 阶段门摩擦升档检查点（runStageCompletionGates 四完成门共用；升档不阻断本次 --done，
+ * 下一阶段才生效）。流程：读 ledger 累计账 → 无档先落初始档 → escalateByFriction →
+ * escalated 时追加 transitions 迁移记录写回。全程持锁（tierPath+'.lock'，读改写一整段），
+ * 「只升不降」由三重保证：escalateByFriction 数学上不降 + 锁内串行化 + 写前对磁盘更高档
+ * 拒绝降档写回（reasons 留痕）。fail-soft 由调用方兜底（本函数抛出即检查失败，不碰完成状态）。
+ * @returns {Promise<{escalated: boolean, from: string, to: string, frictionCounts: object,
+ *   downgradeRejected?: boolean, tierFilePath: string}>}
+ */
+async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName }) {
+  const effectiveSpecBase = platformOpts?.specRoot || specBase
+  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+  // ledger 按 change 过滤的累计账（merge-by-change 后单 change 单条目）；三键超集透传给
+  // escalateByFriction——引擎只消费 gate_rollback/review_rejected 两键，verify_run_failed 容忍
+  const entry = readFrictionLedger(runtimeRoot).find((e) => e.change === changeName) || null
+  const rawCounts = entry && entry.counts && typeof entry.counts === 'object' && !Array.isArray(entry.counts) ? entry.counts : {}
+  const frictionCounts = {
+    gate_rollback: Number(rawCounts.gate_rollback) || 0,
+    review_rejected: Number(rawCounts.review_rejected) || 0,
+    verify_run_failed: Number(rawCounts.verify_run_failed) || 0,
+  }
+  const tierPath = ceremonyTierFilePath(runtimeRoot, changeName)
+  const result = await withFileLock(tierPath + '.lock', async () => {
+    // 读档无文件（或坏档）→ 先落初始档（开跑定价事件）
+    let doc = readCeremonyTierDoc(tierPath)
+    if (!doc) {
+      doc = computeInitialCeremonyTierDoc({ cwd, specBase: effectiveSpecBase, platformOpts, progress, changeName, projectName, stageName })
+      writeCeremonyTierDoc(tierPath, doc)
+    }
+    const esc = escalateByFriction(doc.tier, frictionCounts)
+    if (!esc.escalated) {
+      return { escalated: false, from: doc.tier, to: doc.tier, frictionCounts, tierFilePath: tierPath }
+    }
+    // 只升不降兜底：锁内读改写已串行化正常并发，此处对「磁盘档高于本次算得档」的锁外写入
+    // （stale 偷锁极端窗口 / 手工改档）拒绝降档写回，reasons 留痕、不追加 transitions（迁移没发生）
+    const disk = readCeremonyTierDoc(tierPath)
+    const diskTier = disk ? disk.tier : doc.tier
+    if (CEREMONY_TIERS.indexOf(diskTier) > CEREMONY_TIERS.indexOf(esc.tier)) {
+      const kept = disk
+      kept.reasons = [
+        ...(Array.isArray(kept.reasons) ? kept.reasons : []),
+        `拒绝降档写入（磁盘已 ${diskTier}，本次按摩擦算得 ${esc.tier}——只升不降不变量）`,
+      ]
+      writeCeremonyTierDoc(tierPath, kept)
+      return { escalated: false, from: diskTier, to: diskTier, frictionCounts, downgradeRejected: true, tierFilePath: tierPath }
+    }
+    const transition = {
+      at: new Date().toISOString(),
+      from: doc.tier,
+      to: esc.tier,
+      frictionCounts: { gate_rollback: frictionCounts.gate_rollback, review_rejected: frictionCounts.review_rejected },
+    }
+    doc.tier = esc.tier
+    doc.components = { ...(doc.components || {}), friction: esc.tier }
+    doc.reasons = [
+      ...(Array.isArray(doc.reasons) ? doc.reasons : []),
+      `friction 升档（${transition.from}→${esc.tier}：ledger 累计 gate_rollback=${frictionCounts.gate_rollback}、review_rejected=${frictionCounts.review_rejected} 超阈，min(S3, tier+1)）`,
+    ]
+    doc.transitions = [...(Array.isArray(doc.transitions) ? doc.transitions : []), transition]
+    writeCeremonyTierDoc(tierPath, doc)
+    return { escalated: true, from: transition.from, to: esc.tier, frictionCounts, tierFilePath: tierPath }
+  })
+  return result
+}
 /**
  * 阶段完成校验 gate 级联（从 completeStep 抽出，行为保持）。仅当所有步骤确实标记为 completed 时
  * 由 completeStep 调用。顺序：runValidators → verify-test 对账 → Plan→Execute contract →
@@ -935,6 +1083,28 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     if (probeBlocked) {
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
+    // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
+    //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
+    //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入 verify
+    //    errors 硬 flag 面——阻断回滚（照 reconcile/probe 先例 rollbackCompletionAndReturn，修复后
+    //    重跑 --done 进度不丢）。检查/记账/种子收敛在 runCeremonyDualRunCheck 单点（archive 出口
+    //    complete-handlers.js runArchiveCeremonyDualRunExit 同款消费）；skipped（档位文件缺失=存量
+    //    变更零红门禁）/degraded（git 不可用降级）零噪音放行；整体 fail-soft——检查自身异常降级
+    //    放行（异常不是低报，对齐 archive 出口同款处置）。specBase/runtimeRoot 与四邻检查同源
+    //    （reconcileRuntimeRoot=resolveRuntimeRoot(platformOpts, specBase)，口径一处定义不二算）。──
+    try {
+      const { runCeremonyDualRunCheck, printCeremonyDualRunCheck } = await import('../verify-postcheck.js')
+      const ceremonyCheck = await runCeremonyDualRunCheck({
+        cwd, specBase, changeName,
+        runtimeRoot: reconcileRuntimeRoot,
+      })
+      printCeremonyDualRunCheck(ceremonyCheck)
+      if (ceremonyCheck.status === 'mismatch' && ceremonyCheck.severity === 'error') {
+        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+      }
+    } catch (e) {
+      console.warn(`⚠️  Ceremony 双跑对账异常降级放行（不阻断 verify，fail-soft）: ${(e && e.message) || e}`)
+    }
     // ── 行号漂移自动重锚（2026-09-09 §7-6：quick --done 已接，verify/archive 收尾补接）──
     // 本变更 diff 中的 .md 文档经 autoReanchorDocRefs 定点重锚（fixable 唯一/优选命中才改 +
     // 同口径回执），消灭「src 改动平移行号 → 下次 docs gate 拦」的人工往返。挂 verify 收尾即
@@ -1216,6 +1386,54 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
     }
+  }
+
+  // ── 仪式档位摩擦升档检查点（task-03 / D-008，design 生命周期契约表「阶段门升档」行）──
+  // 级联末位（所有阻断门通过、本次 --done 即将成立）执行：读 friction-ledger 累计账 →
+  // escalateByFriction 超阈 min(S3, tier+1) → 迁移记录写 .runtime/ceremony-tier-<change>.json
+  // （withFileLock+原子写、只升不降；读档无文件先落初始档=开跑定价事件）。升档不阻断本次
+  // 完成——下一阶段才生效，warning 披露 from→to 与摩擦计数审计行；未超阈静默通过不加噪。
+  // fail-soft：升档检查是旁路数据面，任何异常绝不阻断完成（对齐 friction-ledger fail-soft 红线）。
+  if (['brainstorm', 'plan', 'execute', 'verify'].includes(stageName) && changeName) {
+    try {
+      const escTier = await escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName })
+      if (escTier.escalated) {
+        let shownPath = escTier.tierFilePath
+        try {
+          const rp = relative(cwd, escTier.tierFilePath)
+          if (rp) shownPath = rp
+        } catch { /* Windows 跨盘符 relative 抛错 → 保留绝对路径 */ }
+        console.warn(`\n⚠️ 摩擦升档 ${escTier.from}→${escTier.to}（friction-ledger 累计 gate_rollback=${escTier.frictionCounts.gate_rollback}、review_rejected=${escTier.frictionCounts.review_rejected} 超阈，min(S3, tier+1)）——不阻断本次完成，下一阶段起生效（档位文件 ${shownPath} 已迁移留痕）`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ 仪式档位摩擦升档检查异常（不阻断完成，本次跳过）: ${e && e.message ? e.message : e}`)
+    }
+  }
+
+  // ── 影子期后台静默派发触发点（2026-09-18-ceremony-risk-pricing task-06 / Phase 3；
+  //    execute 评审 GAP 项补接线）：升档检查块后 fire-and-forget（dispatchShadowReview JSDoc
+  //    建议挂点），S0/S1 轻档变更在 brainstorm/plan/execute 完成时向平台派重仪式影子审查做轻/重
+  //    对照——只记账不阻断（FR-04：影子结论只落 stage-reviews-shadow/ 命名空间，函数内部已隔离，
+  //    绝不写主线 marker、不进 gate/verify/archive 判定面）。前置校验（档位∈S0/S1、ceremony.shadow
+  //    开关、幂等闸、平台 client 可用性）全在函数内部，不满足 → skip 留痕对照账（零噪音）；
+  //    本层不组装 client（CLI 进程无平台会话——agent-tool/host-mcp 宿主通道由宿主自行派发，结论
+  //    不入本账）。specBase 平台接管优先（与上方 Stage Review Gate effectiveSpecBase 同口径）。
+  //    异常双保险：函数自身 catch-all 永不抛 + 外层 try-catch/promise.catch 吞掉（影子是旁路
+  //    数据面，任何异常绝不影响门判定与完成）。──
+  if (['brainstorm', 'plan', 'execute'].includes(stageName) && changeName) {
+    try {
+      const shadowSpecBase = platformOpts?.specRoot || specBase
+      import('../review-dispatch.js')
+        .then(({ dispatchShadowReview }) => dispatchShadowReview({
+          mode: 'create', cwd, specBase: shadowSpecBase, changeName, stage: stageName,
+        }))
+        .then((r) => {
+          if (r && r.ok && !r.skipped && r.missionId) {
+            console.log(`\nℹ️ 影子审查已后台派发（mission ${r.missionId}，fire-and-forget 只记账不阻断——回收随主线检查点 status 模式或 doctor 影子对照维度）`)
+          }
+        })
+        .catch(() => { /* fire-and-forget：影子链路异常吞掉，绝不向主线传播 */ })
+    } catch { /* 动态 import 触发失败静默（影子是旁路数据面） */ }
   }
   return null
 }

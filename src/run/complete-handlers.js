@@ -816,6 +816,8 @@ export async function handleArchiveConfirmStep({ stageName, steps, currentIdx, c
       console.warn(`⚠️  db 声明门异常降级放行（apply-manifest.json 读取/解析失败，fail-open）: ${(e && e.message) || e}`)
     }
   }
+  // Ceremony 双跑收口·第二出口（task-04 / FR-03 / D-003）：实现在文件尾 runArchiveCeremonyDualRunExit——mismatch 阻断级警告+记账+种子，不回滚归档（D-006）
+  await runArchiveCeremonyDualRunExit({ cwd, specBase, changeName, sessionFlag, platformOpts, progress })
   // ── 归档前 delta.md 自动生成（P3d task-02，fail-soft 零阻断）──
   // 目录移走前在 changes/<name>/ 落一份 Before/Delta/After 三段式快照（四源采集容缺，
   // buildDeltaReport 见 ../archive-delta.js），随归档包留存。失败只 console.error 留痕、
@@ -2650,5 +2652,40 @@ export async function assertWaveTasksComplete({ steps, currentIdx, changeName, c
     process.exit(1)
   }
   console.log(`🛡️ 「${stepName}」完成度门通过：${waveTaskIds.length} 个 task checkbox 全勾（${waveTaskIds.join('、')}）`)
+}
+
+/**
+ * Ceremony 双跑收口·第二出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003）：
+ * archive confirm（--confirm 已过）目录移动前，与 verify --done 出口同款检查函数对账——
+ * 实际 diff 经 resolveReconcileActualFiles 单点重跑 blast+span，vs .runtime/ceremony-tier-
+ * <change>.json 开跑声明档。mismatch → 阻断级警告（⛔ console.error 列声明档/事实档/超阈
+ * 分量）+ 摩擦账 + 事实面预价种子——但只警告不回滚归档步骤（archive=终态铁律，D-006 防复潮：
+ * 不 reopen、不改归档终态语义，与上方 db 门「回 pending 阻断」刻意不同形）。显式降级被
+ * 事实面支持 → 放行并在 warning 披露（D-004）；skipped（档位文件缺失等）/ degraded
+ * （git 不可用）零噪音放行；检查整体 fail-soft，异常降级放行不阻断归档。
+ *
+ * 检查实现 + 记账 + 种子全部收敛在 verify-postcheck.runCeremonyDualRunCheck 单点（两出口
+ * 同一实现），本函数只做接线 + 会话标识（resolveSessionIdentity 同 :604 所有权护栏三级口径：
+ * --session > env > anon@host；warn:false——机器消费路径，教学 warning 归所有权护栏面）。
+ * 动态 import 是 gates.js 消费 verify-postcheck 的既有防环形态（verify-probes 闭包含
+ * run/shared）。实现放文件尾与 assertWaveTasksCompleted 同一考量：platform-interface-map.md
+ * 锚 handleScanStageCompleted 于 [2216,2223] 行窗（doc-ref-check 层2），handleArchiveConfirmStep
+ * 内联大块会把锚推出窗口——调用点只留两行，注释与实现全落此处。
+ */
+async function runArchiveCeremonyDualRunExit({ cwd, specBase, changeName, platformOpts = {}, sessionFlag = null, progress = null }) {
+  try {
+    const { runCeremonyDualRunCheck, printCeremonyDualRunCheck } = await import('../verify-postcheck.js')
+    const ceremonyChangeName = (progress && progress.currentChange) || changeName
+    if (!ceremonyChangeName) return
+    const { session: ceremonySession } = resolveSessionIdentity({ flagSession: sessionFlag || null, cwd, warn: false })
+    const ceremonyCheck = await runCeremonyDualRunCheck({
+      cwd, specBase, changeName: ceremonyChangeName,
+      runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
+      session: ceremonySession,
+    })
+    printCeremonyDualRunCheck(ceremonyCheck)
+  } catch (e) {
+    console.warn(`⚠️  Ceremony 双跑对账异常降级放行（不阻断归档，fail-soft）: ${(e && e.message) || e}`)
+  }
 }
 

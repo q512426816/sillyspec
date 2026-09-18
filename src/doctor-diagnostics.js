@@ -36,6 +36,10 @@ import { readFrictionLedger } from './friction-ledger.js';
 // FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
 // fr-index 是纯 fs 叶子链（仅 decision-distill 底座），doctor 静态引入无环。
 import { FR_INDEX_EPOCH, scanFrIndex, parseChangeRequirements } from './fr-index.js';
+// 影子对照账消费（2026-09-18-ceremony-risk-pricing task-06 / FR-04 / R-04 / R-06）：读
+// stage-reviews-shadow/shadow-ledger.json 累计账。review-dispatch 依赖链（fs-atomic /
+// stage-review / quicklog / ceremony-tier）均不回指 doctor，静态引入无环。
+import { readShadowLedger, SHADOW_NAMESPACE_DIR, SHADOW_PROMOTION_SAMPLE_TARGET } from './review-dispatch.js';
 
 // db 角色标签
 const DB_ROLE = {
@@ -1292,6 +1296,117 @@ function detectArchiveIntegrity(cwd, authoritySpecDir) {
   };
 }
 
+// ── 影子对照维度（2026-09-18-ceremony-risk-pricing task-06 / FR-04 / R-04 / R-06 / D-007@v1）──
+
+/**
+ * 轻仪影子期对照（ceremony_shadow）：读 stage-reviews-shadow/ 对照账，输出轻/重 catch 差异
+ * 报告（影子重仪式抓到、主线轻仪没抓到的问题清单）+ 转正判据计数——N/10 轻档对照样本且
+ * （漏检=0 ∨ 漏检均 advisory 级（checklist result=gap；result=fail 为非 advisory））→ 达标。
+ *
+ * 语义（降级先例对齐 detectLifecycleDocStaleness）：
+ *   - 无影子数据（账不存在 / 零条目零 skip）→ pass + 跳过注记，不误报；
+ *   - local.yaml ceremony.shadow: off → 已转正，pass + 终态统计（转正后不再报缺口）；
+ *   - 影子期 on：达标 → pass +「可转正」提示；未达标 → pass:false + WARNING（advisory 公示
+ *     缺口——影子链路只记账不阻断，本维度同样不进任何 gate / verify / archive 判定面）。
+ * R-04 公示：findings 明示影子期 token 不降反升属「花钱买标定」+ local.yaml 开关位置 + 判据。
+ * 转正动作本身是人工置 ceremony.shadow: off——CLI 只出判据不出手（safe_actions 只描述）。
+ */
+function detectCeremonyShadowComparison(cwd, authoritySpecDir) {
+  const base = { name: 'ceremony_shadow', label: '影子对照', safe_actions: [] };
+  try {
+    const pointer = resolvePointer(cwd);
+    const runtimeRoot = resolveRuntimeRoot(
+      { runtimeRoot: pointer.present && pointer.runtimeRoot && existsSync(pointer.runtimeRoot) ? pointer.runtimeRoot : null },
+      authoritySpecDir || join(cwd, '.sillyspec'),
+    );
+    const ledger = readShadowLedger(runtimeRoot);
+    const entries = Array.isArray(ledger.entries) ? ledger.entries : [];
+    const skips = Array.isArray(ledger.skips) ? ledger.skips : [];
+    if (entries.length === 0 && skips.length === 0) {
+      return { ...base, pass: true, severity: null, findings: [`无影子对照数据（${SHADOW_NAMESPACE_DIR}/ 未开账——影子期未跑或已转正），跳过`] };
+    }
+    // 开关面（R-04 公示位置；读取容错对齐 readCeremonyLocalConfig 口径——本维度同步，内联读）
+    let shadowOn = true;
+    try {
+      const lp = join(cwd, '.sillyspec', 'local.yaml');
+      if (existsSync(lp)) {
+        const doc = jsYaml.load(readFileSync(lp, 'utf8'));
+        if (doc && typeof doc === 'object' && doc.ceremony && typeof doc.ceremony === 'object' && typeof doc.ceremony.shadow === 'boolean') {
+          shadowOn = doc.ceremony.shadow;
+        }
+      }
+    } catch { /* 开关读取失败按缺省 on */ }
+
+    const completed = entries.filter((e) => e && e.state === 'completed');
+    const inFlight = entries.filter((e) => e && e.state === 'in-flight');
+    const dead = entries.filter((e) => e && (e.state === 'failed' || e.state === 'abandoned' || e.state === 'bad-review'));
+
+    // catch 差异聚合：漏检 = 影子抓到而主线轻仪没抓到（result=fail → 非 advisory 级；gap → advisory 级）
+    const missed = [];
+    for (const e of completed) {
+      for (const m of (e.diff && Array.isArray(e.diff.missedByLight) ? e.diff.missedByLight : [])) {
+        missed.push({ change: e.change, stage: e.stage, item: m.item, result: m.result, note: m.note });
+      }
+    }
+    const nonAdvisory = missed.filter((m) => m.result === 'fail');
+    const verdictDelta = completed.filter((e) => e.diff && e.diff.verdictDelta);
+
+    const findings = [];
+    // ① catch 差异报告（影子抓到主线没抓到的问题列表）
+    if (missed.length > 0) {
+      for (const m of missed.slice(0, 5)) {
+        findings.push(`影子抓到主线漏检（${m.change}/${m.stage}）：[${m.result}] ${String(m.item).slice(0, 100)}${m.note ? `——${String(m.note).slice(0, 60)}` : ''}`);
+      }
+      if (missed.length > 5) findings.push(`…还有 ${missed.length - 5} 项漏检（明细见 ${SHADOW_NAMESPACE_DIR}/shadow-ledger.json）`);
+    } else if (completed.length > 0) {
+      findings.push(`已完成 ${completed.length} 例轻/重对照，零漏检——轻仪 catch 面与重仪式一致`);
+    }
+    if (verdictDelta.length > 0) findings.push(`verdict 对照：${verdictDelta.length}/${completed.length} 例主线轻仪通过而影子重仪式判 fail`);
+    if (inFlight.length > 0) findings.push(`在途影子派发 ${inFlight.length} 条（回收走 dispatchShadowReview mode='status'——影子结论不进任何主线判定）`);
+    if (dead.length > 0) findings.push(`失败/未回收影子派发 ${dead.length} 条（fire-and-forget 记账，不补派不阻断）`);
+    if (skips.length > 0) {
+      const lastSkip = skips[skips.length - 1];
+      findings.push(`跳过留痕 ${skips.length} 条（档位非轻档/开关 off/平台通道不可用——最近一条：${lastSkip && lastSkip.reason ? String(lastSkip.reason).slice(0, 80) : '未知原因'}）`);
+    }
+
+    const N = completed.length;
+    const target = SHADOW_PROMOTION_SAMPLE_TARGET;
+    // ② 转正判据（计数逻辑非文案——acceptance：N≥10 且漏检=0 ∨ 漏检均 advisory 级）
+    const promotable = N >= target && nonAdvisory.length === 0;
+
+    if (!shadowOn) {
+      findings.push(`ceremony.shadow: off——轻仪已转正（影子对照账保留供审计：N=${N}，累计漏检 ${missed.length} 项）`);
+      return { ...base, pass: true, severity: CHECK_SEVERITY.PASSED, findings };
+    }
+
+    findings.push(`转正进度：${N}/${target} 轻档对照样本，漏检 ${missed.length} 项（非 advisory 级 ${nonAdvisory.length} 项）——判据：N≥${target} 且漏检=0 或漏检均 advisory 级（checklist result=gap）`);
+    // ③ R-04 token 面注记（影子期开销公示，防困惑）
+    findings.push('影子期 token 不降反升属「花钱买标定」（重仪式后台并行跑攒对照证据）——开关 local.yaml ceremony.shadow（当前 on），转正由人工置 off，CLI 只出判据不出手');
+
+    if (N === 0) {
+      findings.push('尚无完成对照——转正判据未开始累计（在途/失败条目不计入 N）');
+      return { ...base, pass: false, severity: CHECK_SEVERITY.WARNING, findings };
+    }
+    if (promotable) {
+      findings.push(`影子期达标可转正：N=${N}≥${target} 且漏检均为 advisory 级（或零漏检）——可人工置 local.yaml ceremony.shadow: off`);
+      return {
+        ...base, pass: true, severity: CHECK_SEVERITY.PASSED, findings,
+        safe_actions: [{ dimension: 'ceremony_shadow', action: 'promote_light_ceremony', risk: 'manual_edit', rationale: '影子期达标，轻仪可转正', next_step: '人工编辑 .sillyspec/local.yaml 置 ceremony.shadow: off（CLI 只出判据不出手）' }],
+      };
+    }
+    const gaps = [];
+    if (N < target) gaps.push(`还差 ${target - N} 个轻档对照样本`);
+    if (nonAdvisory.length > 0) gaps.push(`${nonAdvisory.length} 项非 advisory 级（fail）漏检待补救核对`);
+    findings.push(`转正判据未达标：${gaps.join('；')}`);
+    return {
+      ...base, pass: false, severity: CHECK_SEVERITY.WARNING, findings,
+      safe_actions: [{ dimension: 'ceremony_shadow', action: 'review_missed_findings', risk: 'advisory', rationale: '影子抓到主线漏检项——影子结论不阻断，人工裁决是否主线补救', next_step: `核对 ${SHADOW_NAMESPACE_DIR}/shadow-ledger.json 漏检明细（非 advisory 级项优先）` }],
+    };
+  } catch (e) {
+    return { ...base, findings: [`探测降级（${e?.message || e}）——skipped`], pass: true, severity: null, skipped: true };
+  }
+}
+
 /**
  * renderDoctorSummary（FR-01，全新输出契约——2026-09-09-doctor-noai）：逐维
  * ✅/⚠️/❌ + label + findings 首行 + safe_actions 提示行。顶层非 --json 命令与
@@ -1346,7 +1461,10 @@ export async function runDoctorDiagnostics({ cwd }) {
   const selfMaintenanceTax = detectSelfMaintenanceTax(cwd, authoritySpecDir)
   // D14（2026-09-17 archive-rescan，OpenSpec validate --archived 对标）：归档完整性事后重扫（只读 WARNING）
   const archiveIntegrity = detectArchiveIntegrity(cwd, authoritySpecDir)
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity];
+  // task-06（2026-09-18-ceremony-risk-pricing / FR-04 / R-04）：影子对照——轻/重 catch 差异报告 +
+  // 转正判据计数（纯增量挂载，只读不阻断；无影子数据跳过不误报）
+  const ceremonyShadow = detectCeremonyShadowComparison(cwd, authoritySpecDir)
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow];
 
   return {
     dimensions,

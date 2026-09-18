@@ -381,11 +381,11 @@ design.md 文件路径 + 自审结果
 ### 定位
 这是设计完成后的质量门，不是需求探索。目标不是继续发散，而是找出 design.md 内部、四件套之间、文档与外部约束之间的结构性矛盾。
 
-### 审查执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
+### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
-- tier=self：当前 agent 直接执行下方交叉审查（小变更）
-- tier=independent：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+- tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省
+- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
@@ -393,12 +393,19 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   - 时间盒收敛：审查子代理的调研是收敛动作不是发散——必读材料读完即逐条出结论并落盘 review.json；仅个别结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 立即停止扩展、基于已读材料收敛）。
   - 写通道降级：子代理写操作持续被平台拒绝（session not in running turn 类故障）→ 重试 ≤3 次即停，把完整审查结论（含 review.json 全文）作为最终文本回传主代理，由主代理代为落盘并在 reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
 
+### 仪式档位菜单（ceremony_tier 按 risk 客观定价——注入的 tier 行已标注当前档）
+- S0：CLI 清单核验——按下方交叉审查模型/交叉点清单机械逐项核对（零 token 发散），结论逐条附证据锚点，无需独立子代理
+- S1：CLI 清单核验 + 定向探针抽查——机械项全查之外，对最高风险的 1-2 个交叉点做定向源码探针（读相关实现验证设计假设），无需独立子代理
+- S2：独立评审×1——一个独立审查子代理完整执行下方交叉审查模型并产出 review.json
+- S3：两轮独立评审 + Grill 深查——两个独立审查子代理分别审查（视角互补：一个查结构性矛盾/一致性，一个查可行性与外部约束），首轮未决项进第二轮复核；对 P0 歧义逐一压力测试（Grill 深查）
+当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方降级兜底执行并留 degraded 痕（reviewerNotes「降级：环境无子代理可用」）；S0/S1 的 self 是档位定价的正常形态，不是降级。
+
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
 2. 只有以下情况可以轻量跳过，并必须记录原因：
    - 用户明确要求 no-grill / 显式跳过
    - 文档是一页以内、单模块、无状态流转、无 schema/API/兼容策略变更
-   - plan_level 明确为 none，且只改 1-2 个文件
+   - ceremony 档为 S0（客观定价已是最低仪式档）且只改 1-2 个文件——S0 的 CLI 清单核验仍要执行，跳过的只是发散深查
 3. 即使跳过，也要输出"Design Grill skipped"和原因，不能静默跳过。
 
 ### 输入材料

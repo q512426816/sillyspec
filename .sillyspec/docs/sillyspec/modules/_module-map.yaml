@@ -76,6 +76,7 @@ modules:
       - src/task-review.js
       - src/verify-postcheck.js
       - src/review-tier.js
+      - src/ceremony-tier.js
       - src/change-risk-profile.js
       - src/quick-gate-profile.js
       - src/scope-audit.js

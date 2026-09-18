@@ -20,6 +20,7 @@
  */
 import { basename, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
+import jsYaml from 'js-yaml'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
@@ -34,6 +35,88 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge } from '../knowledge-match.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
+
+// ═══════════════════════════════════════════════════════════════
+// ceremony 档位仪式菜单（2026-09-18-ceremony-risk-pricing task-05，D-002/D-005）
+// ═══════════════════════════════════════════════════════════════
+
+/** ceremony 档位序（与 ceremony-tier.js CEREMONY_TIERS 同序；此处仅作消费侧排序/枚举校验，不 reimport） */
+const CEREMONY_TIER_ORDER = ['S0', 'S1', 'S2', 'S3']
+
+/** 档位→仪式菜单（消费侧映射，design「档位→仪式菜单」契约：引擎只定价不映射） */
+const CEREMONY_TIER_MENUS = [
+  ['S0', 'CLI 清单核验（stage-review-checklist 机械项逐条核对，零 token 发散）'],
+  ['S1', 'CLI 清单核验 + 定向探针抽查（机械项全查 + 高风险交叉点定向源码探针，无需独立子代理）'],
+  ['S2', '独立评审×1（独立审查子代理单轮 + review.json）'],
+  ['S3', '两轮独立评审 + Grill 深查（两轮独立子代理交叉 + review.json）'],
+]
+
+/**
+ * 读 local.yaml `ceremony:` 段（best-effort 绝不抛，对齐 readReviewChannelPriority 范式）。
+ * force_tier：S0|S1|S2|S3 枚举逃生阀（非法值 warn 后忽略）；shadow：boolean 缺省 true。
+ * config-schema.js ceremony 节的 prompt 面 reader（影子派发侧消费随 task-06 接线）。
+ */
+export function readCeremonyLocalConfig(cwd) {
+  let raw = null
+  try {
+    const p = join(cwd || process.cwd(), '.sillyspec', 'local.yaml')
+    if (existsSync(p)) raw = jsYaml.load(readFileSync(p, 'utf8'))
+  } catch { raw = null }
+  const c = raw && typeof raw === 'object' && raw.ceremony && typeof raw.ceremony === 'object'
+    ? raw.ceremony
+    : null
+  const forceRaw = c && typeof c.force_tier === 'string' ? c.force_tier.trim() : null
+  const forceTier = CEREMONY_TIER_ORDER.includes(forceRaw) ? forceRaw : null
+  if (forceRaw && !forceTier) {
+    console.warn(`[sillyspec] ceremony.force_tier 未知档位「${forceRaw}」已忽略（可选：${CEREMONY_TIER_ORDER.join(' | ')}）`)
+  }
+  const shadow = c && typeof c.shadow === 'boolean' ? c.shadow : true
+  return { forceTier, shadow }
+}
+
+/**
+ * ceremony 档位菜单渲染（{REVIEW_TIER} 注入值的追加块——追加不替换：tier: self/independent
+ * 语义与 {REVIEW_TIER_REASON} 注入机制原样保留，菜单块按 ceremonyTier 标注当前档）。
+ *
+ * 逃生阀（ceremony.force_tier）只升不降：强制档高于客观定价档 → 菜单当前档随调、注入
+ * tier 值升为 independent（S2/S3）；低于客观档 → 只留注记不降档——防 prompt 面与 gate 侧
+ * classifyReviewTier（未读逃生阀）判定分裂（prompt 说 self 而 gate 等 review.json 的错位阻断）。
+ *
+ * 强制轻仪审计痕（FR-02）：agent 报 plan_level=full 而档位 S0/S1 → 菜单块追加固定审计行
+ * （照「分级异常降级 self」既有降级戳先例：注入文案即留痕），明示勿因「计划写得完整」自行升仪。
+ *
+ * @param {{ ceremonyTier?: string, tierValue?: string, planLevel?: string|null, cwd?: string }} args
+ * @returns {{ tierValue: string, menuMd: string }} menuMd 以 \n 开头（拼在 tier 值后）；无有效档位时为 ''
+ */
+export function renderCeremonyTierInjection({ ceremonyTier, tierValue, planLevel, cwd } = {}) {
+  const baseTierValue = tierValue || 'self'
+  if (!CEREMONY_TIER_ORDER.includes(ceremonyTier)) {
+    return { tierValue: baseTierValue, menuMd: '' }
+  }
+  const { forceTier, shadow } = readCeremonyLocalConfig(cwd)
+  let active = ceremonyTier
+  let forceNote = ''
+  let effectiveTierValue = baseTierValue
+  if (forceTier && forceTier !== ceremonyTier) {
+    if (CEREMONY_TIER_ORDER.indexOf(forceTier) > CEREMONY_TIER_ORDER.indexOf(ceremonyTier)) {
+      active = forceTier
+      forceNote = `——local.yaml ceremony.force_tier=${forceTier} 强制升档（逃生阀，绕过客观定价）`
+      if (active === 'S2' || active === 'S3') effectiveTierValue = 'independent'
+    } else {
+      forceNote = `——local.yaml ceremony.force_tier=${forceTier} 低于客观定价档，不降档（只升不降）`
+    }
+  }
+  const menuLines = CEREMONY_TIER_MENUS.map(([t, menu]) => `- ${t}：${menu}${t === active ? ' ◀ 当前档' : ''}`)
+  const lightTier = active === 'S0' || active === 'S1'
+  const shadowNote = lightTier && shadow
+    ? '\n（影子期 on：轻档明面轻仪，后台静默派发重仪式对照只记账不阻断——local.yaml ceremony.shadow 开关，对照报告见 doctor）'
+    : ''
+  const auditTrail = planLevel === 'full' && lightTier
+    ? '\n⚠️ 强制轻仪审计痕：agent 报 plan_level=full 但 ceremony 档为轻档——仪式按 risk 计价、plan_level 仅编排，按当前轻档菜单执行，勿因「计划写得完整」自行升回 independent×2'
+    : ''
+  const menuMd = `\nceremony_tier: ${active}${forceNote}（仪式按 risk 计价，plan_level 仅编排——四档菜单：）\n${menuLines.join('\n')}${shadowNote}${auditTrail}`
+  return { tierValue: effectiveTierValue, menuMd }
+}
 
 /**
  * 从 _module-map.yaml 读取模块上下文索引
@@ -1069,7 +1152,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
 
   // Stage Review Tier：brainstorm/plan/execute 阶段注入审查分级占位符
   // （scanProfile 只在 scan 生效、change-risk-profile 只管 apply/verify，都不约束这些阶段的审查方式，
-  //  故按 plan_level / 变更文件数分级：self 当前 agent 自审，independent 强制独立子代理 + review.json）
+  //  故按 ceremony_tier 风险定价分级——2026-09-18-ceremony-risk-pricing task-05 起 plan_level 降级为
+  //  编排标签不再驱动仪式档：S0/S1 → self 轻仪，S2 → independent×1，S3 → independent 多轮；
+  //  {REVIEW_TIER} 注入值 = tier 值 + 追加 ceremony 档位菜单块（renderCeremonyTierInjection），
+  //  {REVIEW_TIER_REASON} 注入机制不动（reason 已含 ceremony 档与 blast 来源，task-02 契约））
   if (['brainstorm', 'plan', 'execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')) {
     try {
       const { classifyReviewTier } = await import('../review-tier.js')
@@ -1086,6 +1172,12 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         }
       }
       const tier = classifyReviewTier({ planLevel, designPath })
+      // ceremony 档位菜单（第三消费面，task-05）：classifyReviewTier 双字段的 ceremonyTier 驱动
+      // 仪式档渲染；force_tier 逃生阀只升不降（升向强制 S2/S3 时注入 tier 值随调 independent，
+      // 与下方契约渲染/前序事实注入同用 effective 值，防 prompt 与注入块自相矛盾）
+      const ceremonyInjection = renderCeremonyTierInjection({
+        ceremonyTier: tier.ceremonyTier, tierValue: tier.tier, planLevel, cwd,
+      })
       // reviewRunId：优先读 marker 复用（保证多次渲染 prompt 注入同一 ID == gate 读取的 ID，
       // 修复「prompt 多次渲染 / 多次 review 时 gate 取错 ID 读错 review.json」），marker 缺失才
       // generate + 落盘。对齐 execute {EXECUTE_RUN_ID} 段（prompt.js:449-467）。
@@ -1112,13 +1204,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // process.cwd 兜底会读错 local.yaml，2026-09-10 通道配置批次）；tier=independent 时契约
       // 头部渲染「审查执行通道」段（按用户配置序，见 local.yaml review_dispatch.channel_priority）。
       const reviewChannelPriority = readReviewChannelPriority(cwd)
-      const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: tier.tier, channelPriority: reviewChannelPriority })
+      const reviewContractMd = renderReviewJsonContract({ stage: stageName, changeDir: tierChangeDir, reviewRunId, tier: ceremonyInjection.tierValue, channelPriority: reviewChannelPriority })
       // C2 前阶段实证清单机械附带（坑 review-subagent-redundant-verify，2026-09-15 wp EHS 实证：
       // plan 审查把 brainstorm 已两轮实证的三仓源码全量重验——94 分钟不收敛被用户三催。此前只有
       // prompt 散文说「前序实证勿重验」，子代理并不知道前序具体审过了什么；现把前序 stage review
       // 的 checklist pass 项机械注入派发 prompt（封顶 15 条防灌爆），审查子代理据此跳过已实证面。
       let priorFactsMd = ''
-      if (tier.tier === 'independent') {
+      if (ceremonyInjection.tierValue === 'independent') {
         try {
           const priorStages = stageName === 'plan' ? ['brainstorm'] : stageName === 'execute' ? ['brainstorm', 'plan'] : []
           const factLines = []
@@ -1154,7 +1246,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         }
       } catch {}
       promptText = promptText
-        .split('{REVIEW_TIER}').join(tier.tier)
+        .split('{REVIEW_TIER}').join(ceremonyInjection.tierValue + ceremonyInjection.menuMd)
         .split('{REVIEW_TIER_REASON}').join(tier.reason)
         .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
         .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)

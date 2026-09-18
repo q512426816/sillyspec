@@ -99,6 +99,10 @@ const stepClassify = {
 - 需要人工审查设计方向
 - 涉及 worktree / baseline / sandbox 等基础设施
 
+### plan_level 语义（编排标签，不定价评审仪式）
+plan_level 只决定**工作量轴**：wave 拆分、并行子代理调度、plan 模板厚度（none 占位 / light 四段 / full 全蓝图）。
+评审仪式档位（ceremony_tier，S0~S3）由 CLI 按 blast/span/friction 三轴风险**客观定价**（风险轴），与 plan_level 无关——「计划写得完整」不会、也不应触发更重的评审仪式；反之，agent 报 full 但档位为 S0/S1 时，CLI 强制轻仪执行并在审查步注入文案留审计痕。plan_level 按编排需要如实判定即可，勿用它博取或回避评审强度。
+
 ### 输出格式
 在输出开头，以如下格式输出分类结果：
 
@@ -130,7 +134,7 @@ needs_human_review: true | false
 const stepGeneratePlan = {
   id: 'generate_plan',
   name: '生成分级计划',
-  prompt: `根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。
+  prompt: `根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。
 
 ### 操作
 1. 读取 plan.md frontmatter 的 \`plan_level:\` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）
@@ -148,7 +152,7 @@ const stepGeneratePlan = {
 ---
 
 #### plan_level = none
-生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图。格式：
+生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图（plan_level=none 只收缩编排与模板厚度，不减免评审仪式——仪式档位由 ceremony_tier 定价）。格式：
 \`\`\`markdown
 ---
 plan_level: none
@@ -173,7 +177,7 @@ plan_level: none
 ---
 
 #### plan_level = light
-生成轻量 plan.md，保存到变更目录。只包含以下四部分：
+生成轻量 plan.md，保存到变更目录（plan_level=light 只决定轻量模板与简化编排，不升降评审仪式——仪式档位由 ceremony_tier 定价）。只包含以下四部分：
 
 \`\`\`markdown
 ---
@@ -212,7 +216,7 @@ light 计划的约束：
 ---
 
 #### plan_level = full
-生成完整 plan.md，保存到变更目录。格式如下：
+生成完整 plan.md，保存到变更目录（plan_level=full 只展开完整蓝图与 wave/并行编排，不加重评审仪式——仪式档位由 ceremony_tier 定价；agent 报 full 而档位 S0/S1 时 CLI 强制轻仪并留审计痕）。格式如下：
 
 \`\`\`markdown
 ---
@@ -315,8 +319,10 @@ plan_level + 计划内容（审查在下一步独立进行）`,
 
 /**
  * 审查计划 step —— 把"审查"从生成 step 拆出（原 stepGeneratePlan 生成+自检同次输出是最严重的 self-review）。
- * 按规模分级：tier=self 当前 agent 自审；tier=independent 强制独立子代理 + review.json。
- * 占位符 {REVIEW_TIER} / {REVIEW_TIER_REASON} / {STAGE_REVIEW_RUN_ID} 由 run.js 注入。
+ * 按档分级（2026-09-18-ceremony-risk-pricing task-05）：tier 由 ceremony_tier 风险定价映射——
+ * S0/S1→self（CLI 清单核验[+定向探针]）、S2/S3→independent（单轮/两轮）；plan_level 降级为编排标签，
+ * 不再驱动评审仪式档。占位符 {REVIEW_TIER} / {REVIEW_TIER_REASON} / {STAGE_REVIEW_RUN_ID} 由 run.js 注入
+ * （{REVIEW_TIER} 注入值随附 ceremony 档位菜单，见 run/prompt.js renderCeremonyTierInjection）。
  */
 const stepReviewPlan = {
   id: 'review_plan',
@@ -332,11 +338,12 @@ plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/�
 - 调用：\`sillyspec run plan --wait --reason "等待用户确认计划" --options "确认，进入执行,需要调整" --output "计划摘要"\`
 - 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可
 
-### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
+### 当前审查分级（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
-- tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）
-- tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+- tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省
+- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+- 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价
 
 ### 审查清单（读取 plan.md 的 plan_level，逐条核对）
 ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}

@@ -73,6 +73,10 @@
 - 需要人工审查设计方向
 - 涉及 worktree / baseline / sandbox 等基础设施
 
+### plan_level 语义（编排标签，不定价评审仪式）
+plan_level 只决定**工作量轴**：wave 拆分、并行子代理调度、plan 模板厚度（none 占位 / light 四段 / full 全蓝图）。
+评审仪式档位（ceremony_tier，S0~S3）由 CLI 按 blast/span/friction 三轴风险**客观定价**（风险轴），与 plan_level 无关——「计划写得完整」不会、也不应触发更重的评审仪式；反之，agent 报 full 但档位为 S0/S1 时，CLI 强制轻仪执行并在审查步注入文案留审计痕。plan_level 按编排需要如实判定即可，勿用它博取或回避评审强度。
+
 ### 输出格式
 在输出开头，以如下格式输出分类结果：
 
@@ -112,19 +116,25 @@ needs_human_review: true | false
 **提示词原文**
 
 ````markdown
-根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。
+根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。
 
 ### 操作
 1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）
 2. 读取 tasks.md 和 design.md 了解需求范围
 3. 按 plan_level 选择对应模板输出
-4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目
+4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围
 5. 保存 plan.md（审查在下一步"审查计划"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）
+
+> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**
+> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）
+> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）
+> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）
+> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）
 
 ---
 
 #### plan_level = none
-生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图。格式：
+生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图（plan_level=none 只收缩编排与模板厚度，不减免评审仪式——仪式档位由 ceremony_tier 定价）。格式：
 ```markdown
 ---
 plan_level: none
@@ -149,7 +159,7 @@ plan_level: none
 ---
 
 #### plan_level = light
-生成轻量 plan.md，保存到变更目录。只包含以下四部分：
+生成轻量 plan.md，保存到变更目录（plan_level=light 只决定轻量模板与简化编排，不升降评审仪式——仪式档位由 ceremony_tier 定价）。只包含以下四部分：
 
 ```markdown
 ---
@@ -172,6 +182,7 @@ plan_level: light
 |---|---|---|
 | D-001@v1 | task-01 | AC-01 |
 ```
+任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。
 
 light 计划的约束：
 - **禁止**生成 Mermaid 图
@@ -179,7 +190,7 @@ light 计划的约束：
 - **禁止**泛泛风险分析（如"需要充分测试"）
 - **禁止**放实现细节（函数签名、代码示例）
 - 来源/目标直接引用已有文档，不重新生成
-- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在 Tasks 或覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）
+- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）
 - 如果存在 P0/P1 unresolved blocker，不生成 plan.md
 - 任务清单（tasks.md）控制在 10 条以内
 - 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行
@@ -187,7 +198,7 @@ light 计划的约束：
 ---
 
 #### plan_level = full
-生成完整 plan.md，保存到变更目录。格式如下：
+生成完整 plan.md，保存到变更目录（plan_level=full 只展开完整蓝图与 wave/并行编排，不加重评审仪式——仪式档位由 ceremony_tier 定价；agent 报 full 而档位 S0/S1 时 CLI 强制轻仪并留审计痕）。格式如下：
 
 ```markdown
 ---
@@ -268,7 +279,7 @@ full 计划的约束：
 ---
 
 ### 通用操作（所有级别）
-1. 读取 tasks.md 获取任务列表
+1. 读取 tasks.md 获取任务列表（注册表唯一真相）
 2. 读取 design.md 获取文件变更清单
 3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）
 4. 按对应级别模板生成内容
@@ -297,8 +308,8 @@ plan_level + 计划内容（审查在下一步独立进行）
 
 **本步出现的运行时占位符**
 - `{SPEC_ROOT}` → 常规模式 `cwd/.sillyspec`；平台模式 `specRoot`
-- `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审）或 `independent`（强制独立子代理 + review.json），由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 按 plan_level / 变更文件数判定
-- `{REVIEW_TIER_REASON}` → 分级理由文案（如 `变更文件 3 ≤ 3` 或 `plan_level=none...`）
+- `{REVIEW_TIER}` → 审查分级：`self`（当前 agent 自审，ceremony 档 S0/S1）或 `independent`（强制独立子代理 + review.json，ceremony 档 S2/S3），由 `review-tier.js` 的 `classifyReviewTier({planLevel, designPath})` 委托 `ceremony-tier.js` 三轴风险客观定价（plan_level 降级为编排标签，不再驱动仪式档）。注入值随附 ceremony 档位菜单块（`run/prompt.js` renderCeremonyTierInjection：S0~S3 四档各一行、当前档标注、轻档附影子期注记；agent 报 plan_level=full 而档位 S0/S1 时附强制轻仪审计痕行）
+- `{REVIEW_TIER_REASON}` → 分级理由文案（如 `ceremony 档 S1 判 self；blast：riskDetection.level=unit-sufficient`）
 - `{REVIEW_JSON_CONTRACT}` → `stage-review.js` 的 `renderReviewJsonContract()` 产出的 review.json 产物契约 markdown（schema + 完整示例 + docHash 算法，主审查文档为 plan.md）
 - `{PRIOR_REVIEW_FACTS}` → 复审回灌块（tier=independent 时注入，self/无历史为空串）：①前序阶段已实证 pass 结论（勿重验，封顶 15 条）②同阶段上一轮审查的未决 findings（fail/gap，逐项核验修复）与已实证 pass 面（勿重复报告）——`run/prompt.js` 从 `.runtime/stage-reviews/` 历史机械采集（`stage-review.js` collectSameStagePriorReview，骨架轮/他变更轮过滤）
 
@@ -315,16 +326,18 @@ plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/�
 - 调用：`sillyspec run plan --wait --reason "等待用户确认计划" --options "确认，进入执行,需要调整" --output "计划摘要"`
 - 用户确认后再 --done；plan_level=none/light（小变更）无需等待，正常完成即可
 
-### 当前审查分级（CLI 按变更规模判定，占位符由 run.js 注入）
+### 当前审查分级（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
-- tier=self：当前 agent 直接执行下方审查清单（小变更，独立审查仪式成本 > 收益）
-- tier=independent：必须用 Agent tool 启动一个独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json
+- tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省
+- tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）
+  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+- 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价
 
 ### 审查清单（读取 plan.md 的 plan_level，逐条核对）
 - [ ] task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务
 - [ ] plan_level 档位与实际复杂度匹配（none/light/full 没选错）
 - [ ] 跨任务契约：task-A 的产出（接口/DTO/响应）被 task-B 消费时，consumer 是否在 TaskCard expects_from 声明所需字段、provider 是否在 provides 承诺、两边字段一致？（plan-postcheck 会硬校验，此处是独立视角复查）
-- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改）
+- [ ] 文件覆盖：design.md 文件变更清单中的每个源码文件，是否都被至少一个 task 的 allowed_paths 覆盖？（漏覆盖 = execute 必然漏改。跨仓变更对账口径：design 清单按「## <repo-key> 仓变更」分段、路径相对各仓根，task 卡 repo: + 同口径相对路径匹配——allowed_paths 带仓库名前缀或绝对路径 = 永不命中、对账不上）
 - [ ] 不存在 P0/P1 unresolved blocker 残留
 - [ ] 没有实现细节泄漏到 plan.md（接口签名/代码示例应在 tasks/task-NN.md）
 - [ ] 关键路径与 Wave 依赖合理（无循环依赖、无遗漏前置）
@@ -340,6 +353,8 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项
+5. 执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证：plan 审查重核三仓源码 94 分钟不收敛——brainstorm 阶段已两轮实证的结论被全量重验）：brainstorm 阶段 design review 已实证的结论（checklist pass 项、file:line 锚点）**直接引用勿重验**，本阶段只审 plan 特有面（任务拆分/依赖/契约/规模映射）；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。
+6. 写通道降级：写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）作为最终文本回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
 
 ### module-impact.md 首版（scale≠small 时：CLI 自动生成，审查步勿手写）
 module-impact.md 首版**由 CLI 在本阶段 --done 时自动生成**——文件×模块归属按 _module-map.yaml 前缀匹配机械预填，章节含「## 模块影响矩阵」「## 未匹配文件」「## 更新结果」表骨架（每受影响模块一行 pending），影响类型列留 <!--TODO--> 由 execute/verify 按实际 diff 回填。已存在不覆盖。手写整份首版是历史返工根源（章节标题变体会被 archive contains_sections 硬拦），**本步不要手写**。

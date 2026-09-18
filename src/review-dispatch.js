@@ -18,10 +18,12 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from './fs-atomic.js'
 import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
+import { CEREMONY_TIERS } from './ceremony-tier.js'
+import { withFileLock } from './quicklog.js'
 import {
   renderReviewJsonContract,
   validateStageReviewSchema,
@@ -363,6 +365,476 @@ export async function runReviewDispatch(opts = {}) {
     return { ok: false, reason: `未知 mode: ${mode}` }
   } catch (e) {
     return { ok: false, reason: `review-dispatch 异常: ${e && e.message ? e.message : String(e)}` }
+  }
+}
+
+// ════════ 影子期派发（2026-09-18-ceremony-risk-pricing task-06 / FR-04 / D-007@v1 / R-04 / R-06）════════
+// 依据：design.md「总体方案 Phase 3」+「风险登记 R-04/R-06」+ plan.md「Wave 4」+ 全局硬约束 2。
+// 定位：S0/S1 轻档变更在明面轻仪主线外，后台静默派发重仪式独立评审**只记账不阻断**——
+// 影子 verdict 任何取值不回流任何 gate / verify / archive 判定面，为轻仪转正攒对照数据证据。
+//
+// 隔离面双通道（R-06，缺一不可）：
+//   ① 目录隔离——影子产物一律落 .runtime/stage-reviews-shadow/<change>-<stage>-<ts>/review.json，
+//     与主线 .runtime/stage-reviews/<stage>-review-* 物理分离（目录名模式亦不匹配主线
+//     `${stage}-review-` 前缀扫描，双保险）；
+//   ② marker 写入隔离——getLatestStageReviewRunId 优先读 current-stage-review-run-id-* marker
+//     （stage-review.js:377-390），本节任何代码**绝不调用 stageReviewMarkerPath / 绝不写主线
+//     marker**，影子 runId 独立生成（shadow- 前缀）不复用主线 marker ID。
+//
+// 通道复用口径：CLI 可自动派发的独立通道是 platform（agent-tool / host-mcp 是宿主侧通道，
+// CLI 无法代为派发——缺 client / probe 不可用时按 skip 留痕，不渲染交互式降级指引防噪音）。
+
+/** 影子命名空间目录名（挂在 runtimeRoot 下，随 .runtime 生命周期回收——design 对照账落盘契约） */
+export const SHADOW_NAMESPACE_DIR = 'stage-reviews-shadow'
+/** 影子派发覆盖的轻档（task-03 档位契约：S0/S1 轻仪、S2/S3 本就是重仪式无影子意义） */
+const SHADOW_LIGHT_TIERS = ['S0', 'S1']
+/** 转正判据样本目标（design Phase 3：N=10 轻档变更对照样本；计数逻辑消费方在 doctor 维度） */
+export const SHADOW_PROMOTION_SAMPLE_TARGET = 10
+/** skip 留痕上限（防高频 skip 无界膨胀；entries 是对照证据不截断） */
+const SHADOW_LEDGER_MAX_SKIPS = 100
+
+/** 影子对照账路径：{runtimeRoot}/stage-reviews-shadow/shadow-ledger.json（doctor 影子对照维度经 readShadowLedger 同源读取） */
+function shadowLedgerPath(runtimeRoot) {
+  return join(runtimeRoot, SHADOW_NAMESPACE_DIR, 'shadow-ledger.json')
+}
+
+/**
+ * 读影子对照账（doctor 影子对照维度消费；best-effort 绝不抛）。
+ * @returns {{schemaVersion: number, entries: object[], skips: object[]}} 无/坏账 → 空账壳
+ */
+export function readShadowLedger(runtimeRoot) {
+  try {
+    const p = shadowLedgerPath(runtimeRoot)
+    if (!existsSync(p)) return { schemaVersion: 1, entries: [], skips: [] }
+    const doc = JSON.parse(readFileSync(p, 'utf8'))
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return { schemaVersion: 1, entries: [], skips: [] }
+    return {
+      schemaVersion: 1,
+      entries: Array.isArray(doc.entries) ? doc.entries : [],
+      skips: Array.isArray(doc.skips) ? doc.skips : [],
+    }
+  } catch {
+    return { schemaVersion: 1, entries: [], skips: [] }
+  }
+}
+
+/**
+ * 对照账读改写（withFileLock + writeAtomicSync，多会话并发追加安全——对齐 gates.js 档位文件
+ * 锁口径）。mutator 直接改 ledger 对象；skips 段自动截尾。锁/写失败 warn 后吞（fire-and-forget
+ * 语义：影子链路任何失败只留日志，不向调用方抛）。
+ */
+async function mutateShadowLedger(runtimeRoot, mutator) {
+  const p = shadowLedgerPath(runtimeRoot)
+  try {
+    await withFileLock(p + '.lock', () => {
+      const ledger = readShadowLedger(runtimeRoot)
+      mutator(ledger)
+      ledger.skips = (Array.isArray(ledger.skips) ? ledger.skips : []).slice(-SHADOW_LEDGER_MAX_SKIPS)
+      mkdirSync(dirname(p), { recursive: true })
+      writeAtomicSync(p, JSON.stringify(ledger, null, 2) + '\n')
+      return ledger
+    })
+  } catch (e) {
+    console.warn(`[sillyspec] 影子对照账写入失败（只记账不阻断）: ${e && e.message ? e.message : String(e)}`)
+  }
+}
+
+/** skip 留痕（前置不满足 / 平台通道不可用——acceptance「skip 留痕可查」落点） */
+function appendShadowLedgerSkip(runtimeRoot, skip) {
+  return mutateShadowLedger(runtimeRoot, (ledger) => {
+    ledger.skips.push({ at: new Date().toISOString(), ...skip })
+  })
+}
+
+/**
+ * 读档位文件（task-03 契约消费：.runtime/ceremony-tier-<change>.json {tier,components,reasons,transitions[]}）。
+ * gates.js readCeremonyTierDoc 未导出——本地镜像同一容错口径（缺失/坏 JSON/非对象/tier 不在
+ * S0~S3 序 → null，不修复不报错）。影子只读不写：升档判定与迁移记录归 gates 阶段门。
+ */
+function readCeremonyTierForShadow(runtimeRoot, changeName) {
+  try {
+    const p = join(runtimeRoot, `ceremony-tier-${changeName}.json`)
+    if (!existsSync(p)) return null
+    const doc = JSON.parse(readFileSync(p, 'utf8'))
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null
+    return CEREMONY_TIERS.includes(doc.tier) ? doc : null
+  } catch {
+    return null
+  }
+}
+
+/** 影子 runId 独立生成（shadow- 前缀 + 毫秒尾——不与主线 review- 前缀 marker 格式互通） */
+function generateShadowReviewRunId() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `shadow-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}-${String(now.getMilliseconds()).padStart(3, '0')}`
+}
+
+// ── 影子在途记录（独立于主线 review-dispatch-<change>.json——互不触发对方幂等闸，
+//    stage-review.js:751 的主线在途提示内联读的也是主线文件名，不会被影子记录污染）──
+
+function shadowRecordPath(specBase, changeName) {
+  return join(specBase, '.runtime', `review-dispatch-shadow-${changeName}.json`)
+}
+
+function readShadowRecord(specBase, changeName) {
+  try {
+    const p = shadowRecordPath(specBase, changeName)
+    if (!existsSync(p)) return null
+    const r = JSON.parse(readFileSync(p, 'utf8'))
+    return r && typeof r === 'object' && typeof r.missionId === 'string' ? r : null
+  } catch { return null }
+}
+
+function createShadowRecord(specBase, changeName, record) {
+  const p = shadowRecordPath(specBase, changeName)
+  mkdirSync(join(specBase, '.runtime'), { recursive: true })
+  try {
+    writeFileSync(p, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' })
+    return { created: true }
+  } catch (e) {
+    if (e && (e.code === 'EEXIST' || e.code === 'EPERM')) {
+      return { created: false, existing: readShadowRecord(specBase, changeName) }
+    }
+    throw e
+  }
+}
+
+function updateShadowRecord(specBase, changeName, patch) {
+  const cur = readShadowRecord(specBase, changeName)
+  if (!cur) return false
+  writeAtomicSync(shadowRecordPath(specBase, changeName), JSON.stringify({ ...cur, ...patch }, null, 2) + '\n')
+  return true
+}
+
+function clearShadowRecord(specBase, changeName) {
+  const p = shadowRecordPath(specBase, changeName)
+  try { if (existsSync(p)) { rmSync(p); return true } return false } catch { return false }
+}
+
+// ── 对照账口径：catch = checklist result ∈ {fail, gap} 的项（与 collectSameStagePriorReview
+//    openFindings 同口径）；漏检 = 影子 catch 项的主线侧文本不匹配项（主线 S0/S1 轻仪通常无
+//    review.json → caught 空 → 影子全部 catch 记为漏检——这正是要攒的证据）──────────────────
+
+function normalizeShadowItemKey(item) {
+  return String(item || '').replace(/\s+/g, ' ').trim()
+}
+
+function extractCaughtItems(review) {
+  const out = []
+  for (const c of (Array.isArray(review && review.checklist) ? review.checklist : [])) {
+    if (!c || typeof c !== 'object' || !c.item) continue
+    if (c.result === 'fail' || c.result === 'gap') {
+      out.push({
+        item: String(c.item).replace(/\s+/g, ' ').trim().slice(0, 200),
+        result: c.result === 'fail' ? 'fail' : 'gap',
+        note: c.note ? String(c.note).replace(/\s+/g, ' ').slice(0, 160) : '',
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * 主线轻仪结论快照（派发时点定妆，此后主线改判不影响对照口径）。
+ * 有主线 review.json（轻档降级自审等场景）→ 采其 verdict + caught；无 → light-cli 形态
+ * （S0/S1 CLI 清单核验无 review.json，按零 catch 记账——漏检判据的保守侧）。
+ */
+async function collectMainlineLightConclusion(runtimeRoot, stage, changeName) {
+  try {
+    const { getLatestStageReviewRunId } = await import('./stage-review.js')
+    const runId = getLatestStageReviewRunId(runtimeRoot, stage, changeName)
+    if (runId) {
+      const rp = join(runtimeRoot, 'stage-reviews', `${stage}-${runId}`, 'review.json')
+      if (existsSync(rp)) {
+        const review = JSON.parse(readFileSync(rp, 'utf8'))
+        if (review && typeof review === 'object') {
+          const r0 = Array.isArray(review.reviewedFiles) ? String(review.reviewedFiles[0]) : ''
+          // cross-change 防护同 getLatestStageReviewRunId 口径；空 reviewedFiles 的存量容过
+          if (!r0 || r0.includes(`changes/${changeName}/`)) {
+            return {
+              source: 'review.json', reviewRunId: runId,
+              specVerdict: String(review.specVerdict || ''), qualityVerdict: String(review.qualityVerdict || ''),
+              caught: extractCaughtItems(review),
+            }
+          }
+        }
+      }
+    }
+  } catch { /* best-effort 快照，失败按 light-cli 记账 */ }
+  return {
+    source: 'light-cli', reviewRunId: null, specVerdict: '', qualityVerdict: '', caught: [],
+    note: 'S0/S1 轻仪主线（CLI 清单核验）无 review.json——按零 catch 记账',
+  }
+}
+
+/**
+ * 落盘影子 stage review（R-06 隔离双通道的目录通道）。
+ *
+ * ⚠️ 与 persistStageReview 的三处刻意差异：①目录落 stage-reviews-shadow/<change>-<stage>-<ts>/
+ * （独立命名空间，目录名模式不匹配主线 `${stage}-review-` 前缀扫描）；②reviewer 落款带
+ * shadow: true 标记；③**绝不触碰 stageReviewMarkerPath / 主线 marker**（marker 写入通道隔离）。
+ * schema 不过 → 不落 review.json（影子命名空间同样不放宽 schema），原始产物存 review-raw.json
+ * 供人工核对、errors 返回记账。
+ * @returns {{ok: boolean, reviewPath?: string, rawPath?: string, errors?: string[]}}
+ */
+function persistShadowStageReview({ runtimeRoot, stage, changeName, shadowRunId, reviewObj, missionId, mainDocPath }) {
+  const review = {
+    ...reviewObj,
+    reviewer: {
+      channel: 'platform', shadow: true,
+      missionId: missionId || null,
+      model: (reviewObj && reviewObj.reviewer && reviewObj.reviewer.model) || null,
+    },
+  }
+  if (mainDocPath && existsSync(mainDocPath)) {
+    const h = computeDocHash(mainDocPath)
+    if (h) review.docHash = h
+  }
+  const schema = validateStageReviewSchema(review, stage)
+  const ts = String(shadowRunId || '').startsWith('shadow-') ? String(shadowRunId).slice('shadow-'.length) : String(shadowRunId || Date.now())
+  const dir = join(runtimeRoot, SHADOW_NAMESPACE_DIR, `${changeName}-${stage}-${ts}`)
+  mkdirSync(dir, { recursive: true })
+  if (!schema.ok) {
+    const rawPath = join(dir, 'review-raw.json')
+    writeAtomicSync(rawPath, JSON.stringify(reviewObj, null, 2) + '\n')
+    return { ok: false, rawPath, errors: schema.errors }
+  }
+  review.reviewedFiles = Array.isArray(review.reviewedFiles) && review.reviewedFiles.length > 0
+    ? review.reviewedFiles
+    : [`changes/${changeName}/${STAGE_MAIN_DOC[stage] || 'design.md'}`]
+  const reviewPath = join(dir, 'review.json')
+  writeAtomicSync(reviewPath, JSON.stringify(review, null, 2) + '\n')
+  return { ok: true, reviewPath }
+}
+
+/**
+ * 影子期派发总入口（task-06 落地；gates.js 阶段门接线归收尾批次——本函数只导出不挂载）。
+ *
+ * 调用协议（gates 阶段门 / task-07 接线用）：
+ *   await dispatchShadowReview({
+ *     mode: 'create',            // 'create' | 'status' | 'kill'（与 runReviewDispatch 同形）
+ *     cwd, specBase, changeName, // 必填；stage（create 必填）∈ brainstorm|plan|execute
+ *     client,                    // SillyHubMcpClient 实例（create/status 用；缺 → skip 留痕不报错）
+ *     probe,                     // 可注入（默认真 probeSillyHub，测试传 stub）
+ *     budgetUsd, stallMs,        // 缺省读 readReviewDispatchConfig（local.yaml review_dispatch 段）
+ *     mainline,                  // 可选：主线轻仪结论快照注入 {specVerdict, qualityVerdict, caught:[{item,result,note}]}；
+ *                                //   缺省自动采（collectMainlineLightConclusion）
+ *   })
+ * 建议挂点：阶段完成门升档检查点（escalateCeremonyTierAtGate）之后 fire-and-forget 调用
+ * （不 await 阻塞门判定亦可用——返回值只用于日志，任何 {ok:false}/{skipped} 形态都不是错误）。
+ *
+ * 前置校验两项硬条件（acceptance）：① .runtime/ceremony-tier-<change>.json 当前档 ∈ {S0, S1}；
+ * ② local.yaml ceremony.shadow ≠ false（task-05 readCeremonyLocalConfig 契约，缺省 true）。
+ * 不满足 → skip 留痕（对照账 skips 段）+ {ok:true, skipped:true}，不报错不阻断主线。
+ *
+ * 只记账不阻断（FR-04）：本函数永不抛（异常吞掉留 warning 日志）；影子 verdict / 影子结论
+ * 不进入任何主线 gate、verify、archive 判定面——对照数据只落 stage-reviews-shadow/ 命名空间。
+ *
+ * @returns {Promise<{ok: boolean, shadow: true, ...}>}
+ */
+export async function dispatchShadowReview(opts = {}) {
+  const {
+    mode = 'create', cwd = process.cwd(), specBase, changeName, stage,
+    client, probe, budgetUsd, stallMs, mainline,
+  } = opts
+  try {
+    if (!specBase || !changeName) return { ok: false, shadow: true, reason: '缺少 specBase/changeName' }
+    const cfg = readReviewDispatchConfig(cwd)
+    const budget = typeof budgetUsd === 'number' && budgetUsd > 0 ? budgetUsd : cfg.budget_usd
+    const stall = typeof stallMs === 'number' && stallMs > 0 ? stallMs : cfg.stall_ms
+    const runtimeRoot = join(specBase, '.runtime')
+
+    if (mode === 'kill') {
+      const rec = readShadowRecord(specBase, changeName)
+      if (rec) {
+        await mutateShadowLedger(runtimeRoot, (ledger) => {
+          const e = ledger.entries.find((x) => x && x.shadowRunId === rec.shadowRunId)
+          if (e && e.state !== 'completed') {
+            e.state = 'failed'
+            e.failReason = `人工 kill（影子在途放弃——平台 mission ${rec.missionId} 处置权在人）`
+          }
+        })
+      }
+      clearShadowRecord(specBase, changeName)
+      return { ok: true, shadow: true, killedLocally: true, platformHint: rec ? `影子在途记录已清；平台侧 mission ${rec.missionId} 请在平台 UI 处置。` : '无影子在途记录（已清或从未派发）。' }
+    }
+
+    if (mode === 'create') {
+      if (!stage || !STAGE_MAIN_DOC[stage]) return { ok: false, shadow: true, reason: `stage 必填 ∈ ${Object.keys(STAGE_MAIN_DOC).join('|')}` }
+      const tierDoc = readCeremonyTierForShadow(runtimeRoot, changeName)
+      const skip = async (reason) => {
+        await appendShadowLedgerSkip(runtimeRoot, { change: changeName, stage, tier: tierDoc ? tierDoc.tier : null, reason })
+        return { ok: true, shadow: true, skipped: true, reason }
+      }
+      // 前置①：档位 ∈ S0/S1（task-03 档位文件契约；无档位文件 = 未定价变更，不开影子）
+      if (!tierDoc) return skip('tier-file-missing（.runtime/ceremony-tier-<change>.json 不存在——影子派发只对已定价的轻档变更开跑）')
+      if (!SHADOW_LIGHT_TIERS.includes(tierDoc.tier)) return skip(`tier-not-light（当前档 ${tierDoc.tier}——影子派发只覆盖 S0/S1 轻档，S2/S3 本就是重仪式）`)
+      // 前置②：ceremony.shadow ≠ false（task-05 readCeremonyLocalConfig；动态 import 防静态环）
+      const { readCeremonyLocalConfig } = await import('./run/prompt.js')
+      const ceremony = readCeremonyLocalConfig(cwd)
+      if (ceremony && ceremony.shadow === false) return skip('shadow-off（local.yaml ceremony.shadow: off——轻仪已转正，影子期关闭）')
+      // 幂等闸（影子记录独立文件，与主线派发并行不互斥）
+      const cur = readShadowRecord(specBase, changeName)
+      if (cur && (cur.state === 'in-flight' || cur.state === 'dispatching')) {
+        return { ok: false, shadow: true, reason: `已有在途影子派发（mission ${cur.missionId}，state ${cur.state}）`, existing: cur }
+      }
+      if (!client || !client.probeDaemon) {
+        return skip('platform-client-missing（影子派发复用 platform 通道；agent-tool/host-mcp 是宿主侧通道 CLI 无法自动派发——宿主可自行派重仪式对照，结论不入本账）')
+      }
+      const probeFn = probe || (await import('./dispatch/probe.js')).probeSillyHub
+      const pr = await probeFn({ client, worktreePath: null, cwd })
+      if (!pr || pr.available !== true) {
+        return skip(`platform-unavailable（${pr && pr.reason ? pr.reason : 'probe 异常'}——影子链路不渲染交互式降级指引，静默记账）`)
+      }
+      // 主线轻仪结论快照（派发时点定妆；调用方可经 mainline 注入覆盖自动采集）
+      const mainlineSnapshot = mainline && typeof mainline === 'object'
+        ? { source: 'caller-injected', specVerdict: String(mainline.specVerdict || ''), qualityVerdict: String(mainline.qualityVerdict || ''), caught: extractCaughtItems({ checklist: mainline.caught }) }
+        : await collectMainlineLightConclusion(runtimeRoot, stage, changeName)
+      // 影子 runId 独立生成（R-06 隔离通道②：绝不读写主线 marker / stageReviewMarkerPath）
+      const shadowRunId = generateShadowReviewRunId()
+      const changeDir = join(specBase, 'changes', changeName)
+      const book = buildReviewerTaskBook({ stage, changeDir, reviewRunId: shadowRunId, channelPriority: readReviewChannelPriority(cwd) })
+      const workerPrompt = book.workerPrompt + '\n（影子审查：本结论将由 CLI 回收到 stage-reviews-shadow/ 独立命名空间做轻/重对照记账，不影响主线任何判定。）\n'
+      const mission = await client.createMission({ objective: book.objective, orchestrationMode: 'external', budgetUsd: budget })
+      const missionId = mission && mission.missionId
+      if (!missionId) return skip('create-mission-no-id（平台未返回 missionId）')
+      const cr = createShadowRecord(specBase, changeName, {
+        change: changeName, stage, shadow: true, missionId, workerId: null, state: 'dispatching',
+        createdAt: new Date().toISOString(), lastState: 'dispatching', lastStateAt: Date.now(), shadowRunId,
+      })
+      if (!cr.created) {
+        return { ok: false, shadow: true, reason: '并发双开被拒（O_EXCL，影子记录）', existing: cr.existing }
+      }
+      let worker = null
+      try {
+        worker = await client.dispatchWorker({
+          missionId, objective: book.objective, readOnly: true,
+          worktreePath: cwd, workerPrompt,
+        })
+      } catch (e) {
+        updateShadowRecord(specBase, changeName, { state: 'abandoned', errorCode: 'dispatch_worker_threw' })
+        await mutateShadowLedger(runtimeRoot, (ledger) => {
+          ledger.entries.push({
+            id: shadowRunId, change: changeName, stage, tier: tierDoc.tier, shadowRunId,
+            at: new Date().toISOString(), state: 'abandoned', failReason: `dispatch_worker 异常: ${e && e.message ? e.message : String(e)}`,
+            mainline: mainlineSnapshot,
+          })
+        })
+        clearShadowRecord(specBase, changeName)
+        console.warn(`[sillyspec] 影子派发失败（只记账不阻断）: dispatch_worker 异常 ${e && e.message ? e.message : String(e)}`)
+        return { ok: false, shadow: true, reason: 'dispatch_worker 异常（已记对照账 abandoned）' }
+      }
+      const workerId = worker && worker.workerId
+      if (!workerId) {
+        updateShadowRecord(specBase, changeName, { state: 'abandoned', errorCode: 'no_worker_id' })
+        await mutateShadowLedger(runtimeRoot, (ledger) => {
+          ledger.entries.push({
+            id: shadowRunId, change: changeName, stage, tier: tierDoc.tier, shadowRunId,
+            at: new Date().toISOString(), state: 'abandoned', failReason: 'dispatch_worker 未返回 workerId',
+            mainline: mainlineSnapshot,
+          })
+        })
+        clearShadowRecord(specBase, changeName)
+        return { ok: false, shadow: true, reason: 'dispatch_worker 未返回 workerId（已记对照账 abandoned）' }
+      }
+      updateShadowRecord(specBase, changeName, { workerId, state: 'in-flight', lastState: 'queued', lastStateAt: Date.now() })
+      // 对照账登记（in-flight 态——回收时补影子结论与 catch 差异）
+      await mutateShadowLedger(runtimeRoot, (ledger) => {
+        ledger.entries.push({
+          id: shadowRunId, change: changeName, stage, tier: tierDoc.tier, shadowRunId,
+          at: new Date().toISOString(), state: 'in-flight',
+          missionId, mainline: mainlineSnapshot,
+        })
+      })
+      return {
+        ok: true, shadow: true, missionId, workerId, shadowRunId,
+        nextStep: '影子派发 fire-and-forget：只记账不阻断——status 回收随主线检查点顺带跑（dispatchShadowReview mode="status"）或由 doctor 影子对照维度报告在途。',
+      }
+    }
+
+    if (mode === 'status') {
+      const rec = readShadowRecord(specBase, changeName)
+      if (!rec) return { ok: false, shadow: true, reason: '无影子在途记录——先 create。' }
+      if (!client || !client.listWorkers) return { ok: false, shadow: true, reason: 'client 未注入' }
+      const workers = await client.listWorkers(rec.missionId)
+      const w = Array.isArray(workers) ? workers.find((x) => x && (x.id === rec.workerId || x.worker_id === rec.workerId)) : null
+      const st = w ? String(w.status || '') : 'unknown'
+      const statusLine = `影子 mission ${rec.missionId} worker ${rec.workerId}: ${st}`
+      if (w && st && st !== rec.lastState) {
+        updateShadowRecord(specBase, changeName, { lastState: st, lastStateAt: Date.now() })
+        rec.lastState = st; rec.lastStateAt = Date.now()
+      }
+      if (st === 'completed') {
+        const gr = await client.getWorkerResult({ missionId: rec.missionId, workerId: rec.workerId })
+        const review = extractReviewFromArtifacts(gr && gr.artifacts)
+        if (!review) {
+          await mutateShadowLedger(runtimeRoot, (ledger) => {
+            const e = ledger.entries.find((x) => x && x.shadowRunId === rec.shadowRunId)
+            if (e && e.state !== 'completed') { e.state = 'failed'; e.failReason = 'completed-no-artifact（worker completed 但 artifacts 提取不到 review JSON）' }
+          })
+          clearShadowRecord(specBase, changeName)
+          return { ok: false, shadow: true, state: 'completed-no-artifact', statusLine, accountingOnly: true }
+        }
+        const mainDocPath = join(specBase, 'changes', changeName, STAGE_MAIN_DOC[rec.stage] || 'design.md')
+        const p = persistShadowStageReview({
+          runtimeRoot, stage: rec.stage, changeName, shadowRunId: rec.shadowRunId,
+          reviewObj: review, missionId: rec.missionId, mainDocPath,
+        })
+        // 对照账补全：影子重仪式结论 + catch 差异（漏检 = 影子抓到而主线轻仪没抓到）
+        await mutateShadowLedger(runtimeRoot, (ledger) => {
+          const e = ledger.entries.find((x) => x && x.shadowRunId === rec.shadowRunId)
+          if (!e) return
+          const shadowCaught = extractCaughtItems(review)
+          const mainlineCaught = e.mainline && Array.isArray(e.mainline.caught) ? e.mainline.caught : []
+          const mainKeys = new Set(mainlineCaught.map((c) => normalizeShadowItemKey(c.item)))
+          const missedByLight = shadowCaught
+            .filter((c) => !mainKeys.has(normalizeShadowItemKey(c.item)))
+            .map((c) => ({ item: c.item, result: c.result, note: c.note }))
+          const shadowFailed = review.specVerdict === 'fail' || review.qualityVerdict === 'fail'
+          const lightFailed = (e.mainline && (e.mainline.specVerdict === 'fail' || e.mainline.qualityVerdict === 'fail')) || false
+          e.state = p.ok ? 'completed' : 'bad-review'
+          e.completedAt = new Date().toISOString()
+          e.shadow = {
+            specVerdict: String(review.specVerdict || ''), qualityVerdict: String(review.qualityVerdict || ''),
+            caught: shadowCaught,
+          }
+          e.diff = {
+            missedByLight,
+            shadowFailed,
+            lightFailed,
+            verdictDelta: shadowFailed && !lightFailed,
+          }
+          e.reviewPath = p.ok ? p.reviewPath : p.rawPath
+          if (!p.ok) e.schemaErrors = p.errors
+        })
+        clearShadowRecord(specBase, changeName)
+        return {
+          ok: p.ok, shadow: true, state: p.ok ? 'completed' : 'bad-review', statusLine,
+          reviewPath: p.reviewPath || p.rawPath, verdict: `${review.specVerdict}/${review.qualityVerdict}`,
+          errors: p.errors, accountingOnly: true,
+        }
+      }
+      if (st === 'failed' || st === 'killed') {
+        await mutateShadowLedger(runtimeRoot, (ledger) => {
+          const e = ledger.entries.find((x) => x && x.shadowRunId === rec.shadowRunId)
+          if (e && e.state !== 'completed') { e.state = 'failed'; e.failReason = `worker 终态 ${st}` }
+        })
+        clearShadowRecord(specBase, changeName)
+        return { ok: false, shadow: true, state: st, statusLine, accountingOnly: true }
+      }
+      const stallInfo = detectStall(rec, Date.now(), stall)
+      return {
+        ok: true, shadow: true, state: st || 'in-flight', statusLine,
+        stalled: stallInfo.stalled, stallHint: stallInfo.hint, accountingOnly: true,
+      }
+    }
+
+    return { ok: false, shadow: true, reason: `未知 mode: ${mode}` }
+  } catch (e) {
+    // fire-and-forget 兜底：影子链路任何异常吞掉留 warning，绝不向主线抛（FR-04 只记账不阻断）
+    console.warn(`[sillyspec] 影子派发异常（只记账不阻断）: ${e && e.message ? e.message : String(e)}`)
+    return { ok: false, shadow: true, reason: `影子派发异常: ${e && e.message ? e.message : String(e)}` }
   }
 }
 

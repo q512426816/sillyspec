@@ -32,6 +32,13 @@ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { reconcileCrossRepoDeclarations } from './cross-repo-reconcile.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
+// ceremony 双跑收口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003）：引擎与账本均为
+// 纯/叶子依赖（ceremony-tier → change-risk-profile；friction-ledger → fs-atomic+quicklog），无环。
+import { detectChangeRisk } from './change-risk-profile.js'
+import { reconcileDualRun, computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+import { mergeFrictionEntry } from './friction-ledger.js'
+import { discoverModuleIndex } from './decision-distill.js'
+import { writeAtomicSync } from './fs-atomic.js'
 // target_files 声明侧解析（Wave 1 已落地）：依赖链已核实无环——plan-postcheck 不反向依赖本模块，
 // 且本模块已经 worktree-apply.js:21 间接依赖 plan-postcheck，此处改直连不引入新环（task-04）
 import { parseTargetFiles, parseRepo } from './stages/plan-postcheck.js'
@@ -2846,6 +2853,264 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   // 状态聚合：②在场即 ERROR 态优先（gates 阻断语义靠它兑现）；仅③ → WARNING 态
   const status = missing.length > 0 ? 'missing_declared' : (undeclared.length > 0 ? 'undeclared' : 'ok')
   return { status, matched, missing, undeclared, undeclaredScaffold: scaffoldTotal, skipReason: null, notes, form: actual.form, sources: actual.sources, crossRepo }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ceremony 双跑收口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003、
+// 显式降档复核 D-004）：预价信声明、结算信事实——verify --done 与 archive confirm
+// 两出口用实际 diff 重跑 blast+span 得事实档，与 .runtime/ceremony-tier-<change>.json
+// 开跑声明档对账，懒 agent 的低报在收口被硬 flag + 记摩擦账 + 落事实面预价种子
+// （该会话下一 change 的开跑价强制并入事实面）。实际 diff 一律取 resolveReconcileActualFiles
+// 单点（上方 :2549——三源并集 / 并行会话剔除 / git 降级语义全复用，勿另造第二取数口径）。
+// 本函数是两出口的唯一实现宿主（gates.js verify 块的调用接线属 task-03 面；archive 出口
+// 接线在 run/complete-handlers.js handleArchiveConfirmStep）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 事实面内容采集上限（防病态体量）：单文件 256KB / 总量 4MB / 至多前 200 个文件 */
+const CEREMONY_FACT_CONTENT_MAX_PER_FILE = 256 * 1024
+const CEREMONY_FACT_CONTENT_MAX_TOTAL = 4 * 1024 * 1024
+const CEREMONY_FACT_CONTENT_MAX_FILES = 200
+
+/**
+ * 事实面内容采集：读实际 diff 文件的对应内容（detectChangeRisk 的文档槽输入——声明侧是
+ * design/plan 措辞，事实侧换成实际改动文件内容，同一套机械关键词判定）。文件头 frontmatter
+ * 整块剥除（事实面无声明通道——reconcileDualRun 契约是「实际 diff 无声明」，防 risk_level
+ * 声明回声经内容槽回流事实面；.sillyspec/changes 已被 filterDeliverableFiles 过滤，此处
+ * 剥的是 docs 等交付文档的头部 frontmatter）。删除/不可读文件跳过内容（文件名仍进
+ * changedFiles 参与 INTEGRATION_FILE_PATTERNS 判级）。超限截断不告警（对账只需关键词覆盖面）。
+ */
+function readCeremonyFactContent(contentRoot, files) {
+  const chunks = []
+  let total = 0
+  let readCount = 0
+  let unreadCount = 0
+  for (const f of files.slice(0, CEREMONY_FACT_CONTENT_MAX_FILES)) {
+    if (total >= CEREMONY_FACT_CONTENT_MAX_TOTAL) break
+    try {
+      let text = readFileSync(join(contentRoot, f), 'utf8')
+      text = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '') // 剥文件头 frontmatter
+      if (text.length > CEREMONY_FACT_CONTENT_MAX_PER_FILE) text = text.slice(0, CEREMONY_FACT_CONTENT_MAX_PER_FILE)
+      chunks.push(text)
+      total += text.length
+      readCount++
+    } catch { unreadCount++ /* 已删除/不可读 → 文件名仍参与判级 */ }
+  }
+  return { content: chunks.join('\n'), readCount, unreadCount }
+}
+
+/** 种子文件名的会话标识清洗（anon@host / agent 名等 → 文件名安全字符，截 80 字符） */
+function sanitizeCeremonySeedSession(session) {
+  return String(session).trim().replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'session'
+}
+
+/** 会话标识解析（种子文件口径）：入参显式给足（archive 出口传 resolveSessionIdentity 结果）；
+ *  缺省动态 import progress.js 三级解析（flag > env > anon@host）——动态引是 gates 先例
+ *  （progress.js 闭包含 DB/registry，静态互引有环风险）；解析失败 → null（种子跳过，判定不受影响） */
+async function resolveCeremonyDualRunSession({ session, cwd }) {
+  if (typeof session === 'string' && session.trim()) return session.trim()
+  try {
+    const { resolveSessionIdentity } = await import('./progress.js')
+    return resolveSessionIdentity({ cwd, warn: false }).session
+  } catch { return null }
+}
+
+/**
+ * ceremony 双跑收口对账检查（verify --done / archive confirm 两出口共用；照 runVerifyTestCheck /
+ * reconcileTargetFiles 检查族先例：单结果对象 + 配套 print 导出）。
+ *
+ * 流程：声明档读 `.runtime/ceremony-tier-<change>.json`（task-03 开跑定价产物）的 tier →
+ * 实际 diff 取 resolveReconcileActualFiles 单点 → 事实面 detectChangeRisk（输入换成实际 diff
+ * 文件与对应内容）+ _module-map 索引组装 reconcileDualRun 入参 → 引擎出 {factTier, mismatch,
+ * severity}（声明档<事实档 → mismatch/error）。mismatch 时本函数亲自落两件收口产物（fail-soft，
+ * 异常降级留痕不阻断）：① 摩擦账 mergeFrictionEntry（counts 记 gate_rollback——现有三枚举中
+ * 唯一双语义契合项：verify 出口低报即 gate 回滚、且 gate_rollback 是 escalateByFriction 消费键
+ * 可供次单升档；扩展第四类型须动 friction-ledger/tally 枚举，不在本卡 allowed_paths）；② 事实面
+ * 预价种子 `.runtime/ceremony-fact-seed-<session>.json`（session 取 resolveSessionIdentity
+ * 同一口径，同 session 幂等覆盖不叠加；字段 declaredTier/factTier/mismatch + 事实面输入 factFiles
+ * 等供次单开跑价直用）。
+ *
+ * 跳过面（fail-soft 不误红，存量变更零回归）：quick 无 changeName / 档位文件缺失（task-03 未
+ * 落地前的在途变更）/ git 全不可用（actual 降级）。档位文件在场但 tier 非法 → 不跳过，按引擎
+ * reconcileDualRun 的 declaredTier 非法口径对账（fail-safe 宁严勿松，notes 留痕）。
+ *
+ * 显式降档复核（D-004）：档位文件 explicitDowngradeAccepted 标记（或 reasons 含该标记）的变更，
+ * 事实面支持（无 mismatch）→ 放行并在 warning 披露；不支持 → 按低报同款 mismatch。
+ *
+ * mismatch 的阻断语义由接线方兑现：verify 出口 errors 硬 flag（阻断回滚，strictViolation / ②类
+ * 先例）；archive 出口阻断级警告（只警告不回滚归档，D-006 archive=终态铁律）。violation 载荷
+ * （code/message 含命中明细）随结果透传，接线方零拼装。
+ *
+ * @param {object} opts
+ * @param {string} opts.cwd - 主仓根（git 调用根）
+ * @param {string|null} [opts.specBase] - .sillyspec 根（缺省 join(cwd,'.sillyspec')；平台模式传 specRoot）
+ * @param {string|null} [opts.changeName] - 变更名（quick 等无关联场景缺省 → skipped）
+ * @param {string|null} [opts.runtimeRoot] - 运行时根（缺省 join(specBase,'.runtime')）
+ * @param {string|null} [opts.session] - 会话标识（种子文件口径；缺省内部三级解析）
+ * @returns {Promise<{
+ *   status: 'ok'|'mismatch'|'skipped'|'degraded',
+ *   change: string|null, declaredTier: string|null, factTier: string|null,
+ *   mismatch: boolean, severity: 'error'|'none'|null,
+ *   explicitDowngradeAccepted: boolean, downgradeRecheckPassed: boolean|null,
+ *   skipReason: string|null, notes: string[], factReasons: string[], factFiles: string[],
+ *   form: 'worktree'|'post-apply'|null, sources: string[],
+ *   violation?: {code: string, message: string},
+ *   ledger?: {ok: boolean, skipped?: boolean}, seed?: {written: boolean, path?: string, reason?: string},
+ *   at: string,
+ * }>}
+ */
+export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName = null, runtimeRoot = null, session = null } = {}) {
+  const notes = []
+  const at = new Date().toISOString()
+  const skippedResult = (reason) => ({ status: 'skipped', change: changeName, declaredTier: null, factTier: null,
+    mismatch: false, severity: null, explicitDowngradeAccepted: false, downgradeRecheckPassed: null,
+    skipReason: reason, notes, factReasons: [], factFiles: [], form: null, sources: [], at })
+
+  if (!changeName) {
+    return skippedResult('无 changeName（quick 等无关联变更场景），ceremony 双跑对账跳过')
+  }
+  const sb = specBase || join(cwd, '.sillyspec')
+  const rt = runtimeRoot || join(sb, '.runtime')
+
+  // —— 声明侧：开跑定价落档（task-03 产物，tier/components/reasons/transitions）——
+  const tierPath = join(rt, `ceremony-tier-${changeName}.json`)
+  let tierFile = null
+  try { tierFile = JSON.parse(readFileSync(tierPath, 'utf8')) } catch { /* 缺失/坏 JSON → 下方跳过 */ }
+  if (tierFile == null || typeof tierFile !== 'object' || Array.isArray(tierFile)) {
+    // 存量零红门禁：档位文件缺失 = 变更先于定价系统起跑（task-03 未覆盖的在途面），跳过不误红。
+    // 与「文件在场但 tier 非法」不同处置：后者走引擎 fail-safe 对账（无法证明声明到位 → 视为低报）。
+    return skippedResult(`档位文件缺失或不可解析（${tierPath}——开跑定价产物，task-03 阶段门落盘），ceremony 双跑跳过（存量变更零红门禁）`)
+  }
+  const declaredTier = typeof tierFile.tier === 'string' ? tierFile.tier : null
+  if (!CEREMONY_TIERS.includes(declaredTier)) {
+    notes.push(`声明档 tier 非法（${JSON.stringify(tierFile.tier)}）——按引擎 fail-safe 口径以最低档对账（宁严勿松）`)
+  }
+
+  // —— 事实侧：实际 diff 单点取数（三源并集 / 并行会话剔除 / git 降级语义全复用）——
+  const actual = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName })
+  if (actual.foreignExcluded > 0) {
+    notes.push(`主仓 status 捕入的 ${actual.foreignExcluded} 个并行会话声明文件已剔除（不参与事实面计价）`)
+  }
+  if (!actual.ok) {
+    return { status: 'degraded', change: changeName, declaredTier, factTier: null,
+      mismatch: false, severity: null, explicitDowngradeAccepted: false, downgradeRecheckPassed: null,
+      skipReason: `git 全部不可用，actual 不可得，双跑对账降级跳过——${actual.degradedReason}`,
+      notes, factReasons: [], factFiles: [], form: actual.form, sources: actual.sources, at }
+  }
+
+  // —— 事实面重跑：blast（detectChangeRisk × 实际 diff 文件与对应内容）+ span（_module-map 索引）——
+  // 内容根按形态取对：worktree 形态文件在 worktree 根（_readWorktreeMeta gitDir 同源），post-apply
+  // 形态在主仓 cwd——actual 只回形态不回根，此处经同一 meta 权威入口补根，不造第二形态判定。
+  let contentRoot = cwd
+  if (actual.form === 'worktree') {
+    const wtMeta = _readWorktreeMeta(sb, cwd, changeName)
+    if (wtMeta && wtMeta.gitDir) contentRoot = wtMeta.gitDir
+  }
+  const fact = readCeremonyFactContent(contentRoot, actual.files)
+  if (fact.unreadCount > 0) {
+    notes.push(`${fact.unreadCount} 个实际文件内容不可读（已删除/权限），文件名仍参与判级`)
+  }
+  const factRiskDetection = detectChangeRisk({ designContent: fact.content, planContent: '', changedFiles: actual.files })
+  let factModuleIndex = null
+  try { factModuleIndex = discoverModuleIndex(join(sb, 'knowledge')) } catch { /* 缺 map → span 跨模块维跳过 */ }
+
+  // —— 引擎对账（mismatch 判定单点）+ 命中明细（同入参跑 computeCeremonyTier 取 reasons，供披露）——
+  const verdict = reconcileDualRun({ declaredTier, factRiskDetection, factFiles: actual.files, factModuleIndex })
+  const factDetail = computeCeremonyTier({
+    riskDetection: factRiskDetection, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
+  })
+
+  // —— 显式降档复核（D-004）：档位文件标记（字段或 reasons 痕迹双口径容错——computeCeremonyTier
+  //    的 reasons 含 explicitDowngradeAccepted=true 字样，task-03 落盘形态两者至少其一在场）——
+  const explicitDowngradeAccepted = tierFile.explicitDowngradeAccepted === true
+    || (Array.isArray(tierFile.reasons) && tierFile.reasons.some((r) => /explicitDowngradeAccepted/.test(String(r))))
+  let downgradeRecheckPassed = null
+  if (explicitDowngradeAccepted) {
+    if (verdict.mismatch) {
+      notes.push('显式降级未获事实面支持（design risk_level 降级声明与实际改动矛盾，D-004）——按低报处理')
+    } else {
+      downgradeRecheckPassed = true
+      notes.push(`显式降级经事实面复核通过（声明档 ${declaredTier} ≥ 事实档 ${verdict.factTier}，D-004 放行留痕）`)
+    }
+  }
+
+  const result = {
+    status: verdict.mismatch ? 'mismatch' : 'ok',
+    change: changeName, declaredTier, factTier: verdict.factTier,
+    mismatch: verdict.mismatch, severity: verdict.severity,
+    explicitDowngradeAccepted, downgradeRecheckPassed,
+    skipReason: null, notes, factReasons: factDetail.reasons, factFiles: actual.files,
+    form: actual.form, sources: actual.sources, at,
+  }
+  if (!verdict.mismatch) return result
+
+  // —— mismatch 收口产物（fail-soft：账本 API 自身不抛；种子落盘异常降级留痕，均不阻断判定）——
+  result.violation = {
+    code: 'ceremony_dual_run_mismatch',
+    message: `ceremony 双跑对账：声明档 ${String(declaredTier)} < 事实档 ${verdict.factTier}（低报）——${factDetail.reasons.join('；')}`,
+  }
+  result.ledger = await mergeFrictionEntry(rt, { change: changeName, counts: { gate_rollback: 1 } })
+  const sid = await resolveCeremonyDualRunSession({ session, cwd })
+  if (sid) {
+    try {
+      mkdirSync(rt, { recursive: true })
+      const seedPath = join(rt, `ceremony-fact-seed-${sanitizeCeremonySeedSession(sid)}.json`)
+      writeAtomicSync(seedPath, JSON.stringify({
+        change: changeName,
+        declaredTier,
+        factTier: verdict.factTier,
+        mismatch: true,
+        factRiskLevel: (factRiskDetection && factRiskDetection.level) || null,
+        factFiles: actual.files,
+        at,
+      }, null, 2) + '\n')
+      result.seed = { written: true, path: seedPath, session: sid }
+    } catch (e) {
+      result.seed = { written: false, reason: `种子落盘失败（fail-soft 不阻断）：${e && e.message ? e.message : e}` }
+    }
+  } else {
+    result.seed = { written: false, reason: '会话标识不可得（resolveSessionIdentity 解析失败）——种子跳过，判定不受影响' }
+  }
+  return result
+}
+
+/**
+ * 打印 ceremony 双跑对账结果（两出口共用渲染）。skipped 静默（存量无档位文件是过渡期常态，
+ * printVerifyParityCheck skipped 先例——零噪音）；ok 单行放行（审计可见性：声明面与事实面
+ * 一致）；显式降档复核通过 → warning 披露（D-004 留痕）；mismatch → ⛔ console.error 列声明档/
+ * 事实档/命中明细 + 修复指引 + 记账/种子落点——出口语义差异（verify=errors 硬 flag 阻断回滚 /
+ * archive=阻断级警告不回滚终态，D-006）在文案末行双披露，阻断侧由各出口接线方兑现。
+ */
+export function printCeremonyDualRunCheck(result) {
+  if (!result || typeof result !== 'object') return
+  if (result.status === 'skipped') return
+  if (result.status === 'degraded') {
+    console.warn(`\n⚠️  Ceremony 双跑对账降级跳过：${result.skipReason}`)
+    return
+  }
+  if (result.status === 'ok') {
+    if (result.downgradeRecheckPassed) {
+      console.warn(`\n⚠️  Ceremony 双跑对账：显式降级经事实面复核通过（声明档 ${result.declaredTier} ≥ 事实档 ${result.factTier}，D-004 放行留痕）`)
+      return
+    }
+    console.log(`\n✅ Ceremony 双跑对账通过：声明档 ${result.declaredTier} ≥ 事实档 ${result.factTier}（实际 diff ${result.factFiles.length} 文件重跑 blast+span）`)
+    return
+  }
+  // mismatch（severity=error）
+  console.error(`\n⛔ Ceremony 双跑对账不通过（低报，severity=error）：声明档 ${String(result.declaredTier)} < 事实档 ${result.factTier}`)
+  console.error(`   声明档：${String(result.declaredTier)}（.runtime/ceremony-tier-${result.change}.json 开跑定价）`)
+  console.error(`   事实档：${result.factTier}（实际 diff ${result.factFiles.length} 文件重跑 blast+span，源：${(result.sources || []).join('、') || '-'}）`)
+  const reasons = result.factReasons || []
+  for (const r of reasons.slice(0, 10)) console.error(`   · ${r}`)
+  if (reasons.length > 10) console.error(`   · …还有 ${reasons.length - 10} 条命中明细`)
+  if (result.explicitDowngradeAccepted) console.error('   显式降级未获事实面支持（design risk_level 降级声明与实际改动矛盾，D-004）——按低报处理')
+  if (result.ledger && result.ledger.ok && !result.ledger.skipped) {
+    console.error(`   已记摩擦账：friction-ledger.json（change=${result.change}，gate_rollback +1）`)
+  }
+  if (result.seed && result.seed.written) {
+    console.error(`   已落事实面预价种子：${result.seed.path}（本会话下一 change 的开跑价强制并入事实面）`)
+  }
+  console.error('   修复：按事实档补做对应档位仪式，或修正降级理由后由阶段门重定价，再重跑收口对账。')
+  console.error('   出口语义：verify --done 出口为 errors 硬 flag（阻断回滚，修复后重跑 --done 进度不丢）；archive confirm 出口为阻断级警告（归档继续，D-006 不回滚终态、不 reopen）。')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

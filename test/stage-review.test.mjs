@@ -3,6 +3,8 @@
  *
  * 覆盖：
  *   1. classifyReviewTier —— 规模分级（plan_level / 文件数 / fail-safe）
+ *   1b. classifyReviewTier —— 委托定价引擎（ceremonyTier 双字段 / brownfield 缺省 S2 /
+ *       旧文件数断路器兼容 / riskDetection·friction·span 接管）——task-02
  *   2. validateStageReviewSchema —— 文档型 schema（reviewType/verdict/cannot_verify/reviewedFiles/docHash/checklist）
  *   3. verifyStageReviewDocHash —— docHash 真实性（防伪造）
  *   4. validateStageReview —— 总校验（缺失/fail/通过）
@@ -102,6 +104,80 @@ console.log('=== 1. classifyReviewTier（规模分级）===\n')
   // plan_level=full + 无 designPath → independent
   const t7 = classifyReviewTier({ planLevel: 'full' })
   assert(t7.tier === 'independent', `plan_level=full 无 designPath → independent`)
+}
+
+// ────────────────────────────────────────────────────────────
+console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接管，task-02）===\n')
+
+{
+  // 双字段并存：ceremonyTier 新增且 tier/reason/fileCount 现字段保留（消费方零适配）
+  const t = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(t.tier === 'self' && t.ceremonyTier === 'S1' && typeof t.reason === 'string' && t.reason.length > 0 && 'fileCount' in t,
+    `双字段并存：{ tier, ceremonyTier, reason, fileCount } 齐全（实际 tier=${t.tier} ceremonyTier=${t.ceremonyTier}）`)
+
+  // S1 档附 CLI 清单核验提示文案（D-005 轻仪菜单）
+  assert(t.reason.includes('CLI 清单核验'), `S1 reason 附 CLI 清单核验提示（实际：${t.reason}）`)
+
+  // brownfield（无 risk 输入）→ ceremonyTier='S2' 保守缺省；≤3 文件旧断路器保兼容 self
+  const b1 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(b1.ceremonyTier === 'S2' && b1.tier === 'self',
+    `brownfield 无 risk 输入 → ceremonyTier='S2'（缺省保守）＋ 文件数≤3 断路器 → self`)
+
+  const b2 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
+  assert(b2.ceremonyTier === 'S2' && b2.tier === 'independent' && b2.fileCount === 4,
+    `brownfield 4 文件 → ceremonyTier='S2' → independent（>3 断路器不命中）`)
+
+  // 真实 risk 输入接管：档位随 RISK_TO_TIER 映射，文件数断路器不再适用（引擎档强制）
+  const r0 = classifyReviewTier({ riskDetection: { level: 'doc-only' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(r0.ceremonyTier === 'S0' && r0.tier === 'self', `risk=doc-only → S0 → self（≤3 文件同判）`)
+
+  const r1 = classifyReviewTier({ riskDetection: { level: 'unit-sufficient' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
+  assert(r1.ceremonyTier === 'S1' && r1.tier === 'self' && r1.reason.includes('CLI 清单核验'),
+    `risk=unit-sufficient → S1 → self ＋ CLI 清单核验提示`)
+
+  const r2 = classifyReviewTier({ riskDetection: { level: 'contract-required' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(r2.ceremonyTier === 'S2' && r2.tier === 'independent',
+    `risk=contract-required → S2 → independent×1（1 文件也强制——文件数不再独自决定）`)
+
+  const r3 = classifyReviewTier({ riskDetection: { level: 'deployment-critical' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(r3.ceremonyTier === 'S3' && r3.tier === 'independent',
+    `risk=deployment-critical → S3 → independent（多轮语义由 prompt 侧渲染）`)
+
+  // riskDetection 优先于 plan_level 代理：light + integration-critical → S3 independent
+  const px = classifyReviewTier({ planLevel: 'light', riskDetection: { level: 'integration-critical' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(px.ceremonyTier === 'S3' && px.tier === 'independent',
+    `riskDetection 优先于 plan_level 代理（light + integration-critical → S3 → independent）`)
+
+  // friction 透传起爆：brownfield 缺省 S2 基础上 +1 → S3；断路器被真实信号压过
+  const fx = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']), frictionCounts: { gate_rollback: 1, review_rejected: 1 } })
+  assert(fx.ceremonyTier === 'S3' && fx.tier === 'independent',
+    `friction 起爆（两键合计 2 ≥ 阈值）→ S2+1=S3 → independent（≤3 断路器不适用）`)
+
+  // span 起爆：声明文件 ≥ SPAN_FILES_THRESHOLD(8) → 至少 S2 → independent（brownfield 之上叠加）
+  const sx = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), Array(8).fill(0).map((_, i) => `f${i}.js`)) })
+  assert(sx.ceremonyTier === 'S2' && sx.tier === 'independent',
+    `span 起爆（8 文件 ≥ SPAN_FILES_THRESHOLD）→ S2 → independent`)
+
+  // 未知 riskDetection.level → 引擎保守缺省 S2（不静默降级）
+  const ux = classifyReviewTier({ riskDetection: { level: 'garbage' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+  assert(ux.ceremonyTier === 'S2' && ux.tier === 'independent',
+    `未知 riskDetection.level → blast 保守缺省 S2 → independent（fail-safe）`)
+
+  // 无任何输入（fail-safe 极端）：fileCount=null → 断路器不适用 → S2 independent
+  const n0 = classifyReviewTier({})
+  assert(n0.ceremonyTier === 'S2' && n0.tier === 'independent' && n0.fileCount === null,
+    `全空输入 → ceremonyTier='S2' → independent（fileCount=null fail-safe）`)
+
+  // task-07 补漏：旧「文件数≤3」断路器的 self 结果在 S0/S1 档内仍生效——真实 risk 输入判
+  // S0/S1 时 >3 文件不再独自推翻 self（文件数启发式不产生隐式 independent；对照 brownfield
+  // S2 档的 >3 → independent 断路器 arm，见上 b2——两档区间行为分化即委托后的兼容边界）
+  const q0 = classifyReviewTier({ riskDetection: { level: 'doc-only' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js', 'e.js']) })
+  assert(q0.ceremonyTier === 'S0' && q0.tier === 'self' && q0.fileCount === 5,
+    `risk=doc-only + 5 文件 → S0 → self（S0 档内 >3 文件不升仪，断路器兼容）`)
+
+  const q1 = classifyReviewTier({ riskDetection: { level: 'unit-sufficient' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
+  assert(q1.ceremonyTier === 'S1' && q1.tier === 'self' && q1.fileCount === 4,
+    `risk=unit-sufficient + 4 文件 → S1 → self（S1 档内文件数不推翻）`)
 }
 
 // ────────────────────────────────────────────────────────────
