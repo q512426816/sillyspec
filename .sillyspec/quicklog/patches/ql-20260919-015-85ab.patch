@@ -1,0 +1,36 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 42f4b4c..d839117 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -3107,6 +3107,31 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
+     code: 'ceremony_dual_run_mismatch',
+     message: `ceremony 双跑对账：声明档 ${String(declaredTier)} < 事实档 ${verdict.factTier}（低报）——${factDetail.reasons.join('；')}`,
+   }
++  // ── 双跑低报自动追赶重定价（坑 ceremony-cascade-deadlock，ql-013 postmortem）────
++  // 声明追赶检查点（escalateCeremonyTierAtGate）位于完成级联末位，双跑 error 在 verify
++  // postcheck 更早拦住 --done——级联走不到末位，追赶永不执行，形成「提示由阶段门重定价
++  // 但阶段门时序不可达」的死锁（five-cuts 实证：3 轮 --done 卡死只能手动改档位文件）。
++  // 修法：mismatch 分支内先按事实面执行一次追赶（applyDeclarationCatchUp 同款语义：
++  // transitions 空→整档换 factTier；非空→max(factTier, 地板)），写回档位文件——本次仍
++  // error（低报惩罚保留：friction 已 +1），但重跑 --done 即对账通过，不需手动改档。
++  // fail-soft：重定价任何异常降级留痕不阻断 error 本身。
++  try {
++    const { applyDeclarationCatchUp } = await import('./ceremony-tier.js')
++    const caught = applyDeclarationCatchUp({
++      currentDoc: tierFile,
++      recomputedTier: verdict.factTier,
++      recomputedComponents: { blast: factRisk.tier, span: (factDetail.components && factDetail.components.span) || 'S0', friction: 'S0' },
++      recomputedReasons: [`双跑低报自动追赶（事实面 tier=${verdict.factTier}，证据面 seed ${actual.files.length} 文件）`],
++      frictionCounts: {},
++    })
++    const tierPathForReprice = join(rt, `ceremony-tier-${changeName}.json`)
++    const { writeAtomicSync } = await import('./fs-atomic.js')
++    writeAtomicSync(tierPathForReprice, JSON.stringify(caught, null, 2) + '\n')
++    result.violation.message += `；档位文件已自动按事实面追赶重定价（${String(declaredTier)} → ${caught.tier}）——修复低报根因后重跑 --done 即对账通过，勿手动改档（ql-013 死锁修复）`
++    notes.push(`低报自动追赶重定价：${String(declaredTier)} → ${caught.tier}（级联死锁修复，applyDeclarationCatchUp 事实面语义）`)
++  } catch (e) {
++    notes.push(`低报自动追赶重定价失败（fail-soft 不阻断 error 本身）：${e && e.message ? e.message : e}`)
++  }
+   result.ledger = await mergeFrictionEntry(rt, { change: changeName, counts: { gate_rollback: 1 } })
+   const sid = await resolveCeremonyDualRunSession({ session, cwd })
+   if (sid) {

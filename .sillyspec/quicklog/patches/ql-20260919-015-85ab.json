@@ -1,0 +1,47 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-3bac25c2",
+  "totals": {
+    "files": 1,
+    "additions": 25,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 25,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-015-85ab",
+  "sessionId": "quick-3bac25c2",
+  "savedAt": "2026-09-19T08:04:10.899Z",
+  "patchSha256": "8bd59b95bc2524002fceb1333f18762cfddfcbba01ad15dfc2023221db2b3c6b",
+  "patchStatus": "ok"
+}
