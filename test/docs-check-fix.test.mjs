@@ -510,8 +510,10 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
       // （task-08 needs-manual 默认输出）后比对 stdout 文本。
       // stripHint：💡 候选行号行（task-08 契约演化）+ 纯位置锚教学后缀（2026-09-11 契约演化：
       // 层2 失败 reason 尾附「行号后加 ?」教学——旧 CLI 无此后缀，字节对照按既定先例过滤）
+      // + 裸文件名指引行（2026-09-19 dab74fc 契约演化：修复指引补裸名改写全路径一条——旧 CLI
+      // 无此行，按同一先例行级过滤）
       const POS_HINT = '（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）'
-      const stripHint = (s) => String(s).split(NL_MARK).filter(l => !l.includes('💡')).join(NL_MARK).split(POS_HINT).join('')
+      const stripHint = (s) => String(s).split(NL_MARK).filter(l => !l.includes('💡') && !l.startsWith('裸文件名引用（')).join(NL_MARK).split(POS_HINT).join('')
       assert.equal(oldR.code, newR.code, 'exit code 一致')
       // 报告文本内容一致（旧 stderr 文本 == 新 stdout 文本，通道迁移不改文案）
       assert.equal(stripHint(oldR.stderr), stripHint(newR.stdout), `报告文本逐字节一致（旧 stderr=${JSON.stringify(stripHint(oldR.stderr).slice(0, 200))} 新 stdout=${JSON.stringify(stripHint(newR.stdout).slice(0, 200))}）`)

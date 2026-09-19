@@ -1,0 +1,311 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index da05242..9b26cdb 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,9 +130,9 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:268/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1364/1471/1713/1776/1977 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1932/1913/1993 |
+-| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:797（`recordAgentLogInvocation`） |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:268/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1526/1785/1848/1859/2049 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1938/1984/2064 |
++| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:875（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:966 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:990 |
+diff --git a/src/run/command.js b/src/run/command.js
+index d1ede94..234d07d 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -671,6 +671,83 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     console.error(`   合法变更名示例：2026-07-27-add-login（仅字母/数字/._-，不含 / \\ ..）`)
+     process.exit(2)
+   }
++  // ── flag 校验 + --help 短路（2026-09-19 上移至 quick 会话生成之前）──
++  // 原位置在 quick sessionId 生成之后：--input 启动门上移（坑 quick-no-input-placeholder-title）
++  // 后，run quick --help 会先建会话/落 owner/上报 agent-log 再短路——run-help-shortcircuit
++  // 零副作用契约破坏（幻影会话实测复现）。上移后未知 flag 校验与帮助短路均先于一切副作用，
++  // 且未知 flag 先于 --input 语义门报错（用法错优先级：形态错 > 语义缺）。
++  // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
++  // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
++  // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
++  // 2026-09-14-change-ownership-guards task-02：原 '--session' 条目（quick 会话名提示）随
++  // --session 升格为真实 flag（所有权会话标识）而移除——提示只对未知 flag 生效，已知 flag
++  // 挂提示是死代码；'--session-id' 是最常见形近拼法，改挂新语义指引（所有权三级标识）。
++  const FLAG_SEMANTIC_HINTS = {
++    '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
++    '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
++    '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
++    '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
++    '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
++    '--session-id': '会话标识用 --session <id>（所有权三级解析最高优先级层；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级）',
++    '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
++    '--notes': '文件括注用 --file-notes "path::注 || path::注"',
++    '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
++    '--description': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
++  }
++
++  // 未知参数 fail-fast
++  const knownFlags = new Set([
++    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
++    '--wait', '--continue', '--non-interactive', '--interactive',
++    '--wait-interactive', // auto 模式 TTY 直通（带值形态 `--wait-interactive true`，autoFlagValue 消费；ql-20260911-029 补注册——此前漏登记，进命令前即被未知参数 exit(2) 拦死，FR-03 整条死路）
++    '--reason', '--options', '--answer', '--confirm-mode',
++    '--output', '--input', '--change', '--linked-changes',
++    '--req', '--cause', '--solution', '--result',
++    '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
++    '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
++    '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
++    '--json', '--dir', '--help',
++    '--reopen', '--from-step', '--mode',
++    '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
++    '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
++    '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
++    '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
++    '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
++    '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
++    '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
++    '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
++    '-h',
++  ])
++  for (let i = 0; i < flags.length; i++) {
++    const f = flags[i]
++    if (f.startsWith('--')) {
++      if (!knownFlags.has(f)) {
++        // F10: flag 级 did-you-mean（此前只命令级有）；F10b：语义别名定向提示优先于形近猜测
++        const semanticHint = FLAG_SEMANTIC_HINTS[f]
++        console.error(`❌ 未知参数: ${f}`)
++        if (semanticHint) {
++          console.error(`   ${semanticHint}`)
++        } else {
++          const suggestion = didYouMean(f, [...knownFlags])
++          if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
++          else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
++        }
++        process.exit(2) // 用法错 → exit 2
++      }
++      // F2: 只有吃值的 flag 才跳下一个 token。布尔 flag（--done 等）不能 i++——
++      // 否则会把紧跟的 typo flag 当成 --done 的「值」吞掉，既不校验也不生效（静默忽略）。
++      if (VALUE_FLAGS.has(f)) i++
++    }
++  }
++
++  // ── --help/-h 短路：flag 校验通过后、任何副作用（cwd 纠正/会话创建/QUICKLOG 落盘）之前 ──
++  // --help 此前在 knownFlags 白名单里被静默吞掉，run quick --help 会误开 quick 会话+写骨架
++  // 条目（查询意图不该有副作用）；-h 更是被当未知参数 exit 2。帮助查询 = 用法展示 = 退出 0。
++  if (flags.includes('--help') || flags.includes('-h')) {
++    printStageUsage(stageName)
++    process.exit(0)
++  }
++
+   // quick 会话隔离（D-001@v1 + D-003@v1 + §4.4 跨进程传递）：每会话用 sessionId 作 changeName，
+   // DB 分行 progress.quick-<uuid8>，避免并行 quick 会话共享单行 progress.default.quick 互相覆盖。
+   // sessionId = crypto.randomUUID 前 8 hex（摒弃旧 quick-YYYYMMDD-HHMMSS 时间戳，同秒并发撞）。
+@@ -719,8 +796,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         // 零沉没成本）。原位置在 flag 校验之后，但 sessionId 生成/「已建立」公告与 agent-log 平台
+         // 上报都在其之前——先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了一条
+         // 永不启动的 agent 日志（2026-09-19 实测踩）；上移到 id 生成前，拒绝路径零输出副作用。
+-        // --help/-h 豁免：帮助查询不该被拦——原实现靠「--help 短路在本门之前」保证，上移后 flag
+-        // 短路尚未到达，此处显式豁免。done-like（--done/--status/--skip/--reset/--reopen）与
++        // --help/-h 豁免：帮助查询不该被拦——flag 校验+--help 短路块已于 2026-09-19 上移至本块
++        // 之前（见上方「flag 校验 + --help 短路」段注记），帮助路径到不了这里；本豁免保留为纵深
++        // 防御。done-like（--done/--status/--skip/--reset/--reopen）与
+         // --cancel 不受限（isDoneLike 含前五者）；--linked-changes 非空可从关联变更提标题。
+         if (!(isDoneLike || isCancel) && !inputText
+           && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)
+@@ -882,78 +960,6 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   // 注册白名单透传，本行补 includes 解析进 completeStep options，isNoDocs 同款先例）。
+   const isSkipApply = flags.includes('--skip-apply')
+ 
+-  // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
+-  // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
+-  // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
+-  // 2026-09-14-change-ownership-guards task-02：原 '--session' 条目（quick 会话名提示）随
+-  // --session 升格为真实 flag（所有权会话标识）而移除——提示只对未知 flag 生效，已知 flag
+-  // 挂提示是死代码；'--session-id' 是最常见形近拼法，改挂新语义指引（所有权三级标识）。
+-  const FLAG_SEMANTIC_HINTS = {
+-    '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
+-    '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+-    '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+-    '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+-    '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
+-    '--session-id': '会话标识用 --session <id>（所有权三级解析最高优先级层；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级）',
+-    '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
+-    '--notes': '文件括注用 --file-notes "path::注 || path::注"',
+-    '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+-    '--description': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+-  }
+-
+-  // 未知参数 fail-fast
+-  const knownFlags = new Set([
+-    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
+-    '--wait', '--continue', '--non-interactive', '--interactive',
+-    '--wait-interactive', // auto 模式 TTY 直通（带值形态 `--wait-interactive true`，autoFlagValue 消费；ql-20260911-029 补注册——此前漏登记，进命令前即被未知参数 exit(2) 拦死，FR-03 整条死路）
+-    '--reason', '--options', '--answer', '--confirm-mode',
+-    '--output', '--input', '--change', '--linked-changes',
+-    '--req', '--cause', '--solution', '--result',
+-    '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+-    '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
+-    '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
+-    '--json', '--dir', '--help',
+-    '--reopen', '--from-step', '--mode',
+-    '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
+-    '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
+-    '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
+-    '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
+-    '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
+-    '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
+-    '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
+-    '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
+-    '-h',
+-  ])
+-  for (let i = 0; i < flags.length; i++) {
+-    const f = flags[i]
+-    if (f.startsWith('--')) {
+-      if (!knownFlags.has(f)) {
+-        // F10: flag 级 did-you-mean（此前只命令级有）；F10b：语义别名定向提示优先于形近猜测
+-        const semanticHint = FLAG_SEMANTIC_HINTS[f]
+-        console.error(`❌ 未知参数: ${f}`)
+-        if (semanticHint) {
+-          console.error(`   ${semanticHint}`)
+-        } else {
+-          const suggestion = didYouMean(f, [...knownFlags])
+-          if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
+-          else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
+-        }
+-        process.exit(2) // 用法错 → exit 2
+-      }
+-      // F2: 只有吃值的 flag 才跳下一个 token。布尔 flag（--done 等）不能 i++——
+-      // 否则会把紧跟的 typo flag 当成 --done 的「值」吞掉，既不校验也不生效（静默忽略）。
+-      if (VALUE_FLAGS.has(f)) i++
+-    }
+-  }
+-
+-  // ── --help/-h 短路：flag 校验通过后、任何副作用（cwd 纠正/会话创建/QUICKLOG 落盘）之前 ──
+-  // --help 此前在 knownFlags 白名单里被静默吞掉，run quick --help 会误开 quick 会话+写骨架
+-  // 条目（查询意图不该有副作用）；-h 更是被当未知参数 exit 2。帮助查询 = 用法展示 = 退出 0。
+-  if (flags.includes('--help') || flags.includes('-h')) {
+-    printStageUsage(stageName)
+-    process.exit(0)
+-  }
+-
+   // （--input 启动门原在此处，2026-09-19 上移到 quick sessionId 生成/公告之前——原位置会先
+   //  打印「会话已建立+续用提示」并上报 agent 日志再 exit(2)，留幻影会话观感；见上方坑注。）
+ 
+diff --git a/test/docs-check-fix.test.mjs b/test/docs-check-fix.test.mjs
+index 5558633..cc0dcee 100644
+--- a/test/docs-check-fix.test.mjs
++++ b/test/docs-check-fix.test.mjs
+@@ -510,8 +510,10 @@ describe('S7 CLI 无 --fix 输出与改动前（84d498a）逐字节一致（FR-0
+       // （task-08 needs-manual 默认输出）后比对 stdout 文本。
+       // stripHint：💡 候选行号行（task-08 契约演化）+ 纯位置锚教学后缀（2026-09-11 契约演化：
+       // 层2 失败 reason 尾附「行号后加 ?」教学——旧 CLI 无此后缀，字节对照按既定先例过滤）
++      // + 裸文件名指引行（2026-09-19 dab74fc 契约演化：修复指引补裸名改写全路径一条——旧 CLI
++      // 无此行，按同一先例行级过滤）
+       const POS_HINT = '（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过关键词断言，层1 行界仍校验——勿删行号）'
+-      const stripHint = (s) => String(s).split(NL_MARK).filter(l => !l.includes('💡')).join(NL_MARK).split(POS_HINT).join('')
++      const stripHint = (s) => String(s).split(NL_MARK).filter(l => !l.includes('💡') && !l.startsWith('裸文件名引用（')).join(NL_MARK).split(POS_HINT).join('')
+       assert.equal(oldR.code, newR.code, 'exit code 一致')
+       // 报告文本内容一致（旧 stderr 文本 == 新 stdout 文本，通道迁移不改文案）
+       assert.equal(stripHint(oldR.stderr), stripHint(newR.stdout), `报告文本逐字节一致（旧 stderr=${JSON.stringify(stripHint(oldR.stderr).slice(0, 200))} 新 stdout=${JSON.stringify(stripHint(newR.stdout).slice(0, 200))}）`)
+diff --git a/test/final-four-fixes.test.mjs b/test/final-four-fixes.test.mjs
+index c3268d2..138b42c 100644
+--- a/test/final-four-fixes.test.mjs
++++ b/test/final-four-fixes.test.mjs
+@@ -81,6 +81,14 @@ console.log('\n=== ③ 字面证据同义扩充 + CLI 回执（坑 verify-litera
+     const cn = '2026-08-22-rcpt'
+     const changeDir = join(d, '.sillyspec', 'changes', cn)
+     fs.mkdirSync(changeDir, { recursive: true })
++    // 证据要求声明面（2026-09-19-ceremony-pricing-five-cuts D-009 架构现代化）：evidence 门只认
++    // blast 段 evidence:true 声明（risk_level 只压仪式档不再触发证据）——夹具补声明使本对照
++    // （回执是决定性信号）在新架构下仍有对象：src/server.js 命中 evidence:true → requiredVerification
++    // 含 real_startup_once/runtime_log_evidence。
++    const mapDir = join(d, '.sillyspec', 'docs', 'app', 'modules')
++    fs.mkdirSync(mapDir, { recursive: true })
++    fs.writeFileSync(join(mapDir, '_module-map.yaml'),
++      'blast:\n  - prefixes:\n      - src/server.js\n    tier: S3\n    evidence: true\n')
+     fs.writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-08-22 00:00:00\nrisk_level: deployment-critical\n---\n# D\n\ndaemon 与 backend 集成、server.js 启动入口。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/server.js | 入口 |\n')
+     fs.writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: none\n---\n# Plan\n')
+     fs.writeFileSync(join(changeDir, 'verify-result.md'),
+diff --git a/test/review-material-pack.test.mjs b/test/review-material-pack.test.mjs
+index d4d3bbe..ce3b7e0 100644
+--- a/test/review-material-pack.test.mjs
++++ b/test/review-material-pack.test.mjs
+@@ -14,7 +14,12 @@
+  *     留位 ＋ prompt.js 主链 join 装配结果/降级 join 空串源码钉 ＋ 三模板槽在场。
+  */
+ import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+-import { join } from 'node:path'
++import { join, resolve, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++// 仓根绝对锚（cwd 无关——全套件并行时有测试 process.chdir 不还原，相对 'src' 会解析到 test/ 下 ENOENT）
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const REPO_ROOT = resolve(__dirname, '..')
+ import { tmpdir } from 'node:os'
+ import { buildReviewMaterialPack, extractDesignHotZone, extractSnippets, extractDiffSummary } from '../src/review-material-pack.js'
+ import { renderPriorRoundFindingsMd } from '../src/stage-review.js'
+@@ -42,7 +47,7 @@ function assert(name, cond, detail = '') {
+       lines.forEach((l, i) => { if (PRIMITIVE_RES.some(re => re.test(l))) hits.push(`${p}:${i + 1}: ${l.trim().slice(0, 60)}`) })
+     }
+   }
+-  walk('src')
++  walk(join(REPO_ROOT, 'src'))
+   assert('组一：src/ 全仓无「必须读取完整/素材宁可多读」两原语（task-02 改写后绝迹）', hits.length === 0, hits.slice(0, 3).join('\n'))
+ }
+ 
+@@ -62,19 +67,19 @@ function assert(name, cond, detail = '') {
+   assert('组二：extractDesignHotZone 节抽取与无命中空串', extractDesignHotZone('# D\n## 非目标\n- A\n## 其他\n- B\n', ['非目标']).includes('- A') && extractDesignHotZone('', ['非目标']) === '')
+ 
+   // 槽位：prompt.js 两分支都 join {REVIEW_MATERIALS}；stage-review.js（再审渲染体）不含该槽字面量
+-  const promptSrc = readFileSync('src/run/prompt.js', 'utf8')
++  const promptSrc = readFileSync(join(REPO_ROOT, 'src/run/prompt.js'), 'utf8')
+   const joins = promptSrc.split("'{REVIEW_MATERIALS}'").length - 1
+   assert('组二：prompt.js 正常链+降级分支均 join {REVIEW_MATERIALS}（≥2 处）', joins >= 2, `实际 ${joins} 处`)
+-  const srSrc = readFileSync('src/stage-review.js', 'utf8')
++  const srSrc = readFileSync(join(REPO_ROOT, 'src/stage-review.js'), 'utf8')
+   assert('组二：两槽互斥——stage-review.js 不含 {REVIEW_MATERIALS} 槽', !srSrc.includes('{REVIEW_MATERIALS}'))
+ }
+ 
+ // ── 组二补：extractSnippets/extractDiffSummary 导出面 ──
+ {
+-  const snip = extractSnippets('.', [{ file: 'package.json', from: 1, to: 3 }])
++  const snip = extractSnippets(REPO_ROOT, [{ file: 'package.json', from: 1, to: 3 }])
+   assert('组二补：extractSnippets 行号锚渲染', snip.includes('package.json:1-3') && snip.includes('`package.json:1-3`') === false ? snip.includes('1	{') : snip.includes('1	{') && snip.includes('package.json:1-3'))
+-  assert('组二补：extractSnippets 不可读文件跳过（空串）', extractSnippets('.', [{ file: 'no-such.js' }]) === '')
+-  const ds = await extractDiffSummary({ cwd: '.', changeName: null, withStat: false })
++  assert('组二补：extractSnippets 不可读文件跳过（空串）', extractSnippets(REPO_ROOT, [{ file: 'no-such.js' }]) === '')
++  const ds = await extractDiffSummary({ cwd: REPO_ROOT, changeName: null, withStat: false })
+   assert('组二补：extractDiffSummary 名单返回（数组形态）', Array.isArray(ds.files))
+ }
+ 
+@@ -147,10 +152,10 @@ function assert(name, cond, detail = '') {
+   assert('组四：参数缺失（changeName null）→ 空串', await assembleStageReviewMaterials({ stage: 'execute-qa', cwd: tmp, changeName: null, specBase: tmp }) === '')
+ 
+   // 接线源码钉：主链 join 装配结果；降级分支 join 空串保持；三模板槽在场（再审不含=组二既有钉）
+-  const promptSrc = readFileSync('src/run/prompt.js', 'utf8')
++  const promptSrc = readFileSync(join(REPO_ROOT, 'src/run/prompt.js'), 'utf8')
+   assert('组四：prompt.js 主链 join 目标为装配结果（非空注入接线）', promptSrc.includes('assembleStageReviewMaterials') && promptSrc.includes(".split('{REVIEW_MATERIALS}').join(reviewMaterialsMd)"))
+   assert('组四：降级分支 join 空串保持', promptSrc.includes(".split('{REVIEW_MATERIALS}').join('')"))
+-  const slotOk = ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js'].every(f => readFileSync(f, 'utf8').includes('{REVIEW_MATERIALS}'))
++  const slotOk = ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js'].every(f => readFileSync(join(REPO_ROOT, f), 'utf8').includes('{REVIEW_MATERIALS}'))
+   assert('组四：三阶段模板含 {REVIEW_MATERIALS} 槽', slotOk)
+ 
+   cleanupTmp(tmp)
+diff --git a/test/stage-review-checklist.test.mjs b/test/stage-review-checklist.test.mjs
+index c85d9d8..7528a1b 100644
+--- a/test/stage-review-checklist.test.mjs
++++ b/test/stage-review-checklist.test.mjs
+@@ -144,8 +144,8 @@ console.log('\n=== 四 stage prompt 渲染产物含全部条目字面（期望
+   const verifyBlock = SNAPSHOT_VERIFY.map(it => '   - ' + it).join('\n')
+   assert(verifyReport.prompt.includes(verifyBlock), 'verify prompt: smoke 纪律四条齐全（3 空格缩进列表行形态，逐字）')
+   assert(verifyReport.prompt.split(verifyBlock).length - 1 === 1, 'verify prompt: 纪律块恰好出现一次（无双重渲染）')
+-  assert(verifyReport.prompt.includes('local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律'),
+-    'verify prompt: 段首命中条件说明在场（commands.smoke 配置或判级 critical）')
++  assert(verifyReport.prompt.includes('local.yaml 配置 commands.smoke 或本变更命中 evidence:true 声明危险面时执行以下纪律'),
++    'verify prompt: 段首命中条件说明在场（commands.smoke 配置或 evidence:true 声明面——2026-09-19-ceremony-pricing-five-cuts D-009 措辞，判级 critical→evidence 位）')
+   // 【task-07 增量】verify 纪律段渲染形态锚：编号条目挂靠 + ①~④ 段编号 + 段尾标点（照 design §6 原文）
+   assert(verifyReport.prompt.includes('8. **smoke 纪律'),
+     'verify prompt: 纪律段挂靠「### 操作」第 8 条编号条目（8. **smoke 纪律 锚——静态导出段的结构位置）')

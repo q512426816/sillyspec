@@ -144,8 +144,8 @@ console.log('\n=== 四 stage prompt 渲染产物含全部条目字面（期望�
   const verifyBlock = SNAPSHOT_VERIFY.map(it => '   - ' + it).join('\n')
   assert(verifyReport.prompt.includes(verifyBlock), 'verify prompt: smoke 纪律四条齐全（3 空格缩进列表行形态，逐字）')
   assert(verifyReport.prompt.split(verifyBlock).length - 1 === 1, 'verify prompt: 纪律块恰好出现一次（无双重渲染）')
-  assert(verifyReport.prompt.includes('local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律'),
-    'verify prompt: 段首命中条件说明在场（commands.smoke 配置或判级 critical）')
+  assert(verifyReport.prompt.includes('local.yaml 配置 commands.smoke 或本变更命中 evidence:true 声明危险面时执行以下纪律'),
+    'verify prompt: 段首命中条件说明在场（commands.smoke 配置或 evidence:true 声明面——2026-09-19-ceremony-pricing-five-cuts D-009 措辞，判级 critical→evidence 位）')
   // 【task-07 增量】verify 纪律段渲染形态锚：编号条目挂靠 + ①~④ 段编号 + 段尾标点（照 design §6 原文）
   assert(verifyReport.prompt.includes('8. **smoke 纪律'),
     'verify prompt: 纪律段挂靠「### 操作」第 8 条编号条目（8. **smoke 纪律 锚——静态导出段的结构位置）')

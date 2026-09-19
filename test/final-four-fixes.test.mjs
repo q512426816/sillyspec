@@ -81,6 +81,14 @@ console.log('\n=== ③ 字面证据同义扩充 + CLI 回执（坑 verify-litera
     const cn = '2026-08-22-rcpt'
     const changeDir = join(d, '.sillyspec', 'changes', cn)
     fs.mkdirSync(changeDir, { recursive: true })
+    // 证据要求声明面（2026-09-19-ceremony-pricing-five-cuts D-009 架构现代化）：evidence 门只认
+    // blast 段 evidence:true 声明（risk_level 只压仪式档不再触发证据）——夹具补声明使本对照
+    // （回执是决定性信号）在新架构下仍有对象：src/server.js 命中 evidence:true → requiredVerification
+    // 含 real_startup_once/runtime_log_evidence。
+    const mapDir = join(d, '.sillyspec', 'docs', 'app', 'modules')
+    fs.mkdirSync(mapDir, { recursive: true })
+    fs.writeFileSync(join(mapDir, '_module-map.yaml'),
+      'blast:\n  - prefixes:\n      - src/server.js\n    tier: S3\n    evidence: true\n')
     fs.writeFileSync(join(changeDir, 'design.md'), '---\nauthor: t\ncreated_at: 2026-08-22 00:00:00\nrisk_level: deployment-critical\n---\n# D\n\ndaemon 与 backend 集成、server.js 启动入口。\n\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/server.js | 入口 |\n')
     fs.writeFileSync(join(changeDir, 'plan.md'), '---\nplan_level: none\n---\n# Plan\n')
     fs.writeFileSync(join(changeDir, 'verify-result.md'),

@@ -671,6 +671,83 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     console.error(`   合法变更名示例：2026-07-27-add-login（仅字母/数字/._-，不含 / \\ ..）`)
     process.exit(2)
   }
+  // ── flag 校验 + --help 短路（2026-09-19 上移至 quick 会话生成之前）──
+  // 原位置在 quick sessionId 生成之后：--input 启动门上移（坑 quick-no-input-placeholder-title）
+  // 后，run quick --help 会先建会话/落 owner/上报 agent-log 再短路——run-help-shortcircuit
+  // 零副作用契约破坏（幻影会话实测复现）。上移后未知 flag 校验与帮助短路均先于一切副作用，
+  // 且未知 flag 先于 --input 语义门报错（用法错优先级：形态错 > 语义缺）。
+  // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
+  // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
+  // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
+  // 2026-09-14-change-ownership-guards task-02：原 '--session' 条目（quick 会话名提示）随
+  // --session 升格为真实 flag（所有权会话标识）而移除——提示只对未知 flag 生效，已知 flag
+  // 挂提示是死代码；'--session-id' 是最常见形近拼法，改挂新语义指引（所有权三级标识）。
+  const FLAG_SEMANTIC_HINTS = {
+    '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
+    '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+    '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+    '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
+    '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
+    '--session-id': '会话标识用 --session <id>（所有权三级解析最高优先级层；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级）',
+    '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
+    '--notes': '文件括注用 --file-notes "path::注 || path::注"',
+    '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+    '--description': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
+  }
+
+  // 未知参数 fail-fast
+  const knownFlags = new Set([
+    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
+    '--wait', '--continue', '--non-interactive', '--interactive',
+    '--wait-interactive', // auto 模式 TTY 直通（带值形态 `--wait-interactive true`，autoFlagValue 消费；ql-20260911-029 补注册——此前漏登记，进命令前即被未知参数 exit(2) 拦死，FR-03 整条死路）
+    '--reason', '--options', '--answer', '--confirm-mode',
+    '--output', '--input', '--change', '--linked-changes',
+    '--req', '--cause', '--solution', '--result',
+    '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
+    '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
+    '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
+    '--json', '--dir', '--help',
+    '--reopen', '--from-step', '--mode',
+    '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
+    '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
+    '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
+    '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
+    '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
+    '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
+    '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
+    '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
+    '-h',
+  ])
+  for (let i = 0; i < flags.length; i++) {
+    const f = flags[i]
+    if (f.startsWith('--')) {
+      if (!knownFlags.has(f)) {
+        // F10: flag 级 did-you-mean（此前只命令级有）；F10b：语义别名定向提示优先于形近猜测
+        const semanticHint = FLAG_SEMANTIC_HINTS[f]
+        console.error(`❌ 未知参数: ${f}`)
+        if (semanticHint) {
+          console.error(`   ${semanticHint}`)
+        } else {
+          const suggestion = didYouMean(f, [...knownFlags])
+          if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
+          else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
+        }
+        process.exit(2) // 用法错 → exit 2
+      }
+      // F2: 只有吃值的 flag 才跳下一个 token。布尔 flag（--done 等）不能 i++——
+      // 否则会把紧跟的 typo flag 当成 --done 的「值」吞掉，既不校验也不生效（静默忽略）。
+      if (VALUE_FLAGS.has(f)) i++
+    }
+  }
+
+  // ── --help/-h 短路：flag 校验通过后、任何副作用（cwd 纠正/会话创建/QUICKLOG 落盘）之前 ──
+  // --help 此前在 knownFlags 白名单里被静默吞掉，run quick --help 会误开 quick 会话+写骨架
+  // 条目（查询意图不该有副作用）；-h 更是被当未知参数 exit 2。帮助查询 = 用法展示 = 退出 0。
+  if (flags.includes('--help') || flags.includes('-h')) {
+    printStageUsage(stageName)
+    process.exit(0)
+  }
+
   // quick 会话隔离（D-001@v1 + D-003@v1 + §4.4 跨进程传递）：每会话用 sessionId 作 changeName，
   // DB 分行 progress.quick-<uuid8>，避免并行 quick 会话共享单行 progress.default.quick 互相覆盖。
   // sessionId = crypto.randomUUID 前 8 hex（摒弃旧 quick-YYYYMMDD-HHMMSS 时间戳，同秒并发撞）。
@@ -719,8 +796,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // 零沉没成本）。原位置在 flag 校验之后，但 sessionId 生成/「已建立」公告与 agent-log 平台
         // 上报都在其之前——先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了一条
         // 永不启动的 agent 日志（2026-09-19 实测踩）；上移到 id 生成前，拒绝路径零输出副作用。
-        // --help/-h 豁免：帮助查询不该被拦——原实现靠「--help 短路在本门之前」保证，上移后 flag
-        // 短路尚未到达，此处显式豁免。done-like（--done/--status/--skip/--reset/--reopen）与
+        // --help/-h 豁免：帮助查询不该被拦——flag 校验+--help 短路块已于 2026-09-19 上移至本块
+        // 之前（见上方「flag 校验 + --help 短路」段注记），帮助路径到不了这里；本豁免保留为纵深
+        // 防御。done-like（--done/--status/--skip/--reset/--reopen）与
         // --cancel 不受限（isDoneLike 含前五者）；--linked-changes 非空可从关联变更提标题。
         if (!(isDoneLike || isCancel) && !inputText
           && !(Array.isArray(linkedChanges) && linkedChanges.length > 0)
@@ -881,78 +959,6 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 语义出口在 completeStep → handleArchiveConfirmStep → archiveChangeDirectory（task-02 只
   // 注册白名单透传，本行补 includes 解析进 completeStep options，isNoDocs 同款先例）。
   const isSkipApply = flags.includes('--skip-apply')
-
-  // F10b（ql-20260818-010）：语义别名定向提示。did-you-mean 按编辑距离猜形近 flag，猜中的常是
-  // 形近但语义错的（--title → --files，ql-20260818-003 负面③实证）。常见「语义别名」在此登记
-  // 定向指引：命中时替代 did-you-mean 打印，引导到真正承载该语义的 flag/机制。
-  // 2026-09-14-change-ownership-guards task-02：原 '--session' 条目（quick 会话名提示）随
-  // --session 升格为真实 flag（所有权会话标识）而移除——提示只对未知 flag 生效，已知 flag
-  // 挂提示是死代码；'--session-id' 是最常见形近拼法，改挂新语义指引（所有权三级标识）。
-  const FLAG_SEMANTIC_HINTS = {
-    '--title': 'QUICKLOG 条目标题无独立参数——从 --output 的「需求：」字段自动提取（写成一句语义化短标题即可）',
-    '--message': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
-    '--summary': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
-    '--result': '结果摘要用 --output（quick 末步须含 需求：/根因：/方案：/结果： 四字段）',
-    '--name': 'quick 会话名由 CLI 自动分配（quick-<hash>），恢复会话用 --change <quick-session-id>；关联变更用 --linked-changes',
-    '--session-id': '会话标识用 --session <id>（所有权三级解析最高优先级层；缺省 env SILLYSPEC_SESSION_ID，再缺省 anon@<host> 机器级降级）',
-    '--note': '文件括注用 --file-notes "path::注 || path::注"；启动时任务描述用 --input',
-    '--notes': '文件括注用 --file-notes "path::注 || path::注"',
-    '--desc': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
-    '--description': '启动时任务描述用 --input；QUICKLOG 标题从 --output「需求：」自动提取',
-  }
-
-  // 未知参数 fail-fast
-  const knownFlags = new Set([
-    '--done', '--skip', '--status', '--reset', '--confirm', '--skip-approval', '--cancel', '--ql',
-    '--wait', '--continue', '--non-interactive', '--interactive',
-    '--wait-interactive', // auto 模式 TTY 直通（带值形态 `--wait-interactive true`，autoFlagValue 消费；ql-20260911-029 补注册——此前漏登记，进命令前即被未知参数 exit(2) 拦死，FR-03 整条死路）
-    '--reason', '--options', '--answer', '--confirm-mode',
-    '--output', '--input', '--change', '--linked-changes',
-    '--req', '--cause', '--solution', '--result',
-    '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id', '--scan-run-id',
-    '--files', '--file-notes', '--allow-new', '--allow-delete', '--force-baseline', '--force-rescan',
-    '--no-docs', // L2 门禁文档认领显式豁免（task-02：布尔 flag 不吃值，audit 链 docClaim → exempt-no-docs）
-    '--json', '--dir', '--help',
-    '--reopen', '--from-step', '--mode',
-    '--deep', '--quick', '--standard', // scan profile 三档显式选择（scan-profile.js 从 argv 读；互斥见下方 PROFILE_FLAGS 检测）
-    '--adopt-branch', // execute 显式收编既有 sillyspec/<change> 分支为 worktree 工作分支（坑 worktree-user-branch-conflict）
-    '--diff', '--base', '--full', '--report', // scan diff（D-001：command.js 只补 flag，裸 token 解析归 index.js 子命令拦截）
-    '--meta', // P1-3：渲染 SS-META 机器块（布尔 flag，不吃值）
-    '--session', // 显式会话标识（吃值，VALUE_FLAGS 同步登记；2026-09-14-change-ownership-guards task-02：启动 claim 消费，所有权三级解析最高优先级层）
-    '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
-    '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
-    '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
-    '-h',
-  ])
-  for (let i = 0; i < flags.length; i++) {
-    const f = flags[i]
-    if (f.startsWith('--')) {
-      if (!knownFlags.has(f)) {
-        // F10: flag 级 did-you-mean（此前只命令级有）；F10b：语义别名定向提示优先于形近猜测
-        const semanticHint = FLAG_SEMANTIC_HINTS[f]
-        console.error(`❌ 未知参数: ${f}`)
-        if (semanticHint) {
-          console.error(`   ${semanticHint}`)
-        } else {
-          const suggestion = didYouMean(f, [...knownFlags])
-          if (suggestion) console.error(`   你是想输入「${suggestion}」吗？`)
-          else console.error(`已知参数: ${[...knownFlags].sort().join(', ')}`)
-        }
-        process.exit(2) // 用法错 → exit 2
-      }
-      // F2: 只有吃值的 flag 才跳下一个 token。布尔 flag（--done 等）不能 i++——
-      // 否则会把紧跟的 typo flag 当成 --done 的「值」吞掉，既不校验也不生效（静默忽略）。
-      if (VALUE_FLAGS.has(f)) i++
-    }
-  }
-
-  // ── --help/-h 短路：flag 校验通过后、任何副作用（cwd 纠正/会话创建/QUICKLOG 落盘）之前 ──
-  // --help 此前在 knownFlags 白名单里被静默吞掉，run quick --help 会误开 quick 会话+写骨架
-  // 条目（查询意图不该有副作用）；-h 更是被当未知参数 exit 2。帮助查询 = 用法展示 = 退出 0。
-  if (flags.includes('--help') || flags.includes('-h')) {
-    printStageUsage(stageName)
-    process.exit(0)
-  }
 
   // （--input 启动门原在此处，2026-09-19 上移到 quick sessionId 生成/公告之前——原位置会先
   //  打印「会话已建立+续用提示」并上报 agent 日志再 exit(2)，留幻影会话观感；见上方坑注。）

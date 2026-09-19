@@ -1,0 +1,118 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-f64f6e09",
+  "totals": {
+    "files": 6,
+    "additions": 110,
+    "deletions": 89
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 80,
+      "deletions": 74,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/docs-check-fix.test.mjs",
+      "declared": true,
+      "additions": 3,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/final-four-fixes.test.mjs",
+      "declared": true,
+      "additions": 8,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/review-material-pack.test.mjs",
+      "declared": true,
+      "additions": 14,
+      "deletions": 9,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/stage-review-checklist.test.mjs",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": [
+      {
+        "file": "src/knowledge-stats.js",
+        "sessions": [
+          "quick-cbafd29a"
+        ]
+      },
+      {
+        "file": "src/run/shared.js",
+        "sessions": [
+          "quick-cbafd29a"
+        ]
+      },
+      {
+        "file": "test/knowledge-fr-stats.test.mjs",
+        "sessions": [
+          "quick-cbafd29a"
+        ]
+      }
+    ]
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 6,
+    "codeFileCount": 1,
+    "testFileCount": 4,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/command.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/docs-check-fix.test.mjs",
+      "test/final-four-fixes.test.mjs",
+      "test/review-material-pack.test.mjs",
+      "test/stage-review-checklist.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-017-fa4d",
+  "sessionId": "quick-f64f6e09",
+  "savedAt": "2026-09-19T11:17:08.567Z",
+  "patchSha256": "fbbe4f2ee7745622c5d53c8fa980037e6261b2ddc860531f222e530e81330330",
+  "patchStatus": "ok"
+}

@@ -14,7 +14,12 @@
  *     留位 ＋ prompt.js 主链 join 装配结果/降级 join 空串源码钉 ＋ 三模板槽在场。
  */
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// 仓根绝对锚（cwd 无关——全套件并行时有测试 process.chdir 不还原，相对 'src' 会解析到 test/ 下 ENOENT）
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = resolve(__dirname, '..')
 import { tmpdir } from 'node:os'
 import { buildReviewMaterialPack, extractDesignHotZone, extractSnippets, extractDiffSummary } from '../src/review-material-pack.js'
 import { renderPriorRoundFindingsMd } from '../src/stage-review.js'
@@ -42,7 +47,7 @@ function assert(name, cond, detail = '') {
       lines.forEach((l, i) => { if (PRIMITIVE_RES.some(re => re.test(l))) hits.push(`${p}:${i + 1}: ${l.trim().slice(0, 60)}`) })
     }
   }
-  walk('src')
+  walk(join(REPO_ROOT, 'src'))
   assert('组一：src/ 全仓无「必须读取完整/素材宁可多读」两原语（task-02 改写后绝迹）', hits.length === 0, hits.slice(0, 3).join('\n'))
 }
 
@@ -62,19 +67,19 @@ function assert(name, cond, detail = '') {
   assert('组二：extractDesignHotZone 节抽取与无命中空串', extractDesignHotZone('# D\n## 非目标\n- A\n## 其他\n- B\n', ['非目标']).includes('- A') && extractDesignHotZone('', ['非目标']) === '')
 
   // 槽位：prompt.js 两分支都 join {REVIEW_MATERIALS}；stage-review.js（再审渲染体）不含该槽字面量
-  const promptSrc = readFileSync('src/run/prompt.js', 'utf8')
+  const promptSrc = readFileSync(join(REPO_ROOT, 'src/run/prompt.js'), 'utf8')
   const joins = promptSrc.split("'{REVIEW_MATERIALS}'").length - 1
   assert('组二：prompt.js 正常链+降级分支均 join {REVIEW_MATERIALS}（≥2 处）', joins >= 2, `实际 ${joins} 处`)
-  const srSrc = readFileSync('src/stage-review.js', 'utf8')
+  const srSrc = readFileSync(join(REPO_ROOT, 'src/stage-review.js'), 'utf8')
   assert('组二：两槽互斥——stage-review.js 不含 {REVIEW_MATERIALS} 槽', !srSrc.includes('{REVIEW_MATERIALS}'))
 }
 
 // ── 组二补：extractSnippets/extractDiffSummary 导出面 ──
 {
-  const snip = extractSnippets('.', [{ file: 'package.json', from: 1, to: 3 }])
+  const snip = extractSnippets(REPO_ROOT, [{ file: 'package.json', from: 1, to: 3 }])
   assert('组二补：extractSnippets 行号锚渲染', snip.includes('package.json:1-3') && snip.includes('`package.json:1-3`') === false ? snip.includes('1	{') : snip.includes('1	{') && snip.includes('package.json:1-3'))
-  assert('组二补：extractSnippets 不可读文件跳过（空串）', extractSnippets('.', [{ file: 'no-such.js' }]) === '')
-  const ds = await extractDiffSummary({ cwd: '.', changeName: null, withStat: false })
+  assert('组二补：extractSnippets 不可读文件跳过（空串）', extractSnippets(REPO_ROOT, [{ file: 'no-such.js' }]) === '')
+  const ds = await extractDiffSummary({ cwd: REPO_ROOT, changeName: null, withStat: false })
   assert('组二补：extractDiffSummary 名单返回（数组形态）', Array.isArray(ds.files))
 }
 
@@ -147,10 +152,10 @@ function assert(name, cond, detail = '') {
   assert('组四：参数缺失（changeName null）→ 空串', await assembleStageReviewMaterials({ stage: 'execute-qa', cwd: tmp, changeName: null, specBase: tmp }) === '')
 
   // 接线源码钉：主链 join 装配结果；降级分支 join 空串保持；三模板槽在场（再审不含=组二既有钉）
-  const promptSrc = readFileSync('src/run/prompt.js', 'utf8')
+  const promptSrc = readFileSync(join(REPO_ROOT, 'src/run/prompt.js'), 'utf8')
   assert('组四：prompt.js 主链 join 目标为装配结果（非空注入接线）', promptSrc.includes('assembleStageReviewMaterials') && promptSrc.includes(".split('{REVIEW_MATERIALS}').join(reviewMaterialsMd)"))
   assert('组四：降级分支 join 空串保持', promptSrc.includes(".split('{REVIEW_MATERIALS}').join('')"))
-  const slotOk = ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js'].every(f => readFileSync(f, 'utf8').includes('{REVIEW_MATERIALS}'))
+  const slotOk = ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js'].every(f => readFileSync(join(REPO_ROOT, f), 'utf8').includes('{REVIEW_MATERIALS}'))
   assert('组四：三阶段模板含 {REVIEW_MATERIALS} 槽', slotOk)
 
   cleanupTmp(tmp)
