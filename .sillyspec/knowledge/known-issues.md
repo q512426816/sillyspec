@@ -152,3 +152,9 @@ archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)—�
 ## worktree 内直跑全量测试的环境性失败族（stash 基线对照成本，待立项）
 
 execute 期在隔离 worktree 内跑 `npm test` 全量时，CLI 子进程类测试（spec-dir/mcp-server/init-*/platform-*/run-* 等族）被 src/index.js 顶层 worktree-cwd 硬拦守卫拦下——2026-09-16 cross-layer-contract-probe 实证 13 文件假红，实现子代理被迫 stash 基线对照自证 IDENTICAL-FAILURE-SETS（实打实的 token/时间成本）。--done 主路径已被隔离快照覆盖（gate-snapshot），但「worktree 内自验全量」仍是摩擦面。**待立项方向**：worktree cwd 下自动豁免该守卫族（known_failures 注入或 run-tests 探测 worktree 跳过守卫族文件），或 execute prompt 注入「worktree 内自验用定向测试面，全量留给 --done 快照」指引。（来源：2026-09-16 实现子代理基线对照报告）
+
+## quick-gate-required-evidence-flake（2026-09-19，未解）
+**现象**：quick --done 实测门（runModuleSubset deps(auto) 30 文件）三连红于 test/verify-required-evidence-check.test.mjs（~155ms 'test failed'，无断言明细）；同一命令在主代理环境八上下文全绿（单跑/配对/5 文件模拟/30 文件 spawnSync/execSync 同款/env 注入/5 轮循环）。
+**根因**：未定位——差异仅在 CLI 进程内派生子进程的未识别条件（疑并发压力或 hook 环境）。
+**护栏**：audit 逃逸通道（SILLYSPEC_QUICK_TEST_GATE=skip 带证据留痕）；复现时先独立验证同命令再定性。
+**证据**：quick-450636f3 三连红输出；主代理 8 次复现全绿（含 env 注入假说排除）。

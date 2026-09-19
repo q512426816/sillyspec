@@ -60,6 +60,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - bash|heredoc|截断 → [known-issues.md#bash-heredoc-truncation（2026-09-12 双会话实证）](known-issues.md#bash-heredoc-truncation（2026-09-12 双会话实证）)
 - wt-commit|dispatch|幽灵命令 → [known-issues.md#execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）](known-issues.md#execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）)
 
+- verify-required-evidence|门脆断|quick gate|deps(auto)|test failed → [known-issues.md#quick-gate-required-evidence-flake（2026-09-19，未解）](known-issues.md#quick-gate-required-evidence-flake2026-09-19未解)
 ## Decisions
 - change-management|quicklog|标签|切段|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
 - core-engine|SQLite|FTS5|db-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)
