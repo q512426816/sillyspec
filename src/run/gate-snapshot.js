@@ -381,10 +381,39 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     // local.yaml 由下方 cfg 段显式复制（单一来源，不经 overlay）。
     const overlayRoot = sourceRoot || cwd
     let overlaid = 0
+    // 双写一致性（2026-09-20 红线机检变更实证：主 agent 在主仓直写而 execute 已建 worktree 时，
+    // overlay 源=worktree 拿陈旧内容盖掉快照 HEAD 的新版——快照内 import 找不到新导出→门禁假红）。
+    // 三方取新：sourceRoot 与 cwd 同文件内容不同时，选「与快照 HEAD 基线不同」的那份；
+    // 两份都变了且互不相等（真分叉）→ 显式警告 + 取 cwd（主仓直写=本会话最新编辑位约定）。
+    // 行尾归一（坑 autocrlf-byte-misjudge）：本机 autocrlf=true 时快照 checkout 是 CRLF、
+    // 工作区文件常是 LF——字节直比会误判「两边都改」。比较一律 CRLF→LF 归一后做。
+    const normalizeEol = (buf) => String(buf).replace(/\r\n/g, '\n')
+    const headFileContent = (rel) => {
+      try { return normalizeEol(readFileSync(join(snapshotRoot, rel))) } catch { return null }
+    }
     for (const f of files) {
       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
       if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) continue
-      const src = join(overlayRoot, f)
+      let src = join(overlayRoot, f)
+      if (sourceRoot && sourceRoot !== cwd) {
+        const wtPath = join(sourceRoot, f), cwdPath = join(cwd, f)
+        if (existsSync(wtPath) && existsSync(cwdPath)) {
+          let wtText = null, cwdText = null
+          try { wtText = normalizeEol(readFileSync(wtPath)) } catch { /* 读失败不介入 */ }
+          try { cwdText = normalizeEol(readFileSync(cwdPath)) } catch { /* 读失败不介入 */ }
+          if (wtText !== null && cwdText !== null && wtText !== cwdText) {
+            const base = headFileContent(f)
+            const wtDiff = base === null || wtText !== base
+            const cwdDiff = base === null || cwdText !== base
+            if (cwdDiff && !wtDiff) {
+              src = cwdPath // 主仓直写新、worktree 停在基线 → 取主仓
+            } else if (!(wtDiff && !cwdDiff)) {
+              console.warn(`⚠️ 快照双写分叉：${f} 在主仓与 worktree 均有不同修改——取主仓（本会话最新编辑位），请尽快对齐两边`)
+              src = cwdPath
+            } // wtDiff && !cwdDiff → 保持 worktree（正常流零改变）
+          }
+        }
+      }
       if (!existsSync(src)) continue
       const dst = join(snapshotRoot, f)
       mkdirSync(dirname(dst), { recursive: true })

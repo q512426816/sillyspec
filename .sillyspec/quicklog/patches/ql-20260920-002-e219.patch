@@ -1,0 +1,377 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index 4831832d..e88fb921 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -36,3 +36,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - ql-20260919-004-cbd8 | 快照层回归钉（回放 2026-09-18 摩擦#5 收口核验）：createVerifyGateSnapshot native 收养态（meta 缺席、cwd 即 linked worktree）untracked 新文件内容进快照——修复链已在 e47ab3a（ql-20260918-010）resolve 层落地（native 分支 porcelain --untracked-files=all 并入），本钉补快照层端到端守卫（修复前 untracked 不进文件集→overlay 漏拷→快照内 ERR_MODULE_NOT_FOUND 裸崩）；test/verify-gate-snapshot.test.mjs 3→4，实证 tmp 仓 native worktree 复跑通过
+ - ql-20260919-006-120b | quick --input 启动门上移（2026-09-19 实测踩）：原位置在 flag 校验后，但 sessionId 生成/「已建立」公告与 agent-log 平台上报都在其之前——缺 --input 的拒绝路径先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了永不启动的 agent 日志；上移至 id 生成前（--help/-h 显式豁免保住帮助查询），拒绝路径零输出副作用。test/quick-start-input-hint.test.mjs 13→15 断言（拒绝路径无公告/无日志上报 + --help exit 0 不被拦）
+ - ql-20260920-001 | quick-audit codeFiles 分类器 monorepo 子包修复（multi-agent-platform 回带收口实证：6 个 sillyhub-daemon/src/**+frontend/src/** 文件被「纯 doc/配置」误判 SKIP）——双通道：路径段全等（任意层 src/test/tests/__tests__，长名不误蹭）+ 代码扩展名兜底（ts/tsx/py 等 20+ 后缀覆盖 backend/app/**.py）；方向宁可多跑不可漏跑；test/quick-test-gate.test.mjs 28/28（+3b 子包用例+防误蹭）
++- ql-20260920-002 | 同批 runtime 侧：detectVerifyBatchFinish 挂 verify --done 收尾路径（镜像 execute 批量模式）+gate-snapshot overlay 三方取新
+diff --git a/.sillyspec/docs/sillyspec/modules/stages.changelog.md b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+index 0a56365f..d63ebfc5 100644
+--- a/.sillyspec/docs/sillyspec/modules/stages.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/stages.changelog.md
+@@ -44,3 +44,4 @@
+ | 2026-09-17 | ql-20260917-001-7cd6（quick） | execute 歧义裁决权限声明（Superpowers v6.3 recorded rulings 采纳⑤剩余）：「确认执行范围」步新增「歧义裁决权限」段——非破坏性歧义（可逆/局部/不越 allowed_paths/不推翻 D-xxx）主代理自行裁决+落盘主仓 decisions.md 新条目（## D-xxx@v1: 接续编号，正文=歧义/选择/理由/影响 task）+Wave 完成披露「执行期裁决 N 条」供 review/verify 对账；破坏性/不可逆（删数据/重写他人模块/改共享配置或门禁/跳过测试/扩边界/推翻决策/跨仓）--wait 停人；拿不准按破坏性（fail-closed）；重复歧义引用既有条目。buildWavePrompt 加紧凑回呼（子代理报告冲突回主代理裁决、子代理不自行记 decisions）。新增 test/execute-ambiguity-ruling.test.mjs（15 断言）；docs/prompt/execute.md 镜像同步；docs check --fix 顺带重锚 architecture-4a/platform-interface-map/prompt-control-debt 三文档 execute.js 行漂移。 |
+ | 2026-09-17 | ql-20260917-002-5d8f（quick） | plan 全局硬约束段 + 实现者子代理触达（Superpowers v6.0 writing-plans 采纳④；Interfaces 半已完成——TaskCard provides/expects_from + postcheck 硬校验早已有，本项只补约束触达）：plan.js full 模板「## 任务总表/关键路径」后新增「## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）」段（版本底线/依赖限制/命名文案/精确值/兼容策略/非目标边界；无跨 task 硬约束可省略）+ 汇总指引句同步；execute.js buildWavePrompt 机械提取 plan.md 该段作子代理 prompt 要点第 9 条逐字下发（「与本 task 蓝图冲突时以本段为准并上报主代理」；designHotzone 只达 Wave 协调者层，本段补齐子代理触达）——advisory：段缺/空体/坏文件零注入零阻断（对齐 hotzone 模式），超 2400 字截断。新增 test/plan-global-constraints.test.mjs（14 断言）；docs/prompt/plan.md 镜像同步；platform-interface-map 行漂移重锚。plan-postcheck 存在性校验（warning 级）留账未做。 |
+ | 2026-09-17 | ql-20260917-004-1a8a（quick） | quick 流程反馈两修复：① SKILL 文档 --input 从「强烈建议」升「启动必带（agent 视角必填）」——参数表补漏带代价（CLI 启动警告劝重启白跑一轮/占位标题/平台隐藏），生命周期命令与全部典型用法示例补 --input（豁免：关联变更可自动提取标题、CI 无语义场景）；② quick.js step3「QUICKLOG 正文核对」补括注示例由 auth/captcha 仿真路径（router.py/captcha_service.py）改为带「虚构占位示例，非任何会话的真实条目」标注的 <path/to/…> 占位符并明示核对对象是本会话 <quicklog-id> 条目——多会话并行时不再可能误认成本会话条目。docs/prompt/quick.md+_extracted.json 镜像流水线同步（顺带修复 step1 知识库注入段存量漂移）。 |
++- ql-20260920-002 | P0 批（对撞实验驱动）：①plan.js TaskCard 步默认主代理直填（≤8任务/单仓不派子代理；>8且跨模块才batch≤3——6填卡子代理6.7M誊写税的终结）+brainstorm.js探索步薄跑判定（需求来源已收敛→直书结论省明知故问交互轮，Grill/规范文件永不省）②run/complete.js detectVerifyBatchFinish（verify批量补完：报告结论已填+facts在场+锚定步过→剩余step一次标完，收尾门禁照常全跑——verify尾巴110req/35M编排税的终结；8/8直测）③run/gate-snapshot.js双写一致性（主仓直写新/worktree陈旧→快照三方取新，行尾归一防autocrlf误判——红线机检变更import假红根因；5/5快照测试含新回归钉）
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index b18e68cd..b11b6c30 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -29,7 +29,7 @@
+       {
+         "index": 2,
+         "name": "对话式探索与需求澄清",
+-        "prompt": "通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。\n\n### A. 原型/设计图分析（如用户提供）\n如果用户提供了截图、图片或 HTML 原型，先分析提取：\n1. 识别图片中的页面结构（区域、组件、布局）\n2. 提取表单字段（名称、类型、必填、选项）\n3. 提取交互流程（页面跳转、按钮行为）\n4. 提取标注和备注（业务规则、权限说明）\n5. 展示分析结果，请用户确认遗漏\n- 没有原型则跳过本节\n- 图片信息 > 文字描述，不要忽略视觉信息\n\n### B. 对话式探索\n1. 从最核心的一个问题开始（用户到底想要什么？）\n2. **提出问题后必须暂停等待用户回答**，不要替用户回答\n3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答\n4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准\n5. 多选题优于开放式问题\n6. YAGNI — 砍掉不需要的功能\n\n### C. 需求范围评估（拆分/批量判断）\n1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：\n   - 3+ 个可独立交付的功能模块\n   - 3+ 种角色有不同权限和视图\n   - 跨页面状态流转（审批流、多步表单）\n   - 模块间耦合度低可独立开发\n2. 满足以下条件建议走**批量模式**：\n   - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）\n   - 本质是「模板 × 数据」而非 N 个独立功能\n   - 直接逐个开发会导致 plan.md 膨胀和上下文溢出\n3. 需要拆分 → 生成 MASTER.md，规划子阶段\n4. 检测到批量模式 → 输出提示并建议用户确认\n5. 都不需要 → 继续（简单 CRUD 不拆）\n\n**批量模式指引**（确认后，后续 plan/execute 按此调整）：\n- **不要**把每个实例列为独立任务（不要写 100 个 checkbox）\n- plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内\n- 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文\n- execute 每个 Wave 独立模块，Wave 间通过接口定义解耦\n- verify 用脚本全量验证 + AI 抽查边界案例\n\n**半批量场景**（大部分相似但有少量特殊任务）：\n- **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）\n- **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）\n- **孤立任务**（1 个）→ 走标准开发流程\n- 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码\n- 架构设计时预留扩展点（hooks/overrides）\n\n### D. 需求澄清 Grill（对仍未稳定的歧义点）\n汇总 B/C 后仍未稳定的歧义点，按类型列出：\n- 术语歧义：同一个词可能指向不同实体/角色/状态\n- 边界歧义：哪些场景做、哪些不做、失败怎么处理\n- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案\n- 代码冲突：用户描述与现有代码/scan/module 文档不一致\n\n**能通过代码或文档确认的不要问用户，先读取**：\n- `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n- `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n- `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n- 相关源码文件\n\n**给每个未解决歧义分级**：\n- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权\n- P1：影响用户场景、验收标准、错误处理、默认值\n- P2：文案、展示细节、低风险交互偏好\n\n**执行规则**：\n- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据\n- P1/P2 歧义 >= 3 个：按优先级逐个澄清\n- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题\n- 不要问用户\"要不要 Grill\"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答\n\n**追问策略**（进入澄清时）：\n1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义\n2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论\n3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term\n4. **模糊词精化**：把\"账户/任务/状态/会话/执行\"这类多义词拆成明确实体或状态\n5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）\n6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明\"可能不该新增\"\n\n**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：\n\n- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`\n- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`\n- 每条记录追加到文件末尾，格式如下：\n\n```markdown\n## D-001@v1: <短标题>\n- type: term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | rejected | superseded\n- source: user | code | docs\n- question: <被解决的问题>\n- answer: <用户确认或代码查证结果>\n- normalized_requirement: <可测试的约束>\n- impacts: [FR-?, task-?, verify-?]\n- evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n```\n\n- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）\n\n### 铁律 — 不要自问自答 / 等待用户\n- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说\"需求已明确\"**（命令由 CLI 在下方注入）\n- 需要拆分或批量模式时：列出方案并暂停等用户确认\n- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）\n- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问\n\n### 输出\n需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）\n\n### 注意\n- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清\n- 用户通过 `--continue --answer \"回答\"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出",
++        "prompt": "### ⚡ 薄跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）\n**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**薄跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。薄跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用薄跑、永不省**。\n\n通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。\n\n### A. 原型/设计图分析（如用户提供）\n如果用户提供了截图、图片或 HTML 原型，先分析提取：\n1. 识别图片中的页面结构（区域、组件、布局）\n2. 提取表单字段（名称、类型、必填、选项）\n3. 提取交互流程（页面跳转、按钮行为）\n4. 提取标注和备注（业务规则、权限说明）\n5. 展示分析结果，请用户确认遗漏\n- 没有原型则跳过本节\n- 图片信息 > 文字描述，不要忽略视觉信息\n\n### B. 对话式探索\n1. 从最核心的一个问题开始（用户到底想要什么？）\n2. **提出问题后必须暂停等待用户回答**，不要替用户回答\n3. 根据用户回答判断：信息够了 → 进入 C/D 或正常完成 / 需要追问 → 暂停等待下一个回答\n4. 探索顺序（按需）：目的 → 约束 → 边界 → 成功标准\n5. 多选题优于开放式问题\n6. YAGNI — 砍掉不需要的功能\n\n### C. 需求范围评估（拆分/批量判断）\n1. 根据分析结果判断复杂度。满足以下任意 2 条建议拆分：\n   - 3+ 个可独立交付的功能模块\n   - 3+ 种角色有不同权限和视图\n   - 跨页面状态流转（审批流、多步表单）\n   - 模块间耦合度低可独立开发\n2. 满足以下条件建议走**批量模式**：\n   - 任务数量 > 10 且任务间有重复模式（如 100 个报表、50 个表单、N 个相似页面）\n   - 本质是「模板 × 数据」而非 N 个独立功能\n   - 直接逐个开发会导致 plan.md 膨胀和上下文溢出\n3. 需要拆分 → 生成 MASTER.md，规划子阶段\n4. 检测到批量模式 → 输出提示并建议用户确认\n5. 都不需要 → 继续（简单 CRUD 不拆）\n\n**批量模式指引**（确认后，后续 plan/execute 按此调整）：\n- **不要**把每个实例列为独立任务（不要写 100 个 checkbox）\n- plan 设计通用架构（引擎/模板/配置格式），任务数控制在 10 个以内\n- 数据转换用脚本完成（Excel → 配置文件），不消耗 AI 上下文\n- execute 每个 Wave 独立模块，Wave 间通过接口定义解耦\n- verify 用脚本全量验证 + AI 抽查边界案例\n\n**半批量场景**（大部分相似但有少量特殊任务）：\n- **主簇**（>10 个相似）→ 走批量模式（引擎 + 配置）\n- **小簇**（2-5 个相似）→ 走简化版批量（基于主簇模板扩展）\n- **孤立任务**（1 个）→ 走标准开发流程\n- 建议用「继承 + override」配置解决特殊任务，配置解决不了的才写定制代码\n- 架构设计时预留扩展点（hooks/overrides）\n\n### D. 需求澄清 Grill（对仍未稳定的歧义点）\n汇总 B/C 后仍未稳定的歧义点，按类型列出：\n- 术语歧义：同一个词可能指向不同实体/角色/状态\n- 边界歧义：哪些场景做、哪些不做、失败怎么处理\n- 前提风险：这个需求是否不该存在，是否已有更简单的现有方案\n- 代码冲突：用户描述与现有代码/scan/module 文档不一致\n\n**能通过代码或文档确认的不要问用户，先读取**：\n- `{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md`\n- `{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md`\n- `{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml`\n- 相关源码文件\n\n**给每个未解决歧义分级**：\n- P0：影响数据模型、权限边界、状态机/工作流、兼容策略、不可逆架构取舍、跨模块所有权\n- P1：影响用户场景、验收标准、错误处理、默认值\n- P2：文案、展示细节、低风险交互偏好\n\n**执行规则**：\n- P1/P2 歧义 0-2 个且无 P0：不进入 Grill 追问，在后续设计中内联处理并记录依据\n- P1/P2 歧义 >= 3 个：按优先级逐个澄清\n- 任意 P0 歧义：必须澄清；如果需要用户判断，暂停问一个问题\n- 不要问用户\"要不要 Grill\"。由你根据歧义风险决定；只在需要业务判断/取舍时等待用户回答\n\n**追问策略**（进入澄清时）：\n1. **一次只问一个问题**：按 P0 → P1 → P2 顺序，深度优先处理最关键歧义\n2. **能查代码就不问**：问题可由源码、scan 文档、模块文档回答时，先查证并给出结论\n3. **术语碰撞立即指出**：用户用词与 glossary/代码实体/模块文档冲突时，当场说明冲突并要求选择 canonical term\n4. **模糊词精化**：把\"账户/任务/状态/会话/执行\"这类多义词拆成明确实体或状态\n5. **场景压力测试**：用具体 case 逼出边界（失败重试、部分成功、历史数据、权限不足、并发修改、兼容旧配置）\n6. **前提挑战优先**：如果现有设计或代码已有简单路径，先说明\"可能不该新增\"\n\n**决策记录（增量落盘，防会话中断丢失）**：每解决一个有实现影响的问题（不要把闲聊都记录进去），**当场追加**写入 `{SPEC_ROOT}/changes/<change-name>/decisions.md`——不要只在对话里留草稿等「写设计文档」步统一落盘：会话随时可能中断，未落盘的决策无法跨会话恢复。落盘规则：\n\n- **优先跑 `sillyspec fourpiece-init --change <change-name>` 生成骨架再填语义**（2026-09-09 起：proposal/requirements/decisions 的 frontmatter/章节标题由 CLI 预生成，已存在不覆盖——手写 frontmatter/章节漏项是格式返工根源）；design.md 骨架归 `sillyspec design-init`\n- 文件不存在则先创建：变更目录缺失先 `mkdir -p {SPEC_ROOT}/changes/<change-name>`；文件头部写 YAML frontmatter（`author: <git-user>` / `created_at: <now-datetime>`）+ 标题 `# 决策记录（Decisions）`\n- 每条记录追加到文件末尾，格式如下：\n\n```markdown\n## D-001@v1: <短标题>\n- type: term | boundary | premise | architecture | compatibility | risk\n- priority: P0 | P1 | P2\n- status: accepted | rejected | superseded\n- source: user | code | docs\n- question: <被解决的问题>\n- answer: <用户确认或代码查证结果>\n- normalized_requirement: <可测试的约束>\n- impacts: [FR-?, task-?, verify-?]\n- evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）\n- 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）\n- 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）\n```\n\n- 幂等：写入前按 D-xxx@vN 查重，已存在的不重复追加；后续修正走新版本 D-001@v2 + supersedes（见 Design Grill 版本规则）\n\n### 铁律 — 不要自问自答 / 等待用户\n- 这是人机协作步骤：提出问题后必须暂停等用户回答，**不要在输出里模拟用户回答然后说\"需求已明确\"**（命令由 CLI 在下方注入）\n- 需要拆分或批量模式时：列出方案并暂停等用户确认\n- 不需要追问、无歧义、需求已清晰时：可正常完成本步骤（不必强行 --wait）。但「正常完成」的前提是**输出一份可否决的确认清单**——在输出里明确列出「已确认需求点清单」（逐条），让用户能一眼看到并喊停；未与用户确认过任何需求点、纯凭自身判断的场景，不得仅凭「我觉得清晰」直接放行（这是把默认共识伪装成共识的逃逸口）\n- 2-3 轮问答即进入方案讨论；达到 maxWaitRounds=8 后必须总结已确认内容与剩余风险，不要无限追问\n\n### 输出\n需求理解摘要（用户确认的需求点列表）+ 拆分/批量结论（如适用）+ 本步新增落盘的 D-xxx@vN 清单 + 剩余风险（如有）\n\n### 注意\n- 第一次进入此步骤时，按 A→D 顺序处理；有原型先分析，再探索，再判规模，再澄清\n- 用户通过 `--continue --answer \"回答\"` 回答后，本步骤会再次执行，此时检查是否需要追问或可以结束；再次执行时输出只需增量汇报（新结论 + 新落盘决策），已落盘内容不要重复输出",
+         "outputHint": "需求理解与决策落盘清单",
+         "optional": false,
+         "conditionalWait": true,
+@@ -500,8 +500,8 @@
+       {
+         "index": 3,
+         "id": "generate_blueprints",
+-        "name": "生成 TaskCard（子代理按 batch 并行）",
+-        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n5. 等待所有 batch 子代理完成\n6. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 UserDTO\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言依赖本次要重构掉的实现细节，需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
++        "name": "生成 TaskCard（默认主代理直填，大规模才派 batch）",
++        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**\n   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**\n   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）\n3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）\n4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n6. 等待所有 batch 子代理完成\n7. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 UserDTO\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言依赖本次要重构掉的实现细节，需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
+         "outputHint": "TaskCard 生成结果",
+         "optional": false
+       },
+diff --git a/docs/prompt/brainstorm.md b/docs/prompt/brainstorm.md
+index fa716579..6942f7f1 100644
+--- a/docs/prompt/brainstorm.md
++++ b/docs/prompt/brainstorm.md
+@@ -104,6 +104,9 @@
+ **提示词原文**
+ 
+ ````markdown
++### ⚡ 薄跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
++**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**薄跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。薄跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用薄跑、永不省**。
++
+ 通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
+ 
+ ### A. 原型/设计图分析（如用户提供）
+diff --git a/src/run/complete.js b/src/run/complete.js
+index dd39efbd..4940aafd 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -588,6 +588,18 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     }
+   }
+ 
++  // verify 批量完成检测（P0-1 verify 尾巴瘦身，2026-09-20 对撞实验驱动）：报告产物齐
++  // （verify-result.md 结论枚举已填 + verify-facts.json 在场）且语义锚定步（step 1-2）
++  // 已过 → 剩余 step 一次性标 completed，本次 --done 直接进阶段完成分支——收尾门禁
++  // （测试对账/验收矩阵/module-impact 死信/PASS 封顶）照常全跑：批量省的是 --done
++  // 肥上下文往返，不省任何门。镜像 execute 批量模式（乐观预标戳 + 失败一并回滚）。
++  if (stageName === 'verify' && changeName) {
++    const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
++    if (_vb.batched && _vb.aligned > 0) {
++      console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
++    }
++  }
++
+   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+ 
+   if (nextPendingIdx === -1) {
+@@ -1267,8 +1279,47 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
+  * 安全门：注册表零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任声明但用代码核验兜底。
+  * @returns {Promise<{batched:boolean, aligned:number, reason?:string, blockedTasks?:string[]}>}
+  */
+-async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {
+-  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
++/**
++ * verify 批量完成检测（P0-1，2026-09-20）：镜像 execute 的 detectExecuteBatchFinish。
++ * 条件（全部满足才批量）：verify-result.md 结论枚举已填（三态任一，非待填占位）+
++ * verify-facts.json 在场（探针跑过）+ 锚定步（step 1-2）已完成。批量只标剩余 step
++ * completed，收尾门禁由阶段完成分支照常执行（批量不绕门）。
++ */
++export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
++  if (!changeName) return { batched: false, aligned: 0 }
++  try {
++    const changeDir = join(specBase, 'changes', changeName)
++    const reportPath = join(changeDir, 'verify-result.md')
++    if (!existsSync(reportPath)) return { batched: false, aligned: 0, reason: 'verify-result.md 缺席（报告未写不批量）' }
++    const report = readFileSync(reportPath, 'utf8')
++    if (!/结论枚举[：:]\s*`?\s*(PASS WITH NOTES|PASS|FAIL)/.test(report)) {
++      return { batched: false, aligned: 0, reason: '结论枚举未填（待填占位不批量）' }
++    }
++    if (!existsSync(join(changeDir, 'verify-facts.json'))) {
++      return { batched: false, aligned: 0, reason: 'verify-facts.json 缺席（探针未跑不批量）' }
++    }
++    const firstPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
++    if (firstPendingIdx === -1) return { batched: false, aligned: 0, reason: '无剩余 step' }
++    if (firstPendingIdx < 2) {
++      return { batched: false, aligned: 0, reason: '锚定步未过（step 1-2 须逐步完成，语义锚定不批量）' }
++    }
++    const now = new Date().toLocaleString('zh-CN', { hour12: false })
++    let aligned = 0
++    for (const step of steps) {
++      if (step.status === 'pending' || step.status === 'in-progress') {
++        step.status = 'completed'
++        step.completedAt = now
++        step._batchAligned = true // 乐观预标戳：gate 失败 rollback 一并回滚（execute 同款）
++        aligned++
++      }
++    }
++    return { batched: true, aligned }
++  } catch (e) {
++    return { batched: false, aligned: 0, reason: `批量完成检测异常（fail-open 单步推进）：${e && e.message ? e.message : e}` }
++  }
++}
++
++async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
+   try {
+     const changeDir = join(specBase, 'changes', changeName)
+     const { total: planTotal, checked: planChecked } = pm.readPlanCheckboxStatus(changeDir)
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 3d319428..09105adc 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -381,10 +381,39 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     // local.yaml 由下方 cfg 段显式复制（单一来源，不经 overlay）。
+     const overlayRoot = sourceRoot || cwd
+     let overlaid = 0
++    // 双写一致性（2026-09-20 红线机检变更实证：主 agent 在主仓直写而 execute 已建 worktree 时，
++    // overlay 源=worktree 拿陈旧内容盖掉快照 HEAD 的新版——快照内 import 找不到新导出→门禁假红）。
++    // 三方取新：sourceRoot 与 cwd 同文件内容不同时，选「与快照 HEAD 基线不同」的那份；
++    // 两份都变了且互不相等（真分叉）→ 显式警告 + 取 cwd（主仓直写=本会话最新编辑位约定）。
++    // 行尾归一（坑 autocrlf-byte-misjudge）：本机 autocrlf=true 时快照 checkout 是 CRLF、
++    // 工作区文件常是 LF——字节直比会误判「两边都改」。比较一律 CRLF→LF 归一后做。
++    const normalizeEol = (buf) => String(buf).replace(/\r\n/g, '\n')
++    const headFileContent = (rel) => {
++      try { return normalizeEol(readFileSync(join(snapshotRoot, rel))) } catch { return null }
++    }
+     for (const f of files) {
+       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
+       if (typeof f !== 'string' || f.includes('..') || f.startsWith('/') || isSillyspecRuntime) continue
+-      const src = join(overlayRoot, f)
++      let src = join(overlayRoot, f)
++      if (sourceRoot && sourceRoot !== cwd) {
++        const wtPath = join(sourceRoot, f), cwdPath = join(cwd, f)
++        if (existsSync(wtPath) && existsSync(cwdPath)) {
++          let wtText = null, cwdText = null
++          try { wtText = normalizeEol(readFileSync(wtPath)) } catch { /* 读失败不介入 */ }
++          try { cwdText = normalizeEol(readFileSync(cwdPath)) } catch { /* 读失败不介入 */ }
++          if (wtText !== null && cwdText !== null && wtText !== cwdText) {
++            const base = headFileContent(f)
++            const wtDiff = base === null || wtText !== base
++            const cwdDiff = base === null || cwdText !== base
++            if (cwdDiff && !wtDiff) {
++              src = cwdPath // 主仓直写新、worktree 停在基线 → 取主仓
++            } else if (!(wtDiff && !cwdDiff)) {
++              console.warn(`⚠️ 快照双写分叉：${f} 在主仓与 worktree 均有不同修改——取主仓（本会话最新编辑位），请尽快对齐两边`)
++              src = cwdPath
++            } // wtDiff && !cwdDiff → 保持 worktree（正常流零改变）
++          }
++        }
++      }
+       if (!existsSync(src)) continue
+       const dst = join(snapshotRoot, f)
+       mkdirSync(dirname(dst), { recursive: true })
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index f755fde7..592c8bea 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -76,7 +76,10 @@ export const definition = {
+       maxWaitRounds: 8,
+       waitReason: '等待用户回答需求问题或澄清',
+       waitOptions: ['回答见--answer', '信息够了，进入方案讨论'],
+-      prompt: `通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
++      prompt: `### ⚡ 薄跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
++**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**薄跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。薄跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用薄跑、永不省**。
++
++通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
+ 
+ ### A. 原型/设计图分析（如用户提供）
+ 如果用户提供了截图、图片或 HTML 原型，先分析提取：
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 896779c1..9568bb63 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -387,7 +387,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
+ // ═══════════════════════════════════════════════════════════════
+ 
+ /**
+- * 构建紧凑 TaskCard 协调器步骤（单步，子代理按 batch 并行写卡片）
++ * 构建紧凑 TaskCard 协调器步骤（默认主 agent 直填；>8 任务且跨模块/上下文紧张时按 batch 派子代理）
+  * 每个 task 生成 20~40 行紧凑可执行卡片
+  * 允许把多个相关 task 合并为一个 batch，由单个子代理一次生成多张卡片，
+  * 在保留 plan 任务拆分完整性的同时减少子代理调用数量。
+@@ -472,17 +472,21 @@ ${taskList}
+    \`\`\`
+    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
+ 1. 确认 \`${changeDir}/tasks/\` 目录存在（上一步预生成会自动创建）
+-2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
++2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
++   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
++   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
++3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
+    - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
+    - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
+    - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）
+    - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）
+-3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
+-4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
+-5. 等待所有 batch 子代理完成
+-6. 验证每个 task-N.md 文件已生成且非空
++   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）
++4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
++5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
++6. 等待所有 batch 子代理完成
++7. 验证每个 task-N.md 文件已生成且非空
+ 
+-> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。
++> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。
+ 
+ ### 批量 TaskCard 子代理 prompt
+ \`\`\`
+@@ -538,7 +542,7 @@ ${taskcardTemplate}
+ 
+   return {
+     id: 'generate_blueprints',
+-    name: '生成 TaskCard（子代理按 batch 并行）',
++    name: '生成 TaskCard（默认主代理直填，大规模才派 batch）',
+     prompt,
+     outputHint: 'TaskCard 生成结果',
+     optional: false
+diff --git a/test/plan-optimization.test.mjs b/test/plan-optimization.test.mjs
+index c442bb1e..7e4a3d3c 100644
+--- a/test/plan-optimization.test.mjs
++++ b/test/plan-optimization.test.mjs
+@@ -66,7 +66,7 @@ console.log('\n--- Test 1b: buildPlanSteps 有 task 时返回 4 步 ---')
+   const steps = buildPlanSteps(changeDir, planContent)
+   assert(steps.length === 5, `有 task 时应有 5 步（3 fixedPrefix + TaskCard + postcheck），实际 ${steps.length}`)
+   assert(steps[2].name === '审查计划', `第 3 步应为「审查计划」，实际 "${steps[2].name}"`)
+-  assert(steps[3].name === '生成 TaskCard（子代理按 batch 并行）', `第 4 步应为 TaskCard 生成，实际 "${steps[3].name}"`)
++  assert(steps[3].name === '生成 TaskCard（默认主代理直填，大规模才派 batch）', `第 4 步应为 TaskCard 生成，实际 "${steps[3].name}"`)
+   assert(steps[4].name === 'Wave 重排与可行性校验', `第 5 步应为 postcheck，实际 "${steps[4].name}"`)
+   assert(steps[4].noAI === true, `第 5 步应为 noAI`)
+   assert(steps[4]._cliAction === 'planPostcheck', `第 5 步 _cliAction 应为 planPostcheck`)
+diff --git a/test/verify-gate-snapshot.test.mjs b/test/verify-gate-snapshot.test.mjs
+index 45bee549..0b55494f 100644
+--- a/test/verify-gate-snapshot.test.mjs
++++ b/test/verify-gate-snapshot.test.mjs
+@@ -141,3 +141,17 @@ test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked 
+       '未提交修改 overlay 工作区版本')
+   } finally { snap.cleanup() }
+ })
++
++// ── 双写一致性（2026-09-20 红线机检变更实证修复：主仓直写新、worktree 陈旧 → 快照取主仓）──
++test('双写：主仓直写新版本而 worktree 停在旧交付 → 快照取主仓（治 import 找不到新导出的假红）', async () => {
++  const proj = mk('vgs-dual-')
++  const { specBase } = setupBase(proj, 'native')
++  // 主 agent 在主仓直写了更新的版本（f=3），worktree 还是 f=2
++  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 3 // 主仓直写新\n')
++  const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase })
++  assert.ok(snap, '快照创建成功')
++  try {
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 3 // 主仓直写新\n',
++      '三方取新：主仓版本胜出（基线 f=1，worktree f=2 也新于基线但主仓是本会话最新编辑位——分叉警告 + 取主仓）')
++  } finally { snap.cleanup() }
++})
+diff --git a/test/verify-batch-finish.test.mjs b/test/verify-batch-finish.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/verify-batch-finish.test.mjs
+@@ -0,0 +1,97 @@
++/**
++ * verify 批量完成检测测试（P0-1 verify 尾巴瘦身，2026-09-20 对撞实验驱动）
++ *
++ * 覆盖 detectVerifyBatchFinish 五态：
++ *   1. 报告缺席 → 不批量
++ *   2. 结论枚举未填（待填占位）→ 不批量
++ *   3. verify-facts.json 缺席 → 不批量
++ *   4. 锚定步（step 1-2）未过 → 不批量
++ *   5. 全条件满足 → 批量标 completed（含乐观预标戳 _batchAligned）
++ *
++ * 风格：自研 assert + tmp fixture（同 quick-test-gate.test.mjs）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++import { detectVerifyBatchFinish } from '../src/run/complete.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (!condition) {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  } else {
++    console.log(`  ✅ PASS: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeRepo({ report, facts } = {}) {
++  const root = mkdtempSync(join(tmpdir(), 'vbatch-'))
++  tmpRoots.push(root)
++  const changeDir = join(root, '.sillyspec', 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  if (report !== undefined) writeFileSync(join(changeDir, 'verify-result.md'), report)
++  if (facts !== undefined) writeFileSync(join(changeDir, 'verify-facts.json'), facts)
++  return root
++}
++
++const REPORT_FILLED = '# 验证报告\n\n结论枚举：`PASS`——全过。\n'
++const REPORT_PENDING = '# 验证报告\n\n结论枚举：`<待填：三选一>`\n'
++const FACTS = '{"schemaVersion":2}'
++
++const mkSteps = (doneCount) => Array.from({ length: 7 }, (_, i) => ({
++  name: `step${i + 1}`,
++  status: i < doneCount ? 'completed' : 'pending',
++}))
++
++// ── 1. 报告缺席 ──
++{
++  const root = makeRepo({ facts: FACTS })
++  const r = detectVerifyBatchFinish({ changeName: 'c1', specBase: join(root, '.sillyspec'), steps: mkSteps(2) })
++  assert(r.batched === false && r.reason.includes('verify-result'), '1 报告缺席 → 不批量')
++}
++// ── 2. 结论未填 ──
++{
++  const root = makeRepo({ report: REPORT_PENDING, facts: FACTS })
++  const r = detectVerifyBatchFinish({ changeName: 'c1', specBase: join(root, '.sillyspec'), steps: mkSteps(2) })
++  assert(r.batched === false && r.reason.includes('结论枚举'), '2 结论待填 → 不批量')
++}
++// ── 3. facts 缺席 ──
++{
++  const root = makeRepo({ report: REPORT_FILLED })
++  const r = detectVerifyBatchFinish({ changeName: 'c1', specBase: join(root, '.sillyspec'), steps: mkSteps(2) })
++  assert(r.batched === false && r.reason.includes('facts'), '3 facts 缺席 → 不批量')
++}
++// ── 4. 锚定步未过 ──
++{
++  const root = makeRepo({ report: REPORT_FILLED, facts: FACTS })
++  const r = detectVerifyBatchFinish({ changeName: 'c1', specBase: join(root, '.sillyspec'), steps: mkSteps(1) })
++  assert(r.batched === false && r.reason.includes('锚定'), '4 step1-2 未过 → 不批量（语义锚定不批量）')
++}
++// ── 5. 全条件满足 → 批量 ──
++{
++  const root = makeRepo({ report: REPORT_FILLED, facts: FACTS })
++  const steps = mkSteps(2)
++  const r = detectVerifyBatchFinish({ changeName: 'c1', specBase: join(root, '.sillyspec'), steps })
++  assert(r.batched === true && r.aligned === 5, `5 全条件 → 批量 5 步（实际 ${r.aligned}）`)
++  assert(steps.slice(2).every(s => s.status === 'completed' && s._batchAligned === true), '5b 剩余步标 completed + 乐观预标戳（gate 失败回滚锚）')
++  assert(steps[0].status === 'completed' && !steps[0]._batchAligned, '5c 已完成步不被重标')
++}
++// ── 6. PASS WITH NOTES / FAIL 枚举也认 ──
++{
++  const root = makeRepo({ report: '# 报告\n\n结论枚举：`PASS WITH NOTES`——note。\n', facts: FACTS })
++  const r = detectVerifyBatchFinish({ changeName: 'c1', specBase: join(root, '.sillyspec'), steps: mkSteps(3) })
++  assert(r.batched === true, '6 NOTES 枚举也批量（FAIL 同族枚举面）')
++}
++
++for (const dir of tmpRoots) {
++  try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟 */ }
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)

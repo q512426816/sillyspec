@@ -130,3 +130,21 @@
 根因：2026-09-19 multi-agent-platform回带收口实证：6个sillyhub-daemon/src/**与frontend/src/**文件触发「纯doc/配置改动SKIP」，门禁漏跑=静默放行代码变更
 方案：run/quick-audit.js分类器改双通道：①路径段全等匹配（任意层src/test/tests/__tests__段，src-guide长名不误蹭）②代码扩展名兜底（ts/tsx/py/go等20+后缀，覆盖backend/app/**.py类目录约定外代码）；方向取宁可多跑不可漏跑；测试补3b用例（子包三路径不再skip）+长名防误蹭断言；runtime changelog边车登记
 结果：quick-test-gate 28/28全绿（24→28）；CLI --done门禁亲跑（修复后src文件正确触发实测）
+
+## ql-20260920-002-e219 | 2026-09-20 01:34:16 | P0批四件——对撞实验2.25倍token差距的三大浪费源+假红根因收口
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（填卡默认主代理）
+- src/stages/brainstorm.js（薄跑判定段）
+- src/run/complete.js（detectVerifyBatchFinish）
+- src/run/gate-snapshot.js（三方取新+行尾归一）
+- test/verify-batch-finish.test.mjs（8断言）
+- test/verify-gate-snapshot.test.mjs（双写回归钉）
+- test/plan-optimization.test.mjs（步名断言）
+- docs/prompt镜像（brainstorm同步）
+- 两changelog（边车登记）
+需求：P0批四件——对撞实验2.25倍token差距的三大浪费源+假红根因收口
+根因：对撞实验实测：填卡子代理6.7M誊写税/brainstorm已收敛需求走全仪20分钟/verify尾巴110req肥上下文编排/主仓直写时快照拿陈旧worktree盖新导出致import假红
+方案：①plan.js填卡默认主代理直填（≤8任务或单仓不派；>8且跨模块才batch≤3）②brainstorm.js探索步薄跑判定（已收敛直书；Grill/规范文件永不薄）③complete.js detectVerifyBatchFinish（结论已填+facts在场+锚定步过→剩余step一次标完；门禁照常全跑）④gate-snapshot.js三方取新+行尾归一防autocrlf误判
+结果：verify-batch-finish 8/8+gate-snapshot 5/5含双写回归钉+全量544/0+lint 694绿+镜像14=旧基线持平

@@ -387,7 +387,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * 构建紧凑 TaskCard 协调器步骤（单步，子代理按 batch 并行写卡片）
+ * 构建紧凑 TaskCard 协调器步骤（默认主 agent 直填；>8 任务且跨模块/上下文紧张时按 batch 派子代理）
  * 每个 task 生成 20~40 行紧凑可执行卡片
  * 允许把多个相关 task 合并为一个 batch，由单个子代理一次生成多张卡片，
  * 在保留 plan 任务拆分完整性的同时减少子代理调用数量。
@@ -472,17 +472,21 @@ ${taskList}
    \`\`\`
    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
 1. 确认 \`${changeDir}/tasks/\` 目录存在（上一步预生成会自动创建）
-2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
+2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
+   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
+   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
+3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
    - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
    - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
    - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）
    - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）
-3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
-4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
-5. 等待所有 batch 子代理完成
-6. 验证每个 task-N.md 文件已生成且非空
+   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）
+4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
+5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
+6. 等待所有 batch 子代理完成
+7. 验证每个 task-N.md 文件已生成且非空
 
-> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。
+> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。
 
 ### 批量 TaskCard 子代理 prompt
 \`\`\`
@@ -538,7 +542,7 @@ ${taskcardTemplate}
 
   return {
     id: 'generate_blueprints',
-    name: '生成 TaskCard（子代理按 batch 并行）',
+    name: '生成 TaskCard（默认主代理直填，大规模才派 batch）',
     prompt,
     outputHint: 'TaskCard 生成结果',
     optional: false

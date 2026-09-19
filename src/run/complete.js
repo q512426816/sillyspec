@@ -588,6 +588,18 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
   }
 
+  // verify 批量完成检测（P0-1 verify 尾巴瘦身，2026-09-20 对撞实验驱动）：报告产物齐
+  // （verify-result.md 结论枚举已填 + verify-facts.json 在场）且语义锚定步（step 1-2）
+  // 已过 → 剩余 step 一次性标 completed，本次 --done 直接进阶段完成分支——收尾门禁
+  // （测试对账/验收矩阵/module-impact 死信/PASS 封顶）照常全跑：批量省的是 --done
+  // 肥上下文往返，不省任何门。镜像 execute 批量模式（乐观预标戳 + 失败一并回滚）。
+  if (stageName === 'verify' && changeName) {
+    const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
+    if (_vb.batched && _vb.aligned > 0) {
+      console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
+    }
+  }
+
   const nextPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
 
   if (nextPendingIdx === -1) {
@@ -1267,8 +1279,47 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
  * 安全门：注册表零 checkbox / 未全勾 / 代码零变更（unchanged）均不批量——信任声明但用代码核验兜底。
  * @returns {Promise<{batched:boolean, aligned:number, reason?:string, blockedTasks?:string[]}>}
  */
-async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {
-  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
+/**
+ * verify 批量完成检测（P0-1，2026-09-20）：镜像 execute 的 detectExecuteBatchFinish。
+ * 条件（全部满足才批量）：verify-result.md 结论枚举已填（三态任一，非待填占位）+
+ * verify-facts.json 在场（探针跑过）+ 锚定步（step 1-2）已完成。批量只标剩余 step
+ * completed，收尾门禁由阶段完成分支照常执行（批量不绕门）。
+ */
+export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
+  if (!changeName) return { batched: false, aligned: 0 }
+  try {
+    const changeDir = join(specBase, 'changes', changeName)
+    const reportPath = join(changeDir, 'verify-result.md')
+    if (!existsSync(reportPath)) return { batched: false, aligned: 0, reason: 'verify-result.md 缺席（报告未写不批量）' }
+    const report = readFileSync(reportPath, 'utf8')
+    if (!/结论枚举[：:]\s*`?\s*(PASS WITH NOTES|PASS|FAIL)/.test(report)) {
+      return { batched: false, aligned: 0, reason: '结论枚举未填（待填占位不批量）' }
+    }
+    if (!existsSync(join(changeDir, 'verify-facts.json'))) {
+      return { batched: false, aligned: 0, reason: 'verify-facts.json 缺席（探针未跑不批量）' }
+    }
+    const firstPendingIdx = steps.findIndex(s => s.status === 'pending' || s.status === 'in-progress')
+    if (firstPendingIdx === -1) return { batched: false, aligned: 0, reason: '无剩余 step' }
+    if (firstPendingIdx < 2) {
+      return { batched: false, aligned: 0, reason: '锚定步未过（step 1-2 须逐步完成，语义锚定不批量）' }
+    }
+    const now = new Date().toLocaleString('zh-CN', { hour12: false })
+    let aligned = 0
+    for (const step of steps) {
+      if (step.status === 'pending' || step.status === 'in-progress') {
+        step.status = 'completed'
+        step.completedAt = now
+        step._batchAligned = true // 乐观预标戳：gate 失败 rollback 一并回滚（execute 同款）
+        aligned++
+      }
+    }
+    return { batched: true, aligned }
+  } catch (e) {
+    return { batched: false, aligned: 0, reason: `批量完成检测异常（fail-open 单步推进）：${e && e.message ? e.message : e}` }
+  }
+}
+
+async function detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps }) {  if (stageName !== 'execute' || !changeName) return { batched: false, aligned: 0 }
   try {
     const changeDir = join(specBase, 'changes', changeName)
     const { total: planTotal, checked: planChecked } = pm.readPlanCheckboxStatus(changeDir)

@@ -141,3 +141,17 @@ test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked �
       '未提交修改 overlay 工作区版本')
   } finally { snap.cleanup() }
 })
+
+// ── 双写一致性（2026-09-20 红线机检变更实证修复：主仓直写新、worktree 陈旧 → 快照取主仓）──
+test('双写：主仓直写新版本而 worktree 停在旧交付 → 快照取主仓（治 import 找不到新导出的假红）', async () => {
+  const proj = mk('vgs-dual-')
+  const { specBase } = setupBase(proj, 'native')
+  // 主 agent 在主仓直写了更新的版本（f=3），worktree 还是 f=2
+  writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 3 // 主仓直写新\n')
+  const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase })
+  assert.ok(snap, '快照创建成功')
+  try {
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 3 // 主仓直写新\n',
+      '三方取新：主仓版本胜出（基线 f=1，worktree f=2 也新于基线但主仓是本会话最新编辑位——分叉警告 + 取主仓）')
+  } finally { snap.cleanup() }
+})
