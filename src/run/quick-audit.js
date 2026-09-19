@@ -145,7 +145,7 @@ export function printQuickAuditReview(review) {
     if (review.foreignSpecChurn.length > 6) console.warn(`   … 共 ${review.foreignSpecChurn.length} 个`)
   }
   if (review.eolOnlyFiles && review.eolOnlyFiles.length > 0) {
-    console.warn(`⚠️ ${review.eolOnlyFiles.length} 个文件仅行尾重写（内容零变化，gen:types/编辑器 CRLF 假 M——已剔出本会话审计）：${review.eolOnlyFiles.slice(0, 5).join('、')}${review.eolOnlyFiles.length > 5 ? ' 等' : ''}`)
+    console.warn(`⚠️ ${review.eolOnlyFiles.length} 个文件仅行尾重写（内容零变化，生成命令/编辑器 CRLF 假 M——已剔出本会话审计）：${review.eolOnlyFiles.slice(0, 5).join('、')}${review.eolOnlyFiles.length > 5 ? ' 等' : ''}`)
     console.warn(`   根治：.gitattributes 声明 text=auto eol=lf（或按文件类型钉死），生成器重写不再制造假 M`)
   }
   if (review.docsCheckHint && review.docsCheckHint.invalid > 0) {

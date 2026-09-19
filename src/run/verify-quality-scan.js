@@ -176,7 +176,7 @@ export async function renderVerifyTestAttribution({ cwd, changeName, specBase, r
             const { filterStaleBaselineOverlap } = await import('./gates.js')
             const actionable = filterStaleBaselineOverlap(overlap, dirtySet, foreignMap)
             if (actionable.length > 0) {
-              console.error(`   ℹ️ 归因提示②：本变更有 ${actionable.length} 个文件与主仓最近 10 条提交重叠且旧内容仍在工作区（${actionable.slice(0, 5).join(', ')}${actionable.length > 5 ? ' 等' : ''}）——若为生成产物（api-types 等），本变更可能在旧基线生成并覆盖了已合入内容；先在新基线重跑生成命令（如 gen:types）再复验。（重叠共 ${overlap.length} 个，其余未在工作区改动或属他者会话在途文件，已归提示①/无需处理）`)
+              console.error(`   ℹ️ 归因提示②：本变更有 ${actionable.length} 个文件与主仓最近 10 条提交重叠且旧内容仍在工作区（${actionable.slice(0, 5).join(', ')}${actionable.length > 5 ? ' 等' : ''}）——若为生成产物（类型生成/代码生成产物等），本变更可能在旧基线生成并覆盖了已合入内容；先在新基线重跑生成命令再复验。（重叠共 ${overlap.length} 个，其余未在工作区改动或属他者会话在途文件，已归提示①/无需处理）`)
             }
           }
         }

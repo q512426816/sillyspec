@@ -94,3 +94,21 @@
 方案：九处纯文案改中性：AC-006 核心模块定义通用化；数据流示例换中性实体；sub-grid-security→user-service/<repo-key>；DaemonRuntimeRead→UserDTO；related_tests reason 去消费者重构故事；契约注入措辞去前端/后端框架改 provider→consumer；Python 陷阱段去消费者命令与目录名（陷阱语义保留）。行为零变更；静态镜像 _sync 自动同步、plan.md 手改、_extracted/_build-site 重生成
 结果：靶向测试 89/89 绿；_verify 镜像失配 14=基线持平零新增；shipped 面专名残留 0（仓内代码注释 3 处 provenance 不下发保留）；quick --done 门禁实测全量 test+lint
 审计：[gate] L1（跨 1 模块 · 9 文件：4 代码/0 测试）advisory；每文件注记已全覆盖；测试增量缺失（4 个代码文件无测试改动）
+
+## ql-20260919-022-1c3d | 2026-09-19 21:47:01 | 通用性审计第三批——CLI 运行时消息与 scan 示例六处消费者专名清理（api-types/gen…
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree-apply.js（apply 警告去 api-types/gen:types）
+- src/worktree.js（doctor 提示去 gen:types/backend）
+- src/run/verify-quality-scan.js（归因提示同款）
+- src/run/quick-audit.js（假 M 归因同款）
+- src/config-schema.js（gate_snapshot note 同款）
+- src/stages/scan.js（示例项目名改 demo-platform）
+- docs/prompt/scan.md（_sync 自动同步）
+- docs/prompt/_extracted.json（机械重生成）
+- docs/prompt/index.html（机械重生成）
+需求：通用性审计第三批——CLI 运行时消息与 scan 示例六处消费者专名清理（api-types/gen:types/backend 路径/multi-agent-platform→中性表述）
+根因：上批只扫 stage prompt 模板面，worktree-apply/worktree/verify-quality-scan/quick-audit 四模块运行时消息、config-schema note、scan 示例 YAML 仍带消费者项目真实命令与项目名
+方案：六处纯文案：生成产物示例改「类型生成/代码生成产物类」、doctor PYTHONPATH 示例改 <项目源码根>、scan 示例 project 改 demo-platform；行为零变更；scan.md _sync 自动同步+_extracted/_build-site 重生成
+结果：靶向 160/160 绿（71 测试文件）；_verify 失配 14=基线持平；全 src+镜像+产物专名残留 0；quick --done 门禁实测全量 test+lint

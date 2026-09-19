@@ -1519,7 +1519,7 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     if (derivedRisk.length > 0) {
       result.warnings = (result.warnings || []).concat([
         `${derivedRisk.length} 个变更文件在 worktree 基线后主仓已有新提交（并行变更可能已合入）：${derivedRisk.slice(0, 5).join(', ')}${derivedRisk.length > 5 ? ' 等' : ''}` +
-        `——若其中含生成产物（api-types/generated 等），本次 apply 可能以旧基线内容覆盖已合入的新内容；apply 后在新基线重跑生成命令（如 gen:types）再验证`
+        `——若其中含生成产物（类型生成/代码生成产物等），本次 apply 可能以旧基线内容覆盖已合入的新内容；apply 后在新基线重跑生成命令再验证`
       ]);
     }
   }

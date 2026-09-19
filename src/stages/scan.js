@@ -289,7 +289,7 @@ modules:
 ### 示例
 \`\`\`yaml
 schema_version: 2
-project: multi-agent-platform
+project: demo-platform
 source_commit: abc1234
 generated_at: 2026-06-02 22:00:00
 generator: sillyspec-scan
