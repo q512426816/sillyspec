@@ -75,3 +75,22 @@
 方案：src/stages/plan.js full 判据改「跨技术层联动（同一变更需多层协同改造，如前端 + 服务端 + 数据库）」保留多层协同意图；镜像 docs/prompt/plan.md 手改同步（动态阶段 _sync 跳过）；既定流水线 _extract.mjs + _build-site.mjs 重生成 _extracted.json/index.html，plan#3 附带路径物化机械差异（HEAD 基线内嵌临时 worktree 绝对路径→主仓根，非语义变更）
 结果：plan 系 21 测试文件 32/32 绿（含镜像同步测试）；旧文案全仓 0 残留；quick --done 门禁实测全量 npm test + lint
 审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/0 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260919-021-b5de | 2026-09-19 21:29:03 | 通用性审计第二批——shipped prompt 九处具体项目专名清理（真实仓名/真实DTO/自身模块名/消费者命令名→中性占位或通用示例）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（数据流示例中性化+sub-grid→user-service）
+- src/stages/brainstorm-auto.js（AC-006 核心模块定义通用化）
+- src/stages/plan.js（UserDTO+reason 通用化+<repo-key> 反例）
+- src/stages/execute.js（契约措辞 provider→consumer+Python 陷阱去专名）
+- docs/prompt/brainstorm.md（_sync 自动同步）
+- docs/prompt/brainstorm-auto.md（_sync 自动同步）
+- docs/prompt/plan.md（动态镜像手改）
+- docs/prompt/_extracted.json（机械重生成）
+- docs/prompt/index.html（机械重生成）
+需求：通用性审计第二批——shipped prompt 九处具体项目专名清理（真实仓名/真实DTO/自身模块名/消费者命令名→中性占位或通用示例）
+根因：工具定位通用，prompt 演化期把 dogfood 与消费者项目的真实实体（sub-grid-security/DaemonRuntimeRead/budget_tokens 数据流/import app·gen:types/AC-006 四模块名）当示例写进了随 CLI 下发所有项目的模板
+方案：九处纯文案改中性：AC-006 核心模块定义通用化；数据流示例换中性实体；sub-grid-security→user-service/<repo-key>；DaemonRuntimeRead→UserDTO；related_tests reason 去消费者重构故事；契约注入措辞去前端/后端框架改 provider→consumer；Python 陷阱段去消费者命令与目录名（陷阱语义保留）。行为零变更；静态镜像 _sync 自动同步、plan.md 手改、_extracted/_build-site 重生成
+结果：靶向测试 89/89 绿；_verify 镜像失配 14=基线持平零新增；shipped 面专名残留 0（仓内代码注释 3 处 provenance 不下发保留）；quick --done 门禁实测全量 test+lint
+审计：[gate] L1（跨 1 模块 · 9 文件：4 代码/0 测试）advisory；每文件注记已全覆盖；测试增量缺失（4 个代码文件无测试改动）

@@ -886,7 +886,7 @@ export function buildWavePrompt(wave, waveIndex, changeDir, worktreePath, option
         if (relevantContracts.length > 0) {
           contractInjection = `
 ### API Contract Matrix
-本 Wave 存在前端/后端跨 task 契约：
+本 Wave 存在跨 task 契约（provider → consumer）：
 ${relevantContracts.map(c => `- **${c.consumer}** 消费 **${c.provider}** 产出的 API`).join('\n')}
 `
           for (const taskName of waveTasks) {
@@ -1236,7 +1236,7 @@ ${workdirLines}
 
 ⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
 
-⚠️ **Python 后端导入链陷阱（venv editable install，2026-09-18 实证 gen:types 坑）**：worktree 内跑任何 \`import app\` / dump_openapi / gen:types 类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——\`import app\` 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「后端没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/backend\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。
+⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 \`import <项目包>\` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/<项目源码根>\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。
 `
       : ''
   }

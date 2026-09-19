@@ -465,7 +465,7 @@ decision_ids: [D-XXX@vN]
 allowed_paths:
   - frontend/src/lib/errors.ts
 provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
-  - contract: <DTO或响应类型名>          # 如 DaemonRuntimeRead
+  - contract: <DTO或响应类型名>          # 如 UserDTO
     fields: [field_a, field_b]
 expects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填
   <provider-task-id>:                  # 如 task-05（占位符，不要照抄）
@@ -488,7 +488,7 @@ constraints:
   - 边界约束 2（如：不修改传入参数）
 related_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）
   - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件
-    reason: 旧断言假设单例，改归属键后需同步
+    reason: 旧断言依赖本次要重构掉的实现细节，需同步
 ---
 
 {{include: taskcard-rules}}

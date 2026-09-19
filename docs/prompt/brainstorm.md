@@ -356,12 +356,12 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
 
    **路径存在性核验（NEW: 前缀铁律，2026-09-17 用户反馈⑥-①前移）**：清单条目在「生成规范文件」步 `--done` 门禁会逐一核验仓内存在性——**计划新建的文件必须在路径前加 `NEW:` 前缀**（冒号后不加空格，`NEW:src/foo.js` 合法、`NEW: src/foo.js` 属书写错误）；未加前缀的新建路径会以 `design_file_ref_invalid`（幻觉路径/书写错误）在末步被拦，返工一轮。已有文件写仓根相对正斜杠路径，禁绝对路径/glob。
    **字段数据流标注**（避免新增字段到 execute 才发现没透传）：当清单含「新增/修改对外字段、接口、DTO、响应体、事件 payload、配置键」时，对应行「说明」列必须交代 producer→consumer 数据流——产出方（producer）→ 每跳流转/归一化点（序列化/反序列化/字段映射/默认值兜底）→ 消费方（consumer）。漏标 = 字段在某跳 dormant（声明了却没透传），到 execute/verify 才暴露，属设计层缺口。
-   - 示例：「修改 daemon.ts：新增 budget_tokens，producer=backend/api-types.ts → ws_hub envelope 透传 → daemon.ts normalizeUsage（snake→camel）→ consumer=runtime/lease.ts 写 lease」
+   - 示例：「修改 api/server.ts：新增 quota_remaining 字段，producer=服务端 types/api.ts → 消息 envelope 透传 → 客户端 normalize（snake→camel）→ consumer=runtime/quota.ts 写入」
    - 仅改内部实现、无对外字段变动时，说明列照常写「新增 xx 方法」即可，无需数据流。
 
    **跨仓变更写法**（本次变更涉及 local.yaml repos: 注册的其他仓时必读；纯主仓变更跳过）：
-   - 清单**按仓分段**：每个仓一个小节，标题格式固定 `## <repo-key> 仓变更`（如 `## sub-grid-security 仓变更`；可加编号前缀或（跨仓，X1-X4）这类括号备注后缀，其余后缀/写法解析不了）。plan-postcheck 文件覆盖对账按此段头解析仓归属，写成「前端仓 / backend」等其他标题 → 对账不上且会点名段头格式错误
-   - 段内路径相对**该仓根**写（`src/routes/x.js`）；❌ 禁止带仓库名前缀（`sub-grid-security/src/routes/x.js`）、❌ 禁止绝对路径/盘符路径（`C:/repo/src/...`）——后续 TaskCard 的 allowed_paths 与 review 对账（`git -C <仓根> diff` 产仓根相对路径）都用同一口径，前缀/绝对路径永不命中
+   - 清单**按仓分段**：每个仓一个小节，标题格式固定 `## <repo-key> 仓变更`（如 `## user-service 仓变更`；可加编号前缀或（跨仓，X1-X4）这类括号备注后缀，其余后缀/写法解析不了）。plan-postcheck 文件覆盖对账按此段头解析仓归属，写成「前端仓 / backend」等其他标题 → 对账不上且会点名段头格式错误
+   - 段内路径相对**该仓根**写（`src/routes/x.js`）；❌ 禁止带仓库名前缀（`<repo-key>/src/routes/x.js`）、❌ 禁止绝对路径/盘符路径（`C:/repo/src/...`）——后续 TaskCard 的 allowed_paths 与 review 对账（`git -C <仓根> diff` 产仓根相对路径）都用同一口径，前缀/绝对路径永不命中
    - 主仓文件放在第一个段头之前（无段头区域 = main），或单独写 `## main 仓变更` 段
    - repo-key 必须是 local.yaml repos: 段已注册的键（未注册先跑 `sillyspec local register-repo <key> <仓根路径>`，main 隐式不用注册）
 
