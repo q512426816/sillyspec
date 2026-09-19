@@ -33,4 +33,4 @@ CLI 的 missing backend endpoint 是 advisory（不硬阻断归档）——但 c
 以 git 事实为准（真实 > 声明）；CLI 的三态（合规/高风险/未声明）是机械判定，是否构成 FAIL blocker 由你诚实判定，务必如实记录——静默删除代码是 verify 的最大盲区。
 
 **探针 7 补充（CLI 已预填矩阵归属与提示，你填判定与证据）**
-验收×测试覆盖矩阵：CLI 机械半边已预填——逐 task 解析 TaskCard acceptance（frontmatter）、双源结构归属测试文件（allowed_paths 测试模式 ∪ execute review changedFiles 中 test/ 路径）、关键词命中提示（命中≠判定，仅提示）。你逐行填判定槽四枚举（covered / partial / uncovered / non-testable——non-testable 是文档/部署类显式逃生门）与证据：covered/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 附一句理由；判定或证据未填 fail-closed，阻断 verify `--done`。与探针 3 口径差异：探针 3 查模块目录有没有测试文件（存在性面），探针 7 查每条 acceptance 由哪些测试承接（承接面）；两者并排冲突以 7 为准。
+验收×测试覆盖矩阵：CLI 机械半边已预填——逐 task 解析 TaskCard acceptance（frontmatter）、双源结构归属测试文件（allowed_paths 测试模式 ∪ execute review changedFiles 中 test/ 路径）、关键词命中提示（命中≠判定，仅提示）。你逐行填判定槽五枚举（covered / covered-service / partial / uncovered / non-testable——covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点；non-testable 是文档/部署类显式逃生门）与证据：covered/covered-service/partial 附测试锚点（`.test.` 文件或 file:line），non-testable 附一句理由；判定或证据未填 fail-closed，阻断 verify `--done`。与探针 3 口径差异：探针 3 查模块目录有没有测试文件（存在性面），探针 7 查每条 acceptance 由哪些测试承接（承接面）；两者并排冲突以 7 为准。

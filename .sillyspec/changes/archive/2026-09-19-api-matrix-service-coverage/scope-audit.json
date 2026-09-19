@@ -1,0 +1,92 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "79c9880aaefb780082b8aff23236981f3f724e32",
+  "totals": {
+    "files": 9,
+    "additions": 192,
+    "deletions": 51
+  },
+  "rows": [
+    {
+      "path": "meta.json",
+      "additions": 22,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/probe7-anchor-check.js",
+      "additions": 8,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "additions": 46,
+      "deletions": 25,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 6,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "templates/prompts/verify-probes.md",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/acceptance-matrix-probe.test.mjs",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/api-coverage-matrix.test.mjs",
+      "additions": 106,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "a1d92d5ac0cec195b92fe4fdb9c36805715b6986196bc4ece8e3ff956072f273",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-18T23:45:38.581Z"
+}

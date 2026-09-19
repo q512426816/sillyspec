@@ -16,6 +16,10 @@
  *      factsExpected=false 存量零行为
  *   7. advisory 两 warning（不阻断）：消费端归类在场而矩阵零子行；写端点未在权限矩阵声明
  *      （「无权限约束」豁免 / 权限段命中放行）
+ *   8. covered-service 第五枚举（2026-09-19-api-matrix-service-coverage FR-01/FR-02）：
+ *      计分子放行（等式满足 ok=true）/ 缺测试锚点 error（matrixEvidenceHasAnchor 三形态口径）/
+ *      advisory 承接计数（N 与 fixture 行数对照）/ probe7 验收矩阵联动不误报 + backfill 后
+ *      facts.matrixPartialRows=0（封顶条件④不触发的结构性证据）
  *
  * 确定性纪律：mkdtempSync 临时目录 + test.after 清理；纯函数直测（零 IO 面全部经参数传入），
  * 矩阵面一律经 extractApiCoverageMatrixSlots 真实解析构造（钉 X-05 防篡改锚点口径）。
@@ -28,8 +32,9 @@ import { tmpdir } from 'node:os'
 
 import {
   parseDesignApiTable, classifyConsumerHints, ensureApiCoverageMatrixSection,
+  backfillFactsFromMdAndTests,
 } from '../src/verify-probes.js'
-import { extractApiCoverageMatrixSlots, judgeApiCoverageMatrix } from '../src/stage-contract.js'
+import { extractApiCoverageMatrixSlots, extractAcceptanceMatrixSlots, judgeApiCoverageMatrix } from '../src/stage-contract.js'
 
 const tmpRoots = []
 function mk(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
@@ -115,7 +120,7 @@ test('2. 行分类：消费端子行只计数不进行账；unfilled 占位标�
     '## 接口验证覆盖矩阵 [层：人工判断——CLI 预填复核]', '',
     '| 端点 | 判定 | 用例依据 ID | 结果 | 证据 |',
     '|---|---|---|---|---|',
-    '| GET /api/a | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |',
+    '| GET /api/a | <待填：五选一> | <待填：用例 ID> | <待填> | <待填：锚点> |',
     '| POST /api/b | uncovered | E1 | 探索走查 | 步骤 [探索] 手工核对 |',
     '  ↳ web: 列表页承接（消费端子行）', '',
     '## 后续章节', '',
@@ -152,7 +157,7 @@ test('3b. partial 不计分子：分子只认 covered（1<2 覆盖不足 error �
   ]
   const r = judgeWith({ rows, face: TWO_FACE(), facts: HANDOVER_FACTS() })
   assert.ok(r.ok === false && r.errors.length === 1
-    && r.errors[0].includes('有效分母 2') && r.errors[0].includes('covered 分子 1') && r.errors[0].includes('POST /api/b'),
+    && r.errors[0].includes('有效分母 2') && r.errors[0].includes('covered+covered-service 分子 1') && r.errors[0].includes('POST /api/b'),
     `partial 行不计分子 → 覆盖不足 error 报分母/分子与缺覆盖端点（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 80)))}）`)
 })
 
@@ -196,12 +201,12 @@ test('3e. 探索行不算覆盖：uncovered+[探索] 端点仍进缺覆盖清单
     `探索行不进分子不进 non-testable 扣减 → 缺覆盖端点照列（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 60)))}）`)
 })
 
-test('3f. 判定未填占位 → 行级违规（四选一）', () => {
+test('3f. 判定未填占位 → 行级违规（五选一）', () => {
   const r = judgeWith({
-    rows: [['GET /api/a', '<待填：四选一>', '<待填：用例 ID>', '<待填>', '<待填：锚点>']],
+    rows: [['GET /api/a', '<待填：五选一>', '<待填：用例 ID>', '<待填>', '<待填：锚点>']],
     face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
   })
-  assert.ok(r.errors.some((e) => e.includes('判定未填') && e.includes('四选一')),
+  assert.ok(r.errors.some((e) => e.includes('判定未填') && e.includes('五选一')),
     `判定槽占位未替换 → 行级违规（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 60)))}）`)
 })
 
@@ -329,6 +334,99 @@ test('7b. ensureApiCoverageMatrixSection 补段：预填端点行 + 幂等二跑
   const r2 = ensureApiCoverageMatrixSection(mdPath, face)
   const md = readFileSync(mdPath, 'utf8')
   assert.ok(r1.added === true && r2.added === false && String(r2.reason || '').includes('已在场')
-    && md.includes('## 接口验证覆盖矩阵') && md.includes('| GET /api/a | <待填：四选一> |'),
-    `缺段 → 补骨架段（端点行 CLI 机械预填 <待填：四选一> 供 agent 逐格复核）；段已在场幂等不触碰（实际 ${JSON.stringify(r1)}/${JSON.stringify(r2)}）`)
+    && md.includes('## 接口验证覆盖矩阵') && md.includes('| GET /api/a | <待填：五选一> |'),
+    `缺段 → 补骨架段（端点行 CLI 机械预填 <待填：五选一> 供 agent 逐格复核）；段已在场幂等不触碰（实际 ${JSON.stringify(r1)}/${JSON.stringify(r2)}）`)
+})
+
+// ═══════════════════════════════════════════════════════════════════
+// 8. covered-service 第五枚举（2026-09-19-api-matrix-service-coverage FR-01/FR-02/D-001/D-002）
+//    ⑤ 向后兼容回归 = 纯四枚举文档行为不变由既有用例 1-7 锁定 + npm test 全量收口（不另造用例）
+// ═══════════════════════════════════════════════════════════════════
+test('8. covered-service 计分子放行（①）：两端点全 covered-service（.test. 与 file:line 两锚点形态）→ 等式满足 ok=true 零 errors', () => {
+  const r = judgeWith({
+    rows: [
+      ['GET /api/a', 'covered-service', 'S1', 'ok', 'test/order-service.test.mjs 承接 GET 行为'],
+      ['POST /api/b', 'covered-service', 'S2', 'ok', 'test/order-service.test.mjs:42'],
+    ],
+    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
+  })
+  assert.ok(r.ok === true && r.errors.length === 0,
+    `covered-service 行计入分子（covered+covered-service 分子 2 == 有效分母 2 等式满足）→ 放行零 errors（实际 ${JSON.stringify(r.errors)}）`)
+  const mixed = judgeWith({
+    rows: [
+      ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
+      ['POST /api/b', 'covered-service', 'S2', 'ok', 'test/order-service.test.mjs:42'],
+    ],
+    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
+  })
+  assert.ok(mixed.ok === true && mixed.errors.length === 0,
+    `混排变体：covered+covered-service 各一行 → 分子 2 == 分母 2 同样放行（实际 ${JSON.stringify(mixed.errors)}）`)
+})
+
+test('8b. covered-service 缺测试锚点 → error（②）：纯文字证据进 anchorViolations；covered 行缺锚行为不变对照', () => {
+  const r = judgeWith({
+    rows: [
+      ['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#GET /api/a'],
+      ['POST /api/b', 'covered-service', 'S1', 'ok', '由 service 层测试锁定'],
+    ],
+    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
+  })
+  assert.ok(r.ok === false && r.errors.length === 1
+    && r.errors[0].includes('POST /api/b') && r.errors[0].includes('covered-service 证据缺测试锚点'),
+    `covered-service 证据无 .test. / file:line / 反引号锚点 → error 含端点标识与 covered-service 违规文案（记账等式已满足不叠报覆盖不足）（实际 ${JSON.stringify(r.errors.map((e) => e.slice(0, 90)))}）`)
+  const coveredCtl = judgeWith({
+    rows: [['GET /api/a', 'covered', 'C1', 'ok', '由冒烟步骤手工核对']],
+    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
+  })
+  assert.ok(coveredCtl.ok === false
+    && coveredCtl.errors.some((e) => e.includes('GET /api/a') && e.includes('证据缺用例依据锚点（五形态之一）'))
+    && !coveredCtl.errors.some((e) => e.includes('covered-service 证据缺测试锚点')),
+    `对照：covered 行缺锚仍走五形态违规文案（行为不变），不误走 covered-service 测试锚点分支（实际 ${JSON.stringify(coveredCtl.errors.map((e) => e.slice(0, 70)))}）`)
+})
+
+test('8c. covered-service advisory 承接计数（③）：N=2 → warnings 含 [advisory] 与计数文案；零 covered-service 文档不出', () => {
+  const r = judgeWith({
+    rows: [
+      ['GET /api/a', 'covered-service', 'S1', 'ok', 'test/order-service.test.mjs 承接 GET 行为'],
+      ['POST /api/b', 'covered-service', 'S2', 'ok', 'test/order-service.test.mjs:42'],
+    ],
+    face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
+  })
+  assert.ok(r.ok === true && r.warnings.some((w) => w.includes('[advisory]') && w.includes('2 端点由 service 层测试承接') && w.includes('不阻断')),
+    `N=2 行 covered-service → advisory warning 计数与 fixture 行数一致（不阻断不进 errors）（实际 ${JSON.stringify(r.warnings)}）`)
+  const ctl = judgeWith({ rows: BOTH_COVERED_ROWS(), face: TWO_FACE(), facts: NO_HANDOVER_FACTS() })
+  assert.ok(ctl.ok === true && !ctl.warnings.some((w) => w.includes('service 层测试承接')),
+    `对照：零 covered-service 行（BOTH_COVERED_ROWS）不出承接 advisory（实际 ${JSON.stringify(ctl.warnings)}）`)
+})
+
+test('8d. probe7 验收矩阵联动不误报（④/FR-02/D-002）：covered-service 行 unfilled=0/missingEvidence=0；backfill 后 facts.matrixPartialRows=0', () => {
+  const md = [
+    '# 验证报告', '',
+    '#### 探针 7：验收×测试覆盖矩阵', '',
+    '**task-01**',
+    '| acceptance 条目 | 归属测试文件 | 关键词命中（提示，命中≠判定） | 判定 | 证据 |',
+    '|---|---|---|---|---|',
+    '| 端点行为由 service 层测试锁定 | `test/order-service.test.mjs` | — | covered-service | `test/order-service.test.mjs:42` |',
+    '',
+    '## 结论', '', '结论枚举：`PASS WITH NOTES`', '',
+  ].join('\n')
+  const slots = extractAcceptanceMatrixSlots(md)
+  assert.ok(slots.present && slots.unfilled === 0 && slots.missingEvidence === 0,
+    `covered-service 认合法枚举（白名单）且证据含测试锚点 → unfilled/missingEvidence 两计数零不误报（实际 ${JSON.stringify({ present: slots.present, unfilled: slots.unfilled, missingEvidence: slots.missingEvidence })}）`)
+  assert.ok(slots.rows.length === 1 && slots.rows[0].verdict === 'covered-service',
+    `covered-service 行提取在账（实际 ${JSON.stringify(slots.rows.map((x) => x.verdict))}）`)
+  // backfill 半边（封顶结构性证据）：facts.matrixPartialRows 只数 partial/uncovered 行——
+  // covered-service 行不计 → 0（PASS 封顶条件④不触发）；tmp 目录无 design.md 走空面 fail-soft 不炸
+  const dir = mk('acm-csv-')
+  const factsPath = join(dir, 'verify-facts.json')
+  writeFileSync(factsPath, JSON.stringify({ schemaVersion: 2, probes: {} }, null, 2))
+  const capWarn = console.warn
+  const warns = []
+  console.warn = (...a) => { warns.push(a.join(' ')) }
+  try {
+    backfillFactsFromMdAndTests(factsPath, { verifyMd: md, conclusion: 'PASS WITH NOTES' })
+    const onDisk = JSON.parse(readFileSync(factsPath, 'utf8'))
+    assert.ok(onDisk.matrixPartialRows === 0,
+      `backfill 后 facts.matrixPartialRows=0（covered-service 不落 partial/uncovered 计数——封顶条件④不触发的结构性证据）（实际 ${onDisk.matrixPartialRows}）`)
+  } finally { console.warn = capWarn }
 })

@@ -1926,8 +1926,8 @@ function renderProbe7Lines(p7) {
     L.push('- 不适用（无 TaskCard）')
     return L
   }
-  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（四选一）：covered / partial / uncovered / non-testable（文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
-  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。covered/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
+  L.push('<!-- 口径注记：探针 3 = 模块目录递归存在性面（allowed_paths 目录附近有没有测试）；探针 7 = allowed_paths ∪ review changedFiles ∪ 直接下游卡测试 结构归属承接面（每条 acceptance 由哪些测试承接；下游消费卡的测试可承接上游 provider 的 acceptance——probe7-provider-tests-in-consumer-card）；两者并排冲突以 7 为准。判定枚举（五选一）：covered / covered-service / partial / uncovered / non-testable（covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点；non-testable 是文档/部署类显式逃生门）。关键词命中只是提示，命中≠判定。 -->')
+  L.push('<!-- 预填说明（ql-20260915-004）：判定列为 CLI 机械预填，agent 逐格复核改写——规则：无归属→uncovered（文档/部署/doc/deploy/manual/config 类词→non-testable）；有归属且命中≥1→covered；有归属零命中→partial。covered/covered-service/partial 证据须含测试锚点三形态之一（file:line / `.test.` 测试文件名 / 反引号包裹的路径或测试名），行号可省；uncovered/non-testable 证据自由形态。预填≠结论：与事实不符的格子必须改写（枚举须保持 covered/covered-service/partial/uncovered/non-testable 纯值，备注写在证据列）。 -->')
   // 零自动化承接计数（坑 review-zero-coverage-unwalked，2026-09-16 EHS 二次复核实证：execute
   // 期 review 走查面事实上跟着测试覆盖走——「新增-部门支线测试充分，编辑路径与相关方支线
   // 零覆盖」恰是 5 个 P1 的藏身处。矩阵渲染时顺带计数零承接条目，verify 复核强制显式走查
@@ -2474,7 +2474,7 @@ const API_MATRIX_WRITE_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH'])
 
 /**
  * 渲染「## 接口验证覆盖矩阵」段（task-04）。
- * 三态：解析有端点 → 逐端点预填行（判定列 `<待填：四选一>` 占位，同 probe7 预填口径供 agent
+ * 三态：解析有端点 → 逐端点预填行（判定列 `<待填：五选一>` 占位，同 probe7 预填口径供 agent
  * 复核）；解析零行有声明 → 声明占位行「本变更接口面：<N> 端点（agent 声明）」（D-005 零解析
  * 降级，对账分母=声明数）；零解析零声明 → 「无接口面」注记行（非判级 critical 变更零行为
  * 注记即可——判级 critical 的 error 拦截归 task-05 validator）。段尾 advisory 占位注记
@@ -2487,7 +2487,7 @@ function renderApiCoverageMatrixLines(apiFace) {
   const endpoints = face && Array.isArray(face.endpoints) ? face.endpoints : []
   const declared = face && typeof face.declared === 'number' ? face.declared : null
   const L = [`${API_MATRIX_HEADING} [层：人工判断——CLI 预填复核]`]
-  L.push('<!-- 口径注记（与探针 7 互指，R-07）：探针 7 = 验收项 × 测试承接面（每条 acceptance 由哪些测试承接）；本矩阵 = 接口端点 × 验证用例面（design 接口段每个端点由哪些验证用例/冒烟步骤覆盖）——两者并排互补，双矩阵并行存在。端点集来自 design.md 接口段 tolerant 解析（parseDesignApiTable：段头宽收 + 方法/路径双条件），预填≠结论，agent 逐行复核。判定枚举（四选一）：covered / partial / uncovered / non-testable。 -->')
+  L.push('<!-- 口径注记（与探针 7 互指，R-07）：探针 7 = 验收项 × 测试承接面（每条 acceptance 由哪些测试承接）；本矩阵 = 接口端点 × 验证用例面（design 接口段每个端点由哪些验证用例/冒烟步骤覆盖）——两者并排互补，双矩阵并行存在。端点集来自 design.md 接口段 tolerant 解析（parseDesignApiTable：段头宽收 + 方法/路径双条件），预填≠结论，agent 逐行复核。判定枚举（五选一）：covered / covered-service / partial / uncovered / non-testable——covered-service 适用：端点行为由 service 层等非端点层测试锁定；证据须含测试文件锚点三形态之一（`.test.` / file:line / 反引号包裹的路径或测试名）。 -->')
   L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态：design接口表#METHOD /path、权限矩阵[角色×动作]、契约表@行标识、DDL@列名、载荷@构造点路径（须真实命中对应表/段，防空指）。 -->')
   L.push('<!-- 文法注释：子行 = 端点行下一行、两空格缩进、以「↳ <消费端>:」前缀书写（消费端细分承接面，不计矩阵行账）；探索行 = 判定 uncovered 且证据列含 [探索] 标记（探索性验证不算覆盖）。 -->')
   if (endpoints.length === 0 && declared === null) {
@@ -2501,10 +2501,10 @@ function renderApiCoverageMatrixLines(apiFace) {
   L.push('|---|---|---|---|---|')
   if (endpoints.length > 0) {
     for (const ep of endpoints) {
-      L.push(`| ${mdEscapeCell(`${ep.method} ${ep.path}`, 160)} | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
+      L.push(`| ${mdEscapeCell(`${ep.method} ${ep.path}`, 160)} | <待填：五选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
     }
   } else {
-    L.push(`| 本变更接口面：${declared} 端点（agent 声明） | <待填：四选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
+    L.push(`| 本变更接口面：${declared} 端点（agent 声明） | <待填：五选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
     L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init 刷新本段 -->')
   }
   L.push('<!-- advisory 尾注（warning 计算归 validator，本段只留位）：有消费端未填子行的端点将列于此（advisory——消费端归类=design 清单启发式，数据面 facts.consumerHints）；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段声明的将列于此（advisory——补行或显式豁免「无权限约束」，数据面 facts.apiFace.writeEndpoints；表缺行会让派生框架继承你的洞） -->')
@@ -3412,6 +3412,8 @@ export function injectDecisionChainDraft(mdPath, changeDir) {
 export function generateVerifyResultSkeleton(result) {
   const L = [
     '# 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）',
+    '',
+    '> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。',
     '',
     '> 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——', /* probe1-noqa */
     '> 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。',

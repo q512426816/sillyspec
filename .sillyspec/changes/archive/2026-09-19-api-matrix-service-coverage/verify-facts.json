@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-19-api-matrix-service-coverage",
+  "generatedAt": "2026-09-18T23:47:03.044Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "matches": 33,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "backendEndpoints": 12,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-19-api-matrix-service-coverage",
+      "metrics": {
+        "checkedFiles": 5,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "worktree 隔离期全量套件 12 个环境红（测试 spawn bin/sillyspec.js 被 worktree-cwd 守卫拦，坑 worktree-cwd-silent-split）+主仓 2 个他侧在途红（doc-ref-check/run-help-shortcircuit，主仓 src/run/command.js 有并行会话未提交改动）——本变更无法在隔离期内完成「主仓全量绿」证明",
+        "condition": "apply 回主仓后跑 `npm test` 全量；预期本变更关联文件全绿、12 环境红消失；2 个他侧红随其会话提交后消失（若仍在，归因其变更非本变更）",
+        "severity": "blocking"
+      },
+      {
+        "type": "other",
+        "item": "probe7-anchor-check 的 covered-service 新形态无自动化测试锁定（task-03 任务边界不碰 test/、task-04 清单未列；execute 独立审查 node -e 实证 rowsChecked/coveredRows/缺锚进 missingAnchors 行为正确）",
+        "condition": "下个触及 src/probe7-anchor-check.js 的变更顺手在 test/probe7-anchor-testfile.test.mjs 补 covered-service fixture 组",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/api-coverage-matrix.test.mjs",
+      "test/acceptance-matrix-probe.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-19T00:00:24.474Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

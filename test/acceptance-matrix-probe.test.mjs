@@ -210,7 +210,7 @@ try {
   assert(report.includes('（无机械命中——人工核验 `test/silent-attrib.test.mjs`）'), 'partial 证据 = 人工核验提示 + 反引号归属文件')
   assert(report.includes('（无归属测试）'), '无归属证据 = （无归属测试）')
   assert(report.includes('判定列为 CLI 机械预填，agent 逐格复核改写'), '段头预填注记在场（枚举纯值的复核责任声明）')
-  assert(report.includes('covered / partial / uncovered / non-testable'), '四枚举图例在场')
+  assert(report.includes('covered / covered-service / partial / uncovered / non-testable'), '五枚举图例在场')
   assert(report.includes('命中≠判定'), '提示列头部标注命中≠判定')
   assert(report.includes('（卡无 acceptance——防御，plan-postcheck 已拦）'), 'task-03 防御行渲染且无待填槽')
   assert(!report.split('\n').find(l => l.includes('卡无 acceptance'))?.includes('待填'), '防御行本身不含待填槽')

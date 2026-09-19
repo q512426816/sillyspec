@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-19-api-matrix-service-coverage",
+  "appliedAt": "2026-09-19T00:02:17.843Z",
+  "baseHash": "79c9880aaefb780082b8aff23236981f3f724e32",
+  "files": [
+    {
+      "path": "src/index.js",
+      "sha256": "e3741d0345d011ba6df22e28e19e425148aa2c05482c5fdd3a2e5a2d074e2eec"
+    },
+    {
+      "path": "src/probe7-anchor-check.js",
+      "sha256": "1616279959809024fcbce1668c34ce0a9bed7173677531dca7ea5eec6d072f69"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "sha256": "c228a0be90535982a0c119d43628067e6dc3a5fd03717445dbebd61f2d2d705d"
+    },
+    {
+      "path": "src/stages/verify.js",
+      "sha256": "e81db1cc068e1344150b45241713cf72f29bc82be223457b73a2d75a8e091ac8"
+    },
+    {
+      "path": "templates/prompts/verify-probes.md",
+      "sha256": "0e0835aec57ccb3359bb62f82f0b3186bced0f49056268b353cd8fc74c93ab6f"
+    },
+    {
+      "path": "test/acceptance-matrix-probe.test.mjs",
+      "sha256": "4995b70ec4cd420a6f65f906117d18edac22569ace855ec796ca0da8024d674f"
+    },
+    {
+      "path": "test/api-coverage-matrix.test.mjs",
+      "sha256": "000189f17344c9d57834975ce12dc0255372d1c85e084ab22fc41c37f4967b04"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "a986c9931c29ff00fa8fa687fd19e020294e9247ac94eb731095d0accc33d347"
+    }
+  ]
+}

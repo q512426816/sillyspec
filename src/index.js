@@ -1209,7 +1209,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
           const vpMatrix = ensureAcceptanceMatrixSection(vpReportPath, vpResult.probe7)
           if (vpMatrix.added) {
             try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
-            console.log(`🧩 探针 7 验收×测试覆盖矩阵骨架段已补齐（判定=四选一/证据两槽待填，命中≠判定；不触碰既有正文）: ${vpReportPath}${vpPlatformNote}`)
+            console.log(`🧩 探针 7 验收×测试覆盖矩阵骨架段已补齐（判定=五选一/证据两槽待填，命中≠判定；不触碰既有正文）: ${vpReportPath}${vpPlatformNote}`)
           }
         } catch { /* 矩阵补段失败不阻断 --init */ }
         // P0-1（noai-ir-roadmap §3）两件机械预填，均幂等 fail-soft：
@@ -1872,6 +1872,7 @@ change: ${fpChange}
 # 决策记录（Decisions）
 
 <!-- 增量落盘：每解决一个有实现影响的问题当场追加一条（格式见 brainstorm Step 3 模板）；幂等按 D-xxx@vN 判重 -->
+<!-- 引用规范：evidence 等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->
 `);
       if (json) {
         console.log(JSON.stringify({ command: 'fourpiece-init', change: fpChange, generated }, null, 2));
@@ -2353,6 +2354,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
               }
               console.log(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`);
               console.log(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`);
+              console.log(`裸文件名引用（foo.js:123 形态）→ 改写为仓根相对全路径（src/foo.js:123）——裸名靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效；变更文档写作期就写全路径可免此返工。`);
             }
             // 变更名提名 advisory 段（主结果之后、exit 之前；不参与 ok/invalid 与 exit code）。
             // 零输出原则（docs-check-fix 契约：无新 flag 时 stdout 逐字节一致；决策规则族同款

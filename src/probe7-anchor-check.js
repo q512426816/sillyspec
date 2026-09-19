@@ -4,8 +4,8 @@
  * 坑 probe7-covered-anchor-missing（2026-09-15 复盘实证：探针7 矩阵第一轮 7 行 covered 判定的
  * 证据列缺 file:line 锚点被审查打回——预填说明写着「证据列给首命中 file:line 锚点」但模板要求
  * 没细读就交，人工往返一轮）。本模块把该口径机器化：verify --done 时点解析正文探针7 段，
- * 判定列=covered 的行必须含 file:line / `.test.` 测试文件名 / 反引号包裹路径或测试名三形态
- * 之一，缺则 advisory 提示回补。
+ * 判定列=covered/covered-service 的行必须含 file:line / `.test.` 测试文件名 / 反引号包裹路径
+ * 或测试名三形态之一，缺则 advisory 提示回补。
  *
  * 口径对齐（2026-09-16-friction5-hardening FR-05 / D-005@v1，用户 2026-09-16 驾驭小结⑤）：
  * 锚点认 file:line 或 `.test.` 文件名两形态（对齐 stage-contract 硬门三形态中的两形态）——
@@ -20,7 +20,8 @@
  * 定位与边界：
  * - **advisory 不阻断**：covered 行缺锚点只 warn（证据可以是合法的人工核验形态，但 covered=
  *   有归属测试命中，锚点理应存在——缺锚点大概率是 agent 改写预填时丢了，回补成本低）。
- * - 只查 covered：partial/uncovered/non-testable 的证据形态多样（人工核验提示/理由），不做
+ * - 只查 covered/covered-service（covered-service 同 covered 口径：service 层承接的判定同样
+ *   须测试锚点）：partial/uncovered/non-testable 的证据形态多样（人工核验提示/理由），不做
  *   锚点要求（误报面大于收益）。
  * - 独立模块而非长在 verify-probes.js：后者是多会话高频冲突面（探针3/5 家族改动多发），
  *   本校验只消费 verify-result.md 文本，零依赖单文件最稳。
@@ -35,7 +36,8 @@ const ANCHOR_RE = /:\d+\b/
 // 与 stage-contract 硬门 matrixEvidenceHasAnchor 的 /`[^`]+`/ 同权）
 const BACKTICK_RE = /`[^`]+`/
 
-// 判定枚举纯值（骨架四枚举；容忍反引号包裹——门禁层 extractAcceptanceMatrixSlots 另有纯值校验）
+// 判定枚举纯值（骨架五枚举 covered/covered-service/partial/uncovered/non-testable；容忍反引号
+// 包裹——门禁层 extractAcceptanceMatrixSlots 另有纯值校验）
 function normalizeVerdict(cell) {
   return String(cell || '').trim().replace(/^`|`$/g, '').toLowerCase()
 }
@@ -67,9 +69,9 @@ export function checkProbe7AnchorCoverage(reportText) {
     const cells = line.split('|').map(c => c.trim())
     if (cells.length < 6) continue // 表头/分隔行之外的畸形行不参与（表头 6 列含首尾空串）
     const verdict = normalizeVerdict(cells[4])
-    if (!['covered', 'partial', 'uncovered', 'non-testable'].includes(verdict)) continue
+    if (!['covered', 'covered-service', 'partial', 'uncovered', 'non-testable'].includes(verdict)) continue
     out.rowsChecked++
-    if (verdict !== 'covered') continue
+    if (verdict !== 'covered' && verdict !== 'covered-service') continue
     out.coveredRows++
     const evidence = cells[5] || ''
     // 三形态锚点（FR-05 / D-005@v2）：file:line（ANCHOR_RE，本体不动）、`.test.` 测试文件名、
