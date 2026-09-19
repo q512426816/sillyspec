@@ -1751,7 +1751,7 @@ export class WorktreeManager {
             const escapes = detectEditableInstallEscape(wtPath);
             if (escapes.length > 0) {
               issues.push({ type: 'editable-install-escape', name, fixable: false,
-                detail: `worktree venv 含 ${escapes.length} 个 editable install 指向 worktree 外（${escapes.slice(0, 5).map(e => `${e.pkg}→${e.target}`).join(', ')}${escapes.length > 5 ? ' 等' : ''}）——gen:types/后端命令会静默加载 worktree 外旧代码。修复：在 worktree 内重装（uv sync / uv pip install -e .）后重跑生成命令` });
+                detail: `worktree venv 含 ${escapes.length} 个 editable install 指向 worktree 外（${escapes.slice(0, 5).map(e => `${e.pkg}→${e.target}`).join(', ')}${escapes.length > 5 ? ' 等' : ''}）——gen:types/后端命令会静默加载 worktree 外旧代码。轻量出口：跑生成链前设 PYTHONPATH=<worktree>/backend（PYTHONPATH 优先于 .pth）；彻底修复：worktree 内重装（uv sync / uv pip install -e .）` });
             }
           } catch { /* 探测失败不阻断 doctor */ }
           }
