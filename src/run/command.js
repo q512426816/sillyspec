@@ -36,6 +36,7 @@ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
 import { stageRegistry, auxiliaryStages } from '../stages/index.js'
 import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
 import { setQuickFileNotes } from '../quicklog.js'
+import { checkQuickSessionOwner, writeQuickSessionOwner } from '../quick-session-owner.js'
 import { hasDecisionId } from '../decisions-io.js'
 
 // F2/F4: 哪些 flag 吃下一个 token 作「值」（其余 --flag 都是布尔，不吞值）。
@@ -731,6 +732,15 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         }
         quickSessionId = 'quick-' + randomUUID().slice(0, 8)
         quickSidFresh = true
+        // 归属首建（quick-shared-pointer-stomp，2026-09-19 实证修复）：创建者 agent 身份落
+        // owner.json（与 guard.json 同目录，随 --cancel 目录清理销毁）。身份三级
+        // flag > env > anon@host——刻意不传 quickChangeName（resolveSessionIdentity 的
+        // quick 会话级会把身份解析成会话 id 本身、恒 self 失去区分度）。fail-open：
+        // 落盘失败不阻断启动（核验侧 owner 缺失即放行）。
+        try {
+          writeQuickSessionOwner(resolveRuntimeRoot(platformOpts, specRoot), quickSessionId,
+            resolveSessionIdentity({ flagSession: getFlagValue('--session'), warn: false }).session)
+        } catch { /* owner 落盘失败 → 核验侧按无 owner 放行 */ }
         // 坑 quick-sync-block-filenotes-and-quicklog-mixed-commit 坑1③：新会话 ID 生成即打印
         // 第一行——后续 agent-log push / spec-sync 等 best-effort 网络动作（平台慢时分钟级）
         // 若把命令拖过 exec 超时，调用方仍能从输出头部拿到 sessionId 续用（--status / guard.json
@@ -741,6 +751,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     } else {
       // 用户显式传了非 sessionId 形态的变更名 → 尊重，不生成 UUID（旧兼容路径）
       quickSessionId = changeName
+    }
+  }
+
+  // ── quick 会话归属核验（quick-shared-pointer-stomp，2026-09-19 实证修复）──
+  // 变更类操作（--done/--skip/--reset/--reopen/--cancel）在会话非本进程新建时核验 owner；
+  // --status 只读豁免；fresh 会话本进程刚落 owner 恒过。异主 exit 2——接管=显式
+  // --session <owner>（与 change 所有权护栏同语义；身份三级缺省 anon@host 机器级只拦他机）。
+  // 无 owner 文件的存量会话放行（brownfield 兼容）。
+  if (stageName === 'quick' && !quickSidFresh && quickSessionId
+    && (isDone || isSkip || isReset || isReopen || isCancel)) {
+    const actorSession = resolveSessionIdentity({ flagSession: getFlagValue('--session'), warn: false }).session
+    const ownerVerdict = checkQuickSessionOwner(resolveRuntimeRoot(platformOpts, specRoot), quickSessionId, actorSession)
+    if (!ownerVerdict.ok) {
+      console.error(`\n❌ quick 会话 ${quickSessionId} 属于其他会话（owner: ${ownerVerdict.owner}），当前会话标识 ${ownerVerdict.actor}，拒绝操作。`)
+      console.error('   （多 agent 并行防互踩：共享指针 current-quick-run-id 是 last-writer-wins，2026-09-19 实证异会话 --done 覆写过他人 QUICKLOG 条目）')
+      console.error('   - 继续自己的会话：sillyspec run quick --status 查各会话，--change <自己的 quick-xxx> 精确指定')
+      console.error(`   - 确需接管他者会话：--session ${ownerVerdict.owner}（显式接管，等同所有权护栏语义）`)
+      console.error('   - 会话标识三级：--session > SILLYSPEC_SESSION_ID > anon@<host>（缺省机器级只拦他机）')
+      process.exit(2)
     }
   }
 
