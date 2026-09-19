@@ -413,8 +413,9 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
    - ceremony 档为 S0（客观定价已是最低仪式档）且只改 1-2 个文件——S0 的 CLI 清单核验仍要执行，跳过的只是发散深查
 3. 即使跳过，也要输出"Design Grill skipped"和原因，不能静默跳过。
 
-### 输入材料（2026-09-19-review-material-pack：必读清单→材料包基准面）
-1. **评审材料包（基准面——checklist 逐条只对本包作答）**：主代理派发时组装（design 要点 digest＋文件清单＋五个交叉点＋点名的源码片段，src/review-material-pack.js buildReviewMaterialPack('grill-first')）。
+### 输入材料（材料包基准面——CLI 注入素材半边＋主代理补点名半边，2026-09-19-review-material-cli-wiring）
+1. **评审材料包（基准面——checklist 逐条只对本包作答）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('grill-first')：design 要点 digest＋文件清单）；「五个交叉点」节留位——派发前由你补齐五点（每点 title＋file:line 锚，如需源码片段按同文件 extractSnippets 口径附），留空则评审者按 cannot_verify 列缺件。tier=independent 时把补完的整包贴进子代理派发 prompt：
+{REVIEW_MATERIALS}
 2. 包外文件可按需定向查证（列明查过的文件），**禁止全量扫读仓**——矛盾经常藏在交叉处，定向读那一处，不读整个仓。
 3. **自检首项（先于一切审查项）**：材料包是否足以逐条作答下方审查清单；不足以作答→cannot_verify＋在 requiredEvidence 列缺件（缺什么列什么——这是包质量问题不是你的问题），不要靠全量扫读自救。
 4. decisions.md 全文可读（决策条目是审查对象本体，不属于扫读面）。

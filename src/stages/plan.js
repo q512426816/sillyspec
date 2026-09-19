@@ -358,7 +358,9 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 
 ### tier=independent 时：启动 plan-review 子代理
 {PRIOR_REVIEW_FACTS}
-用 Agent tool 启动子代理（subagent_type: general），**材料包口径（2026-09-19-review-material-pack）**——派发 prompt 按包组 装（src/review-material-pack.js buildReviewMaterialPack('plan-review')：design 硬约束＋plan 相对差量＋点名锚），prompt 要点：
+用 Agent tool 启动子代理（subagent_type: general），**材料包口径（2026-09-19-review-material-cli-wiring）**——CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('plan-review')：design 硬约束，缺「全局硬约束」节时 decisions.md P0/P1 accepted 决策兜底）；「plan 差量」节留位——派发前由你逐约束判定补齐（一致/偏离/未覆盖＋注），留空则评审者按 cannot_verify 列缺件。把补完的整包贴进派发 prompt：
+{REVIEW_MATERIALS}
+prompt 要点：
 1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):

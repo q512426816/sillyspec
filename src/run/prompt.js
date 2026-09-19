@@ -1464,13 +1464,26 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           priorFactsMd = priorFactsMd ? priorFactsMd + blockMd : blockMd
         }
       } catch {}
+      // {REVIEW_MATERIALS} 机械组装（2026-09-19-review-material-cli-wiring，Gap 1 收口）：CLI 半边
+      // 素材（designDigest/fileList/硬约束/diff 摘要/热区/checklist）经 assembleStageReviewMaterials
+      // 组包注入（specBase 用上方 tierSpecBase——块内唯一解析源，平台模式不漂）；主代理点名半边
+      // （五交叉点/plan 差量）留位，模板补位指引接手。占位符在场才组装（省无槽步骤的 git IO）；
+      // best-effort：失败空串（与占位符缺失同态，模板散文兜底）。
+      let reviewMaterialsMd = ''
+      if (promptText.includes('{REVIEW_MATERIALS}')) {
+        try {
+          const { assembleStageReviewMaterials } = await import('../review-material-pack.js')
+          const matStage = stageName === 'brainstorm' ? 'grill-first' : stageName === 'plan' ? 'plan-review' : 'execute-qa'
+          reviewMaterialsMd = await assembleStageReviewMaterials({ stage: matStage, cwd, changeName, specBase: tierSpecBase })
+        } catch { /* 组装 best-effort：失败零注入 */ }
+      }
       promptText = promptText
         .split('{REVIEW_TIER}').join(ceremonyInjection.tierValue + ceremonyInjection.menuMd)
         .split('{REVIEW_TIER_REASON}').join(tier.reason)
         .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
         .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
         .split('{PRIOR_REVIEW_FACTS}').join(priorFactsMd)
-        .split('{REVIEW_MATERIALS}').join('') // 2026-09-19-review-material-pack：三阶段材料包槽（组装方 buildReviewMaterialPack 注入；本注入链缺省空串——包由派发侧组好后再经本链二次替换，防双写）
+        .split('{REVIEW_MATERIALS}').join(reviewMaterialsMd) // 三阶段材料包槽（CLI 组装注入，Gap 1 收口——此前恒空串靠主代理手组，机械保证断一半；主代理点名半边由模板补位指引接手）
     } catch (e) {
       // 降级 self，避免 prompt 残留占位符
       promptText = promptText
