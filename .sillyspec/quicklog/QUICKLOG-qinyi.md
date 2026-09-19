@@ -30,3 +30,17 @@
 根因：five-cuts 归档走 --skip-apply：30 前缀 blast 自举表只存在于悬空提交 bbe30ab（分支已删），主仓 map 无 blast 段——evidence 门全失效（declarations=0 → evidenceRequired 恒 false）、会话/租约域变更判 S1 逃顶档
 方案：git show bbe30ab:.sillyspec/.../_module-map.yaml 提取 blast 段（39 行 3 条目）追加回主仓 map；known-issues 条目标记已修复
 结果：三档走位复验全绿：会话域 S3+evidence（2 hits）/门禁判定面 S2（2 hits）/零声明面 S1；blast-surface 27+rebuild-preserve 8 回归绿
+
+## ql-20260919-017-fa4d | 2026-09-19 18:46:01 | pre-push 测试债清偿：main 四处预存测试失败阻推送——①stage-review-checklist 字面锚滞后于 five-cuts D-009 措辞 ②docs-check-fix S7 字节对照钉未过滤 dab74fc 裸…
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260919-018-640f | 2026-09-19 18:55:49 | 自举声明表校验钉——blast/span_risk 段丢失防复发（今日 blast 段丢失事故的结构性收口）
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：自举声明表校验钉——blast/span_risk 段丢失防复发（今日 blast 段丢失事故的结构性收口）
+根因：five-cuts 归档 skip-apply 遗留：主仓 map blast 段整体缺失，loadBlastDeclarations 返 0——evidence 门恒 false、会话域逃顶档，丢段不报错是安静地不设防；今日已手工恢复（ql-016）但缺口仍在（任何 map 重写/skip-apply 可复发）
+方案：NEW:test/bootstrap-declaration-pin.test.mjs 三组 11 断言：blast ≥3 条目+域前缀在场+evidence ≥1+门禁 S2 在场 / span_risk ≥9 token+两族在场 / 三档走位语义钉（worktree→S3+evidence、stage-contract→S2、datetime→S1）——丢段 CI 即红且失败信息带恢复路径先例；连带：conventions 撞词条回填首日实测数字（单价 1/4 已验证非估计）；审计 tag 回收（对象已进 main）
+结果：钉 11/11 绿（含一次自身 bug 修正：loader 返回编译对象数组取 .pattern）；lint 含新测试文件

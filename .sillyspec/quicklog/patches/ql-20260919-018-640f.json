@@ -1,0 +1,55 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-a0d9c96e",
+  "totals": {
+    "files": 2,
+    "additions": 79,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "test/bootstrap-declaration-pin.test.mjs",
+      "declared": true,
+      "additions": 73,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/conventions.md",
+      "declared": true,
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-018-640f",
+  "sessionId": "quick-a0d9c96e",
+  "savedAt": "2026-09-19T10:57:14.868Z",
+  "patchSha256": "2a7ae41392d7b89cb4203805dfb57490c1aa293c76cee03ed7efc5fd67f4c9f8",
+  "patchStatus": "ok"
+}

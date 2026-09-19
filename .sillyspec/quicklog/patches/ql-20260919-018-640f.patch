@@ -1,0 +1,92 @@
+diff --git a/.sillyspec/knowledge/conventions.md b/.sillyspec/knowledge/conventions.md
+index a3dade2..7b35cba 100644
+--- a/.sillyspec/knowledge/conventions.md
++++ b/.sillyspec/knowledge/conventions.md
+@@ -77,3 +77,9 @@ checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移
+ ## 判级/定价/门禁输入必须项目声明，禁全宇宙词表
+ 
+ 危险度信号（判级 / 仪式定价 / 证据门）必须来自项目自己的声明面（路径前缀 / 结构件，如 `_module-map.yaml` blast 段），禁止工具自带的全宇宙关键词表当危险度——通用词表换个仓库全是噪声（HTTP session / lifecycle 回调 / 变量名 entryPoint 均为良性词），且判级引擎自身的源码与教学文案写满关键词，按「文档措辞 / 文件内容」判级必然打伤改引擎自身的变更（自指陷阱：扫变更面〔路径 / 行级 diff〕，不扫全文件不扫措辞）。显式人工通道（risk_level 类 frontmatter）是逃生补丁不是定价规则——出现「门禁逼 agent 虚标才放行」的信号时追输入源设计，不给机械字符串匹配加精度（否定抑制 / 枚举继承那类精修是给错误的仪器上油）；首次判级/定价早于显式声明落盘时声明会被粘住，此类机制必须给后补声明留重算通道。（2026-09-19-ceremony-pricing-five-cuts，api-matrix 变更因 design 措辞撞词被定 S3 顶档实证）
++
++  实测成本对照（2026-09-19 材料包口径首日，同日同仓同规模变更）：Design Grill 154万→34.7万 token、
++  plan 审 81万→18.5万、execute QA 228万→43.8万、填卡 229万双批→80万单批——**单价约 1/4，发现质量不降**
++  （每轮零阻断、gap 全有锚、QA 抓到真 bug specBase 推导错层）。省的是「每轮评审从零重建仓库认知」（~200x
++  信息放大），不是审的东西。评审轮次结构不动（少审这条路不通——两轮 QA 拦下错层与假设反转的价值
++  大于全部评审成本）。后续命中注入的会话：这是已验证的数字不是估计。
+diff --git a/test/bootstrap-declaration-pin.test.mjs b/test/bootstrap-declaration-pin.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/bootstrap-declaration-pin.test.mjs
+@@ -0,0 +1,73 @@
++/**
++ * 自举声明表校验钉（2026-09-19，坑 blast-section-lost-skipapply）
++ *
++ * 当天实证：five-cuts 归档走 --skip-apply 后主仓 map 的 blast 段整体缺失——
++ * loadBlastDeclarations 返回 0 条 → evidence 门恒 false、会话/租约域变更判 S1
++ * 逃顶档。**丢段不报错，是安静地不设防**——任何一次 map 重写/skip-apply/手工合并
++ * 都可能复发。本钉在 CI 层硬拦：本仓 map 的声明表低于自举基线即红。
++ *
++ * 三组断言：
++ *   1. blast 段：≥3 条目；会话域关键前缀在场（worktree/progress/dispatch 域至少各一）；
++ *      S3+evidence 条目 ≥1（evidence 门的本仓存续依据）；门禁判定 S2 条目在场。
++ *   2. span_risk 段：loadSpanRiskPatterns ≥9 token；migration/scheduling 族各 ≥1。
++ *   3. 走位抽样：worktree.js → S3+evidence；stage-contract.js → S2；datetime.js → S1
++ *      （三档语义钉——丢了哪一档这组立刻指认）。
++ */
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { loadBlastDeclarations } from '../src/blast-surface.js'
++import { loadSpanRiskPatterns } from '../src/span-risk-surface.js'
++import { resolveChangeRisk } from '../src/change-risk-profile.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const repoRoot = join(__dirname, '..')
++const specBase = join(repoRoot, '.sillyspec')
++
++let passed = 0, failed = 0
++function assert(name, cond, detail = '') {
++  if (cond) { console.log(`✅ PASS: ${name}`); passed++ }
++  else { console.log(`❌ FAIL: ${name}${detail ? ' — ' + detail : ''}`); failed++ }
++}
++
++console.log('\n=== 自举声明表校验钉（blast 段丢失防复发）===\n')
++
++// ── 组一：blast 段基线 ──
++{
++  const { declarations } = loadBlastDeclarations({ specBase, project: 'sillyspec' })
++  assert('组一：blast 声明 ≥3 条目（自举基线）', declarations.length >= 3, `实际 ${declarations.length}——若 <3 疑似段丢失（查 git log 该文件 + 悬空提交恢复先例 ql-016）`)
++  const evidenceEntries = declarations.filter(d => d.evidence === true)
++  assert('组一：S3+evidence 条目 ≥1（evidence 门的存续依据）', evidenceEntries.length >= 1, '全部无 evidence——证据门在本仓失效')
++  const flat = declarations.flatMap(d => d.prefixes)
++  assert('组一：会话域前缀在场（agent-session-log / friction-ledger / progress/ 之一）',
++    flat.some(p => /agent-session-log|friction-ledger|progress/.test(p)))
++  assert('组一：worktree 域前缀在场', flat.some(p => /worktree|wt-commit|git-helper/.test(p)))
++  assert('组一：门禁判定 S2 条目在场（stage-contract / ceremony-tier 之一）',
++    declarations.some(d => d.tier === 'S2' && d.prefixes.some(p => /stage-contract|ceremony-tier/.test(p))))
++}
++
++// ── 组二：span_risk 段基线 ──
++{
++  const compiled = loadSpanRiskPatterns({ specBase, project: 'sillyspec' })
++  const tokens = compiled.map(e => e && e.pattern).filter(Boolean)
++  assert('组二：span_risk ≥9 token（自举基线）', tokens.length >= 9, `实际 ${tokens.length}`)
++  assert('组二：migration 族在场', tokens.some(t => /migrat/.test(t)))
++  assert('组二：scheduling 族在场', tokens.some(t => /sched|cron|job/.test(t)))
++}
++
++// ── 组三：三档走位语义钉 ──
++{
++  const { declarations } = loadBlastDeclarations({ specBase, project: 'sillyspec' })
++  const top = resolveChangeRisk({ files: ['src/worktree.js', 'src/friction-ledger.js'], blastDeclarations: declarations })
++  assert('组三：会话域 → S3+evidence', top.tier === 'S3' && top.evidenceRequired === true, `实际 ${top.tier}/${top.evidenceRequired}`)
++  const mid = resolveChangeRisk({ files: ['src/stage-contract.js', 'src/ceremony-tier.js'], blastDeclarations: declarations })
++  assert('组三：门禁判定面 → S2', mid.tier === 'S2' && mid.evidenceRequired === false, `实际 ${mid.tier}/${mid.evidenceRequired}`)
++  const low = resolveChangeRisk({ files: ['src/datetime.js', 'docs/readme.md'], blastDeclarations: declarations })
++  assert('组三：零声明面 → S1', low.tier === 'S1' && low.evidenceRequired === false, `实际 ${low.tier}/${low.evidenceRequired}`)
++}
++
++console.log(`\n✅ 通过: ${passed}  ❌ 失败: ${failed}`)
++if (failed > 0) {
++  console.error('\n💥 自举声明表低于基线——blast/span_risk 段疑似丢失。恢复路径先例：git show <悬空提交>:.sillyspec/docs/sillyspec/modules/_module-map.yaml 取段回落（ql-20260919-016）')
++  process.exit(1)
++}
