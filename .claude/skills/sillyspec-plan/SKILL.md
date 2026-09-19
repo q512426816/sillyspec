@@ -135,7 +135,7 @@ plan 完成校验会按仓分段对账：跨仓仓路径相对跨仓仓根校验
 
 ### Wave 划分
 
-同 Wave 内允许混合主仓 + 跨仓 task（execute 按 per-task workdir 派发，不强制同 Wave 同 repo）。共享文件的 task 仍须分到不同 Wave（同 Wave 共享文件会被强制并行，子代理互相覆盖）。plan.md 无显式 Wave 划分（light 级无任务区）不再被 postcheck 硬拦——execute 按单隐式 Wave 串行执行（共享文件安全，仅 warning 提示）；显式 Wave 的同 Wave 共享文件硬拦维持。
+同 Wave 内允许混合主仓 + 跨仓 task（execute 按 per-task workdir 派发，不强制同 Wave 同 repo）。共享文件的 task 仍须分到不同 Wave（同 Wave 共享文件会被强制并行，子代理互相覆盖）。
 
 ## 阶段流转
 

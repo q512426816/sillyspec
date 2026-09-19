@@ -25,7 +25,7 @@ quick 阶段的 `--change` 语义是「关联变更」**且会触发步骤重置
 > `sillyspec quick` 是 `sillyspec run quick` 的顶层别名，两者等价。
 
 ```bash
-sillyspec run quick --input "<一句话任务描述>"  # 启动新会话（首次启动必带 --input，见下方参数表；输出当前步骤 prompt + 记录 baseline）
+sillyspec run quick                            # 输出当前步骤 prompt（首次会记录 baseline）
 sillyspec run quick --done --output "摘要"     # 完成当前步骤
 sillyspec run quick --status                   # 查看阶段进度
 sillyspec run quick --skip                     # 跳过可选步骤
@@ -50,7 +50,7 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 | 参数 | 说明 |
 |---|---|
 | `--spec-dir <path>` | 指定规范目录（默认 `<项目>/.sillyspec`） |
-| `--input "<一句话任务描述>"` | 通用参数，**quick 启动必带（agent 视角必填）**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。漏带则落「(quick 任务)」占位标题——CLI 启动即警告并建议放弃重启补带（长任务白跑一轮）、平台「快速修复」列表默认隐藏进行中的占位条目、语义标题要到最终 `--done` 才回填。仅两豁免可免传：关联变更有 proposal/design 标题可自动提取；CI/脚本确无语义可描述 |
+| `--input "<一句话任务描述>"` | 通用参数，**quick 启动时强烈建议带**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。不带则落「(quick 任务)」占位标题——平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 `--done` 才回填（关联变更有 proposal/design 标题时可自动提取，免传） |
 | `--non-interactive` | CI/脚本下禁用交互式 prompt |
 | `--interactive` | 强制交互（即便 stdin 非 TTY） |
 | `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
@@ -84,21 +84,21 @@ sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会�
 # 推荐启动：带一句话语义标题（QUICKLOG/平台快速修复列表进行中即可见可读）
 sillyspec run quick --input "修复登录限流 INCR 计数误清" --linked-changes none --files src/auth.ts
 
-# 单变更项目，直接开始（--input 必带）
-sillyspec run quick --input "<一句话任务描述>"
+# 单变更项目，直接开始
+sillyspec run quick
 
 # 多变更项目，显式不关联
-sillyspec run quick --input "<一句话任务描述>" --linked-changes none
+sillyspec run quick --linked-changes none
 
-# 多变更项目，关联到指定变更（关联变更有 proposal/design 标题时可免 --input）
+# 多变更项目，关联到指定变更
 sillyspec run quick --linked-changes 2026-07-03-add-login
 
-# CI/脚本（非交互，避免 prompt 崩溃；无语义可描述时是唯一可省 --input 的场景）
+# CI/脚本（非交互，避免 prompt 崩溃）
 sillyspec run quick --non-interactive
 sillyspec run quick --done --linked-changes none --output "修复手机号校验"
 
 # 限定修改文件范围
-sillyspec run quick --input "<一句话任务描述>" --files src/phone.ts,src/phone.test.ts
+sillyspec run quick --files src/phone.ts,src/phone.test.ts
 ```
 
 ## 铁律
