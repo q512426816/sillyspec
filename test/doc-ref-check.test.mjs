@@ -28,6 +28,7 @@ if (!result.ok) {
   }
   console.error(`\n修复指引：行号漂移 → 更新文档行号到当前源码；文件删改名 → 更新引用路径；`)
   console.error(`关键词缺失但行号正确 → 确认符号是否改名，改文档 token 或行号。`)
+  console.error(`裸文件名引用（foo.js:123 形态）→ 改写为仓根相对全路径（src/foo.js:123）——裸名靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效；变更文档写作期就写全路径可免此返工。`)
   process.exit(1)
 }
 

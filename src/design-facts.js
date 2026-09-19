@@ -301,6 +301,7 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   lines.push(`# 设计文档（Design）— ${change}`)
   lines.push('')
   lines.push(`<!-- 由 sillyspec design-init 生成的骨架（${change}）——逐节填散文后删除本注释；存量手写路径不受影响 -->`)
+  lines.push('<!-- 引用规范：全文源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工） -->')
   lines.push('')
 
   lines.push('## 背景')
