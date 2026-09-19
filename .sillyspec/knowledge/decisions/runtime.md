@@ -180,3 +180,30 @@ supersedes：无（修订 design 初稿注入时机）
 理由：不降级。根因是 `prefetchDiffFileSet` 的 diffFileSet 只算 `git diff base..head`（worktree 已提交），而草稿归属（generateTaskReviewDrafts）并入了 porcelain 未提交 + merge-base committed 补齐——子代理默认不 commit 时 diffFileSet 恒空/缺文件，勾选守卫全部跳过。修法：把「worktree 改动文件集（porcelain ∪ committed merge-base 补齐）」抽成公共 helper，complete.js 勾选守卫与 task-review.js 草稿归因共用（两处既有「口径须同步改」注记正好收口）。同文件多 task 归属：`attributeSuspectTasks` 首中即止改全量多归属（map 值 string[]），③类报告渲染完整作者列表。
 故障面：helper 对 meta 缺失/in-place 返回 [] → 守卫退回 base..head 现状（fail-open 不放大勾选面）；多归属渲染膨胀 → 截断展示
 退役判据：review/勾选改为 per-task 锡点锚定（base/head 写进 task 卡）全量落地时
+
+## D-003@v1 完成门「声明追赶重定价」——无摩擦可降、摩擦地板不退（「只升不降」契约修订）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：escalateCeremonyTierAtGate 在档位文件在场时先用当前 design/plan 重跑 computeInitialCeremonyTierDoc，再跑摩擦升档。**transitions 为空且 ledger 摩擦未超阈：开跑价整档换成重算结果，可升可降**，reasons 留「声明追赶重定价」；**已有摩擦迁移：地板不退**，重算只更新 blast/span 分量，最终档=max(重算档, 摩擦地板)。懒 agent 靠删关键词把真 S3 写成 S0 仍由收口双跑按实际 diff 硬拦（verify-postcheck 事实面 detectChangeRisk 无声明通道）。
+故障面：重定价抖动（design 反复改声明 → 档位反复横跳）——每次迁移留 transitions 审计痕，评审可见；摩擦地板保证已付仪式价不白付。
+退役判据：若声明通道前移到定价时刻强制存在（如 brainstorm 门要求 frontmatter 先行），追赶重定价需求自然消失。
+
+## D-004@v1 readDesignOwnFiles 认「## 文件变更清单」标题（解析器/模板漂移修复）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：同时认 `## 6.` 数字标题与 `## 文件变更清单`（含带括注形态「## 文件变更清单（…）」）；阈值 SPAN_FILES_THRESHOLD=8 不动；旧数字标题行为不变。
+故障面：标题形态再演进（如双语/别名）会再漂——接受双形态白名单，不做模糊匹配（宁窄勿宽，误解析面小于漏解析面）。
+退役判据：design 迁结构化产物（yaml/json 清单）后文本标题解析整体退役。
+
+## D-001@v2 重定范围——四件事编队（supersedes D-001@v1 五刀编队）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：范围收成四件事（用户裁定原文「范围收成四件事：路径声明的 blast、追赶重定价、span 标题、高报记账」）：①blast 轴项目化（D-008）②追赶重定价（D-003 保留）③span 标题（D-004 保留）④高报记账（D-005 保留）。刀 1/5 作废（D-002/D-006 superseded）；变更名保留不改（内容重定，目录 churn 无收益）。
+故障面：范围仍跨三模块+scan 文档——rebuild 保留手工字段（D-008）与九消费点切换是两大执行风险，分别以回归测试与逐点处置表对冲。
+退役判据：若路径声明面实证维护成本过高（声明漂移没人管），重审是否引入 scan 自动推导建议（仍需人工确认落 map）。

@@ -115,3 +115,39 @@ supersedes：D-003@v1
 锚点：未记录
 最近确认：318e80c
 理由：①聚合键从「提交时间最旧」改为「落后最多」：对去重基线集逐个 rev-list --count，取计数最大者（拓扑序免疫日期倒挂，且直接就是保守目标本体——落后最多=漂移窗最大）；N≤去重基线数，成本可忽略。②finalizeRefresh 内 specDir = platformOpts?.specRoot || null 再传 runScanPostCheck（对齐 scan-profile.js:356 executeScanFinalize 口径）。③①拍在 guard.refreshDocs 各条目记文档内容 sha256；--done 逐文档比对——内容未变者**默认不 bump**，打印「未编辑即盖章」提示，需显式 --docs 点名或 --force 才推进（工单零改动文档本就不该吃新基线）。附带 P3 措辞修正：①拍写面表述补 _facts.md；FR-5 ④dirty 明确 --force 不可越；staleness 聚合条目从 FR-7 挪入 FR-4；审计平台路径根=resolveRuntimeRoot(platformOpts, specBase)。
+
+## D-001@v2 重定范围——四件事编队（supersedes D-001@v1 五刀编队）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：范围收成四件事（用户裁定原文「范围收成四件事：路径声明的 blast、追赶重定价、span 标题、高报记账」）：①blast 轴项目化（D-008）②追赶重定价（D-003 保留）③span 标题（D-004 保留）④高报记账（D-005 保留）。刀 1/5 作废（D-002/D-006 superseded）；变更名保留不改（内容重定，目录 churn 无收益）。
+故障面：范围仍跨三模块+scan 文档——rebuild 保留手工字段（D-008）与九消费点切换是两大执行风险，分别以回归测试与逐点处置表对冲。
+退役判据：若路径声明面实证维护成本过高（声明漂移没人管），重审是否引入 scan 自动推导建议（仍需人工确认落 map）。
+
+## D-008@v2 rebuild 保留机制实证修正——--force 文本回插（supersedes D-008@v1 的 rebuild 表述，其余条款不变）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：修法改为：--force 重发射时从 existingMap 文本提取顶层 blast 段原样回插（未知顶层段通用回插）；回归钉断言「--force 写盘后 blast 段在场且字节不变」。v1 其余条款（map 主声明/local 只升/未命中 S1/禁回退词表/不留 legacy）不变。
+故障面：文本回插对坏形态 blast 段（手写残缺 yaml）的容错——提取失败时警告并丢弃该段（rebuild 本就是重建语义，宁失勿错），回归钉覆盖健康段。
+退役判据：同 D-008@v1。
+
+## D-010@v1 sillyspec 自举声明表口径——S3 钉真运行时域、门禁判定文件 S2、core-engine 不整模块标价
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：**S3+evidence 只钉真正的会话/租约/worktree/dispatch 路径**（runtime 会话域文件、worktree 模块、dispatch 域）；**门禁判定文件最多 S2**（stage-contract/verify-postcheck/verify-probes/ceremony-tier/review-tier/change-risk-profile/quick-gate-profile/probe7-anchor-check/run/gates 等）；**core-engine 不整模块标价**（datetime/constants/fs-atomic/taskcard 等零声明）。按此口径 api-matrix 类变更新架构下 = S2（8 文件 span），不是 S3——「改门禁判定白名单」与「改会话租约」不同价。具体路径清单在 design 落全量表。
+故障面：声明表与模块演化脱节（新文件落错价）——map 评审流程可见，scan 层不自动改价（宁缺勿错）。
+退役判据：无。
+
+## D-005@v1 非目标显式清单＋合规项
+状态：implemented
+变更：2026-09-19-review-material-pack
+锚点：未记录
+最近确认：7438d34
+理由：非目标：不改评审轮次（S2/S3 菜单不动）、不改填卡步骤（plan.js:500 的 batch 子代理另立变更或明示非目标）、不动事实面计量（⑥ 另走 quick）、不吞 verify 级联死锁两轮（已有 postmortem ql-013）。**合规项（本变更触 src/stages/*.js prompt，CLAUDE.md 规则 19）**：改完必须重跑 `node docs/prompt/_extract.mjs` 并同步 docs/prompt/*.md——列入文件清单，防 doc-ref-check 层面返工。**自指纪律**：本变更在评审域，brainstorm 完成门按当时 design 定档且只升不降——risk_level 必须在该 --done 前写入 frontmatter（否则关键词定顶格、把要省的钱先花掉）。
+故障面：无。
+退役判据：无。

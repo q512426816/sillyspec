@@ -91,3 +91,33 @@ created_at: 2026-09-18T00:26:28.615Z
 状态：active
 摘要：注清零校验
 最近确认：6786025
+
+## FR-core-engine-015 covered-service 判定形态满足覆盖等式
+变更：2026-09-19-api-matrix-service-coverage
+状态：active
+摘要：（无场景名）
+最近确认：7438d34
+
+## FR-core-engine-016 测试锚点硬约束与八面文案同源
+变更：2026-09-19-api-matrix-service-coverage
+状态：active
+摘要：（无场景名）
+最近确认：7438d34
+
+## FR-core-engine-017 四阶段评审材料包契约
+变更：2026-09-19-review-material-pack
+状态：active
+摘要：（无场景名）
+最近确认：7438d34
+
+## FR-core-engine-018 再审唯一材料化＋基准面语义
+变更：2026-09-19-review-material-pack
+状态：active
+摘要：（无场景名）
+最近确认：7438d34
+
+## FR-core-engine-019 机械验收钉
+变更：2026-09-19-review-material-pack
+状态：active
+摘要：（无场景名）
+最近确认：7438d34

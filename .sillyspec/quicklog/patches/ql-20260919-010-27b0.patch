@@ -1,0 +1,271 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index e934647..c6e6f4a 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -206,6 +206,7 @@ modules:
+     paths:
+       - src/change-list.js
+       - src/quicklog.js
++      - src/quick-session-owner.js
+ 
+   hooks:
+     status: active
+diff --git a/src/run/command.js b/src/run/command.js
+index 62bf186..d1ede94 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -36,6 +36,7 @@ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
+ import { stageRegistry, auxiliaryStages } from '../stages/index.js'
+ import { definition as brainstormAutoDef } from '../stages/brainstorm-auto.js'
+ import { setQuickFileNotes } from '../quicklog.js'
++import { checkQuickSessionOwner, writeQuickSessionOwner } from '../quick-session-owner.js'
+ import { hasDecisionId } from '../decisions-io.js'
+ 
+ // F2/F4: 哪些 flag 吃下一个 token 作「值」（其余 --flag 都是布尔，不吞值）。
+@@ -731,6 +732,15 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         }
+         quickSessionId = 'quick-' + randomUUID().slice(0, 8)
+         quickSidFresh = true
++        // 归属首建（quick-shared-pointer-stomp，2026-09-19 实证修复）：创建者 agent 身份落
++        // owner.json（与 guard.json 同目录，随 --cancel 目录清理销毁）。身份三级
++        // flag > env > anon@host——刻意不传 quickChangeName（resolveSessionIdentity 的
++        // quick 会话级会把身份解析成会话 id 本身、恒 self 失去区分度）。fail-open：
++        // 落盘失败不阻断启动（核验侧 owner 缺失即放行）。
++        try {
++          writeQuickSessionOwner(resolveRuntimeRoot(platformOpts, specRoot), quickSessionId,
++            resolveSessionIdentity({ flagSession: getFlagValue('--session'), warn: false }).session)
++        } catch { /* owner 落盘失败 → 核验侧按无 owner 放行 */ }
+         // 坑 quick-sync-block-filenotes-and-quicklog-mixed-commit 坑1③：新会话 ID 生成即打印
+         // 第一行——后续 agent-log push / spec-sync 等 best-effort 网络动作（平台慢时分钟级）
+         // 若把命令拖过 exec 超时，调用方仍能从输出头部拿到 sessionId 续用（--status / guard.json
+@@ -744,6 +754,25 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     }
+   }
+ 
++  // ── quick 会话归属核验（quick-shared-pointer-stomp，2026-09-19 实证修复）──
++  // 变更类操作（--done/--skip/--reset/--reopen/--cancel）在会话非本进程新建时核验 owner；
++  // --status 只读豁免；fresh 会话本进程刚落 owner 恒过。异主 exit 2——接管=显式
++  // --session <owner>（与 change 所有权护栏同语义；身份三级缺省 anon@host 机器级只拦他机）。
++  // 无 owner 文件的存量会话放行（brownfield 兼容）。
++  if (stageName === 'quick' && !quickSidFresh && quickSessionId
++    && (isDone || isSkip || isReset || isReopen || isCancel)) {
++    const actorSession = resolveSessionIdentity({ flagSession: getFlagValue('--session'), warn: false }).session
++    const ownerVerdict = checkQuickSessionOwner(resolveRuntimeRoot(platformOpts, specRoot), quickSessionId, actorSession)
++    if (!ownerVerdict.ok) {
++      console.error(`\n❌ quick 会话 ${quickSessionId} 属于其他会话（owner: ${ownerVerdict.owner}），当前会话标识 ${ownerVerdict.actor}，拒绝操作。`)
++      console.error('   （多 agent 并行防互踩：共享指针 current-quick-run-id 是 last-writer-wins，2026-09-19 实证异会话 --done 覆写过他人 QUICKLOG 条目）')
++      console.error('   - 继续自己的会话：sillyspec run quick --status 查各会话，--change <自己的 quick-xxx> 精确指定')
++      console.error(`   - 确需接管他者会话：--session ${ownerVerdict.owner}（显式接管，等同所有权护栏语义）`)
++      console.error('   - 会话标识三级：--session > SILLYSPEC_SESSION_ID > anon@<host>（缺省机器级只拦他机）')
++      process.exit(2)
++    }
++  }
++
+   // ── 本地 agent 会话日志登记 + 上报（平台会话展示用，best-effort）──
+   // 平台/daemon 模式下 SillyHub 只能看到 CLI 阶段信息，看不到本地 agent 的实际执行日志。
+   // 在此探测当前 agent 环境（Claude Code / Codex / ZCode transcript / SILLYSPEC_AGENT_LOG
+diff --git a/src/quick-session-owner.js b/src/quick-session-owner.js
+new file mode 100644
+--- /dev/null
++++ b/src/quick-session-owner.js
+@@ -0,0 +1,63 @@
++/**
++ * quick-session-owner.js — quick 会话归属隔离（多 agent 并行防互踩）
++ *
++ * 坑 quick-shared-pointer-stomp（2026-09-19 实证）：quick 会话 id 经共享指针
++ * .runtime/current-quick-run-id（last-writer-wins）+ --done fallback 解析，并行 agent
++ * 会话的 --done 会静默步进/收尾他者会话（实证：他者会话 QUICKLOG 条目标题被覆写、
++ * 四字段嵌合）。既有护栏两处缺口：resolveSessionIdentity 的 quick 场景身份=会话 id
++ * 本身（selfSession==changeName 恒 self，不区分创建者）；Q7 守卫只拦 fallback 命中
++ * 已完成/stale 会话，活动中的他者会话照踩。
++ *
++ * 修复语义（与 change 所有权护栏同三级：--session > SILLYSPEC_SESSION_ID >
++ * anon@<host>，缺省机器级只拦他机）：quick 会话创建时把创建者 agent 身份落
++ * .runtime/quick-sessions/<sid>/owner.json（与 guard.json 同目录，随 --cancel
++ * 目录清理销毁）；变更类操作（--done/--skip/--reset/--reopen/--cancel）前核验归属，
++ * 异主 exit 2（接管=显式 --session <owner>）。无 owner 文件的存量会话放行
++ * （brownfield 兼容）。核验身份刻意不走 quick 会话三级——那会把身份解析成会话 id
++ * 本身，恒 self 失去区分度。
++ */
++import { readFileSync, mkdirSync } from 'fs'
++import { join, dirname } from 'path'
++import { writeAtomicSync } from './fs-atomic.js'
++
++/** owner 文件路径（<runtimeRoot>/quick-sessions/<sid>/owner.json，与 guard.json 同目录） */
++export function quickSessionOwnerPath(runtimeRoot, sessionId) {
++  return join(runtimeRoot, 'quick-sessions', sessionId, 'owner.json')
++}
++
++/** 读创建者身份：文件缺失 / 坏 JSON / owner 非法形态 → null（按无 owner 放行处理） */
++export function readQuickSessionOwner(runtimeRoot, sessionId) {
++  if (!runtimeRoot || !sessionId) return null
++  try {
++    const doc = JSON.parse(readFileSync(quickSessionOwnerPath(runtimeRoot, sessionId), 'utf8'))
++    if (doc == null || typeof doc !== 'object' || Array.isArray(doc)) return null
++    const owner = typeof doc.owner === 'string' ? doc.owner.trim() : ''
++    return owner ? owner : null
++  } catch {
++    return null
++  }
++}
++
++/** 创建时落 owner（fail-open：调用方吞异常，落盘失败不阻断启动，核验侧缺失即放行） */
++export function writeQuickSessionOwner(runtimeRoot, sessionId, owner) {
++  if (!runtimeRoot || !sessionId || !owner || !owner.trim()) return false
++  const p = quickSessionOwnerPath(runtimeRoot, sessionId)
++  mkdirSync(dirname(p), { recursive: true })
++  writeAtomicSync(p, JSON.stringify({ owner: owner.trim(), at: new Date().toISOString() }, null, 2))
++  return true
++}
++
++/**
++ * 归属核验（纯判定，exit 语义归调用方）：
++ *   owner 文件缺失（存量会话/落盘失败）→ { ok: true, legacy: true } 放行；
++ *   owner === actor → { ok: true }；
++ *   owner !== actor → { ok: false, owner, actor }（调用方 exit 2 + 接管指引）；
++ *   入参不全（无法判定）→ { ok: true } 放行（fail-open，Q7 守卫同立场——宁可少拦不误伤单用户流）。
++ */
++export function checkQuickSessionOwner(runtimeRoot, sessionId, actor) {
++  if (!runtimeRoot || !sessionId || !actor) return { ok: true }
++  const owner = readQuickSessionOwner(runtimeRoot, sessionId)
++  if (owner == null) return { ok: true, legacy: true }
++  if (owner === actor) return { ok: true }
++  return { ok: false, owner, actor }
++}
+
+diff --git a/test/quick-session-owner.test.mjs b/test/quick-session-owner.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/quick-session-owner.test.mjs
+@@ -0,0 +1,131 @@
++/**
++ * quick 会话归属隔离测试（quick-shared-pointer-stomp，2026-09-19 实证修复）
++ *
++ * 覆盖：
++ *   1. owner 文件路径形态（<runtimeRoot>/quick-sessions/<sid>/owner.json，与 guard.json 同目录）
++ *   2. write→read 往返（owner trim、JSON 形态含 at）
++ *   3. read：文件缺失 / 坏 JSON / owner 非字符串 / 空白 owner → null（按无 owner 放行）
++ *   4. write：入参不全 → false 不抛错（fail-open 创建面）
++ *   5. check：owner 文件缺失 → { ok:true, legacy:true }（存量会话放行）
++ *   6. check：owner === actor → ok（同会话续用）
++ *   7. check：owner !== actor → { ok:false, owner, actor }（事故回归钉——异会话 --done 必拒）
++ *   8. check：入参不全 → ok（fail-open，Q7 同立场）
++ *
++ * 风格：自研 assert（与 quick-test-gate.test.mjs 同），tmp fixture 不引入测试框架。
++ */
++import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++import { quickSessionOwnerPath, readQuickSessionOwner, writeQuickSessionOwner, checkQuickSessionOwner } from '../src/quick-session-owner.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (condition) {
++    console.log(`  ✅ PASS: ${msg}`)
++  } else {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++console.log('\n=== quick-session-owner：quick 会话归属隔离 ===\n')
++
++// 1. 路径形态
++{
++  const p = quickSessionOwnerPath('/rt', 'quick-ab12cd34')
++  const norm = p.replace(/\\/g, '/')
++  assert(norm === '/rt/quick-sessions/quick-ab12cd34/owner.json', `路径形态 quick-sessions/<sid>/owner.json（实际 ${norm}）`)
++}
++
++// 2. write→read 往返
++{
++  const rt = makeTmpDir('qso-roundtrip-')
++  const ok = writeQuickSessionOwner(rt, 'quick-ab12cd34', 'agent-a')
++  const owner = readQuickSessionOwner(rt, 'quick-ab12cd34')
++  assert(ok === true, 'write 返回 true')
++  assert(owner === 'agent-a', `read 回读创建者身份（实际 ${owner}）`)
++  const raw = JSON.parse(String.raw`{}`) // 形态由下条直接读文件核
++  void raw
++  const fs = await import('fs')
++  const doc = JSON.parse(fs.readFileSync(join(rt, 'quick-sessions', 'quick-ab12cd34', 'owner.json'), 'utf8'))
++  assert(doc.owner === 'agent-a' && typeof doc.at === 'string', 'owner.json 形态含 owner/at')
++  // owner trim
++  writeQuickSessionOwner(rt, 'quick-ef56ab78', '  agent-b  ')
++  assert(readQuickSessionOwner(rt, 'quick-ef56ab78') === 'agent-b', 'owner 写入/读取两侧 trim')
++}
++
++// 3. read 异常形态
++{
++  const rt = makeTmpDir('qso-badread-')
++  assert(readQuickSessionOwner(rt, 'quick-none0000') === null, '文件缺失 → null')
++  const sid = 'quick-bad00001'
++  mkdirSync(join(rt, 'quick-sessions', sid), { recursive: true })
++  writeFileSync(join(rt, 'quick-sessions', sid, 'owner.json'), '{not json', 'utf8')
++  assert(readQuickSessionOwner(rt, sid) === null, '坏 JSON → null')
++  writeFileSync(join(rt, 'quick-sessions', sid, 'owner.json'), JSON.stringify({ owner: 123 }), 'utf8')
++  assert(readQuickSessionOwner(rt, sid) === null, 'owner 非字符串 → null')
++  writeFileSync(join(rt, 'quick-sessions', sid, 'owner.json'), JSON.stringify({ owner: '   ' }), 'utf8')
++  assert(readQuickSessionOwner(rt, sid) === null, 'owner 空白 → null')
++}
++
++// 4. write 入参不全
++{
++  const rt = makeTmpDir('qso-badwrite-')
++  assert(writeQuickSessionOwner(null, 'quick-x', 'a') === false, 'runtimeRoot 缺 → false')
++  assert(writeQuickSessionOwner(rt, '', 'a') === false, 'sessionId 缺 → false')
++  assert(writeQuickSessionOwner(rt, 'quick-x', '  ') === false, 'owner 空白 → false')
++}
++
++// 5. check：owner 缺失（存量会话）
++{
++  const rt = makeTmpDir('qso-legacy-')
++  const v = checkQuickSessionOwner(rt, 'quick-old00001', 'agent-a')
++  assert(v.ok === true && v.legacy === true, 'owner 文件缺失 → 放行 + legacy 标记')
++}
++
++// 6. check：同主
++{
++  const rt = makeTmpDir('qso-self-')
++  writeQuickSessionOwner(rt, 'quick-mine0001', 'agent-a')
++  const v = checkQuickSessionOwner(rt, 'quick-mine0001', 'agent-a')
++  assert(v.ok === true && v.legacy === undefined, 'owner === actor → 放行（非 legacy）')
++}
++
++// 7. check：异主（事故回归钉——2026-09-19 实证：异会话 --done 步进他者会话、QUICKLOG 标题被覆写）
++{
++  const rt = makeTmpDir('qso-foreign-')
++  writeQuickSessionOwner(rt, 'quick-6f06b207', 'agent-owner')
++  const v = checkQuickSessionOwner(rt, 'quick-6f06b207', 'zcode-five-cuts')
++  assert(v.ok === false, '异会话操作 → 拒绝')
++  assert(v.owner === 'agent-owner' && v.actor === 'zcode-five-cuts', `拒绝载荷带 owner/actor（实际 ${v.owner}/${v.actor}）`)
++  // 接管语义：显式以 owner 身份操作 → 放行
++  const takeover = checkQuickSessionOwner(rt, 'quick-6f06b207', 'agent-owner')
++  assert(takeover.ok === true, '显式 --session <owner> 接管 → 放行')
++}
++
++// 8. check：入参不全 → fail-open
++{
++  const v1 = checkQuickSessionOwner(null, 'quick-x', 'a')
++  const v2 = checkQuickSessionOwner('/rt', '', 'a')
++  const v3 = checkQuickSessionOwner('/rt', 'quick-x', '')
++  assert(v1.ok === true && v2.ok === true && v3.ok === true, '入参不全 → 放行（fail-open）')
++}
++
++// 清理
++for (const d of tmpRoots) {
++  try { rmSync(d, { recursive: true, force: true }) } catch { /* best-effort */ }
++}
++
++console.log(`\n${failed === 0 ? '✅' : '❌'} quick-session-owner：${total - failed}/${total} 通过\n`)
++if (failed > 0) process.exit(1)

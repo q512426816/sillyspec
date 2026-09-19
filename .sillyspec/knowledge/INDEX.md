@@ -24,6 +24,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - 判别器|写入方|文件 → [conventions.md#新增写入方不得无中生有建判别器依赖的文件](conventions.md#新增写入方不得无中生有建判别器依赖的文件)
 - 漂移|维度|豁免|docs-check → [conventions.md#双维度报同一漂移信号时后加维度须豁免](conventions.md#双维度报同一漂移信号时后加维度须豁免)
 
+- 判级|定价|门禁|词表|关键词匹配|risk_level|仪式档|blast|危险度|风险等级|证据门 → [conventions.md#判级定价门禁输入必须项目声明禁全宇宙词表](conventions.md#判级定价门禁输入必须项目声明禁全宇宙词表)
 ## Patterns
 - 阶段定义|stage|stages → [patterns.md#stage-step-pattern](patterns.md#stage-step-pattern)
 - 数据库|SQLite|sql.js|DB → [patterns.md#database-first](patterns.md#database-first)
@@ -75,3 +76,4 @@ created_at: 2026-06-19T12:40:00+08:00
 ## FR 需求索引
 - core-engine|FR|需求|承接 → [fr/core-engine.md](fr/core-engine.md)
 - runtime|FR|需求|承接 → [fr/runtime.md](fr/runtime.md)
+- bin|FR|需求|承接 → [fr/bin.md](fr/bin.md)

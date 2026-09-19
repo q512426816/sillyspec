@@ -233,3 +233,111 @@ supersedes：D-001@v1
 理由：消费侧。`runRequiredEvidenceCheckV2` 逐文件核验（存在性/mtime）从单根（主仓 cwd）改双根：候选根 = [cwd, worktree 根]（worktree 根经 `specBase/.runtime/worktrees/<change>/meta.json` 解析，与 resolveVerifyChangedFiles 同源）；文件在任一根存在即 filesExist=true，mtime 取所在根 stat。diffHit 不动（resolveVerifyChangedFiles 已 worktree-aware）。生成时机不动——execute 期 Task Review Gate 写入是既有契约（gates.js:1172?）。
 故障面：worktree 根解析失败 → 退单根现状（误报回潮但不误放行）；双根同文件内容分叉取 worktree mtime → 主仓后写场景误判 mtimeOk=false → 属实报（主仓后写=apply 后态，不该在 verify 期）
 退役判据：verify 核验统一改在 worktree 内执行（单根化）时
+
+## D-001@v1 接口矩阵引入第五判定形态 covered-service（service 层承接计入覆盖）
+状态：implemented
+变更：2026-09-19-api-matrix-service-coverage
+锚点：未记录
+最近确认：7438d34
+理由：新增 verdict 枚举 `covered-service`：**计入分子、分母不变**（区别于 non-testable 的分母扣除——那是「不可测」，service 承接是「已测、覆盖层不同」）；证据列必须含**真实测试锚点**（复用 probe7-anchor-check 的测试文件口径：`.test.` / `test/` 路径 / file:line 形态），缺锚点即 error（与 non-testable 必须有一句理由同构——防滥用是 D-004@v1(api-coverage-smoke)「防挑好测的测」立意的延续，虚标 covered 反而是当前最大的诚实性漏洞）；不触发 PASS 封顶降级（区别于 partial——service 承接是已完成态不是移交待办），但 advisory 单独计数「N 端点由 service 层测试承接（非端点级）」保持评审可见。
+故障面：全部端点都标 covered-service、零端点级验证的系统性逃避——advisory 计数保持可见但不阻断（先观察滥用面再考虑上限；写端点的回执/集成门禁是独立门照常拦截）。
+退役判据：若接口矩阵迁结构化产物（design-frontmatter/api.yaml），覆盖形态语义随预填源切换重审；advisory 实证滥用面可忽略时移除计数注记。
+
+## D-002@v1 MATRIX_VERDICT_WHITELIST 两矩阵共用——covered-service 联动接受而非拆分
+状态：implemented
+变更：2026-09-19-api-matrix-service-coverage
+锚点：未记录
+最近确认：7438d34
+理由：接受联动不拆白名单。依据：两矩阵判定词汇本就「骨架口径注记字面同源」；验收矩阵语义上「验收项由非端点层测试承接」本就是正当形态（单测承接验收项是常态），联动是语义修正而非风险扩散。执行时必须核实探针 7 门（:872 附近）对 covered-service 的记账路径——不得落进 unfilled 分支误报。
+故障面：探针 7 记账分支若显式枚举 verdict 值（而非白名单判非）会把 covered-service 误判 unfilled——需测试覆盖「验收矩阵含 covered-service 行」用例。
+退役判据：若两矩阵判定词汇语义分化（各自需要不同枚举集），拆白名单为两份。
+
+## D-003@v1 方案选择——A（新枚举 covered-service）胜出
+状态：implemented
+变更：2026-09-19-api-matrix-service-coverage
+锚点：未记录
+最近确认：7438d34
+理由：选 A。**用户未应答（自主模式推进，非用户确认——可否决：--reopen 重选）**，依据：用户原始反馈方向（诚实标注 service 承接、不再被迫虚标 covered）与 A 完全对齐；B 的最小改动恰好牺牲本变更的目的本身（端点级/间接区分度、承接占比可审计、防滥用——原虚标问题被合法化）；C 把 partial 语义重载为「间接覆盖可放行」，与移交联动/PASS 封顶分支纠缠最深、回归面最大。
+故障面：自主选案未经用户实时确认——用户回看时若否决 A，需 --reopen 从 step 4 重做并 supersedes 本条。
+退役判据：用户回看确认方案 A（step 5 设计确认轮已实质覆盖——设计为 A 的直接展开且获用户实答「确认设计，继续」）。
+
+## D-003@v1 完成门「声明追赶重定价」——无摩擦可降、摩擦地板不退（「只升不降」契约修订）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：escalateCeremonyTierAtGate 在档位文件在场时先用当前 design/plan 重跑 computeInitialCeremonyTierDoc，再跑摩擦升档。**transitions 为空且 ledger 摩擦未超阈：开跑价整档换成重算结果，可升可降**，reasons 留「声明追赶重定价」；**已有摩擦迁移：地板不退**，重算只更新 blast/span 分量，最终档=max(重算档, 摩擦地板)。懒 agent 靠删关键词把真 S3 写成 S0 仍由收口双跑按实际 diff 硬拦（verify-postcheck 事实面 detectChangeRisk 无声明通道）。
+故障面：重定价抖动（design 反复改声明 → 档位反复横跳）——每次迁移留 transitions 审计痕，评审可见；摩擦地板保证已付仪式价不白付。
+退役判据：若声明通道前移到定价时刻强制存在（如 brainstorm 门要求 frontmatter 先行），追赶重定价需求自然消失。
+
+## D-005@v1 双跑高报 severity warn——只记账不阻断
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：增加高报态：事实档低于声明档 → severity 'warn'，写入 reasons/notes，verify 不回滚、archive 不阻断、不记 gate_rollback 摩擦；低报维持 error 硬拦。消费面（runCeremonyDualRunCheck 返回结构与 complete-handlers 接线）同步 'warn' 非阻断语义。
+故障面：高报免费化被滥用来「买保险」——高报自身代价是更重仪式（S3 两轮评审），自罚机制天然存在，无外部性。
+退役判据：无（单向低报硬拦是不可让步的诚实性门）。
+
+## D-001@v2 重定范围——四件事编队（supersedes D-001@v1 五刀编队）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：范围收成四件事（用户裁定原文「范围收成四件事：路径声明的 blast、追赶重定价、span 标题、高报记账」）：①blast 轴项目化（D-008）②追赶重定价（D-003 保留）③span 标题（D-004 保留）④高报记账（D-005 保留）。刀 1/5 作废（D-002/D-006 superseded）；变更名保留不改（内容重定，目录 churn 无收益）。
+故障面：范围仍跨三模块+scan 文档——rebuild 保留手工字段（D-008）与九消费点切换是两大执行风险，分别以回归测试与逐点处置表对冲。
+退役判据：若路径声明面实证维护成本过高（声明漂移没人管），重审是否引入 scan 自动推导建议（仍需人工确认落 map）。
+
+## D-007@v2 在途 api-matrix 变更不动档位文件（supersedes D-007@v1，entryPoint 论断随词表退役作废）
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：只保留：在途 api-matrix-service-coverage 继续按已锁定的 S3 跑完（已付仪式不追溯，排期解耦）。entryPoint「词汇碰撞非边界 bug」论断随散文匹配退役失去对象（D-008）——新架构下该词不再被任何路径匹配。
+故障面：无（零动作决策）。
+退役判据：无。
+
+## D-009@v1 仪式档与证据门分离——证据只认显式标记，不从仪式档推断
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：blast 声明两项独立属性：`tier`（仪式档）与 `evidence: true`（需要真实集成证据）。**证据门只认显式标了 evidence 的路径，不从 tier S3 推断**；evidence 命中**不被 risk_level 显式声明豁免**（豁免=改 map，git 可见——今日显式短路「声明 doc-only 连证据门都免」的懒 agent 洞顺手收掉）；risk_level 仍可经 D-003 追赶压低仪式档。requiredVerification 生成源从 level 词汇推断改为 evidence 位直出。
+故障面：evidence 位滥用（全仓标 true）→ 证据门大面积误拦——自举声明表只挂真运行时域（D-010），map 评审可见。
+退役判据：无（分离是不可让步的语义边界）。
+
+## D-010@v1 sillyspec 自举声明表口径——S3 钉真运行时域、门禁判定文件 S2、core-engine 不整模块标价
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：**S3+evidence 只钉真正的会话/租约/worktree/dispatch 路径**（runtime 会话域文件、worktree 模块、dispatch 域）；**门禁判定文件最多 S2**（stage-contract/verify-postcheck/verify-probes/ceremony-tier/review-tier/change-risk-profile/quick-gate-profile/probe7-anchor-check/run/gates 等）；**core-engine 不整模块标价**（datetime/constants/fs-atomic/taskcard 等零声明）。按此口径 api-matrix 类变更新架构下 = S2（8 文件 span），不是 S3——「改门禁判定白名单」与「改会话租约」不同价。具体路径清单在 design 落全量表。
+故障面：声明表与模块演化脱节（新文件落错价）——map 评审流程可见，scan 层不自动改价（宁缺勿错）。
+退役判据：无。
+
+## D-011@v1 QUICK_RISK_PATH_PATTERNS 同族登记——管道建好后迁，不单独立刀
+状态：implemented
+变更：2026-09-19-ceremony-pricing-five-cuts
+锚点：未记录
+最近确认：7438d34
+理由：本变更只在 design 登记同族关系与迁移方向（blast 声明管道落地后，该表迁为项目可配置——本仓自举声明可吸收或保留为缺省种子待定），**不扩刀不单独立刀**。
+故障面：遗忘——design 与归档蒸馏双登记（archive 时 decisions 提炼进知识库）。
+退役判据：迁移变更落地时本条 superseded。
+
+## D-001@v1 方案选择——A（评审材料包契约）胜出；1/2 合并为同一契约矛盾
+状态：implemented
+变更：2026-09-19-review-material-pack
+锚点：未记录
+最近确认：7438d34
+理由：选 A。**核心判断（用户）：原 1/2 不是两个功能，是同一处契约矛盾**——复审增量机制 2026-09-16 已进引擎（stage-review.js:513 renderPriorRoundFindingsMd 注入 {PRIOR_REVIEW_FACTS}，明文「以增量为主，不重演全量审查」；S3 菜单第二轮只盯首轮未决项），QA2 仍烧 135 万是因为同 prompt 里有更高优先级的反指令：Grill 输入材料段写死「必须读取完整 design.md」（brainstorm.js:417）与「素材宁可多读，不要只读摘要」（:424）；94 分钟事故后加的时间盒只限发散、没缩短必读清单——**子代理服从必读清单，不服从回灌块**。B（仅删清单无注入）被否：材料面失控、子代理自行检索重新发明热点；C（含填卡/轮次/计量）被否：范围炸且自吃狗粮。
+故障面：材料包太薄→评审质量降为确认偏差放大器（对策见 D-003 基准面语义）。
+退役判据：若材料包实测导致评审漏检率上升（P0/P1 逃逸到后续阶段），重审包的下限构成。
+
+## D-003@v1 验收标准——可证伪的清单覆盖，不是 token 节省比例
+状态：implemented
+变更：2026-09-19-review-material-pack
+锚点：未记录
+最近确认：7438d34
+理由：不能——那个数是希望，写进 design 会变成无法证伪的成功标准。验收两条：①**清单上的每一条都能只靠材料包回答**；②**复审 prompt 里不再出现「读完整 design / 宁可多读」**（机械可查——补一条回归钉：grep 阶段 prompt 模板断言无此类指令字样）。
+故障面：验收②的机械钉可能误伤合法表述（如「可按需定向查证」与「宁可多读」边界）——钉只匹配「必须读取完整/素材宁可多读」两个原语，正则收窄。
+退役判据：无。
