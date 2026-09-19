@@ -1789,6 +1789,36 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
         const attrGateFiles = gateFiles.filter(f => !undeclaredNorm.has(String(f).replace(/\\/g, '/')))
         result.gateProfile.checks.docClaim = computeGateProfile(attrGateFiles, moduleIndex, gateOpts).checks.docClaim
       }
+      // ── FR 写面腐烂 suspect 遥测（钩子 #1，L3 裁决数据，advisory 零阻断）──
+      // quick 永不归档 → FR 索引对 quick 改动无感知（L1 显式划出覆盖面），改掉 FR 覆盖行为后
+      // 条目仍标 active——账本从 quick 路径腐烂且今天完全不可见。此钩子把它量出来：changedFiles
+      // 经 moduleIndex 路径匹配得触达域（与 computeGateProfile 同 join），域内有 active FR 即记
+      // fr-rot-suspect 事件+一行 warn（只提醒不阻断——看得见约束≠声明取代，L3 才有裁决权）。
+      // 盲区预登（评审要求）：①unmapped 文件静默漏 join（新路径未录 map 即无信号）②map 文件
+      // 清单自身漂移——**无信号 ≠ 无腐烂**。fail-open：异常跳过不碰审计结论。
+      try {
+        const { readActiveFrDigest } = await import('../fr-index.js')
+        const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+        const gateFilesNorm = gateFiles.map(f => String(f).replace(/\\/g, '/'))
+        const touchedDomains = new Set()
+        for (const [modId, mod] of Object.entries(moduleIndex || {})) {
+          const prefixes = [...(mod && Array.isArray(mod.paths) ? mod.paths : []), ...(mod && Array.isArray(mod.core_files) ? mod.core_files : [])]
+          for (const raw of prefixes) {
+            const p = String(raw).replace(/\\/g, '/').replace(/\/+$/, '')
+            if (p && gateFilesNorm.some(f => f === p || f.startsWith(p + '/'))) { touchedDomains.add(modId); break }
+          }
+        }
+        if (touchedDomains.size > 0) {
+          const frs = readActiveFrDigest(join(specBase, 'knowledge'), [...touchedDomains])
+          if (frs.length > 0) {
+            appendKnowledgeHit(join(specBase, '.runtime'), {
+              type: 'fr-rot-suspect', change: guard.changeName || null,
+              domains: [...touchedDomains], count: frs.length, source: 'quick-done',
+            })
+            console.warn(`⚠️ [FR 腐烂 suspect·advisory] 本次 quick 触达 ${[...touchedDomains].join('、')} 域的 ${frs.length} 条 active FR——quick 不走归档，若改动影响这些行为，索引不会自动 supersede（L3 声明义务；盲区：unmapped 文件/map 漂移不报警）`)
+          }
+        }
+      } catch { /* fail-open：遥测异常不影响审计 */ }
     } catch { /* 画像 fail-open：异常只跳过（gateProfile 保持 null，D-003 不碰 status） */ }
 
     // --confirm 模式：展示 diff 并等待确认

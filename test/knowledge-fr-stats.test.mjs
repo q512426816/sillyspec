@@ -151,6 +151,27 @@ const CE = [
   rmSyncSafe(fx.root)
 }
 
+// ── fr-rot-suspect 计数（钩子 #1，ql-20260919-019-344f）：quick 写面腐烂遥测进 stats ──
+{
+  const fx = makeFixture()
+  const NL = String.fromCharCode(10)
+  const hits = [
+    JSON.stringify({ type: 'fr-rot-suspect', change: 'q1', domains: ['core-engine', 'runtime'], count: 5, source: 'quick-done', at: new Date().toISOString() }),
+    JSON.stringify({ type: 'fr-rot-suspect', change: 'q2', domains: ['core-engine'], count: 3, source: 'quick-done', at: new Date().toISOString() }),
+    JSON.stringify({ type: 'fr-inject', change: 'q1', domains: ['core-engine'], count: 14, source: 'module-inject', at: new Date().toISOString() }),
+  ].join(NL) + NL
+  writeFileSync(join(fx.runtimeDir, 'knowledge-hits.jsonl'), hits)
+  const st = buildFrIndexStats(fx.knowledgeDir, fx.runtimeDir, {})
+  assert(st.events.frRotSuspect === 2, `frRotSuspect 总事件=2（实际 ${st.events.frRotSuspect}）`)
+  const ce = (st.events.frRotSuspectByDomain || []).find(d => d.domain === 'core-engine')
+  assert(ce && ce.events === 2 && ce.count === 8, `core-engine 域 events=2 count=8（实际 ${JSON.stringify(ce)}）`)
+  const rt = (st.events.frRotSuspectByDomain || []).find(d => d.domain === 'runtime')
+  assert(rt && rt.events === 1 && rt.count === 5, `runtime 域 events=1 count=5`)
+  assert(st.events.frRotSuspectChanges === 2, `changes 去重=2（q1/q2，实际 ${st.events.frRotSuspectChanges}）`)
+  assert(st.events.frInject === 1, `fr-inject 不受新 type 影响`)
+  rmSyncSafe(fx.root)
+}
+
 for (const dir of tmpRoots) {
   try { rmSyncSafe(dir) } catch { /* Windows 句柄延迟 */ }
 }

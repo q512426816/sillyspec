@@ -126,9 +126,12 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
   // vs 'digest'（brainstorm step8 写作期）。存量事件无 source 读数归 digest 桶——保总数口径稳定，
   // 只增归因维度；新发射面一律带 source 勿开新 type（未知 fr-* 类型静默漏过下方 if 链）。
   const frInjectBySource = new Map()
+  const rotSuspectByDomain = new Map()
+  const rotSuspectChanges = new Set()
   let frInject = 0
   let frSupersede = 0
   let frDuplicateWarning = 0
+  let frRotSuspect = 0
   for (const r of frEvents) {
     if (r.type === 'fr-inject') {
       frInject += 1
@@ -141,6 +144,18 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
     } else if (r.type === 'fr-duplicate-warning') {
       frDuplicateWarning += 1
       if (r.candidate) duplicateCandidates.add(r.candidate)
+    } else if (r.type === 'fr-rot-suspect') {
+      // 钩子 #1（quick 写面腐烂 suspect，source=quick-done）：按域求和（count=触达 active FR 数），
+      // 总数按事件计（多域事件不重复计）；涉及变更去重——L3 裁决核心读数。盲区：unmapped 漏
+      // join / map 漂移——此计数是下界不是全量。
+      frRotSuspect += 1
+      for (const domain of Array.isArray(r.domains) ? r.domains : [r.domain || 'unknown']) {
+        const row = rotSuspectByDomain.get(domain) || { domain, events: 0, count: 0 }
+        row.events += 1
+        row.count += Number.isFinite(Number(r.count)) ? Number(r.count) : 0
+        rotSuspectByDomain.set(domain, row)
+      }
+      if (r.change) rotSuspectChanges.add(r.change)
     } else if (r.type === 'fr-unreferenced') {
       const domain = r.domain || 'unknown'
       const row = unreferencedByDomain.get(domain) || { domain, events: 0, count: 0 }
@@ -164,6 +179,9 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
     events: {
       frInject,
       frInjectBySource: Object.fromEntries(frInjectBySource),
+      frRotSuspect,
+      frRotSuspectByDomain: [...rotSuspectByDomain.values()],
+      frRotSuspectChanges: rotSuspectChanges.size,
       frInjectChanges: injectChanges.size,
       frSupersede,
       frSupersedeChanges: supersedeChanges.size,
