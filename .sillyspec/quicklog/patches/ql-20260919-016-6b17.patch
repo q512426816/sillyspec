@@ -1,0 +1,47 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 2d105d9..a2de6a0 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -291,3 +291,42 @@ span_risk:
+   - cron
+   - job
+   - jobs
++blast:
++  - prefixes:
++      - src/agent-session-log.js
++      - src/friction-ledger.js
++      - src/friction-tally.js
++      - src/semantic-guard.js
++      - src/workspace.js
++      - src/runtime-hygiene.js
++      - src/progress/
++      - src/db.js
++      - src/db-engine.js
++    tier: S3
++    evidence: true
++  - prefixes:
++      - src/worktree.js
++      - src/worktree-apply.js
++      - src/worktree-cross.js
++      - src/worktree-deps.js
++      - src/wt-commit.js
++      - src/git-helper.js
++      - src/review-dispatch.js
++      - src/dispatch/
++    tier: S3
++    evidence: true
++  - prefixes:
++      - src/stage-contract.js
++      - src/stage-contract-engine.js
++      - src/stage-contract-spec.js
++      - src/verify-postcheck.js
++      - src/verify-probes.js
++      - src/ceremony-tier.js
++      - src/review-tier.js
++      - src/change-risk-profile.js
++      - src/blast-surface.js
++      - src/quick-gate-profile.js
++      - src/probe7-anchor-check.js
++      - src/run/gates.js
++      - src/run/complete.js
++    tier: S2

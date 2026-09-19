@@ -21,3 +21,12 @@
 根因：ql-013 postmortem：声明追赶检查点位于完成级联末位（escalateCeremonyTierAtGate），双跑 error 在 verify postcheck 更早拦住 --done——级联走不到末位追赶永不执行，gate 提示『由阶段门重定价』时序不可达，five-cuts 实证 3 轮 --done 卡死只能手动改档位文件
 方案：runCeremonyDualRunCheck mismatch 分支内先按事实面执行追赶（applyDeclarationCatchUp 同款三分支语义：transitions 空→整档换 factTier、非空→max(factTier,地板)），写回档位文件+violation message 附『已自动重定价，重跑即过勿手动改档』；本次仍 error（低报惩罚保留，friction +1 已记）；fail-soft 异常降级留痕
 结果：行为验证三分支全绿（空迁移 S1→S3/地板托底/写回读回链）；回归 verify-postcheck-worktree 6+module 88+ceremony-tier 104 全绿；lint 688 绿；低报语义不变（仍 error+记账），死的只是『提示不可达』的时序盲点
+
+## ql-20260919-016-6b17 | 2026-09-19 18:41:25 | 恢复主仓 map blast 段（span-risk 会话 known-issues 登记的活风险收口）
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：恢复主仓 map blast 段（span-risk 会话 known-issues 登记的活风险收口）
+根因：five-cuts 归档走 --skip-apply：30 前缀 blast 自举表只存在于悬空提交 bbe30ab（分支已删），主仓 map 无 blast 段——evidence 门全失效（declarations=0 → evidenceRequired 恒 false）、会话/租约域变更判 S1 逃顶档
+方案：git show bbe30ab:.sillyspec/.../_module-map.yaml 提取 blast 段（39 行 3 条目）追加回主仓 map；known-issues 条目标记已修复
+结果：三档走位复验全绿：会话域 S3+evidence（2 hits）/门禁判定面 S2（2 hits）/零声明面 S1；blast-surface 27+rebuild-preserve 8 回归绿
