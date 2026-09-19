@@ -41,6 +41,7 @@ modules:
     needs_review: false
     review_reasons: []
     paths:
+      - src/handoff.js
       - src/index.js
       - bin/sillyspec.js
       - src/version.js

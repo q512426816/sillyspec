@@ -3402,6 +3402,35 @@ SillySpec worktree — git worktree 隔离管理
       await cmdAgentLog(filteredArgs.slice(1), { json, cwd: dir, specDir });
       break;
     }
+    case 'handoff': {
+      // 阶段跑者瘦会话交接块（P1-5 v1，2026-09-20 对撞实验驱动）：打印下一阶段新会话
+      // 启动块（保持 SILLYSPEC_SESSION_ID）+ 状态摘要。纯只读。CLI prompt 自足——
+      // 新会话零背景可续跑，主会话按阶段收尾省肥上下文重发税。
+      const hoChangeIdx = filteredArgs.indexOf('--change');
+      const hoChange = hoChangeIdx >= 0 ? filteredArgs[hoChangeIdx + 1] : undefined;
+      const { buildHandoff } = await import('./handoff.js');
+      const specRootHo = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const ho = await buildHandoff({ cwd: dir, specBase: specRootHo, changeName: hoChange });
+      if (!ho.ok) {
+        console.error(`❌ ${ho.error}`);
+        process.exit(2);
+      }
+      if (json) {
+        console.log(JSON.stringify({
+          schema_version: 1,
+          change: ho.change,
+          auto_picked: ho.autoPicked,
+          current_stage: ho.currentStage,
+          stage_completed: ho.stageCompleted,
+          next_stage: ho.suggestion.next,
+          mode: ho.suggestion.mode,
+          session_id: ho.sessionId,
+        }, null, 2));
+      } else {
+        for (const l of ho.lines) console.log(l);
+      }
+      break;
+    }
     case 'dispatch': {
       // SillyHub 派发抽象层的 agent 调用桥（design.md §Phase2 / D-007@v1）：
       // 仅做能力探测（probe）与派发策略生成（hint），**不执行任何 tool 调用**——

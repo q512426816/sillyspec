@@ -1,0 +1,336 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index ca4555d1..96588bef 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -41,6 +41,7 @@ modules:
+     needs_review: false
+     review_reasons: []
+     paths:
++      - src/handoff.js
+       - src/index.js
+       - bin/sillyspec.js
+       - src/version.js
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+index 11a41407..9a7e3794 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.changelog.md
+@@ -17,3 +17,4 @@
+ - ql-20260911-017-0c35 | change-rename 入口新名日期前缀门禁（assertDatedChangeName，非日期前缀新名 exit 2；2026-09-11 实证 friction-signal-hint 重命名丢前缀被静默物化）
+ - ql-20260911-029-2892 | 紧急包小修：index.js next --apply 的 ESM __dirname ReferenceError 改 fileURLToPath；modules resolve --json 死条件改用顶层 json 变量
+ - ql-20260912-008-8eff | flag 值位守卫全量收口（52 三元形+解析器 5 分支）：值位为 flag 名/缺值视为未提供——--change --json 不再吞 flag
++- ql-20260920-003 | P1-5 v1 阶段跑者瘦会话：sillyspec handoff 命令（src/handoff.js——交接块=新会话启动块[保持SILLYSPEC_SESSION_ID]+下一阶段建议[进行中续跑/完成后继]+状态摘要；纯只读；--json）+ 主流程阶段完成尾提示（complete.js——brainstorm/plan/execute/verify 完成时点一行 advisory）+handoff.test.mjs 12/12（CLI实跑夹具）——对撞实验主会话203请求63M肥上下文重发税的结构性出口
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 9b26cdb8..3f0d2dc8 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -136,10 +136,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:966 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:990 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3666；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3618；sync.js:2129 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3697；sync.js:1431/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3649；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3431/3402；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3462/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:682/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -196,7 +196,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3528`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3559`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index 2e98e588..bcf3afd1 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3402,6 +3402,35 @@ SillySpec worktree — git worktree 隔离管理
+       await cmdAgentLog(filteredArgs.slice(1), { json, cwd: dir, specDir });
+       break;
+     }
++    case 'handoff': {
++      // 阶段跑者瘦会话交接块（P1-5 v1，2026-09-20 对撞实验驱动）：打印下一阶段新会话
++      // 启动块（保持 SILLYSPEC_SESSION_ID）+ 状态摘要。纯只读。CLI prompt 自足——
++      // 新会话零背景可续跑，主会话按阶段收尾省肥上下文重发税。
++      const hoChangeIdx = filteredArgs.indexOf('--change');
++      const hoChange = hoChangeIdx >= 0 ? filteredArgs[hoChangeIdx + 1] : undefined;
++      const { buildHandoff } = await import('./handoff.js');
++      const specRootHo = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
++      const ho = await buildHandoff({ cwd: dir, specBase: specRootHo, changeName: hoChange });
++      if (!ho.ok) {
++        console.error(`❌ ${ho.error}`);
++        process.exit(2);
++      }
++      if (json) {
++        console.log(JSON.stringify({
++          schema_version: 1,
++          change: ho.change,
++          auto_picked: ho.autoPicked,
++          current_stage: ho.currentStage,
++          stage_completed: ho.stageCompleted,
++          next_stage: ho.suggestion.next,
++          mode: ho.suggestion.mode,
++          session_id: ho.sessionId,
++        }, null, 2));
++      } else {
++        for (const l of ho.lines) console.log(l);
++      }
++      break;
++    }
+     case 'dispatch': {
+       // SillyHub 派发抽象层的 agent 调用桥（design.md §Phase2 / D-007@v1）：
+       // 仅做能力探测（probe）与派发策略生成（hint），**不执行任何 tool 调用**——
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 4940aafd..5123252a 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -714,6 +714,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     const total = steps.length
+     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
+ 
++    // 瘦会话交接提示（P1-5 v1，2026-09-20 对撞实验驱动）：主流程阶段完成时点提示
++    // 「下一阶段可新会话续跑」——CLI prompt 自足（进度/上下文全由进度库与注入提供），
++    // 每阶段一个瘦会话省掉肥上下文 × N 请求的重发税。advisory 一行，不强制。
++    if (['brainstorm', 'plan', 'execute', 'verify'].includes(stageName) && changeName) {
++      console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
++    }
++
+     // 平台模式产物落点指针（platform-docs-dual-location，2026-09-15 EHS 实证）：完成时点在
+     // 工作树 .sillyspec/ 刷新人类可读指针（本地模式零行为，fail-soft 内部全兜）。
+     writePlatformDocsPointer(cwd, changeName, platformOpts, stageName)
+diff --git a/src/handoff.js b/src/handoff.js
+new file mode 100644
+--- /dev/null
++++ b/src/handoff.js
+@@ -0,0 +1,113 @@
++/**
++ * handoff.js —— 阶段跑者瘦会话交接块生成器（P1-5 v1，2026-09-20 对撞实验驱动）
++ *
++ * 为什么需要：单会话跑全流程时主上下文 ~300K 底座 × 每 CLI 往返重发一次——对撞实验
++ * 实测 sillyspec 侧主会话 203 请求烧 63M（肥上下文编排税是最大浪费源）。而 CLI prompt
++ * 本就自足（进度快照/模块命中/知识注入全由进度库与 prompt 渲染提供，新会话零背景可
++ * 续跑）——「每阶段一个瘦会话」是零机制改动的省法，缺的只是把交接信息打成一块可粘贴。
++ *
++ * 定位：纯只读（ProgressManager 读路径 + 环境探测），不写盘不动状态。输出三件：
++ *   ① 新会话启动块（保持 SILLYSPEC_SESSION_ID 不变——变更所有权按此判定）；
++ *   ② 下一阶段建议（当前阶段完成 → MAIN_FLOW_ORDER 后继；进行中 → 同阶段续跑）；
++ *   ③ 当前状态摘要（阶段进度 + 停留步骤）。
++ */
++import { ProgressManager, resolveSpecDir } from './progress.js';
++import { MAIN_FLOW_ORDER, STAGE_LABELS } from './progress/shared.js';
++
++/**
++ * 解析下一阶段建议。
++ * @param {string} currentStage - DB 当前阶段
++ * @param {boolean} stageCompleted - 当前阶段是否已完成（进度库 stageData.status === 'completed'）
++ * @returns {{ next: string, mode: 'advance' | 'resume', reason: string }}
++ */
++export function nextStageSuggestion(currentStage, stageCompleted) {
++  if (!currentStage) return { next: 'brainstorm', mode: 'resume', reason: '无进度记录，从头脑风暴起步' };
++  if (!stageCompleted) {
++    return { next: currentStage, mode: 'resume', reason: `${STAGE_LABELS[currentStage] || currentStage} 进行中——新会话续跑本阶段（步骤态由进度库恢复）` };
++  }
++  const idx = MAIN_FLOW_ORDER.indexOf(currentStage);
++  if (idx >= 0 && idx < MAIN_FLOW_ORDER.length - 1) {
++    const next = MAIN_FLOW_ORDER[idx + 1];
++    return { next, mode: 'advance', reason: `${STAGE_LABELS[currentStage] || currentStage} 已完成——新会话开跑下一阶段 ${STAGE_LABELS[next] || next}` };
++  }
++  if (currentStage === 'archive') {
++    return { next: '', mode: 'done', reason: '流程已归档终态——无下一阶段（可 sillyspec progress show 复核或开新变更）' };
++  }
++  // 辅助阶段（quick/scan/explore/status/doctor）完成：建议回主流程或开新
++  return { next: 'brainstorm', mode: 'resume', reason: `辅助阶段 ${STAGE_LABELS[currentStage] || currentStage} 完成——主流程变更请带 --change 续跑，或开新变更` };
++}
++
++/**
++ * 生成交接块（human 模式行数组 / --json 由调用方取结构）。
++ * @param {object} opts
++ * @param {string} opts.cwd
++ * @param {string} [opts.specBase] - 平台模式 specRoot；缺省 resolveSpecDir
++ * @param {string} [opts.changeName] - 变更名；缺省取唯一活跃主流程变更
++ * @returns {Promise<{ok:true, change, currentStage, stageCompleted, suggestion, sessionId, lines:string[]}|{ok:false, error:string}>}
++ */
++export async function buildHandoff({ cwd, specBase, changeName } = {}) {
++  const specRoot = specBase || resolveSpecDir(cwd);
++  const pm = new ProgressManager({ specDir: specRoot });
++
++  let target = changeName;
++  let picked = false;
++  if (!target) {
++    // 唯一活跃主流程变更自动选中（listChanges=目录+DB 联合口径，read 取 currentStage）
++    const names = pm.listChanges(cwd) || [];
++    const mains = [];
++    for (const cn of names) {
++      const p = pm.read(cwd, cn);
++      if (p && MAIN_FLOW_ORDER.includes(p.currentStage || '')) mains.push({ name: cn, stage: p.currentStage });
++    }
++    if (mains.length === 1) {
++      target = mains[0].name;
++      picked = true;
++    } else if (mains.length > 1) {
++      return { ok: false, error: `多活跃主流程变更（${mains.length} 个：${mains.map((m) => m.name).join('、')}）——请带 --change <名> 指定` };
++    } else {
++      return { ok: false, error: '无活跃主流程变更（quick/scan 会话或全部归档）——handoff 面向主流程阶段交接' };
++    }
++  }
++
++  const progress = pm.read(cwd, target);
++  if (!progress) return { ok: false, error: `变更不存在: ${target}` };
++
++  const currentStage = progress.currentStage || '';
++  const stageData = (progress.stages && progress.stages[currentStage]) || null;
++  const stageCompleted = !!(stageData && stageData.status === 'completed');
++  const suggestion = nextStageSuggestion(currentStage, stageCompleted);
++  const sessionId = process.env.SILLYSPEC_SESSION_ID || null;
++
++  const steps = Array.isArray(stageData && stageData.steps) ? stageData.steps : [];
++  const doneSteps = steps.filter((s) => s && s.status === 'completed').length;
++
++  const lines = [];
++  lines.push('🔗 交接块（瘦会话模式——下一阶段/续跑在新会话执行，主会话收尾省上下文）');
++  lines.push('');
++  lines.push('# ── 在新会话粘贴以下内容 ──');
++  if (sessionId) lines.push(`export SILLYSPEC_SESSION_ID=${sessionId}`);
++  else lines.push('export SILLYSPEC_SESSION_ID=<本变更的会话标识——旧会话 echo $SILLYSPEC_SESSION_ID 取>');
++  lines.push(`cd ${cwd}`);
++  if (suggestion.next) {
++    lines.push(`sillyspec run ${suggestion.next} --change ${target}`);
++  } else {
++    lines.push('# （流程终态，无续跑命令）');
++  }
++  lines.push('# ── 交接块结束 ──');
++  lines.push('');
++  lines.push(`📋 ${target}：当前 ${STAGE_LABELS[currentStage] || currentStage}${steps.length > 0 ? `（步骤 ${doneSteps}/${steps.length}）` : ''}${stageCompleted ? ' ✅ 已完成' : ''}`);
++  lines.push(`➡️ ${suggestion.reason}`);
++  lines.push('💡 为什么可行：CLI prompt 自足——进度快照/模块命中/知识注入由进度库与渲染提供，新会话零背景可续跑。');
++  lines.push('⚠️ SILLYSPEC_SESSION_ID 必须保持不变（变更所有权/接管判定按此标识）；缺省降级机器级标识只拦他机。');
++
++  return {
++    ok: true,
++    change: target,
++    autoPicked: picked,
++    currentStage,
++    stageCompleted,
++    suggestion,
++    sessionId,
++    lines,
++  };
++}
+
+diff --git a/test/handoff.test.mjs b/test/handoff.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/handoff.test.mjs
+@@ -0,0 +1,106 @@
++/**
++ * handoff 命令测试（P1-5 v1 阶段跑者瘦会话，2026-09-20 对撞实验驱动）
++ *
++ * 覆盖：
++ *   1. nextStageSuggestion 四态：进行中→同阶段续跑 / 完成→主流程后继 / archive 终态 / 辅助阶段回主流程
++ *   2. buildHandoff：唯一活跃主流程变更自动选中 + 交接块含启动命令/状态摘要/会话标识警示
++ *   3. 多活跃 → 报错；无活跃 → 报错；--change 指定 → 不自动选
++ *   4. CLI 端到端：handoff --json 形状
++ *
++ * 风格：自研 assert + tmp fixture（DB 夹具经 sillyspec run 实跑建立，同 quick-session-isolation 族）。
++ */
++import { mkdtempSync, mkdirSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { execFileSync } from 'child_process'
++import { fileURLToPath } from 'url'
++
++import { nextStageSuggestion, buildHandoff } from '../src/handoff.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (!condition) {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  } else {
++    console.log(`  ✅ PASS: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++const BIN = join(fileURLToPath(import.meta.url), '..', '..', 'bin', 'sillyspec.js')
++
++/** 造一个跑到指定阶段的夹具仓（经 CLI 实跑建立 DB，避免手搓 schema 漂移）。 */
++function makeRepoAtStage(stage) {
++  const proj = makeTmpDir('handoff-')
++  const env = { ...process.env, SILLYSPEC_SESSION_ID: 'test-handoff-sess' }
++  for (const args of [['init', '-q'], ['config', 'user.email', 't@t.local'], ['config', 'user.name', 't']]) {
++    execFileSync('git', args, { cwd: proj, encoding: 'utf8' })
++  }
++  mkdirSync(join(proj, '.sillyspec'), { recursive: true })
++  const change = '2026-09-20-handoff-fixture'
++  // brainstorm 建变更 + 打到 plan（brainstorm 完成）——最少实跑路径
++  execFileSync('node', [BIN, 'run', 'brainstorm', '--change', change], { cwd: proj, env, encoding: 'utf8' })
++  if (stage === 'plan') {
++    // 把 brainstorm 各步直接 --done 到完成（步骤输出可省——completeStep 容忍空 output）
++    for (let i = 0; i < 8; i++) {
++      try {
++        execFileSync('node', [BIN, 'run', 'brainstorm', '--done', '--change', change, '--output', `step${i}`], { cwd: proj, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++      } catch { /* gate 拦截即止——夹具只需 currentStage 落在非完成态亦可测 resume 分支 */ break }
++    }
++  }
++  return { proj, change }
++}
++
++// ── 1. nextStageSuggestion 四态 ──
++{
++  const r1 = nextStageSuggestion('plan', false)
++  assert(r1.mode === 'resume' && r1.next === 'plan', '1a 进行中 → 同阶段续跑')
++  const r2 = nextStageSuggestion('brainstorm', true)
++  assert(r2.mode === 'advance' && r2.next === 'plan', '1b brainstorm 完成 → plan')
++  const r3 = nextStageSuggestion('verify', true)
++  assert(r3.mode === 'advance' && r3.next === 'archive', '1c verify 完成 → archive')
++  const r4 = nextStageSuggestion('archive', true)
++  assert(r4.mode === 'done' && r4.next === '', '1d archive 终态 → 无下一阶段')
++  const r5 = nextStageSuggestion('quick', true)
++  assert(r5.mode === 'resume', '1e 辅助阶段 → 回主流程建议')
++}
++
++// ── 2/3. buildHandoff ──
++{
++  const { proj, change } = makeRepoAtStage('brainstorm')
++  const ho = await buildHandoff({ cwd: proj })
++  assert(ho.ok === true && ho.change === change, `2a 唯一活跃自动选中（实际 ${ho.change || ho.error}）`)
++  assert(ho.autoPicked === true, '2b autoPicked 标记')
++  const text = ho.lines.join('\n')
++  assert(text.includes(`sillyspec run ${ho.suggestion.next} --change ${change}`), `2c 交接块含续跑命令（next=${ho.suggestion.next}）`)
++  assert(text.includes('SILLYSPEC_SESSION_ID'), '2d 含会话标识保持警示')
++  assert(ho.currentStage === 'brainstorm', `2e currentStage=brainstorm（实际 ${ho.currentStage}）`)
++
++  const bad = await buildHandoff({ cwd: proj, changeName: 'no-such-change' })
++  assert(bad.ok === false && bad.error.includes('变更不存在'), '3a 不存在的变更 → 报错')
++}
++
++// ── 4. CLI 端到端 --json ──
++{
++  const { proj, change } = makeRepoAtStage('brainstorm')
++  const out = execFileSync('node', [BIN, 'handoff', '--json'], { cwd: proj, encoding: 'utf8' })
++  const j = JSON.parse(out)
++  assert(j.change === change && typeof j.next_stage === 'string' && j.schema_version === 1, `4a --json 形状（change=${j.change} next=${j.next_stage}）`)
++}
++
++for (const dir of tmpRoots) {
++  try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟 */ }
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)

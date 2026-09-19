@@ -714,6 +714,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
 
+    // 瘦会话交接提示（P1-5 v1，2026-09-20 对撞实验驱动）：主流程阶段完成时点提示
+    // 「下一阶段可新会话续跑」——CLI prompt 自足（进度/上下文全由进度库与注入提供），
+    // 每阶段一个瘦会话省掉肥上下文 × N 请求的重发税。advisory 一行，不强制。
+    if (['brainstorm', 'plan', 'execute', 'verify'].includes(stageName) && changeName) {
+      console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
+    }
+
     // 平台模式产物落点指针（platform-docs-dual-location，2026-09-15 EHS 实证）：完成时点在
     // 工作树 .sillyspec/ 刷新人类可读指针（本地模式零行为，fail-soft 内部全兜）。
     writePlatformDocsPointer(cwd, changeName, platformOpts, stageName)

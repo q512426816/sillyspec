@@ -148,3 +148,18 @@
 根因：对撞实验实测：填卡子代理6.7M誊写税/brainstorm已收敛需求走全仪20分钟/verify尾巴110req肥上下文编排/主仓直写时快照拿陈旧worktree盖新导出致import假红
 方案：①plan.js填卡默认主代理直填（≤8任务或单仓不派；>8且跨模块才batch≤3）②brainstorm.js探索步薄跑判定（已收敛直书；Grill/规范文件永不薄）③complete.js detectVerifyBatchFinish（结论已填+facts在场+锚定步过→剩余step一次标完；门禁照常全跑）④gate-snapshot.js三方取新+行尾归一防autocrlf误判
 结果：verify-batch-finish 8/8+gate-snapshot 5/5含双写回归钉+全量544/0+lint 694绿+镜像14=旧基线持平
+
+## ql-20260920-003-04cf | 2026-09-20 07:21:50 | P1-5 v1 阶段跑者瘦会话——handoff命令+阶段完成尾提示
+状态：已完成
+关联变更：（无）
+文件：
+- src/handoff.js（新模块）
+- src/index.js（dispatch case）
+- src/run/complete.js（尾提示）
+- test/handoff.test.mjs（12断言）
+- _module-map.yaml+cli-entry.changelog（登记）
+- platform-interface-map.md（锚重锚）
+需求：P1-5 v1 阶段跑者瘦会话——handoff命令+阶段完成尾提示
+根因：对撞实验实测主会话203请求63M肥上下文重发税；CLI prompt自足缺的只是可粘贴交接块
+方案：src/handoff.js（nextStageSuggestion四态+buildHandoff交接块）+index.js dispatch+complete.js四阶段完成尾提示+module-map登记
+结果：handoff 12/12（CLI实跑夹具）；全量545/0；lint 696绿；docs锚--fix重锚
