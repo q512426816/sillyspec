@@ -1461,6 +1461,40 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         if (outputText) steps[currentIdx].output = null
         process.exit(1)
       }
+      // ── 结果虚报提交核对（坑 quicklog-result-false-commit-claim，2026-09-18 实证：ql 条目
+      // 写「已提交 <hash> 推送」但 git show 核查该提交不含本会话任何文件——代码滞留暂存区
+      // 11 小时，台账账实不符）。advisory warn 不阻断（hash 可能是组合/merge 提交，命中判定
+      // 模糊），但把 CLI 端能机械核实的部分摆上台面：结果文本声称提交（40 位 hex，或短 hash
+      // 紧跟「已提交/已推送」类字样）且会话声明文件（guard.allowedFiles）无一命中该提交面 →
+      // 醒目警告要求 git show 复核；确认是正常形态可照常落账（警告留痕即审计面）。
+      try {
+        const m40 = outputText.match(/\b[0-9a-f]{40}\b/)
+        const mShort = outputText.match(/\b([0-9a-f]{7,12})\b(?=[^\n]{0,40}(?:已提交|已推送|推送|提交入库|落库))/)
+        const claimed = m40 || mShort
+        if (claimed) {
+          const hash = m40 ? m40[0] : mShort[1]
+          const declared = Array.isArray(guard?.allowedFiles) ? guard.allowedFiles : []
+          let commitFiles = null
+          try {
+            const out = safeGit(cwd, ['show', '--name-only', '--pretty=format:', hash])
+            const raw = typeof out === 'string' ? out : (out && out.value) || ''
+            commitFiles = String(raw).split('\n').map(s => s.trim()).filter(Boolean)
+          } catch { /* 引用不存在/解析失败 → commitFiles 保持 null 走提示分支 */
+          }
+          if (Array.isArray(commitFiles) && commitFiles.length > 0 && declared.length > 0) {
+            const hit = declared.some(f => commitFiles.includes(f)
+              || commitFiles.some(c => c.endsWith('/' + f) || f.endsWith('/' + c) || c === f.replace(/^\.?\//, '')))
+            if (!hit) {
+              console.warn('')
+              console.warn(`⚠️ 结果声称已提交 ${String(hash).slice(0, 12)}，但本会话声明的 ${declared.length} 个文件均不在该提交面内——疑似「计划提交的 hash」被当成「已提交的 hash」（git add 整体失败 / commit pathspec 漏文件的已知形态）。`)
+              console.warn(`   核实：git show ${String(hash).slice(0, 12)} --stat 对照本会话文件；确未落库则补提交后重跑 --done 更正「结果：」。`)
+              console.warn(`   组合/merge 提交等正常形态确认后照常落账（本警告留痕即审计面）。`)
+            }
+          } else if (commitFiles === null) {
+            console.warn(`⚠️ 结果引用提交 ${String(hash).slice(0, 12)} 但该引用无法解析（git show 失败）——落账前请 git show 核实。`)
+          }
+        }
+      } catch { /* 校验自身异常不阻断 --done（advisory） */ }
     }
 
     if (!qlId) {
