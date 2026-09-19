@@ -151,6 +151,14 @@ modules:
       - src/machine-interface.js
       - src/diagnostic-codes.js
 
+  redlines:
+    status: active
+    doc: modules/redlines.md
+    needs_review: false
+    review_reasons: []
+    paths:
+      - src/redlines.js
+
   dispatch:
     status: active
     doc: modules/dispatch.md

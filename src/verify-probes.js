@@ -39,6 +39,9 @@ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { RECEIPT_SOURCE_CROSS_LAYER_RE as RECEIPT_CROSS_LAYER_RE, RECEIPT_SOURCE_UNIT_RE as RECEIPT_UNIT_RE, CLI_SMOKE_SOURCE_MARK as SMOKE_RECEIPT_SOURCE_MARK } from './change-risk-profile.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
+// 探针 11（2026-09-20-redline-machine-check）：红线机检评估器——纯函数模块，依赖
+// （fs/js-yaml）已在模块图内，静态导入零增量开销；评估器异常由探针 fail-soft 捕获。
+import { parseRedlines, evaluateRedlines } from './redlines.js'
 
 // 探针1 未实现标记匹配（坑 probe1-literal-false-positive，2026-09-15 复盘实证：16 命中全
 // 字面误报——TODO_FLAG_TODO 业务常量、「XXX完成处置」中文占位模板）。口径分三级：
@@ -2229,6 +2232,17 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe10.notes = [`探针 10 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
   }
 
+  // ── 探针 11：红线一致性（advisory；2026-09-20-redline-machine-check——对撞实验核心
+  // 教训转化：语义红线活在散文里无机器可查形态）。消费者仓自持 .sillyspec/redlines.yaml
+  // （缺=不适用零打扰，D-002）；forbid 命中 ❌/⚠️（severity 驱动）、require 缺失 ⚠️，渲染进
+  // 骨架供裁定；不进 PASS 封顶（D-003：攒误报率后另案升硬门）。fail-soft 同 8/9/10。──
+  let probe11 = { applicable: false, entryCount: 0, findings: [], warnings: [] }
+  try {
+    probe11 = runRedlineConsistencyProbe({ specBase, cwd, wtRoot, changeName })
+  } catch (e) {
+    probe11.warnings = [`探针 11 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+  }
+
   // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
   // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
   // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
@@ -2352,6 +2366,8 @@ export function renderVerifyProbesReport(result) {
   // 探针 10 紧随探针 9；旧 result 无 probe10 键（存量调用方/合成 result）→ applicable=false
   // 渲染「不适用」行 + notes，零回归（探针 8/9 兜底口径同款）。
   L.push(...(renderProbe10Lines(result.probe10 || { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] })))
+  // 探针 11 紧随 10；旧 result 无 probe11 键 → 不适用兜底（8/9/10 同款零回归口径）。
+  L.push(...(renderProbe11Lines(result.probe11 || { applicable: false, entryCount: 0, findings: [], warnings: [] })))
   return L.join('\n')
 }
 
@@ -2460,6 +2476,67 @@ function renderProbe10Lines(p10) {
     L.push(`- ✅ 预填注清零（${p10.checkedFiles ?? 0} 个在检文件无未确认预填）`)
   }
   for (const n of p10.notes || []) L.push(`- ℹ️ ${n}`)
+  return L
+}
+
+// ── 探针 11：红线一致性（2026-09-20-redline-machine-check，advisory）──────────────
+
+const PROBE11_HEADING = '#### 探针 11：红线一致性（advisory）'
+
+/**
+ * 红线一致性探针（advisory / fail-open 全链，D-003/D-004）：
+ * 读 <specBase>/redlines.yaml（消费者仓自持，缺=不适用零打扰），调 redlines.js
+ * 评估器（纯函数，root=wtRoot||cwd 定位 scope 文件）。坏 yaml → 不适用 + 注记；
+ * 不进 PASS 封顶（D-003：攒误报率后另案升硬门）。
+ */
+export function runRedlineConsistencyProbe({ specBase, cwd, wtRoot = null }) {
+  const yamlPath = join(specBase, 'redlines.yaml')
+  if (!existsSync(yamlPath)) {
+    return { applicable: false, entryCount: 0, findings: [], warnings: [] }
+  }
+  let yamlText
+  try {
+    yamlText = readFileSync(yamlPath, 'utf8')
+  } catch (e) {
+    return { applicable: false, entryCount: 0, findings: [], warnings: [`redlines.yaml 读取失败（不适用）：${e && e.code ? e.code : 'error'}`] }
+  }
+  let parsed
+  try {
+    parsed = parseRedlines(yamlText)
+  } catch (e) {
+    return { applicable: false, entryCount: 0, findings: [], warnings: [`redlines.yaml 解析失败（不适用）：${e && e.message ? e.message : e}`] }
+  }
+  const root = wtRoot || cwd
+  const result = evaluateRedlines({ entries: parsed.entries, root })
+  return {
+    applicable: true,
+    entryCount: result.entryCount,
+    findings: result.findings,
+    warnings: [...(parsed.warnings || []), ...(result.warnings || [])],
+  }
+}
+
+/** renderProbe11Lines：不适用 / 命中逐条（severity 驱动 ❌/⚠️ + statement + origin）/ ✅ 计数。 */
+function renderProbe11Lines(p11) {
+  const L = [PROBE11_HEADING]
+  if (!p11 || !p11.applicable) {
+    L.push('- 不适用（仓未配置 .sillyspec/redlines.yaml——红线机检零打扰，D-002）')
+    for (const w of (p11 && p11.warnings) || []) L.push(`- ℹ️ ${w}`)
+    return L
+  }
+  L.push('<!-- 口径注记：模式级断言（正则×scope，人写人负责）非语义审计——命中是「定向复核提示」；advisory 不阻断（D-003：误报率数据攒够后另案升硬门）。命中处置：真违规则修代码或升红线版本；正则过宽则收窄条目。 -->')
+  const findings = p11.findings || []
+  if (findings.length === 0) {
+    L.push(`- ✅ 红线全过（${p11.entryCount ?? 0} 条断言，0 命中 0 缺失）`)
+  } else {
+    for (const f of findings) {
+      const marker = f.kind === 'forbid' && f.severity === 'error' ? '❌' : '⚠️'
+      const where = f.file ? `\`${f.file}:${f.line}\`` : 'scope 全集'
+      L.push(`- ${marker} ${f.id}（${f.kind === 'forbid' ? '禁式命中' : '要求缺失'}）@ ${where}${f.snippet ? `：\`${mdEscapeCell(f.snippet, 100)}\`` : f.detail ? `：${f.detail}` : ''}`)
+      if (f.statement) L.push(`  - 红线：${f.statement}${f.origin ? `（溯源：${f.origin}）` : ''}`)
+    }
+  }
+  for (const w of p11.warnings || []) L.push(`- ℹ️ ${w}`)
   return L
 }
 
