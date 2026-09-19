@@ -121,3 +121,21 @@ created_at: 2026-09-18T00:26:28.615Z
 状态：active
 摘要：（无场景名）
 最近确认：7438d34
+
+## FR-core-engine-020 CLI 机械注入接线
+变更：2026-09-19-review-material-cli-wiring
+状态：active
+摘要：（无场景名）
+最近确认：33fca7f
+
+## FR-core-engine-021 混合组包边界
+变更：2026-09-19-review-material-cli-wiring
+状态：active
+摘要：（无场景名）
+最近确认：33fca7f
+
+## FR-core-engine-022 验收钉
+变更：2026-09-19-review-material-cli-wiring
+状态：active
+摘要：（无场景名）
+最近确认：33fca7f

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-19-review-material-cli-wiring",
+  "appliedAt": "2026-09-19T09:18:44.642Z",
+  "baseHash": "c3294d9899d6e2a995a0d56e7c7a3e02477134dc",
+  "files": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "sha256": "08aeed1271c1ed48bd1827465bbe9b1c1c1a77760f95674816caa192d64d3f7d"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "sha256": "1753ed6a7a967bed738b092f59a91f737a1a997a7a4b3203f9dd872ed90d3651"
+    },
+    {
+      "path": "docs/prompt/verify.md",
+      "sha256": "0584921148651632245338c47e7f1f94f2adbf60b452fcc808706e38550a9a32"
+    },
+    {
+      "path": "src/review-material-pack.js",
+      "sha256": "0ba09dfed9e25bd0b08530efd9b728288419bcad352a2b14815acfdfe08247d5"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "sha256": "589e999acbd794dd52ae3721a7a65bf7eac55e3c18c6c30fbbd24262436266a4"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "3369b4b1e9e8055f30a815051d86b48e0148b4c0ef8a6ad289496b1ec91825f5"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "sha256": "2b9ee48f971a356ca9fdee42bdd31582f2bb9c5c4e4d0481bc07ab02e62246a2"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "sha256": "f6560b19294ad0cfb605df9a47717fe135c2e65976414bfa19b27039b8be16dc"
+    },
+    {
+      "path": "test/review-material-pack.test.mjs",
+      "sha256": "05161635080d249a01e393727a18f6209ef64a15c1c4becb4269a0e46287b01e"
+    }
+  ]
+}

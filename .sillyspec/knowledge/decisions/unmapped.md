@@ -434,3 +434,29 @@
 理由：用户选 A——probe8 载荷字段契约对账探针内新增 direct-compare 子段（现有 design 契约面 advisory 保留，代码直比为并行新增维度）；extractFrontendPayloadFields/extractBackendRequiredFields 独立导出，未来升 probe10/plugin 只挪注册不改逻辑。B 否决：探针膨胀+碎片化；C 否决：当前 Java+JS 两族用不上插件接口（D-005 违背）。
 故障面：probe8 文件膨胀——提取函数+对账逻辑独立区块注释锚定，膨胀可控。
 退役判据：若直比面升独立探针（攒证后），提取函数整体迁出。
+
+## D-001@v1 接线点选 prompt.js tier 注入块（同链注入），不另立派发前置步
+状态：implemented
+变更：2026-09-19-review-material-cli-wiring
+锚点：未记录
+最近确认：33fca7f
+理由：复用 prompt.js 既有 tier 注入块（src/run/prompt.js:1378 起 `['brainstorm','plan','execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')` 分支）：{REVIEW_TIER}/{REVIEW_JSON_CONTRACT}/{PRIOR_REVIEW_FACTS} 已在此链机械填充，{REVIEW_MATERIALS} 同链同框架填充（stageName 分流三形态）。理由：①派发 prompt 本来就经此链渲染给主代理，槽位与既有占位符同址，主代理复制即得；②不新增步骤/状态机面；③降级分支（catch 内 join ''）同款容错沿用。
+故障面：组装失败若不加兜底会让占位符残留——沿既有 catch 降级 join('') 消解
+退役判据：若材料包实测导致评审漏检率上升（P0/P1 逃逸到后续阶段），重审注入内容的下限构成
+
+## D-002@v1 混合组包边界——CLI 抽素材半边、主代理点名半边留位，不改 buildReviewMaterialPack schema
+状态：implemented
+变更：2026-09-19-review-material-cli-wiring
+锚点：未记录
+最近确认：33fca7f
+理由：CLI 半边＝机械可抽取素材：grill-first 的 designDigest（章节行号索引＋背景/设计目标节体）与 fileList（design.md 文件变更清单表路径列）；plan-review 的 hardConstraints（design.md「## 全局硬约束」节行，缺节时 decisions.md P0/P1 条目标题兜底）；execute-qa 的 diffSummary（extractDiffSummary 委托 resolveVerifyChangedFiles）＋design 热区＋checklist（REVIEW_CHECKLISTS.execute）。主代理半边＝语义点名：五交叉点（grill）、planDelta 逐约束判定（plan-review）——不预填，包内对应节渲染既有「（无——主代理未点名…）」缺件提示，模板散文指示主代理派发前补该节（偷懒→评审者 cannot_verify 自检拦，R-04 兜底不变）。buildReviewMaterialPack 零 schema 改动（已归档契约不回改）。
+故障面：CLI 抽取源缺节/解析失败→包变薄——best-effort 降级为「（无）」行，评审者自检列缺件
+退役判据：若主代理补位率实测过低（点名半边长期空），评估把点名半边也机械化（如按 design 交叉点清单生成候选）
+
+## D-003@v1 非空注入以装配函数为可测单元，端到端以源码钉＋渲染断言双保险
+状态：implemented
+变更：2026-09-19-review-material-cli-wiring
+锚点：未记录
+最近确认：33fca7f
+理由：拆两层：①assembleStageReviewMaterials 为导出纯装配函数（入参 stage/cwd/changeName/specBase，临时 fixture 可直接断言三形态非空）；②prompt.js 接线用源码断言钉（调用点在场＋join 非''字面量），既有测试组二的 joins≥2 断言保持绿。不在测试里跑 outputStep 全链（既有测试先例 worktree-execute-spec-drift.test.mjs 走子进程 runCommand 才隔离 exit，本变更不引入该重量）。
+故障面：源码钉只证调用在场不证运行时值——装配函数单测＋CLI 亲跑冒烟（本变更 dogfood 路径）补

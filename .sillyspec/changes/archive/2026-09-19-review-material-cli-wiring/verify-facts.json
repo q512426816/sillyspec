@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-19-review-material-cli-wiring",
+  "generatedAt": "2026-09-19T09:29:07.765Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "matches": 17,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 2
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-cli-wiring",
+      "metrics": {
+        "checkedFiles": 4,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "requiredEvidence": [
+    {
+      "task": "task-01",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/review-material-pack.js"
+      ]
+    },
+    {
+      "task": "task-02",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/run/prompt.js",
+        "src/stages/brainstorm.js",
+        "src/stages/plan.js",
+        "src/stages/execute.js"
+      ]
+    },
+    {
+      "task": "task-03",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "test/review-material-pack.test.mjs",
+        "docs/prompt/_extracted.json",
+        "docs/prompt/brainstorm.md",
+        "docs/prompt/verify.md"
+      ]
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  },
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "other",
+        "item": "全量 npm test 基线红（先于本变更，主仓基线即 5 文件红：docs-check-fix/final-four-fixes/review-material-pack/run-help-shortcircuit/stage-review-checklist——根因一类为套件 runner cwd=test/（test/run-tests.mjs:113）下测试内相对路径 `src/...` ENOENT，一类为 docs-check 字节比对既知环境红；本变更新增断言全部定向可跑且绿，未加重基线）",
+        "condition": "后续小变更把相对路径断言锚到 import.meta.url 仓根（同 worktree-execute-spec-drift.test.mjs:18 先例）；或 runner 侧统一 cwd=仓根。known_failures 豁免面不变",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "core-engine 模块卡超预算（36KB+）split-changelog 顺延——预览涉及 hooks/setup/sync 等多他模块卡，超出本变更文件面且并行会话活跃，不顺手 --force",
+        "condition": "独立 quick 跑 `sillyspec modules split-changelog --force`（预览输出已在案）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/review-material-pack.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured"
+}

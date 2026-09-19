@@ -57,6 +57,15 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 
 消费方（scope-audit 命令 / execute--done / verify--done / archive--confirm / quick--done 四注入）只 import 本三导出，禁止自研采集（D-003）。冻结重放/双 map 仓消歧走模块内 `pickModuleMapProject`（内部 helper 非导出）：按样本文件对候选 _module-map.yaml 归属得分唯一最高选项目，零归属样本平分 → degraded（与 computeGateProfile.unmappedFiles 同款归属口径）。
 
+### src/review-material-pack.js — 评审材料包组装（2026-09-19-review-material-pack 新增 / 2026-09-19-review-material-cli-wiring 接线）
+| 函数/常量 | 说明 | 参数 |
+|-----------|------|------|
+| `buildReviewMaterialPack(stage, inputs)` | 四形态纯渲染（grill-first/plan-review/execute-qa/re-review），基准面语义头＋PACK_MAX_CHARS=12000 封顶；re-review 形态仅供 {PRIOR_REVIEW_FACTS} 渲染体拼装（两槽互斥铁律） | `stage, inputs` |
+| `extractDesignHotZone(designContent, sections?)` | design 节抽取（## 起 ## 止），缺省取非目标/兼容策略 | `designContent, sections` |
+| `extractDiffSummary({cwd,changeName,specBase,...})` | diff 名单+stat：名单委托 resolveVerifyChangedFiles（base 解序单点，禁独立解 base）；stat 走 safeGit（返回 {value,error} 取 .value——[object Object] 坑 2026-09-19 修复） | 见左 |
+| `extractSnippets(repoRoot, anchors)` | 点名文件×行窗片段（每片段 SNIPPET_MAX_CHARS 截断） | `repoRoot, anchors` |
+| `assembleStageReviewMaterials({stage,cwd,changeName,specBase})` | **CLI 半边装配入口（cli-wiring Gap 1 收口）**：prompt.js tier 注入链组包调用——grill-first（章节行号索引+背景/设计目标+文件清单表路径列剥 NEW:/MOD:）/plan-review（全局硬约束节行 cap10，缺节 decisions.md accepted P0/P1 兜底）/execute-qa（diffSummary+designContent+REVIEW_CHECKLISTS.execute）；crossPoints/planDelta 恒不预填（主代理点名半边留位，D-002）；best-effort 全层兜底→''（与占位符缺失同态） | `async, 上述四参` |
+
 ### src/quick-gate-profile.js — quick 出口分级门禁画像（2026-09-14-quick-exit-tiered-gates 新增）
 定位：quick --done 分级门禁的信号单一来源——纯函数零 IO（moduleIndex/风险表/阈值全由参数或默认值，D-007 / R-04），接线消费见 runtime 卡（run/shared.js 挂 review.gateProfile）。
 
