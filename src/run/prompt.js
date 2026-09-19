@@ -1458,7 +1458,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // 审过什么/报过什么）。骨架轮/他变更轮由采集端过滤；tier=self 不注入（当前 agent 自带
       // 上一轮上下文）。
       try {
-        const priorRound = collectSameStagePriorReview(tierRuntimeRoot, stageName, changeName)
+        const priorRound = await collectSameStagePriorReview(tierRuntimeRoot, stageName, changeName)
         if (priorRound) {
           const blockMd = renderPriorRoundFindingsMd(priorRound)
           priorFactsMd = priorFactsMd ? priorFactsMd + blockMd : blockMd
@@ -1470,6 +1470,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         .split('{STAGE_REVIEW_RUN_ID}').join(reviewRunId)
         .split('{REVIEW_JSON_CONTRACT}').join(reviewContractMd)
         .split('{PRIOR_REVIEW_FACTS}').join(priorFactsMd)
+        .split('{REVIEW_MATERIALS}').join('') // 2026-09-19-review-material-pack：三阶段材料包槽（组装方 buildReviewMaterialPack 注入；本注入链缺省空串——包由派发侧组好后再经本链二次替换，防双写）
     } catch (e) {
       // 降级 self，避免 prompt 残留占位符
       promptText = promptText
@@ -1478,6 +1479,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         .split('{STAGE_REVIEW_RUN_ID}').join('review-unknown')
         .split('{REVIEW_JSON_CONTRACT}').join('(review 契约注入失败,按 schemaVersion=1 + reviewType + verdicts∈pass/fail/cannot_verify + reviewedFiles + docHash=主文档 sha256 产出)')
         .split('{PRIOR_REVIEW_FACTS}').join('')
+        .split('{REVIEW_MATERIALS}').join('') // 降级分支同步 join（plan 审查提示：防占位符字面量残留）
     }
   }
 

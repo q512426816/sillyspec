@@ -445,7 +445,7 @@ export function getLatestStageReviewRunId(runtimeRoot, stage, changeName) {
  * @param {string} changeName - 变更名（跨变更过滤锚）
  * @returns {{ priorRunId: string, verdicts: string, openFindings: string[], passItems: string[], notesPreview: string }|null}
  */
-export function collectSameStagePriorReview(runtimeRoot, stage, changeName) {
+export async function collectSameStagePriorReview(runtimeRoot, stage, changeName) {
   if (!runtimeRoot || !stage || !changeName) return null
   const dir = join(runtimeRoot, 'stage-reviews')
   if (!existsSync(dir)) return null
@@ -490,11 +490,27 @@ export function collectSameStagePriorReview(runtimeRoot, stage, changeName) {
     openFindings.push(`[verdict-fail] verdict=fail 但 checklist 无明细——以 reviewerNotes 为准：${notes || '（无 notes）'}`)
   }
   if (openFindings.length === 0 && passItems.length === 0) return null
+  // fixDiff 腿（QA Gap 2 修正，design Wave 2.4 兑现）：复审唯一基准面的另一半——上一轮之后
+  // 主文档的修复 diff 摘要（git diff --stat 半边，主文档相对 HEAD 的未提交改动；纯函数侧
+  // 不再追多提交窗口——复审场景主文档几乎总在工作树）。fail 时留空串不阻断渲染。
+  let fixDiff = ''
+  try {
+    const metaPath = join(runtimeRoot, '..', 'changes', changeName)
+    const docCandidates = ['design.md', 'plan.md', 'proposal.md']
+    for (const doc of docCandidates) {
+      const dp = join(metaPath, doc)
+      if (!existsSync(dp)) continue
+      const { safeGit } = await import('./git-helper.js')
+      fixDiff = String(safeGit(join(runtimeRoot, '..', '..'), ['diff', '--stat', 'HEAD', '--', dp], { trim: false }) || '')
+      if (fixDiff.trim()) break
+    }
+  } catch { /* fixDiff best-effort：无 git/无 diff → 空串（渲染体仍成立） */ }
   return {
     priorRunId: latest.runId,
     verdicts: `spec=${latest.review.specVerdict}, quality=${latest.review.qualityVerdict}`,
     openFindings,
     passItems,
+    fixDiff: fixDiff.trim().slice(0, 2000),
     notesPreview: String(latest.review.reviewerNotes || '').replace(/\s+/g, ' ').slice(0, 160),
   }
 }
@@ -513,17 +529,25 @@ export function collectSameStagePriorReview(runtimeRoot, stage, changeName) {
 export function renderPriorRoundFindingsMd(collected, cap = 15) {
   if (!collected) return ''
   const L = []
-  L.push(`**同阶段上一轮审查结论（run ${collected.priorRunId}，verdict ${collected.verdicts}）——本次为复审，以增量为主，不重演全量审查**：`)
+  // 2026-09-19-review-material-pack D-002/Grill 交叉点 1：建议语→排他语——本块是再审的
+  // **唯一基准面**（fixDiff 由采集端并入 collected.openFindings 的证据行，渲染体扩展、
+  // 占位符机制零改动）。子代理服从必读清单而非回灌块的教训：排他语必须明写「唯一」。
+  L.push(`**同阶段上一轮审查结论（run ${collected.priorRunId}，verdict ${collected.verdicts}）——本材料是本轮复审的唯一基准面：只核验下列未决项的修复状态与本次改版新增面，不重演全量审查（全量重读=重做已付的评审）**：`)
   if (collected.openFindings.length > 0) {
     const shown = collected.openFindings.slice(0, cap)
     L.push(`- **上一轮未决问题（逐项核验修复状态：已修给证据、未解决必须如实再次 fail——漏放行=假通过）**（${shown.length}/${collected.openFindings.length} 条）：`)
     for (const f of shown) L.push(`  - ${f}`)
+  }
+  if (collected.fixDiff && String(collected.fixDiff).trim()) {
+    L.push('- **上一轮后的修复 diff 摘要（唯一基准面的证据半边——核验修复是否真实落地）**：')
+    L.push('```diff\n' + String(collected.fixDiff) + '\n```')
   }
   if (collected.passItems.length > 0) {
     const shown = collected.passItems.slice(0, cap)
     L.push(`- **上一轮已实证 pass 面（勿重复报告/重验——除非本次修复改动明确触及该面才定向复查）**（${shown.length}/${collected.passItems.length} 条）：`)
     for (const p of shown) L.push(`  - ${p}`)
   }
+  L.push(`- **包外查证口径**：本基准面之外的文件可定向查证但须在 reviewerNotes 列明查证清单；禁全量扫读仓。材料不足以核验某未决项→该项 cannot_verify＋列缺件，不得靠全量重读自救。`)
   return `\n${L.join('\n')}\n`
 }
 

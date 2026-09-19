@@ -440,8 +440,8 @@ ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + ite
   **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
   **gate 重试修复**：review.json 落盘后若 design.md 又有改版，gate 会**自动机械重算 docHash 放行**（verdict/checklist 保留，结论是否仍适用于新文档需人工确认）——**不要重做审查**（重做=同一材料第三遍）；主文档路径错/缺失不会被自动修复，按 gate 报错修正 reviewedFiles[0]，或跑 \`sillyspec register-stage-review --change <变更名> --stage execute --refresh-hash\`。
 
-### 操作
-1. 读取 design.md（技术方案）——按章节精准读（design-check 对照表可借 tasks 卡 §锚点定位），避免反复整读全文
+### 操作（材料包口径——2026-09-19-review-material-pack）
+1. **评审材料包（基准面）**：主代理派发时组装（src/review-material-pack.js buildReviewMaterialPack('execute-qa')：diff 摘要＋design 热区＋验收清单＋点名锚）——checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。task review 双 pass 抽查、未双 pass 全量重审的分级照旧（上方「审查范围分级」）。
 2. 逐一对照 design.md 中的设计要点与实际代码实现
 3. 检查接口签名、数据结构、模块划分是否一致
 4. 记录偏差项（偏差 ≠ 错误，可能是合理的实现调整）
@@ -1234,6 +1234,8 @@ ${workdirLines}
 蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
 
 ⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
+
+⚠️ **Python 后端导入链陷阱（venv editable install，2026-09-18 实证 gen:types 坑）**：worktree 内跑任何 \`import app\` / dump_openapi / gen:types 类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——\`import app\` 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「后端没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/backend\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。
 `
       : ''
   }

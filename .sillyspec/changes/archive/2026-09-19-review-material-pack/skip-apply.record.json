@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-19-review-material-pack",
+  "flag": "--skip-apply",
+  "skippedAt": "2026-09-19T07:25:13.343Z",
+  "deliverableCount": 12,
+  "deliverableFiles": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    "docs/prompt/_extracted.json",
+    "docs/prompt/brainstorm.md",
+    "docs/prompt/verify.md",
+    "src/review-material-pack.js",
+    "src/run/prompt.js",
+    "src/stage-review.js",
+    "src/stages/brainstorm.js",
+    "src/stages/execute.js",
+    "src/stages/plan.js",
+    "test/review-material-pack.test.mjs",
+    "test/stage-review-prior-round.test.mjs"
+  ],
+  "note": "归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计"
+}

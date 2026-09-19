@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-19-review-material-pack",
+  "generatedAt": "2026-09-19T07:17:39.871Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "matches": 6,
+        "skippedFiles": 0,
+        "worktreeHits": 2,
+        "globEntries": 1
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "tasks": 3,
+        "hasTest": 1
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-19-review-material-pack",
+      "metrics": {
+        "checkedFiles": 4,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "other",
+        "item": "Gap 1 CLI 机械注入接线（包组装 helper 已就位但生产调用点为零——主代理按模板指引手工组装）与 Gap 4 map 夹带并行补录披露",
+        "condition": "后续小变更接 CLI 注入链（照 execute 热区直抽先例）；G4 已披露无需动作",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/review-material-pack.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-19T07:23:41.338Z"
+  },
+  "requiredEvidence": [
+    {
+      "task": "task-01",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/review-material-pack.js",
+        "src/run/prompt.js"
+      ]
+    },
+    {
+      "task": "task-02",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/stages/brainstorm.js",
+        "src/stages/plan.js",
+        "src/stages/execute.js",
+        "src/stage-review.js"
+      ]
+    },
+    {
+      "task": "task-03",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "test/review-material-pack.test.mjs",
+        "docs/prompt/_extracted.json"
+      ]
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

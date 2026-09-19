@@ -172,7 +172,7 @@ export const definition = {
 - answer: <用户确认或代码查证结果>
 - normalized_requirement: <可测试的约束>
 - impacts: [FR-?, task-?, verify-?]
-- evidence: <文件路径/代码位置/用户回答轮次>
+- evidence: <文件路径/代码位置/用户回答轮次>（源码引用写仓根相对全路径+行号，如 src/stage-contract.js:789——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦，2026-09-19 实证 64 处返工）
 - 故障面: <本决策引入的新失败模式>（可选，type=architecture 时建议填写）
 - 退役判据: <出现什么信号时简化/删除本机制>（可选，type=architecture 时建议填写）
 \`\`\`
@@ -413,15 +413,11 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
    - ceremony 档为 S0（客观定价已是最低仪式档）且只改 1-2 个文件——S0 的 CLI 清单核验仍要执行，跳过的只是发散深查
 3. 即使跳过，也要输出"Design Grill skipped"和原因，不能静默跳过。
 
-### 输入材料
-1. 必须读取完整 \`{SPEC_ROOT}/changes/<change-name>/design.md\`
-2. 读取 proposal.md、requirements.md、tasks.md、decisions.md（如存在）
-3. 读取 scan/module docs：
-   - \`{SPEC_ROOT}/docs/<project>/scan/ARCHITECTURE.md\`
-   - \`{SPEC_ROOT}/docs/<project>/scan/CONVENTIONS.md\`
-   - \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`
-   - 命中的模块文档
-4. 按 design.md 文件变更清单读取相关源码、测试、配置、schema 或样例数据；矛盾经常藏在设计与外部约束交叉处，素材宁可多读，不要只读摘要。
+### 输入材料（2026-09-19-review-material-pack：必读清单→材料包基准面）
+1. **评审材料包（基准面——checklist 逐条只对本包作答）**：主代理派发时组装（design 要点 digest＋文件清单＋五个交叉点＋点名的源码片段，src/review-material-pack.js buildReviewMaterialPack('grill-first')）。
+2. 包外文件可按需定向查证（列明查过的文件），**禁止全量扫读仓**——矛盾经常藏在交叉处，定向读那一处，不读整个仓。
+3. **自检首项（先于一切审查项）**：材料包是否足以逐条作答下方审查清单；不足以作答→cannot_verify＋在 requiredEvidence 列缺件（缺什么列什么——这是包质量问题不是你的问题），不要靠全量扫读自救。
+4. decisions.md 全文可读（决策条目是审查对象本体，不属于扫读面）。
 
 ### 交叉审查模型
 按三层检查并输出 cross-check matrix：
