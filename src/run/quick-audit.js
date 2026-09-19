@@ -415,7 +415,17 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   // 倒推 B 模式兜底：审计口径为空时回退声明边界（文件早于会话启动被基线吸收的场景）
   const files = audited.length > 0 ? audited : (Array.isArray(declaredFiles) ? declaredFiles : [])
   const fileSource = audited.length > 0 ? '审计' : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
-  const codeFiles = files.filter(f => typeof f === 'string' && (f.startsWith('src/') || f.startsWith('test/')))
+  // 代码文件判定（2026-09-19 monorepo 子包实证修复：multi-agent-platform 回带收口 6 个
+  // sillyhub-daemon/src/**、frontend/src/** 文件被「纯 doc/配置」误判跳过实测）：旧口径只认
+  // 仓根 src/、test/ 前缀——monorepo 子包（<pkg>/src/**、backend/app/**.py）全漏。
+  // 新口径双通道，方向取「宁可多跑不可漏跑」（门禁漏跑=静默放行，多跑只是费一次实测）：
+  //   ① 路径段匹配：任意层出现 src / test / tests / __tests__ 段（src-guide 等长名不误蹭——按段全等）
+  //   ② 代码扩展名兜底：src/test 目录约定外的代码（backend/app/**.py、scripts/*.go 等）
+  const CODE_PATH_SEGMENT_RE = /(^|\/)(src|tests?|__tests__)(\/|$)/
+  const CODE_EXTENSION_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|groovy|vue|svelte)$/
+  const codeFiles = files.filter(
+    (f) => typeof f === 'string' && (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)),
+  )
   if (files.length === 0) {
     return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null }
   }

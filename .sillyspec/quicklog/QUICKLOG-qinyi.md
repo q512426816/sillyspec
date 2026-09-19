@@ -57,10 +57,16 @@
 方案：NEW:test/bootstrap-declaration-pin.test.mjs 三组 11 断言：blast ≥3 条目+域前缀在场+evidence ≥1+门禁 S2 在场 / span_risk ≥9 token+两族在场 / 三档走位语义钉（worktree→S3+evidence、stage-contract→S2、datetime→S1）——丢段 CI 即红且失败信息带恢复路径先例；连带：conventions 撞词条回填首日实测数字（单价 1/4 已验证非估计）；审计 tag 回收（对象已进 main）
 结果：钉 11/11 绿（含一次自身 bug 修正：loader 返回编译对象数组取 .pattern）；lint 含新测试文件
 
-## ql-20260919-019-344f | 2026-09-19 19:16:24 | 钩子 #1：quick --done FR 写面腐烂 suspect 遥测——changedFiles × module-map join → 触达域 active FR → fr-rot-suspect advisory 事件+warn（…
-状态：进行中
+## ql-20260919-019-344f | 2026-09-19 19:16:24 | 钩子 #1
+状态：已完成
 关联变更：（无）
-文件：src/run/shared.js, src/knowledge-stats.js, test/knowledge-fr-stats.test.mjs
+文件：src/knowledge-stats.js（+302/-0）
+需求：钩子 #1
+根因：quick 写面真空
+方案：join+digest+事件+stats
+结果：24/24+lint 绿
+审计：📝 文档欠账（D-8）：1 个源码文件改动未同步任何模块文档（涉及模块：docs-consistency）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs-check-baseline
 
 ## ql-20260919-020-dddf | 2026-09-19 21:07:08 | plan full 分级判据去项目特化——「CLI + 平台 + DB 联动」改通用「跨技术层联动」
 状态：已完成
@@ -112,3 +118,15 @@
 根因：上批只扫 stage prompt 模板面，worktree-apply/worktree/verify-quality-scan/quick-audit 四模块运行时消息、config-schema note、scan 示例 YAML 仍带消费者项目真实命令与项目名
 方案：六处纯文案：生成产物示例改「类型生成/代码生成产物类」、doctor PYTHONPATH 示例改 <项目源码根>、scan 示例 project 改 demo-platform；行为零变更；scan.md _sync 自动同步+_extracted/_build-site 重生成
 结果：靶向 160/160 绿（71 测试文件）；_verify 失配 14=基线持平；全 src+镜像+产物专名残留 0；quick --done 门禁实测全量 test+lint
+
+## ql-20260920-001-63a5 | 2026-09-20 00:11:15 | quick门禁monorepo子包感知修复——codeFiles分类器只认仓根src/test前缀，子包代码被误判纯doc跳过实测
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/quick-audit.js（codeFiles双通道分类器（段匹配+扩展名兜底））
+- test/quick-test-gate.test.mjs（3b子包用例+长名防误蹭断言）
+- .sillyspec/docs/sillyspec/modules/runtime.changelog.md（边车登记ql-20260920-001）
+需求：quick门禁monorepo子包感知修复——codeFiles分类器只认仓根src/test前缀，子包代码被误判纯doc跳过实测
+根因：2026-09-19 multi-agent-platform回带收口实证：6个sillyhub-daemon/src/**与frontend/src/**文件触发「纯doc/配置改动SKIP」，门禁漏跑=静默放行代码变更
+方案：run/quick-audit.js分类器改双通道：①路径段全等匹配（任意层src/test/tests/__tests__段，src-guide长名不误蹭）②代码扩展名兜底（ts/tsx/py/go等20+后缀，覆盖backend/app/**.py类目录约定外代码）；方向取宁可多跑不可漏跑；测试补3b用例（子包三路径不再skip）+长名防误蹭断言；runtime changelog边车登记
+结果：quick-test-gate 28/28全绿（24→28）；CLI --done门禁亲跑（修复后src文件正确触发实测）

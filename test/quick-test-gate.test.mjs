@@ -58,6 +58,12 @@ function makeGateFixture({ yaml } = {}) {
 
 const SRC_FILES = ['src/index.js']
 const DOC_FILES = ['docs/a.md', 'README.md', 'package.json']
+// monorepo 子包代码路径（2026-09-19 multi-agent-platform 回带收口实证形态）
+const MONOREPO_CODE_FILES = [
+  'sillyhub-daemon/src/agent-log/parse-zcode-model-io.ts',
+  'frontend/src/lib/agent-log-turns.tsx',
+  'backend/app/modules/change/router.py',
+]
 
 // ─── 1. env 逃生门 ───
 console.log('--- 1. env 逃生门 ---')
@@ -86,6 +92,19 @@ console.log('--- 3. 纯 doc/配置改动 ---')
   const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: DOC_FILES })
   assert(gate.action === 'skip', `doc-only → skip（实际 ${gate.action}）`)
   assert(gate.reason.includes('src/test'), 'reason 点出规则 8 语义（未触及 src/test）')
+  // 段全等防误蹭：src-guide 等长名不是 src 段（doc 仍 skip）
+  const tricky = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: ['docs/src-guide.md', 'notes/testing-notes.md'] })
+  assert(tricky.action === 'skip', '长名不误蹭（src-guide/testing-notes 非段全等 → 仍 doc skip）')
+}
+
+// ─── 3b. monorepo 子包代码路径不再误判（2026-09-19 实证修复）───
+console.log('--- 3b. monorepo 子包代码 → 不再纯 doc skip ---')
+{
+  // 未配置 commands → 走到 pass（若被误判 doc 会 skip——本用例即旧 bug 形态）
+  const { proj, specBase } = makeGateFixture({ yaml: '# 空 local.yaml\n' })
+  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: MONOREPO_CODE_FILES })
+  assert(gate.action === 'pass', `子包代码（<pkg>/src/**、backend/app/**.py）→ pass 不 skip（实际 ${gate.action}）`)
+  assert(gate.test.status === 'skipped' && gate.lint.status === 'skipped', '未配置命令降级 skipped（同用例 4 语义）')
 }
 
 // ─── 4. 触及 src + 未配置 commands ───

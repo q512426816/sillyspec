@@ -1,0 +1,72 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-7b2768bb",
+  "totals": {
+    "files": 3,
+    "additions": 31,
+    "deletions": 1
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/quick-audit.js",
+      "declared": true,
+      "additions": 11,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/quick-test-gate.test.mjs",
+      "declared": true,
+      "additions": 19,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/quick-audit.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/quick-test-gate.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-001-63a5",
+  "sessionId": "quick-7b2768bb",
+  "savedAt": "2026-09-19T16:14:16.087Z",
+  "patchSha256": "640066cb27e4d759718eb511e0bc926487a58cb2a187f4edd29ebccb7c0f80c4",
+  "patchStatus": "ok"
+}

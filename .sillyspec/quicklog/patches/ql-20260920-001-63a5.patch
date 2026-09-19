@@ -1,0 +1,69 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index bf0e140..4831832 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -35,3 +35,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - 2026-09-16-friction5-hardening | 门禁快照 copy 面（FR-04/D-002@v1，用户驾驭小结④）：gate-snapshot 新增 parseGateSnapshotCopy（主仓 local.yaml 轻量行扫描，块列表+inline flow 双形态）+ 导出 applyGateSnapshotCopy(cwd, snapshotRoot)——createGateSnapshot 环境目录链接段后调用，逐条规整→拒 ../绝对路径→主仓不存在 warn 跳过→overlay 已覆盖跳过→symlinkSync junction→existsSync 后验（Windows 文件 junction 假成功坑：不抛错但产不可解析重解析点）→回退递归 copy/copyFileSync→再失败 warn 不作废快照；未配置全段空转。run/gates.js probe7 advisory 文案双口径（R5）；verify-probes 回执骨架双形态示例两处（R1）。新增 test/gate-snapshot-copy.test.mjs（5）
+ - ql-20260919-004-cbd8 | 快照层回归钉（回放 2026-09-18 摩擦#5 收口核验）：createVerifyGateSnapshot native 收养态（meta 缺席、cwd 即 linked worktree）untracked 新文件内容进快照——修复链已在 e47ab3a（ql-20260918-010）resolve 层落地（native 分支 porcelain --untracked-files=all 并入），本钉补快照层端到端守卫（修复前 untracked 不进文件集→overlay 漏拷→快照内 ERR_MODULE_NOT_FOUND 裸崩）；test/verify-gate-snapshot.test.mjs 3→4，实证 tmp 仓 native worktree 复跑通过
+ - ql-20260919-006-120b | quick --input 启动门上移（2026-09-19 实测踩）：原位置在 flag 校验后，但 sessionId 生成/「已建立」公告与 agent-log 平台上报都在其之前——缺 --input 的拒绝路径先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了永不启动的 agent 日志；上移至 id 生成前（--help/-h 显式豁免保住帮助查询），拒绝路径零输出副作用。test/quick-start-input-hint.test.mjs 13→15 断言（拒绝路径无公告/无日志上报 + --help exit 0 不被拦）
++- ql-20260920-001 | quick-audit codeFiles 分类器 monorepo 子包修复（multi-agent-platform 回带收口实证：6 个 sillyhub-daemon/src/**+frontend/src/** 文件被「纯 doc/配置」误判 SKIP）——双通道：路径段全等（任意层 src/test/tests/__tests__，长名不误蹭）+ 代码扩展名兜底（ts/tsx/py 等 20+ 后缀覆盖 backend/app/**.py）；方向宁可多跑不可漏跑；test/quick-test-gate.test.mjs 28/28（+3b 子包用例+防误蹭）
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index f865466..6bc1746 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -415,7 +415,17 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+   // 倒推 B 模式兜底：审计口径为空时回退声明边界（文件早于会话启动被基线吸收的场景）
+   const files = audited.length > 0 ? audited : (Array.isArray(declaredFiles) ? declaredFiles : [])
+   const fileSource = audited.length > 0 ? '审计' : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
+-  const codeFiles = files.filter(f => typeof f === 'string' && (f.startsWith('src/') || f.startsWith('test/')))
++  // 代码文件判定（2026-09-19 monorepo 子包实证修复：multi-agent-platform 回带收口 6 个
++  // sillyhub-daemon/src/**、frontend/src/** 文件被「纯 doc/配置」误判跳过实测）：旧口径只认
++  // 仓根 src/、test/ 前缀——monorepo 子包（<pkg>/src/**、backend/app/**.py）全漏。
++  // 新口径双通道，方向取「宁可多跑不可漏跑」（门禁漏跑=静默放行，多跑只是费一次实测）：
++  //   ① 路径段匹配：任意层出现 src / test / tests / __tests__ 段（src-guide 等长名不误蹭——按段全等）
++  //   ② 代码扩展名兜底：src/test 目录约定外的代码（backend/app/**.py、scripts/*.go 等）
++  const CODE_PATH_SEGMENT_RE = /(^|\/)(src|tests?|__tests__)(\/|$)/
++  const CODE_EXTENSION_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|groovy|vue|svelte)$/
++  const codeFiles = files.filter(
++    (f) => typeof f === 'string' && (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)),
++  )
+   if (files.length === 0) {
+     return { action: 'skip', failed: [], reason: `无变更文件清单（${fileSource}口径均空——brownfield 无 guard 或空审计），跳过`, test: null, lint: null }
+   }
+diff --git a/test/quick-test-gate.test.mjs b/test/quick-test-gate.test.mjs
+index f083776..5c25284 100644
+--- a/test/quick-test-gate.test.mjs
++++ b/test/quick-test-gate.test.mjs
+@@ -58,6 +58,12 @@ function makeGateFixture({ yaml } = {}) {
+ 
+ const SRC_FILES = ['src/index.js']
+ const DOC_FILES = ['docs/a.md', 'README.md', 'package.json']
++// monorepo 子包代码路径（2026-09-19 multi-agent-platform 回带收口实证形态）
++const MONOREPO_CODE_FILES = [
++  'sillyhub-daemon/src/agent-log/parse-zcode-model-io.ts',
++  'frontend/src/lib/agent-log-turns.tsx',
++  'backend/app/modules/change/router.py',
++]
+ 
+ // ─── 1. env 逃生门 ───
+ console.log('--- 1. env 逃生门 ---')
+@@ -86,6 +92,19 @@ console.log('--- 3. 纯 doc/配置改动 ---')
+   const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: DOC_FILES })
+   assert(gate.action === 'skip', `doc-only → skip（实际 ${gate.action}）`)
+   assert(gate.reason.includes('src/test'), 'reason 点出规则 8 语义（未触及 src/test）')
++  // 段全等防误蹭：src-guide 等长名不是 src 段（doc 仍 skip）
++  const tricky = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: ['docs/src-guide.md', 'notes/testing-notes.md'] })
++  assert(tricky.action === 'skip', '长名不误蹭（src-guide/testing-notes 非段全等 → 仍 doc skip）')
++}
++
++// ─── 3b. monorepo 子包代码路径不再误判（2026-09-19 实证修复）───
++console.log('--- 3b. monorepo 子包代码 → 不再纯 doc skip ---')
++{
++  // 未配置 commands → 走到 pass（若被误判 doc 会 skip——本用例即旧 bug 形态）
++  const { proj, specBase } = makeGateFixture({ yaml: '# 空 local.yaml\n' })
++  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: MONOREPO_CODE_FILES })
++  assert(gate.action === 'pass', `子包代码（<pkg>/src/**、backend/app/**.py）→ pass 不 skip（实际 ${gate.action}）`)
++  assert(gate.test.status === 'skipped' && gate.lint.status === 'skipped', '未配置命令降级 skipped（同用例 4 语义）')
+ }
+ 
+ // ─── 4. 触及 src + 未配置 commands ───
