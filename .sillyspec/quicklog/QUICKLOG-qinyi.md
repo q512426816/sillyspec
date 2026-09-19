@@ -61,3 +61,17 @@
 状态：进行中
 关联变更：（无）
 文件：src/run/shared.js, src/knowledge-stats.js, test/knowledge-fr-stats.test.mjs
+
+## ql-20260919-020-dddf | 2026-09-19 21:07:08 | plan full 分级判据去项目特化——「CLI + 平台 + DB 联动」改通用「跨技术层联动」
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan.js（full 判据一行去项目特化）
+- docs/prompt/plan.md（镜像同步手改（动态阶段 _sync 跳过））
+- docs/prompt/_extracted.json（_extract.mjs 机械重生成）
+- docs/prompt/index.html（_build-site.mjs 机械重生成）
+需求：plan full 分级判据去项目特化——「CLI + 平台 + DB 联动」改通用「跨技术层联动」
+根因：该判据 60a0109 首版按 SillySpec 自身架构写死，但 plan 阶段 prompt 随 CLI 下发到所有安装项目，前端/纯算法等项目里三层对不上号；仓库同概念先例（plan-execute-contract.md:155「前后端联动」）已是通用措辞
+方案：src/stages/plan.js full 判据改「跨技术层联动（同一变更需多层协同改造，如前端 + 服务端 + 数据库）」保留多层协同意图；镜像 docs/prompt/plan.md 手改同步（动态阶段 _sync 跳过）；既定流水线 _extract.mjs + _build-site.mjs 重生成 _extracted.json/index.html，plan#3 附带路径物化机械差异（HEAD 基线内嵌临时 worktree 绝对路径→主仓根，非语义变更）
+结果：plan 系 21 测试文件 32/32 绿（含镜像同步测试）；旧文案全仓 0 残留；quick --done 门禁实测全量 npm test + lint
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/0 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）

@@ -1,0 +1,78 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-87486e0a",
+  "totals": {
+    "files": 4,
+    "additions": 5,
+    "deletions": 5
+  },
+  "rows": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/index.html",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 1,
+    "testFileCount": 0,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/plan.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-020-dddf",
+  "sessionId": "quick-87486e0a",
+  "savedAt": "2026-09-19T13:14:20.541Z",
+  "patchSha256": "2421e8d38cb04159341b31705f9d76b000f79e237156172d7464d56a5a293d91",
+  "patchStatus": "ok"
+}

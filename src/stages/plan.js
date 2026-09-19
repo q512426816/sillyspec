@@ -92,7 +92,7 @@ const stepClassify = {
 判定为 full（满足任一即升为 full）：
 - 预计 8 个以上 task
 - 跨 3 个以上模块
-- 涉及 CLI + 平台 + DB 联动
+- 跨技术层联动（同一变更需多层协同改造，如前端 + 服务端 + 数据库）
 - 涉及 agent 调度 / worktree / isolation 逻辑
 - 涉及复杂状态恢复（checkpoint / resume）
 - 需要并行 sub-agent 执行
