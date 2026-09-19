@@ -151,3 +151,30 @@ supersedes：D-003@v1
 理由：非目标：不改评审轮次（S2/S3 菜单不动）、不改填卡步骤（plan.js:500 的 batch 子代理另立变更或明示非目标）、不动事实面计量（⑥ 另走 quick）、不吞 verify 级联死锁两轮（已有 postmortem ql-013）。**合规项（本变更触 src/stages/*.js prompt，CLAUDE.md 规则 19）**：改完必须重跑 `node docs/prompt/_extract.mjs` 并同步 docs/prompt/*.md——列入文件清单，防 doc-ref-check 层面返工。**自指纪律**：本变更在评审域，brainstorm 完成门按当时 design 定档且只升不降——risk_level 必须在该 --done 前写入 frontmatter（否则关键词定顶格、把要省的钱先花掉）。
 故障面：无。
 退役判据：无。
+
+## D-001@v1 范围与硬约束——六模式表迁项目声明，价目表/blast 段零改动
+状态：implemented
+变更：2026-09-19-span-risk-pattern-migration
+锚点：未记录
+最近确认：c796534
+理由：迁移=六模式表自硬编码改项目声明（形态在方案步定），两消费面（①ceremony-tier.js:218 span 轴命中→至少 S2；②quick-gate-profile.js:148 computeGateProfile 默认 riskTable 命中→L2+runtimeEvidence advisory）按方案期决策切换。硬约束（用户原话逐条）：**价目表不动**（三轴 max 公式、阈值 8/2、force_tier 只升不降）；**blast 声明面（blast 段）不动**——只迁 span 的路径模式；quick 画像消费面与定价消费面口径**可以分开迁也可以一起**（design 定）；risk_level 先行纪律（design frontmatter 首次定价前声明）。
+故障面：迁移中匹配语义漂移（口径变化伪装成迁移）——以「同 token 集 ⇒ 逐字节同命中」等价性钉对冲（方案步定）。
+退役判据：若 span 轴整体改结构化输入（非路径模式），本机制随轴退役。
+
+## D-003@v1 方案 A——map 顶层 span_risk 段（token 扁平列表）+ 空缺省 + 双消费面同刀 + 硬退役
+状态：implemented
+变更：2026-09-19-span-risk-pattern-migration
+锚点：未记录
+最近确认：c796534
+理由：选 A（用户简报显式委托方案期定夺——原话「形态 brainstorm 定」「缺省行为、本仓自举表、两消费面切换、向后兼容（无声明项目）都在方案期落决策」；本条 agent 按委托选定，可 --reopen 否决）。理由：①与 blast 管道同构（D-008 先例：map 主声明进 git 可评审、modules rebuild --force 未知顶层段通用回插已覆盖 span_risk、装载容错立场「坏段跳过不拦截」现成）；②B 被等价问题显式否决过——local.yaml gitignore 每机一份当共享价目表（D-008 evidence 原文「local.yaml 当共享价目表」被否）；③C 与 blast「未配置禁止回退」（D-008）正面冲突且让全宇宙表活在缺省路径，违反知识库 conventions「判级/定价/门禁输入必须项目声明，禁全宇宙词表」口径真相源条目。覆盖决策：符合 D-001（价目表公式零改动）、不违 D-002（不触碰 blast 段）。
+故障面：①无声明项目静默失去六域网（auth/billing 路径不再触发 span S2 / quick L2）——以 known-issues/文档登记 + 本仓自举表示范对冲，blast 迁移同款取舍；②token 写错（拼错/过宽）静默失配——token 为纯字面量可评审，装载数量进 reasons 审计。
+退役判据：若 span 轴改结构化输入或 pattern 声明并入 blast 段 schema 升版，本段形态随之退役。
+
+## D-004@v1 本仓自举表——定制而非照抄六域（migration 族 + scheduling 族含 dispatch）
+状态：implemented
+变更：2026-09-19-span-risk-pattern-migration
+锚点：未记录
+最近确认：c796534
+理由：定制：migration 族（migrate/migration/migrations）+ scheduling 族（dispatch/scheduler/scheduling/cron/job/jobs），共 9 token。依据：①现行六域中 auth/permission/billing/lock 在本仓 src/ 零路径实体（grep 实证无 auth/billing/permission 命名文件；lock 无 lock 命名文件）——声明无实体的域是死配置，违反「项目自己的危险面自己声明」口径；②migration 族保住现行命中面（src/migrate.js、src/docs-migrate.js 今日即被 migrations?/migrate 命中——迁移工具/文档迁移是本仓真风险域）；③scheduling 族是本 dispatch/异步任务域的自 declaration（现行通用表 schedul(?:er|ing)|cron|jobs? 在本仓恰零命中，dispatch 词不在通用表——本仓按自身模块图补 declaration：src/dispatch/、src/review-dispatch.js），这是迁移的立意本身：声名面反映项目实况而非全宇宙猜测。行为面如实登记：本仓 dispatch 域文件自本变更起 span 命中→S2 / quick L2（比现行严）——这正是声明面该有的灵敏度。
+故障面：dispatch 域灵敏度上升带来的误伤面（纯文档性 dispatch 改动也被 quick L2 提示）——L2 是 advisory 不阻断；dispatch 域确属异步任务风险域，误伤面可接受。
+退役判据：本仓模块图重构使 dispatch/migration 域消亡时随 map 评审退役。

@@ -61,6 +61,8 @@ created_at: 2026-06-19T12:40:00+08:00
 - wt-commit|dispatch|幽灵命令 → [known-issues.md#execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）](known-issues.md#execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）)
 
 - verify-required-evidence|门脆断|quick gate|deps(auto)|test failed → [known-issues.md#quick-gate-required-evidence-flake（2026-09-19，未解）](known-issues.md#quick-gate-required-evidence-flake2026-09-19未解)
+- blast|自举|悬空提交|bbe30ab|skip-apply → [known-issues.md#blast 自举声明表未落 main（2026-09-19-ceremony-pricing-five-cuts 归档 --skip-apply 遗留）](known-issues.md#blast-自举声明表未落-main2026-09-19-ceremony-pricing-five-cuts-归档---skip-apply-遗留)
+- span|六域|QUICK_RISK_PATH_PATTERNS|span_risk|维度关闭 → [known-issues.md#span 六域通用路径表已退役为项目声明（无声明项目维度关闭）](known-issues.md#span-六域通用路径表已退役为项目声明无声明项目维度关闭)
 ## Decisions
 - change-management|quicklog|标签|切段|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
 - core-engine|SQLite|FTS5|db-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)

@@ -229,7 +229,7 @@ export const LOCAL_YAML_SCHEMA = {
     {
       id: 'ceremony',
       title: '评审仪式档位（ceremony tier）',
-      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（blast 轴输入=项目声明危险面 _module-map.yaml 顶层 blast 段，2026-09-19-ceremony-pricing-five-cuts）；完成门声明追赶重定价——无摩擦迁移随声明面可升可降、有摩擦迁移地板不退，force_tier 仍只升不降；本段是逃生阀/影子期开关/逐机升档面。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
+      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（blast 轴输入=项目声明危险面 _module-map.yaml 顶层 blast 段，2026-09-19-ceremony-pricing-five-cuts；span 轴路径模式输入=项目声明 _module-map.yaml 顶层 span_risk 段，2026-09-19-span-risk-pattern-migration，无声明项目该维关闭不回退内置表）；完成门声明追赶重定价——无摩擦迁移随声明面可升可降、有摩擦迁移地板不退，force_tier 仍只升不降；本段是逃生阀/影子期开关/逐机升档面。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
       keys: [
         { path: 'ceremony.blast_surfaces', type: 'json', optional: true, status: 'live', readers: ['loadBlastDeclarations (src/blast-surface.js — local 逐机升档，与 map 声明逐文件取 max)'], desc: 'blast 危险面逐机覆盖：[{ prefixes: [...], tier: S0~S3 }]——主声明在 _module-map.yaml 顶层 blast 段（进 git、可挂 evidence 位）；本键只升不降（与 map 命中逐文件取 max，压低共享声明无效）、不承载 evidence（证据语义属共享 map，D-009）。非法条目静默跳过。', example: '[{ prefixes: [src/my-daemon/], tier: S3 }]' },
         { path: 'ceremony.force_tier', type: 'enum', values: ['S0', 'S1', 'S2', 'S3'], optional: true, status: 'live', readers: ['readCeremonyLocalConfig (src/run/prompt.js — {REVIEW_TIER} 注入档位菜单/强制轻仪审计痕)', '影子派发前置校验 (src/review-dispatch.js — task-06 影子期框架接线)'], desc: '档位逃生阀：强制仪式档 S0~S3，绕过客观定价（过渡期「就是不信这套」用）。prompt 注入面只升不降——强制档低于客观定价档时不降档（防 prompt 面与 gate 侧判定分裂）；非法值 warn 后忽略。', example: 'S3' },

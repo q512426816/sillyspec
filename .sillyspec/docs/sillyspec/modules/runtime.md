@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: runtime
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-14T22:30:00+08:00
+updated_at: 2026-09-19T18:10:00+08:00
 ---
 # runtime
 
@@ -110,6 +110,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
 - ql-20260819-014-0082 | autoCheckPlanFromReviews catch 加 warn 留痕（原静默返回假阴性）；prompt.js quicklog-id guard.json 读取失败加 warn（原空 catch 降级 (未分配) 无根因）。
 - 2026-09-02 P0-2（跨 agent 工单） | quick --done 内置 test+lint 硬门禁：complete-handlers.js quick 收尾在边界审计后接 runQuickTestLintGate（quick-audit.js），changedFiles 触及 src/test 时复用 verify-postcheck 的 runVerifyTestCheck/runVerifyLintCheck 亲自实测（commands.test/lint，含 test_strategy/known_failures/超时语义），任一 failed → step 回 pending + exit 1（与边界审计同款阻断），修复重跑不丢进度；纯 doc/配置、未配置命令、brownfield 无清单自动跳过不阻断；env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip 留痕跳过。治「--done 前跑 test+lint」靠 agent 自律的 CLAUDE.md 规则 8。新增 test/quick-test-gate.test.mjs（8 组 21 断言）；本仓 local.yaml 补 commands.test/lint 启用自监管。
 - 2026-09-14-quick-exit-tiered-gates | quick 出口分级门禁接线（run/ 四点，FR-03，信号层与 THRESHOLDS 定稿见 core-engine 卡 quick-gate-profile 小节）：① run/shared.js auditQuickCompletion 照 docSyncHint 先例挂 `review.gateProfile`——changedFiles 取本函数已算的 git 事实窗口（非 --files 自声明；先滤会话簿记噪声但保留模块卡与 changelog sidecar——模块卡恰是 L2 docClaim 认领对象，不沿用 isQuickMetadata 记录面谓词）、moduleIndex 复用 matchQuickModules 同源 loadQuickModuleIndex、阈值经 resolveGateThresholds 合并 local.yaml quick-gate 段（readLocalYamlRaw + js-yaml 动态 import，坏 YAML 纯默认，D-009）、noDocs/fileNotes 经 options 透传；**fail-open**——画像整块内层 try/catch，异常只跳过（gateProfile 保持 null），绝不碰 status 三态（D-003 advisory）；**D-005 归属分流**——undeclaredFiles 非空时 docClaim 单独按归属口径重算覆盖（级判 span/files/risk 仍用 git 事实全窗口防未声明面漏判级，他者窗口内改模块卡不得伪造成「已认领」）。② run/complete-handlers.js quick 收尾 [gate] 落账——buildGateAuditNote(review.gateProfile) 组装单行注记随既有 auditNotes 通道落 QUICKLOG（L1 每文件注记+测试增量 / L2 模块文档认领+风险命中 / --no-docs 豁免同通道留痕；L0/无画像 → null 零落账）。③ run/quick-audit.js printQuickAuditReview 增 [gate] advisory 打印块（L1/L2 级别/跨度/模块清单/风险命中/检查项 + --no-docs 指引，L0 零输出）+ buildGateAuditNote 单独导出（与打印块同 review.gateProfile 数据源，纯函数可测）。④ run/command.js 解析 --no-docs 布尔 flag 并登记 knownFlags + run/complete.js isNoDocs 随 completeStep options 透传进审计链（只影响 gate 画像 docClaim=exempt-no-docs 与 [gate] 落账留痕，不改 status/exit code，D-003）。测试：test/audit-quick-completion.test.mjs 增 G-0~G-8 九组（含 --no-docs 豁免/D-005 归属分流/D-009 阈值覆写/降级档）
+- 2026-09-19-span-risk-pattern-migration | span 轴路径模式声明面装载接线（run/ 两点；装载层 span-risk-surface.js 四导出与信号层参数化见 core-engine 卡）：① run/gates.js 阶段门定价点（computeInitialCeremonyTierDoc）装载 `loadSpanRiskPatterns({ specBase, project: projectName })` → `computeCeremonyTier` `spanRiskPatterns`——与 blast 装载同 specBase/projectName 上下文，无声明项目 → 空表（span 模式维关闭，禁回退内置表）；② run/shared.js auditQuickCompletion quick 审计点（与 loadQuickModuleIndex 同 specBase/projectName 上下文）装载声明表 → `gateOpts.riskTable`（computeGateProfile 的 riskTable 默认已改空表，此处显式装载与其他声明面入参同风格）。评审档/双跑事实面/quick 冻结重放三装载点归 core-engine 卡文件（review-tier.js / verify-postcheck.js / scope-audit.js，AllProjects 并集口径）。
 
 ## 人工备注
 <!-- MANUAL_NOTES_START -->

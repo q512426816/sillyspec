@@ -5,6 +5,10 @@
  * D-007 影子隔离、D-008 friction 升档），七组断言：
  *   1. 三轴取封顶矩阵：ceremony_tier = max(blast, span, friction)——单分量高档+其余低档 →
  *      高档；多分量同档 → 档不变；全低 → S0；reasons 逐分量留痕
+ *   1b. spanRiskPatterns 声明表注入（2026-09-19-span-risk-pattern-migration task-02/D-003）：
+ *       compileSpanRiskPatterns(['auth']) 命中 → span S2 + reasons 逐字记 token 与文件；
+ *       默认 [] = 模式维度关闭（六域路径无参不触发 span S2）；reconcileDualRun
+ *       factSpanRiskPatterns 穿透双跑事实面
  *   2. RISK_TO_TIER 映射表逐档（integration/deployment 同归 S3）+ brownfield 保守缺省 S2
  *   3. escalateByFriction 只升不降 + S3 封顶 + thresholds 覆写/非法回退 + 第三键透传容忍
  *   4. reconcileDualRun 错配注入：声明 S1/事实 S2 → mismatch error；声明 ≥ 事实 → none；
@@ -37,6 +41,7 @@ import {
   SPAN_MODULES_THRESHOLD,
   FRICTION_ESCALATION_THRESHOLD,
 } from '../src/ceremony-tier.js'
+import { compileSpanRiskPatterns } from '../src/span-risk-surface.js'
 import { getLatestStageReviewRunId, stageReviewMarkerPath } from '../src/stage-review.js'
 import { SHADOW_NAMESPACE_DIR } from '../src/review-dispatch.js'
 import { withFileLock } from '../src/quicklog.js'
@@ -62,7 +67,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 /** 档位→序数（与引擎 tierRank 同口径） */
 const rank = (t) => CEREMONY_TIERS.indexOf(t)
 
-/** 生成 n 个不命中 QUICK_RISK_PATH_PATTERNS 的低风险文件名（span 轴干净对照用） */
+/** 生成 n 个不命中 span 风险 token 的低风险文件名（span 轴干净对照用；低风险=不落任何 token 段） */
 const lowFiles = (n) => Array.from({ length: n }, (_, i) => `low${i}.js`)
 
 /** 跨模块口径 fixture（paths 前缀归属，quick-gate-profile matchModuleForFile 同形态） */
@@ -113,12 +118,14 @@ console.log('=== 1. 三轴取封顶矩阵（max(blast, span, friction)，FR-01/D
   const noModuleIndex = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/a/x.js'] })
   assert(noModuleIndex.tier === 'S0', `moduleIndex 缺失 → 跨模块检查跳过不缺省不拦截（实际 ${noModuleIndex.tier}）`)
 
-  // 单分量高档：span 风险路径模式轴（含 Windows 反斜杠归一）
-  const patHit = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/oauth-config.js'] })
+  // 单分量高档：span 风险路径模式轴（含 Windows 反斜杠归一）——显式注入声明表
+  // （2026-09-19-span-risk-pattern-migration：默认 [] = 模式维度关闭，命中取决于注入 token 集）
+  const spanTable = compileSpanRiskPatterns(['auth', 'oauth', 'billing'])
+  const patHit = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/oauth-config.js'], spanRiskPatterns: spanTable })
   assert(patHit.tier === 'S2' && patHit.components.span === 'S2',
-    `span 风险路径命中（oauth）→ S2（实际 ${patHit.tier}）`)
-  const patHitWin = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src\\billing-hook.js'] })
-  assert(patHitWin.tier === 'S2', `反斜杠路径归一后风险路径命中（billing）→ S2（实际 ${patHitWin.tier}）`)
+    `span 风险路径命中（oauth token）→ S2（实际 ${patHit.tier}）`)
+  const patHitWin = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src\\billing-hook.js'], spanRiskPatterns: spanTable })
+  assert(patHitWin.tier === 'S2', `反斜杠路径归一后风险路径命中（billing token）→ S2（实际 ${patHitWin.tier}）`)
 
   // 单分量高档：friction 轴（低基 +1 档；两键合计口径）
   const frOnly = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['a.js'], frictionCounts: { gate_rollback: FRICTION_ESCALATION_THRESHOLD } })
@@ -148,6 +155,42 @@ console.log('=== 1. 三轴取封顶矩阵（max(blast, span, friction)，FR-01/D
   assert(combined.reasons.some((r) => r.includes('span=S2')), `reasons 含 span 分量留痕`)
   assert(combined.reasons.some((r) => r.includes('friction 升档') && r.includes(`阈值 ${FRICTION_ESCALATION_THRESHOLD}`)),
     `reasons 含 friction 分量留痕（含阈值数字）`)
+}
+
+// ────────────────────────────────────────────────────────────
+console.log('\n=== 1b. spanRiskPatterns 声明表注入与默认关闭（2026-09-19-span-risk-pattern-migration task-02/D-003）===\n')
+{
+  // 注入用例：compileSpanRiskPatterns(['auth']) 命中 src/auth/x.js → span S2 + reasons 记 token 与文件
+  const hit = computeCeremonyTier({
+    riskDetection: { level: 'doc-only' },
+    declaredFiles: ['src/auth/x.js'],
+    spanRiskPatterns: compileSpanRiskPatterns(['auth']),
+  })
+  assert(hit.tier === 'S2' && hit.components.span === 'S2',
+    `注入 auth token 表命中 src/auth/x.js → span S2（实际 ${hit.tier}/${hit.components.span}）`)
+  assert(hit.reasons.includes('span=S2（风险路径命中 auth：src/auth/x.js）'),
+    `reasons 逐字记 token 与文件（实际 ${JSON.stringify(hit.reasons)}）`)
+
+  // 同表反例：author 子串被段边界锚定挡住 → 不触发（匹配语义零漂移）
+  const sub = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/author/x.js'], spanRiskPatterns: compileSpanRiskPatterns(['auth']) })
+  assert(sub.tier === 'S0' && !sub.reasons.some((r) => r.includes('风险路径命中')),
+    `注入表下 author 子串假阳不命中 → S0 且无「风险路径命中」行（实际 ${sub.tier}）`)
+
+  // 默认 [] = 模式维度关闭钉：六域路径文件不传 spanRiskPatterns → span 维度零触发（文件数 < 阈值防串轴）
+  const sixDomainFiles = ['src/auth/x.js', 'src/oauth2/token.js', 'src/billing/invoice.js', 'db/migrations/001.sql', 'src/locks.js', 'src/scheduler.js']
+  const off = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: sixDomainFiles })
+  assert(off.tier === 'S0' && off.components.span === 'S0',
+    `默认 [] = span 模式维度关闭（六域路径 6 文件 < 阈值 ${SPAN_FILES_THRESHOLD} 且无注入 → S0，实际 ${off.tier}/${off.components.span}）`)
+  assert(!off.reasons.some((r) => r.includes('风险路径命中')),
+    `默认关闭 → 无「风险路径命中」reasons 行（实际 ${JSON.stringify(off.reasons)}）`)
+
+  // reconcileDualRun factSpanRiskPatterns 穿透（双跑事实面同口径，design R-05）
+  const factHit = reconcileDualRun({ declaredTier: 'S1', factRiskDetection: { level: 'doc-only' }, factFiles: ['src/auth/x.js'], factSpanRiskPatterns: compileSpanRiskPatterns(['auth']) })
+  assert(factHit.factTier === 'S2' && factHit.mismatch === true,
+    `factSpanRiskPatterns 穿透 → 事实 span S2 > 声明 S1 → mismatch（实际 ${factHit.factTier}/${factHit.mismatch}）`)
+  const factOff = reconcileDualRun({ declaredTier: 'S1', factRiskDetection: { level: 'doc-only' }, factFiles: ['src/auth/x.js'] })
+  assert(factOff.factTier === 'S0' && factOff.mismatch === false,
+    `事实面不传表 → 维度关闭 S0 ≤ 声明 S1 无错配（实际 ${factOff.factTier}/${factOff.mismatch}）`)
 }
 
 // ────────────────────────────────────────────────────────────

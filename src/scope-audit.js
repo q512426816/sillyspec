@@ -29,6 +29,7 @@ import { createHash } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs, isQuickMetadata } from './run/shared.js'
 import { computeGateProfile, resolveGateThresholds } from './quick-gate-profile.js'
+import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
 import { safeGit } from './git-helper.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 import { classifyToolScaffold } from './worktree-apply.js'
@@ -432,10 +433,16 @@ async function buildQuickRecordResult(rec, requestedName) {
         .filter(Boolean)
       if (rowsPaths.length > 0) {
         const thresholds = await resolveReplayGateThresholds(rec.specBase)
+        // span 声明面装载（2026-09-19-span-risk-pattern-migration task-03）：重放态 rec 只有
+        // specBase 无 projectName 语境 → AllProjects 并集口径（与 verify-postcheck 双跑事实面
+        // 同款；单项目仓与实时态 auditQuickCompletion 的 project 装载逐字相同）；无声明 → 空表。
+        // :517 pickModuleMapProject 内的 computeGateProfile 唯一消费 unmappedFiles.length，
+        // riskTable 不参与——不接线（Grill X-7 避免死接线）
+        const riskTable = loadSpanRiskPatternsAllProjects({ specBase: rec.specBase })
         gateProfile = computeGateProfile(
           rowsPaths,
           await loadGateModuleIndex(rec.specBase, rowsPaths),
-          thresholds ? { thresholds } : {},
+          { ...(thresholds ? { thresholds } : {}), riskTable },
         )
       }
     }

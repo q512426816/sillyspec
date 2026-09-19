@@ -1020,7 +1020,9 @@ test('FR-02 模式判定：quick id 形态命中但 guard 缺失 → ok=false �
 
 // ───────────────────────── 组 8：quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008） ─────────────────────────
 
-/** _module-map.yaml 夹具（parseModuleMapSimple 可解析形态；m2 带 doc 卡片供 docClaim 断言） */
+/** _module-map.yaml 夹具（parseModuleMapSimple 可解析形态；m2 带 doc 卡片供 docClaim 断言；
+ *  span_risk 段为 D-005 夹具翻新——旧默认六域风险表已退役（2026-09-19-span-risk-pattern-migration），
+ *  声明面=map 顶层段，夹具按本组用例语义只声明最小 token 集（auth，供「L2 风险命中」实时态用例） */
 function writeModuleMap(specBase, project = 'demo') {
   const dir = join(specBase, 'docs', project, 'modules')
   mkdirSync(dir, { recursive: true })
@@ -1035,6 +1037,9 @@ function writeModuleMap(specBase, project = 'demo') {
     '    doc: modules/m2.md',
     '    paths:',
     '      - src/api/',
+    'span_risk:',
+    '  # span 轴风险路径声明（token 扁平列表，形态对照本仓真实 map）',
+    '  - auth',
     '',
   ].join('\n'))
 }

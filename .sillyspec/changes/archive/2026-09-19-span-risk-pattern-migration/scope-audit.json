@@ -1,0 +1,214 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "c3294d9899d6e2a995a0d56e7c7a3e02477134dc",
+  "totals": {
+    "files": 24,
+    "additions": 672,
+    "deletions": 122
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 12,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "additions": 12,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.md",
+      "additions": 4,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/setup.md",
+      "additions": 6,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/knowledge/INDEX.md",
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned",
+      "facility": "platform"
+    },
+    {
+      "path": ".sillyspec/knowledge/known-issues.md",
+      "additions": 11,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned",
+      "facility": "platform"
+    },
+    {
+      "path": "meta.json",
+      "additions": 20,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/ceremony-tier.js",
+      "additions": 27,
+      "deletions": 19,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/change-risk-profile.js",
+      "additions": 8,
+      "deletions": 20,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/quick-gate-profile.js",
+      "additions": 8,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/review-tier.js",
+      "additions": 7,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/gates.js",
+      "additions": 6,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/shared.js",
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "additions": 8,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "additions": 7,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/audit-quick-completion.test.mjs",
+      "additions": 4,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/ceremony-tier.test.mjs",
+      "additions": 49,
+      "deletions": 6,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/modules-rebuild-preserve.test.mjs",
+      "additions": 25,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/quick-gate-profile.test.mjs",
+      "additions": 75,
+      "deletions": 47,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "additions": 6,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/span-risk-surface.js",
+      "additions": 127,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/span-risk-surface.test.mjs",
+      "additions": 239,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "8dea298f86c0fbcbc9599ee4582b1255dc3b093ab1db647d8232780205f6d9c3",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-19T10:03:30.195Z"
+}

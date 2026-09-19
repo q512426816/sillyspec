@@ -10,7 +10,9 @@
  * 不豁免证据，D-009）。散文词表判级（detectChangeRisk 及词表/否定抑制/枚举继承机器）已整体
  * 退役删除。RISK_TO_TIER 五级词→档位映射表迁入本文件（ceremony-tier re-export 保持既有
  * import 面——依赖方向 ceremony-tier→本文件已有先例）。证据门判据（VERIFICATION_NEEDS /
- * checkIntegrationEvidence / auditRuntimeReceipt）与 span 轴 QUICK_RISK_PATH_PATTERNS 原样保留。
+ * checkIntegrationEvidence / auditRuntimeReceipt）原样保留；span 轴路径模式已迁项目声明面
+ * （_module-map.yaml 顶层 span_risk 段，装载 src/span-risk-surface.js——2026-09-19-
+ * span-risk-pattern-migration 硬退役，不留 legacy 别名）。
  */
 import { readFileSync, statSync } from 'fs'
 import { join, isAbsolute } from 'path'
@@ -22,25 +24,11 @@ import { resolveBlastSurfaces } from './blast-surface.js'
 // INTEGRATION_FILE_PATTERNS 全宇宙词表与 detectChangeRisk 散文扫描整体退役（D-008：撞词≠危险、
 // 自指陷阱——判级唯一入口是 resolveChangeRisk 声明面口径；知识库 conventions.md「判级/定价/门禁
 // 输入必须项目声明」条目为口径真相源）。
-// ============ quick 出口门禁：路径模式风险表（2026-09-14-quick-exit-tiered-gates task-01） ============
-//
-// quick 侧「风险特征命中」的单一数据源（design D-004@v2：v1 仅路径模式——不做 diff 关键词
-// 扫描、不加 git 子进程，R-04 零子进程承诺；diff 维度待真实需求另立变更）。与上方 verify 侧
-// INTEGRATION_FILE_PATTERNS 语义不同（那张表收跨进程/集成域、供 detectChangeRisk 判级），本表
-// 收 quick 实证踩坑域（R-03 从窄收录：auth/permission/billing/migration/锁/调度），供
-// quick-gate-profile.js 的 computeGateProfile 经 opts.riskTable 默认引用——命中即画像 L2 +
-// checks.runtimeEvidence='required'。detectChangeRisk 判级逻辑不消费本表（verify 侧行为零变化）。
-//
-// 匹配口径：POSIX 路径、大小写不敏感、段边界锚定——前界 (^|[/_-]) + 后界 (?=[/._-]|$)，
-// 防 author/booking/lockfile 类子串假阳（R-03）；pattern 为稳定域标识（riskHits 审计输出用）。
-export const QUICK_RISK_PATH_PATTERNS = [
-  { pattern: 'auth', re: /(?:^|[/_-])(?:oauth2?|auth(?:orization|entication|enticator)?)(?=[/._-]|$)/i },
-  { pattern: 'permission', re: /(?:^|[/_-])permissions?(?=[/._-]|$)/i },
-  { pattern: 'billing', re: /(?:^|[/_-])billing(?=[/._-]|$)/i },
-  { pattern: 'migration', re: /(?:^|[/_-])(?:migrations?|migrate)(?=[/._-]|$)/i },
-  { pattern: 'lock', re: /(?:^|[/_-])(?:locks?|mutex(?:es)?)(?=[/._-]|$)/i },
-  { pattern: 'scheduling', re: /(?:^|[/_-])(?:schedul(?:er|ing)|cron|jobs?)(?=[/._-]|$)/i },
-]
+// 2026-09-19-span-risk-pattern-migration task-03 同款删除收口：quick 出口门禁的六域硬编码
+// 路径模式风险表（auth/permission/billing/migration/lock/scheduling，2026-09-14-quick-exit-
+// tiered-gates task-01 引入）退役——span 模式维与 quick 画像 riskTable 唯一输入源改为项目声明
+// _module-map.yaml 顶层 span_risk 段（装载 src/span-risk-surface.js；匹配口径段边界锚定逐字
+// 继承）。无声明项目 → 空表（维度关闭，禁回退内置表——与 blast 未配置禁回退同款取舍）。
 
 /**
  * task 级「端到端/deployment-critical」文本判定（execute 批量完成 autoCheckPlanFromReviews 用）。

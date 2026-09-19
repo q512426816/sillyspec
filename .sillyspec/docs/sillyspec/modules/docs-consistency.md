@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: docs-consistency
 author: qinyi
 created_at: 2026-08-16T19:05:00+08:00
-updated_at: 2026-09-17T10:30:00+08:00
+updated_at: 2026-09-19T18:10:00+08:00
 ---
 
 # docs-consistency
@@ -31,6 +31,8 @@ updated_at: 2026-09-17T10:30:00+08:00
 - ratchet 语义（docs-gate）：behind 计数是代理信号不能当阈值（源码活跃不代表卡错），docs-check 失效数是直接信号（每条都是具体的错）
 - 决策规则族 advisory 语义（2026-08-23，D-003）：决策 behind 复核同属「代理信号」——锚定模块源码前进超阈值只提示「决策待复核」（doctor/verify 消费），不进 docs-check ok/invalid 阻断链、不影响 docs gate 阻断行为；生产/消费对偶——decision-distill 的写入契约与 docs-check 决策条目解析字段行契约互为镜像（producer=decision-distill → consumer=规则族），改写入格式两侧同步
 - 四件写侧边界（2026-08-18 platform-map-auto-anchors 起）：校验链路仍全部只读（docs-check / docs-debt / scan-staleness 无写入；docs-gate 仅读基线文件）；唯一例外是 docs check `--fix` 显式触发时 applyFixes 写回文档行号（多命中/零命中/无 token → needs-manual 保守不修，`--dry-run` 预览零写盘），无 `--fix` 时行为与旧版逐字节一致。2026-08-23 起模块含一个写侧文件 src/decision-distill.js（决策提炼落盘），但它是归档流程的独立职责（写 knowledge/decisions/ + INDEX 路由行），不属 docs-check 校验链路——校验四件仍只读
+- _module-map.yaml 顶层声明段维护（2026-09-19 起 span_risk）：`span_risk` 段为 span 轴风险路径 token 声明（扁平字符串列表，进 git 手工维护，消费方装载见 core-engine 卡 span-risk-surface 条目）——维护提示只写**段内注释**（`span_risk:` 键行后首行）：map 头部注释区与段前置注释会被 modules rebuild --force 重发射丢弃，唯段内注释随未知顶层段通用回插机制保留（D-008@v2；test/modules-rebuild-preserve.test.mjs span_risk 段含段内注释回插断言钉死）。与 blast 段同为顶层手工维护声明面（blast 段 main 现状缺口见 known-issues）
+- knowledge 登记职责（known-issues 行为面变化留痕）：无声明面兼容取舍按 blast 迁移先例落 knowledge/known-issues.md + INDEX.md 路由行——2026-09-19-span-risk-pattern-migration 登记两条（blast 自举声明表未落 main 的归档 --skip-apply 遗留缺口；span 六域通用路径表退役为项目声明、无声明项目维度关闭）
 
 ## 依赖关系
 
@@ -41,3 +43,4 @@ updated_at: 2026-09-17T10:30:00+08:00
 | 2026-09-07 | 2026-09-07-ir-stage-p3d | IR P3d：新 src/archive-delta.js（collectDeltaSources 四源 fail-soft：reconcile 按 change 过滤取最新+apply-pathspec 兜底 / buildDeltaReport Before-Delta-After 三段式 + scan 刷新建议与端点基线立项提示）；design-facts deriveActualModules 加导出；test/archive-delta.test.mjs 102 断言 |
 | 2026-09-08 | 2026-09-08-docs-fix-capability | 平台仓 1058→0 清理提案摘果子五项：REF_RE 展开循环形（括号路径/ReDoS 防护）+ 省略号模糊跳过 + 豁免双通道 + fix.candidates JSON + 报告出口统一 stdout（FR-5：报告走 stdout 诊断走 stderr）+ 新 src/docs-migrate.js 批量路径迁移；test/docs-fix-capability.test.mjs 16 断言 + test/docs-migrate.test.mjs 6 断言 + docs-check-fix 通道断言改造 S8 |
 | 2026-09-17 | 2026-09-17-docs-bracket-reanchor | 引用锚方括号段（Next.js 动态路由 [id]/[cid] 圆/方同权，markdown 链接零回归，D-006 线性保持）+ docs gate 陈旧基线自动重锚（已实测不劣于远端即落盘披露，checkOpts 四键守卫，返回面增 reanchored）；test/docs-fix-capability.test.mjs FR-1.1c 11 断言 + test/docs-gate.test.mjs +2 用例改写 1；interface-contract §1.3b 镜像 |
+| 2026-09-19 | 2026-09-19-span-risk-pattern-migration | _module-map.yaml 顶层新增 span_risk 段（9 token 自举声明，进 git 手工维护——维护提示落段内注释、rebuild --force 按未知顶层段原样回插保留，test/modules-rebuild-preserve.test.mjs 断言钉死）；knowledge/known-issues.md 登记两条行为面变化（blast 自举表 main 缺口遗留 + span 六域表退役维度关闭）+ INDEX.md 路由行 |

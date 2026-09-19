@@ -1,0 +1,1379 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 68694c9..2d105d9 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -81,6 +81,7 @@ modules:
+       - src/prefill.js
+       - src/change-risk-profile.js
+       - src/blast-surface.js
++      - src/span-risk-surface.js
+       - src/quick-gate-profile.js
+       - src/scope-audit.js
+       - src/classify-change.js
+@@ -279,3 +280,14 @@ modules:
+     paths:
+       - bin/sillyspec.js
+ 
++span_risk:
++  # span 轴风险路径声明（token 扁平列表，进 git 手工维护；modules rebuild --force 按未知顶层段原样回插）
++  - migrate
++  - migration
++  - migrations
++  - dispatch
++  - scheduler
++  - scheduling
++  - cron
++  - job
++  - jobs
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index ccdbd0a..5f493c8 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -1,12 +1,12 @@
+ ---
+-updated_at: 2026-09-18T10:20:00+08:00
++updated_at: 2026-09-19T18:10:00+08:00
+ author: qinyi
+ created_at: 2026-06-01T09:05:00
+ ---
+ 
+ # core-engine
+ > 最后更新：2026-09-19
+-> 最近变更：ql-20260918-005-435a（knowledge-stats 接入 L1 仪表盘——buildFrIndexStats：四类 fr-* 事件聚合[inject/supersede/duplicate/unreferenced 按域]+索引面扫描[条目/active/superseded/来源变更/域]+承接引用率[分子窗口内事件/分母索引全量，裁决用大窗口]；CLI --json 增 frIndex 键+人类模式「FR 索引实验」段；present 三态+未知 fr- 前缀前向兼容；test/knowledge-fr-stats.test.mjs 15 断言；L1 后续钩子 D-006 落地——观察期满直接出数裁决 L3）/ 2026-09-18-fr-index-l1（FR 稳定索引 L1——**L3 证据发生器**：src/fr-index.js 五导出[发号 FR-<域>-NNN 连字符域/幂等键=全局 id/承接翻链就地补丁保摘要/unreferenced 探针/digest active-only/bigram overlap]+decision-distill 四函数参数化复用（decisions 零回归钉死）+archive noAI 步挂载（fr-supersede/fr-unreferenced 遥测——后者显式标注「不算 L3 门禁」）+brainstorm step8 {FR_INDEX_DIGEST} 注入与软门（fr-inject/fr-duplicate-warning，advisory 永不阻断）+D14 第四检查（epoch=2026-09-18 分界：索引在场+取代完整）+verify-probes facts.handover 恒落盘死锁修复（verify 期 Reverse Sync：原「有行才写」使零移交+PASS 被 eligibility fail-closed 拦死）；知识面新增 knowledge/fr/<域>.md；**自举验证**：本变更归档即真实仓首批索引 FR-core-engine-001..004，D14 复扫绿；独立验收审查两轮[三阻断：连字符域字符集/跨域翻链不落盘/doc 锚点位移]；35+40+132 断言）/ ql-20260917-009-2ec3（D14 archive_integrity 收尾三件套——①豁免账本：.sillyspec/archive-integrity-exempt.yaml 逐份记理由压红 16 份远古归档（早于 plan.md 流程，照 docs-check skip 先例不伪造历史），账本外继续亮红/stale 提示清理/解析失败 fail-safe 红灯保持，+4 测试组；②两份近期归档测试任务簿记补勾（ir-hardening task-09 / auto-driver task-06，对应测试文件俱在且直跑绿——D14 首扫发现的真实簿记漂移，补勾留 ql 审计痕；③pre-push 挂 advisory 零阻断露出（ratchet 门待欠账稳定后另裁）；④DB 漂移核实：listChanges 排除 archive，手工重激活归档行由 D4 ghostRows 覆盖，无缺口不加；真实仓维度转绿 93 完整+16 豁免）/ ql-20260917-007-b35d（doctor 新增 D14 archive_integrity 归档完整性重扫——补「归档后无人回头看」缺口（对标 OpenSpec validate --archived）：①任务全勾（tasks.md 优先回退 plan.md，**legacy 完成源切换**：tasks 有行 0 勾而 plan ≥1 勾 → 完成证据在 plan.md，真实仓首扫 43→18 份消 0/N 全误报——2026-08-20-task-truth-unify 前完成态勾在 plan）②plan.md 在场性（自愈基准文件）③注册表存在但不可读必须报、不许当无任务放行（#205 教训）；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）；test/doctor-archive-integrity.test.mjs 23 断言）/ 2026-09-16-guard-consistency-probe（探针9 守卫一致性——clusterMutationMethods 同实体方法组聚类 + detectGuardSignals 四类守卫信号（编码式调用形态+注解式）+ runProbe9GuardConsistency advisory + 一致性抽查 probe9 维度 WARNING 级接线）/ 2026-09-16-cross-layer-contract-probe（探针8 扩展 design 契约维度——parseDesignContracts 契约面解析 + contractOrphans/missingRequired 两 advisory 维度 + 一致性抽查 probe8 WARNING 级接线）/ 2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
++> 最近变更：2026-09-19-span-risk-pattern-migration（span 轴路径模式迁项目声明——新 src/span-risk-surface.js 装载层四导出[compile/match/load×2，与 blast-surface.js 同构]；change-risk-profile 的 QUICK_RISK_PATH_PATTERNS 六域硬编码表硬退役删除不留 legacy；ceremony-tier spanRiskPatterns / quick-gate-profile riskTable 参数化接声明表[默认 []=维度关闭禁回退内置表]；接线五点 run/gates·review-tier·verify-postcheck·run/shared·scope-audit）/ ql-20260918-005-435a（knowledge-stats 接入 L1 仪表盘——buildFrIndexStats：四类 fr-* 事件聚合[inject/supersede/duplicate/unreferenced 按域]+索引面扫描[条目/active/superseded/来源变更/域]+承接引用率[分子窗口内事件/分母索引全量，裁决用大窗口]；CLI --json 增 frIndex 键+人类模式「FR 索引实验」段；present 三态+未知 fr- 前缀前向兼容；test/knowledge-fr-stats.test.mjs 15 断言；L1 后续钩子 D-006 落地——观察期满直接出数裁决 L3）/ 2026-09-18-fr-index-l1（FR 稳定索引 L1——**L3 证据发生器**：src/fr-index.js 五导出[发号 FR-<域>-NNN 连字符域/幂等键=全局 id/承接翻链就地补丁保摘要/unreferenced 探针/digest active-only/bigram overlap]+decision-distill 四函数参数化复用（decisions 零回归钉死）+archive noAI 步挂载（fr-supersede/fr-unreferenced 遥测——后者显式标注「不算 L3 门禁」）+brainstorm step8 {FR_INDEX_DIGEST} 注入与软门（fr-inject/fr-duplicate-warning，advisory 永不阻断）+D14 第四检查（epoch=2026-09-18 分界：索引在场+取代完整）+verify-probes facts.handover 恒落盘死锁修复（verify 期 Reverse Sync：原「有行才写」使零移交+PASS 被 eligibility fail-closed 拦死）；知识面新增 knowledge/fr/<域>.md；**自举验证**：本变更归档即真实仓首批索引 FR-core-engine-001..004，D14 复扫绿；独立验收审查两轮[三阻断：连字符域字符集/跨域翻链不落盘/doc 锚点位移]；35+40+132 断言）/ ql-20260917-009-2ec3（D14 archive_integrity 收尾三件套——①豁免账本：.sillyspec/archive-integrity-exempt.yaml 逐份记理由压红 16 份远古归档（早于 plan.md 流程，照 docs-check skip 先例不伪造历史），账本外继续亮红/stale 提示清理/解析失败 fail-safe 红灯保持，+4 测试组；②两份近期归档测试任务簿记补勾（ir-hardening task-09 / auto-driver task-06，对应测试文件俱在且直跑绿——D14 首扫发现的真实簿记漂移，补勾留 ql 审计痕；③pre-push 挂 advisory 零阻断露出（ratchet 门待欠账稳定后另裁）；④DB 漂移核实：listChanges 排除 archive，手工重激活归档行由 D4 ghostRows 覆盖，无缺口不加；真实仓维度转绿 93 完整+16 豁免）/ ql-20260917-007-b35d（doctor 新增 D14 archive_integrity 归档完整性重扫——补「归档后无人回头看」缺口（对标 OpenSpec validate --archived）：①任务全勾（tasks.md 优先回退 plan.md，**legacy 完成源切换**：tasks 有行 0 勾而 plan ≥1 勾 → 完成证据在 plan.md，真实仓首扫 43→18 份消 0/N 全误报——2026-08-20-task-truth-unify 前完成态勾在 plan）②plan.md 在场性（自愈基准文件）③注册表存在但不可读必须报、不许当无任务放行（#205 教训）；WARNING advisory 只读无修复，无钩子挂载（门禁策略另裁）；test/doctor-archive-integrity.test.mjs 23 断言）/ 2026-09-16-guard-consistency-probe（探针9 守卫一致性——clusterMutationMethods 同实体方法组聚类 + detectGuardSignals 四类守卫信号（编码式调用形态+注解式）+ runProbe9GuardConsistency advisory + 一致性抽查 probe9 维度 WARNING 级接线）/ 2026-09-16-cross-layer-contract-probe（探针8 扩展 design 契约维度——parseDesignContracts 契约面解析 + contractOrphans/missingRequired 两 advisory 维度 + 一致性抽查 probe8 WARNING 级接线）/ 2026-09-14-change-ownership-guards（task-review 归因分流 D-004@v1：readChangeIsolationMode DB 判源 + resolveAttributionDiffFiles 四模式路由——worktree/worktree-branch/worktree-cleaned/main-window，见下方专节）/ 2026-09-14-apply-conflict-hardening（doctor 新增 apply_manifest_drift 漂移检查维——两态内容 sha256 vs manifest 指纹三分支矩阵，活跃∪归档扫描面 appliedAt 降序取前 5，advisory WARNING）/ 2026-09-14-quick-exit-tiered-gates（quick 出口分级门禁：信号层 src/quick-gate-profile.js 三导出 + change-risk-profile 补 QUICK_RISK_PATH_PATTERNS 路径模式表 + scope-audit 增 gateProfile 双出口；THRESHOLDS 定稿 2/4/4/8）/ ql-20260910-002-9beb（stage-review 降级自审 CLI 侧配套：isDegradedSelfReview + gate ⚠️ 审计行 + 报错/契约降级出口——PI agent 等宿主无 Agent tool）/ 2026-08-23-adopt-harness-practices（knowledge-match 增 decisionHits 防复潮解析 + verify-postcheck skip 真跳过/evidence-auto 推荐）/ 2026-08-16-scan-docs-reconcile（契约/评审族与基础原语补录归属 + propose 回收）/ ql-20260809-003-c88a（#5 next-action 读路径对齐变更根目录 + #6 initChange 用 VALID_STAGES 单一源 + 修正 propose 残留误述）
+ > 模块路径：src/db.js, src/db-engine.js + 契约/评审族与基础原语（stage-contract 三件、check-primitives、stage-review、task-review、verify-postcheck、review-tier、change-risk-profile、quick-gate-profile、classify-change、contract-matrix、endpoint-extractor、knowledge-match、doctor-diagnostics、fs-atomic、constants、scan-postcheck）；完整清单见 _module-map.yaml core-engine paths。历史正文中的 run.js / progress.js / index.js 章节已分属 runtime / progress / cli-entry 模块卡
+ 
+ ## 职责
+@@ -36,8 +36,9 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - `src/verify-facts-schema.js` — verify-facts.json v2 schema 单点（2026-09-08-ir-verify-facts，D-005@v2）：FACTS_SCHEMA_VERSION/EVIDENCE_STATUS/EXEMPTION_RE/classifyVerifiedFile（code|artifact 证据核验口径分流）/parseEvidenceSlots（证据账+集成验证回执槽段解析，行首锚定占位 fail-closed）/validateFactsV2；builder/对账/集成证据/渲染四方 import 同源2026-08-23 起 test_strategy 新值接线（D-005@v2）：`resolveTestStrategy` 统一入口（`src/verify-postcheck.js:21`）解析配置策略 + evidence-auto 按 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）；
+   skip=真跳过（`src/verify-postcheck.js:1010` mode 'strategy-skip'）——不回退全量、verify 输出显式标注留审计痕迹（R-07），`--done` 对账按 skip 分支放行
+ - `src/review-tier.js` — 审查分级（self/independent）：plan_level 确定性映射（none/light→self、full→independent），无 plan_level 阶段退文件数启发式；run/gates.js 与 run/prompt.js 消费
+-- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）；`QUICK_RISK_PATH_PATTERNS`（2026-09-14-quick-exit-tiered-gates）——auth/permission/billing/migration/lock/scheduling 六域路径模式表（`Array<{pattern, re}>`），供 quick-gate-profile 画像风险命中消费（纯增量导出，detectChangeRisk 判级语义零变化）
+-- `src/quick-gate-profile.js` — quick 出口分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02，纯函数零 IO 零子进程，D-007）：`computeGateProfile`（CLI 审计链 git 事实 changedFiles × _module-map.yaml paths/core_files 前缀聚类 → L0/L1/L2 画像 + 检查项）+ `resolveGateThresholds`（local.yaml quick-gate 段覆写合并，D-009）+ `THRESHOLDS` 阈值单点；与 change-risk-profile/scope-audit 同卡，三导出明细见下方对外接口小节，全部 advisory 不阻断（D-003）
++- `src/change-risk-profile.js` — 变更风险分级检测（P0 阻塞确认 / P1 记录 / P2 通过，产出 risk-profile.json）；`QUICK_RISK_PATH_PATTERNS`（2026-09-14-quick-exit-tiered-gates 引入的 auth/permission/billing/migration/lock/scheduling 六域硬编码路径模式表）已随 2026-09-19-span-risk-pattern-migration 退役删除（D-003 硬退役不留 legacy 别名）——span 轴路径模式唯一输入源迁项目声明 `_module-map.yaml` 顶层 `span_risk` 段（装载 src/span-risk-surface.js），其余导出零改动
++- `src/span-risk-surface.js` — span 轴路径模式声明面装载层（2026-09-19-span-risk-pattern-migration，与 blast-surface.js 同栈同容错立场）：四导出 `compileSpanRiskPatterns`（token 纯字面量编译为边界锚定正则 `(?:^|[/_-])<token>(?=[/._-]|$)` /i，非字符串/空白/重复逐条跳过去重——零新文法防 YAML 写正则）/ `matchSpanRiskPatterns`（files×patterns → `[{pattern, file}]` 扁平命中数组，反斜杠归一 POSIX，两消费面共享的单一命中语义）/ `loadSpanRiskPatterns`（project 域读 `docs/<project>/modules/_module-map.yaml` 顶层 `span_risk` 段）/ `loadSpanRiskPatternsAllProjects`（多项目并集，事实面用）；口径真相源 knowledge/conventions.md「判级/定价/门禁输入必须项目声明」——未配置/坏声明项目 → 空表禁回退内置表（与 blast 未配置禁回退同款取舍）
++- `src/quick-gate-profile.js` — quick 出口分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02，纯函数零 IO 零子进程，D-007）：`computeGateProfile`（CLI 审计链 git 事实 changedFiles × _module-map.yaml paths/core_files 前缀聚类 → L0/L1/L2 画像 + 检查项）+ `resolveGateThresholds`（local.yaml quick-gate 段覆写合并，D-009）+ `THRESHOLDS` 阈值单点；风险表自 2026-09-19-span-risk-pattern-migration 起为声明面口径——`opts.riskTable` 参数形态不变、默认改空表（=风险维度关闭），项目声明表（span_risk 段，loadSpanRiskPatterns 产物）由调用方注入；与 change-risk-profile/span-risk-surface/scope-audit 同卡，三导出明细见下方对外接口小节，全部 advisory 不阻断（D-003）
+ - `src/classify-change.js` — 变更规模分类器（quick/auto/full，供 auto 模式决定内部流程深度）
+ - `src/contract-matrix.js` / `src/endpoint-extractor.js` — API 契约矩阵生成与注入（provider/consumer 端点提取与 parity check）
+ - `src/knowledge-match.js` — knowledge 关键词匹配引擎（INDEX.md 条目解析 + 任务上下文匹配生成 hit report）；2026-08-23 起 INDEX `## Decisions` 段路由行进决策匹配（`src/knowledge-match.js:110-155`）：新增 `parseDecisionEntries` 解析 decisions/<域>.md 条目 + `matchKnowledge` 返回值新增 decisionHits——任务上下文命中的 Decisions 路由行所指向文件内全部 D-xxx@vN 条目，rejected 优先排序（防复潮信息最先可见）；matched/entries/report/json 旧四键结构与语义不变，无 decisions 库/路由行未命中 → decisionHits: []，供 brainstorm Step2 防复潮注入（runtime run/prompt.js 消费）
+@@ -62,7 +63,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ 
+ | 函数/常量 | 说明 | 参数 |
+ |-----------|------|------|
+-| `computeGateProfile(changedFiles, moduleIndex, opts)` | 画像计算：非文档文件 × paths/core_files 前缀聚类模块归属 + `QUICK_RISK_PATH_PATTERNS` 风险命中 → level（正常态 L2=跨 ≥L2_SPAN 模块或风险命中、L1=跨 ≥L1_SPAN 或 ≥L1_FILES 文件；module-map 缺失降级档 span 退出判级、L2=≥L2_FILES_DEGRADED 文件）+ checks{perFileNotes（--file-notes 覆盖率）, testDelta（na/missing/ok 机械规则）, docClaim（claimed/missing/exempt-no-docs，模块卡认领空真防假 advisory）, runtimeEvidence（风险命中→required）}；文档文件不计数不参与归属与风险命中（docSyncHint isDoc 同源口径） | `changedFiles, moduleIndex, {riskTable?, thresholds?, fileNotes?, noDocs?}` |
++| `computeGateProfile(changedFiles, moduleIndex, opts)` | 画像计算：非文档文件 × paths/core_files 前缀聚类模块归属 + riskTable（注入的项目声明 span_risk 表，默认空表=风险维度关闭，2026-09-19-span-risk-pattern-migration）风险命中 → level（正常态 L2=跨 ≥L2_SPAN 模块或风险命中、L1=跨 ≥L1_SPAN 或 ≥L1_FILES 文件；module-map 缺失降级档 span 退出判级、L2=≥L2_FILES_DEGRADED 文件）+ checks{perFileNotes（--file-notes 覆盖率）, testDelta（na/missing/ok 机械规则）, docClaim（claimed/missing/exempt-no-docs，模块卡认领空真防假 advisory）, runtimeEvidence（风险命中→required）}；文档文件不计数不参与归属与风险命中（docSyncHint isDoc 同源口径） | `changedFiles, moduleIndex, {riskTable?, thresholds?, fileNotes?, noDocs?}` |
+ | `resolveGateThresholds(config)` | local.yaml quick-gate 段覆写与代码默认值合并（无段全默认；键非法回退默认并 warn；D-009） | `config` |
+ | `THRESHOLDS` | 阈值单点（缺省行为单一事实源）：L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8——task-05 真实图谱校准维持定稿，依据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节。⚠️ 升 blocking 另立变更时须重审判级基：现判级用 fileCount（含文档，裁决依据=与旧「≤3 文件」规则边界连续+advisory 噪音可容忍，见 quick-gate-profile.js 计数口径注释）；blocking 期「2 代码+2 文档抬进 L1」误伤与文档同步者系统性跨阈的激励成本需重估，届时改用 codeFileCount 为文件维判级基是候选（用户裁决条件 2026-09-14，ql-20260914-009-4623） | — |
+ 
+@@ -137,7 +138,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
+ - runCommand 中的 resolveChangeName 有多级回退：显式指定 > progress.currentChange > 自动检测
+ - 自动模式 (runAutoMode) 按 MAIN_FLOW_ORDER（brainstorm→plan→execute→verify→archive）顺序推进，跳过已完成的阶段
+ - quick 守卫（`auditQuickCompletion`）：step 1 记录 baselineFiles（预存脏文件），`--done` 审计时排除它们；quick 自身写入的 `.sillyspec/` 元数据（quicklog/.runtime/modules/_module-map）由 `isQuickMetadata` 精确豁免。`--force-baseline`（覆盖受保护/危险文件如 src/run.js）/`--allow-new`（允许新增）在 step 1 持久化进 guard.json，也可在 `--done` 时传入（与持久化值取或）
+-- quick 出口分级门禁（2026-09-14-quick-exit-tiered-gates）：quick --done 审计链挂 `review.gateProfile`（L0/L1/L2 画像，信号层 src/quick-gate-profile.js——判级/检查项/三导出见上方对外接口小节），全部 advisory 不改 status 三态与 exit code（D-003）。THRESHOLDS 定稿值 L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8（task-05 按 sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 校准维持，证据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节）。local.yaml quick-gate 段四 optional 键（l1_span/l1_files/l2_span/l2_files_degraded）可覆写代码默认值（D-009，readers=resolveGateThresholds，键非法回退默认并 warn；.sillyspec/local.yaml.example 有注释示例）。风险路径模式表 `QUICK_RISK_PATH_PATTERNS` 落 change-risk-profile.js（六域，detectChangeRisk 判级语义零变化）。测试 test/quick-gate-profile.test.mjs（27 用例）
++- quick 出口分级门禁（2026-09-14-quick-exit-tiered-gates）：quick --done 审计链挂 `review.gateProfile`（L0/L1/L2 画像，信号层 src/quick-gate-profile.js——判级/检查项/三导出见上方对外接口小节），全部 advisory 不改 status 三态与 exit code（D-003）。THRESHOLDS 定稿值 L1_SPAN=2 / L1_FILES=4 / L2_SPAN=4 / L2_FILES_DEGRADED=8（task-05 按 sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 校准维持，证据见 changes/2026-09-14-quick-exit-tiered-gates/design.md「阈值校准记录」节）。local.yaml quick-gate 段四 optional 键（l1_span/l1_files/l2_span/l2_files_degraded）可覆写代码默认值（D-009，readers=resolveGateThresholds，键非法回退默认并 warn；.sillyspec/local.yaml.example 有注释示例）。风险路径模式表已退役为项目声明（2026-09-19-span-risk-pattern-migration）：quick 画像 riskHits / runtimeEvidence 的输入=注入的 `_module-map.yaml` 顶层 `span_risk` 段声明表（装载接线见 runtime 卡 run/shared.js 条目），无声明项目 → 空表=风险维度关闭不回退内置表；仓内消费点已全量切净。测试 test/quick-gate-profile.test.mjs + test/span-risk-surface.test.mjs
+ 
+ ## 变更索引
+ 
+@@ -171,3 +172,8 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
+ - 完成门声明追赶重定价（D-003）：applyDeclarationCatchUp 三分支——无摩擦迁移随声明面可升可降、摩擦地板（transitions 最高 to）不退；重定价记 reasons 不记 transitions。
+ - 双跑高报 warn（D-005）：reconcileDualRun 事实档低于声明档 → severity 'warn' 只记账不阻断不记摩擦；低报 error 不变。事实面零内容扫描（文件名 × 声明面）。
+ - span 声明文件面解析：run/gates.js readDesignOwnFiles 委托 change-list.js parseFileChangeListDetailed（单一真相源，双形态标题）。
++
++## span 轴路径模式声明面迁移（2026-09-19-span-risk-pattern-migration）
++- 装载层 src/span-risk-surface.js 四导出（compile/match/load×2，见上方契约/评审族清单条目）——span 轴路径模式唯一输入源=`_module-map.yaml` 顶层 `span_risk` 段；QUICK_RISK_PATH_PATTERNS 六域硬编码表退役删除（change-risk-profile.js，硬退役不留 legacy 别名）。
++- `src/ceremony-tier.js`：`computeCeremonyTier` span 模式维参数化——`opts.spanRiskPatterns`（默认 `[]`=维度关闭，项目声明表由调用方装载注入）内部命中循环改共享 matcher `matchSpanRiskPatterns`，匹配口径逐字继承（段边界锚定正则，等价性有回归钉）、reasons 文案形态不变（token 即审计标签）；`reconcileDualRun` 增 `factSpanRiskPatterns` 穿透内部 computeCeremonyTier（双跑事实面同口径）。接线装载点：run/gates.js（project 域）+ review-tier.js / verify-postcheck.js / scope-audit.js 冻结重放（AllProjects 并集）；run/shared.js quick 审计点接线见 runtime 卡。
++- 行为面变化：无 span_risk 段的项目 span 模式维度关闭（ceremony span 轴只剩文件数/跨模块两维；quick 画像 riskHits 恒空、runtimeEvidence 恒 'na'）——不回退内置表，与 blast「未配置禁回退」同款取舍，known-issues 已登记（见 docs-consistency 卡 knowledge 登记条目）。
+diff --git a/.sillyspec/docs/sillyspec/modules/docs-consistency.md b/.sillyspec/docs/sillyspec/modules/docs-consistency.md
+index bfa4ac4..4543623 100644
+--- a/.sillyspec/docs/sillyspec/modules/docs-consistency.md
++++ b/.sillyspec/docs/sillyspec/modules/docs-consistency.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: docs-consistency
+ author: qinyi
+ created_at: 2026-08-16T19:05:00+08:00
+-updated_at: 2026-09-17T10:30:00+08:00
++updated_at: 2026-09-19T18:10:00+08:00
+ ---
+ 
+ # docs-consistency
+@@ -31,6 +31,8 @@ updated_at: 2026-09-17T10:30:00+08:00
+ - ratchet 语义（docs-gate）：behind 计数是代理信号不能当阈值（源码活跃不代表卡错），docs-check 失效数是直接信号（每条都是具体的错）
+ - 决策规则族 advisory 语义（2026-08-23，D-003）：决策 behind 复核同属「代理信号」——锚定模块源码前进超阈值只提示「决策待复核」（doctor/verify 消费），不进 docs-check ok/invalid 阻断链、不影响 docs gate 阻断行为；生产/消费对偶——decision-distill 的写入契约与 docs-check 决策条目解析字段行契约互为镜像（producer=decision-distill → consumer=规则族），改写入格式两侧同步
+ - 四件写侧边界（2026-08-18 platform-map-auto-anchors 起）：校验链路仍全部只读（docs-check / docs-debt / scan-staleness 无写入；docs-gate 仅读基线文件）；唯一例外是 docs check `--fix` 显式触发时 applyFixes 写回文档行号（多命中/零命中/无 token → needs-manual 保守不修，`--dry-run` 预览零写盘），无 `--fix` 时行为与旧版逐字节一致。2026-08-23 起模块含一个写侧文件 src/decision-distill.js（决策提炼落盘），但它是归档流程的独立职责（写 knowledge/decisions/ + INDEX 路由行），不属 docs-check 校验链路——校验四件仍只读
++- _module-map.yaml 顶层声明段维护（2026-09-19 起 span_risk）：`span_risk` 段为 span 轴风险路径 token 声明（扁平字符串列表，进 git 手工维护，消费方装载见 core-engine 卡 span-risk-surface 条目）——维护提示只写**段内注释**（`span_risk:` 键行后首行）：map 头部注释区与段前置注释会被 modules rebuild --force 重发射丢弃，唯段内注释随未知顶层段通用回插机制保留（D-008@v2；test/modules-rebuild-preserve.test.mjs span_risk 段含段内注释回插断言钉死）。与 blast 段同为顶层手工维护声明面（blast 段 main 现状缺口见 known-issues）
++- knowledge 登记职责（known-issues 行为面变化留痕）：无声明面兼容取舍按 blast 迁移先例落 knowledge/known-issues.md + INDEX.md 路由行——2026-09-19-span-risk-pattern-migration 登记两条（blast 自举声明表未落 main 的归档 --skip-apply 遗留缺口；span 六域通用路径表退役为项目声明、无声明项目维度关闭）
+ 
+ ## 依赖关系
+ 
+@@ -41,3 +43,4 @@ updated_at: 2026-09-17T10:30:00+08:00
+ | 2026-09-07 | 2026-09-07-ir-stage-p3d | IR P3d：新 src/archive-delta.js（collectDeltaSources 四源 fail-soft：reconcile 按 change 过滤取最新+apply-pathspec 兜底 / buildDeltaReport Before-Delta-After 三段式 + scan 刷新建议与端点基线立项提示）；design-facts deriveActualModules 加导出；test/archive-delta.test.mjs 102 断言 |
+ | 2026-09-08 | 2026-09-08-docs-fix-capability | 平台仓 1058→0 清理提案摘果子五项：REF_RE 展开循环形（括号路径/ReDoS 防护）+ 省略号模糊跳过 + 豁免双通道 + fix.candidates JSON + 报告出口统一 stdout（FR-5：报告走 stdout 诊断走 stderr）+ 新 src/docs-migrate.js 批量路径迁移；test/docs-fix-capability.test.mjs 16 断言 + test/docs-migrate.test.mjs 6 断言 + docs-check-fix 通道断言改造 S8 |
+ | 2026-09-17 | 2026-09-17-docs-bracket-reanchor | 引用锚方括号段（Next.js 动态路由 [id]/[cid] 圆/方同权，markdown 链接零回归，D-006 线性保持）+ docs gate 陈旧基线自动重锚（已实测不劣于远端即落盘披露，checkOpts 四键守卫，返回面增 reanchored）；test/docs-fix-capability.test.mjs FR-1.1c 11 断言 + test/docs-gate.test.mjs +2 用例改写 1；interface-contract §1.3b 镜像 |
++| 2026-09-19 | 2026-09-19-span-risk-pattern-migration | _module-map.yaml 顶层新增 span_risk 段（9 token 自举声明，进 git 手工维护——维护提示落段内注释、rebuild --force 按未知顶层段原样回插保留，test/modules-rebuild-preserve.test.mjs 断言钉死）；knowledge/known-issues.md 登记两条行为面变化（blast 自举表 main 缺口遗留 + span 六域表退役维度关闭）+ INDEX.md 路由行 |
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index cb500df..7cf536e 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: runtime
+ author: qinyi
+ created_at: 2026-06-03T07:42:00+08:00
+-updated_at: 2026-09-14T22:30:00+08:00
++updated_at: 2026-09-19T18:10:00+08:00
+ ---
+ # runtime
+ 
+@@ -110,6 +110,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - ql-20260819-014-0082 | autoCheckPlanFromReviews catch 加 warn 留痕（原静默返回假阴性）；prompt.js quicklog-id guard.json 读取失败加 warn（原空 catch 降级 (未分配) 无根因）。
+ - 2026-09-02 P0-2（跨 agent 工单） | quick --done 内置 test+lint 硬门禁：complete-handlers.js quick 收尾在边界审计后接 runQuickTestLintGate（quick-audit.js），changedFiles 触及 src/test 时复用 verify-postcheck 的 runVerifyTestCheck/runVerifyLintCheck 亲自实测（commands.test/lint，含 test_strategy/known_failures/超时语义），任一 failed → step 回 pending + exit 1（与边界审计同款阻断），修复重跑不丢进度；纯 doc/配置、未配置命令、brownfield 无清单自动跳过不阻断；env 逃生门 SILLYSPEC_QUICK_TEST_GATE=skip 留痕跳过。治「--done 前跑 test+lint」靠 agent 自律的 CLAUDE.md 规则 8。新增 test/quick-test-gate.test.mjs（8 组 21 断言）；本仓 local.yaml 补 commands.test/lint 启用自监管。
+ - 2026-09-14-quick-exit-tiered-gates | quick 出口分级门禁接线（run/ 四点，FR-03，信号层与 THRESHOLDS 定稿见 core-engine 卡 quick-gate-profile 小节）：① run/shared.js auditQuickCompletion 照 docSyncHint 先例挂 `review.gateProfile`——changedFiles 取本函数已算的 git 事实窗口（非 --files 自声明；先滤会话簿记噪声但保留模块卡与 changelog sidecar——模块卡恰是 L2 docClaim 认领对象，不沿用 isQuickMetadata 记录面谓词）、moduleIndex 复用 matchQuickModules 同源 loadQuickModuleIndex、阈值经 resolveGateThresholds 合并 local.yaml quick-gate 段（readLocalYamlRaw + js-yaml 动态 import，坏 YAML 纯默认，D-009）、noDocs/fileNotes 经 options 透传；**fail-open**——画像整块内层 try/catch，异常只跳过（gateProfile 保持 null），绝不碰 status 三态（D-003 advisory）；**D-005 归属分流**——undeclaredFiles 非空时 docClaim 单独按归属口径重算覆盖（级判 span/files/risk 仍用 git 事实全窗口防未声明面漏判级，他者窗口内改模块卡不得伪造成「已认领」）。② run/complete-handlers.js quick 收尾 [gate] 落账——buildGateAuditNote(review.gateProfile) 组装单行注记随既有 auditNotes 通道落 QUICKLOG（L1 每文件注记+测试增量 / L2 模块文档认领+风险命中 / --no-docs 豁免同通道留痕；L0/无画像 → null 零落账）。③ run/quick-audit.js printQuickAuditReview 增 [gate] advisory 打印块（L1/L2 级别/跨度/模块清单/风险命中/检查项 + --no-docs 指引，L0 零输出）+ buildGateAuditNote 单独导出（与打印块同 review.gateProfile 数据源，纯函数可测）。④ run/command.js 解析 --no-docs 布尔 flag 并登记 knownFlags + run/complete.js isNoDocs 随 completeStep options 透传进审计链（只影响 gate 画像 docClaim=exempt-no-docs 与 [gate] 落账留痕，不改 status/exit code，D-003）。测试：test/audit-quick-completion.test.mjs 增 G-0~G-8 九组（含 --no-docs 豁免/D-005 归属分流/D-009 阈值覆写/降级档）
++- 2026-09-19-span-risk-pattern-migration | span 轴路径模式声明面装载接线（run/ 两点；装载层 span-risk-surface.js 四导出与信号层参数化见 core-engine 卡）：① run/gates.js 阶段门定价点（computeInitialCeremonyTierDoc）装载 `loadSpanRiskPatterns({ specBase, project: projectName })` → `computeCeremonyTier` `spanRiskPatterns`——与 blast 装载同 specBase/projectName 上下文，无声明项目 → 空表（span 模式维关闭，禁回退内置表）；② run/shared.js auditQuickCompletion quick 审计点（与 loadQuickModuleIndex 同 specBase/projectName 上下文）装载声明表 → `gateOpts.riskTable`（computeGateProfile 的 riskTable 默认已改空表，此处显式装载与其他声明面入参同风格）。评审档/双跑事实面/quick 冻结重放三装载点归 core-engine 卡文件（review-tier.js / verify-postcheck.js / scope-audit.js，AllProjects 并集口径）。
+ 
+ ## 人工备注
+ <!-- MANUAL_NOTES_START -->
+diff --git a/.sillyspec/docs/sillyspec/modules/setup.md b/.sillyspec/docs/sillyspec/modules/setup.md
+index 0e888a0..f40e8af 100644
+--- a/.sillyspec/docs/sillyspec/modules/setup.md
++++ b/.sillyspec/docs/sillyspec/modules/setup.md
+@@ -1,12 +1,12 @@
+ ---
+ author: qinyi
+ created_at: 2026-06-01T09:05:00+08:00
+-updated_at: 2026-09-14T22:40:00+08:00
++updated_at: 2026-09-19T18:10:00+08:00
+ ---
+ 
+ # setup
+-> 最后更新：2026-09-14
+-> 最近变更：2026-09-14-change-ownership-guards（config-schema 登记 live 键 change-ownership.heartbeat_minutes + local.yaml.example 注释段——所有者活跃心跳窗，reader=src/progress/change-registry.js 心跳窗解析）/ 2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
++> 最后更新：2026-09-19
++> 最近变更：2026-09-19-span-risk-pattern-migration（config-schema ceremony 段 note 补 span 轴输入源表述——项目声明 _module-map.yaml 顶层 span_risk 段、无声明项目该维关闭不回退内置表；纯 note 同步无新 local 键）/ 2026-09-14-change-ownership-guards（config-schema 登记 live 键 change-ownership.heartbeat_minutes + local.yaml.example 注释段——所有者活跃心跳窗，reader=src/progress/change-registry.js 心跳窗解析）/ 2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
+ > 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
+ 
+ ## 职责
+@@ -27,6 +27,8 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
+ 
+ 2026-09-14-change-ownership-guards 新增 live 键 `change-ownership.heartbeat_minutes`（`src/config-schema.js`，optional integer，缺省 15）——change 所有权活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（`--takeover` 显式接管）；窗口外 → 放行并自动接管。reader 为 `resolveHeartbeatMs`（src/progress/change-registry.js 模块私有，唯一消费方 `assertChangeOwnership` 的心跳窗缺省解析——定向行扫描不引 YAML 依赖；值非正整数（含 0）回落缺省，防误配把活跃窗清零废掉护栏）；判级语义与接线见 progress / runtime / cli-entry 卡。`renderExample()` 落 local.yaml.example 注释段同步。
+ 
++2026-09-19-span-risk-pattern-migration：ceremony 段 note 补 span 轴路径模式输入源表述（项目声明 `_module-map.yaml` 顶层 `span_risk` 段，装载 src/span-risk-surface.js；无声明项目该维关闭不回退内置表）——纯 note 文本同步，无新 local 键（span 轴 token 集无逐机覆盖语义，不设 blast_surfaces 式覆盖键）。
++
+ **local-detect.js** 是纯 fs 项目类型嗅探（detectLocalYaml）：不 spawn 子进程、不耗 token，几秒完成项目类型判定；只返回数据结构不写盘（create/gate 无需为此跑完整 scan），落盘由 CLI 路由 / scan.js 调用方负责。
+ 
+ ## 对外接口（表格）
+@@ -81,3 +83,4 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
+ |------|--------|------|
+ | 2026-08-19 | ql-20260819-015-65fa | init.js 子项目 repo 探测的 git remote get-url 改 execFileSync（去 shell 注入面） |
+ | 2026-09-14 | 2026-09-14-change-ownership-guards | config-schema.js 登记 live 键 `change-ownership.heartbeat_minutes`（optional integer，缺省 15；reader=src/progress/change-registry.js `resolveHeartbeatMs`）+ local.yaml.example 注释段（task-01） |
++| 2026-09-19 | 2026-09-19-span-risk-pattern-migration | config-schema.js ceremony 段 note 补 span 轴路径模式输入源表述（项目声明 _module-map.yaml 顶层 span_risk 段、无声明项目该维关闭不回退内置表；无新 local 键） |
+diff --git a/.sillyspec/knowledge/INDEX.md b/.sillyspec/knowledge/INDEX.md
+index 191706a..3510b1f 100644
+--- a/.sillyspec/knowledge/INDEX.md
++++ b/.sillyspec/knowledge/INDEX.md
+@@ -61,6 +61,8 @@ created_at: 2026-06-19T12:40:00+08:00
+ - wt-commit|dispatch|幽灵命令 → [known-issues.md#execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）](known-issues.md#execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）)
+ 
+ - verify-required-evidence|门脆断|quick gate|deps(auto)|test failed → [known-issues.md#quick-gate-required-evidence-flake（2026-09-19，未解）](known-issues.md#quick-gate-required-evidence-flake2026-09-19未解)
++- blast|自举|悬空提交|bbe30ab|skip-apply → [known-issues.md#blast 自举声明表未落 main（2026-09-19-ceremony-pricing-five-cuts 归档 --skip-apply 遗留）](known-issues.md#blast-自举声明表未落-main2026-09-19-ceremony-pricing-five-cuts-归档---skip-apply-遗留)
++- span|六域|QUICK_RISK_PATH_PATTERNS|span_risk|维度关闭 → [known-issues.md#span 六域通用路径表已退役为项目声明（无声明项目维度关闭）](known-issues.md#span-六域通用路径表已退役为项目声明无声明项目维度关闭)
+ ## Decisions
+ - change-management|quicklog|标签|切段|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
+ - core-engine|SQLite|FTS5|db-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)
+diff --git a/.sillyspec/knowledge/known-issues.md b/.sillyspec/knowledge/known-issues.md
+index 258a3eb..b6b7029 100644
+--- a/.sillyspec/knowledge/known-issues.md
++++ b/.sillyspec/knowledge/known-issues.md
+@@ -158,3 +158,14 @@ execute 期在隔离 worktree 内跑 `npm test` 全量时，CLI 子进程类测
+ **根因**：未定位——差异仅在 CLI 进程内派生子进程的未识别条件（疑并发压力或 hook 环境）。
+ **护栏**：audit 逃逸通道（SILLYSPEC_QUICK_TEST_GATE=skip 带证据留痕）；复现时先独立验证同命令再定性。
+ **证据**：quick-450636f3 三连红输出；主代理 8 次复现全绿（含 env 注入假说排除）。
++
++## blast 自举声明表未落 main（2026-09-19-ceremony-pricing-five-cuts 归档 --skip-apply 遗留）
++
++**事实**：main 的 `.sillyspec/docs/sillyspec/modules/_module-map.yaml` 无 blast 段——上一变更的 30 前缀 blast 自举表只存在于悬空提交 bbe30ab（无分支包含），归档走 --skip-apply 留下缺口（skip-apply.record.json 在案）。
++**影响**：main 定价 blast 轴全仓 S1 起步（声明面缺失=无命中，不缺省不拦截）——本应 S3/S2 的危险域声明（worktree/progress 等）在 main 不生效。
++**恢复路径**：独立变更自 bbe30ab 取 blast 段文本落 map（`git show bbe30ab:.sillyspec/docs/sillyspec/modules/_module-map.yaml`）。本变更（2026-09-19-span-risk-pattern-migration）按硬约束 D-002 未触碰（不新增不恢复 blast 段，只登记不修）。
++
++## span 六域通用路径表已退役为项目声明（无声明项目维度关闭）
++
++2026-09-19-span-risk-pattern-migration 起，旧六域硬编码表（src/change-risk-profile.js 的 QUICK_RISK_PATH_PATTERNS，auth/permission/billing/migration/lock/scheduling）退役删除：span 模式维（ceremony 定价 span 轴第三维）与 quick 画像 riskTable 只认 `_module-map.yaml` 顶层 `span_risk` 段（装载 src/span-risk-surface.js）。**行为面变化**：无声明项目不再有 auth/billing 等六域命中——span 轴不再推 S2、quick 不再因风险路径升 L2 + runtimeEvidence='required'（blast 迁移同款取舍：未配置禁回退，R-01）；项目按需自声明，声明示例见 src/span-risk-surface.js 头注。
++
+diff --git a/meta.json b/meta.json
+index 3a02871..ad42f8b 100644
+--- a/meta.json
++++ b/meta.json
+@@ -1,11 +1,25 @@
+ {
+   "name_zh": "worktree 元数据",
+-  "changeName": "2026-09-11-cross-change-decision-guard",
+-  "branch": "sillyspec/2026-09-11-cross-change-decision-guard",
++  "changeName": "2026-09-19-span-risk-pattern-migration",
++  "branch": "sillyspec/2026-09-19-span-risk-pattern-migration",
+   "baseBranch": "main",
+-  "baseHash": "42aa9927f71b78c903709fadd681d71719855d66",
+-  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-11-cross-change-decision-guard",
++  "baseHash": "c3294d9899d6e2a995a0d56e7c7a3e02477134dc",
++  "actualBaseHash": "c3294d9899d6e2a995a0d56e7c7a3e02477134dc",
++  "createdAt": "2026-09-19T08:48:22.229Z",
++  "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-19-span-risk-pattern-migration",
+   "mode": "worktree",
+-  "createdAt": "2026-09-11T06:50:20.659Z",
+-  "provisioning": true
++  "baselineFiles": [],
++  "baselineCommit": null,
++  "baselineHash": null,
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 55
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-19T08:48:22.179Z"
+ }
+diff --git a/src/ceremony-tier.js b/src/ceremony-tier.js
+index 52acf85..b369596 100644
+--- a/src/ceremony-tier.js
++++ b/src/ceremony-tier.js
+@@ -19,7 +19,8 @@
+  *            映射（legacy 兼容层）＋ 显式声明升降规则；两者皆缺 → 保守缺省 S2
+  *            （brownfield 兼容：≈现状 independent×1，不静默降级）。
+  *   span  ＝ 声明文件数 ≥ SPAN_FILES_THRESHOLD ∨ 跨模块数 ≥ SPAN_MODULES_THRESHOLD ∨
+- *            声明文件命中 QUICK_RISK_PATH_PATTERNS → 至少 S2。moduleIndex 沿用
++ *            声明文件命中项目声明 span_risk 表（matchSpanRiskPatterns，
++ *            2026-09-19-span-risk-pattern-migration D-003）→ 至少 S2。moduleIndex 沿用
+  *            computeGateProfile 的输入形态（_module-map.yaml 解析结果，先例
+  *            quick-gate-profile.js），缺失/空则跨模块检查跳过（不缺省不拦截）；声明文件数
+  *            按 declaredFiles 全量计（任务卡口径，不复刻 quick-gate 的文档剔除）。
+@@ -29,11 +30,14 @@
+  *            会给 verify 门引入隐式次序依赖）；入参携第三键 verify_run_failed 时透传容忍：
+  *            不抛错不拒收、不参与升档计算。
+  *
+- * 零依赖纯函数：无 fs / 锁 / 网络 / 日志副作用；唯一仓内 import 是 change-risk-profile.js
+- * 的纯常量 QUICK_RISK_PATH_PATTERNS（quick-gate-profile.js:28 先例）。阈值常量集中文件
+- * 顶部可调（R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
++ * 零依赖纯函数：无 fs / 锁 / 网络 / 日志副作用；仓内 import 是 change-risk-profile.js 的
++ * 纯常量 RISK_TO_TIER 与 span-risk-surface.js 的纯函数 matchSpanRiskPatterns（span 轴
++ * 风险路径表自 2026-09-19-span-risk-pattern-migration D-003 起改项目声明 span_risk 段经
++ * 参数注入，默认 [] = 模式维度关闭，不再内嵌全宇宙表）。阈值常量集中文件顶部可调
++ * （R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
+  */
+-import { QUICK_RISK_PATH_PATTERNS, RISK_TO_TIER } from './change-risk-profile.js'
++import { RISK_TO_TIER } from './change-risk-profile.js'
++import { matchSpanRiskPatterns } from './span-risk-surface.js'
+ 
+ /** 仪式档位序（只升不降的偏序基准，index 即高低：S0=0 … S3=3） */
+ export const CEREMONY_TIERS = ['S0', 'S1', 'S2', 'S3']
+@@ -41,7 +45,7 @@ export const CEREMONY_TIERS = ['S0', 'S1', 'S2', 'S3']
+ // RISK_TO_TIER 迁源 re-export（2026-09-19-ceremony-pricing-five-cuts task-02）：五级词→档位映射表
+ // 判级域归属 change-risk-profile.js（resolveChangeRisk 消费方），本文件 re-export 保持既有
+ // import 面（test/ceremony-tier.test.mjs 等）不变——依赖方向 ceremony-tier→change-risk-profile
+-// 已有先例（QUICK_RISK_PATH_PATTERNS 同款）。
++// 已有先例。
+ export { RISK_TO_TIER }
+ 
+ // ============ 阈值常量（集中可调；R-02 friction-ledger 历史回放标定的落点） ============
+@@ -141,6 +145,10 @@ function matchModuleForFile(posix, modulesObj) {
+  * @param {string[]} [opts.declaredFiles] 声明变更文件（span 轴；反斜杠自动归一 POSIX）
+  * @param {object|null} [opts.moduleIndex] _module-map.yaml 解析结果（跨模块数口径）；
+  *   null/undefined/空 → 跨模块检查跳过（不缺省不拦截）
++ * @param {Array<{pattern: string, re: RegExp}>} [opts.spanRiskPatterns] span 轴风险路径声明表
++ *   （span-risk-surface.js compile/load 产物；默认 [] = 模式维度关闭——项目声明 span_risk
++ *   段由调用方装载注入，2026-09-19-span-risk-pattern-migration D-003；命中 → 至少 S2，
++ *   reasons 记 token 与命中文件）
+  * @param {object} [opts.frictionCounts] friction-ledger 累计账口径 { gate_rollback,
+  *   review_rejected }——携 verify_run_failed 第三键透传容忍不拒收、不参与计算
+  * @returns {{ tier: 'S0'|'S1'|'S2'|'S3', components: { blast: string, span: string, friction: string },
+@@ -148,7 +156,7 @@ function matchModuleForFile(posix, modulesObj) {
+  *   friction 分量＝升档后的档（未起爆为 S0，不参与封顶）；reasons 逐分量留痕（含阈值与
+  *   命中明细），供消费方审计打印与双跑比对
+  */
+-export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, frictionCounts } = {}) {
++export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, spanRiskPatterns = [], frictionCounts } = {}) {
+   const reasons = []
+   let explicitDowngradeAccepted = false
+ 
+@@ -213,18 +221,14 @@ export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLeve
+     }
+   } // moduleIndex 缺失/空 → 跨模块检查跳过，span 其余两维照常
+ 
++  // 风险路径模式维：共享 matcher（matchSpanRiskPatterns——files 已归一，其内部重复归一幂等；
++  // 防御口径 null/非对象条目跳过与 /g lastIndex 归零由 matcher 承接），按 pattern 聚合 files
++  // 保持 riskHitsByPattern 语义与 reasons 文案形态不变（只换表来源：注入声明表，默认 [] 关维）
+   const riskHitsByPattern = new Map()
+-  for (const f of files) {
+-    for (const entry of QUICK_RISK_PATH_PATTERNS) {
+-      const re = entry == null ? null : entry.re
+-      if (!(re instanceof RegExp)) continue
+-      if (re.global) re.lastIndex = 0 // 防调用方传入 /g 正则跨文件携带 lastIndex 状态
+-      if (re.test(f)) {
+-        const list = riskHitsByPattern.get(entry.pattern) || []
+-        list.push(f)
+-        riskHitsByPattern.set(entry.pattern, list)
+-      }
+-    }
++  for (const { pattern, file } of matchSpanRiskPatterns(files, spanRiskPatterns)) {
++    const list = riskHitsByPattern.get(pattern) || []
++    list.push(file)
++    riskHitsByPattern.set(pattern, list)
+   }
+   if (riskHitsByPattern.size > 0) {
+     span = 'S2'
+@@ -332,14 +336,18 @@ export function applyDeclarationCatchUp({ currentDoc, recomputedTier, recomputed
+  *   在场合跳过 factRiskDetection 映射直入，2026-09-19-ceremony-pricing-five-cuts task-03）
+  * @param {string[]} [opts.factFiles] 实际变更文件（scope-audit / apply-pathspec 文件集）
+  * @param {object|null} [opts.factModuleIndex] _module-map.yaml 解析结果
++ * @param {Array<{pattern: string, re: RegExp}>} [opts.factSpanRiskPatterns] 事实面 span 风险
++ *   声明表（穿透内部 computeCeremonyTier 的 spanRiskPatterns；与 factBlastTier 同装载源
++ *   ——项目声明 span_risk 段，默认 [] = 模式维度关闭，2026-09-19-span-risk-pattern-migration D-003）
+  * @returns {{ factTier: 'S0'|'S1'|'S2'|'S3', mismatch: boolean, severity: 'error'|'warn'|'none' }}
+  */
+-export function reconcileDualRun({ declaredTier, factRiskDetection, factBlastTier, factFiles, factModuleIndex } = {}) {
++export function reconcileDualRun({ declaredTier, factRiskDetection, factBlastTier, factFiles, factModuleIndex, factSpanRiskPatterns = [] } = {}) {
+   const fact = computeCeremonyTier({
+     riskDetection: factRiskDetection,
+     blastTier: factBlastTier,
+     declaredFiles: factFiles,
+     moduleIndex: factModuleIndex,
++    spanRiskPatterns: factSpanRiskPatterns,
+     frictionCounts: {},
+   })
+   const declaredRank = tierRank(declaredTier)
+diff --git a/src/change-risk-profile.js b/src/change-risk-profile.js
+index a994b51..6215141 100644
+--- a/src/change-risk-profile.js
++++ b/src/change-risk-profile.js
+@@ -10,7 +10,9 @@
+  * 不豁免证据，D-009）。散文词表判级（detectChangeRisk 及词表/否定抑制/枚举继承机器）已整体
+  * 退役删除。RISK_TO_TIER 五级词→档位映射表迁入本文件（ceremony-tier re-export 保持既有
+  * import 面——依赖方向 ceremony-tier→本文件已有先例）。证据门判据（VERIFICATION_NEEDS /
+- * checkIntegrationEvidence / auditRuntimeReceipt）与 span 轴 QUICK_RISK_PATH_PATTERNS 原样保留。
++ * checkIntegrationEvidence / auditRuntimeReceipt）原样保留；span 轴路径模式已迁项目声明面
++ * （_module-map.yaml 顶层 span_risk 段，装载 src/span-risk-surface.js——2026-09-19-
++ * span-risk-pattern-migration 硬退役，不留 legacy 别名）。
+  */
+ import { readFileSync, statSync } from 'fs'
+ import { join, isAbsolute } from 'path'
+@@ -22,25 +24,11 @@ import { resolveBlastSurfaces } from './blast-surface.js'
+ // INTEGRATION_FILE_PATTERNS 全宇宙词表与 detectChangeRisk 散文扫描整体退役（D-008：撞词≠危险、
+ // 自指陷阱——判级唯一入口是 resolveChangeRisk 声明面口径；知识库 conventions.md「判级/定价/门禁
+ // 输入必须项目声明」条目为口径真相源）。
+-// ============ quick 出口门禁：路径模式风险表（2026-09-14-quick-exit-tiered-gates task-01） ============
+-//
+-// quick 侧「风险特征命中」的单一数据源（design D-004@v2：v1 仅路径模式——不做 diff 关键词
+-// 扫描、不加 git 子进程，R-04 零子进程承诺；diff 维度待真实需求另立变更）。与上方 verify 侧
+-// INTEGRATION_FILE_PATTERNS 语义不同（那张表收跨进程/集成域、供 detectChangeRisk 判级），本表
+-// 收 quick 实证踩坑域（R-03 从窄收录：auth/permission/billing/migration/锁/调度），供
+-// quick-gate-profile.js 的 computeGateProfile 经 opts.riskTable 默认引用——命中即画像 L2 +
+-// checks.runtimeEvidence='required'。detectChangeRisk 判级逻辑不消费本表（verify 侧行为零变化）。
+-//
+-// 匹配口径：POSIX 路径、大小写不敏感、段边界锚定——前界 (^|[/_-]) + 后界 (?=[/._-]|$)，
+-// 防 author/booking/lockfile 类子串假阳（R-03）；pattern 为稳定域标识（riskHits 审计输出用）。
+-export const QUICK_RISK_PATH_PATTERNS = [
+-  { pattern: 'auth', re: /(?:^|[/_-])(?:oauth2?|auth(?:orization|entication|enticator)?)(?=[/._-]|$)/i },
+-  { pattern: 'permission', re: /(?:^|[/_-])permissions?(?=[/._-]|$)/i },
+-  { pattern: 'billing', re: /(?:^|[/_-])billing(?=[/._-]|$)/i },
+-  { pattern: 'migration', re: /(?:^|[/_-])(?:migrations?|migrate)(?=[/._-]|$)/i },
+-  { pattern: 'lock', re: /(?:^|[/_-])(?:locks?|mutex(?:es)?)(?=[/._-]|$)/i },
+-  { pattern: 'scheduling', re: /(?:^|[/_-])(?:schedul(?:er|ing)|cron|jobs?)(?=[/._-]|$)/i },
+-]
++// 2026-09-19-span-risk-pattern-migration task-03 同款删除收口：quick 出口门禁的六域硬编码
++// 路径模式风险表（auth/permission/billing/migration/lock/scheduling，2026-09-14-quick-exit-
++// tiered-gates task-01 引入）退役——span 模式维与 quick 画像 riskTable 唯一输入源改为项目声明
++// _module-map.yaml 顶层 span_risk 段（装载 src/span-risk-surface.js；匹配口径段边界锚定逐字
++// 继承）。无声明项目 → 空表（维度关闭，禁回退内置表——与 blast 未配置禁回退同款取舍）。
+ 
+ /**
+  * task 级「端到端/deployment-critical」文本判定（execute 批量完成 autoCheckPlanFromReviews 用）。
+diff --git a/src/config-schema.js b/src/config-schema.js
+index c2066b1..517b9ad 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -229,7 +229,7 @@ export const LOCAL_YAML_SCHEMA = {
+     {
+       id: 'ceremony',
+       title: '评审仪式档位（ceremony tier）',
+-      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（blast 轴输入=项目声明危险面 _module-map.yaml 顶层 blast 段，2026-09-19-ceremony-pricing-five-cuts）；完成门声明追赶重定价——无摩擦迁移随声明面可升可降、有摩擦迁移地板不退，force_tier 仍只升不降；本段是逃生阀/影子期开关/逐机升档面。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
++      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（blast 轴输入=项目声明危险面 _module-map.yaml 顶层 blast 段，2026-09-19-ceremony-pricing-five-cuts；span 轴路径模式输入=项目声明 _module-map.yaml 顶层 span_risk 段，2026-09-19-span-risk-pattern-migration，无声明项目该维关闭不回退内置表）；完成门声明追赶重定价——无摩擦迁移随声明面可升可降、有摩擦迁移地板不退，force_tier 仍只升不降；本段是逃生阀/影子期开关/逐机升档面。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
+       keys: [
+         { path: 'ceremony.blast_surfaces', type: 'json', optional: true, status: 'live', readers: ['loadBlastDeclarations (src/blast-surface.js — local 逐机升档，与 map 声明逐文件取 max)'], desc: 'blast 危险面逐机覆盖：[{ prefixes: [...], tier: S0~S3 }]——主声明在 _module-map.yaml 顶层 blast 段（进 git、可挂 evidence 位）；本键只升不降（与 map 命中逐文件取 max，压低共享声明无效）、不承载 evidence（证据语义属共享 map，D-009）。非法条目静默跳过。', example: '[{ prefixes: [src/my-daemon/], tier: S3 }]' },
+         { path: 'ceremony.force_tier', type: 'enum', values: ['S0', 'S1', 'S2', 'S3'], optional: true, status: 'live', readers: ['readCeremonyLocalConfig (src/run/prompt.js — {REVIEW_TIER} 注入档位菜单/强制轻仪审计痕)', '影子派发前置校验 (src/review-dispatch.js — task-06 影子期框架接线)'], desc: '档位逃生阀：强制仪式档 S0~S3，绕过客观定价（过渡期「就是不信这套」用）。prompt 注入面只升不降——强制档低于客观定价档时不降档（防 prompt 面与 gate 侧判定分裂）；非法值 warn 后忽略。', example: 'S3' },
+diff --git a/src/quick-gate-profile.js b/src/quick-gate-profile.js
+index f7682cf..95a8143 100644
+--- a/src/quick-gate-profile.js
++++ b/src/quick-gate-profile.js
+@@ -6,7 +6,10 @@
+  * （_module-map.yaml 解析结果），输出 L0/L1/L2 画像与检查项，供 Wave 2 接线消费
+  * （run/shared.js 挂 review.gateProfile → complete-handlers 落账 / quick-audit 打印 /
+  * scope-audit 表格与 --json 双出口）。本模块零 IO、零子进程：moduleIndex、风险表、阈值
+- * 全部由参数或默认值提供（D-007 独立纯函数模块；R-04 画像=纯字符串运算）。
++ * 全部由参数或默认值提供（D-007 独立纯函数模块；R-04 画像=纯字符串运算）。风险表自
++ * 2026-09-19-span-risk-pattern-migration D-003 起为声明面口径：默认空表=风险维度关闭，
++ * 项目声明表（_module-map.yaml 顶层 span_risk 段）经 opts.riskTable 注入
++ * （loadSpanRiskPatterns 产物装载），不再内嵌全宇宙表。
+  *
+  * 判级（阈值只引用 THRESHOLDS 常量，不散落字面量）：
+  *   正常态（moduleIndex 可用）：L2 = 跨 ≥L2_SPAN 模块 或 风险命中；L1 = 跨 ≥L1_SPAN 模块
+@@ -25,7 +28,6 @@
+  *                   .sillyspec/docs/ 前缀——模块卡与 changelog sidecar 均 .md 天然覆盖），
+  *                   文档文件不计入 testFileCount/codeFileCount，也不参与模块归属与风险命中。
+  */
+-import { QUICK_RISK_PATH_PATTERNS } from './change-risk-profile.js'
+ 
+ /** 代码内默认阈值（task-05 真实图谱校准定稿，缺省行为的单一事实源；local.yaml quick-gate 段可覆写，D-009）。
+  *  定稿依据（2026-09-14，sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 重算交叉表，
+@@ -138,14 +140,16 @@ function cardInFiles(doc, fileSet) {
+  * @param {string[]} changedFiles 变更文件（CLI 审计链 git 事实；反斜杠自动归一 POSIX）
+  * @param {object|null} moduleIndex _module-map.yaml 解析结果（null/undefined/空 → degraded）
+  * @param {object} [opts]
+- * @param {Array<{pattern: string, re: RegExp}>} [opts.riskTable] 路径模式风险表（默认 QUICK_RISK_PATH_PATTERNS）
++ * @param {Array<{pattern: string, re: RegExp}>} [opts.riskTable] 路径模式风险表（默认空表=
++ *   风险维度关闭；项目声明表经注入——loadSpanRiskPatterns 产物，
++ *   2026-09-19-span-risk-pattern-migration D-003）
+  * @param {object} [opts.thresholds] 已合并阈值（resolveGateThresholds 产物；缺省用 THRESHOLDS，D-009）
+  * @param {Array<{path: string}>} [opts.fileNotes] --file-notes 解析结果（perFileNotes 覆盖率判定）
+  * @param {boolean} [opts.noDocs] --no-docs 显式豁免（docClaim → exempt-no-docs）
+  * @returns 画像对象（字段与判级规则见 design.md 接口定义）
+  */
+ export function computeGateProfile(changedFiles, moduleIndex, opts = {}) {
+-  const riskTable = Array.isArray(opts.riskTable) ? opts.riskTable : QUICK_RISK_PATH_PATTERNS
++  const riskTable = Array.isArray(opts.riskTable) ? opts.riskTable : [] // 默认空表=风险维度关闭（声明表经注入，D-003）
+ 
+   // 阈值：opts.thresholds 逐键取合法值，否则回 THRESHOLDS 默认（warn 责任在 resolveGateThresholds）
+   const th = {}
+diff --git a/src/review-tier.js b/src/review-tier.js
+index 5cd622e..1a2e8ac 100644
+--- a/src/review-tier.js
++++ b/src/review-tier.js
+@@ -40,6 +40,7 @@ import { resolveChangeRisk, extractExplicitRiskLevel } from './change-risk-profi
+ import { readFileSync, existsSync } from 'fs'
+ import { join, dirname, basename } from 'path'
+ import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
++import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
+ 
+ /**
+  * 审查分级阈值：变更文件数 ≤ 此值 → 旧启发式断路器命中（brownfield 兼容倾向 self）。
+@@ -108,6 +109,10 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
+   let blastInput = null
+   let blastSource = null
+   let explicitInput = null
++  // span 轴声明面（2026-09-19-span-risk-pattern-migration task-03）：与 blast 实判同 caliber——
++  // designPath 可读时按其推导 specBase 装载 AllProjects 并集（loadBlastDeclarationsAllProjects
++  // 同款用法）；riskDetection 透传（调用方自带判级）或推导失败 → 空表（span 模式维关闭，D-003）
++  let spanRiskPatterns = []
+   if (hasRiskDetection) {
+     blastInput = riskDetection
+     blastSource = `riskDetection.level=${riskDetection.level}`
+@@ -120,6 +125,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
+       // （非常规路径）→ 空声明面（S1 起步不拦审查分级）。
+       const specBase = dirname(dirname(dirname(designPath)))
+       const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase })
++      spanRiskPatterns = loadSpanRiskPatternsAllProjects({ specBase })
+       const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: explicitInput })
+       blastInput = { level: risk.level }
+       blastSource = `声明面判级 tier=${risk.tier}/level=${risk.level}（design 文件清单 × blast 声明，D-008；explicit=${risk.explicit}）`
+@@ -153,7 +159,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
+   }
+ 
+   // 委托三轴定价引擎取档（ceremony-tier.js 单点真相源）
+-  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, frictionCounts })
++  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, spanRiskPatterns, frictionCounts })
+   let ceremonyTier = priced.tier
+   if (tierFileTier && CEREMONY_TIERS.indexOf(tierFileTier) > CEREMONY_TIERS.indexOf(ceremonyTier)) {
+     ceremonyTier = tierFileTier
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 989b2ac..df65a6a 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -40,6 +40,7 @@ import { recordFrictionEvent } from '../friction-tally.js'
+ import { readFrictionLedger } from '../friction-ledger.js'
+ import { computeCeremonyTier, escalateByFriction, applyDeclarationCatchUp, CEREMONY_TIERS } from '../ceremony-tier.js'
+ import { loadBlastDeclarations } from '../blast-surface.js'
++import { loadSpanRiskPatterns } from '../span-risk-surface.js'
+ import { resolveChangeRisk } from '../change-risk-profile.js'
+ import { withFileLock } from '../quicklog.js'
+ import { extractExplicitRiskLevel } from '../change-risk-profile.js'
+@@ -638,12 +639,16 @@ function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress,
+   const declaredFiles = readDesignOwnFiles(specBase, changeName)
+   const { declarations } = loadBlastDeclarations({ specBase, project: projectName })
+   const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations: declarations, explicitRiskLevel })
++  // span 轴声明面装载（2026-09-19-span-risk-pattern-migration task-03）：与 :639 blast 装载同
++  // specBase/projectName 上下文——_module-map.yaml 顶层 span_risk 段；无声明项目 → 空表（span
++  // 模式维关闭，禁回退内置表，D-003；引擎默认 [] 同效，显式装载与其他声明面入参同风格）
++  const spanRiskPatterns = loadSpanRiskPatterns({ specBase, project: projectName })
+   let moduleIndex = null
+   const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+   if (existsSync(mapPath)) {
+     try { moduleIndex = parseModuleMapSimple(readFileSync(mapPath, 'utf8')) || null } catch { moduleIndex = null }
+   }
+-  const priced = computeCeremonyTier({ blastTier: risk.tier, declaredFiles, moduleIndex })
++  const priced = computeCeremonyTier({ blastTier: risk.tier, declaredFiles, moduleIndex, spanRiskPatterns })
+   const auditLines = []
+   if (risk.hitPrefixes.length > 0) {
+     auditLines.push(`声明危险面命中：${risk.hitPrefixes.join('、')}（evidenceRequired=${risk.evidenceRequired}）`)
+diff --git a/src/run/shared.js b/src/run/shared.js
+index f3cf6fe..61e5a8c 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto'
+ // 分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02）：纯函数零 IO，
+ // 仅依赖 change-risk-profile，无环——auditQuickCompletion 静态 import 安全（task-02 接线）。
+ import { computeGateProfile, resolveGateThresholds } from '../quick-gate-profile.js'
++import { loadSpanRiskPatterns } from '../span-risk-surface.js'
+ export { safeGit, unquoteGitPath }
+ 
+ const __dirname = dirname(fileURLToPath(import.meta.url))
+@@ -1771,10 +1772,15 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+         } catch { /* 坏 YAML → 纯默认阈值 */ }
+       }
+       const gateFiles = result.changedFiles.filter(f => !isQuicklogFileLineNoise(f, guard.linkedChanges))
++      // span 声明面装载（2026-09-19-span-risk-pattern-migration task-03）：与 loadQuickModuleIndex 同
++      // specBase/projectName 上下文（_module-map.yaml 顶层 span_risk 段）→ gateOpts.riskTable；
++      // 无声明项目 → 空表（riskTable 已默认 []，此处显式装载与其他声明面入参同风格，D-003）
++      const riskTable = loadSpanRiskPatterns({ specBase, project: projectName })
+       const gateOpts = {
+         ...(thresholds ? { thresholds } : {}),
+         ...(noDocs ? { noDocs: true } : {}),
+         ...(Array.isArray(fileNotes) && fileNotes.length > 0 ? { fileNotes } : {}),
++        riskTable,
+       }
+       const moduleIndex = await loadQuickModuleIndex(specBase, projectName)
+       result.gateProfile = computeGateProfile(gateFiles, moduleIndex, gateOpts)
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 7ce1cc5..15c7832 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -29,6 +29,7 @@ import { createHash } from 'node:crypto'
+ import { join, dirname } from 'node:path'
+ import { locateQuickSessionGuard, auditQuickCompletion, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, ancestorSpecDirs, isQuickMetadata } from './run/shared.js'
+ import { computeGateProfile, resolveGateThresholds } from './quick-gate-profile.js'
++import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
+ import { safeGit } from './git-helper.js'
+ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+ import { classifyToolScaffold } from './worktree-apply.js'
+@@ -432,10 +433,16 @@ async function buildQuickRecordResult(rec, requestedName) {
+         .filter(Boolean)
+       if (rowsPaths.length > 0) {
+         const thresholds = await resolveReplayGateThresholds(rec.specBase)
++        // span 声明面装载（2026-09-19-span-risk-pattern-migration task-03）：重放态 rec 只有
++        // specBase 无 projectName 语境 → AllProjects 并集口径（与 verify-postcheck 双跑事实面
++        // 同款；单项目仓与实时态 auditQuickCompletion 的 project 装载逐字相同）；无声明 → 空表。
++        // :517 pickModuleMapProject 内的 computeGateProfile 唯一消费 unmappedFiles.length，
++        // riskTable 不参与——不接线（Grill X-7 避免死接线）
++        const riskTable = loadSpanRiskPatternsAllProjects({ specBase: rec.specBase })
+         gateProfile = computeGateProfile(
+           rowsPaths,
+           await loadGateModuleIndex(rec.specBase, rowsPaths),
+-          thresholds ? { thresholds } : {},
++          { ...(thresholds ? { thresholds } : {}), riskTable },
+         )
+       }
+     }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index d839117..5d977a0 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -37,6 +37,7 @@ import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.j
+ // 纯/叶子依赖（ceremony-tier → change-risk-profile；friction-ledger → fs-atomic+quicklog），无环。
+ import { resolveChangeRisk } from './change-risk-profile.js'
+ import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
++import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
+ import { reconcileDualRun, computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+ import { mergeFrictionEntry } from './friction-ledger.js'
+ import { discoverModuleIndex } from './decision-distill.js'
+@@ -3065,14 +3066,18 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
+   // 旧口径（读实际 diff 文件全文喂 detectChangeRisk 词表）整类删除——事实面只吃文件名 × 声明面
+   // （自指陷阱消失：门禁引擎源码里的关键词不再是判级输入，D-008）。
+   const blastDeclarations = loadBlastDeclarationsAllProjects(sb)
++  // span 轴同款声明面（2026-09-19-span-risk-pattern-migration task-03）：map 顶层 span_risk 段
++  // AllProjects 并集，一次装载双点共用（reconcileDualRun factSpanRiskPatterns + factDetail 披露）；
++  // 无声明项目 → 空表（span 模式维关闭，禁回退内置表，D-003）
++  const factSpanRiskPatterns = loadSpanRiskPatternsAllProjects(sb)
+   const factRisk = resolveChangeRisk({ files: actual.files, blastDeclarations })
+   let factModuleIndex = null
+   try { factModuleIndex = discoverModuleIndex(join(sb, 'knowledge')) } catch { /* 缺 map → span 跨模块维跳过 */ }
+ 
+   // —— 引擎对账（mismatch 判定单点）+ 命中明细（同入参跑 computeCeremonyTier 取 reasons，供披露）——
+-  const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex })
++  const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex, factSpanRiskPatterns })
+   const factDetail = computeCeremonyTier({
+-    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
++    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, spanRiskPatterns: factSpanRiskPatterns, frictionCounts: {},
+   })
+   if (verdict.severity === 'warn') {
+     notes.push(`[advisory] 高报记账（D-005）：声明档 ${String(declaredTier)} > 事实档 ${verdict.factTier}——只记账不阻断不记摩擦（高报代价是更重仪式，自罚机制在场）`)
+diff --git a/test/audit-quick-completion.test.mjs b/test/audit-quick-completion.test.mjs
+index 674d523..541e109 100644
+--- a/test/audit-quick-completion.test.mjs
++++ b/test/audit-quick-completion.test.mjs
+@@ -541,10 +541,12 @@ const gateGuard = (d, extra = {}) => ({ ...baseGuard, specBase: join(d, '.sillys
+   assert(note.includes('模块文档认领已覆盖'), `claimed 落账行（实际 ${JSON.stringify(note)}）`)
+ }
+ 
+-// case G-4 (L2 风险命中): auth 路径命中 → L2 + runtimeEvidence=required + 命中点名 pattern/file
++// case G-4 (L2 风险命中): 声明面 span_risk 段 auth token 命中 → L2 + runtimeEvidence=required + 命中点名 pattern/file
++//   （D-005 夹具翻新：旧默认六域风险表已退役，风险维度声明面=map 顶层 span_risk 段——夹具只声明本用例所需 auth）
+ {
+   const d = seedRepo({ 'src/web/login.js': 'v1\n', 'src/web/auth.js': 'v1\n' })
+-  writeModuleMap(d, 'modules:\n  web:\n    status: active\n    doc: modules/web.md\n    paths:\n      - src/web\n')
++  writeModuleMap(d, 'modules:\n  web:\n    status: active\n    doc: modules/web.md\n    paths:\n      - src/web\n'
++    + 'span_risk:\n  # span 轴风险路径声明（token 扁平列表，形态对照本仓真实 map）\n  - auth\n')
+   writeFileSync(join(d, 'src', 'web', 'login.js'), 'v2\n')
+   writeFileSync(join(d, 'src', 'web', 'auth.js'), 'v2\n')
+   const r = await auditQuickCompletion(d, gateGuard(d), {})
+diff --git a/test/ceremony-tier.test.mjs b/test/ceremony-tier.test.mjs
+index 4f6322e..c2cc4c2 100644
+--- a/test/ceremony-tier.test.mjs
++++ b/test/ceremony-tier.test.mjs
+@@ -5,6 +5,10 @@
+  * D-007 影子隔离、D-008 friction 升档），七组断言：
+  *   1. 三轴取封顶矩阵：ceremony_tier = max(blast, span, friction)——单分量高档+其余低档 →
+  *      高档；多分量同档 → 档不变；全低 → S0；reasons 逐分量留痕
++ *   1b. spanRiskPatterns 声明表注入（2026-09-19-span-risk-pattern-migration task-02/D-003）：
++ *       compileSpanRiskPatterns(['auth']) 命中 → span S2 + reasons 逐字记 token 与文件；
++ *       默认 [] = 模式维度关闭（六域路径无参不触发 span S2）；reconcileDualRun
++ *       factSpanRiskPatterns 穿透双跑事实面
+  *   2. RISK_TO_TIER 映射表逐档（integration/deployment 同归 S3）+ brownfield 保守缺省 S2
+  *   3. escalateByFriction 只升不降 + S3 封顶 + thresholds 覆写/非法回退 + 第三键透传容忍
+  *   4. reconcileDualRun 错配注入：声明 S1/事实 S2 → mismatch error；声明 ≥ 事实 → none；
+@@ -37,6 +41,7 @@ import {
+   SPAN_MODULES_THRESHOLD,
+   FRICTION_ESCALATION_THRESHOLD,
+ } from '../src/ceremony-tier.js'
++import { compileSpanRiskPatterns } from '../src/span-risk-surface.js'
+ import { getLatestStageReviewRunId, stageReviewMarkerPath } from '../src/stage-review.js'
+ import { SHADOW_NAMESPACE_DIR } from '../src/review-dispatch.js'
+ import { withFileLock } from '../src/quicklog.js'
+@@ -62,7 +67,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+ /** 档位→序数（与引擎 tierRank 同口径） */
+ const rank = (t) => CEREMONY_TIERS.indexOf(t)
+ 
+-/** 生成 n 个不命中 QUICK_RISK_PATH_PATTERNS 的低风险文件名（span 轴干净对照用） */
++/** 生成 n 个不命中 span 风险 token 的低风险文件名（span 轴干净对照用；低风险=不落任何 token 段） */
+ const lowFiles = (n) => Array.from({ length: n }, (_, i) => `low${i}.js`)
+ 
+ /** 跨模块口径 fixture（paths 前缀归属，quick-gate-profile matchModuleForFile 同形态） */
+@@ -113,12 +118,14 @@ console.log('=== 1. 三轴取封顶矩阵（max(blast, span, friction)，FR-01/D
+   const noModuleIndex = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/a/x.js'] })
+   assert(noModuleIndex.tier === 'S0', `moduleIndex 缺失 → 跨模块检查跳过不缺省不拦截（实际 ${noModuleIndex.tier}）`)
+ 
+-  // 单分量高档：span 风险路径模式轴（含 Windows 反斜杠归一）
+-  const patHit = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/oauth-config.js'] })
++  // 单分量高档：span 风险路径模式轴（含 Windows 反斜杠归一）——显式注入声明表
++  // （2026-09-19-span-risk-pattern-migration：默认 [] = 模式维度关闭，命中取决于注入 token 集）
++  const spanTable = compileSpanRiskPatterns(['auth', 'oauth', 'billing'])
++  const patHit = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/oauth-config.js'], spanRiskPatterns: spanTable })
+   assert(patHit.tier === 'S2' && patHit.components.span === 'S2',
+-    `span 风险路径命中（oauth）→ S2（实际 ${patHit.tier}）`)
+-  const patHitWin = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src\\billing-hook.js'] })
+-  assert(patHitWin.tier === 'S2', `反斜杠路径归一后风险路径命中（billing）→ S2（实际 ${patHitWin.tier}）`)
++    `span 风险路径命中（oauth token）→ S2（实际 ${patHit.tier}）`)
++  const patHitWin = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src\\billing-hook.js'], spanRiskPatterns: spanTable })
++  assert(patHitWin.tier === 'S2', `反斜杠路径归一后风险路径命中（billing token）→ S2（实际 ${patHitWin.tier}）`)
+ 
+   // 单分量高档：friction 轴（低基 +1 档；两键合计口径）
+   const frOnly = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['a.js'], frictionCounts: { gate_rollback: FRICTION_ESCALATION_THRESHOLD } })
+@@ -150,6 +157,42 @@ console.log('=== 1. 三轴取封顶矩阵（max(blast, span, friction)，FR-01/D
+     `reasons 含 friction 分量留痕（含阈值数字）`)
+ }
+ 
++// ────────────────────────────────────────────────────────────
++console.log('\n=== 1b. spanRiskPatterns 声明表注入与默认关闭（2026-09-19-span-risk-pattern-migration task-02/D-003）===\n')
++{
++  // 注入用例：compileSpanRiskPatterns(['auth']) 命中 src/auth/x.js → span S2 + reasons 记 token 与文件
++  const hit = computeCeremonyTier({
++    riskDetection: { level: 'doc-only' },
++    declaredFiles: ['src/auth/x.js'],
++    spanRiskPatterns: compileSpanRiskPatterns(['auth']),
++  })
++  assert(hit.tier === 'S2' && hit.components.span === 'S2',
++    `注入 auth token 表命中 src/auth/x.js → span S2（实际 ${hit.tier}/${hit.components.span}）`)
++  assert(hit.reasons.includes('span=S2（风险路径命中 auth：src/auth/x.js）'),
++    `reasons 逐字记 token 与文件（实际 ${JSON.stringify(hit.reasons)}）`)
++
++  // 同表反例：author 子串被段边界锚定挡住 → 不触发（匹配语义零漂移）
++  const sub = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: ['src/author/x.js'], spanRiskPatterns: compileSpanRiskPatterns(['auth']) })
++  assert(sub.tier === 'S0' && !sub.reasons.some((r) => r.includes('风险路径命中')),
++    `注入表下 author 子串假阳不命中 → S0 且无「风险路径命中」行（实际 ${sub.tier}）`)
++
++  // 默认 [] = 模式维度关闭钉：六域路径文件不传 spanRiskPatterns → span 维度零触发（文件数 < 阈值防串轴）
++  const sixDomainFiles = ['src/auth/x.js', 'src/oauth2/token.js', 'src/billing/invoice.js', 'db/migrations/001.sql', 'src/locks.js', 'src/scheduler.js']
++  const off = computeCeremonyTier({ riskDetection: { level: 'doc-only' }, declaredFiles: sixDomainFiles })
++  assert(off.tier === 'S0' && off.components.span === 'S0',
++    `默认 [] = span 模式维度关闭（六域路径 6 文件 < 阈值 ${SPAN_FILES_THRESHOLD} 且无注入 → S0，实际 ${off.tier}/${off.components.span}）`)
++  assert(!off.reasons.some((r) => r.includes('风险路径命中')),
++    `默认关闭 → 无「风险路径命中」reasons 行（实际 ${JSON.stringify(off.reasons)}）`)
++
++  // reconcileDualRun factSpanRiskPatterns 穿透（双跑事实面同口径，design R-05）
++  const factHit = reconcileDualRun({ declaredTier: 'S1', factRiskDetection: { level: 'doc-only' }, factFiles: ['src/auth/x.js'], factSpanRiskPatterns: compileSpanRiskPatterns(['auth']) })
++  assert(factHit.factTier === 'S2' && factHit.mismatch === true,
++    `factSpanRiskPatterns 穿透 → 事实 span S2 > 声明 S1 → mismatch（实际 ${factHit.factTier}/${factHit.mismatch}）`)
++  const factOff = reconcileDualRun({ declaredTier: 'S1', factRiskDetection: { level: 'doc-only' }, factFiles: ['src/auth/x.js'] })
++  assert(factOff.factTier === 'S0' && factOff.mismatch === false,
++    `事实面不传表 → 维度关闭 S0 ≤ 声明 S1 无错配（实际 ${factOff.factTier}/${factOff.mismatch}）`)
++}
++
+ // ────────────────────────────────────────────────────────────
+ console.log('\n=== 2. RISK_TO_TIER 映射表逐档 + brownfield 缺省（FR-01）===\n')
+ {
+diff --git a/test/modules-rebuild-preserve.test.mjs b/test/modules-rebuild-preserve.test.mjs
+index 17c9c00..6265179 100644
+--- a/test/modules-rebuild-preserve.test.mjs
++++ b/test/modules-rebuild-preserve.test.mjs
+@@ -10,6 +10,7 @@
+  *   2. 非 force（无 --force）dry-run 不写盘（mtime/内容不变）
+  *   3. 无手工段的 map --force 重建 → 不产生多余空段
+  *   4. 重建头五族外的其他顶层手工段同样保留（通用机制，不只为 blast 特判）
++ *   5. span_risk 段（含段内注释 + 9 token）--force 写盘后在场且字节不变（2026-09-19-span-risk-pattern-migration task-03——注释在键行后段内，键行前注释会被 modules 段重发射丢弃，故钉段内形态）
+  *
+  * 风格：自研 assert，tmp fixture。
+  */
+@@ -131,6 +132,30 @@ console.log('\n=== modules-rebuild-preserve：--force 顶层段回插 ===\n')
+   assert(after.includes('- 手工备注 A') && after.includes('- 手工备注 B'), '段内列表项保真')
+ }
+ 
++// 5. span_risk 段（含段内注释）--force 回插字节保真（2026-09-19-span-risk-pattern-migration task-03）
++{
++  const { root, mapPath } = makeFixture('mrp-span-', false)
++  const spanSection = [
++    'span_risk:',
++    '  # span 轴风险路径声明（token 扁平列表，进 git 手工维护；modules rebuild --force 按未知顶层段原样回插）',
++    '  - migrate',
++    '  - migration',
++    '  - migrations',
++    '  - dispatch',
++    '  - scheduler',
++    '  - scheduling',
++    '  - cron',
++    '  - job',
++    '  - jobs',
++  ].join('\n')
++  writeFileSync(mapPath, readFileSync(mapPath, 'utf8') + '\n' + spanSection + '\n', 'utf8')
++  await rebuildModuleMap(root, { force: true })
++  const after = readFileSync(mapPath, 'utf8')
++  assert(after.includes('span_risk:'), '--force 写盘后顶层 span_risk 段在场')
++  assert(after.includes(spanSection), 'span_risk 段字节不变原样回插（含段内注释 + 9 token）')
++  assert(after.includes('modules:'), 'modules 段照常重建')
++}
++
+ for (const d of tmpRoots) {
+   try { rmSync(d, { recursive: true, force: true }) } catch { /* best-effort */ }
+ }
+diff --git a/test/quick-gate-profile.test.mjs b/test/quick-gate-profile.test.mjs
+index 340cb4b..9d7fed9 100644
+--- a/test/quick-gate-profile.test.mjs
++++ b/test/quick-gate-profile.test.mjs
+@@ -10,6 +10,9 @@
+  *   6. opts 注入面：thresholds / riskTable / fileNotes / noDocs；
+  *   7. 风险表段边界锚定（author/booking/lockfile 假阳不命中）+ 文档文件不参与风险命中；
+  *   8. resolveChangeRisk 声明面判级回归（词表退役，2026-09-19-ceremony-pricing-five-cuts task-02）。
++ *   9. 风险表声明面口径（2026-09-19-span-risk-pattern-migration task-02/D-003）：riskTable
++ *      默认空表=风险维度关闭（不传 riskHits 恒空双向钉）；命中用例全部显式注入
++ *      compileSpanRiskPatterns 产物；compile 产物形状钉（{pattern, re}、/i 非 global）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -19,7 +22,8 @@ import {
+   THRESHOLDS,
+   resolveGateThresholds,
+ } from '../src/quick-gate-profile.js'
+-import { QUICK_RISK_PATH_PATTERNS, resolveChangeRisk } from '../src/change-risk-profile.js'
++import { resolveChangeRisk } from '../src/change-risk-profile.js'
++import { compileSpanRiskPatterns } from '../src/span-risk-surface.js'
+ 
+ /** 四模块 fixture（parseModuleMapSimple 扁平形态：字面量 + 目录前缀两种 paths 写法） */
+ const IDX = {
+@@ -31,6 +35,18 @@ const IDX = {
+ 
+ const DEFAULTS = { l1_span: 2, l1_files: 4, l2_span: 4, l2_files_degraded: 8 }
+ 
++/** 六域 21 token 展开集（旧六域硬编码表六条正则的 alternation 逐项展开——编译等价性钉见
++ *  test/span-risk-surface.test.mjs；本文件以 compileSpanRiskPatterns 产物作注入表，
++ *  2026-09-19-span-risk-pattern-migration task-02 声明面口径）。 */
++const SPAN_TOKENS = [
++  'auth', 'authorization', 'authentication', 'authenticator', 'oauth', 'oauth2',
++  'permission', 'permissions',
++  'billing',
++  'migration', 'migrations', 'migrate',
++  'lock', 'locks', 'mutex', 'mutexes',
++  'scheduler', 'scheduling', 'cron', 'job', 'jobs',
++]
++
+ /** 捕获 console.warn 调用（resolveGateThresholds 键非法回退的 warn 断言用），finally 必还原。 */
+ function withWarnSpy(fn) {
+   const original = console.warn
+@@ -180,8 +196,8 @@ test('正常态 span 边界：span=3 → L1；span=4 恰达 L2_SPAN → L2', ()
+   assert.equal(four.level, 'L2')
+ })
+ 
+-test('正常态风险命中：单模块 2 文件 + auth 路径 → 直接 L2（risk 优先于 span/files）', () => {
+-  const p = computeGateProfile(['src/run/a.js', 'src/auth/login.js'], IDX)
++test('正常态风险命中：单模块 2 文件 + auth 路径（注入声明表）→ 直接 L2（risk 优先于 span/files）', () => {
++  const p = computeGateProfile(['src/run/a.js', 'src/auth/login.js'], IDX, { riskTable: compileSpanRiskPatterns(['auth']) })
+   assert.equal(p.moduleSpan, 1)
+   assert.equal(p.fileCount, 2)
+   assert.equal(p.level, 'L2')
+@@ -207,8 +223,8 @@ test('降级态边界：7 文件 L1 / 8 文件恰达 L2_FILES_DEGRADED', () => {
+   assert.equal(computeGateProfile(mk(8), null).level, 'L2')
+ })
+ 
+-test('降级态风险命中照常升 L2（风险判定不依赖 module-map）', () => {
+-  const p = computeGateProfile(['src/billing/invoice.js'], null)
++test('降级态风险命中照常升 L2（风险判定不依赖 module-map；注入声明表）', () => {
++  const p = computeGateProfile(['src/billing/invoice.js'], null, { riskTable: compileSpanRiskPatterns(['billing']) })
+   assert.equal(p.degraded, true)
+   assert.equal(p.level, 'L2')
+   assert.deepEqual(p.riskHits, [{ pattern: 'billing', file: 'src/billing/invoice.js' }])
+@@ -269,9 +285,10 @@ test('docClaim：claimed / missing / exempt-no-docs / 无可认领空真 claimed
+   assert.equal(computeGateProfile(['src/db.js'], null).checks.docClaim, 'claimed', 'degraded 无触及模块')
+ })
+ 
+-test('runtimeEvidence：风险命中 required / 无命中 na', () => {
++test('runtimeEvidence：风险命中 required / 无命中 na（默认空表恒 na；注入表命中 required）', () => {
+   assert.equal(computeGateProfile(['src/db.js'], IDX).checks.runtimeEvidence, 'na')
+-  assert.equal(computeGateProfile(['src/run/cron.js'], IDX).checks.runtimeEvidence, 'required')
++  assert.equal(computeGateProfile(['src/run/cron.js'], IDX).checks.runtimeEvidence, 'na', '默认空表=维度关闭，cron 路径不注入不命中')
++  assert.equal(computeGateProfile(['src/run/cron.js'], IDX, { riskTable: compileSpanRiskPatterns(['cron']) }).checks.runtimeEvidence, 'required')
+ })
+ 
+ // ── 6. opts 注入面 ──
+@@ -290,73 +307,83 @@ test('opts.thresholds 覆写判级（resolveGateThresholds 产物形态：snake
+   assert.equal(chained.level, 'L1')
+ })
+ 
+-test('opts.riskTable 自定义表替换默认表', () => {
++test('opts.riskTable 自定义注入表（默认空表下注入表是唯一风险面）', () => {
+   const custom = [{ pattern: 'widget', re: /widget/ }]
+   const hit = computeGateProfile(['src/run/widget.js'], IDX, { riskTable: custom })
+   assert.deepEqual(hit.riskHits, [{ pattern: 'widget', file: 'src/run/widget.js' }])
+   assert.equal(hit.level, 'L2')
+   const notHit = computeGateProfile(['src/run/auth.js'], IDX, { riskTable: custom })
+-  assert.deepEqual(notHit.riskHits, [], '默认 auth 表被自定义表替换，不再命中')
++  assert.deepEqual(notHit.riskHits, [], 'auth 不在注入表 → 不命中')
+   assert.equal(notHit.level, 'L0')
+ })
+ 
+ // ── 7. 风险表段边界锚定（R-03 假阳防线）──
+ 
+-test('六域路径模式正命中（目录段/文件名/连字符复合段）', () => {
++test('六域 21 token 注入表正命中（目录段/文件名/连字符复合段；pattern 标签=token）', () => {
++  const table = compileSpanRiskPatterns(SPAN_TOKENS)
+   const cases = [
+-    ['src/auth/login.js', 'auth'],
+-    ['src/oauth2/token.js', 'auth'],
+-    ['src/user_auth.js', 'auth'],
+-    ['src/authenticator.ts', 'auth'],
+-    ['src/permissions.ts', 'permission'],
+-    ['src/role-permission.js', 'permission'],
+-    ['src/billing/invoice.ts', 'billing'],
+-    ['billing-service/main.py', 'billing'],
+-    ['db/migrations/001_init.sql', 'migration'],
+-    ['src/migrate.ts', 'migration'],
+-    ['src/locks.js', 'lock'],
+-    ['src/mutex.ts', 'lock'],
+-    ['src/db-lock.js', 'lock'],
+-    ['src/scheduler.js', 'scheduling'],
+-    ['src/cron-job.js', 'scheduling'],
+-    ['src/jobs/worker.js', 'scheduling'],
++    ['src/auth/login.js', ['auth']],
++    ['src/oauth2/token.js', ['oauth2']],
++    ['src/user_auth.js', ['auth']],
++    ['src/authenticator.ts', ['authenticator']],
++    ['src/permissions.ts', ['permissions']],
++    ['src/role-permission.js', ['permission']],
++    ['src/billing/invoice.ts', ['billing']],
++    ['billing-service/main.py', ['billing']],
++    ['db/migrations/001_init.sql', ['migrations']],
++    ['src/migrate.ts', ['migrate']],
++    ['src/locks.js', ['locks']],
++    ['src/mutex.ts', ['mutex']],
++    ['src/db-lock.js', ['lock']],
++    ['src/scheduler.js', ['scheduler']],
++    ['src/cron-job.js', ['cron', 'job']], // 连字符复合段两 token 并列命中（旧表同域单正则 → 现按 token 计两跳）
++    ['src/jobs/worker.js', ['jobs']],
+   ]
+-  for (const [file, domain] of cases) {
+-    const p = computeGateProfile([file], null)
+-    assert.deepEqual(p.riskHits, [{ pattern: domain, file }], `${file} → ${domain}`)
++  for (const [file, tokens] of cases) {
++    const p = computeGateProfile([file], null, { riskTable: table })
++    assert.deepEqual(p.riskHits.map((h) => h.pattern), tokens, `${file} → ${tokens.join('+')}`)
++    assert.ok(p.riskHits.every((h) => h.file === file), `${file} 命中条目 file 字段一致`)
+     assert.equal(p.level, 'L2')
+   }
+ })
+ 
+-test('子串假阳不命中：author/booking/lockfile/jobtitle/调度无关词', () => {
++test('子串假阳不命中（双向钉）：注入表下 author/booking/lockfile/jobtitle 不命中；默认不传 riskHits 恒空', () => {
++  const table = compileSpanRiskPatterns(SPAN_TOKENS)
+   for (const file of ['src/author.js', 'src/booking.js', 'src/lockfile.js', 'src/jobtitle.ts', 'src/enjoy.js']) {
+-    const p = computeGateProfile([file], IDX)
+-    assert.deepEqual(p.riskHits, [], `${file} 不命中任何风险模式`)
++    const p = computeGateProfile([file], IDX, { riskTable: table })
++    assert.deepEqual(p.riskHits, [], `${file} 不命中任何声明 token（段边界锚定）`)
+     assert.equal(p.level, 'L0')
+   }
++  // 反向钉：默认（不传 riskTable）= 空表维度关闭 → riskHits 恒空（含会被注入表命中的 auth 路径）
++  const def = computeGateProfile(['src/auth/login.js'], IDX)
++  assert.deepEqual(def.riskHits, [], '默认空表 → 即便 auth 路径也不命中（维度关闭）')
++  assert.equal(def.checks.runtimeEvidence, 'na')
+ })
+ 
+-test('文档文件不参与风险命中（常见 MIGRATION.md/changelog 不误报）', () => {
++test('文档文件不参与风险命中（常见 MIGRATION.md/changelog 不误报；注入表下仍豁免）', () => {
++  const table = compileSpanRiskPatterns(SPAN_TOKENS)
+   for (const file of ['MIGRATION.md', 'docs/auth-guide.md', '.sillyspec/docs/sillyspec/modules/billing.md']) {
+-    const p = computeGateProfile([file], IDX)
++    const p = computeGateProfile([file], IDX, { riskTable: table })
+     assert.deepEqual(p.riskHits, [], `${file} 是文档文件，不构成运行时风险面`)
+     assert.equal(p.codeFileCount, 0)
+     assert.equal(p.level, 'L0', '纯文档改动不因路径含风险词升 L2')
+   }
+ })
+ 
+-test('QUICK_RISK_PATH_PATTERNS 表形状：六域齐全、条目只含 pattern+re', () => {
+-  assert.ok(Array.isArray(QUICK_RISK_PATH_PATTERNS))
+-  const domains = QUICK_RISK_PATH_PATTERNS.map((e) => e.pattern)
+-  for (const d of ['auth', 'permission', 'billing', 'migration', 'lock', 'scheduling']) {
+-    assert.ok(domains.includes(d), `踩坑域 ${d} 在表内`)
+-  }
+-  for (const e of QUICK_RISK_PATH_PATTERNS) {
++test('compileSpanRiskPatterns 产物形状：条目只含 pattern+re、re 为 /i 非 global 边界锚定正则', () => {
++  const table = compileSpanRiskPatterns(['auth', 'billing'])
++  assert.ok(Array.isArray(table))
++  assert.deepEqual(table.map((e) => e.pattern), ['auth', 'billing'])
++  for (const e of table) {
+     assert.equal(typeof e.pattern, 'string')
+     assert.ok(e.re instanceof RegExp)
++    assert.equal(e.re.flags, 'i', '大小写不敏感编译')
++    assert.ok(!e.re.global, '非 global（无 lastIndex 跨调用状态）')
++    assert.equal(e.re.source, `(?:^|[/_-])${e.pattern}(?=[/._-]|$)`, '段边界锚定口径逐字钉')
+   }
+-  // riskHits 元素只含 pattern 与 file 字段（v1 无 diff 关键词维度）
+-  const p = computeGateProfile(['src/auth/x.js'], null)
++  // riskHits 元素只含 pattern 与 file 字段（v1 无 diff 关键词维度）——注入编译产物断言
++  const p = computeGateProfile(['src/auth/x.js'], null, { riskTable: table })
++  assert.deepEqual(p.riskHits, [{ pattern: 'auth', file: 'src/auth/x.js' }])
+   assert.deepEqual(Object.keys(p.riskHits[0]).sort(), ['file', 'pattern'])
+ })
+ 
+@@ -373,10 +400,11 @@ test('resolveChangeRisk 声明面判级：词表词在正文出现不再触发
+   const hit = resolveChangeRisk({ files: ['src/worktree.js', 'src/datetime.js'], blastDeclarations: decls })
+   assert.equal(hit.tier, 'S3')
+   assert.equal(hit.evidenceRequired, true)
+-  // 两表互不掺和：auth 路径只进 quick 风险表（QUICK_RISK_PATH_PATTERNS），不触发 blast 判级
++  // 两表互不掺和：auth 路径只进 quick 风险表（span_risk 声明表），不触发 blast 判级
+   const authOnly = resolveChangeRisk({ files: ['src/auth/login.js'], blastDeclarations: decls })
+   assert.equal(authOnly.tier, 'S1')
+-  // QUICK_RISK_PATH_PATTERNS 表自身零变化（D-011：本变更不迁不动）——auth 命中仍可计算
+-  const authRe = QUICK_RISK_PATH_PATTERNS.find(e => e.pattern === 'auth')
+-  assert.ok(authRe && authRe.re.test('src/auth/login.js'))
++  // span 风险面已迁项目声明表（2026-09-19-span-risk-pattern-migration D-011 收口 / D-003）：
++  // auth token 经注入编译表命中可计算（不再有硬编码表——等价性由 test/span-risk-surface.test.mjs 钉）
++  const [authEntry] = compileSpanRiskPatterns(['auth'])
++  assert.ok(authEntry && authEntry.re.test('src/auth/login.js'))
+ })
+diff --git a/test/scope-audit.test.mjs b/test/scope-audit.test.mjs
+index 661a413..83fde5a 100644
+--- a/test/scope-audit.test.mjs
++++ b/test/scope-audit.test.mjs
+@@ -1020,7 +1020,9 @@ test('FR-02 模式判定：quick id 形态命中但 guard 缺失 → ok=false 
+ 
+ // ───────────────────────── 组 8：quick 画像出口（2026-09-14-quick-exit-tiered-gates task-03，FR-04 / D-008） ─────────────────────────
+ 
+-/** _module-map.yaml 夹具（parseModuleMapSimple 可解析形态；m2 带 doc 卡片供 docClaim 断言） */
++/** _module-map.yaml 夹具（parseModuleMapSimple 可解析形态；m2 带 doc 卡片供 docClaim 断言；
++ *  span_risk 段为 D-005 夹具翻新——旧默认六域风险表已退役（2026-09-19-span-risk-pattern-migration），
++ *  声明面=map 顶层段，夹具按本组用例语义只声明最小 token 集（auth，供「L2 风险命中」实时态用例） */
+ function writeModuleMap(specBase, project = 'demo') {
+   const dir = join(specBase, 'docs', project, 'modules')
+   mkdirSync(dir, { recursive: true })
+@@ -1035,6 +1037,9 @@ function writeModuleMap(specBase, project = 'demo') {
+     '    doc: modules/m2.md',
+     '    paths:',
+     '      - src/api/',
++    'span_risk:',
++    '  # span 轴风险路径声明（token 扁平列表，形态对照本仓真实 map）',
++    '  - auth',
+     '',
+   ].join('\n'))
+ }
+diff --git a/src/span-risk-surface.js b/src/span-risk-surface.js
+new file mode 100644
+--- /dev/null
++++ b/src/span-risk-surface.js
+@@ -0,0 +1,127 @@
++/**
++ * span-risk-surface.js — 项目声明风险路径面（span 轴路径模式唯一输入源，2026-09-19-span-risk-pattern-migration D-003）
++ *
++ * 口径真相源：knowledge/conventions.md「判级/定价/门禁输入必须项目声明」条——src/
++ * change-risk-profile.js 的旧六域硬编码表（auth/permission/billing/migration/lock/
++ * scheduling 全宇宙路径模式，2026-09-19-span-risk-pattern-migration 已退役删除）是
++ * 判级/定价域最后一张违反该口径的表，本模块按 D-003 口径取而代之（表退役与消费面切换
++ * 见本变更 design.md）。
++ *
++ *   主声明 = `_module-map.yaml` 顶层 `span_risk:` 段（token 扁平字符串列表，进 git 手工
++ *   维护；modules rebuild --force 按未知顶层段原样回插保留——D-008@v2 机制）。token 只做
++ *   字面量编译（零新文法：无通配/正则语法，防 YAML 里写正则的转义与评审不可读问题），
++ *   编译口径与旧表逐字相同：前界 `(?:^|[/_-])` + 后界 `(?=[/._-]|$)` + `/i`——段边界锚定
++ *   防 author/booking/lockfile 类子串假阳（旧表 R-03 口径原样继承）。
++ *   未配置/坏声明项目 → 空表（span 模式维度关闭），禁止回退内置表——与 blast「未配置禁
++ *   回退」（2026-09-19-ceremony-pricing-five-cuts D-008 先例）同款取舍。
++ *
++ * 零依赖纯函数（compile/match）+ 两个 IO 装载器（仅 fs/path/js-yaml，与 blast-surface.js
++ * 同栈）；无 CLI/DB/锁副作用。装载容错立场同 parseModuleMapSimple / loadBlastDeclarations：
++ * 坏数据不缺省不拦截（map 缺失/坏 YAML/段非数组 → 空表，条目脏值逐条跳过）。
++ */
++import { readFileSync, existsSync, readdirSync } from 'fs'
++import { join } from 'path'
++import jsYaml from 'js-yaml'
++
++/** 正则字面量转义（先例：knowledge-classify.js escapeRegExp——token 只做字面量编译，防特殊字符注入文法） */
++function escapeRegExp(s) {
++  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
++}
++
++/**
++ * token 编译（纯函数）：token 字符串数组 → 边界锚定正则表。
++ *   逐 token：非字符串跳过（design 兼容策略：条目非字符串逐条跳过）；trim 后空串跳过；
++ *   重复 token 去重（首个保留，按 trim 后字面量判重）。产物 { pattern, re } 与旧六域
++ *   硬编码表条目同形（两消费面现有循环零适配消费）——pattern 为 token
++ *   原始字面量（审计标签，ceremony reasons / quick riskHits 输出用），re 编译为
++ *   `(?:^|[/_-])<token>(?=[/._-]|$)` /i。
++ * @param {string[]} tokens
++ * @returns {Array<{pattern: string, re: RegExp}>}
++ */
++export function compileSpanRiskPatterns(tokens) {
++  if (!Array.isArray(tokens)) return []
++  const seen = new Set()
++  const out = []
++  for (const raw of tokens) {
++    if (typeof raw !== 'string') continue // 条目非字符串逐条跳过（手工维护数据容错）
++    const token = String(raw).trim()
++    if (token === '') continue // 空/纯空白 token 跳过
++    if (seen.has(token)) continue // 重复 token 去重（首个保留）
++    seen.add(token)
++    out.push({ pattern: token, re: new RegExp('(?:^|[/_-])' + escapeRegExp(token) + '(?=[/._-]|$)', 'i') })
++  }
++  return out
++}
++
++/**
++ * 共享命中语义（纯函数）：files × patterns → `[{ pattern, file }]` 扁平命中数组
++ * （两消费面 span 命中的单一语义）。files 逐条反斜杠归一 POSIX（Windows 兼容）并过滤
++ * 空串；patterns 逐条防御（null/非对象/re 非 RegExp 跳过）；global 正则每次 test 前归零
++ * lastIndex——调用方多次调用语义安全（先例：src/ceremony-tier.js span 命中循环同款写法）。
++ * @param {string[]} files 变更文件面
++ * @param {Array<{pattern: string, re: RegExp}>} patterns compileSpanRiskPatterns 产物
++ * @returns {Array<{pattern: string, file: string}>} file 为归一后（POSIX）路径
++ */
++export function matchSpanRiskPatterns(files, patterns) {
++  const norm = (Array.isArray(files) ? files : []).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
++  const list = Array.isArray(patterns) ? patterns : []
++  const hits = []
++  for (const file of norm) {
++    for (const entry of list) {
++      if (entry == null || typeof entry !== 'object') continue
++      const re = entry.re
++      if (!(re instanceof RegExp)) continue
++      if (re.global) re.lastIndex = 0 // 防调用方传入 /g 正则跨文件携带 lastIndex 状态
++      if (re.test(file)) hits.push({ pattern: entry.pattern, file })
++    }
++  }
++  return hits
++}
++
++/**
++ * 声明面装载（IO，project 域）：`docs/<project>/modules/_module-map.yaml` 顶层 `span_risk:`
++ * 段（token 字符串数组）→ 编译产物。容错逐款对照 loadBlastDeclarations（src/blast-surface.js）：
++ * map 缺失/坏 YAML/顶层非对象/段非数组 → 空表（不缺省不拦截）；条目脏值经
++ * compileSpanRiskPatterns 逐条跳过。无声明 = span 模式维度关闭（禁回退内置表）。
++ * @param {{ specBase: string, project?: string|null }} opts specBase=.sillyspec 根；project=子项目名
++ * @returns {Array<{pattern: string, re: RegExp}>}
++ */
++export function loadSpanRiskPatterns({ specBase, project = null } = {}) {
++  if (!specBase || !project) return []
++  const mapPath = join(specBase, 'docs', project, 'modules', '_module-map.yaml')
++  try {
++    if (existsSync(mapPath)) {
++      const doc = jsYaml.load(readFileSync(mapPath, 'utf8'))
++      const spanRisk = doc && typeof doc === 'object' ? doc.span_risk : null
++      if (Array.isArray(spanRisk)) return compileSpanRiskPatterns(spanRisk)
++    }
++  } catch { /* 坏 map → 空表（手工数据容错，不拦截判级） */ }
++  return []
++}
++
++/**
++ * 多项目并集装载（事实面用——调用方无 project 语境时扫各 docs/<project>/modules/
++ * _module-map.yaml 取全部项目声明并集）：跨项目 token 按 trim 后字面量去重（并集语义，
++ * 防重复 pattern 在消费面重复计命中条数）；任一项目装载异常 → 该项目按空表跳过
++ * （loadSpanRiskPatterns 内建 catch；形态对照 loadBlastDeclarationsAllProjects）。
++ * @param {{ specBase: string }} opts
++ * @returns {Array<{pattern: string, re: RegExp}>}
++ */
++export function loadSpanRiskPatternsAllProjects({ specBase } = {}) {
++  const all = []
++  if (!specBase) return all
++  try {
++    const docsDir = join(specBase, 'docs')
++    if (!existsSync(docsDir)) return all
++    const seen = new Set()
++    for (const entry of readdirSync(docsDir, { withFileTypes: true })) {
++      if (!entry.isDirectory()) continue
++      for (const p of loadSpanRiskPatterns({ specBase, project: entry.name })) {
++        if (seen.has(p.pattern)) continue
++        seen.add(p.pattern)
++        all.push(p)
++      }
++    }
++  } catch { /* docs 目录不可读 → 空表（手工数据容错） */ }
++  return all
++}
+
+diff --git a/test/span-risk-surface.test.mjs b/test/span-risk-surface.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/span-risk-surface.test.mjs
+@@ -0,0 +1,239 @@
++/**
++ * span-risk-surface 测试（2026-09-19-span-risk-pattern-migration task-01 / FR-01 / FR-05 / D-003）
++ *
++ * 覆盖：
++ *   1. 编译等价性钉（核心，R-02）：六域 21 token 展开集经 compileSpanRiskPatterns 编译后，
++ *      对 35 条代表性路径（正反例，21 token 全覆盖）逐文件断言——新表命中 ⇔ 旧六域正则
++ *      任一命中（双向同命中同不命中）、命中条数相等、命中 token 集=绝对期望、同文件同域
++ *      至多 1 token 命中（互斥钉：oauth vs oauth2、job vs jobs 等段边界锚定）。旧表六条
++ *      正则以测试内常量 LEGACY 逐字快照（源：src/change-risk-profile.js:36-43——本 task
++ *      时点表还在 src；task-03 删表后本快照仍可对照，等价性钉不随退役失效）。
++ *   2. compile 容错：非字符串/空白/重复 token 跳过与去重（首个保留）；产物 {pattern, re}
++ *      形态（边界锚定 /i、特殊字符只做字面量）
++ *   3. match：Windows 反斜杠归一、空串过滤、patterns 元素防御（null/非对象/re 非 RegExp
++ *      跳过）、global 正则 lastIndex 跨文件/跨调用防御
++ *   4. load 容错（tmp 夹具）：无 span_risk 段 → []、段非数组 → []、条目脏值混入 → 只留
++ *      合法、坏 YAML → []、map 缺失 → []（不回退内置表）
++ *   5. AllProjects：tmp 多项目 token 并集（跨项目去重）+ 单项目坏 map 跳过 + docs 缺失空表
++ *   6. export 形状钉：四导出 typeof function
++ */
++import { test, after } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++import {
++  compileSpanRiskPatterns,
++  matchSpanRiskPatterns,
++  loadSpanRiskPatterns,
++  loadSpanRiskPatternsAllProjects,
++} from '../src/span-risk-surface.js'
++
++// ── 旧表六条正则逐字快照（src/change-risk-profile.js:36-43；task-03 删表后即为独立对照基准）──
++const LEGACY = [
++  { pattern: 'auth', re: /(?:^|[/_-])(?:oauth2?|auth(?:orization|entication|enticator)?)(?=[/._-]|$)/i },
++  { pattern: 'permission', re: /(?:^|[/_-])permissions?(?=[/._-]|$)/i },
++  { pattern: 'billing', re: /(?:^|[/_-])billing(?=[/._-]|$)/i },
++  { pattern: 'migration', re: /(?:^|[/_-])(?:migrations?|migrate)(?=[/._-]|$)/i },
++  { pattern: 'lock', re: /(?:^|[/_-])(?:locks?|mutex(?:es)?)(?=[/._-]|$)/i },
++  { pattern: 'scheduling', re: /(?:^|[/_-])(?:schedul(?:er|ing)|cron|jobs?)(?=[/._-]|$)/i },
++]
++
++// ── 六域 21 token 展开集（LEGACY 六条正则的全部 alternation 逐项展开）──
++const TOKENS = [
++  'auth', 'authorization', 'authentication', 'authenticator', 'oauth', 'oauth2',
++  'permission', 'permissions',
++  'billing',
++  'migration', 'migrations', 'migrate',
++  'lock', 'locks', 'mutex', 'mutexes',
++  'scheduler', 'scheduling', 'cron', 'job', 'jobs',
++]
++
++// token → 旧域映射（互斥钉用：同文件同域至多 1 token 命中）
++const TOKEN_DOMAIN = new Map([
++  ['auth', 'auth'], ['authorization', 'auth'], ['authentication', 'auth'], ['authenticator', 'auth'], ['oauth', 'auth'], ['oauth2', 'auth'],
++  ['permission', 'permission'], ['permissions', 'permission'],
++  ['billing', 'billing'],
++  ['migration', 'migration'], ['migrations', 'migration'], ['migrate', 'migration'],
++  ['lock', 'lock'], ['locks', 'lock'], ['mutex', 'lock'], ['mutexes', 'lock'],
++  ['scheduler', 'scheduling'], ['scheduling', 'scheduling'], ['cron', 'scheduling'], ['job', 'scheduling'], ['jobs', 'scheduling'],
++])
++
++// ── 代表性路径集（35 条，21 token 正例全覆盖 + 边界锚定反例）──
++// 每条 [路径, 期望命中 token 集]；期望集独立于两侧实现写死，防新旧连带漂移。
++const PATH_CASES = [
++  // 正例（21 token 全覆盖；互斥：同段只长形式命中，短形式被后界锚定挡住）
++  ['src/auth/x.js', ['auth']],
++  ['user-auth.js', ['auth']],                        // 前界含 -
++  ['AUTH/login.js', ['auth']],                       // /i 大小写不敏感
++  ['src/authorization/grant.js', ['authorization']], // auth+orization 不串
++  ['src/authentication/ldap.js', ['authentication']],
++  ['src/authenticator/totp.js', ['authenticator']],
++  ['src/oauth/index.js', ['oauth']],
++  ['src/oauth2/token.js', ['oauth2']],               // oauth 被「2」挡住（互斥钉）
++  ['src/permission/show.js', ['permission']],
++  ['src/permissions/admin.js', ['permissions']],     // permission 被「s」挡住（互斥钉）
++  ['src/billing/invoice.js', ['billing']],
++  ['db/migrations/001.sql', ['migrations']],         // migration 被尾 s 挡住
++  ['src/migration/alter.sql', ['migration']],
++  ['src/migrate.js', ['migrate']],
++  ['docs-migrate.js', ['migrate']],
++  ['src/lock/a.js', ['lock']],
++  ['src/locks/redis.js', ['locks']],
++  ['src/mutex-guard.js', ['mutex']],                 // 后界含 -（mutex-guard 命中 mutex）
++  ['src/mutexes/x.js', ['mutexes']],
++  ['src/scheduler.js', ['scheduler']],
++  ['src/scheduling/queue.js', ['scheduling']],
++  ['src/cron/tick.js', ['cron']],
++  ['src/job/queue.js', ['job']],                     // jobs 不命中（后界 / 挡住）
++  ['src/jobs/worker.js', ['jobs']],                  // job 被「s」挡住（互斥钉）
++  ['src/auth/migration.js', ['auth', 'migration']],  // 多域命中：条数=2（新表 token 数=旧表域数）
++  // 反例（边界锚定防子串假阳 / 非六域 token）
++  ['author.js', []],                                 // auth+or 不命中
++  ['booking.js', []],
++  ['lockfile.js', []],                               // lock+file 不命中
++  ['src/locked.js', []],                             // lock+ed 不命中
++  ['src/schedule.js', []],                           // schedul ≠ scheduler/scheduling
++  ['src/jobby.js', []],                              // job+by 不命中
++  ['src/oauth2client/x.js', []],                     // oauth2+client 不命中
++  ['src/billings-report.js', []],                    // billing+s 不命中
++  ['src/dispatch/a.js', []],                         // dispatch 非六域 token（本仓自举才有）
++  ['src/unrelated/x.js', []],
++]
++
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++after(() => {
++  for (const d of tmpRoots) {
++    try { rmSync(d, { recursive: true, force: true }) } catch { /* best-effort */ }
++  }
++})
++
++test('export 形状钉：四导出均为 function', () => {
++  for (const fn of [compileSpanRiskPatterns, matchSpanRiskPatterns, loadSpanRiskPatterns, loadSpanRiskPatternsAllProjects]) {
++    assert.equal(typeof fn, 'function')
++  }
++})
++
++test('compile 产物形态：{pattern, re} 边界锚定 /i + 特殊字符只做字面量', () => {
++  const [p] = compileSpanRiskPatterns(['auth'])
++  assert.equal(p.pattern, 'auth')
++  assert.equal(p.re.source, '(?:^|[/_-])auth(?=[/._-]|$)')
++  assert.equal(p.re.flags, 'i')
++  assert.ok(!p.re.global)
++  // 特殊字符字面量编译（零新文法：token 不被当正则解释）
++  const [dot] = compileSpanRiskPatterns(['a.b'])
++  assert.ok(dot.re.test('src/a.b/x.js'))
++  assert.ok(!dot.re.test('src/aXb/x.js'))
++})
++
++test('compile 容错：非字符串/空白/重复 token 跳过与去重（首个保留）', () => {
++  const out = compileSpanRiskPatterns(['auth', 123, null, true, undefined, {}, ['x'], '', '   ', 'billing', 'auth', ' auth ', 'billing '])
++  assert.deepEqual(out.map((p) => p.pattern), ['auth', 'billing'])
++  assert.ok(out.every((p) => p.re instanceof RegExp))
++  // 非数组入参 → []
++  assert.deepEqual(compileSpanRiskPatterns(null), [])
++  assert.deepEqual(compileSpanRiskPatterns('auth'), [])
++})
++
++test('match：反斜杠归一/空串过滤/元素防御/global lastIndex 防御', () => {
++  const patterns = compileSpanRiskPatterns(['auth', 'billing'])
++  // Windows 反斜杠归一（file=归一后 POSIX 路径）；空串过滤
++  const hits = matchSpanRiskPatterns(['src\\auth\\x.js', '', 'src\\billing\\a.js'], patterns)
++  assert.deepEqual(hits, [
++    { pattern: 'auth', file: 'src/auth/x.js' },
++    { pattern: 'billing', file: 'src/billing/a.js' },
++  ])
++  // patterns 元素防御：null/非对象/re 非 RegExp 逐条跳过，合法条目照常命中
++  const defended = matchSpanRiskPatterns(['src/auth/a.js'], [null, 'garbage', 42, { pattern: 'x' }, { pattern: 'y', re: 'not-a-regexp' }, ...patterns])
++  assert.deepEqual(defended, [{ pattern: 'auth', file: 'src/auth/a.js' }])
++  // global 正则 lastIndex 防御：同批多文件 + 跨多次调用结果一致（无防御时第 2 个文件起失配）
++  const g = { pattern: 'auth', re: /(?:^|[/_-])auth(?=[/._-]|$)/gi }
++  const batch1 = matchSpanRiskPatterns(['src/auth/1.js', 'src/auth/2.js'], [g])
++  const batch2 = matchSpanRiskPatterns(['src/auth/1.js', 'src/auth/2.js'], [g])
++  assert.equal(batch1.length, 2)
++  assert.equal(batch2.length, 2)
++  assert.deepEqual(batch2.map((h) => h.file), ['src/auth/1.js', 'src/auth/2.js'])
++  // 非数组入参防御
++  assert.deepEqual(matchSpanRiskPatterns(null, patterns), [])
++  assert.deepEqual(matchSpanRiskPatterns(['src/auth/x.js'], null), [])
++})
++
++test('编译等价性钉：21 token 新表 ⇔ 旧六域正则（双向同命中 + 条数相等 + 同域互斥）', () => {
++  const patterns = compileSpanRiskPatterns(TOKENS)
++  assert.equal(patterns.length, 21, '21 token 全部编译（无去重误伤）')
++  for (const [file, expectedTokens] of PATH_CASES) {
++    const newHits = matchSpanRiskPatterns([file], patterns).map((h) => h.pattern)
++    const legacyHits = LEGACY.filter((e) => e.re.test(file)).map((e) => e.pattern)
++    // 双向：新表命中 ⇔ 旧表任一正则命中（同命中同不命中）
++    assert.equal(newHits.length > 0, legacyHits.length > 0, `${file} 命中面双向一致（新 ${JSON.stringify(newHits)} vs 旧 ${JSON.stringify(legacyHits)}）`)
++    // 条数相等（互斥前提下：新表 token 命中数 = 旧表域命中数）
++    assert.equal(newHits.length, legacyHits.length, `${file} 命中条数一致（新 ${JSON.stringify(newHits)} vs 旧 ${JSON.stringify(legacyHits)}）`)
++    // 绝对期望（独立于两侧实现，防新旧连带漂移）
++    assert.deepEqual([...newHits].sort(), [...expectedTokens].sort(), `${file} 命中 token 集=期望 ${JSON.stringify(expectedTokens)}`)
++    // 互斥钉：同文件同域至多 1 token 命中（oauth vs oauth2、job vs jobs 等段边界锚定）
++    const domains = newHits.map((t) => TOKEN_DOMAIN.get(t))
++    assert.equal(new Set(domains).size, domains.length, `${file} 同文件同域至多 1 token 命中（新 ${JSON.stringify(newHits)}）`)
++  }
++})
++
++test('load 容错：无段/段非数组/脏条目/坏 YAML/map 缺失 → 空表或只留合法', () => {
++  const rt = makeTmpDir('srs-load-')
++  const projDir = join(rt, 'docs', 'demo', 'modules')
++  mkdirSync(projDir, { recursive: true })
++  const mapPath = join(projDir, '_module-map.yaml')
++
++  // 好形态 map（块式 YAML，token 装载为编译产物）
++  writeFileSync(mapPath, ['schema_version: 2', 'modules:', '  a:', '    status: active', 'span_risk:', '  - auth', '  - billing'].join('\n'), 'utf8')
++  let out = loadSpanRiskPatterns({ specBase: rt, project: 'demo' })
++  assert.deepEqual(out.map((p) => p.pattern), ['auth', 'billing'])
++  assert.ok(out[0].re instanceof RegExp && out[0].re.test('src/auth/x.js'))
++
++  // 无 span_risk 段 → []（维度关闭，不回退内置表）
++  writeFileSync(mapPath, 'modules:\n  a:\n    status: active\n', 'utf8')
++  assert.deepEqual(loadSpanRiskPatterns({ specBase: rt, project: 'demo' }), [])
++
++  // 段非数组（标量 / 映射）→ []
++  writeFileSync(mapPath, 'span_risk: auth\n', 'utf8')
++  assert.deepEqual(loadSpanRiskPatterns({ specBase: rt, project: 'demo' }), [])
++  writeFileSync(mapPath, 'span_risk:\n  a: b\n', 'utf8')
++  assert.deepEqual(loadSpanRiskPatterns({ specBase: rt, project: 'demo' }), [])
++
++  // 条目脏值混入 → 只留合法（数字/null/对象/空串/纯空白跳过；空白 token trim 生效）
++  writeFileSync(mapPath, 'span_risk:\n  - auth\n  - 123\n  - null\n  - {}\n  - ""\n  - "   "\n  - " billing "\n  - cron\n', 'utf8')
++  out = loadSpanRiskPatterns({ specBase: rt, project: 'demo' })
++  assert.deepEqual(out.map((p) => p.pattern), ['auth', 'billing', 'cron'])
++
++  // 坏 YAML → []
++  writeFileSync(mapPath, '{not yaml', 'utf8')
++  assert.deepEqual(loadSpanRiskPatterns({ specBase: rt, project: 'demo' }), [])
++
++  // map 缺失 → []
++  assert.deepEqual(loadSpanRiskPatterns({ specBase: rt, project: 'no-such' }), [])
++})
++
++test('AllProjects 并集：多项目 token 并集（跨项目去重）+ 单项目坏 map 跳过', () => {
++  const rt = makeTmpDir('srs-all-')
++  const mk = (project, lines) => {
++    const dir = join(rt, 'docs', project, 'modules')
++    mkdirSync(dir, { recursive: true })
++    writeFileSync(join(dir, '_module-map.yaml'), lines.join('\n'), 'utf8')
++  }
++  mk('alpha', ['span_risk:', '  - auth', '  - billing'])
++  mk('beta', ['span_risk:', '  - billing', '  - cron']) // billing 跨项目重复 → 去重
++  mk('broken', ['{not yaml'])                            // 坏 map → 该项目按空表跳过
++  mk('empty', ['modules:', '  a:', '    status: active']) // 无段项目 → 空表
++  writeFileSync(join(rt, 'docs', 'plain-file.md'), 'x', 'utf8') // docs 下非目录项跳过
++  const all = loadSpanRiskPatternsAllProjects({ specBase: rt })
++  assert.deepEqual(all.map((p) => p.pattern).sort(), ['auth', 'billing', 'cron'])
++  assert.ok(all.every((p) => p.re instanceof RegExp))
++  // docs 目录缺失 → 空表
++  const rt2 = makeTmpDir('srs-none-')
++  assert.deepEqual(loadSpanRiskPatternsAllProjects({ specBase: rt2 }), [])
++})

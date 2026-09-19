@@ -1,12 +1,12 @@
 ---
 author: qinyi
 created_at: 2026-06-01T09:05:00+08:00
-updated_at: 2026-09-14T22:40:00+08:00
+updated_at: 2026-09-19T18:10:00+08:00
 ---
 
 # setup
-> 最后更新：2026-09-14
-> 最近变更：2026-09-14-change-ownership-guards（config-schema 登记 live 键 change-ownership.heartbeat_minutes + local.yaml.example 注释段——所有者活跃心跳窗，reader=src/progress/change-registry.js 心跳窗解析）/ 2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
+> 最后更新：2026-09-19
+> 最近变更：2026-09-19-span-risk-pattern-migration（config-schema ceremony 段 note 补 span 轴输入源表述——项目声明 _module-map.yaml 顶层 span_risk 段、无声明项目该维关闭不回退内置表；纯 note 同步无新 local 键）/ 2026-09-14-change-ownership-guards（config-schema 登记 live 键 change-ownership.heartbeat_minutes + local.yaml.example 注释段——所有者活跃心跳窗，reader=src/progress/change-registry.js 心跳窗解析）/ 2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
 > 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
 
 ## 职责
@@ -26,6 +26,8 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 新增 live 键 `decisions.behind_threshold`（`src/config-schema.js:189`，决策 behind 复核阈值缺省 10，reader 为 `readDecisionRulesConfig` src/docs-check.js）；renderExample 落盘段与示例注释同步扩。
 
 2026-09-14-change-ownership-guards 新增 live 键 `change-ownership.heartbeat_minutes`（`src/config-schema.js`，optional integer，缺省 15）——change 所有权活跃心跳窗口（分钟）：owner 非本会话且 last_active 距今在窗口内 → 拒绝接管类操作（`--takeover` 显式接管）；窗口外 → 放行并自动接管。reader 为 `resolveHeartbeatMs`（src/progress/change-registry.js 模块私有，唯一消费方 `assertChangeOwnership` 的心跳窗缺省解析——定向行扫描不引 YAML 依赖；值非正整数（含 0）回落缺省，防误配把活跃窗清零废掉护栏）；判级语义与接线见 progress / runtime / cli-entry 卡。`renderExample()` 落 local.yaml.example 注释段同步。
+
+2026-09-19-span-risk-pattern-migration：ceremony 段 note 补 span 轴路径模式输入源表述（项目声明 `_module-map.yaml` 顶层 `span_risk` 段，装载 src/span-risk-surface.js；无声明项目该维关闭不回退内置表）——纯 note 文本同步，无新 local 键（span 轴 token 集无逐机覆盖语义，不设 blast_surfaces 式覆盖键）。
 
 **local-detect.js** 是纯 fs 项目类型嗅探（detectLocalYaml）：不 spawn 子进程、不耗 token，几秒完成项目类型判定；只返回数据结构不写盘（create/gate 无需为此跑完整 scan），落盘由 CLI 路由 / scan.js 调用方负责。
 
@@ -81,3 +83,4 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 |------|--------|------|
 | 2026-08-19 | ql-20260819-015-65fa | init.js 子项目 repo 探测的 git remote get-url 改 execFileSync（去 shell 注入面） |
 | 2026-09-14 | 2026-09-14-change-ownership-guards | config-schema.js 登记 live 键 `change-ownership.heartbeat_minutes`（optional integer，缺省 15；reader=src/progress/change-registry.js `resolveHeartbeatMs`）+ local.yaml.example 注释段（task-01） |
+| 2026-09-19 | 2026-09-19-span-risk-pattern-migration | config-schema.js ceremony 段 note 补 span 轴路径模式输入源表述（项目声明 _module-map.yaml 顶层 span_risk 段、无声明项目该维关闭不回退内置表；无新 local 键） |

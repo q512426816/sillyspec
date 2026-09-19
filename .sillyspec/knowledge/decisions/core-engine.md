@@ -341,3 +341,30 @@ supersedes：D-001@v1
 理由：不能——那个数是希望，写进 design 会变成无法证伪的成功标准。验收两条：①**清单上的每一条都能只靠材料包回答**；②**复审 prompt 里不再出现「读完整 design / 宁可多读」**（机械可查——补一条回归钉：grep 阶段 prompt 模板断言无此类指令字样）。
 故障面：验收②的机械钉可能误伤合法表述（如「可按需定向查证」与「宁可多读」边界）——钉只匹配「必须读取完整/素材宁可多读」两个原语，正则收窄。
 退役判据：无。
+
+## D-001@v1 范围与硬约束——六模式表迁项目声明，价目表/blast 段零改动
+状态：implemented
+变更：2026-09-19-span-risk-pattern-migration
+锚点：未记录
+最近确认：c796534
+理由：迁移=六模式表自硬编码改项目声明（形态在方案步定），两消费面（①ceremony-tier.js:218 span 轴命中→至少 S2；②quick-gate-profile.js:148 computeGateProfile 默认 riskTable 命中→L2+runtimeEvidence advisory）按方案期决策切换。硬约束（用户原话逐条）：**价目表不动**（三轴 max 公式、阈值 8/2、force_tier 只升不降）；**blast 声明面（blast 段）不动**——只迁 span 的路径模式；quick 画像消费面与定价消费面口径**可以分开迁也可以一起**（design 定）；risk_level 先行纪律（design frontmatter 首次定价前声明）。
+故障面：迁移中匹配语义漂移（口径变化伪装成迁移）——以「同 token 集 ⇒ 逐字节同命中」等价性钉对冲（方案步定）。
+退役判据：若 span 轴整体改结构化输入（非路径模式），本机制随轴退役。
+
+## D-003@v1 方案 A——map 顶层 span_risk 段（token 扁平列表）+ 空缺省 + 双消费面同刀 + 硬退役
+状态：implemented
+变更：2026-09-19-span-risk-pattern-migration
+锚点：未记录
+最近确认：c796534
+理由：选 A（用户简报显式委托方案期定夺——原话「形态 brainstorm 定」「缺省行为、本仓自举表、两消费面切换、向后兼容（无声明项目）都在方案期落决策」；本条 agent 按委托选定，可 --reopen 否决）。理由：①与 blast 管道同构（D-008 先例：map 主声明进 git 可评审、modules rebuild --force 未知顶层段通用回插已覆盖 span_risk、装载容错立场「坏段跳过不拦截」现成）；②B 被等价问题显式否决过——local.yaml gitignore 每机一份当共享价目表（D-008 evidence 原文「local.yaml 当共享价目表」被否）；③C 与 blast「未配置禁止回退」（D-008）正面冲突且让全宇宙表活在缺省路径，违反知识库 conventions「判级/定价/门禁输入必须项目声明，禁全宇宙词表」口径真相源条目。覆盖决策：符合 D-001（价目表公式零改动）、不违 D-002（不触碰 blast 段）。
+故障面：①无声明项目静默失去六域网（auth/billing 路径不再触发 span S2 / quick L2）——以 known-issues/文档登记 + 本仓自举表示范对冲，blast 迁移同款取舍；②token 写错（拼错/过宽）静默失配——token 为纯字面量可评审，装载数量进 reasons 审计。
+退役判据：若 span 轴改结构化输入或 pattern 声明并入 blast 段 schema 升版，本段形态随之退役。
+
+## D-005@v1 执行期裁决——连带测试翻新面扩展两文件（Grill 枚举遗漏）+ design 阈值措辞修正
+状态：implemented
+变更：2026-09-19-span-risk-pattern-migration
+锚点：未记录
+最近确认：c796534
+理由：扩翻新面：两测试文件补翻新（夹具 map 补 span_risk 段走真实装载路径——比注入更端到端），design 文件清单/任务卡 allowed_paths/tasks.md 同步扩面；阈值措辞全文修正为「阈值 8/3/2 三常量」（约束实质=三常量零改动，已满足且继续满足）。非破坏性：可逆、局部、不改 D-001~D-004 语义、不越变更边界（两文件属本变更行为契约的直接连带测试，FR-03 同类翻新义务）。
+故障面：夹具补段后夹具 map 与真实 map 演进脱节（token 变更夹具不跟）——夹具只钉本变更语义所需最小 token 集（auth 族），真实口径以仓 map 为准。
+退役判据：无（连带翻新属一次性收口）。

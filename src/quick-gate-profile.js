@@ -6,7 +6,10 @@
  * （_module-map.yaml 解析结果），输出 L0/L1/L2 画像与检查项，供 Wave 2 接线消费
  * （run/shared.js 挂 review.gateProfile → complete-handlers 落账 / quick-audit 打印 /
  * scope-audit 表格与 --json 双出口）。本模块零 IO、零子进程：moduleIndex、风险表、阈值
- * 全部由参数或默认值提供（D-007 独立纯函数模块；R-04 画像=纯字符串运算）。
+ * 全部由参数或默认值提供（D-007 独立纯函数模块；R-04 画像=纯字符串运算）。风险表自
+ * 2026-09-19-span-risk-pattern-migration D-003 起为声明面口径：默认空表=风险维度关闭，
+ * 项目声明表（_module-map.yaml 顶层 span_risk 段）经 opts.riskTable 注入
+ * （loadSpanRiskPatterns 产物装载），不再内嵌全宇宙表。
  *
  * 判级（阈值只引用 THRESHOLDS 常量，不散落字面量）：
  *   正常态（moduleIndex 可用）：L2 = 跨 ≥L2_SPAN 模块 或 风险命中；L1 = 跨 ≥L1_SPAN 模块
@@ -25,7 +28,6 @@
  *                   .sillyspec/docs/ 前缀——模块卡与 changelog sidecar 均 .md 天然覆盖），
  *                   文档文件不计入 testFileCount/codeFileCount，也不参与模块归属与风险命中。
  */
-import { QUICK_RISK_PATH_PATTERNS } from './change-risk-profile.js'
 
 /** 代码内默认阈值（task-05 真实图谱校准定稿，缺省行为的单一事实源；local.yaml quick-gate 段可覆写，D-009）。
  *  定稿依据（2026-09-14，sillyhub 919 条 quicklog × 5 份真实 _module-map.yaml 重算交叉表，
@@ -138,14 +140,16 @@ function cardInFiles(doc, fileSet) {
  * @param {string[]} changedFiles 变更文件（CLI 审计链 git 事实；反斜杠自动归一 POSIX）
  * @param {object|null} moduleIndex _module-map.yaml 解析结果（null/undefined/空 → degraded）
  * @param {object} [opts]
- * @param {Array<{pattern: string, re: RegExp}>} [opts.riskTable] 路径模式风险表（默认 QUICK_RISK_PATH_PATTERNS）
+ * @param {Array<{pattern: string, re: RegExp}>} [opts.riskTable] 路径模式风险表（默认空表=
+ *   风险维度关闭；项目声明表经注入——loadSpanRiskPatterns 产物，
+ *   2026-09-19-span-risk-pattern-migration D-003）
  * @param {object} [opts.thresholds] 已合并阈值（resolveGateThresholds 产物；缺省用 THRESHOLDS，D-009）
  * @param {Array<{path: string}>} [opts.fileNotes] --file-notes 解析结果（perFileNotes 覆盖率判定）
  * @param {boolean} [opts.noDocs] --no-docs 显式豁免（docClaim → exempt-no-docs）
  * @returns 画像对象（字段与判级规则见 design.md 接口定义）
  */
 export function computeGateProfile(changedFiles, moduleIndex, opts = {}) {
-  const riskTable = Array.isArray(opts.riskTable) ? opts.riskTable : QUICK_RISK_PATH_PATTERNS
+  const riskTable = Array.isArray(opts.riskTable) ? opts.riskTable : [] // 默认空表=风险维度关闭（声明表经注入，D-003）
 
   // 阈值：opts.thresholds 逐键取合法值，否则回 THRESHOLDS 默认（warn 责任在 resolveGateThresholds）
   const th = {}

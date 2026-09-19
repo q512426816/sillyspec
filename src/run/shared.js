@@ -23,6 +23,7 @@ import { createHash } from 'node:crypto'
 // 分级门禁画像信号层（2026-09-14-quick-exit-tiered-gates task-01 / FR-02）：纯函数零 IO，
 // 仅依赖 change-risk-profile，无环——auditQuickCompletion 静态 import 安全（task-02 接线）。
 import { computeGateProfile, resolveGateThresholds } from '../quick-gate-profile.js'
+import { loadSpanRiskPatterns } from '../span-risk-surface.js'
 export { safeGit, unquoteGitPath }
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -1771,10 +1772,15 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
         } catch { /* 坏 YAML → 纯默认阈值 */ }
       }
       const gateFiles = result.changedFiles.filter(f => !isQuicklogFileLineNoise(f, guard.linkedChanges))
+      // span 声明面装载（2026-09-19-span-risk-pattern-migration task-03）：与 loadQuickModuleIndex 同
+      // specBase/projectName 上下文（_module-map.yaml 顶层 span_risk 段）→ gateOpts.riskTable；
+      // 无声明项目 → 空表（riskTable 已默认 []，此处显式装载与其他声明面入参同风格，D-003）
+      const riskTable = loadSpanRiskPatterns({ specBase, project: projectName })
       const gateOpts = {
         ...(thresholds ? { thresholds } : {}),
         ...(noDocs ? { noDocs: true } : {}),
         ...(Array.isArray(fileNotes) && fileNotes.length > 0 ? { fileNotes } : {}),
+        riskTable,
       }
       const moduleIndex = await loadQuickModuleIndex(specBase, projectName)
       result.gateProfile = computeGateProfile(gateFiles, moduleIndex, gateOpts)

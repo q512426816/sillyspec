@@ -158,3 +158,14 @@ execute 期在隔离 worktree 内跑 `npm test` 全量时，CLI 子进程类测�
 **根因**：未定位——差异仅在 CLI 进程内派生子进程的未识别条件（疑并发压力或 hook 环境）。
 **护栏**：audit 逃逸通道（SILLYSPEC_QUICK_TEST_GATE=skip 带证据留痕）；复现时先独立验证同命令再定性。
 **证据**：quick-450636f3 三连红输出；主代理 8 次复现全绿（含 env 注入假说排除）。
+
+## blast 自举声明表未落 main（2026-09-19-ceremony-pricing-five-cuts 归档 --skip-apply 遗留）
+
+**事实**：main 的 `.sillyspec/docs/sillyspec/modules/_module-map.yaml` 无 blast 段——上一变更的 30 前缀 blast 自举表只存在于悬空提交 bbe30ab（无分支包含），归档走 --skip-apply 留下缺口（skip-apply.record.json 在案）。
+**影响**：main 定价 blast 轴全仓 S1 起步（声明面缺失=无命中，不缺省不拦截）——本应 S3/S2 的危险域声明（worktree/progress 等）在 main 不生效。
+**恢复路径**：独立变更自 bbe30ab 取 blast 段文本落 map（`git show bbe30ab:.sillyspec/docs/sillyspec/modules/_module-map.yaml`）。本变更（2026-09-19-span-risk-pattern-migration）按硬约束 D-002 未触碰（不新增不恢复 blast 段，只登记不修）。
+
+## span 六域通用路径表已退役为项目声明（无声明项目维度关闭）
+
+2026-09-19-span-risk-pattern-migration 起，旧六域硬编码表（src/change-risk-profile.js 的 QUICK_RISK_PATH_PATTERNS，auth/permission/billing/migration/lock/scheduling）退役删除：span 模式维（ceremony 定价 span 轴第三维）与 quick 画像 riskTable 只认 `_module-map.yaml` 顶层 `span_risk` 段（装载 src/span-risk-surface.js）。**行为面变化**：无声明项目不再有 auth/billing 等六域命中——span 轴不再推 S2、quick 不再因风险路径升 L2 + runtimeEvidence='required'（blast 迁移同款取舍：未配置禁回退，R-01）；项目按需自声明，声明示例见 src/span-risk-surface.js 头注。
+

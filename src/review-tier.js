@@ -40,6 +40,7 @@ import { resolveChangeRisk, extractExplicitRiskLevel } from './change-risk-profi
 import { readFileSync, existsSync } from 'fs'
 import { join, dirname, basename } from 'path'
 import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
+import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
 
 /**
  * 审查分级阈值：变更文件数 ≤ 此值 → 旧启发式断路器命中（brownfield 兼容倾向 self）。
@@ -108,6 +109,10 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
   let blastInput = null
   let blastSource = null
   let explicitInput = null
+  // span 轴声明面（2026-09-19-span-risk-pattern-migration task-03）：与 blast 实判同 caliber——
+  // designPath 可读时按其推导 specBase 装载 AllProjects 并集（loadBlastDeclarationsAllProjects
+  // 同款用法）；riskDetection 透传（调用方自带判级）或推导失败 → 空表（span 模式维关闭，D-003）
+  let spanRiskPatterns = []
   if (hasRiskDetection) {
     blastInput = riskDetection
     blastSource = `riskDetection.level=${riskDetection.level}`
@@ -120,6 +125,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
       // （非常规路径）→ 空声明面（S1 起步不拦审查分级）。
       const specBase = dirname(dirname(dirname(designPath)))
       const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase })
+      spanRiskPatterns = loadSpanRiskPatternsAllProjects({ specBase })
       const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: explicitInput })
       blastInput = { level: risk.level }
       blastSource = `声明面判级 tier=${risk.tier}/level=${risk.level}（design 文件清单 × blast 声明，D-008；explicit=${risk.explicit}）`
@@ -153,7 +159,7 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
   }
 
   // 委托三轴定价引擎取档（ceremony-tier.js 单点真相源）
-  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, frictionCounts })
+  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, spanRiskPatterns, frictionCounts })
   let ceremonyTier = priced.tier
   if (tierFileTier && CEREMONY_TIERS.indexOf(tierFileTier) > CEREMONY_TIERS.indexOf(ceremonyTier)) {
     ceremonyTier = tierFileTier

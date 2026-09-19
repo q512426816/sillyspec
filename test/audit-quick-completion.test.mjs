@@ -541,10 +541,12 @@ const gateGuard = (d, extra = {}) => ({ ...baseGuard, specBase: join(d, '.sillys
   assert(note.includes('模块文档认领已覆盖'), `claimed 落账行（实际 ${JSON.stringify(note)}）`)
 }
 
-// case G-4 (L2 风险命中): auth 路径命中 → L2 + runtimeEvidence=required + 命中点名 pattern/file
+// case G-4 (L2 风险命中): 声明面 span_risk 段 auth token 命中 → L2 + runtimeEvidence=required + 命中点名 pattern/file
+//   （D-005 夹具翻新：旧默认六域风险表已退役，风险维度声明面=map 顶层 span_risk 段——夹具只声明本用例所需 auth）
 {
   const d = seedRepo({ 'src/web/login.js': 'v1\n', 'src/web/auth.js': 'v1\n' })
-  writeModuleMap(d, 'modules:\n  web:\n    status: active\n    doc: modules/web.md\n    paths:\n      - src/web\n')
+  writeModuleMap(d, 'modules:\n  web:\n    status: active\n    doc: modules/web.md\n    paths:\n      - src/web\n'
+    + 'span_risk:\n  # span 轴风险路径声明（token 扁平列表，形态对照本仓真实 map）\n  - auth\n')
   writeFileSync(join(d, 'src', 'web', 'login.js'), 'v2\n')
   writeFileSync(join(d, 'src', 'web', 'auth.js'), 'v2\n')
   const r = await auditQuickCompletion(d, gateGuard(d), {})

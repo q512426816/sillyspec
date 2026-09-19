@@ -19,7 +19,8 @@
  *            映射（legacy 兼容层）＋ 显式声明升降规则；两者皆缺 → 保守缺省 S2
  *            （brownfield 兼容：≈现状 independent×1，不静默降级）。
  *   span  ＝ 声明文件数 ≥ SPAN_FILES_THRESHOLD ∨ 跨模块数 ≥ SPAN_MODULES_THRESHOLD ∨
- *            声明文件命中 QUICK_RISK_PATH_PATTERNS → 至少 S2。moduleIndex 沿用
+ *            声明文件命中项目声明 span_risk 表（matchSpanRiskPatterns，
+ *            2026-09-19-span-risk-pattern-migration D-003）→ 至少 S2。moduleIndex 沿用
  *            computeGateProfile 的输入形态（_module-map.yaml 解析结果，先例
  *            quick-gate-profile.js），缺失/空则跨模块检查跳过（不缺省不拦截）；声明文件数
  *            按 declaredFiles 全量计（任务卡口径，不复刻 quick-gate 的文档剔除）。
@@ -29,11 +30,14 @@
  *            会给 verify 门引入隐式次序依赖）；入参携第三键 verify_run_failed 时透传容忍：
  *            不抛错不拒收、不参与升档计算。
  *
- * 零依赖纯函数：无 fs / 锁 / 网络 / 日志副作用；唯一仓内 import 是 change-risk-profile.js
- * 的纯常量 QUICK_RISK_PATH_PATTERNS（quick-gate-profile.js:28 先例）。阈值常量集中文件
- * 顶部可调（R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
+ * 零依赖纯函数：无 fs / 锁 / 网络 / 日志副作用；仓内 import 是 change-risk-profile.js 的
+ * 纯常量 RISK_TO_TIER 与 span-risk-surface.js 的纯函数 matchSpanRiskPatterns（span 轴
+ * 风险路径表自 2026-09-19-span-risk-pattern-migration D-003 起改项目声明 span_risk 段经
+ * 参数注入，默认 [] = 模式维度关闭，不再内嵌全宇宙表）。阈值常量集中文件顶部可调
+ * （R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
  */
-import { QUICK_RISK_PATH_PATTERNS, RISK_TO_TIER } from './change-risk-profile.js'
+import { RISK_TO_TIER } from './change-risk-profile.js'
+import { matchSpanRiskPatterns } from './span-risk-surface.js'
 
 /** 仪式档位序（只升不降的偏序基准，index 即高低：S0=0 … S3=3） */
 export const CEREMONY_TIERS = ['S0', 'S1', 'S2', 'S3']
@@ -41,7 +45,7 @@ export const CEREMONY_TIERS = ['S0', 'S1', 'S2', 'S3']
 // RISK_TO_TIER 迁源 re-export（2026-09-19-ceremony-pricing-five-cuts task-02）：五级词→档位映射表
 // 判级域归属 change-risk-profile.js（resolveChangeRisk 消费方），本文件 re-export 保持既有
 // import 面（test/ceremony-tier.test.mjs 等）不变——依赖方向 ceremony-tier→change-risk-profile
-// 已有先例（QUICK_RISK_PATH_PATTERNS 同款）。
+// 已有先例。
 export { RISK_TO_TIER }
 
 // ============ 阈值常量（集中可调；R-02 friction-ledger 历史回放标定的落点） ============
@@ -141,6 +145,10 @@ function matchModuleForFile(posix, modulesObj) {
  * @param {string[]} [opts.declaredFiles] 声明变更文件（span 轴；反斜杠自动归一 POSIX）
  * @param {object|null} [opts.moduleIndex] _module-map.yaml 解析结果（跨模块数口径）；
  *   null/undefined/空 → 跨模块检查跳过（不缺省不拦截）
+ * @param {Array<{pattern: string, re: RegExp}>} [opts.spanRiskPatterns] span 轴风险路径声明表
+ *   （span-risk-surface.js compile/load 产物；默认 [] = 模式维度关闭——项目声明 span_risk
+ *   段由调用方装载注入，2026-09-19-span-risk-pattern-migration D-003；命中 → 至少 S2，
+ *   reasons 记 token 与命中文件）
  * @param {object} [opts.frictionCounts] friction-ledger 累计账口径 { gate_rollback,
  *   review_rejected }——携 verify_run_failed 第三键透传容忍不拒收、不参与计算
  * @returns {{ tier: 'S0'|'S1'|'S2'|'S3', components: { blast: string, span: string, friction: string },
@@ -148,7 +156,7 @@ function matchModuleForFile(posix, modulesObj) {
  *   friction 分量＝升档后的档（未起爆为 S0，不参与封顶）；reasons 逐分量留痕（含阈值与
  *   命中明细），供消费方审计打印与双跑比对
  */
-export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, frictionCounts } = {}) {
+export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, spanRiskPatterns = [], frictionCounts } = {}) {
   const reasons = []
   let explicitDowngradeAccepted = false
 
@@ -213,18 +221,14 @@ export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLeve
     }
   } // moduleIndex 缺失/空 → 跨模块检查跳过，span 其余两维照常
 
+  // 风险路径模式维：共享 matcher（matchSpanRiskPatterns——files 已归一，其内部重复归一幂等；
+  // 防御口径 null/非对象条目跳过与 /g lastIndex 归零由 matcher 承接），按 pattern 聚合 files
+  // 保持 riskHitsByPattern 语义与 reasons 文案形态不变（只换表来源：注入声明表，默认 [] 关维）
   const riskHitsByPattern = new Map()
-  for (const f of files) {
-    for (const entry of QUICK_RISK_PATH_PATTERNS) {
-      const re = entry == null ? null : entry.re
-      if (!(re instanceof RegExp)) continue
-      if (re.global) re.lastIndex = 0 // 防调用方传入 /g 正则跨文件携带 lastIndex 状态
-      if (re.test(f)) {
-        const list = riskHitsByPattern.get(entry.pattern) || []
-        list.push(f)
-        riskHitsByPattern.set(entry.pattern, list)
-      }
-    }
+  for (const { pattern, file } of matchSpanRiskPatterns(files, spanRiskPatterns)) {
+    const list = riskHitsByPattern.get(pattern) || []
+    list.push(file)
+    riskHitsByPattern.set(pattern, list)
   }
   if (riskHitsByPattern.size > 0) {
     span = 'S2'
@@ -332,14 +336,18 @@ export function applyDeclarationCatchUp({ currentDoc, recomputedTier, recomputed
  *   在场合跳过 factRiskDetection 映射直入，2026-09-19-ceremony-pricing-five-cuts task-03）
  * @param {string[]} [opts.factFiles] 实际变更文件（scope-audit / apply-pathspec 文件集）
  * @param {object|null} [opts.factModuleIndex] _module-map.yaml 解析结果
+ * @param {Array<{pattern: string, re: RegExp}>} [opts.factSpanRiskPatterns] 事实面 span 风险
+ *   声明表（穿透内部 computeCeremonyTier 的 spanRiskPatterns；与 factBlastTier 同装载源
+ *   ——项目声明 span_risk 段，默认 [] = 模式维度关闭，2026-09-19-span-risk-pattern-migration D-003）
  * @returns {{ factTier: 'S0'|'S1'|'S2'|'S3', mismatch: boolean, severity: 'error'|'warn'|'none' }}
  */
-export function reconcileDualRun({ declaredTier, factRiskDetection, factBlastTier, factFiles, factModuleIndex } = {}) {
+export function reconcileDualRun({ declaredTier, factRiskDetection, factBlastTier, factFiles, factModuleIndex, factSpanRiskPatterns = [] } = {}) {
   const fact = computeCeremonyTier({
     riskDetection: factRiskDetection,
     blastTier: factBlastTier,
     declaredFiles: factFiles,
     moduleIndex: factModuleIndex,
+    spanRiskPatterns: factSpanRiskPatterns,
     frictionCounts: {},
   })
   const declaredRank = tierRank(declaredTier)

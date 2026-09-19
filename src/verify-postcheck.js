@@ -37,6 +37,7 @@ import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.j
 // 纯/叶子依赖（ceremony-tier → change-risk-profile；friction-ledger → fs-atomic+quicklog），无环。
 import { resolveChangeRisk } from './change-risk-profile.js'
 import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
+import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
 import { reconcileDualRun, computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
 import { mergeFrictionEntry } from './friction-ledger.js'
 import { discoverModuleIndex } from './decision-distill.js'
@@ -3065,14 +3066,18 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
   // 旧口径（读实际 diff 文件全文喂 detectChangeRisk 词表）整类删除——事实面只吃文件名 × 声明面
   // （自指陷阱消失：门禁引擎源码里的关键词不再是判级输入，D-008）。
   const blastDeclarations = loadBlastDeclarationsAllProjects(sb)
+  // span 轴同款声明面（2026-09-19-span-risk-pattern-migration task-03）：map 顶层 span_risk 段
+  // AllProjects 并集，一次装载双点共用（reconcileDualRun factSpanRiskPatterns + factDetail 披露）；
+  // 无声明项目 → 空表（span 模式维关闭，禁回退内置表，D-003）
+  const factSpanRiskPatterns = loadSpanRiskPatternsAllProjects(sb)
   const factRisk = resolveChangeRisk({ files: actual.files, blastDeclarations })
   let factModuleIndex = null
   try { factModuleIndex = discoverModuleIndex(join(sb, 'knowledge')) } catch { /* 缺 map → span 跨模块维跳过 */ }
 
   // —— 引擎对账（mismatch 判定单点）+ 命中明细（同入参跑 computeCeremonyTier 取 reasons，供披露）——
-  const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex })
+  const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex, factSpanRiskPatterns })
   const factDetail = computeCeremonyTier({
-    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
+    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, spanRiskPatterns: factSpanRiskPatterns, frictionCounts: {},
   })
   if (verdict.severity === 'warn') {
     notes.push(`[advisory] 高报记账（D-005）：声明档 ${String(declaredTier)} > 事实档 ${verdict.factTier}——只记账不阻断不记摩擦（高报代价是更重仪式，自罚机制在场）`)

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-19-span-risk-pattern-migration",
+  "appliedAt": "2026-09-19T10:20:40.857Z",
+  "baseHash": "c3294d9899d6e2a995a0d56e7c7a3e02477134dc",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "4e4da2a4d7834b34bf0def8803952a57c13ea9d55e86c144cb7b1f03598a2f30"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/docs-consistency.md",
+      "sha256": "765fcdece89ae69514f838ed93357ec77dd5f53fd24c7d1381e4a8aaf86890df"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+      "sha256": "cfcebfa2203a2823046e16398522820bbbcb4a5942b2c9054f46bdb371335749"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/setup.md",
+      "sha256": "4ba5030a07ddde2963a876689c57f8176ef3cdb94126c530f58cce37397ea34d"
+    },
+    {
+      "path": "src/ceremony-tier.js",
+      "sha256": "f595cfa354d942114b4a16dca80d4bb3f5c93acb3ec226b9b417cdb31c3ea961"
+    },
+    {
+      "path": "src/change-risk-profile.js",
+      "sha256": "338a5e4bdac100f43537a618d1d0cf444635e19abbcd364988b07a8616c7bc14"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "92f980aeb30ddf39cbba9139378eb7937a536202aa46a8dfc5421dcfe7da50cf"
+    },
+    {
+      "path": "src/quick-gate-profile.js",
+      "sha256": "5837a9f9a3cce23dd84f0309f97109ed1220c8afc0aa597059709b2fde494e57"
+    },
+    {
+      "path": "src/review-tier.js",
+      "sha256": "ca7ccebc9a7987ec0cd2eee4f516ad7f9b18b358648aabe1a6d9898ddceb99b1"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "f2584f58927789c367dccafffcef1ac6455c39ac5d13ee45e9ce712be81e1cf9"
+    },
+    {
+      "path": "src/run/shared.js",
+      "sha256": "656cc4ca9b5500a91a7920ab06543b1ebf836fd1cb94097514aa269e7fc05416"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "sha256": "61813b49fe45c52ebd3308f62cb86414b60668ffc1926f50a6994b5df214215f"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "b7cf768756e777ca6ca377b1c19930919922789b090389f699622470018b2aaa"
+    },
+    {
+      "path": "test/audit-quick-completion.test.mjs",
+      "sha256": "4072e9a08890dff557665bdcf3fdbab161ff909bd91c5fa3c57bec5a6f38c8a0"
+    },
+    {
+      "path": "test/ceremony-tier.test.mjs",
+      "sha256": "0c56e464a7e65d48b08844574db6cca306ba5cab85b30c7ef56efe20a288f63f"
+    },
+    {
+      "path": "test/modules-rebuild-preserve.test.mjs",
+      "sha256": "ceae59741488d971be67ec9031fadc202079447fbdded349de7f8750780d89a3"
+    },
+    {
+      "path": "test/quick-gate-profile.test.mjs",
+      "sha256": "83139a522fad623f4f2020c4210c1722225e2ef1c5edbda6cb1e92d7e8f699a9"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "sha256": "804145a510fd126d064520bc62400712ee69bf8d61ba69b9ba086a5f04191b23"
+    },
+    {
+      "path": "src/span-risk-surface.js",
+      "sha256": "5abcae1faab50b94342cacbac2bcfc7a1fb8e60ba5eae75bceac06bd24fc8a0d"
+    },
+    {
+      "path": "test/span-risk-surface.test.mjs",
+      "sha256": "351dad55fafd6a1491eefefd1fb0f544fd3f6d8f0ab1b80b647fc31cd211c64f"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "sha256": "f7abc2cba9ae8d26305ec3887e7c3bbf45adaa41be74b61ac7cf98688bd75cda"
+    }
+  ]
+}

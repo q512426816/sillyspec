@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-19-span-risk-pattern-migration",
+  "generatedAt": "2026-09-19T10:13:39.797Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-19-span-risk-pattern-migration",
+      "metrics": {
+        "matches": 12,
+        "skippedFiles": 0,
+        "worktreeHits": 2,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-19-span-risk-pattern-migration",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-19-span-risk-pattern-migration",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-19-span-risk-pattern-migration",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-19-span-risk-pattern-migration",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-19-span-risk-pattern-migration",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "worktree 内全量 npm test 的 17 个环境性失败（CLI 子进程类测试被 src/index.js 顶层 worktree-cwd 守卫拦下 + spec-dir 并发 flake，known-issues 已登记；stash 基线对照失败集逐字相同、净增 0）",
+        "condition": "apply 后在主仓（或 CI）跑一次全量 `npm test` 期望 exit 0——worktree 形态下这些用例结构性不可跑，非本变更引入",
+        "severity": "blocking"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "走位验收为一次性回放（node -e 实测：模式维命中 0 且与旧口径对照同为 0——等价性再实证；span S2 由文件数 18≥8 + 跨模块 3≥3 双维承担）",
+        "condition": "已在 execute task-04 实录完成；如需持久化可后续把回放固化为测试（advisory）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 2,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/span-risk-surface.test.mjs",
+      "test/ceremony-tier.test.mjs",
+      "test/quick-gate-profile.test.mjs",
+      "test/modules-rebuild-preserve.test.mjs",
+      "test/scope-audit.test.mjs",
+      "test/audit-quick-completion.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-19T10:18:49.293Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

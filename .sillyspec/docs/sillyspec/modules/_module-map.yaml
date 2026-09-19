@@ -81,6 +81,7 @@ modules:
       - src/prefill.js
       - src/change-risk-profile.js
       - src/blast-surface.js
+      - src/span-risk-surface.js
       - src/quick-gate-profile.js
       - src/scope-audit.js
       - src/classify-change.js
@@ -279,3 +280,14 @@ modules:
     paths:
       - bin/sillyspec.js
 
+span_risk:
+  # span 轴风险路径声明（token 扁平列表，进 git 手工维护；modules rebuild --force 按未知顶层段原样回插）
+  - migrate
+  - migration
+  - migrations
+  - dispatch
+  - scheduler
+  - scheduling
+  - cron
+  - job
+  - jobs

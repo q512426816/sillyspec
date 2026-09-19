@@ -139,3 +139,33 @@ created_at: 2026-09-18T00:26:28.615Z
 状态：active
 摘要：（无场景名）
 最近确认：33fca7f
+
+## FR-core-engine-023 span_risk 声明段与装载器
+变更：2026-09-19-span-risk-pattern-migration
+状态：active
+摘要：（无场景名）
+最近确认：c796534
+
+## FR-core-engine-024 定价消费面切换（ceremony span 轴）
+变更：2026-09-19-span-risk-pattern-migration
+状态：active
+摘要：（无场景名）
+最近确认：c796534
+
+## FR-core-engine-025 quick 画像消费面切换
+变更：2026-09-19-span-risk-pattern-migration
+状态：active
+摘要：（无场景名）
+最近确认：c796534
+
+## FR-core-engine-026 硬退役与自举
+变更：2026-09-19-span-risk-pattern-migration
+状态：active
+摘要：（无场景名）
+最近确认：c796534
+
+## FR-core-engine-027 回归钉
+变更：2026-09-19-span-risk-pattern-migration
+状态：active
+摘要：（无场景名）
+最近确认：c796534

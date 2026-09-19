@@ -40,6 +40,7 @@ import { recordFrictionEvent } from '../friction-tally.js'
 import { readFrictionLedger } from '../friction-ledger.js'
 import { computeCeremonyTier, escalateByFriction, applyDeclarationCatchUp, CEREMONY_TIERS } from '../ceremony-tier.js'
 import { loadBlastDeclarations } from '../blast-surface.js'
+import { loadSpanRiskPatterns } from '../span-risk-surface.js'
 import { resolveChangeRisk } from '../change-risk-profile.js'
 import { withFileLock } from '../quicklog.js'
 import { extractExplicitRiskLevel } from '../change-risk-profile.js'
@@ -638,12 +639,16 @@ function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress, 
   const declaredFiles = readDesignOwnFiles(specBase, changeName)
   const { declarations } = loadBlastDeclarations({ specBase, project: projectName })
   const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations: declarations, explicitRiskLevel })
+  // span 轴声明面装载（2026-09-19-span-risk-pattern-migration task-03）：与 :639 blast 装载同
+  // specBase/projectName 上下文——_module-map.yaml 顶层 span_risk 段；无声明项目 → 空表（span
+  // 模式维关闭，禁回退内置表，D-003；引擎默认 [] 同效，显式装载与其他声明面入参同风格）
+  const spanRiskPatterns = loadSpanRiskPatterns({ specBase, project: projectName })
   let moduleIndex = null
   const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
   if (existsSync(mapPath)) {
     try { moduleIndex = parseModuleMapSimple(readFileSync(mapPath, 'utf8')) || null } catch { moduleIndex = null }
   }
-  const priced = computeCeremonyTier({ blastTier: risk.tier, declaredFiles, moduleIndex })
+  const priced = computeCeremonyTier({ blastTier: risk.tier, declaredFiles, moduleIndex, spanRiskPatterns })
   const auditLines = []
   if (risk.hitPrefixes.length > 0) {
     auditLines.push(`声明危险面命中：${risk.hitPrefixes.join('、')}（evidenceRequired=${risk.evidenceRequired}）`)

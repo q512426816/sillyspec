@@ -10,6 +10,7 @@
  *   2. 非 force（无 --force）dry-run 不写盘（mtime/内容不变）
  *   3. 无手工段的 map --force 重建 → 不产生多余空段
  *   4. 重建头五族外的其他顶层手工段同样保留（通用机制，不只为 blast 特判）
+ *   5. span_risk 段（含段内注释 + 9 token）--force 写盘后在场且字节不变（2026-09-19-span-risk-pattern-migration task-03——注释在键行后段内，键行前注释会被 modules 段重发射丢弃，故钉段内形态）
  *
  * 风格：自研 assert，tmp fixture。
  */
@@ -129,6 +130,30 @@ console.log('\n=== modules-rebuild-preserve：--force 顶层段回插 ===\n')
   const after = readFileSync(mapPath, 'utf8')
   assert(after.includes('extra_notes:'), '非 blast 顶层手工段同样回插（通用机制）')
   assert(after.includes('- 手工备注 A') && after.includes('- 手工备注 B'), '段内列表项保真')
+}
+
+// 5. span_risk 段（含段内注释）--force 回插字节保真（2026-09-19-span-risk-pattern-migration task-03）
+{
+  const { root, mapPath } = makeFixture('mrp-span-', false)
+  const spanSection = [
+    'span_risk:',
+    '  # span 轴风险路径声明（token 扁平列表，进 git 手工维护；modules rebuild --force 按未知顶层段原样回插）',
+    '  - migrate',
+    '  - migration',
+    '  - migrations',
+    '  - dispatch',
+    '  - scheduler',
+    '  - scheduling',
+    '  - cron',
+    '  - job',
+    '  - jobs',
+  ].join('\n')
+  writeFileSync(mapPath, readFileSync(mapPath, 'utf8') + '\n' + spanSection + '\n', 'utf8')
+  await rebuildModuleMap(root, { force: true })
+  const after = readFileSync(mapPath, 'utf8')
+  assert(after.includes('span_risk:'), '--force 写盘后顶层 span_risk 段在场')
+  assert(after.includes(spanSection), 'span_risk 段字节不变原样回插（含段内注释 + 9 token）')
+  assert(after.includes('modules:'), 'modules 段照常重建')
 }
 
 for (const d of tmpRoots) {
