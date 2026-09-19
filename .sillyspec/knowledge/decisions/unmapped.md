@@ -460,3 +460,21 @@
 最近确认：33fca7f
 理由：拆两层：①assembleStageReviewMaterials 为导出纯装配函数（入参 stage/cwd/changeName/specBase，临时 fixture 可直接断言三形态非空）；②prompt.js 接线用源码断言钉（调用点在场＋join 非''字面量），既有测试组二的 joins≥2 断言保持绿。不在测试里跑 outputStep 全链（既有测试先例 worktree-execute-spec-drift.test.mjs 走子进程 runCommand 才隔离 exit，本变更不引入该重量）。
 故障面：源码钉只证调用在场不证运行时值——装配函数单测＋CLI 亲跑冒烟（本变更 dogfood 路径）补
+
+## D-001@v1 红线 v1 取模式级断言，不做 AST/语义级
+状态：implemented
+变更：2026-09-20-redline-machine-check
+锚点：未记录
+最近确认：a17fcab
+理由：语义级约束（「不得假运行」）无法直接机检；AST 级实现成本高且跨语言（TS/Py/Go 消费者仓）。
+故障面：正则过宽误报（advisory 渲染+攒误报率数据）；过漏（require 兜底存在性检查）。
+退役判据：跨语言 AST 基建落地时逐条升级。
+
+## D-002@v1 清单消费者仓自持，sillyspec 只供机制
+状态：implemented
+变更：2026-09-20-redline-machine-check
+锚点：未记录
+最近确认：a17fcab
+理由：红线是消费者仓的项目知识，不是工具自带物。
+故障面：清单腐化无人维护——origin 锚引用文档行号，docs check 可校验引用有效性（后续接线）。
+退役判据：无。
