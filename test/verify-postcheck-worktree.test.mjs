@@ -11,10 +11,12 @@
  * 用真实 git 临时仓 + meta.json fixture 验证（meta 结构与 checkExecuteCodeEvidence 同源）。
  */
 import { execSync } from 'child_process'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { resolveVerifyChangedFiles } from '../src/verify-postcheck.js'
+
+function existsSyncSafe(p) { try { return existsSync(p) } catch { return false } }
 
 let passed = 0
 let failed = 0
@@ -185,6 +187,58 @@ function writeMeta(cwd, change, meta) {
     )
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+// ── 6. 已提交补齐块（includeWorkingTree）× checkpoint：baselineCommit 优先，排除 overlay ──
+// 坑 fact-face-checkpoint-pollution（2026-09-19 five-cuts 实证：双跑对账面 45 文件虚增 23 条）：
+// resolveVerifyChangedFiles 的「已提交口径补齐」块（includeWorkingTree=true，形态 A 事实面消费）
+// 旧口径恒用 merge-base(wtHead, mainHead) 做 diff 基线且注释假设其＝创建锚点——但 baseline
+// checkpoint 提交落在 worktree 分支上、主仓 HEAD 不动，merge-base 指到 checkpoint 之前，
+// checkpoint 卷入的并行会话文件整段进事实面（span 虚增、档位虚抬）。修复：该块优先 meta
+// 锚点（baselineCommit＞actualBaseHash＞baseHash），三锚全缺才退 merge-base。真 worktree fixture。
+{
+  const dir = mkRepo()
+  let wtDir = null
+  try {
+    const baseHash = git(dir, 'rev-parse HEAD').trim()
+    // 真 worktree（分支自主仓 HEAD 分叉——与 sillyspec worktree add 同构）
+    wtDir = join(dir, '..', `verify-wt-c6-${Date.now()}`)
+    git(dir, `worktree add -q "${wtDir}" -b sillyspec/c6-fact-face`)
+
+    // 模拟 baseline checkpoint：在 worktree 分支上提交并行会话 overlay 文件（_createBaselineCheckpoint 同构）
+    mkdirSync(join(wtDir, 'daemon'), { recursive: true })
+    writeFileSync(join(wtDir, 'daemon', 'svc.py'), 'overlay')
+    mkdirSync(join(wtDir, 'frontend'), { recursive: true })
+    writeFileSync(join(wtDir, 'frontend', 'page.tsx'), 'overlay')
+    git(wtDir, 'add -A')
+    git(wtDir, 'commit -q -m baseline-checkpoint')
+    const baselineCommit = git(wtDir, 'rev-parse HEAD').trim()
+
+    // 本 change 真实改动（checkpoint 之上）
+    mkdirSync(join(wtDir, 'backend', 'app', 'modules', 'ppm'), { recursive: true })
+    writeFileSync(join(wtDir, 'backend', 'app', 'modules', 'ppm', 'owner.py'), 'real')
+    git(wtDir, 'add -A')
+    git(wtDir, 'commit -q -m real-change')
+
+    const change = 'c6-fact-face'
+    writeMeta(dir, change, {
+      baseHash,                        // pre-checkpoint（主仓 HEAD；merge-base 会指到这里）
+      baselineCommit,                  // checkpoint 本身（修复后补齐块优先用）
+      worktreePath: wtDir,
+      mode: 'worktree',
+    })
+
+    const files = resolveVerifyChangedFiles(dir, change, null, { includeWorkingTree: true })
+    assertEqualUnsorted(
+      '已提交补齐 × checkpoint: baselineCommit 优先做基线，事实面只含真实改动（overlay 不进窗口）',
+      files,
+      ['backend/app/modules/ppm/owner.py'],
+    )
+  } finally {
+    if (wtDir && existsSyncSafe(wtDir)) git(dir, `worktree remove --force "${wtDir}"`)
+    rmSync(dir, { recursive: true, force: true })
+    if (wtDir) rmSync(wtDir, { recursive: true, force: true })
   }
 }
 

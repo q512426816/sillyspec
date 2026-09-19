@@ -76,9 +76,11 @@ modules:
       - src/task-review.js
       - src/verify-postcheck.js
       - src/review-tier.js
+      - src/review-material-pack.js
       - src/ceremony-tier.js
       - src/prefill.js
       - src/change-risk-profile.js
+      - src/blast-surface.js
       - src/quick-gate-profile.js
       - src/scope-audit.js
       - src/classify-change.js
@@ -206,6 +208,7 @@ modules:
     paths:
       - src/change-list.js
       - src/quicklog.js
+      - src/quick-session-owner.js
 
   hooks:
     status: active

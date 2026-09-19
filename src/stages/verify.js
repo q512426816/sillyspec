@@ -162,7 +162,7 @@ export const definition = {
 2. 如果存在：
    - 逐个读取 tasks/task-NN.md，对照 frontmatter 的 \`acceptance:\` 列表逐条核验（TaskCard 协议的验收标准在 frontmatter YAML，正文无 checkbox）
    - 每条 acceptance 对照实际实现/测试结果判定满足与否，未满足的项列为不通过
-   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/partial/uncovered/non-testable 四选一）与证据——covered/partial 附测试锚点（file:line / \`.test.\` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
+   - 覆盖对账走探针 7 矩阵：verify-result.md「探针 7：验收×测试覆盖矩阵」段已由 CLI 预填归属测试文件与关键词提示（骨架未生成时先跑 \`sillyspec verify-probes --change <change-name> --init\`，幂等不覆盖已有正文）；逐行填判定（covered/covered-service/partial/uncovered/non-testable 五选一——covered-service 适用：端点行为由 service 层等非端点层测试锁定，证据附测试锚点）与证据——covered/covered-service/partial 附测试锚点（file:line / \`.test.\` 测试文件名 / 反引号包裹的路径或测试名，行号可省），non-testable 写一句理由；判定/证据未填会被 verify \`--done\` 门禁阻断（fail-closed）
 3. 如果不存在：跳过此步骤
 
 ### 输出
@@ -191,11 +191,11 @@ export const definition = {
 
 ### 操作
 1. 汇总以上所有检查结果
-2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
-   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。
-   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 \`risk_level: <真实等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
-   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。
-   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
+2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描。本步骤 --done 时，CLI 按项目声明危险面（\`_module-map.yaml\` 顶层 blast 段的路径前缀声明）× 变更文件面自动判定（2026-09-19-ceremony-pricing-five-cuts 起的声明面口径——文档措辞与文件内容不参与判级），并强制门控：命中 evidence:true 声明路径的变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
+   - **判级输入＝文件路径 × 项目声明**（不是关键词）：变更文件（design 文件变更清单 / 实际 diff）命中声明前缀即取该声明档位；未配置项目/未命中路径一律 S1 起步。「撞词」时代结束：文档里写 daemon/session 等措辞不再影响判级。
+   - **frontmatter risk_level 的作用边界**：在 design.md 顶部 frontmatter 加 \`risk_level: <等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）可**压低/抬高仪式档**（评审轮次定价），但**不豁免 evidence:true 命中的集成证据要求**——证据豁免的唯一出路是改 \`_module-map.yaml\` blast 段的 evidence 声明（进 git、评审可见），不得靠声明措辞绕证据门。
+   - **留痕要求（防逃逸）**：用了显式声明，必须在「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（压仪式档；evidence 要求不受豁免）」+ 一句话理由，让声明可审计。
+   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更文件命中 evidence:true 声明路径（CLI 会在 design/verify 门禁 warnings 点名命中前缀），在「Runtime Evidence」section 提供真实集成证据（启动命令、跨进程调用与日志关键片段、终态断言）。
    - **集成回执须真实执行——commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记，亲跑段谎报无效）**，其余形态仍须 agent 实跑后据实填写：CLI 对其余形态只校验**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
 
 3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
@@ -204,7 +204,7 @@ export const definition = {
 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
    - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」
 7. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
-8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
+8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更命中 evidence:true 声明危险面时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
 ${REVIEW_CHECKLISTS.verify.map((item) => '   - ' + item).join('\n')}
 
 ### verify-result.md 章节结构（骨架已含，占位替换即可）

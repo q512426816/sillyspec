@@ -76,18 +76,19 @@ console.log('=== 1. classifyReviewTier（规模分级）===\n')
   const t3 = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
   assert(t3.tier === 'self', `plan_level=light + 2 文件 → self`)
 
-  // ql-20260918-007 双轨修复：full 不再独自推档——design 可读即实判（benign 内容 → doc-only → S0 self）
+  // ql-20260918-007 双轨修复：full 不再独自推档——design 可读即实判（声明面零命中 → S1 self；
+  // 2026-09-19-ceremony-pricing-five-cuts：无命中缺省 S1，词表 doc-only→S0 时代结束）
   const tFull = classifyReviewTier({ planLevel: 'full', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
-  assert(tFull.tier === 'self' && tFull.ceremonyTier === 'S0' && tFull.reason.includes('实判'),
-    `plan_level=full + benign 2 文件 → self/S0（实判压过代理——双轨修复回归钉，实际 ${tFull.tier}/${tFull.ceremonyTier}）`)
+  assert(tFull.tier === 'self' && tFull.ceremonyTier === 'S1' && tFull.reason.includes('声明面判级'),
+    `plan_level=full + 零命中面 → self/S1（实判压过代理——双轨修复回归钉，实际 ${tFull.tier}/${tFull.ceremonyTier}）`)
 
   // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm 场景，启发式）
   const t4 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
   assert(t4.tier === 'self', `无 planLevel + 1 文件 → self`)
 
-  // ql-20260918-007：4 文件 + benign 实判 → self（文件数启发式只保 brownfield 无 design 态，实判接管）
+  // ql-20260918-007：4 文件 + 零命中声明面 → self（文件数启发式只保 brownfield 无 design 态，实判接管）
   const t4b = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
-  assert(t4b.tier === 'self' && t4b.reason.includes('实判'), `benign 4 文件 → self（实判接管文件数启发式）`)
+  assert(t4b.tier === 'self' && t4b.reason.includes('声明面判级'), `零命中 4 文件 → self（声明面实判接管文件数启发式）`)
   assert(t4b.fileCount === 4, `fileCount 正确返回 4`)
 
   // 阈值边界：恰好 = 阈值 → self
@@ -117,14 +118,15 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
   assert(t.tier === 'self' && typeof t.reason === 'string' && t.reason.length > 0 && 'fileCount' in t && typeof t.ceremonyTier === 'string',
     `双字段并存：{ tier, ceremonyTier, reason, fileCount } 齐全（实际 tier=${t.tier} ceremonyTier=${t.ceremonyTier}）`)
 
-  // brownfield（无 risk 输入）→ ceremonyTier='S2' 保守缺省；≤3 文件旧断路器保兼容 self
+  // brownfield（无 risk 输入）→ 声明面零命中 S1（2026-09-19-ceremony-pricing-five-cuts：
+  // 无命中缺省 S1，旧断路器面由声明面实判接管）
   const b1 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
-  assert(b1.ceremonyTier === 'S0' && b1.tier === 'self' && b1.reason.includes('实判'),
-    `benign 1 文件 → 实判 doc-only → S0 self（旧断路器面被实判接管）`)
+  assert(b1.ceremonyTier === 'S1' && b1.tier === 'self' && b1.reason.includes('声明面判级'),
+    `零命中 1 文件 → 声明面 S1 self（旧断路器面被声明面实判接管）`)
 
   const b2 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
   assert(b2.tier === 'self' && b2.fileCount === 4,
-    `benign 4 文件 → self（实判接管；fileCount 仍正确返回 4）`)
+    `零命中 4 文件 → self（声明面实判接管；fileCount 仍正确返回 4）`)
 
   // 真实 risk 输入接管：档位随 RISK_TO_TIER 映射，文件数断路器不再适用（引擎档强制）
   const r0 = classifyReviewTier({ riskDetection: { level: 'doc-only' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
@@ -183,15 +185,21 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
 console.log('\n=== 1c. 双轨修复回归组（ql-20260918-007：实判/档位文件/显式声明）===\n')
 
 {
-  // 高风险内容实判升档：contract 关键词 → S2 independent（不受 plan_level 影响）
+  // 声明面命中实判升档（2026-09-19-ceremony-pricing-five-cuts：词表内容触发退役——
+  // 「http client」措辞不再判级，改 fixture 建带 blast 段的 map + 文件清单命中 S2 前缀）
   const dirR = makeTmpDir('rt-')
-  const dR = join(dirR, 'design.md')
-  writeFileSync(dR, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
+  const changeDirR = join(dirR, 'changes', 'c-risk')
+  mkdirSync(changeDirR, { recursive: true })
+  const mapDirR = join(dirR, 'docs', 'demo', 'modules')
+  mkdirSync(mapDirR, { recursive: true })
+  writeFileSync(join(mapDirR, '_module-map.yaml'), 'modules:\n  demo:\n    status: active\nblast:\n  - prefixes: [src/contract/]\n    tier: S2\n')
+  const dR = join(changeDirR, 'design.md')
+  writeFileSync(dR, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | src/contract/a.js | x |\n')
   const c1 = classifyReviewTier({ planLevel: 'full', designPath: dR })
-  assert(c1.ceremonyTier === 'S2' && c1.tier === 'independent' && c1.reason.includes('实判'),
-    `contract 内容实判 → S2 independent（实际 ${c1.ceremonyTier}/${c1.tier}）`)
+  assert(c1.ceremonyTier === 'S2' && c1.tier === 'independent' && c1.reason.includes('声明面判级'),
+    `声明面 S2 命中实判 → S2 independent（实际 ${c1.ceremonyTier}/${c1.tier}）`)
 
-  // 档位文件兜底并入：specBase/.runtime/ceremony-tier-<change>.json S2 + benign 实判 S0 → S2
+  // 档位文件兜底并入：specBase/.runtime/ceremony-tier-<change>.json S2 + 零命中实判 S1 → S2
   const dirT = makeTmpDir('rt-')
   const changeDir = join(dirT, 'changes', 'c-demo')
   mkdirSync(changeDir, { recursive: true })
@@ -201,14 +209,16 @@ console.log('\n=== 1c. 双轨修复回归组（ql-20260918-007：实判/档位�
   writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S2', components: {}, reasons: [], transitions: [] }))
   const c2 = classifyReviewTier({ planLevel: 'full', designPath: dT })
   assert(c2.ceremonyTier === 'S2' && c2.tier === 'independent' && c2.reason.includes('档位文件 S2 兜底并入'),
-    `档位文件 S2 + benign 实判 → S2 independent（兜底并入，实际 ${c2.ceremonyTier}）`)
+    `档位文件 S2 + 零命中实判 S1 → S2 independent（兜底并入，实际 ${c2.ceremonyTier}）`)
 
-  // 档位文件低于实判不生效：file S1 + http client 实判 S2 → 取高 S2（只升不降）
+  // 档位文件低于实判不生效：file S1 + 声明面命中 S2 → 取高 S2（只升不降）
   writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S1', components: {}, reasons: [], transitions: [] }))
-  writeFileSync(dT, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
+  const mapDirT = join(dirT, 'docs', 'demo', 'modules')
+  mkdirSync(mapDirT, { recursive: true })
+  writeFileSync(join(mapDirT, '_module-map.yaml'), 'modules:\nblast:\n  - prefixes: [a.js]\n    tier: S2\n')
   const c3 = classifyReviewTier({ planLevel: 'full', designPath: dT })
   assert(c3.ceremonyTier === 'S2' && c3.reason.includes('在场（未高于实判'),
-    `档位文件 S1 < 实判 S2 → 取高 S2（只升不降，实际 ${c3.ceremonyTier}）`)
+    `档位文件 S1 < 声明面实判 S2 → 取高 S2（只升不降，实际 ${c3.ceremonyTier}）`)
 
   // 显式 risk_level frontmatter 并入实判链：声明 unit-sufficient + full → S1 self（升档尊重）
   const dirE = makeTmpDir('rt-')

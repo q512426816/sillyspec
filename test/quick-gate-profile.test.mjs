@@ -9,7 +9,7 @@
  *   5. checks 四项：perFileNotes 覆盖率、testDelta 三态、docClaim 四路、runtimeEvidence；
  *   6. opts 注入面：thresholds / riskTable / fileNotes / noDocs；
  *   7. 风险表段边界锚定（author/booking/lockfile 假阳不命中）+ 文档文件不参与风险命中；
- *   8. detectChangeRisk 判级零变化回归（quick 表新增不影响 verify 侧，task-01 验收项）。
+ *   8. resolveChangeRisk 声明面判级回归（词表退役，2026-09-19-ceremony-pricing-five-cuts task-02）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -19,7 +19,7 @@ import {
   THRESHOLDS,
   resolveGateThresholds,
 } from '../src/quick-gate-profile.js'
-import { QUICK_RISK_PATH_PATTERNS, detectChangeRisk } from '../src/change-risk-profile.js'
+import { QUICK_RISK_PATH_PATTERNS, resolveChangeRisk } from '../src/change-risk-profile.js'
 
 /** 四模块 fixture（parseModuleMapSimple 扁平形态：字面量 + 目录前缀两种 paths 写法） */
 const IDX = {
@@ -360,42 +360,23 @@ test('QUICK_RISK_PATH_PATTERNS 表形状：六域齐全、条目只含 pattern+r
   assert.deepEqual(Object.keys(p.riskHits[0]).sort(), ['file', 'pattern'])
 })
 
-// ── 8. detectChangeRisk 判级零变化回归（verify 侧） ──
+// ── 8. resolveChangeRisk 声明面判级回归（2026-09-19-ceremony-pricing-five-cuts task-02：词表判级退役）──
 
-test('detectChangeRisk 判级零变化：quick 表新增不影响 verify 侧语义', () => {
-  const plain = detectChangeRisk({ designContent: '普通文本改动', planContent: '', changedFiles: ['src/run/a.js'] })
-  assert.equal(plain.level, 'doc-only')
-  assert.deepEqual(plain.triggers, [])
-
-  const integ = detectChangeRisk({ designContent: '涉及 daemon 与 backend 的联调', planContent: '', changedFiles: [] })
-  assert.equal(integ.level, 'integration-critical')
-  assert.ok(integ.triggers.includes('daemon'))
-
-  const dep = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/cli.ts'] })
-  assert.equal(dep.level, 'deployment-critical')
-
-  // 同句否定抑制语义不变（坑 risk-negation-blindness 回归锚点）
-  const neg = detectChangeRisk({ designContent: '本次不新增 daemon 协议', planContent: '', changedFiles: [] })
-  assert.equal(neg.level, 'doc-only')
-  assert.ok(neg.suppressedTriggers.includes('daemon'))
-
-  // 两表互不掺和：auth 路径只进 quick 风险表，不触发 detectChangeRisk 判级
-  const authOnly = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/auth/login.js'] })
-  assert.equal(authOnly.level, 'doc-only')
-
-  // ── 9. 文件名型模式定界符前缀双回归（ql-20260918-009，回放实验实证 mcp-server.js 误判）──
-  // 假阳面：`-`/`_` 等定界符前缀的相似名不得触发 deployment（此前 \b 对非\w定界符漏界）
-  const fpLine = detectChangeRisk({ designContent: '# D\n## 非目标\n- mcp-server.js 错误面透传\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
-  assert.equal(fpLine.level, 'doc-only', 'mcp-server.js 非目标行（无同句否定词）不再误判 deployment')
-  const fpPath = detectChangeRisk({ designContent: '# D\n## 清单\n| 修改 | x | y |', planContent: '', changedFiles: ['src/mcp-server.js'] })
-  assert.notEqual(fpPath.level, 'deployment-critical', 'src/mcp-server.js 路径不再误判 deployment')
-  const fpUnderscore = detectChangeRisk({ designContent: '# D\n- my_cli.ts 不在范围\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
-  assert.notEqual(fpUnderscore.level, 'deployment-critical', 'my_cli.ts 前缀不误判 deployment')
-  // 真阳面：真实入口文件/行内提及/中文紧邻必须仍然命中（判级输入面，漏报=静默降 risk 主价）
-  const tpLine = detectChangeRisk({ designContent: '# D\n入口 server.js 修改\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
-  assert.equal(tpLine.level, 'deployment-critical', '行内 server.js 仍判 deployment')
-  const tpCn = detectChangeRisk({ designContent: '# D\n修改server.js入口\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
-  assert.equal(tpCn.level, 'deployment-critical', '中文紧邻 修改server.js 仍判 deployment（边界不误伤非\\w邻接）')
-  const tpPath = detectChangeRisk({ designContent: '# D\n## 清单\n| 修改 | x | y |', planContent: '', changedFiles: ['bin/server.js'] })
-  assert.equal(tpPath.level, 'deployment-critical', 'bin/server.js 路径仍判 deployment')
+test('resolveChangeRisk 声明面判级：词表词在正文出现不再触发判级（两表互不掺和）', () => {
+  const decls = [{ prefixes: ['src/worktree.js'], tier: 'S3', evidence: true }]
+  // 词表时代的误伤面（2026-09-19 api-matrix S3 撞词事故形态）在声明面口径下全部消失
+  const proseHit = resolveChangeRisk({ files: ['src/datetime.js'], blastDeclarations: decls, explicitRiskLevel: null })
+  // files 未命中声明面 → S1，正文措辞与文件名相似度均不参与（resolveChangeRisk 无正文输入面）
+  assert.equal(proseHit.tier, 'S1')
+  assert.equal(proseHit.evidenceRequired, false)
+  // 命中声明面 → S3+evidence（判级输入面=路径，漏报=静默降 risk 主价）
+  const hit = resolveChangeRisk({ files: ['src/worktree.js', 'src/datetime.js'], blastDeclarations: decls })
+  assert.equal(hit.tier, 'S3')
+  assert.equal(hit.evidenceRequired, true)
+  // 两表互不掺和：auth 路径只进 quick 风险表（QUICK_RISK_PATH_PATTERNS），不触发 blast 判级
+  const authOnly = resolveChangeRisk({ files: ['src/auth/login.js'], blastDeclarations: decls })
+  assert.equal(authOnly.tier, 'S1')
+  // QUICK_RISK_PATH_PATTERNS 表自身零变化（D-011：本变更不迁不动）——auth 命中仍可计算
+  const authRe = QUICK_RISK_PATH_PATTERNS.find(e => e.pattern === 'auth')
+  assert.ok(authRe && authRe.re.test('src/auth/login.js'))
 })

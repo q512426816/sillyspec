@@ -1,0 +1,2615 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index e934647..68d07c9 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -4,7 +4,7 @@ generator: sillyspec-modules-rebuild
+ source_commit: 4401b3dd9e4a3afbefd769eb00c4ac47d9553ab6
+ 
+ # Module Context Index — 机器可读的模块上下文索引（2026-08-16-scan-docs-reconcile 手工升 v2 并补录全模块 paths）
+-# paths 为该模块覆盖的源文件/目录（目录条目以 / 结尾，读侧按前缀匹配）；⚠️ 勿跑 modules rebuild --force——会清空本文件手动维护的 paths
++# paths 为该模块覆盖的源文件/目录（目录条目以 / 结尾，读侧按前缀匹配）；⚠️ 手工维护面（modules 段内 paths 等字段 + 顶层 blast 段）在 rebuild --force（merge 语义）下保留；非 force 为 dry-run 预览不写盘
+ 
+ modules:
+   stages:
+@@ -206,6 +206,7 @@ modules:
+     paths:
+       - src/change-list.js
+       - src/quicklog.js
++      - src/quick-session-owner.js
+ 
+   hooks:
+     status: active
+@@ -276,3 +277,49 @@ modules:
+     paths:
+       - bin/sillyspec.js
+ 
++
++# ── blast 危险面声明（2026-09-19-ceremony-pricing-five-cuts D-008/D-010）─────────────────────
++# 仪式定价 blast 轴的唯一输入源：按路径前缀挂 tier（S0~S3）与 evidence（true=需要真实集成
++# 证据，证据门只认此标记、不从仪式档推断）。手工维护、进 git；modules rebuild --force 写盘
++# 时本段从原文回插保留。local.yaml ceremony.blast_surfaces 可逐机只升不降（不承载 evidence）。
++# 未命中声明面 → blast S1。口径：S3 只钉真会话/租约/worktree/dispatch 运行时域；门禁判定
++# 文件 S2；core-engine 其余文件（datetime/constants/fs-atomic/taskcard 等）零声明。
++blast:
++  - prefixes:
++      - src/agent-session-log.js
++      - src/friction-ledger.js
++      - src/friction-tally.js
++      - src/semantic-guard.js
++      - src/workspace.js
++      - src/runtime-hygiene.js
++      - src/progress/
++      - src/db.js
++      - src/db-engine.js
++    tier: S3
++    evidence: true
++  - prefixes:
++      - src/worktree.js
++      - src/worktree-apply.js
++      - src/worktree-cross.js
++      - src/worktree-deps.js
++      - src/wt-commit.js
++      - src/git-helper.js
++      - src/review-dispatch.js
++      - src/dispatch/
++    tier: S3
++    evidence: true
++  - prefixes:
++      - src/stage-contract.js
++      - src/stage-contract-engine.js
++      - src/stage-contract-spec.js
++      - src/verify-postcheck.js
++      - src/verify-probes.js
++      - src/ceremony-tier.js
++      - src/review-tier.js
++      - src/change-risk-profile.js
++      - src/blast-surface.js
++      - src/quick-gate-profile.js
++      - src/probe7-anchor-check.js
++      - src/run/gates.js
++      - src/run/complete.js
++    tier: S2
+diff --git a/.sillyspec/docs/sillyspec/modules/core-engine.md b/.sillyspec/docs/sillyspec/modules/core-engine.md
+index 33a6943..8fb0741 100644
+--- a/.sillyspec/docs/sillyspec/modules/core-engine.md
++++ b/.sillyspec/docs/sillyspec/modules/core-engine.md
+@@ -164,3 +164,10 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
+   - `worktree-cleaned` — 分支 ref 也已删（cleanup 后态）→ **fail-closed 空集 +「不可归因（worktree 已清理）」注记，绝不回退主仓窗口**（复审残留①）；草稿层 reason 显式区分终态空源与普通「无 diff」；
+   - `main-window` — 其余（DB in-place / NULL 存量）→ 主仓窗口原行为零回归；NULL 且 meta 缺失加存量路由注记（D-04 残留②：不追求完美只保安全）。DB in-place 但 meta 判 worktree 且目录活 → 仍取 worktree（fail-safe：归因源只会更隔离不会更共享）。
+ - 测试 test/change-ownership-guards.test.mjs ⑥ 组（meta 活/分支活两形态主仓脏文件零吸入 + 分支已删空集注记）。
++
++## 判级/定价行为契约变更（2026-09-19-ceremony-pricing-five-cuts）
++- blast 轴输入源切换：词表散文判级（detectChangeRisk 及 INTEGRATION_*/否定抑制/枚举继承机器）整体退役删除；唯一入口 resolveChangeRisk（src/change-risk-profile.js）——变更文件 × `_module-map.yaml` 顶层 blast 段声明危险面（src/blast-surface.js 装载/解析）；未命中 S1、未配置项目禁回退词表。
++- evidence 位独立（D-009）：证据门只认 blast 段 `evidence: true` 显式标记，不从仪式档推断；frontmatter risk_level 只压仪式档、不豁免证据要求（豁免=改 map，git 可见）。
++- 完成门声明追赶重定价（D-003）：applyDeclarationCatchUp 三分支——无摩擦迁移随声明面可升可降、摩擦地板（transitions 最高 to）不退；重定价记 reasons 不记 transitions。
++- 双跑高报 warn（D-005）：reconcileDualRun 事实档低于声明档 → severity 'warn' 只记账不阻断不记摩擦；低报 error 不变。事实面零内容扫描（文件名 × 声明面）。
++- span 声明文件面解析：run/gates.js readDesignOwnFiles 委托 change-list.js parseFileChangeListDetailed（单一真相源，双形态标题）。
+diff --git a/meta.json b/meta.json
+index b157a09..f31b492 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,48 @@
+   "branch": "sillyspec/2026-09-19-ceremony-pricing-five-cuts",
+   "baseBranch": "main",
+   "baseHash": "7438d34c193fac96d621ee53a796a018c140b65d",
++  "actualBaseHash": "664b97235c07387801fdfc4a7f676ec69d96c0e4",
++  "createdAt": "2026-09-19T00:41:42.533Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-19-ceremony-pricing-five-cuts",
+   "mode": "worktree",
+-  "createdAt": "2026-09-19T00:41:40.488Z",
+-  "provisioning": true
++  "baselineFiles": [
++    "docs/sillyspec/platform-interface-map.md",
++    "src/design-facts.js",
++    "src/index.js",
++    "src/probe7-anchor-check.js",
++    "src/stage-contract.js",
++    "src/stages/brainstorm.js",
++    "src/stages/verify.js",
++    "src/taskcard.js",
++    "src/verify-probes.js",
++    "templates/prompts/verify-probes.md",
++    "test/acceptance-matrix-probe.test.mjs",
++    "test/api-coverage-matrix.test.mjs",
++    "test/doc-ref-check.test.mjs",
++    ".claude/CLAUDE.md",
++    ".claude/skills/sillyspec-execute/SKILL.md",
++    ".claude/skills/sillyspec-plan/SKILL.md",
++    ".claude/skills/sillyspec-quick/SKILL.md",
++    ".claude/skills/sillyspec-verify/SKILL.md",
++    "src/run/command.js",
++    "src/run/complete-handlers.js",
++    "src/stages/execute.js",
++    "src/worktree.js",
++    "src/quick-session-owner.js",
++    "test/quick-session-owner.test.mjs",
++    "test/quicklog-false-commit-claim.test.mjs"
++  ],
++  "baselineCommit": "664b97235c07387801fdfc4a7f676ec69d96c0e4",
++  "baselineHash": "cf3729c69c348dcc",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 44
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-19T00:41:42.496Z"
+ }
+diff --git a/src/blast-surface.js b/src/blast-surface.js
+new file mode 100644
+index 0000000..0a0ad88
+--- /dev/null
++++ b/src/blast-surface.js
+@@ -0,0 +1,168 @@
++/**
++ * blast-surface.js — 项目声明危险面（blast 轴唯一输入源，2026-09-19-ceremony-pricing-five-cuts D-008）
++ *
++ * 背景（词表退役的根因，详见 knowledge/conventions.md「判级/定价/门禁输入必须项目声明」条）：
++ * 旧 detectChangeRisk 用硬编码全宇宙词表对文档措辞/文件内容做机械匹配——「撞词≠危险」（换仓
++ * HTTP session / lifecycle 回调 / 变量名 entryPoint 全是良性词）且自指（判级引擎自身源码与教学
++ * 文案写满关键词，改引擎的变更被自家门禁打顶档）。本模块按 D-008 口径取而代之：
++ *
++ *   主声明 = `_module-map.yaml` 顶层 `blast:` 段（进 git、手工维护、modules rebuild --force
++ *   写盘时从 existingMap 文本回插保留——见 modules.js）：按路径前缀挂 `tier: S0~S3` 与
++ *   `evidence: true`（需要真实集成证据的显式标记，D-009——证据门只认它，不从仪式档推断）。
++ *   local.yaml `ceremony.blast_surfaces` 只升不降（逐文件取 max；不承载 evidence——证据语义
++ *   属共享 map）。
++ *   未命中声明面 → blast S1；未配置项目禁止回退旧词表（D-008：无默认词表兜底）。
++ *
++ * 零依赖纯函数 + 一个 IO 装载器；前缀匹配复用 matchModuleForFile 同款语义（字面量或目录
++ * 前缀，matchModuleForFile 先例：src/ceremony-tier.js / src/quick-gate-profile.js）——零新
++ * 正则族、不造第二套文法。
++ */
++import { readFileSync, existsSync, readdirSync } from 'fs'
++import { join } from 'path'
++import jsYaml from 'js-yaml'
++
++/** 未命中任何声明面时的 blast 缺省档（D-008：S1 起步，无词表兜底） */
++export const BLAST_NO_HIT_TIER = 'S1'
++
++/** 档位序（与 ceremony-tier.js CEREMONY_TIERS 同序；本地声明避免 core-engine↔本模块循环依赖） */
++const TIER_ORDER = ['S0', 'S1', 'S2', 'S3']
++
++function tierRank(t) {
++  return TIER_ORDER.indexOf(t)
++}
++
++function maxTier(a, b) {
++  return tierRank(a) >= tierRank(b) ? a : b
++}
++
++/** POSIX 归一（Windows 反斜杠兼容） */
++function toPosix(p) {
++  return String(p).replace(/\\/g, '/')
++}
++
++/**
++ * 单文件 × 单前缀匹配（matchModuleForFile 同款语义）：字面量相等或目录前缀命中
++ * （prefix 以 / 结尾时先剥尾斜杠；`src/a` 命中 `src/a.js` 与 `src/a/x.js`，不命中 `src/ab.js`）。
++ */
++export function blastPrefixMatches(file, prefix) {
++  const posix = toPosix(file)
++  const p = toPosix(prefix).replace(/\/+$/, '')
++  if (!p) return false
++  return posix === p || posix.startsWith(p + '/')
++}
++
++/**
++ * 声明面解析（纯函数）：files × 声明条目 → { tier, evidence, hitPrefixes }。
++ *   tier = 命中条目最高档（无命中 BLAST_NO_HIT_TIER）；evidence = 任一命中条目带
++ *   `evidence: true`；hitPrefixes = 命中的前缀（POSIX 化去重，审计/文案用）。
++ * 非法条目（tier 不在序、prefixes 非数组）逐条跳过不抛错（声明面是手工维护数据，
++ * 容错立场同 parseModuleMapSimple：坏段不缺省不拦截）。
++ *
++ * @param {string[]} files 变更文件面（声明面或实际 diff；反斜杠自动归一）
++ * @param {Array<{prefixes: string[], tier: string, evidence?: boolean}>} declarations
++ */
++export function resolveBlastSurfaces(files, declarations) {
++  const norm = (Array.isArray(files) ? files : []).map(toPosix).filter(Boolean)
++  const list = Array.isArray(declarations) ? declarations : []
++  let tier = BLAST_NO_HIT_TIER
++  let evidence = false
++  const hitSet = new Set()
++  for (const entry of list) {
++    if (entry == null || typeof entry !== 'object') continue
++    const prefixes = Array.isArray(entry.prefixes) ? entry.prefixes : []
++    const entryTier = TIER_ORDER.includes(entry.tier) ? entry.tier : null
++    const entryEvidence = entry.evidence === true
++    if (!entryTier && !entryEvidence) continue
++    for (const file of norm) {
++      for (const rawPrefix of prefixes) {
++        const prefix = toPosix(rawPrefix).replace(/\/+$/, '')
++        if (!prefix) continue
++        if (blastPrefixMatches(file, prefix)) {
++          if (entryTier) tier = maxTier(tier, entryTier)
++          if (entryEvidence) evidence = true
++          hitSet.add(prefix)
++          break // 该文件对该条目命中一次即止
++        }
++      }
++    }
++  }
++  return { tier, evidence, hitPrefixes: [...hitSet] }
++}
++
++/**
++ * 声明面装载（IO）：`_module-map.yaml` 顶层 `blast:` 段 + `local.yaml ceremony.blast_surfaces`
++ * 合并——**local 只升不降**（D-008：逐文件取 max；local 不承载 evidence，证据语义属共享 map）。
++ * 合并实现口径：map 声明原样透传；local 条目以「影子 tier 条目」参与解析（evidence 恒 false），
++ * resolveBlastSurfaces 的 max 语义天然保证只升不降。
++ *
++ * 容错：map/local 缺失、坏 YAML、blast 段/键形态非法 → 该源按空表（不缺省不拦截）。
++ *
++ * @param {{ specBase: string, project?: string|null, localCeremonyConfig?: object|null }} opts
++ *   specBase=.sillyspec 根；project=子项目名（缺省只试 docs/<project> 不猜）；
++ *   localCeremonyConfig=已读好的 local ceremony 段（缺省内部直读 local.yaml，容错）
++ * @returns {{ declarations: Array, mapDeclarations: Array, localDeclarations: Array }}
++ */
++export function loadBlastDeclarations({ specBase, project = null, localCeremonyConfig = null } = {}) {
++  const mapDeclarations = []
++  if (specBase && project) {
++    const mapPath = join(specBase, 'docs', project, 'modules', '_module-map.yaml')
++    try {
++      if (existsSync(mapPath)) {
++        const doc = jsYaml.load(readFileSync(mapPath, 'utf8'))
++        const blast = doc && typeof doc === 'object' ? doc.blast : null
++        if (Array.isArray(blast)) {
++          for (const entry of blast) {
++            if (entry == null || typeof entry !== 'object') continue
++            if (!Array.isArray(entry.prefixes) || entry.prefixes.length === 0) continue
++            if (!TIER_ORDER.includes(entry.tier)) continue
++            mapDeclarations.push({ prefixes: entry.prefixes.map(String), tier: entry.tier, evidence: entry.evidence === true })
++          }
++        }
++      }
++    } catch { /* 坏 map → 空表（手工数据容错，不拦截判级） */ }
++  }
++
++  let localCeremony = localCeremonyConfig
++  if (localCeremony == null && specBase) {
++    try {
++      const localPath = join(specBase, 'local.yaml')
++      if (existsSync(localPath)) {
++        const doc = jsYaml.load(readFileSync(localPath, 'utf8'))
++        localCeremony = doc && typeof doc === 'object' ? doc.ceremony : null
++      }
++    } catch { /* 坏 local → 无本地覆盖 */ }
++  }
++  const localDeclarations = []
++  const surfaces = localCeremony && Array.isArray(localCeremony.blast_surfaces) ? localCeremony.blast_surfaces : []
++  for (const entry of surfaces) {
++    if (entry == null || typeof entry !== 'object') continue
++    if (!Array.isArray(entry.prefixes) || entry.prefixes.length === 0) continue
++    if (!TIER_ORDER.includes(entry.tier)) continue
++    // local 只升 tier 不承载 evidence（evidence 恒 false——证据语义属共享 map，D-009）
++    localDeclarations.push({ prefixes: entry.prefixes.map(String), tier: entry.tier, evidence: false })
++  }
++
++  return { declarations: [...mapDeclarations, ...localDeclarations], mapDeclarations, localDeclarations }
++}
++
++/**
++ * 多项目并集装载（事实面用——调用方无 project 语境时扫各 docs/<project>/modules/_module-map.yaml
++ * 取全部项目声明并集）：多项目仓对 repo 级文件面的变更按全声明面保守计价；local.yaml 覆盖
++ * 同入（specBase 只有一份 local，全项目共享升档面）。任一项目装载异常 → 该项目按空表跳过。
++ * @param {{ specBase: string, localCeremonyConfig?: object|null }} opts
++ * @returns {Array<{prefixes: string[], tier: string, evidence?: boolean}>}
++ */
++export function loadBlastDeclarationsAllProjects({ specBase, localCeremonyConfig = null } = {}) {
++  const all = []
++  if (!specBase) return all
++  try {
++    const docsDir = join(specBase, 'docs')
++    if (!existsSync(docsDir)) return all
++    for (const entry of readdirSync(docsDir, { withFileTypes: true })) {
++      if (!entry.isDirectory()) continue
++      const { declarations } = loadBlastDeclarations({ specBase, project: entry.name, localCeremonyConfig })
++      all.push(...declarations)
++    }
++  } catch { /* docs 目录不可读 → 空表（手工数据容错） */ }
++  return all
++}
+diff --git a/src/ceremony-tier.js b/src/ceremony-tier.js
+index dd71224..52acf85 100644
+--- a/src/ceremony-tier.js
++++ b/src/ceremony-tier.js
+@@ -3,15 +3,21 @@
+  *
+  * 2026-09-18-ceremony-risk-pricing task-01 / FR-01（D-001 引擎骨架、D-004 显式声明通道、
+  * D-008 friction 升档规则）。ceremony_tier = max(blast, span, friction)：评审轮次/计划厚度/
+- * Grill 深度不再由 agent 自报的 plan_level 定价，而是三分量客观取封顶——一切 agent 自报
+- * 只可升不可降（升档永远尊重；降档须理由并标记 explicitDowngradeAccepted，待收口双跑
+- * 复核）。本模块是定价的单点真相源，消费面：review-tier.js（评审档）、run/gates.js
+- * （阶段门升档）、verify-postcheck.js / complete-handlers.js（双跑收口）。
++ * Grill 深度不再由 agent 自报的 plan_level 定价，而是三分量客观取封顶。自报契约
++ * （2026-09-19-ceremony-pricing-five-cuts D-003 修订）：**无摩擦迁移时随声明面重定价**
++ * （完成门声明追赶，applyDeclarationCatchUp——后补 risk_level/声明面变化可升可降）；
++ * **有摩擦迁移时地板不退**（transitions 最高 to 档托底）；摩擦升档本身与 force_tier 仍
++ * 只升不降；本 computeCeremonyTier 内的 explicitRiskLevel 降档仍须 reason 并标记
++ * explicitDowngradeAccepted 待收口双跑复核。本模块是定价的单点真相源，消费面：
++ * review-tier.js（评审档）、run/gates.js（阶段门升档）、verify-postcheck.js /
++ * complete-handlers.js（双跑收口）。
+  *
+  * 三轴口径：
+- *   blast ＝ riskDetection.level（detectChangeRisk 输出）经 RISK_TO_TIER 五档映射 ＋ 显式
+- *            声明升降规则；riskDetection 缺失 / level 未知 → 保守缺省 S2（brownfield 兼容：
+- *            ≈现状 independent×1，不静默降级）。
++ *   blast ＝ blastTier 声明面直入（resolveChangeRisk：变更文件 × _module-map.yaml 顶层
++ *            blast 段声明危险面，D-008——2026-09-19-ceremony-pricing-five-cuts 起的
++ *            主通道；未命中 S1、词表判级退役）＞ riskDetection.level 经 RISK_TO_TIER 五档
++ *            映射（legacy 兼容层）＋ 显式声明升降规则；两者皆缺 → 保守缺省 S2
++ *            （brownfield 兼容：≈现状 independent×1，不静默降级）。
+  *   span  ＝ 声明文件数 ≥ SPAN_FILES_THRESHOLD ∨ 跨模块数 ≥ SPAN_MODULES_THRESHOLD ∨
+  *            声明文件命中 QUICK_RISK_PATH_PATTERNS → 至少 S2。moduleIndex 沿用
+  *            computeGateProfile 的输入形态（_module-map.yaml 解析结果，先例
+@@ -27,19 +33,16 @@
+  * 的纯常量 QUICK_RISK_PATH_PATTERNS（quick-gate-profile.js:28 先例）。阈值常量集中文件
+  * 顶部可调（R-02：上线前用 friction-ledger 历史变更回放标定再定值）。
+  */
+-import { QUICK_RISK_PATH_PATTERNS } from './change-risk-profile.js'
++import { QUICK_RISK_PATH_PATTERNS, RISK_TO_TIER } from './change-risk-profile.js'
+ 
+ /** 仪式档位序（只升不降的偏序基准，index 即高低：S0=0 … S3=3） */
+ export const CEREMONY_TIERS = ['S0', 'S1', 'S2', 'S3']
+ 
+-/** detectChangeRisk 五档风险 → 仪式档位映射（integration 与 deployment 同归 S3：顶档仪式不分家） */
+-export const RISK_TO_TIER = {
+-  'doc-only': 'S0',
+-  'unit-sufficient': 'S1',
+-  'contract-required': 'S2',
+-  'integration-critical': 'S3',
+-  'deployment-critical': 'S3',
+-}
++// RISK_TO_TIER 迁源 re-export（2026-09-19-ceremony-pricing-five-cuts task-02）：五级词→档位映射表
++// 判级域归属 change-risk-profile.js（resolveChangeRisk 消费方），本文件 re-export 保持既有
++// import 面（test/ceremony-tier.test.mjs 等）不变——依赖方向 ceremony-tier→change-risk-profile
++// 已有先例（QUICK_RISK_PATH_PATTERNS 同款）。
++export { RISK_TO_TIER }
+ 
+ // ============ 阈值常量（集中可调；R-02 friction-ledger 历史回放标定的落点） ============
+ 
+@@ -127,8 +130,11 @@ function matchModuleForFile(posix, modulesObj) {
+  * 三轴定价：ceremony_tier = max(blast, span, friction)（客观计算，一切自报只升不可降）。
+  *
+  * @param {object} [opts]
+- * @param {{level: string}} [opts.riskDetection] detectChangeRisk 输出（只消费 level）；
++ * @param {{level: string}} [opts.riskDetection] legacy 判级输入（五级词 level，只消费 level；词表判级已退役——保留为既有调用方兼容通道，新调用走 blastTier）；
+  *   缺失 / level 未知 → blast 保守缺省 S2（brownfield：不静默降级）
++ * @param {string} [opts.blastTier] blast 轴直入（2026-09-19-ceremony-pricing-five-cuts task-03：
++ *   resolveChangeRisk 声明面判级产物 tier——在场合跳过 riskDetection.level 映射直接起算；
++ *   与 riskDetection 并存时 blastTier 优先；显式声明升降规则照常套用）
+  * @param {string|{level: string, reason: string}} [opts.explicitRiskLevel] 显式声明
+  *   （design frontmatter risk_level 通道）：升档永远尊重；降档须 reason（无 reason 的降档
+  *   忽略并在 reasons 留痕），采纳时 explicitDowngradeAccepted=true 待收口双跑复核
+@@ -142,21 +148,26 @@ function matchModuleForFile(posix, modulesObj) {
+  *   friction 分量＝升档后的档（未起爆为 S0，不参与封顶）；reasons 逐分量留痕（含阈值与
+  *   命中明细），供消费方审计打印与双跑比对
+  */
+-export function computeCeremonyTier({ riskDetection, explicitRiskLevel, declaredFiles, moduleIndex, frictionCounts } = {}) {
++export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, frictionCounts } = {}) {
+   const reasons = []
+   let explicitDowngradeAccepted = false
+ 
+-  // ── blast 轴：判级映射 + 显式声明升降 ──
+-  const detectedLevel = riskDetection != null && typeof riskDetection === 'object' ? riskDetection.level : undefined
+-  const mappedTier = RISK_TO_TIER[detectedLevel]
++  // ── blast 轴：声明面直入（优先）＞ 判级映射 ＞ 保守缺省 ──
+   let blast
+-  if (mappedTier) {
+-    blast = mappedTier
+-    reasons.push(`blast=${blast}（riskDetection.level=${detectedLevel} 经 RISK_TO_TIER 映射）`)
++  if (CEREMONY_TIERS.includes(blastTier)) {
++    blast = blastTier
++    reasons.push(`blast=${blast}（声明面直入 blastTier——resolveChangeRisk 声明危险面判级，D-008）`)
+   } else {
+-    blast = 'S2'
+-    const cause = detectedLevel === undefined ? 'riskDetection.level 缺失' : `riskDetection.level=${String(detectedLevel)} 未知`
+-    reasons.push(`blast=S2（保守缺省：${cause}——brownfield 不静默降级）`)
++    const detectedLevel = riskDetection != null && typeof riskDetection === 'object' ? riskDetection.level : undefined
++    const mappedTier = RISK_TO_TIER[detectedLevel]
++    if (mappedTier) {
++      blast = mappedTier
++      reasons.push(`blast=${blast}（riskDetection.level=${detectedLevel} 经 RISK_TO_TIER 映射）`)
++    } else {
++      blast = 'S2'
++      const cause = detectedLevel === undefined ? 'riskDetection.level 缺失' : `riskDetection.level=${String(detectedLevel)} 未知`
++      reasons.push(`blast=S2（保守缺省：${cause}——brownfield 不静默降级）`)
++    }
+   }
+ 
+   const explicit = normalizeExplicit(explicitRiskLevel)
+@@ -254,26 +265,87 @@ export function escalateByFriction(currentTier, frictionCounts, thresholds) {
+   return { tier: CEREMONY_TIERS[nextRank], escalated: nextRank > currentRank }
+ }
+ 
++/**
++ * 声明追赶重定价（2026-09-19-ceremony-pricing-five-cuts task-03 / D-003 纯函数单点）：
++ * 档位文件在场时完成门按当前声明面重算开跑价，「只升不降」契约修订为三分支——
++ *   ① currentDoc.transitions 为空且 frictionTotal < 阈值 → 整档换重算结果（可升可降），
++ *     reasons 记「声明追赶重定价」（后补 risk_level/声明面变化由此生效，不再粘住）；
++ *   ② transitions 为空且 frictionTotal ≥ 阈值 → 同样整档换、不设地板——后续 escalateByFriction
++ *     在同一锁内按既有 +1 语义即时兑现摩擦价（重算 S1 → 终 S2），摩擦价不因追赶丢失也不预支
++ *     （可达入参：gate 失败先记摩擦于级联前段、升档检查点在级联末位，Grill P1-1 边界）；
++ *   ③ transitions 非空 → 最终档 = maxTier(重算档, 摩擦地板)，地板 = transitions 内最高 to 档
++ *     （已付摩擦价不白付；后续 escalate 若仍超阈按既有语义再 +1，封顶 S3）。
++ * 重定价不记 transitions（该数组专属摩擦迁移审计）；transitions 原样透传。
++ *
++ * @param {object} opts
++ * @param {{tier: string, components?: object, reasons?: string[], transitions?: Array<{to: string}>}} [opts.currentDoc] 现档位 doc（读档侧）
++ * @param {string} opts.recomputedTier 按当前声明面重算的档（computeInitialCeremonyTierDoc 产物 tier）
++ * @param {object} [opts.recomputedComponents] 重算分量（透传进新 doc）
++ * @param {string[]} [opts.recomputedReasons] 重算 reasons（事件文案由调用方以参数区分——追赶场景不追加「初始档/首见」行）
++ * @param {object} [opts.frictionCounts] ledger 累计账口径（携 verify_run_failed 第三键透传容忍）
++ * @returns {{ tier: string, components: object, reasons: string[], transitions: Array<object> }}
++ */
++export function applyDeclarationCatchUp({ currentDoc, recomputedTier, recomputedComponents = {}, recomputedReasons = [], frictionCounts } = {}) {
++  const transitions = Array.isArray(currentDoc && currentDoc.transitions) ? currentDoc.transitions : []
++  const baseReasons = Array.isArray(currentDoc && currentDoc.reasons) ? currentDoc.reasons : []
++  const recomputed = CEREMONY_TIERS.includes(recomputedTier) ? recomputedTier : (currentDoc && currentDoc.tier) || 'S1'
++  const frictionOver = frictionTotal(frictionCounts) >= FRICTION_ESCALATION_THRESHOLD
++  if (transitions.length === 0) {
++    // 分支①②：无摩擦迁移——整档换（超阈不设地板，摩擦价交由同锁 escalate 即时兑现）
++    return {
++      tier: recomputed,
++      components: recomputedComponents,
++      reasons: [
++        ...recomputedReasons,
++        `声明追赶重定价（${(currentDoc && currentDoc.tier) || '无'} → ${recomputed}，无摩擦迁移${frictionOver ? '但摩擦已超阈——地板不设，同锁 escalate 即时 +1 兑现' : '且未超阈'}，blast/span 分量随当前声明面刷新，D-003）`,
++      ],
++      transitions,
++    }
++  }
++  // 分支③：摩擦地板不退——最终档 = max(重算档, transitions 最高 to)
++  const floor = transitions.reduce((acc, t) => maxTier(acc, t && t.to), 'S0')
++  const final = maxTier(recomputed, floor)
++  return {
++    tier: final,
++    components: recomputedComponents,
++    reasons: [
++      ...recomputedReasons,
++      ...baseReasons.slice(-3), // 摩擦地板语境留最近三条旧痕防断代（全部保留会随每道门膨胀）
++      `摩擦地板 ${floor} 不退，重算 ${recomputed} 被地板托底 → ${final}（transitions ${transitions.length} 条在场，D-003）`,
++    ],
++    transitions,
++  }
++}
++
+ /**
+  * 双跑收口对账（verify --done / archive confirm 两出口）：事实面仅重跑 blast+span 两轴
+  * （实际 diff 无声明通道；摩擦属过程面，阶段门已计过价，不重复升档），与开跑声明档比对。
+- * 声明档低于事实档 → mismatch=true、severity='error'（懒 agent 低报硬 flag）；声明档
++ * 声明档低于事实档 → mismatch=true、severity='error'（懒 agent 低报硬 flag）；声明档高于
++ * 事实档 → 高报态 severity='warn'（D-005：只记账不阻断——高报代价是更重仪式自罚机制天然
++ * 在场，硬拦会把「误伤粘住」变成「收口再打回一轮」反向涨 token）；等档 'none'。声明档
+  * 非法/缺失按最低档对账（fail-safe：无法证明声明到位 → 视为低报，宁严勿松）。
+  *
+  * @param {object} [opts]
+  * @param {string} [opts.declaredTier] 开跑定价落档的声明档
+- * @param {object} [opts.factRiskDetection] 实际 diff 重跑的 detectChangeRisk 输出
++ * @param {object} [opts.factRiskDetection] legacy 事实面判级输入（新调用走 factBlastTier）
++ * @param {string} [opts.factBlastTier] 实际 diff × 声明面判级 tier（resolveChangeRisk 产物——
++ *   在场合跳过 factRiskDetection 映射直入，2026-09-19-ceremony-pricing-five-cuts task-03）
+  * @param {string[]} [opts.factFiles] 实际变更文件（scope-audit / apply-pathspec 文件集）
+  * @param {object|null} [opts.factModuleIndex] _module-map.yaml 解析结果
+- * @returns {{ factTier: 'S0'|'S1'|'S2'|'S3', mismatch: boolean, severity: 'error'|'none' }}
++ * @returns {{ factTier: 'S0'|'S1'|'S2'|'S3', mismatch: boolean, severity: 'error'|'warn'|'none' }}
+  */
+-export function reconcileDualRun({ declaredTier, factRiskDetection, factFiles, factModuleIndex } = {}) {
++export function reconcileDualRun({ declaredTier, factRiskDetection, factBlastTier, factFiles, factModuleIndex } = {}) {
+   const fact = computeCeremonyTier({
+     riskDetection: factRiskDetection,
++    blastTier: factBlastTier,
+     declaredFiles: factFiles,
+     moduleIndex: factModuleIndex,
+     frictionCounts: {},
+   })
+-  const mismatch = tierRank(fact.tier) > tierRank(declaredTier)
+-  return { factTier: fact.tier, mismatch, severity: mismatch ? 'error' : 'none' }
++  const declaredRank = tierRank(declaredTier)
++  const factRank = tierRank(fact.tier)
++  // 声明档非法/缺失（rank<0）按最低档对账 → 事实高于声明即 error（fail-safe 宁严勿松）
++  const mismatch = factRank > declaredRank
++  const overReport = declaredRank > factRank && declaredRank >= 0
++  return { factTier: fact.tier, mismatch, severity: mismatch ? 'error' : overReport ? 'warn' : 'none' }
+ }
+diff --git a/src/change-risk-profile.js b/src/change-risk-profile.js
+index 81596eb..a994b51 100644
+--- a/src/change-risk-profile.js
++++ b/src/change-risk-profile.js
+@@ -4,58 +4,24 @@
+  * 根据变更涉及的文件类型、关键词、git diff、brainstorm 产物，
+  * 判定 5 级风险（doc-only / unit-sufficient / contract-required /
+  * integration-critical / deployment-critical），产出门控验证需求。
++ *
++ * 2026-09-19-ceremony-pricing-five-cuts：判级唯一入口 resolveChangeRisk（危险面=项目
++ * _module-map.yaml 顶层 blast 段路径声明 × 变更文件，D-008；explicit frontmatter 只压仪式档
++ * 不豁免证据，D-009）。散文词表判级（detectChangeRisk 及词表/否定抑制/枚举继承机器）已整体
++ * 退役删除。RISK_TO_TIER 五级词→档位映射表迁入本文件（ceremony-tier re-export 保持既有
++ * import 面——依赖方向 ceremony-tier→本文件已有先例）。证据门判据（VERIFICATION_NEEDS /
++ * checkIntegrationEvidence / auditRuntimeReceipt）与 span 轴 QUICK_RISK_PATH_PATTERNS 原样保留。
+  */
+ import { readFileSync, statSync } from 'fs'
+ import { join, isAbsolute } from 'path'
++import { resolveBlastSurfaces } from './blast-surface.js'
+ 
+-// ============ 向后兼容：旧的 INTEGRATION_CRITICAL_PATTERNS ============
+-
+-// 文件名型模式边界（ql-20260918-009，回放实验实证）：\b 对 `-`/`_`/`.` 前缀漏界——design 非目标
+-// 行写 mcp-server.js、changedFiles 含 src/mcp-server.js 均被误判 deployment-critical（触发 D-004
+-// 人肉降级）。行级用负向后顾 (?<![\w\-._]) 排除定界符前缀；路径级用行首/分隔符边界。
+-// 真阳面（src/server.js、行首/空格/中文紧邻 server.js、bin/server.js）双回归钉在
+-// test/quick-gate-profile.test.mjs——判级输入面，假修=静默降 risk 主价。
+-const INTEGRATION_CRITICAL_PATTERNS = [
+-  /\bdaemon\b/i,
+-  /\bbackend\b/i,
+-  /\bclient.*api\b/i,
+-  /\bgrpc\b/i,
+-  /\bwebsocket\b/i,
+-  /\bhttp.*client\b/i,
+-  /\bsession\b/i,
+-  /\blease\b/i,
+-  /\bagent.?run\b/i,
+-  /\blifecycle\b/i,
+-  /\bstate.?transition\b/i,
+-  /\bclaim\b/i,
+-  /\bheartbeat\b/i,
+-  /\bcross.?process\b/i,
+-  /\bipc\b/i,
+-  /\bmessage.?queue\b/i,
+-  /\bpub.?sub\b/i,
+-  /(?<![\w\-._])cli\.ts\b/i,
+-  /(?<![\w\-._])main\.ts\b/i,
+-  /\bentrypoint\b/i,
+-  /(?<![\w\-._])server\.(js|ts)\b/i,
+-  /\bbootstrap\b/i,
+-  /\bdockerfile\b/i,
+-  /\bdocker.?compose\b/i,
+-]
+-
+-const INTEGRATION_FILE_PATTERNS = [
+-  /daemon/i,
+-  /session.?manager/i,
+-  /agent.?run/i,
+-  /lifecycle/i,
+-  /state.?machine/i,
+-  /lease/i,
+-  /(?:^|[\/\\])cli\.(js|ts)$/,
+-  /(?:^|[\/\\])main\.(js|ts)$/,
+-  /(?:^|[\/\\])server\.(js|ts)$/,
+-  /bootstrap/i,
+-  /startup/i,
+-]
++// ============（已退役）词表散文判级 ============
+ 
++// 2026-09-19-ceremony-pricing-five-cuts task-03 删除收口：INTEGRATION_CRITICAL_PATTERNS /
++// INTEGRATION_FILE_PATTERNS 全宇宙词表与 detectChangeRisk 散文扫描整体退役（D-008：撞词≠危险、
++// 自指陷阱——判级唯一入口是 resolveChangeRisk 声明面口径；知识库 conventions.md「判级/定价/门禁
++// 输入必须项目声明」条目为口径真相源）。
+ // ============ quick 出口门禁：路径模式风险表（2026-09-14-quick-exit-tiered-gates task-01） ============
+ //
+ // quick 侧「风险特征命中」的单一数据源（design D-004@v2：v1 仅路径模式——不做 diff 关键词
+@@ -143,88 +109,27 @@ export const VERIFICATION_NEEDS = {
+   },
+ }
+ 
+-/** 风险分级的判定来源（命中关键词来源 = design.md / plan.md 内容，非改动文件本身） */
++/** 风险分级的判定来源（2026-09-19-ceremony-pricing-five-cuts task-03 改声明面口径） */
+ export const RISK_LEVEL_CAUSES = {
+   'deployment-critical':
+-    'design.md / plan.md 命中启动入口关键词（cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint）。' +
+-    '注意：这是按 design/plan 里的措辞判定的，不一定代表你真改了启动入口；若属误判可在 design.md frontmatter 用 risk_level 显式声明真实等级（如 unit-sufficient）覆盖——不要靠删措辞绕门控，危险链路该有真实启动证据。',
++    '变更文件面命中项目声明危险面（_module-map.yaml 顶层 blast 段）且判级为顶档。' +
++    '这是按「文件路径 × 项目声明」判定的——若认为该路径不该定此价：改 map 声明（git 可见）；危险链路该有真实启动证据。',
+   'integration-critical':
+-    'design.md / plan.md 命中跨进程/状态机关键词（daemon / backend / session / lease / lifecycle / heartbeat 等）。' +
+-    '关键词前方同句有否定提示（不/未/无/避免…）的命中已被抑制不参与判级——若本变更实际涉及跨进程/状态机改动，请在 design.md frontmatter 用 risk_level 声明真实等级。',
+-  'contract-required': 'design.md / plan.md 命中 API contract 关键词（api / client / contract / dto）。',
+-  'explicit': 'design.md frontmatter 的 risk_level 显式声明（覆盖关键词判级）。',
++    '变更文件面命中项目声明危险面的 evidence:true 路径（需要真实集成证据，D-009）。' +
++    'frontmatter risk_level 只压仪式档、不豁免证据要求——证据豁免=改 map 的 evidence 声明（git 可见）。',
++  'contract-required': '变更文件面命中项目声明的 S2 档危险面（跨模块契约域）。',
++  'explicit': 'design.md frontmatter 的 risk_level 显式声明（压仪式档；不豁免 evidence 要求）。',
+ }
+ 
+-/** design.md frontmatter 可显式声明的合法 risk_level 值（与 detectChangeRisk 判级结果同集合） */
++/** design.md frontmatter 可显式声明的合法 risk_level 值（存量五级词兼容集合） */
+ const RISK_LEVELS = ['doc-only', 'unit-sufficient', 'contract-required', 'integration-critical', 'deployment-critical']
+ 
+-// ============ 同句否定抑制（坑 risk-negation-blindness） ============
+-//
+-// detectChangeRisk 原为全文 blob 字面命中：design 写「本次不新增 daemon 协议」仍判
+-// integration-critical、强制全套集成证据，对无状态后端变更误伤（用户实证 2026-08-24）。
+-// 机械抑制规则（不做事语义理解，三段判定）：
+-//   ① 子句切分：按 句号/分号/逗号/换行 切子句，否定只在同子句内生效——「不改动 A。新增 B」
+-//      的 B 不继承否定；
+-//   ② 直接否定：命中位置前方 NEGATION_WINDOW 字符内出现否定提示 → 抑制；
+-//   ③ 枚举继承：「不改动 daemon / session / lifecycle」中后位关键词与前位被抑制关键词之间
+-//      只隔枚举连接符（空格 / 、 , 和 与 及 and or）→ 继承抑制——纯距离窗口盖不住长枚举，
+-//      而「不涉及 daemon 的情况下重构 session」的间隔是普通文字，不继承（session 正常命中）。
+-// 同一关键词的**全部**命中都被抑制才不参与判级（任一处未抑制命中仍算数）。降级不静默：
+-// design/verify 两道 gate 会把被抑制词打进 warning（可审计），design.md frontmatter
+-// risk_level 仍是双向权威覆盖通道（声明优先级最高，行为不变）。
+-//
+-// 否定提示词排除假阳：不同/不断/不久/不时/不仅（「不」的非否定合成词）、无状态/无法
+-// （「无状态后端」是常见肯定表述）、非常/非空/非法（「非空校验 session」是在改 session）。
+-const NEGATION_CUES = /不(?!同|断|久|时|仅|妨)|未|无(?!状态|法)|非(?!常|空|法)|避免|排除|无需|不再|no\s+new|not\b|don'?t|without|avoid/i
+-const NEGATION_WINDOW = 16
+-const CLAUSE_SPLIT_RE = /[。；;，,\n]/
+-const ENUM_GAP_RE = /^[\s/|、,，]*(?:(?:和|与|及|and|or)[\s/|、,，]*)*$/i
+-
+-/**
+- * 单行内统计各关键词命中（同子句否定窗口 + 枚举继承）。
+- * @returns {Map<string, {kept: number, suppressed: number}>} trigger 原文 → 命中统计
+- */
+-function collectLineTriggerStats(line, patterns, stats = new Map()) {
+-  for (const pattern of patterns) {
+-    const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+-    let m
+-    while ((m = re.exec(line)) !== null) {
+-      if (m[0].length === 0) { re.lastIndex++; continue }
+-      // 行内绝对偏移 → 子句内相对偏移（子句内可能有多命中，逐一判定）
+-      const clauseStart = line.slice(0, m.index).split(CLAUSE_SPLIT_RE).pop().length
+-      const clauseStartAbs = m.index - clauseStart
+-      const clause = line.slice(clauseStartAbs).split(CLAUSE_SPLIT_RE)[0]
+-      const relIndex = m.index - clauseStartAbs
+-      const prefix = clause.slice(0, relIndex)
+-      let negated = NEGATION_CUES.test(prefix.slice(-NEGATION_WINDOW))
+-      if (!negated && prefix.length > 0) {
+-        // 枚举继承：查同子句内更早的关键词命中，且间隔只有枚举连接符
+-        for (const other of patterns) {
+-          const ore = new RegExp(other.source, other.flags.includes('g') ? other.flags : other.flags + 'g')
+-          let om
+-          while ((om = ore.exec(clause)) !== null) {
+-            if (om[0].length === 0) { ore.lastIndex++; continue }
+-            if (om.index >= relIndex) break
+-            const gap = clause.slice(om.index + om[0].length, relIndex)
+-            const prevSuppressed = NEGATION_CUES.test(clause.slice(0, om.index).slice(-NEGATION_WINDOW))
+-            if (prevSuppressed && ENUM_GAP_RE.test(gap)) { negated = true; break }
+-          }
+-          if (negated) break
+-        }
+-      }
+-      const stat = stats.get(m[0]) || { kept: 0, suppressed: 0 }
+-      if (negated) stat.suppressed++
+-      else stat.kept++
+-      stats.set(m[0], stat)
+-    }
+-  }
+-  return stats
+-}
+-
+ /**
+  * 从 design.md 顶部 frontmatter 提取显式 risk_level 声明。
+  * 只认文档最开头 `---\n...\n---` 块内的 `risk_level: <level>` 单行（与 plan.md 的 plan_level 同款解析），
+  * 不扫正文——避免正文里讨论 risk_level 措辞时被误当声明。返回合法 level 或 null。
++ * 2026-09-19-ceremony-pricing-five-cuts task-03 删除收口后保留：声明面判级 explicit 通道的
++ * 唯一提取器（stage-contract / review-tier / verify-quality-scan / run-gates 消费）。
+  */
+ export function extractExplicitRiskLevel(designContent = '') {
+   const fm = designContent.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+@@ -235,75 +140,50 @@ export function extractExplicitRiskLevel(designContent = '') {
+   return RISK_LEVELS.includes(value) ? value : null
+ }
+ 
+-export function detectChangeRisk({ designContent = '', planContent = '', changedFiles = [] } = {}) {
+-  const triggers = []
+-
+-  // ── 显式豁免优先：design.md frontmatter 声明 risk_level → 以声明为准，跳过关键词判级 ──
+-  // 历史教训：detectChangeRisk 是机械字面匹配——design 写「本次不改动 daemon/session」曾命中关键词
+-  // 被误判 integration/deployment-critical，强制要全套集成证据，对无状态后端变更误伤。现给两条通道：
+-  // ① 同句否定抑制（上方 NEGATION_CUES，机械可审计、只认「关键词前方否定窗口」不做语义理解）；
+-  // ② frontmatter 显式声明（显式、诚实、可审计，落在 design frontmatter + verify-result）——本分支。
+-  // 声明仍走门控（结论 FAIL 仍拦），但豁免级（unit-sufficient 等）不再强制集成证据。
+-  const explicit = extractExplicitRiskLevel(designContent)
+-  if (explicit) {
+-    const requiredVerification =
+-      explicit === 'deployment-critical' ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'real_startup_once'] :
+-      explicit === 'integration-critical' ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion'] :
+-      explicit === 'contract-required' ? ['unit_tests', 'contract_tests'] :
+-      explicit === 'doc-only' ? ['static_check'] :
+-      ['unit_tests']
+-    return { level: explicit, triggers: ['risk_level (explicit)'], suppressedTriggers: [], requiredVerification, explicit: true }
+-  }
+-
+-  const combined = [designContent, planContent].join('\n')
+-
+-  // 逐行收集命中：同句否定窗口内的命中进 suppressed（全部命中均被抑制才剔除该 trigger）
+-  const stats = new Map()
+-  for (const line of combined.split('\n')) {
+-    collectLineTriggerStats(line, INTEGRATION_CRITICAL_PATTERNS, stats)
+-  }
+-  const suppressedTriggers = []
+-  for (const [t, stat] of stats) {
+-    if (stat.kept > 0) triggers.push(t)
+-    else suppressedTriggers.push(t)
+-  }
+-
+-  for (const file of changedFiles) {
+-    for (const pattern of INTEGRATION_FILE_PATTERNS) {
+-      if (pattern.test(file)) {
+-        pattern.lastIndex = 0
+-        const match = file.match(pattern)
+-        if (match && !triggers.includes(match[0])) triggers.push(match[0])
+-      }
+-    }
+-  }
+-
+-  if (triggers.length === 0) {
+-    // 关键词命中全被否定语境抑制（或本就无命中）→ doc-only；抑制词随 suppressedTriggers 上报可审计
+-    return { level: 'doc-only', triggers: [], suppressedTriggers, requiredVerification: ['static_check'] }
+-  }
+-
+-  const deploymentTrigger = triggers.some(t => /cli\.ts|main\.ts|server\.(js|ts)|bootstrap|entrypoint/i.test(t))
+-  const lifecycleTrigger = triggers.some(t => /session|lease|agent.?run|lifecycle|state.?transition|claim|heartbeat/i.test(t))
+-  const crossProcessTrigger = triggers.some(t => /daemon|backend|client.*api|grpc|websocket|cross.?process|ipc|message.?queue/i.test(t))
+-
+-  let level
+-  const requiredVerification = ['unit_tests']
++/**
++ * 五级风险词 → 仪式档位映射（integration 与 deployment 同归 S3：顶档仪式不分家）。
++ * 2026-09-19-ceremony-pricing-five-cuts task-02 自 ceremony-tier.js 迁入（判级域归属本文件，
++ * ceremony-tier re-export 保持既有 import 面不变）；resolveChangeRisk 的 explicitRiskLevel
++ * 兼容通道消费本表（存量 frontmatter 五级词）。
++ */
++export const RISK_TO_TIER = {
++  'doc-only': 'S0',
++  'unit-sufficient': 'S1',
++  'contract-required': 'S2',
++  'integration-critical': 'S3',
++  'deployment-critical': 'S3',
++}
+ 
+-  if (deploymentTrigger) {
+-    level = 'deployment-critical'
+-    requiredVerification.push('contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'real_startup_once')
+-  } else if (lifecycleTrigger || crossProcessTrigger) {
+-    level = 'integration-critical'
+-    requiredVerification.push('contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion')
+-  } else if (triggers.some(t => /api|client|contract|dto/i.test(t))) {
+-    level = 'contract-required'
+-    requiredVerification.push('contract_tests')
+-  } else {
+-    level = 'unit-sufficient'
+-  }
++// ============ 声明面判级（2026-09-19-ceremony-pricing-five-cuts task-02 / D-008 / D-009）============
++//
++// 新判级入口：files × 项目声明危险面（loadBlastDeclarations 装载 map blast 段 + local 只升合并）
++// → { tier, evidenceRequired, explicit, hitPrefixes, requiredVerification }。
++//   tier：命中声明面最高档（无命中 S1——未配置项目禁回退词表，D-008）；explicitRiskLevel
++//   （frontmatter 五级词经 RISK_TO_TIER 存量兼容）存在时覆盖 tier（人工通道升/降均尊重），
++//   **不豁免 evidenceRequired**（D-009：证据豁免=改 map，git 可见——收掉旧显式短路连证据门
++//   一起免的懒 agent 洞）。
++//   evidenceRequired → requiredVerification 取现行 integration-critical 组原样（证据门判据零改动）。
+ 
+-  return { level, triggers, suppressedTriggers, requiredVerification }
++/**
++ * 声明面判级（纯函数）。
++ * @param {{ files?: string[], blastDeclarations?: Array<{prefixes: string[], tier: string, evidence?: boolean}>, explicitRiskLevel?: string|null }} opts
++ * @returns {{ tier: 'S0'|'S1'|'S2'|'S3', level: string, evidenceRequired: boolean, explicit: boolean, hitPrefixes: string[], requiredVerification: string[] }}
++ *   level＝五级词兼容字段（存量消费面零改动）：evidenceRequired → 'integration-critical'；
++ *   否则 tier 反查（S0 doc-only / S1 unit-sufficient / S2 contract-required / S3 integration-critical）。
++ */
++const TIER_TO_COMPAT_LEVEL = { S0: 'doc-only', S1: 'unit-sufficient', S2: 'contract-required', S3: 'integration-critical' }
++
++export function resolveChangeRisk({ files = [], blastDeclarations = [], explicitRiskLevel = null } = {}) {
++  const surfaces = resolveBlastSurfaces(files, blastDeclarations)
++  const level = typeof explicitRiskLevel === 'string' ? explicitRiskLevel.trim().toLowerCase() : ''
++  const explicitTier = level ? RISK_TO_TIER[level] : undefined
++  const tier = explicitTier ? explicitTier : surfaces.tier
++  const evidenceRequired = surfaces.evidence
++  const requiredVerification = evidenceRequired
++    ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion']
++    : ['unit_tests']
++  const compatLevel = evidenceRequired ? 'integration-critical' : TIER_TO_COMPAT_LEVEL[tier]
++  return { tier, level: compatLevel, evidenceRequired, explicit: Boolean(explicitTier), hitPrefixes: surfaces.hitPrefixes, requiredVerification }
+ }
+ 
+ // ============ 回执来源分类打标（X-10 / D-002 / D-006，2026-09-17-pass-cap-semantics task-02） ============
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 1342082..c2066b1 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -229,8 +229,9 @@ export const LOCAL_YAML_SCHEMA = {
+     {
+       id: 'ceremony',
+       title: '评审仪式档位（ceremony tier）',
+-      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（2026-09-18-ceremony-risk-pricing），agent 自报只可升不可降；本段是逃生阀与影子期开关。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
++      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（blast 轴输入=项目声明危险面 _module-map.yaml 顶层 blast 段，2026-09-19-ceremony-pricing-five-cuts）；完成门声明追赶重定价——无摩擦迁移随声明面可升可降、有摩擦迁移地板不退，force_tier 仍只升不降；本段是逃生阀/影子期开关/逐机升档面。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
+       keys: [
++        { path: 'ceremony.blast_surfaces', type: 'json', optional: true, status: 'live', readers: ['loadBlastDeclarations (src/blast-surface.js — local 逐机升档，与 map 声明逐文件取 max)'], desc: 'blast 危险面逐机覆盖：[{ prefixes: [...], tier: S0~S3 }]——主声明在 _module-map.yaml 顶层 blast 段（进 git、可挂 evidence 位）；本键只升不降（与 map 命中逐文件取 max，压低共享声明无效）、不承载 evidence（证据语义属共享 map，D-009）。非法条目静默跳过。', example: '[{ prefixes: [src/my-daemon/], tier: S3 }]' },
+         { path: 'ceremony.force_tier', type: 'enum', values: ['S0', 'S1', 'S2', 'S3'], optional: true, status: 'live', readers: ['readCeremonyLocalConfig (src/run/prompt.js — {REVIEW_TIER} 注入档位菜单/强制轻仪审计痕)', '影子派发前置校验 (src/review-dispatch.js — task-06 影子期框架接线)'], desc: '档位逃生阀：强制仪式档 S0~S3，绕过客观定价（过渡期「就是不信这套」用）。prompt 注入面只升不降——强制档低于客观定价档时不降档（防 prompt 面与 gate 侧判定分裂）；非法值 warn 后忽略。', example: 'S3' },
+         { path: 'ceremony.shadow', type: 'boolean', optional: true, status: 'live', readers: ['readCeremonyLocalConfig (src/run/prompt.js — S0/S1 轻档注入影子期注记)', 'runReviewDispatch 影子前置校验 (src/review-dispatch.js — task-06 影子期框架接线)'], desc: '影子期开关，默认 true（on）：S0/S1 轻档明面轻仪、后台静默派发重仪式只记账不阻断（影子派发框架随 task-06 落地）；置 off = 轻仪转正（转正判据由 doctor 影子对照维度公示，CLI 只出判据不出手）。', example: 'true' },
+       ],
+@@ -445,11 +446,15 @@ docs-check:
+ # change-ownership:
+ #   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
+ 
+-# ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价；本段为逃生阀与影子期开关）──
++# ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价；本段为逃生阀/影子期开关/逐机升档面）──
++# blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。
+ # force_tier 强制档位绕过客观定价（过渡逃生阀，prompt 注入面只升不降）；shadow 影子期默认 on——
+ # S0/S1 轻档明面轻仪、后台静默派发重仪式对照只记账不阻断；置 off = 轻仪转正（转正判据见 doctor 影子对照）。
+ # ceremony:
+ #   force_tier: S3            # 强制全重仪式（逃生阀；S0 | S1 | S2 | S3）
+ #   shadow: true              # 影子期开关（默认 true）
++#   blast_surfaces:           # blast 逐机升档（只升不降、不承载 evidence；主声明在 _module-map.yaml blast 段）
++#     - prefixes: [src/my-daemon/]
++#       tier: S3
+ `;
+ }
+diff --git a/src/modules.js b/src/modules.js
+index b6b8b26..df77c3e 100644
+--- a/src/modules.js
++++ b/src/modules.js
+@@ -122,6 +122,7 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
+   if (headCommit) yaml += `source_commit: ${headCommit}\n`;
+   yaml += `\n# Module Context Index — 机器可读的模块上下文索引\n`;
+   yaml += `# scan 阶段自动生成，brainstorm/plan/execute 阶段按任务命中模块精准注入上下文\n`;
++  yaml += `# ⚠️ 顶层手工段（如 blast 危险面声明）随 --force 写盘从原文回插保留；段内列表项手工维护\n`;
+   yaml += `\nmodules:\n`;
+ 
+   // 合并：已有映射 + 新卡片
+@@ -175,6 +176,33 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
+     yaml += `\n`;
+   }
+ 
++  // ── 顶层手工段保留（2026-09-19-ceremony-pricing-five-cuts D-008@v2）──────────────────
++  // rebuild 重发射只生成头部与 modules: 段——existingMap 里的其他顶层段（blast 危险面声明等
++  // 手工维护段）在 --force 写盘时会整体丢失（merge 白名单只覆盖 modules 段内 per-module 字段，
++  // 顶层段无此机制）。修法：从 existingMap 原文提取非重建头的顶层段原样回插（通用机制，不只为
++  // blast 特判）。提取口径：顶层键行（行首无缩进 `key:`）且 ∉ 重建头五族（schema_version/
++  // generated_at/generator/source_commit/modules）；范围＝该键行起至下一顶层键行前（段内注释/
++  // 列表项随之保留）。段缺失/无手工段 → 不追加不告警（rebuild 本就是重建语义，宁失勿错）。
++  const TOP_LEVEL_REGENERATED = new Set(['schema_version', 'generated_at', 'generator', 'source_commit', 'modules']);
++  const preservedTopSections = [];
++  if (existingMap) {
++    let current = null;
++    for (const line of existingMap.split('\n')) {
++      const m = line.match(/^([A-Za-z_][\w-]*):/);
++      if (m) {
++        if (current) { preservedTopSections.push(current.join('\n') + '\n'); current = null; }
++        if (!TOP_LEVEL_REGENERATED.has(m[1])) current = [line];
++      } else if (current) {
++        current.push(line);
++      }
++    }
++    if (current) preservedTopSections.push(current.join('\n') + '\n');
++  }
++  for (const section of preservedTopSections) {
++    const trimmed = section.replace(/\n+$/, '');
++    if (trimmed.trim()) yaml += `\n${trimmed}\n`;
++  }
++
+   // 写入保护（multi-agent-platform 坑 modules-rebuild-destructive）：默认 dry-run 只预览不写。
+   // P2-c 后 --force 为 merge 语义（手动字段全量保留），但重写仍会刷新 generated_at/source_commit
+   // 与排版——dry-run 预览默认保留，确认写入用 --force。
+diff --git a/src/review-tier.js b/src/review-tier.js
+index d77107a..5cd622e 100644
+--- a/src/review-tier.js
++++ b/src/review-tier.js
+@@ -36,9 +36,10 @@
+ 
+ import { parseFileChangeList } from './change-list.js'
+ import { computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+-import { detectChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
++import { resolveChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
+ import { readFileSync, existsSync } from 'fs'
+ import { join, dirname, basename } from 'path'
++import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
+ 
+ /**
+  * 审查分级阈值：变更文件数 ≤ 此值 → 旧启发式断路器命中（brownfield 兼容倾向 self）。
+@@ -99,10 +100,11 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
+     fileCount = declaredFiles.length
+   }
+ 
+-  // blast 输入组装（ql-20260918-007 双轨修复）：riskDetection ＞ design/plan 实判 ＞ plan_level 代理 ＞ undefined。
+-  // 实判优先治「full 代理把 S1 推成 S2」的双轨（回放实验实证：档位文件 S1 vs 审查面 S2）——
+-  // designPath 可读即真跑 detectChangeRisk（显式 risk_level frontmatter 经 extractExplicitRiskLevel 并入），
+-  // plan_level 代理降为无 designPath 的 brownfield 兜底（plan_level 仅编排，D-002）。
++  // blast 输入组装（ql-20260918-007 双轨修复 + 2026-09-19-ceremony-pricing-five-cuts task-03 声明面切换）：
++  // riskDetection ＞ design/plan 实判（resolveChangeRisk 声明面：declaredFiles × blast 声明 + explicit）＞
++  // plan_level 代理 ＞ undefined。实判优先治「full 代理把 S1 推成 S2」的双轨（回放实验实证：
++  // 档位文件 S1 vs 审查面 S2）——designPath 可读即真跑声明面判级，plan_level 代理降为无
++  // designPath 的 brownfield 兜底（plan_level 仅编排，D-002）。
+   let blastInput = null
+   let blastSource = null
+   let explicitInput = null
+@@ -112,12 +114,15 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
+   } else if (designPath) {
+     try {
+       const designContent = readFileSync(designPath, 'utf8')
+-      let planContent = ''
+-      const siblingPlan = join(dirname(designPath), 'plan.md')
+-      if (existsSync(siblingPlan)) planContent = readFileSync(siblingPlan, 'utf8')
+-      blastInput = detectChangeRisk({ designContent, planContent, changedFiles: declaredFiles })
+       explicitInput = extractExplicitRiskLevel(designContent)
+-      blastSource = `riskDetection.level=${blastInput.level}（design/plan 实判，ql-20260918-007）`
++      // specBase 推导：designPath 形如 <specBase>/changes/<change>/design.md（worktree/主仓同形）
++      // → 三层 dirname（QA 实证：两层只得 <specBase>/changes、声明面装载恒空表）。推导失败
++      // （非常规路径）→ 空声明面（S1 起步不拦审查分级）。
++      const specBase = dirname(dirname(dirname(designPath)))
++      const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase })
++      const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: explicitInput })
++      blastInput = { level: risk.level }
++      blastSource = `声明面判级 tier=${risk.tier}/level=${risk.level}（design 文件清单 × blast 声明，D-008；explicit=${risk.explicit}）`
+     } catch {
+       // design 读失败 → 降回代理链（不因 IO 异常拦审查分级）
+       blastInput = null
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 3629bf3..989b2ac 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -38,9 +38,12 @@ import { stageRegistry } from '../stages/index.js'
+ import { normalizeTaskId } from '../taskcard.js'
+ import { recordFrictionEvent } from '../friction-tally.js'
+ import { readFrictionLedger } from '../friction-ledger.js'
+-import { computeCeremonyTier, escalateByFriction, CEREMONY_TIERS } from '../ceremony-tier.js'
++import { computeCeremonyTier, escalateByFriction, applyDeclarationCatchUp, CEREMONY_TIERS } from '../ceremony-tier.js'
++import { loadBlastDeclarations } from '../blast-surface.js'
++import { resolveChangeRisk } from '../change-risk-profile.js'
+ import { withFileLock } from '../quicklog.js'
+-import { detectChangeRisk, extractExplicitRiskLevel } from '../change-risk-profile.js'
++import { extractExplicitRiskLevel } from '../change-risk-profile.js'
++import { parseFileChangeListDetailed } from '../change-list.js'
+ import { parseModuleMapSimple } from '../modules.js'
+ 
+ /**
+@@ -615,38 +618,44 @@ function writeCeremonyTierDoc(path, doc) {
+ }
+ 
+ /**
+- * 开跑定价（design 生命周期契约表首行「无 → 初始档」——计划评审发现①补认领）：档位文件首见
+- * （首阶段完成门，或坏档重定价）时以当时可得的 blast/span 信号算初始档。
+- *   blast ＝ detectChangeRisk 的 design/plan 双文件判级 + frontmatter 显式声明（升降规则由
+- *           computeCeremonyTier 统一裁：升档尊重、降档须理由）；design.md 缺失 → 不传
+- *           riskDetection → 保守缺省 S2（brownfield 不静默降级）。
+- *   span  ＝ design §6「文件变更清单」反引号路径（readDesignOwnFiles 既有解析，无清单容空退化）
++ * 开跑定价 / 声明追赶重定价共用重算体（design 生命周期契约表「无 → 初始档」+ D-003 追赶）：
++ *   blast ＝ resolveChangeRisk 声明面判级（declaredFiles × _module-map.yaml 顶层 blast 段
++ *           ＋ local 只升合并，经 loadBlastDeclarations 装载；explicit frontmatter 只压 tier
++ *           不豁免 evidence，D-008/D-009——词表散文判级随 2026-09-19-ceremony-pricing-five-cuts
++ *           退役）→ computeCeremonyTier blastTier 直入。design.md 缺失 → declaredFiles 空 →
++ *           blast S1（声明面缺失按无命中，不缺省不拦截）。
++ *   span  ＝ design 文件变更清单（readDesignOwnFiles 委托 change-list 单一真相源，双形态标题）
+  *           + _module-map.yaml 跨模块口径（moduleIndex 缺失/空 → 该维跳过不缺省不拦截）。
+- * frictionCounts 不进初始定价——摩擦轴归 escalateByFriction 检查点（超阈升一档封顶语义），
++ * frictionCounts 不进重算——摩擦轴归 escalateByFriction 检查点（超阈升一档封顶语义），
+  * 两处重复计价会让 transitions 审计口径失真。
++ * eventContext='initial' → reasons 追加「初始档」事件行（档位首见）；'catchup' → 不追加
++ * （追赶事件行由 applyDeclarationCatchUp 落，防语义错位与 reasons 随每道门膨胀）。
+  */
+-function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName }) {
++function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName, eventContext = 'initial' }) {
+   const changeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+   const designContent = changeDir && existsSync(join(changeDir, 'design.md')) ? readFileSync(join(changeDir, 'design.md'), 'utf8') : ''
+-  const planContent = changeDir && existsSync(join(changeDir, 'plan.md')) ? readFileSync(join(changeDir, 'plan.md'), 'utf8') : ''
+-  const riskDetection = designContent ? detectChangeRisk({ designContent, planContent, changedFiles: [] }) : undefined
+   const explicitRiskLevel = designContent ? extractExplicitRiskLevel(designContent) : null
+   const declaredFiles = readDesignOwnFiles(specBase, changeName)
++  const { declarations } = loadBlastDeclarations({ specBase, project: projectName })
++  const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations: declarations, explicitRiskLevel })
+   let moduleIndex = null
+   const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+   if (existsSync(mapPath)) {
+     try { moduleIndex = parseModuleMapSimple(readFileSync(mapPath, 'utf8')) || null } catch { moduleIndex = null }
+   }
+-  const priced = computeCeremonyTier({ riskDetection, explicitRiskLevel, declaredFiles, moduleIndex })
+-  return {
+-    tier: priced.tier,
+-    components: priced.components,
+-    reasons: [
+-      ...priced.reasons,
+-      `初始档（开跑定价事件：${stageName} 完成门首见该 change 无档位文件，按当时可得的 blast/span 信号定价——design 生命周期契约表「无 → 初始档」行）`,
+-    ],
+-    transitions: [],
++  const priced = computeCeremonyTier({ blastTier: risk.tier, declaredFiles, moduleIndex })
++  const auditLines = []
++  if (risk.hitPrefixes.length > 0) {
++    auditLines.push(`声明危险面命中：${risk.hitPrefixes.join('、')}（evidenceRequired=${risk.evidenceRequired}）`)
++  }
++  if (risk.explicit) {
++    auditLines.push(`explicit risk_level 应用（tier 覆盖 → ${risk.tier}；evidenceRequired 不受豁免，D-009）`)
+   }
++  const reasons = [...priced.reasons, ...auditLines]
++  if (eventContext === 'initial') {
++    reasons.push(`初始档（开跑定价事件：${stageName} 完成门首见该 change 无档位文件，按当时可得的 blast/span 信号定价——design 生命周期契约表「无 → 初始档」行）`)
++  }
++  return { tier: priced.tier, components: priced.components, reasons, transitions: [] }
+ }
+ 
+ /**
+@@ -672,11 +681,20 @@ async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progres
+   }
+   const tierPath = ceremonyTierFilePath(runtimeRoot, changeName)
+   const result = await withFileLock(tierPath + '.lock', async () => {
+-    // 读档无文件（或坏档）→ 先落初始档（开跑定价事件）
++    // 读档无文件（或坏档）→ 先落初始档（开跑定价事件）；档位在场 → 声明追赶重定价
++    // （D-003：按当前声明面重算 → applyDeclarationCatchUp 三分支——无摩擦可升可降/摩擦
++    // 地板不退 → 写回；追赶不记 transitions，摩擦价随后由 escalate 即时兑现，同锁串行）
+     let doc = readCeremonyTierDoc(tierPath)
+     if (!doc) {
+       doc = computeInitialCeremonyTierDoc({ cwd, specBase: effectiveSpecBase, platformOpts, progress, changeName, projectName, stageName })
+       writeCeremonyTierDoc(tierPath, doc)
++    } else {
++      const recomputed = computeInitialCeremonyTierDoc({ cwd, specBase: effectiveSpecBase, platformOpts, progress, changeName, projectName, stageName, eventContext: 'catchup' })
++      const caught = applyDeclarationCatchUp({ currentDoc: doc, recomputedTier: recomputed.tier, recomputedComponents: recomputed.components, recomputedReasons: recomputed.reasons, frictionCounts })
++      // 降档保护由 applyDeclarationCatchUp 三分支承担（无摩擦整档换可升可降是 D-003 的立意；
++      // 有摩擦地板托底）——此处不再叠加「拒绝降档写回」（与追赶语义矛盾，防误伤）。
++      doc = caught
++      writeCeremonyTierDoc(tierPath, doc)
+     }
+     const esc = escalateByFriction(doc.tier, frictionCounts)
+     if (!esc.escalated) {
+@@ -1630,28 +1648,17 @@ export function validateFileLocations(cwd, stageName, progress, changeName, spec
+  */
+ function readDesignOwnFiles(specBase, changeName) {
+   if (!specBase || !changeName) return []
+-  let content
++  // 2026-09-19-ceremony-pricing-five-cuts task-03 / D-004：委托 change-list.js 单一真相源解析器
++  // （此前本地重写的数字标题版只认「## 6.」——现行模板「## 文件变更清单」8 行解析成 0，span 轴瞎）。
++  // parseFileChangeListDetailed：双形态标题（## 6. 文件变更清单 / ## 文件变更清单 含括注变体）
++  // + 任何 ^## 标题关段 + 表格/分类列表双写法；keepSillyspecDocs=true 保持旧实现把 .sillyspec
++  // 交付文档计入声明面的行为。
+   try {
+-    content = readFileSync(join(specBase, 'changes', changeName, 'design.md'), 'utf8')
++    return parseFileChangeListDetailed(join(specBase, 'changes', changeName, 'design.md'), { keepSillyspecDocs: true })
++      .map(e => e.path)
+   } catch {
+     return []
+   }
+-  const files = []
+-  let inSection6 = false
+-  for (const line of content.split('\n')) {
+-    const heading = line.match(/^##\s+(\d+)\./)
+-    if (heading) {
+-      inSection6 = heading[1] === '6'
+-      continue
+-    }
+-    if (!inSection6 || !line.startsWith('|')) continue
+-    // 跳过表头分隔行（|---|---|）
+-    if (/^\|[\s:|-]+\|?$/.test(line.trim())) continue
+-    // 表格第 2 列反引号文件路径：`| 新增 | \`src/.../x.js\` | 说明 |`
+-    const m = line.match(/^\|[^|]+\|\s*`([^`]+)`/)
+-    if (m) files.push(m[1].trim())
+-  }
+-  return files
+ }
+ 
+ /**
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 9b2701c..b66ef90 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -33,7 +33,9 @@ import { join, dirname } from 'node:path'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { resolveRuntimeRoot, parsePorcelainPath } from './shared.js'
+-import { detectChangeRisk } from '../change-risk-profile.js'
++import { resolveChangeRisk, extractExplicitRiskLevel } from '../change-risk-profile.js'
++import { loadBlastDeclarationsAllProjects } from '../blast-surface.js'
++import { parseFileChangeListDetailed } from '../change-list.js'
+ import { recordFrictionEvent } from '../friction-tally.js'
+ 
+ const RECORD_SCHEMA_VERSION = 1
+@@ -524,13 +526,19 @@ export function evaluateConclusionDraft({ cwd, specBase, changeName, changeDir,
+   const p6 = (probes.probe6 && probes.probe6.deletions) || []
+   if (p6.length > 0) reasons.push(`探针 6 删除对账 ${p6.length} 项（待人工判定）`)
+   try {
++    // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（design 文件清单 × blast 声明 + explicit；
++    // evidenceRequired → 集成证据链不预填——level 兼容字段为 integration-critical）
+     const designPath = join(changeDir || '', 'design.md')
+-    const planPath = join(changeDir || '', 'plan.md')
+     const designContent = existsSync(designPath) ? readFileSync(designPath, 'utf8') : ''
+-    const planContent = existsSync(planPath) ? readFileSync(planPath, 'utf8') : ''
+-    const risk = detectChangeRisk({ designContent, planContent, changedFiles: [] })
+-    if (risk && (risk.level === 'integration-critical' || risk.level === 'deployment-critical')) {
+-      reasons.push(`风险等级 ${risk.level}——需集成证据链（回执槽 + Runtime Evidence），不预填`)
++    const declaredFiles = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true }).map(e => e.path)
++    const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase: specBase || dirname(dirname(dirname(designPath))) })
++    const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: designContent ? extractExplicitRiskLevel(designContent) : null })
++    // 否决面＝evidence:true 命中 或 agent 显式自报 critical（诚实承认集成风险 → 不代笔 PASS 草稿；
++    // explicit 低档声明不豁免 evidence 命中，D-009）
++    if (risk && (risk.evidenceRequired || (risk.explicit && risk.tier === 'S3'))) {
++      reasons.push(risk.evidenceRequired
++        ? `命中 evidence:true 声明危险面（${risk.hitPrefixes.join('、')}）——需集成证据链（回执槽 + Runtime Evidence），不预填`
++        : `显式自报 risk_level=integration-critical（tier=${risk.tier}）——需集成证据链（回执槽 + Runtime Evidence），不预填`)
+     }
+   } catch (e) {
+     reasons.push(`风险判级异常（${e && e.message ? e.message : e}）——保守不预填`)
+diff --git a/src/stage-contract-spec.js b/src/stage-contract-spec.js
+index 9620589..4f3a178 100644
+--- a/src/stage-contract-spec.js
++++ b/src/stage-contract-spec.js
+@@ -52,7 +52,7 @@ const CUSTOM_KINDS = new Set([
+   'task-card-fields',        // task-NN.md 卡片字段存在性(validateBlueprintConsistency + validatePlanFeasibility)
+   'verify-conclusion-gate',  // verify-result.md 结论 PASS/FAIL 门控
+   'integration-evidence',    // verify-result.md 集成证据(change-risk-profile.checkIntegrationEvidence)
+-  'change-risk-gate',        // 变更风险分级门控(detectChangeRisk)
++  'change-risk-gate',        // 变更风险分级门控(resolveChangeRisk)
+ ])
+ 
+ export function isCustomKind(kind) {
+@@ -226,7 +226,7 @@ const VERIFY_RULES = [
+     failMessage: 'verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证。⚠️ 重验成本预告：修复后 verify --done 时 CLI 会重新执行 local.yaml 的 commands.test 全量对账（同步执行，长套件可达数分钟、中途无输出属正常；可按 local.yaml test_strategy: module + modules 收窄命中模块），请在修复时一并评估测试范围',
+     noConclusionWarning: 'verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）',
+   },
+-  // integration-evidence(custom,D10 事前契约):风险门控。判定算法 detectChangeRisk +
++  // integration-evidence(custom,D10 事前契约):风险门控。判定算法 resolveChangeRisk +
+   // checkIntegrationEvidence 留 change-risk-profile.js(需运行时读 design/plan 内容,引擎无法纯判定);
+   // 此处只作事前提示——renderStageContract 把 spec/hint 注入 verify step0,让 agent 写 verify-result.md
+   // 前就知道:若 design/plan 命中部署/启动或跨进程关键词,必须提供对应字面证据,否则完成时被门控阻断。
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 738101f..0d737c8 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -9,7 +9,9 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+ import { join, basename } from 'path'
+ import { safeGit } from './git-helper.js'
+ import { nowWallClock } from './datetime.js'
+-import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
++import { resolveChangeRisk, extractExplicitRiskLevel, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
++import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
++import { parseFileChangeListDetailed } from './change-list.js'
+ import { parseEvidenceSlots } from './verify-facts-schema.js'
+ import { IR_STRICT_SINCE } from './constants.js'
+ import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
+@@ -24,7 +26,6 @@ import { discoverModuleIndex } from './decision-distill.js'
+ import { appendKnowledgeHit } from './knowledge-hits.js'
+ // design.md 文件清单解析（2026-09-17-pass-cap-semantics task-02 事实③）：change-list 是纯 fs
+ // 叶子模块（design-facts / scope-audit / verify-probes 等同款直连惯例），静态引入无环。
+-import { parseFileChangeListDetailed } from './change-list.js'
+ 
+ /**
+  * 校验结果
+@@ -299,6 +300,21 @@ function validateScanOutputs(cwd, changeName, context = {}) {
+ /**
+  * brainstorm 完成校验：检查四件套规范文件是否生成
+  */
++/**
++ * 变更目录级声明面判级（2026-09-19-ceremony-pricing-five-cuts task-03 / D-008）：
++ * design 文件变更清单（change-list 单一真相源解析，双形态标题）× blast 声明（多项目并集，
++ * 调用方无 project 语境）+ design frontmatter explicit（只压 tier 不豁免 evidence，D-009）。
++ * 词表散文判级（detectChangeRisk）退役后的 stage-contract 四消费点统一入口。
++ */
++function resolveChangeRiskForChangeDir(changeDir, specBase) {
++  const designPath = join(changeDir, 'design.md')
++  let designText = ''
++  try { designText = readFileSync(designPath, 'utf8') } catch { designText = '' }
++  const declaredFiles = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true }).map(e => e.path)
++  const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase })
++  return resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: designText ? extractExplicitRiskLevel(designText) : null })
++}
++
+ function validateBrainstormOutputs(cwd, changeName, context = {}) {
+   const { specRoot } = context
+   const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
+@@ -376,23 +392,22 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
+       }
+     }
+ 
+-    // ── 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24 用户实证）──
+-    // verify --done 的 risk gate 既往只在流程末段暴露，首次使用者撞墙后才知道 frontmatter
+-    // risk_level 覆盖通道。design --done 即按同款 detectChangeRisk 预判一次（此时 plan.md 尚未
+-    // 产出，verify 时会连 plan 一起重判、级别可能上浮——本提示 advisory 不作为定论）：
+-    // 高危关键词命中 / 存在否定抑制 → 透出判级结果 + 覆盖指引，把机制可见性提前到 design 阶段。
++    // ── 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24；2026-09-19-ceremony-pricing-five-cuts
++    //    task-03 改声明面口径）── verify --done 的证据门既往只在流程末段暴露，首次使用者撞墙后
++    //    才知道出路。design --done 即按「design 文件清单 × 项目声明危险面」预判一次（advisory
++    //    不作定论）：evidence:true 命中 → 透出证据要求 + 出路；explicit 已声明 → 透出「压档不豁免
++    //    证据」（D-009——旧显式短路连证据门一起免的洞已收口）。
+     {
+-      const profile = detectChangeRisk({ designContent: content })
+-      if (['integration-critical', 'deployment-critical'].includes(profile.level) && !profile.explicit) {
++      const riskPreview = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
++      if (riskPreview.evidenceRequired && !riskPreview.explicit) {
+         warnings.push(
+-          `[risk] 本次 design 判级 ${profile.level}（命中关键词：${profile.triggers.join('、')}）——verify --done 将强制真实集成证据门控。` +
+-          `若属关键词误伤（实际未触碰 daemon/session/启动入口），现在就在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖，免得到 verify 阶段才发现而返工。`
++          `[risk] 本次 design 声明文件面命中项目声明危险面（${riskPreview.hitPrefixes.join('、')}，evidence:true）——verify --done 将强制真实集成证据门控。` +
++          `若认为不该要求集成证据：改 _module-map.yaml 顶层 blast 段（git 可见）；design frontmatter risk_level 只压仪式档、不豁免证据要求（D-009）。`
+         )
+       }
+-      if ((profile.suppressedTriggers || []).length > 0) {
++      if (riskPreview.evidenceRequired && riskPreview.explicit) {
+         warnings.push(
+-          `[risk] 关键词命中 ${profile.suppressedTriggers.join('、')} 已被同句否定语境抑制，当前判级 ${profile.level}。` +
+-          `若实际涉及对应改动，请在 design.md frontmatter 声明高危级（抑制可审计，防静默降级逃证据门控）。`
++          `[risk] 声明文件面命中 evidence:true 危险面（${riskPreview.hitPrefixes.join('、')}），且 frontmatter 已显式 risk_level——注意：显式声明压仪式档（tier=${riskPreview.tier}），但集成证据要求不被豁免（D-009）。`
+         )
+       }
+     }
+@@ -655,40 +670,26 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
+     }
+ 
+     // ── P0: Change Risk Gate — 核心功能缺少真实集成验证时 FAIL ──
+-    const changeRiskProfile = detectChangeRisk({
+-      designContent: readIfExists(join(changeDir, 'design.md')),
+-      planContent: readIfExists(join(changeDir, 'plan.md')),
+-    })
++    // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面口径——design 文件清单 × blast 声明，
++    // evidenceRequired 驱动证据门（D-009：explicit 只压仪式档不豁免证据）。
++    const changeRiskProfile = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
+     const conclusion = conclusionStr // 槽优先解析结果复用（此前同输入重复扫两遍）
+-    // ── 否定抑制审计（坑 risk-negation-blindness）──
+-    // 关键词命中被同句否定语境抑制而不参与判级时必须透出：抑制是把双刃剑（「本次不新增
+-    // daemon」真豁免 vs 靠堆否定措辞静默降级逃证据门控），这里让每次抑制可见可核对；
+-    // frontmatter risk_level 仍是双向权威覆盖通道。
+-    if ((changeRiskProfile.suppressedTriggers || []).length > 0) {
+-      warnings.push(
+-        `[${changeRiskProfile.level}] 风险判级：关键词命中 ${changeRiskProfile.suppressedTriggers.join(', ')} 已被同句否定语境（不/未/无/避免…）抑制，未参与判级。` +
+-        `若本变更实际涉及跨进程/状态机/启动入口改动，请在 design.md frontmatter 加 risk_level: integration-critical（或 deployment-critical）显式声明或提供真实集成证据——抑制可审计，不许用来静默降级。`
+-      )
+-    }
+-    if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
+-      // 关键词误伤早期引导（坑2，FR-02）：命中高危关键词且无 frontmatter risk_level 时，
+-      // 无条件透出 frontmatter 覆盖指引（不依赖 conclusion / evidence），让 agent 早期即可
+-      // 判断是否属误判并显式覆盖，而非撞到 evidence gate 末尾才发现出路③。含否定语境的
+-      // 命中已在 detectChangeRisk 内被同句否定抑制（见 change-risk-profile.js NEGATION_CUES），
+-      // 此处命中的都是无否定语境的真命中；仍误伤的走 frontmatter 显式覆盖通道。
++    if (changeRiskProfile.evidenceRequired) {
++      // 声明面命中披露 + 出路（旧关键词误伤引导随词表退役改写）：命中 evidence:true 声明路径
++      // → 证据门强制；出路=改 map（git 可见）或提供真实证据；risk_level 压档不豁免证据。
+       if (!changeRiskProfile.explicit) {
+         warnings.push(
+-          `[${changeRiskProfile.level}] 本次变更被关键词判级（命中：${changeRiskProfile.triggers.join(', ')}）。` +
+-          `若属关键词误伤（实际未触碰 daemon/session/启动入口/跨进程），可在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。`
++          `[${changeRiskProfile.level}] 本次变更声明文件面命中项目声明危险面（evidence:true：${changeRiskProfile.hitPrefixes.join(', ')}）。` +
++          `若认为不该要求集成证据：改 _module-map.yaml 顶层 blast 段（git 可见）；design frontmatter risk_level 只压仪式档、不豁免证据要求（D-009）。`
+         )
+       }
+-      // ── 显式 risk_level 豁免洞分层（D-002@v1，2026-09-17-pass-cap-semantics task-02）──
+-      // ① explicit + 降级 unit-sufficient/contract-required：不进本 critical 块（上方 level 门），
+-      //   PASS WITH NOTES 维持免证据——关键词误伤逃生保留；
+-      // ② explicit 且仍 integration/deployment-critical + PASS WITH NOTES：必须携带结构化 handover
+-      //   （facts.handover 有效行；blocking 级计入封顶口径同 validatePassEligibility 条件②）或齐全
+-      //   集成证据，二选一——无 handover 即挂证据门（checkIntegrationEvidence 不过 → error）；
+-      // ③ 非显式（关键词判级）判定式一字不动（防 PASS WITH NOTES 绕证据门控）。
++      // ── 显式 risk_level 分层（D-002@v1 延续 + D-009 修订，2026-09-19-ceremony-pricing-five-cuts）──
++      // ① explicit 与否不豁免证据（D-009）：evidence:true 命中即进本块——explicit 低档声明不再
++      //   是证据逃生门（旧「豁免级免证据」洞已收口，出路=改 map）；
++      // ② explicit + PASS WITH NOTES：必须携带结构化 handover（facts.handover 有效行；blocking 级
++      //   计入封顶口径同 validatePassEligibility 条件②）或齐全集成证据，二选一——无 handover 即挂
++      //   证据门（checkIntegrationEvidence 不过 → error）；
++      // ③ 非显式（声明面判级）判定式一字不动（防 PASS WITH NOTES 绕证据门控）。
+       const notesExplicitCritical = conclusion === 'PASS WITH NOTES' && changeRiskProfile.explicit
+       const handoverRows = notesExplicitCritical ? countFactsHandoverItems(changeDir) : 0
+       const requiresEvidence = conclusion === 'PASS'
+@@ -764,10 +765,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
+             `  缺失项（需在 verify-result.md 如实提供并满足）：${evidenceCheck.errors.join('; ')}\n` +
+             `  每项要提供什么：${needs}\n` +
+             `  风险判级原因：${cause}\n` +
+-            `  命中触发词：${changeRiskProfile.triggers.join(', ')}\n` +
++            `  命中声明危险面（evidence:true）：${changeRiskProfile.hitPrefixes.join(', ') || '（无）'}\n` +
+             `  出路：① 补全上述缺失的真实集成证据（真实启动 daemon/backend、集成测试、运行日志）后保持 PASS；` +
+             `或 ② 如实改结论 FAIL（承认端到端未验，留待部署后补）；` +
+-            `或 ③ 若判级是关键词误伤（实际并未触碰 daemon/session/启动入口），在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。` +
++            `或 ③ 若认为该路径不该要求集成证据，改 _module-map.yaml 顶层 blast 段的 evidence 声明（git 可见）——` +
++            `design frontmatter risk_level 只压仪式档、不豁免证据要求（D-009）。` +
+             `仅改结论文案/措辞蹭字面关键词会被对账。`
+           )
+         }
+@@ -1096,7 +1098,7 @@ function apiEvidenceHasAnchorForm(evidence) {
+  *   facts?: object|null,                // verify-facts.json（handover 联动用，缺 null）
+  *   factsExpected?: boolean,            // false（存量未跑管线）→ 兼容 ok 不误伤
+  *   strict?: boolean,                   // isIrStrictVerifyChange（段缺失分层用）
+- *   riskLevel?: string|null,            // detectChangeRisk().level
++ *   riskLevel?: string|null,            // resolveChangeRisk().level（声明面判级兼容字段）
+  *   changeName?: string,
+  *   permSectionText?: string,           // design.md 权限段（段头含 权限/角色 的段合并文本，壳内提取）
+  *   designText?: string,                // design.md 全文（写端点豁免行级检测用）
+@@ -1361,7 +1363,7 @@ function extractPermissionMatrixText(designMd) {
+  *   - factsExpected=false（存量未跑管线，resolveFactsExpected 同源口径）→ no-op 零行为
+  *   - verify-facts.json（apiFace/consumerHints/handover，缺失容 null——fail-closed 归纯函数）
+  *   - 矩阵段 MD 槽解析（X-05 防篡改锚点：锚定当前文档实态）
+- *   - detectChangeRisk 判级（与 validatePassEligibility 壳同款 design/plan 双文件输入）
++ *   - resolveChangeRisk 声明面判级（design 文件清单 × blast 声明 + explicit，task-03）
+  *   - design.md 权限矩阵段提取（fs 只读，壳非纯函数）
+  */
+ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
+@@ -1379,10 +1381,9 @@ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
+ 
+   const facts = readFactsForEligibility(changeDir)
+   const designText = readIfExists(join(changeDir, 'design.md'))
+-  const riskProfile = detectChangeRisk({
+-    designContent: designText,
+-    planContent: readIfExists(join(changeDir, 'plan.md')),
+-  })
++  // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（design 文件清单 × blast 声明 +
++  // explicit；level 为五级词兼容字段——evidenceRequired → integration-critical）
++  const riskProfile = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
+   return judgeApiCoverageMatrix({
+     matrix: extractApiCoverageMatrixSlots(readFileSync(verifyResultPath, 'utf8')),
+     apiFace: facts && facts.apiFace && typeof facts.apiFace === 'object' ? facts.apiFace : null,
+@@ -1639,7 +1640,7 @@ function collectDbScriptCandidates({ cwd, changeName, specRoot, changeDir }) {
+  * PASS 封顶 validator 注册壳（与 validateAcceptanceMatrix 同三参签名同构，D-010：注册进
+  * contracts.verify.validators 即覆盖 gates / machine-interface 等全部 runValidators 调用方，
+  * gates.js 零改动）。壳内取数组装：verify-result.md 结论（槽优先，legacy 回退）、
+- * verify-facts.json（缺失容 null）、detectChangeRisk 判级、事实③文件集；判定调
++ * verify-facts.json（缺失容 null）、resolveChangeRisk 声明面判级、事实③文件集；判定调
+  * evaluatePassEligibility 纯函数。
+  */
+ export function validatePassEligibility(cwd, changeName, context = {}) {
+@@ -1659,10 +1660,9 @@ export function validatePassEligibility(cwd, changeName, context = {}) {
+     conclusion,
+     facts,
+     factsExpected: isIrStrictVerifyChange(changeDir) || facts !== null,
+-    changeRiskProfile: detectChangeRisk({
+-      designContent: readIfExists(join(changeDir, 'design.md')),
+-      planContent: readIfExists(join(changeDir, 'plan.md')),
+-    }),
++    // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（level 兼容字段驱动 evaluatePassEligibility
++    // 的 critical 判定——evidenceRequired → integration-critical，D-009 证据不被 explicit 豁免）
++    changeRiskProfile: resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec')),
+     changeName,
+     dbScriptCandidates: collectDbScriptCandidates({ cwd, changeName, specRoot, changeDir }),
+   })
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index 120713a..0669372 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -191,11 +191,11 @@ export const definition = {
+ 
+ ### 操作
+ 1. 汇总以上所有检查结果
+-2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描关键词。本步骤 --done 时，CLI 会用 detectChangeRisk 扫描 design.md / plan.md 自动判定等级（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）并强制门控：integration-critical / deployment-critical 变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
+-   - **判级是机械字面匹配 + 同句否定抑制**：关键词命中位置前方同句有否定提示（不/未/无/避免…，如「本次不新增 daemon 协议」）时该次命中被抑制、不参与判级；「daemon 不稳定」「不同模块的 daemon」这类否定词不在关键词前方的仍正常命中。
+-   - **误判时的诚实出路（豁免级）**：在 design.md 顶部 frontmatter 加一行 \`risk_level: <真实等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical），CLI 会以声明为准覆盖关键词判级。声明后若是 unit-sufficient 等豁免级，PASS WITH NOTES 不再被强制拦；但结论为 PASS 仍需对应证据。
+-   - **留痕要求（防逃逸）**：用了显式声明，必须在本报告「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（覆盖关键词判级）」+ 一句话理由，让豁免可审计；若有命中被否定语境抑制，同样写明被抑制关键词与理由（抑制可审计，不许用来静默降级）。
+-   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更涉及 daemon/backend 跨进程、session/lease/lifecycle 状态机、或部署启动路径，在「Runtime Evidence」section 提供真实集成证据（启动命令、daemon↔backend 调用与日志关键片段、终态断言）。
++2. **变更风险等级（change_risk_profile）由 CLI 自动判定与门控**：你无需自己扫描。本步骤 --done 时，CLI 按项目声明危险面（\`_module-map.yaml\` 顶层 blast 段的路径前缀声明）× 变更文件面自动判定（2026-09-19-ceremony-pricing-five-cuts 起的声明面口径——文档措辞与文件内容不参与判级），并强制门控：命中 evidence:true 声明路径的变更若结论为 PASS / PASS WITH NOTES 但缺少真实集成证据，CLI 直接阻断 verify 完成——谎报结论无效。
++   - **判级输入＝文件路径 × 项目声明**（不是关键词）：变更文件（design 文件变更清单 / 实际 diff）命中声明前缀即取该声明档位；未配置项目/未命中路径一律 S1 起步。「撞词」时代结束：文档里写 daemon/session 等措辞不再影响判级。
++   - **frontmatter risk_level 的作用边界**：在 design.md 顶部 frontmatter 加 \`risk_level: <等级>\`（doc-only / unit-sufficient / contract-required / integration-critical / deployment-critical）可**压低/抬高仪式档**（评审轮次定价），但**不豁免 evidence:true 命中的集成证据要求**——证据豁免的唯一出路是改 \`_module-map.yaml\` blast 段的 evidence 声明（进 git、评审可见），不得靠声明措辞绕证据门。
++   - **留痕要求（防逃逸）**：用了显式声明，必须在「变更风险等级」section 写明「risk_level 由 design frontmatter 显式声明 = <等级>（压仪式档；evidence 要求不受豁免）」+ 一句话理由，让声明可审计。
++   你只需：在 verify-result.md 的「变更风险等级」section 如实记录变更性质；若变更文件命中 evidence:true 声明路径（CLI 会在 design/verify 门禁 warnings 点名命中前缀），在「Runtime Evidence」section 提供真实集成证据（启动命令、跨进程调用与日志关键片段、终态断言）。
+    - **集成回执须真实执行——commands.smoke 配置后由 CLI 亲跑并机器落盘（source: cli-noai-smoke 标记，亲跑段谎报无效）**，其余形态仍须 agent 实跑后据实填写：CLI 对其余形态只校验**字面存在**（是否含关键词），**不会替你启动 daemon、打真实请求或跑迁移**——它是否名副其实取决于你是否实跑过，不得凭堆关键词通过门控。（测试套件对账另算：commands.test 由 CLI 真实执行，那块谎报无效。）
+ 
+ 3. **生成 verify-result.md 骨架（勿从零手写）**：先跑 \`sillyspec verify-probes --change <change-name> --init\`——一条命令生成十章节骨架（已存在不覆盖），其中**探针结果章节已机械预填**（探针 1 的 TODO/FIXME 命中清单、探针 3 的测试覆盖、探针 5 的 API 契约对账表、探针 6 的删除对账三态判定），文件落 \`{SPEC_ROOT}/changes/<change-name>/verify-result.md\`（CLI 替换出的**主仓绝对路径**；若当前 cwd 在 worktree 内也绝不落 worktree 副本——CLI 校验读主仓，副本随 worktree 清理蒸发）。你只需把各 \`<!--TODO-->\` 占位替换为语义结论；半语义探针（2 关键词覆盖 / 4 决策追踪）与断言抽查、集成盲区标注由你补在对应 TODO 处
+@@ -204,7 +204,7 @@ export const definition = {
+ 6. 给出结论：PASS / PASS WITH NOTES / FAIL（受风险门控约束）——**结论只认骨架「结论枚举：」槽行（行首锚定，把 <待填：三选一> 整体替换为枚举值）；槽留待填会被 gate 判不过，正文其他位置的 PASS/FAIL 字样不参与判定**
+    - **结论想写 PASS 前自查四事实条件（PASS 封顶语义，--done 门禁按 verify-facts.json 实拦）**：①集成实测未跑 ②「## 移交项（结构化）」含 blocking 级行 ③db/**/*.sql 未声明执行（verify-result.md 无「已对目标库执行」声明、回执 command 亦不含该文件）④验收×测试覆盖矩阵含 partial/uncovered 行且移交项零有效行——任一成立即不得写 PASS：改写 PASS WITH NOTES 并在「## 移交项（结构化）」表格如实分行（类型枚举 env-blocked/manual-acceptance/db-script/other）。severity 口径：db-script/env-blocked 恒 blocking；manual-acceptance/other 默认 advisory、须显式标 blocking 才计入封顶；确需把 blocking 降为 advisory 必须附「（降级：<理由>，依据 <file:line 或 D-xxx>）」
+ 7. **核对 module-impact.md**（若 \`{SPEC_ROOT}/changes/<change>/module-impact.md\` 存在）：对照本次实际代码变更（git diff）与 module-impact.md 的模块影响矩阵，发现不一致（漏标受影响模块 / 影响类型错误 / 实际未触碰的模块被误标）则在 verify-result.md 标注。module-impact 由 plan 首版生成、execute 各 Wave 更新，verify 是最后一次核对机会（archive 仅终审不再生成）。这是 advisory 核对（不阻断 verify 完成），但 module-impact 与实际严重背离应记为风险。
+-8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更判级 integration/deployment-critical 时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
++8. **smoke 纪律（local.yaml 配置 commands.smoke 或本变更命中 evidence:true 声明危险面时执行以下纪律；本步 prompt 为静态导出，命中条件以文本内嵌说明注入——未命中时本段不适用）**：
+ ${REVIEW_CHECKLISTS.verify.map((item) => '   - ' + item).join('\n')}
+ 
+ ### verify-result.md 章节结构（骨架已含，占位替换即可）
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index bb7f956..531d970 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -35,7 +35,8 @@ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+ import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
+ // ceremony 双跑收口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003）：引擎与账本均为
+ // 纯/叶子依赖（ceremony-tier → change-risk-profile；friction-ledger → fs-atomic+quicklog），无环。
+-import { detectChangeRisk } from './change-risk-profile.js'
++import { resolveChangeRisk } from './change-risk-profile.js'
++import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
+ import { reconcileDualRun, computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+ import { mergeFrictionEntry } from './friction-ledger.js'
+ import { discoverModuleIndex } from './decision-distill.js'
+@@ -2936,37 +2937,8 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null,
+ // 接线在 run/complete-handlers.js handleArchiveConfirmStep）。
+ // ─────────────────────────────────────────────────────────────────────────────
+ 
+-/** 事实面内容采集上限（防病态体量）：单文件 256KB / 总量 4MB / 至多前 200 个文件 */
+-const CEREMONY_FACT_CONTENT_MAX_PER_FILE = 256 * 1024
+-const CEREMONY_FACT_CONTENT_MAX_TOTAL = 4 * 1024 * 1024
+-const CEREMONY_FACT_CONTENT_MAX_FILES = 200
+-
+-/**
+- * 事实面内容采集：读实际 diff 文件的对应内容（detectChangeRisk 的文档槽输入——声明侧是
+- * design/plan 措辞，事实侧换成实际改动文件内容，同一套机械关键词判定）。文件头 frontmatter
+- * 整块剥除（事实面无声明通道——reconcileDualRun 契约是「实际 diff 无声明」，防 risk_level
+- * 声明回声经内容槽回流事实面；.sillyspec/changes 已被 filterDeliverableFiles 过滤，此处
+- * 剥的是 docs 等交付文档的头部 frontmatter）。删除/不可读文件跳过内容（文件名仍进
+- * changedFiles 参与 INTEGRATION_FILE_PATTERNS 判级）。超限截断不告警（对账只需关键词覆盖面）。
+- */
+-function readCeremonyFactContent(contentRoot, files) {
+-  const chunks = []
+-  let total = 0
+-  let readCount = 0
+-  let unreadCount = 0
+-  for (const f of files.slice(0, CEREMONY_FACT_CONTENT_MAX_FILES)) {
+-    if (total >= CEREMONY_FACT_CONTENT_MAX_TOTAL) break
+-    try {
+-      let text = readFileSync(join(contentRoot, f), 'utf8')
+-      text = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '') // 剥文件头 frontmatter
+-      if (text.length > CEREMONY_FACT_CONTENT_MAX_PER_FILE) text = text.slice(0, CEREMONY_FACT_CONTENT_MAX_PER_FILE)
+-      chunks.push(text)
+-      total += text.length
+-      readCount++
+-    } catch { unreadCount++ /* 已删除/不可读 → 文件名仍参与判级 */ }
+-  }
+-  return { content: chunks.join('\n'), readCount, unreadCount }
+-}
++// 2026-09-19-ceremony-pricing-five-cuts task-03：readCeremonyFactContent 与内容采集上限三常量
++// 整体删除——事实面零内容扫描（只吃文件名 × 声明面，D-008），常量随之失去消费者。
+ 
+ /** 种子文件名的会话标识清洗（anon@host / agent 名等 → 文件名安全字符，截 80 字符） */
+ function sanitizeCeremonySeedSession(session) {
+@@ -2989,7 +2961,8 @@ async function resolveCeremonyDualRunSession({ session, cwd }) {
+  * reconcileTargetFiles 检查族先例：单结果对象 + 配套 print 导出）。
+  *
+  * 流程：声明档读 `.runtime/ceremony-tier-<change>.json`（task-03 开跑定价产物）的 tier →
+- * 实际 diff 取 resolveReconcileActualFiles 单点 → 事实面 detectChangeRisk（输入换成实际 diff
++ * 实际 diff 取 resolveReconcileActualFiles 单点 → 事实面 resolveChangeRisk（文件名 × 项目
++ * 声明危险面，零内容扫描——D-008）+ _module-map 索引组装 reconcileDualRun 入参 → 引擎出
+  * 文件与对应内容）+ _module-map 索引组装 reconcileDualRun 入参 → 引擎出 {factTier, mismatch,
+  * severity}（声明档<事实档 → mismatch/error）。mismatch 时本函数亲自落两件收口产物（fail-soft，
+  * 异常降级留痕不阻断）：① 摩擦账 mergeFrictionEntry（counts 记 gate_rollback——现有三枚举中
+@@ -3067,27 +3040,24 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
+       notes, factReasons: [], factFiles: [], form: actual.form, sources: actual.sources, at }
+   }
+ 
+-  // —— 事实面重跑：blast（detectChangeRisk × 实际 diff 文件与对应内容）+ span（_module-map 索引）——
+-  // 内容根按形态取对：worktree 形态文件在 worktree 根（_readWorktreeMeta gitDir 同源），post-apply
+-  // 形态在主仓 cwd——actual 只回形态不回根，此处经同一 meta 权威入口补根，不造第二形态判定。
+-  let contentRoot = cwd
+-  if (actual.form === 'worktree') {
+-    const wtMeta = _readWorktreeMeta(sb, cwd, changeName)
+-    if (wtMeta && wtMeta.gitDir) contentRoot = wtMeta.gitDir
+-  }
+-  const fact = readCeremonyFactContent(contentRoot, actual.files)
+-  if (fact.unreadCount > 0) {
+-    notes.push(`${fact.unreadCount} 个实际文件内容不可读（已删除/权限），文件名仍参与判级`)
+-  }
+-  const factRiskDetection = detectChangeRisk({ designContent: fact.content, planContent: '', changedFiles: actual.files })
++  // —— 事实面重跑（2026-09-19-ceremony-pricing-five-cuts task-03：零内容扫描）——
++  // blast ＝ actual.files × 项目声明危险面（loadBlastDeclarationsAllProjects——runCeremonyDualRunCheck
++  // 无 project 语境，扫 specBase/docs/*/modules/_module-map.yaml 取并集，多项目仓保守正确）；
++  // 旧口径（读实际 diff 文件全文喂 detectChangeRisk 词表）整类删除——事实面只吃文件名 × 声明面
++  // （自指陷阱消失：门禁引擎源码里的关键词不再是判级输入，D-008）。
++  const blastDeclarations = loadBlastDeclarationsAllProjects(sb)
++  const factRisk = resolveChangeRisk({ files: actual.files, blastDeclarations })
+   let factModuleIndex = null
+   try { factModuleIndex = discoverModuleIndex(join(sb, 'knowledge')) } catch { /* 缺 map → span 跨模块维跳过 */ }
+ 
+   // —— 引擎对账（mismatch 判定单点）+ 命中明细（同入参跑 computeCeremonyTier 取 reasons，供披露）——
+-  const verdict = reconcileDualRun({ declaredTier, factRiskDetection, factFiles: actual.files, factModuleIndex })
++  const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex })
+   const factDetail = computeCeremonyTier({
+-    riskDetection: factRiskDetection, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
++    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
+   })
++  if (verdict.severity === 'warn') {
++    notes.push(`[advisory] 高报记账（D-005）：声明档 ${String(declaredTier)} > 事实档 ${verdict.factTier}——只记账不阻断不记摩擦（高报代价是更重仪式，自罚机制在场）`)
++  }
+ 
+   // —— 显式降档复核（D-004）：档位文件标记（字段或 reasons 痕迹双口径容错——computeCeremonyTier
+   //    的 reasons 含 explicitDowngradeAccepted=true 字样，task-03 落盘形态两者至少其一在场）——
+@@ -3129,7 +3099,8 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
+         declaredTier,
+         factTier: verdict.factTier,
+         mismatch: true,
+-        factRiskLevel: (factRiskDetection && factRiskDetection.level) || null,
++        factBlastTier: factRisk.tier,
++        factHitPrefixes: factRisk.hitPrefixes,
+         factFiles: actual.files,
+         at,
+       }, null, 2) + '\n')
+diff --git a/test/blast-surface.test.mjs b/test/blast-surface.test.mjs
+new file mode 100644
+index 0000000..2262c58
+--- /dev/null
++++ b/test/blast-surface.test.mjs
+@@ -0,0 +1,178 @@
++/**
++ * blast 声明面测试（2026-09-19-ceremony-pricing-five-cuts task-01 / FR-01 / D-008/D-010）
++ *
++ * 覆盖：
++ *   1. 前缀匹配形态：字面量文件、目录前缀（含尾斜杠）、段边界不误命中（src/a 不命中 src/ab.js）、
++ *      Windows 反斜杠归一
++ *   2. 无命中 → tier S1（BLAST_NO_HIT_TIER，禁词表兜底口径）
++ *   3. 多条目命中取最高档；evidence 位传递（任一命中条目 true 即 true）
++ *   4. 非法条目容错：tier 越界/prefixes 非数组/条目非对象 → 逐条跳过不抛错
++ *   5. loadBlastDeclarations：map blast 段装载（好形态）、map 缺失/坏 YAML/段缺失 → 空表
++ *   6. local 只升不降：local 高档 → 升；local 低于 map → 不压低；local 不承载 evidence
++ *   7. D-010 自举口径验收：api-matrix 类文件面 → S2、会话/worktree 域 → S3+evidence（合成声明面，
++ *      不依赖真实 map——真实 map 的走位由 task-04 自指验收覆盖）
++ *
++ * 风格：自研 assert（与 quick-session-owner.test.mjs 同），tmp fixture 不引入测试框架。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++import { resolveBlastSurfaces, loadBlastDeclarations, blastPrefixMatches, BLAST_NO_HIT_TIER } from '../src/blast-surface.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (condition) {
++    console.log(`  ✅ PASS: ${msg}`)
++  } else {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeTmpDir(prefix) {
++  const dir = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(dir)
++  return dir
++}
++
++console.log('\n=== blast-surface：声明面解析与装载 ===\n')
++
++// 1. 前缀匹配形态
++{
++  assert(blastPrefixMatches('src/a.js', 'src/a.js') === true, '字面量文件命中')
++  assert(blastPrefixMatches('src/a/x.js', 'src/a') === true, '目录前缀命中')
++  assert(blastPrefixMatches('src/a/x.js', 'src/a/') === true, '尾斜杠目录前缀命中')
++  assert(blastPrefixMatches('src/ab.js', 'src/a') === false, '段边界不误命中（src/a ≠ src/ab.js）')
++  assert(blastPrefixMatches('src\\a.js', 'src/a.js') === true, 'Windows 反斜杠归一命中')
++  assert(blastPrefixMatches('src/a.js', '') === false, '空前缀不命中')
++}
++
++// 2. 无命中 → S1
++{
++  const v = resolveBlastSurfaces(['docs/x.md', 'src/datetime.js'], [{ prefixes: ['src/worktree.js'], tier: 'S3', evidence: true }])
++  assert(v.tier === BLAST_NO_HIT_TIER && v.tier === 'S1', `无命中 → S1（实际 ${v.tier}）`)
++  assert(v.evidence === false && v.hitPrefixes.length === 0, '无命中 → evidence false / hits 空')
++  assert(resolveBlastSurfaces([], [{ prefixes: ['src/a'], tier: 'S3' }]).tier === 'S1', '空文件面 → S1')
++}
++
++// 3. 多条目取最高档 + evidence 传递
++{
++  const decls = [
++    { prefixes: ['src/stage-contract.js'], tier: 'S2' },
++    { prefixes: ['src/worktree.js'], tier: 'S3', evidence: true },
++  ]
++  const v = resolveBlastSurfaces(['src/stage-contract.js', 'src/worktree.js'], decls)
++  assert(v.tier === 'S3', '多条目命中取最高档')
++  assert(v.evidence === true, '任一命中条目 evidence:true → true')
++  const v2 = resolveBlastSurfaces(['src/stage-contract.js'], decls)
++  assert(v2.tier === 'S2' && v2.evidence === false, '仅 S2 条目命中 → S2 无 evidence')
++  assert(v.hitPrefixes.length === 2, 'hitPrefixes 记录两条命中前缀')
++}
++
++// 4. 非法条目容错
++{
++  const v = resolveBlastSurfaces(['src/a.js'], [
++    { prefixes: ['src/a.js'], tier: 'SX' },            // tier 越界 → 跳过
++    { prefixes: 'not-array', tier: 'S3' },              // prefixes 非数组 → 跳过
++    'garbage',                                          // 非对象 → 跳过
++    null,                                               // null → 跳过
++    { prefixes: ['src/a.js'] },                          // 无 tier 无 evidence → 跳过
++    { prefixes: ['src/a.js'], tier: 'S2' },             // 合法
++  ])
++  assert(v.tier === 'S2', `非法条目逐条跳过、合法条目生效（实际 ${v.tier}）`)
++}
++
++// 5. loadBlastDeclarations：map 装载与容错
++{
++  const rt = makeTmpDir('bs-load-')
++  const projDir = join(rt, 'docs', 'demo', 'modules')
++  mkdirSync(projDir, { recursive: true })
++  // 好形态 map
++  writeFileSync(join(projDir, '_module-map.yaml'), [
++    'schema_version: 2',
++    'modules:',
++    '  a:',
++    '    status: active',
++    'blast:',
++    '  - prefixes:',
++    '      - src/daemon/',
++    '    tier: S3',
++    '    evidence: true',
++    '  - prefixes: [src/gate.js]',
++    '    tier: S2',
++  ].join('\n'), 'utf8')
++  const { declarations, mapDeclarations } = loadBlastDeclarations({ specBase: rt, project: 'demo' })
++  assert(mapDeclarations.length === 2, `map blast 段装载 2 条（实际 ${mapDeclarations.length}）`)
++  assert(declarations[0].evidence === true && declarations[1].tier === 'S2', '条目字段形态正确（块式/流式 YAML 均可）')
++  // map 缺失 → 空表
++  const none = loadBlastDeclarations({ specBase: rt, project: 'no-such' })
++  assert(none.declarations.length === 0, 'map 缺失 → 空表不缺省不拦截')
++  // 坏 YAML → 空表
++  writeFileSync(join(projDir, '_module-map.yaml'), '{not yaml', 'utf8')
++  const bad = loadBlastDeclarations({ specBase: rt, project: 'demo' })
++  assert(bad.declarations.length === 0, '坏 YAML → 空表')
++  // 段缺失（无 blast: 键）→ 空表
++  writeFileSync(join(projDir, '_module-map.yaml'), 'modules:\n  a:\n    status: active\n', 'utf8')
++  const noBlast = loadBlastDeclarations({ specBase: rt, project: 'demo' })
++  assert(noBlast.declarations.length === 0, 'map 无 blast 段 → 空表（S1 起步）')
++}
++
++// 6. local 只升不降（经 loadBlastDeclarations 合并 + resolveBlastSurfaces 取 max）
++{
++  const rt = makeTmpDir('bs-local-')
++  const projDir = join(rt, 'docs', 'demo', 'modules')
++  mkdirSync(projDir, { recursive: true })
++  writeFileSync(join(projDir, '_module-map.yaml'), [
++    'blast:',
++    '  - prefixes: [src/gate.js]',
++    '    tier: S2',
++    '  - prefixes: [src/other.js]',
++    '    tier: S3',
++  ].join('\n'), 'utf8')
++  writeFileSync(join(rt, 'local.yaml'), [
++    'ceremony:',
++    '  blast_surfaces:',
++    '    - prefixes: [src/gate.js]',
++    '      tier: S3',           // local 高 → 升
++    '    - prefixes: [src/other.js]',
++    '      tier: S1',           // local 低 → 不压低
++    '    - prefixes: [src/mine.js]',
++    '      tier: S3',           // local-only 前缀 → 生效
++  ].join('\n'), 'utf8')
++  const { declarations, localDeclarations } = loadBlastDeclarations({ specBase: rt, project: 'demo' })
++  assert(localDeclarations.length === 3, `local 条目装载 3 条（实际 ${localDeclarations.length}）`)
++  assert(localDeclarations.every(d => d.evidence === false), 'local 条目 evidence 恒 false（不承载证据语义）')
++  const raised = resolveBlastSurfaces(['src/gate.js'], declarations)
++  assert(raised.tier === 'S3', `local 高档 → 升（实际 ${raised.tier}）`)
++  const kept = resolveBlastSurfaces(['src/other.js'], declarations)
++  assert(kept.tier === 'S3', `local 低于 map → 不压低（实际 ${kept.tier}）`)
++  const mine = resolveBlastSurfaces(['src/mine.js'], declarations)
++  assert(mine.tier === 'S3' && mine.evidence === false, 'local-only 前缀生效')
++}
++
++// 7. D-010 自举口径（合成声明面）
++{
++  const decls = [
++    { prefixes: ['src/friction-ledger.js', 'src/worktree.js', 'src/progress/'], tier: 'S3', evidence: true },
++    { prefixes: ['src/stage-contract.js', 'src/verify-probes.js', 'src/probe7-anchor-check.js', 'src/ceremony-tier.js', 'src/run/gates.js'], tier: 'S2' },
++  ]
++  const apiMatrix = ['src/stage-contract.js', 'src/verify-probes.js', 'src/probe7-anchor-check.js', 'src/index.js', 'src/stages/verify.js', 'templates/prompts/verify-probes.md', 'test/api-coverage-matrix.test.mjs', 'test/acceptance-matrix-probe.test.mjs']
++  const am = resolveBlastSurfaces(apiMatrix, decls)
++  assert(am.tier === 'S2' && am.evidence === false, `D-010 验收：api-matrix 类文件面 → S2 无 evidence（实际 ${am.tier}/${am.evidence}）`)
++  const session = resolveBlastSurfaces(['src/friction-ledger.js', 'src/progress/x.js'], decls)
++  assert(session.tier === 'S3' && session.evidence === true, '真会话/租约域 → S3 + evidence')
++  const plain = resolveBlastSurfaces(['src/datetime.js', 'src/constants.js', 'packages/dashboard/src/App.vue'], decls)
++  assert(plain.tier === 'S1', 'core-engine 轻文件/dashboard → S1（不整模块标价）')
++}
++
++for (const d of tmpRoots) {
++  try { rmSync(d, { recursive: true, force: true }) } catch { /* best-effort */ }
++}
++
++console.log(`\n${failed === 0 ? '✅' : '❌'} blast-surface：${total - failed}/${total} 通过\n`)
++if (failed > 0) process.exit(1)
+diff --git a/test/ceremony-tier.test.mjs b/test/ceremony-tier.test.mjs
+index febea75..4f6322e 100644
+--- a/test/ceremony-tier.test.mjs
++++ b/test/ceremony-tier.test.mjs
+@@ -29,6 +29,7 @@ import { tmpdir } from 'node:os'
+ import {
+   computeCeremonyTier,
+   escalateByFriction,
++  applyDeclarationCatchUp,
+   reconcileDualRun,
+   CEREMONY_TIERS,
+   RISK_TO_TIER,
+@@ -254,11 +255,19 @@ console.log('\n=== 4. reconcileDualRun 错配注入（FR-03/D-003 双跑收口
+   assert(under.factTier === 'S2' && under.mismatch === true && under.severity === 'error',
+     `声明 S1/事实 S2 → mismatch error（实际 ${under.factTier}/${under.mismatch}/${under.severity}）`)
+ 
+-  // 声明 ≥ 事实 → 无错配
++  // 声明 ≥ 事实 → 无错配（等档 none；高报 warn 只记账不阻断，D-005——2026-09-19-ceremony-pricing-five-cuts 翻新）
+   const eq = reconcileDualRun({ declaredTier: 'S2', factRiskDetection: { level: 'contract-required' } })
+   assert(eq.mismatch === false && eq.severity === 'none', `声明 S2/事实 S2 等档 → none（实际 ${eq.mismatch}/${eq.severity}）`)
+   const above = reconcileDualRun({ declaredTier: 'S3', factRiskDetection: { level: 'contract-required' } })
+-  assert(above.mismatch === false && above.severity === 'none', `声明 S3/事实 S2 高报 → none（只罚低报不罚高报）`)
++  assert(above.mismatch === false && above.severity === 'warn',
++    `声明 S3/事实 S2 高报 → warn 只记账不阻断（实际 ${above.mismatch}/${above.severity}）`)
++
++  // factBlastTier 声明面直入（D-008 新通道——在场合跳过 factRiskDetection 映射）
++  const blastDirect = reconcileDualRun({ declaredTier: 'S2', factBlastTier: 'S3', factFiles: ['src/worktree.js'] })
++  assert(blastDirect.factTier === 'S3' && blastDirect.mismatch === true && blastDirect.severity === 'error',
++    `factBlastTier S3 直入 → 事实 S3 > 声明 S2 → error（实际 ${blastDirect.factTier}/${blastDirect.severity}）`)
++  const blastWarn = reconcileDualRun({ declaredTier: 'S3', factBlastTier: 'S1', factFiles: ['src/datetime.js'] })
++  assert(blastWarn.severity === 'warn', `factBlastTier S1 × 声明 S3 → warn（实际 ${blastWarn.severity}）`)
+ 
+   // declaredTier 非法/缺失 → fail-safe 视为低报 error（无法证明声明到位 → 宁严勿松）
+   const badTier = reconcileDualRun({ declaredTier: 'SX', factRiskDetection: { level: 'doc-only' } })
+@@ -285,6 +294,30 @@ console.log('\n=== 4. reconcileDualRun 错配注入（FR-03/D-003 双跑收口
+   assert(empty.factTier === 'S2' && empty.mismatch === false, `空事实面 → 保守 S2 与声明 S2 对齐（实际 ${empty.factTier}/${empty.mismatch}）`)
+ }
+ 
++// ────────────────────────────────────────────────────────────
++console.log('\n=== 4b. applyDeclarationCatchUp 三分支（D-003 声明追赶重定价，2026-09-19-ceremony-pricing-five-cuts）===\n')
++{
++  // 分支①：transitions 空且未超阈 → 整档换可升可降（后补声明生效，不再粘住）
++  const down = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: ['初始档…'], transitions: [] }, recomputedTier: 'S2', recomputedComponents: { blast: 'S2', span: 'S2', friction: 'S0' }, recomputedReasons: ['span=S2…'], frictionCounts: { gate_rollback: 0, review_rejected: 0 } })
++  assert(down.tier === 'S2' && down.transitions.length === 0, `空+未超阈 → 降档 S3→S2（实际 ${down.tier}）`)
++  assert(down.reasons.some((r) => r.includes('声明追赶重定价') && r.includes('S3') && r.includes('S2')), '追赶留痕含「声明追赶重定价（S3 → S2）」')
++
++  // 分支②：transitions 空但摩擦已超阈（gate 失败先记账、升档检查点在末位的可达态）→ 整档换不设地板
++  const overThreshold = applyDeclarationCatchUp({ currentDoc: { tier: 'S2', reasons: [], transitions: [] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: { gate_rollback: 2, review_rejected: 0 } })
++  assert(overThreshold.tier === 'S1', `空+超阈 → 整档换不设地板（S1，摩擦价由同锁 escalate +1 兑现；实际 ${overThreshold.tier}）`)
++  assert(overThreshold.reasons.some((r) => r.includes('地板不设') && r.includes('escalate')), '超阈分支留痕「地板不设、同锁 escalate 即时 +1」')
++
++  // 分支③：transitions 非空 → 摩擦地板不退（max(重算, transitions 最高 to)）
++  const floored = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: [], transitions: [{ to: 'S3' }] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: {} })
++  assert(floored.tier === 'S3', `地板 S3 托底（重算 S1 → 终 S3；实际 ${floored.tier}）`)
++  assert(floored.reasons.some((r) => r.includes('摩擦地板 S3 不退')), '地板分支留痕「摩擦地板 S3 不退」')
++  const flooredRaise = applyDeclarationCatchUp({ currentDoc: { tier: 'S2', reasons: [], transitions: [{ to: 'S2' }] }, recomputedTier: 'S3', recomputedComponents: {}, recomputedReasons: [], frictionCounts: {} })
++  assert(flooredRaise.tier === 'S3', `重算高于地板 → 取重算 S3（实际 ${flooredRaise.tier}）`)
++  // transitions 原样透传（重定价不记迁移）
++  assert(floored.transitions.length === 1, 'transitions 原样透传'
++  )
++}
++
+ // ────────────────────────────────────────────────────────────
+ console.log('\n=== 5. 显式升降规则（FR-01/D-004：一切自报只升不可降）===\n')
+ {
+diff --git a/test/concurrent-preflight-hooks.test.mjs b/test/concurrent-preflight-hooks.test.mjs
+index a187c36..1c4f94e 100644
+--- a/test/concurrent-preflight-hooks.test.mjs
++++ b/test/concurrent-preflight-hooks.test.mjs
+@@ -182,6 +182,34 @@ console.log('\n--- Part B：钩子挂载契约（quick/execute 完成路径）--
+   assert(csgBlock.includes('try') && csgBlock.includes('catch'), 'B2 execute 钩子包在 try/catch 内（advisory fail-open）')
+ }
+ 
++// ---- Part C：门接线组（2026-09-19-ceremony-pricing-five-cuts task-03 / D-003）----
++// escalateCeremonyTierAtGate 模块私有未导出——按本文件先例（Part B 静态断言 + 驱动源直测）锁
++// 锁内「追赶→摩擦」组合语义（applyDeclarationCatchUp → escalateByFriction 同锁顺序）。
++console.log('\n--- Part C：ceremony 门接线（追赶→摩擦组合）---')
++{
++  const { applyDeclarationCatchUp, escalateByFriction } = await import('../src/ceremony-tier.js')
++  // C1：无迁移 + 未超阈 + 重算降档 → 降档生效（声明追赶的立意——S3 误伤档后补声明降到真实价）
++  const c1 = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: [], transitions: [] }, recomputedTier: 'S2', recomputedComponents: {}, recomputedReasons: [], frictionCounts: { gate_rollback: 0 } })
++  const e1 = escalateByFriction(c1.tier, { gate_rollback: 0 })
++  assert(c1.tier === 'S2' && e1.tier === 'S2', 'C1 S3 误伤档 + 后补声明重算 S2 + 未超阈 → 终档 S2（追赶生效）')
++  // C2：无迁移 + 超阈 + 重算 S1 → 追赶降 S1 后摩擦即时 +1 → S2（地板不设、摩擦价同锁兑现）
++  const c2 = applyDeclarationCatchUp({ currentDoc: { tier: 'S2', reasons: [], transitions: [] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: { gate_rollback: 2 } })
++  const e2 = escalateByFriction(c2.tier, { gate_rollback: 2 })
++  assert(c2.tier === 'S1' && e2.tier === 'S2' && e2.escalated === true, 'C2 重算 S1 × 超阈 → 同锁 escalate 即时 +1 → 终档 S2')
++  // C3：有迁移（to S3）+ 重算 S1 → 摩擦地板 S3 托底
++  const c3 = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: [], transitions: [{ to: 'S3' }] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: {} })
++  assert(c3.tier === 'S3', 'C3 摩擦地板 S3 不退（重算 S1 被托底）')
++
++  // 挂载契约：gates 锁内先追赶后摩擦 + 事件文案参数化 + readDesignOwnFiles 委托单一真相源
++  const gatesSrc = readFileSync(join(repoRoot, 'src/run/gates.js'), 'utf8')
++  assert(gatesSrc.includes('applyDeclarationCatchUp({ currentDoc: doc'), 'C4 gates 锁内接线 applyDeclarationCatchUp（在场档追赶）')
++  assert(gatesSrc.includes("eventContext: 'catchup'"), 'C4 追赶场景事件文案参数化（不追加「初始档/首见」行）')
++  const escalateIdx = gatesSrc.indexOf('const esc = escalateByFriction(doc.tier, frictionCounts)')
++  const catchUpIdx = gatesSrc.indexOf('applyDeclarationCatchUp({ currentDoc: doc')
++  assert(escalateIdx > catchUpIdx && escalateIdx > 0, 'C4 锁内顺序：追赶在 escalateByFriction 之前（先追赶后摩擦）')
++  assert(gatesSrc.includes("parseFileChangeListDetailed(join(specBase, 'changes', changeName, 'design.md')"), 'C5 readDesignOwnFiles 委托 change-list 单一真相源（D-004 双形态标题）')
++}
++
+ for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+ console.log(`\n${'='.repeat(50)}`)
+ console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
+diff --git a/test/modules-rebuild-preserve.test.mjs b/test/modules-rebuild-preserve.test.mjs
+new file mode 100644
+index 0000000..17c9c00
+--- /dev/null
++++ b/test/modules-rebuild-preserve.test.mjs
+@@ -0,0 +1,139 @@
++/**
++ * modules rebuild 顶层段保留测试（2026-09-19-ceremony-pricing-five-cuts task-01 / D-008@v2 / R-01）
++ *
++ * 背景（Grill P1-1 实证修正）：rebuild 非 force 是 dry-run 不写盘；--force 是唯一写盘路径且
++ * merge 重发射只覆盖 modules 段 per-module 字段——顶层手工段（blast 危险面声明）此前会整体
++ * 丢失。修法：--force 写盘时从 existingMap 文本提取非重建头顶层段原样回插。
++ *
++ * 覆盖：
++ *   1. --force 写盘后顶层 blast 段在场且内容保真（逐行语义等价——generated_at 头部刷新属预期）
++ *   2. 非 force（无 --force）dry-run 不写盘（mtime/内容不变）
++ *   3. 无手工段的 map --force 重建 → 不产生多余空段
++ *   4. 重建头五族外的其他顶层手工段同样保留（通用机制，不只为 blast 特判）
++ *
++ * 风格：自研 assert，tmp fixture。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, statSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++
++import { rebuildModuleMap } from '../src/modules.js'
++
++let failed = 0
++let total = 0
++
++function assert(condition, msg) {
++  total++
++  if (condition) {
++    console.log(`  ✅ PASS: ${msg}`)
++  } else {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  }
++}
++
++const tmpRoots = []
++function makeFixture(prefix, withBlast) {
++  const root = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(root)
++  const modulesDir = join(root, '.sillyspec', 'docs', 'demo', 'modules')
++  mkdirSync(modulesDir, { recursive: true })
++  // 一张模块卡（rebuild 需要至少一张卡或 existing 模块）
++  writeFileSync(join(modulesDir, 'alpha.md'), [
++    '---',
++    'module_id: alpha',
++    '---',
++    '## 定位',
++    '测试模块',
++  ].join('\n'), 'utf8')
++  const mapLines = [
++    'schema_version: 2',
++    'generated_at: 2026-01-01 00:00:00',
++    'generator: sillyspec-modules-rebuild',
++    '',
++    'modules:',
++    '  alpha:',
++    '    status: active',
++    '    doc: modules/alpha.md',
++  ]
++  if (withBlast) {
++    mapLines.push(
++      '',
++      '# blast 段前置注释（随段保留）',
++      'blast:',
++      '  - prefixes:',
++      '      - src/worktree.js',
++      '      - src/progress/',
++      '    tier: S3',
++      '    evidence: true',
++      '  - prefixes: [src/stage-contract.js]',
++      '    tier: S2',
++    )
++  }
++  writeFileSync(join(modulesDir, '_module-map.yaml'), mapLines.join('\n') + '\n', 'utf8')
++  return { root, mapPath: join(modulesDir, '_module-map.yaml') }
++}
++
++function blastSectionOf(text) {
++  const lines = text.split('\n')
++  const start = lines.findIndex(l => /^blast:/.test(l))
++  if (start < 0) return null
++  const rest = []
++  for (let i = start; i < lines.length; i++) {
++    if (i > start && /^[A-Za-z_][\w-]*:/.test(lines[i])) break
++    rest.push(lines[i])
++  }
++  return rest.join('\n').replace(/\n+$/, '')
++}
++
++console.log('\n=== modules-rebuild-preserve：--force 顶层段回插 ===\n')
++
++// 1. --force 写盘后 blast 段在场且保真
++{
++  const { root, mapPath } = makeFixture('mrp-force-', true)
++  const before = blastSectionOf(readFileSync(mapPath, 'utf8'))
++  await rebuildModuleMap(root, { force: true })
++  const after = readFileSync(mapPath, 'utf8')
++  const afterBlast = blastSectionOf(after)
++  assert(afterBlast != null, '--force 写盘后顶层 blast 段在场')
++  assert(afterBlast === before, `blast 段内容保真（原样回插，实际：${JSON.stringify(afterBlast)}）`)
++  assert(after.includes('modules:'), 'modules 段照常重建')
++}
++
++// 2. 非 force dry-run 不写盘
++{
++  const { root, mapPath } = makeFixture('mrp-dry-', true)
++  const before = readFileSync(mapPath, 'utf8')
++  const beforeMtime = statSync(mapPath).mtimeMs
++  await new Promise(r => setTimeout(r, 20))
++  await rebuildModuleMap(root, { force: false })
++  const after = readFileSync(mapPath, 'utf8')
++  assert(after === before && statSync(mapPath).mtimeMs === beforeMtime, '非 force dry-run 不写盘（内容与 mtime 不变）')
++}
++
++// 3. 无手工段 → 不产生多余空段
++{
++  const { root, mapPath } = makeFixture('mrp-plain-', false)
++  await rebuildModuleMap(root, { force: true })
++  const after = readFileSync(mapPath, 'utf8')
++  assert(!/^blast:/.test(after), '无手工段重建 → 不凭空产生 blast 段')
++  assert(!/\n\n\n\n/.test(after), '不产生多余连续空行')
++}
++
++// 4. 其他顶层手工段同样保留（通用机制）
++{
++  const { root, mapPath } = makeFixture('mrp-other-', false)
++  const extra = ['extra_notes:', '  - 手工备注 A', '  - 手工备注 B'].join('\n')
++  writeFileSync(mapPath, readFileSync(mapPath, 'utf8') + '\n' + extra + '\n', 'utf8')
++  await rebuildModuleMap(root, { force: true })
++  const after = readFileSync(mapPath, 'utf8')
++  assert(after.includes('extra_notes:'), '非 blast 顶层手工段同样回插（通用机制）')
++  assert(after.includes('- 手工备注 A') && after.includes('- 手工备注 B'), '段内列表项保真')
++}
++
++for (const d of tmpRoots) {
++  try { rmSync(d, { recursive: true, force: true }) } catch { /* best-effort */ }
++}
++
++console.log(`\n${failed === 0 ? '✅' : '❌'} modules-rebuild-preserve：${total - failed}/${total} 通过\n`)
++if (failed > 0) process.exit(1)
+diff --git a/test/pass-eligibility.test.mjs b/test/pass-eligibility.test.mjs
+index 2ce0cff..11cea12 100644
+--- a/test/pass-eligibility.test.mjs
++++ b/test/pass-eligibility.test.mjs
+@@ -191,14 +191,22 @@ test('C. facts 双源：factsExpected=false（存量未跑管线）→ 兼容口
+ // ═══════════════════════════════════════════════════════════════════
+ // D. 豁免洞分层三态（FR-02 GWT1/GWT2，D-002@v1）——经 runValidators verify 链
+ // ═══════════════════════════════════════════════════════════════════
+-function makeExemptionChange(cn, { riskLevel, facts } = {}) {
++function makeExemptionChange(cn, { riskLevel, facts, evidenceHit = false } = {}) {
+   const root = mk('pe-exempt-')
+   const changeDir = join(root, '.sillyspec', 'changes', cn)
+   mkdirSync(changeDir, { recursive: true })
++  if (evidenceHit) {
++    // 2026-09-19-ceremony-pricing-five-cuts：证据要求来自 map evidence:true 命中（D-008/D-009），
++    // 不再来自词表判级或 explicit 声明——fixture 建带 blast 段的 map + 文件清单命中行。
++    const mapDir = join(root, '.sillyspec', 'docs', 'demo', 'modules')
++    mkdirSync(mapDir, { recursive: true })
++    writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\nblast:\n  - prefixes: [src/hot/]\n    tier: S3\n    evidence: true\n')
++  }
++  const file = evidenceHit ? 'src/hot/x.js' : 'src/plain.js'
+   writeFileSync(join(changeDir, 'design.md'), [
+     '---', 'author: t', `risk_level: ${riskLevel}`, 'created_at: 2026-01-01 08:00:00', '---',
+     '# 设计', '', '## 文件变更清单', '',
+-    '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/feature.js | 特性 |', '',
++    '| 操作 | 文件路径 | 说明 |', '|---|---|---|', `| 修改 | ${file} | 特性 |`, '',
+   ].join('\n'))
+   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: 实现\n')
+   if (facts) writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify(facts, null, 2) + '\n')
+@@ -209,24 +217,25 @@ function makeExemptionChange(cn, { riskLevel, facts } = {}) {
+   return { root, cn }
+ }
+ 
+-test('D. 豁免洞分层：unit-sufficient 免证据 / critical 无 handover → error（二选一缺位）/ 有 handover → 放行', () => {
+-  // 态一：explicit unit-sufficient + NOTES → 不要求集成证据（关键词误伤逃生保留）
++test('D. 证据分层（D-009 口径）：零命中免证据 / evidence 命中无 handover → error（二选一缺位）/ 有 handover → 放行', () => {
++  // 态一：零 evidence 命中 + explicit unit-sufficient + NOTES → 不要求集成证据（零命中面 S1 起步）
+   const u = makeExemptionChange('exempt-unit', { riskLevel: 'unit-sufficient' })
+   const ru = runValidators('verify', u.root, u.cn)
+   assert.ok(!ru.errors.some(e => e.includes('缺少真实集成证据')),
+-    `explicit unit-sufficient + NOTES → 不强制集成证据（实际 errors=${JSON.stringify(ru.errors)}）`)
++    `零命中面 + explicit unit-sufficient + NOTES → 不强制集成证据（实际 errors=${JSON.stringify(ru.errors)}）`)
+ 
+-  // 态二：explicit integration-critical + NOTES + 无 handover + 无证据 → error（D-002 豁免洞封死）
+-  const c = makeExemptionChange('exempt-crit', { riskLevel: 'integration-critical' })
++  // 态二：evidence:true 命中 + explicit integration-critical + NOTES + 无 handover + 无证据 → error
++  //（证据要求来自 map 声明命中——explicit 声明不豁免，D-009；handover 二选一缺位）
++  const c = makeExemptionChange('exempt-crit', { riskLevel: 'integration-critical', evidenceHit: true })
+   const rc = runValidators('verify', c.root, c.cn)
+   assert.ok(rc.errors.some(e => e.includes('缺少真实集成证据')),
+-    'explicit integration-critical + NOTES 无 handover 无证据 → error（结构化 handover 与齐全证据二选一缺位）')
++    'evidence 命中 + explicit critical + NOTES 无 handover 无证据 → error（结构化 handover 与齐全证据二选一缺位）')
+   assert.ok(rc.warnings.some(w => w.includes('零有效行') && w.includes('二选一')),
+     `warning 透出二选一出路（补结构化移交项 或 提供齐全集成证据）（实际 ${JSON.stringify(rc.warnings)}）`)
+ 
+-  // 态三：同判级 + NOTES + 携带结构化 handover（facts.handover 有效行）→ 放行
++  // 态三：evidence 命中 + NOTES + 携带结构化 handover（facts.handover 有效行）→ 放行
+   const h = makeExemptionChange('exempt-handover', {
+-    riskLevel: 'integration-critical',
++    riskLevel: 'integration-critical', evidenceHit: true,
+     facts: {
+       schemaVersion: 2, integrationRan: 'ran',
+       handover: { count: 1, items: [{ type: 'env-blocked', item: '联调环境阻断', condition: '恢复后复跑', severity: 'advisory' }] },
+diff --git a/test/quick-gate-profile.test.mjs b/test/quick-gate-profile.test.mjs
+index 18e9905..340cb4b 100644
+--- a/test/quick-gate-profile.test.mjs
++++ b/test/quick-gate-profile.test.mjs
+@@ -9,7 +9,7 @@
+  *   5. checks 四项：perFileNotes 覆盖率、testDelta 三态、docClaim 四路、runtimeEvidence；
+  *   6. opts 注入面：thresholds / riskTable / fileNotes / noDocs；
+  *   7. 风险表段边界锚定（author/booking/lockfile 假阳不命中）+ 文档文件不参与风险命中；
+- *   8. detectChangeRisk 判级零变化回归（quick 表新增不影响 verify 侧，task-01 验收项）。
++ *   8. resolveChangeRisk 声明面判级回归（词表退役，2026-09-19-ceremony-pricing-five-cuts task-02）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -19,7 +19,7 @@ import {
+   THRESHOLDS,
+   resolveGateThresholds,
+ } from '../src/quick-gate-profile.js'
+-import { QUICK_RISK_PATH_PATTERNS, detectChangeRisk } from '../src/change-risk-profile.js'
++import { QUICK_RISK_PATH_PATTERNS, resolveChangeRisk } from '../src/change-risk-profile.js'
+ 
+ /** 四模块 fixture（parseModuleMapSimple 扁平形态：字面量 + 目录前缀两种 paths 写法） */
+ const IDX = {
+@@ -360,42 +360,23 @@ test('QUICK_RISK_PATH_PATTERNS 表形状：六域齐全、条目只含 pattern+r
+   assert.deepEqual(Object.keys(p.riskHits[0]).sort(), ['file', 'pattern'])
+ })
+ 
+-// ── 8. detectChangeRisk 判级零变化回归（verify 侧） ──
+-
+-test('detectChangeRisk 判级零变化：quick 表新增不影响 verify 侧语义', () => {
+-  const plain = detectChangeRisk({ designContent: '普通文本改动', planContent: '', changedFiles: ['src/run/a.js'] })
+-  assert.equal(plain.level, 'doc-only')
+-  assert.deepEqual(plain.triggers, [])
+-
+-  const integ = detectChangeRisk({ designContent: '涉及 daemon 与 backend 的联调', planContent: '', changedFiles: [] })
+-  assert.equal(integ.level, 'integration-critical')
+-  assert.ok(integ.triggers.includes('daemon'))
+-
+-  const dep = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/cli.ts'] })
+-  assert.equal(dep.level, 'deployment-critical')
+-
+-  // 同句否定抑制语义不变（坑 risk-negation-blindness 回归锚点）
+-  const neg = detectChangeRisk({ designContent: '本次不新增 daemon 协议', planContent: '', changedFiles: [] })
+-  assert.equal(neg.level, 'doc-only')
+-  assert.ok(neg.suppressedTriggers.includes('daemon'))
+-
+-  // 两表互不掺和：auth 路径只进 quick 风险表，不触发 detectChangeRisk 判级
+-  const authOnly = detectChangeRisk({ designContent: '', planContent: '', changedFiles: ['src/auth/login.js'] })
+-  assert.equal(authOnly.level, 'doc-only')
+-
+-  // ── 9. 文件名型模式定界符前缀双回归（ql-20260918-009，回放实验实证 mcp-server.js 误判）──
+-  // 假阳面：`-`/`_` 等定界符前缀的相似名不得触发 deployment（此前 \b 对非\w定界符漏界）
+-  const fpLine = detectChangeRisk({ designContent: '# D\n## 非目标\n- mcp-server.js 错误面透传\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+-  assert.equal(fpLine.level, 'doc-only', 'mcp-server.js 非目标行（无同句否定词）不再误判 deployment')
+-  const fpPath = detectChangeRisk({ designContent: '# D\n## 清单\n| 修改 | x | y |', planContent: '', changedFiles: ['src/mcp-server.js'] })
+-  assert.notEqual(fpPath.level, 'deployment-critical', 'src/mcp-server.js 路径不再误判 deployment')
+-  const fpUnderscore = detectChangeRisk({ designContent: '# D\n- my_cli.ts 不在范围\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+-  assert.notEqual(fpUnderscore.level, 'deployment-critical', 'my_cli.ts 前缀不误判 deployment')
+-  // 真阳面：真实入口文件/行内提及/中文紧邻必须仍然命中（判级输入面，漏报=静默降 risk 主价）
+-  const tpLine = detectChangeRisk({ designContent: '# D\n入口 server.js 修改\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+-  assert.equal(tpLine.level, 'deployment-critical', '行内 server.js 仍判 deployment')
+-  const tpCn = detectChangeRisk({ designContent: '# D\n修改server.js入口\n## 清单\n| 修改 | a.js | x |', planContent: '', changedFiles: [] })
+-  assert.equal(tpCn.level, 'deployment-critical', '中文紧邻 修改server.js 仍判 deployment（边界不误伤非\\w邻接）')
+-  const tpPath = detectChangeRisk({ designContent: '# D\n## 清单\n| 修改 | x | y |', planContent: '', changedFiles: ['bin/server.js'] })
+-  assert.equal(tpPath.level, 'deployment-critical', 'bin/server.js 路径仍判 deployment')
++// ── 8. resolveChangeRisk 声明面判级回归（2026-09-19-ceremony-pricing-five-cuts task-02：词表判级退役）──
++
++test('resolveChangeRisk 声明面判级：词表词在正文出现不再触发判级（两表互不掺和）', () => {
++  const decls = [{ prefixes: ['src/worktree.js'], tier: 'S3', evidence: true }]
++  // 词表时代的误伤面（2026-09-19 api-matrix S3 撞词事故形态）在声明面口径下全部消失
++  const proseHit = resolveChangeRisk({ files: ['src/datetime.js'], blastDeclarations: decls, explicitRiskLevel: null })
++  // files 未命中声明面 → S1，正文措辞与文件名相似度均不参与（resolveChangeRisk 无正文输入面）
++  assert.equal(proseHit.tier, 'S1')
++  assert.equal(proseHit.evidenceRequired, false)
++  // 命中声明面 → S3+evidence（判级输入面=路径，漏报=静默降 risk 主价）
++  const hit = resolveChangeRisk({ files: ['src/worktree.js', 'src/datetime.js'], blastDeclarations: decls })
++  assert.equal(hit.tier, 'S3')
++  assert.equal(hit.evidenceRequired, true)
++  // 两表互不掺和：auth 路径只进 quick 风险表（QUICK_RISK_PATH_PATTERNS），不触发 blast 判级
++  const authOnly = resolveChangeRisk({ files: ['src/auth/login.js'], blastDeclarations: decls })
++  assert.equal(authOnly.tier, 'S1')
++  // QUICK_RISK_PATH_PATTERNS 表自身零变化（D-011：本变更不迁不动）——auth 命中仍可计算
++  const authRe = QUICK_RISK_PATH_PATTERNS.find(e => e.pattern === 'auth')
++  assert.ok(authRe && authRe.re.test('src/auth/login.js'))
+ })
+diff --git a/test/stage-contract.test.mjs b/test/stage-contract.test.mjs
+index 4e8d1f1..bd42db4 100644
+--- a/test/stage-contract.test.mjs
++++ b/test/stage-contract.test.mjs
+@@ -2,7 +2,7 @@
+  * StageContract 状态转换 + validator 测试
+  */
+ import { checkTransition, runValidators, getContract } from '../src/stage-contract.js'
+-import { detectChangeRisk, extractExplicitRiskLevel } from '../src/change-risk-profile.js'
++import { extractExplicitRiskLevel, resolveChangeRisk } from '../src/change-risk-profile.js'
+ 
+ let failed = 0
+ 
+@@ -328,45 +328,58 @@ if (lcCaseC.errors.some(e => e.includes('生命周期契约表'))) {
+ 
+ rmSync(traceRoot, { recursive: true })
+ 
+-// === A: verify 风险门控报错可执行化（2026-07-27）===
++// === A: verify 风险门控报错可执行化（2026-07-27；2026-09-19-ceremony-pricing-five-cuts task-03 声明面口径）===
+ // 历史教训：integration/deployment-critical 门控只报「缺少真实集成证据 / 需要真实启动验证证据」，
+-// agent 看不出缺哪一项、要写/做什么才算过，只能改结论文案撞墙。此处锁：
++// agent 看不出缺哪一项、要写/做什么才算过，只能改结论文案撞墙。此处锁（声明面版）：
+ //   - 报错逐条列出缺失项 + 每项要提供什么（含字面期望）
+-//   - 报出风险判级原因（design/plan 措辞命中，非改动文件）
+-//   - 指明「真实启动」须是本变更实际改动的部署/启动入口，非无关进程
+-console.log('\n=== verify 风险门控报错可执行化 ===')
++//   - 报出风险判级原因（文件清单 × 项目 blast 声明命中，非措辞）
++//   - 指明出路含「改 map」（evidence 不被 risk_level 豁免，D-009）
++// 判级 fixture：词表判级已退役——建带 blast 段（evidence:true）的 map + design 文件清单命中行。
++console.log('\n=== verify 风险门控报错可执行化（声明面） ===')
++
++function writeBlastMap(root, project = 'demo') {
++  const dir = join(root, '.sillyspec', 'docs', project, 'modules')
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, '_module-map.yaml'), [
++    'modules:',
++    '  demo:',
++    '    status: active',
++    'blast:',
++    '  - prefixes: [src/daemon/]',
++    '    tier: S3',
++    '    evidence: true',
++  ].join('\n'), 'utf8')
++}
+ 
+ const gateRoot = mkdtempSync(join(tmpdir(), 'sillyspec-gate-'))
+ const gateDir = join(gateRoot, '.sillyspec', 'changes', 'gate')
+ mkdirSync(gateDir, { recursive: true })
+-// design 命中 server.js（deployment 触发词）+ daemon → deployment-critical
++writeBlastMap(gateRoot)
++// design 文件清单命中 evidence:true 声明路径（旧版靠 daemon/server.js 措辞——已退役）
+ writeFileSync(join(gateDir, 'design.md'), [
+-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-  '改 daemon 下发链路，server.js 入口，claude 读取 settings.json。',
++  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
+   'D-001@v1', ''
+ ].join('\n'))
+ writeFileSync(join(gateDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 实现下发\n')
+ writeFileSync(join(gateDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— gate\n\n测试占位\n')
+-// verify 只有单测 + 无关子进程证据（有 端到端 / Runtime Evidence 字面，但无真实启动入口）
++// verify 只有单测、无集成证据字面（「端到端/Runtime Evidence」等字面会喂饱 legacy literals——故意不含）
+ writeFileSync(join(gateDir, 'verify-result.md'), [
+   '# 验证报告', '', '## 结论', '', 'PASS', '',
+-  '单测全过。spike-02 端到端实测：真跑 claude --debug。', '',
+-  '## Runtime Evidence', 'claude 实测读取 settings.json。', ''
++  '单测全过。spike-02 手测：真跑 claude --debug。', ''
+ ].join('\n'))
+ 
+ const gateTrace = runValidators('verify', gateRoot, 'gate')
+ const gateErr = gateTrace.errors.find(e => e.includes('缺少真实集成证据'))
+ if (gateTrace.ok === false
+   && gateErr
+-  && gateErr.includes('real_startup_once')
+-  && gateErr.includes('部署/启动入口')
+-  && gateErr.includes('无关进程')
++  && gateErr.includes('real_daemon_backend_integration')
+   && gateErr.includes('字面命中其一')
+   && gateErr.includes('风险判级原因')
+-  && gateErr.includes('design.md / plan.md 命中启动入口关键词')) {
+-  console.log('✅ deployment-critical 门控报错可执行：列出缺失项 real_startup_once + 字面期望 + 指明部署/启动入口（非无关进程）+ 判级原因')
++  && gateErr.includes('变更文件面命中项目声明危险面')) {
++  console.log('✅ evidence:true 命中门控报错可执行：列出缺失项 + 字面期望 + 判级原因（声明面口径）')
+ } else {
+-  console.log('❌ deployment-critical 门控报错不可执行', gateTrace.errors)
++  console.log('❌ evidence:true 门控报错不可执行', gateTrace.errors)
+   failed++
+ }
+ 
+@@ -408,97 +421,122 @@ console.log('\n=== risk_level 显式豁免 ===')
+   }
+ }
+ 
+-// 单测 2：detectChangeRisk 显式声明覆盖关键词误判（design 命中 daemon/session 但声明 unit-sufficient）
++// 单测 2：resolveChangeRisk 声明面判级（2026-09-19-ceremony-pricing-five-cuts task-02 / D-008）
++// 词表散文判级退役（detectChangeRisk 删除收口在 task-03），新口径：files × 项目声明危险面。
+ {
+-  const design = '---\nrisk_level: unit-sufficient\n---\n# Design\n本次不改动 daemon / session / lifecycle，仅调 service 文案。\n'
+-  const r = detectChangeRisk({ designContent: design })
+-  if (r.level === 'unit-sufficient' && r.explicit === true && !r.requiredVerification.includes('real_daemon_backend_integration')) {
+-    console.log('✅ detectChangeRisk：risk_level 显式声明覆盖关键词误判 → unit-sufficient，免集成证据')
++  const decls = [
++    { prefixes: ['src/worktree.js', 'src/progress/'], tier: 'S3', evidence: true },
++    { prefixes: ['src/stage-contract.js'], tier: 'S2' },
++  ]
++  // 命中 evidence:true 声明 → S3 + 证据全集
++  const hit = resolveChangeRisk({ files: ['src/worktree.js', 'src/datetime.js'], blastDeclarations: decls })
++  if (hit.tier === 'S3' && hit.evidenceRequired === true && hit.explicit === false
++    && hit.requiredVerification.includes('real_daemon_backend_integration')
++    && hit.hitPrefixes.join(',') === 'src/worktree.js') {
++    console.log('✅ resolveChangeRisk：命中 S3+evidence 声明 → tier S3 + 证据全集（hitPrefixes 记录命中面）')
+   } else {
+-    console.log('❌ detectChangeRisk 显式豁免未生效', r)
++    console.log('❌ resolveChangeRisk 命中声明面判级异常', hit)
+     failed++
+   }
+-  // 对照：无声明、无否定语境的措辞仍按关键词判 integration-critical（证明关键词确实命中；
+-  // 否定措辞场景由下方「同句否定抑制」单测覆盖，不再作为对照组）
+-  const rAuto = detectChangeRisk({ designContent: '# Design\n涉及 daemon 与 session 状态机。\n' })
+-  if (rAuto.level === 'integration-critical' && !rAuto.explicit) {
+-    console.log('✅ 对照：无显式声明、无否定语境时仍按关键词判 integration-critical（证明豁免生效于声明而非措辞）')
++  // 命中无 evidence 的 S2 → 无证据要求
++  const gate = resolveChangeRisk({ files: ['src/stage-contract.js'], blastDeclarations: decls })
++  if (gate.tier === 'S2' && gate.evidenceRequired === false && gate.requiredVerification.join(',') === 'unit_tests') {
++    console.log('✅ resolveChangeRisk：门禁判定文件 S2 声明 → 无证据要求')
+   } else {
+-    console.log('❌ 对照判级异常', rAuto)
++    console.log('❌ S2 无 evidence 判级异常', gate)
++    failed++
++  }
++  // 未命中 → S1（禁词表兜底，D-008）
++  const noHit = resolveChangeRisk({ files: ['docs/x.md'], blastDeclarations: decls })
++  if (noHit.tier === 'S1' && noHit.evidenceRequired === false) {
++    console.log('✅ resolveChangeRisk：未命中声明面 → S1 起步（无词表兜底）')
++  } else {
++    console.log('❌ 未命中判级异常', noHit)
+     failed++
+   }
+ }
+ 
+-// 单测 2b：同句否定抑制（坑 risk-negation-blindness，2026-08-24）——机械窗口 + 枚举继承，
+-// 全部命中被抑制才降级；否定词在关键词后方/「不同」合成词/跨子句/从属文字间隔均不抑制
++// 单测 2b：explicitRiskLevel 只压 tier、不豁免 evidenceRequired（D-009 钉——收掉旧显式短路的懒 agent 洞）
+ {
+-  const cases = [
+-    // [名, design, 期望 level, 期望 kept triggers, 期望 suppressed triggers]
+-    ['枚举全抑制→doc-only', '# D\n本次不改动 daemon / session / lifecycle。\n', 'doc-only', [], ['daemon', 'session', 'lifecycle']],
+-    ['后置否定不抑制', '# D\ndaemon 稳定性提升。\n', 'integration-critical', ['daemon'], []],
+-    ['「不同」合成词不抑制', '# D\n不同模块的 daemon。\n', 'integration-critical', ['daemon'], []],
+-    ['子句切断不继承', '# D\n不改动 daemon，新增 session 管理。\n', 'integration-critical', ['session'], ['daemon']],
+-    ['从属文字间隔不继承', '# D\n在不涉及 daemon 的情况下重构 session 管理。\n', 'integration-critical', ['session'], ['daemon']],
+-    ['部分抑制不降级', '# D\n不新增 daemon 协议，但重构 session 状态机。\n', 'integration-critical', ['session'], ['daemon']],
+-    ['英文否定抑制', '# D\nno new daemon protocol in this change.\n', 'doc-only', [], ['daemon']],
+-  ]
+-  let allOk = true
+-  for (const [name, design, wantLevel, wantKept, wantSup] of cases) {
+-    const r = detectChangeRisk({ designContent: design })
+-    const ok = r.level === wantLevel
+-      && r.triggers.join(',') === wantKept.join(',')
+-      && r.suppressedTriggers.join(',') === wantSup.join(',')
+-    if (!ok) { allOk = false; console.log(`❌ 否定抑制「${name}」`, r) }
++  const decls = [{ prefixes: ['src/worktree.js'], tier: 'S3', evidence: true }]
++  // 钉：声明 S3+evidence × explicit=unit-sufficient → tier 压低、证据要求保留
++  const pin = resolveChangeRisk({ files: ['src/worktree.js'], blastDeclarations: decls, explicitRiskLevel: 'unit-sufficient' })
++  if (pin.tier === 'S1' && pin.explicit === true && pin.evidenceRequired === true
++    && pin.requiredVerification.includes('real_daemon_backend_integration')) {
++    console.log('✅ D-009 钉：explicit 压 tier（S3→S1）但 evidenceRequired 保留（证据全集仍在）')
++  } else {
++    console.log('❌ explicit 豁免了证据要求（懒 agent 洞回归）', pin)
++    failed++
+   }
+-  if (allOk) {
+-    console.log('✅ detectChangeRisk 同句否定抑制：枚举继承/后置不抑制/「不同」不抑制/子句切断/部分抑制共 7 例')
++  // explicit 升档也尊重（声明高于机械面）
++  const up = resolveChangeRisk({ files: ['docs/x.md'], blastDeclarations: decls, explicitRiskLevel: 'integration-critical' })
++  if (up.tier === 'S3' && up.explicit === true && up.evidenceRequired === false) {
++    console.log('✅ explicit 升档尊重（S1 面 × integration-critical → S3；evidence 不受 explicit 影响）')
+   } else {
++    console.log('❌ explicit 升档异常', up)
+     failed++
+   }
+-  // frontmatter 显式声明仍最高优先（声明分支不做否定分析，行为不变）
+-  const rExplicit = detectChangeRisk({ designContent: '---\nrisk_level: integration-critical\n---\n# D\n本次不新增 daemon。\n' })
+-  if (rExplicit.level === 'integration-critical' && rExplicit.explicit && rExplicit.suppressedTriggers.length === 0) {
+-    console.log('✅ 显式声明优先于否定抑制（声明分支不分析否定，行为不变）')
++  // 非法 explicit 值忽略（存量五级词兼容集合外 → explicit false）
++  const bad = resolveChangeRisk({ files: ['src/worktree.js'], blastDeclarations: decls, explicitRiskLevel: 'not-a-level' })
++  if (bad.tier === 'S3' && bad.explicit === false && bad.evidenceRequired === true) {
++    console.log('✅ 非法 explicit 值忽略（tier 回声明面、证据不变）')
+   } else {
+-    console.log('❌ 显式声明与否定抑制优先级异常', rExplicit)
++    console.log('❌ 非法 explicit 处理异常', bad)
+     failed++
+   }
+ }
+ 
+-// 集成 3：门控端到端 —— design 声明 unit-sufficient（虽命中 daemon）+ 结论 PASS + 仅单测 → 放行
++// 集成 3：门控端到端 —— evidence:true 命中 + explicit unit-sufficient + PASS + 仅单测 → 仍拦
++// 【语义翻转，D-009 / 2026-09-19-ceremony-pricing-five-cuts】旧断言期望「显式声明放行免证据」
++// ——懒 agent 洞（声明 doc-only 连证据门全免）已收口：explicit 只压仪式档、不豁免证据要求。
+ {
+   const exRoot = mkdtempSync(join(tmpdir(), 'sillyspec-risktag-'))
+   const exDir = join(exRoot, '.sillyspec', 'changes', 'risktag')
+   mkdirSync(exDir, { recursive: true })
++  writeBlastMap(exRoot)
+   writeFileSync(join(exDir, 'design.md'), [
+     '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
+-    '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-    '本次不改动 daemon / session，仅改 service 文案。', 'D-001@v1', ''
++    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++    '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++    'D-001@v1', ''
+   ].join('\n'))
+-  writeFileSync(join(exDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改文案\n')
++  writeFileSync(join(exDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改下发\n')
+   writeFileSync(join(exDir, 'module-impact.md'), '# 模块影响分析（Module Impact）— ex\n\n测试占位\n')
+   writeFileSync(join(exDir, 'verify-result.md'), [
+     '# 验证报告', '', '## 结论', '', 'PASS', '',
+-    '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = unit-sufficient（覆盖关键词判级）：本次仅改 service 文案，未触 daemon/session。', '',
++    '## 变更风险等级', 'risk_level 由 design frontmatter 显式声明 = unit-sufficient。', '',
+     '单测全过。', ''
+   ].join('\n'))
+   const exPass = runValidators('verify', exRoot, 'risktag')
+-  if (!exPass.errors.some(e => e.includes('缺少真实集成证据'))) {
+-    console.log('✅ 门控：design 声明 unit-sufficient + PASS + 仅单测 → 不强制集成证据，放行')
++  if (exPass.errors.some(e => e.includes('缺少真实集成证据'))) {
++    console.log('✅ 门控（D-009 端到端钉）：evidence 命中 + explicit unit-sufficient + PASS + 仅单测 → 仍拦（explicit 不豁免证据）')
++  } else {
++    console.log('❌ explicit 豁免了证据门（懒 agent 洞回归）', exPass.errors)
++    failed++
++  }
++  // 3b：无声明面命中的纯文案变更（explicit unit-sufficient + 文件不命中 blast）→ 放行
++  writeFileSync(join(exDir, 'design.md'), [
++    '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
++    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++    '| 修改 | `docs/readme.md` | 文案 |', '', '## 风险登记', '## 自审', '',
++    'D-001@v1', ''
++  ].join('\n'))
++  const exClean = runValidators('verify', exRoot, 'risktag')
++  if (!exClean.errors.some(e => e.includes('缺少真实集成证据'))) {
++    console.log('✅ 门控：文件面零声明命中 + PASS + 仅单测 → 放行（未配置路径 S1 起步，无误伤）')
+   } else {
+-    console.log('❌ 显式豁免后门控仍强制集成证据', exPass.errors)
++    console.log('❌ 零命中面仍被强制集成证据', exClean.errors)
+     failed++
+   }
+ 
+-  // 集成 4：显式声明 integration-critical + 结论 PASS WITH NOTES（无 handover 无集成证据）→ 拦截
+-  // 【语义翻转，D-002@v1 / 2026-09-17-pass-cap-semantics task-02】原断言期望「显式等级放宽 PWN 放行」
+-  // ——豁免洞封死后的新契约：显式 critical + NOTES 必须携带结构化 handover（facts.handover 有效行）
+-  // 或齐全集成证据，二选一；两者皆缺 → error（不弱化校验，翻转到新契约，直测面在
+-  // test/pass-eligibility.test.mjs 态二/态三）。
++  // 集成 4：evidence 命中 + 显式 integration-critical + PASS WITH NOTES（无 handover 无集成证据）→ 拦截
++  // 【D-002@v1 / 2026-09-17-pass-cap-semantics task-02 契约延续】显式 critical + NOTES 必须携带
++  // 结构化 handover 或齐全集成证据二选一；两者皆缺 → error。
+   writeFileSync(join(exDir, 'design.md'), [
+     '---', 'author: qinyi', 'risk_level: integration-critical', '---',
+-    '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-    '改 daemon 下发链路。', 'D-001@v1', ''
++    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++    '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++    'D-001@v1', ''
+   ].join('\n'))
+   writeFileSync(join(exDir, 'verify-result.md'), [
+     '# 验证报告', '', '## 结论', '', 'PASS WITH NOTES', '',
+@@ -519,14 +557,15 @@ console.log('\n=== risk_level 显式豁免 ===')
+     failed++
+   }
+ 
+-  // 集成 5：对照 —— 无显式声明、关键词判 integration-critical + PASS WITH NOTES（无证据）→ 仍拦
++  // 集成 5：对照 —— 无显式声明、evidence 命中 + PASS WITH NOTES（无证据）→ 仍拦
+   writeFileSync(join(exDir, 'design.md'), [
+-    '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-    '改 daemon 下发链路。', 'D-001@v1', ''
++    '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++    '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++    'D-001@v1', ''
+   ].join('\n'))
+   const exAutoPwn = runValidators('verify', exRoot, 'risktag')
+   if (exAutoPwn.errors.some(e => e.includes('缺少真实集成证据'))) {
+-    console.log('✅ 对照：无显式声明 + 关键词判级 + PASS WITH NOTES → 仍强制集成证据（严格模式不变）')
++    console.log('✅ 对照：无显式声明 + evidence 命中 + PASS WITH NOTES → 仍强制集成证据（严格模式不变）')
+   } else {
+     console.log('❌ 无声明时 PASS WITH NOTES 竟被放行', exAutoPwn.errors)
+     failed++
+@@ -614,69 +653,71 @@ if (epExempt.ok && !epExempt.errors.some(e => e.includes('生产接线路径矛
+ 
+ rmSync(epRoot, { recursive: true })
+ 
+-// === Change Risk Gate 早期 warning 引导（坑2，FR-02）===
+-// detectChangeRisk 机械匹配：design 命中 daemon 关键词且无 frontmatter risk_level → 判
+-// integration-critical。validateVerifyResults 此时应在 warnings 早期透出 frontmatter 覆盖指引
+-// （不依赖 conclusion / evidence），让 agent 不必撞到 evidence gate 末尾出路③才知道可覆盖。
+-console.log('\n=== Change Risk Gate 早期 frontmatter 覆盖 warning ===')
++// === Change Risk Gate 早期引导（坑2 FR-02；2026-09-19-ceremony-pricing-five-cuts task-03 声明面口径）===
++// evidence 命中且无 explicit → verify 门早期透出命中披露 + 出路（不依赖 conclusion / evidence）；
++// 加 explicit 后不再发「无声明」引导（但 evidence 要求仍在——D-009 口径由集成 3 钉）。
++console.log('\n=== Change Risk Gate 早期声明面披露 ===')
+ 
+ const warnRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskwarn-'))
+ const warnDir = join(warnRoot, '.sillyspec', 'changes', 'riskwarn')
+ mkdirSync(warnDir, { recursive: true })
+-// design 命中 daemon（无 frontmatter risk_level）→ 自动判 integration-critical
++writeBlastMap(warnRoot)
++// design 文件清单命中 evidence:true（无 frontmatter risk_level）
+ writeFileSync(join(warnDir, 'design.md'), [
+-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-  '改 daemon 下发链路。', 'D-001@v1', ''
++  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++  'D-001@v1', ''
+ ].join('\n'))
+-writeFileSync(join(warnDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改 daemon\n')
++writeFileSync(join(warnDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 改下发\n')
+ writeFileSync(join(warnDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n单测全过。\n')
+ const warnAuto = runValidators('verify', warnRoot, 'riskwarn')
+ const warnHit = warnAuto.warnings.find(w =>
+-  w.includes('integration-critical') && w.includes('关键词判级') && w.includes('命中：daemon')
+-  && w.includes('frontmatter 加 risk_level') && w.includes('显式覆盖'))
++  w.includes('integration-critical') && w.includes('声明文件面命中项目声明危险面') && w.includes('src/daemon')
++  && w.includes('_module-map.yaml'))
+ if (warnHit) {
+-  console.log('✅ 命中 daemon 无 frontmatter → 早期 warning 透出 frontmatter 覆盖指引（含等级/触发词）')
++  console.log('✅ evidence 命中无 frontmatter → 早期 warning 透出命中面 + 改 map 出路')
+ } else {
+-  console.log('❌ 命中关键词无 frontmatter 未透出早期覆盖 warning', warnAuto.warnings)
++  console.log('❌ evidence 命中未透出早期披露 warning', warnAuto.warnings)
+   failed++
+ }
+ 
+-// 加 frontmatter risk_level: unit-sufficient（explicit）后 → 不发该 warning（已显式声明无需引导）
++// 加 frontmatter risk_level（explicit）后 → 不再发「无声明」引导（证据要求不豁免——由集成 3 钉）
+ writeFileSync(join(warnDir, 'design.md'), [
+   '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
+-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-  '改 daemon 下发链路（实际仅文案）。', 'D-001@v1', ''
++  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++  'D-001@v1', ''
+ ].join('\n'))
+ const warnExplicit = runValidators('verify', warnRoot, 'riskwarn')
+-if (!warnExplicit.warnings.some(w => w.includes('关键词判级') && w.includes('显式覆盖'))) {
+-  console.log('✅ 加 frontmatter risk_level（explicit）后不再发关键词误伤 warning')
++if (!warnExplicit.warnings.some(w => w.includes('若认为不该要求集成证据：改 _module-map.yaml'))) {
++  console.log('✅ 加 frontmatter risk_level（explicit）后不再发无声明引导')
+ } else {
+-  console.log('❌ explicit 后仍发关键词误伤 warning', warnExplicit.warnings)
++  console.log('❌ explicit 后仍发无声明引导', warnExplicit.warnings)
+   failed++
+ }
+ rmSync(warnRoot, { recursive: true })
+ 
+-// === 否定抑制审计 warning（坑 risk-negation-blindness，2026-08-24）===
+-// design 写「不新增 daemon 协议」→ 命中被同句否定抑制、判级降为 doc-only（不强制集成证据），
+-// 但降级必须可审计：validateVerifyOutputs 要透出抑制词 + 防静默降级指引。
+-console.log('\n=== 否定抑制审计 warning ===')
++// === 零命中面放行对照（2026-09-19-ceremony-pricing-five-cuts task-03：否定抑制机制随词表退役，
++// 本段改为声明面正交对照——文件面零声明命中 → 无证据要求、PASS 放行）===
++console.log('\n=== 零命中面放行对照（声明面） ===')
+ 
+ const supRoot = mkdtempSync(join(tmpdir(), 'sillyspec-risksup-'))
+ const supDir = join(supRoot, '.sillyspec', 'changes', 'risksup')
+ mkdirSync(supDir, { recursive: true })
++writeBlastMap(supRoot)
++// 文件清单写满旧词表时代的词（daemon/session 表述在正文与路径不命中声明面）→ 零命中放行
+ writeFileSync(join(supDir, 'design.md'), [
+-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-  '本次不新增 daemon 协议，仅调整 service 文案。', 'D-001@v1', ''
++  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++  '| 修改 | `docs/glossary.md` | daemon/session 术语文案 |', '', '## 风险登记', '## 自审', '',
++  'D-001@v1', ''
+ ].join('\n'))
+ writeFileSync(join(supDir, 'plan.md'), '# Plan\n\n- [ ] task-01: 调整文案\n')
+ writeFileSync(join(supDir, 'verify-result.md'), '# 验证报告\n\n## 结论\n\nPASS\n\n单测全过。\n')
+ const supAuto = runValidators('verify', supRoot, 'risksup')
+-const supHit = supAuto.warnings.find(w =>
+-  w.includes('已被同句否定语境') && w.includes('daemon') && w.includes('不许用来静默降级'))
+-if (supHit && supAuto.ok === true) {
+-  console.log('✅ 否定抑制降级 → 审计 warning 透出（抑制词 + 防静默降级指引），doc-only 放行不强制集成证据')
++if (supAuto.ok === true && !supAuto.errors.some(e => e.includes('缺少真实集成证据'))) {
++  console.log('✅ 正文含旧词表词但文件面零声明命中 → doc 面 S1 放行（撞词时代结束，D-008）')
+ } else {
+-  console.log('❌ 否定抑制未透出审计 warning 或误阻断', { ok: supAuto.ok, warnings: supAuto.warnings, errors: supAuto.errors })
++  console.log('❌ 零命中面被误拦', { ok: supAuto.ok, errors: supAuto.errors, warnings: supAuto.warnings })
+   failed++
+ }
+ rmSync(supRoot, { recursive: true })
+@@ -705,37 +746,42 @@ if (fgHit && fgAuto.ok === false) {
+ }
+ rmSync(fgRoot, { recursive: true })
+ 
+-// === design gate 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24）===
+-// 首次使用者在 design --done 就应看到判级结果 + frontmatter 覆盖指引，不必等 verify 撞墙。
+-console.log('\n=== design gate 风险判级提前提示 ===')
++// === design gate 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24；task-03 声明面口径）===
++// 首次使用者在 design --done 就应看到声明面命中 + 出路，不必等 verify 撞墙；explicit 在场 →
++// 透出「压档不豁免证据」（D-009）。
++console.log('\n=== design gate 风险判级提前提示（声明面） ===')
+ 
+ const ehRoot = mkdtempSync(join(tmpdir(), 'sillyspec-riskhint-'))
+ const ehDir = join(ehRoot, '.sillyspec', 'changes', 'riskhint')
+ mkdirSync(ehDir, { recursive: true })
++writeBlastMap(ehRoot)
+ writeFileSync(join(ehDir, 'design.md'), [
+-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-  '改 daemon 下发链路。', 'D-001@v1', ''
++  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++  'D-001@v1', ''
+ ].join('\n'))
+ const ehAuto = runValidators('brainstorm', ehRoot, 'riskhint')
+ const ehHit = ehAuto.warnings.find(w =>
+-  w.includes('[risk]') && w.includes('integration-critical') && w.includes('frontmatter 加 risk_level'))
++  w.includes('[risk]') && w.includes('evidence:true') && w.includes('_module-map.yaml'))
+ if (ehHit) {
+-  console.log('✅ design 命中 daemon → design gate 提前透出判级 + frontmatter 覆盖指引')
++  console.log('✅ design 文件面命中 evidence:true → design gate 提前透出命中面 + 改 map 出路')
+ } else {
+   console.log('❌ design gate 未透出风险判级提前提示', ehAuto.warnings)
+   failed++
+ }
+ 
+-// 否定抑制场景：design gate 也提示（抑制可审计，两道 gate 同口径）
++// explicit 在场场景：透出「压档不豁免证据」（D-009 教学面）
+ writeFileSync(join(ehDir, 'design.md'), [
+-  '# Design', '## 文件变更清单', '## 风险登记', '## 自审', '',
+-  '本次不新增 daemon 协议，仅调整文案。', 'D-001@v1', ''
++  '---', 'author: qinyi', 'risk_level: unit-sufficient', '---',
++  '# Design', '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|',
++  '| 修改 | `src/daemon/x.js` | 下发链路 |', '', '## 风险登记', '## 自审', '',
++  'D-001@v1', ''
+ ].join('\n'))
+ const ehSup = runValidators('brainstorm', ehRoot, 'riskhint')
+-if (ehSup.warnings.some(w => w.includes('[risk]') && w.includes('已被同句否定语境抑制'))) {
+-  console.log('✅ design 否定抑制 → design gate 透出抑制审计提示')
++if (ehSup.warnings.some(w => w.includes('[risk]') && w.includes('不被豁免') && w.includes('D-009'))) {
++  console.log('✅ evidence 命中 + explicit → design gate 透出「压档不豁免证据」提示')
+ } else {
+-  console.log('❌ design gate 未透出否定抑制提示', ehSup.warnings)
++  console.log('❌ design gate 未透出 explicit 不豁免提示', ehSup.warnings)
+   failed++
+ }
+ rmSync(ehRoot, { recursive: true })
+diff --git a/test/stage-review.test.mjs b/test/stage-review.test.mjs
+index e3a363f..3aea051 100644
+--- a/test/stage-review.test.mjs
++++ b/test/stage-review.test.mjs
+@@ -76,18 +76,19 @@ console.log('=== 1. classifyReviewTier（规模分级）===\n')
+   const t3 = classifyReviewTier({ planLevel: 'light', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
+   assert(t3.tier === 'self', `plan_level=light + 2 文件 → self`)
+ 
+-  // ql-20260918-007 双轨修复：full 不再独自推档——design 可读即实判（benign 内容 → doc-only → S0 self）
++  // ql-20260918-007 双轨修复：full 不再独自推档——design 可读即实判（声明面零命中 → S1 self；
++  // 2026-09-19-ceremony-pricing-five-cuts：无命中缺省 S1，词表 doc-only→S0 时代结束）
+   const tFull = classifyReviewTier({ planLevel: 'full', designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js']) })
+-  assert(tFull.tier === 'self' && tFull.ceremonyTier === 'S0' && tFull.reason.includes('实判'),
+-    `plan_level=full + benign 2 文件 → self/S0（实判压过代理——双轨修复回归钉，实际 ${tFull.tier}/${tFull.ceremonyTier}）`)
++  assert(tFull.tier === 'self' && tFull.ceremonyTier === 'S1' && tFull.reason.includes('声明面判级'),
++    `plan_level=full + 零命中面 → self/S1（实判压过代理——双轨修复回归钉，实际 ${tFull.tier}/${tFull.ceremonyTier}）`)
+ 
+   // 无 planLevel + 文件 ≤ 阈值 → self（brainstorm 场景，启发式）
+   const t4 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+   assert(t4.tier === 'self', `无 planLevel + 1 文件 → self`)
+ 
+-  // ql-20260918-007：4 文件 + benign 实判 → self（文件数启发式只保 brownfield 无 design 态，实判接管）
++  // ql-20260918-007：4 文件 + 零命中声明面 → self（文件数启发式只保 brownfield 无 design 态，实判接管）
+   const t4b = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
+-  assert(t4b.tier === 'self' && t4b.reason.includes('实判'), `benign 4 文件 → self（实判接管文件数启发式）`)
++  assert(t4b.tier === 'self' && t4b.reason.includes('声明面判级'), `零命中 4 文件 → self（声明面实判接管文件数启发式）`)
+   assert(t4b.fileCount === 4, `fileCount 正确返回 4`)
+ 
+   // 阈值边界：恰好 = 阈值 → self
+@@ -117,14 +118,15 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
+   assert(t.tier === 'self' && typeof t.reason === 'string' && t.reason.length > 0 && 'fileCount' in t && typeof t.ceremonyTier === 'string',
+     `双字段并存：{ tier, ceremonyTier, reason, fileCount } 齐全（实际 tier=${t.tier} ceremonyTier=${t.ceremonyTier}）`)
+ 
+-  // brownfield（无 risk 输入）→ ceremonyTier='S2' 保守缺省；≤3 文件旧断路器保兼容 self
++  // brownfield（无 risk 输入）→ 声明面零命中 S1（2026-09-19-ceremony-pricing-five-cuts：
++  // 无命中缺省 S1，旧断路器面由声明面实判接管）
+   const b1 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+-  assert(b1.ceremonyTier === 'S0' && b1.tier === 'self' && b1.reason.includes('实判'),
+-    `benign 1 文件 → 实判 doc-only → S0 self（旧断路器面被实判接管）`)
++  assert(b1.ceremonyTier === 'S1' && b1.tier === 'self' && b1.reason.includes('声明面判级'),
++    `零命中 1 文件 → 声明面 S1 self（旧断路器面被声明面实判接管）`)
+ 
+   const b2 = classifyReviewTier({ designPath: writeDesign(makeTmpDir('rt-'), ['a.js', 'b.js', 'c.js', 'd.js']) })
+   assert(b2.tier === 'self' && b2.fileCount === 4,
+-    `benign 4 文件 → self（实判接管；fileCount 仍正确返回 4）`)
++    `零命中 4 文件 → self（声明面实判接管；fileCount 仍正确返回 4）`)
+ 
+   // 真实 risk 输入接管：档位随 RISK_TO_TIER 映射，文件数断路器不再适用（引擎档强制）
+   const r0 = classifyReviewTier({ riskDetection: { level: 'doc-only' }, designPath: writeDesign(makeTmpDir('rt-'), ['a.js']) })
+@@ -183,15 +185,21 @@ console.log('\n=== 1b. classifyReviewTier 委托定价引擎（ceremony-tier 接
+ console.log('\n=== 1c. 双轨修复回归组（ql-20260918-007：实判/档位文件/显式声明）===\n')
+ 
+ {
+-  // 高风险内容实判升档：contract 关键词 → S2 independent（不受 plan_level 影响）
++  // 声明面命中实判升档（2026-09-19-ceremony-pricing-five-cuts：词表内容触发退役——
++  // 「http client」措辞不再判级，改 fixture 建带 blast 段的 map + 文件清单命中 S2 前缀）
+   const dirR = makeTmpDir('rt-')
+-  const dR = join(dirR, 'design.md')
+-  writeFileSync(dR, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
++  const changeDirR = join(dirR, 'changes', 'c-risk')
++  mkdirSync(changeDirR, { recursive: true })
++  const mapDirR = join(dirR, 'docs', 'demo', 'modules')
++  mkdirSync(mapDirR, { recursive: true })
++  writeFileSync(join(mapDirR, '_module-map.yaml'), 'modules:\n  demo:\n    status: active\nblast:\n  - prefixes: [src/contract/]\n    tier: S2\n')
++  const dR = join(changeDirR, 'design.md')
++  writeFileSync(dR, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | src/contract/a.js | x |\n')
+   const c1 = classifyReviewTier({ planLevel: 'full', designPath: dR })
+-  assert(c1.ceremonyTier === 'S2' && c1.tier === 'independent' && c1.reason.includes('实判'),
+-    `contract 内容实判 → S2 independent（实际 ${c1.ceremonyTier}/${c1.tier}）`)
++  assert(c1.ceremonyTier === 'S2' && c1.tier === 'independent' && c1.reason.includes('声明面判级'),
++    `声明面 S2 命中实判 → S2 independent（实际 ${c1.ceremonyTier}/${c1.tier}）`)
+ 
+-  // 档位文件兜底并入：specBase/.runtime/ceremony-tier-<change>.json S2 + benign 实判 S0 → S2
++  // 档位文件兜底并入：specBase/.runtime/ceremony-tier-<change>.json S2 + 零命中实判 S1 → S2
+   const dirT = makeTmpDir('rt-')
+   const changeDir = join(dirT, 'changes', 'c-demo')
+   mkdirSync(changeDir, { recursive: true })
+@@ -201,14 +209,16 @@ console.log('\n=== 1c. 双轨修复回归组（ql-20260918-007：实判/档位
+   writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S2', components: {}, reasons: [], transitions: [] }))
+   const c2 = classifyReviewTier({ planLevel: 'full', designPath: dT })
+   assert(c2.ceremonyTier === 'S2' && c2.tier === 'independent' && c2.reason.includes('档位文件 S2 兜底并入'),
+-    `档位文件 S2 + benign 实判 → S2 independent（兜底并入，实际 ${c2.ceremonyTier}）`)
++    `档位文件 S2 + 零命中实判 S1 → S2 independent（兜底并入，实际 ${c2.ceremonyTier}）`)
+ 
+-  // 档位文件低于实判不生效：file S1 + http client 实判 S2 → 取高 S2（只升不降）
++  // 档位文件低于实判不生效：file S1 + 声明面命中 S2 → 取高 S2（只升不降）
+   writeFileSync(join(dirT, '.runtime', 'ceremony-tier-c-demo.json'), JSON.stringify({ tier: 'S1', components: {}, reasons: [], transitions: [] }))
+-  writeFileSync(dT, '# Design\n本次改动 http client 请求封装\n## 文件变更清单\n| 操作 | 文件路径 | 说明 |\n| --- | --- | --- |\n| 修改 | a.js | x |\n')
++  const mapDirT = join(dirT, 'docs', 'demo', 'modules')
++  mkdirSync(mapDirT, { recursive: true })
++  writeFileSync(join(mapDirT, '_module-map.yaml'), 'modules:\nblast:\n  - prefixes: [a.js]\n    tier: S2\n')
+   const c3 = classifyReviewTier({ planLevel: 'full', designPath: dT })
+   assert(c3.ceremonyTier === 'S2' && c3.reason.includes('在场（未高于实判'),
+-    `档位文件 S1 < 实判 S2 → 取高 S2（只升不降，实际 ${c3.ceremonyTier}）`)
++    `档位文件 S1 < 声明面实判 S2 → 取高 S2（只升不降，实际 ${c3.ceremonyTier}）`)
+ 
+   // 显式 risk_level frontmatter 并入实判链：声明 unit-sufficient + full → S1 self（升档尊重）
+   const dirE = makeTmpDir('rt-')

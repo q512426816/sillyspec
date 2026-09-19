@@ -36,9 +36,10 @@
 
 import { parseFileChangeList } from './change-list.js'
 import { computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
-import { detectChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
+import { resolveChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
 import { readFileSync, existsSync } from 'fs'
 import { join, dirname, basename } from 'path'
+import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
 
 /**
  * 审查分级阈值：变更文件数 ≤ 此值 → 旧启发式断路器命中（brownfield 兼容倾向 self）。
@@ -99,10 +100,11 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
     fileCount = declaredFiles.length
   }
 
-  // blast 输入组装（ql-20260918-007 双轨修复）：riskDetection ＞ design/plan 实判 ＞ plan_level 代理 ＞ undefined。
-  // 实判优先治「full 代理把 S1 推成 S2」的双轨（回放实验实证：档位文件 S1 vs 审查面 S2）——
-  // designPath 可读即真跑 detectChangeRisk（显式 risk_level frontmatter 经 extractExplicitRiskLevel 并入），
-  // plan_level 代理降为无 designPath 的 brownfield 兜底（plan_level 仅编排，D-002）。
+  // blast 输入组装（ql-20260918-007 双轨修复 + 2026-09-19-ceremony-pricing-five-cuts task-03 声明面切换）：
+  // riskDetection ＞ design/plan 实判（resolveChangeRisk 声明面：declaredFiles × blast 声明 + explicit）＞
+  // plan_level 代理 ＞ undefined。实判优先治「full 代理把 S1 推成 S2」的双轨（回放实验实证：
+  // 档位文件 S1 vs 审查面 S2）——designPath 可读即真跑声明面判级，plan_level 代理降为无
+  // designPath 的 brownfield 兜底（plan_level 仅编排，D-002）。
   let blastInput = null
   let blastSource = null
   let explicitInput = null
@@ -112,12 +114,15 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
   } else if (designPath) {
     try {
       const designContent = readFileSync(designPath, 'utf8')
-      let planContent = ''
-      const siblingPlan = join(dirname(designPath), 'plan.md')
-      if (existsSync(siblingPlan)) planContent = readFileSync(siblingPlan, 'utf8')
-      blastInput = detectChangeRisk({ designContent, planContent, changedFiles: declaredFiles })
       explicitInput = extractExplicitRiskLevel(designContent)
-      blastSource = `riskDetection.level=${blastInput.level}（design/plan 实判，ql-20260918-007）`
+      // specBase 推导：designPath 形如 <specBase>/changes/<change>/design.md（worktree/主仓同形）
+      // → 三层 dirname（QA 实证：两层只得 <specBase>/changes、声明面装载恒空表）。推导失败
+      // （非常规路径）→ 空声明面（S1 起步不拦审查分级）。
+      const specBase = dirname(dirname(dirname(designPath)))
+      const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase })
+      const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: explicitInput })
+      blastInput = { level: risk.level }
+      blastSource = `声明面判级 tier=${risk.tier}/level=${risk.level}（design 文件清单 × blast 声明，D-008；explicit=${risk.explicit}）`
     } catch {
       // design 读失败 → 降回代理链（不因 IO 异常拦审查分级）
       blastInput = null

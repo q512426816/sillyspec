@@ -122,6 +122,7 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
   if (headCommit) yaml += `source_commit: ${headCommit}\n`;
   yaml += `\n# Module Context Index — 机器可读的模块上下文索引\n`;
   yaml += `# scan 阶段自动生成，brainstorm/plan/execute 阶段按任务命中模块精准注入上下文\n`;
+  yaml += `# ⚠️ 顶层手工段（如 blast 危险面声明）随 --force 写盘从原文回插保留；段内列表项手工维护\n`;
   yaml += `\nmodules:\n`;
 
   // 合并：已有映射 + 新卡片
@@ -173,6 +174,33 @@ export async function rebuildModuleMap(cwd, { force = false } = {}) {
     }
     if (merged.risk_level !== undefined) yaml += `    risk_level: ${merged.risk_level}\n`;
     yaml += `\n`;
+  }
+
+  // ── 顶层手工段保留（2026-09-19-ceremony-pricing-five-cuts D-008@v2）──────────────────
+  // rebuild 重发射只生成头部与 modules: 段——existingMap 里的其他顶层段（blast 危险面声明等
+  // 手工维护段）在 --force 写盘时会整体丢失（merge 白名单只覆盖 modules 段内 per-module 字段，
+  // 顶层段无此机制）。修法：从 existingMap 原文提取非重建头的顶层段原样回插（通用机制，不只为
+  // blast 特判）。提取口径：顶层键行（行首无缩进 `key:`）且 ∉ 重建头五族（schema_version/
+  // generated_at/generator/source_commit/modules）；范围＝该键行起至下一顶层键行前（段内注释/
+  // 列表项随之保留）。段缺失/无手工段 → 不追加不告警（rebuild 本就是重建语义，宁失勿错）。
+  const TOP_LEVEL_REGENERATED = new Set(['schema_version', 'generated_at', 'generator', 'source_commit', 'modules']);
+  const preservedTopSections = [];
+  if (existingMap) {
+    let current = null;
+    for (const line of existingMap.split('\n')) {
+      const m = line.match(/^([A-Za-z_][\w-]*):/);
+      if (m) {
+        if (current) { preservedTopSections.push(current.join('\n') + '\n'); current = null; }
+        if (!TOP_LEVEL_REGENERATED.has(m[1])) current = [line];
+      } else if (current) {
+        current.push(line);
+      }
+    }
+    if (current) preservedTopSections.push(current.join('\n') + '\n');
+  }
+  for (const section of preservedTopSections) {
+    const trimmed = section.replace(/\n+$/, '');
+    if (trimmed.trim()) yaml += `\n${trimmed}\n`;
   }
 
   // 写入保护（multi-agent-platform 坑 modules-rebuild-destructive）：默认 dry-run 只预览不写。

@@ -4,58 +4,24 @@
  * 根据变更涉及的文件类型、关键词、git diff、brainstorm 产物，
  * 判定 5 级风险（doc-only / unit-sufficient / contract-required /
  * integration-critical / deployment-critical），产出门控验证需求。
+ *
+ * 2026-09-19-ceremony-pricing-five-cuts：判级唯一入口 resolveChangeRisk（危险面=项目
+ * _module-map.yaml 顶层 blast 段路径声明 × 变更文件，D-008；explicit frontmatter 只压仪式档
+ * 不豁免证据，D-009）。散文词表判级（detectChangeRisk 及词表/否定抑制/枚举继承机器）已整体
+ * 退役删除。RISK_TO_TIER 五级词→档位映射表迁入本文件（ceremony-tier re-export 保持既有
+ * import 面——依赖方向 ceremony-tier→本文件已有先例）。证据门判据（VERIFICATION_NEEDS /
+ * checkIntegrationEvidence / auditRuntimeReceipt）与 span 轴 QUICK_RISK_PATH_PATTERNS 原样保留。
  */
 import { readFileSync, statSync } from 'fs'
 import { join, isAbsolute } from 'path'
+import { resolveBlastSurfaces } from './blast-surface.js'
 
-// ============ 向后兼容：旧的 INTEGRATION_CRITICAL_PATTERNS ============
+// ============（已退役）词表散文判级 ============
 
-// 文件名型模式边界（ql-20260918-009，回放实验实证）：\b 对 `-`/`_`/`.` 前缀漏界——design 非目标
-// 行写 mcp-server.js、changedFiles 含 src/mcp-server.js 均被误判 deployment-critical（触发 D-004
-// 人肉降级）。行级用负向后顾 (?<![\w\-._]) 排除定界符前缀；路径级用行首/分隔符边界。
-// 真阳面（src/server.js、行首/空格/中文紧邻 server.js、bin/server.js）双回归钉在
-// test/quick-gate-profile.test.mjs——判级输入面，假修=静默降 risk 主价。
-const INTEGRATION_CRITICAL_PATTERNS = [
-  /\bdaemon\b/i,
-  /\bbackend\b/i,
-  /\bclient.*api\b/i,
-  /\bgrpc\b/i,
-  /\bwebsocket\b/i,
-  /\bhttp.*client\b/i,
-  /\bsession\b/i,
-  /\blease\b/i,
-  /\bagent.?run\b/i,
-  /\blifecycle\b/i,
-  /\bstate.?transition\b/i,
-  /\bclaim\b/i,
-  /\bheartbeat\b/i,
-  /\bcross.?process\b/i,
-  /\bipc\b/i,
-  /\bmessage.?queue\b/i,
-  /\bpub.?sub\b/i,
-  /(?<![\w\-._])cli\.ts\b/i,
-  /(?<![\w\-._])main\.ts\b/i,
-  /\bentrypoint\b/i,
-  /(?<![\w\-._])server\.(js|ts)\b/i,
-  /\bbootstrap\b/i,
-  /\bdockerfile\b/i,
-  /\bdocker.?compose\b/i,
-]
-
-const INTEGRATION_FILE_PATTERNS = [
-  /daemon/i,
-  /session.?manager/i,
-  /agent.?run/i,
-  /lifecycle/i,
-  /state.?machine/i,
-  /lease/i,
-  /(?:^|[\/\\])cli\.(js|ts)$/,
-  /(?:^|[\/\\])main\.(js|ts)$/,
-  /(?:^|[\/\\])server\.(js|ts)$/,
-  /bootstrap/i,
-  /startup/i,
-]
-
+// 2026-09-19-ceremony-pricing-five-cuts task-03 删除收口：INTEGRATION_CRITICAL_PATTERNS /
+// INTEGRATION_FILE_PATTERNS 全宇宙词表与 detectChangeRisk 散文扫描整体退役（D-008：撞词≠危险、
+// 自指陷阱——判级唯一入口是 resolveChangeRisk 声明面口径；知识库 conventions.md「判级/定价/门禁
+// 输入必须项目声明」条目为口径真相源）。
 // ============ quick 出口门禁：路径模式风险表（2026-09-14-quick-exit-tiered-gates task-01） ============
 //
 // quick 侧「风险特征命中」的单一数据源（design D-004@v2：v1 仅路径模式——不做 diff 关键词
@@ -143,88 +109,27 @@ export const VERIFICATION_NEEDS = {
   },
 }
 
-/** 风险分级的判定来源（命中关键词来源 = design.md / plan.md 内容，非改动文件本身） */
+/** 风险分级的判定来源（2026-09-19-ceremony-pricing-five-cuts task-03 改声明面口径） */
 export const RISK_LEVEL_CAUSES = {
   'deployment-critical':
-    'design.md / plan.md 命中启动入口关键词（cli.ts / main.ts / server.(js|ts) / bootstrap / entrypoint）。' +
-    '注意：这是按 design/plan 里的措辞判定的，不一定代表你真改了启动入口；若属误判可在 design.md frontmatter 用 risk_level 显式声明真实等级（如 unit-sufficient）覆盖——不要靠删措辞绕门控，危险链路该有真实启动证据。',
+    '变更文件面命中项目声明危险面（_module-map.yaml 顶层 blast 段）且判级为顶档。' +
+    '这是按「文件路径 × 项目声明」判定的——若认为该路径不该定此价：改 map 声明（git 可见）；危险链路该有真实启动证据。',
   'integration-critical':
-    'design.md / plan.md 命中跨进程/状态机关键词（daemon / backend / session / lease / lifecycle / heartbeat 等）。' +
-    '关键词前方同句有否定提示（不/未/无/避免…）的命中已被抑制不参与判级——若本变更实际涉及跨进程/状态机改动，请在 design.md frontmatter 用 risk_level 声明真实等级。',
-  'contract-required': 'design.md / plan.md 命中 API contract 关键词（api / client / contract / dto）。',
-  'explicit': 'design.md frontmatter 的 risk_level 显式声明（覆盖关键词判级）。',
+    '变更文件面命中项目声明危险面的 evidence:true 路径（需要真实集成证据，D-009）。' +
+    'frontmatter risk_level 只压仪式档、不豁免证据要求——证据豁免=改 map 的 evidence 声明（git 可见）。',
+  'contract-required': '变更文件面命中项目声明的 S2 档危险面（跨模块契约域）。',
+  'explicit': 'design.md frontmatter 的 risk_level 显式声明（压仪式档；不豁免 evidence 要求）。',
 }
 
-/** design.md frontmatter 可显式声明的合法 risk_level 值（与 detectChangeRisk 判级结果同集合） */
+/** design.md frontmatter 可显式声明的合法 risk_level 值（存量五级词兼容集合） */
 const RISK_LEVELS = ['doc-only', 'unit-sufficient', 'contract-required', 'integration-critical', 'deployment-critical']
-
-// ============ 同句否定抑制（坑 risk-negation-blindness） ============
-//
-// detectChangeRisk 原为全文 blob 字面命中：design 写「本次不新增 daemon 协议」仍判
-// integration-critical、强制全套集成证据，对无状态后端变更误伤（用户实证 2026-08-24）。
-// 机械抑制规则（不做事语义理解，三段判定）：
-//   ① 子句切分：按 句号/分号/逗号/换行 切子句，否定只在同子句内生效——「不改动 A。新增 B」
-//      的 B 不继承否定；
-//   ② 直接否定：命中位置前方 NEGATION_WINDOW 字符内出现否定提示 → 抑制；
-//   ③ 枚举继承：「不改动 daemon / session / lifecycle」中后位关键词与前位被抑制关键词之间
-//      只隔枚举连接符（空格 / 、 , 和 与 及 and or）→ 继承抑制——纯距离窗口盖不住长枚举，
-//      而「不涉及 daemon 的情况下重构 session」的间隔是普通文字，不继承（session 正常命中）。
-// 同一关键词的**全部**命中都被抑制才不参与判级（任一处未抑制命中仍算数）。降级不静默：
-// design/verify 两道 gate 会把被抑制词打进 warning（可审计），design.md frontmatter
-// risk_level 仍是双向权威覆盖通道（声明优先级最高，行为不变）。
-//
-// 否定提示词排除假阳：不同/不断/不久/不时/不仅（「不」的非否定合成词）、无状态/无法
-// （「无状态后端」是常见肯定表述）、非常/非空/非法（「非空校验 session」是在改 session）。
-const NEGATION_CUES = /不(?!同|断|久|时|仅|妨)|未|无(?!状态|法)|非(?!常|空|法)|避免|排除|无需|不再|no\s+new|not\b|don'?t|without|avoid/i
-const NEGATION_WINDOW = 16
-const CLAUSE_SPLIT_RE = /[。；;，,\n]/
-const ENUM_GAP_RE = /^[\s/|、,，]*(?:(?:和|与|及|and|or)[\s/|、,，]*)*$/i
-
-/**
- * 单行内统计各关键词命中（同子句否定窗口 + 枚举继承）。
- * @returns {Map<string, {kept: number, suppressed: number}>} trigger 原文 → 命中统计
- */
-function collectLineTriggerStats(line, patterns, stats = new Map()) {
-  for (const pattern of patterns) {
-    const re = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
-    let m
-    while ((m = re.exec(line)) !== null) {
-      if (m[0].length === 0) { re.lastIndex++; continue }
-      // 行内绝对偏移 → 子句内相对偏移（子句内可能有多命中，逐一判定）
-      const clauseStart = line.slice(0, m.index).split(CLAUSE_SPLIT_RE).pop().length
-      const clauseStartAbs = m.index - clauseStart
-      const clause = line.slice(clauseStartAbs).split(CLAUSE_SPLIT_RE)[0]
-      const relIndex = m.index - clauseStartAbs
-      const prefix = clause.slice(0, relIndex)
-      let negated = NEGATION_CUES.test(prefix.slice(-NEGATION_WINDOW))
-      if (!negated && prefix.length > 0) {
-        // 枚举继承：查同子句内更早的关键词命中，且间隔只有枚举连接符
-        for (const other of patterns) {
-          const ore = new RegExp(other.source, other.flags.includes('g') ? other.flags : other.flags + 'g')
-          let om
-          while ((om = ore.exec(clause)) !== null) {
-            if (om[0].length === 0) { ore.lastIndex++; continue }
-            if (om.index >= relIndex) break
-            const gap = clause.slice(om.index + om[0].length, relIndex)
-            const prevSuppressed = NEGATION_CUES.test(clause.slice(0, om.index).slice(-NEGATION_WINDOW))
-            if (prevSuppressed && ENUM_GAP_RE.test(gap)) { negated = true; break }
-          }
-          if (negated) break
-        }
-      }
-      const stat = stats.get(m[0]) || { kept: 0, suppressed: 0 }
-      if (negated) stat.suppressed++
-      else stat.kept++
-      stats.set(m[0], stat)
-    }
-  }
-  return stats
-}
 
 /**
  * 从 design.md 顶部 frontmatter 提取显式 risk_level 声明。
  * 只认文档最开头 `---\n...\n---` 块内的 `risk_level: <level>` 单行（与 plan.md 的 plan_level 同款解析），
  * 不扫正文——避免正文里讨论 risk_level 措辞时被误当声明。返回合法 level 或 null。
+ * 2026-09-19-ceremony-pricing-five-cuts task-03 删除收口后保留：声明面判级 explicit 通道的
+ * 唯一提取器（stage-contract / review-tier / verify-quality-scan / run-gates 消费）。
  */
 export function extractExplicitRiskLevel(designContent = '') {
   const fm = designContent.match(/^---\r?\n([\s\S]*?)\r?\n---/)
@@ -235,75 +140,50 @@ export function extractExplicitRiskLevel(designContent = '') {
   return RISK_LEVELS.includes(value) ? value : null
 }
 
-export function detectChangeRisk({ designContent = '', planContent = '', changedFiles = [] } = {}) {
-  const triggers = []
+/**
+ * 五级风险词 → 仪式档位映射（integration 与 deployment 同归 S3：顶档仪式不分家）。
+ * 2026-09-19-ceremony-pricing-five-cuts task-02 自 ceremony-tier.js 迁入（判级域归属本文件，
+ * ceremony-tier re-export 保持既有 import 面不变）；resolveChangeRisk 的 explicitRiskLevel
+ * 兼容通道消费本表（存量 frontmatter 五级词）。
+ */
+export const RISK_TO_TIER = {
+  'doc-only': 'S0',
+  'unit-sufficient': 'S1',
+  'contract-required': 'S2',
+  'integration-critical': 'S3',
+  'deployment-critical': 'S3',
+}
 
-  // ── 显式豁免优先：design.md frontmatter 声明 risk_level → 以声明为准，跳过关键词判级 ──
-  // 历史教训：detectChangeRisk 是机械字面匹配——design 写「本次不改动 daemon/session」曾命中关键词
-  // 被误判 integration/deployment-critical，强制要全套集成证据，对无状态后端变更误伤。现给两条通道：
-  // ① 同句否定抑制（上方 NEGATION_CUES，机械可审计、只认「关键词前方否定窗口」不做语义理解）；
-  // ② frontmatter 显式声明（显式、诚实、可审计，落在 design frontmatter + verify-result）——本分支。
-  // 声明仍走门控（结论 FAIL 仍拦），但豁免级（unit-sufficient 等）不再强制集成证据。
-  const explicit = extractExplicitRiskLevel(designContent)
-  if (explicit) {
-    const requiredVerification =
-      explicit === 'deployment-critical' ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'real_startup_once'] :
-      explicit === 'integration-critical' ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion'] :
-      explicit === 'contract-required' ? ['unit_tests', 'contract_tests'] :
-      explicit === 'doc-only' ? ['static_check'] :
-      ['unit_tests']
-    return { level: explicit, triggers: ['risk_level (explicit)'], suppressedTriggers: [], requiredVerification, explicit: true }
-  }
+// ============ 声明面判级（2026-09-19-ceremony-pricing-five-cuts task-02 / D-008 / D-009）============
+//
+// 新判级入口：files × 项目声明危险面（loadBlastDeclarations 装载 map blast 段 + local 只升合并）
+// → { tier, evidenceRequired, explicit, hitPrefixes, requiredVerification }。
+//   tier：命中声明面最高档（无命中 S1——未配置项目禁回退词表，D-008）；explicitRiskLevel
+//   （frontmatter 五级词经 RISK_TO_TIER 存量兼容）存在时覆盖 tier（人工通道升/降均尊重），
+//   **不豁免 evidenceRequired**（D-009：证据豁免=改 map，git 可见——收掉旧显式短路连证据门
+//   一起免的懒 agent 洞）。
+//   evidenceRequired → requiredVerification 取现行 integration-critical 组原样（证据门判据零改动）。
 
-  const combined = [designContent, planContent].join('\n')
+/**
+ * 声明面判级（纯函数）。
+ * @param {{ files?: string[], blastDeclarations?: Array<{prefixes: string[], tier: string, evidence?: boolean}>, explicitRiskLevel?: string|null }} opts
+ * @returns {{ tier: 'S0'|'S1'|'S2'|'S3', level: string, evidenceRequired: boolean, explicit: boolean, hitPrefixes: string[], requiredVerification: string[] }}
+ *   level＝五级词兼容字段（存量消费面零改动）：evidenceRequired → 'integration-critical'；
+ *   否则 tier 反查（S0 doc-only / S1 unit-sufficient / S2 contract-required / S3 integration-critical）。
+ */
+const TIER_TO_COMPAT_LEVEL = { S0: 'doc-only', S1: 'unit-sufficient', S2: 'contract-required', S3: 'integration-critical' }
 
-  // 逐行收集命中：同句否定窗口内的命中进 suppressed（全部命中均被抑制才剔除该 trigger）
-  const stats = new Map()
-  for (const line of combined.split('\n')) {
-    collectLineTriggerStats(line, INTEGRATION_CRITICAL_PATTERNS, stats)
-  }
-  const suppressedTriggers = []
-  for (const [t, stat] of stats) {
-    if (stat.kept > 0) triggers.push(t)
-    else suppressedTriggers.push(t)
-  }
-
-  for (const file of changedFiles) {
-    for (const pattern of INTEGRATION_FILE_PATTERNS) {
-      if (pattern.test(file)) {
-        pattern.lastIndex = 0
-        const match = file.match(pattern)
-        if (match && !triggers.includes(match[0])) triggers.push(match[0])
-      }
-    }
-  }
-
-  if (triggers.length === 0) {
-    // 关键词命中全被否定语境抑制（或本就无命中）→ doc-only；抑制词随 suppressedTriggers 上报可审计
-    return { level: 'doc-only', triggers: [], suppressedTriggers, requiredVerification: ['static_check'] }
-  }
-
-  const deploymentTrigger = triggers.some(t => /cli\.ts|main\.ts|server\.(js|ts)|bootstrap|entrypoint/i.test(t))
-  const lifecycleTrigger = triggers.some(t => /session|lease|agent.?run|lifecycle|state.?transition|claim|heartbeat/i.test(t))
-  const crossProcessTrigger = triggers.some(t => /daemon|backend|client.*api|grpc|websocket|cross.?process|ipc|message.?queue/i.test(t))
-
-  let level
-  const requiredVerification = ['unit_tests']
-
-  if (deploymentTrigger) {
-    level = 'deployment-critical'
-    requiredVerification.push('contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'real_startup_once')
-  } else if (lifecycleTrigger || crossProcessTrigger) {
-    level = 'integration-critical'
-    requiredVerification.push('contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion')
-  } else if (triggers.some(t => /api|client|contract|dto/i.test(t))) {
-    level = 'contract-required'
-    requiredVerification.push('contract_tests')
-  } else {
-    level = 'unit-sufficient'
-  }
-
-  return { level, triggers, suppressedTriggers, requiredVerification }
+export function resolveChangeRisk({ files = [], blastDeclarations = [], explicitRiskLevel = null } = {}) {
+  const surfaces = resolveBlastSurfaces(files, blastDeclarations)
+  const level = typeof explicitRiskLevel === 'string' ? explicitRiskLevel.trim().toLowerCase() : ''
+  const explicitTier = level ? RISK_TO_TIER[level] : undefined
+  const tier = explicitTier ? explicitTier : surfaces.tier
+  const evidenceRequired = surfaces.evidence
+  const requiredVerification = evidenceRequired
+    ? ['unit_tests', 'contract_tests', 'real_daemon_backend_integration', 'runtime_log_evidence', 'terminal_state_assertion']
+    : ['unit_tests']
+  const compatLevel = evidenceRequired ? 'integration-critical' : TIER_TO_COMPAT_LEVEL[tier]
+  return { tier, level: compatLevel, evidenceRequired, explicit: Boolean(explicitTier), hitPrefixes: surfaces.hitPrefixes, requiredVerification }
 }
 
 // ============ 回执来源分类打标（X-10 / D-002 / D-006，2026-09-17-pass-cap-semantics task-02） ============

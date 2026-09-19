@@ -229,8 +229,9 @@ export const LOCAL_YAML_SCHEMA = {
     {
       id: 'ceremony',
       title: '评审仪式档位（ceremony tier）',
-      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（2026-09-18-ceremony-risk-pricing），agent 自报只可升不可降；本段是逃生阀与影子期开关。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
+      note: '仪式档位（S0~S3）由 CLI 按 blast/span/friction 三轴风险客观定价（blast 轴输入=项目声明危险面 _module-map.yaml 顶层 blast 段，2026-09-19-ceremony-pricing-five-cuts）；完成门声明追赶重定价——无摩擦迁移随声明面可升可降、有摩擦迁移地板不退，force_tier 仍只升不降；本段是逃生阀/影子期开关/逐机升档面。读键按「存在则读、不存在用缺省」容错（读取走 readCeremonyLocalConfig）。',
       keys: [
+        { path: 'ceremony.blast_surfaces', type: 'json', optional: true, status: 'live', readers: ['loadBlastDeclarations (src/blast-surface.js — local 逐机升档，与 map 声明逐文件取 max)'], desc: 'blast 危险面逐机覆盖：[{ prefixes: [...], tier: S0~S3 }]——主声明在 _module-map.yaml 顶层 blast 段（进 git、可挂 evidence 位）；本键只升不降（与 map 命中逐文件取 max，压低共享声明无效）、不承载 evidence（证据语义属共享 map，D-009）。非法条目静默跳过。', example: '[{ prefixes: [src/my-daemon/], tier: S3 }]' },
         { path: 'ceremony.force_tier', type: 'enum', values: ['S0', 'S1', 'S2', 'S3'], optional: true, status: 'live', readers: ['readCeremonyLocalConfig (src/run/prompt.js — {REVIEW_TIER} 注入档位菜单/强制轻仪审计痕)', '影子派发前置校验 (src/review-dispatch.js — task-06 影子期框架接线)'], desc: '档位逃生阀：强制仪式档 S0~S3，绕过客观定价（过渡期「就是不信这套」用）。prompt 注入面只升不降——强制档低于客观定价档时不降档（防 prompt 面与 gate 侧判定分裂）；非法值 warn 后忽略。', example: 'S3' },
         { path: 'ceremony.shadow', type: 'boolean', optional: true, status: 'live', readers: ['readCeremonyLocalConfig (src/run/prompt.js — S0/S1 轻档注入影子期注记)', 'runReviewDispatch 影子前置校验 (src/review-dispatch.js — task-06 影子期框架接线)'], desc: '影子期开关，默认 true（on）：S0/S1 轻档明面轻仪、后台静默派发重仪式只记账不阻断（影子派发框架随 task-06 落地）；置 off = 轻仪转正（转正判据由 doctor 影子对照维度公示，CLI 只出判据不出手）。', example: 'true' },
       ],
@@ -445,11 +446,15 @@ docs-check:
 # change-ownership:
 #   heartbeat_minutes: 15   # 所有者活跃心跳窗口（分钟）
 
-# ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价；本段为逃生阀与影子期开关）──
+# ── 评审仪式档位（ceremony tier：S0~S3 由 CLI 按 blast/span/friction 三轴风险客观定价；本段为逃生阀/影子期开关/逐机升档面）──
+# blast 轴输入=项目声明危险面（_module-map.yaml 顶层 blast 段）；完成门声明追赶重定价（无摩擦随声明、有摩擦地板不退）。
 # force_tier 强制档位绕过客观定价（过渡逃生阀，prompt 注入面只升不降）；shadow 影子期默认 on——
 # S0/S1 轻档明面轻仪、后台静默派发重仪式对照只记账不阻断；置 off = 轻仪转正（转正判据见 doctor 影子对照）。
 # ceremony:
 #   force_tier: S3            # 强制全重仪式（逃生阀；S0 | S1 | S2 | S3）
 #   shadow: true              # 影子期开关（默认 true）
+#   blast_surfaces:           # blast 逐机升档（只升不降、不承载 evidence；主声明在 _module-map.yaml blast 段）
+#     - prefixes: [src/my-daemon/]
+#       tier: S3
 `;
 }

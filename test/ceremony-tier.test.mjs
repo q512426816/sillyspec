@@ -29,6 +29,7 @@ import { tmpdir } from 'node:os'
 import {
   computeCeremonyTier,
   escalateByFriction,
+  applyDeclarationCatchUp,
   reconcileDualRun,
   CEREMONY_TIERS,
   RISK_TO_TIER,
@@ -254,11 +255,19 @@ console.log('\n=== 4. reconcileDualRun 错配注入（FR-03/D-003 双跑收口�
   assert(under.factTier === 'S2' && under.mismatch === true && under.severity === 'error',
     `声明 S1/事实 S2 → mismatch error（实际 ${under.factTier}/${under.mismatch}/${under.severity}）`)
 
-  // 声明 ≥ 事实 → 无错配
+  // 声明 ≥ 事实 → 无错配（等档 none；高报 warn 只记账不阻断，D-005——2026-09-19-ceremony-pricing-five-cuts 翻新）
   const eq = reconcileDualRun({ declaredTier: 'S2', factRiskDetection: { level: 'contract-required' } })
   assert(eq.mismatch === false && eq.severity === 'none', `声明 S2/事实 S2 等档 → none（实际 ${eq.mismatch}/${eq.severity}）`)
   const above = reconcileDualRun({ declaredTier: 'S3', factRiskDetection: { level: 'contract-required' } })
-  assert(above.mismatch === false && above.severity === 'none', `声明 S3/事实 S2 高报 → none（只罚低报不罚高报）`)
+  assert(above.mismatch === false && above.severity === 'warn',
+    `声明 S3/事实 S2 高报 → warn 只记账不阻断（实际 ${above.mismatch}/${above.severity}）`)
+
+  // factBlastTier 声明面直入（D-008 新通道——在场合跳过 factRiskDetection 映射）
+  const blastDirect = reconcileDualRun({ declaredTier: 'S2', factBlastTier: 'S3', factFiles: ['src/worktree.js'] })
+  assert(blastDirect.factTier === 'S3' && blastDirect.mismatch === true && blastDirect.severity === 'error',
+    `factBlastTier S3 直入 → 事实 S3 > 声明 S2 → error（实际 ${blastDirect.factTier}/${blastDirect.severity}）`)
+  const blastWarn = reconcileDualRun({ declaredTier: 'S3', factBlastTier: 'S1', factFiles: ['src/datetime.js'] })
+  assert(blastWarn.severity === 'warn', `factBlastTier S1 × 声明 S3 → warn（实际 ${blastWarn.severity}）`)
 
   // declaredTier 非法/缺失 → fail-safe 视为低报 error（无法证明声明到位 → 宁严勿松）
   const badTier = reconcileDualRun({ declaredTier: 'SX', factRiskDetection: { level: 'doc-only' } })
@@ -283,6 +292,30 @@ console.log('\n=== 4. reconcileDualRun 错配注入（FR-03/D-003 双跑收口�
   // 全空事实面 → blast 保守缺省 S2（事实侧同样不静默降级），声明 S2 无错配
   const empty = reconcileDualRun({ declaredTier: 'S2' })
   assert(empty.factTier === 'S2' && empty.mismatch === false, `空事实面 → 保守 S2 与声明 S2 对齐（实际 ${empty.factTier}/${empty.mismatch}）`)
+}
+
+// ────────────────────────────────────────────────────────────
+console.log('\n=== 4b. applyDeclarationCatchUp 三分支（D-003 声明追赶重定价，2026-09-19-ceremony-pricing-five-cuts）===\n')
+{
+  // 分支①：transitions 空且未超阈 → 整档换可升可降（后补声明生效，不再粘住）
+  const down = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: ['初始档…'], transitions: [] }, recomputedTier: 'S2', recomputedComponents: { blast: 'S2', span: 'S2', friction: 'S0' }, recomputedReasons: ['span=S2…'], frictionCounts: { gate_rollback: 0, review_rejected: 0 } })
+  assert(down.tier === 'S2' && down.transitions.length === 0, `空+未超阈 → 降档 S3→S2（实际 ${down.tier}）`)
+  assert(down.reasons.some((r) => r.includes('声明追赶重定价') && r.includes('S3') && r.includes('S2')), '追赶留痕含「声明追赶重定价（S3 → S2）」')
+
+  // 分支②：transitions 空但摩擦已超阈（gate 失败先记账、升档检查点在末位的可达态）→ 整档换不设地板
+  const overThreshold = applyDeclarationCatchUp({ currentDoc: { tier: 'S2', reasons: [], transitions: [] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: { gate_rollback: 2, review_rejected: 0 } })
+  assert(overThreshold.tier === 'S1', `空+超阈 → 整档换不设地板（S1，摩擦价由同锁 escalate +1 兑现；实际 ${overThreshold.tier}）`)
+  assert(overThreshold.reasons.some((r) => r.includes('地板不设') && r.includes('escalate')), '超阈分支留痕「地板不设、同锁 escalate 即时 +1」')
+
+  // 分支③：transitions 非空 → 摩擦地板不退（max(重算, transitions 最高 to)）
+  const floored = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: [], transitions: [{ to: 'S3' }] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: {} })
+  assert(floored.tier === 'S3', `地板 S3 托底（重算 S1 → 终 S3；实际 ${floored.tier}）`)
+  assert(floored.reasons.some((r) => r.includes('摩擦地板 S3 不退')), '地板分支留痕「摩擦地板 S3 不退」')
+  const flooredRaise = applyDeclarationCatchUp({ currentDoc: { tier: 'S2', reasons: [], transitions: [{ to: 'S2' }] }, recomputedTier: 'S3', recomputedComponents: {}, recomputedReasons: [], frictionCounts: {} })
+  assert(flooredRaise.tier === 'S3', `重算高于地板 → 取重算 S3（实际 ${flooredRaise.tier}）`)
+  // transitions 原样透传（重定价不记迁移）
+  assert(floored.transitions.length === 1, 'transitions 原样透传'
+  )
 }
 
 // ────────────────────────────────────────────────────────────

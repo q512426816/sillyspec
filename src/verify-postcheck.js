@@ -35,7 +35,8 @@ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
 import { filterDeliverableFiles, classifyToolScaffold } from './worktree-apply.js'
 // ceremony 双跑收口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003）：引擎与账本均为
 // 纯/叶子依赖（ceremony-tier → change-risk-profile；friction-ledger → fs-atomic+quicklog），无环。
-import { detectChangeRisk } from './change-risk-profile.js'
+import { resolveChangeRisk } from './change-risk-profile.js'
+import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
 import { reconcileDualRun, computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
 import { mergeFrictionEntry } from './friction-ledger.js'
 import { discoverModuleIndex } from './decision-distill.js'
@@ -1157,17 +1158,25 @@ export function resolveVerifyChangedFiles(cwd, changeName, ctx = null, opts = {}
             !p.startsWith('.sillyspec/quicklog/'))
         // 已提交口径补齐（2026-09-10 用户反馈②「先提交则 diff 空」时序两难的 diff 半边）：
         // worktree 内已 commit 的改动对主仓 base..HEAD 与 status --porcelain 双双不可见——
-        // 用 merge-base(主仓 HEAD, worktree HEAD)（= worktree 创建锚点）到 worktree HEAD 的
-        // commit diff 补入，未提交 ∪ 已提交两形态全覆盖。wtGitDir===cwd（in-place 退化）时
-        // 已提交改动已在 mainFiles，跳过防双并。fail-open：git 失败退回 status-only 现状。
+        // diff 基线**优先 meta 锚点（baselineCommit＞actualBaseHash＞baseHash，resolveMainChangedFiles
+        // 同口径）**，三锚全缺才退 merge-base(wtHead, mainHead)。坑 fact-face-checkpoint-pollution
+        // （2026-09-19 five-cuts 实证：45 文件对账面虚增 23 条）：旧口径恒用 merge-base 且注释
+        // 假设其＝「worktree 创建锚点」——但 baseline checkpoint 提交（_createBaselineCheckpoint，
+        // worktree.js:816）落在 worktree 分支上、主仓 HEAD 不动，merge-base 指到 checkpoint 之前，
+        // checkpoint 卷入的并行会话文件整段进窗口。wtGitDir===cwd（in-place 退化）时已提交改动
+        // 已在 mainFiles，跳过防双并。fail-open：git 失败退回 status-only 现状。
         let committedFiles = []
         if (wtGitDir !== cwd) {
           try {
             const mainHead = gitQuiet(cwd, ['rev-parse', 'HEAD'], { timeout: 15000 })
             const wtHead = gitQuiet(wtGitDir, ['rev-parse', 'HEAD'], { timeout: 15000 })
-            const mb = (mainHead && wtHead)
-              ? gitQuiet(wtGitDir, ['merge-base', wtHead, mainHead], { timeout: 15000 })
+            const metaBase = found && found.meta
+              ? (found.meta.baselineCommit || found.meta.actualBaseHash || found.meta.baseHash || null)
               : null
+            const mb = metaBase
+              || ((mainHead && wtHead)
+                ? gitQuiet(wtGitDir, ['merge-base', wtHead, mainHead], { timeout: 15000 })
+                : null)
             if (mb) {
               const diffOut = gitQuiet(wtGitDir, ['diff', '--name-only', mb, wtHead], { timeout: 30000 })
               committedFiles = String(diffOut || '').split('\n')
@@ -1297,7 +1306,18 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
         // 不损原 worktree 结果。
         if (files !== null && gitDir !== cwd) {
           try {
-            const mainFiles = runGitDiffNameOnly(cwd, `${diffBase}..HEAD`)
+            // 主仓侧窗口锚 fork 点（merge-base(HEAD, diffBase)）——坑 fact-face-checkpoint-pollution
+            // （2026-09-19 five-cuts 实证：事实面 45 文件虚增 23 条）：旧口径 `${diffBase}..HEAD`
+            // 在「主仓 HEAD 未前移、checkpoint 落 worktree 分支」时是反向区间——checkpoint 卷入的
+            // 并行会话文件在主仓侧全显示为删除、--name-only 照样列名，overlay 整段泄漏进并集。
+            // 锚 fork 点后：主仓没动 → 窗口空（零泄漏）；wt-commit 流（提交落主仓 HEAD）→ fork..HEAD
+            // 恰捕获那些提交，语义不变。merge-base 不可得（对象缺失等极端）→ 退旧区间（不放大）。
+            let mainFiles = null
+            const fork = gitQuiet(cwd, ['merge-base', 'HEAD', String(diffBase)], { timeout: 15000 })
+            if (typeof fork === 'string' && fork.trim()) {
+              mainFiles = runGitDiffNameOnly(cwd, `${fork.trim()}..HEAD`)
+            }
+            if (mainFiles === null) mainFiles = runGitDiffNameOnly(cwd, `${diffBase}..HEAD`)
             if (Array.isArray(mainFiles)) {
               const merged = [...new Set([...files, ...mainFiles])]
               const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, merged, { specBase: sb })
@@ -2936,37 +2956,8 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
 // 接线在 run/complete-handlers.js handleArchiveConfirmStep）。
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 事实面内容采集上限（防病态体量）：单文件 256KB / 总量 4MB / 至多前 200 个文件 */
-const CEREMONY_FACT_CONTENT_MAX_PER_FILE = 256 * 1024
-const CEREMONY_FACT_CONTENT_MAX_TOTAL = 4 * 1024 * 1024
-const CEREMONY_FACT_CONTENT_MAX_FILES = 200
-
-/**
- * 事实面内容采集：读实际 diff 文件的对应内容（detectChangeRisk 的文档槽输入——声明侧是
- * design/plan 措辞，事实侧换成实际改动文件内容，同一套机械关键词判定）。文件头 frontmatter
- * 整块剥除（事实面无声明通道——reconcileDualRun 契约是「实际 diff 无声明」，防 risk_level
- * 声明回声经内容槽回流事实面；.sillyspec/changes 已被 filterDeliverableFiles 过滤，此处
- * 剥的是 docs 等交付文档的头部 frontmatter）。删除/不可读文件跳过内容（文件名仍进
- * changedFiles 参与 INTEGRATION_FILE_PATTERNS 判级）。超限截断不告警（对账只需关键词覆盖面）。
- */
-function readCeremonyFactContent(contentRoot, files) {
-  const chunks = []
-  let total = 0
-  let readCount = 0
-  let unreadCount = 0
-  for (const f of files.slice(0, CEREMONY_FACT_CONTENT_MAX_FILES)) {
-    if (total >= CEREMONY_FACT_CONTENT_MAX_TOTAL) break
-    try {
-      let text = readFileSync(join(contentRoot, f), 'utf8')
-      text = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '') // 剥文件头 frontmatter
-      if (text.length > CEREMONY_FACT_CONTENT_MAX_PER_FILE) text = text.slice(0, CEREMONY_FACT_CONTENT_MAX_PER_FILE)
-      chunks.push(text)
-      total += text.length
-      readCount++
-    } catch { unreadCount++ /* 已删除/不可读 → 文件名仍参与判级 */ }
-  }
-  return { content: chunks.join('\n'), readCount, unreadCount }
-}
+// 2026-09-19-ceremony-pricing-five-cuts task-03：readCeremonyFactContent 与内容采集上限三常量
+// 整体删除——事实面零内容扫描（只吃文件名 × 声明面，D-008），常量随之失去消费者。
 
 /** 种子文件名的会话标识清洗（anon@host / agent 名等 → 文件名安全字符，截 80 字符） */
 function sanitizeCeremonySeedSession(session) {
@@ -2989,7 +2980,8 @@ async function resolveCeremonyDualRunSession({ session, cwd }) {
  * reconcileTargetFiles 检查族先例：单结果对象 + 配套 print 导出）。
  *
  * 流程：声明档读 `.runtime/ceremony-tier-<change>.json`（task-03 开跑定价产物）的 tier →
- * 实际 diff 取 resolveReconcileActualFiles 单点 → 事实面 detectChangeRisk（输入换成实际 diff
+ * 实际 diff 取 resolveReconcileActualFiles 单点 → 事实面 resolveChangeRisk（文件名 × 项目
+ * 声明危险面，零内容扫描——D-008）+ _module-map 索引组装 reconcileDualRun 入参 → 引擎出
  * 文件与对应内容）+ _module-map 索引组装 reconcileDualRun 入参 → 引擎出 {factTier, mismatch,
  * severity}（声明档<事实档 → mismatch/error）。mismatch 时本函数亲自落两件收口产物（fail-soft，
  * 异常降级留痕不阻断）：① 摩擦账 mergeFrictionEntry（counts 记 gate_rollback——现有三枚举中
@@ -3067,27 +3059,24 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
       notes, factReasons: [], factFiles: [], form: actual.form, sources: actual.sources, at }
   }
 
-  // —— 事实面重跑：blast（detectChangeRisk × 实际 diff 文件与对应内容）+ span（_module-map 索引）——
-  // 内容根按形态取对：worktree 形态文件在 worktree 根（_readWorktreeMeta gitDir 同源），post-apply
-  // 形态在主仓 cwd——actual 只回形态不回根，此处经同一 meta 权威入口补根，不造第二形态判定。
-  let contentRoot = cwd
-  if (actual.form === 'worktree') {
-    const wtMeta = _readWorktreeMeta(sb, cwd, changeName)
-    if (wtMeta && wtMeta.gitDir) contentRoot = wtMeta.gitDir
-  }
-  const fact = readCeremonyFactContent(contentRoot, actual.files)
-  if (fact.unreadCount > 0) {
-    notes.push(`${fact.unreadCount} 个实际文件内容不可读（已删除/权限），文件名仍参与判级`)
-  }
-  const factRiskDetection = detectChangeRisk({ designContent: fact.content, planContent: '', changedFiles: actual.files })
+  // —— 事实面重跑（2026-09-19-ceremony-pricing-five-cuts task-03：零内容扫描）——
+  // blast ＝ actual.files × 项目声明危险面（loadBlastDeclarationsAllProjects——runCeremonyDualRunCheck
+  // 无 project 语境，扫 specBase/docs/*/modules/_module-map.yaml 取并集，多项目仓保守正确）；
+  // 旧口径（读实际 diff 文件全文喂 detectChangeRisk 词表）整类删除——事实面只吃文件名 × 声明面
+  // （自指陷阱消失：门禁引擎源码里的关键词不再是判级输入，D-008）。
+  const blastDeclarations = loadBlastDeclarationsAllProjects(sb)
+  const factRisk = resolveChangeRisk({ files: actual.files, blastDeclarations })
   let factModuleIndex = null
   try { factModuleIndex = discoverModuleIndex(join(sb, 'knowledge')) } catch { /* 缺 map → span 跨模块维跳过 */ }
 
   // —— 引擎对账（mismatch 判定单点）+ 命中明细（同入参跑 computeCeremonyTier 取 reasons，供披露）——
-  const verdict = reconcileDualRun({ declaredTier, factRiskDetection, factFiles: actual.files, factModuleIndex })
+  const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex })
   const factDetail = computeCeremonyTier({
-    riskDetection: factRiskDetection, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
+    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, frictionCounts: {},
   })
+  if (verdict.severity === 'warn') {
+    notes.push(`[advisory] 高报记账（D-005）：声明档 ${String(declaredTier)} > 事实档 ${verdict.factTier}——只记账不阻断不记摩擦（高报代价是更重仪式，自罚机制在场）`)
+  }
 
   // —— 显式降档复核（D-004）：档位文件标记（字段或 reasons 痕迹双口径容错——computeCeremonyTier
   //    的 reasons 含 explicitDowngradeAccepted=true 字样，task-03 落盘形态两者至少其一在场）——
@@ -3129,7 +3118,8 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
         declaredTier,
         factTier: verdict.factTier,
         mismatch: true,
-        factRiskLevel: (factRiskDetection && factRiskDetection.level) || null,
+        factBlastTier: factRisk.tier,
+        factHitPrefixes: factRisk.hitPrefixes,
         factFiles: actual.files,
         at,
       }, null, 2) + '\n')

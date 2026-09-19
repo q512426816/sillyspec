@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-19-ceremony-pricing-five-cuts",
+  "flag": "--skip-apply",
+  "skippedAt": "2026-09-19T03:10:40.174Z",
+  "deliverableCount": 22,
+  "deliverableFiles": [
+    ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    "src/blast-surface.js",
+    "src/ceremony-tier.js",
+    "src/change-risk-profile.js",
+    "src/config-schema.js",
+    "src/modules.js",
+    "src/review-tier.js",
+    "src/run/gates.js",
+    "src/run/verify-quality-scan.js",
+    "src/stage-contract-spec.js",
+    "src/stage-contract.js",
+    "src/stages/verify.js",
+    "src/verify-postcheck.js",
+    "test/blast-surface.test.mjs",
+    "test/ceremony-tier.test.mjs",
+    "test/concurrent-preflight-hooks.test.mjs",
+    "test/modules-rebuild-preserve.test.mjs",
+    "test/pass-eligibility.test.mjs",
+    "test/quick-gate-profile.test.mjs",
+    "test/stage-contract.test.mjs",
+    "test/stage-review.test.mjs"
+  ],
+  "note": "归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计"
+}

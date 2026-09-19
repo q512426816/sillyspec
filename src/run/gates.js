@@ -38,9 +38,12 @@ import { stageRegistry } from '../stages/index.js'
 import { normalizeTaskId } from '../taskcard.js'
 import { recordFrictionEvent } from '../friction-tally.js'
 import { readFrictionLedger } from '../friction-ledger.js'
-import { computeCeremonyTier, escalateByFriction, CEREMONY_TIERS } from '../ceremony-tier.js'
+import { computeCeremonyTier, escalateByFriction, applyDeclarationCatchUp, CEREMONY_TIERS } from '../ceremony-tier.js'
+import { loadBlastDeclarations } from '../blast-surface.js'
+import { resolveChangeRisk } from '../change-risk-profile.js'
 import { withFileLock } from '../quicklog.js'
-import { detectChangeRisk, extractExplicitRiskLevel } from '../change-risk-profile.js'
+import { extractExplicitRiskLevel } from '../change-risk-profile.js'
+import { parseFileChangeListDetailed } from '../change-list.js'
 import { parseModuleMapSimple } from '../modules.js'
 
 /**
@@ -615,38 +618,44 @@ function writeCeremonyTierDoc(path, doc) {
 }
 
 /**
- * 开跑定价（design 生命周期契约表首行「无 → 初始档」——计划评审发现①补认领）：档位文件首见
- * （首阶段完成门，或坏档重定价）时以当时可得的 blast/span 信号算初始档。
- *   blast ＝ detectChangeRisk 的 design/plan 双文件判级 + frontmatter 显式声明（升降规则由
- *           computeCeremonyTier 统一裁：升档尊重、降档须理由）；design.md 缺失 → 不传
- *           riskDetection → 保守缺省 S2（brownfield 不静默降级）。
- *   span  ＝ design §6「文件变更清单」反引号路径（readDesignOwnFiles 既有解析，无清单容空退化）
+ * 开跑定价 / 声明追赶重定价共用重算体（design 生命周期契约表「无 → 初始档」+ D-003 追赶）：
+ *   blast ＝ resolveChangeRisk 声明面判级（declaredFiles × _module-map.yaml 顶层 blast 段
+ *           ＋ local 只升合并，经 loadBlastDeclarations 装载；explicit frontmatter 只压 tier
+ *           不豁免 evidence，D-008/D-009——词表散文判级随 2026-09-19-ceremony-pricing-five-cuts
+ *           退役）→ computeCeremonyTier blastTier 直入。design.md 缺失 → declaredFiles 空 →
+ *           blast S1（声明面缺失按无命中，不缺省不拦截）。
+ *   span  ＝ design 文件变更清单（readDesignOwnFiles 委托 change-list 单一真相源，双形态标题）
  *           + _module-map.yaml 跨模块口径（moduleIndex 缺失/空 → 该维跳过不缺省不拦截）。
- * frictionCounts 不进初始定价——摩擦轴归 escalateByFriction 检查点（超阈升一档封顶语义），
+ * frictionCounts 不进重算——摩擦轴归 escalateByFriction 检查点（超阈升一档封顶语义），
  * 两处重复计价会让 transitions 审计口径失真。
+ * eventContext='initial' → reasons 追加「初始档」事件行（档位首见）；'catchup' → 不追加
+ * （追赶事件行由 applyDeclarationCatchUp 落，防语义错位与 reasons 随每道门膨胀）。
  */
-function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName }) {
+function computeInitialCeremonyTierDoc({ cwd, specBase, platformOpts, progress, changeName, projectName, stageName, eventContext = 'initial' }) {
   const changeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
   const designContent = changeDir && existsSync(join(changeDir, 'design.md')) ? readFileSync(join(changeDir, 'design.md'), 'utf8') : ''
-  const planContent = changeDir && existsSync(join(changeDir, 'plan.md')) ? readFileSync(join(changeDir, 'plan.md'), 'utf8') : ''
-  const riskDetection = designContent ? detectChangeRisk({ designContent, planContent, changedFiles: [] }) : undefined
   const explicitRiskLevel = designContent ? extractExplicitRiskLevel(designContent) : null
   const declaredFiles = readDesignOwnFiles(specBase, changeName)
+  const { declarations } = loadBlastDeclarations({ specBase, project: projectName })
+  const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations: declarations, explicitRiskLevel })
   let moduleIndex = null
   const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
   if (existsSync(mapPath)) {
     try { moduleIndex = parseModuleMapSimple(readFileSync(mapPath, 'utf8')) || null } catch { moduleIndex = null }
   }
-  const priced = computeCeremonyTier({ riskDetection, explicitRiskLevel, declaredFiles, moduleIndex })
-  return {
-    tier: priced.tier,
-    components: priced.components,
-    reasons: [
-      ...priced.reasons,
-      `初始档（开跑定价事件：${stageName} 完成门首见该 change 无档位文件，按当时可得的 blast/span 信号定价——design 生命周期契约表「无 → 初始档」行）`,
-    ],
-    transitions: [],
+  const priced = computeCeremonyTier({ blastTier: risk.tier, declaredFiles, moduleIndex })
+  const auditLines = []
+  if (risk.hitPrefixes.length > 0) {
+    auditLines.push(`声明危险面命中：${risk.hitPrefixes.join('、')}（evidenceRequired=${risk.evidenceRequired}）`)
   }
+  if (risk.explicit) {
+    auditLines.push(`explicit risk_level 应用（tier 覆盖 → ${risk.tier}；evidenceRequired 不受豁免，D-009）`)
+  }
+  const reasons = [...priced.reasons, ...auditLines]
+  if (eventContext === 'initial') {
+    reasons.push(`初始档（开跑定价事件：${stageName} 完成门首见该 change 无档位文件，按当时可得的 blast/span 信号定价——design 生命周期契约表「无 → 初始档」行）`)
+  }
+  return { tier: priced.tier, components: priced.components, reasons, transitions: [] }
 }
 
 /**
@@ -672,10 +681,19 @@ async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progres
   }
   const tierPath = ceremonyTierFilePath(runtimeRoot, changeName)
   const result = await withFileLock(tierPath + '.lock', async () => {
-    // 读档无文件（或坏档）→ 先落初始档（开跑定价事件）
+    // 读档无文件（或坏档）→ 先落初始档（开跑定价事件）；档位在场 → 声明追赶重定价
+    // （D-003：按当前声明面重算 → applyDeclarationCatchUp 三分支——无摩擦可升可降/摩擦
+    // 地板不退 → 写回；追赶不记 transitions，摩擦价随后由 escalate 即时兑现，同锁串行）
     let doc = readCeremonyTierDoc(tierPath)
     if (!doc) {
       doc = computeInitialCeremonyTierDoc({ cwd, specBase: effectiveSpecBase, platformOpts, progress, changeName, projectName, stageName })
+      writeCeremonyTierDoc(tierPath, doc)
+    } else {
+      const recomputed = computeInitialCeremonyTierDoc({ cwd, specBase: effectiveSpecBase, platformOpts, progress, changeName, projectName, stageName, eventContext: 'catchup' })
+      const caught = applyDeclarationCatchUp({ currentDoc: doc, recomputedTier: recomputed.tier, recomputedComponents: recomputed.components, recomputedReasons: recomputed.reasons, frictionCounts })
+      // 降档保护由 applyDeclarationCatchUp 三分支承担（无摩擦整档换可升可降是 D-003 的立意；
+      // 有摩擦地板托底）——此处不再叠加「拒绝降档写回」（与追赶语义矛盾，防误伤）。
+      doc = caught
       writeCeremonyTierDoc(tierPath, doc)
     }
     const esc = escalateByFriction(doc.tier, frictionCounts)
@@ -1630,28 +1648,17 @@ export function validateFileLocations(cwd, stageName, progress, changeName, spec
  */
 function readDesignOwnFiles(specBase, changeName) {
   if (!specBase || !changeName) return []
-  let content
+  // 2026-09-19-ceremony-pricing-five-cuts task-03 / D-004：委托 change-list.js 单一真相源解析器
+  // （此前本地重写的数字标题版只认「## 6.」——现行模板「## 文件变更清单」8 行解析成 0，span 轴瞎）。
+  // parseFileChangeListDetailed：双形态标题（## 6. 文件变更清单 / ## 文件变更清单 含括注变体）
+  // + 任何 ^## 标题关段 + 表格/分类列表双写法；keepSillyspecDocs=true 保持旧实现把 .sillyspec
+  // 交付文档计入声明面的行为。
   try {
-    content = readFileSync(join(specBase, 'changes', changeName, 'design.md'), 'utf8')
+    return parseFileChangeListDetailed(join(specBase, 'changes', changeName, 'design.md'), { keepSillyspecDocs: true })
+      .map(e => e.path)
   } catch {
     return []
   }
-  const files = []
-  let inSection6 = false
-  for (const line of content.split('\n')) {
-    const heading = line.match(/^##\s+(\d+)\./)
-    if (heading) {
-      inSection6 = heading[1] === '6'
-      continue
-    }
-    if (!inSection6 || !line.startsWith('|')) continue
-    // 跳过表头分隔行（|---|---|）
-    if (/^\|[\s:|-]+\|?$/.test(line.trim())) continue
-    // 表格第 2 列反引号文件路径：`| 新增 | \`src/.../x.js\` | 说明 |`
-    const m = line.match(/^\|[^|]+\|\s*`([^`]+)`/)
-    if (m) files.push(m[1].trim())
-  }
-  return files
 }
 
 /**

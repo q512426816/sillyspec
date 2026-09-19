@@ -52,7 +52,7 @@ const CUSTOM_KINDS = new Set([
   'task-card-fields',        // task-NN.md 卡片字段存在性(validateBlueprintConsistency + validatePlanFeasibility)
   'verify-conclusion-gate',  // verify-result.md 结论 PASS/FAIL 门控
   'integration-evidence',    // verify-result.md 集成证据(change-risk-profile.checkIntegrationEvidence)
-  'change-risk-gate',        // 变更风险分级门控(detectChangeRisk)
+  'change-risk-gate',        // 变更风险分级门控(resolveChangeRisk)
 ])
 
 export function isCustomKind(kind) {
@@ -226,7 +226,7 @@ const VERIFY_RULES = [
     failMessage: 'verify-result.md 结论为 FAIL — 验证未通过，不能标记 verify 完成；请修复后重新运行验证。⚠️ 重验成本预告：修复后 verify --done 时 CLI 会重新执行 local.yaml 的 commands.test 全量对账（同步执行，长套件可达数分钟、中途无输出属正常；可按 local.yaml test_strategy: module + modules 收窄命中模块），请在修复时一并评估测试范围',
     noConclusionWarning: 'verify-result.md 未识别到结论章节（含 结论/Conclusion/Result/结果 的二级标题，后跟 PASS / PASS WITH NOTES / FAIL）',
   },
-  // integration-evidence(custom,D10 事前契约):风险门控。判定算法 detectChangeRisk +
+  // integration-evidence(custom,D10 事前契约):风险门控。判定算法 resolveChangeRisk +
   // checkIntegrationEvidence 留 change-risk-profile.js(需运行时读 design/plan 内容,引擎无法纯判定);
   // 此处只作事前提示——renderStageContract 把 spec/hint 注入 verify step0,让 agent 写 verify-result.md
   // 前就知道:若 design/plan 命中部署/启动或跨进程关键词,必须提供对应字面证据,否则完成时被门控阻断。

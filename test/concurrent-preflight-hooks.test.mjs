@@ -182,6 +182,34 @@ console.log('\n--- Part B：钩子挂载契约（quick/execute 完成路径）--
   assert(csgBlock.includes('try') && csgBlock.includes('catch'), 'B2 execute 钩子包在 try/catch 内（advisory fail-open）')
 }
 
+// ---- Part C：门接线组（2026-09-19-ceremony-pricing-five-cuts task-03 / D-003）----
+// escalateCeremonyTierAtGate 模块私有未导出——按本文件先例（Part B 静态断言 + 驱动源直测）锁
+// 锁内「追赶→摩擦」组合语义（applyDeclarationCatchUp → escalateByFriction 同锁顺序）。
+console.log('\n--- Part C：ceremony 门接线（追赶→摩擦组合）---')
+{
+  const { applyDeclarationCatchUp, escalateByFriction } = await import('../src/ceremony-tier.js')
+  // C1：无迁移 + 未超阈 + 重算降档 → 降档生效（声明追赶的立意——S3 误伤档后补声明降到真实价）
+  const c1 = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: [], transitions: [] }, recomputedTier: 'S2', recomputedComponents: {}, recomputedReasons: [], frictionCounts: { gate_rollback: 0 } })
+  const e1 = escalateByFriction(c1.tier, { gate_rollback: 0 })
+  assert(c1.tier === 'S2' && e1.tier === 'S2', 'C1 S3 误伤档 + 后补声明重算 S2 + 未超阈 → 终档 S2（追赶生效）')
+  // C2：无迁移 + 超阈 + 重算 S1 → 追赶降 S1 后摩擦即时 +1 → S2（地板不设、摩擦价同锁兑现）
+  const c2 = applyDeclarationCatchUp({ currentDoc: { tier: 'S2', reasons: [], transitions: [] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: { gate_rollback: 2 } })
+  const e2 = escalateByFriction(c2.tier, { gate_rollback: 2 })
+  assert(c2.tier === 'S1' && e2.tier === 'S2' && e2.escalated === true, 'C2 重算 S1 × 超阈 → 同锁 escalate 即时 +1 → 终档 S2')
+  // C3：有迁移（to S3）+ 重算 S1 → 摩擦地板 S3 托底
+  const c3 = applyDeclarationCatchUp({ currentDoc: { tier: 'S3', reasons: [], transitions: [{ to: 'S3' }] }, recomputedTier: 'S1', recomputedComponents: {}, recomputedReasons: [], frictionCounts: {} })
+  assert(c3.tier === 'S3', 'C3 摩擦地板 S3 不退（重算 S1 被托底）')
+
+  // 挂载契约：gates 锁内先追赶后摩擦 + 事件文案参数化 + readDesignOwnFiles 委托单一真相源
+  const gatesSrc = readFileSync(join(repoRoot, 'src/run/gates.js'), 'utf8')
+  assert(gatesSrc.includes('applyDeclarationCatchUp({ currentDoc: doc'), 'C4 gates 锁内接线 applyDeclarationCatchUp（在场档追赶）')
+  assert(gatesSrc.includes("eventContext: 'catchup'"), 'C4 追赶场景事件文案参数化（不追加「初始档/首见」行）')
+  const escalateIdx = gatesSrc.indexOf('const esc = escalateByFriction(doc.tier, frictionCounts)')
+  const catchUpIdx = gatesSrc.indexOf('applyDeclarationCatchUp({ currentDoc: doc')
+  assert(escalateIdx > catchUpIdx && escalateIdx > 0, 'C4 锁内顺序：追赶在 escalateByFriction 之前（先追赶后摩擦）')
+  assert(gatesSrc.includes("parseFileChangeListDetailed(join(specBase, 'changes', changeName, 'design.md')"), 'C5 readDesignOwnFiles 委托 change-list 单一真相源（D-004 双形态标题）')
+}
+
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)

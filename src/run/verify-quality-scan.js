@@ -33,7 +33,9 @@ import { join, dirname } from 'node:path'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { resolveRuntimeRoot, parsePorcelainPath } from './shared.js'
-import { detectChangeRisk } from '../change-risk-profile.js'
+import { resolveChangeRisk, extractExplicitRiskLevel } from '../change-risk-profile.js'
+import { loadBlastDeclarationsAllProjects } from '../blast-surface.js'
+import { parseFileChangeListDetailed } from '../change-list.js'
 import { recordFrictionEvent } from '../friction-tally.js'
 
 const RECORD_SCHEMA_VERSION = 1
@@ -524,13 +526,19 @@ export function evaluateConclusionDraft({ cwd, specBase, changeName, changeDir, 
   const p6 = (probes.probe6 && probes.probe6.deletions) || []
   if (p6.length > 0) reasons.push(`探针 6 删除对账 ${p6.length} 项（待人工判定）`)
   try {
+    // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（design 文件清单 × blast 声明 + explicit；
+    // evidenceRequired → 集成证据链不预填——level 兼容字段为 integration-critical）
     const designPath = join(changeDir || '', 'design.md')
-    const planPath = join(changeDir || '', 'plan.md')
     const designContent = existsSync(designPath) ? readFileSync(designPath, 'utf8') : ''
-    const planContent = existsSync(planPath) ? readFileSync(planPath, 'utf8') : ''
-    const risk = detectChangeRisk({ designContent, planContent, changedFiles: [] })
-    if (risk && (risk.level === 'integration-critical' || risk.level === 'deployment-critical')) {
-      reasons.push(`风险等级 ${risk.level}——需集成证据链（回执槽 + Runtime Evidence），不预填`)
+    const declaredFiles = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true }).map(e => e.path)
+    const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase: specBase || dirname(dirname(dirname(designPath))) })
+    const risk = resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: designContent ? extractExplicitRiskLevel(designContent) : null })
+    // 否决面＝evidence:true 命中 或 agent 显式自报 critical（诚实承认集成风险 → 不代笔 PASS 草稿；
+    // explicit 低档声明不豁免 evidence 命中，D-009）
+    if (risk && (risk.evidenceRequired || (risk.explicit && risk.tier === 'S3'))) {
+      reasons.push(risk.evidenceRequired
+        ? `命中 evidence:true 声明危险面（${risk.hitPrefixes.join('、')}）——需集成证据链（回执槽 + Runtime Evidence），不预填`
+        : `显式自报 risk_level=integration-critical（tier=${risk.tier}）——需集成证据链（回执槽 + Runtime Evidence），不预填`)
     }
   } catch (e) {
     reasons.push(`风险判级异常（${e && e.message ? e.message : e}）——保守不预填`)

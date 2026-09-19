@@ -9,7 +9,9 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, basename } from 'path'
 import { safeGit } from './git-helper.js'
 import { nowWallClock } from './datetime.js'
-import { detectChangeRisk, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
+import { resolveChangeRisk, extractExplicitRiskLevel, checkIntegrationEvidence, VERIFICATION_NEEDS, RISK_LEVEL_CAUSES } from './change-risk-profile.js'
+import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
+import { parseFileChangeListDetailed } from './change-list.js'
 import { parseEvidenceSlots } from './verify-facts-schema.js'
 import { IR_STRICT_SINCE } from './constants.js'
 import { SCAN_REQUIRED_DOCS, AUXILIARY_STAGES } from './constants.js'
@@ -24,7 +26,6 @@ import { discoverModuleIndex } from './decision-distill.js'
 import { appendKnowledgeHit } from './knowledge-hits.js'
 // design.md 文件清单解析（2026-09-17-pass-cap-semantics task-02 事实③）：change-list 是纯 fs
 // 叶子模块（design-facts / scope-audit / verify-probes 等同款直连惯例），静态引入无环。
-import { parseFileChangeListDetailed } from './change-list.js'
 
 /**
  * 校验结果
@@ -299,6 +300,21 @@ function validateScanOutputs(cwd, changeName, context = {}) {
 /**
  * brainstorm 完成校验：检查四件套规范文件是否生成
  */
+/**
+ * 变更目录级声明面判级（2026-09-19-ceremony-pricing-five-cuts task-03 / D-008）：
+ * design 文件变更清单（change-list 单一真相源解析，双形态标题）× blast 声明（多项目并集，
+ * 调用方无 project 语境）+ design frontmatter explicit（只压 tier 不豁免 evidence，D-009）。
+ * 词表散文判级（detectChangeRisk）退役后的 stage-contract 四消费点统一入口。
+ */
+function resolveChangeRiskForChangeDir(changeDir, specBase) {
+  const designPath = join(changeDir, 'design.md')
+  let designText = ''
+  try { designText = readFileSync(designPath, 'utf8') } catch { designText = '' }
+  const declaredFiles = parseFileChangeListDetailed(designPath, { keepSillyspecDocs: true }).map(e => e.path)
+  const blastDeclarations = loadBlastDeclarationsAllProjects({ specBase })
+  return resolveChangeRisk({ files: declaredFiles, blastDeclarations, explicitRiskLevel: designText ? extractExplicitRiskLevel(designText) : null })
+}
+
 function validateBrainstormOutputs(cwd, changeName, context = {}) {
   const { specRoot } = context
   const changesRoot = specRoot ? join(specRoot, 'changes') : join(cwd, '.sillyspec', 'changes')
@@ -376,23 +392,22 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
       }
     }
 
-    // ── 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24 用户实证）──
-    // verify --done 的 risk gate 既往只在流程末段暴露，首次使用者撞墙后才知道 frontmatter
-    // risk_level 覆盖通道。design --done 即按同款 detectChangeRisk 预判一次（此时 plan.md 尚未
-    // 产出，verify 时会连 plan 一起重判、级别可能上浮——本提示 advisory 不作为定论）：
-    // 高危关键词命中 / 存在否定抑制 → 透出判级结果 + 覆盖指引，把机制可见性提前到 design 阶段。
+    // ── 风险判级提前提示（坑 risk-first-use-opaque，2026-08-24；2026-09-19-ceremony-pricing-five-cuts
+    //    task-03 改声明面口径）── verify --done 的证据门既往只在流程末段暴露，首次使用者撞墙后
+    //    才知道出路。design --done 即按「design 文件清单 × 项目声明危险面」预判一次（advisory
+    //    不作定论）：evidence:true 命中 → 透出证据要求 + 出路；explicit 已声明 → 透出「压档不豁免
+    //    证据」（D-009——旧显式短路连证据门一起免的洞已收口）。
     {
-      const profile = detectChangeRisk({ designContent: content })
-      if (['integration-critical', 'deployment-critical'].includes(profile.level) && !profile.explicit) {
+      const riskPreview = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
+      if (riskPreview.evidenceRequired && !riskPreview.explicit) {
         warnings.push(
-          `[risk] 本次 design 判级 ${profile.level}（命中关键词：${profile.triggers.join('、')}）——verify --done 将强制真实集成证据门控。` +
-          `若属关键词误伤（实际未触碰 daemon/session/启动入口），现在就在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖，免得到 verify 阶段才发现而返工。`
+          `[risk] 本次 design 声明文件面命中项目声明危险面（${riskPreview.hitPrefixes.join('、')}，evidence:true）——verify --done 将强制真实集成证据门控。` +
+          `若认为不该要求集成证据：改 _module-map.yaml 顶层 blast 段（git 可见）；design frontmatter risk_level 只压仪式档、不豁免证据要求（D-009）。`
         )
       }
-      if ((profile.suppressedTriggers || []).length > 0) {
+      if (riskPreview.evidenceRequired && riskPreview.explicit) {
         warnings.push(
-          `[risk] 关键词命中 ${profile.suppressedTriggers.join('、')} 已被同句否定语境抑制，当前判级 ${profile.level}。` +
-          `若实际涉及对应改动，请在 design.md frontmatter 声明高危级（抑制可审计，防静默降级逃证据门控）。`
+          `[risk] 声明文件面命中 evidence:true 危险面（${riskPreview.hitPrefixes.join('、')}），且 frontmatter 已显式 risk_level——注意：显式声明压仪式档（tier=${riskPreview.tier}），但集成证据要求不被豁免（D-009）。`
         )
       }
     }
@@ -655,40 +670,26 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
     }
 
     // ── P0: Change Risk Gate — 核心功能缺少真实集成验证时 FAIL ──
-    const changeRiskProfile = detectChangeRisk({
-      designContent: readIfExists(join(changeDir, 'design.md')),
-      planContent: readIfExists(join(changeDir, 'plan.md')),
-    })
+    // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面口径——design 文件清单 × blast 声明，
+    // evidenceRequired 驱动证据门（D-009：explicit 只压仪式档不豁免证据）。
+    const changeRiskProfile = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
     const conclusion = conclusionStr // 槽优先解析结果复用（此前同输入重复扫两遍）
-    // ── 否定抑制审计（坑 risk-negation-blindness）──
-    // 关键词命中被同句否定语境抑制而不参与判级时必须透出：抑制是把双刃剑（「本次不新增
-    // daemon」真豁免 vs 靠堆否定措辞静默降级逃证据门控），这里让每次抑制可见可核对；
-    // frontmatter risk_level 仍是双向权威覆盖通道。
-    if ((changeRiskProfile.suppressedTriggers || []).length > 0) {
-      warnings.push(
-        `[${changeRiskProfile.level}] 风险判级：关键词命中 ${changeRiskProfile.suppressedTriggers.join(', ')} 已被同句否定语境（不/未/无/避免…）抑制，未参与判级。` +
-        `若本变更实际涉及跨进程/状态机/启动入口改动，请在 design.md frontmatter 加 risk_level: integration-critical（或 deployment-critical）显式声明或提供真实集成证据——抑制可审计，不许用来静默降级。`
-      )
-    }
-    if (['integration-critical', 'deployment-critical'].includes(changeRiskProfile.level)) {
-      // 关键词误伤早期引导（坑2，FR-02）：命中高危关键词且无 frontmatter risk_level 时，
-      // 无条件透出 frontmatter 覆盖指引（不依赖 conclusion / evidence），让 agent 早期即可
-      // 判断是否属误判并显式覆盖，而非撞到 evidence gate 末尾才发现出路③。含否定语境的
-      // 命中已在 detectChangeRisk 内被同句否定抑制（见 change-risk-profile.js NEGATION_CUES），
-      // 此处命中的都是无否定语境的真命中；仍误伤的走 frontmatter 显式覆盖通道。
+    if (changeRiskProfile.evidenceRequired) {
+      // 声明面命中披露 + 出路（旧关键词误伤引导随词表退役改写）：命中 evidence:true 声明路径
+      // → 证据门强制；出路=改 map（git 可见）或提供真实证据；risk_level 压档不豁免证据。
       if (!changeRiskProfile.explicit) {
         warnings.push(
-          `[${changeRiskProfile.level}] 本次变更被关键词判级（命中：${changeRiskProfile.triggers.join(', ')}）。` +
-          `若属关键词误伤（实际未触碰 daemon/session/启动入口/跨进程），可在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。`
+          `[${changeRiskProfile.level}] 本次变更声明文件面命中项目声明危险面（evidence:true：${changeRiskProfile.hitPrefixes.join(', ')}）。` +
+          `若认为不该要求集成证据：改 _module-map.yaml 顶层 blast 段（git 可见）；design frontmatter risk_level 只压仪式档、不豁免证据要求（D-009）。`
         )
       }
-      // ── 显式 risk_level 豁免洞分层（D-002@v1，2026-09-17-pass-cap-semantics task-02）──
-      // ① explicit + 降级 unit-sufficient/contract-required：不进本 critical 块（上方 level 门），
-      //   PASS WITH NOTES 维持免证据——关键词误伤逃生保留；
-      // ② explicit 且仍 integration/deployment-critical + PASS WITH NOTES：必须携带结构化 handover
-      //   （facts.handover 有效行；blocking 级计入封顶口径同 validatePassEligibility 条件②）或齐全
-      //   集成证据，二选一——无 handover 即挂证据门（checkIntegrationEvidence 不过 → error）；
-      // ③ 非显式（关键词判级）判定式一字不动（防 PASS WITH NOTES 绕证据门控）。
+      // ── 显式 risk_level 分层（D-002@v1 延续 + D-009 修订，2026-09-19-ceremony-pricing-five-cuts）──
+      // ① explicit 与否不豁免证据（D-009）：evidence:true 命中即进本块——explicit 低档声明不再
+      //   是证据逃生门（旧「豁免级免证据」洞已收口，出路=改 map）；
+      // ② explicit + PASS WITH NOTES：必须携带结构化 handover（facts.handover 有效行；blocking 级
+      //   计入封顶口径同 validatePassEligibility 条件②）或齐全集成证据，二选一——无 handover 即挂
+      //   证据门（checkIntegrationEvidence 不过 → error）；
+      // ③ 非显式（声明面判级）判定式一字不动（防 PASS WITH NOTES 绕证据门控）。
       const notesExplicitCritical = conclusion === 'PASS WITH NOTES' && changeRiskProfile.explicit
       const handoverRows = notesExplicitCritical ? countFactsHandoverItems(changeDir) : 0
       const requiresEvidence = conclusion === 'PASS'
@@ -764,10 +765,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
             `  缺失项（需在 verify-result.md 如实提供并满足）：${evidenceCheck.errors.join('; ')}\n` +
             `  每项要提供什么：${needs}\n` +
             `  风险判级原因：${cause}\n` +
-            `  命中触发词：${changeRiskProfile.triggers.join(', ')}\n` +
+            `  命中声明危险面（evidence:true）：${changeRiskProfile.hitPrefixes.join(', ') || '（无）'}\n` +
             `  出路：① 补全上述缺失的真实集成证据（真实启动 daemon/backend、集成测试、运行日志）后保持 PASS；` +
             `或 ② 如实改结论 FAIL（承认端到端未验，留待部署后补）；` +
-            `或 ③ 若判级是关键词误伤（实际并未触碰 daemon/session/启动入口），在 design.md frontmatter 加 risk_level: <真实等级>（如 unit-sufficient）显式覆盖后重跑。` +
+            `或 ③ 若认为该路径不该要求集成证据，改 _module-map.yaml 顶层 blast 段的 evidence 声明（git 可见）——` +
+            `design frontmatter risk_level 只压仪式档、不豁免证据要求（D-009）。` +
             `仅改结论文案/措辞蹭字面关键词会被对账。`
           )
         }
@@ -782,11 +784,11 @@ function validateVerifyOutputs(cwd, changeName, context = {}) {
 // ============ 探针 7 验收×测试覆盖矩阵门禁（2026-09-14-acceptance-test-matrix FR-02） ============
 // 段格式与 src/verify-probes.js renderProbe7Lines 骨架渲染字面同源（禁第二套解析文法）：
 // 段标题「#### 探针 7：验收×测试覆盖矩阵」（全/半角冒号皆认）；每 task 前 **task-NN** 锚行；
-// 五列表 | acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |；判定槽 <待填：四选一>、
+// 五列表 | acceptance 条目 | 归属测试文件 | 关键词命中 | 判定 | 证据 |；判定槽 <待填：五选一>、
 // 证据槽 <TODO>；列表防御行（卡无 acceptance…）与不适用行无槽不计。
 
-/** 判定列四枚举白名单（骨架口径注记字面同源） */
-const MATRIX_VERDICT_WHITELIST = new Set(['covered', 'partial', 'uncovered', 'non-testable'])
+/** 判定列五枚举白名单（骨架口径注记字面同源；covered-service=service 层承接，2026-09-19-api-matrix-service-coverage） */
+const MATRIX_VERDICT_WHITELIST = new Set(['covered', 'covered-service', 'partial', 'uncovered', 'non-testable'])
 /** 证据列未填占位（骨架字面同源） */
 const MATRIX_EVIDENCE_TODO = '<TODO>'
 
@@ -823,11 +825,12 @@ function matrixEvidenceHasAnchor(evidence) {
 }
 
 /**
- * 行级证据口径：covered/partial 须非 TODO 且含测试锚点；non-testable 须非 TODO 且非空
- * （一句话理由）；uncovered 无证据要求；判定未填（不在三枚举内）的行只计 unfilled 不重复计证据。
+ * 行级证据口径：covered/covered-service/partial 须非 TODO 且含测试锚点；non-testable 须非 TODO
+ * 且非空（一句话理由）；uncovered 无证据要求；判定未填（不在需证据枚举内）的行只计 unfilled 不重复
+ * 计证据（covered-service 与 covered 同口径：证据即测试锚点三形态，2026-09-19-api-matrix-service-coverage）。
  */
 function matrixEvidenceMissing(verdict, evidence) {
-  if (verdict !== 'covered' && verdict !== 'partial' && verdict !== 'non-testable') return false
+  if (verdict !== 'covered' && verdict !== 'covered-service' && verdict !== 'partial' && verdict !== 'non-testable') return false
   const e = String(evidence || '').trim()
   if (e === '' || e === MATRIX_EVIDENCE_TODO || e.startsWith('<待填')) return true
   if (verdict === 'non-testable') return false // 非 TODO 且非空即合规（理由一句话）
@@ -925,15 +928,15 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
   if (matrix.unfilled > 0) {
     const list = matrix.rows.filter(r => r.unfilled).map(rowLabel).join('；')
     errors.push(
-      `探针 7 验收×测试覆盖矩阵有 ${matrix.unfilled} 行判定未填（四选一 covered/partial/uncovered/non-testable）：${list}。` +
-      `修复：编辑 verify-result.md 探针 7 段，把 <待填：四选一> 替换为判定值。`
+      `探针 7 验收×测试覆盖矩阵有 ${matrix.unfilled} 行判定未填（五选一 covered/covered-service/partial/uncovered/non-testable）：${list}。` +
+      `修复：编辑 verify-result.md 探针 7 段，把 <待填：五选一> 替换为判定值。`
     )
   }
   if (matrix.missingEvidence > 0) {
     const list = matrix.rows.filter(r => r.evidenceMissing).map(rowLabel).join('；')
     errors.push(
       `探针 7 验收×测试覆盖矩阵有 ${matrix.missingEvidence} 行证据缺失` +
-      `（covered/partial 证据须含测试锚点：\`.test.\` 文件名 / file:line / 反引号包裹的测试名；non-testable 证据须写一句理由）：${list}。` +
+      `（covered/covered-service/partial 证据须含测试锚点：\`.test.\` 文件名 / file:line / 反引号包裹的测试名；non-testable 证据须写一句理由）：${list}。` +
       `修复：在证据列补测试锚点（如 \`test/foo.test.mjs\` 或 \`src/x.js:42\`）或 non-testable 理由。`
     )
   }
@@ -985,11 +988,13 @@ function validateAcceptanceMatrix(cwd, changeName, context = {}) {
 // 与探针 7（验收×测试承接面）并排互补的独立对账门（design §4，D-009 非目标 / R-07 口径注记
 // 互指）：探针 7 管「每条 acceptance 由哪些测试承接」，本矩阵管「design 接口段每个端点由哪些
 // 验证用例/冒烟步骤覆盖」——fail-closed 记账，机械封住「接口层零派生」的 P1 缺陷面：
-//   - covered 记账：分子=判定 covered 的端点行；有效分母=N−non-testable 行数（N=解析端点数
-//     或声明数，D-005）；分子<有效分母或解析面有未覆盖端点 → error 逐条列缺覆盖端点
+//   - covered 记账：分子=判定 covered+covered-service 的端点行（covered-service 计分子——
+//     service 层承接是已完成、覆盖层不同；另有 advisory 单独计数承接面）；有效分母=N−non-testable
+//     行数（N=解析端点数或声明数，D-005）；分子<有效分母或解析面有未覆盖端点 → error 逐条列缺覆盖端点
 //   - 锚点五形态（design §4 Grill #10）：design接口表#<METHOD /path> 解析级（须命中
 //     facts.apiFace 解析产出集，防空指）；权限矩阵[...]/契约表@.../DDL@.../载荷@... 形态级
-//     存在即认；covered/partial 行缺锚点 → error（missingEvidence 口径同 probe7）
+//     存在即认；covered/partial 行缺锚点 → error（missingEvidence 口径同 probe7）；
+//     covered-service 行只须测试锚点三形态（matrixEvidenceHasAnchor 同源，2026-09-19-api-matrix-service-coverage）
 //   - 移交联动（probe7 条件④同款形态）：partial/uncovered 端点行>0 且 facts.handover 零
 //     有效行 → error；blocking 是否封顶归 validatePassEligibility 条件②（④管有去向/②管去向级）
 //   - 探索行（uncovered+[探索] 标记）与消费端子行（两空格缩进 ↳ 前缀）不进分母分子
@@ -1093,7 +1098,7 @@ function apiEvidenceHasAnchorForm(evidence) {
  *   facts?: object|null,                // verify-facts.json（handover 联动用，缺 null）
  *   factsExpected?: boolean,            // false（存量未跑管线）→ 兼容 ok 不误伤
  *   strict?: boolean,                   // isIrStrictVerifyChange（段缺失分层用）
- *   riskLevel?: string|null,            // detectChangeRisk().level
+ *   riskLevel?: string|null,            // resolveChangeRisk().level（声明面判级兼容字段）
  *   changeName?: string,
  *   permSectionText?: string,           // design.md 权限段（段头含 权限/角色 的段合并文本，壳内提取）
  *   designText?: string,                // design.md 全文（写端点豁免行级检测用）
@@ -1172,13 +1177,22 @@ export function judgeApiCoverageMatrix(args) {
   const unfilledRows = judgedRows.filter(r => r.unfilled)
   if (unfilledRows.length > 0) {
     errors.push(
-      `接口验证覆盖矩阵有 ${unfilledRows.length} 行判定未填（四选一 covered/partial/uncovered/non-testable）：${unfilledRows.map(rowLabel).join('；')}。` +
-      `修复：编辑 verify-result.md 接口验证覆盖矩阵段，把 <待填：四选一> 替换为判定值。`
+      `接口验证覆盖矩阵有 ${unfilledRows.length} 行判定未填（五选一 covered/covered-service/partial/uncovered/non-testable）：${unfilledRows.map(rowLabel).join('；')}。` +
+      `修复：编辑 verify-result.md 接口验证覆盖矩阵段，把 <待填：五选一> 替换为判定值。`
     )
   }
   const parseSet = new Set(endpoints.map(e => `${e.method} ${e.path}`))
   const anchorViolations = []
   for (const r of judgedRows) {
+    if (r.verdict === 'covered-service') {
+      // covered-service（service 层承接）：证据即测试本身，只校验测试锚点三形态
+      // （matrixEvidenceHasAnchor 同源口径，禁第二套解析文法）；不做 design接口表# 解析级
+      // 核对与五形态校验（不要求 design 侧锚点）——校验后 continue，不走 covered/partial 分支。
+      if (!matrixEvidenceHasAnchor(r.evidence)) {
+        anchorViolations.push(`${rowLabel(r)}：covered-service 证据缺测试锚点（\`.test.\` 文件名 / file:line / 反引号包裹的测试名）`)
+      }
+      continue
+    }
     if (r.verdict !== 'covered' && r.verdict !== 'partial') continue
     const e = String(r.evidence || '')
     // design接口表# 锚点解析级核对（防空指）：提取的 METHOD /path 须全部命中解析产出集
@@ -1192,7 +1206,7 @@ export function judgeApiCoverageMatrix(args) {
   if (anchorViolations.length > 0) {
     errors.push(
       `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
-      `（covered/partial 证据须含锚点五形态之一：design接口表#METHOD /path（须命中 design 接口段解析面）/ 权限矩阵[角色×动作] / 契约表@行标识 / DDL@列名 / 载荷@构造点路径）：${anchorViolations.join('；')}。` +
+      `（covered/partial 证据须含锚点五形态之一：design接口表#METHOD /path（须命中 design 接口段解析面）/ 权限矩阵[角色×动作] / 契约表@行标识 / DDL@列名 / 载荷@构造点路径；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
       `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
     )
   }
@@ -1205,17 +1219,19 @@ export function judgeApiCoverageMatrix(args) {
     )
   }
 
-  // ── covered 记账（D-005/D-008）：分子=covered 端点行；有效分母=N−non-testable 行数；
-  //    N=解析端点数，解析零行按声明数（declaredRow 优先——矩阵实态，facts.declared 兜底）。
-  //    缺覆盖清单解析集驱动：解析面端点 − covered 行命中 − non-testable 行命中（partial/
-  //    uncovered/unfilled 端点行不在 covered 命中集即自然进清单；探索行不进分母分子——其
-  //    uncovered 判定使之天然不计分子，且不计入 non-testable 扣减）。──
+  // ── covered 记账（D-005/D-008）：分子=covered+covered-service 端点行（covered-service 并入
+  //    分子满足覆盖等式，service 层承接是「已完成、覆盖层不同」非「未完成待移交」）；有效分母=
+  //    N−non-testable 行数；N=解析端点数，解析零行按声明数（declaredRow 优先——矩阵实态，
+  //    facts.declared 兜底）。缺覆盖清单解析集驱动：解析面端点 − covered/covered-service 行命中
+  //    − non-testable 行命中（partial/uncovered/unfilled 端点行不在命中集即自然进清单；探索行
+  //    不进分母分子——其 uncovered 判定使之天然不计分子，且不计入 non-testable 扣减）。──
   if (!zeroFace) {
     const N = endpoints.length > 0 ? endpoints.length : (declaredFromRow != null ? declaredFromRow : (declared != null ? declared : 0))
     const nonTestableCount = rows.filter(r => r.verdict === 'non-testable').length
     const validDenominator = Math.max(0, N - nonTestableCount)
-    const coveredCount = rows.filter(r => r.verdict === 'covered').length
-    const coveredSet = new Set(rows.filter(r => r.verdict === 'covered' && r.method && r.path).map(r => `${r.method} ${r.path}`))
+    const serviceCoveredCount = rows.filter(r => r.verdict === 'covered-service').length
+    const coveredCount = rows.filter(r => r.verdict === 'covered' || r.verdict === 'covered-service').length
+    const coveredSet = new Set(rows.filter(r => (r.verdict === 'covered' || r.verdict === 'covered-service') && r.method && r.path).map(r => `${r.method} ${r.path}`))
     const nonTestSet = new Set(rows.filter(r => r.verdict === 'non-testable' && r.method && r.path).map(r => `${r.method} ${r.path}`))
     const missingEndpoints = endpoints.filter(e => {
       const k = `${e.method} ${e.path}`
@@ -1224,10 +1240,17 @@ export function judgeApiCoverageMatrix(args) {
     if (coveredCount < validDenominator || missingEndpoints.length > 0) {
       const list = missingEndpoints.length > 0
         ? missingEndpoints.map(e => `${e.method} ${e.path}`).join('；')
-        : `声明 ${N} 端点而 covered 端点行仅 ${coveredCount}（解析零行降级，无法逐条列端点——按声明行拆出每端点行填判定）`
+        : `声明 ${N} 端点而 covered/covered-service 端点行仅 ${coveredCount}（解析零行降级，无法逐条列端点——按声明行拆出每端点行填判定）`
       errors.push(
-        `接口验证覆盖矩阵覆盖不足：有效分母 ${validDenominator}（N=${N} − non-testable ${nonTestableCount}），covered 分子 ${coveredCount}——缺覆盖端点：${list}。` +
-        `修复：补验证用例/冒烟步骤后把端点行改 covered 并填五形态锚点；不适用端点改 non-testable 并写一句理由；确未覆盖的走「## 移交项（结构化）」承载并保持 partial/uncovered（FR-04）。`
+        `接口验证覆盖矩阵覆盖不足：有效分母 ${validDenominator}（N=${N} − non-testable ${nonTestableCount}），covered+covered-service 分子 ${coveredCount}——缺覆盖端点：${list}。` +
+        `修复：补验证用例/冒烟步骤后把端点行改 covered 并填五形态锚点；端点行为由 service 层测试锁定的改 covered-service 并填测试锚点（\`.test.\` / file:line / 反引号）；不适用端点改 non-testable 并写一句理由；确未覆盖的走「## 移交项（结构化）」承载并保持 partial/uncovered（FR-04）。`
+      )
+    }
+    // covered-service 承接 advisory（D-001/R-01 第一版，只进 warnings 不进 errors）：端点级与
+    // 间接覆盖在矩阵统计上可区分——先 advisory 观察滥用面，不设占比上限不阻断。
+    if (serviceCoveredCount > 0) {
+      warnings.push(
+        `[advisory] ${serviceCoveredCount} 端点由 service 层测试承接（非端点级）——端点级与间接覆盖在矩阵统计上可区分，承接占比先 advisory 观察（D-001/R-01，不阻断）`
       )
     }
     // 声明与解析并存以解析为准并注记（骨架 :1573 漂移信号同款口径，数据面 facts.apiFace）
@@ -1340,7 +1363,7 @@ function extractPermissionMatrixText(designMd) {
  *   - factsExpected=false（存量未跑管线，resolveFactsExpected 同源口径）→ no-op 零行为
  *   - verify-facts.json（apiFace/consumerHints/handover，缺失容 null——fail-closed 归纯函数）
  *   - 矩阵段 MD 槽解析（X-05 防篡改锚点：锚定当前文档实态）
- *   - detectChangeRisk 判级（与 validatePassEligibility 壳同款 design/plan 双文件输入）
+ *   - resolveChangeRisk 声明面判级（design 文件清单 × blast 声明 + explicit，task-03）
  *   - design.md 权限矩阵段提取（fs 只读，壳非纯函数）
  */
 export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
@@ -1358,10 +1381,9 @@ export function validateApiCoverageMatrix(cwd, changeName, context = {}) {
 
   const facts = readFactsForEligibility(changeDir)
   const designText = readIfExists(join(changeDir, 'design.md'))
-  const riskProfile = detectChangeRisk({
-    designContent: designText,
-    planContent: readIfExists(join(changeDir, 'plan.md')),
-  })
+  // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（design 文件清单 × blast 声明 +
+  // explicit；level 为五级词兼容字段——evidenceRequired → integration-critical）
+  const riskProfile = resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec'))
   return judgeApiCoverageMatrix({
     matrix: extractApiCoverageMatrixSlots(readFileSync(verifyResultPath, 'utf8')),
     apiFace: facts && facts.apiFace && typeof facts.apiFace === 'object' ? facts.apiFace : null,
@@ -1618,7 +1640,7 @@ function collectDbScriptCandidates({ cwd, changeName, specRoot, changeDir }) {
  * PASS 封顶 validator 注册壳（与 validateAcceptanceMatrix 同三参签名同构，D-010：注册进
  * contracts.verify.validators 即覆盖 gates / machine-interface 等全部 runValidators 调用方，
  * gates.js 零改动）。壳内取数组装：verify-result.md 结论（槽优先，legacy 回退）、
- * verify-facts.json（缺失容 null）、detectChangeRisk 判级、事实③文件集；判定调
+ * verify-facts.json（缺失容 null）、resolveChangeRisk 声明面判级、事实③文件集；判定调
  * evaluatePassEligibility 纯函数。
  */
 export function validatePassEligibility(cwd, changeName, context = {}) {
@@ -1638,10 +1660,9 @@ export function validatePassEligibility(cwd, changeName, context = {}) {
     conclusion,
     facts,
     factsExpected: isIrStrictVerifyChange(changeDir) || facts !== null,
-    changeRiskProfile: detectChangeRisk({
-      designContent: readIfExists(join(changeDir, 'design.md')),
-      planContent: readIfExists(join(changeDir, 'plan.md')),
-    }),
+    // 2026-09-19-ceremony-pricing-five-cuts task-03：声明面判级（level 兼容字段驱动 evaluatePassEligibility
+    // 的 critical 判定——evidenceRequired → integration-critical，D-009 证据不被 explicit 豁免）
+    changeRiskProfile: resolveChangeRiskForChangeDir(changeDir, context.specRoot || specRoot || join(cwd, '.sillyspec')),
     changeName,
     dbScriptCandidates: collectDbScriptCandidates({ cwd, changeName, specRoot, changeDir }),
   })

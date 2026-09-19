@@ -191,14 +191,22 @@ test('C. facts 双源：factsExpected=false（存量未跑管线）→ 兼容口
 // ═══════════════════════════════════════════════════════════════════
 // D. 豁免洞分层三态（FR-02 GWT1/GWT2，D-002@v1）——经 runValidators verify 链
 // ═══════════════════════════════════════════════════════════════════
-function makeExemptionChange(cn, { riskLevel, facts } = {}) {
+function makeExemptionChange(cn, { riskLevel, facts, evidenceHit = false } = {}) {
   const root = mk('pe-exempt-')
   const changeDir = join(root, '.sillyspec', 'changes', cn)
   mkdirSync(changeDir, { recursive: true })
+  if (evidenceHit) {
+    // 2026-09-19-ceremony-pricing-five-cuts：证据要求来自 map evidence:true 命中（D-008/D-009），
+    // 不再来自词表判级或 explicit 声明——fixture 建带 blast 段的 map + 文件清单命中行。
+    const mapDir = join(root, '.sillyspec', 'docs', 'demo', 'modules')
+    mkdirSync(mapDir, { recursive: true })
+    writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\nblast:\n  - prefixes: [src/hot/]\n    tier: S3\n    evidence: true\n')
+  }
+  const file = evidenceHit ? 'src/hot/x.js' : 'src/plain.js'
   writeFileSync(join(changeDir, 'design.md'), [
     '---', 'author: t', `risk_level: ${riskLevel}`, 'created_at: 2026-01-01 08:00:00', '---',
     '# 设计', '', '## 文件变更清单', '',
-    '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/feature.js | 特性 |', '',
+    '| 操作 | 文件路径 | 说明 |', '|---|---|---|', `| 修改 | ${file} | 特性 |`, '',
   ].join('\n'))
   writeFileSync(join(changeDir, 'plan.md'), '# Plan\n\n## Wave 1\n\n- [x] task-01: 实现\n')
   if (facts) writeFileSync(join(changeDir, 'verify-facts.json'), JSON.stringify(facts, null, 2) + '\n')
@@ -209,24 +217,25 @@ function makeExemptionChange(cn, { riskLevel, facts } = {}) {
   return { root, cn }
 }
 
-test('D. 豁免洞分层：unit-sufficient 免证据 / critical 无 handover → error（二选一缺位）/ 有 handover → 放行', () => {
-  // 态一：explicit unit-sufficient + NOTES → 不要求集成证据（关键词误伤逃生保留）
+test('D. 证据分层（D-009 口径）：零命中免证据 / evidence 命中无 handover → error（二选一缺位）/ 有 handover → 放行', () => {
+  // 态一：零 evidence 命中 + explicit unit-sufficient + NOTES → 不要求集成证据（零命中面 S1 起步）
   const u = makeExemptionChange('exempt-unit', { riskLevel: 'unit-sufficient' })
   const ru = runValidators('verify', u.root, u.cn)
   assert.ok(!ru.errors.some(e => e.includes('缺少真实集成证据')),
-    `explicit unit-sufficient + NOTES → 不强制集成证据（实际 errors=${JSON.stringify(ru.errors)}）`)
+    `零命中面 + explicit unit-sufficient + NOTES → 不强制集成证据（实际 errors=${JSON.stringify(ru.errors)}）`)
 
-  // 态二：explicit integration-critical + NOTES + 无 handover + 无证据 → error（D-002 豁免洞封死）
-  const c = makeExemptionChange('exempt-crit', { riskLevel: 'integration-critical' })
+  // 态二：evidence:true 命中 + explicit integration-critical + NOTES + 无 handover + 无证据 → error
+  //（证据要求来自 map 声明命中——explicit 声明不豁免，D-009；handover 二选一缺位）
+  const c = makeExemptionChange('exempt-crit', { riskLevel: 'integration-critical', evidenceHit: true })
   const rc = runValidators('verify', c.root, c.cn)
   assert.ok(rc.errors.some(e => e.includes('缺少真实集成证据')),
-    'explicit integration-critical + NOTES 无 handover 无证据 → error（结构化 handover 与齐全证据二选一缺位）')
+    'evidence 命中 + explicit critical + NOTES 无 handover 无证据 → error（结构化 handover 与齐全证据二选一缺位）')
   assert.ok(rc.warnings.some(w => w.includes('零有效行') && w.includes('二选一')),
     `warning 透出二选一出路（补结构化移交项 或 提供齐全集成证据）（实际 ${JSON.stringify(rc.warnings)}）`)
 
-  // 态三：同判级 + NOTES + 携带结构化 handover（facts.handover 有效行）→ 放行
+  // 态三：evidence 命中 + NOTES + 携带结构化 handover（facts.handover 有效行）→ 放行
   const h = makeExemptionChange('exempt-handover', {
-    riskLevel: 'integration-critical',
+    riskLevel: 'integration-critical', evidenceHit: true,
     facts: {
       schemaVersion: 2, integrationRan: 'ran',
       handover: { count: 1, items: [{ type: 'env-blocked', item: '联调环境阻断', condition: '恢复后复跑', severity: 'advisory' }] },
