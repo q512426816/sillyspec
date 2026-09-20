@@ -114,7 +114,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
-  sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
+  sillyspec verify-probes --change <name> [--init [--force]]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架（--force 覆盖重生成，手填内容会重置）
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
   sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照记录态；advisory 只读不设门禁）
   sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
@@ -1114,12 +1114,15 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       // 六探针中的纯机械四个（未实现标记 grep / 测试文件递归查找 / API 契约对账 / 删除对账）
       // 一条命令跑完并渲染成可直接粘贴的 markdown；半语义探针（2/4 + 3.4/3.5）显式留 TODO。
       // --init 顺带生成 verify-result.md 七章节骨架（探针结果预填；结论留「待填」——gate 找
-      // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖。
+      // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖；--force 覆盖重生成全骨架
+      // （quick-B，2026-09-20 报告问题 B：骨架 :2571 指引曾承诺「重跑 --init 刷新本段」但已存在
+      // 场景实为 no-op——刷新通道缺失；design-init --force 同款先例）。
       const vpChangeIdx = args.indexOf('--change');
       const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] && !String(args[vpChangeIdx + 1]).startsWith("--") ? args[vpChangeIdx + 1] : null;
       const vpInit = args.includes('--init');
+      const vpForce = args.includes('--force');
       if (!vpChange) {
-        console.error('用法: sillyspec verify-probes --change <name> [--init] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）');
+        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）');
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
@@ -1168,8 +1171,15 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
             writeFileSync(vpReportPath, vpInjected);
             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
+          } else if (vpForce) {
+            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置，
+            // 醒目警告 + 备份指引（预填段过期/骨架仍是「无接口面」注记时的刷新通道）
+            const vpSkeleton = generateVerifyResultSkeleton(vpResult);
+            writeFileSync(vpReportPath, vpSkeleton);
+            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
+            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从 git 或备份找回后回填）${vpPlatformNote}`);
           } else {
-            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}`);
+            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
           }
         } else {
           const vpSkeleton = generateVerifyResultSkeleton(vpResult);

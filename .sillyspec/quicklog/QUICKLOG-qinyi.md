@@ -299,3 +299,13 @@
 根因：git() 助手全输出 trim，git show 祖先内容被剥尾换行与磁盘读取不对称，已存在文件恒误判双写分叉取主仓（taskcard-yaml-hardgate verify 实证）
 方案：比较三侧统一 cmpText=normalizeEol+trim 对称口径（src/run/gate-snapshot.js 双写一致性段），首尾空白不参与分叉判定；--force-baseline 因修复对象即受保护文件本身
 结果：直测 test/gate-snapshot-ancestor-trim.test.mjs 3/3（单侧修改取 worktree + 真分叉/陈旧 worktree 语义护栏）；CLI 实测 npm test 全量与 lint 本步门禁执行
+
+## ql-20260920-015-e784 | 2026-09-20 23:25:07 | verify-probes --init 刷新通道缺失与段头宽收误收（问题B）
+状态：已完成
+关联变更：（无）
+文件：src/index.js（+14/-4）, src/verify-probes.js（+3/-3）, test/api-coverage-matrix.test.mjs（+15/-0）
+需求：verify-probes --init 刷新通道缺失与段头宽收误收（问题B）
+根因：已存在不覆盖与骨架指引承诺的刷新路径矛盾；/api/i 无词边界把 OpenAPI 标题收进 sectionHint
+方案：index.js 增 --force 全量重生成骨架带重置警告与备份指引（usage/help 同步）；两处骨架指引改写为 --init --force 可行操作；API_FACE_SECTION_RE 加词边界
+结果：test/api-coverage-matrix.test.mjs 22/22 含新增词边界断言；node --check 双文件过；CLI 实测全量与 lint 本步门禁执行
+审计：[gate] L1（跨 2 模块 · 3 文件：2 代码/1 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含

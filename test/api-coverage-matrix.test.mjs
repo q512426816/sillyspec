@@ -430,3 +430,18 @@ test('8d. probe7 验收矩阵联动不误报（④/FR-02/D-002）：covered-serv
       `backfill 后 facts.matrixPartialRows=0（covered-service 不落 partial/uncovered 计数——封顶条件④不触发的结构性证据）（实际 ${onDisk.matrixPartialRows}）`)
   } finally { console.warn = capWarn }
 })
+
+// ── quick-B（2026-09-20 报告问题 B 附带）：段头宽收词边界——OpenAPI 标题不误收 sectionHint ──
+test('parseDesignApiTable 段头词边界：OpenAPI 标题不进 sectionHint，独立 API/接口/REST 标题照常进', () => {
+  const md = [
+    '# design', '',
+    '## Wave 2：gen:types 与 OpenAPI（backend）', '',
+    '该段描述 openapi.json 重生成，无端点表格行。', '',
+    '## API 契约', '',
+    '| GET | /api/x | 说明 |', '',
+  ].join('\n')
+  const r = parseDesignApiTable(md)
+  assert.ok(!r.sectionHint.some(h => /OpenAPI/i.test(h)), `OpenAPI 标题不应误收（实际 ${JSON.stringify(r.sectionHint)}）——/api/i 无词边界时 OpenAPI 含 api 子串命中`)
+  assert.ok(r.sectionHint.some(h => /API 契约/.test(h)), '独立 API 标题照常命中')
+  assert.equal(r.endpoints.length, 1, '端点行仍从 API 契约段解析')
+})

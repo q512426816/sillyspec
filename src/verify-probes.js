@@ -1073,7 +1073,7 @@ function designHasSubmitEndpoint(text) {
 //   sectionHint（命中的接口段头列表，审计注记）。
 // 落盘面（数据通道=落盘即消费，stage-contract 零 import 纪律）：backfillFactsFromMdAndTests
 // 主路径写 facts.apiFace / facts.consumerHints，task-05 validator 经 facts 消费不经函数调用。
-const API_FACE_SECTION_RE = /接口|端点|api|rest/i
+const API_FACE_SECTION_RE = /接口|端点|\bapi\b|\brest\b/i // quick-B 词边界：OpenAPI 标题（api 前邻字母）不再误收进 sectionHint
 const API_FACE_METHOD_RE = /(?:^|[^A-Za-z])(GET|POST|PUT|DELETE|PATCH)(?![A-Za-z])/
 // 路径样式 token：/ 起始、前邻非字母数字（日期 2026/09/17 的 /09 前是数字段不认），
 // 首字符字母数字/_/-/{，后续段字符含 {}/: 模板形态（/orders/{id}、/orders/:id 全串命中）
@@ -2590,7 +2590,7 @@ function renderApiCoverageMatrixLines(apiFace) {
   L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态：design接口表#METHOD /path、权限矩阵[角色×动作]、契约表@行标识、DDL@列名、载荷@构造点路径（须真实命中对应表/段，防空指）。 -->')
   L.push('<!-- 文法注释：子行 = 端点行下一行、两空格缩进、以「↳ <消费端>:」前缀书写（消费端细分承接面，不计矩阵行账）；探索行 = 判定 uncovered 且证据列含 [探索] 标记（探索性验证不算覆盖）。 -->')
   if (endpoints.length === 0 && declared === null) {
-    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --init` 刷新本段；判级 critical 的零面拦截归 validator')
+    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --change <变更名> --init --force` 重生成本段（⚠️ 全骨架重生成，手填结论会重置——先备份；quick-B 起 --force 通道存在）；判级 critical 的零面拦截归 validator')
     return L
   }
   if (endpoints.length > 0 && declared !== null && declared !== endpoints.length) {
@@ -2604,7 +2604,7 @@ function renderApiCoverageMatrixLines(apiFace) {
     }
   } else {
     L.push(`| 本变更接口面：${declared} 端点（agent 声明） | <待填：五选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
-    L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init 刷新本段 -->')
+    L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init --force 重生成本段（quick-B：--force 才有刷新通道，手填内容会重置先备份） -->')
   }
   L.push('<!-- advisory 尾注（warning 计算归 validator，本段只留位）：有消费端未填子行的端点将列于此（advisory——消费端归类=design 清单启发式，数据面 facts.consumerHints）；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段声明的将列于此（advisory——补行或显式豁免「无权限约束」，数据面 facts.apiFace.writeEndpoints；表缺行会让派生框架继承你的洞） -->')
   return L
