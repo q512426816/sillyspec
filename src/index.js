@@ -222,6 +222,7 @@ async function main() {
   // --tool 多值收集（逗号分隔 + 重复 flag）；空数组 = 未提供，cmdInit 侧自动检测
   const toolValues = [];
   let interactive = false;
+  let forceCards = false;
   // init 专属：--no-skills 跳过 skills 复制段（platform init 勿污染项目内工具目录）
   let noSkills = false;
   // 平台模式 flag（init 落平台指针用；非 init 命令时忽略——runCommand 自行解析 filteredArgs）
@@ -247,6 +248,9 @@ async function main() {
         if (t) toolValues.push(t);
       }
       i++;
+    } else if (args[i] === '--force-cards') {
+      // 流程命令卡强制覆盖（2026-09-21-flow-command-cards）：跳过手改保护分支
+      forceCards = true;
     } else if (args[i] === '--no-skills') {
       // init 专属：跳过 skills 复制段（吞进变量，不透传 filteredArgs）
       noSkills = true;
@@ -351,7 +355,7 @@ async function main() {
 
   switch (command) {
     case 'init':
-      await (await import('./init.js')).cmdInit(dir, { tool, tools: toolValues.length > 0 ? toolValues : null, interactive, specDir, noSkills, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
+      await (await import('./init.js')).cmdInit(dir, { tool, tools: toolValues.length > 0 ? toolValues : null, interactive, specDir, noSkills, forceCards, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
       break;
     case 'setup':
       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');

@@ -52,3 +52,7 @@ packages/dashboard/package-lock.json
 # （sillyspec init 写「用户项目」的 CLAUDE.md，模板读包内 templates/claude-instruction.md，不读本文件），不进 npm 包。
 # 锚定仓库根（/CLAUDE.md）避免误排子目录同名文件。
 /CLAUDE.md
+
+# ⚠️ 不要忽略 assets/command-cards/ ——
+# sillyspec init 从该目录读取流程命令卡（src/command-cards.js readCardAssets）注入用户项目。
+# 黑名单模式维持（勿引入 package.json files 白名单——翻转效应见 2026-09-21-flow-command-cards Grill P1-2）。

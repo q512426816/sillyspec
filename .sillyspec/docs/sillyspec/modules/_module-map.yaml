@@ -208,6 +208,7 @@ modules:
     review_reasons: []
     paths:
       - src/init.js
+      - src/command-cards.js
       - src/setup.js
       - src/config-schema.js
       - src/local-detect.js

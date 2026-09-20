@@ -5,6 +5,7 @@ import { checkbox, confirm, input } from '@inquirer/prompts';
 import { ProgressManager } from './progress.js';
 import chalk from 'chalk';
 import { getVersion } from './version.js';
+import { injectCommandCards } from './command-cards.js';
 import { gitQuiet } from './git-helper.js';
 import { renderExample } from './config-schema.js';
 // 向后兼容：getVersion 已抽到轻量 version.js（避免 index.js 为 --version 静态加载 init.js 的 inquirer 税），
@@ -76,10 +77,11 @@ function copyDirSync(src, dst) {
 
 
 
-const VALID_TOOLS = ['claude', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
+const VALID_TOOLS = ['claude', 'zcode', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
 
 const TOOL_LABELS = {
   claude: 'Claude Code',
+  zcode: 'ZCode',
   cursor: 'Cursor',
   openclaw: 'OpenClaw',
   codex: 'OpenAI Codex (通过 AGENTS.md)',
@@ -288,14 +290,17 @@ function isTTY() {
 
 // ── 核心安装逻辑 ──
 
-function doInstall(projectDir, tools, subprojects = [], specDir = null, options = {}) {
+async function doInstall(projectDir, tools, subprojects = [], specDir = null, options = {}) {
   // specDir: 规范目录（默认 projectDir/.sillyspec）
   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
   // options.noSkills: 跳过 skills 复制段（--no-skills；指令注入不受影响）
   // options.platformMode: 平台模式（cmdInit 收到 platformOpts 非空）——项目内 .sillyspec/
   //   通常只有 local.yaml（平台 init lease 写、含用户手调 mcp 段），任何清理都会丢失，整体跳过
-  const { noSkills = false, platformMode = false } = options;
+  const { noSkills = false, platformMode = false, forceCards = false } = options;
   const spec = specDir || join(projectDir, '.sillyspec');
+  // 命令卡工具面（2026-09-21-flow-command-cards）：仅 zcode/claude 有落点（D-003）；
+  // noSkills/platformMode 与 skills 同门跳过（Grill P2-4）
+  const cardTools = noSkills || platformMode ? [] : tools.filter((t) => t === 'zcode' || t === 'claude');
 
   // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
   // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）
@@ -443,9 +448,21 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null, options 
     }
   }
 
-  // 注入 AGENTS.md 完整指引（claude/codex 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 段迁移）
-  if (tools.includes('claude') || tools.includes('codex')) {
+  // 注入 AGENTS.md 完整指引（claude/codex/zcode 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 段迁移；
+  // zcode 2026-09-21-flow-command-cards FR-05 入面——AGENTS.md 是跨工具通用标准内容源）
+  if (tools.includes('claude') || tools.includes('codex') || tools.includes('zcode')) {
     injectAgentsInstructions(projectDir);
+  }
+
+  // 流程命令卡注入（2026-09-21-flow-command-cards：zcode→.zcode/commands/sillyspec/、claude→.claude/commands/sillyspec/；
+  // 尾部锚行三态幂等。与 skills 复制同门：noSkills/platformMode 跳过（工具目录零污染语义，Grill P2-4）；
+  // 挂点在 noSkills return 之前——卡与 AGENTS.md 同批，早于 skills 复制不影响）
+  if (cardTools.length > 0) {
+    const cards = await injectCommandCards(projectDir, { tools: cardTools, force: forceCards, version: getVersion() });
+    for (const w of cards.warnings) console.warn(`    ⚠️ [命令卡] ${w}`);
+    if (cards.written.length + cards.updated.length > 0) {
+      console.log(chalk.green(`    ✓ 流程命令卡已${cards.written.length ? '生成' : '更新'} ${cards.written.length + cards.updated.length} 张 → ${cardTools.map((t) => (t === 'zcode' ? '.zcode' : '.claude') + '/commands/sillyspec/').join(' + ')}`));
+    }
   }
 
   // 注入 CLAUDE.md 指针（claude 专属：@AGENTS.md 导入薄文件，须在 AGENTS.md 之后）
@@ -546,7 +563,7 @@ function showSummary(version, tools, specDir) {
 // ── 主命令 ──
 
 export async function cmdInit(projectDir, options = {}) {
-  const { tool, tools: toolsOpt, interactive, specDir, noSkills = false, platformOpts = null } = options;
+  const { tool, tools: toolsOpt, interactive, specDir, noSkills = false, forceCards = false, platformOpts = null } = options;
   const version = getVersion();
   const resolvedSpecDir = specDir ? resolve(specDir) : null;
 
@@ -654,7 +671,7 @@ export async function cmdInit(projectDir, options = {}) {
     }
 
     console.log('');
-    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills, platformMode: platformOpts != null });
+    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills, forceCards, platformMode: platformOpts != null });
     writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
     showSummary(version, selectedTools, resolvedSpecDir);
     return;
@@ -682,7 +699,7 @@ export async function cmdInit(projectDir, options = {}) {
     tools = detectTools(projectDir);
   }
 
-  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills, platformMode: platformOpts != null });
+  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills, forceCards, platformMode: platformOpts != null });
   writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
 
   console.log('');
