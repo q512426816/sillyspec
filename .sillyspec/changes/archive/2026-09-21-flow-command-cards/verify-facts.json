@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-21-flow-command-cards",
+  "generatedAt": "2026-09-20T18:19:06.158Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 9,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "tasks": 2,
+        "hasTest": 2
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-21-flow-command-cards",
+      "metrics": {
+        "checkedFiles": 3,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "handover": {
+    "count": 0,
+    "items": []
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/command-cards.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core]+deps(1)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-20T18:20:01.367Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

@@ -82,3 +82,4 @@ created_at: 2026-06-19T12:40:00+08:00
 - bin|FR|需求|承接 → [fr/bin.md](fr/bin.md)
 - redlines|FR|需求|承接 → [fr/redlines.md](fr/redlines.md)
 - stages|FR|需求|承接 → [fr/stages.md](fr/stages.md)
+- setup|FR|需求|承接 → [fr/setup.md](fr/setup.md)

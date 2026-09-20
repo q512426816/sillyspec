@@ -1,0 +1,660 @@
+diff --git a/.npmignore b/.npmignore
+index ff7f198b..6f8f45ce 100644
+--- a/.npmignore
++++ b/.npmignore
+@@ -52,3 +52,7 @@ packages/dashboard/package-lock.json
+ # （sillyspec init 写「用户项目」的 CLAUDE.md，模板读包内 templates/claude-instruction.md，不读本文件），不进 npm 包。
+ # 锚定仓库根（/CLAUDE.md）避免误排子目录同名文件。
+ /CLAUDE.md
++
++# ⚠️ 不要忽略 assets/command-cards/ ——
++# sillyspec init 从该目录读取流程命令卡（src/command-cards.js readCardAssets）注入用户项目。
++# 黑名单模式维持（勿引入 package.json files 白名单——翻转效应见 2026-09-21-flow-command-cards Grill P1-2）。
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index ff75bce8..2285d039 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -208,6 +208,7 @@ modules:
+     review_reasons: []
+     paths:
+       - src/init.js
++      - src/command-cards.js
+       - src/setup.js
+       - src/config-schema.js
+       - src/local-detect.js
+diff --git a/assets/command-cards/run-archive.md b/assets/command-cards/run-archive.md
+new file mode 100644
+index 00000000..9a46cf5c
+--- /dev/null
++++ b/assets/command-cards/run-archive.md
+@@ -0,0 +1,26 @@
++---
++name: sillyspec:run-archive
++description: archive 归档阶段：变更产物归档+知识蒸馏+FR/决策入库
++---
++# 何时用
++
++verify PASS 后归档：目录迁移+distill 知识沉淀+活文档同步。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++sillyspec run archive --change <变更名>
++sillyspec run archive --done --change <变更名> --output "<归档摘要>"
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++```
++
++# 防坑清单
++
++- 归档是移动不是复制——活跃目录会被迁走，勿在归档中途手改。
++- 跨仓同步检查（multi-repo 场景）在归档收口统一出。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run archive` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/assets/command-cards/run-brainstorm.md b/assets/command-cards/run-brainstorm.md
+new file mode 100644
+index 00000000..38ea5b74
+--- /dev/null
++++ b/assets/command-cards/run-brainstorm.md
+@@ -0,0 +1,33 @@
++---
++name: sillyspec:run-brainstorm
++description: brainstorm 头脑风暴阶段：需求澄清→四件套→设计→Grill 审查
++---
++# 何时用
++
++新能力/行为契约变更/跨模块取舍——需要落盘设计决策的变更，第一步走这里（判规模：范围明确的局部修补走 run-quick）。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++sillyspec run brainstorm --change <变更名> --input "<需求一句话>"
++# 每步产出后：
++sillyspec run brainstorm --done --change <变更名> --output "<摘要>"
++# 方案选择/设计确认等用户决策点（已拍板则一步落）：
++sillyspec run brainstorm --done --answer "<用户回答>" --change <变更名> --output "<摘要>"
++# 预检省一轮返工：
++sillyspec gate brainstorm --change <变更名>
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++```
++
++# 防坑清单
++
++- 四件套/设计/任务卡一律用 CLI 骨架生成（fourpiece-init / design-init / taskcard）——手拼 frontmatter 会被门禁拦。
++- design.md 计划新建的文件路径必须带 `NEW:` 前缀（末步存在性核验铁律）。
++- Grill 审查档 S2=独立子代理单轮；审查者只读，唯一可写 review.json；FAIL 后 resume 同一审查者只验阻断项（禁全文重审）。
++- 用户决策点用 --answer 落既有决策，不要空等。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run brainstorm` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/assets/command-cards/run-execute.md b/assets/command-cards/run-execute.md
+new file mode 100644
+index 00000000..8edd461c
+--- /dev/null
++++ b/assets/command-cards/run-execute.md
+@@ -0,0 +1,29 @@
++---
++name: sillyspec:run-execute
++description: execute 执行阶段：按 Wave 逐任务实现（子代理或直做）+ 逐 task review
++---
++# 何时用
++
++plan 收口后写代码。多 agent 共享仓——开工前重读目标文件最新态。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++sillyspec run execute --change <变更名>
++sillyspec run execute --done --change <变更名> --output "<摘要>"
++# 逐 task review.json：
++sillyspec review write --change <变更名> --task task-NN --spec <verdict> --quality <verdict>
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++```
++
++# 防坑清单
++
++- 改前重跑读最新态（多 agent 并行，Edit 前文件可能已被他侧改）。
++- review 的 changedFiles 必须与本 task 卡 target_files/allowed_paths 相交（完全不相交过不了门）。
++- 破坏性 git op 前先备份；禁止跳过 hook。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run execute` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/assets/command-cards/run-plan.md b/assets/command-cards/run-plan.md
+new file mode 100644
+index 00000000..b7c60e96
+--- /dev/null
++++ b/assets/command-cards/run-plan.md
+@@ -0,0 +1,27 @@
++---
++name: sillyspec:run-plan
++description: plan 计划阶段：复杂度分类→分级计划→计划审查→TaskCard→Wave 校验
++---
++# 何时用
++
++brainstorm 收口后拆任务排 Wave（plan_level=light 走轻计划，仍需 Wave 结构与任务卡）。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++sillyspec run plan --change <变更名>
++sillyspec run plan --done --change <变更名> --output "<摘要>"
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++```
++
++# 防坑清单
++
++- plan.md 的 Wave 段只收纯 ID 引用行（`- task-01`），带括注长文会被 execute 契约门禁拦。
++- 任务卡用 Edit 填充勿整文件重写（CRLF/漏字段回归）；taskcard 骨架占位符未替换会被 --done 硬校验拦。
++- 卡内 depends_on 必须与 tasks.md 注册表一致（分叉=执行序错乱）。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run plan` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/assets/command-cards/run-quick.md b/assets/command-cards/run-quick.md
+new file mode 100644
+index 00000000..8986237a
+--- /dev/null
++++ b/assets/command-cards/run-quick.md
+@@ -0,0 +1,34 @@
++---
++name: sillyspec:run-quick
++description: quick 轻流程：无落盘设计决策的小修补，三步到 --done
++---
++# 何时用
++
++范围明确的局部修补（判据见 AGENTS.md 第 6 条；倒推 B 模式=代码先写好用 --done 收尾登记）。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++# 启动（--input 必带，缺了占位标题/CLI 警告劝重启白跑一轮）：
++sillyspec run quick --input "<语义化标题>"
++# 步进（每步产出后）：
++sillyspec run quick --done --change quick-<会话ID> --output "<摘要>"
++# 末步收尾（四参数结构化落账 + 文件括注 + 关联变更）：
++sillyspec run quick --done --change quick-<会话ID>   --req "<一句话标题>" --cause "<为什么改>" --solution "<怎么改的>"   --result "<验证情况：测试数/lint/部署>"   --file-notes "path::括注 || path2::括注"   --linked-changes <关联的正式变更名>
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++# 断点恢复：
++sillyspec progress show   # 查进度后续跑
++```
++
++# 防坑清单
++
++- --done 时显式 --linked-changes 有效（会并入 guard：蒸馏尾/轻归档/QUICKLOG 关联行都吃它）；'none' 清空。
++- 触及 src/test 的改动 --done 门禁会亲自实测 local.yaml 的 test/lint——想省「被拦→修→重跑」一轮就先自跑。
++- 纯 lint 失败重试时门禁仍会全量重测（已知损耗，勿绕门）。
++- 显式 pathspec 提交（`git commit -m "..." -- 文件…`），禁 git add -A。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run quick` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/assets/command-cards/run-verify.md b/assets/command-cards/run-verify.md
+new file mode 100644
+index 00000000..a327c893
+--- /dev/null
++++ b/assets/command-cards/run-verify.md
+@@ -0,0 +1,29 @@
++---
++name: sillyspec:run-verify
++description: verify 验证阶段：探针核验+测试对账+验收报告
++---
++# 何时用
++
++execute 收口后对照文档验收（probe 契约+known_failures 对账+测试绿）。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++sillyspec run verify --change <变更名>
++sillyspec run verify --done --change <变更名> --output "<验收摘要>"
++# 探针骨架缺失时：
++sillyspec verify-probes --init --change <变更名>   # 已存在加 --force 刷新
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++```
++
++# 防坑清单
++
++- gate 失败明细落 .runtime/verify-runs/gate-<stage>-<change>.json（勿靠 stdout 记忆）。
++- 非测试逻辑有误禁改测试来过——修逻辑。
++- known_failures 豁免只在 local.yaml 声明位置复核，勿手抄。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run verify` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/assets/command-cards/status.md b/assets/command-cards/status.md
+new file mode 100644
+index 00000000..7d15d5ec
+--- /dev/null
++++ b/assets/command-cards/status.md
+@@ -0,0 +1,27 @@
++---
++name: sillyspec:status
++description: 状态查询：进度/变更清单/断点恢复入口
++---
++# 何时用
++
++任何时刻查「我在哪、下一步做什么」——多变更并行时先看再动。
++
++# 生命周期速查
++
++```bash
++export SILLYSPEC_SESSION_ID=<agent名+任务名>   # 每条命令都带（shell 状态不持久；多会话并行的所有权判定依赖它）
++sillyspec progress show [--change <名>] [--all] [--json]
++sillyspec status
++# 有信号变更（冲突/滞留/疑似完成）保持详情渲染；--all 展开全部
++# 在隔离 worktree 内跑时（守卫默认拒绝，需双 flag）：
++#   sillyspec <cmd> --allow-worktree-cwd --spec-dir "<worktree>/.sillyspec"
++```
++
++# 防坑清单
++
++- 多会话并行：变更各自 --change 隔离，永不 reset 他人变更。
++- 中途停下不靠额外命令存进度——上次 --done 已落盘。
++
++# 边界声明
++
++本卡不含步骤内容——每步的具体指令由 `sillyspec run status` 按当前状态实时渲染（含门禁、审查档位、产物契约）。本卡只管启动与防坑。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index fa7c1757..3025cfe9 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -164,7 +164,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:242`）公共入口，flag 在 `command.js:396`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+-- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:240` 解析后经 `case 'init'`（`index.js:354`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
++- **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
++- **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:240` 解析后经 `case 'init'`（`index.js:354`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+ - **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:737（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+diff --git a/meta.json b/meta.json
+index ecc31955..b02cf9c7 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,69 @@
+   "branch": "sillyspec/2026-09-21-flow-command-cards",
+   "baseBranch": "main",
+   "baseHash": "83d91cd4fc4431f2f4f17931accd729f4cd14712",
++  "actualBaseHash": "89e5b012bc744be0ccf26847935faf0d5e25316d",
++  "createdAt": "2026-09-20T17:32:48.956Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-flow-command-cards",
+   "mode": "worktree",
+-  "createdAt": "2026-09-20T17:32:47.122Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".claude/CLAUDE.md",
++    "analyze-transcript.cjs",
++    "asset-audit-2026-09-20/README.md",
++    "asset-audit-2026-09-20/asset-audit.cjs",
++    "asset-audit-2026-09-20/extract-candidates.cjs",
++    "asset-audit-2026-09-20/platform-archive.csv",
++    "asset-audit-2026-09-20/platform-fr.csv",
++    "asset-audit-2026-09-20/platform-gotchas.csv",
++    "asset-audit-2026-09-20/platform-knownissues.csv",
++    "asset-audit-2026-09-20/platform-modules.csv",
++    "asset-audit-2026-09-20/platform-quicklog.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting-candidates.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting.csv",
++    "asset-audit-2026-09-20/sillyspec-archive.csv",
++    "asset-audit-2026-09-20/sillyspec-fr.csv",
++    "asset-audit-2026-09-20/sillyspec-gotchas.csv",
++    "asset-audit-2026-09-20/sillyspec-knownissues.csv",
++    "asset-audit-2026-09-20/sillyspec-modules.csv",
++    "asset-audit-2026-09-20/sillyspec-quicklog.csv",
++    "asset-audit-2026-09-20/sillyspec-troubleshooting.csv",
++    "asset-audit-2026-09-20/summary.json",
++    "round4/account.mjs",
++    "round4/brief-autocompact.md",
++    "round4/brief-session-replay.md",
++    "round4/extract-full.mjs",
++    "round4/extract-timeline.mjs",
++    "round4/find-sessions.mjs",
++    "round4/full-r4-l.md",
++    "round4/full-r4-o-l.md",
++    "round4/full-r4-os.md",
++    "round4/full-r4-sf.md",
++    "round4/full-r4-sq.md",
++    "round4/gate-value-audit.md",
++    "round4/prereg.md",
++    "round4/prompt-R4-L.md",
++    "round4/prompt-R4-O-L.md",
++    "round4/prompt-R4-O-S.md",
++    "round4/prompt-R4-S-F.md",
++    "round4/prompt-R4-S-Q.md",
++    "round4/r4-os-timeline.txt",
++    "round4/r4-sf-timeline.txt",
++    "round4/r4-sq-timeline.txt",
++    "round4/result-S.md",
++    "round4/result-final.md",
++    "round4/result-quality.md",
++    "test/cursor-agent-transcript-detect.test.mjs"
++  ],
++  "baselineCommit": "89e5b012bc744be0ccf26847935faf0d5e25316d",
++  "baselineHash": "d9734f33846512ad",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 11
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "337f491dae3b3308",
++  "depsCheckedAt": "2026-09-20T17:32:48.911Z"
+ }
+diff --git a/src/command-cards.js b/src/command-cards.js
+new file mode 100644
+index 00000000..7cbcc6e7
+--- /dev/null
++++ b/src/command-cards.js
+@@ -0,0 +1,73 @@
++// 流程命令卡注入器（2026-09-21-flow-command-cards）——init 按 --tools 把包内
++// assets/command-cards/*.md 落到工具命令目录（zcode/claude），尾部锚行三态幂等。
++// 基准（Grill P1-3 修订）：锚行记录「剥离锚行后的落盘正文 sha」，重跑剥离重算比对
++// ——检测的是用户手改正文；「锚行 vs 包资产」字面比对检测不到正文手改（已否决）。
++import { readdirSync, readFileSync, mkdirSync } from 'fs'
++import { join } from 'path'
++import { fileURLToPath } from 'url'
++import { createHash } from 'crypto'
++import { writeAtomicSync } from './fs-atomic.js'
++
++export const COMMAND_CARD_TARGETS = { zcode: '.zcode/commands/sillyspec', claude: '.claude/commands/sillyspec' }
++export const COMMAND_CARD_NAMES = ['run-brainstorm', 'run-plan', 'run-execute', 'run-verify', 'run-archive', 'run-quick', 'status']
++
++const ANCHOR_TAIL_RE = /\n?<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->\s*$/
++const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex')
++// 尾换行对称归一（首版 bug 实证：锚行正则 \n? 吞掉正文末换行，重算侧 replace(/\s+$/,'\n')
++// 对无尾随空白的串是 no-op 换行补不回 → 完好文件恒判「手改」。先全剥尾随空白再统一补单个 \n，
++// 两侧（资产读取/落盘重解析）同函数 → 对称。
++const canonical = (raw) => raw.replace(/\r\n/g, '\n').replace(/\s+$/, '') + '\n'
++
++/** 读包内卡资产（import.meta.url 相对——npm 全局安装/本地 checkout 双形态同源）。 */
++export function readCardAssets() {
++  const dir = fileURLToPath(new URL('../assets/command-cards/', import.meta.url))
++  const assets = new Map()
++  for (const f of readdirSync(dir).filter((x) => x.endsWith('.md')).sort()) {
++    assets.set(f.replace(/\.md$/, ''), canonical(readFileSync(join(dir, f), 'utf8')))
++  }
++  return assets
++}
++
++/**
++ * 三态四分支注入（判据源唯一=尾部锚行；frontmatter 不承载管理面）：
++ *  1 目标不存在 → 写（正文+锚行）
++ *  2 锚行在且剥离重算正文 sha 一致（完好）：与包资产一致 → no-op（mtime 不动）；不一致（CLI 更新）→ 覆盖
++ *  3 锚行缺失（外来同名文件）或重算 sha 不符（用户手改正文）→ warn 跳过，force 才覆盖
++ * @returns {Promise<{written:string[], updated:string[], skipped:string[], warnings:string[]}>}（元素为相对目标目录的卡名）
++ */
++export async function injectCommandCards(projectDir, { tools = [], force = false, version = '' } = {}) {
++  const written = [], updated = [], skipped = [], warnings = []
++  const assets = readCardAssets()
++  if (assets.size === 0) {
++    warnings.push('包内 assets/command-cards/ 为空——npm 发布是否漏 assets/（白屏防线：npm pack --dry-run | grep assets/command-cards）')
++    return { written, updated, skipped, warnings }
++  }
++  for (const name of COMMAND_CARD_NAMES) {
++    if (!assets.has(name)) warnings.push(`资产缺失：${name}.md 不在包内 assets/command-cards/`)
++  }
++  for (const tool of [...new Set(tools)].filter((t) => COMMAND_CARD_TARGETS[t])) {
++    const dir = join(projectDir, COMMAND_CARD_TARGETS[tool])
++    mkdirSync(dir, { recursive: true })
++    for (const [name, body] of assets) {
++      const file = join(dir, `${name}.md`)
++      const out = `${body}<!-- sillyspec-card: v${version} sha256=${sha256(body)} -->\n`
++      let landed = null
++      try { landed = readFileSync(file, 'utf8') } catch { /* 不存在走分支 1 */ }
++      if (landed === null) { writeAtomicSync(file, out); written.push(name); continue }
++      const m = landed.match(ANCHOR_TAIL_RE)
++      if (!m) {
++        if (force) { writeAtomicSync(file, out); updated.push(name); warnings.push(`${tool}/${name}：外来同名文件被 --force 覆盖`) }
++        else { skipped.push(name); warnings.push(`${tool}/${name}：无锚行（外来同名文件），跳过——确认后删它重跑 init 或 --force`) }
++        continue
++      }
++      const bodyNow = canonical(landed.slice(0, m.index))
++      if (sha256(bodyNow) === m[2]) {
++        if (bodyNow === body) { skipped.push(name); continue } // 完好且同资产：no-op（mtime 不动）
++        writeAtomicSync(file, out); updated.push(name); continue // 完好且新资产：版本更新
++      }
++      if (force) { writeAtomicSync(file, out); updated.push(name); warnings.push(`${tool}/${name}：手改正文被 --force 覆盖（原改动已丢）`) }
++      else { skipped.push(name); warnings.push(`${tool}/${name}：正文与锚行记录不符（用户手改），跳过——保留改动；--force 可覆盖`) }
++    }
++  }
++  return { written, updated, skipped, warnings }
++}
+diff --git a/src/index.js b/src/index.js
+index 519dacb6..247df2bb 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -222,6 +222,7 @@ async function main() {
+   // --tool 多值收集（逗号分隔 + 重复 flag）；空数组 = 未提供，cmdInit 侧自动检测
+   const toolValues = [];
+   let interactive = false;
++  let forceCards = false;
+   // init 专属：--no-skills 跳过 skills 复制段（platform init 勿污染项目内工具目录）
+   let noSkills = false;
+   // 平台模式 flag（init 落平台指针用；非 init 命令时忽略——runCommand 自行解析 filteredArgs）
+@@ -247,6 +248,9 @@ async function main() {
+         if (t) toolValues.push(t);
+       }
+       i++;
++    } else if (args[i] === '--force-cards') {
++      // 流程命令卡强制覆盖（2026-09-21-flow-command-cards）：跳过手改保护分支
++      forceCards = true;
+     } else if (args[i] === '--no-skills') {
+       // init 专属：跳过 skills 复制段（吞进变量，不透传 filteredArgs）
+       noSkills = true;
+@@ -351,7 +355,7 @@ async function main() {
+ 
+   switch (command) {
+     case 'init':
+-      await (await import('./init.js')).cmdInit(dir, { tool, tools: toolValues.length > 0 ? toolValues : null, interactive, specDir, noSkills, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
++      await (await import('./init.js')).cmdInit(dir, { tool, tools: toolValues.length > 0 ? toolValues : null, interactive, specDir, noSkills, forceCards, platformOpts: (platformWorkspaceId || platformRuntimeRoot) ? { workspaceId: platformWorkspaceId, runtimeRoot: platformRuntimeRoot } : null });
+       break;
+     case 'setup':
+       const setupList = filteredArgs.includes('--list') || filteredArgs.includes('-l');
+diff --git a/src/init.js b/src/init.js
+index 84bce4a7..b8a17914 100644
+--- a/src/init.js
++++ b/src/init.js
+@@ -5,6 +5,7 @@ import { checkbox, confirm, input } from '@inquirer/prompts';
+ import { ProgressManager } from './progress.js';
+ import chalk from 'chalk';
+ import { getVersion } from './version.js';
++import { injectCommandCards } from './command-cards.js';
+ import { gitQuiet } from './git-helper.js';
+ import { renderExample } from './config-schema.js';
+ // 向后兼容：getVersion 已抽到轻量 version.js（避免 index.js 为 --version 静态加载 init.js 的 inquirer 税），
+@@ -76,10 +77,11 @@ function copyDirSync(src, dst) {
+ 
+ 
+ 
+-const VALID_TOOLS = ['claude', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
++const VALID_TOOLS = ['claude', 'zcode', 'cursor', 'openclaw', 'codex', 'gemini', 'opencode'];
+ 
+ const TOOL_LABELS = {
+   claude: 'Claude Code',
++  zcode: 'ZCode',
+   cursor: 'Cursor',
+   openclaw: 'OpenClaw',
+   codex: 'OpenAI Codex (通过 AGENTS.md)',
+@@ -288,14 +290,17 @@ function isTTY() {
+ 
+ // ── 核心安装逻辑 ──
+ 
+-function doInstall(projectDir, tools, subprojects = [], specDir = null, options = {}) {
++async function doInstall(projectDir, tools, subprojects = [], specDir = null, options = {}) {
+   // specDir: 规范目录（默认 projectDir/.sillyspec）
+   // projectDir: 源码项目根目录（用于工具检测、指令注入、.gitignore）
+   // options.noSkills: 跳过 skills 复制段（--no-skills；指令注入不受影响）
+   // options.platformMode: 平台模式（cmdInit 收到 platformOpts 非空）——项目内 .sillyspec/
+   //   通常只有 local.yaml（平台 init lease 写、含用户手调 mcp 段），任何清理都会丢失，整体跳过
+-  const { noSkills = false, platformMode = false } = options;
++  const { noSkills = false, platformMode = false, forceCards = false } = options;
+   const spec = specDir || join(projectDir, '.sillyspec');
++  // 命令卡工具面（2026-09-21-flow-command-cards）：仅 zcode/claude 有落点（D-003）；
++  // noSkills/platformMode 与 skills 同门跳过（Grill P2-4）
++  const cardTools = noSkills || platformMode ? [] : tools.filter((t) => t === 'zcode' || t === 'claude');
+ 
+   // 外部 specDir 时清理旧版本残留的 cwd/.sillyspec/（防止源码污染）。
+   // ⚠️ 必须保护真实资产：若本地 .sillyspec 含 changes/（非空）、projects/（非空）
+@@ -443,11 +448,23 @@ function doInstall(projectDir, tools, subprojects = [], specDir = null, options
+     }
+   }
+ 
+-  // 注入 AGENTS.md 完整指引（claude/codex 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 段迁移）
+-  if (tools.includes('claude') || tools.includes('codex')) {
++  // 注入 AGENTS.md 完整指引（claude/codex/zcode 共用：版本感知幂等三态四分支 + 旧 ## SillySpec 段迁移；
++  // zcode 2026-09-21-flow-command-cards FR-05 入面——AGENTS.md 是跨工具通用标准内容源）
++  if (tools.includes('claude') || tools.includes('codex') || tools.includes('zcode')) {
+     injectAgentsInstructions(projectDir);
+   }
+ 
++  // 流程命令卡注入（2026-09-21-flow-command-cards：zcode→.zcode/commands/sillyspec/、claude→.claude/commands/sillyspec/；
++  // 尾部锚行三态幂等。与 skills 复制同门：noSkills/platformMode 跳过（工具目录零污染语义，Grill P2-4）；
++  // 挂点在 noSkills return 之前——卡与 AGENTS.md 同批，早于 skills 复制不影响）
++  if (cardTools.length > 0) {
++    const cards = await injectCommandCards(projectDir, { tools: cardTools, force: forceCards, version: getVersion() });
++    for (const w of cards.warnings) console.warn(`    ⚠️ [命令卡] ${w}`);
++    if (cards.written.length + cards.updated.length > 0) {
++      console.log(chalk.green(`    ✓ 流程命令卡已${cards.written.length ? '生成' : '更新'} ${cards.written.length + cards.updated.length} 张 → ${cardTools.map((t) => (t === 'zcode' ? '.zcode' : '.claude') + '/commands/sillyspec/').join(' + ')}`));
++    }
++  }
++
+   // 注入 CLAUDE.md 指针（claude 专属：@AGENTS.md 导入薄文件，须在 AGENTS.md 之后）
+   if (tools.includes('claude')) {
+     injectClaudePointer(projectDir);
+@@ -546,7 +563,7 @@ function showSummary(version, tools, specDir) {
+ // ── 主命令 ──
+ 
+ export async function cmdInit(projectDir, options = {}) {
+-  const { tool, tools: toolsOpt, interactive, specDir, noSkills = false, platformOpts = null } = options;
++  const { tool, tools: toolsOpt, interactive, specDir, noSkills = false, forceCards = false, platformOpts = null } = options;
+   const version = getVersion();
+   const resolvedSpecDir = specDir ? resolve(specDir) : null;
+ 
+@@ -654,7 +671,7 @@ export async function cmdInit(projectDir, options = {}) {
+     }
+ 
+     console.log('');
+-    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills, platformMode: platformOpts != null });
++    await doInstall(projectDir, selectedTools, subprojects, resolvedSpecDir, { noSkills, forceCards, platformMode: platformOpts != null });
+     writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
+     showSummary(version, selectedTools, resolvedSpecDir);
+     return;
+@@ -682,7 +699,7 @@ export async function cmdInit(projectDir, options = {}) {
+     tools = detectTools(projectDir);
+   }
+ 
+-  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills, platformMode: platformOpts != null });
++  await doInstall(projectDir, tools, [], resolvedSpecDir, { noSkills, forceCards, platformMode: platformOpts != null });
+   writeInitPlatformPointer(projectDir, resolvedSpecDir, platformOpts);
+ 
+   console.log('');
+diff --git a/test/command-cards.test.mjs b/test/command-cards.test.mjs
+new file mode 100644
+index 00000000..82bb04bb
+--- /dev/null
++++ b/test/command-cards.test.mjs
+@@ -0,0 +1,85 @@
++// 流程命令卡注入器测试（2026-09-21-flow-command-cards task-01）
++// 三态四分支逐态断言 + 双落点 + 资产齐全 + 四段契约内容锚（FR-01~04）
++import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, statSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { injectCommandCards, readCardAssets, COMMAND_CARD_TARGETS, COMMAND_CARD_NAMES } from '../src/command-cards.js'
++
++let failed = 0, total = 0
++const t = (cond, msg) => { total++; if (!cond) { failed++; console.log(`  ❌ FAIL: ${msg}`) } else console.log(`  ✅ PASS: ${msg}`) }
++const tmpRoots = []
++const mk = (p) => { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++const anchorRe = /<!-- sillyspec-card: v(\S+) sha256=([0-9a-f]{64}) -->$/
++
++// ── 1. 资产齐全（发布白屏本地防线）──
++const assets = readCardAssets()
++t(assets.size === 7, `包内卡资产 7 张（实得 ${assets.size}）`)
++for (const n of COMMAND_CARD_NAMES) t(assets.has(n), `资产在列：${n}.md`)
++
++// ── 2. 四段契约内容锚（FR-04）──
++for (const [name, body] of assets) {
++  const stage = name.replace('run-', '')
++  t(body.includes('# 何时用') && body.includes('# 生命周期速查') && body.includes('# 防坑清单') && body.includes('# 边界声明'), `${name} 四段契约齐`)
++  t(body.includes(`sillyspec run ${stage}`) || name === 'status' ? true : false, `${name} 生命周期含命令`)
++}
++// run-quick 卡防坑清单锚定 954946ae 修复后语义（P2-5 验收）
++const quick = assets.get('run-quick')
++t(quick.includes('--linked-changes') && quick.includes('有效'), 'run-quick 卡含 --linked-changes 有效语义（954946ae 后）')
++t(quick.includes('--req') && quick.includes('--cause') && quick.includes('--solution') && quick.includes('--result'), 'run-quick 卡含四参数 --done')
++
++// ── 3. 注入产生双落点 7 卡（FR-01/03）──
++const proj = mk('cc-')
++const r1 = await injectCommandCards(proj, { tools: ['zcode', 'claude'], version: '9.9.9' })
++t(r1.written.length === 14 && r1.warnings.length === 0, `首轮全写（7×2，实得 ${r1.written.length}；警告 ${r1.warnings.length}）`)
++t(existsSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-quick.md')), 'zcode 落点在')
++t(existsSync(join(proj, COMMAND_CARD_TARGETS.claude, 'status.md')), 'claude 落点在')
++const landed = readFileSync(join(proj, COMMAND_CARD_TARGETS.zcode, 'run-quick.md'), 'utf8')
++t(anchorRe.test(landed.replace(/\n$/, '')) && landed.includes('v9.9.9'), '锚行含版本与 sha')
++
++// ── 4. 同参重跑 no-op（mtime 不动，FR-02 分支 2a）──
++const f1 = join(proj, COMMAND_CARD_TARGETS.zcode, 'run-quick.md')
++const before = readFileSync(f1).toString()
++const stat = statSync(f1)
++await new Promise((r) => setTimeout(r, 1100))
++const r2 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.9' })
++t(r2.written.length === 0 && r2.updated.length === 0 && r2.skipped.length === 7, `同参重跑 no-op（skipped=${r2.skipped.length}）`)
++t(r2.warnings.length === 0, `no-op 零警告（完好文件勿误判手改——实得 ${JSON.stringify(r2.warnings)}）`)
++t(statSync(f1).mtimeMs === stat.mtimeMs, 'mtime 不动')
++t(readFileSync(f1).toString() === before, '内容零变化')
++
++// ── 5. 内容更新覆盖（分支 2b：完好但内容旧——纯版本号变内容同应 no-op，先钉语义）──
++const r3a = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.10' })
++t(r3a.updated.length === 0 && r3a.skipped.length === 7, '纯版本变内容同 → no-op（内容 sha 才是判据）')
++const curLanded = readFileSync(f1, 'utf8')
++const curBody = curLanded.slice(0, curLanded.match(/<!-- sillyspec-card/).index)
++const oldBody = curBody.replace('# 何时用', '# 何时用（旧版内容）')
++const { createHash } = await import('crypto')
++const oldSha = createHash('sha256').update(oldBody, 'utf8').digest('hex')
++writeFileSync(f1, `${oldBody}<!-- sillyspec-card: v9.9.9 sha256=${oldSha} -->
++`, 'utf8')
++const r3 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.10' })
++t(r3.updated.length === 1 && r3.updated.includes('run-quick') && r3.skipped.length === 6, `内容更新覆盖（仅旧内容那张：updated=${JSON.stringify(r3.updated)} skipped=${r3.skipped.length}）`)
++t(readFileSync(f1, 'utf8').includes('v9.9.10') && !readFileSync(f1, 'utf8').includes('旧版内容'), '覆盖后为新内容+新锚')
++
++// ── 6. 手改正文 → 跳过；force → 覆盖（分支 3）──
++writeFileSync(f1, readFileSync(f1, 'utf8').replace('# 何时用', '# 何时用（用户手改）'), 'utf8')
++const r4 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.11' })
++t(r4.updated.length === 0 && r4.skipped.includes('run-quick') && r4.warnings.some((w) => w.includes('手改')), '手改正文被跳过并 warn')
++const r5 = await injectCommandCards(proj, { tools: ['zcode'], version: '9.9.11', force: true })
++t(r5.updated.includes('run-quick'), 'force 覆盖手改文件')
++t(!readFileSync(f1, 'utf8').includes('用户手改'), '手改内容已被覆盖')
++
++// ── 7. 外来同名无锚行 → 跳过（分支 3'）──
++const fExt = join(proj, COMMAND_CARD_TARGETS.claude, 'status.md')
++writeFileSync(fExt, '# 我自己的 status 卡，别动\n', 'utf8')
++const r6 = await injectCommandCards(proj, { tools: ['claude'], version: '9.9.12' })
++t(r6.skipped.includes('status') && r6.warnings.some((w) => w.includes('外来')), '外来同名跳过并 warn')
++t(readFileSync(fExt, 'utf8').startsWith('# 我自己的'), '外来文件原样保留')
++
++// ── 8. 未知工具零动作（FR-06 侧）──
++const r7 = await injectCommandCards(proj, { tools: ['codex'], version: '1' })
++t(r7.written.length === 0 && r7.updated.length === 0, 'codex 等未映射工具零落点')
++
++for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)

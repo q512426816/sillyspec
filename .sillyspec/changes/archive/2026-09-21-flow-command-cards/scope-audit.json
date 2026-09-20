@@ -1,0 +1,140 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "89e5b012bc744be0ccf26847935faf0d5e25316d",
+  "totals": {
+    "files": 15,
+    "additions": 463,
+    "deletions": 12
+  },
+  "rows": [
+    {
+      "path": ".npmignore",
+      "additions": 4,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "assets/command-cards/run-archive.md",
+      "additions": 26,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "assets/command-cards/run-brainstorm.md",
+      "additions": 33,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "assets/command-cards/run-execute.md",
+      "additions": 29,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "assets/command-cards/run-plan.md",
+      "additions": 27,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "assets/command-cards/run-quick.md",
+      "additions": 34,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "assets/command-cards/run-verify.md",
+      "additions": 29,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "assets/command-cards/status.md",
+      "additions": 27,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 63,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/command-cards.js",
+      "additions": 73,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 5,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/init.js",
+      "additions": 25,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/command-cards.test.mjs",
+      "additions": 85,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "eb81e69e69d88d38bc25463aa871f8b51babb1f5d1b2aa7126009c2b377152f1",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-20T18:15:01.654Z"
+}
