@@ -1,0 +1,130 @@
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 74ad90ba..bd29d8b4 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -389,15 +389,21 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+     // 两份都变于祖先且互不相等（真双写分叉）→ 显式警告 + 取 cwd（主仓直写=本会话最新编辑位约定）。
+     // 行尾归一（坑 autocrlf-byte-misjudge）：本机 autocrlf=true 时快照 checkout 是 CRLF、
+     // 工作区文件常是 LF——字节直比会误判「两边都改」。比较一律 CRLF→LF 归一后做。
++    // 对称 trim（坑 gate-snapshot-ancestor-trim，2026-09-20 taskcard-yaml-hardgate verify 实证）：
++    // git() 助手对全部输出 .trim()（rev-parse 场景需要），git show 的祖先内容因此被剥掉尾换行——
++    // 与磁盘读取（仅 CRLF 归一）不对称，已存在文件恒 anc!==cwd 误判「双写分叉」取主仓旧版，
++    // worktree 交付的修改进不了 verify 门快照→门假红（新文件因主仓不存在幸免）。比较三侧
++    // 统一 normalizeEol+trim 同口径——首尾空白差异不参与分叉判定（语义修改不会只差首尾空白）。
+     const normalizeEol = (buf) => String(buf).replace(/\r\n/g, '\n')
++    const cmpText = (t) => normalizeEol(t).trim()
+     const headFileContent = (rel) => {
+       if (mergeBase) {
+         try {
+           const anc = git(cwd, ['show', `${mergeBase}:${rel}`])
+-          if (typeof anc === 'string') return normalizeEol(anc)
++          if (typeof anc === 'string') return cmpText(anc)
+         } catch { /* 祖先无此文件（新增文件）→ 落到快照 HEAD 口径 */ }
+       }
+-      try { return normalizeEol(readFileSync(join(snapshotRoot, rel))) } catch { return null }
++      try { return cmpText(readFileSync(join(snapshotRoot, rel))) } catch { return null }
+     }
+     for (const f of files) {
+       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
+@@ -407,8 +413,8 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+         const wtPath = join(sourceRoot, f), cwdPath = join(cwd, f)
+         if (existsSync(wtPath) && existsSync(cwdPath)) {
+           let wtText = null, cwdText = null
+-          try { wtText = normalizeEol(readFileSync(wtPath)) } catch { /* 读失败不介入 */ }
+-          try { cwdText = normalizeEol(readFileSync(cwdPath)) } catch { /* 读失败不介入 */ }
++          try { wtText = cmpText(readFileSync(wtPath)) } catch { /* 读失败不介入 */ }
++          try { cwdText = cmpText(readFileSync(cwdPath)) } catch { /* 读失败不介入 */ }
+           if (wtText !== null && cwdText !== null && wtText !== cwdText) {
+             const base = headFileContent(f)
+             const wtDiff = base === null || wtText !== base
+diff --git a/test/gate-snapshot-ancestor-trim.test.mjs b/test/gate-snapshot-ancestor-trim.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-ancestor-trim.test.mjs
+@@ -0,0 +1,86 @@
++/**
++ * gate-snapshot 祖先比对 trim 失真测试（quick-1733001a，2026-09-20-taskcard-yaml-hardgate verify 实证）。
++ *
++ * 坑：git() 助手对全部输出 .trim()（rev-parse 场景需要），git show 取的 merge-base 祖先内容
++ * 被剥掉尾换行——与磁盘读取（仅 CRLF 归一）不对称 → 已存在文件恒 anc!==cwd 误判「双写分叉」
++ * 取主仓旧版 → worktree 交付的已存在文件修改进不了 verify 门快照 → 门假红。
++ *
++ * 覆盖：
++ * 1. worktree 单侧修改（主仓=祖先内容）：快照应取 worktree 版本（修复前误取主仓旧版）
++ * 2. 真双写分叉（两侧都真改且互不相等）：仍取主仓（既有语义不变，警告照发）
++ * 3. 主仓直写新、worktree=祖先（陈旧 worktree）：仍取主仓（既有语义不变）
++ */
++import { describe, it, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++
++import { createGateSnapshot } from '../src/run/gate-snapshot.js'
++
++const run = (cwd, args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' })
++
++describe('createGateSnapshot 祖先比对对称 trim（坑 gate-snapshot-ancestor-trim）', () => {
++  let repo, wt
++  beforeEach(() => {
++    const root = join(tmpdir(), `sillyspec-snaptrim-${Math.random().toString(36).slice(2)}`)
++    repo = join(root, 'repo')
++    wt = join(root, 'wt')
++    mkdirSync(repo, { recursive: true })
++    mkdirSync(wt, { recursive: true })
++    run(repo, ['init', '--quiet'])
++    writeFileSync(join(repo, 'a.js'), 'base content\n')
++    writeFileSync(join(repo, 'b.js'), 'shared base\n')
++    run(repo, ['add', '.'])
++    run(repo, ['commit', '--quiet', '-m', 'base'])
++  })
++  afterEach(() => {
++    try { rmSync(join(repo, '..'), { recursive: true, force: true }) } catch {}
++  })
++
++  const baseSha = (cwd) => run(cwd, ['rev-parse', 'HEAD']).trim()
++
++  it('worktree 单侧修改：快照取 worktree 版本（修复前误判双写分叉取主仓旧版）', () => {
++    const sha = baseSha(repo)
++    // worktree 侧修改 a.js（主仓保持祖先内容）
++    writeFileSync(join(wt, 'a.js'), 'worktree deliverable\n')
++    const snap = createGateSnapshot({ cwd: repo, files: ['a.js'], sourceRoot: wt, mergeBase: sha, skipImportSmoke: true })
++    assert.ok(snap, '快照应创建成功')
++    try {
++      const got = readFileSync(join(snap.snapshotRoot, 'a.js'), 'utf8')
++      assert.ok(got.includes('worktree deliverable'), `快照应含 worktree 交付版（实际：${got}）——祖先 trim 失真会让它退回主仓旧版`)
++    } finally {
++      snap.cleanup()
++    }
++  })
++
++  it('真双写分叉（两侧都真改且互不相等）：仍取主仓（语义不变）', () => {
++    const sha = baseSha(repo)
++    writeFileSync(join(wt, 'b.js'), 'wt real edit\n')
++    writeFileSync(join(repo, 'b.js'), 'main real edit\n')
++    const snap = createGateSnapshot({ cwd: repo, files: ['b.js'], sourceRoot: wt, mergeBase: sha, skipImportSmoke: true })
++    assert.ok(snap)
++    try {
++      const got = readFileSync(join(snap.snapshotRoot, 'b.js'), 'utf8')
++      assert.ok(got.includes('main real edit'), '真分叉取主仓（本会话最新编辑位约定）')
++    } finally {
++      snap.cleanup()
++    }
++  })
++
++  it('主仓直写新、worktree 停在祖先（陈旧）：仍取主仓（语义不变）', () => {
++    const sha = baseSha(repo)
++    writeFileSync(join(repo, 'b.js'), 'main newer\n')
++    // worktree b.js 保持祖先内容
++    writeFileSync(join(wt, 'b.js'), 'shared base\n')
++    const snap = createGateSnapshot({ cwd: repo, files: ['b.js'], sourceRoot: wt, mergeBase: sha, skipImportSmoke: true })
++    assert.ok(snap)
++    try {
++      const got = readFileSync(join(snap.snapshotRoot, 'b.js'), 'utf8')
++      assert.ok(got.includes('main newer'), '陈旧 worktree 场景取主仓直写新')
++    } finally {
++      snap.cleanup()
++    }
++  })
++})

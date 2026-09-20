@@ -290,3 +290,12 @@
 根因：closeQuickLinkedChanges 三闸对刻意转轨变更永真拦截——ql-20260819-010 阶段完成态闸（brainstorm --done 必置 completed）、缺陷②60min 时近性闸（转轨间隔天然分钟级）、tasks 判定（scale:small 按 brainstorm 末步约定不生成 tasks.md）——d192f89 原始目标场景被三闸全部误拦，linked quick --done 后变更永留 active/brainstorm 成僵尸（2026-09-20 daemon 三键变更实证：quick 17:27 完成提交 c1ce37e9e，change 仍 active/brainstorm last_active=17:26）
 方案：closeQuickLinkedChanges 新增转轨判定：current_stage=brainstorm + stage_status=completed + design.md frontmatter scale:small 三信号齐=刻意转轨（复用 gates.js 既有 readDesignScale，动态 import 破环——gates 静态导入本模块；异常 fail-safe 按非转轨走原闸）。转轨变更豁免阶段完成态闸与时近性闸，tasks 判定按 quick 语义（无 tasks.md=无待办放行，文件存在仍按全勾、未勾行照拦）；scale=large/未写 scale 的「即将进 plan」在途变更两闸防护面零变动
 结果：目标套件 22/22 全绿（16 既有护栏零回归+6 新增转轨测试全过）+邻接 quick-single-change-auto-link/progress-get-change-stage 10/10+lint 706 文件绿+全量 npm test 退出码 0
+
+## ql-20260920-014-3174 | 2026-09-20 23:03:04 | gate-snapshot 祖先比对 trim 失真——verify 门快照误取主仓旧版致 worktree 交付假红
+状态：已完成
+关联变更：（无）
+文件：src/run/gate-snapshot.js（+10/-4）, test/gate-snapshot-ancestor-trim.test.mjs（+86/-0）
+需求：gate-snapshot 祖先比对 trim 失真——verify 门快照误取主仓旧版致 worktree 交付假红
+根因：git() 助手全输出 trim，git show 祖先内容被剥尾换行与磁盘读取不对称，已存在文件恒误判双写分叉取主仓（taskcard-yaml-hardgate verify 实证）
+方案：比较三侧统一 cmpText=normalizeEol+trim 对称口径（src/run/gate-snapshot.js 双写一致性段），首尾空白不参与分叉判定；--force-baseline 因修复对象即受保护文件本身
+结果：直测 test/gate-snapshot-ancestor-trim.test.mjs 3/3（单侧修改取 worktree + 真分叉/陈旧 worktree 语义护栏）；CLI 实测 npm test 全量与 lint 本步门禁执行
