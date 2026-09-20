@@ -318,3 +318,8 @@
 根因：change-relevant 判定为属于artifact端点集，artifact池是全仓baseline时全集命中，418存量端点误标本变更端点刷屏
 方案：有变更文件面时改判端点定义源文件属于本变更diff面（providerFile归一双向endsWith，parityChanged一次解析两用）；面不可得回退artifact口径、无artifact回退全列零回归
 结果：新增test/probe5-change-relevant-surface.test.mjs两用例（整仓baseline夹具只变更文件端点进relevant加无changeName回退护栏）；probe5全家五件13/13；CLI实测全量与lint本步门禁执行
+
+## ql-20260920-017-77b0 | 2026-09-20 23:34:39 | 问题D+E：①gate/verify --done 失败明细只活在 stdout（宿主转后台截断即丢，2026-09-20 报告实证 target_files ②类逐条明细没被取回靠推断绕 3 轮）②known_failures 豁免提示不…
+状态：进行中
+关联变更：（无）
+文件：src/machine-interface.js, src/index.js, src/run/gates.js, test/gate-failure-artifact.test.mjs

@@ -15,7 +15,7 @@
  * 仅依赖 Node 18+ 原生 API，零新增外部依赖。
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { ProgressManager, resolveSpecDir } from './progress.js';
 import { resolveRuntimeRoot } from './run/shared.js';
@@ -25,7 +25,6 @@ import { runVerifyTestCheck } from './verify-postcheck.js';
 import { checkCode } from './diagnostic-codes.js';
 
 // ============ 退出码常量（D-004@v1）============
-
 export const EXIT_OK = 0;          // 核验通过（可含 warnings）
 export const EXIT_BLOCKED = 1;     // 事实性阻断（JSON 含 errors）
 export const EXIT_UNKNOWN = 2;     // 无法核验（用法错/变更不存在/环境错/内部异常）
@@ -295,8 +294,9 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         vtWarnings.push(`⚠️ verify-test SKIPPED — gate 未核验测试（${vt.reason || 'local.yaml 未配置 commands.test 或显式无测试'}）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL`);
       }
       // known_failures 豁免披露：本次 PASS 含豁免，driver 应提示人工复核清单是否过宽
+      // （quick-E，2026-09-20 报告问题 E：提示原不带清单位置，复核要先翻一遍才找到——带路径）
       if (vt.exemptedCount > 0) {
-        vtWarnings.push(`⚠️ verify-test PASS 含 ${vt.exemptedCount} 个 known_failures 豁免（${vt.reason || ''}）；driver 应提示人工复核豁免清单是否过宽（避免误豁免本变更引入的真实失败）`);
+        vtWarnings.push(`⚠️ verify-test PASS 含 ${vt.exemptedCount} 个 known_failures 豁免（${vt.reason || ''}）；driver 应提示人工复核豁免清单是否过宽（避免误豁免本变更引入的真实失败）——清单位置：${join(specRoot, 'local.yaml')} 的 known_failures 键`);
       }
       // 全量 fallback 明示：跑了全量 commands.test 但非变更范围子集，失败可能含未变更
       // 模块的预存错误——driver 不应据 exit 0 判定本次变更范围已客观测试（见 3.24 verify 坑1）。
@@ -665,5 +665,32 @@ export function runStatusOverview({ cwd, specBase } = {}) {
       codes: ['internal_error'],
     });
     return { envelope, exitCode: EXIT_UNKNOWN };
+  }
+}
+
+// ============ gate 失败明细稳定路径落盘（quick-D，2026-09-20 报告问题 D）============
+
+/**
+ * `sillyspec gate <stage> --change <name>` 的失败信封落盘（稳定路径，每次覆盖）。
+ * 背景：gate 失败明细只在 stdout——宿主把长命令转后台截断输出后 ❌ 段落实际取不回
+ * （2026-09-20 实证：agent 靠推断绕 3 轮）。runGate 本体保持只读契约（D-002@v1，不写
+ * sillyspec.db），落盘由本函数承担（CLI 层调用，fail-soft）——审计附件非状态。
+ * @param {{ specBase: string, stage: string, changeName: string, envelope: object }} opts
+ * @returns {string|null} 成功返回落盘路径；失败返回 null
+ */
+export function writeGateResultArtifact({ specBase, stage, changeName, envelope }) {
+  try {
+    const runsDir = join(specBase, '.runtime', 'verify-runs')
+    const resultPath = join(runsDir, `gate-${stage}-${changeName}.json`)
+    mkdirSync(runsDir, { recursive: true })
+    writeFileSync(resultPath, JSON.stringify({
+      written_at: new Date().toISOString(),
+      stage,
+      change: changeName,
+      envelope,
+    }, null, 2) + '\n')
+    return resultPath
+  } catch {
+    return null // fail-soft：落盘是审计附件，失败只缺附件不误门
   }
 }

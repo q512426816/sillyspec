@@ -554,6 +554,13 @@ async function main() {
         // 顶层 errors/warnings 是各 check 的聚合，已在上面按 check 分组显示；不再重复打印——
         // 非 json 是 agent 默认消费路径，重复文本纯耗 context（W1-J）。
       }
+      // quick-D（2026-09-20 报告问题 D）：gate 信封落稳定路径——失败明细只活在 stdout 时，宿主
+      // 转后台截断即丢（实证 agent 靠推断绕 3 轮）。fail-soft；runGate 只读契约不动（落盘归 CLI 层）。
+      try {
+        const { writeGateResultArtifact } = await import('./machine-interface.js');
+        const gateArtifact = writeGateResultArtifact({ specBase: gateSpecBase || gateOpts.specBase || dir, stage: gateStage, changeName: gateChange, envelope });
+        if (gateArtifact && !envelope.ok) console.error(`\n📄 gate 失败明细已落盘（稳定路径，stdout 被截断时直读）: ${gateArtifact}`);
+      } catch { /* fail-soft：落盘失败不影响 gate 结论 */ }
       process.exitCode = exitCode;
       break;
     }

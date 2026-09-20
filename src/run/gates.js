@@ -1076,6 +1076,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 放行态），fail-soft 不影响 gate 判定；②类阻断回执同样留档供平台/审计消费
     writeReconcileRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: reconcileEnvelope, result: reconcileCheck })
     if (reconcileBlocked) {
+      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'target_files ②类（missing_declared）阻断' })
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
     // ── verify-result.md 探针预填段一致性抽查（task-03 / ir-stage-p3b D-002@v1 方案A）──
@@ -1122,6 +1123,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 两检查间耦合；各写各的回执、按文件名订阅更干净。fail-soft 不影响 gate 判定
     writeProbeConsistencyRunResult({ runtimeRoot: reconcileRuntimeRoot, changeName, envelope: probeEnvelope, result: probeCheck })
     if (probeBlocked) {
+      writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
     // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
@@ -1886,6 +1888,42 @@ export function writeReconcileRunResult({ runtimeRoot, changeName, envelope, res
     return resultPath
   } catch (e) {
     console.error(`⚠️ target_files 对账结果落盘失败（不影响 verify gate）: ${e.message}`)
+    return null
+  }
+}
+
+/**
+ * verify --done 阻断明细稳定锚点（quick-D，2026-09-20 报告问题 D）：ts 目录（verify-runs/<ts>/
+ * reconcile-result.json 等）的可发现性依赖 stdout——宿主把长命令转后台截断输出后，逐条打印的
+ * ②类明细实际取不回（实证：target_files 阻断明细靠推断绕 3 轮才定位）。稳定路径指针（每次
+ * 覆盖、不随 ts 变）指向本轮最新 verify-runs 目录，agent 无 stdout 也能直读。fail-soft：
+ * 写失败只留痕不阻断 gate（对齐 writeReconcileRunResult 口径）。
+ * @param {{ runtimeRoot: string, changeName: string|null, blocked?: boolean, note?: string }} opts
+ * @returns {string|null} 成功返回指针路径；失败返回 null
+ */
+export function writeVerifyGatePointer({ runtimeRoot, changeName, blocked = false, note = '' }) {
+  try {
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '')
+    const runsDir = join(runtimeRoot, 'verify-runs')
+    const pointerPath = join(runsDir, `gate-last-${changeName || 'change'}.json`)
+    mkdirSync(runsDir, { recursive: true })
+    writeFileSync(pointerPath, JSON.stringify({
+      change: changeName,
+      blocked,
+      note,
+      latest_run_dir: join(runsDir, ts),
+      artifacts_hint: [
+        `${ts}/reconcile-result.json（target_files ②类阻断明细在 missing 数组）`,
+        `${ts}/probe-consistency-result.json（探针一致性抽查明细）`,
+      ],
+      written_at: new Date().toISOString(),
+    }, null, 2) + '\n')
+    if (blocked) {
+      console.error(`\n📄 verify 门失败明细稳定锚点（stdout 被截断时直读此文件）: ${pointerPath}\n   逐条明细在指针文件指向的 verify-runs/<ts>/ 目录（reconcile-result.json 的 missing 数组等）`)
+    }
+    return pointerPath
+  } catch (e) {
+    console.error(`⚠️ verify 门稳定锚点写入失败（不影响 gate）: ${e.message}`)
     return null
   }
 }
