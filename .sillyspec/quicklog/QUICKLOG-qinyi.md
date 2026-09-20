@@ -213,3 +213,17 @@
 根因：Grill 48请求17分钟+plan审查6分钟+FAIL重开全文复审，三轮占brainstorm+plan总时43%
 方案：三阶段prompt同款：①预算硬钳（12/10/15分档，到达即verdict）②FAIL后resume原子代理+diff只验阻断项（5倍差实证）③run_in_background派发+主链先走+--done前回收（门禁照常）
 结果：549/0+lint绿+镜像14=基线持平；纯prompt指引零gate改动
+
+## ql-20260920-009-2045 | 2026-09-20 11:35:30 | 审查只读纪律（第四律）——补三律缺口：审查子代理是法医不是外科医生，禁越权改被审产物
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（第四律全文）
+- src/stages/plan.js（④浓缩）
+- src/stages/execute.js（④浓缩）
+- docs/prompt镜像（同步）
+- stages.changelog.md（登记）
+需求：审查只读纪律（第四律）——补三律缺口：审查子代理是法医不是外科医生，禁越权改被审产物
+根因：新会话铁证：Grill审查员在主会话零请求窗口直接Edit design.md 15处（独立性破坏/责任链断裂/48回合爆炸）；③并行化下后台改文件与主链前台写=同文件双写竞态
+方案：brainstorm全文版第四律+plan/execute浓缩版④：工具面只读（Read/Grep/只读Bash），禁Edit/Write被审产物，唯一可写review.json，发现问题写checklist/blockers由主代理修；镜像同步
+结果：镜像14=基线持平；lint 701绿；全量549/0；stages changelog登记

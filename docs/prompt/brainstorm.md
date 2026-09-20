@@ -484,6 +484,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
   - **请求预算硬钳（时间盒的数字化形态）**：子代理审查是「按清单作答」不是「自由调研」——请求预算硬上限 **12 次**（设计审查 ≤8 次必读+≤4 次定向补证）；到达即基于已读材料出 verdict，禁止「再确认一下」式续读（2026-09-20 实证：48 请求审一份 287 行 design = 17 分钟纯等待，根因是审查者陷入自由调研）。派发 prompt 必须明示此预算。
   - **FAIL 后增量复审（禁全文重审）**：首轮 verdict=fail → 你修复阻断项后，**resume 同一审查子代理**（SendMessage 回原 agent）只发修复说明与 diff，要求它仅验证「首轮阻断项是否解决」——不重开全文审（2026-09-20 实证：resume 增量复审 64s/8 调用 vs 新子代理全文审 322s/26 调用 = 5 倍差距）。复审 review.json 的 checklist 追加增量复核行（item 含「增量复审：首轮阻断项 N 条」），verdict 按增量结果改判。原 agent 已不可 resume（会话过期等）才允许新开子代理（此时 prompt 里附首轮 review.json 阻断项，仍只验阻断项）。
   - **Grill 并行化（fire-and-forget）**：tier=independent 时派发审查子代理用 **run_in_background: true**，然后**立即进入 Step 8 生成规范文件**——不阻塞等待审查结果（Grill 平均可省 15 分钟墙钟）。Step 8 产出完成、即将 `--done` 本步骤前，回收子代理结果：verdict=pass → 直接完成；verdict=fail → 走上条增量复审流程；子代理仍在跑 → 轮询等待（它有 12 请求预算不会发散太久）。Stage Review Gate 在 `--done` 时仍硬校验 review.json 在场——并行化省的是墙钟不是门。
+  - **审查只读纪律（审查员是法医不是外科医生——并行化的前置安全条件）**：审查子代理的工具面**只读**（Read/Grep/只读 Bash 如 cat/ls/git log/git diff）；**禁止 Edit/Write 任何被审产物**（design.md/四件套/源码），唯一可写文件是 review.json。发现问题 → 写进 review.json 的 checklist/blockers 由主代理修复（2026-09-20 实证：Grill 审查员在审查窗口直接 Edit design.md 15 处——主会话零请求窗口铁证——三重危害：独立性破坏〔自己审自己改，pass 有效性打折〕、责任链断裂〔修改未经主代理复核即生效〕、回合数爆炸〔边审边改 48 回合 vs 正常 12~15〕）。与上条并行化叠加时本纪律是硬前提：审查员后台改文件的同时主链在前台写后续产物 = 同文件双写竞态。
 
 ### 仪式档位菜单（ceremony_tier 按 risk 客观定价——注入的 tier 行已标注当前档）
 - S0：CLI 清单核验——按下方交叉审查模型/交叉点清单机械逐项核对（零 token 发散），结论逐条附证据锚点，无需独立子代理

@@ -1,0 +1,103 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-39180bed",
+  "totals": {
+    "files": 8,
+    "additions": 8,
+    "deletions": 5
+  },
+  "rows": [
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt镜像",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "stages.changelog.md",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-009-2045",
+  "sessionId": "quick-39180bed",
+  "savedAt": "2026-09-20T03:36:10.079Z",
+  "patchSha256": "70bf6343f023fcf46d9a169882f0163806efdcf77a6ac2498c7389446cf211f2",
+  "patchStatus": "ok"
+}
