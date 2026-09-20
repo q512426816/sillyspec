@@ -1151,7 +1151,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       if (entries.length === 0) {
         promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
       } else {
-        const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
+        const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）${e.needsReview ? ` ⚠️ 待复核（${e.needsReview}）——该 FR 覆盖的代码近期被 quick 触达，行为可能已变；本变更若触及同域先核对现状再决定承接/新写` : ''}`)
         lines.push('')
         lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
         promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))

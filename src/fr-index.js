@@ -320,9 +320,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
         const target = st2.sections.find((s) => s.number === refId && !s.lines.some((l) => l.startsWith('superseded_by：')));
         if (!target) continue;
         // 就地补丁：状态翻 superseded + 插 superseded_by + 追取代链注记 + 刷新最近确认（摘要/标题保留）
+        // 待复核行随承接清除（2026-09-20-quick-asset-tail D-003：quick 触达留下的 needs_review 信号
+        // 在条目被正式承接取代时一并清——取代即复核完成，语义自然闭环）
         target.lines = target.lines
           .map((l) => (l.startsWith('状态：') ? `状态：superseded` : l.startsWith('最近确认：') ? `最近确认：${headHash || ''}` : l))
-          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：'));
+          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：') && !l.startsWith('待复核：'));
         const stateIdx = target.lines.findIndex((l) => l.startsWith('状态：'));
         // 退役理由（追平刀②）：承接令牌带（退役理由：…）时写进被取代条目——对标 OpenSpec REMOVED
         // 的 Migration 语义；无理由则省略行（不伪造）。
@@ -564,7 +566,11 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
       const decisionLine = s.lines.find((l) => l.startsWith('依据决策：'));
       const decisions = decisionLine ? decisionLine.replace(/^依据决策：s*/, '').split('、').map((x) => x.trim()).filter(Boolean) : [];
       const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions });
+      // 待复核标记透传（2026-09-20-quick-asset-tail FR-02）：quick 触达留下的信号，
+      // 注入面带 ⚠️ 提示后续变更核对——是信号非失效，承接翻链时清除。
+      const reviewLine = s.lines.find((l) => l.startsWith('待复核：'));
+      const needsReview = reviewLine ? reviewLine.replace(/^待复核：\s*/, '').trim() : null;
+      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview });
     }
   }
   return out;
@@ -586,4 +592,54 @@ export function frTitleOverlap(a, b) {
   let inter = 0;
   for (const g of A) if (B.has(g)) inter++;
   return inter / (A.size + B.size - inter);
+}
+
+// ── needs_review 标记（2026-09-20-quick-asset-tail，D-003：信号非门禁）─────────────
+
+/** 待复核行前缀（机械解析契约：digest 按此前缀读，条目可多轮标记仅保最新一条）。 */
+const FR_NEEDS_REVIEW_PREFIX = '待复核：';
+
+/**
+ * quick 触达域后给 active FR 条目打待复核标记（钩子#1 升级：遥测之外让地图本身诚实）。
+ * 幂等：条目已有含同 ref 的待复核行 → 跳过；superseded 条目不标（digest 注入面本就不含）。
+ * 只动文件不改语义——行是信号，承接翻链时被 indexRequirements 的 filter 清除。
+ * @param {string} knowledgeRoot
+ * @param {string[]} frIds - 全局 id 列表（钩子#1 的 readActiveFrDigest 命中集）
+ * @param {string} refNote - 标记来源（ql-id 或 change 名）
+ * @returns {{ marked: number, warnings: string[] }}
+ */
+export function markFrNeedsReview(knowledgeRoot, frIds, refNote) {
+  const warnings = [];
+  let marked = 0;
+  if (!Array.isArray(frIds) || frIds.length === 0 || !refNote) return { marked, warnings };
+  const all = scanAllDomains(knowledgeRoot);
+  const idSet = new Set(frIds);
+  const dirty = new Set();
+  for (const [domain, st] of all.entries()) {
+    for (const s of st.sections) {
+      if (!idSet.has(s.number)) continue;
+      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代不标
+      const line = `${FR_NEEDS_REVIEW_PREFIX}${refNote}`;
+      if (s.lines.some((l) => l === line)) continue; // 幂等：同 ref 已标
+      // 移除旧 ref 的待复核行（多轮标记仅保最新），追加新行到摘要行后
+      s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
+      const sumIdx = s.lines.findIndex((l) => l.startsWith('摘要：'));
+      s.lines.splice(sumIdx === -1 ? s.lines.length : sumIdx + 1, 0, line);
+      dirty.add(domain);
+      marked++;
+    }
+  }
+  if (dirty.size > 0) {
+    mkdirSync(frDirPath(knowledgeRoot), { recursive: true });
+    for (const d of dirty) {
+      const st = all.get(d);
+      writeFileSync(join(frDirPath(knowledgeRoot), `${d}.md`), joinKnowledgeFile(st.preamble, st.sections));
+    }
+  }
+  for (const id of idSet) {
+    let found = false;
+    for (const st of all.values()) if (st.sections.some((s) => s.number === id)) { found = true; break; }
+    if (!found) warnings.push(`markFrNeedsReview：${id} 不在索引中（跳过）`);
+  }
+  return { marked, warnings };
 }

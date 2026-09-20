@@ -1837,6 +1837,16 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
               type: 'fr-rot-suspect', change: guard.changeName || null,
               domains: [...touchedDomains], count: frs.length, source: 'quick-done',
             })
+            // 地图诚实升级（2026-09-20-quick-asset-tail FR-02/D-003）：遥测之外给条目打
+            // 待复核标记——下一次 brainstorm 注入行带 ⚠️，承接翻链时清除。fail-open 同块。
+            const markRef = guard.changeName || 'recent-quick'
+            try {
+              const { markFrNeedsReview } = await import('../fr-index.js')
+              const mr = markFrNeedsReview(join(specBase, 'knowledge'), frs.map(f => f.id), markRef)
+              if (mr.marked > 0) {
+                console.warn(`⚠️ [FR 待复核标记] ${mr.marked} 条 active FR 已标「待复核：${markRef}」——下次 brainstorm 注入可见，承接翻链时自动清除`)
+              }
+            } catch { /* 标记失败不影响遥测/审计 */ }
             console.warn(`⚠️ [FR 腐烂 suspect·advisory] 本次 quick 触达 ${[...touchedDomains].join('、')} 域的 ${frs.length} 条 active FR——quick 不走归档，若改动影响这些行为，索引不会自动 supersede（L3 声明义务；盲区：unmapped 文件/map 漂移不报警）`)
           }
         }

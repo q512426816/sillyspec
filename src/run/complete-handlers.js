@@ -30,11 +30,11 @@
  * （非被外层吞）；process.exit 不可被 try 捕获 → 搬迁行为完全等价。
  */
 import { basename, dirname, join, resolve, relative, isAbsolute } from 'node:path'
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, rmSync, renameSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { renameSyncRetry, writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
-import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, isQuicklogFileLineNoise, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles } from './shared.js'
+import { resolveChangeDir, resolveQuickSessionsDir, safeGit, auditQuickCompletion, triggerSync, isQuickMetadata, isQuicklogFileLineNoise, resolveRuntimeRoot, collectOtherQuickSessionDeclarations, mergeQuickBoundaryFiles, QUICK_SID_RE } from './shared.js'
 import { detectConcurrentChanges, formatConcurrentWarning, resolveConcurrentAnchor } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { SCAN_STATUS, POINTER_STATUS } from '../constants.js'
@@ -1398,6 +1398,70 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
       }
       progress.lastQuickReview = review
     }
+
+    // ── quick 资产尾（2026-09-20-quick-asset-tail，D-001/D-002/D-005）：门禁过后三件机械
+    // 事，agent 零新增命令/零写作义务，fail-open 全链（任何异常 warn 不拦 quick 完成）。
+    // ① 薄通道蒸馏尾：linked 真变更（非 quick-<hex>）→ decision-distill + fr-index（幂等）
+    //    + lite 归档（治「薄通道零资产 + 僵尸 brainstorm 态」——autocompact 对撞实证）。
+    //    挂点在门禁后（D-002 时序：防未实现设计进索引）。
+    // ② 模块 changelog 机械追加：changedFiles×moduleIndex join → 边车存在才 append 一行
+    //    （纯 quick 的检索面——QUICKLOG 是时间流水账，模块边车是空间索引）。
+    // ③ 根因 classify 提示：--cause 原文 × INDEX 关键词命中 → 打一行确切命令（非空提示）。
+    try {
+      // linkedChangesAuto 排除（S2 执行审查缺陷③）：auto-link 命中的他者中途/僵尸变更不走蒸馏
+      // 尾（quick-single-change-auto-link §3 契约——即便 requirements.md 在场也不蒸馏不归档，
+      // 防未实现设计进索引 + 误归档他者 brainstorm 进行中变更）
+      const linkedChanges = Array.isArray(mergedGuard?.linkedChanges) ? mergedGuard.linkedChanges : []
+      const autoLinked = new Set(Array.isArray(mergedGuard?.linkedChangesAuto) ? mergedGuard.linkedChangesAuto : [])
+      const manualLinked = linkedChanges.filter((c) => c && !QUICK_SID_RE.test(c) && !autoLinked.has(c))
+      const { distillLinkedChangeAssets } = await import('./complete-handlers.js')
+      const tail = await distillLinkedChangeAssets({ pm, cwd, specBase, changeName, linkedChanges: manualLinked, platformOpts })
+      for (const w of tail.warnings) console.warn(`⚠️ [资产尾] ${w}`)
+    } catch (e) {
+      console.warn(`⚠️ [资产尾] 蒸馏尾异常（fail-open 不拦 quick 完成）：${e && e.message ? e.message : e}`)
+    }
+    try {
+      // ② changelog 边车追加——projectName 同源修复（S2 执行审查缺陷①a）：progress.project
+      // （与 outputStep 占位符渲染同源，平台模式真实项目名）三级回退，不再硬编码 null。
+      const projName = progress.project
+        || steps[currentIdx].project
+        || (steps[currentIdx].name.match(/\[([^\]]+)\]\s*$/) || [])[1]
+        || null
+      const { loadQuickModuleIndex } = await import('./shared.js')
+      const moduleIndex2 = await loadQuickModuleIndex(specBase, projName)
+      const changed2 = (progress.lastQuickReview?.changedFiles ?? []).map(f => String(f).replace(/\\/g, '/'))
+      if (changed2.length > 0 && moduleIndex2 && projName) {
+        const touchedMods = new Map()
+        for (const [modId, mod] of Object.entries(moduleIndex2)) {
+          const prefixes = [...(mod && Array.isArray(mod.paths) ? mod.paths : []), ...(mod && Array.isArray(mod.core_files) ? mod.core_files : [])]
+          for (const raw of prefixes) {
+            const p = String(raw).replace(/\\/g, '/').replace(/\/+$/, '')
+            if (p && changed2.some(f => f === p || f.startsWith(p + '/'))) { touchedMods.set(modId, mod); break }
+          }
+        }
+        // 修复①b：边车路径补 <project> 段——map 的 doc 字段相对 docs/<project>/（如 modules/x.md）
+        const modulesDir = join(specBase, 'docs', projName)
+        for (const [modId, mod] of touchedMods) {
+          try {
+            const docRel = mod && mod.doc
+            if (!docRel) continue
+            const docNorm = String(docRel).replace(/\\/g, '/')
+            const sidecarRel = docNorm.replace(/\.md$/, '.changelog.md')
+            const target = join(modulesDir, sidecarRel)
+            if (!existsSync(target)) continue // 边车不存在静默跳过（建卡是 scan 职责）
+            const line = `- ${changeName} | quick 机械留痕（${changed2.length} 文件触达 ${modId}；详账见 QUICKLOG）`
+            appendFileSync(target, line + '\n')
+            console.log(`🗂️ 模块留痕：${modId} changelog 边车 +1 行（${changeName}）`)
+          } catch { /* 单模块失败不连坐 */ }
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️ [资产尾] changelog 追加异常（fail-open）：${e && e.message ? e.message : e}`)
+    }
+    // ③ 根因 classify 提示——S2 复审缺陷②终裁：**删除本块**。既有「待归类提议」块
+    // （下方 extractQuickCauseField → matchKnowledge → 确切 classify 命令）已完全承担此职责
+    // 且传参/qlId/文件路径全正确（1836-1844）；本块首版传对象给字符串参数（TypeError 被吞）
+    // 二版仍是重复建设——机械件③的 classify 职责由既有块唯一承担，本变更不再另造。
 
     // task-02 并发预检（FR-05/FR-07，纯副作用 advisory）：auditQuickCompletion 返回后、推进前
     // 扫工作树，识别他者未提交改动 / 他者脏变更目录，有则 console.warn。不改 status/gate、
@@ -2767,3 +2831,108 @@ async function runArchiveCeremonyDualRunExit({ cwd, specBase, changeName, platfo
   }
 }
 
+
+// ── quick 资产尾（2026-09-20-quick-asset-tail，D-001/D-002/D-004）─────────────────
+
+/**
+ * lite 归档（D-004）：薄通道（brainstorm→linked quick）变更的轻量收口——所有权 assert →
+ * 命名 → rename → unregisterChange。不复用 archiveChangeDirectory 的 9 处重门（未 apply
+ * 交付面等 worktree 导向，linked quick 变更无 worktree 语义会被误拦）；重件
+ * （module-impact/ROADMAP/delta）明确豁免。自愈：源目录缺失但已在 archive/ 时补
+ * unregister 不留永久 skipped（与重路径 586-604 同款语义）。
+ * @returns {Promise<{archivedTo: string}|{skipped: string}>}
+ */
+export async function liteArchiveChange({ pm, cwd, specBase, changeName, platformOpts = {} }) {
+  const changesDir = join(specBase, 'changes')
+  const archiveDir = join(changesDir, 'archive')
+  const srcDir = join(changesDir, changeName)
+  // 所有权（同重路径语义：他人活跃拒；self/stale/forced 放行并接管）
+  const { session } = resolveSessionIdentity({ flagSession: platformOpts.sessionFlag || null, cwd })
+  const check = pm.assertChangeOwnership(cwd, changeName, { selfSession: session, nowMs: Date.now() })
+  if (!check.allowed) return { skipped: `所有权拒（owner=${check.owner}，活跃窗内）` }
+  if (check.action !== 'self') pm.setChangeOwner(cwd, changeName, session)
+  // 自愈：目录已被手动/前次部分流程移到 archive/ → 只补 unregister（不留永久 desync）
+  if (!existsSync(srcDir)) {
+    // lite 变更目录常无 plan.md（findAlreadyArchivedDir 精确命中的硬条件）——本场景放宽：
+    // archive/ 下有以变更名为末段的目录且含 requirements.md 或 decisions.md 即认自愈
+    const already = (() => {
+      try {
+        const entries = readdirSync(archiveDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+        const hit = entries.find(e => (e === changeName || e.endsWith('-' + changeName)) &&
+          (existsSync(join(archiveDir, e, 'requirements.md')) || existsSync(join(archiveDir, e, 'decisions.md'))))
+        return hit ? join(archiveDir, hit) : null
+      } catch { return null }
+    })()
+    if (already) {
+      pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+      console.log(`📦 lite 自愈归档：${changeName} 已在 archive/（${basename(already)}），补注销 DB 行`)
+      return { archivedTo: already }
+    }
+    return { skipped: `源目录不存在且 archive/ 无此变更（requirements/decisions 均缺的空关联）` }
+  }
+  const destName = archiveDestDirName(new Date().toISOString().slice(0, 10), changeName)
+  const destDir = join(archiveDir, destName)
+  mkdirSync(archiveDir, { recursive: true })
+  renameSync(srcDir, destDir) // 先 rename 后 unregister：失败时 change 留 active 可重试（D-004 顺序保证）
+  pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+  console.log(`📦 lite 归档：${changeName} → archive/${destName}/（薄通道轻收口：蒸馏已先行，module-impact/ROADMAP 豁免）`)
+  return { archivedTo: destDir }
+}
+
+/**
+ * 薄通道蒸馏尾（D-001/D-002）：quick --done 门禁过后对 linked 真变更（非 quick-<hex>）跑
+ * decision-distill + fr-index（均幂等）→ lite 归档。挂点在质量闸后（D-002：防未实现设计进
+ * 索引——quick 中途废弃永不 --done 永不蒸馏）；两文件均缺失零打扰跳过；fail-open 全链
+ * （任何异常 warn 留痕不拦 quick 完成）。
+ * @returns {Promise<{distilled: boolean, frCount: number, decisionCount: number, archived: boolean, warnings: string[]}>}
+ */
+export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName, linkedChanges = [], platformOpts = {} }) {
+  const out = { distilled: false, frCount: 0, decisionCount: 0, archived: false, warnings: [] }
+  const realChanges = (linkedChanges || []).filter((c) => c && !QUICK_SID_RE.test(c))
+  if (realChanges.length === 0) return out // 纯 quick：无关联真变更，零打扰
+  try {
+    const knowledgeRoot = join(specBase, 'knowledge')
+    let anyDistilled = false
+    for (const linked of realChanges) {
+      const changeDir = join(specBase, 'changes', linked)
+      if (!existsSync(changeDir)) { out.warnings.push(`linked 变更目录缺失：${linked}`); continue }
+      const hasReqs = existsSync(join(changeDir, 'requirements.md'))
+      const hasDecisions = existsSync(join(changeDir, 'decisions.md'))
+      if (!hasReqs && !hasDecisions) continue // quick/scale:small 无索引义务（fr-index 既有语义对齐）
+      // 决策蒸馏（decisions.md → knowledge/decisions/，幂等；无文件内部自跳过）
+      if (hasDecisions) {
+        try {
+          const { distillIntoKnowledge } = await import('../decision-distill.js')
+          const r = distillIntoKnowledge(changeDir, knowledgeRoot, '')
+          const writtenCount = r && Array.isArray(r.written) ? r.written.length : 0
+          if (writtenCount > 0) { out.decisionCount += writtenCount; anyDistilled = true }
+        } catch (e) { out.warnings.push(`decision-distill ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
+      }
+      // FR 索引（requirements.md → knowledge/fr/，幂等：同变更名 no-op）
+      if (hasReqs) {
+        try {
+          const { indexRequirements } = await import('../fr-index.js')
+          const r = indexRequirements({ changeDir, knowledgeRoot, headHash: '' })
+          if (r && Array.isArray(r.written) && r.written.length > 0) { out.frCount += r.written.length; anyDistilled = true }
+        } catch (e) { out.warnings.push(`fr-index ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
+      }
+    }
+    out.distilled = anyDistilled
+    // lite 归档（蒸馏后；仅四件套容器变更——requirements.md 在场=brainstorm 承接的薄通道形态；
+    // 纯信号自动关联的 proposal-only 变更不归档〔quick-single-change-auto-link §3 契约钉死〕）
+    for (const linked of realChanges) {
+      if (!existsSync(join(specBase, 'changes', linked, 'requirements.md'))) continue
+      try {
+        const r = await liteArchiveChange({ pm, cwd, specBase, changeName: linked, platformOpts })
+        if (r.archivedTo) out.archived = true
+        else if (r.skipped) out.warnings.push(`lite 归档 ${linked}：${r.skipped}`)
+      } catch (e) { out.warnings.push(`lite 归档 ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
+    }
+    if (anyDistilled || out.archived) {
+      console.log(`📚 quick 资产尾：${out.frCount} 条 FR 入索引、${out.decisionCount} 条决策入 knowledge${out.archived ? '、linked 变更 lite 归档' : ''}（门禁后自动，agent 零新增命令）`)
+    }
+  } catch (e) {
+    out.warnings.push(`蒸馏尾异常（fail-open 不拦 quick 完成）：${e && e.message ? e.message : e}`)
+  }
+  return out
+}
