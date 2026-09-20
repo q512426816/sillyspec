@@ -1,0 +1,600 @@
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 3f5dd7f7..28d53e78 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -118,7 +118,7 @@ export const LOCAL_YAML_SCHEMA = {
+       title: '测试策略',
+       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
+       keys: [
+-        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）；skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹，R-07）；evidence-auto=按变更目录 module-impact.md 影响类型推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）。缺省=全量。', example: 'full' },
++        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）；skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹，R-07）；evidence-auto=按变更目录 module-impact.md 影响类型推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）。缺省：配了 modules: 块 → module（v3.29.3 起缺省收窄，ql-20260920-010）；未配 modules → 全量。', example: 'full' },
+       ],
+     },
+     {
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 51792016..2303b7d8 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -99,7 +99,7 @@ export function computeQualityScanFingerprint({ cwd, specBase }) {
+  * 保持 1——存量记录无 smoke 段照常读回（smokeResult 兜底 null）；未配置 smoke 时段形态为
+  * configured=false（记录仍写，供 --done PASS 封顶判 not-configured）。
+  */
+-export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult }) {
++export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult, usedSnapshot = false }) {
+   const path = qualityScanRecordPath(specBase, changeName)
+   if (!path) return null
+   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
+@@ -110,6 +110,10 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
+       source: 'cli-noai',
+       change: changeName,
+       fingerprint,
++      // 失败签名去重面（ql-20260920-010 修复一 d）：additive 字段，存量记录无这两键 →
++      // shouldReuseLastFailedScan 判 no-dedup-key 保守重跑一次，之后新记录即携带
++      dedupKey: computeQualityScanDedupKey({ cwd, specBase, fingerprint }),
++      usedSnapshot: Boolean(usedSnapshot),
+       ranAt: new Date().toISOString(),
+       testResult,
+       lintResult: lintResult || null,
+@@ -143,6 +147,93 @@ export function loadReusableQualityScan({ specBase, cwd, changeName }) {
+   }
+ }
+ 
++/**
++ * 去重键（ql-20260920-010 修复一 d，对撞三轮三连假红重试 8~10 分钟×3 的根治）：
++ * 指纹 + known_failures 块哈希。指纹只哈希 commands 段 + test_strategy 行——不含
++ * known_failures；而 agent 对假红的常见补救正是加豁免条目（不改代码、指纹不动）。
++ * 去重若只看指纹会把「合法补救后复跑」误判成「什么都没改」而拒绝重跑——键独立补
++ * 豁免面哈希，豁免一动即失配。git 不可用 → null（fail-closed 同指纹口径）。
++ */
++export function computeQualityScanDedupKey({ cwd, specBase, fingerprint = null }) {
++  const fp = fingerprint ?? computeQualityScanFingerprint({ cwd, specBase })
++  if (!fp) return null
++  let kf = 'none'
++  try {
++    const localPath = join(specBase, 'local.yaml')
++    if (existsSync(localPath)) {
++      const lines = readFileSync(localPath, 'utf8').replace(/\r\n?/g, '\n').split('\n')
++      const start = lines.findIndex((l) => /^\s*known_failures:\s*(#.*)?$/.test(l))
++      if (start !== -1) {
++        const body = []
++        for (let i = start + 1; i < lines.length && !/^\S/.test(lines[i]); i++) body.push(lines[i])
++        kf = body.join('\n')
++      }
++    }
++  } catch { /* 读不到按无豁免面处理 */ }
++  return createHash('sha256').update(fp + '\n##known-failures##\n' + kf).digest('hex')
++}
++
++/**
++ * 读回最近一条扫描记录（不论成败）——失败去重重放用。loadReusableQualityScan 拒绝
++ * failed 记录（复用是优化不是正确性依赖），去重恰恰要消费 failed 态；schema/source/
++ * testResult 校验同 load 口径，读不回 → null。
++ */
++export function loadLastQualityScanRecord({ specBase, changeName }) {
++  const path = qualityScanRecordPath(specBase, changeName)
++  if (!path || !existsSync(path)) return null
++  try {
++    const rec = JSON.parse(readFileSync(path, 'utf8'))
++    if (!rec || rec.schemaVersion !== RECORD_SCHEMA_VERSION || rec.source !== 'cli-noai') return null
++    if (!rec.testResult || !rec.testResult.status) return null
++    return rec
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 失败签名去重判定（纯函数）。reuse=true 语义：代码指纹 + 豁免面 + 快照口径均未变 →
++ * 上次失败必然原样复现，重跑是纯等待浪费。四路不重跑：forceRerun 逃生阀 / 无失败记录 /
++ * 存量记录无 dedupKey（本版起才有，老记录保守重跑一次）/ 键或口径失配。
++ */
++export function shouldReuseLastFailedScan({ lastRecord, currentDedupKey, plannedSnapshot, forceRerun = false }) {
++  if (forceRerun) return { reuse: false, reason: 'force-rerun（逃生阀 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN）' }
++  if (!lastRecord || !lastRecord.testResult || lastRecord.testResult.status !== 'failed') {
++    return { reuse: false, reason: 'no-failed-record' }
++  }
++  if (!lastRecord.dedupKey || !currentDedupKey) return { reuse: false, reason: 'no-dedup-key（存量记录 / git 不可用）' }
++  if (lastRecord.dedupKey !== currentDedupKey) return { reuse: false, reason: 'dedup-key-mismatch（代码/配置/豁免面/HEAD 已变化）' }
++  if (Boolean(lastRecord.usedSnapshot) !== Boolean(plannedSnapshot)) return { reuse: false, reason: 'snapshot-scope-changed' }
++  return { reuse: true, reason: null }
++}
++
++/**
++ * 伪影分诊编排（ql-20260920-010 修复一 a）：测试失败 → classify 分类 → 命中且本次是
++ * 快照口径 → 主树口径单点复跑对照。复跑过 = 伪影坐实：返回主树结果 + artifactTriage
++ * 证据（放行有据，disclosure 走 console + 台账，不改 passed.reason 语义）；复跑仍挂 =
++ * 真失败：保留快照失败结果 + 两口径对照注记（拦截照常，归因已对照过）。主树口径失败
++ * （snap=null）只注记 advice 不复跑（本身就是对照口径）。classify/rerunInMainScope
++ * 可注入——纯函数化供测试；分诊永不单独放行（放行必经主树实测复证）。
++ */
++export function applyArtifactTriageRerun({ testCheck, classify, snap, rerunInMainScope }) {
++  if (!testCheck || testCheck.status !== 'failed') return testCheck
++  const triage = classify(testCheck)
++  if (!triage || !triage.matched) return testCheck
++  if (!snap) {
++    console.warn(`🔬 伪影分诊命中（${triage.kind}，本次已主树口径）：${triage.advice}`)
++    return { ...testCheck, reason: `${testCheck.reason || ''}［伪影分诊命中（${triage.kind}）：${triage.advice}］`, artifactTriage: triage }
++  }
++  console.warn(`🔬 伪影分诊命中（${triage.kind}）——快照口径失败疑似沙箱伪影，主树口径单点复跑对照…`)
++  for (const ev of triage.evidence) console.warn(`   · ${ev}`)
++  const mainRetry = rerunInMainScope()
++  if (mainRetry.status === 'passed') {
++    console.warn('   主树复跑通过——伪影坐实：按主树口径结果放行（快照失败输出与分诊证据随台账落盘）')
++    return { ...mainRetry, artifactTriage: triage }
++  }
++  console.warn('   主树复跑仍失败——非沙箱伪影，按真失败拦截（两口径输出均见台账）')
++  return { ...testCheck, reason: `${testCheck.reason || ''}［伪影分诊：两口径（快照/主树）均失败，非沙箱伪影］`, artifactTriage: triage }
++}
++
+ /**
+  * 并行 WIP 归因鉴别（前置二）：迁自 gates.js verify 实测失败归因 inline 块，输出逐字保持。
+  * 判据①他者声明文件命中 dirty 集；判据②本变更 apply 的文件与主仓近期提交重叠且旧内容
+@@ -401,7 +492,37 @@ function warnIfMainRepoDirtyForGate(cwd) {
+  * `run verify` 复入本步重新实测（指纹随代码修复失配，--done 不会复用旧失败结果）。
+  */
+ export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
+-  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint } = await import('../verify-postcheck.js')
++  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact } = await import('../verify-postcheck.js')
++  // ── 失败签名去重（ql-20260920-010 修复一 d）──
++  // 复入本步前先对账上次失败：代码指纹 + known_failures 豁免面 + 快照口径都没变 → 失败
++  // 必然原样复现，重跑是纯等待（对撞三轮三连 8~10 分钟假红重试的根治）。复用只消费
++  // failed 态记录（passed 态 --done 复用归 loadReusableQualityScan），逃生阀
++  // SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1。
++  if (process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN !== '1') {
++    const lastRecord = loadLastQualityScanRecord({ specBase, changeName })
++    const verdict = shouldReuseLastFailedScan({
++      lastRecord,
++      currentDedupKey: computeQualityScanDedupKey({ cwd, specBase }),
++      plannedSnapshot: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF,
++    })
++    if (verdict.reuse) {
++      const t = lastRecord.testResult
++      console.error(`\n🛑 检测到上次质量扫描失败且失败签名未变（代码指纹 / known_failures 豁免面 / 快照口径均未变，${lastRecord.ranAt ? '上次运行 ' + lastRecord.ranAt : ''}）——本次跳过重跑，直接复用上次失败结果：`)
++      console.error(`   上次实测：\`${t.command}\` — ${(t.reason || '').split('\n')[0]}`)
++      if (t.outputTail) {
++        for (const line of t.outputTail.split('\n').slice(-8)) console.error(`   | ${line}`)
++      }
++      const replayTriage = classifyTestFailureArtifact(t)
++      if (t.artifactTriage) {
++        console.error(`   🔬 上次已做过伪影分诊（${t.artifactTriage.kind}）且主树对照复跑仍失败——非沙箱伪影，别再换口径重试`)
++      } else if (replayTriage.matched) {
++        console.error(`   🔬 失败签名命中伪影形态（${replayTriage.kind}）：${replayTriage.advice}`)
++        console.error('      （上次运行早于分诊机制——本次重跑会自动做主树口径对照；如需立即重跑设 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1）')
++      }
++      console.error('   出路（按序）：① 修代码（指纹即失配，下次自动重测）② 补 known_failures 豁免（豁免面即失配）③ 换快照口径（设/删 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，口径变化即失配）④ 环境确已修好后强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1')
++      throw new Error(`noAI 质量扫描复用上次失败结果（失败签名未变，跳过重跑）——${(t.reason || '测试失败').split('\n')[0]}。修复后重跑 sillyspec run verify${changeName ? ` --change ${changeName}` : ''}，或按上方出路处置。`)
++    }
++  }
+   // ── 隔离快照定向跑（2026-09-11 驾驭第十二批，用户第三次撞上：noAI 质量扫描是 verify 的
+   // 第一实测执行点，第八批只接了 gates.js verify 块——本步仍跑 main 工作区，并行 WIP 在此弄红
+   // 无辜变更）。与 gates.js 同款：createVerifyGateSnapshot（HEAD + 本变更文件集，native worktree
+@@ -429,6 +550,13 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   let smokeResult = null
+   try {
+     testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
++    // ── 伪影分诊（ql-20260920-010 修复一 a）：失败先分诊，命中 → 主树口径单点复跑对照 ──
++    testCheck = applyArtifactTriageRerun({
++      testCheck,
++      classify: classifyTestFailureArtifact,
++      snap,
++      rerunInMainScope: () => runVerifyTestCheck({ cwd, specBase, changeName }),
++    })
+     printVerifyTestCheck(testCheck)
+     lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snap ? 5 * 60 * 1000 : undefined })
+     // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
+@@ -463,7 +591,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   } finally {
+     if (snap) { try { snap.cleanup() } catch {} }
+   }
+-  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck })
++  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, usedSnapshot: Boolean(snap) })
+   const testFailed = testCheck.status === 'failed'
+   const lintBlocked = shouldBlockVerifyLint(lintCheck)
+   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index d6a3fb5a..eb5efc2f 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -953,6 +953,71 @@ export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailur
+   }
+ }
+ 
++// ═══ 沙箱伪影分诊（ql-20260920-010 修复一 a，对撞三轮 68 分钟单步收口）═══
++// 三轮实测：verify 质量扫描三连假红重试（9.7+8.2+7.8 分钟）根因全是工具/环境自身缺陷
++// 而非被测代码——四类已知形态：沙箱环境缺件（venv dev 依赖/工具二进制不在）、overlay
++// 半成品缺模块、CRLF 字节差（autocrlf 检出 vs 快照期望）、判账正则把通过/汇总行误判
++// 失败行（PER_TEST_FAIL_RE 残留形态）。本函数只做**签名分类**（纯函数零 IO），处置归
++// 消费侧（run/verify-quality-scan.js executeVerifyQualityScan）：快照口径失败且命中 →
++// 主树口径单点复跑对照，复跑过 = 伪影坐实按主树结果放行；复跑仍挂 = 真失败照常拦截。
++// 分诊永不单独放行——只改「要不要换口径再测一次」与「给 agent 的归因提示」。
++const ARTIFACT_ENV_MISSING_RES = [
++  // 条目 H 签名族：pytest-xdist 缺失 → usage error（unrecognized -n/--dist）
++  /ERROR:\s*usage:\s*py(?:test|thon)[^\n]*(?:-n\b|--dist|xdist|unrecognized argument)/i,
++  /ModuleNotFoundError:\s*No module named\s+'?(?:pytest|pytest_xdist|xdist|_pytest)'?/i,
++  /(?:command not found|not recognized as an internal or external command)[^\n]*(?:pytest|vitest|jest|mocha|ruff|tsc|eslint|python)/i,
++]
++const ARTIFACT_MODULE_IMPORT_RES = [
++  // overlay 部分态：改动引用方没改被引用方 → 本地顶层包 import 不到（①已先排除 pytest 家族）
++  /ModuleNotFoundError:\s*No module named\s+'?[A-Za-z_][\w.]*'?/i,
++  /ImportError:\s*cannot import name\s+\S+\s+from\s+/i,
++]
++const ARTIFACT_CRLF_RES = [
++  /\\r\\n/i, // 断言差异里字面 \r\n 转义可见（jest/vitest 快照与精确串断言）
++  /\bCRLF\b/i,
++  /line endings?\s*(?:mismatch|differ)/i,
++]
++
++/**
++ * 失败结果伪影分诊。优先消费 failureRemaining（判账行集，不受 tail 截断），缺失时回退
++ * outputTail。返回 { matched, kind, evidence, advice }；matched=false 时其余字段为
++ * null/[]。分类顺序刻意：env-missing 先于 module-import（pytest 家族两处命中算环境缺件）。
++ * @param {{ status:string, failureRemaining?:string[], outputTail?:string|null }} result
++ * @returns {{ matched:boolean, kind:string|null, evidence:string[], advice:string|null }}
++ */
++export function classifyTestFailureArtifact(result) {
++  const empty = { matched: false, kind: null, evidence: [], advice: null }
++  if (!result || result.status !== 'failed') return empty
++  const lines = (Array.isArray(result.failureRemaining) && result.failureRemaining.length > 0)
++    ? result.failureRemaining.map(String)
++    : String(result.outputTail || '').split(/\r?\n/).filter(Boolean)
++  if (lines.length === 0) return empty
++  const hit = (res) => lines.filter(l => res.some(re => re.test(l.replace(ANSI_RE, ''))))
++  const pick = (ev) => ev.slice(0, 3).map(l => { const t = l.trim(); return t.length > 120 ? t.slice(0, 120) + '…' : t })
++
++  const envEv = hit(ARTIFACT_ENV_MISSING_RES)
++  if (envEv.length > 0) {
++    return { matched: true, kind: 'sandbox-env-missing', evidence: pick(envEv),
++      advice: '疑似沙箱环境缺件（venv dev 依赖 / 工具二进制不在 PATH）——先主树口径对照复跑再定论；若主仓同样缺件，补环境（uv sync --group dev / 安装工具）而非改代码' }
++  }
++  const impEv = hit(ARTIFACT_MODULE_IMPORT_RES)
++  if (impEv.length > 0) {
++    return { matched: true, kind: 'overlay-module-missing', evidence: pick(impEv),
++      advice: '疑似快照 overlay 部分态缺模块（改了引用方没改被引用方）——主树口径对照复跑可分辨；主树也挂才是真失败' }
++  }
++  const crlfEv = hit(ARTIFACT_CRLF_RES)
++  if (crlfEv.length > 0) {
++    return { matched: true, kind: 'crlf-diff', evidence: pick(crlfEv),
++      advice: '疑似 CRLF/LF 字节差（autocrlf 检出口径 vs 断言期望）——主树口径对照复跑可分辨；确认后统一行尾口径（.gitattributes / 编辑器设置）' }
++  }
++  // 判账假阳性：所有「失败行」剥 ANSI 后全是通过/汇总/捕获块形态——失败标记本身误判
++  if (lines.every(l => { const b = l.replace(ANSI_RE, ''); return PASS_LINE_RE.test(b) || SUMMARY_LINE_RE.test(b) || CONSOLE_CAPTURE_RE.test(b) })) {
++    return { matched: true, kind: 'parser-false-positive', evidence: pick(lines),
++      advice: '判账疑似把通过/汇总行误判为失败行（PER_TEST_FAIL_RE 残留形态）——请把失败输出原文上报工具仓修判定正则；exitCode 非零的根因另在输出里' }
++  }
++  return empty
++}
++
+ /**
+  * 决定 verify 实测的执行动作（纯函数，便于测试；坑 verify-worktree-... 修复方向 3）。
+  *   - skip               → 'skip'（真跳过，D-005@v2——不落 full 兜底；evidence-auto 经
+@@ -1393,11 +1458,20 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
+     console.warn(`📋 known_failures 豁免清单已加载：${knownFailures.length} 条模式（local.yaml）`)
+   }
+ 
++  // —— 缺省收窄（ql-20260920-010 修复一 c，对撞三轮 68 分钟单步构成之一=缺省全量）——
++  // modules: 已配置且未显式 test_strategy → 缺省按 module 子集实测。未配置 modules: 的仓
++  // 保持缺省 full 零打扰；显式 test_strategy: full 是用户有意跑全量，不受影响。
++  let defaultedToModule = false
++  if (rawStrategy === null && extractModules(yamlText)) {
++    defaultedToModule = true
++    console.warn('ℹ️ test_strategy 未配置但 modules: 已配置——缺省按 module 子集实测（v3.29.3 起收窄；显式写 test_strategy: full 恢复全量）')
++  }
++
+   // —— evidence-auto 生效策略解析（D-005@v2 / task-11）——
+   // 按变更目录 module-impact.md 影响面取生效策略（行为→module、纯文档/门禁→skip、
+   // 缺失/不可解析→降级 module 并注记）再进既有链路；full/module/skip/缺省四路径
+   // 不经此分支（消费语义逐字不变）。
+-  let strategy = rawStrategy
++  let strategy = defaultedToModule ? 'module' : rawStrategy
+   let evidenceAuto = null
+   if (rawStrategy === 'evidence-auto') {
+     const changeDir = changeName ? join(specBase, 'changes', changeName) : null
+@@ -1504,7 +1578,8 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
+         durationMs: null,
+         outputTail: null,
+         reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
+-          ` 诊断：${diagLines.join('；')}` + eaNote,
++          ` 诊断：${diagLines.join('；')}` + eaNote
++          + (defaultedToModule ? '（注：module 为缺省收窄——local.yaml 未显式配置 test_strategy；常跑全量请显式写 test_strategy: full）' : ''),
+         resultPath: null,
+         mode: 'module-zero-hit',
+         fallbackReason: null,
+@@ -1516,6 +1591,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
+     // evidence-auto 解析为 module 后落全量兜底时追加推荐来源注记（eaNote；其余路径空串零变化）。
+     let fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
+     if (fallbackReason && eaNote) fallbackReason = fallbackReason + eaNote
++    if (fallbackReason && defaultedToModule) fallbackReason = fallbackReason + '（注：module 为缺省收窄——local.yaml 未显式配置 test_strategy）'
+     mainResult = runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
+   }
+ 
+diff --git a/test/gate-snapshot-monorepo.test.mjs b/test/gate-snapshot-monorepo.test.mjs
+index 51389069..5d2b107a 100644
+--- a/test/gate-snapshot-monorepo.test.mjs
++++ b/test/gate-snapshot-monorepo.test.mjs
+@@ -60,6 +60,31 @@ test('createGateSnapshot：pnpm workspace 形态子包依赖 junction 进快照
+   } finally { snap.cleanup() }
+ })
+ 
++test('createGateSnapshot：Python venv 族 junction 进快照（dev 依赖同源——条目H 僵尸债回归钉，ql-20260920-010 修复一 b）', () => {
++  // 交接文档曾把「沙箱 venv 缺 dev 依赖（pytest-xdist 缺失 → -n auto usage error）」当活 bug；
++  // 核对裁决（2026-09-20）：junction 链接 2026-09-12 已落地（v3.29.0 已含），第三轮台账
++  // module 子集 7.76 分钟通过实证生效——本钉锁住「链接主仓 venv 而非新建」这一机制本身
++  // 不回退：沙箱内 venv 读穿可达 = dev 依赖与主仓同源，xdist 类 dev 件不缺。
++  const proj = mk('venv-e2e-')
++  git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
++  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n.venv/\nvenv/\nenv/\n')
++  mkdirSync(join(proj, 'src'), { recursive: true })
++  writeFileSync(join(proj, 'src', 'app.py'), 'print("hi")\n')
++  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
++  // 主仓 venv 含 dev 依赖件（pytest-xdist 形态 marker）
++  const xdistDir = join(proj, '.venv', 'Lib', 'site-packages', 'pytest_xdist')
++  mkdirSync(xdistDir, { recursive: true })
++  writeFileSync(join(xdistDir, 'marker.txt'), 'dev-deps-same-source')
++
++  const snap = createGateSnapshot({ cwd: proj, files: ['src/app.py'] })
++  assert.ok(snap, '快照创建')
++  try {
++    const marker = join(snap.snapshotRoot, '.venv', 'Lib', 'site-packages', 'pytest_xdist', 'marker.txt')
++    assert.ok(existsSync(marker), 'venv junction 读穿可达（dev 依赖与主仓同源，xdist 不缺——条目H 形态不回归）')
++    assert.equal(readFileSync(marker, 'utf8'), 'dev-deps-same-source', '链接主仓 venv（非新建空环境）')
++  } finally { snap.cleanup() }
++})
++
+ test('printSnapshotFailureHint：路径 + 排查顺序 + 对照复跑出口直给', () => {
+   const origErr = console.error
+   let buf = ''
+diff --git a/test/verify-artifact-triage.test.mjs b/test/verify-artifact-triage.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/verify-artifact-triage.test.mjs
+@@ -0,0 +1,250 @@
++/**
++ * 质量扫描伪影分诊 + 失败签名去重 + module 缺省收窄（ql-20260920-010 修复一 a/c/d，
++ * 对撞三轮 verify「运行测试和质量扫描」68 分钟单步的机制收口）：
++ *   a. classifyTestFailureArtifact 四类伪影签名命中 + 真失败对照不命中；
++ *      applyArtifactTriageRerun 编排四态（命中+主树复跑过=放行有据 / 复跑仍挂=真失败 /
++ *      不命中=原样且不触发复跑 / 主树口径失败命中=只注记不复跑）；
++ *   d. shouldReuseLastFailedScan 判定矩阵 + computeQualityScanDedupKey 豁免面敏感性 +
++ *      executeVerifyQualityScan E2E（签名未变不重跑；逃生阀/代码面/豁免面三路解封）；
++ *   c. runVerifyTestCheck 缺省收窄 E2E（modules 已配未显式 test_strategy → module 子集；
++ *      显式 full 与未配 modules 两对照保持全量）。
++ * 修复一 b（venv junction 回归钉）在 gate-snapshot-monorepo.test.mjs。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync } from 'node:child_process'
++import { classifyTestFailureArtifact, runVerifyTestCheck } from '../src/verify-postcheck.js'
++import {
++  computeQualityScanDedupKey,
++  loadLastQualityScanRecord,
++  shouldReuseLastFailedScan,
++  applyArtifactTriageRerun,
++  executeVerifyQualityScan,
++} from '../src/run/verify-quality-scan.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function makeRepo() {
++  const dir = mk('vat-')
++  execSync('git init -q', { cwd: dir })
++  execSync('git config user.email t@t.local', { cwd: dir })
++  execSync('git config user.name t', { cwd: dir })
++  writeFileSync(join(dir, 'README.md'), 'init\n')
++  execSync('git add -A', { cwd: dir })
++  execSync('git commit -qm init', { cwd: dir })
++  mkdirSync(join(dir, '.sillyspec', 'changes', 'c1'), { recursive: true })
++  mkdirSync(join(dir, '.sillyspec', '.runtime'), { recursive: true })
++  return dir
++}
++
++// ── 修复一 a：classifyTestFailureArtifact ───────────────────────────
++
++test('分诊：沙箱环境缺件（条目 H 签名族）命中 sandbox-env-missing', () => {
++  const r = classifyTestFailureArtifact({ status: 'failed', failureRemaining: ['ERROR: usage: pytest -n auto'] })
++  assert.equal(r.matched, true)
++  assert.equal(r.kind, 'sandbox-env-missing')
++  const r2 = classifyTestFailureArtifact({ status: 'failed', failureRemaining: ["ModuleNotFoundError: No module named 'pytest_xdist'"] })
++  assert.equal(r2.kind, 'sandbox-env-missing', 'pytest 家族缺件归环境类（先于 module-import 判）')
++})
++
++test('分诊：本地模块缺失命中 overlay-module-missing', () => {
++  const r = classifyTestFailureArtifact({ status: 'failed', failureRemaining: ["ModuleNotFoundError: No module named 'platform_sync'"] })
++  assert.equal(r.matched, true)
++  assert.equal(r.kind, 'overlay-module-missing')
++})
++
++test('分诊：字面 \\r\\n 字节差命中 crlf-diff', () => {
++  const r = classifyTestFailureArtifact({ status: 'failed', failureRemaining: ['AssertionError: expected "a\\r\\n" to equal "a\\n"'] })
++  assert.equal(r.matched, true)
++  assert.equal(r.kind, 'crlf-diff')
++})
++
++test('分诊：全部「失败行」实为通过/汇总形态命中 parser-false-positive', () => {
++  const r = classifyTestFailureArtifact({ status: 'failed', failureRemaining: ['✓ 超时后 syncStatus=failed 用例', 'Tests  3 passed | 1 skipped'] })
++  assert.equal(r.matched, true)
++  assert.equal(r.kind, 'parser-false-positive')
++})
++
++test('分诊对照：真实失败（✕ 行 / AssertionError）与 passed 态不命中', () => {
++  assert.equal(classifyTestFailureArtifact({ status: 'failed', failureRemaining: ['✕ suite > case (2 ms)', 'AssertionError: expected 1 to be 2'] }).matched, false, '真失败行不命中任何伪影类')
++  assert.equal(classifyTestFailureArtifact({ status: 'passed', failureRemaining: [] }).matched, false, 'passed 态不分诊')
++  assert.equal(classifyTestFailureArtifact({ status: 'failed', failureRemaining: [], outputTail: 'Error: Process exited with code 1' }).matched, false, '无判账行集时 tail 回退也不含已知签名 → 不命中')
++})
++
++// ── 修复一 a：applyArtifactTriageRerun 编排 ─────────────────────────
++
++test('分诊编排：命中且主树复跑通过 → 按主树结果放行（artifactTriage 随行，reason 不伪造）', () => {
++  const triage = { matched: true, kind: 'sandbox-env-missing', evidence: ['ERROR: usage: pytest -n auto'], advice: 'adv' }
++  let calls = 0
++  const out = applyArtifactTriageRerun({
++    testCheck: { status: 'failed', reason: '退出码 1' },
++    classify: () => triage,
++    snap: { snapshotRoot: 'X' },
++    rerunInMainScope: () => { calls++; return { status: 'passed', reason: null } },
++  })
++  assert.equal(calls, 1, '主树复跑恰好一次')
++  assert.equal(out.status, 'passed')
++  assert.equal(out.artifactTriage, triage, '分诊证据随台账落盘')
++  assert.equal(out.reason, null, 'passed 态 reason 不动（披露走 console + artifactTriage 字段）')
++})
++
++test('分诊编排：命中但主树复跑仍挂 → 真失败拦截（两口径对照注记）', () => {
++  let calls = 0
++  const out = applyArtifactTriageRerun({
++    testCheck: { status: 'failed', reason: '退出码 1' },
++    classify: () => ({ matched: true, kind: 'crlf-diff', evidence: ['x'], advice: 'adv' }),
++    snap: {},
++    rerunInMainScope: () => { calls++; return { status: 'failed', reason: '也挂' } },
++  })
++  assert.equal(calls, 1)
++  assert.equal(out.status, 'failed')
++  assert.match(out.reason, /两口径（快照\/主树）均失败/)
++})
++
++test('分诊编排：不命中 → 原样返回且不触发复跑', () => {
++  let calls = 0
++  const src = { status: 'failed', reason: '退出码 1' }
++  const out = applyArtifactTriageRerun({
++    testCheck: src,
++    classify: () => ({ matched: false, kind: null, evidence: [], advice: null }),
++    snap: {},
++    rerunInMainScope: () => { calls++; return { status: 'passed' } },
++  })
++  assert.equal(calls, 0)
++  assert.equal(out, src, '原样返回（零新对象零扰动）')
++})
++
++test('分诊编排：主树口径失败命中 → 只注记 advice 不复跑（本身即对照口径）', () => {
++  let calls = 0
++  const out = applyArtifactTriageRerun({
++    testCheck: { status: 'failed', reason: '退出码 1' },
++    classify: () => ({ matched: true, kind: 'parser-false-positive', evidence: ['✓ x'], advice: '上报输出原文' }),
++    snap: null,
++    rerunInMainScope: () => { calls++; return { status: 'passed' } },
++  })
++  assert.equal(calls, 0)
++  assert.equal(out.status, 'failed')
++  assert.match(out.reason, /伪影分诊命中（parser-false-positive）/)
++})
++
++// ── 修复一 d：shouldReuseLastFailedScan 矩阵 + 去重键敏感性 ──────────
++
++test('去重判定矩阵：force / 无记录 / passed / 存量无键 / 键失配 / 口径变化 / 命中', () => {
++  const rec = { testResult: { status: 'failed' }, dedupKey: 'k', usedSnapshot: true }
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: rec, currentDedupKey: 'k', plannedSnapshot: true, forceRerun: true }).reuse, false, '逃生阀')
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: null, currentDedupKey: 'k', plannedSnapshot: true }).reuse, false, '无记录')
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: { testResult: { status: 'passed' }, dedupKey: 'k' }, currentDedupKey: 'k', plannedSnapshot: true }).reuse, false, 'passed 不复用')
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: { testResult: { status: 'failed' } }, currentDedupKey: 'k', plannedSnapshot: true }).reuse, false, '存量记录无 dedupKey 保守重跑')
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: rec, currentDedupKey: 'k2', plannedSnapshot: true }).reuse, false, '键失配')
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: rec, currentDedupKey: 'k', plannedSnapshot: false }).reuse, false, '快照口径变化')
++  assert.equal(shouldReuseLastFailedScan({ lastRecord: rec, currentDedupKey: 'k', plannedSnapshot: true }).reuse, true, '全未变 → 复用')
++})
++
++test('去重键：known_failures 豁免面 / 代码面变化即失配；文档面不失效（指纹口径继承）', () => {
++  const dir = makeRepo()
++  try {
++    const specBase = join(dir, '.sillyspec')
++    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: npm test\nknown_failures:\n  - old-debt\n')
++    const k0 = computeQualityScanDedupKey({ cwd: dir, specBase })
++    assert.ok(typeof k0 === 'string' && k0.length === 64)
++    // 豁免面补救（agent 加条目）→ 键失配 → 允许重跑
++    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: npm test\nknown_failures:\n  - old-debt\n  - new-exemption\n')
++    const k1 = computeQualityScanDedupKey({ cwd: dir, specBase })
++    assert.notEqual(k1, k0, 'known_failures 变化即失配（补救路径不被去重误拦）')
++    // 代码面变化 → 失配
++    writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n')
++    const k2 = computeQualityScanDedupKey({ cwd: dir, specBase })
++    assert.notEqual(k2, k1)
++    // 文档面变化 → 不失效（verify 窗口合法产出）
++    writeFileSync(join(specBase, 'changes', 'c1', 'verify-result.md'), '# report\n')
++    assert.equal(computeQualityScanDedupKey({ cwd: dir, specBase }), k2, '文档面不触发失配')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++// ── 修复一 d：executeVerifyQualityScan E2E ──────────────────────────
++
++test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁免面三路解封', async () => {
++  const dir = makeRepo()
++  try {
++    // 计数器脚本：真实执行才 append（去重跳过时不增）；打印失败行 + 退出 1
++    writeFileSync(join(dir, 'count-fail.js'), 'console.log("\\u2715 Boom-counter test failed")\nrequire("fs").appendFileSync(__dirname + "/runs.txt", "x\\n")\nprocess.exit(1)\n')
++    writeFileSync(join(dir, 'exit0.js'), 'process.exit(0)\n')
++    writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'commands:\n  test: node count-fail.js\n  lint: node exit0.js\n')
++    const specBase = join(dir, '.sillyspec')
++    const runCount = () => (existsSync(join(dir, 'runs.txt')) ? readFileSync(join(dir, 'runs.txt'), 'utf8').trim().split('\n').filter(Boolean).length : 0)
++    const prevOff = process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF
++    const prevRerun = process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
++    process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF = '1'
++    delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
++    try {
++      // 第一次：真跑失败，台账落盘（dedupKey + usedSnapshot 随行）
++      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
++      assert.equal(runCount(), 1, '第一次真跑')
++      const rec = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
++      assert.equal(rec.testResult.status, 'failed')
++      assert.ok(rec.dedupKey, '新记录携带去重键')
++      assert.equal(rec.usedSnapshot, false, '主树口径如实记录')
++      // 第二次：什么都没变 → 去重（不重跑），报「失败签名未变」
++      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /失败签名未变/)
++      assert.equal(runCount(), 1, '签名未变跳过重跑（三连假红重试根治点）')
++      // 第三次：逃生阀强制重跑
++      process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = '1'
++      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
++      assert.equal(runCount(), 2, '逃生阀解封真跑')
++      delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
++      // 第四次：代码面变化 → 指纹失配 → 真跑
++      writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n')
++      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
++      assert.equal(runCount(), 3, '代码变化解封真跑')
++      // 第五次：豁免面补救 → 键失配 → 重跑且豁免命中通过（假红补救全流程闭环）
++      writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'commands:\n  test: node count-fail.js\n  lint: node exit0.js\nknown_failures:\n  - Boom-counter\n')
++      await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' })
++      assert.equal(runCount(), 4, '豁免面变化解封重跑且判 passed（不再 throw）')
++      assert.equal(loadLastQualityScanRecord({ specBase, changeName: 'c1' }).testResult.status, 'passed')
++    } finally {
++      if (prevOff === undefined) delete process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF
++      else process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF = prevOff
++      if (prevRerun === undefined) delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
++      else process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = prevRerun
++    }
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++// ── 修复一 c：module 缺省收窄 E2E ───────────────────────────────────
++
++test('缺省收窄：modules 已配未显式 test_strategy → module 子集（不落全量）', () => {
++  const dir = makeRepo()
++  try {
++    writeFileSync(join(dir, 'modok.js'), 'console.log("ok")\n')
++    writeFileSync(join(dir, 'exit1.js'), 'process.exit(1)\n')
++    mkdirSync(join(dir, 'src'), { recursive: true })
++    // 命中口径同 verify-crlf-module-subset-e2e：已提交文件的未提交再修改（git diff HEAD
++    // 不含未跟踪文件——纯新增文件不算变更集）
++    writeFileSync(join(dir, 'src', 'thing.js'), 'x\n')
++    execSync('git add -A && git commit -qm add-src', { cwd: dir })
++    writeFileSync(join(dir, 'src', 'thing.js'), 'y\n')
++    const specBase = join(dir, '.sillyspec')
++    writeFileSync(join(specBase, 'local.yaml'),
++      'commands:\n  test: node exit1.js\nmodules:\n  core: { path: "src/", test: "node modok.js" }\n')
++    const r = runVerifyTestCheck({ cwd: dir, specBase, changeName: 'c1' })
++    assert.equal(r.mode, 'module-subset', '缺省收窄到 module 子集')
++    assert.equal(r.status, 'passed', '模块命令实测通过（全量 exit1 未被触发）')
++    assert.match(r.command, /^module\[core\]/)
++    // 对照 A：显式 test_strategy: full → 全量真跑（用户有意跑全量不受收窄影响）
++    writeFileSync(join(specBase, 'local.yaml'),
++      'commands:\n  test: node exit1.js\ntest_strategy: full\nmodules:\n  core: { path: "src/", test: "node modok.js" }\n')
++    const rFull = runVerifyTestCheck({ cwd: dir, specBase, changeName: 'c1' })
++    assert.equal(rFull.mode, 'full')
++    assert.equal(rFull.status, 'failed', '显式 full 照跑全量（exit1 失败如实拦截）')
++    // 对照 B：未配 modules 且未配 test_strategy → 保持缺省全量（零打扰）
++    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node exit1.js\n')
++    const rNoMod = runVerifyTestCheck({ cwd: dir, specBase, changeName: 'c1' })
++    assert.equal(rNoMod.mode, 'full')
++    assert.equal(rNoMod.status, 'failed')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})

@@ -1,0 +1,108 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-379c2c73",
+  "totals": {
+    "files": 5,
+    "additions": 485,
+    "deletions": 6
+  },
+  "rows": [
+    {
+      "path": "src/config-schema.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/verify-quality-scan.js",
+      "declared": true,
+      "additions": 131,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 78,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/gate-snapshot-monorepo.test.mjs",
+      "declared": true,
+      "additions": 25,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-artifact-triage.test.mjs",
+      "declared": true,
+      "additions": 250,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 13,
+    "codeFileCount": 4,
+    "testFileCount": 3,
+    "moduleSpan": 4,
+    "modules": [
+      {
+        "id": "setup",
+        "files": [
+          "src/config-schema.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/verify-quality-scan.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/plan-postcheck.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/verify-postcheck.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/gate-snapshot-monorepo.test.mjs",
+      "test/plan-wave-structure-guard.test.mjs",
+      "test/verify-artifact-triage.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L2",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-010-7a19",
+  "sessionId": "quick-379c2c73",
+  "savedAt": "2026-09-20T06:36:05.860Z",
+  "patchSha256": "004540742ee1f9b7b235ee3f31af246775636afae8bfc3a2039ad61b1e6e3df9",
+  "patchStatus": "ok"
+}

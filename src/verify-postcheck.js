@@ -953,6 +953,71 @@ export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailur
   }
 }
 
+// ═══ 沙箱伪影分诊（ql-20260920-010 修复一 a，对撞三轮 68 分钟单步收口）═══
+// 三轮实测：verify 质量扫描三连假红重试（9.7+8.2+7.8 分钟）根因全是工具/环境自身缺陷
+// 而非被测代码——四类已知形态：沙箱环境缺件（venv dev 依赖/工具二进制不在）、overlay
+// 半成品缺模块、CRLF 字节差（autocrlf 检出 vs 快照期望）、判账正则把通过/汇总行误判
+// 失败行（PER_TEST_FAIL_RE 残留形态）。本函数只做**签名分类**（纯函数零 IO），处置归
+// 消费侧（run/verify-quality-scan.js executeVerifyQualityScan）：快照口径失败且命中 →
+// 主树口径单点复跑对照，复跑过 = 伪影坐实按主树结果放行；复跑仍挂 = 真失败照常拦截。
+// 分诊永不单独放行——只改「要不要换口径再测一次」与「给 agent 的归因提示」。
+const ARTIFACT_ENV_MISSING_RES = [
+  // 条目 H 签名族：pytest-xdist 缺失 → usage error（unrecognized -n/--dist）
+  /ERROR:\s*usage:\s*py(?:test|thon)[^\n]*(?:-n\b|--dist|xdist|unrecognized argument)/i,
+  /ModuleNotFoundError:\s*No module named\s+'?(?:pytest|pytest_xdist|xdist|_pytest)'?/i,
+  /(?:command not found|not recognized as an internal or external command)[^\n]*(?:pytest|vitest|jest|mocha|ruff|tsc|eslint|python)/i,
+]
+const ARTIFACT_MODULE_IMPORT_RES = [
+  // overlay 部分态：改动引用方没改被引用方 → 本地顶层包 import 不到（①已先排除 pytest 家族）
+  /ModuleNotFoundError:\s*No module named\s+'?[A-Za-z_][\w.]*'?/i,
+  /ImportError:\s*cannot import name\s+\S+\s+from\s+/i,
+]
+const ARTIFACT_CRLF_RES = [
+  /\\r\\n/i, // 断言差异里字面 \r\n 转义可见（jest/vitest 快照与精确串断言）
+  /\bCRLF\b/i,
+  /line endings?\s*(?:mismatch|differ)/i,
+]
+
+/**
+ * 失败结果伪影分诊。优先消费 failureRemaining（判账行集，不受 tail 截断），缺失时回退
+ * outputTail。返回 { matched, kind, evidence, advice }；matched=false 时其余字段为
+ * null/[]。分类顺序刻意：env-missing 先于 module-import（pytest 家族两处命中算环境缺件）。
+ * @param {{ status:string, failureRemaining?:string[], outputTail?:string|null }} result
+ * @returns {{ matched:boolean, kind:string|null, evidence:string[], advice:string|null }}
+ */
+export function classifyTestFailureArtifact(result) {
+  const empty = { matched: false, kind: null, evidence: [], advice: null }
+  if (!result || result.status !== 'failed') return empty
+  const lines = (Array.isArray(result.failureRemaining) && result.failureRemaining.length > 0)
+    ? result.failureRemaining.map(String)
+    : String(result.outputTail || '').split(/\r?\n/).filter(Boolean)
+  if (lines.length === 0) return empty
+  const hit = (res) => lines.filter(l => res.some(re => re.test(l.replace(ANSI_RE, ''))))
+  const pick = (ev) => ev.slice(0, 3).map(l => { const t = l.trim(); return t.length > 120 ? t.slice(0, 120) + '…' : t })
+
+  const envEv = hit(ARTIFACT_ENV_MISSING_RES)
+  if (envEv.length > 0) {
+    return { matched: true, kind: 'sandbox-env-missing', evidence: pick(envEv),
+      advice: '疑似沙箱环境缺件（venv dev 依赖 / 工具二进制不在 PATH）——先主树口径对照复跑再定论；若主仓同样缺件，补环境（uv sync --group dev / 安装工具）而非改代码' }
+  }
+  const impEv = hit(ARTIFACT_MODULE_IMPORT_RES)
+  if (impEv.length > 0) {
+    return { matched: true, kind: 'overlay-module-missing', evidence: pick(impEv),
+      advice: '疑似快照 overlay 部分态缺模块（改了引用方没改被引用方）——主树口径对照复跑可分辨；主树也挂才是真失败' }
+  }
+  const crlfEv = hit(ARTIFACT_CRLF_RES)
+  if (crlfEv.length > 0) {
+    return { matched: true, kind: 'crlf-diff', evidence: pick(crlfEv),
+      advice: '疑似 CRLF/LF 字节差（autocrlf 检出口径 vs 断言期望）——主树口径对照复跑可分辨；确认后统一行尾口径（.gitattributes / 编辑器设置）' }
+  }
+  // 判账假阳性：所有「失败行」剥 ANSI 后全是通过/汇总/捕获块形态——失败标记本身误判
+  if (lines.every(l => { const b = l.replace(ANSI_RE, ''); return PASS_LINE_RE.test(b) || SUMMARY_LINE_RE.test(b) || CONSOLE_CAPTURE_RE.test(b) })) {
+    return { matched: true, kind: 'parser-false-positive', evidence: pick(lines),
+      advice: '判账疑似把通过/汇总行误判为失败行（PER_TEST_FAIL_RE 残留形态）——请把失败输出原文上报工具仓修判定正则；exitCode 非零的根因另在输出里' }
+  }
+  return empty
+}
+
 /**
  * 决定 verify 实测的执行动作（纯函数，便于测试；坑 verify-worktree-... 修复方向 3）。
  *   - skip               → 'skip'（真跳过，D-005@v2——不落 full 兜底；evidence-auto 经
@@ -1393,11 +1458,20 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     console.warn(`📋 known_failures 豁免清单已加载：${knownFailures.length} 条模式（local.yaml）`)
   }
 
+  // —— 缺省收窄（ql-20260920-010 修复一 c，对撞三轮 68 分钟单步构成之一=缺省全量）——
+  // modules: 已配置且未显式 test_strategy → 缺省按 module 子集实测。未配置 modules: 的仓
+  // 保持缺省 full 零打扰；显式 test_strategy: full 是用户有意跑全量，不受影响。
+  let defaultedToModule = false
+  if (rawStrategy === null && extractModules(yamlText)) {
+    defaultedToModule = true
+    console.warn('ℹ️ test_strategy 未配置但 modules: 已配置——缺省按 module 子集实测（v3.29.3 起收窄；显式写 test_strategy: full 恢复全量）')
+  }
+
   // —— evidence-auto 生效策略解析（D-005@v2 / task-11）——
   // 按变更目录 module-impact.md 影响面取生效策略（行为→module、纯文档/门禁→skip、
   // 缺失/不可解析→降级 module 并注记）再进既有链路；full/module/skip/缺省四路径
   // 不经此分支（消费语义逐字不变）。
-  let strategy = rawStrategy
+  let strategy = defaultedToModule ? 'module' : rawStrategy
   let evidenceAuto = null
   if (rawStrategy === 'evidence-auto') {
     const changeDir = changeName ? join(specBase, 'changes', changeName) : null
@@ -1504,7 +1578,8 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         durationMs: null,
         outputTail: null,
         reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
-          ` 诊断：${diagLines.join('；')}` + eaNote,
+          ` 诊断：${diagLines.join('；')}` + eaNote
+          + (defaultedToModule ? '（注：module 为缺省收窄——local.yaml 未显式配置 test_strategy；常跑全量请显式写 test_strategy: full）' : ''),
         resultPath: null,
         mode: 'module-zero-hit',
         fallbackReason: null,
@@ -1516,6 +1591,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     // evidence-auto 解析为 module 后落全量兜底时追加推荐来源注记（eaNote；其余路径空串零变化）。
     let fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
     if (fallbackReason && eaNote) fallbackReason = fallbackReason + eaNote
+    if (fallbackReason && defaultedToModule) fallbackReason = fallbackReason + '（注：module 为缺省收窄——local.yaml 未显式配置 test_strategy）'
     mainResult = runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
   }
 

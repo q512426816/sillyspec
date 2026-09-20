@@ -227,3 +227,19 @@
 根因：新会话铁证：Grill审查员在主会话零请求窗口直接Edit design.md 15处（独立性破坏/责任链断裂/48回合爆炸）；③并行化下后台改文件与主链前台写=同文件双写竞态
 方案：brainstorm全文版第四律+plan/execute浓缩版④：工具面只读（Read/Grep/只读Bash），禁Edit/Write被审产物，唯一可写review.json，发现问题写checklist/blockers由主代理修；镜像同步
 结果：镜像14=基线持平；lint 701绿；全量549/0；stages changelog登记
+
+## ql-20260920-010-7a19 | 2026-09-20 14:14:27 | 质量扫描伪影分诊+失败签名去重+module缺省收窄（对撞三轮68分钟单步机制收口）
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（classifyTestFailureArtifact 四类伪影签名纯函数+runVerifyTestCheck 缺省收窄（defaultedToModule 三处可见面））
+- src/run/verify-quality-scan.js（dedupKey/台账读取/去重判定/分诊编排+executeVerifyQualityScan 入口对账与主树对照接线）
+- src/config-schema.js（test_strategy desc 缺省语义登记）
+- test/verify-artifact-triage.test.mjs（新建，分诊/去重/缺省三面测试）
+- test/gate-snapshot-monorepo.test.mjs（venv junction 回归钉（修复一 b））
+需求：质量扫描伪影分诊+失败签名去重+module缺省收窄（对撞三轮68分钟单步机制收口）
+根因：对撞三轮实证 verify 质量扫描单步 68 分钟（旧版同位 9 分钟）：构成=agent 反复触发门禁的多轮重跑+三连假红重试（9.7+8.2+7.8 分钟），假红根因全是工具/环境自身缺陷而非被测代码；等待结构封顶了 prompt 级修复的收益，需 CLI 机制级收口
+方案：三件：①d 失败签名去重——computeQualityScanDedupKey（代码指纹+known_failures 豁免面哈希，指纹不含豁免面而补救路径恰恰靠它）+loadLastQualityScanRecord+shouldReuseLastFailedScan 纯函数+executeVerifyQualityScan 入口对账（失败签名未变→跳过重跑重放阻断与出路指引，逃生阀 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN）；②a 伪影分诊——classifyTestFailureArtifact 四类签名（env 缺件/overlay 缺模块/CRLF/判账假阳性）+applyArtifactTriageRerun 编排（快照口径失败命中→主树单点复跑对照：过=伪影坐实放行/仍挂=真失败拦截，分诊永不单独放行）；③c modules 已配未显式 test_strategy 缺省收窄 module（未配仓零打扰，config-schema 登记）。附 b 项裁决为非活 bug（venv junction 2026-09-12 已落地，第三轮台账实证生效）补回归钉
+结果：test/verify-artifact-triage.test.mjs 13/13（分诊四类+对照/编排四态/去重矩阵+E2E 五连含豁免补救闭环/缺省收窄+双对照）+gate-snapshot-monorepo 6/6（venv junction 钉）+邻接回归 11/11+plan 侧 13/13+lint 703 绿；全量 npm test 收尾门禁实测通过
+审计：[gate] L2（跨 4 模块 · 13 文件：4 代码/3 测试）advisory；模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/stages/plan-postcheck.js, test/plan-wave-structure-guard.test.mjs

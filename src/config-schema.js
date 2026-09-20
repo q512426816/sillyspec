@@ -118,7 +118,7 @@ export const LOCAL_YAML_SCHEMA = {
       title: '测试策略',
       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
       keys: [
-        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）；skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹，R-07）；evidence-auto=按变更目录 module-impact.md 影响类型推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）。缺省=全量。', example: 'full' },
+        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）；skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹，R-07）；evidence-auto=按变更目录 module-impact.md 影响类型推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）。缺省：配了 modules: 块 → module（v3.29.3 起缺省收窄，ql-20260920-010）；未配 modules → 全量。', example: 'full' },
       ],
     },
     {

@@ -99,7 +99,7 @@ export function computeQualityScanFingerprint({ cwd, specBase }) {
  * 保持 1——存量记录无 smoke 段照常读回（smokeResult 兜底 null）；未配置 smoke 时段形态为
  * configured=false（记录仍写，供 --done PASS 封顶判 not-configured）。
  */
-export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult }) {
+export function storeQualityScan({ specBase, cwd, changeName, testResult, lintResult, smokeResult, usedSnapshot = false }) {
   const path = qualityScanRecordPath(specBase, changeName)
   if (!path) return null
   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
@@ -110,6 +110,10 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
       source: 'cli-noai',
       change: changeName,
       fingerprint,
+      // 失败签名去重面（ql-20260920-010 修复一 d）：additive 字段，存量记录无这两键 →
+      // shouldReuseLastFailedScan 判 no-dedup-key 保守重跑一次，之后新记录即携带
+      dedupKey: computeQualityScanDedupKey({ cwd, specBase, fingerprint }),
+      usedSnapshot: Boolean(usedSnapshot),
       ranAt: new Date().toISOString(),
       testResult,
       lintResult: lintResult || null,
@@ -141,6 +145,93 @@ export function loadReusableQualityScan({ specBase, cwd, changeName }) {
   } catch {
     return null
   }
+}
+
+/**
+ * 去重键（ql-20260920-010 修复一 d，对撞三轮三连假红重试 8~10 分钟×3 的根治）：
+ * 指纹 + known_failures 块哈希。指纹只哈希 commands 段 + test_strategy 行——不含
+ * known_failures；而 agent 对假红的常见补救正是加豁免条目（不改代码、指纹不动）。
+ * 去重若只看指纹会把「合法补救后复跑」误判成「什么都没改」而拒绝重跑——键独立补
+ * 豁免面哈希，豁免一动即失配。git 不可用 → null（fail-closed 同指纹口径）。
+ */
+export function computeQualityScanDedupKey({ cwd, specBase, fingerprint = null }) {
+  const fp = fingerprint ?? computeQualityScanFingerprint({ cwd, specBase })
+  if (!fp) return null
+  let kf = 'none'
+  try {
+    const localPath = join(specBase, 'local.yaml')
+    if (existsSync(localPath)) {
+      const lines = readFileSync(localPath, 'utf8').replace(/\r\n?/g, '\n').split('\n')
+      const start = lines.findIndex((l) => /^\s*known_failures:\s*(#.*)?$/.test(l))
+      if (start !== -1) {
+        const body = []
+        for (let i = start + 1; i < lines.length && !/^\S/.test(lines[i]); i++) body.push(lines[i])
+        kf = body.join('\n')
+      }
+    }
+  } catch { /* 读不到按无豁免面处理 */ }
+  return createHash('sha256').update(fp + '\n##known-failures##\n' + kf).digest('hex')
+}
+
+/**
+ * 读回最近一条扫描记录（不论成败）——失败去重重放用。loadReusableQualityScan 拒绝
+ * failed 记录（复用是优化不是正确性依赖），去重恰恰要消费 failed 态；schema/source/
+ * testResult 校验同 load 口径，读不回 → null。
+ */
+export function loadLastQualityScanRecord({ specBase, changeName }) {
+  const path = qualityScanRecordPath(specBase, changeName)
+  if (!path || !existsSync(path)) return null
+  try {
+    const rec = JSON.parse(readFileSync(path, 'utf8'))
+    if (!rec || rec.schemaVersion !== RECORD_SCHEMA_VERSION || rec.source !== 'cli-noai') return null
+    if (!rec.testResult || !rec.testResult.status) return null
+    return rec
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 失败签名去重判定（纯函数）。reuse=true 语义：代码指纹 + 豁免面 + 快照口径均未变 →
+ * 上次失败必然原样复现，重跑是纯等待浪费。四路不重跑：forceRerun 逃生阀 / 无失败记录 /
+ * 存量记录无 dedupKey（本版起才有，老记录保守重跑一次）/ 键或口径失配。
+ */
+export function shouldReuseLastFailedScan({ lastRecord, currentDedupKey, plannedSnapshot, forceRerun = false }) {
+  if (forceRerun) return { reuse: false, reason: 'force-rerun（逃生阀 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN）' }
+  if (!lastRecord || !lastRecord.testResult || lastRecord.testResult.status !== 'failed') {
+    return { reuse: false, reason: 'no-failed-record' }
+  }
+  if (!lastRecord.dedupKey || !currentDedupKey) return { reuse: false, reason: 'no-dedup-key（存量记录 / git 不可用）' }
+  if (lastRecord.dedupKey !== currentDedupKey) return { reuse: false, reason: 'dedup-key-mismatch（代码/配置/豁免面/HEAD 已变化）' }
+  if (Boolean(lastRecord.usedSnapshot) !== Boolean(plannedSnapshot)) return { reuse: false, reason: 'snapshot-scope-changed' }
+  return { reuse: true, reason: null }
+}
+
+/**
+ * 伪影分诊编排（ql-20260920-010 修复一 a）：测试失败 → classify 分类 → 命中且本次是
+ * 快照口径 → 主树口径单点复跑对照。复跑过 = 伪影坐实：返回主树结果 + artifactTriage
+ * 证据（放行有据，disclosure 走 console + 台账，不改 passed.reason 语义）；复跑仍挂 =
+ * 真失败：保留快照失败结果 + 两口径对照注记（拦截照常，归因已对照过）。主树口径失败
+ * （snap=null）只注记 advice 不复跑（本身就是对照口径）。classify/rerunInMainScope
+ * 可注入——纯函数化供测试；分诊永不单独放行（放行必经主树实测复证）。
+ */
+export function applyArtifactTriageRerun({ testCheck, classify, snap, rerunInMainScope }) {
+  if (!testCheck || testCheck.status !== 'failed') return testCheck
+  const triage = classify(testCheck)
+  if (!triage || !triage.matched) return testCheck
+  if (!snap) {
+    console.warn(`🔬 伪影分诊命中（${triage.kind}，本次已主树口径）：${triage.advice}`)
+    return { ...testCheck, reason: `${testCheck.reason || ''}［伪影分诊命中（${triage.kind}）：${triage.advice}］`, artifactTriage: triage }
+  }
+  console.warn(`🔬 伪影分诊命中（${triage.kind}）——快照口径失败疑似沙箱伪影，主树口径单点复跑对照…`)
+  for (const ev of triage.evidence) console.warn(`   · ${ev}`)
+  const mainRetry = rerunInMainScope()
+  if (mainRetry.status === 'passed') {
+    console.warn('   主树复跑通过——伪影坐实：按主树口径结果放行（快照失败输出与分诊证据随台账落盘）')
+    return { ...mainRetry, artifactTriage: triage }
+  }
+  console.warn('   主树复跑仍失败——非沙箱伪影，按真失败拦截（两口径输出均见台账）')
+  return { ...testCheck, reason: `${testCheck.reason || ''}［伪影分诊：两口径（快照/主树）均失败，非沙箱伪影］`, artifactTriage: triage }
 }
 
 /**
@@ -401,7 +492,37 @@ function warnIfMainRepoDirtyForGate(cwd) {
  * `run verify` 复入本步重新实测（指纹随代码修复失配，--done 不会复用旧失败结果）。
  */
 export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
-  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint } = await import('../verify-postcheck.js')
+  const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact } = await import('../verify-postcheck.js')
+  // ── 失败签名去重（ql-20260920-010 修复一 d）──
+  // 复入本步前先对账上次失败：代码指纹 + known_failures 豁免面 + 快照口径都没变 → 失败
+  // 必然原样复现，重跑是纯等待（对撞三轮三连 8~10 分钟假红重试的根治）。复用只消费
+  // failed 态记录（passed 态 --done 复用归 loadReusableQualityScan），逃生阀
+  // SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1。
+  if (process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN !== '1') {
+    const lastRecord = loadLastQualityScanRecord({ specBase, changeName })
+    const verdict = shouldReuseLastFailedScan({
+      lastRecord,
+      currentDedupKey: computeQualityScanDedupKey({ cwd, specBase }),
+      plannedSnapshot: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF,
+    })
+    if (verdict.reuse) {
+      const t = lastRecord.testResult
+      console.error(`\n🛑 检测到上次质量扫描失败且失败签名未变（代码指纹 / known_failures 豁免面 / 快照口径均未变，${lastRecord.ranAt ? '上次运行 ' + lastRecord.ranAt : ''}）——本次跳过重跑，直接复用上次失败结果：`)
+      console.error(`   上次实测：\`${t.command}\` — ${(t.reason || '').split('\n')[0]}`)
+      if (t.outputTail) {
+        for (const line of t.outputTail.split('\n').slice(-8)) console.error(`   | ${line}`)
+      }
+      const replayTriage = classifyTestFailureArtifact(t)
+      if (t.artifactTriage) {
+        console.error(`   🔬 上次已做过伪影分诊（${t.artifactTriage.kind}）且主树对照复跑仍失败——非沙箱伪影，别再换口径重试`)
+      } else if (replayTriage.matched) {
+        console.error(`   🔬 失败签名命中伪影形态（${replayTriage.kind}）：${replayTriage.advice}`)
+        console.error('      （上次运行早于分诊机制——本次重跑会自动做主树口径对照；如需立即重跑设 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1）')
+      }
+      console.error('   出路（按序）：① 修代码（指纹即失配，下次自动重测）② 补 known_failures 豁免（豁免面即失配）③ 换快照口径（设/删 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，口径变化即失配）④ 环境确已修好后强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1')
+      throw new Error(`noAI 质量扫描复用上次失败结果（失败签名未变，跳过重跑）——${(t.reason || '测试失败').split('\n')[0]}。修复后重跑 sillyspec run verify${changeName ? ` --change ${changeName}` : ''}，或按上方出路处置。`)
+    }
+  }
   // ── 隔离快照定向跑（2026-09-11 驾驭第十二批，用户第三次撞上：noAI 质量扫描是 verify 的
   // 第一实测执行点，第八批只接了 gates.js verify 块——本步仍跑 main 工作区，并行 WIP 在此弄红
   // 无辜变更）。与 gates.js 同款：createVerifyGateSnapshot（HEAD + 本变更文件集，native worktree
@@ -429,6 +550,13 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   let smokeResult = null
   try {
     testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+    // ── 伪影分诊（ql-20260920-010 修复一 a）：失败先分诊，命中 → 主树口径单点复跑对照 ──
+    testCheck = applyArtifactTriageRerun({
+      testCheck,
+      classify: classifyTestFailureArtifact,
+      snap,
+      rerunInMainScope: () => runVerifyTestCheck({ cwd, specBase, changeName }),
+    })
     printVerifyTestCheck(testCheck)
     lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snap ? 5 * 60 * 1000 : undefined })
     // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
@@ -463,7 +591,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   } finally {
     if (snap) { try { snap.cleanup() } catch {} }
   }
-  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck })
+  storeQualityScan({ specBase, cwd, changeName, testResult: testCheck, lintResult: lintCheck, smokeResult, coverageCheck, usedSnapshot: Boolean(snap) })
   const testFailed = testCheck.status === 'failed'
   const lintBlocked = shouldBlockVerifyLint(lintCheck)
   // 摩擦计数（friction-signal-hint task-03）：记录条件与 throw 条件**刻意解耦**——advisory 档

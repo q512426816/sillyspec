@@ -60,6 +60,31 @@ test('createGateSnapshot：pnpm workspace 形态子包依赖 junction 进快照�
   } finally { snap.cleanup() }
 })
 
+test('createGateSnapshot：Python venv 族 junction 进快照（dev 依赖同源——条目H 僵尸债回归钉，ql-20260920-010 修复一 b）', () => {
+  // 交接文档曾把「沙箱 venv 缺 dev 依赖（pytest-xdist 缺失 → -n auto usage error）」当活 bug；
+  // 核对裁决（2026-09-20）：junction 链接 2026-09-12 已落地（v3.29.0 已含），第三轮台账
+  // module 子集 7.76 分钟通过实证生效——本钉锁住「链接主仓 venv 而非新建」这一机制本身
+  // 不回退：沙箱内 venv 读穿可达 = dev 依赖与主仓同源，xdist 类 dev 件不缺。
+  const proj = mk('venv-e2e-')
+  git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])
+  writeFileSync(join(proj, '.gitignore'), '.sillyspec/\n.venv/\nvenv/\nenv/\n')
+  mkdirSync(join(proj, 'src'), { recursive: true })
+  writeFileSync(join(proj, 'src', 'app.py'), 'print("hi")\n')
+  git(proj, ['add', '.']); git(proj, ['commit', '-q', '-m', 'init'])
+  // 主仓 venv 含 dev 依赖件（pytest-xdist 形态 marker）
+  const xdistDir = join(proj, '.venv', 'Lib', 'site-packages', 'pytest_xdist')
+  mkdirSync(xdistDir, { recursive: true })
+  writeFileSync(join(xdistDir, 'marker.txt'), 'dev-deps-same-source')
+
+  const snap = createGateSnapshot({ cwd: proj, files: ['src/app.py'] })
+  assert.ok(snap, '快照创建')
+  try {
+    const marker = join(snap.snapshotRoot, '.venv', 'Lib', 'site-packages', 'pytest_xdist', 'marker.txt')
+    assert.ok(existsSync(marker), 'venv junction 读穿可达（dev 依赖与主仓同源，xdist 不缺——条目H 形态不回归）')
+    assert.equal(readFileSync(marker, 'utf8'), 'dev-deps-same-source', '链接主仓 venv（非新建空环境）')
+  } finally { snap.cleanup() }
+})
+
 test('printSnapshotFailureHint：路径 + 排查顺序 + 对照复跑出口直给', () => {
   const origErr = console.error
   let buf = ''
