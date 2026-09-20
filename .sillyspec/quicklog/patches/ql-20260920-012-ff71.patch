@@ -1,0 +1,790 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 66d3f16a..53a1bdb5 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -79,10 +79,10 @@ mcp:
+ `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
+ 
+ ### run 流程里的三个触发器（`src/run/shared.js`）
+-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:775`）：包 `sync()` + **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:775`）。这是最常用的上推入口。
+-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:922`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:913`）：包 `syncMod.checkApproval`。
+-- **`triggerPullActiveChange`**（`shared.js:990`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
++- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:856`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:826`）。这是最常用的上推入口。
++- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:989`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
++- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:1084`）：包 `syncMod.checkApproval`。
++- **`triggerPullActiveChange`**（`shared.js:1013`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+ 
+ ---
+ 
+@@ -130,12 +130,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（8s 熔断）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:268/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1557/1785/1848/1859/2049 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:268/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1557/1785/1848/1859/2049 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1970/1984/2064 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:875（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:966 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:990 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:989 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:1013 |
+ | `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3720；sync.js:1431/986 |
+ | `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3672；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+@@ -210,7 +210,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:672`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:855/834/902`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:672`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
+ - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:50`）。
+ - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
+-- **8s 熔断**：`triggerSync`/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:775`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:775`，平台慢环境放宽用；放宽代价是 `--done` 最坏等待同比例变长）。
++- **8s 熔断**：`triggerSync`（inline 路径）/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:838`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:826`，平台慢环境放宽用；放宽代价是 inline 路径 `--done` 最坏等待同比例变长）。**`triggerSync` 默认已转后台子进程**（2026-09-20，`run/bg-sync.js`）：熔断让路的是后台轮（预算 max(env 值, 45s)），主命令不再等网络；后台输出与结果留痕 `<runtimeRoot>/spec-sync-bg.log`，逃生阀 `SILLYSPEC_SYNC_BG=0` 回落 inline。
+ - **MCP 不硬试**：路径A 未落地保守回退 Local（R-04）；CLI 不碰 DB 持久化 worktree_path（D-004 / client.js:18）。
+ - **派发不双写**：worker 不 commit，SillySpec 自己 apply（D-004），不调 SillyHub 合并 tool。
+ 
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 57087146..7a35ceb8 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -175,7 +175,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ ### 2026-08-08 候选增补（多 agent 并发写预检）→ 已实现
+ 状态：`✅ 已实现（2026-08-08 主会话 in-place execute，task-01..05 全完成，npm test 全量 EXIT=0 + lint 73 文件；详见下方「实现落地」）`
+ 
+-来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1108`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
++来源：2026-08-08 自审收尾 + multi-agent-review 同步推进中，主会话与并行会话在同一仓库实打实撞车（俩 session 都要动 `quick-audit.js` / `shared.js` / `complete.js`）。复盘暴露**真实功能缺口**：CLAUDE.md 第一段立身之本就是「多 agent 同时操作代码」，但 SillySpec 无任何命令让 agent 感知「工作树里有他者未提交改动 / 存在其他活跃 change 目录」——`src/run/shared.js:1131`（`isQuickMetadata`）已在 quick-audit 内部识别出「并发他者会话的工作」，却作为元数据噪音整体放行（「非关联变更目录整体视为元数据放行」），agent 完全无从知情。对应记忆坑：git commit 扫入预暂存并行工作、并发 session 撞重叠 change。
+ 
+ **钩子点（用户指定设计约束）**：并发检测应在 **quick / execute 写操作前**预检（`quick --done` 前、`execute --done` 前），而非仅作独立诊断命令——写操作是撞车高发点，预检才有拦截价值。
+ 
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index 3846e76b..3da5a1c0 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -1001,3 +1001,22 @@ gate_snapshot:
+ 
+ **证据**：五坑实证与决策见 changes/2026-09-15-worktree-dual-truth-gates/（requirements FR-01~FR-05 GWT 对账 + decisions D-001~D-005@v1）；回归锁定 test/worktree-dual-truth-gates.test.mjs 五组用例（每组正向 + 零回归各至少一条）。
+ 
++
++## 67. quick/全流程 `--done` 被 spec-sync 网络尾巴拖住分钟级不返回（2026-09-20 用户实证，已修复）
++
++**症状**：末步 `--done`（及每条触发同步的命令）主体输出打完后长时间无任何中间输出、命令不返回——平台慢时约 4 分钟，易误判挂死。机制落地当天的会话启动命令尾部 3 行 `[spec-sync] 已同步` 逐条等网络收尾，现场即实证。
++
++**根因**：`triggerSync`（`run/shared.js`）17 个调用点全部 fire-and-forget，但 Node 进程退出要等事件循环排空——在飞 fetch 拖住进程，CLI 打完输出仍要等网络收尾才返回 shell。8s 总熔断（raceWithAbort，坑 #54 前半段）只是「最多等 8s」治标；且平台慢环境放宽 `SILLYSPEC_SYNC_TIMEOUT_MS` 后等待同比例变长。
++
++**修复（spec-sync 后台异步化，`run/bg-sync.js`）**：
++- `triggerSync` 默认转 **detached 后台子进程**执行同步：主进程 spawn + unref 立即返回，命令零网络尾巴（实测 triggerSync 8ms 返回，同步经子进程照常到达）。
++- **单飞锁**（`<runtimeRoot>/spec-sync-bg.lock`：pid 活性 + 15min 时效双判）：活锁在跑 → 置 `rerunQueued` 合并迟到状态（跑完当前轮自动补一轮，上限 5 轮/总预算 ~2.5min），防进程堆积；死锁/崩溃残留自动接管。
++- **后台轮预算** = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)：后台无人等待，放宽预算提高慢平台真同步成功概率（坑 #54 的间歇熔断在后台模式下自然消解）。
++- **输出/结果留痕** `<runtimeRoot>/spec-sync-bg.log`（子进程 stdout/stderr append，超 1MB 截尾保后 512KB）：`[spec-sync]`/`[sync]` 的 warn/冲突横幅不再刷主命令输出也不丢失；冲突可见性不降级（冲突文件照落，下一条命令 progress show 红标）。
++- **未连接平台零开销**：spawn 前经 `sync.js peekPlatformConnected`（与 `_getPlatform` 同源判据）预判，未连接不 spawn，本地独立用户零行为变化。
++- **逃生阀** `SILLYSPEC_SYNC_BG=0` 回落 inline 旧行为（测试断言进程内行为/用户自救）；bg 子进程自身回环调 `triggerSync` 强制 inline（env 护栏防 fork 链）。
++- 测试 test/spec-sync-bg.test.mjs（26 断言）：锁判定纯函数五态 + spawn 决策矩阵（spawnImpl 注入）+ e2e 真子进程（快速返回/请求到达/锁自清/日志落盘）+ 逃生阀 inline。
++
++**遇到同步类等待/噪音先查三处**：① 命令尾部卡住不看时钟猜——看是否 `[spec-sync]` 行还没打完（后台化后此形态已消，若再现查 `SILLYSPEC_SYNC_BG` 是否被置 0）；② 后台同步结果/失败去 `spec-sync-bg.log` 翻（不再进主命令输出）；③ 冲突横幅只在日志里出现时，`progress show` 的红标与 `platform resolve` 处置入口不变。
++
++**关联坑名**：`sync-tail-blocks-cli-exit`；上游坑 #54（熔断文案/预算可调，本坑是其「治本」续篇）
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 6bb0f224..3db2c78f 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -854,6 +854,28 @@ async function raceWithAbort(op, timeoutMs = resolveSyncTotalTimeoutMs()) {
+ export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
+ 
+ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
++  // ── 后台异步化（2026-09-20 用户反馈：--done 被网络尾巴拖住分钟级）──
++  // 默认把同步整体挪进 detached 后台子进程：17 个调用点全部 fire-and-forget，但进程
++  // 退出要等事件循环排空，在飞 fetch 拖住命令返回。回落 inline 的三条件：
++  //   opts.inline（bg 子进程自身回环调用/测试断言进程内行为）
++  //   env SILLYSPEC_SYNC_BG=0（逃生阀，回退旧行为）
++  //   env SILLYSPEC_BG_SYNC_CWD 在场（本进程已是后台子进程，防 fork 链）
++  // spawn 决策（未连接预判/单飞锁/rerunQueued 合并/日志）见 bg-sync.js；bg 机制任何
++  // 异常降级 inline，绝不因后台化阻断主流程。
++  if (!opts.inline && changeName
++    && process.env.SILLYSPEC_SYNC_BG !== '0'
++    && !process.env.SILLYSPEC_BG_SYNC_CWD) {
++    try {
++      const bg = await import('./bg-sync.js')
++      const r = await bg.spawnBackgroundSync(cwd, changeName, platformOpts, opts)
++      if (r.status === 'spawned') {
++        console.log(`🔄 [spec-sync] 平台同步转后台执行（不阻塞本命令返回；输出与结果见 ${r.logPath}）`)
++        return
++      }
++      if (r.status === 'coalesced') return // 活后台轮在跑，本轮状态已并入其下一轮
++      // not-connected → 落回 inline（内部静默 no-op，与旧行为一致）
++    } catch { /* 后台化失败降级 inline（best-effort 契约不变） */ }
++  }
+   // 平台模式不再整体跳过（2026-08-26 用户决策）：上行回传（进度 + 四件套 + spec 树）
+   // 在平台模式同样执行，凭据经 env SILLYHUB_PLATFORM_URL/TOKEN（预留通道，daemon 未
+   // 实现注入——需外部显式 export，sync.js _getPlatform，链路 D 同款）或 local.yaml
+diff --git a/src/stages/quick.js b/src/stages/quick.js
+index 3aebba1c..495a2b37 100644
+--- a/src/stages/quick.js
++++ b/src/stages/quick.js
+@@ -70,6 +70,8 @@ step 3 --done 审计会把 src 核心文件（CLI / 状态机 / 注入框架等
+ ### 📌 末步预告：结果摘要四字段（step3 --done 硬校验，缺一被拒）
+ 下一步（step3）--done 必须给四字段结果摘要（推荐 \`--req/--cause/--solution/--result\` 四参数，CLI 自动合成；兼容 \`--output "需求：… 根因：… 方案：… 结果：…"\`）。其中「结果：验证情况（测试数 / lint / typecheck / 部署状态）」的素材在**本步**产生——实现摘要里请顺手记下具体验证数据（如「3 个单测通过、lint 0 告警」），step3 直接引用，避免到收尾时回忆不起来或被硬校验打回重跑。
+ 
++⚠️ 文件括注 \`--file-notes "path::注 || path2"\` 也只随 step3 --done 同一命令传才生效——**本步与 step1 的命令带了会被直接拒绝执行**（白跑一轮）。括注内容留到 step3 收尾时连同四字段一起传（2026-09-20 用户反馈：提示此前只在 step3 prompt 可见，第一次传白跑一轮）。
++
+ ### 铁律
+ - 不要修改无关文件
+ - 不要编造不存在的 CLI 子命令
+diff --git a/src/sync.js b/src/sync.js
+index 52e9baf2..3b3d7bcf 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -2281,6 +2281,18 @@ export async function syncSpecTreeOnly(changeName, cwd, opts = {}) {
+   return syncSpecTree(safePlatformSpecDir(cwd) || join(cwd, '.sillyspec'), platform, changeName, { signal: opts.signal });
+ }
+ 
++/**
++ * 平台连接预判（run/bg-sync.js 父侧 spawn 前的免开销短路）：与 _getPlatform 同源判据
++ * 的布尔化——env 两键齐全，或 cwd/.sillyspec/local.yaml platform 段带 url+token。
++ * 未连接时不为一次注定 no-op 的同步 spawn 后台子进程（本地独立用户零开销零行为变化）。
++ * 只做连接性预判不携带凭据：子进程自行经 _getPlatform 取全量配置（判据同源必一致）。
++ */
++export function peekPlatformConnected(cwd) {
++  if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) return true;
++  const p = readLocalYaml(cwd).platform;
++  return Boolean(p && p.url && p.token);
++}
++
+ // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；
+ // 对齐时只改本函数（_submitApproval），无需动 approve/reject 入口。
+ /**
+diff --git a/test/hub09-sync-circuit-abort.test.mjs b/test/hub09-sync-circuit-abort.test.mjs
+index 26fcb0dd..9de9d047 100644
+--- a/test/hub09-sync-circuit-abort.test.mjs
++++ b/test/hub09-sync-circuit-abort.test.mjs
+@@ -74,7 +74,7 @@ console.log('\n--- B. triggerSync timeoutMs 熔断 → abort 传到底层 POST -
+   pm.init(cwd)
+   pm.initChange(cwd, CN)
+   const t0 = Date.now()
+-  await triggerSync(cwd, CN, {}, { timeoutMs: 600 })
++  await triggerSync(cwd, CN, {}, { timeoutMs: 600, inline: true }) // inline：断言进程内熔断行为（默认已转后台子进程，2026-09-20）
+   const elapsed = Date.now() - t0
+   assert(elapsed < 3000, `熔断按 timeoutMs 生效（${elapsed}ms < 3000ms）`)
+   await new Promise((r) => setTimeout(r, 300))
+diff --git a/test/platform-mode-trigger-sync.test.mjs b/test/platform-mode-trigger-sync.test.mjs
+index 8104c532..d1efb28b 100644
+--- a/test/platform-mode-trigger-sync.test.mjs
++++ b/test/platform-mode-trigger-sync.test.mjs
+@@ -121,7 +121,7 @@ console.log('\n--- 1. 平台模式 + env 凭据 → progress POST 到达（env t
+   hits.length = 0; authHeaders.length = 0; progressBodies.length = 0;
+   let threw = false;
+   try {
+-    await triggerSync(cwd, 'plat-mode-change', platformOpts);
++    await triggerSync(cwd, 'plat-mode-change', platformOpts, { inline: true }); // inline：断言进程内上行（默认已转后台子进程）
+   } catch (e) { threw = true; console.error('   异常:', e.message); }
+   clearEnvCreds();
+ 
+@@ -144,7 +144,7 @@ console.log('\n--- 2. 平台模式无 env 无 local.yaml platform 段 → 静默
+   clearEnvCreds(); // 且不写 local.yaml → _getPlatform() 为 null
+   hits.length = 0;
+   let threw = false;
+-  try { await triggerSync(cwd, 'plat-mode-change', platformOpts); } catch { threw = true; }
++  try { await triggerSync(cwd, 'plat-mode-change', platformOpts, { inline: true }); } catch { threw = true; }
+   assert(!threw, '未连接不抛异常');
+   assert(hits.length === 0, '无任何请求发出（daemon 未注入 env 时与放行前行为一致）');
+ }
+diff --git a/test/platform-sync-archive-final-state.test.mjs b/test/platform-sync-archive-final-state.test.mjs
+index 033e3693..4927eab0 100644
+--- a/test/platform-sync-archive-final-state.test.mjs
++++ b/test/platform-sync-archive-final-state.test.mjs
+@@ -119,7 +119,7 @@ console.log('\n--- 1. 归档后（目录已移 + status=archived）→ 终态照
+   simulateArchive(pm, cwd, 'archived-change');
+   hits.length = 0; progressBodies.length = 0; syncBodies.length = 0;
+ 
+-  await triggerSync(cwd, 'archived-change');
++  await triggerSync(cwd, 'archived-change', {}, { inline: true }); // inline：断言进程内终态推送（默认已转后台子进程，2026-09-20）
+ 
+   const progressHit = hits.some((h) => h.includes('POST /api/changes/archived-change/progress'));
+   assert(progressHit, 'progress POST 到达服务器（终态不再被目录缺失守卫吞掉）');
+@@ -152,7 +152,7 @@ console.log('\n--- 2. 归档后未连接平台 → 静默 ---');
+   hits.length = 0;
+ 
+   let threw = false;
+-  try { await triggerSync(cwd, 'offline-change'); } catch { threw = true; }
++  try { await triggerSync(cwd, 'offline-change', {}, { inline: true }); } catch { threw = true; }
+   assert(!threw, '未连接不抛异常');
+   assert(hits.length === 0, '无任何请求发出');
+ }
+@@ -169,7 +169,7 @@ console.log('\n--- 3. 目录手删（DB 行仍 active）→ progress 照推 ---'
+   rmSync(join(cwd, '.sillyspec', 'changes', 'dir-gone-change'), { recursive: true, force: true });
+   hits.length = 0; progressBodies.length = 0;
+ 
+-  await triggerSync(cwd, 'dir-gone-change');
++  await triggerSync(cwd, 'dir-gone-change', {}, { inline: true });
+   const progressHit = hits.some((h) => h.includes('POST /api/changes/dir-gone-change/progress'));
+   assert(progressHit, 'progress POST 到达（DB 是进度真相源，目录缺失只 warn）');
+   const body = progressBodies.length > 0 ? JSON.parse(progressBodies[0]) : null;
+diff --git a/test/platform-sync-quick-session-spectree.test.mjs b/test/platform-sync-quick-session-spectree.test.mjs
+index fbd8be20..50f170d7 100644
+--- a/test/platform-sync-quick-session-spectree.test.mjs
++++ b/test/platform-sync-quick-session-spectree.test.mjs
+@@ -91,7 +91,7 @@ console.log('\n--- 1. quick 会话触发 spec 树同步（不推 progress） ---
+   seedQuicklog(cwd);
+   hits.length = 0;
+ 
+-  await triggerSync(cwd, 'quick-ab12cd34');
++  await triggerSync(cwd, 'quick-ab12cd34', {}, { inline: true }); // inline：断言进程内同步（默认已转后台子进程，2026-09-20）
+ 
+   const manifestHit = hits.some((h) => h.includes('GET /api/changes/-/spec-manifest'));
+   const syncHit = hits.some((h) => h.includes('POST /api/changes/-/spec-sync'));
+@@ -112,7 +112,7 @@ console.log('\n--- 2. quick 会话未连接平台 → 静默 ---');
+   hits.length = 0;
+ 
+   let threw = false;
+-  try { await triggerSync(cwd, 'quick-ab12cd34'); } catch { threw = true; }
++  try { await triggerSync(cwd, 'quick-ab12cd34', {}, { inline: true }); } catch { threw = true; }
+   assert(!threw, '未连接不抛异常');
+   assert(hits.length === 0, '无任何请求发出');
+ }
+@@ -128,7 +128,7 @@ console.log('\n--- 3. 拼错变更名 → 无任何请求（仅本地 warn） --
+   seedQuicklog(cwd);
+   hits.length = 0;
+ 
+-  await triggerSync(cwd, '2026-08-18-not-exist-typo');
++  await triggerSync(cwd, '2026-08-18-not-exist-typo', {}, { inline: true });
+   assert(hits.length === 0, '无任何请求（防拼写错误噪音混入网络通道）');
+ }
+ 
+@@ -147,7 +147,7 @@ console.log('\n--- 4. 真实变更目录 → progress POST 照常 ---');
+   seedQuicklog(cwd);
+   hits.length = 0;
+ 
+-  await triggerSync(cwd, 'real-change');
++  await triggerSync(cwd, 'real-change', {}, { inline: true });
+   const progressHit = hits.some((h) => h.includes('POST /api/changes/real-change/progress'));
+   assert(progressHit, 'progress POST 到达（原 sync() 主路径未被 quick 分支影响）');
+ }
+@@ -180,8 +180,12 @@ console.log('\n--- 5. quick 起步即推「进行中」占位条目（CLI 子进
+   connectYaml(cwd); // 指向 mock server（QUICKLOG 文件名 = QUICKLOG-<git-user>.md，harness git user 为 test）
+   hits.length = 0;
+   syncBodies.length = 0;
++  // 起步推送断言走 inline（2026-09-20 spec-sync 默认转后台子进程）：本场景测「起步即推」
++  // 的时点语义，确定性优先；后台链路（spawn/锁/日志）由 test/spec-sync-bg.test.mjs 专测。
++  process.env.SILLYSPEC_SYNC_BG = '0';
+ 
+   const r = await runCLIAsync(['run', 'quick', '--files', 'src/app.js', '--input', '占位条目推送探针'], cwd);
++  delete process.env.SILLYSPEC_SYNC_BG;
+ 
+   assert(r.status === 0, 'quick 起步进程 exit 0（同步 best-effort 不阻断启动）');
+   const syncHit = hits.some((h) => h.includes('POST /api/changes/-/spec-sync'));
+diff --git a/test/spec-sync-abort-classification.test.mjs b/test/spec-sync-abort-classification.test.mjs
+index d5a5e3cf..7a798aa8 100644
+--- a/test/spec-sync-abort-classification.test.mjs
++++ b/test/spec-sync-abort-classification.test.mjs
+@@ -123,7 +123,7 @@ console.log('\n--- B2. triggerSync env=SILLYSPEC_SYNC_TIMEOUT_MS=1000 → 1s 熔
+   let elapsed
+   try {
+     const t0 = Date.now()
+-    await triggerSync(cwd, SID)
++    await triggerSync(cwd, SID, {}, { inline: true }) // inline：断言进程内熔断时长（默认已转后台子进程，2026-09-20）
+     elapsed = Date.now() - t0
+   } finally {
+     if (saved === undefined) delete process.env.SILLYSPEC_SYNC_TIMEOUT_MS
+diff --git a/src/run/bg-sync.js b/src/run/bg-sync.js
+new file mode 100644
+--- /dev/null
++++ b/src/run/bg-sync.js
+@@ -0,0 +1,231 @@
++/**
++ * spec-sync 后台异步执行（detached 子进程）。
++ *
++ * 背景（2026-09-20 用户反馈：末步 --done 因 spec-sync 网络同步约 4 分钟不返回）：
++ * triggerSync 的 17 个调用点全部 fire-and-forget，但 Node 进程退出要等事件循环排空——
++ * 在飞 fetch 拖住进程，CLI 输出打完后仍要等网络收尾才返回 shell（平台慢时分钟级体感
++ * hang；本机制落地当天的会话启动命令尾部 3 行 [spec-sync] 已同步 逐条等网络，现场即
++ * 实证）。8s 总熔断（raceWithAbort）只保证「最多等 8s」，治标；本模块治本：同步整体
++ * 挪进 detached 后台子进程，父进程 spawn + unref 后立即返回，命令零网络尾巴。
++ *
++ * 架构（父侧/子侧同一模块，职责分开）：
++ * - 父侧 spawnBackgroundSync（shared.js triggerSync 唯一接入点调用）：
++ *   ① 未连接平台预判（sync.js peekPlatformConnected 同源判据）——未连接不 spawn，
++ *     本地独立用户零开销零行为变化；② 单飞锁判定：活锁 → rerunQueued 置位合并
++ *     （跑完当前轮再补一轮，防进程堆积），无锁/死锁 → spawn detached 子进程。
++ * - 子侧 runBgSyncFromEnv（node -e bootstrap 动态 import 本模块）：写锁 → 循环
++ *   〔清 rerunQueued → triggerSync inline 执行一轮 → 期间有新请求则再来一轮〕，
++ *   上限 5 轮 / 总预算 ~2.5min → 清锁退出。轮前清位 + 轮后查位：清位后本轮树 hash
++ *   晚于清位时刻，天然覆盖此后到达的状态；hash 之后到达的靠置位标记触发下一轮。
++ * - 子进程 stdout/stderr 接 <runtimeRoot>/spec-sync-bg.log（append，超 1MB 截尾保
++ *   后 512KB）：[spec-sync]/[sync] 的 warn/冲突横幅全量留痕，不进主命令输出也不再丢。
++ *
++ * 与既有机制的交互：
++ * - raceWithAbort / SILLYSPEC_SYNC_TIMEOUT_MS 不动——inline 路径原样。后台轮预算 =
++ *   max(resolveSyncTotalTimeoutMs(), 45s)：后台无人等待，放宽到 45s 提高「慢平台真的
++ *   同步成功」概率（2026-09-07 平台 >8s 响应间歇熔断的 pain 点在后台模式下自然消解）。
++ * - sync-noise.js 噪音闸 / spec-sync-conflict-*.json / 基线快照在子进程内照常工作
++ *   （同一 .runtime 目录，跨进程 marker 语义不变）。
++ * - 冲突可见性不降级：横幅进日志文件 + 冲突文件照落，下一条命令 progress show 照常
++ *   红标提示（resolve 三态处置入口不变）。
++ * - SILLYSPEC_SYNC_BG=0 逃生阀：triggerSync 回落 inline（测试断言进程内行为/用户自救）。
++ *
++ * 循环 import 说明：本模块与 shared.js 双向引用（shared 调本模块 spawnBackgroundSync、
++ * 本模块两侧调 shared 的 triggerSync/resolveRuntimeRoot/resolveSyncTotalTimeoutMs）。
++ * 对 shared 的引用一律走函数内动态 import，避免静态环（ESM 环可运行但初始化序脆弱，
++ * 刻意不赌）；父进程内 shared.js 已加载，动态 import 走缓存无额外成本。
++ */
++import { spawn } from 'child_process';
++import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'fs';
++import { join } from 'path';
++
++export const BG_LOCK_FILENAME = 'spec-sync-bg.lock';
++export const BG_LOG_FILENAME = 'spec-sync-bg.log';
++
++// 后台轮参数：单轮预算下限（与 env SILLYSPEC_SYNC_TIMEOUT_MS 取 max）、轮数与总预算帽
++// （防慢平台下无限续轮）；锁时效（pid 活性之外的第二道判死——pid 复用假活兜底，
++// 子进程自身总预算 ~2.5min + 收尾余量远小于该值，超时必是异常残留）。
++const BG_ROUND_FLOOR_MS = 45_000;
++const BG_MAX_ROUNDS = 5;
++const BG_TOTAL_BUDGET_MS = 150_000;
++const LOCK_STALE_MS = 15 * 60 * 1000;
++const LOG_TRUNCATE_THRESHOLD = 1_000_000;
++const LOG_TRUNCATE_KEEP = 512 * 1024;
++
++/** pid 活性探测（跨平台）：signal 0 探测；EPERM = 进程存在但属他户，保守按活。 */
++function isPidAlive(pid) {
++  if (!Number.isInteger(pid) || pid <= 0) return false;
++  try {
++    process.kill(pid, 0);
++    return true;
++  } catch (e) {
++    return e && e.code === 'EPERM';
++  }
++}
++
++/** 读后台单飞锁（缺失/损坏 → null）。 */
++export function readBgSyncLock(runtimeRoot) {
++  try {
++    const raw = readFileSync(join(runtimeRoot, BG_LOCK_FILENAME), 'utf8');
++    const obj = JSON.parse(raw);
++    return obj && typeof obj === 'object' ? obj : null;
++  } catch {
++    return null;
++  }
++}
++
++function writeBgSyncLock(runtimeRoot, lock) {
++  mkdirSync(runtimeRoot, { recursive: true });
++  const tmp = join(runtimeRoot, `${BG_LOCK_FILENAME}.${process.pid}.tmp`);
++  writeFileSync(tmp, JSON.stringify(lock) + '\n', 'utf8');
++  renameSync(tmp, join(runtimeRoot, BG_LOCK_FILENAME));
++}
++
++function removeBgSyncLock(runtimeRoot) {
++  try {
++    const p = join(runtimeRoot, BG_LOCK_FILENAME);
++    if (existsSync(p)) unlinkSync(p);
++  } catch { /* 清锁失败：残留锁按时效/pid 判死后自动接管，不影响正确性 */ }
++}
++
++/**
++ * 锁活性判定（pid 活 + 未超时）。纯函数（pid 探测单列 isPidAlive 便于注入测试）。
++ * @param {object|null} lock readBgSyncLock 产物
++ * @param {number} [now] 注入时钟（测试用）
++ */
++export function isBgSyncLockLive(lock, now = Date.now()) {
++  if (!lock || !Number.isInteger(lock.pid) || lock.pid <= 0) return false;
++  if (typeof lock.startedAt !== 'number') return false;
++  if (now - lock.startedAt > LOCK_STALE_MS) return false;
++  return isPidAlive(lock.pid);
++}
++
++/** 子进程起步截尾日志（>1MB 保后 512KB，从整行边界起）。失败只影响日志体积。 */
++function truncateLogIfNeeded(runtimeRoot) {
++  try {
++    const p = join(runtimeRoot, BG_LOG_FILENAME);
++    if (statSync(p).size <= LOG_TRUNCATE_THRESHOLD) return;
++    const buf = readFileSync(p);
++    const keep = buf.subarray(Math.max(0, buf.length - LOG_TRUNCATE_KEEP));
++    const nl = keep.indexOf(10);
++    writeFileSync(p, nl >= 0 ? keep.subarray(nl + 1) : keep);
++  } catch { /* 截断失败：继续 append */ }
++}
++
++/** 子进程 bootstrap：node -e 动态 import 本模块（file URL 精确定位，不依赖 CLI 安装形态）。 */
++function buildChildBootstrap() {
++  const selfUrl = new URL('./bg-sync.js', import.meta.url).href;
++  return `import(${JSON.stringify(selfUrl)}).then(m=>m.runBgSyncFromEnv()).catch(e=>{console.error('[spec-sync-bg] 后台同步进程异常退出:',(e&&e.message)||e)});`;
++}
++
++/**
++ * 父侧后台同步入口（triggerSync 调用，不直接被业务代码使用）。
++ *
++ * @returns {Promise<{status:'spawned'|'coalesced'|'not-connected', logPath?:string}>}
++ *   spawned=已起后台子进程；coalesced=活锁在跑、本轮状态已并入其下一轮（rerunQueued）；
++ *   not-connected=未连接平台（调用方回落 inline 路径=与旧行为一致的静默 no-op）。
++ *   spawn 失败抛异常（调用方 catch 降级 inline，绝不因后台化阻断主流程）。
++ */
++export async function spawnBackgroundSync(cwd, changeName, platformOpts = {}, opts = {}) {
++  const syncMod = await import('../sync.js');
++  if (!syncMod.peekPlatformConnected(cwd)) return { status: 'not-connected' };
++
++  const { resolveRuntimeRoot } = await import('./shared.js');
++  const runtimeRoot = resolveRuntimeRoot(platformOpts, platformOpts?.specRoot || join(cwd, '.sillyspec'));
++
++  const lock = readBgSyncLock(runtimeRoot);
++  if (isBgSyncLockLive(lock)) {
++    // 单飞合并：活后台轮在跑，把「还有新状态要同步」并入其下一轮。置位失败（并发写锁）
++    // 只损失合并信号——后台轮收尾锁自清，下一条命令重新 spawn，收敛不丢。
++    try { writeBgSyncLock(runtimeRoot, { ...lock, rerunQueued: true }); } catch { /* 见上 */ }
++    return { status: 'coalesced', logPath: join(runtimeRoot, BG_LOG_FILENAME) };
++  }
++
++  // 日志 fd：子进程 stdout/stderr 直接 append 进日志文件（跨平台 fd 继承）；开不了退 ignore
++  const logPath = join(runtimeRoot, BG_LOG_FILENAME);
++  let stdio = ['ignore', 'ignore', 'ignore'];
++  let logFd = null;
++  try {
++    mkdirSync(runtimeRoot, { recursive: true });
++    logFd = openSync(logPath, 'a');
++    stdio = ['ignore', logFd, logFd];
++  } catch {
++    logFd = null;
++  }
++
++  const env = {
++    ...process.env,
++    SILLYSPEC_BG_SYNC_CHANGE: String(changeName),
++    SILLYSPEC_BG_SYNC_CWD: String(cwd),
++  };
++  if (platformOpts?.specRoot) env.SILLYSPEC_BG_SYNC_SPEC_ROOT = String(platformOpts.specRoot);
++  if (platformOpts?.runtimeRoot) env.SILLYSPEC_BG_SYNC_RUNTIME_ROOT = String(platformOpts.runtimeRoot);
++
++  try {
++    const child = (opts.spawnImpl || spawn)(process.execPath, ['-e', buildChildBootstrap()], {
++      cwd,
++      detached: true,
++      stdio,
++      windowsHide: true,
++      env,
++    });
++    child.unref?.();
++  } finally {
++    if (logFd !== null) {
++      try { closeSync(logFd); } catch { /* 父侧 fd 副本关闭；子进程持有继承副本 */ }
++    }
++  }
++  return { status: 'spawned', logPath };
++}
++
++/**
++ * 子侧入口（bootstrap 经 env 传参调起；env 注入默认值供测试覆盖）。
++ *
++ * 单飞循环：写锁（本 pid）→ 每轮清 rerunQueued 后 inline 跑一轮 triggerSync →
++ * 轮末查位，被置位且预算未尽则续轮（迟到状态收敛），否则清锁退出。
++ * 锁 pid 非本进程（双 spawn 竞态窗口被后写者接管）→ 让位退出防双跑。
++ */
++export async function runBgSyncFromEnv(env = process.env) {
++  const changeName = env.SILLYSPEC_BG_SYNC_CHANGE;
++  const cwd = env.SILLYSPEC_BG_SYNC_CWD;
++  if (!changeName || !cwd) return;
++
++  const platformOpts = {};
++  if (env.SILLYSPEC_BG_SYNC_SPEC_ROOT) platformOpts.specRoot = env.SILLYSPEC_BG_SYNC_SPEC_ROOT;
++  if (env.SILLYSPEC_BG_SYNC_RUNTIME_ROOT) platformOpts.runtimeRoot = env.SILLYSPEC_BG_SYNC_RUNTIME_ROOT;
++
++  const { triggerSync, resolveRuntimeRoot, resolveSyncTotalTimeoutMs } = await import('./shared.js');
++  const runtimeRoot = resolveRuntimeRoot(platformOpts, platformOpts.specRoot || join(cwd, '.sillyspec'));
++  truncateLogIfNeeded(runtimeRoot);
++  const startedAt = Date.now();
++  writeBgSyncLock(runtimeRoot, { pid: process.pid, startedAt, change: changeName, rerunQueued: false });
++
++  const roundTimeoutMs = Math.max(resolveSyncTotalTimeoutMs(), BG_ROUND_FLOOR_MS);
++  const deadline = startedAt + BG_TOTAL_BUDGET_MS;
++  for (let round = 1; round <= BG_MAX_ROUNDS; round++) {
++    // 轮前清位：本轮 triggerSync 的树 hash 晚于清位时刻，覆盖此后到达的全部状态；
++    // 读→写间隙内的置位存在丢失窗口（毫秒级），由下一条命令的同步兜底收敛。
++    const cur = readBgSyncLock(runtimeRoot);
++    writeBgSyncLock(runtimeRoot, { pid: process.pid, startedAt: cur?.startedAt || startedAt, change: changeName, rerunQueued: false });
++    console.log(`[spec-sync-bg] 第 ${round}/${BG_MAX_ROUNDS} 轮开始 ${new Date().toISOString()}: ${changeName}`);
++    try {
++      await triggerSync(cwd, changeName, platformOpts, { inline: true, timeoutMs: roundTimeoutMs });
++    } catch (e) {
++      console.warn(`[spec-sync-bg] 本轮同步异常（best-effort，下一条命令自动重试）: ${(e && e.message) || e}`);
++    }
++    const lock = readBgSyncLock(runtimeRoot);
++    if (!lock || lock.pid !== process.pid) {
++      console.warn('[spec-sync-bg] 锁已不属于本进程（被并行 spawn 接管），让位退出');
++      return;
++    }
++    if (!lock.rerunQueued) break;
++    if (Date.now() + roundTimeoutMs > deadline) {
++      console.warn('[spec-sync-bg] 总预算用尽，残留待同步状态由下一条命令的同步接管');
++      break;
++    }
++  }
++  console.log(`[spec-sync-bg] 后台同步完成 ${new Date().toISOString()}: ${changeName}`);
++  removeBgSyncLock(runtimeRoot);
++}
++
++export default { spawnBackgroundSync, runBgSyncFromEnv, readBgSyncLock, isBgSyncLockLive, isPidAlive };
+
+diff --git a/test/spec-sync-bg.test.mjs b/test/spec-sync-bg.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/spec-sync-bg.test.mjs
+@@ -0,0 +1,263 @@
++// spec-sync 后台异步执行（detached 子进程）验收：--done 的网络尾巴不再拖住命令返回。
++//
++// 背景（2026-09-20 用户反馈）：triggerSync 17 个调用点全部 fire-and-forget，但在飞 fetch
++// 拖住 Node 事件循环——CLI 输出完毕后进程要等网络收尾才退出，平台慢时分钟级体感 hang
++// （本会话启动命令尾部 3 行 [spec-sync] 已同步 逐条等网络，现场即实证）。8s 总熔断只是
++// 「最多等 8s」治标；本批改 detached 后台子进程治本：spawn 后 unref，主进程零网络尾巴。
++//
++// 验收点：
++// 1. 锁活性判定 isBgSyncLockLive 纯函数：null/缺 pid/过期（>15min）/死 pid → false；
++//    活 pid（process.pid）→ true
++// 2. spawnBackgroundSync 决策矩阵（spawnImpl 注入，不起真进程）：
++//    a. 未连接平台（无 env 无 local.yaml）→ not-connected，不 spawn（本地用户零开销）
++//    b. env 连接 + 无锁 → spawned：detached/windowsHide/env 四键注入/bootstrap 含
++//       runBgSyncFromEnv、stdio 接日志 fd、unref 被调
++//    c. env 连接 + 活锁 → coalesced：rerunQueued 置位、不 spawn（单飞防堆积）
++//    d. env 连接 + 死锁（崩溃残留）→ spawned（自动接管）
++// 3. triggerSync 集成（真实子进程 + mock server）：
++//    a. 默认后台化：triggerSync 快速返回 → manifest GET + spec-sync POST 经后台子进程
++//       到达服务器 → 锁文件自清 → 日志落 .runtime/spec-sync-bg.log
++//    b. SILLYSPEC_SYNC_BG=0 逃生阀 → 回落 inline：await 返回时请求已在进程内发出
++//    c. quick 会话形态（quick-<hex8> 无实体目录）→ 子进程内走 syncSpecTreeOnly 降级
++//       分支（manifest+spec-sync 到达、无 progress POST 孤儿行）
++//
++// 隔离：os.tmpdir() 临时目录 + Node http mock server，绝不碰真实 .sillyspec/.runtime。
++import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'fs';
++import { join } from 'path';
++import { tmpdir } from 'os';
++import http from 'http';
++import { spawn } from 'child_process';
++import {
++  spawnBackgroundSync,
++  readBgSyncLock,
++  isBgSyncLockLive,
++  BG_LOCK_FILENAME,
++  BG_LOG_FILENAME,
++} from '../src/run/bg-sync.js';
++import { triggerSync } from '../src/run/shared.js';
++
++let failures = 0;
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg);
++  else { console.error('  ❌ ' + msg); failures++; }
++};
++
++const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
++async function waitUntil(fn, timeoutMs, everyMs = 150) {
++  const deadline = Date.now() + timeoutMs;
++  while (Date.now() < deadline) {
++    if (fn()) return true;
++    await sleep(everyMs);
++  }
++  return fn();
++}
++
++const tmpRoot = mkdtempSync(join(tmpdir(), `sillyspec-bg-sync-${process.pid}-`));
++
++console.log('\n[spec-sync-bg] 后台异步执行（detached 子进程 + 单飞锁 + 重跑合并）');
++
++// ── mock server：manifest 空清单 + spec-sync 200 ──
++const hits = [];
++const server = http.createServer((req, res) => {
++  let body = '';
++  req.on('data', (c) => { body += c; });
++  req.on('end', () => {
++    hits.push(`${req.method} ${req.url}`);
++    if (req.url.includes('/api/changes/-/spec-manifest')) {
++      res.writeHead(200, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ files: {} }));
++    } else if (req.url.includes('/api/changes/-/spec-sync')) {
++      res.writeHead(200, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ ok: true, new_versions: {}, conflict: false }));
++    } else {
++      res.writeHead(200, { 'Content-Type': 'application/json' });
++      res.end(JSON.stringify({ ok: true }));
++    }
++  });
++});
++await new Promise((r) => server.listen(0, '127.0.0.1', r));
++const mockUrl = `http://127.0.0.1:${server.address().port}`;
++
++const ENV_KEYS = ['SILLYHUB_PLATFORM_URL', 'SILLYHUB_PLATFORM_TOKEN', 'SILLYSPEC_SYNC_BG'];
++const savedEnv = {};
++for (const k of ENV_KEYS) { savedEnv[k] = process.env[k]; }
++const setEnvCreds = (url, token) => {
++  process.env.SILLYHUB_PLATFORM_URL = url;
++  process.env.SILLYHUB_PLATFORM_TOKEN = token;
++};
++const restoreEnv = () => {
++  for (const k of ENV_KEYS) {
++    if (savedEnv[k] === undefined) delete process.env[k];
++    else process.env[k] = savedEnv[k];
++  }
++};
++
++/** 建本地模式现场：.sillyspec 树带一个文件（保证 manifest diff 出 add op → POST 可断言）。 */
++function seedLocalProject(sub) {
++  const cwd = join(tmpRoot, sub);
++  mkdirSync(join(cwd, '.sillyspec', 'quicklog'), { recursive: true });
++  writeFileSync(join(cwd, '.sillyspec', 'quicklog', 'QUICKLOG-test.md'), '# test\n', 'utf8');
++  return cwd;
++}
++
++// ─────────────────────────────────────────
++// 1. 锁活性判定纯函数
++// ─────────────────────────────────────────
++console.log('\n--- 1. isBgSyncLockLive：null / 缺 pid / 过期 / 死 pid / 活 pid ---');
++{
++  const now = Date.now();
++  assert(isBgSyncLockLive(null, now) === false, 'null 锁 → false');
++  assert(isBgSyncLockLive({ startedAt: now }, now) === false, '缺 pid → false');
++  assert(
++    isBgSyncLockLive({ pid: process.pid, startedAt: now - 16 * 60 * 1000 }, now) === false,
++    'startedAt 超 15min 时效 → false（pid 复用假活兜底）'
++  );
++  assert(
++    isBgSyncLockLive({ pid: process.pid, startedAt: now }, now) === true,
++    '活 pid（本进程）+ 未过期 → true'
++  );
++
++  // 死 pid：spawn 一个立即退出的进程，用它的 pid 判死
++  const dead = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
++  const deadPid = dead.pid;
++  await new Promise((r) => dead.on('exit', r));
++  assert(isBgSyncLockLive({ pid: deadPid, startedAt: Date.now() }, Date.now()) === false, '已退出进程 pid → false（崩溃残留锁可接管）');
++}
++
++// ─────────────────────────────────────────
++// 2. spawnBackgroundSync 决策矩阵（spawnImpl 注入）
++// ─────────────────────────────────────────
++console.log('\n--- 2. spawnBackgroundSync：未连接 / spawned / coalesced / 死锁接管 ---');
++{
++  const cwd = seedLocalProject('decision');
++  const mkSpy = () => {
++    const calls = [];
++    return {
++      calls,
++      impl: (cmd, args, opts) => {
++        calls.push({ cmd, args, opts, child: { unrefCalled: false, unref() { this.unrefCalled = true; } } });
++        return calls[calls.length - 1].child;
++      },
++    };
++  };
++
++  // 2a. 未连接 → not-connected，不 spawn
++  {
++    restoreEnv();
++    const spy = mkSpy();
++    const r = await spawnBackgroundSync(cwd, 'quick-aa11bb22', {}, { spawnImpl: spy.impl });
++    assert(r.status === 'not-connected', '未连接平台 → not-connected（本地用户零开销，不 spawn）');
++    assert(spy.calls.length === 0, '未连接时 spawn 未被调用');
++  }
++
++  // 2b. env 连接 + 无锁 → spawned + 参数面
++  setEnvCreds(mockUrl, 'bg-token');
++  {
++    const spy = mkSpy();
++    const r = await spawnBackgroundSync(cwd, 'quick-aa11bb22', {}, { spawnImpl: spy.impl });
++    assert(r.status === 'spawned', 'env 连接 + 无锁 → spawned');
++    assert(spy.calls.length === 1, '恰好 spawn 一次');
++    const c = spy.calls[0];
++    assert(c.cmd === process.execPath, 'spawn 的是 process.execPath（node）');
++    assert(c.opts.detached === true && c.opts.windowsHide === true, 'detached + windowsHide（跨平台后台存活）');
++    assert(typeof c.opts.stdio[1] === 'number' && typeof c.opts.stdio[2] === 'number', 'stdout/stderr 接日志 fd（同步输出留痕）');
++    assert(c.opts.env.SILLYSPEC_BG_SYNC_CHANGE === 'quick-aa11bb22', 'env 注入 SILLYSPEC_BG_SYNC_CHANGE');
++    assert(c.opts.env.SILLYSPEC_BG_SYNC_CWD === cwd, 'env 注入 SILLYSPEC_BG_SYNC_CWD');
++    const boot = c.args[c.args.length - 1];
++    assert(boot.includes('runBgSyncFromEnv') && boot.includes('import('), '-e bootstrap 动态 import 本模块 runBgSyncFromEnv');
++    assert(c.child.unrefCalled === true, 'child.unref() 被调（父进程不被子进程拖住）');
++    assert(r.logPath === join(cwd, '.sillyspec', '.runtime', BG_LOG_FILENAME), 'logPath 指向 .runtime/spec-sync-bg.log');
++    // 锁未预写（子进程自写）；清残留以防影响后续用例
++    assert(!existsSync(join(cwd, '.sillyspec', '.runtime', BG_LOCK_FILENAME)), '父侧不预写锁（子进程起步自写）');
++  }
++
++  // 2c. 活锁 → coalesced + rerunQueued 置位
++  {
++    const runtimeRoot = join(cwd, '.sillyspec', '.runtime');
++    mkdirSync(runtimeRoot, { recursive: true });
++    writeFileSync(join(runtimeRoot, BG_LOCK_FILENAME), JSON.stringify({
++      pid: process.pid, startedAt: Date.now(), change: 'quick-other', rerunQueued: false,
++    }) + '\n', 'utf8');
++    const spy = mkSpy();
++    const r = await spawnBackgroundSync(cwd, 'quick-aa11bb22', {}, { spawnImpl: spy.impl });
++    assert(r.status === 'coalesced', '活锁存在 → coalesced（单飞防进程堆积）');
++    assert(spy.calls.length === 0, 'coalesced 不再 spawn');
++    const lock = readBgSyncLock(runtimeRoot);
++    assert(lock?.rerunQueued === true, 'rerunQueued 已置位（本轮状态并入后台下一轮）');
++  }
++
++  // 2d. 死锁（崩溃残留）→ spawned 接管
++  {
++    const runtimeRoot = join(cwd, '.sillyspec', '.runtime');
++    const dead2 = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
++    const deadPid2 = dead2.pid;
++    await new Promise((r) => dead2.on('exit', r));
++    writeFileSync(join(runtimeRoot, BG_LOCK_FILENAME), JSON.stringify({
++      pid: deadPid2, startedAt: Date.now(), change: 'quick-crashed', rerunQueued: false,
++    }) + '\n', 'utf8');
++    const spy = mkSpy();
++    const r = await spawnBackgroundSync(cwd, 'quick-aa11bb22', {}, { spawnImpl: spy.impl });
++    assert(r.status === 'spawned', '死锁（pid 已退出）→ 视为无锁接管 spawn');
++    rmSync(join(runtimeRoot, BG_LOCK_FILENAME), { force: true });
++  }
++  restoreEnv();
++}
++
++// ─────────────────────────────────────────
++// 3. triggerSync 集成（真实子进程 + mock server）
++// ─────────────────────────────────────────
++console.log('\n--- 3a. 默认后台化：triggerSync 快速返回，同步经子进程到达，锁自清，日志落盘 ---');
++{
++  const cwd = seedLocalProject('e2e-bg');
++  const SID = 'quick-1a2b3c4d';
++  setEnvCreds(mockUrl, 'bg-token');
++  delete process.env.SILLYSPEC_SYNC_BG;
++  hits.length = 0;
++
++  const t0 = Date.now();
++  await triggerSync(cwd, SID, {});
++  const elapsed = Date.now() - t0;
++  assert(elapsed < 5000, `triggerSync 快速返回（${elapsed}ms < 5000ms，不等网络收尾）`);
++  assert(!hits.some((h) => h.includes('spec-manifest')), '父进程内未发任何同步请求（全部在子进程）');
++
++  const runtimeRoot = join(cwd, '.sillyspec', '.runtime');
++  const manifestArrived = await waitUntil(() => hits.some((h) => h.startsWith('GET') && h.includes('spec-manifest')), 20_000);
++  assert(manifestArrived, '后台子进程的 manifest GET 到达服务器（≤20s）');
++  const postArrived = await waitUntil(() => hits.some((h) => h.startsWith('POST') && h.includes('spec-sync')), 20_000);
++  assert(postArrived, '后台子进程的 spec-sync POST 到达（本地树 diff 出 add op）');
++  assert(!hits.some((h) => h.includes('/progress')), 'quick 会话形态无 progress POST（子进程内降级 syncSpecTreeOnly 分支正确）');
++
++  const lockGone = await waitUntil(() => !existsSync(join(runtimeRoot, BG_LOCK_FILENAME)), 20_000);
++  assert(lockGone, '锁文件在同步完成后自清');
++  await sleep(300); // 子进程末条日志落盘余量
++  const logPath = join(runtimeRoot, BG_LOG_FILENAME);
++  const logText = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
++  assert(logText.includes('后台同步完成'), `日志含「后台同步完成」（${logPath}）`);
++  restoreEnv();
++}
++
++console.log('\n--- 3b. SILLYSPEC_SYNC_BG=0 逃生阀 → 回落 inline（进程内同步，不 spawn） ---');
++{
++  const cwd = seedLocalProject('e2e-inline');
++  const SID = 'quick-2b3c4d5e';
++  setEnvCreds(mockUrl, 'inline-token');
++  process.env.SILLYSPEC_SYNC_BG = '0';
++  hits.length = 0;
++
++  await triggerSync(cwd, SID, {});
++  assert(hits.some((h) => h.startsWith('GET') && h.includes('spec-manifest')), 'await 返回时 manifest 请求已在进程内发出（旧行为不变）');
++  assert(!existsSync(join(cwd, '.sillyspec', '.runtime', BG_LOCK_FILENAME)), 'inline 路径不产生锁文件');
++  restoreEnv();
++}
++
++server.close();
++// e2e 子进程退出后清理（Windows 下打开中的 fd 会锁目录，容忍残留）
++try { rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
++restoreEnv();
++
++if (failures > 0) {
++  console.error(`\n❌ spec-sync-bg: ${failures} 处断言失败`);
++  process.exitCode = 1;
++} else {
++  console.log('\n✅ spec-sync-bg: 全部通过');
++}

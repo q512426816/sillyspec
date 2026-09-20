@@ -119,7 +119,7 @@ console.log('\n--- 1. 归档后（目录已移 + status=archived）→ 终态照
   simulateArchive(pm, cwd, 'archived-change');
   hits.length = 0; progressBodies.length = 0; syncBodies.length = 0;
 
-  await triggerSync(cwd, 'archived-change');
+  await triggerSync(cwd, 'archived-change', {}, { inline: true }); // inline：断言进程内终态推送（默认已转后台子进程，2026-09-20）
 
   const progressHit = hits.some((h) => h.includes('POST /api/changes/archived-change/progress'));
   assert(progressHit, 'progress POST 到达服务器（终态不再被目录缺失守卫吞掉）');
@@ -152,7 +152,7 @@ console.log('\n--- 2. 归档后未连接平台 → 静默 ---');
   hits.length = 0;
 
   let threw = false;
-  try { await triggerSync(cwd, 'offline-change'); } catch { threw = true; }
+  try { await triggerSync(cwd, 'offline-change', {}, { inline: true }); } catch { threw = true; }
   assert(!threw, '未连接不抛异常');
   assert(hits.length === 0, '无任何请求发出');
 }
@@ -169,7 +169,7 @@ console.log('\n--- 3. 目录手删（DB 行仍 active）→ progress 照推 ---'
   rmSync(join(cwd, '.sillyspec', 'changes', 'dir-gone-change'), { recursive: true, force: true });
   hits.length = 0; progressBodies.length = 0;
 
-  await triggerSync(cwd, 'dir-gone-change');
+  await triggerSync(cwd, 'dir-gone-change', {}, { inline: true });
   const progressHit = hits.some((h) => h.includes('POST /api/changes/dir-gone-change/progress'));
   assert(progressHit, 'progress POST 到达（DB 是进度真相源，目录缺失只 warn）');
   const body = progressBodies.length > 0 ? JSON.parse(progressBodies[0]) : null;

@@ -1,0 +1,170 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-0ecf05fe",
+  "totals": {
+    "files": 13,
+    "additions": 573,
+    "deletions": 20
+  },
+  "rows": [
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 8,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/troubleshooting.md",
+      "declared": true,
+      "additions": 19,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/shared.js",
+      "declared": true,
+      "additions": 22,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/quick.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/sync.js",
+      "declared": true,
+      "additions": 12,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/hub09-sync-circuit-abort.test.mjs",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-mode-trigger-sync.test.mjs",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-sync-archive-final-state.test.mjs",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/platform-sync-quick-session-spectree.test.mjs",
+      "declared": true,
+      "additions": 8,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/spec-sync-abort-classification.test.mjs",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/bg-sync.js",
+      "declared": true,
+      "additions": 231,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/spec-sync-bg.test.mjs",
+      "declared": true,
+      "additions": 263,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 14,
+    "codeFileCount": 4,
+    "testFileCount": 6,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/shared.js",
+          "src/run/bg-sync.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/quick.js"
+        ]
+      },
+      {
+        "id": "sync",
+        "files": [
+          "src/sync.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/hub09-sync-circuit-abort.test.mjs",
+      "test/platform-mode-trigger-sync.test.mjs",
+      "test/platform-sync-archive-final-state.test.mjs",
+      "test/platform-sync-quick-session-spectree.test.mjs",
+      "test/spec-sync-abort-classification.test.mjs",
+      "test/spec-sync-bg.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-012-ff71",
+  "sessionId": "quick-0ecf05fe",
+  "savedAt": "2026-09-20T07:37:39.786Z",
+  "patchSha256": "1cce06ffe0e8bcba4f84bdc5d68c9c684120a7f33ee226cf7e4cd9b18119e93a",
+  "patchStatus": "ok"
+}

@@ -854,6 +854,28 @@ async function raceWithAbort(op, timeoutMs = resolveSyncTotalTimeoutMs()) {
 export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
+  // ── 后台异步化（2026-09-20 用户反馈：--done 被网络尾巴拖住分钟级）──
+  // 默认把同步整体挪进 detached 后台子进程：17 个调用点全部 fire-and-forget，但进程
+  // 退出要等事件循环排空，在飞 fetch 拖住命令返回。回落 inline 的三条件：
+  //   opts.inline（bg 子进程自身回环调用/测试断言进程内行为）
+  //   env SILLYSPEC_SYNC_BG=0（逃生阀，回退旧行为）
+  //   env SILLYSPEC_BG_SYNC_CWD 在场（本进程已是后台子进程，防 fork 链）
+  // spawn 决策（未连接预判/单飞锁/rerunQueued 合并/日志）见 bg-sync.js；bg 机制任何
+  // 异常降级 inline，绝不因后台化阻断主流程。
+  if (!opts.inline && changeName
+    && process.env.SILLYSPEC_SYNC_BG !== '0'
+    && !process.env.SILLYSPEC_BG_SYNC_CWD) {
+    try {
+      const bg = await import('./bg-sync.js')
+      const r = await bg.spawnBackgroundSync(cwd, changeName, platformOpts, opts)
+      if (r.status === 'spawned') {
+        console.log(`🔄 [spec-sync] 平台同步转后台执行（不阻塞本命令返回；输出与结果见 ${r.logPath}）`)
+        return
+      }
+      if (r.status === 'coalesced') return // 活后台轮在跑，本轮状态已并入其下一轮
+      // not-connected → 落回 inline（内部静默 no-op，与旧行为一致）
+    } catch { /* 后台化失败降级 inline（best-effort 契约不变） */ }
+  }
   // 平台模式不再整体跳过（2026-08-26 用户决策）：上行回传（进度 + 四件套 + spec 树）
   // 在平台模式同样执行，凭据经 env SILLYHUB_PLATFORM_URL/TOKEN（预留通道，daemon 未
   // 实现注入——需外部显式 export，sync.js _getPlatform，链路 D 同款）或 local.yaml

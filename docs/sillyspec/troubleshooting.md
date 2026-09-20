@@ -1001,3 +1001,22 @@ gate_snapshot:
 
 **证据**：五坑实证与决策见 changes/2026-09-15-worktree-dual-truth-gates/（requirements FR-01~FR-05 GWT 对账 + decisions D-001~D-005@v1）；回归锁定 test/worktree-dual-truth-gates.test.mjs 五组用例（每组正向 + 零回归各至少一条）。
 
+
+## 67. quick/全流程 `--done` 被 spec-sync 网络尾巴拖住分钟级不返回（2026-09-20 用户实证，已修复）
+
+**症状**：末步 `--done`（及每条触发同步的命令）主体输出打完后长时间无任何中间输出、命令不返回——平台慢时约 4 分钟，易误判挂死。机制落地当天的会话启动命令尾部 3 行 `[spec-sync] 已同步` 逐条等网络收尾，现场即实证。
+
+**根因**：`triggerSync`（`run/shared.js`）17 个调用点全部 fire-and-forget，但 Node 进程退出要等事件循环排空——在飞 fetch 拖住进程，CLI 打完输出仍要等网络收尾才返回 shell。8s 总熔断（raceWithAbort，坑 #54 前半段）只是「最多等 8s」治标；且平台慢环境放宽 `SILLYSPEC_SYNC_TIMEOUT_MS` 后等待同比例变长。
+
+**修复（spec-sync 后台异步化，`run/bg-sync.js`）**：
+- `triggerSync` 默认转 **detached 后台子进程**执行同步：主进程 spawn + unref 立即返回，命令零网络尾巴（实测 triggerSync 8ms 返回，同步经子进程照常到达）。
+- **单飞锁**（`<runtimeRoot>/spec-sync-bg.lock`：pid 活性 + 15min 时效双判）：活锁在跑 → 置 `rerunQueued` 合并迟到状态（跑完当前轮自动补一轮，上限 5 轮/总预算 ~2.5min），防进程堆积；死锁/崩溃残留自动接管。
+- **后台轮预算** = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)：后台无人等待，放宽预算提高慢平台真同步成功概率（坑 #54 的间歇熔断在后台模式下自然消解）。
+- **输出/结果留痕** `<runtimeRoot>/spec-sync-bg.log`（子进程 stdout/stderr append，超 1MB 截尾保后 512KB）：`[spec-sync]`/`[sync]` 的 warn/冲突横幅不再刷主命令输出也不丢失；冲突可见性不降级（冲突文件照落，下一条命令 progress show 红标）。
+- **未连接平台零开销**：spawn 前经 `sync.js peekPlatformConnected`（与 `_getPlatform` 同源判据）预判，未连接不 spawn，本地独立用户零行为变化。
+- **逃生阀** `SILLYSPEC_SYNC_BG=0` 回落 inline 旧行为（测试断言进程内行为/用户自救）；bg 子进程自身回环调 `triggerSync` 强制 inline（env 护栏防 fork 链）。
+- 测试 test/spec-sync-bg.test.mjs（26 断言）：锁判定纯函数五态 + spawn 决策矩阵（spawnImpl 注入）+ e2e 真子进程（快速返回/请求到达/锁自清/日志落盘）+ 逃生阀 inline。
+
+**遇到同步类等待/噪音先查三处**：① 命令尾部卡住不看时钟猜——看是否 `[spec-sync]` 行还没打完（后台化后此形态已消，若再现查 `SILLYSPEC_SYNC_BG` 是否被置 0）；② 后台同步结果/失败去 `spec-sync-bg.log` 翻（不再进主命令输出）；③ 冲突横幅只在日志里出现时，`progress show` 的红标与 `platform resolve` 处置入口不变。
+
+**关联坑名**：`sync-tail-blocks-cli-exit`；上游坑 #54（熔断文案/预算可调，本坑是其「治本」续篇）

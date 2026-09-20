@@ -91,7 +91,7 @@ console.log('\n--- 1. quick 会话触发 spec 树同步（不推 progress） ---
   seedQuicklog(cwd);
   hits.length = 0;
 
-  await triggerSync(cwd, 'quick-ab12cd34');
+  await triggerSync(cwd, 'quick-ab12cd34', {}, { inline: true }); // inline：断言进程内同步（默认已转后台子进程，2026-09-20）
 
   const manifestHit = hits.some((h) => h.includes('GET /api/changes/-/spec-manifest'));
   const syncHit = hits.some((h) => h.includes('POST /api/changes/-/spec-sync'));
@@ -112,7 +112,7 @@ console.log('\n--- 2. quick 会话未连接平台 → 静默 ---');
   hits.length = 0;
 
   let threw = false;
-  try { await triggerSync(cwd, 'quick-ab12cd34'); } catch { threw = true; }
+  try { await triggerSync(cwd, 'quick-ab12cd34', {}, { inline: true }); } catch { threw = true; }
   assert(!threw, '未连接不抛异常');
   assert(hits.length === 0, '无任何请求发出');
 }
@@ -128,7 +128,7 @@ console.log('\n--- 3. 拼错变更名 → 无任何请求（仅本地 warn） --
   seedQuicklog(cwd);
   hits.length = 0;
 
-  await triggerSync(cwd, '2026-08-18-not-exist-typo');
+  await triggerSync(cwd, '2026-08-18-not-exist-typo', {}, { inline: true });
   assert(hits.length === 0, '无任何请求（防拼写错误噪音混入网络通道）');
 }
 
@@ -147,7 +147,7 @@ console.log('\n--- 4. 真实变更目录 → progress POST 照常 ---');
   seedQuicklog(cwd);
   hits.length = 0;
 
-  await triggerSync(cwd, 'real-change');
+  await triggerSync(cwd, 'real-change', {}, { inline: true });
   const progressHit = hits.some((h) => h.includes('POST /api/changes/real-change/progress'));
   assert(progressHit, 'progress POST 到达（原 sync() 主路径未被 quick 分支影响）');
 }
@@ -180,8 +180,12 @@ console.log('\n--- 5. quick 起步即推「进行中」占位条目（CLI 子进
   connectYaml(cwd); // 指向 mock server（QUICKLOG 文件名 = QUICKLOG-<git-user>.md，harness git user 为 test）
   hits.length = 0;
   syncBodies.length = 0;
+  // 起步推送断言走 inline（2026-09-20 spec-sync 默认转后台子进程）：本场景测「起步即推」
+  // 的时点语义，确定性优先；后台链路（spawn/锁/日志）由 test/spec-sync-bg.test.mjs 专测。
+  process.env.SILLYSPEC_SYNC_BG = '0';
 
   const r = await runCLIAsync(['run', 'quick', '--files', 'src/app.js', '--input', '占位条目推送探针'], cwd);
+  delete process.env.SILLYSPEC_SYNC_BG;
 
   assert(r.status === 0, 'quick 起步进程 exit 0（同步 best-effort 不阻断启动）');
   const syncHit = hits.some((h) => h.includes('POST /api/changes/-/spec-sync'));

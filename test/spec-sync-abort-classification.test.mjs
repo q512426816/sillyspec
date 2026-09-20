@@ -123,7 +123,7 @@ console.log('\n--- B2. triggerSync env=SILLYSPEC_SYNC_TIMEOUT_MS=1000 → 1s 熔
   let elapsed
   try {
     const t0 = Date.now()
-    await triggerSync(cwd, SID)
+    await triggerSync(cwd, SID, {}, { inline: true }) // inline：断言进程内熔断时长（默认已转后台子进程，2026-09-20）
     elapsed = Date.now() - t0
   } finally {
     if (saved === undefined) delete process.env.SILLYSPEC_SYNC_TIMEOUT_MS

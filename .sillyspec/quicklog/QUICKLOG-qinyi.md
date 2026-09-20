@@ -254,3 +254,27 @@
 根因：对撞三轮 plan 把 13 任务手排 6 波全串行链（Wave N 依赖 Wave N-1，平均 2.2/波，Wave 5 单波 30 分钟），方向合法故被 planPostcheck『结构不一致但方向合法→静默放行』放过，execute 108 分钟并行度归零（旧版同任务 4 波 75 分钟）
 方案：assessWaveStructure 纯函数（可合并相邻波对=相邻波间无 depends_on 依赖边且 allowed_paths 并集无交集；≥2→ERROR 硬拦带具体可并入对与 plan-adopt-waves 出口；显式波数=拓扑最小且≥5→advisory 深链提示核 depends_on 过声明不阻断——真串行链合法放行）；planPostcheck 显式 Wave 比对块接线（wavePathSets 任务卡加载，卡片缺失按空面同 validateWaveProposal 口径）；刻意不用波数≥5+平均<2.5 启发式（会误伤真依赖链：链深 N≥5 平均=1 但串行合法）；topoSortWaves 本身 Kahn 最早可行层不保守，不动排序只加拦截；同波共享文件分离合法不算可合并（双写竞态保护）
 结果：test/plan-wave-structure-guard.test.mjs 8/8（纯函数五态含既有『单对保守串行不拦』语义保持+executePlanPostcheck 集成三态拦/放/advisory）+plan 侧回归 13/13+lint 703 绿；quick 收尾门禁实测
+
+## ql-20260920-012-ff71 | 2026-09-20 15:11:17 | spec-sync 网络同步转后台异步执行——--done 不再被网络尾巴拖住分钟级
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/bg-sync.js（新增：后台同步模块（父侧 spawn 决策/单飞锁/未连接预判；子侧清位-跑轮-查位循环+日志留痕））
+- src/run/shared.js（triggerSync 入口接 bg 分支——默认后台化，三条件回落 inline（opts.inline/SILLYSPEC_SYNC_BG=0/bg 子进程回环））
+- src/sync.js（新增 peekPlatformConnected——与 _getPlatform 同源判据的连接预判（未连接不 spawn 零开销））
+- src/stages/quick.js（step2 末步预告补 --file-notes 仅末步生效的前置提示）
+- test/spec-sync-bg.test.mjs（新增：锁判定五态+spawn 决策矩阵+e2e 真子进程+逃生阀，26 断言）
+- test/platform-mode-trigger-sync.test.mjs（triggerSync 直调补 inline:true（断言进程内行为））
+- test/platform-sync-quick-session-spectree.test.mjs（直调补 inline + CLI 子进程场景设 SILLYSPEC_SYNC_BG=0 保确定性）
+- test/platform-sync-archive-final-state.test.mjs（triggerSync 直调补 inline:true）
+- test/hub09-sync-circuit-abort.test.mjs（triggerSync 直调补 inline:true）
+- test/spec-sync-abort-classification.test.mjs（triggerSync 直调补 inline:true）
+- docs/sillyspec/platform-interface-map.md（triggerSync 后台化条目 + 锚点漂移修复（含 2 处基线存量债））
+- docs/sillyspec/troubleshooting.md（新增条目 #67：网络尾巴拖住命令返回（后台异步化闭环））
+- docs/sillyspec/prompt-control-debt.md（shared.js 锚点 1108→1131 漂移修复）
+需求：spec-sync 网络同步转后台异步执行——--done 不再被网络尾巴拖住分钟级
+根因：triggerSync 17 处 fire-and-forget，但在飞 fetch 拖住 Node 事件循环，CLI 打完输出仍要等网络收尾才返回 shell（用户实证末步 --done 约 4 分钟无中间输出易误判挂死；8s 熔断只封上限不治本）。次要：--file-notes 仅末步生效的提示只在 step3 prompt 可见，step2 传了被拒白跑一轮
+方案：triggerSync 默认转 detached 后台子进程执行同步（新模块 run/bg-sync.js：未连接平台预判零开销不 spawn、单飞锁 pid+时效判活、活锁 rerunQueued 合并迟到状态、子进程输出留痕 .runtime/spec-sync-bg.log、后台轮预算 max(SILLYSPEC_SYNC_TIMEOUT_MS,45s) 5轮封顶；SILLYSPEC_SYNC_BG=0 逃生阀回落旧行为，bg 子进程回环强制 inline 防 fork 链），17 个调用点零改动受益；stages/quick.js step2 末步预告补 file-notes 前置提示
+结果：新测试 26/26 断言绿（e2e：triggerSync 8ms 返回、同步经后台子进程到达服务器、锁自清、日志落盘；本仓实弹后台轮 2.5s 完成真实平台同步）；全量 npm test 553 文件 EXIT=0；lint 705 文件 0 告警；docs check 592/592 全绿（顺手修 2 处基线存量锚债）
+审计：[gate] L1（跨 3 模块 · 14 文件：4 代码/6 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/CLAUDE.md

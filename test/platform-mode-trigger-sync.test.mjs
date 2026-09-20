@@ -121,7 +121,7 @@ console.log('\n--- 1. 平台模式 + env 凭据 → progress POST 到达（env t
   hits.length = 0; authHeaders.length = 0; progressBodies.length = 0;
   let threw = false;
   try {
-    await triggerSync(cwd, 'plat-mode-change', platformOpts);
+    await triggerSync(cwd, 'plat-mode-change', platformOpts, { inline: true }); // inline：断言进程内上行（默认已转后台子进程）
   } catch (e) { threw = true; console.error('   异常:', e.message); }
   clearEnvCreds();
 
@@ -144,7 +144,7 @@ console.log('\n--- 2. 平台模式无 env 无 local.yaml platform 段 → 静默
   clearEnvCreds(); // 且不写 local.yaml → _getPlatform() 为 null
   hits.length = 0;
   let threw = false;
-  try { await triggerSync(cwd, 'plat-mode-change', platformOpts); } catch { threw = true; }
+  try { await triggerSync(cwd, 'plat-mode-change', platformOpts, { inline: true }); } catch { threw = true; }
   assert(!threw, '未连接不抛异常');
   assert(hits.length === 0, '无任何请求发出（daemon 未注入 env 时与放行前行为一致）');
 }

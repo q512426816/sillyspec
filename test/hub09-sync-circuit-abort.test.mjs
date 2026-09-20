@@ -74,7 +74,7 @@ console.log('\n--- B. triggerSync timeoutMs 熔断 → abort 传到底层 POST -
   pm.init(cwd)
   pm.initChange(cwd, CN)
   const t0 = Date.now()
-  await triggerSync(cwd, CN, {}, { timeoutMs: 600 })
+  await triggerSync(cwd, CN, {}, { timeoutMs: 600, inline: true }) // inline：断言进程内熔断行为（默认已转后台子进程，2026-09-20）
   const elapsed = Date.now() - t0
   assert(elapsed < 3000, `熔断按 timeoutMs 生效（${elapsed}ms < 3000ms）`)
   await new Promise((r) => setTimeout(r, 300))

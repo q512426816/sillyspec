@@ -2281,6 +2281,18 @@ export async function syncSpecTreeOnly(changeName, cwd, opts = {}) {
   return syncSpecTree(safePlatformSpecDir(cwd) || join(cwd, '.sillyspec'), platform, changeName, { signal: opts.signal });
 }
 
+/**
+ * 平台连接预判（run/bg-sync.js 父侧 spawn 前的免开销短路）：与 _getPlatform 同源判据
+ * 的布尔化——env 两键齐全，或 cwd/.sillyspec/local.yaml platform 段带 url+token。
+ * 未连接时不为一次注定 no-op 的同步 spawn 后台子进程（本地独立用户零开销零行为变化）。
+ * 只做连接性预判不携带凭据：子进程自行经 _getPlatform 取全量配置（判据同源必一致）。
+ */
+export function peekPlatformConnected(cwd) {
+  if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) return true;
+  const p = readLocalYaml(cwd).platform;
+  return Boolean(p && p.url && p.token);
+}
+
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；
 // 对齐时只改本函数（_submitApproval），无需动 approve/reject 入口。
 /**
