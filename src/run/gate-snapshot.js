@@ -352,7 +352,7 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
  */
-export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false }) {
+export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null }) {
   let snapshotRoot = null
   try {
     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
@@ -383,12 +383,20 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     let overlaid = 0
     // 双写一致性（2026-09-20 红线机检变更实证：主 agent 在主仓直写而 execute 已建 worktree 时，
     // overlay 源=worktree 拿陈旧内容盖掉快照 HEAD 的新版——快照内 import 找不到新导出→门禁假红）。
-    // 三方取新：sourceRoot 与 cwd 同文件内容不同时，选「与快照 HEAD 基线不同」的那份；
-    // 两份都变了且互不相等（真分叉）→ 显式警告 + 取 cwd（主仓直写=本会话最新编辑位约定）。
+    // 祖先判据（fr-index-l2 二次实证升级）：基线优先取 merge-base 的每文件祖先内容
+    //（git show mb:file——worktree 有自家 checkpoint 提交时，快照 HEAD 不是公共祖先，
+    // wtDiff/cwdDiff 同谱不可分；祖先内容可精确分「worktree 停在分叉点=陈旧」与「真有修改」）。
+    // 两份都变于祖先且互不相等（真双写分叉）→ 显式警告 + 取 cwd（主仓直写=本会话最新编辑位约定）。
     // 行尾归一（坑 autocrlf-byte-misjudge）：本机 autocrlf=true 时快照 checkout 是 CRLF、
     // 工作区文件常是 LF——字节直比会误判「两边都改」。比较一律 CRLF→LF 归一后做。
     const normalizeEol = (buf) => String(buf).replace(/\r\n/g, '\n')
     const headFileContent = (rel) => {
+      if (mergeBase) {
+        try {
+          const anc = git(cwd, ['show', `${mergeBase}:${rel}`])
+          if (typeof anc === 'string') return normalizeEol(anc)
+        } catch { /* 祖先无此文件（新增文件）→ 落到快照 HEAD 口径 */ }
+      }
       try { return normalizeEol(readFileSync(join(snapshotRoot, rel))) } catch { return null }
     }
     for (const f of files) {
@@ -633,16 +641,30 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
 
     // overlay 源：worktree meta 感知（native worktree 在则从 worktree 根取「本变更分支内容」）
     let sourceRoot = null
+    let snapMergeBase = null
     try {
       const { WorktreeManager } = await import('../worktree.js')
       const wm = new WorktreeManager({ cwd })
       const meta = wm.getMeta(changeName)
       if (meta && meta.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
         sourceRoot = meta.worktreePath
+        // 陈旧 worktree 判定（2026-09-20 fr-index-l2 实证）：主 agent 在主仓直写并提交后，
+        // worktree 停在基线——内容三方（worktree/cwd/快照HEAD）判不出「领先」与「落后」
+        // （同谱）。精确判据 = merge-base 的每文件祖先内容（git show mb:file）：
+        // worktree 内容==祖先 → 陈旧（主仓取新）；≠ → worktree 有真修改（正常流保 worktree）。
+        // 此处只算 mergeBase 一次（拓扑级），每文件祖先内容由 createGateSnapshot 按需取。
+        try {
+          const wtTip = git(sourceRoot, ['rev-parse', 'HEAD'])
+          const mainHead = git(cwd, ['rev-parse', 'HEAD'])
+          const mb = (wtTip && mainHead && wtTip !== mainHead) ? git(cwd, ['merge-base', wtTip, mainHead]) : null
+          if (wtTip && mainHead && wtTip !== mainHead && mb) {
+            snapMergeBase = String(mb).trim()
+          }
+        } catch { /* 拓扑判定失败退快照HEAD口径（既有兜底） */ }
       }
     } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
 
-    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot })
+    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase })
     if (!snap) return null
 
     // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
