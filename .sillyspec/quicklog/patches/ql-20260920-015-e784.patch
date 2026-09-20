@@ -1,0 +1,102 @@
+diff --git a/src/index.js b/src/index.js
+index d6d5a1d5..c4fec03e 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -114,7 +114,7 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec delta --change <name> [--json]   生成变更 delta.md（Before/Delta/After 三段式聚合；幂等覆盖重跑即刷新）
+   sillyspec next                            项目状态探测：输出当前状态 + 下一步命令 + 依据（吸收 continue/resume 手工探测表）
+   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
+-  sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
++  sillyspec verify-probes --change <name> [--init [--force]]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架（--force 覆盖重生成，手填内容会重置）
+   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
+   sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照记录态；advisory 只读不设门禁）
+   sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
+@@ -1114,12 +1114,15 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
+       // 六探针中的纯机械四个（未实现标记 grep / 测试文件递归查找 / API 契约对账 / 删除对账）
+       // 一条命令跑完并渲染成可直接粘贴的 markdown；半语义探针（2/4 + 3.4/3.5）显式留 TODO。
+       // --init 顺带生成 verify-result.md 七章节骨架（探针结果预填；结论留「待填」——gate 找
+-      // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖。
++      // 不到 PASS/FAIL 即判不过，骨架不能直接过门）。已存在不覆盖；--force 覆盖重生成全骨架
++      // （quick-B，2026-09-20 报告问题 B：骨架 :2571 指引曾承诺「重跑 --init 刷新本段」但已存在
++      // 场景实为 no-op——刷新通道缺失；design-init --force 同款先例）。
+       const vpChangeIdx = args.indexOf('--change');
+       const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] && !String(args[vpChangeIdx + 1]).startsWith("--") ? args[vpChangeIdx + 1] : null;
+       const vpInit = args.includes('--init');
++      const vpForce = args.includes('--force');
+       if (!vpChange) {
+-        console.error('用法: sillyspec verify-probes --change <name> [--init] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖）');
++        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）');
+         process.exit(2);
+       }
+       assertSafeChangeName(vpChange, '--change 变更名');
+@@ -1168,8 +1171,15 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
+             writeFileSync(vpReportPath, vpInjected);
+             await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpInjected);
+             console.log(`\n📄 存量旧格式 verify-result.md 已补注入探针预填段: ${vpReportPath}（正文其余未动；补注后按新预填段如实核对结论）${vpPlatformNote}`);
++          } else if (vpForce) {
++            // quick-B：--force 覆盖重生成全骨架（含接口矩阵等 CLI 预填段）——手填内容会重置，
++            // 醒目警告 + 备份指引（预填段过期/骨架仍是「无接口面」注记时的刷新通道）
++            const vpSkeleton = generateVerifyResultSkeleton(vpResult);
++            writeFileSync(vpReportPath, vpSkeleton);
++            await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
++            console.log(`\n📄 --force 已重生成 verify-result.md 骨架: ${vpReportPath}（探针与预填段已刷新；⚠️ 手填的结论/移交项等已被重置——需保留的内容从 git 或备份找回后回填）${vpPlatformNote}`);
+           } else {
+-            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}`);
++            console.log(`\nℹ️  verify-result.md 已存在，不覆盖: ${vpReportPath}${vpPlatformNote}（预填段过期需刷新时用 --init --force）`);
+           }
+         } else {
+           const vpSkeleton = generateVerifyResultSkeleton(vpResult);
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 06934ecc..6e58c90b 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -1073,7 +1073,7 @@ function designHasSubmitEndpoint(text) {
+ //   sectionHint（命中的接口段头列表，审计注记）。
+ // 落盘面（数据通道=落盘即消费，stage-contract 零 import 纪律）：backfillFactsFromMdAndTests
+ // 主路径写 facts.apiFace / facts.consumerHints，task-05 validator 经 facts 消费不经函数调用。
+-const API_FACE_SECTION_RE = /接口|端点|api|rest/i
++const API_FACE_SECTION_RE = /接口|端点|\bapi\b|\brest\b/i // quick-B 词边界：OpenAPI 标题（api 前邻字母）不再误收进 sectionHint
+ const API_FACE_METHOD_RE = /(?:^|[^A-Za-z])(GET|POST|PUT|DELETE|PATCH)(?![A-Za-z])/
+ // 路径样式 token：/ 起始、前邻非字母数字（日期 2026/09/17 的 /09 前是数字段不认），
+ // 首字符字母数字/_/-/{，后续段字符含 {}/: 模板形态（/orders/{id}、/orders/:id 全串命中）
+@@ -2590,7 +2590,7 @@ function renderApiCoverageMatrixLines(apiFace) {
+   L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态：design接口表#METHOD /path、权限矩阵[角色×动作]、契约表@行标识、DDL@列名、载荷@构造点路径（须真实命中对应表/段，防空指）。 -->')
+   L.push('<!-- 文法注释：子行 = 端点行下一行、两空格缩进、以「↳ <消费端>:」前缀书写（消费端细分承接面，不计矩阵行账）；探索行 = 判定 uncovered 且证据列含 [探索] 标记（探索性验证不算覆盖）。 -->')
+   if (endpoints.length === 0 && declared === null) {
+-    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --init` 刷新本段；判级 critical 的零面拦截归 validator')
++    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --change <变更名> --init --force` 重生成本段（⚠️ 全骨架重生成，手填结论会重置——先备份；quick-B 起 --force 通道存在）；判级 critical 的零面拦截归 validator')
+     return L
+   }
+   if (endpoints.length > 0 && declared !== null && declared !== endpoints.length) {
+@@ -2604,7 +2604,7 @@ function renderApiCoverageMatrixLines(apiFace) {
+     }
+   } else {
+     L.push(`| 本变更接口面：${declared} 端点（agent 声明） | <待填：五选一> | <待填：用例 ID> | <待填> | <待填：锚点> |`)
+-    L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init 刷新本段 -->')
++    L.push('<!-- 解析零行降级（D-005）：接口面以 agent 声明为准（对账分母=声明数）；声明与实际不符时补 design 接口段表格后重跑 --init --force 重生成本段（quick-B：--force 才有刷新通道，手填内容会重置先备份） -->')
+   }
+   L.push('<!-- advisory 尾注（warning 计算归 validator，本段只留位）：有消费端未填子行的端点将列于此（advisory——消费端归类=design 清单启发式，数据面 facts.consumerHints）；写端点（POST/PUT/DELETE/PATCH）未在权限矩阵段声明的将列于此（advisory——补行或显式豁免「无权限约束」，数据面 facts.apiFace.writeEndpoints；表缺行会让派生框架继承你的洞） -->')
+   return L
+diff --git a/test/api-coverage-matrix.test.mjs b/test/api-coverage-matrix.test.mjs
+index 7d0cee3f..7b73a810 100644
+--- a/test/api-coverage-matrix.test.mjs
++++ b/test/api-coverage-matrix.test.mjs
+@@ -430,3 +430,18 @@ test('8d. probe7 验收矩阵联动不误报（④/FR-02/D-002）：covered-serv
+       `backfill 后 facts.matrixPartialRows=0（covered-service 不落 partial/uncovered 计数——封顶条件④不触发的结构性证据）（实际 ${onDisk.matrixPartialRows}）`)
+   } finally { console.warn = capWarn }
+ })
++
++// ── quick-B（2026-09-20 报告问题 B 附带）：段头宽收词边界——OpenAPI 标题不误收 sectionHint ──
++test('parseDesignApiTable 段头词边界：OpenAPI 标题不进 sectionHint，独立 API/接口/REST 标题照常进', () => {
++  const md = [
++    '# design', '',
++    '## Wave 2：gen:types 与 OpenAPI（backend）', '',
++    '该段描述 openapi.json 重生成，无端点表格行。', '',
++    '## API 契约', '',
++    '| GET | /api/x | 说明 |', '',
++  ].join('\n')
++  const r = parseDesignApiTable(md)
++  assert.ok(!r.sectionHint.some(h => /OpenAPI/i.test(h)), `OpenAPI 标题不应误收（实际 ${JSON.stringify(r.sectionHint)}）——/api/i 无词边界时 OpenAPI 含 api 子串命中`)
++  assert.ok(r.sectionHint.some(h => /API 契约/.test(h)), '独立 API 标题照常命中')
++  assert.equal(r.endpoints.length, 1, '端点行仍从 API 契约段解析')
++})

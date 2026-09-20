@@ -1,0 +1,64 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-3c834903",
+  "totals": {
+    "files": 2,
+    "additions": 96,
+    "deletions": 5
+  },
+  "rows": [
+    {
+      "path": "src/contract-matrix.js",
+      "declared": true,
+      "additions": 26,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/probe5-change-relevant-surface.test.mjs",
+      "declared": true,
+      "additions": 70,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/contract-matrix.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/probe5-change-relevant-surface.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-016-3185",
+  "sessionId": "quick-3c834903",
+  "savedAt": "2026-09-20T15:33:36.852Z",
+  "patchSha256": "2a37df56494c3ae8f6eaa7f4ba3981c86a31bc885867a3df5650c1ea2c8eb41e",
+  "patchStatus": "ok"
+}

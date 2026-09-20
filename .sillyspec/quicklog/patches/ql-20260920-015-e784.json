@@ -1,0 +1,78 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-2ca4887e",
+  "totals": {
+    "files": 3,
+    "additions": 32,
+    "deletions": 7
+  },
+  "rows": [
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/api-coverage-matrix.test.mjs",
+      "declared": true,
+      "additions": 15,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/verify-probes.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/api-coverage-matrix.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-015-e784",
+  "sessionId": "quick-2ca4887e",
+  "savedAt": "2026-09-20T15:28:20.190Z",
+  "patchSha256": "bd6b23a12f5f7d824dce9a4afaf1e9ed44c5c80b7914238f71a87649287cc8d4",
+  "patchStatus": "ok"
+}

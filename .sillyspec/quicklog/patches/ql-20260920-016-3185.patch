@@ -1,0 +1,130 @@
+diff --git a/src/contract-matrix.js b/src/contract-matrix.js
+index f20bd90c..840e7829 100644
+--- a/src/contract-matrix.js
++++ b/src/contract-matrix.js
+@@ -542,11 +542,16 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
+   // worktree，scanRoot（主仓 cwd）里是旧版本——读旧版会漏新调用/多已删调用。
+   let frontendCalls = []
+   let frontendScope = 'full-repo'
++  // 变更文件面一次解析两用（quick-C，2026-09-20 报告问题 C）：前端调用收窄 + unused 分层的
++  // change-relevant 判定共消费；解析失败 → null（前端回退全仓、分层回退 artifact 口径）
++  const parityChanged = changeName
++    ? (() => { try { return _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot) } catch { return null } })()
++    : null
+   const frontendRoot = (wt && wt.gitDir !== scanRoot) ? wt.gitDir : scanRoot
+   const frontendRootLabel = frontendRoot === scanRoot ? 'scan-root' : 'worktree'
+   if (changeName) {
+     try {
+-      const changed = _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot)
++      const changed = parityChanged
+       if (changed && changed.length > 0) {
+         const changedSet = new Set(changed.map(f => f.replace(/\\/g, '/')))
+         frontendCalls = scanFrontendApiCalls(frontendRoot).filter(c => {
+@@ -647,12 +652,28 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
+     return liveKeys.has(key) || liveEndpoints.length === 0
+   })
+   // unused 分层（坑 probe5-unused-stock-noise，2026-09-15 EHS 生产实证：490 个 unused 全是
+-  // urgent 等他模块存量端点——全仓 live 扫描 × 本变更对账的口径噪音刷屏）。本变更相关 =
+-  // contract artifact 端点集内（本变更换的端点漏配才是真信号）；存量其余折叠计数。无
+-  // artifact（非契约流）回退全列零回归。
++  // urgent 等他模块存量端点——全仓 live 扫描 × 本变更对账的口径噪音刷屏）。本变更相关判定
++  // 两级（quick-C，2026-09-20 报告问题 C：artifact 集口径被整仓 baseline 击穿——execute 起点
++  // 拍的全仓端点基线让 artifactKeys ⊇ 全仓、418 存量端点全误标「本变更端点前端未调用」）：
++  // ①有变更文件面（_resolveDiffFilesForParity 同款链，前端收窄复用同一次解析）→ 判「端点定义
++  //   源文件 ∈ 本变更 diff 面」（源串反斜杠归一 + artifact 任务目录前缀形态，双向 endsWith——
++  //   与前端调用收窄同款匹配）；
++  // ②面不可得（CLI contractScan 无 changeName / diff 兜底链全空）→ 回退 artifact 端点集口径；
++  // ③无 artifact（非契约流）→ 回退全列零回归。
+   const artifactKeys = new Set(allProviderEndpoints.map(e => `${e.method} ${e.path}`))
+   const hasArtifacts = allProviderEndpoints.length > 0
+-  const unusedChangeRelevant = hasArtifacts ? narrowedUnused.filter(u => artifactKeys.has(`${u.method} ${u.path}`)) : narrowedUnused
++  const unusedChangeRelevant = parityChanged && parityChanged.length > 0
++    ? narrowedUnused.filter(u => {
++        // diffApiParity 的 unused 项定义源字段是 providerFile（endpoint-extractor.js:492），
++        // 兼容直调方可能给的 source 形态
++        const src = String(u.providerFile || u.source || '').replace(/\\/g, '/')
++        if (!src) return false
++        return parityChanged.some(cf => {
++          const c = String(cf).replace(/\\/g, '/')
++          return src === c || src.endsWith('/' + c) || c.endsWith('/' + src) || src.endsWith(c) || c.endsWith(src)
++        })
++      })
++    : (hasArtifacts ? narrowedUnused.filter(u => artifactKeys.has(`${u.method} ${u.path}`)) : narrowedUnused)
+   const unusedStockCount = narrowedUnused.length - unusedChangeRelevant.length
+ 
+   const ok = missingBackend.length === 0
+diff --git a/test/probe5-change-relevant-surface.test.mjs b/test/probe5-change-relevant-surface.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/probe5-change-relevant-surface.test.mjs
+@@ -0,0 +1,70 @@
++/**
++ * 探针 5 unused 分层「本变更相关=定义源文件∈变更文件面」测试（quick-C，2026-09-20 报告问题 C）。
++ *
++ * 坑：change-relevant 原判「∈ contract artifact 端点集」——artifact 池是 execute 起点拍的整仓
++ * baseline（614 端点全量）时 artifactKeys ⊇ 全仓，418 个存量端点全被误标「本变更端点前端未调用」
++ * 刷屏，存量折叠机制被击穿。修法：有变更文件面时改判「端点定义源文件 ∈ 本变更 diff 面」。
++ *
++ * 夹具形态：tmp git 仓两个后端文件各定义一个端点；artifact 池（contract-artifacts/<change>/
++ * baseline/endpoints.json）两端点都收（模拟整仓 baseline）；a.js 未提交修改（diff 面只含 a.js）。
++ * 断言：unusedChangeRelevant 只含 /api/changed（a.js 端点），/api/stock 落 stock 折叠。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++
++import { verifyApiParity } from '../src/contract-matrix.js'
++
++const git = (cwd, args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' })
++
++test('unused 分层文件面口径：整仓 baseline artifact 下只有变更文件定义的端点进 change-relevant', () => {
++  const root = mkdtempSync(join(tmpdir(), 'p5cr-'))
++  try {
++    git(root, ['init', '--quiet'])
++    writeFileSync(join(root, 'a.js'), "app.get('/api/changed', h)\n")
++    writeFileSync(join(root, 'b.js'), "app.get('/api/stock', h)\n")
++    git(root, ['add', '.'])
++    git(root, ['commit', '--quiet', '-m', 'base'])
++    // diff 面：只改 a.js（未提交）
++    writeFileSync(join(root, 'a.js'), "app.get('/api/changed', h2)\n")
++    // 整仓 baseline artifact：两端点都在池里（模拟 endpoints baseline 全量拍法）
++    const specBase = join(root, '.sillyspec')
++    const runtimeRoot = join(specBase, '.runtime')
++    const artifactDir = join(runtimeRoot, 'contract-artifacts', 'c1', 'baseline')
++    mkdirSync(artifactDir, { recursive: true })
++    writeFileSync(join(artifactDir, 'endpoints.json'), JSON.stringify({
++      endpoints: [
++        { method: 'GET', path: '/api/changed', source: 'a.js' },
++        { method: 'GET', path: '/api/stock', source: 'b.js' },
++      ],
++    }))
++    const r = verifyApiParity(specBase, root, runtimeRoot, 'c1')
++    const relevant = (r.unusedChangeRelevant || []).map(u => `${u.method} ${u.path}`)
++    assert.ok(relevant.includes('GET /api/changed'), `变更文件（a.js）定义的端点进 change-relevant（实际 ${JSON.stringify(relevant)}）`)
++    assert.ok(!relevant.includes('GET /api/stock'), `存量端点（b.js）不进 change-relevant——整仓 baseline 击穿场景收口（实际 ${JSON.stringify(relevant)}）`)
++    assert.ok((r.unusedStockCount || 0) >= 1, `存量端点落 stock 折叠计数（实际 ${r.unusedStockCount}）`)
++  } finally {
++    try { rmSync(root, { recursive: true, force: true }) } catch {}
++  }
++})
++
++test('无变更文件面（无 changeName）回退 artifact 口径零回归', () => {
++  const root = mkdtempSync(join(tmpdir(), 'p5cr2-'))
++  try {
++    writeFileSync(join(root, 'a.js'), "app.get('/api/x', h)\n")
++    const specBase = join(root, '.sillyspec')
++    const runtimeRoot = join(specBase, '.runtime')
++    const artifactDir = join(runtimeRoot, 'contract-artifacts', 'c2', 'baseline')
++    mkdirSync(artifactDir, { recursive: true })
++    writeFileSync(join(artifactDir, 'endpoints.json'), JSON.stringify({
++      endpoints: [{ method: 'GET', path: '/api/x', source: 'a.js' }],
++    }))
++    const r = verifyApiParity(specBase, root, runtimeRoot, null)
++    assert.ok((r.unusedChangeRelevant || []).some(u => u.path === '/api/x'), '无 changeName → artifact 口径：artifact 内端点仍进 change-relevant')
++  } finally {
++    try { rmSync(root, { recursive: true, force: true }) } catch {}
++  }
++})
