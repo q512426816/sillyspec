@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-09-14T21:40:00+08:00
+updated_at: 2026-09-20T00:00:00+08:00
 ---
 
 # stages
@@ -23,6 +23,8 @@ updated_at: 2026-09-14T21:40:00+08:00
 | `buildPlanSteps(changeDir)` | 动态生成 plan 步骤 | run.js |
 
 **preflightValidators 声明**（2026-09-18-preflight-slimming 批2）：产出型步骤可选键（数组，值 ∈ prompt.js PREFLIGHT_VALIDATORS 已收录键 design-file-list/four-piece-rules）——brainstorm 写设计文档/生成规范两步已声明，plan 生成计划步声明 four-piece-rules，execute 任务步键位就位留 v2（allowed-paths-scan 收录归期 D-006@v1）；另有「中间验证定向优先」引导行（execute 任务步+taskcard-rules）。
+
+**Wave 拓扑守卫**（ql-20260920-011-c0d4 修复二，对撞三轮 execute 108 分钟串行收口）：`assessWaveStructure`（plan-postcheck.js，纯函数）按**可合并相邻波对**判定显式 Wave 排布质量——相邻 (W_i, W_{i+1}) 间无 depends_on 依赖边且两波 allowed_paths 并集无交集 = 合并不破坏任何约束的纯手工串行化；≥2 可合并对 → planPostcheck ERROR 硬拦（伪并行串行链：三轮形态 13 任务 6 波全串行被旧「方向合法静默放行」洞口放过）；显式波数=拓扑最小且 ≥5 → advisory 深链提示核 depends_on 过声明（真串行合法放行，阻断归阻断提示归提示）。刻意不用「波数≥5 且平均<2.5」启发式（误伤真依赖链）；同波共享文件分离合法不算可合并（与 validateWaveProposal 同口径，卡片缺失按空面）；topoSortWaves 本身是 Kahn 最早可行层分配不保守，只加拦截不动排序。
 
 ## 关键逻辑
 

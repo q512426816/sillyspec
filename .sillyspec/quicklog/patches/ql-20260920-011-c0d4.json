@@ -1,0 +1,55 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-98cbbea2",
+  "totals": {
+    "files": 2,
+    "additions": 210,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "declared": true,
+      "additions": 66,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/plan-wave-structure-guard.test.mjs",
+      "declared": true,
+      "additions": 144,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-011-c0d4",
+  "sessionId": "quick-98cbbea2",
+  "savedAt": "2026-09-20T06:39:05.872Z",
+  "patchSha256": "df2325144ed0bee4cec4c2a3b63970490e2b13763e27b9247346c9a0b231e4e2",
+  "patchStatus": "ok"
+}

@@ -243,3 +243,14 @@
 结果：test/verify-artifact-triage.test.mjs 13/13（分诊四类+对照/编排四态/去重矩阵+E2E 五连含豁免补救闭环/缺省收窄+双对照）+gate-snapshot-monorepo 6/6（venv junction 钉）+邻接回归 11/11+plan 侧 13/13+lint 703 绿；全量 npm test 收尾门禁实测通过
 审计：[gate] L2（跨 4 模块 · 13 文件：4 代码/3 测试）advisory；模块文档认领缺失（同步模块卡进改动集，或 --no-docs 显式豁免）
 审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/stages/plan-postcheck.js, test/plan-wave-structure-guard.test.mjs
+
+## ql-20260920-011-c0d4 | 2026-09-20 14:37:34 | Wave 拓扑守卫：plan-postcheck 可合并相邻波对差值判据（伪并行串行链硬拦+深链 advisory）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/plan-postcheck.js（assessWaveStructure 导出+planPostcheck Wave 比对块接线（文件面加载/阈值判定/advisory 与 error 双出口））
+- test/plan-wave-structure-guard.test.mjs（新建，纯函数五态+集成三态）
+需求：Wave 拓扑守卫：plan-postcheck 可合并相邻波对差值判据（伪并行串行链硬拦+深链 advisory）
+根因：对撞三轮 plan 把 13 任务手排 6 波全串行链（Wave N 依赖 Wave N-1，平均 2.2/波，Wave 5 单波 30 分钟），方向合法故被 planPostcheck『结构不一致但方向合法→静默放行』放过，execute 108 分钟并行度归零（旧版同任务 4 波 75 分钟）
+方案：assessWaveStructure 纯函数（可合并相邻波对=相邻波间无 depends_on 依赖边且 allowed_paths 并集无交集；≥2→ERROR 硬拦带具体可并入对与 plan-adopt-waves 出口；显式波数=拓扑最小且≥5→advisory 深链提示核 depends_on 过声明不阻断——真串行链合法放行）；planPostcheck 显式 Wave 比对块接线（wavePathSets 任务卡加载，卡片缺失按空面同 validateWaveProposal 口径）；刻意不用波数≥5+平均<2.5 启发式（会误伤真依赖链：链深 N≥5 平均=1 但串行合法）；topoSortWaves 本身 Kahn 最早可行层不保守，不动排序只加拦截；同波共享文件分离合法不算可合并（双写竞态保护）
+结果：test/plan-wave-structure-guard.test.mjs 8/8（纯函数五态含既有『单对保守串行不拦』语义保持+executePlanPostcheck 集成三态拦/放/advisory）+plan 侧回归 13/13+lint 703 绿；quick 收尾门禁实测

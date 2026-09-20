@@ -1563,6 +1563,51 @@ function validateWaveProposal(changeDir, waves, repoRegistry = null) {
 const PLAN_LEVEL_SIGNALS = { files: 8, modules: 2 }
 
 /**
+ * Wave 结构分诊（ql-20260920-010 修复二，对撞三轮 execute 108 分钟串行的收口）：
+ * 显式 Wave 排布 vs depends_on 拓扑最小波数的差值判定。判据=**可合并相邻波对**：
+ * 相邻 (W_i, W_{i+1}) 之间无依赖边（W_{i+1} 任务不 depends_on W_i 任务）且两波文件面
+ * （allowed_paths 并集）无交集 → 合并不破坏任何约束，是纯手工串行化。刻意不用
+ * 「波数 ≥5 且平均每波 <2.5」的粗暴启发式——它会误伤真依赖链（task-N 依赖 task-(N-1)
+ * 全链波数=N≥5、平均=1，但串行合法必须放行）；可合并对计数对真链恒为 0（拓扑最小波
+ * 的每对相邻波间必有依赖边），天然免疫。
+ *   - 可合并对 ≥2 → error（伪并行串行链：三轮形态=13 任务 6 波全串行、平均 2.2/波、
+ *     Wave 5 单波 30 分钟，并行度归零）；
+ *   - 显式波数=拓扑最小（diff=0）且波数 ≥5 → advisory 深链提示（真串行合法放行，
+ *     但 depends_on 可能过声明——task-07 只需 task-01 产物却声明依赖 task-06 那种；
+ *     阻断归阻断、提示归提示，不混淆）。
+ * 文件面交集的相邻对不算可合并（同 Wave 共享文件=双写竞态，分离合法）——与
+ * validateWaveProposal 的「卡片读取失败按无重叠证据」同口径，卡片缺/未声明 → 空面。
+ * 纯函数（文件面由调用方注入，测试不依赖卡片读盘）。
+ * @param {{ existingWaves: string[][], topoWaves: string[][], depMap: Map<string,string[]>, wavePathSets?: (Set<string>|null)[] }} args
+ * @returns {{ mergeablePairs: Array<[number,number]>, error: string|null, advisory: string|null }}
+ */
+export function assessWaveStructure({ existingWaves, topoWaves, depMap, wavePathSets = [] }) {
+  const mergeablePairs = []
+  for (let i = 0; i + 1 < existingWaves.length; i++) {
+    const cur = existingWaves[i]
+    const next = existingWaves[i + 1]
+    const curSet = new Set(cur)
+    const hasDepEdge = next.some(t => (depMap.get(t) || []).some(d => curSet.has(d)))
+    if (hasDepEdge) continue
+    const a = wavePathSets[i] || new Set()
+    const b = wavePathSets[i + 1] || new Set()
+    let overlap = false
+    for (const p of a) { if (b.has(p)) { overlap = true; break } }
+    if (overlap) continue
+    mergeablePairs.push([i, i + 1])
+  }
+  let error = null
+  let advisory = null
+  if (mergeablePairs.length >= 2) {
+    const detail = mergeablePairs.map(([a, b]) => `Wave ${b + 1} 可并入 Wave ${a + 1}`).join('、')
+    error = `planPostcheck: Wave 伪并行串行链——${detail}（相邻波间无 depends_on 依赖边且文件面无交集，合并不破坏任何约束），手工排布比依赖拓扑多出 ${mergeablePairs.length} 段纯串行化：同层无依赖的波必须合并（execute 按 Wave 串行推进，碎片化波=并行度归零）；或回 tasks 卡核对 depends_on 是否过声明。sillyspec plan-adopt-waves --change <变更名> 可按 depends_on 拓扑一键重排（重排后同波文件面有交集会被拒绝，需手工拆分）`
+  } else if (existingWaves.length >= 5 && existingWaves.length === topoWaves.length) {
+    advisory = `Wave 链深 ${existingWaves.length}（与 depends_on 拓扑最小一致，串行合法放行）——若任务间实际没有这么强的依赖，回 tasks 卡核对 depends_on 是否过声明（如 task-07 只需 task-01 的产物却声明依赖 task-06）；砍掉过声明依赖可提升并行度`
+  }
+  return { mergeablePairs, error, advisory }
+}
+
+/**
  * plan_level 第二把尺子（不接管，仅 warning）：design 文件清单数 / 模块跨度 / task 数
  * 与声明档位比对。fail-open（design/map 读取失败 → null 零输出）。
  * @returns {string|null} warning 文案
@@ -1919,6 +1964,27 @@ export async function executePlanPostcheck(context) {
           }
           // 结构不一致但方向合法（手工保守串行）→ 静默放行（2026-09-09-plan-derived：
           // 合法安全模式消每轮提示噪音；手动对齐出口保留 sillyspec plan-adopt-waves）
+
+          // ── 伪并行串行链守卫（ql-20260920-010 修复二）──
+          // 「静默放行」被三轮对撞实证穿透：plan 把 13 任务手排 6 波全串行（方向合法）→
+          // execute 108 分钟并行度归零。静默放行只对「保守但收敛」的排布安全，对碎片化
+          // 串行链是漏门——此处按可合并相邻波对分诊（见 assessWaveStructure）：≥2 可合并
+          // → 硬拦；深链（diff=0 且波数≥5）→ advisory 提示核 depends_on，不阻断。
+          const wavePathSets = existingWaves.map(ws => {
+            const s = new Set()
+            for (const t of ws) {
+              try {
+                for (const p of parseAllowedPaths(readFileSync(pJoin(tasksDir, `${t}.md`), 'utf8'))) s.add(p)
+              } catch { /* 卡片缺失/读失败按空面（同 validateWaveProposal 口径） */ }
+            }
+            return s
+          })
+          const structure = assessWaveStructure({ existingWaves, topoWaves: waves, depMap, wavePathSets })
+          if (structure.advisory) console.warn(`  ⚠️ ${structure.advisory}`)
+          if (structure.error) {
+            console.error(`\n❌ ${structure.error}`)
+            throw new Error(structure.error)
+          }
         }
       }
     }
