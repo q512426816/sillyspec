@@ -1,0 +1,172 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+index e88fb921..a8273434 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.changelog.md
+@@ -37,3 +37,4 @@ ql-20260911-030-bad4 | checkApproval 意外异常改 {status:unknown} 走 warnAp
+ - ql-20260919-006-120b | quick --input 启动门上移（2026-09-19 实测踩）：原位置在 flag 校验后，但 sessionId 生成/「已建立」公告与 agent-log 平台上报都在其之前——缺 --input 的拒绝路径先宣告「已建立+续用提示」再 exit(2) 留幻影会话观感，且给平台报了永不启动的 agent 日志；上移至 id 生成前（--help/-h 显式豁免保住帮助查询），拒绝路径零输出副作用。test/quick-start-input-hint.test.mjs 13→15 断言（拒绝路径无公告/无日志上报 + --help exit 0 不被拦）
+ - ql-20260920-001 | quick-audit codeFiles 分类器 monorepo 子包修复（multi-agent-platform 回带收口实证：6 个 sillyhub-daemon/src/**+frontend/src/** 文件被「纯 doc/配置」误判 SKIP）——双通道：路径段全等（任意层 src/test/tests/__tests__，长名不误蹭）+ 代码扩展名兜底（ts/tsx/py 等 20+ 后缀覆盖 backend/app/**.py）；方向宁可多跑不可漏跑；test/quick-test-gate.test.mjs 28/28（+3b 子包用例+防误蹭）
+ - ql-20260920-002 | 同批 runtime 侧：detectVerifyBatchFinish 挂 verify --done 收尾路径（镜像 execute 批量模式）+gate-snapshot overlay 三方取新
++- ql-20260920-003 | 所有权写路径断言（2026-09-20 双写碰撞实证：两会话并行驱动同一change，owner他人活跃中另一会话三条--done直通落库步骤槽混写）——run/command.js 写flag（--done/--reset/--reopen/--skip/--answer/--confirm/--files）时 assertChangeOwnership：self放行/takeover-stale放行并自动接管/blocked-active-owner拒绝（结构化错误+--takeover逃生阀+协调指引）；读路径不拦；quick身份=changeName恒self零影响；fail-open同claim；测试9/9（CLI子进程端到端五态+hermetic HOME隔离套件污染+import.meta.url定位BIN治套件cwd差异）
+diff --git a/src/run/command.js b/src/run/command.js
+index 234d07d6..83bd8565 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -1325,6 +1325,38 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     } catch { /* claim 失败不阻断启动 */ }
+   }
+ 
++  // ── 所有权写路径断言（2026-09-20 双写碰撞实证修复）：claim 只「不抢不拒」，写操作还须
++  // assert——今晚实证两会话并行驱动同一 change（owner=zcode-fr-l2 他人活跃中，另一会话的
++  // 三条 --done 直通落库，步骤槽混写）。拦截面=写 flag（--done/--reset/--reopen/--skip/
++  // --answer/--confirm/--files：quick 边界追加也是写）；读路径（prompt 显示/--status）不拦
++  // （index.js apply/cleanup 只读不接同款）。语义同接管类：self/no-owner 放行；
++  // takeover-stale（活跃窗外）放行并自动接管重写 owner；blocked-active-owner 拒绝（结构化
++  // 错误 + 指引）；--takeover 显式强制（逃生阀，重写留痕）。quick 会话身份=changeName 恒
++  // self 零影响；default 容器跳过（同上方 claim）。fail-open：断言异常不拦（护栏退 no-owner）。
++  if (effectiveChange && effectiveChange !== 'default') {
++    const _isWriteOp = isDone || isReset || isReopen || isSkip
++      || flags.includes('--answer') || flags.includes('--confirm') || flags.includes('--files');
++    if (_isWriteOp) {
++      try {
++        const ident = resolveSessionIdentity({
++          flagSession: getFlagValue('--session'),
++          quickChangeName: stageName === 'quick' ? effectiveChange : null,
++          cwd: dirname(specRoot),
++        })
++        const check = pm.assertChangeOwnership(cwd, effectiveChange, {
++          selfSession: ident.session, nowMs: Date.now(), forced: flags.includes('--takeover'),
++        })
++        if (check.allowed) {
++          if (check.action !== 'self') pm.setChangeOwner(cwd, effectiveChange, ident.session)
++        } else {
++          console.error(`\n🚫 变更 ${effectiveChange} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝写操作（--done/--reset/--reopen/--skip/--answer/--confirm/--files）`)
++          console.error(`   两个会话同时驱动同一 change 会步骤槽混写（2026-09-20 实证）。确认对方已放弃：等活跃窗过期后重试（自动接管），或本条命令加 --takeover 显式强制接管（重写 owner 留痕）；或与对方会话协调归属。`)
++          process.exit(1)
++        }
++      } catch { /* 断言异常不拦（fail-open，同 claim） */ }
++    }
++  }
++
+   // --reset
+   if (isReset) {
+     return await resetStage(pm, progress, stageName, cwd, effectiveChange, platformOpts)
+diff --git a/test/change-owner-write-guard.test.mjs b/test/change-owner-write-guard.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/change-owner-write-guard.test.mjs
+@@ -0,0 +1,115 @@
++/**
++ * 所有权写路径断言测试（2026-09-20 双写碰撞实证修复）
++ *
++ * 场景（经 CLI 子进程端到端，最真实面）：tmp 仓 + DB 预置 owner 行 →
++ *   1. 他人活跃窗内 --done → 拒绝（exit 非零 + owner 提示 + 指引）
++ *   2. --takeover 强制 → 放行且 owner 重写为本会话
++ *   3. 他人活跃窗外（stale）→ 放行且自动接管
++ *   4. 读路径（无写 flag，prompt 显示）→ 不拦
++ *   5. 本会话自有 → 放行零扰动
++ *
++ * 风格：自研 assert + tmp fixture + CLI 子进程（同 quick-cli-managed-e2e）。
++ */
++import { mkdtempSync, mkdirSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { execFileSync, spawnSync } from 'child_process'
++import { fileURLToPath } from 'url'
++import { DatabaseSync } from 'node:sqlite'
++
++let failed = 0
++let total = 0
++function assert(cond, msg) {
++  total++
++  if (!cond) { failed++; console.log(`  ❌ FAIL: ${msg}`) } else { console.log(`  ✅ PASS: ${msg}`) }
++}
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++
++const BIN = join(fileURLToPath(new URL('.', import.meta.url)), '..', 'bin', 'sillyspec.js')
++
++/** 造仓：git init + .sillyspec + DB 预置 c1 行（owner/last_active 可参）。 */
++async function makeRepo({ owner, lastActive }) {
++  const proj = mk('ownguard-')
++  mkdirSync(join(proj, '.sillyspec', 'changes', 'c1'), { recursive: true })
++  for (const a of [['init', '-q'], ['config', 'user.email', 't@t.local'], ['config', 'user.name', 't']]) {
++    execFileSync('git', a, { cwd: proj, stdio: 'ignore' })
++  }
++  // 建库走 ProgressManager（progress show 是只读路径不建库——套件/直跑环境差异实证）
++  const { ProgressManager } = await import('../src/progress.js')
++  const pm = new ProgressManager({ specDir: join(proj, '.sillyspec') })
++  pm.read(proj, 'c1')
++  const db2 = new DatabaseSync(join(proj, '.sillyspec', '.runtime', 'sillyspec.db'))
++  db2.prepare(`INSERT OR REPLACE INTO changes (name, created_at, last_active, owner_session, status) VALUES ('c1', ?, ?, ?, 'active')`)
++    .run(lastActive, lastActive, owner)
++  db2.close()
++  return proj
++}
++
++function run(cwd, args, { session, expectFail = false } = {}) {
++  // 子进程 env 隔离：套件 runner 把 HOME/USERPROFILE 重定向到共享 suiteTmp——前序测试
++  // 可能在那里留过平台指针/全局态，spawn 的 CLI 走平台路径早退（套件内 stderr 无所有权
++  // 文案实证）。每次调用一次性 HOME，平台耦合归零。
++  const hermeticHome = mk('ownguard-home-')
++  const env = {
++    ...process.env,
++    HOME: hermeticHome,
++    USERPROFILE: hermeticHome,
++  }
++  if (session) env.SILLYSPEC_SESSION_ID = session
++  else delete env.SILLYSPEC_SESSION_ID
++  const r = spawnSync('node', [BIN, ...args], { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
++  try { rmSync(hermeticHome, { recursive: true, force: true }) } catch { /* Windows 句柄延迟 */ }
++  if (expectFail) return r
++  return r
++}
++
++const NOW = new Date().toISOString()
++
++// ── 1. 他人活跃 → --done 拒 ──
++{
++  const proj = await makeRepo({ owner: 'session-A', lastActive: NOW })
++  const r = run(proj, ['run', 'brainstorm', '--change', 'c1', '--done', '--output', 'x'], { session: 'session-B' })
++  assert(r.status !== 0, `1a 他人活跃 --done → exit 非零（实际 ${r.status}）`)
++  assert((r.stderr || '').includes('session-A') && (r.stderr || '').includes('拒绝写操作'), '1b 错误指认 owner + 拒绝写操作字样')
++  assert((r.stderr || '').includes('--takeover'), '1c 指引含 --takeover 逃生阀')
++}
++// ── 2. --takeover 强制 → 放行 + owner 重写 ──
++{
++  const proj = await makeRepo({ owner: 'session-A', lastActive: NOW })
++  const r = run(proj, ['run', 'brainstorm', '--change', 'c1', '--takeover', '--done', '--output', 'x'], { session: 'session-B' })
++  // takeover 后 --done 可能因产物校验失败 exit 1——区分：不得是所有权拒绝（stderr 无「拒绝写操作」）
++  const ownershipBlocked = (r.stderr || '').includes('拒绝写操作')
++  assert(!ownershipBlocked, `2 --takeover → 不被所有权拦（后续门禁另行判）`)
++  const db = new DatabaseSync(join(proj, '.sillyspec', '.runtime', 'sillyspec.db'), { readOnly: true })
++  const row = db.prepare('SELECT owner_session FROM changes WHERE name = ?').get('c1')
++  db.close()
++  assert(row && row.owner_session === 'session-B', `2b owner 重写为接管会话（实际 ${row && row.owner_session}）`)
++}
++// ── 3. 他人 stale（窗外）→ 放行 + 自动接管 ──
++{
++  const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString() // 30 分钟前 > 15 分钟窗
++  const proj = await makeRepo({ owner: 'session-A', lastActive: stale })
++  const r = run(proj, ['run', 'brainstorm', '--change', 'c1', '--done', '--output', 'x'], { session: 'session-B' })
++  assert(!(r.stderr || '').includes('拒绝写操作'), '3 他人 stale → 不拦（自动接管）')
++  const db = new DatabaseSync(join(proj, '.sillyspec', '.runtime', 'sillyspec.db'), { readOnly: true })
++  const row = db.prepare('SELECT owner_session FROM changes WHERE name = ?').get('c1')
++  db.close()
++  assert(row && row.owner_session === 'session-B', `3b owner 自动接管（实际 ${row && row.owner_session}）`)
++}
++// ── 4. 读路径（prompt 显示）→ 不拦 ──
++{
++  const proj = await makeRepo({ owner: 'session-A', lastActive: NOW })
++  const r = run(proj, ['run', 'brainstorm', '--change', 'c1'], { session: 'session-B' })
++  assert(!(r.stderr || '').includes('拒绝写操作'), '4 读路径（无写 flag）不拦——prompt 显示保持开放')
++}
++// ── 5. 本会话自有 → 放行 ──
++{
++  const proj = await makeRepo({ owner: 'session-A', lastActive: NOW })
++  const r = run(proj, ['run', 'brainstorm', '--change', 'c1', '--done', '--output', 'x'], { session: 'session-A' })
++  assert(!(r.stderr || '').includes('拒绝写操作'), '5 本会话自有 → 写操作零扰动')
++}
++
++for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)

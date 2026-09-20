@@ -163,3 +163,20 @@
 根因：对撞实验实测主会话203请求63M肥上下文重发税；CLI prompt自足缺的只是可粘贴交接块
 方案：src/handoff.js（nextStageSuggestion四态+buildHandoff交接块）+index.js dispatch+complete.js四阶段完成尾提示+module-map登记
 结果：handoff 12/12（CLI实跑夹具）；全量545/0；lint 696绿；docs锚--fix重锚
+
+## ql-20260920-004-3ad6 | 2026-09-20 08:28:38 | run写路径所有权断言——双写碰撞直接根因修复（claim不抢不拒但写操作无assert）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（写路径断言块）
+- test/change-owner-write-guard.test.mjs（五态端到端）
+- runtime.changelog.md（ql-003）
+需求：run写路径所有权断言——双写碰撞直接根因修复（claim不抢不拒但写操作无assert）
+根因：今晚两会话并行驱动fr-index-l2，非owner会话三条--done直通落库步骤槽混写；断言只在apply/cleanup/assess接管类
+方案：command.js claim块后写flag断言（done/reset/reopen/skip/answer/confirm/files）：self放行/stale放行自动接管/他人活跃结构化拒绝（owner指认+逃生阀+指引）；读路径与default不拦；quick恒self；fail-open
+结果：9/9（直跑+套件双绿，hermetic HOME与import.meta.url两套件坑排掉）；全量548/0；lint绿；runtime边车登记
+
+## ql-20260920-005-440a | 2026-09-20 08:35:44 | fr-index 追平两小刀（用户裁决）：①全文锚——新条目自动加「全文：.sillyspec/changes/archive/<变更>/requirements.md#FR-<局部号>」引用行（不复制正文零体积税；backfill同步补存…
+状态：进行中
+关联变更：（无）
+文件：src/fr-index.js, src/run/prompt.js, test/fr-index-l2.test.mjs

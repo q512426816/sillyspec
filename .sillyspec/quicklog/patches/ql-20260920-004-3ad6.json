@@ -1,0 +1,71 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-22da3d00",
+  "totals": {
+    "files": 4,
+    "additions": 148,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 32,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/change-owner-write-guard.test.mjs",
+      "declared": true,
+      "additions": 115,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.changelog.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "runtime.changelog.md",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-004-3ad6",
+  "sessionId": "quick-22da3d00",
+  "savedAt": "2026-09-20T00:29:17.461Z",
+  "patchSha256": "c12de988c638d8e15ff9d0d3ec715c6bac2b8498326ccad5bc397bc496a16572",
+  "patchStatus": "ok"
+}

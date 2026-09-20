@@ -82,10 +82,23 @@ export function parseChangeRequirements(changeDir) {
     const s = line.match(/^\s*承接\s*[:：]\s*(.+)$/);
     if (s) {
       for (const tok of s[1].split(/[,，、]/)) {
-        const id = tok.trim();
-        if (!id) continue;
-        if (FR_GLOBAL_ID_RE.test(id)) cur.supersedes.push(id);
-        else malformed.push(`${cur.local} 的承接行含非全局 id 形态「${id}」（应为 FR-<域>-NNN）`);
+        const t = tok.trim();
+        if (!t) continue;
+        // 退役理由语法（追平刀②，对标 OpenSpec REMOVED 语义）：`FR-域-NNN（退役理由：一句话）`
+        //——理由随承接令牌走，翻链时写进被取代条目。理由内禁逗号（token 切分边界）。
+        const rm = t.match(/^(FR-[A-Za-z0-9-]+)[（(]\s*退役理由[：:]\s*([^）)]+)[）)]$/);
+        if (rm) {
+          if (FR_GLOBAL_ID_RE.test(rm[1])) {
+            cur.supersedes.push(rm[1]);
+            if (!cur.supersedeReasons) cur.supersedeReasons = {};
+            cur.supersedeReasons[rm[1]] = rm[2].trim();
+          } else {
+            malformed.push(`${cur.local} 的承接行退役理由令牌含非全局 id 形态「${rm[1]}」（应为 FR-<域>-NNN）`);
+          }
+          continue;
+        }
+        if (FR_GLOBAL_ID_RE.test(t)) cur.supersedes.push(t);
+        else malformed.push(`${cur.local} 的承接行含非全局 id 形态「${t}」（应为 FR-<域>-NNN）`);
       }
       continue;
     }
@@ -203,6 +216,11 @@ function renderFrLines(entry, headHash) {
       lines.push(`- 场景：${b.name || '默认场景'} — ${parts.join('；')}`);
     }
   }
+  // 全文锚（追平刀①）：正文是截断摘要，全文活在来源归档——引用行不复制正文零体积税，
+  // 锚=归档 requirements.md 内的 FR 局部号标题（### FR-NN:），docs-check 层1 可校验存在性。
+  if (entry.local) {
+    lines.push(`全文：.sillyspec/changes/archive/${entry.change}/requirements.md#${entry.local}`);
+  }
   lines.push(`最近确认：${headHash || ''}`);
   return lines;
 }
@@ -291,7 +309,7 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
       id,
       title: fr.title,
       change: changeName,
-      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies }, headHash),
+      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies, local: fr.local }, headHash),
     });
     dirtyDomains.add(primaryDomain);
     written.push({ file: `${FR_DIR}/${primaryDomain}.md`, id, action: 'added' });
@@ -304,9 +322,15 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
         // 就地补丁：状态翻 superseded + 插 superseded_by + 追取代链注记 + 刷新最近确认（摘要/标题保留）
         target.lines = target.lines
           .map((l) => (l.startsWith('状态：') ? `状态：superseded` : l.startsWith('最近确认：') ? `最近确认：${headHash || ''}` : l))
-          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：'));
+          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：'));
         const stateIdx = target.lines.findIndex((l) => l.startsWith('状态：'));
-        target.lines.splice(stateIdx + 1, 0, `superseded_by：${id}`, `取代链：${refId} ← ${id}（${changeName} 承接）`);
+        // 退役理由（追平刀②）：承接令牌带（退役理由：…）时写进被取代条目——对标 OpenSpec REMOVED
+        // 的 Migration 语义；无理由则省略行（不伪造）。
+        const reason = fr.supersedeReasons && fr.supersedeReasons[refId];
+        target.lines.splice(stateIdx + 1, 0,
+          `superseded_by：${id}`,
+          `取代链：${refId} ← ${id}（${changeName} 承接）`,
+          ...(reason ? [`退役理由：${reason}`] : []));
         dirtyDomains.add(st2Domain);
         superseded.push({ from: refId, to: id, change: changeName });
       }
@@ -413,6 +437,24 @@ export function backfillScenarioBodies({ knowledgeRoot, archiveRoot }) {
     let sectionMeta = null; // {title, change, hasBody, backfilled}
     const flushSection = () => {
       if (sectionMeta === null) return;
+      // 全文锚回填（追平刀①）：独立于正文块——已有正文（或 superseded）的条目缺锚同样补
+      //（正文块早退分支之前的必经路径；锚插入位=场景正文/摘要行后）。
+      let anchoredThisSection = false;
+      if (sectionMeta.change && !sectionLines.some((l) => l.startsWith('全文：'))) {
+        const parsedA = parseArchive(sectionMeta.change);
+        if (parsedA && !parsedA.missing) {
+          let srcA = parsedA.frs.find((fr) => (fr.title || '').trim() === sectionMeta.title);
+          if (!srcA) srcA = parsedA.frs[sectionMeta.ordInChange - 1] || null;
+          if (srcA) {
+            const isSceneLine = (l) => l.startsWith('场景正文：') || l.startsWith('- 场景：');
+            const aIdx = sectionLines.findLastIndex ? sectionLines.findLastIndex(isSceneLine) : -1;
+            const fallbackIdx = sectionLines.findLastIndex ? sectionLines.findLastIndex((l) => l.startsWith('摘要：')) : -1;
+            sectionLines.splice(Math.max(aIdx, fallbackIdx) + 1, 0, `全文：.sillyspec/changes/archive/${sectionMeta.change}/requirements.md#${srcA.local}`);
+            backfilled.push({ file: `fr/${f}`, id: sectionMeta.id, title: sectionMeta.title, what: '全文锚' });
+            anchoredThisSection = true;
+          }
+        }
+      }
       if (sectionMeta.hasBody || !sectionMeta.change) {
         if (!sectionMeta.hasBody) skipped++;
         out.push(...sectionLines);
@@ -430,8 +472,10 @@ export function backfillScenarioBodies({ knowledgeRoot, archiveRoot }) {
       }
       const bodies = src && Array.isArray(src.scenarioBodies) ? src.scenarioBodies.filter((b) => b.given || b.when || b.then).slice(0, 5) : [];
       if (!src || bodies.length === 0) {
-        warnings.push(`${f} 的「${sectionMeta.title}」来源无场景正文可回填（跳过）`);
-        skipped++;
+        if (!anchoredThisSection) {
+          warnings.push(`${f} 的「${sectionMeta.title}」来源无场景正文可回填（跳过）`);
+          skipped++;
+        }
         out.push(...sectionLines);
         return;
       }

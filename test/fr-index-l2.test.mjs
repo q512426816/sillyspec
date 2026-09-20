@@ -220,7 +220,7 @@ author: sillyspec-fr-index
   mkdirSync(join(archiveRoot, '2026-01-01-old-a'), { recursive: true })
   writeFileSync(join(archiveRoot, '2026-01-01-old-a', 'requirements.md'), `# 需求\n\n### FR-01: 存量甲条目\n**场景：老场景**\nGiven 老状态\nWhen 老动作\nThen 老结果\n`)
   const r = backfillScenarioBodies({ knowledgeRoot, archiveRoot })
-  assert(r.backfilled.length === 1 && r.backfilled[0].id === 'FR-legacy-001', `7a 恰回填缺正文条目（实际 ${JSON.stringify(r.backfilled.map(b => b.id))}）`)
+  assert(r.backfilled.some(b => b.id === 'FR-legacy-001' && !b.what), `7a 恰回填缺正文条目（实际 ${JSON.stringify(r.backfilled.map(b => b.id + (b.what ? ':' + b.what : '')))}——锚与正文各记一条）`)
   const c = readFileSync(join(knowledgeRoot, 'fr', 'legacy.md'), 'utf8')
   assert(c.includes('- 场景：老场景 — Given 老状态；When 老动作；Then 老结果'), '7b 正文块按标题匹配补入')
   assert(!c.includes('FR-legacy-002\n变更：2026-01-01-old-a\n状态：active\n摘要：已回填过\n场景正文：\n- 场景：在场 — Given x\n场景正文：'), '7c 已有正文条目不被重复回填')
@@ -228,6 +228,44 @@ author: sillyspec-fr-index
   const r2 = backfillScenarioBodies({ knowledgeRoot, archiveRoot })
   assert(r2.backfilled.length === 0, `7d 二跑幂等（实际回填 ${r2.backfilled.length}）`)
   assert(r.warnings.some(w => w.includes('2026-01-01-gone')), '7e 来源缺失 → 警告不阻断')
+  // 全文锚回填（追平刀①）：7a 回填正文的同时补锚
+  assert(c.includes('全文：.sillyspec/changes/archive/2026-01-01-old-a/requirements.md#FR-01'), '7f 全文锚随正文块补入（FR-01 局部号）')
+}
+
+// ── 8. 全文锚新条目 + 退役理由承接（追平两刀）──
+{
+  const root = makeTmpDir('frl2-anchor-')
+  const knowledgeRoot = join(root, 'knowledge')
+  mkdirSync(knowledgeRoot, { recursive: true })
+  const mapDir = join(root, 'docs', 'p1', 'modules')
+  mkdirSync(mapDir, { recursive: true })
+  writeFileSync(join(mapDir, '_module-map.yaml'), 'schema_version: 2\nmodules:\n  demo:\n    status: active\n    doc: modules/demo.md\n    paths:\n      - src/demo.js\n')
+  // 第一变更：建一条 FR
+  const c1 = join(root, 'changes', 'c1')
+  mkdirSync(c1, { recursive: true })
+  writeFileSync(join(c1, 'requirements.md'), `# 需求\n\n### FR-01: 旧行为\nGiven 老态\nWhen 老动作\nThen 老果\n`)
+  writeFileSync(join(c1, 'design.md'), `# 设计\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/demo.js | x |\n`)
+  indexRequirements({ changeDir: c1, knowledgeRoot, headHash: 'h1' })
+  const c1file = readFileSync(join(knowledgeRoot, 'fr', 'demo.md'), 'utf8')
+  assert(c1file.includes('全文：.sillyspec/changes/archive/c1/requirements.md#FR-01'), '8a 新条目自动带全文锚（局部号 FR-01）')
+
+  // 第二变更：带退役理由承接旧行为
+  const c2 = join(root, 'changes', 'c2')
+  mkdirSync(c2, { recursive: true })
+  writeFileSync(join(c2, 'requirements.md'), `# 需求\n\n### FR-01: 新行为\n承接: FR-demo-001（退役理由：旧口径在并行场景下有覆盖缺陷）\nGiven 新态\nWhen 新动作\nThen 新果\n`)
+  writeFileSync(join(c2, 'design.md'), `# 设计\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/demo.js | x |\n`)
+  const r2 = indexRequirements({ changeDir: c2, knowledgeRoot, headHash: 'h2' })
+  assert(r2.superseded.length === 1, `8b 承接翻链生效（实际 ${JSON.stringify(r2.superseded)}）`)
+  const c2file = readFileSync(join(knowledgeRoot, 'fr', 'demo.md'), 'utf8')
+  assert(c2file.includes('退役理由：旧口径在并行场景下有覆盖缺陷'), '8c 退役理由写进被取代条目')
+  // 无理由承接不伪造行
+  const c3 = join(root, 'changes', 'c3')
+  mkdirSync(c3, { recursive: true })
+  writeFileSync(join(c3, 'requirements.md'), `# 需求\n\n### FR-01: 更新行为\n承接: FR-demo-002\nGiven 新态2\nWhen 新动作2\nThen 新果2\n`)
+  writeFileSync(join(c3, 'design.md'), `# 设计\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/demo.js | x |\n`)
+  indexRequirements({ changeDir: c3, knowledgeRoot, headHash: 'h3' })
+  const c3file = readFileSync(join(knowledgeRoot, 'fr', 'demo.md'), 'utf8')
+  assert((c3file.match(/退役理由：/g) || []).length === 1, '8d 无理由承接不伪造退役理由行（仍只 1 处）')
 }
 
 console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
