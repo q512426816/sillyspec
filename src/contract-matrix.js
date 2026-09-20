@@ -542,11 +542,16 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
   // worktree，scanRoot（主仓 cwd）里是旧版本——读旧版会漏新调用/多已删调用。
   let frontendCalls = []
   let frontendScope = 'full-repo'
+  // 变更文件面一次解析两用（quick-C，2026-09-20 报告问题 C）：前端调用收窄 + unused 分层的
+  // change-relevant 判定共消费；解析失败 → null（前端回退全仓、分层回退 artifact 口径）
+  const parityChanged = changeName
+    ? (() => { try { return _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot) } catch { return null } })()
+    : null
   const frontendRoot = (wt && wt.gitDir !== scanRoot) ? wt.gitDir : scanRoot
   const frontendRootLabel = frontendRoot === scanRoot ? 'scan-root' : 'worktree'
   if (changeName) {
     try {
-      const changed = _resolveDiffFilesForParity(specBase, scanRoot, changeName, runtimeRoot)
+      const changed = parityChanged
       if (changed && changed.length > 0) {
         const changedSet = new Set(changed.map(f => f.replace(/\\/g, '/')))
         frontendCalls = scanFrontendApiCalls(frontendRoot).filter(c => {
@@ -647,12 +652,28 @@ export function verifyApiParity(specBase, scanRoot, runtimeRoot, changeName = nu
     return liveKeys.has(key) || liveEndpoints.length === 0
   })
   // unused 分层（坑 probe5-unused-stock-noise，2026-09-15 EHS 生产实证：490 个 unused 全是
-  // urgent 等他模块存量端点——全仓 live 扫描 × 本变更对账的口径噪音刷屏）。本变更相关 =
-  // contract artifact 端点集内（本变更换的端点漏配才是真信号）；存量其余折叠计数。无
-  // artifact（非契约流）回退全列零回归。
+  // urgent 等他模块存量端点——全仓 live 扫描 × 本变更对账的口径噪音刷屏）。本变更相关判定
+  // 两级（quick-C，2026-09-20 报告问题 C：artifact 集口径被整仓 baseline 击穿——execute 起点
+  // 拍的全仓端点基线让 artifactKeys ⊇ 全仓、418 存量端点全误标「本变更端点前端未调用」）：
+  // ①有变更文件面（_resolveDiffFilesForParity 同款链，前端收窄复用同一次解析）→ 判「端点定义
+  //   源文件 ∈ 本变更 diff 面」（源串反斜杠归一 + artifact 任务目录前缀形态，双向 endsWith——
+  //   与前端调用收窄同款匹配）；
+  // ②面不可得（CLI contractScan 无 changeName / diff 兜底链全空）→ 回退 artifact 端点集口径；
+  // ③无 artifact（非契约流）→ 回退全列零回归。
   const artifactKeys = new Set(allProviderEndpoints.map(e => `${e.method} ${e.path}`))
   const hasArtifacts = allProviderEndpoints.length > 0
-  const unusedChangeRelevant = hasArtifacts ? narrowedUnused.filter(u => artifactKeys.has(`${u.method} ${u.path}`)) : narrowedUnused
+  const unusedChangeRelevant = parityChanged && parityChanged.length > 0
+    ? narrowedUnused.filter(u => {
+        // diffApiParity 的 unused 项定义源字段是 providerFile（endpoint-extractor.js:492），
+        // 兼容直调方可能给的 source 形态
+        const src = String(u.providerFile || u.source || '').replace(/\\/g, '/')
+        if (!src) return false
+        return parityChanged.some(cf => {
+          const c = String(cf).replace(/\\/g, '/')
+          return src === c || src.endsWith('/' + c) || c.endsWith('/' + src) || src.endsWith(c) || c.endsWith(src)
+        })
+      })
+    : (hasArtifacts ? narrowedUnused.filter(u => artifactKeys.has(`${u.method} ${u.path}`)) : narrowedUnused)
   const unusedStockCount = narrowedUnused.length - unusedChangeRelevant.length
 
   const ok = missingBackend.length === 0

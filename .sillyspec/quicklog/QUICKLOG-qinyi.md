@@ -309,3 +309,12 @@
 方案：index.js 增 --force 全量重生成骨架带重置警告与备份指引（usage/help 同步）；两处骨架指引改写为 --init --force 可行操作；API_FACE_SECTION_RE 加词边界
 结果：test/api-coverage-matrix.test.mjs 22/22 含新增词边界断言；node --check 双文件过；CLI 实测全量与 lint 本步门禁执行
 审计：[gate] L1（跨 2 模块 · 3 文件：2 代码/1 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+
+## ql-20260920-016-3185 | 2026-09-20 23:29:05 | 探针5本变更端点口径被整仓baseline击穿（问题C）
+状态：已完成
+关联变更：（无）
+文件：src/contract-matrix.js（+26/-5）, test/probe5-change-relevant-surface.test.mjs（+70/-0）
+需求：探针5本变更端点口径被整仓baseline击穿（问题C）
+根因：change-relevant 判定为属于artifact端点集，artifact池是全仓baseline时全集命中，418存量端点误标本变更端点刷屏
+方案：有变更文件面时改判端点定义源文件属于本变更diff面（providerFile归一双向endsWith，parityChanged一次解析两用）；面不可得回退artifact口径、无artifact回退全列零回归
+结果：新增test/probe5-change-relevant-surface.test.mjs两用例（整仓baseline夹具只变更文件端点进relevant加无changeName回退护栏）；probe5全家五件13/13；CLI实测全量与lint本步门禁执行
