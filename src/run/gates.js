@@ -978,6 +978,20 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
     } catch { /* fail-soft：回填失败不影响门禁 */ }
     if (testCheck.status === 'failed') {
+      // ── 纯超时降档（R4 门禁价值考古 2026-09-21：227 跑 106 败里 36 次 600s 帽杀纯超时假拦
+      //    =失败桶最大单一来源）。超时=未完成非测试挂——所有失败单元 reason 均含超时 → advisory
+      //    放行带处置指引；任一单元真实挂测/退出码 → 维持原硬拦（真拦 12 次的防线不动）。──
+      let timeoutOnly = false
+      try {
+        const { isTimeoutOnlyTestFailure } = await import('../verify-postcheck.js')
+        timeoutOnly = isTimeoutOnlyTestFailure(testCheck)
+      } catch { /* 判定链异常维持硬拦（保守） */ }
+      if (timeoutOnly) {
+        if (verifyGateSnap) { try { verifyGateSnap.cleanup() } catch {} ; verifyGateSnap = null }
+        console.warn('\n⚠️ Verify 实测门未在超时帽内完成（纯超时，无任何挂掉的测试）——降档 advisory 不阻断：')
+        console.warn(`   ${testCheck.reason || ''}`)
+        console.warn('   处置：① local.yaml 配置 modules: 块（name: { path, test }）启用模块子集实测——触碰模块全套测试，时长与超时同步收窄；② 定向复跑触碰模块自证；③ 确需长跑设 SILLYSPEC_TEST_TIMEOUT_MS。')
+      } else {
       if (verifyGateSnap) {
         try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
           printSnapshotFailureHint(verifyGateSnap) } catch { /* 提示失败不影响阻断 */ }
@@ -994,6 +1008,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       } catch { /* 归因提示失败不影响阻断语义 */ }
       console.error('   请修复失败的测试并更新 verify-result.md 后重新完成此步骤。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-test' })
+      } // else（纯超时降档分支）结束——真实测试失败分支的 rollback 语义不变
     }
     // lint 对账（2026-08-21 审查 CLI-1）：test 侧"自报告 PASS 但实测失败→阻断"已闭环，
     // lint 侧此前纯口头——CLI 亲自执行 commands.lint，advisory 起步（失败打印不阻断，观察期后升级）

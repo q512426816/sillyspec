@@ -1066,6 +1066,22 @@ export function classifyTestFailureArtifact(result) {
  *   - 其余（full / module 无块 / module git 不可用 hitCount=-1）→ 'full'
  * @returns {'skip'|'module-subset'|'module-zero-hit-skip'|'full'}
  */
+/**
+ * 纯超时失败判定（R4 门禁价值考古 2026-09-21：227 跑 106 败里 36 次（34%）是 600s 帽杀的
+ * 纯超时假拦——超时=未完成非测试失败，硬拦只是浪费一轮门禁）。所有失败单元的 reason 都
+ * 含「超时」→ true（调用方降档 advisory）；任一失败单元是真实退出码/挂测 → false（维持硬拦）。
+ * 单元来源：module 模式读 result.modules（失败单元过滤），full 模式整体 reason。跨仓合并结果
+ * 语义同 full（整体 reason 聚合）。
+ */
+export function isTimeoutOnlyTestFailure(testCheck) {
+  if (!testCheck || testCheck.status !== 'failed') return false
+  const units = Array.isArray(testCheck.modules) && testCheck.modules.length > 0
+    ? testCheck.modules.filter(u => u && u.status === 'failed')
+    : [testCheck]
+  if (units.length === 0) return false
+  return units.every(u => /超时/.test(String(u.reason || '')))
+}
+
 export function decideVerifyTestAction({ strategy, modulesPresent, hitCount }) {
   if (strategy === 'skip') return 'skip'
   if (strategy === 'module' && modulesPresent) {
@@ -2073,6 +2089,9 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
     // 每模块台账另见 extra.modules[].failure_remaining（带模块归属）
     failureRemaining: perModule.flatMap(r => r.failureRemaining || []),
     failureExempted: perModule.flatMap(r => r.failureExempted || []),
+    // 逐模块结论（isTimeoutOnlyTestFailure 的单元口径；writeRunResult extra 之外再随结果
+    // 返回，调用方可精确分单元判超时/真挂，不依赖聚合 reason 文本）
+    modules: perModule.map(r => ({ name: r.name, status: r.status, reason: r.reason, durationMs: r.durationMs })),
   }
 
   writeRunResult({

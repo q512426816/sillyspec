@@ -353,3 +353,17 @@
 根因：R4-S-F/S-Q 对撞实证：①死信/预填注等纯文档 blocking 检查排在 9 分钟级 test+lint 实测门后，文档未清每轮 --done 先白烧门禁再被拦（R4-S-F 166min 主形状，db 计数死信拦 1 次+lint 硬拦 7 次）②lint 硬门在隔离快照含 HEAD 存量债文件时恒败（债文件不在变更归属集，agent 被逼范围外清偿或逃生口），quick 与 verify 两门同根因只修一侧另一侧重演 ③观察期计数『失败累计 1/1 次』读作 1-of-1 歧义 ④worktree 守卫与 monorepo 多实例拦的放行 flag 组合（--allow-worktree-cwd + --spec-dir）agent 试 3 次才拼对，报错只给 flag 名不给整行
 方案：①gates.js 死信探针+预填注 error 门整块前移到 verify 实测门前（纯排序，语义文案 rollback 类型零变化，原位留已前移标记）②verify-postcheck.js 新增导出纯函数 extractLintFailureFiles（token 化剥引号行号尾缀+带分隔符代码扩展名口径）与 triageLintOwnership（owned/pre-existing/unattributable 三态双向 endsBy 归一），runVerifyLintCheck 返回值增 failureFiles 全文口径字段；gates.js verify lint 硬拦分支与 quick-audit.js quick 门失败分支同接：pre-existing 存量债→advisory 降档放行带清偿建议，owned/无路径可鉴定→维持硬拦保守 ③措辞改实测 N 次中失败 M 次 ④index.js（补 ancestorSpecDirs import）与 command.js 两守卫各附 sillyspec 原命令+双 flag 一键放行整行
 结果：test/lint-ownership-failfast.test.mjs 新增 21 断言全绿；受影响既有件 quick-test-gate 28/0、quick-gate-snapshot 绿（无路径输出用例走 unattributable 维持硬拦语义兼容）；全量 npm test 40+559/559 + npm run lint 通过（713 文件）；docs check 重锚 4 活文档+手工修 core-engine.md pickModuleMapProject 陈锚（符号已迁 scope-audit.js:523）；未发版
+
+## ql-20260921-003-c047 | 2026-09-21 01:40:28 | 纯超时失败降档 advisory——R4 门禁价值考古 36/106 假拦最大单一来源的根治
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（isTimeoutOnlyTestFailure 纯函数+modules 单元数组）
+- src/run/gates.js（verify test 门纯超时降档分支）
+- src/run/quick-audit.js（quick test 门同接）
+- test/test-timeout-downgrade.test.mjs（11 断言）
+- docs/sillyspec/*.md（行号锚机械重锚）
+需求：纯超时失败降档 advisory——R4 门禁价值考古 36/106 假拦最大单一来源的根治
+根因：round4/gate-value-audit.md 考古实证：2 个月 227 次有效 test 门 106 败里 36 次（34%）是 600s 帽杀纯超时——超时=未完成非测试挂，硬拦只是浪费一轮门禁并逼 agent 全流程重跑；尾截 46 次不可判的根因同源（全量跑太长）
+方案：verify-postcheck 新增导出纯函数 isTimeoutOnlyTestFailure（module 模式逐失败单元 reason 判超时/full 模式整体 reason，任一真实挂测或不可鉴定→false 保守硬拦）+ runModuleSubset 结果补 modules 单元数组；gates.js verify test 门与 quick-audit.js quick 门失败分支同接：纯超时→advisory 带三路处置指引（modules 块模块子集/定向复跑/SILLYSPEC_TEST_TIMEOUT_MS），真实失败 rollback 语义逐字不变——真拦 12 次的防线不动
+结果：test/test-timeout-downgrade.test.mjs 新增 11 断言全绿（纯函数 8 面+两门接线源钉+单元数组源钉）；全量 npm test 40+561/561+lint 过；docs check --fix 重锚 5 活文档；平台仓 local.yaml modules 块另案补全 22 模块+be-core（extractModules 39 条目解析全命中验证，机器本地不入库）；未发版

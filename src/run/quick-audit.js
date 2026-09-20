@@ -472,7 +472,17 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       lint = runVerifyLintCheck({ cwd, specBase })
     }
     const failed = []
-    if (test.status === 'failed') failed.push('test')
+    // 纯超时降档（R4 门禁价值考古：36/106 失败是 600s 帽杀纯超时假拦——超时=未完成非测试挂）。
+    // 所有失败单元 reason 均含超时 → advisory 不计入 failed；任一单元真实挂测 → 维持硬拦。
+    if (test.status === 'failed') {
+      const { isTimeoutOnlyTestFailure } = await import('../verify-postcheck.js')
+      if (isTimeoutOnlyTestFailure(test)) {
+        console.warn(`\n⚠️ quick test 实测纯超时（无任何挂掉的测试）——不拦完成：${test.reason || ''}`)
+        console.warn('   处置：定向复跑触碰模块自证；常发超时建议 local.yaml 配 modules: 块启用模块子集实测。')
+      } else {
+        failed.push('test')
+      }
+    }
     // ── lint 归属鉴定降档（R4-S-F/R4-S-Q 同根因：隔离快照含 HEAD 存量债文件时 lint 恒败，
     //    agent 被逼范围外清偿才过门）。失败输出提及文件 × 本会话文件集零交集 → 存量债
     //    advisory 放行不拦完成；有交集 / 输出无可识别路径（unattributable）→ 维持硬拦。──
