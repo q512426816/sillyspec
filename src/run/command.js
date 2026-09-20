@@ -1325,6 +1325,38 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     } catch { /* claim 失败不阻断启动 */ }
   }
 
+  // ── 所有权写路径断言（2026-09-20 双写碰撞实证修复）：claim 只「不抢不拒」，写操作还须
+  // assert——今晚实证两会话并行驱动同一 change（owner=zcode-fr-l2 他人活跃中，另一会话的
+  // 三条 --done 直通落库，步骤槽混写）。拦截面=写 flag（--done/--reset/--reopen/--skip/
+  // --answer/--confirm/--files：quick 边界追加也是写）；读路径（prompt 显示/--status）不拦
+  // （index.js apply/cleanup 只读不接同款）。语义同接管类：self/no-owner 放行；
+  // takeover-stale（活跃窗外）放行并自动接管重写 owner；blocked-active-owner 拒绝（结构化
+  // 错误 + 指引）；--takeover 显式强制（逃生阀，重写留痕）。quick 会话身份=changeName 恒
+  // self 零影响；default 容器跳过（同上方 claim）。fail-open：断言异常不拦（护栏退 no-owner）。
+  if (effectiveChange && effectiveChange !== 'default') {
+    const _isWriteOp = isDone || isReset || isReopen || isSkip
+      || flags.includes('--answer') || flags.includes('--confirm') || flags.includes('--files');
+    if (_isWriteOp) {
+      try {
+        const ident = resolveSessionIdentity({
+          flagSession: getFlagValue('--session'),
+          quickChangeName: stageName === 'quick' ? effectiveChange : null,
+          cwd: dirname(specRoot),
+        })
+        const check = pm.assertChangeOwnership(cwd, effectiveChange, {
+          selfSession: ident.session, nowMs: Date.now(), forced: flags.includes('--takeover'),
+        })
+        if (check.allowed) {
+          if (check.action !== 'self') pm.setChangeOwner(cwd, effectiveChange, ident.session)
+        } else {
+          console.error(`\n🚫 变更 ${effectiveChange} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝写操作（--done/--reset/--reopen/--skip/--answer/--confirm/--files）`)
+          console.error(`   两个会话同时驱动同一 change 会步骤槽混写（2026-09-20 实证）。确认对方已放弃：等活跃窗过期后重试（自动接管），或本条命令加 --takeover 显式强制接管（重写 owner 留痕）；或与对方会话协调归属。`)
+          process.exit(1)
+        }
+      } catch { /* 断言异常不拦（fail-open，同 claim） */ }
+    }
+  }
+
   // --reset
   if (isReset) {
     return await resetStage(pm, progress, stageName, cwd, effectiveChange, platformOpts)
