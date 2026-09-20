@@ -156,7 +156,12 @@ function matchModuleForFile(posix, modulesObj) {
  *   friction 分量＝升档后的档（未起爆为 S0，不参与封顶）；reasons 逐分量留痕（含阈值与
  *   命中明细），供消费方审计打印与双跑比对
  */
-export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, spanRiskPatterns = [], frictionCounts } = {}) {
+export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLevel, declaredFiles, moduleIndex, spanRiskPatterns = [], frictionCounts, config } = {}) {
+  // ── 项目级配置覆写（2026-09-20 ceremony 项目化定价）：引擎保持纯函数零 IO，配置由调用方
+  //    读 local.yaml ceremony: 段注入（readCeremonyPricingConfig）。可配的是「起点与阈值」：
+  //    缺省档 / span 两阈值 / friction 起爆线 / 五级词映射。「只升不降」全局纪律（friction 升档、
+  //    显式降档须理由）不开放配置——防项目把自己配裸奔。非法值逐项回退默认并在 reasons 留痕。
+  const cfg = normalizeTierConfig(config)
   const reasons = []
   let explicitDowngradeAccepted = false
 
@@ -167,22 +172,22 @@ export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLeve
     reasons.push(`blast=${blast}（声明面直入 blastTier——resolveChangeRisk 声明危险面判级，D-008）`)
   } else {
     const detectedLevel = riskDetection != null && typeof riskDetection === 'object' ? riskDetection.level : undefined
-    const mappedTier = RISK_TO_TIER[detectedLevel]
+    const mappedTier = cfg.riskTierMap[detectedLevel]
     if (mappedTier) {
       blast = mappedTier
-      reasons.push(`blast=${blast}（riskDetection.level=${detectedLevel} 经 RISK_TO_TIER 映射）`)
+      reasons.push(`blast=${blast}（riskDetection.level=${detectedLevel} 经 risk_tier_map 映射）`)
     } else {
-      blast = 'S2'
+      blast = cfg.defaultTier
       const cause = detectedLevel === undefined ? 'riskDetection.level 缺失' : `riskDetection.level=${String(detectedLevel)} 未知`
-      reasons.push(`blast=S2（保守缺省：${cause}——brownfield 不静默降级）`)
+      reasons.push(`blast=${cfg.defaultTier}（保守缺省：${cause}${cfg.defaultTierSource === 'config' ? '，项目配置 default_tier' : '，brownfield 不静默降级'}）`)
     }
   }
 
   const explicit = normalizeExplicit(explicitRiskLevel)
   if (explicit) {
-    const explicitTier = RISK_TO_TIER[explicit.level]
+    const explicitTier = cfg.riskTierMap[explicit.level]
     if (!explicitTier) {
-      reasons.push(`显式 risk_level 非法被忽略：${JSON.stringify(explicitRiskLevel)}（合法值：${Object.keys(RISK_TO_TIER).join(' / ')}）`)
+      reasons.push(`显式 risk_level 非法被忽略：${JSON.stringify(explicitRiskLevel)}（合法值：${Object.keys(cfg.riskTierMap).join(' / ')}）`)
     } else if (tierRank(explicitTier) > tierRank(blast)) {
       reasons.push(`blast 升档尊重显式声明 risk_level=${explicit.level} → ${explicitTier}（高于判级 ${blast}）`)
       blast = explicitTier
@@ -203,9 +208,9 @@ export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLeve
     .map((f) => String(f).replace(/\\/g, '/'))
     .filter(Boolean)
   let span = 'S0'
-  if (files.length >= SPAN_FILES_THRESHOLD) {
+  if (files.length >= cfg.spanFilesThreshold) {
     span = 'S2'
-    reasons.push(`span=S2（声明文件 ${files.length} ≥ 阈值 ${SPAN_FILES_THRESHOLD}）`)
+    reasons.push(`span=S2（声明文件 ${files.length} ≥ 阈值 ${cfg.spanFilesThreshold}${cfg.spanFilesSource === 'config' ? '（项目配置）' : ''}）`)
   }
 
   const modulesObj = resolveModulesObject(moduleIndex)
@@ -215,9 +220,9 @@ export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLeve
       const id = matchModuleForFile(f, modulesObj)
       if (id != null) hitModules.add(id)
     }
-    if (hitModules.size >= SPAN_MODULES_THRESHOLD) {
+    if (hitModules.size >= cfg.spanModulesThreshold) {
       span = 'S2'
-      reasons.push(`span=S2（跨模块 ${hitModules.size} ≥ 阈值 ${SPAN_MODULES_THRESHOLD}：${[...hitModules].join('、')}）`)
+      reasons.push(`span=S2（跨模块 ${hitModules.size} ≥ 阈值 ${cfg.spanModulesThreshold}${cfg.spanModulesSource === 'config' ? '（项目配置）' : ''}：${[...hitModules].join('、')}）`)
     }
   } // moduleIndex 缺失/空 → 跨模块检查跳过，span 其余两维照常
 
@@ -240,13 +245,61 @@ export function computeCeremonyTier({ riskDetection, blastTier, explicitRiskLeve
   // ── friction 轴：ledger 两键合计达到阈值 → 在 blast/span 结果上 +1 档封顶 S3（只升不降）──
   const total = frictionTotal(frictionCounts)
   let friction = 'S0'
-  if (total >= FRICTION_ESCALATION_THRESHOLD) {
+  if (total >= cfg.frictionThreshold) {
     const base = maxTier(blast, span)
     friction = CEREMONY_TIERS[Math.min(tierRank(base) + 1, CEREMONY_TIERS.length - 1)]
-    reasons.push(`friction 升档（gate_rollback+review_rejected 合计 ${total} ≥ 阈值 ${FRICTION_ESCALATION_THRESHOLD}，${base} → ${friction}，封顶 S3）`)
+    reasons.push(`friction 升档（gate_rollback+review_rejected 合计 ${total} ≥ 阈值 ${cfg.frictionThreshold}${cfg.frictionSource === 'config' ? '（项目配置）' : ''}，${base} → ${friction}，封顶 S3）`)
   }
 
   return { tier: maxTier(maxTier(blast, span), friction), components: { blast, span, friction }, reasons, explicitDowngradeAccepted }
+}
+
+/**
+ * 项目级定价配置归一（computeCeremonyTier 内部消费，纯函数）：非法值逐项回退默认。
+ * 入参形态即 local.yaml `ceremony:` 段的 pricing 五键（由 readCeremonyPricingConfig 读取注入，
+ * 引擎自身不读文件）：
+ *   default_tier（'S0'~'S3'）/ span_files_threshold（≥1 整数）/ span_modules_threshold（≥1 整数）
+ *   / friction_escalation_threshold（≥1 整数）/ risk_tier_map（五级词→档位映射的**部分覆写**，
+ *   与内置表浅合并——只覆写声明的词，未声明词保持内置值）。
+ * 「只升不降」纪律不在此面（friction 升档/显式降档复核为全局语义，无配置出口）。
+ */
+function normalizeTierConfig(config) {
+  const c = config != null && typeof config === 'object' && !Array.isArray(config) ? config : {}
+  const out = {
+    defaultTier: 'S2',
+    defaultTierSource: 'builtin',
+    spanFilesThreshold: SPAN_FILES_THRESHOLD,
+    spanFilesSource: 'builtin',
+    spanModulesThreshold: SPAN_MODULES_THRESHOLD,
+    spanModulesSource: 'builtin',
+    frictionThreshold: FRICTION_ESCALATION_THRESHOLD,
+    frictionSource: 'builtin',
+    riskTierMap: { ...RISK_TO_TIER },
+  }
+  if (CEREMONY_TIERS.includes(c.defaultTier)) {
+    out.defaultTier = c.defaultTier
+    out.defaultTierSource = 'config'
+  }
+  if (Number.isInteger(c.spanFilesThreshold) && c.spanFilesThreshold >= 1) {
+    out.spanFilesThreshold = c.spanFilesThreshold
+    out.spanFilesSource = 'config'
+  }
+  if (Number.isInteger(c.spanModulesThreshold) && c.spanModulesThreshold >= 1) {
+    out.spanModulesThreshold = c.spanModulesThreshold
+    out.spanModulesSource = 'config'
+  }
+  if (Number.isInteger(c.frictionThreshold) && c.frictionThreshold >= 1) {
+    out.frictionThreshold = c.frictionThreshold
+    out.frictionSource = 'config'
+  }
+  if (c.riskTierMap != null && typeof c.riskTierMap === 'object' && !Array.isArray(c.riskTierMap)) {
+    for (const [level, tier] of Object.entries(c.riskTierMap)) {
+      if (Object.prototype.hasOwnProperty.call(RISK_TO_TIER, level) && CEREMONY_TIERS.includes(tier)) {
+        out.riskTierMap[level] = tier
+      }
+    }
+  }
+  return out
 }
 
 /**

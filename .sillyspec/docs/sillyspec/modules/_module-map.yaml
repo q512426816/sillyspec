@@ -79,6 +79,7 @@ modules:
       - src/review-tier.js
       - src/review-material-pack.js
       - src/ceremony-tier.js
+      - src/ceremony-config.js
       - src/prefill.js
       - src/change-risk-profile.js
       - src/blast-surface.js
@@ -331,6 +332,7 @@ blast:
       - src/verify-postcheck.js
       - src/verify-probes.js
       - src/ceremony-tier.js
+      - src/ceremony-config.js
       - src/review-tier.js
       - src/change-risk-profile.js
       - src/blast-surface.js

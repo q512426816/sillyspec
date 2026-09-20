@@ -39,6 +39,7 @@ import { resolveChangeRisk } from './change-risk-profile.js'
 import { loadBlastDeclarationsAllProjects } from './blast-surface.js'
 import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
 import { reconcileDualRun, computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+import { readCeremonyPricingConfig } from './ceremony-config.js'
 import { mergeFrictionEntry } from './friction-ledger.js'
 import { discoverModuleIndex } from './decision-distill.js'
 import { writeAtomicSync } from './fs-atomic.js'
@@ -3075,9 +3076,12 @@ export async function runCeremonyDualRunCheck({ cwd, specBase = null, changeName
   try { factModuleIndex = discoverModuleIndex(join(sb, 'knowledge')) } catch { /* 缺 map → span 跨模块维跳过 */ }
 
   // —— 引擎对账（mismatch 判定单点）+ 命中明细（同入参跑 computeCeremonyTier 取 reasons，供披露）——
+  // pricing 配置注入（2026-09-20 项目化定价）：双跑事实面与 classifyReviewTier 声明面同源读
+  // local.yaml ceremony: 段——两侧配置不一致会制造假 mismatch，此处与 review-tier 同 specBase 口径。
+  const factPricingConfig = readCeremonyPricingConfig(sb)
   const verdict = reconcileDualRun({ declaredTier, factBlastTier: factRisk.tier, factFiles: actual.files, factModuleIndex, factSpanRiskPatterns })
   const factDetail = computeCeremonyTier({
-    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, spanRiskPatterns: factSpanRiskPatterns, frictionCounts: {},
+    blastTier: factRisk.tier, declaredFiles: actual.files, moduleIndex: factModuleIndex, spanRiskPatterns: factSpanRiskPatterns, frictionCounts: {}, config: factPricingConfig,
   })
   if (verdict.severity === 'warn') {
     notes.push(`[advisory] 高报记账（D-005）：声明档 ${String(declaredTier)} > 事实档 ${verdict.factTier}——只记账不阻断不记摩擦（高报代价是更重仪式，自罚机制在场）`)

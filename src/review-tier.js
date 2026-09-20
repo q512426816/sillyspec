@@ -36,6 +36,7 @@
 
 import { parseFileChangeList } from './change-list.js'
 import { computeCeremonyTier, CEREMONY_TIERS } from './ceremony-tier.js'
+import { readCeremonyPricingConfig } from './ceremony-config.js'
 import { resolveChangeRisk, extractExplicitRiskLevel } from './change-risk-profile.js'
 import { readFileSync, existsSync } from 'fs'
 import { join, dirname, basename } from 'path'
@@ -158,8 +159,10 @@ export function classifyReviewTier({ planLevel, designPath, riskDetection, frict
     } catch { /* 坏档当无档（实判仍兜底） */ }
   }
 
-  // 委托三轴定价引擎取档（ceremony-tier.js 单点真相源）
-  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, spanRiskPatterns, frictionCounts })
+  // 委托三轴定价引擎取档（ceremony-tier.js 单点真相源）——pricing 配置自 designPath 推导
+  // specBase 读 local.yaml ceremony: 段注入（2026-09-20 项目化定价；无 designPath → 空配置回内置值）
+  const pricingConfig = designPath ? readCeremonyPricingConfig(join(dirname(designPath), '..')) : {}
+  const priced = computeCeremonyTier({ riskDetection: blastInput, explicitRiskLevel: explicitInput, declaredFiles, spanRiskPatterns, frictionCounts, config: pricingConfig })
   let ceremonyTier = priced.tier
   if (tierFileTier && CEREMONY_TIERS.indexOf(tierFileTier) > CEREMONY_TIERS.indexOf(ceremonyTier)) {
     ceremonyTier = tierFileTier
