@@ -1,0 +1,47 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-cbafd29a",
+  "totals": {
+    "files": 1,
+    "additions": 302,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/knowledge-stats.js",
+      "declared": true,
+      "additions": 302,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 1,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [
+      ".sillyspec/docs-check-baseline"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260919-019-344f",
+  "sessionId": "quick-cbafd29a",
+  "savedAt": "2026-09-19T11:25:42.946Z"
+}

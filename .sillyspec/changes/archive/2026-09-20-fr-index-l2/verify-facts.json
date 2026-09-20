@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-20-fr-index-l2",
+  "generatedAt": "2026-09-20T00:05:51.496Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-20-fr-index-l2",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 2
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "other",
+        "item": "quality-scan 实测记录未落（--done 亲测替代扫描时序不可得，X-01 已知缺口）——npm test 546绿+定向23/23+lint 698均实跑",
+        "condition": "记录落点修复后 facts 刷新自动闭环",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/fr-index-l2.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(24)",
+    "exitCode": 1,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-20T00:10:42.716Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
