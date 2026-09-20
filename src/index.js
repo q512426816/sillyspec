@@ -3431,6 +3431,29 @@ SillySpec worktree — git worktree 隔离管理
       }
       break;
     }
+    case 'fr-backfill': {
+      // L2 厚版（2026-09-20-fr-index-l2 / D-003@v2 / FR-04）：存量 FR 条目场景正文回填——
+      // active 条目缺「场景正文：」块 → 从来源变更归档 requirements.md 按标题匹配补齐
+      //（幂等；superseded 不回填；来源缺失警告不阻断）。一次性/手动命令，归档管线不挂载。
+      const specRootFb = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const { backfillScenarioBodies } = await import('./fr-index.js');
+      const r = backfillScenarioBodies({
+        knowledgeRoot: join(specRootFb, 'knowledge'),
+        archiveRoot: join(specRootFb, 'changes', 'archive'),
+      });
+      if (json) {
+        console.log(JSON.stringify({ schema_version: 1, backfilled: r.backfilled, skipped: r.skipped, warnings: r.warnings }, null, 2));
+      } else {
+        if (r.backfilled.length === 0) {
+          console.log(`✅ 无待回填条目（已有正文或无来源可回填 ${r.skipped} 条跳过）`);
+        } else {
+          console.log(`📦 回填 ${r.backfilled.length} 条：`);
+          for (const b of r.backfilled) console.log(`   - ${b.id} ${b.title}（${b.file}）`);
+        }
+        for (const w of r.warnings) console.warn(`   ⚠️ ${w}`);
+      }
+      break;
+    }
     case 'dispatch': {
       // SillyHub 派发抽象层的 agent 调用桥（design.md §Phase2 / D-007@v1）：
       // 仅做能力探测（probe）与派发策略生成（hint），**不执行任何 tool 调用**——

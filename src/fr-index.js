@@ -54,12 +54,28 @@ export function parseChangeRequirements(changeDir) {
   const frs = [];
   const malformed = [];
   const lines = content.replace(/\r\n/g, '\n').split('\n');
+  // L2（2026-09-20-fr-index-l2）：决策覆盖矩阵解析——requirements.md 尾表行
+  // `| D-xxx@vN | FR-01, FR-02 |` 提取 D→FR-NN 映射（local 号），归档时随条目落「依据决策：」行。
+  // 格式漂移/缺矩阵 → decisions 恒 []（省略行降级，不阻断归档）。
+  const decisionMap = new Map();
+  for (const line of lines) {
+    const m = line.match(/^\|\s*(D-\d+@v\d+)\s*\|([^|]+)\|/);
+    if (!m) continue;
+    for (const tok of m[2].split(/[,，、]/)) {
+      const fr = tok.trim().match(/^(FR-\d+)$/);
+      if (!fr) continue;
+      if (!decisionMap.has(fr[1])) decisionMap.set(fr[1], []);
+      decisionMap.get(fr[1]).push(m[1]);
+    }
+  }
   let cur = null;
+  // L2 厚版（D-003@v2）：GWT 行捕获——Given/When/Then 归最近场景名下（无名归默认场景）。
+  // scenarioBodies: [{name, given, when, then}]；scenarios（名字数组）保留 L1 契约不动。
   for (const line of lines) {
     const h = line.match(/^###\s+(FR-\d+)\s*[:：]\s*(.*)$/);
     if (h) {
       if (cur) frs.push(cur);
-      cur = { local: h[1], title: (h[2] || '').trim(), supersedes: [], scenarios: [] };
+      cur = { local: h[1], title: (h[2] || '').trim(), supersedes: [], scenarios: [], decisions: decisionMap.get(h[1]) || [], __bodies: [{ name: null, given: '', when: '', then: '' }] };
       continue;
     }
     if (!cur) continue;
@@ -75,11 +91,29 @@ export function parseChangeRequirements(changeDir) {
     }
     const sc = line.match(/^\s*(?:#{2,4}\s*场景\s*[:：]\s*(.+)|\*\*场景\s*[:：]\s*([^*]+)\*\*)\s*$/);
     if (sc) {
-      const name = ((sc[1] || sc[2] || '')).trim();
-      cur.scenarios.push(name || `场景${cur.scenarios.length + 1}`);
+      const name = ((sc[1] || sc[2] || '')).trim() || `场景${cur.scenarios.length + 1}`;
+      cur.scenarios.push(name);
+      cur.__bodies.push({ name, given: '', when: '', then: '' });
+      continue;
+    }
+    const gwt = line.match(/^\s*(Given|When|Then)\s+(.+)$/i);
+    if (gwt) {
+      const body = cur.__bodies[cur.__bodies.length - 1];
+      const key = gwt[1].toLowerCase();
+      body[key] = (body[key] ? body[key] + ' ' : '') + gwt[2].trim();
+      // 无名默认场景已收 GWT → 命名并同步进 scenarios 名字数组（L1 摘要契约兼容）
+      if (body.name === null && cur.scenarios.length === 0 && (body.given || body.when || body.then)) {
+        cur.scenarios.push('默认场景');
+        body.name = '默认场景';
+      }
     }
   }
   if (cur) frs.push(cur);
+  // 剥离内部键，暴露 scenarioBodies（有 GWT 内容的体块才进）
+  for (const fr of frs) {
+    fr.scenarioBodies = (fr.__bodies || []).filter((b) => b.name !== null || b.given || b.when || b.then).map((b) => ({ name: b.name, given: b.given, when: b.when, then: b.then }));
+    delete fr.__bodies;
+  }
   return { missing: false, frs, malformed };
 }
 
@@ -129,6 +163,7 @@ function loadDomainSections(knowledgeRoot, domain) {
         '',
         '> fr-index 从归档变更 requirements.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为机械解析契约，勿手改。',
         '> superseded 条目保留供取代链回溯；brainstorm 注入默认只给 active。',
+        `> 模块卡：modules/${domain}.md（域=模块 id 同构；行为条目↔模块契约互跳）`,
         '',
       ],
       sections: [],
@@ -153,6 +188,21 @@ function renderFrLines(entry, headHash) {
   if (entry.supersededBy) lines.push(`superseded_by：${entry.supersededBy}`);
   if (entry.supersededOf) lines.push(`取代链：${entry.supersededOf} ← 本条目（${entry.change} 承接）`);
   lines.push(`摘要：${(entry.scenarios || []).slice(0, 5).join('；') || '（无场景名）'}`);
+  // L2：依据决策行（决策覆盖矩阵提取；空省略——旧条目无此行照常解析）。
+  if (Array.isArray(entry.decisions) && entry.decisions.length > 0) {
+    lines.push(`依据决策：${entry.decisions.join('、')}`);
+  }
+  // L2 厚版（D-003@v2）：场景正文块——每场景一行（各段截 80 字，≤5 场景）。
+  // 空体块省略整块；回填幂等锚=「场景正文：」行在场即跳过。
+  const bodies = (entry.scenarioBodies || []).filter((b) => b.given || b.when || b.then).slice(0, 5);
+  if (bodies.length > 0) {
+    lines.push('场景正文：');
+    const cut = (s) => String(s || '').slice(0, 80);
+    for (const b of bodies) {
+      const parts = [`Given ${cut(b.given)}`, `When ${cut(b.when)}`, `Then ${cut(b.then)}`].filter((p) => !p.endsWith(' '));
+      lines.push(`- 场景：${b.name || '默认场景'} — ${parts.join('；')}`);
+    }
+  }
   lines.push(`最近确认：${headHash || ''}`);
   return lines;
 }
@@ -241,7 +291,7 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
       id,
       title: fr.title,
       change: changeName,
-      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios }, headHash),
+      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies }, headHash),
     });
     dirtyDomains.add(primaryDomain);
     written.push({ file: `${FR_DIR}/${primaryDomain}.md`, id, action: 'added' });
@@ -323,6 +373,118 @@ export function scanFrIndex(knowledgeRoot) {
 }
 
 /**
+ * L2 厚版（D-003@v2 / FR-04）：存量回填——active 条目缺「场景正文：」块 → 从其来源
+ * 变更的归档 requirements.md 按标题匹配补齐（fallback 按序）。幂等：已有正文块的条目
+ * 跳过；来源归档缺失/标题不匹配 → 警告不阻断。回填只动正文块，其余行（摘要/依据决策/
+ * 状态链/最近确认）原样保留。
+ * @param {object} opts
+ * @param {string} opts.knowledgeRoot - knowledge/ 目录
+ * @param {string} opts.archiveRoot - changes/archive/ 目录
+ * @returns {{backfilled: Array<{file,id,title}>, skipped: number, warnings: string[]}}
+ */
+export function backfillScenarioBodies({ knowledgeRoot, archiveRoot }) {
+  const backfilled = [];
+  const warnings = [];
+  let skipped = 0;
+  // 归档 requirements 缓存：changeName → parse 结果（多条目共享一次读盘）
+  const parsedCache = new Map();
+  const parseArchive = (changeName) => {
+    if (parsedCache.has(changeName)) return parsedCache.get(changeName);
+    const dir = join(archiveRoot, changeName);
+    let result = null;
+    try { result = parseChangeRequirements(dir); } catch { result = { missing: true, frs: [] }; }
+    if (!result || result.missing) {
+      warnings.push(`来源归档缺 requirements.md：${changeName}（该条目正文不回填）`);
+    }
+    parsedCache.set(changeName, result);
+    return result;
+  };
+  let files;
+  try { files = readdirSync(frDirPath(knowledgeRoot)).filter((f) => f.endsWith('.md')); }
+  catch { return { backfilled: [], skipped: 0, warnings: ['knowledge/fr 目录不可读'] }; }
+  for (const f of files) {
+    const p = join(frDirPath(knowledgeRoot), f);
+    let content;
+    try { content = readFileSync(p, 'utf8'); } catch (e) { warnings.push(`读 ${f} 失败（${e && e.code ? e.code : 'error'}）跳过`); continue; }
+    const lines = content.replace(/\r\n/g, '\n').split('\n');
+    // 按条目分段：## 开头为新段；段内判定「场景正文：」在场性
+    const out = [];
+    let sectionLines = [];
+    let sectionMeta = null; // {title, change, hasBody, backfilled}
+    const flushSection = () => {
+      if (sectionMeta === null) return;
+      if (sectionMeta.hasBody || !sectionMeta.change) {
+        if (!sectionMeta.hasBody) skipped++;
+        out.push(...sectionLines);
+        return;
+      }
+      const parsed = parseArchive(sectionMeta.change);
+      if (!parsed || parsed.missing) { skipped++; out.push(...sectionLines); return; }
+      // 标题匹配（剥 FR-x-NNN 前缀后的标题全等；fallback 按序：本域文件中该来源变更的第 n 条）
+      const bareTitle = sectionMeta.title;
+      let src = parsed.frs.find((fr) => (fr.title || '').trim() === bareTitle);
+      if (!src) {
+        const sameChange = parsed.frs;
+        src = sameChange[sectionMeta.ordInChange - 1] || null;
+        if (src) warnings.push(`${f} 的「${sectionMeta.title}」按序匹配回填（标题不精确匹配——建议核对）`);
+      }
+      const bodies = src && Array.isArray(src.scenarioBodies) ? src.scenarioBodies.filter((b) => b.given || b.when || b.then).slice(0, 5) : [];
+      if (!src || bodies.length === 0) {
+        warnings.push(`${f} 的「${sectionMeta.title}」来源无场景正文可回填（跳过）`);
+        skipped++;
+        out.push(...sectionLines);
+        return;
+      }
+      // 就地插入：状态行后（依据决策行若有则其后）
+      const insertAfter = Math.max(
+        sectionLines.findLastIndex ? sectionLines.findLastIndex((l) => l.startsWith('依据决策：')) : -1,
+        sectionLines.findLastIndex ? sectionLines.findLastIndex((l) => l.startsWith('摘要：')) : -1,
+      );
+      const block = ['场景正文：'];
+      const cut = (s) => String(s || '').slice(0, 80);
+      for (const b of bodies) {
+        const parts = [`Given ${cut(b.given)}`, `When ${cut(b.when)}`, `Then ${cut(b.then)}`].filter((x) => !x.endsWith(' '));
+        block.push(`- 场景：${b.name || '默认场景'} — ${parts.join('；')}`);
+      }
+      sectionLines.splice(insertAfter + 1, 0, ...block);
+      backfilled.push({ file: `fr/${f}`, id: sectionMeta.id, title: sectionMeta.title });
+      out.push(...sectionLines);
+    };
+    let ordCounter = new Map(); // changeName → 该来源在当前文件已见条目数
+    for (const line of lines) {
+      const hm = line.match(/^##\s+(FR-[A-Za-z0-9-]+)\s+(.*)$/);
+      if (hm) {
+        flushSection();
+        sectionLines = [line];
+        const changeLine = null; // 变更行在下文读取；先记标题
+        sectionMeta = { title: hm[2].trim(), change: null, hasBody: false, id: hm[1], ordInChange: 0 };
+        continue;
+      }
+      sectionLines.push(line);
+      if (sectionMeta) {
+        if (line.startsWith('变更：')) {
+          sectionMeta.change = line.replace(/^变更：\s*/, '').trim();
+          const n = (ordCounter.get(sectionMeta.change) || 0) + 1;
+          ordCounter.set(sectionMeta.change, n);
+          sectionMeta.ordInChange = n;
+        }
+        if (line.startsWith('状态：superseded')) sectionMeta.hasBody = true; // superseded 条目不回填（历史回溯面）
+        if (line.startsWith('场景正文：')) sectionMeta.hasBody = true;
+      }
+    }
+    flushSection();
+    if (backfilled.length > 0 || content !== out.join('\n')) {
+      // 仅当本文件确有回填才写盘（无回填保持字节不变）
+      const orig = content.replace(/\r\n/g, '\n');
+      if (out.join('\n') !== orig) {
+        try { writeFileSync(p, out.join('\n')); } catch (e) { warnings.push(`写 ${f} 失败（${e && e.message ? e.message : e}）`); }
+      }
+    }
+  }
+  return { backfilled, skipped, warnings };
+}
+
+/**
  * 注入源：触达域的 active 条目（superseded 默认藏——D-004）。
  * @returns {Array<{domain,id,title,change,scenarios:string[]}>}
  */
@@ -333,8 +495,10 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
     for (const s of st.sections) {
       if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue;
       const scenarioLine = s.lines.find((l) => l.startsWith('摘要：'));
+      const decisionLine = s.lines.find((l) => l.startsWith('依据决策：'));
+      const decisions = decisionLine ? decisionLine.replace(/^依据决策：s*/, '').split('、').map((x) => x.trim()).filter(Boolean) : [];
       const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios });
+      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions });
     }
   }
   return out;
