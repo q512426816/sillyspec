@@ -419,3 +419,144 @@ test('缺陷②边界：无任何完成步（latestActivityAt=null，propose 骨
     cleanup(specBase)
   }
 })
+
+// ── 转轨放行（2026-09-20 僵尸状态实证缺口）──────────────────────────────────────
+// 事故形态：brainstorm 精判 scale:small → 设计实现路径即 quick --linked-changes <本变更>，
+// brainstorm --done（置 stage completed、刷新 last_active）→ minutes 后 linked quick --done。
+// 缺陷①闸（stage_status=completed）+ 缺陷②闸（60min 时近性）对转轨变更构成永真拦截
+//（2026-09-20 daemon 三键变更实证：quick 17:27 完成提交，change 永留 active/brainstorm）。
+// 放行条件三信号齐：current_stage=brainstorm + stage_status=completed + design.md
+// frontmatter scale:small（brainstorm 末步精判落盘产物）——scale=large/未写 scale 不放行。
+
+function writeDesignWithScale(specBase, changeName, scale) {
+  const changeDir = join(specBase, 'changes', changeName)
+  mkdirSync(changeDir, { recursive: true })
+  writeFileSync(join(changeDir, 'design.md'), `---\nauthor: tester\ncreated_at: 2026-09-20T17:26:00Z\nscale: ${scale}\n---\n# 设计\n\n拆分判断：单变更 scale=${scale}，走 quick（--linked-changes）\n`)
+}
+
+test('转轨主场景：brainstorm completed + scale:small + 10 分钟内活动 + 无 tasks.md → closed（缺口本体检修）', async () => {
+  const specBase = makeSpecBase('qclc-handoff-main-')
+  const cwd = specBase
+  const changeName = '2026-09-20-daemon-three-keys'
+  try {
+    // scale=small 约定不生成 tasks.md（无 propose 骨架场景）
+    writeDesignWithScale(specBase, changeName, 'small')
+    const changeDir = join(specBase, 'changes', changeName)
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'completed' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 1 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更（转轨变更 linked quick --done 即收尾）')
+    assert.deepEqual(result.skipped, [], 'skipped 应为空')
+    assert.equal(pm._calls.length, 1, 'unregisterChange 应被调用')
+    assert.ok(!existsSync(changeDir), '源目录应被移走')
+    assert.ok(existsSync(join(specBase, 'changes', 'archive', archiveDestDirName(todayIsoDate(), changeName), 'design.md')), '归档目录应保留 design.md')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('转轨 + propose 骨架 tasks.md 全勾 → closed（骨架存在不阻碍，缺陷①空窗场景不再误拦转轨）', async () => {
+  const specBase = makeSpecBase('qclc-handoff-skel-')
+  const cwd = specBase
+  const changeName = '2026-09-20-handoff-skeleton'
+  try {
+    writeDesignWithScale(specBase, changeName, 'small')
+    writeFileSync(join(specBase, 'changes', changeName, 'tasks.md'), '- [x] ql-20260920-007 完成任务\n')
+    const changeDir = join(specBase, 'changes', changeName)
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'completed' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 2 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [changeName], 'closed 应含该变更')
+    assert.ok(!existsSync(changeDir), '源目录应被移走')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('转轨但 tasks.md 有未勾行 → skipped（转轨放行不豁免未完成任务）', async () => {
+  const specBase = makeSpecBase('qclc-handoff-open-')
+  const cwd = specBase
+  const changeName = '2026-09-20-handoff-open-tasks'
+  try {
+    writeDesignWithScale(specBase, changeName, 'small')
+    writeFileSync(join(specBase, 'changes', changeName, 'tasks.md'), '- [ ] ql-xxx 未完成任务\n')
+    const changeDir = join(specBase, 'changes', changeName)
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'completed' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 2 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /tasks\.md/, 'reason 应指向 tasks 判定')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('非转轨仍拦①：brainstorm completed + scale:large（即将进 plan）→ skipped（缺陷①防护面不变）', async () => {
+  const specBase = makeSpecBase('qclc-nohandoff-large-')
+  const cwd = specBase
+  const changeName = '2026-09-20-headed-to-plan'
+  try {
+    writeDesignWithScale(specBase, changeName, 'large')
+    writeFileSync(join(specBase, 'changes', changeName, 'tasks.md'), '- [x] ql-xxx 已完成\n')
+    const changeDir = join(specBase, 'changes', changeName)
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'completed' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（scale:large 完整流程在途不误归档）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /已完成/, 'reason 应指明阶段完成态闸')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('非转轨仍拦②：brainstorm completed + design 无 scale 字段（未写/旧变更）→ skipped', async () => {
+  const specBase = makeSpecBase('qclc-nohandoff-noscale-')
+  const cwd = specBase
+  const changeName = '2026-09-20-legacy-no-scale'
+  try {
+    const changeDir = makeChange(specBase, changeName, '- [x] ql-xxx 已完成\n')
+    writeFileSync(join(changeDir, 'design.md'), '---\nauthor: tester\ncreated_at: 2026-09-01T00:00:00Z\n---\n# 设计\n正文里的 scale: small 不是 frontmatter，不得误判转轨\n')
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'completed' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（无 scale 信号不识别为转轨）')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})
+
+test('转轨信号不足：scale:small 但 brainstorm 尚未 --done（in-progress）→ 时近性闸照拦（设计未定稿不收尾）', async () => {
+  const specBase = makeSpecBase('qclc-handoff-inprog-')
+  const cwd = specBase
+  const changeName = '2026-09-20-handoff-mid-design'
+  try {
+    writeDesignWithScale(specBase, changeName, 'small')
+    const changeDir = join(specBase, 'changes', changeName)
+    const pm = makePm({ [changeName]: { current_stage: 'brainstorm', status: 'active', stage_status: 'in-progress' } })
+    pm.getLatestActivityAt = () => new Date(Date.now() - 5 * 60 * 1000).toISOString()
+
+    const result = await closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges: [changeName] })
+
+    assert.deepEqual(result.closed, [], 'closed 应为空（设计进行中，转轨判定要求 stage completed）')
+    assert.equal(result.skipped.length, 1, 'skipped 应含 1 条')
+    assert.match(result.skipped[0].reason, /进度活动/, 'reason 应指明时近性信号')
+    assert.ok(existsSync(changeDir), '源目录应保持原位')
+  } finally {
+    cleanup(specBase)
+  }
+})

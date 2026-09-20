@@ -1897,6 +1897,15 @@ async function closeSingleQuickLinkedChange({ pm, cwd, specBase, changeName, pla
  * 缺陷①）：current_stage=brainstorm 但该阶段 status=completed（brainstorm 收尾到 plan
  * 开始之间的空窗）≠ 僵尸变更——此时关联 quick --done 会把即将进 plan 的进行中变更误
  * 轻量归档。stage_status=completed 一律走原流程收尾。
+ *
+ * 转轨放行（2026-09-20 僵尸状态实证缺口）：缺陷①②两闸把 d192f89 的原始目标场景——
+ * brainstorm 精判 scale:small、设计裁定实现路径即 `quick --linked-changes <本变更>` 的
+ * 刻意转轨变更——也拦成了永真（brainstorm --done 必然置 completed、转轨间隔天然分钟级
+ * 必中时近性闸），linked quick --done 后变更永留 active/brainstorm 成僵尸。识别信号用
+ * brainstorm 末步已落盘的机器可读产物：current_stage=brainstorm + stage_status=completed
+ * + design.md frontmatter scale:small（readDesignScale，gates.js）三条件齐 = 转轨变更，
+ * 放行两闸且 tasks 判定按 quick 语义（无 tasks.md=无待办）；scale=large/未写 scale 的
+ * 在途变更两闸原样生效（缺陷①②防护面不变）。
  */
 const QUICK_CLOSE_ALLOWED_STAGES = new Set(['', 'scan', 'brainstorm'])
 
@@ -1912,6 +1921,10 @@ const QUICK_CLOSE_ACTIVITY_WINDOW_MS = 60 * 60 * 1000
  * 阶段闸（fail-closed）：先查 changes.current_stage——无 DB 记录（未注册目录桩）或停在
  * scan/brainstorm 才继续 tasks 判定；plan/execute/verify/archive 一律 skip 走原流程收尾。
  * pm 缺 getChangeStage 接口或查询抛错同样 skip，不静默放行。
+ *
+ * 转轨放行：current_stage=brainstorm + stage_status=completed + design.md scale:small =
+ * brainstorm 精判裁定走 quick 的刻意转轨变更（见 QUICK_CLOSE_ALLOWED_STAGES 上注释），
+ * 豁免「阶段完成态」「时近性」两闸与「无 tasks.md」判定，linked quick --done 即收尾。
  *
  * @param {Object} opts
  * @param {ProgressManager} opts.pm
@@ -1952,13 +1965,25 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
         })
         continue
       }
+      // 刻意转轨判定（见 QUICK_CLOSE_ALLOWED_STAGES 上注释「转轨放行」段）：scale:small 是
+      // brainstorm 末步写进 design.md frontmatter 的精判产物（stages/brainstorm.js「生成规范
+      // 文件」步），其设计实现路径就是本 quick 会话——linked quick --done 即本变更流程收尾点。
+      // readDesignScale 动态导入破环（gates.js 静态导入本模块，其 :1175 反向动态 import 先例）；
+      // 导入/执行异常 fail-safe 按「非转轨」走原闸，不废既有护栏。
+      let quickHandoff = false
+      if (stageInfo !== null && stageInfo.current_stage === 'brainstorm' && stageInfo.stage_status === 'completed') {
+        try {
+          const { readDesignScale } = await import('./gates.js')
+          quickHandoff = readDesignScale(specBase, changeName) === 'small'
+        } catch { /* fail-safe：识别不了按非转轨走原闸 */ }
+      }
       // ql-20260819-010（quick-done-autoarchive-misfire 缺陷①）：当前阶段已完成 ≠
       // 从未进入完整流程的僵尸。brainstorm 收尾到 plan 开始之间的空窗里 current_stage
       // 仍读 brainstorm，只看阶段名会把即将进 plan 的变更误轻量归档（propose 骨架
       // tasks.md 除 quick 追加的 ql 行外没有任务行，「无未勾选框=全勾」恒真）。
       // stage_status=completed 一律原流程收尾；null（无阶段行/brownfield）与旧调用方
       // mock 缺字段（undefined）均按未完成放行，僵尸逃生通道行为不变。
-      if (stageInfo !== null && stageInfo.stage_status === 'completed') {
+      if (!quickHandoff && stageInfo !== null && stageInfo.stage_status === 'completed') {
         skipped.push({
           name: changeName,
           reason: `变更当前阶段「${stageInfo.current_stage || '(空)'}」已完成（推进/收尾中，非僵尸变更），不自动归档——请走原流程收尾（sillyspec progress show 查看进度）`,
@@ -1974,7 +1999,10 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
       //（既有「真·僵尸 in_progress→closed」行为保留）。pm 无此方法（旧 mock/旧进度库）
       // 按无近期活动放行——与 getChangeStage 缺失 skip 的 fail-safe 不同向：本闸误放行的
       // 最坏后果是回到缺陷②现状（有 D-002 防护兜底），误拦截则僵尸永不清——权衡取放行。
-      if (typeof pm.getLatestActivityAt === 'function') {
+      // （转轨变更例外：brainstorm --done → quick 启动/--done 间隔天然分钟级，时近性对它
+      // 是永真拦截信号——quickHandoff 已用 scale:small 坐实「等 quick 落地」，不在「在途」
+      // 语义面内，放行。）
+      if (!quickHandoff && typeof pm.getLatestActivityAt === 'function') {
         const latest = pm.getLatestActivityAt(cwd, changeName)
         if (latest && Date.now() - new Date(latest).getTime() < QUICK_CLOSE_ACTIVITY_WINDOW_MS) {
           skipped.push({
@@ -1984,7 +2012,13 @@ export async function closeQuickLinkedChanges({ pm, cwd, specBase, linkedChanges
           continue
         }
       }
-      if (!isChangeTasksComplete(specBase, changeName)) {
+      // tasks 判定（转轨例外）：scale=small 按 brainstorm 末步约定不生成 tasks.md
+      //（「proposal/requirements/tasks 对 quick 无用」）——转轨变更无 tasks.md = 无待办
+      // 放行；文件存在（propose 骨架等）仍按全勾判定，未勾任务行照拦。
+      const tasksComplete = quickHandoff && !existsSync(join(specBase, 'changes', changeName, 'tasks.md'))
+        ? true
+        : isChangeTasksComplete(specBase, changeName)
+      if (!tasksComplete) {
         skipped.push({ name: changeName, reason: 'tasks.md 未全勾选或不存在' })
         continue
       }

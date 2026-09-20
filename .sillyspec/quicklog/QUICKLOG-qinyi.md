@@ -278,3 +278,15 @@
 结果：新测试 26/26 断言绿（e2e：triggerSync 8ms 返回、同步经后台子进程到达服务器、锁自清、日志落盘；本仓实弹后台轮 2.5s 完成真实平台同步）；全量 npm test 553 文件 EXIT=0；lint 705 文件 0 告警；docs check 592/592 全绿（顺手修 2 处基线存量锚债）
 审计：[gate] L1（跨 3 模块 · 14 文件：4 代码/6 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/CLAUDE.md
+
+## ql-20260920-013-f8e3 | 2026-09-20 18:19:21 | brainstorm→quick 转轨变更僵尸状态闭合（scale:small 刻意转轨 linked quick --done 即收尾）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（closeQuickLinkedChanges 转轨放行（scale:small 三信号判定豁免缺陷①②闸与无 tasks.md 判定，readDesignScale 动态导入破环 fail-safe，注释/JSDoc 补转轨段；--force-baseline 因核心收尾管线属危险面））
+- test/quick-close-linked-changes.test.mjs（新增 6 转轨测试（主场景 closed/骨架全勾 closed/未勾行仍拦/scale:large 仍拦/无 scale 仍拦/in-progress 时近性照拦））
+- docs/sillyspec/platform-interface-map.md（handleScanStageCompleted 锚随动 2267→2301（本改动在其上方插入所致，docs check 建议行号））
+需求：brainstorm→quick 转轨变更僵尸状态闭合（scale:small 刻意转轨 linked quick --done 即收尾）
+根因：closeQuickLinkedChanges 三闸对刻意转轨变更永真拦截——ql-20260819-010 阶段完成态闸（brainstorm --done 必置 completed）、缺陷②60min 时近性闸（转轨间隔天然分钟级）、tasks 判定（scale:small 按 brainstorm 末步约定不生成 tasks.md）——d192f89 原始目标场景被三闸全部误拦，linked quick --done 后变更永留 active/brainstorm 成僵尸（2026-09-20 daemon 三键变更实证：quick 17:27 完成提交 c1ce37e9e，change 仍 active/brainstorm last_active=17:26）
+方案：closeQuickLinkedChanges 新增转轨判定：current_stage=brainstorm + stage_status=completed + design.md frontmatter scale:small 三信号齐=刻意转轨（复用 gates.js 既有 readDesignScale，动态 import 破环——gates 静态导入本模块；异常 fail-safe 按非转轨走原闸）。转轨变更豁免阶段完成态闸与时近性闸，tasks 判定按 quick 语义（无 tasks.md=无待办放行，文件存在仍按全勾、未勾行照拦）；scale=large/未写 scale 的「即将进 plan」在途变更两闸防护面零变动
+结果：目标套件 22/22 全绿（16 既有护栏零回归+6 新增转轨测试全过）+邻接 quick-single-change-auto-link/progress-get-change-stage 10/10+lint 706 文件绿+全量 npm test 退出码 0
