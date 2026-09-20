@@ -37,3 +37,33 @@
 - 场景：守恒验收 — Given 批 2 落地后的首个变更；When verify；Then 摩擦账对比拦截数守恒、noAI 亲测双绿、prompt 中位统计不反弹
 全文：.sillyspec/changes/archive/2026-09-18-preflight-slimming/requirements.md#FR-04
 最近确认：29aa686
+
+## FR-runtime-005 薄通道蒸馏尾与 lite 归档
+变更：2026-09-20-quick-asset-tail
+状态：active
+摘要：默认场景
+依据决策：D-001@v1、D-002@v1、D-004@v1
+场景正文：
+- 场景：默认场景 — Given quick --done 且 test+lint 门禁 action ≠ fail 且 linkedChanges 含真变更（非 quick-<hex>）；When 收尾段执行；Then requirements.md 有 FR 块 → fr-index 入账（幂等）；decisions.md 有条目 → decision-distill 入账；
+全文：.sillyspec/changes/archive/2026-09-20-quick-asset-tail/requirements.md#FR-01
+最近确认：611b6890
+
+## FR-runtime-006 FR needs_review 标记与清除
+变更：2026-09-20-quick-asset-tail
+状态：active
+摘要：默认场景
+依据决策：D-003@v1
+场景正文：
+- 场景：默认场景 — Given 纯 quick 或薄通道 quick 触达某域且该域有 active FR；When 钩子#1 命中
+全文：.sillyspec/changes/archive/2026-09-20-quick-asset-tail/requirements.md#FR-02
+最近确认：611b6890
+
+## FR-runtime-007 纯 quick 机械件
+变更：2026-09-20-quick-asset-tail
+状态：active
+摘要：默认场景
+依据决策：D-005@v1
+场景正文：
+- 场景：默认场景 — Given 纯 quick --done（无 linked 真变更）；When 收尾段执行；Then changedFiles×module-map 命中模块且边车存在 → changelog 追加一行 `- ql-id | 摘要`；--cause 原文 × I
+全文：.sillyspec/changes/archive/2026-09-20-quick-asset-tail/requirements.md#FR-03
+最近确认：611b6890

@@ -1,0 +1,244 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "41cb1a610faf97786f110c55f2a624905891658a",
+  "totals": {
+    "files": 28,
+    "additions": 3618,
+    "deletions": 6
+  },
+  "rows": [
+    {
+      "path": ".claude/CLAUDE.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "analyze-transcript.cjs",
+      "additions": 38,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/README.md",
+      "additions": 42,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/asset-audit.cjs",
+      "additions": 253,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/extract-candidates.cjs",
+      "additions": 37,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-archive.csv",
+      "additions": 294,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-fr.csv",
+      "additions": 12,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-gotchas.csv",
+      "additions": 6,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-knownissues.csv",
+      "additions": 23,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-modules.csv",
+      "additions": 222,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-quicklog.csv",
+      "additions": 1076,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-troubleshooting-candidates.csv",
+      "additions": 88,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/platform-troubleshooting.csv",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-archive.csv",
+      "additions": 108,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-fr.csv",
+      "additions": 51,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-gotchas.csv",
+      "additions": 4,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-knownissues.csv",
+      "additions": 34,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-modules.csv",
+      "additions": 30,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-quicklog.csv",
+      "additions": 460,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/sillyspec-troubleshooting.csv",
+      "additions": 69,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "asset-audit-2026-09-20/summary.json",
+      "additions": 241,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/fr-index.js",
+      "additions": 58,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "additions": 171,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/shared.js",
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/cursor-agent-transcript-detect.test.mjs",
+      "additions": 93,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/quick-asset-tail.test.mjs",
+      "additions": 194,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "b0f7236d723e64cfbdeccefae85c9643d31adbd81f228bcc1fefb8ee081a870a",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-20T13:25:33.757Z"
+}

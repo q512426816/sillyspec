@@ -487,3 +487,30 @@
 理由：行为条目与决策账（knowledge/decisions）互不引用——翻案场景（想改某行为）从 FR 条目跳不到「当年依据/否决了什么」，防复潮链断头。
 故障面：矩阵格式漂移解析空——降级省略行（不阻断归档，fr-inject 遥测可见）。
 退役判据：无。
+
+## D-001@v1 蒸馏尾内联 quick --done（单一入口），不设独立收口命令
+状态：implemented
+变更：2026-09-20-quick-asset-tail
+锚点：未记录
+最近确认：611b6890
+理由：薄通道的资产产出点缺失；若做成 `sillyspec quick-close` 独立命令，终态又靠 agent 自觉记命令——autocompact 实证没人记得收口。
+故障面：quick --done 收尾变重——蒸馏函数纯内存秒级，lite 归档一次 rename；fail-open 不拦。
+退役判据：无。
+
+## D-003@v1 FR needs_review 标记（module-map 同款模式），非 L3 门禁
+状态：implemented
+变更：2026-09-20-quick-asset-tail
+锚点：未记录
+最近确认：611b6890
+理由：钩子#1 只记遥测——quick 改 FR 覆盖行为后索引腐烂不可见，信号躺在 jsonl 无人消费。
+故障面：误标（触达≠行为变更）——advisory 信号人裁，注入行明示"待复核非失效"。
+退役判据：L3 门禁上线时升级为声明义务。
+
+## D-004@v1 lite 归档轻实现（9 处重门全跳，S2 核数勘误），不复用 archiveChangeDirectory
+状态：implemented
+变更：2026-09-20-quick-asset-tail
+锚点：未记录
+最近确认：611b6890
+理由：archiveChangeDirectory 含 6 处 exit(1) 重门（未 apply 交付面等 worktree 导向）——linked quick 变更无 worktree 语义会被误拦。
+故障面：rename 失败中途态——unregister 前 rename，失败时 change 留 active 可重试（顺序保证）。
+退役判据：无。
