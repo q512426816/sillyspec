@@ -185,3 +185,31 @@
 状态：进行中
 关联变更：（无）
 文件：src/fr-index.js, test/fr-index-l2.test.mjs
+
+## ql-20260920-007-c8a2 | 2026-09-20 10:45:40 | ceremony 项目化定价——S0~S3 判定阈值进 local.yaml（对话裁决：每个项目体系不一样）
+状态：已完成
+关联变更：（无）
+文件：
+- src/ceremony-tier.js（config参+normalizeTierConfig）
+- src/ceremony-config.js（读取器）
+- src/review-tier.js+src/verify-postcheck.js（双跑注入）
+- src/config-schema.js（五键+模板）
+- test/ceremony-pricing-config.test.mjs（18断言）
+- module-map+core-engine.changelog（登记）
+需求：ceremony 项目化定价——S0~S3 判定阈值进 local.yaml（对话裁决：每个项目体系不一样）
+根因：三轴阈值/缺省档/五级映射硬编码引擎常量，项目无法按体系调参只能改源码
+方案：computeCeremonyTier config 参五键（default_tier/span两阈值/friction起爆线/risk_tier_map部分覆写；非法回退+留痕；纯函数保持；只升不降无出口）+ceremony-config.js读取器+review-tier/verify-postcheck双跑同源注入+config-schema五键+example模板
+结果：18/18直测+ceremony-tier 111/111零回归+config-schema 390/390+全量549/0+lint 701绿
+
+## ql-20260920-008-ec1c | 2026-09-20 11:18:32 | 审查经济学三律——前置阶段23分钟审查等待的结构性收口
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（Grill三律块）
+- src/stages/plan.js（审查步第7条）
+- src/stages/execute.js（QA三律块）
+- docs/prompt镜像（sync）
+需求：审查经济学三律——前置阶段23分钟审查等待的结构性收口
+根因：Grill 48请求17分钟+plan审查6分钟+FAIL重开全文复审，三轮占brainstorm+plan总时43%
+方案：三阶段prompt同款：①预算硬钳（12/10/15分档，到达即verdict）②FAIL后resume原子代理+diff只验阻断项（5倍差实证）③run_in_background派发+主链先走+--done前回收（门禁照常）
+结果：549/0+lint绿+镜像14=基线持平；纯prompt指引零gate改动

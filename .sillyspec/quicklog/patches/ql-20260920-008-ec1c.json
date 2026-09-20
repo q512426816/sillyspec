@@ -1,0 +1,87 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-00a9d8cc",
+  "totals": {
+    "files": 6,
+    "additions": 15,
+    "deletions": 3
+  },
+  "rows": [
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/brainstorm.md",
+      "declared": true,
+      "additions": 5,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt镜像",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260920-008-ec1c",
+  "sessionId": "quick-00a9d8cc",
+  "savedAt": "2026-09-20T03:20:11.687Z",
+  "patchSha256": "f9ea99b0d15f4fea405ca5c72da0b56881400b96000ba5b63c55824ecb962885",
+  "patchStatus": "ok"
+}
