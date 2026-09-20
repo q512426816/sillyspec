@@ -389,15 +389,21 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     // 两份都变于祖先且互不相等（真双写分叉）→ 显式警告 + 取 cwd（主仓直写=本会话最新编辑位约定）。
     // 行尾归一（坑 autocrlf-byte-misjudge）：本机 autocrlf=true 时快照 checkout 是 CRLF、
     // 工作区文件常是 LF——字节直比会误判「两边都改」。比较一律 CRLF→LF 归一后做。
+    // 对称 trim（坑 gate-snapshot-ancestor-trim，2026-09-20 taskcard-yaml-hardgate verify 实证）：
+    // git() 助手对全部输出 .trim()（rev-parse 场景需要），git show 的祖先内容因此被剥掉尾换行——
+    // 与磁盘读取（仅 CRLF 归一）不对称，已存在文件恒 anc!==cwd 误判「双写分叉」取主仓旧版，
+    // worktree 交付的修改进不了 verify 门快照→门假红（新文件因主仓不存在幸免）。比较三侧
+    // 统一 normalizeEol+trim 同口径——首尾空白差异不参与分叉判定（语义修改不会只差首尾空白）。
     const normalizeEol = (buf) => String(buf).replace(/\r\n/g, '\n')
+    const cmpText = (t) => normalizeEol(t).trim()
     const headFileContent = (rel) => {
       if (mergeBase) {
         try {
           const anc = git(cwd, ['show', `${mergeBase}:${rel}`])
-          if (typeof anc === 'string') return normalizeEol(anc)
+          if (typeof anc === 'string') return cmpText(anc)
         } catch { /* 祖先无此文件（新增文件）→ 落到快照 HEAD 口径 */ }
       }
-      try { return normalizeEol(readFileSync(join(snapshotRoot, rel))) } catch { return null }
+      try { return cmpText(readFileSync(join(snapshotRoot, rel))) } catch { return null }
     }
     for (const f of files) {
       const isSillyspecRuntime = typeof f === 'string' && (f.startsWith('.sillyspec/.runtime/') || f.startsWith('.sillyspec/quicklog/') || f === '.sillyspec/local.yaml' || f === '.sillyspec/.sillyspec-platform.json')
@@ -407,8 +413,8 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
         const wtPath = join(sourceRoot, f), cwdPath = join(cwd, f)
         if (existsSync(wtPath) && existsSync(cwdPath)) {
           let wtText = null, cwdText = null
-          try { wtText = normalizeEol(readFileSync(wtPath)) } catch { /* 读失败不介入 */ }
-          try { cwdText = normalizeEol(readFileSync(cwdPath)) } catch { /* 读失败不介入 */ }
+          try { wtText = cmpText(readFileSync(wtPath)) } catch { /* 读失败不介入 */ }
+          try { cwdText = cmpText(readFileSync(cwdPath)) } catch { /* 读失败不介入 */ }
           if (wtText !== null && cwdText !== null && wtText !== cwdText) {
             const base = headFileContent(f)
             const wtDiff = base === null || wtText !== base
