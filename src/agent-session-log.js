@@ -497,12 +497,66 @@ function detectOpencode(ctx) {
  *     防「Cursor IDE 在别的项目聊天 / 其他项目 opencode 会话活跃」被误报进当前登记。
  * 新增 CLI = 加一个探测器对象 + protocol 文档补布局与格式说明。
  */
+/**
+ * cursor-agent（CLI 子代理，非 Cursor IDE）：transcript = <home>/.cursor/projects/
+ * <encoded-workspace-path>/agent-transcripts/<uuid>/<uuid>.jsonl（{role,message} 行 +
+ * turn_ended 事件）。workspace 目录名是 cwd 的连字符编码（C:/Users/qinyi → C-Users-qinyi，
+ * 路径内合法连字符保留原样——编码不可逆，匹配方向为 cwd→编码名正向比对）→ **precise** 探测：
+ * 逐 cwdCandidate 编码后与目录名精确相等才登记（数字目录名无从解码，跳过不误报）。
+ * 归属规则与 zcode/claude-code 同款（本会话 cwd 即 workspace 根）；token 不落盘属数据源
+ * 缺失（usage 未知，平台侧 FR-03 口径不伪造）。
+ * 坑 cursor-agent-transcript-report-pipeline（2026-09-19 平台侧就绪声明）：daemon 解析器
+ * 注册键 `cursor-agent-transcript-jsonl` 必须与此处 format 串逐字一致。
+ */
+function detectCursorAgentTranscripts(ctx) {
+  const { cwdCandidates, homeDir, now, windowMs } = ctx;
+  const projectsRoot = join(homeDir, '.cursor', 'projects');
+  let projectDirs;
+  try {
+    projectDirs = readdirSync(projectsRoot, { withFileTypes: true }).filter(d => d.isDirectory());
+  } catch { return []; }
+  // cwd → 编码名（正向，避免解码歧义）：盘符冒号与路径分隔符全部 → '-'
+  const encodeCwd = (p) => toPosix(String(p)).replace(/^([a-zA-Z]):/, '$1').replace(/[/:]/g, '-');
+  const wanted = new Set(cwdCandidates.filter(Boolean).map(encodeCwd));
+  if (wanted.size === 0) return [];
+  const entries = [];
+  for (const proj of projectDirs) {
+    if (!wanted.has(proj.name)) continue;
+    const tsRoot = join(projectsRoot, proj.name, 'agent-transcripts');
+    let sessionDirs;
+    try {
+      sessionDirs = readdirSync(tsRoot, { withFileTypes: true }).filter(d => d.isDirectory());
+    } catch { continue; }
+    for (const sess of sessionDirs) {
+      let files;
+      try {
+        files = readdirSync(join(tsRoot, sess.name)).filter(f => f.endsWith('.jsonl'));
+      } catch { continue; }
+      for (const f of files) {
+        const full = join(tsRoot, sess.name, f);
+        const st = statSafe(full);
+        if (!st || now - st.mtimeMs > windowMs) continue;
+        entries.push({
+          harness: 'cursor-agent', format: 'cursor-agent-transcript-jsonl',
+          detected_via: 'cursor-agent-transcript-scan',
+          log_path: toPosix(full), agent_cwd: toPosix(cwdCandidates[0] || ''),
+          session_id: sess.name, originator: null,
+          mtime_ms: st.mtimeMs,
+        });
+      }
+    }
+  }
+  entries.sort((a, b) => b.mtime_ms - a.mtime_ms);
+  return entries.slice(0, 3);
+}
+
 const HARNESS_DETECTORS = [
   { name: 'claude-code', tier: 'precise', detect: detectClaudeCode },
   { name: 'codex', tier: 'precise', detect: detectCodex },
   { name: 'zcode', tier: 'precise', detect: detectZcode },
   { name: 'pi', tier: 'precise', detect: detectPi },
   { name: 'deepseek-dsh', tier: 'precise', detect: detectDsh },
+  { name: 'cursor-agent', tier: 'precise', detect: detectCursorAgentTranscripts },
   { name: 'cursor', tier: 'loose', detect: detectCursor },
   { name: 'opencode', tier: 'loose', detect: detectOpencode },
 ];
