@@ -40,14 +40,14 @@ test('syncModuleDocSidecars：sidecar 追加 + 卡戳 + 幂等二跑跳过', () 
   const fx = mkSyncFx()
   try {
     const r1 = syncModuleDocSidecars({ cwd: fx.cwd, changeName: '2026-09-09-t1', note: '测试变更' })
-    assert.deepEqual(r1.synced, ['core'])
+    assert.deepEqual(r1.synced, ['proj/core'])  // 2026-09-21 multimap 修复后 synced 带项目前缀（多项目仓模块身份含项目）
     const sc = readFileSync(join(fx.mapDir, 'core.changelog.md'), 'utf8')
     assert.ok(sc.includes('- 2026-09-09-t1 | 测试变更'), '追加行在场')
     const card = readFileSync(join(fx.mapDir, 'core.md'), 'utf8')
     assert.ok(!card.includes('2020-01-01'), 'updated_at 已戳')
     // 幂等
     const r2 = syncModuleDocSidecars({ cwd: fx.cwd, changeName: '2026-09-09-t1', note: '测试变更' })
-    assert.deepEqual(r2.skipped, ['core'], '二跑跳过')
+    assert.deepEqual(r2.skipped, ['proj/core'], '二跑跳过')
     const sc2 = readFileSync(join(fx.mapDir, 'core.changelog.md'), 'utf8')
     assert.equal((sc2.match(/2026-09-09-t1/g) || []).length, 1, '无重复行')
   } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
@@ -58,7 +58,7 @@ test('CLI module-docs-sync：命令式冒烟（--json）', () => {
   try {
     const out = execFileSync(process.execPath, [bin, 'module-docs-sync', '--change', '2026-09-09-t2', '--note', 'CLI 冒烟', '--json'], { cwd: fx.cwd, encoding: 'utf8' })
     const j = JSON.parse(out)
-    assert.deepEqual(j.synced, ['core'])
+    assert.deepEqual(j.synced, ['proj/core'])
     assert.ok(readFileSync(join(fx.mapDir, 'core.changelog.md'), 'utf8').includes('- 2026-09-09-t2 | CLI 冒烟'))
   } finally { rmSync(fx.cwd, { recursive: true, force: true }) }
 })

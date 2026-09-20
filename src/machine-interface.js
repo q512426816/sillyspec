@@ -318,6 +318,64 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           fallbackReason: vt.fallbackReason ?? null,
         },
       });
+
+      // ── d2. verify-lint（parity 补齐，2026-09-21 R4-S-F 实证）──
+      // gate verify 原先只查 test 不查 lint，而 verify --done 的 lint 隔离快照门会拦——
+      // gate PASS / --done FAIL 两套口径并存，误导 agent 诊断 16 分钟（对撞会话 db 实证）。
+      // 本检查与 --done 同引擎（runVerifyLintCheck + triageLintOwnership 归属降档）；口径差异
+      // 永久明示：gate 在工作树直跑 lint，--done 在隔离快照（HEAD+归属文件 overlay）跑——
+      // 不一致时以 --done 为准。lint 未配置/不可跑 → informational，不阻断只读查询。
+      try {
+        const { runVerifyLintCheck, triageLintOwnership, resolveVerifyChangedFiles } = await import('./verify-postcheck.js');
+        const lc = runVerifyLintCheck({ cwd, specBase: specRoot });
+        if (lc.status === 'skipped') {
+          checks.push({
+            id: 'verify-lint',
+            code: checkCode('verify-lint'),
+            ok: true,
+            informational: true,
+            warnings: [`verify-lint SKIPPED — ${lc.reason || 'local.yaml 未配置 commands.lint'}；本次 gate 结论不含 lint 客观核验`],
+            data: { status: lc.status },
+          });
+        } else {
+          const lcWarnings = [
+            '口径说明：gate verify 的 lint 在工作树直跑；verify --done 的 lint 在隔离快照（HEAD+归属文件 overlay）跑——两口径不一致时以 --done 为准。',
+          ];
+          let ownership = null;
+          let lintOk = lc.status !== 'failed';
+          if (lc.status === 'failed') {
+            const changed = resolveVerifyChangedFiles(cwd, changeName, null, { specBase: specRoot }) || [];
+            ownership = triageLintOwnership({ failureFiles: lc.failureFiles || [], changeFiles: changed });
+            if (ownership.verdict === 'pre-existing') {
+              lintOk = true; // 存量债不拦只读查询（与 --done 的 advisory 降档同口径）
+              lcWarnings.push('lint 失败文件与本变更零交集（HEAD 存量债）→ 本 check 降档放行；--done 同口径 advisory，建议顺手清偿解锁全仓 lint 门。');
+            }
+          }
+          checks.push({
+            id: 'verify-lint',
+            code: checkCode('verify-lint'),
+            ok: lintOk,
+            errors: !lintOk ? [`lint 失败（工作树口径）: ${lc.reason || ''}`] : [],
+            warnings: lcWarnings,
+            data: {
+              status: lc.status,
+              exitCode: lc.exitCode,
+              durationMs: lc.durationMs,
+              ownership: ownership ? ownership.verdict : null,
+              overlap: ownership ? ownership.overlap : [],
+            },
+          });
+        }
+      } catch (e) {
+        checks.push({
+          id: 'verify-lint',
+          code: checkCode('verify-lint'),
+          ok: true,
+          informational: true,
+          warnings: [`verify-lint 检查装配失败（fail-open）: ${e && e.message ? e.message : e}`],
+          data: { status: 'error' },
+        });
+      }
     }
 
     // ── 综合结论：所有非 informational check 均 ok ──

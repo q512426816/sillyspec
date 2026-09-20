@@ -48,7 +48,15 @@ export function parseModuleMapPaths(yamlText) {
     }
     if (inPaths && currentModule) {
       const item = line.match(/^      - (.+)$/)
-      if (item) map.get(currentModule).push(item[1].trim().replace(/\\/g, '/'))
+      if (item) {
+        // 引号剥离（坑 map-quoted-path-deadmatch，2026-09-21 R4-L 实证）：docs/<p>/modules/
+        // _module-map.yaml 存在带引号条目（"frontend/src/app/page.tsx"）——只 trim 不剥引号时
+        // classifyFile 的 === / startsWith 恒失配，引号条目全是死路径（frontend map 790 条
+        // 几乎全带引号＝整图失效）。仅首尾成对引号才剥（路径内部引号不动）。
+        const raw = item[1].trim()
+        const unquoted = raw.replace(/^(['"])([\s\S]*)\1$/, '$2')
+        map.get(currentModule).push(unquoted.replace(/\\/g, '/'))
+      }
     }
   }
   return map
@@ -89,18 +97,33 @@ export function syncModuleDocSidecars({ cwd, changeName, note, specDir = null })
   // 复用 generateModuleImpactSkeleton 的 map 发现 + 归类（diff 来源）
   const skel = generateModuleImpactSkeleton({ cwd, changeName, specDir })
   if (!skel) return { synced: [], unmatched: [], skipped: [], reason: '无 module-map 或无 diff 可归类' }
-  const modulesDir = findModulesDir(specBase)
-  if (!modulesDir) return { synced: [], unmatched: [], skipped: [], reason: 'modules 目录不存在' }
-  // 从骨架 markdown 反解归类结果（命中模块集合 + 未匹配清单）
-  const hitModules = [...skel.markdown.matchAll(/^\| (\S+) \| `([^`]+)`/gm)].map(m => m[1])
-  const unmatched = [...skel.markdown.matchAll(/^- `([^`]+)` /gm)].map(m => m[1])
+  // 结构化归类直用（classified 含 project 归属；multimap-first-found-mismatch 同坑修复面）——
+  // 不再反解 markdown（正则脆且丢 project 维度）。classified 缺席时兜底反解 + 首个 modules 目录。
+  let mods = []
+  if (Array.isArray(skel.classified) && skel.classified.length >= 0) {
+    const seen = new Set()
+    for (const r of skel.classified) {
+      const key = r.project + '/' + r.module
+      if (seen.has(key)) continue
+      seen.add(key)
+      mods.push({ project: r.project, module: r.module, modulesDir: join(specBase, 'docs', r.project, 'modules') })
+    }
+  } else {
+    const modulesDir = findModulesDir(specBase)
+    if (!modulesDir) return { synced: [], unmatched: [], skipped: [], reason: 'modules 目录不存在' }
+    mods = [...new Set([...skel.markdown.matchAll(/^\| (\S+) \| `([^`]+)`/gm)].map(m => m[1]))]
+      .map(mod => ({ project: null, module: mod, modulesDir }))
+  }
+  const unmatched = Array.isArray(skel.unmatchedFiles)
+    ? skel.unmatchedFiles
+    : [...skel.markdown.matchAll(/^- `([^`]+)` /gm)].map(m => m[1])
   const synced = []
   const skipped = []
-  for (const mod of [...new Set(hitModules)]) {
+  for (const { project: proj, module: mod, modulesDir } of mods) {
     const sidecarPath = join(modulesDir, `${mod}.changelog.md`)
     let sidecar = ''
     try { sidecar = readFileSync(sidecarPath, 'utf8') } catch { sidecar = '' }
-    if (sidecar.includes(`- ${changeName} |`)) { skipped.push(mod); continue }
+    if (sidecar.includes(`- ${changeName} |`)) { skipped.push(proj ? `${proj}/${mod}` : mod); continue }
     const NL = String.fromCharCode(10)
     const line = `- ${changeName} | ${note || '(见该变更 quicklog/归档)'}`
     const base = sidecar
@@ -114,7 +137,7 @@ export function syncModuleDocSidecars({ cwd, changeName, note, specDir = null })
       const stamped = card.replace(/^updated_at:.*$/m, `updated_at: ${new Date().toISOString().slice(0, 19) + '+08:00'}`)
       if (stamped !== card) writeFileSync(cardPath, stamped)
     } catch { /* 卡不存在——sidecar 照写，卡内容留给 agent */ }
-    synced.push(mod)
+    synced.push(proj ? `${proj}/${mod}` : mod)
   }
   return { synced, unmatched, skipped }
 }
@@ -133,22 +156,22 @@ function findModulesDir(specBase) {
 export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null, sourceFiles = null, origin = null }) {
   const specBase = resolveSpecDir(cwd, { specDir })
 
-  // 找 _module-map.yaml（docs/<p>/modules/；多项目取首个含 modules 索引的）
-  let moduleMapPath = null
+  // 多项目 map 联合归类（坑 multimap-first-found-mismatch，2026-09-21 R4-L 实证）：docs/ 下
+  // 各项目可各带 _module-map.yaml（对撞仓 5 个），原「取首个命中」让 daemon/frontend 文件对
+  // 按目录序排前的 backend map 全失配——24 文件全未匹配、sidecar 也写错项目目录。联合口径：
+  // 逐项目 classify、目录序首个命中 wins（单项目时联合退化为一图，行为不变）。
+  const moduleMaps = []
   try {
     for (const p of readdirSync(join(specBase, 'docs'), { withFileTypes: true })) {
       if (!p.isDirectory()) continue
       const candidate = join(specBase, 'docs', p.name, 'modules', '_module-map.yaml')
       if (existsSync(candidate)) {
-        moduleMapPath = candidate
-        break
+        const pm = parseModuleMapPaths(readFileSync(candidate, 'utf8'))
+        if (pm.size > 0) moduleMaps.push({ project: p.name, modulePaths: pm })
       }
     }
   } catch { /* 无 docs/ */ }
-  if (!moduleMapPath) return null
-
-  const modulePaths = parseModuleMapPaths(readFileSync(moduleMapPath, 'utf8'))
-  if (modulePaths.size === 0) return null
+  if (moduleMaps.length === 0) return null
 
   let sourceFileList
   if (sourceFiles) {
@@ -169,12 +192,18 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null, 
   if (sourceFileList.length === 0) return null
 
   const byModule = new Map()
+  const classified = [] // {project, module, file}——syncModuleDocSidecars 按 project 落 sidecar 用
   const unmatched = []
   for (const f of sourceFileList) {
-    const mod = classifyFile(f, modulePaths)
-    if (mod) {
-      if (!byModule.has(mod)) byModule.set(mod, [])
-      byModule.get(mod).push(f)
+    let hit = null
+    for (const m of moduleMaps) {
+      const mod = classifyFile(f, m.modulePaths)
+      if (mod) { hit = { project: m.project, moduleId: mod }; break }
+    }
+    if (hit) {
+      if (!byModule.has(hit.moduleId)) byModule.set(hit.moduleId, [])
+      byModule.get(hit.moduleId).push(f)
+      classified.push({ project: hit.project, module: hit.moduleId, file: f })
     } else {
       unmatched.push(f)
     }
@@ -234,5 +263,5 @@ export function generateModuleImpactSkeleton({ cwd, changeName, specDir = null, 
   L.push('规则：execute/verify 完成文档同步后把对应行回填 done；确定不同步的行改 skipped 并在操作列写明原因。')
   L.push('')
 
-  return { markdown: L.join('\n'), matchedCount: sourceFileList.length - unmatched.length, unmatchedCount: unmatched.length }
+  return { markdown: L.join('\n'), matchedCount: sourceFileList.length - unmatched.length, unmatchedCount: unmatched.length, classified, unmatchedFiles: unmatched }
 }

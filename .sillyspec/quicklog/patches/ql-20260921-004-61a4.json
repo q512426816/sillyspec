@@ -1,0 +1,127 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-c31e2a30",
+  "totals": {
+    "files": 11,
+    "additions": 265,
+    "deletions": 39
+  },
+  "rows": [
+    {
+      "path": "src/module-impact.js",
+      "declared": true,
+      "additions": 51,
+      "deletions": 22,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/machine-interface.js",
+      "declared": true,
+      "additions": 58,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/diagnostic-codes.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/_extracted.json",
+      "declared": true,
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/quick.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/r4-followup-fixes.test.mjs",
+      "declared": true,
+      "additions": 134,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/plan-execute-contract.test.mjs",
+      "declared": true,
+      "additions": 3,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knife-batch2.test.mjs",
+      "declared": true,
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/dispatch/execute-dispatch-integration.test.mjs",
+      "declared": true,
+      "additions": 4,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260921-004-61a4",
+  "sessionId": "quick-c31e2a30",
+  "savedAt": "2026-09-20T18:09:23.569Z",
+  "patchSha256": "e369207ba3935e43653ed27921cf99f4df0cd5a2f8136c244234d00e61bc8c71",
+  "patchStatus": "ok"
+}

@@ -270,9 +270,10 @@ console.log('\n--- buildWavePrompt：implicit Wave 串行指令 / 显式 Wave �
   assert(!implicitPrompt.includes('同 Wave 内可并行'), 'implicit 角色清单不应含「同 Wave 内可并行」')
   assert(implicitPrompt.includes('契约 task 由独立子代理逐个（串行）处理或落在不同批次'),
     'implicit batch 条件 2 括注应收敛为串行口径（防同 prompt 自相矛盾）')
-  // 显式 Wave（无 implicit 标记）→ 并行原文不变
+  // 显式 Wave（无 implicit 标记）→ 并行原文（2026-09-21 r4-followup 并发帽后：并行启动 + 在飞 ≤3，
+  // 旧「必须并行启动」措辞退役——R4-L 实证 4 路齐发触发额度耗尽中断 17min）
   const explicitPrompt = buildWavePrompt({ index: 1, tasks: mkTasks() }, 1, null, null)
-  assert(explicitPrompt.includes('必须并行启动'), '显式 Wave 调度要求仍含「必须并行启动」')
+  assert(explicitPrompt.includes('并行启动、batch 内部串行，且同时在飞 ≤3'), '显式 Wave 调度要求含并行+并发帽 ≤3 新契约')
   assert(explicitPrompt.includes('同 Wave 内可并行'), '显式 Wave 角色清单仍含「同 Wave 内可并行」')
   assert(!explicitPrompt.includes('隐式合成'), '显式 Wave 不应含「隐式合成」头标注')
   assert(!explicitPrompt.includes('禁止并行启动'), '显式 Wave 不应含「禁止并行启动」')

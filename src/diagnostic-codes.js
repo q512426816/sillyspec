@@ -76,7 +76,7 @@ export const DIAGNOSTIC_CODES = Object.freeze({
   },
 });
 
-/** gate check id → 失败码（六 check 全覆盖；表外 id 返回 undefined，调用方不挂键）。 */
+/** gate check id → 失败码（七 check 全覆盖；表外 id 返回 undefined，调用方不挂键）。 */
 const CHECK_ID_TO_CODE = Object.freeze({
   artifacts: 'artifacts_invalid',
   'design-file-list': 'design_file_ref_invalid',
@@ -84,6 +84,7 @@ const CHECK_ID_TO_CODE = Object.freeze({
   'execute-evidence': 'execute_evidence_unchanged',
   'task-reviews': 'task_reviews_invalid',
   'verify-test': 'verify_test_failed',
+  'verify-lint': 'verify_lint_failed',
 });
 
 /**

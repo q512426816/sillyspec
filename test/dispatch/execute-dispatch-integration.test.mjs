@@ -341,9 +341,10 @@ console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责
     '越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决',
     '越权即停：改 batch 外/其他 task 文件立即停止并报告冲突')
 
-  // e. 并行铁律改写（「独立或 batch」+「并行启动」+「batch 内部串行」组合表述）
-  assertContains(out, '同一 Wave 的多个子代理（独立或 batch）必须并行启动，batch 内部串行',
-    '并行铁律改写：独立或 batch 并行启动 + batch 内部串行')
+  // e. 并行铁律改写（「独立或 batch」+「并行启动」+「batch 内部串行」+「在飞 ≤3 并发帽」组合表述——
+  //    2026-09-21 r4-followup：旧「必须并行启动」退役换并发帽，R4-L 4 路齐发额度耗尽实证）
+  assertContains(out, '同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3',
+    '并行铁律改写：独立或 batch 并行启动 + batch 内部串行 + 在飞 ≤3 并发帽')
 
   // f. 旧独占文案移除（NotContains 锚旧整句；新版为「默认每个任务由独立子代理执行」默认+例外结构，
   //    不断言子串「由独立子代理执行」——该子串在新默认句中仍存在，会误伤）
