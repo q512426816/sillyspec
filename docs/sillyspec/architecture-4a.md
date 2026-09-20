@@ -80,8 +80,8 @@ brainstorm (allowedFrom:[]) → plan (allowedFrom:[brainstorm])
 
 **阶段完成 gate 级联**（`runStageCompletionGates` `src/run/gates.js:747`，统一收尾管线）顺序：
 1. `runValidators`（客观产物校验，`src/stage-contract.js:1359`）：`validateBrainstormOutputs` / `validatePlanOutputs` / `validateExecuteOutputs`+`checkExecuteCodeEvidence` / `validateVerifyOutputs` / `validateScanOutputs`。
-2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:865`）。
-3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1218`）。
+2. verify 实测对账：CLI 亲跑 `local.yaml` 的 `commands.test`，自报告 PASS 但实测失败→阻断（`gates.js:906`）。
+3. Plan→Execute Contract（`validatePlanForExecute` `gates.js:1244`）。
 4. Stage Review Gate（brainstorm/plan/execute，`gates.js:253`）：`classifyReviewTier` 判 tier=self（自审）/independent（强制独立子代理 review.json）。
 5. Execute Task Review Gate（`gates.js:527`）：校验所有 task review.json 存在 + verdict 通过 + git 真实性交叉校验。
 

@@ -861,6 +861,47 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } catch { /* advisory 失败不阻断完成（fail-soft，facade 预检先例同款） */ }
   }
 
+  // ── fail-fast 前置：纯文档 blocking 检查先于 test/lint 实测门（R4-S-F 实证，2026-09-21）──
+  // module-impact 死信与预填注清零 error 门只读文档零外部执行，原先排在 9 分钟级 test+lint
+  // 实测门之后——文档未清时每轮 --done 都先白烧一轮门禁再被拦（R4-S-F 166min 的主要形状）。
+  // 前置到实测门之前：秒级失败秒级返工，贵的门只在文档面已清后才跑。
+  if (stageName === 'verify' && changeName) {
+    // module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify。
+    // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
+    // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦。
+    const verifyChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+    if (verifyChangeDir) {
+      const impactPath = join(verifyChangeDir, 'module-impact.md')
+      if (existsSync(impactPath)) {
+        const { extractPendingDocSyncRows } = await import('./complete-handlers.js')
+        const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
+        if (pendingRows.length > 0) {
+          console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+          for (const row of pendingRows) console.error(`   - ${row}`)
+          console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
+          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+        }
+      }
+    }
+    // 预填注清零 error 门（归档前最后一道；2026-09-18-artifact-prefill task-03 / FR-03 / D-003@v1
+    // 门禁梯度·error 档）：白名单槽宿主文件（design.md + tasks/task-*.md）仍含未删预填注 →
+    // 阻断 verify 完成。brainstorm/plan --done 的 advisory 在此收口为硬门，注在场=预填未确认。
+    // 检测单点 = runProbe10PrefillNoteClearance（不二算）。已知误报面：散文引用注字面量会命中
+    // ——修法是核对后删注/改写散文措辞，不是绕门。
+    try {
+      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
+      const noteClearance = runProbe10PrefillNoteClearance({ specBase, changeName })
+      if (noteClearance.unclearedFiles.length > 0) {
+        console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
+        for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
+        console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
+        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+      }
+    } catch (e) {
+      console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
+    }
+  }
+
   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
@@ -983,6 +1024,22 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     // 逃生 SILLYSPEC_VERIFY_LINT_GATE=advisory）
     const { shouldBlockVerifyLint } = await import('../verify-postcheck.js')
     if (shouldBlockVerifyLint(lintCheck)) {
+      // ── lint 归属鉴定降档（R4-S-F 实证：verify 侧 lint 硬门 7 轮全是 HEAD 存量债——隔离
+      //    快照含基线债文件时恒败，agent 被逼范围外清偿或逃生口）。失败输出提及文件 × 本变更
+      //    文件集零交集 → 存量债 advisory 降档放行（债非本变更引入，硬拦只是制造范围外功）；
+      //    有交集 / 输出无可识别路径（unattributable，纯配置错误类）→ 维持硬拦（保守）。──
+      let lintOwnership = null
+      try {
+        const { triageLintOwnership, resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+        const lintScopeFiles = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || [])
+          .map(f => String(f).replace(/\\/g, '/')).filter(f => !f.startsWith('.sillyspec/'))
+        lintOwnership = triageLintOwnership({ failureFiles: lintCheck.failureFiles || [], changeFiles: lintScopeFiles })
+      } catch { /* 鉴定链异常维持硬拦（保守） */ }
+      if (lintOwnership && lintOwnership.verdict === 'pre-existing') {
+        console.warn('\n⚠️ Verify lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本变更文件集零交集）——降档 advisory 不阻断 verify 完成：')
+        console.warn(`   存量债文件：${(lintCheck.failureFiles || []).join('、') || '（见上方输出）'}`)
+        console.warn('   处置建议：单独 quick 机械清偿（顺手清债解锁全仓 lint 门），或本变更确认无关时设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。债随基线存在，与本变更交付无关。')
+      } else {
       console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
       if (usedSnapInfo) {
         try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
@@ -1006,6 +1063,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       }
       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-lint' })
+      } // else（pre-existing 降档分支）结束——维持硬拦分支的 rollback 语义不变
     }
     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
@@ -1166,43 +1224,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
       }
     } catch { /* 自动重锚失败不影响收尾（docs gate 兜底） */ }
-    // ── module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify ──
-    // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
-    // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦（修复 perf-remediation
-    // 类「verify PASS → archive 才发现 pending」的时序漏洞）。
-    const verifyChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
-    if (verifyChangeDir) {
-      const impactPath = join(verifyChangeDir, 'module-impact.md')
-      if (existsSync(impactPath)) {
-        const { extractPendingDocSyncRows } = await import('./complete-handlers.js')
-        const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
-        if (pendingRows.length > 0) {
-          console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
-          for (const row of pendingRows) console.error(`   - ${row}`)
-          console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-        }
-      }
-    }
-    // ── 预填注清零 error 门（归档前最后一道；2026-09-18-artifact-prefill task-03 / FR-03 /
-    //    D-003@v1 门禁梯度·error 档）：白名单槽宿主文件（design.md + tasks/task-*.md）仍含
-    //    未删预填注 → 阻断 verify 完成（verify 完成是 archive 前置——「归档前注清零」的落点；
-    //    brainstorm/plan --done 的 advisory 在此收口为硬门，注在场=预填未确认）。检测单点 =
-    //    verify-probes 探针面 runProbe10PrefillNoteClearance（探针 10 --init 预填与本门同一
-    //    实现，不二算）。已知误报面：散文引用注字面量会命中——修法是核对后删注/改写散文
-    //    措辞，不是绕门。──
-    try {
-      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
-      const noteClearance = runProbe10PrefillNoteClearance({ specBase, changeName })
-      if (noteClearance.unclearedFiles.length > 0) {
-        console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
-        for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
-        console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
-      }
-    } catch (e) {
-      console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
-    }
+    // ── module-impact 死信探针 + 预填注清零 error 门：已前移至 test/lint 实测门之前 ──
+    // （fail-fast，R4-S-F 实证——纯文档 blocking 检查排在 9 分钟实测门后白烧门禁轮次；
+    //   实现体见上方「fail-fast 前置」块，此处不再重复执行。）
     // ── verify 服务进程回收（坑 verify-service-process-leak；坑 verify-pids-cross-session-kill
     // 见 reapVerifyServices 注释）──
     try {

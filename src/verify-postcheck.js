@@ -136,6 +136,44 @@ function extractLintCommand(yamlText) {
 }
 
 /**
+ * lint 失败输出中提及的文件路径提取（lint 归属鉴定·R4-S-F 实证：verify 侧 lint 硬门 7 轮
+ * 全是 HEAD 存量债——快照含基线债文件时恒败，逼 agent 范围外清偿或逃生口）。
+ * 口径：按空白切 token，剥引号/行号尾缀（ruff/eslint 的 path:line:col 形态），保留带路径
+ * 分隔符且以代码扩展名结尾的 token（不带分隔符的普通单词不收，防误报）。去重保序。
+ */
+export function extractLintFailureFiles(output) {
+  if (!output || typeof output !== 'string') return []
+  const LINT_FILE_EXT_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|vue|svelte|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|css|scss)$/
+  const seen = new Set()
+  for (const raw of output.split(/\s+/)) {
+    let t = raw.replace(/^["'`(\[]+/, '').replace(/["'`),;]+$/, '')
+    t = t.replace(/:(?:\d+)(?::\d+)*$/, '') // 剥 :line / :line:col
+    if (!LINT_FILE_EXT_RE.test(t)) continue
+    if (!/[\\/]/.test(t)) continue
+    const norm = t.replace(/\\/g, '/').replace(/^\.\//, '')
+    if (norm.length > 1) seen.add(norm)
+  }
+  return [...seen]
+}
+
+/**
+ * lint 失败归属判定（纯函数）：失败输出提及的文件 × 本变更文件集。
+ * - owned：有交集 → 失败可能由本变更引入 → 维持硬拦（保守）。
+ * - pre-existing：零交集 → 全是 HEAD 存量债 → 调用方降档 advisory（债不是本变更的错）。
+ * - unattributable：失败文件提取为空（输出无可识别路径，如纯配置错误）→ 维持硬拦（无法
+ *   排除本变更责任，宁可拦不可漏）。
+ * 匹配宽松双向 endsWith（输出可能是绝对路径/仓相对路径，两侧口径不一定同源）。
+ */
+export function triageLintOwnership({ failureFiles = [], changeFiles = [] } = {}) {
+  const norm = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
+  const ffs = (Array.isArray(failureFiles) ? failureFiles : []).map(norm).filter(Boolean)
+  if (ffs.length === 0) return { verdict: 'unattributable', overlap: [] }
+  const cfs = (Array.isArray(changeFiles) ? changeFiles : []).map(norm).filter(Boolean)
+  const overlap = ffs.filter(f => cfs.some(c => c === f || c.endsWith('/' + f) || f.endsWith('/' + c)))
+  return overlap.length > 0 ? { verdict: 'owned', overlap } : { verdict: 'pre-existing', overlap: [] }
+}
+
+/**
  * lint advisory 观察期计数（刀③，2026-09-08）：advisory 失败不阻断，但「观察期后升级硬门」
  * 需要失败率数据支撑（更硬 vs 更吵的决策依据——硬门误伤纯文档/跨平台路径会制造新噪音）。
  * 每次非 skipped 实测追加计数进 <specBase>/.runtime/verify-lint-tally.json（passed/failed
@@ -226,6 +264,7 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
     outputTail,
     reason: finalReason,
     tally, // { failedRuns, totalRuns } | null——观察期失败率，升级硬门的决策依据
+    failureFiles: status === 'failed' ? extractLintFailureFiles(output) : [], // 归属鉴定输入（全文口径，outputTail 有截断盲区）
   }
 }
 
@@ -266,7 +305,7 @@ export function printVerifyLintCheck(result) {
     console.error(`\n⚠️  Verify lint 实测失败（advisory 档，不阻断本次完成）：\`${result.command}\` — ${result.reason}`)
     console.error('   agent 的 lint 自报告与实测不符时以实测为准；请修复后重跑，避免格式债推迟到 commit 被 pre-commit hook 拦截。')
     if (result.tally) {
-      console.error(`   📊 lint advisory 失败累计 ${result.tally.failedRuns}/${result.tally.totalRuns} 次（数据落 .runtime/verify-lint-tally.json）。`)
+      console.error(`   📊 lint advisory 观察期：实测 ${result.tally.totalRuns} 次中失败 ${result.tally.failedRuns} 次（数据落 .runtime/verify-lint-tally.json）。`)
     }
   }
   if (result.outputTail) {

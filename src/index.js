@@ -211,7 +211,7 @@ async function main() {
 
   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
   const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
-  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree } = await import('./run/shared.js');
+  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree, ancestorSpecDirs } = await import('./run/shared.js');
 
   // 解析全局选项
   let json = false;
@@ -339,6 +339,12 @@ async function main() {
       console.error(`   主仓根：${wtInfo.mainRepoRoot}`);
       console.error('   SillySpec 进度库只存在于主仓，worktree 内跑会产生分裂进度（坑 worktree-cwd-silent-split）。');
       console.error('   修复：cd 到主仓根后重跑，或用 --dir <主仓根>，或用 --allow-worktree-cwd 强制放行。');
+      // 一键放行整行（R4-S-Q 实证：agent 试 3 次才拼对组合——worktree 守卫要 --allow-worktree-cwd，
+      // 而 worktree 嵌套在主仓 .sillyspec/.runtime/ 下又触发 monorepo 多实例拦，需再补 --spec-dir
+      // 指向 worktree 自己的 .sillyspec，两 flag 缺一不可。给整行可贴命令，不再让调用方试错拼装。）
+      const wtSpecDir = (ancestorSpecDirs(guardDir)[0]) || join(guardDir, '.sillyspec');
+      console.error(`   一键放行（本 worktree 作独立实例跑，整行照贴）：`);
+      console.error(`   sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir "${wtSpecDir}"`);
       process.exit(2);
     }
   }

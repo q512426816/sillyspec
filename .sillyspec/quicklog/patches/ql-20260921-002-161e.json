@@ -1,0 +1,95 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-fa844de8",
+  "totals": {
+    "files": 7,
+    "additions": 223,
+    "deletions": 40
+  },
+  "rows": [
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 61,
+      "deletions": 37,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "declared": true,
+      "additions": 40,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/quick-audit.js",
+      "declared": true,
+      "additions": 17,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 7,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 4,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/lint-ownership-failfast.test.mjs",
+      "declared": true,
+      "additions": 94,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/*.md×4+core-engine.md",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260921-002-161e",
+  "sessionId": "quick-fa844de8",
+  "savedAt": "2026-09-20T17:24:47.837Z",
+  "patchSha256": "a766d0c8fd5f53d5f3a78ba3ffe78b90bba1ae4e3ef34871568ceaa9248071e9",
+  "patchStatus": "ok"
+}

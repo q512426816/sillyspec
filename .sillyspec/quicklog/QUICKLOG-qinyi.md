@@ -337,3 +337,19 @@
 根因：R4 对照实验细读实证：①complete-handlers 动态 import 解构 loadQuickModuleIndex 得 undefined（shared.js 缺 export），资产尾②调用即 TypeError 被 fail-open 吞，changelog 边车整条死路（§7 单测直接模拟 join 语义未走真实 import，故漏检）；②--linked-changes 在 --done 时经 runStage opts 传入但 completeStep 解构与 handleQuickStageCompletion 签名均无此参，guard 只读落盘文件——两次 --done 均带 flag 而蒸馏尾零触发、quicklog 渲染『关联变更：（无）』
 方案：A=shared.js:1294 补 export；B=complete.js 解构+调用两处透传、complete-handlers 签名增两参、新增导出纯函数 mergeGuardLinkedChanges（并集去重保序/'none' 清空 manual 面/auto 独立并集/无变化返回原引用免回写/guard 非对象原样返回）在 guard 读取后并入并回写 sessionGuardFile（brownfield 不造对象，回写 fail-open）；test/quick-asset-tail.test.mjs 增 §8 回归 10 断言（真实 import 钉 A、merge 六面、接线源文本钉两处）；docs 重锚 8 处（我 1 处 2365→2400 + 并行会话 794529e5 遗留 7 处 index.js 锚，docs check --fix 机械）
 结果：quick 门禁实测 npm test 40+558/558 全绿（含 doc-ref-check 88/88）+ npm run lint 通过（712 文件、未引用导出 0）；quick-asset-tail 本文件 35/35（新增 §8 十断言）；未发版（3.29.4 之后随批）
+
+## ql-20260921-002-161e | 2026-09-21 01:17:18 | R4 对撞反馈四修复：门禁 fail-fast 前置 + lint 归属鉴定降档（quick/verify 两门）+ advisory 计数歧义 + 守卫一键放…
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/gates.js（fail-fast 前置块+lint 归属鉴定降档分支）
+- src/verify-postcheck.js（extractLintFailureFiles/triageLintOwnership 导出+failureFiles 字段+计数措辞）
+- src/run/quick-audit.js（quick 门 lint 失败归属鉴定接线）
+- src/index.js（worktree 守卫一键放行整行）
+- src/run/command.js（多实例守卫一键指定整行）
+- test/lint-ownership-failfast.test.mjs（21 断言（提取6+判定6+源序钉5+接线措辞4））
+- docs/sillyspec/*.md×4+core-engine.md（行号锚机械重锚+陈锚手工修）
+需求：R4 对撞反馈四修复：门禁 fail-fast 前置 + lint 归属鉴定降档（quick/verify 两门）+ advisory 计数歧义 + 守卫一键放行整行
+根因：R4-S-F/S-Q 对撞实证：①死信/预填注等纯文档 blocking 检查排在 9 分钟级 test+lint 实测门后，文档未清每轮 --done 先白烧门禁再被拦（R4-S-F 166min 主形状，db 计数死信拦 1 次+lint 硬拦 7 次）②lint 硬门在隔离快照含 HEAD 存量债文件时恒败（债文件不在变更归属集，agent 被逼范围外清偿或逃生口），quick 与 verify 两门同根因只修一侧另一侧重演 ③观察期计数『失败累计 1/1 次』读作 1-of-1 歧义 ④worktree 守卫与 monorepo 多实例拦的放行 flag 组合（--allow-worktree-cwd + --spec-dir）agent 试 3 次才拼对，报错只给 flag 名不给整行
+方案：①gates.js 死信探针+预填注 error 门整块前移到 verify 实测门前（纯排序，语义文案 rollback 类型零变化，原位留已前移标记）②verify-postcheck.js 新增导出纯函数 extractLintFailureFiles（token 化剥引号行号尾缀+带分隔符代码扩展名口径）与 triageLintOwnership（owned/pre-existing/unattributable 三态双向 endsBy 归一），runVerifyLintCheck 返回值增 failureFiles 全文口径字段；gates.js verify lint 硬拦分支与 quick-audit.js quick 门失败分支同接：pre-existing 存量债→advisory 降档放行带清偿建议，owned/无路径可鉴定→维持硬拦保守 ③措辞改实测 N 次中失败 M 次 ④index.js（补 ancestorSpecDirs import）与 command.js 两守卫各附 sillyspec 原命令+双 flag 一键放行整行
+结果：test/lint-ownership-failfast.test.mjs 新增 21 断言全绿；受影响既有件 quick-test-gate 28/0、quick-gate-snapshot 绿（无路径输出用例走 unattributable 维持硬拦语义兼容）；全量 npm test 40+559/559 + npm run lint 通过（713 文件）；docs check 重锚 4 活文档+手工修 core-engine.md pickModuleMapProject 陈锚（符号已迁 scope-audit.js:523）；未发版

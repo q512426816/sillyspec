@@ -511,6 +511,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         console.error(`❌ 检测到祖先链有 ${ancestorSpecs.length} 个 .sillyspec 实例(monorepo 多实例)，当前使用: ${specBase}`)
         console.error(`   当前 cwd 不在 git 顶层仓库根下，静默绑定到子项目实例会导致进度/QUICKLOG 分裂。`)
         console.error(`   修复：cd 回项目根目录，或用 --spec-dir <根>/.sillyspec 显式指定。`)
+        // 一键指定整行（R4-S-Q 实证：嵌套 worktree 场景下 agent 多次试错才拼对放行组合）——
+        // 意图实例即当前最近命中（specBase），直接给出可贴完整命令行。
+        console.error(`   一键指定（当前最近实例，整行照贴）：`)
+        console.error(`   sillyspec ${process.argv.slice(2).join(' ')} --spec-dir "${specBase}"`)
         process.exit(2)
       }
       // 在 git 根下但有多实例(子项目也有 .sillyspec)→ 仅警告(正确实例已命中)

@@ -473,7 +473,23 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     }
     const failed = []
     if (test.status === 'failed') failed.push('test')
-    if (lint.status === 'failed') failed.push('lint')
+    // ── lint 归属鉴定降档（R4-S-F/R4-S-Q 同根因：隔离快照含 HEAD 存量债文件时 lint 恒败，
+    //    agent 被逼范围外清偿才过门）。失败输出提及文件 × 本会话文件集零交集 → 存量债
+    //    advisory 放行不拦完成；有交集 / 输出无可识别路径（unattributable）→ 维持硬拦。──
+    if (lint.status === 'failed') {
+      const { triageLintOwnership } = await import('../verify-postcheck.js')
+      const own = triageLintOwnership({
+        failureFiles: lint.failureFiles || [],
+        changeFiles: files.map(f => String(f).replace(/\\/g, '/')),
+      })
+      if (own.verdict === 'pre-existing') {
+        console.warn(`\n⚠️ quick lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本会话文件集零交集）——不拦完成`)
+        console.warn(`   存量债文件：${(lint.failureFiles || []).join('、') || '（见上方输出）'}`)
+        console.warn('   处置建议：单独 quick 机械清偿解锁全仓 lint 门（顺手清债）；确与本会话无关可忽略本行。')
+      } else {
+        failed.push('lint')
+      }
+    }
     if (failed.length > 0 && snapshot) {
       try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
         printSnapshotFailureHint({ snapshotRoot: snapshot.snapshotRoot, changeFileCount: snapshot.overlaid, sourceRoot: snapshot.sourceRoot || null }, { offEnv: 'SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF' })

@@ -1,0 +1,366 @@
+diff --git a/src/index.js b/src/index.js
+index 0d094fc4..519dacb6 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -211,7 +211,7 @@ async function main() {
+ 
+   // E22：重路径统一加载（轻路径 --version/help 已早退，未付此税）。
+   const { ProgressManager, resolvePlatformSpecDir, resolvePlatformOpts } = await import('./progress.js');
+-  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree } = await import('./run/shared.js');
++  const { didYouMean, assertSafeChangeName, assertDatedChangeName, resolveSpecDir, detectWorktreeSpecDrift, detectCwdInsideWorktree, ancestorSpecDirs } = await import('./run/shared.js');
+ 
+   // 解析全局选项
+   let json = false;
+@@ -339,6 +339,12 @@ async function main() {
+       console.error(`   主仓根：${wtInfo.mainRepoRoot}`);
+       console.error('   SillySpec 进度库只存在于主仓，worktree 内跑会产生分裂进度（坑 worktree-cwd-silent-split）。');
+       console.error('   修复：cd 到主仓根后重跑，或用 --dir <主仓根>，或用 --allow-worktree-cwd 强制放行。');
++      // 一键放行整行（R4-S-Q 实证：agent 试 3 次才拼对组合——worktree 守卫要 --allow-worktree-cwd，
++      // 而 worktree 嵌套在主仓 .sillyspec/.runtime/ 下又触发 monorepo 多实例拦，需再补 --spec-dir
++      // 指向 worktree 自己的 .sillyspec，两 flag 缺一不可。给整行可贴命令，不再让调用方试错拼装。）
++      const wtSpecDir = (ancestorSpecDirs(guardDir)[0]) || join(guardDir, '.sillyspec');
++      console.error(`   一键放行（本 worktree 作独立实例跑，整行照贴）：`);
++      console.error(`   sillyspec ${args.join(' ')} --allow-worktree-cwd --spec-dir "${wtSpecDir}"`);
+       process.exit(2);
+     }
+   }
+diff --git a/src/run/command.js b/src/run/command.js
+index 83bd8565..a6bfc196 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -511,6 +511,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         console.error(`❌ 检测到祖先链有 ${ancestorSpecs.length} 个 .sillyspec 实例(monorepo 多实例)，当前使用: ${specBase}`)
+         console.error(`   当前 cwd 不在 git 顶层仓库根下，静默绑定到子项目实例会导致进度/QUICKLOG 分裂。`)
+         console.error(`   修复：cd 回项目根目录，或用 --spec-dir <根>/.sillyspec 显式指定。`)
++        // 一键指定整行（R4-S-Q 实证：嵌套 worktree 场景下 agent 多次试错才拼对放行组合）——
++        // 意图实例即当前最近命中（specBase），直接给出可贴完整命令行。
++        console.error(`   一键指定（当前最近实例，整行照贴）：`)
++        console.error(`   sillyspec ${process.argv.slice(2).join(' ')} --spec-dir "${specBase}"`)
+         process.exit(2)
+       }
+       // 在 git 根下但有多实例(子项目也有 .sillyspec)→ 仅警告(正确实例已命中)
+diff --git a/src/run/gates.js b/src/run/gates.js
+index e81be2aa..557d1aaa 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -861,6 +861,47 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     } catch { /* advisory 失败不阻断完成（fail-soft，facade 预检先例同款） */ }
+   }
+ 
++  // ── fail-fast 前置：纯文档 blocking 检查先于 test/lint 实测门（R4-S-F 实证，2026-09-21）──
++  // module-impact 死信与预填注清零 error 门只读文档零外部执行，原先排在 9 分钟级 test+lint
++  // 实测门之后——文档未清时每轮 --done 都先白烧一轮门禁再被拦（R4-S-F 166min 的主要形状）。
++  // 前置到实测门之前：秒级失败秒级返工，贵的门只在文档面已清后才跑。
++  if (stageName === 'verify' && changeName) {
++    // module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify。
++    // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
++    // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦。
++    const verifyChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
++    if (verifyChangeDir) {
++      const impactPath = join(verifyChangeDir, 'module-impact.md')
++      if (existsSync(impactPath)) {
++        const { extractPendingDocSyncRows } = await import('./complete-handlers.js')
++        const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
++        if (pendingRows.length > 0) {
++          console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
++          for (const row of pendingRows) console.error(`   - ${row}`)
++          console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
++          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++        }
++      }
++    }
++    // 预填注清零 error 门（归档前最后一道；2026-09-18-artifact-prefill task-03 / FR-03 / D-003@v1
++    // 门禁梯度·error 档）：白名单槽宿主文件（design.md + tasks/task-*.md）仍含未删预填注 →
++    // 阻断 verify 完成。brainstorm/plan --done 的 advisory 在此收口为硬门，注在场=预填未确认。
++    // 检测单点 = runProbe10PrefillNoteClearance（不二算）。已知误报面：散文引用注字面量会命中
++    // ——修法是核对后删注/改写散文措辞，不是绕门。
++    try {
++      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
++      const noteClearance = runProbe10PrefillNoteClearance({ specBase, changeName })
++      if (noteClearance.unclearedFiles.length > 0) {
++        console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
++        for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
++        console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
++        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++      }
++    } catch (e) {
++      console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
++    }
++  }
++
+   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
+   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
+   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
+@@ -983,6 +1024,22 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     // 逃生 SILLYSPEC_VERIFY_LINT_GATE=advisory）
+     const { shouldBlockVerifyLint } = await import('../verify-postcheck.js')
+     if (shouldBlockVerifyLint(lintCheck)) {
++      // ── lint 归属鉴定降档（R4-S-F 实证：verify 侧 lint 硬门 7 轮全是 HEAD 存量债——隔离
++      //    快照含基线债文件时恒败，agent 被逼范围外清偿或逃生口）。失败输出提及文件 × 本变更
++      //    文件集零交集 → 存量债 advisory 降档放行（债非本变更引入，硬拦只是制造范围外功）；
++      //    有交集 / 输出无可识别路径（unattributable，纯配置错误类）→ 维持硬拦（保守）。──
++      let lintOwnership = null
++      try {
++        const { triageLintOwnership, resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
++        const lintScopeFiles = (resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase }) || [])
++          .map(f => String(f).replace(/\\/g, '/')).filter(f => !f.startsWith('.sillyspec/'))
++        lintOwnership = triageLintOwnership({ failureFiles: lintCheck.failureFiles || [], changeFiles: lintScopeFiles })
++      } catch { /* 鉴定链异常维持硬拦（保守） */ }
++      if (lintOwnership && lintOwnership.verdict === 'pre-existing') {
++        console.warn('\n⚠️ Verify lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本变更文件集零交集）——降档 advisory 不阻断 verify 完成：')
++        console.warn(`   存量债文件：${(lintCheck.failureFiles || []).join('、') || '（见上方输出）'}`)
++        console.warn('   处置建议：单独 quick 机械清偿（顺手清债解锁全仓 lint 门），或本变更确认无关时设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。债随基线存在，与本变更交付无关。')
++      } else {
+       console.error('\n❌ verify 阶段被阻断：CLI 亲自实测 lint 失败（agent 的 lint 自报告与实测不符时以实测为准）。')
+       if (usedSnapInfo) {
+         try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+@@ -1006,6 +1063,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       }
+       console.error('   修复后重跑 --done（进度不丢）；确认要跳过实测请设 SILLYSPEC_VERIFY_LINT_GATE=advisory（审计留痕）。')
+       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-lint' })
++      } // else（pre-existing 降档分支）结束——维持硬拦分支的 rollback 语义不变
+     }
+     // 契约 parity 对账：扫前端 API 调用 vs execute 提取的 provider endpoint artifact。
+     // 接线自 contract-matrix pipeline（verifyApiParity 的 CLI 入口）。
+@@ -1166,43 +1224,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         }
+       }
+     } catch { /* 自动重锚失败不影响收尾（docs gate 兜底） */ }
+-    // ── module-impact 死信探针（blocking，债单 D-1/D-5）：更新结果表 pending/待办行 → 阻断 verify ──
+-    // 与 archive 移动前校验（extractPendingDocSyncRows）同一口径，把死信号从 archive 提前到 verify：
+-    // agent 在 verify 阶段就须完成文档同步并回填 done/skipped，而非拖到归档被拦（修复 perf-remediation
+-    // 类「verify PASS → archive 才发现 pending」的时序漏洞）。
+-    const verifyChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+-    if (verifyChangeDir) {
+-      const impactPath = join(verifyChangeDir, 'module-impact.md')
+-      if (existsSync(impactPath)) {
+-        const { extractPendingDocSyncRows } = await import('./complete-handlers.js')
+-        const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
+-        if (pendingRows.length > 0) {
+-          console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+-          for (const row of pendingRows) console.error(`   - ${row}`)
+-          console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
+-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+-        }
+-      }
+-    }
+-    // ── 预填注清零 error 门（归档前最后一道；2026-09-18-artifact-prefill task-03 / FR-03 /
+-    //    D-003@v1 门禁梯度·error 档）：白名单槽宿主文件（design.md + tasks/task-*.md）仍含
+-    //    未删预填注 → 阻断 verify 完成（verify 完成是 archive 前置——「归档前注清零」的落点；
+-    //    brainstorm/plan --done 的 advisory 在此收口为硬门，注在场=预填未确认）。检测单点 =
+-    //    verify-probes 探针面 runProbe10PrefillNoteClearance（探针 10 --init 预填与本门同一
+-    //    实现，不二算）。已知误报面：散文引用注字面量会命中——修法是核对后删注/改写散文
+-    //    措辞，不是绕门。──
+-    try {
+-      const { runProbe10PrefillNoteClearance } = await import('../verify-probes.js')
+-      const noteClearance = runProbe10PrefillNoteClearance({ specBase, changeName })
+-      if (noteClearance.unclearedFiles.length > 0) {
+-        console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
+-        for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
+-        console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
+-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+-      }
+-    } catch (e) {
+-      console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
+-    }
++    // ── module-impact 死信探针 + 预填注清零 error 门：已前移至 test/lint 实测门之前 ──
++    // （fail-fast，R4-S-F 实证——纯文档 blocking 检查排在 9 分钟实测门后白烧门禁轮次；
++    //   实现体见上方「fail-fast 前置」块，此处不再重复执行。）
+     // ── verify 服务进程回收（坑 verify-service-process-leak；坑 verify-pids-cross-session-kill
+     // 见 reapVerifyServices 注释）──
+     try {
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 6bc17466..cbe1b430 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -473,7 +473,23 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     }
+     const failed = []
+     if (test.status === 'failed') failed.push('test')
+-    if (lint.status === 'failed') failed.push('lint')
++    // ── lint 归属鉴定降档（R4-S-F/R4-S-Q 同根因：隔离快照含 HEAD 存量债文件时 lint 恒败，
++    //    agent 被逼范围外清偿才过门）。失败输出提及文件 × 本会话文件集零交集 → 存量债
++    //    advisory 放行不拦完成；有交集 / 输出无可识别路径（unattributable）→ 维持硬拦。──
++    if (lint.status === 'failed') {
++      const { triageLintOwnership } = await import('../verify-postcheck.js')
++      const own = triageLintOwnership({
++        failureFiles: lint.failureFiles || [],
++        changeFiles: files.map(f => String(f).replace(/\\/g, '/')),
++      })
++      if (own.verdict === 'pre-existing') {
++        console.warn(`\n⚠️ quick lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本会话文件集零交集）——不拦完成`)
++        console.warn(`   存量债文件：${(lint.failureFiles || []).join('、') || '（见上方输出）'}`)
++        console.warn('   处置建议：单独 quick 机械清偿解锁全仓 lint 门（顺手清债）；确与本会话无关可忽略本行。')
++      } else {
++        failed.push('lint')
++      }
++    }
+     if (failed.length > 0 && snapshot) {
+       try { const { printSnapshotFailureHint } = await import('./gate-snapshot.js')
+         printSnapshotFailureHint({ snapshotRoot: snapshot.snapshotRoot, changeFileCount: snapshot.overlaid, sourceRoot: snapshot.sourceRoot || null }, { offEnv: 'SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF' })
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 95b812ab..e326922d 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -135,6 +135,44 @@ function extractLintCommand(yamlText) {
+   return null
+ }
+ 
++/**
++ * lint 失败输出中提及的文件路径提取（lint 归属鉴定·R4-S-F 实证：verify 侧 lint 硬门 7 轮
++ * 全是 HEAD 存量债——快照含基线债文件时恒败，逼 agent 范围外清偿或逃生口）。
++ * 口径：按空白切 token，剥引号/行号尾缀（ruff/eslint 的 path:line:col 形态），保留带路径
++ * 分隔符且以代码扩展名结尾的 token（不带分隔符的普通单词不收，防误报）。去重保序。
++ */
++export function extractLintFailureFiles(output) {
++  if (!output || typeof output !== 'string') return []
++  const LINT_FILE_EXT_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|vue|svelte|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|css|scss)$/
++  const seen = new Set()
++  for (const raw of output.split(/\s+/)) {
++    let t = raw.replace(/^["'`(\[]+/, '').replace(/["'`),;]+$/, '')
++    t = t.replace(/:(?:\d+)(?::\d+)*$/, '') // 剥 :line / :line:col
++    if (!LINT_FILE_EXT_RE.test(t)) continue
++    if (!/[\\/]/.test(t)) continue
++    const norm = t.replace(/\\/g, '/').replace(/^\.\//, '')
++    if (norm.length > 1) seen.add(norm)
++  }
++  return [...seen]
++}
++
++/**
++ * lint 失败归属判定（纯函数）：失败输出提及的文件 × 本变更文件集。
++ * - owned：有交集 → 失败可能由本变更引入 → 维持硬拦（保守）。
++ * - pre-existing：零交集 → 全是 HEAD 存量债 → 调用方降档 advisory（债不是本变更的错）。
++ * - unattributable：失败文件提取为空（输出无可识别路径，如纯配置错误）→ 维持硬拦（无法
++ *   排除本变更责任，宁可拦不可漏）。
++ * 匹配宽松双向 endsWith（输出可能是绝对路径/仓相对路径，两侧口径不一定同源）。
++ */
++export function triageLintOwnership({ failureFiles = [], changeFiles = [] } = {}) {
++  const norm = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase()
++  const ffs = (Array.isArray(failureFiles) ? failureFiles : []).map(norm).filter(Boolean)
++  if (ffs.length === 0) return { verdict: 'unattributable', overlap: [] }
++  const cfs = (Array.isArray(changeFiles) ? changeFiles : []).map(norm).filter(Boolean)
++  const overlap = ffs.filter(f => cfs.some(c => c === f || c.endsWith('/' + f) || f.endsWith('/' + c)))
++  return overlap.length > 0 ? { verdict: 'owned', overlap } : { verdict: 'pre-existing', overlap: [] }
++}
++
+ /**
+  * lint advisory 观察期计数（刀③，2026-09-08）：advisory 失败不阻断，但「观察期后升级硬门」
+  * 需要失败率数据支撑（更硬 vs 更吵的决策依据——硬门误伤纯文档/跨平台路径会制造新噪音）。
+@@ -226,6 +264,7 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
+     outputTail,
+     reason: finalReason,
+     tally, // { failedRuns, totalRuns } | null——观察期失败率，升级硬门的决策依据
++    failureFiles: status === 'failed' ? extractLintFailureFiles(output) : [], // 归属鉴定输入（全文口径，outputTail 有截断盲区）
+   }
+ }
+ 
+@@ -266,7 +305,7 @@ export function printVerifyLintCheck(result) {
+     console.error(`\n⚠️  Verify lint 实测失败（advisory 档，不阻断本次完成）：\`${result.command}\` — ${result.reason}`)
+     console.error('   agent 的 lint 自报告与实测不符时以实测为准；请修复后重跑，避免格式债推迟到 commit 被 pre-commit hook 拦截。')
+     if (result.tally) {
+-      console.error(`   📊 lint advisory 失败累计 ${result.tally.failedRuns}/${result.tally.totalRuns} 次（数据落 .runtime/verify-lint-tally.json）。`)
++      console.error(`   📊 lint advisory 观察期：实测 ${result.tally.totalRuns} 次中失败 ${result.tally.failedRuns} 次（数据落 .runtime/verify-lint-tally.json）。`)
+     }
+   }
+   if (result.outputTail) {
+diff --git a/test/lint-ownership-failfast.test.mjs b/test/lint-ownership-failfast.test.mjs
+new file mode 100644
+index 00000000..56fad2c0
+--- /dev/null
++++ b/test/lint-ownership-failfast.test.mjs
+@@ -0,0 +1,94 @@
++/**
++ * R4 对撞反馈四修复回归（2026-09-21）：
++ * 1. lint 归属鉴定：extractLintFailureFiles / triageLintOwnership 纯函数语义
++ *    （R4-S-F 实证：verify lint 硬门 7 轮全是 HEAD 存量债——快照含基线债文件恒败）
++ * 2. fail-fast 前置：verify 纯文档 blocking 检查（module-impact 死信 + 预填注清零 error 门）
++ *    源序钉在 test/lint 实测门之前（R4-S-F 166min 形状的结构性修复——秒级失败不再排在
++ *    9 分钟实测门后面）
++ * 3. quick/verify 两门接线源文本钉（triageLintOwnership 消费在场——只改一门另一门必漏）
++ * 4. advisory 观察期计数措辞（「实测 N 次中失败 M 次」，治「1/1」读作 1-of-1 的歧义）
++ * 5. worktree / monorepo 多实例守卫报错附一键放行整行（R4-S-Q：agent 试 3 次才拼对组合）
++ */
++import { readFileSync } from 'fs'
++import { fileURLToPath } from 'url'
++import { extractLintFailureFiles, triageLintOwnership } from '../src/verify-postcheck.js'
++
++let failed = 0
++let total = 0
++function assert(cond, msg) {
++  total++
++  if (!cond) { failed++; console.log(`  ❌ FAIL: ${msg}`) } else { console.log(`  ✅ PASS: ${msg}`) }
++}
++const srcOf = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
++
++// ── 1. extractLintFailureFiles ──
++{
++  const ruff = extractLintFailureFiles('backend/app/modules/admin/model.py:42:1: E302 expected 2 blank lines\nWould reformat: backend/app/modules/admin/model.py\n2 files would be reformatted.')
++  assert(ruff.includes('backend/app/modules/admin/model.py'), `1a ruff path:line:col 形态提取（实得 ${JSON.stringify(ruff)}）`)
++  assert(ruff.length === 1, '1b 去重（同文件两次出现只收一次）')
++
++  const eslint = extractLintFailureFiles('error  no-unused-vars  "C:\\proj\\src\\y.tsx"  3:1  warning  ..')
++  assert(eslint.includes('C:/proj/src/y.tsx'), `1c 引号包裹反斜杠绝对路径归一（实得 ${JSON.stringify(eslint)}）`)
++
++  const none = extractLintFailureFiles('error: configuration file not found\nfailed with no output')
++  assert(none.length === 0, '1d 无路径输出 → 空（unattributable 输入）')
++
++  const bare = extractLintFailureFiles('file.py readme.md something.tsx')
++  assert(bare.length === 0, '1e 不带路径分隔符的裸文件名不收（防普通单词误报）')
++
++  assert(extractLintFailureFiles(null).length === 0 && extractLintFailureFiles(123).length === 0, '1f 非字符串输入零崩')
++}
++
++// ── 2. triageLintOwnership ──
++{
++  const owned = triageLintOwnership({ failureFiles: ['backend/a.py'], changeFiles: ['frontend/x.tsx', 'backend/a.py'] })
++  assert(owned.verdict === 'owned' && owned.overlap.length === 1, '2a 有交集 → owned（维持硬拦）')
++
++  const pre = triageLintOwnership({ failureFiles: ['backend/debt1.py', 'backend/debt2.py'], changeFiles: ['frontend/x.tsx', 'sillyhub-daemon/src/a.ts'] })
++  assert(pre.verdict === 'pre-existing', '2b 零交集 → pre-existing（存量债降档）')
++
++  const unatt = triageLintOwnership({ failureFiles: [], changeFiles: ['a.py'] })
++  assert(unatt.verdict === 'unattributable', '2c 失败文件为空 → unattributable（保守硬拦）')
++
++  const absRel = triageLintOwnership({ failureFiles: ['C:/repo/backend/a.py'], changeFiles: ['backend/a.py'] })
++  assert(absRel.verdict === 'owned', '2d 绝对/相对口径混用双向 endsWith 命中')
++
++  const sep = triageLintOwnership({ failureFiles: ['src\\a.py'], changeFiles: ['src/a.py'] })
++  assert(sep.verdict === 'owned', '2e 反斜杠/正斜杠归一后命中')
++
++  assert(triageLintOwnership({}).verdict === 'unattributable', '2f 全空参零崩')
++}
++
++// ── 3. fail-fast 源序钉（gates.js）──
++{
++  const g = srcOf('../src/run/gates.js')
++  const iPre = g.indexOf('fail-fast 前置')
++  const iDead = g.indexOf('module-impact.md「更新结果」表存在')
++  const iTest = g.indexOf('Verify 测试对账')
++  const iMoved = g.indexOf('已前移至 test/lint 实测门之前')
++  assert(iPre !== -1 && iDead !== -1 && iTest !== -1, `3a 三标记在场（pre=${iPre} dead=${iDead} test=${iTest}）`)
++  assert(iDead > -1 && iDead < iTest, `3b 死信阻断在 test 实测门之前（dead=${iDead} < test=${iTest}）——纯文档检查 fail-fast`)
++  assert(iMoved !== -1, '3c 原位置留前移标记（防重复执行）')
++  const iPrefill = g.indexOf('预填注清零校验未过')
++  assert(iPrefill > -1 && iPrefill < iTest, '3d 预填注 error 门同样前置')
++  assert(g.includes("verdict === 'pre-existing'"), '3e verify lint 硬拦分支含归属鉴定降档（pre-existing 放行路径）')
++}
++
++// ── 4. quick 门接线 + 措辞 ──
++{
++  const q = srcOf('../src/run/quick-audit.js')
++  assert(q.includes('triageLintOwnership') && q.includes("verdict === 'pre-existing'"), '4a quick lint 门接同一归属鉴定（两门同根因同修）')
++  const v = srcOf('../src/verify-postcheck.js')
++  assert(v.includes('次中失败') && !v.includes('失败累计'), '4b advisory 观察期计数措辞改「实测 N 次中失败 M 次」（治 1/1 歧义）')
++}
++
++// ── 5. 守卫一键放行整行 ──
++{
++  const i = srcOf('../src/index.js')
++  assert(i.includes('一键放行') && i.includes('--allow-worktree-cwd --spec-dir'), '5a worktree 守卫报错附双 flag 整行（R4-S-Q 试错 3 次的痛点）')
++  const c = srcOf('../src/run/command.js')
++  assert(c.includes('一键指定') && c.includes('--spec-dir "${specBase}"'), '5b monorepo 多实例守卫报错附 --spec-dir 整行')
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)
