@@ -120,7 +120,7 @@ export function synthesizeStepOutput({ stageName, stepName, cwd }) {
 }
 
 export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [] } = options
+  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [], linkedChanges = [], linkedChangesAuto = [] } = options
   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
   // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
@@ -619,8 +619,11 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）；
     // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options；
-    // sessionFlag（task-03）--session 随链透传进 quick 轻量归档链所有权校验
-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag, platformOpts, pm, quickFiles })
+    // sessionFlag（task-03）--session 随链透传进 quick 轻量归档链所有权校验；
+    // linkedChanges/linkedChangesAuto（R4-S-Q 缺陷 B）：--done 时显式 --linked-changes 随链透传——
+    // 完成侧 guard 从落盘文件读，不接 opts 会静默丢弃 --done 时声明的关联（蒸馏尾/quicklog
+    // 关联变更行/closeQuickLinkedChanges 三处消费同断）
+    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag, platformOpts, pm, quickFiles, linkedChanges, linkedChangesAuto })
 
     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤

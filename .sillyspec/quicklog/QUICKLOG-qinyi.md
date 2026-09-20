@@ -323,3 +323,17 @@
 状态：进行中
 关联变更：（无）
 文件：src/machine-interface.js, src/index.js, src/run/gates.js, test/gate-failure-artifact.test.mjs
+
+## ql-20260921-001-2dbf | 2026-09-21 00:52:38 | R4-S-Q 两个 CLI 缺陷修复：资产尾 changelog 边车缺 export 死路 + --done 显式关联变更被静默丢弃
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（loadQuickModuleIndex 补 export（R4-S-Q 缺陷 A））
+- src/run/complete-handlers.js（mergeGuardLinkedChanges 纯函数+guard 并入回写（缺陷 B 核心））
+- src/run/complete.js（completeStep 解构与 handler 透传两处接线）
+- test/quick-asset-tail.test.mjs（§8 回归 10 断言（真实 import+merge 语义+接线源文本钉））
+- docs/sillyspec/platform-interface-map.md（行号锚重锚 8 处（含并行会话遗留 7 处机械修复））
+需求：R4-S-Q 两个 CLI 缺陷修复：资产尾 changelog 边车缺 export 死路 + --done 显式关联变更被静默丢弃
+根因：R4 对照实验细读实证：①complete-handlers 动态 import 解构 loadQuickModuleIndex 得 undefined（shared.js 缺 export），资产尾②调用即 TypeError 被 fail-open 吞，changelog 边车整条死路（§7 单测直接模拟 join 语义未走真实 import，故漏检）；②--linked-changes 在 --done 时经 runStage opts 传入但 completeStep 解构与 handleQuickStageCompletion 签名均无此参，guard 只读落盘文件——两次 --done 均带 flag 而蒸馏尾零触发、quicklog 渲染『关联变更：（无）』
+方案：A=shared.js:1294 补 export；B=complete.js 解构+调用两处透传、complete-handlers 签名增两参、新增导出纯函数 mergeGuardLinkedChanges（并集去重保序/'none' 清空 manual 面/auto 独立并集/无变化返回原引用免回写/guard 非对象原样返回）在 guard 读取后并入并回写 sessionGuardFile（brownfield 不造对象，回写 fail-open）；test/quick-asset-tail.test.mjs 增 §8 回归 10 断言（真实 import 钉 A、merge 六面、接线源文本钉两处）；docs 重锚 8 处（我 1 处 2365→2400 + 并行会话 794529e5 遗留 7 处 index.js 锚，docs check --fix 机械）
+结果：quick 门禁实测 npm test 40+558/558 全绿（含 doc-ref-check 88/88）+ npm run lint 通过（712 文件、未引用导出 0）；quick-asset-tail 本文件 35/35（新增 §8 十断言）；未发版（3.29.4 之后随批）

@@ -189,6 +189,32 @@ function fakePm({ owner = null, active = true } = {}) {
   assert(d[0].needsReview === 'ql-9', '6 needsReview 在注入源可用（prompt.js 已接 ⚠️ 渲染——字段契约钉）')
 }
 
+// ── 8. R4-S-Q 缺陷 A/B 回归（2026-09-21 修复）：真实 import + --done 显式关联并入 guard ──
+{
+  // 8a 缺陷 A：loadQuickModuleIndex 必须真实可解构（曾缺 export → 资产尾② TypeError fail-open 死路）
+  const shared = await import('../src/run/shared.js')
+  assert(typeof shared.loadQuickModuleIndex === 'function', '8a shared.js 真实导出 loadQuickModuleIndex（R4-S-Q 缺陷 A）')
+
+  // 8b-8f 缺陷 B：mergeGuardLinkedChanges 纯函数语义
+  const { mergeGuardLinkedChanges } = await import('../src/run/complete-handlers.js')
+  const g0 = { linkedChanges: ['ch-a'], linkedChangesAuto: ['ch-auto'], allowedFiles: ['x'] }
+  const m1 = mergeGuardLinkedChanges(g0, ['ch-b'], [])
+  assert(m1.linkedChanges.join(',') === 'ch-a,ch-b', '8b 并集去重保序（persisted 前，显式后）')
+  assert(m1.linkedChangesAuto.join(',') === 'ch-auto', '8c manual 显式声明不影响 auto 面')
+  assert(m1.allowedFiles.length === 1 && m1.allowedFiles[0] === 'x', '8b2 guard 其余字段原样透传（spread）')
+  assert(mergeGuardLinkedChanges(g0, ['ch-a'], []) === g0, '8d 无变化返回原引用（调用点以此免回写）')
+  const m3 = mergeGuardLinkedChanges(g0, ['none'], [])
+  assert(m3.linkedChanges.length === 0 && m3.linkedChangesAuto.length === 1, "8e 'none' 清空 manual 面、auto 不动")
+  assert(mergeGuardLinkedChanges(null, ['ch-b'], []) === null, '8f guard 缺失原样返回（brownfield 语义不变）')
+  const m4 = mergeGuardLinkedChanges({ linkedChanges: ['ch-a'] }, [], ['ch-x'])
+  assert(m4.linkedChangesAuto.join(',') === 'ch-x', '8g auto 显式并入（--done 自动解析路径）')
+
+  // 8h/8i 接线防回归（源文本钉）：completeStep 解构与 handler 透传两处都在
+  const src = readFileSync(new URL('../src/run/complete.js', import.meta.url), 'utf8')
+  assert(/quickFiles = \[\], linkedChanges = \[\], linkedChangesAuto = \[\] \}/.test(src), '8h completeStep options 解构含 linkedChanges/linkedChangesAuto')
+  assert(/quickFiles, linkedChanges, linkedChangesAuto \}\)/.test(src), '8i handleQuickStageCompletion 调用透传两参')
+}
+
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
 process.exit(failed === 0 ? 0 : 1)

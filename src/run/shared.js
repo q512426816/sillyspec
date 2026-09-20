@@ -1291,7 +1291,9 @@ async function matchQuickModules(srcChanged, specBase, projectName) {
  * @param {string} projectName 项目名（progress.project）
  * @returns {Promise<object|null>} 模块索引（扁平 { id: {...} }）；不可得 → null
  */
-async function loadQuickModuleIndex(specBase, projectName) {
+// quick 资产尾②（changelog 边车）消费：complete-handlers 动态 import 解构取用——
+// 缺 export 曾致「loadQuickModuleIndex is not a function」fail-open 死路（R4-S-Q 实证）。
+export async function loadQuickModuleIndex(specBase, projectName) {
   if (!specBase || !projectName) return null
   try {
     const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')

@@ -1,0 +1,190 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index e454392d..507494cd 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2301` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2400` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1970/1984/2064 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:875（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2487；shared.js:989 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2487/2705；shared.js:1013 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3720；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3672；sync.js:2129 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2506；shared.js:989 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2506/2705；shared.js:1013 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3737；sync.js:1431/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3689；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3485/3402；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3502/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:682/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -165,7 +165,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ **收这些 flag 的入口不止 `run scan`**：
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:242`）公共入口，flag 在 `command.js:396`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:240` 解析后经 `case 'init'`（`index.js:345`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:686`/`658` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:720（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:731（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:407` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 398?）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381?` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -196,7 +196,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3582`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3599`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 2db79acc..103d32e4 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -1265,6 +1265,25 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
+   }
+   return null
+ }
++/**
++ * guard.linkedChanges/linkedChangesAuto 并入 --done 显式声明（R4-S-Q 缺陷 B 纯函数核）：
++ * 持久化值 ∪ 显式值（去重保序，persisted 在前）；显式 ['none'] 语义为清空 manual 面（auto 不动）；
++ * 无变化返回原对象引用（调用点以此判「是否需要回写」）。guard 非对象原样返回。
++ */
++export function mergeGuardLinkedChanges(guard, explicitLinked, explicitAuto) {
++  if (!guard || typeof guard !== 'object') return guard
++  const cur = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
++  const curAuto = Array.isArray(guard.linkedChangesAuto) ? guard.linkedChangesAuto : []
++  const ex = (Array.isArray(explicitLinked) ? explicitLinked : []).filter(Boolean)
++  const exAuto = (Array.isArray(explicitAuto) ? explicitAuto : []).filter(Boolean)
++  const next = ex.length === 1 && ex[0] === 'none' ? [] : [...new Set([...cur, ...ex])]
++  const nextAuto = exAuto.length === 0 ? curAuto : [...new Set([...curAuto, ...exAuto])]
++  const unchanged = next.length === cur.length && next.every((v, i) => v === cur[i])
++    && nextAuto.length === curAuto.length && nextAuto.every((v, i) => v === curAuto[i])
++  if (unchanged) return guard
++  return { ...guard, linkedChanges: next, linkedChangesAuto: nextAuto }
++}
++
+ /**
+  * quick 阶段完成收尾（W6 Step6b 从 completeStep 内联块抽出）：
+  * 强校验 QUICKLOG 条目 + 审计（auditQuickCompletion）+ 结果摘要结构校验 + 翻状态/勾 tasks.md
+@@ -1274,7 +1293,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
+  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
+  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
+  */
+-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag = null, platformOpts, pm, quickFiles = [] }) {
++export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag = null, platformOpts, pm, quickFiles = [], linkedChanges = [], linkedChangesAuto = [] }) {
+   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
+   if (stageName === 'quick') {
+     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
+@@ -1293,6 +1312,22 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
+     } catch {}
+ 
++    // R4-S-Q 缺陷 B：--done 时显式 --linked-changes 并入 guard（启动持久化值 ∪ 本次显式值，
++    // 'none' 清空）再回写 sessionGuardFile。下游关账 closeQuickLinkedChanges / 资产尾蒸馏 /
++    // quicklog「关联变更」渲染全读 guard——不并入则 --done 时声明的关联被静默丢弃（R4-S-Q
++    // 实测：--linked-changes 两次都在命令行上，资产尾零触发 + 条目渲染「（无）」）。
++    // guard 缺失（brownfield）不造对象——保持 D-3 无 guard 降级语义不变。
++    try {
++      if (guard && (linkedChanges.length > 0 || linkedChangesAuto.length > 0)) {
++        const merged = mergeGuardLinkedChanges(guard, linkedChanges, linkedChangesAuto)
++        if (merged !== guard) {
++          guard = merged
++          writeAtomicSync(sessionGuardFile, JSON.stringify(guard, null, 2))
++          console.log(`🔗 --done 显式关联变更已并入 guard: ${(guard.linkedChanges ?? []).join(', ') || '（none 清空）'}`)
++        }
++      }
++    } catch { /* 并入/回写失败不拦完成，guard 内存原值兜底 */ }
++
+     // 强校验 / 收尾：本会话必须有一条真实 QUICKLOG 条目（治「报 SAFE 但漏写」bug）。
+     // guard 缺失（brownfield：新代码前启动的会话）不阻断——兜底补写一条记录，保住「完成必有记录」不变量。
+     const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 5123252a..d796a58e 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -120,7 +120,7 @@ export function synthesizeStepOutput({ stageName, stepName, cwd }) {
+ }
+ 
+ export async function completeStep(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+-  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [] } = options
++  const { printNext = true, confirm = false, changeName, platformOpts = {}, nonInteractive = false, isForceBaseline = false, isAllowNew = false, isAllowDelete = false, isNoDocs = false, isSkipApply = false, sessionFlag = null, quickFiles = [], linkedChanges = [], linkedChangesAuto = [] } = options
+   // specRoot(平台) > specDriftAnchor(worktree 漂移锚定主仓) > cwd/.sillyspec(本地)——
+   // 与 prompt.js resolvePromptSpecBase 同序：--done 收尾的 user-inputs.md/超长 artifact 落盘
+   // 必须与 prompt 渲染同一根，否则写进 worktree 副本目录、随 cleanup 整目录删除。
+@@ -619,8 +619,11 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     }
+     // quick 收尾（W6 Step6b 抽至 complete-handlers.js handleQuickStageCompletion）；
+     // isNoDocs（task-02）--no-docs 豁免随链透传进 auditQuickCompletion options；
+-    // sessionFlag（task-03）--session 随链透传进 quick 轻量归档链所有权校验
+-    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag, platformOpts, pm, quickFiles })
++    // sessionFlag（task-03）--session 随链透传进 quick 轻量归档链所有权校验；
++    // linkedChanges/linkedChangesAuto（R4-S-Q 缺陷 B）：--done 时显式 --linked-changes 随链透传——
++    // 完成侧 guard 从落盘文件读，不接 opts 会静默丢弃 --done 时声明的关联（蒸馏尾/quicklog
++    // 关联变更行/closeQuickLinkedChanges 三处消费同断）
++    await handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag, platformOpts, pm, quickFiles, linkedChanges, linkedChangesAuto })
+ 
+     // ── reopen --done 回填（坑 brainstorm-reopen-step-state-desync）──
+     // nextPendingIdx === -1 且无 waiting，说明要进阶段完成分支。此时若存在 stale 步骤
+diff --git a/src/run/shared.js b/src/run/shared.js
+index c57c428f..d11b9d4a 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1291,7 +1291,9 @@ async function matchQuickModules(srcChanged, specBase, projectName) {
+  * @param {string} projectName 项目名（progress.project）
+  * @returns {Promise<object|null>} 模块索引（扁平 { id: {...} }）；不可得 → null
+  */
+-async function loadQuickModuleIndex(specBase, projectName) {
++// quick 资产尾②（changelog 边车）消费：complete-handlers 动态 import 解构取用——
++// 缺 export 曾致「loadQuickModuleIndex is not a function」fail-open 死路（R4-S-Q 实证）。
++export async function loadQuickModuleIndex(specBase, projectName) {
+   if (!specBase || !projectName) return null
+   try {
+     const mapPath = join(specBase, 'docs', projectName, 'modules', '_module-map.yaml')
+diff --git a/test/quick-asset-tail.test.mjs b/test/quick-asset-tail.test.mjs
+index e45022a2..7e4252a6 100644
+--- a/test/quick-asset-tail.test.mjs
++++ b/test/quick-asset-tail.test.mjs
+@@ -189,6 +189,32 @@ function fakePm({ owner = null, active = true } = {}) {
+   assert(d[0].needsReview === 'ql-9', '6 needsReview 在注入源可用（prompt.js 已接 ⚠️ 渲染——字段契约钉）')
+ }
+ 
++// ── 8. R4-S-Q 缺陷 A/B 回归（2026-09-21 修复）：真实 import + --done 显式关联并入 guard ──
++{
++  // 8a 缺陷 A：loadQuickModuleIndex 必须真实可解构（曾缺 export → 资产尾② TypeError fail-open 死路）
++  const shared = await import('../src/run/shared.js')
++  assert(typeof shared.loadQuickModuleIndex === 'function', '8a shared.js 真实导出 loadQuickModuleIndex（R4-S-Q 缺陷 A）')
++
++  // 8b-8f 缺陷 B：mergeGuardLinkedChanges 纯函数语义
++  const { mergeGuardLinkedChanges } = await import('../src/run/complete-handlers.js')
++  const g0 = { linkedChanges: ['ch-a'], linkedChangesAuto: ['ch-auto'], allowedFiles: ['x'] }
++  const m1 = mergeGuardLinkedChanges(g0, ['ch-b'], [])
++  assert(m1.linkedChanges.join(',') === 'ch-a,ch-b', '8b 并集去重保序（persisted 前，显式后）')
++  assert(m1.linkedChangesAuto.join(',') === 'ch-auto', '8c manual 显式声明不影响 auto 面')
++  assert(m1.allowedFiles.length === 1 && m1.allowedFiles[0] === 'x', '8b2 guard 其余字段原样透传（spread）')
++  assert(mergeGuardLinkedChanges(g0, ['ch-a'], []) === g0, '8d 无变化返回原引用（调用点以此免回写）')
++  const m3 = mergeGuardLinkedChanges(g0, ['none'], [])
++  assert(m3.linkedChanges.length === 0 && m3.linkedChangesAuto.length === 1, "8e 'none' 清空 manual 面、auto 不动")
++  assert(mergeGuardLinkedChanges(null, ['ch-b'], []) === null, '8f guard 缺失原样返回（brownfield 语义不变）')
++  const m4 = mergeGuardLinkedChanges({ linkedChanges: ['ch-a'] }, [], ['ch-x'])
++  assert(m4.linkedChangesAuto.join(',') === 'ch-x', '8g auto 显式并入（--done 自动解析路径）')
++
++  // 8h/8i 接线防回归（源文本钉）：completeStep 解构与 handler 透传两处都在
++  const src = readFileSync(new URL('../src/run/complete.js', import.meta.url), 'utf8')
++  assert(/quickFiles = \[\], linkedChanges = \[\], linkedChangesAuto = \[\] \}/.test(src), '8h completeStep options 解构含 linkedChanges/linkedChangesAuto')
++  assert(/quickFiles, linkedChanges, linkedChangesAuto \}\)/.test(src), '8i handleQuickStageCompletion 调用透传两参')
++}
++
+ for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+ console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
+ process.exit(failed === 0 ? 0 : 1)

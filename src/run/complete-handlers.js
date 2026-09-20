@@ -1266,6 +1266,25 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
   return null
 }
 /**
+ * guard.linkedChanges/linkedChangesAuto 并入 --done 显式声明（R4-S-Q 缺陷 B 纯函数核）：
+ * 持久化值 ∪ 显式值（去重保序，persisted 在前）；显式 ['none'] 语义为清空 manual 面（auto 不动）；
+ * 无变化返回原对象引用（调用点以此判「是否需要回写」）。guard 非对象原样返回。
+ */
+export function mergeGuardLinkedChanges(guard, explicitLinked, explicitAuto) {
+  if (!guard || typeof guard !== 'object') return guard
+  const cur = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
+  const curAuto = Array.isArray(guard.linkedChangesAuto) ? guard.linkedChangesAuto : []
+  const ex = (Array.isArray(explicitLinked) ? explicitLinked : []).filter(Boolean)
+  const exAuto = (Array.isArray(explicitAuto) ? explicitAuto : []).filter(Boolean)
+  const next = ex.length === 1 && ex[0] === 'none' ? [] : [...new Set([...cur, ...ex])]
+  const nextAuto = exAuto.length === 0 ? curAuto : [...new Set([...curAuto, ...exAuto])]
+  const unchanged = next.length === cur.length && next.every((v, i) => v === cur[i])
+    && nextAuto.length === curAuto.length && nextAuto.every((v, i) => v === curAuto[i])
+  if (unchanged) return guard
+  return { ...guard, linkedChanges: next, linkedChangesAuto: nextAuto }
+}
+
+/**
  * quick 阶段完成收尾（W6 Step6b 从 completeStep 内联块抽出）：
  * 强校验 QUICKLOG 条目 + 审计（auditQuickCompletion）+ 结果摘要结构校验 + 翻状态/勾 tasks.md
  * （CLI 接管 QUICKLOG 分配/写入/收尾）。blocked → process.exit(1)（无 early-return，调用点纯 await）。
@@ -1274,7 +1293,7 @@ export async function handleWorkflowPostCheck({ stageName, steps, currentIdx, cw
  * isForceBaseline/isAllowNew/platformOpts。辅助函数直接 import（safeGit/auditQuickCompletion ← shared，
  * printQuickAuditReview ← quick-audit，4 个 quicklog fns ← quicklog，unlinkSync/rmSync ← fs 静态）。
  */
-export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag = null, platformOpts, pm, quickFiles = [] }) {
+export async function handleQuickStageCompletion({ stageName, steps, currentIdx, cwd, progress, changeName, specBase, outputText, confirm, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, sessionFlag = null, platformOpts, pm, quickFiles = [], linkedChanges = [], linkedChangesAuto = [] }) {
   // quick 收尾：强校验 QUICKLOG 条目 + 翻状态 + 勾 tasks.md（CLI 接管）
   if (stageName === 'quick') {
     // §4.6 从 session guard.json 读 guard（不依赖 progress.quickGuard）。
@@ -1292,6 +1311,22 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         ? JSON.parse(readFileSync(sessionGuardFile, 'utf8'))
         : (existsSync(legacyGuardFile) ? JSON.parse(readFileSync(legacyGuardFile, 'utf8')) : null)
     } catch {}
+
+    // R4-S-Q 缺陷 B：--done 时显式 --linked-changes 并入 guard（启动持久化值 ∪ 本次显式值，
+    // 'none' 清空）再回写 sessionGuardFile。下游关账 closeQuickLinkedChanges / 资产尾蒸馏 /
+    // quicklog「关联变更」渲染全读 guard——不并入则 --done 时声明的关联被静默丢弃（R4-S-Q
+    // 实测：--linked-changes 两次都在命令行上，资产尾零触发 + 条目渲染「（无）」）。
+    // guard 缺失（brownfield）不造对象——保持 D-3 无 guard 降级语义不变。
+    try {
+      if (guard && (linkedChanges.length > 0 || linkedChangesAuto.length > 0)) {
+        const merged = mergeGuardLinkedChanges(guard, linkedChanges, linkedChangesAuto)
+        if (merged !== guard) {
+          guard = merged
+          writeAtomicSync(sessionGuardFile, JSON.stringify(guard, null, 2))
+          console.log(`🔗 --done 显式关联变更已并入 guard: ${(guard.linkedChanges ?? []).join(', ') || '（none 清空）'}`)
+        }
+      }
+    } catch { /* 并入/回写失败不拦完成，guard 内存原值兜底 */ }
 
     // 强校验 / 收尾：本会话必须有一条真实 QUICKLOG 条目（治「报 SAFE 但漏写」bug）。
     // guard 缺失（brownfield：新代码前启动的会话）不阻断——兜底补写一条记录，保住「完成必有记录」不变量。
