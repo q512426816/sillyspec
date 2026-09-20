@@ -180,3 +180,8 @@
 状态：进行中
 关联变更：（无）
 文件：src/fr-index.js, src/run/prompt.js, test/fr-index-l2.test.mjs
+
+## ql-20260920-006-f534 | 2026-09-20 09:00:14 | fr-index scenario-loss 检测（对撞对比唯一剩余内容差距，对标 OpenSpec 同名检查）：承接翻链时比对新旧条目场景集——被取代条目的场景名（场景正文行- 场景：X与摘要行；分隔）若在新FR的scenarios集（含…
+状态：进行中
+关联变更：（无）
+文件：src/fr-index.js, test/fr-index-l2.test.mjs

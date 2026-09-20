@@ -331,6 +331,28 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
           `superseded_by：${id}`,
           `取代链：${refId} ← ${id}（${changeName} 承接）`,
           ...(reason ? [`退役理由：${reason}`] : []));
+        // scenario-loss 检测（对标 OpenSpec 同名检查）：被取代条目的场景名在新 FR 场景集
+        //（scenarios 名字数组 ∪ scenarioBodies 名）无对应 → warning 提示核对（advisory 不阻断
+        //——场景名合法漂移存在，人裁）。旧条目无场景信息（摘要「（无场景名）」/空）不比对。
+        const oldNames = new Set();
+        for (const l of target.lines) {
+          const sm = l.match(/^- 场景：(.+?)\s*—/);
+          if (sm) oldNames.add(sm[1].trim());
+        }
+        const summaryLine = target.lines.find((l) => l.startsWith('摘要：'));
+        if (summaryLine && !summaryLine.includes('（无场景名）')) {
+          for (const n of summaryLine.replace(/^摘要：\s*/, '').split('；')) {
+            const t = n.trim();
+            if (t) oldNames.add(t);
+          }
+        }
+        if (oldNames.size > 0) {
+          const newNames = new Set([...(fr.scenarios || []), ...((fr.scenarioBodies || []).map((b) => b.name).filter(Boolean))]);
+          const dropped = [...oldNames].filter((n) => !newNames.has(n));
+          if (dropped.length > 0) {
+            warnings.push(`scenario-loss：${refId} 被承接时新 FR 未覆盖旧场景「${dropped.join('、')}」——若非故意丢弃（合并/更名/降维），请在新 FR 场景集补对应场景或在退役理由说明去向`);
+          }
+        }
         dirtyDomains.add(st2Domain);
         superseded.push({ from: refId, to: id, change: changeName });
       }

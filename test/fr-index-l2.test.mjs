@@ -268,5 +268,35 @@ author: sillyspec-fr-index
   assert((c3file.match(/退役理由：/g) || []).length === 1, '8d 无理由承接不伪造退役理由行（仍只 1 处）')
 }
 
+// ── 9. scenario-loss 检测（对标 OpenSpec）──
+{
+  const root = makeTmpDir('frl2-sloss-')
+  const mkIndex = (kr) => {
+    mkdirSync(kr, { recursive: true })
+    const md = join(root, 'docs', 'p1', 'modules')
+    mkdirSync(md, { recursive: true })
+    writeFileSync(join(md, '_module-map.yaml'), 'schema_version: 2\nmodules:\n  demo:\n    status: active\n    doc: modules/demo.md\n    paths:\n      - src/demo.js\n')
+  }
+  const mkChange = (name, body) => {
+    const d = join(root, 'changes', name)
+    mkdirSync(d, { recursive: true })
+    writeFileSync(join(d, 'requirements.md'), body)
+    writeFileSync(join(d, 'design.md'), '# 设计\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/demo.js | x |\n')
+    return d
+  }
+  // 建旧行为（两场景）→ 承接方丢场景乙
+  const k1 = join(root, 'k1')
+  mkIndex(k1)
+  indexRequirements({ changeDir: mkChange('c1', '# 需求\n\n### FR-01: 旧行为\n**场景：甲**\nGiven a\nWhen b\nThen c\n\n**场景：乙**\nGiven d\nWhen e\nThen f\n'), knowledgeRoot: k1, headHash: 'h1' })
+  const r = indexRequirements({ changeDir: mkChange('c2', '# 需求\n\n### FR-01: 新行为\n承接: FR-demo-001\n**场景：甲**\nGiven a2\nWhen b2\nThen c2\n'), knowledgeRoot: k1, headHash: 'h2' })
+  assert(r.warnings.some(w => w.includes('scenario-loss') && w.includes('乙')), `9a 丢场景乙 → scenario-loss warning（实际 ${JSON.stringify(r.warnings)}）`)
+  // 全覆盖 → 无 warning
+  const k2 = join(root, 'k2')
+  mkIndex(k2)
+  indexRequirements({ changeDir: mkChange('c3', '# 需求\n\n### FR-01: 旧行为\n**场景：甲**\nGiven a\nWhen b\nThen c\n'), knowledgeRoot: k2, headHash: 'h3' })
+  const r2 = indexRequirements({ changeDir: mkChange('c4', '# 需求\n\n### FR-01: 新行为\n承接: FR-demo-001\n**场景：甲**\nGiven a2\nWhen b2\nThen c2\n'), knowledgeRoot: k2, headHash: 'h4' })
+  assert(!r2.warnings.some(w => w.includes('scenario-loss')), '9b 全覆盖 → 无 warning')
+}
+
 console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
 process.exit(failed === 0 ? 0 : 1)
