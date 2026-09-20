@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-20-taskcard-yaml-hardgate",
+  "generatedAt": "2026-09-20T14:49:22.345Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "matches": 7,
+        "skippedFiles": 0,
+        "worktreeHits": 5,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "tasks": 4,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate",
+      "metrics": {
+        "checkedFiles": 5,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "other",
+        "item": "探针 5 报「3 个本变更端点前端未调用」（GET /api/path 等）系存量端点误标——本变更零接口面，端点来自仓内既有文件；属问题 C（contract-matrix unusedChangeRelevant 口径被击穿）",
+        "condition": "quick-C 落地后重跑 `sillyspec verify-probes --change 2026-09-20-taskcard-yaml-hardgate`，确认该 ⚠️ 行消失或正确折叠",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/fixtures/taskcard-bad-yaml/task-01.md",
+      "test/fixtures/taskcard-bad-yaml/task-02.md",
+      "test/fixtures/taskcard-bad-yaml/task-03.md",
+      "test/taskcard-frontmatter-hardgate.test.mjs",
+      "test/acceptance-matrix-probe.test.mjs",
+      "test/cross-task-contracts.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-20T15:17:04.068Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

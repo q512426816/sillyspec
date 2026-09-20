@@ -1,0 +1,915 @@
+diff --git a/meta.json b/meta.json
+index 5cdd42a3..dcbf8c0e 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,56 @@
+   "branch": "sillyspec/2026-09-20-taskcard-yaml-hardgate",
+   "baseBranch": "main",
+   "baseHash": "9f3aecf497ef0313e9599f376c6a82295157c71c",
++  "actualBaseHash": "e044ae5b3bd0a4366ff6ff5764ec82dea34ca744",
++  "createdAt": "2026-09-20T14:31:37.394Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-20-taskcard-yaml-hardgate",
+   "mode": "worktree",
+-  "createdAt": "2026-09-20T14:31:34.286Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".claude/CLAUDE.md",
++    "docs/sillyspec/platform-interface-map.md",
++    "analyze-transcript.cjs",
++    "asset-audit-2026-09-20/README.md",
++    "asset-audit-2026-09-20/asset-audit.cjs",
++    "asset-audit-2026-09-20/extract-candidates.cjs",
++    "asset-audit-2026-09-20/platform-archive.csv",
++    "asset-audit-2026-09-20/platform-fr.csv",
++    "asset-audit-2026-09-20/platform-gotchas.csv",
++    "asset-audit-2026-09-20/platform-knownissues.csv",
++    "asset-audit-2026-09-20/platform-modules.csv",
++    "asset-audit-2026-09-20/platform-quicklog.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting-candidates.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting.csv",
++    "asset-audit-2026-09-20/sillyspec-archive.csv",
++    "asset-audit-2026-09-20/sillyspec-fr.csv",
++    "asset-audit-2026-09-20/sillyspec-gotchas.csv",
++    "asset-audit-2026-09-20/sillyspec-knownissues.csv",
++    "asset-audit-2026-09-20/sillyspec-modules.csv",
++    "asset-audit-2026-09-20/sillyspec-quicklog.csv",
++    "asset-audit-2026-09-20/sillyspec-troubleshooting.csv",
++    "asset-audit-2026-09-20/summary.json",
++    "round4/account.mjs",
++    "round4/brief-autocompact.md",
++    "round4/brief-session-replay.md",
++    "round4/find-sessions.mjs",
++    "round4/prereg.md",
++    "round4/prompt-R4-L.md",
++    "round4/prompt-R4-O-L.md",
++    "round4/prompt-R4-O-S.md",
++    "round4/prompt-R4-S-F.md",
++    "round4/prompt-R4-S-Q.md",
++    "test/cursor-agent-transcript-detect.test.mjs"
++  ],
++  "baselineCommit": "e044ae5b3bd0a4366ff6ff5764ec82dea34ca744",
++  "baselineHash": "d665093675f426c9",
++  "syncDiagnostic": {
++    "status": "up-to-date",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 0
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "2be6e9b1e90be718",
++  "depsCheckedAt": "2026-09-20T14:31:37.306Z"
+ }
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index bd32f4b7..7f8a2ecb 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -21,6 +21,7 @@ import { parseFileChangeList, pathMatches } from '../change-list.js'
+ import { getRule } from '../stage-contract-spec.js'
+ import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
+ import { validateScriptCommands } from './cmd-existence.js'
++import { parseTaskFrontmatter } from '../taskcard-frontmatter.js'
+ 
+ // ═══════════════════════════════════════════════════════════════
+ // 解析工具（从 plan.js 迁移）
+@@ -319,21 +320,20 @@ function hasTddOrVerify(content) {
+ 
+ /**
+  * 解析 task-NN.md 的跨任务契约字段 provides / expects_from
+- * 用 js-yaml 解析 frontmatter（嵌套结构，正则不可靠）。
+- * provides/expects_from 为可选字段；缺失或解析失败时返回空（不阻断）。
++ * 解析归一 taskcard-frontmatter.js 单一源（2026-09-20-taskcard-yaml-hardgate：此前本函数与
++ * verify-probes 各自提取+吞错，坏 YAML 冒充「无契约字段」致 [plan.cross-task-contract] 空真过门）。
++ * provides/expects_from 为可选字段；缺失返回空（不阻断）；frontmatter 非法 YAML 返回空 +
++ * yamlError 显式降级键（不冒充无字段——YAML 合法性由 validatePlanFeasibility 步骤 0b 硬拦，
++ * D-001@v2 单点拦截先例；yamlError 供独立消费方判读）。
+  * @param {string} content - task 文件内容
+- * @returns {{ provides: Array<{contract, fields}>, expectsFrom: Record<string, Array<{contract, needs}>> }}
++ * @returns {{ provides: Array<{contract, fields}>, expectsFrom: Record<string, Array<{contract, needs}>>,
++ *   yamlError: {message: string, line: number, column: number}|null }}
+  */
+ export function parseTaskContracts(content) {
+-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
+-  if (!fmMatch) return { provides: [], expectsFrom: {} }
+-  let fm
+-  try {
+-    fm = jsYaml.load(fmMatch[1]) || {}
+-  } catch {
+-    // frontmatter 非合法 YAML（老格式/手写不规范）—— 当作无契约字段，不阻断
+-    return { provides: [], expectsFrom: {} }
+-  }
++  const parsed = parseTaskFrontmatter(content)
++  if (!parsed.hasFrontmatter) return { provides: [], expectsFrom: {}, yamlError: null }
++  if (!parsed.ok) return { provides: [], expectsFrom: {}, yamlError: parsed.error }
++  const fm = parsed.fm
+ 
+   const provides = Array.isArray(fm.provides)
+     ? fm.provides.map(p => ({
+@@ -355,7 +355,7 @@ export function parseTaskContracts(content) {
+     }
+   }
+ 
+-  return { provides, expectsFrom }
++  return { provides, expectsFrom, yamlError: null }
+ }
+ 
+ // ═══════════════════════════════════════════════════════════════
+@@ -1300,6 +1300,21 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
+       errors.push(`${dupTaskId || file}: frontmatter 顶层键 ${dup.key} 重复出现 ${dup.lines.length} 次（L${dup.lines.join('、L')}）——骨架已自动反填的键（如 depends_on）勿重复手填，保留正确一处删除其余`)
+     }
+ 
++    // 0b. frontmatter YAML 合法性硬校验（2026-09-20-taskcard-yaml-hardgate FR-02 / D-001@v2——
++    // D-004@v1 重复键拦截的同类泛化：jsYaml 抛错族错误只能在 feasibility 入口单点拦截，
++    // 否则下游 4 处 catch 静默降级令 [plan.cross-task-contract] 空真过门。双报豁免（双维度
++    // 同信号须豁免惯例）：message 含 duplicated mapping key 且 dupKeys 非空时跳过——上方 0
++    // 已用键名+行号精确上报；嵌套重复键（detectDuplicateTopKeys 顶格正则够不到）仍由此兜底。
++    const fmParse = parseTaskFrontmatter(content)
++    if (!fmParse.ok) {
++      const isDupReported = dupKeys.length > 0 && /duplicated mapping key/i.test(fmParse.error.message)
++      if (!isDupReported) {
++        errors.push(
++          `${dupTaskId || file}: frontmatter 非法 YAML（${file}:${fmParse.error.line}:${fmParse.error.column} ${fmParse.error.message}）——契约/验收/标量字段全链路不可读，plan 门禁拒绝放行；修复卡片 frontmatter（值含方括号/全角括号时加引号或改块式列表）`
++        )
++      }
++    }
++
+     // 1. 必要字段检查
+     const taskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
+     const title = (fm.match(/^title:\s*(.+)/m)?.[1] || '').trim()
+@@ -1374,12 +1389,11 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
+     //    不存在文件一律跳过，且至少读到一个源文件才比对（防全读不到 → 全标识符误报）。
+     if (projectRoot && hasAcceptance && allowedPaths.length > 0) {
+       let acceptanceText = ''
+-      try {
+-        const fmObj = jsYaml.load(fm) || {}
+-        if (typeof fmObj.acceptance === 'string') acceptanceText = fmObj.acceptance
+-        else if (Array.isArray(fmObj.acceptance)) acceptanceText = fmObj.acceptance.join('\n')
+-      } catch {
+-        // frontmatter 非法 YAML（feasibility 未对 fm 做 YAML 解析，可能字面合法但语义复杂）→ 跳过 best-effort
++      // 复用步骤 0b 的 fmParse（2026-09-20-taskcard-yaml-hardgate）：不再重复 jsYaml.load；
++      // 坏卡已被 0b 阻断，此处 ok=false 仅防御性跳过 best-effort（0 告警不误拦）
++      if (fmParse.ok && fmParse.fm) {
++        if (typeof fmParse.fm.acceptance === 'string') acceptanceText = fmParse.fm.acceptance
++        else if (Array.isArray(fmParse.fm.acceptance)) acceptanceText = fmParse.fm.acceptance.join('\n')
+       }
+       if (acceptanceText) {
+         const IDENT_RE = /(?<![A-Za-z])[a-z]+(?:_[a-z]+)+|(?<![A-Za-z])[a-z]+(?:[A-Z][a-z]+)+/g
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 9b9aa815..06934ecc 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -26,7 +26,6 @@
+  */
+ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
+ import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
+-import jsYaml from 'js-yaml'
+ import { gitQuiet, unquoteGitPath } from './git-helper.js'
+ import { hasUnconfirmedPrefill } from './prefill.js'
+ import {
+@@ -36,6 +35,7 @@ import { parseFileChangeListDetailed } from './change-list.js'
+ import { parseDecisions } from './decision-distill.js'
+ import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
++import { parseTaskFrontmatter } from './taskcard-frontmatter.js'
+ import { RECEIPT_SOURCE_CROSS_LAYER_RE as RECEIPT_CROSS_LAYER_RE, RECEIPT_SOURCE_UNIT_RE as RECEIPT_UNIT_RE, CLI_SMOKE_SOURCE_MARK as SMOKE_RECEIPT_SOURCE_MARK } from './change-risk-profile.js'
+ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+ import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
+@@ -1713,26 +1713,34 @@ const PROBE7_NONTESTABLE_RE = /文档|部署|doc|deploy|manual|config/i
+ 
+ /**
+  * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
+- * 口径锚 src/stages/plan-postcheck.js acceptance best-effort 段（string → 原文单条、array →
+- * 逐条）——不 import 它：parseTaskContracts 只返回 provides/expects_from 不含 acceptance。
++ * 解析归一 taskcard-frontmatter.js 单一源（2026-09-20-taskcard-yaml-hardgate：此前坏 YAML
++ * catch 返回 [] 冒充「无 acceptance」，探针 7 渲染假防御文案）——status 三态让调用方区分
++ * 「真无 acceptance」与「frontmatter 非法 YAML」。口径锚 src/stages/plan-postcheck.js
++ * acceptance best-effort 段（string → 原文单条、array → 逐条）。
+  * @param {string} content task 卡全文
+- * @returns {string[]|null} acceptance 条目数组；null = 无 frontmatter（调用方跳过该卡）；
+- *   frontmatter 在场但无 acceptance / 非法 YAML → []（防御行，plan-postcheck 已拦缺失）
++ * @returns {{ status: 'no-frontmatter'|'invalid-yaml'|'ok', acceptance: string[],
++ *   error: {message: string, line: number, column: number}|null }}
++ *   no-frontmatter = 无 frontmatter（调用方跳过该卡）；invalid-yaml = frontmatter 非法 YAML
++ *   （acceptance 不可读，error 带文件 1 基行:列）；ok = 合法解析，acceptance 归一数组
++ *   （frontmatter 在场但无 acceptance → []，此时防御行为真——plan-postcheck 已拦缺失）
+  */
+ export function parseTaskAcceptance(content) {
+-  const fmMatch = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/)
+-  if (!fmMatch) return null
+-  try {
+-    const fmObj = jsYaml.load(fmMatch[1]) || {}
+-    if (typeof fmObj.acceptance === 'string') {
+-      const t = fmObj.acceptance.trim()
+-      return t ? [t] : []
+-    }
+-    if (Array.isArray(fmObj.acceptance)) {
+-      return fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim())
++  const parsed = parseTaskFrontmatter(content)
++  if (!parsed.hasFrontmatter) return { status: 'no-frontmatter', acceptance: [], error: null }
++  if (!parsed.ok) return { status: 'invalid-yaml', acceptance: [], error: parsed.error }
++  const fmObj = parsed.fm || {}
++  if (typeof fmObj.acceptance === 'string') {
++    const t = fmObj.acceptance.trim()
++    return { status: 'ok', acceptance: t ? [t] : [], error: null }
++  }
++  if (Array.isArray(fmObj.acceptance)) {
++    return {
++      status: 'ok',
++      acceptance: fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim()),
++      error: null,
+     }
+-  } catch { /* frontmatter 非法 YAML → 防御性空（plan-postcheck 侧已拦） */ }
+-  return []
++  }
++  return { status: 'ok', acceptance: [], error: null }
+ }
+ 
+ /**
+@@ -1939,6 +1947,12 @@ function renderProbe7Lines(p7) {
+   for (const t of (p7.tasks || [])) {
+     L.push('')
+     L.push(`**${t.task}**`)
++    if (t.fmError) {
++      // 坏 YAML 如实陈述（2026-09-20-taskcard-yaml-hardgate）：非「无 acceptance」防御——
++      // plan 门禁 0b 硬校验应已拦截；已过 plan 门仍见此行 = 门禁失效信号（可反馈工具缺陷）
++      L.push(`- ⚠️ frontmatter 非法 YAML（${t.task}.md:${t.fmError.line}:${t.fmError.column} ${mdEscapeCell(t.fmError.message, 160)}）——acceptance 不可读，本行非「无 acceptance」防御；plan 门禁 frontmatter 硬校验应已拦截，若已过 plan 门仍见此行即门禁失效信号`)
++      continue
++    }
+     if (!Array.isArray(t.acceptance) || t.acceptance.length === 0) {
+       L.push('- （卡无 acceptance——防御，plan-postcheck 已拦）')
+       continue
+@@ -2138,10 +2152,17 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+       try {
+         for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n)).sort()) {
+           const raw = readFileSync(join(tasksDir, f), 'utf8')
+-          const acceptance = parseTaskAcceptance(raw)
+-          if (acceptance === null) continue // 无 frontmatter → 跳过（plan-postcheck 已拦）
++          // 三态分流（2026-09-20-taskcard-yaml-hardgate）：no-frontmatter 跳卡（原 null 语义）；
++          // invalid-yaml 挂 fmError 进条目——渲染层区分「坏 YAML」与「真无 acceptance」防御行
++          const parsed = parseTaskAcceptance(raw)
++          if (parsed.status === 'no-frontmatter') continue // 无 frontmatter → 跳过（plan-postcheck 已拦）
+           const fmId = (raw.match(/^id:\s*(\S+)/m) || [])[1]
+-          cards.push({ task: fmId || f.replace(/\.md$/, ''), acceptance, raw })
++          cards.push({
++            task: fmId || f.replace(/\.md$/, ''),
++            acceptance: parsed.acceptance,
++            fmError: parsed.status === 'invalid-yaml' ? parsed.error : null,
++            raw,
++          })
+         }
+       } catch { /* tasks 目录不可读 → applicable 维持 false */ }
+       probe7.applicable = cards.length > 0
+@@ -2196,6 +2217,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+         probe7.tasks.push({
+           task: card.task,
+           acceptance: card.acceptance,
++          fmError: card.fmError || null,
+           testFiles,
+           hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
+         })
+diff --git a/test/acceptance-matrix-probe.test.mjs b/test/acceptance-matrix-probe.test.mjs
+index 7e4be5c1..163484c5 100644
+--- a/test/acceptance-matrix-probe.test.mjs
++++ b/test/acceptance-matrix-probe.test.mjs
+@@ -3,7 +3,7 @@
+  *
+  * 覆盖：
+  * 1. acceptance 解析：string/array 双形态归一（口径锚 plan-postcheck best-effort 段）、无
+- *    frontmatter → null、非法 YAML → []、无 acceptance 字段 → []（防御行）
++ *    frontmatter → status=no-frontmatter、非法 YAML → status=invalid-yaml、无 acceptance 字段 → []（防御行；2026-09-20-taskcard-yaml-hardgate 三态契约）
+  * 2. 双源结构归属：allowed_paths 测试模式命中（test/ 前缀 + .test. 文件名 + NEW: 前缀剥离）
+  *    ∪ marker 解析的 runId 下 review.json changedFiles test/ 前缀；marker 读不到 → execute-runs
+  *    目录扫描兜底；review.json 读不到 → 该源空集不报错
+@@ -151,12 +151,13 @@ try {
+   const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
+   const t4 = r.probe7.tasks.find(t => t.task === 'task-04')
+ 
+-  console.log('--- 1. acceptance 双形态解析 ---')
+-  assert(parseTaskAcceptance('no frontmatter here') === null, '无 frontmatter → null（卡跳过）')
+-  assert(parseTaskAcceptance('---\nid: x\nacceptance: 单条字符串\n---\n') .length === 1, 'string 形态 → 单条数组')
+-  assert(parseTaskAcceptance('---\nid: x\nacceptance:\n  - a\n  - b\n---\n').length === 2, 'array 形态 → 逐条数组')
+-  assert(parseTaskAcceptance('---\nid: x\n---\n').length === 0, '有 frontmatter 无 acceptance → []（防御）')
+-  assert(parseTaskAcceptance('---\nid: x\nacceptance: [unclosed\n---\n').length === 0, '非法 YAML → []（防御不抛）')
++  console.log('--- 1. acceptance 双形态解析（2026-09-20-taskcard-yaml-hardgate 三态契约迁移） ---')
++  assert(parseTaskAcceptance('no frontmatter here').status === 'no-frontmatter', '无 frontmatter → status=no-frontmatter（卡跳过）')
++  assert(parseTaskAcceptance('---\nid: x\nacceptance: 单条字符串\n---\n').acceptance.length === 1, 'string 形态 → 单条数组')
++  assert(parseTaskAcceptance('---\nid: x\nacceptance:\n  - a\n  - b\n---\n').acceptance.length === 2, 'array 形态 → 逐条数组')
++  assert(parseTaskAcceptance('---\nid: x\n---\n').acceptance.length === 0, '有 frontmatter 无 acceptance → []（防御）')
++  const badYaml = parseTaskAcceptance('---\nid: x\nacceptance: [unclosed\n---\n')
++  assert(badYaml.status === 'invalid-yaml' && badYaml.acceptance.length === 0 && badYaml.error, '非法 YAML → status=invalid-yaml + error 在场（不抛不冒充）')
+   assert(t1.acceptance.length === 2 && t2.acceptance.length === 1, `array/string 双形态归一（t1=${t1.acceptance.length} t2=${t2.acceptance.length}）`)
+   assert(t2.acceptance[0].includes('ensureAcceptanceMatrixSection'), 'folded > 字符串条目内容完整')
+   assert(t3.acceptance.length === 0, 'task-03 无 acceptance → 空数组（防御行）')
+diff --git a/test/cross-task-contracts.test.mjs b/test/cross-task-contracts.test.mjs
+index d6c4b3e7..39940bf3 100644
+--- a/test/cross-task-contracts.test.mjs
++++ b/test/cross-task-contracts.test.mjs
+@@ -74,11 +74,13 @@ describe('parseTaskContracts', () => {
+     assert.deepEqual(expectsFrom, {})
+   })
+ 
+-  it('非法 YAML frontmatter 容错返回空（不阻断）', () => {
++  it('非法 YAML frontmatter 返回空 + yamlError 显式降级键（不阻断对账，合法性归 feasibility 0b）', () => {
+     const content = '---\nid: task-01\nbroken: [a, b\n---\ngoal: >\n  bad'
+-    const { provides, expectsFrom } = parseTaskContracts(content)
++    const { provides, expectsFrom, yamlError } = parseTaskContracts(content)
+     assert.deepEqual(provides, [])
+     assert.deepEqual(expectsFrom, {})
++    assert.ok(yamlError, 'yamlError 在场（显式降级，不冒充无契约字段）')
++    assert.equal(typeof yamlError.line, 'number')
+   })
+ 
+   it('无 frontmatter 返回空', () => {
+diff --git a/src/taskcard-frontmatter.js b/src/taskcard-frontmatter.js
+new file mode 100644
+--- /dev/null
++++ b/src/taskcard-frontmatter.js
+@@ -0,0 +1,57 @@
++/**
++ * taskcard-frontmatter.js — task 卡 frontmatter 单一解析源（2026-09-20-taskcard-yaml-hardgate）
++ *
++ * 背景：坏 YAML 曾被三个消费点各自静默吞——plan-postcheck.js parseTaskContracts 的 catch 返回
++ * 空对象冒充「无契约字段」→ 契约门禁空真过门；verify-probes.js parseTaskAcceptance 的 catch
++ * 返回空数组 → 探针 7 假防御文案；且两侧 frontmatter 提取口径不一致（一侧 \r 容错一侧不容）。
++ * 本模块把「提取 + jsYaml 解析 + 错误定位（文件行:列）」收敛为一处，plan 与 verify 两侧共同消费。
++ *
++ * 防环铁律：本模块除 js-yaml 外零依赖（不 import 仓内任何模块）——plan-postcheck 与
++ * worktree-apply 存在既有依赖边（knowledge patterns），共享逻辑放新模块两侧 import。
++ */
++import jsYaml from 'js-yaml'
++
++const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/
++
++/**
++ * 提取 task 卡 frontmatter。界定口径与 verify-probes.js parseTaskAcceptance 原实现同款
++ * （首行 --- 起、闭合 --- 行止，\r\n 容错——Windows 编辑器文本模式写卡不炸提取）。
++ * @param {string} content task 卡全文
++ * @returns {{ has: boolean, yamlText: string|null, yamlStartLine: number }}
++ *   yamlStartLine = YAML 内容在文件中的起始行号（1 基）：首行是 ---，YAML 自第 2 行起，恒为 2
++ */
++export function splitFrontmatter(content) {
++  const m = String(content ?? '').match(FRONTMATTER_RE)
++  if (!m) return { has: false, yamlText: null, yamlStartLine: 2 }
++  return { has: true, yamlText: m[1], yamlStartLine: 2 }
++}
++
++/**
++ * 解析 task 卡 frontmatter（单一真相源）。
++ * @param {string} content task 卡全文
++ * @returns {{ ok: boolean, hasFrontmatter: boolean, fm: object|null,
++ *   error: { message: string, line: number, column: number }|null }}
++ *   - 无 frontmatter：{ ok: true, hasFrontmatter: false, fm: null, error: null }——不是错误，
++ *     「无 frontmatter」由各消费方按自身语义处理（plan-postcheck 结构检查另有拦截）
++ *   - jsYaml 抛错：{ ok: false, hasFrontmatter: true, fm: null, error: {...} }。
++ *     error.line = e.mark.line + yamlStartLine：js-yaml mark.line 是 YAML 文本内 0 基行号，
++ *     +2 后即文件 1 基行号（首行 ---，YAML 第 1 行 = 文件第 2 行）；mark 缺席回退 1。
++ *     error.column = e.mark.column + 1（0 基 → 1 基；mark 缺席回退 1）。
++ *     error.message 取异常首行（js-yaml 原始 message 含多行上下文，单行化便于门禁文案）。
++ *   - 合法：{ ok: true, hasFrontmatter: true, fm, error: null }（空文档回退 {}）
++ */
++export function parseTaskFrontmatter(content) {
++  const { has, yamlText, yamlStartLine } = splitFrontmatter(content)
++  if (!has) return { ok: true, hasFrontmatter: false, fm: null, error: null }
++  let fm
++  try {
++    fm = jsYaml.load(yamlText) || {}
++  } catch (e) {
++    const mark = e && e.mark
++    const line = mark && typeof mark.line === 'number' ? mark.line + yamlStartLine : 1
++    const column = mark && typeof mark.column === 'number' ? mark.column + 1 : 1
++    const message = String((e && e.message) || e).split('\n')[0]
++    return { ok: false, hasFrontmatter: true, fm: null, error: { message, line, column } }
++  }
++  return { ok: true, hasFrontmatter: true, fm, error: null }
++}
+
+diff --git a/test/fixtures/taskcard-bad-yaml/task-01.md b/test/fixtures/taskcard-bad-yaml/task-01.md
+new file mode 100644
+--- /dev/null
++++ b/test/fixtures/taskcard-bad-yaml/task-01.md
+@@ -0,0 +1,61 @@
++---
++id: task-01
++title: 'daemon scope-audit contract v2 projection (cross_repo + repos[])'
++title_zh: 'daemon 投影契约 v2（cross_repo + repos[]）'
++author: 'qinyi'
++generated_by: sillyspec-taskcard
++created_at: 2026-09-20 20:03:38
++priority: P0
++depends_on: []
++blocks: []
++requirement_ids: [FR-01, FR-02]
++decision_ids: [D-001@v1, D-004@v2]
++allowed_paths:
++  - sillyhub-daemon/src/sillyspec-manager.ts
++  - sillyhub-daemon/tests/sillyspec-file-diff.test.ts
++target_files:
++  - sillyhub-daemon/src/sillyspec-manager.ts
++  - sillyhub-daemon/tests/sillyspec-file-diff.test.ts
++provides:
++  rpc_scope_audit_v2_fields: [rows[].cross_repo, repos[]（key/anchor{source,base,head,label}/anchor_label/totals{files,additions,deletions,planned,unplanned,untouched}/degraded/degraded_reason）]
++goal: >
++  daemon auditTable 投影消费 sillyspec --json 契约 v2：行级 cross_repo 与信封 repos[] 透传到
++  RPC sillyspec_scope_audit result（backend 消费），repoPath 不出 daemon（D-001），旧 CLI 无键
++  安全回退 null。
++implementation:
++  - sillyhub-daemon/src/sillyspec-manager.ts:385 SillySpecAuditRow 接口增 cross_repo?: string | null（注释更新契约 v2 说明）
++  - 新增 SillySpecAuditRepoAnchor / SillySpecAuditRepoTotals / SillySpecAuditRepo 三个导出接口；SillySpecAuditTable（:395 附近）增 repos: SillySpecAuditRepo[] | null
++  - auditTable()（sillyhub-daemon/src/sillyspec-manager.ts:1558-1567）rows.push 白名单补 cross_repo: asStr(raw.crossRepo)
++  - auditTable() 信封投影：parsed.repos 非数组 → repos: null；是数组 → 逐条防御投影（isRecord + key 非空 string 否则整条跳过；anchor 四字段 asStr；anchor_label = /^[0-9a-f]{7,40}$/.test(base) ? base.slice(0,7) : null——语义锚/无 base → null〔D-004@v2〕；totals 六字段 asCount；degraded boolean；degraded_reason asStr；repoPath 不投影）
++  - sillyhub-daemon/tests/sillyspec-file-diff.test.ts:305 auditTable describe 增用例：v2 信封夹具（三仓 repos[] + 跨仓行，按上游契约示例造）断言投影全字段 / 无 repos 键 → repos:null / 505 行截断护栏含跨仓行不受影响 / JSON.stringify(result) 不含 repoPath
++acceptance:
++  - v2 信封夹具下投影结果逐字段正确（cross_repo 透传、anchor_label 短化、totals 三态计数、degraded_reason、repos 数组序保持）
++  - 无 repos 键（旧 CLI）→ repos 为 null，其余投影与现状逐字段一致（回退零回归）
++  - 投影结果序列化后不含 repoPath 字符串（D-001）
++verify:
++  - cd sillyhub-daemon && pnpm typecheck
++  - cd sillyhub-daemon && pnpm vitest run tests/sillyspec-file-diff.test.ts
++constraints:
++  - 只改投影与类型，不改 RPC method 注册/错误码/_runScopeAuditJson 共享执行器
++  - repoPath 白名单排除（D-001）；anchor_label 语义锚 → null（D-004@v2）
++  - 禁跑全量测试，仅跑本文件相关测试（CLAUDE.md 规则 0）
++---
++
++<!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。
++     用 Edit tool 填充上方占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等），
++     勿用 Write 整文件重写——会引入 CRLF 行尾/漏闭合 ---/漏字段回归。
++     ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
++     一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
++     target_files 格式（可选，对账用精确文件级意图声明，与 allowed_paths 语义不同）：
++                    精确文件路径（仓根相对、正斜杠），当前不存在、将由本 task 新建的文件加
++                    NEW: 前缀（如 NEW:src/foo.js）；禁 glob（src/**）、禁目录前缀（src/dir/）、
++                    禁绝对路径；无明确文件级意图时保留 [] 占位行不动。
++     implementation/acceptance 里的源码位置同样写仓根相对全路径+行号（src/foo.js:123）——
++                    裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词
++                    窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。
++     可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
++     repo:          仅跨仓 task 填（local.yaml repos: 注册的仓 key；缺省=main。allowed_paths 相对该仓根写，
++                    禁止带仓库名前缀/绝对路径——review 对账按仓根相对路径匹配，带前缀永不命中）
++     provides:      仅当本 task 给其他 task 提供接口/DTO/响应时填
++     expects_from:  仅当本 task 消费其他 task 的契约时填
++     related_tests: 仅当本 task 改动导致既有测试断言失效时填（测试路径须同时进 allowed_paths） -->
+
+diff --git a/test/fixtures/taskcard-bad-yaml/task-02.md b/test/fixtures/taskcard-bad-yaml/task-02.md
+new file mode 100644
+--- /dev/null
++++ b/test/fixtures/taskcard-bad-yaml/task-02.md
+@@ -0,0 +1,64 @@
++---
++id: task-02
++title: 'backend change-module schema and passthrough for contract v2'
++title_zh: 'backend schema 与透传'
++author: 'qinyi'
++generated_by: sillyspec-taskcard
++created_at: 2026-09-20 20:03:38
++priority: P0
++depends_on: []
++blocks: []
++requirement_ids: [FR-03]
++decision_ids: [D-002@v1]
++allowed_paths:
++  - backend/app/modules/change/schema.py
++  - backend/app/modules/change/scope_audit.py
++  - backend/app/modules/change/tests/test_scope_file_diff.py
++target_files:
++  - backend/app/modules/change/schema.py
++  - backend/app/modules/change/scope_audit.py
++  - backend/app/modules/change/tests/test_scope_file_diff.py
++expects_from:
++  task-01: [rows[].cross_repo, repos[]（key/anchor{source,base,head,label}/anchor_label/totals{files,additions,deletions,planned,unplanned,untouched}/degraded/degraded_reason）]
++provides:
++  openapi_scope_audit_v2_fields: [ScopeAuditRow.cross_repo, ScopeAuditResponse.repos（ScopeAuditRepo{key,anchor,anchor_label,totals,degraded,degraded_reason}）]
++goal: >
++  backend change 模块消费 daemon RPC result 的契约 v2 增量：ScopeAuditRow.cross_repo 与
++  ScopeAuditRepo 族 pydantic schema + get_scope_audit 防御透传，非法/缺省形态回退 repos=[]（D-002）。
++implementation:
++  - backend/app/modules/change/schema.py:692 ScopeAuditRow 增 cross_repo: str | None = None
++  - schema.py 新增 ScopeAuditRepoAnchor（source/base/head/label 四个 str|None）、ScopeAuditRepoTotals（files/additions/deletions/planned/unplanned/untouched 全 int|None）、ScopeAuditRepo（key:str + anchor/anchor_label/totals/degraded/degraded_reason 带默认值）；ScopeAuditResponse（schema.py:713 附近）增 repos: list[ScopeAuditRepo] = []
++  - backend/app/modules/change/scope_audit.py:385-408 get_scope_audit rows 循环补 cross_repo 投影（isinstance str 守卫，同 declared/attribution 风格）；result.get("repos") 为 list 时逐条防御构造 ScopeAuditRepo（isinstance dict + key str 否则跳过，嵌套 anchor/totals 逐字段归一），否则 repos=[]
++  - backend/app/modules/change/tests/test_scope_file_diff.py 增 scope-audit 端点用例：FakeHub 返回 v2 形态（跨仓行 + 三仓 repos[]）断言 DTO 透传 / 无 repos 键 → repos==[] / 非法条目跳过
++acceptance:
++  - v2 形态 FakeHub 下响应 JSON 含 cross_repo 与 repos 逐字段正确（key/anchor/anchor_label/totals 三态计数/degraded_reason）
++  - 无 repos 键/非 list 形态 → repos==[]（回退零回归，既有端点用例全绿）
++  - OpenAPI 导出含新字段（gen:types 在 task-03 消费）
++verify:
++  - cd backend && uv run pytest -q app/modules/change/tests/test_scope_file_diff.py
++  - cd backend && uv run ruff check app/modules/change/schema.py app/modules/change/scope_audit.py app/modules/change/tests/test_scope_file_diff.py
++  - cd backend && uv run mypy app/modules/change/schema.py app/modules/change/scope_audit.py
++constraints:
++  - 只做 additive：既有字段/端点/错误映射族（scope_audit.py AppError 族）零改动
++  - 错误与注释文案中文；防御构造风格对齐既有 rows 循环（isinstance 守卫、非法跳过）
++  - 禁跑全量测试，仅跑本文件相关测试（CLAUDE.md 规则 0）
++---
++
++<!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。
++     用 Edit tool 填充上方占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等），
++     勿用 Write 整文件重写——会引入 CRLF 行尾/漏闭合 ---/漏字段回归。
++     ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
++     一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
++     target_files 格式（可选，对账用精确文件级意图声明，与 allowed_paths 语义不同）：
++                    精确文件路径（仓根相对、正斜杠），当前不存在、将由本 task 新建的文件加
++                    NEW: 前缀（如 NEW:src/foo.js）；禁 glob（src/**）、禁目录前缀（src/dir/）、
++                    禁绝对路径；无明确文件级意图时保留 [] 占位行不动。
++     implementation/acceptance 里的源码位置同样写仓根相对全路径+行号（src/foo.js:123）——
++                    裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词
++                    窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。
++     可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
++     repo:          仅跨仓 task 填（local.yaml repos: 注册的仓 key；缺省=main。allowed_paths 相对该仓根写，
++                    禁止带仓库名前缀/绝对路径——review 对账按仓根相对路径匹配，带前缀永不命中）
++     provides:      仅当本 task 给其他 task 提供接口/DTO/响应时填
++     expects_from:  仅当本 task 消费其他 task 的契约时填
++     related_tests: 仅当本 task 改动导致既有测试断言失效时填（测试路径须同时进 allowed_paths） -->
+
+diff --git a/test/fixtures/taskcard-bad-yaml/task-03.md b/test/fixtures/taskcard-bad-yaml/task-03.md
+new file mode 100644
+--- /dev/null
++++ b/test/fixtures/taskcard-bad-yaml/task-03.md
+@@ -0,0 +1,68 @@
++---
++id: task-03
++title: 'gen:types and frontend per-repo grouped audit card'
++title_zh: 'gen:types 与前端按仓分组'
++author: 'qinyi'
++generated_by: sillyspec-taskcard
++created_at: 2026-09-20 20:03:38
++priority: P0
++depends_on: ['task-01', 'task-02']
++blocks: []
++requirement_ids: [FR-04, FR-05, FR-06]
++decision_ids: [D-002@v1, D-003@v1, D-005@v1, D-004@v2]
++allowed_paths:
++  - frontend/src/lib/api-types.ts
++  - backend/openapi.json
++  - frontend/src/components/changes/scope-audit-command-card.tsx
++  - frontend/src/components/changes/__tests__/scope-audit-command-card.test.tsx
++  - frontend/src/components/mobile/mobile-change-detail.test.tsx
++  - frontend/src/components/changes/__tests__/quicklog-drawer.test.tsx
++target_files:
++  - frontend/src/lib/api-types.ts
++  - backend/openapi.json
++  - frontend/src/components/changes/scope-audit-command-card.tsx
++  - frontend/src/components/changes/__tests__/scope-audit-command-card.test.tsx
++expects_from:
++  task-02: [ScopeAuditRow.cross_repo, ScopeAuditResponse.repos（ScopeAuditRepo{key,anchor,anchor_label,totals,degraded,degraded_reason}）]
++goal: >
++  前端消费契约 v2：gen:types 重生成类型后，对账卡按仓分组渲染（全表合计 + 每仓段真实三态与
++  锚点档，D-003/D-005），明细弹窗按仓分节 + 仓标徽章，无 repos 全链回退现状单段渲染（D-002）。
++implementation:
++  - gen:types 前预检 node_modules（cd frontend && pnpm exec tsc --version；坏则 pnpm install --force），再 cd frontend && pnpm gen:types；提交 frontend/src/lib/api-types.ts + backend/openapi.json（伴生产物只保留相关 diff）
++  - frontend/src/components/changes/scope-audit-command-card.tsx 卡面：分组激活条件（repos 非空数组且 mode==='full-flow'，:301-305 分支处）→ 顶部全表合计行（锚点/文件数/+−/仓数）+ 每仓段——段头=仓标识（key==='main' → 「主仓」brand 色，否则 repo key）+ 锚点档 chip（anchor.label 文案 + anchor_label 短 hash，语义锚 null 显示 —）；段身=三态 chips（计数取 repos[].totals，不前端重算，testid=scope-audit-chip-<repo>-<verdict>）+ 该仓 files/+−；degraded=true 段不渲染 chips 整段 ⚠️ degraded_reason；卡尾 note 顶摘要层（muted 单行，:354 附近）
++  - 同文件明细弹窗（:396-439）：rows 按 cross_repo 分桶（无键归 main 桶），桶序=repos[] 序（main 首位，孤儿桶尾随首现序），每桶粘性小节头（仓标识+锚点档），跨仓行加仓标徽章；行点击 diff 联动不变
++  - 回退分支：repos 空/null 或 mode==='quick' → 现状渲染路径与 testid 原样（回退形态不渲染 note，兼容策略 6）
++  - frontend/src/components/changes/__tests__/scope-audit-command-card.test.tsx 增用例：三仓分组渲染（chips 数字=信封 totals）/degraded 段降级文案/note 渲染/回退（无 repos 单段+旧形态跨仓行归主仓+testid 不变）/明细分桶与仓标
++  - 回归 frontend/src/components/mobile/mobile-change-detail.test.tsx 与 frontend/src/components/changes/__tests__/quicklog-drawer.test.tsx（import 复用/挂载面，只跑不改为主，桩需调整时才有写面）
++acceptance:
++  - f85a6650 类三仓夹具：卡面显示主仓段（20/2+主仓锚）+ sub-grid-security/spdemo 段各带真实三态与锚点档（任务书验收）
++  - 单仓/无 repos/quick 夹具：渲染与现状等价（回退用例断言，既有 testid 断言全绿）
++  - degraded 仓段显示 ⚠️ 原因文案、无伪三态；跨仓行 null 行数显示 —
++  - api-types.ts 含 cross_repo/repos 字段且 gen:types 重跑零漂移
++verify:
++  - cd frontend && pnpm exec tsc --noEmit
++  - cd frontend && pnpm vitest run src/components/changes/__tests__/scope-audit-command-card.test.tsx src/components/mobile/mobile-change-detail.test.tsx src/components/changes/__tests__/quicklog-drawer.test.tsx
++constraints:
++  - 布局/色阶走主题 token 与语义类（brand-* 做主仓标识、success/warning/error 既有阶），不手写 hex（CLAUDE.md 规则 20）
++  - 回退形态 DOM/testid 不变（旧测试零改挂）；分组形态新 testid 带 repo 前缀防冲突
++  - 移动端不做专属布局（import 复用自动继承）；禁跑全量测试（CLAUDE.md 规则 0）
++---
++
++<!-- 骨架由 sillyspec taskcard 生成（LF 行尾 + frontmatter 已闭合 + 硬校验 9 字段齐全）。
++     用 Edit tool 填充上方占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等），
++     勿用 Write 整文件重写——会引入 CRLF 行尾/漏闭合 ---/漏字段回归。
++     ⚠️ plan --done 硬校验会拦截未替换的占位符（FR-XX / D-XXX / src/example/file.ts /
++     一句话说明这个 task / 具体步骤 1 / 可验证的验收条件 1 / 边界约束 1）——占位符视同缺字段。
++     target_files 格式（可选，对账用精确文件级意图声明，与 allowed_paths 语义不同）：
++                    精确文件路径（仓根相对、正斜杠），当前不存在、将由本 task 新建的文件加
++                    NEW: 前缀（如 NEW:src/foo.js）；禁 glob（src/**）、禁目录前缀（src/dir/）、
++                    禁绝对路径；无明确文件级意图时保留 [] 占位行不动。
++     implementation/acceptance 里的源码位置同样写仓根相对全路径+行号（src/foo.js:123）——
++                    裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词
++                    窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。
++     可选字段按需插进上方 frontmatter（规则见 taskcard-rules）：
++     repo:          仅跨仓 task 填（local.yaml repos: 注册的仓 key；缺省=main。allowed_paths 相对该仓根写，
++                    禁止带仓库名前缀/绝对路径——review 对账按仓根相对路径匹配，带前缀永不命中）
++     provides:      仅当本 task 给其他 task 提供接口/DTO/响应时填
++     expects_from:  仅当本 task 消费其他 task 的契约时填
++     related_tests: 仅当本 task 改动导致既有测试断言失效时填（测试路径须同时进 allowed_paths） -->
+
+diff --git a/test/taskcard-frontmatter-hardgate.test.mjs b/test/taskcard-frontmatter-hardgate.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/taskcard-frontmatter-hardgate.test.mjs
+@@ -0,0 +1,313 @@
++/**
++ * task 卡 frontmatter 非法 YAML 硬门禁测试（2026-09-20-taskcard-yaml-hardgate task-04）。
++ *
++ * 夹具：test/fixtures/taskcard-bad-yaml/task-0{1,2,3}.md——multi-agent-platform 仓
++ * 2026-09-20-scope-audit-cross-repo-platform 变更三张原卡整卡拷贝（字节原样，坏行就是夹具）。
++ * 坏因：provides/expects_from 值为含未引号方括号+全角括号的 flow 序列，js-yaml 抛
++ * `missed comma between flow collection entries`。坏行实测 20/22/26（独立审查 node 实测修正：
++ * 调查报告的 19/21/25 是 YAML 文本内 1 基行号，文件行号 +1）。
++ *
++ * 覆盖（design AC-01~07）：
++ * AC-01 parseTaskFrontmatter 行:列断言（20/22/26 + 列 35/17/78）
++ * AC-02 validatePlanFeasibility 坏卡阻断（恰 N 条 0b error，无其他假阳性）
++ * AC-03 parseTaskContracts yamlError 显式降级键
++ * AC-04 validateCrossTaskContracts 坏卡零假阳性契约错误（D-001@v2 纯契约语义）
++ * AC-05 parseTaskAcceptance 三态契约
++ * AC-06 探针 7 渲染区分「frontmatter 非法 YAML」与「真无 acceptance」防御行
++ * AC-07 重复键双报豁免（顶层重复 :1298 独占；嵌套重复 0b 兜底）
++ */
++import { describe, it, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { fileURLToPath } from 'node:url'
++
++import { splitFrontmatter, parseTaskFrontmatter } from '../src/taskcard-frontmatter.js'
++import { parseTaskContracts, validateCrossTaskContracts, validatePlanFeasibility } from '../src/stages/plan-postcheck.js'
++import { parseTaskAcceptance, runVerifyProbes, generateVerifyResultSkeleton } from '../src/verify-probes.js'
++
++const __dirname = dirname(fileURLToPath(import.meta.url))
++const FIXTURE_DIR = join(__dirname, 'fixtures', 'taskcard-bad-yaml')
++const fixture = (n) => readFileSync(join(FIXTURE_DIR, `task-${n}.md`), 'utf8')
++
++// 三卡坏行与列（mark+1 换算；AC-01 锚——换算错位即此断言挂，design R-01）
++const BAD_POS = { '01': { line: 20, column: 35 }, '02': { line: 22, column: 17 }, '03': { line: 26, column: 78 } }
++
++// ─── AC-01：共享解析源 ────────────────────────────────────────────────────
++describe('parseTaskFrontmatter（AC-01）', () => {
++  it('三张真实坏卡：!ok + 行:列精确 + js-yaml 原始 message', () => {
++    for (const n of ['01', '02', '03']) {
++      const r = parseTaskFrontmatter(fixture(n))
++      assert.equal(r.ok, false, `task-${n} 应 ok=false`)
++      assert.equal(r.hasFrontmatter, true)
++      assert.equal(r.fm, null)
++      assert.ok(r.error, `task-${n} error 在场`)
++      assert.equal(r.error.line, BAD_POS[n].line, `task-${n} error.line 应为文件 1 基行 ${BAD_POS[n].line}（mark.line+2）`)
++      assert.equal(r.error.column, BAD_POS[n].column, `task-${n} error.column 应为 1 基列 ${BAD_POS[n].column}（mark.column+1）`)
++      assert.ok(r.error.message.includes('missed comma between flow collection entries'), `task-${n} message 含 js-yaml 原始信息：${r.error.message}`)
++    }
++  })
++
++  it('合法 frontmatter → ok=true + fm 对象 + error=null', () => {
++    const r = parseTaskFrontmatter('---\nid: task-01\nacceptance:\n  - a\n---\nbody')
++    assert.equal(r.ok, true)
++    assert.equal(r.hasFrontmatter, true)
++    assert.equal(r.fm.id, 'task-01')
++    assert.deepEqual(r.fm.acceptance, ['a'])
++    assert.equal(r.error, null)
++  })
++
++  it('无 frontmatter → ok=true + hasFrontmatter=false（不是错误）', () => {
++    const r = parseTaskFrontmatter('no frontmatter here')
++    assert.equal(r.ok, true)
++    assert.equal(r.hasFrontmatter, false)
++    assert.equal(r.fm, null)
++    assert.equal(r.error, null)
++  })
++
++  it('splitFrontmatter：CRLF 容错 + yamlStartLine 恒 2', () => {
++    const lf = splitFrontmatter('---\nid: x\n---\n')
++    assert.deepEqual([lf.has, lf.yamlStartLine], [true, 2])
++    const crlf = splitFrontmatter('---\r\nid: x\r\n---\r\n')
++    assert.equal(crlf.has, true, 'CRLF 卡提取不炸（界定口径含 \\r 容错）')
++    assert.equal(splitFrontmatter('nothing').has, false)
++  })
++})
++
++// ─── AC-02 / AC-07：feasibility 0b 硬校验 ─────────────────────────────────
++describe('validatePlanFeasibility 步骤 0b（AC-02/AC-07）', () => {
++  let changeDir
++  const tasksDir = () => join(changeDir, 'tasks')
++  beforeEach(() => {
++    changeDir = join(tmpdir(), `sillyspec-hardgate-${Math.random().toString(36).slice(2)}`)
++    mkdirSync(tasksDir(), { recursive: true })
++  })
++  afterEach(() => {
++    try { rmSync(changeDir, { recursive: true, force: true }) } catch {}
++  })
++
++  it('AC-02：三张坏卡 → ok=false，恰 3 条 0b error（文件:行:列），无其他假阳性', () => {
++    for (const n of ['01', '02', '03']) {
++      writeFileSync(join(tasksDir(), `task-${n}.md`), fixture(n))
++    }
++    const r = validatePlanFeasibility(changeDir, null)
++    assert.equal(r.ok, false)
++    const gate = r.errors.filter(e => e.includes('frontmatter 非法 YAML'))
++    assert.equal(gate.length, 3, `应恰 3 条 0b error（实际 errors=${JSON.stringify(r.errors)}）`)
++    assert.ok(gate.some(e => e.includes('task-01.md:20:35')), 'task-01 行:列在文案中')
++    assert.ok(gate.some(e => e.includes('task-02.md:22:17')), 'task-02 行:列在文案中')
++    assert.ok(gate.some(e => e.includes('task-03.md:26:78')), 'task-03 行:列在文案中')
++    assert.equal(r.errors.length, 3, `坏卡只报 0b 不产其他假阳性（实际 ${r.errors.length} 条）`)
++  })
++
++  it('AC-07：顶层重复键 → :1298 文案独占，0b 双报豁免', () => {
++    const dupTop = [
++      '---',
++      'id: task-01',
++      "title: 't'",
++      "title_zh: '中'",
++      'depends_on: []',
++      'allowed_paths:',
++      '  - src/foo.js',
++      'goal: >',
++      '  first',
++      'goal: >',
++      '  second',
++      'implementation:',
++      '  - i',
++      'acceptance:',
++      '  - a',
++      'verify:',
++      '  - node --check src/foo.js',
++      'constraints:',
++      '  - c',
++      '---',
++      'body',
++    ].join('\n')
++    writeFileSync(join(tasksDir(), 'task-01.md'), dupTop)
++    const r = validatePlanFeasibility(changeDir, null)
++    assert.equal(r.ok, false)
++    assert.ok(r.errors.some(e => e.includes('顶层键 goal 重复出现')), ':1298 重复键文案在场')
++    assert.equal(r.errors.filter(e => e.includes('frontmatter 非法 YAML')).length, 0,
++      `0b 跳过不双报（实际 errors=${JSON.stringify(r.errors)}）`)
++  })
++
++  it('AC-07：嵌套重复键（顶格正则够不到）→ 0b 兜底上报', () => {
++    const nestedDup = [
++      '---',
++      'id: task-01',
++      "title: 't'",
++      "title_zh: '中'",
++      'depends_on: []',
++      'allowed_paths:',
++      '  - src/foo.js',
++      'meta:',
++      '  a: 1',
++      '  a: 2',
++      'goal: >',
++      '  g',
++      'implementation:',
++      '  - i',
++      'acceptance:',
++      '  - a',
++      'verify:',
++      '  - node --check src/foo.js',
++      'constraints:',
++      '  - c',
++      '---',
++      'body',
++    ].join('\n')
++    writeFileSync(join(tasksDir(), 'task-01.md'), nestedDup)
++    const r = validatePlanFeasibility(changeDir, null)
++    assert.equal(r.ok, false)
++    const gate = r.errors.filter(e => e.includes('frontmatter 非法 YAML'))
++    assert.equal(gate.length, 1, '嵌套重复键由 0b 兜底（唯一上报源）')
++    assert.ok(gate[0].includes('duplicated mapping key'), `message 含 js-yaml 重复键信息：${gate[0]}`)
++  })
++
++  it('好卡（合法 YAML 九字段全）→ 零新增错误', () => {
++    writeFileSync(join(tasksDir(), 'task-01.md'), [
++      '---',
++      'id: task-01',
++      "title: 'good'",
++      "title_zh: '好卡'",
++      'depends_on: []',
++      'allowed_paths:',
++      '  - src/foo.js',
++      'provides:',
++      '  - contract: Demo',
++      '    fields:',
++      "      - 'field a'",
++      'goal: >',
++      '  g',
++      'implementation:',
++      '  - i',
++      'acceptance:',
++      '  - a1',
++      'verify:',
++      '  - node --check src/foo.js',
++      'constraints:',
++      '  - c',
++      '---',
++      'body',
++    ].join('\n'))
++    const r = validatePlanFeasibility(changeDir, null)
++    assert.deepEqual(r.errors, [], `好卡零错误（实际 ${JSON.stringify(r.errors)}）`)
++  })
++})
++
++// ─── AC-03 / AC-04：契约面 ────────────────────────────────────────────────
++describe('契约面（AC-03/AC-04）', () => {
++  let changeDir
++  const tasksDir = () => join(changeDir, 'tasks')
++  beforeEach(() => {
++    changeDir = join(tmpdir(), `sillyspec-hardgate-ct-${Math.random().toString(36).slice(2)}`)
++    mkdirSync(tasksDir(), { recursive: true })
++  })
++  afterEach(() => {
++    try { rmSync(changeDir, { recursive: true, force: true }) } catch {}
++  })
++
++  it('AC-03：parseTaskContracts 坏卡 → 空契约 + yamlError 非 null（显式降级不冒充）', () => {
++    const p = parseTaskContracts(fixture('02'))
++    assert.deepEqual(p.provides, [])
++    assert.deepEqual(p.expectsFrom, {})
++    assert.ok(p.yamlError, 'yamlError 在场')
++    assert.equal(p.yamlError.line, BAD_POS['02'].line)
++    assert.ok(p.yamlError.message.includes('missed comma'))
++  })
++
++  it('AC-03：合法卡 → 契约内容 + yamlError=null', () => {
++    const p = parseTaskContracts([
++      '---',
++      'id: task-01',
++      'provides:',
++      '  - contract: Demo',
++      '    fields:',
++      "      - 'f1'",
++      '---',
++      'body',
++    ].join('\n'))
++    assert.equal(p.provides.length, 1)
++    assert.equal(p.provides[0].contract, 'Demo')
++    assert.equal(p.yamlError, null)
++  })
++
++  it('AC-04：validateCrossTaskContracts 对三张坏卡零假阳性（纯契约语义，阻断归 0b）', () => {
++    for (const n of ['01', '02', '03']) {
++      writeFileSync(join(tasksDir(), `task-${n}.md`), fixture(n))
++    }
++    const r = validateCrossTaskContracts(changeDir)
++    assert.equal(r.ok, true, `坏卡不产假阳性契约错误（实际 ${JSON.stringify(r.errors)}）`)
++    assert.equal(r.errors.length, 0)
++  })
++})
++
++// ─── AC-05 / AC-06：verify 探针面 ─────────────────────────────────────────
++describe('verify 探针面（AC-05/AC-06）', () => {
++  it('AC-05：parseTaskAcceptance 三态', () => {
++    const bad = parseTaskAcceptance(fixture('01'))
++    assert.equal(bad.status, 'invalid-yaml')
++    assert.deepEqual(bad.acceptance, [])
++    assert.ok(bad.error && bad.error.line === BAD_POS['01'].line)
++
++    const none = parseTaskAcceptance('no frontmatter here')
++    assert.equal(none.status, 'no-frontmatter')
++
++    const okArr = parseTaskAcceptance('---\nid: x\nacceptance:\n  - a\n  - b\n---\n')
++    assert.equal(okArr.status, 'ok')
++    assert.deepEqual(okArr.acceptance, ['a', 'b'])
++    assert.equal(okArr.error, null)
++
++    const okNone = parseTaskAcceptance('---\nid: x\n---\n')
++    assert.equal(okNone.status, 'ok')
++    assert.deepEqual(okNone.acceptance, [])
++  })
++
++  it('AC-06：坏卡渲染「frontmatter 非法 YAML」行，不渲染假防御行；真无 acceptance 保留防御行', () => {
++    const proj = join(tmpdir(), `sillyspec-hardgate-p7-${Math.random().toString(36).slice(2)}`)
++    const changeDir = join(proj, '.sillyspec', 'changes', 'c9')
++    mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++    try {
++      // 坏卡（真实夹具）+ 真无 acceptance 的合法卡并列
++      writeFileSync(join(changeDir, 'tasks', 'task-01.md'), fixture('01'))
++      writeFileSync(join(changeDir, 'tasks', 'task-02.md'), [
++        '---',
++        'id: task-02',
++        "title: 'no-acc'",
++        "title_zh: '无验收卡'",
++        'depends_on: []',
++        'allowed_paths:',
++        '  - src/foo.js',
++        'goal: >',
++        '  g',
++        'implementation:',
++        '  - i',
++        'acceptance: []',
++        'verify:',
++        '  - node --check src/foo.js',
++        'constraints:',
++        '  - c',
++        '---',
++        'body',
++      ].join('\n'))
++      const r = runVerifyProbes({ cwd: proj, changeName: 'c9' })
++      const t1 = r.probe7.tasks.find(t => t.task === 'task-01')
++      const t2 = r.probe7.tasks.find(t => t.task === 'task-02')
++      assert.ok(t1, '坏卡不因解析失败被跳过')
++      assert.ok(t1.fmError, '坏卡条目挂 fmError')
++      assert.equal(t1.fmError.line, BAD_POS['01'].line)
++      assert.ok(!t2.fmError, '合法无验收卡不挂 fmError')
++
++      const skeleton = generateVerifyResultSkeleton(r)
++      assert.ok(skeleton.includes('frontmatter 非法 YAML（task-01.md:20:35'), `骨架渲染坏 YAML 行带行:列（实际片段：${skeleton.split('\n').find(l => l.includes('frontmatter 非法 YAML')) || '(未找到)'}）`)
++      const t1Section = skeleton.slice(skeleton.indexOf('**task-01**'), skeleton.indexOf('**task-02**'))
++      assert.ok(!t1Section.includes('卡无 acceptance'), '坏卡不渲染假防御行')
++      const t2Section = skeleton.slice(skeleton.indexOf('**task-02**'))
++      assert.ok(t2Section.includes('卡无 acceptance——防御'), '真无 acceptance 合法卡保留防御行')
++    } finally {
++      rmSync(proj, { recursive: true, force: true })
++    }
++  })
++})

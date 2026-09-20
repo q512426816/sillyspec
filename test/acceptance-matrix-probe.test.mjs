@@ -3,7 +3,7 @@
  *
  * 覆盖：
  * 1. acceptance 解析：string/array 双形态归一（口径锚 plan-postcheck best-effort 段）、无
- *    frontmatter → null、非法 YAML → []、无 acceptance 字段 → []（防御行）
+ *    frontmatter → status=no-frontmatter、非法 YAML → status=invalid-yaml、无 acceptance 字段 → []（防御行；2026-09-20-taskcard-yaml-hardgate 三态契约）
  * 2. 双源结构归属：allowed_paths 测试模式命中（test/ 前缀 + .test. 文件名 + NEW: 前缀剥离）
  *    ∪ marker 解析的 runId 下 review.json changedFiles test/ 前缀；marker 读不到 → execute-runs
  *    目录扫描兜底；review.json 读不到 → 该源空集不报错
@@ -151,12 +151,13 @@ try {
   const t3 = r.probe7.tasks.find(t => t.task === 'task-03')
   const t4 = r.probe7.tasks.find(t => t.task === 'task-04')
 
-  console.log('--- 1. acceptance 双形态解析 ---')
-  assert(parseTaskAcceptance('no frontmatter here') === null, '无 frontmatter → null（卡跳过）')
-  assert(parseTaskAcceptance('---\nid: x\nacceptance: 单条字符串\n---\n') .length === 1, 'string 形态 → 单条数组')
-  assert(parseTaskAcceptance('---\nid: x\nacceptance:\n  - a\n  - b\n---\n').length === 2, 'array 形态 → 逐条数组')
-  assert(parseTaskAcceptance('---\nid: x\n---\n').length === 0, '有 frontmatter 无 acceptance → []（防御）')
-  assert(parseTaskAcceptance('---\nid: x\nacceptance: [unclosed\n---\n').length === 0, '非法 YAML → []（防御不抛）')
+  console.log('--- 1. acceptance 双形态解析（2026-09-20-taskcard-yaml-hardgate 三态契约迁移） ---')
+  assert(parseTaskAcceptance('no frontmatter here').status === 'no-frontmatter', '无 frontmatter → status=no-frontmatter（卡跳过）')
+  assert(parseTaskAcceptance('---\nid: x\nacceptance: 单条字符串\n---\n').acceptance.length === 1, 'string 形态 → 单条数组')
+  assert(parseTaskAcceptance('---\nid: x\nacceptance:\n  - a\n  - b\n---\n').acceptance.length === 2, 'array 形态 → 逐条数组')
+  assert(parseTaskAcceptance('---\nid: x\n---\n').acceptance.length === 0, '有 frontmatter 无 acceptance → []（防御）')
+  const badYaml = parseTaskAcceptance('---\nid: x\nacceptance: [unclosed\n---\n')
+  assert(badYaml.status === 'invalid-yaml' && badYaml.acceptance.length === 0 && badYaml.error, '非法 YAML → status=invalid-yaml + error 在场（不抛不冒充）')
   assert(t1.acceptance.length === 2 && t2.acceptance.length === 1, `array/string 双形态归一（t1=${t1.acceptance.length} t2=${t2.acceptance.length}）`)
   assert(t2.acceptance[0].includes('ensureAcceptanceMatrixSection'), 'folded > 字符串条目内容完整')
   assert(t3.acceptance.length === 0, 'task-03 无 acceptance → 空数组（防御行）')

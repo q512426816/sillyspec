@@ -15,6 +15,7 @@ modules:
     paths:
       - src/stages/
       - src/plan-adopt-waves.js
+      - src/taskcard-frontmatter.js
 
   runtime:
     status: active

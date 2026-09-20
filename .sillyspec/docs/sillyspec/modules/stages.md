@@ -26,6 +26,8 @@ updated_at: 2026-09-20T00:00:00+08:00
 
 **Wave 拓扑守卫**（ql-20260920-011-c0d4 修复二，对撞三轮 execute 108 分钟串行收口）：`assessWaveStructure`（plan-postcheck.js，纯函数）按**可合并相邻波对**判定显式 Wave 排布质量——相邻 (W_i, W_{i+1}) 间无 depends_on 依赖边且两波 allowed_paths 并集无交集 = 合并不破坏任何约束的纯手工串行化；≥2 可合并对 → planPostcheck ERROR 硬拦（伪并行串行链：三轮形态 13 任务 6 波全串行被旧「方向合法静默放行」洞口放过）；显式波数=拓扑最小且 ≥5 → advisory 深链提示核 depends_on 过声明（真串行合法放行，阻断归阻断提示归提示）。刻意不用「波数≥5 且平均<2.5」启发式（误伤真依赖链）；同波共享文件分离合法不算可合并（与 validateWaveProposal 同口径，卡片缺失按空面）；topoSortWaves 本身是 Kahn 最早可行层分配不保守，只加拦截不动排序。
 
+**frontmatter YAML 硬校验（2026-09-20-taskcard-yaml-hardgate）**：validatePlanFeasibility 步骤 0b（紧随重复键检测）对 task 卡 frontmatter 整体 jsYaml 解析，失败即 ERROR 带 文件:行:列（js-yaml mark.line+2 换算文件 1 基行；双报豁免——message 含 duplicated mapping key 且 dupKeys 非空时让位重复键检测的键名+行号精确文案，嵌套重复键仍由 0b 兜底）。解析单一源 src/taskcard-frontmatter.js（stages/verify 双侧消费，除 js-yaml 零依赖防环）；parseTaskContracts 坏 YAML 返回 yamlError 显式降级键——契约对账不再以空对象冒充「无契约字段」空真过门。
+
 ## 关键逻辑
 
 每个阶段由 `export const definition = { name, title, description, steps: [...] }` 导出。steps 数组中每个 step 包含 name、prompt、outputHint、optional 字段。CLI 通过 `ProgressManager` 写入 SQLite，并以兼容旧 progress JSON 的对象跟踪每个 step 的执行状态。

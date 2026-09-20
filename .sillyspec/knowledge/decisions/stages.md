@@ -156,3 +156,11 @@ supersedes：D-002@v1（v1 的防护措施继续有效；本条补齐热修）
 理由：非目标：不改评审轮次（S2/S3 菜单不动）、不改填卡步骤（plan.js:500 的 batch 子代理另立变更或明示非目标）、不动事实面计量（⑥ 另走 quick）、不吞 verify 级联死锁两轮（已有 postmortem ql-013）。**合规项（本变更触 src/stages/*.js prompt，CLAUDE.md 规则 19）**：改完必须重跑 `node docs/prompt/_extract.mjs` 并同步 docs/prompt/*.md——列入文件清单，防 doc-ref-check 层面返工。**自指纪律**：本变更在评审域，brainstorm 完成门按当时 design 定档且只升不降——risk_level 必须在该 --done 前写入 frontmatter（否则关键词定顶格、把要省的钱先花掉）。
 故障面：无。
 退役判据：无。
+
+## D-001@v2 硬校验落点重定位——validatePlanFeasibility 入口（步骤 0b），非契约门禁预检
+状态：implemented
+变更：2026-09-20-taskcard-yaml-hardgate
+锚点：src/stages/plan-postcheck.js:1298（detectDuplicateTopKeys 调用点，0b 紧随其后）
+最近确认：2a9e4a5f
+理由：移至 validatePlanFeasibility 步骤 0b（紧随 :1298 重复键检测）。理由：①D-004@v1 先例——重复键（js-yaml 4 对重复映射键 throw）与非法 YAML 同为 jsYaml 抛错类，当时终裁「只能在 feasibility 入口单点拦截」，四处下游 catch 静默降级保留；②runPlanPostcheck 聚合器 1b 可行性先于 1c 契约校验同 pass 运行（src/stages/plan-postcheck.js:1741-1760），入口拦截即 plan 门全链路覆盖，「契约门禁空过」在聚合路径上不可能发生；③knowledge conventions「双维度报同一漂移信号时后加维度须豁免」——契约门禁再报 YAML 错=同一信号双维度重复刷屏。validateCrossTaskContracts 保持纯契约对账语义；parseTaskContracts 的 yamlError 键（显式降级注记）供独立消费方判读，jsdoc 注明 YAML 合法性归 feasibility。
+supersedes：D-001@v1 的「落点 validateCrossTaskContracts 预检」条目；v1 其余内容（共享解析源/三态契约/探针 7 文案区分/additive 键）不变。

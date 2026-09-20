@@ -225,7 +225,9 @@ console.log('--- 4c. 违规 + 提案脏（拓扑并 Wave 收敛出文件重叠�
   // 拓扑 W1=[02,03]（两者独立）→ 提案把共享 shared.js 的 02/03 并入同 Wave → 提案脏
   const { cwd, changeDir } = makeFixture({
     files: ['src/a.js', 'src/shared.js', 'src/shared.js'],
-    deps: { 'task-01': ["'task-02'"], 'task-02': [], 'task-03': [] },
+    // deps 传裸 ID（card() 模板统一加引号）——预引号会叠成 ''task-02'' 双重引号=非法 YAML，
+    // 2026-09-20-taskcard-yaml-hardgate 起 feasibility 0b 硬拦（旧门禁不整体解析漏过）
+    deps: { 'task-01': ['task-02'], 'task-02': [], 'task-03': [] },
     waveLines: ['## Wave 1', '- task-01', '- task-02', '', '## Wave 2', '- task-03'],
   })
   const before = readFileSync(join(changeDir, 'plan.md'), 'utf8')

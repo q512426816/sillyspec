@@ -1,0 +1,100 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "e044ae5b3bd0a4366ff6ff5764ec82dea34ca744",
+  "totals": {
+    "files": 10,
+    "additions": 700,
+    "deletions": 50
+  },
+  "rows": [
+    {
+      "path": "meta.json",
+      "additions": 50,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "additions": 33,
+      "deletions": 19,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 42,
+      "deletions": 20,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/acceptance-matrix-probe.test.mjs",
+      "additions": 8,
+      "deletions": 7,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/cross-task-contracts.test.mjs",
+      "additions": 4,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/taskcard-frontmatter.js",
+      "additions": 57,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/fixtures/taskcard-bad-yaml/task-01.md",
+      "additions": 61,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/fixtures/taskcard-bad-yaml/task-02.md",
+      "additions": 64,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/fixtures/taskcard-bad-yaml/task-03.md",
+      "additions": 68,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/taskcard-frontmatter-hardgate.test.mjs",
+      "additions": 313,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "29f86c9d11a8e269835623b882c3961d3c7620651d1033cbe46ee67bcee09b48",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-20T14:47:45.658Z"
+}

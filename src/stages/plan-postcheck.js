@@ -21,6 +21,7 @@ import { parseFileChangeList, pathMatches } from '../change-list.js'
 import { getRule } from '../stage-contract-spec.js'
 import { TASKCARD_PLACEHOLDERS } from '../taskcard-placeholders.js'
 import { validateScriptCommands } from './cmd-existence.js'
+import { parseTaskFrontmatter } from '../taskcard-frontmatter.js'
 
 // ═══════════════════════════════════════════════════════════════
 // 解析工具（从 plan.js 迁移）
@@ -319,21 +320,20 @@ function hasTddOrVerify(content) {
 
 /**
  * 解析 task-NN.md 的跨任务契约字段 provides / expects_from
- * 用 js-yaml 解析 frontmatter（嵌套结构，正则不可靠）。
- * provides/expects_from 为可选字段；缺失或解析失败时返回空（不阻断）。
+ * 解析归一 taskcard-frontmatter.js 单一源（2026-09-20-taskcard-yaml-hardgate：此前本函数与
+ * verify-probes 各自提取+吞错，坏 YAML 冒充「无契约字段」致 [plan.cross-task-contract] 空真过门）。
+ * provides/expects_from 为可选字段；缺失返回空（不阻断）；frontmatter 非法 YAML 返回空 +
+ * yamlError 显式降级键（不冒充无字段——YAML 合法性由 validatePlanFeasibility 步骤 0b 硬拦，
+ * D-001@v2 单点拦截先例；yamlError 供独立消费方判读）。
  * @param {string} content - task 文件内容
- * @returns {{ provides: Array<{contract, fields}>, expectsFrom: Record<string, Array<{contract, needs}>> }}
+ * @returns {{ provides: Array<{contract, fields}>, expectsFrom: Record<string, Array<{contract, needs}>>,
+ *   yamlError: {message: string, line: number, column: number}|null }}
  */
 export function parseTaskContracts(content) {
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/)
-  if (!fmMatch) return { provides: [], expectsFrom: {} }
-  let fm
-  try {
-    fm = jsYaml.load(fmMatch[1]) || {}
-  } catch {
-    // frontmatter 非合法 YAML（老格式/手写不规范）—— 当作无契约字段，不阻断
-    return { provides: [], expectsFrom: {} }
-  }
+  const parsed = parseTaskFrontmatter(content)
+  if (!parsed.hasFrontmatter) return { provides: [], expectsFrom: {}, yamlError: null }
+  if (!parsed.ok) return { provides: [], expectsFrom: {}, yamlError: parsed.error }
+  const fm = parsed.fm
 
   const provides = Array.isArray(fm.provides)
     ? fm.provides.map(p => ({
@@ -355,7 +355,7 @@ export function parseTaskContracts(content) {
     }
   }
 
-  return { provides, expectsFrom }
+  return { provides, expectsFrom, yamlError: null }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1300,6 +1300,21 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
       errors.push(`${dupTaskId || file}: frontmatter 顶层键 ${dup.key} 重复出现 ${dup.lines.length} 次（L${dup.lines.join('、L')}）——骨架已自动反填的键（如 depends_on）勿重复手填，保留正确一处删除其余`)
     }
 
+    // 0b. frontmatter YAML 合法性硬校验（2026-09-20-taskcard-yaml-hardgate FR-02 / D-001@v2——
+    // D-004@v1 重复键拦截的同类泛化：jsYaml 抛错族错误只能在 feasibility 入口单点拦截，
+    // 否则下游 4 处 catch 静默降级令 [plan.cross-task-contract] 空真过门。双报豁免（双维度
+    // 同信号须豁免惯例）：message 含 duplicated mapping key 且 dupKeys 非空时跳过——上方 0
+    // 已用键名+行号精确上报；嵌套重复键（detectDuplicateTopKeys 顶格正则够不到）仍由此兜底。
+    const fmParse = parseTaskFrontmatter(content)
+    if (!fmParse.ok) {
+      const isDupReported = dupKeys.length > 0 && /duplicated mapping key/i.test(fmParse.error.message)
+      if (!isDupReported) {
+        errors.push(
+          `${dupTaskId || file}: frontmatter 非法 YAML（${file}:${fmParse.error.line}:${fmParse.error.column} ${fmParse.error.message}）——契约/验收/标量字段全链路不可读，plan 门禁拒绝放行；修复卡片 frontmatter（值含方括号/全角括号时加引号或改块式列表）`
+        )
+      }
+    }
+
     // 1. 必要字段检查
     const taskId = (fm.match(/^id:\s*(.+)/m)?.[1] || '').trim()
     const title = (fm.match(/^title:\s*(.+)/m)?.[1] || '').trim()
@@ -1374,12 +1389,11 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     //    不存在文件一律跳过，且至少读到一个源文件才比对（防全读不到 → 全标识符误报）。
     if (projectRoot && hasAcceptance && allowedPaths.length > 0) {
       let acceptanceText = ''
-      try {
-        const fmObj = jsYaml.load(fm) || {}
-        if (typeof fmObj.acceptance === 'string') acceptanceText = fmObj.acceptance
-        else if (Array.isArray(fmObj.acceptance)) acceptanceText = fmObj.acceptance.join('\n')
-      } catch {
-        // frontmatter 非法 YAML（feasibility 未对 fm 做 YAML 解析，可能字面合法但语义复杂）→ 跳过 best-effort
+      // 复用步骤 0b 的 fmParse（2026-09-20-taskcard-yaml-hardgate）：不再重复 jsYaml.load；
+      // 坏卡已被 0b 阻断，此处 ok=false 仅防御性跳过 best-effort（0 告警不误拦）
+      if (fmParse.ok && fmParse.fm) {
+        if (typeof fmParse.fm.acceptance === 'string') acceptanceText = fmParse.fm.acceptance
+        else if (Array.isArray(fmParse.fm.acceptance)) acceptanceText = fmParse.fm.acceptance.join('\n')
       }
       if (acceptanceText) {
         const IDENT_RE = /(?<![A-Za-z])[a-z]+(?:_[a-z]+)+|(?<![A-Za-z])[a-z]+(?:[A-Z][a-z]+)+/g

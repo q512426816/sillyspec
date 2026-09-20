@@ -74,11 +74,13 @@ describe('parseTaskContracts', () => {
     assert.deepEqual(expectsFrom, {})
   })
 
-  it('非法 YAML frontmatter 容错返回空（不阻断）', () => {
+  it('非法 YAML frontmatter 返回空 + yamlError 显式降级键（不阻断对账，合法性归 feasibility 0b）', () => {
     const content = '---\nid: task-01\nbroken: [a, b\n---\ngoal: >\n  bad'
-    const { provides, expectsFrom } = parseTaskContracts(content)
+    const { provides, expectsFrom, yamlError } = parseTaskContracts(content)
     assert.deepEqual(provides, [])
     assert.deepEqual(expectsFrom, {})
+    assert.ok(yamlError, 'yamlError 在场（显式降级，不冒充无契约字段）')
+    assert.equal(typeof yamlError.line, 'number')
   })
 
   it('无 frontmatter 返回空', () => {

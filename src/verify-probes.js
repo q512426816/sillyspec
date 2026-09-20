@@ -26,7 +26,6 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
-import jsYaml from 'js-yaml'
 import { gitQuiet, unquoteGitPath } from './git-helper.js'
 import { hasUnconfirmedPrefill } from './prefill.js'
 import {
@@ -36,6 +35,7 @@ import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDecisions } from './decision-distill.js'
 import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+import { parseTaskFrontmatter } from './taskcard-frontmatter.js'
 import { RECEIPT_SOURCE_CROSS_LAYER_RE as RECEIPT_CROSS_LAYER_RE, RECEIPT_SOURCE_UNIT_RE as RECEIPT_UNIT_RE, CLI_SMOKE_SOURCE_MARK as SMOKE_RECEIPT_SOURCE_MARK } from './change-risk-profile.js'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { resolveSpecDir, resolveRuntimeRoot, detectWorktreeSpecDrift } from './run/shared.js'
@@ -1713,26 +1713,34 @@ const PROBE7_NONTESTABLE_RE = /文档|部署|doc|deploy|manual|config/i
 
 /**
  * 解析 task-NN.md frontmatter 的 acceptance（string/array 双形态归一为数组）。
- * 口径锚 src/stages/plan-postcheck.js acceptance best-effort 段（string → 原文单条、array →
- * 逐条）——不 import 它：parseTaskContracts 只返回 provides/expects_from 不含 acceptance。
+ * 解析归一 taskcard-frontmatter.js 单一源（2026-09-20-taskcard-yaml-hardgate：此前坏 YAML
+ * catch 返回 [] 冒充「无 acceptance」，探针 7 渲染假防御文案）——status 三态让调用方区分
+ * 「真无 acceptance」与「frontmatter 非法 YAML」。口径锚 src/stages/plan-postcheck.js
+ * acceptance best-effort 段（string → 原文单条、array → 逐条）。
  * @param {string} content task 卡全文
- * @returns {string[]|null} acceptance 条目数组；null = 无 frontmatter（调用方跳过该卡）；
- *   frontmatter 在场但无 acceptance / 非法 YAML → []（防御行，plan-postcheck 已拦缺失）
+ * @returns {{ status: 'no-frontmatter'|'invalid-yaml'|'ok', acceptance: string[],
+ *   error: {message: string, line: number, column: number}|null }}
+ *   no-frontmatter = 无 frontmatter（调用方跳过该卡）；invalid-yaml = frontmatter 非法 YAML
+ *   （acceptance 不可读，error 带文件 1 基行:列）；ok = 合法解析，acceptance 归一数组
+ *   （frontmatter 在场但无 acceptance → []，此时防御行为真——plan-postcheck 已拦缺失）
  */
 export function parseTaskAcceptance(content) {
-  const fmMatch = String(content || '').match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  if (!fmMatch) return null
-  try {
-    const fmObj = jsYaml.load(fmMatch[1]) || {}
-    if (typeof fmObj.acceptance === 'string') {
-      const t = fmObj.acceptance.trim()
-      return t ? [t] : []
+  const parsed = parseTaskFrontmatter(content)
+  if (!parsed.hasFrontmatter) return { status: 'no-frontmatter', acceptance: [], error: null }
+  if (!parsed.ok) return { status: 'invalid-yaml', acceptance: [], error: parsed.error }
+  const fmObj = parsed.fm || {}
+  if (typeof fmObj.acceptance === 'string') {
+    const t = fmObj.acceptance.trim()
+    return { status: 'ok', acceptance: t ? [t] : [], error: null }
+  }
+  if (Array.isArray(fmObj.acceptance)) {
+    return {
+      status: 'ok',
+      acceptance: fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim()),
+      error: null,
     }
-    if (Array.isArray(fmObj.acceptance)) {
-      return fmObj.acceptance.filter(x => typeof x === 'string' && x.trim() !== '').map(x => x.trim())
-    }
-  } catch { /* frontmatter 非法 YAML → 防御性空（plan-postcheck 侧已拦） */ }
-  return []
+  }
+  return { status: 'ok', acceptance: [], error: null }
 }
 
 /**
@@ -1939,6 +1947,12 @@ function renderProbe7Lines(p7) {
   for (const t of (p7.tasks || [])) {
     L.push('')
     L.push(`**${t.task}**`)
+    if (t.fmError) {
+      // 坏 YAML 如实陈述（2026-09-20-taskcard-yaml-hardgate）：非「无 acceptance」防御——
+      // plan 门禁 0b 硬校验应已拦截；已过 plan 门仍见此行 = 门禁失效信号（可反馈工具缺陷）
+      L.push(`- ⚠️ frontmatter 非法 YAML（${t.task}.md:${t.fmError.line}:${t.fmError.column} ${mdEscapeCell(t.fmError.message, 160)}）——acceptance 不可读，本行非「无 acceptance」防御；plan 门禁 frontmatter 硬校验应已拦截，若已过 plan 门仍见此行即门禁失效信号`)
+      continue
+    }
     if (!Array.isArray(t.acceptance) || t.acceptance.length === 0) {
       L.push('- （卡无 acceptance——防御，plan-postcheck 已拦）')
       continue
@@ -2138,10 +2152,17 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
       try {
         for (const f of readdirSync(tasksDir).filter(n => /^task-\d+\.md$/.test(n)).sort()) {
           const raw = readFileSync(join(tasksDir, f), 'utf8')
-          const acceptance = parseTaskAcceptance(raw)
-          if (acceptance === null) continue // 无 frontmatter → 跳过（plan-postcheck 已拦）
+          // 三态分流（2026-09-20-taskcard-yaml-hardgate）：no-frontmatter 跳卡（原 null 语义）；
+          // invalid-yaml 挂 fmError 进条目——渲染层区分「坏 YAML」与「真无 acceptance」防御行
+          const parsed = parseTaskAcceptance(raw)
+          if (parsed.status === 'no-frontmatter') continue // 无 frontmatter → 跳过（plan-postcheck 已拦）
           const fmId = (raw.match(/^id:\s*(\S+)/m) || [])[1]
-          cards.push({ task: fmId || f.replace(/\.md$/, ''), acceptance, raw })
+          cards.push({
+            task: fmId || f.replace(/\.md$/, ''),
+            acceptance: parsed.acceptance,
+            fmError: parsed.status === 'invalid-yaml' ? parsed.error : null,
+            raw,
+          })
         }
       } catch { /* tasks 目录不可读 → applicable 维持 false */ }
       probe7.applicable = cards.length > 0
@@ -2196,6 +2217,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
         probe7.tasks.push({
           task: card.task,
           acceptance: card.acceptance,
+          fmError: card.fmError || null,
           testFiles,
           hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
         })
