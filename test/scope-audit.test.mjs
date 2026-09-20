@@ -1334,7 +1334,7 @@ test('改进点 1：工具/平台脚手架软桶——计划外设施行打标 f
   } finally { cleanup(d) }
 })
 
-test('改进点 2：计划侧跨仓条目标注 crossRepo——⊘ 跨仓（本表不含），不恒「计划未动」', async () => {
+test('改进点 2（degraded 兼容形态）：注册不可达仓 → 跨仓行 ⊘ 恒 untouched + repos[] 降级条目，不恒「计划未动」占主仓计数', async () => {
   const d = makeRepo('sa-crossrepo-')
   try {
     mkdirSync(join(d, 'src'), { recursive: true })
@@ -1343,7 +1343,7 @@ test('改进点 2：计划侧跨仓条目标注 crossRepo——⊘ 跨仓（本�
     sh(d, ['commit', '-q', '-m', 'init'])
     const base = head(d)
     const specBase = join(d, '.sillyspec')
-    // local.yaml repos 段：注册跨仓 key（parseRepoRegistry 同款格式）
+    // local.yaml repos 段：注册跨仓 key（parseRepoRegistry 同款格式）——注册路径不可达 → degraded 形态
     mkdirSync(specBase, { recursive: true })
     writeFileSync(join(specBase, 'local.yaml'), [
       'repos:',
@@ -1381,19 +1381,106 @@ test('改进点 2：计划侧跨仓条目标注 crossRepo——⊘ 跨仓（本�
     const byPath = new Map(r.rows.map(x => [x.path, x]))
     assert.equal(byPath.get('src/main.js').verdict, 'planned', '主仓实改 planned')
     const auth = byPath.get('src/auth.py')
-    assert.ok(auth && auth.verdict === 'untouched', '跨仓条目无实际改动 → untouched 补行')
+    assert.ok(auth && auth.verdict === 'untouched', 'degraded 仓跨仓条目退 ⊘ 形态（恒 untouched 补行）')
     assert.equal(auth.crossRepo, 'sub-grid-security', '跨仓子段（key 标题）标 crossRepo')
     assert.equal(byPath.get('src/demo.py').crossRepo, 'spdemo', '跨仓子段（<key> 仓 后缀）标 crossRepo')
     assert.equal(byPath.get('src/shared.py').crossRepo, 'sub-grid-security', 'cross-repo: 前缀剥后标 crossRepo')
     assert.ok(!byPath.get('src/main.js').crossRepo, '主仓条目无 crossRepo 字段')
+    // repos[] 信封：degraded 仓条目（2026-09-20 scope-audit-cross-repo，D-006 fail-soft 不炸主仓表）
+    assert.ok(Array.isArray(r.repos), 'degraded 仓也进 repos[] 信封')
+    const sg = r.repos.find(x => x.key === 'sub-grid-security')
+    assert.ok(sg && sg.degraded === true, '不可达仓条目 degraded=true')
+    assert.ok(sg.degradedReason.includes('注册路径不可达'), `degradedReason 带不可达原因（实际 ${sg.degradedReason}）`)
+    assert.equal(sg.totals.untouched, 2, 'degraded 仓 totals 恒全 untouched（auth.py + shared.py）')
+    assert.ok(r.note && r.note.includes('跨仓 sub-grid-security 对账降级'), `note 逐仓降级说明（实际 ${r.note}）`)
     const out = renderScopeAuditTable(r)
-    assert.ok(out.includes('⊘ 跨仓（本表不含）'), '渲染跨仓独立标记')
+    assert.ok(out.includes('⊘ 跨仓（本表不含）'), 'degraded 仓跨仓行渲染保留 ⊘ 独立标记')
     assert.ok(out.includes('跨仓 3 文件'), '汇总单列跨仓计数')
-    assert.ok(out.includes('计划外请补 design.md 声明') === false || true, '出口指引行存在性不限定')
+    assert.ok(out.includes('跨仓 sub-grid-security：⊘ 对账降级'), '逐仓降级汇总行')
     assert.ok(!/⚠️ 计划未动 \d+ 文件/.test(out), '跨仓行不占 ⚠️ 计划未动笼统计数')
     assert.ok(r.note && r.note.includes('跨仓') && r.note.includes('sub-grid-security'),
       `note 交代跨仓段与去对应仓对账（实际 ${r.note}）`)
   } finally { cleanup(d) }
+})
+
+test('改进点 2（2026-09-20 分仓对账）：可达注册仓跨仓行真实三态——planned 带真实行数 + [仓key] 渲染标 + per-repo 汇总', async () => {
+  const d = makeRepo('sa-crossreal-')
+  const cross = makeRepo('sa-crossreal-x-')
+  try {
+    // 跨仓仓两笔提交 + execute-runs review 锡点（A 档锚：c1..c2 区间内新增 auth.py 两行）
+    mkdirSync(join(cross, 'src'), { recursive: true })
+    writeFileSync(join(cross, 'src', 'seed.js'), 's1\n')
+    sh(cross, ['add', '-A'])
+    sh(cross, ['commit', '-q', '-m', 'c1'])
+    const cb = head(cross)
+    writeFileSync(join(cross, 'src', 'auth.py'), 'a1\na2\n')
+    sh(cross, ['add', '-A'])
+    sh(cross, ['commit', '-q', '-m', 'c2'])
+    const ch = head(cross)
+
+    mkdirSync(join(d, 'src'), { recursive: true })
+    writeFileSync(join(d, 'src', 'main.js'), 'm1\n')
+    sh(d, ['add', '-A'])
+    sh(d, ['commit', '-q', '-m', 'init'])
+    const base = head(d)
+    const specBase = join(d, '.sillyspec')
+    mkdirSync(specBase, { recursive: true })
+    writeFileSync(join(specBase, 'local.yaml'), `repos:\n  crossA: ${cross.replace(/\\/g, '/')}\n`)
+    // execute-runs 锡点（change 戳归属本变更 + task-01 review repo=crossA）
+    const runDir = join(specBase, '.runtime', 'execute-runs', 'exec-20260920-010000')
+    mkdirSync(join(runDir, 'tasks', 'task-01'), { recursive: true })
+    writeFileSync(join(runDir, 'change'), 'xreal-change\n')
+    writeFileSync(join(runDir, 'tasks', 'task-01', 'review.json'), JSON.stringify({
+      schemaVersion: 1, task: 'task-01', repo: 'crossA', base: cb, head: ch,
+      specVerdict: 'pass', qualityVerdict: 'pass', changedFiles: [], requiredEvidence: [],
+    }))
+    const changeDir = join(specBase, 'changes', 'xreal-change')
+    mkdirSync(changeDir, { recursive: true })
+    writeFileSync(join(changeDir, 'design.md'), `# design（fixture）
+
+## 文件变更清单
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 修改 | src/main.js | 主仓实改 |
+
+### crossA
+
+| 操作 | 文件路径 | 说明 |
+|---|---|---|
+| 新增 | src/auth.py | 跨仓实改 |
+| 新增 | src/todo.py | 跨仓未动 |
+`)
+    writeWorktreeMeta(specBase, 'xreal-change', base)
+    writeFileSync(join(d, 'src', 'main.js'), 'm1\nm2\n')
+
+    const r = await computeChangeScopeAudit({ cwd: d, changeName: 'xreal-change' })
+    assert.equal(r.ok, true, `ok（degradedReason=${r.degradedReason}）`)
+    const byPath = new Map(r.rows.map(x => [x.path, x]))
+    const auth = byPath.get('src/auth.py')
+    assert.ok(auth, '可达仓跨仓实改文件进 rows')
+    assert.equal(auth.verdict, 'planned', '跨仓行真实三态：区间内实改 → planned（不恒 untouched）')
+    assert.equal(auth.crossRepo, 'crossA')
+    assert.equal(auth.planned, '新增', 'planned 携带清单 operation')
+    assert.equal(auth.additions, 2, 'planned 跨仓行带真实行数（A 档锡点窗口 numstat）')
+    assert.equal(auth.deletions, 0)
+    const todo = byPath.get('src/todo.py')
+    assert.equal(todo.verdict, 'untouched', '清单未动跨仓文件 untouched 补行')
+    assert.equal(todo.crossRepo, 'crossA')
+    // repos[] 信封：可达仓条目带锚点档与三态计数
+    assert.ok(Array.isArray(r.repos))
+    assert.equal(r.repos[0].key, 'main', 'main 条目首位')
+    const ra = r.repos.find(x => x.key === 'crossA')
+    assert.ok(ra && ra.degraded === false, '可达仓条目非 degraded')
+    assert.equal(ra.anchor.source, 'reviews-range', '锚点档透传（A 档）')
+    assert.equal(ra.totals.planned, 1)
+    assert.equal(ra.totals.untouched, 1)
+    // 渲染：真实三态带仓标 + per-repo 汇总（v1 ⊘ 不再出现）
+    const out = renderScopeAuditTable(r)
+    assert.ok(out.includes('✓ 计划内 [crossA]'), '跨仓行渲染带 [仓key] 标')
+    assert.ok(out.includes('跨仓 crossA：锚点'), '表尾 per-repo 汇总行（锚点档）')
+    assert.ok(!out.includes('⊘ 跨仓（本表不含）'), '可达仓跨仓行不再 ⊘')
+  } finally { cleanup(d); cleanup(cross) }
 })
 
 test('改进点 3：退栈排除的 planned(NEW:) 文件标 suspectedForeignDone——疑似他者已实现·已退栈', async () => {

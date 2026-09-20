@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-20-scope-audit-cross-repo",
+  "appliedAt": "2026-09-20T10:15:24.015Z",
+  "baseHash": "e9cbd1bd6637b34b2da9b6575dcc7dc346ade0c7",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "sha256": "c4558233763c9277a821ae8ef185e1f6e5feba3bd11b6b10987fe8498fc240c6"
+    },
+    {
+      "path": "src/cross-repo-reconcile.js",
+      "sha256": "0e93c920b44f2a17d8fa32061e9b98af652dd0013672cdf5869b8a8d6b5101b7"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "70b0b6d41ba65a4e0c6612a1e785183629dc5d7ee31cf5fe7774970749f1e7cf"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "803c3e73e568c9710de4c28619ecdb6423f83dbe994c13d07b02ed1722959964"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "sha256": "9a55483d0ded6efa86a145ee4f4aa5f577b6893779b064010cc89a3ef8a59bf9"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "sha256": "870ebbdbe56b14eca06c1e82bbbb1920290095ac4557be3398d8a3bb83e89ec7"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "sha256": "cc0f2baefa0ccda362190f4f749c37a9f8de3a1a46111da4d1b627271276c9c5"
+    },
+    {
+      "path": "test/scope-audit-cross-repo.test.mjs",
+      "sha256": "5cf81ac6e6ee7ccc75cb566678670c4628db1ad9f808c72795adee061ac930fa"
+    }
+  ]
+}

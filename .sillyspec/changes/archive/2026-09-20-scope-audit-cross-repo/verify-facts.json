@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-20-scope-audit-cross-repo",
+  "generatedAt": "2026-09-20T10:41:39.079Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "matches": 36,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-20-scope-audit-cross-repo",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "平台侧消费方（SillyHub daemon 投影 rows[].crossRepo/verdict 与 repos[] → 后端 schema → 前端按仓分组 UI）在 multi-agent-platform 仓独立变更，等本契约定型（已定型：design.md 接口定义节 = 契约 v2 终稿）",
+        "condition": "外仓按 design.md「接口定义」字段表开发；验收=平台对账卡对 f85a6650 类多仓变更显示三仓分组真实三态",
+        "severity": "advisory"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "存量旧快照（跨仓行恒 untouched、无 repos 键）不回算——「快照说什么是什么」契约（D-002@v1）",
+        "condition": "需要旧变更跨仓真实态时人工按 execute-runs reviews 锡点到对应仓 git diff（CLI 已在 note 中给指引文案）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/scope-audit-cross-repo.test.mjs",
+      "test/scope-audit.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-20T10:47:23.844Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

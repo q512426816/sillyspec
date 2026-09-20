@@ -2909,21 +2909,25 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   const decl = collectDeclaredTargetFiles(sb, changeName)
   // —— 跨仓 per-repo 对账（坑 cross-repo-reconcile-blindness，2026-09-15 复盘兑现 D-004 分期：
   // 此前 22 个跨仓文件在归档表全标「计划未动」、跨仓全靠人工到对应仓解释）——advisory 不阻断：
-  // 锚点是各仓 HEAD~1..HEAD 最近提交窗口（多 task 同仓只反映最近一笔，锚点脆弱期会产②类假
-  // 信号），只报告不翻转主仓状态。结果经 crossRepo 字段（gates 渲染明细）与 notes（摘要随
-  // 各状态出口流动）双通道出口。
+  // 锚点档经内核分级（A reviews 锡点区间 > B HEAD~1..HEAD 窗口 > C 未提交窗口，runtimeRoot/
+  // changeName 传参贯通喂 A 档 reviews 解析——评审 G2；锚点脆弱期会产②类假信号），只报告不
+  // 翻转主仓状态。结果经 crossRepo 字段（gates 渲染明细）与 notes（摘要随各状态出口流动）
+  // 双通道出口。
   let crossRepo = []
   if (decl.crossRepoCards.length > 0) {
     try {
-      crossRepo = reconcileCrossRepoDeclarations({ specBase: sb, cwd, declarationsByRepo: decl.crossRepoDeclarations })
+      crossRepo = reconcileCrossRepoDeclarations({ specBase: sb, cwd, declarationsByRepo: decl.crossRepoDeclarations, runtimeRoot: rt, changeName })
     } catch { crossRepo = [] /* 跨仓对账异常不拖垮主仓链（advisory 定位） */ }
     for (const label of decl.crossRepoCards) {
       notes.push(`跨仓 task 卡 ${label} 不进主仓对账（主仓 actual 对不上跨仓声明，D-004）——其声明已转 per-repo 对账（见下方跨仓对账段）`)
     }
     for (const r of crossRepo) {
+      // 锚点档动态化（task-03）：优先内核透传的 anchor.label（A/B/C/degraded 四档人类可读描述）；
+      // 旧形态无 anchor 字段 → 防御性回退原文案（该仓最近提交窗口）
+      const anchorTxt = r.anchor && typeof r.anchor.label === 'string' && r.anchor.label ? r.anchor.label : '该仓最近提交窗口'
       notes.push(r.degradedReason
         ? `跨仓 ${r.repo}：${r.degradedReason}`
-        : `跨仓 ${r.repo} 对账：声明 ${r.declaredCount} / 实测 ${r.actualCount} / 对上 ${r.matched.length} / ②缺 ${r.missing.length} / ③多 ${r.undeclared.length}${r.scaffoldCount > 0 ? `（另有 ${r.scaffoldCount} 脚手架已聚合）` : ''}——advisory（锚点=该仓最近提交窗口）`)
+        : `跨仓 ${r.repo} 对账：声明 ${r.declaredCount} / 实测 ${r.actualCount} / 对上 ${r.matched.length} / ②缺 ${r.missing.length} / ③多 ${r.undeclared.length}${r.scaffoldCount > 0 ? `（另有 ${r.scaffoldCount} 脚手架已聚合）` : ''}——advisory（锚点=${anchorTxt}）`)
     }
   }
   if (decl.cardCount === 0) {

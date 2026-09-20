@@ -1905,22 +1905,27 @@ export function writeReconcileRunResult({ runtimeRoot, changeName, envelope, res
  */
 /**
  * 打印跨仓 per-repo 对账结果（cross-repo-reconcile.js 产出的 advisory 明细，verify 块接线）。
- * 恒不阻断（返回 void）：跨仓 diff 锚点=各仓最近提交窗口，锚点脆弱期（已 commit 多笔/全在
- * working-tree）会产②类假信号——明细供人工裁决，不翻主仓对账状态。
+ * 恒不阻断（返回 void）：锚点档逐行携带（内核分级：A reviews 锡点区间 > B 最近提交窗口 >
+ * C 未提交窗口，anchor.label 透传），锚点脆弱期（已 commit 多笔/全在 working-tree）会产②类
+ * 假信号——明细供人工裁决，不翻主仓对账状态。
  * @param {Array<{repo:string,repoPath:string|null,declaredCount:number,actualCount:number,
  *   matched:string[],missing:Array<{task:string,path:string,isNew?:boolean}>,
- *   undeclared:string[],scaffoldCount:number,degradedReason:string|null}>|undefined} crossRepo
+ *   undeclared:string[],scaffoldCount:number,degradedReason:string|null,
+ *   anchor?:{source:string,base:string|null,head:string|null,label:string}}>|undefined} crossRepo
  */
 function printCrossRepoReconcile(crossRepo) {
   if (!Array.isArray(crossRepo) || crossRepo.length === 0) return
-  console.log(`\n🔀 跨仓 per-repo 对账（advisory 不阻断，锚点=各仓最近提交窗口）：`)
+  console.log(`\n🔀 跨仓 per-repo 对账（advisory 不阻断）：`)
   for (const r of crossRepo) {
     if (r.degradedReason) {
       console.warn(`   ⚠️ ${r.repo}：${r.degradedReason}`)
       continue
     }
     const flag = (r.missing.length > 0 || r.undeclared.length > 0) ? '⚠️ ' : '✅ '
-    console.log(`   ${flag}${r.repo}（${r.repoPath}）：声明 ${r.declaredCount} / 实测 ${r.actualCount} / 对上 ${r.matched.length} / ②缺 ${r.missing.length} / ③多 ${r.undeclared.length}${r.scaffoldCount > 0 ? ` / 脚手架聚合 ${r.scaffoldCount}` : ''}`)
+    // 锚点档标签（task-03）：有 anchor.label 时追加（A/B/C 档人类可读描述）；无 anchor（旧形态）
+    // 零输出——逐字兼容
+    const anchorTag = r.anchor && typeof r.anchor.label === 'string' && r.anchor.label ? `｜锚点 ${r.anchor.label}` : ''
+    console.log(`   ${flag}${r.repo}（${r.repoPath}）：声明 ${r.declaredCount} / 实测 ${r.actualCount} / 对上 ${r.matched.length} / ②缺 ${r.missing.length} / ③多 ${r.undeclared.length}${r.scaffoldCount > 0 ? ` / 脚手架聚合 ${r.scaffoldCount}` : ''}${anchorTag}`)
     for (const m of r.missing.slice(0, 10)) {
       console.warn(`      ②缺 ${m.task}: ${m.path}${m.isNew ? '（NEW: 声明新建，该仓未见）' : ''}——锚点窗口外已提交或多笔时可能假信号，到该仓 git log 核实`)
     }

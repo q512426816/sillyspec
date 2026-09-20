@@ -293,3 +293,66 @@
 - 场景：默认场景 — Given knowledge/fr 存在 active 条目缺场景正文，且其来源变更归档目录 requirements.md 在场；When sillyspec fr-backfill 执行；Then 按标题匹配补齐正文（幂等：已有正文的条目跳过；匹配失败警告不阻断）
 全文：.sillyspec/changes/archive/2026-09-20-fr-index-l2/requirements.md#FR-04
 最近确认：4222a90b
+
+## FR-core-engine-032 跨仓条目按仓真实对账
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 多仓变更（design 清单含跨仓子段/`cross-repo:` 前缀条目，repoKey 已在 local.yaml repos 注册）且变更已进入 exe；When computeChangeScopeAudit 运行；Then 跨仓行携带真实 `verdict`（planned/unplanned/untouched 三态，按该仓 actual × 声明面差集）、`additions/
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-01
+最近确认：50c29406
+
+## FR-core-engine-033 锚点分级
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given collectRepoActual 对某跨仓仓采集；When 依次判定锚点；Then 按优先级取首个可得档：①reviews-range（execute-runs task review 的 base..head 区间文件集并集，有 diffPa
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-02
+最近确认：50c29406
+
+## FR-core-engine-034 --json 契约仓库维度（第一交付物，additive）
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given `scope-audit --change <c> --json`；When 计划侧含跨仓条目且非预执行形态；Then 信封新增 `repos: [{key, repoPath, anchor, totals{files,additions,deletions,planned,u
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-03
+最近确认：50c29406
+
+## FR-core-engine-035 预执行与降级形态
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 变更未进入 execute（主仓三信号全无+四类证据全缺）或某跨仓仓 degraded；When computeChangeScopeAudit 运行；Then 预执行形态跨仓行保持清单视图（untouched+crossRepo 标注，不调内核——B/C 档 status 会捕该仓他人脏文件）；degraded 仓跨仓
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-04
+最近确认：50c29406
+
+## FR-core-engine-036 文本表与 --file
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given renderScopeAuditTable / getFileDiff 消费含跨仓行的结果；When 渲染/查询；Then 跨仓行 label 为真实三态带仓标（如「✓ 计划内 [sub-grid-security]」，degraded 仓保留 ⊘）；表尾出 per-repo 汇总行
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-05
+最近确认：50c29406
+
+## FR-core-engine-037 快照与冻结语义
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given execute --done 落快照 / 查询面读快照；When 结果对象含跨仓真实行与 repos[]；Then 新快照自动冻结（落盘链零改动）；查询面跨仓照快照回放（settled 回放 return 增量透传 snap.repos，旧快照无键不输出）；settled n
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-06
+最近确认：50c29406
+
+## FR-core-engine-038 共享内核单一真相源
+变更：2026-09-20-scope-audit-cross-repo
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given scope-audit 与 verify-postcheck 两消费方；When 跨仓 per-repo 采集；Then 均消费 collectRepoActual 共享内核（仓解析/路径归一/大小写折叠/porcelain 解析/锚点分级单点实现，行数采集留调用方）；reconc
+全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-07
+最近确认：50c29406

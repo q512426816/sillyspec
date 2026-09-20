@@ -116,7 +116,7 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec commit [--json]                 智能提交建议：收集 QUICKLOG/已勾 task/阶段产出语义，生成建议 message（只建议不执行）
   sillyspec verify-probes --change <name> [--init]  verify 机械探针（TODO 标记/测试覆盖/API 对账/删除对账）；--init 生成 verify-result.md 骨架
   sillyspec module-impact --change <name>       生成 module-impact.md 骨架（文件×模块归属按 module-map 预填 + 未匹配清单）
-  sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；已归档变更可查——快照记录态；advisory 只读不设门禁）
+  sillyspec scope-audit --change <name> [--json]  变更范围对账：计划×实际三态全表 + 行数（✓ 计划内/⚠️ 计划外/⚠️ 计划未动；quick 会话传 quick-<id> 出归属表；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照记录态；advisory 只读不设门禁）
   sillyspec module-docs-sync --change <name> [--note ...]  diff 归属模块 → sidecar 追加变更索引行 + 卡 updated_at 戳（幂等）
   sillyspec endpoints extract --change <name> [--task task-NN | --all-tasks] [--dir <dir>|--files <a.py,b.js>]  静态扫描路由装饰器生成 endpoints.json
   sillyspec endpoints baseline --change <name> [--spec-dir <path>] [--json]  拍变更前端点基线（幂等不覆盖；worktree 内跑自动锚主仓；归档 delta 端点增删 before 侧）
@@ -1419,7 +1419,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
       const saChangeIdx = args.indexOf('--change');
       const saChange = saChangeIdx >= 0 && args[saChangeIdx + 1] && !String(args[saChangeIdx + 1]).startsWith("--") ? args[saChangeIdx + 1] : null;
       if (!saChange) {
-        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表，附 [gate] 分级门禁画像——表格画像段与 --json gateProfile 字段；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff）；advisory 只读展示，不构成门禁');
+        console.error('用法: sillyspec scope-audit --change <name> [--file <path>] [--json] [--spec-dir <path>]\n  变更范围对账：计划×实际三态全表 + 行数（quick 会话传 quick-<8hex> 出归属表，附 [gate] 分级门禁画像——表格画像段与 --json gateProfile 字段；跨仓条目按 local.yaml repos 分仓真实对账——--json 出 repos[] 仓库维度汇总；已归档变更可查——快照冻结记录态）；--file <path> 看单文件变化内容（对账同源锚点的 git diff，跨仓行路由该仓锚点区间）；advisory 只读展示，不构成门禁');
         process.exit(2);
       }
       assertSafeChangeName(saChange, '--change 变更名');

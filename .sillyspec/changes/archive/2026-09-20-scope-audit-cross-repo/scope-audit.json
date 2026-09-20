@@ -1,0 +1,92 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "e9cbd1bd6637b34b2da9b6575dcc7dc346ade0c7",
+  "totals": {
+    "files": 9,
+    "additions": 1309,
+    "deletions": 93
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/core-engine.md",
+      "additions": 10,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 20,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/cross-repo-reconcile.js",
+      "additions": 232,
+      "deletions": 46,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/gates.js",
+      "additions": 10,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/scope-audit.js",
+      "additions": 303,
+      "deletions": 20,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "additions": 9,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/scope-audit.test.mjs",
+      "additions": 92,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/scope-audit-cross-repo.test.mjs",
+      "additions": 631,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "4e72d3fbf7a12d97704bdbdf7d60a604f800278fa850626a33edaf66152bf572",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-20T10:14:38.042Z"
+}

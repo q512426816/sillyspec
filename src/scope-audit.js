@@ -23,6 +23,13 @@
  *
  * 全 advisory（D-006）：不抛错阻断、不写门禁状态；任何异常 catch 后并入 degradedReason。
  * 纯读：不落盘、不改 guard/进度库。Windows 路径 \\→/ 归一，ESM-only，零新依赖。
+ *
+ * 跨仓分仓真实对账（2026-09-20 scope-audit-cross-repo task-02，design Wave 2）：full-flow
+ * 非预执行形态下，计划侧跨仓条目（parseFileChangeListDetailed 的 .repo 标注）按 repoKey 分
+ * 组调 collectRepoActual 共享内核（cross-repo-reconcile.js，task-01 单一真相源）在该仓取
+ * actual——跨仓行从 v1 恒 untouched（⊘ 本表不含）升级为真实三态 + 行数 + crossRepo 归属；
+ * 信封增量 repos[]（main 首位 + 各仓锚点/三态计数/degraded 态，--json 契约 v2 平台消费面）。
+ * degraded 仓退 v1 ⊘ 形态不炸主仓表；预执行形态不调内核（跨仓行保持清单形态）。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -32,8 +39,12 @@ import { computeGateProfile, resolveGateThresholds } from './quick-gate-profile.
 import { loadSpanRiskPatternsAllProjects } from './span-risk-surface.js'
 import { safeGit } from './git-helper.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
-import { classifyToolScaffold } from './worktree-apply.js'
+import { classifyToolScaffold, filterDeliverableFiles } from './worktree-apply.js'
 import { parseRepoRegistry } from './stages/plan-postcheck.js'
+// 跨仓 per-repo 采集共享内核（2026-09-20 scope-audit-cross-repo task-02 消费 task-01 产物）。
+// 无环确认：cross-repo-reconcile 的静态依赖链（git-helper/plan-postcheck/worktree-apply/
+// task-review 及其传递闭包）不 import 本模块——内核绝不 import scope-audit（评审 G3 定稿）。
+import { collectRepoActual } from './cross-repo-reconcile.js'
 import { _readWorktreeMeta } from './contract-matrix.js'
 
 /** quick 会话 id 形态（与 run/command.js :652 QUICK_SID_RE 同款——crypto.randomUUID 前 8 hex） */
@@ -573,6 +584,25 @@ function sumTotals(rows) {
 }
 
 /**
+ * per-repo 汇总（信封 repos[].totals，2026-09-20 scope-audit-cross-repo task-02 --json 契约 v2）：
+ * files/additions/deletions 沿 sumTotals 口径（binary 与 null 降级不计行数）+ 三态计数
+ * （verdict === 'planned'/'unplanned'/'untouched' 各自计数；行无 verdict 时不计三态——计划侧
+ * 降级形态的主仓行只有 files/additions/deletions，不出伪三态）。main 条目只喂主仓行、跨仓
+ * 条目只喂该仓行（调用方保证切片，函数本身不区分）。
+ */
+function repoTotals(rows) {
+  const list = Array.isArray(rows) ? rows : []
+  const t = { files: list.length, ...sumTotals(list.filter(r => r && typeof r === 'object')), planned: 0, unplanned: 0, untouched: 0 }
+  for (const r of list) {
+    if (!r || typeof r !== 'object') continue
+    if (r.verdict === 'planned') t.planned++
+    else if (r.verdict === 'unplanned') t.unplanned++
+    else if (r.verdict === 'untouched') t.untouched++
+  }
+  return t
+}
+
+/**
  * quick 模式对账：重跑 auditQuickCompletion 同款窗口归属（不改其判定语义，只消费结果）。
  * 他者会话声明索引与 --done 收尾同源实时采集（complete-handlers :1050 同款 merge），保证
  * foreignDeclared 豁免面与门禁口径一致（R-04：行数只对归属本会话的文件采集）。
@@ -926,20 +956,34 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
     const snap = readScopeSnapshot(changeDirInfo.dir, runtimeRoot, changeName)
     if (snap && snap.rows.length > 0) {
       const settleLabel = changeDirInfo.archived ? '已归档' : 'execute 已收尾（分支已清理，待 verify/archive）'
+      // repos[] 回放透传（2026-09-20 scope-audit-cross-repo，D-002@v1）：新快照（跨仓对账上线后
+      // execute --done 落盘，complete.js `...snap` 展开零改动自动携带）原样回放；旧快照无该键
+      // → undefined（JSON.stringify 自动省略——单仓/旧快照零新增字段，additive 契约）。
+      const snapRepos = Array.isArray(snap.repos) ? snap.repos : undefined
+      // 旧快照跨仓注记（R-07）：快照冻结于跨仓对账上线前（跨仓行恒 untouched 的 v1 ⊘ 形态、
+      // 无 repos 键）——照旧回放不重算（「快照说什么是什么」契约不破），注记指明人工渠道
+      // （该仓锚点锡点冻结在 execute-runs reviews，可人工 git diff 核实）。
+      const legacyCrossNote = !snapRepos && snap.rows.some(r => r && r.crossRepo)
+        ? '；快照冻结于跨仓对账上线前——跨仓段未按仓对账（⊘ 行为历史冻结值；如需跨仓真实态，该仓锚点锡点在 execute-runs reviews，可人工 git diff）'
+        : ''
       // 行数补采：快照可能落盘于 apply 后、tag 锚落地前的窗口（行数列全 —）；tag 锚
       // （quick-df1fed77）恢复 merge-base 后，对冻结文件集按锚补采行数——文件集不重算
       // （冻结语义不变），仅行数从 — 复活；含主仓后续演进（同文件被再改会计入），口径标注。
       let rows = snap.rows
       let snapDegraded = snap.degradedReason || null
-      const needsStats = rows.some(r => r && !Number.isFinite(r.additions) && r.kind !== 'binary')
+      // 补采只针对主仓行（评审 G1）：needsStats 排除 crossRepo 行——补采对主仓根跑，跨仓行
+      // null 档会被主仓盘面误判成 {0,0,'deleted'} 伪数据（违反「不出伪数据」）；跨仓行数
+      // 维持快照冻结值。
+      const needsStats = rows.some(r => r && !r.crossRepo && !Number.isFinite(r.additions) && r.kind !== 'binary')
       if (needsStats && actual && actual.ok && actual.baseAnchor) {
-        const paths = rows.map(r => (r && r.path ? toPosix(r.path) : '')).filter(Boolean)
+        const paths = rows.filter(r => r && !r.crossRepo).map(r => (r && r.path ? toPosix(r.path) : '')).filter(Boolean)
         // 审查 C-F04：补采执行根走共享 resolveDiffRoot（form=worktree 时必须对 worktree 跑，
         // 与主链路 :629/:636 同源配对——直用 cwd 会基点×根错位）
         const stats = collectNumstatByPath(resolveDiffRoot(sb, changeName, actual.form, cwd), paths, { baseRef: actual.baseAnchor })
         let recovered = 0
         rows = rows.map(r => {
           if (!r || !r.path || Number.isFinite(r.additions) || r.kind === 'binary') return r
+          if (r.crossRepo) return r // 跨仓行维持快照冻结值（G1：主仓根补采会产伪数据）
           const st = stats.get(toPosix(r.path))
           if (!st) return r
           recovered++
@@ -953,12 +997,13 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
           baseAnchor: actual.baseAnchor,
           totals: { files: rows.length, ...sumTotals(rows) },
           rows,
+          repos: snapRepos,
           excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
             ? snap.excluded
             : { foreignDeclared: [] },
           patchSha256: snap.patchSha256 || null,
           patchStatus: snap.patchStatus || null,
-          note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）`,
+          note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：文件集封闭在 apply 时点，主仓后续新文件不进表；行数按锚 ${actual.baseAnchor.slice(0, 7)}→当前工作树 补采（同文件后续演进会计入）${legacyCrossNote}`,
         }
       }
       return {
@@ -970,12 +1015,13 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
           ? snap.totals
           : { files: snap.rows.length, ...sumTotals(snap.rows) },
         rows: snap.rows,
+        repos: snapRepos,
         excluded: snap.excluded && Array.isArray(snap.excluded.foreignDeclared)
           ? snap.excluded
           : { foreignDeclared: [] },
         patchSha256: snap.patchSha256 || null,
         patchStatus: snap.patchStatus || null,
-        note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status`,
+        note: `${settleLabel}——execute --done 时点冻结快照${snap.savedAt ? '（' + String(snap.savedAt).replace('T', ' ').slice(0, 19) + ' 落盘）' : ''}：范围封闭在 apply 时点，主仓后续改动不反映到本表；需要看当前工作区实时状态请跑 git status${legacyCrossNote}`,
       }
     }
     // 快照缺失 → 实时开放区间兜底（下方主链路），note 追加漂移警告
@@ -1018,12 +1064,90 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
     notes.push(`实际侧另有 ${actual.foreignExcluded} 个文件按他者会话声明退栈未进本表——「计划未动」行标注「疑似他者已实现·已退栈」者即此类（声明即归属，git diff 核实）`)
   }
 
-  // 计划侧跨仓段汇总（改进点 2）：跨仓条目不进本仓对账（actual 只采主仓 git），行级标
-  // crossRepo + note 交代去对应仓对账。
+  // —— 计划侧跨仓段分仓真实对账（2026-09-20 scope-audit-cross-repo task-02，design Wave 2）——
+  // 旧形态「⊘ 行不在本仓对账面（实际侧只采主仓 git）」升级：plannedEntries 按 e.repo 分组，
+  // 每组调 collectRepoActual 共享内核（task-01）在**该仓**取 actual（锚点四级：A reviews-range
+  // > B head~1-window > C head-uncommitted-window > degraded），主仓同款三类差集出真实三态行
+  // + 行数；degraded 仓（未注册/路径不可达/git 双源失败）退 v1 ⊘ 形态（untouched + crossRepo）
+  // + 降级注记进 note，不炸主仓表（D-006 fail-soft）。
+  // 行数由本集成层对内核产物跑 collectNumstatByPath（内核不 import scope-audit 防环，评审
+  // G3——调用方职责）；anchor.base 为 null（B/C 档降级锚）→ numstat 空 Map → degradedStat
+  // 该仓根兜底（行数 null 降级档，不出伪数据）。跨仓行过滤口径与主仓 actual 侧一致
+  // （filterDeliverableFiles：排 .sillyspec 运行时面/平台自装脚手架），unplanned 行的
+  // classifyToolScaffold 软桶与主仓 unplanned 行同款。
   const crossRepoKeys = [...new Set(plannedEntries.map(e => e.repo).filter(Boolean))]
+  const crossRepoRows = []
+  const crossRepoEntries = []
   if (crossRepoKeys.length > 0) {
     const crossCount = plannedEntries.filter(e => e.repo).length
-    notes.push(`计划侧含 ${crossCount} 个跨仓文件（repo：${crossRepoKeys.join('、')}）——⊘ 行不在本仓对账面（实际侧只采主仓 git），请到对应仓跑 scope-audit 对账`)
+    notes.push(`计划侧含 ${crossCount} 个跨仓文件（repo：${crossRepoKeys.join('、')}）——已按 local.yaml repos 注册表分仓对账（各仓锚点档见 repos[].anchor）`)
+    for (const repoKey of crossRepoKeys) {
+      const entries = plannedEntries.filter(e => e.repo === repoKey)
+      const repoRows = []
+      let repoActual = null
+      let repoFailure = null
+      try {
+        repoActual = collectRepoActual({ repoKey, specBase: sb, cwd, runtimeRoot, changeName })
+      } catch (e) {
+        repoFailure = e && e.message ? String(e.message).split('\n')[0] : String(e)
+      }
+      if (repoFailure || !repoActual || repoActual.degradedReason) {
+        // degraded 仓（内核 fail-soft 产物或调用点异常）：v1 ⊘ 形态回退——该组行恒 untouched，
+        // 降级原因进 note 与 repos[] 条目（平台消费方可感知），主仓表不受影响。
+        const reason = repoFailure
+          ? `内核采集异常: ${repoFailure}`
+          : (repoActual && repoActual.degradedReason) || '跨仓采集不可用'
+        for (const e of entries) {
+          repoRows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: repoKey })
+        }
+        notes.push(`跨仓 ${repoKey} 对账降级: ${reason}`)
+        crossRepoEntries.push({
+          key: repoKey,
+          repoPath: repoActual ? repoActual.repoPath : null,
+          anchor: repoActual ? repoActual.anchor : { source: 'degraded', base: null, head: null, label: 'degraded' },
+          totals: repoTotals(repoRows),
+          degraded: true,
+          degradedReason: reason,
+        })
+        crossRepoRows.push(...repoRows)
+        continue
+      }
+      // 真实三态：该仓 actual（filterDeliverableFiles 过滤，主仓口径）× 该组声明面 pathMatches
+      // 双向容差（glob/目录前缀兼容，design 清单可写 glob）→ planned / unplanned / untouched
+      const repoFiles = [...new Set(filterDeliverableFiles(repoActual.files).filter(Boolean))].map(toPosix).sort()
+      const repoStats = collectNumstatByPath(repoActual.repoPath, repoFiles, { baseRef: repoActual.anchor.base })
+      const repoMatched = new Set()
+      for (const f of repoFiles) {
+        const path = toPosix(f)
+        const st = repoStats.get(path) || degradedStat(repoActual.repoPath, path)
+        const row = { path, planned: null, additions: st.additions, deletions: st.deletions, kind: st.kind, verdict: 'unplanned', crossRepo: repoKey }
+        const entry = entries.find(e => pathMatches(path, e.path))
+        if (entry) {
+          repoMatched.add(entry.path)
+          row.planned = entry.operation || null
+          row.verdict = 'planned'
+        } else {
+          // 工具/平台脚手架软桶（主仓 unplanned 行同款）：CLI/平台自装文件不占「计划外」逐条清单
+          const facility = classifyToolScaffold(path)
+          if (facility) row.facility = facility
+        }
+        repoRows.push(row)
+      }
+      // 声明未动：该仓清单文件无实际改动 → 补行（行数 0/0，主仓补行同款；crossRepo 恒带）
+      for (const e of entries) {
+        if (repoMatched.has(e.path)) continue
+        repoRows.push({ path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched', crossRepo: repoKey })
+      }
+      crossRepoEntries.push({
+        key: repoKey,
+        repoPath: repoActual.repoPath,
+        anchor: repoActual.anchor,
+        totals: repoTotals(repoRows),
+        degraded: false,
+        degradedReason: null,
+      })
+      crossRepoRows.push(...repoRows)
+    }
   }
 
   // —— 三态判定 ——
@@ -1055,18 +1179,39 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
   }
   // 计划未动：清单文件无实际改动 → 补行（行数 0/0）；计划侧降级时不产（plannedEntries 为空天然不跑）
   for (const e of plannedEntries) {
+    // 跨仓条目：由上方跨仓链路产出行（真实三态或 degraded ⊘ 形态）——主仓补行不接管
+    // （旧行为的 untouched+crossRepo 补行即跨仓恒「计划未动」的失真源头，task-02 接管点）
+    if (e.repo) continue
     if (matchedPlanned.has(e.path)) continue
     const row = { path: e.path, planned: e.operation || null, additions: 0, deletions: 0, kind: 'modified', verdict: 'untouched' }
-    if (e.repo) {
-      // 跨仓条目（改进点 2）：不是「未动」是「本表不含」
-      row.crossRepo = e.repo
-    } else {
-      // 退栈排除 + 盘面已存在 → 他者会话已写盘（改进点 3）；NEW: 前缀剥除后比对（pathMatches 同款口径）
-      const norm = toPosix(e.path).replace(/^NEW:/, '')
-      if (foreignExcludedSet.has(norm) && existsSync(join(numstatRoot, norm))) row.suspectedForeignDone = true
-    }
+    // 退栈排除 + 盘面已存在 → 他者会话已写盘（改进点 3）；NEW: 前缀剥除后比对（pathMatches 同款口径）
+    const norm = toPosix(e.path).replace(/^NEW:/, '')
+    if (foreignExcludedSet.has(norm) && existsSync(join(numstatRoot, norm))) row.suspectedForeignDone = true
     rows.push(row)
   }
+
+  // 信封 repos[]（--json 契约 v2，仅计划侧含跨仓条目时输出——单仓变更/预执行视图零新增字段，
+  // additive）：main 条目首位（repoPath=null 不冗余；anchor.source='main-<form>' 包装主仓
+  // baseAnchor；totals 只计主仓行——跨仓行并入前取）+ 各跨仓仓条目（内核透传锚点/该仓行三态
+  // 计数/degraded 态）。顶层 totals 保持全表合计（下方 sumTotals(rows)——跨仓行并入后自然
+  // 计入，多仓变更合计随真实化变化正是修复目标：现状恒 0/0 是失真）。
+  let reposOut = null
+  if (crossRepoKeys.length > 0) {
+    reposOut = [
+      {
+        key: 'main',
+        repoPath: null,
+        anchor: { source: `main-${actual.form}`, base: actual.baseAnchor || null, head: null, label: `${actual.form} 主仓锚` },
+        totals: repoTotals(rows),
+        degraded: false,
+        degradedReason: null,
+      },
+      ...crossRepoEntries,
+    ]
+  }
+  // 跨仓行并入总表（主仓行在前、跨仓组按 repoKey 声明序追加——顶层 totals 与 rows 消费方
+  // 无序假设，渲染面 task-03 按 crossRepo 分组）
+  rows.push(...crossRepoRows)
 
   // 冻结 patch（collectPatch，execute --done 落盘方消费）：与行数同根同锚（numstatRoot +
   // baseAnchor；无锚 HEAD 兜底同口径），全窗口 diff + untracked 自拼 hunk（buildFrozenPatch）
@@ -1081,6 +1226,7 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
     baseAnchor: actual.baseAnchor || (usedHeadFallback ? 'head-uncommitted-window' : null),
     totals: { files: rows.length, ...sumTotals(rows) },
     rows,
+    ...(reposOut ? { repos: reposOut } : {}),
     excluded: { foreignDeclared: [] },
     frozenPatch,
     note: notes.length > 0 ? notes.join('；') : null,
@@ -1112,8 +1258,19 @@ async function computeFullFlowAudit({ cwd, specBase, changeName, platformOpts, c
  *     增量字段：跨仓条目标 repoKey / 退栈排除但已写盘的 planned 文件 / 计划外行里的工具平台
  *     脚手架桶——均为按存在性读取，缺省无字段零回归）
  *   excluded: { foreignDeclared: Array<{ file: string, sessions: string[] }> },
+ *   repos?: Array<{ key: 'main'|string, repoPath: string|null,
+ *                    anchor: { source: string, base: string|null, head: string|null, label: string },
+ *                    totals: { files: number, additions: number, deletions: number,
+ *                              planned: number, unplanned: number, untouched: number },
+ *                    degraded: boolean, degradedReason: string|null }>,
  *   note?: string|null,
  *   gateProfile?: object|null }>}
+ *   repos（2026-09-20 scope-audit-cross-repo task-02，--json 契约 v2 增量信封，消费方=平台）：
+ *   仅 full-flow 模式且计划侧含跨仓条目、非预执行形态时输出（单仓变更/预执行视图零新增字段，
+ *   additive）；main 条目始终首位（只计主仓行），跨仓条目按内核透传锚点档 + 该仓行三态计数，
+ *   degraded 仓（未注册/不可达/git 不可用）totals 恒全 untouched、degradedReason 非空。跨仓行
+ *   verdict 为真实三态（design 接口定义「行级」表）；degraded 仓/预执行/旧快照回放行保持 v1
+ *   ⊘ 语义（恒 untouched + crossRepo）。settled 快照回放原样透传 snap.repos（旧快照无键不输出）。
  *   gateProfile（2026-09-14-quick-exit-tiered-gates task-03 增量字段，消费方按存在性读取）：
  *   仅 quick 模式携带——实时态透传 auditQuickCompletion 挂的 review.gateProfile（不重复计算）；
  *   冻结重放态透传 quicklog/patches 记录冻结值（旧记录无 → rows 文件清单现算重放）。full-flow
@@ -1177,6 +1334,11 @@ export async function computeChangeScopeAudit({ cwd, specBase, changeName, platf
  * 出完整变化内容（git 原生 diff 格式）。锚点/执行根与表格行数同口径——worktree 形态 A 对
  * worktree 工作树跑、quick 对会话根跑、归档冻结形态用快照补采基点；无锚时 HEAD 未提交窗口兜底。
  *
+ * 跨仓行路由（2026-09-20 scope-audit-cross-repo task-03，D-002@v1）：filePath 命中结果 rows 的
+ * crossRepo 行 → 跳过主仓冻结 patch 捷径与主仓锚链，在该仓根出 diff——A 档（reviews 锡点
+ * base..head 封闭区间=跨仓版冻结档）优先，B 档实时窗口兜底，C 档注记看本体；旧快照（无 repos
+ * 键）锚点不可得 → 提示人工渠道。主仓行路径零变化。
+ *
  * untracked 新文件不在 git diff 内（整个文件都是新增）→ note 提示看文件本体；该锚点窗口
  * 无改动 → diff 空串 + note。纯读 fail-soft。
  *
@@ -1192,6 +1354,87 @@ export async function getFileDiff({ cwd, specBase, changeName, platformOpts, fil
     const result = await computeChangeScopeAudit({ cwd, specBase, changeName, platformOpts })
     const norm = toPosix(filePath)
     const sb = specBase || join(cwd, '.sillyspec')
+
+    // —— 跨仓行路由（2026-09-20 scope-audit-cross-repo task-03，D-002@v1）——
+    // filePath 命中结果 rows 的跨仓行（crossRepo 字段）→ **先于主仓冻结 patch 捷径**改在该仓
+    // 出 diff（防两仓同相对路径被主仓 patch 误切 + 跨仓内容不在主仓 patch 内会被误报「窗口外
+    // 文件」，评审交叉点⑤）。A 档（repos[].anchor 的 base+head = execute task reviews 锡点
+    // 区间）优先 `git diff base..head -- file` 在该仓根执行（封闭区间 = 跨仓版冻结档，收尾后
+    // 不漂）；B 档实时窗口兜底；C 档仅 status 面（无 diff 锚）→ 注记看本体。主仓行不进本分支，
+    // 全链零变化。
+    const crossRow = Array.isArray(result.rows)
+      ? result.rows.find(x => x && typeof x === 'object' && toPosix(x.path) === norm && x.crossRepo)
+      : null
+    if (crossRow) {
+      const repoKey = crossRow.crossRepo
+      // 无 repos 键 = 旧快照回放态（v1：跨仓行恒 untouched 无锚）——该仓锚点不可得，不猜：
+      // 按快照契约提示人工渠道（R-07 同款语义：锚点锡点冻在 execute-runs reviews）
+      if (!Array.isArray(result.repos)) {
+        return { ok: true, mode: result.mode, root: cwd, baseRef: null, anchorLabel: null, diff: null,
+          note: '跨仓行快照冻结于跨仓对账上线前——请到该仓人工 git diff' }
+      }
+      const repoEntry = result.repos.find(x => x && typeof x === 'object' && x.key === repoKey)
+      if (!repoEntry) {
+        return { ok: false, mode: result.mode, root: cwd, baseRef: null, anchorLabel: null, diff: null,
+          note: `跨仓 ${repoKey} 的 repos 信封条目缺失——锚点不可得` }
+      }
+      if (repoEntry.degraded || !repoEntry.repoPath) {
+        return { ok: false, mode: result.mode, root: repoEntry.repoPath || cwd, baseRef: null, anchorLabel: null, diff: null,
+          note: `跨仓 ${repoKey} 不可达${repoEntry.degradedReason ? '——' + repoEntry.degradedReason : ''}` }
+      }
+      const anchor = repoEntry.anchor && typeof repoEntry.anchor === 'object' ? repoEntry.anchor : null
+      // A 档：reviews base..head 封闭区间（冻结语义，无后续演进混入）
+      if (anchor && anchor.base && anchor.head) {
+        const range = `${anchor.base}..${anchor.head}`
+        const rangeLabel = '跨仓 reviews 锡点区间（冻结语义，无后续演进混入）'
+        const rd = safeGit(repoEntry.repoPath, ['diff', '--no-color', range, '--', norm], { timeout: 30 * 1000 })
+        if (rd.error) {
+          return { ok: false, mode: result.mode, root: repoEntry.repoPath, baseRef: range, anchorLabel: '跨仓 reviews 锡点区间', diff: null,
+            note: `git diff 执行失败: ${rd.error}` }
+        }
+        const diff = rd.value || ''
+        if (diff) {
+          return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: range, anchorLabel: rangeLabel, diff, note: null }
+        }
+        // 空 diff：盘上存在且未跟踪 → 新文件看本体（tracked 查询同主仓逻辑）；否则区间内无改动
+        if (existsSync(join(repoEntry.repoPath, norm))) {
+          const tracked = safeGit(repoEntry.repoPath, ['ls-files', '--', norm], { timeout: 15 * 1000 })
+          if (!tracked || !tracked.value || !tracked.value.trim()) {
+            return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: range, anchorLabel: '跨仓 reviews 锡点区间', diff: null,
+              note: '未跟踪新文件——不在 git diff 内，文件全部行为新增；直接查看文件本体' }
+          }
+        }
+        return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: range, anchorLabel: '跨仓 reviews 锡点区间', diff: '',
+          note: '该文件在此区间无 diff（未改动）' }
+      }
+      // C 档：仅 status 面（该仓无 diff 锚——未提交窗口），git diff 无意义 → 直接指引看本体
+      if (anchor && anchor.source === 'head-uncommitted-window') {
+        return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: 'HEAD', anchorLabel: anchor.label || 'HEAD 未提交窗口', diff: null,
+          note: '该仓无 diff 锚（未提交窗口）——直接查看文件本体' }
+      }
+      // B 档（head~1-window）及未知降级锚（base=null）：实时窗口兜底——diff HEAD 与主仓无锚
+      // 兜底同口径，anchorLabel 带该仓降级锚档位、note 注明含后续演进
+      const liveLabel = anchor && typeof anchor.label === 'string' && anchor.label ? anchor.label : 'HEAD 未提交窗口（降级锚兜底）'
+      const ld = safeGit(repoEntry.repoPath, ['diff', '--no-color', 'HEAD', '--', norm], { timeout: 30 * 1000 })
+      if (ld.error) {
+        return { ok: false, mode: result.mode, root: repoEntry.repoPath, baseRef: 'HEAD', anchorLabel: liveLabel, diff: null,
+          note: `git diff 执行失败: ${ld.error}` }
+      }
+      const liveDiff = ld.value || ''
+      if (liveDiff) {
+        return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: 'HEAD', anchorLabel: liveLabel, diff: liveDiff,
+          note: '跨仓降级锚（非 reviews 锡点区间）——实时窗口 diff，含该仓后续演进' }
+      }
+      if (existsSync(join(repoEntry.repoPath, norm))) {
+        const tracked = safeGit(repoEntry.repoPath, ['ls-files', '--', norm], { timeout: 15 * 1000 })
+        if (!tracked || !tracked.value || !tracked.value.trim()) {
+          return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: 'HEAD', anchorLabel: liveLabel, diff: null,
+            note: '未跟踪新文件——不在 git diff 内，文件全部行为新增；直接查看文件本体' }
+        }
+      }
+      return { ok: true, mode: result.mode, root: repoEntry.repoPath, baseRef: 'HEAD', anchorLabel: liveLabel, diff: '',
+        note: '该文件在此锚点窗口内无 diff（未改动）' }
+    }
 
     // —— 真·当时内容比对（quick-359a48f1）：已收尾变更优先冻结 patch 切片 ——
     // ① quick 记录态自带 frozenPatchPath；② full-flow 变更目录 scope-audit.patch。
@@ -1333,12 +1576,28 @@ export function renderScopeAuditTable(result, opts = {}) {
 
   const maxRows = Number.isFinite(opts.maxRows) && opts.maxRows > 0 ? opts.maxRows : Infinity
   const shown = rows.slice(0, maxRows)
+  // ── 跨仓行 label 判定基（2026-09-20 scope-audit-cross-repo task-03，design Wave 2 渲染面）──
+  // repos[] 信封存在（task-02 起 full-flow 真实对账产出 / 新快照回放）→ 非 degraded 仓的跨仓行
+  // 出真实三态带仓标（`✓ 计划内 [key]` 形态）；degraded 仓与**无 repos 键**的旧形态（v1 快照
+  // 回放 / 预执行清单视图——行 verdict 恒 untouched，与真实 untouched 在行内不可区分）保留
+  // v1 ⊘ 标记（历史形态兼容，不假装对账过）。
+  const reposEnvelope = Array.isArray(r.repos) ? r.repos.filter(x => x && typeof x === 'object') : null
+  const crossEnvelopeEntries = reposEnvelope && reposEnvelope.length > 0
+    ? reposEnvelope.filter(x => x.key && x.key !== 'main')
+    : []
+  const hasCrossEnvelope = crossEnvelopeEntries.length > 0
+  const degradedRepoKeys = new Set(crossEnvelopeEntries.filter(x => x.degraded).map(x => x.key))
+  const crossRepoRowLabel = (row) => {
+    if (!hasCrossEnvelope || degradedRepoKeys.has(row.crossRepo)) return CROSS_REPO_LABEL
+    const base = row.facility ? FACILITY_LABEL : VERDICT_LABEL[row.verdict]
+    return base ? `${base} [${row.crossRepo}]` : CROSS_REPO_LABEL
+  }
   for (const row of shown) {
     if (!row || typeof row !== 'object') continue
     const stat = row.kind === 'binary'
       ? { a: 'BIN', d: 'BIN' }
       : { a: fmtCount(row.additions) ?? '—', d: fmtCount(row.deletions) ?? '—' }
-    const label = row.crossRepo ? CROSS_REPO_LABEL
+    const label = row.crossRepo ? crossRepoRowLabel(row)
       : row.suspectedForeignDone ? SUSPECTED_FOREIGN_LABEL
       : row.facility ? FACILITY_LABEL
       : VERDICT_LABEL[row.verdict] || ATTRIBUTION_LABEL[row.attribution] || ''
@@ -1353,8 +1612,11 @@ export function renderScopeAuditTable(result, opts = {}) {
   // ⚠️ 出口指引（full-flow 三态面）：计划外补声明、计划未动确认遗漏。
   // 行级标注三分（scope-audit-cross-repo-blindness 改进点 1/2/3）：跨仓行/疑似他者已实现行/
   // 工具设施桶各有去向说明，不混入笼统的「计划外/计划未动」计数逼用户排查噪音。
-  const unplanned = rows.filter(x => x && x.verdict === 'unplanned' && !x.facility).length
-  const facility = rows.filter(x => x && x.verdict === 'unplanned' && x.facility).length
+  // 跨仓行不占主仓笼统 ⚠️ 计数（task-03）：非 degraded 仓行已有 per-repo 汇总（见下方跨仓
+  // 汇总段）、degraded 仓行有 ⊘ 降级行——planned/unplanned/untouched 三态与 facility 桶的
+  // 主仓笼统计数一律排除 crossRepo 行（现状 unplanned 未排除致跨仓行冒充主仓计划外）。
+  const unplanned = rows.filter(x => x && x.verdict === 'unplanned' && !x.facility && !x.crossRepo).length
+  const facility = rows.filter(x => x && x.verdict === 'unplanned' && x.facility && !x.crossRepo).length
   const untouchedReal = rows.filter(x => x && x.verdict === 'untouched' && !x.suspectedForeignDone && !x.crossRepo).length
   const suspectedForeign = rows.filter(x => x && x.suspectedForeignDone).length
   const crossRepo = rows.filter(x => x && x.crossRepo).length
@@ -1371,7 +1633,28 @@ export function renderScopeAuditTable(result, opts = {}) {
     lines.push(`   ℹ️ 工具/平台设施 ${facility} 文件（CLI/平台自装脚手架，非本变更改动，不占计划外）`)
   }
   if (crossRepo > 0) {
-    lines.push(`   ℹ️ 跨仓 ${crossRepo} 文件（⊘ 行——本表不含，请到对应仓跑 scope-audit 对账）`)
+    // 跨仓汇总段（task-03，design Wave 2）：有 repos[] 信封 → 聚合计数行 + 逐仓一行真实汇总
+    // （锚点档 anchor.label + 三态计数 + 行数）；degraded 仓逐仓一行降级原因。无 repos 键
+    // （v1 快照回放 / 预执行清单视图——跨仓行 ⊘ 本表不含）保留现行单行文案（历史形态）。
+    // 全 degraded 形态下所有跨仓行仍是 ⊘（本表不含）→ 聚合行保留 v1 文案（计数可见 + 逐字
+    // 兼容既有断言），非全 degraded 时行已真实进表 → 聚合行改「已按仓对账」措辞。
+    if (hasCrossEnvelope) {
+      const allDegraded = crossEnvelopeEntries.every(x => x.degraded)
+      lines.push(allDegraded
+        ? `   ℹ️ 跨仓 ${crossRepo} 文件（⊘ 行——本表不含，请到对应仓跑 scope-audit 对账）`
+        : `   ℹ️ 跨仓 ${crossRepo} 文件——已按 local.yaml repos 分仓对账（逐仓汇总如下）`)
+      for (const re of crossEnvelopeEntries) {
+        if (re.degraded) {
+          lines.push(`   ℹ️ 跨仓 ${re.key}：⊘ 对账降级——${re.degradedReason || '未知原因'}`)
+          continue
+        }
+        const t = re.totals && typeof re.totals === 'object' ? re.totals : {}
+        const anchorTxt = re.anchor && typeof re.anchor.label === 'string' && re.anchor.label ? re.anchor.label : '—'
+        lines.push(`   ℹ️ 跨仓 ${re.key}：锚点 ${anchorTxt}——✓ ${t.planned ?? 0} / ⚠️ 计划外 ${t.unplanned ?? 0} / ⚠️ 未动 ${t.untouched ?? 0}（+${t.additions ?? 0}/-${t.deletions ?? 0}）`)
+      }
+    } else {
+      lines.push(`   ℹ️ 跨仓 ${crossRepo} 文件（⊘ 行——本表不含，请到对应仓跑 scope-audit 对账）`)
+    }
   }
   const undeclared = rows.filter(x => x && x.attribution === 'undeclared').length
   if (undeclared > 0) lines.push(`   ⚠️ 未声明 ${undeclared} 文件——超出 allowedFiles 声明面，补 --files 声明或注明原因`)
