@@ -28,6 +28,8 @@ updated_at: 2026-09-20T00:00:00+08:00
 
 **frontmatter YAML 硬校验（2026-09-20-taskcard-yaml-hardgate）**：validatePlanFeasibility 步骤 0b（紧随重复键检测）对 task 卡 frontmatter 整体 jsYaml 解析，失败即 ERROR 带 文件:行:列（js-yaml mark.line+2 换算文件 1 基行；双报豁免——message 含 duplicated mapping key 且 dupKeys 非空时让位重复键检测的键名+行号精确文案，嵌套重复键仍由 0b 兜底）。解析单一源 src/taskcard-frontmatter.js（stages/verify 双侧消费，除 js-yaml 零依赖防环）；parseTaskContracts 坏 YAML 返回 yamlError 显式降级键——契约对账不再以空对象冒充「无契约字段」空真过门。
 
+**R5 效率第 1 批三行为（2026-09-21-r5-efficiency-batch1）**：①**plan 并批默认**——plan「生成计划/TaskCard」步 prompt 注入 batch 三条件话术（文件正交/无契约链/≤3），plan-postcheck 纯增量 advisory 提醒正交未并批（N≥4 阈值消相邻 advisory nag 环；blockquote 批注行防 parseWavesFromPlan 静默丢任务），advisory 只走 warning 通道 fail-open 不阻断；②**execute 材料包**——buildWavePrompt 注入任务材料包引用行（assembleExecuteTaskMaterials 预装配，稳定段先行、只摘不译，冲突以源文件为准），无映射零注入；③**派发契约**——轮数纪律三行（同文件改动合并单次 Edit/TodoWrite 只在阶段边界/测试合并单次 Bash）+ 返回契约（子代理返回 ≤25 行结构化摘要：verdict/触碰文件数/测试一行/偏差说明）+ 审查回收瘦身行（回收输出=verdict+blockers+review.json 路径，git diff 对账仍是真相源）无条件常驻注入，编号单调（全局硬约束恒 9→材料包顺延 10→契约再顺延，缺位前移）。文本钉 test/dispatch-contract.test.mjs 四组合编号覆盖。
+
 ## 关键逻辑
 
 每个阶段由 `export const definition = { name, title, description, steps: [...] }` 导出。steps 数组中每个 step 包含 name、prompt、outputHint、optional 字段。CLI 通过 `ProgressManager` 写入 SQLite，并以兼容旧 progress JSON 的对象跟踪每个 step 的执行状态。

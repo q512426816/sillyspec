@@ -132,6 +132,11 @@ needs_human_review: true | false
 > tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）
 > plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）
 
+> **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：
+> - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（`> batch: task-01+task-02`，一段多行即多批），**不替代** `- task-XX` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）
+> - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+> - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
+
 ---
 
 #### plan_level = none
@@ -399,6 +404,10 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 - **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）
 这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
 
+⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。
+
+可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。
+
 ## 任务清单
 - task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）
 - task-02: 添加角色创建接口（覆盖：FR-02）
@@ -417,18 +426,22 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
    sillyspec taskcard 2026-05-13-demo-change --all
    ```
    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
-1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
-2. **按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
+1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
+2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
+   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
+   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
+3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**
    - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组
    - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch
    - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）
    - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）
-3. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
-4. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
-5. 等待所有 batch 子代理完成
-6. 验证每个 task-N.md 文件已生成且非空
+   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）
+4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch
+5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md
+6. 等待所有 batch 子代理完成
+7. 验证每个 task-N.md 文件已生成且非空
 
-> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段要合理合并，避免子代理数量随 task 数线性爆炸。一个子代理生成 2~4 张卡片与生成 1 张卡片的 token/时间成本接近，却能显著减少协调开销。
+> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。
 
 ### 批量 TaskCard 子代理 prompt
 ```
@@ -438,17 +451,17 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。
 
 ## 输入
-- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change
+- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change
 - 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
 - 当前用户：<git-user>（frontmatter 的 author 使用此值）
 - 本 batch 任务列表：
   <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>
 
 ## 操作
-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
+1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
 2. 读取本 batch 涉及的相关源文件
-3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
-4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
+3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
+4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
 5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
 
 ---
@@ -462,8 +475,11 @@ depends_on: []
 blocks: []
 requirement_ids: [FR-XX]
 decision_ids: [D-XXX@vN]
-allowed_paths:
+repo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）
+allowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径
   - frontend/src/lib/errors.ts
+target_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动
+  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径
 provides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填
   - contract: <DTO或响应类型名>          # 如 UserDTO
     fields: [field_a, field_b]
@@ -496,12 +512,13 @@ related_tests:                           # 可选。当本 task 改动会导致�
 ## 约束
 - 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计
 - 同 batch 内 task 的 allowed_paths 不要互相冲突
+- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上
 - 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐
 - 只生成本 batch 声明的任务，不要多写或少写
 - 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
 
 ## 完成标志
-- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\changes\2026-05-13-demo-change/tasks/
+- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/tasks/
 - 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）
 ```
 
@@ -515,6 +532,7 @@ related_tests:                           # 可选。当本 task 改动会导致�
 - 每个 task 总长度 20~40 行
 - **一致性自查**：
   - allowed_paths 有无冲突
+  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径
   - depends_on 与 plan.md Wave 分组是否一致
   - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）
   - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）

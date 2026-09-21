@@ -23,7 +23,7 @@
  * 是 prompt.js tier 注入链的组包入口——机械抽素材半边（designDigest/fileList/硬约束/diff/热区/
  * checklist），主代理点名半边（五交叉点/plan 差量）留位不预填（decisions.md D-002）。
  */
-import { readFileSync } from 'fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { REVIEW_CHECKLISTS } from './stage-review-checklist.js'
 
@@ -262,4 +262,201 @@ export async function assembleStageReviewMaterials({ stage, cwd, changeName, spe
     return ''
   } catch { /* 装配 best-effort：失败零注入（与占位符缺失同态） */ }
   return ''
+}
+
+// ══ execute 任务材料包（2026-09-21-r5-efficiency-batch1 task-02，B-④ / D-003）════
+// 两段式装配：稳定段（design.md「接口定义」「文件变更清单」固定节名机械选取原文 + 签名锚点）
+// 在前、专属段（task 卡 title/goal/implementation/acceptance + allowed_paths）在后——稳定前缀
+// 跨任务共享，兑现统一前缀缓存收益（压 task-08 型子代理轮均 148K vs 同侪 45-92K 差额）。
+// 只摘不译（D-003 错键正典红线）：一切内容为源文件原文逐字摘录/字段机械抽取，禁转写缩写。
+
+/** 材料包字节上限（专属段尾部优先截；稳定段超限按节优先级截断——见 assembleExecuteTaskMaterials） */
+const EXEC_MATERIALS_MAX_BYTES = 24576
+/** 被截节保底形态里「首个代码块/表格」的块级上限（单块病态体量防穿顶） */
+const EXEC_STUB_BLOCK_MAX_BYTES = 3600
+
+function bytesOf(s) { return Buffer.byteLength(String(s || ''), 'utf8') }
+
+/** 字节安全截断（按 UTF-8 字节预算切，不切断多字节字符） */
+function byteSafeSlice(text, maxBytes) {
+  const s = String(text || '')
+  if (bytesOf(s) <= maxBytes) return s
+  let out = ''
+  let used = 0
+  for (const ch of s) {
+    const b = Buffer.byteLength(ch, 'utf8')
+    if (used + b > maxBytes) break
+    out += ch
+    used += b
+  }
+  return out
+}
+
+/** 节内首个完整代码块（``` 围栏）或表格（连续 | 行）——被截节的保底保留形态 */
+function firstBlockOrTable(body) {
+  const fence = body.match(/```[^\n]*\n[\s\S]*?```/)
+  if (fence) return fence[0]
+  const lines = body.split('\n')
+  const start = lines.findIndex(l => l.trim().startsWith('|'))
+  if (start >= 0) {
+    let end = start
+    while (end < lines.length && lines[end].trim().startsWith('|')) end++
+    return lines.slice(start, end).join('\n')
+  }
+  return null
+}
+
+/** task 卡 frontmatter 块级解析（机械逐字）：顶格 key 行归属，其后缩进行归当前 key */
+function splitTaskCardFields(cardText) {
+  const m = String(cardText || '').match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!m) return {}
+  const fields = {}
+  let cur = null
+  for (const line of m[1].split(/\r?\n/)) {
+    if (/^[A-Za-z_][\w-]*:/.test(line)) {
+      const at = line.indexOf(':')
+      cur = { key: line.slice(0, at), raw: line.slice(at + 1).trim(), lines: [] }
+      fields[cur.key] = cur
+    } else if (cur) {
+      cur.lines.push(line)
+    }
+  }
+  return fields
+}
+
+function unquoteScalar(v) {
+  const s = String(v || '')
+  return s.replace(/^'(.*)'$/s, '$1').replace(/^"(.*)"$/s, '$1')
+}
+
+/**
+ * task 卡字段取值（只摘不译——原文保持，无 YAML 折叠语义改写）：
+ * 块标量（>/|）→ 原始行去公共缩进后逐行拼接；列表 → `- ` 后原文数组；标量 → 去包裹引号。
+ * @returns {string|string[]}
+ */
+function taskCardFieldValue(field) {
+  if (!field) return ''
+  if (/^[>|][+-]?$/.test(field.raw)) {
+    const indents = field.lines.filter(l => l.trim()).map(l => l.match(/^[ \t]*/)[0].length)
+    const cut = indents.length ? Math.min(...indents) : 0
+    return field.lines.map(l => (l.trim() ? l.slice(cut) : '')).join('\n').trim()
+  }
+  if (field.raw) return unquoteScalar(field.raw)
+  const items = []
+  for (const l of field.lines) {
+    const im = l.match(/^\s*-\s?(.*)$/)
+    if (im && im[1].trim()) items.push(im[1].trim())
+  }
+  return items
+}
+
+/**
+ * 组装 execute 任务材料包（两段式，只摘不译——契约见 change design.md「接口定义」）。
+ * @param {object} opts
+ * @param {string} opts.changeDir         - 变更目录（读 design.md / tasks/task-NN.md）
+ * @param {string} opts.taskId            - 'task-NN'
+ * @param {string} [opts.materialsDir]    - 落盘目录；缺省 → 不落盘不抛错返回 null（additive）
+ * @param {Array<{symbol: string, file: string, line: number}>} [opts.signatureAnchors]
+ *                                        - 接口签名锚点（可选，调用方供给；缺省空）
+ * @returns {Promise<{path: string, bytes: number, truncated: boolean}|null>}
+ *   截尾序：①专属段尾部优先截（稳定段全量保留）；②稳定段自身超限按节优先级（接口定义 >
+ *   文件变更清单——高优先节后截）逐节降为「节头 + 首个代码块/表格 + 回源指引行」；锚点永不丢。
+ */
+export async function assembleExecuteTaskMaterials({ changeDir, taskId, materialsDir, signatureAnchors }) {
+  if (!changeDir || !taskId || !materialsDir) return null
+  const designPath = join(changeDir, 'design.md')
+  const taskCardPath = join(changeDir, 'tasks', `${taskId}.md`)
+  let designContent = ''
+  let cardContent = ''
+  try { designContent = readFileSync(designPath, 'utf8') } catch { /* 缺 design → 稳定段只剩锚点 */ }
+  try { cardContent = readFileSync(taskCardPath, 'utf8') } catch { /* 缺卡 → 专属段仅回源指引 */ }
+
+  // ── 稳定段素材：固定节名机械选取（缺节跳过）+ 签名锚点行 ──
+  const anchors = (Array.isArray(signatureAnchors) ? signatureAnchors : [])
+    .filter(a => a && a.symbol)
+    .map(a => `- \`${String(a.symbol)}\` → ${a.file || '?'}:${a.line || '?'}`)
+  const anchorsBlock = anchors.length ? `### 接口签名锚点\n\n${anchors.join('\n')}` : ''
+
+  const SECTION_SPECS = [{ name: '接口定义' }, { name: '文件变更清单' }] // 序 = 保留优先级序
+  const secBlocks = SECTION_SPECS
+    .map(s => ({ ...s, body: sectionBody(designContent, s.name) }))
+    .filter(s => s.body)
+    .map(s => ({ ...s, full: `### ${s.name}（design.md 原文摘录）\n\n${s.body}` }))
+
+  /** 被截节残体：节头 + 首个代码块/表格（块级 clamp）+ 一行回源指引 */
+  const stubOf = s => {
+    const first = firstBlockOrTable(s.body)
+    const kept = first
+      ? (bytesOf(first) > EXEC_STUB_BLOCK_MAX_BYTES ? byteSafeSlice(first, EXEC_STUB_BLOCK_MAX_BYTES) + '\n…（首块超限截断）' : first)
+      : byteSafeSlice(s.body, 600)
+    return `### ${s.name}（design.md 原文摘录）\n\n${kept}\n\n完整内容回源：${designPath}#${s.name}`
+  }
+
+  // ── 专属段素材：task 卡要点（机械摘录）+ allowed_paths + 回源指引 ──
+  const fields = splitTaskCardFields(cardContent)
+  const val = k => taskCardFieldValue(fields[k])
+  const bulletList = v => (Array.isArray(v) ? v.map(i => `  - ${i}`).join('\n') : `  - ${v}`)
+  const title = val('title')
+  const goal = val('goal')
+  const impl = val('implementation')
+  const acc = val('acceptance')
+  const paths = val('allowed_paths')
+  const cardLines = [
+    title ? `- title：${title}` : '',
+    goal ? `- goal：${goal}` : '',
+    impl ? `- implementation：\n${bulletList(impl)}` : '',
+    acc ? `- acceptance：\n${bulletList(acc)}` : '',
+  ].filter(Boolean).join('\n')
+  const dedicatedFull = [
+    cardLines ? `### 任务卡要点（tasks/${taskId}.md 摘录）\n\n${cardLines}` : '',
+    Array.isArray(paths) && paths.length ? `### allowed_paths\n\n${paths.map(p => `- ${p}`).join('\n')}` : '',
+    `### 回源指引\n\n- design.md：${designPath}\n- 任务卡：${taskCardPath}`,
+  ].filter(Boolean).join('\n\n')
+
+  // ── 装配（稳定段在前、专属段在后）+ 字节预算 ──
+  const packTitle = `# execute 任务材料包：${taskId}`
+  const packNote = '> 两段式：稳定段（design 契约节原文摘录）在前、专属段（task 卡摘录）在后。\n> 只摘不译——正文均为源文件原文逐字摘录；与源文件冲突时以源文件为准，按锚点回源核对。'
+  const stableTitle = '## 稳定段（design 契约节原文摘录——跨任务稳定）'
+  const dedicatedTitle = `## 专属段（${taskId} 专属）`
+  const tailMarker = `…（专属段超限截尾——完整内容回源：${taskCardPath}）`
+  const joinParts = parts => parts.filter(Boolean).join('\n\n')
+  const assemble = (secs, dedicatedText) =>
+    joinParts([packTitle, packNote, stableTitle, ...secs, anchorsBlock, dedicatedTitle, dedicatedText])
+
+  let truncated = false
+  const sections = secBlocks.map(s => s.full)
+  let content = assemble(sections, dedicatedFull)
+
+  if (bytesOf(content) > EXEC_MATERIALS_MAX_BYTES) {
+    truncated = true
+    // ① 专属段尾部优先截：稳定段全量保留，专属段按剩余预算截尾
+    const clampDedicated = () => {
+      const head = assemble(sections, '')
+      const room = EXEC_MATERIALS_MAX_BYTES - bytesOf(head) - bytesOf('\n\n') - bytesOf(tailMarker) - 1
+      if (room < 0) return false
+      const sliced = byteSafeSlice(dedicatedFull, room)
+      content = head + '\n\n' + (sliced ? sliced + '\n' + tailMarker : tailMarker)
+      return true
+    }
+    if (!clampDedicated()) {
+      // ② 稳定段自身超限：按节优先级（接口定义 > 文件变更清单）低优先节先降为残节，逐节重试
+      for (let i = secBlocks.length - 1; i >= 0; i--) {
+        sections[i] = stubOf(secBlocks[i])
+        if (clampDedicated()) break
+      }
+    }
+    // ③ 终极兜底（双节皆残仍超限——仅病态锚点面可达）：字节安全截 + 锚点块强制保留
+    if (bytesOf(content) > EXEC_MATERIALS_MAX_BYTES && anchorsBlock) {
+      const cut = content.indexOf(anchorsBlock)
+      const before = (cut > 0 ? content.slice(0, cut) : content).replace(/\n+$/, '')
+      content = byteSafeSlice(before, EXEC_MATERIALS_MAX_BYTES - bytesOf('\n\n' + anchorsBlock)) + '\n\n' + anchorsBlock
+    } else if (bytesOf(content) > EXEC_MATERIALS_MAX_BYTES) {
+      content = byteSafeSlice(content, EXEC_MATERIALS_MAX_BYTES)
+    }
+  }
+
+  mkdirSync(materialsDir, { recursive: true })
+  const outPath = join(materialsDir, `${taskId}.md`)
+  writeFileSync(outPath, content, 'utf8')
+  return { path: outPath, bytes: bytesOf(content), truncated }
 }

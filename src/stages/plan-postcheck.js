@@ -1631,6 +1631,255 @@ export function assessWaveStructure({ existingWaves, topoWaves, depMap, wavePath
   return { mergeablePairs, error, advisory }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 并批 advisory（B-③ / FR-01，2026-09-21-r5-efficiency-batch1 task-01）
+// ═══════════════════════════════════════════════════════════════
+
+/** task id 归一补零（`task-1` → `task-01`，与卡片/注册表/Wave 引用口径一致，坑 wave-ref-unpadded 家族） */
+function padTaskRef(id) {
+  return String(id).trim().replace(/^task-(\d+)$/i, (_, n) => `task-${n.padStart(2, '0')}`)
+}
+
+/**
+ * 解析并批成员串：`task-01+task-02` / `task-01,task-02` / `01+02`（depends_on 式数字简写）。
+ * 混合分隔符（+ ＋ , ， ; ；）通吃；返回补零 id 数组（无法解析的 token 丢弃）。
+ */
+function parseBatchMemberList(text) {
+  if (text == null) return []
+  return String(text)
+    .split(/[+＋,，;；]/)
+    .map(s => s.trim().replace(/['"`]/g, ''))
+    .filter(Boolean)
+    .map(tok => {
+      const m = tok.match(/^(?:task-)?(\d+)$/i)
+      return m ? `task-${m[1].padStart(2, '0')}` : null
+    })
+    .filter(Boolean)
+}
+
+/**
+ * 解析 plan.md Wave 段任务分组 + 批标注行（行扫描口径同 parseTaskWavesFromPlan /
+ * execute.js parseWavesFromPlan：`## Wave N` 进段、非 Wave 标题退出段）。
+ *
+ * 批标注行两形态（规范形态由 plan.js stepGeneratePlan prompt 钉死）：
+ *   ① `> batch: task-01+task-02`——Wave 段内 blockquote 行，**不替代** `- task-XX` 纯 ID
+ *      引用行（execute 只按纯 ID 行收任务，批标注行对既有解析器全部惰性——零阻断面）；
+ *   ② `- task-01 + task-02（batch）`——列表项多 ID `+` 拼接（agent 即兴写法，语义无歧义宽收）。
+ *
+ * @param {string} planMdText
+ * @returns {Array<{waveNo:number, tasks:string[], groups:string[][], batchIntent:boolean, clean:boolean}>}
+ *   tasks       补零任务 id（纯 ID 行 + 旧 checkbox 行兼容收，同既有双正则口径）
+ *   groups      批标注解析出的成员组（未与 Wave 任务对账，对账归主函数）
+ *   batchIntent 有任何并批意图信号（可解析标注 / 含 batch/并批/同批 字样的存疑行）→ 判定①不再提示
+ *   clean       无存疑 task 列表行、无 <2 成员的标注 → 判定②才评估（宁缺勿假）
+ */
+function parseBatchWavesFromPlanText(planMdText) {
+  const waves = []
+  let cur = null
+  for (const line of String(planMdText || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const wm = line.match(/^#+\s*Wave\s+(\d+)/i)
+    if (wm) {
+      cur = { waveNo: parseInt(wm[1], 10), tasks: [], groups: [], batchIntent: false, clean: true }
+      waves.push(cur)
+      continue
+    }
+    if (/^#+\s/.test(line)) { cur = null; continue } // 非 Wave 标题退出当前段（同既有解析守卫）
+    if (!cur) continue
+    // 批标注形态①：`> batch: task-01+task-02`
+    const bm = line.match(/^>\s*batch\s*[:：]\s*(.+)$/i)
+    if (bm) {
+      cur.batchIntent = true
+      const members = parseBatchMemberList(bm[1])
+      if (members.length >= 2) cur.groups.push(members)
+      else cur.clean = false
+      continue
+    }
+    // 批标注形态②：`- task-01 + task-02（batch）`（多 ID `+` 拼接的列表项）
+    const lb = line.match(/^[-*]\s+(task-\d+(?:\s*[+＋]\s*task-\d+)+)\s*(?:[（(]\s*batch\s*[）)])?\s*$/i)
+    if (lb) {
+      cur.batchIntent = true
+      const members = parseBatchMemberList(lb[1])
+      if (members.length >= 2) cur.groups.push(members)
+      else cur.clean = false
+      continue
+    }
+    // 纯 ID 引用行（新契约）与旧 checkbox 行（同 parseTaskWavesFromPlan 双正则口径）
+    const tm = line.match(/^[-*]\s+(?:\[[ x]\]\s*)?(task-\d+)\s*[:：\s]*$/i)
+      || line.match(/^[-*]\s*\[[ x]\]\s*(task-\d+)\b/i)
+    if (tm) { cur.tasks.push(padTaskRef(tm[1])); continue }
+    // 含 task id 但不匹配任何已知形态的列表行 → 并批信息存疑（判定②跳过；含并批字样则
+    // 同时视为并批意图挡①）。说明文字等非列表行忽略，不参与任务集合与并批判定。
+    if (/^[-*]\s+.*task-\d+/i.test(line)) {
+      cur.clean = false
+      if (/batch|并批|同批/i.test(line)) cur.batchIntent = true
+      continue
+    }
+  }
+  return waves
+}
+
+/**
+ * 汇总单卡并批判定要件（纯函数，复用本文件既有解析器先例——parseTargetFiles / parseAllowedPaths /
+ * parseDependsOn / parseTaskContracts / parseTaskFrontmatter）：
+ *   fileSet          文件面（parseTargetFiles 优先；缺失回退 parseAllowedPaths——存量卡兼容；两者皆无 → null 不可判）
+ *   deps             depends_on（补零）
+ *   expectsProviders expects_from 的 provider 任务集（补零；Wave 内命中 = 契约链）
+ *   batchMembers     卡 frontmatter `batch:` 字段成员（数组成员或 `task-01+task-02` 串皆收；<2 成员不供信息）
+ */
+function collectCardBatchFacts(content) {
+  const text = String(content || '')
+  let fileSet = null
+  const tf = parseTargetFiles(text)
+  if (!tf.missing && tf.entries.length > 0) {
+    fileSet = new Set(tf.entries.map(e => e.path))
+  } else {
+    const ap = parseAllowedPaths(text)
+    if (ap.length > 0) fileSet = new Set(ap)
+  }
+  const deps = parseDependsOn(text).map(padTaskRef)
+  const { expectsFrom } = parseTaskContracts(text)
+  const expectsProviders = Object.keys(expectsFrom || {}).map(padTaskRef)
+  let batchMembers = null
+  try {
+    const parsed = parseTaskFrontmatter(text)
+    if (parsed.ok && parsed.fm && parsed.fm.batch != null) {
+      const raw = Array.isArray(parsed.fm.batch) ? parsed.fm.batch : [parsed.fm.batch]
+      const uniq = [...new Set(raw.flatMap(v => parseBatchMemberList(String(v))))]
+      if (uniq.length >= 2) batchMembers = uniq
+    }
+  } catch { /* 坏卡不供并批信息（fail-open，advisory 面不抛错） */ }
+  return { fileSet, deps, expectsProviders, batchMembers }
+}
+
+/**
+ * checkBatchAdvisory —— plan 并批默认的 postcheck 机械提醒（B-③ / FR-01，warning 级 advisory）。
+ *
+ * 两判定（同口径不变式：并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)）：
+ *   ① batch_orthogonal_unbundled：Wave 任务两两文件正交（无共享 target_files——缺失回退
+ *      allowed_paths 判、无 Wave 内 depends_on 链、无 Wave 内 expects_from 契约链）且无任何
+ *      并批信号（plan.md 批标注行 / task 卡 batch 字段）→ 提示默认并批（2–4 任务/批）。
+ *      阈值 N≥4：N≤3 时任何并批都违反护栏 min(3,N)=N（未并批已是唯一合规形态），提示只会
+ *      制造 ①↔② 打架的 nag 环；B-③ 实证收益场景（R4-S-F）为 5 任务级。
+ *   ② wave_inflight_below_floor：有**可解析且无冲突**的并批信息，批数（多成员组数 + 未分组
+ *      单任务数）< min(3, 任务数) → 护栏缺口提示（墙钟回退风险，warning 可显式接受）。
+ *      解析不出 / 组间冲突 / 越界（成员不在本 Wave）→ 跳过（宁缺勿假，绝不猜批数）。
+ *
+ * @param {object} opts
+ * @param {string} opts.tasksMdText tasks.md 注册表文本（任务唯一真相——声明集非空时过滤 Wave
+ *   段里未声明的陈旧引用，防虚增任务数扰动两判定；空/无声明则不过滤）
+ * @param {string} opts.planMdText  plan.md 文本（Wave 段分组 + 批标注行）
+ * @param {object|Map<string,string>} [opts.taskCards] taskId → 卡片全文（Record 或 Map 皆收）
+ * @returns {Array<{level:'warning', code:'batch_orthogonal_unbundled'|'wave_inflight_below_floor', message:string}>}
+ *   恒为数组（0..n 条，单次调用多 Wave 可各出一条）；调用方只准并入 warnings 通道——
+ *   红线：绝不进 errors（门禁阻断语义零变化）。
+ */
+export function checkBatchAdvisory({ tasksMdText, planMdText, taskCards } = {}) {
+  const advisories = []
+  const waves = parseBatchWavesFromPlanText(planMdText)
+  if (waves.length === 0) return advisories
+
+  // 注册表过滤（2026-08-20-task-truth-unify：tasks.md 是任务唯一真相）
+  const declared = new Set()
+  for (const line of String(tasksMdText || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const m = line.match(/^[-*]\s*\[[ xX]\]\s*(task-\d+)\b/i)
+    if (m) declared.add(padTaskRef(m[1]))
+  }
+
+  const cards = new Map()
+  const cardEntries = taskCards instanceof Map
+    ? [...taskCards.entries()]
+    : (taskCards && typeof taskCards === 'object' ? Object.entries(taskCards) : [])
+  for (const [id, content] of cardEntries) cards.set(padTaskRef(id), collectCardBatchFacts(content))
+
+  for (const w of waves) {
+    const waveTasks = [...new Set(w.tasks)].filter(t => declared.size === 0 || declared.has(t))
+    const n = waveTasks.length
+    if (n < 2) continue
+    const waveSet = new Set(waveTasks)
+
+    // ── 并批信息对账：plan 批标注 × 卡 batch 字段 → 组。越界（成员不在本 Wave——跨 Wave /
+    //    幻觉引用）或组间冲突（同任务进两组）→ 本 Wave ②跳过（宁缺勿假）；此时必有并批
+    //    意图信号（组来自批标注行或卡 batch 字段），①也不再提示。──
+    let conflicted = false
+    const rawGroups = []
+    const seenKeys = new Set()
+    const pushGroup = (members) => {
+      const key = [...members].sort().join('+')
+      if (seenKeys.has(key)) return // 同组多卡重复声明 / 双源同组 → 去重
+      seenKeys.add(key)
+      rawGroups.push(members)
+    }
+    for (const members of w.groups) {
+      if (members.some(m => !waveSet.has(m))) { conflicted = true; continue }
+      pushGroup(members)
+    }
+    let cardBatchIntent = false
+    for (const t of waveTasks) {
+      const c = cards.get(t)
+      if (!c || !c.batchMembers) continue
+      cardBatchIntent = true
+      if (c.batchMembers.some(m => !waveSet.has(m))) { conflicted = true; continue }
+      pushGroup(c.batchMembers)
+    }
+    const owner = new Set()
+    let overlap = false
+    for (const g of rawGroups) {
+      for (const t of g) {
+        if (owner.has(t)) { overlap = true; break }
+        owner.add(t)
+      }
+      if (overlap) break
+    }
+    if (conflicted || overlap) continue
+
+    const batchIntent = w.batchIntent || cardBatchIntent
+    const batchCount = rawGroups.length + (n - owner.size)
+    const floor = Math.min(3, n)
+
+    // ── 判定①：文件正交但全未并批 ──
+    if (!batchIntent && n >= 4) {
+      const facts = waveTasks.map(t => cards.get(t) || null)
+      const knowable = facts.every(f => f && f.fileSet)
+      const chainFree = facts.every(f => f
+        && !f.deps.some(d => waveSet.has(d))
+        && !f.expectsProviders.some(p => waveSet.has(p)))
+      let fileDisjoint = true
+      if (knowable && chainFree) {
+        outer:
+        for (let i = 0; i < facts.length; i++) {
+          for (let j = i + 1; j < facts.length; j++) {
+            for (const p of facts[i].fileSet) {
+              if (facts[j].fileSet.has(p)) { fileDisjoint = false; break outer }
+            }
+          }
+        }
+      }
+      if (knowable && chainFree && fileDisjoint) {
+        advisories.push({
+          level: 'warning',
+          code: 'batch_orthogonal_unbundled',
+          message: `Wave ${w.waveNo} 内 ${n} 个任务文件两两正交（无共享 target_files、无 depends_on / provides-expects_from 契约链）` +
+            `但全部未并批——默认并批可摊平 execute 扇出的重复上下文重建（B-③）：2–4 任务/批，` +
+            `Wave 段内加批标注行（如 "> batch: task-01+task-02"，不替代 - task-XX 纯 ID 引用行），` +
+            `并批后整 Wave 批数保持 ≥ min(3, ${n})`,
+        })
+      }
+    }
+
+    // ── 判定②：批数护栏缺口（解析不出并批信息时跳过——宁缺勿假）──
+    if (batchIntent && w.clean && rawGroups.length > 0 && batchCount < floor) {
+      advisories.push({
+        level: 'warning',
+        code: 'wave_inflight_below_floor',
+        message: `Wave ${w.waveNo} 并批后批数 ${batchCount} < min(3, ${n})（该 Wave 任务数）——` +
+          `在飞子代理数低于护栏下限，有墙钟回退风险；建议拆为 ≥ ${floor} 批（如 5 任务 → 2+2+1 三批而非 3+2 两批）。` +
+          `护栏为 warning 提示可显式接受：S-F 型小任务（token 优先于墙钟）可保持现批并在 plan.md 注明接受`,
+      })
+    }
+  }
+  return advisories
+}
+
 /**
  * plan_level 第二把尺子（不接管，仅 warning）：design 文件清单数 / 模块跨度 / task 数
  * 与声明档位比对。fail-open（design/map 读取失败 → null 零输出）。
@@ -1863,6 +2112,31 @@ export async function executePlanPostcheck(context) {
   ⚠️  ${levelWarn}`)
     }
   } catch { /* fail-open */ }
+
+  // ── 1h. 并批 advisory（B-③ / FR-01，warning 不阻断——R5 效率批 task-01）──
+  // 正交未并批提示 + 批数护栏提示，只进 warnings 输出通道（printSectionWarnings 先例），
+  // 绝不进 failures/errors——红线：门禁阻断语义零变化。fail-open：读取/解析异常整体跳过。
+  try {
+    const batchAdvPlanPath = pJoin(changeDir, 'plan.md')
+    if (existsSync(batchAdvPlanPath)) {
+      const batchAdvTasksMdPath = pJoin(changeDir, 'tasks.md')
+      const batchAdvTasksDir = pJoin(changeDir, 'tasks')
+      const batchAdvCards = {}
+      if (existsSync(batchAdvTasksDir)) {
+        for (const f of readdirSync(batchAdvTasksDir).filter(f => /^task-\d+\.md$/.test(f))) {
+          const cardContent = readFileSync(pJoin(batchAdvTasksDir, f), 'utf8')
+          const cardId = parseTaskId(cardContent, f)
+          if (cardId) batchAdvCards[cardId] = cardContent
+        }
+      }
+      const batchAdvisories = checkBatchAdvisory({
+        tasksMdText: existsSync(batchAdvTasksMdPath) ? readFileSync(batchAdvTasksMdPath, 'utf8') : '',
+        planMdText: readFileSync(batchAdvPlanPath, 'utf8'),
+        taskCards: batchAdvCards,
+      })
+      printSectionWarnings('并批', batchAdvisories.map(a => `[${a.code}] ${a.message}`))
+    }
+  } catch { /* fail-open：advisory 面任何异常不阻断 */ }
 
   // ── 聚合输出：一轮 --done 暴露全部失败项（坑6③）──
   if (failures.length > 0) {

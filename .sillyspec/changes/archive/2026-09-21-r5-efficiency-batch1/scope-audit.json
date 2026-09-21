@@ -1,0 +1,140 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "33437ef1e9fc12d03f615c53b44bfa6426ee6619",
+  "totals": {
+    "files": 15,
+    "additions": 1472,
+    "deletions": 30
+  },
+  "rows": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "additions": 23,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "additions": 31,
+      "deletions": 13,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 78,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/review-material-pack.js",
+      "additions": 198,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "additions": 30,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "additions": 274,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "additions": 5,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/dispatch-contract.test.mjs",
+      "additions": 136,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/execute-materials.test.mjs",
+      "additions": 161,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/plan-batch-advisory.test.mjs",
+      "additions": 312,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/probe-suite/wrong-key.fixtures.mjs",
+      "additions": 136,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/probe-suite/wrong-key.test.mjs",
+      "additions": 83,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/stages.changelog.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "68070ed2e7ceb9c4071288bd3d989bc910078f717bae53201e527b537e3ca275",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-21T07:29:54.026Z"
+}

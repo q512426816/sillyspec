@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-21-r5-efficiency-batch1",
+  "generatedAt": "2026-09-21T07:37:46.727Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "matches": 16,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch1",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "other",
+        "item": "verify gate 快照按 mtime 三方取新存在血统盲区：主仓并行提交（ql-20260921-005 quick 修复）刷新 src/stages/execute.js mtime 后，快照取了无契约代码的主仓版 + worktree 新测试 → module 实测假红一轮；worktree apply 集成后主仓单源消解（569/569）",
+        "condition": "已复跑消解；根治建议入 R5 第 2 批：快照对「本变更 worktree 分支内文件」优先取分支内容（血统优先于 mtime），同族记录 round5/r5-collision-ehs-attribution.md P16",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 2,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/plan-batch-advisory.test.mjs",
+      "test/execute-materials.test.mjs",
+      "test/dispatch-contract.test.mjs",
+      "test/probe-suite/wrong-key.fixtures.mjs",
+      "test/probe-suite/wrong-key.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-21T07:42:11.909Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

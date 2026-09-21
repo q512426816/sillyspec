@@ -1277,6 +1277,34 @@ ${workdirLines}
   }
   // dispatchMode === 'local'（无配置）或 worktreePath 为空 → dispatchSection = '' → 输出与改前字节一致（零回归）
 
+  // ── 任务材料包引用行（2026-09-21-r5-efficiency-batch1 task-02，B-④）：options.materials 为
+  // taskId → 材料包路径映射（调用方用 assembleExecuteTaskMaterials 落盘后传入；execute 主链
+  // 暂不主动生成——接线最小化，生成调用留待后续）。无映射或本 Wave 无命中 → ''（零回归：
+  // prompt 与改前字节一致）。编号：全局硬约束恒为第 9 条（既有钉），材料包无冲突时占 9、
+  // 并存时顺延 10——两条路径（有/无 gc）编号均单调。
+  // （插在派发段之后：docs/sillyspec/platform-interface-map.md 锚 execute.js:1246 关键词窗口
+  // 止于上方 dispatchMode 判定行——本块置于其后不推移该锚。）
+  const materialsMap = options.materials || {}
+  const waveMaterialHits = wave.tasks.map((t, ti) => {
+    const taskNum = String(t.index || (ti + 1)).padStart(2, '0')
+    const p = materialsMap[`task-${taskNum}`]
+    return p ? `task-${taskNum} → \`${String(p)}\`` : null
+  }).filter(Boolean)
+  let materialsPoint = ''
+  if (waveMaterialHits.length > 0) {
+    const itemNo = globalConstraintsBlock ? '10.' : '9.'
+    materialsPoint = `\n${itemNo} **任务材料包（CLI 预装配，稳定段先行）**：${waveMaterialHits.join('；')}——先读材料包，按锚点回源核对；材料包只摘不译，冲突以源文件为准`
+  }
+
+  // ── 派发契约（2026-09-21-r5-efficiency-batch1 task-03，FR-03 / B-⑥ + C-1）：轮数纪律三行 +
+  // 子代理返回契约，无条件常驻注入（与要点 1-8 同级，不随材料包/硬约束缺位消失）。编号接在
+  // 材料包之后保持单调：全局硬约束恒 9（既有钉）→ 材料包在位占 10 → 本两条顺延；缺位前移，
+  // 四种组合（gc×材料包在否）编号均单调不撞车。轮数纪律打「轮数 × 上下文」的轮数乘数——验靶
+  // 实证新鲜内容仅 3.2%，逐处小 Edit / TodoWrite 连发 / 逐文件跑测是轮数膨胀三大源头。──
+  const roundDisciplineNo = 9 + (globalConstraintsBlock ? 1 : 0) + (waveMaterialHits.length > 0 ? 1 : 0)
+  const roundDisciplinePoint = `\n${roundDisciplineNo}. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑`
+  const returnContractPoint = `\n${roundDisciplineNo + 1}. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read`
+
   // ── 隐式 Wave 串行化（2026-09-17-feedback-hardening D-003@v1）：plan.md 无显式 Wave 划分时
   // parseWavesFromPlan 合成的 implicit Wave 未做过文件正交/契约链核查，并行不安全——prompt 层
   // 下发串行调度指令（头标注 + 角色清单 + 调度要求铁律 + batch 条件 2 括注收敛，防同 prompt
@@ -1332,7 +1360,7 @@ ${taskSummary}
    **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
 8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
-${globalConstraintsBlock}
+${globalConstraintsBlock}${materialsPoint}${roundDisciplinePoint}${returnContractPoint}
 {{include: testcase-design}}
 
 ${designHotzone}${decisionTouchSection}${waveKnowledgeSection}
@@ -1408,6 +1436,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
 - \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
 - \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
+- **回收瘦身**：审查回收输出 = verdict 一行 + blockers（如有）+ review.json 路径——细节不转述，主代理按需 Read 工件；git diff 对账仍是回收真相源，本条只瘦身转述
 
 ### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
 本 Wave 内所有 task 子代理完成、review.json 写好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：

@@ -154,6 +154,11 @@ const stepGeneratePlan = {
 > tasks.md 格式：\`- [ ] task-01: 一句话任务名\`（execute 从这里解析任务清单）
 > plan.md Wave 段格式：\`- task-01\`（纯 ID 引用，execute 据此分组）
 
+> **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：
+> - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（\`> batch: task-01+task-02\`，一段多行即多批），**不替代** \`- task-XX\` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）
+> - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+> - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
+
 ---
 
 #### plan_level = none

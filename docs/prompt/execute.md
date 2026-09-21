@@ -197,7 +197,7 @@ worktree 路径 + 分支名 + 模式
 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
 1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行——但同时在飞子代理 ≤3（见「调度要求」并发帽，超出的 batch 排队错峰）
 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
-3. 勾选 tasks.md 中对应任务的 checkbox
+3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
 4. 记录改动文件和测试结果
 
 
@@ -215,7 +215,11 @@ worktree 路径 + 分支名 + 模式
 ```
 
 ### 注意
-蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下；同理，spec 流程产物（module-impact.md / knowledge 条目 / 模块文档）只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本。
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
+
+⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 `<module>.changelog.md` sidecar。在 worktree 内发现 `.sillyspec/` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
+
+⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 `import <项目包>` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（`_editable_impl_*.pth`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 `PYTHONPATH=<worktree>/<项目源码根>`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；`sillyspec worktree doctor` 的 editable-install-escape 检查可提前暴露。
 
 **SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。
 
@@ -228,13 +232,17 @@ task-01: 默认任务 1 (TBD) → task-01.md
 1. 任务目标（简短描述）
 2. 蓝图文件路径（让子代理自行读取详情）
 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
-4. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定与数据流（读主仓路径，不读 worktree 副本）
+4. 4. 如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本
 5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt，要求子代理按此设计测试用例
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
+   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
 7. **任务边界铁律**：严格只实现本 task 的 `allowed_paths` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
 8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
 
+9. **轮数纪律（省 token 铁律）**：相邻同文件的多个改动合并为一次 Edit 批量提交（不逐处小改）；TodoWrite 只在阶段边界用、实现中途不连发；测试验证合并单次 Bash 跑完（多查一条命令串联），不逐文件逐轮跑
+10. **返回契约**：子代理最终返回 ≤25 行结构化摘要——verdict（done|blocked）/ 触碰文件数 / 测试一行结果 / 偏差说明；实现细节不贴正文，落盘文件按需 Read
 {{include: testcase-design}}
+
 
 ### Wave 开始前
 1. 读取 design.md 的「非目标」与「兼容策略」章节（如存在），确保子代理不超范围、不破坏旧逻辑
@@ -267,21 +275,23 @@ execute 按 Wave 持久化进度，task 级进度靠 tasks.md checkbox 勾选。
    - 最后一个 Wave 完成后做一次全量编译验证
    - 用户明确要求编译时
 4. 每个任务完成后：
-   - **用 CLI 串行提交，不要裸跑 git add/commit**：在 worktree 内执行 `sillyspec wt-commit --change <change> -m "<task-NN 摘要>" -- <本 task allowed_paths 内的精确路径...>`（坑 wt-parallel-commit-race，2026-08-29 用户实证×2：同 Wave 兄弟子代理共享本 worktree，裸 `git add -A && git commit` 会把对方 WIP 卷进自己的提交 / 并发撞 index.lock，两次都靠子代理自觉救回。wt-commit 按变更文件锁串行 + 强制 pathspec 双保险；输出的 HEAD 直接填 review.json 的 head）。CLI 确不可用时的退路：`git add -- <精确路径> && git commit -m "..." -- <精确路径>`——任何情况下**禁 `git add -A` / `git add .`**。必须当场 commit（坑 subagent-uncommitted-newfile-apply3way，2026-08-22 实证：纯新增文件不 commit 时 apply 的 git apply --3way 报 "does not exist in index" 直接炸；commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点）
-   - **先写 review.json 再勾选 checkbox**（见下方 Task Review Gate）
+   - **使用 `sillyspec wt-commit --change <change-name> -- <task-files>` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 `git add -A` 互卷 WIP / 撞 index.lock；`git add -A` 还会把并行子代理未提交的半成品一并暂存——**禁 `git add -A`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 "does not exist in index"）
+   - commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点
+   - **写 review.json 即可**（checkbox 由 CLI 自动勾选，见下方 Task Review Gate）
+   - **任务边界上报（每任务一次，主仓根目录）**：review write 落盘（CLI 已自动勾选）后跑一次 `sillyspec platform sync --change <change-name>`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 `ruff format` / `prettier --write`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 `which <bin>` 确认，缺则 `uv tool install` / `uv sync`）
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
 ### Task Review Gate
 
-每个子代理完成后、勾选 checkbox **之前**，你必须创建 task review。
+每个子代理完成后，你必须创建 task review（review write 落盘后 CLI 自动勾选 checkbox——P2-f 起勾选唯一写入者是 CLI）。
 
 **操作步骤：**
 1. 读取当前 task 的 git diff（从 task 开始到完成的变更）
 2. 对照 plan.md 中该 task 的描述和 tasks/task-XX.md（如果存在）检查实现是否符合要求
 3. 写入 review.json 文件
-4. **只有 review.json 写入成功后，才允许勾选 tasks.md 中对应任务的 checkbox**（勾选唯一落点；CLI 的 autoCheckPlanFromReviews 机器勾选器同样写 tasks.md，文件锁 .tasks.md.lock 串行化双路勾选）
+4. **禁止手动勾选 tasks.md 的 checkbox**（P2-f task 真源归一：review.json verdict 是唯一真源，tasks.md 勾选是它的显示态，唯一写入者是 CLI——review write 落盘即勾、execute --done 时 autoCheckPlanFromReviews 兜底；agent 手勾与机器勾的漂移面就此退役）
 
 **review.json 路径：**
 
@@ -297,11 +307,16 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
  "qualityVerdict": "pass|fail|cannot_verify", "reviewerNotes": "评审说明",
  "requiredEvidence": [] }
 
+**base/head 两种取法（按提交模式选其一）：**
+- **per-task commit 模式**（默认，子代理每 task 一提交）：base=本 task 开始前的 commit，head=本 task 的 commit——base..head 天然就是本 task 的 diff，无需 diffPaths。
+- **统一 commit 模式**（主代理统一实现/收尾一次性 commit，全部 task 一个提交）：base=基线 commit（worktree meta 的 baseHash），head=统一 commit，并**必填 `diffPaths`（本 task 卡的 allowed_paths 原样数组）**——评审与 CLI 校验的 diff 都是 `git diff base..head -- diffPaths` 的路径限定切片，任务边界由 diffPaths 机器可验，不再只靠 changedFiles 归属说明。changedFiles 填切片内实际改动的文件。
+
 **评审铁律：**
 - 不信任 implementer 自报结果，对照 diff 和 task brief 验证
-- 只看当前 task 的 diff，不做全仓库漫游审查
+- 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
 - `cannot_verify` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
 - `sillyspec run execute --done` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
+- **回收瘦身**：审查回收输出 = verdict 一行 + blockers（如有）+ review.json 路径——细节不转述，主代理按需 Read 工件；git diff 对账仍是回收真相源，本条只瘦身转述
 
 ### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
 本 Wave 内所有 task 子代理完成、review.json 写好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：

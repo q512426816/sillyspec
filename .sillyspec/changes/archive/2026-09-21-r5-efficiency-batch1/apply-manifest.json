@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-21-r5-efficiency-batch1",
+  "appliedAt": "2026-09-21T07:35:11.048Z",
+  "baseHash": "33437ef1e9fc12d03f615c53b44bfa6426ee6619",
+  "files": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "sha256": "694063d734304a00f9fca6be230cf4290f673b6bf3f79d1474e3c446487e74ab"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "sha256": "bd69d132f6a6fb0c74d3676cf628d4adf088b8ae84db547c73fceddad4bfd44b"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "sha256": "199be8d2768995d4852056cdd93777407fcc91f4efa6b95b7b173fc1b3c627c6"
+    },
+    {
+      "path": "src/review-material-pack.js",
+      "sha256": "1b6c3fed4c1703317e43c789acde51a76f752f9c86d0802e2967b770bce6c4a6"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "sha256": "93b9b0f24f7a2c5f7a0f153a5ab7e8d955520802d0d3c349bfea0be485c61eef"
+    },
+    {
+      "path": "test/dispatch-contract.test.mjs",
+      "sha256": "15aec3c6e631f2d690cc58d9f55594a58e38b2135a85f9474218ff659e1a5844"
+    },
+    {
+      "path": "test/execute-materials.test.mjs",
+      "sha256": "9153a11ab7fc229bdae4df5c75ac811cc51f9861ec7b0315e534ede216ff1d9f"
+    },
+    {
+      "path": "test/plan-batch-advisory.test.mjs",
+      "sha256": "5e9aa0bb98dbe32aad8df6ef2952645e499b6fd1b768928cae73d9e048ea3d7f"
+    },
+    {
+      "path": "test/probe-suite/wrong-key.fixtures.mjs",
+      "sha256": "216e152d60b1ed2b73fe85916e7c8d40e1913729e156c8cbc74d79ff0c6b9bec"
+    },
+    {
+      "path": "test/probe-suite/wrong-key.test.mjs",
+      "sha256": "6e0970d6b7f5d0a6985348cd8bfa25eeba39fa8faa2d35e64396962412c26ae3"
+    },
+    {
+      "path": "src/stages/plan-postcheck.js",
+      "sha256": "db73ab24e4ddd9a2e41fccd0eea3b803ec273980ac18348429e1860f5c4774af"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "sha256": "1ff642b024c21f0c68da07dedc09eb38d362040d4a58c127bae660e35921aa4b"
+    }
+  ]
+}

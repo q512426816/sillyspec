@@ -69,6 +69,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | `extractDiffSummary({cwd,changeName,specBase,...})` | diff 名单+stat：名单委托 resolveVerifyChangedFiles（base 解序单点，禁独立解 base）；stat 走 safeGit（返回 {value,error} 取 .value——[object Object] 坑 2026-09-19 修复） | 见左 |
 | `extractSnippets(repoRoot, anchors)` | 点名文件×行窗片段（每片段 SNIPPET_MAX_CHARS 截断） | `repoRoot, anchors` |
 | `assembleStageReviewMaterials({stage,cwd,changeName,specBase})` | **CLI 半边装配入口（cli-wiring Gap 1 收口）**：prompt.js tier 注入链组包调用——grill-first（章节行号索引+背景/设计目标+文件清单表路径列剥 NEW:/MOD:）/plan-review（全局硬约束节行 cap10，缺节 decisions.md accepted P0/P1 兜底）/execute-qa（diffSummary+designContent+REVIEW_CHECKLISTS.execute）；crossPoints/planDelta 恒不预填（主代理点名半边留位，D-002）；best-effort 全层兜底→''（与占位符缺失同态） | `async, 上述四参` |
+| `assembleExecuteTaskMaterials({changeDir,tasks})` | **execute 任务材料包装配（2026-09-21-r5-efficiency-batch1 B-④）**：两段式——稳定段（design 通摘/接口契约）先行、任务专属段（task 卡要点）在后，超限按 24KB 上限专属段截尾保锚点；只摘不译（原文逐字），无映射任务零输出；buildWavePrompt 消费渲染材料包引用行（编号随硬约束恒 9 顺延） | `async, 上述两参` |
 
 ### src/quick-gate-profile.js — quick 出口分级门禁画像（2026-09-14-quick-exit-tiered-gates 新增）
 定位：quick --done 分级门禁的信号单一来源——纯函数零 IO（moduleIndex/风险表/阈值全由参数或默认值，D-007 / R-04），接线消费见 runtime 卡（run/shared.js 挂 review.gateProfile）。
