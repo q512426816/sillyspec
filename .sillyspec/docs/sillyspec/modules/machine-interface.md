@@ -47,3 +47,5 @@ SillyHub driver 模式的机器接口层。把 SillySpec 门控与事实核验�
 <!-- MANUAL_NOTES_START -->
 
 <!-- MANUAL_NOTES_END -->
+
+**--full 只读预检档（2026-09-21-r5-efficiency-batch3，P1/FR-01/D-002@v1）**：`sillyspec gate <stage> --full` 在标准 checks 之上补齐 --done 独有检查面——verify 档加 full-target-files-reconcile（reconcileTargetFiles 纯计算只读跑，missing_declared 即红）与 full-stage-review（getLatestStageReviewRunId 在场探测，缺则报预期路径+register 骨架指引）；execute 档加 full-stage-review。全只读零副作用（fail-open 装配异常降 informational）；默认档（无 --full）envelope.checks 零 full-* 条目（零行为变化）。「预检过=必过（同因）」——状态在预检与 --done 之间变化时 --done 复查照拦（预演不代门）。quick 档不在此通道（machine gate 无 quick 面；其实测门去重由 P2 账本在 quick --done 消费点兑现）。

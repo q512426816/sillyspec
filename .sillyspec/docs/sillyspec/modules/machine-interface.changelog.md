@@ -1,0 +1,1 @@
+- 2026-09-21-r5-efficiency-batch3 | P1 gate --full 只读预检档：verify/execute 补 --done 独有面（reconcile 只读+stage review 探测），默认档零变化。
