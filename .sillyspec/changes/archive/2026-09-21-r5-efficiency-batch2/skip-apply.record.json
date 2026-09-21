@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-21-r5-efficiency-batch2",
+  "flag": "--skip-apply",
+  "skippedAt": "2026-09-21T12:57:54.165Z",
+  "deliverableCount": 3,
+  "deliverableFiles": [
+    "docs/sillyspec/platform-interface-map.md",
+    "docs/sillyspec/prompt-control-debt.md",
+    "src/stages/execute.js"
+  ],
+  "note": "归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计"
+}

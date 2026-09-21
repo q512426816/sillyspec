@@ -1,0 +1,1723 @@
+diff --git a/docs/prompt/_extracted.json b/docs/prompt/_extracted.json
+index 744abf68..b4b8498b 100644
+--- a/docs/prompt/_extracted.json
++++ b/docs/prompt/_extracted.json
+@@ -479,7 +479,7 @@
+         "index": 1,
+         "id": "generate_plan",
+         "name": "生成分级计划",
+-        "prompt": "根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。\n\n### 操作\n1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）\n2. 读取 tasks.md 和 design.md 了解需求范围\n3. 按 plan_level 选择对应模板输出\n4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围\n5. 保存 plan.md（审查在下一步\"审查计划\"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）\n\n> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**\n> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）\n> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）\n> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）\n> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）\n\n> **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：\n> - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（`> batch: task-01+task-02`，一段多行即多批），**不替代** `- task-XX` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）\n> - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退\n> - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）\n\n---\n\n#### plan_level = none\n生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图（plan_level=none 只收缩编排与模板厚度，不减免评审仪式——仪式档位由 ceremony_tier 定价）。格式：\n```markdown\n---\nplan_level: none\n---\n\n# 计划跳过\n\n## 原因\n<一句话说明判定理由>\n\n## 建议直接 execute\n直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。\n\n## 验收\n- 修改范围符合用户需求\n- 不引入额外无关变更\n- 必要测试或检查通过\n```\n同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。\n**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。\n\n---\n\n#### plan_level = light\n生成轻量 plan.md，保存到变更目录（plan_level=light 只决定轻量模板与简化编排，不升降评审仪式——仪式档位由 ceremony_tier 定价）。只包含以下四部分：\n\n```markdown\n---\nplan_level: light\n---\n\n# 轻量计划（Light Plan）：<需求简述>\n\n## 来源\n直接引用 brainstorm 结论或用户原始需求，不重新扩写。\n\n## 范围\n- 涉及的文件/模块清单\n\n## 验收\n- 具体可验证的验收条目\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。\n\nlight 计划的约束：\n- **禁止**生成 Mermaid 图\n- **禁止**估时\n- **禁止**泛泛风险分析（如\"需要充分测试\"）\n- **禁止**放实现细节（函数签名、代码示例）\n- 来源/目标直接引用已有文档，不重新生成\n- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md\n- 任务清单（tasks.md）控制在 10 条以内\n- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行\n\n---\n\n#### plan_level = full\n生成完整 plan.md，保存到变更目录（plan_level=full 只展开完整蓝图与 wave/并行编排，不加重评审仪式——仪式档位由 ceremony_tier 定价；agent 报 full 而档位 S0/S1 时 CLI 强制轻仪并留审计痕）。格式如下：\n\n```markdown\n---\nplan_level: full\n---\n\n# 实现计划（Plan）\n\n## Spike 前置验证（如需要）\n| Spike | 验证内容 | 不通过后果 |\n|---|---|---|\n| spike-01 | ... | task-XX 推翻重设计 |\n\n> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。\n\n## Wave 1（并行，无依赖）\n- task-01\n- task-02\n\n## Wave 2（依赖 Wave 1）\n- task-03\n\n## 任务总表\n| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |\n|---|---|---|---|---|---|---|\n| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |\n| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |\n| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |\n\n## 关键路径\ntask-01 → task-03（最长路径，决定最短交付周期）\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）\n- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文\n\n## 全局验收标准\n1. 所有单元测试通过\n2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确\n3. （brownfield）未配置新功能时行为不变\n\n> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n\nfull 计划的约束：\n- **禁止**估时（任务总表不含估时列）\n- **禁止**泛泛风险分析（\"需要充分测试\"类废话转为具体验收条目）\n- Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）\n- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）\n- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**\n- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单\n- 实现细节写到后续的 tasks/task-NN.md 中\n- 每个任务编号格式：task-01、task-02 ...\n- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）\n- 总任务数控制在 15 个以内\n\n### Spike 前置验证（仅 full）\n当存在技术不确定性时，在 Wave 之前设计 Spike：\n- 涉及新技术栈/未经验证的集成 → 需要 Spike\n- 涉及安全隔离/性能瓶颈 → 需要 Spike\n- 纯业务逻辑/确定的技术方案 → 不需要 Spike\n- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果\n\n### 批量模式指引（仅 full）\n如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：\n- ❌ 不要列出每个实例作为独立任务\n- ❌ 不要在文档中嵌入数据\n- ✅ 设计通用架构，Wave 1 聚焦架构\n- ✅ 数据转换用脚本完成，单独一个 Wave\n- ✅ 总任务数控制在 10 个以内\n\n---\n\n### 通用操作（所有级别）\n1. 读取 tasks.md 获取任务列表（注册表唯一真相）\n2. 读取 design.md 获取文件变更清单\n3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）\n4. 按对应级别模板生成内容\n5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）\n6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）\n**plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**\n\n---\n\n### 输出\nplan_level + 计划内容（审查在下一步独立进行）",
++        "prompt": "根据 plan.md frontmatter 的 plan_level 结果，按对应级别生成计划。plan_level 只决定编排（wave 拆分 / 并行子代理 / 模板厚度——工作量轴）；评审仪式档位一律由 ceremony_tier 按 risk 客观定价（风险轴），与本步所选级别无关。\n\n### 操作\n1. 读取 plan.md frontmatter 的 `plan_level:` 字段（上一步已落盘为持久锚点；文件不存在或无该字段时回退读上一步输出的分类结果）\n2. 读取 tasks.md 和 design.md 了解需求范围\n3. 按 plan_level 选择对应模板输出\n4. **写回任务清单**：把展开后的任务清单写回 tasks.md（checkbox 行 `- [ ] task-XX: 一句话任务名`，可附 `[model:xxx]`/`(depends_on: task-01,02)` 行内标注）。**写回规则（D-002@v1）**：保留 frontmatter/中文标题/所有非 task-XX 行（quick 挂载的 ql-xxx 勾选行、注记等逐行保留），仅重写 task-XX checkbox 行集合——防摧毁 quick 挂载条目。**展开任务时为每个 task 确定 target_files**（该 task 计划要改动的文件清单，随下一步「生成 TaskCard」按统一格式落进卡 frontmatter 的 target_files 字段）：每项为精确仓根相对路径（✅ `src/foo.js`），计划新建的文件加 `NEW:` 前缀（✅ `NEW:src/bar.js`）；❌ 禁 glob（`src/**`）/目录前缀（`src/dir/`）/绝对路径。target_files 与 allowed_paths 语义不同：前者=计划要动的具体文件，后者=权限范围\n5. 保存 plan.md（审查在下一步\"审查计划\"独立进行，不在本步自审——避免生成与自审同一次输出）；frontmatter 保留 plan_level 字段不删。**plan.md Wave 段下任务一律纯 ID 引用行**（`- task-XX`，不重抄任务名——任务名唯一真相在 tasks.md，重抄即双写漂移）\n\n> ⚠️ **Wave 段格式铁律（踩坑：旧先例 `- [ ] task-XX: 描述` 格式会导致 postcheck 告警）：**\n> ✅ 正确：`- task-01`（裸 ID 引用行，无 checkbox 无任务名）\n> ❌ 错误：`- [ ] task-01: 添加用户创建接口`（checkbox + 任务名——这是 tasks.md 格式，不是 plan.md Wave 段格式）\n> tasks.md 格式：`- [ ] task-01: 一句话任务名`（execute 从这里解析任务清单）\n> plan.md Wave 段格式：`- task-01`（纯 ID 引用，execute 据此分组）\n\n> **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：\n> - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（`> batch: task-01+task-02`，一段多行即多批），**不替代** `- task-XX` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）\n> - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退\n> - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）\n\n> **执行模式声明（execution_mode，M4——清晰输入任务的主代理直写通道，2026-09-21-r5-efficiency-batch2）**：\n> - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = dispatch**（走既有子代理派发，既有变更零影响）；本仓对撞实证 A 组主代理直写 7′ 进码 vs B 组派发 70′（GSD 在 Claude Code 永远 spawn 子代理，direct 模式是本仓结论非抄袭项——分歧声明见 design）\n> - 仅当满足判据才声明 `execution_mode: main`：**输入已含决策**（design/方案已把接口、边界、验收定死，实现期无开放式设计裁决）× **任务边界清晰可串行**（无跨 task 契约链半成品风险）；不满足或拿不准一律缺省 dispatch（误用 main 只损失并行收益，不损失任何防线与审查）\n> - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）\n\n---\n\n#### plan_level = none\n生成最小 plan.md（占位文件，保持流程兼容），不生成完整蓝图（plan_level=none 只收缩编排与模板厚度，不减免评审仪式——仪式档位由 ceremony_tier 定价）。格式：\n```markdown\n---\nplan_level: none\n---\n\n# 计划跳过\n\n## 原因\n<一句话说明判定理由>\n\n## 建议直接 execute\n直接进入 execute 阶段完成最小任务（任务清单见 tasks.md）。\n\n## 验收\n- 修改范围符合用户需求\n- 不引入额外无关变更\n- 必要测试或检查通过\n```\n同时把最小任务写入 tasks.md：`- [ ] task-01: 按用户需求完成小范围明确修改`（同样遵守写回规则）。\n**注意：** 任务 checkbox 只在 tasks.md（`- [ ] task-XX:` 格式，execute 阶段从 tasks.md 解析任务、按 plan.md Wave 引用分组）。\n\n---\n\n#### plan_level = light\n生成轻量 plan.md，保存到变更目录（plan_level=light 只决定轻量模板与简化编排，不升降评审仪式——仪式档位由 ceremony_tier 定价）。只包含以下四部分：\n\n```markdown\n---\nplan_level: light\nexecution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）\n---\n\n# 轻量计划（Light Plan）：<需求简述>\n\n## 来源\n直接引用 brainstorm 结论或用户原始需求，不重新扩写。\n\n## 范围\n- 涉及的文件/模块清单\n\n## 验收\n- 具体可验证的验收条目\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n任务清单一律写 tasks.md（本步操作 4 写回；light 级 plan.md **无任务区**——execute 自动把注册表合成为单个隐式 Wave 串行执行）。\n\nlight 计划的约束：\n- **禁止**生成 Mermaid 图\n- **禁止**估时\n- **禁止**泛泛风险分析（如\"需要充分测试\"）\n- **禁止**放实现细节（函数签名、代码示例）\n- 来源/目标直接引用已有文档，不重新生成\n- 如果存在 decisions.md，所有当前版本 D-xxx@vN 必须在覆盖矩阵中出现（CLI 只校验 D-xxx@vN ID 字面出现在 plan.md，warning 不阻断；矩阵结构供人类追溯，CLI 不校验 D→FR→task 映射完整性）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md\n- 任务清单（tasks.md）控制在 10 条以内\n- 任务名使用 tasks.md checkbox 格式（`- [ ] task-XX:`），plan.md 不放任务行\n\n---\n\n#### plan_level = full\n生成完整 plan.md，保存到变更目录（plan_level=full 只展开完整蓝图与 wave/并行编排，不加重评审仪式——仪式档位由 ceremony_tier 定价；agent 报 full 而档位 S0/S1 时 CLI 强制轻仪并留审计痕）。格式如下：\n\n```markdown\n---\nplan_level: full\nexecution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）\n---\n\n# 实现计划（Plan）\n\n## Spike 前置验证（如需要）\n| Spike | 验证内容 | 不通过后果 |\n|---|---|---|\n| spike-01 | ... | task-XX 推翻重设计 |\n\n> 技术不确定性高时才需要 Spike。无不确定性则跳过此节。\n\n## Wave 1（并行，无依赖）\n- task-01\n- task-02\n\n## Wave 2（依赖 Wave 1）\n- task-03\n\n## 任务总表\n| 编号 | 任务 | Wave | 优先级 | 依赖 | 覆盖 FR/D | 说明 |\n|---|---|---|---|---|---|---|\n| task-01 | 添加用户创建接口 | W1 | P0 | — | FR-01, D-001@v1 | ... |\n| task-02 | 添加角色创建接口 | W1 | P0 | — | FR-02 | ... |\n| task-03 | 用户创建接口联调 | W2 | P0 | task-01,02 | FR-03 | ... |\n\n## 关键路径\ntask-01 → task-03（最长路径，决定最短交付周期）\n\n## 全局硬约束（从 design.md 逐字抄录，绑定所有 task）\n- （逐字抄录 design.md 中绑定**每个** task 的硬约束：版本底线 / 依赖限制 / 命名与文案 / 精确值 / 兼容策略 / 非目标边界——执行期子代理只读自己的任务卡 + 本段、不重读 design 全文，抄录失真 = 执行期偏差源头；无跨 task 硬约束时可省略本段）\n- 示例：Node ≥ 20；禁止新增运行时依赖；错误文案一律中文\n\n## 全局验收标准\n1. 所有单元测试通过\n2. 集成敏感 task（路由/layout/跨进程装配）建议加集成冒烟验收——组件单测全绿 ≠ 集成正确\n3. （brownfield）未配置新功能时行为不变\n\n> 验收结论不落在 plan.md（此段是验收清单，plan.md 不做执行态文件）——逐项核验结果由 verify 阶段写入 verify-result.md（PASS/FAIL 结论与证据）；task 级验收对照 TaskCard frontmatter 的 acceptance 字段。\n\n## 覆盖矩阵（如存在 decisions.md）\n| ID | 覆盖任务 | 验收证据 |\n|---|---|---|\n| D-001@v1 | task-01 | AC-01 |\n```\n\nfull 计划的约束：\n- **禁止**估时（任务总表不含估时列）\n- **禁止**泛泛风险分析（\"需要充分测试\"类废话转为具体验收条目）\n- Mermaid 依赖关系图**仅当依赖关系非平凡时生成**（线性依赖或全并行时不生成）\n- **Wave 段 ID 引用行必须保留**（`- task-XX` 纯 ID、无 checkbox 无任务名——机器解析依赖；任务名唯一真相在 tasks.md，plan.md 重抄即双写漂移）\n- plan.md 包含 Wave 分组 + 任务总表 + 关键路径 + 全局硬约束（design 有跨 task 硬约束时逐字抄录）+ 全局验收标准，**不放实现细节**\n- 如果存在 decisions.md，plan.md 建议包含当前版本 D-xxx@vN/FR-xxx 覆盖矩阵（CLI 只校验 D-xxx@vN/FR-xxx ID 字面出现在 plan.md，warning 不阻断；矩阵的 D→FR→task 映射完整性供人类追溯，CLI 不校验——勿以为画了矩阵就被结构校验）\n- 如果存在 P0/P1 unresolved blocker，不生成 plan.md，输出阻塞清单\n- 实现细节写到后续的 tasks/task-NN.md 中\n- 每个任务编号格式：task-01、task-02 ...\n- 任务总表的优先级：P0（必须）/ P1（重要）/ P2（可选）\n- 总任务数控制在 15 个以内\n\n### Spike 前置验证（仅 full）\n当存在技术不确定性时，在 Wave 之前设计 Spike：\n- 涉及新技术栈/未经验证的集成 → 需要 Spike\n- 涉及安全隔离/性能瓶颈 → 需要 Spike\n- 纯业务逻辑/确定的技术方案 → 不需要 Spike\n- 每个 Spike 定义：验证内容 + 通过标准 + 不通过后果\n\n### 批量模式指引（仅 full）\n如果 design.md 或需求中包含批量特征（关键词：批量/模板/引擎/N个相似），按以下原则规划：\n- ❌ 不要列出每个实例作为独立任务\n- ❌ 不要在文档中嵌入数据\n- ✅ 设计通用架构，Wave 1 聚焦架构\n- ✅ 数据转换用脚本完成，单独一个 Wave\n- ✅ 总任务数控制在 10 个以内\n\n---\n\n### 通用操作（所有级别）\n1. 读取 tasks.md 获取任务列表（注册表唯一真相）\n2. 读取 design.md 获取文件变更清单\n3. 读取 plan.md frontmatter 的 `plan_level:` 字段（持久锚点；缺失时回退上一步输出）\n4. 按对应级别模板生成内容\n5. 保存到变更目录下的 plan.md（路径格式：`{SPEC_ROOT}/changes/<change-name>/plan.md`，其中 <change-name> 是变更目录名，直接使用，不加子目录。正确路径示例：`{SPEC_ROOT}/changes/2026-05-28-agent-log-streaming/plan.md`）\n6. 写回 tasks.md（本步操作 4 的写回规则：仅重写 task-XX checkbox 行集合，保留非 task-XX 行）\n**plan_level 为 none 时生成最小 plan.md（占位），不生成完整蓝图。**\n\n---\n\n### 输出\nplan_level + 计划内容（审查在下一步独立进行）",
+         "outputHint": "plan_level + 计划内容",
+         "optional": false
+       },
+@@ -501,7 +501,7 @@
+         "index": 3,
+         "id": "generate_blueprints",
+         "name": "生成 TaskCard（默认主代理直填，大规模才派 batch）",
+-        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch1\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**\n   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**\n   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）\n3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）\n4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n6. 等待所有 batch 子代理完成\n7. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch1\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch1\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch1\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch1\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 UserDTO\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言依赖本次要重构掉的实现细节，需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch1\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
++        "prompt": "为 plan.md 中的每个任务生成紧凑 TaskCard。\n\n⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：\n- **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）\n- **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）\n这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。\n\n⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。\n\n可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 `target_files: []` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 `src/foo.js`、计划新建文件 `NEW:src/bar.js`；❌ `src/**`（glob）、`src/dir/`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。\n\n## 任务清单\n- task-01: 添加用户创建接口（覆盖：FR-01, D-001@v1）\n- task-02: 添加角色创建接口（覆盖：FR-02）\n- task-03: 用户创建接口联调\n\n## 时间和用户\n当前时间：<now-datetime>\n当前用户：<git-user>\n\n## 执行方式（必须严格遵守）\n\n**你必须使用 Agent tool 启动子代理来写卡片，不要自己写。**\n\n0. **先由你（主 agent）一次性预生成全部骨架**（2026-08-25 实证：并行子代理各自跑 taskcard CLI 撞进度库 SQLite 锁，主代理单进程预生成 + 子代理只 Edit 才稳）：\n   ```\n   sillyspec taskcard 2026-05-13-demo-change --all\n   ```\n   幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**\n1. 确认 `C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）\n2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**\n   - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**\n   - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）\n3. **（分派形态时）按 batch 分派子代理（减少总子代理数量，而不是一个 task 一个子代理）：**\n   - 把任务按「同一 Wave + 同一模块/相近能力 + 无跨 batch 强依赖」原则分组\n   - **每个 batch 包含 2~4 个 task**；Wave 内任务数 ≤4 时整个 Wave 可作为一个 batch\n   - 有提供/消费契约的 task 尽量放到同一 batch（子代理能同时看到 consumer 与 provider，避免契约字段漏配）\n   - 跨 Wave 依赖的 task 不要放在同一 batch（子代理只需读 plan.md，但 batch 内 task 的 allowed_paths 不应互相阻塞）\n   - batch 数量封顶 ≤3（13 任务≈3 batch 已足；再多是协调税）\n4. 为每个 batch 启动一个独立子代理（Agent tool），可并行启动多个 batch\n5. 每个子代理使用下方「批量 TaskCard 子代理 prompt」，一次生成该 batch 的全部 task-N.md\n6. 等待所有 batch 子代理完成\n7. 验证每个 task-N.md 文件已生成且非空\n\n> 设计意图：plan.md 里 task 数可以较多（能力拆分完整），但 TaskCard 生成阶段的**默认形态是主 agent 直填**——卡是 design/plan 的誊写不是创作，主 agent 刚写完 plan 上下文最热；子代理只在规模/上下文压力真实存在时才有净收益（每个子代理都要重读 design+plan+源码，6 个子代理 6.7M token 的实证教训）。分派时合并 batch，避免子代理数量随 task 数线性爆炸。\n\n### 批量 TaskCard 子代理 prompt\n```\n你是一个专注的 TaskCard 生成器。你的任务是为指定 batch 生成全部 TaskCard。\n\n## ⚠️ 格式形态（第一眼必读，坑 taskcard-body-section-rework）\nTaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。\n\n## 输入\n- 变更目录：C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2\\.sillyspec\\changes\\2026-05-13-demo-change\n- 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）\n- 当前用户：<git-user>（frontmatter 的 author 使用此值）\n- 本 batch 任务列表：\n  <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>\n\n## 操作\n1. 读取 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2\\.sillyspec\\changes\\2026-05-13-demo-change/design.md 和 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2\\.sillyspec\\changes\\2026-05-13-demo-change/plan.md 了解整体上下文\n2. 读取本 batch 涉及的相关源文件\n3. **骨架已由主 agent 预生成**（`C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑\n4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭\n5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：\n\n---\nid: <task-id>\ntitle: <task-name>\ntitle_zh: <任务中文标题>\nauthor: <git-user>\ncreated_at: <now-datetime>\npriority: P0\ndepends_on: []\nblocks: []\nrequirement_ids: [FR-XX]\ndecision_ids: [D-XXX@vN]\nrepo: <repo-key>                          # 可选。仅跨仓 task 填：local.yaml repos: 注册的仓 key（缺省=main，主仓 task 省略此行）\nallowed_paths:                            # ⚠️ 路径相对 repo 声明的仓根（跨仓=跨仓仓根，主仓=主仓根），禁止带仓库名前缀/绝对路径\n  - frontend/src/lib/errors.ts\ntarget_files:                             # 可选。本 task 计划要改动的文件清单（文件级意图，供对账；与 allowed_paths 语义不同——那是权限范围）。骨架已预置 [] 占位行，无明确意图保留 [] 不动\n  - src/foo.js                            # ✅ 精确仓根相对路径（口径同 allowed_paths）；计划新建文件加 NEW: 前缀（NEW:src/bar.js）。❌ 禁 glob（src/**）/目录前缀（src/dir/）/绝对路径\nprovides:                              # 可选。仅当本 task 给其他 task 提供接口/DTO/响应时填\n  - contract: <DTO或响应类型名>          # 如 UserDTO\n    fields: [field_a, field_b]\nexpects_from:                          # 可选。仅当本 task 消费其他 task 的契约时填\n  <provider-task-id>:                  # 如 task-05（占位符，不要照抄）\n    - contract: <DTO或响应类型名>\n      needs: [field_a]                 # 必须从该 provider 拿到的字段\ngoal: >\n  一句话说明这个 task 要做什么、为什么。\nimplementation:\n  - 具体步骤 1\n  - 具体步骤 2\n  - 具体步骤 3\nacceptance:\n  - 可验证的验收条件 1\n  - 可验证的验收条件 2\n  - 可验证的验收条件 3\nverify:\n  - cd frontend && pnpm exec tsc --noEmit\nconstraints:\n  - 边界约束 1（如：不加测试）\n  - 边界约束 2（如：不修改传入参数）\nrelated_tests:                           # 可选。当本 task 改动会导致既有测试断言失效时填（共享源文件/UI文案/常量/签名变更等，判据=测试是否失败非文件是否共享）\n  - path: frontend/src/lib/errors.test.ts # 因本次改动断言失效的既有测试文件\n    reason: 旧断言依赖本次要重构掉的实现细节，需同步\n---\n\n{{include: taskcard-rules}}\n\n## 约束\n- 每个 task 20~40 行；禁止在 TaskCard 里写实现细节之外的冗长设计\n- 同 batch 内 task 的 allowed_paths 不要互相冲突\n- **跨仓 task 路径口径（涉及 local.yaml repos: 注册仓的变更必读）**：跨仓 task frontmatter 必须填 `repo: <repo-key>`（local.yaml repos: 注册键，缺省=main 省略不填）；allowed_paths 相对**该仓根**写（`src/routes/x.js`），从 design.md「`## <repo-key> 仓变更`」段内路径原样搬。❌ 禁止带仓库名前缀（`<repo-key>/src/...`）、❌ 禁止绝对路径/盘符（`C:/repo/src/...`）——review 对账按 `git -C <仓根> diff` 的仓根相对路径匹配 allowed_paths，带前缀/绝对路径永不命中 → task 改完却判「无归属」对账不上\n- 若 task 之间有 provides/expects_from 契约，同 batch 生成时必须字段对齐\n- 只生成本 batch 声明的任务，不要多写或少写\n- 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设\n\n## 完成标志\n- 本 batch 的每个 task-N.md 都已写入 C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2\\.sillyspec\\changes\\2026-05-13-demo-change/tasks/\n- 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）\n```\n\n## 验收（生成后自查，不另开步骤）\n- 每个 task-N.md 文件存在且非空\n- 所有 task 都被某个 batch 覆盖、无遗漏、无重复\n- frontmatter 字段分两组对照（与 plan-postcheck / taskcard-rules.md 同源，三处清单以此为准）：\n  - **硬校验 9 字段**（缺失 plan-postcheck 直接报错阻断）：id、title、title_zh、allowed_paths、goal、implementation、acceptance、verify、constraints\n  - **占位符硬拦**（骨架占位值未替换视同缺字段，plan --done 报错阻断）：FR-XX、D-XXX、src/example/file.ts、一句话说明这个 task、具体步骤 1、可验证的验收条件 1、边界约束 1\n  - **规范约定 5 字段**（应填但缺失只影响规范性，不阻断）：author、created_at、priority、depends_on、blocks\n- 每个 task 总长度 20~40 行\n- **一致性自查**：\n  - allowed_paths 有无冲突\n  - 跨仓 task：repo: 键是 local.yaml repos: 已注册键；allowed_paths 全部为仓根相对路径（无仓库名前缀、无绝对路径/盘符）；与 design.md 对应「仓变更」段路径同口径\n  - depends_on 与 plan.md Wave 分组是否一致\n  - provides/expects_from 契约自洽：每个 expects_from[provider].needs 字段都在该 provider task 的 provides.fields 里（plan-postcheck 会硬校验，这里提前自查）\n  - related_tests 判据 = 是否有既有测试因本次改动而失败（非「源文件是否共享」；UI 文案/常量/签名变更等单文件场景也算）；若填，测试路径必须都在本 task 或某 task 的 allowed_paths 内（否则子代理无权改 → execute 测试债、主代理事后兜底）\n  - 如发现矛盾，列出问题清单，不要自动修复",
+         "outputHint": "TaskCard 生成结果",
+         "optional": false
+       },
+diff --git a/docs/prompt/execute.md b/docs/prompt/execute.md
+index 0eef2862..d8dc51c4 100644
+--- a/docs/prompt/execute.md
++++ b/docs/prompt/execute.md
+@@ -178,6 +178,10 @@ worktree 路径 + 分支名 + 模式
+ **本步出现的 include 指令**
+ - `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」6 条检查（边界/异常、断言有效、测行为不测实现、契约与回归、时间敏感分支、隔离确定性）拉进「子代理 prompt 要点」第 5 项后，供调度者整段复制进子代理 prompt（任务含测试代码时）
+ 
++**本步的模式条件注入（M3/M4，2026-09-21-r5-efficiency-batch2）**
++- **推荐分组行**（M3）：CLI 按三条件（allowed_paths 正交 / 无 provides-expects_from 契约链 / 组 ≤3，另内建批数护栏 ≥ min(3, N)）预计算本 Wave 推荐分组注入 batch 条件段后（agent 可偏离须在 Wave 摘要披露）——仅本地 Agent tool 派发路径渲染（SillyHub 一 Wave 一 mission 互斥）；无可并批（无 ≥2 组）零注入，输出与无该行时逐字节一致
++- **execution_mode**（M4）：plan.md frontmatter `execution_mode: main` 时整段执行方式换主代理直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；缺省/非法回退 dispatch，渲染与既往一致（逐字节零回归）
++
+ **提示词原文**
+ 
+ ````markdown
+diff --git a/docs/prompt/plan.md b/docs/prompt/plan.md
+index 98b5ec04..356fa6b6 100644
+--- a/docs/prompt/plan.md
++++ b/docs/prompt/plan.md
+@@ -137,6 +137,11 @@ needs_human_review: true | false
+ > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+ > - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
+ 
++> **执行模式声明（execution_mode，M4——清晰输入任务的主代理直写通道，2026-09-21-r5-efficiency-batch2）**：
++> - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = dispatch**（走既有子代理派发，既有变更零影响）；本仓对撞实证 A 组主代理直写 7′ 进码 vs B 组派发 70′（GSD 在 Claude Code 永远 spawn 子代理，direct 模式是本仓结论非抄袭项——分歧声明见 design）
++> - 仅当满足判据才声明 `execution_mode: main`：**输入已含决策**（design/方案已把接口、边界、验收定死，实现期无开放式设计裁决）× **任务边界清晰可串行**（无跨 task 契约链半成品风险）；不满足或拿不准一律缺省 dispatch（误用 main 只损失并行收益，不损失任何防线与审查）
++> - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
++
+ ---
+ 
+ #### plan_level = none
+@@ -170,6 +175,7 @@ plan_level: none
+ ```markdown
+ ---
+ plan_level: light
++execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
+ ---
+ 
+ # 轻量计划（Light Plan）：<需求简述>
+@@ -209,6 +215,7 @@ light 计划的约束：
+ ```markdown
+ ---
+ plan_level: full
++execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
+ ---
+ 
+ # 实现计划（Plan）
+@@ -426,7 +433,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
+    sillyspec taskcard 2026-05-13-demo-change --all
+    ```
+    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
+-1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
++1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
+ 2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
+    - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
+    - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
+@@ -451,16 +458,16 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
+ TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。
+ 
+ ## 输入
+-- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change
++- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change
+ - 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
+ - 当前用户：<git-user>（frontmatter 的 author 使用此值）
+ - 本 batch 任务列表：
+   <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>
+ 
+ ## 操作
+-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
++1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
+ 2. 读取本 batch 涉及的相关源文件
+-3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
++3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
+ 4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
+ 5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
+ 
+@@ -518,7 +525,7 @@ related_tests:                           # 可选。当本 task 改动会导致
+ - 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
+ 
+ ## 完成标志
+-- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch1\.sillyspec\changes\2026-05-13-demo-change/tasks/
++- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/tasks/
+ - 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）
+ ```
+ 
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index aac1dfa8..c739d065 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -106,7 +106,7 @@ mcp:
+ ### 派发决策链
+ 1. **`probeSillyHub()`**（`dispatch/probe.js:133`）：no-config 同步快返回 → 负面缓存(TTL) → `probeDaemon` → `listTools` 预热路径A → root_path 越界校验 → `{available}`。
+ 2. **`renderDispatchInstruction(contract, probe)`**（`dispatch/strategy.js:69`）：`probe.available` → backend=`sillyhub`（注入 SillyHub 指令，含一 Wave 一 mission + dispatch_worker 参数 + 轮询 + kill lease + 回收约定）；否则 backend=`local`。**始终附 Local 兜底指令全文**。
+-   - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:685`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:1272`），probe 不参与。
++   - **两条消费路径**：① `sillyspec dispatch probe/hint` 命令——agent 主动探测/取指令，probe 结果直接传 `renderDispatchInstruction`；② **execute Wave prompt 注入**——`getDispatchMode()`（`execute.js:685`）同步三态判定（不发网络），`sillyhub` 态下以 `{available:true}` 硬编码调 `renderDispatchInstruction`（`execute.js:1300`），probe 不参与。
+ 3. **路径A 降级**（`backends/sillyhub-mcp.js:104` `isPathASupported`）：env `SILLYHUB_PATH_A=1` 强开 > probe 预热缓存；未支持则指令追加降级提示，per-worker 回退 Local，**绝不硬试 MCP**（R-04）。
+ 4. **回收**（D-004）：worker **绝不 git commit**，SillySpec 自己 diff worktree 写 review.json，**不调 SillyHub 合并 tool**（`backends/sillyhub-mcp.js:47` `SILLYHUB_RECYCLE_RULE`）。
+ 
+diff --git a/docs/sillyspec/prompt-control-debt.md b/docs/sillyspec/prompt-control-debt.md
+index 9c9065bd..94041cfd 100644
+--- a/docs/sillyspec/prompt-control-debt.md
++++ b/docs/sillyspec/prompt-control-debt.md
+@@ -206,7 +206,7 @@ updated_at: 2026-08-14T22:20:00+08:00
+ 
+ 来源：complete-gate-atomicity 变更 execute --done 卡「review.json 字段校验阻断」，诊断发现是 marker 漂移（非 review.json 真缺）。
+ 
+-- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:852）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:852）在写 review.json 时才建。marker 在 stage.js:121 / prompt.js:910 / gates.js:473 / task-review.js:852 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:147，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:286）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:852，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:286）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
++- ⏭ **gate-atom-a enforceReviewJsonGate 漏 resolveLatestExecuteRunId fallback**：`current-execute-run-id-<change>` marker 与 run 目录可脱节——`generateExecuteRunId`（task-review.js:852）只生成时间戳字符串写 marker，run 目录由 `ensureTaskReviewDir`（task-review.js:852）在写 review.json 时才建。marker 在 stage.js:121 / prompt.js:1399 / gates.js:473 / task-review.js:852 任一处被判「缺失」即 generate 新 ID 写盘（旧 marker 被删 / 格式迁移 / 并行 cleanup 时触发），新 run 目录隔离不继承旧 review.json → marker 漂移 = 旧 review 全部失联。**enforceReviewJsonGate（gates.js:147，每次 execute --done 早跑）直接 `readFileSync(marker)` 拿值就用，不校验目录存在、不 fallback**；而同文件阶段级 Task Review Gate（gates.js:286）marker 为空时已 fallback `resolveLatestExecuteRunId`（task-review.js:852，扫 mtime 最新真实目录）。**self-audit-2026-08-07.md:103/107 当年修了后者漏了前者——同一兜底两处口径不一致**。实证：marker=`exec-2026-08-09-141248`（14:12:48 写），141248 目录 14:21:22 才建出，--done 落在中间 → 去 141248 找 task-01 review.json 报「不存在」，而真实齐备的 review.json 在 `exec-2026-08-09-112734`（task-01~06 全有）。**修法（方案 A，最小正确）**：enforceReviewJsonGate 读 marker 后，若 `execute-runs/<executeRunId>/tasks/` 不存在，fallback `resolveLatestExecuteRunId({ runtimeRoot, changeName })`（对齐 gates.js:286）；补测试（marker 指向不存在目录 + 旧 run 含完整 review.json 时 --done 不误报）。**否决方案 B**（generateExecuteRunId 写 marker 时同步 mkdir 空目录）：只保证目录存在不保证 review.json 存在，marker 漂到新 run 后空目录照样报「review.json 不存在」，治标不治本。当前 complete-gate-atomicity 因 141248 事后补齐 task-01~04 review.json 不再被阻塞；待该 change 归档 + 主仓工作区干净（现有无关 staged brainstorm 改动需先厘清归属）后开独立 quick 落 A。
+ 
+ ---
+ 
+diff --git a/meta.json b/meta.json
+index 5970a568..b4bde63c 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,85 @@
+   "branch": "sillyspec/2026-09-21-r5-efficiency-batch2",
+   "baseBranch": "main",
+   "baseHash": "e49a7ce02a5279cc737721eb693088cf138e5d52",
++  "actualBaseHash": "bfa81dc9600fd219df420d271deb51a04a98e78b",
++  "createdAt": "2026-09-21T10:11:13.134Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-21-r5-efficiency-batch2",
+   "mode": "worktree",
+-  "createdAt": "2026-09-21T10:11:06.742Z",
+-  "provisioning": true
++  "baselineFiles": [
++    "asset-audit-2026-09-20/README.md",
++    "asset-audit-2026-09-20/asset-audit.cjs",
++    "asset-audit-2026-09-20/extract-candidates.cjs",
++    "asset-audit-2026-09-20/platform-archive.csv",
++    "asset-audit-2026-09-20/platform-fr.csv",
++    "asset-audit-2026-09-20/platform-gotchas.csv",
++    "asset-audit-2026-09-20/platform-knownissues.csv",
++    "asset-audit-2026-09-20/platform-modules.csv",
++    "asset-audit-2026-09-20/platform-quicklog.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting-candidates.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting.csv",
++    "asset-audit-2026-09-20/sillyspec-archive.csv",
++    "asset-audit-2026-09-20/sillyspec-fr.csv",
++    "asset-audit-2026-09-20/sillyspec-gotchas.csv",
++    "asset-audit-2026-09-20/sillyspec-knownissues.csv",
++    "asset-audit-2026-09-20/sillyspec-modules.csv",
++    "asset-audit-2026-09-20/sillyspec-quicklog.csv",
++    "asset-audit-2026-09-20/sillyspec-troubleshooting.csv",
++    "asset-audit-2026-09-20/summary.json",
++    "bash.exe.stackdump",
++    "round4/account.mjs",
++    "round4/b1-analyze-task08.mjs",
++    "round4/b1-b1-target-validation.md",
++    "round4/b3a-prompt-audit-result.md",
++    "round4/b3a-prompt-audit.mjs",
++    "round4/brief-autocompact.md",
++    "round4/brief-session-replay.md",
++    "round4/deep-read-synthesis.md",
++    "round4/extract-full.mjs",
++    "round4/extract-timeline.mjs",
++    "round4/find-sessions.mjs",
++    "round4/full-r4-l.md",
++    "round4/full-r4-o-l.md",
++    "round4/full-r4-os.md",
++    "round4/full-r4-sf.md",
++    "round4/full-r4-sq.md",
++    "round4/gate-audit-relay-receipt.md",
++    "round4/gate-value-audit.md",
++    "round4/optimization-plan.md",
++    "round4/prereg.md",
++    "round4/prompt-R4-L.md",
++    "round4/prompt-R4-O-L.md",
++    "round4/prompt-R4-O-S.md",
++    "round4/prompt-R4-S-F.md",
++    "round4/prompt-R4-S-Q.md",
++    "round4/r4-final-report.html",
++    "round4/r4-os-timeline.txt",
++    "round4/r4-sf-timeline.txt",
++    "round4/r4-sq-timeline.txt",
++    "round4/r4l-timeline.txt",
++    "round4/r4ol-timeline.txt",
++    "round4/r4sf-timeline.txt",
++    "round4/result-S.md",
++    "round4/result-final.md",
++    "round4/result-quality.md",
++    "round5/cmp.mjs",
++    "round5/cmp2.mjs",
++    "round5/gate-audit.mjs",
++    "round5/gen-collision-html.mjs",
++    "round5/r5-collision-ehs-attribution.md",
++    "round5/r5-collision-timeline.html",
++    "round5/why2.mjs"
++  ],
++  "baselineCommit": "bfa81dc9600fd219df420d271deb51a04a98e78b",
++  "baselineHash": "eebcd9cb75a0c326",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 4
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "337f491dae3b3308",
++  "depsCheckedAt": "2026-09-21T10:11:13.109Z"
+ }
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index bd29d8b4..59b6bf32 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -422,8 +422,12 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
+             if (cwdDiff && !wtDiff) {
+               src = cwdPath // 主仓直写新、worktree 停在基线 → 取主仓
+             } else if (!(wtDiff && !cwdDiff)) {
+-              console.warn(`⚠️ 快照双写分叉：${f} 在主仓与 worktree 均有不同修改——取主仓（本会话最新编辑位），请尽快对齐两边`)
+-              src = cwdPath
++              // M2（2026-09-21-r5-efficiency-batch2 D-002@v2）：双写分叉改取 worktree 分支版——sourceRoot=worktree
++              // 定向跑的语义=验证本变更分支交付（batch1 实证：分叉取主仓拿走无本变更代码的版本，配上
++              // worktree 新增测试文件 → src/test 血统断裂 → module 实测假红一轮）。主仓侧同文件异动是
++              // 干扰源，其内容在 apply/对齐后由主仓单源复核兜底。
++              console.warn(`⚠️ 快照双写分叉：${f} 在主仓与 worktree 均有不同修改——取 worktree 分支版（本变更交付血统）；主仓侧改动若需保留请 apply/对齐后复跑`)
++              src = wtPath
+             } // wtDiff && !cwdDiff → 保持 worktree（正常流零改变）
+           }
+         }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 3fefded7..66173af0 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -19,13 +19,37 @@
+  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
+  */
+ import { basename, join } from 'node:path'
+-import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
++import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import jsYaml from 'js-yaml'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { stageRegistry } from '../stages/index.js'
+ import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
+ import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
++
++// ── M1 步骤指引静态段指纹（2026-09-21-r5-efficiency-batch2 task-01 / D-001@v1）──
++// 易变占位符全集（值因运行而异）：指纹掩码 + 复入附录照常渲染。新增易变占位符时同步此表
++// （漏登会令指纹误变——退化后果只是多一次全量重印，不产生错误指引；多登同理只多印）。
++const VOLATILE_PLACEHOLDER_RES = [
++  /<now-datetime>/g, /<now-timestamp>/g, /<now-date>/g, /<now-iso-datetime>/g, /<git-head-short>/g, /<quicklog-id>/g,
++  /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g,
++  /{KNOWLEDGE_HIT_REPORT}/g, /{DOCS_DEBT}/g, /{MODULE_RESOLVE_TABLE}/g, /{REVIEW_MATERIALS}/g,
++  /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
++  /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
++  /{SCOPE_AUDIT_TABLE}/g, /{FR_INDEX_DIGEST}/g, /{HANDOVER_SUMMARY}/g, /{PREFLIGHT_FAILURES}/g,
++  /{PRIOR_REVIEW_FACTS}/g, /{ARCHIVE_IMPACT_AUDIT}/g, /{EVIDENCE_AUTO_RECOMMENDATION}/g,
++]
++const VOLATILE_MASK = '⟦dyn⟧'
++function maskVolatileForGuide(text) {
++  let out = text
++  for (const re of VOLATILE_PLACEHOLDER_RES) out = out.replace(re, VOLATILE_MASK)
++  return out
++}
++/** M1：步骤指引静态段指纹——模板原文（include 解析后、占位符替换前）掩码易变占位符后的 sha256。
++ *  确定性：同模板同指纹；模板文本/静态占位符变更即变；易变占位符的值不参与（值在替换后，不在此面）。 */
++export function computeStepGuideFingerprint(template) {
++  return createHash('sha256').update(maskVolatileForGuide(String(template))).digest('hex')
++}
+ import { renderStageContract } from '../stage-contract-spec.js'
+ import { nowWallClock } from '../datetime.js'
+ import { parseModuleMapSimple } from '../modules.js'
+@@ -868,17 +892,36 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // 先解析 {{include: name}}（把外部模板片段拉进 prompt），再做下方占位符替换，
+   // 保证模板内容里的 {SPEC_ROOT}/<change-name> 等也能被替换
+   let promptText = resolvePromptIncludes(step.prompt)
++  // ── M1 步骤指引静态段指纹增量（2026-09-21-r5-efficiency-batch2 task-01 / FR-01 / D-001@v1）──
++  // P8 实证（round5）：73 次 CLI 调用注入 252KB、同步骤复入全量重印。契约：静态段按渲染指纹落盘
++  // .runtime/step-guides/，同指纹复入静态部分 ≤10 行（指纹+路径+提示），动态注入段（值因运行而异）
++  // 每次渲染永不缓存（附录照常输出）。--json（console.log 劫持形态，src/index.js withJsonOutput）与
++  // SILLYSPEC_STEP_GUIDE=0 走全量——机器消费方与逃生门不读盘。
++  const guideTemplate = promptText // 替换管线入口的模板原文（指纹基面）
++  const dynSegments = [] // 动态注入段值收集（复入附录素材，顺序即渲染顺序）
++  const substitute = (re, value, isStaticToken = false) => {
++    const v = String(value)
++    if (!isStaticToken) dynSegments.push(v) // 非白名单占位符默认按动态收集（错收只多不少，漏收才是坑）
++    promptText = promptText.replace(re, v)
++    return promptText
++  }
++  const substituteSplitJoin = (token, value) => {
++    const v = String(value)
++    dynSegments.push(v)
++    promptText = promptText.split(token).join(v)
++    return promptText
++  }
+   // 替换 prompt 中的占位符
+   if (projectName && promptText.includes('<project>')) {
+-    promptText = promptText.replace(/<project>/g, projectName)
++    substitute(/<project>/g, projectName, true)
+   }
+   // 替换 <git-user> 占位符
+   if (promptText.includes('<git-user>')) {
+     try {
+       const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
+-      promptText = promptText.replace(/<git-user>/g, gitUser)
++      substitute(/<git-user>/g, gitUser, true)
+     } catch {
+-      promptText = promptText.replace(/<git-user>/g, 'unknown')
++      substitute(/<git-user>/g, 'unknown', true)
+     }
+   }
+   // 替换时间戳占位符（本地墙钟统一走 nowWallClock——坑 taskcard-created-at-utc：人读字段用
+@@ -887,33 +930,33 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   const nowDatetime = nowWallClock(now)
+   const nowTimestamp = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0')
+   const nowDate = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
+-  promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
+-  promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
+-  promptText = promptText.replace(/<now-date>/g, nowDate)
++  substitute(/<now-datetime>/g, nowDatetime)
++  substitute(/<now-timestamp>/g, nowTimestamp)
++  substitute(/<now-date>/g, nowDate)
+   // <now-iso-datetime>（scan frontmatter updated_at 用；与 scan-fix-headers 同款秒级格式）。
+   // 占位符名带 iso 是历史遗留——值已统一为本地墙钟（同 <now-datetime>），改名会破坏 stages 引用。
+-  promptText = promptText.replace(/<now-iso-datetime>/g, nowWallClock(now))
++  substitute(/<now-iso-datetime>/g, nowWallClock(now))
+   // <git-head-short>（scan frontmatter source_commit 用；CLI 代查，agent 勿自跑 rev-parse）
+   if (promptText.includes('<git-head-short>')) {
+     let headShort = 'unknown'
+     try {
+       headShort = safeGit(cwd, ['rev-parse', '--short', 'HEAD']).value || 'unknown'
+     } catch { /* git 不可用 → unknown，scan-postcheck 失配时再核 */ }
+-    promptText = promptText.replace(/<git-head-short>/g, headShort)
++    substitute(/<git-head-short>/g, headShort)
+   }
+   // 替换 {REVIEW_SCHEMA_VERSION} 占位符（task review 示例模板用，值=CLI 当前 REVIEW_SCHEMA_VERSION 常量，
+   // 避免 agent 照抄 design 目标版本与 CLI 写侧常量漂移；与 stage review 契约 renderReviewJsonContract 动态注入同源）
+   if (promptText.includes('{REVIEW_SCHEMA_VERSION}')) {
+-    promptText = promptText.replace(/\{REVIEW_SCHEMA_VERSION\}/g, String(REVIEW_SCHEMA_VERSION))
++    substitute(/\{REVIEW_SCHEMA_VERSION\}/g, String(REVIEW_SCHEMA_VERSION))
+   }
+   // 替换 <change-name> 占位符
+   if (changeName && promptText.includes('<change-name>')) {
+-    promptText = promptText.replace(/<change-name>/g, changeName)
++    substitute(/<change-name>/g, changeName, true)
+   }
+   // 替换 <quick-session-id> 占位符（quick 阶段专用：sessionId == changeName == quick-<uuid8>，
+   // 见 runStage 参数解析 quickSessionId 生成。告知 agent 本会话 id + --done 需带 --change）
+   if (changeName && promptText.includes('<quick-session-id>')) {
+-    promptText = promptText.replace(/<quick-session-id>/g, changeName)
++    substitute(/<quick-session-id>/g, changeName, true)
+   }
+   // 替换 <quicklog-id> 占位符（quick 阶段：从 session guard.json 读 CLI 分配的 ql-ID，
+   // 供 agent 在模块文档变更索引等处引用）
+@@ -928,7 +971,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (err) {
+       console.warn(`⚠️ quicklog-id 占位符读取 guard.json 失败: ${err && err.message ? err.message : err}`);
+     }
+-    promptText = promptText.replace(/<quicklog-id>/g, qlIdVal || '(未分配)')
++    substitute(/<quicklog-id>/g, qlIdVal || '(未分配)')
+   }
+   // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-sessions/<sessionId>/guard.json 读关联变更）
+   if (promptText.includes('<linked-changes>')) {
+@@ -944,7 +987,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       if (guard) linkedChanges = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
+     } catch {}
+     const display = linkedChanges.length > 0 ? linkedChanges.join(', ') : '（无）'
+-    promptText = promptText.replace(/<linked-changes>/g, display)
++    substitute(/<linked-changes>/g, display, true)
+   }
+   // 平台模式：注入路径覆盖指令
+   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
+@@ -1074,9 +1117,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       const injected = fact
+         ? `[docs-debt] scan 基线漂移：${fact.message}`
+         : '[docs-debt] scan 基线漂移：无 scan 文档（绿地项目），跳过判定'
+-      promptText = promptText.replace(/\{SCAN_STALENESS\}/g, injected)
++      substitute(/\{SCAN_STALENESS\}/g, injected)
+     } catch (e) {
+-      promptText = promptText.replace(/\{SCAN_STALENESS\}/g, `[docs-debt] scan 漂移检测异常（${e.message}），跳过判定`)
++      substitute(/\{SCAN_STALENESS\}/g, `[docs-debt] scan 漂移检测异常（${e.message}），跳过判定`)
+     }
+   }
+ 
+@@ -1106,7 +1149,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+           '\n\n⛔ 红线（同 scan 子代理先例）：禁止重新 grep 发现底稿覆盖的机械事实（端点/依赖/规模），冲突以底稿为准。\n'
+       }
+     } catch { /* fail-soft：读取失败空注入，不阻断 prompt 输出 */ }
+-    promptText = promptText.replace(/\{SCAN_FACTS\}/g, factsInjected)
++    substitute(/\{SCAN_FACTS\}/g, factsInjected)
+   }
+ 
+   // ── 机械事实注入三件（2026-09-07 注入缺口批次）：{LOCAL_COMMANDS} / {GIT_DIRTY} / {TASKS_CHECKBOX} ──
+@@ -1141,7 +1184,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       localBlock = `（构建命令注入失败：${e.message}——可自行读 local.yaml）`
+     }
+-    promptText = promptText.replace(/\{LOCAL_COMMANDS\}/g, localBlock)
++    substitute(/\{LOCAL_COMMANDS\}/g, localBlock)
+   }
+ 
+   // ①b {QUICK_CONTEXT_DIGEST}（刀①，2026-09-08）：quick step1 的项目/约定上下文 CLI 代读注入
+@@ -1149,7 +1192,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // fail-soft 同三件套；无 quick 占位符自然零输出。
+   if (stageName === 'quick' && promptText.includes('{QUICK_CONTEXT_DIGEST}')) {
+     const digestSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+-    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST}/g, buildQuickContextDigest(digestSpecBase, projectName))
++    substitute(/\{QUICK_CONTEXT_DIGEST}/g, buildQuickContextDigest(digestSpecBase, projectName))
+   }
+ 
+   // ①c {FR_INDEX_DIGEST}（2026-09-18-fr-index-l1 L1，D-004）：brainstorm step8 的触达域现行 FR 注入
+@@ -1165,12 +1208,12 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       const domains = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
+       const entries = readActiveFrDigest(knowledgeRoot, domains)
+       if (entries.length === 0) {
+-        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
++        substitute(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
+       } else {
+         const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）${e.needsReview ? ` ⚠️ 待复核（${e.needsReview}）——该 FR 覆盖的代码近期被 quick 触达，行为可能已变；本变更若触及同域先核对现状再决定承接/新写` : ''}`)
+         lines.push('')
+         lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
+-        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
++        substitute(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
+       }
+       try {
+         const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+@@ -1179,7 +1222,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         })
+       } catch { /* 遥测 fail-soft */ }
+     } catch (e) {
+-      promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
++      substitute(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
+     }
+   }
+ 
+@@ -1196,7 +1239,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       dirtyBlock = `（脏文件注入失败：${e.message}——可自行跑 git status --porcelain）`
+     }
+-    promptText = promptText.replace(/\{GIT_DIRTY\}/g, dirtyBlock)
++    substitute(/\{GIT_DIRTY\}/g, dirtyBlock)
+   }
+ 
+   // ③ {TASKS_CHECKBOX}：tasks.md 任务勾选状态投影（verify 逐项检查步消费——省 agent 手数）
+@@ -1219,7 +1262,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     } catch (e) {
+       tasksBlock = `（勾选状态注入失败：${e.message}——可自行读 tasks.md）`
+     }
+-    promptText = promptText.replace(/\{TASKS_CHECKBOX\}/g, tasksBlock)
++    substitute(/\{TASKS_CHECKBOX\}/g, tasksBlock)
+   }
+ 
+   // 决策防复潮注入（W1.1 第 3 点，task-04，FR-05）：brainstorm「加载项目上下文」Step2 的
+@@ -1248,13 +1291,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         }
+         decInjected = '\n\n' + lines.join('\n')
+       }
+-      promptText = promptText.replace(/\{DECISION_HITS\}/g, decInjected)
++      substitute(/\{DECISION_HITS\}/g, decInjected)
+       // 注入结果同步落 runtime JSON（与既有 KNOWLEDGE_HIT_REPORT 落盘口径一致）
+       const decRuntimeDir = join(decSpecBase, '.runtime')
+       mkdirSync(decRuntimeDir, { recursive: true })
+       writeAtomicSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
+     } catch (e) {
+-      promptText = promptText.replace(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
++      substitute(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
+     }
+   }
+ 
+@@ -1290,7 +1333,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         change: changeName || '',
+         query: taskContext,
+       })
+-      promptText = promptText.replace(
++      substitute(
+         /\{KNOWLEDGE_HIT_REPORT\}/g,
+         knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report
+       )
+@@ -1298,7 +1341,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       mkdirSync(runtimeDir, { recursive: true })
+       writeAtomicSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeInjection.json, null, 2) + '\n')
+     } catch (e) {
+-      promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
++      substitute(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
+     }
+   }
+ 
+@@ -1327,9 +1370,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       try {
+         debtTouchFacts = renderDecisionTouchFacts(computeDecisionTouches(changedFiles, join(debtSpecBase, 'knowledge')).touches)
+       } catch { /* 触碰计算降级为空——不影响欠账 facts 注入 */ }
+-      promptText = promptText.replace(/\{DOCS_DEBT\}/g, [result.facts, debtTouchFacts].filter(Boolean).join('\n'))
++      substitute(/\{DOCS_DEBT\}/g, [result.facts, debtTouchFacts].filter(Boolean).join('\n'))
+     } catch (e) {
+-      promptText = promptText.replace(/\{DOCS_DEBT\}/g, `[docs-debt] 欠账计算异常（${e.message}），跳过`)
++      substitute(/\{DOCS_DEBT\}/g, `[docs-debt] 欠账计算异常（${e.message}），跳过`)
+     }
+   }
+ 
+@@ -1342,9 +1385,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       const { renderModuleResolveTable } = await import('../module-resolve.js')
+       const mrSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       const table = renderModuleResolveTable({ cwd, specBase: mrSpecBase, changeName })
+-      promptText = promptText.replace(/\{MODULE_RESOLVE_TABLE\}/g, table)
++      substitute(/\{MODULE_RESOLVE_TABLE\}/g, table)
+     } catch (e) {
+-      promptText = promptText.replace(/\{MODULE_RESOLVE_TABLE\}/g, `[modules-resolve] 模块卡分级解析异常（${e.message}），跳过——可手跑 sillyspec modules resolve --change <变更名>`)
++      substitute(/\{MODULE_RESOLVE_TABLE\}/g, `[modules-resolve] 模块卡分级解析异常（${e.message}），跳过——可手跑 sillyspec modules resolve --change <变更名>`)
+     }
+   }
+ 
+@@ -1382,7 +1425,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+         console.error(`[sillyspec] execute run marker/目录写入失败（降级继续，ID ${runId} 仍注入 prompt）: ${e.message}`)
+       }
+     }
+-    promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
++    substitute(/\{EXECUTE_RUN_ID\}/g, runId)
+   }
+ 
+   // Stage Review Tier：brainstorm/plan/execute 阶段注入审查分级占位符
+@@ -1891,12 +1934,58 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     })
+   } catch { preflightFailuresMd = '' }
+   if (promptText.includes('{PREFLIGHT_FAILURES}')) {
+-    promptText = promptText.split('{PREFLIGHT_FAILURES}').join(preflightFailuresMd)
++    promptText = substituteSplitJoin('{PREFLIGHT_FAILURES}', preflightFailuresMd)
+   } else if (preflightFailuresMd) {
+     promptText = `${promptText}\n\n${preflightFailuresMd}`
+   }
+ 
+-  console.log(promptText)
++  // ── M1 打印分流：同指纹复入短输出 + 动态附录；首见全量 + guide 落盘 ──
++  const jsonHijacked = String(console.log).includes('stderr.write') // --json 劫持形态探测（withJsonOutput 同款函数体）
++  // v1 默认关闭（D-001@v1 修订：跨进程短输出与 CLI stdout 确定性测试族冲突——别名路由奇偶校验等
++  // 要求同参两次调用字节一致）。SILLYSPEC_STEP_GUIDE=1 显式开启（R5 对撞重跑开启验证，达标后
++  // 迁移测试面再翻默认）；'0' 维持显式关闭语义（历史逃生门）。
++  const guideEnabled = process.env.SILLYSPEC_STEP_GUIDE === '1'
++  const fingerprint = computeStepGuideFingerprint(guideTemplate)
++  const runtimeRoot = platformOpts?.specRoot || join(cwd, '.sillyspec')
++  const guideRoot = join(runtimeRoot, '.runtime', 'step-guides')
++  const guideFile = join(guideRoot, `${stageName}-step${stepIndex}-${fingerprint.slice(0, 8)}.md`)
++  // 复入状态=变更级（change+stage+step → 指纹）：「复入」锚定同一变更同一步的重渲染（跨 CLI 进程
++  // 持续生效——实验里每次 run 都是独立进程，进程内缓存无意义）；他变更渲染同模板不误短路
++  // （knowledge-inject 两路径字节一致测试的机制依赖此界——模板级寻址会短路其第二次全量渲染）。
++  const stateRoot = join(runtimeRoot, '.runtime', 'step-guide-state')
++  const stateFile = join(stateRoot, `${stageName}-step${stepIndex}-${String(changeName || '_nochange').replace(/[^A-Za-z0-9._-]/g, '_')}.json`)
++  let prevState = null
++  try { prevState = JSON.parse(readFileSync(stateFile, 'utf8')) } catch { /* 无状态=首见 */ }
++  const reentryHit = guideEnabled && !jsonHijacked && prevState != null && prevState.fingerprint === fingerprint && existsSync(prevState.guidePath)
++  if (reentryHit) {
++    // 复入：静态部分 ≤10 行；动态段照常渲染为附录
++    console.log(`📄 步骤指引未变（fingerprint=${fingerprint.slice(0, 8)}）——静态全文不再重印。需要全文时 Read：`)
++    console.log(`   ${guideFile}`)
++    console.log(`   （首见渲染已在上下文中；上下文被压缩丢失时才需要 Read）`)
++    console.log(`⛔ 本步骤安全铁律仍在生效（破坏性操作禁令见首见渲染/guide 全文）`)
++    if (dynSegments.filter(x => x.trim() !== '').length > 0) {
++      console.log(`## 动态注入段（本次运行——永不缓存，每次照常渲染）`)
++      for (const seg of dynSegments) if (seg.trim() !== '') console.log(seg)
++    }
++  } else {
++    console.log(promptText)
++    try {
++      // 特性开启且有 spec 根才落盘：默认关时不写（stdout 确定性）；无 spec 根不凭空造目录
++      //（spec-dir 向上命中类测试会被新建的 test/.sillyspec 污染——本批实证）。
++      if (guideEnabled && (platformOpts?.specRoot || existsSync(join(cwd, '.sillyspec')))) {
++      mkdirSync(guideRoot, { recursive: true })
++      writeFileSync(guideFile, `<!--fp=${fingerprint}-->
++# ${stageName} step ${stepIndex + 1} 指引静态全文（${step.name}）
++
++> 动态占位符（时间/材料包/知识命中/欠账等）以当次渲染为准，本文件只存静态模板面。
++
++${maskVolatileForGuide(guideTemplate)}
++`, 'utf8')
++      mkdirSync(stateRoot, { recursive: true })
++      writeFileSync(stateFile, JSON.stringify({ fingerprint, guidePath: guideFile, changeName: changeName || null, stage: stageName, stepIndex, at: new Date().toISOString() }, null, 1) + '\n', 'utf8')
++      }
++    } catch { /* guide/state 落盘 best-effort：失败仅退化回全量重印，不阻断步骤输出 */ }
++  }
+   // 铁律拆分（W3 token 效率）：通用流程纪律（文档优先/不跳步/不编造命令）只在首个 agent 可见步注入——
+   // 每步重复 ~800B 纯耗 context。但【平台写入规则 + 路径规则】是安全关键（防写错目录/绕过 Write），
+   // 且依赖 changeName/platformOpts，必须【每步注入】（context 压缩丢失会让 agent 越界写源码）。
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 5679b3d1..d5da4c08 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -7,7 +7,7 @@ import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
+ import { readMcpConfig } from '../sillyhub-mcp/config.js'
+ import { gitQuiet } from '../git-helper.js'
+ import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
+-import { parseRepo } from './plan-postcheck.js'
++import { parseRepo, collectCardBatchFacts, recommendWaveGroups } from './plan-postcheck.js'
+ // 模块卡分级解析（token 成本优化 P0a）。注意：module-resolve.js 反向 import 本文件的
+ // parseTaskRegistry（注册表同口径）——双向引用均为函数声明 + 调用时解引（无模块初始化期
+ // 交叉求值），ESM live binding 下安全；两边都是纯读函数，无副作用序问题。
+@@ -953,6 +953,31 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
+     } catch {}
+   }
+ 
++  // ── execution_mode 通道（M4 / FR-04，2026-09-21-r5-efficiency-batch2 task-04，D-004@v1）：
++  // plan.md frontmatter `execution_mode: main | dispatch`，**缺省/非法值一律回退 dispatch**
++  // （既有变更含归档重放逐字节零回归）。main=主代理直写（本仓对撞实证 A 组 7′ vs B 组 70′；
++  // GSD 在 Claude Code 永远 spawn 子代理——direct 是本仓结论非 GSD 抄袭项，分歧声明见
++  // design M4）。main 时：执行方式段换直写指引、派发段/子代理工作目录强制段/并发帽段/
++  // M3 推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与锚点/review write
++  // 指引全保留（只换执行宿主，不换防线）。判据（plan 生成时 agent 声明）：输入已含决策 ×
++  // 任务文件正交的清晰输入任务；自动化判据归第 3 批 ceremony 决策密度轴。best-effort：
++  // plan 缺失/读取失败回退 dispatch。严格小写 'main'（大小写漂移视为非法回退）。
++  let executionMode = 'dispatch'
++  try {
++    if (changeDir) {
++      const emPlanPath = path.join(changeDir, 'plan.md')
++      if (existsSync(emPlanPath)) {
++        const emPlanText = memo('plan', () => readFileSync(emPlanPath, 'utf8'))
++        const emFm = emPlanText.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)
++        if (emFm) {
++          const emVal = emFm[1].match(/^execution_mode:[ \t]*(\S+)[ \t]*(?:#.*)?$/m)
++          if (emVal && emVal[1] === 'main') executionMode = 'main'
++        }
++      }
++    }
++  } catch { /* execution_mode 解析 best-effort：失败回退 dispatch */ }
++  const mainMode = executionMode === 'main'
++
+   // ── 模块卡分级（P0a）：本 Wave per-task 最优卡表，细卡优先——治「根层大卡被每个子代理
+   // 整读」（multi-agent-platform backend.md 58KB 实测单卡一项 20 万+ tokens/全流程）。
+   // best-effort：解析失败/无 map 不注入（零回归），可经 `sillyspec modules resolve` 手查。
+@@ -1193,9 +1218,29 @@ ${crossLines}${crossWorktreeSection}${crossLegacySection}
+ `
+   }
+ 
++  // 工作目录「注意」尾段（单仓口径，M4 抽出共享）：主代理直写变体与子代理派发变体逐字
++  // 共用——蓝图主仓路径指引 / spec 产物主仓铁律 / Python 导入链陷阱与执行宿主无关。
++  const worktreeNoticeSingle = `### 注意
++蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
++
++⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
++
++⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 \`import <项目包>\` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/<项目源码根>\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。`
++
+   // worktreeSection：无 ctx / 无跨仓 task → 旧单值（零回归）；有 ctx 含跨仓 task → per-task 多值表
+   let worktreeSection
+-  if (ctx && hasCrossRepoWave && perTaskWorkdirs) {
++  if (mainMode && worktreePath && !(ctx && hasCrossRepoWave && perTaskWorkdirs)) {
++    // M4 main 单仓直写变体：无子代理 workdir JSON（无子代理），注意尾段与派发变体逐字共享。
++    // 跨仓 + main 仍走下方 per-task 表（跨仓 workdir 归属信息与执行宿主无关；M4 判据=清晰
++    // 输入 × 文件正交，跨仓 ctx 场景罕见，本批不扩面）。
++    worktreeSection = `
++### 工作目录（主代理直写）
++
++本变更在隔离 worktree 内实现：\`${worktreePath}\`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（\`sillyspec wt-commit --change <change-name> -- <task-files>\`），不经子代理派发。
++
++${worktreeNoticeSingle}
++`
++  } else if (ctx && hasCrossRepoWave && perTaskWorkdirs) {
+     const workdirLines = perTaskWorkdirs.map(i =>
+       `  - task-${i.taskNum} (repo: ${i.repo}) → workdir: "${i.workdir}"`
+     ).join('\n')
+@@ -1241,12 +1286,7 @@ ${workdirLines}
+ }
+ \`\`\`
+ 
+-### 注意
+-蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
+-
+-⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
+-
+-⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 \`import <项目包>\` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/<项目源码根>\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。
++${worktreeNoticeSingle}
+ `
+       : ''
+   }
+@@ -1259,7 +1299,7 @@ ${workdirLines}
+   // （无 worktree 无谓派发指令）。测试/调用方可经 options.dispatchMode 覆盖，避免 env 污染。
+   const dispatchMode = options.dispatchMode || getDispatchMode()
+   let dispatchSection = ''
+-  if (worktreePath && dispatchMode === 'sillyhub') {
++  if (!mainMode && worktreePath && dispatchMode === 'sillyhub') {
+     // 路径A 落地后：注入完整 SillyHub 派发指令（renderDispatchInstruction 已含 Local 兜底全文）
+     const contract = {
+       brief: '本 Wave 任务（见上方任务摘要与 tasks/task-XX.md）',
+@@ -1271,7 +1311,7 @@ ${workdirLines}
+     }
+     const { instruction } = renderDispatchInstruction(contract, { available: true })
+     dispatchSection = `\n### 派发后端：SillyHub MCP（探测可用，一 Wave 一 mission）\n\n本次 Wave 派发经 SillyHub MCP。按以下派发指令执行（含 create_mission / dispatch_worker / 轮询 list_workers / 超时 kill lease 防双写 / 回收 + Local 兜底）：\n\n${instruction}\n`
+-  } else if (worktreePath && dispatchMode === 'local-fallback') {
++  } else if (!mainMode && worktreePath && dispatchMode === 'local-fallback') {
+     // 有 MCP 配置但路径A 未落地：加短提示，派发仍走 Local（与默认行为一致）
+     dispatchSection = `\n### 派发后端提示：SillyHub MCP 已配置但路径A 未落地\n\n检测到 local.yaml mcp 段或 env 配置，但 SillyHub \`dispatch_worker\` 尚不支持 \`worktree_path\`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。\n`
+   }
+@@ -1296,6 +1336,42 @@ ${workdirLines}
+     materialsPoint = `\n${itemNo} **任务材料包（CLI 预装配，稳定段先行）**：${waveMaterialHits.join('；')}——先读材料包，按锚点回源核对；材料包只摘不译，冲突以源文件为准`
+   }
+ 
++  // ── 推荐分组（M3 / FR-03，2026-09-21-r5-efficiency-batch2 task-03，D-003@v1）：CLI 按
++  // 第 1 批三条件机械预计算本 Wave 推荐分组，注入派发段——派发交接单位从 task 升组，摊平
++  // per-task 子代理的重复上下文重建（P13/GSD）。两道零回归门：
++  //   ① dispatchMode === 'sillyhub' 零注入（一 Wave 一 mission，分组语义不适用——与下方
++  //      「SillyHub 派发互斥」行同口径；local / local-fallback 实际派发走 Local 照注入）；
++  //   ② recommendWaveGroups 无 ≥2 组（无可并/卡缺失不可判/护栏预算 0）→ recommendBlock=''
++  //      → 模板插入位相邻字节形态不变，输出与改前逐字节一致。
++  //   ③ execution_mode=main 零注入（M4：无派发即无分组语义，Grill P3-2——与 SillyHub 互斥
++  //      同款模式互斥口径）。
++  // facts 逐卡 memoMap（一次 buildExecuteSteps 期间卡内容不变，跨 Wave 共享）；分组本体与
++  // plan-postcheck checkBatchAdvisory 判定①共用 recommendWaveGroups 纯函数（无二源）。──
++  let recommendBlock = ''
++  if (changeDir && dispatchMode !== 'sillyhub' && !mainMode) {
++    try {
++      const groupTasks = wave.tasks.map((t, ti) => {
++        const id = `task-${String(t.index || (ti + 1)).padStart(2, '0')}`
++        const facts = memoMap('batchFacts', id, () => {
++          const cardPath = path.join(changeDir, 'tasks', `${id}.md`)
++          if (!existsSync(cardPath)) return null
++          return collectCardBatchFacts(readFileSync(cardPath, 'utf8'))
++        })
++        return {
++          id,
++          files: facts && facts.fileSet ? [...facts.fileSet] : null,
++          deps: facts ? facts.deps : [],
++          expectsProviders: facts ? facts.expectsProviders : [],
++        }
++      })
++      const recGroups = recommendWaveGroups(groupTasks)
++      if (recGroups.some(g => g.length >= 2)) {
++        const display = recGroups.map(g => `[${g.join(',')}]`).join(' / ')
++        recommendBlock = `\n**推荐分组（CLI 已按上述三条件预计算）**：${display}\n按推荐分组派发与回收（组内逐 task 审查/review.json 照旧，主代理按组一次回收）；可偏离推荐分组，但偏离须在 Wave 完成摘要中披露理由——机械建议不夺裁决权。\n`
++      }
++    } catch { /* 推荐分组 fail-open：计算失败零注入，不阻断 Wave prompt 组装 */ }
++  }
++
+   // ── 派发契约（2026-09-21-r5-efficiency-batch1 task-03，FR-03 / B-⑥ + C-1）：轮数纪律三行 +
+   // 子代理返回契约，无条件常驻注入（与要点 1-8 同级，不随材料包/硬约束缺位消失）。编号接在
+   // 材料包之后保持单调：全局硬约束恒 9（既有钉）→ 材料包在位占 10 → 本两条顺延；缺位前移，
+@@ -1319,13 +1395,25 @@ ${workdirLines}
+   const roleItem1 = implicit
+     ? `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，逐个完成（串行——启动一个、等它完成并审查后再启动下一个，见「调度要求」串行铁律）`
+     : `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行——但同时在飞子代理 ≤3（见「调度要求」并发帽，超出的 batch 排队错峰）`
+-  const scheduleItem1 = implicit
+-    ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
+-    : `1. **同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中。并发帽 3：Wave 内子代理超 3 个时分两批错峰——首批完成后回收槽位再派第二批；4 路齐发实证触发平台额度/限流耗尽，整 Wave 中断 17 分钟由用户手动恢复，得不偿失）。`
++  const scheduleItem1 = mainMode
++    ? `1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 锚点/review write → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。`
++    : implicit
++      ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
++      : `1. **同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中。并发帽 3：Wave 内子代理超 3 个时分两批错峰——首批完成后回收槽位再派第二批；4 路齐发实证触发平台额度/限流耗尽，整 Wave 中断 17 分钟由用户手动恢复，得不偿失）。`
+ 
+-  return `${waveHeader}
++  // ── M4 模式段变体（2026-09-21-r5-efficiency-batch2 task-04）：dispatch 分支为既有模板
++  // 逐字移植（缺省/非法回退 dispatch → 输出与改前逐字节一致，零回归由改动前后黄金快照
++  // diff + 既有钉测试双保证）；main 分支为直写指引——派发段/子代理工作目录强制段/并发帽
++  // 段/M3 分组段全抑制，防线与锚点/review write 指引全保留（只换执行宿主，不换防线）。──
++  const mainExecSection = `## 执行方式
++
++**主代理直写（execution_mode: main）——你直接实现，不派子代理。**
++
++逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 锚点写入与 review write（见下方 Task Review Gate——checkbox 由 CLI 自动勾选，勿手动勾选）→ 下一任务。
++
++worktree 隔离 / 写入守卫（allowed_paths）/ review.json / verify 门禁全部保留——只换执行宿主，不换任何防线。`
+ 
+-## 执行方式
++  const dispatchExecSection = `## 执行方式
+ 
+ **默认每个任务由独立子代理执行，你不要自己写代码。**
+ 
+@@ -1333,24 +1421,37 @@ ${workdirLines}
+ - 组内任意两个 task 的 allowed_paths 无交集（文件正交）
+ ${batchCond2}
+ - 组大小不超过 3 个 task
+-
++${recommendBlock}
+ 任一条件不满足，该 task 走独立子代理（默认形态）；拿不准就不合并。无论独立还是 batch，实现一律由子代理完成，你不要自己写代码。
+ 
+ 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
+ ${roleItem1}
+ 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
+ 3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
+-4. 记录改动文件和测试结果
+-
+-${worktreeSection}${crossRepoCommitSection}${dispatchSection}
+-**SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。
+-${moduleSection}
+-### 任务摘要（按需读取完整蓝图）
+-为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
+-
+-${taskSummary}
+-
+-子代理 prompt 要点：
++4. 记录改动文件和测试结果`
++
++  // main 模式无派发——SillyHub 互斥行随派发段一同抑制（无 batch 分组语义可互斥）
++  const sillyhubMutexLine = mainMode ? '' : '**SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。'
++
++  // 任务摘要引导行 + 要点块的模式变体（M4）：dispatch 分支逐字原文；main 分支去子代理
++  // 语境（无 prompt 组装、无 batch 协议），铁律/模块卡/测试设计/增量落盘/边界铁律五条保留。
++  const summaryIntroLine = mainMode
++    ? '逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：'
++    : '为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：'
++
++  const modulePointMain = moduleSection
++    ? '**模块卡分级**：按上方「模块卡分级」表读该 task 命中的卡（细卡整读；粗大卡只读「契约摘要/注意事项/定位」节）——勿按目录漫游或整读根层大卡'
++    : '如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本'
++
++  const mainPointsSection = `实现要点：
++1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
++2. ${modulePointMain}
++3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例
++4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作
++   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**
++5. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界`
++
++  const subagentPointsSection = `子代理 prompt 要点：
+ 1. 任务目标（简短描述）
+ 2. 蓝图文件路径（让子代理自行读取详情）
+ 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
+@@ -1359,7 +1460,21 @@ ${taskSummary}
+ 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
+    **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
+ 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
+-8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
++8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task`
++
++  return `${waveHeader}
++
++${mainMode ? mainExecSection : dispatchExecSection}
++
++${worktreeSection}${crossRepoCommitSection}${dispatchSection}
++${sillyhubMutexLine}
++${moduleSection}
++### 任务摘要（按需读取完整蓝图）
++${summaryIntroLine}
++
++${taskSummary}
++
++${mainMode ? mainPointsSection : subagentPointsSection}
+ ${globalConstraintsBlock}${materialsPoint}${roundDisciplinePoint}${returnContractPoint}
+ {{include: testcase-design}}
+ 
+diff --git a/src/stages/plan-postcheck.js b/src/stages/plan-postcheck.js
+index 9f270f86..dfc99709 100644
+--- a/src/stages/plan-postcheck.js
++++ b/src/stages/plan-postcheck.js
+@@ -1725,8 +1725,11 @@ function parseBatchWavesFromPlanText(planMdText) {
+  *   deps             depends_on（补零）
+  *   expectsProviders expects_from 的 provider 任务集（补零；Wave 内命中 = 契约链）
+  *   batchMembers     卡 frontmatter `batch:` 字段成员（数组成员或 `task-01+task-02` 串皆收；<2 成员不供信息）
++ *
++ * M3（2026-09-21-r5-efficiency-batch2 task-03）起导出：execute.js buildWavePrompt 推荐分组
++ * 与本文件 checkBatchAdvisory 共用此 facts 收集（单一实现无二源——导出是复用需要，非新逻辑）。
+  */
+-function collectCardBatchFacts(content) {
++export function collectCardBatchFacts(content) {
+   const text = String(content || '')
+   let fileSet = null
+   const tf = parseTargetFiles(text)
+@@ -1751,6 +1754,59 @@ function collectCardBatchFacts(content) {
+   return { fileSet, deps, expectsProviders, batchMembers }
+ }
+ 
++/**
++ * recommendWaveGroups —— M3 PLAN 粒度派发默认化的推荐分组纯函数（FR-03 / D-003@v1，
++ * 2026-09-21-r5-efficiency-batch2 task-03）。按第 1 批三条件（allowed_paths/target_files
++ * 两两正交 / 组内无 provides-expects_from 契约链（含 depends_on，双向）/ 组 ≤3）贪心预计算
++ * 分组；checkBatchAdvisory 判定①文案与 execute.js buildWavePrompt 派发段共用本函数（无二源）。
++ *
++ * 护栏不变式（与 checkBatchAdvisory 两判定同口径：并批后整 Wave 批数 ≥ min(3, 任务数)）：
++ * 并批预算 = n − min(3,n)，每把一个 task 并入已有组消耗 1 预算，预算耗尽后余 task 独立成组；
++ * n≤3 时预算为 0 恒全单例（任何并批必违反 min(3,N)=N——推荐不得自触判定②）。
++ * files=null（卡缺失/字段全无，正交不可判）→ 恒单例（宁缺勿假）。
++ *
++ * 确定性：按输入序贪心（先开组后补组、组满 3 或不相容即让位），同输入恒同输出；
++ * 非数组输入返回 []（纯机械容错，不 throw）。
++ *
++ * @param {Array<{id:string, files:Iterable<string>|null, deps?:string[], expectsProviders?:string[]}>} tasks
++ *   id 接受未补零形态（内部 padTaskRef 归一）；deps/expectsProviders 缺省视为无链。
++ * @returns {string[][]} 全量 partition（含单例组，组内按输入序）——调用方以
++ *   groups.some(g => g.length >= 2) 判定有无推荐（无则零注入/零文案）。
++ */
++export function recommendWaveGroups(tasks) {
++  if (!Array.isArray(tasks)) return []
++  const list = tasks.map(t => ({
++    id: padTaskRef(t?.id ?? ''),
++    files: t?.files == null ? null : new Set([...t.files].map(String)),
++    deps: new Set((t?.deps || []).map(padTaskRef)),
++    expects: new Set((t?.expectsProviders || []).map(padTaskRef)),
++  }))
++  const n = list.length
++  let budget = n - Math.min(3, n) // 并批预算：分组后批数 = n - 已消耗预算 ≥ min(3,n) 恒成立
++  const chainBetween = (a, b) =>
++    a.deps.has(b.id) || b.deps.has(a.id) || a.expects.has(b.id) || b.expects.has(a.id)
++  const filesDisjoint = (a, b) => {
++    for (const p of a.files) if (b.files.has(p)) return false
++    return true
++  }
++  const groups = []
++  for (const t of list) {
++    let placed = false
++    if (t.files != null && budget > 0) {
++      for (const g of groups) {
++        if (g.length >= 3) continue // 帽值：组 ≤3
++        if (g.some(m => m.files == null || !filesDisjoint(m, t) || chainBetween(m, t))) continue
++        g.push(t)
++        budget -= 1
++        placed = true
++        break
++      }
++    }
++    if (!placed) groups.push([t])
++  }
++  return groups.map(g => g.map(t => t.id))
++}
++
+ /**
+  * checkBatchAdvisory —— plan 并批默认的 postcheck 机械提醒（B-③ / FR-01，warning 级 advisory）。
+  *
+@@ -1855,13 +1911,24 @@ export function checkBatchAdvisory({ tasksMdText, planMdText, taskCards } = {})
+         }
+       }
+       if (knowable && chainFree && fileDisjoint) {
++        // M3（batch2 task-03）：判定①附推荐分组清单——同一纯函数 recommendWaveGroups
++        // 无二源（该分支内任务两两正交无链，分组差异只来自帽值与批数护栏预算）。
++        const recGroups = recommendWaveGroups(waveTasks.map((t, i) => ({
++          id: t,
++          files: facts[i].fileSet,
++          deps: facts[i].deps,
++          expectsProviders: facts[i].expectsProviders,
++        })))
++        const recLine = recGroups.some(g => g.length >= 2)
++          ? `；CLI 预计算推荐分组：${recGroups.map(g => `[${g.join(',')}]`).join(' / ')}`
++          : ''
+         advisories.push({
+           level: 'warning',
+           code: 'batch_orthogonal_unbundled',
+           message: `Wave ${w.waveNo} 内 ${n} 个任务文件两两正交（无共享 target_files、无 depends_on / provides-expects_from 契约链）` +
+             `但全部未并批——默认并批可摊平 execute 扇出的重复上下文重建（B-③）：2–4 任务/批，` +
+             `Wave 段内加批标注行（如 "> batch: task-01+task-02"，不替代 - task-XX 纯 ID 引用行），` +
+-            `并批后整 Wave 批数保持 ≥ min(3, ${n})`,
++            `并批后整 Wave 批数保持 ≥ min(3, ${n})${recLine}`,
+         })
+       }
+     }
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 6ebf92dd..61e69fe9 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -159,6 +159,11 @@ const stepGeneratePlan = {
+ > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+ > - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
+ 
++> **执行模式声明（execution_mode，M4——清晰输入任务的主代理直写通道，2026-09-21-r5-efficiency-batch2）**：
++> - plan.md frontmatter 加 \`execution_mode: main | dispatch\` 键，**缺省不写 = dispatch**（走既有子代理派发，既有变更零影响）；本仓对撞实证 A 组主代理直写 7′ 进码 vs B 组派发 70′（GSD 在 Claude Code 永远 spawn 子代理，direct 模式是本仓结论非抄袭项——分歧声明见 design）
++> - 仅当满足判据才声明 \`execution_mode: main\`：**输入已含决策**（design/方案已把接口、边界、验收定死，实现期无开放式设计裁决）× **任务边界清晰可串行**（无跨 task 契约链半成品风险）；不满足或拿不准一律缺省 dispatch（误用 main 只损失并行收益，不损失任何防线与审查）
++> - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
++
+ ---
+ 
+ #### plan_level = none
+@@ -192,6 +197,7 @@ plan_level: none
+ \`\`\`markdown
+ ---
+ plan_level: light
++execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
+ ---
+ 
+ # 轻量计划（Light Plan）：<需求简述>
+@@ -231,6 +237,7 @@ light 计划的约束：
+ \`\`\`markdown
+ ---
+ plan_level: full
++execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
+ ---
+ 
+ # 实现计划（Plan）
+diff --git a/test/gate-snapshot-ancestor-trim.test.mjs b/test/gate-snapshot-ancestor-trim.test.mjs
+index a094c556..184fc235 100644
+--- a/test/gate-snapshot-ancestor-trim.test.mjs
++++ b/test/gate-snapshot-ancestor-trim.test.mjs
+@@ -7,7 +7,7 @@
+  *
+  * 覆盖：
+  * 1. worktree 单侧修改（主仓=祖先内容）：快照应取 worktree 版本（修复前误取主仓旧版）
+- * 2. 真双写分叉（两侧都真改且互不相等）：仍取主仓（既有语义不变，警告照发）
++ * 2. 真双写分叉（两侧都真改且互不相等）：取 worktree（2026-09-21-r5-efficiency-batch2 D-002@v2 翻转——batch1 verify 实证分叉取主仓致 src/test 血统断裂假红；主仓侧异动为干扰源，apply 后主仓单源复核兜底）
+  * 3. 主仓直写新、worktree=祖先（陈旧 worktree）：仍取主仓（既有语义不变）
+  */
+ import { describe, it, beforeEach, afterEach } from 'node:test'
+@@ -55,7 +55,7 @@ describe('createGateSnapshot 祖先比对对称 trim（坑 gate-snapshot-ancesto
+     }
+   })
+ 
+-  it('真双写分叉（两侧都真改且互不相等）：仍取主仓（语义不变）', () => {
++  it('真双写分叉（两侧都真改且互不相等）：取 worktree（D-002@v2 语义翻转）', () => {
+     const sha = baseSha(repo)
+     writeFileSync(join(wt, 'b.js'), 'wt real edit\n')
+     writeFileSync(join(repo, 'b.js'), 'main real edit\n')
+@@ -63,7 +63,7 @@ describe('createGateSnapshot 祖先比对对称 trim（坑 gate-snapshot-ancesto
+     assert.ok(snap)
+     try {
+       const got = readFileSync(join(snap.snapshotRoot, 'b.js'), 'utf8')
+-      assert.ok(got.includes('main real edit'), '真分叉取主仓（本会话最新编辑位约定）')
++      assert.ok(got.includes('wt real edit'), '真分叉取 worktree 分支版（D-002@v2：本变更交付血统优先）')
+     } finally {
+       snap.cleanup()
+     }
+diff --git a/test/verify-gate-snapshot.test.mjs b/test/verify-gate-snapshot.test.mjs
+index 0b55494f..f285f978 100644
+--- a/test/verify-gate-snapshot.test.mjs
++++ b/test/verify-gate-snapshot.test.mjs
+@@ -142,16 +142,18 @@ test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked 
+   } finally { snap.cleanup() }
+ })
+ 
+-// ── 双写一致性（2026-09-20 红线机检变更实证修复：主仓直写新、worktree 陈旧 → 快照取主仓）──
+-test('双写：主仓直写新版本而 worktree 停在旧交付 → 快照取主仓（治 import 找不到新导出的假红）', async () => {
++// ── 双写分叉（2026-09-21 D-002@v2 语义翻转：分叉态取 worktree——batch1 假红根治；
++//    原「取主仓」期望随设计批准翻转，同 gate-snapshot-ancestor-trim 先例；三态完整钉归
++//    test/gate-snapshot-lineage.test.mjs，此处保留端到端快照层复刻）──
++test('双写分叉：主仓侧并行异动 + worktree 交付 → 快照取 worktree 分支版（D-002@v2）', async () => {
+   const proj = mk('vgs-dual-')
+   const { specBase } = setupBase(proj, 'native')
+-  // 主 agent 在主仓直写了更新的版本（f=3），worktree 还是 f=2
++  // 主仓侧同文件被并行会话异动（f=3），worktree 停在本变更交付（f=2）——③态分叉
+   writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 3 // 主仓直写新\n')
+   const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase })
+   assert.ok(snap, '快照创建成功')
+   try {
+-    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 3 // 主仓直写新\n',
+-      '三方取新：主仓版本胜出（基线 f=1，worktree f=2 也新于基线但主仓是本会话最新编辑位——分叉警告 + 取主仓）')
++    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 2 // 本变更交付\n',
++      '分叉取 worktree 分支版（基线 f=1，主仓 f=3 为并行异动干扰源——定向跑语义=验本变更分支交付；①保护态取主仓不受影响）')
+   } finally { snap.cleanup() }
+ })
+diff --git a/test/execution-mode-render.test.mjs b/test/execution-mode-render.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/execution-mode-render.test.mjs
+@@ -0,0 +1,178 @@
++/**
++ * M4 execution_mode 通道（2026-09-21-r5-efficiency-batch2 task-04，FR-04 / D-004@v1）
++ *
++ * 锁死契约：
++ * 1. 缺省回退：无键 / execution_mode: dispatch / 非法值（含大小写漂移）→ dispatch 渲染，
++ *    三态输出互相逐字节一致；含派发段/工作目录段/并发帽段，不含直写段（零回归钉）。
++ * 2. main 渲染：含直写指引段（逐任务闭环 + 防线保留声明 + 直写工作目录段 + 直写纪律），
++ *    不含派发段（默认子代理话术/可选 batch）/子代理工作目录强制段/并发帽段/M3 推荐分组段/
++ *    SillyHub 派发互斥行。
++ * 3. 两模式锚点 + review write 指引一致存在（wt-commit / Task Review Gate / review.json——
++ *    只换执行宿主，不换防线）。
++ * 4. main × M3 互斥：同一可并批 Wave，dispatch 注入推荐分组、main 零注入（无派发即无分组语义）。
++ * 5. plan.js stepGeneratePlan 模板：light/full 两档 frontmatter 均含 execution_mode 注释键
++ *    + 声明判据话术（输入已含决策 × 任务文件正交性；缺省 dispatch）。
++ * 6. 注释容忍：`execution_mode: main  # 说明` 仍识别为 main（YAML 注释不碍解析）。
++ * 7. 隐式 Wave（light/无显式 Wave 段）+ main → 直写段照注入（implicit 分支同受 execution_mode 支配）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { buildWavePrompt } from '../src/stages/execute.js'
++import { fixedPrefix } from '../src/stages/plan.js'
++
++// ── fixtures ───────────────────────────────────────────────────────
++
++function card(id, files) {
++  return [
++    '---', `id: ${id}`, 'title: t', 'title_zh: 中文标题', 'author: t',
++    'created_at: 2026-09-21 00:00:00', 'priority: P0', 'depends_on: []',
++    'blocks: []', 'requirement_ids: [FR-4]', 'decision_ids: []',
++    'allowed_paths:', ...files.map(p => `  - ${p}`),
++    'goal: >', '  g', 'implementation:', '  - i', 'acceptance:', '  - a',
++    'verify:', '  - node --version', 'constraints:', '  - c', '---', '',
++  ].join('\n')
++}
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++/** fixture change 目录：n 张两两正交卡 + plan.md（frontmatter 可注入额外键行；waves=false 写 light 无段形态） */
++/** 重写 fixture 的 plan.md（同 cd 原地换 frontmatter——逐字节比对需路径恒定） */
++function writePlan(cd, n, { fmExtra = [], waves = true } = {}) {
++  const planLines = ['---', 'plan_level: full', ...fmExtra, '---', '', '# 实现计划', '']
++  if (waves) {
++    planLines.push('## Wave 1（并行）', '')
++    for (let i = 1; i <= n; i++) planLines.push(`- task-${String(i).padStart(2, '0')}`)
++    planLines.push('')
++  }
++  writeFileSync(join(cd, 'plan.md'), planLines.join('\n'))
++}
++
++function makeChangeDir(n, { fmExtra = [], waves = true } = {}) {
++  const cd = mk('exec-mode-')
++  mkdirSync(join(cd, 'tasks'), { recursive: true })
++  writePlan(cd, n, { fmExtra, waves })
++  for (let i = 1; i <= n; i++) {
++    const id = `task-${String(i).padStart(2, '0')}`
++    writeFileSync(join(cd, 'tasks', `${id}.md`), card(id, [`src/fx${i}.js`]))
++  }
++  return cd
++}
++
++const waveOf = (n, implicit = false) => ({
++  index: 1,
++  ...(implicit ? { implicit: true } : {}),
++  tasks: Array.from({ length: n }, (_, i) => ({
++    index: i + 1, name: `task-${String(i + 1).padStart(2, '0')}: 示例`, file: `tasks/task-${String(i + 1).padStart(2, '0')}.md`,
++  })),
++})
++
++const render = (cd, n = 3, opts = {}, implicit = false) =>
++  buildWavePrompt(waveOf(n, implicit), 1, cd, join(cd, 'wt'), { dispatchMode: 'local', ...opts })
++
++// ── 1. 缺省回退：dispatch 渲染（零回归钉）─────────────────────────
++
++test('T1 缺省三态（无键/dispatch/非法值）→ dispatch 渲染且互相逐字节一致', () => {
++  // 同一 cd 原地换 frontmatter 再渲染——worktree 路径恒定，输出才可逐字节比对
++  const cd = makeChangeDir(3)
++  const wpNo = render(cd)
++  writePlan(cd, 3, { fmExtra: ['execution_mode: dispatch'] })
++  const wpDispatch = render(cd)
++  writePlan(cd, 3, { fmExtra: ['execution_mode: agent-swarm'] })
++  const wpGarbage = render(cd)
++  assert.equal(wpNo, wpDispatch, '无键 === 显式 dispatch（逐字节）')
++  assert.equal(wpNo, wpGarbage, '无键 === 非法值回退（逐字节）')
++  for (const wp of [wpNo]) {
++    assert.ok(wp.includes('默认每个任务由独立子代理执行，你不要自己写代码'), 'T1: 派发段在位')
++    assert.ok(wp.includes('可选 batch（合并实现）'), 'T1: batch 条件段在位')
++    assert.ok(wp.includes('workdir 参数是强制必传'), 'T1: 子代理工作目录强制段在位')
++    assert.ok(wp.includes('同时在飞 ≤3'), 'T1: 并发帽段在位')
++    assert.ok(!wp.includes('主代理直写'), 'T1: 无直写段')
++  }
++  // 大写漂移同样回退 dispatch（严格小写 main 判定）
++  writePlan(cd, 3, { fmExtra: ['execution_mode: MAIN'] })
++  assert.equal(render(cd), wpNo, 'execution_mode: MAIN → dispatch 回退（大小写敏感）')
++})
++
++test('T1b options 缺省与空对象输出逐字节一致（既有回归钉保持）', () => {
++  const cd = makeChangeDir(3)
++  assert.equal(buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), undefined), render(cd))
++})
++
++// ── 2. main 渲染：直写指引段 + 四段抑制 ───────────────────────────
++
++test('T2 main → 直写指引段在位，派发段/工作目录强制段/并发帽段/SillyHub 互斥行全抑制', () => {
++  const cd = makeChangeDir(3, { fmExtra: ['execution_mode: main'] })
++  const wp = render(cd)
++  assert.ok(wp.includes('**主代理直写（execution_mode: main）——你直接实现，不派子代理。**'), 'T2: 直写指引头在位')
++  assert.ok(wp.includes('逐任务闭环（串行，完成一个再下一个）'), 'T2: 逐任务闭环话术在位')
++  assert.ok(wp.includes('只换执行宿主，不换任何防线'), 'T2: 防线保留声明在位')
++  assert.ok(wp.includes('### 工作目录（主代理直写）'), 'T2: 直写工作目录段在位')
++  assert.ok(wp.includes('主代理直写纪律'), 'T2: 调度要求直写纪律在位')
++  assert.ok(wp.includes(join(cd, 'wt')), 'T2: worktree 路径仍在（worktree 内实现）')
++  for (const banned of [
++    '默认每个任务由独立子代理执行',   // 派发段
++    '可选 batch（合并实现）',          // batch 条件段
++    'workdir 参数是强制必传',          // 子代理工作目录强制段
++    '同时在飞 ≤3',               // 并发帽段
++    'SillyHub 派发互斥',               // 派发互斥行（无派发）
++    '你的角色是调度者 + 审查者',       // 调度者角色清单
++  ]) {
++    assert.ok(!wp.includes(banned), `T2: main 渲染不含「${banned}」`)
++  }
++})
++
++// ── 3. 两模式锚点 + review write 指引一致 ─────────────────────────
++
++test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存在', () => {
++  const cdD = makeChangeDir(3)
++  const cdM = makeChangeDir(3, { fmExtra: ['execution_mode: main'] })
++  const wpD = render(cdD)
++  const wpM = render(cdM)
++  for (const [label, wp] of [['dispatch', wpD], ['main', wpM]]) {
++    assert.ok(wp.includes('sillyspec wt-commit --change'), `T3: ${label} 含 wt-commit 逐任务提交指引`)
++    assert.ok(wp.includes('### Task Review Gate'), `T3: ${label} 含 Task Review Gate`)
++    assert.ok(wp.includes('review.json'), `T3: ${label} 含 review.json 指引`)
++  }
++})
++
++// ── 4. main × M3 互斥 ─────────────────────────────────────────────
++
++test('T4 同一可并批 Wave（5 任务两两正交）：dispatch 注入推荐分组，main 零注入', () => {
++  const cdD = makeChangeDir(5)
++  const cdM = makeChangeDir(5, { fmExtra: ['execution_mode: main'] })
++  assert.ok(render(cdD, 5).includes('推荐分组'), 'T4: dispatch 下 M3 推荐分组在位')
++  assert.ok(!render(cdM, 5).includes('推荐分组'), 'T4: main 下 M3 分组段抑制（无派发即无分组语义）')
++})
++
++// ── 5. plan.js 模板钉 ─────────────────────────────────────────────
++
++test('T5 stepGeneratePlan prompt：light/full 模板含 execution_mode 键 + 判据话术', () => {
++  const step = fixedPrefix.find(s => s.id === 'generate_plan')
++  assert.ok(step, 'fixedPrefix 含 generate_plan 步骤')
++  assert.ok(step.prompt.includes('execution_mode: dispatch'), 'T5: 缺省 dispatch 注释键在模板')
++  assert.ok(step.prompt.includes('execution_mode: main'), 'T5: main 选项在模板判据话术')
++  assert.ok(step.prompt.includes('输入已含决策'), 'T5: 声明判据（输入已含决策 × 任务文件正交性）话术在位')
++  assert.ok(step.prompt.includes('execution_mode') && (step.prompt.match(/execution_mode: dispatch/g) || []).length >= 2,
++    'T5: light 与 full 两档模板均带键（≥2 处 dispatch 缺省行）')
++})
++
++// ── 6. 注释容忍 ───────────────────────────────────────────────────
++
++test('T6 YAML 行内注释不碍识别：`execution_mode: main  # 直写` → main 渲染', () => {
++  const cd = makeChangeDir(3, { fmExtra: ['execution_mode: main  # 清晰输入任务直写'] })
++  assert.ok(render(cd).includes('主代理直写（execution_mode: main）'), 'T6: 注释后仍识别 main')
++})
++
++// ── 7. 隐式 Wave + main ───────────────────────────────────────────
++
++test('T7 隐式 Wave（无显式 Wave 段）+ main → 直写段照注入', () => {
++  const cd = makeChangeDir(3, { fmExtra: ['execution_mode: main'], waves: false })
++  const wp = render(cd, 3, {}, true)
++  assert.ok(wp.includes('主代理直写（execution_mode: main）'), 'T7: 隐式 Wave 下 main 直写段在位')
++  assert.ok(!wp.includes('默认每个任务由独立子代理执行'), 'T7: 派发话术抑制')
++})
+
+diff --git a/test/gate-snapshot-lineage.test.mjs b/test/gate-snapshot-lineage.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-lineage.test.mjs
+@@ -0,0 +1,67 @@
++/**
++ * gate-snapshot-lineage.test.mjs — M2 快照分叉态取 worktree 血统（2026-09-21-r5-efficiency-batch2 task-02 / FR-02 / D-002@v2）
++ *
++ * batch1 verify 实证（round5/r5-collision-ehs-attribution.md P16 移交）：sourceRoot=worktree 定向跑
++ * verify 时，主仓侧同文件被并行 quick 修复异动 → 双写分叉取主仓（cwd）= 拿走无本变更代码的版本，
++ * 配上 worktree 新增测试文件（新文件不经分叉判定）→ src/test 血统断裂 → module 实测假红一轮。
++ *
++ * 三态钉（D-002@v2 契约——①②态为既有语义零回归，③态为本批翻转）：
++ *   ① 保护态（主仓直写新、worktree 停基线）→ 取主仓（2026-09-20 红线机检实证场景，不动）
++ *   ② 正常态（仅 worktree 交付修改）→ 取 worktree（不动）
++ *   ③ 分叉态（双侧均异于 merge-base 祖先且互不相等）→ 取 worktree（batch1 假红根治）+ 警告含对齐指引
++ */
++import { describe, it, beforeEach, afterEach } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { createGateSnapshot } from '../src/run/gate-snapshot.js'
++
++const run = (cwd, args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' })
++
++describe('createGateSnapshot 血统三态（D-002@v2：仅分叉态翻转）', () => {
++  let repo, wt, srcFile
++  beforeEach(() => {
++    const root = join(tmpdir(), `sillyspec-lineage-${Math.random().toString(36).slice(2)}`)
++    repo = join(root, 'repo')
++    wt = join(root, 'wt')
++    mkdirSync(repo, { recursive: true })
++    mkdirSync(wt, { recursive: true })
++    run(repo, ['init', '--quiet'])
++    writeFileSync(join(repo, 'service.js'), 'base\n')
++    run(repo, ['add', '.'])
++    run(repo, ['commit', '--quiet', '-m', 'base'])
++    srcFile = 'service.js'
++  })
++  afterEach(() => { try { rmSync(join(repo, '..'), { recursive: true, force: true }) } catch {} })
++
++  const baseSha = () => run(repo, ['rev-parse', 'HEAD']).trim()
++  const snapContent = (mergeBase) => {
++    const snap = createGateSnapshot({ cwd: repo, files: [srcFile], sourceRoot: wt, mergeBase, skipImportSmoke: true })
++    try { return readFileSync(join(snap.snapshotRoot, srcFile), 'utf8') } finally { snap.cleanup() }
++  }
++
++  it('① 保护态：主仓直写新、worktree 停基线 → 取主仓（既有语义零回归）', () => {
++    const sha = baseSha()
++    writeFileSync(join(repo, srcFile), 'main direct write\n') // 主仓侧新内容
++    // worktree 侧 = 祖先内容（未动）
++    writeFileSync(join(wt, srcFile), 'base\n')
++    assert.ok(snapContent(sha).includes('main direct write'), '保护态取主仓（2026-09-20 实证场景不回归）')
++  })
++
++  it('② 正常态：仅 worktree 交付修改 → 取 worktree（既有语义零回归）', () => {
++    const sha = baseSha()
++    writeFileSync(join(wt, srcFile), 'worktree deliverable\n')
++    assert.ok(snapContent(sha).includes('worktree deliverable'), '正常态取 worktree')
++  })
++
++  it('③ 分叉态：双侧均改且互不相等 → 取 worktree（batch1 假红根治，翻转点）', () => {
++    const sha = baseSha()
++    writeFileSync(join(wt, srcFile), 'worktree contract code\n')   // 本变更交付（含新导出/契约代码）
++    writeFileSync(join(repo, srcFile), 'main parallel quickfix\n') // 主仓侧并行异动（干扰源）
++    const got = snapContent(sha)
++    assert.ok(got.includes('worktree contract code'), `分叉态取 worktree 分支版（实际：${got}）——取主仓会重现 batch1 src/test 血统断裂假红`)
++    assert.ok(!got.includes('main parallel quickfix'), '主仓干扰版不得进快照')
++  })
++})
+
+diff --git a/test/plan-grouping-recommend.test.mjs b/test/plan-grouping-recommend.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/plan-grouping-recommend.test.mjs
+@@ -0,0 +1,288 @@
++/**
++ * M3 PLAN 粒度派发默认化（2026-09-21-r5-efficiency-batch2 task-03，FR-03 / D-003@v1）
++ *
++ * 三层断言：
++ * 1. recommendWaveGroups 纯函数：第 1 批三条件（文件两两正交 / 组内无契约链（含
++ *    depends_on）/ 组 ≤3）+ 批数护栏不变式（分组后批数 ≥ min(3, n)——与
++ *    checkBatchAdvisory 两判定同口径，推荐不得自触判定②）。
++ * 2. buildWavePrompt 推荐分组行注入：有可并批 → 注入（含偏离披露话术 + 按组回收）；
++ *    无可并批 → 零注入（「- 组大小不超过 3 个 task」与「任一条件不满足」相邻字节
++ *    形态钉 = 输出与改前逐字节一致）；SillyHub 模式互斥零注入（一 Wave 一 mission，
++ *    分组语义不适用）；卡缺失 fail-open 单例。
++ * 3. checkBatchAdvisory 判定①附推荐分组清单（同一纯函数无二源）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { recommendWaveGroups, checkBatchAdvisory } from '../src/stages/plan-postcheck.js'
++import { buildWavePrompt } from '../src/stages/execute.js'
++
++// ── fixtures ───────────────────────────────────────────────────────
++
++/** 纯函数入参速构：files=null 表示文件面不可判（恒单例） */
++const T = (id, files, { deps = [], expects = [] } = {}) =>
++  ({ id, files, deps, expectsProviders: expects })
++
++/** 单卡 frontmatter（与 plan-batch-advisory.test.mjs 同款速构；targets 优先于 allowed） */
++function card(id, { targets = null, allowed = null, depends = null, expects = null } = {}) {
++  const lines = [
++    '---', `id: ${id}`, 'title: t', 'title_zh: 中文标题', 'author: t',
++    'created_at: 2026-09-21 00:00:00', 'priority: P0',
++    `depends_on: ${depends && depends.length ? `[${depends.map(d => `'${d}'`).join(', ')}]` : '[]'}`,
++    'blocks: []', 'requirement_ids: [FR-3]', 'decision_ids: []',
++  ]
++  const ap = allowed || (targets || []).map(t => t.replace(/^NEW:/, ''))
++  lines.push('allowed_paths:', ...ap.map(p => `  - ${p}`))
++  if (targets !== null && targets.length > 0) lines.push('target_files:', ...targets.map(t => `  - ${t}`))
++  if (expects) {
++    lines.push('expects_from:')
++    for (const [provider, contracts] of Object.entries(expects)) {
++      lines.push(`  ${provider}:`)
++      for (const c of contracts) lines.push(`    - contract: ${c.contract}`, `      needs: [${(c.needs || []).join(', ')}]`)
++    }
++  }
++  lines.push('goal: >', '  g', 'implementation:', '  - i', 'acceptance:', '  - a',
++    'verify:', '  - node --version', 'constraints:', '  - c', '---', '')
++  return lines.join('\n')
++}
++
++function planMd(waves) {
++  const lines = ['---', 'plan_level: full', '---', '', '# 实现计划', '']
++  for (const w of waves) {
++    lines.push(`## Wave ${w.no}（并行）`, '')
++    for (const t of w.tasks) lines.push(`- ${t}`)
++    for (const b of (w.batchLines || [])) lines.push(b)
++    lines.push('')
++  }
++  return lines.join('\n')
++}
++
++const tasksMdFor = (ids) => ids.map(i => `- [ ] ${i}: 任务${i.slice(5)}`).join('\n') + '\n'
++const FIVE = ['task-01', 'task-02', 'task-03', 'task-04', 'task-05']
++const cardsOrthogonal = (ids = FIVE) => Object.fromEntries(
++  ids.map((id, i) => [id, card(id, { targets: [`src/mod${i}.js`] })])
++)
++
++/** 结构不变式校验（三条件 + 护栏，供全部纯函数用例复跑） */
++function assertInvariants(ts, groups, label) {
++  const n = ts.length
++  assert.ok(groups.every(g => g.length >= 1 && g.length <= 3), `${label}: 组大小 ∈ [1,3]（帽值）`)
++  assert.ok(groups.length >= Math.min(3, n), `${label}: 批数 ${groups.length} ≥ min(3,${n}) 护栏`)
++  const flat = groups.flat().sort()
++  assert.deepEqual(flat, ts.map(t => t.id).sort(), `${label}: partition 完整（每 id 恰一现）`)
++  const byId = new Map(ts.map(t => [t.id, t]))
++  for (const g of groups) {
++    for (let i = 0; i < g.length; i++) {
++      for (let j = i + 1; j < g.length; j++) {
++        const a = byId.get(g[i]); const b = byId.get(g[j])
++        assert.ok(a.files && b.files, `${label}: 组内 ${g[i]}/${g[j]} 文件面均可判`)
++        for (const p of a.files) assert.ok(!b.files.includes(p), `${label}: 组内 ${g[i]}/${g[j]} 文件正交（共享 ${p}）`)
++        assert.ok(!a.deps.includes(b.id) && !b.deps.includes(a.id), `${label}: 组内 ${g[i]}/${g[j]} 无 depends_on 链`)
++        assert.ok(!a.expectsProviders.includes(b.id) && !b.expectsProviders.includes(a.id), `${label}: 组内 ${g[i]}/${g[j]} 无 expects_from 契约链`)
++      }
++    }
++    for (const id of g) {
++      if (byId.get(id).files === null) assert.equal(g.length, 1, `${label}: files=null 的 ${id} 恒单例`)
++    }
++  }
++}
++
++// ── 1. 纯函数：recommendWaveGroups ─────────────────────────────────
++
++test('A1 全正交无链 n=6 → 首组帽值满填 + 预算耗尽（批数 3 = min(3,6) 贴线，2+2+2 的 2 批形态会被护栏否决）', () => {
++  const ts = ['a', 'b', 'c', 'd', 'e', 'f'].map((f, i) => T(`task-0${i + 1}`, [`src/${f}.js`]))
++  const g = recommendWaveGroups(ts)
++  assert.deepEqual(g, [['task-01', 'task-02', 'task-03'], ['task-04', 'task-05'], ['task-06']])
++  assertInvariants(ts, g, 'A1')
++})
++
++test('A2 n=5 → [1,2,3]+[4]+[5]（预算 2，批数 3 = min(3,5) 护栏贴线不越界）', () => {
++  const ts = FIVE.map((id, i) => T(id, [`src/f${i}.js`]))
++  const g = recommendWaveGroups(ts)
++  assert.deepEqual(g, [['task-01', 'task-02', 'task-03'], ['task-04'], ['task-05']])
++  assertInvariants(ts, g, 'A2')
++})
++
++test('A3 n=4 → [1,2]+[3]+[4]（预算 1——3+1 形态批数 2 < 3 会被护栏否决）', () => {
++  const ids = FIVE.slice(0, 4)
++  const ts = ids.map((id, i) => T(id, [`src/f${i}.js`]))
++  const g = recommendWaveGroups(ts)
++  assert.deepEqual(g, [['task-01', 'task-02'], ['task-03'], ['task-04']])
++  assertInvariants(ts, g, 'A3')
++})
++
++test('A4 n≤3 → 全单例（预算 0：任何并批必违反 min(3,N)=N，未并批已是唯一合规形态）', () => {
++  for (const n of [0, 1, 2, 3]) {
++    const ts = FIVE.slice(0, n).map((id, i) => T(id, [`src/f${i}.js`]))
++    const g = recommendWaveGroups(ts)
++    assert.deepEqual(g, ts.map(t => [t.id]), `n=${n} 全单例`)
++    if (n > 0) assertInvariants(ts, g, `A4-n${n}`)
++  }
++})
++
++test('A5 文件相交不并：task-02 与 task-01 共享文件 → 独立成组，正交的 task-03/04 并入 task-01 组', () => {
++  const ts = [
++    T('task-01', ['src/a.js']),
++    T('task-02', ['src/a.js', 'src/b.js']),
++    T('task-03', ['src/c.js']),
++    T('task-04', ['src/d.js']),
++    T('task-05', ['src/e.js']),
++  ]
++  const g = recommendWaveGroups(ts)
++  assert.deepEqual(g, [['task-01', 'task-03', 'task-04'], ['task-02'], ['task-05']])
++  assertInvariants(ts, g, 'A5')
++})
++
++test('A6 契约链不并（双向）：expects_from 与 depends_on 任一命中即隔开', () => {
++  const base = (over) => FIVE.map((id, i) => T(id, [`src/f${i}.js`], over(id, i)))
++  // task-02 expects_from task-01
++  const gExpects = recommendWaveGroups(base(id => id === 'task-02' ? { expects: ['task-01'] } : {}))
++  assert.deepEqual(gExpects, [['task-01', 'task-03', 'task-04'], ['task-02'], ['task-05']])
++  assertInvariants(base(id => id === 'task-02' ? { expects: ['task-01'] } : {}), gExpects, 'A6-expects')
++  // task-01 depends_on task-02（链方向翻转同隔开）
++  const tsDeps = base(id => id === 'task-01' ? { deps: ['task-02'] } : {})
++  const gDeps = recommendWaveGroups(tsDeps)
++  assertInvariants(tsDeps, gDeps, 'A6-deps')
++  assert.ok(gDeps.some(g => g.includes('task-01')) && gDeps.some(g => g.includes('task-02'))
++    && !gDeps.some(g => g.includes('task-01') && g.includes('task-02')), 'A6-deps: 01/02 不同组')
++})
++
++test('A7 files=null 不可判 → 恒单例（宁缺勿假，不与任何任务并组）', () => {
++  const ts = [
++    T('task-01', ['src/a.js']),
++    T('task-02', null),
++    T('task-03', ['src/c.js']),
++    T('task-04', ['src/d.js']),
++    T('task-05', ['src/e.js']),
++  ]
++  const g = recommendWaveGroups(ts)
++  assert.deepEqual(g, [['task-01', 'task-03', 'task-04'], ['task-02'], ['task-05']])
++  assertInvariants(ts, g, 'A7')
++})
++
++test('A8 id/链 id 补零归一：task-1 输入 → task-01 输出；未补零 deps 引用仍成链', () => {
++  const ts = [
++    T('task-1', ['src/a.js']),
++    T('task-2', ['src/b.js'], { deps: ['task-1'] }),
++    T('task-3', ['src/c.js']),
++    T('task-4', ['src/d.js']),
++    T('task-5', ['src/e.js']),
++  ]
++  const g = recommendWaveGroups(ts)
++  assert.ok(g.flat().every(id => /^task-\d{2}$/.test(id)), 'A8: 输出全为补零形态')
++  assert.ok(!g.some(gr => gr.includes('task-01') && gr.includes('task-02')), 'A8: task-1/task-2 链被识别隔开')
++})
++
++test('A9 确定性：同输入两次调用输出 deep equal', () => {
++  const ts = FIVE.map((id, i) => T(id, [`src/f${i}.js`]))
++  assert.deepEqual(recommendWaveGroups(ts), recommendWaveGroups(ts))
++})
++
++test('A10 非法输入容错：非数组/null → 空数组', () => {
++  assert.deepEqual(recommendWaveGroups(null), [])
++  assert.deepEqual(recommendWaveGroups(undefined), [])
++  assert.deepEqual(recommendWaveGroups('not-array'), [])
++})
++
++// ── 2. buildWavePrompt 推荐分组行注入 ──────────────────────────────
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++/** 建 fixture change 目录（n 张两两正交卡 + plan.md 单 Wave）；缺卡任务单独跳过 */
++function makeChangeDir(n, { skipCards = [] } = {}) {
++  const cd = mk('grp-rec-')
++  mkdirSync(join(cd, 'tasks'), { recursive: true })
++  const planLines = ['---', 'plan_level: full', '---', '', '# 实现计划', '', '## Wave 1（并行）', '']
++  for (let i = 1; i <= n; i++) {
++    const id = `task-${String(i).padStart(2, '0')}`
++    planLines.push(`- ${id}`)
++    if (!skipCards.includes(id)) {
++      writeFileSync(join(cd, 'tasks', `${id}.md`), card(id, { targets: [`src/fx${i}.js`] }))
++    }
++  }
++  planLines.push('')
++  writeFileSync(join(cd, 'plan.md'), planLines.join('\n'))
++  return cd
++}
++
++const waveOf = (n) => ({
++  index: 1,
++  tasks: Array.from({ length: n }, (_, i) => ({
++    index: i + 1, name: `task-${String(i + 1).padStart(2, '0')}: 示例`, file: `tasks/task-${String(i + 1).padStart(2, '0')}.md`,
++  })),
++})
++
++test('B1 有可并批（5 任务两两正交）→ 注入推荐分组行 + 偏离披露话术 + 按组回收', () => {
++  const cd = makeChangeDir(5)
++  const wp = buildWavePrompt(waveOf(5), 1, cd, join(cd, 'wt'), { dispatchMode: 'local' })
++  assert.ok(wp.includes('**推荐分组（CLI 已按上述三条件预计算）**：[task-01,task-02,task-03] / [task-04] / [task-05]'),
++    'B1: 推荐分组行（全 partition 展示，含单例组）')
++  assert.ok(wp.includes('偏离须在 Wave 完成摘要中披露理由'), 'B1: 偏离披露话术在位')
++  assert.ok(wp.includes('机械建议不夺裁决权'), 'B1: 裁决权保留声明在位')
++  assert.ok(wp.includes('按组一次回收'), 'B1: 按组聚合回收指引在位')
++})
++
++test('B2 无可并批（n=3 护栏预算 0）→ 零注入，插入位相邻字节形态与改前一致（零回归钉）', () => {
++  const cd = makeChangeDir(3)
++  const wp = buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), { dispatchMode: 'local' })
++  assert.ok(!wp.includes('推荐分组'), 'B2: 无推荐零注入')
++  assert.ok(wp.includes('- 组大小不超过 3 个 task\n\n任一条件不满足'),
++    'B2: 「- 组大小不超过 3 个 task」与「任一条件不满足」保持相邻原形态（未插入任何字节）')
++  assert.equal(wp, buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), undefined),
++    'B2: options 缺省与 {dispatchMode:local} 输出逐字节一致')
++})
++
++test('B3 SillyHub 互斥：dispatchMode=sillyhub 零注入；local-fallback（实际派发走 Local）照注入', () => {
++  const cd = makeChangeDir(5)
++  const wpHub = buildWavePrompt(waveOf(5), 1, cd, join(cd, 'wt'), { dispatchMode: 'sillyhub' })
++  assert.ok(!wpHub.includes('推荐分组'), 'B3: SillyHub 一 Wave 一 mission，分组语义不适用 → 零注入')
++  const wpFb = buildWavePrompt(waveOf(5), 1, cd, join(cd, 'wt'), { dispatchMode: 'local-fallback' })
++  assert.ok(wpFb.includes('推荐分组'), 'B3: local-fallback 派发实际走 Local → 照注入')
++})
++
++test('B4 卡缺失 fail-open：缺卡任务单例不抛错，其余照推', () => {
++  const cd = makeChangeDir(5, { skipCards: ['task-05'] })
++  const wp = buildWavePrompt(waveOf(5), 1, cd, join(cd, 'wt'), { dispatchMode: 'local' })
++  assert.ok(wp.includes('[task-01,task-02,task-03] / [task-04] / [task-05]'),
++    'B4: 缺卡 task-05 单例成组，可判任务照常推荐')
++})
++
++// ── 3. checkBatchAdvisory 判定①附推荐分组清单 ─────────────────────
++
++test('C1 判定① message 附推荐分组清单（同一纯函数无二源，n=5）', () => {
++  const r = checkBatchAdvisory({
++    tasksMdText: tasksMdFor(FIVE),
++    planMdText: planMd([{ no: 1, tasks: FIVE }]),
++    taskCards: cardsOrthogonal(),
++  })
++  assert.equal(r.length, 1)
++  assert.equal(r[0].code, 'batch_orthogonal_unbundled')
++  assert.ok(r[0].message.includes('推荐分组'), 'C1: 文案含推荐分组')
++  assert.ok(r[0].message.includes('[task-01,task-02,task-03] / [task-04] / [task-05]'),
++    'C1: 分组清单与纯函数输出同形')
++  assert.ok(r[0].message.includes('min(3, 5)'), 'C1: 既有护栏文案保留（append-only 升级）')
++})
++
++test('C2 判定①帽值边界（n=4）：推荐 [1,2]+[3]+[4] 而非 3+1（护栏否决）', () => {
++  const ids = FIVE.slice(0, 4)
++  const r = checkBatchAdvisory({
++    tasksMdText: tasksMdFor(ids),
++    planMdText: planMd([{ no: 1, tasks: ids }]),
++    taskCards: cardsOrthogonal(ids),
++  })
++  assert.equal(r.length, 1)
++  assert.ok(r[0].message.includes('[task-01,task-02] / [task-03] / [task-04]'), 'C2: n=4 推荐恰一对并批')
++})
++
++test('C3 已有并批信号（批标注行）→ 判定①不 fire、无推荐文案（既有行为零回归）', () => {
++  const r = checkBatchAdvisory({
++    tasksMdText: tasksMdFor(FIVE),
++    planMdText: planMd([{ no: 1, tasks: FIVE, batchLines: ['> batch: task-01+task-02', '> batch: task-03+task-04'] }]),
++    taskCards: cardsOrthogonal(),
++  })
++  assert.deepEqual(r, [], 'C3: 3 批合规 → 零 advisory（推荐文案只随判定①出现）')
++})
+
+diff --git a/test/step-guide-fingerprint.test.mjs b/test/step-guide-fingerprint.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/step-guide-fingerprint.test.mjs
+@@ -0,0 +1,122 @@
++/**
++ * step-guide-fingerprint.test.mjs — M1 指令指纹增量（2026-09-21-r5-efficiency-batch2 task-01 / FR-01 / D-001@v1）
++ *
++ * P8 实证：73 次 CLI 调用注入 252KB 指令文本、同步骤复入全量重印（单次最大 24KB）——「轮数×上下文」
++ * 基数浪费。契约：静态段按渲染指纹落盘 .runtime/step-guides/；同指纹复入静态部分 ≤10 行（指纹+路径+
++ * 提示），动态注入段每次渲染永不缓存（附录照常输出）；--json（console.log 劫持）与
++ * SILLYSPEC_STEP_GUIDE=0 走全量。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { outputStep, computeStepGuideFingerprint } from '../src/run/prompt.js'
++
++async function capture(fn) {
++  const lines = []
++  const orig = console.log
++  console.log = (...a) => lines.push(a.map(String).join(' '))
++  try { return { r: await fn(), lines } } finally { console.log = orig }
++}
++
++let envPrev = undefined
++function makeCwd() {
++  const cwd = mkdtempSync(join(tmpdir(), 'stepguide-'))
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  envPrev = process.env.SILLYSPEC_STEP_GUIDE
++  process.env.SILLYSPEC_STEP_GUIDE = '1' // v1 默认关闭：特性测试显式开启
++  return cwd
++}
++function restoreEnv() {
++  if (envPrev === undefined) delete process.env.SILLYSPEC_STEP_GUIDE
++  else process.env.SILLYSPEC_STEP_GUIDE = envPrev
++}
++
++const STEP = { name: '调研', prompt: '调研 <project> 的模块结构，当前时间 <now-datetime>，产出报告。' }
++const runExplore = (cwd, step = STEP) => outputStep('explore', 0, [step], cwd, null, null, {}, null, null, null)
++
++test('指纹确定性：对易变占位符不敏感、对模板变更敏感（纯函数）', () => {
++  const a = computeStepGuideFingerprint('调研 X 于 <now-datetime> 与 <now-iso-datetime>，材料 {DOCS_DEBT} {KNOWLEDGE_HIT_REPORT}，run {EXECUTE_RUN_ID}')
++  const b = computeStepGuideFingerprint('调研 X 于 <now-datetime> 与 <now-iso-datetime>，材料 {DOCS_DEBT} {KNOWLEDGE_HIT_REPORT}，run {EXECUTE_RUN_ID}')
++  const c = computeStepGuideFingerprint('调研 X 于 <now-datetime>，模板变了')
++  assert.equal(a, b, '同模板（易变占位符位置一致）→ 同指纹')
++  assert.notEqual(a, c, '模板文本变更 → 指纹变化')
++})
++
++test('首见全量渲染 + guide 落盘；复入静态部分 ≤10 行且动态段照常渲染', async () => {
++  const cwd = makeCwd()
++  try {
++    const s1 = await capture(() => runExplore(cwd))
++    assert.ok(s1.lines.some(l => l.includes('的模块结构')), '首见渲染含步骤正文')
++    const guideDir = join(cwd, '.sillyspec', '.runtime', 'step-guides')
++    assert.ok(existsSync(guideDir) && readdirSync(guideDir).length >= 1, 'guide 文件已落盘')
++
++    const s2 = await capture(() => runExplore(cwd))
++    const joined = s2.lines.join('\n')
++    assert.ok(!joined.includes('的模块结构'), '复入不再重印静态正文')
++    assert.ok(joined.includes('fingerprint='), '复入含指纹行')
++    assert.ok(joined.includes('step-guides'), '复入含 guide 路径')
++    assert.ok(/\d{4}-\d{2}-\d{2}/.test(joined), '动态段（本次时间）照常渲染')
++    // 静态部分判据：'## Step' 结构标题与附录标记之间的短输出块 ≤10 行（stage/step 头部为身份信息不计）
++    const cut = s2.lines.findIndex(l => l.includes('动态注入段'))
++    const head = s2.lines.findIndex(l => /^## Step /.test(l))
++    assert.ok(cut > head && head >= 0, '复入输出含 Step 标题与动态注入段标记')
++    assert.ok(cut - head <= 10, `短输出块 ≤10 行（实际 ${cut - head}））`)
++  } finally { restoreEnv(); rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('指纹变更（模板变）→ 复入全量重印', async () => {
++  const cwd = makeCwd()
++  try {
++    await capture(() => runExplore(cwd))
++    const s2 = await capture(() => runExplore(cwd, { ...STEP, prompt: STEP.prompt + ' 补充要求。' }))
++    assert.ok(s2.lines.some(l => l.includes('补充要求')), '模板变更 → 全量重印')
++  } finally { restoreEnv(); rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('kill-switch SILLYSPEC_STEP_GUIDE=0 → 复入仍全量', async () => {
++  const cwd = makeCwd()
++  const prev = process.env.SILLYSPEC_STEP_GUIDE
++  process.env.SILLYSPEC_STEP_GUIDE = '0'
++  try {
++    await capture(() => runExplore(cwd))
++    const s2 = await capture(() => runExplore(cwd))
++    assert.ok(s2.lines.some(l => l.includes('的模块结构')), '禁用时复入全量输出')
++  } finally {
++    if (prev === undefined) delete process.env.SILLYSPEC_STEP_GUIDE; else process.env.SILLYSPEC_STEP_GUIDE = prev
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('--json 劫持（console.log→stderr 形态）→ 不短输出，全量照出', async () => {
++  const cwd = makeCwd()
++  const orig = console.log
++  console.log = (...a) => process.stderr.write(a.map(String).join(' ') + '\n') // 与 src/index.js withJsonOutput 同形态
++  try {
++    await runExplore(cwd)
++    const lines2 = []
++    // 保持劫持形态（函数体含 stderr.write 即探测目标）同时记录，验证 json 模式下不走短输出
++    console.log = (...a) => { process.stderr.write(a.map(String).join(' ') + '\n'); lines2.push(a.map(String).join(' ')) }
++    await runExplore(cwd)
++    assert.ok(lines2.some(l => l.includes('的模块结构')), 'json 劫持下复入仍全量（机器消费方不读盘）')
++  } finally {
++    console.log = orig
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('v1 默认关闭：未显式 SILLYSPEC_STEP_GUIDE=1 时复入仍全量（stdout 确定性）', async () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'stepguide-off-'))
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  const prev = process.env.SILLYSPEC_STEP_GUIDE
++  delete process.env.SILLYSPEC_STEP_GUIDE
++  try {
++    await capture(() => runExplore(cwd))
++    const s2 = await capture(() => runExplore(cwd))
++    assert.ok(s2.lines.some(l => l.includes('的模块结构')), '默认关：复入全量（别名路由奇偶校验类 stdout 字节一致测试依赖此默认）')
++  } finally {
++    if (prev !== undefined) process.env.SILLYSPEC_STEP_GUIDE = prev
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})

@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-21-r5-efficiency-batch2",
+  "generatedAt": "2026-09-21T12:14:27.919Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "matches": 16,
+        "skippedFiles": 0,
+        "worktreeHits": 4,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch2",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 4,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "worktree 内 13 个测试文件失败（config-schema/init-no-skills/init-platform-keep-local-yaml/init-tool-multi/mcp-server/platform-init-pointer/platform-managed-declaration/platform-recovery/platform-recovery-chain/run-help-shortcircuit/run-exit-codes/sillyhub-mcp-platform-fixes/spec-dir）——全为 worktree cwd 守卫环境族（探测「当前在隔离 worktree 内」拒绝跑，主仓同族绿，Wave 1 起基线即如此）",
+        "condition": "apply 后主仓跑 `npm test`（预期同族全绿；worktree 定向跑经 gate 快照口径不触这族）",
+        "severity": "blocking"
+      },
+      {
+        "type": "env-blocked",
+        "item": "**verify 门快照③态分叉假红（M2 修复场景活实证）**：本会话期间并行会话在主仓改了 `src/stages/execute.js`（+1 行反例测试核对 prompt）与 `docs/sillyspec/platform-interface-map.md`（14 行锚点，quick 修复在途）——verify 门跑主仓进程用**未 apply 的旧版** gate-snapshot，③态按旧语义取主仓 → 快照装入并行版 execute.js，本变更 2 条新测试对旧代码断言假红（module[cli-core,run-gates]+deps 2 行）。M2 修复（分叉取 worktree）恰能根治此场景但自身未 apply——鸡生蛋。已按 CLI 排查路径②处置：SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1 回退主仓口径复跑对照（旧世界自洽绿）+本变更真实测试证据以 worktree 定向全量 560/573 为准",
+        "condition": "apply 后（并行主仓异动与本变更 3-way 合并落地）主仓重跑 `npm test`——M2 已随 apply 生效，此后快照口径即修复语义",
+        "severity": "blocking"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "R5 对撞重跑指标（design 验收协议：写码前 ≤35′ / 门禁轮次 ≤2 / token ≤1.7× / 三类卡点零复现）——外部执行面，非本 verify 可判定",
+        "condition": "第 3 批立项前跑 R5 重跑对撞组，指标对照 design「验收协议」节",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "M1 v1 默认关闭（SILLYSPEC_STEP_GUIDE=1 显式开）——D-001 退役判据锚定「跨进程短输出与 stdout 确定性测试族相容后翻默认」，属既定分批路径非缺陷",
+        "condition": "后续批迁移测试面后翻默认并删 env 门",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/step-guide-fingerprint.test.mjs",
+      "test/gate-snapshot-lineage.test.mjs",
+      "test/plan-grouping-recommend.test.mjs",
+      "test/execution-mode-render.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-21T12:43:52.170Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

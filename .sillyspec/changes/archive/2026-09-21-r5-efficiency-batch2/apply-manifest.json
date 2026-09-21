@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-21-r5-efficiency-batch2",
+  "appliedAt": "2026-09-21T12:57:04.898Z",
+  "baseHash": "bfa81dc9600fd219df420d271deb51a04a98e78b",
+  "files": [
+    {
+      "path": "docs/sillyspec/prompt-control-debt.md",
+      "sha256": "6e62f00d41873efe5f0af40cfa38b13f1cbe8d62728e5f932891b46c2239b1bc"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "sha256": "bc3ffc139090565da2132d8941585799dd0ecaf899e887037d72139e90f0fedd"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "sha256": "885c99d02ece48046bda9affafb83f26e41ee7df541c583a15257702ae9f1aa2"
+    }
+  ]
+}
