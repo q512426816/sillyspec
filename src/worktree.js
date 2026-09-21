@@ -9,8 +9,9 @@
  */
 
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync, mkdtempSync } from 'fs';
 import { join, resolve, dirname, relative, isAbsolute, basename } from 'path';
+import { tmpdir } from 'os';
 import { createHash } from 'crypto';
 import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape, sweepForeignNodeModulesJunctions } from './worktree-deps.js';
 import { resolveRuntimeRoot } from './run/shared.js';
@@ -45,6 +46,62 @@ function _chunkPathsPrivate(paths, maxChars = 8000) {
     len += l
   }
   return batches
+}
+
+/**
+ * 交付包含判定（合并感知「未 apply」口径，ql-20260921-009 ②，2026-09-21 batch2 归档实证）。
+ *
+ * 语义：worktree 交付文件与主仓**当前工作区**内容不等时，做只读三方合并测试——
+ * base=交付锚点（baselineCommit||baseHash）版本、ours=主仓工作区内容、theirs=worktree
+ * 交付内容；clean 合并且结果 === 主仓工作区内容 ⟺ worktree 的全部改动已被主仓包含
+ * （差异全是并行会话在主仓的增量）→ 该文件视为已 apply。实证形态：交付文件经
+ * EXCLUDE-DIRTY/MISMATCH 三方合并落地后天然含并行增量，字节等值口径的归档/清理门
+ * 恒误拦「未 apply」（分支非 merge 落地时可达性短路也不命中），人工 grep 自证后才
+ * 走 --skip-apply/--force 逃生口。
+ *
+ * 与 worktree-apply.js mergeDirtyOverlapThreeWay 的差异：**只读不写回**（判定专用，
+ * 无备份/暂存面）；冲突/取不到 base/异常 fail-safe 不剔（宁误拦不误放）。放本文件
+ * 导出供 worktree-apply.js 消费（那边 import 本文件是既有方向，反向会成环——
+ * _lsTreeBlobs 注释同款约束）。成本：仅对「内容不等」的残余交付文件逐个一次
+ * git merge-file（正常收尾路径 0 个文件触发），生命周期边界点一次性开销。
+ *
+ * @param {{ projectRoot: string, worktreePath: string, baseRef: string }} ctx
+ * @param {string[]} files 待判文件（仓库根相对路径；不可读/base 缺席者自动跳过）
+ * @returns {string[]} 判定为「已包含于主仓当前内容」的文件子集（files 原字面）
+ */
+export function detectDeliverableContained({ projectRoot, worktreePath, baseRef }, files) {
+  const contained = []
+  if (!Array.isArray(files) || files.length === 0 || !baseRef) return contained
+  let tmpDir = null
+  try {
+    for (const f of files) {
+      if (!f || typeof f !== 'string') continue
+      try {
+        const wtRaw = readFileSync(join(worktreePath, f))
+        const mainRaw = readFileSync(join(projectRoot, f))
+        if (wtRaw.equals(mainRaw)) { contained.push(f); continue } // 快路径：内容相等天然已含
+        const baseRaw = git(projectRoot, ['show', `${baseRef}:${f}`], { encoding: 'buffer', timeout: 15000 })
+        if (!tmpDir) tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-contain-'))
+        const p = (tag) => join(tmpDir, `${tag}-${Math.random().toString(36).slice(2, 8)}`)
+        const baseP = p('base'); const oursP = p('ours'); const theirsP = p('theirs')
+        writeFileSync(baseP, baseRaw); writeFileSync(oursP, mainRaw); writeFileSync(theirsP, wtRaw)
+        // merge-file <current=ours(主仓现状)> <base> <other=theirs(worktree 交付)> -p：
+        // stdout=合并结果；exit 0=clean。结果===主仓现状 ⟺ 交付 delta 已全在主仓。
+        let outBuf, code = 0
+        try {
+          outBuf = git(projectRoot, ['merge-file', '-p', oursP, baseP, theirsP], { encoding: 'buffer', timeout: 15000 })
+        } catch (e) {
+          code = (typeof e.status === 'number') ? e.status : -1
+          outBuf = (e.stdout instanceof Buffer) ? e.stdout : Buffer.alloc(0)
+          if (code < 0) continue // merge-file 不可用 → 保守不剔
+        }
+        if (code === 0 && outBuf.equals(mainRaw)) contained.push(f)
+      } catch { /* 该文件判定不可得 → 保守不剔 */ }
+    }
+  } finally {
+    if (tmpDir) { try { rmSync(tmpDir, { recursive: true, force: true }) } catch {} }
+  }
+  return contained
 }
 
 // ── supplyFiles 生成物供给（坑③ / FR-03 / D-003@v1）──
@@ -1957,7 +2014,7 @@ export class WorktreeManager {
       }
 
       // 2) 候选集中尚未落到主工作区 HEAD 的子集
-      const pending = this._changesAlreadyOnMain(worktreePath, tracked, untracked);
+      const pending = this._changesAlreadyOnMain(worktreePath, tracked, untracked, diffBase);
       // 3) main 工作区副本降噪层（坑 unapplied-false-positive-workspace-copy，2026-08-21 实证：
       // apply 后 main 工作区有逐字节一致副本但未 commit → HEAD-only 判定报「未落仓」虚警拦
       // doctor）。原注释「不查 main 工作区未提交副本（防误删）」的保护意图是内容未落地——
@@ -1995,9 +2052,9 @@ export class WorktreeManager {
    * @param {string[]} untrackedFiles
    * @returns {string[]} 尚未落到 main HEAD 的文件
    */
-  _changesAlreadyOnMain(worktreePath, trackedFiles, untrackedFiles) {
+  _changesAlreadyOnMain(worktreePath, trackedFiles, untrackedFiles, diffBase = null) {
     const mainHead = git(this.cwd, ['rev-parse', 'HEAD']); // 失败即抛 → 外层 catch fail-safe
-    const pending = [];
+    let pending = [];
 
     if (trackedFiles.length > 0) {
       const diverged = (gitQuiet(worktreePath,
@@ -2024,7 +2081,24 @@ export class WorktreeManager {
       }
     }
 
-    return [...new Set(pending)];
+    pending = [...new Set(pending)];
+
+    // 合并感知包含剔除（ql-20260921-009 ②）：pending 文件（≠主仓 HEAD）与主仓**当前工作区**
+    // 内容逐个只读三方合并测试——worktree delta 已全在主仓（差异=并行增量，如三方合并落地后
+    // 形态）→ 视为已落地剔除。字节等值口径对该形态恒误拦（2026-09-21 batch2 归档实证），
+    // 分支非 merge 落地时上方可达性短路也不命中。冲突/异常 fail-safe 不剔。
+    if (diffBase && pending.length > 0) {
+      const contained = detectDeliverableContained(
+        { projectRoot: this.cwd, worktreePath, baseRef: diffBase },
+        pending,
+      );
+      if (contained.length > 0) {
+        const containedSet = new Set(contained);
+        pending = pending.filter(f => !containedSet.has(f));
+      }
+    }
+
+    return pending;
   }
 
   /**

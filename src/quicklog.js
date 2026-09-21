@@ -752,10 +752,12 @@ const GUARD_CLAIM_STALE_MS = 7 * 24 * 60 * 60 * 1000
  * 遍历 quick-sessions 目录，按同一僵尸窗口口径读各会话 guard.json（collectGuardReservedQuicklogIds
  * 与 collectActiveQuickGuardFiles 共用，活跃判定勿分叉）：guard.json 损坏/缺失 → guard=null 保留
  * 条目（消费方各自决定跳过或视为空声明）；startedAt 可解析且超 GUARD_CLAIM_STALE_MS → 僵尸剔除。
+ * 附 guardMtimeMs（guard.json 最后写时间——会话结构性更新【启动/--files 追加边界】都会重写该文件，
+ * 是比 startedAt 更新的活性信号；非周期心跳，长思考会话会漂老，消费方 TTL 须以此为前提选窗）。
  *
  * @param {string} dir quick-sessions 目录
  * @param {number} [nowMs] 当前时间戳（可注入，测试用）
- * @returns {Array<{sessionId: string, guard: object|null}>}
+ * @returns {Array<{sessionId: string, guard: object|null, guardMtimeMs: number|null}>}
  */
 function listQuickSessionGuards(dir, nowMs = Date.now()) {
   const out = []
@@ -765,12 +767,17 @@ function listQuickSessionGuards(dir, nowMs = Date.now()) {
   } catch { return out } // 目录不存在/不可读 → 无会话
   for (const sessionName of sessionDirs) {
     let guard = null
-    try { guard = JSON.parse(readFileSync(join(dir, sessionName, 'guard.json'), 'utf8')) } catch { guard = null } // 损坏/缺失 → null
+    let guardMtimeMs = null
+    const guardPath = join(dir, sessionName, 'guard.json')
+    try {
+      guard = JSON.parse(readFileSync(guardPath, 'utf8'))
+      guardMtimeMs = statSync(guardPath).mtimeMs
+    } catch { guard = null } // 损坏/缺失 → null（mtime 一并放弃）
     if (guard && guard.startedAt) {
       const startedAtMs = Date.parse(guard.startedAt)
       if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > GUARD_CLAIM_STALE_MS) continue // 僵尸不活跃
     }
-    out.push({ sessionId: sessionName, guard })
+    out.push({ sessionId: sessionName, guard, guardMtimeMs })
   }
   return out
 }
@@ -795,28 +802,59 @@ export function collectGuardReservedQuicklogIds(specBase, sessionsDirHint = null
  * （quick --done 完成时清理 guard 目录，完成态天然退出），超 7 天僵尸窗口（GUARD_CLAIM_STALE_MS，
  * 异常残留不钉死）剔除。勿用 changes.last_active 判活跃（非周期心跳，D-002）。
  *
+ * **拦截面 TTL（ql-20260921-009 ①，2026-09-21 batch2 归档实证）**：在僵尸窗口之上，本函数（apply
+ * 拦截面专用消费口）再按 guard.json **mtime** 收紧——超过 staleAfterMs（缺省 4h）无结构性更新的
+ * 会话视为放弃，声明不再参与相交拦截。实证形态：quick 会话中断未 --done、guard 目录残留 36h，
+ * apply 被幽灵守卫拦住，人工查证 owner.json 才敢解锁。安全性：守卫只是预警层，apply 的内容级
+ * 脏文件三方合并检查（EXCLUDE-DIRTY）仍兜底真实冲突；4h 窗口对 quick（短命流程）足够宽，
+ * 超窗未动 CLI 的会话即使活着，其声明文件若真有未提交改动也走内容级检查。quicklog ID 预留
+ * （collectGuardReservedQuicklogIds）**不套用**此 TTL——ID 复用避开近期死会话仍取 7 天窗。
+ * 过期跳过时打一行 ℹ️（可观测，不静默）；staleAfterMs=null 关闭（测试/回退口径）。
+ *
  * @param {string} specBase .sillyspec 根目录
- * @param {{ excludeChange?: string|null, sessionsDir?: string|null, nowMs?: number }} [opts]
+ * @param {{ excludeChange?: string|null, sessionsDir?: string|null, nowMs?: number, staleAfterMs?: number|null }} [opts]
  *   - excludeChange：排除自身 change 的 quick 会话——sessionId == changeName（quick 会话 id 即
  *     change 名）或 guard.linkedChanges 显式关联该 change 的协作会话（自己人，非拦截面）
  *   - sessionsDir：quick-sessions 目录（缺省 <specBase>/.runtime/quick-sessions）
  *   - nowMs：当前时间戳（可注入，测试用）
+ *   - staleAfterMs：拦截面 TTL 毫秒数（缺省 GUARD_INTERCEPT_STALE_MS=4h；null 关闭）
  * @returns {Map<string, string[]>} sessionId → guard.allowedFiles（无 guard/无声明 → 空数组；fail-open）
  */
-export function collectActiveQuickGuardFiles(specBase, { excludeChange = null, sessionsDir = null, nowMs = Date.now() } = {}) {
+const GUARD_INTERCEPT_STALE_MS = 4 * 60 * 60 * 1000
+export function collectActiveQuickGuardFiles(specBase, { excludeChange = null, sessionsDir = null, nowMs = Date.now(), staleAfterMs = GUARD_INTERCEPT_STALE_MS } = {}) {
   const out = new Map()
+  let staleSkipped = 0
   try {
     const dir = sessionsDir || join(specBase, '.runtime', 'quick-sessions')
-    for (const { sessionId, guard } of listQuickSessionGuards(dir, nowMs)) {
+    for (const { sessionId, guard, guardMtimeMs } of listQuickSessionGuards(dir, nowMs)) {
       if (excludeChange && (sessionId === excludeChange
         || (guard && Array.isArray(guard.linkedChanges) && guard.linkedChanges.includes(excludeChange)))) continue
+      if (staleAfterMs != null && guardMtimeMs != null && Number.isFinite(guardMtimeMs)
+        && nowMs - guardMtimeMs > staleAfterMs) { staleSkipped++; continue } // TTL 过期：拦截面视为放弃
       const allowed = (guard && Array.isArray(guard.allowedFiles))
         ? guard.allowedFiles.filter(f => typeof f === 'string' && f.length > 0)
         : []
       out.set(sessionId, allowed)
     }
   } catch { /* fail-open：采集失败等同无活跃 guard（不放大拦截面） */ }
+  if (staleSkipped > 0) {
+    console.log(`ℹ️ 已忽略 ${staleSkipped} 个过期 quick 守卫（>${Math.round(staleAfterMs / 3600000)}h 无活动，TTL 自动失效）——内容级脏文件合并检查仍兜底真实冲突`)
+  }
   return out
+}
+
+/**
+ * quick 启动并发错峰建议探测（ql-20260921-009 ③，2026-09-21 batch2 归档实证）。纯读：
+ * 他者活跃 quick 守卫（TTL 过滤后）≥1 且主仓已有 src/test 脏文件 → suggest=true——两者
+ * 同时在场时工作区互写/apply 相交拦截摩擦集中爆发。单会话常态 suggest=false 零输出。
+ * @returns {{ suggest: boolean, others: string[] }}
+ */
+export function detectQuickConcurrencyAdvice({ specBase, changeName, baselineFiles, sessionsDir = null, nowMs = Date.now() } = {}) {
+  const others = collectActiveQuickGuardFiles(specBase, { excludeChange: changeName, sessionsDir, nowMs })
+  const srcTestDirty = Array.isArray(baselineFiles) && baselineFiles.some(
+    (p) => { const n = String(p).split('\\').join('/'); return n.startsWith('src/') || n.startsWith('test/') }
+  )
+  return { suggest: others.size > 0 && !!srcTestDirty, others: [...others.keys()] }
 }
 
 /**

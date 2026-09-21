@@ -23,7 +23,7 @@ import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessi
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
-import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
+import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc, detectQuickConcurrencyAdvice } from '../quicklog.js'
 import { createHash } from 'node:crypto'
 import { checkTransition } from '../stage-contract.js'
 import { AUXILIARY_STAGES } from '../constants.js'
@@ -510,6 +510,18 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
             console.warn(`   清理：sillyspec run quick --cancel --change <会话ID>；若确在用请忽略本提示。`)
           }
         } catch { /* fail-open：探测失败不打扰 quick 启动 */ }
+        // 并发错峰建议（ql-20260921-009 ③，2026-09-21 batch2 归档实证：多 quick 会话文件面
+        // 重叠+主仓脏文件在途时，工作区级互写/apply 相交拦截的摩擦集中爆发）。条件与探测在
+        // quicklog.js detectQuickConcurrencyAdvice（可测纯读）——他者活跃守卫（TTL 过滤后）≥1
+        // 且主仓已有 src/test 脏文件。advisory 不阻断；单会话常态零输出零成本。
+        try {
+          const advice = detectQuickConcurrencyAdvice({ specBase, changeName, baselineFiles })
+          if (advice.suggest) {
+            console.warn('')
+            console.warn(`⚠️ 检测到 ${advice.others.length} 个并行 quick 会话在途（${advice.others.slice(0, 5).join('、')}${advice.others.length > 5 ? ' 等' : ''}）且主仓已有 src/test 脏文件——若文件面重叠，工作区互写与 apply 相交拦截的摩擦会集中出现。`)
+            console.warn('   建议：错峰（等对方 --done 后再动手），或本会话立即声明边界（--files <a.js,b.js>）把交集显式化。')
+          }
+        } catch { /* fail-open：建议探测失败不打扰 quick 启动 */ }
         // 缺 --input 且关联变更无可提取标题 → 条目落「(quick 任务)」占位标题，平台「快速修复」列表
         // 默认隐藏进行中占位（task-06 口径），长会话全程不可见、语义标题要到最终 --done 才回填。
         // 此刻会话刚起步零沉没成本，提示放弃重启带 --input 是最便宜的自愈点。
