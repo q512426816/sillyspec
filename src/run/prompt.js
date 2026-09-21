@@ -18,7 +18,7 @@
  *   - 删除 outputStep 内死代码 `const { execSync } = await import('child_process')`（execSync 解构未用，实际走 safeGit）
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import jsYaml from 'js-yaml'
@@ -59,6 +59,7 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
 // 静态 import 不引入环（stages/* 反向引用本文件会撞 index.js 顶层 stageRegistry TDZ——见
 // buildKnowledgeInjection docstring）。
 import { matchKnowledge } from '../knowledge-match.js'
+import { matchQuicklogContext } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 import { readActiveFrDigest } from '../fr-index.js'
 // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
@@ -449,19 +450,28 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
  */
 export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
   const knowledgeResult = matchKnowledge(knowledgeDir, String(query || ''))
-  if (!knowledgeResult.matched) {
+  // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立——INDEX 未命中时 quicklog 照常
+  // 注入（两 retrieval 面互为补充）；fail-open（无 quicklog/异常 → 空 hits 零注入）。
+  // specBase 由 knowledgeDir 上溯（两个注入点传的都是 <specBase>/knowledge）。
+  const quick = knowledgeDir
+    ? matchQuicklogContext(dirname(knowledgeDir), String(query || ''))
+    : { hits: [], report: '' }
+  if (!knowledgeResult.matched && quick.hits.length === 0) {
     return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json }
   }
-  const section = renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines })
+  const kSection = knowledgeResult.matched ? renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) : ''
+  const qSection = quick.report || ''
+  const section = [kSection, qSection].filter(Boolean).join('\n\n')
   try {
     appendKnowledgeHit(runtimeDir, {
       type: 'inject',
       change: change || '',
       query: String(query || ''),
       matchedFiles: knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
+      quicklogIds: quick.hits.map(h => h.qlId),
     })
   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }
-  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json }
+  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, quickHits: quick.hits }
 }
 
 // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；

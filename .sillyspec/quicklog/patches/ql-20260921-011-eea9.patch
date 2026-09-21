@@ -1,0 +1,665 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 2285d039..b99d8295 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -96,6 +96,7 @@ modules:
+       - src/cross-repo-reconcile.js
+       - src/probe7-anchor-check.js
+       - src/knowledge-match.js
++      - src/knowledge-quicklog.js
+       - src/knowledge-hits.js
+       - src/knowledge-classify.js
+       - src/knowledge-stats.js
+diff --git a/src/fr-index.js b/src/fr-index.js
+index 4fda3670..7baa4a2f 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -130,11 +130,14 @@ export function parseChangeRequirements(changeDir) {
+   return { missing: false, frs, malformed };
+ }
+ 
+-/** 域解析（导出供注入/软门消费）：变更自身 design.md 文件变更清单表行（剥 NEW: 前缀）× moduleIndex paths 前缀匹配；无匹配 → unmapped。 */
++/** 域解析（导出供注入/软门消费）：变更自身 design.md 文件变更清单表行（剥 NEW: 前缀）× moduleIndex paths 前缀匹配；
++ * 无匹配 → 伪域回退（auto-<路径段>，按文件路径段投票——2026-09-21 R5R 实证主仓 706 条 FR 落
++ * unmapped 大池且 INDEX 路由键为通用词无法命中，模块卡覆盖不足时 FR 复利断路）；无文件清单 → unmapped。 */
+ export function resolveTouchedDomains(changeDir, moduleIndex) {
+   const domains = new Set();
+   const designPath = join(changeDir, 'design.md');
+-  if (moduleIndex && existsSync(designPath)) {
++  const files = [];
++  if (existsSync(designPath)) {
+     let design;
+     try {
+       design = readFileSync(designPath, 'utf8');
+@@ -145,6 +148,8 @@ export function resolveTouchedDomains(changeDir, moduleIndex) {
+       const m = line.match(/^\|\s*(?:新增|修改|删除)\s*\|\s*(?:NEW:)?([^\s|]+)\s*\|/);
+       if (!m) continue;
+       const filePath = m[1].trim();
++      files.push(filePath);
++      if (!moduleIndex) continue; // 无模块索引（如整仓无模块卡）→ 只攒文件清单走伪域回退
+       for (const [modId, mod] of Object.entries(moduleIndex)) {
+         const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
+         if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
+@@ -153,10 +158,35 @@ export function resolveTouchedDomains(changeDir, moduleIndex) {
+       }
+     }
+   }
+-  if (domains.size === 0) domains.add('unmapped');
++  if (domains.size === 0) domains.add(files.length > 0 ? pseudoDomainFromPaths(files) : 'unmapped');
+   return [...domains];
+ }
+ 
++// 泛化首段（src/lib/test/...）不承载域语义——目录段里跳过它们取首个具体段。
++const GENERIC_PATH_SEGMENTS = new Set(['src', 'lib', 'test', 'tests', 'spec', 'docs', 'doc', 'app', 'packages', 'scripts', 'config', 'public', 'internal']);
++
++/**
++ * 文件清单 → 伪域名（auto-<段>）：逐文件取目录段（末段是文件名不投票）里首个非泛化段，
++ * 按出现次数投票取众数；全部泛化/根文件 → 'unmapped'。auto- 前缀保证与真实模块 id
++ * （模块卡派生）不冲突，且在 fr 文件头与 INDEX 路由键里自明身份。
++ */
++function pseudoDomainFromPaths(files) {
++  const votes = new Map();
++  for (const f of files) {
++    const segs = String(f || '').replace(/\\/g, '/').split('/').filter(Boolean);
++    if (segs.length < 2) continue; // 根文件无目录段
++    for (const seg of segs.slice(0, -1)) {
++      const s = seg.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
++      if (!s || GENERIC_PATH_SEGMENTS.has(s)) continue;
++      votes.set(s, (votes.get(s) || 0) + 1);
++      break; // 首个非泛化目录段即该文件的票，一文件一票
++    }
++  }
++  if (votes.size === 0) return 'unmapped';
++  const top = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
++  return `auto-${top}`;
++}
++
+ /** 域文件路径与域索引读写（复用参数化底座；FR 节无版本段，id 恒等）。 */
+ function frDirPath(knowledgeRoot) {
+   return join(knowledgeRoot, FR_DIR);
+@@ -176,7 +206,9 @@ function loadDomainSections(knowledgeRoot, domain) {
+         '',
+         '> fr-index 从归档变更 requirements.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为机械解析契约，勿手改。',
+         '> superseded 条目保留供取代链回溯；brainstorm 注入默认只给 active。',
+-        `> 模块卡：modules/${domain}.md（域=模块 id 同构；行为条目↔模块契约互跳）`,
++        String(domain).startsWith('auto-')
++          ? '> 伪域（auto- 前缀）：由文件路径段投票派生，无模块卡——为该域补模块卡后，新变更将自动落回真域'
++          : `> 模块卡：modules/${domain}.md（域=模块 id 同构；行为条目↔模块契约互跳）`,
+         '',
+       ],
+       sections: [],
+@@ -384,7 +416,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
+     syncIndexRoutingLines(knowledgeRoot, {
+       section: 'FR 需求索引',
+       subdir: FR_DIR,
+-      makeLine: (d) => `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
++      // 伪域路由行追加裸段关键词（auto-backend 行同时吃 'backend' 命中——域名字面作为
++      // 唯一路由键对 auto- 域过窄，2026-09-21 unmapped 大池路由失效的教训）
++      makeLine: (d) => d.startsWith('auto-')
++        ? `- ${d}|${d.slice(5)}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`
++        : `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
+     });
+   }
+ 
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 66173af0..c04af9f3 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -18,7 +18,7 @@
+  *   - 删除 outputStep 内死代码 `const { execSync } = await import('child_process')`（execSync 解构未用，实际走 safeGit）
+  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
+  */
+-import { basename, join } from 'node:path'
++import { basename, dirname, join } from 'node:path'
+ import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import jsYaml from 'js-yaml'
+@@ -59,6 +59,7 @@ import { REVIEW_SCHEMA_VERSION, isValidExecuteRunId } from '../task-review.js'
+ // 静态 import 不引入环（stages/* 反向引用本文件会撞 index.js 顶层 stageRegistry TDZ——见
+ // buildKnowledgeInjection docstring）。
+ import { matchKnowledge } from '../knowledge-match.js'
++import { matchQuicklogContext } from '../knowledge-quicklog.js'
+ import { appendKnowledgeHit } from '../knowledge-hits.js'
+ import { readActiveFrDigest } from '../fr-index.js'
+ // 前置失败清单 validator 面（2026-09-18-preflight-slimming task-01）：design-facts /
+@@ -449,19 +450,28 @@ function renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles,
+  */
+ export function buildKnowledgeInjection({ knowledgeDir, runtimeDir, change, query, maxFiles = KNOWLEDGE_INJECT_MAX_FILES, maxLines = KNOWLEDGE_INJECT_MAX_LINES } = {}) {
+   const knowledgeResult = matchKnowledge(knowledgeDir, String(query || ''))
+-  if (!knowledgeResult.matched) {
++  // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立——INDEX 未命中时 quicklog 照常
++  // 注入（两 retrieval 面互为补充）；fail-open（无 quicklog/异常 → 空 hits 零注入）。
++  // specBase 由 knowledgeDir 上溯（两个注入点传的都是 <specBase>/knowledge）。
++  const quick = knowledgeDir
++    ? matchQuicklogContext(dirname(knowledgeDir), String(query || ''))
++    : { hits: [], report: '' }
++  if (!knowledgeResult.matched && quick.hits.length === 0) {
+     return { matched: false, section: '', report: knowledgeResult.report, json: knowledgeResult.json }
+   }
+-  const section = renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines })
++  const kSection = knowledgeResult.matched ? renderKnowledgeInjectSection(knowledgeResult, { knowledgeDir, maxFiles, maxLines }) : ''
++  const qSection = quick.report || ''
++  const section = [kSection, qSection].filter(Boolean).join('\n\n')
+   try {
+     appendKnowledgeHit(runtimeDir, {
+       type: 'inject',
+       change: change || '',
+       query: String(query || ''),
+       matchedFiles: knowledgeResult.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)),
++      quicklogIds: quick.hits.map(h => h.qlId),
+     })
+   } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不阻断注入本体 */ }
+-  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json }
++  return { matched: true, section, report: knowledgeResult.report, json: knowledgeResult.json, quickHits: quick.hits }
+ }
+ 
+ // parseModuleMapSimple 复用 modules.js 的 canonical 实现（合并历史 copy-paste 副本，2026-08-07；
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 7e43c327..9afbd2df 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -22,6 +22,7 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
+ // const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
+ // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
+ import { matchKnowledge } from '../knowledge-match.js'
++import { matchQuicklogContext, renderQuicklogSection } from '../knowledge-quicklog.js'
+ import { appendKnowledgeHit } from '../knowledge-hits.js'
+ 
+ // 机械知识注入限额（与 run/prompt.js KNOWLEDGE_INJECT_MAX_FILES/MAX_LINES 同值孪生，R-02 膨胀控制）
+@@ -46,10 +47,13 @@ function buildWaveKnowledgeSection(changeDir, wave) {
+       .map(t => String((t && t.name) || '')).filter(Boolean).join(' ')
+     if (!query.trim()) return ''
+     const result = matchKnowledge(knowledgeDir, query)
+-    if (!result.matched) return ''
++    // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立，INDEX 未命中时照常注入
++    const quick = matchQuicklogContext(specBase, query)
++    if (!result.matched && quick.hits.length === 0) return ''
++    const lines = []
++    if (result.matched) {
+     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
+     const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
+-    const lines = []
+     lines.push(`### 📚 命中知识（CLI 按 Wave 任务名机械匹配，top-${KNOWLEDGE_INJECT_MAX_FILES}——勿自行重跑 INDEX 匹配）`)
+     lines.push(`Status: matched | Entries: ${result.entries.length} | Sources:`)
+     for (const e of result.entries) lines.push(` - ${ref(e)}`)
+@@ -80,12 +84,19 @@ function buildWaveKnowledgeSection(changeDir, wave) {
+         lines.push(body.replace(/\n+$/, ''))
+       }
+     }
++    }
++    // quicklog 段与知识段之间空一行（run/prompt.js buildKnowledgeInjection 同款拼接口径）
++    if (quick.hits.length > 0) {
++      if (lines.length > 0) lines.push('')
++      lines.push(renderQuicklogSection(quick.hits, { h3: true }))
++    }
+     try {
+       appendKnowledgeHit(path.join(specBase, '.runtime'), {
+         type: 'inject',
+         change: path.basename(changeDir),
+         query,
+-        matchedFiles: result.entries.map(ref),
++        matchedFiles: result.matched ? result.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
++        quicklogIds: quick.hits.map(h => h.qlId),
+       })
+     } catch { /* 遥测 fail-soft（R-04） */ }
+     return lines.join('\n') + '\n'
+diff --git a/test/fr-index.test.mjs b/test/fr-index.test.mjs
+index 596d368a..c61ef554 100644
+--- a/test/fr-index.test.mjs
++++ b/test/fr-index.test.mjs
+@@ -244,6 +244,41 @@ function makeFixture() {
+   assert(r.written[0].file === 'fr/alpha.md', '13b 落 primary 域（首个触达域）')
+ }
+ 
++// ── 14. 伪域回退（知识可见性导线②：无模块卡命中时 auto-<路径段>，替代 unmapped 大池） ──
++{
++  const { knowledgeRoot, mkChange } = makeFixture()
++  // 14a: 目录段投票——backend 2 票胜 frontend 1 票 → auto-backend
++  const da = mkChange('2026-09-21-pd1', '# R\n### FR-01: 后台守护行为\n')
++  writeFileSync(join(da, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | backend/app/daemon/x.py |\n| 修改 | backend/app/y.py |\n| 修改 | frontend/src/z.ts |\n')
++  const ra = indexRequirements({ changeDir: da, knowledgeRoot, headHash: 'h1' })
++  assert(ra.written.length === 1 && ra.written[0].file === 'fr/auto-backend.md' && ra.written[0].id === 'FR-auto-backend-001',
++    `14a 目录段投票派生伪域 auto-backend（实际 ${JSON.stringify(ra.written)}）`)
++  // 14b: 伪域文件头自明身份（不谎称有模块卡）
++  const fa = readFileSync(join(knowledgeRoot, 'fr', 'auto-backend.md'), 'utf8')
++  assert(fa.includes('伪域（auto- 前缀）：由文件路径段投票派生') && !fa.includes('模块卡：modules/auto-backend.md'),
++    '14b 伪域 preamble 自明（无模块卡不谎称）')
++  // 14c: INDEX 路由行带裸段关键词（unmapped 大池路由失效的教训）
++  const idx = readFileSync(join(knowledgeRoot, 'INDEX.md'), 'utf8')
++  assert(idx.includes('- auto-backend|backend|FR|需求|承接 → [fr/auto-backend.md](fr/auto-backend.md)'),
++    '14c 伪域路由行含裸段关键词（backend 可命中）')
++  // 14d: 泛化目录无具体段 → unmapped（原行为保持）
++  const db = mkChange('2026-09-21-pd2', '# R\n### FR-01: 单文件行为\n')
++  writeFileSync(join(db, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/foo.js |\n')
++  const rb = indexRequirements({ changeDir: db, knowledgeRoot })
++  assert(rb.written[0].file === 'fr/unmapped.md', `14d 泛化目录（src 单文件）退 unmapped（实际 ${rb.written[0] && rb.written[0].file}）`)
++  // 14e: 根文件无目录段 → unmapped
++  const dc = mkChange('2026-09-21-pd3', '# R\n### FR-01: 根文件行为\n')
++  writeFileSync(join(dc, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | README.md |\n')
++  const rc = indexRequirements({ changeDir: dc, knowledgeRoot })
++  assert(rc.written[0].file === 'fr/unmapped.md', '14e 根文件退 unmapped')
++  // 14f: NEW: 前缀新建文件参与伪域投票（正则剥前缀后照常入票——跨仓新建文件不因前缀失票）
++  const dd = mkChange('2026-09-21-pd4', '# R\n### FR-01: 新文件行为\n')
++  writeFileSync(join(dd, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 新增 | NEW:backend/app/new_module.py |\n')
++  const rd = indexRequirements({ changeDir: dd, knowledgeRoot })
++  assert(rd.written[0].file === 'fr/auto-backend.md',
++    `14f NEW: 前缀剥除后参与投票（实际 ${rd.written[0] && rd.written[0].file}）`)
++}
++
+ for (const dir of tmpRoots) {
+   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
+ }
+diff --git a/test/knowledge-inject.test.mjs b/test/knowledge-inject.test.mjs
+index 94fa1b52..3a1e1b30 100644
+--- a/test/knowledge-inject.test.mjs
++++ b/test/knowledge-inject.test.mjs
+@@ -316,8 +316,59 @@ console.log('\n--- 9. buildWavePrompt Wave 粒度注入 ---')
+   } finally { restore(); cleanup(fx) }
+ }
+ 
++// ── 10. quicklog 检索面（知识可见性导线）：独立于 INDEX 知识面，INDEX 未命中时照常注入 ──
++console.log('\n--- 10. quicklog 检索面注入 ---')
++{
++  const fx = makeSpecRoot()
++  const restore = withoutSillyHubEnv()
++  try {
++    // quicklog fixture：一条 claude autocompact 修补（标题/文件名可被查询命中）
++    mkdirSync(join(fx.specBase, 'quicklog'), { recursive: true })
++    writeFileSync(join(fx.specBase, 'quicklog', 'QUICKLOG-test.md'), [
++      '## ql-20260920-007-x | 2026-09-20 17:27:00 | claude 引擎 autocompact 做成 provider 级可配',
++      '状态：已完成',
++      '文件：',
++      '- sillyhub-daemon/src/claude-settings.ts（白名单三键）',
++      '方案：白名单加 autoCompactWindow 等三键+值守护',
++      '',
++    ].join('\n'), 'utf8')
++    const QL_QUERY = 'claude autocompact provider 配置 claude-settings 白名单'
++
++    // 10a INDEX 缺失 + quicklog 命中 → matched:true 且段注入（两检索面独立）
++    const ki = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 't-ql', query: QL_QUERY })
++    assertTrue(ki.matched === true && ki.section.includes('🕘 近期 quick 修补') && ki.section.includes('ql-20260920-007-x'),
++      '10a INDEX 未命中时 quicklog 段照常注入（matched=true）')
++    // 10b quickHits 字段形状（日期截 10）
++    assertTrue(Array.isArray(ki.quickHits) && ki.quickHits[0] && ki.quickHits[0].qlId === 'ql-20260920-007-x' && ki.quickHits[0].date === '2026-09-20',
++      '10b quickHits 返回形状（qlId/date 截 10/title/files）')
++    // 10c 遥测记录带 quicklogIds
++    const rec = readKnowledgeHits(fx.runtimeDir).find((h) => h.type === 'inject')
++    assertTrue(rec && Array.isArray(rec.quicklogIds) && rec.quicklogIds.includes('ql-20260920-007-x'),
++      '10c hits.jsonl inject 记录含 quicklogIds')
++    // 10d 双面并存：INDEX 命中 + quicklog 命中 → 两段都在
++    writeFiveFileFixture(fx.knowledgeDir)
++    const both = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: join(fx.root, 'rt2'), change: 't-both', query: `${HIT_QUERY} claude autocompact claude-settings` })
++    assertTrue(both.section.includes('📚 命中知识') && both.section.includes('🕘 近期 quick 修补'),
++      '10d INDEX 知识段与 quicklog 段并存')
++    // 10e Wave 孪生：quicklog-only 查询词（INDEX 不含这些关键词）→ Wave prompt 含 h3 quicklog 段
++    const changeName = '2026-09-21-ki-ql-wave'
++    const changeDir = join(fx.specBase, 'changes', changeName)
++    mkdirSync(changeDir, { recursive: true })
++    const wave = { index: 1, tasks: [{ index: 1, name: 'claude autocompact 白名单 调整' }] }
++    const out = buildWavePrompt(wave, 1, changeDir, join(fx.root, 'wt'), { cwd: fx.root })
++    assertTrue(out.includes('### 🕘 近期 quick 修补') && out.includes('ql-20260920-007-x'),
++      '10e execute.js Wave 孪生注入 quicklog 段（h3 层级）')
++    // 10f 无 quicklog 无 INDEX → 既有行为零回归（matched:false 零字节）
++    const fx2 = makeSpecRoot()
++    try {
++      const miss = buildKnowledgeInjection({ knowledgeDir: fx2.knowledgeDir, runtimeDir: fx2.runtimeDir, change: 't-miss', query: '任意 查询 词组' })
++      assertTrue(miss.matched === false && miss.section === '', '10f 无 quicklog 无 INDEX → matched:false 零字节（既有行为）')
++    } finally { cleanup(fx2) }
++  } finally { restore(); cleanup(fx) }
++}
++
+ console.log(`\n${'='.repeat(50)}`)
+-const total = 41
++const total = 47
+ console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
+ if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
+ console.log('='.repeat(50))
+diff --git a/src/knowledge-quicklog.js b/src/knowledge-quicklog.js
+new file mode 100644
+--- /dev/null
++++ b/src/knowledge-quicklog.js
+@@ -0,0 +1,194 @@
++/**
++ * knowledge-quicklog.js — quicklog 历史检索面（知识可见性导线）
++ *
++ * 缺口（2026-09-21 R5R 实证）：quick 产出（quicklog 条目 + patch）不在任何检索面——
++ * knowledge-match 只扫 INDEX 路由与 decisions；主仓唯一核验过键名的先例
++ * （ql-20260920-007-d0dd）因 linked 变更未归档而 distill 缺席，FR 检索面零覆盖，
++ * 后续三个独立会话全部猜错同一外部键。本模块把 quicklog 历史拉进注入面：
++ * 纯读、fail-open、top-3 一行制——注入的是「发生过什么」的历史事实（条目说的是
++ * 当时做了什么），不是权威断言；消费方要用契约细节按 ql-ID 回源读全文或读代码。
++ *
++ * 与 knowledge-match.js 分工：那边消费 INDEX/decisions（结构化知识），这边消费
++ * quicklog/QUICKLOG-*.md（append-only 历史）。条目头与字段行是 allocateQuicklogEntry
++ * 的机械解析契约：`## ql-<id> | <时间> | <标题>` + `文件：` 段（`- path（注记）` 行）。
++ * run/prompt.js（execute 确认步 + quick step1）与 stages/execute.js（Wave 孪生）两处
++ * 注入点共用本模块——格式等价由 test/knowledge-inject.test.mjs 锁定，改渲染必同步两处。
++ */
++
++import { existsSync, readFileSync, readdirSync } from 'fs'
++import { join } from 'path'
++
++const QUICKLOG_ENTRY_RE = /^##\s+(ql-[\w-]+)\s*\|\s*([^|]+)\s*\|\s*(.+)$/
++// 文件注记行：`- path（中文括注）` / `- path(ascii)` / 裸 `- path`（allocateQuicklogEntry
++// 均可产出；path 本身不含空白，故止于首个空白或括号）
++const QUICKLOG_FILE_LINE_RE = /^-\s+([^\s（(]+)/
++// 文件：段结束边界——出现其他字段标签行即收段（状态/需求/根因/方案/结果/审计/关联变更）
++const QUICKLOG_FIELD_RE = /^(状态|关联变更|需求|根因|方案|结果|审计)\s*[：:]/
++
++/**
++ * 解析 quicklog 全量条目（所有 QUICKLOG-*.md，含按日归档的分片文件）。
++ * @param {string} specBase - .sillyspec 根
++ * @returns {{ qlId: string, date: string, title: string, solution: string, files: string[] }[]}
++ *   quicklog/ 不存在 / 全部不可读 → []（调用方零注入零阻断）
++ */
++export function parseQuicklogEntries(specBase) {
++  const dir = join(specBase, 'quicklog')
++  let files
++  try {
++    files = readdirSync(dir).filter((f) => /^QUICKLOG-.*\.md$/i.test(f))
++  } catch {
++    return []
++  }
++  const entries = []
++  for (const f of files) {
++    let content
++    try {
++      content = readFileSync(join(dir, f), 'utf8')
++    } catch {
++      continue
++    }
++    let cur = null
++    let inFiles = false
++    const flush = () => {
++      if (cur) entries.push(cur)
++      cur = null
++    }
++    for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
++      const h = line.match(QUICKLOG_ENTRY_RE)
++      if (h) {
++        flush()
++        cur = { qlId: h[1].trim(), date: h[2].trim(), title: h[3].trim(), solution: '', files: [] }
++        inFiles = false
++        continue
++      }
++      if (!cur) continue
++      if (QUICKLOG_FIELD_RE.test(line)) {
++        inFiles = false
++        const m = line.match(/^方案\s*[：:]\s*(.*)$/)
++        if (m) cur.solution = m[1].trim()
++        continue
++      }
++      if (/^文件\s*[：:]/.test(line)) {
++        inFiles = true
++        continue
++      }
++      if (inFiles) {
++        const m = line.match(QUICKLOG_FILE_LINE_RE)
++        if (m) cur.files.push(m[1].replace(/\\/g, '/'))
++      }
++    }
++    flush()
++  }
++  return entries
++}
++
++// ── 匹配打分 ─────────────────────────────────────────────────────────────────
++// 查询侧 token：ASCII 词（≥3 字符，词边界匹配）+ CJK 连续段（≥2 字，子串匹配）——
++// 与 knowledge-match.keywordMatchesContext 同判法，方向相反（那边条目出关键词查上下文，
++// 这边上下文出 token 查条目——quicklog 条目没有 INDEX 关键词行，只能反向）。
++const ASCII_TOKEN_RE = /[a-z][a-z0-9._-]{2,}/g
++const CJK_RUN_RE = /[\u4e00-\u9fff]{2,}/g
++
++function contextTokens(taskContext) {
++  const s = String(taskContext || '').toLowerCase()
++  const out = new Set()
++  for (const t of s.match(ASCII_TOKEN_RE) || []) out.add(t)
++  for (const t of s.match(CJK_RUN_RE) || []) out.add(t)
++  return [...out]
++}
++
++function escapeRegex(s) {
++  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
++}
++
++/** 文件命中权重：路径/文件名是强信号（同一文件被改过 ≈ 同域修补） */
++const FILE_HIT_WEIGHT = 5
++/** 命中门槛：≥1 文件命中，或 ≥2 个不同 token 命中（单 token 命中多为噪音词，不注入） */
++const MIN_TOKEN_HITS = 2
++
++/**
++ * 任务上下文 × quicklog 条目匹配。
++ * @param {string} specBase - .sillyspec 根
++ * @param {string} taskContext - 任务描述串（与 matchKnowledge 的 query 同源）
++ * @param {{ limit?: number }} [opts] - 注入上限（默认 3）
++ * @returns {{ hits: Array<{ qlId: string, date: string, title: string, files: string[] }>, report: string }}
++ *   无 quicklog / 无命中 / 任何异常 → { hits: [], report: '' }（fail-open，永不抛）
++ */
++export function matchQuicklogContext(specBase, taskContext, { limit = 3 } = {}) {
++  try {
++    if (!specBase || !taskContext) return { hits: [], report: '' }
++    const entries = parseQuicklogEntries(specBase)
++    if (entries.length === 0) return { hits: [], report: '' }
++    const tokens = contextTokens(taskContext)
++    if (tokens.length === 0) return { hits: [], report: '' }
++
++    const scored = []
++    for (const e of entries) {
++      const hay = [e.title, e.solution, e.files.join(' ')].join(' ').toLowerCase()
++      const basenames = new Set(e.files.map((f) => f.split('/').pop().toLowerCase()))
++      let score = 0
++      let tokenHits = 0
++      let fileHit = 0
++      for (const t of tokens) {
++        let hit = false
++        if (/[^\x00-\x7f]/.test(t)) {
++          hit = hay.includes(t)
++        } else {
++          hit = new RegExp(`(^|[^a-z0-9])${escapeRegex(t)}([^a-z0-9]|$)`).test(hay)
++          if (!hit && t.length >= 4) {
++            for (const b of basenames) {
++              if (b.includes(t)) {
++                hit = true
++                fileHit++
++                score += FILE_HIT_WEIGHT
++                break
++              }
++            }
++          }
++        }
++        if (hit) {
++          score += 1
++          tokenHits++
++        }
++      }
++      if (fileHit >= 1 || tokenHits >= MIN_TOKEN_HITS) {
++        scored.push({ entry: e, score, fileHit })
++      }
++    }
++    scored.sort((a, b) =>
++      (b.fileHit - a.fileHit) ||
++      (b.score - a.score) ||
++      String(b.entry.date).localeCompare(String(a.entry.date))
++    )
++    const top = scored.slice(0, Math.max(1, limit)).map((s) => ({
++      qlId: s.entry.qlId,
++      date: String(s.entry.date).slice(0, 10),
++      title: s.entry.title,
++      files: s.entry.files,
++    }))
++    return { hits: top, report: renderQuicklogSection(top) }
++  } catch {
++    return { hits: [], report: '' }
++  }
++}
++
++/**
++ * 注入段渲染（prompt.js 与 execute.js 孪生共用——仅段头层级不同）。
++ * 一行一条：ql-ID · 标题（截 60）· 日期 · 至多 2 个触碰文件。零正文注入——
++ * quicklog 条目正文可能很长，注入面只做「知道有这回事 + 回源指针」。
++ * @param {Array<{qlId,date,title,files}>} hits
++ * @param {{ h3?: boolean }} [opts] - execute.js Wave prompt 内用 h3（### ）对齐知识段层级
++ */
++export function renderQuicklogSection(hits, { h3 = false } = {}) {
++  if (!Array.isArray(hits) || hits.length === 0) return ''
++  const lines = [
++    `${h3 ? '### ' : ''}🕘 近期 quick 修补（quicklog 机械匹配，top-${hits.length}——历史记录非权威断言，细节按 ql-ID 回源 .sillyspec/quicklog/ 或读代码）`,
++  ]
++  for (const h of hits) {
++    const files = (h.files || []).slice(0, 2).join(', ')
++    const title = String(h.title || '').slice(0, 60)
++    const date = String(h.date || '').slice(0, 10)
++    lines.push(` - ${h.qlId} · ${title} · ${date}${files ? ` · ${files}` : ''}`)
++  }
++  return lines.join('\n')
++}
+
+diff --git a/test/knowledge-quicklog.test.mjs b/test/knowledge-quicklog.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/knowledge-quicklog.test.mjs
+@@ -0,0 +1,144 @@
++/**
++ * knowledge-quicklog 测试（知识可见性导线①——quicklog 检索面）
++ *
++ * 覆盖：
++ *   1) parseQuicklogEntries：条目头/文件段/方案行解析、括注剥离、CRLF 容错、
++ *      多 QUICKLOG-*.md 文件聚合、无 quicklog 目录 → []
++ *   2) matchQuicklogContext：文件名命中强信号、token 门槛（单 token 噪音不注入）、
++ *      top-3 帽、排序（文件命中 > token 分 > 日期新）、fail-open（异常/空参 → 空）
++ *   3) renderQuicklogSection：一行制格式（ql-ID · 标题截 60 · 日期截 10 · ≤2 文件）、
++ *      h3 层级开关、空 hits → ''
++ *
++ * 风格：自研 assert + mkdtempSync（同 knowledge-inject.test.mjs）。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++import { parseQuicklogEntries, matchQuicklogContext, renderQuicklogSection } from '../src/knowledge-quicklog.js'
++
++let failed = 0
++let total = 0
++const tmpRoots = []
++
++function assert(condition, msg) {
++  total++
++  if (condition) {
++    console.log(`  ✅ PASS: ${msg}`)
++  } else {
++    failed++
++    console.log(`  ❌ FAIL: ${msg}`)
++  }
++}
++
++function makeSpec() {
++  const root = mkdtempSync(join(tmpdir(), 'kq-quicklog-'))
++  tmpRoots.push(root)
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(join(specBase, 'quicklog'), { recursive: true })
++  return { root, specBase }
++}
++
++function writeMain(specBase) {
++  writeFileSync(join(specBase, 'quicklog', 'QUICKLOG-test.md'), [
++    '## ql-20260920-007-x | 2026-09-20 17:27:00 | claude 引擎 autocompact 做成 provider 级可配（解决 160K 过早压缩）',
++    '状态：已完成',
++    '关联变更：（无）',
++    '文件：',
++    '- sillyhub-daemon/src/claude-settings.ts（白名单三键+值守护）',
++    '- frontend/src/components/llm-provider-form.tsx（claude 分支表单区）',
++    '- docs/daemon.md（增量段）',
++    '需求：claude 引擎 autocompact 做成 provider 级可配',
++    '根因：引擎默认 believed limit×~80% 触发，白名单未放行',
++    '方案：白名单加 autoCompactWindow 等三键+VALUE_GUARDS 值守护',
++    '结果：daemon 25/25 全绿',
++    '',
++    '## ql-20260921-009-y | 2026-09-21 20:00:00 | 多会话摩擦三修复（quick 守卫 TTL）',
++    '状态：已完成',
++    '文件：',
++    '- src/quicklog.js（TTL 剔除）',
++    '- src/run/stage.js（并发错峰建议）',
++    '方案：guard.json mtime 超 4h 剔除',
++    '',
++  ].join('\n'), 'utf8')
++}
++
++function writeCrlf(specBase) {
++  writeFileSync(join(specBase, 'quicklog', 'QUICKLOG-crlf.md'), [
++    '## ql-20260918-000-z | 2026-09-18 09:00:00 | cursor 交互会话修复',
++    '文件：',
++    '- backend/app/cursor.py（会话绑定）',
++  ].join('\r\n') + '\r\n', 'utf8')
++}
++
++// ── 1. 解析 ──
++console.log('\n--- 1. parseQuicklogEntries ---')
++{
++  const { specBase } = makeSpec()
++  writeMain(specBase)
++  writeCrlf(specBase)
++  const entries = parseQuicklogEntries(specBase)
++  assert(entries.length === 3, `1a 三条目（含 CRLF 文件，实际 ${entries.length}）`)
++  const e7 = entries.find((e) => e.qlId === 'ql-20260920-007-x')
++  assert(e7 && e7.date === '2026-09-20 17:27:00' && e7.title.includes('autocompact'), '1b 条目头三段（id/时间/标题）解析')
++  assert(e7 && e7.files.length === 3 && e7.files[0] === 'sillyhub-daemon/src/claude-settings.ts' && !e7.files[0].includes('（'),
++    '1c 文件段逐行提取，括注剥离')
++  assert(e7 && e7.solution.includes('VALUE_GUARDS'), '1d 方案行捕获（打分语料）')
++  const ez = entries.find((e) => e.qlId === 'ql-20260918-000-z')
++  assert(ez && ez.files.length === 1 && ez.files[0] === 'backend/app/cursor.py', '1e CRLF 文件容错')
++}
++
++// ── 2. 匹配 ──
++console.log('\n--- 2. matchQuicklogContext ---')
++{
++  const { specBase } = makeSpec()
++  writeMain(specBase)
++  writeCrlf(specBase)
++  const r1 = matchQuicklogContext(specBase, 'claude autocompact provider 配置 claude-settings 白名单')
++  assert(r1.hits.length >= 1 && r1.hits[0].qlId === 'ql-20260920-007-x', `2a 文件名命中+标题 token 命中（实际 ${JSON.stringify(r1.hits.map(h => h.qlId))}）`)
++  const r2 = matchQuicklogContext(specBase, 'cursor 会话 修复 backend')
++  assert(r2.hits.length >= 1 && r2.hits[0].qlId === 'ql-20260918-000-z', `2b CJK 子串 + ASCII 词边界命中，文件命中条目居首（实际 ${JSON.stringify(r2.hits.map(h => h.qlId))}）`)
++  const r3 = matchQuicklogContext(specBase, 'quicklog')
++  assert(r3.hits.length === 0, `2c 单 token 噪音不注入（门槛 ≥2 token 或 ≥1 文件命中，实际 ${r3.hits.length}）`)
++  const r4 = matchQuicklogContext(specBase, null)
++  assert(r4.hits.length === 0 && r4.report === '', '2d 空参数 fail-open')
++  const r5 = matchQuicklogContext(join(specBase, '..', 'no-such-dir'), 'claude autocompact')
++  assert(r5.hits.length === 0, '2e quicklog 目录缺失 fail-open')
++}
++
++// ── 3. 排序与上限 ──
++console.log('\n--- 3. 排序与上限 ---')
++{
++  const { specBase } = makeSpec()
++  writeMain(specBase)
++  writeCrlf(specBase)
++  // claude-settings 文件命中 007；cursor.py 文件命中 cursor 查询——文件命中优先于纯 token
++  const r = matchQuicklogContext(specBase, 'claude-settings cursor.py autocompact 会话 修复 引擎')
++  assert(r.hits.length <= 3, `3a top-3 帽（实际 ${r.hits.length}）`)
++  assert(r.hits[0].qlId === 'ql-20260920-007-x' || r.hits[0].qlId === 'ql-20260918-000-z', '3b 文件命中条目排前')
++  const rLimit = matchQuicklogContext(specBase, 'claude-settings cursor.py autocompact 会话 修复 引擎', { limit: 1 })
++  assert(rLimit.hits.length === 1, '3c limit 参数生效')
++}
++
++// ── 4. 渲染 ──
++console.log('\n--- 4. renderQuicklogSection ---')
++{
++  const s = renderQuicklogSection([
++    { qlId: 'ql-20260920-007-x', date: '2026-09-20 17:27:00', title: 'claude 引擎 autocompact 做成 provider 级可配（解决 160K 过早压缩）', files: ['sillyhub-daemon/src/claude-settings.ts', 'frontend/src/components/llm-provider-form.tsx', 'docs/daemon.md'] },
++  ])
++  assert(s.startsWith('🕘 近期 quick 修补（quicklog 机械匹配，top-1'), '4a 段头文案')
++  assert(s.includes(' - ql-20260920-007-x · claude 引擎 autocompact 做成 provider 级可配（解决 160K 过早压缩） · 2026-09-20 · sillyhub-daemon/src/claude-settings.ts, frontend/src/components/llm-provider-form.tsx'),
++    '4b 一行制：ql-ID · 标题 · 日期截 10 · 至多 2 文件（第三个不出现）')
++  const s3 = renderQuicklogSection([...Array(5)].map((_, i) => ({ qlId: `ql-x-${i}`, date: '2026-09-21', title: `t${i}`, files: [] })))
++  assert(s3.split('\n').length === 6, `4c N 条 N 行+段头（实际 ${s3.split('\n').length}）`)
++  const h3 = renderQuicklogSection([{ qlId: 'ql-1', date: '2026-09-21', title: 't', files: [] }], { h3: true })
++  assert(h3.startsWith('### 🕘 近期 quick 修补'), '4d h3 层级开关（execute.js Wave 孪生用）')
++  assert(renderQuicklogSection([]) === '', '4e 空 hits 空串')
++}
++
++for (const dir of tmpRoots) {
++  try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄迟滞容忍 */ }
++}
++
++console.log(`\n${failed === 0 ? '✅ ALL PASS' : '❌ FAILED'}: ${total - failed}/${total}`)
++process.exit(failed === 0 ? 0 : 1)

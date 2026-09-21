@@ -130,11 +130,14 @@ export function parseChangeRequirements(changeDir) {
   return { missing: false, frs, malformed };
 }
 
-/** 域解析（导出供注入/软门消费）：变更自身 design.md 文件变更清单表行（剥 NEW: 前缀）× moduleIndex paths 前缀匹配；无匹配 → unmapped。 */
+/** 域解析（导出供注入/软门消费）：变更自身 design.md 文件变更清单表行（剥 NEW: 前缀）× moduleIndex paths 前缀匹配；
+ * 无匹配 → 伪域回退（auto-<路径段>，按文件路径段投票——2026-09-21 R5R 实证主仓 706 条 FR 落
+ * unmapped 大池且 INDEX 路由键为通用词无法命中，模块卡覆盖不足时 FR 复利断路）；无文件清单 → unmapped。 */
 export function resolveTouchedDomains(changeDir, moduleIndex) {
   const domains = new Set();
   const designPath = join(changeDir, 'design.md');
-  if (moduleIndex && existsSync(designPath)) {
+  const files = [];
+  if (existsSync(designPath)) {
     let design;
     try {
       design = readFileSync(designPath, 'utf8');
@@ -145,6 +148,8 @@ export function resolveTouchedDomains(changeDir, moduleIndex) {
       const m = line.match(/^\|\s*(?:新增|修改|删除)\s*\|\s*(?:NEW:)?([^\s|]+)\s*\|/);
       if (!m) continue;
       const filePath = m[1].trim();
+      files.push(filePath);
+      if (!moduleIndex) continue; // 无模块索引（如整仓无模块卡）→ 只攒文件清单走伪域回退
       for (const [modId, mod] of Object.entries(moduleIndex)) {
         const paths = (mod && Array.isArray(mod.paths)) ? mod.paths : [];
         if (paths.some((pp) => filePath === pp || filePath.startsWith(pp.endsWith('/') ? pp : pp + '/'))) {
@@ -153,8 +158,33 @@ export function resolveTouchedDomains(changeDir, moduleIndex) {
       }
     }
   }
-  if (domains.size === 0) domains.add('unmapped');
+  if (domains.size === 0) domains.add(files.length > 0 ? pseudoDomainFromPaths(files) : 'unmapped');
   return [...domains];
+}
+
+// 泛化首段（src/lib/test/...）不承载域语义——目录段里跳过它们取首个具体段。
+const GENERIC_PATH_SEGMENTS = new Set(['src', 'lib', 'test', 'tests', 'spec', 'docs', 'doc', 'app', 'packages', 'scripts', 'config', 'public', 'internal']);
+
+/**
+ * 文件清单 → 伪域名（auto-<段>）：逐文件取目录段（末段是文件名不投票）里首个非泛化段，
+ * 按出现次数投票取众数；全部泛化/根文件 → 'unmapped'。auto- 前缀保证与真实模块 id
+ * （模块卡派生）不冲突，且在 fr 文件头与 INDEX 路由键里自明身份。
+ */
+function pseudoDomainFromPaths(files) {
+  const votes = new Map();
+  for (const f of files) {
+    const segs = String(f || '').replace(/\\/g, '/').split('/').filter(Boolean);
+    if (segs.length < 2) continue; // 根文件无目录段
+    for (const seg of segs.slice(0, -1)) {
+      const s = seg.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!s || GENERIC_PATH_SEGMENTS.has(s)) continue;
+      votes.set(s, (votes.get(s) || 0) + 1);
+      break; // 首个非泛化目录段即该文件的票，一文件一票
+    }
+  }
+  if (votes.size === 0) return 'unmapped';
+  const top = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  return `auto-${top}`;
 }
 
 /** 域文件路径与域索引读写（复用参数化底座；FR 节无版本段，id 恒等）。 */
@@ -176,7 +206,9 @@ function loadDomainSections(knowledgeRoot, domain) {
         '',
         '> fr-index 从归档变更 requirements.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为机械解析契约，勿手改。',
         '> superseded 条目保留供取代链回溯；brainstorm 注入默认只给 active。',
-        `> 模块卡：modules/${domain}.md（域=模块 id 同构；行为条目↔模块契约互跳）`,
+        String(domain).startsWith('auto-')
+          ? '> 伪域（auto- 前缀）：由文件路径段投票派生，无模块卡——为该域补模块卡后，新变更将自动落回真域'
+          : `> 模块卡：modules/${domain}.md（域=模块 id 同构；行为条目↔模块契约互跳）`,
         '',
       ],
       sections: [],
@@ -384,7 +416,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '' }) {
     syncIndexRoutingLines(knowledgeRoot, {
       section: 'FR 需求索引',
       subdir: FR_DIR,
-      makeLine: (d) => `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
+      // 伪域路由行追加裸段关键词（auto-backend 行同时吃 'backend' 命中——域名字面作为
+      // 唯一路由键对 auto- 域过窄，2026-09-21 unmapped 大池路由失效的教训）
+      makeLine: (d) => d.startsWith('auto-')
+        ? `- ${d}|${d.slice(5)}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`
+        : `- ${d}|FR|需求|承接 → [${FR_DIR}/${d}.md](${FR_DIR}/${d}.md)`,
     });
   }
 

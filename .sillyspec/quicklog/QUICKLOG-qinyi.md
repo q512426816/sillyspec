@@ -438,3 +438,42 @@
 方案：test/gate-snapshot-e2e.test.mjs：夹具=git 仓+probe.js 血统探针+WorktreeManager 真实 worktree；入口=executeVerifyQualityScan 进程内直调；四场景（保护/正常/分叉钉/负控）
 结果：4/4 绿 @11.07s；全量 575/575；lint 过
 审计：📝 文档欠账（D-8）：1 个源码文件改动未同步任何模块文档
+
+## ql-20260921-009-c2d3 | 2026-09-21 21:18:29 | 多会话摩擦三修复：守卫 TTL/合并感知未-apply 判定/并发错峰建议
+状态：已完成
+关联变更：（无）
+文件：
+- src/quicklog.js（守卫 TTL——拦截口 mtime 4h 剔除+ℹ️日志，ID 预留 7 天口径不动）
+- src/worktree.js（新导出 detectDeliverableContained 只读三方合并包含测试，清理门 _changesAlreadyOnMain 接线）
+- src/worktree-apply.js（changedFiles 计算接合并感知剔除（归档门消费同口径））
+- src/run/stage.js（quick 启动错峰建议行（detectQuickConcurrencyAdvice 消费））
+- test/multi-session-friction-fixes.test.mjs（三修复单测 6 例（共位测试，未命中 module-map 属共位常态））
+需求：多会话摩擦三修复：守卫 TTL/合并感知未-apply 判定/并发错峰建议
+根因：batch2 归档全程实证三笔并行税：36h 幽灵 quick 守卫拦 apply 须人工查证才敢解锁；交付文件经三方合并落地后含并行增量，归档/清理门字节等值口径恒误拦「未 apply」三次、每次人工 grep 自证才走逃生口；多 quick 会话文件面重叠+主仓脏在途时摩擦集中爆发无预警
+方案：①quicklog.js 守卫拦截口按 guard.json mtime 超 4h TTL 剔除（ℹ️ 日志可观测，quicklog ID 预留保持 7 天口径）②worktree.js 新导出 detectDeliverableContained 只读三方合并测试（merge(base,主仓现状,worktree) clean 且=主仓现状⟺交付已含，冲突 fail-safe 不剔），applyWorktree changedFiles 与清理门 _changesAlreadyOnMain 双侧接线③quick 启动 detectQuickConcurrencyAdvice（他者 TTL 存活守卫≥1+src/test 脏→一行错峰建议）
+结果：新测试 6/6+受影响面 7 文件绿；末步 CLI 实测全量+lint 见门禁输出
+审计：[gate] L1（跨 3 模块 · 5 文件：4 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260921-010-6e4f | 2026-09-21 23:12:34 | 修复 ql-009② 回归：applyWorktree 合并感知早滤抢占 EXCLUDE-DIRTY 合并管线致 mergedDirtyFiles 审计丢失（apply-dirty-threeway 主仓红）——containment 从 …
+状态：进行中
+关联变更：（无）
+文件：src/worktree-apply.js, test/apply-dirty-threeway.test.mjs
+
+## ql-20260921-011-eea9 | 2026-09-21 23:52:13 | 知识检索可见性两件：① quicklog 历史进注入检索面（execute 确认步+quick step1+Wave 孪生三点）② fr-index disti…
+状态：已完成
+关联变更：（无）
+文件：
+- src/knowledge-quicklog.js（新模块 quicklog 解析/匹配/渲染纯函数（fail-open））
+- src/run/prompt.js（buildKnowledgeInjection 并联 quicklog 面（specBase 由 knowledgeDir 上溯；危险文件面预判放行——变更目标即注入核心））
+- src/stages/execute.js（Wave 孪生同款接入（格式等价锁 10e））
+- src/fr-index.js（resolveTouchedDomains 伪域回退+auto- preamble+路由行裸段键）
+- test/knowledge-quicklog.test.mjs（新建 18 断言）
+- test/knowledge-inject.test.mjs（+6 断言 10a-10f（47/47））
+- test/fr-index.test.mjs（+6 断言 14a-14f（41/41））
+- .sillyspec/docs/sillyspec/modules/_module-map.yaml（新文件录 core-engine 模块）
+需求：知识检索可见性两件：① quicklog 历史进注入检索面（execute 确认步+quick step1+Wave 孪生三点）② fr-index distill 伪域回退（无模块卡命中时 auto-<路径段> 替代 unmapped 大池）
+根因：R5R 实证三缺口：quick 产出不在任何检索面（knowledge-match 只扫 INDEX/decisions）——主仓唯一核验过键名的先例 ql-20260920-007 因 linked 变更未归档 distill 缺席，三个新会话全猜错同一外部键；fr distill 主仓 706 条落 unmapped 且 INDEX 路由键为通用词不可命中（模块卡覆盖不足时 FR 复利断路）
+方案：① 新模块 knowledge-quicklog.js：解析 QUICKLOG-*.md 条目，任务上下文 token（ASCII 词边界+CJK 子串）× 条目（标题+方案+文件）打分，文件 basename 命中×5，门槛≥2 token 或≥1 文件命中，top-3 一行制，fail-open；buildKnowledgeInjection 与 INDEX 面独立并联，execute.js Wave 孪生 h3 同款，遥测 quicklogIds additive。② resolveTouchedDomains 无模块卡命中时目录段投票派生 auto-<众数段>（跳过泛化段），全泛化/根文件退 unmapped；伪域 preamble 自明；INDEX 路由行 auto- 域追加裸段关键词
+结果：受影响面 106 断言全绿（knowledge-quicklog 18/18 + knowledge-inject 47/47 含 10a-10f + fr-index 41/41 含 14a-14f）；lint 734 过+module-map 全；全量 3 存量失败经 stash A/B 实证与本改动无关，SILLYSPEC_QUICK_TEST_GATE=skip 留痕放行全量留 CI；--force-baseline 预判放行：本变更目标即注入核心 prompt.js（ql-009 同款先例）；工作区并行会话在途文件（CONVENTIONS/docs 三件/r5l-verify-state）未计入本会话 --files
+审计：[gate] L1（跨 3 模块 · 12 文件：5 代码/3 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/CONVENTIONS.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md, round5/r5l-verify-state.mjs

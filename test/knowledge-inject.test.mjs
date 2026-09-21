@@ -316,8 +316,59 @@ console.log('\n--- 9. buildWavePrompt Wave 粒度注入 ---')
   } finally { restore(); cleanup(fx) }
 }
 
+// ── 10. quicklog 检索面（知识可见性导线）：独立于 INDEX 知识面，INDEX 未命中时照常注入 ──
+console.log('\n--- 10. quicklog 检索面注入 ---')
+{
+  const fx = makeSpecRoot()
+  const restore = withoutSillyHubEnv()
+  try {
+    // quicklog fixture：一条 claude autocompact 修补（标题/文件名可被查询命中）
+    mkdirSync(join(fx.specBase, 'quicklog'), { recursive: true })
+    writeFileSync(join(fx.specBase, 'quicklog', 'QUICKLOG-test.md'), [
+      '## ql-20260920-007-x | 2026-09-20 17:27:00 | claude 引擎 autocompact 做成 provider 级可配',
+      '状态：已完成',
+      '文件：',
+      '- sillyhub-daemon/src/claude-settings.ts（白名单三键）',
+      '方案：白名单加 autoCompactWindow 等三键+值守护',
+      '',
+    ].join('\n'), 'utf8')
+    const QL_QUERY = 'claude autocompact provider 配置 claude-settings 白名单'
+
+    // 10a INDEX 缺失 + quicklog 命中 → matched:true 且段注入（两检索面独立）
+    const ki = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: fx.runtimeDir, change: 't-ql', query: QL_QUERY })
+    assertTrue(ki.matched === true && ki.section.includes('🕘 近期 quick 修补') && ki.section.includes('ql-20260920-007-x'),
+      '10a INDEX 未命中时 quicklog 段照常注入（matched=true）')
+    // 10b quickHits 字段形状（日期截 10）
+    assertTrue(Array.isArray(ki.quickHits) && ki.quickHits[0] && ki.quickHits[0].qlId === 'ql-20260920-007-x' && ki.quickHits[0].date === '2026-09-20',
+      '10b quickHits 返回形状（qlId/date 截 10/title/files）')
+    // 10c 遥测记录带 quicklogIds
+    const rec = readKnowledgeHits(fx.runtimeDir).find((h) => h.type === 'inject')
+    assertTrue(rec && Array.isArray(rec.quicklogIds) && rec.quicklogIds.includes('ql-20260920-007-x'),
+      '10c hits.jsonl inject 记录含 quicklogIds')
+    // 10d 双面并存：INDEX 命中 + quicklog 命中 → 两段都在
+    writeFiveFileFixture(fx.knowledgeDir)
+    const both = buildKnowledgeInjection({ knowledgeDir: fx.knowledgeDir, runtimeDir: join(fx.root, 'rt2'), change: 't-both', query: `${HIT_QUERY} claude autocompact claude-settings` })
+    assertTrue(both.section.includes('📚 命中知识') && both.section.includes('🕘 近期 quick 修补'),
+      '10d INDEX 知识段与 quicklog 段并存')
+    // 10e Wave 孪生：quicklog-only 查询词（INDEX 不含这些关键词）→ Wave prompt 含 h3 quicklog 段
+    const changeName = '2026-09-21-ki-ql-wave'
+    const changeDir = join(fx.specBase, 'changes', changeName)
+    mkdirSync(changeDir, { recursive: true })
+    const wave = { index: 1, tasks: [{ index: 1, name: 'claude autocompact 白名单 调整' }] }
+    const out = buildWavePrompt(wave, 1, changeDir, join(fx.root, 'wt'), { cwd: fx.root })
+    assertTrue(out.includes('### 🕘 近期 quick 修补') && out.includes('ql-20260920-007-x'),
+      '10e execute.js Wave 孪生注入 quicklog 段（h3 层级）')
+    // 10f 无 quicklog 无 INDEX → 既有行为零回归（matched:false 零字节）
+    const fx2 = makeSpecRoot()
+    try {
+      const miss = buildKnowledgeInjection({ knowledgeDir: fx2.knowledgeDir, runtimeDir: fx2.runtimeDir, change: 't-miss', query: '任意 查询 词组' })
+      assertTrue(miss.matched === false && miss.section === '', '10f 无 quicklog 无 INDEX → matched:false 零字节（既有行为）')
+    } finally { cleanup(fx2) }
+  } finally { restore(); cleanup(fx) }
+}
+
 console.log(`\n${'='.repeat(50)}`)
-const total = 41
+const total = 47
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
 console.log('='.repeat(50))

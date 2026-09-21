@@ -22,6 +22,7 @@ import { collectExecuteChangedFiles, computeDecisionTouches, renderDecisionTouch
 // const 的 TDZ 求值（ESM 环实证 2026-09-14）。此处为同格式本地孪生，漂移由
 // test/knowledge-inject.test.mjs 格式等价断言锁定——改 prompt.js 版必同步改此处。
 import { matchKnowledge } from '../knowledge-match.js'
+import { matchQuicklogContext, renderQuicklogSection } from '../knowledge-quicklog.js'
 import { appendKnowledgeHit } from '../knowledge-hits.js'
 
 // 机械知识注入限额（与 run/prompt.js KNOWLEDGE_INJECT_MAX_FILES/MAX_LINES 同值孪生，R-02 膨胀控制）
@@ -46,10 +47,13 @@ function buildWaveKnowledgeSection(changeDir, wave) {
       .map(t => String((t && t.name) || '')).filter(Boolean).join(' ')
     if (!query.trim()) return ''
     const result = matchKnowledge(knowledgeDir, query)
-    if (!result.matched) return ''
+    // quicklog 检索面（知识可见性导线）：与 INDEX 知识面独立，INDEX 未命中时照常注入
+    const quick = matchQuicklogContext(specBase, query)
+    if (!result.matched && quick.hits.length === 0) return ''
+    const lines = []
+    if (result.matched) {
     // ── 以下与 run/prompt.js renderKnowledgeInjectSection 同格式孪生（含段头文案/截断标记）──
     const ref = e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)
-    const lines = []
     lines.push(`### 📚 命中知识（CLI 按 Wave 任务名机械匹配，top-${KNOWLEDGE_INJECT_MAX_FILES}——勿自行重跑 INDEX 匹配）`)
     lines.push(`Status: matched | Entries: ${result.entries.length} | Sources:`)
     for (const e of result.entries) lines.push(` - ${ref(e)}`)
@@ -80,12 +84,19 @@ function buildWaveKnowledgeSection(changeDir, wave) {
         lines.push(body.replace(/\n+$/, ''))
       }
     }
+    }
+    // quicklog 段与知识段之间空一行（run/prompt.js buildKnowledgeInjection 同款拼接口径）
+    if (quick.hits.length > 0) {
+      if (lines.length > 0) lines.push('')
+      lines.push(renderQuicklogSection(quick.hits, { h3: true }))
+    }
     try {
       appendKnowledgeHit(path.join(specBase, '.runtime'), {
         type: 'inject',
         change: path.basename(changeDir),
         query,
-        matchedFiles: result.entries.map(ref),
+        matchedFiles: result.matched ? result.entries.map(e => (e.anchor ? `${e.file}#${e.anchor}` : e.file)) : [],
+        quicklogIds: quick.hits.map(h => h.qlId),
       })
     } catch { /* 遥测 fail-soft（R-04） */ }
     return lines.join('\n') + '\n'

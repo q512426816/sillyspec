@@ -96,6 +96,7 @@ modules:
       - src/cross-repo-reconcile.js
       - src/probe7-anchor-check.js
       - src/knowledge-match.js
+      - src/knowledge-quicklog.js
       - src/knowledge-hits.js
       - src/knowledge-classify.js
       - src/knowledge-stats.js

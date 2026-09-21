@@ -1,0 +1,128 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-616fca0f",
+  "totals": {
+    "files": 8,
+    "additions": 495,
+    "deletions": 13
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/fr-index.js",
+      "declared": true,
+      "additions": 41,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/fr-index.test.mjs",
+      "declared": true,
+      "additions": 35,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knowledge-inject.test.mjs",
+      "declared": true,
+      "additions": 52,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/knowledge-quicklog.js",
+      "declared": true,
+      "additions": 194,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knowledge-quicklog.test.mjs",
+      "declared": true,
+      "additions": 144,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 12,
+    "codeFileCount": 5,
+    "testFileCount": 3,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/fr-index.js",
+          "src/knowledge-quicklog.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/prompt.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/execute.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "round5/r5l-verify-state.mjs",
+      "test/fr-index.test.mjs",
+      "test/knowledge-inject.test.mjs",
+      "test/knowledge-quicklog.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260921-011-eea9",
+  "sessionId": "quick-616fca0f",
+  "savedAt": "2026-09-21T16:28:33.200Z",
+  "patchSha256": "4e971039d07b8eb0fb653554788a15d7ce097fe2ecfd888b43bb27efebeef754",
+  "patchStatus": "ok"
+}

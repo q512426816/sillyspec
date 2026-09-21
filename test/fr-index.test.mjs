@@ -244,6 +244,41 @@ function makeFixture() {
   assert(r.written[0].file === 'fr/alpha.md', '13b 落 primary 域（首个触达域）')
 }
 
+// ── 14. 伪域回退（知识可见性导线②：无模块卡命中时 auto-<路径段>，替代 unmapped 大池） ──
+{
+  const { knowledgeRoot, mkChange } = makeFixture()
+  // 14a: 目录段投票——backend 2 票胜 frontend 1 票 → auto-backend
+  const da = mkChange('2026-09-21-pd1', '# R\n### FR-01: 后台守护行为\n')
+  writeFileSync(join(da, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | backend/app/daemon/x.py |\n| 修改 | backend/app/y.py |\n| 修改 | frontend/src/z.ts |\n')
+  const ra = indexRequirements({ changeDir: da, knowledgeRoot, headHash: 'h1' })
+  assert(ra.written.length === 1 && ra.written[0].file === 'fr/auto-backend.md' && ra.written[0].id === 'FR-auto-backend-001',
+    `14a 目录段投票派生伪域 auto-backend（实际 ${JSON.stringify(ra.written)}）`)
+  // 14b: 伪域文件头自明身份（不谎称有模块卡）
+  const fa = readFileSync(join(knowledgeRoot, 'fr', 'auto-backend.md'), 'utf8')
+  assert(fa.includes('伪域（auto- 前缀）：由文件路径段投票派生') && !fa.includes('模块卡：modules/auto-backend.md'),
+    '14b 伪域 preamble 自明（无模块卡不谎称）')
+  // 14c: INDEX 路由行带裸段关键词（unmapped 大池路由失效的教训）
+  const idx = readFileSync(join(knowledgeRoot, 'INDEX.md'), 'utf8')
+  assert(idx.includes('- auto-backend|backend|FR|需求|承接 → [fr/auto-backend.md](fr/auto-backend.md)'),
+    '14c 伪域路由行含裸段关键词（backend 可命中）')
+  // 14d: 泛化目录无具体段 → unmapped（原行为保持）
+  const db = mkChange('2026-09-21-pd2', '# R\n### FR-01: 单文件行为\n')
+  writeFileSync(join(db, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/foo.js |\n')
+  const rb = indexRequirements({ changeDir: db, knowledgeRoot })
+  assert(rb.written[0].file === 'fr/unmapped.md', `14d 泛化目录（src 单文件）退 unmapped（实际 ${rb.written[0] && rb.written[0].file}）`)
+  // 14e: 根文件无目录段 → unmapped
+  const dc = mkChange('2026-09-21-pd3', '# R\n### FR-01: 根文件行为\n')
+  writeFileSync(join(dc, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | README.md |\n')
+  const rc = indexRequirements({ changeDir: dc, knowledgeRoot })
+  assert(rc.written[0].file === 'fr/unmapped.md', '14e 根文件退 unmapped')
+  // 14f: NEW: 前缀新建文件参与伪域投票（正则剥前缀后照常入票——跨仓新建文件不因前缀失票）
+  const dd = mkChange('2026-09-21-pd4', '# R\n### FR-01: 新文件行为\n')
+  writeFileSync(join(dd, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 新增 | NEW:backend/app/new_module.py |\n')
+  const rd = indexRequirements({ changeDir: dd, knowledgeRoot })
+  assert(rd.written[0].file === 'fr/auto-backend.md',
+    `14f NEW: 前缀剥除后参与投票（实际 ${rd.written[0] && rd.written[0].file}）`)
+}
+
 for (const dir of tmpRoots) {
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
 }
