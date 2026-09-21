@@ -1406,26 +1406,6 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       );
     }
 
-    // 合并感知包含剔除（ql-20260921-009 ②）：残余交付文件（≠主仓当前工作区内容）逐个只读
-    // 三方合并测试——worktree 的 delta 已全在主仓（差异=并行会话增量，如 EXCLUDE-DIRTY/
-    // MISMATCH 三方合并落地后形态）→ 视为已 apply 剔出 changedFiles。归档/清理门的「未 apply
-    // 交付面」消费本口径，字节等值误拦（2026-09-21 batch2 归档实证三次）就此消解。冲突/异常
-    // fail-safe 不剔。仅对内容不等者付 merge-file 成本（正常收尾 0 个触发）。
-    if (changedFiles.length > 0) {
-      const containedFiles = detectDeliverableContained(
-        { projectRoot, worktreePath, baseRef: deliverableBase },
-        changedFiles,
-      );
-      if (containedFiles.length > 0) {
-        const containedSet = new Set(containedFiles);
-        changedFiles = changedFiles.filter(f => !containedSet.has(f));
-        result.warnings = result.warnings || [];
-        result.warnings.push(
-          `${containedFiles.length} 个文件交付已包含于主仓当前内容（差异为并行会话增量，合并感知判定不计入未 apply 面）：${containedFiles.slice(0, 5).join(', ')}${containedFiles.length > 5 ? ' 等' : ''}`
-        );
-      }
-    }
-
     // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：平台设施被滤出不静默——
     // apply 不回放它们（.worktrees//.sillyspec-platform*/knowledge/local.yaml）；确为交付物
     // 的极少数场景（如刻意改 knowledge 模板）人工落主仓。
@@ -1893,6 +1873,29 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
     }
 
     // 5b hashMismatch 计算已前移到 step3.5（Grill P0），见上
+
+    // ── 合并感知包含清理（ql-20260921-010 修复，ql-20260921-009② 的晚置重接线）──
+    // 4.5/4.5b 合并管线跑完之后、patch 生成/checkOnly 返回之前：对 changedFiles 残余面逐文件
+    // 只读三方包含测试（merge(base, ours=主仓现状, theirs=worktree) clean 且===主仓现状 ⟺
+    // 交付 delta 已全在主仓——差异纯属并行增量）。命中者剔出 changedFiles（面清：归档/清理门
+    // 的「未 apply」判定不再误拦三方合并落地件），审计入 result.mergeContainedFiles。
+    // 早于合并步做（009② 原形态）会抢占 EXCLUDE-DIRTY/MISMATCH 管线——mergedDirtyFiles 审计
+    // 与合并写回被短路（apply-dirty-threeway 主仓红实证），故必须晚置。
+    try {
+      if (changedFiles.length > 0) {
+        const containedFiles = detectDeliverableContained(
+          { projectRoot, worktreePath, baseRef: deliverableBase }, changedFiles);
+        if (containedFiles.length > 0) {
+          const containedSet = new Set(containedFiles);
+          changedFiles = changedFiles.filter(f => !containedSet.has(f));
+          result.mergeContainedFiles = containedFiles;
+          result.warnings = result.warnings || [];
+          result.warnings.push(
+            containedFiles.length + ' 个文件交付已包含于主仓当前内容（差异为并行会话增量，合并感知判定不计入未 apply 面）：' +
+            containedFiles.slice(0, 5).join(', ') + (containedFiles.length > 5 ? ' 等' : ''));
+        }
+      }
+    } catch { /* 包含判定异常 → 保守保留（宁误拦不误放） */ }
 
     // --- 6. checkOnly 模式：到此返回 ---
     if (checkOnly) {
