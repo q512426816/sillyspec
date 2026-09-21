@@ -722,9 +722,11 @@ function resolveTaskRepo(task, changeDir) {
  * @param {string} taskFilePath - task-NN.md 绝对路径
  * @param {'base_commit'|'head_commit'} field - 锚点字段名
  * @param {string} commit - commit sha
- * @returns {boolean} 是否实际写入（false = 文件不存在 / 写失败 / 值未变）
+ * @param {{keepExisting?: boolean}} [opts] - keepExisting=true 时已有非空锚点不覆写（先写先得，
+ *   R5 对撞实证 F1：Wave 派发循环重入防 base 锚点漂移，见 round5/r5-collision-ehs-attribution.md P4/N5）
+ * @returns {boolean} 是否实际写入（false = 文件不存在 / 写失败 / 值未变 / keepExisting 跳过）
  */
-export function writeCommitAnchorToTaskCard(taskFilePath, field, commit) {
+export function writeCommitAnchorToTaskCard(taskFilePath, field, commit, opts = {}) {
   if (!taskFilePath || !commit || (field !== 'base_commit' && field !== 'head_commit')) return false
   if (!existsSync(taskFilePath)) return false
   let content
@@ -745,6 +747,11 @@ export function writeCommitAnchorToTaskCard(taskFilePath, field, commit) {
   if (lineRe.test(fm)) {
     const existing = (fm.match(lineRe) || [''])[0]
     if (existing === `${field}: ${commit}`) return false // 值未变，幂等跳过
+    // 先写先得（F1）：keepExisting 下已有非空锚点不覆写；空值锚点（占位残留）仍允许补值
+    if (opts.keepExisting) {
+      const existingVal = existing.replace(new RegExp(`^${field}:\\s*`), '').trim()
+      if (existingVal !== '') return false
+    }
     newFm = fm.replace(lineRe, `${field}: ${commit}`)
   } else {
     // 插入锚点（D-010 协议顺序 repo→base_commit→head_commit）：head 跟 base 后，
@@ -768,8 +775,10 @@ export function writeCommitAnchorToTaskCard(taskFilePath, field, commit) {
   }
 }
 
-function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
-  return writeCommitAnchorToTaskCard(taskFilePath, 'base_commit', baseCommit)
+export function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
+  // keepExisting：base 锚点先写先得——Wave 派发循环重入（--done 后重渲染）时不再用实时
+  // HEAD 覆写既有锚点（F1）；显式刷新走 writeCommitAnchorToTaskCard 不带 opt 的旧通道。
+  return writeCommitAnchorToTaskCard(taskFilePath, 'base_commit', baseCommit, { keepExisting: true })
 }
 
 /**

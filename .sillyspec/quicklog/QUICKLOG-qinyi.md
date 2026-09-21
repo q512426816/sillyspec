@@ -386,7 +386,17 @@
 方案：machine-interface.js runGate verify 补 verify-lint 检查：与 --done 同引擎（runVerifyLintCheck+triageLintOwnership），存量债 advisory 放行、口径差异（工作树 vs 隔离快照，以 --done 为准）永久明示、装配失败 fail-open；diagnostic-codes.js 注册 verify_lint_failed。module-impact.js：parseModuleMapPaths 首尾成对引号剥壳；generateModuleImpactSkeleton 改多项目 map 联合归类（目录序首命中 wins）并产出 classified/unmatchedFiles；syncModuleDocSidecars 弃 markdown 反解、按命中项目落 sidecar（synced/skipped 带 project/ 前缀）。stages/execute.js 显式 Wave 派发行与调度行注入「同时在飞 ≤3」并发帽（超 3 分批错峰），隐式 Wave 串行铁律不动；docs/prompt 镜像同步
 结果：新增 test/r4-followup-fixes.test.mjs 25 断言全绿；既有三件钉旧措辞的测试更新为新契约（plan-execute-contract 显式 Wave 并行+帽新文案、knife-batch2 synced 带项目前缀、execute-dispatch-integration 并发帽句）；全量 561/561 绿 + lint 过（715 文件）+ docs check 我方四文件零锚点漂移（余 3 失败均系并行会话在途 fixture）
 
-## ql-20260921-005-eb19 | 2026-09-21 14:47:20 | R5对撞实证三修复：TaskCard base_commit锚点改先写先得防Wave重渲染漂移 + plan-postcheck存在性检查认NEW:前缀与跨仓跳过消灭假阳性 + 校验文案附逃生通道
-状态：进行中
+## ql-20260921-005-eb19 | 2026-09-21 14:47:20 | R5对撞三修复：base锚点先写先得+plan存在性检查NEW:跨仓放行+文案逃生通道
+状态：已完成
 关联变更：（无）
-文件：src/stages/execute.js, src/stages/plan-postcheck.js
+文件：
+- src/stages/execute.js（F1锚点先写先得(keepExisting)）
+- src/stages/plan-postcheck.js（F2存在性检查NEW:/跨仓放行+F3文案逃生通道）
+- test/base-commit-anchor-keepexisting.test.mjs（F1测试14断言）
+- test/plan-postcheck-path-existence.test.mjs（F2/F3测试6断言）
+- docs/sillyspec/platform-interface-map.md（行号锚漂移修正682→685/1246→1272）
+需求：R5对撞三修复：base锚点先写先得+plan存在性检查NEW:跨仓放行+文案逃生通道
+根因：R5对撞实证（round5/r5-collision-ehs-attribution.md P4/P9/N4）：Wave派发循环重渲染用实时HEAD覆写既有base锚点致漂移；存在性检查不认taskcard.js:129已定合法的NEW:前缀（模块口径分裂）且用单一projectRoot查跨仓路径必假阳性——plan --done三连卡壳+agent五次读CLI安装源码考古
+方案：execute.js writeCommitAnchorToTaskCard增opts.keepExisting（先写先得、空值仍补值）并导出writeBaseCommitToTaskCard走该通道；plan-postcheck.js存在性检查NEW:条目跳过+repo≠main跨仓整卡跳过（复用parseFrontmatterScalar）；真缺失告警文案附NEW:/repo:逃生通道；附带platform-interface-map.md两处行号锚漂移修正
+结果：新增20断言全过（14+6，红→绿）；npm test 565/565全绿；lint过（720文件+未引用导出0）；doc-ref 93/93
+审计：[gate] L1（跨 1 模块 · 5 文件：2 代码/2 测试）advisory；每文件注记已全覆盖；测试增量已含

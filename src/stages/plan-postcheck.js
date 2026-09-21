@@ -1337,12 +1337,22 @@ export function validatePlanFeasibility(changeDir, projectRoot = null) {
     }
 
     // 3. allowed_paths 文件存在或父目录存在（仅在 projectRoot 提供时检查）
+    //    F2/F3（R5 对撞实证 2026-09-21，round5/r5-collision-ehs-attribution.md P9/N4）：
+    //    ① NEW: 前缀 = 声明待建文件（taskcard.js:129 已定合法格式），plan 时不存在是常态，
+    //    照查必假阳性（实证：plan --done 三连卡壳 + agent 读 CLI 源码考古）——跳过；
+    //    ② repo≠main 的跨仓 task 路径相对他仓根，用主仓 projectRoot 查 100% 不存在——整卡跳过；
+    //    ③ 主仓真缺失仍告警，但文案附逃生通道（教 NEW: 前缀与 repo: 字段），消灭「读源码弄懂
+    //    校验规则」的 meta 开销。
     if (projectRoot && allowedPaths.length > 0) {
+      const repoField = parseFrontmatterScalar(content, 'repo')
+      const crossRepo = repoField != null && repoField !== 'main'
       for (const p of allowedPaths) {
+        if (p.startsWith('NEW:')) continue // 待建文件：存在性检查语义不适用
+        if (crossRepo) continue // 跨仓路径按对应仓根声明，主仓根下查不到是常态（由该仓自己的执行/verify 把关）
         const fullPath = pJoin(projectRoot, p)
         const parentDir = pJoin(fullPath, '..')
         if (!existsSync(fullPath) && !existsSync(parentDir)) {
-          warnings.push(`${taskId}: allowed_paths 中的 ${p} 文件和父目录都不存在`)
+          warnings.push(`${taskId}: allowed_paths 中的 ${p} 文件和父目录都不存在——若为本次待建文件请改写为 NEW:${p}；跨仓 task 路径须配 repo: <仓别名> 字段按对应仓根书写（此项主仓存在性检查不适用）`)
         }
       }
     }
