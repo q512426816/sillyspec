@@ -1,4 +1,5 @@
 # Claude Code 指引
+语言规则：你与用户的所有交互，包括思考过程、代码解释、问题回答，必须全程使用简体中文。
 
 # 定期解决这些问题
  此目录下的 C:\Users\qinyi\IdeaProjects\multi-agent-platform\docs\sillyspec 文件（排除 finished 目录下的）

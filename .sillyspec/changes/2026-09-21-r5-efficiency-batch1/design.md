@@ -63,6 +63,7 @@ R4 对照实验（round4/r4-final-report.html）实测：大任务账单当量 2
 | 修改 | docs/prompt/execute.md | 镜像机械重生成 |
 | 修改 | docs/prompt/_extracted.json | 镜像机械重生成 |
 | 修改 | .sillyspec/docs/sillyspec/modules/stages.md | stages 模块文档增补新行为（并批默认/材料包/派发契约） |
+| 修改 | .sillyspec/docs/sillyspec/modules/stages.changelog.md | stages 模块 changelog 边车同步（design.md:47 prose 提及，清单原漏列——计划审查 gap 收口） |
 
 ## 接口定义
 

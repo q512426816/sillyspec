@@ -24,9 +24,9 @@ Given tasks/plan 已落盘，某 Wave 任务文件正交但全未并批
 When plan-postcheck 运行 checkBatchAdvisory
 Then 产出 warning 级提示（code=batch_orthogonal_unbundled），不阻断 --done
 #### 场景：护栏缺口提示
-Given 某 Wave 并批后批数 < min(3, 任务数)
+Given 某 Wave 存在并批信号（批注行或卡 batch 字段）且并批后批数 < min(3, 任务数)
 When plan-postcheck 运行 checkBatchAdvisory
-Then 产出 warning 级提示（code=wave_inflight_below_floor），不阻断；单 Wave 可双码并存（返回数组）
+Then 产出 warning 级提示（code=wave_inflight_below_floor），不阻断；返回数组支持多 Wave 各自命中——单 Wave 内两码互斥（①⟺无并批信号 / ②⟺有并批信号；判定①仅 N≥4 触发，N≤3 时未并批是唯一合规形态不提示）
 
 ### FR-02: execute 任务材料包（只摘不译）
 覆盖决策：D-003@v1

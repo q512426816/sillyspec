@@ -385,3 +385,8 @@
 根因：①gate verify 只查 test 不查 lint，与 verify --done 的 lint 隔离快照门两套口径——R4-S-F 会话 db 实证 gate PASS 与 --done FAIL 并存、误导 agent 诊断 16 分钟；②module-impact 双机械 bug——parseModuleMapPaths 不剥引号致带引号 map 条目全死路径（对撞仓 frontend map 790 条几乎全带引号），且多项目仓只取目录序首个 map、R4-L 实证 24 文件全未匹配、sidecar 错写项目目录；③execute Wave 无并发上限——R4-L 4 路齐发实证触发平台额度/限流耗尽、整 Wave 中断 17 分钟由用户手动恢复
 方案：machine-interface.js runGate verify 补 verify-lint 检查：与 --done 同引擎（runVerifyLintCheck+triageLintOwnership），存量债 advisory 放行、口径差异（工作树 vs 隔离快照，以 --done 为准）永久明示、装配失败 fail-open；diagnostic-codes.js 注册 verify_lint_failed。module-impact.js：parseModuleMapPaths 首尾成对引号剥壳；generateModuleImpactSkeleton 改多项目 map 联合归类（目录序首命中 wins）并产出 classified/unmatchedFiles；syncModuleDocSidecars 弃 markdown 反解、按命中项目落 sidecar（synced/skipped 带 project/ 前缀）。stages/execute.js 显式 Wave 派发行与调度行注入「同时在飞 ≤3」并发帽（超 3 分批错峰），隐式 Wave 串行铁律不动；docs/prompt 镜像同步
 结果：新增 test/r4-followup-fixes.test.mjs 25 断言全绿；既有三件钉旧措辞的测试更新为新契约（plan-execute-contract 显式 Wave 并行+帽新文案、knife-batch2 synced 带项目前缀、execute-dispatch-integration 并发帽句）；全量 561/561 绿 + lint 过（715 文件）+ docs check 我方四文件零锚点漂移（余 3 失败均系并行会话在途 fixture）
+
+## ql-20260921-005-eb19 | 2026-09-21 14:47:20 | R5对撞实证三修复：TaskCard base_commit锚点改先写先得防Wave重渲染漂移 + plan-postcheck存在性检查认NEW:前缀与跨仓跳过消灭假阳性 + 校验文案附逃生通道
+状态：进行中
+关联变更：（无）
+文件：src/stages/execute.js, src/stages/plan-postcheck.js
