@@ -1,0 +1,204 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "17c7c67bf8d39ac55dbfaed1bb2ed7543df6af4d",
+  "totals": {
+    "files": 23,
+    "additions": 962,
+    "deletions": 42
+  },
+  "rows": [
+    {
+      "path": "docs/prompt/_extracted.json",
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 84,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/machine-interface.js",
+      "additions": 60,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/gates.js",
+      "additions": 116,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/prompt.js",
+      "additions": 4,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/quick-audit.js",
+      "additions": 28,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "additions": 23,
+      "deletions": 20,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/cli-top-level-aliases.test.mjs",
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/preflight-slimming.test.mjs",
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/semantic-guard-prompt-inject.test.mjs",
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/step-guide-fingerprint.test.mjs",
+      "additions": 7,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/test-ledger.js",
+      "additions": 199,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/archive-readiness.test.mjs",
+      "additions": 103,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/gate-full-preflight.test.mjs",
+      "additions": 101,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/step-guide-default-on.test.mjs",
+      "additions": 87,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/test-ledger.test.mjs",
+      "additions": 124,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-postcheck.js",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/*.md",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "a876918241c34bc311c4fcee6122bdb1af9b8a9ebd465bc45b79320bd75b4f95",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-21T16:08:27.047Z"
+}

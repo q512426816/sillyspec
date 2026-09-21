@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-21-r5-efficiency-batch3",
+  "generatedAt": "2026-09-21T16:11:40.769Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "matches": 46,
+        "skippedFiles": 0,
+        "worktreeHits": 5,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-21-r5-efficiency-batch3",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 5
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "env-blocked",
+        "item": "worktree 内 13 个测试文件失败（cwd 守卫环境族，Wave1 起基线即如此，主仓同族绿）",
+        "condition": "apply 后主仓跑 npm test（预期全绿）",
+        "severity": "blocking"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/test-ledger.test.mjs",
+      "test/gate-full-preflight.test.mjs",
+      "test/archive-readiness.test.mjs",
+      "test/step-guide-default-on.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-21T16:27:23.588Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
