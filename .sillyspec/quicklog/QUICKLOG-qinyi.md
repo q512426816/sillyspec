@@ -400,3 +400,15 @@
 方案：execute.js writeCommitAnchorToTaskCard增opts.keepExisting（先写先得、空值仍补值）并导出writeBaseCommitToTaskCard走该通道；plan-postcheck.js存在性检查NEW:条目跳过+repo≠main跨仓整卡跳过（复用parseFrontmatterScalar）；真缺失告警文案附NEW:/repo:逃生通道；附带platform-interface-map.md两处行号锚漂移修正
 结果：新增20断言全过（14+6，红→绿）；npm test 565/565全绿；lint过（720文件+未引用导出0）；doc-ref 93/93
 审计：[gate] L1（跨 1 模块 · 5 文件：2 代码/2 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260921-006-72e5 | 2026-09-21 16:12:37 | handoff 交接块加厚 B4a——任务面/未决/决策三段机械抽取，80 行帽
+状态：已完成
+关联变更：（无）
+文件：
+- src/handoff.js（三纯函数导出+装配后80行钳制纯只读）
+- test/handoff.test.mjs（5a-5m十三断言（计数/折叠/未决/集成/行帽/顺序））
+需求：handoff 交接块加厚 B4a——任务面/未决/决策三段机械抽取，80 行帽
+根因：R5 优化方案 C-2 B4a（round4/optimization-plan.md v3.1 修订 1）：交接块原先只有阶段进度+续跑命令，「任务太大爆窗」的规程缺 Wave/任务/决策上下文——enrich 现有 buildHandoff 而非新命令立项
+方案：src/handoff.js 新增 summarizeTaskFace（tasks.md checkbox 计数+待办清单，超 8 项折叠）/summarizeDecisions（D-xxx@vN 标题行 ID 清单）/summarizeBlockers（waiting/blocked/failed 步骤）三导出纯函数，buildHandoff 在状态行后注入上下文三段；HANDOFF_LINE_CAP=80 装配后钳制（粘贴块与警示行永不动，超限从上下文段尾截并留回源指引）；--json 契约 additive 加 truncated 字段
+结果：handoff 单件 25/25 断言全绿（新增 5a-5m）；全量 569/569；lint 过（725 文件，未引用导出 0）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/.changes/
