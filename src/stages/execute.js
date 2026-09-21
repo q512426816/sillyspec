@@ -1436,6 +1436,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
 - 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
 - \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
 - \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
+- **反例测试核对**（2026-09-21 R5 接线）：本 task 新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死
 - **回收瘦身**：审查回收输出 = verdict 一行 + blockers（如有）+ review.json 路径——细节不转述，主代理按需 Read 工件；git diff 对账仍是回收真相源，本条只瘦身转述
 
 ### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）

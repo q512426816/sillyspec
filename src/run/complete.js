@@ -61,6 +61,18 @@ import { deriveTitleFromLinkedChange } from '../quicklog.js'
 // step6 design.md 已落盘但阶段未完）与阶段完成同样刷新，治「brainstorm 全程 title 存英文 autoName
 // 兜底」。quick-<hex> 无 proposal/design 目录，deriveTitleFromLinkedChange 返回 '' 不刷新
 // （quick 走 handleQuickStageCompletion 的 extractTitleFromResult）。失败静默（不阻断流程）。
+// ── Wave 边界 handoff 纪律（2026-09-21 R5 接线 ql-20260921-007）──
+// rollout 实证（sess_418fc2bb，2026-09-21）：单会话跨 4 Wave 背 ~130K 上下文 ×176 请求，
+// ≈1/4 墙钟是肥上下文结构税（缓存 99% 救账单不救墙钟）。B4a 交接块已在场，缺的只是纪律——
+// 本 helper 维护「变更 × 会话 → 已完成 Wave 步计数」账本，同会话跨 ≥2 Wave 时升级提示语气。
+// 纯函数（IO 由调用方做）：返回更新后的账本 + 是否达 advisory 阈值。
+export function updateWaveSessionLedger(ledger, sessionId, waveName) {
+  const sid = String(sessionId || 'anon')
+  const prev = ledger && ledger.sessionId === sid ? (ledger.waveCount || 0) : 0
+  const next = { sessionId: sid, waveCount: prev + 1, lastWave: waveName || null, at: new Date().toISOString() }
+  return { ledger: next, crossWaveAdvisory: next.waveCount >= 2 }
+}
+
 function refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName) {
   if (!changeName || /^quick-[0-9a-f]{8}$/.test(changeName)) return
   try {
@@ -846,6 +858,27 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // （参照 prompt.js:174-179 越界降级先例），越界时静默跳过，不崩。
     if (defSteps && defSteps[nextPendingIdx]) {
       console.log(`\n🚀 advanced to step ${nextPendingIdx + 1}/${steps.length}: ${defSteps[nextPendingIdx].name}`)
+    }
+    // ── Wave 边界 handoff 默认动作（2026-09-21 R5 接线 ql-20260921-007，①）──
+    // 刚完成的步是 Wave 步且下一步也是 Wave 步 = Wave 边界：把「换瘦会话」从建议升为默认动作
+    // （同会话硬续不阻断——advisory 语义）。账本：同会话跨 ≥2 Wave 时提示语气升级（肥上下文税
+    // 累积实证见 updateWaveSessionLedger 注释）。best-effort：账本读写失败零输出不阻断。
+    if (stageName === 'execute' && changeName && defSteps && defSteps[currentIdx] && defSteps[nextPendingIdx] &&
+        /Wave \d+ 执行/.test(defSteps[currentIdx].name || '') && /Wave \d+ 执行/.test(defSteps[nextPendingIdx].name || '')) {
+      try {
+        const ledgerPath = join(specBase, '.runtime', `wave-session-ledger-${changeName}.json`)
+        let ledger = null
+        try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { /* 首 Wave */ }
+        const { ledger: nextLedger, crossWaveAdvisory } = updateWaveSessionLedger(ledger, process.env.SILLYSPEC_SESSION_ID, defSteps[currentIdx].name)
+        try { mkdirSync(join(specBase, '.runtime'), { recursive: true }); writeFileSync(ledgerPath, JSON.stringify(nextLedger, null, 1) + '\n', 'utf8') } catch { /* 账本 best-effort */ }
+        console.log(`\n🔄 Wave 边界——默认动作：下一 Wave 换瘦会话续跑（每请求背全量历史，130K 上下文 ×每步重发≈1/4 墙钟，实测 2026-09-21）：`)
+        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（含任务面/未决阻断/决策 ID 回源）`)
+        console.log(`   2. 新会话（SILLYSPEC_SESSION_ID 不变）粘贴交接块 → sillyspec run execute --change ${changeName}`)
+        console.log(`   同会话硬续不阻断；上下文已压缩过（Read 旧工件可回源）则续跑无妨。`)
+        if (crossWaveAdvisory) {
+          console.log(`   ⚠️ 本会话已完成 ${nextLedger.waveCount} 个 Wave——肥上下文税在累积（缓存救账单不救墙钟），强烈建议 handoff。`)
+        }
+      } catch { /* 边界提示 best-effort */ }
     }
     // quick 末步四字段前置预告（坑 quick-step3-four-fields-late）：末步 --done 的 --output 四字段
     // 是硬校验（缺任一项被拒 + 回滚），但模板藏在 step3 长 prompt 中段——task-08 同因（长 prompt

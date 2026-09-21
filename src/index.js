@@ -805,6 +805,26 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
           task: tTask, change: tChange, note: tNote || '', startedAt: new Date().toISOString(),
         }, null, 2) + '\n');
         console.log(`📌 ${tTask} 已标记进行中${tNote ? '（' + tNote + '）' : ''}——完工时 sillyspec task finish --change ${tChange} --task ${tTask}`);
+        // ── 受影响测试族前移注入（2026-09-21 R5 接线 ql-20260921-007，②）──
+        // deps(auto) 同源计算（verify-postcheck discoverModuleDependentTests）从 quick 收尾门
+        // 前移到任务开工：30 秒定向定位替代 100 秒全量轰炸+混合归因（W1 实证全量当首验多跑
+        // 2 轮+triage 三轮）。按 task 卡 allowed_paths 声明面计算；best-effort：卡片缺失/
+        // 解析失败/零命中零输出零阻断。
+        try {
+          const tCardPath = join(tSpecBase, 'changes', tChange, 'tasks', `${tTask}.md`);
+          if (existsSync(tCardPath)) {
+            const { parseAllowedPaths } = await import('./stages/plan-postcheck.js');
+            const { discoverModuleDependentTests } = await import('./verify-postcheck.js');
+            const tAllowed = parseAllowedPaths(readFileSync(tCardPath, 'utf8'));
+            if (tAllowed.length > 0) {
+              const tDeps = discoverModuleDependentTests({ cwd: dir, changedFiles: tAllowed, coveredCommands: [] });
+              if (tDeps.length > 0) {
+                console.log(`🎯 受影响测试族（deps(auto) 同源 ${tDeps.length} 个）——写完先跑定向再全量（30s 定位 < 100s 全量+归因）：`);
+                console.log(`   node --test ${tDeps.slice(0, 10).join(' ')}${tDeps.length > 10 ? `  …等共 ${tDeps.length} 个` : ''}`);
+              }
+            }
+          }
+        } catch { /* 注入 best-effort */ }
       } else if (taskSub === 'finish') {
         try { unlinkSync(join(tDir, `${tTask}.json`)); console.log(`✅ ${tTask} 进行中标记已清除（完工）`); }
         catch { console.log(`ℹ️ ${tTask} 无进行中标记（已完工或从未 start）`); }
