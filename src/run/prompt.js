@@ -163,9 +163,10 @@ export function loadModuleContextIndex(specBase, projectName) {
  * @param {object} moduleIndex - loadModuleContextIndex 返回值
  * @param {string} specBase - 规范目录
  * @param {string} projectName - 项目名
+ * @param {object} [opts] - { change }：变更名 / quick sessionId（docs-inject 遥测 change 字段；缺省 ''）
  * @returns {{text: string, frModules: Array<{id: string, count: number}>}} 上下文注入文本（空=无匹配模块）+ 有活需求的模块清单（供遥测）
  */
-export function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName) {  if (!moduleIndex || !taskDescription) return { text: '', frModules: [] }
+export function buildModuleContextInjection(taskDescription, moduleIndex, specBase, projectName, opts = {}) {  if (!moduleIndex || !taskDescription) return { text: '', frModules: [] }
 
   const taskLower = taskDescription.toLowerCase()
   const matched = []
@@ -236,6 +237,21 @@ export function buildModuleContextInjection(taskDescription, moduleIndex, specBa
     } catch { /* fail-open：FR 读失败该模块无活需求行 */ }
     injection += '\n'
   }
+
+  // docs-inject 遥测（2026-09-21-scan-docs-ops-panel task-04，FR-06 / D-003@v1 Wave 0）：模块
+  // 上下文注入命中（≥1 模块、注入段已渲染）经 task-01 底座 appendKnowledgeHit 落一行
+  // type:docs-inject，供平台 scan-docs 注入频次聚合消费（knowledge-stats 未知 type 前向兼容
+  // 静默跳过，不污染知识 stats 口径）。matchedFiles 取命中模块 doc 字段原值（modules/<x>.md，
+  // _module-map.yaml 实际形态）。未命中零行；fail-soft：遥测写失败不影响注入本体（对齐上方
+  // buildKnowledgeInjection 遥测分离先例）。
+  try {
+    appendKnowledgeHit(join(specBase, '.runtime'), {
+      type: 'docs-inject',
+      change: String((opts && opts.change) || ''),
+      query: String(taskDescription || ''),
+      matchedFiles: matched.map(m => m.data && m.data.doc).filter(Boolean),
+    })
+  } catch { /* 遥测 fail-soft（R-04）：hits 落盘失败不影响注入本体 */ }
 
   return { text: injection, frModules }
 }
@@ -1743,7 +1759,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         if (stageName === 'quick') {
           taskDesc = readQuickGuardField(changeName, effectiveSpecBase, 'taskDescription') || taskDesc
         }
-        const injRes = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName) || { text: '', frModules: [] }
+        const injRes = buildModuleContextInjection(taskDesc, moduleIndex, effectiveSpecBase, projectName, { change: changeName || '' }) || { text: '', frModules: [] }
         const injection = injRes.text
         if (injection) {
           promptText = injection + '\n' + promptText
