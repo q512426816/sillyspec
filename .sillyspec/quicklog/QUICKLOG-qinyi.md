@@ -412,3 +412,29 @@
 方案：src/handoff.js 新增 summarizeTaskFace（tasks.md checkbox 计数+待办清单，超 8 项折叠）/summarizeDecisions（D-xxx@vN 标题行 ID 清单）/summarizeBlockers（waiting/blocked/failed 步骤）三导出纯函数，buildHandoff 在状态行后注入上下文三段；HANDOFF_LINE_CAP=80 装配后钳制（粘贴块与警示行永不动，超限从上下文段尾截并留回源指引）；--json 契约 additive 加 truncated 字段
 结果：handoff 单件 25/25 断言全绿（新增 5a-5m）；全量 569/569；lint 过（725 文件，未引用导出 0）
 审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/.changes/
+
+## ql-20260921-007-615c | 2026-09-21 20:19:49 | R5 优化接线三件：Wave 边界 handoff 默认动作+受影响测试族前移 task start+评审铁律反例测试条
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（①账本纯函数+Wave 边界注入（输出面追加，状态机零改动））
+- src/index.js（②task start 受影响测试族注入）
+- src/stages/execute.js（③评审铁律反例条）
+- test/r5-wiring-three.test.mjs（纯函数四态+三处文本钉）
+- docs/sillyspec/platform-interface-map.md（7 锚重锚）
+- .idea/vcs.xml（IDE 产物非本变更（窗口混入归属排除））
+需求：R5 优化接线三件：Wave 边界 handoff 默认动作+受影响测试族前移 task start+评审铁律反例测试条
+根因：两份 rollout 解剖实证的乘子接线——W1 62% 工具税源于全量当首验+守卫无反例；对向会话 75% 模型税中约 1/4 是单会话跨 4 Wave 背 130K×176 请求的肥上下文结构税（缓存救账单不救墙钟）
+方案：①complete.js updateWaveSessionLedger 纯函数+Wave 边界注入（handoff 照抄命令+≥2Wave advisory+账本 best-effort）②index.js task start 注入 deps(auto) 同源受影响测试族（discoverModuleDependentTests 复用无二源）③execute.js 评审铁律反例测试核对条（守卫不该生效时确实不生效断言）；附带 platform-interface-map 7 处行号锚重锚。危险文件说明：complete.js 触点仅两处——纯函数 helper（无状态）+ printNext 块内 console.log 输出追加（不动状态机推进/门禁判定），状态机语义零改动
+结果：r5-wiring-three 4/4（纯函数四态+三处文本钉）；全量 570/570 全绿；lint 过 726 文件；doc-ref 93/93
+审计：[gate] L1（跨 3 模块 · 6 文件：4 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260921-008-0e5a | 2026-09-21 21:02:17 | 快照门禁 E2E 测试基建：假项目夹具走真入口验证三态血统+负控
+状态：已完成
+关联变更：（无）
+文件：test/gate-snapshot-e2e.test.mjs（+122/-0）
+需求：快照门禁 E2E 测试基建：假项目夹具走真入口验证三态血统+负控
+根因：batch2 verify 实证缺口：单元钉只覆盖组装函数，真链路无自动验证面，手工副本烧 6.5 分钟
+方案：test/gate-snapshot-e2e.test.mjs：夹具=git 仓+probe.js 血统探针+WorktreeManager 真实 worktree；入口=executeVerifyQualityScan 进程内直调；四场景（保护/正常/分叉钉/负控）
+结果：4/4 绿 @11.07s；全量 575/575；lint 过
+审计：📝 文档欠账（D-8）：1 个源码文件改动未同步任何模块文档
