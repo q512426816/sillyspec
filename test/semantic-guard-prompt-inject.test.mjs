@@ -74,7 +74,12 @@ function writeGuard(specBase, sid, guard) {
 
 /** 渲染 quick step1「理解任务」并捕获 console 输出（outputStep 全输出走 console，无返回 prompt） */
 async function renderQuickStep1(cwd, sid, promptBody = '【任务正文锚点XYZ】理解本任务后动手。') {
+  // P4 迁移注记（batch3 task-02）：本测试语义=护栏注入对照，双渲染须字节一致——锁 STEP_GUIDE=0
+  // 全量形态（缺省开之后复入短输出会破坏字节对照；guide 非本测试被测面）
+  const prevGuide = process.env.SILLYSPEC_STEP_GUIDE
+  process.env.SILLYSPEC_STEP_GUIDE = '0'
   const STEP = { name: '理解任务', prompt: promptBody, requiresWait: false }
+  const restoreGuide = () => { if (prevGuide === undefined) delete process.env.SILLYSPEC_STEP_GUIDE; else process.env.SILLYSPEC_STEP_GUIDE = prevGuide }
   const origLog = console.log, origErr = console.error, origWarn = console.warn
   let buf = ''
   const sink = (...a) => { buf += a.join(' ') + '\n' }
@@ -83,6 +88,7 @@ async function renderQuickStep1(cwd, sid, promptBody = '【任务正文锚点XYZ
     await outputStep('quick', 0, [STEP], cwd, sid, null, {}, null)
   } finally {
     console.log = origLog; console.error = origErr; console.warn = origWarn
+    restoreGuide()
   }
   return buf
 }

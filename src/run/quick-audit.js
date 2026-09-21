@@ -462,7 +462,34 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     } catch { /* 快照链路异常 → 主仓现行为 */ }
   }
   try {
-    const test = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+    // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
+    //    键不等/分量不可得=真跑，行为不变）。quick 会话名 per-change 天然隔离账本文件。──
+    let testLedgerReuse = null
+    if (changeName) {
+      try {
+        const { consultTestLedger } = await import('./test-ledger.js')
+        const { resolveRuntimeRoot } = await import('./shared.js')
+        const consult = consultTestLedger({
+          runtimeRoot: resolveRuntimeRoot(null, specBase), changeName,
+          projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+        })
+        if (consult.reuse) testLedgerReuse = consult
+      } catch { /* 咨询异常 → 真跑 */ }
+    }
+    const test = testLedgerReuse
+      ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: 'npm test (ledger-reuse)', exitCode: 0, durationMs: 0, outputTail: null }
+      : runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+    if (!testLedgerReuse && changeName && test.status === 'passed') {
+      try {
+        const { recordTestLedger } = await import('./test-ledger.js')
+        const { resolveRuntimeRoot } = await import('./shared.js')
+        recordTestLedger({
+          runtimeRoot: resolveRuntimeRoot(null, specBase), changeName,
+          projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+          result: { pass: true, durationMs: test.durationMs ?? null, strategy: test.strategy ?? null },
+        })
+      } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
+    }
     let lint = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: snapshot ? 5 * 60 * 1000 : undefined })
     // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
     // 超时杀——主仓 60~110s 正常。按用户建议「自动回退」而非假败/advisory：主仓复跑保硬门，

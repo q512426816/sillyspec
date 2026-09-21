@@ -952,7 +952,30 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const gateCwd = verifyGateSnap ? verifyGateSnap.snapshotRoot : cwd
     const gateSpecBase = verifyGateSnap ? join(verifyGateSnap.snapshotRoot, '.sillyspec') : specBase
     let testCheck
-    if (reusableScan && reusableScan.testResult) {
+    // ── P2 三键账本复用（D-001@v1，2026-09-21-r5-efficiency-batch3 task-01）：代码×测试面×环境
+    //    三键全等且有通过记录 → 免重跑（batch2 实证同码态全量被跑多遍）。fail-closed：键分量
+    //    不可得/键不等/无记录 → 真跑（走下方原路径，行为不变）。咨询异常整体按无账本（fail-open
+    //    不影响门禁）。优先级：P2 账本（三键精确）> P0-1 质量扫描复用 > 真跑。──
+    let ledgerReuse = null
+    try {
+      const { consultTestLedger } = await import('./test-ledger.js')
+      const consult = consultTestLedger({
+        runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
+        changeName, projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+      })
+      if (consult.reuse) ledgerReuse = consult
+    } catch { /* 账本咨询异常 → 真跑 */ }
+    if (ledgerReuse) {
+      testCheck = {
+        status: 'passed',
+        reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${ledgerReuse.result.ranAt}，耗时 ${Math.round((ledgerReuse.result.durationMs || 0) / 1000)}s）`,
+        command: 'npm test (ledger-reuse)',
+        exitCode: 0, durationMs: 0, outputTail: null,
+        resultPath: null, strategy: ledgerReuse.result.strategy || null,
+      }
+      console.log(`\n♻️ Verify 测试对账：P2 账本复用（三键全等，免重跑；实测于 ${ledgerReuse.result.ranAt}）`)
+      printVerifyTestCheck(testCheck)
+    } else if (reusableScan && reusableScan.testResult) {
       testCheck = reusableScan.testResult
       console.log(`\n♻️ Verify 测试对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑；实测于 ${reusableScan.ranAt || '本变更 verify 期间'}${testCheck.resultPath ? `，台账 ${testCheck.resultPath}` : ''}）`)
       printVerifyTestCheck(testCheck)
@@ -961,6 +984,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
       testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx })
       printVerifyTestCheck(testCheck)
+      // P2 记账（fail-closed 层②：只有通过结果落账本——失败永不缓存，修复后重跑才能记）
+      try {
+        const { recordTestLedger } = await import('./test-ledger.js')
+        if (testCheck && testCheck.status === 'passed') {
+          recordTestLedger({
+            runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
+            changeName, projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+            result: { pass: true, total: testCheck.total ?? null, failedFiles: [], durationMs: testCheck.durationMs ?? null, strategy: testCheck.strategy ?? null },
+          })
+        }
+      } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
     }
     // tests 段二次回填（2026-09-08-ir-verify-facts FR-03 次序：实测在 runValidators 之后，
     // tests 快照此刻才可得；不参与门禁——供 P3d 追溯）
@@ -1248,6 +1282,31 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       reapVerifyServices(platformOpts, specBase, changeName)
     } catch (e) { console.warn(`⚠️ verify 服务进程回收异常（不阻断）: ${e.message}`) }
 
+    // ── 归档就绪度报告（P3 / FR-03 / D-003@batch3，task-04）：构造归 buildArchiveReadinessReport
+    // （本文件下方导出的可测函数），此处只渲染。全只读 fail-open；无发现零输出。──
+    try {
+      const report = await buildArchiveReadinessReport({ cwd, changeName, progress, specBase: platformOpts?.specRoot || specBase })
+      if (report && (report.face.length > 0 || report.manifestGaps.length > 0 || report.impactUnlisted.length > 0 || report.agingHit)) {
+        console.log('\n📋 归档就绪度报告（verify 收口前置——archive 三查预演，全只读）：')
+        if (report.face.length > 0) {
+          console.log('  ⎿ 未-apply 交付面 ' + report.face.length + ' 个文件：' + report.face.slice(0, 5).join('、') + (report.face.length > 5 ? ' 等' : ''))
+          console.log('      建议 archive 前先 apply：sillyspec worktree apply ' + changeName)
+        } else {
+          console.log('  ⎿ 未-apply 交付面：0（干净）')
+        }
+        if (report.manifestGaps.length > 0) {
+          console.log('  ⎿ manifest 缺行草拟【待确认——确认后自行补入 design.md §6，草拟不代写】：')
+          for (const g of report.manifestGaps.slice(0, 5)) console.log('      | 修改 | ' + g + ' | 归档就绪度草拟（verify 收口前置探测） |')
+          if (report.manifestGaps.length > 5) console.log('      … 共 ' + report.manifestGaps.length + ' 个')
+        }
+        if (report.impactUnlisted.length > 0) {
+          console.log('  ⎿ module-impact 归因草拟【待确认——确认后补入未匹配/矩阵章节】：')
+          for (const u of report.impactUnlisted.slice(0, 5)) console.log('      - `' + u + '` → 归因（共位测试/镜像/并行排除…）')
+          if (report.impactUnlisted.length > 5) console.log('      … 共 ' + report.impactUnlisted.length + ' 个')
+        }
+        if (report.agingHit) console.log('  ⚠️ main 已前进且与交付面有交集（基线老化中——等待越久合并面越大，batch2 实证窗口期三方冲突）：建议立即 apply')
+      }
+    } catch { /* 就绪度报告整体 fail-open：异常零输出不影响 verify 收尾 */ }
     console.log('\n✅ 验证通过，下一步：sillyspec run archive')
   }
 
@@ -2299,4 +2358,60 @@ export function reapVerifyServices(platformOpts, specBase, changeName) {
   }
   if (failedAll.length > 0) console.warn(`⚠️ 服务进程回收失败 ${failedAll.length} 个：${failedAll.join(', ')} — 手动处理：taskkill /PID <pid> /F（Windows）/ kill -9 <pid>`)
   return { reaped: reapedTotal, receiptPath }
+}
+
+
+/**
+ * buildArchiveReadinessReport —— 归档就绪度报告构造（P3 / FR-03 / D-003@batch3，task-04）。
+ * verify PASS 后、archive 前的三查前置（batch2 实证三查全压 archive 时段首查=15 回合主因）。
+ * 纯读：①未-apply 交付面（applyWorktree checkOnly，含 ql-009②/ql-010 合并感知口径）②manifest
+ * 缺行草拟集（面文件不在 design §6 清单——草拟不代写，agent 确认后自落）③module-impact 归因
+ * 草拟集（面文件不在 module-impact.md 文本）④基线老化命中（main HEAD 前进过 worktree 基点
+ * ∩ 前进文件与交付面有交集）。无 worktree（meta 缺/in-place/native）→ 全空（零噪音）。
+ * fail-open：任一探测异常只置空该项，不抛（渲染层再兜一层）。
+ */
+export async function buildArchiveReadinessReport({ cwd, changeName, progress, specBase }) {
+  const out = { face: [], manifestGaps: [], impactUnlisted: [], agingHit: false }
+  try {
+    const { WorktreeManager } = await import('../worktree.js')
+    const wm = new WorktreeManager({ cwd })
+    const meta = wm.getMeta(changeName)
+    if (!meta || meta.mode === 'in-place-fallback' || meta.mode === 'native-worktree'
+      || !meta.worktreePath || !existsSync(meta.worktreePath)) return out
+    const { applyWorktree } = await import('../worktree-apply.js')
+    const probe = applyWorktree(changeName, { cwd, checkOnly: true })
+    out.face = (probe && Array.isArray(probe.changedFiles)) ? probe.changedFiles : []
+    if (out.face.length === 0) return out
+    // ② manifest 缺行草拟
+    try {
+      const changeDir = resolveChangeDir(cwd, progress || {}, specBase)
+      if (changeDir) {
+        const designPath = join(changeDir, 'design.md')
+        if (existsSync(designPath)) {
+          const { parseFileChangeList } = await import('../change-list.js')
+          const declared = parseFileChangeList(designPath, { keepSillyspecDocs: true })
+          out.manifestGaps = out.face.filter(f => !declared.has(f))
+        }
+      }
+    } catch { /* 草拟失败置空该项 */ }
+    // ③ module-impact 归因草拟
+    try {
+      const changeDir2 = resolveChangeDir(cwd, progress || {}, specBase)
+      const miPath = changeDir2 ? join(changeDir2, 'module-impact.md') : null
+      const miText = (miPath && existsSync(miPath)) ? readFileSync(miPath, 'utf8') : ''
+      out.impactUnlisted = out.face.filter(f => !miText.includes(f))
+    } catch { /* 同上 */ }
+    // ④ 基线老化命中
+    try {
+      if (meta.baseHash) {
+        const { gitQuiet } = await import('../git-helper.js')
+        const advanced = gitQuiet(cwd, ['diff', '--name-only', meta.baseHash + '..HEAD'])
+        if (advanced) {
+          const advSet = new Set(advanced.split('\n').filter(Boolean))
+          out.agingHit = out.face.some(f => advSet.has(f))
+        }
+      }
+    } catch { /* git 失败不提示 */ }
+  } catch { /* 整体 fail-open → 全空 */ }
+  return out
 }

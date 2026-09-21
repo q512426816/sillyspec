@@ -1951,10 +1951,10 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
 
   // ── M1 打印分流：同指纹复入短输出 + 动态附录；首见全量 + guide 落盘 ──
   const jsonHijacked = String(console.log).includes('stderr.write') // --json 劫持形态探测（withJsonOutput 同款函数体）
-  // v1 默认关闭（D-001@v1 修订：跨进程短输出与 CLI stdout 确定性测试族冲突——别名路由奇偶校验等
-  // 要求同参两次调用字节一致）。SILLYSPEC_STEP_GUIDE=1 显式开启（R5 对撞重跑开启验证，达标后
-  // 迁移测试面再翻默认）；'0' 维持显式关闭语义（历史逃生门）。
-  const guideEnabled = process.env.SILLYSPEC_STEP_GUIDE === '1'
+  // P4 缺省开（D-004@batch3，2026-09-21-r5-efficiency-batch3 task-02）：未设=开（短输出+落盘），
+  // '=0' 显式关（逃生门保留，stdout 确定性测试族 fixture 用它锁定全量形态）。v1 默认关的动因
+  // （测试族冲突）已由 task-02 迁移消解——逐例迁移注记见各测试文件。
+  const guideEnabled = process.env.SILLYSPEC_STEP_GUIDE !== '0'
   const fingerprint = computeStepGuideFingerprint(guideTemplate)
   const runtimeRoot = platformOpts?.specRoot || join(cwd, '.sillyspec')
   const guideRoot = join(runtimeRoot, '.runtime', 'step-guides')

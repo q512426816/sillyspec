@@ -433,7 +433,7 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
    sillyspec taskcard 2026-05-13-demo-change --all
    ```
    幂等，已存在的卡跳过不覆盖；骨架带 LF 行尾 + 闭合 frontmatter + 硬校验 9 字段 + depends_on 反填。**只有主 agent 跑这一次，子代理一律不再运行 taskcard CLI。**
-1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
+1. 确认 `C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/tasks/` 目录存在（上一步预生成会自动创建）
 2. **默认主 agent 自己填卡（P0-2，2026-09-20 对撞实验驱动——6 个填卡子代理 6.7M token 做的是主 agent 可自完成的誊写，独立性价值为零）：**
    - task 总数 ≤8 或变更单仓单模块 → 主 agent 逐卡 Edit 填充（骨架已预生成，誊写近乎免费），**不派子代理**
    - 仅当 task 总数 >8 **且**跨多模块/跨仓、或主会话上下文已明显吃紧时，才按 batch 分派子代理（此时并行省墙钟有真实收益）
@@ -458,16 +458,16 @@ execute/verify 阶段会按实际代码变更更新此文档；archive 阶段会
 TaskCard 的契约字段全部在 **frontmatter**（首对 --- 包裹的 YAML 键值对：id/title/title_zh/allowed_paths/goal/...）——**不是 body 章节**（## 标题下的段落）。goal 是 frontmatter 的 `goal: >` 多行标量、implementation/acceptance/verify/constraints 是 frontmatter 的列表项；写成 body 章节（`## goal` / `## Goal` 等）会三组校验全挂返工。骨架已由主 agent 预生成（正确形态），直接 Edit 填充即可。
 
 ## 输入
-- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change
+- 变更目录：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change
 - 当前时间：<now-datetime>（frontmatter 的 created_at 使用此值）
 - 当前用户：<git-user>（frontmatter 的 author 使用此值）
 - 本 batch 任务列表：
   <由主 agent 注入：task-01: 名称 / task-02: 名称 / ...>
 
 ## 操作
-1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
+1. 读取 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/design.md 和 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/plan.md 了解整体上下文
 2. 读取本 batch 涉及的相关源文件
-3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
+3. **骨架已由主 agent 预生成**（`C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/tasks/task-NN.md` 已存在，LF 行尾 + 闭合 frontmatter + 硬校验 9 字段齐全）。**禁止再运行 `sillyspec taskcard` CLI**——并行子代理各起 CLI 进程会撞进度库 SQLite 锁（2026-08-25 实证）；若发现本 batch 某卡骨架缺失，报告主 agent 补跑，不要自己跑
 4. 用 Edit tool 逐卡填充骨架占位符（allowed_paths/target_files/goal/implementation/acceptance/verify/constraints 等）。**禁止用 Write 整文件重写**——手写整卡是 CRLF 行尾/漏闭合 --- /漏硬校验字段三类 postcheck 拒绝的根源，骨架 + Edit 从源头消灭
 5. 骨架字段含义与可选字段（provides/expects_from/related_tests，按需插进 frontmatter）参考下述模板：
 
@@ -525,7 +525,7 @@ related_tests:                           # 可选。当本 task 改动会导致�
 - 不要在 TaskCard 里泄露 plan.md 中未出现的实现假设
 
 ## 完成标志
-- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch2\.sillyspec\changes\2026-05-13-demo-change/tasks/
+- 本 batch 的每个 task-N.md 都已写入 C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\worktrees\2026-09-21-r5-efficiency-batch3\.sillyspec\changes\2026-05-13-demo-change/tasks/
 - 每个文件非空且 frontmatter 完整（保持骨架的 --- 闭合与 LF 行尾）
 ```
 

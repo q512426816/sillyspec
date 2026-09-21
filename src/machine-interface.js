@@ -116,7 +116,7 @@ export function buildEnvelope({
  *   让两函数按 ctx 切跨仓 gitDir / per-repo cwd。null 时两函数按既有单仓行为零回归。
  * @returns {Promise<{ envelope: object, exitCode: number }>}
  */
-export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null } = {}) {
+export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false } = {}) {
   const specRoot = specBase || resolveSpecDir(cwd);
   // A4：pm 用 specRoot（而非默认 resolveSpecDir(cwd)）——--spec-dir/平台模式下 specBase 是真实
   // specDir，默认解析会指向本地孤儿库，与下方 planContent/changeDir 的 specRoot 两套事实源混拼。
@@ -374,6 +374,65 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           informational: true,
           warnings: [`verify-lint 检查装配失败（fail-open）: ${e && e.message ? e.message : e}`],
           data: { status: 'error' },
+        });
+      }
+    }
+
+    // ── e. --full 只读预检档（P1 / FR-01 / D-002@batch3，2026-09-21-r5-efficiency-batch3 task-03）──
+    // 覆盖 --done 独有的贵门（batch2 实证四类盲区：reconcile 两轮/stage review 缺失各吃一整 agent
+    // 回合）：①target_files reconcile 只读跑（reconcileTargetFiles 纯计算不落盘，--done 的写结果
+    // 文件在其调用方）；②stage review 在场探测（marker+review.json——缺则报预期路径，同 --done
+    // Stage Review Gate 口径，只报缺不生成）。全只读零副作用；未传 full 零行为变化。
+    if (full && (stage === 'verify' || stage === 'execute')) {
+      // e1. reconcile（verify --done 的 target_files 对账门）
+      if (stage === 'verify') {
+        try {
+          const { reconcileTargetFiles } = await import('./verify-postcheck.js');
+          const rec = reconcileTargetFiles({ cwd, specBase: specRoot, changeName });
+          const recOk = rec.status !== 'missing_declared';
+          checks.push({
+            id: 'full-target-files-reconcile',
+            code: checkCode('full-target-files-reconcile') || 'full_target_files_reconcile',
+            ok: recOk,
+            errors: !recOk
+              ? (rec.missing || []).map((m) => `task-${m.task || '?'}: ${m.path} 声明未做（②类计划落空）——补做交付或按声明修正通道改卡（与 review 结论一致）`)
+              : [],
+            warnings: (rec.undeclared || []).length > 0
+              ? [`${(rec.undeclared || []).length} 个未声明文件（warning 级，${(rec.undeclared || []).slice(0, 3).map((u) => u.path).join('、')}${(rec.undeclared || []).length > 3 ? ' 等' : ''}）——并行会话归因噪音或漏声明，verify 报告须裁决`]
+              : [],
+            data: { status: rec.status, matched: (rec.matched || []).length, missing: (rec.missing || []).length, undeclared: (rec.undeclared || []).length },
+          });
+        } catch (e) {
+          checks.push({
+            id: 'full-target-files-reconcile',
+            code: 'full_target_files_reconcile',
+            ok: true,
+            informational: true,
+            warnings: [`--full reconcile 检查装配失败（fail-open）: ${e && e.message ? e.message : e}`],
+          });
+        }
+      }
+      // e2. stage review 在场探测（verify/execute --done 的 Stage Review Gate）
+      try {
+        const { getLatestStageReviewRunId } = await import('./stage-review.js');
+        const rrRoot = runtimeRoot || join(specRoot, '.runtime');
+        const runId = getLatestStageReviewRunId(rrRoot, stage, changeName);
+        checks.push({
+          id: 'full-stage-review',
+          code: checkCode('full-stage-review') || 'full_stage_review_missing',
+          ok: !!runId,
+          errors: !runId
+            ? [`缺 ${stage} 阶段的 stage review.json（tier=independent 要求独立审查产出）——--done 将被 Stage Review Gate 拦；可先 sillyspec register-stage-review --change ${changeName} --stage ${stage} 生成骨架再填（降级条款照 review.json reviewerNotes 首行留痕）`]
+            : [],
+          data: { runId: runId || null },
+        });
+      } catch (e) {
+        checks.push({
+          id: 'full-stage-review',
+          code: 'full_stage_review_missing',
+          ok: true,
+          informational: true,
+          warnings: [`--full stage review 探测装配失败（fail-open）: ${e && e.message ? e.message : e}`],
         });
       }
     }

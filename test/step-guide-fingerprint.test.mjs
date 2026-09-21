@@ -106,15 +106,19 @@ test('--json 劫持（console.log→stderr 形态）→ 不短输出，全量照
   }
 })
 
-test('v1 默认关闭：未显式 SILLYSPEC_STEP_GUIDE=1 时复入仍全量（stdout 确定性）', async () => {
-  const cwd = mkdtempSync(join(tmpdir(), 'stepguide-off-'))
+// P4 迁移注记（batch3 task-02，D-004@v1）：原『v1 默认关闭』断言随缺省翻转而反转——
+// 未设 env=复入短输出（缺省开）；原依赖全量默认的字节一致测试族已逐例锁 =0（见各文件迁移注记）。
+test('P4 缺省开：未设 SILLYSPEC_STEP_GUIDE → 复入短输出（D-004@v1 终态）', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'stepguide-on-'))
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
   const prev = process.env.SILLYSPEC_STEP_GUIDE
   delete process.env.SILLYSPEC_STEP_GUIDE
   try {
     await capture(() => runExplore(cwd))
     const s2 = await capture(() => runExplore(cwd))
-    assert.ok(s2.lines.some(l => l.includes('的模块结构')), '默认关：复入全量（别名路由奇偶校验类 stdout 字节一致测试依赖此默认）')
+    const joined = s2.lines.join(String.fromCharCode(10))
+    assert.ok(!joined.includes('的模块结构'), '缺省开：复入不重印静态正文')
+    assert.ok(joined.includes('fingerprint='), '缺省开：复入含指纹行')
   } finally {
     if (prev !== undefined) process.env.SILLYSPEC_STEP_GUIDE = prev
     rmSync(cwd, { recursive: true, force: true })

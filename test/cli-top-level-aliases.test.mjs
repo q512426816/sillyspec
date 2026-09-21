@@ -37,11 +37,14 @@ function assert(cond, msg) {
 }
 
 function runCLI(args, cwd) {
+  // P4 迁移注记（batch3 task-02）：Test 3/6 语义=同参双调用 stdout 字节一致——锁 STEP_GUIDE=0
+  // 全量形态（缺省开后第二次调用吃复入短输出破坏字节对照；guide 非被测面）
   const res = spawnSync(process.execPath, [cliBin, ...args], {
     cwd,
     encoding: 'utf8',
     timeout: 15000,
     stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, SILLYSPEC_STEP_GUIDE: '0' },
   })
   return {
     stdout: res.stdout || '',

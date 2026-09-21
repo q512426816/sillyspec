@@ -171,6 +171,9 @@ console.log('--- 组一/组七：前置清单三态（有失败帽截断 / 无�
 // 组二：账本幂等与摘要形态 + 双渲染字节金丝雀
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('\n--- 组二：账本分叉判定 + outputStep 注入分叉 + 双渲染字节金丝雀 ---')
+// P4 迁移注记（batch3 task-02）：金丝雀语义=同参双渲染字节一致——锁 STEP_GUIDE=0 全量形态
+// （缺省开后复入短输出破坏字节对照；guide 非被测面）
+process.env.SILLYSPEC_STEP_GUIDE = '0'
 {
   const root = makeTmpRoot('pfs-fork-')
   const specBase = join(root, '.sillyspec')

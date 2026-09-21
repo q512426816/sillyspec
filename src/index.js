@@ -524,6 +524,9 @@ async function main() {
       // 只传 cwd 致 --spec-dir 对 gate verify 无效。不传 --spec-dir 时 specBase 走默认
       // resolveSpecDir(cwd)，向后兼容。
       const gateOpts = { cwd: dir };
+      // P1 --full 只读预检档（batch3 task-03）：覆盖 --done 独有检查面（reconcile/stage review）——
+      // 预检过=必过（同因），省一轮 gate 失败重跑的整 agent 回合
+      if (args.includes('--full')) gateOpts.full = true;
       // A4：平台指针 / 显式 --spec-dir / 本地 fallback 三合一解析 specBase——平台模式（指针指向外部
       // specDir）下 gate 也能核验（原只传 cwd 致 runGate 的 resolveSpecDir 指向本地孤儿库，恒
       // 「无法核验」exit 2）。resolvePlatformSpecDir 指针失效时抛 PointerUnreachableError，由顶层 catch 优雅 fail-closed。
