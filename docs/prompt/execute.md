@@ -178,6 +178,10 @@ worktree 路径 + 分支名 + 模式
 **本步出现的 include 指令**
 - `{{include: testcase-design}}` → include 指令：`resolvePromptIncludes` 在占位符替换前，把仓库根 `templates/prompts/testcase-design.md` 的「测试用例设计」6 条检查（边界/异常、断言有效、测行为不测实现、契约与回归、时间敏感分支、隔离确定性）拉进「子代理 prompt 要点」第 5 项后，供调度者整段复制进子代理 prompt（任务含测试代码时）
 
+**本步的模式条件注入（M3/M4，2026-09-21-r5-efficiency-batch2）**
+- **推荐分组行**（M3）：CLI 按三条件（allowed_paths 正交 / 无 provides-expects_from 契约链 / 组 ≤3，另内建批数护栏 ≥ min(3, N)）预计算本 Wave 推荐分组注入 batch 条件段后（agent 可偏离须在 Wave 摘要披露）——仅本地 Agent tool 派发路径渲染（SillyHub 一 Wave 一 mission 互斥）；无可并批（无 ≥2 组）零注入，输出与无该行时逐字节一致
+- **execution_mode**（M4）：plan.md frontmatter `execution_mode: main` 时整段执行方式换主代理直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；缺省/非法回退 dispatch，渲染与既往一致（逐字节零回归）
+
 **提示词原文**
 
 ````markdown

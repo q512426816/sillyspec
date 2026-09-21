@@ -1725,8 +1725,11 @@ function parseBatchWavesFromPlanText(planMdText) {
  *   deps             depends_on（补零）
  *   expectsProviders expects_from 的 provider 任务集（补零；Wave 内命中 = 契约链）
  *   batchMembers     卡 frontmatter `batch:` 字段成员（数组成员或 `task-01+task-02` 串皆收；<2 成员不供信息）
+ *
+ * M3（2026-09-21-r5-efficiency-batch2 task-03）起导出：execute.js buildWavePrompt 推荐分组
+ * 与本文件 checkBatchAdvisory 共用此 facts 收集（单一实现无二源——导出是复用需要，非新逻辑）。
  */
-function collectCardBatchFacts(content) {
+export function collectCardBatchFacts(content) {
   const text = String(content || '')
   let fileSet = null
   const tf = parseTargetFiles(text)
@@ -1749,6 +1752,59 @@ function collectCardBatchFacts(content) {
     }
   } catch { /* 坏卡不供并批信息（fail-open，advisory 面不抛错） */ }
   return { fileSet, deps, expectsProviders, batchMembers }
+}
+
+/**
+ * recommendWaveGroups —— M3 PLAN 粒度派发默认化的推荐分组纯函数（FR-03 / D-003@v1，
+ * 2026-09-21-r5-efficiency-batch2 task-03）。按第 1 批三条件（allowed_paths/target_files
+ * 两两正交 / 组内无 provides-expects_from 契约链（含 depends_on，双向）/ 组 ≤3）贪心预计算
+ * 分组；checkBatchAdvisory 判定①文案与 execute.js buildWavePrompt 派发段共用本函数（无二源）。
+ *
+ * 护栏不变式（与 checkBatchAdvisory 两判定同口径：并批后整 Wave 批数 ≥ min(3, 任务数)）：
+ * 并批预算 = n − min(3,n)，每把一个 task 并入已有组消耗 1 预算，预算耗尽后余 task 独立成组；
+ * n≤3 时预算为 0 恒全单例（任何并批必违反 min(3,N)=N——推荐不得自触判定②）。
+ * files=null（卡缺失/字段全无，正交不可判）→ 恒单例（宁缺勿假）。
+ *
+ * 确定性：按输入序贪心（先开组后补组、组满 3 或不相容即让位），同输入恒同输出；
+ * 非数组输入返回 []（纯机械容错，不 throw）。
+ *
+ * @param {Array<{id:string, files:Iterable<string>|null, deps?:string[], expectsProviders?:string[]}>} tasks
+ *   id 接受未补零形态（内部 padTaskRef 归一）；deps/expectsProviders 缺省视为无链。
+ * @returns {string[][]} 全量 partition（含单例组，组内按输入序）——调用方以
+ *   groups.some(g => g.length >= 2) 判定有无推荐（无则零注入/零文案）。
+ */
+export function recommendWaveGroups(tasks) {
+  if (!Array.isArray(tasks)) return []
+  const list = tasks.map(t => ({
+    id: padTaskRef(t?.id ?? ''),
+    files: t?.files == null ? null : new Set([...t.files].map(String)),
+    deps: new Set((t?.deps || []).map(padTaskRef)),
+    expects: new Set((t?.expectsProviders || []).map(padTaskRef)),
+  }))
+  const n = list.length
+  let budget = n - Math.min(3, n) // 并批预算：分组后批数 = n - 已消耗预算 ≥ min(3,n) 恒成立
+  const chainBetween = (a, b) =>
+    a.deps.has(b.id) || b.deps.has(a.id) || a.expects.has(b.id) || b.expects.has(a.id)
+  const filesDisjoint = (a, b) => {
+    for (const p of a.files) if (b.files.has(p)) return false
+    return true
+  }
+  const groups = []
+  for (const t of list) {
+    let placed = false
+    if (t.files != null && budget > 0) {
+      for (const g of groups) {
+        if (g.length >= 3) continue // 帽值：组 ≤3
+        if (g.some(m => m.files == null || !filesDisjoint(m, t) || chainBetween(m, t))) continue
+        g.push(t)
+        budget -= 1
+        placed = true
+        break
+      }
+    }
+    if (!placed) groups.push([t])
+  }
+  return groups.map(g => g.map(t => t.id))
 }
 
 /**
@@ -1855,13 +1911,24 @@ export function checkBatchAdvisory({ tasksMdText, planMdText, taskCards } = {}) 
         }
       }
       if (knowable && chainFree && fileDisjoint) {
+        // M3（batch2 task-03）：判定①附推荐分组清单——同一纯函数 recommendWaveGroups
+        // 无二源（该分支内任务两两正交无链，分组差异只来自帽值与批数护栏预算）。
+        const recGroups = recommendWaveGroups(waveTasks.map((t, i) => ({
+          id: t,
+          files: facts[i].fileSet,
+          deps: facts[i].deps,
+          expectsProviders: facts[i].expectsProviders,
+        })))
+        const recLine = recGroups.some(g => g.length >= 2)
+          ? `；CLI 预计算推荐分组：${recGroups.map(g => `[${g.join(',')}]`).join(' / ')}`
+          : ''
         advisories.push({
           level: 'warning',
           code: 'batch_orthogonal_unbundled',
           message: `Wave ${w.waveNo} 内 ${n} 个任务文件两两正交（无共享 target_files、无 depends_on / provides-expects_from 契约链）` +
             `但全部未并批——默认并批可摊平 execute 扇出的重复上下文重建（B-③）：2–4 任务/批，` +
             `Wave 段内加批标注行（如 "> batch: task-01+task-02"，不替代 - task-XX 纯 ID 引用行），` +
-            `并批后整 Wave 批数保持 ≥ min(3, ${n})`,
+            `并批后整 Wave 批数保持 ≥ min(3, ${n})${recLine}`,
         })
       }
     }

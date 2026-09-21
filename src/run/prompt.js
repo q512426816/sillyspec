@@ -19,13 +19,37 @@
  *   - loadModuleContextIndex/buildModuleContextInjection 内 require('fs'/'path') 改顶部静态 import
  */
 import { basename, join } from 'node:path'
-import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import jsYaml from 'js-yaml'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
 import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
+
+// ── M1 步骤指引静态段指纹（2026-09-21-r5-efficiency-batch2 task-01 / D-001@v1）──
+// 易变占位符全集（值因运行而异）：指纹掩码 + 复入附录照常渲染。新增易变占位符时同步此表
+// （漏登会令指纹误变——退化后果只是多一次全量重印，不产生错误指引；多登同理只多印）。
+const VOLATILE_PLACEHOLDER_RES = [
+  /<now-datetime>/g, /<now-timestamp>/g, /<now-date>/g, /<now-iso-datetime>/g, /<git-head-short>/g, /<quicklog-id>/g,
+  /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g,
+  /{KNOWLEDGE_HIT_REPORT}/g, /{DOCS_DEBT}/g, /{MODULE_RESOLVE_TABLE}/g, /{REVIEW_MATERIALS}/g,
+  /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
+  /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
+  /{SCOPE_AUDIT_TABLE}/g, /{FR_INDEX_DIGEST}/g, /{HANDOVER_SUMMARY}/g, /{PREFLIGHT_FAILURES}/g,
+  /{PRIOR_REVIEW_FACTS}/g, /{ARCHIVE_IMPACT_AUDIT}/g, /{EVIDENCE_AUTO_RECOMMENDATION}/g,
+]
+const VOLATILE_MASK = '⟦dyn⟧'
+function maskVolatileForGuide(text) {
+  let out = text
+  for (const re of VOLATILE_PLACEHOLDER_RES) out = out.replace(re, VOLATILE_MASK)
+  return out
+}
+/** M1：步骤指引静态段指纹——模板原文（include 解析后、占位符替换前）掩码易变占位符后的 sha256。
+ *  确定性：同模板同指纹；模板文本/静态占位符变更即变；易变占位符的值不参与（值在替换后，不在此面）。 */
+export function computeStepGuideFingerprint(template) {
+  return createHash('sha256').update(maskVolatileForGuide(String(template))).digest('hex')
+}
 import { renderStageContract } from '../stage-contract-spec.js'
 import { nowWallClock } from '../datetime.js'
 import { parseModuleMapSimple } from '../modules.js'
@@ -868,17 +892,36 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // 先解析 {{include: name}}（把外部模板片段拉进 prompt），再做下方占位符替换，
   // 保证模板内容里的 {SPEC_ROOT}/<change-name> 等也能被替换
   let promptText = resolvePromptIncludes(step.prompt)
+  // ── M1 步骤指引静态段指纹增量（2026-09-21-r5-efficiency-batch2 task-01 / FR-01 / D-001@v1）──
+  // P8 实证（round5）：73 次 CLI 调用注入 252KB、同步骤复入全量重印。契约：静态段按渲染指纹落盘
+  // .runtime/step-guides/，同指纹复入静态部分 ≤10 行（指纹+路径+提示），动态注入段（值因运行而异）
+  // 每次渲染永不缓存（附录照常输出）。--json（console.log 劫持形态，src/index.js withJsonOutput）与
+  // SILLYSPEC_STEP_GUIDE=0 走全量——机器消费方与逃生门不读盘。
+  const guideTemplate = promptText // 替换管线入口的模板原文（指纹基面）
+  const dynSegments = [] // 动态注入段值收集（复入附录素材，顺序即渲染顺序）
+  const substitute = (re, value, isStaticToken = false) => {
+    const v = String(value)
+    if (!isStaticToken) dynSegments.push(v) // 非白名单占位符默认按动态收集（错收只多不少，漏收才是坑）
+    promptText = promptText.replace(re, v)
+    return promptText
+  }
+  const substituteSplitJoin = (token, value) => {
+    const v = String(value)
+    dynSegments.push(v)
+    promptText = promptText.split(token).join(v)
+    return promptText
+  }
   // 替换 prompt 中的占位符
   if (projectName && promptText.includes('<project>')) {
-    promptText = promptText.replace(/<project>/g, projectName)
+    substitute(/<project>/g, projectName, true)
   }
   // 替换 <git-user> 占位符
   if (promptText.includes('<git-user>')) {
     try {
       const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
-      promptText = promptText.replace(/<git-user>/g, gitUser)
+      substitute(/<git-user>/g, gitUser, true)
     } catch {
-      promptText = promptText.replace(/<git-user>/g, 'unknown')
+      substitute(/<git-user>/g, 'unknown', true)
     }
   }
   // 替换时间戳占位符（本地墙钟统一走 nowWallClock——坑 taskcard-created-at-utc：人读字段用
@@ -887,33 +930,33 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   const nowDatetime = nowWallClock(now)
   const nowTimestamp = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '-' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0')
   const nowDate = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
-  promptText = promptText.replace(/<now-datetime>/g, nowDatetime)
-  promptText = promptText.replace(/<now-timestamp>/g, nowTimestamp)
-  promptText = promptText.replace(/<now-date>/g, nowDate)
+  substitute(/<now-datetime>/g, nowDatetime)
+  substitute(/<now-timestamp>/g, nowTimestamp)
+  substitute(/<now-date>/g, nowDate)
   // <now-iso-datetime>（scan frontmatter updated_at 用；与 scan-fix-headers 同款秒级格式）。
   // 占位符名带 iso 是历史遗留——值已统一为本地墙钟（同 <now-datetime>），改名会破坏 stages 引用。
-  promptText = promptText.replace(/<now-iso-datetime>/g, nowWallClock(now))
+  substitute(/<now-iso-datetime>/g, nowWallClock(now))
   // <git-head-short>（scan frontmatter source_commit 用；CLI 代查，agent 勿自跑 rev-parse）
   if (promptText.includes('<git-head-short>')) {
     let headShort = 'unknown'
     try {
       headShort = safeGit(cwd, ['rev-parse', '--short', 'HEAD']).value || 'unknown'
     } catch { /* git 不可用 → unknown，scan-postcheck 失配时再核 */ }
-    promptText = promptText.replace(/<git-head-short>/g, headShort)
+    substitute(/<git-head-short>/g, headShort)
   }
   // 替换 {REVIEW_SCHEMA_VERSION} 占位符（task review 示例模板用，值=CLI 当前 REVIEW_SCHEMA_VERSION 常量，
   // 避免 agent 照抄 design 目标版本与 CLI 写侧常量漂移；与 stage review 契约 renderReviewJsonContract 动态注入同源）
   if (promptText.includes('{REVIEW_SCHEMA_VERSION}')) {
-    promptText = promptText.replace(/\{REVIEW_SCHEMA_VERSION\}/g, String(REVIEW_SCHEMA_VERSION))
+    substitute(/\{REVIEW_SCHEMA_VERSION\}/g, String(REVIEW_SCHEMA_VERSION))
   }
   // 替换 <change-name> 占位符
   if (changeName && promptText.includes('<change-name>')) {
-    promptText = promptText.replace(/<change-name>/g, changeName)
+    substitute(/<change-name>/g, changeName, true)
   }
   // 替换 <quick-session-id> 占位符（quick 阶段专用：sessionId == changeName == quick-<uuid8>，
   // 见 runStage 参数解析 quickSessionId 生成。告知 agent 本会话 id + --done 需带 --change）
   if (changeName && promptText.includes('<quick-session-id>')) {
-    promptText = promptText.replace(/<quick-session-id>/g, changeName)
+    substitute(/<quick-session-id>/g, changeName, true)
   }
   // 替换 <quicklog-id> 占位符（quick 阶段：从 session guard.json 读 CLI 分配的 ql-ID，
   // 供 agent 在模块文档变更索引等处引用）
@@ -928,7 +971,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (err) {
       console.warn(`⚠️ quicklog-id 占位符读取 guard.json 失败: ${err && err.message ? err.message : err}`);
     }
-    promptText = promptText.replace(/<quicklog-id>/g, qlIdVal || '(未分配)')
+    substitute(/<quicklog-id>/g, qlIdVal || '(未分配)')
   }
   // 替换 <linked-changes> 占位符（quick 阶段：从 .runtime/quick-sessions/<sessionId>/guard.json 读关联变更）
   if (promptText.includes('<linked-changes>')) {
@@ -944,7 +987,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       if (guard) linkedChanges = Array.isArray(guard.linkedChanges) ? guard.linkedChanges : []
     } catch {}
     const display = linkedChanges.length > 0 ? linkedChanges.join(', ') : '（无）'
-    promptText = promptText.replace(/<linked-changes>/g, display)
+    substitute(/<linked-changes>/g, display, true)
   }
   // 平台模式：注入路径覆盖指令
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot) {
@@ -1074,9 +1117,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       const injected = fact
         ? `[docs-debt] scan 基线漂移：${fact.message}`
         : '[docs-debt] scan 基线漂移：无 scan 文档（绿地项目），跳过判定'
-      promptText = promptText.replace(/\{SCAN_STALENESS\}/g, injected)
+      substitute(/\{SCAN_STALENESS\}/g, injected)
     } catch (e) {
-      promptText = promptText.replace(/\{SCAN_STALENESS\}/g, `[docs-debt] scan 漂移检测异常（${e.message}），跳过判定`)
+      substitute(/\{SCAN_STALENESS\}/g, `[docs-debt] scan 漂移检测异常（${e.message}），跳过判定`)
     }
   }
 
@@ -1106,7 +1149,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
           '\n\n⛔ 红线（同 scan 子代理先例）：禁止重新 grep 发现底稿覆盖的机械事实（端点/依赖/规模），冲突以底稿为准。\n'
       }
     } catch { /* fail-soft：读取失败空注入，不阻断 prompt 输出 */ }
-    promptText = promptText.replace(/\{SCAN_FACTS\}/g, factsInjected)
+    substitute(/\{SCAN_FACTS\}/g, factsInjected)
   }
 
   // ── 机械事实注入三件（2026-09-07 注入缺口批次）：{LOCAL_COMMANDS} / {GIT_DIRTY} / {TASKS_CHECKBOX} ──
@@ -1141,7 +1184,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       localBlock = `（构建命令注入失败：${e.message}——可自行读 local.yaml）`
     }
-    promptText = promptText.replace(/\{LOCAL_COMMANDS\}/g, localBlock)
+    substitute(/\{LOCAL_COMMANDS\}/g, localBlock)
   }
 
   // ①b {QUICK_CONTEXT_DIGEST}（刀①，2026-09-08）：quick step1 的项目/约定上下文 CLI 代读注入
@@ -1149,7 +1192,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // fail-soft 同三件套；无 quick 占位符自然零输出。
   if (stageName === 'quick' && promptText.includes('{QUICK_CONTEXT_DIGEST}')) {
     const digestSpecBase = resolvePromptSpecBase(platformOpts, cwd)
-    promptText = promptText.replace(/\{QUICK_CONTEXT_DIGEST}/g, buildQuickContextDigest(digestSpecBase, projectName))
+    substitute(/\{QUICK_CONTEXT_DIGEST}/g, buildQuickContextDigest(digestSpecBase, projectName))
   }
 
   // ①c {FR_INDEX_DIGEST}（2026-09-18-fr-index-l1 L1，D-004）：brainstorm step8 的触达域现行 FR 注入
@@ -1165,12 +1208,12 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       const domains = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
       const entries = readActiveFrDigest(knowledgeRoot, domains)
       if (entries.length === 0) {
-        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
+        substitute(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
       } else {
         const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）${e.needsReview ? ` ⚠️ 待复核（${e.needsReview}）——该 FR 覆盖的代码近期被 quick 触达，行为可能已变；本变更若触及同域先核对现状再决定承接/新写` : ''}`)
         lines.push('')
         lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
-        promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
+        substitute(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
       }
       try {
         const { appendKnowledgeHit } = await import('../knowledge-hits.js')
@@ -1179,7 +1222,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         })
       } catch { /* 遥测 fail-soft */ }
     } catch (e) {
-      promptText = promptText.replace(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
+      substitute(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
     }
   }
 
@@ -1196,7 +1239,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       dirtyBlock = `（脏文件注入失败：${e.message}——可自行跑 git status --porcelain）`
     }
-    promptText = promptText.replace(/\{GIT_DIRTY\}/g, dirtyBlock)
+    substitute(/\{GIT_DIRTY\}/g, dirtyBlock)
   }
 
   // ③ {TASKS_CHECKBOX}：tasks.md 任务勾选状态投影（verify 逐项检查步消费——省 agent 手数）
@@ -1219,7 +1262,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     } catch (e) {
       tasksBlock = `（勾选状态注入失败：${e.message}——可自行读 tasks.md）`
     }
-    promptText = promptText.replace(/\{TASKS_CHECKBOX\}/g, tasksBlock)
+    substitute(/\{TASKS_CHECKBOX\}/g, tasksBlock)
   }
 
   // 决策防复潮注入（W1.1 第 3 点，task-04，FR-05）：brainstorm「加载项目上下文」Step2 的
@@ -1248,13 +1291,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         }
         decInjected = '\n\n' + lines.join('\n')
       }
-      promptText = promptText.replace(/\{DECISION_HITS\}/g, decInjected)
+      substitute(/\{DECISION_HITS\}/g, decInjected)
       // 注入结果同步落 runtime JSON（与既有 KNOWLEDGE_HIT_REPORT 落盘口径一致）
       const decRuntimeDir = join(decSpecBase, '.runtime')
       mkdirSync(decRuntimeDir, { recursive: true })
       writeAtomicSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
     } catch (e) {
-      promptText = promptText.replace(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
+      substitute(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
     }
   }
 
@@ -1290,7 +1333,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         change: changeName || '',
         query: taskContext,
       })
-      promptText = promptText.replace(
+      substitute(
         /\{KNOWLEDGE_HIT_REPORT\}/g,
         knowledgeInjection.matched ? knowledgeInjection.section : knowledgeInjection.report
       )
@@ -1298,7 +1341,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       mkdirSync(runtimeDir, { recursive: true })
       writeAtomicSync(join(runtimeDir, 'knowledge-hit-report.json'), JSON.stringify(knowledgeInjection.json, null, 2) + '\n')
     } catch (e) {
-      promptText = promptText.replace(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
+      substitute(/\{KNOWLEDGE_HIT_REPORT\}/g, 'Status: no matches (error: ' + e.message + ')')
     }
   }
 
@@ -1327,9 +1370,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       try {
         debtTouchFacts = renderDecisionTouchFacts(computeDecisionTouches(changedFiles, join(debtSpecBase, 'knowledge')).touches)
       } catch { /* 触碰计算降级为空——不影响欠账 facts 注入 */ }
-      promptText = promptText.replace(/\{DOCS_DEBT\}/g, [result.facts, debtTouchFacts].filter(Boolean).join('\n'))
+      substitute(/\{DOCS_DEBT\}/g, [result.facts, debtTouchFacts].filter(Boolean).join('\n'))
     } catch (e) {
-      promptText = promptText.replace(/\{DOCS_DEBT\}/g, `[docs-debt] 欠账计算异常（${e.message}），跳过`)
+      substitute(/\{DOCS_DEBT\}/g, `[docs-debt] 欠账计算异常（${e.message}），跳过`)
     }
   }
 
@@ -1342,9 +1385,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       const { renderModuleResolveTable } = await import('../module-resolve.js')
       const mrSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const table = renderModuleResolveTable({ cwd, specBase: mrSpecBase, changeName })
-      promptText = promptText.replace(/\{MODULE_RESOLVE_TABLE\}/g, table)
+      substitute(/\{MODULE_RESOLVE_TABLE\}/g, table)
     } catch (e) {
-      promptText = promptText.replace(/\{MODULE_RESOLVE_TABLE\}/g, `[modules-resolve] 模块卡分级解析异常（${e.message}），跳过——可手跑 sillyspec modules resolve --change <变更名>`)
+      substitute(/\{MODULE_RESOLVE_TABLE\}/g, `[modules-resolve] 模块卡分级解析异常（${e.message}），跳过——可手跑 sillyspec modules resolve --change <变更名>`)
     }
   }
 
@@ -1382,7 +1425,7 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
         console.error(`[sillyspec] execute run marker/目录写入失败（降级继续，ID ${runId} 仍注入 prompt）: ${e.message}`)
       }
     }
-    promptText = promptText.replace(/\{EXECUTE_RUN_ID\}/g, runId)
+    substitute(/\{EXECUTE_RUN_ID\}/g, runId)
   }
 
   // Stage Review Tier：brainstorm/plan/execute 阶段注入审查分级占位符
@@ -1891,12 +1934,58 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
     })
   } catch { preflightFailuresMd = '' }
   if (promptText.includes('{PREFLIGHT_FAILURES}')) {
-    promptText = promptText.split('{PREFLIGHT_FAILURES}').join(preflightFailuresMd)
+    promptText = substituteSplitJoin('{PREFLIGHT_FAILURES}', preflightFailuresMd)
   } else if (preflightFailuresMd) {
     promptText = `${promptText}\n\n${preflightFailuresMd}`
   }
 
-  console.log(promptText)
+  // ── M1 打印分流：同指纹复入短输出 + 动态附录；首见全量 + guide 落盘 ──
+  const jsonHijacked = String(console.log).includes('stderr.write') // --json 劫持形态探测（withJsonOutput 同款函数体）
+  // v1 默认关闭（D-001@v1 修订：跨进程短输出与 CLI stdout 确定性测试族冲突——别名路由奇偶校验等
+  // 要求同参两次调用字节一致）。SILLYSPEC_STEP_GUIDE=1 显式开启（R5 对撞重跑开启验证，达标后
+  // 迁移测试面再翻默认）；'0' 维持显式关闭语义（历史逃生门）。
+  const guideEnabled = process.env.SILLYSPEC_STEP_GUIDE === '1'
+  const fingerprint = computeStepGuideFingerprint(guideTemplate)
+  const runtimeRoot = platformOpts?.specRoot || join(cwd, '.sillyspec')
+  const guideRoot = join(runtimeRoot, '.runtime', 'step-guides')
+  const guideFile = join(guideRoot, `${stageName}-step${stepIndex}-${fingerprint.slice(0, 8)}.md`)
+  // 复入状态=变更级（change+stage+step → 指纹）：「复入」锚定同一变更同一步的重渲染（跨 CLI 进程
+  // 持续生效——实验里每次 run 都是独立进程，进程内缓存无意义）；他变更渲染同模板不误短路
+  // （knowledge-inject 两路径字节一致测试的机制依赖此界——模板级寻址会短路其第二次全量渲染）。
+  const stateRoot = join(runtimeRoot, '.runtime', 'step-guide-state')
+  const stateFile = join(stateRoot, `${stageName}-step${stepIndex}-${String(changeName || '_nochange').replace(/[^A-Za-z0-9._-]/g, '_')}.json`)
+  let prevState = null
+  try { prevState = JSON.parse(readFileSync(stateFile, 'utf8')) } catch { /* 无状态=首见 */ }
+  const reentryHit = guideEnabled && !jsonHijacked && prevState != null && prevState.fingerprint === fingerprint && existsSync(prevState.guidePath)
+  if (reentryHit) {
+    // 复入：静态部分 ≤10 行；动态段照常渲染为附录
+    console.log(`📄 步骤指引未变（fingerprint=${fingerprint.slice(0, 8)}）——静态全文不再重印。需要全文时 Read：`)
+    console.log(`   ${guideFile}`)
+    console.log(`   （首见渲染已在上下文中；上下文被压缩丢失时才需要 Read）`)
+    console.log(`⛔ 本步骤安全铁律仍在生效（破坏性操作禁令见首见渲染/guide 全文）`)
+    if (dynSegments.filter(x => x.trim() !== '').length > 0) {
+      console.log(`## 动态注入段（本次运行——永不缓存，每次照常渲染）`)
+      for (const seg of dynSegments) if (seg.trim() !== '') console.log(seg)
+    }
+  } else {
+    console.log(promptText)
+    try {
+      // 特性开启且有 spec 根才落盘：默认关时不写（stdout 确定性）；无 spec 根不凭空造目录
+      //（spec-dir 向上命中类测试会被新建的 test/.sillyspec 污染——本批实证）。
+      if (guideEnabled && (platformOpts?.specRoot || existsSync(join(cwd, '.sillyspec')))) {
+      mkdirSync(guideRoot, { recursive: true })
+      writeFileSync(guideFile, `<!--fp=${fingerprint}-->
+# ${stageName} step ${stepIndex + 1} 指引静态全文（${step.name}）
+
+> 动态占位符（时间/材料包/知识命中/欠账等）以当次渲染为准，本文件只存静态模板面。
+
+${maskVolatileForGuide(guideTemplate)}
+`, 'utf8')
+      mkdirSync(stateRoot, { recursive: true })
+      writeFileSync(stateFile, JSON.stringify({ fingerprint, guidePath: guideFile, changeName: changeName || null, stage: stageName, stepIndex, at: new Date().toISOString() }, null, 1) + '\n', 'utf8')
+      }
+    } catch { /* guide/state 落盘 best-effort：失败仅退化回全量重印，不阻断步骤输出 */ }
+  }
   // 铁律拆分（W3 token 效率）：通用流程纪律（文档优先/不跳步/不编造命令）只在首个 agent 可见步注入——
   // 每步重复 ~800B 纯耗 context。但【平台写入规则 + 路径规则】是安全关键（防写错目录/绕过 Write），
   // 且依赖 changeName/platformOpts，必须【每步注入】（context 压缩丢失会让 agent 越界写源码）。

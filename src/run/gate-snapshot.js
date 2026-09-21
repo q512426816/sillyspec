@@ -422,8 +422,12 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
             if (cwdDiff && !wtDiff) {
               src = cwdPath // 主仓直写新、worktree 停在基线 → 取主仓
             } else if (!(wtDiff && !cwdDiff)) {
-              console.warn(`⚠️ 快照双写分叉：${f} 在主仓与 worktree 均有不同修改——取主仓（本会话最新编辑位），请尽快对齐两边`)
-              src = cwdPath
+              // M2（2026-09-21-r5-efficiency-batch2 D-002@v2）：双写分叉改取 worktree 分支版——sourceRoot=worktree
+              // 定向跑的语义=验证本变更分支交付（batch1 实证：分叉取主仓拿走无本变更代码的版本，配上
+              // worktree 新增测试文件 → src/test 血统断裂 → module 实测假红一轮）。主仓侧同文件异动是
+              // 干扰源，其内容在 apply/对齐后由主仓单源复核兜底。
+              console.warn(`⚠️ 快照双写分叉：${f} 在主仓与 worktree 均有不同修改——取 worktree 分支版（本变更交付血统）；主仓侧改动若需保留请 apply/对齐后复跑`)
+              src = wtPath
             } // wtDiff && !cwdDiff → 保持 worktree（正常流零改变）
           }
         }

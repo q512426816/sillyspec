@@ -7,7 +7,7 @@
  *
  * 覆盖：
  * 1. worktree 单侧修改（主仓=祖先内容）：快照应取 worktree 版本（修复前误取主仓旧版）
- * 2. 真双写分叉（两侧都真改且互不相等）：仍取主仓（既有语义不变，警告照发）
+ * 2. 真双写分叉（两侧都真改且互不相等）：取 worktree（2026-09-21-r5-efficiency-batch2 D-002@v2 翻转——batch1 verify 实证分叉取主仓致 src/test 血统断裂假红；主仓侧异动为干扰源，apply 后主仓单源复核兜底）
  * 3. 主仓直写新、worktree=祖先（陈旧 worktree）：仍取主仓（既有语义不变）
  */
 import { describe, it, beforeEach, afterEach } from 'node:test'
@@ -55,7 +55,7 @@ describe('createGateSnapshot 祖先比对对称 trim（坑 gate-snapshot-ancesto
     }
   })
 
-  it('真双写分叉（两侧都真改且互不相等）：仍取主仓（语义不变）', () => {
+  it('真双写分叉（两侧都真改且互不相等）：取 worktree（D-002@v2 语义翻转）', () => {
     const sha = baseSha(repo)
     writeFileSync(join(wt, 'b.js'), 'wt real edit\n')
     writeFileSync(join(repo, 'b.js'), 'main real edit\n')
@@ -63,7 +63,7 @@ describe('createGateSnapshot 祖先比对对称 trim（坑 gate-snapshot-ancesto
     assert.ok(snap)
     try {
       const got = readFileSync(join(snap.snapshotRoot, 'b.js'), 'utf8')
-      assert.ok(got.includes('main real edit'), '真分叉取主仓（本会话最新编辑位约定）')
+      assert.ok(got.includes('wt real edit'), '真分叉取 worktree 分支版（D-002@v2：本变更交付血统优先）')
     } finally {
       snap.cleanup()
     }

@@ -7,7 +7,7 @@ import { isPathASupported } from '../dispatch/backends/sillyhub-mcp.js'
 import { readMcpConfig } from '../sillyhub-mcp/config.js'
 import { gitQuiet } from '../git-helper.js'
 import { REVIEW_CHECKLISTS } from '../stage-review-checklist.js'
-import { parseRepo } from './plan-postcheck.js'
+import { parseRepo, collectCardBatchFacts, recommendWaveGroups } from './plan-postcheck.js'
 // 模块卡分级解析（token 成本优化 P0a）。注意：module-resolve.js 反向 import 本文件的
 // parseTaskRegistry（注册表同口径）——双向引用均为函数声明 + 调用时解引（无模块初始化期
 // 交叉求值），ESM live binding 下安全；两边都是纯读函数，无副作用序问题。
@@ -953,6 +953,31 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
     } catch {}
   }
 
+  // ── execution_mode 通道（M4 / FR-04，2026-09-21-r5-efficiency-batch2 task-04，D-004@v1）：
+  // plan.md frontmatter `execution_mode: main | dispatch`，**缺省/非法值一律回退 dispatch**
+  // （既有变更含归档重放逐字节零回归）。main=主代理直写（本仓对撞实证 A 组 7′ vs B 组 70′；
+  // GSD 在 Claude Code 永远 spawn 子代理——direct 是本仓结论非 GSD 抄袭项，分歧声明见
+  // design M4）。main 时：执行方式段换直写指引、派发段/子代理工作目录强制段/并发帽段/
+  // M3 推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与锚点/review write
+  // 指引全保留（只换执行宿主，不换防线）。判据（plan 生成时 agent 声明）：输入已含决策 ×
+  // 任务文件正交的清晰输入任务；自动化判据归第 3 批 ceremony 决策密度轴。best-effort：
+  // plan 缺失/读取失败回退 dispatch。严格小写 'main'（大小写漂移视为非法回退）。
+  let executionMode = 'dispatch'
+  try {
+    if (changeDir) {
+      const emPlanPath = path.join(changeDir, 'plan.md')
+      if (existsSync(emPlanPath)) {
+        const emPlanText = memo('plan', () => readFileSync(emPlanPath, 'utf8'))
+        const emFm = emPlanText.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)
+        if (emFm) {
+          const emVal = emFm[1].match(/^execution_mode:[ \t]*(\S+)[ \t]*(?:#.*)?$/m)
+          if (emVal && emVal[1] === 'main') executionMode = 'main'
+        }
+      }
+    }
+  } catch { /* execution_mode 解析 best-effort：失败回退 dispatch */ }
+  const mainMode = executionMode === 'main'
+
   // ── 模块卡分级（P0a）：本 Wave per-task 最优卡表，细卡优先——治「根层大卡被每个子代理
   // 整读」（multi-agent-platform backend.md 58KB 实测单卡一项 20 万+ tokens/全流程）。
   // best-effort：解析失败/无 map 不注入（零回归），可经 `sillyspec modules resolve` 手查。
@@ -1193,9 +1218,29 @@ ${crossLines}${crossWorktreeSection}${crossLegacySection}
 `
   }
 
+  // 工作目录「注意」尾段（单仓口径，M4 抽出共享）：主代理直写变体与子代理派发变体逐字
+  // 共用——蓝图主仓路径指引 / spec 产物主仓铁律 / Python 导入链陷阱与执行宿主无关。
+  const worktreeNoticeSingle = `### 注意
+蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
+
+⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
+
+⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 \`import <项目包>\` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/<项目源码根>\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。`
+
   // worktreeSection：无 ctx / 无跨仓 task → 旧单值（零回归）；有 ctx 含跨仓 task → per-task 多值表
   let worktreeSection
-  if (ctx && hasCrossRepoWave && perTaskWorkdirs) {
+  if (mainMode && worktreePath && !(ctx && hasCrossRepoWave && perTaskWorkdirs)) {
+    // M4 main 单仓直写变体：无子代理 workdir JSON（无子代理），注意尾段与派发变体逐字共享。
+    // 跨仓 + main 仍走下方 per-task 表（跨仓 workdir 归属信息与执行宿主无关；M4 判据=清晰
+    // 输入 × 文件正交，跨仓 ctx 场景罕见，本批不扩面）。
+    worktreeSection = `
+### 工作目录（主代理直写）
+
+本变更在隔离 worktree 内实现：\`${worktreePath}\`——你（主代理）直接在该 worktree 内改代码并逐任务 commit（\`sillyspec wt-commit --change <change-name> -- <task-files>\`），不经子代理派发。
+
+${worktreeNoticeSingle}
+`
+  } else if (ctx && hasCrossRepoWave && perTaskWorkdirs) {
     const workdirLines = perTaskWorkdirs.map(i =>
       `  - task-${i.taskNum} (repo: ${i.repo}) → workdir: "${i.workdir}"`
     ).join('\n')
@@ -1241,12 +1286,7 @@ ${workdirLines}
 }
 \`\`\`
 
-### 注意
-蓝图文件（tasks.md / design.md / proposal.md / requirements.md）在主工作区 {SPEC_ROOT}/changes/<change>/ 下（CLI 已替换为主仓绝对路径），它们可能不在 worktree 中。读取蓝图时使用主工作区路径，不要拼接到 worktree 路径下。
-
-⚠️ **铁律：spec 流程产物只写主仓 {SPEC_ROOT}，绝不写进 worktree 副本**——包括 module-impact.md / knowledge 条目 / 模块卡与 \`<module>.changelog.md\` sidecar。在 worktree 内发现 \`.sillyspec/\` 目录是 checkout 副本，写进去的任何内容都会随 worktree cleanup 整目录蒸发（2026-09-10 实证：模块文档写副本、归档被迫 checkout 补救）。子代理 prompt 中涉及此类产物时，必须原样带上主仓绝对路径。
-
-⚠️ **Python 导入链陷阱（venv editable install，2026-09-18 实证）**：worktree 内跑任何 \`import <项目包>\` / dump_openapi / 代码生成类命令时，若用的是主仓 venv（junction 链接或裸调主仓 python），其 editable install（\`_editable_impl_*.pth\`）指向**主仓**绝对路径——项目包 import 会静默解析到主仓旧代码，产出旧 schema/旧行为且零报错（看似「改动没生效」）。**跑生成链前设 \`PYTHONPATH=<worktree>/<项目源码根>\`**（PYTHONPATH 优先于 .pth），或用 worktree 自建 venv；\`sillyspec worktree doctor\` 的 editable-install-escape 检查可提前暴露。
+${worktreeNoticeSingle}
 `
       : ''
   }
@@ -1259,7 +1299,7 @@ ${workdirLines}
   // （无 worktree 无谓派发指令）。测试/调用方可经 options.dispatchMode 覆盖，避免 env 污染。
   const dispatchMode = options.dispatchMode || getDispatchMode()
   let dispatchSection = ''
-  if (worktreePath && dispatchMode === 'sillyhub') {
+  if (!mainMode && worktreePath && dispatchMode === 'sillyhub') {
     // 路径A 落地后：注入完整 SillyHub 派发指令（renderDispatchInstruction 已含 Local 兜底全文）
     const contract = {
       brief: '本 Wave 任务（见上方任务摘要与 tasks/task-XX.md）',
@@ -1271,7 +1311,7 @@ ${workdirLines}
     }
     const { instruction } = renderDispatchInstruction(contract, { available: true })
     dispatchSection = `\n### 派发后端：SillyHub MCP（探测可用，一 Wave 一 mission）\n\n本次 Wave 派发经 SillyHub MCP。按以下派发指令执行（含 create_mission / dispatch_worker / 轮询 list_workers / 超时 kill lease 防双写 / 回收 + Local 兜底）：\n\n${instruction}\n`
-  } else if (worktreePath && dispatchMode === 'local-fallback') {
+  } else if (!mainMode && worktreePath && dispatchMode === 'local-fallback') {
     // 有 MCP 配置但路径A 未落地：加短提示，派发仍走 Local（与默认行为一致）
     dispatchSection = `\n### 派发后端提示：SillyHub MCP 已配置但路径A 未落地\n\n检测到 local.yaml mcp 段或 env 配置，但 SillyHub \`dispatch_worker\` 尚不支持 \`worktree_path\`（路径A 跨仓未落地）。本次派发走 Local（本机 Agent tool），与默认行为一致——上方「执行方式」与「工作目录」段适用。\n`
   }
@@ -1294,6 +1334,42 @@ ${workdirLines}
   if (waveMaterialHits.length > 0) {
     const itemNo = globalConstraintsBlock ? '10.' : '9.'
     materialsPoint = `\n${itemNo} **任务材料包（CLI 预装配，稳定段先行）**：${waveMaterialHits.join('；')}——先读材料包，按锚点回源核对；材料包只摘不译，冲突以源文件为准`
+  }
+
+  // ── 推荐分组（M3 / FR-03，2026-09-21-r5-efficiency-batch2 task-03，D-003@v1）：CLI 按
+  // 第 1 批三条件机械预计算本 Wave 推荐分组，注入派发段——派发交接单位从 task 升组，摊平
+  // per-task 子代理的重复上下文重建（P13/GSD）。两道零回归门：
+  //   ① dispatchMode === 'sillyhub' 零注入（一 Wave 一 mission，分组语义不适用——与下方
+  //      「SillyHub 派发互斥」行同口径；local / local-fallback 实际派发走 Local 照注入）；
+  //   ② recommendWaveGroups 无 ≥2 组（无可并/卡缺失不可判/护栏预算 0）→ recommendBlock=''
+  //      → 模板插入位相邻字节形态不变，输出与改前逐字节一致。
+  //   ③ execution_mode=main 零注入（M4：无派发即无分组语义，Grill P3-2——与 SillyHub 互斥
+  //      同款模式互斥口径）。
+  // facts 逐卡 memoMap（一次 buildExecuteSteps 期间卡内容不变，跨 Wave 共享）；分组本体与
+  // plan-postcheck checkBatchAdvisory 判定①共用 recommendWaveGroups 纯函数（无二源）。──
+  let recommendBlock = ''
+  if (changeDir && dispatchMode !== 'sillyhub' && !mainMode) {
+    try {
+      const groupTasks = wave.tasks.map((t, ti) => {
+        const id = `task-${String(t.index || (ti + 1)).padStart(2, '0')}`
+        const facts = memoMap('batchFacts', id, () => {
+          const cardPath = path.join(changeDir, 'tasks', `${id}.md`)
+          if (!existsSync(cardPath)) return null
+          return collectCardBatchFacts(readFileSync(cardPath, 'utf8'))
+        })
+        return {
+          id,
+          files: facts && facts.fileSet ? [...facts.fileSet] : null,
+          deps: facts ? facts.deps : [],
+          expectsProviders: facts ? facts.expectsProviders : [],
+        }
+      })
+      const recGroups = recommendWaveGroups(groupTasks)
+      if (recGroups.some(g => g.length >= 2)) {
+        const display = recGroups.map(g => `[${g.join(',')}]`).join(' / ')
+        recommendBlock = `\n**推荐分组（CLI 已按上述三条件预计算）**：${display}\n按推荐分组派发与回收（组内逐 task 审查/review.json 照旧，主代理按组一次回收）；可偏离推荐分组，但偏离须在 Wave 完成摘要中披露理由——机械建议不夺裁决权。\n`
+      }
+    } catch { /* 推荐分组 fail-open：计算失败零注入，不阻断 Wave prompt 组装 */ }
   }
 
   // ── 派发契约（2026-09-21-r5-efficiency-batch1 task-03，FR-03 / B-⑥ + C-1）：轮数纪律三行 +
@@ -1319,13 +1395,25 @@ ${workdirLines}
   const roleItem1 = implicit
     ? `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，逐个完成（串行——启动一个、等它完成并审查后再启动下一个，见「调度要求」串行铁律）`
     : `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行——但同时在飞子代理 ≤3（见「调度要求」并发帽，超出的 batch 排队错峰）`
-  const scheduleItem1 = implicit
-    ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
-    : `1. **同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中。并发帽 3：Wave 内子代理超 3 个时分两批错峰——首批完成后回收槽位再派第二批；4 路齐发实证触发平台额度/限流耗尽，整 Wave 中断 17 分钟由用户手动恢复，得不偿失）。`
+  const scheduleItem1 = mainMode
+    ? `1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 锚点/review write → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。`
+    : implicit
+      ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
+      : `1. **同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中。并发帽 3：Wave 内子代理超 3 个时分两批错峰——首批完成后回收槽位再派第二批；4 路齐发实证触发平台额度/限流耗尽，整 Wave 中断 17 分钟由用户手动恢复，得不偿失）。`
 
-  return `${waveHeader}
+  // ── M4 模式段变体（2026-09-21-r5-efficiency-batch2 task-04）：dispatch 分支为既有模板
+  // 逐字移植（缺省/非法回退 dispatch → 输出与改前逐字节一致，零回归由改动前后黄金快照
+  // diff + 既有钉测试双保证）；main 分支为直写指引——派发段/子代理工作目录强制段/并发帽
+  // 段/M3 分组段全抑制，防线与锚点/review write 指引全保留（只换执行宿主，不换防线）。──
+  const mainExecSection = `## 执行方式
 
-## 执行方式
+**主代理直写（execution_mode: main）——你直接实现，不派子代理。**
+
+逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 锚点写入与 review write（见下方 Task Review Gate——checkbox 由 CLI 自动勾选，勿手动勾选）→ 下一任务。
+
+worktree 隔离 / 写入守卫（allowed_paths）/ review.json / verify 门禁全部保留——只换执行宿主，不换任何防线。`
+
+  const dispatchExecSection = `## 执行方式
 
 **默认每个任务由独立子代理执行，你不要自己写代码。**
 
@@ -1333,24 +1421,37 @@ ${workdirLines}
 - 组内任意两个 task 的 allowed_paths 无交集（文件正交）
 ${batchCond2}
 - 组大小不超过 3 个 task
-
+${recommendBlock}
 任一条件不满足，该 task 走独立子代理（默认形态）；拿不准就不合并。无论独立还是 batch，实现一律由子代理完成，你不要自己写代码。
 
 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
 ${roleItem1}
 2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
 3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
-4. 记录改动文件和测试结果
+4. 记录改动文件和测试结果`
 
-${worktreeSection}${crossRepoCommitSection}${dispatchSection}
-**SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。
-${moduleSection}
-### 任务摘要（按需读取完整蓝图）
-为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：
+  // main 模式无派发——SillyHub 互斥行随派发段一同抑制（无 batch 分组语义可互斥）
+  const sillyhubMutexLine = mainMode ? '' : '**SillyHub 派发互斥**：SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组；batch 分组指导仅适用于本地 Agent tool 派发。'
 
-${taskSummary}
+  // 任务摘要引导行 + 要点块的模式变体（M4）：dispatch 分支逐字原文；main 分支去子代理
+  // 语境（无 prompt 组装、无 batch 协议），铁律/模块卡/测试设计/增量落盘/边界铁律五条保留。
+  const summaryIntroLine = mainMode
+    ? '逐任务实现前先读该 task 卡（目标/边界/验收都在卡上，按需再读 design 对应节）：'
+    : '为每个任务启动子代理时，**只需告知任务目标和蓝图文件路径，让子代理按需读取**：'
 
-子代理 prompt 要点：
+  const modulePointMain = moduleSection
+    ? '**模块卡分级**：按上方「模块卡分级」表读该 task 命中的卡（细卡整读；粗大卡只读「契约摘要/注意事项/定位」节）——勿按目录漫游或整读根层大卡'
+    : '如存在模块文档（{SPEC_ROOT}/docs/*/modules/），按需读取涉及模块的 <module>.md 参考接口约定和数据流——读主仓路径（CLI 已替换为绝对路径），不要读 worktree 副本'
+
+  const mainPointsSection = `实现要点：
+1. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
+2. ${modulePointMain}
+3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例
+4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作
+   **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**
+5. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界`
+
+  const subagentPointsSection = `子代理 prompt 要点：
 1. 任务目标（简短描述）
 2. 蓝图文件路径（让子代理自行读取详情）
 3. 编码铁律：先读后写、TDD、不编造方法、只做蓝图里写的事、遵守边界处理规则、不超出 allowed_paths
@@ -1359,7 +1460,21 @@ ${taskSummary}
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
    **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
-8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task
+8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task`
+
+  return `${waveHeader}
+
+${mainMode ? mainExecSection : dispatchExecSection}
+
+${worktreeSection}${crossRepoCommitSection}${dispatchSection}
+${sillyhubMutexLine}
+${moduleSection}
+### 任务摘要（按需读取完整蓝图）
+${summaryIntroLine}
+
+${taskSummary}
+
+${mainMode ? mainPointsSection : subagentPointsSection}
 ${globalConstraintsBlock}${materialsPoint}${roundDisciplinePoint}${returnContractPoint}
 {{include: testcase-design}}
 

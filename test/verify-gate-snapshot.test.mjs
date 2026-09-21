@@ -142,16 +142,18 @@ test('native 收养态（meta 缺席、cwd 即 linked worktree）：untracked �
   } finally { snap.cleanup() }
 })
 
-// ── 双写一致性（2026-09-20 红线机检变更实证修复：主仓直写新、worktree 陈旧 → 快照取主仓）──
-test('双写：主仓直写新版本而 worktree 停在旧交付 → 快照取主仓（治 import 找不到新导出的假红）', async () => {
+// ── 双写分叉（2026-09-21 D-002@v2 语义翻转：分叉态取 worktree——batch1 假红根治；
+//    原「取主仓」期望随设计批准翻转，同 gate-snapshot-ancestor-trim 先例；三态完整钉归
+//    test/gate-snapshot-lineage.test.mjs，此处保留端到端快照层复刻）──
+test('双写分叉：主仓侧并行异动 + worktree 交付 → 快照取 worktree 分支版（D-002@v2）', async () => {
   const proj = mk('vgs-dual-')
   const { specBase } = setupBase(proj, 'native')
-  // 主 agent 在主仓直写了更新的版本（f=3），worktree 还是 f=2
+  // 主仓侧同文件被并行会话异动（f=3），worktree 停在本变更交付（f=2）——③态分叉
   writeFileSync(join(proj, 'src', 'feature.js'), 'export const f = 3 // 主仓直写新\n')
   const snap = await createVerifyGateSnapshot({ cwd: proj, changeName: 'c1', specBase })
   assert.ok(snap, '快照创建成功')
   try {
-    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 3 // 主仓直写新\n',
-      '三方取新：主仓版本胜出（基线 f=1，worktree f=2 也新于基线但主仓是本会话最新编辑位——分叉警告 + 取主仓）')
+    assert.equal(readFileSync(join(snap.snapshotRoot, 'src', 'feature.js'), 'utf8'), 'export const f = 2 // 本变更交付\n',
+      '分叉取 worktree 分支版（基线 f=1，主仓 f=3 为并行异动干扰源——定向跑语义=验本变更分支交付；①保护态取主仓不受影响）')
   } finally { snap.cleanup() }
 })
