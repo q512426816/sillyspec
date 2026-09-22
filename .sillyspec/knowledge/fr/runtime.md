@@ -74,3 +74,132 @@
 - 场景：默认场景 — Given 纯 quick --done（无 linked 真变更）；When 收尾段执行；Then changedFiles×module-map 命中模块且边车存在 → changelog 追加一行 `- ql-id | 摘要`；--cause 原文 × I
 全文：.sillyspec/changes/archive/2026-09-20-quick-asset-tail/requirements.md#FR-03
 最近确认：611b6890
+
+## FR-runtime-008 指令指纹增量——同步骤复入只印指纹+路径
+变更：2026-09-21-r5-efficiency-batch2
+状态：active
+摘要：（无场景名）
+待复核：recent-quick
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-01
+最近确认：c1d22063
+
+## FR-runtime-009 gate 快照分叉态取 worktree 血统
+变更：2026-09-21-r5-efficiency-batch2
+状态：active
+摘要：（无场景名）
+待复核：recent-quick
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-02
+最近确认：c1d22063
+
+## FR-runtime-010 PLAN 粒度派发默认化
+变更：2026-09-21-r5-efficiency-batch2
+状态：active
+摘要：（无场景名）
+待复核：recent-quick
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-03
+最近确认：c1d22063
+
+## FR-runtime-011 execute direct 模式通道
+变更：2026-09-21-r5-efficiency-batch2
+状态：active
+摘要：默认场景
+待复核：recent-quick
+场景正文：
+- 场景：默认场景 — Given 同一 (stage, step) 第二次渲染且静态段指纹一致；When run <stage> 复入输出步骤指引；Then 输出 ≤10 行（指纹+落盘路径+按需 Read 提示），动态段照常渲染，--json 模式全量输出不变
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-04
+最近确认：c1d22063
+
+## FR-runtime-012 gate 预检补全（--full 只读档）
+变更：2026-09-21-r5-efficiency-batch3
+状态：active
+摘要：（无场景名）
+待复核：recent-quick
+依据决策：D-002@v1
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-01
+最近确认：27de9716
+
+## FR-runtime-013 测试结果记账（fail-closed 复用）
+变更：2026-09-21-r5-efficiency-batch3
+状态：active
+摘要：（无场景名）
+待复核：recent-quick
+依据决策：D-001@v1
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-02
+最近确认：27de9716
+
+## FR-runtime-014 归档就绪度前置
+变更：2026-09-21-r5-efficiency-batch3
+状态：active
+摘要：（无场景名）
+待复核：recent-quick
+依据决策：D-003@v1
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-03
+最近确认：27de9716
+
+## FR-runtime-015 M1 缺省开
+变更：2026-09-21-r5-efficiency-batch3
+状态：active
+摘要：默认场景
+待复核：recent-quick
+依据决策：D-004@v1
+场景正文：
+- 场景：默认场景 — Given 全量测试在同一（代码×测试面×环境）态下重复执行；When gate/verify --done/quick --done 再次触发实测检查；Then 三键全等即复用最近结果（不重跑），任一分量变化或不可得即真跑——失败永不来自缓存
+全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-04
+最近确认：27de9716
+
+## FR-runtime-016 readStageBurst 配置读取（三态）
+变更：2026-09-22-stage-burst-fold
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 仓库 local.yaml 可读（或缺失/坏 YAML）；When 调 readStageBurst(cwd)
+全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-01
+最近确认：9f9450d0
+
+## FR-runtime-017 burst 渲染折叠（白名单阶段）
+变更：2026-09-22-stage-burst-fold
+状态：active
+摘要：默认场景
+依据决策：D-002@v2
+场景正文：
+- 场景：默认场景 — Given brainstorm/plan/execute 阶段存在剩余非 completed/skipped 步且 readStageBurst(cwd) 为 true，；When `sillyspec run <stage>`；Then noAI 步就地执行 _cliAction 并标 completed 落库；AI 步逐个按既有 outputStep 输出（首可渲染步带 persona 注入）
+全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-02
+最近确认：9f9450d0
+
+## FR-runtime-018 burst done 循环收口（守卫零改动）
+变更：2026-09-22-stage-burst-fold
+状态：active
+摘要：默认场景
+依据决策：D-003@v2、D-004@v2
+场景正文：
+- 场景：默认场景 — Given burst 开启且白名单阶段有待完成步；When `sillyspec run <stage> --done [--output ...] [--answer ...]`；Then completeStepBurst 循环调既有 completeStep（printNext:false、每轮 outputText=null 走 P0-2 事
+全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-03
+最近确认：9f9450d0
+
+## FR-runtime-019 env 逃生阀
+变更：2026-09-22-stage-burst-fold
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given local.yaml 配置 `stage: burst: true`；When 以 `SILLYSPEC_STAGE_BURST=0` 运行 `sillyspec run <stage>`；Then 走既有单步渲染路径（仅当前步说明书、无 burst 尾提示）
+全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-04
+最近确认：9f9450d0
+
+## FR-runtime-020 flow.mode 缺省翻回 legacy
+变更：2026-09-22-stage-burst-fold
+状态：active
+摘要：默认场景
+依据决策：D-010@v2
+场景正文：
+- 场景：默认场景 — Given 仓库 local.yaml 无 flow 配置（或读取失败）；When 调 readFlowConfig(specBase)；Then mode === 'legacy'；显式 `mode: thin` / `flow: thin` 照旧生效；受影响测试 fixture（test/flow-pr
+全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-05
+最近确认：9f9450d0
+
+## FR-runtime-021 command.js 两处 --done 分发接线
+变更：2026-09-22-stage-burst-fold
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given burst 开启且 stage ∈ 白名单；When 主 --done 分发（src/run/command.js:1727 一带）或 auto --done 路径（:2073 一带）执行；Then 走 completeStepBurst；burst 关闭或非白名单走 completeStep 原路径——两路径 options 透传语义不变
+全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-06
+最近确认：9f9450d0

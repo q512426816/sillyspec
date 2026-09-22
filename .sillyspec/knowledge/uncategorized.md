@@ -21,3 +21,6 @@ verify 门（--done 实测）跑在主仓进程、用主仓**当前已 apply** �
 根因：spawn 侧环境闸（NODE_TEST_CONTEXT/SILLYSPEC_WATCHER）只拦「我拉起的这条路」，测试内 CLI 子进程自带自定义 env 绕过；而 watcher 设计上未连平台也 spawn+自刷心跳租约=无外部判死锚，测试临时目录又不清理 → 永续孤儿。
 护栏（三闸模式，通用）：①出生即死——首拍已是终态（对象不存在）立即退出；②外部资源蒸发——依赖的外部资源（git 仓/目录）连续 N 拍消失即退；③硬寿命帽——无论活跃与否 T 小时绝对退出。另：套件 runner 注入全局逃生阀（run-tests.mjs SILLYSPEC_WATCHER=0）+真子进程回归钉（主路径而非只边缘路径——本次常量缺失崩启动恰是只测边缘路径漏掉的）。
 证据：2026-09-22 用户会话抓现行 41 进程+杀灭后零闪现；src/watcher.js 三闸+test/watcher.test.mjs 两枚真子进程钉。（来源：2026-09-22-r7-protocol-surgery task-01）
+
+## execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）
+在隔离 execute worktree 内跑全量套件时，spawn `sillyspec` 子进程的测试族（config-schema / init-* / platform-* / spec-dir / mcp-server / sillyhub / run-help-shortcircuit）会被 CLI 的「当前在隔离 worktree 内」守卫拦下整文件挂（exit 非 0）——这是环境性假红不是回归。判定法：基线 A/B（同 worktree 环境跑基线提交）同挂即存量；或单跑对照（套件顺序 flake 单跑双绿）。规避：全量回归在主仓跑（或基线 A/B 归因后留痕）；worktree 内只跑定向测试文件。另：cursor-agent-transcript-detect 在全量套件内有顺序性 flake（单跑稳定绿）。（来源：2026-09-22-stage-burst-fold task-05 基线 A/B 实证）

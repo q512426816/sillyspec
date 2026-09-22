@@ -85,3 +85,4 @@ created_at: 2026-06-19T12:40:00+08:00
 - stages|FR|需求|承接 → [fr/stages.md](fr/stages.md)
 - setup|FR|需求|承接 → [fr/setup.md](fr/setup.md)
 - sync|FR|需求|承接 → [fr/sync.md](fr/sync.md)
+- cli-entry|FR|需求|承接 → [fr/cli-entry.md](fr/cli-entry.md)
