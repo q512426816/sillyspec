@@ -147,6 +147,15 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     pm.claimChangeOwner(cwd, change, session)
   } catch { /* claim 失败不阻断启动（fail-open，同 runCommand 接线） */ }
 
+  // watcher 拉起（D-001：change 启动即观测——flow start 走 index.js 分发不经 runCommand，
+  // 需在此独立接线；语义同 command.js 侧：无条件 spawn+单飞锁合并+best-effort 不阻断，
+  // 未连接平台也 spawn（本地 jsonl 是事件唯一真相源）；SILLYSPEC_WATCHER=0 逃生阀）。
+  try {
+    const { spawnWatcher } = await import('./watcher.js')
+    const r = await spawnWatcher(cwd, change, { specBase })
+    if (r.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+  } catch { /* 观测旁路 best-effort，绝不阻断协议面 */ }
+
   const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
   const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
   writeFlowState(changeDir, {
