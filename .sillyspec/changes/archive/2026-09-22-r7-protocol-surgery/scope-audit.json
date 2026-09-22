@@ -1,0 +1,180 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "57146014b10a235089c624062614dc11647a151d",
+  "totals": {
+    "files": 20,
+    "additions": 2363,
+    "deletions": 121
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 4,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": ".sillyspec/local.yaml.example",
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 111,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/flow-draft.js",
+      "additions": 308,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/flow.js",
+      "additions": 418,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 6,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/machine-draft.js",
+      "additions": 117,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/command.js",
+      "additions": 30,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "additions": 79,
+      "deletions": 60,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "additions": 9,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-draft.js",
+      "additions": 9,
+      "deletions": 59,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/watcher.js",
+      "additions": 466,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/archive-chain.test.mjs",
+      "additions": 62,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-draft.test.mjs",
+      "additions": 139,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-protocol.test.mjs",
+      "additions": 153,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-route.test.mjs",
+      "additions": 109,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/machine-draft.test.mjs",
+      "additions": 83,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/run-tests.mjs",
+      "additions": 3,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/watcher.test.mjs",
+      "additions": 241,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "3bb34cf4c7a53edaa3bda71c786ff5a2d44d43dac5cb7333fe50b4beff52303b",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-22T06:17:46.196Z"
+}

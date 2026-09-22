@@ -154,6 +154,12 @@ const stepGeneratePlan = {
 > tasks.md 格式：\`- [ ] task-01: 一句话任务名\`（execute 从这里解析任务清单）
 > plan.md Wave 段格式：\`- task-01\`（纯 ID 引用，execute 据此分组）
 
+> **拆分粒度纪律（D-006@v1 / FR-11，R7 实证：18 卡细拆给反仪式变更预付协议税）**：
+> - **默认「实现+单测同卡」**——测试与实现放同一任务卡（TDD 同任务），不单独开「测试卡」「验收 Wave」；纯验收类动作（跑全量回归）并入相关实现卡的 acceptance/verify。
+> - **禁止仪式卡**：「纯接线」「纯 module-map 录入」「纯全量回归绿」不独立成卡——此类收尾动作写进相关实现卡的 implementation 与 acceptance（几行接线并入实现，module-map 录入并入该片最后一张实现卡）。
+> - **「同 Wave 文件不相交」语义澄清**：该约束防并行子代理同文件互写（调度约束），**不要求**把测试/接线/录入拆成独立任务——同一张卡携带多个文件（实现+测试+module-map）完全合法，约束只作用于 Wave 内**多任务之间**的 allowed_paths 交集。
+> - 拆分对齐「可独立验收的能力边界」而非「工序步骤」——一个能力（实现+接线+单测+登记）通常=一张卡；协议成本与任务卡数线性挂钩，卡片数是税。
+
 > **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：
 > - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（\`> batch: task-01+task-02\`，一段多行即多批），**不替代** \`- task-XX\` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）
 > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
@@ -461,8 +467,11 @@ related_tests:                           # 可选。当本 task 改动会导致�
 
 ⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：
 - **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）
+  （注意：该约束只限制 Wave 内**多任务之间**的文件交集——同一张卡携带实现+测试+module-map 多文件合法，勿为规避此约束把测试/接线拆成独立卡，见步骤 2 拆分粒度纪律）
 - **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）
 这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
+
+卡片粒度对齐 plan.md/tasks.md 的任务数——plan 未拆出的收尾动作不为仪式另立卡。
 
 ⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。
 

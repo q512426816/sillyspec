@@ -15,3 +15,9 @@ docs/prompt/_extract.mjs 抽取的 plan/execute 动态步骤 prompt 会内嵌**�
 
 ## 修 gate-snapshot 自身的变更在 verify 门遇「快照分叉假红」鸡生蛋
 verify 门（--done 实测）跑在主仓进程、用主仓**当前已 apply** 的 gate-snapshot 代码装配隔离快照（HEAD+本变更文件 overlay 自 worktree）。若本变更恰好修 gate-snapshot 的双写分叉语义（如 2026-09-21-r5-efficiency-batch2 M2/D-002@v2 分叉取 worktree），修复未 apply 前门仍用旧语义（分叉取主仓）——此时主仓侧同文件若有并行会话在途异动（③态成立），快照会装入**主仓并行版**而非本变更 worktree 版，本变更的新测试对旧码断言→确定性假红（实证：module[cli-core,run-gates]+deps 2 行，主仓 execute.js+1 行并行 quick 修复窗口）。判据：快照挂而 worktree 定向全量绿 + 快照警告日志含「双写分叉：…取主仓」旧文案。处置：CLI 排查路径② `SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1` 回退主仓口径对照过门（如实披露口径差异），apply 后主仓复跑终局对账——修复随 apply 生效后此场景永久消失。勿改测试迁就旧码。（来源：2026-09-21-r5-efficiency-batch2 verify，D-002@v2 修复场景活实证）
+
+## detached 长驻子进程必须有独立于 spawn 环境的自杀条件（41 孤儿 watcher 泄漏实证）
+现象：全量测试套件后 41 个 watcher 孤儿进程存活，每 3s 轮询 git（每秒十几次 git/conhost 闪现，用户侧当病毒排查）。
+根因：spawn 侧环境闸（NODE_TEST_CONTEXT/SILLYSPEC_WATCHER）只拦「我拉起的这条路」，测试内 CLI 子进程自带自定义 env 绕过；而 watcher 设计上未连平台也 spawn+自刷心跳租约=无外部判死锚，测试临时目录又不清理 → 永续孤儿。
+护栏（三闸模式，通用）：①出生即死——首拍已是终态（对象不存在）立即退出；②外部资源蒸发——依赖的外部资源（git 仓/目录）连续 N 拍消失即退；③硬寿命帽——无论活跃与否 T 小时绝对退出。另：套件 runner 注入全局逃生阀（run-tests.mjs SILLYSPEC_WATCHER=0）+真子进程回归钉（主路径而非只边缘路径——本次常量缺失崩启动恰是只测边缘路径漏掉的）。
+证据：2026-09-22 用户会话抓现行 41 进程+杀灭后零闪现；src/watcher.js 三闸+test/watcher.test.mjs 两枚真子进程钉。（来源：2026-09-22-r7-protocol-surgery task-01）

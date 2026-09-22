@@ -4,9 +4,11 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-14T22:35:00+08:00
+updated_at: 2026-09-22T00:00:00+08:00
 ---
 # cli-entry
+
+> R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：新增 flow 命令族（src/flow.js 2-调用协议 start/done/amend-draft + src/flow-draft.js 机器起草；index.js case flow 接线）
 
 ## 定位
 

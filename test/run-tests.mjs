@@ -37,6 +37,9 @@ const childEnv = {
   TMPDIR: suiteTmp,
   HOME: suiteTmp,
   USERPROFILE: suiteTmp,
+  // 套件级 watcher 逃生阀（2026-09-22 实证：全套件漏 41 个孤儿 watcher 每 3s 轮询 git）——
+  // 测试内 CLI 子进程无论 env 传递形态如何，凡继承本 runner 环境者一律不拉起观测旁路。
+  SILLYSPEC_WATCHER: '0',
 }
 
 // 全局指针污染防护：测试可能把 ~/.sillyspec-platform.json 写到 HOME（cwd 纠正到 home 的缝隙），

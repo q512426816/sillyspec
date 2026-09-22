@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-22-r7-protocol-surgery",
+  "generatedAt": "2026-09-22T09:40:52.637Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "matches": 31,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "tasks": 7,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-22-r7-protocol-surgery",
+      "metrics": {
+        "checkedFiles": 8,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 3,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "终验大任务重放（R7 发版硬门）：复用 r6-session-replay 工作树+prompt-R6-L.md，仅换重打包版本号；判据三桶 Δ≤20M/当量 ≤1.3 达标 ≤1.2 拉伸/墙钟 ~90min",
+        "condition": "按 docs/sillyspec/r7-final-replay-checklist.md 执行：前置=版本号重打包；产出=forensic-buckets 桶级对比+flow-telemetry/watcher 事件导出；不达标逐层归因不回滚重测",
+        "severity": "advisory"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "30min 级小任务烟测三指标（agent 采纳行为验证）",
+        "condition": "task done 使用数（--with-tasks 时）/--draft 槽填充形态/RERUN 拒绝数——单测证明机制存在，烟测证明采纳发生（proposal §十一验证策略）",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "task-done 四合一 review-head 错位工具修复（quick 立项候选）",
+        "condition": "task done 的 wt-commit 子步完成后回填 review.json head——本次 5 份手工重对的机制化根治",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 3,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/run-tests.mjs",
+      "test/watcher.test.mjs",
+      "test/archive-chain.test.mjs",
+      "test/machine-draft.test.mjs",
+      "test/flow-protocol.test.mjs",
+      "test/flow-draft.test.mjs",
+      "test/flow-route.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-22T09:42:40.421Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

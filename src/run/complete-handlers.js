@@ -570,6 +570,176 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
   return { docsAdded: null, fallbackDocs: true }
 }
 
+/**
+ * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
+ *
+ * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
+ * flow thin 薄工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
+ * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
+ * → unregisterChange 终态一致化 → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
+ * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
+ *
+ * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
+ */
+export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false } = {}) {
+  const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
+  // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
+  // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
+  // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①
+  // 的代劳窗口放大器）。只拦不代跑（design 非目标：脏重叠场景人确认更稳）。--skip-apply 显式
+  // 跳过并留痕（控制台输出 + skip-apply.record.json 随归档包留存，可审计）。无 worktree
+  // （meta 缺失/in-place/native）或零交付面 → 零行为变化。探测用 applyWorktree checkOnly
+  // （只读零写盘，Gate 全收集不落盘、不短路）。
+  try {
+    const { WorktreeManager } = await import('../worktree.js')
+    const wmGate = new WorktreeManager({ cwd })
+    const gateMeta = wmGate.getMeta(changeName)
+    if (gateMeta
+      && gateMeta.mode !== 'in-place-fallback'
+      && gateMeta.mode !== 'native-worktree'
+      && gateMeta.worktreePath
+      && existsSync(gateMeta.worktreePath)) {
+      const { applyWorktree } = await import('../worktree-apply.js')
+      const checkApply = applyWorktree(changeName, { cwd, checkOnly: true })
+      const face = (checkApply && Array.isArray(checkApply.changedFiles)) ? checkApply.changedFiles : []
+      if (face.length > 0) {
+        const facePreview = `${face.slice(0, 5).join('、')}${face.length > 5 ? ' 等' : ''}`
+        if (!skipApply) {
+          console.error(`❌ 归档失败：worktree 存在未 apply 的交付面（${face.length} 个文件：${facePreview}）`)
+          console.error(`   归档会清理 worktree（目录+分支+meta），交付物将失去进主仓的通道，形成「归档完成但交付物未进主仓」悬空态。`)
+          console.error(`   先 apply 再归档: sillyspec worktree apply ${changeName}`)
+          console.error(`   确认无需 apply（交付面已由其他会话落地/纯探索性变更等）: sillyspec run archive --done --confirm --skip-apply（显式跳过并留痕归档记录）`)
+          process.exit(1)
+        }
+        console.warn(`⚠️  已按 --skip-apply 跳过未 apply 交付面检查（${face.length} 个文件未确认落地主仓：${facePreview}）——留痕归档记录`)
+        writeFileSync(join(srcDir, 'skip-apply.record.json'), JSON.stringify({
+          schemaVersion: 1,
+          change: changeName,
+          flag: '--skip-apply',
+          skippedAt: new Date().toISOString(),
+          deliverableCount: face.length,
+          deliverableFiles: face,
+          note: '归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计',
+        }, null, 2) + '\n')
+      }
+    }
+  } catch (e) {
+    // 探测自身异常 fail-open 留痕：归档主流程既有失败面（rename/git/清理）不叠加；正常路径
+    // 的阻断语义不受影响（无异常时 face 判定照常生效）。
+    console.warn(`⚠️  归档前未 apply 交付面探测失败（不阻断归档）: ${e && e.message ? e.message : e}`)
+  }
+  // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
+  // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
+  // skipPlanCheck（R7 切片二 / task-03 flow 薄工件面）：flow-state 在场的 thin change 无
+  // plan.md（薄工件面四件套），flow done 归档子步传 true 旁路；既有 archive 流程缺省 false 零变化。
+  if (!skipPlanCheck && !existsSync(join(srcDir, 'plan.md'))) {
+    console.error(`❌ 归档失败：变更目录缺少 plan.md（${srcDir}）`)
+    console.error(`   plan.md 是归档的必需产物。请先补全 plan 阶段产出再归档。`)
+    process.exit(1)
+  }
+  // 移动前硬校验（债单 D-5）：module-impact.md「更新结果」表存在 pending 死信 → 阻断。
+  // 修复场景：perf-remediation 类变更把文档同步显式推给 archive（「（execute 完成后由 archive
+  // 阶段同步）| 待办 | pending」），archive 又没做 → 带 pending 归档且 verify 全 PASS，死信无人回填。
+  // 只查「## 更新结果」段内表格行的状态列（末列）精确匹配 pending/待办/未同步——不做全文 grep，
+  // 防 sync_manual_get_pending / pending_review 等代码标识符误报。
+  const impactPath = join(srcDir, 'module-impact.md')
+  if (existsSync(impactPath)) {
+    const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
+    if (pendingRows.length > 0) {
+      console.error(`❌ 归档失败：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+      for (const row of pendingRows) console.error(`   - ${row}`)
+      console.error(`   这些文档同步项从未落地。请先完成同步并回填状态为 done/skipped（说明原因），再归档。`)
+      process.exit(1)
+    }
+  }
+  if (existsSync(destDir)) {
+    console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
+    process.exit(1)
+  }
+  mkdirSync(archiveDir, { recursive: true })
+  try {
+    renameSyncRetry(srcDir, destDir)
+  } catch (e) {
+    console.error(`❌ 归档失败：移动变更目录时出错（${e.message}）`)
+    console.error(`   常见原因：变更目录内文件被 IDE / 杀毒 / 索引占用，已重试 5 次仍失败。请关闭相关程序后重试。`)
+    process.exit(1)
+  }
+
+  if (!existsSync(destDir) || existsSync(srcDir)) {
+    console.error('❌ 归档校验失败：移动操作异常')
+    process.exit(1)
+  }
+
+  // 正常路径同样走终态一致化（坑 manual-archive-desync-status-only）：标准 --done --confirm 流程
+  // 中 completeStep 随后也会逐项完成，此处先收尾是幂等写同值——保证任何走出本函数的归档终态一致
+  pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+
+  // CLI 下沉 git add（坑4，FR-04）：确定性暂存归档目录 + 模块文档，不靠 step5 prompt 驱动。
+  // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
+  // safeGit 内部已 try-catch（返回 {value,error} 不抛），外层 try 兜底防御；失败不阻断归档
+  // （目录已移动 + change 已注销），由 step5 prompt git add + agent git status 核对兜底。
+  // ql-20260915-001 修复④（坑 archive-git-add-sweeps-parallel-docs，2026-09-14 实证：目录级
+  // pathspec 把并行会话同目录未提交文件夹带进共享暂存区）：改为窄化——changes 侧只 add 本变更
+  // 归档目录 archive/<destName>/，docs 侧按 module-impact「更新结果」done 行精确文件集（提取
+  // 失败回退目录级 + 前置 warning，见 archiveNarrowedGitAdd）。
+  try {
+    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName })
+  } catch {}
+
+  // ── 他者半归档残留探测（坑 archive-other-residual-rename，2026-08-21 实证）──
+  // 并行变更的手动归档把 R 残留（源目录 rename 目标行）留在暂存区；本变更归档提交时
+  // git status 显示它们，agent 会误判「还没提交完 / 要做第二次提交」。区分：
+  //   本变更：未暂存的源侧移动（` D changes/<me>/...` + 未跟踪 archive/<me>/...）→ 补暂存
+  //           让归档成单次原子提交；
+  //   他者：已暂存的 rename（`R  changes/<他人>/... -> changes/archive/<他人>/...`）→ 只 warn
+  //         提示归属（不 stage 不动——别人的归别人的）。
+  try {
+    const raw = gitQuiet(cwd, ['status', '--porcelain'], { trim: false, timeout: 30000 })
+    if (raw && raw.trim()) {
+      const changesPrefix = '.sillyspec/changes/'
+      const minePaths = []
+      const othersResidual = []
+      for (const line of raw.split('\n')) {
+        if (!line || line.length < 4) continue
+        const x = line[0], y = line[1]
+        const body = line.slice(3).trim()
+        const arrow = body.indexOf(' -> ')
+        const src = arrow !== -1 ? body.slice(0, arrow).replace(/^"|"$/g, '') : null
+        const dst = (arrow !== -1 ? body.slice(arrow + 4) : body).replace(/^"|"$/g, '')
+        if (x === 'R' && y === ' ' && arrow !== -1 && dst.startsWith(changesPrefix + 'archive/')) {
+          // 已暂存 rename → 半归档残留；按目标目录名归属他者变更
+          const m = /^\.sillyspec\/changes\/archive\/([^/]+)\//.exec(dst)
+          const owner = m ? m[1] : '?'
+          if (owner !== changeName) othersResidual.push(owner)
+        } else if (x === ' ' && (y === 'D' || y === 'A' || y === 'M')) {
+          // 未暂存的源侧移动：源目录 D / 新位置 A——指向本变更的补暂存
+          const p = dst || src
+          if (p && (p.startsWith(changesPrefix + changeName + '/')
+                    || p.startsWith(changesPrefix + 'archive/' + changeName + '/'))) {
+            minePaths.push(p)
+          }
+        }
+      }
+      if (minePaths.length > 0) {
+        // ql-20260915-001 修复④：补暂存源侧移动改精确 pathspec（minePaths 已按本变更目录名
+        // 过滤，chunkPaths 分批防 Windows argv 上限）——原 add -A -- .sillyspec/changes/ 目录级
+        // 会顺带扫入并行会话在 changes/ 下的未提交文件（坑 archive-git-add-sweeps-parallel-docs
+        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）
+        for (const batch of chunkPaths(minePaths)) {
+          safeGit(cwd, ['add', '--', ...batch])
+        }
+        console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
+      }
+      if (othersResidual.length > 0) {
+        const owners = [...new Set(othersResidual)].filter(Boolean)
+        console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)
+        console.warn(`   这些是别的变更此前手动归档留下的暂存项，不属于本次归档——git status 里看到它们是正常的，`)
+        console.warn(`   本变更归档已完成，无需为其做第二次提交；如需清理走它们自己的收尾（或 git restore --staged 后核对）。`)
+      }
+    }
+  } catch { /* 探测失败不阻断归档（advisory） */ }
+}
+
 export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}, gateOpts = {}) {
   const archiveChangeName = progress.currentChange
   if (!archiveChangeName) {
@@ -620,159 +790,8 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
     }
     if (check.action !== 'self') pm.setChangeOwner(cwd, archiveChangeName, session)
   }
-  // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
-  // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
-  // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①
-  // 的代劳窗口放大器）。只拦不代跑（design 非目标：脏重叠场景人确认更稳）。--skip-apply 显式
-  // 跳过并留痕（控制台输出 + skip-apply.record.json 随归档包留存，可审计）。无 worktree
-  // （meta 缺失/in-place/native）或零交付面 → 零行为变化。探测用 applyWorktree checkOnly
-  // （只读零写盘，Gate 全收集不落盘、不短路）。
-  try {
-    const { WorktreeManager } = await import('../worktree.js')
-    const wmGate = new WorktreeManager({ cwd })
-    const gateMeta = wmGate.getMeta(archiveChangeName)
-    if (gateMeta
-      && gateMeta.mode !== 'in-place-fallback'
-      && gateMeta.mode !== 'native-worktree'
-      && gateMeta.worktreePath
-      && existsSync(gateMeta.worktreePath)) {
-      const { applyWorktree } = await import('../worktree-apply.js')
-      const checkApply = applyWorktree(archiveChangeName, { cwd, checkOnly: true })
-      const face = (checkApply && Array.isArray(checkApply.changedFiles)) ? checkApply.changedFiles : []
-      if (face.length > 0) {
-        const facePreview = `${face.slice(0, 5).join('、')}${face.length > 5 ? ' 等' : ''}`
-        if (!gateOpts.skipApply) {
-          console.error(`❌ 归档失败：worktree 存在未 apply 的交付面（${face.length} 个文件：${facePreview}）`)
-          console.error(`   归档会清理 worktree（目录+分支+meta），交付物将失去进主仓的通道，形成「归档完成但交付物未进主仓」悬空态。`)
-          console.error(`   先 apply 再归档: sillyspec worktree apply ${archiveChangeName}`)
-          console.error(`   确认无需 apply（交付面已由其他会话落地/纯探索性变更等）: sillyspec run archive --done --confirm --skip-apply（显式跳过并留痕归档记录）`)
-          process.exit(1)
-        }
-        console.warn(`⚠️  已按 --skip-apply 跳过未 apply 交付面检查（${face.length} 个文件未确认落地主仓：${facePreview}）——留痕归档记录`)
-        writeFileSync(join(srcDir, 'skip-apply.record.json'), JSON.stringify({
-          schemaVersion: 1,
-          change: archiveChangeName,
-          flag: '--skip-apply',
-          skippedAt: new Date().toISOString(),
-          deliverableCount: face.length,
-          deliverableFiles: face,
-          note: '归档时显式跳过未 apply 交付面检查（--skip-apply）：交付物未确认进主仓，本记录随归档包留存供审计',
-        }, null, 2) + '\n')
-      }
-    }
-  } catch (e) {
-    // 探测自身异常 fail-open 留痕：归档主流程既有失败面（rename/git/清理）不叠加；正常路径
-    // 的阻断语义不受影响（无异常时 face 判定照常生效）。
-    console.warn(`⚠️  归档前未 apply 交付面探测失败（不阻断归档）: ${e && e.message ? e.message : e}`)
-  }
-  // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
-  // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
-  if (!existsSync(join(srcDir, 'plan.md'))) {
-    console.error(`❌ 归档失败：变更目录缺少 plan.md（${srcDir}）`)
-    console.error(`   plan.md 是归档的必需产物。请先补全 plan 阶段产出再归档。`)
-    process.exit(1)
-  }
-  // 移动前硬校验（债单 D-5）：module-impact.md「更新结果」表存在 pending 死信 → 阻断。
-  // 修复场景：perf-remediation 类变更把文档同步显式推给 archive（「（execute 完成后由 archive
-  // 阶段同步）| 待办 | pending」），archive 又没做 → 带 pending 归档且 verify 全 PASS，死信无人回填。
-  // 只查「## 更新结果」段内表格行的状态列（末列）精确匹配 pending/待办/未同步——不做全文 grep，
-  // 防 sync_manual_get_pending / pending_review 等代码标识符误报。
-  const impactPath = join(srcDir, 'module-impact.md')
-  if (existsSync(impactPath)) {
-    const pendingRows = extractPendingDocSyncRows(readFileSync(impactPath, 'utf8'))
-    if (pendingRows.length > 0) {
-      console.error(`❌ 归档失败：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
-      for (const row of pendingRows) console.error(`   - ${row}`)
-      console.error(`   这些文档同步项从未落地。请先完成同步并回填状态为 done/skipped（说明原因），再归档。`)
-      process.exit(1)
-    }
-  }
-  if (existsSync(destDir)) {
-    console.error(`❌ 归档失败：目标目录已存在 ${destDir}`)
-    process.exit(1)
-  }
-  mkdirSync(archiveDir, { recursive: true })
-  try {
-    renameSyncRetry(srcDir, destDir)
-  } catch (e) {
-    console.error(`❌ 归档失败：移动变更目录时出错（${e.message}）`)
-    console.error(`   常见原因：变更目录内文件被 IDE / 杀毒 / 索引占用，已重试 5 次仍失败。请关闭相关程序后重试。`)
-    process.exit(1)
-  }
-
-  if (!existsSync(destDir) || existsSync(srcDir)) {
-    console.error('❌ 归档校验失败：移动操作异常')
-    process.exit(1)
-  }
-
-  // 正常路径同样走终态一致化（坑 manual-archive-desync-status-only）：标准 --done --confirm 流程
-  // 中 completeStep 随后也会逐项完成，此处先收尾是幂等写同值——保证任何走出本函数的归档终态一致
-  pm.unregisterChange(cwd, archiveChangeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
-
-  // CLI 下沉 git add（坑4，FR-04）：确定性暂存归档目录 + 模块文档，不靠 step5 prompt 驱动。
-  // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
-  // safeGit 内部已 try-catch（返回 {value,error} 不抛），外层 try 兜底防御；失败不阻断归档
-  // （目录已移动 + change 已注销），由 step5 prompt git add + agent git status 核对兜底。
-  // ql-20260915-001 修复④（坑 archive-git-add-sweeps-parallel-docs，2026-09-14 实证：目录级
-  // pathspec 把并行会话同目录未提交文件夹带进共享暂存区）：改为窄化——changes 侧只 add 本变更
-  // 归档目录 archive/<destName>/，docs 侧按 module-impact「更新结果」done 行精确文件集（提取
-  // 失败回退目录级 + 前置 warning，见 archiveNarrowedGitAdd）。
-  try {
-    archiveNarrowedGitAdd({ cwd, specBase, destDir, destName })
-  } catch {}
-
-  // ── 他者半归档残留探测（坑 archive-other-residual-rename，2026-08-21 实证）──
-  // 并行变更的手动归档把 R 残留（源目录 rename 目标行）留在暂存区；本变更归档提交时
-  // git status 显示它们，agent 会误判「还没提交完 / 要做第二次提交」。区分：
-  //   本变更：未暂存的源侧移动（` D changes/<me>/...` + 未跟踪 archive/<me>/...）→ 补暂存
-  //           让归档成单次原子提交；
-  //   他者：已暂存的 rename（`R  changes/<他人>/... -> changes/archive/<他人>/...`）→ 只 warn
-  //         提示归属（不 stage 不动——别人的归别人的）。
-  try {
-    const raw = gitQuiet(cwd, ['status', '--porcelain'], { trim: false, timeout: 30000 })
-    if (raw && raw.trim()) {
-      const changesPrefix = '.sillyspec/changes/'
-      const minePaths = []
-      const othersResidual = []
-      for (const line of raw.split('\n')) {
-        if (!line || line.length < 4) continue
-        const x = line[0], y = line[1]
-        const body = line.slice(3).trim()
-        const arrow = body.indexOf(' -> ')
-        const src = arrow !== -1 ? body.slice(0, arrow).replace(/^"|"$/g, '') : null
-        const dst = (arrow !== -1 ? body.slice(arrow + 4) : body).replace(/^"|"$/g, '')
-        if (x === 'R' && y === ' ' && arrow !== -1 && dst.startsWith(changesPrefix + 'archive/')) {
-          // 已暂存 rename → 半归档残留；按目标目录名归属他者变更
-          const m = /^\.sillyspec\/changes\/archive\/([^/]+)\//.exec(dst)
-          const owner = m ? m[1] : '?'
-          if (owner !== archiveChangeName) othersResidual.push(owner)
-        } else if (x === ' ' && (y === 'D' || y === 'A' || y === 'M')) {
-          // 未暂存的源侧移动：源目录 D / 新位置 A——指向本变更的补暂存
-          const p = dst || src
-          if (p && (p.startsWith(changesPrefix + archiveChangeName + '/')
-                    || p.startsWith(changesPrefix + 'archive/' + archiveChangeName + '/'))) {
-            minePaths.push(p)
-          }
-        }
-      }
-      if (minePaths.length > 0) {
-        // ql-20260915-001 修复④：补暂存源侧移动改精确 pathspec（minePaths 已按本变更目录名
-        // 过滤，chunkPaths 分批防 Windows argv 上限）——原 add -A -- .sillyspec/changes/ 目录级
-        // 会顺带扫入并行会话在 changes/ 下的未提交文件（坑 archive-git-add-sweeps-parallel-docs
-        // 同坑不同点；git add -- <已删路径> 即暂存删除，语义等价 -A 限本变更面）
-        for (const batch of chunkPaths(minePaths)) {
-          safeGit(cwd, ['add', '--', ...batch])
-        }
-        console.log(`🧾 已补暂存本变更归档的源侧移动（${minePaths.length} 项，归档成单次原子提交）`)
-      }
-      if (othersResidual.length > 0) {
-        const owners = [...new Set(othersResidual)].filter(Boolean)
-        console.warn(`⚠️  检测到「他者半归档」残留（暂存区存在其他变更的 rename 记录）：${owners.join('、')}`)
-        console.warn(`   这些是别的变更此前手动归档留下的暂存项，不属于本次归档——git status 里看到它们是正常的，`)
-        console.warn(`   本变更归档已完成，无需为其做第二次提交；如需清理走它们自己的收尾（或 git restore --staged 后核对）。`)
-      }
-    }
-  } catch { /* 探测失败不阻断归档（advisory） */ }
+  // ── 归档执行链（task-02 抽取：链体在 runArchiveChain，行为等价纯搬运）──
+  await runArchiveChain({ pm, cwd, specBase, changeName: archiveChangeName, srcDir, destDir, skipApply: Boolean(gateOpts.skipApply), skipPlanCheck: false })
 
   // 归档时清理可能残留的 worktree（自愈路径也复用，见上方 srcDir 缺失分支）。
   await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)

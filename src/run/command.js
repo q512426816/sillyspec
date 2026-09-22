@@ -20,7 +20,7 @@
  *     './run/stage.js' → './shared.js' 等同级
  */
 import { basename, join, resolve, dirname } from 'node:path'
-import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from 'node:fs'
+import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync, statSync } from 'node:fs'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { writeAtomicSync } from '../fs-atomic.js'
@@ -795,6 +795,43 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         } catch {}
       }
       if (!quickSessionId) {
+        // 坑 quick-done-长静默与快照行尾假阳性 坑3（2026-09-21 实证）：`quick --status` 不带
+        // --change 时缺省语义是「新建」而非「查看」——查进度忘带 --change 直接误开空壳会话
+        //（需 --cancel 清理）。只读意图（--status）拦截：读 current marker 与最近 guard 目录
+        // 展示最近会话状态 + 提示带 --change，零副作用退出（绝不新建）。
+        if (isStatus) {
+          const recentRoot = resolveRuntimeRoot(platformOpts, specRoot)
+          let recent = null
+          try {
+            const idFile = join(recentRoot, 'current-quick-run-id')
+            if (existsSync(idFile)) {
+              const v = readFileSync(idFile, 'utf8').trim()
+              if (QUICK_SID_RE.test(v)) recent = v
+            }
+          } catch { /* 读失败按无 marker 处理 */ }
+          if (!recent) {
+            try {
+              const sessRoot = join(recentRoot, 'quick-sessions')
+              if (existsSync(sessRoot)) {
+                const cands = readdirSync(sessRoot, { withFileTypes: true })
+                  .filter(d => d.isDirectory() && QUICK_SID_RE.test(d.name))
+                  .map(d => ({ name: d.name, m: statSync(join(sessRoot, d.name, 'guard.json')).mtimeMs }))
+                  .filter(x => x.m > 0)
+                  .sort((a, b) => b.m - a.m)
+                if (cands.length > 0) recent = cands[0].name
+              }
+            } catch { /* 枚举失败按无近期会话处理 */ }
+          }
+          console.log('ℹ️ `run quick --status` 不带 --change 查的是最近会话，不会新建（查进度请带 --change <sessionId>）')
+          if (recent) {
+            console.log(`   最近会话: ${recent}（本命令将展示其状态）`)
+            quickSessionId = recent
+            quickFallbackUsed = true
+          } else {
+            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——如需新会话请带 --input 启动')
+            process.exit(0)
+          }
+        } else {
         // 坑 quick-no-input-placeholder-title（2026-08-24 二期①；2026-09-19 上移）：全新 quick 会话
         // （即将生成新 sessionId）缺 --input 且无可取标题的 --linked-changes → 拒绝启动（exit 2，
         // 零沉没成本）。原位置在 flag 校验之后，但 sessionId 生成/「已建立」公告与 agent-log 平台
@@ -828,6 +865,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
         // 若把命令拖过 exec 超时，调用方仍能从输出头部拿到 sessionId 续用（--status / guard.json
         // 核对），不会误开空壳新会话。
         console.log(`📌 quick 会话已建立: ${quickSessionId}（后续若超时/中断，用 --change ${quickSessionId} 续用）`)
+        }
       }
       changeName = quickSessionId
     } else {
@@ -1305,6 +1343,36 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   // 注册变更到全局活跃列表（如果尚未注册）
   if (effectiveChange) {
     pm.registerChange(cwd, effectiveChange)
+    // ── watcher 拉起（R7 切片一 / D-001：观测与协议解耦）──
+    // effectiveChange 解析后无条件 spawn（不做「检测新建」——registerChange 是 INSERT OR
+    // IGNORE 不返回新建信号），活锁在跑由单飞锁合并 coalesced。best-effort：失败只 warn
+    // 绝不阻断主流程；未连接平台也 spawn（本地 jsonl 是事件唯一真相源）；
+    // SILLYSPEC_WATCHER=0 逃生阀。default 容器行不监听（非真实变更）。
+    if (effectiveChange !== 'default') {
+      // ── 混跑回退写侧（R7 切片二 / FR-06 / D-002：thin change 上跑 run <stage> = 该 change
+      // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。──
+      try {
+        const flowStatePath = join(specRoot, 'changes', effectiveChange, 'flow-state.yaml')
+        if (existsSync(flowStatePath)) {
+          const { readFlowState, writeFlowState } = await import('../flow.js')
+          const changeDir = join(specRoot, 'changes', effectiveChange)
+          const st = readFlowState(changeDir)
+          if (st && !st.legacy_fallback) {
+            writeFlowState(changeDir, { legacy_fallback: true })
+            console.warn(`⚠️ [flow] thin change「${effectiveChange}」跑了 run ${stageName}——已混跑回退 legacy（flow done 将按厚档拒裁并指路；两套记账不叠加）`)
+          }
+        }
+      } catch { /* 探测失败不阻断既有 run 流程 */ }
+      try {
+        const { spawnWatcher } = await import('../watcher.js')
+        const r = await spawnWatcher(cwd, effectiveChange, platformOpts)
+        if (r.status === 'spawned') {
+          console.log(`🔄 [watcher] 观测旁路已拉起（产物签名轮询，事件恒带 provisional:true）: ${effectiveChange}`)
+        }
+      } catch (e) {
+        console.warn(`⚠️ [watcher] 拉起失败（观测旁路 best-effort，不影响主流程）: ${(e && e.message) || e}`)
+      }
+    }
     // ── 所有权首建 claim（2026-09-14-change-ownership-guards task-02 / FR-01 / D-001@v1）──
     // run <stage> 启动即认领 owner（claimChangeOwner 守卫语义：已有值不覆盖——他人持有不抢
     // 也不拒；拒绝语义只锁接管类操作，见 index.js apply/cleanup/assess 接线）。会话标识三级：

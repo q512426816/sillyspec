@@ -4315,6 +4315,12 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       process.exitCode = r.ok ? 0 : 1;
       break;
     }
+    case 'flow': {
+      // R7 切片二：2-调用薄协议命令族（start/done/amend-draft）——协议必需交互=2
+      const flowMod = await import('./flow.js');
+      await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir);
+      break;
+    }
     case 'workflow': {
       const wfSub = filteredArgs[1];
       if (!wfSub || wfSub === 'help' || wfSub === '--help') {

@@ -100,7 +100,11 @@ test('T1 缺省三态（无键/dispatch/非法值）→ dispatch 渲染且互相
 
 test('T1b options 缺省与空对象输出逐字节一致（既有回归钉保持）', () => {
   const cd = makeChangeDir(3)
-  assert.equal(buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), undefined), render(cd))
+  // 2026-09-22 r7-protocol-surgery verify 修复：原断言「undefined vs render(显式 dispatchMode local)」
+  // 隐含「机器无 MCP 配置」环境假设——本机主仓 local.yaml mcp 段使 getDispatchMode 解析为
+  // local-fallback（undefined 侧注入派发提示段），deps(auto) 子集裸 env 跑红（套件隔离 env 绿）。
+  // 改为语义同名比对 undefined vs {}：两侧 mode 解析同源，任意环境恒逐字节一致。
+  assert.equal(buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), undefined), buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), {}))
 })
 
 // ── 2. main 渲染：直写指引段 + 四段抑制 ───────────────────────────

@@ -20,15 +20,15 @@
  * 质量扫描记录同级威胁模型（本门拦的是 heredoc 习惯性整份重写与意外覆盖，不是对抗性攻击）。
  * 纯 --init（无 --draft）路径零变化；无 sidecar → 门禁 not-applicable（存量变更零红）。
  */
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
+// 三件套原语消费方化（R7 切片三 task-04）：标记格式/指纹/三态判定/重锚的机械半边在本模块，
+// verify-draft 保留 verify-result 专有面（骨架正则/槽契约/sidecar 路径）与全部既有导出签名。
+import { bodyHash, wrapSection, verifyMarkers, reanchorText } from './machine-draft.js'
 
-const sha256 = (s) => createHash('sha256').update(String(s).replace(/\r\n/g, '\n')).digest('hex')
+const sha256 = bodyHash
 
-const MARK_BEGIN = /^<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin.*-->\s*$/
-const MARK_END = /^<!--\s*MACHINE-DRAFT:([\w.-]+):end.*-->\s*$/
 const AMEND_CMD = 'sillyspec verify-probes --change <变更名> --amend-draft'
 
 /** sidecar 路径（.runtime 下，与质量扫描记录/探针回执同族） */
@@ -122,12 +122,7 @@ export function transformSkeletonToDraft(skeletonText, sections) {
     // 幂等闸：段内已有 MACHINE-DRAFT 标记或已非 TODO 占位（手写正文）→ 不动
     if (body.includes('MACHINE-DRAFT:')) continue
     if (!/<!--TODO|<待填|<!-- 结论=|<!--\s*无 cannot_verify/.test(body)) continue
-    const wrapped = [
-      `<!-- MACHINE-DRAFT:${sec.key}:${sha256(sec.body)}:begin 机器预填段——整段改写会被 verify --done 拒收；确要修改：${AMEND_CMD} 留痕重锚 -->`,
-      sec.body,
-      `<!-- MACHINE-DRAFT:${sec.key}:end -->`,
-      '',
-    ].join('\n')
+    const wrapped = wrapSection({ key: sec.key, body: sec.body, amendCmd: AMEND_CMD })
     text = text.slice(0, m.index) + m[1] + wrapped + text.slice(m.index + m[0].length)
     applied.push(sec.key)
   }
@@ -191,36 +186,8 @@ export function checkDraftIntegrity({ mdPath, changeName, runtimeRoot }) {
   try { text = readFileSync(mdPath, 'utf8') } catch {
     return { applicable: true, ok: false, violations: ['verify-result.md 不可读（draft sidecar 在案）'] }
   }
-  const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const violations = []
-  const openByKey = new Map()
-  const contentByKey = new Map()
-  let current = null
-  for (const line of lines) {
-    const b = line.match(MARK_BEGIN)
-    if (b) { current = { key: b[1], hash: b[2] }; openByKey.set(b[1], current); contentByKey.set(b[1], []); continue }
-    const e = line.match(MARK_END)
-    if (e) { current = null; continue }
-    if (current) contentByKey.get(current.key).push(line)
-  }
-  for (const [key, rec] of Object.entries(sidecar.sections)) {
-    if (!openByKey.has(key)) {
-      violations.push(`机器段「${key}」的 MACHINE-DRAFT 标记缺失（被删除或整份重写）——${fixLine(key)}`)
-      continue
-    }
-    const actual = sha256((contentByKey.get(key) || []).join('\n'))
-    if (actual !== rec.hash) {
-      violations.push(`机器段「${key}」内容与指纹失配（被改写）——${fixLine(key)}`)
-    } else if (openByKey.get(key).hash !== rec.hash) {
-      // 内容未动但标记哈希与 sidecar 不一致 = 标记被手工重锚而未经 --amend-draft 审计
-      violations.push(`机器段「${key}」标记指纹与 sidecar 台账不一致（未经 --amend-draft 的手工重锚）——${fixLine(key)}`)
-    }
-  }
+  const violations = verifyMarkers({ text, sections: sidecar.sections, amendCmd: AMEND_CMD })
   return { applicable: true, ok: violations.length === 0, violations }
-}
-
-function fixLine(key) {
-  return `还原机器段原文，或确要修改时跑 ${AMEND_CMD} 留痕重锚（段键 ${key}）`
 }
 
 /**
@@ -230,25 +197,8 @@ function fixLine(key) {
 export function amendDraftMarkers({ mdPath, changeName, runtimeRoot }) {
   let text
   try { text = readFileSync(mdPath, 'utf8') } catch { return [] }
-  const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const contentByKey = new Map()
-  let current = null
-  for (const line of lines) {
-    const b = line.match(MARK_BEGIN)
-    if (b) { current = b[1]; contentByKey.set(current, []); continue }
-    const e = line.match(MARK_END)
-    if (e) { current = null; continue }
-    if (current) contentByKey.get(current).push(line)
-  }
-  const keys = [...contentByKey.keys()]
+  const { text: next, keys, contentByKey } = reanchorText({ text, amendCmd: AMEND_CMD })
   if (keys.length === 0) return []
-  // 重写 begin 标记（按当前内容哈希）
-  const next = lines.map((line) => {
-    const b = line.match(MARK_BEGIN)
-    if (!b) return line
-    const content = (contentByKey.get(b[1]) || []).join('\n')
-    return `<!-- MACHINE-DRAFT:${b[1]}:${sha256(content)}:begin 机器预填段——整段改写会被 verify --done 拒收；确要修改：${AMEND_CMD} 留痕重锚 -->`
-  }).join('\n')
   try { writeAtomicSync(mdPath, next) } catch (e) {
     console.warn(`⚠️ amend-draft 重锚落盘失败: ${e && e.message ? e.message : e}`)
     return []
@@ -257,7 +207,7 @@ export function amendDraftMarkers({ mdPath, changeName, runtimeRoot }) {
   const sidecarPath = verifyDraftSidecarPath(runtimeRoot, changeName)
   let sidecar = { schemaVersion: 1, change: changeName, generatedAt: new Date().toISOString(), sections: {}, amendments: [] }
   try { sidecar = { ...sidecar, ...JSON.parse(readFileSync(sidecarPath, 'utf8')) } } catch { /* 无既有 → 新立 */ }
-  for (const k of keys) sidecar.sections[k] = { hash: sha256((contentByKey.get(k) || []).join('\n')) }
+  for (const k of keys) sidecar.sections[k] = { hash: sha256(contentByKey[k]) }
   sidecar.amendments = [...(sidecar.amendments || []), { at: new Date().toISOString(), keys }]
   try { writeAtomicSync(sidecarPath, JSON.stringify(sidecar, null, 2) + '\n') } catch { /* 审计失败不回滚重锚 */ }
   return keys

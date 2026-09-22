@@ -51,6 +51,8 @@ modules:
       - src/config-cat.js
       - src/local-register.js
       - src/commit-suggest.js
+      - src/flow.js
+      - src/flow-draft.js
 
   progress:
     status: active
@@ -78,6 +80,7 @@ modules:
       - src/task-review.js
       - src/task-done.js
       - src/verify-draft.js
+      - src/machine-draft.js
       - src/verify-postcheck.js
       - src/review-tier.js
       - src/review-material-pack.js
@@ -185,6 +188,7 @@ modules:
       - src/sync-noise.js
       - src/write-audit.js
       - src/commit-guard.js
+      - src/watcher.js
 
   sillyhub-mcp:
     status: active

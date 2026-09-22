@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-22-r7-protocol-surgery",
+  "appliedAt": "2026-09-22T06:20:06.626Z",
+  "baseHash": "57146014b10a235089c624062614dc11647a151d",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "7043bff585ccf984e90fe4ec273e08e9627677b6b6633ae725cfcad0e731499d"
+    },
+    {
+      "path": ".sillyspec/local.yaml.example",
+      "sha256": "87499d749c8a765ba83e269f79d38012381b536403d82ab8bf4ba8426613b347"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "adc0bff4fb887a372870cf6113d3799c3a85f5a1c4f1f1c899a9eea112c7f4f3"
+    },
+    {
+      "path": "src/flow-draft.js",
+      "sha256": "3e8fff69de5d4f7de67a4b5b77dbd7888611d4fcaa7e321e07654bc903789f07"
+    },
+    {
+      "path": "src/flow.js",
+      "sha256": "0e0beb50b6d57b27b0f20530d0bfea4c076dad1a42ae4c9095ad962d3661d0ee"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "641d34a7e753351c6858ae5b4acdf4816da555822dd074ffadf67161cce9af5d"
+    },
+    {
+      "path": "src/machine-draft.js",
+      "sha256": "3aa48052915f79e587d938a96ccd81dff518701688da5db880785ffe11439d1a"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "sha256": "bb1d7c8946200739def4ee32b0d8329687c34a131939164b3e7422ddce58302d"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "sha256": "17f19cec1d1a2671c0657538d24ad9365b735d25b41e7ce3ade5638ab59e9b06"
+    },
+    {
+      "path": "src/verify-draft.js",
+      "sha256": "8d67ca886bb4e945c897a0d340060e7c3f9f4533760975f2884f0feb5c50d262"
+    },
+    {
+      "path": "src/watcher.js",
+      "sha256": "65ce99ca1c83f5260b8a0d16417b894d232fc66ef5057223cc76bb68c5b97ae4"
+    },
+    {
+      "path": "test/archive-chain.test.mjs",
+      "sha256": "628ec2678ed451cb56d875a1b1c3bede820755a2cf65a983d670ef37abde3bda"
+    },
+    {
+      "path": "test/flow-draft.test.mjs",
+      "sha256": "8c66d124f0fedcaf36c205d2a721c3ca1039cbb445243933224e12b6d6951775"
+    },
+    {
+      "path": "test/flow-protocol.test.mjs",
+      "sha256": "6b3236b6093a3537027bf62ce4b48d55c91fb65982f3db4451f30f5d1e50ba3b"
+    },
+    {
+      "path": "test/flow-route.test.mjs",
+      "sha256": "b4c5cc3883dd775573d864c762caf1ecfc222d1764916f8d11fe1d5dd771aafe"
+    },
+    {
+      "path": "test/machine-draft.test.mjs",
+      "sha256": "552f9fed03463deded379c894804a631332b310ace0fca73cb69cd0c3ea357a7"
+    },
+    {
+      "path": "test/run-tests.mjs",
+      "sha256": "f453adcd30f1e870c46a98be209b6febdfb080f41638dab23cf9c6a2d8a0e640"
+    },
+    {
+      "path": "test/watcher.test.mjs",
+      "sha256": "bfaee6038726cad8a7a44202bc0aa011606a8cc4cb361a5f5e29474f100e5eb8"
+    },
+    {
+      "path": "src/run/command.js",
+      "sha256": "e7b0adf4221cda7d69f067d52a6920cdad0c1d62e3903fe6c4ac9cb6e6d7d990"
+    }
+  ]
+}

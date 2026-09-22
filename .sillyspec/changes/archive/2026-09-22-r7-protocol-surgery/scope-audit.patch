@@ -1,0 +1,2769 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index d00f6c99..f25251c6 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -51,6 +51,8 @@ modules:
+       - src/config-cat.js
+       - src/local-register.js
+       - src/commit-suggest.js
++      - src/flow.js
++      - src/flow-draft.js
+ 
+   progress:
+     status: active
+@@ -78,6 +80,7 @@ modules:
+       - src/task-review.js
+       - src/task-done.js
+       - src/verify-draft.js
++      - src/machine-draft.js
+       - src/verify-postcheck.js
+       - src/review-tier.js
+       - src/review-material-pack.js
+@@ -185,6 +188,7 @@ modules:
+       - src/sync-noise.js
+       - src/write-audit.js
+       - src/commit-guard.js
++      - src/watcher.js
+ 
+   sillyhub-mcp:
+     status: active
+diff --git a/.sillyspec/local.yaml.example b/.sillyspec/local.yaml.example
+index b2cbc139..3dbe660e 100644
+--- a/.sillyspec/local.yaml.example
++++ b/.sillyspec/local.yaml.example
+@@ -28,6 +28,12 @@ platform:
+   user: alice                 # 推送者身份（可空，回退 git user.name / env）
+   # last_connected: 2026-08-11T00:00:00.000Z   # connect 自动写，勿手填
+ 
++# ── 2-调用薄协议（R7 切片二；缺省 thin 即薄跑道，无需配置）──
++# flow:
++#   mode: thin               # thin=flow start/done 薄跑道（协议必需交互=2）| legacy=既有 run <stage> 全族（回滚一行）
++#   edit_ratio_threshold: 0.5   # 机器稿改写比例路由阈值（超阈提示厚档；缺省 0.5）
++#   edit_ratio_enforcement: advisory   # advisory=测绿可薄过只提示（缺省）| block=超阈阻断
++
+ # ── 派发调参（仅确知调优值时填，否则留默认）──
+ dispatch:
+   probe_ttl_ms: 60000         # 派发探测负面缓存 TTL（默认 60000）
+diff --git a/meta.json b/meta.json
+index fc7cb4b2..d50eb93e 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,117 @@
+   "branch": "sillyspec/2026-09-22-r7-protocol-surgery",
+   "baseBranch": "main",
+   "baseHash": "2bd35703e6da82d79b6f1811261ff6bf8c19e442",
++  "actualBaseHash": "57146014b10a235089c624062614dc11647a151d",
++  "createdAt": "2026-09-22T03:22:40.322Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-22-r7-protocol-surgery",
+   "mode": "worktree",
+-  "createdAt": "2026-09-22T03:22:38.315Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".idea/vcs.xml",
++    "docs/sillyspec/architecture-4a.md",
++    "docs/sillyspec/prompt-control-debt.md",
++    "package.json",
++    "src/run/command.js",
++    "src/run/gate-snapshot.js",
++    "src/run/quick-audit.js",
++    "src/verify-postcheck.js",
++    "test/gate-snapshot-import-smoke.test.mjs",
++    "asset-audit-2026-09-20/README.md",
++    "asset-audit-2026-09-20/asset-audit.cjs",
++    "asset-audit-2026-09-20/extract-candidates.cjs",
++    "asset-audit-2026-09-20/platform-archive.csv",
++    "asset-audit-2026-09-20/platform-fr.csv",
++    "asset-audit-2026-09-20/platform-gotchas.csv",
++    "asset-audit-2026-09-20/platform-knownissues.csv",
++    "asset-audit-2026-09-20/platform-modules.csv",
++    "asset-audit-2026-09-20/platform-quicklog.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting-candidates.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting.csv",
++    "asset-audit-2026-09-20/sillyspec-archive.csv",
++    "asset-audit-2026-09-20/sillyspec-fr.csv",
++    "asset-audit-2026-09-20/sillyspec-gotchas.csv",
++    "asset-audit-2026-09-20/sillyspec-knownissues.csv",
++    "asset-audit-2026-09-20/sillyspec-modules.csv",
++    "asset-audit-2026-09-20/sillyspec-quicklog.csv",
++    "asset-audit-2026-09-20/sillyspec-troubleshooting.csv",
++    "asset-audit-2026-09-20/summary.json",
++    "bash.exe.stackdump",
++    "round4/account.mjs",
++    "round4/b1-analyze-task08.mjs",
++    "round4/b1-b1-target-validation.md",
++    "round4/b3a-prompt-audit-result.md",
++    "round4/b3a-prompt-audit.mjs",
++    "round4/brief-autocompact.md",
++    "round4/brief-session-replay.md",
++    "round4/deep-read-synthesis.md",
++    "round4/extract-full.mjs",
++    "round4/extract-timeline.mjs",
++    "round4/find-sessions.mjs",
++    "round4/full-r4-l.md",
++    "round4/full-r4-o-l.md",
++    "round4/full-r4-os.md",
++    "round4/full-r4-sf.md",
++    "round4/full-r4-sq.md",
++    "round4/gate-audit-relay-receipt.md",
++    "round4/gate-value-audit.md",
++    "round4/optimization-plan.md",
++    "round4/prereg.md",
++    "round4/prompt-R4-L.md",
++    "round4/prompt-R4-O-L.md",
++    "round4/prompt-R4-O-S.md",
++    "round4/prompt-R4-S-F.md",
++    "round4/prompt-R4-S-Q.md",
++    "round4/r4-final-report.html",
++    "round4/r4-os-timeline.txt",
++    "round4/r4-sf-timeline.txt",
++    "round4/r4-sq-timeline.txt",
++    "round4/r4l-timeline.txt",
++    "round4/r4ol-timeline.txt",
++    "round4/r4sf-timeline.txt",
++    "round4/r5-scenario-matrix.md",
++    "round4/result-S.md",
++    "round4/result-final.md",
++    "round4/result-quality.md",
++    "round5/audit/oS/requests.jsonl",
++    "round5/audit/oS/toolinputs.jsonl",
++    "round5/audit/oS/tools.jsonl",
++    "round5/audit/r5L/requests.jsonl",
++    "round5/audit/r5L/toolinputs.jsonl",
++    "round5/audit/r5L/toolinputs2.jsonl",
++    "round5/audit/r5L/tools.jsonl",
++    "round5/audit/sF/_classified.json",
++    "round5/audit/sF/analyze.cjs",
++    "round5/audit/sF/requests.jsonl",
++    "round5/audit/sF/toolinputs.jsonl",
++    "round5/audit/sF/tools.jsonl",
++    "round5/audit/sQ/requests.jsonl",
++    "round5/audit/sQ/toolinputs.jsonl",
++    "round5/audit/sQ/tools.jsonl",
++    "round5/cmp.mjs",
++    "round5/cmp2.mjs",
++    "round5/flip-3.31.0-plan.html",
++    "round5/flip-3.31.0-proposal.md",
++    "round5/gate-audit.mjs",
++    "round5/gen-collision-html.mjs",
++    "round5/prompt-R5R-OS.md",
++    "round5/prompt-R5R-SF.md",
++    "round5/prompt-R5R-SQ.md",
++    "round5/prompt-R6-L.md",
++    "round5/r5-collision-ehs-attribution.md",
++    "round5/r5-collision-timeline.html",
++    "round5/r5r-audit-extract.mjs",
++    "round5/why2.mjs"
++  ],
++  "baselineCommit": "57146014b10a235089c624062614dc11647a151d",
++  "baselineHash": "e1572db99722503c",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 25
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "337f491dae3b3308",
++  "depsCheckedAt": "2026-09-22T03:22:40.284Z"
+ }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 28d53e78..42a04042 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -162,6 +162,16 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'gate_snapshot.commands', type: 'array', optional: true, status: 'live', readers: ['parseGateSnapshotCommands + runGateSnapshotCommands (src/run/gate-snapshot.js — createGateSnapshot 环境预检后 copy 面前)'], desc: '门禁隔离快照的命令面（元素 string）：快照构建期在环境目录链接后、copy 面前于快照根逐条执行（cwd=快照根、300s/条超时帽、非零退出/超时只 warn 继续——fail-open 不作废快照），产出「本仓应然态」生成物，收口主仓生成物缺失/过期（fresh clone 未跑 postinstall / build-id 类产物）时快照内全量 lint/test 必挂的坑（D-002@v2，2026-09-17-feedback-hardening FR-01）。⚠️ 环境目录（node_modules/venv）是活链接，命令写它们会穿透主仓——只放生成物命令（npm run gen:build-id 类），不放 install/build 全家桶。未配置 = 全段空转零行为。', example: 'npm run gen:build-id' },
+       ],
+     },
++    {
++      id: 'flow',
++      title: '2-调用薄协议（R7 切片二）',
++      note: 'flow start/done 协议形状开关与路由参数。design 措辞 flow: thin|legacy 落地为单键 flow.mode（YAML 单键形态，语义一致）。',
++      keys: [
++        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：thin（缺省）= 新 change 走 flow start/done 薄跑道（协议必需交互=2）；legacy = 既有 run <stage> 全族行为逐字不动，flow start 拒跑并指路。回滚一行 yaml。', example: 'thin' },
++        { path: 'flow.edit_ratio_threshold', type: 'number', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '机器稿改写比例路由阈值（amend 通道计算的行级 editRatio 超阈 → 厚档提示 route_hint）。缺省 0.5。', example: '0.5' },
++        { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可薄档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
++      ],
++    },
+     {
+       id: 'auto_mode',
+       title: '变更规模自动分类',
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+new file mode 100644
+index 00000000..e02afe45
+--- /dev/null
++++ b/src/flow-draft.js
+@@ -0,0 +1,308 @@
++/**
++ * flow-draft.js — 全件机器起草器（R7 切片三 task-05 / D-004 D-005 / FR-07 FR-08）。
++ *
++ * 薄跑道治理工件全部 CLI 机器起草（工件回填轮=0），agent 只裁例外：
++ *   - proposal：--input 机械转写（动机/关键问题/变更范围从任务原话摘段）；
++ *   - requirements：机械摘「成功标准」条目 → FR 条目；
++ *   - tasks：成功标准 → checkbox 任务行；任务卡分岔（用户裁定#3）：默认 thin+直写零任务卡
++ *     （薄跑=quick 的协议兄弟）；--thick / --with-tasks 才生成 tasks/task-NN.md 卡；
++ *   - decisions：只记真实新增（转写任务通常为零——不落文件）。
++ *
++ * 机器段经 machine-draft.wrapSection 包裹（sha256 指纹标记对，guardNote 指向 flow done 拒收）；
++ * draft-ledger（.runtime/draft-ledger-<change>.json）每段存 hash+**首版原文 body（首版快照永不
++ * 覆盖——切片四 editRatio 的基准依赖；amend 只刷 hash 不动 body）**，命名空间按 文件名+段键。
++ * AGENT 槽（<!--AGENT:--> 标记对）=合法书写面（验收侧放行，不参与指纹）。
++ *
++ * 守卫全在验收侧（护栏#2：零 prompt 劝说）：flow done 工件校验子步对 ledger 在案的每文件
++ * verifyMarkers 三态拒收（标记缺失/哈希失配/手工重锚未审计）；flow amend-draft 是唯一留痕
++ * 修改通道（reanchorText 重锚 + ledger amendments 审计）。
++ */
++import { existsSync, readFileSync, mkdirSync } from 'node:fs'
++import { join } from 'node:path'
++import { writeAtomicSync } from './fs-atomic.js'
++import { wrapSection, verifyMarkers, reanchorText, bodyHash } from './machine-draft.js'
++
++const AMEND_CMD = (change) => `sillyspec flow amend-draft --change ${change}`
++const GUARD_NOTE = '整段改写会被 flow done 拒收'
++
++/** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
++export function draftLedgerPath(runtimeRoot, changeName) {
++  return join(runtimeRoot, `draft-ledger-${changeName}.json`)
++}
++
++const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`
++
++/** 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。 */
++export function extractSuccessCriteria(input) {
++  if (!input) return []
++  const NL = /\r\n|\r|\n/
++  const lines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
++  const criteria = []
++  let inSection = false
++  let sawSection = false
++  for (const raw of lines) {
++    const line = raw.replace(/^#+\s*/, '')
++    if (/^(成功标准|验收标准|验收|acceptance)\s*[：:]?$/i.test(line)) { inSection = true; sawSection = true; continue }
++    if (/^(动机|背景|关键问题|变更范围|需求|非目标)/i.test(line)) { inSection = false; continue }
++    if (!sawSection && /^[-*•]\s+\S/.test(raw)) { criteria.push(raw.replace(/^[-*•]\s+/, '')); continue }
++    if (inSection) {
++      const item = raw.replace(/^[-*•\d.)、]+\s*/, '')
++      if (item && !/^#/.test(item)) criteria.push(item)
++    }
++  }
++  return criteria
++}
++
++/** proposal 机器稿（--input 转写：动机/关键问题/变更范围/成功标准四机器段+AGENT 槽）。 */
++function draftProposal({ change, input, criteria }) {
++  const crit = criteria || extractSuccessCriteria(input)
++  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
++  const text = [
++    '---',
++    `author: flow-machine-draft`,
++    `created_at: ${new Date().toISOString()}`,
++    '---',
++    `# 提案书（Proposal）— ${change}`,
++    '',
++    '## 动机',
++    wrapped('proposal-motivation', `任务原话转写：${input || '（未提供 --input）'}`),
++    AGENT_SLOT(1, '动机例外裁决'),
++    '',
++    '## 变更范围',
++    wrapped('proposal-scope', crit.length > 0
++      ? ['按成功标准机械推导，共 ' + crit.length + ' 条验收面：', ...crit.map((c, i) => `${i + 1}. ${c}`)].join('\n')
++      : '（--input 未含成功标准条目——flow done 测试门与工件校验为默认验收面）'),
++    '',
++    '## 成功标准（可验证）',
++    wrapped('proposal-criteria', crit.length > 0
++      ? crit.map((c, i) => `${i + 1}. ${c}`).join('\n')
++      : '1. flow done 六子步全绿（测试门实测通过+工件指纹校验通过）'),
++    AGENT_SLOT(2, '成功标准例外裁决（增删条目在此书写）'),
++    '',
++  ].join('\n')
++  return { text, sections: collectSections(text) }
++}
++
++/** requirements 机器稿（成功标准 → FR 条目）。 */
++function draftRequirements({ change, criteria }) {
++  const crit = criteria || []
++  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
++  const frBodies = crit.length > 0
++    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
++    : '### FR-01: flow done 全绿\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
++  const text = [
++    '---',
++    `author: flow-machine-draft`,
++    `created_at: ${new Date().toISOString()}`,
++    '---',
++    `# 需求规格（Requirements）— ${change}`,
++    '',
++    '## 功能需求（成功标准机械摘录）',
++    wrapped('requirements-frs', frBodies),
++    AGENT_SLOT(1, '需求例外裁决'),
++    '',
++  ].join('\n')
++  return { text, sections: collectSections(text) }
++}
++
++/** tasks 机器稿（成功标准 → checkbox 行）。任务卡分岔：withTasks 才生成 tasks/task-NN.md。 */
++function draftTasks({ change, criteria, withTasks }) {
++  const crit = criteria || []
++  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
++  const rows = crit.length > 0
++    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 60)}`)
++    : ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
++  const text = [
++    '---',
++    `author: flow-machine-draft`,
++    `created_at: ${new Date().toISOString()}`,
++    '---',
++    `# 任务注册表（Tasks）— ${change}`,
++    '',
++    '> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；',
++    `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
++    '',
++    wrapped('tasks-rows', rows.join('\n')),
++    '',
++  ].join('\n')
++  return { text, sections: collectSections(text) }
++}
++
++/** 任务卡（--with-tasks/--thick 分岔产物，最小合规 frontmatter）。 */
++function draftTaskCards({ change, criteria }) {
++  const crit = (criteria && criteria.length > 0) ? criteria : ['完成实现并使 flow done 六子步全绿']
++  return crit.map((c, i) => {
++    const id = `task-${String(i + 1).padStart(2, '0')}`
++    return {
++      id,
++      text: [
++        '---',
++        `id: ${id}`,
++        `title: 'machine-drafted task ${i + 1}'`,
++        `title_zh: '${c.slice(0, 30).replace(/'/g, '')}'`,
++        `author: flow-machine-draft`,
++        `created_at: ${new Date().toISOString()}`,
++        'priority: P1',
++        'depends_on: []',
++        'blocks: []',
++        'requirement_ids: []',
++        'decision_ids: []',
++        `goal: >`,
++        `  ${c}`,
++        '---',
++        '',
++      ].join('\n'),
++    }
++  })
++}
++
++/** decisions：只记真实新增（无真实决策=不落文件，转写任务通常为零）。 */
++export function draftDecisions({ change, decisions }) {
++  if (!decisions || decisions.length === 0) return null
++  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
++  const text = [
++    '---',
++    `author: flow-machine-draft`,
++    `created_at: ${new Date().toISOString()}`,
++    '---',
++    `# 决策记录（Decisions）— ${change}`,
++    '',
++    wrapped('decisions-entries', decisions.map((d, i) => `## D-${String(i + 1).padStart(3, '0')}@v1: ${d.title}\n- 决策：${d.body}`).join('\n\n')),
++    '',
++  ].join('\n')
++  return { text, sections: collectSections(text) }
++}
++
++/** 从稿文本收集段哈希+首版原文（ledger 记账面）。 */
++function collectSections(text) {
++  const blocks = []
++  const re = /MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin/g
++  const lines = text.split('\n')
++  let m
++  // 按 wrapSection 结构回溯：begin 标记行下一段直到 end 标记
++  let current = null
++  for (const line of lines) {
++    const b = line.match(/<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin/)
++    if (b) { current = { key: b[1], hash: b[2], body: [] }; blocks.push(current); continue }
++    if (/<!--\s*MACHINE-DRAFT:[\w.-]+:end/.test(line)) { current = null; continue }
++    if (current) current.body.push(line)
++  }
++  const sections = {}
++  for (const b of blocks) {
++    sections[b.key] = { hash: b.hash, body: b.body.join('\n') }
++  }
++  return sections
++}
++
++/**
++ * 起草全件落盘 + draft-ledger 记账（flow start 消费）。
++ * @returns {{written: string[], ledgerPath: string}}
++ */
++export function draftAll({ changeDir, change, input, withTasks = false, runtimeRoot }) {
++  const criteria = extractSuccessCriteria(input)
++  const outputs = [
++    { file: 'proposal.md', draft: draftProposal({ change, input, criteria }) },
++    { file: 'requirements.md', draft: draftRequirements({ change, criteria }) },
++    { file: 'tasks.md', draft: draftTasks({ change, criteria, withTasks }) },
++  ]
++  const written = []
++  const ledger = { schemaVersion: 1, change, generatedAt: new Date().toISOString(), files: {}, amendments: [] }
++  for (const { file, draft } of outputs) {
++    writeAtomicSync(join(changeDir, file), draft.text)
++    ledger.files[file] = draft.sections
++    written.push(file)
++  }
++  if (withTasks) {
++    const cards = draftTaskCards({ change, criteria })
++    mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++    for (const c of cards) writeAtomicSync(join(changeDir, 'tasks', `${c.id}.md`), c.text)
++    written.push(`tasks/（${cards.length} 卡）`)
++  }
++  const ledgerPath = draftLedgerPath(runtimeRoot, change)
++  writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
++  return { written, ledgerPath, criteria }
++}
++
++/**
++ * computeEditRatio——机器稿改写比例（R7 切片四 / D-005 / FR-09）：决策覆盖度机械代理。
++ * LCS 行 diff：改写行数 / 首版总行数（首版为 ledger body 永存基准；AGENT 槽不属机器段
++ * 天然不计入）。纯函数。
++ */
++export function computeEditRatio(originalBody, currentBody) {
++  const a = String(originalBody || '').split('\n')
++  const b = String(currentBody || '').split('\n')
++  if (a.length === 0 || (a.length === 1 && !a[0])) return 0
++  // LCS 长度 DP（机器段行数小，O(n·m) 足够）
++  const dp = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1))
++  for (let i = a.length - 1; i >= 0; i--) {
++    for (let j = b.length - 1; j >= 0; j--) {
++      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
++    }
++  }
++  const lcs = dp[0][0]
++  // 改写比例口径=原文被改行占比（a.length - lcs)/a.length——del+ins 双计会把「替换」算两倍
++  // （2 行体改 1 行得 1.0 失真）；纯增行不改写原文不计入。
++  return Math.min(1, Math.max(0, (a.length - lcs) / a.length))
++}
++
++/**
++ * flow amend-draft：机器稿留痕重锚（唯一合法修改通道）。
++ * 对 ledger 在案的每文件 reanchorText 重锚 + ledger 追加 amendment 审计（首版 body 不动）。
++ * 切片四：amend 时对首版原文计算 editRatio（改写比例=决策覆盖度机械代理，AGENT 槽不计入）。
++ * @returns {{reanchored: string[], files: string[], editRatio: number, sectionRatios: Object}}
++ */
++export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
++  const ledgerPath = draftLedgerPath(runtimeRoot, change)
++  if (!existsSync(ledgerPath)) return { reanchored: [], files: [], editRatio: 0, sectionRatios: {} }
++  let ledger
++  try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { return { reanchored: [], files: [], editRatio: 0, sectionRatios: {} } }
++  const reanchored = []
++  const sectionRatios = {}
++  let totalOrig = 0
++  let totalChanged = 0
++  for (const file of Object.keys(ledger.files || {})) {
++    const mdPath = join(changeDir, file)
++    let text
++    try { text = readFileSync(mdPath, 'utf8') } catch { continue }
++    const r = reanchorText({ text, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
++    if (r.keys.length === 0) continue
++    writeAtomicSync(mdPath, r.text)
++    for (const k of r.keys) {
++      const firstBody = ledger.files[file][k] && ledger.files[file][k].body
++      const ratio = firstBody != null ? computeEditRatio(firstBody, r.contentByKey[k]) : 0
++      sectionRatios[`${file}:${k}`] = Math.round(ratio * 1000) / 1000
++      const aLines = String(firstBody || '').split('\n').length
++      totalOrig += aLines
++      totalChanged += Math.round(ratio * aLines)
++      ledger.files[file][k] = { ...ledger.files[file][k], hash: bodyHash(r.contentByKey[k]) }
++    }
++    reanchored.push(`${file}（${r.keys.join('/')}）`)
++  }
++  if (reanchored.length > 0) {
++    ledger.amendments = [...(ledger.amendments || []), { at: new Date().toISOString(), files: reanchored, sectionRatios }]
++    writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
++  }
++  const editRatio = totalOrig > 0 ? Math.round((totalChanged / totalOrig) * 1000) / 1000 : 0
++  return { reanchored, files: Object.keys(ledger.files || {}), editRatio, sectionRatios }
++}
++
++/** 三态拒收校验（flow done 工件子步消费面；无 ledger=not-applicable）。 */
++export function verifyFlowDrafts({ changeDir, change, runtimeRoot }) {
++  const ledgerPath = draftLedgerPath(runtimeRoot, change)
++  if (!existsSync(ledgerPath)) return { applicable: false, violations: [] }
++  let ledger
++  try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { return { applicable: false, violations: [] } }
++  const violations = []
++  for (const [file, sections] of Object.entries(ledger.files || {})) {
++    const mdPath = join(changeDir, file)
++    let text
++    try { text = readFileSync(mdPath, 'utf8') } catch {
++      violations.push(`机器稿「${file}」不可读（draft ledger 在案）`)
++      continue
++    }
++    violations.push(...verifyMarkers({ text, sections, amendCmd: AMEND_CMD(change) }))
++  }
++  return { applicable: true, violations }
++}
++
++export default { draftAll, amendFlowDraft, verifyFlowDrafts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+diff --git a/src/flow.js b/src/flow.js
+new file mode 100644
+index 00000000..ca2b128f
+--- /dev/null
++++ b/src/flow.js
+@@ -0,0 +1,418 @@
++/**
++ * flow.js — 2-调用协议（R7 切片二 / D-002 D-003 D-007 / FR-03~06）。
++ *
++ * 协议形状属性（机械 harness 可验，非 agent 配额）：薄跑道 CLI 必需交互 = 2——
++ *   ① `flow start`（一次下发：建 change + 基线锚定 + 薄流程说明 + 全部材料**路径**清单
++ *      ——稳定前缀=缓存最优；已存在 change → 恢复简报（盘面状态：checkbox/提交/账本/
++ *      dirty files → 做到哪、剩什么））；
++ *   ② `flow done`（唯一裁决点：六子步幂等——工件校验/P2 账本对账+亲测/探针/distill/
++ *      归档/事件收口）。
++ * 中间零协议必需交互；agent 自愿 status/verify 合法不计入（D-007：协议记账单位=change 级
++ * ≈ 一次 GSD Phase；task 卡是干活单位非协议检查点）。
++ *
++ * fail-closed 三句（用户裁定钉死）：①亲自实测失败=整单 FAIL exit≠0（不继续 distill/归档）；
++ * ②实测超时=失败（同 quick 门，无部分成功当绿）；③半态可重入不可假绿——归档子步未完成前
++ * change 仍 active，重入从断点续不新开 change。
++ *
++ * 配置（local.yaml，config-schema 注册；design 措辞 `flow: thin|legacy` 落地为单键
++ * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 thin；legacy=既有 run <stage>
++ * 全族逐字不动，flow start 拒跑并指路（回滚一行 yaml）。thin change 上跑 run <stage> =
++ * 混跑回退（flow-state 落 legacy_fallback，flow done 按厚档裁决——两套记账不叠加）。
++ *
++ * 状态落文件不落 DB（红线）：.sillyspec/changes/<名>/flow-state.yaml（tier/baseline_commit/
++ * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
++ * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
++ */
++import { existsSync, readFileSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import yaml from 'js-yaml'
++import { git, gitQuiet } from './git-helper.js'
++import { writeAtomicSync } from './fs-atomic.js'
++import { resolveRuntimeRoot } from './run/shared.js'
++
++const FLOW_STATE_FILE = 'flow-state.yaml'
++const SUBSTEPS = ['artifacts', 'ledger', 'probes', 'distill', 'archive', 'events']
++
++/** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
++export function readFlowState(changeDir) {
++  try {
++    const raw = readFileSync(join(changeDir, FLOW_STATE_FILE), 'utf8')
++    const obj = yaml.load(raw)
++    return obj && typeof obj === 'object' ? obj : null
++  } catch {
++    return null
++  }
++}
++
++/** 原子写 flow-state（patch 合并，幂等）。 */
++export function writeFlowState(changeDir, patch) {
++  const cur = readFlowState(changeDir) || {}
++  writeAtomicSync(join(changeDir, FLOW_STATE_FILE), yaml.dump({
++    tier: 'thin',
++    legacy_fallback: false,
++    substeps: {},
++    ...cur,
++    ...patch,
++    substeps: { ...(cur.substeps || {}), ...(patch.substeps || {}) },
++    updatedAt: new Date().toISOString(),
++  }, { lineWidth: 120 }) + '\n')
++}
++
++/** 读 local.yaml 的 flow 配置（缺省 thin；文本级读同既有 parseSimpleYaml 习惯）。 */
++export function readFlowConfig(specBase) {
++  try {
++    const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
++    const m = raw.match(/^\s*mode\s*:\s*(thin|legacy)\s*$/m)
++    let mode = m ? m[1] : 'thin'
++    if (/^flow\s*:\s*(thin|legacy)\s*$/m.test(raw)) mode = raw.match(/^flow\s*:\s*(thin|legacy)\s*$/m)[1]
++    const th = raw.match(/^\s*edit_ratio_threshold\s*:\s*([0-9.]+)\s*$/m)
++    const en = raw.match(/^\s*edit_ratio_enforcement\s*:\s*(advisory|block)\s*$/m)
++    return {
++      mode,
++      editRatioThreshold: th ? Number(th[1]) : 0.5,
++      editRatioEnforcement: en ? en[1] : 'advisory',
++    }
++  } catch {
++    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
++  }
++}
++
++/** 基线以来变更文件（git diff 基线→HEAD + 工作区 dirty——flow done 测试门清单来源，D-003）。
++ * 排除 .sillyspec/ 内部产物（观测对象≠交付物；spec 文件不触发测试门也不算 dirty 恢复信号）。 */
++function changedFilesSinceBaseline(cwd, baselineCommit) {
++  const files = new Set()
++  const addIfDeliverable = (p) => {
++    if (p && !p.replace(/\\/g, '/').startsWith('.sillyspec/')) files.add(p)
++  }
++  if (baselineCommit) {
++    const d = gitQuiet(cwd, ['diff', '--name-only', `${baselineCommit}..HEAD`])
++    if (d) for (const l of String(d).split('\n')) if (l.trim()) addIfDeliverable(l.trim())
++  }
++  const s = gitQuiet(cwd, ['status', '--porcelain'])
++  if (s) {
++    for (const line of String(s).split('\n')) {
++      if (!line || line.length < 4) continue
++      const p = line.slice(3).trim().replace(/^"|"$/g, '')
++      const arrow = p.indexOf(' -> ')
++      const path = arrow !== -1 ? p.slice(arrow + 4) : p
++      addIfDeliverable(path)
++    }
++  }
++  return [...files]
++}
++
++/** 材料路径清单（稳定前缀——缓存最优；按在场性列出，不读内容）。 */
++function materialPaths(specBase, changeName, changeDir) {
++  const paths = [
++    join(changeDir, FLOW_STATE_FILE),
++    join(specBase, 'docs', 'sillyspec', 'scan', 'PROJECT.md'),
++    join(specBase, 'docs', 'sillyspec', 'scan', 'CONVENTIONS.md'),
++    join(specBase, 'docs', 'sillyspec', 'modules', '_module-map.yaml'),
++    join(specBase, 'knowledge', 'INDEX.md'),
++  ]
++  return paths.filter((p) => { try { return existsSync(p) } catch { return false } })
++}
++
++/**
++ * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
++ * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
++ */
++export async function cmdFlowStart({ change, input, thick = false, withTasks = false, cwd, specBase, json = false }) {
++  const cfg = readFlowConfig(specBase)
++  if (cfg.mode === 'legacy') {
++    console.error('❌ 本项目配置 flow.mode=legacy——2-调用薄协议未启用，走既有流程：sillyspec run <stage> --change <名>')
++    console.error('   回滚一行 yaml：local.yaml 删掉 mode: legacy 或改为 mode: thin（缺省即 thin）')
++    process.exit(2)
++  }
++  const { ProgressManager } = await import('./progress.js')
++  const pm = new ProgressManager()
++  const changesDir = join(specBase, 'changes')
++  const changeDir = join(changesDir, change)
++  const runtimeRoot = resolveRuntimeRoot({}, specBase)
++
++  if (existsSync(changeDir)) {
++    const st = readFlowState(changeDir)
++    if (!st) {
++      console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
++      process.exit(2)
++    }
++    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st })
++    return { recovery: true }
++  }
++
++  pm.initChange(cwd, change, {})
++  try {
++    const { resolveSessionIdentity } = await import('./progress.js')
++    const { session } = resolveSessionIdentity({ flagSession: null, cwd })
++    pm.claimChangeOwner(cwd, change, session)
++  } catch { /* claim 失败不阻断启动（fail-open，同 runCommand 接线） */ }
++
++  const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++  const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
++  writeFlowState(changeDir, {
++    tier: thick ? 'thick' : 'thin',
++    // born_face=工件面出身（R7 切片四修正：失败升厚改 tier 只升仪式不回溯出身——薄面出身归档
++    // 恒走 skipPlanCheck，防「升厚后无 plan.md 归档死锁」；厚面出身（--thick 起步）才要 plan.md）
++    born_face: thick ? 'thick' : 'thin',
++    with_tasks: Boolean(withTasks),
++    baseline_commit: baseline,
++    substeps: {},
++  })
++
++  // 全件机器起草（R7 切片三 / FR-07：工件回填轮=0——治理工件 CLI 写，agent 只裁例外）。
++  // 任务卡分岔（用户裁定#3）：默认 thin+直写零任务卡；--thick/--with-tasks 才生成任务卡。
++  let drafted = []
++  try {
++    const { draftAll } = await import('./flow-draft.js')
++    const r = draftAll({ changeDir, change, input, withTasks: thick || withTasks, runtimeRoot })
++    drafted = r.written
++  } catch (e) {
++    console.warn(`⚠️ 机器起草失败（薄工件面降级为 flow done 默认验收；best-effort 不阻断）: ${(e && e.message) || e}`)
++  }
++
++  const materials = materialPaths(specBase, change, changeDir)
++  const lines = [
++    `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 薄跑道'}）: ${change}`,
++    `══════════════════════════════════════`,
++    `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
++    ``,
++    `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
++    `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
++    ``,
++    `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
++    `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
++    ``,
++    `材料路径清单（稳定前缀，按需 Read）：`,
++    ...materials.map((p) => `  - ${p}`),
++  ]
++  if (json) {
++    console.log(JSON.stringify({ change, tier: thick ? 'thick' : 'thin', baseline, materials }))
++  } else {
++    console.log(lines.join('\n'))
++  }
++  return { change, baseline, materials }
++}
++
++/** 恢复简报：盘面状态（checkbox/提交/账本/dirty files）→ 做到哪、剩什么、下一步。 */
++function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st }) {
++  const done = []
++  const left = []
++  for (const k of SUBSTEPS) (st.substeps?.[k] === 'done' ? done : left).push(k)
++  let checked = 0, total = 0
++  try {
++    const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
++    checked = (t.match(/^- \[x\]/gm) || []).length
++    total = (t.match(/^- \[( |x)\]/gm) || []).length
++  } catch { /* 无 tasks.md = 零任务卡（thin 默认） */ }
++  const commits = st.baseline_commit
++    ? (gitQuiet(cwd, ['rev-list', '--count', `${st.baseline_commit}..HEAD`]) || '0').toString().trim()
++    : '?'
++  const dirty = changedFilesSinceBaseline(cwd, st.baseline_commit).length
++  const hasLedger = existsSync(join(runtimeRoot, `verify-quality-scan-${change}.json`))
++  console.log([
++    `🔁 flow start 恢复简报（重入）: ${change}（tier=${st.tier}${st.legacy_fallback ? '，legacy_fallback=true 混跑回退中' : ''}）`,
++    `══════════════════════════════════════`,
++    `- 做到哪：任务勾选 ${checked}/${total}；基线以来提交 ${commits} 个；变更/dirty 文件 ${dirty} 个；P2 质量扫描记录 ${hasLedger ? '在场' : '无'}。`,
++    `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
++    `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
++    `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
++  ].join('\n'))
++}
++
++/**
++ * flow done —— 第 2 次协议调用（唯一裁决点，六子步幂等）。
++ * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
++ * → archive（归档经 runArchiveChain，thin 薄工件面跳过 plan.md 硬校验）→ events（事件收口）。
++ */
++export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true }) {
++  const changeDir = join(specBase, 'changes', change)
++  const st = readFlowState(changeDir)
++  if (!st) {
++    console.error(`❌ ${change} 无 ${FLOW_STATE_FILE}（未参与 thin 协议）——走 run <stage> 既有流程`)
++    process.exit(2)
++  }
++  if (st.legacy_fallback) {
++    console.error('❌ 本 change 已混跑回退 legacy（跑过 run <stage>）——剩余流程按厚档走 run <stage>，flow done 不再裁决')
++    process.exit(2)
++  }
++  const runtimeRoot = resolveRuntimeRoot({}, specBase)
++  let markDir = changeDir
++  const mark = (k) => { writeFlowState(markDir, { substeps: { [k]: 'done' } }); doneList.push(k) }
++  const doneList = []
++  const skip = (k) => { doneList.push(`${k}(skip)`) }
++  const reportMidFail = (failed) => {
++    console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
++    console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
++  }
++
++  // ① artifacts：机器稿指纹校验（draft-ledger 在场时三态拒收——标记缺失/哈希失配/手工重锚
++  // 未审计；AGENT 槽是合法书写面不参与指纹；缺 ledger=not-applicable 放行）
++  if (st.substeps?.artifacts === 'done') { skip('artifacts') } else {
++    const { verifyFlowDrafts } = await import('./flow-draft.js')
++    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot })
++    if (r.applicable && r.violations.length > 0) {
++      console.error(`❌ 工件校验拒收（机器稿指纹三态）：`)
++      for (const v of r.violations) console.error(`   - ${v}`)
++      reportMidFail('artifacts')
++      process.exit(1)
++    }
++    mark('artifacts')
++  }
++
++  // ② ledger：P2 账本对账+亲测（runQuickTestLintGate 同源：账本优先→真跑→recordTestLedger 落账）
++  if (st.substeps?.ledger === 'done') { skip('ledger') } else {
++    const { runQuickTestLintGate } = await import('./run/quick-audit.js')
++    const changedFiles = changedFilesSinceBaseline(cwd, st.baseline_commit)
++    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change })
++    if (gate && gate.action === 'fail') {
++      console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
++      console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
++      // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
++      writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
++      console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')
++      reportMidFail('ledger')
++      process.exit(1)
++    }
++    mark('ledger')
++  }
++
++  // ③ probes：thin 薄跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
++  // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
++  // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
++  if (st.substeps?.probes === 'done') { skip('probes') } else {
++    if (st.tier === 'thick') console.log('ℹ️ 厚档探针链：run verify --done 时经 verify-probes --init --draft 承接（第 3 批既有面）')
++    mark('probes')
++  }
++
++  // ④ distill：决策提炼（rejected/needsWait 异态 → 升厚留人工裁决，不静默吞）
++  if (st.substeps?.distill === 'done') { skip('distill') } else {
++    try {
++      const { distillIntoKnowledge } = await import('./decision-distill.js')
++      const knowledgeRoot = join(specBase, 'knowledge')
++      const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++      const res = distillIntoKnowledge(changeDir, knowledgeRoot, typeof head === 'string' ? head.trim() : '', null)
++      const abnormal = res && (res.rejected > 0 || res.needsWait > 0)
++      if (abnormal) {
++        writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `distill 异态（rejected=${res.rejected} needsWait=${res.needsWait}）——升厚留人工裁决` })
++        console.warn(`⚠️ distill 异态 → 已升厚档（tier=thick）。剩余流程按厚档走 run <stage> 完整仪式；归档子步仍将执行（厚档语义不跳过 plan.md 校验）。`)
++      }
++    } catch (e) {
++      console.warn(`⚠️ distill best-effort 失败（不阻断归档链）: ${(e && e.message) || e}`)
++    }
++    mark('distill')
++  }
++
++  // ⑤ archive：归档经 runArchiveChain（thin 薄工件面跳过 plan.md 硬校验；thick 不跳）
++  if (st.substeps?.archive === 'done') { skip('archive') } else {
++    const { ProgressManager } = await import('./progress.js')
++    const { runArchiveChain } = await import('./run/complete-handlers.js')
++    const { archiveDestDirName } = await import('./stage-contract.js')
++    const pm = new ProgressManager()
++    const date = new Date().toISOString().slice(0, 10)
++    const destName = archiveDestDirName(date, change)
++    const destDir = join(specBase, 'changes', 'archive', destName)
++    await runArchiveChain({
++      pm, cwd, specBase, changeName: change,
++      srcDir: changeDir,
++      destDir,
++      skipPlanCheck: (st.born_face ?? st.tier) === 'thin',
++    })
++    // 归档后 changeDir 已搬走——后续子步标记随归档目录走（flow-state 随变更包留存审计）
++    markDir = destDir
++    mark('archive')
++  }
++
++  // ⑥ events：事件收口（watcher 观测旁路 best-effort 读回，非真相源）
++  if (st.substeps?.events === 'done') { skip('events') } else {
++    try {
++      const eventsPath = join(runtimeRoot, `watcher-events-${change}.jsonl`)
++      if (existsSync(eventsPath)) {
++        const n = readFileSync(eventsPath, 'utf8').split('\n').filter(Boolean).length
++        console.log(`📊 watcher 事件收口：${n} 条 provisional 事件在案（.runtime 留档，平台展示面）`)
++      } else {
++        console.log('📊 watcher 事件收口：无事件文件（观测旁路未在跑——best-effort，不影响裁决）')
++      }
++    } catch { /* 读回失败不阻断 */ }
++    mark('events')
++  }
++
++  // ── 切片四收口面：路由信号醒目打印 + 遥测四列记一笔（advisory 定案——只记录不判罚）──
++  const cfg = readFlowConfig(specBase)
++  if (st.route_hint === 'thick') {
++    console.warn(`🧭 route_hint: thick（机器稿改写比例 ${st.edit_ratio ?? '?'} > 阈值 ${cfg.editRatioThreshold}——决策覆盖度低，该走厚档；advisory 不强制，测绿已薄档过）`)
++    if (cfg.editRatioEnforcement === 'block') {
++      console.error('❌ flow.edit_ratio_enforcement=block：超阈阻断 done（降阈/改走 thick/回退 advisory 三选一）')
++      process.exit(1)
++    }
++  }
++  try {
++    const { appendFileSync } = await import('node:fs')
++    appendFileSync(join(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
++      ts: new Date().toISOString(), change, protocolCalls: 2,
++      draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
++      routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
++    }) + '\n', 'utf8')
++  } catch { /* 遥测 best-effort */ }
++
++  console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——六子步 ${doneList.join('、')}；change 已归档注销。`)
++  return { change, substeps: doneList }
++}
++
++/** flow 命令族入口（index.js case 'flow' 接线）：flow start|done|amend-draft。 */
++export async function cmdFlow(args, cwd, specDir = null) {
++  const sub = args[0] || ''
++  const rest = args.slice(1)
++  const specBase = specDir || join(cwd, '.sillyspec')
++  const getFlag = (name) => {
++    const i = rest.indexOf(name)
++    return i !== -1 && i + 1 < rest.length ? rest[i + 1] : null
++  }
++  const hasFlag = (name) => rest.includes(name)
++  if (sub === 'start') {
++    const change = getFlag('--change') || `flow-${new Date().toISOString().slice(0, 10)}-${Math.random().toString(16).slice(2, 6)}`
++    return cmdFlowStart({
++      change,
++      input: getFlag('--input') || undefined,
++      thick: hasFlag('--thick'),
++      withTasks: hasFlag('--with-tasks'),
++      cwd, specBase,
++      json: hasFlag('--json'),
++    })
++  }
++  if (sub === 'done') {
++    const change = getFlag('--change')
++    if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
++    return cmdFlowDone({ change, cwd, specBase })
++  }
++  if (sub === 'amend-draft') {
++    // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
++    // 首版原文 body 永存（切片四 editRatio 基准）。
++    const change = getFlag('--change')
++    if (!change) { console.error('❌ flow amend-draft 需 --change <名>'); process.exit(2) }
++    const changeDir = join(specBase, 'changes', change)
++    const runtimeRoot = resolveRuntimeRoot({}, specBase)
++    const { amendFlowDraft } = await import('./flow-draft.js')
++    const r = amendFlowDraft({ changeDir, change, runtimeRoot })
++    if (r.reanchored.length === 0) {
++      console.error('（无可重锚机器稿——draft ledger 不在案或稿件无标记段）')
++      process.exit(1)
++    }
++    // 切片四：editRatio 路由信号（D-005 advisory 定案——测绿可薄档过；超阈提示+route_hint 落档）
++    const cfg = readFlowConfig(specBase)
++    // 路由信号取段级最大改写比（任一段过半=该段决策未被输入覆盖——聚合比会被未改段稀释）；
++    // 段级明细 sectionRatios 已随 amendment 入 ledger，遥测可见。
++    const maxRatio = Math.max(0, ...Object.values(r.sectionRatios || {}))
++    if (maxRatio > cfg.editRatioThreshold) {
++      writeFlowState(changeDir, { route_hint: 'thick', edit_ratio: maxRatio })
++      console.warn(`⚠️ route_hint: thick——机器稿段级最大改写比例 ${maxRatio}（阈值 ${cfg.editRatioThreshold}）：决策覆盖度低，该走厚档（advisory：测绿可薄档过，不强制；flow done 将醒目提示+遥测记账）`)
++    } else {
++      writeFlowState(changeDir, { edit_ratio: maxRatio })
++    }
++    console.log(`✅ flow amend-draft 留痕重锚：${r.reanchored.join('、')}——ledger amendment 审计在案；editRatio=${maxRatio}（段级最大；基准=首版原文，AGENT 槽不计入）`)
++    return r
++  }
++  console.error('用法: sillyspec flow start --change <名> --input "<任务>" [--thick|--with-tasks] | sillyspec flow done --change <名>')
++  process.exit(2)
++}
++
++export default { cmdFlow, cmdFlowStart, cmdFlowDone, readFlowState, writeFlowState, readFlowConfig }
+diff --git a/src/index.js b/src/index.js
+index ff4db7f8..4cbec757 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -4315,6 +4315,12 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
+       process.exitCode = r.ok ? 0 : 1;
+       break;
+     }
++    case 'flow': {
++      // R7 切片二：2-调用薄协议命令族（start/done/amend-draft）——协议必需交互=2
++      const flowMod = await import('./flow.js');
++      await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir);
++      break;
++    }
+     case 'workflow': {
+       const wfSub = filteredArgs[1];
+       if (!wfSub || wfSub === 'help' || wfSub === '--help') {
+diff --git a/src/machine-draft.js b/src/machine-draft.js
+new file mode 100644
+index 00000000..c9504b4f
+--- /dev/null
++++ b/src/machine-draft.js
+@@ -0,0 +1,117 @@
++/**
++ * machine-draft.js — MACHINE-DRAFT 指纹三件套泛化（R7 切片三 task-04 / D-004 / FR-08）。
++ *
++ * 从 verify-draft.js（verify 填槽制 v2 件二）抽出通用原语，供 flow 四件机器稿（flow-draft）
++ * 复用；verify-draft 改为消费方（导出签名与行为逐字不动，零回归硬门）。
++ *
++ * 三件套语义（护栏#2：守卫必须是验收侧的机制，永远不是生成侧的劝说）：
++ *   - wrapSection：机器预填段以 MACHINE-DRAFT begin/end 注释对包裹，begin 内嵌段内容
++ *     sha256（CRLF 归一）；amendCmd 按消费方参数化（verify-result 指向 verify-probes
++ *     --amend-draft，flow 稿指向 flow amend-draft——勿把 agent 引向错误命令）；
++ *   - verifyMarkers：三态拒收判定——标记缺失（被删/整份重写）/内容哈希失配（改写）/
++ *     手工重锚未审计（标记哈希与台账不一致）；
++ *   - reanchorText：按当前内容重锚哈希的纯文本变换（amend 留痕通道的机械半边；
++ *     台账审计与落盘归消费方）。
++ *
++ * 本模块纯函数（无 fs）——md 文本与台账对象由消费方读写；段 key 命名空间归消费方
++ * （verify-result 单文件段键 / flow 按文件名+段键组合）。
++ */
++import { createHash } from 'node:crypto'
++
++export const MARK_BEGIN_RE = /^<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin.*-->\s*$/
++const MARK_END_RE = /^<!--\s*MACHINE-DRAFT:([\w.-]+):end.*-->\s*$/
++
++/** 段内容哈希（CRLF 归一——跨平台写盘行尾漂移不炸指纹）。 */
++export function bodyHash(s) {
++  return createHash('sha256').update(String(s).replace(/\r\n/g, '\n')).digest('hex')
++}
++
++/**
++ * 包裹机器段（begin 标记 + body + end 标记 + 尾空行）。标记格式与既有 MARK_*_RE 逐字兼容。
++ * @returns {string} 四行块（含尾空行，消费方按原位替换）
++ */
++export function wrapSection({ key, body, amendCmd, guardNote = '整段改写会被 verify --done 拒收' }) {
++  return [
++    `<!-- MACHINE-DRAFT:${key}:${bodyHash(body)}:begin 机器预填段——${guardNote}；确要修改：${amendCmd} 留痕重锚 -->`,
++    body,
++    `<!-- MACHINE-DRAFT:${key}:end -->`,
++    '',
++  ].join('\n')
++}
++
++/**
++ * 解析 md 中全部标记段（CRLF 归一）。
++ * @returns {{key:string, markerHash:string, contentLines:string[]}[]}
++ */
++export function parseMarkerBlocks(text) {
++  const lines = String(text).replace(/\r\n/g, '\n').split('\n')
++  const blocks = []
++  let current = null
++  for (const line of lines) {
++    const b = line.match(MARK_BEGIN_RE)
++    if (b) { current = { key: b[1], markerHash: b[2], contentLines: [] }; blocks.push(current); continue }
++    const e = line.match(MARK_END_RE)
++    if (e) { current = null; continue }
++    if (current) current.contentLines.push(line)
++  }
++  return blocks
++}
++
++/**
++ * 三态拒收判定（--done 验收侧承重件的纯函数半边）。
++ * @param {object} p
++ * @param {string} p.text md 全文
++ * @param {Object<string,{hash:string}>} p.sections 台账段哈希（sidecar.sections 形态）
++ * @param {string} p.amendCmd 修复指引命令文案（消费方参数化）
++ * @returns {string[]} violations（空=干净；文案含修复指引）
++ */
++export function verifyMarkers({ text, sections, amendCmd }) {
++  const blocks = parseMarkerBlocks(text)
++  const byKey = new Map(blocks.map((b) => [b.key, b]))
++  const violations = []
++  const fix = (key) => `还原机器段原文，或确要修改时跑 ${amendCmd} 留痕重锚（段键 ${key}）`
++  for (const [key, rec] of Object.entries(sections || {})) {
++    const b = byKey.get(key)
++    if (!b) {
++      violations.push(`机器段「${key}」的 MACHINE-DRAFT 标记缺失（被删除或整份重写）——${fix(key)}`)
++      continue
++    }
++    const actual = bodyHash(b.contentLines.join('\n'))
++    if (actual !== rec.hash) {
++      violations.push(`机器段「${key}」内容与指纹失配（被改写）——${fix(key)}`)
++    } else if (b.markerHash !== rec.hash) {
++      // 内容未动但标记哈希与台账不一致 = 标记被手工重锚而未经 amend 审计
++      violations.push(`机器段「${key}」标记指纹与 sidecar 台账不一致（未经 --amend-draft 的手工重锚）——${fix(key)}`)
++    }
++  }
++  return violations
++}
++
++/**
++ * 按当前内容重锚全部标记段（纯文本变换；不落盘不记台账——消费方持 mdPath/台账）。
++ * @returns {{text:string, keys:string[], contentByKey:Object<string,string>}}
++ */
++export function reanchorText({ text, amendCmd, guardNote = '整段改写会被 verify --done 拒收' }) {
++  const lines = String(text).replace(/\r\n/g, '\n').split('\n')
++  const contentLinesByKey = new Map()
++  let current = null
++  for (const line of lines) {
++    const b = line.match(MARK_BEGIN_RE)
++    if (b) { current = b[1]; contentLinesByKey.set(current, []); continue }
++    const e = line.match(MARK_END_RE)
++    if (e) { current = null; continue }
++    if (current) contentLinesByKey.get(current).push(line)
++  }
++  const keys = [...contentLinesByKey.keys()]
++  const next = lines.map((line) => {
++    const b = line.match(MARK_BEGIN_RE)
++    if (!b) return line
++    const content = (contentLinesByKey.get(b[1]) || []).join('\n')
++    return `<!-- MACHINE-DRAFT:${b[1]}:${bodyHash(content)}:begin 机器预填段——${guardNote}；确要修改：${amendCmd} 留痕重锚 -->`
++  }).join('\n')
++  const contentByKey = {}
++  for (const k of keys) contentByKey[k] = (contentLinesByKey.get(k) || []).join('\n')
++  return { text: next, keys, contentByKey }
++}
++
++export default { wrapSection, parseMarkerBlocks, verifyMarkers, reanchorText, bodyHash, MARK_BEGIN_RE }
+diff --git a/src/run/command.js b/src/run/command.js
+index 7eb5bf31..315809cf 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -1343,6 +1343,36 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   // 注册变更到全局活跃列表（如果尚未注册）
+   if (effectiveChange) {
+     pm.registerChange(cwd, effectiveChange)
++    // ── watcher 拉起（R7 切片一 / D-001：观测与协议解耦）──
++    // effectiveChange 解析后无条件 spawn（不做「检测新建」——registerChange 是 INSERT OR
++    // IGNORE 不返回新建信号），活锁在跑由单飞锁合并 coalesced。best-effort：失败只 warn
++    // 绝不阻断主流程；未连接平台也 spawn（本地 jsonl 是事件唯一真相源）；
++    // SILLYSPEC_WATCHER=0 逃生阀。default 容器行不监听（非真实变更）。
++    if (effectiveChange !== 'default') {
++      // ── 混跑回退写侧（R7 切片二 / FR-06 / D-002：thin change 上跑 run <stage> = 该 change
++      // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。──
++      try {
++        const flowStatePath = join(specRoot, 'changes', effectiveChange, 'flow-state.yaml')
++        if (existsSync(flowStatePath)) {
++          const { readFlowState, writeFlowState } = await import('../flow.js')
++          const changeDir = join(specRoot, 'changes', effectiveChange)
++          const st = readFlowState(changeDir)
++          if (st && !st.legacy_fallback) {
++            writeFlowState(changeDir, { legacy_fallback: true })
++            console.warn(`⚠️ [flow] thin change「${effectiveChange}」跑了 run ${stageName}——已混跑回退 legacy（flow done 将按厚档拒裁并指路；两套记账不叠加）`)
++          }
++        }
++      } catch { /* 探测失败不阻断既有 run 流程 */ }
++      try {
++        const { spawnWatcher } = await import('../watcher.js')
++        const r = await spawnWatcher(cwd, effectiveChange, platformOpts)
++        if (r.status === 'spawned') {
++          console.log(`🔄 [watcher] 观测旁路已拉起（产物签名轮询，事件恒带 provisional:true）: ${effectiveChange}`)
++        }
++      } catch (e) {
++        console.warn(`⚠️ [watcher] 拉起失败（观测旁路 best-effort，不影响主流程）: ${(e && e.message) || e}`)
++      }
++    }
+     // ── 所有权首建 claim（2026-09-14-change-ownership-guards task-02 / FR-01 / D-001@v1）──
+     // run <stage> 启动即认领 owner（claimChangeOwner 守卫语义：已有值不覆盖——他人持有不抢
+     // 也不拒；拒绝语义只锁接管类操作，见 index.js apply/cleanup/assess 接线）。会话标识三级：
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 103d32e4..cb2e582f 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -570,56 +570,19 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+   return { docsAdded: null, fallbackDocs: true }
+ }
+ 
+-export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}, gateOpts = {}) {
+-  const archiveChangeName = progress.currentChange
+-  if (!archiveChangeName) {
+-    console.error('❌ 归档失败：未找到当前变更名（currentChange）')
+-    process.exit(1)
+-  }
+-  const changesDir = join(specBase, 'changes')
+-  const archiveDir = join(changesDir, 'archive')
+-  const srcDir = join(changesDir, archiveChangeName)
+-  const date = new Date().toISOString().slice(0, 10)
+-  const destName = archiveDestDirName(date, archiveChangeName)
+-  const destDir = join(archiveDir, destName)
+-
+-  if (!existsSync(srcDir)) {
+-    // 幂等自愈（issue archive-stage-physical-tracking-desync）：源目录已不存在，但变更可能已被
+-    // 手动 / 部分流程移到 changes/archive/ 并 commit，而 --done --confirm 从未正式跑完 → 进度 DB
+-    // 卡 archive 阶段、active 列表仍列此 change。检测到已归档则回填进度（unregisterChange）并
+-    // 成功返回，让收尾流程把 archive 阶段标完成，而非 exit(1) 死路（source 已移走无法重跑 move）。
+-    const alreadyArchivedDir = findAlreadyArchivedDir(archiveDir, archiveChangeName)
+-    if (alreadyArchivedDir) {
+-      console.log(`ℹ️  源目录不存在但变更已在 archive/（${basename(alreadyArchivedDir)}），判定已归档，自愈进度 DB`)
+-      // 终态一致化（坑 manual-archive-desync-status-only）：手动搬目录绕过标准归档后，本自愈路径
+-      // 不能只翻 status——同时收尾 archive 阶段（steps/stages/current_stage），否则推送平台的终态
+-      // 是「已归档 + 归档 0/5 + 停在 execute」的矛盾体，详情页渲染成「进度丢失」
+-      pm.unregisterChange(cwd, archiveChangeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+-      await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
+-      console.log(`📦 已自愈归档：${archiveChangeName} → archive/${basename(alreadyArchivedDir)}/`)
+-      return alreadyArchivedDir
+-    }
+-    console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
+-    console.error(`   且 changes/archive/ 下未找到该变更的归档目录。若已手动归档请核对目录名；否则先补全变更产物。`)
+-    process.exit(1)
+-  }
+-  // ── 所有权护栏（2026-09-14-change-ownership-guards task-03 / FR-01 / D-001@v1 接线点）──
+-  // 归档=接管类操作（注销 change + 移目录 + 清 worktree），他人活跃 change 硬拒。判定在
+-  // withMainRepoLock 锁内（handleArchiveConfirmStep 调用点），判定-执行无 TOCTOU；放行分支
+-  // no-owner/takeover-stale 重写 owner=本会话（setChangeOwner 同事务刷新 last_active，心跳从
+-  // 接管时刻起算）。会话标识三级解析：--session > env SILLYSPEC_SESSION_ID > anon@host（降级
+-  // 时 resolveSessionIdentity 自带教学 warning）。消费 task-02 契约（assertChangeOwnership
+-  // 纯读不写库），不重复实现判定语义。
+-  {
+-    const { session } = resolveSessionIdentity({ flagSession: gateOpts.sessionFlag || null, cwd })
+-    const check = pm.assertChangeOwnership(cwd, archiveChangeName, { selfSession: session, nowMs: Date.now() })
+-    if (!check.allowed) {
+-      console.error(`🚫 归档失败：变更 ${archiveChangeName} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝归档`)
+-      console.error(`   等对方会话收尾后重试（窗口过后自动接管）；确认对方已放弃且本会话应接管：先经 sillyspec worktree apply/cleanup ${archiveChangeName} --takeover 显式接管（重写 owner 留痕）再归档`)
+-      process.exit(1)
+-    }
+-    if (check.action !== 'self') pm.setChangeOwner(cwd, archiveChangeName, session)
+-  }
++/**
++ * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
++ *
++ * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
++ * flow thin 薄工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
++ * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
++ * → unregisterChange 终态一致化 → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
++ * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
++ *
++ * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
++ */
++export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false } = {}) {
++  const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
+   // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
+   // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
+   // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①
+@@ -630,28 +593,28 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+   try {
+     const { WorktreeManager } = await import('../worktree.js')
+     const wmGate = new WorktreeManager({ cwd })
+-    const gateMeta = wmGate.getMeta(archiveChangeName)
++    const gateMeta = wmGate.getMeta(changeName)
+     if (gateMeta
+       && gateMeta.mode !== 'in-place-fallback'
+       && gateMeta.mode !== 'native-worktree'
+       && gateMeta.worktreePath
+       && existsSync(gateMeta.worktreePath)) {
+       const { applyWorktree } = await import('../worktree-apply.js')
+-      const checkApply = applyWorktree(archiveChangeName, { cwd, checkOnly: true })
++      const checkApply = applyWorktree(changeName, { cwd, checkOnly: true })
+       const face = (checkApply && Array.isArray(checkApply.changedFiles)) ? checkApply.changedFiles : []
+       if (face.length > 0) {
+         const facePreview = `${face.slice(0, 5).join('、')}${face.length > 5 ? ' 等' : ''}`
+-        if (!gateOpts.skipApply) {
++        if (!skipApply) {
+           console.error(`❌ 归档失败：worktree 存在未 apply 的交付面（${face.length} 个文件：${facePreview}）`)
+           console.error(`   归档会清理 worktree（目录+分支+meta），交付物将失去进主仓的通道，形成「归档完成但交付物未进主仓」悬空态。`)
+-          console.error(`   先 apply 再归档: sillyspec worktree apply ${archiveChangeName}`)
++          console.error(`   先 apply 再归档: sillyspec worktree apply ${changeName}`)
+           console.error(`   确认无需 apply（交付面已由其他会话落地/纯探索性变更等）: sillyspec run archive --done --confirm --skip-apply（显式跳过并留痕归档记录）`)
+           process.exit(1)
+         }
+         console.warn(`⚠️  已按 --skip-apply 跳过未 apply 交付面检查（${face.length} 个文件未确认落地主仓：${facePreview}）——留痕归档记录`)
+         writeFileSync(join(srcDir, 'skip-apply.record.json'), JSON.stringify({
+           schemaVersion: 1,
+-          change: archiveChangeName,
++          change: changeName,
+           flag: '--skip-apply',
+           skippedAt: new Date().toISOString(),
+           deliverableCount: face.length,
+@@ -667,7 +630,9 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+   }
+   // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
+   // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
+-  if (!existsSync(join(srcDir, 'plan.md'))) {
++  // skipPlanCheck（R7 切片二 / task-03 flow 薄工件面）：flow-state 在场的 thin change 无
++  // plan.md（薄工件面四件套），flow done 归档子步传 true 旁路；既有 archive 流程缺省 false 零变化。
++  if (!skipPlanCheck && !existsSync(join(srcDir, 'plan.md'))) {
+     console.error(`❌ 归档失败：变更目录缺少 plan.md（${srcDir}）`)
+     console.error(`   plan.md 是归档的必需产物。请先补全 plan 阶段产出再归档。`)
+     process.exit(1)
+@@ -707,7 +672,7 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+ 
+   // 正常路径同样走终态一致化（坑 manual-archive-desync-status-only）：标准 --done --confirm 流程
+   // 中 completeStep 随后也会逐项完成，此处先收尾是幂等写同值——保证任何走出本函数的归档终态一致
+-  pm.unregisterChange(cwd, archiveChangeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
++  pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+ 
+   // CLI 下沉 git add（坑4，FR-04）：确定性暂存归档目录 + 模块文档，不靠 step5 prompt 驱动。
+   // step5 prompt 的 git add 保留作幂等兜底；POSIX 路径跨平台（git 接受正斜杠）。
+@@ -745,12 +710,12 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+           // 已暂存 rename → 半归档残留；按目标目录名归属他者变更
+           const m = /^\.sillyspec\/changes\/archive\/([^/]+)\//.exec(dst)
+           const owner = m ? m[1] : '?'
+-          if (owner !== archiveChangeName) othersResidual.push(owner)
++          if (owner !== changeName) othersResidual.push(owner)
+         } else if (x === ' ' && (y === 'D' || y === 'A' || y === 'M')) {
+           // 未暂存的源侧移动：源目录 D / 新位置 A——指向本变更的补暂存
+           const p = dst || src
+-          if (p && (p.startsWith(changesPrefix + archiveChangeName + '/')
+-                    || p.startsWith(changesPrefix + 'archive/' + archiveChangeName + '/'))) {
++          if (p && (p.startsWith(changesPrefix + changeName + '/')
++                    || p.startsWith(changesPrefix + 'archive/' + changeName + '/'))) {
+             minePaths.push(p)
+           }
+         }
+@@ -773,6 +738,60 @@ export async function archiveChangeDirectory(pm, cwd, progress, specBase, platfo
+       }
+     }
+   } catch { /* 探测失败不阻断归档（advisory） */ }
++}
++
++export async function archiveChangeDirectory(pm, cwd, progress, specBase, platformOpts = {}, gateOpts = {}) {
++  const archiveChangeName = progress.currentChange
++  if (!archiveChangeName) {
++    console.error('❌ 归档失败：未找到当前变更名（currentChange）')
++    process.exit(1)
++  }
++  const changesDir = join(specBase, 'changes')
++  const archiveDir = join(changesDir, 'archive')
++  const srcDir = join(changesDir, archiveChangeName)
++  const date = new Date().toISOString().slice(0, 10)
++  const destName = archiveDestDirName(date, archiveChangeName)
++  const destDir = join(archiveDir, destName)
++
++  if (!existsSync(srcDir)) {
++    // 幂等自愈（issue archive-stage-physical-tracking-desync）：源目录已不存在，但变更可能已被
++    // 手动 / 部分流程移到 changes/archive/ 并 commit，而 --done --confirm 从未正式跑完 → 进度 DB
++    // 卡 archive 阶段、active 列表仍列此 change。检测到已归档则回填进度（unregisterChange）并
++    // 成功返回，让收尾流程把 archive 阶段标完成，而非 exit(1) 死路（source 已移走无法重跑 move）。
++    const alreadyArchivedDir = findAlreadyArchivedDir(archiveDir, archiveChangeName)
++    if (alreadyArchivedDir) {
++      console.log(`ℹ️  源目录不存在但变更已在 archive/（${basename(alreadyArchivedDir)}），判定已归档，自愈进度 DB`)
++      // 终态一致化（坑 manual-archive-desync-status-only）：手动搬目录绕过标准归档后，本自愈路径
++      // 不能只翻 status——同时收尾 archive 阶段（steps/stages/current_stage），否则推送平台的终态
++      // 是「已归档 + 归档 0/5 + 停在 execute」的矛盾体，详情页渲染成「进度丢失」
++      pm.unregisterChange(cwd, archiveChangeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
++      await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
++      console.log(`📦 已自愈归档：${archiveChangeName} → archive/${basename(alreadyArchivedDir)}/`)
++      return alreadyArchivedDir
++    }
++    console.error(`❌ 归档失败：源目录不存在 ${srcDir}`)
++    console.error(`   且 changes/archive/ 下未找到该变更的归档目录。若已手动归档请核对目录名；否则先补全变更产物。`)
++    process.exit(1)
++  }
++  // ── 所有权护栏（2026-09-14-change-ownership-guards task-03 / FR-01 / D-001@v1 接线点）──
++  // 归档=接管类操作（注销 change + 移目录 + 清 worktree），他人活跃 change 硬拒。判定在
++  // withMainRepoLock 锁内（handleArchiveConfirmStep 调用点），判定-执行无 TOCTOU；放行分支
++  // no-owner/takeover-stale 重写 owner=本会话（setChangeOwner 同事务刷新 last_active，心跳从
++  // 接管时刻起算）。会话标识三级解析：--session > env SILLYSPEC_SESSION_ID > anon@host（降级
++  // 时 resolveSessionIdentity 自带教学 warning）。消费 task-02 契约（assertChangeOwnership
++  // 纯读不写库），不重复实现判定语义。
++  {
++    const { session } = resolveSessionIdentity({ flagSession: gateOpts.sessionFlag || null, cwd })
++    const check = pm.assertChangeOwnership(cwd, archiveChangeName, { selfSession: session, nowMs: Date.now() })
++    if (!check.allowed) {
++      console.error(`🚫 归档失败：变更 ${archiveChangeName} 正被其他会话持有（owner: ${check.owner}，最后活跃: ${check.lastActive || '未知'}），活跃窗口 ${Math.round(check.heartbeatMs / 60000)} 分钟内拒绝归档`)
++      console.error(`   等对方会话收尾后重试（窗口过后自动接管）；确认对方已放弃且本会话应接管：先经 sillyspec worktree apply/cleanup ${archiveChangeName} --takeover 显式接管（重写 owner 留痕）再归档`)
++      process.exit(1)
++    }
++    if (check.action !== 'self') pm.setChangeOwner(cwd, archiveChangeName, session)
++  }
++  // ── 归档执行链（task-02 抽取：链体在 runArchiveChain，行为等价纯搬运）──
++  await runArchiveChain({ pm, cwd, specBase, changeName: archiveChangeName, srcDir, destDir, skipApply: Boolean(gateOpts.skipApply), skipPlanCheck: false })
+ 
+   // 归档时清理可能残留的 worktree（自愈路径也复用，见上方 srcDir 缺失分支）。
+   await archiveWorktreeCleanup(cwd, archiveChangeName, specBase, platformOpts)
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 61e69fe9..2e4fcf09 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -154,6 +154,12 @@ const stepGeneratePlan = {
+ > tasks.md 格式：\`- [ ] task-01: 一句话任务名\`（execute 从这里解析任务清单）
+ > plan.md Wave 段格式：\`- task-01\`（纯 ID 引用，execute 据此分组）
+ 
++> **拆分粒度纪律（D-006@v1 / FR-11，R7 实证：18 卡细拆给反仪式变更预付协议税）**：
++> - **默认「实现+单测同卡」**——测试与实现放同一任务卡（TDD 同任务），不单独开「测试卡」「验收 Wave」；纯验收类动作（跑全量回归）并入相关实现卡的 acceptance/verify。
++> - **禁止仪式卡**：「纯接线」「纯 module-map 录入」「纯全量回归绿」不独立成卡——此类收尾动作写进相关实现卡的 implementation 与 acceptance（几行接线并入实现，module-map 录入并入该片最后一张实现卡）。
++> - **「同 Wave 文件不相交」语义澄清**：该约束防并行子代理同文件互写（调度约束），**不要求**把测试/接线/录入拆成独立任务——同一张卡携带多个文件（实现+测试+module-map）完全合法，约束只作用于 Wave 内**多任务之间**的 allowed_paths 交集。
++> - 拆分对齐「可独立验收的能力边界」而非「工序步骤」——一个能力（实现+接线+单测+登记）通常=一张卡；协议成本与任务卡数线性挂钩，卡片数是税。
++
+ > **并批默认（B-③，同 Wave 文件正交任务默认并批——摊平 execute 扇出的重复上下文重建，R4-S-F 实证 5 任务 2 批收益）**：
+ > - 文件正交（无共享 target_files、无 provides/expects_from 契约链、无 depends_on 依赖）的同 Wave 任务默认并批 2–4 任务/批；批标注写在 Wave 段内独立行（\`> batch: task-01+task-02\`，一段多行即多批），**不替代** \`- task-XX\` 纯 ID 引用行（execute 只按纯 ID 行收任务，漏写 ID 行 = 任务不进 execute）；任务数 ≤3 的 Wave 不并批（任何并批都违反下条批数护栏）
+ > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+@@ -461,9 +467,12 @@ related_tests:                           # 可选。当本 task 改动会导致
+ 
+ ⚠️ 生成卡片前先确认 plan.md 已满足（否则下一步 postcheck 会硬拦，导致返工重编号/重分 Wave）：
+ - **共享文件须分 Wave**：若多个 task 的 allowed_path 含同一文件，plan.md 必须把它们分到不同「## Wave N」（同 Wave 共享文件会被 execute 强制并行，子代理互相覆盖；postcheck 拦同 Wave 共享）
++  （注意：该约束只限制 Wave 内**多任务之间**的文件交集——同一张卡携带实现+测试+module-map 多文件合法，勿为规避此约束把测试/接线拆成独立卡，见步骤 2 拆分粒度纪律）
+ - **task id 从 1 连续**：task-01、task-02、task-03… 不能跳号或重号（postcheck 校验 id 连续性，gap 会拦）
+ 这两条是跨 task 全局约束，子代理只写单卡看不到全局——你（主 agent）分派子代理前必须先在 plan.md 里确认 Wave 划分与编号正确。
+ 
++卡片粒度对齐 plan.md/tasks.md 的任务数——plan 未拆出的收尾动作不为仪式另立卡。
++
+ ⚠️ **TaskCard 必备字段（缺一 postcheck 直接阻断）：** id、title（英文）、**title_zh（中文标题，必填）**、allowed_paths、goal、implementation、acceptance、verify、constraints。骨架已由 taskcard CLI 预生成（含 title_zh 占位），子代理只需 Edit 填值，不要删除任何必备字段。
+ 
+ 可选字段 **target_files**（本 task 计划要改动的文件清单；骨架已预置 \`target_files: []\` 占位行，按任务计划 Edit 填值，无明确文件级意图保留 []）：✅ 精确仓根相对路径 \`src/foo.js\`、计划新建文件 \`NEW:src/bar.js\`；❌ \`src/**\`（glob）、\`src/dir/\`（目录前缀）、绝对路径。语义区分：target_files=计划要动的具体文件，allowed_paths=权限范围。
+diff --git a/src/verify-draft.js b/src/verify-draft.js
+index c5d47b19..ea4160b6 100644
+--- a/src/verify-draft.js
++++ b/src/verify-draft.js
+@@ -20,15 +20,15 @@
+  * 质量扫描记录同级威胁模型（本门拦的是 heredoc 习惯性整份重写与意外覆盖，不是对抗性攻击）。
+  * 纯 --init（无 --draft）路径零变化；无 sidecar → 门禁 not-applicable（存量变更零红）。
+  */
+-import { createHash } from 'node:crypto'
+-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
++import { existsSync, readFileSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { writeAtomicSync } from './fs-atomic.js'
++// 三件套原语消费方化（R7 切片三 task-04）：标记格式/指纹/三态判定/重锚的机械半边在本模块，
++// verify-draft 保留 verify-result 专有面（骨架正则/槽契约/sidecar 路径）与全部既有导出签名。
++import { bodyHash, wrapSection, verifyMarkers, reanchorText } from './machine-draft.js'
+ 
+-const sha256 = (s) => createHash('sha256').update(String(s).replace(/\r\n/g, '\n')).digest('hex')
++const sha256 = bodyHash
+ 
+-const MARK_BEGIN = /^<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin.*-->\s*$/
+-const MARK_END = /^<!--\s*MACHINE-DRAFT:([\w.-]+):end.*-->\s*$/
+ const AMEND_CMD = 'sillyspec verify-probes --change <变更名> --amend-draft'
+ 
+ /** sidecar 路径（.runtime 下，与质量扫描记录/探针回执同族） */
+@@ -122,12 +122,7 @@ export function transformSkeletonToDraft(skeletonText, sections) {
+     // 幂等闸：段内已有 MACHINE-DRAFT 标记或已非 TODO 占位（手写正文）→ 不动
+     if (body.includes('MACHINE-DRAFT:')) continue
+     if (!/<!--TODO|<待填|<!-- 结论=|<!--\s*无 cannot_verify/.test(body)) continue
+-    const wrapped = [
+-      `<!-- MACHINE-DRAFT:${sec.key}:${sha256(sec.body)}:begin 机器预填段——整段改写会被 verify --done 拒收；确要修改：${AMEND_CMD} 留痕重锚 -->`,
+-      sec.body,
+-      `<!-- MACHINE-DRAFT:${sec.key}:end -->`,
+-      '',
+-    ].join('\n')
++    const wrapped = wrapSection({ key: sec.key, body: sec.body, amendCmd: AMEND_CMD })
+     text = text.slice(0, m.index) + m[1] + wrapped + text.slice(m.index + m[0].length)
+     applied.push(sec.key)
+   }
+@@ -191,38 +186,10 @@ export function checkDraftIntegrity({ mdPath, changeName, runtimeRoot }) {
+   try { text = readFileSync(mdPath, 'utf8') } catch {
+     return { applicable: true, ok: false, violations: ['verify-result.md 不可读（draft sidecar 在案）'] }
+   }
+-  const lines = text.replace(/\r\n/g, '\n').split('\n')
+-  const violations = []
+-  const openByKey = new Map()
+-  const contentByKey = new Map()
+-  let current = null
+-  for (const line of lines) {
+-    const b = line.match(MARK_BEGIN)
+-    if (b) { current = { key: b[1], hash: b[2] }; openByKey.set(b[1], current); contentByKey.set(b[1], []); continue }
+-    const e = line.match(MARK_END)
+-    if (e) { current = null; continue }
+-    if (current) contentByKey.get(current.key).push(line)
+-  }
+-  for (const [key, rec] of Object.entries(sidecar.sections)) {
+-    if (!openByKey.has(key)) {
+-      violations.push(`机器段「${key}」的 MACHINE-DRAFT 标记缺失（被删除或整份重写）——${fixLine(key)}`)
+-      continue
+-    }
+-    const actual = sha256((contentByKey.get(key) || []).join('\n'))
+-    if (actual !== rec.hash) {
+-      violations.push(`机器段「${key}」内容与指纹失配（被改写）——${fixLine(key)}`)
+-    } else if (openByKey.get(key).hash !== rec.hash) {
+-      // 内容未动但标记哈希与 sidecar 不一致 = 标记被手工重锚而未经 --amend-draft 审计
+-      violations.push(`机器段「${key}」标记指纹与 sidecar 台账不一致（未经 --amend-draft 的手工重锚）——${fixLine(key)}`)
+-    }
+-  }
++  const violations = verifyMarkers({ text, sections: sidecar.sections, amendCmd: AMEND_CMD })
+   return { applicable: true, ok: violations.length === 0, violations }
+ }
+ 
+-function fixLine(key) {
+-  return `还原机器段原文，或确要修改时跑 ${AMEND_CMD} 留痕重锚（段键 ${key}）`
+-}
+-
+ /**
+  * --amend-draft：对 md 中现存标记段按**当前内容**重锚哈希（标记与 sidecar 同步刷新），
+  * sidecar 追加 amendment 审计（时点 + 段清单）。返回重锚段键（空 = 无可重锚标记）。
+@@ -230,25 +197,8 @@ function fixLine(key) {
+ export function amendDraftMarkers({ mdPath, changeName, runtimeRoot }) {
+   let text
+   try { text = readFileSync(mdPath, 'utf8') } catch { return [] }
+-  const lines = text.replace(/\r\n/g, '\n').split('\n')
+-  const contentByKey = new Map()
+-  let current = null
+-  for (const line of lines) {
+-    const b = line.match(MARK_BEGIN)
+-    if (b) { current = b[1]; contentByKey.set(current, []); continue }
+-    const e = line.match(MARK_END)
+-    if (e) { current = null; continue }
+-    if (current) contentByKey.get(current).push(line)
+-  }
+-  const keys = [...contentByKey.keys()]
++  const { text: next, keys, contentByKey } = reanchorText({ text, amendCmd: AMEND_CMD })
+   if (keys.length === 0) return []
+-  // 重写 begin 标记（按当前内容哈希）
+-  const next = lines.map((line) => {
+-    const b = line.match(MARK_BEGIN)
+-    if (!b) return line
+-    const content = (contentByKey.get(b[1]) || []).join('\n')
+-    return `<!-- MACHINE-DRAFT:${b[1]}:${sha256(content)}:begin 机器预填段——整段改写会被 verify --done 拒收；确要修改：${AMEND_CMD} 留痕重锚 -->`
+-  }).join('\n')
+   try { writeAtomicSync(mdPath, next) } catch (e) {
+     console.warn(`⚠️ amend-draft 重锚落盘失败: ${e && e.message ? e.message : e}`)
+     return []
+@@ -257,7 +207,7 @@ export function amendDraftMarkers({ mdPath, changeName, runtimeRoot }) {
+   const sidecarPath = verifyDraftSidecarPath(runtimeRoot, changeName)
+   let sidecar = { schemaVersion: 1, change: changeName, generatedAt: new Date().toISOString(), sections: {}, amendments: [] }
+   try { sidecar = { ...sidecar, ...JSON.parse(readFileSync(sidecarPath, 'utf8')) } } catch { /* 无既有 → 新立 */ }
+-  for (const k of keys) sidecar.sections[k] = { hash: sha256((contentByKey.get(k) || []).join('\n')) }
++  for (const k of keys) sidecar.sections[k] = { hash: sha256(contentByKey[k]) }
+   sidecar.amendments = [...(sidecar.amendments || []), { at: new Date().toISOString(), keys }]
+   try { writeAtomicSync(sidecarPath, JSON.stringify(sidecar, null, 2) + '\n') } catch { /* 审计失败不回滚重锚 */ }
+   return keys
+diff --git a/src/watcher.js b/src/watcher.js
+new file mode 100644
+index 00000000..57776c92
+--- /dev/null
++++ b/src/watcher.js
+@@ -0,0 +1,466 @@
++/**
++ * watcher.js — change 产物签名 watcher（R7 切片一，detached 观测旁路）。
++ *
++ * 背景（2026-09-22-r7-protocol-surgery 切片一 / D-001）：协议对话与平台心跳共线（信道
++ * 混乱）——进度信号只能靠 CLI 调用推进。本模块把观测从协议解耦：change 启动即拉起
++ * detached 监听进程，从**产物签名**（文件/git/工件三类源）推断阶段并落事件流。事件恒带
++ * provisional:true，平台 ingest 只展示不判定——`--done`（或 flow done）是唯一真相，
++ * watcher 是 best-effort 缓存，崩溃/不 spawn 零影响主流程。
++ *
++ * 结构循 src/run/bg-sync.js（spawn detached + windowsHide + 单飞锁 + 日志截尾），两处
++ * 语义差异：①长驻——锁加 heartbeatAt 心跳字段（30s 刷新，5min 无心跳或 pid 死判死；
++ * bg-sync 只有 startedAt 时效）；②**未连接平台也 spawn**（本地 jsonl 是事件唯一真相源，
++ * 平台推送是展示面增强；bg-sync 的 not-connected 短路不适用）。
++ *
++ * 观测机制=轮询快照 diff（3s，弃 fs.watch：Windows/网络盘跨平台不可靠+递归噪声；事件数
++ * 与 CLI 调用数解耦是验收钉，轮询天然满足）。轮询面收窄：change 子树已知产物 +
++ * git HEAD 头指针 + verify-quality-scan 记录——不扫全仓。
++ *
++ * 平台推送：POST {platform.url}/api/changes/{name}/events 专用端点，实现模式循
++ * src/agent-session-log.js 的 pushAgentLogToPlatform（凭据读取同 readPlatformPushConfig
++ * 的 local.yaml platform 段/env 双通道——该函数未导出且 agent-session-log 属他任务
++ * allowed_paths，此处同模式自建；5s 超时+best-effort+env SILLYSPEC_WATCHER_PUSH=0 开关；
++ * 未配置/非 2xx/网络失败静默降级本地-only——平台未升级该端点是有声明的跨系统依赖）。
++ *
++ * 副产品：阶段墙钟拆账（产物事件时间序列聚合）落 .runtime/watcher-stage-timing-<change>.
++ * json，替代 transcript 抽取。
++ *
++ * 生命周期：change 目录移入 archive（archived 终态事件）→ 自退；空闲 6h 无事件 → 自退；
++ * SILLYSPEC_WATCHER=0 逃生阀（父侧不 spawn）。
++ */
++import { spawn } from 'child_process';
++import {
++  appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync,
++  readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
++} from 'fs';
++import { createHash } from 'crypto';
++import { join } from 'path';
++import { gitQuiet } from './git-helper.js';
++
++export const WATCHER_LOCK_FILENAME = 'watcher.lock';
++const WATCHER_LOG_FILENAME = 'watcher.log';
++
++const HEARTBEAT_INTERVAL_MS = 30_000;
++const LEASE_STALE_MS = 5 * 60_000;
++const POLL_INTERVAL_MS = 3_000;
++const IDLE_EXIT_MS = 6 * 60 * 60_1000;
++// 硬寿命帽：孤儿绝对上限（2026-09-22 泄漏实证兜底）——无论活跃与否 12h 必退
++const MAX_LIFETIME_MS = 12 * 60 * 60_000;
++const PUSH_TIMEOUT_MS = 5_000;
++const LOG_TRUNCATE_THRESHOLD = 1_000_000;
++const LOG_TRUNCATE_KEEP = 512 * 1024;
++
++/** 已知产物 → 阶段映射（阶段推断=产物签名；未列出的文件不发事件，防噪声）。 */
++const STAGE_FILES = {
++  'proposal.md': 'proposal',
++  'requirements.md': 'requirements',
++  'design.md': 'design',
++  'plan.md': 'plan',
++  'tasks.md': 'tasks',
++  'decisions.md': 'proposal',
++  'verify-result.md': 'verify',
++  'module-impact.md': 'verify',
++  'symbol-impact.md': 'verify',
++};
++
++/** pid 活性探测（跨平台）：signal 0 探测；EPERM = 进程存在但属他户，保守按活。 */
++function isPidAlive(pid) {
++  if (!Number.isInteger(pid) || pid <= 0) return false;
++  try {
++    process.kill(pid, 0);
++    return true;
++  } catch (e) {
++    return e && e.code === 'EPERM';
++  }
++}
++
++/** 读 watcher 单飞锁（缺失/损坏 → null）。 */
++export function readWatcherLock(runtimeRoot) {
++  try {
++    const raw = readFileSync(join(runtimeRoot, WATCHER_LOCK_FILENAME), 'utf8');
++    const obj = JSON.parse(raw);
++    return obj && typeof obj === 'object' ? obj : null;
++  } catch {
++    return null;
++  }
++}
++
++function writeWatcherLock(runtimeRoot, lock) {
++  mkdirSync(runtimeRoot, { recursive: true });
++  const tmp = join(runtimeRoot, `${WATCHER_LOCK_FILENAME}.${process.pid}.tmp`);
++  writeFileSync(tmp, JSON.stringify(lock) + '\n', 'utf8');
++  renameSync(tmp, join(runtimeRoot, WATCHER_LOCK_FILENAME));
++}
++
++function removeWatcherLock(runtimeRoot) {
++  try {
++    const p = join(runtimeRoot, WATCHER_LOCK_FILENAME);
++    if (existsSync(p)) unlinkSync(p);
++  } catch { /* 清锁失败：残留锁按心跳/pid 判死后自动接管，不影响正确性 */ }
++}
++
++/**
++ * 租约活性判定（心跳新鲜 + pid 活）。纯函数（pid 探测单列 isPidAlive 便于注入测试）。
++ * 与 bg-sync 锁的差异：心跳字段 heartbeatAt 是长驻租约的判死主锚（30s 刷新/5min 过期），
++ * startedAt 仅作审计信息——pid 复用假活由心跳过期兜底。
++ */
++export function isWatcherLeaseLive(lock, now = Date.now()) {
++  if (!lock || !Number.isInteger(lock.pid) || lock.pid <= 0) return false;
++  if (typeof lock.heartbeatAt !== 'number') return false;
++  if (now - lock.heartbeatAt > LEASE_STALE_MS) return false;
++  return isPidAlive(lock.pid);
++}
++
++function sha256(text) {
++  return createHash('sha256').update(text).digest('hex');
++}
++
++function countCheckboxes(text) {
++  const checked = (text.match(/- \[x\]/g) || []).length;
++  const unchecked = (text.match(/- \[ \]/g) || []).length;
++  return { checked, total: checked + unchecked };
++}
++
++/**
++ * 构建一次快照（纯读盘+git 头指针；不入事件——推断在 inferEvents 纯函数，测试主入口）。
++ * @returns {{ts:number, archived:boolean, head:string|null, files:Object, scan:Object|null}}
++ *   files: { <相对 changeDir 路径>: { hash, checked, total } }
++ */
++export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, gitHeadImpl }) {
++  const snap = { ts: Date.now(), archived: false, head: null, files: {}, scan: null };
++  if (!existsSync(changeDir)) {
++    snap.archived = true;
++  } else {
++    for (const [name, stage] of Object.entries(STAGE_FILES)) {
++      const p = join(changeDir, name);
++      if (!existsSync(p)) continue;
++      try {
++        const text = readFileSyncImpl(p, 'utf8');
++        snap.files[name] = { hash: sha256(text), stage, ...countCheckboxes(text) };
++      } catch { /* 读失败按未变更处理，下轮重试 */ }
++    }
++    const tasksDir = join(changeDir, 'tasks');
++    if (existsSync(tasksDir)) {
++      for (const ent of readdirSync(tasksDir)) {
++        if (!ent.endsWith('.md')) continue;
++        const rel = `tasks/${ent}`;
++        try {
++          const text = readFileSyncImpl(join(tasksDir, ent), 'utf8');
++          snap.files[rel] = { hash: sha256(text), stage: 'tasks', ...countCheckboxes(text) };
++        } catch { /* 同上 */ }
++      }
++    }
++  }
++  if (typeof gitHeadImpl === 'function') {
++    snap.head = gitHeadImpl();
++  } else {
++    const out = gitQuiet(cwd, ['rev-parse', '--short', 'HEAD']);
++    snap.head = typeof out === 'string' && out.trim() ? out.trim() : null;
++  }
++  const scanPath = join(runtimeRoot, `verify-quality-scan-${changeName}.json`);
++  try {
++    const st = statSyncImpl(scanPath);
++    snap.scan = { mtimeMs: Math.round(st.mtimeMs), size: st.size };
++  } catch {
++    snap.scan = null;
++  }
++  return snap;
++}
++
++/**
++ * 快照 diff → 事件（纯函数）。每事件恒带 provisional:true（护栏#5：平台 ingest 只展示
++ * 不判定）。事件面：文件首现/内容变更/checkbox 翻格/新提交/质量扫描记录/archived 终态。
++ */
++export function inferEvents(prev, next) {
++  if (!prev || !next) return [];
++  const events = [];
++  const mk = (kind, stage, detail) => ({ ts: next.ts, kind, stage: stage ?? null, detail: detail ?? null, provisional: true });
++  if (!prev.archived && next.archived) {
++    events.push(mk('archived', 'archive', 'change 目录已移入 archive'));
++    return events;
++  }
++  const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
++  for (const key of keys) {
++    const p = prev.files[key];
++    const n = next.files[key];
++    if (!p && n) {
++      events.push(mk('file', n.stage, `${key} 出现`));
++      if (n.checked > 0) events.push(mk('task-done', n.stage, `checked 0→${n.checked}`));
++    } else if (p && n && p.hash !== n.hash) {
++      events.push(mk('file-update', n.stage, `${key} 内容变更`));
++    }
++    if (p && n && n.checked > p.checked) {
++      events.push(mk('task-done', n.stage ?? 'tasks', `checked ${p.checked}→${n.checked}`));
++    }
++  }
++  if (prev.head && next.head && prev.head !== next.head) {
++    events.push(mk('commit', null, next.head));
++  }
++  if (next.scan && (!prev.scan || prev.scan.mtimeMs !== next.scan.mtimeMs || prev.scan.size !== next.scan.size)) {
++    events.push(mk('verify', 'verify', prev.scan ? '质量扫描记录更新' : '质量扫描记录出现'));
++  }
++  return events;
++}
++
++/**
++ * 事件序列 → 阶段墙钟拆账（纯函数）：每 stage 首末事件时间差，按首事件时序输出。
++ */
++export function aggregateStageTiming(events) {
++  const byStage = new Map();
++  for (const e of events) {
++    if (!e || typeof e.ts !== 'number' || !e.stage) continue;
++    let rec = byStage.get(e.stage);
++    if (!rec) {
++      rec = { stage: e.stage, firstTs: e.ts, lastTs: e.ts, events: 0 };
++      byStage.set(e.stage, rec);
++    }
++    rec.lastTs = Math.max(rec.lastTs, e.ts);
++    rec.firstTs = Math.min(rec.firstTs, e.ts);
++    rec.events += 1;
++  }
++  return [...byStage.values()]
++    .sort((a, b) => a.firstTs - b.firstTs)
++    .map((r) => ({ stage: r.stage, firstTs: r.firstTs, lastTs: r.lastTs, durationMs: r.lastTs - r.firstTs, events: r.events }));
++}
++
++/** watcher 平台推送凭据（模式同 agent-session-log readPlatformPushConfig：env > local.yaml platform 段）。 */
++function readWatcherPushConfig(specBase, env = process.env) {
++  if (env.SILLYHUB_PLATFORM_URL && env.SILLYHUB_PLATFORM_TOKEN) {
++    return { url: env.SILLYHUB_PLATFORM_URL, token: env.SILLYHUB_PLATFORM_TOKEN };
++  }
++  try {
++    const yamlPath = join(specBase, 'local.yaml');
++    if (!existsSync(yamlPath)) return null;
++    const lines = readFileSync(yamlPath, 'utf8').split(/\r?\n/);
++    let inPlatform = false;
++    const cfg = {};
++    for (const line of lines) {
++      if (!line.trim() || line.trim().startsWith('#')) continue;
++      if (!/^\s/.test(line)) inPlatform = line.startsWith('platform:');
++      else if (inPlatform) {
++        const m = line.match(/^\s+(url|token)\s*:\s*(.*)$/);
++        if (m) {
++          let v = m[2].trim();
++          if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) v = v.slice(1, -1);
++          if (v) cfg[m[1]] = v;
++        }
++      }
++    }
++    return cfg.url && cfg.token ? cfg : null;
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * 事件批量推平台（best-effort，唯一非本地副作用）：专用 events 端点，5s 熔断，
++ * 任何失败只 warn——本地 jsonl 已是事件唯一真相源，平台是展示面。
++ */
++async function pushEventsToPlatform({ specBase, changeName, events, env = process.env, fetchImpl = fetch }) {
++  if (env.SILLYSPEC_WATCHER_PUSH === '0' || events.length === 0) return { pushed: null };
++  const cfg = readWatcherPushConfig(specBase, env);
++  if (!cfg) return { pushed: null, reason: 'no-config' };
++  const controller = new AbortController();
++  const timer = setTimeout(() => controller.abort(), PUSH_TIMEOUT_MS);
++  try {
++    const res = await fetchImpl(`${cfg.url.replace(/\/+$/, '')}/api/changes/${encodeURIComponent(changeName)}/events`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
++      body: JSON.stringify({ events }),
++      signal: controller.signal,
++    });
++    if (!res.ok) {
++      console.warn(`[watcher] 事件推送 → HTTP ${res.status}（本地 jsonl 已兜底）`);
++      return { pushed: false, reason: `http-${res.status}` };
++    }
++    return { pushed: true };
++  } catch (err) {
++    const msg = err && err.name === 'AbortError' ? '超时' : (err && err.message ? err.message : err);
++    console.warn(`[watcher] 事件推送失败: ${msg}（本地 jsonl 已兜底）`);
++    return { pushed: false, reason: 'network' };
++  } finally {
++    clearTimeout(timer);
++  }
++}
++
++/** 子进程起步截尾日志（>1MB 保后 512KB，整行边界起）。失败只影响日志体积。 */
++function truncateLogIfNeeded(runtimeRoot) {
++  try {
++    const p = join(runtimeRoot, WATCHER_LOG_FILENAME);
++    if (statSync(p).size <= LOG_TRUNCATE_THRESHOLD) return;
++    const buf = readFileSync(p);
++    const keep = buf.subarray(Math.max(0, buf.length - LOG_TRUNCATE_KEEP));
++    const nl = keep.indexOf(10);
++    writeFileSync(p, nl >= 0 ? keep.subarray(nl + 1) : keep);
++  } catch { /* 截断失败：继续 append */ }
++}
++
++/** 子进程 bootstrap：node -e 动态 import 本模块（file URL 精确定位，不依赖 CLI 安装形态）。 */
++function buildChildBootstrap() {
++  const selfUrl = new URL('./watcher.js', import.meta.url).href;
++  return `import(${JSON.stringify(selfUrl)}).then(m=>m.runWatcherFromEnv()).catch(e=>{console.error('[watcher] 监听进程异常退出:',(e&&e.message)||e)});`;
++}
++
++/**
++ * 父侧入口（run/command.js 在 effectiveChange 解析后无条件调用，锁合并）。
++ * 未连接平台也 spawn（本地 jsonl 是主目标）；SILLYSPEC_WATCHER=0 逃生阀。
++ * spawn 失败抛异常由调用方 catch 降级（绝不因观测旁路阻断主流程）。
++ * @returns {Promise<{status:'spawned'|'coalesced'|'disabled', logPath?:string}>}
++ */
++export async function spawnWatcher(cwd, changeName, opts = {}) {
++  const env = opts.env || process.env;
++  // 逃生阀/测试护栏：SILLYSPEC_WATCHER=0 显式关；NODE_TEST_CONTEXT（node:test 运行器注入）
++  // 下不拉起——防全量套件每条 run 用例孵化真 detached watcher 污染测试环境。
++  if (env.SILLYSPEC_WATCHER === '0' || env.NODE_TEST_CONTEXT) return { status: 'disabled' };
++  const { resolveRuntimeRoot } = await import('./run/shared.js');
++  const specBase = opts.specBase || join(cwd, '.sillyspec');
++  const runtimeRoot = resolveRuntimeRoot(opts, specBase);
++
++  const lock = readWatcherLock(runtimeRoot);
++  if (isWatcherLeaseLive(lock)) return { status: 'coalesced', logPath: join(runtimeRoot, WATCHER_LOG_FILENAME) };
++
++  const logPath = join(runtimeRoot, WATCHER_LOG_FILENAME);
++  let stdio = ['ignore', 'ignore', 'ignore'];
++  let logFd = null;
++  try {
++    mkdirSync(runtimeRoot, { recursive: true });
++    logFd = openSync(logPath, 'a');
++    stdio = ['ignore', logFd, logFd];
++  } catch {
++    logFd = null;
++  }
++
++  const childEnv = {
++    ...env,
++    SILLYSPEC_WATCHER_CHANGE: String(changeName),
++    SILLYSPEC_WATCHER_CWD: String(cwd),
++  };
++  if (opts.specBase) childEnv.SILLYSPEC_WATCHER_SPEC_BASE = String(opts.specBase);
++  if (opts.runtimeRoot) childEnv.SILLYSPEC_WATCHER_RUNTIME_ROOT = String(opts.runtimeRoot);
++
++  try {
++    const child = (opts.spawnImpl || spawn)(process.execPath, ['-e', buildChildBootstrap()], {
++      cwd,
++      detached: true,
++      stdio,
++      windowsHide: true,
++      env: childEnv,
++    });
++    child.unref?.();
++  } finally {
++    if (logFd !== null) {
++      try { closeSync(logFd); } catch { /* 父侧 fd 副本关闭；子进程持有继承副本 */ }
++    }
++  }
++  return { status: 'spawned', logPath };
++}
++
++/**
++ * 子侧入口（bootstrap 经 env 传参调起）。循环：心跳租约（30s 刷新，锁被他人接管即让位）
++ * → 每 3s 快照 diff → 事件落 jsonl + best-effort 推平台 + 墙钟拆账重写。
++ * 终态自退：archived 事件 / 空闲 6h / 锁失守。退出前清本进程锁。
++ */
++export async function runWatcherFromEnv(env = process.env, opts = {}) {
++  const changeName = env.SILLYSPEC_WATCHER_CHANGE;
++  const cwd = env.SILLYSPEC_WATCHER_CWD;
++  if (!changeName || !cwd) return;
++
++  const specBase = env.SILLYSPEC_WATCHER_SPEC_BASE || join(cwd, '.sillyspec');
++  const { resolveRuntimeRoot } = await import('./run/shared.js');
++  const runtimeRoot = env.SILLYSPEC_WATCHER_RUNTIME_ROOT
++    ? env.SILLYSPEC_WATCHER_RUNTIME_ROOT
++    : resolveRuntimeRoot({}, specBase);
++  const changeDir = join(specBase, 'changes', changeName);
++
++  truncateLogIfNeeded(runtimeRoot);
++  const startedAt = Date.now();
++  writeWatcherLock(runtimeRoot, { pid: process.pid, change: changeName, startedAt, heartbeatAt: startedAt });
++  console.log(`[watcher] 监听开始 ${new Date().toISOString()}: ${changeName}`);
++
++  const eventsPath = join(runtimeRoot, `watcher-events-${changeName}.jsonl`);
++  const timingPath = join(runtimeRoot, `watcher-stage-timing-${changeName}.json`);
++  let allEvents = [];
++
++  const refreshHeartbeat = () => {
++    const cur = readWatcherLock(runtimeRoot);
++    if (!cur || cur.pid !== process.pid) {
++      console.warn('[watcher] 锁已不属于本进程（被并行 spawn 接管），让位退出');
++      process.exitCode = 0;
++      return false;
++    }
++    writeWatcherLock(runtimeRoot, { ...cur, heartbeatAt: Date.now() });
++    return true;
++  };
++  const heartbeatTimer = setInterval(() => { refreshHeartbeat(); }, HEARTBEAT_INTERVAL_MS);
++  heartbeatTimer.unref?.();
++
++  let prev = buildSnapshot({ changeDir, cwd, runtimeRoot, changeName });
++  // ── 孤儿自愈三闸（2026-09-22 全套件实证漏 41 个孤儿 watcher——每 3s 轮询 git 的孤儿进程）──
++  // ①出生即死：首拍已 archived（change 目录不存在/已归档）没有可观测对象，立即退出；
++  // ②仓库蒸发：head 曾非空后连续 20 拍为 null（cwd/git 仓被删——测试临时目录清理）→ 退出；
++  // ③硬寿命帽：无论活跃与否，超过 MAX_LIFETIME_MS 绝对退出（孤儿绝对上限兜底）。
++  if (prev.archived) {
++    console.log('[watcher] 首拍即 archived（无可观测对象），不启动监听');
++    clearInterval(heartbeatTimer);
++    removeWatcherLock(runtimeRoot);
++    return;
++  }
++  let headNullStreak = 0;
++  let everHadHead = prev.head != null;
++  const hardDeadline = startedAt + MAX_LIFETIME_MS;
++  let lastActivityAt = Date.now();
++  // eslint-disable-next-line no-constant-condition
++  while (true) {
++    await new Promise((r) => setTimeout(r, opts.pollIntervalMs ?? POLL_INTERVAL_MS));
++    if (!refreshHeartbeat()) break;
++    if (Date.now() > hardDeadline) {
++      console.log('[watcher] 硬寿命帽自退（绝对上限兜底，防永续孤儿）');
++      break;
++    }
++
++    let snap;
++    try {
++      snap = buildSnapshot({ changeDir, cwd, runtimeRoot, changeName });
++    } catch (e) {
++      console.warn(`[watcher] 快照构建异常（本轮跳过）: ${(e && e.message) || e}`);
++      continue;
++    }
++    // 仓库蒸发闸：git 头从有到无且持续（临时仓被删）——无对象可观测，退
++    if (everHadHead) {
++      headNullStreak = snap.head == null ? headNullStreak + 1 : 0;
++      if (headNullStreak >= 20) {
++        console.log('[watcher] git 仓蒸发（头指针连续空拍），判定无可观测对象，自退');
++        break;
++      }
++    }
++    const events = inferEvents(prev, snap);
++    prev = snap;
++    if (events.length === 0) {
++      if (Date.now() - lastActivityAt > IDLE_EXIT_MS) {
++        console.log('[watcher] 空闲超时自退（6h 无事件）');
++        break;
++      }
++      continue;
++    }
++    lastActivityAt = Date.now();
++    allEvents = allEvents.concat(events);
++    try {
++      for (const e of events) appendFileSync(eventsPath, JSON.stringify(e) + '\n', 'utf8');
++      writeFileSync(timingPath, JSON.stringify({ change: changeName, updatedAt: new Date().toISOString(), stages: aggregateStageTiming(allEvents) }, null, 2) + '\n', 'utf8');
++    } catch (e) {
++      console.warn(`[watcher] 事件落盘异常（best-effort 继续）: ${(e && e.message) || e}`);
++    }
++    await pushEventsToPlatform({ specBase, changeName, events, env });
++    if (events.some((e) => e.kind === 'archived')) {
++      console.log(`[watcher] archived 终态，监听结束: ${changeName}`);
++      break;
++    }
++  }
++  clearInterval(heartbeatTimer);
++  const cur = readWatcherLock(runtimeRoot);
++  if (cur && cur.pid === process.pid) removeWatcherLock(runtimeRoot);
++  console.log(`[watcher] 监听结束 ${new Date().toISOString()}: ${changeName}`);
++}
++
++export { isPidAlive };
++export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming };
+diff --git a/test/archive-chain.test.mjs b/test/archive-chain.test.mjs
+new file mode 100644
+index 00000000..0de365ae
+--- /dev/null
++++ b/test/archive-chain.test.mjs
+@@ -0,0 +1,62 @@
++/**
++ * archive-chain.test.mjs — 归档执行链抽取（R7 切片二 task-02 / FR-05）
++ *
++ * 覆盖验收面：
++ *   ① runArchiveChain 可导入、happy path 端到端（目录搬移+unregisterChange 终态一致化）；
++ *   ② skipPlanCheck 两态：false（既有语义）缺 plan.md → 子进程 exit 1（移动前硬校验）；
++ *      true（flow 薄工件面旁路）缺 plan.md → 归档成功；
++ *   ③ 既有语义零变化：plan.md 在场 + skipPlanCheck=false → 正常归档（缺省路径回归）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { pathToFileURL } from 'node:url'
++
++const { runArchiveChain } = await import('../src/run/complete-handlers.js')
++
++function makeFixture(withPlan) {
++  const root = mkdtempSync(join(tmpdir(), 'ac-'))
++  const specBase = join(root, '.sillyspec')
++  const srcDir = join(specBase, 'changes', 'c1')
++  mkdirSync(srcDir, { recursive: true })
++  if (withPlan) writeFileSync(join(srcDir, 'plan.md'), '# plan\n')
++  writeFileSync(join(srcDir, 'proposal.md'), '# p\n')
++  const destDir = join(specBase, 'changes', 'archive', '2026-09-22-c1')
++  const pm = { unregisterChangeCalls: [], unregisterChange(cwd, name, opts) { this.unregisterChangeCalls.push({ cwd, name, opts }) } }
++  return { root, specBase, srcDir, destDir, pm }
++}
++
++test('happy path: plan.md 在场 + skipPlanCheck 缺省 false → 目录搬移 + 终态一致化（既有语义回归）', async () => {
++  const { root, specBase, srcDir, destDir, pm } = makeFixture(true)
++  await runArchiveChain({ pm, cwd: root, specBase, changeName: 'c1', srcDir, destDir })
++  assert.equal(existsSync(srcDir), false, '源目录已搬走')
++  assert.equal(existsSync(join(destDir, 'plan.md')), true, '归档目录就位')
++  assert.equal(pm.unregisterChangeCalls.length, 1)
++  assert.equal(pm.unregisterChangeCalls[0].name, 'c1')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('skipPlanCheck=true: 薄工件面（无 plan.md）旁路硬校验 → 归档成功（task-03 消费入口）', async () => {
++  const { root, specBase, srcDir, destDir, pm } = makeFixture(false)
++  await runArchiveChain({ pm, cwd: root, specBase, changeName: 'c1', srcDir, destDir, skipPlanCheck: true })
++  assert.equal(existsSync(srcDir), false)
++  assert.equal(existsSync(join(destDir, 'proposal.md')), true)
++  assert.equal(pm.unregisterChangeCalls.length, 1)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('skipPlanCheck=false: 缺 plan.md → 移动前硬校验阻断 exit 1（子进程验证，纯搬运不改 exit 语义）', () => {
++  const { root, specBase, srcDir, destDir, pm } = makeFixture(false)
++  const modUrl = new URL('../src/run/complete-handlers.js', import.meta.url).href
++  const code = `import(${JSON.stringify(modUrl)}).then(async (m) => {`
++    + ` await m.runArchiveChain({ pm: { unregisterChange() {} }, cwd: ${JSON.stringify(root)}, specBase: ${JSON.stringify(specBase)},`
++    + ` changeName: 'c1', srcDir: ${JSON.stringify(srcDir)}, destDir: ${JSON.stringify(destDir)} }) }).catch((e) => { console.error(e && e.message); process.exit(3) })`
++  const r = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8', timeout: 60_000 })
++  assert.equal(r.status, 1, `期望 exit 1，实际 ${r.status}；stderr: ${r.stderr}`)
++  assert.equal(existsSync(srcDir), true, '移动前阻断：源目录未动')
++  assert.equal(existsSync(destDir), false, '目标未产生')
++  rmSync(root, { recursive: true, force: true })
++})
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+new file mode 100644
+index 00000000..2f24bce9
+--- /dev/null
++++ b/test/flow-draft.test.mjs
+@@ -0,0 +1,139 @@
++/**
++ * flow-draft.test.mjs — 全件机器起草+守卫（R7 切片三 task-05 / D-004 D-005 / FR-07 FR-08）
++ *
++ * 覆盖验收面：
++ *   ① 四件起草形态：draftAll 落盘 proposal/requirements/tasks（MACHINE-DRAFT 标记+AGENT 槽）
++ *      +draft-ledger（hash+首版原文 body 永存）；任务卡分岔（默认零卡/--with-tasks 生成卡）；
++ *   ② 成功标准机械摘录：节内条目/无节回退列表行；
++ *   ③ 三态拒收：机器段被改写（哈希失配）/标记被删（整份重写形态）→ verifyFlowDrafts violations；
++ *   ④ AGENT 槽放行：槽内书写不触发拒收；
++ *   ⑤ amend 留痕：重锚后 violations 清零+ledger amendments 在案+首版 body 未被覆盖；
++ *   ⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness 验产物面）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const {
++  draftAll, amendFlowDraft, verifyFlowDrafts, extractSuccessCriteria, draftLedgerPath, draftDecisions,
++} = await import('../src/flow-draft.js')
++// decisions 起草器：零真实决策=不落文件（转写任务通常为零）；有输入才有产物——锚定存在性+空态语义
++if (draftDecisions({ change: 'x', decisions: [] }) !== null) throw new Error('draftDecisions 空态应返回 null（不落文件）')
++
++const INPUT_WITH_CRITERIA = '动机：修 watcher 泄漏\n成功标准：\n- 事件恒带 provisional:true\n- 崩溃零影响主流程\n'
++
++function makeFixtureDir() {
++  const root = mkdtempSync(join(tmpdir(), 'fd-'))
++  const changeDir = join(root, '.sillyspec', 'changes', 'c1')
++  const runtimeRoot = join(root, '.sillyspec', '.runtime')
++  mkdirSync(changeDir, { recursive: true })
++  mkdirSync(runtimeRoot, { recursive: true })
++  return { root, changeDir, runtimeRoot }
++}
++
++test('① draftAll 四件形态（标记+AGENT 槽+ledger 首版原文）+任务卡分岔', () => {
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  const a = draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, withTasks: false, runtimeRoot })
++  assert.deepEqual(a.written, ['proposal.md', 'requirements.md', 'tasks.md'])
++  assert.ok(!existsSync(join(changeDir, 'tasks')), '默认 thin 零任务卡')
++  for (const f of ['proposal.md', 'requirements.md', 'tasks.md']) {
++    const text = readFileSync(join(changeDir, f), 'utf8')
++    assert.match(text, /MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin/, `${f} 含指纹标记`)
++  }
++  assert.match(readFileSync(join(changeDir, 'proposal.md'), 'utf8'), /<!--AGENT:槽/)
++  const ledger = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
++  for (const file of Object.keys(ledger.files)) {
++    for (const sec of Object.values(ledger.files[file])) {
++      assert.ok(sec.hash && typeof sec.body === 'string' && sec.body.length > 0, `${file} 段 hash+首版 body 在案`)
++    }
++  }
++  // 分岔：withTasks 生成任务卡
++  const { changeDir: cd2, runtimeRoot: rt2 } = makeFixtureDir()
++  draftAll({ changeDir: cd2, change: 'c2', input: INPUT_WITH_CRITERIA, withTasks: true, runtimeRoot: rt2 })
++  const cards = readdirSync(join(cd2, 'tasks')).filter((f) => f.endsWith('.md'))
++  assert.equal(cards.length, 2, '两条成功标准→两张卡')
++  rmSync(root, { recursive: true, force: true })
++  rmSync(dirname(cd2), { recursive: true, force: true })
++})
++
++test('② extractSuccessCriteria：节内条目与无节回退列表行', () => {
++  assert.deepEqual(extractSuccessCriteria(INPUT_WITH_CRITERIA), ['事件恒带 provisional:true', '崩溃零影响主流程'])
++  assert.deepEqual(extractSuccessCriteria('- 甲条件\n- 乙条件'), ['甲条件', '乙条件'])
++  assert.deepEqual(extractSuccessCriteria('普通一句话没有条目'), [])
++})
++
++test('③④ 三态拒收与 AGENT 槽放行', () => {
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, runtimeRoot })
++  const p = join(changeDir, 'proposal.md')
++
++  // AGENT 槽书写（机器段之外）→ 放行
++  let text = readFileSync(p, 'utf8')
++  writeFileSync(p, text.replace(/(<!--AGENT:槽1[^\n]*-->)/, '$1\n例外裁决：补充一条动机'))
++  assert.equal(verifyFlowDrafts({ changeDir, change: 'c1', runtimeRoot }).violations.length, 0, 'AGENT 槽放行')
++
++  // 机器段被改写（哈希失配）→ 拒收
++  text = readFileSync(p, 'utf8')
++  writeFileSync(p, text.replace('任务原话转写', '被 agent 改写'))
++  const v1 = verifyFlowDrafts({ changeDir, change: 'c1', runtimeRoot }).violations
++  assert.ok(v1.some((x) => /内容与指纹失配/.test(x)), '改写拒收')
++
++  // 标记被整删（heredoc 整份重写形态）→ 拒收
++  writeFileSync(p, '# 整份重写\n无标记\n')
++  const v2 = verifyFlowDrafts({ changeDir, change: 'c1', runtimeRoot }).violations
++  assert.ok(v2.some((x) => /标记缺失/.test(x)), '标记删除拒收')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑤ amend 留痕：重锚后放行+amendments 审计+首版 body 未覆盖', () => {
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, runtimeRoot })
++  const ledgerPath = draftLedgerPath(runtimeRoot, 'c1')
++  const before = JSON.parse(readFileSync(ledgerPath, 'utf8'))
++  const firstBody = before.files['proposal.md']['proposal-motivation'].body
++
++  // agent 经 amend 通道合法改写机器段（直接改写+重锚一体）
++  const p = join(changeDir, 'proposal.md')
++  writeFileSync(p, readFileSync(p, 'utf8').replace('任务原话转写', '任务原话转写（amend 补充）'))
++  const r = amendFlowDraft({ changeDir, change: 'c1', runtimeRoot })
++  assert.ok(r.reanchored.some((x) => x.startsWith('proposal.md')), 'amend 重锚了 proposal')
++
++  const after = JSON.parse(readFileSync(ledgerPath, 'utf8'))
++  assert.equal(after.amendments.length, 1, 'amendment 审计在案')
++  assert.equal(after.files['proposal.md']['proposal-motivation'].body, firstBody, '首版 body 永存未被 amend 覆盖')
++  assert.equal(verifyFlowDrafts({ changeDir, change: 'c1', runtimeRoot }).violations.length, 0, '重锚后放行')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness 验产物面）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'fd-e2e-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n')
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++
++  const change = 'fd-e2e'
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', INPUT_WITH_CRITERIA]).status, 0)
++  const specBase = join(cwd, '.sillyspec')
++  const changeDir = join(specBase, 'changes', change)
++
++  // 机器稿+flow-state 由 CLI 写；agent 干活（代码文件）+唯一 .sillyspec 书写=AGENT 槽填充
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  const p = join(changeDir, 'proposal.md')
++  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽1[^\n]*-->)/, '$1\n例外：无'))
++  const snapshotBefore = readdirSync(changeDir).sort()
++  assert.deepEqual(snapshotBefore, ['flow-state.yaml', 'proposal.md', 'requirements.md', 'tasks.md'], '产物面=四件+状态（零手写额外文件）')
++
++  const r = cli(['flow', 'done', '--change', change])
++  assert.equal(r.status, 0, `flow done 应过（AGENT 槽=合法书写）: ${r.stdout}\n${r.stderr}`)
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+new file mode 100644
+index 00000000..de259015
+--- /dev/null
++++ b/test/flow-protocol.test.mjs
+@@ -0,0 +1,153 @@
++/**
++ * flow-protocol.test.mjs — 2-调用协议（R7 切片二 task-03 / D-002 D-003 D-007 / FR-03~06）
++ *
++ * 覆盖验收面：
++ *   ① 机械 harness 2 调用走通薄跑道：flow start → 造改动物 → flow done——全程仅两次 CLI
++ *      协议调用（中间零协议必需交互），flow done exit 0 且 change 归档注销；
++ *   ② flow start 重入 → 恢复简报（checkbox/提交/账本/dirty files 盘面状态→做到哪/剩什么/下一步）；
++ *   ③ fail-closed 三句：实测失败=整单 FAIL exit≠0（不归档）；修复后重入断点续（已完成子步幂等跳过）
++ *      ——翻转用 pass.flag 代码文件（local.yaml 是 gitignored 配置，改它不进门禁快照 overlay）；
++ *   ④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回滚一行 yaml）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const { cmdFlowStart, cmdFlowDone, readFlowState, writeFlowState } = await import('../src/flow.js')
++// CLI 子进程消费形态（index.js case 'flow' → cmdFlow），静态零引用属预期——锚定存在性
++if (typeof cmdFlowStart !== 'function' || typeof cmdFlowDone !== 'function' || typeof readFlowState !== 'function' || typeof writeFlowState !== 'function') throw new Error('flow.js 导出面缺失')
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++/** 造临时 git 仓 + local.yaml（test/lint 命令可注入）+ 基线提交。 */
++function makeRepo({ testCmd = 'node -e "0"' } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'fp-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "' + testCmd + '"\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++/** 跑一次 CLI（计一次协议调用）。 */
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd,
++    encoding: 'utf8',
++    timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅两次协议调用，归档注销', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t1'
++
++  // 协议调用 1/2：flow start
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件'])
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  assert.match(s1.stdout, /协议调用 1\/2/)
++  assert.match(s1.stdout, /flow done/)
++  assert.match(s1.stdout, /材料路径清单/)
++  const specBase = join(cwd, '.sillyspec')
++  assert.ok(existsSync(join(specBase, 'changes', change, 'flow-state.yaml')), 'flow-state 落盘')
++  const st = readFileSync(join(specBase, 'changes', change, 'flow-state.yaml'), 'utf8')
++  assert.match(st, /baseline_commit:/)
++  assert.match(st, /tier: thin/)
++
++  // agent 干活（非协议调用：纯文件+git）
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++
++  // 协议调用 2/2：flow done
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  assert.match(s2.stdout, /flow done 完成（2\/2 协议调用收口）/)
++  assert.equal(existsSync(join(specBase, 'changes', change)), false, '源目录已归档搬走')
++  assert.ok(existsSync(join(specBase, 'changes', 'archive')), '归档目录在')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② flow start 重入 → 恢复简报（盘面状态信号：dirty/子步标记/下一步）', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t2'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  writeFileSync(join(cwd, 'wip.txt'), 'wip\n')
++  const r = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(r.status, 0)
++  assert.match(r.stdout, /恢复简报/)
++  assert.match(r.stdout, /dirty 文件 1 个/)
++  assert.match(r.stdout, /活未干完/)
++  assert.match(r.stdout, /flow done/)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后重入断点续（子步幂等跳过）', () => {
++  const { cwd } = makeRepo({ testCmd: 'node check.js' })
++  // 可翻转测试命令：pass.flag 在场→过（local.yaml gitignored 不进快照 overlay，故用代码文件翻转）
++  writeFileSync(join(cwd, 'check.js'), "const { existsSync } = require('node:fs'); process.exit(existsSync('pass.flag') ? 0 : 1)\n")
++  execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
++  const change = 'flow-h2-t3'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
++  const specBase = join(cwd, '.sillyspec')
++
++  // 实测失败 → 整单 FAIL exit 1，change 仍 active（不可假绿）
++  const fail = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(fail.status, 1, `首跑应整单 FAIL: ${fail.stdout}\n${fail.stderr}`)
++  assert.match(fail.stdout + fail.stderr, /整单 FAIL/)
++  assert.ok(existsSync(join(specBase, 'changes', change)), '未归档（归档子步未执行）')
++
++  // 修复（pass.flag 进会话 overlay）后重入：artifacts 已完成幂等跳过，从 ledger 断点续
++  writeFileSync(join(cwd, 'pass.flag'), '1\n')
++  const retry = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(retry.status, 0, `重入失败: ${retry.stdout}\n${retry.stderr}`)
++  assert.match(retry.stdout, /artifacts\(skip\)/, '已完成子步幂等跳过')
++  assert.equal(existsSync(join(specBase, 'changes', change)), false, '重入后归档完成')
++  // FR-10 失败升厚在案：tier=thick+upgrade_reason（born_face=thin 保归档不死锁）
++  const archDir = readdirSync(join(specBase, 'changes', 'archive'))[0]
++  const stFinal = readFileSync(join(specBase, 'changes', 'archive', archDir, 'flow-state.yaml'), 'utf8')
++  assert.match(stFinal, /tier: thick/)
++  assert.match(stFinal, /upgrade_reason: .*失败自动升厚/)
++  assert.match(stFinal, /born_face: thin/)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回滚一行）', () => {
++  const { cwd } = makeRepo()
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: legacy\n')
++  const r = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t4'])
++  assert.equal(r.status, 2)
++  assert.match(r.stderr, /legacy/)
++  assert.match(r.stderr, /run <stage>/)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑤ 混跑回退写读两侧：thin change 跑 run <stage> → legacy_fallback 落档；flow done 拒裁 exit 2', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t5'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  // 混跑：run brainstorm 渲染一步（真实 run <stage> 路径）
++  const mix = cli(cwd, ['run', 'brainstorm', '--change', change])
++  assert.equal(mix.status, 0, `run 应正常: ${mix.stdout}\n${mix.stderr}`)
++  assert.match(mix.stdout + mix.stderr, /混跑回退 legacy/)
++  const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
++  assert.match(st, /legacy_fallback: true/)
++  // 读侧：flow done 拒裁并指路
++  const done = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(done.status, 2)
++  assert.match(done.stderr, /混跑回退 legacy/)
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+new file mode 100644
+index 00000000..ddd3a976
+--- /dev/null
++++ b/test/flow-route.test.mjs
+@@ -0,0 +1,109 @@
++/**
++ * flow-route.test.mjs — 编辑距离路由+失败升厚（R7 切片四 task-06 / D-005 / FR-09 FR-10）
++ *
++ * 覆盖验收面：
++ *   ① computeEditRatio 纯函数：0 边界/半改写/全改写/插入删除——LCS 行 diff 口径；
++ *   ② 阈值触发（0.5 边界两侧）：amend 大改（>50%）→ route_hint:thick 落档+amend 输出提示；
++ *      小改（<50%）→ 无 route_hint；
++ *   ③ advisory 定案：route_hint=thick + 测绿 → flow done 仍 exit 0（测绿可薄档过）+醒目打印+遥测记一笔；
++ *   ④ enforcement=block：route_hint=thick 时 flow done 阻断 exit 1；
++ *   ⑤ 失败升级通路真跑（fr-10）：verify 失败→tier thick+upgrade_reason（flow-protocol ③ 已覆盖
++ *      行为面，此处补遥测账核对）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const { computeEditRatio } = await import('../src/flow-draft.js')
++
++test('① computeEditRatio：LCS 行 diff 口径（0/半改/全改/插删）', () => {
++  const orig = ['a', 'b', 'c', 'd'].join('\n')
++  assert.equal(computeEditRatio(orig, orig), 0, '未改=0')
++  // 4 行改 1 行：LCS=3 → 被改原文行 1/4=0.25（替换不双计）
++  assert.equal(computeEditRatio(orig, ['a', 'b', 'x', 'd'].join('\n')), 0.25)
++  // 全改：LCS=0 → 4/4=1
++  assert.equal(computeEditRatio(orig, ['w', 'x', 'y', 'z'].join('\n')), 1)
++  // 纯插入 4 行：原文零改写 → 0（增行不改写原文）
++  assert.equal(computeEditRatio(orig, orig + '\ne\nf\ng\nh'), 0)
++  assert.equal(computeEditRatio('', 'x'), 0, '无首版基准=0')
++})
++
++function makeRepo(yamlExtra = '') {
++  const cwd = mkdtempSync(join(tmpdir(), 'fr-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n' + yamlExtra)
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++  return { cwd, cli }
++}
++
++/** 对 proposal 机器段做比例可控的 amend 改写（改动机器段正文后走 amend 通道）。 */
++function amendWithRatio(cwd, change, ratio) {
++  const p = join(cwd, '.sillyspec', 'changes', change, 'proposal.md')
++  let text = readFileSync(p, 'utf8')
++  // 定位动机机器段 body 行，按比例改写行内容
++  const lines = text.split('\n')
++  const bIdx = lines.findIndex((l) => l.includes('proposal-motivation'))
++  const bodyStart = bIdx + 1
++  const bodyEnd = lines.findIndex((l, i) => i > bodyStart && l.includes('MACHINE-DRAFT:') && l.includes(':end'))
++  const bodyLen = bodyEnd - bodyStart
++  const nChange = Math.round(bodyLen * ratio)
++  for (let i = 0; i < nChange; i++) lines[bodyStart + i] = `改写行 ${i}（决策覆盖度测试）`
++  writeFileSync(p, lines.join('\n'))
++  return spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++}
++
++test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
++  const { cwd, cli } = makeRepo()
++  const change = 'fr-r1'
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
++  // 大改（≥0.75 行）→ route_hint
++  const big = amendWithRatio(cwd, change, 0.75)
++  assert.equal(big.status, 0)
++  assert.match(big.stdout + big.stderr, /route_hint: thick/)
++  assert.match(big.stdout + big.stderr, /决策覆盖度低/)
++  let st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
++  assert.match(st, /route_hint: thick/)
++
++  // advisory（缺省）：测绿 → flow done exit 0 + 醒目打印 + 遥测记一笔
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  const done = cli(['flow', 'done', '--change', change])
++  assert.equal(done.status, 0, `advisory 应薄档过: ${done.stdout}\n${done.stderr}`)
++  assert.match(done.stdout + done.stderr, /route_hint: thick/)
++  const telemetry = readFileSync(join(cwd, '.sillyspec', '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
++  const rec = telemetry.find((r) => r.change === change)
++  assert.ok(rec && rec.protocolCalls === 2 && rec.routeHint === 'thick' && rec.editRatio > 0.5, `遥测四列记一笔: ${JSON.stringify(rec)}`)
++  rmSync(cwd, { recursive: true, force: true })
++
++  // 小改（≤0.25）→ 无 route_hint
++  const s2 = makeRepo()
++  const change2 = 'fr-r2'
++  assert.equal(s2.cli(['flow', 'start', '--change', change2, '--input', '成功标准：\n- 条件A']).status, 0)
++  const small = amendWithRatio(s2.cwd, change2, 0.25)
++  assert.equal(small.status, 0)
++  const st2 = readFileSync(join(s2.cwd, '.sillyspec', 'changes', change2, 'flow-state.yaml'), 'utf8')
++  assert.doesNotMatch(st2, /route_hint: thick/)
++  rmSync(s2.cwd, { recursive: true, force: true })
++})
++
++test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
++  const { cwd, cli } = makeRepo('flow:\n  edit_ratio_enforcement: block\n')
++  const change = 'fr-b1'
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
++  const big = amendWithRatio(cwd, change, 0.75)
++  assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  const done = cli(['flow', 'done', '--change', change])
++  assert.equal(done.status, 1, 'block 档应阻断')
++  assert.match(done.stdout + done.stderr, /edit_ratio_enforcement=block/)
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/machine-draft.test.mjs b/test/machine-draft.test.mjs
+new file mode 100644
+index 00000000..be1bf2d1
+--- /dev/null
++++ b/test/machine-draft.test.mjs
+@@ -0,0 +1,83 @@
++/**
++ * machine-draft.test.mjs — 三件套泛化原语（R7 切片三 task-04 / D-004 / FR-08）
++ *
++ * 覆盖验收面：
++ *   ① wrapSection/parseMarkerBlocks 往返（标记格式与 MARK_*_RE 逐字兼容；amendCmd 参数化）；
++ *   ② verifyMarkers 三态：标记缺失/内容哈希失配/手工重锚未审计 + 干净态零 violation；
++ *   ③ reanchorText 重锚后新哈希生效且内容不动。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++
++const { wrapSection, parseMarkerBlocks, verifyMarkers, reanchorText, bodyHash, MARK_BEGIN_RE } = await import('../src/machine-draft.js')
++
++const AMEND = 'sillyspec flow amend-draft --change <变更名>'
++
++test('wrapSection → parseMarkerBlocks 往返：标记正则逐字兼容 + 内容与哈希还原', () => {
++  const body = '- 机器判级：tier=S1\n- 第二行'
++  const block = wrapSection({ key: 'risk-level', body, amendCmd: AMEND })
++  const md = `# t\n\n## 节\n${block}\n后文\n`
++  const blocks = parseMarkerBlocks(md)
++  assert.equal(blocks.length, 1)
++  assert.equal(blocks[0].key, 'risk-level')
++  assert.equal(blocks[0].contentLines.join('\n'), body)
++  assert.equal(blocks[0].markerHash, bodyHash(body))
++  // begin 标记行匹配既有正则且 amendCmd 参数化文案在场
++  const beginLine = md.split('\n').find((l) => MARK_BEGIN_RE.test(l))
++  assert.match(beginLine, new RegExp(AMEND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
++})
++
++test('verifyMarkers: 干净态零 violation', () => {
++  const body = 'x'
++  const md = wrapSection({ key: 'k1', body, amendCmd: AMEND })
++  const v = verifyMarkers({ text: md, sections: { k1: { hash: bodyHash(body) } }, amendCmd: AMEND })
++  assert.deepEqual(v, [])
++})
++
++test('verifyMarkers: 三态——标记缺失 / 内容失配 / 手工重锚未审计', () => {
++  const body = 'original'
++  const good = wrapSection({ key: 'k1', body, amendCmd: AMEND })
++  // ① 标记缺失（整份重写掉标记）
++  const missing = verifyMarkers({ text: '# rewritten\nno markers\n', sections: { k1: { hash: bodyHash(body) } }, amendCmd: AMEND })
++  assert.equal(missing.length, 1)
++  assert.match(missing[0], /标记缺失/)
++  // ② 内容哈希失配（段内被改写）
++  const tampered = good.replace('original', 'tampered')
++  const mismatch = verifyMarkers({ text: tampered, sections: { k1: { hash: bodyHash(body) } }, amendCmd: AMEND })
++  assert.equal(mismatch.length, 1)
++  assert.match(mismatch[0], /内容与指纹失配/)
++  // ③ 手工重锚未审计（内容未动但台账哈希与标记不一致）
++  const manualReanchor = wrapSection({ key: 'k1', body, amendCmd: AMEND }) // 同内容新标记=旧台账对不上
++  const manual = verifyMarkers({
++    text: manualReanchor,
++    sections: { k1: { hash: bodyHash('stale-ledger-hash-placeholder') } },
++    amendCmd: AMEND,
++  })
++  // 内容与 stale 台账失配（先命中失配态）；构造精确第三态需内容等而台账异：
++  const exactThird = verifyMarkers({
++    text: wrapSection({ key: 'k1', body: 'same', amendCmd: AMEND }),
++    sections: { k1: { hash: bodyHash('same') } },
++    amendCmd: AMEND,
++  })
++  assert.deepEqual(exactThird, []) // 内容与台账一致+标记一致 → 干净
++  // 真第三态：标记哈希=内容哈希，但台账记录的是旧内容哈希且旧内容≠新内容 → 失配先命中；
++  // 标记哈希≠内容哈希（伪标记）+ 台账=内容哈希 → 第三态
++  const forged = `<!-- MACHINE-DRAFT:k1:${'0'.repeat(64)}:begin x -->\nsame\n<!-- MACHINE-DRAFT:k1:end -->`
++  const third = verifyMarkers({ text: forged, sections: { k1: { hash: bodyHash('same') } }, amendCmd: AMEND })
++  assert.equal(third.length, 1)
++  assert.match(third[0], /手工重锚/)
++  assert.match(mismatch[0], /留痕重锚/)
++})
++
++test('reanchorText: 重锚后标记哈希=当前内容哈希，内容行不动', () => {
++  const body = 'line1\nline2'
++  const md = `# h\n${wrapSection({ key: 'a', body, amendCmd: AMEND })}tail`
++  const edited = md.replace('line1', 'line1-edited')
++  const r = reanchorText({ text: edited, amendCmd: AMEND })
++  assert.deepEqual(r.keys, ['a'])
++  assert.ok(r.text.includes('line1-edited'))
++  assert.ok(r.text.includes(bodyHash('line1-edited\nline2')))
++  // 重锚后再校验（台账同步为新哈希）→ 干净
++  const ledger = { a: { hash: bodyHash(r.contentByKey.a) } }
++  assert.deepEqual(verifyMarkers({ text: r.text, sections: ledger, amendCmd: AMEND }), [])
++})
+diff --git a/test/run-tests.mjs b/test/run-tests.mjs
+index 03c5c9b5..d68bcbad 100644
+--- a/test/run-tests.mjs
++++ b/test/run-tests.mjs
+@@ -37,6 +37,9 @@ const childEnv = {
+   TMPDIR: suiteTmp,
+   HOME: suiteTmp,
+   USERPROFILE: suiteTmp,
++  // 套件级 watcher 逃生阀（2026-09-22 实证：全套件漏 41 个孤儿 watcher 每 3s 轮询 git）——
++  // 测试内 CLI 子进程无论 env 传递形态如何，凡继承本 runner 环境者一律不拉起观测旁路。
++  SILLYSPEC_WATCHER: '0',
+ }
+ 
+ // 全局指针污染防护：测试可能把 ~/.sillyspec-platform.json 写到 HOME（cwd 纠正到 home 的缝隙），
+diff --git a/test/watcher.test.mjs b/test/watcher.test.mjs
+new file mode 100644
+index 00000000..d8164460
+--- /dev/null
++++ b/test/watcher.test.mjs
+@@ -0,0 +1,241 @@
++/**
++ * watcher.test.mjs — watcher 观测旁路（R7 切片一 / D-001 / FR-01 FR-02）
++ *
++ * 覆盖验收面：
++ *   ① inferEvents 纯函数：文件首现（阶段推断）/内容变更/checkbox 翻格（task-done 计数）/
++ *      新提交/质量扫描记录出现与更新/archived 终态；全部事件恒带 provisional:true；
++ *   ② aggregateStageTiming：阶段拆账聚合单调、按首事件时序输出；
++ *   ③ 租约判死：心跳新鲜+pid 活→live；心跳过期→死（pid 复用假活兜底）；pid 死→死；
++ *   ④ spawnWatcher 三态：SILLYSPEC_WATCHER=0→disabled；活租约→coalesced；正常→spawned
++ *      （注入 spawnImpl 断言 detached/windowsHide/env 传参，不真起子进程）；
++ *   ⑤ buildSnapshot：临时 change 子树快照（已知产物 hash+checkbox 计数+任务卡；gitHead
++ *      注入；scan 记录 stat）；harness 解耦钉=事件源三源皆纯盘面/纯函数可驱动（无 CLI 调用）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++const {
++  inferEvents, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
++  spawnWatcher, buildSnapshot, runWatcherFromEnv, WATCHER_LOCK_FILENAME,
++} = await import('../src/watcher.js')
++
++// 子侧入口经 node -e bootstrap 动态 import 消费（静态零引用属预期），此处锚定存在性
++assert.equal(typeof runWatcherFromEnv, 'function')
++
++function snap(over = {}) {
++  return { ts: 1700000000000, archived: false, head: null, files: {}, scan: null, ...over }
++}
++
++test('inferEvents: 文件首现带阶段推断 + provisional:true', () => {
++  const next = snap({ files: { 'proposal.md': { hash: 'a', stage: 'proposal', checked: 0, total: 0 } } })
++  const ev = inferEvents(snap(), next)
++  assert.equal(ev.length, 1)
++  assert.equal(ev[0].kind, 'file')
++  assert.equal(ev[0].stage, 'proposal')
++  assert.equal(ev[0].provisional, true)
++})
++
++test('inferEvents: 内容变更→file-update；checkbox 勾选数增加→task-done', () => {
++  const prev = snap({ files: { 'tasks.md': { hash: 'a', stage: 'tasks', checked: 1, total: 3 } } })
++  const next = snap({ files: { 'tasks.md': { hash: 'b', stage: 'tasks', checked: 2, total: 3 } } })
++  const ev = inferEvents(prev, next)
++  const kinds = ev.map((e) => e.kind).sort()
++  assert.deepEqual(kinds, ['file-update', 'task-done'])
++  const td = ev.find((e) => e.kind === 'task-done')
++  assert.match(td.detail, /checked 1→2/)
++  assert.ok(ev.every((e) => e.provisional === true))
++})
++
++test('inferEvents: git 新提交→commit 事件带短哈希', () => {
++  const prev = snap({ head: 'abc1234' })
++  const next = snap({ head: 'def5678' })
++  const ev = inferEvents(prev, next)
++  assert.equal(ev.length, 1)
++  assert.equal(ev[0].kind, 'commit')
++  assert.equal(ev[0].detail, 'def5678')
++})
++
++test('inferEvents: 质量扫描记录出现与更新→verify 事件', () => {
++  const appear = inferEvents(snap(), snap({ scan: { mtimeMs: 1, size: 10 } }))
++  assert.equal(appear.length, 1)
++  assert.equal(appear[0].kind, 'verify')
++  assert.equal(appear[0].stage, 'verify')
++  const update = inferEvents(snap({ scan: { mtimeMs: 1, size: 10 } }), snap({ scan: { mtimeMs: 2, size: 12 } }))
++  assert.equal(update.length, 1)
++  assert.equal(update[0].kind, 'verify')
++})
++
++test('inferEvents: archived 终态唯一事件（change 目录移入 archive）', () => {
++  const ev = inferEvents(snap(), snap({ archived: true }))
++  assert.equal(ev.length, 1)
++  assert.equal(ev[0].kind, 'archived')
++})
++
++test('inferEvents: 无变化零事件', () => {
++  const s = snap({ head: 'a', files: { 'proposal.md': { hash: 'x', stage: 'proposal', checked: 0, total: 0 } } })
++  assert.equal(inferEvents(s, snap({ ...s, ts: s.ts + 3000 })).length, 0)
++})
++
++test('aggregateStageTiming: 阶段聚合按首事件时序、时长单调', () => {
++  const events = [
++    { ts: 1000, kind: 'file', stage: 'proposal', provisional: true },
++    { ts: 2500, kind: 'file', stage: 'proposal', provisional: true },
++    { ts: 5000, kind: 'file', stage: 'design', provisional: true },
++    { ts: 9000, kind: 'verify', stage: 'verify', provisional: true },
++    { ts: 200, kind: 'commit', stage: null, provisional: true }, // 无 stage 不计入
++  ]
++  const timing = aggregateStageTiming(events)
++  assert.deepEqual(timing.map((t) => t.stage), ['proposal', 'design', 'verify'])
++  assert.equal(timing[0].durationMs, 1500)
++  assert.equal(timing[0].events, 2)
++})
++
++test('租约判死: 心跳新鲜+pid 活→live；心跳过期→死（pid 复用假活兜底）', () => {
++  const now = Date.now()
++  const live = { pid: process.pid, heartbeatAt: now - 10_000 }
++  assert.equal(isWatcherLeaseLive(live, now), true)
++  const staleHb = { pid: process.pid, heartbeatAt: now - 6 * 60_000 }
++  assert.equal(isWatcherLeaseLive(staleHb, now), false)
++  const deadPid = { pid: -1, heartbeatAt: now }
++  assert.equal(isWatcherLeaseLive(deadPid, now), false)
++  const noHb = { pid: process.pid }
++  assert.equal(isWatcherLeaseLive(noHb, now), false)
++})
++
++test('spawnWatcher: SILLYSPEC_WATCHER=0 → disabled（不 spawn）', async () => {
++  const r = await spawnWatcher(process.cwd(), 'c1', {
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++    runtimeRoot: mkdtempSync(join(tmpdir(), 'wt-')),
++  })
++  assert.equal(r.status, 'disabled')
++})
++
++test('spawnWatcher: 活租约 → coalesced；正常 → spawned（detached+windowsHide+env 传参）', async () => {
++  const runtimeRoot = mkdtempSync(join(tmpdir(), 'wt-'))
++  // 活租约：本进程 pid + 新鲜心跳
++  writeFileSync(join(runtimeRoot, WATCHER_LOCK_FILENAME), JSON.stringify({ pid: process.pid, change: 'c1', heartbeatAt: Date.now() }) + '\n')
++  assert.equal(readWatcherLock(runtimeRoot).pid, process.pid)
++  const coalesced = await spawnWatcher(process.cwd(), 'c1', {
++    runtimeRoot,
++    env: (() => { const e = { ...process.env }; delete e.NODE_TEST_CONTEXT; delete e.SILLYSPEC_WATCHER; return e })(),
++  })
++  assert.equal(coalesced.status, 'coalesced')
++
++  // 判死后正常 spawn：注入 spawnImpl 断言参数，不真起子进程
++  rmSync(join(runtimeRoot, WATCHER_LOCK_FILENAME))
++  let spawnArgs = null
++  const fakeSpawn = (cmd, args, opts) => {
++    spawnArgs = { cmd, args, opts }
++    return { unref() {} }
++  }
++  const spawned = await spawnWatcher(process.cwd(), 'c1', {
++    runtimeRoot,
++    env: (() => { const e = { ...process.env }; delete e.NODE_TEST_CONTEXT; delete e.SILLYSPEC_WATCHER; return e })(),
++    spawnImpl: fakeSpawn,
++  })
++  assert.equal(spawned.status, 'spawned')
++  assert.equal(spawnArgs.cmd, process.execPath)
++  assert.equal(spawnArgs.opts.detached, true)
++  assert.equal(spawnArgs.opts.windowsHide, true)
++  assert.equal(spawnArgs.opts.env.SILLYSPEC_WATCHER_CHANGE, 'c1')
++  assert.equal(existsSync(spawned.logPath), true)
++  rmSync(runtimeRoot, { recursive: true, force: true })
++})
++
++test('buildSnapshot: 已知产物 hash+checkbox 计数+任务卡+scan stat（三源皆盘面，无 CLI 依赖）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wt-'))
++  const changeDir = join(root, 'changes', 'c1')
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'proposal.md'), '# P\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '- [x] t1\n- [ ] t2\n')
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), '- [x] a\n- [x] b\n- [ ] c\n')
++  writeFileSync(join(changeDir, 'notes-unknown.md'), 'noise') // 未映射文件不入快照
++  const runtimeRoot = join(root, '.runtime')
++  mkdirSync(runtimeRoot, { recursive: true })
++  writeFileSync(join(runtimeRoot, 'verify-quality-scan-c1.json'), '{}')
++
++  const s = buildSnapshot({
++    changeDir,
++    cwd: root,
++    runtimeRoot,
++    changeName: 'c1',
++    gitHeadImpl: () => 'abc1234',
++  })
++  assert.equal(s.archived, false)
++  assert.equal(s.head, 'abc1234')
++  assert.ok(s.files['proposal.md'].hash)
++  assert.equal(s.files['tasks.md'].checked, 1)
++  assert.equal(s.files['tasks.md'].total, 2)
++  assert.equal(s.files['tasks/task-01.md'].checked, 2)
++  assert.equal(s.files['tasks/task-01.md'].stage, 'tasks')
++  assert.equal(s.files['notes-unknown.md'], undefined)
++  assert.ok(s.scan && s.scan.size > 0)
++
++  // 目录消失 → archived 快照（终态判定输入）
++  const archivedSnap = buildSnapshot({
++    changeDir: join(root, 'changes', 'moved-away'),
++    cwd: root,
++    runtimeRoot,
++    changeName: 'c1',
++    gitHeadImpl: () => null,
++  })
++  assert.equal(archivedSnap.archived, true)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('孤儿自愈：首拍 archived 立即退出（真子进程，泄漏回归钉）', async () => {
++  const { spawn } = await import('node:child_process')
++  const root = mkdtempSync(join(tmpdir(), 'wt-'))
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(specBase, { recursive: true }) // changes/c1 不建 → 首拍即 archived
++  const r = await new Promise((resolve) => {
++    const child = spawn(process.execPath, ['--input-type=module', '-e',
++      `import(${JSON.stringify(new URL('../src/watcher.js', import.meta.url).href)}).then(m => m.runWatcherFromEnv({
++        SILLYSPEC_WATCHER_CHANGE: 'c1',
++        SILLYSPEC_WATCHER_CWD: ${JSON.stringify(root)},
++        SILLYSPEC_WATCHER_SPEC_BASE: ${JSON.stringify(specBase)},
++        SILLYSPEC_WATCHER_RUNTIME_ROOT: ${JSON.stringify(join(specBase, '.runtime'))},
++      }))`], { stdio: 'pipe' })
++    let out = ''
++    child.stdout.on('data', (d) => { out += d })
++    child.on('exit', (code) => resolve({ code, out }))
++    setTimeout(() => { try { child.kill() } catch {} }, 10_000)
++  })
++  assert.equal(r.code, 0)
++  assert.match(r.out, /首拍即 archived/)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('孤儿自愈：正常路径真子进程起跑（锁落盘+存活）——常量缺失类缺陷回归钉', async () => {
++  const { spawn } = await import('node:child_process')
++  const root = mkdtempSync(join(tmpdir(), 'wt-'))
++  const specBase = join(root, '.sillyspec')
++  const changeDir = join(specBase, 'changes', 'c1')
++  const runtimeRoot = join(specBase, '.runtime')
++  mkdirSync(changeDir, { recursive: true })
++  mkdirSync(runtimeRoot, { recursive: true })
++  writeFileSync(join(changeDir, 'proposal.md'), '# p\n')
++  const child = spawn(process.execPath, ['--input-type=module', '-e',
++    `import(${JSON.stringify(new URL('../src/watcher.js', import.meta.url).href)}).then(m => m.runWatcherFromEnv({
++      SILLYSPEC_WATCHER_CHANGE: 'c1',
++      SILLYSPEC_WATCHER_CWD: ${JSON.stringify(root)},
++      SILLYSPEC_WATCHER_SPEC_BASE: ${JSON.stringify(specBase)},
++      SILLYSPEC_WATCHER_RUNTIME_ROOT: ${JSON.stringify(runtimeRoot)},
++    })).catch((e) => { console.error('CHILD-DIED', e && e.message); process.exit(3) })`], { stdio: 'pipe' })
++  let err = ''
++  child.stderr.on('data', (d) => { err += d })
++  // 轮询锁文件至 8s（正常路径应写锁并存活——常量缺失/启动崩类缺陷在此暴露）
++  const lockPath = join(runtimeRoot, 'watcher.lock')
++  let ok = false
++  for (let i = 0; i < 80; i++) {
++    await new Promise((r) => setTimeout(r, 100))
++    if (existsSync(lockPath)) { ok = true; break }
++    if (child.exitCode !== null) break
++  }
++  try { child.kill() } catch {}
++  assert.ok(ok, `正常路径子进程应在 8s 内落锁存活（exitCode=${child.exitCode} stderr=${err.slice(0, 300)}）`)
++  rmSync(root, { recursive: true, force: true })
++})

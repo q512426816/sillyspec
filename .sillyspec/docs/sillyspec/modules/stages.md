@@ -4,10 +4,12 @@ doc_type: module-card
 module_id: stages
 author: qinyi
 created_at: 2026-06-04T16:55:00+08:00
-updated_at: 2026-09-20T00:00:00+08:00
+updated_at: 2026-09-22T00:00:00+08:00
 ---
 
 # stages
+
+> R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：plan.js 拆分粒度纪律注入（D-006/FR-11——实现+单测同卡默认；禁纯接线/纯 module-map/纯全绿仪式卡；同 Wave 文件不相交语义澄清）
 
 ## 定位
 
