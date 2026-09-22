@@ -1,0 +1,101 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-827b2686",
+  "totals": {
+    "files": 5,
+    "additions": 350,
+    "deletions": 13
+  },
+  "rows": [
+    {
+      "path": "src/quicklog.js",
+      "declared": true,
+      "additions": 44,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/stage.js",
+      "declared": true,
+      "additions": 13,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-apply.js",
+      "declared": true,
+      "additions": 21,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree.js",
+      "declared": true,
+      "additions": 79,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/multi-session-friction-fixes.test.mjs",
+      "declared": true,
+      "additions": 193,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 5,
+    "codeFileCount": 4,
+    "testFileCount": 1,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "change-management",
+        "files": [
+          "src/quicklog.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/stage.js"
+        ]
+      },
+      {
+        "id": "worktree",
+        "files": [
+          "src/worktree-apply.js",
+          "src/worktree.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/multi-session-friction-fixes.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260921-009-c2d3",
+  "sessionId": "quick-827b2686",
+  "savedAt": "2026-09-21T13:34:13.068Z",
+  "patchSha256": "f79293cdfd3ed1f18317b87d583acd1debbc01dff32193c625d06e42d11be5a4",
+  "patchStatus": "ok"
+}

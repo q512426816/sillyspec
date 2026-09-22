@@ -1,0 +1,498 @@
+diff --git a/src/quicklog.js b/src/quicklog.js
+index bfbd841b..ad58cd16 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -752,10 +752,12 @@ const GUARD_CLAIM_STALE_MS = 7 * 24 * 60 * 60 * 1000
+  * 遍历 quick-sessions 目录，按同一僵尸窗口口径读各会话 guard.json（collectGuardReservedQuicklogIds
+  * 与 collectActiveQuickGuardFiles 共用，活跃判定勿分叉）：guard.json 损坏/缺失 → guard=null 保留
+  * 条目（消费方各自决定跳过或视为空声明）；startedAt 可解析且超 GUARD_CLAIM_STALE_MS → 僵尸剔除。
++ * 附 guardMtimeMs（guard.json 最后写时间——会话结构性更新【启动/--files 追加边界】都会重写该文件，
++ * 是比 startedAt 更新的活性信号；非周期心跳，长思考会话会漂老，消费方 TTL 须以此为前提选窗）。
+  *
+  * @param {string} dir quick-sessions 目录
+  * @param {number} [nowMs] 当前时间戳（可注入，测试用）
+- * @returns {Array<{sessionId: string, guard: object|null}>}
++ * @returns {Array<{sessionId: string, guard: object|null, guardMtimeMs: number|null}>}
+  */
+ function listQuickSessionGuards(dir, nowMs = Date.now()) {
+   const out = []
+@@ -765,12 +767,17 @@ function listQuickSessionGuards(dir, nowMs = Date.now()) {
+   } catch { return out } // 目录不存在/不可读 → 无会话
+   for (const sessionName of sessionDirs) {
+     let guard = null
+-    try { guard = JSON.parse(readFileSync(join(dir, sessionName, 'guard.json'), 'utf8')) } catch { guard = null } // 损坏/缺失 → null
++    let guardMtimeMs = null
++    const guardPath = join(dir, sessionName, 'guard.json')
++    try {
++      guard = JSON.parse(readFileSync(guardPath, 'utf8'))
++      guardMtimeMs = statSync(guardPath).mtimeMs
++    } catch { guard = null } // 损坏/缺失 → null（mtime 一并放弃）
+     if (guard && guard.startedAt) {
+       const startedAtMs = Date.parse(guard.startedAt)
+       if (Number.isFinite(startedAtMs) && nowMs - startedAtMs > GUARD_CLAIM_STALE_MS) continue // 僵尸不活跃
+     }
+-    out.push({ sessionId: sessionName, guard })
++    out.push({ sessionId: sessionName, guard, guardMtimeMs })
+   }
+   return out
+ }
+@@ -795,30 +802,61 @@ export function collectGuardReservedQuicklogIds(specBase, sessionsDirHint = null
+  * （quick --done 完成时清理 guard 目录，完成态天然退出），超 7 天僵尸窗口（GUARD_CLAIM_STALE_MS，
+  * 异常残留不钉死）剔除。勿用 changes.last_active 判活跃（非周期心跳，D-002）。
+  *
++ * **拦截面 TTL（ql-20260921-009 ①，2026-09-21 batch2 归档实证）**：在僵尸窗口之上，本函数（apply
++ * 拦截面专用消费口）再按 guard.json **mtime** 收紧——超过 staleAfterMs（缺省 4h）无结构性更新的
++ * 会话视为放弃，声明不再参与相交拦截。实证形态：quick 会话中断未 --done、guard 目录残留 36h，
++ * apply 被幽灵守卫拦住，人工查证 owner.json 才敢解锁。安全性：守卫只是预警层，apply 的内容级
++ * 脏文件三方合并检查（EXCLUDE-DIRTY）仍兜底真实冲突；4h 窗口对 quick（短命流程）足够宽，
++ * 超窗未动 CLI 的会话即使活着，其声明文件若真有未提交改动也走内容级检查。quicklog ID 预留
++ * （collectGuardReservedQuicklogIds）**不套用**此 TTL——ID 复用避开近期死会话仍取 7 天窗。
++ * 过期跳过时打一行 ℹ️（可观测，不静默）；staleAfterMs=null 关闭（测试/回退口径）。
++ *
+  * @param {string} specBase .sillyspec 根目录
+- * @param {{ excludeChange?: string|null, sessionsDir?: string|null, nowMs?: number }} [opts]
++ * @param {{ excludeChange?: string|null, sessionsDir?: string|null, nowMs?: number, staleAfterMs?: number|null }} [opts]
+  *   - excludeChange：排除自身 change 的 quick 会话——sessionId == changeName（quick 会话 id 即
+  *     change 名）或 guard.linkedChanges 显式关联该 change 的协作会话（自己人，非拦截面）
+  *   - sessionsDir：quick-sessions 目录（缺省 <specBase>/.runtime/quick-sessions）
+  *   - nowMs：当前时间戳（可注入，测试用）
++ *   - staleAfterMs：拦截面 TTL 毫秒数（缺省 GUARD_INTERCEPT_STALE_MS=4h；null 关闭）
+  * @returns {Map<string, string[]>} sessionId → guard.allowedFiles（无 guard/无声明 → 空数组；fail-open）
+  */
+-export function collectActiveQuickGuardFiles(specBase, { excludeChange = null, sessionsDir = null, nowMs = Date.now() } = {}) {
++const GUARD_INTERCEPT_STALE_MS = 4 * 60 * 60 * 1000
++export function collectActiveQuickGuardFiles(specBase, { excludeChange = null, sessionsDir = null, nowMs = Date.now(), staleAfterMs = GUARD_INTERCEPT_STALE_MS } = {}) {
+   const out = new Map()
++  let staleSkipped = 0
+   try {
+     const dir = sessionsDir || join(specBase, '.runtime', 'quick-sessions')
+-    for (const { sessionId, guard } of listQuickSessionGuards(dir, nowMs)) {
++    for (const { sessionId, guard, guardMtimeMs } of listQuickSessionGuards(dir, nowMs)) {
+       if (excludeChange && (sessionId === excludeChange
+         || (guard && Array.isArray(guard.linkedChanges) && guard.linkedChanges.includes(excludeChange)))) continue
++      if (staleAfterMs != null && guardMtimeMs != null && Number.isFinite(guardMtimeMs)
++        && nowMs - guardMtimeMs > staleAfterMs) { staleSkipped++; continue } // TTL 过期：拦截面视为放弃
+       const allowed = (guard && Array.isArray(guard.allowedFiles))
+         ? guard.allowedFiles.filter(f => typeof f === 'string' && f.length > 0)
+         : []
+       out.set(sessionId, allowed)
+     }
+   } catch { /* fail-open：采集失败等同无活跃 guard（不放大拦截面） */ }
++  if (staleSkipped > 0) {
++    console.log(`ℹ️ 已忽略 ${staleSkipped} 个过期 quick 守卫（>${Math.round(staleAfterMs / 3600000)}h 无活动，TTL 自动失效）——内容级脏文件合并检查仍兜底真实冲突`)
++  }
+   return out
+ }
+ 
++/**
++ * quick 启动并发错峰建议探测（ql-20260921-009 ③，2026-09-21 batch2 归档实证）。纯读：
++ * 他者活跃 quick 守卫（TTL 过滤后）≥1 且主仓已有 src/test 脏文件 → suggest=true——两者
++ * 同时在场时工作区互写/apply 相交拦截摩擦集中爆发。单会话常态 suggest=false 零输出。
++ * @returns {{ suggest: boolean, others: string[] }}
++ */
++export function detectQuickConcurrencyAdvice({ specBase, changeName, baselineFiles, sessionsDir = null, nowMs = Date.now() } = {}) {
++  const others = collectActiveQuickGuardFiles(specBase, { excludeChange: changeName, sessionsDir, nowMs })
++  const srcTestDirty = Array.isArray(baselineFiles) && baselineFiles.some(
++    (p) => { const n = String(p).split('\\').join('/'); return n.startsWith('src/') || n.startsWith('test/') }
++  )
++  return { suggest: others.size > 0 && !!srcTestDirty, others: [...others.keys()] }
++}
++
+ /**
+  * 数某 qlId 在所有 QUICKLOG-*.md 里的条目头出现次数（--done 占用校验用）。
+  * ≥2 = 分配竞态残留已损坏记录（同 ID 双条目）；容错空白形态与 scanExisting 的 reLoose 同口径。
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 69699594..9d83c453 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -23,7 +23,7 @@ import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessi
+ import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+ import { executeProgressConfirm } from './progress-confirm.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+-import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc } from '../quicklog.js'
++import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc, detectQuickConcurrencyAdvice } from '../quicklog.js'
+ import { createHash } from 'node:crypto'
+ import { checkTransition } from '../stage-contract.js'
+ import { AUXILIARY_STAGES } from '../constants.js'
+@@ -510,6 +510,18 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+             console.warn(`   清理：sillyspec run quick --cancel --change <会话ID>；若确在用请忽略本提示。`)
+           }
+         } catch { /* fail-open：探测失败不打扰 quick 启动 */ }
++        // 并发错峰建议（ql-20260921-009 ③，2026-09-21 batch2 归档实证：多 quick 会话文件面
++        // 重叠+主仓脏文件在途时，工作区级互写/apply 相交拦截的摩擦集中爆发）。条件与探测在
++        // quicklog.js detectQuickConcurrencyAdvice（可测纯读）——他者活跃守卫（TTL 过滤后）≥1
++        // 且主仓已有 src/test 脏文件。advisory 不阻断；单会话常态零输出零成本。
++        try {
++          const advice = detectQuickConcurrencyAdvice({ specBase, changeName, baselineFiles })
++          if (advice.suggest) {
++            console.warn('')
++            console.warn(`⚠️ 检测到 ${advice.others.length} 个并行 quick 会话在途（${advice.others.slice(0, 5).join('、')}${advice.others.length > 5 ? ' 等' : ''}）且主仓已有 src/test 脏文件——若文件面重叠，工作区互写与 apply 相交拦截的摩擦会集中出现。`)
++            console.warn('   建议：错峰（等对方 --done 后再动手），或本会话立即声明边界（--files <a.js,b.js>）把交集显式化。')
++          }
++        } catch { /* fail-open：建议探测失败不打扰 quick 启动 */ }
+         // 缺 --input 且关联变更无可提取标题 → 条目落「(quick 任务)」占位标题，平台「快速修复」列表
+         // 默认隐藏进行中占位（task-06 口径），长会话全程不可见、语义标题要到最终 --done 才回填。
+         // 此刻会话刚起步零沉没成本，提示放弃重启带 --input 是最便宜的自愈点。
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index 23bf57e7..658e77a4 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -16,7 +16,7 @@ import { existsSync, unlinkSync, writeFileSync, mkdtempSync, rmSync, readdirSync
+ import { join, resolve } from 'path';
+ import { tmpdir } from 'os';
+ import { createHash } from 'crypto';
+-import { WorktreeManager } from './worktree.js';
++import { WorktreeManager, detectDeliverableContained } from './worktree.js';
+ import { getCrossWorktreeMeta, cleanupCrossWorktrees } from './worktree-cross.js';
+ import { parseFileChangeList, parseFileChangeListDetailed, pathMatches } from './change-list.js';
+ import { parseAllowedPaths, parseRepo } from './stages/plan-postcheck.js';
+@@ -1406,6 +1406,26 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+       );
+     }
+ 
++    // 合并感知包含剔除（ql-20260921-009 ②）：残余交付文件（≠主仓当前工作区内容）逐个只读
++    // 三方合并测试——worktree 的 delta 已全在主仓（差异=并行会话增量，如 EXCLUDE-DIRTY/
++    // MISMATCH 三方合并落地后形态）→ 视为已 apply 剔出 changedFiles。归档/清理门的「未 apply
++    // 交付面」消费本口径，字节等值误拦（2026-09-21 batch2 归档实证三次）就此消解。冲突/异常
++    // fail-safe 不剔。仅对内容不等者付 merge-file 成本（正常收尾 0 个触发）。
++    if (changedFiles.length > 0) {
++      const containedFiles = detectDeliverableContained(
++        { projectRoot, worktreePath, baseRef: deliverableBase },
++        changedFiles,
++      );
++      if (containedFiles.length > 0) {
++        const containedSet = new Set(containedFiles);
++        changedFiles = changedFiles.filter(f => !containedSet.has(f));
++        result.warnings = result.warnings || [];
++        result.warnings.push(
++          `${containedFiles.length} 个文件交付已包含于主仓当前内容（差异为并行会话增量，合并感知判定不计入未 apply 面）：${containedFiles.slice(0, 5).join(', ')}${containedFiles.length > 5 ? ' 等' : ''}`
++        );
++      }
++    }
++
+     // 硬排可见性（scope-audit-cross-repo-blindness 改进点 1）：平台设施被滤出不静默——
+     // apply 不回放它们（.worktrees//.sillyspec-platform*/knowledge/local.yaml）；确为交付物
+     // 的极少数场景（如刻意改 knowledge 模板）人工落主仓。
+diff --git a/src/worktree.js b/src/worktree.js
+index de63b947..b993d3dc 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -9,8 +9,9 @@
+  */
+ 
+ import { execFileSync } from 'child_process';
+-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync } from 'fs';
++import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync, unlinkSync, copyFileSync, mkdtempSync } from 'fs';
+ import { join, resolve, dirname, relative, isAbsolute, basename } from 'path';
++import { tmpdir } from 'os';
+ import { createHash } from 'crypto';
+ import { provisionDeps, checkDepsFreshness, detectEditableInstallEscape, sweepForeignNodeModulesJunctions } from './worktree-deps.js';
+ import { resolveRuntimeRoot } from './run/shared.js';
+@@ -47,6 +48,62 @@ function _chunkPathsPrivate(paths, maxChars = 8000) {
+   return batches
+ }
+ 
++/**
++ * 交付包含判定（合并感知「未 apply」口径，ql-20260921-009 ②，2026-09-21 batch2 归档实证）。
++ *
++ * 语义：worktree 交付文件与主仓**当前工作区**内容不等时，做只读三方合并测试——
++ * base=交付锚点（baselineCommit||baseHash）版本、ours=主仓工作区内容、theirs=worktree
++ * 交付内容；clean 合并且结果 === 主仓工作区内容 ⟺ worktree 的全部改动已被主仓包含
++ * （差异全是并行会话在主仓的增量）→ 该文件视为已 apply。实证形态：交付文件经
++ * EXCLUDE-DIRTY/MISMATCH 三方合并落地后天然含并行增量，字节等值口径的归档/清理门
++ * 恒误拦「未 apply」（分支非 merge 落地时可达性短路也不命中），人工 grep 自证后才
++ * 走 --skip-apply/--force 逃生口。
++ *
++ * 与 worktree-apply.js mergeDirtyOverlapThreeWay 的差异：**只读不写回**（判定专用，
++ * 无备份/暂存面）；冲突/取不到 base/异常 fail-safe 不剔（宁误拦不误放）。放本文件
++ * 导出供 worktree-apply.js 消费（那边 import 本文件是既有方向，反向会成环——
++ * _lsTreeBlobs 注释同款约束）。成本：仅对「内容不等」的残余交付文件逐个一次
++ * git merge-file（正常收尾路径 0 个文件触发），生命周期边界点一次性开销。
++ *
++ * @param {{ projectRoot: string, worktreePath: string, baseRef: string }} ctx
++ * @param {string[]} files 待判文件（仓库根相对路径；不可读/base 缺席者自动跳过）
++ * @returns {string[]} 判定为「已包含于主仓当前内容」的文件子集（files 原字面）
++ */
++export function detectDeliverableContained({ projectRoot, worktreePath, baseRef }, files) {
++  const contained = []
++  if (!Array.isArray(files) || files.length === 0 || !baseRef) return contained
++  let tmpDir = null
++  try {
++    for (const f of files) {
++      if (!f || typeof f !== 'string') continue
++      try {
++        const wtRaw = readFileSync(join(worktreePath, f))
++        const mainRaw = readFileSync(join(projectRoot, f))
++        if (wtRaw.equals(mainRaw)) { contained.push(f); continue } // 快路径：内容相等天然已含
++        const baseRaw = git(projectRoot, ['show', `${baseRef}:${f}`], { encoding: 'buffer', timeout: 15000 })
++        if (!tmpDir) tmpDir = mkdtempSync(join(tmpdir(), 'sillyspec-contain-'))
++        const p = (tag) => join(tmpDir, `${tag}-${Math.random().toString(36).slice(2, 8)}`)
++        const baseP = p('base'); const oursP = p('ours'); const theirsP = p('theirs')
++        writeFileSync(baseP, baseRaw); writeFileSync(oursP, mainRaw); writeFileSync(theirsP, wtRaw)
++        // merge-file <current=ours(主仓现状)> <base> <other=theirs(worktree 交付)> -p：
++        // stdout=合并结果；exit 0=clean。结果===主仓现状 ⟺ 交付 delta 已全在主仓。
++        let outBuf, code = 0
++        try {
++          outBuf = git(projectRoot, ['merge-file', '-p', oursP, baseP, theirsP], { encoding: 'buffer', timeout: 15000 })
++        } catch (e) {
++          code = (typeof e.status === 'number') ? e.status : -1
++          outBuf = (e.stdout instanceof Buffer) ? e.stdout : Buffer.alloc(0)
++          if (code < 0) continue // merge-file 不可用 → 保守不剔
++        }
++        if (code === 0 && outBuf.equals(mainRaw)) contained.push(f)
++      } catch { /* 该文件判定不可得 → 保守不剔 */ }
++    }
++  } finally {
++    if (tmpDir) { try { rmSync(tmpDir, { recursive: true, force: true }) } catch {} }
++  }
++  return contained
++}
++
+ // ── supplyFiles 生成物供给（坑③ / FR-03 / D-003@v1）──
+ // .gitignore 生成物（如 src/build-id.ts）不在 git 树也不进 untracked overlay
+ // （ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸
+@@ -1957,7 +2014,7 @@ export class WorktreeManager {
+       }
+ 
+       // 2) 候选集中尚未落到主工作区 HEAD 的子集
+-      const pending = this._changesAlreadyOnMain(worktreePath, tracked, untracked);
++      const pending = this._changesAlreadyOnMain(worktreePath, tracked, untracked, diffBase);
+       // 3) main 工作区副本降噪层（坑 unapplied-false-positive-workspace-copy，2026-08-21 实证：
+       // apply 后 main 工作区有逐字节一致副本但未 commit → HEAD-only 判定报「未落仓」虚警拦
+       // doctor）。原注释「不查 main 工作区未提交副本（防误删）」的保护意图是内容未落地——
+@@ -1995,9 +2052,9 @@ export class WorktreeManager {
+    * @param {string[]} untrackedFiles
+    * @returns {string[]} 尚未落到 main HEAD 的文件
+    */
+-  _changesAlreadyOnMain(worktreePath, trackedFiles, untrackedFiles) {
++  _changesAlreadyOnMain(worktreePath, trackedFiles, untrackedFiles, diffBase = null) {
+     const mainHead = git(this.cwd, ['rev-parse', 'HEAD']); // 失败即抛 → 外层 catch fail-safe
+-    const pending = [];
++    let pending = [];
+ 
+     if (trackedFiles.length > 0) {
+       const diverged = (gitQuiet(worktreePath,
+@@ -2024,7 +2081,24 @@ export class WorktreeManager {
+       }
+     }
+ 
+-    return [...new Set(pending)];
++    pending = [...new Set(pending)];
++
++    // 合并感知包含剔除（ql-20260921-009 ②）：pending 文件（≠主仓 HEAD）与主仓**当前工作区**
++    // 内容逐个只读三方合并测试——worktree delta 已全在主仓（差异=并行增量，如三方合并落地后
++    // 形态）→ 视为已落地剔除。字节等值口径对该形态恒误拦（2026-09-21 batch2 归档实证），
++    // 分支非 merge 落地时上方可达性短路也不命中。冲突/异常 fail-safe 不剔。
++    if (diffBase && pending.length > 0) {
++      const contained = detectDeliverableContained(
++        { projectRoot: this.cwd, worktreePath, baseRef: diffBase },
++        pending,
++      );
++      if (contained.length > 0) {
++        const containedSet = new Set(contained);
++        pending = pending.filter(f => !containedSet.has(f));
++      }
++    }
++
++    return pending;
+   }
+ 
+   /**
+diff --git a/test/multi-session-friction-fixes.test.mjs b/test/multi-session-friction-fixes.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/multi-session-friction-fixes.test.mjs
+@@ -0,0 +1,193 @@
++/**
++ * 多会话摩擦三修复（ql-20260921-009，2026-09-21 batch2 归档全程实证）：
++ *
++ * ① quick 守卫 TTL——collectActiveQuickGuardFiles（apply 相交拦截消费口）按 guard.json
++ *    mtime 超 4h 过期；quicklog ID 预留（collectGuardReservedQuicklogIds）保持 7 天 startedAt
++ *    口径不受影响。实证形态：36h 幽灵守卫拦 apply。
++ * ② 交付包含判定（合并感知未-apply）——detectDeliverableContained 只读三方合并测试：
++ *    merge(base, ours=主仓现状, theirs=worktree) clean 且 === 主仓现状 ⟺ 交付 delta 已全在
++ *    主仓（差异=并行增量）。归档门（applyWorktree changedFiles）与清理门（_changesAlreadyOnMain）
++ *    双侧消费。实证形态：EXCLUDE-DIRTY/MISMATCH 三方合并落地后字节等值恒误拦。
++ * ③ quick 启动并发错峰建议——detectQuickConcurrencyAdvice：他者活跃守卫（TTL 过滤后）≥1
++ *    且主仓有 src/test 脏文件 → suggest。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execSync } from 'node:child_process'
++import {
++  collectActiveQuickGuardFiles,
++  collectGuardReservedQuicklogIds,
++  detectQuickConcurrencyAdvice,
++} from '../src/quicklog.js'
++import { detectDeliverableContained } from '../src/worktree.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++const H = 3600 * 1000
++
++/** 建守卫目录（mtime 偏移小时数可注入；startedAt 一并按同偏移写，7 天僵尸窗口不触发） */
++function makeGuard(sessionsDir, id, { allowedFiles = [], mtimeAgeH = 0, quicklogId = null } = {}) {
++  const dir = join(sessionsDir, id)
++  mkdirSync(dir, { recursive: true })
++  const startedAtMs = Date.now() - mtimeAgeH * H
++  const guard = { sessionId: id, allowedFiles, startedAt: new Date(startedAtMs).toISOString() }
++  if (quicklogId) guard.quicklogId = quicklogId
++  const p = join(dir, 'guard.json')
++  writeFileSync(p, JSON.stringify(guard))
++  const t = new Date(startedAtMs)
++  utimesSync(p, t, t)
++  return p
++}
++
++// ── ① 守卫 TTL ────────────────────────────────────────────────────
++
++test('T1 TTL：mtime >4h 守卫从拦截面剔除，≤4h 与无 guard 会话保留（36h 幽灵实证复刻）', () => {
++  const specBase = mk('ttl-')
++  const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
++  mkdirSync(sessionsDir, { recursive: true })
++  makeGuard(sessionsDir, 'quick-fresh', { allowedFiles: ['src/a.js'], mtimeAgeH: 1 })
++  makeGuard(sessionsDir, 'quick-ghost36h', { allowedFiles: ['src/run/prompt.js'], mtimeAgeH: 36 })
++  mkdirSync(join(sessionsDir, 'quick-noguard'), { recursive: true }) // 无 guard.json → 空声明条目
++
++  const now = Date.now()
++  const guards = collectActiveQuickGuardFiles(specBase, { excludeChange: 'quick-self', nowMs: now })
++  assert.ok(guards.has('quick-fresh'), 'T1: 1h 守卫在拦截面')
++  assert.deepEqual(guards.get('quick-fresh'), ['src/a.js'], 'T1: 声明文件原样')
++  assert.ok(!guards.has('quick-ghost36h'), 'T1: 36h 幽灵守卫 TTL 过期剔除（batch2 实证形态）')
++  assert.ok(guards.has('quick-noguard'), 'T1: 无 guard 会话保留为空声明（既有行为）')
++  assert.deepEqual(guards.get('quick-noguard'), [])
++
++  // 边界贴线：恰 4h 不剔、4h+1ms 剔
++  makeGuard(sessionsDir, 'quick-4h', { allowedFiles: ['src/b.js'], mtimeAgeH: 4 })
++  assert.ok(collectActiveQuickGuardFiles(specBase, { nowMs: now }).has('quick-4h'), 'T1: 恰 4h 不过期（> 判定）')
++
++  // 回退口径：staleAfterMs=null 关 TTL（遗留全量行为）
++  const legacy = collectActiveQuickGuardFiles(specBase, { nowMs: now, staleAfterMs: null })
++  assert.ok(legacy.has('quick-ghost36h'), 'T1: null 关闭 TTL=遗留口径')
++
++  // excludeChange 语义不回归
++  const selfExcluded = collectActiveQuickGuardFiles(specBase, { excludeChange: 'quick-fresh', nowMs: now })
++  assert.ok(!selfExcluded.has('quick-fresh'), 'T1: 排除自身会话')
++})
++
++test('T2 quicklog ID 预留不套 TTL：36h 幽灵的 qlId 仍被预留（7 天 startedAt 口径原样）', () => {
++  const specBase = mk('reserve-')
++  const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
++  mkdirSync(sessionsDir, { recursive: true })
++  makeGuard(sessionsDir, 'quick-ghost36h', { allowedFiles: [], mtimeAgeH: 36, quicklogId: 'ql-20260921-009-c2d3' })
++  const reserved = collectGuardReservedQuicklogIds(specBase, sessionsDir, Date.now())
++  assert.deepEqual(reserved.get('ql-20260921-009-c2d3'), ['quick-ghost36h'], 'T2: 预留口径不受拦截 TTL 影响')
++})
++
++// ── ② 交付包含判定 ────────────────────────────────────────────────
++
++function initRepo(dir) {
++  execSync('git init -q', { cwd: dir })
++  execSync('git config user.email t@t', { cwd: dir })
++  execSync('git config user.name t', { cwd: dir })
++}
++
++test('T3 包含：主仓=交付 delta+并行增量（不同区域）→ 判已含；快路径相等 → 判已含', () => {
++  const repo = mk('contain-')
++  initRepo(repo)
++  writeFileSync(join(repo, 'a.js'), 'A\nB\nC\n')
++  writeFileSync(join(repo, 'same.js'), 'x\n')
++  execSync('git add -A && git commit -qm base', { cwd: repo })
++  const baseRef = execSync('git rev-parse HEAD', { cwd: repo }).toString().trim()
++
++  const wt = join(repo, 'wt') // 模拟 worktree 侧目录（无需真 worktree，helper 只读文件）
++  mkdirSync(wt)
++  // a.js：mine 在尾部加 D（交付 delta，尾部区域）；main 顶部加 Z（并行增量，不同区域）且已含 D
++  // ——复刻 EXCLUDE-DIRTY/MISMATCH 三方合并落地后的真实形态（区域不重叠，重合并 clean）
++  writeFileSync(join(wt, 'a.js'), 'A\nB\nC\nD\n')
++  writeFileSync(join(repo, 'a.js'), 'Z\nA\nB\nC\nD\n')
++  // same.js：内容相等（快路径）
++  writeFileSync(join(wt, 'same.js'), 'x\n')
++
++  const contained = detectDeliverableContained({ projectRoot: repo, worktreePath: wt, baseRef }, ['a.js', 'same.js'])
++  assert.deepEqual(contained, ['a.js', 'same.js'], 'T3: delta 已含（差异=并行 Z）与相等快路径均判已含')
++
++  // 同位追加（双方都改同一区域）→ merge-file 冲突 → fail-safe 不剔（归 T4 口径，此处钉语义）
++  writeFileSync(join(wt, 'b.js'), 'A\nB\nC\nD\n')
++  writeFileSync(join(repo, 'b.js'), 'A\nB\nC\nD\nE\n')
++  writeFileSync(join(repo, 'c.js'), 'A\nB\nC\n')
++  execSync('git add b.js c.js && git commit -qm b', { cwd: repo }) // b/c 进 base 后再同位分叉
++  const baseRef2 = execSync('git rev-parse HEAD', { cwd: repo }).toString().trim()
++  writeFileSync(join(repo, 'b.js'), 'A\nB\nC\nD\nE\n')
++  assert.deepEqual(
++    detectDeliverableContained({ projectRoot: repo, worktreePath: wt, baseRef: baseRef2 }, ['b.js']),
++    [], 'T3: 同区域追加=冲突区 → 保守不剔（宁误拦不误放）',
++  )
++})
++
++test('T4 不包含：main 缺交付 delta → 不剔；同行改写冲突 → 不剔（fail-safe）', () => {
++  const repo = mk('notcontain-')
++  initRepo(repo)
++  writeFileSync(join(repo, 'a.js'), 'A\nB\nC\n')
++  writeFileSync(join(repo, 'c.js'), 'A\nB\nC\n')
++  execSync('git add -A && git commit -qm base', { cwd: repo })
++  const baseRef = execSync('git rev-parse HEAD', { cwd: repo }).toString().trim()
++
++  const wt = join(repo, 'wt')
++  mkdirSync(wt)
++  // a.js：mine 加 D，main 只有并行 E（无 D）→ delta 未到 → 不含
++  writeFileSync(join(wt, 'a.js'), 'A\nB\nC\nD\n')
++  writeFileSync(join(repo, 'a.js'), 'A\nB\nC\nE\n')
++  // c.js：双方改同一行 B → merge-file 冲突 → 不含
++  writeFileSync(join(wt, 'c.js'), 'A\nB-mine\nC\n')
++  writeFileSync(join(repo, 'c.js'), 'A\nB-theirs\nC\n')
++
++  const contained = detectDeliverableContained({ projectRoot: repo, worktreePath: wt, baseRef }, ['a.js', 'c.js'])
++  assert.deepEqual(contained, [], 'T4: delta 未到与同行冲突均保守不剔（宁误拦不误放）')
++})
++
++test('T5 边界：base 缺席且内容不等 / worktree 文件缺失 / 空入参 → 不剔不炸；新文件相等 → 快路径判已含', () => {
++  const repo = mk('edge-')
++  initRepo(repo)
++  writeFileSync(join(repo, 'keep.js'), 'x\n')
++  execSync('git add -A && git commit -qm base', { cwd: repo })
++  const baseRef = execSync('git rev-parse HEAD', { cwd: repo }).toString().trim()
++  const wt = join(repo, 'wt')
++  mkdirSync(wt)
++  writeFileSync(join(wt, 'new-diff.js'), 'mine\n')           // base 无此文件且内容不等 → base 取不到保守不剔
++  writeFileSync(join(repo, 'new-diff.js'), 'theirs\n')
++  writeFileSync(join(wt, 'new-same.js'), 'brand new\n')      // base 无此文件但内容相等 → 快路径判已含（交付确在主仓）
++  writeFileSync(join(repo, 'new-same.js'), 'brand new\n')
++  writeFileSync(join(wt, 'gone.js'), 'wt-only\n')            // main 无此文件（readFileSync 失败）
++  const contained = detectDeliverableContained({ projectRoot: repo, worktreePath: wt, baseRef }, ['new-diff.js', 'new-same.js', 'gone.js'])
++  assert.deepEqual(contained, ['new-same.js'], 'T5: 相等快路径判已含；base 缺席/不可读保守不剔')
++  assert.deepEqual(detectDeliverableContained({ projectRoot: repo, worktreePath: wt, baseRef }, []), [], 'T5: 空入参')
++  assert.deepEqual(detectDeliverableContained({ projectRoot: repo, worktreePath: wt, baseRef: null }, ['keep.js']), [], 'T5: baseRef 缺省直接空')
++})
++
++// ── ③ quick 并发错峰建议 ──────────────────────────────────────────
++
++test('T6 建议：他者活跃守卫≥1 + 主仓 src/test 脏 → suggest；单会话/无 src 脏 → 不建议', () => {
++  const specBase = mk('advice-')
++  const sessionsDir = join(specBase, '.runtime', 'quick-sessions')
++  mkdirSync(sessionsDir, { recursive: true })
++  makeGuard(sessionsDir, 'quick-other', { allowedFiles: ['src/run/prompt.js'], mtimeAgeH: 0.5 })
++  makeGuard(sessionsDir, 'quick-ghost', { allowedFiles: ['src/x.js'], mtimeAgeH: 30 })
++  const now = Date.now()
++
++  const hit = detectQuickConcurrencyAdvice({ specBase, changeName: 'quick-self', baselineFiles: ['docs/a.md', 'src/b.js'], nowMs: now })
++  assert.equal(hit.suggest, true, 'T6: 活跃他者+src 脏 → 建议')
++  assert.deepEqual(hit.others, ['quick-other'], 'T6: others 只列 TTL 存活者（幽灵不计）')
++
++  const noOther = detectQuickConcurrencyAdvice({ specBase, changeName: 'quick-other', baselineFiles: ['src/b.js'], nowMs: now })
++  assert.equal(noOther.suggest, false, 'T6: 排除自身后无他者 → 不建议')
++
++  const noSrcDirty = detectQuickConcurrencyAdvice({ specBase, changeName: 'quick-self', baselineFiles: ['docs/a.md'], nowMs: now })
++  assert.equal(noSrcDirty.suggest, false, 'T6: 脏文件非 src/test → 不建议')
++
++  const onlyGhost = (() => { // 只剩幽灵守卫在场
++    rmSync(join(sessionsDir, 'quick-other'), { recursive: true, force: true })
++    return detectQuickConcurrencyAdvice({ specBase, changeName: 'quick-self', baselineFiles: ['src/b.js'], nowMs: now })
++  })()
++  assert.equal(onlyGhost.suggest, false, 'T6: 唯一在场者是 TTL 过期幽灵 → 不建议（过期守卫不应触发建议噪音）')
++})

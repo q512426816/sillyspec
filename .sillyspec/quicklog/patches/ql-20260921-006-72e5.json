@@ -1,0 +1,65 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-4bb3824b",
+  "totals": {
+    "files": 2,
+    "additions": 103,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": "src/handoff.js",
+      "declared": true,
+      "additions": 71,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/handoff.test.mjs",
+      "declared": true,
+      "additions": 32,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/handoff.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      ".sillyspec/.changes/",
+      "test/handoff.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260921-006-72e5",
+  "sessionId": "quick-4bb3824b",
+  "savedAt": "2026-09-21T08:20:24.401Z",
+  "patchSha256": "2f01ef3ebf24645150862d7f9e0c41553684b089174d816e4651daadd76d356e",
+  "patchStatus": "ok"
+}

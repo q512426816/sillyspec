@@ -1,0 +1,167 @@
+diff --git a/src/handoff.js b/src/handoff.js
+index 05418837..02a8e367 100644
+--- a/src/handoff.js
++++ b/src/handoff.js
+@@ -6,13 +6,66 @@
+  * 本就自足（进度快照/模块命中/知识注入全由进度库与 prompt 渲染提供，新会话零背景可
+  * 续跑）——「每阶段一个瘦会话」是零机制改动的省法，缺的只是把交接信息打成一块可粘贴。
+  *
+- * 定位：纯只读（ProgressManager 读路径 + 环境探测），不写盘不动状态。输出三件：
++ * 定位：纯只读（ProgressManager 读路径 + 变更目录文本 + 环境探测），不写盘不动状态。输出：
+  *   ① 新会话启动块（保持 SILLYSPEC_SESSION_ID 不变——变更所有权按此判定）；
+  *   ② 下一阶段建议（当前阶段完成 → MAIN_FLOW_ORDER 后继；进行中 → 同阶段续跑）；
+- *   ③ 当前状态摘要（阶段进度 + 停留步骤）。
++ *   ③ 当前状态摘要（阶段进度 + 停留步骤）；
++ *   ④ 上下文三段（B4a 加厚，2026-09-21-r5 优化 C-2）：未决阻断（waiting/blocked/failed 步骤）/
++ *      任务面（tasks.md checkbox 计数+待办清单）/ 决策 ID 清单（decisions.md D-xxx@vN，翻案先回源）——
++ *      整块 80 行帽（HANDOFF_LINE_CAP），超限从上下文段尾截，粘贴块与警示行永不动。
+  */
+ import { ProgressManager, resolveSpecDir } from './progress.js';
+ import { MAIN_FLOW_ORDER, STAGE_LABELS } from './progress/shared.js';
++import { readFileSync } from 'node:fs';
++import { join } from 'node:path';
++
++/** 交接块总行数帽（优化方案 C-2 B4a：把「任务太大爆窗」从硬墙变操作规程——块本身不许变大到失控） */
++const HANDOFF_LINE_CAP = 80;
++
++function readChangeFile(specRoot, change, name) {
++  try { return readFileSync(join(specRoot, 'changes', change, name), 'utf8'); } catch { return null; }
++}
++
++/**
++ * 任务面摘要：tasks.md checkbox 行计数（done/total + 待办 ID 清单）。
++ * @param {string|null} tasksMdText
++ * @returns {string|null} 无 checkbox 行（非 execute 期/未落盘）返回 null
++ */
++export function summarizeTaskFace(tasksMdText) {
++  if (!tasksMdText) return null;
++  const boxes = [...tasksMdText.matchAll(/^-\s?\[([ xX])\]\s*(task-\d+)/gm)];
++  if (!boxes.length) return null;
++  const pending = boxes.filter((m) => m[1].toLowerCase() !== 'x').map((m) => m[2]);
++  let line = `📦 任务面：${boxes.length - pending.length}/${boxes.length} 完成`;
++  if (pending.length) {
++    line += `（待办：${pending.slice(0, 8).join('、')}${pending.length > 8 ? ` 等 ${pending.length} 项` : ''}）`;
++  }
++  return line;
++}
++
++/**
++ * 决策清单摘要：decisions.md 的 `## D-xxx@vN` 标题行 ID（跨会话恢复时按 ID 回源翻否决理由）。
++ * @param {string|null} decisionsMdText
++ * @returns {string|null}
++ */
++export function summarizeDecisions(decisionsMdText) {
++  if (!decisionsMdText) return null;
++  const ids = [...decisionsMdText.matchAll(/^##\s+(D-[\w-]+@v\d+)/gm)].map((m) => m[1]);
++  if (!ids.length) return null;
++  return `🧠 决策：${ids.slice(0, 10).join('、')}${ids.length > 10 ? ` 等 ${ids.length} 条` : ''}（翻案/复潮先读 decisions.md 对应条目）`;
++}
++
++/**
++ * 未决阻断摘要：进度库步骤态 waiting/blocked/failed（--wait 决策点与门禁拦截点）。
++ * @param {object|null} stageData
++ * @returns {string|null}
++ */
++export function summarizeBlockers(stageData) {
++  const steps = Array.isArray(stageData && stageData.steps) ? stageData.steps : [];
++  const stuck = steps.filter((s) => s && (s.status === 'waiting' || s.status === 'blocked' || s.status === 'failed'));
++  if (!stuck.length) return null;
++  return `⛔ 未决：${stuck.slice(0, 3).map((s) => `「${String(s.name || s.stepName || s.title || `Step ${s.index ?? '?'}`).slice(0, 20)}」${s.status}`).join('；')}${stuck.length > 3 ? ` 等 ${stuck.length} 步` : ''}`;
++}
+ 
+ /**
+  * 解析下一阶段建议。
+@@ -81,6 +134,12 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
+   const steps = Array.isArray(stageData && stageData.steps) ? stageData.steps : [];
+   const doneSteps = steps.filter((s) => s && s.status === 'completed').length;
+ 
++  // ── 上下文三段（B4a 加厚：任务面 / 未决 / 决策——进度库+变更目录机械抽取，仍纯只读）──
++  const faceLine = summarizeTaskFace(readChangeFile(specRoot, target, 'tasks.md'));
++  const decisionLine = summarizeDecisions(readChangeFile(specRoot, target, 'decisions.md'));
++  const blockerLine = summarizeBlockers(stageData);
++  const contextLines = [blockerLine, faceLine, decisionLine].filter(Boolean);
++
+   const lines = [];
+   lines.push('🔗 交接块（瘦会话模式——下一阶段/续跑在新会话执行，主会话收尾省上下文）');
+   lines.push('');
+@@ -96,6 +155,15 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
+   lines.push('# ── 交接块结束 ──');
+   lines.push('');
+   lines.push(`📋 ${target}：当前 ${STAGE_LABELS[currentStage] || currentStage}${steps.length > 0 ? `（步骤 ${doneSteps}/${steps.length}）` : ''}${stageCompleted ? ' ✅ 已完成' : ''}`);
++  const contextStart = lines.length;
++  for (const c of contextLines) lines.push(c);
++  // 80 行帽：粘贴块（头）与警示行（尾）不动，超限从上下文段尾截（决策→任务面→未决，重要性递增反向丢）
++  let truncated = false;
++  while (lines.length + 3 > HANDOFF_LINE_CAP && lines.length > contextStart) {
++    lines.splice(lines.length - 1, 1);
++    truncated = true;
++  }
++  if (truncated) lines.push('…（上下文超 80 行帽截尾——任务面/决策明细回源 tasks.md 与 decisions.md）');
+   lines.push(`➡️ ${suggestion.reason}`);
+   lines.push('💡 为什么可行：CLI prompt 自足——进度快照/模块命中/知识注入由进度库与渲染提供，新会话零背景可续跑。');
+   lines.push('⚠️ SILLYSPEC_SESSION_ID 必须保持不变（变更所有权/接管判定按此标识）；缺省降级机器级标识只拦他机。');
+@@ -108,6 +176,7 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
+     stageCompleted,
+     suggestion,
+     sessionId,
++    truncated,
+     lines,
+   };
+ }
+diff --git a/test/handoff.test.mjs b/test/handoff.test.mjs
+index dd659557..3e3ad91f 100644
+--- a/test/handoff.test.mjs
++++ b/test/handoff.test.mjs
+@@ -9,13 +9,13 @@
+  *
+  * 风格：自研 assert + tmp fixture（DB 夹具经 sillyspec run 实跑建立，同 quick-session-isolation 族）。
+  */
+-import { mkdtempSync, mkdirSync, rmSync } from 'fs'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+ import { join } from 'path'
+ import { tmpdir } from 'os'
+ import { execFileSync } from 'child_process'
+ import { fileURLToPath } from 'url'
+ 
+-import { nextStageSuggestion, buildHandoff } from '../src/handoff.js'
++import { nextStageSuggestion, buildHandoff, summarizeTaskFace, summarizeDecisions, summarizeBlockers } from '../src/handoff.js'
+ 
+ let failed = 0
+ let total = 0
+@@ -98,6 +98,36 @@ function makeRepoAtStage(stage) {
+   assert(j.change === change && typeof j.next_stage === 'string' && j.schema_version === 1, `4a --json 形状（change=${j.change} next=${j.next_stage}）`)
+ }
+ 
++// ── 5. B4a 上下文三段（任务面/未决/决策）+ 80 行帽 ──
++{
++  // 纯函数面
++  const face = summarizeTaskFace('- [x] task-01: a\n- [ ] task-02: b\n- [ ] task-03: c')
++  assert(face === '📦 任务面：1/3 完成（待办：task-02、task-03）', `5a 任务面计数（实际 ${face}）`)
++  assert(summarizeTaskFace(null) === null && summarizeTaskFace('无 checkbox') === null, '5b 无 checkbox → null（非 execute 期静默跳过）')
++  const many = summarizeTaskFace(Array.from({ length: 10 }, (_, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: x`).join('\n'))
++  assert(many.includes('等 10 项'), `5c 待办超 8 项折叠（实际 ${many}）`)
++  const dec = summarizeDecisions('---\nauthor: t\n---\n# 决策\n\n## D-001@v1: x\n## D-002@v1: y')
++  assert(dec.includes('D-001@v1、D-002@v1') && dec.includes('decisions.md'), `5d 决策 ID 清单（实际 ${dec}）`)
++  assert(summarizeDecisions(null) === null, '5e 无决策文件 → null')
++  const blk = summarizeBlockers({ steps: [{ name: 'Wave 2 执行', status: 'waiting' }, { name: 'x', status: 'completed' }] })
++  assert(blk.includes('⛔ 未决') && blk.includes('Wave 2 执行') && blk.includes('waiting'), `5f 未决 waiting 步骤（实际 ${blk}）`)
++  assert(summarizeBlockers(null) === null && summarizeBlockers({ steps: [{ name: 'x', status: 'completed' }] }) === null, '5g 无未决 → null')
++
++  // buildHandoff 集成：夹具变更目录落 tasks.md + decisions.md
++  const { proj, change } = makeRepoAtStage('brainstorm')
++  const changeDir = join(proj, '.sillyspec', 'changes', change)
++  writeFileSync(join(changeDir, 'tasks.md'), ['- [x] task-01: a', '- [x] task-02: b', '- [ ] task-03: c', '- [ ] task-04: d', '- [ ] task-05: e'].join('\n') + '\n', 'utf8')
++  writeFileSync(join(changeDir, 'decisions.md'), '---\nauthor: t\ncreated_at: 2026-09-21T00:00:00\n---\n# 决策记录\n\n## D-001@v1: 甲\n- 决策：甲\n\n## D-002@v1: 乙\n- 决策：乙\n', 'utf8')
++  const ho = await buildHandoff({ cwd: proj })
++  assert(ho.ok === true, '5h 夹具可交接')
++  const text = ho.lines.join('\n')
++  assert(text.includes('📦 任务面：2/5 完成（待办：task-03、task-04、task-05）'), `5i 任务面行（实际片段 ${text.split('\n').find(l => l.includes('任务面'))}）`)
++  assert(text.includes('🧠 决策：D-001@v1、D-002@v1'), '5j 决策行')
++  assert(ho.lines.length <= 80, `5k 80 行帽（实际 ${ho.lines.length}）`)
++  assert(ho.truncated === false, '5l 常规量不截尾')
++  assert(text.indexOf('📦 任务面') > text.indexOf('📋'), '5m 上下文段在状态行之后')
++}
++
+ for (const dir of tmpRoots) {
+   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟 */ }
+ }

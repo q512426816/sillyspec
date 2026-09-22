@@ -1,0 +1,201 @@
+diff --git a/.idea/vcs.xml b/.idea/vcs.xml
+index aed40d9d..cb1ceaec 100644
+--- a/.idea/vcs.xml
++++ b/.idea/vcs.xml
+@@ -2,6 +2,6 @@
+ <project version="4">
+   <component name="VcsDirectoryMappings">
+     <mapping directory="" vcs="Git" />
+-    <mapping directory="$PROJECT_DIR$/sa-rename-probe" vcs="Git" />
++    <mapping directory="$PROJECT_DIR$/round5/_gsd" vcs="Git" />
+   </component>
+ </project>
+\ No newline at end of file
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index aac1dfa8..3802b409 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,16 +130,16 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:268/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1557/1785/1848/1859/2049 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:279/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1557/1785/1848/1859/2049 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1970/1984/2064 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:875（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2512；shared.js:989 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2512/2705；shared.js:1013 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3743；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3695；sync.js:2129 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2536；shared.js:989 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2536/2705；shared.js:1013 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3767；sync.js:1431/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3719；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3508/3402；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3532/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:682/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3605`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3629`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index 247df2bb..2e7c8186 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -805,6 +805,26 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
+           task: tTask, change: tChange, note: tNote || '', startedAt: new Date().toISOString(),
+         }, null, 2) + '\n');
+         console.log(`📌 ${tTask} 已标记进行中${tNote ? '（' + tNote + '）' : ''}——完工时 sillyspec task finish --change ${tChange} --task ${tTask}`);
++        // ── 受影响测试族前移注入（2026-09-21 R5 接线 ql-20260921-007，②）──
++        // deps(auto) 同源计算（verify-postcheck discoverModuleDependentTests）从 quick 收尾门
++        // 前移到任务开工：30 秒定向定位替代 100 秒全量轰炸+混合归因（W1 实证全量当首验多跑
++        // 2 轮+triage 三轮）。按 task 卡 allowed_paths 声明面计算；best-effort：卡片缺失/
++        // 解析失败/零命中零输出零阻断。
++        try {
++          const tCardPath = join(tSpecBase, 'changes', tChange, 'tasks', `${tTask}.md`);
++          if (existsSync(tCardPath)) {
++            const { parseAllowedPaths } = await import('./stages/plan-postcheck.js');
++            const { discoverModuleDependentTests } = await import('./verify-postcheck.js');
++            const tAllowed = parseAllowedPaths(readFileSync(tCardPath, 'utf8'));
++            if (tAllowed.length > 0) {
++              const tDeps = discoverModuleDependentTests({ cwd: dir, changedFiles: tAllowed, coveredCommands: [] });
++              if (tDeps.length > 0) {
++                console.log(`🎯 受影响测试族（deps(auto) 同源 ${tDeps.length} 个）——写完先跑定向再全量（30s 定位 < 100s 全量+归因）：`);
++                console.log(`   node --test ${tDeps.slice(0, 10).join(' ')}${tDeps.length > 10 ? `  …等共 ${tDeps.length} 个` : ''}`);
++              }
++            }
++          }
++        } catch { /* 注入 best-effort */ }
+       } else if (taskSub === 'finish') {
+         try { unlinkSync(join(tDir, `${tTask}.json`)); console.log(`✅ ${tTask} 进行中标记已清除（完工）`); }
+         catch { console.log(`ℹ️ ${tTask} 无进行中标记（已完工或从未 start）`); }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index d796a58e..70a46396 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -61,6 +61,18 @@ import { deriveTitleFromLinkedChange } from '../quicklog.js'
+ // step6 design.md 已落盘但阶段未完）与阶段完成同样刷新，治「brainstorm 全程 title 存英文 autoName
+ // 兜底」。quick-<hex> 无 proposal/design 目录，deriveTitleFromLinkedChange 返回 '' 不刷新
+ // （quick 走 handleQuickStageCompletion 的 extractTitleFromResult）。失败静默（不阻断流程）。
++// ── Wave 边界 handoff 纪律（2026-09-21 R5 接线 ql-20260921-007）──
++// rollout 实证（sess_418fc2bb，2026-09-21）：单会话跨 4 Wave 背 ~130K 上下文 ×176 请求，
++// ≈1/4 墙钟是肥上下文结构税（缓存 99% 救账单不救墙钟）。B4a 交接块已在场，缺的只是纪律——
++// 本 helper 维护「变更 × 会话 → 已完成 Wave 步计数」账本，同会话跨 ≥2 Wave 时升级提示语气。
++// 纯函数（IO 由调用方做）：返回更新后的账本 + 是否达 advisory 阈值。
++export function updateWaveSessionLedger(ledger, sessionId, waveName) {
++  const sid = String(sessionId || 'anon')
++  const prev = ledger && ledger.sessionId === sid ? (ledger.waveCount || 0) : 0
++  const next = { sessionId: sid, waveCount: prev + 1, lastWave: waveName || null, at: new Date().toISOString() }
++  return { ledger: next, crossWaveAdvisory: next.waveCount >= 2 }
++}
++
+ function refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName) {
+   if (!changeName || /^quick-[0-9a-f]{8}$/.test(changeName)) return
+   try {
+@@ -847,6 +859,27 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     if (defSteps && defSteps[nextPendingIdx]) {
+       console.log(`\n🚀 advanced to step ${nextPendingIdx + 1}/${steps.length}: ${defSteps[nextPendingIdx].name}`)
+     }
++    // ── Wave 边界 handoff 默认动作（2026-09-21 R5 接线 ql-20260921-007，①）──
++    // 刚完成的步是 Wave 步且下一步也是 Wave 步 = Wave 边界：把「换瘦会话」从建议升为默认动作
++    // （同会话硬续不阻断——advisory 语义）。账本：同会话跨 ≥2 Wave 时提示语气升级（肥上下文税
++    // 累积实证见 updateWaveSessionLedger 注释）。best-effort：账本读写失败零输出不阻断。
++    if (stageName === 'execute' && changeName && defSteps && defSteps[currentIdx] && defSteps[nextPendingIdx] &&
++        /Wave \d+ 执行/.test(defSteps[currentIdx].name || '') && /Wave \d+ 执行/.test(defSteps[nextPendingIdx].name || '')) {
++      try {
++        const ledgerPath = join(specBase, '.runtime', `wave-session-ledger-${changeName}.json`)
++        let ledger = null
++        try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { /* 首 Wave */ }
++        const { ledger: nextLedger, crossWaveAdvisory } = updateWaveSessionLedger(ledger, process.env.SILLYSPEC_SESSION_ID, defSteps[currentIdx].name)
++        try { mkdirSync(join(specBase, '.runtime'), { recursive: true }); writeFileSync(ledgerPath, JSON.stringify(nextLedger, null, 1) + '\n', 'utf8') } catch { /* 账本 best-effort */ }
++        console.log(`\n🔄 Wave 边界——默认动作：下一 Wave 换瘦会话续跑（每请求背全量历史，130K 上下文 ×每步重发≈1/4 墙钟，实测 2026-09-21）：`)
++        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（含任务面/未决阻断/决策 ID 回源）`)
++        console.log(`   2. 新会话（SILLYSPEC_SESSION_ID 不变）粘贴交接块 → sillyspec run execute --change ${changeName}`)
++        console.log(`   同会话硬续不阻断；上下文已压缩过（Read 旧工件可回源）则续跑无妨。`)
++        if (crossWaveAdvisory) {
++          console.log(`   ⚠️ 本会话已完成 ${nextLedger.waveCount} 个 Wave——肥上下文税在累积（缓存救账单不救墙钟），强烈建议 handoff。`)
++        }
++      } catch { /* 边界提示 best-effort */ }
++    }
+     // quick 末步四字段前置预告（坑 quick-step3-four-fields-late）：末步 --done 的 --output 四字段
+     // 是硬校验（缺任一项被拒 + 回滚），但模板藏在 step3 长 prompt 中段——task-08 同因（长 prompt
+     // 易被 tail 截断），agent 常到 --done 被拦才第一次见到模板。推进到末步的此刻用底部短块预告
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 5679b3d1..ac789d19 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -1436,6 +1436,7 @@ task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-X
+ - 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
+ - \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
+ - \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
++- **反例测试核对**（2026-09-21 R5 接线）：本 task 新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死
+ - **回收瘦身**：审查回收输出 = verdict 一行 + blockers（如有）+ review.json 路径——细节不转述，主代理按需 Read 工件；git diff 对账仍是回收真相源，本条只瘦身转述
+ 
+ ### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
+diff --git a/test/r5-wiring-three.test.mjs b/test/r5-wiring-three.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/r5-wiring-three.test.mjs
+@@ -0,0 +1,53 @@
++/**
++ * r5-wiring-three.test.mjs — R5 优化接线三件（ql-20260921-007）
++ *
++ * ① Wave 边界 handoff 默认动作（complete.js updateWaveSessionLedger 纯函数 + 注入文本钉）
++ * ② task start 受影响测试族前移注入（index.js 注入文本钉——deps(auto) 同源 discoverModuleDependentTests）
++ * ③ 评审铁律反例测试条（execute.js Task Review Gate 文本钉）
++ *
++ * 依据：rollout 解剖（W1 56min=62% 工具税·全量当首验多 2 轮；sess_418fc2bb 63min=75% 模型税·
++ * 176 请求背 130K ≈1/4 墙钟）——本三件是「反馈环前移/会话结构」两个乘子的机械接线。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { updateWaveSessionLedger } from '../src/run/complete.js'
++
++const root = join(dirname(fileURLToPath(import.meta.url)), '..')
++const read = p => readFileSync(join(root, p), 'utf8')
++
++test('① updateWaveSessionLedger：同会话跨 Wave 计数与 advisory 阈值', () => {
++  const r1 = updateWaveSessionLedger(null, 'sess-A', 'Wave 1 执行')
++  assert.equal(r1.ledger.waveCount, 1, '首 Wave 计 1')
++  assert.equal(r1.crossWaveAdvisory, false, '首 Wave 不出 advisory')
++  const r2 = updateWaveSessionLedger(r1.ledger, 'sess-A', 'Wave 2 执行')
++  assert.equal(r2.ledger.waveCount, 2, '同会话第二 Wave 计 2')
++  assert.equal(r2.crossWaveAdvisory, true, '≥2 Wave 触发 advisory')
++  const r3 = updateWaveSessionLedger(r2.ledger, 'sess-B', 'Wave 3 执行')
++  assert.equal(r3.ledger.waveCount, 1, '换会话重置计数')
++  assert.equal(r3.crossWaveAdvisory, false, '新会话首 Wave 不 advisory')
++  assert.equal(updateWaveSessionLedger(null, null, 'Wave 1 执行').ledger.sessionId, 'anon', '缺省会话 ID 落 anon')
++})
++
++test('① Wave 边界注入文本钉：complete.js 含 handoff 默认动作块', () => {
++  const s = read('src/run/complete.js')
++  assert.ok(s.includes('Wave 边界——默认动作：下一 Wave 换瘦会话'), 'handoff 默认动作文案')
++  assert.ok(s.includes('sillyspec handoff --change'), '照抄命令行')
++  assert.ok(s.includes('wave-session-ledger-'), '账本文件名钉')
++  assert.ok(s.includes('/Wave \\d+ 执行/'), 'Wave 步判定（当前步与下一步均 Wave）')
++})
++
++test('② task start 受影响测试族注入钉：index.js 含 deps(auto) 同源注入块', () => {
++  const s = read('src/index.js')
++  assert.ok(s.includes('受影响测试族（deps(auto) 同源'), '注入文案')
++  assert.ok(s.includes('discoverModuleDependentTests'), '同源函数复用（无二源）')
++  assert.ok(s.includes('写完先跑定向再全量'), '验证顺序前移话术')
++})
++
++test('③ 评审铁律反例测试条钉：execute.js Task Review Gate', () => {
++  const s = read('src/stages/execute.js')
++  assert.ok(s.includes('**反例测试核对**'), '铁律条在场')
++  assert.ok(s.includes('守卫不该生效的场景确实不生效'), '反例语义（非泛泛「写测试」）')
++})

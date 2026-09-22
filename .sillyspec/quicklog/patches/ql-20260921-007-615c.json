@@ -1,0 +1,109 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-a8a27151",
+  "totals": {
+    "files": 6,
+    "additions": 115,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": ".idea/vcs.xml",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 7,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 20,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 33,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/r5-wiring-three.test.mjs",
+      "declared": true,
+      "additions": 53,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 6,
+    "codeFileCount": 4,
+    "testFileCount": 1,
+    "moduleSpan": 3,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/complete.js"
+        ]
+      },
+      {
+        "id": "stages",
+        "files": [
+          "src/stages/execute.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      ".idea/vcs.xml",
+      "test/r5-wiring-three.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260921-007-615c",
+  "sessionId": "quick-a8a27151",
+  "savedAt": "2026-09-21T12:36:19.891Z",
+  "patchSha256": "2342d9c663d21f62ab320871c78fdbfb7103d102cab9b35c61b8c51a7406630f",
+  "patchStatus": "ok"
+}

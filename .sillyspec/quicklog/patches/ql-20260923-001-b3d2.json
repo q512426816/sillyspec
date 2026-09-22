@@ -1,0 +1,47 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-cb83099a",
+  "totals": {
+    "files": 1,
+    "additions": 2,
+    "deletions": 2
+  },
+  "rows": [
+    {
+      "path": "AGENTS.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-001-b3d2",
+  "sessionId": "quick-cb83099a",
+  "savedAt": "2026-09-22T16:11:12.394Z",
+  "patchSha256": "e8386b8bcd88de36717ae431e1394384d2f7044d5353d146f632a6e37e470fee",
+  "patchStatus": "ok"
+}
