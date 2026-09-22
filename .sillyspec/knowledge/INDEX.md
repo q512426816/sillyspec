@@ -25,6 +25,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - 漂移|维度|豁免|docs-check → [conventions.md#双维度报同一漂移信号时后加维度须豁免](conventions.md#双维度报同一漂移信号时后加维度须豁免)
 
 - 判级|定价|门禁|词表|关键词匹配|risk_level|仪式档|blast|危险度|风险等级|证据门 → [conventions.md#判级定价门禁输入必须项目声明禁全宇宙词表](conventions.md#判级定价门禁输入必须项目声明禁全宇宙词表)
+- env敏感|双模式|套件阀|环境变量剥离|快照overlay|gitignored配置|pass.flag|行为翻转 → [conventions.md#env 敏感测试必须双模式跑+行为翻转走被跟踪文件](conventions.md#env-敏感测试必须双模式跑行为翻转走被跟踪文件)
 ## Patterns
 - 阶段定义|stage|stages → [patterns.md#stage-step-pattern](patterns.md#stage-step-pattern)
 - 数据库|SQLite|sql.js|DB → [patterns.md#database-first](patterns.md#database-first)
@@ -83,3 +84,4 @@ created_at: 2026-06-19T12:40:00+08:00
 - redlines|FR|需求|承接 → [fr/redlines.md](fr/redlines.md)
 - stages|FR|需求|承接 → [fr/stages.md](fr/stages.md)
 - setup|FR|需求|承接 → [fr/setup.md](fr/setup.md)
+- sync|FR|需求|承接 → [fr/sync.md](fr/sync.md)

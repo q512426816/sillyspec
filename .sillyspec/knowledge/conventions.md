@@ -83,3 +83,15 @@ checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移�
   （每轮零阻断、gap 全有锚、QA 抓到真 bug specBase 推导错层）。省的是「每轮评审从零重建仓库认知」（~200x
   信息放大），不是审的东西。评审轮次结构不动（少审这条路不通——两轮 QA 拦下错层与假设反转的价值
   大于全部评审成本）。后续命中注入的会话：这是已验证的数字不是估计。
+
+## env 敏感测试必须双模式跑+行为翻转走被跟踪文件
+
+两类实测坑（2026-09-22 R7 dogfood 复盘，2026-09-22-r7-protocol-surgery 双实证）：
+①**套件阀自噬**：测试对 env 门控行为（如 SILLYSPEC_WATCHER=0 的 disabled 语义）做断言时，测试
+runner 注入的全局阀会继承进测试内 spawn 的 env——裸跑绿、套件内红。规则：凡断言 env 门控
+分支的测试，构造 spawn env 时**显式剥净全部相关变量**（delete NODE_TEST_CONTEXT /
+SILLYSPEC_WATCHER 等），且收口前双模式各跑一遍（裸 + 套件阀生效形态）才算绿。
+②**gitignored 配置翻转不可见**：门禁快照 overlay=HEAD+会话**被跟踪**文件，测试中途改
+local.yaml（gitignored）对快照内实测不可见→「修好了还红」假象。规则：测试内翻转被测行为
+一律走**被跟踪文件**（check.js+pass.flag 模式），不走 gitignored 配置。（来源：
+test/watcher.test.mjs env 剥离双清 / test/flow-protocol.test.mjs ③ pass.flag）
