@@ -51,3 +51,12 @@
 根因：套件阀继承使 env 门控断言套件内红裸跑绿；gitignored 配置中途修改不进快照 overlay；设计死亡面无人审（41 孤儿）；两裁定组合出归档死锁
 方案：conventions 新增 env 双模式纪律+INDEX 路由；brainstorm 设计模板增 10b 非功能生命周期节与多裁定组合推演自查
 结果：lint 753 绿；brainstorm-plan-contract 零回归；guidance 级不进 gate 硬校验存量零影响
+
+## ql-20260922-007-3446 | 2026-09-22 18:12:22 | flow start 补 watcher 拉起接线（薄跑道观测面完整）
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：flow start 补 watcher 拉起接线（薄跑道观测面完整）
+根因：flow start 走 index.js 分发不经 runCommand，change 启动即观测在薄跑道落空（R7 测试环境准备时实测发现）
+方案：cmdFlowStart 建卡后独立 spawnWatcher（无条件+单飞锁合并+best-effort+未连平台也 spawn，与 command.js 同语义）
+结果：flow 族 10/10 零回归+lint 753 绿；demo 真 watcher 冒烟：拉起到 archived 事件落 jsonl 后干净自退零泄漏
