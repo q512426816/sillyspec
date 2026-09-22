@@ -529,7 +529,9 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     }
     const test = testLedgerReuse
       ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: 'npm test (ledger-reuse)', exitCode: 0, durationMs: 0, outputTail: null }
-      : runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName })
+      // restrictFiles = 本会话声明文件（坑 quick-gate-并行全流程变更脏文件误伤）：模块选择
+      // 与 deps(auto) 只取「实际变更 ∩ 本会话声明」，并行全流程变更 WIP 不再挡死本会话
+      : runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, restrictFiles: files })
     if (!testLedgerReuse && changeName && test.status === 'passed') {
       try {
         const { recordTestLedger } = await import('./test-ledger.js')
@@ -574,6 +576,19 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         console.warn(`\n⚠️ quick lint 实测失败，但归属鉴定为 HEAD 存量债（失败提及文件与本会话文件集零交集）——不拦完成`)
         console.warn(`   存量债文件：${(lint.failureFiles || []).join('、') || '（见上方输出）'}`)
         console.warn('   处置建议：单独 quick 机械清偿解锁全仓 lint 门（顺手清债）；确与本会话无关可忽略本行。')
+      } else if (snapshot) {
+        // 主仓对照复核（坑 quick-done-长静默与快照行尾假阳性 坑2，2026-09-21 实证：快照
+        // Would reformat 本会话文件、主仓同命令 1294 文件全绿——快照 checkout 行尾转换
+        // 与 ruff 字节级比对不一致的环境假阳性）。失败文件与本会话有交集时主仓复跑同命令：
+        // 主仓绿 = 环境假阳性 advisory 放行（本会话文件在真实工作区是格式合规的）；主仓
+        // 也红 = 真实格式债维持硬拦（主仓可能有并行噪声，失败输出带归属鉴定提示）。
+        const mainLint = runVerifyLintCheck({ cwd, specBase })
+        if (mainLint.status === 'passed') {
+          console.warn(`\n⚠️ 快照 lint 失败但主仓同命令全绿——判定为快照环境假阳性（行尾转换类），不拦完成`)
+          console.warn(`   快照失败面：${(lint.failureFiles || []).join('、') || '（见上方输出）'}；主仓口径已实证格式合规。`)
+        } else {
+          failed.push('lint')
+        }
       } else {
         failed.push('lint')
       }

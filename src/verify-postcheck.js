@@ -1494,7 +1494,11 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
  *   resultPath: string|null,
  * }}
  */
-export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null }) {
+export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null }) {
+  // restrictFiles（坑 quick-gate-并行全流程变更脏文件误伤，2026-09-21 实证）：本会话声明
+  // 文件集（quick gate 传 allowedFiles）——提供时 module 子集的变更文件面收窄到
+  // 「实际变更 ∩ restrictFiles」，窗口内未声明的并行全流程变更 WIP 文件不再进模块选择
+  // 与 deps(auto)（保留在 git diff 审计记录里，不进快照实测面）。null = 旧行为零变化。
   // 信任边界声明（体检 SEC-02 核实）：本函数三处 execSync(command) 的命令只来源于
   // ① 主仓 specBase（resolveSpecDir → 主仓 .sillyspec/local.yaml）② 跨仓仓根
   // <repo>/.sillyspec/local.yaml——均为仓库自有配置（与 `npm test` 同信任级：跑测试
@@ -1551,7 +1555,20 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       modulesPresent = true
       // includeWorkingTree（坑 module-subset-zero-hit-uncommitted）：子代理不 commit 的改动
       // 也参与 module 命中判定，0 命中跳过不再误伤 worktree 未提交的真实变更
-      const changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+      let changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+      // restrictFiles 收窄（坑 quick-gate-并行全流程变更脏文件误伤）：并行全流程变更的
+      // WIP 文件（未写 quick --files、其 design 清单在快照 HEAD 副本里不可见 → foreign
+      // 豁免失效）曾把 scan_docs 模块拉进 quick 会话的模块选择，被并行 WIP 的红挡死。
+      // 有 restrictFiles 时只留本会话声明文件——未声明脏文件留在 git diff 审计面不进实测面。
+      if (Array.isArray(changedFiles) && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+        const restrictSet = new Set(restrictFiles.map(f => String(f).replace(/\\/g, '/').replace(/^\.\//, '')))
+        const before = changedFiles.length
+        changedFiles = changedFiles.filter(f => restrictSet.has(String(f).replace(/\\/g, '/').replace(/^\.\//, '')))
+        const dropped = before - changedFiles.length
+        if (dropped > 0) {
+          console.log(`ℹ️ 模块选择已收窄到本会话声明的 ${changedFiles.length}/${before} 个变更文件（${dropped} 个未声明脏文件不进实测面——并行变更 WIP 留在审计记录）`)
+        }
+      }
       lastChangedFiles = Array.isArray(changedFiles) ? changedFiles : []
       if (changedFiles === null) {
         hitCount = -1 // git 不可用 / 非仓库
