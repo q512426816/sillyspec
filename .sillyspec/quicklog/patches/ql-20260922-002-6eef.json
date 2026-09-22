@@ -1,0 +1,63 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-4ffae299",
+  "totals": {
+    "files": 3,
+    "additions": 152,
+    "deletions": 3
+  },
+  "rows": [
+    {
+      "path": "src/run/gate-snapshot.js test/gate-snapshot-e2e.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "declared": true,
+      "additions": 63,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/gate-snapshot-e2e.test.mjs",
+      "declared": true,
+      "additions": 89,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260922-002-6eef",
+  "sessionId": "quick-4ffae299",
+  "savedAt": "2026-09-22T01:25:15.025Z",
+  "patchSha256": "9a075b7865cc28c9cb4a82aaa2bc3099aa74a0f32ac4daeb987858616a8e2108",
+  "patchStatus": "ok"
+}

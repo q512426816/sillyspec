@@ -489,3 +489,14 @@
 根因：RERUN=1 原先无条件旁路全部去重；旧失败签名不含环境，环境真变与未变不可区分只能无差别放行——R5-L 两次同签名强制重扫各烧~8M+10m/6.8m 纯等待
 方案：computeRerunSignature=dedupKey×测试面×环境探针（computeEnvProfile 剔除 RERUN 自身防闸门恒失配；探针复用 test-ledger 同源实现）；storeQualityScan additive 落 rerunSignature；RERUN=1 同签名 throw 拒跑+既有出路四选一（④补 force）；签名变化自动放行；RERUN=force 无条件旁路；RERUN 未设的既有 dedup/fail-closed 判定逐字不动
 结果：五态回归全绿（同签名拒 exit1/代码变放行/环境变双向/force/既有去重函数级零回归）；verify-quality-scan 9/9+artifact-triage 13/13（E2E 第三段更新新契约）；全量 580/581+lint 739 过（唯一失败 doc-ref-check=并行会话 command.js 在途行号漂移，与本改动零交集留痕）
+
+## ql-20260922-002-6eef | 2026-09-22 09:24:37 | 快照通用 env 钉定缓存链接面：注册表驱动 junction 仓内构建缓存进快照（P17 假红根治，通用机制）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/gate-snapshot.js（PINNED_CACHE_ENV_VARS 注册表+resolvePinnedCacheLinks 纯解析+createGateSnapshot 构建缓存链接段（fail-soft，additive 返回 pinnedCacheLinks））
+- test/gate-snapshot-e2e.test.mjs（E2E 仓内钉定（P17 探针：env 解析缓存读构建后端标记）+仓外家形态零行为边界+注册表通用性单测）
+需求：快照通用 env 钉定缓存链接面：注册表驱动 junction 仓内构建缓存进快照（P17 假红根治，通用机制）
+根因：隔离快照=HEAD worktree，gitignored 仓内缓存（工具经 env var 钉定的 UV_CACHE_DIR 类）不进 HEAD——快照缺构建隔离环境，快照内构建拿不到已装构建后端（P17 hatchling EPERM 两轮假红卡 37min）
+方案：PINNED_CACHE_ENV_VARS 注册表（uv/pip/poetry 首批，扩新工具加一行）+resolvePinnedCacheLinks 纯解析（仓内相对/绝对命中、仓外直达排除、pnpm-store 族不入表防 junction 跨根失效）+createGateSnapshot 预检后 junction 同相对路径 fail-soft 链接（返回值 additive pinnedCacheLinks）；家目录缺省形态经继承 env 直达刻意不链接（junction 同文件零增益，用户裁定通用化不做单一工具硬编码）
+结果：gate-snapshot-e2e 7/7（4 存量零回归+仓内钉定构建依赖可用/仓外边界/注册表非 uv 项通用性）；快照族 6 文件 32 断言全绿；lint 739 过；全量在并行改动恢复工作区后跑（gate-snapshot.js 暂为 HEAD+本改动，并行会话在途已备份待三方恢复）

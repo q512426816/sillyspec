@@ -16,7 +16,7 @@
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
-import { join, dirname, relative, resolve } from 'node:path'
+import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 
 function git(cwd, args) {
@@ -474,6 +474,27 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
       return null
     }
 
+    // env 钉定缓存链接面（r5l 方案 5 / P17，通用机制见 resolvePinnedCacheLinks jsdoc）：
+    // 工具把缓存钉在仓内（UV_CACHE_DIR=.uv-cache 类）时 gitignored 不进 HEAD，快照缺它 →
+    // 构建隔离环境（含已装构建后端）缺失 → 快照内构建假红。junction 同相对路径进快照，
+    // 与环境目录族同款链接原语。整段 fail-soft：链接失败只 warn 不作废快照（缓存面缺失的
+    // 影响是工具自身的构建失败，失败输出自带归因提示）；未钉定/钉在仓外 → 全段零行为零输出。
+    const pinnedCacheLinks = []
+    for (const link of resolvePinnedCacheLinks({ cwd })) {
+      if (!existsSync(link.srcAbs)) continue
+      const dst = join(snapshotRoot, link.rel)
+      try {
+        mkdirSync(dirname(dst), { recursive: true })
+        symlinkSync(link.srcAbs, dst, 'junction')
+        pinnedCacheLinks.push({ envName: link.envName, tool: link.tool, rel: link.rel })
+      } catch (e) {
+        console.warn(`⚠️ 门禁快照构建缓存链接失败（${link.envName}=${link.rel}）：${e && e.message ? e.message : e}——快照内该工具构建可能缺缓存假红，失败先对照主仓口径`)
+      }
+    }
+    if (pinnedCacheLinks.length > 0) {
+      console.log(`🔬 门禁快照构建缓存面：${pinnedCacheLinks.map((x) => `${x.envName}=${x.rel}`).join('、')} 已 junction 进快照（P17：gitignored 仓内缓存携带构建隔离环境——缺它快照内构建假红；⚠️ 活链接，快照内构建写穿回主仓缓存）`)
+    }
+
     // gate_snapshot.commands 命令面（D-002@v2，2026-09-17-feedback-hardening R1，用户
     // 2026-09-17 负面①实证「全量快照必挂」）：主仓侧生成物缺失（fresh clone 未跑
     // postinstall）或过期时，copy 面只搬「主仓现有态」供给缺失/陈旧态——本段在环境链接
@@ -534,7 +555,7 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
         try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch { /* 残留交 OS tmp 清理 */ }
       }
     }
-    return { snapshotRoot, cleanup, overlaid }
+    return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks }
   } catch (e) {
     // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓
     if (snapshotRoot) {
@@ -567,8 +588,47 @@ export function detectSymlinkStoreLayout(cwd) {
 const ENV_DIR_NAMES = new Set(['node_modules', '.venv', 'venv', 'env'])
 
 /**
+ * 「env 钉定缓存目录」注册表（r5l-forensic-verdict 方案 5 / P17，用户裁定走通用机制不做
+ * 单一工具硬编码）：构建/包管理工具用 env var 把缓存钉在**仓内**（相对 cwd 或仓内绝对路径）
+ * 时，该目录 gitignored 不进 HEAD——隔离快照（HEAD worktree）天然缺它，快照内构建隔离
+ * （uv builds-v0 / pip build 隔离环境）拿不到已装好的构建后端（P17：hatchling EPERM 假红
+ * 两轮卡 37min）。机制对任意工具通用：解析「注册的 env var → 仓内路径 → junction 进快照
+ * 同相对路径」，工具只是注册表一行数据——扩新工具（cargo/poetry/自定义）加一行即可，
+ * 不新增代码分支。家目录缺省形态（~/.cache/uv、%LOCALAPPDATA%/uv 等）**刻意不链接**：
+ * 快照内命令继承完整进程 env，家目录绝对路径直达真实缓存，junction 同一批文件零机制增益。
+ * pnpm-store 族不入表：符号链接 store 经 junction 跨根失效（detectSymlinkStoreLayout 先例）。
+ */
+const PINNED_CACHE_ENV_VARS = [
+  { env: 'UV_CACHE_DIR', tool: 'uv' },
+  { env: 'PIP_CACHE_DIR', tool: 'pip' },
+  { env: 'POETRY_CACHE_DIR', tool: 'poetry' },
+]
+
+/**
+ * 解析 env 钉定的仓内缓存目录（纯解析，不做链接/IO 判存在——可测性）。
+ * 规则：注册表逐项取 env 值；相对路径按 cwd 解析（与 uv/pip 相对 cwd 语义一致）；解析后
+ * 落在仓内（relative 不出仓）才算钉定缓存；仓外路径（家目录/自定义绝对位置）经继承 env
+ * 直达，不属于本面。同 var 多次出现取首个命中。
+ * @returns {{ envName: string, tool: string, srcAbs: string, rel: string }[]} 仓内钉定缓存清单
+ */
+export function resolvePinnedCacheLinks({ cwd, env = process.env } = {}) {
+  const out = []
+  for (const entry of PINNED_CACHE_ENV_VARS) {
+    const v = env[entry.env]
+    if (!v || !String(v).trim()) continue
+    const abs = isAbsolute(String(v).trim()) ? String(v).trim() : resolve(cwd, String(v).trim())
+    let rel = null
+    try { rel = relative(cwd, abs) } catch { continue }
+    if (!rel || rel.startsWith('..') || isAbsolute(rel)) continue // 仓外直达，无需链接
+    if (out.some((x) => x.rel === rel.split('\\').join('/'))) continue
+    out.push({ envName: entry.env, tool: entry.tool, srcAbs: abs, rel: rel.split('\\').join('/') })
+  }
+  return out
+}
+
+/**
  * 递归依赖发现（坑 gate-snapshot-monorepo-layout）：深度 ≤3 扫描（跳过环境目录自身内部/
- * .git/dist/build/.sillyspec），返回所有环境目录的仓库根相对 POSIX 路径（含根级四目录）。
+ * .git/dist/build/.sillyspec），返回所有环境目录的仓库根相对 POSIX 路径（含根四目录）。
  * pnpm/nx/lerna workspace 的 packages/<pkg>/node_modules 覆盖。
  */
 export function discoverEnvDirs(cwd, { maxDepth = 3 } = {}) {

@@ -120,3 +120,92 @@ test('E2E ③ 负控：同分叉场景期望主仓标记 → 探测必 FAIL（�
     assert.match(r.msg + r.logs.join('\n'), /LINEAGE-MISMATCH|测试失败|failed/, '失败信息应来自探针Mismatch')
   } finally { clean(f.root) }
 })
+
+// ── env 钉定缓存链接面（r5l 方案 5 / P17，通用机制）：快照内构建依赖可用 ──
+
+test('E2E ④ 构建缓存：UV_CACHE_DIR 钉在仓内（gitignored）→ 快照内构建依赖可用（P17）', async () => {
+  const f = makeFixture('uvcache')
+  try {
+    // 仓内钉定缓存：未跟踪目录（gitignored 语义——不进 HEAD），内放「构建后端已就位」标记
+    // （P17 实形：构建隔离环境含 hatchling）。探针模拟工具行为：按 env var 相对 cwd 解析
+    // 缓存并读取构建依赖标记——快照缺该目录即 ENOENT 假红（修复前的实态）。
+    const cacheDir = join(f.repo, '.build-cache')
+    mkdirSync(cacheDir, { recursive: true })
+    writeFileSync(join(cacheDir, 'build-backend-marker.txt'), 'hatchling-ready\n', 'utf8')
+    writeFileSync(join(f.wt, 'cacheprobe.js'), [
+      "const fs = require('node:fs')",
+      "const path = require('node:path')",
+      "const marker = path.resolve(process.cwd(), process.env.UV_CACHE_DIR, 'build-backend-marker.txt')",
+      "try { fs.readFileSync(marker, 'utf8') }",
+      "catch (e) { console.error('BUILD-DEP-MISSING ' + marker); process.exit(1) }",
+      "console.log('BUILD-DEP-OK')",
+    ].join('\n'), 'utf8')
+    writeFileSync(join(f.specBase, 'local.yaml'), 'commands:\n  test: node cacheprobe.js\n  lint: unavailable\n', 'utf8')
+    // 快照定向源=变更 worktree（meta 感知）——probe 须提交进 worktree 分支才进快照
+    //（.build-cache 保持未跟踪：被测对象正是「HEAD 缺 gitignored 缓存、链接面补齐」）
+    git(f.wt, 'add', 'cacheprobe.js')
+    git(f.wt, 'commit', '--quiet', '-m', 'add cache probe')
+    const prevUv = process.env.UV_CACHE_DIR
+    process.env.UV_CACHE_DIR = '.build-cache'
+    const buf = []
+    const ol = console.log, oe = console.error
+    console.log = (...a) => buf.push(a.map(String).join(' '))
+    console.error = (...a) => buf.push(a.map(String).join(' '))
+    try {
+      await executeVerifyQualityScan({ cwd: f.repo, specBase: f.specBase, changeName: CHANGE, platformOpts: {} })
+    } finally {
+      console.log = ol; console.error = oe
+      if (prevUv === undefined) delete process.env.UV_CACHE_DIR; else process.env.UV_CACHE_DIR = prevUv
+    }
+    assert.ok(buf.some((l) => /构建缓存面.*UV_CACHE_DIR=\.build-cache/.test(l)), `应打印构建缓存面链接行。日志尾部：\n${buf.slice(-8).join('\n')}`)
+  } finally { clean(f.root) }
+})
+
+test('E2E ④ 钉在仓外（家目录形态）→ 不链接零行为（继承 env 绝对路径直达，机制边界）', async () => {
+  const f = makeFixture('uvhome')
+  try {
+    writeFileSync(join(f.wt, 'cacheprobe.js'), [
+      "const fs = require('node:fs')",
+      "const p = process.env.UV_CACHE_DIR + '/build-backend-marker.txt'",
+      "try { fs.readFileSync(p, 'utf8') }",
+      "catch (e) { console.error('BUILD-DEP-MISSING ' + p); process.exit(1) }",
+      "console.log('BUILD-DEP-OK')",
+    ].join('\n'), 'utf8')
+    writeFileSync(join(f.specBase, 'local.yaml'), 'commands:\n  test: node cacheprobe.js\n  lint: unavailable\n', 'utf8')
+    git(f.wt, 'add', 'cacheprobe.js')
+    git(f.wt, 'commit', '--quiet', '-m', 'add cache probe')
+    // 家目录形态：绝对路径指向仓外 tmp——快照不链接，但探针经继承 env 直达同样可用
+    const homeCache = join(f.root, 'home-uv-cache')
+    mkdirSync(homeCache, { recursive: true })
+    writeFileSync(join(homeCache, 'build-backend-marker.txt'), 'hatchling-ready\n', 'utf8')
+    const prevUv = process.env.UV_CACHE_DIR
+    process.env.UV_CACHE_DIR = homeCache
+    const buf = []
+    const ol = console.log, oe = console.error
+    console.log = (...a) => buf.push(a.map(String).join(' '))
+    console.error = (...a) => buf.push(a.map(String).join(' '))
+    try {
+      await executeVerifyQualityScan({ cwd: f.repo, specBase: f.specBase, changeName: CHANGE, platformOpts: {} })
+    } finally {
+      console.log = ol; console.error = oe
+      if (prevUv === undefined) delete process.env.UV_CACHE_DIR; else process.env.UV_CACHE_DIR = prevUv
+    }
+    assert.ok(!buf.some((l) => /构建缓存面/.test(l)), '仓外钉定不应触发链接面（机制边界：继承 env 直达）')
+  } finally { clean(f.root) }
+})
+
+test('resolvePinnedCacheLinks 单测：注册表逐项通用解析（非 uv 项同样命中）；相对/绝对/仓外/空值边界', async () => {
+  const { resolvePinnedCacheLinks } = await import('../src/run/gate-snapshot.js')
+  const f = makeFixture('resolve')
+  try {
+    const links = resolvePinnedCacheLinks({ cwd: f.repo, env: {
+      UV_CACHE_DIR: '.uv-cache',
+      PIP_CACHE_DIR: 'tools/pip/cache',        // 非 uv 注册项同样命中（机制通用性）
+      POETRY_CACHE_DIR: join(f.root, 'elsewhere'), // 仓外绝对路径 → 直达不链接
+    } })
+    assert.deepEqual(links.map((x) => x.rel).sort(), ['.uv-cache', 'tools/pip/cache'], '两个仓内钉定命中，仓外排除')
+    assert.equal(links.filter((x) => x.envName === 'PIP_CACHE_DIR')[0].tool, 'pip', '注册表元数据随行')
+    assert.deepEqual(resolvePinnedCacheLinks({ cwd: f.repo, env: {} }), [], '未钉定零行为')
+    assert.deepEqual(resolvePinnedCacheLinks({ cwd: f.repo, env: { UV_CACHE_DIR: '   ' } }), [], '空白值不算钉定')
+  } finally { clean(f.root) }
+})
