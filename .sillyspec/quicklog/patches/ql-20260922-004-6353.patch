@@ -1,0 +1,596 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index e3f8412d..d00f6c99 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -77,6 +77,7 @@ modules:
+       - src/stage-review-checklist.js
+       - src/task-review.js
+       - src/task-done.js
++      - src/verify-draft.js
+       - src/verify-postcheck.js
+       - src/review-tier.js
+       - src/review-material-pack.js
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index f8b40b42..40454934 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,16 +130,16 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:279/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1557/1785/1848/1859/2049 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:1970/1984/2064 |
+-| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:875（`recordAgentLogInvocation`） |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:279/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1599/1785/1848/1859/2049 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:2012/1984/2064 |
++| **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:917（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:2536；shared.js:989 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2536/2705；shared.js:1013 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3767；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3719；sync.js:2129 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3988；shared.js:989 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2678/2954；shared.js:1013 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3909；sync.js:1431/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3861；sync.js:2129 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3532/3402；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3674/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3629`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3771`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/index.js b/src/index.js
+index cb2f2504..ff4db7f8 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -1214,8 +1214,14 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+       const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] && !String(args[vpChangeIdx + 1]).startsWith("--") ? args[vpChangeIdx + 1] : null;
+       const vpInit = args.includes('--init');
+       const vpForce = args.includes('--force');
++      const vpDraft = args.includes('--draft');
++      const vpAmendDraft = args.includes('--amend-draft');
++      if (vpDraft && !vpInit) {
++        console.error('❌ --draft 需与 --init 同用（draft 是骨架生成的机器起草模式）——sillyspec verify-probes --change <名> --init --draft');
++        process.exit(2);
++      }
+       if (!vpChange) {
+-        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）');
++        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
+         process.exit(2);
+       }
+       assertSafeChangeName(vpChange, '--change 变更名');
+@@ -1242,6 +1248,24 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+         } catch { return null }
+       }
+       const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir: vpSpecBase });
++      // ── --amend-draft（r5l 方案3/护栏#2：机器段修改的唯一留痕通道）── 对 md 中现存
++      // MACHINE-DRAFT 标记段按当前内容重锚哈希 + sidecar amendment 审计，不跑探针不写骨架。
++      if (vpAmendDraft) {
++        const { resolveRuntimeRoot } = await import('./run/shared.js');
++        const { amendDraftMarkers } = await import('./verify-draft.js');
++        const vpAmRoot = resolveRuntimeRoot({}, vpSpecBase);
++        const vpAmKeys = amendDraftMarkers({
++          mdPath: join(vpSpecBase, 'changes', vpChange, 'verify-result.md'),
++          changeName: vpChange, runtimeRoot: vpAmRoot,
++        });
++        if (vpAmKeys.length > 0) {
++          try { await mirrorInitArtifact(join(vpSpecBase, 'changes', vpChange, 'verify-result.md'), 'verify-result.md', readFileSync(join(vpSpecBase, 'changes', vpChange, 'verify-result.md'), 'utf8')) } catch { /* 镜像失败不阻断 */ }
++          console.log(`✏️  amend-draft 已重锚 ${vpAmKeys.length} 个机器段：${vpAmKeys.join('、')}（sidecar 记 amendment 审计——verify --done 篡改门禁按新指纹放行）`);
++        } else {
++          console.log('ℹ️  无 MACHINE-DRAFT 标记段可重锚（报告未用 --draft 生成，或标记已全部删除——后者会被 --done 拒收，先恢复标记或重跑 --init --force --draft）');
++        }
++        break;
++      }
+       if (json) {
+         console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
+         break;
+@@ -1280,6 +1304,68 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾
+           await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
+           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）${vpPlatformNote}`);
+         }
++        // ── --draft 填槽模式（r5l 方案3/护栏#2，v2 件二）── 四节机器预填完整句子 + 指纹防篡改。
++        // 位置刻意在 backfill/ensure/inject 三 enricher 之前：决策追踪矩阵由本段先落（含标记），
++        // injectDecisionChainDraft 随后见表格自然 no-op（幂等两不误）。材料与 verify 门对账同源：
++        // 测试结果优先级 P2 账本 > 质量扫描记录（gates.js 同序）；风险判级 evaluateConclusionDraft
++        // 同款口径（detectChangeRisk 词表已退役 D-008）。幂等：段内非 TODO 占位（已手写/已
++        // draft 化）零改动；平台模式 sidecar 随 vpSpecBase 锚定（门禁侧 not-applicable 即降级放行，
++        // 不产生假红）。
++        if (vpDraft && existsSync(vpReportPath)) {
++          try {
++            const { resolveRuntimeRoot } = await import('./run/shared.js');
++            const { summarizeTaskCompletion } = await import('./task-review.js');
++            const { buildDecisionChainMatrix } = await import('./verify-probes.js');
++            const { parseFileChangeListDetailed } = await import('./change-list.js');
++            const { loadBlastDeclarationsAllProjects } = await import('./blast-surface.js');
++            const { resolveChangeRisk, extractExplicitRiskLevel } = await import('./change-risk-profile.js');
++            const { consultTestLedger } = await import('./run/test-ledger.js');
++            const { loadReusableQualityScan } = await import('./run/verify-quality-scan.js');
++            const { buildDraftSections, applyDraftMode } = await import('./verify-draft.js');
++            const vpChangeDir = join(vpSpecBase, 'changes', vpChange);
++            const vpRuntimeRoot = resolveRuntimeRoot({}, vpSpecBase);
++            // ① 任务完成度（summarizeTaskCompletion 同源：review verdict 真源 + 降级说明句）
++            const vpSummarize = summarizeTaskCompletion({ changeDir: vpChangeDir, runtimeRoot: vpRuntimeRoot, changeName: vpChange });
++            // ② 风险等级（evaluateConclusionDraft 同款输入面；无清单 → null 走降级句）
++            let vpRisk = null;
++            try {
++              const vpDesignPath = join(vpChangeDir, 'design.md');
++              const vpDesignContent = existsSync(vpDesignPath) ? readFileSync(vpDesignPath, 'utf8') : '';
++              const vpDeclared = parseFileChangeListDetailed(vpDesignPath, { keepSillyspecDocs: true }).map((e) => e.path);
++              if (vpDeclared.length > 0) {
++                vpRisk = resolveChangeRisk({
++                  files: vpDeclared,
++                  blastDeclarations: loadBlastDeclarationsAllProjects({ specBase: vpSpecBase }),
++                  explicitRiskLevel: vpDesignContent ? extractExplicitRiskLevel(vpDesignContent) : null,
++                });
++              }
++            } catch { /* 风险材料不可得 → 降级句（完整句子，不空段） */ }
++            // ③ 测试结果（与 verify 门对账同源优先级：P2 账本 > 扫描记录 > 无记录提示句）
++            let vpTest = null;
++            try {
++              const vpConsult = consultTestLedger({ runtimeRoot: vpRuntimeRoot, changeName: vpChange, projectRoot: dir, testRoot: join(dir, 'test'), command: 'npm test', cwd: dir });
++              if (vpConsult.reuse) vpTest = { source: 'ledger', command: 'npm test', status: 'passed', ranAt: vpConsult.result.ranAt, durationMs: vpConsult.result.durationMs, total: vpConsult.result.total ?? null };
++            } catch { /* 账本咨询异常 → 下一源 */ }
++            if (!vpTest) {
++              try {
++                const vpScan = loadReusableQualityScan({ specBase: vpSpecBase, cwd: dir, changeName: vpChange });
++                if (vpScan && vpScan.testResult) vpTest = { source: 'scan', command: vpScan.testResult.command, status: vpScan.testResult.status, ranAt: vpScan.ranAt, durationMs: vpScan.testResult.durationMs, total: vpScan.testResult.total ?? null };
++              } catch { /* 扫描记录不可得 → 提示句 */ }
++            }
++            // ④ 决策追踪（buildDecisionChainMatrix 机械半边——Evidence/状态两列留人工）
++            const vpChain = buildDecisionChainMatrix(vpChangeDir);
++            const vpDraftRes = applyDraftMode({
++              mdPath: vpReportPath, changeName: vpChange, runtimeRoot: vpRuntimeRoot,
++              sections: buildDraftSections({ summarize: vpSummarize, risk: vpRisk, testResult: vpTest, decisionChain: vpChain }),
++            });
++            if (vpDraftRes) {
++              try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
++              console.log(`\n📝 填槽模式已应用：${vpDraftRes.applied.length} 节机器预填（${vpDraftRes.applied.join('、')}，MACHINE-DRAFT 指纹防篡改——整段改写会被 verify --done 拒收）；你只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）${vpPlatformNote}`);
++            }
++          } catch (e) {
++            console.warn(`⚠️ --draft 机器起草降级（fail-soft，骨架保持原态）: ${e && e.message ? e.message : e}`);
++          }
++        }
+         const vpFacts = writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange, {
+           platformNote: formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-facts.json'),
+         }); // P3b：facts 底稿随 --init 刷新（骨架已存在也刷新；v2 起分段合并保留固化段）
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 6e19abc1..503b9977 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1233,6 +1233,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+       writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
+       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+     }
++    // ── verify 填槽制篡改门禁（r5l 方案3 / 评审护栏#2 承重件，v2 件二）──
++    // verify-probes --init --draft 生成的机器预填段（任务完成度/风险等级/测试结果/决策追踪）带
++    // sha256 指纹标记 + .runtime sidecar 台账；--done 对账：标记被删 / 内容哈希失配 → 阻断回滚
++    // （heredoc 整份重写的典型形态——Write 可用与否均免疫，机制修法不做生成侧劝说）。修改机器
++    // 段唯一通道 verify-probes --amend-draft（重锚 + amendment 审计）。无 sidecar（未用 draft /
++    // 存量变更）→ not-applicable 零红；门禁自身异常 fail-soft（对齐探针抽查 degraded 语义）。
++    try {
++      const { checkDraftIntegrity } = await import('../verify-draft.js')
++      const draftCheck = checkDraftIntegrity({
++        mdPath: join(specBase, 'changes', changeName, 'verify-result.md'),
++        changeName, runtimeRoot: reconcileRuntimeRoot,
++      })
++      if (draftCheck.applicable && !draftCheck.ok) {
++        console.error(`\n❌ verify-result.md 机器预填段篡改门禁：${draftCheck.violations.length} 处失配——draft 预填段被整份重写或标记被删/被手工重锚。`)
++        for (const v of draftCheck.violations) console.error(`   - ${v}`)
++        console.error('   修复：还原机器段原文（AGENT 槽——结论枚举/移交项/审查叙述——不受本门限制）；确要修改机器段，跑 sillyspec verify-probes --change ' + changeName + ' --amend-draft 留痕重锚后重新 --done。')
++        writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'draft 篡改门禁阻断' })
++        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++      }
++    } catch { /* 门禁异常 fail-soft（不是篡改，对齐探针 degraded 放行） */ }
+     // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
+     //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
+     //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入 verify
+diff --git a/src/verify-draft.js b/src/verify-draft.js
+new file mode 100644
+--- /dev/null
++++ b/src/verify-draft.js
+@@ -0,0 +1,264 @@
++/**
++ * verify-draft.js — verify 填槽制（r5l-forensic-verdict 方案 3 / 评审护栏#2，v2 件二）。
++ *
++ * 背景（R5-L 桶②）：verify-result.md 被读写 14 次、每次 python-heredoc 整份回填一次全量重发
++ * （两次各挂起 7 分钟）；模板 29KB 里 CLI 已能机械预填大部分。--draft 模式把四节 CLI 可算部分
++ * 预填成完整句子（任务完成度 summarizeTaskCompletion / 风险等级 resolveChangeRisk（detectChangeRisk
++ * 散文词表已退役 D-008）/ 测试结果 P2 test-ledger→质量扫描记录（与 verify 门对账同源同优先级）/
++ * 决策追踪 buildDecisionChainMatrix），agent 只填三处显式 <!--AGENT:--> 槽——工作流收敛为
++ * draft→填槽→复核，verify-result 读写 ≤3 次。
++ *
++ * 承重件 = --done 篡改门禁（护栏#2：守卫必须是验收侧的机制，永远不是生成侧的劝说）：
++ *   - 机器预填段以 MACHINE-DRAFT begin/end 注释对包裹，begin 标记内嵌该段内容的 sha256；
++ *   - sidecar（.runtime/verify-draft-<change>.json）记录各段哈希与生成时点；
++ *   - verify --done 对账（checkDraftIntegrity）：标记被删 / 内容哈希失配 → 阻断回滚——
++ *     heredoc 整份重写会同时破坏两者，无论 Write 可用与否均免疫（机制修法，不依赖劝说）；
++ *   - 确要改机器段：`verify-probes --change <名> --amend-draft` 重锚哈希并留痕
++ *     （sidecar amendments 审计：时点 + 改动段清单）。
++ *
++ * 信任边界：sidecar 与骨架同在 agent 可写空间，伪造需主动协同造假——与 verify-facts.json /
++ * 质量扫描记录同级威胁模型（本门拦的是 heredoc 习惯性整份重写与意外覆盖，不是对抗性攻击）。
++ * 纯 --init（无 --draft）路径零变化；无 sidecar → 门禁 not-applicable（存量变更零红）。
++ */
++import { createHash } from 'node:crypto'
++import { existsSync, readFileSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { writeAtomicSync } from './fs-atomic.js'
++
++const sha256 = (s) => createHash('sha256').update(String(s).replace(/\r\n/g, '\n')).digest('hex')
++
++const MARK_BEGIN = /^<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin.*-->\s*$/
++const MARK_END = /^<!--\s*MACHINE-DRAFT:([\w.-]+):end.*-->\s*$/
++const AMEND_CMD = 'sillyspec verify-probes --change <变更名> --amend-draft'
++
++/** sidecar 路径（.runtime 下，与质量扫描记录/探针回执同族） */
++export function verifyDraftSidecarPath(runtimeRoot, changeName) {
++  return join(runtimeRoot, `verify-draft-${changeName}.json`)
++}
++
++/**
++ * 构建机器段：四节 CLI 可算部分的完整句子（纯函数——材料由调用方备齐，可测）。
++ * 各段 key 稳定（指纹与 sidecar 对账键）；材料缺不到时给「降级说明句」而非空段——
++ * 机器段的降级也要是完整句子（读报告的人不需要反查工具行为）。
++ */
++export function buildDraftSections({ summarize, risk, testResult, decisionChain }) {
++  const sections = []
++  // ── 任务完成度（summarizeTaskCompletion 同源）──
++  sections.push({
++    key: 'task-completion',
++    body: [
++      summarize.report,
++      `- 总任务：${summarize.total}；已完成（review verdict 口径）：${summarize.completed}`,
++      summarize.pending && summarize.pending.length > 0
++        ? `- 未完成：${summarize.pending.map((p) => `${p.id}（${p.reason || '未勾'}）`).join('、')}`
++        : '- 未完成：无',
++    ].filter(Boolean).join('\n'),
++  })
++  // ── 变更风险等级（resolveChangeRisk 同源，evaluateConclusionDraft 先例口径）──
++  sections.push({
++    key: 'risk-level',
++    body: risk
++      ? [
++          `- 机器判级：tier=${risk.tier}${risk.explicit ? `（design.md 显式声明 = ${risk.level}——显式声明已入判定）` : '（design.md 无显式 risk_level 声明）'}`,
++          risk.evidenceRequired
++            ? `- ⚠️ 命中 evidence:true 声明危险面（${(risk.hitPrefixes || []).join('、')}）——integration/deployment-critical 档：需集成证据链（回执槽 + Runtime Evidence），下方「集成验证回执」为例外人工槽`
++            : '- 未命中 evidence:true 声明危险面——无集成证据链硬要求（「集成验证回执」节机器判「无」）',
++          '- 判级输入：design 文件清单 × blast 声明（同 verify 门 evaluateConclusionDraft 口径；判定被新事实推翻时在「审查叙述」槽说明）',
++        ].join('\n')
++      : '- 机器判级降级：无法解析 design 文件清单/blast 声明（无 design.md 或清单为空）——按审查叙述确认实际等级（局部修补通常 doc-only / unit-sufficient）',
++  })
++  // ── 测试结果（P2 账本 → 质量扫描记录，与 verify 门对账同源同优先级）──
++  sections.push({
++    key: 'test-result',
++    body: testResult
++      ? [
++          `- ${testResult.source === 'ledger' ? '♻️ P2 三键账本复用（代码×测试面×环境全等）' : '♻️ noAI 质量扫描实测记录复用（代码指纹匹配）'}：\`${testResult.command}\` — ${testResult.status === 'passed' ? '通过' : testResult.status}`,
++          `- 实测于 ${testResult.ranAt}${testResult.durationMs != null ? `，耗时 ${Math.round(testResult.durationMs / 1000)}s` : ''}${testResult.total != null ? `，${testResult.total} 断言` : ''}`,
++          '- verify `--done` 门与本文对账同源（P2 账本 > 扫描记录 > 亲跑）——正文与门结论冲突时以门为准并在此说明差异',
++        ].join('\n')
++      : '- 本 draft 生成时点无 P2 账本/质量扫描记录（verify 步「运行测试和质量扫描」尚未跑）——该步实测后门对账自动落账，此处以门结论为准（无需手改本段）',
++  })
++  // ── 决策追踪（buildDecisionChainMatrix 机械半边）──
++  sections.push({
++    key: 'decision-chain',
++    body: decisionChain && decisionChain.rows && decisionChain.rows.length > 0
++      ? [
++          `- 决策链机械半边：${decisionChain.decisionCount} 条决策 × ${decisionChain.taskCount} 张 task 卡（D→FR→Task 自 decisions.md × tasks/*.md frontmatter 构建）`,
++          '| 决策 ID | FR | Task | Evidence | 状态 |',
++          '|---|---|---|---|---|',
++          ...decisionChain.rows,
++          '- Evidence / 状态两列是人工判断（机器不代笔）——逐格复核，未闭环行在「审查叙述」槽标注风险',
++        ].join('\n')
++      : '- 本变更无 decisions.md（或零决策条目）——决策追踪无机器面对账，如执行期做过真实取舍在「审查叙述」槽说明',
++  })
++  return sections
++}
++
++/** 段 key → 骨架标题关键词（骨架标题行包含这些词即命中该段） */
++function sectionKeyword(key) {
++  switch (key) {
++    case 'task-completion': return '任务完成度'
++    case 'risk-level': return '变更风险等级'
++    case 'test-result': return '测试结果'
++    case 'decision-chain': return '决策追踪矩阵'
++    default: return key
++  }
++}
++
++/**
++ * draft 化主入口：骨架文本 → draft 文本（机器段替换 + 三 AGENT 槽标注 + 顶部模式横幅）。
++ * 纯文本变换（落盘与 sidecar 归 applyDraftMode）。
++ * @returns {{ text: string, applied: string[], slots: number }}
++ */
++export function transformSkeletonToDraft(skeletonText, sections) {
++  let text = skeletonText
++  const applied = []
++  for (const sec of sections) {
++    const kw = sectionKeyword(sec.key)
++    const headRe = new RegExp(`^(## [^\\n]*${kw}[^\\n]*\\n)([\\s\\S]*?)(?=^## |\\n*$)`, 'm')
++    const m = text.match(headRe)
++    if (!m) continue
++    const body = m[2]
++    // 幂等闸：段内已有 MACHINE-DRAFT 标记或已非 TODO 占位（手写正文）→ 不动
++    if (body.includes('MACHINE-DRAFT:')) continue
++    if (!/<!--TODO|<待填|<!-- 结论=|<!--\s*无 cannot_verify/.test(body)) continue
++    const wrapped = [
++      `<!-- MACHINE-DRAFT:${sec.key}:${sha256(sec.body)}:begin 机器预填段——整段改写会被 verify --done 拒收；确要修改：${AMEND_CMD} 留痕重锚 -->`,
++      sec.body,
++      `<!-- MACHINE-DRAFT:${sec.key}:end -->`,
++      '',
++    ].join('\n')
++    text = text.slice(0, m.index) + m[1] + wrapped + text.slice(m.index + m[0].length)
++    applied.push(sec.key)
++  }
++  // 三 AGENT 槽标注（幂等：已有标注零改动）——结论枚举槽行契约不动（gate 消费面）
++  if (!text.includes('<!--AGENT:')) {
++    text = text
++      .replace(/(结论枚举：`<待填：三选一>`)/, '<!--AGENT:槽1/3 结论枚举——替换上行占位，槽行格式勿改（gate 判定消费面） -->\n$1')
++      .replace(/(\| <待填：env-blocked \/ manual-acceptance \/ db-script \/ other> \| <待填：移交条目> \| <待填：复跑\/验收条件> \|)/, '<!--AGENT:槽2/3 移交项——按需增行；结论=PASS/FAIL 时本表写「无」 -->\n$1')
++      .replace(/(## 设计一致性 \[层：人工判断\]\n)(<!--TODO[^>]*-->)/, '$1<!--AGENT:槽3/3 审查叙述——设计偏差（无偏差显式写「一致」）+ 技术债务叙述（探针 1 统计已机器预填在「技术债务」节）；替换下方 TODO 注释为正文 -->\n$2')
++  }
++  // 顶部横幅（draft 模式可见性：读写 ≤3 次的工作流说明——机制不带劝说，只说事实）
++  if (!text.includes('<!-- VERIFY-DRAFT-MODE -->') && applied.length > 0) {
++    const banner = [
++      '<!-- VERIFY-DRAFT-MODE -->',
++      '> **填槽模式**：机器段（MACHINE-DRAFT 标记包裹，篡改会被 --done 拒收）之外，你只填三处',
++      '> AGENT 槽：①结论枚举 ②移交项 ③审查叙述。工作流 = 本 draft → 填槽 → `--done` 复核，',
++      '> verify-result 读写 ≤3 次。改机器段唯一通道：`' + AMEND_CMD + '`（留痕重锚）。',
++      '',
++    ].join('\n')
++    text = text.replace(/(^# [^\n]*\n)/, `$1\n${banner}`)
++  }
++  return { text, applied, slots: 3 }
++}
++
++/**
++ * draft 模式落盘 + sidecar 记账（--init --draft 消费）。
++ * @returns {{ applied: string[], sidecarPath: string }|null} 无可替换段（非骨架态/已 draft）→ null
++ */
++export function applyDraftMode({ mdPath, changeName, runtimeRoot, sections }) {
++  let text
++  try { text = readFileSync(mdPath, 'utf8') } catch { return null }
++  const { text: next, applied } = transformSkeletonToDraft(text, sections)
++  if (applied.length === 0) return null
++  try {
++    writeAtomicSync(mdPath, next)
++  } catch (e) {
++    console.warn(`⚠️ verify draft 落盘失败（fail-soft，骨架保持原态）: ${e && e.message ? e.message : e}`)
++    return null
++  }
++  const sidecar = { schemaVersion: 1, change: changeName, generatedAt: new Date().toISOString(), sections: {}, amendments: [] }
++  for (const sec of sections) {
++    if (applied.includes(sec.key)) sidecar.sections[sec.key] = { hash: sha256(sec.body) }
++  }
++  const sidecarPath = verifyDraftSidecarPath(runtimeRoot, changeName)
++  try { writeAtomicSync(sidecarPath, JSON.stringify(sidecar, null, 2) + '\n') } catch { /* sidecar 失败 → 门禁 not-applicable（降级放行，不阻断） */ }
++  return { applied, sidecarPath }
++}
++
++/**
++ * --done 篡改门禁（承重件，验收侧）：sidecar 在案时逐段对账。
++ * @returns {{ applicable: boolean, ok: boolean, violations: string[] }}
++ *   not-applicable（无 sidecar）→ 放行（存量/非 draft 变更零红）；
++ *   违规 = 标记被删（含整段删除）/ 内容哈希失配（整份重写必中）。
++ */
++export function checkDraftIntegrity({ mdPath, changeName, runtimeRoot }) {
++  const sidecarPath = verifyDraftSidecarPath(runtimeRoot, changeName)
++  let sidecar = null
++  try { sidecar = JSON.parse(readFileSync(sidecarPath, 'utf8')) } catch { return { applicable: false, ok: true, violations: [] } }
++  if (!sidecar || sidecar.schemaVersion !== 1 || !sidecar.sections) return { applicable: false, ok: true, violations: [] }
++  let text = ''
++  try { text = readFileSync(mdPath, 'utf8') } catch {
++    return { applicable: true, ok: false, violations: ['verify-result.md 不可读（draft sidecar 在案）'] }
++  }
++  const lines = text.replace(/\r\n/g, '\n').split('\n')
++  const violations = []
++  const openByKey = new Map()
++  const contentByKey = new Map()
++  let current = null
++  for (const line of lines) {
++    const b = line.match(MARK_BEGIN)
++    if (b) { current = { key: b[1], hash: b[2] }; openByKey.set(b[1], current); contentByKey.set(b[1], []); continue }
++    const e = line.match(MARK_END)
++    if (e) { current = null; continue }
++    if (current) contentByKey.get(current.key).push(line)
++  }
++  for (const [key, rec] of Object.entries(sidecar.sections)) {
++    if (!openByKey.has(key)) {
++      violations.push(`机器段「${key}」的 MACHINE-DRAFT 标记缺失（被删除或整份重写）——${fixLine(key)}`)
++      continue
++    }
++    const actual = sha256((contentByKey.get(key) || []).join('\n'))
++    if (actual !== rec.hash) {
++      violations.push(`机器段「${key}」内容与指纹失配（被改写）——${fixLine(key)}`)
++    } else if (openByKey.get(key).hash !== rec.hash) {
++      // 内容未动但标记哈希与 sidecar 不一致 = 标记被手工重锚而未经 --amend-draft 审计
++      violations.push(`机器段「${key}」标记指纹与 sidecar 台账不一致（未经 --amend-draft 的手工重锚）——${fixLine(key)}`)
++    }
++  }
++  return { applicable: true, ok: violations.length === 0, violations }
++}
++
++function fixLine(key) {
++  return `还原机器段原文，或确要修改时跑 ${AMEND_CMD} 留痕重锚（段键 ${key}）`
++}
++
++/**
++ * --amend-draft：对 md 中现存标记段按**当前内容**重锚哈希（标记与 sidecar 同步刷新），
++ * sidecar 追加 amendment 审计（时点 + 段清单）。返回重锚段键（空 = 无可重锚标记）。
++ */
++export function amendDraftMarkers({ mdPath, changeName, runtimeRoot }) {
++  let text
++  try { text = readFileSync(mdPath, 'utf8') } catch { return [] }
++  const lines = text.replace(/\r\n/g, '\n').split('\n')
++  const contentByKey = new Map()
++  let current = null
++  for (const line of lines) {
++    const b = line.match(MARK_BEGIN)
++    if (b) { current = b[1]; contentByKey.set(current, []); continue }
++    const e = line.match(MARK_END)
++    if (e) { current = null; continue }
++    if (current) contentByKey.get(current).push(line)
++  }
++  const keys = [...contentByKey.keys()]
++  if (keys.length === 0) return []
++  // 重写 begin 标记（按当前内容哈希）
++  const next = lines.map((line) => {
++    const b = line.match(MARK_BEGIN)
++    if (!b) return line
++    const content = (contentByKey.get(b[1]) || []).join('\n')
++    return `<!-- MACHINE-DRAFT:${b[1]}:${sha256(content)}:begin 机器预填段——整段改写会被 verify --done 拒收；确要修改：${AMEND_CMD} 留痕重锚 -->`
++  }).join('\n')
++  try { writeAtomicSync(mdPath, next) } catch (e) {
++    console.warn(`⚠️ amend-draft 重锚落盘失败: ${e && e.message ? e.message : e}`)
++    return []
++  }
++  // sidecar：合并既有 + amendment 审计
++  const sidecarPath = verifyDraftSidecarPath(runtimeRoot, changeName)
++  let sidecar = { schemaVersion: 1, change: changeName, generatedAt: new Date().toISOString(), sections: {}, amendments: [] }
++  try { sidecar = { ...sidecar, ...JSON.parse(readFileSync(sidecarPath, 'utf8')) } } catch { /* 无既有 → 新立 */ }
++  for (const k of keys) sidecar.sections[k] = { hash: sha256((contentByKey.get(k) || []).join('\n')) }
++  sidecar.amendments = [...(sidecar.amendments || []), { at: new Date().toISOString(), keys }]
++  try { writeAtomicSync(sidecarPath, JSON.stringify(sidecar, null, 2) + '\n') } catch { /* 审计失败不回滚重锚 */ }
++  return keys
++}
+
+diff --git a/test/verify-draft.test.mjs b/test/verify-draft.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/verify-draft.test.mjs
+@@ -0,0 +1,126 @@
++/**
++ * verify-draft.test.mjs — verify 填槽制（r5l 方案3 / 评审护栏#2，v2 件二）
++ *
++ * 覆盖验收四面：
++ *   ① draft 形态：真骨架（generateVerifyResultSkeleton）→ 四节机器预填完整句子 + MACHINE-DRAFT
++ *      指纹标记 + 恰好三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）+ 顶部模式横幅；幂等二跑零改动；
++ *   ② --done 篡改门禁（承重件）：机器段内容被改写 / 标记被整删（heredoc 整份重写形态）/
++ *      标记被手工重锚而未审计 → 拒收；AGENT 槽改动放行；无 sidecar（未用 draft）零红；
++ *   ③ --amend-draft 留痕通道：重锚后放行 + sidecar amendment 审计在案；
++ *   ④ 既有槽契约不动：结论枚举槽行 `<待填：三选一>` 形态经 extractVerifyConclusionSlot 仍解析为未填。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { createHash } from 'node:crypto'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++const { generateVerifyResultSkeleton } = await import('../src/verify-probes.js')
++const { buildDraftSections, transformSkeletonToDraft, applyDraftMode, checkDraftIntegrity, amendDraftMarkers, verifyDraftSidecarPath } = await import('../src/verify-draft.js')
++const { extractVerifyConclusionSlot } = await import('../src/stage-contract.js')
++
++const SYNTH = {
++  probe1: { matches: [], globEntries: [], skippedFiles: [], markersTotal: 0, filesScanned: 0, taskCardsHit: [] },
++  probe2: { hitCount: 0 }, probe3: { tasks: [] }, probe4: { hitCount: 0 },
++  probe5: { missingBackend: [] }, probe6: { deletions: [], present: [] },
++}
++
++const MATERIALS = {
++  summarize: { report: '✅ 任务完成度（review verdict 真源）', total: 3, completed: 3, pending: [] },
++  risk: { tier: 'S1', level: 'unit-sufficient', evidenceRequired: false, explicit: false, hitPrefixes: [] },
++  testResult: { source: 'ledger', command: 'npm test', status: 'passed', ranAt: '2026-09-22T00:00:00Z', durationMs: 95000, total: 581 },
++  decisionChain: { rows: ['| D-001@v1 | FR-01 | task-01 | <待填：证据回指> | <待填> |'], decisionCount: 1, taskCount: 1 },
++}
++
++function makeFixture() {
++  const root = mkdtempSync(join(tmpdir(), 'vd-'))
++  const changeDir = join(root, '.sillyspec', 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  const runtimeRoot = join(root, '.sillyspec', '.runtime')
++  mkdirSync(runtimeRoot, { recursive: true })
++  const mdPath = join(changeDir, 'verify-result.md')
++  return { root, changeDir, runtimeRoot, mdPath }
++}
++const clean = (root) => { try { rmSync(root, { recursive: true, force: true }) } catch {} }
++
++test('draft 形态：四节机器预填+指纹标记+恰好三 AGENT 槽+横幅；幂等二跑零改动；结论枚举槽契约不动', () => {
++  const f = makeFixture()
++  try {
++    const skeleton = generateVerifyResultSkeleton(SYNTH)
++    const sections = buildDraftSections(MATERIALS)
++    const { text, applied } = transformSkeletonToDraft(skeleton, sections)
++    assert.deepEqual(applied.sort(), ['decision-chain', 'risk-level', 'task-completion', 'test-result'], '四节全部 draft 化')
++    assert.equal((text.match(/<!--AGENT:槽/g) || []).length, 3, '恰好三处 AGENT 槽（横幅不写字面标记防误计）')
++    assert.ok(text.includes('VERIFY-DRAFT-MODE'), '顶部模式横幅在案')
++    assert.ok(text.includes('MACHINE-DRAFT:task-completion:'), '任务完成度指纹标记')
++    assert.ok(text.includes('581 断言'), '测试结果机器句子（完整句非占位）')
++    assert.ok(text.includes('D-001@v1'), '决策链机械半边表格')
++    assert.ok(!/## 任务完成度[^\n]*\n<!--TODO/.test(text), '四节 TODO 占位被替换')
++    // 既有槽契约：draft 态结论枚举槽行仍是 <待填：三选一>（gate fail-closed 消费面不动）
++    assert.equal(extractVerifyConclusionSlot(text), '', '槽未填仍判不过（契约零回归）')
++    // 幂等：二跑零改动
++    const again = transformSkeletonToDraft(text, sections)
++    assert.deepEqual(again.applied, [], '已 draft 化段落不再触碰')
++    assert.equal(again.text, text, '文本逐字节不变')
++  } finally { clean(f.root) }
++})
++
++test('篡改门禁（承重件）：内容改写/标记整删/手工重锚均拒收；AGENT 槽改动放行；无 sidecar 零红', () => {
++  const f = makeFixture()
++  try {
++    writeFileSync(f.mdPath, generateVerifyResultSkeleton(SYNTH), 'utf8')
++    const applied = applyDraftMode({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot, sections: buildDraftSections(MATERIALS) })
++    assert.equal(applied.applied.length, 4, 'draft 落盘')
++    assert.ok(existsSync(verifyDraftSidecarPath(f.runtimeRoot, 'c1')), 'sidecar 台账在案')
++    // 基线：原样通过
++    assert.ok(checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot }).ok, '未动放行')
++    // AGENT 槽（机器段之外）改动 → 放行（槽是 agent 的合法书写面）
++    const withSlot = readFileSync(f.mdPath, 'utf8').replace('结论枚举：`<待填：三选一>`', '结论枚举：PASS（机器段外合法填槽）')
++    writeFileSync(f.mdPath, withSlot, 'utf8')
++    assert.ok(checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot }).ok, 'AGENT 槽改动放行')
++    // 形态①：机器段内容被改写（heredoc 整份回写后机器句被顺手改）
++    const tampered = withSlot.replace('- 总任务：3；已完成（review verdict 口径）：3', '- 总任务：3；已完成（review verdict 口径）：2')
++    writeFileSync(f.mdPath, tampered, 'utf8')
++    const v1 = checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot })
++    assert.ok(!v1.ok && v1.violations.some((x) => x.includes('task-completion') && x.includes('失配')), '内容改写拒收')
++    // 形态②：标记被整删（整份重写把注释对洗掉）
++    const stripped = tampered.replace(/^<!--\s*MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin[^>]*-->\n/gm, '').replace(/^<!--\s*MACHINE-DRAFT:[\w.-]+:end[^>]*-->\n/gm, '')
++    writeFileSync(f.mdPath, stripped, 'utf8')
++    const v2 = checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot })
++    assert.ok(!v2.ok && v2.violations.length === 4, '标记整删全段拒收')
++    // 形态③：内容改写 + begin 行哈希手工重锚到改后内容（绕内容比对）而未走 --amend-draft
++    // ——sidecar 台账未同步，标记哈希 ≠ 台账哈希即拦（未经审计的重锚无留痕面）
++    const forgedBase = withSlot.replace('- 总任务：3；已完成（review verdict 口径）：3', '- 总任务：3；已完成（review verdict 口径）：2')
++    const flines = forgedBase.split('\n')
++    const bIdx = flines.findIndex((l) => l.includes('MACHINE-DRAFT:task-completion:'))
++    const eIdx = flines.findIndex((l) => l.includes('MACHINE-DRAFT:task-completion:end'))
++    const forged = createHash('sha256').update(flines.slice(bIdx + 1, eIdx).join('\n').replace(/\r\n/g, '\n')).digest('hex')
++    writeFileSync(f.mdPath, forgedBase.replace(/(<!--\s*MACHINE-DRAFT:task-completion:)[0-9a-f]{64}(:begin)/, `$1${forged}$2`), 'utf8')
++    const v3 = checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot })
++    assert.ok(!v3.ok && v3.violations.some((x) => x.includes('不一致') || x.includes('失配')), '手工重锚未审计拒收（sidecar 哈希是真相基准——内容比对或标记-台账比对任一命中即拦）')
++    // 无 sidecar（未用 draft 的存量变更）→ not-applicable 零红
++    const other = checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c-other', runtimeRoot: f.runtimeRoot })
++    assert.ok(other.applicable === false && other.ok, '无 sidecar 放行')
++  } finally { clean(f.root) }
++})
++
++test('--amend-draft 留痕通道：改写后重锚放行 + sidecar amendment 审计在案', async () => {
++  const f = makeFixture()
++  try {
++    writeFileSync(f.mdPath, generateVerifyResultSkeleton(SYNTH), 'utf8')
++    applyDraftMode({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot, sections: buildDraftSections(MATERIALS) })
++    // agent 确要改机器段（合法场景：机器句子有事实误差）→ 直接改内容 → 门禁红
++    const edited = readFileSync(f.mdPath, 'utf8').replace('- 总任务：3；已完成（review verdict 口径）：3', '- 总任务：3；已完成（review verdict 口径）：2（修正：task-03 实为未过）')
++    writeFileSync(f.mdPath, edited, 'utf8')
++    assert.ok(!checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot }).ok, '改写后先红')
++    // --amend-draft 重锚 → 放行 + 审计
++    const keys = amendDraftMarkers({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot })
++    assert.ok(keys.includes('task-completion'), '重锚覆盖被改段')
++    const verdict = checkDraftIntegrity({ mdPath: f.mdPath, changeName: 'c1', runtimeRoot: f.runtimeRoot })
++    assert.ok(verdict.ok, `重锚后放行：${JSON.stringify(verdict.violations)}`)
++    const sidecar = JSON.parse(readFileSync(verifyDraftSidecarPath(f.runtimeRoot, 'c1'), 'utf8'))
++    assert.ok(Array.isArray(sidecar.amendments) && sidecar.amendments.length === 1 && sidecar.amendments[0].keys.includes('task-completion'), 'amendment 审计在案（留痕）')
++    assert.ok(readFileSync(f.mdPath, 'utf8').includes('修正：task-03 实为未过'), 'agent 的修正内容保留（未被重写回机器原文）')
++  } finally { clean(f.root) }
++})

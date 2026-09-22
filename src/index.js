@@ -1214,8 +1214,14 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
       const vpChange = vpChangeIdx >= 0 && args[vpChangeIdx + 1] && !String(args[vpChangeIdx + 1]).startsWith("--") ? args[vpChangeIdx + 1] : null;
       const vpInit = args.includes('--init');
       const vpForce = args.includes('--force');
+      const vpDraft = args.includes('--draft');
+      const vpAmendDraft = args.includes('--amend-draft');
+      if (vpDraft && !vpInit) {
+        console.error('❌ --draft 需与 --init 同用（draft 是骨架生成的机器起草模式）——sillyspec verify-probes --change <名> --init --draft');
+        process.exit(2);
+      }
       if (!vpChange) {
-        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 对账/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）');
+        console.error('用法: sillyspec verify-probes --change <name> [--init [--force]] [--draft] [--amend-draft] [--json] [--spec-dir <path>]\n  跑机械探针（TODO 标记/测试覆盖/API 契约/删除对账）输出 markdown；--init 生成 verify-result.md 骨架（探针预填，已存在不覆盖；--force 覆盖重生成全骨架——手填内容会重置，先备份）；\n  --init --draft 填槽模式（r5l 方案3）：任务完成度/风险等级/测试结果/决策追踪四节机器预填完整句子+指纹防篡改，agent 只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）；\n  --amend-draft 留痕重锚：确要修改机器预填段时重算指纹并记 sidecar 审计（--done 篡改门禁的显式例外通道）');
         process.exit(2);
       }
       assertSafeChangeName(vpChange, '--change 变更名');
@@ -1242,6 +1248,24 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
         } catch { return null }
       }
       const vpResult = runVerifyProbes({ cwd: dir, changeName: vpChange, specDir: vpSpecBase });
+      // ── --amend-draft（r5l 方案3/护栏#2：机器段修改的唯一留痕通道）── 对 md 中现存
+      // MACHINE-DRAFT 标记段按当前内容重锚哈希 + sidecar amendment 审计，不跑探针不写骨架。
+      if (vpAmendDraft) {
+        const { resolveRuntimeRoot } = await import('./run/shared.js');
+        const { amendDraftMarkers } = await import('./verify-draft.js');
+        const vpAmRoot = resolveRuntimeRoot({}, vpSpecBase);
+        const vpAmKeys = amendDraftMarkers({
+          mdPath: join(vpSpecBase, 'changes', vpChange, 'verify-result.md'),
+          changeName: vpChange, runtimeRoot: vpAmRoot,
+        });
+        if (vpAmKeys.length > 0) {
+          try { await mirrorInitArtifact(join(vpSpecBase, 'changes', vpChange, 'verify-result.md'), 'verify-result.md', readFileSync(join(vpSpecBase, 'changes', vpChange, 'verify-result.md'), 'utf8')) } catch { /* 镜像失败不阻断 */ }
+          console.log(`✏️  amend-draft 已重锚 ${vpAmKeys.length} 个机器段：${vpAmKeys.join('、')}（sidecar 记 amendment 审计——verify --done 篡改门禁按新指纹放行）`);
+        } else {
+          console.log('ℹ️  无 MACHINE-DRAFT 标记段可重锚（报告未用 --draft 生成，或标记已全部删除——后者会被 --done 拒收，先恢复标记或重跑 --init --force --draft）');
+        }
+        break;
+      }
       if (json) {
         console.log(JSON.stringify({ command: 'verify-probes', change: vpChange, ...vpResult }, null, 2));
         break;
@@ -1279,6 +1303,68 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
           writeFileSync(vpReportPath, vpSkeleton);
           await mirrorInitArtifact(vpReportPath, 'verify-result.md', vpSkeleton);
           console.log(`\n📄 已生成 verify-result.md 骨架: ${vpReportPath}（探针已预填；结论必须写明 PASS/FAIL，留待填会被 gate 判不过）${vpPlatformNote}`);
+        }
+        // ── --draft 填槽模式（r5l 方案3/护栏#2，v2 件二）── 四节机器预填完整句子 + 指纹防篡改。
+        // 位置刻意在 backfill/ensure/inject 三 enricher 之前：决策追踪矩阵由本段先落（含标记），
+        // injectDecisionChainDraft 随后见表格自然 no-op（幂等两不误）。材料与 verify 门对账同源：
+        // 测试结果优先级 P2 账本 > 质量扫描记录（gates.js 同序）；风险判级 evaluateConclusionDraft
+        // 同款口径（detectChangeRisk 词表已退役 D-008）。幂等：段内非 TODO 占位（已手写/已
+        // draft 化）零改动；平台模式 sidecar 随 vpSpecBase 锚定（门禁侧 not-applicable 即降级放行，
+        // 不产生假红）。
+        if (vpDraft && existsSync(vpReportPath)) {
+          try {
+            const { resolveRuntimeRoot } = await import('./run/shared.js');
+            const { summarizeTaskCompletion } = await import('./task-review.js');
+            const { buildDecisionChainMatrix } = await import('./verify-probes.js');
+            const { parseFileChangeListDetailed } = await import('./change-list.js');
+            const { loadBlastDeclarationsAllProjects } = await import('./blast-surface.js');
+            const { resolveChangeRisk, extractExplicitRiskLevel } = await import('./change-risk-profile.js');
+            const { consultTestLedger } = await import('./run/test-ledger.js');
+            const { loadReusableQualityScan } = await import('./run/verify-quality-scan.js');
+            const { buildDraftSections, applyDraftMode } = await import('./verify-draft.js');
+            const vpChangeDir = join(vpSpecBase, 'changes', vpChange);
+            const vpRuntimeRoot = resolveRuntimeRoot({}, vpSpecBase);
+            // ① 任务完成度（summarizeTaskCompletion 同源：review verdict 真源 + 降级说明句）
+            const vpSummarize = summarizeTaskCompletion({ changeDir: vpChangeDir, runtimeRoot: vpRuntimeRoot, changeName: vpChange });
+            // ② 风险等级（evaluateConclusionDraft 同款输入面；无清单 → null 走降级句）
+            let vpRisk = null;
+            try {
+              const vpDesignPath = join(vpChangeDir, 'design.md');
+              const vpDesignContent = existsSync(vpDesignPath) ? readFileSync(vpDesignPath, 'utf8') : '';
+              const vpDeclared = parseFileChangeListDetailed(vpDesignPath, { keepSillyspecDocs: true }).map((e) => e.path);
+              if (vpDeclared.length > 0) {
+                vpRisk = resolveChangeRisk({
+                  files: vpDeclared,
+                  blastDeclarations: loadBlastDeclarationsAllProjects({ specBase: vpSpecBase }),
+                  explicitRiskLevel: vpDesignContent ? extractExplicitRiskLevel(vpDesignContent) : null,
+                });
+              }
+            } catch { /* 风险材料不可得 → 降级句（完整句子，不空段） */ }
+            // ③ 测试结果（与 verify 门对账同源优先级：P2 账本 > 扫描记录 > 无记录提示句）
+            let vpTest = null;
+            try {
+              const vpConsult = consultTestLedger({ runtimeRoot: vpRuntimeRoot, changeName: vpChange, projectRoot: dir, testRoot: join(dir, 'test'), command: 'npm test', cwd: dir });
+              if (vpConsult.reuse) vpTest = { source: 'ledger', command: 'npm test', status: 'passed', ranAt: vpConsult.result.ranAt, durationMs: vpConsult.result.durationMs, total: vpConsult.result.total ?? null };
+            } catch { /* 账本咨询异常 → 下一源 */ }
+            if (!vpTest) {
+              try {
+                const vpScan = loadReusableQualityScan({ specBase: vpSpecBase, cwd: dir, changeName: vpChange });
+                if (vpScan && vpScan.testResult) vpTest = { source: 'scan', command: vpScan.testResult.command, status: vpScan.testResult.status, ranAt: vpScan.ranAt, durationMs: vpScan.testResult.durationMs, total: vpScan.testResult.total ?? null };
+              } catch { /* 扫描记录不可得 → 提示句 */ }
+            }
+            // ④ 决策追踪（buildDecisionChainMatrix 机械半边——Evidence/状态两列留人工）
+            const vpChain = buildDecisionChainMatrix(vpChangeDir);
+            const vpDraftRes = applyDraftMode({
+              mdPath: vpReportPath, changeName: vpChange, runtimeRoot: vpRuntimeRoot,
+              sections: buildDraftSections({ summarize: vpSummarize, risk: vpRisk, testResult: vpTest, decisionChain: vpChain }),
+            });
+            if (vpDraftRes) {
+              try { await mirrorInitArtifact(vpReportPath, 'verify-result.md', readFileSync(vpReportPath, 'utf8')) } catch { /* 镜像失败不阻断 */ }
+              console.log(`\n📝 填槽模式已应用：${vpDraftRes.applied.length} 节机器预填（${vpDraftRes.applied.join('、')}，MACHINE-DRAFT 指纹防篡改——整段改写会被 verify --done 拒收）；你只填三处 <!--AGENT:--> 槽（结论枚举/移交项/审查叙述）${vpPlatformNote}`);
+            }
+          } catch (e) {
+            console.warn(`⚠️ --draft 机器起草降级（fail-soft，骨架保持原态）: ${e && e.message ? e.message : e}`);
+          }
         }
         const vpFacts = writeVerifyFacts(join(vpSpecBase, 'changes', vpChange), vpResult, vpChange, {
           platformNote: formatPlatformPathNote(vpPlatformBase, vpChange, 'verify-facts.json'),

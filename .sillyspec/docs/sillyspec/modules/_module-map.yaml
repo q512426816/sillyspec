@@ -77,6 +77,7 @@ modules:
       - src/stage-review-checklist.js
       - src/task-review.js
       - src/task-done.js
+      - src/verify-draft.js
       - src/verify-postcheck.js
       - src/review-tier.js
       - src/review-material-pack.js

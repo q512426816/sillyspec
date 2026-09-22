@@ -1233,6 +1233,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: '探针一致性抽查 error 阻断' })
       return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
     }
+    // ── verify 填槽制篡改门禁（r5l 方案3 / 评审护栏#2 承重件，v2 件二）──
+    // verify-probes --init --draft 生成的机器预填段（任务完成度/风险等级/测试结果/决策追踪）带
+    // sha256 指纹标记 + .runtime sidecar 台账；--done 对账：标记被删 / 内容哈希失配 → 阻断回滚
+    // （heredoc 整份重写的典型形态——Write 可用与否均免疫，机制修法不做生成侧劝说）。修改机器
+    // 段唯一通道 verify-probes --amend-draft（重锚 + amendment 审计）。无 sidecar（未用 draft /
+    // 存量变更）→ not-applicable 零红；门禁自身异常 fail-soft（对齐探针抽查 degraded 语义）。
+    try {
+      const { checkDraftIntegrity } = await import('../verify-draft.js')
+      const draftCheck = checkDraftIntegrity({
+        mdPath: join(specBase, 'changes', changeName, 'verify-result.md'),
+        changeName, runtimeRoot: reconcileRuntimeRoot,
+      })
+      if (draftCheck.applicable && !draftCheck.ok) {
+        console.error(`\n❌ verify-result.md 机器预填段篡改门禁：${draftCheck.violations.length} 处失配——draft 预填段被整份重写或标记被删/被手工重锚。`)
+        for (const v of draftCheck.violations) console.error(`   - ${v}`)
+        console.error('   修复：还原机器段原文（AGENT 槽——结论枚举/移交项/审查叙述——不受本门限制）；确要修改机器段，跑 sillyspec verify-probes --change ' + changeName + ' --amend-draft 留痕重锚后重新 --done。')
+        writeVerifyGatePointer({ runtimeRoot: reconcileRuntimeRoot, changeName, blocked: true, note: 'draft 篡改门禁阻断' })
+        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+      }
+    } catch { /* 门禁异常 fail-soft（不是篡改，对齐探针 degraded 放行） */ }
     // ── ceremony 双跑收口·第一出口（2026-09-18-ceremony-risk-pricing task-04 / FR-03 / D-003；
     //    execute 评审 FAIL 项补接线）：声明档（.runtime/ceremony-tier-<change>.json 开跑定价）vs
     //    实际 diff 重跑 blast+span 的事实档，mismatch（severity=error，懒 agent 低报）汇入 verify
