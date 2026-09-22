@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sillyspec × OpenSpec 对撞结果</title>
+<style>
+  :root {
+    --ink:#1a2233; --sub:#64708a; --line:#e4e8ef; --card:#fff;
+    --green:#16a34a; --green-bg:#f0fdf4; --green-bd:#bbe7c9;
+    --red:#dc2626; --red-bg:#fef2f2; --red-bd:#f5c2c2;
+    --amber:#d97706; --amber-bg:#fffbeb; --amber-bd:#f3ddad;
+    --blue:#2563eb; --blue-bg:#eff6ff;
+    --mono:"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Microsoft YaHei UI","PingFang SC","Segoe UI",sans-serif;background:#f2f4f7;color:var(--ink);font-size:15px;line-height:1.6;padding:26px 18px 70px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;border-radius:14px;padding:26px 30px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  header h1{font-size:22px}
+  header p{color:#aebbd2;font-size:13px;margin-top:4px}
+  header .tags{font-size:12px;color:#8ea3c4;text-align:right}
+  /* 结论条 */
+  .verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .chip{border-radius:10px;padding:12px 14px;font-size:13.5px;font-weight:600;border:1px solid;text-align:center}
+  .chip small{display:block;font-weight:400;font-size:11.5px;color:var(--sub);margin-top:2px}
+  .chip.g{background:var(--green-bg);border-color:var(--green-bd);color:#14532d}
+  .chip.r{background:var(--red-bg);border-color:var(--red-bd);color:#7f1d1d}
+  .chip.a{background:var(--amber-bg);border-color:var(--amber-bd);color:#78350f}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 24px;margin-bottom:16px}
+  h2{font-size:17px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  h2 .n{background:var(--ink);color:#fff;border-radius:7px;font-size:12px;padding:1px 8px}
+  h2.win{color:#14532d} h2.gap{color:#7f1d1d}
+  /* 数字对比 */
+  .duel{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .duel .col{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .duel .col .hd{padding:8px;text-align:center;font-weight:700;font-size:14px;color:#fff}
+  .col.silly .hd{background:#1d4ed8} .col.open .hd{background:#b45309}
+  .duel .row{display:flex;justify-content:space-between;padding:8px 14px;border-top:1px solid var(--line);font-size:13.5px}
+  .duel .row b{font-family:var(--mono);font-size:15px}
+  .duel .row.hl b{color:var(--blue)} .col.open .row.hl b{color:var(--amber)}
+  .duel .foot{padding:6px 14px 10px;font-size:11.5px;color:var(--sub);border-top:1px dashed var(--line)}
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:720px){.duel,.cols2{grid-template-columns:1fr}}
+  /* 亮点/差距卡 */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:720px){.cards{grid-template-columns:1fr}}
+  .card{border-radius:10px;padding:14px 16px;border:1px solid}
+  .card h3{font-size:15px;margin-bottom:6px}
+  .card p{font-size:13px;color:#3a465c}
+  .card .big{font-size:26px;font-weight:800;font-family:var(--mono);line-height:1.2;margin-bottom:4px}
+  .card.win{background:linear-gradient(180deg,#f4fdf6,#fff);border-color:var(--green-bd)}
+  .card.win h3{color:#14532d} .card.win .big{color:var(--green)}
+  .card.gap{background:linear-gradient(180deg,#fef5f5,#fff);border-color:var(--red-bd)}
+  .card.gap h3{color:#7f1d1d} .card.gap .big{color:var(--red)}
+  code{font-family:var(--mono);background:#eef1f6;border-radius:4px;padding:0 5px;font-size:12px;color:#b3244a}
+  /* 错键对比 */
+  .vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  .vs .box{border-radius:10px;padding:12px 14px;font-size:13px;border:1px solid var(--line)}
+  .vs .box b{display:block;font-size:13.5px;margin-bottom:4px}
+  .vs .ok{background:var(--green-bg);border-color:var(--green-bd)} .vs .bad{background:var(--red-bg);border-color:var(--red-bd)}
+  /* 条形图 */
+  .bar-row{margin:12px 0}
+  .bar-row .lbl{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;margin-bottom:3px}
+  .bar-row .lbl span:last-child{color:var(--sub);font-family:var(--mono)}
+  .bar{display:flex;height:26px;border-radius:6px;overflow:hidden;color:#fff;font-size:10.5px;font-family:var(--mono)}
+  .seg{display:flex;align-items:center;justify-content:center;min-width:0;white-space:nowrap;overflow:hidden}
+  .s1{background:#3b82f6}.s2{background:#8b5cf6}.s3{background:#f59e0b}.s4{background:#ef4444}.s5{background:#0ea5e9}.s6{background:#10b981}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:11.5px;color:var(--sub);margin:4px 0 8px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  .note{font-size:12px;color:var(--sub);margin-top:6px}
+  .tok{font-size:11.5px;color:var(--sub);font-family:var(--mono);margin:2px 0 3px}
+  .tok b{color:var(--ink);font-weight:600}
+  .sample{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fafbfd}
+  .sample .cap{font-size:12.5px;font-weight:700;margin-bottom:2px}
+  .sample .cap small{font-weight:400;color:var(--sub)}
+  .sample pre{font-family:var(--mono);font-size:11.5px;line-height:1.6;color:#333d52;white-space:pre-wrap;word-break:break-all;margin-top:6px}
+  .sample pre em{color:#b3244a;font-style:normal}
+  .tbl{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0 4px}
+  .tbl th,.tbl td{border:1px solid var(--line);padding:7px 12px;text-align:left}
+  .tbl th.cat{background:#f0f3f8;width:88px;font-size:12.5px}
+  .tbl th.a{background:#1d4ed8;color:#fff} .tbl th.b{background:#b45309;color:#fff}
+  .tbl td.a{background:#f8faff;width:41%} .tbl td.b{background:#fffdf5;width:41%}
+  .tbl .y{color:var(--green);font-weight:700} .tbl .n{color:#b6bfce} .tbl .w{color:var(--red);font-weight:700}
+  .side-hd{padding:6px;text-align:center;font-weight:700;font-size:13px;color:#fff;border-radius:8px}
+  .side-hd.a{background:#1d4ed8} .side-hd.b{background:#b45309}
+  .stack{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+  .one{background:var(--blue-bg);border:1px solid #c3d7fb;border-radius:10px;padding:14px 18px;font-size:15px;font-weight:600;text-align:center}
+  .small{font-size:11.5px;color:var(--sub)}
+  footer{text-align:center;color:var(--sub);font-size:11.5px;margin-top:22px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>sillyspec × OpenSpec 对撞结果</h1>
+    <p>同任务 · 同基线 · 全新会话 · 同机同模型 —— 受控对照</p>
+  </div>
+  <div class="tags">2026-09-20/21<br>大任务 + 小任务 · 5 会话<br>db 硬账 + 全量记录深读</div>
+</header>
+
+<!-- 一页结论 -->
+<div class="verdict">
+  <div class="chip g">小任务成本真持平<small>tokens 8.97 vs 9.33M · 账单当量 ~1.0×</small></div>
+  <div class="chip g">全场唯一硬缺陷在对方<small>错键生产 no-op，测试全绿掩护</small></div>
+  <div class="chip g">交付厚度 2.4×<small>2,909 vs 1,193 行测试</small></div>
+  <div class="chip r">墙钟慢 1.3× / 2×<small>差距全在非模型时间</small></div>
+  <div class="chip r">子代理扇出贵<small>43% tokens / 68% 请求</small></div>
+  <div class="chip a">定位：用等待换防线<small>砍仪式＝砍防线</small></div>
+</div>
+
+<!-- ① 数据 -->
+<section>
+  <h2><span class="n">1</span>核心数据对比</h2>
+  <div class="cols2">
+    <div>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:6px"><b style="color:var(--ink)">小任务</b> —— 给 Claude 的自动压缩加三个界面开关<span class="small">（autocompact 三键 · sillyspec 走 quick 轻通道）</span></p>
+      <div class="duel">
+        <div class="col silly"><div class="hd">sillyspec</div>
+          <div class="row hl"><span>墙钟</span><b>28min＊</b></div>
+          <div class="row"><span>tokens 新入/缓存/输出</span><b>0.2M / 8.7M / 0.05M</b></div>
+          <div class="row"><span>请求</span><b>87</b></div>
+          <div class="row"><span>代码量</span><b>+516 行</b></div>
+          <div class="row"><span>新增测试</span><b>22</b></div>
+        </div>
+        <div class="col open"><div class="hd">OpenSpec</div>
+          <div class="row hl"><span>墙钟</span><b>21.5min</b></div>
+          <div class="row"><span>tokens 新入/缓存/输出</span><b>0.1M / 9.2M / 0.05M</b></div>
+          <div class="row"><span>请求</span><b>85</b></div>
+          <div class="row"><span>代码量</span><b>+539 行</b></div>
+          <div class="row"><span>新增测试</span><b>15</b></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:6px"><b style="color:var(--ink)">大任务</b> —— 把 AI 干活的日志变成可回放的聊天记录<span class="small">（会话回放 · 跨三端 · sillyspec 走全流程）</span></p>
+      <div class="duel">
+        <div class="col silly"><div class="hd">sillyspec</div>
+          <div class="row hl"><span>墙钟</span><b>156min＊</b></div>
+          <div class="row"><span>tokens 新入/缓存/输出</span><b>2.4M / 96.1M / 0.64M</b></div>
+          <div class="row"><span>请求</span><b>767</b></div>
+          <div class="row"><span>代码（源码+测试）</span><b>7.2K 行</b></div>
+          <div class="row"><span>流程文档</span><b>10.9K 行<span style="font-size:11px;color:var(--sub)">（84% CLI 生成）</span></b></div>
+          <div class="row"><span>子代理 / 测试行</span><b>19 / 2,909</b></div>
+        </div>
+        <div class="col open"><div class="hd">OpenSpec</div>
+          <div class="row hl"><span>墙钟</span><b>80min</b></div>
+          <div class="row"><span>tokens 新入/缓存/输出</span><b>0.3M / 51.6M / 0.14M</b></div>
+          <div class="row"><span>请求</span><b>251</b></div>
+          <div class="row"><span>代码（源码+测试）</span><b>3.3K 行</b></div>
+          <div class="row"><span>流程文档</span><b>0.6K 行<span style="font-size:11px;color:var(--sub)">（全 agent 写）</span></b></div>
+          <div class="row"><span>子代理 / 测试行</span><b>0 / 1,193</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="small">＊ sillyspec 墙钟为稳态口径（门禁单轮）；tokens / 请求 / 代码量两侧均实测。模型时间两侧同量级（13.3 vs 13.1min）——<b>差距不在模型，在流程</b>。<b>tokens 三分（新输入 / 缓存读 / 输出）</b>：大任务 2.4/96.1/0.64M vs 0.3/51.6/0.14M。按计价折算（新入 1× / 缓存 ~0.1× / 输出 3–5×）：<b>大任务账单当量比 ≈ 2.4×（区间 2.1–2.8×），略高于面值 1.9×</b>——两侧命中率都 97%+，缓存救不了比值，且输出差恰好落在最贵计价档。差额构成：<b>缓存体量差 55% + 冷启动新输入 26%（扇出签名，子代理新鲜上下文首读打不中缓存）+ 输出差 19%</b>；输出 4.6× 中 77%（0.49M）是子代理代码/测试产出（交付厚度），主会话编排输出仅 0.14M。小任务账单当量 ~1.0×（三段 0.2/8.7/0.05 vs 0.1/9.2/0.05，真持平）。<br>大任务构成拆解：手写源码 4.3K vs 2.1K（功能对齐，我们组件更厚）· 测试 2.9K vs 1.2K · 流程文档 10.9K vs 0.6K——但其中 <b>84%（8.8K）是 CLI 机械生成的 diff 快照（scope-audit.patch，零 token）</b>，agent 实写文档仅 ~1.75K vs 0.6K（2.9×，与代码 2× 同量级）；写作窗口 token 4.2M vs 1.5M，<b>只占大任务 token 差的 ~6%</b>——token 差主因是执行段子代理扇出，不是写文档；小任务两侧基本持平。</p>
+  <p class="small"><b>任务画像</b>：小任务＝照既有先例加三键的局部修补（简单，轻通道的适用对象）；大任务＝三端五层契约对齐（daemon→RPC→backend→生成类型→前端），<b>难度在广度与一致性、不在单点深度</b>——每条字段映射都是一次「错键型」失败的机会，防线价值随接缝数放大。</p>
+</section>
+
+<!-- ② 亮点 -->
+<section>
+  <h2 class="win"><span class="n">2</span>我们的亮点</h2>
+  <div class="cards">
+    <div class="card win">
+      <div class="big">1 vs 0</div>
+      <h3>全场唯一硬缺陷，出现在对方侧</h3>
+      <p>对方把第三键写错（<code>autoCompactPreCompute</code>）：<b>27/27 测试全绿 → 干净归档 → 错键进规格库</b> → 预计算开关生产 no-op。我们的 agent 联网核验官方文档后落码，多花 2.5 分钟拦下静默缺陷。</p>
+    </div>
+    <div class="card win">
+      <div class="big">同一个错误</div>
+      <h3>两边 agent 都猜了错键名——差别只在验证步</h3>
+      <p>深读记录实证：我们的 agent <b>最初猜的也是那个错名</b>，但先搜官方文档、拿到真名才写码。<b>错误生成是确定性的，拦截是结构性的</b>——这是流程属性，不是运气。</p>
+    </div>
+    <div class="card win">
+      <div class="big">写码之前</div>
+      <h3>独立设计审查拦下架构级错误（B1）</h3>
+      <p>初版设计与 registry 源码契约矛盾，审查员独立核对源码后首轮打回、强制改设计。<b>零代码浪费</b>。对方流程无任何独立审查环节。</p>
+    </div>
+    <div class="card win">
+      <div class="big">4 道防线</div>
+      <h3>缺陷类覆盖：结构化 vs 全靠自觉</h3>
+      <p>域事实核验 · 设计-源码一致性 · 声明-实测对账 · 资产正典校验，四类各有机制；对方四类全押 agent 自觉。历史数据：测试门两个月 <b>12 次真拦「声称完成但测试挂」</b>。</p>
+    </div>
+    <div class="card win">
+      <div class="big">可检索资产</div>
+      <h3>做完即沉淀</h3>
+      <p>4 条决策 + 7 条 FR 索引 + ROADMAP + 模块文档 + 归档 15 件——<b>下次变更直接复用</b>。对方的规格库同样留资产，但本轮把错键典藏成了「正典」。</p>
+    </div>
+    <div class="card win">
+      <div class="big">真并发</div>
+      <h3>机制不是纸面</h3>
+      <p>Wave 内 4 个子代理同窗并行（时间戳实证）；审查请求钳 3/3 阶段达标（11/6/6 ≤ 12/10/15）；进度库 / 边界审计 / 防作弊全程有效，<b>双方 agent 零违反</b>。</p>
+    </div>
+  </div>
+  <div class="callout" style="background:var(--blue-bg);border:1px solid #c3d7fb;border-radius:10px;padding:12px 16px;margin-top:12px;font-size:13px">
+    <b style="display:block;margin-bottom:4px">测试逻辑对比：两边测试都是 agent 写的，差在依据链与强制面</b>
+    🅰 <b>测试＝契约的执行形态</b>：requirements 的 GWT 场景直接翻译成断言（如「230000 成功标准场景」用例）· 任务卡写死 verify 命令 · 存量测试当契约（改契约必须显式）；五层执行：子代理自跑 → 主代理复跑 → <b>QA 独立复跑全量</b> → <b>verify 门禁机器实测</b> → 相邻面回归。<br>
+    🅱 <b>测试＝agent 自觉</b>：specs 与测试无强制映射（validate 只查格式），写多少凭理解、跑不跑无人拦——全绿可能是<b>自指测试</b>（断言自己写的实现，错键照样 27/27）。<br>
+    <span class="small">诚实边界：测试防「实现与声明不符」，不防「声明与事实不符」——若我们写错键名，13 个用例同样全绿。拦错键的是<b>联网核验</b>不是测试：测试管一致性，核验管事实性。</span>
+  </div>
+</section>
+
+<!-- ③ 产物与资产 -->
+<section>
+  <h2 class="win"><span class="n">3</span>执行完成后，你拿到什么（产物与项目资产）</h2>
+  <table class="tbl">
+    <tr><th class="cat">资产</th><th class="a">🅰 sillyspec</th><th class="b">🅱 OpenSpec</th></tr>
+    <tr><td class="cat">决策知识</td><td class="a"><span class="y">✓</span> 决策 <b>4 条</b>（含理由 / 故障面 / 退役判据）</td><td class="b"><span class="n">—</span></td></tr>
+    <tr><td class="cat">特性索引</td><td class="a"><span class="y">✓</span> FR <b>7 条</b>（承接链可回溯）</td><td class="b"><span class="n">—</span></td></tr>
+    <tr><td class="cat">行为规格</td><td class="a"><span class="y">✓ 替代形态</span> FR 索引 + 模块卡（GWT 场景体，台账式承接链）</td><td class="b"><span class="y">✓</span> 活规格 <b>3 capability · 215 行</b> WHEN/SHALL</td></tr>
+    <tr><td class="cat">路线 / 文档</td><td class="a"><span class="y">✓</span> ROADMAP 里程碑 + 模块文档 ×2</td><td class="b"><span class="n">—</span></td></tr>
+    <tr><td class="cat">变更账目</td><td class="a"><span class="y">✓</span> 四字段账目 + <b>sha256</b> 范围快照</td><td class="b">git 提交历史</td></tr>
+    <tr><td class="cat">过程留痕</td><td class="a"><span class="y">✓</span> 归档 <b>15 件</b> + verify 双证 + 审查 verdict</td><td class="b">归档变更夹</td></tr>
+    <tr><td class="cat">下次消费</td><td class="a"><span class="y">✓</span> 自动注入下一次变更的上下文</td><td class="b">靠 agent 主动读</td></tr>
+    <tr><td class="cat">正确性</td><td class="a"><span class="y">✓</span> 来源经实证核验</td><td class="b"><span class="w">⚠</span> 本轮错键写入 5 条 requirement</td></tr>
+  </table>
+  <p class="small">形态差异：OpenSpec 活规格＝<b>改写式正典</b>（后续变更直接改文本，像 API 文档好读，但改错即正典错）；sillyspec FR 索引＝<b>台账式承接链</b>（追加+取代，演进史可见，当前态靠 active 过滤）。</p>
+  <h3 style="font-size:14px;margin:14px 0 0">实物抽样（两条任务的真实产物原文摘录）</h3>
+  <div class="vs" style="margin-top:0">
+    <div class="stack">
+      <div class="side-hd a">🅰 sillyspec 实物</div>
+      <div class="sample"><div class="cap">📐 决策库条目 <small>· 大任务 D-001，归档自动提炼</small></div>
+<pre>## D-001@v1 回放形态=前端适配器复用 TurnTimeline 真组件（方案 A）
+状态：implemented ｜ 变更：2026-09-20-r4-session-replay ｜ 最近确认：66636108c
+理由：任务书点名「适配器 → TurnTimeline 真组件复用」，用户已定案
+故障面：适配器与 TurnTimeline 契约耦合；靠既有测试族守护
+退役判据：多 harness 形态差异大到 SessionTurnView 表达不下 → 复议方案 B</pre></div>
+      <div class="sample"><div class="cap">🔢 FR 索引条目 <small>· 大任务 FR-host-fs-handler-002（GWT 行为场景）</small></div>
+<pre>## FR-host-fs-handler-002 轮次与 token 可见
+状态：active ｜ 最近确认：66636108c（归档时 HEAD）
+场景：Given 数据源含 usage/turn_id（zcode/claude-code）——
+Then 每轮轮尾显示输入/输出 token 徽标，头部显示会话累计；
+无 token 数据源（cursor-agent/老 daemon）→ 显示「未知」
+全文回链：changes/archive/…/requirements.md#FR-02（承接链可翻旧账）</pre></div>
+      <div class="sample"><div class="cap">📒 quick 结构化账目 <small>· 小任务 ql-20260920-007-ec47</small></div>
+<pre>## ql-20260920-007-ec47 | claude 引擎 autocompact 三键 provider 级配置
+状态：已完成 ｜ 文件：8 行括注
+需求：三键 provider 级配置（白名单透传 + 前端表单 + 文档）
+根因：settings_config→白名单→settings.json 链路不含 autocompact 键，
+配置写了也不生效；用户只能手改数据库 JSON
+方案：TOP_LEVEL_KEYS 加三键 + AUTO_COMPACT_VALIDATORS 值守护…
+结果：门禁实测 test 545.5s + lint 双 PASS；定向 31/31 + 相邻 93/93
+＋ 范围快照 ql-*.patch（sha256 锚定，可回放当时 diff）</pre></div>
+    </div>
+    <div class="stack">
+      <div class="side-hd b">🅱 OpenSpec 实物</div>
+      <div class="sample"><div class="cap">📘 活规格条目（正面）<small>· 大任务 agent-log-parsers</small></div>
+<pre>openspec/specs/agent-log-parsers/spec.md
+### Requirement: 归一化消息携带轮次与用量元数据
+每条消息 SHALL 携带 turn_id / usage（五项）/ model / duration_ms /
+sender，全部可缺省，缺失按「未知」呈现，不影响既有九字段
+#### Scenario: 数据源无用量时元字段为 null
+WHEN 数据源不含 token（如 cursor-agent transcript）
+THEN 全部段 usage=null，RPC totalUsage=null</pre></div>
+      <div class="sample"><div class="cap">🚫 活规格条目（反例）<small>· 小任务 spec.md 原文，4 处错键</small></div>
+<pre>openspec/specs/claude-autocompact-config/spec.md
+- `autoCompactPreCompute`：布尔（压缩摘要预计算开关） ← <em>键名错误</em>
+- WHEN 配 {"autoCompactPreCompute": true}
+  THEN settings.json 含该键        ← <em>正确键：precomputeCompactionEnabled</em>
+5 条 requirement 把错键记为系统行为契约——
+后续变更将信任并传播它（错误被典藏为「正典」）</pre></div>
+    </div>
+  </div>
+  <div class="one" style="margin-top:12px">都真资产：<b>sillyspec 沉淀「为什么 + 下次注意什么」并自动注入</b> · OpenSpec 沉淀「系统该怎么表现」 · 行为规格两边都有（台账式 vs 正典式）——但<b>资产带错，复利变负</b>（见右侧实物 ⚠）</div>
+</section>
+
+<!-- ④ 差距 -->
+<section>
+  <h2 class="gap"><span class="n">4</span>目前的差距（不回避）</h2>
+  <div class="cards">
+    <div class="card gap">
+      <div class="big">1.3× / 2×</div>
+      <h3>墙钟落后（小 / 大任务）</h3>
+      <p>28 vs 21.5min；156 vs 80min。模型算力同量级，<b>差距全部在非模型时间</b>——门禁 + 编排等待，见下节拆解。</p>
+    </div>
+    <div class="card gap">
+      <div class="big">43% / 68%</div>
+      <h3>子代理扇出的成本倍增</h3>
+      <p>19 个子代理各自重建上下文，吃掉 42.3M tokens（43%）+ 522 请求（68%）。但这笔钱同时是<b>上下文保险</b>：每个子代理新鲜窗口（峰值 219K、用完即释），实现体量不进主会话——对方单会话上下文线性涨，爆了靠 auto-compact 硬扛（压缩丢细节）。<br><b>诚实注</b>：我们的主会话峰值 377K 反高于对方 317K——编排侧自己也会胖，超大任务需派发瘦身。</p>
+    </div>
+    <div class="card gap">
+      <div class="big">~60%</div>
+      <h3>大任务时间在等待</h3>
+      <p>子代理执行 / 门禁运行 / 审查回收占六成墙钟，主代理生成不足三分之一。<b>慢＝编排深度</b>，但对外表现就是慢。</p>
+    </div>
+    <div class="card gap">
+      <div class="big">40% 假拦</div>
+      <h3>门禁噪声真实存在（历史）</h3>
+      <p>两个月 106 次门禁失败中：真拦 12、超时 36、环境 6。治理方向已定：<b>按触碰模块收敛范围</b>（文件级会漏真拦，有实证）+ 超时帽。</p>
+    </div>
+  </div>
+  <div class="one" style="margin-top:12px">差距定性：等待与假拦是<b>优化项</b>；审查与扇出是<b>防线的价格</b>——砍掉它＝砍掉第 2 节的亮点。当前策略：保防线，砍等待。</div>
+  <div class="callout" style="background:var(--blue-bg);border:1px solid #c3d7fb;border-radius:10px;padding:12px 16px;margin-top:10px;font-size:13px">
+    <b style="display:block;margin-bottom:4px">扇出优化路线（砍冗余读取，不砍隔离与独立审查）</b>
+    ① 读取范围约束——allowed_paths 兼作读范围 + symbol-impact 符号锚点注入（直打 task-08 型 8.6M over-reading）<br>
+    ② 调研消化物共享——探索摘要落盘，实现子代理读两页 digest 替代重读源码（调研段 9.4M → ~5M）<br>
+    ③ batch 激进化——R4-S-F 实证 5 任务 2 batch 仅 6M：文件正交即并批，摊平 design/plan 重复重建<br>
+    ④ 派发材料包扩展——复用审查侧 assembleStageReviewMaterials 有界组装基建<br>
+    ⑤ 子代理模型分级——实现跑便宜档、审查保持旗舰（砍账单不砍 token）<br>
+    <span class="small">预期 ①+②+③ 把子代理段 42M → 20-25M，大任务 99M → ~78M（差距 1.9×→~1.5×）；剩余差额＝上下文保险 + 独立审查的价格。</span>
+  </div>
+</section>
+
+<!-- ④ 时间去哪了 -->
+<section>
+  <h2><span class="n">5</span>时间去哪了（时间戳级分解）</h2>
+  <div class="legend">
+    <span><i class="s1"></i>探索</span><span><i class="s2"></i>实现+定向测试</span><span><i class="s3"></i>编排/子代理</span><span><i class="s4"></i>门禁</span><span><i class="s5"></i>独立审查</span><span><i class="s6"></i>收尾</span>
+  </div>
+  <div class="bar-row"><div class="lbl"><span>小任务 · OpenSpec</span><span>21.5min</span></div>
+    <div class="tok">⚡ 探索 <b>2.0M</b> · 四件套 <b>1.3M</b> · 实现 <b>4.9M</b> · 归档 <b>1.0M</b></div>
+    <div class="bar" style="width:77%"><div class="seg s1" style="width:28%">探索 6</div><div class="seg s2" style="width:14%">四件套 3</div><div class="seg s3" style="width:38%">实现 8</div><div class="seg s6" style="width:20%">归档 4.5</div></div></div>
+  <div class="bar-row"><div class="lbl"><span>小任务 · sillyspec quick</span><span>28min</span></div>
+    <div class="tok">⚡ 引导+核验 <b>2.1M</b> · 实现 <b>4.4M</b> · 门禁期 <b>1.3M</b> · 收尾 <b>1.2M</b></div>
+    <div class="bar"><div class="seg s1" style="width:22%">核验 6</div><div class="seg s2" style="width:32%">实现 9</div><div class="seg s4" style="width:36%">门禁 10</div><div class="seg s6" style="width:10%">收尾 3</div></div></div>
+  <p class="note">小任务差 6.5min ≈ <b>一轮门禁 + 域事实核验</b>——正是两道防线的价格。<b>quick 无四件套＝轻通道设计</b>：无落盘设计决策的小修补不写流程文档，代之以 CLI 合成的四字段账目（近零写作成本，含在收尾段）；对方无论任务多小都写四件套（3min / 1.3M）。（组内同尺度，条长∝墙钟；⚡为各阶段实测 tokens）</p>
+  <div class="bar-row"><div class="lbl"><span>大任务 · OpenSpec</span><span>80min</span></div>
+    <div class="tok">⚡ 探查 <b>5.6M</b> · 四件套 <b>1.5M</b> · 单会话实现 <b>42.6M</b> · 归档 <b>2.2M</b></div>
+    <div class="bar" style="width:51%"><div class="seg s1" style="width:24%">探查 19</div><div class="seg s2" style="width:4%">3</div><div class="seg s3" style="width:68%">单会话实现+回归 55</div><div class="seg s6" style="width:4%">3</div></div></div>
+  <div class="bar-row"><div class="lbl"><span>大任务 · sillyspec</span><span>156min</span></div>
+    <div class="tok">⚡ 调研 <b>10.6M</b> · 四件套 <b>4.2M</b> · 审查 <b>7.8M</b> · 六波执行（含子代理）<b>56.6M</b> · verify+收尾 <b>19.9M</b></div>
+    <div class="bar"><div class="seg s1" style="width:13%">调研 20</div><div class="seg s2" style="width:13%">四件套 20</div><div class="seg s5" style="width:11%">审查 17</div><div class="seg s3" style="width:46%">六波执行 73</div><div class="seg s4" style="width:11%">门禁 17</div><div class="seg s6" style="width:13%">收尾 20</div></div></div>
+  <p class="note">大任务差 76min ＝ 审查 17 + 门禁 17（<b>质量溢价</b>）+ 编排开销 ~42（<b>扇出成本，优化候选</b>）。（组内同尺度，条长∝墙钟；⚡为各阶段实测 tokens——sillyspec 执行段 56.6M 里约 42M 是 19 个子代理的上下文重建，见差距卡 43%）</p>
+</section>
+
+<!-- ⑤ 一句话 -->
+<section>
+  <h2><span class="n">6</span>一句话总结与选型</h2>
+  <div class="vs">
+    <div class="box ok"><b>🅰 sillyspec ＝ 机器侧验证</b>声称完成必须过实测对账；四类缺陷有结构化防线。代价：等待与仪式。</div>
+    <div class="box bad"><b>🅱 OpenSpec ＝ 模型侧自觉</b>快、轻、零等待；防线全靠 agent 自觉——格式校验不校验事实。</div>
+  </div>
+  <ul style="margin-top:12px;font-size:14px">
+    <li><b>小任务 → sillyspec quick</b>：28min、token 持平略优、一次过 + 资产落盘</li>
+    <li><b>大任务 → 按缺陷成本选</b>：生产平台（错一次贵）选全流程；原型快跑选轻流程</li>
+    <li><b>互相借鉴</b>：轻流程补「外部契约事实来源强制」；重流程做门禁模块粒度收敛</li>
+  </ul>
+</section>
+
+<p class="small" style="text-align:center">口径：sillyspec 墙钟为稳态（门禁单轮），OpenSpec 实测；tokens/请求均实测硬账 · n=1 对撞，墙钟按量级解读 · 底稿 sillyspec 仓 round4/</p>
+<footer>2026-09-21</footer>
+</div>
+</body>
+</html>

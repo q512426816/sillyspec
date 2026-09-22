@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sillyspec 3.31.0 效率翻转方案（人话版）</title>
+<style>
+  :root {
+    --ink: #1a2332; --muted: #5b6b7f; --line: #e3e8ef; --bg: #f6f8fb; --card: #ffffff;
+    --red: #d64545; --red-bg: #fdf0f0; --green: #2e9e5b; --green-bg: #eef9f2;
+    --blue: #2f6fb5; --blue-bg: #eef4fb; --amber: #b97d10; --amber-bg: #fdf6e9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.7; padding: 32px 16px 64px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { font-size: 26px; letter-spacing: .5px; }
+  header p { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .pill { display:inline-block; background: var(--blue-bg); color: var(--blue); border-radius: 999px;
+          padding: 2px 12px; font-size: 12px; margin: 0 3px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+            padding: 22px 26px; margin-bottom: 18px; }
+  h2 { font-size: 18px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  h2 .no { background: var(--ink); color:#fff; width: 24px; height: 24px; border-radius: 6px;
+           display:inline-flex; align-items:center; justify-content:center; font-size: 13px; flex: none; }
+  .hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .stat { border-radius: 10px; padding: 16px 18px; text-align: center; }
+  .stat .num { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  .stat .lab { font-size: 13px; margin-top: 4px; }
+  .stat small { color: var(--muted); font-size: 12px; display:block; margin-top:2px; }
+  .red   { background: var(--red-bg); }   .red .num   { color: var(--red); }
+  .amber { background: var(--amber-bg); } .amber .num { color: var(--amber); }
+  .green { background: var(--green-bg); } .green .num { color: var(--green); }
+  .callout { border-left: 4px solid var(--blue); background: var(--blue-bg); border-radius: 0 8px 8px 0;
+             padding: 12px 16px; margin: 12px 0; font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
+  th { background: #f0f3f8; text-align: left; padding: 8px 10px; font-weight: 600; border-bottom: 2px solid var(--line); white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .hl { background: var(--red-bg); color: var(--red); font-weight: 700; }
+  .ok { color: var(--green); font-weight: 700; }
+  .bar-row { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+  .bar-track { background: #edf1f6; border-radius: 6px; height: 22px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; display:flex; align-items:center; padding-left:8px; color:#fff; font-size:11.5px; white-space:nowrap; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .col-card { border-radius: 10px; padding: 16px 18px; font-size: 14px; }
+  .col-card h3 { font-size: 15px; margin-bottom: 10px; }
+  .col-card ol { padding-left: 20px; }
+  .col-card li { margin: 7px 0; }
+  .tag { display:inline-block; font-size:11px; border-radius:4px; padding:1px 7px; margin-right:6px; vertical-align:1px; }
+  .tag-q { background: var(--green-bg); color: var(--green); }
+  .tag-m { background: var(--amber-bg); color: var(--amber); }
+  .tag-w { background: var(--blue-bg); color: var(--blue); }
+  .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
+  .step { background:#f0f3f8; border-radius:8px; padding:7px 13px; font-size:13px; }
+  .arrow { color: var(--muted); font-size:15px; }
+  footer { text-align:center; color: var(--muted); font-size: 12.5px; margin-top: 26px; line-height:1.8; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>sillyspec 3.31.0 效率翻转方案 · 人话版</h1>
+  <p>2026-09-22 · 基于 R4/R5R/R5-L 四会话逐请求法证审计（数字可复算）·
+     <span class="pill">合并版执行顺序</span><span class="pill">先打五件小刀 → R6 重放验收</span></p>
+</header>
+
+<!-- 0 病根 -->
+<section>
+  <h2><span class="no">0</span>病根：一句话 + 三个数</h2>
+  <div class="callout"><b>sillyspec 让 agent 把大半时间花在「跟流程打交道」上，而不是写代码。</b><br>
+  问下一步、填表格、重跑没变化的测试——每一步都拖着越来越胖的对话重新发一遍。openspec 同样的活干得完，说明不是活难，是我们自己加的戏。</div>
+  <div class="hero">
+    <div class="stat red"><div class="num">84%</div><div class="lab">小任务（全流程）的 token 不是在干活</div><small>写码+测试仅占 16%</small></div>
+    <div class="stat red"><div class="num">94%</div><div class="lab">大任务多烧的 82.3M 里是流程自转</div><small>77.7M = 往返+工件+重跑</small></div>
+    <div class="stat amber"><div class="num">7~9×</div><div class="lab">全流程比 openspec 贵的倍数</div><small>且质量面零差异（见 §2）</small></div>
+  </div>
+</section>
+
+<!-- 1 证据 -->
+<section>
+  <h2><span class="no">1</span>证据：实测账本（三张表）</h2>
+
+  <b style="font-size:14px">① 同一个小任务，三个工具比</b>
+  <table>
+    <tr><th>通道</th><th>墙钟</th><th>请求</th><th>tokens</th><th>治理开销占比</th><th>真正干活占比</th></tr>
+    <tr><td>sillyspec 全流程</td><td class="hl">125 min</td><td class="hl">265</td><td class="hl">60.6M</td><td class="hl">54.0%（82 次 CLI 调用）</td><td>16%</td></tr>
+    <tr><td>sillyspec quick</td><td>25.3 min</td><td>77</td><td>8.3M</td><td class="ok">14.4%</td><td>~50%（环境税 19%）</td></tr>
+    <tr><td>openspec</td><td class="ok">17.2 min</td><td class="ok">71</td><td class="ok">6.5M</td><td>27.6%</td><td>66%</td></tr>
+  </table>
+  <p class="legend">→ 结论：quick 通道已经接近合理；浪费集中在全流程臂。</p>
+
+  <b style="font-size:14px; display:block; margin-top:16px">② 大任务：修了四批之后反而更贵</b>
+  <table>
+    <tr><th></th><th>R4-L 旧版</th><th>R5-L 3.30.0</th><th>openspec</th></tr>
+    <tr><td>墙钟</td><td>185 min</td><td class="hl">193 min</td><td class="ok">80 min</td></tr>
+    <tr><td>tokens</td><td>99.1M</td><td class="hl">136.4M</td><td class="ok">52.0M</td></tr>
+    <tr><td>子代理</td><td>19 个 / 42.3M</td><td class="ok">3 个 / 1.9M</td><td>0</td></tr>
+    <tr><td>主会话</td><td>56.8M</td><td class="hl">134.5M</td><td>52.0M</td></tr>
+  </table>
+  <p class="legend">→ 扇出等旧病全治好了（结构修复是真的）；省下的钱全被流程往返吃回去了。193 分钟里写码只占 53 分钟。</p>
+
+  <b style="font-size:14px; display:block; margin-top:16px">③ 大任务多烧的 82.3M 到底烧在哪（对 openspec 的差值）</b>
+  <div class="bar-row"><span>CLI 状态机往返</span><div class="bar-track"><div class="bar-fill" style="width:100%; background:#d64545">106 次往返（run brainstorm×19、verify×18…）</div></div><span><b>+29.1M</b></span></div>
+  <div class="bar-row"><span>spec 工件维护</span><div class="bar-track"><div class="bar-fill" style="width:99%; background:#e07b39">97 vs 11 轮（verify-result 读写 14 次）</div></div><span><b>+28.9M</b></span></div>
+  <div class="bar-row"><span>强制测试重跑</span><div class="bar-track"><div class="bar-fill" style="width:68%; background:#c9a227">80 vs 48 轮（RERUN 强制重扫 ×2 ≈ 16M）</div></div><span><b>+19.7M</b></span></div>
+  <div class="bar-row"><span>读代码</span><div class="bar-track"><div class="bar-fill" style="width:21%; background:#8aa0b8">基本对称（任务固有）</div></div><span>+6.1M</span></div>
+  <p class="legend">→ 读代码是对称的（人家也要读）——差异全在前三桶。<b>还有隐藏税：Windows 写文件工具失效，agent 用 python 整文件重注入写了 57 轮 = 23.1M（17.2%）。</b></p>
+</section>
+
+<!-- 2 质量 -->
+<section>
+  <h2><span class="no">2</span>质量面：多付的钱没买到东西</h2>
+  <div class="callout" style="border-color: var(--red); background: var(--red-bg)">
+    三个独立会话（全流程/quick/openspec）写了<b>同一个错键</b> <code>autoCompactPrecompute</code>（正确名
+    <code>precomputeCompactionEnabled</code>，官方文档核验）。全流程四道防线——设计自查、计划自查、verify 门、归档提炼——<b>全部放行</b>，错键还进了知识库正典。
+  </div>
+  <p style="font-size:14px">所以 3.31.0 的口径改了：<b>贵 10~20% 买的是功能</b>（quicklog 账本、知识检索、多会话隔离、防造假的测试账本），<b>不是"更少 bug"</b>——后者今晚实证为零。防线重建（事实核验入口）是另一个独立立项，不混在这。</p>
+</section>
+
+<!-- 3 前后对比 -->
+<section>
+  <h2><span class="no">3</span>改完后，一次变更长什么样</h2>
+  <div class="cols">
+    <div class="col-card" style="background:var(--red-bg)">
+      <h3>😵 现在</h3>
+      <ol>
+        <li>走 <b>37 步</b>流程机：每步跑一次命令问"现在干嘛"，每次问都全量重发对话</li>
+        <li>每个任务打 <b>4 条命令</b>（开始→实现→记录审查→结束）</li>
+        <li>verify 报告 <b>九章节手写</b>，被读回 14 次</li>
+        <li>环境假失败 → <b>强制重扫</b>代码没变的测试</li>
+        <li>平台靠 agent 打电话才知道进度</li>
+      </ol>
+    </div>
+    <div class="col-card" style="background:var(--green-bg)">
+      <h3>🙂 改完后</h3>
+      <ol>
+        <li><b>开工一条命令</b>：材料一次给全（都是路径）</li>
+        <li>干完一个任务 <b>一条命令</b>（四件事 CLI 内部串完）</li>
+        <li>verify 报告<b>机器算 70%</b>，agent 只填三个空：结论 / 移交 / 例外</li>
+        <li><b>指纹没变不许重跑</b>，拒绝时给四条出路</li>
+        <li>平台<b>后台盯文件</b>看进度：proposal 出现=设计、任务勾=完成、账本动=验证</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- 4 五件 -->
+<section>
+  <h2><span class="no">4</span>五件活：全在 CLI 侧，不动执行结构</h2>
+  <table>
+    <tr><th style="width:26%">件</th><th style="width:12%">量级</th><th>干什么</th><th>验收（机器判）</th><th>预期</th></tr>
+    <tr><td><b>① task done 四合一</b></td><td><span class="tag tag-q">quick</span></td><td>新命令把「记录审查→勾任务→提交」串成一个进程</td><td>13 任务场景调用数 52→13</td><td>−12~15M<br>−20 分钟</td></tr>
+    <tr><td><b>② verify 填槽制</b></td><td><span class="tag tag-q">quick~小</span></td><td><code>--draft</code> 把能算的章节预填成完整句子，agent 只填三个 <code>&lt;!--AGENT:--&gt;</code> 槽</td><td>verify-result 读写 ≤3 次，三槽外零手写；<b>--done 拦整份重写</b>（承重件）</td><td>−4~8M<br>−14 分钟</td></tr>
+    <tr><td><b>③ 重跑闸</b></td><td><span class="tag tag-q" style="background:#e6f7ec">已落地 ✓</span></td><td>RERUN 前先算失败签名（代码指纹+测试面+环境探针），没变直接拒绝并印四条出路</td><td>五态回归已绿（1ccf5460，2026-09-22）</td><td>−6~8M<br>−17 分钟</td></tr>
+    <tr><td><b>④ 快照构建依赖链接</b></td><td><span class="tag tag-q">quick</span></td><td>通用「env 钉定缓存链接」注册表（uv 是首行数据，扩新工具=加一行），消 37 分钟假红卡点</td><td>E2E 新场景绿</td><td>纯墙钟<br>（token≈0）</td></tr>
+    <tr><td><b>⑤ 步进折叠</b></td><td><span class="tag" style="background:#f0f3f8;color:#5b6b7f">降级</span></td><td>ROI 差（步数折叠≈请求折叠的 15%）；路由职能并入 R7（机器草稿编辑距离信号）</td><td>—</td><td>—</td></tr>
+  </table>
+  <p class="legend">①③④ 几小时一件可立即开工；② 一两天；⑤ 是大件走完整流程。另有第六件打底：<b>后台观察器</b>（盯文件推平台，观测与协议解耦）随②⑤ 一起落。</p>
+</section>
+
+<!-- 5 验收 -->
+<section>
+  <h2><span class="no">5</span>怎么验收：两道门，各对各的批次</h2>
+  <div class="cols">
+    <div class="col-card" style="background:var(--amber-bg)">
+      <h3>R6 · quick 批次验收（①②④ 落地后）</h3>
+      <div class="stat amber" style="text-align:left"><div class="num" style="font-size:26px">三桶 ≤50M</div><div class="lab">线性预期 77.7→~50M（斜坡交互或更好，但<b>打不穿 20M</b>——不装能）</div></div>
+      <p style="font-size:14px; margin-top:8px">墙钟 ≤150min · 当量 ≤1.9× · 擦边过关必须附剩余差距归因。<br><b>R6 同时是 R7 手术的立项测量</b>（四列遥测+桶级对比）。</p>
+    </div>
+    <div class="col-card" style="background:var(--blue-bg)">
+      <h3>R7 · 协议手术验收（2-调用+全件机器起草+watcher）</h3>
+      <div class="stat" style="text-align:left"><div class="num" style="font-size:26px; color:var(--blue)">三桶 ≤20M</div><div class="lab">达标线 当量 ≤1.3× / 拉伸 ≤1.2× / 墙钟目标 ~90min</div></div>
+      <p style="font-size:14px; margin-top:8px">打穿 20M 的是协议形状（少必需 CLI + 工件 CLI 写），不是步数折叠。质量底线两道门同跑：错键探针、账本对账、12 真拦回归。</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 路线 -->
+<section>
+  <h2><span class="no">6</span>路线：先小刀，数据决定大手术</h2>
+  <div class="flow">
+    <span class="step">③ 已落地 ✓（1ccf5460）</span><span class="arrow">→</span>
+    <span class="step">现在：①④ + ② 填槽（含 --done 篡改门禁）</span><span class="arrow">→</span>
+    <span class="step" style="background:var(--amber-bg)"><b>R6 重放：quick 批次验收 + R7 立项测量</b></span><span class="arrow">→</span>
+    <span class="step" style="background:var(--blue-bg)"><b>R7 协议手术</b>（真刀）</span>
+  </div>
+  <p style="margin-top:14px; font-size:14px"><b>协议手术三张牌</b>（打穿 20M 门的刀，R6 数据立项）：</p>
+  <ul style="font-size:14px; padding-left:22px; margin-top:6px">
+    <li><b>两调用协议</b>——开工 + 收尾，中间零流程对话</li>
+    <li><b>所有文件机器起草</b>——连 proposal/tasks 都是 CLI 打草稿，agent 只改错处</li>
+    <li><b>写文件根因修复</b>——消灭 57 轮 python 整文件重注入（先查 Write 失效根因，再谈逃生通道）</li>
+  </ul>
+</section>
+
+<footer>
+  依据链：<b>round5/flip-3.31.0-proposal.md</b>（完整方案）· <b>round5/r5l-forensic-verdict.md</b>（法证终账）· round5/audit/（四会话逐请求数据，双重复核）<br>
+  本页为合并执行顺序的人话视图 · 2026-09-22
+</footer>
+
+</div>
+</body>
+</html>

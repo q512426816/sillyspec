@@ -25,3 +25,9 @@ eval/results/
 # 临时产物
 attachments/
 sa-rename-probe/
+
+# 本地构建产物与会话残留（不入库）
+/sillyspec-*.tgz
+*.stackdump
+/r7-test-env/demo-project/
+/round5/_gsd/

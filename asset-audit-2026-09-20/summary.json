@@ -1,0 +1,241 @@
+{
+  "generatedAt": "2026-09-20T12:27:35.518Z",
+  "repos": {
+    "sillyspec": {
+      "root": "C:/Users/qinyi/IdeaProjects/sillyspec",
+      "archive": {
+        "total": 107,
+        "fullSixDocs": 43,
+        "dateRange": "2026-04-08 ~ 2026-09-20",
+        "datedNamed": 95,
+        "activeChanges": [
+          "2026-09-20-quick-asset-tail"
+        ]
+      },
+      "quicklog": {
+        "files": 11,
+        "entries": 459,
+        "status": {
+          "已完成": 436,
+          "已完成（代码并入 commit 4a5f596，与 --no-worktree 谎言修复混提；message 漏标 7 bug）": 2,
+          "已完成（经直接 git commit，非 quick --done——quick 审计 shared.js:516 对文件删除恒 blocked 无 flag 解锁，A6 必删 propose.js/propose.md 故走 quick 不通）": 2,
+          "已废弃": 1,
+          "进行中": 11,
+          "已取消": 7
+        },
+        "byMonth": {
+          "2026-06": 12,
+          "2026-07": 8,
+          "2026-08": 230,
+          "2026-09": 209
+        },
+        "firstTs": "2026-06-04 16:47:41",
+        "lastTs": "2026-09-20 18:19:21"
+      },
+      "moduleDocs": {
+        "count": 29,
+        "totalLines": 2455,
+        "byDir": {
+          ".sillyspec/docs/dashboard/modules": 6,
+          ".sillyspec/docs/sillyspec/modules": 23
+        }
+      },
+      "troubleshooting": {
+        "files": [
+          "docs/sillyspec/troubleshooting.md",
+          "docs/troubleshooting.md"
+        ],
+        "entries": 68,
+        "numberedEntries": 66
+      },
+      "knownIssues": {
+        "exists": true,
+        "entries": 33,
+        "statusTally": {},
+        "lines": 172
+      },
+      "frIndex": {
+        "entries": 50,
+        "withConfirm": 47,
+        "confirmVerified": 47
+      },
+      "gotchas": {
+        "files": 3,
+        "entries": 24,
+        "byFile": {
+          "conventions.md": 13,
+          "patterns.md": 10,
+          "uncategorized.md": 1
+        },
+        "indexRouteLines": 62
+      },
+      "tests": {
+        "testFiles": 554,
+        "testLines": 102854,
+        "regressionPinIndicator": 17,
+        "byTopLevelDir": {
+          "test": 554
+        }
+      },
+      "git": {
+        "commits": 1376,
+        "head": "41cb1a61",
+        "lastCommitDate": "2026-09-20"
+      },
+      "misc": {
+        "roadmap": {
+          "exists": true,
+          "lines": 22,
+          "items": 2
+        },
+        "knowledgeIndex": {
+          "exists": true,
+          "lines": 84
+        },
+        "redlinesYaml": false
+      }
+    },
+    "platform": {
+      "root": "C:/Users/qinyi/IdeaProjects/multi-agent-platform",
+      "archive": {
+        "total": 293,
+        "fullSixDocs": 16,
+        "dateRange": "2026-05-25 ~ 2026-09-20",
+        "datedNamed": 286,
+        "activeChanges": [
+          "2026-07-23-milestone-mobile",
+          "2026-09-03-agent-provider-abstraction",
+          "2026-09-03-group-chat-archive-delete",
+          "2026-09-04-conflict-resolve-entry",
+          "2026-09-07-pi-task-events",
+          "2026-09-07-session-pin-rename-scheduled-send",
+          "2026-09-08-cursor-interactive-session",
+          "2026-09-08-session-list-liveness-dot",
+          "2026-09-09-conflict-root-workspace-scoping",
+          "2026-09-09-sessions-file-browser-three-pane",
+          "2026-09-09-sessions-visual-refresh",
+          "2026-09-10-auto-resume-interrupted-turn",
+          "2026-09-10-group-agent-direct-chat",
+          "2026-09-10-review-dispatch-platform-fixes",
+          "2026-09-10-zcode-session-sqlite-read",
+          "2026-09-11-agent-log-attribution-refactor",
+          "2026-09-11-provider-adapter-registry",
+          "2026-09-11-session-provider-switch-codex-pi",
+          "2026-09-12-provider-file-tx",
+          "2026-09-12-session-live-display-fixes",
+          "2026-09-13-consensus-timeout-activity-aware",
+          "2026-09-13-session-group-ux-fixes",
+          "2026-09-14-session-ctx-compact",
+          "2026-09-14-session-export",
+          "2026-09-14-session-thinking-level",
+          "2026-09-14-workspace-drag-sort",
+          "2026-09-15-background-task-notification-delivery",
+          "2026-09-15-background-task-permission-lockout",
+          "2026-09-15-subagent-three-pane-display",
+          "2026-09-16-background-task-grace-timeout",
+          "2026-09-16-logs-cursor-tiebreaker",
+          "2026-09-16-mobile-changes-parity",
+          "2026-09-16-platform-progress-ingest-persist",
+          "2026-09-17-knowledge-precipitation",
+          "2026-09-18-single-chat-steering",
+          "2026-09-18-web-menu-management",
+          "2026-09-20-claude-autocompact-config",
+          "2026-09-20-scope-audit-cross-repo-platform",
+          "default"
+        ]
+      },
+      "quicklog": {
+        "files": 25,
+        "entries": 1075,
+        "status": {
+          "已完成": 1023,
+          "进行中": 41,
+          "已完成（3 commit 本地，push 待 GitHub 网络 port 443 连不上）": 1,
+          "已完成（纯调研；曾尝试 running-skip 修复已 revert）": 1,
+          "(未标)": 1,
+          "已完成（commit 5f39f496，已 push main）": 1,
+          "已完成（commit e9866a0b，已 push main）": 1,
+          "已完成（commit 913503ad，已 push main）": 1,
+          "已暂存（git add install.sh，未 commit；本机 .cmd 已手工修可立即用）": 1,
+          "已暂存（git add 4 文件，未 commit；DB 已临时 ALTER 生效；待 build backend 持久化）": 1,
+          "已完成（⚠️ quick --done 审计拦删除无法收尾，经用户确认直接 git 提交）": 1,
+          "已完成（分支 sillyspec/2026-09-10-mcp-central-registry 提交 83932255e，待随分支 ff 合并）": 1,
+          "已取消": 1
+        },
+        "byMonth": {
+          "2026-06": 216,
+          "2026-07": 184,
+          "2026-08": 364,
+          "2026-09": 311
+        },
+        "firstTs": "2026-06-04 09:11:09",
+        "lastTs": "2026-09-20 18:30:19"
+      },
+      "moduleDocs": {
+        "count": 221,
+        "totalLines": 14615,
+        "byDir": {
+          ".sillyspec/docs/backend/modules": 36,
+          ".sillyspec/docs/frontend/modules": 87,
+          ".sillyspec/docs/multi-agent-platform/modules": 11,
+          ".sillyspec/docs/sillyhub-daemon/modules": 51,
+          ".sillyspec/docs/SillyHub/modules": 36
+        }
+      },
+      "troubleshooting": {
+        "files": [],
+        "entries": 0,
+        "numberedEntries": 0
+      },
+      "knownIssues": {
+        "exists": true,
+        "entries": 22,
+        "statusTally": {},
+        "lines": 163
+      },
+      "frIndex": {
+        "entries": 11,
+        "withConfirm": 11,
+        "confirmVerified": 11
+      },
+      "gotchas": {
+        "files": 5,
+        "entries": 76,
+        "byFile": {
+          "conventions.md": 11,
+          "patterns.md": 10,
+          "sillyspec-gotchas.md": 10,
+          "testing-gotchas.md": 6,
+          "uncategorized.md": 39
+        },
+        "indexRouteLines": 74
+      },
+      "tests": {
+        "testFiles": 320,
+        "testLines": 132284,
+        "regressionPinIndicator": 2,
+        "byTopLevelDir": {
+          "frontend": 80,
+          "sillyhub-daemon": 240
+        }
+      },
+      "git": {
+        "commits": 2994,
+        "head": "82a76721f",
+        "lastCommitDate": "2026-09-20"
+      },
+      "misc": {
+        "roadmap": {
+          "exists": true,
+          "lines": 241,
+          "items": 34
+        },
+        "knowledgeIndex": {
+          "exists": true,
+          "lines": 106
+        },
+        "redlinesYaml": true
+      }
+    }
+  }
+}
