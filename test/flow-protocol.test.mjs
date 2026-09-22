@@ -151,3 +151,36 @@ test('⑤ 混跑回退写读两侧：thin change 跑 run <stage> → legacy_fall
   assert.match(done.stderr, /混跑回退 legacy/)
   rmSync(cwd, { recursive: true, force: true })
 })
+
+test('⑥ FR 索引提炼接线：薄变更 flow done 后 requirements 进 knowledge/fr（无 design.md 走交付文件伪域）', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t6'
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input',
+    'backend 守护任务\n成功标准：\n- backend 守护行为 X 发生'])
+  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+  const specBase = join(cwd, '.sillyspec')
+  const reqs = readFileSync(join(specBase, 'changes', change, 'requirements.md'), 'utf8')
+  assert.match(reqs, /### FR-01:/, '机器稿 requirements 含 FR 块（供索引解析）')
+
+  // agent 干活：交付文件落在 backend/ 目录（伪域路由信号；用 .txt——.py 交付物会触发门禁
+  // python 环境探测族（P17 同族预存行为，无解释器即挂），与本测试目的无关）
+  mkdirSync(join(cwd, 'backend', 'app'), { recursive: true })
+  writeFileSync(join(cwd, 'backend', 'app', 'deliv.txt'), 'x\n')
+  execFileSync('git', ['add', 'backend'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'deliv'], { cwd, stdio: 'pipe' })
+
+  const s2 = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
+  const frFile = join(specBase, 'knowledge', 'fr', 'auto-backend.md')
+  assert.ok(existsSync(frFile), 'FR 索引条目落盘（auto-backend 伪域——无 design.md 时按交付文件路由）')
+  const frText = readFileSync(frFile, 'utf8')
+  assert.match(frText, new RegExp(`FR-auto-backend-001`))
+  assert.match(frText, new RegExp(`变更：${change}`))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {
+  const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+  const hits = src.split('await triggerSync(cwd, change)').length - 1
+  assert.ok(hits >= 2, `flow.js 应在 start/done 两处尾部触发 triggerSync（实际 ${hits} 处）`)
+})

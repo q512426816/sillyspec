@@ -279,6 +279,24 @@ function makeFixture() {
     `14f NEW: 前缀剥除后参与投票（实际 ${rd.written[0] && rd.written[0].file}）`)
 }
 
+// ── 15. deliverableFiles 旁路（薄流程无 design.md：flow done 以基线 diff 供清单） ──
+{
+  const { knowledgeRoot, mkChange } = makeFixture()
+  const d = mkChange('2026-09-22-pdf1', '# R\n### FR-01: 薄变更行为\n')
+  // 无 design.md、无 deliverableFiles → unmapped（既有行为保持）
+  const r1 = indexRequirements({ changeDir: d, knowledgeRoot })
+  assert(r1.written[0].file === 'fr/unmapped.md', `15a 无 design 无 override 退 unmapped（实际 ${r1.written[0] && r1.written[0].file}）`)
+  // deliverableFiles → 伪域路由（与 design 行同判法：目录段投票）
+  const d2 = mkChange('2026-09-22-pdf2', '# R\n### FR-01: 薄变更行为二\n')
+  const r2 = indexRequirements({ changeDir: d2, knowledgeRoot, deliverableFiles: ['backend/app/x.py', 'backend/app/y.ts', 'frontend/src/z.js'] })
+  assert(r2.written[0].file === 'fr/auto-backend.md', `15b override 按交付文件伪域路由（实际 ${r2.written[0] && r2.written[0].file}）`)
+  // override 优先于 design.md（薄流程语义：实际 diff 是真相，design 声明可缺席或过期）
+  const d3 = mkChange('2026-09-22-pdf3', '# R\n### FR-01: 薄变更行为三\n')
+  writeFileSync(join(d3, 'design.md'), '# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | src/legacy/x.js |\n')
+  const r3 = indexRequirements({ changeDir: d3, knowledgeRoot, deliverableFiles: ['backend/app/x.py'] })
+  assert(r3.written[0].file === 'fr/auto-backend.md', `15c override 优先于 design.md（实际 ${r3.written[0] && r3.written[0].file}）`)
+}
+
 for (const dir of tmpRoots) {
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ }
 }

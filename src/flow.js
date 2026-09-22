@@ -28,7 +28,7 @@ import { join } from 'node:path'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
-import { resolveRuntimeRoot } from './run/shared.js'
+import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
 
 const FLOW_STATE_FILE = 'flow-state.yaml'
 const SUBSTEPS = ['artifacts', 'ledger', 'probes', 'distill', 'archive', 'events']
@@ -199,6 +199,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   } else {
     console.log(lines.join('\n'))
   }
+  // 平台同步（2026-09-22-thin-fr-distill-sync：flow 走 index.js 分发不经 runCommand，此前后台
+  // spec-sync 从不触发——薄道 docs/knowledge 不推平台。对齐 run 族语义：尾部 best-effort 后台推）
+  try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
   return { change, baseline, materials }
 }
 
@@ -293,7 +296,10 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     mark('probes')
   }
 
-  // ④ distill：决策提炼（rejected/needsWait 异态 → 升厚留人工裁决，不静默吞）
+  // ④ distill：决策提炼（rejected/needsWait 异态 → 升厚留人工裁决，不静默吞）+ FR 索引提炼
+  // （2026-09-22-thin-fr-distill-sync：薄道此前只蒸馏 decisions 不调 indexRequirements——
+  // requirements 永不进 knowledge/fr，知识复利在新默认道断流；薄变更无 design.md，域路由
+  // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
   if (st.substeps?.distill === 'done') { skip('distill') } else {
     try {
       const { distillIntoKnowledge } = await import('./decision-distill.js')
@@ -307,6 +313,18 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       }
     } catch (e) {
       console.warn(`⚠️ distill best-effort 失败（不阻断归档链）: ${(e && e.message) || e}`)
+    }
+    try {
+      const { indexRequirements } = await import('./fr-index.js')
+      const knowledgeRoot = join(specBase, 'knowledge')
+      const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+      const deliverableFiles = changedFilesSinceBaseline(cwd, st.baseline_commit)
+      const r = indexRequirements({ changeDir, knowledgeRoot, headHash: typeof head === 'string' ? head.trim() : '', deliverableFiles })
+      if (r && Array.isArray(r.written) && r.written.length > 0) {
+        console.log(`📚 FR 索引提炼：${r.written.map((w) => w.id).join('、')} → knowledge/fr/（域=${r.written[0].file}）`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ FR 索引提炼 best-effort 失败（不阻断归档链）: ${(e && e.message) || e}`)
     }
     mark('distill')
   }
@@ -364,6 +382,8 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   } catch { /* 遥测 best-effort */ }
 
   console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——六子步 ${doneList.join('、')}；change 已归档注销。`)
+  // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
+  try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
   return { change, substeps: doneList }
 }
 
