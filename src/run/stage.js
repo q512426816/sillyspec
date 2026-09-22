@@ -19,7 +19,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
@@ -584,49 +584,19 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
 
   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
   if (defSteps && defSteps[currentIdx]) {
+    // ── burst 渲染分支（2026-09-22-stage-burst-fold D-002/D-006/D-008，FR-02）──
+    // 白名单主阶段 + readStageBurst 开启时走单趟折叠渲染：noAI 步就地 CLI 执行，AI 步逐个
+    // 调既有 outputStep 一次下发全部剩余说明书（渲染器零改动）。waiting 步在此不可达——
+    // runStage 对任一 waiting 步的硬拦（上方 waiting 检查块 exit(1) 指引 --continue）先于本分支。
+    if (STAGE_BURST_STAGES.includes(stageName) && await readStageBurst(cwd)) {
+      return await renderStageBurst({ stageName, defSteps, cwd, changeName, platformOpts, progress, pm, specBase, scanProfile, stageData })
+    }
     // noAI 步骤自动完成（CLI-only，不需要 Agent 参与）
     if (defSteps[currentIdx].noAI || stageData.steps[currentIdx]?.noAI) {
       const stepName = defSteps[currentIdx].name
       const cliAction = defSteps[currentIdx]._cliAction || stageData.steps[currentIdx]?._cliAction
       console.log(`⚙️ Step ${currentIdx + 1}/${stageData.steps.length}: ${stepName}（CLI 自动执行，无需 Agent）`)
-      if (cliAction === 'scanPreflight') {
-        await executeScanPreflight(cwd, platformOpts, scanProfile)
-      } else if (cliAction === 'scanPostcheck') {
-        await executeScanPostcheck(cwd, platformOpts, scanProfile)
-      } else if (cliAction === 'scanDetectProjects') {
-        await executeScanDetectProjects(cwd, platformOpts)
-      } else if (cliAction === 'scanResumeCheck') {
-        await executeScanResumeCheck(cwd, platformOpts)
-      } else if (cliAction === 'scanFinalize') {
-        await executeScanFinalize(cwd, platformOpts)
-      } else if (cliAction === 'planPostcheck') {
-        await executePlanPostcheck(cwd, platformOpts, progress)
-      } else if (cliAction === 'doctorRunDiagnostics') {
-        // 2026-09-09-doctor-noai FR-01：doctor 阶段折叠——noAI 步跑全量诊断
-        // （八维 + 三新 detector）+ renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘
-        const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
-        const diag = await runDoctorDiagnostics({ cwd })
-        console.log(renderDoctorSummary(diag))
-        try { writeDoctorDiagnosis(diag, (platformOpts?.specRoot || join(cwd, '.sillyspec'))) } catch { /* 落盘 fail-soft */ }
-      } else if (cliAction === 'progressConfirm') {
-        // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
-        // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返
-        executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
-      } else if (cliAction === 'verifyRunQualityScan') {
-        // P0-1（noai-ir-roadmap §3）：verify「运行测试和质量扫描」noAI 化——test/lint 实测提前，
-        // 指纹落盘供 --done 复用免重跑（长套件不再跑两遍）；失败 throw 不盖 completed，
-        // 输出 + 并行 WIP 归因提示透传给 agent（前置一/二）。
-        const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
-        await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
-      } else if (cliAction === 'archiveDistill') {
-        // P0-4 安全变体（noai-ir-roadmap §3）：archive「decision-distill 决策提炼」noAI 化——
-        // 提炼本体是 CLI 纯函数（旧 prompt 即「调函数转述输出」纯中继）；needsWait 裁决收敛到
-        // 「确认归档 --confirm」。全路径不抛（裁决是确认步输入，非本步阻断条件）。
-        const { executeArchiveDistill } = await import('./archive-distill.js')
-        await executeArchiveDistill({ cwd, specBase, changeName })
-      } else {
-        throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
-      }
+      await executeNoAiCliAction({ cliAction, stepName, stageName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile, stageData })
       stageData.steps[currentIdx].status = 'completed'
       stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
       pm._write(cwd, progress, changeName)
@@ -636,26 +606,124 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         console.log('')
         await outputStep(stageName, nextIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
       } else {
-        // 所有步骤完成
-        stageData.status = 'completed'
-        stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
-        // 主阶段完成钉 currentStage（troubleshooting #56 根因修复，2026-09-08；与 complete.js 两处同语义）
-        if (!AUXILIARY_STAGES.includes(stageName)) progress.currentStage = stageName
-        // persist _write 移到 completeStageGates 成功之后（task-02 / review-2026-08-09 #2）：gate 异常/失败 → rollback 回 in-progress 落盘，此处未到 _write，DB 不留假 completed。
-        // 阶段完成收尾共享管线（noAI 末步核心修复 S1：plan postcheck independent-tier review verdict=fail /
-        // 平台 scan manifest 此前被绕过）。gate 失败已 rollback 为 in-progress，early-return（不 fall through 到末尾 return）。
-        const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText: null })
-        // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1（与 completeStep/continueStep 同语义）。
-        if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
-        if (_stageGatesResult) return _stageGatesResult
-        // gate 全过：persist completed（task-02 移后；此处无 triggerSync，与同文件 noAI 末步语义一致）。
-        pm._write(cwd, progress, changeName)
-        console.log(`\n✅ ${stageName} 阶段全部完成。`)
+        // 所有步骤完成——收尾管线抽为 finalizeStageAllStepsDone（burst 全 noAI 场景共用，防第二副本）
+        return await finalizeStageAllStepsDone({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, currentIdx })
       }
       return
     }
     await outputStep(stageName, currentIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
   }
+}
+
+// ── burst 阶段折叠助手族（2026-09-22-stage-burst-fold，D-002/D-006/D-008）──
+// 白名单 STAGE_BURST_STAGES 自 shared.js import（与 command.js --done 分发门共用单一事实源）。
+
+/**
+ * noAI 步 _cliAction 分发（原 runStage noAI 分支 if-链原样抽取，D-008——常规单步路径与
+ * burst 渲染循环共同调用，单一事实源防第三副本；行为零变化：同一 if-链、同一入参语义。
+ * complete.js 的 --done 路径平行副本不动——"不改 completeStep 本体"边界）。
+ */
+async function executeNoAiCliAction({ cliAction, stepName, stageName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile, stageData }) {
+  if (cliAction === 'scanPreflight') {
+    await executeScanPreflight(cwd, platformOpts, scanProfile)
+  } else if (cliAction === 'scanPostcheck') {
+    await executeScanPostcheck(cwd, platformOpts, scanProfile)
+  } else if (cliAction === 'scanDetectProjects') {
+    await executeScanDetectProjects(cwd, platformOpts)
+  } else if (cliAction === 'scanResumeCheck') {
+    await executeScanResumeCheck(cwd, platformOpts)
+  } else if (cliAction === 'scanFinalize') {
+    await executeScanFinalize(cwd, platformOpts)
+  } else if (cliAction === 'planPostcheck') {
+    await executePlanPostcheck(cwd, platformOpts, progress)
+  } else if (cliAction === 'doctorRunDiagnostics') {
+    // 2026-09-09-doctor-noai FR-01：doctor 阶段折叠——noAI 步跑全量诊断
+    // （八维 + 三新 detector）+ renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘
+    const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
+    const diag = await runDoctorDiagnostics({ cwd })
+    console.log(renderDoctorSummary(diag))
+    try { writeDoctorDiagnosis(diag, (platformOpts?.specRoot || join(cwd, '.sillyspec'))) } catch { /* 落盘 fail-soft */ }
+  } else if (cliAction === 'progressConfirm') {
+    // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
+    // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返
+    executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
+  } else if (cliAction === 'verifyRunQualityScan') {
+    // P0-1（noai-ir-roadmap §3）：verify「运行测试和质量扫描」noAI 化——test/lint 实测提前，
+    // 指纹落盘供 --done 复用免重跑（长套件不再跑两遍）；失败 throw 不盖 completed，
+    // 输出 + 并行 WIP 归因提示透传给 agent（前置一/二）。
+    const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
+    await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+  } else if (cliAction === 'archiveDistill') {
+    // P0-4 安全变体（noai-ir-roadmap §3）：archive「decision-distill 决策提炼」noAI 化——
+    // 提炼本体是 CLI 纯函数（旧 prompt 即「调函数转述输出」纯中继）；needsWait 裁决收敛到
+    // 「确认归档 --confirm」。全路径不抛（裁决是确认步输入，非本步阻断条件）。
+    const { executeArchiveDistill } = await import('./archive-distill.js')
+    await executeArchiveDistill({ cwd, specBase, changeName })
+  } else {
+    throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
+  }
+}
+
+/**
+ * 阶段全部步骤完成后的收尾管线（原 noAI 末步 :640-653 块原样抽取）——noAI 末步路径与
+ * burst 渲染全 noAI 场景共用。gate 失败 rollback + exitCode 语义逐字保留：
+ * persist _write 移到 completeStageGates 成功之后（gate 异常/失败 → rollback 回 in-progress
+ * 落盘，DB 不留假 completed）；阶段完成收尾共享管线（plan postcheck independent-tier review
+ * verdict=fail / 平台 scan manifest 不被绕过）。
+ */
+async function finalizeStageAllStepsDone({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, currentIdx }) {
+  stageData.status = 'completed'
+  stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+  // 主阶段完成钉 currentStage（troubleshooting #56 根因修复，2026-09-08；与 complete.js 两处同语义）
+  if (!AUXILIARY_STAGES.includes(stageName)) progress.currentStage = stageName
+  const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null })
+  // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1（与 completeStep/continueStep 同语义）。
+  if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
+  if (_stageGatesResult) return _stageGatesResult
+  // gate 全过：persist completed（此处无 triggerSync，与 noAI 末步语义一致）。
+  pm._write(cwd, progress, changeName)
+  console.log(`\n✅ ${stageName} 阶段全部完成。`)
+  return undefined
+}
+
+/**
+ * burst 折叠渲染（D-002，FR-02）：单趟遍历 defSteps——跳过 completed/skipped；noAI 步就地
+ * CLI 执行 + 标完成落库（与单步 noAI 路径同语义）；AI 步逐个调既有 outputStep（渲染器零改动，
+ * 首 AI 步的 persona/护栏注入由 outputStep 的 firstRenderableIdx 机制自然生效）。遍历后：
+ * 无剩余步 → finalizeStageAllStepsDone 收尾（全 noAI 场景）；有剩余 → burst 尾提示。
+ * blocked/stale 步按「非 completed/skipped」正常进说明书（currentIdx 的 stale/blocked 已在
+ * runStage 上方拉回 pending；尾随 stale 步的完成侧拉回归 completeStepBurst 轮首，D-003@v2）。
+ */
+async function renderStageBurst({ stageName, defSteps, cwd, changeName, platformOpts, progress, pm, specBase, scanProfile, stageData }) {
+  let lastNoAiIdx = -1
+  for (let i = 0; i < defSteps.length; i++) {
+    const st = stageData.steps[i]
+    if (st && (st.status === 'completed' || st.status === 'skipped')) continue
+    const isNoAI = defSteps[i]?.noAI || st?.noAI
+    if (isNoAI) {
+      const stepName = defSteps[i].name
+      const cliAction = defSteps[i]._cliAction || st?._cliAction
+      console.log(`⚙️ Step ${i + 1}/${stageData.steps.length}: ${stepName}（burst 就地 CLI 自动执行）`)
+      await executeNoAiCliAction({ cliAction, stepName, stageName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile, stageData })
+      if (st) {
+        st.status = 'completed'
+        st.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+      }
+      pm._write(cwd, progress, changeName)
+      lastNoAiIdx = i
+      continue
+    }
+    await outputStep(stageName, i, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
+  }
+  const remainingIdx = stageData.steps.findIndex(s => s && s.status !== 'completed' && s.status !== 'skipped')
+  if (remainingIdx === -1) {
+    // currentIdx=本轮最后执行的 noAI 步（与单步路径「刚执行步」同语义；尾随 skipped 场景不漂移——
+    // Grill execute 轮 P2-1），防御回退 defSteps.length - 1
+    return await finalizeStageAllStepsDone({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, currentIdx: lastNoAiIdx !== -1 ? lastNoAiIdx : defSteps.length - 1 })
+  }
+  console.log('')
+  console.log('📦 burst 模式：本阶段全部说明书已一次下发。干完全部步骤后用一次 --done 收口（CLI 内部逐步推进+逐步校验，失败即停在失败步）。')
+  return undefined
 }
 
 

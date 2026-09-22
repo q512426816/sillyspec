@@ -15,7 +15,8 @@
  * change 仍 active，重入从断点续不新开 change。
  *
  * 配置（local.yaml，config-schema 注册；design 措辞 `flow: thin|legacy` 落地为单键
- * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 thin；legacy=既有 run <stage>
+ * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 legacy（2026-09-22-stage-burst-fold D-010@v2
+ * 用户裁定翻回——flow 族保留为实验通道，薄道不再缺省敞开）；legacy=既有 run <stage>
  * 全族逐字不动，flow start 拒跑并指路（回滚一行 yaml）。thin change 上跑 run <stage> =
  * 混跑回退（flow-state 落 legacy_fallback，flow done 按厚档裁决——两套记账不叠加）。
  *
@@ -58,12 +59,12 @@ export function writeFlowState(changeDir, patch) {
   }, { lineWidth: 120 }) + '\n')
 }
 
-/** 读 local.yaml 的 flow 配置（缺省 thin；文本级读同既有 parseSimpleYaml 习惯）。 */
+/** 读 local.yaml 的 flow 配置（缺省 legacy——2026-09-22-stage-burst-fold D-010@v2 翻转；文本级读同既有习惯）。 */
 export function readFlowConfig(specBase) {
   try {
     const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
     const m = raw.match(/^\s*mode\s*:\s*(thin|legacy)\s*$/m)
-    let mode = m ? m[1] : 'thin'
+    let mode = m ? m[1] : 'legacy'
     if (/^flow\s*:\s*(thin|legacy)\s*$/m.test(raw)) mode = raw.match(/^flow\s*:\s*(thin|legacy)\s*$/m)[1]
     const th = raw.match(/^\s*edit_ratio_threshold\s*:\s*([0-9.]+)\s*$/m)
     const en = raw.match(/^\s*edit_ratio_enforcement\s*:\s*(advisory|block)\s*$/m)
@@ -73,7 +74,7 @@ export function readFlowConfig(specBase) {
       editRatioEnforcement: en ? en[1] : 'advisory',
     }
   } catch {
-    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
+    return { mode: 'legacy', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
   }
 }
 
@@ -121,7 +122,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   const cfg = readFlowConfig(specBase)
   if (cfg.mode === 'legacy') {
     console.error('❌ 本项目配置 flow.mode=legacy——2-调用薄协议未启用，走既有流程：sillyspec run <stage> --change <名>')
-    console.error('   回滚一行 yaml：local.yaml 删掉 mode: legacy 或改为 mode: thin（缺省即 thin）')
+    console.error('   回滚一行 yaml：local.yaml 删掉 mode: legacy 或改为 mode: thin（缺省即 legacy）')
     process.exit(2)
   }
   const { ProgressManager } = await import('./progress.js')

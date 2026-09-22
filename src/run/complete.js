@@ -1163,6 +1163,119 @@ function prefetchDiffFileSet(ctx) {
 }
 
 /**
+ * burst 完成侧循环包装（2026-09-22-stage-burst-fold D-003@v2/D-004@v2/D-005/D-009，FR-03）：
+ * burst 模式下一次 --done 收口全部剩余步——循环调既有 completeStep（**本体零改动**，全部守卫
+ * ——WAIT 硬校验/waiting 前置/requiresWait 门控/意图断言/门禁/并发防护——逐轮原样生效）。
+ *
+ * 循环语义（每轮）：
+ * 1. **轮首：尾随 stale 拉回**（D-003@v2，钉死先于退出判定——「仅剩尾随 stale、无 pending」的轮
+ *    必须先拉回再判退出，否则 --reopen 中途开 burst 时渲染集合与完成集合发散、stale 尾残留阶梯）：
+ *    首个非 completed/skipped 步为 stale → 拉回 pending + pm._write（与 runStage 单步路径同语义）。
+ * 2. 重算 pending（谓词 pending|in-progress|blocked，与 completeStep 内部一致）；无 → 退出循环。
+ * 3. 调 completeStep(pm, progress, stageName, cwd, **null**, inputText, {...roundOptions, printNext:false})
+ *    ——每轮 outputText=null 走 P0-2 事实合成（per-step 摘要 CLI 合成，agent 只给一次整体 --output）。
+ *    completeStep 遇守卫失败 process.exit 即 burst 天然断点（agent 修复后重跑 --done 从断点幂等续推）；
+ *    续推/停轮以每轮后重读 DB 态为准（正常完成也返回 truthy 进度对象——真值性不代表失败）：
+ *    无 pending → 收口透传；pending 未前进（失败步保持/重拦）→ 停断点 + exitCode=1。
+ * 4. 每轮后 pm.read 重读（null=并发归档删除 → 报错 exitCode=1，对齐 command.js auto 路径 BUG-05 语义）。
+ * 5. **--answer 单次消费**（D-004@v2）：轮前快照全部步 waitAnswer、轮后比对——任一步 waitAnswer
+ *    新变为 === doneAnswer → 已消费，后续轮剥离（防 brainstorm 双 requiresWait 步〔选方案/确认设计〕
+ *    把步4答案错填步5；快照比对防 waiting 解析重定向漏检）。
+ * 6. **--step 断言仅首轮**（D-005）：第二轮起当前步已推进、断言必然 mismatch，首轮后剥离。
+ *
+ * 循环上限 50 轮（单阶段步数不可能超），耗尽仍有 pending → 报错防死循环。
+ * agent 的整体 --output 只打一行横幅（D-009：不落步记录——语义错归属会污染步骤审计面）。
+ *
+ * @param {import('./shared.js').ProgressManagerLike} pm
+ * @param {object} progress
+ * @param {string} stageName
+ * @param {string} cwd
+ * @param {string|null} outputText agent 整体摘要（仅横幅展示，不落步记录）
+ * @param {string|null} [inputText]
+ * @param {object} [options] 透传 completeStep 全量字段（printNext 强制 false、每轮 outputText 强制 null）
+ * @returns {Promise<object|undefined>} 末轮 completeStep 返回值
+ */
+export async function completeStepBurst(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
+  if (outputText) console.log(`📦 burst 收口摘要：${outputText}`)
+  let roundOptions = { ...options, printNext: false }
+  const MAX_ROUNDS = 50
+  let lastResult
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    // ① 轮首尾随 stale 拉回（先于退出判定）
+    const stepsNow = progress?.stages?.[stageName]?.steps
+    if (Array.isArray(stepsNow) && stepsNow.length > 0) {
+      const firstOpenIdx = stepsNow.findIndex(s => s && s.status !== 'completed' && s.status !== 'skipped')
+      if (firstOpenIdx !== -1 && stepsNow[firstOpenIdx].status === 'stale') {
+        console.log(`⚠️  Step "${stepsNow[firstOpenIdx].name}" 处于 stale，burst 轮首拉回待执行。`)
+        stepsNow[firstOpenIdx].status = 'pending'
+        pm._write(cwd, progress, options.changeName)
+      }
+    }
+    // ② 重算 pending（谓词与 completeStep 内部一致）
+    const stepsForPending = progress?.stages?.[stageName]?.steps
+    const pendingIdx = Array.isArray(stepsForPending)
+      ? stepsForPending.findIndex(s => s && (s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked'))
+      : -1
+    if (pendingIdx === -1) {
+      if (round === 0) {
+        // 退化场景对齐（execute 轮 Grill P2-2）：无任何待完成步的 --done 委托 completeStep 走
+        // 既有 no-pending 处理（「没有待完成的步骤」报错 / --confirm stale 回填 / 矛盾态自愈）
+        // ——burst 不静默吞掉该信号（静默 break 会让 auto 路径跳过 nextInFlow 推进）。
+        return await completeStep(pm, progress, stageName, cwd, outputText ?? null, inputText, roundOptions)
+      }
+      break
+    }
+    // ③ 轮前 waitAnswer 快照（D-004@v2 消费检测基准）
+    const answerSnapshot = roundOptions.doneAnswer != null && Array.isArray(stepsForPending)
+      ? stepsForPending.map(s => (s && s.waitAnswer) || null)
+      : null
+    const result = await completeStep(pm, progress, stageName, cwd, null, inputText, roundOptions)
+    lastResult = result
+    // ④ 每轮后重读（completeStep 内部已落库；重读后下一轮谓词基于真实 DB 态）。
+    // 注意 completeStep 正常完成单步也返回 truthy 进度对象（{stageCompleted:false, nextPendingIdx}）
+    // ——续推/停轮判定以重读 DB 态为准，不以返回值真值性为准（探针实证：步 7 正常完成返回
+    // {stageCompleted:false,currentIdx:6,nextPendingIdx:7}）。
+    const fresh = pm.read(cwd, options.changeName)
+    if (!fresh) {
+      console.error(`❌ burst 收口推进后进度数据消失（变更 ${options.changeName} 可能被并发归档/删除），请用 sillyspec progress show 核对当前状态`)
+      process.exitCode = 1
+      return lastResult
+    }
+    progress = fresh
+    // 停轮判定：重读后无 pending → 阶段收口（gate 返回态由 lastResult 透传）；pending 未前进
+    //（门禁失败步保持 pending / blocked 重拦 / 前置步被重置）→ 停在断点防同步锤击（重跑幂等续推）。
+    const stepsAfterRound = progress?.stages?.[stageName]?.steps
+    const nextPendingIdx = Array.isArray(stepsAfterRound)
+      ? stepsAfterRound.findIndex(s => s && (s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked'))
+      : -1
+    if (nextPendingIdx === -1) break
+    if (nextPendingIdx <= pendingIdx) {
+      if (!process.exitCode) process.exitCode = 1
+      break
+    }
+    // ⑤ --answer 单次消费：快照比对（任一步 waitAnswer 新变为 === doneAnswer 即已消费）
+    if (roundOptions.doneAnswer != null && answerSnapshot) {
+      const stepsAfter = progress?.stages?.[stageName]?.steps || []
+      const consumed = stepsAfter.some((s, i) => s && s.waitAnswer === roundOptions.doneAnswer
+        && (answerSnapshot[i] == null || answerSnapshot[i] !== roundOptions.doneAnswer))
+      if (consumed) roundOptions = { ...roundOptions, doneAnswer: undefined }
+    }
+    // ⑥ --step 断言仅首轮
+    if (round === 0 && roundOptions.stepAssert !== undefined) roundOptions = { ...roundOptions, stepAssert: undefined }
+  }
+  // 防死循环：耗尽仍有 pending
+  const stepsFinal = progress?.stages?.[stageName]?.steps
+  const stillOpenIdx = Array.isArray(stepsFinal)
+    ? stepsFinal.findIndex(s => s && (s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked'))
+    : -1
+  if (stillOpenIdx !== -1) {
+    console.error(`❌ burst 收口循环达到上限（${MAX_ROUNDS} 轮）仍有待完成步骤「${stepsFinal[stillOpenIdx].name}」——疑似状态推进异常，请 sillyspec progress show 核对后重跑。`)
+    process.exitCode = 1
+  }
+  return lastResult
+}
+
+/**
  * 判定 task 是否该被 autoCheckPlanFromReviews 自动勾选。
  * 端到端/deployment-critical task 要求 review spec+quality 双 pass（cannot_verify 不算，防批量完成
  * 放行未真验的端到端 task）；普通 task 非 fail 即可（保主 agent 直接实现模式体验，其 cannot_verify

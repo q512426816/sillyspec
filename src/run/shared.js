@@ -1945,6 +1945,40 @@ function readLocalYamlRaw(cwd) {
 }
 
 /**
+ * 读 stage.burst 开关（2026-09-22-stage-burst-fold D-001/D-007，FR-01/FR-04）：local.yaml
+ * `stage.burst === true` 开启旧流程阶段折叠（burst）；env SILLYSPEC_STAGE_BURST=0 强制关 /
+ * =1 强制开（优先于配置，逃生阀）；**缺省 OFF**——读失败/坏 YAML/解析异常一律 false
+ * （fail-safe，burst 缺省不翻是 D-001 边界：全量测试面零迁移）。读取走本模块 readLocalYamlRaw
+ * + js-yaml 动态 import（resolveLivingDocs 同款范式，绕开 parseSimpleYaml 缩进坑——known-issues
+ * 实证）。锚定 cwd 而非 specBase：burst 是仓库本地开发偏好，不随平台/worktree specRoot 漂移。
+ * @param {string} cwd 仓库根（local.yaml 在 <cwd>/.sillyspec/local.yaml）
+ * @returns {Promise<boolean>}
+ */
+export async function readStageBurst(cwd) {
+  const env = process.env.SILLYSPEC_STAGE_BURST
+  if (env === '0') return false
+  if (env === '1') return true
+  const raw = readLocalYamlRaw(cwd)
+  if (!raw) return false
+  try {
+    const mod = await import('js-yaml')
+    const yamlLoad = mod.load || mod.default?.load
+    const doc = yamlLoad(raw)
+    const stage = doc && typeof doc === 'object' ? doc.stage : null
+    return stage && typeof stage === 'object' ? stage.burst === true : false
+  } catch { /* 坏 YAML / js-yaml 不可用 → 缺省 OFF */ }
+  return false
+}
+
+/**
+ * burst 作用域白名单（D-006）：三主阶段。quick 排除（末步四字段硬契约与 P0-2 事实合成不兼容，
+ * complete.js:224 已把 quick 列为合成豁免）；verify/archive 任务书明确不动（--init --draft 与
+ * 就绪度已压到 1-2 次调用）；辅助阶段（scan/doctor/explore）不在本轮验收面。渲染侧（stage.js
+ * renderStageBurst 门）与完成侧（command.js --done 分发门）共用本单一事实源。
+ */
+export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute']
+
+/**
  * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。
  *
  * design §5.4 execute 启动段 + §7.2：扫 plan.md 所有 task 卡片 frontmatter，用 parseRepo 解析

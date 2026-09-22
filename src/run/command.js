@@ -24,10 +24,10 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { randomBytes, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
+import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
 import { resolveQuickLinkedChanges } from './quick-audit.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
-import { completeStep, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
+import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
 import { runStage } from './stage.js'
 import { sanitizeDesc } from '../quicklog.js'
 import { ProgressManager, resolveSessionIdentity } from '../progress.js'
@@ -1724,6 +1724,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     const doneAnswer = getFlagValue('--answer')
     // isSkipApply/sessionFlag（task-03）：--skip-apply 归档收口跳过 + --session 所有权会话标识，
     // 随 completeStep options 透传（isNoDocs 同款链路）——消费点 archive/quick 收尾 handler。
+    // burst 分发门（2026-09-22-stage-burst-fold D-003@v2/FR-06）：白名单主阶段 + readStageBurst
+    // 开启 → completeStepBurst 循环收口（completeStep 本体零改动，守卫逐轮生效）；options 原样透传。
+    if (STAGE_BURST_STAGES.includes(stageName) && await readStageBurst(cwd)) {
+      return await completeStepBurst(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles, stepAssert: stepAssertValue })
+    }
     return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles, stepAssert: stepAssertValue })
   }
 
@@ -2061,7 +2066,13 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     return
   }
 
-  if (!outputText) {
+  // burst 分发门（2026-09-22-stage-burst-fold D-003@v2/X-4，FR-06）：auto 路径 burst 分支跳过
+  // --output 预合成（预合成文本在 burst 下沦为横幅重复打印——burst 直接透传原始 outputText，
+  // 横幅去重归 completeStepBurst 单点），循环收口后本路径既有推进逻辑（nextPendingIdx 渲染 /
+  // nextInFlow 阶段推进）基于重读 progress 自然衔接。
+  const _autoBurstOn = STAGE_BURST_STAGES.includes(currentStage) && await readStageBurst(cwd)
+
+  if (!outputText && !_autoBurstOn) {
     // P0-2（noai-ir-roadmap §3）：auto --done 的 --output 同样可省略——与 completeStep 同源
     // 的事实性摘要合成（此前硬拒 exit 2 是用法守卫；SS-META 的 doneCommand 仍带 --output，
     // 照抄路径零变化，省略路径不再罚一轮）。
@@ -2070,7 +2081,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     console.log(`🤖 auto --done 未带 --output——CLI 已按事实合成步骤摘要（语义说明下次带 --output 手写）。`)
   }
 
-  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
+  const result = _autoBurstOn
+    ? await completeStepBurst(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
+    : await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
   if (!result) return
   progress = pm.read(cwd, changeName)
   // change 行被并发归档/删除时 read 返回 null（体检 BUG-05）：引导排查而非 TypeError 崩溃

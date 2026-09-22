@@ -63,7 +63,7 @@ function amendWithRatio(cwd, change, ratio) {
 }
 
 test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
-  const { cwd, cli } = makeRepo()
+  const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
   const change = 'fr-r1'
   assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
   // 大改（≥0.75 行）→ route_hint
@@ -85,7 +85,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒�
   rmSync(cwd, { recursive: true, force: true })
 
   // 小改（≤0.25）→ 无 route_hint
-  const s2 = makeRepo()
+  const s2 = makeRepo('flow:\n  mode: thin\n')
   const change2 = 'fr-r2'
   assert.equal(s2.cli(['flow', 'start', '--change', change2, '--input', '成功标准：\n- 条件A']).status, 0)
   const small = amendWithRatio(s2.cwd, change2, 0.25)
@@ -96,7 +96,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒�
 })
 
 test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
-  const { cwd, cli } = makeRepo('flow:\n  edit_ratio_enforcement: block\n')
+  const { cwd, cli } = makeRepo('flow:\n  mode: thin\n  edit_ratio_enforcement: block\n')
   const change = 'fr-b1'
   assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
   const big = amendWithRatio(cwd, change, 0.75)

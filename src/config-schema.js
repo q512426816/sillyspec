@@ -167,7 +167,7 @@ export const LOCAL_YAML_SCHEMA = {
       title: '2-调用薄协议（R7 切片二）',
       note: 'flow start/done 协议形状开关与路由参数。design 措辞 flow: thin|legacy 落地为单键 flow.mode（YAML 单键形态，语义一致）。',
       keys: [
-        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：thin（缺省）= 新 change 走 flow start/done 薄跑道（协议必需交互=2）；legacy = 既有 run <stage> 全族行为逐字不动，flow start 拒跑并指路。回滚一行 yaml。', example: 'thin' },
+        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：legacy（缺省——2026-09-22-stage-burst-fold 翻回，flow 族保留为实验通道）= 既有 run <stage> 全族行为逐字不动，flow start 拒跑并指路；thin = 新 change 走 flow start/done 薄跑道（协议必需交互=2）。回滚一行 yaml。', example: 'legacy' },
         { path: 'flow.edit_ratio_threshold', type: 'number', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '机器稿改写比例路由阈值（amend 通道计算的行级 editRatio 超阈 → 厚档提示 route_hint）。缺省 0.5。', example: '0.5' },
         { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可薄档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
       ],
