@@ -784,9 +784,12 @@ async function main() {
       if (!taskSub || ['help', '--help', '-h'].includes(taskSub)) {
         console.log(`用法:
   sillyspec task start --change <名> --task task-NN [--note "一句话在做什么"]
+  sillyspec task done --change <名> --task task-NN --verdict <pass|fail|cannot_verify> [--notes "评审备注"]
+                     [--evidence "..."] [--commit -m "提交信息"] [-- <精确路径...>] [--force]
   sillyspec task finish --change <名> --task task-NN
   sillyspec task list --change <名>
-task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标红 >2h 中断遗留（接管审查点名用）`);
+task done 四合一（r5l 方案1）：review write（落 review.json+自动勾选）→ finish（清标记）→ 可选 wt-commit，
+子步幂等可断点重入；task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标红 >2h 中断遗留`);
         break;
       }
       const tChangeIdx = filteredArgs.indexOf('--change');
@@ -828,6 +831,56 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
             }
           }
         } catch { /* 注入 best-effort */ }
+      } else if (taskSub === 'done') {
+        // ── task done 四合一（r5l-forensic-verdict 方案 1 / 评审护栏#3）：13 任务 × 4 连收尾
+        // 往返（review write+勾选 / finish / wt-commit）合并为单进程串行 + 合并输出——每次省
+        // 一次 ~300K 全量上下文重发。原子性：子步幂等跳过 / 中断精确报告已完成子步 / 重入断点
+        // 续；ownership 与拒覆盖语义继承 writeTaskReview / runWtCommit 既有判定（编排零旁路）。──
+        const tdVal = (flag) => {
+          const i = filteredArgs.indexOf(flag);
+          return i >= 0 && filteredArgs[i + 1] && !String(filteredArgs[i + 1]).startsWith("--") ? filteredArgs[i + 1] : null;
+        };
+        const tdVerdict = tdVal('--verdict');
+        const tdNotes = tdVal('--notes');
+        const tdEvidence = tdVal('--evidence');
+        const tdCommit = filteredArgs.includes('--commit');
+        const tdMessage = tdVal('-m') || tdVal('--message');
+        const tdBase = tdVal('--base');
+        const tdHead = tdVal('--head');
+        const tdCfIdx = filteredArgs.indexOf('--changed-files');
+        // 存在即显式覆盖（含空串=纯验证任务零 diff 声明）——与 review write 同语义
+        const tdFilesOverride = tdCfIdx >= 0
+          ? (filteredArgs[tdCfIdx + 1] || '').split(',').map((x) => x.trim()).filter(Boolean)
+          : null;
+        const tdPsIdx = filteredArgs.indexOf('--pathspec-from-file');
+        const tdPsFile = tdPsIdx >= 0 && filteredArgs[tdPsIdx + 1] ? filteredArgs[tdPsIdx + 1] : null;
+        const tdDd = filteredArgs.indexOf('--');
+        const tdPaths = tdDd === -1 ? [] : filteredArgs.slice(tdDd + 1);
+        if (!tdVerdict || (tdCommit && !tdMessage)) {
+          console.error('用法: sillyspec task done --change <名> --task task-NN --verdict <pass|fail|cannot_verify> [--notes "评审备注"] [--evidence "cannot_verify 证据"]\n  [--commit -m "提交信息"] [--pathspec-from-file <f>] [-- <精确路径...>] [--force]\n  四合一收尾：review write（落 review.json+自动勾选）→ task finish（清进行中标记）→ 可选 wt-commit；\n  子步幂等可断点重入；verdict 改判已存在 review 需 --force（与 review write 拒覆盖同款）');
+          process.exit(2);
+        }
+        if (tdCommit && tdPaths.length === 0 && !tdPsFile) {
+          console.error('❌ --commit 需要提交路径：`--` 后逐个给出本 task 的精确路径（或 --pathspec-from-file <f>）——wt-commit 刻意不支持空 pathspec（同 Wave 兄弟 WIP 防卷入）');
+          process.exit(2);
+        }
+        const tdPlatformOpts = {};
+        const tdResolved = resolvePlatformOpts(dir, specDir);
+        if (tdResolved) {
+          tdPlatformOpts.specRoot = tdResolved.specRoot;
+          if (tdResolved.runtimeRoot) tdPlatformOpts.runtimeRoot = tdResolved.runtimeRoot;
+        }
+        const { runTaskDone } = await import('./task-done.js');
+        const tdResult = await runTaskDone({
+          changeName: tChange, cwd: dir, taskId: tTask, verdict: tdVerdict,
+          notes: tdNotes || '', evidence: tdEvidence,
+          commitMessage: tdCommit ? tdMessage : null,
+          pathspecs: tdPaths, pathspecFile: tdPsFile,
+          markerDir: tDir, platformOpts: tdPlatformOpts,
+          baseOverride: tdBase, headOverride: tdHead, changedFilesOverride: tdFilesOverride,
+          force: filteredArgs.includes('--force'),
+        });
+        if (!tdResult.ok) process.exit(1);
       } else if (taskSub === 'finish') {
         try { unlinkSync(join(tDir, `${tTask}.json`)); console.log(`✅ ${tTask} 进行中标记已清除（完工）`); }
         catch { console.log(`ℹ️ ${tTask} 无进行中标记（已完工或从未 start）`); }
@@ -848,7 +901,7 @@ task 进行中状态标记：开工/完工落 .runtime/task-progress/，list 标
         }
         if (stale > 0) console.log(`   共 ${stale} 个疑似中断遗留——主代理接管时逐一审查（半成品无主的痛点出口）`);
       } else {
-        console.error(`❌ 未知子命令「${taskSub}」（start | finish | list）`); process.exit(2);
+        console.error(`❌ 未知子命令「${taskSub}」（start | done | finish | list）`); process.exit(2);
       }
       break;
     }

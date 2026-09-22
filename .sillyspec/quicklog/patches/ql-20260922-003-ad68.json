@@ -1,0 +1,86 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-1fa87eb8",
+  "totals": {
+    "files": 4,
+    "additions": 376,
+    "deletions": 2
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "declared": true,
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 55,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/task-done.js",
+      "declared": true,
+      "additions": 157,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/task-done.test.mjs",
+      "declared": true,
+      "additions": 163,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/index.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/task-done.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/task-done.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260922-003-ad68",
+  "sessionId": "quick-1fa87eb8",
+  "savedAt": "2026-09-22T01:43:36.001Z",
+  "patchSha256": "85f21a8726e84c5ee7b23e3319c8b9f14ffe16762fc5e61bfbd25e43cdbd0ade",
+  "patchStatus": "ok"
+}
