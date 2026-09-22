@@ -13,7 +13,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 
 `src/spec-sync.js`（2026-08-17 spec-file-incremental-sync 起）：CLI 直跑场景的 spec 文件树增量同步——以服务器清单为锚 walk/hash/diff 后只推送变化文件（add/update/delete/rename），复用 daemon 排除口径（local.yaml 不上传、worktrees 剪枝）。并行会话 fail-closed 护栏（2026-08-28 ql-20260828-003）：`computeSpecOps` changes/ 整删守卫（本地树非空但 changes/ 全空而服务器有 → 跳过防误删）+ `filterStaleUpdates` 旧副本回推守卫（.runtime/spec-sync-last-success.json 时间锚——本地自上次同步未改动而服务器已前进的 update 拦下，重存后重推为强制出口）。
 
-`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（28 例）。
+`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（28 例）。2026-09-23 quick（watcher-alerts）补纯读出口：`watcherEventsPath`/`readWatcherEvents`（jsonl 解析+告警过滤（kind/severity 双字段容差）+坏行容忍计数，readKnowledgeHits 先例），CLI 面 `sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]`（缺省 warning-only，--follow 2s 轮询增量打印）；测试锚：test/watcher-alerts.test.mjs（10 例）。
 
 ## 当前设计
 `SyncManager` 是独立于 `ProgressManager` 的同步管理类，由 `run.js` 和 `index.js` 调用。设计遵循 "Best Effort" 原则：所有网络失败仅 `console.warn`，不抛错、不阻塞主流程。
@@ -53,6 +53,8 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | `collectStatus(cwd)` | 顶层便捷函数（platform status 扩展用） | `cwd` |
 | `listConflictFiles(cwd)` | 顶层便捷函数（platform resolve 参数解析/报错兜底用，只读列 .runtime 未决冲突） | `cwd` |
 | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
+| `readWatcherEvents({runtimeRoot, change})` | watcher 事件流纯读（watcher alerts 命令消费）：jsonl 解析+告警过滤+坏行容忍 | `{runtimeRoot, change}` |
+| `watcherEventsPath(runtimeRoot, changeName)` | 事件流文件路径锚（与子进程落盘名同源） | `runtimeRoot, changeName` |
 
 ## 关键数据流
 1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 文本级定向写入 `.sillyspec/local.yaml` 的 `platform` 段（`replaceTopLevelSection` 原位替换，保留注释/其他段/数组/深嵌套）+ `mcp` 段（不存在时追加同源 url/token；文本级 `findTopLevelSectionRange('mcp')` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）

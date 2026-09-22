@@ -1,0 +1,379 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index efb6ec94..7b0b7000 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -13,7 +13,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同
+ 
+ `src/spec-sync.js`（2026-08-17 spec-file-incremental-sync 起）：CLI 直跑场景的 spec 文件树增量同步——以服务器清单为锚 walk/hash/diff 后只推送变化文件（add/update/delete/rename），复用 daemon 排除口径（local.yaml 不上传、worktrees 剪枝）。并行会话 fail-closed 护栏（2026-08-28 ql-20260828-003）：`computeSpecOps` changes/ 整删守卫（本地树非空但 changes/ 全空而服务器有 → 跳过防误删）+ `filterStaleUpdates` 旧副本回推守卫（.runtime/spec-sync-last-success.json 时间锚——本地自上次同步未改动而服务器已前进的 update 拦下，重存后重推为强制出口）。
+ 
+-`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（28 例）。
++`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（28 例）。2026-09-23 quick（watcher-alerts）补纯读出口：`watcherEventsPath`/`readWatcherEvents`（jsonl 解析+告警过滤（kind/severity 双字段容差）+坏行容忍计数，readKnowledgeHits 先例），CLI 面 `sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]`（缺省 warning-only，--follow 2s 轮询增量打印）；测试锚：test/watcher-alerts.test.mjs（10 例）。
+ 
+ ## 当前设计
+ `SyncManager` 是独立于 `ProgressManager` 的同步管理类，由 `run.js` 和 `index.js` 调用。设计遵循 "Best Effort" 原则：所有网络失败仅 `console.warn`，不抛错、不阻塞主流程。
+@@ -53,6 +53,8 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同
+ | `collectStatus(cwd)` | 顶层便捷函数（platform status 扩展用） | `cwd` |
+ | `listConflictFiles(cwd)` | 顶层便捷函数（platform resolve 参数解析/报错兜底用，只读列 .runtime 未决冲突） | `cwd` |
+ | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
++| `readWatcherEvents({runtimeRoot, change})` | watcher 事件流纯读（watcher alerts 命令消费）：jsonl 解析+告警过滤+坏行容忍 | `{runtimeRoot, change}` |
++| `watcherEventsPath(runtimeRoot, changeName)` | 事件流文件路径锚（与子进程落盘名同源） | `runtimeRoot, changeName` |
+ 
+ ## 关键数据流
+ 1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 文本级定向写入 `.sillyspec/local.yaml` 的 `platform` 段（`replaceTopLevelSection` 原位替换，保留注释/其他段/数组/深嵌套）+ `mcp` 段（不存在时追加同源 url/token；文本级 `findTopLevelSectionRange('mcp')` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）
+diff --git a/src/index.js b/src/index.js
+index 4cbec757..db1819b7 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -95,6 +95,8 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
+   sillyspec config cat [--json]           读取 local.yaml 实际内容（自动定位真实路径，worktree 内解析到主仓）
+   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
++  sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]
++                                      哨兵告警查询（watcher 事件流只读可视化；--all 全事件、--follow 2s 轮询持续打印）
+   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
+   sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
+ 
+@@ -4831,8 +4833,94 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+       }
+       break;
+     }
++    case 'watcher': {
++      // 哨兵告警可视化出口（2026-09-23 quick / 1a91587c 后续件）：watcher 落的
++      // watcher-events-<change>.jsonl 是事件唯一真相源，此前只能人肉 grep。纯只读查询 +
++      // 可选 --follow 轮询；不改 applySentinelRules、不做平台推送、不加新事件类型。
++      // 子命令面：alerts；预留名（勿占）：events（原始流格式化）/ tail（时间窗过滤）。
++      const watcherSub = filteredArgs[1];
++      if (watcherSub !== 'alerts') {
++        const sug = didYouMean(watcherSub || '', ['alerts']);
++        console.error(`❌ 未知子命令: watcher ${watcherSub || '(空)'}`);
++        if (sug) console.error(`   你是想输入「watcher ${sug}」吗？`);
++        console.error('用法: sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]');
++        process.exit(2);
++      }
++      const wRest = filteredArgs.slice(2);
++      let wChange = null;
++      let wRuntimeRootFlag = null;
++      let wAll = false;
++      let wFollow = false;
++      for (let i = 0; i < wRest.length; i++) {
++        if (wRest[i] === '--change' && wRest[i + 1]) wChange = wRest[++i];
++        else if (wRest[i] === '--runtime-root' && wRest[i + 1]) wRuntimeRootFlag = resolve(wRest[++i]);
++        else if (wRest[i] === '--all') wAll = true;
++        else if (wRest[i] === '--follow') wFollow = true;
++      }
++      if (!wChange) {
++        console.error('❌ watcher alerts 需要 --change <变更名>（事件流按变更名分文件）');
++        console.error('用法: sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]');
++        process.exit(2);
++      }
++      assertSafeChangeName(wChange, '变更名');
++      const { resolveRuntimeRoot } = await import('./run/shared.js');
++      const { readWatcherEvents, watcherEventsPath } = await import('./watcher.js');
++      // runtimeRoot 解析与 watcher.js spawnWatcher 同源：--runtime-root flag > 平台指针
++      // runtimeRoot > specBase/.runtime（resolveRuntimeRoot 单点收敛）。
++      const wSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
++      const wPlatformOpts = resolvePlatformOpts(dir, specDir);
++      const wRuntimeRoot = resolveRuntimeRoot({ runtimeRoot: wRuntimeRootFlag || (wPlatformOpts && wPlatformOpts.runtimeRoot) || null }, wSpecBase);
++
++      const ALERTS_POLL_MS = 2000;
++      const fmtLocal = (ts) => {
++        const d = new Date(Number(ts));
++        if (Number.isNaN(d.getTime())) return String(ts);
++        const p = (n) => String(n).padStart(2, '0');
++        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
++      };
++      // detail 截 80：超长取前 79 列 + 省略号恰好 80 列
++      const clip80 = (s) => {
++        const t = String(s ?? '');
++        return t.length > 80 ? t.slice(0, 79) + '…' : t;
++      };
++      const fmtRow = (e) => `${fmtLocal(e.ts)} | ${String(e.rule ?? e.kind ?? '').padEnd(12)} | ${clip80(e.detail)}`;
++      const fmtStats = (warnN, evN, badN) => `📊 ${warnN} 条告警 / ${evN} 条事件${badN > 0 ? `（跳过 ${badN} 坏行）` : ''}`;
++
++      let wRes = readWatcherEvents({ runtimeRoot: wRuntimeRoot, change: wChange });
++      if (!wRes.exists) {
++        console.log(`📭 ${wChange} 无事件流（未跑过 watcher）: ${watcherEventsPath(wRuntimeRoot, wChange)}`);
++        break;
++      }
++      console.log(`🕒 watcher alerts — ${wChange}（${wRuntimeRoot}）`);
++      console.log(`${'本地时间'.padEnd(19)} | ${wAll ? 'rule/kind' : 'rule'.padEnd(12)} | detail`);
++      const shown = wAll ? wRes.events : wRes.warnings;
++      for (const e of shown) console.log(fmtRow(e));
++      console.log(fmtStats(wRes.warnings.length, wRes.events.length, wRes.badLines));
++      if (!wFollow) break;
++
++      // --follow：2s 轮询增量打印（jsonl 单写者 append-only，按 events 序号单调锚定已打印
++      // 水位；坏行不产事件不干扰锚——残行下一轮解析成功后自然补打）。Ctrl-C 打印末次统计退出。
++      console.log('\n⏳ 持续监听中（2s 轮询，Ctrl-C 退出）');
++      const printNew = (from) => {
++        const rows = (wAll ? wRes.events : wRes.warnings).slice(from);
++        for (const e of rows) console.log(fmtRow(e));
++      };
++      let printed = shown.length;
++      process.on('SIGINT', () => {
++        console.log(`\n${fmtStats(wRes.warnings.length, wRes.events.length, wRes.badLines)}（已停止监听）`);
++        process.exit(0);
++      });
++      // eslint-disable-next-line no-constant-condition
++      while (true) {
++        await new Promise((r) => setTimeout(r, ALERTS_POLL_MS));
++        wRes = readWatcherEvents({ runtimeRoot: wRuntimeRoot, change: wChange });
++        if (!wRes.exists) continue; // 文件中途被删：继续等（watcher 重启会重建）
++        printNew(printed);
++        printed = wAll ? wRes.events.length : wRes.warnings.length;
++      }
++    }
+     default: {
+-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
++      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher'];
+       const suggestion = didYouMean(command, topCommands);
+       console.error(`❌ 未知命令: ${command}`);
+       if (command === '--status') {
+diff --git a/src/watcher.js b/src/watcher.js
+index 73ea9500..773df5c5 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -394,6 +394,49 @@ function taskTokenRe(id) {
+   return new RegExp(`${id}(?!\\d)`);
+ }
+ 
++// ── 事件流读取（2026-09-23 watcher-alerts quick：哨兵告警可视化出口的纯读面）──
++// 子进程侧 appendFileSync 落盘名与此处读取名同锚（runWatcherFromEnv 内联字符串的唯一对应）。
++
++export function watcherEventsPath(runtimeRoot, changeName) {
++  return join(runtimeRoot, `watcher-events-${changeName}.jsonl`);
++}
++
++/**
++ * 读事件流（纯读：解析+过滤，`watcher alerts` 命令与测试消费；不写盘不推平台）。
++ * 坏行/残行/非对象行跳过并计数不抛（readKnowledgeHits 先例 R-04——并发 append 交错容忍）。
++ * @returns {{exists:boolean, events:Array, warnings:Array, badLines:number}}
++ *   文件/目录缺失 → {exists:false, 空集}；warnings=告警子集（kind 或 severity 为
++ *   'warning' 即入——mkWarning 两者皆写，双字段容差防未来形态漂移）。
++ */
++export function readWatcherEvents({ runtimeRoot, change }) {
++  let text;
++  try {
++    text = readFileSync(watcherEventsPath(runtimeRoot, change), 'utf8');
++  } catch {
++    return { exists: false, events: [], warnings: [], badLines: 0 };
++  }
++  const events = [];
++  let badLines = 0;
++  for (const line of text.split('\n')) {
++    const trimmed = line.trim();
++    if (!trimmed) continue;
++    let rec;
++    try {
++      rec = JSON.parse(trimmed);
++    } catch {
++      badLines += 1;
++      continue;
++    }
++    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
++      badLines += 1;
++      continue;
++    }
++    events.push(rec);
++  }
++  const warnings = events.filter((e) => e.kind === 'warning' || e.severity === 'warning');
++  return { exists: true, events, warnings, badLines };
++}
++
+ /**
+  * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
+  * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
+@@ -844,4 +887,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+ }
+ 
+ export { isPidAlive };
+-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark };
++export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents };
+diff --git a/test/watcher-alerts.test.mjs b/test/watcher-alerts.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/watcher-alerts.test.mjs
+@@ -0,0 +1,183 @@
++/**
++ * watcher-alerts.test.mjs — watcher alerts 查询命令（2026-09-23 quick：哨兵告警可视化出口）
++ *
++ * 覆盖验收面：
++ *   ① readWatcherEvents 纯读函数：fixture jsonl（warning/normal/backfill 混合+坏行）→
++ *      events 全量 / warnings 子集（kind/severity 双字段容差）/ badLines 计数；
++ *   ② CLI 缺省只出 warning、--all 全出；统计行「N 条告警 / M 条事件」；detail 截 80；
++ *      坏行跳过注记；--change 缺失/未知子命令 → exit 2；
++ *   ③ 文件缺失 / 目录缺失 two-case 友好退出码 0；
++ *   ④ --follow 子进程真轮询：追加行后打印新 warning 行（杀超时验证，warnings-only 过滤钉）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { spawn, spawnSync } from 'child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'url'
++
++const __filename = fileURLToPath(import.meta.url)
++const __dirname = dirname(__filename)
++const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
++
++const { readWatcherEvents } = await import('../src/watcher.js')
++
++// ── fixture：mkWarning 真实形态（kind/severity 双写）+ 基础事件 + backfill 变体 + 坏行 ──
++const EV = {
++  file: { ts: 1740000000000, kind: 'file', stage: 'proposal', detail: 'proposal.md 出现', provisional: true },
++  fakeCheck: { ts: 1740000001000, kind: 'warning', stage: null, rule: 'fake-check', severity: 'warning', detail: 'tasks 勾选 task-01 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判', provisional: true },
++  taskDoneBackfill: { ts: 1740000002000, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', provisional: true, backfill: true },
++  stallBackfill: { ts: 1740000003000, kind: 'warning', stage: null, rule: 'stall', severity: 'warning', detail: 'execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）', provisional: true, backfill: true },
++  longDetail: { ts: 1740000004000, kind: 'warning', stage: null, rule: 'scope-drift', severity: 'warning', detail: 'x'.repeat(120), provisional: true },
++}
++
++function writeFixture(runtimeRoot, change, records) {
++  mkdirSync(runtimeRoot, { recursive: true })
++  const lines = records.map((r) => (typeof r === 'string' ? r : JSON.stringify(r)))
++  writeFileSync(join(runtimeRoot, `watcher-events-${change}.jsonl`), lines.join('\n') + '\n', 'utf8')
++}
++
++function runCLI(args, cwd) {
++  const res = spawnSync(process.execPath, [cliBin, ...args], {
++    cwd, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'],
++  })
++  return { stdout: res.stdout || '', stderr: res.stderr || '', status: res.status }
++}
++
++// ───────────────────────── ① readWatcherEvents 纯读函数 ─────────────────────────
++
++test('readWatcherEvents: 混合 fixture → events 全量 / warnings 子集 / badLines 计数', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-fn-'))
++  writeFixture(root, '2026-09-23-x', [
++    EV.file, EV.fakeCheck, EV.taskDoneBackfill, EV.stallBackfill, EV.longDetail,
++    '{"broken":', 'garbage line', '["array"]',
++  ])
++  const r = readWatcherEvents({ runtimeRoot: root, change: '2026-09-23-x' })
++  assert.equal(r.exists, true)
++  assert.equal(r.events.length, 5)
++  assert.equal(r.warnings.length, 3)
++  assert.deepEqual(r.warnings.map((w) => w.rule).sort(), ['fake-check', 'scope-drift', 'stall'])
++  assert.equal(r.badLines, 3)
++})
++
++test('readWatcherEvents: severity-only 容差（kind 非 warning 但 severity=warning 仍入告警集）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-fn2-'))
++  writeFixture(root, 'c1', [
++    { ts: 1, kind: 'notice', stage: null, severity: 'warning', detail: '容差形态', provisional: true },
++    { ts: 2, kind: 'file', stage: null, detail: '普通', provisional: true },
++  ])
++  const r = readWatcherEvents({ runtimeRoot: root, change: 'c1' })
++  assert.equal(r.warnings.length, 1)
++  assert.equal(r.warnings[0].detail, '容差形态')
++})
++
++test('readWatcherEvents: 文件缺失/目录缺失 → exists:false 零事件（two-case 同形）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-fn3-'))
++  assert.deepEqual(readWatcherEvents({ runtimeRoot: root, change: 'nope' }), { exists: false, events: [], warnings: [], badLines: 0 })
++  assert.deepEqual(readWatcherEvents({ runtimeRoot: join(root, 'no-such-dir'), change: 'nope' }), { exists: false, events: [], warnings: [], badLines: 0 })
++})
++
++// ───────────────────────── ② CLI 一次性查询 ─────────────────────────
++
++const FIX = [EV.file, EV.fakeCheck, EV.taskDoneBackfill, EV.stallBackfill, EV.longDetail, '{"broken":', 'garbage line', '["array"]']
++
++test('CLI 缺省: 只出 warning 行 + 统计「3 条告警 / 5 条事件」+ 坏行注记', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-cli-'))
++  writeFixture(root, '2026-09-23-y', FIX)
++  const r = runCLI(['watcher', 'alerts', '--change', '2026-09-23-y', '--runtime-root', root], root)
++  assert.equal(r.status, 0)
++  assert.match(r.stdout, /fake-check/)
++  assert.match(r.stdout, /stall/)
++  assert.match(r.stdout, /scope-drift/)
++  assert.doesNotMatch(r.stdout, /proposal\.md 出现/)
++  assert.doesNotMatch(r.stdout, /checked 0→1/)
++  assert.match(r.stdout, /3 条告警 \/ 5 条事件/)
++  assert.match(r.stdout, /跳过 3 坏行/)
++})
++
++test('CLI --all: 全事件出（kind 入 rule 列）+ 统计行同口径', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-cli2-'))
++  writeFixture(root, '2026-09-23-z', FIX)
++  const r = runCLI(['watcher', 'alerts', '--change', '2026-09-23-z', '--runtime-root', root, '--all'], root)
++  assert.equal(r.status, 0)
++  assert.match(r.stdout, /proposal\.md 出现/)
++  assert.match(r.stdout, /task-done/)
++  assert.match(r.stdout, /3 条告警 \/ 5 条事件/)
++})
++
++test('CLI detail 截 80（含省略号恰好 80 列）+ 本地时间列', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-cli3-'))
++  writeFixture(root, 'c-long', [EV.longDetail])
++  const r = runCLI(['watcher', 'alerts', '--change', 'c-long', '--runtime-root', root], root)
++  assert.equal(r.status, 0)
++  const row = r.stdout.split('\n').find((l) => l.includes('scope-drift'))
++  assert.ok(row, 'scope-drift 行存在')
++  const cell = row.split('|')[2].trim()
++  assert.equal(cell.length, 80)
++  assert.ok(cell.endsWith('…'))
++  assert.match(row, /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)
++})
++
++test('CLI two-case 友好退出: 目录缺失 / 文件缺失 → exit 0 + 无事件流提示', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-cli4-'))
++  const dirMissing = runCLI(['watcher', 'alerts', '--change', 'a1', '--runtime-root', join(root, 'gone')], root)
++  assert.equal(dirMissing.status, 0)
++  assert.match(dirMissing.stdout, /a1 无事件流（未跑过 watcher）/)
++
++  mkdirSync(root, { recursive: true })
++  const fileMissing = runCLI(['watcher', 'alerts', '--change', 'a1', '--runtime-root', root], root)
++  assert.equal(fileMissing.status, 0)
++  assert.match(fileMissing.stdout, /a1 无事件流（未跑过 watcher）/)
++})
++
++test('CLI 用法面: 未知子命令 / 缺 --change → exit 2', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-cli5-'))
++  const sub = runCLI(['watcher', 'tail', '--change', 'a1'], root)
++  assert.equal(sub.status, 2)
++  assert.match(sub.stderr, /未知子命令/)
++
++  const noChange = runCLI(['watcher', 'alerts'], root)
++  assert.equal(noChange.status, 2)
++  assert.match(noChange.stderr, /--change/)
++})
++
++test('CLI 路径穿越守卫: --change 含分隔符 → 非零退出', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-cli6-'))
++  const r = runCLI(['watcher', 'alerts', '--change', '..\\evil', '--runtime-root', root], root)
++  assert.notEqual(r.status, 0)
++  assert.match(r.stderr, /路径穿越|非法字符|含路径分隔符/)
++})
++
++// ───────────────────────── ④ --follow 子进程轮询 ─────────────────────────
++
++test('CLI --follow: 追加行后打印新 warning 行（缺省过滤 normal 不打印），杀超时验证', { timeout: 30000 }, async () => {
++  const root = mkdtempSync(join(tmpdir(), 'wa-follow-'))
++  const eventsPath = join(root, 'watcher-events-follow-change.jsonl')
++  writeFixture(root, 'follow-change', [EV.fakeCheck])
++
++  const child = spawn(process.execPath, [cliBin, 'watcher', 'alerts', '--change', 'follow-change', '--runtime-root', root, '--follow'], {
++    cwd: root, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8',
++  })
++  let out = ''
++  child.stdout.on('data', (d) => { out += d })
++  let err = ''
++  child.stderr.on('data', (d) => { err += d })
++
++  try {
++    // 首屏（1 warning）落定后追加 1 warning + 1 normal——下一轮 2s 轮询只应补打 warning 行
++    await new Promise((r) => setTimeout(r, 1500))
++    appendFileSync(eventsPath, JSON.stringify(EV.stallBackfill) + '\n' + JSON.stringify(EV.file) + '\n', 'utf8')
++    await new Promise((r) => setTimeout(r, 4500))
++    assert.match(out, /fake-check/, '首屏已有初始 warning')
++    assert.match(out, /stall/, '追加的 warning 行被打印')
++    assert.doesNotMatch(out, /proposal\.md 出现/, '追加的 normal 事件不打印（缺省 warnings-only）')
++    assert.equal(err, '')
++  } finally {
++    child.kill()
++    await new Promise((resolveExit) => {
++      child.once('exit', resolveExit)
++      setTimeout(resolveExit, 3000)
++    })
++  }
++})

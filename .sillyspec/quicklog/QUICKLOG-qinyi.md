@@ -114,3 +114,17 @@
 审计：   ❌ [docs/sillyspec/file-lifecycle.md:291] gates.js:1259 → src/run/gates.js: 关键词缺失：期望任一「validatePlanForExecute / parseTaskRegistry」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过
 审计：🔧 行号漂移已自动重锚 1 处（同口径复跑：1 → 0；剩余 0 处需人工 sillyspec docs check）
 审计：[gate] L1（跨 2 模块 · 6 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260923-005-74fe | 2026-09-23 04:03:19 | watcher alerts 查询命令——哨兵告警可视化出口（quick）
+状态：已完成
+关联变更：（无）
+文件：
+- src/watcher.js（新增 watcherEventsPath+readWatcherEvents 纯读导出（jsonl 解析+告警过滤+坏行容忍），default 导出同步补录）
+- src/index.js（case 'watcher' alerts 子命令分发+usage 行+topCommands 补录）
+- test/watcher-alerts.test.mjs（10 例（纯函数 3+CLI 面 6+follow 子进程 1））
+- .sillyspec/docs/sillyspec/modules/sync.md（watcher 段落补纯读出口一笔+对外接口表两行）
+需求：watcher alerts 查询命令——哨兵告警可视化出口（quick）
+根因：哨兵规则引擎（1a91587c）已把 warning 事件落 .sillyspec/.runtime/watcher-events-<变更名>.jsonl，但查看只能人肉 grep，缺一条顺手查询命令
+方案：src/watcher.js 导出纯读 readWatcherEvents+watcherEventsPath（jsonl 解析+告警子集过滤（kind/severity=warning 双字段容差，对齐 mkWarning 实际写出形态）+坏行容忍计数（readKnowledgeHits 先例）+缺失 exists:false）；src/index.js 加 case 'watcher' 分发 alerts 子命令：--change 必填+assertSafeChangeName 防路径穿越，--all 全事件（kind 入 rule 列），--follow 2s 轮询按 events 序号锚水位增量打印+SIGINT 末次统计，表格 本地时间|rule|detail（截80）+统计行「N 条告警 / M 条事件」+坏行注记，文件/目录缺失友好提示 exit 0，runtimeRoot 与 spawnWatcher 同源（--runtime-root > 平台指针 > specBase/.runtime，resolveRuntimeRoot 单点）；usage 行+topCommands 补 watcher；sync.md 登记导出（段落一笔+接口表两行）
+结果：新测 test/watcher-alerts.test.mjs 10/10 绿（readWatcherEvents 纯函数 3+CLI 面 6+--follow 子进程杀超时真轮询 1）；watcher+sentinel 回归 41/41 零失败；lint 757 文件未引用导出 0+module-map 覆盖全；真仓冒烟：sentinel-rules 流缺省 0 告警/23 事件、--all 全列、缺失 two-case exit 0
+审计：[gate] L1（跨 2 模块 · 4 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含

@@ -95,6 +95,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec config [schema] [--json]      打印 local.yaml 全部已知键 + 生效状态 + 读取点（堵外部 agent 配置发现缺口）
   sillyspec config cat [--json]           读取 local.yaml 实际内容（自动定位真实路径，worktree 内解析到主仓）
   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
+  sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]
+                                      哨兵告警查询（watcher 事件流只读可视化；--all 全事件、--follow 2s 轮询持续打印）
   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
   sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
 
@@ -4831,8 +4833,94 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       }
       break;
     }
+    case 'watcher': {
+      // 哨兵告警可视化出口（2026-09-23 quick / 1a91587c 后续件）：watcher 落的
+      // watcher-events-<change>.jsonl 是事件唯一真相源，此前只能人肉 grep。纯只读查询 +
+      // 可选 --follow 轮询；不改 applySentinelRules、不做平台推送、不加新事件类型。
+      // 子命令面：alerts；预留名（勿占）：events（原始流格式化）/ tail（时间窗过滤）。
+      const watcherSub = filteredArgs[1];
+      if (watcherSub !== 'alerts') {
+        const sug = didYouMean(watcherSub || '', ['alerts']);
+        console.error(`❌ 未知子命令: watcher ${watcherSub || '(空)'}`);
+        if (sug) console.error(`   你是想输入「watcher ${sug}」吗？`);
+        console.error('用法: sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]');
+        process.exit(2);
+      }
+      const wRest = filteredArgs.slice(2);
+      let wChange = null;
+      let wRuntimeRootFlag = null;
+      let wAll = false;
+      let wFollow = false;
+      for (let i = 0; i < wRest.length; i++) {
+        if (wRest[i] === '--change' && wRest[i + 1]) wChange = wRest[++i];
+        else if (wRest[i] === '--runtime-root' && wRest[i + 1]) wRuntimeRootFlag = resolve(wRest[++i]);
+        else if (wRest[i] === '--all') wAll = true;
+        else if (wRest[i] === '--follow') wFollow = true;
+      }
+      if (!wChange) {
+        console.error('❌ watcher alerts 需要 --change <变更名>（事件流按变更名分文件）');
+        console.error('用法: sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]');
+        process.exit(2);
+      }
+      assertSafeChangeName(wChange, '变更名');
+      const { resolveRuntimeRoot } = await import('./run/shared.js');
+      const { readWatcherEvents, watcherEventsPath } = await import('./watcher.js');
+      // runtimeRoot 解析与 watcher.js spawnWatcher 同源：--runtime-root flag > 平台指针
+      // runtimeRoot > specBase/.runtime（resolveRuntimeRoot 单点收敛）。
+      const wSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+      const wPlatformOpts = resolvePlatformOpts(dir, specDir);
+      const wRuntimeRoot = resolveRuntimeRoot({ runtimeRoot: wRuntimeRootFlag || (wPlatformOpts && wPlatformOpts.runtimeRoot) || null }, wSpecBase);
+
+      const ALERTS_POLL_MS = 2000;
+      const fmtLocal = (ts) => {
+        const d = new Date(Number(ts));
+        if (Number.isNaN(d.getTime())) return String(ts);
+        const p = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+      };
+      // detail 截 80：超长取前 79 列 + 省略号恰好 80 列
+      const clip80 = (s) => {
+        const t = String(s ?? '');
+        return t.length > 80 ? t.slice(0, 79) + '…' : t;
+      };
+      const fmtRow = (e) => `${fmtLocal(e.ts)} | ${String(e.rule ?? e.kind ?? '').padEnd(12)} | ${clip80(e.detail)}`;
+      const fmtStats = (warnN, evN, badN) => `📊 ${warnN} 条告警 / ${evN} 条事件${badN > 0 ? `（跳过 ${badN} 坏行）` : ''}`;
+
+      let wRes = readWatcherEvents({ runtimeRoot: wRuntimeRoot, change: wChange });
+      if (!wRes.exists) {
+        console.log(`📭 ${wChange} 无事件流（未跑过 watcher）: ${watcherEventsPath(wRuntimeRoot, wChange)}`);
+        break;
+      }
+      console.log(`🕒 watcher alerts — ${wChange}（${wRuntimeRoot}）`);
+      console.log(`${'本地时间'.padEnd(19)} | ${wAll ? 'rule/kind' : 'rule'.padEnd(12)} | detail`);
+      const shown = wAll ? wRes.events : wRes.warnings;
+      for (const e of shown) console.log(fmtRow(e));
+      console.log(fmtStats(wRes.warnings.length, wRes.events.length, wRes.badLines));
+      if (!wFollow) break;
+
+      // --follow：2s 轮询增量打印（jsonl 单写者 append-only，按 events 序号单调锚定已打印
+      // 水位；坏行不产事件不干扰锚——残行下一轮解析成功后自然补打）。Ctrl-C 打印末次统计退出。
+      console.log('\n⏳ 持续监听中（2s 轮询，Ctrl-C 退出）');
+      const printNew = (from) => {
+        const rows = (wAll ? wRes.events : wRes.warnings).slice(from);
+        for (const e of rows) console.log(fmtRow(e));
+      };
+      let printed = shown.length;
+      process.on('SIGINT', () => {
+        console.log(`\n${fmtStats(wRes.warnings.length, wRes.events.length, wRes.badLines)}（已停止监听）`);
+        process.exit(0);
+      });
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, ALERTS_POLL_MS));
+        wRes = readWatcherEvents({ runtimeRoot: wRuntimeRoot, change: wChange });
+        if (!wRes.exists) continue; // 文件中途被删：继续等（watcher 重启会重建）
+        printNew(printed);
+        printed = wAll ? wRes.events.length : wRes.warnings.length;
+      }
+    }
     default: {
-      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime'];
+      const topCommands = ['init', 'setup', 'run', 'progress', 'worktree', 'dispatch', 'agent-log', 'local', 'workflow', 'gate', 'derive', 'backfill-reviews', 'register-stage-review', 'modules', 'change-rename', 'change-delete', 'knowledge', 'platform', 'pull', 'scan', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'quick', 'explore', 'status', 'doctor', 'auto', 'runtime', 'watcher'];
       const suggestion = didYouMean(command, topCommands);
       console.error(`❌ 未知命令: ${command}`);
       if (command === '--status') {

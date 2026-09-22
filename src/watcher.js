@@ -394,6 +394,49 @@ function taskTokenRe(id) {
   return new RegExp(`${id}(?!\\d)`);
 }
 
+// ── 事件流读取（2026-09-23 watcher-alerts quick：哨兵告警可视化出口的纯读面）──
+// 子进程侧 appendFileSync 落盘名与此处读取名同锚（runWatcherFromEnv 内联字符串的唯一对应）。
+
+export function watcherEventsPath(runtimeRoot, changeName) {
+  return join(runtimeRoot, `watcher-events-${changeName}.jsonl`);
+}
+
+/**
+ * 读事件流（纯读：解析+过滤，`watcher alerts` 命令与测试消费；不写盘不推平台）。
+ * 坏行/残行/非对象行跳过并计数不抛（readKnowledgeHits 先例 R-04——并发 append 交错容忍）。
+ * @returns {{exists:boolean, events:Array, warnings:Array, badLines:number}}
+ *   文件/目录缺失 → {exists:false, 空集}；warnings=告警子集（kind 或 severity 为
+ *   'warning' 即入——mkWarning 两者皆写，双字段容差防未来形态漂移）。
+ */
+export function readWatcherEvents({ runtimeRoot, change }) {
+  let text;
+  try {
+    text = readFileSync(watcherEventsPath(runtimeRoot, change), 'utf8');
+  } catch {
+    return { exists: false, events: [], warnings: [], badLines: 0 };
+  }
+  const events = [];
+  let badLines = 0;
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let rec;
+    try {
+      rec = JSON.parse(trimmed);
+    } catch {
+      badLines += 1;
+      continue;
+    }
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
+      badLines += 1;
+      continue;
+    }
+    events.push(rec);
+  }
+  const warnings = events.filter((e) => e.kind === 'warning' || e.severity === 'warning');
+  return { exists: true, events, warnings, badLines };
+}
+
 /**
  * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
  * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
@@ -844,4 +887,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
 }
 
 export { isPidAlive };
-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark };
+export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents };

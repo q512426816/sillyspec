@@ -13,6 +13,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-22-thin-fr-distill-sync
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试门实测通过+工件指纹校验通过
 全文：.sillyspec/changes/archive/2026-09-22-thin-fr-distill-sync/requirements.md#FR-01
