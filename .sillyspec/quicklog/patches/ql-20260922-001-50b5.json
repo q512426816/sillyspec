@@ -1,0 +1,73 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-fce01fb6",
+  "totals": {
+    "files": 3,
+    "additions": 191,
+    "deletions": 6
+  },
+  "rows": [
+    {
+      "path": "src/run/verify-quality-scan.js",
+      "declared": true,
+      "additions": 70,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-artifact-triage.test.mjs",
+      "declared": true,
+      "additions": 7,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/verify-quality-scan.test.mjs",
+      "declared": true,
+      "additions": 114,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 1,
+    "testFileCount": 2,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/verify-quality-scan.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/verify-artifact-triage.test.mjs",
+      "test/verify-quality-scan.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260922-001-50b5",
+  "sessionId": "quick-fce01fb6",
+  "savedAt": "2026-09-22T01:10:02.348Z",
+  "patchSha256": "9becb43213e558cf4e57b58bf616c05e133f170061d0fab4c41355d492334990",
+  "patchStatus": "ok"
+}

@@ -192,10 +192,15 @@ test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁�
       // 第二次：什么都没变 → 去重（不重跑），报「失败签名未变」
       await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /失败签名未变/)
       assert.equal(runCount(), 1, '签名未变跳过重跑（三连假红重试根治点）')
-      // 第三次：逃生阀强制重跑
+      // 第三次：RERUN=1 同签名 → RERUN 签名闸拒绝（r5l 方案 4 新契约：RERUN=1 不再无条件
+      // 解封——签名含环境探针，环境真变自动放行；不变则重跑注定同果）
       process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = '1'
+      await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /RERUN 签名闸拒绝重跑/)
+      assert.equal(runCount(), 1, '同签名 RERUN=1 被签名闸拒绝（不真跑）')
+      // 第三次b：force 逃生阀 → 无条件真跑（旧 RERUN=1 的裸语义移到 force 档）
+      process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = 'force'
       await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
-      assert.equal(runCount(), 2, '逃生阀解封真跑')
+      assert.equal(runCount(), 2, 'force 逃生阀解封真跑')
       delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
       // 第四次：代码面变化 → 指纹失配 → 真跑
       writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n')

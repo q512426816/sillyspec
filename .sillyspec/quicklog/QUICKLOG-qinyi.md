@@ -477,3 +477,15 @@
 结果：受影响面 106 断言全绿（knowledge-quicklog 18/18 + knowledge-inject 47/47 含 10a-10f + fr-index 41/41 含 14a-14f）；lint 734 过+module-map 全；全量 3 存量失败经 stash A/B 实证与本改动无关，SILLYSPEC_QUICK_TEST_GATE=skip 留痕放行全量留 CI；--force-baseline 预判放行：本变更目标即注入核心 prompt.js（ql-009 同款先例）；工作区并行会话在途文件（CONVENTIONS/docs 三件/r5l-verify-state）未计入本会话 --files
 审计：[gate] L1（跨 3 模块 · 12 文件：5 代码/3 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
 审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/CONVENTIONS.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md, round5/r5l-verify-state.mjs
+
+## ql-20260922-001-50b5 | 2026-09-22 08:56:22 | RERUN 失败签名闸：RERUN=1 生效前先算代码指纹×测试面×环境探针失败签名，同签名拒跑（r5l 法证方案4）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/verify-quality-scan.js（新增 computeRerunSignature（dedupKey×测试面×环境探针；RERUN 自身剔除不入键）+storeQualityScan 落 rerunSignature（additive）+executeVerifyQualityScan 前置签名闸（同签名 throw/force 旁路两闸/未设路径逐字不动））
+- test/verify-quality-scan.test.mjs（签名纯函数五性+五态集成回归（环境回摆双向敏感+既有去重函数级零回归断言））
+- test/verify-artifact-triage.test.mjs（E2E 第三段更新新契约：RERUN=1 同签名被签名闸拒+force 解封真跑）
+需求：RERUN 失败签名闸：RERUN=1 生效前先算代码指纹×测试面×环境探针失败签名，同签名拒跑（r5l 法证方案4）
+根因：RERUN=1 原先无条件旁路全部去重；旧失败签名不含环境，环境真变与未变不可区分只能无差别放行——R5-L 两次同签名强制重扫各烧~8M+10m/6.8m 纯等待
+方案：computeRerunSignature=dedupKey×测试面×环境探针（computeEnvProfile 剔除 RERUN 自身防闸门恒失配；探针复用 test-ledger 同源实现）；storeQualityScan additive 落 rerunSignature；RERUN=1 同签名 throw 拒跑+既有出路四选一（④补 force）；签名变化自动放行；RERUN=force 无条件旁路；RERUN 未设的既有 dedup/fail-closed 判定逐字不动
+结果：五态回归全绿（同签名拒 exit1/代码变放行/环境变双向/force/既有去重函数级零回归）；verify-quality-scan 9/9+artifact-triage 13/13（E2E 第三段更新新契约）；全量 580/581+lint 739 过（唯一失败 doc-ref-check=并行会话 command.js 在途行号漂移，与本改动零交集留痕）

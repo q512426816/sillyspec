@@ -14,9 +14,13 @@ import { tmpdir } from 'os'
 import { execSync } from 'node:child_process'
 import {
   computeQualityScanFingerprint,
+  computeQualityScanDedupKey,
+  shouldReuseLastFailedScan,
   qualityScanRecordPath,
   storeQualityScan,
   loadReusableQualityScan,
+  loadLastQualityScanRecord,
+  computeRerunSignature,
   evaluateConclusionDraft,
   executeVerifyQualityScan,
 } from '../src/run/verify-quality-scan.js'
@@ -317,6 +321,116 @@ test('noAI 动作：实测全绿 → 落记录不抛；实测失败 → throw（
     const rec2 = loadReusableQualityScan({ specBase, cwd: dir, changeName: 'c1' })
     assert.equal(rec2, null, 'failed 记录不复用')
   } finally {
+    try { rmSync(dir, { recursive: true, force: true }) } catch {}
+  }
+})
+
+// ── RERUN 失败签名闸（r5l-forensic-verdict.md 方案 4 / 评审护栏#6 五态回归）──
+
+test('RERUN 签名纯函数：同态稳定；RERUN 自身取值不入键；环境/代码/测试面变化即失配', () => {
+  const dir = makeFixtureRepo()
+  try {
+    const specBase = join(dir, '.sillyspec')
+    const baseEnv = { ...process.env }
+    delete baseEnv.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
+    delete baseEnv.SILLYSPEC_STEP_GUIDE
+    const s0 = computeRerunSignature({ cwd: dir, specBase, env: baseEnv })
+    assert.ok(typeof s0 === 'string' && s0.length === 64, '签名 sha256 hex')
+    assert.equal(computeRerunSignature({ cwd: dir, specBase, env: baseEnv }), s0, '同态稳定')
+    // 被测旋钮不是环境：RERUN=1/force 取值不影响签名（否则闸门与历史记录恒失配永不触发）
+    const withRerun = { ...baseEnv, SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN: '1' }
+    assert.equal(computeRerunSignature({ cwd: dir, specBase, env: withRerun }), s0, 'RERUN 取值不入键')
+    assert.equal(computeRerunSignature({ cwd: dir, specBase, env: { ...baseEnv, SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN: 'force' } }), s0, 'force 取值同样不入键')
+    // 环境探针入键：行为开关变化 → 签名失配（环境真变自动放行的机制基础）
+    const envChanged = { ...baseEnv, SILLYSPEC_STEP_GUIDE: '0' }
+    assert.notEqual(computeRerunSignature({ cwd: dir, specBase, env: envChanged }), s0, '环境探针变化 → 失配')
+    // 代码变化 → dedupKey 变 → 失配
+    writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n')
+    assert.notEqual(computeRerunSignature({ cwd: dir, specBase, env: baseEnv }), s0, '代码变化 → 失配')
+    // 测试面变化 → 失配（fixture 无 test/ 目录时为 unavailable 占位，建目录后摘要生效）
+    writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n') // 保持同一代码态
+    const withFace = computeRerunSignature({ cwd: dir, specBase, env: baseEnv })
+    mkdirSync(join(dir, 'test'), { recursive: true })
+    writeFileSync(join(dir, 'test', 'a.test.js'), 'import { test } from "node:test"\n')
+    assert.notEqual(computeRerunSignature({ cwd: dir, specBase, env: baseEnv }), withFace, '测试面出现 → 失配（unavailable→实测摘要）')
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }) } catch {}
+  }
+})
+
+test('RERUN 签名闸五态：同签名拒（throw=退出码非0 同源）/ 代码变放行 / 环境变放行 / force 放行 / 既有去重语义零回归', async () => {
+  const dir = makeFixtureRepo()
+  try {
+    const specBase = join(dir, '.sillyspec')
+    // 造失败记录（RERUN 未设——真实时序：失败在先，重扫在后）
+    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node exit1.js\n  lint: node exit0.js\n')
+    await assert.rejects(() => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }))
+    const rec0 = loadLastQualityScanRecord({ specBase, changeName: 'c2' })
+    assert.ok(rec0.rerunSignature, '失败记录携带 rerunSignature（additive 落盘）')
+
+    // 态①：同签名 + RERUN=1 → 拒绝重跑（throw=CLI 顶层 exitCode 1 同源；不是实测失败的复入语义）
+    process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = '1'
+    await assert.rejects(
+      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }),
+      (e) => String(e.message).includes('RERUN 签名闸拒绝重跑'),
+    )
+    assert.equal(loadLastQualityScanRecord({ specBase, changeName: 'c2' }).rerunSignature, rec0.rerunSignature, '拒跑不刷新记录')
+
+    // 态②：代码变（指纹失配）→ RERUN=1 自动放行（真跑了：失败语义回到「复入本步」而非签名闸）
+    writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 2\n')
+    await assert.rejects(
+      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }),
+      (e) => String(e.message).includes('复入本步'),
+    )
+    const rec2 = loadLastQualityScanRecord({ specBase, changeName: 'c2' })
+    assert.notEqual(rec2.rerunSignature, rec0.rerunSignature, '代码变化 → 重跑后签名刷新')
+
+    // 态③：环境变（探针入键：SILLYSPEC_STEP_GUIDE 未设→设值）→ RERUN=1 自动放行
+    process.env.SILLYSPEC_STEP_GUIDE = '0'
+    await assert.rejects(
+      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }),
+      (e) => String(e.message).includes('复入本步'),
+    )
+    delete process.env.SILLYSPEC_STEP_GUIDE
+    // 环境回摆同样是环境变化：首跑相对态③记录（探针含 STEP_GUIDE='0'）失配 → 放行并按
+    // 回摆后环境刷记录；紧接着同签名再跑 → 拒绝（闸门对来回摆动敏感，双向生效）
+    await assert.rejects(
+      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }),
+      (e) => String(e.message).includes('复入本步'),
+    )
+    await assert.rejects(
+      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }),
+      (e) => String(e.message).includes('RERUN 签名闸拒绝重跑'),
+    )
+
+    // 态④：force——同签名也放行（无条件逃生阀）
+    process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = 'force'
+    await assert.rejects(
+      () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }),
+      (e) => String(e.message).includes('复入本步'),
+    )
+    delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
+
+    // 态⑤：RERUN 未设 → 既有失败签名去重语义零回归。函数级断言（shouldReuseLastFailedScan
+    // 纯函数）：dedupKey 全等 + 口径一致 → reuse=true——RERUN 未设路径的判定输入与分流一行
+    // 未动，语义即未动（集成级 refused-by-reuse 在本 fixture 不可达：tmpdir 无 change 目录 →
+    // 快照创建 fail-soft 回退主仓 usedSnapshot=false ≠ plannedSnapshot=true，既有口径短路
+    // snapshot-scope-changed 与本改动无关；快照口径变化在 RERUN 闸侧由环境探针覆盖）。
+    const recEnd = loadLastQualityScanRecord({ specBase, changeName: 'c2' })
+    const verdictSame = shouldReuseLastFailedScan({
+      lastRecord: recEnd,
+      currentDedupKey: computeQualityScanDedupKey({ cwd: dir, specBase }),
+      plannedSnapshot: Boolean(recEnd.usedSnapshot),
+    })
+    assert.equal(verdictSame.reuse, true, '同 dedupKey+同口径 → 既有去重照常复用（语义零回归）')
+    assert.equal(shouldReuseLastFailedScan({
+      lastRecord: recEnd,
+      currentDedupKey: 'deadbeef',
+      plannedSnapshot: Boolean(recEnd.usedSnapshot),
+    }).reason, 'dedup-key-mismatch（代码/配置/豁免面/HEAD 已变化）', '失配路径文案逐字保持')
+  } finally {
+    delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
+    delete process.env.SILLYSPEC_STEP_GUIDE
     try { rmSync(dir, { recursive: true, force: true }) } catch {}
   }
 })

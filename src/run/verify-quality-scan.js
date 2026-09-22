@@ -33,6 +33,7 @@ import { join, dirname } from 'node:path'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { gitQuiet } from '../git-helper.js'
 import { resolveRuntimeRoot, parsePorcelainPath } from './shared.js'
+import { computeEnvProfile, computeTestFaceDigest } from './test-ledger.js'
 import { resolveChangeRisk, extractExplicitRiskLevel } from '../change-risk-profile.js'
 import { loadBlastDeclarationsAllProjects } from '../blast-surface.js'
 import { parseFileChangeListDetailed } from '../change-list.js'
@@ -103,6 +104,7 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
   const path = qualityScanRecordPath(specBase, changeName)
   if (!path) return null
   const fingerprint = computeQualityScanFingerprint({ cwd, specBase })
+  const dedupKey = computeQualityScanDedupKey({ cwd, specBase, fingerprint })
   try {
     mkdirSync(dirname(path), { recursive: true })
     writeAtomicSync(path, JSON.stringify({
@@ -112,7 +114,10 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
       fingerprint,
       // 失败签名去重面（ql-20260920-010 修复一 d）：additive 字段，存量记录无这两键 →
       // shouldReuseLastFailedScan 判 no-dedup-key 保守重跑一次，之后新记录即携带
-      dedupKey: computeQualityScanDedupKey({ cwd, specBase, fingerprint }),
+      dedupKey,
+      // RERUN 失败签名（r5l 方案 4）：dedupKey × 测试面 × 环境探针；同样 additive——存量
+      // 记录无此键 → RERUN 签名闸判无签名放行一次（同 no-dedup-key 先例口径）
+      rerunSignature: computeRerunSignature({ cwd, specBase, dedupKey, env: process.env }),
       usedSnapshot: Boolean(usedSnapshot),
       ranAt: new Date().toISOString(),
       testResult,
@@ -171,6 +176,36 @@ export function computeQualityScanDedupKey({ cwd, specBase, fingerprint = null }
     }
   } catch { /* 读不到按无豁免面处理 */ }
   return createHash('sha256').update(fp + '\n##known-failures##\n' + kf).digest('hex')
+}
+
+/**
+ * RERUN 失败签名（r5l-forensic-verdict.md 方案 4 / 评审护栏#6）：dedupKey（代码指纹 ×
+ * known_failures 豁免面）× 测试面 × 环境探针 三路合成，供 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1
+ * 生效前对账——签名未变则拒绝重跑（重跑结果注定相同，R5-L 两次强制重扫各烧 ~8M+10m 的根治）。
+ *
+ * 环境必须入键（护栏#6 五态之「环境变放行」）：环境真变（探针换值）签名才失配，RERUN=1 才
+ * 不会被假拒漏真拦。探针复用 test-ledger computeEnvProfile 同源实现，但剔除
+ * SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN 自身——被测旋钮不是环境（原样入键 = RERUN=1 与历史
+ * 记录恒失配，闸门永不触发）。测试面同理复用 computeTestFaceDigest（test/ 读不到按
+ * 'unavailable' 入键——代码指纹的 HEAD+非文档脏集仍覆盖已提交/未提交的测试文件变更）。
+ *
+ * 任一 fail 分量不可得 → null：签名闸 fail-open（拒跑是危险方向——算不出签名就放行重跑，
+ * 宁可多跑一次不可漏真拦；与复用判定的 fail-closed 方向刻意相反）。
+ */
+export function computeRerunSignature({ cwd, specBase, dedupKey = null, env = process.env }) {
+  const dedup = dedupKey ?? computeQualityScanDedupKey({ cwd, specBase })
+  if (!dedup) return null
+  let testFace = 'unavailable'
+  try {
+    const face = computeTestFaceDigest(join(cwd, 'test'))
+    if (face !== null) testFace = face
+  } catch { /* 测试面读不到 → unavailable 兜底入键 */ }
+  const profile = computeEnvProfile({ cwd, env })
+  if (!profile) return null
+  if (profile.behaviorEnv) delete profile.behaviorEnv.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
+  return createHash('sha256')
+    .update(dedup + '\n##test-face##\n' + testFace + '\n##env-probe##\n' + JSON.stringify(profile))
+    .digest('hex')
 }
 
 /**
@@ -493,12 +528,43 @@ function warnIfMainRepoDirtyForGate(cwd) {
  */
 export async function executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts }) {
   const { runVerifyTestCheck, printVerifyTestCheck, runVerifyLintCheck, printVerifyLintCheck, shouldBlockVerifyLint, classifyTestFailureArtifact } = await import('../verify-postcheck.js')
+  // ── RERUN 失败签名闸（r5l-forensic-verdict.md 方案 4 / 评审护栏#6 五态）──
+  // R5-L 实证：RERUN=1 两次强制重扫各烧 ~8M 重发 + 10m/6.8m 等待，而失败签名未变——重跑
+  // 结果注定相同。故 RERUN=1 生效前先对账失败签名（dedupKey 已含代码指纹×豁免面，再叠测试
+  // 面×环境探针）：未变 → 拒绝重跑（throw=退出码非 0）；环境真变（探针入键）/代码/豁免/测试
+  // 面变化 → 签名失配自动放行；RERUN=force 无条件放行（真·逃生阀，旧 RERUN=1 的裸语义移到
+  // 此档）。RERUN 未设时本闸不参与——下方既有 dedup 复用判定与 fail-closed 语义一行不动。
+  const rerunMode = process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
+  if (rerunMode === 'force') {
+    console.log('ℹ️ SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force——无条件强制重跑（RERUN 签名闸与失败签名去重均旁路）')
+  } else if (rerunMode === '1') {
+    const lastRecord = loadLastQualityScanRecord({ specBase, changeName })
+    const lastSig = lastRecord ? lastRecord.rerunSignature : null
+    const lastFailed = lastRecord && lastRecord.testResult && lastRecord.testResult.status === 'failed'
+    if (lastFailed && lastSig) {
+      const sig = computeRerunSignature({ cwd, specBase })
+      if (sig && sig === lastSig) {
+        const t = lastRecord.testResult
+        console.error(`\n🛑 RERUN 签名闸：上次质量扫描失败且失败签名未变（代码指纹 / known_failures 豁免面 / 测试面 / 环境探针均未变${lastRecord.ranAt ? '，上次运行 ' + lastRecord.ranAt : ''}）——重跑结果注定相同，拒绝重跑：`)
+        console.error(`   上次实测：\`${t.command}\` — ${(t.reason || '').split('\n')[0]}`)
+        if (t.outputTail) {
+          for (const line of t.outputTail.split('\n').slice(-8)) console.error(`   | ${line}`)
+        }
+        console.error('   出路（按序）：① 修代码（指纹即失配，下次自动重测）② 补 known_failures 豁免（豁免面即失配）③ 换快照口径（设/删 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，口径变化即失配）④ 环境确已修好后强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（环境探针已入失败签名——环境真变即自动放行；仍被拒=探针未见变化，确要无条件重跑用 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force）')
+        throw new Error(`RERUN 签名闸拒绝重跑（失败签名未变：代码指纹×测试面×环境探针全等）——${(t.reason || '测试失败').split('\n')[0]}。按上方出路处置；确要无条件重跑设 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force。`)
+      }
+    } else if (lastFailed) {
+      console.log('ℹ️ RERUN=1：上次失败记录无 rerunSignature（存量记录）——签名闸放行一次，本次重跑后新记录即携带签名')
+    } else {
+      console.log('ℹ️ SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1——强制重跑（上次无失败记录在案，签名闸无事可对）')
+    }
+  }
   // ── 失败签名去重（ql-20260920-010 修复一 d）──
   // 复入本步前先对账上次失败：代码指纹 + known_failures 豁免面 + 快照口径都没变 → 失败
   // 必然原样复现，重跑是纯等待（对撞三轮三连 8~10 分钟假红重试的根治）。复用只消费
   // failed 态记录（passed 态 --done 复用归 loadReusableQualityScan），逃生阀
-  // SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1。
-  if (process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN !== '1') {
+  // SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（闸门见上方签名闸）与 =force（无条件旁路）。
+  if (rerunMode !== '1' && rerunMode !== 'force') {
     const lastRecord = loadLastQualityScanRecord({ specBase, changeName })
     const verdict = shouldReuseLastFailedScan({
       lastRecord,
@@ -519,7 +585,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
         console.error(`   🔬 失败签名命中伪影形态（${replayTriage.kind}）：${replayTriage.advice}`)
         console.error('      （上次运行早于分诊机制——本次重跑会自动做主树口径对照；如需立即重跑设 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1）')
       }
-      console.error('   出路（按序）：① 修代码（指纹即失配，下次自动重测）② 补 known_failures 豁免（豁免面即失配）③ 换快照口径（设/删 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，口径变化即失配）④ 环境确已修好后强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1')
+      console.error('   出路（按序）：① 修代码（指纹即失配，下次自动重测）② 补 known_failures 豁免（豁免面即失配）③ 换快照口径（设/删 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，口径变化即失配）④ 环境确已修好后强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（环境探针已入失败签名——环境真变即放行；仍被拒用 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force）')
       throw new Error(`noAI 质量扫描复用上次失败结果（失败签名未变，跳过重跑）——${(t.reason || '测试失败').split('\n')[0]}。修复后重跑 sillyspec run verify${changeName ? ` --change ${changeName}` : ''}，或按上方出路处置。`)
     }
   }
