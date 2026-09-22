@@ -7,10 +7,10 @@
 ## 核心规则
 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
-3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+3. **新功能 / 大改动走完整流程**：`sillyspec run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 --init --draft 机器预填）。附注：`flow start/done` 两调用薄协议为实验通道（local.yaml `flow.mode: thin` 显式开启），不作默认。
 4. **小修复 / 小调整走 quick**（= 无需要落盘的设计决策的改动，选道判据见第 6 条）：`sillyspec run quick`。
 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
-6. **判规模选档**：看本次改动有无需要落盘的设计决策——有（新能力 / 行为契约变更 / 跨模块取舍 / 多阶段推进）走完整流程，无（范围明确的局部修补）走 `quick`。文件数不是选道判据，只作出口绊线——改动大或跨模块时 quick 收尾门禁会自动加查（分级提示补文件注记 / 测试增量 / 模块文档认领）。
+6. **判规模选档**：看本次改动有无**真决策密度**（要真做设计取舍 / 行为契约变更 / 跨模块取舍 / 大爆炸半径）——有则走完整流程（brainstorm/plan 落盘设计决策）；无（输入已含决策的常规任务 / 范围明确的局部修补）走 `quick`。文件数不是选道判据，只作出口绊线——改动大或跨模块时 quick 收尾门禁会自动加查（分级提示补文件注记 / 测试增量 / 模块文档认领）。
 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `quick --done` 收尾 + 补 quicklog 条目，把已落盘改动如实登记进进度库。
 8. **实证核验再 `--done`**：触及 `src`/`test` 的改动，CLI 会在 `quick --done` 时**亲自实测** `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（门禁：实测失败阻断 --done 回 pending；纯 doc/配置与未配置命令自动跳过；倒推 B 模式按 --files 声明边界兜底判定）。agent 侧预跑**可选**——想省「--done 被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动无需跑。以落盘文件与测试结果为准，不信口头"已完成"。
 9. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
