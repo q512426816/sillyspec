@@ -1,0 +1,63 @@
+diff --git a/.sillyspec/knowledge/conventions.md b/.sillyspec/knowledge/conventions.md
+index 7b35cbad..b29ff61b 100644
+--- a/.sillyspec/knowledge/conventions.md
++++ b/.sillyspec/knowledge/conventions.md
+@@ -83,3 +83,15 @@ checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移
+   （每轮零阻断、gap 全有锚、QA 抓到真 bug specBase 推导错层）。省的是「每轮评审从零重建仓库认知」（~200x
+   信息放大），不是审的东西。评审轮次结构不动（少审这条路不通——两轮 QA 拦下错层与假设反转的价值
+   大于全部评审成本）。后续命中注入的会话：这是已验证的数字不是估计。
++
++## env 敏感测试必须双模式跑+行为翻转走被跟踪文件
++
++两类实测坑（2026-09-22 R7 dogfood 复盘，2026-09-22-r7-protocol-surgery 双实证）：
++①**套件阀自噬**：测试对 env 门控行为（如 SILLYSPEC_WATCHER=0 的 disabled 语义）做断言时，测试
++runner 注入的全局阀会继承进测试内 spawn 的 env——裸跑绿、套件内红。规则：凡断言 env 门控
++分支的测试，构造 spawn env 时**显式剥净全部相关变量**（delete NODE_TEST_CONTEXT /
++SILLYSPEC_WATCHER 等），且收口前双模式各跑一遍（裸 + 套件阀生效形态）才算绿。
++②**gitignored 配置翻转不可见**：门禁快照 overlay=HEAD+会话**被跟踪**文件，测试中途改
++local.yaml（gitignored）对快照内实测不可见→「修好了还红」假象。规则：测试内翻转被测行为
++一律走**被跟踪文件**（check.js+pass.flag 模式），不走 gitignored 配置。（来源：
++test/watcher.test.mjs env 剥离双清 / test/flow-protocol.test.mjs ③ pass.flag）
+diff --git a/.sillyspec/quicklog/QUICKLOG-qinyi.md b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+index 92b8e9f0..022d781f 100644
+--- a/.sillyspec/quicklog/QUICKLOG-qinyi.md
++++ b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+@@ -42,3 +42,12 @@
+ 根因：task done 的 review 写在 wt-commit 前，head 停在基线 → Task Review Gate base..head 切片空误判零改动伪造（R7 会话 5 份手工重应急，坑 task-done-head-premature）
+ 方案：子步 4 提交成功（HEAD 前移且 review 在场）即回填 review.head=提交全哈希+headBackfilledAt 审计戳+结果行留痕；fail-soft；skipped 提交不触发（幂等复跑 review 逐字节不动）
+ 结果：task-done 4/4（happy 增 head===worktree HEAD 断言+审计戳+留痕行）；task-review 族 8 组零回归；lint 753 文件绿
++
++## ql-20260922-006-8474 | 2026-09-22 17:58:38 | R7 dogfood 复盘行动项落盘（环境一致性测试纪律+设计模板两项自查）
++状态：已完成
++关联变更：（无）
++文件：src/stages/brainstorm.js（+11/-0）
++需求：R7 dogfood 复盘行动项落盘（环境一致性测试纪律+设计模板两项自查）
++根因：套件阀继承使 env 门控断言套件内红裸跑绿；gitignored 配置中途修改不进快照 overlay；设计死亡面无人审（41 孤儿）；两裁定组合出归档死锁
++方案：conventions 新增 env 双模式纪律+INDEX 路由；brainstorm 设计模板增 10b 非功能生命周期节与多裁定组合推演自查
++结果：lint 753 绿；brainstorm-plan-contract 零回归；guidance 级不进 gate 硬校验存量零影响
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index cabf851e..b2a670bf 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -345,10 +345,21 @@ design.md 第一行标题必须用中文：# 设计文档（Design）— <变更
+ |---|---|---|---|
+ | R-01 | ... | P0/P1/P2 | ... |
+ 
++10b. **非功能生命周期**（进程/资源/清理面——2026-09-22 R7 dogfood 复盘新增，41 孤儿 watcher
++泄漏实证：设计审查惯于覆盖 API/通道/语义面，「死亡面」无人审）：
++   - 本变更是否引入长驻进程/后台任务/持有外部资源（文件锁/监听句柄/子进程）？
++   - 引入 → 逐项写自灭条件（谁负责杀、何时死、父环境消失后靠什么死——不得只依赖 spawn 侧
++     环境变量；参考三闸模式：首拍终态即退/外部资源蒸发连续 N 拍退/硬寿命帽）
++   - 不涉及 → 风险登记表加一行「无长驻进程/外部资源，生命周期面不适用」显式留痕
++
+ 11. **决策追踪**（如存在 Grill/重大决策）：
+    - 列出当前版本 D-xxx@vN 决策 ID
+    - 说明每个 D-xxx@vN 被哪些 FR-xxx / 设计章节覆盖
+    - 标注仍未解决的 D-xxx@vN 或剩余风险
++   - **多裁定组合推演**（2026-09-22 R7 dogfood 复盘新增：升厚×断点续两裁定各自正确、组合
++     出归档死锁的实证）：≥2 条相互约束的裁定（状态升降/回退路径/失败语义类）时，自审必须
++     做组合状态表推演——各裁定的状态叉乘 × 关键子步（如归档/重入）逐格过一遍，死锁格写
++     进风险登记与调和方案；无组合面（裁定互不作用）显式记「无组合约束」一行
+ 12. **自审**（AI 对自身设计的校验）
+ 
+ ### 操作

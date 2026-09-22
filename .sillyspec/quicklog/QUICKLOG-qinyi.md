@@ -42,3 +42,12 @@
 根因：task done 的 review 写在 wt-commit 前，head 停在基线 → Task Review Gate base..head 切片空误判零改动伪造（R7 会话 5 份手工重应急，坑 task-done-head-premature）
 方案：子步 4 提交成功（HEAD 前移且 review 在场）即回填 review.head=提交全哈希+headBackfilledAt 审计戳+结果行留痕；fail-soft；skipped 提交不触发（幂等复跑 review 逐字节不动）
 结果：task-done 4/4（happy 增 head===worktree HEAD 断言+审计戳+留痕行）；task-review 族 8 组零回归；lint 753 文件绿
+
+## ql-20260922-006-8474 | 2026-09-22 17:58:38 | R7 dogfood 复盘行动项落盘（环境一致性测试纪律+设计模板两项自查）
+状态：已完成
+关联变更：（无）
+文件：src/stages/brainstorm.js（+11/-0）
+需求：R7 dogfood 复盘行动项落盘（环境一致性测试纪律+设计模板两项自查）
+根因：套件阀继承使 env 门控断言套件内红裸跑绿；gitignored 配置中途修改不进快照 overlay；设计死亡面无人审（41 孤儿）；两裁定组合出归档死锁
+方案：conventions 新增 env 双模式纪律+INDEX 路由；brainstorm 设计模板增 10b 非功能生命周期节与多裁定组合推演自查
+结果：lint 753 绿；brainstorm-plan-contract 零回归；guidance 级不进 gate 硬校验存量零影响

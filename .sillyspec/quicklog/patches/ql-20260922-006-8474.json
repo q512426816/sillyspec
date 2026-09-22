@@ -1,0 +1,63 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-c0074b68",
+  "totals": {
+    "files": 3,
+    "additions": 32,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/knowledge/conventions.md",
+      "declared": true,
+      "additions": 12,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/quicklog/QUICKLOG-qinyi.md",
+      "declared": true,
+      "additions": 9,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 11,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 1,
+    "codeFileCount": 1,
+    "testFileCount": 0,
+    "moduleSpan": null,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": true,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260922-006-8474",
+  "sessionId": "quick-c0074b68",
+  "savedAt": "2026-09-22T10:02:21.269Z",
+  "patchSha256": "fc1e1743664f6c8c511eb5684381163f70bc55a0eca9337c57f7ce9a24f14391",
+  "patchStatus": "ok"
+}
