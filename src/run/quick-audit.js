@@ -352,6 +352,55 @@ export async function resolveQuickLinkedChanges({ pm, cwd, specDir, quickFiles, 
 
 // ============ quick --done test+lint 硬门禁（2026-09-02 跨 agent 工单 P0-2）============
 
+// ── 测试最低面 advisory（资产三小件②，2026-09-23）口径常量 ──
+// 代码文件判定双通道（原为 runQuickTestLintGate 函数内常量，advisory 复用同口径提为模块级；
+// 无 /g 标志无状态，提级零行为差）：
+//   ① 路径段匹配：任意层出现 src / test / tests / __tests__ 段（src-guide 等长名不误蹭——按段全等）
+//   ② 代码扩展名兜底：src/test 目录约定外的代码（backend/app/**.py、scripts/*.go 等）
+const CODE_PATH_SEGMENT_RE = /(^|\/)(src|tests?|__tests__)(\/|$)/
+const CODE_EXTENSION_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|groovy|vue|svelte)$/
+
+// 测试文件判定：目录段（test/tests/__tests__——比 quick-gate-profile 的 TEST_DIR_RE 多认裸
+// test/ 段，本仓 test/ 下即有无 .test. 后缀的 .mjs）+ basename test_ 前缀 + .test./_test./.spec.
+// 命名三信号任一命中（与 quick-gate-profile isTestPath 同判法补 test 段）。
+const ADVISORY_TEST_DIR_RE = /(^|\/)(test|tests|__tests__)(\/|$)/i
+
+function isAdvisoryTestPath(p) {
+  if (ADVISORY_TEST_DIR_RE.test(p)) return true
+  const base = p.slice(p.lastIndexOf('/') + 1)
+  if (/^test_/i.test(base)) return true
+  return /[._](test|spec)\.[^.]+$/i.test(base)
+}
+
+/** 最低测试面 advisory 阈值：src 类交付文件 ≥3 且测试改动 0 才出警示（R7-L 重放校准） */
+const MIN_SRC_FILES_FOR_TEST_ADVISORY = 3
+
+/**
+ * 测试最低面 advisory（资产三小件②，advisory 不阻断——测试门 fail-closed 语义零改动）。
+ *
+ * 背景：R7-L 重放实测测试量仅为旧流程 40%（1162 vs 2909 行）——薄道/burst 收口走
+ * runQuickTestLintGate，无 quick 出口 L1 门禁的 testDelta 检查，测试厚度零约束。
+ * 判定：变更交付文件（非 .sillyspec）中 src 类文件（代码双通道判定 × 非测试文件）
+ * ≥3 个而测试文件 0 个改动（P2 账本测试面亦无增量可对账——账本测试面=test/ 目录
+ * 内容摘要，测试零改动=两信号同态）→ 返回一行警告文案；负例（有测试改动/纯 doc/
+ * 少文件）返回 null。
+ * @param {string[]} files 变更文件清单（changedFiles 审计口径或 declaredFiles 兜底口径）
+ * @returns {string|null}
+ */
+export function buildTestSurfaceAdvisory(files) {
+  const list = (Array.isArray(files) ? files : [])
+    .map((f) => String(f).replace(/\\/g, '/'))
+    .filter((f) => f && !f.startsWith('.sillyspec/'))
+  let srcCount = 0
+  let testCount = 0
+  for (const f of list) {
+    if (isAdvisoryTestPath(f)) { testCount++; continue }
+    if (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)) srcCount++
+  }
+  if (srcCount < MIN_SRC_FILES_FOR_TEST_ADVISORY || testCount > 0) return null
+  return `⚠️ 测试面厚度 advisory：交付面 ${srcCount} 个 src 类文件但测试面为空（0 个测试文件改动，P2 账本测试面无增量可对账），确认无需测试增量？（advisory 不阻断——薄道/burst 实证测试量仅为旧流程 40%）`
+}
+
 /**
  * 语义护栏命中组装（change: 2026-09-11-cross-change-decision-guard，task-06，FR-04，
  * D-001@v1）：断言重写检测 ∩ 近因他者交付归因 → hits 清单，gate 内一行调用拼进返回对象。
@@ -418,11 +467,8 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   // 代码文件判定（2026-09-19 monorepo 子包实证修复：multi-agent-platform 回带收口 6 个
   // sillyhub-daemon/src/**、frontend/src/** 文件被「纯 doc/配置」误判跳过实测）：旧口径只认
   // 仓根 src/、test/ 前缀——monorepo 子包（<pkg>/src/**、backend/app/**.py）全漏。
-  // 新口径双通道，方向取「宁可多跑不可漏跑」（门禁漏跑=静默放行，多跑只是费一次实测）：
-  //   ① 路径段匹配：任意层出现 src / test / tests / __tests__ 段（src-guide 等长名不误蹭——按段全等）
-  //   ② 代码扩展名兜底：src/test 目录约定外的代码（backend/app/**.py、scripts/*.go 等）
-  const CODE_PATH_SEGMENT_RE = /(^|\/)(src|tests?|__tests__)(\/|$)/
-  const CODE_EXTENSION_RE = /\.(?:js|mjs|cjs|ts|tsx|jsx|py|pyw|go|rs|java|kt|kts|rb|php|cs|c|h|cpp|cc|hpp|swift|scala|groovy|vue|svelte)$/
+  // 新口径双通道，方向取「宁可多跑不可漏跑」（门禁漏跑=静默放行，多跑只是费一次实测），
+  // 常量已提为模块级 CODE_PATH_SEGMENT_RE / CODE_EXTENSION_RE（advisory 同口径复用）。
   const codeFiles = files.filter(
     (f) => typeof f === 'string' && (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)),
   )
@@ -432,6 +478,11 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   if (codeFiles.length === 0) {
     return { action: 'skip', failed: [], reason: `纯 doc/配置改动（${files.length} 个文件均未触及 src/test，规则 8 语义跳过 test+lint）`, test: null, lint: null }
   }
+
+  // ── 测试最低面 advisory（资产三小件②）：放在两条早退之后——纯 doc/env skip/空清单
+  //    天然零输出（负例语义）；此处测试门确定要跑，厚度提示与实测结论同场可见。──
+  const surfaceAdvisory = buildTestSurfaceAdvisory(files)
+  if (surfaceAdvisory) console.warn(`\n${surfaceAdvisory}`)
 
   // ── 语义护栏检测（task-06，FR-04 断言重写 WARNING，D-001@v1 非阻断）──
   // 三条早退（env skip / 无文件 / 纯 doc）已在上文 return，检测不跑——语义一致。

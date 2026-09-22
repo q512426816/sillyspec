@@ -18,7 +18,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
 
-import { runQuickTestLintGate, printQuickTestLintGate } from '../src/run/quick-audit.js'
+import { runQuickTestLintGate, printQuickTestLintGate, buildTestSurfaceAdvisory } from '../src/run/quick-audit.js'
 
 let failed = 0
 let total = 0
@@ -203,6 +203,73 @@ console.log('--- 10. 倒推 B 兜底不扩大：声明边界纯 doc → skip ---
   const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [], declaredFiles: DOC_FILES })
   assert(gate.action === 'skip', `声明边界纯 doc → skip（实际 ${gate.action}）`)
   assert(gate.test === null, 'doc 声明边界不触发实测')
+}
+
+// ─── 11. 测试最低面 advisory（资产三小件②：src 类交付 ≥3 且测试 0 改动 → 一行警告） ───
+console.log('--- 11. buildTestSurfaceAdvisory ---')
+{
+  // 正例：3 个 src 类文件（monorepo 路径段 + 代码扩展名双通道）+ 0 测试 → 一行警告
+  const pos = buildTestSurfaceAdvisory(['src/run/a.js', 'sillyhub-daemon/src/b.ts', 'backend/app/c.py'])
+  assert(pos !== null && pos.includes('交付面 3 个 src 类文件') && pos.includes('测试面为空'),
+    `11a 空测试面正例出一行警告（实际 ${JSON.stringify(pos)}）`)
+  // 负例①：有测试改动 → 零输出
+  assert(buildTestSurfaceAdvisory(['src/a.js', 'src/b.js', 'src/c.js', 'test/d.test.mjs']) === null,
+    '11b 有测试改动 → null')
+  // 负例②：纯 doc → 零输出
+  assert(buildTestSurfaceAdvisory(['docs/a.md', 'README.md', 'docs/b.md', 'package.json']) === null,
+    '11c 纯 doc/配置 → null')
+  // 负例③：少文件（2 个 src 类）→ 零输出
+  assert(buildTestSurfaceAdvisory(['src/a.js', 'src/b.js']) === null, '11d <3 个 src 类文件 → null')
+  // .sillyspec 前缀剔除：spec 内部产物不算交付面（3 spec + 2 src → 不足 3 → null）
+  assert(buildTestSurfaceAdvisory([
+    '.sillyspec/changes/x/design.md', '.sillyspec/knowledge/INDEX.md', '.sillyspec/quicklog/QUICKLOG-x.md',
+    'src/a.js', 'src/b.js',
+  ]) === null, '11e .sillyspec 产物不计入交付面')
+  // 测试目录段判定：裸 test/ 段（无 .test. 命名）也算测试文件
+  assert(buildTestSurfaceAdvisory(['src/a.js', 'src/b.js', 'src/c.js', 'test/helper.mjs']) === null,
+    '11f test/ 目录段（无 .test. 后缀）也算测试改动')
+  // 反斜杠归一 + 非数组/空数组 fail-open
+  assert(buildTestSurfaceAdvisory(['src\\a.js', 'src\\b.js', 'src\\c.js']) !== null, '11g 反斜杠路径归一')
+  assert(buildTestSurfaceAdvisory(null) === null && buildTestSurfaceAdvisory([]) === null, '11h 非数组/空 → null')
+}
+// 集成：runQuickTestLintGate 内接线（console.warn 一行；负例零输出；doc-only 早退不触发）
+console.log('--- 11i. runQuickTestLintGate advisory 接线 ---')
+{
+  const { proj, specBase } = makeGateFixture({ yaml: '# 空 local.yaml\n' })
+  const capture = () => {
+    const warns = []
+    const orig = console.warn
+    console.warn = (...a) => warns.push(a.join(' '))
+    return { warns, restore: () => { console.warn = orig } }
+  }
+  // 正例：3 个 src 类、无测试 → gate 跑起来且出 advisory（warn 不改 action）
+  {
+    const c = capture()
+    try {
+      const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: ['src/a.js', 'src/b.js', 'src/c.js'] })
+      assert(gate.action === 'pass', `11i advisory 场景 gate 仍 pass（实际 ${gate.action}）`)
+      assert(c.warns.some((w) => w.includes('测试面厚度 advisory') && w.includes('确认无需测试增量')),
+        `11j 一行警告在门禁输出（实际 ${JSON.stringify(c.warns)}）`)
+    } finally { c.restore() }
+  }
+  // 负例：有测试文件 → 零 advisory 输出
+  {
+    const c = capture()
+    try {
+      const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: ['src/a.js', 'src/b.js', 'src/c.js', 'test/x.test.mjs'] })
+      assert(gate.action === 'pass', '11k 负例 gate 正常')
+      assert(!c.warns.some((w) => w.includes('测试面厚度 advisory')), '11l 有测试改动零 advisory 输出')
+    } finally { c.restore() }
+  }
+  // 负例：纯 doc 早退 → 零 advisory 输出
+  {
+    const c = capture()
+    try {
+      const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: DOC_FILES })
+      assert(gate.action === 'skip', '11m doc-only 仍 skip')
+      assert(!c.warns.some((w) => w.includes('测试面厚度 advisory')), '11n doc-only 早退零 advisory 输出')
+    } finally { c.restore() }
+  }
 }
 
 // ─── 清理 & 汇总 ───
