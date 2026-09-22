@@ -83,3 +83,14 @@
 方案：parseQuicklogEntries 扩双源：parseQuicklogFileEntries 原逻辑零变化；新增 parseFlowArchiveEntries 扫 changes/archive 含 flow-state.yaml 目录合成伪条目（qlId=变更名/date=目录名日期前缀 mtime 兜底/title=proposal.md 首 # 行缺件退变更名/files 恒空）；条目增 source 字段，排序加 source 键双源命中 quicklog 排前；全链 fail-open
 结果：knowledge-quicklog 28/28（新增 5a-5j：双源聚合/伪条目三料/flow 变更可命中/quicklog 排前/无 flow-state 目录不入源/mtime 兜底），knowledge-inject 47/47 零回归，全量门禁由 --done 亲测
 审计：📝 文档欠账（D-8）：2 个源码文件改动未同步任何模块文档（涉及模块：core-engine）
+
+## ql-20260923-003-4829 | 2026-09-23 00:24:05 | 测试最低面门槛 advisory（薄道/burst 测试厚度显性化）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/quick-audit.js（buildTestSurfaceAdvisory+门禁接线（同文件他者 hunk 已分离））
+- test/quick-test-gate.test.mjs（增 11a-11n 断言）
+需求：测试最低面门槛 advisory（薄道/burst 测试厚度显性化）
+根因：R7-L 重放实测测试量仅为旧流程 40%——薄道 flow done ledger 子步与 burst 收口走 runQuickTestLintGate，无 quick 出口 L1 门禁 testDelta 检查，测试厚度零约束
+方案：quick-audit.js 增导出纯函数 buildTestSurfaceAdvisory：交付文件（剔 .sillyspec）中 src 类 ≥3 且测试文件 0 改动（P2 账本测试面同态无增量）→ 一行警告文案，负例 null；runQuickTestLintGate 两条早退后接线 console.warn——advisory 不阻断，action/failed 零改动；代码判定正则提为模块级常量复用。同文件并发处置：他者未提交 hunk（restrictFiles 接线/快照 lint 主仓对照）按分离纪律排除在提交 f3737663 外、原样留工作树
+结果：quick-test-gate 42/42（新增 11a-11n 三负例零输出+正例一行警告+接线三态）+quick-gate-snapshot 4/4+semantic-guard 30/30+flow-protocol 7/7 零回归+主仓全量 EXIT=0
