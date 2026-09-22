@@ -39,6 +39,10 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
   const { resolveRuntimeRoot } = await import('./run/shared.js')
   const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
   const { writeTaskReview, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('./task-review.js')
+  // review.json 路径锚（子步 1 落定；子步 4 提交后回填 head 用——坑 task-done-head-premature：
+  // review 写在 wt-commit 之前，head 快照停在基线 → Task Review Gate 的 base..head 路径切片
+  // 为空被误判「零改动伪造」（R7 会话 5 份手工重对的机制化根治，2026-09-22）。
+  let reviewPathForBackfill = null
 
   // ── 子步 1：review.json（幂等标记 = 同 executeRunId 同 task 同双 verdict 已在）──
   // executeRunId 解析与 writeTaskReview 同源：marker 文件优先，缺省回退最新含 tasks 的 run。
@@ -55,6 +59,7 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
     } catch { /* 读失败走回退 */ }
     if (!runId) runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName }) || ''
     const existingPath = runId ? join(runtimeRoot, 'execute-runs', runId, 'tasks', taskId, 'review.json') : null
+    if (existingPath) reviewPathForBackfill = existingPath
     if (existingPath && existsSync(existingPath)) {
       let existing = null
       try { existing = JSON.parse(readFileSync(existingPath, 'utf8')) } catch { /* 损坏按不存在处理 */ }
@@ -78,6 +83,7 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
       })
       if (r.ok) {
         reviewWritten = true
+        reviewPathForBackfill = r.reviewPath || reviewPathForBackfill
         step('review.json', 'done', `${preExisting ? '覆盖写入（--force）' : '写入'} ${r.reviewPath}（executeRunId=${r.executeRunId}）`)
       } else {
         step('review.json', 'failed', r.errors.join('；'))
@@ -125,8 +131,26 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
     try {
       const { runWtCommit } = await import('./wt-commit.js')
       const r = await runWtCommit({ changeName, message: commitMessage, pathspecs, pathspecFile, cwd })
+      // head 回填（坑 task-done-head-premature 根治）：review 先于 commit 写入，head 停在基线
+      // → Task Review Gate base..head 切片空误判零改动。提交成功（HEAD 前移）即把 review.head
+      // 重锚为本提交全哈希+headBackfilledAt 审计戳；fail-soft（回填失败只警示不改判提交结果）。
+      let backfillNote = ''
+      if (!r.skipped && r.head && reviewPathForBackfill && existsSync(reviewPathForBackfill)) {
+        try {
+          const rev = JSON.parse(readFileSync(reviewPathForBackfill, 'utf8'))
+          if (rev && rev.head !== r.head) {
+            rev.head = r.head
+            rev.headBackfilledAt = new Date().toISOString()
+            const { writeAtomicSync } = await import('./fs-atomic.js')
+            writeAtomicSync(reviewPathForBackfill, JSON.stringify(rev, null, 2) + '\n')
+            backfillNote = `；review.head 已回填 ${r.shortHead}（提交后重锚）`
+          }
+        } catch (e) {
+          backfillNote = `；review.head 回填失败（fail-soft）: ${(e && e.message) || e}`
+        }
+      }
       step('wt-commit', r.skipped ? 'skipped' : 'done',
-        r.skipped ? `无变更跳过（HEAD 不动）：${r.shortHead}` : `${r.shortHead}（${r.files.length} 文件，worktree=${r.worktreePath}）`)
+        r.skipped ? `无变更跳过（HEAD 不动）：${r.shortHead}` : `${r.shortHead}（${r.files.length} 文件，worktree=${r.worktreePath}）${backfillNote}`)
     } catch (e) {
       step('wt-commit', 'failed', `${e && e.message ? e.message : e}`)
       return finishReport({ ok: false, steps, changeName, taskId })

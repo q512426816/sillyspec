@@ -82,7 +82,12 @@ test('四合一 happy path：单命令四段结果行（review 落盘/勾选/标
     assert.match(readFileSync(join(f.changeDir, 'tasks.md'), 'utf8'), /- \[x\] task-01/, 'checkbox 已按 verdict 勾选')
     assert.ok(!existsSync(join(f.markerDir, 'task-01.json')), '进行中标记已清除')
     assert.match(step(r, 'wt-commit').detail, /^[0-9a-f]{7,}/, 'wt-commit 结果行带 shortHead')
+    assert.match(step(r, 'wt-commit').detail, /review\.head 已回填/, 'head 回填在结果行留痕（坑 task-done-head-premature）')
     assert.equal(git(f.wt, 'status', '--porcelain', '--', 'service.js'), '', '本 task 改动已提交（残留仅 WorktreeManager 自身 meta.json，不属 task 面）')
+    // head 回填断言（根治钉）：review.head === 本 task 提交后的 worktree HEAD 全哈希 + 审计戳
+    // （原缺陷：review 先于 commit 写入，head 停在基线 → Task Review Gate base..head 切片空误判伪造）
+    assert.equal(rev.head, wtHead(f.wt), 'review.head 已重锚为本 task 提交全哈希')
+    assert.ok(rev.headBackfilledAt, 'headBackfilledAt 审计戳在案')
   } finally { clean(f.root) }
 })
 
