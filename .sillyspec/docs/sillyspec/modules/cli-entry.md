@@ -10,6 +10,8 @@ updated_at: 2026-09-22T00:00:00+08:00
 
 > R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：新增 flow 命令族（src/flow.js 2-调用协议 start/done/amend-draft + src/flow-draft.js 机器起草；index.js case flow 接线）
 
+> burst 注记（2026-09-23）：2026-09-22-stage-burst-fold：src/flow.js readFlowConfig 缺省 thin→legacy（:66/:76 两处，用户裁定 flow 族保留实验通道——显式 mode: thin 照旧生效）；协议面/命令面零改动，纯缺省值翻转
+
 ## 定位
 
 CLI 入口 + 命令分发 + 阶段执行引擎。`bin/sillyspec.js` 是 shebang 入口，`src/index.js` 负责命令路由（init / setup / progress / run / …），`src/run.js` 是 `sillyspec run` 的核心执行引擎，管理步骤流转、审批门禁、自动模式。不负责数据库层实现（委托 ProgressManager/DB）。

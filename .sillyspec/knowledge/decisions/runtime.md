@@ -225,3 +225,105 @@ supersedes：无（修订 design 初稿注入时机）
 理由：选 A（用户简报显式委托方案期定夺——原话「形态 brainstorm 定」「缺省行为、本仓自举表、两消费面切换、向后兼容（无声明项目）都在方案期落决策」；本条 agent 按委托选定，可 --reopen 否决）。理由：①与 blast 管道同构（D-008 先例：map 主声明进 git 可评审、modules rebuild --force 未知顶层段通用回插已覆盖 span_risk、装载容错立场「坏段跳过不拦截」现成）；②B 被等价问题显式否决过——local.yaml gitignore 每机一份当共享价目表（D-008 evidence 原文「local.yaml 当共享价目表」被否）；③C 与 blast「未配置禁止回退」（D-008）正面冲突且让全宇宙表活在缺省路径，违反知识库 conventions「判级/定价/门禁输入必须项目声明，禁全宇宙词表」口径真相源条目。覆盖决策：符合 D-001（价目表公式零改动）、不违 D-002（不触碰 blast 段）。
 故障面：①无声明项目静默失去六域网（auth/billing 路径不再触发 span S2 / quick L2）——以 known-issues/文档登记 + 本仓自举表示范对冲，blast 迁移同款取舍；②token 写错（拼错/过宽）静默失配——token 为纯字面量可评审，装载数量进 reasons 审计。
 退役判据：若 span 轴改结构化输入或 pattern 声明并入 blast 段 schema 升版，本段形态随之退役。
+
+## D-001@v1 burst 缺省 OFF，本仓 local.yaml 自举开启
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：不翻。缺省 OFF（未配置即单步模式，既有行为零变化）；本仓 `.sillyspec/local.yaml` 手动加 `stage: burst: true` 自举 dogfood；env `SILLYSPEC_STAGE_BURST=1` 强制开 / `=0` 强制关（逃生阀）。全量默认翻转（测试面迁移）验收后另立变更。
+故障面：用户误配 `burst: false` 之外的非法值按 false 处理（宽容缺省，不报错）。
+退役判据：全量翻转变更落地后本配置读取保留（env 阀仍有效），local.yaml 自举行可删。
+
+## D-005@v1 --step 意图断言仅 burst 首轮生效
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：断言只在第一轮透传（防读旧进度的并发错位，首轮 mismatch 照常 exit）；第二轮起从 options 剥离 stepAssert。burst 本身就是「一次收口全部剩余步」的显式声明，后续轮次无需重复断言。
+故障面：无新增（首轮语义与单步完全一致）。
+退役判据：无。
+
+## D-006@v1 burst 作用域 = brainstorm/plan/execute 三主阶段
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：否。渲染与完成两侧的 burst 分支均以 `stageName ∈ {brainstorm, plan, execute}` 为门。排除理由：① verify/archive 任务书明确不动（--init --draft 与就绪度已压到 1-2 次调用）；② quick 末步四字段硬契约（validateQuickResult）与 P0-2 事实合成不兼容（src/run/complete.js:222-224 已把 quick 列为合成豁免），burst 每轮传 null 会在 quick 末步炸校验；③ scan/doctor/explore 辅助阶段不在本轮验收面。
+故障面：无（白名单门控，未列阶段走原路径）。
+退役判据：后续若要把 burst 推广到 verify/archive，改白名单即可（quick 永远除外）。
+
+## D-007@v1 readStageBurst 走 readLocalYamlRaw + js-yaml 读 stage.burst
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：放 src/run/shared.js export `readStageBurst(cwd)`：复用既有 `readLocalYamlRaw(cwd)`（src/run/shared.js:1938-1946）+ js-yaml 动态 import 读 `doc?.stage?.burst === true`——与 resolveLivingDocs 读 `docs-check.living-docs` 同款范式（src/run/shared.js:1331-1340），绕开 parseSimpleYaml 缩进坑（known-issues 实证）。env 覆写：`SILLYSPEC_STAGE_BURST=0` → false / `=1` → true，优先于配置；坏 YAML/读失败 → false。锚定 cwd 而非 specBase：burst 是仓库本地开发偏好（与 resolveLivingDocs 同锚定），不随平台/worktree specRoot 漂移。
+故障面：js-yaml 动态 import 失败 → false（fail-safe 回缺省）。
+退役判据：无。
+
+## D-008@v1 burst 渲染侧 noAI 自动完成抽取 stage.js 分发为共用助手
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：不可接受，改为抽取。把 src/run/stage.js:592-629 的 _cliAction if-链抽为 stage.js 内局部助手 `executeNoAiCliAction({ cliAction, stageName, stepName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile })`，常规单步路径（stage.js noAI 分支）与 burst 渲染循环共同调用——单一事实源防三分叉。complete.js:437-472 的平行副本**不动**（"不改 completeStep 本体"承诺；该副本本就以"与 stage.js 对齐"注释维持平行维护，本轮不扩面）。
+故障面：新增 _cliAction 只登记 stage.js 助手会在 complete.js 副本报"未知 _cliAction"——既有平行维护约束，非本轮新增。
+退役判据：无。
+
+## D-009@v1 agent 整体 --output 横幅打印，不落步记录
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：completeStepBurst 开打一行横幅（`📦 burst 收口摘要：<outputText>` 或省略时跳过），循环每轮 outputText 传 null 由 P0-2 事实合成（src/run/complete.js:224-227）逐步生成。不把整体摘要挂到末步 output——语义错归属（末步会记录与自身无关的整体叙述，污染步骤审计面）。
+故障面：无持久化的整体语义摘要——语义说明进 decisions.md/proposal.md（本就有），步骤 output 面保持纯事实。
+退役判据：无。
+
+## D-011@v1 方案选择 = A（burst 交互折叠）
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：用户选 A（任务书冻结版）：渲染侧剩余步逐个调既有 outputStep + completeStepBurst 循环调 completeStep(printNext:false)，completeStep 本体零 diff；缺省 OFF 本仓自举。用户同时授权全程免询问（后续 requiresWait 决策点按任务书冻结口径自决并如实记录）。
+故障面：无（方案选择记录）。
+退役判据：无。
+
+## D-002@v2 burst 渲染输出一致判据改「首访渲染形」
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：不可达（Grill P2 附注）：requiresWait 步被 --answer 恢复后，单步模式重渲染时 collectStageWaitHistory 已带 waitAnswer 记录而 burst 首渲染时为空——文本面结构性不同。判据改为「首访渲染形一致」：前置 waitAnswer 状态相同的前提下，burst 逐个 outputStep 的输出与单步模式调用该步时一致。核心架构面（复用 outputStep、渲染器零改动）v1 不变。
+supersedes：D-002@v1
+故障面：无（判据口径修正）。
+退役判据：无。
+
+## D-003@v2 completeStepBurst 补尾随 stale 拉回 + auto 路径跳过预合成
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：Grill P1-1：runStage 只拉回 currentIdx（首个非 completed/skipped）的 stale/blocked（src/run/stage.js:264-269），completeStep 谓词不含 stale（src/run/complete.js:165）——尾随 stale 步会被 burst 渲染打印说明书但 done 循环永不完成，退化为单步阶梯，破等价性目标。修正：completeStepBurst 每轮调 completeStep 前对首个非 completed/skipped 步做同语义 stale→pending 拉回（burst 新代码内，不触 completeStep 本体）。附带：auto 路径 burst 分支跳过 command.js:2064-2070 的 --output 预合成（防横幅重复）。v1 核心面（循环+printNext:false+completeStep 零 diff+50 轮上限+幂等断点）不变。
+supersedes：D-003@v1
+故障面：拉回写库失败 → 该轮 completeStep 落到其后的 pending 步（不卡死，重跑续）；与单步模式同故障语义。
+退役判据：无。
+
+## D-004@v2 --answer 消费检测改轮前后 waitAnswer 快照比对
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：会（Grill P2 附注）：--done --answer 落在已 waiting 步时 resolveWaitingStepWithAnswer 重定向 currentIdx（src/run/complete.js:190-193），实际完成的步 ≠ 轮前首个 pending 索引，固定索引检测漏判 → answer 未剥离 → 错配风险回归。修正：轮前快照全部步 waitAnswer、轮后比对，任一步 waitAnswer 新变为 === doneAnswer 即视为已消费并剥离。v1 核心面（单次消费语义、防双 requiresWait 错配）不变。
+supersedes：D-004@v1
+故障面：同 v1（文本巧合提前剥离，fail-safe 方向）。
+退役判据：无。
+
+## D-012@v1 STAGE_BURST_STAGES 白名单常量单一事实源落 shared.js（执行期裁决）
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：放 src/run/shared.js export（readStageBurst 旁）：渲染门（stage.js renderStageBurst）与完成门（command.js 两处 --done 分发）共用同一常量，防两处字面量漂移。执行期越界披露：该裁决使 task-03 提交含 stage.js import 行切换与 shared.js 常量 export（两文件原属 task-01/02 的 allowed_paths）——非破坏性、可逆、不推翻任何 D，属主代理直写模式歧义裁决条款范围。
+故障面：无（常量单一源）。
+退役判据：无。

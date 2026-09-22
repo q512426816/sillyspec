@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-22-stage-burst-fold",
+  "appliedAt": "2026-09-22T17:22:15.076Z",
+  "baseHash": "8a8ce1b1a81f485a7b783968bfdf2ace3493ffd4",
+  "files": [
+    {
+      "path": "src/config-schema.js",
+      "sha256": "58c66c7834691990c5734fe4c00a65364bdf2e21c0d154d6c0cae5ca84402ca5"
+    },
+    {
+      "path": "src/flow.js",
+      "sha256": "f97a0eec25a4f6934a5a3fd66b38bf5ed4ab01b5c1ea24f0442eb06c3392b5af"
+    },
+    {
+      "path": "src/run/command.js",
+      "sha256": "f66e671c0428e03a31009ac83dd939e33d3afcff3769ae2f19f90a01923aab22"
+    },
+    {
+      "path": "src/run/complete.js",
+      "sha256": "8611126481c5735fe3e8b6db68d8193ff4ca83645751e9015db4c4d0adbde0d2"
+    },
+    {
+      "path": "src/run/shared.js",
+      "sha256": "1766eb4517d573dff5df10e9b42c727a61748b58806a132101500aa9339bb24c"
+    },
+    {
+      "path": "src/run/stage.js",
+      "sha256": "26fe8f94e7f5b462ba372457e860fb6147c67c90c4e969db71fdd629ecf18cce"
+    },
+    {
+      "path": "test/flow-draft.test.mjs",
+      "sha256": "a6da41d6b09d1a6889310694e57059fe790ca740d8e8e6eecfc4c849a6af0117"
+    },
+    {
+      "path": "test/flow-protocol.test.mjs",
+      "sha256": "937a38154bd61910f9b082b69a916355a72e88e68099d3a663e7c6b46593b0c3"
+    },
+    {
+      "path": "test/flow-route.test.mjs",
+      "sha256": "977e07609661ae6da3b8e1f54848c4121391b55caacee1b96e7fccb013bc9afb"
+    },
+    {
+      "path": "test/stage-burst.test.mjs",
+      "sha256": "60f3f544608b44fe26eb20c70280fb3a6faabeeda33906dfc37816f7f54a47ce"
+    }
+  ]
+}

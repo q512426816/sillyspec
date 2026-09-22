@@ -8,6 +8,7 @@ updated_at: 2026-09-19T18:10:00+08:00
 > 最后更新：2026-09-220
 > 最近变更：ql-20260920-010-7a19（config-schema test_strategy desc 缺省语义更新——配了 modules: 块 → 缺省 module[v3.29.3 起收窄]，未配 → 缺省全量；无新键纯 note）/ 2026-09-19-span-risk-pattern-migration（config-schema ceremony 段 note 补 span 轴输入源表述——项目声明 _module-map.yaml 顶层 span_risk 段、无声明项目该维关闭不回退内置表；纯 note 同步无新 local 键）/ 2026-09-14-change-ownership-guards（config-schema 登记 live 键 change-ownership.heartbeat_minutes + local.yaml.example 注释段——所有者活跃心跳窗，reader=src/progress/change-registry.js 心跳窗解析）/ 2026-08-30 AGENTS.md 单源改造（init 指引注入：AGENTS.md 承载完整模板、CLAUDE.md 退化为 @AGENTS.md 指针，codex 与 claude 共用注入器）/ 2026-08-23-adopt-harness-practices（test_strategy 枚举扩 skip/evidence-auto + 新 live 键 decisions.behind_threshold）/ 2026-08-16-scan-docs-reconcile（config-schema/local-detect 补录归属；migrate.js 归属已划 migration 卡）
 > R7 注记：2026-09-22-r7-protocol-surgery（config-schema 新增 flow 段三键：flow.mode thin|legacy / flow.edit_ratio_threshold / flow.edit_ratio_enforcement；local.yaml.example 同步）
+> burst 注记：2026-09-22-stage-burst-fold（flow.mode desc 缺省语义更新：legacy（缺省——翻回，flow 族实验通道）/thin 显式开启薄跑道；无新键纯 desc 同步）
 > 模块路径：src/init.js, src/setup.js, src/config-schema.js, src/local-detect.js（migrate.js 归 migration 卡）
 
 ## 职责

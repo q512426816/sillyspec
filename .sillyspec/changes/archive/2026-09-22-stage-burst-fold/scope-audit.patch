@@ -1,0 +1,942 @@
+diff --git a/meta.json b/meta.json
+index 6b3df8d1..92c83052 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,127 @@
+   "branch": "sillyspec/2026-09-22-stage-burst-fold",
+   "baseBranch": "main",
+   "baseHash": "5ad6dfaf894e4de227c1eaf7a6893ba522708b54",
++  "actualBaseHash": "8a8ce1b1a81f485a7b783968bfdf2ace3493ffd4",
++  "createdAt": "2026-09-22T16:28:05.952Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-22-stage-burst-fold",
+   "mode": "worktree",
+-  "createdAt": "2026-09-22T16:28:02.765Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".idea/vcs.xml",
++    "docs/sillyspec/architecture-4a.md",
++    "docs/sillyspec/prompt-control-debt.md",
++    "package.json",
++    "src/run/gate-snapshot.js",
++    "src/verify-postcheck.js",
++    "test/gate-snapshot-import-smoke.test.mjs",
++    "asset-audit-2026-09-20/README.md",
++    "asset-audit-2026-09-20/asset-audit.cjs",
++    "asset-audit-2026-09-20/extract-candidates.cjs",
++    "asset-audit-2026-09-20/platform-archive.csv",
++    "asset-audit-2026-09-20/platform-fr.csv",
++    "asset-audit-2026-09-20/platform-gotchas.csv",
++    "asset-audit-2026-09-20/platform-knownissues.csv",
++    "asset-audit-2026-09-20/platform-modules.csv",
++    "asset-audit-2026-09-20/platform-quicklog.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting-candidates.csv",
++    "asset-audit-2026-09-20/platform-troubleshooting.csv",
++    "asset-audit-2026-09-20/sillyspec-archive.csv",
++    "asset-audit-2026-09-20/sillyspec-fr.csv",
++    "asset-audit-2026-09-20/sillyspec-gotchas.csv",
++    "asset-audit-2026-09-20/sillyspec-knownissues.csv",
++    "asset-audit-2026-09-20/sillyspec-modules.csv",
++    "asset-audit-2026-09-20/sillyspec-quicklog.csv",
++    "asset-audit-2026-09-20/sillyspec-troubleshooting.csv",
++    "asset-audit-2026-09-20/summary.json",
++    "bash.exe.stackdump",
++    "r7-test-env/README-R7-TEST.md",
++    "r7-test-env/prompt-R7-SMOKE.md",
++    "r7-test-env/sillyspec-r7.cmd",
++    "round4/account.mjs",
++    "round4/b1-analyze-task08.mjs",
++    "round4/b1-b1-target-validation.md",
++    "round4/b3a-prompt-audit-result.md",
++    "round4/b3a-prompt-audit.mjs",
++    "round4/brief-autocompact.md",
++    "round4/brief-session-replay.md",
++    "round4/deep-read-synthesis.md",
++    "round4/extract-full.mjs",
++    "round4/extract-timeline.mjs",
++    "round4/find-sessions.mjs",
++    "round4/full-r4-l.md",
++    "round4/full-r4-o-l.md",
++    "round4/full-r4-os.md",
++    "round4/full-r4-sf.md",
++    "round4/full-r4-sq.md",
++    "round4/gate-audit-relay-receipt.md",
++    "round4/gate-value-audit.md",
++    "round4/optimization-plan.md",
++    "round4/prereg.md",
++    "round4/prompt-R4-L.md",
++    "round4/prompt-R4-O-L.md",
++    "round4/prompt-R4-O-S.md",
++    "round4/prompt-R4-S-F.md",
++    "round4/prompt-R4-S-Q.md",
++    "round4/r4-final-report.html",
++    "round4/r4-os-timeline.txt",
++    "round4/r4-sf-timeline.txt",
++    "round4/r4-sq-timeline.txt",
++    "round4/r4l-timeline.txt",
++    "round4/r4ol-timeline.txt",
++    "round4/r4sf-timeline.txt",
++    "round4/r5-scenario-matrix.md",
++    "round4/result-S.md",
++    "round4/result-final.md",
++    "round4/result-quality.md",
++    "round5/audit/fork-cont-requests.jsonl",
++    "round5/audit/fork-cont-toolinputs.jsonl",
++    "round5/audit/oS/requests.jsonl",
++    "round5/audit/oS/toolinputs.jsonl",
++    "round5/audit/oS/tools.jsonl",
++    "round5/audit/r5L/requests.jsonl",
++    "round5/audit/r5L/toolinputs.jsonl",
++    "round5/audit/r5L/toolinputs2.jsonl",
++    "round5/audit/r5L/tools.jsonl",
++    "round5/audit/r7l-requests.jsonl",
++    "round5/audit/r7l-toolinputs.jsonl",
++    "round5/audit/sF/_classified.json",
++    "round5/audit/sF/analyze.cjs",
++    "round5/audit/sF/requests.jsonl",
++    "round5/audit/sF/toolinputs.jsonl",
++    "round5/audit/sF/tools.jsonl",
++    "round5/audit/sQ/requests.jsonl",
++    "round5/audit/sQ/toolinputs.jsonl",
++    "round5/audit/sQ/tools.jsonl",
++    "round5/cmp.mjs",
++    "round5/cmp2.mjs",
++    "round5/flip-3.31.0-plan.html",
++    "round5/flip-3.31.0-proposal.md",
++    "round5/fork-cont-stage-accounting.mjs",
++    "round5/fork-continuation-forensic.mjs",
++    "round5/gate-audit.mjs",
++    "round5/gen-collision-html.mjs",
++    "round5/prompt-R5R-OS.md",
++    "round5/prompt-R5R-SF.md",
++    "round5/prompt-R5R-SQ.md",
++    "round5/prompt-R7-L.md",
++    "round5/prompt-stage-burst.md",
++    "round5/r5-collision-ehs-attribution.md",
++    "round5/r5-collision-timeline.html",
++    "round5/r5r-audit-extract.mjs",
++    "round5/r7-integrity-audit.mjs",
++    "round5/r7l-forensic.mjs",
++    "round5/why2.mjs"
++  ],
++  "baselineCommit": "8a8ce1b1a81f485a7b783968bfdf2ace3493ffd4",
++  "baselineHash": "d828a06dc1d255c0",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 3
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "337f491dae3b3308",
++  "depsCheckedAt": "2026-09-22T16:28:05.890Z"
+ }
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 408bf345..d05dbc52 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -167,7 +167,7 @@ export const LOCAL_YAML_SCHEMA = {
+       title: '2-调用薄协议（R7 切片二）',
+       note: 'flow start/done 协议形状开关与路由参数。design 措辞 flow: thin|legacy 落地为单键 flow.mode（YAML 单键形态，语义一致）。',
+       keys: [
+-        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：thin（缺省）= 新 change 走 flow start/done 薄跑道（协议必需交互=2）；legacy = 既有 run <stage> 全族行为逐字不动，flow start 拒跑并指路。回滚一行 yaml。', example: 'thin' },
++        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：legacy（缺省——2026-09-22-stage-burst-fold 翻回，flow 族保留为实验通道）= 既有 run <stage> 全族行为逐字不动，flow start 拒跑并指路；thin = 新 change 走 flow start/done 薄跑道（协议必需交互=2）。回滚一行 yaml。', example: 'legacy' },
+         { path: 'flow.edit_ratio_threshold', type: 'number', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '机器稿改写比例路由阈值（amend 通道计算的行级 editRatio 超阈 → 厚档提示 route_hint）。缺省 0.5。', example: '0.5' },
+         { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可薄档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
+       ],
+diff --git a/src/flow.js b/src/flow.js
+index 80be5f77..3b37b2d0 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -15,7 +15,8 @@
+  * change 仍 active，重入从断点续不新开 change。
+  *
+  * 配置（local.yaml，config-schema 注册；design 措辞 `flow: thin|legacy` 落地为单键
+- * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 thin；legacy=既有 run <stage>
++ * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 legacy（2026-09-22-stage-burst-fold D-010@v2
++ * 用户裁定翻回——flow 族保留为实验通道，薄道不再缺省敞开）；legacy=既有 run <stage>
+  * 全族逐字不动，flow start 拒跑并指路（回滚一行 yaml）。thin change 上跑 run <stage> =
+  * 混跑回退（flow-state 落 legacy_fallback，flow done 按厚档裁决——两套记账不叠加）。
+  *
+@@ -58,12 +59,12 @@ export function writeFlowState(changeDir, patch) {
+   }, { lineWidth: 120 }) + '\n')
+ }
+ 
+-/** 读 local.yaml 的 flow 配置（缺省 thin；文本级读同既有 parseSimpleYaml 习惯）。 */
++/** 读 local.yaml 的 flow 配置（缺省 legacy——2026-09-22-stage-burst-fold D-010@v2 翻转；文本级读同既有习惯）。 */
+ export function readFlowConfig(specBase) {
+   try {
+     const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
+     const m = raw.match(/^\s*mode\s*:\s*(thin|legacy)\s*$/m)
+-    let mode = m ? m[1] : 'thin'
++    let mode = m ? m[1] : 'legacy'
+     if (/^flow\s*:\s*(thin|legacy)\s*$/m.test(raw)) mode = raw.match(/^flow\s*:\s*(thin|legacy)\s*$/m)[1]
+     const th = raw.match(/^\s*edit_ratio_threshold\s*:\s*([0-9.]+)\s*$/m)
+     const en = raw.match(/^\s*edit_ratio_enforcement\s*:\s*(advisory|block)\s*$/m)
+@@ -73,7 +74,7 @@ export function readFlowConfig(specBase) {
+       editRatioEnforcement: en ? en[1] : 'advisory',
+     }
+   } catch {
+-    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
++    return { mode: 'legacy', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
+   }
+ }
+ 
+@@ -121,7 +122,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+   const cfg = readFlowConfig(specBase)
+   if (cfg.mode === 'legacy') {
+     console.error('❌ 本项目配置 flow.mode=legacy——2-调用薄协议未启用，走既有流程：sillyspec run <stage> --change <名>')
+-    console.error('   回滚一行 yaml：local.yaml 删掉 mode: legacy 或改为 mode: thin（缺省即 thin）')
++    console.error('   回滚一行 yaml：local.yaml 删掉 mode: legacy 或改为 mode: thin（缺省即 legacy）')
+     process.exit(2)
+   }
+   const { ProgressManager } = await import('./progress.js')
+diff --git a/src/run/command.js b/src/run/command.js
+index 315809cf..c85530a6 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -24,10 +24,10 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, readFileSync, rmSync
+ import { randomBytes, randomUUID } from 'node:crypto'
+ import { fileURLToPath } from 'node:url'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce } from './shared.js'
++import { resolveSpecDir, countAncestorSpecDirs, ancestorSpecDirs, resolveAncestorCeiling, resolveChangeDir, triggerSync, getStageSteps, formatWaitOptions, checkApproval, warnApprovalUnknown, didYouMean, assertSafeChangeName, assertDatedChangeName, detectQuickSessionDrift, detectWorktreeSpecDrift, resolveRuntimeRoot, resolveQuickSessionsDir, writePlatformPointer, checkPlatformManaged, isSelfReferentialSpecRoot, isTempResidueSpecRoot, PLATFORM_MANAGED_FILENAME, warnSelfRefPointerOnce, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
+ import { resolveQuickLinkedChanges } from './quick-audit.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+-import { completeStep, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
++import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
+ import { runStage } from './stage.js'
+ import { sanitizeDesc } from '../quicklog.js'
+ import { ProgressManager, resolveSessionIdentity } from '../progress.js'
+@@ -1724,6 +1724,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     const doneAnswer = getFlagValue('--answer')
+     // isSkipApply/sessionFlag（task-03）：--skip-apply 归档收口跳过 + --session 所有权会话标识，
+     // 随 completeStep options 透传（isNoDocs 同款链路）——消费点 archive/quick 收尾 handler。
++    // burst 分发门（2026-09-22-stage-burst-fold D-003@v2/FR-06）：白名单主阶段 + readStageBurst
++    // 开启 → completeStepBurst 循环收口（completeStep 本体零改动，守卫逐轮生效）；options 原样透传。
++    if (STAGE_BURST_STAGES.includes(stageName) && await readStageBurst(cwd)) {
++      return await completeStepBurst(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles, stepAssert: stepAssertValue })
++    }
+     return await completeStep(pm, progress, stageName, cwd, outputText, inputText, { confirm: isConfirm, changeName: effectiveChange, nonInteractive: isNonInteractive && !isInteractive, platformOpts, doneAnswer, isForceBaseline, isAllowNew, isAllowDelete, isNoDocs, isSkipApply, sessionFlag: getFlagValue('--session'), quickFiles, stepAssert: stepAssertValue })
+   }
+ 
+@@ -2061,7 +2066,13 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+     return
+   }
+ 
+-  if (!outputText) {
++  // burst 分发门（2026-09-22-stage-burst-fold D-003@v2/X-4，FR-06）：auto 路径 burst 分支跳过
++  // --output 预合成（预合成文本在 burst 下沦为横幅重复打印——burst 直接透传原始 outputText，
++  // 横幅去重归 completeStepBurst 单点），循环收口后本路径既有推进逻辑（nextPendingIdx 渲染 /
++  // nextInFlow 阶段推进）基于重读 progress 自然衔接。
++  const _autoBurstOn = STAGE_BURST_STAGES.includes(currentStage) && await readStageBurst(cwd)
++
++  if (!outputText && !_autoBurstOn) {
+     // P0-2（noai-ir-roadmap §3）：auto --done 的 --output 同样可省略——与 completeStep 同源
+     // 的事实性摘要合成（此前硬拒 exit 2 是用法守卫；SS-META 的 doneCommand 仍带 --output，
+     // 照抄路径零变化，省略路径不再罚一轮）。
+@@ -2070,7 +2081,9 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+     console.log(`🤖 auto --done 未带 --output——CLI 已按事实合成步骤摘要（语义说明下次带 --output 手写）。`)
+   }
+ 
+-  const result = await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
++  const result = _autoBurstOn
++    ? await completeStepBurst(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
++    : await completeStep(pm, progress, currentStage, cwd, outputText, inputText, { printNext: false, changeName, platformOpts })
+   if (!result) return
+   progress = pm.read(cwd, changeName)
+   // change 行被并发归档/删除时 read 返回 null（体检 BUG-05）：引导排查而非 TypeError 崩溃
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 70a46396..c0929101 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -1162,6 +1162,119 @@ function prefetchDiffFileSet(ctx) {
+   }
+ }
+ 
++/**
++ * burst 完成侧循环包装（2026-09-22-stage-burst-fold D-003@v2/D-004@v2/D-005/D-009，FR-03）：
++ * burst 模式下一次 --done 收口全部剩余步——循环调既有 completeStep（**本体零改动**，全部守卫
++ * ——WAIT 硬校验/waiting 前置/requiresWait 门控/意图断言/门禁/并发防护——逐轮原样生效）。
++ *
++ * 循环语义（每轮）：
++ * 1. **轮首：尾随 stale 拉回**（D-003@v2，钉死先于退出判定——「仅剩尾随 stale、无 pending」的轮
++ *    必须先拉回再判退出，否则 --reopen 中途开 burst 时渲染集合与完成集合发散、stale 尾残留阶梯）：
++ *    首个非 completed/skipped 步为 stale → 拉回 pending + pm._write（与 runStage 单步路径同语义）。
++ * 2. 重算 pending（谓词 pending|in-progress|blocked，与 completeStep 内部一致）；无 → 退出循环。
++ * 3. 调 completeStep(pm, progress, stageName, cwd, **null**, inputText, {...roundOptions, printNext:false})
++ *    ——每轮 outputText=null 走 P0-2 事实合成（per-step 摘要 CLI 合成，agent 只给一次整体 --output）。
++ *    completeStep 遇守卫失败 process.exit 即 burst 天然断点（agent 修复后重跑 --done 从断点幂等续推）；
++ *    续推/停轮以每轮后重读 DB 态为准（正常完成也返回 truthy 进度对象——真值性不代表失败）：
++ *    无 pending → 收口透传；pending 未前进（失败步保持/重拦）→ 停断点 + exitCode=1。
++ * 4. 每轮后 pm.read 重读（null=并发归档删除 → 报错 exitCode=1，对齐 command.js auto 路径 BUG-05 语义）。
++ * 5. **--answer 单次消费**（D-004@v2）：轮前快照全部步 waitAnswer、轮后比对——任一步 waitAnswer
++ *    新变为 === doneAnswer → 已消费，后续轮剥离（防 brainstorm 双 requiresWait 步〔选方案/确认设计〕
++ *    把步4答案错填步5；快照比对防 waiting 解析重定向漏检）。
++ * 6. **--step 断言仅首轮**（D-005）：第二轮起当前步已推进、断言必然 mismatch，首轮后剥离。
++ *
++ * 循环上限 50 轮（单阶段步数不可能超），耗尽仍有 pending → 报错防死循环。
++ * agent 的整体 --output 只打一行横幅（D-009：不落步记录——语义错归属会污染步骤审计面）。
++ *
++ * @param {import('./shared.js').ProgressManagerLike} pm
++ * @param {object} progress
++ * @param {string} stageName
++ * @param {string} cwd
++ * @param {string|null} outputText agent 整体摘要（仅横幅展示，不落步记录）
++ * @param {string|null} [inputText]
++ * @param {object} [options] 透传 completeStep 全量字段（printNext 强制 false、每轮 outputText 强制 null）
++ * @returns {Promise<object|undefined>} 末轮 completeStep 返回值
++ */
++export async function completeStepBurst(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
++  if (outputText) console.log(`📦 burst 收口摘要：${outputText}`)
++  let roundOptions = { ...options, printNext: false }
++  const MAX_ROUNDS = 50
++  let lastResult
++  for (let round = 0; round < MAX_ROUNDS; round++) {
++    // ① 轮首尾随 stale 拉回（先于退出判定）
++    const stepsNow = progress?.stages?.[stageName]?.steps
++    if (Array.isArray(stepsNow) && stepsNow.length > 0) {
++      const firstOpenIdx = stepsNow.findIndex(s => s && s.status !== 'completed' && s.status !== 'skipped')
++      if (firstOpenIdx !== -1 && stepsNow[firstOpenIdx].status === 'stale') {
++        console.log(`⚠️  Step "${stepsNow[firstOpenIdx].name}" 处于 stale，burst 轮首拉回待执行。`)
++        stepsNow[firstOpenIdx].status = 'pending'
++        pm._write(cwd, progress, options.changeName)
++      }
++    }
++    // ② 重算 pending（谓词与 completeStep 内部一致）
++    const stepsForPending = progress?.stages?.[stageName]?.steps
++    const pendingIdx = Array.isArray(stepsForPending)
++      ? stepsForPending.findIndex(s => s && (s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked'))
++      : -1
++    if (pendingIdx === -1) {
++      if (round === 0) {
++        // 退化场景对齐（execute 轮 Grill P2-2）：无任何待完成步的 --done 委托 completeStep 走
++        // 既有 no-pending 处理（「没有待完成的步骤」报错 / --confirm stale 回填 / 矛盾态自愈）
++        // ——burst 不静默吞掉该信号（静默 break 会让 auto 路径跳过 nextInFlow 推进）。
++        return await completeStep(pm, progress, stageName, cwd, outputText ?? null, inputText, roundOptions)
++      }
++      break
++    }
++    // ③ 轮前 waitAnswer 快照（D-004@v2 消费检测基准）
++    const answerSnapshot = roundOptions.doneAnswer != null && Array.isArray(stepsForPending)
++      ? stepsForPending.map(s => (s && s.waitAnswer) || null)
++      : null
++    const result = await completeStep(pm, progress, stageName, cwd, null, inputText, roundOptions)
++    lastResult = result
++    // ④ 每轮后重读（completeStep 内部已落库；重读后下一轮谓词基于真实 DB 态）。
++    // 注意 completeStep 正常完成单步也返回 truthy 进度对象（{stageCompleted:false, nextPendingIdx}）
++    // ——续推/停轮判定以重读 DB 态为准，不以返回值真值性为准（探针实证：步 7 正常完成返回
++    // {stageCompleted:false,currentIdx:6,nextPendingIdx:7}）。
++    const fresh = pm.read(cwd, options.changeName)
++    if (!fresh) {
++      console.error(`❌ burst 收口推进后进度数据消失（变更 ${options.changeName} 可能被并发归档/删除），请用 sillyspec progress show 核对当前状态`)
++      process.exitCode = 1
++      return lastResult
++    }
++    progress = fresh
++    // 停轮判定：重读后无 pending → 阶段收口（gate 返回态由 lastResult 透传）；pending 未前进
++    //（门禁失败步保持 pending / blocked 重拦 / 前置步被重置）→ 停在断点防同步锤击（重跑幂等续推）。
++    const stepsAfterRound = progress?.stages?.[stageName]?.steps
++    const nextPendingIdx = Array.isArray(stepsAfterRound)
++      ? stepsAfterRound.findIndex(s => s && (s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked'))
++      : -1
++    if (nextPendingIdx === -1) break
++    if (nextPendingIdx <= pendingIdx) {
++      if (!process.exitCode) process.exitCode = 1
++      break
++    }
++    // ⑤ --answer 单次消费：快照比对（任一步 waitAnswer 新变为 === doneAnswer 即已消费）
++    if (roundOptions.doneAnswer != null && answerSnapshot) {
++      const stepsAfter = progress?.stages?.[stageName]?.steps || []
++      const consumed = stepsAfter.some((s, i) => s && s.waitAnswer === roundOptions.doneAnswer
++        && (answerSnapshot[i] == null || answerSnapshot[i] !== roundOptions.doneAnswer))
++      if (consumed) roundOptions = { ...roundOptions, doneAnswer: undefined }
++    }
++    // ⑥ --step 断言仅首轮
++    if (round === 0 && roundOptions.stepAssert !== undefined) roundOptions = { ...roundOptions, stepAssert: undefined }
++  }
++  // 防死循环：耗尽仍有 pending
++  const stepsFinal = progress?.stages?.[stageName]?.steps
++  const stillOpenIdx = Array.isArray(stepsFinal)
++    ? stepsFinal.findIndex(s => s && (s.status === 'pending' || s.status === 'in-progress' || s.status === 'blocked'))
++    : -1
++  if (stillOpenIdx !== -1) {
++    console.error(`❌ burst 收口循环达到上限（${MAX_ROUNDS} 轮）仍有待完成步骤「${stepsFinal[stillOpenIdx].name}」——疑似状态推进异常，请 sillyspec progress show 核对后重跑。`)
++    process.exitCode = 1
++  }
++  return lastResult
++}
++
+ /**
+  * 判定 task 是否该被 autoCheckPlanFromReviews 自动勾选。
+  * 端到端/deployment-critical task 要求 review spec+quality 双 pass（cannot_verify 不算，防批量完成
+diff --git a/src/run/shared.js b/src/run/shared.js
+index d11b9d4a..52a55127 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1944,6 +1944,40 @@ function readLocalYamlRaw(cwd) {
+   }
+ }
+ 
++/**
++ * 读 stage.burst 开关（2026-09-22-stage-burst-fold D-001/D-007，FR-01/FR-04）：local.yaml
++ * `stage.burst === true` 开启旧流程阶段折叠（burst）；env SILLYSPEC_STAGE_BURST=0 强制关 /
++ * =1 强制开（优先于配置，逃生阀）；**缺省 OFF**——读失败/坏 YAML/解析异常一律 false
++ * （fail-safe，burst 缺省不翻是 D-001 边界：全量测试面零迁移）。读取走本模块 readLocalYamlRaw
++ * + js-yaml 动态 import（resolveLivingDocs 同款范式，绕开 parseSimpleYaml 缩进坑——known-issues
++ * 实证）。锚定 cwd 而非 specBase：burst 是仓库本地开发偏好，不随平台/worktree specRoot 漂移。
++ * @param {string} cwd 仓库根（local.yaml 在 <cwd>/.sillyspec/local.yaml）
++ * @returns {Promise<boolean>}
++ */
++export async function readStageBurst(cwd) {
++  const env = process.env.SILLYSPEC_STAGE_BURST
++  if (env === '0') return false
++  if (env === '1') return true
++  const raw = readLocalYamlRaw(cwd)
++  if (!raw) return false
++  try {
++    const mod = await import('js-yaml')
++    const yamlLoad = mod.load || mod.default?.load
++    const doc = yamlLoad(raw)
++    const stage = doc && typeof doc === 'object' ? doc.stage : null
++    return stage && typeof stage === 'object' ? stage.burst === true : false
++  } catch { /* 坏 YAML / js-yaml 不可用 → 缺省 OFF */ }
++  return false
++}
++
++/**
++ * burst 作用域白名单（D-006）：三主阶段。quick 排除（末步四字段硬契约与 P0-2 事实合成不兼容，
++ * complete.js:224 已把 quick 列为合成豁免）；verify/archive 任务书明确不动（--init --draft 与
++ * 就绪度已压到 1-2 次调用）；辅助阶段（scan/doctor/explore）不在本轮验收面。渲染侧（stage.js
++ * renderStageBurst 门）与完成侧（command.js --done 分发门）共用本单一事实源。
++ */
++export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute']
++
+ /**
+  * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。
+  *
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 9d83c453..58bc100b 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -19,7 +19,7 @@
+ import { join, dirname } from 'node:path'
+ import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions } from './shared.js'
++import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
+ import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+ import { executeProgressConfirm } from './progress-confirm.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+@@ -584,49 +584,19 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+ 
+   const defSteps = await getStageSteps(stageName, cwd, progress, platformOpts?.specRoot || null)
+   if (defSteps && defSteps[currentIdx]) {
++    // ── burst 渲染分支（2026-09-22-stage-burst-fold D-002/D-006/D-008，FR-02）──
++    // 白名单主阶段 + readStageBurst 开启时走单趟折叠渲染：noAI 步就地 CLI 执行，AI 步逐个
++    // 调既有 outputStep 一次下发全部剩余说明书（渲染器零改动）。waiting 步在此不可达——
++    // runStage 对任一 waiting 步的硬拦（上方 waiting 检查块 exit(1) 指引 --continue）先于本分支。
++    if (STAGE_BURST_STAGES.includes(stageName) && await readStageBurst(cwd)) {
++      return await renderStageBurst({ stageName, defSteps, cwd, changeName, platformOpts, progress, pm, specBase, scanProfile, stageData })
++    }
+     // noAI 步骤自动完成（CLI-only，不需要 Agent 参与）
+     if (defSteps[currentIdx].noAI || stageData.steps[currentIdx]?.noAI) {
+       const stepName = defSteps[currentIdx].name
+       const cliAction = defSteps[currentIdx]._cliAction || stageData.steps[currentIdx]?._cliAction
+       console.log(`⚙️ Step ${currentIdx + 1}/${stageData.steps.length}: ${stepName}（CLI 自动执行，无需 Agent）`)
+-      if (cliAction === 'scanPreflight') {
+-        await executeScanPreflight(cwd, platformOpts, scanProfile)
+-      } else if (cliAction === 'scanPostcheck') {
+-        await executeScanPostcheck(cwd, platformOpts, scanProfile)
+-      } else if (cliAction === 'scanDetectProjects') {
+-        await executeScanDetectProjects(cwd, platformOpts)
+-      } else if (cliAction === 'scanResumeCheck') {
+-        await executeScanResumeCheck(cwd, platformOpts)
+-      } else if (cliAction === 'scanFinalize') {
+-        await executeScanFinalize(cwd, platformOpts)
+-      } else if (cliAction === 'planPostcheck') {
+-        await executePlanPostcheck(cwd, platformOpts, progress)
+-      } else if (cliAction === 'doctorRunDiagnostics') {
+-        // 2026-09-09-doctor-noai FR-01：doctor 阶段折叠——noAI 步跑全量诊断
+-        // （八维 + 三新 detector）+ renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘
+-        const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
+-        const diag = await runDoctorDiagnostics({ cwd })
+-        console.log(renderDoctorSummary(diag))
+-        try { writeDoctorDiagnosis(diag, (platformOpts?.specRoot || join(cwd, '.sillyspec'))) } catch { /* 落盘 fail-soft */ }
+-      } else if (cliAction === 'progressConfirm') {
+-        // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
+-        // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返
+-        executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
+-      } else if (cliAction === 'verifyRunQualityScan') {
+-        // P0-1（noai-ir-roadmap §3）：verify「运行测试和质量扫描」noAI 化——test/lint 实测提前，
+-        // 指纹落盘供 --done 复用免重跑（长套件不再跑两遍）；失败 throw 不盖 completed，
+-        // 输出 + 并行 WIP 归因提示透传给 agent（前置一/二）。
+-        const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
+-        await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+-      } else if (cliAction === 'archiveDistill') {
+-        // P0-4 安全变体（noai-ir-roadmap §3）：archive「decision-distill 决策提炼」noAI 化——
+-        // 提炼本体是 CLI 纯函数（旧 prompt 即「调函数转述输出」纯中继）；needsWait 裁决收敛到
+-        // 「确认归档 --confirm」。全路径不抛（裁决是确认步输入，非本步阻断条件）。
+-        const { executeArchiveDistill } = await import('./archive-distill.js')
+-        await executeArchiveDistill({ cwd, specBase, changeName })
+-      } else {
+-        throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
+-      }
++      await executeNoAiCliAction({ cliAction, stepName, stageName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile, stageData })
+       stageData.steps[currentIdx].status = 'completed'
+       stageData.steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+       pm._write(cwd, progress, changeName)
+@@ -636,21 +606,8 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+         console.log('')
+         await outputStep(stageName, nextIdx, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
+       } else {
+-        // 所有步骤完成
+-        stageData.status = 'completed'
+-        stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+-        // 主阶段完成钉 currentStage（troubleshooting #56 根因修复，2026-09-08；与 complete.js 两处同语义）
+-        if (!AUXILIARY_STAGES.includes(stageName)) progress.currentStage = stageName
+-        // persist _write 移到 completeStageGates 成功之后（task-02 / review-2026-08-09 #2）：gate 异常/失败 → rollback 回 in-progress 落盘，此处未到 _write，DB 不留假 completed。
+-        // 阶段完成收尾共享管线（noAI 末步核心修复 S1：plan postcheck independent-tier review verdict=fail /
+-        // 平台 scan manifest 此前被绕过）。gate 失败已 rollback 为 in-progress，early-return（不 fall through 到末尾 return）。
+-        const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, outputText: null })
+-        // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1（与 completeStep/continueStep 同语义）。
+-        if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
+-        if (_stageGatesResult) return _stageGatesResult
+-        // gate 全过：persist completed（task-02 移后；此处无 triggerSync，与同文件 noAI 末步语义一致）。
+-        pm._write(cwd, progress, changeName)
+-        console.log(`\n✅ ${stageName} 阶段全部完成。`)
++        // 所有步骤完成——收尾管线抽为 finalizeStageAllStepsDone（burst 全 noAI 场景共用，防第二副本）
++        return await finalizeStageAllStepsDone({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, currentIdx })
+       }
+       return
+     }
+@@ -658,6 +615,117 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+   }
+ }
+ 
++// ── burst 阶段折叠助手族（2026-09-22-stage-burst-fold，D-002/D-006/D-008）──
++// 白名单 STAGE_BURST_STAGES 自 shared.js import（与 command.js --done 分发门共用单一事实源）。
++
++/**
++ * noAI 步 _cliAction 分发（原 runStage noAI 分支 if-链原样抽取，D-008——常规单步路径与
++ * burst 渲染循环共同调用，单一事实源防第三副本；行为零变化：同一 if-链、同一入参语义。
++ * complete.js 的 --done 路径平行副本不动——"不改 completeStep 本体"边界）。
++ */
++async function executeNoAiCliAction({ cliAction, stepName, stageName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile, stageData }) {
++  if (cliAction === 'scanPreflight') {
++    await executeScanPreflight(cwd, platformOpts, scanProfile)
++  } else if (cliAction === 'scanPostcheck') {
++    await executeScanPostcheck(cwd, platformOpts, scanProfile)
++  } else if (cliAction === 'scanDetectProjects') {
++    await executeScanDetectProjects(cwd, platformOpts)
++  } else if (cliAction === 'scanResumeCheck') {
++    await executeScanResumeCheck(cwd, platformOpts)
++  } else if (cliAction === 'scanFinalize') {
++    await executeScanFinalize(cwd, platformOpts)
++  } else if (cliAction === 'planPostcheck') {
++    await executePlanPostcheck(cwd, platformOpts, progress)
++  } else if (cliAction === 'doctorRunDiagnostics') {
++    // 2026-09-09-doctor-noai FR-01：doctor 阶段折叠——noAI 步跑全量诊断
++    // （八维 + 三新 detector）+ renderDoctorSummary 渲染 + doctor-diagnosis.json 落盘
++    const { runDoctorDiagnostics, renderDoctorSummary, writeDoctorDiagnosis } = await import('../doctor-diagnostics.js')
++    const diag = await runDoctorDiagnostics({ cwd })
++    console.log(renderDoctorSummary(diag))
++    try { writeDoctorDiagnosis(diag, (platformOpts?.specRoot || join(cwd, '.sillyspec'))) } catch { /* 落盘 fail-soft */ }
++  } else if (cliAction === 'progressConfirm') {
++    // 主流程 step1「进度确认」noAI 化（2026-09-07）：brainstorm/execute/verify——
++    // 快照本就 CLI 注入、阶段路由已由 run 落定，省一轮「复述摘要→--done」往返
++    executeProgressConfirm({ stageName, cwd, stageData, changeName, pm })
++  } else if (cliAction === 'verifyRunQualityScan') {
++    // P0-1（noai-ir-roadmap §3）：verify「运行测试和质量扫描」noAI 化——test/lint 实测提前，
++    // 指纹落盘供 --done 复用免重跑（长套件不再跑两遍）；失败 throw 不盖 completed，
++    // 输出 + 并行 WIP 归因提示透传给 agent（前置一/二）。
++    const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
++    await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
++  } else if (cliAction === 'archiveDistill') {
++    // P0-4 安全变体（noai-ir-roadmap §3）：archive「decision-distill 决策提炼」noAI 化——
++    // 提炼本体是 CLI 纯函数（旧 prompt 即「调函数转述输出」纯中继）；needsWait 裁决收敛到
++    // 「确认归档 --confirm」。全路径不抛（裁决是确认步输入，非本步阻断条件）。
++    const { executeArchiveDistill } = await import('./archive-distill.js')
++    await executeArchiveDistill({ cwd, specBase, changeName })
++  } else {
++    throw new Error(`noAI 步骤 ${stepName} 的未知 _cliAction: ${cliAction}——请在 stage.js 注册对应分支`)
++  }
++}
++
++/**
++ * 阶段全部步骤完成后的收尾管线（原 noAI 末步 :640-653 块原样抽取）——noAI 末步路径与
++ * burst 渲染全 noAI 场景共用。gate 失败 rollback + exitCode 语义逐字保留：
++ * persist _write 移到 completeStageGates 成功之后（gate 异常/失败 → rollback 回 in-progress
++ * 落盘，DB 不留假 completed）；阶段完成收尾共享管线（plan postcheck independent-tier review
++ * verdict=fail / 平台 scan manifest 不被绕过）。
++ */
++async function finalizeStageAllStepsDone({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, currentIdx }) {
++  stageData.status = 'completed'
++  stageData.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
++  // 主阶段完成钉 currentStage（troubleshooting #56 根因修复，2026-09-08；与 complete.js 两处同语义）
++  if (!AUXILIARY_STAGES.includes(stageName)) progress.currentStage = stageName
++  const _stageGatesResult = await completeStageGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps: stageData.steps, currentIdx, outputText: null })
++  // task-04 / A5：gate 失败（stageCompleted===false）设进程退出码 1（与 completeStep/continueStep 同语义）。
++  if (_stageGatesResult?.stageCompleted === false) process.exitCode = 1
++  if (_stageGatesResult) return _stageGatesResult
++  // gate 全过：persist completed（此处无 triggerSync，与 noAI 末步语义一致）。
++  pm._write(cwd, progress, changeName)
++  console.log(`\n✅ ${stageName} 阶段全部完成。`)
++  return undefined
++}
++
++/**
++ * burst 折叠渲染（D-002，FR-02）：单趟遍历 defSteps——跳过 completed/skipped；noAI 步就地
++ * CLI 执行 + 标完成落库（与单步 noAI 路径同语义）；AI 步逐个调既有 outputStep（渲染器零改动，
++ * 首 AI 步的 persona/护栏注入由 outputStep 的 firstRenderableIdx 机制自然生效）。遍历后：
++ * 无剩余步 → finalizeStageAllStepsDone 收尾（全 noAI 场景）；有剩余 → burst 尾提示。
++ * blocked/stale 步按「非 completed/skipped」正常进说明书（currentIdx 的 stale/blocked 已在
++ * runStage 上方拉回 pending；尾随 stale 步的完成侧拉回归 completeStepBurst 轮首，D-003@v2）。
++ */
++async function renderStageBurst({ stageName, defSteps, cwd, changeName, platformOpts, progress, pm, specBase, scanProfile, stageData }) {
++  let lastNoAiIdx = -1
++  for (let i = 0; i < defSteps.length; i++) {
++    const st = stageData.steps[i]
++    if (st && (st.status === 'completed' || st.status === 'skipped')) continue
++    const isNoAI = defSteps[i]?.noAI || st?.noAI
++    if (isNoAI) {
++      const stepName = defSteps[i].name
++      const cliAction = defSteps[i]._cliAction || st?._cliAction
++      console.log(`⚙️ Step ${i + 1}/${stageData.steps.length}: ${stepName}（burst 就地 CLI 自动执行）`)
++      await executeNoAiCliAction({ cliAction, stepName, stageName, cwd, specBase, changeName, platformOpts, progress, pm, scanProfile, stageData })
++      if (st) {
++        st.status = 'completed'
++        st.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
++      }
++      pm._write(cwd, progress, changeName)
++      lastNoAiIdx = i
++      continue
++    }
++    await outputStep(stageName, i, defSteps, cwd, changeName, progress.project || null, platformOpts, null, collectStageWaitHistory(progress, stageName))
++  }
++  const remainingIdx = stageData.steps.findIndex(s => s && s.status !== 'completed' && s.status !== 'skipped')
++  if (remainingIdx === -1) {
++    // currentIdx=本轮最后执行的 noAI 步（与单步路径「刚执行步」同语义；尾随 skipped 场景不漂移——
++    // Grill execute 轮 P2-1），防御回退 defSteps.length - 1
++    return await finalizeStageAllStepsDone({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, currentIdx: lastNoAiIdx !== -1 ? lastNoAiIdx : defSteps.length - 1 })
++  }
++  console.log('')
++  console.log('📦 burst 模式：本阶段全部说明书已一次下发。干完全部步骤后用一次 --done 收口（CLI 内部逐步推进+逐步校验，失败即停在失败步）。')
++  return undefined
++}
++
+ 
+ 
+ 
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 2f24bce9..cc01f2ef 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -116,7 +116,7 @@ test('⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness
+   const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
+   g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
+   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n')
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\nflow:\n  mode: thin\n')
+   writeFileSync(join(cwd, 'base.txt'), 'b\n')
+   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+   const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 874c359c..72d1b5ad 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -32,7 +32,8 @@ function makeRepo({ testCmd = 'node -e "0"' } = {}) {
+   run(['config', 'user.email', 't@t'])
+   run(['config', 'user.name', 't'])
+   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+-  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "' + testCmd + '"\n')
++  // flow: mode: thin——2026-09-22-stage-burst-fold 缺省翻 legacy 后薄跑道测试需显式声明（①②③⑤⑥ 共用本造法；④ 另行整文件覆写 legacy）
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "' + testCmd + '"\nflow:\n  mode: thin\n')
+   writeFileSync(join(cwd, 'base.txt'), 'base\n')
+   run(['add', '.'])
+   run(['commit', '-q', '-m', 'base'])
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index ddd3a976..632bd84c 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -63,7 +63,7 @@ function amendWithRatio(cwd, change, ratio) {
+ }
+ 
+ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
+-  const { cwd, cli } = makeRepo()
++  const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
+   const change = 'fr-r1'
+   assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
+   // 大改（≥0.75 行）→ route_hint
+@@ -85,7 +85,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒
+   rmSync(cwd, { recursive: true, force: true })
+ 
+   // 小改（≤0.25）→ 无 route_hint
+-  const s2 = makeRepo()
++  const s2 = makeRepo('flow:\n  mode: thin\n')
+   const change2 = 'fr-r2'
+   assert.equal(s2.cli(['flow', 'start', '--change', change2, '--input', '成功标准：\n- 条件A']).status, 0)
+   const small = amendWithRatio(s2.cwd, change2, 0.25)
+@@ -96,7 +96,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒
+ })
+ 
+ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
+-  const { cwd, cli } = makeRepo('flow:\n  edit_ratio_enforcement: block\n')
++  const { cwd, cli } = makeRepo('flow:\n  mode: thin\n  edit_ratio_enforcement: block\n')
+   const change = 'fr-b1'
+   assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
+   const big = amendWithRatio(cwd, change, 0.75)
+diff --git a/test/stage-burst.test.mjs b/test/stage-burst.test.mjs
+new file mode 100644
+index 00000000..b86d0c85
+--- /dev/null
++++ b/test/stage-burst.test.mjs
+@@ -0,0 +1,247 @@
++/**
++ * stage-burst.test.mjs — burst 阶段折叠机制测试（2026-09-22-stage-burst-fold）
++ *
++ * task-01 覆盖面（FR-01/FR-04，D-001/D-007）：readStageBurst 三态——
++ *   ① 无 local.yaml / 无 stage 段 → false（缺省 OFF）
++ *   ② stage.burst: true → true
++ *   ③ env SILLYSPEC_STAGE_BURST=0 强制关（配置 true 也压掉）/ =1 强制开（无配置也开）
++ *   ④ 坏 YAML → false（fail-safe）
++ * env 纪律（conventions：env 敏感测试双模式）：每用例显式剥净 SILLYSPEC_STAGE_BURST 后按需注入，
++ * 收口前裸跑+套件阀两种形态各跑一遍（该变量非套件阀，但按同款纪律显式管理进程 env）。
++ * 后续 task-02/03/05 在本文件追加渲染折叠/等价性/断点/answer 消费/逃生阀用例。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++
++const { readStageBurst } = await import('../src/run/shared.js')
++if (typeof readStageBurst !== 'function') throw new Error('shared.js 导出面缺失：readStageBurst')
++
++const tmpRoots = []
++function makeRepo(localYaml = null) {
++  const cwd = mkdtempSync(join(tmpdir(), 'sb-'))
++  tmpRoots.push(cwd)
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  if (localYaml !== null) writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), localYaml)
++  return cwd
++}
++// 每用例剥净 env 后按需注入；用例结束恢复原值（防跨用例渗漏）
++function setBurstEnv(v) {
++  const saved = process.env.SILLYSPEC_STAGE_BURST
++  delete process.env.SILLYSPEC_STAGE_BURST
++  if (v !== undefined) process.env.SILLYSPEC_STAGE_BURST = v
++  return () => {
++    delete process.env.SILLYSPEC_STAGE_BURST
++    if (saved !== undefined) process.env.SILLYSPEC_STAGE_BURST = saved
++  }
++}
++
++test('① 缺省 OFF：无 local.yaml → false', async () => {
++  const restore = setBurstEnv()
++  try {
++    assert.equal(await readStageBurst(makeRepo()), false)
++  } finally { restore() }
++})
++
++test('① 缺省 OFF：有 local.yaml 但无 stage 段 → false；stage 段无 burst 键 → false', async () => {
++  const restore = setBurstEnv()
++  try {
++    assert.equal(await readStageBurst(makeRepo('project:\n  type: generic\n')), false)
++    assert.equal(await readStageBurst(makeRepo('stage:\n  burst: false\n')), false)
++  } finally { restore() }
++})
++
++test('② local.yaml stage.burst: true → true（含同段他键共存）', async () => {
++  const restore = setBurstEnv()
++  try {
++    assert.equal(await readStageBurst(makeRepo('stage:\n  burst: true\n')), true)
++    assert.equal(await readStageBurst(makeRepo('commands:\n  test: "node -e \\"0\\""\nstage:\n  burst: true\n')), true)
++  } finally { restore() }
++})
++
++test('③ env 逃生阀：SILLYSPEC_STAGE_BURST=0 压掉配置 true → false；=1 无配置 → true（优先于配置）', async () => {
++  const off = setBurstEnv('0')
++  try {
++    assert.equal(await readStageBurst(makeRepo('stage:\n  burst: true\n')), false)
++  } finally { off() }
++  const on = setBurstEnv('1')
++  try {
++    assert.equal(await readStageBurst(makeRepo()), true)
++    assert.equal(await readStageBurst(makeRepo('stage:\n  burst: false\n')), true)
++  } finally { on() }
++})
++
++test('④ 坏 YAML → false（fail-safe）', async () => {
++  const restore = setBurstEnv()
++  try {
++    assert.equal(await readStageBurst(makeRepo('stage: [unclosed\n  burst: true\n')), false)
++  } finally { restore() }
++})
++
++// ══════════ task-05 行为面（FR-02/FR-03/FR-04，D-002@v2/D-003@v2/D-004@v2）══════════
++// fixture 造法：临时 git 仓 + ProgressManager 种 brainstorm 步态 + spawn CLI 子进程。
++// env 纪律：spawn env 显式 delete SILLYSPEC_STAGE_BURST 后按需注入（conventions 双模式）；
++// 行为翻转走 fixture 内 local.yaml（测试自建文件，temp 仓内即被跟踪面）。
++import { execFileSync, spawnSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const B_STEPS = ['进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案', '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件']
++
++function mkFlowRepo({ burst = false } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'sb-cli-'))
++  tmpRoots.push(cwd)
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' }).toString().trim()
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  const yaml = burst ? 'project:\n  type: generic\nstage:\n  burst: true\n' : 'project:\n  type: generic\n'
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), yaml)
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  return { cwd }
++}
++
++async function seedBrainstorm(cwd, change, upto, override = {}) {
++  const { ProgressManager } = await import('../src/progress.js')
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  await pm.init(cwd)
++  await pm.initChange(cwd, change)
++  const p = await pm.read(cwd, change)
++  p.currentChange = change
++  p.project = 'generic'
++  p.stages.brainstorm = {
++    status: 'in-progress', startedAt: '2026/09/23 00:00:00', completedAt: null,
++    steps: B_STEPS.map((name, i) => ({ name, status: i < upto ? 'completed' : 'pending', ...(override[i] || {}) })),
++  }
++  await pm._write(cwd, p, change)
++  return pm
++}
++
++function cliRun(cwd, args, { burstEnv = undefined, timeout = 120_000 } = {}) {
++  const env = { ...process.env }
++  delete env.SILLYSPEC_STAGE_BURST
++  if (burstEnv !== undefined) env.SILLYSPEC_STAGE_BURST = burstEnv
++  env.SILLYSPEC_WATCHER = '0'
++  env.SILLYSPEC_STEP_GUIDE = '0'
++  env.SILLYSPEC_SYNC = '0'
++  env.SILLYSPEC_SESSION_ID = 'sb-test'
++  return spawnSync(process.execPath, [CLI, '--dir', cwd, ...args], { cwd, encoding: 'utf8', timeout, env })
++}
++
++const stepPattern = async (pm, cwd, change) => {
++  const p = await pm.read(cwd, change)
++  return { steps: p.stages.brainstorm.steps.map(s => s.status[0]).join(''), stage: p.stages.brainstorm.status }
++}
++
++test('⑤ 渲染折叠（FR-02）：burst 开启一次下发全部剩余步说明书+尾提示；关闭仅当前步（反例）', async () => {
++  // burst on：步 1-5 完成 → 渲染下发 6/7/8 三步说明书
++  const A = mkFlowRepo({ burst: true })
++  const pmA = await seedBrainstorm(A.cwd, 'sb-r1', 5)
++  const rA = cliRun(A.cwd, ['run', 'brainstorm', '--change', 'sb-r1'])
++  const outA = rA.stdout + rA.stderr
++  assert.equal(rA.status, 0, `burst 渲染应成功: ${outA.slice(0, 400)}`)
++  assert.ok((outA.match(/## Step \d\/8/g) || []).length >= 3, `应一次下发 ≥3 步说明书（实际 ${outA.match(/## Step \d\/8/g)?.length}）`)
++  assert.match(outA, /## Step 6\/8/, '步 6 说明书在场')
++  assert.match(outA, /## Step 8\/8/, '步 8 说明书在场')
++  assert.match(outA, /burst 模式：本阶段全部说明书已一次下发/, 'burst 尾提示在场')
++  assert.equal((await stepPattern(pmA, A.cwd, 'sb-r1')).steps, 'cccccppp', '渲染侧不改步态（AI 步保持 pending）')
++
++  // 反例（escape valve 反向）：burst off 同状态只渲染当前步
++  const B = mkFlowRepo({ burst: false })
++  const pmB = await seedBrainstorm(B.cwd, 'sb-r2', 5)
++  const rB = cliRun(B.cwd, ['run', 'brainstorm', '--change', 'sb-r2'])
++  const outB = rB.stdout + rB.stderr
++  assert.equal(rB.status, 0)
++  assert.match(outB, /## Step 6\/8/, '单步渲染当前步在场')
++  assert.ok(!/## Step 7\/8/.test(outB) && !/## Step 8\/8/.test(outB), '后续步说明书不应在场')
++  assert.ok(!outB.includes('burst 模式'), '无 burst 尾提示')
++})
++
++test('⑥ env 逃生阀（FR-04）：配置 burst: true + SILLYSPEC_STAGE_BURST=0 → 单步渲染', async () => {
++  const R = mkFlowRepo({ burst: true })
++  await seedBrainstorm(R.cwd, 'sb-r3', 5)
++  const r = cliRun(R.cwd, ['run', 'brainstorm', '--change', 'sb-r3'], { burstEnv: '0' })
++  const out = r.stdout + r.stderr
++  assert.equal(r.status, 0, `逃生阀渲染应成功: ${out.slice(0, 300)}`)
++  assert.match(out, /## Step 6\/8/, '当前步说明书在场')
++  assert.ok(!/## Step 7\/8/.test(out), '后续步不应下发')
++  assert.ok(!out.includes('burst 模式：'), '无 burst 尾提示（env=0 完全回单步形态）')
++})
++
++test('⑦ 等价性双跑（FR-03 验收 2）：burst on/off 同 fixture——推进集合、断点位、步态、输出合成一致', async () => {
++  // 逐步侧（burst off）：3 次 --done 推步 6、7，第 3 次撞步 8 门禁（四件套缺失）失败
++  const A = mkFlowRepo({ burst: false })
++  const pmA = await seedBrainstorm(A.cwd, 'sb-eq-a', 5)
++  const d1 = cliRun(A.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-eq-a'])
++  const d2 = cliRun(A.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-eq-a'])
++  const d3 = cliRun(A.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-eq-a'])
++  assert.equal(d1.status, 0, `A 第 1 次 --done 应成功（步 6）: ${d1.stdout.slice(0, 300)}`)
++  assert.equal(d2.status, 0, `A 第 2 次 --done 应成功（步 7）: ${d2.stdout.slice(0, 300)}`)
++  assert.notEqual(d3.status, 0, 'A 第 3 次 --done 应撞步 8 门禁失败（四件套缺失）')
++  const stA = await stepPattern(pmA, A.cwd, 'sb-eq-a')
++
++  // burst 侧（burst on）：单次 --done——推步 6、7 后停在步 8 同一断点
++  const B = mkFlowRepo({ burst: true })
++  const pmB = await seedBrainstorm(B.cwd, 'sb-eq-b', 5)
++  const d = cliRun(B.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-eq-b', '--output', 'burst 等价性双跑'])
++  const outD = d.stdout + d.stderr
++  assert.notEqual(d.status, 0, 'burst 单次 --done 应停在步 8 门禁断点')
++  assert.match(outD, /burst 收口摘要：burst 等价性双跑/, '整体 --output 横幅在场（D-009）')
++  const advD = (outD.match(/✅ Step \d\/8 完成/g) || []).length
++  assert.equal(advD, 2, `burst 应推 2 步（6/7）后停（实际 ${advD}）`)
++  const stB = await stepPattern(pmB, B.cwd, 'sb-eq-b')
++
++  assert.equal(stB.steps, stA.steps, `步态一致（A=${stA.steps} B=${stB.steps}）`)
++  assert.equal(stB.stage, stA.stage, '阶段状态一致')
++  // per-step 输出合成一致（P0-2 前缀 + 同步名）
++  const pA = await pmA.read(A.cwd, 'sb-eq-a')
++  const pB = await pmB.read(B.cwd, 'sb-eq-b')
++  assert.match(pB.stages.brainstorm.steps[5].output || '', /【CLI 合成】步骤「写设计文档并自审」完成/, 'burst 侧步 6 输出为 CLI 合成')
++  assert.equal((pA.stages.brainstorm.steps[5].output || '').startsWith('【CLI 合成】步骤「写设计文档并自审」完成'),
++    (pB.stages.brainstorm.steps[5].output || '').startsWith('【CLI 合成】步骤「写设计文档并自审」完成'), '合成输出前缀一致')
++})
++
++test('⑧ --answer 单次消费（FR-03/D-004@v2）：双 requiresWait 步答案不错配，二次 --answer 续推', async () => {
++  const R = mkFlowRepo({ burst: true })
++  const pm = await seedBrainstorm(R.cwd, 'sb-ans', 3)
++  const r1 = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--answer', '选方案B', '--change', 'sb-ans'])
++  const p1 = await pm.read(R.cwd, 'sb-ans')
++  assert.notEqual(r1.status, 0, '应在步 5 requiresWait 断点退出')
++  assert.ok((r1.stdout + r1.stderr).includes('必须先等待用户输入'), '断点提示指向等待步')
++  assert.equal(p1.stages.brainstorm.steps[3].waitAnswer, '选方案B', '步 4 消费了答案')
++  assert.equal(p1.stages.brainstorm.steps[4].waitAnswer, undefined, '步 5 未被步 4 答案污染（单次消费）')
++  const r2 = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--answer', '确认设计', '--change', 'sb-ans'])
++  const p2 = await pm.read(R.cwd, 'sb-ans')
++  assert.equal(p2.stages.brainstorm.steps[4].waitAnswer, '确认设计', '步 5 消费第二次答案')
++  assert.ok(p2.stages.brainstorm.steps.slice(4).every(s => ['completed', 'pending'].includes(s.status)), '续推后无错位状态')
++  assert.notEqual(r2.status, 0, '续推后停在步 8 门禁断点（与单步模式失败态同族）')
++})
++
++test('⑨ 尾随 stale 拉回（FR-03/D-003@v2）：渲染集合=完成集合，stale 尾由 done 轮首拉回推进', async () => {
++  const R = mkFlowRepo({ burst: true })
++  // 步 1-5 完成、步 6 pending、步 7 stale（尾随 stale——runStage 渲染前只拉回 currentIdx=6 的
++  // stale，尾随 stale 保持原状进渲染集合，由 completeStepBurst 轮首拉回后在完成侧推进）
++  const pm = await seedBrainstorm(R.cwd, 'sb-st', 5, { 6: { status: 'stale' } })
++  const r = cliRun(R.cwd, ['run', 'brainstorm', '--change', 'sb-st'])
++  assert.equal(r.status, 0, '渲染应成功')
++  assert.match(r.stdout + r.stderr, /## Step 7\/8/, '尾随 stale 步说明书照常进渲染集合')
++  const d = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-st'])
++  const out = d.stdout + d.stderr
++  assert.ok(out.includes('处于 stale，burst 轮首拉回待执行'), '轮首拉回日志在场')
++  const p = await pm.read(R.cwd, 'sb-st')
++  assert.equal(p.stages.brainstorm.steps[6].status, 'completed', '尾随 stale 步（步 7）被轮首拉回并完成——渲染集合=完成集合')
++  assert.equal(p.stages.brainstorm.steps[5].status, 'completed', '前置 pending 步正常推进')
++})
++
++test('⑩ flow 缺省翻转（FR-05/D-010@v2）：readFlowConfig 空配置→legacy；显式 thin 照旧', async () => {
++  const { readFlowConfig } = await import('../src/flow.js')
++  const empty = mkFlowRepo({ burst: false })
++  assert.equal(readFlowConfig(join(empty.cwd, '.sillyspec')).mode, 'legacy', '无 flow 配置 → legacy（翻转后缺省）')
++  const thin = makeRepo('project:\n  type: generic\nflow:\n  mode: thin\n')
++  assert.equal(readFlowConfig(join(thin, '.sillyspec')).mode, 'thin', '显式 mode: thin 照旧生效')
++})
++
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ } } })

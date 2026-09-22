@@ -64,3 +64,22 @@
 锚点：未记录
 最近确认：ee966ed
 理由：§65 护栏①：changes 表加 owner_session 列（v6 迁移，四处版本号同步 bump——db.js DDL/DB_SCHEMA_VERSION/shared.js CURRENT_VERSION/progress._version）；run/<stage> 与 quick 启动时写 owner（会话标识=sessionId 或 pid@host，首次创建者获得，已有值不覆盖）；每次 CLI 写操作已刷新 last_active（现成心跳）；apply/cleanup/archive/归档内置 apply 前查所有权——owner 非本会话且 last_active 在活跃窗（15 分钟，可配）内 → 拒绝并列出 owner/最后活跃，--takeover 显式接管（重写 owner+留痕）；owner 停活跃（窗口外）→ 放行并提示接管完成。
+
+## D-011@v1 方案选择 = A（burst 交互折叠）
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：用户选 A（任务书冻结版）：渲染侧剩余步逐个调既有 outputStep + completeStepBurst 循环调 completeStep(printNext:false)，completeStep 本体零 diff；缺省 OFF 本仓自举。用户同时授权全程免询问（后续 requiresWait 决策点按任务书冻结口径自决并如实记录）。
+故障面：无（方案选择记录）。
+退役判据：无。
+
+## D-010@v2 flow 翻转测试面完整枚举 + config-schema 文案
+状态：implemented
+变更：2026-09-22-stage-burst-fold
+锚点：未记录
+最近确认：9f9450d0
+理由：不完整（Grill P1-2）：调用 flow start/done 且依赖缺省 thin 的测试共三个文件——test/flow-protocol.test.mjs（makeRepo 缺省造法，受影响 ①②③⑤⑥ 五测，任务书原估 ①②③⑥ 漏 ⑤）、test/flow-route.test.mjs（:68 断言 flow start exit 0）、test/flow-draft.test.mjs（⑥ 真 CLI harness）。test/fr-index.test.mjs 核实不受影响（纯单测直调 indexRequirements，不经 flow start/done——本会话亲自核实）。另补 src/config-schema.js:170 flow.mode desc「thin（缺省）」→「legacy（缺省）」文案同步与 src/flow.js:18/:62/:124 三处文案。v1 核心面（缺省翻 legacy、断言本体不动）不变。
+supersedes：D-010@v1
+故障面：同 v1（未配置用户走厚档=intentional）。
+退役判据：薄道转正时再翻回。

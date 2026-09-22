@@ -10,6 +10,8 @@ updated_at: 2026-09-22T00:00:00+08:00
 
 > R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：run/command.js watcher spawn 接线+混跑回退 legacy_fallback 写侧；complete-handlers.js 归档链抽取 runArchiveChain（skipPlanCheck 旁路）；run-tests.mjs 套件级 SILLYSPEC_WATCHER 阀；新增 src/watcher.js 观测旁路（sync 域）
 
+> burst 注记（2026-09-23）：2026-09-22-stage-burst-fold：run/stage.js runStage 渲染路径新增 burst 门（白名单 brainstorm/plan/execute × readStageBurst）+renderStageBurst 单趟折叠渲染；noAI _cliAction 分发与阶段收尾抽为 executeNoAiCliAction/finalizeStageAllStepsDone 两助手（原块原样搬运，burst 与单步共用）；run/complete.js 新增 completeStepBurst 循环包装（completeStep 本体零 diff——守卫逐轮生效，轮首尾随 stale 拉回/answer 快照单次消费/stepAssert 仅首轮/50 轮上限）；run/command.js :1727/:2073 两处 --done 分发按 burst 门接线；run/shared.js 新增 readStageBurst（local.yaml stage.burst + env SILLYSPEC_STAGE_BURST=0/1 覆写，缺省 OFF）+STAGE_BURST_STAGES 白名单常量（渲染/完成两门单一源）
+
 ## 定位
 
 SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillyspec.db` 作为权威状态源，管理项目、变更（change）、阶段（stage）、步骤（step）的全生命周期。不负责 CLI 解析、命令分发或阶段执行逻辑。

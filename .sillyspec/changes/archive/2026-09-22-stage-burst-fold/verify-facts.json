@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-22-stage-burst-fold",
+  "generatedAt": "2026-09-22T17:13:23.668Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 1,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-22-stage-burst-fold",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "归档 worktree apply 后主仓全量 npm test 复跑（execute 期全量在 worktree 内跑，12 文件级挂为 worktree 守卫环境性存量——基线 A/B 实证，主仓跑应零挂面）",
+        "condition": "apply 完成后在主仓根跑 npm test：预期 578+11 全过（stage-burst 11 用例随 apply 进主仓）；若仍有挂按 quicklog 口径甄别归因",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "burst 全量默认翻转（D-001 退役判据线）",
+        "condition": "验收后另立变更——本轮不翻，缺省 OFF",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/flow-protocol.test.mjs",
+      "test/flow-route.test.mjs",
+      "test/flow-draft.test.mjs",
+      "test/stage-burst.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-22T17:17:51.099Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

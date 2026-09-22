@@ -1,0 +1,108 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "8a8ce1b1a81f485a7b783968bfdf2ace3493ffd4",
+  "totals": {
+    "files": 11,
+    "additions": 667,
+    "deletions": 71
+  },
+  "rows": [
+    {
+      "path": "meta.json",
+      "additions": 121,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/flow.js",
+      "additions": 6,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/command.js",
+      "additions": 17,
+      "deletions": 4,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete.js",
+      "additions": 113,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/shared.js",
+      "additions": 34,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/stage.js",
+      "additions": 122,
+      "deletions": 54,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-draft.test.mjs",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-protocol.test.mjs",
+      "additions": 2,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-route.test.mjs",
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/stage-burst.test.mjs",
+      "additions": 247,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "5efb2a6a28c4e471625918ceeb22d5616a67ce0d1d202a9c33d505a66b987962",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-22T17:10:55.665Z"
+}
