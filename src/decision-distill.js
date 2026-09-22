@@ -186,8 +186,11 @@ function normalizeModules(moduleIndex) {
   return moduleIndex.modules ? moduleIndex.modules : moduleIndex
 }
 
-/** _module-map.yaml 子集解析（仅模块 id → paths/core_files；不复用 modules.js 以保零依赖纯函数） */
-function parseModulePathsSubset(content) {
+/** _module-map.yaml 子集解析（仅模块 id → paths/core_files/doc；不复用 modules.js 以保零依赖纯函数）。
+ *  2026-09-23 资产三小件③：增 doc 标量捕获（`    doc: modules/<id>.md`——模块卡路径，归档文档
+ *  认领 advisory 消费）+ 导出（complete-handlers 复用同解析源，跨项目扫描需项目归属故不走
+ *  discoverModuleIndex 的合并口径）。既有消费方只读 paths/core_files，增字段零行为差。 */
+export function parseModulePathsSubset(content) {
   const modules = {}
   let cur = null
   let key = null
@@ -202,6 +205,8 @@ function parseModulePathsSubset(content) {
     }
     const block = line.match(/^    (paths|core_files):$/)
     if (block) { key = block[1]; modules[cur][key] = modules[cur][key] || []; continue }
+    const doc = line.match(/^    doc: (.+)$/)
+    if (doc) { modules[cur].doc = doc[1].trim().replace(/^['"]|['"]$/g, ''); key = null; continue }
     const item = line.match(/^      - (.+)$/)
     if (item && key) modules[cur][key].push(item[1].trim().replace(/^['"]|['"]$/g, ''))
   }
@@ -224,10 +229,11 @@ export function discoverModuleIndex(knowledgeRoot) {
       if (!existsSync(mapPath)) continue
       const sub = parseModulePathsSubset(readFileSync(mapPath, 'utf8'))
       for (const [id, m] of Object.entries(sub)) {
-        if (!merged[id]) merged[id] = { paths: m.paths || [], core_files: m.core_files || [] }
+        if (!merged[id]) merged[id] = { paths: m.paths || [], core_files: m.core_files || [], ...(m.doc ? { doc: m.doc } : {}) }
         else {
           merged[id].paths = [...new Set([...(merged[id].paths || []), ...(m.paths || [])])]
           merged[id].core_files = [...new Set([...(merged[id].core_files || []), ...(m.core_files || [])])]
+          if (!merged[id].doc && m.doc) merged[id].doc = m.doc
         }
       }
     }

@@ -1,0 +1,381 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 58441f1a..97abcb44 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -86,7 +86,7 @@ ProgressManager.alignExecuteToPlan(cwd, changeName, specBase, {confirm})
+ - **stage review gate marker 缺失自生**（坑1，`run/gates.js:254`）：tier=independent 且 `getLatestStageReviewRunId` 返回空时（execute 批量完成跳过 prompt 渲染等），gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`——错误路径从 `execute-null`（不可执行）变为 `execute-review-<id>`（可执行）。补充 prompt 渲染时落 marker（gap 6）的兜底：prompt 路径未走到时 gate 路径自生，marker 文件名/位置不变
+ - **brainstorm/verify 双占位符注入（fail-soft）**（2026-08-23-adopt-harness-practices，`src/run/prompt.js:429-464`）：brainstorm Step2 的 {DECISION_HITS} ← matchKnowledge decisionHits——命中 rejected 条目渲染「否决决策提示」段（ID/标题/否决理由/复潮条件），无命中替换空串零输出（不留残留占位符）；注入结果同步落 runtime JSON（.runtime/decision-hits.json，与 KNOWLEDGE_HIT_REPORT 落盘同口径）；advisory 展示不改步骤流程，异常单行说明不抛（全降级）。
+   verify「运行测试和质量扫描」步的 {EVIDENCE_AUTO_RECOMMENDATION}（`src/run/prompt.js:719-746`）← resolveTestStrategy 的 evidence_auto_recommendation.summary 渲染进 step prompt——verify-postcheck 在 --done 事后才解析 evidence-auto，agent 写 verify-result.md 时看不到推荐无从否决，故在 prompt 时点注入（含推荐理由、降级注记与「可在 verify-result.md 否决并改跑全量」路径，FR-11）；同样 fail-soft（注入失败给读 local.yaml 确认 test_strategy 的指引，--done 仍按 resolveTestStrategy 实测对账）。
+-- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:579`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
++- **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:768`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动（step5 prompt 的 git add 保留作幂等兜底）；safeGit 失败不阻断归档（目录已移动 + change 已注销）
+ - **execute run marker 写入原子化 + 分层 fail**（2026-08-16-state-split-fixes #1，D-001@v1）：四处 marker 写入点（`run/stage.js` 主点 + `run/gates.js`/`run/prompt.js`/`task-review.js` 补写点）统一「mkdir `execute-runs/<runId>/tasks` 先于 marker」不变量——目录不再只随 review.json 写入创建，消除「有 marker 无目录」空 run 被 archive 完成度扫描误用。分层失败语义：stage 主点 throw（execute 启动 exit 1 + 修复指引）；gates 补写点异常直穿外层 catch fail-closed；prompt 渲染路径降级（console.error 留痕 + runId 仍注入）；task-review 去静默保 fail-open。测试 execute-run-dir-fail-loud.test.mjs（33 断言）。runId 同秒碰撞根治（2026-09-10 驾驭小结①，坑 exec-run-id-same-second-collision）：四处写入点在 mkdir 前先经 `claimExecuteRunId`（task-review.js，非递归 mkdir 排他认领，碰撞换随机短后缀）——并行会话（不同 change）同秒启动 execute 不再生成同一 runId 共享 run 目录互相覆盖 per-task review.json；分层 fail 语义不变。第三批①再加固：generateExecuteRunId 携 changeName 附 6 位 FNV 哈希段（exec-…-<hash>）——不同变更 runId 结构性不同，五处 generate 写入点全部传 changeName。第十三批③：gate-snapshot 环境目录链接面扩 venv 族（node_modules/.venv/venv/env 全 junction，dev 依赖同源；链接失败/全缺 ⚠️ 可见——坑 gate-snapshot-env-mismatch）。第十二批：noAI 质量扫描步（executeVerifyQualityScan，verify 第一实测执行点）补接同款快照（第八批只接 gates.js verify 块——用户第三次撞上的真实来源）；两处 fallback 主仓时若非 .sillyspec 脏文件在场打 ⚠️ 口径可见提示（warnIfMainRepoDirtyForGate）。第八批：verify 实测门同款隔离（createVerifyGateSnapshot——resolveVerifyChangedFiles 变更文件集 + native worktree 时 overlay 源=worktree 根（--worktree 定向跑等价）+ 他者显式声明剔除 + 变更文档/local.yaml 随快照；gates.js verify 块 test/lint 快照内跑，fallback 主仓 + lint 阻断补污染归属提示，SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF 可关）。第六批：quick --done test+lint 门禁隔离快照（run/gate-snapshot.js createGateSnapshot——HEAD worktree + 会话文件 overlay + node_modules junction + local.yaml 复制，并行会话脏文件不参与本会话门禁判定；基建失败 fallback 主仓现行为；SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF 可关）；taskcard --all 平台产物镜像主仓（mirrorPlatformArtifactToMainRepo 增 ensureParentDir——tasks/ 子目录在 changeDir 存在时自动建，index.js taskcard case pointer 态接线）。第五批①：自指平台指针警告跨进程 10min 窗口降频（warnSelfRefPointerOnce marker，writePlatformPointer 与 command.js 恢复链两处接线——daemon junction 形态下每命令重复告警的噪音闸）+ resolvePlatformSpecDir 对 pointer specRoot realpath 规范化（junction 坍缩为真实路径：design-init/endpoints 等落盘不再锚到 daemon junction 副本路径）。同批③：reapVerifyServices 改 killProcessTree 进程树击杀（win32 taskkill /PID <pid> /T /F；POSIX ps 递归枚举子进程后杀——坑 verify-service-process-leak 子进程泄漏：原 process.kill 只杀登记的 shell 包装 PID，python 服务本体成孤儿挂机；verify prompt 同步补「优先登记服务本体（叶子）PID」指引）。同批②：run/shared.js 新增 mirrorPlatformArtifactToMainRepo（平台模式产物双写镜像主仓 changeDir——design-init / verify-probes --init 在 pointer 态 agent 本地跑时不再单点依赖 spec-sync 回程；daemon 显式 --spec-dir / 本地无 changeDir / 路径同构跳过）。
+ - **`.runtime` 根解析统一 `resolveRuntimeRoot`**（坑 execute-runs-isolation，`run/shared.js`）：`.runtime` 根（含 `sillyspec.db` / execute-runs / stage-reviews / quick-sessions）由 `resolveRuntimeRoot(platformOpts, localSpecBase)` 统一解析，三级优先级 `platformOpts.runtimeRoot`（平台）> `platformOpts.specDriftAnchor`（drift 锚点）> `localSpecBase/.runtime`（本地兜底）。drift 守卫（`run/command.js`）命中时设 `specDriftAnchor = 主仓 specBase`（**不**设 `specRoot`/`runtimeRoot`——否则触发平台 sentinel，误跳 `triggerSync`/`checkApproval`、误进平台渲染分支）→ 下游 15 处站点解析落主仓 `.runtime`，execute-runs / stage-reviews 不随 worktree cleanup 整目录删消失，archive step1 完成度 gate 真相源（磁盘主仓 review.json）不再丢
+ 
+diff --git a/.sillyspec/knowledge/decisions/unmapped.md b/.sillyspec/knowledge/decisions/unmapped.md
+index 21ead437..e4f3bdb2 100644
+--- a/.sillyspec/knowledge/decisions/unmapped.md
++++ b/.sillyspec/knowledge/decisions/unmapped.md
+@@ -56,7 +56,7 @@
+ 变更：2026-08-08-concurrent-write-preflight
+ 锚点：未记录
+ 最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
+-理由：complete-handlers.js:1340 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
++理由：complete-handlers.js:1453 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
+ 
+ ## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
+ 状态：implemented
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 92b89ff9..00c458f9 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -288,7 +288,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+ - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+ - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+-- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1259（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
++- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1338（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
+ - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
+ - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续；2026-08-24 坑 taskcard-placeholder-slip 起**骨架占位符硬拦**——`FR-XX`/`D-XXX`/`src/example/file.ts`/`一句话说明这个 task`/`具体步骤 1`/`可验证的验收条件 1`/`边界约束 1` 未替换视同缺字段，标记清单 `src/taskcard-placeholders.js` 与骨架同源、先剥 HTML 注释再匹配防骨架自述误伤）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改；2026-08-15 D-2 起 `.sillyspec/docs/` 模块文档亦须认领）、`validateBlueprintConsistency` 内含任务声明 ↔ tasks/ 卡片双向对账（2026-08-15 D-2b；2026-08-20-task-truth-unify 起声明源=tasks.md 注册表，plan.md 旧 checkbox 声明回退兼容：声明任务漏生成卡片——典型尾部文档同步任务——阻断，孤儿卡亦阻断）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）；Wave 段比对（坑 wave-dep-direction-unchecked，2026-08-24）：**依赖方向硬拦**（depends_on 落同 Wave——execute 同 Wave 强制并行——或后置 Wave → throw 阻断，报错指向 `sillyspec plan-adopt-waves --change <名>` 一键重排；plan-adopt-waves.js：tasks/*.md depends_on → topoSortWaves → 重写 `## Wave N` 段块 + best-effort 同步任务总表 W 列 + 写后复跑 validateBlueprintConsistency；--dry-run 只预览；幂等），仅分组数差异（手工过度串行化）合法保留 warning。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 非 docs 子路径与「不修改文件」子段，CRLF 容错（2026-08-15 D-2 起 plan 覆盖对账传 `keepSillyspecDocs: true`：`.sillyspec/docs/` 模块文档 = 交付物，须被 task `allowed_paths` 认领，与 worktree apply `resolveApplyAllowSet` 口径一致）；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
+ - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+@@ -318,7 +318,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - **工具驾驭复盘 4 坑确定性修复**（2026-08-06，change `2026-08-06-sillyspec-self-tooling-fixes`）：
+   - **stage review gate marker 缺失自生**（坑1，`run/gates.js:254`）：tier=independent 且 `getLatestStageReviewRunId` 返回空（execute 批量完成跳过 prompt 渲染、prompt 未落 marker 等场景）时，gate 自身调 `generateStageReviewRunId()` + `stageReviewMarkerPath()` 写盘 + `mkdirSync`，让 gate 读到确定 ID——错误路径从 `execute-null`（不可执行）变为 `execute-review-<review-前缀 id>`（可执行）。补充 gap 6（prompt 渲染时落 marker）的兜底：prompt 路径未走到时 gate 路径自生，两条落 marker 路径互不依赖。marker 文件名 / 位置不变（`current-stage-review-run-id-<stage>(-<change>)`）。
+   - **worktree apply 交付物过滤精细化**（坑3，`worktree-apply.js#filterDeliverableFiles`）：apply 时排除 `.sillyspec/changes/` + `.sillyspec/.runtime/` + `.sillyspec/quicklog/` + `meta.json`，**保留 `.sillyspec/docs/`（dogfood 模块规范文档视为交付物，随变更 apply 回主仓）**。原一刀切排除整个 `.sillyspec/` 导致模块文档改动滞留 worktree 分支（exec-g defer 项落地）。`verify-postcheck.js` 改 import `filterDeliverableFiles` 去双写；`index.js` apply / assess 自动 apply 的用户面消息同步为「changes/.runtime/quicklog 不自动 apply，模块文档 docs/ 会自动 apply」。
+-  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:597`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
++  - **archive CLI 下沉 git add**（坑4，`run/complete-handlers.js:768`）：`unregisterChange` 后 CLI 确定性 `safeGit add -- .sillyspec/changes/archive/ + .sillyspec/docs/`，不靠 archive step5 prompt 驱动。step5 prompt 的 git add 已精确化（`git add .sillyspec/changes/archive/` + `git add .sillyspec/docs/<project>/modules/`，勿用 changes/ 或 docs/ 整目录——会裹挟其他活跃变更；坑 index-staged-cross-change-contamination），保留作幂等兜底。safeGit 失败不阻断归档（目录已移动 + change 已注销），由 step5 prompt + agent `git status` 核对兜底。
+   - **归档清理 runId marker**（2026-08-10，`run/complete-handlers.js#archiveWorktreeCleanup`）：归档时除 worktree cleanup 外，顺带清理该 change 的 execute / stage-review runId marker（`current-execute-run-id-<change>` + `current-stage-review-run-id-<stage>-<change>`，normal + 自愈分支共用）。marker 只服务 execute→verify→archive 期间，归档后无读者；只写不删会让 `.runtime/` 随变更数无限累积（单仓库几十个）。runtimeRoot 解析同写入侧 `resolveRuntimeRoot(platformOpts, specBase)`（锚主仓，平台模式不误清理）。失败仅 warn 不阻断归档。
+   - 坑5（多代理中间态 import 链污染，D-05）架构级延后入 [ROADMAP.md](../../ROADMAP.md)。
+ - **跨仓 task 支持**（2026-08-12，change `2026-08-11-cross-repo-task-support`）：单个 change 的 task 可分散到主仓 + 多个跨仓仓实现（dogfood 自指、monorepo 多包仓等场景）。**单仓 change 零回归**（所有 task 无 `repo:` → MultiRepoContext 退化为 `{main:{...}}` 单值 map，7 个调用点全走原路径）。跨仓机制要点：
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 6a65fecb..a7d9a9fe 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2419` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2512` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index 16642173..8333b32a 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -186,8 +186,11 @@ function normalizeModules(moduleIndex) {
+   return moduleIndex.modules ? moduleIndex.modules : moduleIndex
+ }
+ 
+-/** _module-map.yaml 子集解析（仅模块 id → paths/core_files；不复用 modules.js 以保零依赖纯函数） */
+-function parseModulePathsSubset(content) {
++/** _module-map.yaml 子集解析（仅模块 id → paths/core_files/doc；不复用 modules.js 以保零依赖纯函数）。
++ *  2026-09-23 资产三小件③：增 doc 标量捕获（`    doc: modules/<id>.md`——模块卡路径，归档文档
++ *  认领 advisory 消费）+ 导出（complete-handlers 复用同解析源，跨项目扫描需项目归属故不走
++ *  discoverModuleIndex 的合并口径）。既有消费方只读 paths/core_files，增字段零行为差。 */
++export function parseModulePathsSubset(content) {
+   const modules = {}
+   let cur = null
+   let key = null
+@@ -202,6 +205,8 @@ function parseModulePathsSubset(content) {
+     }
+     const block = line.match(/^    (paths|core_files):$/)
+     if (block) { key = block[1]; modules[cur][key] = modules[cur][key] || []; continue }
++    const doc = line.match(/^    doc: (.+)$/)
++    if (doc) { modules[cur].doc = doc[1].trim().replace(/^['"]|['"]$/g, ''); key = null; continue }
+     const item = line.match(/^      - (.+)$/)
+     if (item && key) modules[cur][key].push(item[1].trim().replace(/^['"]|['"]$/g, ''))
+   }
+@@ -224,10 +229,11 @@ export function discoverModuleIndex(knowledgeRoot) {
+       if (!existsSync(mapPath)) continue
+       const sub = parseModulePathsSubset(readFileSync(mapPath, 'utf8'))
+       for (const [id, m] of Object.entries(sub)) {
+-        if (!merged[id]) merged[id] = { paths: m.paths || [], core_files: m.core_files || [] }
++        if (!merged[id]) merged[id] = { paths: m.paths || [], core_files: m.core_files || [], ...(m.doc ? { doc: m.doc } : {}) }
+         else {
+           merged[id].paths = [...new Set([...(merged[id].paths || []), ...(m.paths || [])])]
+           merged[id].core_files = [...new Set([...(merged[id].core_files || []), ...(m.core_files || [])])]
++          if (!merged[id].doc && m.doc) merged[id].doc = m.doc
+         }
+       }
+     }
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index cb2e582f..3b30fa22 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -52,6 +52,7 @@ import { resolveSessionIdentity } from '../progress.js'
+ // checkDbScriptDeclarationGate（task-04 / FR-05）同排静态引入：门函数自身纯文件集 ×
+ // 文本声明对账（verify-probes 文法经 worktree-apply 顶层动态绑定），同样无环约束。
+ import { chunkPaths, checkDbScriptDeclarationGate } from '../worktree-apply.js'
++import { parseModulePathsSubset } from '../decision-distill.js'
+ 
+ /**
+  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
+@@ -570,6 +571,85 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+   return { docsAdded: null, fallbackDocs: true }
+ }
+ 
++/**
++ * flow 变更交付面推导（资产三小件③）——flow.js changedFilesSinceBaseline 同口径本仓实现
++ * （flow.js 为并行会话在改，不 cross-import；两处语义等价：diff 基线→HEAD + porcelain dirty，
++ * 排除 .sillyspec/ 内部产物）。docsIncrement 单列 .sillyspec/docs/**（文档认领增量信号）。
++ * @returns {{ deliverableFiles: string[], docsIncrement: string[] }|null}
++ *   非 flow 变更（无 flow-state.yaml / 无 baseline_commit / 读取异常）→ null（调用方跳过 advisory）
++ */
++export function deriveFlowDeliverableFace({ cwd, srcDir }) {
++  let baseline = null
++  try {
++    const raw = readFileSync(join(srcDir, 'flow-state.yaml'), 'utf8')
++    const m = raw.match(/^baseline_commit:\s*'?([0-9a-f]{7,40})'?\s*$/m)
++    baseline = m ? m[1] : null
++  } catch { return null }
++  if (!baseline) return null
++  const all = new Set()
++  const addAll = (out) => {
++    if (!out) return
++    for (const l of String(out).split('\n')) {
++      const p = l.trim().replace(/\\/g, '/')
++      if (p) all.add(p)
++    }
++  }
++  addAll(gitQuiet(cwd, ['diff', '--name-only', `${baseline}..HEAD`]))
++  const s = gitQuiet(cwd, ['status', '--porcelain'])
++  if (s) {
++    for (const line of String(s).split('\n')) {
++      if (!line || line.length < 4) continue
++      const p = line.slice(3).trim().replace(/^"|"$/g, '')
++      const arrow = p.indexOf(' -> ')
++      all.add((arrow !== -1 ? p.slice(arrow + 4) : p).replace(/\\/g, '/'))
++    }
++  }
++  return {
++    deliverableFiles: [...all].filter((p) => !p.startsWith('.sillyspec/')),
++    docsIncrement: [...all].filter((p) => p.startsWith('.sillyspec/docs/')),
++  }
++}
++
++/**
++ * 模块文档认领 advisory（资产三小件③，advisory 不阻断归档链）。
++ *
++ * 背景：flow done/burst 收口不产生模块文档增量（旧流程的文档同步挂在 execute/verify 步骤里）
++ * ——R7-L 重放实证零模块文档的资产缺口。判定：deliverableFiles 交付面 × module-map
++ * （discoverModuleIndex 同源解析 parseModulePathsSubset，按项目扫描保卡片路径归属）交集
++ * ≥1 且本次变更无 .sillyspec/docs/** 增量 → 一行警告列出未认领模块卡路径。
++ * --no-docs 豁免仅存在于 quick 出口（run/command.js L2 docClaim），archive 链无该 flag——
++ * 出现豁免语义时在 runArchiveChain 接线处尊重。
++ * @returns {string|null} 命中 → 警告文案；负例（纯 spec 变更/有文档增量/无交集/无 map）→ null
++ */
++export function buildArchiveModuleDocAdvisory({ specBase, deliverableFiles, docsIncrement }) {
++  if (!Array.isArray(deliverableFiles) || deliverableFiles.length === 0) return null
++  if (Array.isArray(docsIncrement) && docsIncrement.length > 0) return null
++  const posix = deliverableFiles.map((f) => String(f).replace(/\\/g, '/')).filter((f) => f && !f.startsWith('.sillyspec/'))
++  if (posix.length === 0) return null
++  const docsDir = join(specBase, 'docs')
++  if (!existsSync(docsDir)) return null
++  const cards = []
++  for (const d of readdirSync(docsDir, { withFileTypes: true })) {
++    if (!d.isDirectory()) continue
++    const mapPath = join(docsDir, d.name, 'modules', '_module-map.yaml')
++    if (!existsSync(mapPath)) continue
++    let mods
++    try { mods = parseModulePathsSubset(readFileSync(mapPath, 'utf8')) } catch { continue }
++    for (const [id, m] of Object.entries(mods || {})) {
++      const prefixes = [...(m && m.paths ? m.paths : []), ...(m && m.core_files ? m.core_files : [])]
++        .map((p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '')).filter(Boolean)
++      const hit = prefixes.some((p) => posix.some((f) => f === p || f.startsWith(p + '/')))
++      if (hit && m && typeof m.doc === 'string' && m.doc.trim() !== '') {
++        // doc 值相对 docs/<项目>/（如 modules/core-engine.md），不再叠 modules/ 段
++        const card = `.sillyspec/docs/${d.name}/${m.doc.replace(/^\.\//, '').replace(/\\/g, '/')}`
++        if (!cards.some((c) => c.card === card)) cards.push({ id, card })
++      }
++    }
++  }
++  if (cards.length === 0) return null
++  return `⚠️ 模块文档认领 advisory：交付面命中 ${cards.map((c) => c.id).join('、')} 模块但本次变更无 .sillyspec/docs/** 增量——未认领模块卡：${cards.map((c) => c.card).join('、')}（advisory 不阻断归档；确认无需文档增量可忽略，需落盘则先补模块卡再归档）`
++}
++
+ /**
+  * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
+  *
+@@ -581,8 +661,21 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+  *
+  * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
+  */
+-export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false } = {}) {
++export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null } = {}) {
+   const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
++  // ── 模块文档认领 advisory（资产三小件③，2026-09-23）──
++  // flow done/burst 收口不产生模块文档增量（旧流程挂在 execute/verify 步骤）——交付面 ×
++  // module-map 交集 ≥1 且无 .sillyspec/docs/** 增量 → 一行警告列未认领模块卡。advisory 不
++  // 阻断；fail-open（异常零输出）。交付面来源：调用方显式清单优先（burst 等未来调用方），
++  // 缺省从 srcDir/flow-state.yaml 的 baseline_commit 自算（deriveFlowDeliverableFace）；非 flow
++  // 变更（无 flow-state.yaml）跳过——legacy archive 已有 module-impact「更新结果」死信硬门。
++  try {
++    const face = (deliverableFiles !== null && docsIncrement !== null)
++      ? { deliverableFiles, docsIncrement }
++      : deriveFlowDeliverableFace({ cwd, srcDir })
++    const docMsg = face ? buildArchiveModuleDocAdvisory({ specBase, ...face }) : null
++    if (docMsg) console.warn(docMsg)
++  } catch { /* advisory fail-open：任何异常不碰归档链 */ }
+   // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
+   // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
+   // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①
+diff --git a/test/archive-chain.test.mjs b/test/archive-chain.test.mjs
+index 0de365ae..2e1601c9 100644
+--- a/test/archive-chain.test.mjs
++++ b/test/archive-chain.test.mjs
+@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
+ import { join, dirname } from 'node:path'
+ import { pathToFileURL } from 'node:url'
+ 
+-const { runArchiveChain } = await import('../src/run/complete-handlers.js')
++const { runArchiveChain, buildArchiveModuleDocAdvisory, deriveFlowDeliverableFace } = await import('../src/run/complete-handlers.js')
+ 
+ function makeFixture(withPlan) {
+   const root = mkdtempSync(join(tmpdir(), 'ac-'))
+@@ -60,3 +60,145 @@ test('skipPlanCheck=false: 缺 plan.md → 移动前硬校验阻断 exit 1（子
+   assert.equal(existsSync(destDir), false, '目标未产生')
+   rmSync(root, { recursive: true, force: true })
+ })
++
++// ─────────────────────────────────────────────────────────────────────────────
++// 模块文档认领 advisory（资产三小件③）：交付面 × module-map 交集 ≥1 且无 docs 增量 → 警告
++// ─────────────────────────────────────────────────────────────────────────────
++
++/** module-map fixture：docs/<proj>/modules/_module-map.yaml（含 doc 卡路径 + paths 前缀）。 */
++function writeModuleMap(specBase, project = 'demo') {
++  const dir = join(specBase, 'docs', project, 'modules')
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, '_module-map.yaml'), [
++    'schema_version: 1',
++    'modules:',
++    '  core-engine:',
++    '    status: active',
++    '    doc: modules/core-engine.md',
++    '    paths:',
++    '      - "src/eng"',
++    '  side-mod:',
++    '    status: active',
++    '    doc: modules/side-mod.md',
++    '    paths:',
++    '      - "lib/side"',
++    '',
++  ].join('\n'), 'utf8')
++}
++
++/** git fixture（真仓）：module-map 先入库（.sillyspec 跟踪态——真实仓形态，防整目录 untracked
++ *  折叠成 `?? .sillyspec/` 行）→ 初始提交 → 返回 { root, specBase, baseline }。 */
++function makeGitFixture() {
++  const root = mkdtempSync(join(tmpdir(), 'ac-doc-'))
++  const specBase = join(root, '.sillyspec')
++  writeModuleMap(specBase)
++  for (const args of [
++    ['init', '-q'],
++    ['config', 'user.email', 't@t.local'],
++    ['config', 'user.name', 't'],
++  ]) {
++    execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  }
++  execFileSync('git', ['add', '.sillyspec'], { cwd: root, encoding: 'utf8' })
++  execFileSync('git', ['commit', '-qm', 'base'], { cwd: root, encoding: 'utf8' })
++  const baseline = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()
++  return { root, specBase, baseline }
++}
++
++test('buildArchiveModuleDocAdvisory: 命中模块卡且无文档增量 → 列出卡片路径（含项目归属）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'ac-doc-pure-'))
++  const specBase = join(root, '.sillyspec')
++  writeModuleMap(specBase)
++  const msg = buildArchiveModuleDocAdvisory({ specBase, deliverableFiles: ['src/eng/foo.js', 'README.md'], docsIncrement: [] })
++  assert.ok(msg && msg.includes('core-engine') && msg.includes('.sillyspec/docs/demo/modules/core-engine.md'),
++    `警告列出未认领模块卡路径（实际 ${JSON.stringify(msg)}）`)
++  assert.ok(!msg.includes('side-mod'), '未命中模块不出场')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('buildArchiveModuleDocAdvisory: 三负例零输出（有文档增量/无交集/纯 spec 变更）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'ac-doc-neg-'))
++  const specBase = join(root, '.sillyspec')
++  writeModuleMap(specBase)
++  assert.equal(buildArchiveModuleDocAdvisory({ specBase, deliverableFiles: ['src/eng/a.js'], docsIncrement: ['.sillyspec/docs/demo/modules/core-engine.md'] }), null,
++    '有 .sillyspec/docs/** 增量 → null')
++  assert.equal(buildArchiveModuleDocAdvisory({ specBase, deliverableFiles: ['other/x.js'], docsIncrement: [] }), null,
++    '交付面与 module-map 无交集 → null')
++  assert.equal(buildArchiveModuleDocAdvisory({ specBase, deliverableFiles: [], docsIncrement: [] }), null,
++    '纯 spec 变更（交付面空）→ null')
++  assert.equal(buildArchiveModuleDocAdvisory({ specBase: join(root, 'no-spec'), deliverableFiles: ['src/eng/a.js'], docsIncrement: [] }), null,
++    '无 docs 目录 → null')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('deriveFlowDeliverableFace: flow-state.yaml 基线自算交付面与 docs 增量；非 flow 变更 → null', () => {
++  const { root, specBase, baseline } = makeGitFixture()
++  // 基线后交付：commit 一个 src 文件 + 工作区脏一个 docs 文件
++  mkdirSync(join(root, 'src', 'eng'), { recursive: true })
++  writeFileSync(join(root, 'src', 'eng', 'a.js'), 'export const x = 1\n')
++  execFileSync('git', ['add', 'src/eng/a.js'], { cwd: root, encoding: 'utf8' })
++  execFileSync('git', ['commit', '-qm', 'deliver'], { cwd: root, encoding: 'utf8' })
++  mkdirSync(join(specBase, 'docs', 'demo', 'modules'), { recursive: true })
++  writeFileSync(join(specBase, 'docs', 'demo', 'modules', 'core-engine.md'), '# core-engine\n')
++  const changeDir = join(specBase, 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${baseline}\n`)
++  const face = deriveFlowDeliverableFace({ cwd: root, srcDir: changeDir })
++  assert.deepEqual(face, {
++    deliverableFiles: ['src/eng/a.js'],
++    docsIncrement: ['.sillyspec/docs/demo/modules/core-engine.md'],
++  }, `diff 基线→HEAD + porcelain 两段并入并按前缀分家（实际 ${JSON.stringify(face)}）`)
++  // 非 flow 变更：无 flow-state.yaml → null
++  const legacyDir = join(specBase, 'changes', 'c2')
++  mkdirSync(legacyDir, { recursive: true })
++  assert.equal(deriveFlowDeliverableFace({ cwd: root, srcDir: legacyDir }), null, '无 flow-state.yaml → null')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('runArchiveChain 集成: flow 变更命中模块卡且无 docs 增量 → 归档前一行警告；有 docs 增量零输出', async () => {
++  const capture = () => {
++    const warns = []
++    const orig = console.warn
++    console.warn = (...a) => warns.push(a.join(' '))
++    return { warns, restore: () => { console.warn = orig } }
++  }
++  // 正例：基线后 commit 交付（命中 src/eng 模块）、零 docs 增量
++  {
++    const { root, specBase, baseline } = makeGitFixture()
++    mkdirSync(join(root, 'src', 'eng'), { recursive: true })
++    writeFileSync(join(root, 'src', 'eng', 'a.js'), 'export const x = 1\n')
++    execFileSync('git', ['add', 'src/eng/a.js'], { cwd: root, encoding: 'utf8' })
++    execFileSync('git', ['commit', '-qm', 'deliver'], { cwd: root, encoding: 'utf8' })
++    const srcDir = join(specBase, 'changes', 'c1')
++    mkdirSync(srcDir, { recursive: true })
++    writeFileSync(join(srcDir, 'plan.md'), '# plan\n')
++    writeFileSync(join(srcDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${baseline}\n`)
++    const c = capture()
++    try {
++      await runArchiveChain({ pm: { unregisterChange() {} }, cwd: root, specBase, changeName: 'c1', srcDir, destDir: join(specBase, 'changes', 'archive', '2026-09-23-c1'), skipPlanCheck: false })
++    } finally { c.restore() }
++    assert.ok(c.warns.some((w) => w.includes('模块文档认领 advisory') && w.includes('.sillyspec/docs/demo/modules/core-engine.md')),
++      `归档链内一行警告（实际 ${JSON.stringify(c.warns)}）`)
++    assert.equal(existsSync(srcDir), false, 'advisory 不阻断：归档照常完成')
++    rmSync(root, { recursive: true, force: true })
++  }
++  // 负例：有 docs 增量（工作区脏模块卡）→ 零 advisory 输出
++  {
++    const { root, specBase, baseline } = makeGitFixture()
++    mkdirSync(join(root, 'src', 'eng'), { recursive: true })
++    writeFileSync(join(root, 'src', 'eng', 'a.js'), 'export const x = 1\n')
++    execFileSync('git', ['add', 'src/eng/a.js'], { cwd: root, encoding: 'utf8' })
++    execFileSync('git', ['commit', '-qm', 'deliver'], { cwd: root, encoding: 'utf8' })
++    writeFileSync(join(specBase, 'docs', 'demo', 'modules', 'core-engine.md'), '# core-engine 更新\n')
++    const srcDir = join(specBase, 'changes', 'c1')
++    mkdirSync(srcDir, { recursive: true })
++    writeFileSync(join(srcDir, 'plan.md'), '# plan\n')
++    writeFileSync(join(srcDir, 'flow-state.yaml'), `tier: thin\nbaseline_commit: ${baseline}\n`)
++    const c = capture()
++    try {
++      await runArchiveChain({ pm: { unregisterChange() {} }, cwd: root, specBase, changeName: 'c1', srcDir, destDir: join(specBase, 'changes', 'archive', '2026-09-23-c1'), skipPlanCheck: false })
++    } finally { c.restore() }
++    assert.ok(!c.warns.some((w) => w.includes('模块文档认领 advisory')), `有文档增量零输出（实际 ${JSON.stringify(c.warns)}）`)
++    rmSync(root, { recursive: true, force: true })
++  }
++})

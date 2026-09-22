@@ -52,6 +52,7 @@ import { resolveSessionIdentity } from '../progress.js'
 // checkDbScriptDeclarationGate（task-04 / FR-05）同排静态引入：门函数自身纯文件集 ×
 // 文本声明对账（verify-probes 文法经 worktree-apply 顶层动态绑定），同样无环约束。
 import { chunkPaths, checkDbScriptDeclarationGate } from '../worktree-apply.js'
+import { parseModulePathsSubset } from '../decision-distill.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -571,6 +572,85 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
 }
 
 /**
+ * flow 变更交付面推导（资产三小件③）——flow.js changedFilesSinceBaseline 同口径本仓实现
+ * （flow.js 为并行会话在改，不 cross-import；两处语义等价：diff 基线→HEAD + porcelain dirty，
+ * 排除 .sillyspec/ 内部产物）。docsIncrement 单列 .sillyspec/docs/**（文档认领增量信号）。
+ * @returns {{ deliverableFiles: string[], docsIncrement: string[] }|null}
+ *   非 flow 变更（无 flow-state.yaml / 无 baseline_commit / 读取异常）→ null（调用方跳过 advisory）
+ */
+export function deriveFlowDeliverableFace({ cwd, srcDir }) {
+  let baseline = null
+  try {
+    const raw = readFileSync(join(srcDir, 'flow-state.yaml'), 'utf8')
+    const m = raw.match(/^baseline_commit:\s*'?([0-9a-f]{7,40})'?\s*$/m)
+    baseline = m ? m[1] : null
+  } catch { return null }
+  if (!baseline) return null
+  const all = new Set()
+  const addAll = (out) => {
+    if (!out) return
+    for (const l of String(out).split('\n')) {
+      const p = l.trim().replace(/\\/g, '/')
+      if (p) all.add(p)
+    }
+  }
+  addAll(gitQuiet(cwd, ['diff', '--name-only', `${baseline}..HEAD`]))
+  const s = gitQuiet(cwd, ['status', '--porcelain'])
+  if (s) {
+    for (const line of String(s).split('\n')) {
+      if (!line || line.length < 4) continue
+      const p = line.slice(3).trim().replace(/^"|"$/g, '')
+      const arrow = p.indexOf(' -> ')
+      all.add((arrow !== -1 ? p.slice(arrow + 4) : p).replace(/\\/g, '/'))
+    }
+  }
+  return {
+    deliverableFiles: [...all].filter((p) => !p.startsWith('.sillyspec/')),
+    docsIncrement: [...all].filter((p) => p.startsWith('.sillyspec/docs/')),
+  }
+}
+
+/**
+ * 模块文档认领 advisory（资产三小件③，advisory 不阻断归档链）。
+ *
+ * 背景：flow done/burst 收口不产生模块文档增量（旧流程的文档同步挂在 execute/verify 步骤里）
+ * ——R7-L 重放实证零模块文档的资产缺口。判定：deliverableFiles 交付面 × module-map
+ * （discoverModuleIndex 同源解析 parseModulePathsSubset，按项目扫描保卡片路径归属）交集
+ * ≥1 且本次变更无 .sillyspec/docs/** 增量 → 一行警告列出未认领模块卡路径。
+ * --no-docs 豁免仅存在于 quick 出口（run/command.js L2 docClaim），archive 链无该 flag——
+ * 出现豁免语义时在 runArchiveChain 接线处尊重。
+ * @returns {string|null} 命中 → 警告文案；负例（纯 spec 变更/有文档增量/无交集/无 map）→ null
+ */
+export function buildArchiveModuleDocAdvisory({ specBase, deliverableFiles, docsIncrement }) {
+  if (!Array.isArray(deliverableFiles) || deliverableFiles.length === 0) return null
+  if (Array.isArray(docsIncrement) && docsIncrement.length > 0) return null
+  const posix = deliverableFiles.map((f) => String(f).replace(/\\/g, '/')).filter((f) => f && !f.startsWith('.sillyspec/'))
+  if (posix.length === 0) return null
+  const docsDir = join(specBase, 'docs')
+  if (!existsSync(docsDir)) return null
+  const cards = []
+  for (const d of readdirSync(docsDir, { withFileTypes: true })) {
+    if (!d.isDirectory()) continue
+    const mapPath = join(docsDir, d.name, 'modules', '_module-map.yaml')
+    if (!existsSync(mapPath)) continue
+    let mods
+    try { mods = parseModulePathsSubset(readFileSync(mapPath, 'utf8')) } catch { continue }
+    for (const [id, m] of Object.entries(mods || {})) {
+      const prefixes = [...(m && m.paths ? m.paths : []), ...(m && m.core_files ? m.core_files : [])]
+        .map((p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '')).filter(Boolean)
+      const hit = prefixes.some((p) => posix.some((f) => f === p || f.startsWith(p + '/')))
+      if (hit && m && typeof m.doc === 'string' && m.doc.trim() !== '') {
+        // doc 值相对 docs/<项目>/（如 modules/core-engine.md），不再叠 modules/ 段
+        const card = `.sillyspec/docs/${d.name}/${m.doc.replace(/^\.\//, '').replace(/\\/g, '/')}`
+        if (!cards.some((c) => c.card === card)) cards.push({ id, card })
+      }
+    }
+  }
+  if (cards.length === 0) return null
+  return `⚠️ 模块文档认领 advisory：交付面命中 ${cards.map((c) => c.id).join('、')} 模块但本次变更无 .sillyspec/docs/** 增量——未认领模块卡：${cards.map((c) => c.card).join('、')}（advisory 不阻断归档；确认无需文档增量可忽略，需落盘则先补模块卡再归档）`
+}
+
+/**
  * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
  *
  * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
@@ -581,8 +661,21 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
  *
  * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
  */
-export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false } = {}) {
+export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, destDir, skipApply = false, skipPlanCheck = false, deliverableFiles = null, docsIncrement = null } = {}) {
   const archiveDir = dirname(destDir) // 抽取补：原闭包变量（changes/archive），从 destDir 推导等价
+  // ── 模块文档认领 advisory（资产三小件③，2026-09-23）──
+  // flow done/burst 收口不产生模块文档增量（旧流程挂在 execute/verify 步骤）——交付面 ×
+  // module-map 交集 ≥1 且无 .sillyspec/docs/** 增量 → 一行警告列未认领模块卡。advisory 不
+  // 阻断；fail-open（异常零输出）。交付面来源：调用方显式清单优先（burst 等未来调用方），
+  // 缺省从 srcDir/flow-state.yaml 的 baseline_commit 自算（deriveFlowDeliverableFace）；非 flow
+  // 变更（无 flow-state.yaml）跳过——legacy archive 已有 module-impact「更新结果」死信硬门。
+  try {
+    const face = (deliverableFiles !== null && docsIncrement !== null)
+      ? { deliverableFiles, docsIncrement }
+      : deriveFlowDeliverableFace({ cwd, srcDir })
+    const docMsg = face ? buildArchiveModuleDocAdvisory({ specBase, ...face }) : null
+    if (docMsg) console.warn(docMsg)
+  } catch { /* advisory fail-open：任何异常不碰归档链 */ }
   // ── 归档收口（2026-09-14-change-ownership-guards task-03 / FR-02 / D-002@v1）──
   // worktree 有未 apply 交付面 → 归档阻断：归档会注销 change + 清理 worktree（目录/分支/meta），
   // 交付物失去进主仓通道，形成「归档完成但交付物未进主仓」悬空态（troubleshooting §65 事件①

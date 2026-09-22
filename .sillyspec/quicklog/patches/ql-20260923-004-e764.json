@@ -1,0 +1,110 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-908384b5",
+  "totals": {
+    "files": 7,
+    "additions": 251,
+    "deletions": 10
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/runtime.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": ".sillyspec/knowledge/decisions/unmapped.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/file-lifecycle.md",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/decision-distill.js",
+      "declared": true,
+      "additions": 9,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "declared": true,
+      "additions": 94,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/archive-chain.test.mjs",
+      "declared": true,
+      "additions": 143,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 6,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "docs-consistency",
+        "files": [
+          "src/decision-distill.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/complete-handlers.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/archive-chain.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-004-e764",
+  "sessionId": "quick-908384b5",
+  "savedAt": "2026-09-22T16:58:40.526Z",
+  "patchSha256": "00f62c92dfb541a11d5097bd1beeadeab5e6343e74f1cde0135c6a5f884db2ea",
+  "patchStatus": "ok"
+}

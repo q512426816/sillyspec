@@ -94,3 +94,23 @@
 根因：R7-L 重放实测测试量仅为旧流程 40%——薄道 flow done ledger 子步与 burst 收口走 runQuickTestLintGate，无 quick 出口 L1 门禁 testDelta 检查，测试厚度零约束
 方案：quick-audit.js 增导出纯函数 buildTestSurfaceAdvisory：交付文件（剔 .sillyspec）中 src 类 ≥3 且测试文件 0 改动（P2 账本测试面同态无增量）→ 一行警告文案，负例 null；runQuickTestLintGate 两条早退后接线 console.warn——advisory 不阻断，action/failed 零改动；代码判定正则提为模块级常量复用。同文件并发处置：他者未提交 hunk（restrictFiles 接线/快照 lint 主仓对照）按分离纪律排除在提交 f3737663 外、原样留工作树
 结果：quick-test-gate 42/42（新增 11a-11n 三负例零输出+正例一行警告+接线三态）+quick-gate-snapshot 4/4+semantic-guard 30/30+flow-protocol 7/7 零回归+主仓全量 EXIT=0
+
+## ql-20260923-004-e764 | 2026-09-23 00:50:02 | 模块文档认领 advisory（归档链资产缺口显性化）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（deriveFlowDeliverableFace+buildArchiveModuleDocAdvisory+runArchiveChain 接线（受保护文件 --force-baseline 放行））
+- src/decision-distill.js（parseModulePathsSubset 导出+doc 捕获+discoverModuleIndex 合并保 doc）
+- test/archive-chain.test.mjs（新增 4 测试（单元+集成））
+- docs/sillyspec/platform-interface-map.md（行号锚 2419→2512 重锚）
+- .sillyspec/docs/sillyspec/modules/runtime.md（行号锚 579→768 重锚）
+- docs/sillyspec/file-lifecycle.md（行号锚 597→768 重锚）
+- .sillyspec/knowledge/decisions/unmapped.md（行号锚 1340→1453 重锚）
+需求：模块文档认领 advisory（归档链资产缺口显性化）
+根因：flow done/burst 收口不产生模块文档增量——旧流程的文档同步挂在 execute/verify 步骤里，薄道绕过；R7-L 重放实证零模块文档
+方案：complete-handlers.js runArchiveChain 顶部接线 advisory（fail-open 不阻断）：deriveFlowDeliverableFace 从 srcDir/flow-state.yaml 的 baseline_commit 自算交付面与 docs 增量（flow.js changedFilesSinceBaseline 同口径本仓实现——flow.js 为并行会话在改不 cross-import；非 flow 变更跳过，legacy archive 有 module-impact 死信硬门）；buildArchiveModuleDocAdvisory 按 docs/<项目>/modules/_module-map.yaml 扫描（decision-distill parseModulePathsSubset 同源解析，导出复用+增 doc 标量捕获），交付面前缀交集 ≥1 且无 .sillyspec/docs/** 增量 → 一行警告列未认领模块卡路径；调用方显式 deliverableFiles/docsIncrement 参数优先（burst 等未来调用方）。附带：插行致 3 处活文档行号锚漂移已重锚（runtime.md/file-lifecycle.md/unmapped.md）
+结果：archive-chain 7/7（新增 4：命中列卡路径/三负例零输出/基线自算两段并入/归档链集成正例出警告不阻断+负例零输出）；decision-distill 三件+fr-index 两件+archive-distill-noai+flow-protocol 7/7 零回归；无新文件故无 module-map 登记
+审计：📎 文档引用失效：1/96 处 file:line 失效（sillyspec docs check 可复现）
+审计：   ❌ [docs/sillyspec/file-lifecycle.md:291] gates.js:1259 → src/run/gates.js: 关键词缺失：期望任一「validatePlanForExecute / parseTaskRegistry」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后加 ? 跳过
+审计：🔧 行号漂移已自动重锚 1 处（同口径复跑：1 → 0；剩余 0 处需人工 sillyspec docs check）
+审计：[gate] L1（跨 2 模块 · 6 文件：2 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
