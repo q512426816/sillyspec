@@ -33,3 +33,12 @@
 审计：   ❌ [docs/sillyspec/platform-interface-map.md:135] command.js:875 → src/run/command.js: 关键词缺失：期望任一「SILLYSPEC_AGENT_LOG / recordAgentLogInvocation」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后
 审计：🔧 行号漂移已自动重锚 3 处（同口径复跑：3 → 0；剩余 0 处需人工 sillyspec docs check）
 审计：[gate] L1（跨 3 模块 · 5 文件：3 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
+
+## ql-20260922-005-0f85 | 2026-09-22 17:47:25 | task-done 四合一 review.head 回填（提交后重锚根治）
+状态：已完成
+关联变更：（无）
+文件：src/task-done.js（+25/-1）, test/task-done.test.mjs（+5/-0）
+需求：task-done 四合一 review.head 回填（提交后重锚根治）
+根因：task done 的 review 写在 wt-commit 前，head 停在基线 → Task Review Gate base..head 切片空误判零改动伪造（R7 会话 5 份手工重应急，坑 task-done-head-premature）
+方案：子步 4 提交成功（HEAD 前移且 review 在场）即回填 review.head=提交全哈希+headBackfilledAt 审计戳+结果行留痕；fail-soft；skipped 提交不触发（幂等复跑 review 逐字节不动）
+结果：task-done 4/4（happy 增 head===worktree HEAD 断言+审计戳+留痕行）；task-review 族 8 组零回归；lint 753 文件绿

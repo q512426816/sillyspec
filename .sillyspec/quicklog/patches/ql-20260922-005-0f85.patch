@@ -1,0 +1,92 @@
+diff --git a/.sillyspec/quicklog/QUICKLOG-qinyi.md b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+index eaf79a20..92b8e9f0 100644
+--- a/.sillyspec/quicklog/QUICKLOG-qinyi.md
++++ b/.sillyspec/quicklog/QUICKLOG-qinyi.md
+@@ -33,3 +33,12 @@
+ 审计：   ❌ [docs/sillyspec/platform-interface-map.md:135] command.js:875 → src/run/command.js: 关键词缺失：期望任一「SILLYSPEC_AGENT_LOG / recordAgentLogInvocation」在 [start-2, end+5] 窗口内（跨文件引用/论述语境的纯位置锚：行号后
+ 审计：🔧 行号漂移已自动重锚 3 处（同口径复跑：3 → 0；剩余 0 处需人工 sillyspec docs check）
+ 审计：[gate] L1（跨 3 模块 · 5 文件：3 代码/1 测试）advisory；每文件注记已全覆盖；测试增量已含
++
++## ql-20260922-005-0f85 | 2026-09-22 17:47:25 | task-done 四合一 review.head 回填（提交后重锚根治）
++状态：已完成
++关联变更：（无）
++文件：src/task-done.js（+25/-1）, test/task-done.test.mjs（+5/-0）
++需求：task-done 四合一 review.head 回填（提交后重锚根治）
++根因：task done 的 review 写在 wt-commit 前，head 停在基线 → Task Review Gate base..head 切片空误判零改动伪造（R7 会话 5 份手工重应急，坑 task-done-head-premature）
++方案：子步 4 提交成功（HEAD 前移且 review 在场）即回填 review.head=提交全哈希+headBackfilledAt 审计戳+结果行留痕；fail-soft；skipped 提交不触发（幂等复跑 review 逐字节不动）
++结果：task-done 4/4（happy 增 head===worktree HEAD 断言+审计戳+留痕行）；task-review 族 8 组零回归；lint 753 文件绿
+diff --git a/src/task-done.js b/src/task-done.js
+index 57f2b4e7..fc94df0c 100644
+--- a/src/task-done.js
++++ b/src/task-done.js
+@@ -39,6 +39,10 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
+   const { resolveRuntimeRoot } = await import('./run/shared.js')
+   const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+   const { writeTaskReview, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('./task-review.js')
++  // review.json 路径锚（子步 1 落定；子步 4 提交后回填 head 用——坑 task-done-head-premature：
++  // review 写在 wt-commit 之前，head 快照停在基线 → Task Review Gate 的 base..head 路径切片
++  // 为空被误判「零改动伪造」（R7 会话 5 份手工重对的机制化根治，2026-09-22）。
++  let reviewPathForBackfill = null
+ 
+   // ── 子步 1：review.json（幂等标记 = 同 executeRunId 同 task 同双 verdict 已在）──
+   // executeRunId 解析与 writeTaskReview 同源：marker 文件优先，缺省回退最新含 tasks 的 run。
+@@ -55,6 +59,7 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
+     } catch { /* 读失败走回退 */ }
+     if (!runId) runId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName }) || ''
+     const existingPath = runId ? join(runtimeRoot, 'execute-runs', runId, 'tasks', taskId, 'review.json') : null
++    if (existingPath) reviewPathForBackfill = existingPath
+     if (existingPath && existsSync(existingPath)) {
+       let existing = null
+       try { existing = JSON.parse(readFileSync(existingPath, 'utf8')) } catch { /* 损坏按不存在处理 */ }
+@@ -78,6 +83,7 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
+       })
+       if (r.ok) {
+         reviewWritten = true
++        reviewPathForBackfill = r.reviewPath || reviewPathForBackfill
+         step('review.json', 'done', `${preExisting ? '覆盖写入（--force）' : '写入'} ${r.reviewPath}（executeRunId=${r.executeRunId}）`)
+       } else {
+         step('review.json', 'failed', r.errors.join('；'))
+@@ -125,8 +131,26 @@ export async function runTaskDone({ changeName, cwd, taskId, verdict, notes = ''
+     try {
+       const { runWtCommit } = await import('./wt-commit.js')
+       const r = await runWtCommit({ changeName, message: commitMessage, pathspecs, pathspecFile, cwd })
++      // head 回填（坑 task-done-head-premature 根治）：review 先于 commit 写入，head 停在基线
++      // → Task Review Gate base..head 切片空误判零改动。提交成功（HEAD 前移）即把 review.head
++      // 重锚为本提交全哈希+headBackfilledAt 审计戳；fail-soft（回填失败只警示不改判提交结果）。
++      let backfillNote = ''
++      if (!r.skipped && r.head && reviewPathForBackfill && existsSync(reviewPathForBackfill)) {
++        try {
++          const rev = JSON.parse(readFileSync(reviewPathForBackfill, 'utf8'))
++          if (rev && rev.head !== r.head) {
++            rev.head = r.head
++            rev.headBackfilledAt = new Date().toISOString()
++            const { writeAtomicSync } = await import('./fs-atomic.js')
++            writeAtomicSync(reviewPathForBackfill, JSON.stringify(rev, null, 2) + '\n')
++            backfillNote = `；review.head 已回填 ${r.shortHead}（提交后重锚）`
++          }
++        } catch (e) {
++          backfillNote = `；review.head 回填失败（fail-soft）: ${(e && e.message) || e}`
++        }
++      }
+       step('wt-commit', r.skipped ? 'skipped' : 'done',
+-        r.skipped ? `无变更跳过（HEAD 不动）：${r.shortHead}` : `${r.shortHead}（${r.files.length} 文件，worktree=${r.worktreePath}）`)
++        r.skipped ? `无变更跳过（HEAD 不动）：${r.shortHead}` : `${r.shortHead}（${r.files.length} 文件，worktree=${r.worktreePath}）${backfillNote}`)
+     } catch (e) {
+       step('wt-commit', 'failed', `${e && e.message ? e.message : e}`)
+       return finishReport({ ok: false, steps, changeName, taskId })
+diff --git a/test/task-done.test.mjs b/test/task-done.test.mjs
+index 29ad289b..8174100b 100644
+--- a/test/task-done.test.mjs
++++ b/test/task-done.test.mjs
+@@ -82,7 +82,12 @@ test('四合一 happy path：单命令四段结果行（review 落盘/勾选/标
+     assert.match(readFileSync(join(f.changeDir, 'tasks.md'), 'utf8'), /- \[x\] task-01/, 'checkbox 已按 verdict 勾选')
+     assert.ok(!existsSync(join(f.markerDir, 'task-01.json')), '进行中标记已清除')
+     assert.match(step(r, 'wt-commit').detail, /^[0-9a-f]{7,}/, 'wt-commit 结果行带 shortHead')
++    assert.match(step(r, 'wt-commit').detail, /review\.head 已回填/, 'head 回填在结果行留痕（坑 task-done-head-premature）')
+     assert.equal(git(f.wt, 'status', '--porcelain', '--', 'service.js'), '', '本 task 改动已提交（残留仅 WorktreeManager 自身 meta.json，不属 task 面）')
++    // head 回填断言（根治钉）：review.head === 本 task 提交后的 worktree HEAD 全哈希 + 审计戳
++    // （原缺陷：review 先于 commit 写入，head 停在基线 → Task Review Gate base..head 切片空误判伪造）
++    assert.equal(rev.head, wtHead(f.wt), 'review.head 已重锚为本 task 提交全哈希')
++    assert.ok(rev.headBackfilledAt, 'headBackfilledAt 审计戳在案')
+   } finally { clean(f.root) }
+ })
