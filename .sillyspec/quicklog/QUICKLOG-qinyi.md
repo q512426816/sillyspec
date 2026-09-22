@@ -60,3 +60,26 @@
 根因：flow start 走 index.js 分发不经 runCommand，change 启动即观测在薄跑道落空（R7 测试环境准备时实测发现）
 方案：cmdFlowStart 建卡后独立 spawnWatcher（无条件+单飞锁合并+best-effort+未连平台也 spawn，与 command.js 同语义）
 结果：flow 族 10/10 零回归+lint 753 绿；demo 真 watcher 冒烟：拉起到 archived 事件落 jsonl 后干净自退零泄漏
+
+## ql-20260923-001-b3d2 | 2026-09-23 00:09:02 | 指路牌回归：AGENTS.md 规则 3/6 改回完整流程（run 族五阶段）为默认，薄道降实验通道
+状态：已完成
+关联变更：（无）
+文件：
+- AGENTS.md（规则3/6 指路牌回归（完整流程默认+薄道降 flow.mode: thin 实验通道附注））
+- C:/nvm4w/nodejs/node_modules/sillyspec/AGENTS.md（仓外全局包同款同步立即生效（不入本仓 git））
+需求：指路牌回归：AGENTS.md 规则 3/6 改回完整流程（run 族五阶段）为默认，薄道降实验通道
+根因：此前指引被改为薄流程（flow start/done 两调用）默认，产品已裁定回归旧流程为主体
+方案：两处 AGENTS.md 同款改动（仓内 + 全局包 C:/nvm4w/nodejs/node_modules/sillyspec/AGENTS.md）：规则 3 改回完整流程五阶段（每阶段一次渲染+一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 --init --draft 机器预填），flow start/done 降为 flow.mode: thin 显式开启的实验通道附注；规则 6 保留决策密度判据，剔除 --thick/缺省薄流程/机器草稿转厚档等薄道措辞，回归 quick/完整流程二分。全局包 SKILL.md/INSTRUCTIONS.md 查无薄默认措辞未动，源头已改下次打包自然一致
+结果：纯 doc 零代码，测试门自动跳过；验收 grep 四文件零命中勿再用/薄流程默认/--thick/机器草稿残留，规则 3 三标记（完整流程/一次渲染一次--done/flow.mode: thin 实验通道）均在
+
+## ql-20260923-002-7473 | 2026-09-23 00:18:22 | quicklog 检索导线扩 flow 变更源
+状态：已完成
+关联变更：（无）
+文件：
+- src/knowledge-quicklog.js（parseQuicklogEntries 扩双信号源（flow 归档伪条目+source 排序键））
+- test/knowledge-quicklog.test.mjs（增源② fixture 与 5a-5j 断言）
+需求：quicklog 检索导线扩 flow 变更源
+根因：flow 族变更不产生 quicklog 条目，parseQuicklogEntries 只扫 quicklog/QUICKLOG-*.md 单源——flow 变更知识不在检索面（与 ql-011 同族病）
+方案：parseQuicklogEntries 扩双源：parseQuicklogFileEntries 原逻辑零变化；新增 parseFlowArchiveEntries 扫 changes/archive 含 flow-state.yaml 目录合成伪条目（qlId=变更名/date=目录名日期前缀 mtime 兜底/title=proposal.md 首 # 行缺件退变更名/files 恒空）；条目增 source 字段，排序加 source 键双源命中 quicklog 排前；全链 fail-open
+结果：knowledge-quicklog 28/28（新增 5a-5j：双源聚合/伪条目三料/flow 变更可命中/quicklog 排前/无 flow-state 目录不入源/mtime 兜底），knowledge-inject 47/47 零回归，全量门禁由 --done 亲测
+审计：📝 文档欠账（D-8）：2 个源码文件改动未同步任何模块文档（涉及模块：core-engine）

@@ -1,0 +1,64 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-fbd8982a",
+  "totals": {
+    "files": 2,
+    "additions": 135,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": "src/knowledge-quicklog.js",
+      "declared": true,
+      "additions": 60,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/knowledge-quicklog.test.mjs",
+      "declared": true,
+      "additions": 75,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "core-engine",
+        "files": [
+          "src/knowledge-quicklog.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/knowledge-quicklog.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-002-7473",
+  "sessionId": "quick-fbd8982a",
+  "savedAt": "2026-09-22T16:22:30.364Z",
+  "patchSha256": "847511210b52d12412585fdc9bd165d4ac5b934bcee494fcde3f392796716e7b",
+  "patchStatus": "ok"
+}

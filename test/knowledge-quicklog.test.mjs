@@ -71,6 +71,23 @@ function writeCrlf(specBase) {
   ].join('\r\n') + '\r\n', 'utf8')
 }
 
+/** 源② fixture：flow 归档变更（flow-state.yaml + proposal.md 首行标题）。 */
+function writeFlowArchive(specBase, name = '2026-09-22-thin-fr-distill-sync') {
+  const dir = join(specBase, 'changes', 'archive', name)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\n')
+  writeFileSync(join(dir, 'proposal.md'), [
+    '---',
+    'author: flow-machine-draft',
+    '---',
+    `# 提案书（Proposal）— ${name}`,
+    '',
+    '## 动机',
+    '薄流程断链修复：distill 索引接线。',
+  ].join('\n'), 'utf8')
+  return dir
+}
+
 // ── 1. 解析 ──
 console.log('\n--- 1. parseQuicklogEntries ---')
 {
@@ -118,6 +135,64 @@ console.log('\n--- 3. 排序与上限 ---')
   assert(r.hits[0].qlId === 'ql-20260920-007-x' || r.hits[0].qlId === 'ql-20260918-000-z', '3b 文件命中条目排前')
   const rLimit = matchQuicklogContext(specBase, 'claude-settings cursor.py autocompact 会话 修复 引擎', { limit: 1 })
   assert(rLimit.hits.length === 1, '3c limit 参数生效')
+}
+
+// ── 5. 源②：flow 归档变更伪条目（资产三小件①扩源） ──
+console.log('\n--- 5. flow 归档源 ---')
+{
+  // 5a 解析：伪条目三料合成（qlId=变更名 / date=目录名日期前缀 / title=proposal 首行标题）+ source 标记
+  {
+    const { specBase } = makeSpec()
+    writeMain(specBase)
+    writeFlowArchive(specBase)
+    const entries = parseQuicklogEntries(specBase)
+    assert(entries.length === 3, `5a 双源聚合（2 quicklog + 1 flow 伪条目，实际 ${entries.length}）`)
+    const f = entries.find((e) => e.qlId === '2026-09-22-thin-fr-distill-sync')
+    assert(f && f.source === 'flow' && f.date === '2026-09-22', '5b 伪条目 source=flow + 日期取目录名前缀')
+    assert(f && f.title === '提案书（Proposal）— 2026-09-22-thin-fr-distill-sync' && f.files.length === 0,
+      '5c 标题取 proposal.md 首个 # 行，files 恒空')
+    // quicklog 条目 source 标记
+    const q = entries.find((e) => e.qlId === 'ql-20260920-007-x')
+    assert(q && q.source === 'quicklog', '5d 既有 quicklog 条目 source=quicklog')
+  }
+  // 5e 匹配：flow 伪条目可被 token 命中（thin/fr/distill 等变更名 token）
+  {
+    const { specBase } = makeSpec()
+    writeFlowArchive(specBase)
+    const r = matchQuicklogContext(specBase, 'flow thin distill 索引接线 断链修复')
+    assert(r.hits.length >= 1 && r.hits.some((h) => h.qlId === '2026-09-22-thin-fr-distill-sync'),
+      `5e flow 变更能被 matchQuicklogContext 命中（实际 ${JSON.stringify(r.hits.map((h) => h.qlId))}）`)
+  }
+  // 5f 双源命中排序：quicklog 条目排前（source 键优先于 fileHit/score/date）
+  {
+    const { specBase } = makeSpec()
+    writeMain(specBase)
+    writeFlowArchive(specBase, '2026-09-22-stage.js-burst-fold')
+    // 查询词同时命中 flow 伪条目（变更名 token）与 quicklog 条目（stage.js 文件命中）
+    const r = matchQuicklogContext(specBase, 'stage burst fold stage.js 并发 quicklog')
+    assert(r.hits.length >= 2, `5f 双源均命中（实际 ${JSON.stringify(r.hits.map((h) => h.qlId))}）`)
+    assert(/^ql-/.test(r.hits[0].qlId), '5g quicklog 条目排前（更新鲜）')
+    assert(r.hits.some((h) => h.qlId === '2026-09-22-stage.js-burst-fold'), '5h flow 条目也在注入面')
+  }
+  // 5i 负例：无 flow-state.yaml 的归档目录不产伪条目；archive/ 缺失零异常
+  {
+    const { specBase } = makeSpec()
+    writeMain(specBase)
+    const legacy = join(specBase, 'changes', 'archive', '2026-09-20-legacy-no-flow')
+    mkdirSync(legacy, { recursive: true })
+    writeFileSync(join(legacy, 'proposal.md'), '# 提案书（Proposal）— legacy\n')
+    const entries = parseQuicklogEntries(specBase)
+    assert(entries.length === 2 && entries.every((e) => e.source === 'quicklog'),
+      `5i 无 flow-state.yaml 目录不入源（实际 ${entries.length}）`)
+  }
+  // 5j 降级：无日期前缀目录名 → mtime 兜底日期；无 proposal.md → 标题退变更名
+  {
+    const { specBase } = makeSpec()
+    writeFlowArchive(specBase, 'thin-no-date-prefix')
+    const entries = parseQuicklogEntries(specBase)
+    const f = entries[0]
+    assert(f && /^\d{4}-\d{2}-\d{2}$/.test(f.date), `5j mtime 兜底日期（实际 ${f && f.date}）`)
+  }
 }
 
 // ── 4. 渲染 ──

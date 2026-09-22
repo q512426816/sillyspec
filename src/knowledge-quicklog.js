@@ -8,14 +8,16 @@
  * 纯读、fail-open、top-3 一行制——注入的是「发生过什么」的历史事实（条目说的是
  * 当时做了什么），不是权威断言；消费方要用契约细节按 ql-ID 回源读全文或读代码。
  *
- * 与 knowledge-match.js 分工：那边消费 INDEX/decisions（结构化知识），这边消费
- * quicklog/QUICKLOG-*.md（append-only 历史）。条目头与字段行是 allocateQuicklogEntry
+ * 与 knowledge-match.js 分工：那边消费 INDEX/decisions（结构化知识），这边消费双信号源——
+ * quicklog/QUICKLOG-*.md（append-only 历史）+ changes/archive/<变更>/flow-state.yaml（flow 族归档
+ * 变更伪条目，2026-09-23 扩源：flow 变更不产生 quicklog 条目，扩源后检索面才看得见）。
+ * 条目头与字段行是 allocateQuicklogEntry
  * 的机械解析契约：`## ql-<id> | <时间> | <标题>` + `文件：` 段（`- path（注记）` 行）。
  * run/prompt.js（execute 确认步 + quick step1）与 stages/execute.js（Wave 孪生）两处
  * 注入点共用本模块——格式等价由 test/knowledge-inject.test.mjs 锁定，改渲染必同步两处。
  */
 
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 
 const QUICKLOG_ENTRY_RE = /^##\s+(ql-[\w-]+)\s*\|\s*([^|]+)\s*\|\s*(.+)$/
@@ -26,12 +28,23 @@ const QUICKLOG_FILE_LINE_RE = /^-\s+([^\s（(]+)/
 const QUICKLOG_FIELD_RE = /^(状态|关联变更|需求|根因|方案|结果|审计)\s*[：:]/
 
 /**
- * 解析 quicklog 全量条目（所有 QUICKLOG-*.md，含按日归档的分片文件）。
+ * 解析 quicklog 全量条目——双信号源（资产三小件①，2026-09-23 扩源）：
+ *   ① quicklog/QUICKLOG-*.md（append-only 历史条目，含按日归档的分片文件）；
+ *   ② .sillyspec/changes/archive/<变更>/flow-state.yaml（flow 族归档变更）——flow 变更不产生
+ *      quicklog 条目，检索面此前看不见 flow 变更的知识（与 ql-011 治的病同族）。伪条目
+ *      三料合成：qlId=变更目录名 / date=目录名日期前缀（缺前缀退 flow-state.yaml mtime）/
+ *      title=proposal.md 首个 `# ` 标题行（缺文件退变更名）；solution 恒空、files 恒空。
+ * 双源命中时 quicklog 条目排前（matchQuicklogContext 排序 source 键）。
  * @param {string} specBase - .sillyspec 根
- * @returns {{ qlId: string, date: string, title: string, solution: string, files: string[] }[]}
- *   quicklog/ 不存在 / 全部不可读 → []（调用方零注入零阻断）
+ * @returns {{ qlId: string, date: string, title: string, solution: string, files: string[], source: 'quicklog'|'flow' }[]}
+ *   两源都不存在 / 全部不可读 → []（调用方零注入零阻断）
  */
 export function parseQuicklogEntries(specBase) {
+  return [...parseQuicklogFileEntries(specBase), ...parseFlowArchiveEntries(specBase)]
+}
+
+/** 源①：quicklog/QUICKLOG-*.md 条目解析（原 parseQuicklogEntries 主体，行为不变）。 */
+function parseQuicklogFileEntries(specBase) {
   const dir = join(specBase, 'quicklog')
   let files
   try {
@@ -57,7 +70,7 @@ export function parseQuicklogEntries(specBase) {
       const h = line.match(QUICKLOG_ENTRY_RE)
       if (h) {
         flush()
-        cur = { qlId: h[1].trim(), date: h[2].trim(), title: h[3].trim(), solution: '', files: [] }
+        cur = { qlId: h[1].trim(), date: h[2].trim(), title: h[3].trim(), solution: '', files: [], source: 'quicklog' }
         inFiles = false
         continue
       }
@@ -80,6 +93,39 @@ export function parseQuicklogEntries(specBase) {
     flush()
   }
   return entries
+}
+
+/** 源②：flow 归档变更伪条目——目录内 flow-state.yaml 在场即认（不校验 yaml 内容：伪条目
+ * 只需「这曾是一个 flow 变更」的存在信号，字段全来自目录名与 proposal.md，缺件逐项降级）。 */
+function parseFlowArchiveEntries(specBase) {
+  const archiveDir = join(specBase, 'changes', 'archive')
+  let dirs
+  try {
+    dirs = readdirSync(archiveDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const out = []
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue
+    try {
+      const dir = join(archiveDir, d.name)
+      if (!existsSync(join(dir, 'flow-state.yaml'))) continue
+      const dm = d.name.match(/^(\d{4}-\d{2}-\d{2})-/)
+      let date = dm ? dm[1] : ''
+      if (!date) {
+        try { date = new Date(statSync(join(dir, 'flow-state.yaml')).mtime).toISOString().slice(0, 10) } catch { /* mtime 不可得 → 空日期（排序自然靠后） */ }
+      }
+      let title = ''
+      try {
+        const prop = readFileSync(join(dir, 'proposal.md'), 'utf8')
+        const h = prop.replace(/\r\n/g, '\n').split('\n').find((l) => /^#\s+/.test(l))
+        if (h) title = h.replace(/^#\s+/, '').trim()
+      } catch { /* 无 proposal.md → 标题退变更名 */ }
+      out.push({ qlId: d.name, date, title: title || d.name, solution: '', files: [], source: 'flow' })
+    } catch { /* 单目录读取异常 → 跳过该目录（fail-open，不影响其余源） */ }
+  }
+  return out
 }
 
 // ── 匹配打分 ─────────────────────────────────────────────────────────────────
@@ -106,8 +152,13 @@ const FILE_HIT_WEIGHT = 5
 /** 命中门槛：≥1 文件命中，或 ≥2 个不同 token 命中（单 token 命中多为噪音词，不注入） */
 const MIN_TOKEN_HITS = 2
 
+/** 源排序权重：quicklog 条目 0（排前），flow 伪条目 1——双源命中时 quicklog 优先（更新鲜）。 */
+function sourceRank(entry) {
+  return entry && entry.source === 'flow' ? 1 : 0
+}
+
 /**
- * 任务上下文 × quicklog 条目匹配。
+ * 任务上下文 × quicklog 条目匹配（双源条目统一打分，排序 source 键优先）。
  * @param {string} specBase - .sillyspec 根
  * @param {string} taskContext - 任务描述串（与 matchKnowledge 的 query 同源）
  * @param {{ limit?: number }} [opts] - 注入上限（默认 3）
@@ -156,6 +207,7 @@ export function matchQuicklogContext(specBase, taskContext, { limit = 3 } = {}) 
       }
     }
     scored.sort((a, b) =>
+      (sourceRank(a.entry) - sourceRank(b.entry)) ||
       (b.fileHit - a.fileHit) ||
       (b.score - a.score) ||
       String(b.entry.date).localeCompare(String(a.entry.date))
