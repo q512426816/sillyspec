@@ -98,3 +98,31 @@ test('③ 无 venv（无解释器）→ fail-open 只 warn 快照照常建', (t)
   assert.ok(snap, '无解释器 fail-open：快照照常创建（冒烟跳过 warn）')
   snap.cleanup()
 })
+
+test('④ 缺陷一回归：backend 子目录包布局的健康 overlay 不因浅根假阳性被回退', { skip: !pyOk }, (t) => {
+  // 坑 verify-gate-worktree-crossrepo-three-defects 缺陷一：backend/app/modules/... 布局的
+  // 健康 overlay 文件，旧实现在浅根（快照根）报 No module named 'backend' 即判坏回退 HEAD →
+  // 快照丢新增符号连环假红。修复后全根尝试——backend/ 根下 import app.modules.x 成功。
+  const cwd = makeRepo()
+  git(cwd, ['init', '-q']); git(cwd, ['config', 'user.email', 't@t.local'])
+  git(cwd, ['config', 'user.name', 't']); git(cwd, ['config', 'commit.gpgsign', 'false'])
+  execFileSync(PY, ['-m', 'venv', join(cwd, '.venv')], { stdio: 'ignore' })
+  writeFileSync(join(cwd, '.gitignore'), '.sillyspec/\n.venv/\n')
+  // HEAD 版：service 无 stats()；本变更 overlay 加上 stats（健康自洽）
+  const pkg = join(cwd, 'backend', 'app', 'modules', 'scan_docs')
+  mkdirSync(pkg, { recursive: true })
+  writeFileSync(join(cwd, 'backend', 'app', '__init__.py'), '', 'utf8')
+  writeFileSync(join(cwd, 'backend', 'app', 'modules', '__init__.py'), '', 'utf8')
+  writeFileSync(join(pkg, '__init__.py'), '', 'utf8')
+  writeFileSync(join(pkg, 'service.py'), 'def list_all():\n    return []\n', 'utf8')
+  git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'init'])
+  // 本变更交付版（overlay）：新增 stats()——健康，不应被回退
+  writeFileSync(join(pkg, 'service.py'), 'def list_all():\n    return []\n\ndef stats():\n    return {}\n', 'utf8')
+
+  const snap = createGateSnapshot({ cwd, files: ['backend/app/modules/scan_docs/service.py'] })
+  assert.ok(snap, '快照应创建成功')
+  try {
+    const after = readFileSync(join(snap.snapshotRoot, 'backend', 'app', 'modules', 'scan_docs', 'service.py'), 'utf8')
+    assert.ok(after.includes('def stats'), `健康 overlay 保留（实际：${after.slice(0, 80)}）——浅根 No module named 'backend' 是 cwd 假阳性`)
+  } finally { snap.cleanup() }
+})

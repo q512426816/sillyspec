@@ -50,7 +50,7 @@ function runOverlayImportSmoke(pythonBin, snapshotRoot, overlaidFiles) {
     let acted = false
     for (const f of overlaidFiles) {
       if (reverted.has(f)) continue
-      const bad = smokeImportPython(pythonBin, snapshotRoot, f)
+      const bad = smokeImportPython(pythonBin, snapshotRoot, f, byModule)
       if (!bad) continue
       acted = true
       // 依赖归因：报错点名另一 overlay 文件 → 回退依赖（ importer 自身往往无恙）
@@ -82,18 +82,34 @@ function findSnapshotPython(envRelDirs, snapshotRoot) {
 }
 
 /**
- * 单文件 import 冒烟：`python -c "import <mod>"`，cwd 取该文件所在包根（模块路径按
- * 目录结构推导：剥 .py、/→.、丢 __init__；相对包根 import）。非 0 退出且 stderr 命中
- * ImportError/ModuleNotFoundError/SyntaxError 才判坏（其余失败如缺第三方依赖是环境问题，
- * 不回退——回退语义只针对「部分态坏文件」）。超时 10s 防挂。
+ * 单文件 import 冒烟：`python -c "import <mod>"`，包根从浅到深全尝试后才定性。
+ *
+ * 坑 verify-gate-worktree-crossrepo-three-defects 缺陷一（2026-09-21 实证）：旧实现首个
+ * import-class 错误立即判坏——浅根（快照根）下 `No module named 'backend'`（backend 不是
+ * 快照根顶层包，包根本就该在 backend/）属 **cwd 假阳性**，却触发交付文件被回退 HEAD →
+ * 快照内丢 stats() 等新增 → 模块子集 AttributeError 连环假红。
+ *
+ * 定性规则（全根耗尽后）：
+ *   - 任一根 import 成功 → 文件健康（null）；
+ *   - SyntaxError → 立即判坏（语法坏与包根无关）；
+ *   - `cannot import name X`（模块已解析、缺名）→ 判坏（真部分态，根无关）；
+ *   - `ModuleNotFoundError: No module named 'X'` → 仅当 X 末段映射到**另一 overlay .py**
+ *     （byModule）才判坏（overlay 依赖缺失）；第三方依赖缺失/浅根前缀 → 环境问题不判坏
+ *     （回退语义只针对「部分态坏文件」，坑原文口径）。
+ *
+ * @param {string} pythonBin 解释器
+ * @param {string} snapshotRoot 快照根
+ * @param {string} relFile overlay 文件（仓库根相对 POSIX）
+ * @param {Map<string,string>} byModule 末段模块名 → overlay 文件（缺失归因用）
  * @returns {string|null} 失败原因（判坏时）；通过/环境性失败返回 null
  */
-function smokeImportPython(pythonBin, snapshotRoot, relFile) {
+function smokeImportPython(pythonBin, snapshotRoot, relFile, byModule) {
   const noExt = relFile.replace(/\.py$/, '')
   const parts = noExt.split('/')
   while (parts.length > 0 && parts[parts.length - 1] === '__init__') parts.pop()
   if (parts.length === 0) return null
-  // 包根推导：从深到浅尝试（backend/app/x/y.py → 先 app.x.y（cwd=backend）再 x.y（cwd=backend/app））
+  let nameErr = null
+  let missingOverlayErr = null
   for (let cut = 0; cut < parts.length; cut++) {
     const mod = parts.slice(cut).join('.')
     if (!mod || !/^[A-Za-z_][\w.]*$/.test(mod)) continue
@@ -103,11 +119,29 @@ function smokeImportPython(pythonBin, snapshotRoot, relFile) {
     })
     if (r.status === 0) return null
     const err = String((r.stderr || '') + (r.stdout || ''))
-    if (/ImportError|ModuleNotFoundError|SyntaxError|cannot import name/i.test(err)) {
-      return (err.match(/(?:ImportError|ModuleNotFoundError|SyntaxError|cannot import name)[^\n]*/) || ['import 失败'])[0].slice(0, 120)
+    if (/SyntaxError/i.test(err)) {
+      // 语法坏与包根无关：该文件任何根下都不可导入，立即判坏
+      return (err.match(/SyntaxError[^\n]*/) || ['语法错误'])[0].slice(0, 120)
     }
-    // 环境性失败（如缺第三方依赖、非模块入口冲突）→ 不判坏，继续试更浅包根
+    if (/cannot import name/i.test(err)) {
+      // 模块已解析、缺名 = 真部分态（依赖 overlay 兄弟缺符号）；记录，全根耗尽后判坏
+      if (!nameErr) nameErr = (err.match(/cannot import name[^\n]*/) || ['cannot import name'])[0].slice(0, 120)
+      continue
+    }
+    const mnf = err.match(/ModuleNotFoundError: No module named '([A-Za-z_][\w.]*)'/)
+    if (mnf) {
+      const missingLast = mnf[1].split('.').pop()
+      if (byModule.has(missingLast)) {
+        // 缺的模块是 overlay 兄弟（如 crud.py 未进快照）→ 部分态候选，记录
+        if (!missingOverlayErr) missingOverlayErr = (err.match(/ModuleNotFoundError[^\n]*/) || ['module not found'])[0].slice(0, 120)
+      }
+      // else：第三方依赖缺失 / 浅根前缀（cwd 假阳性）→ 环境问题，继续试更深包根
+      continue
+    }
+    // 其余失败（超时/崩溃等）→ 环境性，继续
   }
+  if (nameErr) return nameErr
+  if (missingOverlayErr) return missingOverlayErr
   return null
 }
 
