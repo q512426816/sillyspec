@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-23-sentinel-rules",
+  "generatedAt": "2026-09-22T17:24:12.867Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 2,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "tasks": 6,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-23-sentinel-rules",
+      "metrics": {
+        "checkedFiles": 7,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "质量扫描实测记录待步 6 noAI 步 CLI 亲测落盘（本报告写于步 5，记录时序未达）",
+        "condition": "步 6 `verifyRunQualityScan` 亲跑 commands.test/lint 落 verify-quality-scan json 后，步 7 终判本结论槽",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "L0 收口接线（detectFakeCheckCompletion → --done 拒收调用点）按任务书显式留给下批，避免与并行会话改同文件",
+        "condition": "下批变更在 verify 收口侧调用该函数并补接线用例（函数本体已交付+28 例中三态钉）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/sentinel-rules.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(9)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-22T17:31:06.917Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "62823f065621e8c8ce0d636f4435047b9fadd28d",
+  "totals": {
+    "files": 6,
+    "additions": 1021,
+    "deletions": 16
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 121,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/run/command.js",
+      "additions": 17,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/sentinel-assertions.js",
+      "additions": 92,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/watcher.js",
+      "additions": 395,
+      "deletions": 14,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/sentinel-rules.test.mjs",
+      "additions": 395,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "973712967b160515131b1ed1e95da8b0749388e991d897c22a4c2d74ffd2dce8",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-22T17:19:46.093Z"
+}
