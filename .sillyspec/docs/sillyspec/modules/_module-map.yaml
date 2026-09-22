@@ -189,6 +189,7 @@ modules:
       - src/write-audit.js
       - src/commit-guard.js
       - src/watcher.js
+      - src/sentinel-assertions.js
 
   sillyhub-mcp:
     status: active

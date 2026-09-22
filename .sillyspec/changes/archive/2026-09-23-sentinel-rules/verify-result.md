@@ -4,7 +4,7 @@ created_at: 2026-09-23 01:30:00
 ---
 # 验证报告（骨架由 `sillyspec verify-probes --change <变更名> --init` 生成）
 
-> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（src/foo.js:123）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。
+> 引用规范：矩阵证据/测试结果等处的源码位置写仓根相对全路径+行号（src/<file>.js:<行号>）——裸文件名在 docs-check 层1 靠 basename 全仓扫描找候选，找不到候选或关键词窗口不匹配即失效，到 pre-push 才拦（2026-09-19 实证 64 处返工）。
 
 > 探针结果已机械预填；其余章节把 `<!--TODO-->` 替换为真实内容。**结论只认「结论枚举：」槽行**——
 > 槽行留「<待填：三选一>」会被 gate 判不过（fail-closed），正文其他位置的 PASS/FAIL 字样不参与判定。
@@ -14,12 +14,11 @@ created_at: 2026-09-23 01:30:00
 
 ## 结论 [层：人工判断]
 
-结论枚举：`PASS WITH NOTES`——六任务全实现全验收（28 例单测+lint 753+watcher.test 13/13 零回归）；质量扫描实测记录由步 6 CLI 亲测落盘后于步 7 终判升级（本槽为步 5 门禁过渡态，见移交项首行）。
+结论枚举：`PASS`——六任务全实现全验收：28 例单测全绿、lint 756 文件绿、既有 watcher.test.mjs 13/13 零回归；CLI 亲测记录 verify-quality-scan-2026-09-23-sentinel-rules.json（test=passed / lint=passed，ranAt 2026-09-22T17:42:23Z）；主仓 apply 后全量 npm test 591/591 绿；实现与 design.md 零偏差，Grill 五修正全部落线。
 
 ## 移交项（结构化） [层：人工判断——CLI 清单核验]
 | 类型 | 条目 | 复跑/验收条件 |
 |---|---|---|
-| manual-acceptance | 质量扫描实测记录待步 6 noAI 步 CLI 亲测落盘（本报告写于步 5，记录时序未达） | 步 6 `verifyRunQualityScan` 亲跑 commands.test/lint 落 verify-quality-scan json 后，步 7 终判本结论槽 |
 | other | L0 收口接线（detectFakeCheckCompletion → --done 拒收调用点）按任务书显式留给下批，避免与并行会话改同文件 | 下批变更在 verify 收口侧调用该函数并补接线用例（函数本体已交付+28 例中三态钉） |
 
 ## 证据账（cannot_verify 任务） [层：人工判断——CLI 核验]
@@ -27,6 +26,7 @@ created_at: 2026-09-23 01:30:00
 
 ## 集成验证回执 [层：自述声明——CLI 一致性校验]
 无（变更风险等级 unit-sufficient，非 integration/deployment-critical——CLI 本地面：detached watcher 子进程+纯函数库，无服务起停/端点发布）。
+<!-- smoke 机器段缺态：not-configured（commands.smoke 未配置——配置 local.yaml 后下次 verify 亲跑并自动注入机器段）source: cli-noai-smoke -->
 
 ## 任务完成度 [层：人工判断]
 - task-01 ✅ 完成：buildSnapshot 五新字段+五注入面（`test/sentinel-rules.test.mjs`「buildSnapshot 注入面」28 例组内实测，含 git 失败 null 化）

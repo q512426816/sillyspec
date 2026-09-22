@@ -36,6 +36,7 @@ import {
 import { createHash } from 'crypto';
 import { join } from 'path';
 import { gitQuiet } from './git-helper.js';
+import { normalizePath, globMatch } from './change-list.js';
 
 export const WATCHER_LOCK_FILENAME = 'watcher.lock';
 const WATCHER_LOG_FILENAME = 'watcher.log';
@@ -121,13 +122,89 @@ function countCheckboxes(text) {
   return { checked, total: checked + unchecked };
 }
 
+/** tasks.md/任务卡里已勾选的 task-NN id 清单（假勾选归因锚：无 id 的勾选行不入判集）。 */
+function extractCheckedTasks(text) {
+  const out = [];
+  const re = /^[-*] \[[xX]\] (task-\d+)/gm;
+  let m;
+  while ((m = re.exec(String(text || '')))) out.push(m[1]);
+  return out;
+}
+
+// ── 哨兵判据源（2026-09-23-sentinel-rules task-01）：快照 additive 四源 ──
+// 口径与 src/run/verify-quality-scan.js isNonCodePath 相同（.sillyspec/、docs/、*.md 非
+// 代码面）——本地复制不 import（该模块拖 test-ledger 重链，detached 子进程不吃）。
+function isNonCodePath(p) {
+  return p.startsWith('.sillyspec/') || p.startsWith('docs/') || p.endsWith('.md');
+}
+
 /**
- * 构建一次快照（纯读盘+git 头指针；不入事件——推断在 inferEvents 纯函数，测试主入口）。
- * @returns {{ts:number, archived:boolean, head:string|null, files:Object, scan:Object|null}}
- *   files: { <相对 changeDir 路径>: { hash, checked, total } }
+ * `git log -20 --format=%h|%s --name-only` 输出解析 → [{hash, subject, files}]。
+ * hash|subject 行与后续裸路径行段式聚合（空行分隔可忽略）；解析不出任何 commit → []。
  */
-export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, gitHeadImpl }) {
-  const snap = { ts: Date.now(), archived: false, head: null, files: {}, scan: null };
+export function parseGitLogWithFiles(text) {
+  const commits = [];
+  let cur = null;
+  for (const line of String(text || '').split('\n')) {
+    if (!line.trim()) continue;
+    const h = line.match(/^([0-9a-f]{7,40})\|(.*)$/);
+    if (h) {
+      cur = { hash: h[1], subject: h[2], files: [] };
+      commits.push(cur);
+      continue;
+    }
+    if (cur && !line.startsWith('commit ')) {
+      const p = line.trim().replace(/\\/g, '/');
+      if (p) cur.files.push(p);
+    }
+  }
+  return commits;
+}
+
+/** porcelain → 代码脏路径清单（重命名取新路径；剔非代码面；排序去重）。 */
+export function parsePorcelainCodePaths(porcelain) {
+  const seen = new Set();
+  const out = [];
+  for (const line of String(porcelain || '').split('\n')) {
+    if (!line.trim()) continue;
+    let p = (line.slice(3) || '').trim();
+    const arrow = p.indexOf(' -> ');
+    if (arrow >= 0) p = p.slice(arrow + 4);
+    p = p.replace(/^"|"$/g, '').replace(/\\/g, '/');
+    if (!p || isNonCodePath(p) || seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out.sort();
+}
+
+/** execute-runs 下全部 review.json 的 mtime 面（假勾选证据源二；有界遍历，缺失 → {}）。 */
+function collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl) {
+  const reviews = {};
+  let runs = [];
+  try { runs = readdirSyncImpl(join(runtimeRoot, 'execute-runs')); } catch { return reviews; }
+  for (const run of runs) {
+    let names = [];
+    try { names = readdirSyncImpl(join(runtimeRoot, 'execute-runs', run, 'tasks')); } catch { continue; }
+    for (const t of names) {
+      const rel = `${run}/tasks/${t}/review.json`;
+      try { reviews[rel] = Math.round(statSyncImpl(join(runtimeRoot, 'execute-runs', run, 'tasks', t, 'review.json')).mtimeMs); } catch { /* 缺失跳过 */ }
+    }
+  }
+  return reviews;
+}
+
+/**
+ * 构建一次快照（纯读盘+git 面；不入事件——推断在 inferEvents 纯函数，测试主入口）。
+ * @returns {{ts:number, archived:boolean, head:string|null, files:Object, scan:Object|null,
+ *   commits:Array<{hash,subject,files:string[]}>|null, dirtyCode:string[]|null,
+ *   scanStatus:{status:string,ranAt:*}|null, reviews:Object}}
+ *   files: { <相对 changeDir 路径>: { hash, checked, total, checkedTasks } }
+ *   哨兵四源（git 失败 → commits/dirtyCode null，规则 fail-open）；全部 JSON 可序列化
+ *   （水位回补落盘依赖）。
+ */
+export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, readdirSyncImpl = readdirSync, gitHeadImpl, gitLogImpl, porcelainImpl }) {
+  const snap = { ts: Date.now(), archived: false, head: null, files: {}, scan: null, commits: null, dirtyCode: null, scanStatus: null, reviews: {} };
   if (!existsSync(changeDir)) {
     snap.archived = true;
   } else {
@@ -136,7 +213,7 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
       if (!existsSync(p)) continue;
       try {
         const text = readFileSyncImpl(p, 'utf8');
-        snap.files[name] = { hash: sha256(text), stage, ...countCheckboxes(text) };
+        snap.files[name] = { hash: sha256(text), stage, ...countCheckboxes(text), checkedTasks: extractCheckedTasks(text) };
       } catch { /* 读失败按未变更处理，下轮重试 */ }
     }
     const tasksDir = join(changeDir, 'tasks');
@@ -146,7 +223,7 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
         const rel = `tasks/${ent}`;
         try {
           const text = readFileSyncImpl(join(tasksDir, ent), 'utf8');
-          snap.files[rel] = { hash: sha256(text), stage: 'tasks', ...countCheckboxes(text) };
+          snap.files[rel] = { hash: sha256(text), stage: 'tasks', ...countCheckboxes(text), checkedTasks: extractCheckedTasks(text) };
         } catch { /* 同上 */ }
       }
     }
@@ -157,6 +234,22 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
     const out = gitQuiet(cwd, ['rev-parse', '--short', 'HEAD']);
     snap.head = typeof out === 'string' && out.trim() ? out.trim() : null;
   }
+  // 哨兵源一：区间新提交（hash/subject/触及文件，单次 git log 调用同取两面）
+  if (typeof gitLogImpl === 'function') {
+    const out = gitLogImpl();
+    snap.commits = out == null ? null : parseGitLogWithFiles(out);
+  } else {
+    const out = gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only']);
+    snap.commits = out == null ? null : parseGitLogWithFiles(out);
+  }
+  // 哨兵源二：工作树代码脏面（范围漂移/test-tamper 工作树证据）
+  if (typeof porcelainImpl === 'function') {
+    const out = porcelainImpl();
+    snap.dirtyCode = out == null ? null : parsePorcelainCodePaths(out);
+  } else {
+    const out = gitQuiet(cwd, ['status', '--porcelain']);
+    snap.dirtyCode = out == null ? null : parsePorcelainCodePaths(out);
+  }
   const scanPath = join(runtimeRoot, `verify-quality-scan-${changeName}.json`);
   try {
     const st = statSyncImpl(scanPath);
@@ -164,6 +257,16 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
   } catch {
     snap.scan = null;
   }
+  // 哨兵源三：P2 测试账本结论（内容读，stat 只管「记录变了」事件；读失败 null）
+  try {
+    const raw = JSON.parse(readFileSyncImpl(scanPath, 'utf8'));
+    const t = raw && raw.testResult;
+    snap.scanStatus = t && t.status ? { status: String(t.status), ranAt: t.ranAt || null } : null;
+  } catch {
+    snap.scanStatus = null;
+  }
+  // 哨兵源四：review.json mtime 面
+  snap.reviews = collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl);
   return snap;
 }
 
@@ -221,6 +324,255 @@ export function aggregateStageTiming(events) {
   return [...byStage.values()]
     .sort((a, b) => a.firstTs - b.firstTs)
     .map((r) => ({ stage: r.stage, firstTs: r.firstTs, lastTs: r.lastTs, durationMs: r.lastTs - r.firstTs, events: r.events }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 哨兵规则引擎（2026-09-23-sentinel-rules / L1：watcher 从只看升级为会喊）
+//
+// 四规则全部机械事实判定，输出恒 advisory：{kind:'warning', rule, severity:'warning',
+// provisional:true}，与基础事件同管线入 jsonl/推平台；**不写 progress db**（真相库只归
+// 协议调用——单写者纪律）。规则逐条独立 try/catch（单规则异常 fail-open 跳过本轮，不杀
+// 引擎不杀 watcher）；warning 不计 lastActivityAt、不触发 archived 自退（不是活动）。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 停滞阈值（FR-05 分相位：brainstorm/plan 20min、execute 15min）。 */
+export const STALL_EARLY_MS = 20 * 60_000;
+export const STALL_EXECUTE_MS = 15 * 60_000;
+
+/** 引擎状态初值（ts=计时锚；task-04 重启回补时取 max(启动时刻, 水位 ts)）。 */
+export function createSentinelState(ts = Date.now()) {
+  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null };
+}
+
+function mkWarning(rule, detail, ts) {
+  return { ts, kind: 'warning', stage: null, rule, severity: 'warning', detail, provisional: true };
+}
+
+/** 区间新提交差集（按 hash 判重，防 subject 改写误判；旧快照无 commits → 全部视为新）。 */
+function newCommitsBetween(prev, next) {
+  const prevHashes = new Set((prev.commits || []).map((c) => c.hash));
+  return (next.commits || []).filter((c) => c && !prevHashes.has(c.hash));
+}
+
+// ── 水位回补（2026-09-23-sentinel-rules task-04 / FR-08 / D-005@v1）──
+// 每轮把快照落 watcher-last-snapshot-<change>.json；重启读取为 prev diff 补发 backfill
+// 事件（幂等锚=水位消费即前移）；损坏/缺失 → null 全新启动（现行为零回归）；覆盖写不
+// append、内容去重不空转；archived 首拍早退路径不读不写。
+
+export function watcherSnapshotPath(runtimeRoot, changeName) {
+  return join(runtimeRoot, `watcher-last-snapshot-${changeName}.json`);
+}
+
+/** 读水位（损坏/缺失/形状不对 → null）。 */
+export function loadSnapshotWatermark(runtimeRoot, changeName) {
+  try {
+    const obj = JSON.parse(readFileSync(watcherSnapshotPath(runtimeRoot, changeName), 'utf8'));
+    return obj && typeof obj === 'object' && typeof obj.ts === 'number' && typeof obj.archived === 'boolean' ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 写水位（best-effort，失败不抛）。cacheObj={last} 时内容去重（与上次序列化串相同跳过写，
+ * 防 3s 周期空转 IO——Grill 修正③）。
+ */
+export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null) {
+  try {
+    const json = JSON.stringify(snap);
+    if (cacheObj && cacheObj.last === json) return { written: false };
+    writeFileSync(watcherSnapshotPath(runtimeRoot, changeName), json);
+    if (cacheObj) cacheObj.last = json;
+    return { written: true };
+  } catch {
+    return { written: false };
+  }
+}
+
+/** task-NN 完整 token 匹配（task-01 不证 task-010，负向前瞻词边界）。 */
+function taskTokenRe(id) {
+  return new RegExp(`${id}(?!\\d)`);
+}
+
+/**
+ * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
+ * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
+ */
+function ruleFakeCheck(prev, next, ts) {
+  const flipped = [];
+  const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
+  for (const key of keys) {
+    const pIds = new Set(((prev.files[key] || {}).checkedTasks) || []);
+    for (const id of ((next.files[key] || {}).checkedTasks) || []) {
+      if (!pIds.has(id)) flipped.push(id);
+    }
+  }
+  if (flipped.length === 0) return [];
+  const newCommits = newCommitsBetween(prev, next);
+  const unevidenced = flipped.filter((id) => {
+    const re = taskTokenRe(id);
+    const byCommit = newCommits.some((c) => re.test(c.subject || ''));
+    const byReview = Object.entries(next.reviews || {}).some(([p, mtime]) => p.includes(`/tasks/${id}/`) && (prev.reviews || {})[p] !== mtime);
+    return !(byCommit || byReview);
+  });
+  if (unevidenced.length === 0) return [];
+  return [mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts)];
+}
+
+const testDirtyOf = (dirtyCode) => (Array.isArray(dirtyCode) ? dirtyCode.filter((p) => p.startsWith('test/')) : []);
+
+/**
+ * R2 改测试凑绿（FR-03）：账本 FAIL → 窗口内**新增**测试改动 → 账本 PASS → warning。
+ * FAIL 锚按账本 statKey（mtime:size）判「新记录」——同一 FAIL 记录跨拍持续只累计证据不
+ * 重锚（重锚会洗掉窗口内已观察的测试改动）；testDirtyAtFail 快照区分窗口前遗留脏面
+ * （Grill 修正①）。skipped 不参与；FAIL→PASS 无新增测试改动不告警。
+ */
+function ruleTestTamper(prev, next, state, ts) {
+  const status = next.scanStatus ? next.scanStatus.status : null;
+  const commitHashes = new Set((next.commits || []).map((c) => c.hash));
+  if (status === 'failed') {
+    const statKey = next.scan ? `${next.scan.mtimeMs}:${next.scan.size}` : String(ts);
+    if (!state.testTamper || state.testTamper.statKey !== statKey) {
+      state.testTamper = { statKey, failAt: ts, testDirtyAtFail: new Set(testDirtyOf(next.dirtyCode)), testChanged: false, anchoredCommits: commitHashes };
+    } else {
+      const anchor = state.testTamper;
+      const dirtyNow = testDirtyOf(next.dirtyCode);
+      if (dirtyNow.some((p) => !anchor.testDirtyAtFail.has(p))) anchor.testChanged = true;
+      if ((next.commits || []).some((c) => !anchor.anchoredCommits.has(c.hash) && (c.files || []).some((f) => f.startsWith('test/')))) anchor.testChanged = true;
+    }
+    return [];
+  }
+  if (state.testTamper && status === 'passed') {
+    const anchor = state.testTamper;
+    state.testTamper = null;
+    if (anchor.testChanged) {
+      return [mkWarning('test-tamper', '测试账本 FAIL→PASS 且窗口内测试文件被改——改测试凑绿嫌疑（测试本身写错是合法场景，人判不阻断）', ts)];
+    }
+    return [];
+  }
+  return [];
+}
+
+/** 任务卡 frontmatter allowed_paths 列表项解析（反引号/尾注剥离走 normalizePath）。 */
+function parseCardAllowedPaths(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  let fmEnd = -1;
+  let inFm = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      if (!inFm) inFm = true;
+      else { fmEnd = i; break; }
+    }
+  }
+  if (fmEnd < 0) return [];
+  const out = [];
+  let inList = false;
+  for (let j = 0; j <= fmEnd; j++) {
+    if (/^allowed_paths:\s*$/.test(lines[j])) { inList = true; continue; }
+    if (!inList) continue;
+    const m = lines[j].match(/^\s+-\s+(.+?)\s*$/);
+    if (m) out.push(normalizePath(m[1]));
+    else if (/^\S/.test(lines[j])) inList = false;
+  }
+  return out.filter(Boolean);
+}
+
+/** design.md「文件变更清单」章节条目（表格路径列+列表行；NEW: 前缀剥离后 normalizePath）。 */
+export function parseDesignListText(text) {
+  const src = String(text || '');
+  const m = /##\s*文件变更清单/.exec(src);
+  if (!m) return [];
+  const rest = src.slice(m.index);
+  const endRe = /\n##\s/;
+  const endM = endRe.exec(rest.slice(1));
+  const section = endM ? rest.slice(0, endM.index + 1) : rest;
+  const raw = [];
+  for (const line of section.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t.startsWith('|')) {
+      if (/^[-:\s|]+$/.test(t)) continue;
+      const cells = t.split('|').map((c) => c.trim()).filter(Boolean);
+      const pathCell = cells.find((c) => c.startsWith('NEW:')) || cells.find((c) => (/[/]/.test(c) && /\.[A-Za-z0-9]+/.test(c)));
+      if (pathCell) raw.push(pathCell);
+    } else if (t.startsWith('- ')) {
+      raw.push(t.slice(2));
+    }
+  }
+  return raw
+    .map((s) => normalizePath(String(s).replace(/^NEW:/, '')))
+    .filter((s) => s && s !== '.' && (s.includes('/') || /\.[A-Za-z0-9]+$/.test(s)));
+}
+
+/**
+ * 声明面 = 任务卡 allowed_paths ∪ design.md 文件清单（FR-04 / D-004@v1）。两源皆空 →
+ * null（规则跳过，fail-open——无面可判不无事生非）。盘面读取注入化（测试零真 fs）。
+ */
+function loadDeclaredScope(changeDir, readImpl, readdirImpl) {
+  if (!changeDir) return null;
+  const scope = new Set();
+  try {
+    const tasksDir = join(changeDir, 'tasks');
+    for (const ent of readdirImpl(tasksDir)) {
+      if (!/^task-.*\.md$/.test(ent)) continue;
+      for (const p of parseCardAllowedPaths(readImpl(join(tasksDir, ent), 'utf8'))) scope.add(p);
+    }
+  } catch { /* tasks/ 不存在或读失败 → 该源贡献为空 */ }
+  try {
+    for (const p of parseDesignListText(readImpl(join(changeDir, 'design.md'), 'utf8'))) scope.add(p);
+  } catch { /* design.md 缺失 → 该源贡献为空 */ }
+  return scope.size > 0 ? [...scope] : null;
+}
+
+/**
+ * R3 范围漂移（FR-04）：dirtyCode 中声明面外文件（精确相等或 globMatch 容差，复用
+ * change-list 匹配器）；只对新漂移文件告警（lastDriftFiles 单调去重，活动恢复不改集）。
+ */
+function ruleScopeDrift(next, state, declaredScope, ts) {
+  if (!declaredScope || !Array.isArray(next.dirtyCode) || next.dirtyCode.length === 0) return [];
+  const unmatched = next.dirtyCode.filter((p) => !declaredScope.some((pat) => pat === p || globMatch(p, pat)));
+  const fresh = unmatched.filter((p) => !state.lastDriftFiles.includes(p));
+  state.lastDriftFiles = unmatched;
+  if (fresh.length === 0) return [];
+  return [mkWarning('scope-drift', `声明面之外的代码文件被改：${fresh.join('、')}——范围漂移嫌疑（并行会话改动/越界，人判）`, ts)];
+}
+
+/**
+ * R4 停滞（FR-05 / D-003@v1）：相位 early→execute 单向锁存（task-done 事件，或 tasks.md
+ * 在场后出现新提交）；阈值 20min/15min；episode 去重（告警一次，活动恢复才允许下一发）。
+ */
+function ruleStall(prev, next, baseEvents, state, ts) {
+  const hasTasksMd = Object.prototype.hasOwnProperty.call(next.files || {}, 'tasks.md');
+  if (baseEvents.some((e) => e && e.kind === 'task-done') || (hasTasksMd && newCommitsBetween(prev, next).length > 0)) {
+    state.phase = 'execute';
+  }
+  if (baseEvents.length > 0) {
+    state.lastActivityAt = ts;
+    state.stallOpen = false;
+  }
+  const threshold = state.phase === 'execute' ? STALL_EXECUTE_MS : STALL_EARLY_MS;
+  if (state.stallOpen || ts - state.lastActivityAt <= threshold) return [];
+  state.stallOpen = true;
+  const idleMin = Math.round((ts - state.lastActivityAt) / 60000);
+  const phaseLabel = state.phase === 'execute' ? 'execute 期' : 'brainstorm/plan 期';
+  return [mkWarning('stall', `${phaseLabel}已 ${idleMin} 分钟无${state.phase === 'execute' ? '提交无' : ''}事件——停滞嫌疑（区分在想/死了，人判）`, ts)];
+}
+
+/**
+ * 哨兵规则引擎主入口（纯函数；prev 缺新字段按空集/null 容错 fail-open）。
+ * @returns {{warnings:Array, state:Object}} warnings 恒 provisional:true；archived 拍不判。
+ */
+export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync } = {}) {
+  const st = state || createSentinelState(next && next.ts);
+  const warnings = [];
+  if (!prev || !next || next.archived) return { warnings, state: st };
+  // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
+  try { warnings.push(...ruleFakeCheck(prev, next, now)); } catch { /* R1 本轮跳过 */ }
+  try { warnings.push(...ruleTestTamper(prev, next, st, now)); } catch { /* R2 本轮跳过 */ }
+  let declaredScope = null;
+  try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }
+  try { warnings.push(...ruleScopeDrift(next, st, declaredScope, now)); } catch { /* R3 本轮跳过 */ }
+  try { warnings.push(...ruleStall(prev, next, baseEvents, st, now)); } catch { /* R4 本轮跳过 */ }
+  return { warnings, state: st };
 }
 
 /** watcher 平台推送凭据（模式同 agent-session-log readPlatformPushConfig：env > local.yaml platform 段）。 */
@@ -394,7 +746,12 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
   const heartbeatTimer = setInterval(() => { refreshHeartbeat(); }, HEARTBEAT_INTERVAL_MS);
   heartbeatTimer.unref?.();
 
-  let prev = buildSnapshot({ changeDir, cwd, runtimeRoot, changeName });
+  // 水位回补（task-04）：重启时以水位快照为 prev——首拍 diff 即停机期间变更的补发事件
+  //（置 backfill:true，事件时间=观测时间）；水位缺失/损坏 → 全新启动（现行为）。
+  const watermark = loadSnapshotWatermark(runtimeRoot, changeName);
+  const useWatermark = Boolean(watermark) && !watermark.archived;
+  let backfillPending = useWatermark;
+  let prev = useWatermark ? watermark : buildSnapshot({ changeDir, cwd, runtimeRoot, changeName });
   // ── 孤儿自愈三闸（2026-09-22 全套件实证漏 41 个孤儿 watcher——每 3s 轮询 git 的孤儿进程）──
   // ①出生即死：首拍已 archived（change 目录不存在/已归档）没有可观测对象，立即退出；
   // ②仓库蒸发：head 曾非空后连续 20 拍为 null（cwd/git 仓被删——测试临时目录清理）→ 退出；
@@ -405,10 +762,15 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
     removeWatcherLock(runtimeRoot);
     return;
   }
+  if (useWatermark) console.log(`[watcher] 水位回补：自 ${new Date(watermark.ts).toISOString()} 的快照续观测`);
   let headNullStreak = 0;
   let everHadHead = prev.head != null;
   const hardDeadline = startedAt + MAX_LIFETIME_MS;
   let lastActivityAt = Date.now();
+  // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
+  // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
+  let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
+  const watermarkCache = { last: null };
   // eslint-disable-next-line no-constant-condition
   while (true) {
     await new Promise((r) => setTimeout(r, opts.pollIntervalMs ?? POLL_INTERVAL_MS));
@@ -434,23 +796,42 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
       }
     }
     const events = inferEvents(prev, snap);
+    // 回补标记：水位续观测的首拍 diff 事件即停机期间变更的补发（消费即复位，幂等）
+    if (backfillPending) {
+      for (const e of events) e.backfill = true;
+      backfillPending = false;
+    }
+    // ── 哨兵规则引擎（2026-09-23-sentinel-rules task-02）：warning 与基础事件同管线 ──
+    // best-effort 双层包裹（引擎内逐规则 fail-open + 此处兜底）——引擎异常绝不杀 watcher。
+    // warning 不计 lastActivityAt（不是活动）、不触发 archived 自退（终态只认基础事件）。
+    let warnings = [];
+    try {
+      const r = applySentinelRules({ prev, next: snap, baseEvents: events, state: sentinelState, now: Date.now(), changeDir });
+      sentinelState = r.state;
+      warnings = r.warnings;
+    } catch (e) {
+      console.warn(`[watcher] 哨兵规则引擎异常（best-effort 跳过本轮）: ${(e && e.message) || e}`);
+    }
+    const batch = events.concat(warnings);
     prev = snap;
-    if (events.length === 0) {
+    // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）
+    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache);
+    if (batch.length === 0) {
       if (Date.now() - lastActivityAt > IDLE_EXIT_MS) {
         console.log('[watcher] 空闲超时自退（6h 无事件）');
         break;
       }
       continue;
     }
-    lastActivityAt = Date.now();
-    allEvents = allEvents.concat(events);
+    if (events.length > 0) lastActivityAt = Date.now();
+    allEvents = allEvents.concat(batch);
     try {
-      for (const e of events) appendFileSync(eventsPath, JSON.stringify(e) + '\n', 'utf8');
+      for (const e of batch) appendFileSync(eventsPath, JSON.stringify(e) + '\n', 'utf8');
       writeFileSync(timingPath, JSON.stringify({ change: changeName, updatedAt: new Date().toISOString(), stages: aggregateStageTiming(allEvents) }, null, 2) + '\n', 'utf8');
     } catch (e) {
       console.warn(`[watcher] 事件落盘异常（best-effort 继续）: ${(e && e.message) || e}`);
     }
-    await pushEventsToPlatform({ specBase, changeName, events, env });
+    await pushEventsToPlatform({ specBase, changeName, events: batch, env });
     if (events.some((e) => e.kind === 'archived')) {
       console.log(`[watcher] archived 终态，监听结束: ${changeName}`);
       break;
@@ -463,4 +844,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
 }
 
 export { isPidAlive };
-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming };
+export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark };

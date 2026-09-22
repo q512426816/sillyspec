@@ -1921,6 +1921,23 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   // 零活跃建变更已上移入口守卫层，多活跃 exit 2 由入口守卫处理）。
   if (changeName) console.log(`🎯 auto 目标变更（单活跃自动选中或显式指定）：${changeName}`)
 
+  // ── watcher 拉起（2026-09-23-sentinel-rules task-05 / FR-09）──
+  // run auto 在 runCommand 主干的 spawnWatcher 挂点（effectiveChange 解析后那处）之前
+  // 早退进本函数——auto 路径是 run 族唯一观测缺口。语义同 flow start 接线：best-effort
+  // 失败只 warn 不阻断，SILLYSPEC_WATCHER=0 逃生阀在 spawnWatcher 内短路，活锁合并
+  // coalesced，未连接平台也 spawn（本地 jsonl 是事件唯一真相源）。
+  if (changeName && changeName !== 'default') {
+    try {
+      const { spawnWatcher } = await import('../watcher.js')
+      const r = await spawnWatcher(cwd, changeName, platformOpts)
+      if (r.status === 'spawned') {
+        console.log(`🔄 [watcher] 观测旁路已拉起（auto 路径补挂，事件恒带 provisional:true）: ${changeName}`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ [watcher] 拉起失败（观测旁路 best-effort，不影响主流程）: ${(e && e.message) || e}`)
+    }
+  }
+
   // Helper: 在 auto 模式下获取步骤定义
   const getAutoSteps = async (stage) => {
     if (stage === 'brainstorm') {

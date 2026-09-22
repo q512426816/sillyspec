@@ -118,3 +118,66 @@ created_at: 2026-09-22T09:42:59.537Z
 - 场景：默认场景 — Given plan 阶段步骤指引文本（src/stages/plan.js）；When agent 按指引分解任务；Then 默认「实现+单测同卡」；不出现「纯接线/纯 module-map 录入/纯全量回归绿」独立成卡的
 全文：.sillyspec/changes/archive/2026-09-22-r7-protocol-surgery/requirements.md#FR-11
 最近确认：2bd35703
+
+## FR-sync-012 哨兵规则引擎（四规则，恒 advisory）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-01
+最近确认：dd7efa44
+
+## FR-sync-013 假勾选规则（fake-check）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-02
+最近确认：dd7efa44
+
+## FR-sync-014 改测试凑绿规则（test-tamper）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-03
+最近确认：dd7efa44
+
+## FR-sync-015 范围漂移规则（scope-drift）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-04
+最近确认：dd7efa44
+
+## FR-sync-016 停滞规则（stall，分相位阈值）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-05
+最近确认：dd7efa44
+
+## FR-sync-017 事件模型扩展（advisory 面与真相库隔离）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-06
+最近确认：dd7efa44
+
+## FR-sync-018 L0 纯函数（detectFakeCheckCompletion，本批不接线）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-07
+最近确认：dd7efa44
+
+## FR-sync-019 水位回补（幂等，修面板连续性）
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-08
+最近确认：dd7efa44
+
+## FR-sync-020 run 族最小挂点
+变更：2026-09-23-sentinel-rules
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-23-sentinel-rules/requirements.md#FR-09
+最近确认：dd7efa44

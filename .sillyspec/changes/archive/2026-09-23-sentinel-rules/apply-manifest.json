@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-23-sentinel-rules",
+  "appliedAt": "2026-09-22T17:33:41.304Z",
+  "baseHash": "62823f065621e8c8ce0d636f4435047b9fadd28d",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "7b9fa08213cd1457924d17b14136bb01792fbccb0ff76c5a41628189ce562696"
+    },
+    {
+      "path": "src/sentinel-assertions.js",
+      "sha256": "18b27abbe8896348b5029d5d1a397a841c579f8074c358309d4c852fed9aaa4a"
+    },
+    {
+      "path": "src/watcher.js",
+      "sha256": "11c181276b7b20315d28fbf10afc919dcf3722b8168b98804c2bbb9cecea1635"
+    },
+    {
+      "path": "test/sentinel-rules.test.mjs",
+      "sha256": "9c3ff940d482a4fd5d42507dff78e97a5a4aa36afd59b013afe31a366424f31e"
+    },
+    {
+      "path": "src/run/command.js",
+      "sha256": "f047263676023a4e85bd721be3a63549c94d7701bb90b7d96965201c061fc111"
+    }
+  ]
+}
