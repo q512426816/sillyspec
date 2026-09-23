@@ -140,3 +140,17 @@
 根因：提交证据只读主仓 git log -20，worktree 流程任务提交先落分支、apply 前不可见，两路证据同时落空——change-events-channel 流 8 个 task 提交全在分支上，R1 两拍全量误报假勾选（04:38:45/05:27:25）
 方案：①src/watcher.js 新导出 mergeCommitEvidence（hash 判重保序并集，apply 后同提交两面可达不双计）；②buildSnapshot 增 gitLogWorktreeImpl 注入参数+生产路径 git log -20 sillyspec/<change> 分支证据并集，分支缺失/git 失败 null 不动主仓结果（fail-open）、主源 null 语义不变、只注入 gitLogImpl 时零真 git 约定保持；③sync.md 哨兵段登记并入语义+测试锚 28→30
 结果：test/sentinel-rules.test.mjs 30/30 绿（新增 2 例：并集判重/分支注入面含端到端 R1 静默）；watcher+watcher-alerts+sentinel 三套回归 53/53 零失败；lint 758 文件未引用导出 0+module-map 覆盖全；CLI 亲测门禁 test/lint=passed
+
+## ql-20260923-007-ecac | 2026-09-23 08:21:37 | 归档终态推送补推扫描：bg-sync 子进程主轮收尾顺带补推「本地终态未被平台镜像」的变更
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/bg-sync.js（新导出 collectTerminalSyncPending+TERMINAL_SWEEP_MAX，runBgSyncFromEnv 收尾补推循环（预算耗尽让位下一轮）；危险文件面显式 --force-baseline 放行（补推扫描即本 quick 目标改动））
+- test/spec-sync-terminal-sweep.test.mjs（新增 4 例（谓词/上限排序/库缺失/向上发现；Windows sqlite 句柄关池再删目录））
+- docs/sillyspec/platform-interface-map.md（triggerSync 条目补终态补推扫描一笔（行内扩展））
+- docs/sillyspec/troubleshooting.md（bg 异步化修复块补补推扫描 bullet+测试锚两文件）
+需求：归档终态推送补推扫描：bg-sync 子进程主轮收尾顺带补推「本地终态未被平台镜像」的变更
+根因：终态推送依赖归档后还有一轮 triggerSync（bg 子进程 best-effort），最后一轮被吞（spawn 失败/单飞锁竞态/会话戛然而止）则平台镜像永久停在旧阶段——2026-09-22 session-fork-continuation 实证：本地 04:22 归档、平台侧停在 verify，此后再无命令碰该变更
+方案：①src/run/bg-sync.js 新导出 collectTerminalSyncPending：扫 DB 取 status=archived/deleted 且 last_local_modified_ts 脏于 last_synced_platform_ts（或从未同步）的变更（last_active 倒序≤3 条；双戳皆空的 D-013 前陈年行 fail-closed 不补；库路径与 sync() 内 ProgressManager 同源 resolvePlatformSpecDir）；②runBgSyncFromEnv 主轮收尾接线补推循环（主变更跳过/预算耗尽让位/逐条 best-effort）；③补推幂等依据=sync() 对 archived/deleted 推终态+墓碑且 POST 幂等
+结果：test/spec-sync-terminal-sweep.test.mjs 新增 4/4 绿（谓词面/上限排序/库缺失空集/向上发现同库）；test/spec-sync-bg.test.mjs 全过（真子进程+mock server 集成回归）；lint 759 文件未引用导出 0+module-map 覆盖全；CLI 亲测门禁 test/lint=passed
+审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）

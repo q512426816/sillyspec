@@ -151,6 +151,7 @@
 变更：2026-09-22-stage-burst-fold
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given 仓库 local.yaml 可读（或缺失/坏 YAML）；When 调 readStageBurst(cwd)
 全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-01
@@ -160,6 +161,7 @@
 变更：2026-09-22-stage-burst-fold
 状态：active
 摘要：默认场景
+待复核：recent-quick
 依据决策：D-002@v2
 场景正文：
 - 场景：默认场景 — Given brainstorm/plan/execute 阶段存在剩余非 completed/skipped 步且 readStageBurst(cwd) 为 true，；When `sillyspec run <stage>`；Then noAI 步就地执行 _cliAction 并标 completed 落库；AI 步逐个按既有 outputStep 输出（首可渲染步带 persona 注入）
@@ -170,6 +172,7 @@
 变更：2026-09-22-stage-burst-fold
 状态：active
 摘要：默认场景
+待复核：recent-quick
 依据决策：D-003@v2、D-004@v2
 场景正文：
 - 场景：默认场景 — Given burst 开启且白名单阶段有待完成步；When `sillyspec run <stage> --done [--output ...] [--answer ...]`；Then completeStepBurst 循环调既有 completeStep（printNext:false、每轮 outputText=null 走 P0-2 事
@@ -180,6 +183,7 @@
 变更：2026-09-22-stage-burst-fold
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given local.yaml 配置 `stage: burst: true`；When 以 `SILLYSPEC_STAGE_BURST=0` 运行 `sillyspec run <stage>`；Then 走既有单步渲染路径（仅当前步说明书、无 burst 尾提示）
 全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-04
@@ -189,6 +193,7 @@
 变更：2026-09-22-stage-burst-fold
 状态：active
 摘要：默认场景
+待复核：recent-quick
 依据决策：D-010@v2
 场景正文：
 - 场景：默认场景 — Given 仓库 local.yaml 无 flow 配置（或读取失败）；When 调 readFlowConfig(specBase)；Then mode === 'legacy'；显式 `mode: thin` / `flow: thin` 照旧生效；受影响测试 fixture（test/flow-pr
@@ -199,6 +204,7 @@
 变更：2026-09-22-stage-burst-fold
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given burst 开启且 stage ∈ 白名单；When 主 --done 分发（src/run/command.js:1727 一带）或 auto --done 路径（:2073 一带）执行；Then 走 completeStepBurst；burst 关闭或非白名单走 completeStep 原路径——两路径 options 透传语义不变
 全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-06

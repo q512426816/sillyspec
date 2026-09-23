@@ -52,6 +52,11 @@ const LOCK_STALE_MS = 15 * 60 * 1000;
 const LOG_TRUNCATE_THRESHOLD = 1_000_000;
 const LOG_TRUNCATE_KEEP = 512 * 1024;
 
+// 终态补推扫描窗口与上限（2026-09-23 quick ql-20260923-007）：候选取 last_active 倒序
+// 前 50 行（老终态缺位也收敛，但不全表扫描）；一轮最多补 3 条（防多缺位风暴挤爆预算）。
+const TERMINAL_SWEEP_CANDIDATES = 50;
+export const TERMINAL_SWEEP_MAX = 3;
+
 /** pid 活性探测（跨平台）：signal 0 探测；EPERM = 进程存在但属他户，保守按活。 */
 function isPidAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -179,6 +184,48 @@ export async function spawnBackgroundSync(cwd, changeName, platformOpts = {}, op
 }
 
 /**
+ * 归档终态补推扫描：DB 里 status=archived/deleted 且本地终态脏于平台镜像
+ * （last_local_modified_ts > last_synced_platform_ts，或从未同步）的变更名，last_active
+ * 倒序取前 TERMINAL_SWEEP_MAX 条。
+ *
+ * 背景（2026-09-22 session-fork-continuation 实证）：终态推送依赖归档后还有一轮
+ * triggerSync——bg 子进程 best-effort，spawn 失败/单飞锁竞态/会话在归档后戛然而止都会
+ * 吞掉最后一轮，本地已归档而平台镜像停在旧阶段（verify），此后再无命令碰该变更即永久
+ * 滞后。归档/删除收尾均 _touchLocalModified（change-registry 语义：本地状态推进），
+ * 谓词即「终态戳晚于最后一次成功推送」。补推幂等（sync() 对 archived/deleted 推终态+
+ * 墓碑，POST 幂等），任意后续命令触发的 bg 轮顺带收敛。
+ * 时钟口径：last_synced_platform_ts 是服务端时间，本地钟超前服务端时至多多补一轮幂等
+ * 推送（无副作用），且 synced 随每次成功推进，自愈。
+ * 库路径与 sync() 内 ProgressManager 同源（resolvePlatformSpecDir(cwd)：平台指针→向上
+ * 发现→cwd/.sillyspec 默认；platformOpts.specRoot 不进库路径——与 triggerSync 对齐），
+ * 保证扫的库就是主轮推的库；解析抛错（指针失效等）→ 空集跳过本轮（best-effort）。
+ */
+export async function collectTerminalSyncPending(cwd) {
+  const { resolvePlatformSpecDir, ProgressManager } = await import('../progress.js');
+  let specDir = null;
+  try { specDir = resolvePlatformSpecDir(cwd); } catch { return []; }
+  if (!specDir) return [];
+  if (!existsSync(join(specDir, '.runtime', 'sillyspec.db'))) return [];
+  const pm = new ProgressManager({ specDir });
+  const rows = pm._ensureDB(cwd).getDb().prepare(
+    `SELECT name, last_active, last_synced_platform_ts, last_local_modified_ts
+     FROM changes WHERE status IN ('archived','deleted')
+     ORDER BY last_active DESC LIMIT ${TERMINAL_SWEEP_CANDIDATES}`
+  ).all();
+  const pending = [];
+  for (const r of rows) {
+    if (!r.name) continue;
+    const synced = r.last_synced_platform_ts || '';
+    const local = r.last_local_modified_ts || '';
+    // 脏度戳必须在场（fail-closed）：D-013 之前的陈年行两戳皆空，无从判滞后——补推只会
+    // 给平台凭空造新行；synced 空而 local 在场 = 从未成功推送过但终态有据 → 补。
+    if (local && (!synced || local > synced)) pending.push(r.name);
+    if (pending.length >= TERMINAL_SWEEP_MAX) break;
+  }
+  return pending;
+}
+
+/**
  * 子侧入口（bootstrap 经 env 传参调起；env 注入默认值供测试覆盖）。
  *
  * 单飞循环：写锁（本 pid）→ 每轮清 rerunQueued 后 inline 跑一轮 triggerSync →
@@ -223,6 +270,26 @@ export async function runBgSyncFromEnv(env = process.env) {
       console.warn('[spec-sync-bg] 总预算用尽，残留待同步状态由下一条命令的同步接管');
       break;
     }
+  }
+  // 终态补推（2026-09-23 quick ql-20260923-007）：主轮收尾后扫 DB，补推「本地已达终态但
+  // 平台镜像滞后」的变更（session-fork 实证缺口）。幂等；主变更刚推过跳过；预算耗尽留下一轮。
+  try {
+    const pending = await collectTerminalSyncPending(cwd);
+    for (const name of pending) {
+      if (name === changeName) continue;
+      if (Date.now() + roundTimeoutMs > deadline) {
+        console.warn('[spec-sync-bg] 总预算用尽，终态补推剩余条目由下一轮 bg 接管');
+        break;
+      }
+      console.log(`[spec-sync-bg] 终态补推（本地终态未被平台镜像）: ${name}`);
+      try {
+        await triggerSync(cwd, name, platformOpts, { inline: true, timeoutMs: roundTimeoutMs });
+      } catch (e) {
+        console.warn(`[spec-sync-bg] 终态补推异常（best-effort，下轮重试）: ${(e && e.message) || e}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`[spec-sync-bg] 终态补推扫描异常（best-effort）: ${(e && e.message) || e}`);
   }
   console.log(`[spec-sync-bg] 后台同步完成 ${new Date().toISOString()}: ${changeName}`);
   removeBgSyncLock(runtimeRoot);

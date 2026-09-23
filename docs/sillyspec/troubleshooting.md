@@ -1015,7 +1015,8 @@ gate_snapshot:
 - **输出/结果留痕** `<runtimeRoot>/spec-sync-bg.log`（子进程 stdout/stderr append，超 1MB 截尾保后 512KB）：`[spec-sync]`/`[sync]` 的 warn/冲突横幅不再刷主命令输出也不丢失；冲突可见性不降级（冲突文件照落，下一条命令 progress show 红标）。
 - **未连接平台零开销**：spawn 前经 `sync.js peekPlatformConnected`（与 `_getPlatform` 同源判据）预判，未连接不 spawn，本地独立用户零行为变化。
 - **逃生阀** `SILLYSPEC_SYNC_BG=0` 回落 inline 旧行为（测试断言进程内行为/用户自救）；bg 子进程自身回环调 `triggerSync` 强制 inline（env 护栏防 fork 链）。
-- 测试 test/spec-sync-bg.test.mjs（26 断言）：锁判定纯函数五态 + spawn 决策矩阵（spawnImpl 注入）+ e2e 真子进程（快速返回/请求到达/锁自清/日志落盘）+ 逃生阀 inline。
+- **归档终态补推扫描**（2026-09-23 quick ql-20260923-007）：bg 轮收尾扫 DB 补推「status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）」的变更——终态推送依赖归档后还有一轮 triggerSync，最后一轮被吞（spawn 失败/会话戛然而止）则平台镜像永久停在旧阶段（2026-09-22 session-fork-continuation 实证：本地 04:22 归档、平台停在 verify）；补推幂等（终态+墓碑 POST 幂等），last_active 倒序一轮 ≤3 条，脏度戳缺失的陈年行 fail-closed 不补。
+- 测试 test/spec-sync-bg.test.mjs（26 断言）：锁判定纯函数五态 + spawn 决策矩阵（spawnImpl 注入）+ e2e 真子进程（快速返回/请求到达/锁自清/日志落盘）+ 逃生阀 inline；test/spec-sync-terminal-sweep.test.mjs（4 例）：谓词面（archived/deleted/active/双空戳）+ 上限排序 + 库缺失空集 + 向上发现同库。
 
 **遇到同步类等待/噪音先查三处**：① 命令尾部卡住不看时钟猜——看是否 `[spec-sync]` 行还没打完（后台化后此形态已消，若再现查 `SILLYSPEC_SYNC_BG` 是否被置 0）；② 后台同步结果/失败去 `spec-sync-bg.log` 翻（不再进主命令输出）；③ 冲突横幅只在日志里出现时，`progress show` 的红标与 `platform resolve` 处置入口不变。
 

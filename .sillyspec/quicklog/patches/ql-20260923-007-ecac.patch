@@ -1,0 +1,219 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 9914924b..eb117b41 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -79,7 +79,7 @@ mcp:
+ `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
+ 
+ ### run 流程里的三个触发器（`src/run/shared.js`）
+-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:856`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:826`）。这是最常用的上推入口。
++- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:856`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:826`）。这是最常用的上推入口。bg 轮收尾带**归档终态补推扫描**（2026-09-23 quick ql-20260923-007，`collectTerminalSyncPending`）：DB 中 status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）的变更顺带补推终态+墓碑（幂等，last_active 倒序一轮 ≤3 条）——治「归档后最后一轮被吞则平台镜像永久停在旧阶段」（2026-09-22 session-fork-continuation 实证）。
+ - **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:989`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+ - **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:1084`）：包 `syncMod.checkApproval`。
+ - **`triggerPullActiveChange`**（`shared.js:1013`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+diff --git a/docs/sillyspec/troubleshooting.md b/docs/sillyspec/troubleshooting.md
+index 3da5a1c0..06f24202 100644
+--- a/docs/sillyspec/troubleshooting.md
++++ b/docs/sillyspec/troubleshooting.md
+@@ -1015,7 +1015,8 @@ gate_snapshot:
+ - **输出/结果留痕** `<runtimeRoot>/spec-sync-bg.log`（子进程 stdout/stderr append，超 1MB 截尾保后 512KB）：`[spec-sync]`/`[sync]` 的 warn/冲突横幅不再刷主命令输出也不丢失；冲突可见性不降级（冲突文件照落，下一条命令 progress show 红标）。
+ - **未连接平台零开销**：spawn 前经 `sync.js peekPlatformConnected`（与 `_getPlatform` 同源判据）预判，未连接不 spawn，本地独立用户零行为变化。
+ - **逃生阀** `SILLYSPEC_SYNC_BG=0` 回落 inline 旧行为（测试断言进程内行为/用户自救）；bg 子进程自身回环调 `triggerSync` 强制 inline（env 护栏防 fork 链）。
+-- 测试 test/spec-sync-bg.test.mjs（26 断言）：锁判定纯函数五态 + spawn 决策矩阵（spawnImpl 注入）+ e2e 真子进程（快速返回/请求到达/锁自清/日志落盘）+ 逃生阀 inline。
++- **归档终态补推扫描**（2026-09-23 quick ql-20260923-007）：bg 轮收尾扫 DB 补推「status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）」的变更——终态推送依赖归档后还有一轮 triggerSync，最后一轮被吞（spawn 失败/会话戛然而止）则平台镜像永久停在旧阶段（2026-09-22 session-fork-continuation 实证：本地 04:22 归档、平台停在 verify）；补推幂等（终态+墓碑 POST 幂等），last_active 倒序一轮 ≤3 条，脏度戳缺失的陈年行 fail-closed 不补。
++- 测试 test/spec-sync-bg.test.mjs（26 断言）：锁判定纯函数五态 + spawn 决策矩阵（spawnImpl 注入）+ e2e 真子进程（快速返回/请求到达/锁自清/日志落盘）+ 逃生阀 inline；test/spec-sync-terminal-sweep.test.mjs（4 例）：谓词面（archived/deleted/active/双空戳）+ 上限排序 + 库缺失空集 + 向上发现同库。
+ 
+ **遇到同步类等待/噪音先查三处**：① 命令尾部卡住不看时钟猜——看是否 `[spec-sync]` 行还没打完（后台化后此形态已消，若再现查 `SILLYSPEC_SYNC_BG` 是否被置 0）；② 后台同步结果/失败去 `spec-sync-bg.log` 翻（不再进主命令输出）；③ 冲突横幅只在日志里出现时，`progress show` 的红标与 `platform resolve` 处置入口不变。
+ 
+diff --git a/src/run/bg-sync.js b/src/run/bg-sync.js
+index b8c7c8f2..887aa76b 100644
+--- a/src/run/bg-sync.js
++++ b/src/run/bg-sync.js
+@@ -52,6 +52,11 @@ const LOCK_STALE_MS = 15 * 60 * 1000;
+ const LOG_TRUNCATE_THRESHOLD = 1_000_000;
+ const LOG_TRUNCATE_KEEP = 512 * 1024;
+ 
++// 终态补推扫描窗口与上限（2026-09-23 quick ql-20260923-007）：候选取 last_active 倒序
++// 前 50 行（老终态缺位也收敛，但不全表扫描）；一轮最多补 3 条（防多缺位风暴挤爆预算）。
++const TERMINAL_SWEEP_CANDIDATES = 50;
++export const TERMINAL_SWEEP_MAX = 3;
++
+ /** pid 活性探测（跨平台）：signal 0 探测；EPERM = 进程存在但属他户，保守按活。 */
+ function isPidAlive(pid) {
+   if (!Number.isInteger(pid) || pid <= 0) return false;
+@@ -178,6 +183,48 @@ export async function spawnBackgroundSync(cwd, changeName, platformOpts = {}, op
+   return { status: 'spawned', logPath };
+ }
+ 
++/**
++ * 归档终态补推扫描：DB 里 status=archived/deleted 且本地终态脏于平台镜像
++ * （last_local_modified_ts > last_synced_platform_ts，或从未同步）的变更名，last_active
++ * 倒序取前 TERMINAL_SWEEP_MAX 条。
++ *
++ * 背景（2026-09-22 session-fork-continuation 实证）：终态推送依赖归档后还有一轮
++ * triggerSync——bg 子进程 best-effort，spawn 失败/单飞锁竞态/会话在归档后戛然而止都会
++ * 吞掉最后一轮，本地已归档而平台镜像停在旧阶段（verify），此后再无命令碰该变更即永久
++ * 滞后。归档/删除收尾均 _touchLocalModified（change-registry 语义：本地状态推进），
++ * 谓词即「终态戳晚于最后一次成功推送」。补推幂等（sync() 对 archived/deleted 推终态+
++ * 墓碑，POST 幂等），任意后续命令触发的 bg 轮顺带收敛。
++ * 时钟口径：last_synced_platform_ts 是服务端时间，本地钟超前服务端时至多多补一轮幂等
++ * 推送（无副作用），且 synced 随每次成功推进，自愈。
++ * 库路径与 sync() 内 ProgressManager 同源（resolvePlatformSpecDir(cwd)：平台指针→向上
++ * 发现→cwd/.sillyspec 默认；platformOpts.specRoot 不进库路径——与 triggerSync 对齐），
++ * 保证扫的库就是主轮推的库；解析抛错（指针失效等）→ 空集跳过本轮（best-effort）。
++ */
++export async function collectTerminalSyncPending(cwd) {
++  const { resolvePlatformSpecDir, ProgressManager } = await import('../progress.js');
++  let specDir = null;
++  try { specDir = resolvePlatformSpecDir(cwd); } catch { return []; }
++  if (!specDir) return [];
++  if (!existsSync(join(specDir, '.runtime', 'sillyspec.db'))) return [];
++  const pm = new ProgressManager({ specDir });
++  const rows = pm._ensureDB(cwd).getDb().prepare(
++    `SELECT name, last_active, last_synced_platform_ts, last_local_modified_ts
++     FROM changes WHERE status IN ('archived','deleted')
++     ORDER BY last_active DESC LIMIT ${TERMINAL_SWEEP_CANDIDATES}`
++  ).all();
++  const pending = [];
++  for (const r of rows) {
++    if (!r.name) continue;
++    const synced = r.last_synced_platform_ts || '';
++    const local = r.last_local_modified_ts || '';
++    // 脏度戳必须在场（fail-closed）：D-013 之前的陈年行两戳皆空，无从判滞后——补推只会
++    // 给平台凭空造新行；synced 空而 local 在场 = 从未成功推送过但终态有据 → 补。
++    if (local && (!synced || local > synced)) pending.push(r.name);
++    if (pending.length >= TERMINAL_SWEEP_MAX) break;
++  }
++  return pending;
++}
++
+ /**
+  * 子侧入口（bootstrap 经 env 传参调起；env 注入默认值供测试覆盖）。
+  *
+@@ -224,6 +271,26 @@ export async function runBgSyncFromEnv(env = process.env) {
+       break;
+     }
+   }
++  // 终态补推（2026-09-23 quick ql-20260923-007）：主轮收尾后扫 DB，补推「本地已达终态但
++  // 平台镜像滞后」的变更（session-fork 实证缺口）。幂等；主变更刚推过跳过；预算耗尽留下一轮。
++  try {
++    const pending = await collectTerminalSyncPending(cwd);
++    for (const name of pending) {
++      if (name === changeName) continue;
++      if (Date.now() + roundTimeoutMs > deadline) {
++        console.warn('[spec-sync-bg] 总预算用尽，终态补推剩余条目由下一轮 bg 接管');
++        break;
++      }
++      console.log(`[spec-sync-bg] 终态补推（本地终态未被平台镜像）: ${name}`);
++      try {
++        await triggerSync(cwd, name, platformOpts, { inline: true, timeoutMs: roundTimeoutMs });
++      } catch (e) {
++        console.warn(`[spec-sync-bg] 终态补推异常（best-effort，下轮重试）: ${(e && e.message) || e}`);
++      }
++    }
++  } catch (e) {
++    console.warn(`[spec-sync-bg] 终态补推扫描异常（best-effort）: ${(e && e.message) || e}`);
++  }
+   console.log(`[spec-sync-bg] 后台同步完成 ${new Date().toISOString()}: ${changeName}`);
+   removeBgSyncLock(runtimeRoot);
+ }
+diff --git a/test/spec-sync-terminal-sweep.test.mjs b/test/spec-sync-terminal-sweep.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/spec-sync-terminal-sweep.test.mjs
+@@ -0,0 +1,95 @@
++/**
++ * spec-sync-terminal-sweep.test.mjs — 归档终态补推扫描（2026-09-23 quick ql-20260923-007）
++ *
++ * 背景（2026-09-22 session-fork-continuation 实证）：终态推送依赖归档后还有一轮
++ * triggerSync——bg 子进程 best-effort，最后一轮被吞（spawn 失败/会话戛然而止）后本地
++ * 已归档而平台镜像停在旧阶段，此后再无命令碰该变更即永久滞后。collectTerminalSyncPending
++ * 按 DB 脏度谓词（last_local_modified_ts > last_synced_platform_ts，或从未同步）找出
++ * 待补推变更，bg 子进程主轮收尾后顺带补推（sync 对 archived/deleted 推终态+墓碑，幂等）。
++ *
++ * 覆盖面（真 sqlite fixture 于 tmpdir，零网络零真仓）：
++ *   ① 谓词：archived+脏 → pending；archived+干净 → 不入；active+脏 → 不入（状态过滤）；
++ *      deleted+从未同步 → pending；
++ *   ② 排序与上限：多缺位按 last_active 倒序取前 3（TERMINAL_SWEEP_MAX）；
++ *   ③ DB 缺失（无 .sillyspec）→ 空集不创建库；
++ *   ④ 库发现：cwd 在 spec 根子目录仍向上解析到同库（与 sync() 内 ProgressManager 同源，
++ *      bg 子进程 cwd 变体场景）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { collectTerminalSyncPending, TERMINAL_SWEEP_MAX } from '../src/run/bg-sync.js'
++import { ProgressManager } from '../src/progress.js'
++
++const rm = (p) => rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
++
++/** 关静态连接池再删目录（Windows sqlite 句柄未关 → rmSync EPERM）。 */
++function closePooledAndRm(p) {
++  for (const db of ProgressManager._dbPool.values()) { try { db.close() } catch { /* 已关/损坏忽略 */ } }
++  ProgressManager._dbPool.clear()
++  rm(p)
++}
++
++/** 建带库 fixture，返回 { root, insert }——insert(name, status, lastActive, synced, local)。
++ *  specDir 语义 = .sillyspec 目录本身（ProgressManager 构造约定），库落
++ *  root/.sillyspec/.runtime/sillyspec.db——与 resolveSpecDir 向上发现的真实结构一致。 */
++function makeFixture() {
++  const root = mkdtempSync(join(tmpdir(), 'term-sweep-'))
++  const pm = new ProgressManager({ specDir: join(root, '.sillyspec') })
++  const db = pm._ensureDB(root).getDb()
++  const insert = db.prepare(
++    `INSERT INTO changes (name, status, last_active, created_at, last_synced_platform_ts, last_local_modified_ts)
++     VALUES (?, ?, ?, ?, ?, ?)`
++  )
++  return { root, insert }
++}
++
++test('collectTerminalSyncPending 谓词面：archived/deleted 终态脏于镜像才入列', async () => {
++  const { root, insert } = makeFixture()
++  try {
++    insert.run('chg-arch-dirty', 'archived', '2026-09-22T20:22:00Z', '2026-09-22T10:00:00Z', '2026-09-22T20:20:00Z', '2026-09-22T20:22:00Z')
++    insert.run('chg-arch-clean', 'archived', '2026-09-22T19:00:00Z', '2026-09-22T10:00:00Z', '2026-09-22T20:30:00Z', '2026-09-22T19:00:00Z')
++    insert.run('chg-active-dirty', 'active', '2026-09-22T21:00:00Z', '2026-09-22T10:00:00Z', '2026-09-22T20:00:00Z', '2026-09-22T21:00:00Z')
++    insert.run('chg-del-neversynced', 'deleted', '2026-09-22T18:00:00Z', '2026-09-22T10:00:00Z', null, '2026-09-22T18:00:00Z')
++    insert.run('chg-arch-nolocal', 'archived', '2026-09-22T17:00:00Z', '2026-09-22T10:00:00Z', null, null)
++    const pending = await collectTerminalSyncPending(root, {})
++    assert.ok(pending.includes('chg-arch-dirty'), '归档+终态脏 → 补推')
++    assert.ok(pending.includes('chg-del-neversynced'), '删除+从未同步 → 补推')
++    assert.equal(pending.includes('chg-arch-clean'), false, '镜像已覆盖 → 不补')
++    assert.equal(pending.includes('chg-active-dirty'), false, '非终态不扫（active 留给常规推送）')
++    assert.equal(pending.includes('chg-arch-nolocal'), false, '从未同步且无脏度戳 → 无从判滞后，不补（fail-closed）')
++  } finally { closePooledAndRm(root) }
++})
++
++test('collectTerminalSyncPending 上限与排序：last_active 倒序取前 TERMINAL_SWEEP_MAX', async () => {
++  const { root, insert } = makeFixture()
++  try {
++    for (let i = 0; i < TERMINAL_SWEEP_MAX + 2; i++) {
++      insert.run(`chg-pending-${i}`, 'archived', `2026-09-22T2${i}:00:00Z`, '2026-09-22T10:00:00Z', '2026-09-22T10:00:00Z', '2026-09-22T2${i}:00:30Z')
++    }
++    const pending = await collectTerminalSyncPending(root, {})
++    assert.equal(pending.length, TERMINAL_SWEEP_MAX, `上限 ${TERMINAL_SWEEP_MAX} 条防风暴`)
++    assert.deepEqual(pending, ['chg-pending-4', 'chg-pending-3', 'chg-pending-2'], 'last_active 倒序（最新缺位优先）')
++  } finally { closePooledAndRm(root) }
++})
++
++test('collectTerminalSyncPending DB 缺失：空集不创建库（无 .sillyspec 环境）', async () => {
++  const root = mkdtempSync(join(tmpdir(), 'term-sweep-nodb-'))
++  try {
++    const pending = await collectTerminalSyncPending(root, {})
++    assert.deepEqual(pending, [])
++  } finally { closePooledAndRm(root) }
++})
++
++test('collectTerminalSyncPending 库发现：cwd 在 spec 根子目录仍解析到同库（与 sync() 同源）', async () => {
++  const { root, insert } = makeFixture()
++  const subCwd = join(root, 'sub', 'project')
++  mkdirSync(subCwd, { recursive: true })
++  try {
++    insert.run('chg-walkup', 'archived', '2026-09-22T20:22:00Z', '2026-09-22T10:00:00Z', null, '2026-09-22T20:22:00Z')
++    const pending = await collectTerminalSyncPending(subCwd)
++    assert.deepEqual(pending, ['chg-walkup'], '向上发现 .sillyspec（bg 子进程 cwd 变体场景）')
++  } finally { closePooledAndRm(root) }
++})
