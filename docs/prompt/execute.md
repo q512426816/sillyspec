@@ -180,7 +180,7 @@ worktree 路径 + 分支名 + 模式
 
 **本步的模式条件注入（M3/M4，2026-09-21-r5-efficiency-batch2）**
 - **推荐分组行**（M3）：CLI 按三条件（allowed_paths 正交 / 无 provides-expects_from 契约链 / 组 ≤3，另内建批数护栏 ≥ min(3, N)）预计算本 Wave 推荐分组注入 batch 条件段后（agent 可偏离须在 Wave 摘要披露）——仅本地 Agent tool 派发路径渲染（SillyHub 一 Wave 一 mission 互斥）；无可并批（无 ≥2 组）零注入，输出与无该行时逐字节一致
-- **execution_mode**（M4）：plan.md frontmatter `execution_mode: main` 时整段执行方式换主代理直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；缺省/非法回退 dispatch，渲染与既往一致（逐字节零回归）
+- **execution_mode**（M4）：plan.md frontmatter `execution_mode: dispatch` 时整段执行方式换子代理派发指引；frontmatter `execution_mode: main`（或缺省不写/非法值——2026-09-23 R8 对撞后默认翻转）渲染主代理直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与派发完全一致（只换执行宿主，不换防线）
 
 **提示词原文**
 

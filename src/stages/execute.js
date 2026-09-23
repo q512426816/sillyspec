@@ -964,16 +964,17 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
     } catch {}
   }
 
-  // ── execution_mode 通道（M4 / FR-04，2026-09-21-r5-efficiency-batch2 task-04，D-004@v1）：
-  // plan.md frontmatter `execution_mode: main | dispatch`，**缺省/非法值一律回退 dispatch**
-  // （既有变更含归档重放逐字节零回归）。main=主代理直写（本仓对撞实证 A 组 7′ vs B 组 70′；
-  // GSD 在 Claude Code 永远 spawn 子代理——direct 是本仓结论非 GSD 抄袭项，分歧声明见
-  // design M4）。main 时：执行方式段换直写指引、派发段/子代理工作目录强制段/并发帽段/
-  // M3 推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与锚点/review write
-  // 指引全保留（只换执行宿主，不换防线）。判据（plan 生成时 agent 声明）：输入已含决策 ×
-  // 任务文件正交的清晰输入任务；自动化判据归第 3 批 ceremony 决策密度轴。best-effort：
-  // plan 缺失/读取失败回退 dispatch。严格小写 'main'（大小写漂移视为非法回退）。
-  let executionMode = 'dispatch'
+  // ── execution_mode 通道（M4 / FR-04，2026-09-21-r5-efficiency-batch2 task-04，D-004@v1；
+  // 2026-09-23 R8 对撞后缺省翻转）：plan.md frontmatter `execution_mode: main | dispatch`，
+  // **缺省不写/非法值一律 main**（主代理直写）。翻转依据：对撞双实证派发对清晰输入任务是
+  // 纯税（R7：A 组直写进码 7′ vs B 组派发 70′；R8：execute 80′（6 子代理+编排）vs 单上下文
+  // 同规模任务进码 14′——派发税 3.6×，来源=子代理冷启动上下文重建 887 万 token + 伪并行 +
+  // 小任务全额派发开销）。**显式 `execution_mode: dispatch` 才走子代理派发**（判据：任务真可
+  // 并行 × 单任务规模大 × 上下文需分片，三者齐备才值得付派发税）。main 时：执行方式段换直写
+  // 指引、派发段/子代理工作目录强制段/并发帽段/M3 推荐分组段全抑制；worktree 隔离/写入守卫/
+  // review.json/verify 门禁与锚点/review write 指引全保留（只换执行宿主，不换防线）。
+  // best-effort：plan 缺失/读取失败 = 缺省 main。严格小写（大小写漂移视为非法回退缺省）。
+  let executionMode = 'main'
   try {
     if (changeDir) {
       const emPlanPath = path.join(changeDir, 'plan.md')
@@ -982,11 +983,11 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
         const emFm = emPlanText.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)
         if (emFm) {
           const emVal = emFm[1].match(/^execution_mode:[ \t]*(\S+)[ \t]*(?:#.*)?$/m)
-          if (emVal && emVal[1] === 'main') executionMode = 'main'
+          if (emVal && emVal[1] === 'dispatch') executionMode = 'dispatch'
         }
       }
     }
-  } catch { /* execution_mode 解析 best-effort：失败回退 dispatch */ }
+  } catch { /* execution_mode 解析 best-effort：失败保持缺省 main */ }
   const mainMode = executionMode === 'main'
 
   // ── 模块卡分级（P0a）：本 Wave per-task 最优卡表，细卡优先——治「根层大卡被每个子代理

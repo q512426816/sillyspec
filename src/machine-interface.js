@@ -22,6 +22,7 @@ import { resolveRuntimeRoot } from './run/shared.js';
 import { runValidators, checkTransition, checkExecuteCodeEvidence } from './stage-contract.js';
 import { validateTaskReviews, resolveLatestExecuteRunId } from './task-review.js';
 import { runVerifyTestCheck } from './verify-postcheck.js';
+import { computeGateFingerprint, lookupGreenCache, storeGreenCache, greenCacheNotice } from './run/green-cache.js';
 import { checkCode } from './diagnostic-codes.js';
 
 // ============ 退出码常量（D-004@v1）============
@@ -116,6 +117,30 @@ export function buildEnvelope({
  *   让两函数按 ctx 切跨仓 gitDir / per-repo cwd。null 时两函数按既有单仓行为零回归。
  * @returns {Promise<{ envelope: object, exitCode: number }>}
  */
+/**
+ * verify 门禁 check 的绿结果缓存包装（R8 对撞修复 2026-09-23，实现见 src/run/green-cache.js）。
+ * 同指纹（HEAD+代码脏面+local.yaml）近期真跑的绿结果复用：命中 → synth(hit) 合成等价结果
+ * （带 cached 披露字段，调用方进 warnings——「结果是真的、本次没跑」必须明示）；未命中 →
+ * 真跑，status==='passed' 时写缓存。fail-open：无根/指纹失败/缓存异常一律回退真跑（零回归）。
+ */
+function greenCachedCheck({ kind, greenRoot, cwd, specBase, changeName }, runReal, synth) {
+  if (!greenRoot) return runReal();
+  let fingerprint = null;
+  try { fingerprint = computeGateFingerprint({ cwd, specBase }); } catch { fingerprint = null; }
+  if (!fingerprint) return runReal();
+  const scope = `change:${changeName}`;
+  let hit = null;
+  try { hit = lookupGreenCache({ runtimeRoot: greenRoot, scope, kind, fingerprint }); } catch { hit = null; }
+  if (hit) return synth(hit);
+  const result = runReal();
+  try {
+    if (result && result.status === 'passed') {
+      storeGreenCache({ runtimeRoot: greenRoot, scope, kind, fingerprint, result: { status: 'passed', exitCode: result.exitCode ?? 0, mode: result.mode ?? null } });
+    }
+  } catch { /* best-effort 写缓存 */ }
+  return result;
+}
+
 export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false } = {}) {
   const specRoot = specBase || resolveSpecDir(cwd);
   // A4：pm 用 specRoot（而非默认 resolveSpecDir(cwd)）——--spec-dir/平台模式下 specBase 是真实
@@ -288,8 +313,14 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
 
     // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
     if (stage === 'verify') {
-      const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx });
+      // 绿缓存根：与 runtimeRoot 解析同源（drift 锚主仓口径）；解析失败 null → 不缓存不命中
+      let greenRoot = null;
+      try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
+      const vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
+        () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
+        (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
       const vtWarnings = [];
+      if (vt.cached) vtWarnings.push(vt.reason);
       if (vt.status === 'skipped') {
         vtWarnings.push(`⚠️ verify-test SKIPPED — gate 未核验测试（${vt.reason || 'local.yaml 未配置 commands.test 或显式无测试'}）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL`);
       }
@@ -311,6 +342,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
         warnings: vtWarnings,
         data: {
           status: vt.status,
+          cached: vt.cached === true,
           exitCode: vt.exitCode,
           durationMs: vt.durationMs,
           resultPath: vt.resultPath,
@@ -327,7 +359,9 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
       // 不一致时以 --done 为准。lint 未配置/不可跑 → informational，不阻断只读查询。
       try {
         const { runVerifyLintCheck, triageLintOwnership, resolveVerifyChangedFiles } = await import('./verify-postcheck.js');
-        const lc = runVerifyLintCheck({ cwd, specBase: specRoot });
+        const lc = greenCachedCheck({ kind: 'lint', greenRoot, cwd, specBase: specRoot, changeName },
+          () => runVerifyLintCheck({ cwd, specBase: specRoot }),
+          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, failureFiles: [], cached: true, reason: greenCacheNotice(hit, 'verify-lint') }));
         if (lc.status === 'skipped') {
           checks.push({
             id: 'verify-lint',
@@ -341,6 +375,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
           const lcWarnings = [
             '口径说明：gate verify 的 lint 在工作树直跑；verify --done 的 lint 在隔离快照（HEAD+归属文件 overlay）跑——两口径不一致时以 --done 为准。',
           ];
+          if (lc.cached) lcWarnings.push(lc.reason);
           let ownership = null;
           let lintOk = lc.status !== 'failed';
           if (lc.status === 'failed') {
@@ -359,6 +394,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
             warnings: lcWarnings,
             data: {
               status: lc.status,
+              cached: lc.cached === true,
               exitCode: lc.exitCode,
               durationMs: lc.durationMs,
               ownership: ownership ? ownership.verdict : null,
@@ -578,9 +614,14 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
 
       // ── b. verify-test：真实执行测试命令并取证 ──
       case 'verify-test': {
-        const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx });
+        let greenRoot = null;
+        try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
+        const vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
+          () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
+          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
         data = {
           status: vt.status,
+          cached: vt.cached === true,
           exitCode: vt.exitCode,
           durationMs: vt.durationMs,
           resultPath: vt.resultPath,
@@ -589,7 +630,9 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
         };
         ok = vt.status !== 'failed';
         errors = vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [];
-        warnings = vt.status === 'skipped'
+        warnings = vt.cached
+          ? [vt.reason]
+          : vt.status === 'skipped'
           ? ['测试被跳过']
           : (vt.mode === 'full' && vt.fallbackReason)
             ? [`⚠️ verify-test 跑的是全量 commands.test（${vt.fallbackReason}）；失败可能含未变更模块的预存错误`]

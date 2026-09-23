@@ -165,9 +165,9 @@ const stepGeneratePlan = {
 > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
 > - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
 
-> **执行模式声明（execution_mode，M4——清晰输入任务的主代理直写通道，2026-09-21-r5-efficiency-batch2）**：
-> - plan.md frontmatter 加 \`execution_mode: main | dispatch\` 键，**缺省不写 = dispatch**（走既有子代理派发，既有变更零影响）；本仓对撞实证 A 组主代理直写 7′ 进码 vs B 组派发 70′（GSD 在 Claude Code 永远 spawn 子代理，direct 模式是本仓结论非抄袭项——分歧声明见 design）
-> - 仅当满足判据才声明 \`execution_mode: main\`：**输入已含决策**（design/方案已把接口、边界、验收定死，实现期无开放式设计裁决）× **任务边界清晰可串行**（无跨 task 契约链半成品风险）；不满足或拿不准一律缺省 dispatch（误用 main 只损失并行收益，不损失任何防线与审查）
+> **执行模式声明（execution_mode，M4——2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）**：
+> - plan.md frontmatter 加 \`execution_mode: main | dispatch\` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）
+> - 仅当满足判据才显式声明 \`execution_mode: dispatch\`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）
 > - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
 
 ---
@@ -203,7 +203,7 @@ plan_level: none
 \`\`\`markdown
 ---
 plan_level: light
-execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
+execution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）
 ---
 
 # 轻量计划（Light Plan）：<需求简述>
@@ -243,7 +243,7 @@ light 计划的约束：
 \`\`\`markdown
 ---
 plan_level: full
-execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
+execution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）
 ---
 
 # 实现计划（Plan）

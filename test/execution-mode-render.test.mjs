@@ -1,9 +1,10 @@
 /**
  * M4 execution_mode 通道（2026-09-21-r5-efficiency-batch2 task-04，FR-04 / D-004@v1）
  *
- * 锁死契约：
- * 1. 缺省回退：无键 / execution_mode: dispatch / 非法值（含大小写漂移）→ dispatch 渲染，
- *    三态输出互相逐字节一致；含派发段/工作目录段/并发帽段，不含直写段（零回归钉）。
+ * 锁死契约（2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）：
+ * 1. 缺省回退：无键 / execution_mode: main / 非法值（含大小写漂移）→ main 渲染，
+ *    三态输出互相逐字节一致；含直写段，不含派发段/子代理工作目录段/并发帽段；
+ *    显式 dispatch 仍走派发渲染（判据：真并行 × 规模大 × 上下文分片）。
  * 2. main 渲染：含直写指引段（逐任务闭环 + 防线保留声明 + 直写工作目录段 + 直写纪律），
  *    不含派发段（默认子代理话术/可选 batch）/子代理工作目录强制段/并发帽段/M3 推荐分组段/
  *    SillyHub 派发互斥行。
@@ -11,7 +12,7 @@
  *    只换执行宿主，不换防线）。
  * 4. main × M3 互斥：同一可并批 Wave，dispatch 注入推荐分组、main 零注入（无派发即无分组语义）。
  * 5. plan.js stepGeneratePlan 模板：light/full 两档 frontmatter 均含 execution_mode 注释键
- *    + 声明判据话术（输入已含决策 × 任务文件正交性；缺省 dispatch）。
+ *    + 声明判据话术（任务真可并行 × 单任务规模大 × 上下文需分片；缺省 main）。
  * 6. 注释容忍：`execution_mode: main  # 说明` 仍识别为 main（YAML 注释不碍解析）。
  * 7. 隐式 Wave（light/无显式 Wave 段）+ main → 直写段照注入（implicit 分支同受 execution_mode 支配）。
  */
@@ -74,28 +75,34 @@ const waveOf = (n, implicit = false) => ({
 const render = (cd, n = 3, opts = {}, implicit = false) =>
   buildWavePrompt(waveOf(n, implicit), 1, cd, join(cd, 'wt'), { dispatchMode: 'local', ...opts })
 
-// ── 1. 缺省回退：dispatch 渲染（零回归钉）─────────────────────────
+// ── 1. 缺省翻转：main 渲染为缺省（R8 对撞修复钉）─────────────────────
 
-test('T1 缺省三态（无键/dispatch/非法值）→ dispatch 渲染且互相逐字节一致', () => {
+test('T1 缺省三态（无键/main/非法值）→ main 渲染且互相逐字节一致；显式 dispatch 仍派发', () => {
   // 同一 cd 原地换 frontmatter 再渲染——worktree 路径恒定，输出才可逐字节比对
   const cd = makeChangeDir(3)
   const wpNo = render(cd)
-  writePlan(cd, 3, { fmExtra: ['execution_mode: dispatch'] })
-  const wpDispatch = render(cd)
+  writePlan(cd, 3, { fmExtra: ['execution_mode: main'] })
+  const wpMain = render(cd)
   writePlan(cd, 3, { fmExtra: ['execution_mode: agent-swarm'] })
   const wpGarbage = render(cd)
-  assert.equal(wpNo, wpDispatch, '无键 === 显式 dispatch（逐字节）')
+  assert.equal(wpNo, wpMain, '无键 === 显式 main（逐字节）')
   assert.equal(wpNo, wpGarbage, '无键 === 非法值回退（逐字节）')
   for (const wp of [wpNo]) {
-    assert.ok(wp.includes('默认每个任务由独立子代理执行，你不要自己写代码'), 'T1: 派发段在位')
-    assert.ok(wp.includes('可选 batch（合并实现）'), 'T1: batch 条件段在位')
-    assert.ok(wp.includes('workdir 参数是强制必传'), 'T1: 子代理工作目录强制段在位')
-    assert.ok(wp.includes('同时在飞 ≤3'), 'T1: 并发帽段在位')
-    assert.ok(!wp.includes('主代理直写'), 'T1: 无直写段')
+    assert.ok(wp.includes('主代理直写（execution_mode: main）'), 'T1: 直写指引头在位')
+    assert.ok(!wp.includes('默认每个任务由独立子代理执行'), 'T1: 无派发段')
+    assert.ok(!wp.includes('workdir 参数是强制必传'), 'T1: 无子代理工作目录强制段')
   }
-  // 大写漂移同样回退 dispatch（严格小写 main 判定）
-  writePlan(cd, 3, { fmExtra: ['execution_mode: MAIN'] })
-  assert.equal(render(cd), wpNo, 'execution_mode: MAIN → dispatch 回退（大小写敏感）')
+  // 大写漂移同样回退缺省 main（严格小写 dispatch 判定）
+  writePlan(cd, 3, { fmExtra: ['execution_mode: DISPATCH'] })
+  assert.equal(render(cd), wpNo, 'execution_mode: DISPATCH → main 回退（大小写敏感）')
+  // 显式 dispatch 仍走完整派发渲染（逃生通道钉）
+  writePlan(cd, 3, { fmExtra: ['execution_mode: dispatch'] })
+  const wpDispatch = render(cd)
+  assert.ok(wpDispatch.includes('默认每个任务由独立子代理执行，你不要自己写代码'), 'T1: 显式 dispatch 派发段在位')
+  assert.ok(wpDispatch.includes('可选 batch（合并实现）'), 'T1: batch 条件段在位')
+  assert.ok(wpDispatch.includes('workdir 参数是强制必传'), 'T1: 子代理工作目录强制段在位')
+  assert.ok(wpDispatch.includes('同时在飞 ≤3'), 'T1: 并发帽段在位')
+  assert.notEqual(wpNo, wpDispatch, '缺省 main 与显式 dispatch 渲染不同')
 })
 
 test('T1b options 缺省与空对象输出逐字节一致（既有回归钉保持）', () => {
@@ -133,7 +140,7 @@ test('T2 main → 直写指引段在位，派发段/工作目录强制段/并发
 // ── 3. 两模式锚点 + review write 指引一致 ─────────────────────────
 
 test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存在', () => {
-  const cdD = makeChangeDir(3)
+  const cdD = makeChangeDir(3, { fmExtra: ['execution_mode: dispatch'] })
   const cdM = makeChangeDir(3, { fmExtra: ['execution_mode: main'] })
   const wpD = render(cdD)
   const wpM = render(cdM)
@@ -147,7 +154,7 @@ test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存
 // ── 4. main × M3 互斥 ─────────────────────────────────────────────
 
 test('T4 同一可并批 Wave（5 任务两两正交）：dispatch 注入推荐分组，main 零注入', () => {
-  const cdD = makeChangeDir(5)
+  const cdD = makeChangeDir(5, { fmExtra: ['execution_mode: dispatch'] })
   const cdM = makeChangeDir(5, { fmExtra: ['execution_mode: main'] })
   assert.ok(render(cdD, 5).includes('推荐分组'), 'T4: dispatch 下 M3 推荐分组在位')
   assert.ok(!render(cdM, 5).includes('推荐分组'), 'T4: main 下 M3 分组段抑制（无派发即无分组语义）')
@@ -158,11 +165,11 @@ test('T4 同一可并批 Wave（5 任务两两正交）：dispatch 注入推荐�
 test('T5 stepGeneratePlan prompt：light/full 模板含 execution_mode 键 + 判据话术', () => {
   const step = fixedPrefix.find(s => s.id === 'generate_plan')
   assert.ok(step, 'fixedPrefix 含 generate_plan 步骤')
-  assert.ok(step.prompt.includes('execution_mode: dispatch'), 'T5: 缺省 dispatch 注释键在模板')
-  assert.ok(step.prompt.includes('execution_mode: main'), 'T5: main 选项在模板判据话术')
-  assert.ok(step.prompt.includes('输入已含决策'), 'T5: 声明判据（输入已含决策 × 任务文件正交性）话术在位')
-  assert.ok(step.prompt.includes('execution_mode') && (step.prompt.match(/execution_mode: dispatch/g) || []).length >= 2,
-    'T5: light 与 full 两档模板均带键（≥2 处 dispatch 缺省行）')
+  assert.ok(step.prompt.includes('execution_mode: main'), 'T5: 缺省 main 注释键在模板')
+  assert.ok(step.prompt.includes('execution_mode: dispatch'), 'T5: dispatch 选项在判据话术')
+  assert.ok(step.prompt.includes('任务真可并行'), 'T5: 声明判据（真并行 × 规模大 × 上下文分片）话术在位')
+  assert.ok((step.prompt.match(/execution_mode: main  #/g) || []).length >= 2,
+    'T5: light 与 full 两档模板均带键（≥2 处 main 缺省行）')
 })
 
 // ── 6. 注释容忍 ───────────────────────────────────────────────────
