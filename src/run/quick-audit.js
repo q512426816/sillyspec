@@ -525,6 +525,16 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   let gateSpecBase = specBase
   let snapshot = null
   if (files.length > 0 && !process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF) {
+    // worktree 会话跳快照（2026-09-23 R9/R10 根治，与 verify-quality-scan 同款）：worktree
+    // 已是会话独占隔离，快照只剩 junction 冻结/慢 I/O 纯成本——直接 worktree 实测。
+    let skipForWorktree = false
+    try {
+      const { shouldSkipGateSnapshotForWorktree } = await import('./gate-snapshot.js')
+      skipForWorktree = shouldSkipGateSnapshotForWorktree(cwd)
+    } catch { /* 判定异常按不跳走原路 */ }
+    if (skipForWorktree) {
+      console.log('🔀 cwd 是会话专属 worktree——隔离快照冗余（并行会话不在场），直接在 worktree 实测')
+    } else {
     try {
       const { createGateSnapshot } = await import('./gate-snapshot.js')
       snapshot = createGateSnapshot({ cwd, files })
@@ -534,6 +544,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         console.log(`🧪 门禁隔离快照（根：${snapshot.snapshotRoot}）：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
       }
     } catch { /* 快照链路异常 → 主仓现行为 */ }
+    }
   }
   try {
     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
@@ -549,6 +560,13 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         })
         if (consult.reuse) testLedgerReuse = consult
       } catch { /* 咨询异常 → 真跑 */ }
+    }
+    if (!testLedgerReuse) {
+      // 沙箱实测预告（坑 quick-done-长静默与快照行尾假阳性 坑1，2026-09-21 实证）：快照内
+      // test+lint 实测大仓可达 841-1054s 且期间零输出——外层 exec 按「疑似挂死」杀进程每轮
+      // 重建沙箱耗时成倍。预告时长预期与勿杀指引（心跳输出需异步改造留专项，预告先消除
+      // 「零信息误判」主因）。
+      console.log(`⏳ 开始 test+lint 实测${snapshot ? '（隔离快照内）' : ''}——大仓全量可达 15-20 分钟，期间无输出属正常；后台跑 + 长容忍（≥20 分钟），勿按超时杀进程（杀掉不丢进度，但每轮重建沙箱重跑实测耗时成倍）。`)
     }
     let test = testLedgerReuse
       ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: 'npm test (ledger-reuse)', exitCode: 0, durationMs: 0, outputTail: null }

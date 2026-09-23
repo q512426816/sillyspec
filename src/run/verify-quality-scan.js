@@ -596,6 +596,16 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
   // ⚠️ 口径可见。指纹（storeQualityScan）仍按主仓 cwd 算——--done 对账复用的指纹匹配口径不变。
   let snap = null
   if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
+    // worktree 会话跳快照（2026-09-23 R9/R10 根治）：worktree 已是会话独占隔离——快照只剩
+    // venv junction 冻结/慢 I/O 纯成本（R9 3MB/0CPU 冻结、R10 15min 慢跑实证），直接工作树实测。
+    let skipForWorktree = false
+    try {
+      const { shouldSkipGateSnapshotForWorktree } = await import('./gate-snapshot.js')
+      skipForWorktree = shouldSkipGateSnapshotForWorktree(cwd)
+    } catch { /* 判定异常按不跳走原路 */ }
+    if (skipForWorktree) {
+      console.log('🔀 cwd 是会话专属 worktree——隔离快照冗余（并行会话不在场；快照 venv junction 冻结/慢 I/O 面 R9/R10 双实证），直接在 worktree 实测')
+    } else {
     try {
       const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
       snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
@@ -603,6 +613,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
         console.log(`🧪 noAI 扫描隔离快照（根：${snap.snapshotRoot}）：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
       }
     } catch { /* 快照链路异常 → 主仓现行为 */ }
+    }
   }
   const gateCwd = snap ? snap.snapshotRoot : cwd
   const gateSpecBase = snap ? join(snap.snapshotRoot, '.sillyspec') : specBase

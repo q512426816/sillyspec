@@ -19,6 +19,20 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync
 import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 
+/**
+ * worktree 会话跳快照判定（2026-09-23 R9/R10 双实证根治）：cwd 位于 sillyspec 会话专属
+ * execute worktree（.sillyspec/.runtime/worktrees/<change>）时，隔离快照的立命之本——
+ * 「主仓共享工作区并行会话脏文件不污染本会话门禁」——天然不成立问题不存在：worktree
+ * 本身就是单会话独占的隔离环境。而快照在此场景只剩纯成本：venv/node_modules junction
+ * 冻结与慢 I/O 面（R9 3MB/0CPU 冻结、R10 15min 慢跑均出自 Temp 快照内）、快照构建时延、
+ * 双层 overlay。跳过 = 直接在 worktree cwd 实测（口径与主仓 fallback 同构）。
+ * 判定（跨平台）：路径分隔符先归一为 /，再匹配 /.sillyspec/.runtime/worktrees/<name>。
+ */
+export function shouldSkipGateSnapshotForWorktree(cwd) {
+  const p = String(cwd || '').replace(/\\/g, '/')
+  return /\/\.sillyspec\/\.runtime\/worktrees\/[^/]+/.test(p)
+}
+
 function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true }).trim()
 }

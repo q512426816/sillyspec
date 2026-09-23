@@ -347,3 +347,16 @@
 根因：multi-agent-platform 实证（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules）：纯 backend 改动被 frontend 链段 next CNF 拦死只能 skip 逃生；实测反转原诊断——沙箱 junction 无罪（健康 pnpm node_modules 经 junction 实测 tsc/next 均可解析），真因=主仓 frontend node_modules 半装（.bin 缺失/链接悬空，已另行 pnpm install 修复环境）；工具缺口成立：CNF 属环境信号非代码失败，超时降档/存量债归属鉴定先例均此口径但 CNF 形态无覆盖；附带连根修 GBK 乱码——zh-Windows cmd 报错经错误代码页解码致签名失效+门禁输出不可读（坑文档「乱码一行难归因」原话）
 方案：src/verify-postcheck.js 五处——①NEW decodeShellOutput：三处 execSync（lint/full/module）改 buffer 捕获+智能解码，utf8 无损直通零行为变化；②NEW detectCommandMissingFailure：四族 CNF 签名（zh/en cmd、bash、debian sh、pnpm 横幅）+二进制名捕获+乱码兜底签名+尾部 1.5KB 窗防中段 fixture 噪音；③三接线 failed→skipped 带响亮修复指引（lint 护栏=失败输出无可归属路径；test 护栏=判账行集全 wrapper 噪声含 TAP 汇总族；降档不进 lint tally）；④aggregateStatus 认识 skipped 单元+runModuleSubset 聚合 reason 点名跳过模块；⑤ARTIFACT_ENV_MISSING_RES 补 next+zh 两侧签名。跨仓路径不动（并行会话 TAP 覆盖刚落）
 结果：新测 verify-gate-command-missing 7/7（签名族+尾部窗+真实 cmd GBK 解码+lint/test/module 三路径端到端降档与真债硬拦对照+聚合+伪影分诊）+核心面 112/112+verify 族 118/118+quick-audit+gate 族 57/57+lint 773 文件 0 问题（未引用导出 0）；本 --done 门禁实测同口径。留痕：父 node --test 注入 NODE_TEST_CONTEXT 使被测命令里的 node --test 零输出零退出码——ql-20260923-021 deps-auto E2E 在该伪影下断言空转绿，红账另册
+
+## ql-20260923-023-9e34 | 2026-09-23 22:32:29 | 门禁快照 worktree 跳过——R9/R10 双实证根治：会话 worktree 内不再建隔离快照
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/gate-snapshot.js（NEW 导出 shouldSkipGateSnapshotForWorktree）
+- src/run/verify-quality-scan.js（noAI 扫描快照点前置跳过）
+- src/run/quick-audit.js（quick 门禁快照点前置跳过）
+- test/gate-snapshot-worktree-skip.test.mjs（NEW 8 断言钉）
+需求：门禁快照 worktree 跳过——R9/R10 双实证根治：会话 worktree 内不再建隔离快照
+根因：用户实测两轮对撞 verify 均卡死在 Temp 隔离快照（R9=venv junction 冻结 3MB/0CPU；R10=快照内慢跑 15min 仍在跑）。根因=隔离快照的立命前提（主仓共享工作区防并行脏文件）在 worktree 会话不成立——worktree 本身就是会话独占隔离；快照在此只剩纯成本（junction 冻结/慢 I/O/构建时延/双层 overlay）。openspec 无此问题正因它没有机器门禁
+方案：gate-snapshot.js 新导出 shouldSkipGateSnapshotForWorktree（路径归一 / 后匹配 /.sillyspec/.runtime/worktrees/<name>，跨平台双分隔符）；verify-quality-scan.js（noAI 质量扫描）与 quick-audit.js（quick 门禁）两处快照创建点前置判定，命中跳过并打🔀日志、直接在 worktree cwd 实测（与主仓 fallback 同构口径）；判定异常按不跳走原路（fail-safe）。主仓共享面行为零变化（worktree 外照建快照）
+结果：gate-snapshot-worktree-skip 1/1（8 断言：worktree 正反斜杠/深子目录 true、主仓/普通/runtime 其他子目录/空/null false）+gate-snapshot 族 9/9 回归+lint 774 未引用导出 0
