@@ -229,3 +229,12 @@
 方案：①complete-handlers.js 新增纯函数 buildKnowledgeInboxLines（零条目零输出的降噪钉；超基线 ⚠️/基线内 📚 双形态；标题直出前 3 条+余量指引+classify 用法行），renderKnowledgeBaselineRatchet 升级为收件箱横幅——待审>0 即渲染（quick --done 与归档收尾两个共用点一次生效），清空才静默；②NEW 子命令 sillyspec knowledge inbox [--json]（cmdKnowledgeInbox：uncategorized 标题+ql 前缀+一行摘要+基线态，纯读零副作用；parseUncategorizedEntries 随之 export 供横幅与命令共用）；③quick 资产尾 FR 计数带去处文件清单（frFiles 去重数组，fr-index written 的 file 维度）；④usage 行补 inbox、runtime.md 模块卡登记（stages/knowledge.js 的 inbox 路由属其既有 dispatch 面，cli-entry/core-engine/stages 三模块仅经 index.js usage 行与路由表受及，--no-docs 豁免留痕）。complete-handlers 属基线保护文件，--force-baseline 显式解锁
 结果：knowledge-inbox 4/4（解析器双形态/横幅零输出钉+双形态+余量/inbox json 与人读+空态）+knowledge-baseline 5/5（176 行文案断言随契约更新，条数+基线值语义不变）+knowledge-classify 1/1 回归零失败；lint 762 文件未引用导出 0+module-map 覆盖全；真机冒烟：inbox 输出本仓 5 条真实待审带标题全文
 审计：[gate] L2（跨 4 模块 · 7 文件：4 代码/2 测试）advisory；模块文档认领已 --no-docs 显式豁免
+
+## ql-20260923-013-a5ab | 2026-09-23 11:27:38 | 演示：知识收件箱横幅真实触发样例
+状态：已完成
+关联变更：（无）
+文件：（见实际改动）
+需求：演示：知识收件箱横幅真实触发样例
+根因：无，纯演示（用户要求可见性样例）
+方案：无文件改动——仅触发收口渲染链路，展示 quick --done 收尾时收件箱横幅如何把待审知识标题打出来
+结果：无测试面（零改动）；演示横幅见输出
