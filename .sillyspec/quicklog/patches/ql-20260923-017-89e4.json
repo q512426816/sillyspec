@@ -1,0 +1,73 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-d5cc6a06",
+  "totals": {
+    "files": 3,
+    "additions": 33,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/local.yaml.example",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/config-schema.js",
+      "declared": true,
+      "additions": 4,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/test-timeout-config.test.mjs",
+      "declared": true,
+      "additions": 27,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 2,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "setup",
+        "files": [
+          "src/config-schema.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      ".sillyspec/local.yaml.example",
+      "test/test-timeout-config.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-017-89e4",
+  "sessionId": "quick-d5cc6a06",
+  "savedAt": "2026-09-23T10:39:57.228Z",
+  "patchSha256": "85bc055a59adfd41aa9a7b9364c167fd52c92a522cc3e1b2ac7a5ec5251dd300",
+  "patchStatus": "ok"
+}

@@ -273,3 +273,17 @@
 根因：跨工具对比实证（2026-09-23 R8/R9 + 用户质询链）：约束句无强度词时读不出是描述还是禁令（「不做 X」歧义），红线类约束靠读的人自觉掂量；OpenSpec 规格库的 SHALL/MUST 纪律是其实际优点之一，sillyspec 侧补齐此写作约定属零逻辑成本（fr/ 蒸馏逐字透传，强度词随知识注入自动带给后续变更）
 方案：brainstorm.js requirements.md 格式模板 GWT 块说明后追加约定行：MUST/必须=硬性要求（违反即缺陷）、MUST NOT/禁止=红线（绝对不允许）、SHOULD/应当=强烈建议（偏离须注明理由）、MAY/可以=可选，禁止裸写无强度词约束句（带事件通道红线实例）；docs/prompt 镜像按 _extract→_sync 流水线同步（brainstorm.md step5/step7 两 fence 替换）
 结果：docs-gate 18/18 绿；fourpiece/brainstorm 相关 4/4 零回归；lint 762 文件未引用导出 0+module-map 覆盖全；纯模板话术零逻辑面（知识库 patterns.md 已有姊妹评估纪律条目）
+
+## ql-20260923-017-89e4 | 2026-09-23 16:17:12 | verify 畅通批①——测试超时配置化 + 快照 test 超时/冻结自动回退主仓
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（resolveTestTimeoutMs+冻结鉴别+lint 链（与并行会话在途 hunk 零重叠，选择性提交见 commit））
+- src/run/quick-audit.js（快照 test 回退主仓块）
+- src/config-schema.js（双键登记+renderExample 模板两行）
+- .sillyspec/local.yaml.example（注释示例（--force-baseline））
+- test/test-timeout-config.test.mjs（NEW 三例）
+需求：verify 畅通批①——测试超时配置化 + 快照 test 超时/冻结自动回退主仓
+根因：R9 实证两坑：全量套件实测 27:03 撞固定 600s 帽被当超时失败（R1 轮 ~10min 损失）；快照 pytest 冻结零输出只能人工杀（R2 轮 ~11min）——lint 已有 2026-09-12 快照超时回退主仓先例，test 路径缺同款
+方案：①verify-postcheck.js resolveTestTimeoutMs 三级链（local.yaml commands.test_timeout_sec > env SILLYSPEC_TEST_TIMEOUT_MS > 600s）接 runFullCommand，超时 reason 冻结鉴别（双空输出=疑似环境冻结附复跑指引；非冻结附提帽/收窄指引）；lint 同链 lint_timeout_sec。②quick-audit.js 快照 test 超时/零输出自动回退主仓复跑（对齐 lint 先例）。③config-schema 双键登记+renderExample 模板同步（防漂耦合钉）+local.yaml.example 注释示例。收口口径披露：快照门禁本次恒假红——会话开始前已脏（含并行会话 hunk）的文件被边界审计记为前序 baseline 不进 overlay，快照缺本会话导出（快照分叉家族第三 sibling，登记 known-issues 待修），按既有口径 SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 主仓实测收口
+结果：主仓口径实测：npm test 全量绿（含新 test-timeout-config 3/3 与 config-schema 426/426）+verify 族 57/57 零失败（两轮自修：env 单位 bug、renderExample 模板耦合漏同步、阀名误用自纠）；lint 763 文件未引用导出 0

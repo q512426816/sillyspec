@@ -12,6 +12,8 @@ commands:
   build: npm run build
   test: npm test
   lint: npm run lint
+  # test_timeout_sec: 2400   # 全量套件实测超 600s 的慢仓在此提帽（缺省 600；env SILLYSPEC_TEST_TIMEOUT_MS 同效）
+  # lint_timeout_sec: 600    # lint 超时秒数（缺省 180）
   # install: npm install   # worktree 依赖安装命令
 
 # ── SillyHub MCP 客户端凭据（派发到 worker 用）──

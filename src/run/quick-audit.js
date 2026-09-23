@@ -527,11 +527,18 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         if (consult.reuse) testLedgerReuse = consult
       } catch { /* 咨询异常 → 真跑 */ }
     }
-    const test = testLedgerReuse
+    let test = testLedgerReuse
       ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: 'npm test (ledger-reuse)', exitCode: 0, durationMs: 0, outputTail: null }
       // restrictFiles = 本会话声明文件（坑 quick-gate-并行全流程变更脏文件误伤）：模块选择
       // 与 deps(auto) 只取「实际变更 ∩ 本会话声明」，并行全流程变更 WIP 不再挡死本会话
       : runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, restrictFiles: files })
+    // 快照 test 超时/零输出冻结 → 主仓复跑（R9 实证 2026-09-23；对齐 2026-09-12 lint 同款
+    // 回退先例——快照内 junction I/O 病态慢/venv 冻结无解，主仓口径保硬门；并行噪声混入时
+    // 失败输出带归属鉴定提示兜底）。冻结特征=超时且 outputTail 空（真慢套件有持续输出）。
+    if (snapshot && test.status === 'failed' && /超时/.test(String(test.reason || ''))) {
+      console.warn(`⚠️ 快照 test ${test.outputTail ? '超时' : '超时且零输出（疑似冻结）'}（junction I/O 病态慢/冻结）→ 主仓复跑 test（并行噪声可能混入——失败先做归属鉴定）`)
+      test = runVerifyTestCheck({ cwd, specBase, changeName, restrictFiles: files })
+    }
     if (!testLedgerReuse && changeName && test.status === 'passed') {
       try {
         const { recordTestLedger } = await import('./test-ledger.js')

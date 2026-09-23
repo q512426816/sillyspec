@@ -56,6 +56,19 @@ import { parseEvidenceSlots, classifyVerifiedFile } from './verify-facts-schema.
 
 // 测试命令最长执行时间；超时视为失败（防止 CLI 被挂起的测试卡死）
 const TEST_TIMEOUT_MS = Number(process.env.SILLYSPEC_TEST_TIMEOUT_MS) || 10 * 60 * 1000
+
+/**
+ * 测试超时配置链（R9 实证 2026-09-23）：local.yaml commands.test_timeout_sec > env
+ * SILLYSPEC_TEST_TIMEOUT_MS > 缺省 600s。全量套件实测可达 27min（change-events-r9 后端
+ * 8181 例 27:03），固定帽必杀——慢仓在 commands: 块配 test_timeout_sec。纯函数 export 供
+ * 测试与 runFullCommand 共用（yamlText 传调用侧同源文本）。
+ */
+export function resolveTestTimeoutMs(yamlText, env = process.env) {
+  const m = String(yamlText || '').match(/^\s*test_timeout_sec:\s*([0-9]+)\s*(?:#.*)?$/m)
+  if (m && Number(m[1]) > 0) return Number(m[1]) * 1000
+  const e = Number(env.SILLYSPEC_TEST_TIMEOUT_MS)
+  return Number.isFinite(e) && e > 0 ? e * 1000 : TEST_TIMEOUT_MS
+}
 const OUTPUT_TAIL_CHARS = 4000
 // 判账失败行台账上限（坑 verify-test-reconcile-tail-blindspot）：对账按完整输出判、tail 只存
 // 末 4000 字符 → 失败行落在盲区时只剩 reason 里 5 行×120 字符采样，归因必须全量复跑。修法是
@@ -229,8 +242,13 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
   }
 
   // timeoutMs（2026-09-12 驾驭第十七批 dogfood）：门禁快照内 node_modules 经 junction I/O 较慢，
-  // 3min 默认预算实测被超时杀（180.1s 假败）——快照路径显式传 5min；优先级 显式参 > env > 默认
-  const LINT_TIMEOUT_MS = timeoutMs || Number(process.env.SILLYSPEC_LINT_TIMEOUT_MS) || 3 * 60 * 1000
+  // 3min 默认预算实测被超时杀（180.1s 假败）——快照路径显式传 5min；优先级 显式参 >
+  // local.yaml lint_timeout_sec（R9 后补，2026-09-23）> env > 默认
+  const yamlLintTimeoutMs = (() => {
+    const m = String(yamlText || '').match(/^\s*lint_timeout_sec:\s*([0-9]+)\s*(?:#.*)?$/m)
+    return m && Number(m[1]) > 0 ? Number(m[1]) * 1000 : 0
+  })()
+  const LINT_TIMEOUT_MS = timeoutMs || yamlLintTimeoutMs || Number(process.env.SILLYSPEC_LINT_TIMEOUT_MS) || 3 * 60 * 1000
   const startedAt = Date.now()
   let exitCode = 0
   let output = ''
@@ -2009,6 +2027,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
   }
 
   const startedAt = Date.now()
+  const timeoutMs = resolveTestTimeoutMs(yamlText)
   let exitCode = 0
   let output = ''
   let reason = null
@@ -2017,15 +2036,19 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
     output = execSync(command, {
       cwd,
       encoding: 'utf8',
-      timeout: TEST_TIMEOUT_MS,
+      timeout: timeoutMs,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
     output = [e.stdout, e.stderr].filter(Boolean).join('\n') || e.message
-    reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= TEST_TIMEOUT_MS
-      ? `测试命令超时（>${TEST_TIMEOUT_MS / 1000}s）`
+    // 冻结鉴别（R9 实证 2026-09-23）：超时且 stdout/stderr 双空 = 进程零产出（真慢套件有
+    // 持续输出）——快照 junction/沙箱环境冻结特征，给主仓口径复跑的可行动指引
+    const frozen = e.signal === 'SIGTERM' && Date.now() - startedAt >= timeoutMs
+      && ![e.stdout, e.stderr].filter(Boolean).join('').trim()
+    reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= timeoutMs
+      ? `测试命令超时（>${timeoutMs / 1000}s）${frozen ? '且零输出——疑似环境冻结（快照 junction/沙箱），建议主仓口径复跑（quick 门禁会自动回退；gate 场景带 SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1）' : '——超时≠测试挂：配 commands.test_timeout_sec 提帽或 test_strategy: module 收窄'}`
       : `测试命令退出码 ${exitCode}`
     // 资源竞争鉴别提示（坑 verify-devserver-port-race）：EADDRINUSE/端口占用类失败极可能是
     // 自留 dev server 竞争而非代码问题——输出里明示鉴别路径，防误报 FAIL
