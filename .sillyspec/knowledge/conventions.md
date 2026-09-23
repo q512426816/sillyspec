@@ -110,3 +110,7 @@ detached/无控制台进程（watcher、bg-sync）派生的控制台子程序（
 根因：spawn 侧环境闸（NODE_TEST_CONTEXT/SILLYSPEC_WATCHER）只拦「我拉起的这条路」，测试内 CLI 子进程自带自定义 env 绕过；而 watcher 设计上未连平台也 spawn+自刷心跳租约=无外部判死锚，测试临时目录又不清理 → 永续孤儿。
 护栏（三闸模式，通用）：①出生即死——首拍已是终态（对象不存在）立即退出；②外部资源蒸发——依赖的外部资源（git 仓/目录）连续 N 拍消失即退；③硬寿命帽——无论活跃与否 T 小时绝对退出。另：套件 runner 注入全局逃生阀（run-tests.mjs SILLYSPEC_WATCHER=0）+真子进程回归钉（主路径而非只边缘路径——本次常量缺失崩启动恰是只测边缘路径漏掉的）。
 证据：2026-09-22 用户会话抓现行 41 进程+杀灭后零闪现；src/watcher.js 三闸+test/watcher.test.mjs 两枚真子进程钉。（来源：2026-09-22-r7-protocol-surgery task-01）
+
+## 进度库引擎 = node:sqlite（Node 内置原生 SQLite——非 WASM、非 npm 原生模块）
+
+src/db-engine.js 是唯一换引擎点（方案 B/D-002）：封装 node:sqlite DatabaseSync（Node v22.13+ 免 flag，仍发 ExperimentalWarning），消解 better-sqlite3→node:sqlite 三缺口（pragma→exec / transaction→手写 SAVEPOINT 栈 / pluck→Object.values）；WAL + busy_timeout=5000 经 applyPragmas 逐条 exec，BUSY 退避重试在 db.js wrapper 外层。选型史：sql.js（WASM 全内存 load/save）→ better-sqlite3（npm 原生绑定）→ **node:sqlite（内置原生——零外部 sqlite 依赖，跨三平台免编译约束的最终形态）**。并发语义按原生 SQLite 理解：多进程读并发 + 单写者 + busy 重试是现成能力，勿按 WASM 整文件模型推断（旧模型是 last-writer-wins lost update 根因，2026-08 已根治）。文档纪律：引擎类根本事实迁移时 known-issues/模块卡/架构账须同步过一遍——2026-09-23 实证三层只跟一层（known-issues 停在 sql.js、core-engine 卡停在 better-sqlite3、源码已是 node:sqlite），预览账本设计讨论中被误引。

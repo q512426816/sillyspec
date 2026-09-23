@@ -17,7 +17,7 @@ SillySpec 的核心运行引擎 — 负责数据库存储、进度管理、阶�
 
 core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化层（DB）、进度管理层（ProgressManager）、调度层（runCommand/index）。
 
-**DB 类**（src/db.js）封装了 better-sqlite3（SQLite 的原生绑定，同步 API）。数据库文件位于 `.sillyspec/.runtime/sillyspec.db`，通过 PRAGMA 配置 journal_mode=WAL（伴随 `.db-wal`/`.db-shm` 侧车）、busy_timeout=5000、foreign_keys=ON、synchronous=NORMAL。better-sqlite3 打开即持久化，DDL/事务提交直接落盘主库，不再有旧 WASM 内存引擎的「全库 load 到内存 → 序列化写回」模型（旧模型是 last-writer-wins lost update 根因，现 WAL 单写者串行 + 应用层 SQLITE_BUSY 有限重试根治）。DB 类提供事务支持（`transaction` 方法，含 BUSY 退避重试），所有写操作通过事务批量提交；`close()` 时 better-sqlite3 自动做 WAL checkpoint 合并 `-wal`/`-shm` 回主库，无需显式 `_save`。`.bak` 损坏回退保留（主库→`.bak`→全新/报错 逐级回退）。
+**DB 类**（src/db.js）经 **src/db-engine.js 引擎抽象层**（唯一换引擎点，方案 B/D-002，2026-08-11 起）封装 **node:sqlite（Node v22.13+ 内置原生 SQLite，免 flag）**，消解 better-sqlite3→node:sqlite 三缺口（pragma→exec / transaction→手写 SAVEPOINT 栈 / pluck→Object.values 取首列）。数据库文件位于 `.sillyspec/.runtime/sillyspec.db`，通过 PRAGMA 配置 journal_mode=WAL（伴随 `.db-wal`/`.db-shm` 侧车）、busy_timeout=5000、foreign_keys=ON、synchronous=NORMAL。原生引擎打开即持久化，DDL/事务提交直接落盘主库，不再有旧 WASM 内存引擎的「全库 load 到内存 → 序列化写回」模型（旧模型是 last-writer-wins lost update 根因，现 WAL 单写者串行 + 应用层 SQLITE_BUSY 有限重试根治）。DB 类提供事务支持（db-engine runTransaction：SAVEPOINT 栈嵌套自动成栈、抛错自动 ROLLBACK TO+RELEASE 原错误上抛；BUSY 退避重试在 db.js wrapper 外层），所有写操作通过事务批量提交；`close()` 时引擎自动做 WAL checkpoint 合并 `-wal`/`-shm` 回主库，无需显式 `_save`。`.bak` 损坏回退保留（主库→`.bak`→全新/报错 逐级回退）。
 
 **ProgressManager 类**（src/progress.js）是核心状态管理器，管理项目全局数据和变更级进度。每个变更的进度由 stages 对象表示，每个 stage 包含 steps 数组。VALID_STAGES 定义了 8 个合法阶段：scan, brainstorm, plan, execute, verify, archive, quick, explore（主流程顺序见 MAIN_FLOW_ORDER：brainstorm→plan→execute→verify→archive；propose 阶段已移除——阶段合并进 brainstorm 产出四件套）。ProgressManager 通过 DB 类的 SQLite 后端存储所有状态。
 
@@ -85,10 +85,10 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 | 函数/常量 | 说明 | 参数 |
 |-----------|------|------|
 | `DB` (class) | SQLite 数据库封装 | `constructor(dbPath)` |
-| `DB.init()` | 同步初始化（better-sqlite3 同步打开/创建库、设 PRAGMA、按 schema 版本戳建表；主库→.bak→全新 逐级回退） | — |
-| `DB.close()` | 关闭连接（better-sqlite3 close 自动 WAL checkpoint 合并 -wal/-shm 回主库，无需显式 _save） | — |
+| `DB.init()` | 同步初始化（node:sqlite DatabaseSync 同步打开/创建库、经 db-engine applyPragmas 设 PRAGMA、按 schema 版本戳建表；主库→.bak→全新 逐级回退） | — |
+| `DB.close()` | 关闭连接（引擎 close 自动 WAL checkpoint 合并 -wal/-shm 回主库，无需显式 _save） | — |
 | `DB.transaction(fn)` | 原生事务（自动 BEGIN/COMMIT/ROLLBACK，fn 抛错自动回滚不吞错）+ SQLITE_BUSY 应用层有限重试（3 次退避） | `fn(sqlDb)` |
-| `DB.getDb()` | 返回底层 better-sqlite3 Database 实例（供 progress.js 直接 prepare/run） | — |
+| `DB.getDb()` | 返回底层 node:sqlite DatabaseSync 实例（供 progress.js 直接 prepare/run） | — |
 
 ### src/progress.js — ProgressManager 类
 | 函数/常量 | 说明 | 参数 |
@@ -134,8 +134,8 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 
 | 决策 | 原因 | 替代方案 |
 |------|------|----------|
-| 使用 better-sqlite3（原生 SQLite 绑定）而非旧 WASM 内存引擎 | 原生绑定直连 SQLite，WAL 真生效（WASM 纯内存库 WAL 无意义）；事务提交即持久化，消除全库 export/load 的 last-writer-wins lost update 根因 | WASM 内存库（零原生依赖但纯内存，需全库 export 落盘） |
-| 同步 API（非 async）用于数据库操作 | better-sqlite3 是同步原生绑定；PM 核心读写方法已同步化，read 每次查最新不缓存快照 | 异步 ORM |
+| 使用 node:sqlite（Node ≥22.13 内置原生 SQLite，经 db-engine.js 抽象层消解三缺口）而非 npm 原生模块/旧 WASM 内存引擎 | 内置原生绑定直连 SQLite：零外部 sqlite 依赖（连 npm 原生模块都不装，跨三平台免编译约束最终形态）；WAL 真生效（WASM 纯内存库 WAL 无意义）；事务提交即持久化，消除全库 export/load 的 last-writer-wins lost update 根因 | WASM 内存库（零原生依赖但纯内存，需全库 export 落盘）/ better-sqlite3（原生但需 npm 原生编译，2026-08-11 已迁内置） |
+| 同步 API（非 async）用于数据库操作 | node:sqlite DatabaseSync 是同步原生内置绑定；PM 核心读写方法已同步化，read 每次查最新不缓存快照 | 异步 ORM |
 | VALID_STAGES 硬编码为常量 | 阶段固定且与 stageRegistry 一一对应 | 配置文件驱动 |
 | 进度快照写入 history 目录 | 便于回溯和调试 | 仅保留当前状态 |
 | 双层目录结构 (.runtime + changes) | 运行时数据与变更数据隔离 | 扁平结构 |
@@ -143,7 +143,7 @@ core-engine 是 SillySpec 的基础设施层，由三个层次组成：持久化
 
 ## 依赖关系
 - 内部依赖：src/stages/index.js（stageRegistry, auxiliaryStages）、src/stages/execute.js（buildExecuteSteps）、src/stages/plan.js（buildPlanSteps）、src/init.js（cmdInit, getVersion）
-- 外部依赖：better-sqlite3、fs、path
+- 外部依赖：node:sqlite（Node 内置模块，零外部 sqlite 依赖）、fs、path
 
 ## 注意事项
 - DB 类使用同步 API；better-sqlite3 事务提交即落盘主库（WAL），close() 负责 WAL checkpoint 合并 -wal/-shm 回主库并释放连接（不再需要旧 WASM 引擎时代的显式 _save）
