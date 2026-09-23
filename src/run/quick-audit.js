@@ -456,14 +456,37 @@ export function buildSemanticGuardHits({ cwd, specBase, files, changeName } = {}
  *   semanticGuard 仅检测跑过（三条早退 skip 路径不跑检测、无字段）时挂载；WARNING 级
  *   非阻断——action/failed 判定不受它影响（调用方 complete-handlers.js 只读 action/failed，零改动）。
  */
+/**
+ * 门禁文件集合并（ql-018）：审计口径 ∪ 声明边界，去重保序（审计在前）。声明文件即使被
+ * 审计判为「前序 baseline 未计入本轮」也随会话进快照——声明即边界（治 declared∩前序脏
+ * 被二选一丢弃→快照 HEAD 旧版→门禁恒假红，2026-09-23 ql-017 三轮实证）。纯函数。
+ */
+export function mergeGateFiles(audited, declared) {
+  const out = []
+  const seen = new Set()
+  for (const f of [...(Array.isArray(audited) ? audited : []), ...(Array.isArray(declared) ? declared : [])]) {
+    if (typeof f !== 'string' || !f || seen.has(f)) continue
+    seen.add(f)
+    out.push(f)
+  }
+  return out
+}
+
 export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
     return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
   }
   const audited = Array.isArray(changedFiles) ? changedFiles : []
-  // 倒推 B 模式兜底：审计口径为空时回退声明边界（文件早于会话启动被基线吸收的场景）
-  const files = audited.length > 0 ? audited : (Array.isArray(declaredFiles) ? declaredFiles : [])
-  const fileSource = audited.length > 0 ? '审计' : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
+  // 门禁文件集 = 审计 ∪ 声明边界（并集，2026-09-23 ql-018 修复）：旧口径二选一（审计非空时
+  // 丢弃 declaredFiles）致「declared ∩ 会话启动前已脏」的文件不进快照 overlay——快照装 HEAD
+  // 旧版，本会话新增导出缺失，快照内测试 import 即炸且重跑恒红（快照分叉家族第三 sibling
+  // 的根治件：声明过的文件无论审计口径是否计入，一律随会话进快照——声明即边界）。倒推 B
+  // 兜底语义保留（审计为空时 declaredFiles 独撑，与旧版一致）；并集对快照零成本（overlay 与
+  // HEAD 同内容的文件不产生差异）。
+  const files = mergeGateFiles(audited, Array.isArray(declaredFiles) ? declaredFiles : [])
+  const fileSource = audited.length > 0
+    ? (files.length > audited.length ? `审计∪声明（审计 ${audited.length} + 声明补入 ${files.length - audited.length}）` : '审计')
+    : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
   // 代码文件判定（2026-09-19 monorepo 子包实证修复：multi-agent-platform 回带收口 6 个
   // sillyhub-daemon/src/**、frontend/src/** 文件被「纯 doc/配置」误判跳过实测）：旧口径只认
   // 仓根 src/、test/ 前缀——monorepo 子包（<pkg>/src/**、backend/app/**.py）全漏。
