@@ -298,3 +298,18 @@
 根因：2026-09-23 ql-017 三轮门禁恒假红实证：runQuickTestLintGate 文件集旧口径二选一（audited 非空时整体丢弃 declaredFiles）——会话启动前已脏（含并行会话 hunk）但被本会话修改并显式声明的文件不进快照 overlay，快照装 HEAD 旧版，本会话新增导出缺失，快照内测试 import 即炸且重跑恒红（known-issues 快照分叉家族第三 sibling 的根治件）。src/run/quick-audit.js 属基线保护文件，--force-baseline 显式解锁
 方案：①新 export 纯函数 mergeGateFiles（审计∪声明，去重保序审计在前；null/空串/非串/重复剔除）；②runQuickTestLintGate 接入替代二选一，fileSource 标签区分审计/审计∪声明（N+M）/声明兜底三态；倒推 B 兜底语义保留（审计空→声明独撑），并集对快照零成本（overlay 与 HEAD 同内容不产生差异）；声明即边界——声明过的文件无论审计口径是否计入一律随会话进快照
 结果：gate-files-merge 3/3（并集钉含 ql-017 五文件实证形态/倒推 B 保留/非法容忍）+quick-gate 与 gate-snapshot 族回归 72/72 零失败；lint 764 文件未引用导出 0；本 quick 收口即自验——修复使能快照正确装载本会话文件，门禁实测通过即根治生效的直接证据
+
+## ql-20260923-019-4703 | 2026-09-23 19:28:36 | token 减负话术件——长输出跑批落文件纪律 + 评审派发保留澄清（直写只免实现派发）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/execute.js（运行测试步铁律+mainExecSection 评审派发保留段）
+- src/stages/quick.js（step2 第 5 条）
+- src/stages/plan.js（执行模式声明第 4 条）
+- docs/prompt/quick.md（镜像同步）
+- docs/prompt/_extracted.json（抽取重建）
+需求：token 减负话术件——长输出跑批落文件纪律 + 评审派发保留澄清（直写只免实现派发）
+根因：R9 实证 token 解剖：verify 段 13.8M 大头是裸测试输出摄取（4-6M，R8-OS 的 agent 天生输出截尾故 18M）；且 main 直写误伤审查通道（R9 无派发工具被迫降级自审——R8 基线审查曾抓真缺口，审查实效是直写唯一损失项）
+方案：①execute 运行测试步铁律+quick step2 各加「长输出跑批纪律」：全量/多文件测试与 lint 输出重定向落文件，上下文只回看尾部摘要与失败段（tail -50/grep FAIL）；CLI 门禁自跑测试已是摘要输出不受约束。②execute mainExecSection+plan 执行模式声明各加「评审派发保留」：Stage Review（tier=independent）仍须派独立子代理（小上下文干重读活+保审查实效），无派发工具环境才降级自审且 reviewerNotes 首行留降级审计行。③quick 镜像 _extract→_sync 同步（plan/execute 属 DYNAMIC 跳过项）。测试门禁口径披露：SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）——快照全量 6 个失败经归属判定为并行会话 19:11-19:13 落地的 wave 串行化契约红（git stash 对照：HEAD 原样同样 6 失败，±本会话改动失败集逐一致=失败中性）；本会话自有验证：execution-mode-render 9/9+quick-laststep 零回归+lint 770 文件过+prompt 纯话术零逻辑面
+结果：render 9/9+lint 770 未引用导出 0；失败中性证据（stash 对照）入本条；红账移交：plan-grouping-recommend B1-B4/plan-execute-contract/execute-testcase-design-include 六失败属并行会话在途语义，建议其下一笔 quick 修复（当前 HEAD 红会阻断一切后续 quick 门禁）
+审计：[gate] L1（跨 1 模块 · 5 文件：3 代码/0 测试）advisory；每文件注记已全覆盖；测试增量缺失（3 个代码文件无测试改动）

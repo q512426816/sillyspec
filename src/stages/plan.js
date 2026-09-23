@@ -169,6 +169,7 @@ const stepGeneratePlan = {
 > - plan.md frontmatter 加 \`execution_mode: main | dispatch\` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）
 > - 仅当满足判据才显式声明 \`execution_mode: dispatch\`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）
 > - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
+> - 直写只免「实现」派发（2026-09-23 R9 教训）：Stage Review（tier=independent）仍派独立子代理——降级自审损失审查实效（R8 基线实证审查抓过真缺口）；测试跑批输出落文件只取摘要——长输出全文进上下文是单会话 token 累积大头（R9 verify 段 13.8M 输入的大头来源）
 
 ---
 

@@ -482,6 +482,7 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 
 ### 铁律
 - 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果
+- **长输出跑批纪律（token 减负，R9 实证 verify 段 13.8M 输入中 4-6M 是裸输出摄取）**：全量/多文件测试与 lint 的输出重定向落文件（如 \`> .runtime/test-out.log 2>&1\`），上下文只回看尾部摘要与失败段（\`tail -50\` / \`grep -E "FAIL|✗|Error"\`）——长输出全文进上下文是单会话 token 累积大头；CLI 门禁自跑的测试已是摘要输出，不受本条约束
 
 ### 输出
 测试结果摘要：通过/失败/跳过数量 + 失败项分析`,
@@ -1423,7 +1424,9 @@ ${worktreeNoticeSingle}
 
 逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 锚点写入与 review write（见下方 Task Review Gate——checkbox 由 CLI 自动勾选，勿手动勾选）→ 下一任务。
 
-worktree 隔离 / 写入守卫（allowed_paths）/ review.json / verify 门禁全部保留——只换执行宿主，不换任何防线。`
+worktree 隔离 / 写入守卫（allowed_paths）/ review.json / verify 门禁全部保留——只换执行宿主，不换任何防线。
+
+**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境才允许降级为主代理自审，且 review.json reviewerNotes 首行必须留「降级：环境无子代理可用」审计行。`
 
   const dispatchExecSection = `## 执行方式
 
