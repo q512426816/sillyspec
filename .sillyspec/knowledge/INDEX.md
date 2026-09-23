@@ -26,6 +26,8 @@ created_at: 2026-06-19T12:40:00+08:00
 
 - 判级|定价|门禁|词表|关键词匹配|risk_level|仪式档|blast|危险度|风险等级|证据门 → [conventions.md#判级定价门禁输入必须项目声明禁全宇宙词表](conventions.md#判级定价门禁输入必须项目声明禁全宇宙词表)
 - env敏感|双模式|套件阀|环境变量剥离|快照overlay|gitignored配置|pass.flag|行为翻转 → [conventions.md#env 敏感测试必须双模式跑+行为翻转走被跟踪文件](conventions.md#env-敏感测试必须双模式跑行为翻转走被跟踪文件)
+- Windows|控制台子进程调用必须带|windowsHide|detached|进程链闪窗根治 → [conventions.md#Windows 控制台子进程调用必须带 windowsHide（detached 进程链闪窗根治）](conventions.md#Windows 控制台子进程调用必须带 windowsHide（detached 进程链闪窗根治）)
+- execution|mode|缺省|main|直写|verify → [conventions.md#execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）](conventions.md#execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）)
 ## Patterns
 - 阶段定义|stage|stages → [patterns.md#stage-step-pattern](patterns.md#stage-step-pattern)
 - 数据库|SQLite|sql.js|DB → [patterns.md#database-first](patterns.md#database-first)
@@ -37,6 +39,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - 知识库|knowledge|INDEX → [patterns.md#knowledge-lifecycle](patterns.md#knowledge-lifecycle)
 - validateTaskReviews|task-review|函数签名 → [patterns.md#validateTaskReviews 真实签名是单 opts 解构，非 (changeDir, {gitDir})](patterns.md#validateTaskReviews 真实签名是单 opts 解构，非 (changeDir, {gitDir}))
 - esm|循环依赖|plan-postcheck|worktree-apply → [patterns.md#plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环](patterns.md#plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环)
+- 对撞实验度量口径|R8|定稿|同任务书|同基线|db → [patterns.md#对撞实验度量口径（R8 定稿：同任务书/同基线/db 同源取证）](patterns.md#对撞实验度量口径（R8 定稿：同任务书/同基线/db 同源取证）)
 
 ## Known Issues
 - WASM|sql.js|native|native binding → [known-issues.md#sqljs-wasm-only](known-issues.md#sqljs-wasm-only)

@@ -95,3 +95,11 @@ SILLYSPEC_WATCHER 等），且收口前双模式各跑一遍（裸 + 套件阀�
 local.yaml（gitignored）对快照内实测不可见→「修好了还红」假象。规则：测试内翻转被测行为
 一律走**被跟踪文件**（check.js+pass.flag 模式），不走 gitignored 配置。（来源：
 test/watcher.test.mjs env 剥离双清 / test/flow-protocol.test.mjs ③ pass.flag）
+
+## Windows 控制台子进程调用必须带 windowsHide（detached 进程链闪窗根治）
+
+detached/无控制台进程（watcher、bg-sync）派生的控制台子程序（git.exe 等）若 spawn 选项缺 `windowsHide: true`，Windows 会为每个子进程创建可见 cmd 窗、跑完即灭——用户侧表现为周期性闪窗（watcher 每轮轮询 3-4 条 git，几秒一闪闪一天，易被当病毒排查）。修复口径：全仓统一 git 入口（git-helper.js execFileSync 双点）+ 其余 git 调用点（commit-guard/docs-check/gate-snapshot/green-cache）一律补 `windowsHide: true`（跨平台安全，非 Windows 忽略）。与「detached 长驻子进程自杀三闸」（2026-09-22 孤儿 watcher 条目）互补：三闸治不该活的，windowsHide 治该活但别闪的。新增外部命令调用点时此选项为必带项。（来源：2026-09-23 用户实证「弹窗出来又立马消失」，quick ql-20260923-011-d859）
+
+## execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）
+
+两契约变更：①plan.md frontmatter `execution_mode` 缺省/非法值回退 **main**（主代理直写），显式 `dispatch` 才派发——判据=任务真可并行×单任务规模大（>30min）×上下文需分片三者齐备；对撞双实证派发税（R7 直写进码 7′ vs 派发 70′；R8 execute 80′ vs 单上下文同规模 14′=3.6×，子代理冷启动上下文重建 887 万 token+伪并行+小任务全额开销）。②gate verify/--done 的 verify-test/verify-lint 接绿结果指纹缓存（src/run/green-cache.js）：指纹=HEAD+代码脏面（剔 .sillyspec/docs/*.md——verify 收敛循环修订 verify-result.md 不击穿缓存）+local.yaml 哈希（换命令即失效）；TTL 30min；SILLYSPEC_GREEN_CACHE_OFF=1 全关/TTL_MIN 覆盖；命中合成等价 passed 并强制披露 cached=本次未重跑（真实性口径：结果必须真跑出来过，但不必重复产生）。治基线实证同一套测试收敛循环内重复真跑 ~13min（gate×3+--done 收口）。（来源：R8 对撞实验，quick ql-20260923-010-32f9）

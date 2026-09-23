@@ -57,3 +57,7 @@ created_at: 2026-06-19T12:40:00+08:00
 ## plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环
 
 worktree-apply.js:21 已 `import { parseAllowedPaths } from './stages/plan-postcheck.js'`——因此 plan-postcheck 侧不能反向 import worktree-apply 的 filterDeliverableFiles（ESM 循环）。需要在 plan-postcheck 内做「流程产物过滤」时，硬编码同口径清单（.sillyspec/changes|.runtime|quicklog + meta.json，保留 .sillyspec/docs/）并注释锚定来源，不引依赖。同类需求先 grep 双向 import 边再决定复用还是同口径复制。（来源：2026-09-06-ir-stage-p3a task-03）
+
+## 对撞实验度量口径（R8 定稿：同任务书/同基线/db 同源取证）
+
+工具对照实验的可比性要件：①任务书 verbatim——从会话库（zcode db.sqlite message 表）挖受试方收到的原始任务消息逐字复用，仅工具指令段替换并告知；②同基线提交起 detached worktree（防捞未来提交+防读对照侧记录，铁律写进受试 prompt）；③度量同源——token/时间线一律取 zcode db 的 model_usage 表（rollout 文件会被清理轮转，db 持久且含子代理），墙钟分解用「主会话空档=子代理墙钟/命令执行窗」归因+进程出生时间（uvicorn/pytest 的 CreationDate）作硬证据钉实现完成时刻；④测试口径归一——两边「全量 pytest」的实际范围可能不同（local.yaml commands.test vs 仓默认 pyproject/Makefile），耗时对比须拆出标注，防把命令源差异算成工具差距。R8 实测参考值：单上下文 vs 派发=实现墙钟 3.6×、token 0.40×。（来源：2026-09-23 R8 对撞，events-channel 任务）
