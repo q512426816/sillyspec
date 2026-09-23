@@ -28,6 +28,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - env敏感|双模式|套件阀|环境变量剥离|快照overlay|gitignored配置|pass.flag|行为翻转 → [conventions.md#env 敏感测试必须双模式跑+行为翻转走被跟踪文件](conventions.md#env-敏感测试必须双模式跑行为翻转走被跟踪文件)
 - Windows|控制台子进程调用必须带|windowsHide|detached|进程链闪窗根治 → [conventions.md#Windows 控制台子进程调用必须带 windowsHide（detached 进程链闪窗根治）](conventions.md#Windows 控制台子进程调用必须带 windowsHide（detached 进程链闪窗根治）)
 - execution|mode|缺省|main|直写|verify → [conventions.md#execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）](conventions.md#execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）)
+- detached|长驻子进程必须有独立于|spawn|环境的自杀条件|41|孤儿 → [conventions.md#detached 长驻子进程必须有独立于 spawn 环境的自杀条件（41 孤儿 watcher 泄漏实证）](conventions.md#detached 长驻子进程必须有独立于 spawn 环境的自杀条件（41 孤儿 watcher 泄漏实证）)
 ## Patterns
 - 阶段定义|stage|stages → [patterns.md#stage-step-pattern](patterns.md#stage-step-pattern)
 - 数据库|SQLite|sql.js|DB → [patterns.md#database-first](patterns.md#database-first)
@@ -67,6 +68,10 @@ created_at: 2026-06-19T12:40:00+08:00
 - verify-required-evidence|门脆断|quick gate|deps(auto)|test failed → [known-issues.md#quick-gate-required-evidence-flake（2026-09-19，未解）](known-issues.md#quick-gate-required-evidence-flake2026-09-19未解)
 - blast|自举|悬空提交|bbe30ab|skip-apply → [known-issues.md#blast 自举声明表未落 main（2026-09-19-ceremony-pricing-five-cuts 归档 --skip-apply 遗留）](known-issues.md#blast-自举声明表未落-main2026-09-19-ceremony-pricing-five-cuts-归档---skip-apply-遗留)
 - span|六域|QUICK_RISK_PATH_PATTERNS|span_risk|维度关闭 → [known-issues.md#span 六域通用路径表已退役为项目声明（无声明项目维度关闭）](known-issues.md#span-六域通用路径表已退役为项目声明无声明项目维度关闭)
+- verify|报告探针预填段禁止摘要化改写|防篡改门按锚点对比 → [known-issues.md#verify 报告探针预填段禁止摘要化改写（防篡改门按锚点对比）](known-issues.md#verify 报告探针预填段禁止摘要化改写（防篡改门按锚点对比）)
+- docs|prompt|镜像|verify|失配数随|变更时代 → [known-issues.md#docs/prompt 镜像 _verify 失配数随「变更时代」漂移（动态阶段示例值）](known-issues.md#docs/prompt 镜像 _verify 失配数随「变更时代」漂移（动态阶段示例值）)
+- gate|snapshot|自身的变更在|verify|门遇|快照分叉假红 → [known-issues.md#修 gate-snapshot 自身的变更在 verify 门遇「快照分叉假红」鸡生蛋](known-issues.md#修 gate-snapshot 自身的变更在 verify 门遇「快照分叉假红」鸡生蛋)
+- execute|worktree|内跑全量|npm|test|守卫假红族 → [known-issues.md#execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）](known-issues.md#execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）)
 ## Decisions
 - change-management|quicklog|标签|切段|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
 - core-engine|SQLite|FTS5|db-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)
