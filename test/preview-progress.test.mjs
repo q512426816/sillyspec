@@ -81,3 +81,22 @@ test('T2 写纪律：无行写入 watcher 行 / cli 行不被触碰 / maxRows �
   assert.equal(writePreviewStages({ specDir: spec, changeName: '未注册变更', rows }), false, '未注册 false')
   assert.equal(writePreviewStages({ specDir: spec, changeName: 'w-change', rows: [] }), false, '空行集 false')
 })
+
+// ── 步骤级投影（预览账本 v2，D-004 兑现）──
+
+test('T3 步骤投影（import 后）：工件→步骤行 / archived 不投影 / 差分 changed', async () => {
+  const { projectPreviewSteps, PREVIEW_STEP_SOURCES } = await import('../src/preview-progress.js')
+  const snap1 = { ts: 1000, archived: false, files: { 'proposal.md': { stage: 'proposal' }, 'plan.md': {} } }
+  const rows = projectPreviewSteps({ snapshot: snap1, prevSnapshot: { ts: 500, archived: false, files: {} } })
+  assert.ok(rows.length >= 2, `proposal+plan 至少两行（${rows.length}）`)
+  const prop = rows.find(r => r.step === '写设计文档并自审')
+  assert.ok(PREVIEW_STEP_SOURCES['proposal.md'] && PREVIEW_STEP_SOURCES['proposal.md'].stage === 'brainstorm', '映射表导出被引用')
+  assert.ok(prop && prop.stage === 'brainstorm' && prop.status === 'in-progress', 'proposal→brainstorm/写设计文档')
+  assert.ok(rows.find(r => r.step === '生成分级计划'), 'plan→plan/生成分级计划')
+  assert.equal(rows.every(r => r.evidence.changed), true, '首现 changed=true')
+  const snap2 = { ts: 2000, archived: false, files: { 'proposal.md': { stage: 'proposal' }, 'plan.md': {} } }
+  const rows2 = projectPreviewSteps({ snapshot: snap2, prevSnapshot: snap1 })
+  assert.equal(rows2.find(r => r.step === '写设计文档并自审').evidence.changed, false, '无变化 changed=false')
+  assert.equal(projectPreviewSteps({ snapshot: { ts: 1, archived: true, files: { 'proposal.md': {} } } }).length, 0, 'archived 不投影')
+  assert.equal(projectPreviewSteps({ snapshot: null }).length, 0, '空容忍')
+})

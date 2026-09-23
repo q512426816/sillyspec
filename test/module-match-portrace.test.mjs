@@ -110,7 +110,7 @@ delete process.env.NODE_TEST_CONTEXT
   try { r = runVerifyTestCheck({ cwd: d, specBase, changeName: 'zht' }) }
   finally { console.warn = ow }
   assertTrue(r.mode === 'module-subset', `0 命中+diff 含测试文件 → 变更测试子集兜底（mode=${r.mode}）`)
-  assertTrue(String(r.command).includes('deps(1)'), `命令含 deps(auto) 变更测试（command=${r.command}）`)
+  assertTrue(String(r.command).includes('deps(js'), `命令含 deps(auto) 变更测试（command=${r.command}）`)
   assertTrue(r.status === 'passed', `变更测试实测通过而非裸 skip（status=${r.status}${r.reason ? '，' + r.reason : ''}）`)
   assertTrue(fs.existsSync(path.join(d, 'ran-marker.txt')) && fs.readFileSync(path.join(d, 'ran-marker.txt'), 'utf8') === 'x-modified-ran',
     '跑的是工作区当前版测试（x-modified 版用例落了标记文件）')

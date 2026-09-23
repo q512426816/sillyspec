@@ -90,3 +90,71 @@ export function writePreviewStages({ specDir, changeName, rows, maxRows = 8 } = 
     if (db) { try { db.close() } catch { /* 关闭失败不放大 */ } }
   }
 }
+
+/** 步骤级工件映射：变更工件基名 → (阶段, 步骤名) 的对应——watcher 步骤节拍的数据源。 */
+export const PREVIEW_STEP_SOURCES = {
+  'proposal.md': { stage: 'brainstorm', step: '写设计文档并自审' },
+  'requirements.md': { stage: 'brainstorm', step: '写设计文档并自审' },
+  'design.md': { stage: 'brainstorm', step: '写设计文档并自审' },
+  'decisions.md': { stage: 'brainstorm', step: '写设计文档并自审' },
+  'plan.md': { stage: 'plan', step: '生成分级计划' },
+  'verify-result.md': { stage: 'verify', step: '输出验证报告' },
+  'verify-facts.json': { stage: 'verify', step: '输出验证报告' },
+  'module-impact.md': { stage: 'archive', step: 'extract-module-impact 与归档语义收尾' },
+}
+
+/**
+ * 纯函数：快照差分 → 步骤级预览行集合（预览账本 v2，D-004 兑现）。
+ * 粒度=工件信号可映射的步骤（tasks.md 勾选→execute 逐任务步不可靠映射，不做——纯思考
+ * 型步骤由 --done 批量自述，burst 已支持）。返回行带 stage+step 双键。
+ */
+export function projectPreviewSteps({ snapshot, prevSnapshot = null } = {}) {
+  if (!snapshot || snapshot.archived) return []
+  const files = snapshot.files || {}
+  const prevFiles = (prevSnapshot && prevSnapshot.files) || {}
+  const rows = []
+  for (const [fname, target] of Object.entries(PREVIEW_STEP_SOURCES)) {
+    if (!Object.prototype.hasOwnProperty.call(files, fname)) continue
+    const changed = prevFiles[fname] === undefined || JSON.stringify(files[fname]) !== JSON.stringify(prevFiles[fname])
+    rows.push({
+      stage: target.stage,
+      step: target.step,
+      status: 'in-progress',
+      startedAt: new Date(snapshot.ts || Date.now()).toISOString(),
+      evidence: { ts: snapshot.ts || null, file: fname, changed },
+    })
+  }
+  return rows
+}
+
+/**
+ * 写步骤级预览行（短连接，fail-open）：steps 表 authority='watcher'，仅当该步骤
+ * 不存在或也是 watcher 行时写入（CLI 步骤行不可中招）。
+ */
+export function writePreviewSteps({ specDir, changeName, rows, maxRows = 12 } = {}) {
+  if (!specDir || !changeName || !Array.isArray(rows) || rows.length === 0) return false
+  let db = null
+  try {
+    db = openDatabase(join(specDir, '.runtime', 'sillyspec.db'), {})
+    db.exec('PRAGMA busy_timeout = 5000')
+    const changeRow = db.prepare('SELECT id FROM changes WHERE name = ?').get(changeName)
+    if (!changeRow) return false
+    const cid = changeRow.id
+    const stageStmt = db.prepare("SELECT id FROM stages WHERE change_id = ? AND stage = ? AND (authority = 'watcher' OR authority = 'cli' OR authority IS NULL)")
+    const insStmt = db.prepare(
+      `INSERT INTO steps (stage_id, name, status, completed_at, ordering, authority, preview_evidence)
+       VALUES (?, ?, 'in-progress', NULL, 0, 'watcher', ?)
+       ON CONFLICT DO NOTHING`
+    )
+    for (const r of rows.slice(0, maxRows)) {
+      const stageRow = stageStmt.get(cid, r.stage)
+      if (!stageRow) continue // 阶段行不在场——CLI 尚未进入该阶段，不预建
+      insStmt.run(stageRow.id, r.step, JSON.stringify(r.evidence || {}))
+    }
+    return true
+  } catch {
+    return false
+  } finally {
+    if (db) { try { db.close() } catch {} }
+  }
+}

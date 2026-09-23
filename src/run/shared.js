@@ -1976,7 +1976,7 @@ export async function readStageBurst(cwd) {
  * 就绪度已压到 1-2 次调用）；辅助阶段（scan/doctor/explore）不在本轮验收面。渲染侧（stage.js
  * renderStageBurst 门）与完成侧（command.js --done 分发门）共用本单一事实源。
  */
-export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute']
+export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
 
 /**
  * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。

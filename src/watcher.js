@@ -895,9 +895,11 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
     // ── 预览进度账本（2026-09-23-watcher-preview-progress task-02）：阶段级投影 best-effort ──
     // fail-open（writePreviewStages 全程吞异常）：预览写失败不影响事件流主循环（D-005）。
     try {
-      const { projectPreviewStages, writePreviewStages } = await import('./preview-progress.js')
+      const { projectPreviewStages, writePreviewStages, projectPreviewSteps, writePreviewSteps } = await import('./preview-progress.js')
       const rows = projectPreviewStages({ snapshot: snap, prevSnapshot: prev })
       if (rows.length > 0) writePreviewStages({ specDir: specBase, changeName, rows })
+      const stepRows = projectPreviewSteps({ snapshot: snap, prevSnapshot: prev })
+      if (stepRows.length > 0) writePreviewSteps({ specDir: specBase, changeName, rows: stepRows })
     } catch { /* 预览投影 best-effort，绝不杀 watcher */ }
 
     const batch = events.concat(warnings);

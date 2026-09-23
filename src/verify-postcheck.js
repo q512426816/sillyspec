@@ -761,7 +761,7 @@ function collectTestFiles(rootDir, base = '', depth = 0, acc = []) {
   let entries = []
   try { entries = readdirSync(rootDir, { withFileTypes: true }) } catch { return acc }
   for (const e of entries) {
-    if (['node_modules', '.venv', 'venv', '.git', 'dist', 'build', '.runtime', '.sillyspec'].includes(e.name)) continue
+    if (['node_modules', '.venv', 'venv', '.git', 'dist', 'build', '.runtime', '.sillyspec', '.claude', '.worktrees'].includes(e.name)) continue
     const rel = base ? `${base}/${e.name}` : e.name
     if (e.isDirectory()) collectTestFiles(join(rootDir, e.name), rel, depth + 1, acc)
     else if (isTestFilePath(rel)) acc.push(rel)
