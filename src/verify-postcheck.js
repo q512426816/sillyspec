@@ -1100,13 +1100,18 @@ export function isTimeoutOnlyTestFailure(testCheck) {
   return units.every(u => /超时/.test(String(u.reason || '')))
 }
 
-export function decideVerifyTestAction({ strategy, modulesPresent, hitCount }) {
+export function decideVerifyTestAction({ strategy, modulesPresent, hitCount, depsAutoEligible = false }) {
   if (strategy === 'skip') return 'skip'
   if (strategy === 'module' && modulesPresent) {
     if (hitCount > 0) return 'module-subset'
     if (hitCount === 0) return 'module-zero-hit-skip'
     return 'full' // hitCount === -1（git 不可用）→ 落全量兜底
   }
+  // deps-auto-default（2026-09-23 用户裁定「cli 跑测试就跑对应开发相关的测试」）：未配置
+  // test_strategy 且未配置 modules: 的仓（多数用户态），diff 存在「import 被改 src 的测试 ∪
+  // 本次变更的 test 文件」（deps(auto) 同源口径）→ 跑该子集而非全量；deps 为空（改动与测试
+  // 面零关系）维持缺省 full 零打扰。显式 test_strategy: full 不受影响（strategy==='full' 直落）。
+  if (strategy === null && depsAutoEligible) return 'deps-auto-subset'
   return 'full'
 }
 
@@ -1567,6 +1572,16 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   let hitCount = 0
   let hits = []
   let lastChangedFiles = [] // 0 命中诊断用（diff 文件样例可见性，坑 module-path-layout-mismatch）
+  // deps-auto-default 前置采集：未配置策略/模块的仓也需要 diff 面供 deps(auto) 判定
+  if (strategy === null) {
+    let cf = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+    if (Array.isArray(restrictFiles) && restrictFiles.length > 0 && Array.isArray(cf)) {
+      const norm = (f) => String(f).replace(/\\/g, '/').replace(/^\.\//, '')
+      const restrictSet = new Set(restrictFiles.map(norm))
+      cf = cf.filter(f => restrictSet.has(norm(f)))
+    }
+    lastChangedFiles = Array.isArray(cf) ? cf : []
+  }
   if (strategy === 'module') {
     const modules = extractModules(yamlText)
     if (modules) {
@@ -1597,7 +1612,16 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     }
   }
 
-  const action = decideVerifyTestAction({ strategy, modulesPresent, hitCount })
+  // deps-auto-default 可得性：仅未配置仓缺省路径判定（模块路径/显式 full 不消耗这次扫描）
+  let depsAutoEligible = false
+  let depsAutoFiles = []
+  if (strategy === null && lastChangedFiles.length > 0) {
+    try {
+      depsAutoFiles = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [] })
+      depsAutoEligible = depsAutoFiles.length > 0
+    } catch { depsAutoEligible = false }
+  }
+  const action = decideVerifyTestAction({ strategy, modulesPresent, hitCount, depsAutoEligible })
   let mainResult
   if (action === 'skip') {
     // —— skip 真跳过（D-005@v2 / R-07）——
@@ -1675,6 +1699,12 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         fallbackReason: null,
       }
     }
+  } else if (action === 'deps-auto-subset') {
+    // deps-auto-default（2026-09-23）：未配置仓缺省收窄——跑「import 被改 src 的测试 ∪ 本次
+    // 变更的 test 文件」子集（hits 空数组，runModuleSubset 内部经 deps(auto) 执行——与模块
+    // 0 命中测试兜底同款执行面）。范围=本次变更的关系闭包，全量语义留 CI/verify 兜底。
+    console.log(`ℹ️ 未配置 test_strategy/modules——缺省按变更关系子集实测（deps(auto) ${depsAutoFiles.length} 个：import 被改 src 的测试 ∪ 本次变更测试；显式 test_strategy: full 恢复全量）`)
+    mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles })
   } else {
     // —— 全量路径（full / module 无块 / module git 不可用）——
     // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
@@ -1895,6 +1925,21 @@ function runCrossRepoFullTest(entry) {
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+  // node:test TAP 摘要级判定（坑 verify-gate-worktree-crossrepo-three-defects 缺陷三，
+  // 2026-09-21 实证：跨仓 npm test 自身 EXIT=0 全绿，但外层命令链（管道/包装脚本）退出码
+  // 丢失变非 0 → 行级 PER_TEST_FAIL_RE 把通过用例的预期错误文案（❌/AssertionError 等
+  // fixture 噪音）全计入未豁免失败行阻断 verify）。node:test 输出自带权威摘要行 `ℹ fail N`
+  // ——摘要存在且 fail=0 且 pass≥1 时，非 0 退出码判为包装层丢失，按摘要覆盖为通过
+  //（摘要 fail>0 维持失败由行级台账归因，无摘要输出不适用零变化）。
+  if (exitCode !== 0) {
+    const tapFail = output.match(/^ℹ fail (\d+)$/m)
+    const tapPass = output.match(/^ℹ pass (\d+)$/m)
+    if (tapFail && Number(tapFail[1]) === 0 && tapPass && Number(tapPass[1]) > 0) {
+      console.warn(`⚠️ 跨仓 repo "${entry.repoKey}" 退出码 ${exitCode} 但 node:test 摘要 ℹ pass ${tapPass[1]} / ℹ fail 0——判定包装命令退出码丢失（管道/脚本链），按 TAP 摘要覆盖为通过`)
+      exitCode = 0
+      reason = `跨仓 repo "${entry.repoKey}" node:test 摘要 ℹ pass ${tapPass[1]} / ℹ fail 0（外层退出码丢失已按摘要覆盖）`
+    }
+  }
   const judged = judgeWithKnownFailures(exitCode, output, reason, crossKnownFailures)
 
   return {

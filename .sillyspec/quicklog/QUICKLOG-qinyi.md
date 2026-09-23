@@ -325,3 +325,14 @@
 根因：R9 实证：单会话五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟 7.2M——肥上下文税随会话内阶段数单调累积；既有瘦会话一行提示 R9 四次看见四次没听（无数据无升级无动作主体）；架构约束（conventions 钉）：会话不能自建会话，CLI 只产信号与接力载荷。complete.js 属基线保护文件 --force-baseline 显式解锁
 方案：①NEW updateStageSessionLedger 纯函数（同会话连续阶段计数、切换重置、stages 尾窗 8 防膨胀，仿 wave-session-ledger 先例）；②complete.js 阶段收口接线：同会话连续 ≥2 阶段 → 升级告警块（带 R9 实测数据+sillyspec handoff 交接块引用〔含 watcher-preview 机器预览态接力段〕+动作主体明写用户新开会话或平台 session-fork+conventions 约束引注）；首阶段保持既有软提示零行为变化；③platform-interface-map 锚漂修复 8 处（complete.js:279→296 本件漂移 + index.js 六处 ql-012 usage 插行未随修 + 行号超界项）——living-doc 全绿
 结果：stage-session-ledger 3/3（连续计数/切换重置/尾窗+空参）；lint 771 未引用导出 0；docs check living-doc 0 失效。测试门禁口径：SILLYSPEC_QUICK_TEST_GATE=skip 留痕——主树红仍为并行会话 wave 串行化契约（plan-grouping-recommend 4 fail 复核在案，归属同 ql-019 stash 对照），本件零失败中性；docs check 其余 ~20 处存量漂移（scan/ARCHITECTURE/architecture-4a 等，非 living-doc 非本会话文件）记欠账待归属方修
+
+## ql-20260923-021-d344 | 2026-09-23 20:18:12 | quick 门禁 deps-auto-default：未配置仓缺省跑变更关系子集而非全量
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（decideVerifyTestAction 增参+前置采集+deps-auto-subset 分支）
+- test/verify-deps-auto-default.test.mjs（NEW）
+需求：quick 门禁 deps-auto-default：未配置仓缺省跑变更关系子集而非全量
+根因：用户裁定（2026-09-23）：CLI 跑测试应跑对应开发相关的测试。缺口=未配置 test_strategy/modules 的仓（多数用户态）门禁缺省落全量 commands.test——R9 对撞 MP 仓（当时未配置）正因此卡全量套件 40 分钟。已配置仓不受影响（module 路径优先）
+方案：verify-postcheck.js：①decideVerifyTestAction 增 depsAutoEligible——strategy=null 且 deps 可得→deps-auto-subset，空→full 零打扰，显式 full 不变；②未配置仓前置采集 diff 面（restrictFiles 收窄同款）；③新分支 runModuleSubset({hits:[]})——与模块 0 命中测试兜底同款执行面（deps(auto)=import 被改 src 的测试∪本次变更测试）
+结果：verify-deps-auto-default 2/2（纯决策四分流+端到端双场景：改被 import src→deps 聚合 passed；改无关系文件→full）；verify 族 46/46；lint 772 未引用导出 0
