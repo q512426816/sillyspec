@@ -77,6 +77,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - execute|worktree|内跑全量|npm|test|守卫假红族 → [known-issues.md#execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）](known-issues.md#execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）)
 - 影子审查回收是拉模式|完成结论到平台面板|CLI|侧盲到下个阶段检查点|推送缺口 → [known-issues.md#影子审查回收是拉模式——完成结论到平台面板、CLI 侧盲到下个阶段检查点（推送缺口）](known-issues.md#影子审查回收是拉模式——完成结论到平台面板、CLI 侧盲到下个阶段检查点（推送缺口）)
 - 快照|overlay|门禁假红|前序脏文件|QUICK_GATE_SNAPSHOT_OFF|边界审计|import → [known-issues.md#快照 overlay 排除「会话内修改的前序脏文件」→ 门禁假红（快照分叉家族第三 sibling）](known-issues.md#快照 overlay 排除「会话内修改的前序脏文件」→ 门禁假红（快照分叉家族第三 sibling）)
+- 快照|冻结|pytest|junction|venv|对照实验|误判|归因 → [known-issues.md#快照内 pytest 启动态冻结——junction 机制已排除（五组对照实验），组合态根因未定](known-issues.md#快照内 pytest 启动态冻结——junction 机制已排除（五组对照实验），组合态根因未定)
 ## Decisions
 - change-management|quicklog|标签|切段|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
 - core-engine|SQLite|FTS5|db-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)

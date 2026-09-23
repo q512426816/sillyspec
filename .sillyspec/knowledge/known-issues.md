@@ -190,3 +190,7 @@ fire-and-forget 派发的平台影子审查，结论回收只挂主线索引点�
 ## 快照 overlay 排除「会话内修改的前序脏文件」→ 门禁假红（快照分叉家族第三 sibling）
 
 quick 门禁隔离快照的 overlay 文件集来自会话边界审计：会话开始前已脏的文件（含并行会话在途 hunk）被记为「前序 baseline」不进 overlay——若本会话随后又修改了这些文件，快照装的是 HEAD 旧版而非本会话新版：新增导出缺失 → 快照内测试 import 即炸（SyntaxError: does not provide an export），门禁假红且重跑恒红（不是 flake）。实证：2026-09-23 ql-017 收口，verify-postcheck/quick-audit 双文件三连撞。判定法：快照失败输出含 import/导出错误 + 主仓口径同命令全绿 + 失败文件在会话启动前已脏。处置：SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 主仓口径收口（口径差异披露）——注意阀名是 QUICK 前缀（verify 门禁阀是 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，两者不同，用错照挂）。根治方向：边界审计对「前序脏文件在本会话窗口内再次变更」的形态改记为本会话文件（内容哈希对比会话首末，而非仅会话启动时刻快照）。（来源：2026-09-23 ql-017 三轮收口实证）
+
+## 快照内 pytest 启动态冻结——junction 机制已排除（五组对照实验），组合态根因未定
+
+2026-09-23 R9 verify --done R2 轮：快照内 pytest 冻结于启动态（3MB/0CPU，7 分钟零进展）。当时（agent 报告与协调者）归因「venv junction 缺陷」——**误判，已实验排除**：用同一真实 venv（R9 worktree uv venv）做最小复现五组对照全过——A junction 路径直起 python/B 真实路径/C 真实路径+cwd=junction/D junction pytest.exe shim（uv trampoline）/E python -m pytest 绕 shim/F 长收集 10s 杀直接子后 2s 再起（模拟 R1 超时杀→R2 冻结时序）——全部正常。结论：纯 junction+venv+pytest+杀进程竞态不构成冻结；剩余嫌疑=快照组合态（overlay 文件集不完整致 import 悬挂/被杀轮次孤儿进程持锁/Defender 扫新临时目录），原快照已清理无法尸检。方法论教训：进程级归因（「3MB/0CPU=冻结」）+ 表面相关（junction 在场）≠ 根因，需对照实验才可定罪——本条即先例。现状兜底：600s 超时帽+冻结鉴别（零输出标注）+快照超时/冻结自动回退主仓（ql-017）已覆盖损失面；根因复现条件=下次再发时保留快照目录与进程 dump（tasklist/wmic ProcessId cmdline+CPU 采样）再定。（来源：2026-09-23 R9 R2 轮 + 当晚五组对照实验）
