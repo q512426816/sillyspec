@@ -232,6 +232,33 @@ test('4b. 其余四形态存在即认：权限矩阵[]/契约表@/DDL@/载荷@',
     `四形态级锚点存在即认（形态级不空指——存在性口径）（实际 ${results.map((r, i) => `${forms[i]}→${r.ok}`).join(' / ')}）`)
 })
 
+test('4c. 锚点分诊（2026-09-23 执行会话实证）：design接口表# 在场但 # 后非 METHOD /path → 定向报命中条件；聚合报错带可复制样例', () => {
+  const bare = judgeWith({
+    rows: [['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#接口定义']],
+    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
+  })
+  const anchorErr = bare.errors.find((e) => e.includes('证据锚点缺失/空指'))
+  assert.ok(bare.ok === false && anchorErr && anchorErr.includes('未提取到 METHOD /path')
+    && anchorErr.includes('design接口表#POST /api/xx'),
+    `分诊定向命中条件 + 聚合样例在场（实际 ${JSON.stringify(anchorErr && anchorErr.slice(0, 200))}）`)
+  const generic = judgeWith({
+    rows: [['GET /api/a', 'covered', 'C1', 'ok', '无任何锚点字样']],
+    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
+  })
+  assert.ok(generic.errors.some((e) => e.includes('证据缺用例依据锚点（五形态之一）')),
+    `无形态字样 → 保持泛化报错不误伤（实际 ${JSON.stringify(generic.errors.map((e) => e.slice(0, 60)))}）`)
+})
+
+test('4d. 零面分诊（散文式接口定义，2026-09-23 执行会话实证）：sectionHint 在场×零端点 → 骨架注记点名「检测到接口段标题」', () => {
+  const d = mk('zero-face-')
+  const mdPath = join(d, 'verify-result.md')
+  writeFileSync(mdPath, '# 验证报告\n\n## 后续章节\n')
+  ensureApiCoverageMatrixSection(mdPath, { endpoints: [], declared: null, sectionHint: ['### 接口定义'] })
+  const out = readFileSync(mdPath, 'utf8')
+  assert.ok(out.includes('检测到接口段标题') && out.includes('散文式接口定义不进矩阵'),
+    `接口段标题在场但表格解析零端点 → 定向注记左移修复时机（实际 ${JSON.stringify(out.slice(Math.max(0, out.indexOf('接口验证覆盖矩阵') - 20), out.indexOf('接口验证覆盖矩阵') + 320))}）`)
+})
+
 // ═══════════════════════════════════════════════════════════════════
 // 5. 声明降级 / 零接口面分层 / 段缺失分层（D-005）
 // ═══════════════════════════════════════════════════════════════════

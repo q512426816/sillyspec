@@ -154,3 +154,15 @@
 方案：①src/run/bg-sync.js 新导出 collectTerminalSyncPending：扫 DB 取 status=archived/deleted 且 last_local_modified_ts 脏于 last_synced_platform_ts（或从未同步）的变更（last_active 倒序≤3 条；双戳皆空的 D-013 前陈年行 fail-closed 不补；库路径与 sync() 内 ProgressManager 同源 resolvePlatformSpecDir）；②runBgSyncFromEnv 主轮收尾接线补推循环（主变更跳过/预算耗尽让位/逐条 best-effort）；③补推幂等依据=sync() 对 archived/deleted 推终态+墓碑且 POST 幂等
 结果：test/spec-sync-terminal-sweep.test.mjs 新增 4/4 绿（谓词面/上限排序/库缺失空集/向上发现同库）；test/spec-sync-bg.test.mjs 全过（真子进程+mock server 集成回归）；lint 759 文件未引用导出 0+module-map 覆盖全；CLI 亲测门禁 test/lint=passed
 审计：[gate] L1（跨 1 模块 · 4 文件：1 代码/1 测试）advisory；每文件注记已全覆盖；测试增量不适用（≤1 代码文件）
+
+## ql-20260923-008-bea4 | 2026-09-23 08:43:52 | 执行会话反馈的 sillyspec 侧三摩擦：①接口矩阵锚点校验报错无可复制样例且 design接口表# 形态在场而端点不可提取时只报泛化『缺五形态之一』（执行…
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/command.js（--step 补登记 knownFlags+VALUE_FLAGS，带死路前例注释）
+- src/stage-contract.js（锚点行级分诊+聚合报错五形态可复制样例）
+需求：执行会话反馈的 sillyspec 侧三摩擦：①接口矩阵锚点校验报错无可复制样例且 design接口表# 形态在场而端点不可提取时只报泛化『缺五形态之一』（执行会话三轮试错实测约 15 分钟，最终被逼换更弱的 DDL@ 形态过门）②散文式接口定义（### 标题+prose）解析零端点，表格形态要求只埋在骨架注记里没人看 ③--done --step <名|序号> 说明书出示的形态进命令即被『未知参数』exit(2) 拦死
+根因：①stage-contract.js 五形态聚合报错只有抽象描述无样例；design接口表# 与其余四形态宽严不对称（# 后必须 METHOD /path 才计命中）且无分诊——agent 无法区分『形态没写对』与『写了没算数』②零面注记不区分『无接口段』与『接口段在场但散文写法』（parseDesignApiTable 的 sectionHint 信号现成未用），控制台无提示③--step 在 command.js:340 消费但 knownFlags/VALUE_FLAGS 均漏登记（--wait-interactive 漏登记死路同款，ql-20260911-029 前例）
+方案：①锚点校验分诊：design接口表# 字样在场但正则不提取→定向报『# 后未提取到 METHOD /path，仅表名/行号/散文描述不计』；聚合报错五形态各带可复制样例（design接口表#POST /api/xx/权限矩阵[admin×读]/契约表@任务卡字段清单/DDL@users.id/载荷@e2e_body.json）；verify-probes 预填说明同步带样例与仅表名不计告警②renderApiCoverageMatrixLines 按 sectionHint 分诊：接口段标题在场×表格零端点→注记点名『检测到接口段标题/散文式接口定义不进矩阵』；writeVerifyFacts 刷完 facts 控制台同款左移警告（修复时机从 verify 收口提前到 --init）③--step 补登记 knownFlags+VALUE_FLAGS（吃值）
+结果：聚焦 25/25（api-coverage-matrix+run-exit-codes，含新增 4c 锚点分诊/4d 散文零面分诊/--step 白名单三例）；全量 594/594 绿（591+3 新增）；lint 759 文件未引用导出 0+module-map 覆盖全；零新增导出（renderApiCoverageMatrixLines 保持私有）
+审计：[gate] L1（跨 2 模块 · 5 文件：3 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含

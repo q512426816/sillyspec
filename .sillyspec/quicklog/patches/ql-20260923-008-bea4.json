@@ -1,0 +1,96 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-48d0bf81",
+  "totals": {
+    "files": 5,
+    "additions": 64,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": "src/run/command.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-contract.js",
+      "declared": true,
+      "additions": 11,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "declared": true,
+      "additions": 14,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/api-coverage-matrix.test.mjs",
+      "declared": true,
+      "additions": 27,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/run-exit-codes.test.mjs",
+      "declared": true,
+      "additions": 10,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 5,
+    "codeFileCount": 3,
+    "testFileCount": 2,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/command.js"
+        ]
+      },
+      {
+        "id": "core-engine",
+        "files": [
+          "src/stage-contract.js",
+          "src/verify-probes.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/api-coverage-matrix.test.mjs",
+      "test/run-exit-codes.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-008-bea4",
+  "sessionId": "quick-48d0bf81",
+  "savedAt": "2026-09-23T00:53:54.150Z",
+  "patchSha256": "91d3afe001374ef5482f60b21d593bdb73d3e6629705f93b2fdec4678817ddad",
+  "patchStatus": "ok"
+}

@@ -77,6 +77,16 @@ console.log('--- run <stage> 退出码三段契约（W1-A 用法/环境错 → e
     `未知参数 stderr 含提示（实际 ${msg.slice(0, 80)}）`)
 }
 
+// --step 白名单登记（2026-09-23 执行会话实证：--done --step <名|序号> 说明书出示的形态进命令即被
+// 未知参数 exit(2) 拦死——与 --wait-interactive 漏登记同款死路，ql-20260911-029 前例）。
+// 登记后不再以「未知参数」拒绝（--status 只读路径安全验证；值 token 由 VALUE_FLAGS 跳过）。
+{
+  const d = makeRepo()
+  const r = runSilly(['run', 'execute', '--status', '--step', '进度确认'], { cwd: d })
+  const msg = r.stderr + r.stdout
+  assert(!msg.includes('未知参数'), `--step 已登记不再报未知参数（实际 ${msg.slice(0, 120)}）`)
+}
+
 // F10b（ql-20260818-010）: 语义别名定向提示——did-you-mean 按编辑距离猜形近 flag，猜中的常是
 // 形近但语义错的（--title → --files，ql-20260818-003 负面③）。命中别名打定向指引替代形近猜测。
 {

@@ -1,0 +1,143 @@
+diff --git a/src/run/command.js b/src/run/command.js
+index 20446ebc..79b864b7 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -52,6 +52,7 @@ const VALUE_FLAGS = new Set([
+   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
+   '--session', // 显式会话标识（吃值；2026-09-14-change-ownership-guards task-02 所有权三级解析最高优先级层，启动 claim 消费）
+   '--inherit-from', // wait 继承盖章锚点 <D-xxx@vN>（吃值；2026-09-18-preflight-slimming task-03 / D-003@v2：仅 --wait 场景合法，--wait 分发点校验消费）
++  '--step', // --done --step <名|序号> 意图断言（吃值；:340 消费。漏登记死路同 --wait-interactive 前例：burst 说明书出示该形态却被未知参数 exit(2) 拦死，2026-09-23 执行会话实证）
+ ])
+ 
+ /**
+@@ -720,6 +721,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
+     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
+     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
++    '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
+     '-h',
+   ])
+   for (let i = 0; i < flags.length; i++) {
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 0d737c81..57eb55cb 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -1201,12 +1201,21 @@ export function judgeApiCoverageMatrix(args) {
+       const key = `${m[1]} ${m[2]}`
+       if (!parseSet.has(key)) anchorViolations.push(`${rowLabel(r)}：design接口表#${key} 未命中 design 接口段解析面（空指）`)
+     }
+-    if (!apiEvidenceHasAnchorForm(e)) anchorViolations.push(`${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
++    if (!apiEvidenceHasAnchorForm(e)) {
++      // 分诊（2026-09-23 执行会话实证：design接口表# 字样在场但 # 后非 METHOD /path 形态时，
++      // 泛化「缺五形态之一」让人无法区分「形态没写对」与「写了没算数」——三轮试错后 agent 被逼
++      // 换更弱的 DDL@ 形态过门，fail-closed 反而促成了更泛的锚点。定向报出该形态的命中条件。）
++      API_ANCHOR_DESIGN_API_RE.lastIndex = 0
++      const bareDesignAnchor = /design接口表#/.test(e) && !API_ANCHOR_DESIGN_API_RE.test(e)
++      anchorViolations.push(bareDesignAnchor
++        ? `${rowLabel(r)}：证据含 design接口表# 但 # 后未提取到 METHOD /path——该形态仅 \`design接口表#POST /api/xx\` 形态计命中（仅写表名/行号/散文描述不计）`
++        : `${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
++    }
+   }
+   if (anchorViolations.length > 0) {
+     errors.push(
+       `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
+-      `（covered/partial 证据须含锚点五形态之一：design接口表#METHOD /path（须命中 design 接口段解析面）/ 权限矩阵[角色×动作] / 契约表@行标识 / DDL@列名 / 载荷@构造点路径；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
++      `（covered/partial 证据须含锚点五形态之一，可复制样例：design接口表#POST /api/xx（# 后必须 METHOD /path 且命中 design 接口段解析面，仅表名/行号不计）/ 权限矩阵[admin×读] / 契约表@任务卡字段清单 / DDL@users.id / 载荷@e2e_body.json；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
+       `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
+     )
+   }
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index 6e58c90b..f404fcde 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -2587,10 +2587,15 @@ function renderApiCoverageMatrixLines(apiFace) {
+   const declared = face && typeof face.declared === 'number' ? face.declared : null
+   const L = [`${API_MATRIX_HEADING} [层：人工判断——CLI 预填复核]`]
+   L.push('<!-- 口径注记（与探针 7 互指，R-07）：探针 7 = 验收项 × 测试承接面（每条 acceptance 由哪些测试承接）；本矩阵 = 接口端点 × 验证用例面（design 接口段每个端点由哪些验证用例/冒烟步骤覆盖）——两者并排互补，双矩阵并行存在。端点集来自 design.md 接口段 tolerant 解析（parseDesignApiTable：段头宽收 + 方法/路径双条件），预填≠结论，agent 逐行复核。判定枚举（五选一）：covered / covered-service / partial / uncovered / non-testable——covered-service 适用：端点行为由 service 层等非端点层测试锁定；证据须含测试文件锚点三形态之一（`.test.` / file:line / 反引号包裹的路径或测试名）。 -->')
+-  L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态：design接口表#METHOD /path、权限矩阵[角色×动作]、契约表@行标识、DDL@列名、载荷@构造点路径（须真实命中对应表/段，防空指）。 -->')
++  L.push('<!-- 预填说明：端点行由 CLI 机械预填，判定/用例依据 ID/结果/证据由 agent 逐格填写——用例依据 ID 锚点五形态（可复制样例）：design接口表#POST /api/xx（# 后必须 METHOD /path，仅表名/行号/散文描述不计命中）、权限矩阵[admin×读]、契约表@任务卡字段清单、DDL@users.id、载荷@e2e_body.json（须真实命中对应表/段，防空指）。 -->')
+   L.push('<!-- 文法注释：子行 = 端点行下一行、两空格缩进、以「↳ <消费端>:」前缀书写（消费端细分承接面，不计矩阵行账）；探索行 = 判定 uncovered 且证据列含 [探索] 标记（探索性验证不算覆盖）。 -->')
+   if (endpoints.length === 0 && declared === null) {
+-    L.push('- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 `verify-probes --change <变更名> --init --force` 重生成本段（⚠️ 全骨架重生成，手填结论会重置——先备份；quick-B 起 --force 通道存在）；判级 critical 的零面拦截归 validator')
++    // 分诊（2026-09-23 执行会话实证：散文式接口定义（### 标题+prose）解析零端点，提示被埋没——
++    // sectionHint 非空 = 接口段标题在场而行解析零，定向报「表格形态才进矩阵」，左移修复时机）
++    const sectionHeads = face && Array.isArray(face.sectionHint) ? face.sectionHint : []
++    L.push(sectionHeads.length > 0
++      ? `- 无接口面（检测到接口段标题「${sectionHeads[0]}」但表格解析零端点）——矩阵只解析表格形态（每端点一行 METHOD | path），散文式接口定义不进矩阵。修复：接口定义改为表格（每端点一行 METHOD /path）或加声明行「本变更接口面：N 端点」，再重跑 \`verify-probes --change <变更名> --init --force\` 重生成本段（⚠️ 全骨架重生成，手填结论会重置——先备份）；判级 critical 的零面拦截归 validator`
++      : `- 无接口面（design 接口段解析零端点且无「本变更接口面：N 端点」声明行）——本变更若实际触碰接口，先补 design 接口段表格或声明行，再重跑 \`verify-probes --change <变更名> --init --force\` 重生成本段（⚠️ 全骨架重生成，手填结论会重置——先备份）；判级 critical 的零面拦截归 validator`)
+     return L
+   }
+   if (endpoints.length > 0 && declared !== null && declared !== endpoints.length) {
+@@ -2747,6 +2752,13 @@ export function writeVerifyFacts(changeDir, result, changeName, opts = {}) {
+   } catch { /* 首次落盘/v1/损坏 → 全新快照（v1 无固化段，直接升 v2） */ }
+   writeFileSync(factsPath, JSON.stringify(facts, null, 2) + '\n')
+   console.log(`📝 已刷新 verify-facts.json 机器底稿: ${factsPath}（v2 分段合并，固化段保留；CLI 全权写，勿手改）${opts.platformNote || ''}`)
++  // 左移警告（2026-09-23 执行会话实证：散文式接口定义到 verify 期才被零面拦下，表格形态要求
++  // 埋在骨架注记里没人看——--init 刷完 facts 就在控制台点名，修复时机从 verify 收口提前到此刻）
++  const face = result && result.apiFace
++  if (face && Array.isArray(face.sectionHint) && face.sectionHint.length > 0
++    && (!face.endpoints || face.endpoints.length === 0) && face.declared == null) {
++    console.warn(`⚠️ design 检测到接口段标题「${face.sectionHint[0]}」但表格解析零端点——接口验证覆盖矩阵只解析表格形态（每端点一行 METHOD | path），散文式接口定义不进矩阵。修复：design.md 接口定义改表格或加声明行「本变更接口面：N 端点」后重跑 --init。`)
++  }
+   return { facts, path: factsPath }
+ }
+ 
+diff --git a/test/api-coverage-matrix.test.mjs b/test/api-coverage-matrix.test.mjs
+index 7b73a810..29f8c278 100644
+--- a/test/api-coverage-matrix.test.mjs
++++ b/test/api-coverage-matrix.test.mjs
+@@ -232,6 +232,33 @@ test('4b. 其余四形态存在即认：权限矩阵[]/契约表@/DDL@/载荷@',
+     `四形态级锚点存在即认（形态级不空指——存在性口径）（实际 ${results.map((r, i) => `${forms[i]}→${r.ok}`).join(' / ')}）`)
+ })
+ 
++test('4c. 锚点分诊（2026-09-23 执行会话实证）：design接口表# 在场但 # 后非 METHOD /path → 定向报命中条件；聚合报错带可复制样例', () => {
++  const bare = judgeWith({
++    rows: [['GET /api/a', 'covered', 'C1', 'ok', 'design接口表#接口定义']],
++    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
++  })
++  const anchorErr = bare.errors.find((e) => e.includes('证据锚点缺失/空指'))
++  assert.ok(bare.ok === false && anchorErr && anchorErr.includes('未提取到 METHOD /path')
++    && anchorErr.includes('design接口表#POST /api/xx'),
++    `分诊定向命中条件 + 聚合样例在场（实际 ${JSON.stringify(anchorErr && anchorErr.slice(0, 200))}）`)
++  const generic = judgeWith({
++    rows: [['GET /api/a', 'covered', 'C1', 'ok', '无任何锚点字样']],
++    face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
++  })
++  assert.ok(generic.errors.some((e) => e.includes('证据缺用例依据锚点（五形态之一）')),
++    `无形态字样 → 保持泛化报错不误伤（实际 ${JSON.stringify(generic.errors.map((e) => e.slice(0, 60)))}）`)
++})
++
++test('4d. 零面分诊（散文式接口定义，2026-09-23 执行会话实证）：sectionHint 在场×零端点 → 骨架注记点名「检测到接口段标题」', () => {
++  const d = mk('zero-face-')
++  const mdPath = join(d, 'verify-result.md')
++  writeFileSync(mdPath, '# 验证报告\n\n## 后续章节\n')
++  ensureApiCoverageMatrixSection(mdPath, { endpoints: [], declared: null, sectionHint: ['### 接口定义'] })
++  const out = readFileSync(mdPath, 'utf8')
++  assert.ok(out.includes('检测到接口段标题') && out.includes('散文式接口定义不进矩阵'),
++    `接口段标题在场但表格解析零端点 → 定向注记左移修复时机（实际 ${JSON.stringify(out.slice(Math.max(0, out.indexOf('接口验证覆盖矩阵') - 20), out.indexOf('接口验证覆盖矩阵') + 320))}）`)
++})
++
+ // ═══════════════════════════════════════════════════════════════════
+ // 5. 声明降级 / 零接口面分层 / 段缺失分层（D-005）
+ // ═══════════════════════════════════════════════════════════════════
+diff --git a/test/run-exit-codes.test.mjs b/test/run-exit-codes.test.mjs
+index 3f27988d..8df9c73e 100644
+--- a/test/run-exit-codes.test.mjs
++++ b/test/run-exit-codes.test.mjs
+@@ -77,6 +77,16 @@ console.log('--- run <stage> 退出码三段契约（W1-A 用法/环境错 → e
+     `未知参数 stderr 含提示（实际 ${msg.slice(0, 80)}）`)
+ }
+ 
++// --step 白名单登记（2026-09-23 执行会话实证：--done --step <名|序号> 说明书出示的形态进命令即被
++// 未知参数 exit(2) 拦死——与 --wait-interactive 漏登记同款死路，ql-20260911-029 前例）。
++// 登记后不再以「未知参数」拒绝（--status 只读路径安全验证；值 token 由 VALUE_FLAGS 跳过）。
++{
++  const d = makeRepo()
++  const r = runSilly(['run', 'execute', '--status', '--step', '进度确认'], { cwd: d })
++  const msg = r.stderr + r.stdout
++  assert(!msg.includes('未知参数'), `--step 已登记不再报未知参数（实际 ${msg.slice(0, 120)}）`)
++}
++
+ // F10b（ql-20260818-010）: 语义别名定向提示——did-you-mean 按编辑距离猜形近 flag，猜中的常是
+ // 形近但语义错的（--title → --files，ql-20260818-003 负面③）。命中别名打定向指引替代形近猜测。
+ {

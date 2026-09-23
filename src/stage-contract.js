@@ -1201,12 +1201,21 @@ export function judgeApiCoverageMatrix(args) {
       const key = `${m[1]} ${m[2]}`
       if (!parseSet.has(key)) anchorViolations.push(`${rowLabel(r)}：design接口表#${key} 未命中 design 接口段解析面（空指）`)
     }
-    if (!apiEvidenceHasAnchorForm(e)) anchorViolations.push(`${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
+    if (!apiEvidenceHasAnchorForm(e)) {
+      // 分诊（2026-09-23 执行会话实证：design接口表# 字样在场但 # 后非 METHOD /path 形态时，
+      // 泛化「缺五形态之一」让人无法区分「形态没写对」与「写了没算数」——三轮试错后 agent 被逼
+      // 换更弱的 DDL@ 形态过门，fail-closed 反而促成了更泛的锚点。定向报出该形态的命中条件。）
+      API_ANCHOR_DESIGN_API_RE.lastIndex = 0
+      const bareDesignAnchor = /design接口表#/.test(e) && !API_ANCHOR_DESIGN_API_RE.test(e)
+      anchorViolations.push(bareDesignAnchor
+        ? `${rowLabel(r)}：证据含 design接口表# 但 # 后未提取到 METHOD /path——该形态仅 \`design接口表#POST /api/xx\` 形态计命中（仅写表名/行号/散文描述不计）`
+        : `${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
+    }
   }
   if (anchorViolations.length > 0) {
     errors.push(
       `接口验证覆盖矩阵有 ${anchorViolations.length} 项证据锚点缺失/空指` +
-      `（covered/partial 证据须含锚点五形态之一：design接口表#METHOD /path（须命中 design 接口段解析面）/ 权限矩阵[角色×动作] / 契约表@行标识 / DDL@列名 / 载荷@构造点路径；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
+      `（covered/partial 证据须含锚点五形态之一，可复制样例：design接口表#POST /api/xx（# 后必须 METHOD /path 且命中 design 接口段解析面，仅表名/行号不计）/ 权限矩阵[admin×读] / 契约表@任务卡字段清单 / DDL@users.id / 载荷@e2e_body.json；covered-service 证据须含测试锚点三形态之一：\`.test.\` 文件名 / file:line / 反引号包裹的测试名）：${anchorViolations.join('；')}。` +
       `修复：在证据列补真实锚点（design接口表# 锚点须与 design.md 接口段端点一致，防编造端点）。`
     )
   }

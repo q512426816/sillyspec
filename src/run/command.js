@@ -52,6 +52,7 @@ const VALUE_FLAGS = new Set([
   '--base', // scan diff 基线 commit（吃值；只在 run scan --diff 转发路径消费）
   '--session', // 显式会话标识（吃值；2026-09-14-change-ownership-guards task-02 所有权三级解析最高优先级层，启动 claim 消费）
   '--inherit-from', // wait 继承盖章锚点 <D-xxx@vN>（吃值；2026-09-18-preflight-slimming task-03 / D-003@v2：仅 --wait 场景合法，--wait 分发点校验消费）
+  '--step', // --done --step <名|序号> 意图断言（吃值；:340 消费。漏登记死路同 --wait-interactive 前例：burst 说明书出示该形态却被未知参数 exit(2) 拦死，2026-09-23 执行会话实证）
 ])
 
 /**
@@ -720,6 +721,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--takeover', // 所有权护栏显式强制接管（task-02 / FR-01：本层只注册透传，实际消费在 index.js apply/cleanup 子命令层——run 侧带上不报未知参数，语义出口在 worktree 命令）
     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
+    '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
