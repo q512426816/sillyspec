@@ -674,9 +674,10 @@ export class SyncManager {
     this._suppressDocsMissingWarn = archivedQuietly;
 
     // X1 墓碑（design §5.5，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）：
-    // 触发判据见循环内 tombstoneDue（DB status='archived'）。
+    // 触发判据见循环内 tombstoneDue（DB status='archived'|'deleted'）。
     // 常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state 钉死），
-    // 墓碑作为推送链成功后的追加 POST（见 _pushTombstone）。
+    // 墓碑作为推送链成功后的追加 POST（见 _pushTombstone；终态透传，archived 链不伪装 deleted——
+    // 2026-09-23 archive-tombstone 坑修复）。
 
     const MAX_PUSH_ATTEMPTS = 2;
     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
@@ -700,7 +701,10 @@ export class SyncManager {
       // （unregisterChange 链——归档收尾/自愈/quick 收尾均置该值）或 status='deleted'
       // （change-delete 命令，2026-08-30——载荷本身携带 deleted，平台 _apply_cli_tombstone
       // 见该值即置 location='deleted'；追加墓碑 POST 幂等兜底）触发，常规推送成功后追加
-      // 一次 changes[].status='deleted' 墓碑（平台 task-04 写路径置 location='deleted' 收敛镜像）。
+      // 一次终态墓碑（终态透传：archived 链发 status='archived'、deleted 链发 'deleted'——
+      // 2026-09-23 前一律写死 'deleted' 致归档链被平台当删除软删，archive-tombstone 坑修复；
+      // 平台 task-04 写路径对 'deleted' 置 location='deleted' 收敛镜像，对 'archived' 新平台
+      // 置 location='archive'、旧平台读时投影零动作）。
       // 不再把「实体目录双失」当裸删发墓碑：platform pull（进度同步）只写 DB 不建目录 →
       // DB active + 目录双失是合法态，误发墓碑会让平台把活跃变更软删（全体成员生效）。
       // 真实裸删（用户手动 rm -rf 目录）由平台镜像收敛兜底（spec-sync delete ops → scoped
@@ -971,20 +975,27 @@ export class SyncManager {
   }
 
   /**
-   * X1：把墓碑状态写进载荷——changes[0].status='deleted'（对齐既有 'archived' 状态语义，
-   * design §5.5）。平台写路径（服务端 task-04 `_apply_cli_tombstone`）见到该值即置
-   * Change.location='deleted' 并触发镜像软删收敛。
+   * X1：把终态写进墓碑载荷——**终态透传**（2026-09-23 archive-tombstone 坑修复）：DB
+   * status='deleted'（change-delete 链）透传 'deleted'，平台写路径 `_apply_cli_tombstone`
+   * 见值置 Change.location='deleted' 并镜像软删（行为不变）；DB status='archived'
+   * （unregisterChange 链）透传 'archived'——此前一律写死 'deleted'，归档链在平台被当
+   * 删除软删、面板「已归档」tab 隐身（MP 仓 docs/sillyspec/archive-tombstone-*.md 实证：
+   * 两工作区受影响，真删除历史仅 3 例且均非 archive 阶段）。'archived' 载荷旧平台走
+   * 读时投影零 location 动作（天然兼容），新平台写路径置 location='archive'。
    * @param {object} progressData serializeForSync 输出（原地修改，返回同一引用）
    */
   _applyTombstoneStatus(progressData) {
     if (progressData && Array.isArray(progressData.changes) && progressData.changes[0]) {
-      progressData.changes[0].status = 'deleted';
+      const terminal = progressData.changes[0].status;
+      progressData.changes[0].status = terminal === 'deleted' ? 'deleted' : 'archived';
     }
     return progressData;
   }
 
   /**
-   * X1 墓碑上行（design §5.5 / task-13）：同端点同结构的一次追加 POST（changes[].status='deleted'）。
+   * X1 墓碑上行（design §5.5 / task-13）：同端点同结构的一次追加 POST（终态透传：
+   * changes[].status='archived'|'deleted'，见 _applyTombstoneStatus——2026-09-23 起归档链
+   * 不再伪装成 deleted）。
    *
    * 由 sync() 成功路径在常规推送 + 文档/spec 树链之后触发（CLI 单进程顺序推送，base_ts 进程内
    * 单调，无乐观锁冲突）。fresh 重读 DB 序列化——常规推送成功的 base_ts 回填已落库，本推送带上
@@ -1022,7 +1033,7 @@ export class SyncManager {
       signal: opts.signal,
     });
     if (res.ok) {
-      console.log(`[sync] 已上行墓碑（status=deleted）: ${changeName}`);
+      console.log(`[sync] 已上行终态墓碑（status=${progressData.changes?.[0]?.status || '?'}）: ${changeName}`);
       try {
         const ackTs = res.body && typeof res.body.last_pushed_at === 'string' ? res.body.last_pushed_at : pushedAt;
         pm._updatePlatformLastSync(this.cwd, changeName, ackTs);

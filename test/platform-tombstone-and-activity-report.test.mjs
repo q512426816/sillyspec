@@ -1,8 +1,10 @@
 // task-13（2026-08-29-change-delete-closure-and-spec-pull，跨仓 sillyspec）：
 // X1 墓碑上报 + X3 步骤开始上报 + X4 execute 任务边界上报（design §5.5 / §8.2）。
 //
-// X1：归档/注销（unregisterChange 链，DB status='archived'）后，progress 上行载荷含
-//     changes[].status='deleted'（对齐既有 archived 语义；平台写路径由服务端 task-04 落地）。
+// X1：归档/注销（unregisterChange 链，DB status='archived'）后，追加墓碑载荷
+//     changes[].status **终态透传**（2026-09-23 archive-tombstone 坑修复：archived 链发
+//     'archived'、deleted 链发 'deleted'——此前一律写死 'deleted'，归档链被平台
+//     _apply_cli_tombstone 当删除软删、面板「已归档」tab 隐身）。
 //     兼容契约：常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state
 //     钉死），墓碑作为同端点同结构的追加 POST——顺序在常规推送之后。
 //     审计 B1 收窄：「实体目录双失」不再触发墓碑——platform pull（进度同步）只写 DB 不建
@@ -114,7 +116,7 @@ function seedChange(cwd, name) {
 // X1
 // ─────────────────────────────────────────
 
-test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓碑 changes[].status=deleted', async () => {
+test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓碑 changes[].status=archived（终态透传，不再伪装 deleted）', async () => {
   const cwd = makeFixture()
   const name = 'archived-change'
   const pm = seedChange(cwd, name)
@@ -131,10 +133,32 @@ test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓
     // 兼容契约：常规终态推送保持原语义（archived 原值）
     assert.ok(m.progressBodies.length >= 1, 'progress POST 到达')
     assert.equal(m.progressBodies[0].changes[0].status, 'archived', '首推保持 archived 原语义（既有回归）')
-    // X1：墓碑载荷存在且形状正确
-    const tombstones = m.progressBodies.filter(b => b.changes[0].status === 'deleted')
-    assert.ok(tombstones.length >= 1, `墓碑上行到达（共 ${m.progressBodies.length} 次 POST）`)
-    assert.equal(tombstones[0].changes[0].name, name, '墓碑载荷 changes[0].name 对应本变更')
+    // X1 终态透传：墓碑存在且载荷 status='archived'（归档链不伪装 deleted——平台
+    // _apply_cli_tombstone 见 'deleted' 即软删+镜像收敛，归档链曾因此在面板隐身）
+    assert.ok(m.progressBodies.length >= 2, `墓碑作为追加 POST 到达（共 ${m.progressBodies.length} 次）`)
+    const tombstone = m.progressBodies[m.progressBodies.length - 1]
+    assert.equal(tombstone.changes[0].status, 'archived', '墓碑载荷终态透传 status=archived')
+    assert.equal(tombstone.changes[0].name, name, '墓碑载荷 changes[0].name 对应本变更')
+    for (const b of m.progressBodies) {
+      assert.notEqual(b.changes[0].status, 'deleted', '归档链全程无 deleted 载荷（archive-tombstone 坑修复）')
+    }
+  } finally { m.restore() }
+})
+
+test('X1-1b 显式删除（change-delete 链，DB status=deleted）→ 墓碑仍透传 status=deleted（删除语义不变）', async () => {
+  const cwd = makeFixture()
+  const name = 'deleted-change'
+  const pm = seedChange(cwd, name)
+  pm.deleteChange(cwd, name) // change-delete 一等删除命令的终态（change-registry deleteChange）
+
+  const m = mockFetch()
+  try {
+    const r = await new SyncManager(cwd).sync(name)
+    assert.equal(r.synced, 1, '主推送成功')
+    assert.ok(m.progressBodies.length >= 2, '常规推送 + 追加墓碑（两次 POST）')
+    const tombstone = m.progressBodies[m.progressBodies.length - 1]
+    assert.equal(tombstone.changes[0].status, 'deleted', '删除链墓碑透传 status=deleted（平台软删语义保持）')
+    assert.equal(tombstone.changes[0].name, name, '墓碑载荷对应本变更')
   } finally { m.restore() }
 })
 

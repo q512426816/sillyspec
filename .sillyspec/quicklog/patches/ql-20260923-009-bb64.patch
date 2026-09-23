@@ -1,0 +1,178 @@
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index 00c458f9..d183f938 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -257,7 +257,9 @@ sillyspec change-delete <变更名> [--confirm]
+      事后审计只能回溯 git。现 DB status='deleted'（终态语义与 archived 分离，行保留供审计）
+      + 物理移除 changes/<名>/ + `archiveWorktreeCleanup` 清 worktree（未 apply 变更保留
+      不误删代码）+ `safeGit add -A` 暂存删除（best-effort）+ `triggerSync` 推终态（sync.js
+-     见 status='deleted' 上行墓碑 → 平台软删收敛）。两段式：默认 dry-run 列出待删项
++     见 status='deleted' 上行墓碑 → 平台软删收敛；墓碑终态透传——archived 链发 'archived'
++     仅 deleted 链发 'deleted'，2026-09-23 archive-tombstone 修复前一律 'deleted' 致归档链
++     被平台当删除软删）。两段式：默认 dry-run 列出待删项
+      （DB 行/目录文件数/worktree 未 apply 数），--confirm 才执行（DB-first + 目录删除失败
+      回滚 DB；审计落 audit.log action=change-delete）。archived 行拒绝（归档历史走 git 层
+      处理）；幽灵行（active 无目录）与孤儿目录（无 DB 行）分别支持仅翻 status / 仅删目录。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index eb117b41..f55eeb0c 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -68,11 +68,11 @@ mcp:
+ | `connect` | GET | `/api/health` | ping 验活平台可达 | `sync.js:263` |
+ | `connect` | POST | `/api/workspaces/resolve-by-root-path` | 用 user 级 token（shk_live_/JWT）+ 本地 `root_path` 换发 `shpsync_` workspace-scoped token | `sync.js:461` |
+ | `sync` | POST | `/api/changes/{name}/progress` | **推六表进度 JSON**（serializeForSync）；元字段走 header：`Authorization`/`X-SillySpec-User`/`X-SillySpec-Base-Ts`(乐观锁)/`X-SillySpec-Pushed-At`；**409** = base_ts 冲突 → 写 `.runtime/sync-conflict-<change>.json` | `sync.js:460` |
+-| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1067` |
++| `syncDocuments` | POST | `/api/changes/{name}/documents` | 推四件套（proposal/design/requirements/tasks.md）全量同步。**⚠️ 后端未实现（404，2026-08-14 实测）**——CLI 预留契约（`_submitApproval` 内 TBD-hub-api 注释），best-effort warn 静默失败 | `sync.js:1078` |
+ | `checkApproval` | GET | `/api/changes/{name}/approval` | 读审批状态 `pending/approved/rejected`，回写本地 approvals 表 | `sync.js:36` |
+-| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1431` |
++| `pullList` | GET | `/api/changes` | 轻量 change 列表（name/stage/last_pushed_at），CLI 比对本地决定哪些需更新 | `sync.js:1442` |
+ | `pull` | GET | `/api/changes/{name}/progress` | 拉平台权威 JSON → import 重建本地 DB 行；本地脏且平台更新 → 冲突写文件 | `sync.js:801` |
+-| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2298` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2298` |
++| `approve`/`reject` | POST | `/api/changes/{name}/approval` | 提交审批决定；**非 best-effort** —— 失败置 `process.exitCode=1`（`sync.js:2321` `_submitApproval`，D-006@v1「显式用户动作失败必须可见」）。**⚠️ 后端未实现（405，只有 GET，2026-08-14 实测）**——CLI 预留契约（TBD-hub-api 注释在 `_submitApproval` 内），当前 `platform approve` 必失败 | `sync.js:2321` |
+ | `resolve` | —（本地） | 读 sync-conflict 文件 | 三选一（keep-local/take-platform/abort），不发网络 | `sync.js:925` |
+ 
+ ### CLI 便捷封装（`sync.js:886-925`）
+@@ -136,8 +136,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3988；shared.js:989 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2678/2954；shared.js:1013 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3909；sync.js:1431/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3861；sync.js:2129 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3909；sync.js:1442/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3861；sync.js:2183 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+ | `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3674/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+diff --git a/src/sync.js b/src/sync.js
+index 3b3d7bcf..b3655bfc 100644
+--- a/src/sync.js
++++ b/src/sync.js
+@@ -674,9 +674,10 @@ export class SyncManager {
+     this._suppressDocsMissingWarn = archivedQuietly;
+ 
+     // X1 墓碑（design §5.5，变更 2026-08-29-change-delete-closure-and-spec-pull task-13）：
+-    // 触发判据见循环内 tombstoneDue（DB status='archived'）。
++    // 触发判据见循环内 tombstoneDue（DB status='archived'|'deleted'）。
+     // 常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state 钉死），
+-    // 墓碑作为推送链成功后的追加 POST（见 _pushTombstone）。
++    // 墓碑作为推送链成功后的追加 POST（见 _pushTombstone；终态透传，archived 链不伪装 deleted——
++    // 2026-09-23 archive-tombstone 坑修复）。
+ 
+     const MAX_PUSH_ATTEMPTS = 2;
+     for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
+@@ -700,7 +701,10 @@ export class SyncManager {
+       // （unregisterChange 链——归档收尾/自愈/quick 收尾均置该值）或 status='deleted'
+       // （change-delete 命令，2026-08-30——载荷本身携带 deleted，平台 _apply_cli_tombstone
+       // 见该值即置 location='deleted'；追加墓碑 POST 幂等兜底）触发，常规推送成功后追加
+-      // 一次 changes[].status='deleted' 墓碑（平台 task-04 写路径置 location='deleted' 收敛镜像）。
++      // 一次终态墓碑（终态透传：archived 链发 status='archived'、deleted 链发 'deleted'——
++      // 2026-09-23 前一律写死 'deleted' 致归档链被平台当删除软删，archive-tombstone 坑修复；
++      // 平台 task-04 写路径对 'deleted' 置 location='deleted' 收敛镜像，对 'archived' 新平台
++      // 置 location='archive'、旧平台读时投影零动作）。
+       // 不再把「实体目录双失」当裸删发墓碑：platform pull（进度同步）只写 DB 不建目录 →
+       // DB active + 目录双失是合法态，误发墓碑会让平台把活跃变更软删（全体成员生效）。
+       // 真实裸删（用户手动 rm -rf 目录）由平台镜像收敛兜底（spec-sync delete ops → scoped
+@@ -971,20 +975,27 @@ export class SyncManager {
+   }
+ 
+   /**
+-   * X1：把墓碑状态写进载荷——changes[0].status='deleted'（对齐既有 'archived' 状态语义，
+-   * design §5.5）。平台写路径（服务端 task-04 `_apply_cli_tombstone`）见到该值即置
+-   * Change.location='deleted' 并触发镜像软删收敛。
++   * X1：把终态写进墓碑载荷——**终态透传**（2026-09-23 archive-tombstone 坑修复）：DB
++   * status='deleted'（change-delete 链）透传 'deleted'，平台写路径 `_apply_cli_tombstone`
++   * 见值置 Change.location='deleted' 并镜像软删（行为不变）；DB status='archived'
++   * （unregisterChange 链）透传 'archived'——此前一律写死 'deleted'，归档链在平台被当
++   * 删除软删、面板「已归档」tab 隐身（MP 仓 docs/sillyspec/archive-tombstone-*.md 实证：
++   * 两工作区受影响，真删除历史仅 3 例且均非 archive 阶段）。'archived' 载荷旧平台走
++   * 读时投影零 location 动作（天然兼容），新平台写路径置 location='archive'。
+    * @param {object} progressData serializeForSync 输出（原地修改，返回同一引用）
+    */
+   _applyTombstoneStatus(progressData) {
+     if (progressData && Array.isArray(progressData.changes) && progressData.changes[0]) {
+-      progressData.changes[0].status = 'deleted';
++      const terminal = progressData.changes[0].status;
++      progressData.changes[0].status = terminal === 'deleted' ? 'deleted' : 'archived';
+     }
+     return progressData;
+   }
+ 
+   /**
+-   * X1 墓碑上行（design §5.5 / task-13）：同端点同结构的一次追加 POST（changes[].status='deleted'）。
++   * X1 墓碑上行（design §5.5 / task-13）：同端点同结构的一次追加 POST（终态透传：
++   * changes[].status='archived'|'deleted'，见 _applyTombstoneStatus——2026-09-23 起归档链
++   * 不再伪装成 deleted）。
+    *
+    * 由 sync() 成功路径在常规推送 + 文档/spec 树链之后触发（CLI 单进程顺序推送，base_ts 进程内
+    * 单调，无乐观锁冲突）。fresh 重读 DB 序列化——常规推送成功的 base_ts 回填已落库，本推送带上
+@@ -1022,7 +1033,7 @@ export class SyncManager {
+       signal: opts.signal,
+     });
+     if (res.ok) {
+-      console.log(`[sync] 已上行墓碑（status=deleted）: ${changeName}`);
++      console.log(`[sync] 已上行终态墓碑（status=${progressData.changes?.[0]?.status || '?'}）: ${changeName}`);
+       try {
+         const ackTs = res.body && typeof res.body.last_pushed_at === 'string' ? res.body.last_pushed_at : pushedAt;
+         pm._updatePlatformLastSync(this.cwd, changeName, ackTs);
+diff --git a/test/platform-tombstone-and-activity-report.test.mjs b/test/platform-tombstone-and-activity-report.test.mjs
+index accaaaa2..50a6307b 100644
+--- a/test/platform-tombstone-and-activity-report.test.mjs
++++ b/test/platform-tombstone-and-activity-report.test.mjs
+@@ -1,8 +1,10 @@
+ // task-13（2026-08-29-change-delete-closure-and-spec-pull，跨仓 sillyspec）：
+ // X1 墓碑上报 + X3 步骤开始上报 + X4 execute 任务边界上报（design §5.5 / §8.2）。
+ //
+-// X1：归档/注销（unregisterChange 链，DB status='archived'）后，progress 上行载荷含
+-//     changes[].status='deleted'（对齐既有 archived 语义；平台写路径由服务端 task-04 落地）。
++// X1：归档/注销（unregisterChange 链，DB status='archived'）后，追加墓碑载荷
++//     changes[].status **终态透传**（2026-09-23 archive-tombstone 坑修复：archived 链发
++//     'archived'、deleted 链发 'deleted'——此前一律写死 'deleted'，归档链被平台
++//     _apply_cli_tombstone 当删除软删、面板「已归档」tab 隐身）。
+ //     兼容契约：常规终态推送保持原语义（archived/active 原值照推，platform-sync-archive-final-state
+ //     钉死），墓碑作为同端点同结构的追加 POST——顺序在常规推送之后。
+ //     审计 B1 收窄：「实体目录双失」不再触发墓碑——platform pull（进度同步）只写 DB 不建
+@@ -114,7 +116,7 @@ function seedChange(cwd, name) {
+ // X1
+ // ─────────────────────────────────────────
+ 
+-test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓碑 changes[].status=deleted', async () => {
++test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓碑 changes[].status=archived（终态透传，不再伪装 deleted）', async () => {
+   const cwd = makeFixture()
+   const name = 'archived-change'
+   const pm = seedChange(cwd, name)
+@@ -131,10 +133,32 @@ test('X1-1 归档后（unregisterChange 链）→ 常规终态照推 + 追加墓
+     // 兼容契约：常规终态推送保持原语义（archived 原值）
+     assert.ok(m.progressBodies.length >= 1, 'progress POST 到达')
+     assert.equal(m.progressBodies[0].changes[0].status, 'archived', '首推保持 archived 原语义（既有回归）')
+-    // X1：墓碑载荷存在且形状正确
+-    const tombstones = m.progressBodies.filter(b => b.changes[0].status === 'deleted')
+-    assert.ok(tombstones.length >= 1, `墓碑上行到达（共 ${m.progressBodies.length} 次 POST）`)
+-    assert.equal(tombstones[0].changes[0].name, name, '墓碑载荷 changes[0].name 对应本变更')
++    // X1 终态透传：墓碑存在且载荷 status='archived'（归档链不伪装 deleted——平台
++    // _apply_cli_tombstone 见 'deleted' 即软删+镜像收敛，归档链曾因此在面板隐身）
++    assert.ok(m.progressBodies.length >= 2, `墓碑作为追加 POST 到达（共 ${m.progressBodies.length} 次）`)
++    const tombstone = m.progressBodies[m.progressBodies.length - 1]
++    assert.equal(tombstone.changes[0].status, 'archived', '墓碑载荷终态透传 status=archived')
++    assert.equal(tombstone.changes[0].name, name, '墓碑载荷 changes[0].name 对应本变更')
++    for (const b of m.progressBodies) {
++      assert.notEqual(b.changes[0].status, 'deleted', '归档链全程无 deleted 载荷（archive-tombstone 坑修复）')
++    }
++  } finally { m.restore() }
++})
++
++test('X1-1b 显式删除（change-delete 链，DB status=deleted）→ 墓碑仍透传 status=deleted（删除语义不变）', async () => {
++  const cwd = makeFixture()
++  const name = 'deleted-change'
++  const pm = seedChange(cwd, name)
++  pm.deleteChange(cwd, name) // change-delete 一等删除命令的终态（change-registry deleteChange）
++
++  const m = mockFetch()
++  try {
++    const r = await new SyncManager(cwd).sync(name)
++    assert.equal(r.synced, 1, '主推送成功')
++    assert.ok(m.progressBodies.length >= 2, '常规推送 + 追加墓碑（两次 POST）')
++    const tombstone = m.progressBodies[m.progressBodies.length - 1]
++    assert.equal(tombstone.changes[0].status, 'deleted', '删除链墓碑透传 status=deleted（平台软删语义保持）')
++    assert.equal(tombstone.changes[0].name, name, '墓碑载荷对应本变更')
+   } finally { m.restore() }
+ })

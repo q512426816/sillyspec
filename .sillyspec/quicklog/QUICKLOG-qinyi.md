@@ -166,3 +166,14 @@
 方案：①锚点校验分诊：design接口表# 字样在场但正则不提取→定向报『# 后未提取到 METHOD /path，仅表名/行号/散文描述不计』；聚合报错五形态各带可复制样例（design接口表#POST /api/xx/权限矩阵[admin×读]/契约表@任务卡字段清单/DDL@users.id/载荷@e2e_body.json）；verify-probes 预填说明同步带样例与仅表名不计告警②renderApiCoverageMatrixLines 按 sectionHint 分诊：接口段标题在场×表格零端点→注记点名『检测到接口段标题/散文式接口定义不进矩阵』；writeVerifyFacts 刷完 facts 控制台同款左移警告（修复时机从 verify 收口提前到 --init）③--step 补登记 knownFlags+VALUE_FLAGS（吃值）
 结果：聚焦 25/25（api-coverage-matrix+run-exit-codes，含新增 4c 锚点分诊/4d 散文零面分诊/--step 白名单三例）；全量 594/594 绿（591+3 新增）；lint 759 文件未引用导出 0+module-map 覆盖全；零新增导出（renderApiCoverageMatrixLines 保持私有）
 审计：[gate] L1（跨 2 模块 · 5 文件：3 代码/2 测试）advisory；每文件注记缺失（--file-notes 覆盖变更文件全集）；测试增量已含
+
+## ql-20260923-009-bb64 | 2026-09-23 09:27:17 | archive-tombstone 坑（MP 仓 docs/sillyspec/archive-tombstone-归档墓碑致面板已归档变更软删不可见.md…
+状态：已完成
+关联变更：（无）
+文件：
+- src/sync.js（_applyTombstoneStatus 终态透传+墓碑日志动态化+三处注释）
+- docs/sillyspec/platform-interface-map.md（仅行号锚漂移修复（1067→1078 等）无内容变更）
+需求：archive-tombstone 坑（MP 仓 docs/sillyspec/archive-tombstone-归档墓碑致面板已归档变更软删不可见.md，2026-09-23 部署验收发现）：CLI 墓碑载荷把归档链伪装成 deleted，平台 _apply_cli_tombstone 见值即软删+镜像收敛，归档变更在面板已归档 tab 隐身；本地 1237 archived vs 3 deleted（全非 archive 阶段）实证受影响面全部是冤案
+根因：sync.js _applyTombstoneStatus（2026-08-29 task-13 引入）无条件 changes[0].status='deleted'，而 serializeForSync 本已携带真实终态（unregisterChange→archived / deleteChange→deleted）——单点写死致两链不可区分；注释『对齐既有 archived 语义』暴露原意是归档信号但平台读到的语义是删除
+方案：终态透传：_applyTombstoneStatus 按 DB status 透传（deleted 链行为不变，archived 链发 'archived'）；兼容已核：旧平台对 archived 载荷走既有读时投影（零 location 动作零软删），新平台补写路径（本坑平台侧另修）。测试 X1-1 改造（归档链墓碑=archived 且全程无 deleted 载荷）+新增 X1-1b（deleteChange 链仍 deleted）；注释三处+file-lifecycle.md 更新；platform-interface-map.md 五处行号锚漂移修复
+结果：聚焦 32/32（tombstone+change-delete+noise+terminal-sweep）；doc-ref 93 处引用全过（修复 5 处漂移）；全量 594/594 绿；lint 759 文件未引用导出 0

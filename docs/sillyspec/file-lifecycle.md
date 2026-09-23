@@ -257,7 +257,9 @@ sillyspec change-delete <变更名> [--confirm]
      事后审计只能回溯 git。现 DB status='deleted'（终态语义与 archived 分离，行保留供审计）
      + 物理移除 changes/<名>/ + `archiveWorktreeCleanup` 清 worktree（未 apply 变更保留
      不误删代码）+ `safeGit add -A` 暂存删除（best-effort）+ `triggerSync` 推终态（sync.js
-     见 status='deleted' 上行墓碑 → 平台软删收敛）。两段式：默认 dry-run 列出待删项
+     见 status='deleted' 上行墓碑 → 平台软删收敛；墓碑终态透传——archived 链发 'archived'
+     仅 deleted 链发 'deleted'，2026-09-23 archive-tombstone 修复前一律 'deleted' 致归档链
+     被平台当删除软删）。两段式：默认 dry-run 列出待删项
      （DB 行/目录文件数/worktree 未 apply 数），--confirm 才执行（DB-first + 目录删除失败
      回滚 DB；审计落 audit.log action=change-delete）。archived 行拒绝（归档历史走 git 层
      处理）；幽灵行（active 无目录）与孤儿目录（无 DB 行）分别支持仅翻 status / 仅删目录。
