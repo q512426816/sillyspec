@@ -261,3 +261,15 @@
 根因：纯演示零改动
 方案：纯演示零改动
 结果：纯演示零改动
+
+## ql-20260923-016-51e9 | 2026-09-23 15:58:54 | requirements 模板补规范语言约定——MUST/MUST NOT/SHOULD/MAY 约束强度标注（RFC 2119）
+状态：已完成
+关联变更：（无）
+文件：
+- src/stages/brainstorm.js（requirements 模板 GWT 说明后加强度标注约定行（含 MUST NOT 红线实例））
+- docs/prompt/brainstorm.md（镜像同步（step5/step7 fence））
+- docs/prompt/_extracted.json（抽取重建）
+需求：requirements 模板补规范语言约定——MUST/MUST NOT/SHOULD/MAY 约束强度标注（RFC 2119）
+根因：跨工具对比实证（2026-09-23 R8/R9 + 用户质询链）：约束句无强度词时读不出是描述还是禁令（「不做 X」歧义），红线类约束靠读的人自觉掂量；OpenSpec 规格库的 SHALL/MUST 纪律是其实际优点之一，sillyspec 侧补齐此写作约定属零逻辑成本（fr/ 蒸馏逐字透传，强度词随知识注入自动带给后续变更）
+方案：brainstorm.js requirements.md 格式模板 GWT 块说明后追加约定行：MUST/必须=硬性要求（违反即缺陷）、MUST NOT/禁止=红线（绝对不允许）、SHOULD/应当=强烈建议（偏离须注明理由）、MAY/可以=可选，禁止裸写无强度词约束句（带事件通道红线实例）；docs/prompt 镜像按 _extract→_sync 流水线同步（brainstorm.md step5/step7 两 fence 替换）
+结果：docs-gate 18/18 绿；fourpiece/brainstorm 相关 4/4 零回归；lint 762 文件未引用导出 0+module-map 覆盖全；纯模板话术零逻辑面（知识库 patterns.md 已有姊妹评估纪律条目）
