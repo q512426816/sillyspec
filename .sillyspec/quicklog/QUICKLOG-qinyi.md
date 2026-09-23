@@ -382,3 +382,8 @@
 根因：R10 实证：node --test 跑 .py 全伪败+字母序截断前端依赖恒缺
 方案：buildDepsBatches：扩展名分组+变更测试优先+30 帽按组比例+pytest 前缀自模块命令推断，双批聚合 deps(pyN+jsM)
 结果：T4 双语言例+全族 4/4+test:core fail 0+lint 774 绿
+
+## ql-20260924-003-d8cb | 2026-09-24 03:49:50 | verify 对账 declared-rescue（变更分支锚定）+modules 块状解析——R9/R11 四连拦与文案矛盾根治
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）

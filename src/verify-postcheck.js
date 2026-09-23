@@ -675,7 +675,29 @@ export function extractModules(yamlText) {
     }
     const name = entry[2]
     const rest = (entry[3] || '').trim()
-    if (rest === '' || rest.startsWith('#')) continue // 子块展开式（本实现只支持 inline flow）
+    if (rest === '' || rest.startsWith('#')) {
+      // 子块展开式（2026-09-24 R10/R11 双实证修复：块状 path:/test: 缩进子行——此前只支持
+      // inline flow，块状被静默跳过 → modulesPresent=false 回退全量；两轮受试分别撞 25min
+      // 全量与文案矛盾）。向前看本条目的子行（缩进 > 条目行缩进）取 path/test 标量。
+      let pathVal = null
+      let testVal = null
+      for (let j = i + 1; j < lines.length; j++) {
+        const sub = lines[j]
+        if (sub.trim() === '' || sub.trim().startsWith('#')) continue
+        const subM = sub.match(/^([ 	]+)([A-Za-z0-9_.\-]+):\s*(.*)$/)
+        if (!subM || subM[1].length <= entry[1].length) break // 子行缩进必须更深
+        const key = subM[2]
+        const val = (subM[3] || '').trim().replace(/^["']|["']$/g, '')
+        if (key === 'path' && val) pathVal = val
+        if (key === 'test' && val) testVal = val
+        if (pathVal && testVal) break
+      }
+      if (pathVal && testVal) {
+        modules[name] = { path: pathVal, test: testVal }
+        continue
+      }
+      continue
+    }
     // 解析 inline flow mapping: { path: "...", test: "..." }
     const pathVal = parseFlowValue(rest, 'path')
     const testVal = parseFlowValue(rest, 'test')
@@ -3098,6 +3120,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
   // 消费方按「planned ∩ excluded ∩ 盘面存在」标「疑似他者已实现」。
   const foreignExcludedFiles = []
   let baseAnchor = null
+  let commitWindowFiles = []
 
   if (form === 'worktree') {
     // —— 形态 A：worktree 存活，整链复用（锚点优先级 baselineCommit>actualBaseHash>baseHash、
@@ -3156,6 +3179,25 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
       }
       for (const f of files) union.add(normalizeReconcilePath(f))
     }
+    // B4 isolation-worktree 提交窗口兜底（2026-09-24 R9/R11 根治：isolated worktree 内
+    // per-task commit 后 porcelain 恒空，B1 分支已删/B2 未提交面零 → declared 13 条全 missing
+    // 四连拦，逼出规则 23 reset 重组。收集 HEAD 近窗提交触及面（--name-only，窗口 20 提交
+    // 与 buildSnapshot commits 同口径；fail-open 静默省略）——**declared-rescue-only**：
+    // 不进全局 union（防其他变更提交文件污染 undeclared 假红），仅供消费方对
+    // 「声明而 missing」的文件做窗口命中救赎。
+    try {
+      // 锚定变更分支/审计 tag（非 blanket 20 提交——base 提交文件不得误救）
+      const rescueRef = (typeof branchHash === 'string' && branchHash.trim()) ? branch : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
+      if (!rescueRef) throw new Error('no-rescue-ref')
+      const recent = gitQuiet(cwd, ['log', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
+      if (typeof recent === 'string' && recent.trim()) {
+        const files = recent.split('\n').map(l => l.trim()).filter(l => l && !/^[0-9a-f]{7,40}$/.test(l))
+        if (files.length > 0) {
+          commitWindowFiles = files
+          sources.push(`main:log-20-commit-window(declared-rescue-only:${rescueRef})`)
+        }
+      }
+    } catch { /* 窗口源失败静默省略 */ }
     // B3 apply-pathspec 兜底（存在则并入，读取失败静默忽略——前两源不受影响）
     const pathspecFile = join(runtimeRoot, `apply-pathspec-${changeName}.txt`)
     if (existsSync(pathspecFile)) {
@@ -3174,7 +3216,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
   }
 
   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
-  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor }
+  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles }
 }
 
 /**
@@ -3346,6 +3388,20 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   const actualKeySet = new Set(actual.files.map(pathKey));
   const declaredPaths = [...new Set(decl.declarations.map(d => d.path))].sort()
   const declaredKeySet = new Set(declaredPaths.map(pathKey))
+  // declared-rescue（2026-09-24 R9/R11 根治接线）：isolated worktree per-task commit 形态下
+  // porcelain 恒空/分支已删，declared 全落②类假红——近窗提交触及面只用于救赎「声明而
+  // missing」的文件（窗口∩declared 才入 actualKeySet，不扩 undeclared 面）。
+  const windowKeySet = new Set((actual.commitWindowFiles || []).map(pathKey))
+  let rescuedCount = 0
+  for (const path of declaredPaths) {
+    if (!actualKeySet.has(pathKey(path)) && windowKeySet.has(pathKey(path))) {
+      actualKeySet.add(pathKey(path))
+      rescuedCount++
+    }
+  }
+  if (rescuedCount > 0) {
+    notes.push(`对账救赎：${rescuedCount} 个声明文件经近窗提交触及面命中（isolated worktree per-task commit 形态，porcelain 恒空——R9/R11 四连拦根治）`)
+  }
   // ①交集（计数进 evidence）：唯一路径口径（多卡声明同文件只计一次）
   for (const path of declaredPaths) {
     if (actualKeySet.has(pathKey(path))) matched.push(path)

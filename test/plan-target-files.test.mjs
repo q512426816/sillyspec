@@ -17,7 +17,7 @@
  * in-place 无独立 diff 路径（meta.mode='in-place-fallback' 时 gitDir 即主仓 cwd，与形态 A fixture
  * 中 worktreePath=cwd 的取源路径等价），不单独造分支。
  */
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -748,3 +748,28 @@ console.log('\n=== C-P1. 声明 ./ 前缀 + 形态 A docs 交付物 + 平台 spe
 
 // 尾部守卫：上方 C-P1 追加段在原汇总块之后执行，失败也必须反映到退出码
 if (failed > 0) process.exit(1)
+
+// ── D7. declared-rescue：变更分支锚定救赎（2026-09-24 R9/R11 四连拦根治钉）──
+{
+  const dir = mkRepo('tf-rescue-')
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src', 'base.js'), 'b')
+    commitAll(dir, 'base')
+    const change = 'tf-rescue'
+    // 变更分支上提交 per-task 文件（模拟 isolated worktree per-task commit 后 apply 到主线）
+    execFileSync('git', ['checkout', '-q', '-b', `sillyspec/${change}`], { cwd: dir })
+    writeFileSync(join(dir, 'src', 'r.js'), 'r')
+    execFileSync('git', ['add', 'src/r.js'], { cwd: dir })
+    execFileSync('git', ['commit', '-qm', 'task-01: r'], { cwd: dir })
+    writeCard(dir, change, 'task-01.md', fm('id: task-01\ntarget_files:\n- src/r.js'))
+    // 工作树干净（porcelain 空）+ 分支在场 → 分支锚定救赎命中
+    const r = reconcileTargetFiles({ cwd: dir, changeName: change })
+    assert(r.status === 'ok', `分支锚定救赎 → ok（实际: ${r.status}；missing=${JSON.stringify(r.missing)}）`)
+    assert((r.notes || []).some(n => String(n).includes('救赎')), '救赎 note 在场')
+    // 负例：声明了但分支上没有的文件仍 missing（不 blanket 救）
+    writeCard(dir, change, 'task-02.md', fm('id: task-02\ntarget_files:\n- src/never.js'))
+    const r2 = reconcileTargetFiles({ cwd: dir, changeName: change })
+    assert(r2.status === 'missing_declared' && JSON.stringify(r2.missing).includes('src/never.js'), `未做文件不误救（实际: ${r2.status}）`)
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+}
