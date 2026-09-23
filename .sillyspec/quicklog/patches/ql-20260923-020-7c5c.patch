@@ -1,0 +1,153 @@
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index f55eeb0c..de2c7f83 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,16 +130,16 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:279/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1630/1785/1848/1859/2049 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:296/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1630/1785/1848/1859/2049 |
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:2064/2118/2198 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:917（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:3988；shared.js:989 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2678/2954；shared.js:1013 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3909；sync.js:1442/986 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3861；sync.js:2183 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4007；shared.js:989 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2974/2954；shared.js:1013 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:3928；sync.js:1442/986 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:3880；sync.js:2183 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3674/3402；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3693/3402；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -166,7 +166,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **任何 `sillyspec run <stage>`**（scan/plan/execute/verify/archive/quick/brainstorm…）—— 都走 `runCommand`（`command.js:242`）公共入口，flag 在 `command.js:396`（`resolvedSpecDir`）起统一解析。scan 只是 daemon 流程的**第一个阶段**，所以是"典型首次激活点"，不是唯一入口。
+ - **流程命令卡注入**（`init.js:461` `injectCommandCards`（`command-cards.js:38` 导出））——init 按 `--tool zcode/claude` 落薄命令卡到 `.zcode|.claude/commands/sillyspec/`（7 张：run-brainstorm/plan/execute/verify/archive/quick+status）；尾部锚行 `<!-- sillyspec-card: v<ver> sha256=<正文sha> -->` 三态幂等（完好同资产 no-op 保 mtime/新内容覆盖/手改跳过 force 才覆盖）；与 skills 复制同门（`--no-skills`/platformMode 跳过，`init.js:303?` cardTools 门控（位置锚））；zcode 同时入 `VALID_TOOLS`（`init.js:80`）并同获 AGENTS.md 注入（`init.js:453?` 条件行）。
+ - **`sillyspec init <dir> --spec-dir <path>`** —— 外部 specDir 安装（`init.js:291` `doInstall(specDir)`，含源码目录旧 `.sillyspec` 残留清理）。⚠️ init **只认 `--spec-dir`**（顶层 `index.js:240` 解析后经 `case 'init'`（`index.js:360`）透传 `specDir`）；传 `--spec-root` 会被**静默忽略**（init 分支不读 filteredArgs）。**平台模式 init 落指针**：带平台专属 flag（`--workspace-id` / `--runtime-root`）时，init 即写双指针（`writePlatformPointer`（`init.js:703`/`515` 调用 `writeInitPlatformPointer`），status: active），消除 init→scan 窗口期 agent 裸调静默回退本地模式的断点。
+-- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:744（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
++- **`backfill-reviews` / `register-stage-review` / worktree apply / assess 等子命令** —— 顶层 `--spec-dir` 透传为 `platformOpts.specRoot`（index.js:763（review write 同款透传）/ 1185-1192（register-stage-review）/ 1791（worktree apply）/ 1902（assess））。
+ - **gate / derive**（machine-interface）—— 只读查询接受 specBase，**不写指针**。
+ 
+ ⚠️ **`--spec-dir` 与平台模式共用开关**：`command.js:407` 把 `--spec-dir` 与 `--spec-root` 同等置位 `specRoot`（`specRoot:` 现 398?）。本地用户为消歧 monorepo 传 `--spec-dir`（`command.js:381?` 的解析块就是这么引导的）也会点亮平台语义：跳过链路 A 的 REST 同步 + 写粘性指针文件 + 触发下方"首次接入清理"。设计上"外部 specDir = 平台模式"是合并处理，但与"本地只是换个目录"的直觉有偏差，易踩。
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3771`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3790`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/src/run/complete.js b/src/run/complete.js
+index c0929101..613385bd 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -73,6 +73,22 @@ export function updateWaveSessionLedger(ledger, sessionId, waveName) {
+   return { ledger: next, crossWaveAdvisory: next.waveCount >= 2 }
+ }
+ 
++/**
++ * 阶段-会话账本（token 减负④，2026-09-23 R9 实证后）：同一 SILLYSPEC_SESSION_ID 连续完成
++ * ≥2 个流程阶段 → 升级告警（同 Wave 账本的阶段粒度版）。R9 数据：单会话五阶段 53.5M 输入、
++ * 尾段单轮 30 万+、archive 3 分钟 7.2M——肥上下文税随会话内阶段数单调累积。架构约束
++ * （conventions 钉）：CLI 只产信号与接力载荷，不做会话编排——新会话创建者是用户或平台
++ * （session-fork 基建），升级块动作主体必须写明。纯函数（IO 由调用方做）。
++ */
++export function updateStageSessionLedger(ledger, sessionId, stageName) {
++  const sid = String(sessionId || 'anon')
++  const prev = ledger && ledger.sessionId === sid ? (ledger.stageCount || 0) : 0
++  const stages = ledger && ledger.sessionId === sid && Array.isArray(ledger.stages) ? [...ledger.stages] : []
++  stages.push(String(stageName || ''))
++  const next = { sessionId: sid, stageCount: prev + 1, stages: stages.slice(-8), lastStage: stageName || null, at: new Date().toISOString() }
++  return { ledger: next, crossStageAdvisory: next.stageCount >= 2 }
++}
++
+ function refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName) {
+   if (!changeName || /^quick-[0-9a-f]{8}$/.test(changeName)) return
+   try {
+@@ -732,8 +748,27 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     // 瘦会话交接提示（P1-5 v1，2026-09-20 对撞实验驱动）：主流程阶段完成时点提示
+     // 「下一阶段可新会话续跑」——CLI prompt 自足（进度/上下文全由进度库与注入提供），
+     // 每阶段一个瘦会话省掉肥上下文 × N 请求的重发税。advisory 一行，不强制。
++    // ④（2026-09-23 R9 实证后）升级：同一会话连续完成 ≥2 阶段 → 肥上下文税升级告警
++    // （带实测数据 + handoff 机器预览态接力段引用 + 动作主体写明用户/平台——CLI 只产信号
++    // 不做编排，conventions 钉死的架构约束）。账本仿 wave-session-ledger（best-effort）。
+     if (['brainstorm', 'plan', 'execute', 'verify'].includes(stageName) && changeName) {
+-      console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
++      let stageLedger = null
++      let crossStage = false
++      try {
++        const ledgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
++        try { stageLedger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { /* 首阶段 */ }
++        const r = updateStageSessionLedger(stageLedger, process.env.SILLYSPEC_SESSION_ID, stageName)
++        stageLedger = r.ledger
++        crossStage = r.crossStageAdvisory
++        try { mkdirSync(join(specBase, '.runtime'), { recursive: true }); writeFileSync(ledgerPath, JSON.stringify(stageLedger, null, 1) + '\n', 'utf8') } catch { /* 账本 best-effort */ }
++      } catch { /* ④ 升级提示 best-effort 零副作用 */ }
++      if (crossStage && stageLedger) {
++        console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
++        console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
++        console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
++      } else {
++        console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
++      }
+     }
+ 
+     // 平台模式产物落点指针（platform-docs-dual-location，2026-09-15 EHS 实证）：完成时点在
+diff --git a/test/stage-session-ledger.test.mjs b/test/stage-session-ledger.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/stage-session-ledger.test.mjs
+@@ -0,0 +1,47 @@
++/**
++ * stage-session-ledger（token 减负④，2026-09-23）：阶段-会话账本纯函数。
++ *
++ * 锁死契约：
++ * 1. 同会话连续计数：第 2 个阶段起 crossStageAdvisory=true（R9 实证五阶段 53.5M——
++ *    肥上下文税随会话内阶段数单调累积，≥2 即该喊）；
++ * 2. 会话切换重置（新会话从 1 起数——换瘦会话后不再误报）；
++ * 3. stages 尾窗 8 条防账本无限膨胀；空参容忍（anon 缺省）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { updateStageSessionLedger } from '../src/run/complete.js'
++
++test('T1 同会话连续计数：≥2 触发升级告警', () => {
++  const r1 = updateStageSessionLedger(null, 'sess-a', 'brainstorm')
++  assert.equal(r1.ledger.stageCount, 1)
++  assert.equal(r1.crossStageAdvisory, false, '首个阶段不告警（软提示档）')
++  assert.deepEqual(r1.ledger.stages, ['brainstorm'])
++  const r2 = updateStageSessionLedger(r1.ledger, 'sess-a', 'plan')
++  assert.equal(r2.ledger.stageCount, 2)
++  assert.equal(r2.crossStageAdvisory, true, '连续第 2 阶段触发')
++  assert.deepEqual(r2.ledger.stages, ['brainstorm', 'plan'])
++  const r3 = updateStageSessionLedger(r2.ledger, 'sess-a', 'execute')
++  assert.equal(r3.ledger.stageCount, 3)
++  assert.equal(r3.crossStageAdvisory, true)
++})
++
++test('T2 会话切换重置：换瘦会话后从 1 起数', () => {
++  const r1 = updateStageSessionLedger(null, 'sess-a', 'brainstorm')
++  const r2 = updateStageSessionLedger(r1.ledger, 'sess-a', 'plan')
++  const rNew = updateStageSessionLedger(r2.ledger, 'sess-b', 'execute')
++  assert.equal(rNew.ledger.sessionId, 'sess-b')
++  assert.equal(rNew.ledger.stageCount, 1, '新会话重置计数')
++  assert.equal(rNew.crossStageAdvisory, false, '不误报')
++  assert.deepEqual(rNew.ledger.stages, ['execute'])
++})
++
++test('T3 stages 尾窗 8 条 + 空参容忍', () => {
++  let led = null
++  for (let i = 0; i < 10; i++) led = updateStageSessionLedger(led, 's', `stage-${i}`).ledger
++  assert.equal(led.stageCount, 10, '总计数不截断')
++  assert.equal(led.stages.length, 8, 'stages 尾窗 8 条')
++  assert.equal(led.stages[7], 'stage-9')
++  const anon = updateStageSessionLedger(null, undefined, null)
++  assert.equal(anon.ledger.sessionId, 'anon')
++  assert.equal(anon.ledger.stageCount, 1)
++})

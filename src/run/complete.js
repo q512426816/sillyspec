@@ -73,6 +73,22 @@ export function updateWaveSessionLedger(ledger, sessionId, waveName) {
   return { ledger: next, crossWaveAdvisory: next.waveCount >= 2 }
 }
 
+/**
+ * 阶段-会话账本（token 减负④，2026-09-23 R9 实证后）：同一 SILLYSPEC_SESSION_ID 连续完成
+ * ≥2 个流程阶段 → 升级告警（同 Wave 账本的阶段粒度版）。R9 数据：单会话五阶段 53.5M 输入、
+ * 尾段单轮 30 万+、archive 3 分钟 7.2M——肥上下文税随会话内阶段数单调累积。架构约束
+ * （conventions 钉）：CLI 只产信号与接力载荷，不做会话编排——新会话创建者是用户或平台
+ * （session-fork 基建），升级块动作主体必须写明。纯函数（IO 由调用方做）。
+ */
+export function updateStageSessionLedger(ledger, sessionId, stageName) {
+  const sid = String(sessionId || 'anon')
+  const prev = ledger && ledger.sessionId === sid ? (ledger.stageCount || 0) : 0
+  const stages = ledger && ledger.sessionId === sid && Array.isArray(ledger.stages) ? [...ledger.stages] : []
+  stages.push(String(stageName || ''))
+  const next = { sessionId: sid, stageCount: prev + 1, stages: stages.slice(-8), lastStage: stageName || null, at: new Date().toISOString() }
+  return { ledger: next, crossStageAdvisory: next.stageCount >= 2 }
+}
+
 function refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName) {
   if (!changeName || /^quick-[0-9a-f]{8}$/.test(changeName)) return
   try {
@@ -732,8 +748,27 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // 瘦会话交接提示（P1-5 v1，2026-09-20 对撞实验驱动）：主流程阶段完成时点提示
     // 「下一阶段可新会话续跑」——CLI prompt 自足（进度/上下文全由进度库与注入提供），
     // 每阶段一个瘦会话省掉肥上下文 × N 请求的重发税。advisory 一行，不强制。
+    // ④（2026-09-23 R9 实证后）升级：同一会话连续完成 ≥2 阶段 → 肥上下文税升级告警
+    // （带实测数据 + handoff 机器预览态接力段引用 + 动作主体写明用户/平台——CLI 只产信号
+    // 不做编排，conventions 钉死的架构约束）。账本仿 wave-session-ledger（best-effort）。
     if (['brainstorm', 'plan', 'execute', 'verify'].includes(stageName) && changeName) {
-      console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
+      let stageLedger = null
+      let crossStage = false
+      try {
+        const ledgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
+        try { stageLedger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { /* 首阶段 */ }
+        const r = updateStageSessionLedger(stageLedger, process.env.SILLYSPEC_SESSION_ID, stageName)
+        stageLedger = r.ledger
+        crossStage = r.crossStageAdvisory
+        try { mkdirSync(join(specBase, '.runtime'), { recursive: true }); writeFileSync(ledgerPath, JSON.stringify(stageLedger, null, 1) + '\n', 'utf8') } catch { /* 账本 best-effort */ }
+      } catch { /* ④ 升级提示 best-effort 零副作用 */ }
+      if (crossStage && stageLedger) {
+        console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
+        console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
+        console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
+      } else {
+        console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
+      }
     }
 
     // 平台模式产物落点指针（platform-docs-dual-location，2026-09-15 EHS 实证）：完成时点在

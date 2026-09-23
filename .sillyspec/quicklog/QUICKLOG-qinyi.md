@@ -313,3 +313,15 @@
 方案：①execute 运行测试步铁律+quick step2 各加「长输出跑批纪律」：全量/多文件测试与 lint 输出重定向落文件，上下文只回看尾部摘要与失败段（tail -50/grep FAIL）；CLI 门禁自跑测试已是摘要输出不受约束。②execute mainExecSection+plan 执行模式声明各加「评审派发保留」：Stage Review（tier=independent）仍须派独立子代理（小上下文干重读活+保审查实效），无派发工具环境才降级自审且 reviewerNotes 首行留降级审计行。③quick 镜像 _extract→_sync 同步（plan/execute 属 DYNAMIC 跳过项）。测试门禁口径披露：SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）——快照全量 6 个失败经归属判定为并行会话 19:11-19:13 落地的 wave 串行化契约红（git stash 对照：HEAD 原样同样 6 失败，±本会话改动失败集逐一致=失败中性）；本会话自有验证：execution-mode-render 9/9+quick-laststep 零回归+lint 770 文件过+prompt 纯话术零逻辑面
 结果：render 9/9+lint 770 未引用导出 0；失败中性证据（stash 对照）入本条；红账移交：plan-grouping-recommend B1-B4/plan-execute-contract/execute-testcase-design-include 六失败属并行会话在途语义，建议其下一笔 quick 修复（当前 HEAD 红会阻断一切后续 quick 门禁）
 审计：[gate] L1（跨 1 模块 · 5 文件：3 代码/0 测试）advisory；每文件注记已全覆盖；测试增量缺失（3 个代码文件无测试改动）
+
+## ql-20260923-020-7c5c | 2026-09-23 20:00:51 | token 减负④分段信号——阶段-会话账本+肥上下文税升级告警（CLI 只产信号不做编排）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete.js（updateStageSessionLedger+阶段收口升级告警接线（--force-baseline））
+- test/stage-session-ledger.test.mjs（NEW 三例）
+- docs/sillyspec/platform-interface-map.md（锚漂修复 8 处（本件 1+ql-012 欠 6+超界 1））
+需求：token 减负④分段信号——阶段-会话账本+肥上下文税升级告警（CLI 只产信号不做编排）
+根因：R9 实证：单会话五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟 7.2M——肥上下文税随会话内阶段数单调累积；既有瘦会话一行提示 R9 四次看见四次没听（无数据无升级无动作主体）；架构约束（conventions 钉）：会话不能自建会话，CLI 只产信号与接力载荷。complete.js 属基线保护文件 --force-baseline 显式解锁
+方案：①NEW updateStageSessionLedger 纯函数（同会话连续阶段计数、切换重置、stages 尾窗 8 防膨胀，仿 wave-session-ledger 先例）；②complete.js 阶段收口接线：同会话连续 ≥2 阶段 → 升级告警块（带 R9 实测数据+sillyspec handoff 交接块引用〔含 watcher-preview 机器预览态接力段〕+动作主体明写用户新开会话或平台 session-fork+conventions 约束引注）；首阶段保持既有软提示零行为变化；③platform-interface-map 锚漂修复 8 处（complete.js:279→296 本件漂移 + index.js 六处 ql-012 usage 插行未随修 + 行号超界项）——living-doc 全绿
+结果：stage-session-ledger 3/3（连续计数/切换重置/尾窗+空参）；lint 771 未引用导出 0；docs check living-doc 0 失效。测试门禁口径：SILLYSPEC_QUICK_TEST_GATE=skip 留痕——主树红仍为并行会话 wave 串行化契约（plan-grouping-recommend 4 fail 复核在案，归属同 ql-019 stash 对照），本件零失败中性；docs check 其余 ~20 处存量漂移（scan/ARCHITECTURE/architecture-4a 等，非 living-doc 非本会话文件）记欠账待归属方修
