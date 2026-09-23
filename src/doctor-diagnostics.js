@@ -1697,7 +1697,7 @@ export async function dumpDb({ dbPath, cwd }) {
     const schemaVersion = sv.length ? sv[0].schema_version : null;
     const changes = rows('SELECT name, current_stage, status, created_at, last_active FROM changes ORDER BY last_active DESC')
       .map((r) => ({ name: r.name, current_stage: r.current_stage, status: r.status, created_at: r.created_at, last_active: r.last_active }));
-    const stages = rows('SELECT c.name, s.stage, s.status, s.started_at, s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id ORDER BY c.name, s.stage')
+    const stages = rows(`SELECT c.name, s.stage, s.status, s.started_at, s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id WHERE (s.authority = 'cli' OR s.authority IS NULL) ORDER BY c.name, s.stage`)
       .map((r) => ({ change: r.name, stage: r.stage, status: r.status, started_at: r.started_at, completed_at: r.completed_at }));
     return writeDump({ ok: true, meta, schema_version: schemaVersion, changes, stages }, authoritySpecDir);
   } catch (e) {

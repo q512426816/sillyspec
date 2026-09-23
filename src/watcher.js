@@ -892,6 +892,14 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
     } catch (e) {
       console.warn(`[watcher] 哨兵规则引擎异常（best-effort 跳过本轮）: ${(e && e.message) || e}`);
     }
+    // ── 预览进度账本（2026-09-23-watcher-preview-progress task-02）：阶段级投影 best-effort ──
+    // fail-open（writePreviewStages 全程吞异常）：预览写失败不影响事件流主循环（D-005）。
+    try {
+      const { projectPreviewStages, writePreviewStages } = await import('./preview-progress.js')
+      const rows = projectPreviewStages({ snapshot: snap, prevSnapshot: prev })
+      if (rows.length > 0) writePreviewStages({ specDir: specBase, changeName, rows })
+    } catch { /* 预览投影 best-effort，绝不杀 watcher */ }
+
     const batch = events.concat(warnings);
     prev = snap;
     // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）

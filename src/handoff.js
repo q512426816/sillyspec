@@ -164,6 +164,21 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
     truncated = true;
   }
   if (truncated) lines.push('…（上下文超 80 行帽截尾——任务面/决策明细回源 tasks.md 与 decisions.md）');
+  // 机器预览态段（2026-09-23-watcher-preview-progress task-03 / FR-05）：watcher 投影的
+  // 进行态参考——新会话据此快速恢复现场（证据引用可回源事件流）。无预览行时零输出（不添行）。
+  try {
+    const { readPreviewProgress } = await import('./progress.js');
+    const pv = readPreviewProgress(specRoot, target);
+    if (pv.exists && pv.stages.length > 0) {
+      lines.push('');
+      lines.push(`👀 机器预览态（watcher 推断 ${pv.stages.length} 行——非流程真相，权威以 progress show 为准）：`);
+      for (const r of pv.stages) {
+        const files = r.evidence && Array.isArray(r.evidence.files) ? r.evidence.files.join('/') : '';
+        lines.push(`   [预览] ${r.stage} → ${r.status}${files ? `（依据：${files}）` : ''} 最后活动 ${r.startedAt || '?'}`);
+      }
+    }
+  } catch { /* 预览段 best-effort，不影响交接块本体 */ }
+
   lines.push(`➡️ ${suggestion.reason}`);
   lines.push('💡 为什么可行：CLI prompt 自足——进度快照/模块命中/知识注入由进度库与渲染提供，新会话零背景可续跑。');
   lines.push('⚠️ SILLYSPEC_SESSION_ID 必须保持不变（变更所有权/接管判定按此标识）；缺省降级机器级标识只拦他机。');

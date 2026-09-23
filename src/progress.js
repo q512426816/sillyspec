@@ -15,6 +15,7 @@ import { join, basename, dirname, resolve, sep } from 'path';
 import { tmpdir, hostname } from 'os';
 import { writeAtomicSync } from './fs-atomic.js';
 import { DB } from './db.js';
+import { openDatabase } from './db-engine.js';
 import { checkExecuteCodeEvidence } from './stage-contract.js';
 import { ConsistencyDoctor } from './progress/consistency-doctor.js';
 import { ChangeRegistry } from './progress/change-registry.js';
@@ -270,6 +271,36 @@ const CHANGES_SUBDIR = 'changes';
 
 // ── ProgressManager ──
 
+/**
+ * 预览进度读出口（2026-09-23-watcher-preview-progress task-03 / FR-04）：
+ * 读 watcher 预览行（authority='watcher'，读侧保险丝之外的显式出口）+ evidence 解析。
+ * 纯只读短连接；库缺失/变更未注册/异常 → { exists:false, stages:[] }（fail-open）。
+ */
+export function readPreviewProgress(specDir, changeName) {
+  if (!specDir || !changeName) return { exists: false, stages: [] }
+  let db = null
+  try {
+    db = openDatabase(join(specDir, '.runtime', 'sillyspec.db'), { readOnly: true })
+    const changeRow = db.prepare('SELECT id FROM changes WHERE name = ?').get(changeName)
+    if (!changeRow) return { exists: false, stages: [] }
+    const rows = db.prepare(
+      "SELECT stage, status, started_at, preview_evidence FROM stages WHERE change_id = ? AND authority = 'watcher' ORDER BY stage"
+    ).all(changeRow.id)
+    return {
+      exists: true,
+      stages: rows.map((r) => {
+        let evidence = null
+        try { evidence = r.preview_evidence ? JSON.parse(r.preview_evidence) : null } catch { evidence = null }
+        return { stage: r.stage, status: r.status, startedAt: r.started_at, evidence }
+      }),
+    }
+  } catch {
+    return { exists: false, stages: [] }
+  } finally {
+    if (db) { try { db.close() } catch { /* 只读关闭失败不放大 */ } }
+  }
+}
+
 export class ProgressManager {
   /** 模块级 DB 连接池：Map<dbPath, DB>（SEC-09/PERF-10，见 _ensureDB 注释） */
   static _dbPool = new Map();
@@ -401,7 +432,7 @@ export class ProgressManager {
     const { id: changeId, name: cName, current_stage: currentStage, no_worktree: noWorktree, last_active: lastActive } = changeRow;
 
     // 2. 从 stages 表获取所有阶段（含 revision 列）
-    const stageRows = sqlDb.prepare('SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? ORDER BY id').all(changeId);
+    const stageRows = sqlDb.prepare(`SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? AND (authority = 'cli' OR authority IS NULL) ORDER BY id`).all(changeId);
     const stageMap = {};
     const stageIds = [];
     for (const row of stageRows) {
@@ -420,7 +451,7 @@ export class ProgressManager {
     if (stageIds.length > 0) {
       const placeholders = stageIds.map(() => '?').join(',');
       const stepRows = sqlDb.prepare(
-        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
+        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) AND (authority = 'cli' OR authority IS NULL) ORDER BY stage_id, ordering`
       ).all(...stageIds);
       // 按阶段分组步骤
       for (const row of stepRows) {
@@ -572,7 +603,14 @@ export class ProgressManager {
 
     // 3. stages（该 change 下，用 change_name+stage 表达外键）
     const stageRows = sqlDb.prepare(
-      `SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason
+      // 权威视图渲染（D-007 钉，2026-09-23-watcher-preview-progress task-05）：被 watcher 认领的行
+      // 在平台载荷里按其 CLI 已知态（pending/未起止）投影——载荷与无预览的干净态逐字节一致，
+      // 不因预览认领缺行（隔离钉 T1 实证：纯过滤会整行剔除该阶段）。
+      `SELECT id, stage,
+         CASE WHEN authority = 'watcher' THEN 'pending' ELSE status END AS status,
+         CASE WHEN authority = 'watcher' THEN NULL ELSE started_at END AS started_at,
+         CASE WHEN authority = 'watcher' THEN NULL ELSE completed_at END AS completed_at,
+         revision, reopened_from_step, reopened_at, stale_reason
        FROM stages WHERE change_id = ? ORDER BY id`
     ).all(changeId);
     const stageJson = stageRows.map(r => ({
@@ -596,7 +634,7 @@ export class ProgressManager {
       const stepRows = sqlDb.prepare(
         `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options,
                 wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds
-         FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
+         FROM steps WHERE stage_id IN (${placeholders}) AND (authority = 'cli' OR authority IS NULL) ORDER BY stage_id, ordering`
       ).all(...stageIds);
       stepJson = stepRows.map(r => ({
         change_name: changeRow.name,
@@ -921,8 +959,8 @@ export class ProgressManager {
         for (const [stageName, stageData] of Object.entries(data.stages)) {
           // UPSERT stages 行（含 revision 列）
           sqlDb.prepare(
-            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason, authority)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cli')
              ON CONFLICT(change_id, stage) DO UPDATE SET
                status = excluded.status,
                started_at = excluded.started_at,
@@ -930,7 +968,8 @@ export class ProgressManager {
                revision = COALESCE(excluded.revision, stages.revision),
                reopened_from_step = excluded.reopened_from_step,
                reopened_at = excluded.reopened_at,
-               stale_reason = excluded.stale_reason`
+               stale_reason = excluded.stale_reason,
+               authority = 'cli'`
           ).run(changeId, stageName, stageData.status || 'pending', stageData.startedAt || null, stageData.completedAt || null,
              stageData.revision || 0, stageData.reopenedFromStep || null, stageData.reopenedAt || null, stageData.staleReason || null);
 
@@ -1468,7 +1507,7 @@ export class ProgressManager {
 
     // 3. stages
     const stageRows = sqlDb.prepare(
-      'SELECT id, stage, status, started_at, completed_at, revision FROM stages WHERE change_id = ? ORDER BY id'
+      `SELECT id, stage, status, started_at, completed_at, revision FROM stages WHERE change_id = ? AND (authority = 'cli' OR authority IS NULL) ORDER BY id`
     ).all(changeId);
 
     const stages = {};
@@ -1481,7 +1520,7 @@ export class ProgressManager {
     if (stageRows.length > 0) {
       const placeholders = stageRows.map(() => '?').join(', ');
       const allStepRows = sqlDb.prepare(
-        `SELECT stage_id, name, status, output, completed_at FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
+        `SELECT stage_id, name, status, output, completed_at FROM steps WHERE stage_id IN (${placeholders}) AND (authority = 'cli' OR authority IS NULL) ORDER BY stage_id, ordering`
       ).all(...stageRows.map(r => r.id));
       for (const sr of allStepRows) {
         if (!stepsByStage.has(sr.stage_id)) stepsByStage.set(sr.stage_id, []);

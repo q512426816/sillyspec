@@ -393,6 +393,22 @@ async function main() {
             break;
           }
           pm.show(progDir, progChangeName, { all: filteredArgs.includes('--all') });
+          // 预览出口（2026-09-23-watcher-preview-progress task-03 / FR-04）：--preview 在默认
+          // 输出后追加 watcher 预览段（带「预览」徽标与证据引用）；缺省零行为变化（保险丝外显式通道）。
+          if (filteredArgs.includes('--preview') && progChangeName) {
+            const { readPreviewProgress } = await import('./progress.js');
+            const pv = readPreviewProgress(resolvePlatformSpecDir(dir, specDir) || join(progDir, '.sillyspec'), progChangeName);
+            console.log('');
+            if (!pv.exists || pv.stages.length === 0) {
+              console.log('👀 预览：无 watcher 预览行（变更未注册/库缺失/尚无投影）');
+            } else {
+              console.log(`👀 预览（watcher 推断，authority='watcher'——非流程真相，CLI --done 才是）：${pv.stages.length} 行`);
+              for (const r of pv.stages) {
+                const files = r.evidence && Array.isArray(r.evidence.files) ? r.evidence.files.join('/') : '';
+                console.log(`   [预览] ${r.stage} → ${r.status}${files ? `（依据：${files}${r.evidence && r.evidence.changed ? ' 本拍有变化' : ''}）` : ''}`);
+              }
+            }
+          }
           break;
         }
         case 'check': {

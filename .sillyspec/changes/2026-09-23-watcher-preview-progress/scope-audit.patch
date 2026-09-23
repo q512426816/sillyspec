@@ -1,0 +1,940 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 19c9c893..536ed050 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -31,6 +31,7 @@ modules:
+       - src/workspace.js
+       - src/run.js
+       - src/run/
++      - src/preview-progress.js
+       - src/facade-hint.js
+       - src/quick-recommend.js
+       - src/scan-diff.js
+diff --git a/meta.json b/meta.json
+index 4cd6d15f..17b45105 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,36 @@
+   "branch": "sillyspec/2026-09-23-watcher-preview-progress",
+   "baseBranch": "main",
+   "baseHash": "6c317f3688e4cf4c09a000b8f34077f96d88f24e",
++  "actualBaseHash": "e2a8e2c099a456fddf35c4a866f863b8373f9db8",
++  "createdAt": "2026-09-23T08:18:34.492Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-23-watcher-preview-progress",
+   "mode": "worktree",
+-  "createdAt": "2026-09-23T08:18:31.810Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".idea/vcs.xml",
++    "package.json",
++    "src/run/quick-audit.js",
++    "src/verify-postcheck.js",
++    "round5/export-r9sf-html.mjs",
++    "round5/export-r9sf-session.mjs",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/README.md",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/analysis.html",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/full.json",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/messages.jsonl",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/transcript.md",
++    "round5/fork-verify-window.mjs",
++    "test/cross-repo-tap-summary.test.mjs"
++  ],
++  "baselineCommit": "e2a8e2c099a456fddf35c4a866f863b8373f9db8",
++  "baselineHash": "6ad4cd0b5f55882e",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 18
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "337f491dae3b3308",
++  "depsCheckedAt": "2026-09-23T08:18:34.446Z"
+ }
+diff --git a/package.json b/package.json
+index 42dce111..b2479078 100644
+--- a/package.json
++++ b/package.json
+@@ -24,6 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/db.js b/src/db.js
+index 491f217e..47c308f3 100644
+--- a/src/db.js
++++ b/src/db.js
+@@ -7,7 +7,7 @@ import { dirname } from 'path';
+ // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
+ // node:sqlite（DatabaseSync）是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
+ // _createSchema 内 DDL 直接落盘，无需额外 _save。
+-const DB_SCHEMA_VERSION = 6;
++const DB_SCHEMA_VERSION = 7;
+ 
+ // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
+ // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
+@@ -252,7 +252,7 @@ export class DB {
+       CREATE TABLE IF NOT EXISTS project (
+         id INTEGER PRIMARY KEY DEFAULT 1,
+         name TEXT NOT NULL,
+-        schema_version INTEGER DEFAULT 6,
++        schema_version INTEGER DEFAULT 7,
+         created_at TEXT NOT NULL,
+         updated_at TEXT NOT NULL
+       )
+@@ -285,6 +285,8 @@ export class DB {
+         status TEXT DEFAULT 'pending',
+         started_at TEXT,
+         completed_at TEXT,
++        authority TEXT NOT NULL DEFAULT 'cli',
++        preview_evidence TEXT,
+         UNIQUE(change_id, stage)
+       )
+     `);
+@@ -298,7 +300,8 @@ export class DB {
+         status TEXT DEFAULT 'pending',
+         output TEXT,
+         completed_at TEXT,
+-        ordering INTEGER NOT NULL DEFAULT 0
++        ordering INTEGER NOT NULL DEFAULT 0,
++        authority TEXT NOT NULL DEFAULT 'cli'
+       )
+     `);
+ 
+@@ -335,6 +338,13 @@ export class DB {
+     this.db.exec('CREATE INDEX IF NOT EXISTS idx_stages_change ON stages(change_id)');
+     this.db.exec('CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage_id)');
+ 
++    // Migration: authority 双轨列（watcher 预览账本，幂等——ADD COLUMN NOT NULL DEFAULT 存量即盖章）
++    this._migrateAddColumn('stages', 'authority', "TEXT NOT NULL DEFAULT 'cli'");
++    this._migrateAddColumn('stages', 'preview_evidence', 'TEXT');
++    this._migrateAddColumn('steps', 'authority', "TEXT NOT NULL DEFAULT 'cli'");
++    // 预览账本（2026-09-23-watcher-preview-progress）：authority 探测与 GC 走此复合索引
++    this.db.exec('CREATE INDEX IF NOT EXISTS idx_stages_authority ON stages(change_id, stage, authority)');
++
+     // Migration: add isolation columns to changes table (idempotent)
+     this._migrateAddColumn('changes', 'isolation_status', 'TEXT');
+     this._migrateAddColumn('changes', 'isolation_mode', 'TEXT');
+diff --git a/src/doctor-diagnostics.js b/src/doctor-diagnostics.js
+index 4db645ab..d6ca7e9e 100644
+--- a/src/doctor-diagnostics.js
++++ b/src/doctor-diagnostics.js
+@@ -1697,7 +1697,7 @@ export async function dumpDb({ dbPath, cwd }) {
+     const schemaVersion = sv.length ? sv[0].schema_version : null;
+     const changes = rows('SELECT name, current_stage, status, created_at, last_active FROM changes ORDER BY last_active DESC')
+       .map((r) => ({ name: r.name, current_stage: r.current_stage, status: r.status, created_at: r.created_at, last_active: r.last_active }));
+-    const stages = rows('SELECT c.name, s.stage, s.status, s.started_at, s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id ORDER BY c.name, s.stage')
++    const stages = rows(`SELECT c.name, s.stage, s.status, s.started_at, s.completed_at FROM stages s JOIN changes c ON s.change_id = c.id WHERE (s.authority = 'cli' OR s.authority IS NULL) ORDER BY c.name, s.stage`)
+       .map((r) => ({ change: r.name, stage: r.stage, status: r.status, started_at: r.started_at, completed_at: r.completed_at }));
+     return writeDump({ ok: true, meta, schema_version: schemaVersion, changes, stages }, authoritySpecDir);
+   } catch (e) {
+diff --git a/src/handoff.js b/src/handoff.js
+index 02a8e367..42e1dcdd 100644
+--- a/src/handoff.js
++++ b/src/handoff.js
+@@ -164,6 +164,21 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
+     truncated = true;
+   }
+   if (truncated) lines.push('…（上下文超 80 行帽截尾——任务面/决策明细回源 tasks.md 与 decisions.md）');
++  // 机器预览态段（2026-09-23-watcher-preview-progress task-03 / FR-05）：watcher 投影的
++  // 进行态参考——新会话据此快速恢复现场（证据引用可回源事件流）。无预览行时零输出（不添行）。
++  try {
++    const { readPreviewProgress } = await import('./progress.js');
++    const pv = readPreviewProgress(specRoot, target);
++    if (pv.exists && pv.stages.length > 0) {
++      lines.push('');
++      lines.push(`👀 机器预览态（watcher 推断 ${pv.stages.length} 行——非流程真相，权威以 progress show 为准）：`);
++      for (const r of pv.stages) {
++        const files = r.evidence && Array.isArray(r.evidence.files) ? r.evidence.files.join('/') : '';
++        lines.push(`   [预览] ${r.stage} → ${r.status}${files ? `（依据：${files}）` : ''} 最后活动 ${r.startedAt || '?'}`);
++      }
++    }
++  } catch { /* 预览段 best-effort，不影响交接块本体 */ }
++
+   lines.push(`➡️ ${suggestion.reason}`);
+   lines.push('💡 为什么可行：CLI prompt 自足——进度快照/模块命中/知识注入由进度库与渲染提供，新会话零背景可续跑。');
+   lines.push('⚠️ SILLYSPEC_SESSION_ID 必须保持不变（变更所有权/接管判定按此标识）；缺省降级机器级标识只拦他机。');
+diff --git a/src/index.js b/src/index.js
+index 75ab4f10..86a014af 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -393,6 +393,22 @@ async function main() {
+             break;
+           }
+           pm.show(progDir, progChangeName, { all: filteredArgs.includes('--all') });
++          // 预览出口（2026-09-23-watcher-preview-progress task-03 / FR-04）：--preview 在默认
++          // 输出后追加 watcher 预览段（带「预览」徽标与证据引用）；缺省零行为变化（保险丝外显式通道）。
++          if (filteredArgs.includes('--preview') && progChangeName) {
++            const { readPreviewProgress } = await import('./progress.js');
++            const pv = readPreviewProgress(resolvePlatformSpecDir(dir, specDir) || join(progDir, '.sillyspec'), progChangeName);
++            console.log('');
++            if (!pv.exists || pv.stages.length === 0) {
++              console.log('👀 预览：无 watcher 预览行（变更未注册/库缺失/尚无投影）');
++            } else {
++              console.log(`👀 预览（watcher 推断，authority='watcher'——非流程真相，CLI --done 才是）：${pv.stages.length} 行`);
++              for (const r of pv.stages) {
++                const files = r.evidence && Array.isArray(r.evidence.files) ? r.evidence.files.join('/') : '';
++                console.log(`   [预览] ${r.stage} → ${r.status}${files ? `（依据：${files}${r.evidence && r.evidence.changed ? ' 本拍有变化' : ''}）` : ''}`);
++              }
++            }
++          }
+           break;
+         }
+         case 'check': {
+diff --git a/src/preview-progress.js b/src/preview-progress.js
+new file mode 100644
+index 00000000..b6964d00
+--- /dev/null
++++ b/src/preview-progress.js
+@@ -0,0 +1,92 @@
++/**
++ * preview-progress.js — watcher 预览进度账本写路径（2026-09-23-watcher-preview-progress task-02）。
++ *
++ * 职责：把 watcher 快照的阶段级推断态投影为 progress 库 stages 预览行（authority='watcher'）。
++ * 设计契约（decisions D-004/D-005，design §3）：
++ *   - 粒度=阶段级（工件签名→progress 阶段映射；steps 级不投影，D-004）；
++ *   - 写纪律=短连接（open→写→close）+ 自带 PRAGMA busy_timeout（连接级，openDatabase 不自动——
++ *     影子审查 gap①）+ 存在性条件进 SQL + maxRows 写放大护栏 + 全程 fail-open（任何异常返回 false，
++ *     绝不影响 watcher 事件流主循环）。WHERE 认领语义（D-005@v2 执行期修正：initChange 预建
++ *     全套 cli/pending 行，纯 authority='watcher' 条件永远空转）：watcher 行可自刷；**CLI 从未
++ *     触碰的 pending 行（status='pending' 且 started_at IS NULL）可被预览认领**（flip 为 watcher，
++ *     语义无损——pending 空行不含 CLI 任何 authored 信息）；CLI 已触碰行（started/completed/
++ *     reopened）SQL 层不可中招；CLI --done 归章（task-01 fail① 修复）把认领行收回 cli。
++ *   - archived 拍不投影（终态只认 CLI）。
++ * 读侧出口在 progress.js readPreviewProgress（task-03）；读侧保险丝在 progress.js 读方法（task-01）。
++ */
++import { join } from 'node:path'
++import { openDatabase } from './db-engine.js'
++
++/** 工件签名 → progress 阶段映射（纯静态；watcher 快照 files 的键为工件基名）。 */
++export const PREVIEW_STAGE_SOURCES = {
++  brainstorm: ['proposal.md', 'requirements.md', 'decisions.md', 'design.md'],
++  plan: ['plan.md'],
++  execute: ['tasks.md'],
++  verify: ['verify-result.md', 'verify-facts.json'],
++}
++
++/**
++ * 纯函数：快照差分 → 阶段级预览行集合。
++ * @param {{ ts:number, archived:boolean, files?:Object }} snapshot 当前拍
++ * @param {{ files?:Object }=} prevSnapshot 上一拍（缺省全量视角）
++ * @returns {{ stage:string, status:'in-progress', startedAt:string, evidence:Object }[]}
++ *   evidence = { ts, files: 命中的工件清单, changed: 本拍有无内容变化（差分信号） }
++ */
++export function projectPreviewStages({ snapshot, prevSnapshot = null } = {}) {
++  if (!snapshot || snapshot.archived) return []
++  const files = snapshot.files || {}
++  const prevFiles = (prevSnapshot && prevSnapshot.files) || {}
++  const rows = []
++  for (const [stage, sources] of Object.entries(PREVIEW_STAGE_SOURCES)) {
++    const hit = sources.filter((k) => Object.prototype.hasOwnProperty.call(files, k))
++    if (hit.length === 0) continue
++    const changed = hit.some((k) => {
++      const a = files[k]; const b = prevFiles[k]
++      if (b === undefined) return true // 出现
++      return JSON.stringify(a) !== JSON.stringify(b) // 内容变化（checked 增/键值漂移）
++    })
++    rows.push({
++      stage,
++      status: 'in-progress',
++      startedAt: new Date(snapshot.ts || Date.now()).toISOString(),
++      evidence: { ts: snapshot.ts || null, files: hit, changed },
++    })
++  }
++  return rows
++}
++
++/**
++ * 短连接写入预览行（best-effort，全程 fail-open）。
++ * @returns {boolean} true=至少尝试写入（库在/变更注册）；false=跳过（库缺失/变更未注册/异常）
++ */
++export function writePreviewStages({ specDir, changeName, rows, maxRows = 8 } = {}) {
++  if (!specDir || !changeName || !Array.isArray(rows) || rows.length === 0) return false
++  let db = null
++  try {
++    db = openDatabase(join(specDir, '.runtime', 'sillyspec.db'), {})
++    // 连接级 PRAGMA（影子审查 gap①）：openDatabase 不自动带，缺省 0 = 撞锁立即 BUSY
++    db.exec('PRAGMA busy_timeout = 5000')
++    const changeRow = db.prepare('SELECT id FROM changes WHERE name = ?').get(changeName)
++    if (!changeRow) return false // 变更未注册（未跑过任何阶段）——无从挂预览，安静跳过
++    const cid = changeRow.id
++    const stmt = db.prepare(
++      `INSERT INTO stages (change_id, stage, status, started_at, authority, preview_evidence)
++       VALUES (?, ?, ?, ?, 'watcher', ?)
++       ON CONFLICT(change_id, stage) DO UPDATE SET
++         status = excluded.status,
++         started_at = COALESCE(stages.started_at, excluded.started_at),
++         preview_evidence = excluded.preview_evidence,
++         authority = 'watcher'
++       WHERE stages.authority = 'watcher'
++          OR (stages.authority = 'cli' AND stages.status = 'pending' AND stages.started_at IS NULL)`
++    )
++    for (const r of rows.slice(0, maxRows)) {
++      stmt.run(cid, r.stage, r.status, r.startedAt, JSON.stringify(r.evidence || {}))
++    }
++    return true
++  } catch {
++    return false // fail-open：锁竞争/库损坏/迁移未达——事件流不受影响，下轮重投影
++  } finally {
++    if (db) { try { db.close() } catch { /* 关闭失败不放大 */ } }
++  }
++}
+diff --git a/src/progress.js b/src/progress.js
+index d4239684..eac0a4bd 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -15,6 +15,7 @@ import { join, basename, dirname, resolve, sep } from 'path';
+ import { tmpdir, hostname } from 'os';
+ import { writeAtomicSync } from './fs-atomic.js';
+ import { DB } from './db.js';
++import { openDatabase } from './db-engine.js';
+ import { checkExecuteCodeEvidence } from './stage-contract.js';
+ import { ConsistencyDoctor } from './progress/consistency-doctor.js';
+ import { ChangeRegistry } from './progress/change-registry.js';
+@@ -270,6 +271,36 @@ const CHANGES_SUBDIR = 'changes';
+ 
+ // ── ProgressManager ──
+ 
++/**
++ * 预览进度读出口（2026-09-23-watcher-preview-progress task-03 / FR-04）：
++ * 读 watcher 预览行（authority='watcher'，读侧保险丝之外的显式出口）+ evidence 解析。
++ * 纯只读短连接；库缺失/变更未注册/异常 → { exists:false, stages:[] }（fail-open）。
++ */
++export function readPreviewProgress(specDir, changeName) {
++  if (!specDir || !changeName) return { exists: false, stages: [] }
++  let db = null
++  try {
++    db = openDatabase(join(specDir, '.runtime', 'sillyspec.db'), { readOnly: true })
++    const changeRow = db.prepare('SELECT id FROM changes WHERE name = ?').get(changeName)
++    if (!changeRow) return { exists: false, stages: [] }
++    const rows = db.prepare(
++      "SELECT stage, status, started_at, preview_evidence FROM stages WHERE change_id = ? AND authority = 'watcher' ORDER BY stage"
++    ).all(changeRow.id)
++    return {
++      exists: true,
++      stages: rows.map((r) => {
++        let evidence = null
++        try { evidence = r.preview_evidence ? JSON.parse(r.preview_evidence) : null } catch { evidence = null }
++        return { stage: r.stage, status: r.status, startedAt: r.started_at, evidence }
++      }),
++    }
++  } catch {
++    return { exists: false, stages: [] }
++  } finally {
++    if (db) { try { db.close() } catch { /* 只读关闭失败不放大 */ } }
++  }
++}
++
+ export class ProgressManager {
+   /** 模块级 DB 连接池：Map<dbPath, DB>（SEC-09/PERF-10，见 _ensureDB 注释） */
+   static _dbPool = new Map();
+@@ -401,7 +432,7 @@ export class ProgressManager {
+     const { id: changeId, name: cName, current_stage: currentStage, no_worktree: noWorktree, last_active: lastActive } = changeRow;
+ 
+     // 2. 从 stages 表获取所有阶段（含 revision 列）
+-    const stageRows = sqlDb.prepare('SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? ORDER BY id').all(changeId);
++    const stageRows = sqlDb.prepare(`SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason FROM stages WHERE change_id = ? AND (authority = 'cli' OR authority IS NULL) ORDER BY id`).all(changeId);
+     const stageMap = {};
+     const stageIds = [];
+     for (const row of stageRows) {
+@@ -420,7 +451,7 @@ export class ProgressManager {
+     if (stageIds.length > 0) {
+       const placeholders = stageIds.map(() => '?').join(',');
+       const stepRows = sqlDb.prepare(
+-        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
++        `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options, wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds FROM steps WHERE stage_id IN (${placeholders}) AND (authority = 'cli' OR authority IS NULL) ORDER BY stage_id, ordering`
+       ).all(...stageIds);
+       // 按阶段分组步骤
+       for (const row of stepRows) {
+@@ -572,7 +603,14 @@ export class ProgressManager {
+ 
+     // 3. stages（该 change 下，用 change_name+stage 表达外键）
+     const stageRows = sqlDb.prepare(
+-      `SELECT id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason
++      // 权威视图渲染（D-007 钉，2026-09-23-watcher-preview-progress task-05）：被 watcher 认领的行
++      // 在平台载荷里按其 CLI 已知态（pending/未起止）投影——载荷与无预览的干净态逐字节一致，
++      // 不因预览认领缺行（隔离钉 T1 实证：纯过滤会整行剔除该阶段）。
++      `SELECT id, stage,
++         CASE WHEN authority = 'watcher' THEN 'pending' ELSE status END AS status,
++         CASE WHEN authority = 'watcher' THEN NULL ELSE started_at END AS started_at,
++         CASE WHEN authority = 'watcher' THEN NULL ELSE completed_at END AS completed_at,
++         revision, reopened_from_step, reopened_at, stale_reason
+        FROM stages WHERE change_id = ? ORDER BY id`
+     ).all(changeId);
+     const stageJson = stageRows.map(r => ({
+@@ -596,7 +634,7 @@ export class ProgressManager {
+       const stepRows = sqlDb.prepare(
+         `SELECT stage_id, name, status, output, completed_at, ordering, wait_reason, wait_options,
+                 wait_answer, waited_at, wait_answers, wait_round, max_wait_rounds
+-         FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
++         FROM steps WHERE stage_id IN (${placeholders}) AND (authority = 'cli' OR authority IS NULL) ORDER BY stage_id, ordering`
+       ).all(...stageIds);
+       stepJson = stepRows.map(r => ({
+         change_name: changeRow.name,
+@@ -921,8 +959,8 @@ export class ProgressManager {
+         for (const [stageName, stageData] of Object.entries(data.stages)) {
+           // UPSERT stages 行（含 revision 列）
+           sqlDb.prepare(
+-            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason)
+-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
++            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, revision, reopened_from_step, reopened_at, stale_reason, authority)
++             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'cli')
+              ON CONFLICT(change_id, stage) DO UPDATE SET
+                status = excluded.status,
+                started_at = excluded.started_at,
+@@ -930,7 +968,8 @@ export class ProgressManager {
+                revision = COALESCE(excluded.revision, stages.revision),
+                reopened_from_step = excluded.reopened_from_step,
+                reopened_at = excluded.reopened_at,
+-               stale_reason = excluded.stale_reason`
++               stale_reason = excluded.stale_reason,
++               authority = 'cli'`
+           ).run(changeId, stageName, stageData.status || 'pending', stageData.startedAt || null, stageData.completedAt || null,
+              stageData.revision || 0, stageData.reopenedFromStep || null, stageData.reopenedAt || null, stageData.staleReason || null);
+ 
+@@ -1468,7 +1507,7 @@ export class ProgressManager {
+ 
+     // 3. stages
+     const stageRows = sqlDb.prepare(
+-      'SELECT id, stage, status, started_at, completed_at, revision FROM stages WHERE change_id = ? ORDER BY id'
++      `SELECT id, stage, status, started_at, completed_at, revision FROM stages WHERE change_id = ? AND (authority = 'cli' OR authority IS NULL) ORDER BY id`
+     ).all(changeId);
+ 
+     const stages = {};
+@@ -1481,7 +1520,7 @@ export class ProgressManager {
+     if (stageRows.length > 0) {
+       const placeholders = stageRows.map(() => '?').join(', ');
+       const allStepRows = sqlDb.prepare(
+-        `SELECT stage_id, name, status, output, completed_at FROM steps WHERE stage_id IN (${placeholders}) ORDER BY stage_id, ordering`
++        `SELECT stage_id, name, status, output, completed_at FROM steps WHERE stage_id IN (${placeholders}) AND (authority = 'cli' OR authority IS NULL) ORDER BY stage_id, ordering`
+       ).all(...stageRows.map(r => r.id));
+       for (const sr of allStepRows) {
+         if (!stepsByStage.has(sr.stage_id)) stepsByStage.set(sr.stage_id, []);
+diff --git a/src/progress/change-registry.js b/src/progress/change-registry.js
+index 69447241..3c05391f 100644
+--- a/src/progress/change-registry.js
++++ b/src/progress/change-registry.js
+@@ -613,9 +613,9 @@ export class ChangeRegistry {
+         const row = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+         if (row) {
+           sqlDb.prepare(
+-            `INSERT INTO stages (change_id, stage, status, started_at, completed_at)
+-             VALUES (?, 'archive', 'completed', ?, ?)
+-             ON CONFLICT(change_id, stage) DO UPDATE SET status = 'completed', completed_at = excluded.completed_at`
++            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, authority)
++             VALUES (?, 'archive', 'completed', ?, ?, 'cli')
++             ON CONFLICT(change_id, stage) DO UPDATE SET status = 'completed', completed_at = excluded.completed_at, authority = 'cli'`
+           ).run(row.id, now, now);
+           const stageRow = sqlDb.prepare(
+             'SELECT id FROM stages WHERE change_id = ? AND stage = ?'
+@@ -638,6 +638,14 @@ export class ChangeRegistry {
+           }
+         }
+       }
++      // 预览账本 GC（2026-09-23-watcher-preview-progress task-04 / FR-06）：归档收尾清 watcher
++      // 预览行（steps 随 stages 的 ON DELETE CASCADE 级联自动清）。fail-open：失败 warn 不阻断归档。
++      try {
++        const prow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
++        if (prow) sqlDb.prepare("DELETE FROM stages WHERE change_id = ? AND authority = 'watcher'").run(prow.id);
++      } catch (e) {
++        console.warn(`⚠️ 预览行 GC 失败（fail-open 不阻断归档）：${(e && e.message) || e}`);
++      }
+       // 本地脏度（D-013 / task-04）：归档也是本地状态推进
+       this.pm._touchLocalModified(cwd, changeName, now);
+     });
+diff --git a/src/progress/shared.js b/src/progress/shared.js
+index ef96ff46..ab38c7c9 100644
+--- a/src/progress/shared.js
++++ b/src/progress/shared.js
+@@ -28,7 +28,7 @@ export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'arch
+ 
+ // progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8；
+ // v6 = changes 加 owner_session 所有权列，2026-09-14-change-ownership-guards D-005@v1）
+-export const CURRENT_VERSION = 6;
++export const CURRENT_VERSION = 7;
+ 
+ // 滞留提示阈值（天，2026-08-30 用户反馈②：7 个「代码全落地但流程没收口」的变更挂 38 天
+ // 无人发现）：活跃变更 last_active 距今超该天数且流程未收口（archive 未完成）时，progress
+diff --git a/src/watcher.js b/src/watcher.js
+index d82173fc..eef3bc7e 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -892,6 +892,14 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+     } catch (e) {
+       console.warn(`[watcher] 哨兵规则引擎异常（best-effort 跳过本轮）: ${(e && e.message) || e}`);
+     }
++    // ── 预览进度账本（2026-09-23-watcher-preview-progress task-02）：阶段级投影 best-effort ──
++    // fail-open（writePreviewStages 全程吞异常）：预览写失败不影响事件流主循环（D-005）。
++    try {
++      const { projectPreviewStages, writePreviewStages } = await import('./preview-progress.js')
++      const rows = projectPreviewStages({ snapshot: snap, prevSnapshot: prev })
++      if (rows.length > 0) writePreviewStages({ specDir: specBase, changeName, rows })
++    } catch { /* 预览投影 best-effort，绝不杀 watcher */ }
++
+     const batch = events.concat(warnings);
+     prev = snap;
+     // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）
+diff --git a/test/change-ownership-guards.test.mjs b/test/change-ownership-guards.test.mjs
+index 88b8401e..e53d4988 100644
+--- a/test/change-ownership-guards.test.mjs
++++ b/test/change-ownership-guards.test.mjs
+@@ -117,7 +117,7 @@ function runCLI(args, { cwd } = {}) {
+ // ─────────────────────────────────────────────────────────────
+ console.log('\n=== ① v5→v6 迁移：自动加列幂等 / 存量行 NULL 无主 ===\n')
+ 
+-test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量行 NULL + 戳升 6 + 重跑幂等', () => {
++test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量行 NULL + 戳升 7（v7 authority 双轨列，2026-09-23-watcher-preview-progress） + 重跑幂等', () => {
+   const root = mk('cog-mig-')
+   const runtimeDir = join(root, '.runtime')
+   mkdirSync(runtimeDir, { recursive: true })
+@@ -152,9 +152,9 @@ test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量
+   assert.ok(cols.includes('title') && cols.includes('isolation_mode'), '历史幂等 ALTER 照常补齐（v5 先例同款）')
+   const legacy = db.getDb().prepare("SELECT owner_session FROM changes WHERE name = 'legacy'").get()
+   assert.equal(legacy.owner_session, null, '存量行 owner_session=NULL（无主，任何会话可接管）')
+-  assert.equal(readFileSync(stampPath, 'utf8').trim(), '6', 'schema 戳升 6')
++  assert.equal(readFileSync(stampPath, 'utf8').trim(), '7', 'schema 戳升 7（v7 authority 双轨列，2026-09-23-watcher-preview-progress）')
+   const projDflt = db.getDb().prepare("SELECT dflt_value FROM pragma_table_info('project') WHERE name = 'schema_version'").get()
+-  assert.equal(String(projDflt.dflt_value), '6', 'project.schema_version DEFAULT 同步 bump 6（新建库口径）')
++  assert.equal(String(projDflt.dflt_value), '7', 'project.schema_version DEFAULT 同步 bump 7（新建库口径）')
+ 
+   // 幂等：删戳强制重跑 _createSchema——duplicate column 被吞，列数不翻倍、数据不丢
+   rmSync(stampPath)
+diff --git a/test/platform-sync-schema.test.mjs b/test/platform-sync-schema.test.mjs
+index 9cb62b8f..45cc29d0 100644
+--- a/test/platform-sync-schema.test.mjs
++++ b/test/platform-sync-schema.test.mjs
+@@ -5,7 +5,7 @@
+ // 验收点（task-01.md acceptance）：
+ // 1. 全新 DB init 后 changes 表含两列且默认 NULL
+ // 2. 已有 schema 3 DB 经 _migrateAddColumn 幂等加列且新列 NULL，不丢既有数据
+-// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 6
++// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 7（v7：authority 双轨列，2026-09-23-watcher-preview-progress）
+ //
+ // 用 DB 原语直接构造（对齐 db-atomic-write.test.mjs 风格），避免 ProgressManager 副作用干扰 DDL 断言。
+ import { DB } from '../src/db.js';
+@@ -44,7 +44,7 @@ const columnsOf = (file) => {
+   }
+ };
+ 
+-console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致（v6 owner_session bump）');
++console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致（v7 authority 双轨列 bump——2026-09-23-watcher-preview-progress）');
+ 
+ // ─────────────────────────────────────────
+ // 1. 版本号四处一致（v6 bump：owner_session 列，2026-09-14-change-ownership-guards）
+@@ -52,14 +52,14 @@ console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处
+ console.log('\n--- 1. 版本号四处一致（v6 bump：owner_session 列）---');
+ {
+   // (1) src/progress/shared.js CURRENT_VERSION（静态导出）
+-  assert(CURRENT_VERSION === 6, `src/progress/shared.js CURRENT_VERSION === 6（实际 ${CURRENT_VERSION}）`);
++  assert(CURRENT_VERSION === 7, `src/progress/shared.js CURRENT_VERSION === 7（实际 ${CURRENT_VERSION}）`);
+ 
+   // (2) src/db.js DB_SCHEMA_VERSION：经 init 后 .schema-version 戳内容间接验证（戳内容 == DB_SCHEMA_VERSION）
+   fresh();
+   let db = open();
+   db.close();
+   const stamp = readStamp();
+-  assert(stamp === '6', `DB_SCHEMA_VERSION === 6（init 后 .schema-version 戳=${stamp}）`);
++  assert(stamp === '7', `DB_SCHEMA_VERSION === 7（init 后 .schema-version 戳=${stamp}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+@@ -132,7 +132,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
+   // 写一个过期（schema 3）戳，使新版 init 判定 schemaCurrent=false → 重跑 _createSchema
+   writeFileSync(stampPath(), '3');
+ 
+-  // 用新版代码 init（DB_SCHEMA_VERSION=6，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
++  // 用新版代码 init（DB_SCHEMA_VERSION=7，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
+   const db = open();
+   db.close();
+ 
+@@ -153,7 +153,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
+   }
+ 
+   // 戳已更新为 6
+-  assert(readStamp() === '6', `迁移后 .schema-version 戳更新为 6（实际 ${readStamp()}）`);
++  assert(readStamp() === '7', `迁移后 .schema-version 戳更新为 6（实际 ${readStamp()}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+@@ -172,7 +172,7 @@ console.log('\n--- 4. project.schema_version DEFAULT 6（连带）---');
+   const probe = new DatabaseSync(dbPath(), { readOnly: true });
+   try {
+     const row = probe.prepare('SELECT schema_version FROM project WHERE id=1').get();
+-    assert(row && row.schema_version === 6, `project.schema_version DEFAULT 6（实际 ${row && row.schema_version}）`);
++    assert(row && row.schema_version === 7, `project.schema_version DEFAULT 7（实际 ${row && row.schema_version}）`);
+   } finally {
+     probe.close();
+   }
+@@ -190,7 +190,7 @@ console.log('\n--- 5. progress.js read()._version === 6（连带第四处）---'
+   await pm.init('demo');
+   await pm.initChange('demo', 'c1');
+   const data = await pm.read('demo', 'c1');
+-  assert(data && data._version === 6, `pm.read()._version === 6（实际 ${data && data._version}）`);
++  assert(data && data._version === 6, `pm.read()._version === 7（实际 ${data && data._version}）`);
+   // ProgressManager 无 close()：手动释放底层 node:sqlite 句柄（Windows 下 WAL 句柄占开会导致
+   // 末尾 rmSync EPERM；node:sqlite close() 自动 checkpoint 合并 -wal/-shm）。
+   try { if (pm._db) pm._db.close(); } catch { /* 已关忽略 */ }
+diff --git a/test/platform-sync-serialization.test.mjs b/test/platform-sync-serialization.test.mjs
+index 8141ee59..0f0d5b19 100644
+--- a/test/platform-sync-serialization.test.mjs
++++ b/test/platform-sync-serialization.test.mjs
+@@ -80,7 +80,7 @@ if (json) {
+ 
+   // project 全局行
+   assert(json.project && json.project.name === basename(cwd), `project.name === basename(cwd)（实际 ${json.project && json.project.name}）`);
+-  assert(json.project && json.project.schema_version === 6, `project.schema_version === 6（实际 ${json.project && json.project.schema_version}）`);
++  assert(json.project && json.project.schema_version === 7, `project.schema_version === 6（实际 ${json.project && json.project.schema_version}）`);
+ 
+   // stages：initChange 插入全部 VALID_STAGES，每行 change_name+stage
+   assert(Array.isArray(json.stages) && json.stages.length >= 5, `stages 数组非空（实际 ${json.stages.length} 行）`);
+diff --git a/test/preview-gate-isolation.test.mjs b/test/preview-gate-isolation.test.mjs
+new file mode 100644
+index 00000000..8479cc63
+--- /dev/null
++++ b/test/preview-gate-isolation.test.mjs
+@@ -0,0 +1,35 @@
++/**
++ * preview-gate-isolation（task-05 / FR-08 + D-007 红线钉）：
++ * 恶意/异常预览行（status='completed'）在场时——①pm.read 输出与无预览逐字节一致（gate 全族消费
++ * pm.read → 结论必然一致）；②serializeForSync 平台载荷与清理后逐字节一致（D-007：预览不进同步）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { DatabaseSync } from 'node:sqlite'
++import { ProgressManager } from '../src/progress.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('T1 恶意预览行隔离钉：read 与 serializeForSync 双逐字节一致', () => {
++  const fx = mk('pv-iso-')
++  const spec = join(fx, '.sillyspec')
++  mkdirSync(spec)
++  const pm = new ProgressManager({ specDir: spec })
++  pm.initChange(fx, 'iso-change')
++  const before = JSON.stringify(pm.read(fx, 'iso-change'))
++  const beforeSync = JSON.stringify(pm.serializeForSync(fx, 'iso-change'))
++  // 直插「声称完成」的 watcher 行（绕过投影纯函数——模拟异常/恶意形态）
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const cid = db.prepare("SELECT id FROM changes WHERE name='iso-change'").get().id
++  db.prepare("UPDATE stages SET status='completed', completed_at='2026-09-23T09:00:00.000Z', authority='watcher', preview_evidence='{\"malicious\":true}' WHERE change_id=? AND stage IN ('brainstorm','plan')").run(cid)
++  const sid = db.prepare('SELECT id FROM stages WHERE change_id=? AND stage=\'execute\'').get(cid).id
++  db.prepare("INSERT INTO steps (stage_id, name, status, completed_at, authority) VALUES (?, 'fake-step', 'completed', '2026-09-23T09:00:00.000Z', 'watcher')").run(sid)
++  db.close()
++  assert.equal(JSON.stringify(pm.read(fx, 'iso-change')), before, 'FR-08：恶意预览行不改变 read 输出（gate 全族消费面隔离）')
++  assert.equal(JSON.stringify(pm.serializeForSync(fx, 'iso-change')), beforeSync, 'D-007：平台载荷零变化（预览不进同步）')
++})
+diff --git a/test/preview-gc.test.mjs b/test/preview-gc.test.mjs
+new file mode 100644
+index 00000000..07e3ebe4
+--- /dev/null
++++ b/test/preview-gc.test.mjs
+@@ -0,0 +1,40 @@
++/**
++ * preview-gc（task-04 / FR-06）：归档收尾清 watcher 预览行。
++ * 契约：unregisterChange 后该 change 的 authority='watcher' 行清零；cli 行（含归档终态行）保留；
++ * 归档 upsert 归章（authority='cli'，fail① 同族防御钉）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { DatabaseSync } from 'node:sqlite'
++import { ProgressManager } from '../src/progress.js'
++import { writePreviewStages } from '../src/preview-progress.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++test('T1 归档 GC：watcher 行清零 / cli 行保留 / 归档行归章', () => {
++  const fx = mk('pv-gc-')
++  const spec = join(fx, '.sillyspec')
++  mkdirSync(spec)
++  const pm = new ProgressManager({ specDir: spec })
++  pm.initChange(fx, 'gc-change')
++  // 预览认领 brainstorm（pending 未触碰）+ 刷一条 execute 预览
++  writePreviewStages({ specDir: spec, changeName: 'gc-change', rows: [
++    { stage: 'brainstorm', status: 'in-progress', startedAt: '2026-09-23T09:00:00.000Z', evidence: { ts: 1, files: ['proposal.md'] } },
++    { stage: 'execute', status: 'in-progress', startedAt: '2026-09-23T09:01:00.000Z', evidence: { ts: 1, files: ['tasks.md'] } },
++  ] })
++  const db0 = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  assert.equal(db0.prepare("SELECT count(*) c FROM stages WHERE authority='watcher'").get().c, 2, '前置：两行预览在场')
++  db0.close()
++  // 归档收尾（带 archiveStepNames 走完整终态链）
++  pm.unregisterChange(fx, 'gc-change', { archiveStepNames: ['确认归档'] })
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  assert.equal(db.prepare("SELECT count(*) c FROM stages WHERE authority='watcher'").get().c, 0, '归档后 watcher 行清零（GC）')
++  const arch = db.prepare("SELECT status, authority FROM stages WHERE stage='archive'").get()
++  assert.ok(arch && arch.status === 'completed' && arch.authority === 'cli', '归档终态行在场且归章 cli')
++  db.close()
++})
+diff --git a/test/preview-migration.test.mjs b/test/preview-migration.test.mjs
+new file mode 100644
+index 00000000..5396efee
+--- /dev/null
++++ b/test/preview-migration.test.mjs
+@@ -0,0 +1,100 @@
++/**
++ * preview-migration（2026-09-23-watcher-preview-progress task-01）：
++ * authority 列迁移 + 读侧保险丝 + CLI 权威归章。
++ *
++ * 锁死契约：
++ * 1. 迁移：新库/旧库（无 authority 列）init 后列在场；重复 init 幂等；存量行盖 'cli' 章。
++ * 2. 读侧保险丝：注入 watcher 预览行后，read（六表读法）默认不可见——与删除预览行后逐字段一致。
++ * 3. 归章（影子审查 fail① 钉）：预览行在场时 CLI 权威写（writeSerialized 的 stage upsert）
++ *    命中 DO UPDATE 分支后 authority 翻转 'cli'，数据对读法可见（顶替闭合）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { DatabaseSync } from 'node:sqlite'
++import { DB } from '../src/db.js'
++import { ProgressManager } from '../src/progress.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function fixture() {
++  const fx = mk('pv-mig-')
++  mkdirSync(join(fx, '.sillyspec'), { recursive: true })
++  return { fx, spec: join(fx, '.sillyspec') }
++}
++
++/** 直插一行 watcher 预览（绕过写路径，模拟 preview-progress 的产物） */
++function injectWatcherStage(spec, changeId, stage) {
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  try {
++    db.prepare("INSERT INTO stages (change_id, stage, status, started_at, authority) VALUES (?, ?, 'in-progress', NULL, 'watcher')" +
++      " ON CONFLICT(change_id, stage) DO UPDATE SET status='in-progress', authority='watcher' WHERE stages.authority='watcher'")
++      .run(changeId, stage)
++  } finally { db.close() }
++}
++
++test('T1 迁移：authority 列在场 + 存量盖章 cli + 重复 init 幂等', () => {
++  const { fx, spec } = fixture()
++  // 旧库：手工建一个 v6 时代的库（无 authority 列）
++  mkdirSync(join(spec, '.runtime'), { recursive: true })
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  db.exec(`CREATE TABLE changes (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, current_stage TEXT DEFAULT 'scan', status TEXT DEFAULT 'active', last_active TEXT, created_at TEXT, updated_at TEXT, title TEXT, owner_session TEXT)`)
++  db.exec(`CREATE TABLE stages (id INTEGER PRIMARY KEY AUTOINCREMENT, change_id INTEGER NOT NULL REFERENCES changes(id) ON DELETE CASCADE, stage TEXT NOT NULL, status TEXT DEFAULT 'pending', started_at TEXT, completed_at TEXT, UNIQUE(change_id, stage))`)
++  db.exec("INSERT INTO changes (name) VALUES ('legacy-change')")
++  db.exec("INSERT INTO stages (change_id, stage, status) VALUES (1, 'brainstorm', 'completed')")
++  db.close()
++  rmSync(join(spec, '.runtime', '.schema-version'), { force: true }) // 强制重走 init
++  const db2 = new DB(join(spec, '.runtime', 'sillyspec.db'))
++  db2.init()
++  const row = db2.getDb().prepare("SELECT authority FROM stages WHERE stage='brainstorm'").get()
++  assert.equal(row.authority, 'cli', '存量行迁移后盖 cli 章')
++  db2.close()
++  // 幂等：再 init 一次零变化
++  rmSync(join(spec, '.runtime', '.schema-version'), { force: true })
++  const db3 = new DB(join(spec, '.runtime', 'sillyspec.db'))
++  db3.init(); db3.close()
++  // 幂等即达：不再经 read()（手工旧库缺 read 所需全列，与迁移断言无关）
++})
++
++test('T2 读侧保险丝：预览行默认不可见（读法输出与无预览一致）', () => {
++  const { fx, spec } = fixture()
++  const pm = new ProgressManager({ specDir: spec })
++  pm.initChange(fx, 'fuse-change')
++  const before = JSON.stringify(pm.read(fx, 'fuse-change'))
++  // 注入预览行（change_id 查取经真实 changes 行）
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const cid = db.prepare("SELECT id FROM changes WHERE name='fuse-change'").get().id
++  db.close()
++  injectWatcherStage(spec, cid, 'brainstorm')
++  const after = JSON.stringify(pm.read(fx, 'fuse-change'))
++  assert.equal(after, before, '注入 watcher 预览行后默认读法逐字节一致（保险丝生效）')
++})
++
++test('T3 归章钉（fail①）：CLI 权威写命中预览行后 authority 翻转 cli 且数据可见', () => {
++  const { fx, spec } = fixture()
++  const pm = new ProgressManager({ specDir: spec })
++  pm.initChange(fx, 'stamp-change')
++  const db0 = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const cid = db0.prepare("SELECT id FROM changes WHERE name='stamp-change'").get().id
++  db0.close()
++  injectWatcherStage(spec, cid, 'brainstorm')
++  // 预览行在场（保险丝应使其不可见）
++  const withPreview = pm.read(fx, 'stamp-change')
++  assert.ok(!withPreview.stages || withPreview.stages.brainstorm?.status !== 'in-progress', '预览值（in-progress）默认不可见（保险丝）')
++  // CLI 权威写：_write 落同键 stage（upsert 命中 DO UPDATE 分支——归章路径）
++  pm._write(fx, {
++    currentChange: 'stamp-change', currentStage: 'brainstorm',
++    stages: { brainstorm: { status: 'completed', startedAt: '2026-09-23 10:00:00', completedAt: '2026-09-23 10:05:00', revision: 0 } },
++  }, 'stamp-change')
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const row = db.prepare("SELECT authority, status FROM stages WHERE stage='brainstorm'").get()
++  db.close()
++  assert.equal(row.authority, 'cli', 'DO UPDATE 分支归章：authority 翻转 cli（fail① 修复钉）')
++  assert.equal(row.status, 'completed', '业务字段同步更新')
++  const after = pm.read(fx, 'stamp-change')
++  assert.ok(after.stages && after.stages.brainstorm, '归章后权威行对读法可见（顶替闭合）')
++})
+diff --git a/test/preview-outlet.test.mjs b/test/preview-outlet.test.mjs
+new file mode 100644
+index 00000000..1d5465d8
+--- /dev/null
++++ b/test/preview-outlet.test.mjs
+@@ -0,0 +1,58 @@
++/**
++ * preview-outlet（task-03）：显式预览出口——readPreviewProgress + handoff 机器预览态段。
++ * 契约：出口带证据引用；无预览行零输出（缺省一致性）；fail-open 容忍。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { DatabaseSync } from 'node:sqlite'
++import { readPreviewProgress, ProgressManager } from '../src/progress.js'
++import { buildHandoff } from '../src/handoff.js'
++import { writePreviewStages } from '../src/preview-progress.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function fixture(name = 'o-change') {
++  const fx = mk('pv-out-')
++  const spec = join(fx, '.sillyspec')
++  mkdirSync(spec)
++  const pm = new ProgressManager({ specDir: spec })
++  pm.initChange(fx, name)
++  return { fx, spec, name }
++}
++
++test('T1 readPreviewProgress：预览行+证据解析 / 无预览空集 / 未注册与库缺失 fail-open', () => {
++  const { fx, spec, name } = fixture()
++  writePreviewStages({ specDir: spec, changeName: name, rows: [
++    { stage: 'brainstorm', status: 'in-progress', startedAt: '2026-09-23T09:00:00.000Z', evidence: { ts: 1, files: ['proposal.md'], changed: true } },
++  ] })
++  const pv = readPreviewProgress(spec, name)
++  assert.equal(pv.exists, true)
++  assert.equal(pv.stages.length, 1)
++  assert.equal(pv.stages[0].stage, 'brainstorm')
++  assert.deepEqual(pv.stages[0].evidence.files, ['proposal.md'], '证据引用解析')
++  const none = readPreviewProgress(spec, name + '-other')
++  assert.equal(none.exists, false, '未注册 fail-open 空集')
++  assert.deepEqual(readPreviewProgress(join(mk('pv-x-'), 's'), 'nope'), { exists: false, stages: [] }, '库缺失 fail-open')
++  void fx
++})
++
++test('T2 handoff 机器预览态段：有预览带段与证据 / 无预览零段', async () => {
++  const a = fixture('h1')
++  writePreviewStages({ specDir: a.spec, changeName: 'h1', rows: [
++    { stage: 'execute', status: 'in-progress', startedAt: '2026-09-23T09:30:00.000Z', evidence: { ts: 9, files: ['tasks.md'], changed: true } },
++  ] })
++  const r1 = await buildHandoff({ cwd: a.fx, specBase: a.spec, changeName: 'h1' })
++  assert.ok(r1.ok, 'handoff ok')
++  const text1 = r1.lines.join('\n')
++  assert.ok(text1.includes('机器预览态'), '预览段在场')
++  assert.ok(text1.includes('execute → in-progress') && text1.includes('tasks.md'), '证据引用渲染')
++
++  const b = fixture('h2')
++  const r2 = await buildHandoff({ cwd: b.fx, specBase: b.spec, changeName: 'h2' })
++  assert.ok(!r2.lines.join('\n').includes('机器预览态'), '无预览行零段（缺省一致性）')
++})
+diff --git a/test/preview-progress.test.mjs b/test/preview-progress.test.mjs
+new file mode 100644
+index 00000000..0bb637d0
+--- /dev/null
++++ b/test/preview-progress.test.mjs
+@@ -0,0 +1,83 @@
++/**
++ * preview-progress（task-02）：投影纯函数 + 短连接写纪律。
++ * 契约：粒度=阶段级（工件映射）；archived 不投影；changed 差分信号；
++ * 写纪律=无 cli 干扰（DO UPDATE WHERE authority='watcher'）/maxRows 截断/库缺失与未注册 fail-open。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { DatabaseSync } from 'node:sqlite'
++import { projectPreviewStages, writePreviewStages, PREVIEW_STAGE_SOURCES } from '../src/preview-progress.js'
++import { ProgressManager } from '../src/progress.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function fixture() {
++  const fx = mk('pv-proj-')
++  mkdirSync(join(fx, '.sillyspec'), { recursive: true })
++  return { fx, spec: join(fx, '.sillyspec') }
++}
++function snap(over = {}) {
++  return { ts: 1790150000000, archived: false, head: 'aaa', files: {}, ...over }
++}
++
++test('T1 投影纯函数：工件→阶段映射 / 出现与变更差分 / archived 不投影', () => {
++  const s1 = snap({ files: { 'proposal.md': { stage: 'proposal' }, 'tasks.md': { checked: 2 } } })
++  const rows = projectPreviewStages({ snapshot: s1, prevSnapshot: snap() })
++  assert.deepEqual(rows.map(r => r.stage).sort(), ['brainstorm', 'execute'], '工件映射到阶段')
++  assert.ok(rows.every(r => r.status === 'in-progress'))
++  assert.ok(rows.find(r => r.stage === 'execute').evidence.changed, '新出现工件 changed=true')
++  const s2 = snap({ ts: s1.ts + 1000, files: { 'proposal.md': { stage: 'proposal' }, 'tasks.md': { checked: 2 } } })
++  const rows2 = projectPreviewStages({ snapshot: s2, prevSnapshot: s1 })
++  assert.equal(rows2.find(r => r.stage === 'execute').evidence.changed, false, '无变化差分 changed=false')
++  assert.equal(projectPreviewStages({ snapshot: snap({ archived: true, files: { 'proposal.md': {} } }) }).length, 0, 'archived 不投影')
++  assert.equal(projectPreviewStages({ snapshot: null }).length, 0, '空快照容忍')
++})
++
++test('T2 写纪律：无行写入 watcher 行 / cli 行不被触碰 / maxRows 截断 / fail-open', () => {
++  const { fx, spec } = fixture()
++  const pm = new ProgressManager({ specDir: spec })
++  pm.initChange(fx, 'w-change')
++  const db0 = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const cid = db0.prepare("SELECT id FROM changes WHERE name='w-change'").get().id
++  // initChange 已预建全套 cli/pending 行（执行期发现）：verify 行改为「已触碰」形态作不可认领对象
++  db0.prepare("UPDATE stages SET status='completed', started_at='2026-09-23T08:00:00.000Z' WHERE stage='verify'").run()
++  db0.close()
++  const rows = [
++    { stage: 'brainstorm', status: 'in-progress', startedAt: '2026-09-23T09:00:00.000Z', evidence: { ts: 1, files: ['proposal.md'] } },
++    { stage: 'verify', status: 'in-progress', startedAt: '2026-09-23T09:01:00.000Z', evidence: { ts: 1, files: ['verify-result.md'] } },
++    { stage: 'execute', status: 'in-progress', startedAt: '2026-09-23T09:02:00.000Z', evidence: { ts: 1, files: ['tasks.md'] } },
++  ]
++  assert.equal(writePreviewStages({ specDir: spec, changeName: 'w-change', rows }), true, '正常写入返回 true')
++  const db = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const w = db.prepare("SELECT authority, status, preview_evidence FROM stages WHERE stage='brainstorm'").get()
++  assert.equal(w.authority, 'watcher', 'pending 未触碰行被预览认领（D-005@v2：initChange 预建行不死锁）')
++  assert.ok(JSON.parse(w.preview_evidence).files.includes('proposal.md'), 'evidence 落库')
++  const cli = db.prepare("SELECT authority, status FROM stages WHERE stage='verify'").get()
++  assert.equal(cli.authority, 'cli', '既有 cli 行不被触碰（fail① 反向钉）')
++  assert.equal(cli.status, 'completed', 'cli 行业务字段原样')
++  db.close()
++  // 再次写入同键（watcher 行 DO UPDATE 分支更新 evidence）
++  writePreviewStages({ specDir: spec, changeName: 'w-change', rows: [{ stage: 'brainstorm', status: 'in-progress', startedAt: '2026-09-23T09:05:00.000Z', evidence: { ts: 2, files: ['proposal.md'], changed: true } }] })
++  const db2 = new DatabaseSync(join(spec, '.runtime', 'sillyspec.db'))
++  const w2 = db2.prepare("SELECT preview_evidence FROM stages WHERE stage='brainstorm' AND authority='watcher'").get()
++  assert.equal(JSON.parse(w2.preview_evidence).ts, 2, 'watcher 行可自更新')
++  db2.close()
++  // maxRows 截断
++  const many = Array.from({ length: 12 }, (_, i) => ({ stage: `s${i}`, status: 'in-progress', startedAt: 'x', evidence: {} }))
++  const { spec: spec2, fx: fx2 } = fixture()
++  const pm2 = new ProgressManager({ specDir: spec2 })
++  pm2.initChange(fx2, 'm-change')
++  writePreviewStages({ specDir: spec2, changeName: 'm-change', rows: many })
++  const db3 = new DatabaseSync(join(spec2, '.runtime', 'sillyspec.db'))
++  assert.equal(db3.prepare("SELECT count(*) c FROM stages WHERE authority='watcher'").get().c, 8, 'maxRows=8 截断')
++  db3.close()
++  // fail-open：库缺失 / 变更未注册
++  assert.equal(writePreviewStages({ specDir: join(mk('pv-none-'), 'x'), changeName: 'nope', rows }), false, '库缺失 false')
++  assert.equal(writePreviewStages({ specDir: spec, changeName: '未注册变更', rows }), false, '未注册 false')
++  assert.equal(writePreviewStages({ specDir: spec, changeName: 'w-change', rows: [] }), false, '空行集 false')
++})

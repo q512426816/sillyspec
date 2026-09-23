@@ -7,7 +7,7 @@ import { dirname } from 'path';
 // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
 // node:sqlite（DatabaseSync）是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
 // _createSchema 内 DDL 直接落盘，无需额外 _save。
-const DB_SCHEMA_VERSION = 6;
+const DB_SCHEMA_VERSION = 7;
 
 // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
 // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
@@ -252,7 +252,7 @@ export class DB {
       CREATE TABLE IF NOT EXISTS project (
         id INTEGER PRIMARY KEY DEFAULT 1,
         name TEXT NOT NULL,
-        schema_version INTEGER DEFAULT 6,
+        schema_version INTEGER DEFAULT 7,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -285,6 +285,8 @@ export class DB {
         status TEXT DEFAULT 'pending',
         started_at TEXT,
         completed_at TEXT,
+        authority TEXT NOT NULL DEFAULT 'cli',
+        preview_evidence TEXT,
         UNIQUE(change_id, stage)
       )
     `);
@@ -298,7 +300,8 @@ export class DB {
         status TEXT DEFAULT 'pending',
         output TEXT,
         completed_at TEXT,
-        ordering INTEGER NOT NULL DEFAULT 0
+        ordering INTEGER NOT NULL DEFAULT 0,
+        authority TEXT NOT NULL DEFAULT 'cli'
       )
     `);
 
@@ -334,6 +337,13 @@ export class DB {
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_changes_status ON changes(status)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_stages_change ON stages(change_id)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_steps_stage ON steps(stage_id)');
+
+    // Migration: authority 双轨列（watcher 预览账本，幂等——ADD COLUMN NOT NULL DEFAULT 存量即盖章）
+    this._migrateAddColumn('stages', 'authority', "TEXT NOT NULL DEFAULT 'cli'");
+    this._migrateAddColumn('stages', 'preview_evidence', 'TEXT');
+    this._migrateAddColumn('steps', 'authority', "TEXT NOT NULL DEFAULT 'cli'");
+    // 预览账本（2026-09-23-watcher-preview-progress）：authority 探测与 GC 走此复合索引
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_stages_authority ON stages(change_id, stage, authority)');
 
     // Migration: add isolation columns to changes table (idempotent)
     this._migrateAddColumn('changes', 'isolation_status', 'TEXT');

@@ -613,9 +613,9 @@ export class ChangeRegistry {
         const row = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
         if (row) {
           sqlDb.prepare(
-            `INSERT INTO stages (change_id, stage, status, started_at, completed_at)
-             VALUES (?, 'archive', 'completed', ?, ?)
-             ON CONFLICT(change_id, stage) DO UPDATE SET status = 'completed', completed_at = excluded.completed_at`
+            `INSERT INTO stages (change_id, stage, status, started_at, completed_at, authority)
+             VALUES (?, 'archive', 'completed', ?, ?, 'cli')
+             ON CONFLICT(change_id, stage) DO UPDATE SET status = 'completed', completed_at = excluded.completed_at, authority = 'cli'`
           ).run(row.id, now, now);
           const stageRow = sqlDb.prepare(
             'SELECT id FROM stages WHERE change_id = ? AND stage = ?'
@@ -637,6 +637,14 @@ export class ChangeRegistry {
             }
           }
         }
+      }
+      // 预览账本 GC（2026-09-23-watcher-preview-progress task-04 / FR-06）：归档收尾清 watcher
+      // 预览行（steps 随 stages 的 ON DELETE CASCADE 级联自动清）。fail-open：失败 warn 不阻断归档。
+      try {
+        const prow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+        if (prow) sqlDb.prepare("DELETE FROM stages WHERE change_id = ? AND authority = 'watcher'").run(prow.id);
+      } catch (e) {
+        console.warn(`⚠️ 预览行 GC 失败（fail-open 不阻断归档）：${(e && e.message) || e}`);
       }
       // 本地脏度（D-013 / task-04）：归档也是本地状态推进
       this.pm._touchLocalModified(cwd, changeName, now);

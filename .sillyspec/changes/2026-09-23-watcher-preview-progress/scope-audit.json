@@ -1,0 +1,180 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "e2a8e2c099a456fddf35c4a866f863b8373f9db8",
+  "totals": {
+    "files": 20,
+    "additions": 565,
+    "deletions": 31
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 30,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "package.json",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/db.js",
+      "additions": 13,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/doctor-diagnostics.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/handoff.js",
+      "additions": 15,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 16,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/preview-progress.js",
+      "additions": 92,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/progress.js",
+      "additions": 48,
+      "deletions": 9,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/progress/change-registry.js",
+      "additions": 11,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/progress/shared.js",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/watcher.js",
+      "additions": 8,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/change-ownership-guards.test.mjs",
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/platform-sync-schema.test.mjs",
+      "additions": 8,
+      "deletions": 8,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/platform-sync-serialization.test.mjs",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "test/preview-gate-isolation.test.mjs",
+      "additions": 35,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/preview-gc.test.mjs",
+      "additions": 40,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/preview-migration.test.mjs",
+      "additions": 100,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/preview-outlet.test.mjs",
+      "additions": 58,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/preview-progress.test.mjs",
+      "additions": 83,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "bc54345e81616488f81f6f2ac79ab89b40e332c8d5e03fce52110f72167bc568",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-23T11:01:35.486Z"
+}

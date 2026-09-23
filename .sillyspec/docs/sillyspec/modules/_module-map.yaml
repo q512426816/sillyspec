@@ -31,6 +31,7 @@ modules:
       - src/workspace.js
       - src/run.js
       - src/run/
+      - src/preview-progress.js
       - src/facade-hint.js
       - src/quick-recommend.js
       - src/scan-diff.js

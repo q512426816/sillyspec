@@ -1,6 +1,6 @@
 {
   "name": "sillyspec",
-  "version": "3.30.0",
+  "version": "3.29.9",
   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
   "icon": "logo.jpg",
   "homepage": "https://sillyspec.ppdmq.top/",
@@ -24,6 +24,7 @@
   ],
   "license": "MIT",
   "scripts": {
+    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs",
     "test": "node test/run-tests.mjs",
     "lint": "node test/check-syntax.mjs",
     "eval:dry": "node eval/run.mjs --dry-run",

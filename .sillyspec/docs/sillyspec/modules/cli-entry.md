@@ -102,3 +102,5 @@ runStage(pm, progress, stageName, cwd, changeName)
 
 ## adoptPlanWaves proposal 档（2026-09-09-plan-derived）
 plan-adopt-waves.js adoptPlanWaves 加 mode 参：proposal 只读产拓扑布局草稿（planMdDraft/rewritten，不落盘）供 postcheck 自动修复验证；write 档向后兼容（CLI 命令行为等价，测试锁定）。
+
+- 2026-09-23-watcher-preview-progress：`progress show` 增 `--preview` flag（预览行独立段带徽标+证据引用，缺省零行为变化）；`handoff` 输出追加「机器预览态」段（有预览带段/无预览零段，best-effort）。测试锚 test/preview-outlet.test.mjs。

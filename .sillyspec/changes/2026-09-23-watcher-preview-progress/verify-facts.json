@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-23-watcher-preview-progress",
+  "generatedAt": "2026-09-23T11:04:55.774Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "matches": 25,
+        "skippedFiles": 0,
+        "worktreeHits": 6,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-23-watcher-preview-progress",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "requiredEvidence": [
+    {
+      "task": "task-01",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/db.js",
+        "src/progress.js",
+        "src/progress/shared.js",
+        "src/doctor-diagnostics.js",
+        "test/preview-migration.test.mjs"
+      ]
+    },
+    {
+      "task": "task-02",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/preview-progress.js",
+        "src/watcher.js",
+        "src/db.js",
+        "test/preview-progress.test.mjs"
+      ]
+    },
+    {
+      "task": "task-03",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/progress.js",
+        "src/index.js",
+        "src/handoff.js",
+        "test/preview-outlet.test.mjs"
+      ]
+    },
+    {
+      "task": "task-04",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "src/progress/change-registry.js",
+        "test/preview-gc.test.mjs"
+      ]
+    },
+    {
+      "task": "task-05",
+      "status": "satisfied",
+      "verifiedFiles": [
+        "test/preview-gate-isolation.test.mjs",
+        "src/progress.js",
+        "src/db.js",
+        "package.json"
+      ]
+    }
+  ],
+  "handover": {
+    "count": 0,
+    "items": []
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/internal/stages-authority",
+        "rowIdx": 1
+      },
+      {
+        "method": "POST",
+        "path": "/internal/writePreviewStages",
+        "rowIdx": 2
+      },
+      {
+        "method": "GET",
+        "path": "/internal/projectPreviewStages",
+        "rowIdx": 3
+      },
+      {
+        "method": "GET",
+        "path": "/internal/readPreviewProgress",
+        "rowIdx": 4
+      },
+      {
+        "method": "GET",
+        "path": "/cli/progress-show-preview",
+        "rowIdx": 5
+      },
+      {
+        "method": "GET",
+        "path": "/cli/handoff-preview-section",
+        "rowIdx": 6
+      }
+    ],
+    "declared": 6,
+    "writeEndpoints": [
+      {
+        "method": "POST",
+        "path": "/internal/stages-authority",
+        "rowIdx": 1
+      },
+      {
+        "method": "POST",
+        "path": "/internal/writePreviewStages",
+        "rowIdx": 2
+      }
+    ]
+  },
+  "consumerHints": {
+    "script": [
+      "test/preview-migration.test.mjs",
+      "test/preview-progress.test.mjs",
+      "test/preview-outlet.test.mjs",
+      "test/preview-gc.test.mjs",
+      "test/preview-gate-isolation.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "module[cli-core,run-gates]+deps(30)",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-23T11:09:02.670Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

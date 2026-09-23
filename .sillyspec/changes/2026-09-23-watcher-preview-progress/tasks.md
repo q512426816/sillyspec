@@ -1,0 +1,5 @@
+- [x] task-01: 权威列迁移+读侧保险丝+读者走查钉
+- [x] task-02: preview-progress 投影纯函数+短连接写入+watcher 循环接线
+- [x] task-03: progress show --preview 出口+handoff 机器预览态段
+- [x] task-04: 归档 GC 接线（unregisterChange 链）
+- [x] task-05: 测试五组全量收口+FR-08 门禁隔离钉+冒烟

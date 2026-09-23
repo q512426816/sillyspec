@@ -60,3 +60,5 @@ changes 表 v6 加 `owner_session` 列（NULL=无主——存量行迁移后任�
 - `registerChange(cwd, changeName, { ownerSession })` — 首建者获得所有权（INSERT OR IGNORE 语义天然已有值不覆盖）
 
 平台同步投影扩列（D-005@v1）：`serializeForSync` changes 投影加 `owner_session`（NULL=无主随 payload 带出，平台消费端不强制）；`import()` 侧回写容错（payload 含该列才写）。接线点（apply/cleanup/assess/归档/quick 链）归 cli-entry / runtime / worktree 卡登记。
+
+- 2026-09-23-watcher-preview-progress：六读点 authority 保险丝（'cli' OR NULL）+权威 upsert 归章（INSERT/DO UPDATE 显式 'cli'）+serializeForSync 权威视图渲染（watcher 行按 pending CASE 投影，载荷逐字节一致 D-007）+readPreviewProgress 导出。测试锚 test/preview-migration / preview-gate-isolation。
