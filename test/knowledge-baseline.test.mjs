@@ -173,7 +173,7 @@ console.log('\n--- E1 超线：软警告 + 不阻断 ---')
   const r = runStage('quick', sid, cwd, { done: true, output: '需求：E1\n根因：无关联知识\n方案：跑收尾\n结果：exit 0' })
 
   assert(r.status === 0, `超线软警告不阻断 exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
-  assert(r.combined.includes('超 knowledge-baseline 基线 2') && r.combined.includes('待归类 3 条'), 'stdout 含超线软警告（条数 + 基线值）')
+  assert(r.combined.includes('超 knowledge-baseline 基线 2') && r.combined.includes('待审 3 条'), 'stdout 含超线软警告（条数 + 基线值，2026-09-23 收件箱横幅新文案）')
   assert(r.combined.includes('sillyspec knowledge classify'), '软警告带 classify 建议命令')
   assert(readFileSync(join(specBase, 'knowledge-baseline'), 'utf8').trim() === '2', '超线收尾不改写基线（只警告）')
 }

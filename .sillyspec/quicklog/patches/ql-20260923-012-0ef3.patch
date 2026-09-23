@@ -1,0 +1,359 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/runtime.md b/.sillyspec/docs/sillyspec/modules/runtime.md
+index 7b71c7b4..9c13a363 100644
+--- a/.sillyspec/docs/sillyspec/modules/runtime.md
++++ b/.sillyspec/docs/sillyspec/modules/runtime.md
+@@ -30,7 +30,7 @@ SQLite 数据库层 + 进度管理 + 迁移。提供 `.sillyspec/.runtime/sillys
+ - **quick-recommend.js**（`src/quick-recommend.js`，根级文件归 runtime）— quick 阶段多变更关联推荐打分：「脏文件 + 任务描述」双信号推测当前 quick 改动最可能归属哪些活跃变更，供交互式多选默认勾选；纯函数 + 只读文件系统无副作用
+ - **friction-tally.js**（`src/friction-tally.js`，根级文件归 runtime，friction-signal-hint Phase 1）— 摩擦信号计数数据层：gate 失败回滚（rollbackCompletionAndReturn）/ verify test·lint 实测失败 / 审查打回三类摩擦事件计数（events 按 type 记 count/lastAt + history 截尾 20 条），quick/verify --done 收尾 `consumeFrictionHint` 计数非零才输出一行 advisory（提示后删计数文件清零，全零零输出、每次收尾最多一行）；落点红线（D-002）——计数文件只落 .runtime 树（quick 会话 `quick-sessions/<sessionId>/friction-tally.json`、真实变更 `<runtimeRoot>/friction-tally-<changeName>.json`，路径统一走 resolveRuntimeRoot/resolveQuickSessionsDir），永不落 changes/（目录上平台同步，本机计数污染他机即事故）；隐私红线（D-005）——落盘字段只含 count/lastAt/at/type/detail（type ∈ 三值枚举、detail ∈ 预定义标签集），永不接触提示词与对话原文；local.yaml `friction_hint.enabled` 默认 true（仅显式 false 关，缺键/读失败同默认开）；读写全程 try/catch 静默降级返回 null/空 hint，绝不反向阻断收尾（同 verify-lint-tally「计数器不许反向阻断」立场）
+ - **verify-quality-scan.js 质量扫描三机制**（ql-20260920-010 修复一 a/d，对撞三轮 verify 68 分钟单步收口）— ①失败签名去重：`computeQualityScanDedupKey`（代码指纹 + known_failures 豁免面哈希——指纹不含豁免面而 agent 假红补救恰恰靠加豁免条目，键独立补齐防误拦补救路径）+ `loadLastQualityScanRecord`（读回最近记录不论成败）+ `shouldReuseLastFailedScan`（纯函数四路不重跑：逃生阀/无失败记录/存量无键/键或快照口径失配）；`executeVerifyQualityScan` 入口先对账——失败签名未变（代码/豁免面/HEAD/快照口径均未动）→ 跳过重跑直接重放上次失败与出路指引（逃生阀 `SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1`）；storeQualityScan 记录 additive 增 dedupKey/usedSnapshot 两键。②伪影分诊编排：`applyArtifactTriageRerun`——测试失败经 classifyTestFailureArtifact（分类器在 core-engine 卡 verify-postcheck.js）命中已知沙箱伪影形态 → 主树口径单点复跑对照：过=伪影坐实按主树结果放行（artifactTriage 证据随台账）、仍挂=真失败拦截（两口径注记）；主树口径失败只注记 advice 不复跑；分诊永不单独放行。③module 缺省收窄消费侧见 core-engine 卡（runVerifyTestCheck 内部）。
+-- **知识闭环消费端注入与收尾渲染**（2026-09-14-knowledge-loop-close，`src/run/prompt.js` + `src/run/complete-handlers.js`）— prompt.js `buildKnowledgeInjection` 命中知识机械注入：matchKnowledge 命中按 INDEX 行序取 top-3 不同 file、单文件首 40 行截断渲染「📚 命中知识」段（未命中 section='' 调用方零字节），三个注入点——execute「确认执行范围」step（升级既有 {KNOWLEDGE_HIT_REPORT}，报告级→正文级）/ quick step1 quickFirstStep（查询串 readQuickGuardField('taskDescription')）/ execute.js buildWavePrompt 本地孪生（静态 import 会成环触发 TDZ，格式等价由 test/knowledge-inject.test.mjs 锁定）；命中同时逐条 `appendKnowledgeHit` 落 `.runtime/knowledge-hits.jsonl` 事件流（type:inject，fail-soft；旧 knowledge-hit-report.json 照旧写，新旧遥测共存）。complete-handlers.js 生产端收尾渲染：quick --done 归类提议器（进程内四字段 outputText 拼查询串跑 matchKnowledge，命中渲染「📚 待归类提议」引导 `knowledge classify`，未命中/纯新增不提议）+ knowledge-baseline 棘轮（uncategorized 条数超线软警告不阻断、低于基线自动收紧、文件缺失视为未启用）+ archive 收尾 uncategorized 抽审清单渲染。stats 聚合命令消费同一事件流输出命中矩阵/死重清单（src/knowledge-stats.js 本体归 core-engine 卡）。
++- **知识闭环消费端注入与收尾渲染**（2026-09-14-knowledge-loop-close，`src/run/prompt.js` + `src/run/complete-handlers.js`）— prompt.js `buildKnowledgeInjection` 命中知识机械注入：matchKnowledge 命中按 INDEX 行序取 top-3 不同 file、单文件首 40 行截断渲染「📚 命中知识」段（未命中 section='' 调用方零字节），三个注入点——execute「确认执行范围」step（升级既有 {KNOWLEDGE_HIT_REPORT}，报告级→正文级）/ quick step1 quickFirstStep（查询串 readQuickGuardField('taskDescription')）/ execute.js buildWavePrompt 本地孪生（静态 import 会成环触发 TDZ，格式等价由 test/knowledge-inject.test.mjs 锁定）；命中同时逐条 `appendKnowledgeHit` 落 `.runtime/knowledge-hits.jsonl` 事件流（type:inject，fail-soft；旧 knowledge-hit-report.json 照旧写，新旧遥测共存）。complete-handlers.js 生产端收尾渲染：quick --done 归类提议器（进程内四字段 outputText 拼查询串跑 matchKnowledge，命中渲染「📚 待归类提议」引导 `knowledge classify`，未命中/纯新增不提议）+ knowledge-baseline 棘轮（uncategorized 条数超线软警告不阻断、低于基线自动收紧、文件缺失视为未启用）+ archive 收尾 uncategorized 抽审清单渲染。stats 聚合命令消费同一事件流输出命中矩阵/死重清单（src/knowledge-stats.js 本体归 core-engine 卡）。 2026-09-23 知识可见性 quick 升级：棘轮渲染改「知识收件箱」横幅（complete-handlers buildKnowledgeInboxLines——待审>0 即渲染不再基线内静默，标题直出前 3 条+余量指引，超基线 ⚠️ 升级，清空才静默；2026-09-23 用户反馈「聊天过程中完全不知道待审知识」）；NEW `sillyspec knowledge inbox [--json]` 按需收件箱视图（cmdKnowledgeInbox，uncategorized 标题+ql 前缀+一行摘要+基线态；parseUncategorizedEntries 随之 export）；quick 资产尾 FR 计数带去处明细（frFiles 文件清单）；测试锚 test/knowledge-inbox.test.mjs。
+ - **R5 效率第 2 批两行为**（2026-09-21-r5-efficiency-batch2）— ①**M1 指令指纹增量**（`src/run/prompt.js`，D-001@v1）：outputStep 静态段渲染后 sha256 指纹（computeStepGuideFingerprint，模板掩码易变占位符后取散列）——首见（指纹变更/落盘缺失）全量渲染+落盘 `.runtime/step-guides/<stage>-<step>-<fp8>.md`，复入（指纹一致）只出短头部（指纹/落盘路径/「需要全文 Read 上述路径」提醒+动态附录）；动态注入段（材料包/知识命中/{DOCS_DEBT}/进度快照）永不缓存照常渲染；复入状态为变更级（change+stage+step→指纹，防模板级误短路 knowledge-inject 两路径字节一致测试）；v1 默认关、`SILLYSPEC_STEP_GUIDE=1` 显式开（跨进程短输出与 CLI stdout 确定性测试族相容后再翻默认，退役判据锚定 R5 重跑注入体积）；`--json`（withJsonOutput）不受影响走全量。②**M2 gate 快照血统**（`src/run/gate-snapshot.js`，D-002@v2）：会话文件 overlay 双写一致性按 merge-base 祖先内容三方比对（CRLF 归一+trim 同口径，非 mtime），③态分叉（双侧均异于祖先且互不相等）**改取 worktree 分支版**（定向跑语义=验本变更分支交付，主仓侧同文件异动=干扰源）+保留警告并附对齐指引（「主仓侧改动若需保留请 apply/对齐后复跑」）；①态（主仓直写新/worktree 停基线→取主仓，2026-09-20 保护场景）与②态（仅 worktree 异动→保持 worktree）逐字节不动——batch1 假红（主仓并行异动+worktree 新测试→src/test 血统断裂 module 假红）根治；三态钉 test/gate-snapshot-lineage.test.mjs，端到端复刻 test/verify-gate-snapshot.test.mjs。
+ - **R5 效率第 3 批三行为**（2026-09-21-r5-efficiency-batch3）—①**P2 测试结果记账**（`src/run/test-ledger.js`，D-001@v1）：三键指纹（codeFingerprint=HEAD+porcelain 摘要【账本自身路径排除，兼容 git 未跟踪目录折叠形态】×testSetHash=命令+测试面内容摘要×envProfile 结构化探针【cwdInsideWorktree 用 detectCwdInsideWorktree 同源判定=13 环境族测试的真实信号；行为开关 env 集含 SILLYSPEC_STEP_GUIDE】）fail-closed 三层（键分量不可得/失败永不缓存/严格全等）——消费点：gates.js verify-test（优先级 P2 账本>P0-1 质量扫描>真跑）与 quick --done 实测门（changeName 空不走账本）。②**P3 归档就绪度**（gates.js buildArchiveReadinessReport 导出，verify 收尾渲染）：未-apply 面（checkOnly 含合并感知）+manifest 缺行草拟（parseFileChangeList 路径口径+keepSillyspecDocs，草拟带待确认不代写）+module-impact 归因草拟+基线老化强提示（main 前进∩交付交集）；无发现零输出。③**P4 M1 缺省开**（prompt.js）：SILLYSPEC_STEP_GUIDE 未设=开（短输出+落盘），=0 逃生门；stdout 确定性测试族迁移以 fixture 锁 =0（semantic-guard/preflight-slimming/cli-aliases 三件）+step-guide-fingerprint 默认断言随契约反转。
+ 
+diff --git a/src/index.js b/src/index.js
+index db1819b7..75ab4f10 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -147,7 +147,8 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec knowledge <search --query "..." --limit N
+                         | inspect --id "..."
+                         | validate | refresh
+-                        | propose --title "..." --category <name>>
++                        | propose --title "..." --category <name>
++                        | inbox [--json]  （知识收件箱：uncategorized 待审清单+基线态）>
+   sillyspec platform <connect <url> [--token <t>]
+                       | disconnect
+                       | sync [--change <name>] | sync-docs [--change <name>]
+diff --git a/src/knowledge-classify.js b/src/knowledge-classify.js
+index d2ea71df..fcc222c4 100644
+--- a/src/knowledge-classify.js
++++ b/src/knowledge-classify.js
+@@ -101,7 +101,7 @@ function resolveKeywords(keywords, title) {
+  * @returns {{ start: number, end: number, headingText: string, qlIdPrefix: string|null,
+  *             title: string, body: string, text: string }[]}
+  */
+-function parseUncategorizedEntries(normalizedContent) {
++export function parseUncategorizedEntries(normalizedContent) {
+   const lines = normalizedContent.split('\n')
+   const boundaryRe = /^#{1,3}\s+\S/
+   const entryHeadingRe = /^#{2,3}\s+\S/
+@@ -380,3 +380,49 @@ export async function cmdKnowledgeClassify(dir, args, opts = {}) {
+     }, result.error)
+   }
+ }
++
++/**
++ * `sillyspec knowledge inbox` 子命令——知识收件箱按需视图（2026-09-23 知识可见性 quick）。
++ *
++ * 背景：uncategorized 待审条目与 quick 资产尾蒸馏产出此前只落文件、不在聊天面露头，
++ * 用户全程无感（2026-09-23 用户反馈「聊天过程中完全不知道」）。收件箱给出待审清单
++ * （标题 + ql 前缀 + 一行摘要）与基线状态；--json 结构化供面板/脚本消费。纯读零副作用。
++ */
++export async function cmdKnowledgeInbox(dir, args, opts = {}) {
++  const base = opts.specDir || join(dir, '.sillyspec')
++  const knowledgeDir = join(base, 'knowledge')
++  const wantJson = args.includes('--json')
++  const uncPath = join(knowledgeDir, 'uncategorized.md')
++  let entries = []
++  if (existsSync(uncPath)) {
++    entries = parseUncategorizedEntries(readFileSync(uncPath, 'utf8').replace(/\r\n/g, '\n'))
++  }
++  let baseline = null
++  try {
++    const bp = join(base, 'knowledge-baseline')
++    if (existsSync(bp)) {
++      const n = parseInt(readFileSync(bp, 'utf8').trim(), 10)
++      if (Number.isFinite(n) && n >= 0) baseline = n
++    }
++  } catch { /* 基线读失败按未启用 */ }
++  const over = baseline !== null && entries.length > baseline
++  const items = entries.map((e) => ({
++    title: e.title,
++    qlId: e.qlIdPrefix || null,
++    summary: String(e.body || '').replace(/\s+/g, ' ').slice(0, 80),
++  }))
++  if (wantJson) {
++    output(true, { inbox: { count: entries.length, baseline, over, items } })
++    return
++  }
++  if (entries.length === 0) {
++    console.log('📚 知识收件箱：空——uncategorized 无待审条目')
++    return
++  }
++  console.log(`📚 知识收件箱：待审 ${entries.length} 条${baseline !== null ? `（基线 ${baseline}${over ? '，已超 ⚠️' : ''}）` : ''}`)
++  items.forEach((it, i) => {
++    console.log(`  ${i + 1}. 《${it.title}》${it.qlId ? `（${it.qlId}）` : ''}`)
++    if (it.summary) console.log(`     ${it.summary}`)
++  })
++  console.log('   归类：sillyspec knowledge classify --title "…" --file conventions|patterns|known-issues.md')
++}
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 3b30fa22..cf1e2296 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -53,6 +53,7 @@ import { resolveSessionIdentity } from '../progress.js'
+ // 文本声明对账（verify-probes 文法经 worktree-apply 顶层动态绑定），同样无环约束。
+ import { chunkPaths, checkDbScriptDeclarationGate } from '../worktree-apply.js'
+ import { parseModulePathsSubset } from '../decision-distill.js'
++import { parseUncategorizedEntries } from '../knowledge-classify.js'
+ 
+ /**
+  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
+@@ -2771,19 +2772,56 @@ export function checkKnowledgeBaselineRatchet(specBase) {
+ }
+ 
+ /**
+- * 棘轮对比 + console 渲染（quick --done 与 archive 收尾共用）：over → ⚠️ 软警告（条数 +
+- * 建议 knowledge classify 清单，不阻断不抛错）；tightened → 📉 单行留痕；disabled/steady
+- * 零输出。自身 try/catch fail-open（R-05：棘轮误伤的兜底就是什么都不做）。
++ * 知识收件箱横幅纯函数（2026-09-23 知识可见性 quick）：待审条数 > 0 即渲染（不再基线内静默——
++ * 用户反馈「聊天过程中完全不知道有待审知识」），标题直出聊天面（前 3 条 + 余量指引），超基线
++ * 升级 ⚠️ 前缀。零条目零输出（降噪：清空即静默）。已 export 供 test/knowledge-inbox.test.mjs。
++ */
++export function buildKnowledgeInboxLines({ count = 0, baseline = null, over = false, titles = [] } = {}) {
++  if (!Number.isFinite(count) || count <= 0) return []
++  const head = over
++    ? `\n⚠️  知识收件箱：uncategorized 待审 ${count} 条，超 knowledge-baseline 基线 ${baseline}（软警告不阻断）——请转达用户审阅，别只留在文件里`
++    : `\n📚 知识收件箱：uncategorized 待审 ${count} 条——请转达用户审阅，别只留在文件里`
++  const lines = [head]
++  const shown = titles.filter(Boolean).slice(0, 3)
++  shown.forEach((t, i) => lines.push(`   ${i + 1}. ${t}`))
++  if (count > shown.length) lines.push(`   …（另 ${count - shown.length} 条，sillyspec knowledge inbox 看全文）`)
++  lines.push(`   归类：sillyspec knowledge classify --title "…" --file conventions|patterns|known-issues.md`)
++  return lines
++}
++
++/** uncategorized 待审标题清单（前 limit+1 条，供横幅与余量计算）。fail-open：读失败空集。 */
++function listUncategorizedTitles(specBase, limit = 3) {
++  try {
++    const p = join(specBase, 'knowledge', 'uncategorized.md')
++    if (!existsSync(p)) return []
++    return parseUncategorizedEntries(readFileSync(p, 'utf8').replace(/\r\n/g, '\n'))
++      .slice(0, limit + 1).map((e) => e.title)
++  } catch { return [] }
++}
++
++/**
++ * 棘轮对比 + console 渲染（quick --done 与 archive 收尾共用）：over → 收件箱横幅 ⚠️ 升级形态；
++ * 基线内但有存量 → 📚 横幅（可见性修复：不再静默）；tightened → 📉 单行留痕；零条目零输出。
++ * 自身 try/catch fail-open（R-05：棘轮误伤的兜底就是什么都不做）。
+  */
+ function renderKnowledgeBaselineRatchet(specBase) {
+   try {
+     const r = checkKnowledgeBaselineRatchet(specBase)
+     if (r && r.status === 'over') {
+-      console.warn(`\n⚠️  knowledge/uncategorized.md 待归类 ${r.count} 条，超 knowledge-baseline 基线 ${r.baseline}（软警告不阻断）`)
+-      console.warn(`   建议跑 sillyspec knowledge classify 逐条归类（待归类清单见 knowledge/uncategorized.md），条数降后基线自动收紧。`)
+-    } else if (r && r.status === 'tightened') {
++      for (const l of buildKnowledgeInboxLines({ count: r.count, baseline: r.baseline, over: true, titles: listUncategorizedTitles(specBase) })) {
++        console.warn(l)
++      }
++      return
++    }
++    if (r && r.status === 'tightened') {
+       console.log(`📉 knowledge-baseline 已自动收紧：${r.baseline} → ${r.count}（uncategorized 待归类条数下降）`)
+     }
++    // 可见性修复（2026-09-23 用户反馈）：基线内存量不再静默——有待审即出横幅，清空才静默
++    if (r && Number.isFinite(r.count) && r.count > 0) {
++      for (const l of buildKnowledgeInboxLines({ count: r.count, baseline: r.baseline, over: false, titles: listUncategorizedTitles(specBase) })) {
++        console.log(l)
++      }
++    }
+   } catch { /* 棘轮渲染失败零副作用（fail-open，R-05） */ }
+ }
+ 
+@@ -3034,7 +3072,7 @@ export async function liteArchiveChange({ pm, cwd, specBase, changeName, platfor
+  * @returns {Promise<{distilled: boolean, frCount: number, decisionCount: number, archived: boolean, warnings: string[]}>}
+  */
+ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName, linkedChanges = [], platformOpts = {} }) {
+-  const out = { distilled: false, frCount: 0, decisionCount: 0, archived: false, warnings: [] }
++  const out = { distilled: false, frCount: 0, decisionCount: 0, archived: false, warnings: [], frFiles: [] }
+   const realChanges = (linkedChanges || []).filter((c) => c && !QUICK_SID_RE.test(c))
+   if (realChanges.length === 0) return out // 纯 quick：无关联真变更，零打扰
+   try {
+@@ -3060,7 +3098,7 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
+         try {
+           const { indexRequirements } = await import('../fr-index.js')
+           const r = indexRequirements({ changeDir, knowledgeRoot, headHash: '' })
+-          if (r && Array.isArray(r.written) && r.written.length > 0) { out.frCount += r.written.length; anyDistilled = true }
++          if (r && Array.isArray(r.written) && r.written.length > 0) { out.frCount += r.written.length; r.written.forEach((w) => { if (w && w.file && !out.frFiles.includes(w.file)) out.frFiles.push(w.file) }); anyDistilled = true }
+         } catch (e) { out.warnings.push(`fr-index ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
+       }
+     }
+@@ -3076,7 +3114,8 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
+       } catch (e) { out.warnings.push(`lite 归档 ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
+     }
+     if (anyDistilled || out.archived) {
+-      console.log(`📚 quick 资产尾：${out.frCount} 条 FR 入索引、${out.decisionCount} 条决策入 knowledge${out.archived ? '、linked 变更 lite 归档' : ''}（门禁后自动，agent 零新增命令）`)
++      const frDetail = out.frFiles.length > 0 ? `（${out.frFiles.join('、')}）` : ''
++      console.log(`📚 quick 资产尾：${out.frCount} 条 FR 入索引${frDetail}、${out.decisionCount} 条决策入 knowledge${out.archived ? '、linked 变更 lite 归档' : ''}（门禁后自动，agent 零新增命令）`)
+     }
+   } catch (e) {
+     out.warnings.push(`蒸馏尾异常（fail-open 不拦 quick 完成）：${e && e.message ? e.message : e}`)
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 81ef5c83..6159bb09 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -575,6 +575,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       }
+       return mod.cmdKnowledgeClassify(dir, args.slice(1), opts)
+     }
++    case 'inbox': {
++      // 知识收件箱（2026-09-23 可见性 quick）：uncategorized 待审清单+基线状态按需视图，
++      // --json 结构化。纯读零副作用——配套 quick --done/归档收尾的收件箱横幅（complete-handlers）。
++      const mod = await tryImportSubcommandImpl('../knowledge-classify.js', 'knowledge-classify.js')
++      if (!mod || typeof mod.cmdKnowledgeInbox !== 'function') {
++        output(false, {}, { code: 'not_implemented', subcommand: 'inbox' })
++        return
++      }
++      return mod.cmdKnowledgeInbox(dir, args.slice(1), opts)
++    }
+     case 'stats': {
+       const mod = await tryImportSubcommandImpl('../knowledge-stats.js', 'knowledge-stats.js')
+       if (!mod || typeof mod.cmdKnowledgeStats !== 'function') {
+@@ -591,7 +601,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       output(false, {}, {
+         code: 'unknown_subcommand',
+         subcommand: subCommand,
+-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'stats'],
++        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats'],
+       })
+   }
+ }
+diff --git a/test/knowledge-baseline.test.mjs b/test/knowledge-baseline.test.mjs
+index b3d83831..0ac8b93d 100644
+--- a/test/knowledge-baseline.test.mjs
++++ b/test/knowledge-baseline.test.mjs
+@@ -173,7 +173,7 @@ console.log('\n--- E1 超线：软警告 + 不阻断 ---')
+   const r = runStage('quick', sid, cwd, { done: true, output: '需求：E1\n根因：无关联知识\n方案：跑收尾\n结果：exit 0' })
+ 
+   assert(r.status === 0, `超线软警告不阻断 exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
+-  assert(r.combined.includes('超 knowledge-baseline 基线 2') && r.combined.includes('待归类 3 条'), 'stdout 含超线软警告（条数 + 基线值）')
++  assert(r.combined.includes('超 knowledge-baseline 基线 2') && r.combined.includes('待审 3 条'), 'stdout 含超线软警告（条数 + 基线值，2026-09-23 收件箱横幅新文案）')
+   assert(r.combined.includes('sillyspec knowledge classify'), '软警告带 classify 建议命令')
+   assert(readFileSync(join(specBase, 'knowledge-baseline'), 'utf8').trim() === '2', '超线收尾不改写基线（只警告）')
+ }
+diff --git a/test/knowledge-inbox.test.mjs b/test/knowledge-inbox.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/knowledge-inbox.test.mjs
+@@ -0,0 +1,118 @@
++/**
++ * knowledge-inbox（2026-09-23 知识可见性 quick）：知识收件箱三件套。
++ *
++ * 锁死契约：
++ * 1. parseUncategorizedEntries：ql 前缀标题剥离（## ql-xxx | 标题）/裸标题双形态、body 区间、
++ *    h1 边界不算条目；
++ * 2. buildKnowledgeInboxLines：零条目零输出（清空即静默——降噪钉）；超基线 ⚠️ 形态/基线内 📚 形态；
++ *    标题直出前 3 条 + 余量指引行 + classify 用法行；
++ * 3. cmdKnowledgeInbox：tmp fixture 上 --json 结构化（count/baseline/over/items 标题与摘要）与
++ *    缺文件空态（console 捕获断言）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { parseUncategorizedEntries, cmdKnowledgeInbox } from '../src/knowledge-classify.js'
++import { buildKnowledgeInboxLines } from '../src/run/complete-handlers.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function captureLogs(fn) {
++  const orig = { log: console.log, warn: console.warn }
++  const buf = { log: [], warn: [] }
++  console.log = (...a) => buf.log.push(a.join(' '))
++  console.warn = (...a) => buf.warn.push(a.join(' '))
++  try { fn() } finally { console.log = orig.log; console.warn = orig.warn }
++  return buf
++}
++
++// ── 1. 解析器 ───────────────────────────────────────────────────────
++
++test('T1 parseUncategorizedEntries：ql 前缀/裸标题双形态 + body 区间', () => {
++  const content = [
++    '# 未分类知识', '',
++    '## ql-20260923-011-d859 | Windows 控制台子进程必须 windowsHide', 'detached watcher 闪窗。', '',
++    '## 裸标题条目', '正文一。', '正文二。', '',
++    '# Another H1 boundary', 'not entry',
++  ].join('\n')
++  const entries = parseUncategorizedEntries(content)
++  assert.equal(entries.length, 2, 'h1 不算条目')
++  assert.equal(entries[0].qlIdPrefix, 'ql-20260923-011-d859')
++  assert.equal(entries[0].title, 'Windows 控制台子进程必须 windowsHide')
++  assert.ok(entries[0].body.includes('闪窗'))
++  assert.equal(entries[1].qlIdPrefix, null)
++  assert.equal(entries[1].title, '裸标题条目')
++  assert.ok(entries[1].body.includes('正文二'))
++})
++
++// ── 2. 横幅纯函数 ───────────────────────────────────────────────────
++
++test('T2 buildKnowledgeInboxLines：零输出钉 + 超基线/基线内双形态 + 余量指引', () => {
++  assert.deepEqual(buildKnowledgeInboxLines({ count: 0 }), [], '零条目零输出（清空即静默）')
++  assert.deepEqual(buildKnowledgeInboxLines({}), [], '无参容忍零输出')
++
++  const over = buildKnowledgeInboxLines({ count: 5, baseline: 3, over: true, titles: ['A', 'B', 'C', 'D'] })
++  assert.match(over[0], /⚠️.*待审 5 条.*基线 3/)
++  assert.match(over[0], /转达用户/)
++  assert.deepEqual(over.slice(1, 4), ['   1. A', '   2. B', '   3. C'], '标题前 3 直出')
++  assert.match(over[4], /另 2 条.*knowledge inbox/, '余量指引行')
++  assert.match(over[5], /knowledge classify/, '用法行')
++
++  const within = buildKnowledgeInboxLines({ count: 2, baseline: 5, over: false, titles: ['X', 'Y'] })
++  assert.match(within[0], /📚.*待审 2 条/)
++  assert.ok(!within[0].includes('⚠️'), '基线内不升级警告')
++  assert.deepEqual(within.slice(1, 3), ['   1. X', '   2. Y'])
++})
++
++// ── 3. inbox 子命令 ─────────────────────────────────────────────────
++
++function fixtureInbox({ baseline = null } = {}) {
++  const base = mk('kinbox-')
++  mkdirSync(join(base, 'knowledge'), { recursive: true })
++  writeFileSync(join(base, 'knowledge', 'uncategorized.md'), [
++    '# 未分类知识', '',
++    '## 条目甲', '甲的正文摘要内容。', '',
++    '## ql-20260923-010-32f9 | 条目乙', '乙的正文。',
++  ].join('\n'))
++  if (baseline !== null) writeFileSync(join(base, 'knowledge-baseline'), String(baseline))
++  return base
++}
++
++test('T3 cmdKnowledgeInbox --json：结构化清单（标题/ql/摘要/基线态）', async () => {
++  const base = fixtureInbox({ baseline: 1 })
++  const buf2 = []
++  const orig = console.log
++  console.log = (...a) => buf2.push(a.join(' '))
++  try { await cmdKnowledgeInbox(base, ['--json'], { specDir: base }) } finally { console.log = orig }
++  const parsed = JSON.parse(buf2.join('\n'))
++  assert.equal(parsed.ok, true)
++  assert.equal(parsed.inbox.count, 2)
++  assert.equal(parsed.inbox.baseline, 1)
++  assert.equal(parsed.inbox.over, true, '2 > 基线 1')
++  assert.equal(parsed.inbox.items[1].qlId, 'ql-20260923-010-32f9')
++  assert.equal(parsed.inbox.items[1].title, '条目乙')
++  assert.ok(parsed.inbox.items[0].summary.includes('甲的正文'))
++})
++
++test('T3b cmdKnowledgeInbox 人读形态与空态', async () => {
++  const base = fixtureInbox({})
++  const buf = []
++  const orig = console.log
++  console.log = (...a) => buf.push(a.join(' '))
++  try { await cmdKnowledgeInbox(base, [], { specDir: base }) } finally { console.log = orig }
++  const text = buf.join('\n')
++  assert.match(text, /待审 2 条/)
++  assert.match(text, /《条目甲》/)
++  assert.match(text, /（ql-20260923-010-32f9）/)
++
++  const empty = mk('kinbox-empty-')
++  mkdirSync(join(empty, 'knowledge'), { recursive: true })
++  const buf2 = []
++  console.log = (...a) => buf2.push(a.join(' '))
++  try { await cmdKnowledgeInbox(empty, [], { specDir: empty }) } finally { console.log = orig }
++  assert.match(buf2.join('\n'), /收件箱：空/)
++})

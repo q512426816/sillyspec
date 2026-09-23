@@ -101,7 +101,7 @@ function resolveKeywords(keywords, title) {
  * @returns {{ start: number, end: number, headingText: string, qlIdPrefix: string|null,
  *             title: string, body: string, text: string }[]}
  */
-function parseUncategorizedEntries(normalizedContent) {
+export function parseUncategorizedEntries(normalizedContent) {
   const lines = normalizedContent.split('\n')
   const boundaryRe = /^#{1,3}\s+\S/
   const entryHeadingRe = /^#{2,3}\s+\S/
@@ -379,4 +379,50 @@ export async function cmdKnowledgeClassify(dir, args, opts = {}) {
       anchor: result.anchor,
     }, result.error)
   }
+}
+
+/**
+ * `sillyspec knowledge inbox` 子命令——知识收件箱按需视图（2026-09-23 知识可见性 quick）。
+ *
+ * 背景：uncategorized 待审条目与 quick 资产尾蒸馏产出此前只落文件、不在聊天面露头，
+ * 用户全程无感（2026-09-23 用户反馈「聊天过程中完全不知道」）。收件箱给出待审清单
+ * （标题 + ql 前缀 + 一行摘要）与基线状态；--json 结构化供面板/脚本消费。纯读零副作用。
+ */
+export async function cmdKnowledgeInbox(dir, args, opts = {}) {
+  const base = opts.specDir || join(dir, '.sillyspec')
+  const knowledgeDir = join(base, 'knowledge')
+  const wantJson = args.includes('--json')
+  const uncPath = join(knowledgeDir, 'uncategorized.md')
+  let entries = []
+  if (existsSync(uncPath)) {
+    entries = parseUncategorizedEntries(readFileSync(uncPath, 'utf8').replace(/\r\n/g, '\n'))
+  }
+  let baseline = null
+  try {
+    const bp = join(base, 'knowledge-baseline')
+    if (existsSync(bp)) {
+      const n = parseInt(readFileSync(bp, 'utf8').trim(), 10)
+      if (Number.isFinite(n) && n >= 0) baseline = n
+    }
+  } catch { /* 基线读失败按未启用 */ }
+  const over = baseline !== null && entries.length > baseline
+  const items = entries.map((e) => ({
+    title: e.title,
+    qlId: e.qlIdPrefix || null,
+    summary: String(e.body || '').replace(/\s+/g, ' ').slice(0, 80),
+  }))
+  if (wantJson) {
+    output(true, { inbox: { count: entries.length, baseline, over, items } })
+    return
+  }
+  if (entries.length === 0) {
+    console.log('📚 知识收件箱：空——uncategorized 无待审条目')
+    return
+  }
+  console.log(`📚 知识收件箱：待审 ${entries.length} 条${baseline !== null ? `（基线 ${baseline}${over ? '，已超 ⚠️' : ''}）` : ''}`)
+  items.forEach((it, i) => {
+    console.log(`  ${i + 1}. 《${it.title}》${it.qlId ? `（${it.qlId}）` : ''}`)
+    if (it.summary) console.log(`     ${it.summary}`)
+  })
+  console.log('   归类：sillyspec knowledge classify --title "…" --file conventions|patterns|known-issues.md')
 }

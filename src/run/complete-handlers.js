@@ -53,6 +53,7 @@ import { resolveSessionIdentity } from '../progress.js'
 // 文本声明对账（verify-probes 文法经 worktree-apply 顶层动态绑定），同样无环约束。
 import { chunkPaths, checkDbScriptDeclarationGate } from '../worktree-apply.js'
 import { parseModulePathsSubset } from '../decision-distill.js'
+import { parseUncategorizedEntries } from '../knowledge-classify.js'
 
 /**
  * 清洗项目名：只保留 ASCII 字母/数字/横线/下划线/点，过滤中文和特殊字符。
@@ -2771,18 +2772,55 @@ export function checkKnowledgeBaselineRatchet(specBase) {
 }
 
 /**
- * 棘轮对比 + console 渲染（quick --done 与 archive 收尾共用）：over → ⚠️ 软警告（条数 +
- * 建议 knowledge classify 清单，不阻断不抛错）；tightened → 📉 单行留痕；disabled/steady
- * 零输出。自身 try/catch fail-open（R-05：棘轮误伤的兜底就是什么都不做）。
+ * 知识收件箱横幅纯函数（2026-09-23 知识可见性 quick）：待审条数 > 0 即渲染（不再基线内静默——
+ * 用户反馈「聊天过程中完全不知道有待审知识」），标题直出聊天面（前 3 条 + 余量指引），超基线
+ * 升级 ⚠️ 前缀。零条目零输出（降噪：清空即静默）。已 export 供 test/knowledge-inbox.test.mjs。
+ */
+export function buildKnowledgeInboxLines({ count = 0, baseline = null, over = false, titles = [] } = {}) {
+  if (!Number.isFinite(count) || count <= 0) return []
+  const head = over
+    ? `\n⚠️  知识收件箱：uncategorized 待审 ${count} 条，超 knowledge-baseline 基线 ${baseline}（软警告不阻断）——请转达用户审阅，别只留在文件里`
+    : `\n📚 知识收件箱：uncategorized 待审 ${count} 条——请转达用户审阅，别只留在文件里`
+  const lines = [head]
+  const shown = titles.filter(Boolean).slice(0, 3)
+  shown.forEach((t, i) => lines.push(`   ${i + 1}. ${t}`))
+  if (count > shown.length) lines.push(`   …（另 ${count - shown.length} 条，sillyspec knowledge inbox 看全文）`)
+  lines.push(`   归类：sillyspec knowledge classify --title "…" --file conventions|patterns|known-issues.md`)
+  return lines
+}
+
+/** uncategorized 待审标题清单（前 limit+1 条，供横幅与余量计算）。fail-open：读失败空集。 */
+function listUncategorizedTitles(specBase, limit = 3) {
+  try {
+    const p = join(specBase, 'knowledge', 'uncategorized.md')
+    if (!existsSync(p)) return []
+    return parseUncategorizedEntries(readFileSync(p, 'utf8').replace(/\r\n/g, '\n'))
+      .slice(0, limit + 1).map((e) => e.title)
+  } catch { return [] }
+}
+
+/**
+ * 棘轮对比 + console 渲染（quick --done 与 archive 收尾共用）：over → 收件箱横幅 ⚠️ 升级形态；
+ * 基线内但有存量 → 📚 横幅（可见性修复：不再静默）；tightened → 📉 单行留痕；零条目零输出。
+ * 自身 try/catch fail-open（R-05：棘轮误伤的兜底就是什么都不做）。
  */
 function renderKnowledgeBaselineRatchet(specBase) {
   try {
     const r = checkKnowledgeBaselineRatchet(specBase)
     if (r && r.status === 'over') {
-      console.warn(`\n⚠️  knowledge/uncategorized.md 待归类 ${r.count} 条，超 knowledge-baseline 基线 ${r.baseline}（软警告不阻断）`)
-      console.warn(`   建议跑 sillyspec knowledge classify 逐条归类（待归类清单见 knowledge/uncategorized.md），条数降后基线自动收紧。`)
-    } else if (r && r.status === 'tightened') {
+      for (const l of buildKnowledgeInboxLines({ count: r.count, baseline: r.baseline, over: true, titles: listUncategorizedTitles(specBase) })) {
+        console.warn(l)
+      }
+      return
+    }
+    if (r && r.status === 'tightened') {
       console.log(`📉 knowledge-baseline 已自动收紧：${r.baseline} → ${r.count}（uncategorized 待归类条数下降）`)
+    }
+    // 可见性修复（2026-09-23 用户反馈）：基线内存量不再静默——有待审即出横幅，清空才静默
+    if (r && Number.isFinite(r.count) && r.count > 0) {
+      for (const l of buildKnowledgeInboxLines({ count: r.count, baseline: r.baseline, over: false, titles: listUncategorizedTitles(specBase) })) {
+        console.log(l)
+      }
     }
   } catch { /* 棘轮渲染失败零副作用（fail-open，R-05） */ }
 }
@@ -3034,7 +3072,7 @@ export async function liteArchiveChange({ pm, cwd, specBase, changeName, platfor
  * @returns {Promise<{distilled: boolean, frCount: number, decisionCount: number, archived: boolean, warnings: string[]}>}
  */
 export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName, linkedChanges = [], platformOpts = {} }) {
-  const out = { distilled: false, frCount: 0, decisionCount: 0, archived: false, warnings: [] }
+  const out = { distilled: false, frCount: 0, decisionCount: 0, archived: false, warnings: [], frFiles: [] }
   const realChanges = (linkedChanges || []).filter((c) => c && !QUICK_SID_RE.test(c))
   if (realChanges.length === 0) return out // 纯 quick：无关联真变更，零打扰
   try {
@@ -3060,7 +3098,7 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
         try {
           const { indexRequirements } = await import('../fr-index.js')
           const r = indexRequirements({ changeDir, knowledgeRoot, headHash: '' })
-          if (r && Array.isArray(r.written) && r.written.length > 0) { out.frCount += r.written.length; anyDistilled = true }
+          if (r && Array.isArray(r.written) && r.written.length > 0) { out.frCount += r.written.length; r.written.forEach((w) => { if (w && w.file && !out.frFiles.includes(w.file)) out.frFiles.push(w.file) }); anyDistilled = true }
         } catch (e) { out.warnings.push(`fr-index ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
       }
     }
@@ -3076,7 +3114,8 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
       } catch (e) { out.warnings.push(`lite 归档 ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
     }
     if (anyDistilled || out.archived) {
-      console.log(`📚 quick 资产尾：${out.frCount} 条 FR 入索引、${out.decisionCount} 条决策入 knowledge${out.archived ? '、linked 变更 lite 归档' : ''}（门禁后自动，agent 零新增命令）`)
+      const frDetail = out.frFiles.length > 0 ? `（${out.frFiles.join('、')}）` : ''
+      console.log(`📚 quick 资产尾：${out.frCount} 条 FR 入索引${frDetail}、${out.decisionCount} 条决策入 knowledge${out.archived ? '、linked 变更 lite 归档' : ''}（门禁后自动，agent 零新增命令）`)
     }
   } catch (e) {
     out.warnings.push(`蒸馏尾异常（fail-open 不拦 quick 完成）：${e && e.message ? e.message : e}`)

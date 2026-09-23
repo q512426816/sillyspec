@@ -575,6 +575,16 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       }
       return mod.cmdKnowledgeClassify(dir, args.slice(1), opts)
     }
+    case 'inbox': {
+      // 知识收件箱（2026-09-23 可见性 quick）：uncategorized 待审清单+基线状态按需视图，
+      // --json 结构化。纯读零副作用——配套 quick --done/归档收尾的收件箱横幅（complete-handlers）。
+      const mod = await tryImportSubcommandImpl('../knowledge-classify.js', 'knowledge-classify.js')
+      if (!mod || typeof mod.cmdKnowledgeInbox !== 'function') {
+        output(false, {}, { code: 'not_implemented', subcommand: 'inbox' })
+        return
+      }
+      return mod.cmdKnowledgeInbox(dir, args.slice(1), opts)
+    }
     case 'stats': {
       const mod = await tryImportSubcommandImpl('../knowledge-stats.js', 'knowledge-stats.js')
       if (!mod || typeof mod.cmdKnowledgeStats !== 'function') {
@@ -591,7 +601,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
       output(false, {}, {
         code: 'unknown_subcommand',
         subcommand: subCommand,
-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'stats'],
+        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats'],
       })
   }
 }

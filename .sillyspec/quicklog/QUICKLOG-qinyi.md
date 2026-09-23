@@ -212,3 +212,20 @@
 方案：①git-helper.js 双 execFileSync 点+commit-guard/docs-check/gate-snapshot/green-cache 四处 git 调用统一补 windowsHide true（跨平台安全）——detached 进程的 git 子进程不再创建控制台窗，闪窗根治。②watcher.js R3 基线豁免：applySentinelRules 首判轮以 prev 脏面拍 baselineDirty（水位重启场景 prev 即水位快照语义自洽），ruleScopeDrift 过滤基线文件——只对观测启动后新出现的声明面外文件告警。③哨兵总阀 env 参数 SILLYSPEC_SENTINEL=0 规则面零告警（watcher 照常记中性事件），与 SILLYSPEC_WATCHER=0/SILLYSPEC_WATCHER_PUSH=0 构成三级阀。④sync.md watcher 段落补登记（--no-docs 豁免其余三模块：windowsHide 纯选项无文档面）。commit-guard 属 hook 基线保护文件，改动仅一行 windowsHide，显式 --force-baseline
 结果：sentinel-rules 30/30（新增基线豁免正反例+总阀双条件例）+watcher 13/13+green-cache 7/7 回归零失败；六源文件 node --check 过；lint 761 文件未引用导出 0+module-map 覆盖全；--force-baseline 因 commit-guard 基线保护显式解锁（一行 windowsHide 纯选项）
 审计：[gate] L2（跨 4 模块 · 7 文件：5 代码/1 测试）advisory；模块文档认领已 --no-docs 显式豁免
+
+## ql-20260923-012-0ef3 | 2026-09-23 11:06:46 | 知识库可见性三件：收件箱横幅带标题（不再基线内静默）+ knowledge inbox 子命令 + quick 资产尾 FR 去处明细
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/complete-handlers.js（buildKnowledgeInboxLines 纯函数+棘轮渲染升级+资产尾 frFiles 明细（基线保护文件 --force-baseline 显式解锁））
+- src/knowledge-classify.js（parseUncategorizedEntries export+cmdKnowledgeInbox 新增）
+- src/stages/knowledge.js（inbox 二级路由+available 补录）
+- src/index.js（usage 行补 inbox）
+- test/knowledge-inbox.test.mjs（NEW 四例）
+- test/knowledge-baseline.test.mjs（超线文案断言随新契约更新）
+- .sillyspec/docs/sillyspec/modules/runtime.md（知识闭环段补可见性升级登记）
+需求：知识库可见性三件：收件箱横幅带标题（不再基线内静默）+ knowledge inbox 子命令 + quick 资产尾 FR 去处明细
+根因：用户实证：quick/变更执行中生成待审知识点或蒸馏出 FR 等资产时聊天面完全无感——旧披露只有两处且都不达标：基线棘轮警告只报条数不带标题（还得自己去开 uncategorized.md）、基线内存量条目完全静默、quick 资产尾只有计数无去处
+方案：①complete-handlers.js 新增纯函数 buildKnowledgeInboxLines（零条目零输出的降噪钉；超基线 ⚠️/基线内 📚 双形态；标题直出前 3 条+余量指引+classify 用法行），renderKnowledgeBaselineRatchet 升级为收件箱横幅——待审>0 即渲染（quick --done 与归档收尾两个共用点一次生效），清空才静默；②NEW 子命令 sillyspec knowledge inbox [--json]（cmdKnowledgeInbox：uncategorized 标题+ql 前缀+一行摘要+基线态，纯读零副作用；parseUncategorizedEntries 随之 export 供横幅与命令共用）；③quick 资产尾 FR 计数带去处文件清单（frFiles 去重数组，fr-index written 的 file 维度）；④usage 行补 inbox、runtime.md 模块卡登记（stages/knowledge.js 的 inbox 路由属其既有 dispatch 面，cli-entry/core-engine/stages 三模块仅经 index.js usage 行与路由表受及，--no-docs 豁免留痕）。complete-handlers 属基线保护文件，--force-baseline 显式解锁
+结果：knowledge-inbox 4/4（解析器双形态/横幅零输出钉+双形态+余量/inbox json 与人读+空态）+knowledge-baseline 5/5（176 行文案断言随契约更新，条数+基线值语义不变）+knowledge-classify 1/1 回归零失败；lint 762 文件未引用导出 0+module-map 覆盖全；真机冒烟：inbox 输出本仓 5 条真实待审带标题全文
+审计：[gate] L2（跨 4 模块 · 7 文件：4 代码/2 测试）advisory；模块文档认领已 --no-docs 显式豁免
