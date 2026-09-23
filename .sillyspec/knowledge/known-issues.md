@@ -5,12 +5,9 @@ created_at: 2026-06-19T12:40:00+08:00
 
 # Known Issues
 
-## sqljs-wasm-only
+## sqljs-wasm-only（已过期——引擎现为 node:sqlite，2026-09-23 勘误）
 
-项目使用 `sql.js`（WASM SQLite），不依赖 native SQLite binding。这意味着：
-- 无需系统级 SQLite 安装
-- WASM 加载有初始开销（首次约 100-200ms）
-- 不支持 SQLite 的某些 native 扩展（如 FTS5）
+~~项目使用 sql.js（WASM SQLite）~~——**历史状态**。进度库引擎已经过 sql.js → better-sqlite3 → **node:sqlite（DatabaseSync，src/db-engine.js 引擎抽象层）** 迁移：Node v22.13+ 内置原生 SQLite（免 flag，仍发 ExperimentalWarning），PRAGMA 逐条 exec（journal_mode=WAL + busy_timeout=5000 等在 db-engine 配置）。含义更新：多进程并发读写走 WAL（读并发+单写者+busy 重试）已具备，行级事务/乐观锁是原生能力，不再是 WASM 整文件载入/回写模型；native 扩展限制（FTS5 等）随引擎迁移解除，以 node:sqlite 实际编译面为准。勘误缘由：2026-09-23 会话按本条旧文误判并发模型（R11 预览账本设计讨论中被用户指出）。保留条目不删——引擎选型史与「知识条目须随实现迁移更新」的教训。
 
 ## Sub Package Isolation
 
