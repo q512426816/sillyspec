@@ -62,3 +62,20 @@ test('T2 端到端：改 add.js → deps 子集（只跑 add.test）；改无关
   assert.notEqual(r.mode, 'module-subset', 'B 不走 deps 子集')
   void r
 })
+
+test('T3 polyglot：Python 仓 deps 发现（service.py → from app.modules.x import 的测试命中，无关不命中）', async () => {
+  const fx = mk('deps-py-')
+  for (const d of ['backend/app/modules/platform_sync/tests', 'backend/app/modules/other/tests']) {
+    mkdirSync(join(fx, d), { recursive: true })
+  }
+  const wf = (p2, c) => writeFileSync(join(fx, p2), c)
+  wf('backend/app/modules/platform_sync/service.py', 'def f(): pass\n')
+  wf('backend/app/modules/platform_sync/schema.py', 'x = 1\n')
+  wf('backend/app/modules/other/api.py', 'def g(): pass\n')
+  wf('backend/app/modules/platform_sync/tests/test_service.py', 'from app.modules.platform_sync.service import f\nfrom app.modules.platform_sync import schema\n')
+  wf('backend/app/modules/other/tests/test_api.py', 'from app.modules.other.api import g\n')
+  const { discoverModuleDependentTests } = await import('../src/verify-postcheck.js')
+  const deps = discoverModuleDependentTests({ cwd: fx, changedFiles: ['backend/app/modules/platform_sync/service.py', 'backend/app/modules/platform_sync/schema.py'], coveredCommands: [] })
+  assert.ok(deps.includes('backend/app/modules/platform_sync/tests/test_service.py'), `命中本包测试（${deps.join(',')}）`)
+  assert.ok(!deps.includes('backend/app/modules/other/tests/test_api.py'), '无关包测试不命中')
+})

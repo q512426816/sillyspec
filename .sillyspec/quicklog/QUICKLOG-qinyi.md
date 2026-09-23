@@ -360,3 +360,14 @@
 根因：用户实测两轮对撞 verify 均卡死在 Temp 隔离快照（R9=venv junction 冻结 3MB/0CPU；R10=快照内慢跑 15min 仍在跑）。根因=隔离快照的立命前提（主仓共享工作区防并行脏文件）在 worktree 会话不成立——worktree 本身就是会话独占隔离；快照在此只剩纯成本（junction 冻结/慢 I/O/构建时延/双层 overlay）。openspec 无此问题正因它没有机器门禁
 方案：gate-snapshot.js 新导出 shouldSkipGateSnapshotForWorktree（路径归一 / 后匹配 /.sillyspec/.runtime/worktrees/<name>，跨平台双分隔符）；verify-quality-scan.js（noAI 质量扫描）与 quick-audit.js（quick 门禁）两处快照创建点前置判定，命中跳过并打🔀日志、直接在 worktree cwd 实测（与主仓 fallback 同构口径）；判定异常按不跳走原路（fail-safe）。主仓共享面行为零变化（worktree 外照建快照）
 结果：gate-snapshot-worktree-skip 1/1（8 断言：worktree 正反斜杠/深子目录 true、主仓/普通/runtime 其他子目录/空/null false）+gate-snapshot 族 9/9 回归+lint 774 未引用导出 0
+
+## ql-20260924-001-12f4 | 2026-09-24 01:34:41 | deps(auto) polyglot 泛化——Python 仓 import 图发现（治 JS-only 扫描零命中回退全量）
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（isTestFilePath/collectTestFiles/pythonImportCandidates 三新函数+discover 重写）
+- test/verify-deps-auto-default.test.mjs（T3 polyglot 例）
+需求：deps(auto) polyglot 泛化——Python 仓 import 图发现（治 JS-only 扫描零命中回退全量）
+根因：R10 实证：deps-auto-default 在 MP 后端（Python）未收窄——discoverModuleDependentTests 硬编码 sillyspec 自家形态（src/ 前缀 + JS import 串 + test/ 单层目录），Python 布局零命中→按设计回退全量 commands.test，R10 verify 又跑 27 分钟全量
+方案：三件泛化：①isTestFilePath 多语言测试判定（*.test/spec.[cm]js/ts + test_*.py/*_test.py）②collectTestFiles 递归收集（任意深度 tests?/ 目录，跳 node_modules/.venv/.git/dist/build/.runtime/.sillyspec，深度帽 6）③匹配双通道——JS 路径子串 + Python 点串导入族（pythonImportCandidates：变更 .py 的各级包后缀 from X import/import X 命中）；代码面不再限定 src/ 前缀
+结果：verify-deps-auto-default 3/3（新增 T3 polyglot：backend/app/.../service.py→from app.modules.x import 测试命中、无关包不命中）+verify 族 fail 0+test:core fail 0+lint 774 未引用导出 0

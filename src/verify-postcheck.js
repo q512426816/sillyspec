@@ -725,27 +725,65 @@ function parseFlowValue(flowText, key) {
  * @param {{cwd: string, changedFiles: string[], coveredCommands?: string[]}} args
  * @returns {string[]} 相对 cwd 的测试文件路径（posix 形态，已排序；无可发现 → []）
  */
+/**
+ * 测试文件判定（polyglot，2026-09-24 deps-auto 泛化）：JS/TS 测试（*.test/spec.[cm]js/ts）
+ * + Python 测试（test_*.py / *_test.py），任意目录深度（tests?/ 目录或散置均可）。
+ */
+function isTestFilePath(p) {
+  return /\.(test|spec)\.[cm]?(js|ts)$/.test(p) || /(^|\/)test_[^\/]+\.py$/.test(p) || /(^|\/)[^\/]+_test\.py$/.test(p)
+}
+
+/** 递归收集测试文件（跳过 node_modules/.venv/.git/dist/build/.runtime/.sillyspec，深度帽 6 层防野目录）。 */
+function collectTestFiles(rootDir, base = '', depth = 0, acc = []) {
+  if (depth > 6) return acc
+  let entries = []
+  try { entries = readdirSync(rootDir, { withFileTypes: true }) } catch { return acc }
+  for (const e of entries) {
+    if (['node_modules', '.venv', 'venv', '.git', 'dist', 'build', '.runtime', '.sillyspec'].includes(e.name)) continue
+    const rel = base ? `${base}/${e.name}` : e.name
+    if (e.isDirectory()) collectTestFiles(join(rootDir, e.name), rel, depth + 1, acc)
+    else if (isTestFilePath(rel)) acc.push(rel)
+  }
+  return acc
+}
+
+/** 变更 .py → 候选导入串（点串后缀族：完整模块及其各级包后缀——匹配 from X import / import X）。 */
+function pythonImportCandidates(changedPy) {
+  const parts = changedPy.replace(/\.py$/, '').split('/')
+  const out = new Set()
+  for (let take = 2; take <= parts.length; take++) {
+    out.add(parts.slice(parts.length - take).join('.'))
+  }
+  return [...out]
+}
+
 export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [] }) {
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
   const norm = (p) => String(p).replace(/\\/g, '/')
-  const changedSrc = [...new Set(changedFiles.map(norm))]
-    .filter(p => p.startsWith('src/') && /\.(js|mjs|cjs|ts)$/.test(p))
-  const changedTests = [...new Set(changedFiles.map(norm))]
-    .filter(p => /^test\//.test(p) && /\.test\.[cm]?js$/.test(p))
+  const changedAll = [...new Set(changedFiles.map(norm))]
+  // 代码面：非测试文件本身（JS/TS + Python 源——deps-auto 泛化，不再限定 src/ 前缀与自家目录形态）
+  const changedSrc = changedAll.filter(p => !isTestFilePath(p) && /\.(js|mjs|cjs|ts|tsx|py)$/.test(p))
+  const changedTests = changedAll.filter(p => isTestFilePath(p))
   if (changedSrc.length === 0 && changedTests.length === 0) return []
   const covered = coveredCommands.filter(Boolean).join(' ')
   const found = new Set()
-  const testDir = join(cwd, 'test')
-  let entries = []
-  try { entries = readdirSync(testDir) } catch { entries = [] }
-  for (const f of entries) {
-    if (!/\.test\.[cm]?js$/.test(f)) continue
-    if (covered.includes(f)) continue
+
+  const pyCandidates = new Set()
+  for (const src of changedSrc.filter(p => p.endsWith('.py'))) {
+    for (const d of pythonImportCandidates(src)) pyCandidates.add(d)
+  }
+  const jsSrc = changedSrc.filter(p => /\.(js|mjs|cjs|ts|tsx)$/.test(p))
+
+  for (const tf of collectTestFiles(cwd)) {
+    const fname = tf.split('/').pop()
+    if (covered.includes(fname) || covered.includes(tf)) continue
     let content = ''
-    try { content = readFileSync(join(testDir, f), 'utf8') } catch { continue }
-    for (const src of changedSrc) {
-      if (content.includes(`../${src}`)) { found.add(`test/${f}`); break }
+    try { content = readFileSync(join(cwd, tf), 'utf8') } catch { continue }
+    let hit = jsSrc.some(src => content.includes(src))
+    if (!hit) {
+      hit = [...pyCandidates].some(d => content.includes(`from ${d}`) || content.includes(`import ${d}`))
     }
+    if (hit) found.add(tf)
   }
   for (const t of changedTests) {
     const fname = t.split('/').pop()
