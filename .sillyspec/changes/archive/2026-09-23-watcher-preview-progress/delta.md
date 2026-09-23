@@ -1,5 +1,5 @@
 ---
-generated_at: 2026-09-23T11:09:43.334Z
+generated_at: 2026-09-23T11:12:37.602Z
 sources_reconcile: 命中（ran_at=2026-09-23T11:09:04.043Z，verify-runs 按 change 过滤取最新）
 sources_verify_facts: 命中
 sources_module_map: 命中
@@ -16,12 +16,12 @@ sources_decisions: 命中
 |---|---|---|
 | core-engine | active | 46 |
 | cli-entry | active | 11 |
+| runtime | active | 13 |
 | progress | active | 2 |
 | sync | active | 7 |
 | setup | active | 5 |
-| runtime | active | 12 |
 
-未匹配文件（不归属任何模块 paths，人工裁量）：src/preview-progress.js、test/preview-gate-isolation.test.mjs、test/preview-gc.test.mjs、test/preview-migration.test.mjs、test/preview-outlet.test.mjs、test/preview-progress.test.mjs、.sillyspec/docs/sillyspec/modules/_module-map.yaml、.sillyspec/docs/sillyspec/modules/cli-entry.md、.sillyspec/docs/sillyspec/modules/core-engine.md、.sillyspec/docs/sillyspec/modules/progress.md、.sillyspec/docs/sillyspec/modules/sync.md、.sillyspec/local.yaml.example、package.json、test/change-ownership-guards.test.mjs、test/gate-files-merge.test.mjs、test/platform-sync-schema.test.mjs、test/platform-sync-serialization.test.mjs、test/test-timeout-config.test.mjs
+未匹配文件（不归属任何模块 paths，人工裁量）：test/preview-gate-isolation.test.mjs、test/preview-gc.test.mjs、test/preview-migration.test.mjs、test/preview-outlet.test.mjs、test/preview-progress.test.mjs、.sillyspec/docs/sillyspec/modules/_module-map.yaml、.sillyspec/docs/sillyspec/modules/cli-entry.md、.sillyspec/docs/sillyspec/modules/core-engine.md、.sillyspec/docs/sillyspec/modules/progress.md、.sillyspec/docs/sillyspec/modules/sync.md、.sillyspec/local.yaml.example、package.json、test/change-ownership-guards.test.mjs、test/gate-files-merge.test.mjs、test/platform-sync-schema.test.mjs、test/platform-sync-serialization.test.mjs、test/test-timeout-config.test.mjs
 
 ### 声明域并集（decisions.md 模块域）
 
@@ -37,7 +37,7 @@ sources_decisions: 命中
 | src/doctor-diagnostics.js | core-engine |
 | src/handoff.js | cli-entry |
 | src/index.js | cli-entry |
-| src/preview-progress.js | —（未匹配） |
+| src/preview-progress.js | runtime |
 | src/progress.js | progress |
 | src/progress/change-registry.js | progress、bin |
 | src/watcher.js | sync |
@@ -93,8 +93,8 @@ sources_decisions: 命中
 
 ### scan 刷新建议
 
-- `sillyspec scan facts` 下次刷新重点关注：core-engine、cli-entry、progress、sync、setup、runtime（共 6 个模块）
-- 未匹配文件补录提示：以下文件未命中任何模块 paths——建议补录 _module-map.yaml（新文件）或核对归属（人工裁量）：src/preview-progress.js、test/preview-gate-isolation.test.mjs、test/preview-gc.test.mjs、test/preview-migration.test.mjs、test/preview-outlet.test.mjs、test/preview-progress.test.mjs、.sillyspec/docs/sillyspec/modules/_module-map.yaml、.sillyspec/docs/sillyspec/modules/cli-entry.md、.sillyspec/docs/sillyspec/modules/core-engine.md、.sillyspec/docs/sillyspec/modules/progress.md、.sillyspec/docs/sillyspec/modules/sync.md、.sillyspec/local.yaml.example、package.json、test/change-ownership-guards.test.mjs、test/gate-files-merge.test.mjs、test/platform-sync-schema.test.mjs、test/platform-sync-serialization.test.mjs、test/test-timeout-config.test.mjs
+- `sillyspec scan facts` 下次刷新重点关注：core-engine、cli-entry、runtime、progress、sync、setup（共 6 个模块）
+- 未匹配文件补录提示：以下文件未命中任何模块 paths——建议补录 _module-map.yaml（新文件）或核对归属（人工裁量）：test/preview-gate-isolation.test.mjs、test/preview-gc.test.mjs、test/preview-migration.test.mjs、test/preview-outlet.test.mjs、test/preview-progress.test.mjs、.sillyspec/docs/sillyspec/modules/_module-map.yaml、.sillyspec/docs/sillyspec/modules/cli-entry.md、.sillyspec/docs/sillyspec/modules/core-engine.md、.sillyspec/docs/sillyspec/modules/progress.md、.sillyspec/docs/sillyspec/modules/sync.md、.sillyspec/local.yaml.example、package.json、test/change-ownership-guards.test.mjs、test/gate-files-merge.test.mjs、test/platform-sync-schema.test.mjs、test/platform-sync-serialization.test.mjs、test/test-timeout-config.test.mjs
 
 ### 端点基线提示
 
