@@ -383,7 +383,14 @@
 方案：buildDepsBatches：扩展名分组+变更测试优先+30 帽按组比例+pytest 前缀自模块命令推断，双批聚合 deps(pyN+jsM)
 结果：T4 双语言例+全族 4/4+test:core fail 0+lint 774 绿
 
-## ql-20260924-003-d8cb | 2026-09-24 03:49:50 | verify 对账 declared-rescue（变更分支锚定）+modules 块状解析——R9/R11 四连拦与文案矛盾根治
-状态：进行中
+## ql-20260924-003-d8cb | 2026-09-24 03:49:50 | verify 对账分支锚定救赎+modules 块状解析（R9/R11 终修）
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：
+- src/verify-postcheck.js（B4+救赎+块状解析）
+- test/modules-block-form.test.mjs（NEW）
+- test/plan-target-files.test.mjs（D7）
+需求：verify 对账分支锚定救赎+modules 块状解析（R9/R11 终修）
+根因：R9 三连拦+R11 四连拦逼出规则 23 reset（对账只认 porcelain 与 per-task commit 死锁）；modules 块状判无效回退全量
+方案：B4 commitWindowFiles 锚定变更分支 log+消费方 declared-rescue（窗口∩declared，不扩 undeclared）；extractModules 块状子行解析
+结果：plan-target-files D7 正负例+modules-block-form 3/3+test:core fail 0+lint 775 绿
