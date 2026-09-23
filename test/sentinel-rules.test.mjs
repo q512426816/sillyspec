@@ -20,6 +20,7 @@ import { join } from 'node:path'
 const {
   applySentinelRules, createSentinelState, inferEvents, buildSnapshot,
   parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText,
+  mergeCommitEvidence,
   loadSnapshotWatermark, writeSnapshotWatermark, watcherSnapshotPath,
   STALL_EARLY_MS, STALL_EXECUTE_MS,
 } = await import('../src/watcher.js')
@@ -392,5 +393,53 @@ test('buildSnapshot 注入面：gitLogImpl/porcelainImpl 产出哨兵字段（�
     const fail = buildSnapshot({ changeDir, cwd: root, runtimeRoot, changeName: 'c1', gitHeadImpl: () => null, gitLogImpl: () => null, porcelainImpl: () => null })
     assert.equal(fail.commits, null)
     assert.equal(fail.dirtyCode, null)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('mergeCommitEvidence：hash 判重并集（apply 后同提交两面可达不双计）', () => {
+  const a = [{ hash: 'h1', subject: 's1', files: ['a.js'] }, { hash: 'h2', subject: 's2', files: [] }]
+  const b = [{ hash: 'h2', subject: 's2-rewrite', files: ['x.js'] }, { hash: 'h3', subject: 's3', files: ['b.js'] }]
+  const merged = mergeCommitEvidence(a, b)
+  assert.deepEqual(merged.map((c) => c.hash), ['h1', 'h2', 'h3'])
+  assert.equal(merged[1].subject, 's2', 'hash 已见保 base 原样（先到为准）')
+  assert.deepEqual(mergeCommitEvidence(null, b).map((c) => c.hash), ['h2', 'h3'])
+  assert.deepEqual(mergeCommitEvidence(a, null).map((c) => c.hash), ['h1', 'h2'])
+  assert.deepEqual(mergeCommitEvidence(null, null), [])
+})
+
+test('buildSnapshot worktree 分支证据并入：task 提交在分支上不再漏判假勾选（2026-09-23 误报实证）', () => {
+  const root = mkdtempSync(join(tmpdir(), 'bs-wt-'))
+  try {
+    const changeDir = join(root, 'changes', 'c1')
+    mkdirSync(changeDir, { recursive: true })
+    const runtimeRoot = join(root, '.runtime')
+    mkdirSync(runtimeRoot, { recursive: true })
+    const base = { changeDir, cwd: root, runtimeRoot, changeName: 'c1', gitHeadImpl: () => 'aaa1111' }
+    // 主仓 log 只有一个无关提交；worktree 分支上挂着 task-01 提交 → 并入后 R1 有证据
+    const s = buildSnapshot({
+      ...base,
+      gitLogImpl: () => 'aaa1111|chore: 无关提交\nsrc/x.js\n',
+      gitLogWorktreeImpl: () => 'fff0001|task-01 平台事件表\nbackend/a.py\n\nfff0002|task-02 service\nbackend/b.py\n',
+      porcelainImpl: () => '',
+    })
+    assert.deepEqual(s.commits.map((c) => c.hash), ['aaa1111', 'fff0001', 'fff0002'])
+    assert.ok(s.commits[1].subject.startsWith('task-01'))
+    // 分支缺失（git 失败 null）/空输出 → 主仓结果原样（fail-open）
+    const miss = buildSnapshot({ ...base, gitLogImpl: () => 'aaa1111|chore: 无关提交\n', gitLogWorktreeImpl: () => null, porcelainImpl: () => '' })
+    assert.deepEqual(miss.commits.map((c) => c.hash), ['aaa1111'])
+    const empty = buildSnapshot({ ...base, gitLogImpl: () => 'aaa1111|chore: 无关提交\n', gitLogWorktreeImpl: () => '', porcelainImpl: () => '' })
+    assert.deepEqual(empty.commits.map((c) => c.hash), ['aaa1111'])
+    // 只注入 gitLogImpl（未注入 worktree 面）→ 不追真 git，主仓结果原样（测试零真仓约定）
+    const solo = buildSnapshot({ ...base, gitLogImpl: () => 'aaa1111|chore: 无关提交\n', porcelainImpl: () => '' })
+    assert.deepEqual(solo.commits.map((c) => c.hash), ['aaa1111'])
+    // 主源失败 null → commits 保持 null（fail-open 语义不因分支面改变）
+    const failMain = buildSnapshot({ ...base, gitLogImpl: () => null, gitLogWorktreeImpl: () => 'fff0001|task-01 x\n', porcelainImpl: () => '' })
+    assert.equal(failMain.commits, null)
+    // 端到端：翻格 task-01 + 证据仅在并入的分支提交里 → R1 静默
+    const prev = snap({ ts: 1, files: { 'tasks.md': { hash: 'x', checked: 0, total: 2, checkedTasks: [] } } })
+    const next = snap({ ts: 2, head: 'fff0001', commits: s.commits, files: { 'tasks.md': { hash: 'y', checked: 1, total: 2, checkedTasks: ['task-01'] } } })
+    const warnings = applySentinelRules({ prev, next, baseEvents: [], state: createSentinelState(1), now: 2 }).warnings
+      .filter((w) => w.rule === 'fake-check')
+    assert.equal(warnings.length, 0, '分支提交并入后假勾选不再误报')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

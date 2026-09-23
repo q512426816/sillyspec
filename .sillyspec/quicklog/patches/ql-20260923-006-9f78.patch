@@ -1,0 +1,141 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index 7b0b7000..8caaaef7 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -13,7 +13,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同
+ 
+ `src/spec-sync.js`（2026-08-17 spec-file-incremental-sync 起）：CLI 直跑场景的 spec 文件树增量同步——以服务器清单为锚 walk/hash/diff 后只推送变化文件（add/update/delete/rename），复用 daemon 排除口径（local.yaml 不上传、worktrees 剪枝）。并行会话 fail-closed 护栏（2026-08-28 ql-20260828-003）：`computeSpecOps` changes/ 整删守卫（本地树非空但 changes/ 全空而服务器有 → 跳过防误删）+ `filterStaleUpdates` 旧副本回推守卫（.runtime/spec-sync-last-success.json 时间锚——本地自上次同步未改动而服务器已前进的 update 拦下，重存后重推为强制出口）。
+ 
+-`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（28 例）。2026-09-23 quick（watcher-alerts）补纯读出口：`watcherEventsPath`/`readWatcherEvents`（jsonl 解析+告警过滤（kind/severity 双字段容差）+坏行容忍计数，readKnowledgeHits 先例），CLI 面 `sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]`（缺省 warning-only，--follow 2s 轮询增量打印）；测试锚：test/watcher-alerts.test.mjs（10 例）。
++`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。提交证据并入 worktree 分支（2026-09-23 quick ql-20260923-006：`sillyspec/<change>` 分支 log 与主仓 log 按 hash 去重并集 `mergeCommitEvidence`——apply 前任务提交只在分支上，主仓 log 盲区曾致 change-events-channel 流 R1 全量误报；分支缺失/git 失败 fail-open 不动主仓结果）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（30 例）。2026-09-23 quick（watcher-alerts）补纯读出口：`watcherEventsPath`/`readWatcherEvents`（jsonl 解析+告警过滤（kind/severity 双字段容差）+坏行容忍计数，readKnowledgeHits 先例），CLI 面 `sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]`（缺省 warning-only，--follow 2s 轮询增量打印）；测试锚：test/watcher-alerts.test.mjs（10 例）。
+ 
+ ## 当前设计
+ `SyncManager` 是独立于 `ProgressManager` 的同步管理类，由 `run.js` 和 `index.js` 调用。设计遵循 "Best Effort" 原则：所有网络失败仅 `console.warn`，不抛错、不阻塞主流程。
+diff --git a/src/watcher.js b/src/watcher.js
+index 773df5c5..0025cc7e 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -161,6 +161,21 @@ export function parseGitLogWithFiles(text) {
+   return commits;
+ }
+ 
++/**
++ * 提交证据并集（hash 判重，保序追加）：worktree 分支提交与主仓 log 合并——
++ * apply/merge 后同一提交从两面都可达，hash 判重防双计（newCommitsBetween 同键）。
++ */
++export function mergeCommitEvidence(base, extra) {
++  const out = [...(base || [])];
++  const seen = new Set(out.map((c) => c && c.hash).filter(Boolean));
++  for (const c of extra || []) {
++    if (!c || !c.hash || seen.has(c.hash)) continue;
++    seen.add(c.hash);
++    out.push(c);
++  }
++  return out;
++}
++
+ /** porcelain → 代码脏路径清单（重命名取新路径；剔非代码面；排序去重）。 */
+ export function parsePorcelainCodePaths(porcelain) {
+   const seen = new Set();
+@@ -203,7 +218,7 @@ function collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl) {
+  *   哨兵四源（git 失败 → commits/dirtyCode null，规则 fail-open）；全部 JSON 可序列化
+  *   （水位回补落盘依赖）。
+  */
+-export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, readdirSyncImpl = readdirSync, gitHeadImpl, gitLogImpl, porcelainImpl }) {
++export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, readdirSyncImpl = readdirSync, gitHeadImpl, gitLogImpl, gitLogWorktreeImpl, porcelainImpl }) {
+   const snap = { ts: Date.now(), archived: false, head: null, files: {}, scan: null, commits: null, dirtyCode: null, scanStatus: null, reviews: {} };
+   if (!existsSync(changeDir)) {
+     snap.archived = true;
+@@ -234,13 +249,21 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
+     const out = gitQuiet(cwd, ['rev-parse', '--short', 'HEAD']);
+     snap.head = typeof out === 'string' && out.trim() ? out.trim() : null;
+   }
+-  // 哨兵源一：区间新提交（hash/subject/触及文件，单次 git log 调用同取两面）
+-  if (typeof gitLogImpl === 'function') {
+-    const out = gitLogImpl();
+-    snap.commits = out == null ? null : parseGitLogWithFiles(out);
+-  } else {
+-    const out = gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only']);
+-    snap.commits = out == null ? null : parseGitLogWithFiles(out);
++  // 哨兵源一：区间新提交（hash/subject/触及文件，单次 git log 调用同取两面）。worktree 模式下
++  // 任务提交先落 sillyspec/<change> 分支、apply 前主仓 log 不可见（2026-09-23 假勾选误报实证：
++  // change-events-channel 流 8 个 task 提交全在分支上，R1 两拍全误报），同仓分支 ref 主仓可直读
++  // ——按 hash 去重并入；分支不存在/git 失败 → null 不动（fail-open）。注入面只给 gitLogImpl 时
++  // 不追真 git（测试零真仓约定）：worktree 面要么注入 gitLogWorktreeImpl，要么走真 git 路径。
++  const injectedLog = typeof gitLogImpl === 'function';
++  const mainLog = injectedLog
++    ? gitLogImpl()
++    : gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only']);
++  snap.commits = mainLog == null ? null : parseGitLogWithFiles(mainLog);
++  if (snap.commits != null && changeName && (!injectedLog || typeof gitLogWorktreeImpl === 'function')) {
++    const wtLog = typeof gitLogWorktreeImpl === 'function'
++      ? gitLogWorktreeImpl()
++      : gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only', `sillyspec/${changeName}`]);
++    if (wtLog) snap.commits = mergeCommitEvidence(snap.commits, parseGitLogWithFiles(wtLog));
+   }
+   // 哨兵源二：工作树代码脏面（范围漂移/test-tamper 工作树证据）
+   if (typeof porcelainImpl === 'function') {
+diff --git a/test/sentinel-rules.test.mjs b/test/sentinel-rules.test.mjs
+index 76f075a1..9a34d4bf 100644
+--- a/test/sentinel-rules.test.mjs
++++ b/test/sentinel-rules.test.mjs
+@@ -20,6 +20,7 @@ import { join } from 'node:path'
+ const {
+   applySentinelRules, createSentinelState, inferEvents, buildSnapshot,
+   parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText,
++  mergeCommitEvidence,
+   loadSnapshotWatermark, writeSnapshotWatermark, watcherSnapshotPath,
+   STALL_EARLY_MS, STALL_EXECUTE_MS,
+ } = await import('../src/watcher.js')
+@@ -394,3 +395,51 @@ test('buildSnapshot 注入面：gitLogImpl/porcelainImpl 产出哨兵字段（
+     assert.equal(fail.dirtyCode, null)
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++test('mergeCommitEvidence：hash 判重并集（apply 后同提交两面可达不双计）', () => {
++  const a = [{ hash: 'h1', subject: 's1', files: ['a.js'] }, { hash: 'h2', subject: 's2', files: [] }]
++  const b = [{ hash: 'h2', subject: 's2-rewrite', files: ['x.js'] }, { hash: 'h3', subject: 's3', files: ['b.js'] }]
++  const merged = mergeCommitEvidence(a, b)
++  assert.deepEqual(merged.map((c) => c.hash), ['h1', 'h2', 'h3'])
++  assert.equal(merged[1].subject, 's2', 'hash 已见保 base 原样（先到为准）')
++  assert.deepEqual(mergeCommitEvidence(null, b).map((c) => c.hash), ['h2', 'h3'])
++  assert.deepEqual(mergeCommitEvidence(a, null).map((c) => c.hash), ['h1', 'h2'])
++  assert.deepEqual(mergeCommitEvidence(null, null), [])
++})
++
++test('buildSnapshot worktree 分支证据并入：task 提交在分支上不再漏判假勾选（2026-09-23 误报实证）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'bs-wt-'))
++  try {
++    const changeDir = join(root, 'changes', 'c1')
++    mkdirSync(changeDir, { recursive: true })
++    const runtimeRoot = join(root, '.runtime')
++    mkdirSync(runtimeRoot, { recursive: true })
++    const base = { changeDir, cwd: root, runtimeRoot, changeName: 'c1', gitHeadImpl: () => 'aaa1111' }
++    // 主仓 log 只有一个无关提交；worktree 分支上挂着 task-01 提交 → 并入后 R1 有证据
++    const s = buildSnapshot({
++      ...base,
++      gitLogImpl: () => 'aaa1111|chore: 无关提交\nsrc/x.js\n',
++      gitLogWorktreeImpl: () => 'fff0001|task-01 平台事件表\nbackend/a.py\n\nfff0002|task-02 service\nbackend/b.py\n',
++      porcelainImpl: () => '',
++    })
++    assert.deepEqual(s.commits.map((c) => c.hash), ['aaa1111', 'fff0001', 'fff0002'])
++    assert.ok(s.commits[1].subject.startsWith('task-01'))
++    // 分支缺失（git 失败 null）/空输出 → 主仓结果原样（fail-open）
++    const miss = buildSnapshot({ ...base, gitLogImpl: () => 'aaa1111|chore: 无关提交\n', gitLogWorktreeImpl: () => null, porcelainImpl: () => '' })
++    assert.deepEqual(miss.commits.map((c) => c.hash), ['aaa1111'])
++    const empty = buildSnapshot({ ...base, gitLogImpl: () => 'aaa1111|chore: 无关提交\n', gitLogWorktreeImpl: () => '', porcelainImpl: () => '' })
++    assert.deepEqual(empty.commits.map((c) => c.hash), ['aaa1111'])
++    // 只注入 gitLogImpl（未注入 worktree 面）→ 不追真 git，主仓结果原样（测试零真仓约定）
++    const solo = buildSnapshot({ ...base, gitLogImpl: () => 'aaa1111|chore: 无关提交\n', porcelainImpl: () => '' })
++    assert.deepEqual(solo.commits.map((c) => c.hash), ['aaa1111'])
++    // 主源失败 null → commits 保持 null（fail-open 语义不因分支面改变）
++    const failMain = buildSnapshot({ ...base, gitLogImpl: () => null, gitLogWorktreeImpl: () => 'fff0001|task-01 x\n', porcelainImpl: () => '' })
++    assert.equal(failMain.commits, null)
++    // 端到端：翻格 task-01 + 证据仅在并入的分支提交里 → R1 静默
++    const prev = snap({ ts: 1, files: { 'tasks.md': { hash: 'x', checked: 0, total: 2, checkedTasks: [] } } })
++    const next = snap({ ts: 2, head: 'fff0001', commits: s.commits, files: { 'tasks.md': { hash: 'y', checked: 1, total: 2, checkedTasks: ['task-01'] } } })
++    const warnings = applySentinelRules({ prev, next, baseEvents: [], state: createSentinelState(1), now: 2 }).warnings
++      .filter((w) => w.rule === 'fake-check')
++    assert.equal(warnings.length, 0, '分支提交并入后假勾选不再误报')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})

@@ -161,6 +161,21 @@ export function parseGitLogWithFiles(text) {
   return commits;
 }
 
+/**
+ * 提交证据并集（hash 判重，保序追加）：worktree 分支提交与主仓 log 合并——
+ * apply/merge 后同一提交从两面都可达，hash 判重防双计（newCommitsBetween 同键）。
+ */
+export function mergeCommitEvidence(base, extra) {
+  const out = [...(base || [])];
+  const seen = new Set(out.map((c) => c && c.hash).filter(Boolean));
+  for (const c of extra || []) {
+    if (!c || !c.hash || seen.has(c.hash)) continue;
+    seen.add(c.hash);
+    out.push(c);
+  }
+  return out;
+}
+
 /** porcelain → 代码脏路径清单（重命名取新路径；剔非代码面；排序去重）。 */
 export function parsePorcelainCodePaths(porcelain) {
   const seen = new Set();
@@ -203,7 +218,7 @@ function collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl) {
  *   哨兵四源（git 失败 → commits/dirtyCode null，规则 fail-open）；全部 JSON 可序列化
  *   （水位回补落盘依赖）。
  */
-export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, readdirSyncImpl = readdirSync, gitHeadImpl, gitLogImpl, porcelainImpl }) {
+export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFileSyncImpl = readFileSync, statSyncImpl = statSync, readdirSyncImpl = readdirSync, gitHeadImpl, gitLogImpl, gitLogWorktreeImpl, porcelainImpl }) {
   const snap = { ts: Date.now(), archived: false, head: null, files: {}, scan: null, commits: null, dirtyCode: null, scanStatus: null, reviews: {} };
   if (!existsSync(changeDir)) {
     snap.archived = true;
@@ -234,13 +249,21 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
     const out = gitQuiet(cwd, ['rev-parse', '--short', 'HEAD']);
     snap.head = typeof out === 'string' && out.trim() ? out.trim() : null;
   }
-  // 哨兵源一：区间新提交（hash/subject/触及文件，单次 git log 调用同取两面）
-  if (typeof gitLogImpl === 'function') {
-    const out = gitLogImpl();
-    snap.commits = out == null ? null : parseGitLogWithFiles(out);
-  } else {
-    const out = gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only']);
-    snap.commits = out == null ? null : parseGitLogWithFiles(out);
+  // 哨兵源一：区间新提交（hash/subject/触及文件，单次 git log 调用同取两面）。worktree 模式下
+  // 任务提交先落 sillyspec/<change> 分支、apply 前主仓 log 不可见（2026-09-23 假勾选误报实证：
+  // change-events-channel 流 8 个 task 提交全在分支上，R1 两拍全误报），同仓分支 ref 主仓可直读
+  // ——按 hash 去重并入；分支不存在/git 失败 → null 不动（fail-open）。注入面只给 gitLogImpl 时
+  // 不追真 git（测试零真仓约定）：worktree 面要么注入 gitLogWorktreeImpl，要么走真 git 路径。
+  const injectedLog = typeof gitLogImpl === 'function';
+  const mainLog = injectedLog
+    ? gitLogImpl()
+    : gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only']);
+  snap.commits = mainLog == null ? null : parseGitLogWithFiles(mainLog);
+  if (snap.commits != null && changeName && (!injectedLog || typeof gitLogWorktreeImpl === 'function')) {
+    const wtLog = typeof gitLogWorktreeImpl === 'function'
+      ? gitLogWorktreeImpl()
+      : gitQuiet(cwd, ['log', '-20', '--format=%h|%s', '--name-only', `sillyspec/${changeName}`]);
+    if (wtLog) snap.commits = mergeCommitEvidence(snap.commits, parseGitLogWithFiles(wtLog));
   }
   // 哨兵源二：工作树代码脏面（范围漂移/test-tamper 工作树证据）
   if (typeof porcelainImpl === 'function') {

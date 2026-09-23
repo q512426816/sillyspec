@@ -1,0 +1,72 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-75161a0f",
+  "totals": {
+    "files": 3,
+    "additions": 81,
+    "deletions": 9
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/sync.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/watcher.js",
+      "declared": true,
+      "additions": 31,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/sentinel-rules.test.mjs",
+      "declared": true,
+      "additions": 49,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 3,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "sync",
+        "files": [
+          "src/watcher.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/sentinel-rules.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-006-9f78",
+  "sessionId": "quick-75161a0f",
+  "savedAt": "2026-09-23T00:17:24.580Z",
+  "patchSha256": "050437c0d2c028db2c331e0f88bcba10ac9d73e64d378faad9cb3818a30d6e30",
+  "patchStatus": "ok"
+}
