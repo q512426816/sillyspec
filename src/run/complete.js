@@ -767,7 +767,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
         console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
       } else {
-        console.log(`💡 瘦会话模式：下一阶段可在新会话续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——省肥上下文重发税`)
+        console.log(`💡 瘦会话模式：下一阶段可在新会话/子代理续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——CLI prompt 自足，verify/archive 尤其适合（读盘即恢复，R11 实测可省 24% 总 token）`)
       }
     }
 
