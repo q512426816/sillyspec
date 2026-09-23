@@ -114,3 +114,7 @@ detached/无控制台进程（watcher、bg-sync）派生的控制台子程序（
 ## 进度库引擎 = node:sqlite（Node 内置原生 SQLite——非 WASM、非 npm 原生模块）
 
 src/db-engine.js 是唯一换引擎点（方案 B/D-002）：封装 node:sqlite DatabaseSync（Node v22.13+ 免 flag，仍发 ExperimentalWarning），消解 better-sqlite3→node:sqlite 三缺口（pragma→exec / transaction→手写 SAVEPOINT 栈 / pluck→Object.values）；WAL + busy_timeout=5000 经 applyPragmas 逐条 exec，BUSY 退避重试在 db.js wrapper 外层。选型史：sql.js（WASM 全内存 load/save）→ better-sqlite3（npm 原生绑定）→ **node:sqlite（内置原生——零外部 sqlite 依赖，跨三平台免编译约束的最终形态）**。并发语义按原生 SQLite 理解：多进程读并发 + 单写者 + busy 重试是现成能力，勿按 WASM 整文件模型推断（旧模型是 last-writer-wins lost update 根因，2026-08 已根治）。文档纪律：引擎类根本事实迁移时 known-issues/模块卡/架构账须同步过一遍——2026-09-23 实证三层只跟一层（known-issues 停在 sql.js、core-engine 卡停在 better-sqlite3、源码已是 node:sqlite），预览账本设计讨论中被误引。
+
+## 换会话的编排权在平台/用户——会话不能自建会话（CLI 只产信号与接力载荷）
+
+架构约束（用户既定决策，2026-09-23 再次明确）：agent 会话本身**不能创建新会话**——「跨阶段 handoff 换瘦会话」类方案不得默认 agent 自己开新会话续跑（R9 后 token 减负方案初版犯过此错）。正确分工：①CLI/agent 侧只做两件事——检测该换会话的信号（同会话连续多阶段/肥上下文累积）+ 用 \`sillyspec handoff\` 生成接力块；②新会话的创建者是**平台**（SillyHub session-fork 基建：2026-09-22-session-fork-continuation 的 fork 端点/种子/轮级入口/谱系——平台可以创建会话）或**用户**（人工开新会话贴接力块，Wave 边界既有 advisory 即此形态）。平台侧自动 fork 是后期方向：CLI 落结构化信号（marker/event），平台 daemon 消费后建会话注入接力块——与 events channel 消费端衔接。方案表述纪律：写「建议新会话续跑」类提示时必须写明动作主体是用户或平台，不是 agent。（来源：用户 2026-09-23 纠正；patterns.md 对撞度量条目姊妹约束）

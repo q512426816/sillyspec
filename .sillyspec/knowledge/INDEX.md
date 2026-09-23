@@ -30,6 +30,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - execution|mode|缺省|main|直写|verify → [conventions.md#execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）](conventions.md#execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）)
 - detached|长驻子进程必须有独立于|spawn|环境的自杀条件|41|孤儿 → [conventions.md#detached 长驻子进程必须有独立于 spawn 环境的自杀条件（41 孤儿 watcher 泄漏实证）](conventions.md#detached 长驻子进程必须有独立于 spawn 环境的自杀条件（41 孤儿 watcher 泄漏实证）)
 - 进度库引擎|node|sqlite|Node|内置原生|SQLite → [conventions.md#进度库引擎 = node:sqlite（Node 内置原生 SQLite——非 WASM、非 npm 原生模块）](conventions.md#进度库引擎 = node:sqlite（Node 内置原生 SQLite——非 WASM、非 npm 原生模块）)
+- handoff|新会话|session fork|换瘦会话|平台|编排权|接力块|上下文分段 → [conventions.md#换会话的编排权在平台/用户——会话不能自建会话（CLI 只产信号与接力载荷）](conventions.md#换会话的编排权在平台/用户——会话不能自建会话（CLI 只产信号与接力载荷）)
 ## Patterns
 - 阶段定义|stage|stages → [patterns.md#stage-step-pattern](patterns.md#stage-step-pattern)
 - 数据库|SQLite|sql.js|DB → [patterns.md#database-first](patterns.md#database-first)
