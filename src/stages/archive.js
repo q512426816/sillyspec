@@ -87,6 +87,8 @@ export const definition = {
    \`sillyspec run archive --done --confirm --output "确认归档"\`
 8. CLI 会创建 \`.sillyspec/changes/archive/\`，并将变更目录移动到 \`.sillyspec/changes/archive/<原变更名>/\`
 
+9. **收口输出转达义务**（知识可见性契约，2026-09-23）：--confirm 收口输出里若出现「📚/⚠️ 知识收件箱」横幅（uncategorized 待审知识标题清单），必须在最终回复中**原文转达用户**——CLI 输出用户不可见，你的转述是用户看到它的唯一通道；未出现则不提及（不得编造）。
+
 ### 输出
 归档完成 + archive 目录路径`,
       outputHint: '归档确认',
