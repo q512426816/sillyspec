@@ -77,6 +77,30 @@ const OUTPUT_TAIL_CHARS = 4000
 const FAILURE_LEDGER_MAX_LINES = 200
 const FAILURE_LEDGER_MAX_CHARS = 300
 
+// ── 子进程输出解码（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，2026-09-23）──
+// zh-Windows 的 cmd 报错（'X' 不是内部或外部命令…）按控制台代码页（GBK/CP936）输出，
+// execSync encoding:'utf8' 直接解出乱码——CNF 签名匹配失效 + 门禁失败输出不可读（坑文档
+// 原话「乱码一行难归因」）。修法：buffer 捕获 + 本函数智能解码——utf8 无损（零 U+FFFD）
+// 优先原样返回；含替换符时试 GBK 解码取更优（Node full-icu 内置，无则维持 utf8 口径）。
+// ASCII/合法 UTF-8（vitest/pytest 等）输出与旧口径逐字节一致，零行为变化。
+let _gbkDecoder = null
+export function decodeShellOutput(buf) {
+  if (buf == null) return ''
+  if (typeof buf === 'string') return buf
+  const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
+  if (b.length === 0) return ''
+  const utf8 = b.toString('utf8')
+  const utf8Bad = (utf8.match(/\ufffd/g) || []).length
+  if (utf8Bad === 0) return utf8
+  try {
+    if (!_gbkDecoder) _gbkDecoder = new TextDecoder('gbk')
+    const gbk = _gbkDecoder.decode(b)
+    const gbkBad = (gbk.match(/\ufffd/g) || []).length
+    if (gbkBad < utf8Bad) return gbk
+  } catch { /* 无 full-icu（小体积构建）→ 维持 utf8 口径，CNF 兜底签名接手 */ }
+  return utf8
+}
+
 /** 失败行台账截断（落盘/展示用；判账本身不受影响）。export 供 test 验证截断语义 */
 export function capFailureLedger(lines) {
   if (!Array.isArray(lines) || lines.length === 0) return []
@@ -254,25 +278,40 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
   let output = ''
   let reason = null
   try {
-    output = execSync(command, {
+    output = decodeShellOutput(execSync(command, {
       cwd,
-      encoding: 'utf8',
+      encoding: 'buffer',
       timeout: LINT_TIMEOUT_MS,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
-    output = [e.stdout, e.stderr].filter(Boolean).join('\n') || e.message
+    output = [decodeShellOutput(e.stdout), decodeShellOutput(e.stderr)].filter(Boolean).join('\n') || e.message
     reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= LINT_TIMEOUT_MS
       ? `lint 命令超时（>${LINT_TIMEOUT_MS / 1000}s）`
       : `lint 命令退出码 ${exitCode}`
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
-  const status = exitCode === 0 ? 'passed' : 'failed'
-  const finalReason = exitCode === 0 ? null : reason
-  const tally = recordVerifyLintTally({ specBase, result: { status, reason: finalReason } })
+  let status = exitCode === 0 ? 'passed' : 'failed'
+  let finalReason = exitCode === 0 ? null : reason
+  // 环境缺件降档（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，2026-09-23 实证）：
+  // 链式 lint 在缺失二进制处中止（&& 语义保证其前段全绿），CNF 是环境信号非代码失败——硬拦
+  // 只会逼 SILLYSPEC_*_GATE=skip 逃生口，降档 skipped 带修复指引。护栏：失败输出无可归属
+  // 文件路径才降（真实 lint 债恒带 path——extractLintFailureFiles 非空维持硬拦，CNF 噪音
+  // 不得掩盖真债）；降档不进 tally（环境跳过非质量信号，不稀释硬门失败率）。
+  let envDowngraded = false
+  if (status === 'failed') {
+    const cnf = detectCommandMissingFailure(output)
+    if (cnf.matched && extractLintFailureFiles(output).length === 0) {
+      status = 'skipped'
+      finalReason = `环境缺件：${cnf.binary ? `二进制「${cnf.binary}」` : '命令二进制'}不存在（${cnf.evidence}）——非代码失败不拦门；在对应包目录补装依赖（pnpm/npm install、uv sync 等）后 lint 恢复实测`
+      envDowngraded = true
+      console.warn(`⚠️ lint 实测环境缺件降档为跳过：${cnf.evidence}——命令链在缺失二进制处中止（&& 链其前段全绿）；修复环境（安装依赖）而非改代码；疑沙箱环境差异可设 SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 对照主仓口径`)
+    }
+  }
+  const tally = envDowngraded ? null : recordVerifyLintTally({ specBase, result: { status, reason: finalReason } })
 
   return {
     status,
@@ -760,15 +799,18 @@ export function pickHitModules(changedFiles, modules) {
  * 聚合多个模块测试结果为单一 status。
  * - 全 passed → 'passed'
  * - 任一 failed → 'failed'
+ * - 无 failed 且非全 passed → 'skipped'（环境缺件跳过单元族，2026-09-23 CNF 降档引入：
+ *   跑过的模块全绿、缺件的在二进制处中止——调用方按跳过族口径呈现，不硬拦）
  * - 空 → null（调用方按 fallback 处理）
  *
- * @param {Array<{status:'passed'|'failed'}>} results
- * @returns {'passed'|'failed'|null}
+ * @param {Array<{status:'passed'|'failed'|'skipped'}>} results
+ * @returns {'passed'|'failed'|'skipped'|null}
  */
 export function aggregateStatus(results) {
   if (!Array.isArray(results) || results.length === 0) return null
+  if (results.some(r => r && r.status === 'failed')) return 'failed'
   if (results.every(r => r && r.status === 'passed')) return 'passed'
-  return 'failed'
+  return 'skipped'
 }
 
 /**
@@ -1022,7 +1064,7 @@ const ARTIFACT_ENV_MISSING_RES = [
   // 条目 H 签名族：pytest-xdist 缺失 → usage error（unrecognized -n/--dist）
   /ERROR:\s*usage:\s*py(?:test|thon)[^\n]*(?:-n\b|--dist|xdist|unrecognized argument)/i,
   /ModuleNotFoundError:\s*No module named\s+'?(?:pytest|pytest_xdist|xdist|_pytest)'?/i,
-  /(?:command not found|not recognized as an internal or external command)[^\n]*(?:pytest|vitest|jest|mocha|ruff|tsc|eslint|python)/i,
+  /(?:command not found|not recognized as an internal or external command|不是内部或外部命令)[^\n]*(?:pytest|vitest|jest|mocha|ruff|tsc|eslint|next|python)|(?:pytest|vitest|jest|mocha|ruff|tsc|eslint|next|python)[^\n]*(?:command not found|not recognized as an internal or external command|不是内部或外部命令)/i,
 ]
 const ARTIFACT_MODULE_IMPORT_RES = [
   // overlay 部分态：改动引用方没改被引用方 → 本地顶层包 import 不到（①已先排除 pytest 家族）
@@ -1071,6 +1113,57 @@ export function classifyTestFailureArtifact(result) {
   if (lines.every(l => { const b = l.replace(ANSI_RE, ''); return PASS_LINE_RE.test(b) || SUMMARY_LINE_RE.test(b) || CONSOLE_CAPTURE_RE.test(b) })) {
     return { matched: true, kind: 'parser-false-positive', evidence: pick(lines),
       advice: '判账疑似把通过/汇总行误判为失败行（PER_TEST_FAIL_RE 残留形态）——请把失败输出原文上报工具仓修判定正则；exitCode 非零的根因另在输出里' }
+  }
+  return empty
+}
+
+// ══ CNF（command-not-found）环境缺件识别（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，
+// 2026-09-23 multi-agent-platform 实证：纯 backend 改动被 frontend 链段 next CNF 拦死 --done）═══
+// 链式 commands.test/lint 在缺失二进制处中止（&& 语义保证其前段全绿）——CNF 是环境信号非
+// 代码失败，处置=降档 skipped 带修复指引（对齐纯超时降档/存量债归属鉴定先例）。只扫输出
+// 尾部窗（wrapper 失败横幅必在链尾；测试 fixture 的预期 CNF 文案在输出中段不进窗——防
+// fixture 噪音触发降档）。注意 2026-09-23 同坑实证反转：沙箱 junction 机制无罪（健康 pnpm
+// node_modules 经 junction 实测 tsc/next 均可解析），CNF 命中时主仓口径大概率同样缺件
+//（半装 node_modules/.bin 缺失族），修复动作是补装环境而非绕沙箱。
+const COMMAND_NOT_FOUND_TAIL_CHARS = 1500
+const COMMAND_NOT_FOUND_RES = [
+  // Windows cmd（zh/en）：二进制名单引号前置于报错短语
+  /'([^']+)'[^'\n]*(?:不是内部或外部命令|is not recognized as an internal or external command)/i,
+  // POSIX bash/zsh：`bash: line 1: next: command not found`
+  /([A-Za-z0-9_@./-]+):\s*command not found/i,
+  // POSIX dash/debian sh：`sh: 1: next: not found`
+  /\bsh(?:\s+\d+)?:\s*\d+:\s*([A-Za-z0-9_@./-]+):\s*not found/i,
+  // pnpm exec/script 包装横幅
+  /Command "([^"]+)" not found/i,
+  // 乱码兜底（decodeShellOutput 不可用面：无 full-icu 构建/e.message 直采）：zh-Windows cmd
+  // 报错经错误代码页解码后短语成乱码，但「单引号 ASCII 二进制名 + 行内 U+FFFD 替换符」
+  // 形态稳定可识别（e.message 回退路径的输出不经 decodeShellOutput）
+  /^'([A-Za-z0-9_@./-]+)'[^\n]*\ufffd/,
+]
+// 判账行集的 wrapper 噪声形态（降档护栏）：remaining 里只允许这些形态，出现真失败行
+// （断言详情/文件行号/✕ 标记族）在场维持硬拦——CNF 噪音不得掩盖真债。runner 汇总族
+//（TAP `# fail N` / node:test spec `ℹ fail N`）计入噪声：链前段通过输出的 `# fail 0`
+// 会进判账行集（PER_TEST_FAIL_RE 命中 fail 词、SUMMARY_LINE_RE 不覆盖该形态），真实
+// 失败场景另有 not ok/断言行在场挡降档，不受此放宽影响。
+const CNF_NOISE_LINE_RE = /(?:^\s*$)|(?:ELIFECYCLE)|(?:ERR_PNPM_)|(?:不是内部或外部命令)|(?:is not recognized as an internal or external command)|(?:command not found)|(?:Command failed with exit code)|(?:^undefined$)|(?:^[#ℹ]\s*(?:pass|fail|tests|suites|cancelled|skipped|todo)\b)/i
+
+/**
+ * 检测命令输出的二进制缺失（CNF）失败签名（纯函数，尾部窗扫描）。
+ * @param {string} output 命令完整输出（stdout+stderr 合并形态）
+ * @returns {{ matched: boolean, binary: string|null, evidence: string }} matched=尾部窗命中；binary=缺失二进制名（签名可捕获时，否则 null）；evidence=命中行（trim 后 ≤120 字，供 reason/日志引用）
+ */
+export function detectCommandMissingFailure(output) {
+  const empty = { matched: false, binary: null, evidence: '' }
+  if (!output || typeof output !== 'string') return empty
+  const tail = output.replace(ANSI_RE, '').slice(-COMMAND_NOT_FOUND_TAIL_CHARS)
+  for (const line of tail.split(/\r?\n/)) {
+    for (const re of COMMAND_NOT_FOUND_RES) {
+      const m = line.match(re)
+      if (m) {
+        const t = line.trim()
+        return { matched: true, binary: (m[1] || '').trim() || null, evidence: t.length > 120 ? t.slice(0, 120) + '…' : t }
+      }
+    }
   }
   return empty
 }
@@ -1126,16 +1219,16 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
   let reason = null
   warnPortRaceBeforeRun(testCommand)
   try {
-    output = execSync(testCommand, {
+    output = decodeShellOutput(execSync(testCommand, {
       cwd,
-      encoding: 'utf8',
+      encoding: 'buffer',
       timeout: TEST_TIMEOUT_MS,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
-    output = [e.stdout, e.stderr].filter(Boolean).join('\n') || e.message
+    output = [decodeShellOutput(e.stdout), decodeShellOutput(e.stderr)].filter(Boolean).join('\n') || e.message
     reason = e.signal === 'SIGTERM' && Date.now() - startedAt >= TEST_TIMEOUT_MS
       ? `模块 ${name} 测试超时（>${TEST_TIMEOUT_MS / 1000}s）`
       : `模块 ${name} 测试退出码 ${exitCode}`
@@ -1147,6 +1240,28 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
   const judged = judgeWithKnownFailures(exitCode, output, reason, knownFailures)
+  // 环境缺件降档（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，2026-09-23 实证）：
+  // 模块命令在缺失二进制处中止——CNF 是环境信号非代码失败，降档 skipped（aggregateStatus
+  // 认识 skipped 单元）。护栏：判账行集全为 wrapper 噪声才降（真失败行在场维持硬拦）。
+  if (judged.status === 'failed') {
+    const cnf = detectCommandMissingFailure(output)
+    if (cnf.matched && judged.remainingLines.every(l => CNF_NOISE_LINE_RE.test(String(l)))) {
+      const skipReason = `模块 ${name} 环境缺件跳过：${cnf.binary ? `二进制「${cnf.binary}」` : '命令二进制'}不存在（${cnf.evidence}）——非代码失败；补装依赖后恢复实测`
+      console.warn(`⚠️ test 实测${skipReason}`)
+      return {
+        name,
+        status: 'skipped',
+        command: testCommand,
+        exitCode,
+        durationMs,
+        outputTail,
+        reason: skipReason,
+        exemptedCount: judged.exemptedCount,
+        failureRemaining: judged.remainingLines,
+        failureExempted: judged.exemptedLines,
+      }
+    }
+  }
   return {
     name,
     status: judged.status,
@@ -2078,16 +2193,16 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
   let reason = null
   warnPortRaceBeforeRun(command)
   try {
-    output = execSync(command, {
+    output = decodeShellOutput(execSync(command, {
       cwd,
-      encoding: 'utf8',
+      encoding: 'buffer',
       timeout: timeoutMs,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
-    output = [e.stdout, e.stderr].filter(Boolean).join('\n') || e.message
+    output = [decodeShellOutput(e.stdout), decodeShellOutput(e.stderr)].filter(Boolean).join('\n') || e.message
     // 冻结鉴别（R9 实证 2026-09-23）：超时且 stdout/stderr 双空 = 进程零产出（真慢套件有
     // 持续输出）——快照 junction/沙箱环境冻结特征，给主仓口径复跑的可行动指引
     const frozen = e.signal === 'SIGTERM' && Date.now() - startedAt >= timeoutMs
@@ -2105,6 +2220,32 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
 
   const judged = judgeWithKnownFailures(exitCode, output, reason, knownFailures)
+  // 环境缺件降档（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，2026-09-23 实证，
+  // 与 runOneModule/runVerifyLintCheck 同口径）：全量测试命令在缺失二进制处中止（&& 链其前
+  // 段全绿）——CNF 环境信号非代码失败，降档 skipped 带修复指引。护栏同 runOneModule：
+  // 判账行集全为 wrapper 噪声才降。
+  if (judged.status === 'failed') {
+    const cnf = detectCommandMissingFailure(output)
+    if (cnf.matched && judged.remainingLines.every(l => CNF_NOISE_LINE_RE.test(String(l)))) {
+      const result = {
+        status: 'skipped',
+        command,
+        exitCode,
+        durationMs,
+        outputTail,
+        reason: `环境缺件：${cnf.binary ? `二进制「${cnf.binary}」` : '命令二进制'}不存在（${cnf.evidence}）——非代码失败不拦门；在对应包目录补装依赖（pnpm/npm install、uv sync 等）后恢复实测`,
+        resultPath: null,
+        mode: 'full',
+        fallbackReason,
+        exemptedCount: judged.exemptedCount,
+        failureRemaining: judged.remainingLines,
+        failureExempted: judged.exemptedLines,
+      }
+      console.warn(`⚠️ test 实测环境缺件降档为跳过：${cnf.evidence}——命令链在缺失二进制处中止（&& 链其前段全绿）；修复环境（安装依赖）而非改代码`)
+      writeRunResult({ specBase, changeName, result, extra: fallbackReason ? { fallback_reason: fallbackReason } : {} })
+      return result
+    }
+  }
   const result = {
     status: judged.status,
     command,
@@ -2152,12 +2293,16 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
     .join('\n')
   const reason = status === 'passed'
     ? null
-    : `模块子集测试失败：${perModule.filter(r => r.status === 'failed').map(r => r.name).join(', ')}`
-      // 失败模块的 reason 明细透传（坑 verify-devserver-port-race：EADDRINUSE 资源竞争鉴别
-      // 提示在 runOneModule 的 reason 里，不透传会被顶层 reason 吞掉）
-      + (perModule.filter(r => r.status === 'failed' && r.reason).some(r => /EADDRINUSE|资源竞争/.test(r.reason))
-        ? '。' + perModule.filter(r => r.status === 'failed' && r.reason && /EADDRINUSE|资源竞争/.test(r.reason)).map(r => r.reason).join('；')
-        : '')
+    : status === 'skipped'
+      // 环境缺件跳过聚合（2026-09-23 CNF 降档）：跑过的模块全绿、缺件模块中止——不硬拦，
+      // reason 点名跳过模块让「本次实测没覆盖到它们」可见（防静默漏测）
+      ? `模块子集含环境缺件跳过（已跑模块全绿）：${perModule.filter(r => r.status === 'skipped').map(r => r.name).join('、')}——补装依赖后恢复实测`
+      : `模块子集测试失败：${perModule.filter(r => r.status === 'failed').map(r => r.name).join(', ')}`
+        // 失败模块的 reason 明细透传（坑 verify-devserver-port-race：EADDRINUSE 资源竞争鉴别
+        // 提示在 runOneModule 的 reason 里，不透传会被顶层 reason 吞掉）
+        + (perModule.filter(r => r.status === 'failed' && r.reason).some(r => /EADDRINUSE|资源竞争/.test(r.reason))
+          ? '。' + perModule.filter(r => r.status === 'failed' && r.reason && /EADDRINUSE|资源竞争/.test(r.reason)).map(r => r.reason).join('；')
+          : '')
 
   const result = {
     status,

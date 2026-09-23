@@ -336,3 +336,14 @@
 根因：用户裁定（2026-09-23）：CLI 跑测试应跑对应开发相关的测试。缺口=未配置 test_strategy/modules 的仓（多数用户态）门禁缺省落全量 commands.test——R9 对撞 MP 仓（当时未配置）正因此卡全量套件 40 分钟。已配置仓不受影响（module 路径优先）
 方案：verify-postcheck.js：①decideVerifyTestAction 增 depsAutoEligible——strategy=null 且 deps 可得→deps-auto-subset，空→full 零打扰，显式 full 不变；②未配置仓前置采集 diff 面（restrictFiles 收窄同款）；③新分支 runModuleSubset({hits:[]})——与模块 0 命中测试兜底同款执行面（deps(auto)=import 被改 src 的测试∪本次变更测试）
 结果：verify-deps-auto-default 2/2（纯决策四分流+端到端双场景：改被 import src→deps 聚合 passed；改无关系文件→full）；verify 族 46/46；lint 772 未引用导出 0
+
+## ql-20260923-022-f7f4 | 2026-09-23 20:33:03 | quick/verify 门禁 CNF 环境缺件降档——commands 链条二进制缺失不再硬拦 --done
+状态：已完成
+关联变更：（无）
+文件：
+- src/verify-postcheck.js（decodeShellOutput+CNF 检测器+三接线降档（护栏防真债被掩盖）+aggregateStatus skipped+伪影签名扩展）
+- test/verify-gate-command-missing.test.mjs（7 用例锁死契约（含 NODE_TEST_CONTEXT 基建伪影规避注记））
+需求：quick/verify 门禁 CNF 环境缺件降档——commands 链条二进制缺失不再硬拦 --done
+根因：multi-agent-platform 实证（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules）：纯 backend 改动被 frontend 链段 next CNF 拦死只能 skip 逃生；实测反转原诊断——沙箱 junction 无罪（健康 pnpm node_modules 经 junction 实测 tsc/next 均可解析），真因=主仓 frontend node_modules 半装（.bin 缺失/链接悬空，已另行 pnpm install 修复环境）；工具缺口成立：CNF 属环境信号非代码失败，超时降档/存量债归属鉴定先例均此口径但 CNF 形态无覆盖；附带连根修 GBK 乱码——zh-Windows cmd 报错经错误代码页解码致签名失效+门禁输出不可读（坑文档「乱码一行难归因」原话）
+方案：src/verify-postcheck.js 五处——①NEW decodeShellOutput：三处 execSync（lint/full/module）改 buffer 捕获+智能解码，utf8 无损直通零行为变化；②NEW detectCommandMissingFailure：四族 CNF 签名（zh/en cmd、bash、debian sh、pnpm 横幅）+二进制名捕获+乱码兜底签名+尾部 1.5KB 窗防中段 fixture 噪音；③三接线 failed→skipped 带响亮修复指引（lint 护栏=失败输出无可归属路径；test 护栏=判账行集全 wrapper 噪声含 TAP 汇总族；降档不进 lint tally）；④aggregateStatus 认识 skipped 单元+runModuleSubset 聚合 reason 点名跳过模块；⑤ARTIFACT_ENV_MISSING_RES 补 next+zh 两侧签名。跨仓路径不动（并行会话 TAP 覆盖刚落）
+结果：新测 verify-gate-command-missing 7/7（签名族+尾部窗+真实 cmd GBK 解码+lint/test/module 三路径端到端降档与真债硬拦对照+聚合+伪影分诊）+核心面 112/112+verify 族 118/118+quick-audit+gate 族 57/57+lint 773 文件 0 问题（未引用导出 0）；本 --done 门禁实测同口径。留痕：父 node --test 注入 NODE_TEST_CONTEXT 使被测命令里的 node --test 零输出零退出码——ql-20260923-021 deps-auto E2E 在该伪影下断言空转绿，红账另册
