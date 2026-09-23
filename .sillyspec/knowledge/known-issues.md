@@ -182,3 +182,11 @@ verify 门（--done 实测）跑在主仓进程、用主仓**当前已 apply** �
 ## execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）
 
 在隔离 execute worktree 内跑全量套件时，spawn `sillyspec` 子进程的测试族（config-schema / init-* / platform-* / spec-dir / mcp-server / sillyhub / run-help-shortcircuit）会被 CLI 的「当前在隔离 worktree 内」守卫拦下整文件挂（exit 非 0）——这是环境性假红不是回归。判定法：基线 A/B（同 worktree 环境跑基线提交）同挂即存量；或单跑对照（套件顺序 flake 单跑双绿）。规避：全量回归在主仓跑（或基线 A/B 归因后留痕）；worktree 内只跑定向测试文件。另：cursor-agent-transcript-detect 在全量套件内有顺序性 flake（单跑稳定绿）。（来源：2026-09-22-stage-burst-fold task-05 基线 A/B 实证）
+
+## 影子审查回收是拉模式——完成结论到平台面板、CLI 侧盲到下个阶段检查点（推送缺口）
+
+fire-and-forget 派发的平台影子审查，结论回收只挂主线索引点（下个阶段 --done 的 status 模式 / doctor 影子对照）——mission 完成后到下一个检查点之间，用户在平台面板已看到结论，而 CLI/agent 侧 stage-reviews-shadow/ 仍是空。2026-09-23 R11 实证：brainstorm 收口派发 16:07 → 影子审出 fail×2/gap×2（用户从面板先看到）→ plan 早已收口、execute 已按旧设计动工，协调者靠用户转贴才收到结论做 Reverse Sync——若回收是推模式，plan 阶段就能带着修正走。改进方向：回收挂「任意下一条 CLI 命令的轻量轮询」（in-flight 台账存在 .runtime/review-dispatch-shadow-*.json，顺手 status 拉一次）或经 events 通道推送；排期随事件通道部署那批。同族病：知识收件箱可见性（2026-09-23 已修）——完成类事件都需要推送面。
+
+## 快照 overlay 排除「会话内修改的前序脏文件」→ 门禁假红（快照分叉家族第三 sibling）
+
+quick 门禁隔离快照的 overlay 文件集来自会话边界审计：会话开始前已脏的文件（含并行会话在途 hunk）被记为「前序 baseline」不进 overlay——若本会话随后又修改了这些文件，快照装的是 HEAD 旧版而非本会话新版：新增导出缺失 → 快照内测试 import 即炸（SyntaxError: does not provide an export），门禁假红且重跑恒红（不是 flake）。实证：2026-09-23 ql-017 收口，verify-postcheck/quick-audit 双文件三连撞。判定法：快照失败输出含 import/导出错误 + 主仓口径同命令全绿 + 失败文件在会话启动前已脏。处置：SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 主仓口径收口（口径差异披露）——注意阀名是 QUICK 前缀（verify 门禁阀是 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，两者不同，用错照挂）。根治方向：边界审计对「前序脏文件在本会话窗口内再次变更」的形态改记为本会话文件（内容哈希对比会话首末，而非仅会话启动时刻快照）。（来源：2026-09-23 ql-017 三轮收口实证）
