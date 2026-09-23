@@ -41,6 +41,7 @@ created_at: 2026-06-19T12:40:00+08:00
 - validateTaskReviews|task-review|函数签名 → [patterns.md#validateTaskReviews 真实签名是单 opts 解构，非 (changeDir, {gitDir})](patterns.md#validateTaskReviews 真实签名是单 opts 解构，非 (changeDir, {gitDir}))
 - esm|循环依赖|plan-postcheck|worktree-apply → [patterns.md#plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环](patterns.md#plan-postcheck 与 worktree-apply 存在既有依赖边，反向复用 filterDeliverableFiles 会成环)
 - 对撞实验度量口径|R8|定稿|同任务书|同基线|db → [patterns.md#对撞实验度量口径（R8 定稿：同任务书/同基线/db 同源取证）](patterns.md#对撞实验度量口径（R8 定稿：同任务书/同基线/db 同源取证）)
+- openspec|规格库|fr|活规格|资产对比|上下文|人读|机读|Given When Then → [patterns.md#跨工具资产对比的评估纪律——fr/ 索引 vs OpenSpec 全文规格库实例（防再翻案）](patterns.md#跨工具资产对比的评估纪律——fr/ 索引 vs OpenSpec 全文规格库实例（防再翻案）)
 
 ## Known Issues
 - WASM|sql.js|native|native binding → [known-issues.md#sqljs-wasm-only](known-issues.md#sqljs-wasm-only)
