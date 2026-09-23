@@ -372,7 +372,13 @@
 方案：三件泛化：①isTestFilePath 多语言测试判定（*.test/spec.[cm]js/ts + test_*.py/*_test.py）②collectTestFiles 递归收集（任意深度 tests?/ 目录，跳 node_modules/.venv/.git/dist/build/.runtime/.sillyspec，深度帽 6）③匹配双通道——JS 路径子串 + Python 点串导入族（pythonImportCandidates：变更 .py 的各级包后缀 from X import/import X 命中）；代码面不再限定 src/ 前缀
 结果：verify-deps-auto-default 3/3（新增 T3 polyglot：backend/app/.../service.py→from app.modules.x import 测试命中、无关包不命中）+verify 族 fail 0+test:core fail 0+lint 774 未引用导出 0
 
-## ql-20260924-002-4cbc | 2026-09-24 02:30:47 | deps(auto) 分批执行修复——py/js 双运行器（pytest 前缀自模块命令推断）+公平帽+变更测试优先（治 R10 四缺陷①②）
-状态：进行中
+## ql-20260924-002-4cbc | 2026-09-24 02:30:47 | deps(auto) 分批执行——py/js 双运行器+公平帽+变更测试优先（R10 缺陷①②）
+状态：已完成
 关联变更：（无）
-文件：（见实际改动）
+文件：
+- src/verify-postcheck.js（buildDepsBatches+双批接线）
+- test/verify-deps-auto-default.test.mjs（T4）
+需求：deps(auto) 分批执行——py/js 双运行器+公平帽+变更测试优先（R10 缺陷①②）
+根因：R10 实证：node --test 跑 .py 全伪败+字母序截断前端依赖恒缺
+方案：buildDepsBatches：扩展名分组+变更测试优先+30 帽按组比例+pytest 前缀自模块命令推断，双批聚合 deps(pyN+jsM)
+结果：T4 双语言例+全族 4/4+test:core fail 0+lint 774 绿
