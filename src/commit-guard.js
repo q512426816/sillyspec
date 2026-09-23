@@ -85,6 +85,8 @@ function main() {
       // stderr 必须管道化：execFileSync 默认把子进程 stderr 透传给父进程——非 git 目录下
       // git 落 --no-index 模式报 unknown option 的 usage 长文会漏进守卫 stderr（噪声）。
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
     })
       .split(/\r?\n/)
       .map((s) => s.trim())

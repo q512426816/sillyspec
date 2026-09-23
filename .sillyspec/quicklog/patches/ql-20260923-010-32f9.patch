@@ -1,0 +1,605 @@
+diff --git a/docs/prompt/execute.md b/docs/prompt/execute.md
+index d66fcbab..23080a2b 100644
+--- a/docs/prompt/execute.md
++++ b/docs/prompt/execute.md
+@@ -180,7 +180,7 @@ worktree 路径 + 分支名 + 模式
+ 
+ **本步的模式条件注入（M3/M4，2026-09-21-r5-efficiency-batch2）**
+ - **推荐分组行**（M3）：CLI 按三条件（allowed_paths 正交 / 无 provides-expects_from 契约链 / 组 ≤3，另内建批数护栏 ≥ min(3, N)）预计算本 Wave 推荐分组注入 batch 条件段后（agent 可偏离须在 Wave 摘要披露）——仅本地 Agent tool 派发路径渲染（SillyHub 一 Wave 一 mission 互斥）；无可并批（无 ≥2 组）零注入，输出与无该行时逐字节一致
+-- **execution_mode**（M4）：plan.md frontmatter `execution_mode: main` 时整段执行方式换主代理直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；缺省/非法回退 dispatch，渲染与既往一致（逐字节零回归）
++- **execution_mode**（M4）：plan.md frontmatter `execution_mode: dispatch` 时整段执行方式换子代理派发指引；frontmatter `execution_mode: main`（或缺省不写/非法值——2026-09-23 R8 对撞后默认翻转）渲染主代理直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与派发完全一致（只换执行宿主，不换防线）
+ 
+ **提示词原文**
+ 
+diff --git a/docs/prompt/plan.md b/docs/prompt/plan.md
+index 15a1c131..39b43ef6 100644
+--- a/docs/prompt/plan.md
++++ b/docs/prompt/plan.md
+@@ -137,9 +137,9 @@ needs_human_review: true | false
+ > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+ > - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
+ 
+-> **执行模式声明（execution_mode，M4——清晰输入任务的主代理直写通道，2026-09-21-r5-efficiency-batch2）**：
+-> - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = dispatch**（走既有子代理派发，既有变更零影响）；本仓对撞实证 A 组主代理直写 7′ 进码 vs B 组派发 70′（GSD 在 Claude Code 永远 spawn 子代理，direct 模式是本仓结论非抄袭项——分歧声明见 design）
+-> - 仅当满足判据才声明 `execution_mode: main`：**输入已含决策**（design/方案已把接口、边界、验收定死，实现期无开放式设计裁决）× **任务边界清晰可串行**（无跨 task 契约链半成品风险）；不满足或拿不准一律缺省 dispatch（误用 main 只损失并行收益，不损失任何防线与审查）
++> **执行模式声明（execution_mode，M4——2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）**：
++> - plan.md frontmatter 加 `execution_mode: main | dispatch` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）
++> - 仅当满足判据才显式声明 `execution_mode: dispatch`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）
+ > - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
+ 
+ ---
+@@ -175,7 +175,7 @@ plan_level: none
+ ```markdown
+ ---
+ plan_level: light
+-execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
++execution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）
+ ---
+ 
+ # 轻量计划（Light Plan）：<需求简述>
+@@ -215,7 +215,7 @@ light 计划的约束：
+ ```markdown
+ ---
+ plan_level: full
+-execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
++execution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）
+ ---
+ 
+ # 实现计划（Plan）
+diff --git a/src/machine-interface.js b/src/machine-interface.js
+index dbb91411..b4d86cae 100644
+--- a/src/machine-interface.js
++++ b/src/machine-interface.js
+@@ -22,6 +22,7 @@ import { resolveRuntimeRoot } from './run/shared.js';
+ import { runValidators, checkTransition, checkExecuteCodeEvidence } from './stage-contract.js';
+ import { validateTaskReviews, resolveLatestExecuteRunId } from './task-review.js';
+ import { runVerifyTestCheck } from './verify-postcheck.js';
++import { computeGateFingerprint, lookupGreenCache, storeGreenCache, greenCacheNotice } from './run/green-cache.js';
+ import { checkCode } from './diagnostic-codes.js';
+ 
+ // ============ 退出码常量（D-004@v1）============
+@@ -116,6 +117,30 @@ export function buildEnvelope({
+  *   让两函数按 ctx 切跨仓 gitDir / per-repo cwd。null 时两函数按既有单仓行为零回归。
+  * @returns {Promise<{ envelope: object, exitCode: number }>}
+  */
++/**
++ * verify 门禁 check 的绿结果缓存包装（R8 对撞修复 2026-09-23，实现见 src/run/green-cache.js）。
++ * 同指纹（HEAD+代码脏面+local.yaml）近期真跑的绿结果复用：命中 → synth(hit) 合成等价结果
++ * （带 cached 披露字段，调用方进 warnings——「结果是真的、本次没跑」必须明示）；未命中 →
++ * 真跑，status==='passed' 时写缓存。fail-open：无根/指纹失败/缓存异常一律回退真跑（零回归）。
++ */
++function greenCachedCheck({ kind, greenRoot, cwd, specBase, changeName }, runReal, synth) {
++  if (!greenRoot) return runReal();
++  let fingerprint = null;
++  try { fingerprint = computeGateFingerprint({ cwd, specBase }); } catch { fingerprint = null; }
++  if (!fingerprint) return runReal();
++  const scope = `change:${changeName}`;
++  let hit = null;
++  try { hit = lookupGreenCache({ runtimeRoot: greenRoot, scope, kind, fingerprint }); } catch { hit = null; }
++  if (hit) return synth(hit);
++  const result = runReal();
++  try {
++    if (result && result.status === 'passed') {
++      storeGreenCache({ runtimeRoot: greenRoot, scope, kind, fingerprint, result: { status: 'passed', exitCode: result.exitCode ?? 0, mode: result.mode ?? null } });
++    }
++  } catch { /* best-effort 写缓存 */ }
++  return result;
++}
++
+ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, specDriftAnchor, ctx = null, full = false } = {}) {
+   const specRoot = specBase || resolveSpecDir(cwd);
+   // A4：pm 用 specRoot（而非默认 resolveSpecDir(cwd)）——--spec-dir/平台模式下 specBase 是真实
+@@ -288,8 +313,14 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+ 
+     // ── d. verify 阶段追加 verify-test（CLI 实测 local.yaml commands.test）──
+     if (stage === 'verify') {
+-      const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx });
++      // 绿缓存根：与 runtimeRoot 解析同源（drift 锚主仓口径）；解析失败 null → 不缓存不命中
++      let greenRoot = null;
++      try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
++      const vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
++        () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
++        (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
+       const vtWarnings = [];
++      if (vt.cached) vtWarnings.push(vt.reason);
+       if (vt.status === 'skipped') {
+         vtWarnings.push(`⚠️ verify-test SKIPPED — gate 未核验测试（${vt.reason || 'local.yaml 未配置 commands.test 或显式无测试'}）。本次 gate 结论不含测试客观核验，driver 不应据 exit 0 判定测试通过；integration-critical 变更应在 verify 阶段降级 FAIL`);
+       }
+@@ -311,6 +342,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+         warnings: vtWarnings,
+         data: {
+           status: vt.status,
++          cached: vt.cached === true,
+           exitCode: vt.exitCode,
+           durationMs: vt.durationMs,
+           resultPath: vt.resultPath,
+@@ -327,7 +359,9 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+       // 不一致时以 --done 为准。lint 未配置/不可跑 → informational，不阻断只读查询。
+       try {
+         const { runVerifyLintCheck, triageLintOwnership, resolveVerifyChangedFiles } = await import('./verify-postcheck.js');
+-        const lc = runVerifyLintCheck({ cwd, specBase: specRoot });
++        const lc = greenCachedCheck({ kind: 'lint', greenRoot, cwd, specBase: specRoot, changeName },
++          () => runVerifyLintCheck({ cwd, specBase: specRoot }),
++          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, failureFiles: [], cached: true, reason: greenCacheNotice(hit, 'verify-lint') }));
+         if (lc.status === 'skipped') {
+           checks.push({
+             id: 'verify-lint',
+@@ -341,6 +375,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+           const lcWarnings = [
+             '口径说明：gate verify 的 lint 在工作树直跑；verify --done 的 lint 在隔离快照（HEAD+归属文件 overlay）跑——两口径不一致时以 --done 为准。',
+           ];
++          if (lc.cached) lcWarnings.push(lc.reason);
+           let ownership = null;
+           let lintOk = lc.status !== 'failed';
+           if (lc.status === 'failed') {
+@@ -359,6 +394,7 @@ export async function runGate(stage, changeName, { cwd, specBase, runtimeRoot, s
+             warnings: lcWarnings,
+             data: {
+               status: lc.status,
++              cached: lc.cached === true,
+               exitCode: lc.exitCode,
+               durationMs: lc.durationMs,
+               ownership: ownership ? ownership.verdict : null,
+@@ -578,9 +614,14 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+ 
+       // ── b. verify-test：真实执行测试命令并取证 ──
+       case 'verify-test': {
+-        const vt = runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx });
++        let greenRoot = null;
++        try { greenRoot = resolveRuntimeRoot({ runtimeRoot, specDriftAnchor }, specRoot); } catch { greenRoot = null; }
++        const vt = greenCachedCheck({ kind: 'test', greenRoot, cwd, specBase: specRoot, changeName },
++          () => runVerifyTestCheck({ cwd, specBase: specRoot, changeName, ctx }),
++          (hit) => ({ status: 'passed', exitCode: 0, durationMs: 0, resultPath: null, mode: null, fallbackReason: null, exemptedCount: 0, cached: true, reason: greenCacheNotice(hit, 'verify-test') }));
+         data = {
+           status: vt.status,
++          cached: vt.cached === true,
+           exitCode: vt.exitCode,
+           durationMs: vt.durationMs,
+           resultPath: vt.resultPath,
+@@ -589,7 +630,9 @@ export async function runDerive(facet, changeName, { cwd, specBase, runtimeRoot,
+         };
+         ok = vt.status !== 'failed';
+         errors = vt.status === 'failed' ? [`测试失败: ${vt.reason || ''}`] : [];
+-        warnings = vt.status === 'skipped'
++        warnings = vt.cached
++          ? [vt.reason]
++          : vt.status === 'skipped'
+           ? ['测试被跳过']
+           : (vt.mode === 'full' && vt.fallbackReason)
+             ? [`⚠️ verify-test 跑的是全量 commands.test（${vt.fallbackReason}）；失败可能含未变更模块的预存错误`]
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 9afbd2df..b418bd56 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -964,16 +964,17 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
+     } catch {}
+   }
+ 
+-  // ── execution_mode 通道（M4 / FR-04，2026-09-21-r5-efficiency-batch2 task-04，D-004@v1）：
+-  // plan.md frontmatter `execution_mode: main | dispatch`，**缺省/非法值一律回退 dispatch**
+-  // （既有变更含归档重放逐字节零回归）。main=主代理直写（本仓对撞实证 A 组 7′ vs B 组 70′；
+-  // GSD 在 Claude Code 永远 spawn 子代理——direct 是本仓结论非 GSD 抄袭项，分歧声明见
+-  // design M4）。main 时：执行方式段换直写指引、派发段/子代理工作目录强制段/并发帽段/
+-  // M3 推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与锚点/review write
+-  // 指引全保留（只换执行宿主，不换防线）。判据（plan 生成时 agent 声明）：输入已含决策 ×
+-  // 任务文件正交的清晰输入任务；自动化判据归第 3 批 ceremony 决策密度轴。best-effort：
+-  // plan 缺失/读取失败回退 dispatch。严格小写 'main'（大小写漂移视为非法回退）。
+-  let executionMode = 'dispatch'
++  // ── execution_mode 通道（M4 / FR-04，2026-09-21-r5-efficiency-batch2 task-04，D-004@v1；
++  // 2026-09-23 R8 对撞后缺省翻转）：plan.md frontmatter `execution_mode: main | dispatch`，
++  // **缺省不写/非法值一律 main**（主代理直写）。翻转依据：对撞双实证派发对清晰输入任务是
++  // 纯税（R7：A 组直写进码 7′ vs B 组派发 70′；R8：execute 80′（6 子代理+编排）vs 单上下文
++  // 同规模任务进码 14′——派发税 3.6×，来源=子代理冷启动上下文重建 887 万 token + 伪并行 +
++  // 小任务全额派发开销）。**显式 `execution_mode: dispatch` 才走子代理派发**（判据：任务真可
++  // 并行 × 单任务规模大 × 上下文需分片，三者齐备才值得付派发税）。main 时：执行方式段换直写
++  // 指引、派发段/子代理工作目录强制段/并发帽段/M3 推荐分组段全抑制；worktree 隔离/写入守卫/
++  // review.json/verify 门禁与锚点/review write 指引全保留（只换执行宿主，不换防线）。
++  // best-effort：plan 缺失/读取失败 = 缺省 main。严格小写（大小写漂移视为非法回退缺省）。
++  let executionMode = 'main'
+   try {
+     if (changeDir) {
+       const emPlanPath = path.join(changeDir, 'plan.md')
+@@ -982,11 +983,11 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
+         const emFm = emPlanText.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---/)
+         if (emFm) {
+           const emVal = emFm[1].match(/^execution_mode:[ \t]*(\S+)[ \t]*(?:#.*)?$/m)
+-          if (emVal && emVal[1] === 'main') executionMode = 'main'
++          if (emVal && emVal[1] === 'dispatch') executionMode = 'dispatch'
+         }
+       }
+     }
+-  } catch { /* execution_mode 解析 best-effort：失败回退 dispatch */ }
++  } catch { /* execution_mode 解析 best-effort：失败保持缺省 main */ }
+   const mainMode = executionMode === 'main'
+ 
+   // ── 模块卡分级（P0a）：本 Wave per-task 最优卡表，细卡优先——治「根层大卡被每个子代理
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 2e4fcf09..0603d9ba 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -165,9 +165,9 @@ const stepGeneratePlan = {
+ > - 并批后整 Wave 批数 ≥ min(3, 该 Wave 任务数)（N≥3 即至少 3 批——批大小上界由此不变式约束：5 任务 → 2+2+1 三批而非 3+2 两批），保 Wave 在飞子代理数 ≥3、防墙钟回退
+ > - 并批不跨风险级（P0 不与 P2 混批，批内风险级不一致时按最高级拆批）；plan-postcheck 的并批提示是 warning 级护栏——S-F 型小任务（token 优先于墙钟）可显式接受（在 plan.md 相应 Wave 段注明「接受并批护栏提示」即放行，不阻断）
+ 
+-> **执行模式声明（execution_mode，M4——清晰输入任务的主代理直写通道，2026-09-21-r5-efficiency-batch2）**：
+-> - plan.md frontmatter 加 \`execution_mode: main | dispatch\` 键，**缺省不写 = dispatch**（走既有子代理派发，既有变更零影响）；本仓对撞实证 A 组主代理直写 7′ 进码 vs B 组派发 70′（GSD 在 Claude Code 永远 spawn 子代理，direct 模式是本仓结论非抄袭项——分歧声明见 design）
+-> - 仅当满足判据才声明 \`execution_mode: main\`：**输入已含决策**（design/方案已把接口、边界、验收定死，实现期无开放式设计裁决）× **任务边界清晰可串行**（无跨 task 契约链半成品风险）；不满足或拿不准一律缺省 dispatch（误用 main 只损失并行收益，不损失任何防线与审查）
++> **执行模式声明（execution_mode，M4——2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）**：
++> - plan.md frontmatter 加 \`execution_mode: main | dispatch\` 键，**缺省不写 = main**（主代理直写）；翻转依据=对撞双实证派发税（R7：直写进码 7′ vs 派发 70′；R8：同规模任务 execute 80′（6 子代理+编排）vs 单上下文进码 14′，3.6×——子代理冷启动上下文重建 + 伪并行 + 小任务全额派发开销）
++> - 仅当满足判据才显式声明 \`execution_mode: dispatch\`：**任务真可并行**（Wave 内任务文件正交且墙钟可压缩）× **单任务规模大**（预估 >30min）× **上下文需分片**（单会话将撞压缩线）；不满足或拿不准一律缺省 main（误用 main 只损失并行收益，不损失任何防线与审查；误用 dispatch 白付 2-3× 墙钟与 token）
+ > - main 下 execute Wave 步渲染直写指引（逐任务：读卡→worktree 内实现→每任务 commit→锚点→review write→下一任务），派发段/子代理工作目录段/并发帽段/推荐分组段全抑制；worktree 隔离/写入守卫/review.json/verify 门禁与 dispatch 完全一致（只换执行宿主，不换防线）
+ 
+ ---
+@@ -203,7 +203,7 @@ plan_level: none
+ \`\`\`markdown
+ ---
+ plan_level: light
+-execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
++execution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）
+ ---
+ 
+ # 轻量计划（Light Plan）：<需求简述>
+@@ -243,7 +243,7 @@ light 计划的约束：
+ \`\`\`markdown
+ ---
+ plan_level: full
+-execution_mode: dispatch  # main=主代理直写（判据见「执行模式声明」；缺省 dispatch）
++execution_mode: main  # dispatch=子代理派发（判据见「执行模式声明」；缺省 main 直写——R7/R8 对撞实证）
+ ---
+ 
+ # 实现计划（Plan）
+diff --git a/test/execution-mode-render.test.mjs b/test/execution-mode-render.test.mjs
+index d146f442..89bb3abd 100644
+--- a/test/execution-mode-render.test.mjs
++++ b/test/execution-mode-render.test.mjs
+@@ -1,9 +1,10 @@
+ /**
+  * M4 execution_mode 通道（2026-09-21-r5-efficiency-batch2 task-04，FR-04 / D-004@v1）
+  *
+- * 锁死契约：
+- * 1. 缺省回退：无键 / execution_mode: dispatch / 非法值（含大小写漂移）→ dispatch 渲染，
+- *    三态输出互相逐字节一致；含派发段/工作目录段/并发帽段，不含直写段（零回归钉）。
++ * 锁死契约（2026-09-23 R8 对撞后缺省翻转：main 直写为缺省）：
++ * 1. 缺省回退：无键 / execution_mode: main / 非法值（含大小写漂移）→ main 渲染，
++ *    三态输出互相逐字节一致；含直写段，不含派发段/子代理工作目录段/并发帽段；
++ *    显式 dispatch 仍走派发渲染（判据：真并行 × 规模大 × 上下文分片）。
+  * 2. main 渲染：含直写指引段（逐任务闭环 + 防线保留声明 + 直写工作目录段 + 直写纪律），
+  *    不含派发段（默认子代理话术/可选 batch）/子代理工作目录强制段/并发帽段/M3 推荐分组段/
+  *    SillyHub 派发互斥行。
+@@ -11,7 +12,7 @@
+  *    只换执行宿主，不换防线）。
+  * 4. main × M3 互斥：同一可并批 Wave，dispatch 注入推荐分组、main 零注入（无派发即无分组语义）。
+  * 5. plan.js stepGeneratePlan 模板：light/full 两档 frontmatter 均含 execution_mode 注释键
+- *    + 声明判据话术（输入已含决策 × 任务文件正交性；缺省 dispatch）。
++ *    + 声明判据话术（任务真可并行 × 单任务规模大 × 上下文需分片；缺省 main）。
+  * 6. 注释容忍：`execution_mode: main  # 说明` 仍识别为 main（YAML 注释不碍解析）。
+  * 7. 隐式 Wave（light/无显式 Wave 段）+ main → 直写段照注入（implicit 分支同受 execution_mode 支配）。
+  */
+@@ -74,28 +75,34 @@ const waveOf = (n, implicit = false) => ({
+ const render = (cd, n = 3, opts = {}, implicit = false) =>
+   buildWavePrompt(waveOf(n, implicit), 1, cd, join(cd, 'wt'), { dispatchMode: 'local', ...opts })
+ 
+-// ── 1. 缺省回退：dispatch 渲染（零回归钉）─────────────────────────
++// ── 1. 缺省翻转：main 渲染为缺省（R8 对撞修复钉）─────────────────────
+ 
+-test('T1 缺省三态（无键/dispatch/非法值）→ dispatch 渲染且互相逐字节一致', () => {
++test('T1 缺省三态（无键/main/非法值）→ main 渲染且互相逐字节一致；显式 dispatch 仍派发', () => {
+   // 同一 cd 原地换 frontmatter 再渲染——worktree 路径恒定，输出才可逐字节比对
+   const cd = makeChangeDir(3)
+   const wpNo = render(cd)
+-  writePlan(cd, 3, { fmExtra: ['execution_mode: dispatch'] })
+-  const wpDispatch = render(cd)
++  writePlan(cd, 3, { fmExtra: ['execution_mode: main'] })
++  const wpMain = render(cd)
+   writePlan(cd, 3, { fmExtra: ['execution_mode: agent-swarm'] })
+   const wpGarbage = render(cd)
+-  assert.equal(wpNo, wpDispatch, '无键 === 显式 dispatch（逐字节）')
++  assert.equal(wpNo, wpMain, '无键 === 显式 main（逐字节）')
+   assert.equal(wpNo, wpGarbage, '无键 === 非法值回退（逐字节）')
+   for (const wp of [wpNo]) {
+-    assert.ok(wp.includes('默认每个任务由独立子代理执行，你不要自己写代码'), 'T1: 派发段在位')
+-    assert.ok(wp.includes('可选 batch（合并实现）'), 'T1: batch 条件段在位')
+-    assert.ok(wp.includes('workdir 参数是强制必传'), 'T1: 子代理工作目录强制段在位')
+-    assert.ok(wp.includes('同时在飞 ≤3'), 'T1: 并发帽段在位')
+-    assert.ok(!wp.includes('主代理直写'), 'T1: 无直写段')
++    assert.ok(wp.includes('主代理直写（execution_mode: main）'), 'T1: 直写指引头在位')
++    assert.ok(!wp.includes('默认每个任务由独立子代理执行'), 'T1: 无派发段')
++    assert.ok(!wp.includes('workdir 参数是强制必传'), 'T1: 无子代理工作目录强制段')
+   }
+-  // 大写漂移同样回退 dispatch（严格小写 main 判定）
+-  writePlan(cd, 3, { fmExtra: ['execution_mode: MAIN'] })
+-  assert.equal(render(cd), wpNo, 'execution_mode: MAIN → dispatch 回退（大小写敏感）')
++  // 大写漂移同样回退缺省 main（严格小写 dispatch 判定）
++  writePlan(cd, 3, { fmExtra: ['execution_mode: DISPATCH'] })
++  assert.equal(render(cd), wpNo, 'execution_mode: DISPATCH → main 回退（大小写敏感）')
++  // 显式 dispatch 仍走完整派发渲染（逃生通道钉）
++  writePlan(cd, 3, { fmExtra: ['execution_mode: dispatch'] })
++  const wpDispatch = render(cd)
++  assert.ok(wpDispatch.includes('默认每个任务由独立子代理执行，你不要自己写代码'), 'T1: 显式 dispatch 派发段在位')
++  assert.ok(wpDispatch.includes('可选 batch（合并实现）'), 'T1: batch 条件段在位')
++  assert.ok(wpDispatch.includes('workdir 参数是强制必传'), 'T1: 子代理工作目录强制段在位')
++  assert.ok(wpDispatch.includes('同时在飞 ≤3'), 'T1: 并发帽段在位')
++  assert.notEqual(wpNo, wpDispatch, '缺省 main 与显式 dispatch 渲染不同')
+ })
+ 
+ test('T1b options 缺省与空对象输出逐字节一致（既有回归钉保持）', () => {
+@@ -133,7 +140,7 @@ test('T2 main → 直写指引段在位，派发段/工作目录强制段/并发
+ // ── 3. 两模式锚点 + review write 指引一致 ─────────────────────────
+ 
+ test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存在', () => {
+-  const cdD = makeChangeDir(3)
++  const cdD = makeChangeDir(3, { fmExtra: ['execution_mode: dispatch'] })
+   const cdM = makeChangeDir(3, { fmExtra: ['execution_mode: main'] })
+   const wpD = render(cdD)
+   const wpM = render(cdM)
+@@ -147,7 +154,7 @@ test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存
+ // ── 4. main × M3 互斥 ─────────────────────────────────────────────
+ 
+ test('T4 同一可并批 Wave（5 任务两两正交）：dispatch 注入推荐分组，main 零注入', () => {
+-  const cdD = makeChangeDir(5)
++  const cdD = makeChangeDir(5, { fmExtra: ['execution_mode: dispatch'] })
+   const cdM = makeChangeDir(5, { fmExtra: ['execution_mode: main'] })
+   assert.ok(render(cdD, 5).includes('推荐分组'), 'T4: dispatch 下 M3 推荐分组在位')
+   assert.ok(!render(cdM, 5).includes('推荐分组'), 'T4: main 下 M3 分组段抑制（无派发即无分组语义）')
+@@ -158,11 +165,11 @@ test('T4 同一可并批 Wave（5 任务两两正交）：dispatch 注入推荐
+ test('T5 stepGeneratePlan prompt：light/full 模板含 execution_mode 键 + 判据话术', () => {
+   const step = fixedPrefix.find(s => s.id === 'generate_plan')
+   assert.ok(step, 'fixedPrefix 含 generate_plan 步骤')
+-  assert.ok(step.prompt.includes('execution_mode: dispatch'), 'T5: 缺省 dispatch 注释键在模板')
+-  assert.ok(step.prompt.includes('execution_mode: main'), 'T5: main 选项在模板判据话术')
+-  assert.ok(step.prompt.includes('输入已含决策'), 'T5: 声明判据（输入已含决策 × 任务文件正交性）话术在位')
+-  assert.ok(step.prompt.includes('execution_mode') && (step.prompt.match(/execution_mode: dispatch/g) || []).length >= 2,
+-    'T5: light 与 full 两档模板均带键（≥2 处 dispatch 缺省行）')
++  assert.ok(step.prompt.includes('execution_mode: main'), 'T5: 缺省 main 注释键在模板')
++  assert.ok(step.prompt.includes('execution_mode: dispatch'), 'T5: dispatch 选项在判据话术')
++  assert.ok(step.prompt.includes('任务真可并行'), 'T5: 声明判据（真并行 × 规模大 × 上下文分片）话术在位')
++  assert.ok((step.prompt.match(/execution_mode: main  #/g) || []).length >= 2,
++    'T5: light 与 full 两档模板均带键（≥2 处 main 缺省行）')
+ })
+ 
+ // ── 6. 注释容忍 ───────────────────────────────────────────────────
+diff --git a/src/run/green-cache.js b/src/run/green-cache.js
+new file mode 100644
+--- /dev/null
++++ b/src/run/green-cache.js
+@@ -0,0 +1,123 @@
++/**
++ * green-cache.js — verify 门禁绿结果指纹缓存（R8 对撞修复，2026-09-23）。
++ *
++ * 问题：verify 收敛循环里同一套 commands.test/lint 被重复真跑——gate verify ×3 +
++ * verify --done 收口再跑（2026-09-23 change-events-channel 基线实测 ≈13min 纯重复执行）。
++ * 「亲自实测」的防作弊语义只要求结果真实，不要求重复产生：同指纹（HEAD + 代码脏面 +
++ * local.yaml）下近期真跑出的绿结果可复用；命中必须明示 cached——结论仍是真的，但
++ * 「本次没跑」必须披露，不冒充本次执行（真实性口径：known_failures 失败签名去重
++ * （v3.29.3）的成功面对偶）。
++ *
++ * 指纹口径：代码脏面剔除 .sillyspec/、docs/、*.md（对齐 watcher buildSnapshot
++ * dirtyCode / quality-scan 口径）——verify 收敛循环里 verify-result.md 等文档修订
++ * 不应击穿缓存，只有代码面变化才 invalid；local.yaml 整文件哈希入指纹（commands
++ * 改动即 miss，防换命令吃旧结果）。
++ *
++ * 逃生阀：env SILLYSPEC_GREEN_CACHE_OFF=1 全关（回退每次真跑，排障口径）；
++ * SILLYSPEC_GREEN_CACHE_TTL_MIN 覆盖 TTL（默认 30min——覆盖一轮 verify 收敛窗口，
++ * 同时防环境漂移（DB/网络态）吃太久前的旧绿）。
++ * fail-open：指纹计算/缓存读写任何异常 → miss（回退真跑，零回归）。
++ */
++import { execFileSync } from 'node:child_process';
++import { createHash } from 'node:crypto';
++import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
++import { dirname, join } from 'node:path';
++
++const DEFAULT_TTL_MIN = 30;
++
++function sha1(text) {
++  return createHash('sha1').update(text).digest('hex');
++}
++
++function safeGit(cwd, args) {
++  try {
++    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 });
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * porcelain 行过滤为「代码面」：剔 .sillyspec/、docs/ 与 *.md（含 rename 两侧任一命中）。
++ * 纯函数（口径单点，watcher dirtyCode / quality-scan 同源判据）；排序保序（同输入同输出）。
++ */
++export function filterCodePorcelain(porcelain) {
++  return String(porcelain || '')
++    .split(/\r?\n/)
++    .filter((line) => {
++      if (!line.trim()) return false;
++      const raw = line.slice(3).trim();
++      if (!raw) return false;
++      // rename 行「old -> new」两侧任一是文档面即整行剔除（防 rename 伪装穿透）
++      const parts = raw.split(' -> ').map((p) => p.replace(/^"|"$/g, ''));
++      return !parts.every((p) => p.startsWith('.sillyspec/') || p.startsWith('docs/') || /\.md$/i.test(p));
++    })
++    .sort();
++}
++
++/**
++ * 计算门禁绿缓存指纹：HEAD + 代码脏面 + local.yaml 内容。
++ * git 不可用（非仓目录）返回 null → 调用方按 miss 处理。
++ */
++export function computeGateFingerprint({ cwd, specBase }) {
++  const head = safeGit(cwd, ['rev-parse', 'HEAD']);
++  if (head === null) return null;
++  const porcelain = safeGit(cwd, ['status', '--porcelain']) ?? '';
++  let localYaml = '';
++  try {
++    const yamlPath = join(specBase, 'local.yaml');
++    if (existsSync(yamlPath)) localYaml = readFileSync(yamlPath, 'utf8');
++  } catch { /* 读不到按空——指纹仍含 HEAD+脏面，miss 风险方向安全 */ }
++  return sha1([head.trim(), filterCodePorcelain(porcelain).join('\n'), localYaml].join('\u0000'));
++}
++
++function greenCacheFile({ runtimeRoot, scope, kind }) {
++  // scope 为变更名（assertSafeChangeName 已在上游消毒）或 facet 固定串，不含路径分隔符
++  return join(runtimeRoot, 'green-cache', `${scope}.${kind}.json`);
++}
++
++function resolveTtlMin(env) {
++  const v = Number(env.SILLYSPEC_GREEN_CACHE_TTL_MIN);
++  return Number.isFinite(v) && v > 0 ? v : DEFAULT_TTL_MIN;
++}
++
++/**
++ * 查绿缓存：指纹不符/TTL 过期/阀关/文件坏 → null（一律回退真跑）。
++ * 命中返回 { ...rec, ageMs, cached:true }（rec = storeGreenCache 写入的记录）。
++ */
++export function lookupGreenCache({ runtimeRoot, scope, kind, fingerprint, now = Date.now(), env = process.env }) {
++  if (env.SILLYSPEC_GREEN_CACHE_OFF === '1') return null;
++  if (!runtimeRoot || !fingerprint) return null;
++  try {
++    const file = greenCacheFile({ runtimeRoot, scope, kind });
++    if (!existsSync(file)) return null;
++    const rec = JSON.parse(readFileSync(file, 'utf8'));
++    if (!rec || rec.fingerprint !== fingerprint) return null;
++    if (now - rec.storedAt > resolveTtlMin(env) * 60_000) return null;
++    return { ...rec, ageMs: now - rec.storedAt, cached: true };
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * 写绿缓存（best-effort：IO 异常返回 false 不抛——缓存失败不影响门禁本体）。
++ */
++export function storeGreenCache({ runtimeRoot, scope, kind, fingerprint, result, now = Date.now(), env = process.env }) {
++  if (env.SILLYSPEC_GREEN_CACHE_OFF === '1') return false;
++  if (!runtimeRoot || !fingerprint) return false;
++  try {
++    const file = greenCacheFile({ runtimeRoot, scope, kind });
++    mkdirSync(dirname(file), { recursive: true });
++    writeFileSync(file, JSON.stringify({ fingerprint, storedAt: now, result }, null, 1));
++    return true;
++  } catch {
++    return false;
++  }
++}
++
++/** 命中时给调用方的人话披露行（进 gate 结果 warnings，真实性口径）。 */
++export function greenCacheNotice(hit, label = 'verify-test') {
++  const ageMin = Math.max(1, Math.round((hit.ageMs || 0) / 60_000));
++  return `ℹ️ ${label} 本次未重跑——复用 ${ageMin} 分钟内同指纹真跑绿结果（SILLYSPEC_GREEN_CACHE_OFF=1 可关闭缓存）`;
++}
+
+diff --git a/test/green-cache.test.mjs b/test/green-cache.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/green-cache.test.mjs
+@@ -0,0 +1,111 @@
++/**
++ * green-cache（R8 对撞修复，2026-09-23）：verify 门禁绿结果指纹缓存。
++ *
++ * 锁死契约：
++ * 1. filterCodePorcelain：.sillyspec/、docs/、*.md 剔除（rename 两侧任一命中即剔），
++ *    代码面保留，同输入排序稳定——verify 收敛循环里的 verify-result.md 修订不击穿指纹。
++ * 2. store/lookup 往返：同指纹命中（cached:true + ageMs）；异指纹 miss；TTL 过期 miss
++ *    （时钟注入，默认 30min）；SILLYSPEC_GREEN_CACHE_OFF=1 双向关；TTL_MIN env 覆盖。
++ * 3. computeGateFingerprint：非 git 目录 null；同状态稳定；代码脏面变化敏感；
++ *    local.yaml 内容变化敏感（换 commands 不吃旧结果）。
++ * 4. greenCacheNotice 披露行：label + 未重跑声明 + 逃生阀提示 + 年龄分钟。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import {
++  filterCodePorcelain, computeGateFingerprint, lookupGreenCache, storeGreenCache, greenCacheNotice,
++} from '../src/run/green-cache.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++// ── 1. 代码面过滤口径 ───────────────────────────────────────────────
++
++test('T1 filterCodePorcelain：文档面剔除（含 rename 两侧）、代码面保留、排序稳定', () => {
++  const porcelain = [
++    ' M .sillyspec/changes/x/verify-result.md',
++    ' M docs/sillyspec/sync.md',
++    ' M README.md',
++    ' M src/a.js',
++    '?? test/b.test.mjs',
++    'R  old.md -> new.md',
++    'R  src/old.js -> src/new.js',
++  ].join('\n')
++  const out = filterCodePorcelain(porcelain)
++  assert.deepEqual(out, [' M src/a.js', '?? test/b.test.mjs', 'R  src/old.js -> src/new.js'].sort(), '仅代码面保留且排序')
++  assert.deepEqual(filterCodePorcelain(porcelain), out, '同输入同输出（排序稳定）')
++  assert.deepEqual(filterCodePorcelain(''), [], '空输入空数组')
++  assert.deepEqual(filterCodePorcelain(null), [], 'null 容忍')
++})
++
++// ── 2. 缓存存取语义 ─────────────────────────────────────────────────
++
++test('T2 store/lookup 往返：同指纹命中、异指纹 miss、TTL 过期 miss（时钟注入）', () => {
++  const root = mk('gc-a')
++  const base = { runtimeRoot: root, scope: 'change:t1', kind: 'test', fingerprint: 'fp1' }
++  assert.ok(storeGreenCache({ ...base, result: { status: 'passed', exitCode: 0 }, now: 1000 }), 'store ok')
++  const hit = lookupGreenCache({ ...base, now: 1000 + 5 * 60_000 })
++  assert.ok(hit && hit.cached === true, '同指纹命中且带 cached 标')
++  assert.equal(hit.ageMs, 5 * 60_000, 'ageMs 为距今时长')
++  assert.equal(hit.result.status, 'passed', '结果原样回带')
++  assert.equal(lookupGreenCache({ ...base, fingerprint: 'fp2', now: 1000 }), null, '异指纹 miss')
++  assert.equal(lookupGreenCache({ ...base, now: 1000 + 31 * 60_000 }), null, '默认 TTL 30min 过期 miss')
++  assert.ok(lookupGreenCache({ ...base, now: 1000 + 29 * 60_000 }), '29min 仍在 TTL 内命中')
++})
++
++test('T2b 阀与 TTL 覆盖：OFF=1 双向关；SILLYSPEC_GREEN_CACHE_TTL_MIN 生效', () => {
++  const root = mk('gc-b')
++  const base = { runtimeRoot: root, scope: 'change:t2', kind: 'lint', fingerprint: 'fp1' }
++  const off = { SILLYSPEC_GREEN_CACHE_OFF: '1' }
++  assert.equal(storeGreenCache({ ...base, result: { status: 'passed' }, now: 0, env: off }), false, 'OFF 下不写')
++  assert.ok(storeGreenCache({ ...base, result: { status: 'passed' }, now: 0, env: {} }), '无阀可写')
++  assert.equal(lookupGreenCache({ ...base, now: 10, env: off }), null, 'OFF 下不读')
++  assert.equal(lookupGreenCache({ ...base, now: 2 * 60_000, env: { SILLYSPEC_GREEN_CACHE_TTL_MIN: '1' } }), null, 'TTL_MIN=1 已过期')
++  assert.ok(lookupGreenCache({ ...base, now: 2 * 60_000, env: { SILLYSPEC_GREEN_CACHE_TTL_MIN: '60' } }), 'TTL_MIN=60 命中')
++})
++
++// ── 3. 指纹敏感性 ───────────────────────────────────────────────────
++
++test('T3 computeGateFingerprint：非仓 null；同状态稳定；代码脏面/local.yaml 变化→指纹变', () => {
++  const d = mk('gc-git-')
++  assert.equal(computeGateFingerprint({ cwd: d, specBase: d }), null, '非 git 目录 null（调用方按 miss 处理）')
++  const git = (args) => execFileSync('git', args, { cwd: d, stdio: 'ignore' })
++  git(['init', '-q'])
++  git(['config', 'user.email', 't@t'])
++  git(['config', 'user.name', 't'])
++  writeFileSync(join(d, 'a.js'), '1')
++  git(['add', 'a.js'])
++  git(['commit', '-qm', 'init'])
++  mkdirSync(join(d, 'spec'), { recursive: true })
++  writeFileSync(join(d, 'spec', 'local.yaml'), 'commands:\n  test: npm test\n')
++  const fp1 = computeGateFingerprint({ cwd: d, specBase: join(d, 'spec') })
++  assert.ok(fp1, '真仓返回指纹')
++  assert.equal(computeGateFingerprint({ cwd: d, specBase: join(d, 'spec') }), fp1, '同状态稳定')
++  // 文档面脏（verify 收敛循环修订 verify-result.md 场景）不击穿
++  mkdirSync(join(d, '.sillyspec'), { recursive: true })
++  writeFileSync(join(d, '.sillyspec', 'verify-result.md'), '内容修订')
++  assert.equal(computeGateFingerprint({ cwd: d, specBase: join(d, 'spec') }), fp1, '.sillyspec 脏面不击穿指纹')
++  // 代码脏面击穿
++  writeFileSync(join(d, 'a.js'), '2')
++  const fp2 = computeGateFingerprint({ cwd: d, specBase: join(d, 'spec') })
++  assert.notEqual(fp2, fp1, '代码脏面变化 → 指纹变')
++  // local.yaml 变化击穿（换 commands 防吃旧结果）
++  writeFileSync(join(d, 'spec', 'local.yaml'), 'commands:\n  test: npm run other\n')
++  const fp3 = computeGateFingerprint({ cwd: d, specBase: join(d, 'spec') })
++  assert.notEqual(fp3, fp2, 'local.yaml 变化 → 指纹变')
++})
++
++// ── 4. 披露行 ───────────────────────────────────────────────────────
++
++test('T4 greenCacheNotice：label + 未重跑声明 + 逃生阀 + 年龄分钟', () => {
++  const s = greenCacheNotice({ ageMs: 90_000 }, 'verify-test')
++  assert.ok(s.includes('verify-test'), 'label 在场')
++  assert.ok(s.includes('未重跑'), '明示本次未重跑')
++  assert.ok(s.includes('SILLYSPEC_GREEN_CACHE_OFF'), '逃生阀提示在场')
++  assert.ok(s.includes('2 分钟'), '年龄分钟在场（90s → 2 分钟）')
++})

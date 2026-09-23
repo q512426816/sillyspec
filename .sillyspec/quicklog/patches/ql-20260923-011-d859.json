@@ -1,0 +1,123 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-ebc92ac7",
+  "totals": {
+    "files": 7,
+    "additions": 55,
+    "deletions": 8
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/sync.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/commit-guard.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/docs-check.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/git-helper.js",
+      "declared": true,
+      "additions": 2,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/watcher.js",
+      "declared": true,
+      "additions": 16,
+      "deletions": 2,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/sentinel-rules.test.mjs",
+      "declared": true,
+      "additions": 32,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 7,
+    "codeFileCount": 5,
+    "testFileCount": 1,
+    "moduleSpan": 4,
+    "modules": [
+      {
+        "id": "sync",
+        "files": [
+          "src/commit-guard.js",
+          "src/watcher.js"
+        ]
+      },
+      {
+        "id": "docs-consistency",
+        "files": [
+          "src/docs-check.js"
+        ]
+      },
+      {
+        "id": "worktree",
+        "files": [
+          "src/git-helper.js"
+        ]
+      },
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/gate-snapshot.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/sentinel-rules.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L2",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-011-d859",
+  "sessionId": "quick-ebc92ac7",
+  "savedAt": "2026-09-23T02:48:58.625Z",
+  "patchSha256": "2b53ffcb26f2153769fe0a0010e9ad5d846b3fadbae596d60f60b5037740430c",
+  "patchStatus": "ok"
+}

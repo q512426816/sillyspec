@@ -1,0 +1,103 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-4d5852e9",
+  "totals": {
+    "files": 8,
+    "additions": 336,
+    "deletions": 51
+  },
+  "rows": [
+    {
+      "path": "src/run/green-cache.js",
+      "declared": true,
+      "additions": 123,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/machine-interface.js",
+      "declared": true,
+      "additions": 47,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/execute.js",
+      "declared": true,
+      "additions": 13,
+      "deletions": 12,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/plan.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/plan.md",
+      "declared": true,
+      "additions": 5,
+      "deletions": 5,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/prompt/execute.md",
+      "declared": true,
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/execution-mode-render.test.mjs",
+      "declared": true,
+      "additions": 31,
+      "deletions": 24,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/green-cache.test.mjs",
+      "declared": true,
+      "additions": 111,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-010-32f9",
+  "sessionId": "quick-4d5852e9",
+  "savedAt": "2026-09-23T02:36:04.396Z",
+  "patchSha256": "94b2ce973b57e9631161f78dbd8f88121687e541e4ca03b82496490727237453",
+  "patchStatus": "ok"
+}

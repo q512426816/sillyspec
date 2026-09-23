@@ -99,7 +99,7 @@ export function safeGit(cwd, args, opts = {}) {
   // 格式化（取首行）推迟到最终返回，避免重试分支重复格式化，并保留原始 code 供重试判定。
   const attempt = (t) => {
     try {
-      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'] })
+      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
       if (trim) value = value.trim()
       return { value, errorObj: null }
     } catch (e) {
@@ -128,7 +128,7 @@ export function git(cwd, args, opts = {}) {
   const fullArgs = buildFullArgs(cwd, args)
   // env（终批-③）：可选注入（如 baseline checkpoint 的临时 GIT identity）——调用方必须
   // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）
-  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env })
+  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env, windowsHide: true })
   if (Buffer.isBuffer(value)) return value
   return trim ? value.trim() : value
 }

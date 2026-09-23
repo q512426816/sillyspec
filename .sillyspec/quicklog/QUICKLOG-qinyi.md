@@ -177,3 +177,38 @@
 根因：sync.js _applyTombstoneStatus（2026-08-29 task-13 引入）无条件 changes[0].status='deleted'，而 serializeForSync 本已携带真实终态（unregisterChange→archived / deleteChange→deleted）——单点写死致两链不可区分；注释『对齐既有 archived 语义』暴露原意是归档信号但平台读到的语义是删除
 方案：终态透传：_applyTombstoneStatus 按 DB status 透传（deleted 链行为不变，archived 链发 'archived'）；兼容已核：旧平台对 archived 载荷走既有读时投影（零 location 动作零软删），新平台补写路径（本坑平台侧另修）。测试 X1-1 改造（归档链墓碑=archived 且全程无 deleted 载荷）+新增 X1-1b（deleteChange 链仍 deleted）；注释三处+file-lifecycle.md 更新；platform-interface-map.md 五处行号锚漂移修复
 结果：聚焦 32/32（tombstone+change-delete+noise+terminal-sweep）；doc-ref 93 处引用全过（修复 5 处漂移）；全量 594/594 绿；lint 759 文件未引用导出 0
+
+## ql-20260923-010-32f9 | 2026-09-23 10:35:14 | R8 对撞双修复：execution_mode 缺省翻转 main 直写 + verify 门禁绿结果指纹缓存
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/green-cache.js（NEW——绿结果指纹缓存纯模块（指纹/存取/TTL/阀/披露行五导出），known_failures 失败签名的成功面对偶）
+- src/machine-interface.js（greenCachedCheck 包装三处 verify 门禁调用点，命中强制披露 cached）
+- src/stages/execute.js（execution_mode 解析缺省翻转为 main，显式 dispatch 才派发）
+- src/stages/plan.js（执行模式声明话术+light/full 两档模板行翻转）
+- docs/prompt/plan.md（与 stages/plan.js 模板同步翻转）
+- docs/prompt/execute.md（M4 条目缺省语义翻转）
+- test/execution-mode-render.test.mjs（T1/T3/T4/T5 改断言钉新默认（契约变更非改测试凑绿））
+- test/green-cache.test.mjs（NEW 六例）
+需求：R8 对撞双修复：execution_mode 缺省翻转 main 直写 + verify 门禁绿结果指纹缓存
+根因：R8 对撞实证（2026-09-23 change-events-channel 基线 vs OpenSpec 单上下文同任务）：execute 80min 中约 47min 是 6 个子代理派发墙钟（冷启动上下文重建 887 万 token+伪并行+小任务全额派发开销），同规模实现切片仅 14min（3.6 倍税）；verify 31min 里 gate verify 三轮加 --done 收口把同一套 commands.test/lint 重复真跑约 13min。R7 实证（main 直写 7 分钟 vs 派发 70 分钟）早已同向结论但默认行为未翻转
+方案：①execute.js 解析翻转——缺省/非法值回退 main（显式 dispatch 才派发，判据=任务真可并行×单任务规模大×上下文需分片）；plan.js light/full 模板与执行模式声明话术、docs/prompt 的 plan.md/execute.md 同步翻转。②NEW src/run/green-cache.js——指纹=HEAD+代码脏面（剔 .sillyspec、docs、*.md，对齐 watcher dirtyCode 口径，verify 收敛循环文档修订不击穿）+local.yaml 哈希（换命令即失效）；TTL 30min；SILLYSPEC_GREEN_CACHE_OFF=1 全关、SILLYSPEC_GREEN_CACHE_TTL_MIN 覆盖；fail-open。③machine-interface.js 三处接线（runGate verify-test/verify-lint + runDerive verify-test facet）——命中合成等价 passed 并在 warnings/data 强制披露 cached=本次未重跑，未命中真跑且 passed 才写缓存；module-map 由 runtime 模块 src/run/ 前缀天然覆盖
+结果：聚焦 30/30 绿（green-cache 6 新例：过滤口径/存取 TTL/阀/指纹敏感性/披露行；execution-mode-render 7 例改断言钉新默认：无键===main 逐字节+显式 dispatch 逃生通道+模板两档 main 缺省行；machine-interface 9 例与 gate 四件 8 例回归零失败）；lint 761 文件未引用导出 0+module-map 覆盖全；--done 门禁隔离快照实测 test/lint 双绿
+
+## ql-20260923-011-d859 | 2026-09-23 10:41:16 | 哨兵降噪双修：detached watcher git 子进程闪窗（windowsHide 全入口补齐）+ R3 范围漂移基线豁免与 SILLYSPEC_SEN…
+状态：已完成
+关联变更：（无）
+文件：
+- src/git-helper.js（主凶——共享 git 入口双点补 windowsHide）
+- src/watcher.js（R3 基线豁免+applySentinelRules env 总阀）
+- src/commit-guard.js（windowsHide 一致性（基线保护文件，--force-baseline 显式解锁））
+- src/docs-check.js（同上一致性）
+- src/run/gate-snapshot.js（同上一致性）
+- src/run/green-cache.js（safeGit 补 windowsHide）
+- test/sentinel-rules.test.mjs（基线豁免正反例+总阀例）
+- .sillyspec/docs/sillyspec/modules/sync.md（watcher 段落补降噪三件登记）
+需求：哨兵降噪双修：detached watcher git 子进程闪窗（windowsHide 全入口补齐）+ R3 范围漂移基线豁免与 SILLYSPEC_SENTINEL=0 总阀
+根因：用户实证「弹窗出来又立马消失」全天反复——detached watcher（无控制台进程）每轮轮询经 git-helper 跑 3-4 条 git.exe，Windows 下无 windowsHide 的控制台子进程每个闪一个 cmd 窗即灭；且 R3 范围漂移把观测起点已在脏面的并行会话文件误归因本变更（R8 对撞 MP 实证 9 文件假告警），多会话共享仓高频噪声
+方案：①git-helper.js 双 execFileSync 点+commit-guard/docs-check/gate-snapshot/green-cache 四处 git 调用统一补 windowsHide true（跨平台安全）——detached 进程的 git 子进程不再创建控制台窗，闪窗根治。②watcher.js R3 基线豁免：applySentinelRules 首判轮以 prev 脏面拍 baselineDirty（水位重启场景 prev 即水位快照语义自洽），ruleScopeDrift 过滤基线文件——只对观测启动后新出现的声明面外文件告警。③哨兵总阀 env 参数 SILLYSPEC_SENTINEL=0 规则面零告警（watcher 照常记中性事件），与 SILLYSPEC_WATCHER=0/SILLYSPEC_WATCHER_PUSH=0 构成三级阀。④sync.md watcher 段落补登记（--no-docs 豁免其余三模块：windowsHide 纯选项无文档面）。commit-guard 属 hook 基线保护文件，改动仅一行 windowsHide，显式 --force-baseline
+结果：sentinel-rules 30/30（新增基线豁免正反例+总阀双条件例）+watcher 13/13+green-cache 7/7 回归零失败；六源文件 node --check 过；lint 761 文件未引用导出 0+module-map 覆盖全；--force-baseline 因 commit-guard 基线保护显式解锁（一行 windowsHide 纯选项）
+审计：[gate] L2（跨 4 模块 · 7 文件：5 代码/1 测试）advisory；模块文档认领已 --no-docs 显式豁免

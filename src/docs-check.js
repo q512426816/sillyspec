@@ -60,7 +60,7 @@ function _rdExists(absPath) {
 export function createHeadReader(projectRoot, ref = 'HEAD') {
   const root = pathResolve(projectRoot)
   const git = (args) => execFileSync('git', ['-C', root, ...args], {
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   })
   let toplevel
   try { toplevel = git(['rev-parse', '--show-toplevel']).trim() } catch { return null }

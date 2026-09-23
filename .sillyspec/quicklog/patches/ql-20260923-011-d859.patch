@@ -1,0 +1,164 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index 8caaaef7..bee76359 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -13,7 +13,7 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同
+ 
+ `src/spec-sync.js`（2026-08-17 spec-file-incremental-sync 起）：CLI 直跑场景的 spec 文件树增量同步——以服务器清单为锚 walk/hash/diff 后只推送变化文件（add/update/delete/rename），复用 daemon 排除口径（local.yaml 不上传、worktrees 剪枝）。并行会话 fail-closed 护栏（2026-08-28 ql-20260828-003）：`computeSpecOps` changes/ 整删守卫（本地树非空但 changes/ 全空而服务器有 → 跳过防误删）+ `filterStaleUpdates` 旧副本回推守卫（.runtime/spec-sync-last-success.json 时间锚——本地自上次同步未改动而服务器已前进的 update 拦下，重存后重推为强制出口）。
+ 
+-`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。提交证据并入 worktree 分支（2026-09-23 quick ql-20260923-006：`sillyspec/<change>` 分支 log 与主仓 log 按 hash 去重并集 `mergeCommitEvidence`——apply 前任务提交只在分支上，主仓 log 盲区曾致 change-events-channel 流 R1 全量误报；分支缺失/git 失败 fail-open 不动主仓结果）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（30 例）。2026-09-23 quick（watcher-alerts）补纯读出口：`watcherEventsPath`/`readWatcherEvents`（jsonl 解析+告警过滤（kind/severity 双字段容差）+坏行容忍计数，readKnowledgeHits 先例），CLI 面 `sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]`（缺省 warning-only，--follow 2s 轮询增量打印）；测试锚：test/watcher-alerts.test.mjs（10 例）。
++`src/watcher.js`（2026-09-23-sentinel-rules 起 L1 哨兵）：观测旁路升级为会喊——快照四源扩展（git log -20 hash/subject/files 单调用、porcelain 代码脏面、scan 账本 testResult.status、execute-runs review.json mtime 面、files.checkedTasks）+ `applySentinelRules` 四规则纯函数引擎（假勾选/改测试凑绿/范围漂移/停滞；恒 advisory `{kind:'warning', rule, severity, provisional:true}` 入既有 jsonl+推送；不写 progress db；逐规则 fail-open）+ 水位回补（watcher-last-snapshot-<change>.json 每轮内容去重落盘，重启补发 backfill:true 事件，幂等=水位消费前移）。提交证据并入 worktree 分支（2026-09-23 quick ql-20260923-006：`sillyspec/<change>` 分支 log 与主仓 log 按 hash 去重并集 `mergeCommitEvidence`——apply 前任务提交只在分支上，主仓 log 盲区曾致 change-events-channel 流 R1 全量误报；分支缺失/git 失败 fail-open 不动主仓结果）。配套 `src/sentinel-assertions.js` 导出 L0 纯函数 `detectFakeCheckCompletion`（--done 收口拒收支点，接线在下批）。测试锚：test/sentinel-rules.test.mjs（30 例）。2026-09-23 quick（watcher-alerts）补纯读出口：`watcherEventsPath`/`readWatcherEvents`（jsonl 解析+告警过滤（kind/severity 双字段容差）+坏行容忍计数，readKnowledgeHits 先例），CLI 面 `sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]`（缺省 warning-only，--follow 2s 轮询增量打印）；测试锚：test/watcher-alerts.test.mjs（10 例）。 2026-09-23 哨兵降噪 quick：R3 基线豁免（首判轮 prev 脏面拍 baselineDirty——观测起点已在脏面的并行会话先在途文件不归因本变更，水位重启场景 prev 即水位快照语义自洽）+ 哨兵总阀 `SILLYSPEC_SENTINEL=0`（规则面零告警、watcher 照常记中性事件，与 SILLYSPEC_WATCHER=0 整体不拉起/SILLYSPEC_WATCHER_PUSH=0 不推平台构成三级阀）+ git 子进程调用全入口补 windowsHide（git-helper 双点+commit-guard/docs-check/gate-snapshot/green-cache——治 detached watcher 每轮 git.exe 在无控制台进程下闪 cmd 窗即灭）。
+ 
+ ## 当前设计
+ `SyncManager` 是独立于 `ProgressManager` 的同步管理类，由 `run.js` 和 `index.js` 调用。设计遵循 "Best Effort" 原则：所有网络失败仅 `console.warn`，不抛错、不阻塞主流程。
+diff --git a/src/commit-guard.js b/src/commit-guard.js
+index d07aa6ee..2b435bd0 100644
+--- a/src/commit-guard.js
++++ b/src/commit-guard.js
+@@ -85,6 +85,8 @@ function main() {
+       // stderr 必须管道化：execFileSync 默认把子进程 stderr 透传给父进程——非 git 目录下
+       // git 落 --no-index 模式报 unknown option 的 usage 长文会漏进守卫 stderr（噪声）。
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
++    stdio: ['ignore', 'pipe', 'pipe'],
+     })
+       .split(/\r?\n/)
+       .map((s) => s.trim())
+diff --git a/src/docs-check.js b/src/docs-check.js
+index 17ea1354..37d5cd5b 100644
+--- a/src/docs-check.js
++++ b/src/docs-check.js
+@@ -60,7 +60,7 @@ function _rdExists(absPath) {
+ export function createHeadReader(projectRoot, ref = 'HEAD') {
+   const root = pathResolve(projectRoot)
+   const git = (args) => execFileSync('git', ['-C', root, ...args], {
+-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
++    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+   })
+   let toplevel
+   try { toplevel = git(['rev-parse', '--show-toplevel']).trim() } catch { return null }
+diff --git a/src/git-helper.js b/src/git-helper.js
+index 28e65252..16e76dd4 100644
+--- a/src/git-helper.js
++++ b/src/git-helper.js
+@@ -99,7 +99,7 @@ export function safeGit(cwd, args, opts = {}) {
+   // 格式化（取首行）推迟到最终返回，避免重试分支重复格式化，并保留原始 code 供重试判定。
+   const attempt = (t) => {
+     try {
+-      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'] })
++      let value = execFileSync('git', fullArgs, { encoding: 'utf8', timeout: t, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+       if (trim) value = value.trim()
+       return { value, errorObj: null }
+     } catch (e) {
+@@ -128,7 +128,7 @@ export function git(cwd, args, opts = {}) {
+   const fullArgs = buildFullArgs(cwd, args)
+   // env（终批-③）：可选注入（如 baseline checkpoint 的临时 GIT identity）——调用方必须
+   // 用 { ...process.env, GIT_xxx } 展开形式，裸替换会丢 SystemRoot/USERPROFILE/TEMP（Windows）
+-  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env })
++  const value = execFileSync('git', fullArgs, { encoding, timeout, maxBuffer: GIT_MAX_BUFFER, stdio: ['ignore', 'pipe', 'pipe'], env, windowsHide: true })
+   if (Buffer.isBuffer(value)) return value
+   return trim ? value.trim() : value
+ }
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 94a27fd9..e89b39ac 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -20,7 +20,7 @@ import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
+ import { tmpdir } from 'node:os'
+ 
+ function git(cwd, args) {
+-  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }).trim()
++  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true }).trim()
+ }
+ 
+ /**
+diff --git a/src/watcher.js b/src/watcher.js
+index 0025cc7e..d82173fc 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -592,10 +592,15 @@ function loadDeclaredScope(changeDir, readImpl, readdirImpl) {
+ /**
+  * R3 范围漂移（FR-04）：dirtyCode 中声明面外文件（精确相等或 globMatch 容差，复用
+  * change-list 匹配器）；只对新漂移文件告警（lastDriftFiles 单调去重，活动恢复不改集）。
++ * 基线豁免（2026-09-23 R8 对撞实证 MP 假归因）：观测起点已在脏面的文件 = 并行会话先在途
++ * 工作（quick 边界记录 / baseline checkpoint 同款语义），不归因本变更——首拍基线之外的
++ * 新出现声明面外文件才算漂移。
+  */
+ function ruleScopeDrift(next, state, declaredScope, ts) {
+   if (!declaredScope || !Array.isArray(next.dirtyCode) || next.dirtyCode.length === 0) return [];
+-  const unmatched = next.dirtyCode.filter((p) => !declaredScope.some((pat) => pat === p || globMatch(p, pat)));
++  const baseline = Array.isArray(state.baselineDirty) ? state.baselineDirty : [];
++  const unmatched = next.dirtyCode.filter((p) =>
++    !baseline.includes(p) && !declaredScope.some((pat) => pat === p || globMatch(p, pat)));
+   const fresh = unmatched.filter((p) => !state.lastDriftFiles.includes(p));
+   state.lastDriftFiles = unmatched;
+   if (fresh.length === 0) return [];
+@@ -627,10 +632,19 @@ function ruleStall(prev, next, baseEvents, state, ts) {
+  * 哨兵规则引擎主入口（纯函数；prev 缺新字段按空集/null 容错 fail-open）。
+  * @returns {{warnings:Array, state:Object}} warnings 恒 provisional:true；archived 拍不判。
+  */
+-export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync } = {}) {
++export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync, env = process.env } = {}) {
+   const st = state || createSentinelState(next && next.ts);
+   const warnings = [];
+   if (!prev || !next || next.archived) return { warnings, state: st };
++  // 哨兵总阀（2026-09-23 用户降噪诉求）：SILLYSPEC_SENTINEL=0 → 规则面零告警，watcher
++  // 照常记录中性事件（观测不中断）——比 SILLYSPEC_WATCHER=0 整体不拉起细一档；排障/
++  // 嫌吵时环境级一关即静。
++  if (env.SILLYSPEC_SENTINEL === '0') return { warnings, state: st };
++  // R3 基线脏面首拍（见 ruleScopeDrift 注释）：首判轮以 prev 脏面为基线——水位重启场景
++  // 首判轮 prev 即水位快照，语义自洽（重启前已脏 = 先在途）。
++  if (!Array.isArray(st.baselineDirty)) {
++    st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
++  }
+   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
+   try { warnings.push(...ruleFakeCheck(prev, next, now)); } catch { /* R1 本轮跳过 */ }
+   try { warnings.push(...ruleTestTamper(prev, next, st, now)); } catch { /* R2 本轮跳过 */ }
+diff --git a/test/sentinel-rules.test.mjs b/test/sentinel-rules.test.mjs
+index 9a34d4bf..ba5a0915 100644
+--- a/test/sentinel-rules.test.mjs
++++ b/test/sentinel-rules.test.mjs
+@@ -4,7 +4,7 @@
+  * 覆盖验收面（fixture 快照直构，零 CLI 依赖零真 git；fs 面仅限 tmpdir fixture）：
+  *   ① R1 假勾选：正（翻格零证据）/负（commit 证据）/负（review mtime 证据）/token 边界钉；
+  *   ② R2 改测试凑绿：正（FAIL→新测试脏→PASS）/负（FAIL 前遗留脏面）/负（src-only 改动）；
+- *   ③ R3 范围漂移：正（声明外脏文件）/负（面内）/负（无声明面 fail-open）/去重/glob 容差；
++ *   ③ R3 范围漂移：正（声明外脏文件）/负（面内）/负（无声明面 fail-open）/去重/glob 容差/基线豁免（并行会话先在脏面不归因）＋SILLYSPEC_SENTINEL=0 总阀；
+  *   ④ R4 停滞：early 20min 与 execute 15min 阈值正负例+episode 去重+活动复位+相位锁存；
+  *   ⑤ warning 事件形态（kind/rule/severity/provisional/stage:null）；
+  *   ⑥ L0 三态（complete/fake/none）+token 边界+无 id 行不入判+review 注入证据；
+@@ -443,3 +443,34 @@ test('buildSnapshot worktree 分支证据并入：task 提交在分支上不再
+     assert.equal(warnings.length, 0, '分支提交并入后假勾选不再误报')
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++// ── R3 基线豁免 + 哨兵总阀（2026-09-23 哨兵降噪：闪窗与误归因修复）──
++
++test('R3 基线豁免：观测起点已在脏面的并行会话文件不告警，其后新文件才告警', () => {
++  const changeDir = fixtureChangeDir()
++  try {
++    const prev = snap({ dirtyCode: ['parallel/x.js', 'parallel/y.test.ts'] })
++    const next = snap({ ts: prev.ts + 3000, dirtyCode: ['parallel/x.js', 'parallel/y.test.ts', 'src/ok.js'] })
++    const r1 = run(prev, next, { changeDir })
++    assert.equal(rulesOf(r1.warnings).includes('scope-drift'), false, '基线脏面（并行会话先在途）不归因本变更')
++    const next2 = snap({ ts: next.ts + 3000, dirtyCode: ['parallel/x.js', 'parallel/y.test.ts', 'src/ok.js', 'src/new-drift.js'] })
++    const r2 = run(next, next2, { changeDir, state: r1.state })
++    const w = r2.warnings.find((x) => x.rule === 'scope-drift')
++    assert.ok(w, '基线之后新出现的声明面外文件仍告警')
++    assert.match(w.detail, /src\/new-drift\.js/)
++    assert.doesNotMatch(w.detail, /parallel\//, '基线文件不点名')
++  } finally { rmSync(changeDir, { recursive: true, force: true }) }
++})
++
++test('哨兵总阀：SILLYSPEC_SENTINEL=0 → stall/drift 双条件在场零告警', () => {
++  const changeDir = fixtureChangeDir()
++  try {
++    const prev = snap({ dirtyCode: [] })
++    const next = snap({ ts: prev.ts + STALL_EARLY_MS + 60_000, dirtyCode: ['src/x.js'] })
++    const { warnings } = applySentinelRules({
++      prev, next, baseEvents: [], state: createSentinelState(prev.ts), now: next.ts, changeDir,
++      env: { SILLYSPEC_SENTINEL: '0' },
++    })
++    assert.equal(warnings.length, 0, '总阀关 → 四规则零告警（watcher 仍记录中性事件）')
++  } finally { rmSync(changeDir, { recursive: true, force: true }) }
++})

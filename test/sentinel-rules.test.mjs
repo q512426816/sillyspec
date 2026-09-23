@@ -4,7 +4,7 @@
  * 覆盖验收面（fixture 快照直构，零 CLI 依赖零真 git；fs 面仅限 tmpdir fixture）：
  *   ① R1 假勾选：正（翻格零证据）/负（commit 证据）/负（review mtime 证据）/token 边界钉；
  *   ② R2 改测试凑绿：正（FAIL→新测试脏→PASS）/负（FAIL 前遗留脏面）/负（src-only 改动）；
- *   ③ R3 范围漂移：正（声明外脏文件）/负（面内）/负（无声明面 fail-open）/去重/glob 容差；
+ *   ③ R3 范围漂移：正（声明外脏文件）/负（面内）/负（无声明面 fail-open）/去重/glob 容差/基线豁免（并行会话先在脏面不归因）＋SILLYSPEC_SENTINEL=0 总阀；
  *   ④ R4 停滞：early 20min 与 execute 15min 阈值正负例+episode 去重+活动复位+相位锁存；
  *   ⑤ warning 事件形态（kind/rule/severity/provisional/stage:null）；
  *   ⑥ L0 三态（complete/fake/none）+token 边界+无 id 行不入判+review 注入证据；
@@ -442,4 +442,35 @@ test('buildSnapshot worktree 分支证据并入：task 提交在分支上不再�
       .filter((w) => w.rule === 'fake-check')
     assert.equal(warnings.length, 0, '分支提交并入后假勾选不再误报')
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+// ── R3 基线豁免 + 哨兵总阀（2026-09-23 哨兵降噪：闪窗与误归因修复）──
+
+test('R3 基线豁免：观测起点已在脏面的并行会话文件不告警，其后新文件才告警', () => {
+  const changeDir = fixtureChangeDir()
+  try {
+    const prev = snap({ dirtyCode: ['parallel/x.js', 'parallel/y.test.ts'] })
+    const next = snap({ ts: prev.ts + 3000, dirtyCode: ['parallel/x.js', 'parallel/y.test.ts', 'src/ok.js'] })
+    const r1 = run(prev, next, { changeDir })
+    assert.equal(rulesOf(r1.warnings).includes('scope-drift'), false, '基线脏面（并行会话先在途）不归因本变更')
+    const next2 = snap({ ts: next.ts + 3000, dirtyCode: ['parallel/x.js', 'parallel/y.test.ts', 'src/ok.js', 'src/new-drift.js'] })
+    const r2 = run(next, next2, { changeDir, state: r1.state })
+    const w = r2.warnings.find((x) => x.rule === 'scope-drift')
+    assert.ok(w, '基线之后新出现的声明面外文件仍告警')
+    assert.match(w.detail, /src\/new-drift\.js/)
+    assert.doesNotMatch(w.detail, /parallel\//, '基线文件不点名')
+  } finally { rmSync(changeDir, { recursive: true, force: true }) }
+})
+
+test('哨兵总阀：SILLYSPEC_SENTINEL=0 → stall/drift 双条件在场零告警', () => {
+  const changeDir = fixtureChangeDir()
+  try {
+    const prev = snap({ dirtyCode: [] })
+    const next = snap({ ts: prev.ts + STALL_EARLY_MS + 60_000, dirtyCode: ['src/x.js'] })
+    const { warnings } = applySentinelRules({
+      prev, next, baseEvents: [], state: createSentinelState(prev.ts), now: next.ts, changeDir,
+      env: { SILLYSPEC_SENTINEL: '0' },
+    })
+    assert.equal(warnings.length, 0, '总阀关 → 四规则零告警（watcher 仍记录中性事件）')
+  } finally { rmSync(changeDir, { recursive: true, force: true }) }
 })

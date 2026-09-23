@@ -20,7 +20,7 @@ import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 
 function git(cwd, args) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 }).trim()
+  return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true }).trim()
 }
 
 /**

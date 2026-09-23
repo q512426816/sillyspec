@@ -592,10 +592,15 @@ function loadDeclaredScope(changeDir, readImpl, readdirImpl) {
 /**
  * R3 范围漂移（FR-04）：dirtyCode 中声明面外文件（精确相等或 globMatch 容差，复用
  * change-list 匹配器）；只对新漂移文件告警（lastDriftFiles 单调去重，活动恢复不改集）。
+ * 基线豁免（2026-09-23 R8 对撞实证 MP 假归因）：观测起点已在脏面的文件 = 并行会话先在途
+ * 工作（quick 边界记录 / baseline checkpoint 同款语义），不归因本变更——首拍基线之外的
+ * 新出现声明面外文件才算漂移。
  */
 function ruleScopeDrift(next, state, declaredScope, ts) {
   if (!declaredScope || !Array.isArray(next.dirtyCode) || next.dirtyCode.length === 0) return [];
-  const unmatched = next.dirtyCode.filter((p) => !declaredScope.some((pat) => pat === p || globMatch(p, pat)));
+  const baseline = Array.isArray(state.baselineDirty) ? state.baselineDirty : [];
+  const unmatched = next.dirtyCode.filter((p) =>
+    !baseline.includes(p) && !declaredScope.some((pat) => pat === p || globMatch(p, pat)));
   const fresh = unmatched.filter((p) => !state.lastDriftFiles.includes(p));
   state.lastDriftFiles = unmatched;
   if (fresh.length === 0) return [];
@@ -627,10 +632,19 @@ function ruleStall(prev, next, baseEvents, state, ts) {
  * 哨兵规则引擎主入口（纯函数；prev 缺新字段按空集/null 容错 fail-open）。
  * @returns {{warnings:Array, state:Object}} warnings 恒 provisional:true；archived 拍不判。
  */
-export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync } = {}) {
+export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync, env = process.env } = {}) {
   const st = state || createSentinelState(next && next.ts);
   const warnings = [];
   if (!prev || !next || next.archived) return { warnings, state: st };
+  // 哨兵总阀（2026-09-23 用户降噪诉求）：SILLYSPEC_SENTINEL=0 → 规则面零告警，watcher
+  // 照常记录中性事件（观测不中断）——比 SILLYSPEC_WATCHER=0 整体不拉起细一档；排障/
+  // 嫌吵时环境级一关即静。
+  if (env.SILLYSPEC_SENTINEL === '0') return { warnings, state: st };
+  // R3 基线脏面首拍（见 ruleScopeDrift 注释）：首判轮以 prev 脏面为基线——水位重启场景
+  // 首判轮 prev 即水位快照，语义自洽（重启前已脏 = 先在途）。
+  if (!Array.isArray(st.baselineDirty)) {
+    st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
+  }
   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
   try { warnings.push(...ruleFakeCheck(prev, next, now)); } catch { /* R1 本轮跳过 */ }
   try { warnings.push(...ruleTestTamper(prev, next, st, now)); } catch { /* R2 本轮跳过 */ }
