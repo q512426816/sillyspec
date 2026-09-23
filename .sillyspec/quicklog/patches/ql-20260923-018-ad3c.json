@@ -1,0 +1,64 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-0064b3f1",
+  "totals": {
+    "files": 2,
+    "additions": 61,
+    "deletions": 3
+  },
+  "rows": [
+    {
+      "path": "src/run/quick-audit.js",
+      "declared": true,
+      "additions": 26,
+      "deletions": 3,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/gate-files-merge.test.mjs",
+      "declared": true,
+      "additions": 35,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 2,
+    "codeFileCount": 1,
+    "testFileCount": 1,
+    "moduleSpan": 1,
+    "modules": [
+      {
+        "id": "runtime",
+        "files": [
+          "src/run/quick-audit.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/gate-files-merge.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "na",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260923-018-ad3c",
+  "sessionId": "quick-0064b3f1",
+  "savedAt": "2026-09-23T11:04:48.779Z",
+  "patchSha256": "c9f5038cd880ca0cd7d2e9d84df9e64393ae3813c1db0e60edcb1a7830e292cb",
+  "patchStatus": "ok"
+}

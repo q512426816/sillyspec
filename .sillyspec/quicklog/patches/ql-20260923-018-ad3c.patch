@@ -1,0 +1,85 @@
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index bf398b63..8d600aeb 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -456,14 +456,37 @@ export function buildSemanticGuardHits({ cwd, specBase, files, changeName } = {}
+  *   semanticGuard 仅检测跑过（三条早退 skip 路径不跑检测、无字段）时挂载；WARNING 级
+  *   非阻断——action/failed 判定不受它影响（调用方 complete-handlers.js 只读 action/failed，零改动）。
+  */
++/**
++ * 门禁文件集合并（ql-018）：审计口径 ∪ 声明边界，去重保序（审计在前）。声明文件即使被
++ * 审计判为「前序 baseline 未计入本轮」也随会话进快照——声明即边界（治 declared∩前序脏
++ * 被二选一丢弃→快照 HEAD 旧版→门禁恒假红，2026-09-23 ql-017 三轮实证）。纯函数。
++ */
++export function mergeGateFiles(audited, declared) {
++  const out = []
++  const seen = new Set()
++  for (const f of [...(Array.isArray(audited) ? audited : []), ...(Array.isArray(declared) ? declared : [])]) {
++    if (typeof f !== 'string' || !f || seen.has(f)) continue
++    seen.add(f)
++    out.push(f)
++  }
++  return out
++}
++
+ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
+   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
+     return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
+   }
+   const audited = Array.isArray(changedFiles) ? changedFiles : []
+-  // 倒推 B 模式兜底：审计口径为空时回退声明边界（文件早于会话启动被基线吸收的场景）
+-  const files = audited.length > 0 ? audited : (Array.isArray(declaredFiles) ? declaredFiles : [])
+-  const fileSource = audited.length > 0 ? '审计' : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
++  // 门禁文件集 = 审计 ∪ 声明边界（并集，2026-09-23 ql-018 修复）：旧口径二选一（审计非空时
++  // 丢弃 declaredFiles）致「declared ∩ 会话启动前已脏」的文件不进快照 overlay——快照装 HEAD
++  // 旧版，本会话新增导出缺失，快照内测试 import 即炸且重跑恒红（快照分叉家族第三 sibling
++  // 的根治件：声明过的文件无论审计口径是否计入，一律随会话进快照——声明即边界）。倒推 B
++  // 兜底语义保留（审计为空时 declaredFiles 独撑，与旧版一致）；并集对快照零成本（overlay 与
++  // HEAD 同内容的文件不产生差异）。
++  const files = mergeGateFiles(audited, Array.isArray(declaredFiles) ? declaredFiles : [])
++  const fileSource = audited.length > 0
++    ? (files.length > audited.length ? `审计∪声明（审计 ${audited.length} + 声明补入 ${files.length - audited.length}）` : '审计')
++    : (files.length > 0 ? '声明边界兜底（倒推 B：文件早于会话启动被基线吸收）' : '无')
+   // 代码文件判定（2026-09-19 monorepo 子包实证修复：multi-agent-platform 回带收口 6 个
+   // sillyhub-daemon/src/**、frontend/src/** 文件被「纯 doc/配置」误判跳过实测）：旧口径只认
+   // 仓根 src/、test/ 前缀——monorepo 子包（<pkg>/src/**、backend/app/**.py）全漏。
+diff --git a/test/gate-files-merge.test.mjs b/test/gate-files-merge.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-files-merge.test.mjs
+@@ -0,0 +1,35 @@
++/**
++ * gate-files-merge（ql-018，2026-09-23）：门禁文件集「审计 ∪ 声明」合并口径。
++ *
++ * 锁死契约（快照分叉第三 sibling 根治件的纯函数面）：
++ * 1. 并集钉：审计非空时声明文件不再被丢弃（旧二选一 → declared∩前序脏文件不进快照 →
++ *    快照 HEAD 旧版缺新导出 → import 炸恒假红，2026-09-23 ql-017 三轮实证）；
++ * 2. 去重保序（审计在前）；倒推 B 兜底保留（审计空 → 声明独撑）；空参容忍。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mergeGateFiles } from '../src/run/quick-audit.js'
++
++test('T1 并集钉：审计非空时声明文件保留（旧二选一在此丢文件）', () => {
++  const audited = ['test/new-file.test.mjs']
++  const declared = ['src/verify-postcheck.js', 'src/run/quick-audit.js', 'src/config-schema.js', '.sillyspec/local.yaml.example', 'test/new-file.test.mjs']
++  const out = mergeGateFiles(audited, declared)
++  assert.deepEqual(out, [
++    'test/new-file.test.mjs',
++    'src/verify-postcheck.js',
++    'src/run/quick-audit.js',
++    'src/config-schema.js',
++    '.sillyspec/local.yaml.example',
++  ], '声明文件全部补入且去重保序（审计在前）')
++})
++
++test('T2 倒推 B 兜底保留：审计空 → 声明独撑', () => {
++  assert.deepEqual(mergeGateFiles([], ['src/a.js']), ['src/a.js'])
++  assert.deepEqual(mergeGateFiles(null, ['src/a.js', 'src/b.js']), ['src/a.js', 'src/b.js'])
++})
++
++test('T3 空与非法容忍', () => {
++  assert.deepEqual(mergeGateFiles([], []), [])
++  assert.deepEqual(mergeGateFiles(null, undefined), [])
++  assert.deepEqual(mergeGateFiles(['src/a.js', null, '', 42, 'src/a.js'], ['src/b.js']), ['src/a.js', 'src/b.js'], 'null/空串/非串/重复剔除')
++})

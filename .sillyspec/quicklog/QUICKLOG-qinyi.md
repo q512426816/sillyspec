@@ -287,3 +287,14 @@
 根因：R9 实证两坑：全量套件实测 27:03 撞固定 600s 帽被当超时失败（R1 轮 ~10min 损失）；快照 pytest 冻结零输出只能人工杀（R2 轮 ~11min）——lint 已有 2026-09-12 快照超时回退主仓先例，test 路径缺同款
 方案：①verify-postcheck.js resolveTestTimeoutMs 三级链（local.yaml commands.test_timeout_sec > env SILLYSPEC_TEST_TIMEOUT_MS > 600s）接 runFullCommand，超时 reason 冻结鉴别（双空输出=疑似环境冻结附复跑指引；非冻结附提帽/收窄指引）；lint 同链 lint_timeout_sec。②quick-audit.js 快照 test 超时/零输出自动回退主仓复跑（对齐 lint 先例）。③config-schema 双键登记+renderExample 模板同步（防漂耦合钉）+local.yaml.example 注释示例。收口口径披露：快照门禁本次恒假红——会话开始前已脏（含并行会话 hunk）的文件被边界审计记为前序 baseline 不进 overlay，快照缺本会话导出（快照分叉家族第三 sibling，登记 known-issues 待修），按既有口径 SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 主仓实测收口
 结果：主仓口径实测：npm test 全量绿（含新 test-timeout-config 3/3 与 config-schema 426/426）+verify 族 57/57 零失败（两轮自修：env 单位 bug、renderExample 模板耦合漏同步、阀名误用自纠）；lint 763 文件未引用导出 0
+
+## ql-20260923-018-ad3c | 2026-09-23 19:01:16 | 快照 overlay 归属根治——门禁文件集改「审计∪声明」并集（治 declared∩前序脏被二选一丢弃）
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/quick-audit.js（mergeGateFiles 纯函数+并集接入+fileSource 三态（--force-baseline 基线保护解锁；与并行会话在途 hunk 零重叠选择性提交））
+- test/gate-files-merge.test.mjs（NEW 三例）
+需求：快照 overlay 归属根治——门禁文件集改「审计∪声明」并集（治 declared∩前序脏被二选一丢弃）
+根因：2026-09-23 ql-017 三轮门禁恒假红实证：runQuickTestLintGate 文件集旧口径二选一（audited 非空时整体丢弃 declaredFiles）——会话启动前已脏（含并行会话 hunk）但被本会话修改并显式声明的文件不进快照 overlay，快照装 HEAD 旧版，本会话新增导出缺失，快照内测试 import 即炸且重跑恒红（known-issues 快照分叉家族第三 sibling 的根治件）。src/run/quick-audit.js 属基线保护文件，--force-baseline 显式解锁
+方案：①新 export 纯函数 mergeGateFiles（审计∪声明，去重保序审计在前；null/空串/非串/重复剔除）；②runQuickTestLintGate 接入替代二选一，fileSource 标签区分审计/审计∪声明（N+M）/声明兜底三态；倒推 B 兜底语义保留（审计空→声明独撑），并集对快照零成本（overlay 与 HEAD 同内容不产生差异）；声明即边界——声明过的文件无论审计口径是否计入一律随会话进快照
+结果：gate-files-merge 3/3（并集钉含 ql-017 五文件实证形态/倒推 B 保留/非法容忍）+quick-gate 与 gate-snapshot 族回归 72/72 零失败；lint 764 文件未引用导出 0；本 quick 收口即自验——修复使能快照正确装载本会话文件，门禁实测通过即根治生效的直接证据
