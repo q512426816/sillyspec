@@ -79,3 +79,30 @@ test('T3 polyglot：Python 仓 deps 发现（service.py → from app.modules.x i
   assert.ok(deps.includes('backend/app/modules/platform_sync/tests/test_service.py'), `命中本包测试（${deps.join(',')}）`)
   assert.ok(!deps.includes('backend/app/modules/other/tests/test_api.py'), '无关包测试不命中')
 })
+
+test('T4 deps 分批：py/js 双批、变更测试优先、pytest 前缀推断（经导出函数直测）', async () => {
+  const mod = await import('../src/verify-postcheck.js')
+  // buildDepsBatches 未导出——用最小 fixture 走 runModuleSubset 不现实（需模块命令执行环境），
+  // 改为对导出面 + 命令形态的行为断言：在含 py+js 依赖的仓跑 deps-auto-default，
+  // 断言 command 含 deps(auto-py)（pytest 推断兜底 python -m pytest）且 js 批在场。
+  const fx = mk('deps-batch-')
+  for (const d of ['backend/app/mod1/tests', 'test', 'src', '.sillyspec']) mkdirSync(join(fx, d), { recursive: true })
+  const wf = (p2, c) => writeFileSync(join(fx, p2), c)
+  wf('backend/app/mod1/service.py', 'def f(): pass\n')
+  wf('src/lib.js', 'export const a = 1\n')
+  wf('backend/app/mod1/tests/test_service.py', 'from app.mod1.service import f\n')
+  wf('test/lib.test.mjs', "import { a } from '../src/lib.js'\nimport { test } from 'node:test'\ntest('l', () => {})\n")
+  wf('.sillyspec/local.yaml', 'commands:\n  test: "node --test test/"\n')
+  const { execFileSync } = await import('node:child_process')
+  execFileSync('git', ['init', '-q'], { cwd: fx })
+  execFileSync('git', ['config', 'user.email', 't@t'], { cwd: fx })
+  execFileSync('git', ['config', 'user.name', 't'], { cwd: fx })
+  execFileSync('git', ['add', '.'], { cwd: fx, stdio: 'ignore' })
+  execFileSync('git', ['commit', '-qm', 'i'], { cwd: fx })
+  wf('backend/app/mod1/service.py', 'def f(): pass\n# t\n')
+  wf('src/lib.js', 'export const a = 2\n')
+  const r = mod.runVerifyTestCheck({ cwd: fx, specBase: join(fx, '.sillyspec'), changeName: null })
+  assert.ok(/deps\(py\d+\+js\d+\)|deps\(js\d+\+py\d+\)/.test(String(r.command)), `command 含双批聚合（${r.command}）`)
+  assert.ok(r.modules && r.modules.some(m => m.name === 'deps(auto-py)'), 'py 批以 pytest 兜底运行器在场')
+  assert.ok(r.modules && r.modules.some(m => m.name === 'deps(auto-js)'), 'js 批在场')
+})

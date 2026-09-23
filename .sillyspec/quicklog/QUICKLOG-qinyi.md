@@ -371,3 +371,8 @@
 根因：R10 实证：deps-auto-default 在 MP 后端（Python）未收窄——discoverModuleDependentTests 硬编码 sillyspec 自家形态（src/ 前缀 + JS import 串 + test/ 单层目录），Python 布局零命中→按设计回退全量 commands.test，R10 verify 又跑 27 分钟全量
 方案：三件泛化：①isTestFilePath 多语言测试判定（*.test/spec.[cm]js/ts + test_*.py/*_test.py）②collectTestFiles 递归收集（任意深度 tests?/ 目录，跳 node_modules/.venv/.git/dist/build/.runtime/.sillyspec，深度帽 6）③匹配双通道——JS 路径子串 + Python 点串导入族（pythonImportCandidates：变更 .py 的各级包后缀 from X import/import X 命中）；代码面不再限定 src/ 前缀
 结果：verify-deps-auto-default 3/3（新增 T3 polyglot：backend/app/.../service.py→from app.modules.x import 测试命中、无关包不命中）+verify 族 fail 0+test:core fail 0+lint 774 未引用导出 0
+
+## ql-20260924-002-4cbc | 2026-09-24 02:30:47 | deps(auto) 分批执行修复——py/js 双运行器（pytest 前缀自模块命令推断）+公平帽+变更测试优先（治 R10 四缺陷①②）
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）

@@ -2307,6 +2307,38 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
  * 串行跑命中的模块子集，聚合结果。
  * 返回 shape 与 runFullCommand 一致（status/command/exitCode/durationMs/outputTail/reason/resultPath）。
  */
+
+/**
+ * deps(auto) 运行器推断 + 公平组卷（2026-09-24 R10 实证修复）：
+ * - R10 缺陷①：deps 一律 `node --test` 执行——.py 依赖测试全 SyntaxError 伪败（只能靠豁免放行）。
+ * - R10 缺陷②：字母序 slice(0,30) 截断——前端 .tsx 依赖测试恒被后端 .py 挤出跑面。
+ * 修法：按扩展名分组（.py 一组 / 其余 node --test 一组），组内「本次变更的测试文件优先」排序，
+ * 每组按比例分 30 帽（保底 5）；.py 组运行器从命中模块命令推断（含 pytest 的命令取其 pytest
+ * 前缀——如 `cd backend && uv run pytest` 的 `uv run pytest`；无命中模块兜底 python -m pytest）。
+ */
+function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
+  const norm = (p2) => String(p2).replace(/\\/g, '/')
+  const changedSet = new Set((changedFiles || []).map(norm))
+  const prio = (f) => changedSet.has(norm(f)) ? 0 : 1 // 变更测试文件优先
+  const py = deps.filter(f => f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
+  const js = deps.filter(f => !f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
+  const CAP = 30
+  const pyCap = py.length === 0 ? 0 : js.length === 0 ? CAP : Math.max(5, Math.min(CAP - 5, Math.round(CAP * py.length / (py.length + js.length))))
+  const jsCap = CAP - pyCap
+  const pyRun = py.slice(0, pyCap)
+  const jsRun = js.slice(0, jsCap)
+  // .py 运行器推断：命中模块命令串中找 pytest 前缀（形如 <...> pytest），否则 python -m pytest
+  let pyRunner = 'python -m pytest'
+  for (const h of hits || []) {
+    const m = /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(String(h.test || ''))
+    if (m) { pyRunner = m[1].trim(); break }
+  }
+  const batches = []
+  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
+  if (jsRun.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsRun.join(' ')}`, count: jsRun.length, dropped: js.length - jsRun.length })
+  return batches
+}
+
 function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [] }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
@@ -2314,14 +2346,18 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
   // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
   // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
   const deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
+  let depsBatches = []
   if (deps.length > 0) {
-    perModule.push(runOneModule('deps(auto)', `node --test ${deps.slice(0, 30).join(' ')}`, cwd, knownFailures))
-    console.log(`ℹ️ module 子集已附加依赖测试伪模块 deps(auto)：${deps.length} 个（import 变更 src/变更的 test 本体，未被模块命令串覆盖——治硬编码清单腐烂）`)
+    depsBatches = buildDepsBatches({ deps, changedFiles, hits })
+    for (const b of depsBatches) {
+      perModule.push(runOneModule(b.name, b.command, cwd, knownFailures))
+      console.log(`ℹ️ module 子集附加依赖测试 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 前缀自模块命令推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
+    }
   }
   const status = aggregateStatus(perModule)
 
   let command = `module[${hits.map(h => h.name).join(',')}]`
-  if (deps.length > 0) command += `+deps(${Math.min(deps.length, 30)})`
+  if (depsBatches.length > 0) command += `+deps(${depsBatches.map(b => `${b.short}${b.count}`).join('+')})`
   const exitCode = status === 'passed' ? 0 : 1
   const durationMs = Date.now() - subsetStartedAt
 
