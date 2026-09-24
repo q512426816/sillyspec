@@ -1,0 +1,312 @@
+diff --git a/src/flow.js b/src/flow.js
+index 3294a37c..cdafa038 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -24,9 +24,9 @@
+  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
++import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+-import { join } from 'node:path'
++import { join, relative } from 'node:path'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+@@ -348,45 +348,69 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+   if (st.substeps?.patch === 'done') { skip('patch') } else {
+     let patchOk = false
+     try {
+-      const ownFiles = (await attributedChangedFiles()).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
++      // patch 面 = 本变更可归属变化（2026-09-25-thin-patch-scope-fix 收窄：dirty 全扫面会把并行
++      // 会话未声明 WIP 冻结进来——上变更实测 49 文件泄漏）：①baseline..HEAD 提交面（.sillyspec/
++      // 治理面只留本变更目录，他侧 quicklog/knowledge WIP 不入）②本变更目录全部工作树件（未提交
++      // 治理面/槽位作答）——排除 patch 自引用。提交面再过他侧声明切分（他侧同窗口提交的防线）。
+       if (!st.baseline_commit) {
+         console.log('📦 patch 留档跳过：无 git 基线（无历史仓）')
+         patchOk = true
+-      } else if (ownFiles.length === 0) {
+-        console.log('📦 patch 留档跳过：归属文件面为空')
+-        patchOk = true
+       } else {
+-        const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
+-        const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
+-        const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
+-        let additions = 0
+-        let deletions = 0
+-        for (const f of ownFiles) {
+-          const s = stats.get(f)
+-          if (s && Number.isFinite(s.additions)) additions += s.additions
+-          if (s && Number.isFinite(s.deletions)) deletions += s.deletions
+-        }
+-        const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+-        const meta = {
+-          change,
+-          baseline: st.baseline_commit,
+-          head: typeof head === 'string' ? head.trim() : null,
+-          files: ownFiles,
+-          totals: { files: ownFiles.length, additions, deletions },
+-          savedAt: new Date().toISOString(),
+-          note: 'flow done 时点冻结（归属收窄后本变更文件面；含工作树未提交与 untracked）',
++        const ownPrefix = `.sillyspec/changes/${change}/`
++        const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
++        let committed = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
++          .filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
++        try {
++          const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
++          committed = splitOwnVsForeignDiffFiles(cwd, change, committed, { specBase }).own
++        } catch { /* 切分失败 fail-closed 保留提交面 */ }
++        const changeDirFiles = []
++        const walk = (dir) => {
++          for (const e of readdirSync(dir, { withFileTypes: true })) {
++            const p = join(dir, e.name)
++            if (e.isDirectory()) walk(p)
++            else changeDirFiles.push(relative(cwd, p).replace(/\\/g, '/'))
++          }
+         }
+-        if (typeof frozen === 'string' && frozen) {
+-          const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
+-          writeFileSync(join(changeDir, 'change.patch'), patchText)
+-          meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+-          meta.patchStatus = 'ok'
++        try { walk(changeDir) } catch { /* 目录异常=空面 */ }
++        const ownFiles = [...new Set([...committed, ...changeDirFiles])]
++          .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
++        if (ownFiles.length === 0) {
++          console.log('📦 patch 留档跳过：本变更可归属文件面为空')
++          patchOk = true
+         } else {
+-          meta.patchStatus = 'failed'
++          const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
++          const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
++          const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
++          let additions = 0
++          let deletions = 0
++          for (const f of ownFiles) {
++            const s = stats.get(f)
++            if (s && Number.isFinite(s.additions)) additions += s.additions
++            if (s && Number.isFinite(s.deletions)) deletions += s.deletions
++          }
++          const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++          const meta = {
++            change,
++            baseline: st.baseline_commit,
++            head: typeof head === 'string' ? head.trim() : null,
++            files: ownFiles,
++            totals: { files: ownFiles.length, additions, deletions },
++            savedAt: new Date().toISOString(),
++            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）',
++          }
++          if (typeof frozen === 'string' && frozen) {
++            const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
++            writeFileSync(join(changeDir, 'change.patch'), patchText)
++            meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
++            meta.patchStatus = 'ok'
++          } else {
++            meta.patchStatus = 'failed'
++          }
++          writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
++          console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
++          patchOk = true
+         }
+-        writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+-        console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
+-        patchOk = true
+       }
+     } catch (e) {
+       console.warn(`⚠️ patch 留档失败（fail-soft 不阻断归档；重入 flow done 从断点重试）：${(e && e.message) || e}`)
+@@ -498,7 +522,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     }) + '\n', 'utf8')
+   } catch { /* 遥测 best-effort */ }
+ 
+-  console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——六子步 ${doneList.join('、')}；change 已归档注销。`)
++  console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
+   // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
+   try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+   return { change, substeps: doneList }
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 0f06f176..b385b191 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -219,6 +219,13 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+   const archived = readdirSync(archDir)[0]
+   assert.ok(existsSync(join(archDir, archived, 'change.patch')), 'change.patch 随归档留存')
+   assert.ok(existsSync(join(archDir, archived, 'change-patch.json')), 'change-patch.json 随归档留存')
++  // 零泄漏（2026-09-25-thin-patch-scope-fix）：patch 面 = 提交面 ∪ 本变更目录——非本变更目录的
++  // .sillyspec 文件不得入 patch（上变更实测并行会话 WIP 被冻结进来）
++  const patchMeta = JSON.parse(readFileSync(join(archDir, archived, 'change-patch.json'), 'utf8'))
++  assert.ok(patchMeta.files.includes('work.txt'), '提交面 work.txt 入 patch')
++  const leaked = patchMeta.files.filter((f) => f.startsWith('.sillyspec/') && !f.startsWith(`.sillyspec/changes/${change}/`))
++  assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
++  assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
+   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+diff --git a/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/design.md b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:32:39.753Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-patch-scope-fix
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++patch 子步的文件面改为「本变更可归属」双源：①baseline..HEAD 提交面（.sillyspec/ 前缀只保留本变更目录，其余治理面 WIP 不入）并过 splitOwnVsForeignDiffFiles 他侧声明切分；②本变更目录全量工作树件（readdirSync 递归，未提交的槽位作答/骨架全收），排除 change.patch/change-patch.json 自引用。完成语案「六子步」硬文案改 SUBSTYPES.length 动态（现七子步）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow.js patch 子步文件面构造重写 + 完成语案动态化；readdirSync/relative 新增导入。无 CLI 参数变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用。2. 并发写：patch 生成是读 git+读目录后一次性写两个文件，与 agent 填槽（同目录）有轻微竞窗——patch 先落、槽后改则差一轮，重入 done 可重冻结（子步已 done 不重跑，接受 done 时点冻结语义）。3. 切换/中断：fail-soft 不标 done，重入重试。4. 作用域：他侧 .sillyspec/ WIP（quicklog/knowledge）与非本变更目录治理面零进入；他侧同窗口的非 .sillyspec 提交无作者级过滤（残余风险，他侧声明切分兜底已尽力）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=只冻结提交面会漏 agent 未提交的实现文件——但薄协议工作期增量提交是惯例、未提交实现由测试门 fail-closed 兜住，且治理面（变更目录）全量收入，审计缺口可接受。死路=继续用 attributedChangedFiles 的 dirty 全扫再逐个猜归属——并行会话未声明 WIP 无归属信号可猜，猜错即泄漏（上变更 49 文件实证），不如收窄到确定归属面。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++baseline_commit: 2264c27134ed5da57a3193baf34f1026295ce0f2
++updatedAt: '2026-09-24T16:36:06.724Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/proposal.md b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/proposal.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:32:39.752Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-patch-scope-fix
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:bbe56212abb21d6c23d0b7cc434684506b826eaf1c32af3e932d6f384064edb7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++任务原话转写：动机：上一变更（thin-patch-bindings）实测暴露 patch 面泄漏——attributedChangedFiles 的 dirty 全扫面把并行会话 17+ 个未声明 WIP 文件冻结进了本变更 change.patch（49 文件 +2870 行，实际本变更约 10 文件）。留档范围必须是本变更可归属的变化。
++成功标准：
++- patch 面改为：baseline..HEAD 提交面（.sillyspec/ 下仅保留本变更目录）∪ 本变更目录全部工作树件（排除 change.patch/change-patch.json 自引用）；提交面仍过他侧声明切分
++- flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.length 动态（现在是七子步）
++- 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入 patch）；flow 系测试全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:ddd89271e5485f849b5e844e1db9ffbc76e29ad55c12f0574682421c455f2e58:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++按成功标准机械推导，共 3 条验收面：
++1. patch 面改为：baseline..HEAD 提交面（.sillyspec/ 下仅保留本变更目录）∪ 本变更目录全部工作树件（排除 change.patch/change-patch.json 自引用）；提交面仍过他侧声明切分
++2. flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.length 动态（现在是七子步）
++3. 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入 patch）；flow 系测试全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:fff7f9264892cce21db5eefefae3ad22c1e328c091a9fca71b32ca23f376a1cd:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++1. patch 面改为：baseline..HEAD 提交面（.sillyspec/ 下仅保留本变更目录）∪ 本变更目录全部工作树件（排除 change.patch/change-patch.json 自引用）；提交面仍过他侧声明切分
++2. flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.length 动态（现在是七子步）
++3. 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入 patch）；flow 系测试全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/requirements.md b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/requirements.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:32:39.753Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-patch-scope-fix
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:b27ba063f97e05bd359690510960b32f9aae04c8779d76bd3b23085ec2c126e1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++### FR-01: patch 面改为：baseline..HEAD 提交面（.sillyspec/
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then patch 面改为：baseline..HEAD 提交面（.sillyspec/ 下仅保留本变更目录）∪ 本变更目录全部工作树件（排除 change.patch/change-patch.json 自引用）；提交面仍过他侧声明切分
++
++### FR-02: flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.leng
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.length 动态（现在是七子步）
++
++### FR-03: 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入 patch）；flow 系测试全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑥b 用例（change-patch.json files 零泄漏断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs（① 末步完成输出面）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs + test/flow-protocol.test.mjs + test/flow-route.test.mjs 全套
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/tasks.md b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-patch-scope-fix/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:32:39.753Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-patch-scope-fix
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:4fd11611345771a7b59c0ecdd531ed94a422c23678d0e8af30cb24406e44b999:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-patch-scope-fix 留痕重锚 -->
++- [ ] task-01: patch 面改为：baseline..HEAD 提交面（.sillyspec/ 下仅保留本变更目录）∪ 本变更目录全部
++- [ ] task-02: flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.length 动态（现在是七子步）
++- [ ] task-03: 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入 patch）；flow 系测试全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

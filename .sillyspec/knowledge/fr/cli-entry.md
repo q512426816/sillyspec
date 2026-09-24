@@ -81,3 +81,150 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖补生成回提与实测面输出，flow 系测试全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-dogfood-fixes/requirements.md#FR-04
 最近确认：654baef97fe80f4cdc317e009c7403fe8e159abf
+
+## FR-cli-entry-009 flow done 新增 patch 子步（ledger 后 noAI）：bui
+变更：2026-09-25-thin-patch-bindings
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 新增 patch 子步（ledger 后 noAI）：buildFrozenPatch 以 baseline 为基、归属收窄后的本变更文件面
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-01
+最近确认：2264c27134ed5da57a3193baf34f1026295ce0f2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-bindings:flow:FR-01
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-bindings
+  status: active
+
+## FR-cli-entry-010 requirements 机器稿每条 FR 附「测试绑定」AGENT 槽；flo
+变更：2026-09-25-thin-patch-bindings
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then requirements 机器稿每条 FR 附「测试绑定」AGENT 槽；flow done artifacts 校验槽非空（不适用加理由=已答；零槽=骨架过旧
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-02
+最近确认：2264c27134ed5da57a3193baf34f1026295ce0f2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-bindings:flow:FR-02
+  tests: test/flow-draft.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-bindings
+  status: active
+
+## FR-cli-entry-011 distill 在 indexRequirements 前从槽位提取绑定行落 t
+变更：2026-09-25-thin-patch-bindings
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-03
+最近确认：2264c27134ed5da57a3193baf34f1026295ce0f2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-bindings:flow:FR-03
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-bindings
+  status: active
+
+## FR-cli-entry-012 新增测试覆盖三件，flow 系测试全绿
+变更：2026-09-25-thin-patch-bindings
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖三件，flow 系测试全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-04
+最近确认：2264c27134ed5da57a3193baf34f1026295ce0f2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-bindings:flow:FR-04
+  tests: test/flow-draft.test.mjs | test/flow-protocol.test.mjs | test/flow-route.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-bindings
+  status: active
+
+## FR-cli-entry-013 patch 面改为：baseline..HEAD 提交面（.sillyspec/
+变更：2026-09-25-thin-patch-scope-fix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then patch 面改为：baseline..HEAD 提交面（.sillyspec/ 下仅保留本变更目录）∪ 本变更目录全部工作树件（排除 change.patch
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-scope-fix/requirements.md#FR-01
+最近确认：7b1dfd7dac919cbf93c81b266852bf398776d0ec
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-scope-fix:flow:FR-01
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-scope-fix
+  status: active
+
+## FR-cli-entry-014 flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.leng
+变更：2026-09-25-thin-patch-scope-fix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 完成语案的「六子步」硬文案改为按 SUBSTEPS.length 动态（现在是七子步）
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-scope-fix/requirements.md#FR-02
+最近确认：7b1dfd7dac919cbf93c81b266852bf398776d0ec
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-scope-fix:flow:FR-02
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-scope-fix
+  status: active
+
+## FR-cli-entry-015 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入
+变更：2026-09-25-thin-patch-scope-fix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试断言 patch 面零泄漏（非本变更目录的 .sillyspec 文件不得入 patch）；flow 系测试全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-patch-scope-fix/requirements.md#FR-03
+最近确认：7b1dfd7dac919cbf93c81b266852bf398776d0ec
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-patch-scope-fix:flow:FR-03
+  tests: test/flow-draft.test.mjs | test/flow-protocol.test.mjs | test/flow-route.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-patch-scope-fix
+  status: active
