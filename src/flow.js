@@ -25,7 +25,7 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import yaml from 'js-yaml'
@@ -167,6 +167,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
           `══════════════════════════════════════`,
           `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+          `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
           ``,
           `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
           ``,
@@ -285,6 +286,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+    `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
+    `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
     ``,
     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
@@ -664,6 +667,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       try { patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8')) } catch { /* 无冻结件 */ }
       let traceCount = 0
       try { traceCount = (JSON.parse(readFileSync(join(changeDir, 'test-trace.json'), 'utf8')).rows || []).length } catch { /* 无锚行 */ }
+      // 实测面回填（断点续跑 ledger 已 skip 时 gateSummaryText 为 null——从 verify-runs 最新
+      // test-result.json 回读，回执不留占位；无记录保持 —）
+      if (!gateSummaryText) {
+        try {
+          const runsDir = join(runtimeRoot, 'verify-runs')
+          const runs = readdirSync(runsDir).map((d) => join(runsDir, d)).filter((rp) => existsSync(join(rp, 'test-result.json')))
+          if (runs.length > 0) {
+            const latest = runs.sort((x, y) => statSync(y).mtimeMs - statSync(x).mtimeMs)[0]
+            const tr = JSON.parse(readFileSync(join(latest, 'test-result.json'), 'utf8'))
+            const seg = (r) => r ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''} 结果：${join(latest, 'test-result.json')}` : '—'
+            gateSummaryText = `test: ${seg(tr)}（断点续跑回读最新实测记录）`
+          }
+        } catch { /* 回读失败留 — */ }
+      }
       const headNow = gitQuiet(cwd, ['rev-parse', 'HEAD'])
       writeFileSync(join(changeDir, 'verify-result.md'), renderVerifyReceipt({
         change, baseline: st.baseline_commit, head: typeof headNow === 'string' ? headNow.trim() : null,

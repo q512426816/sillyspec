@@ -75,6 +75,9 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
       ? '豁免（低风险证据齐全' + (review.sampled ? '' : '') + '）'
       : `${review.verdict}（reviewer 见 review.json${Number.isFinite(review.findingsP1) ? `，P1 ${review.findingsP1}` : ''}）`
     : '—'
+  const headNote = head && baseline && head === baseline
+    ? '（等于基线——交付代码尚未提交，冻结面以 change.patch 实际内容为准）'
+    : ''
   return [
     `---`,
     `author: flow-machine-draft`,
@@ -83,7 +86,7 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
     `# 验证回执（flow）— ${change}`,
     ``,
     `- **结论**：PASS（flow done 2/2 协议调用收口）`,
-    `- **基线..HEAD**：${baseline ? baseline.slice(0, 10) : '?'}..${head ? head.slice(0, 10) : '?'}`,
+    `- **基线..收口时 HEAD**：${baseline ? baseline.slice(0, 10) : '?'}..${head ? head.slice(0, 10) : '?'}${headNote}`,
     `- **实测面**：${gateSummary || '—'}`,
     `- **独立评审**：${reviewLine}`,
     `- **测试绑定**：${traceCount > 0 ? `${traceCount} 行（test-trace.json，已随发号提升）` : '0（无锚行）'}`,
