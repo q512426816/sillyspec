@@ -22,7 +22,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
 const {
   draftAll, amendFlowDraft, verifyFlowDrafts, extractSuccessCriteria, draftLedgerPath, draftDecisions,
-  draftDesignRecord, verifyDesignRecordFilled,
+  draftDesignRecord, verifyDesignRecordFilled, redraftMissingArtifacts,
 } = await import('../src/flow-draft.js')
 // decisions 起草器：零真实决策=不落文件（转写任务通常为零）；有输入才有产物——锚定存在性+空态语义
 if (draftDecisions({ change: 'x', decisions: [] }) !== null) throw new Error('draftDecisions 空态应返回 null（不落文件）')
@@ -96,6 +96,34 @@ test('⑦ 设计记录槽位门：空槽拒收清单/作答与不适用放行/�
   const r3 = verifyDesignRecordFilled({ changeDir })
   assert.equal(r3.emptySlots.length, 1, '零槽=骨架缺失被点名')
   assert.match(r3.emptySlots[0], /骨架缺失/)
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑧ 幂等补起草：缺哪补哪/已存在不碰/ledger 合并/criteria 从 proposal 机器段回提', () => {
+  const { root, changeDir, runtimeRoot } = makeFixtureDir()
+  draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, runtimeRoot })
+  const proposalBefore = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
+  const ledgerBefore = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
+  // 模拟工具升级前的在途变更：删掉 design.md 与 requirements.md（start 时还不存在这两件）
+  rmSync(join(changeDir, 'design.md'))
+  rmSync(join(changeDir, 'requirements.md'))
+  delete ledgerBefore.files['requirements.md']
+
+  // input=null（重入不带 --input）→ criteria 从既有 proposal 机器段回提，不退化兜底单行
+  const r = redraftMissingArtifacts({ changeDir, change: 'c1', input: null, runtimeRoot })
+  assert.deepEqual(r.drafted, ['requirements.md', 'design.md'], '只补缺的两件')
+  assert.equal(readFileSync(join(changeDir, 'proposal.md'), 'utf8'), proposalBefore, '已存在文件逐字未动')
+  const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+  assert.match(reqs, /### FR-01: 事件恒带/, 'criteria 回提成功（非兜底文案）')
+  assert.match(reqs, /### FR-02: 崩溃零影响/, '第二条 criteria 也回提')
+  assert.ok(existsSync(join(changeDir, 'design.md')), 'design 骨架补生成')
+  const ledgerAfter = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
+  assert.ok(ledgerAfter.files['requirements.md'] && ledgerAfter.files['design.md'], '新段入账')
+  assert.ok(ledgerAfter.files['proposal.md']['proposal-motivation'].hash === ledgerBefore.files['proposal.md']['proposal-motivation'].hash, '既有段 hash 原样')
+
+  // 再跑一遍 → 零补件（幂等）
+  const r2 = redraftMissingArtifacts({ changeDir, change: 'c1', input: null, runtimeRoot })
+  assert.deepEqual(r2.drafted, [], '全在场零补件')
   rmSync(root, { recursive: true, force: true })
 })
 

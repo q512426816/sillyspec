@@ -205,12 +205,32 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.match(fail.stdout + fail.stderr, /中断于子步「artifacts」/)
   assert.ok(existsSync(join(specBase, 'changes', change)), '未归档')
 
-  // 补答（不适用+理由）→ done 全绿归档
+  // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）
   fillDesignSlots(cwd, change)
   const ok = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
+  assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t6c'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  rmSync(join(cwd, '.sillyspec', 'changes', change, 'design.md'), { force: true }) // 模拟工具升级前的在途变更
+  const r = cli(cwd, ['flow', 'start', '--change', change])
+  assert.equal(r.status, 0)
+  assert.match(r.stdout, /重入补生成缺失机器稿 1 件：design\.md/, '补生成提示点名')
+  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'design.md')), '骨架已补回')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑧ 归属收窄接线钉（文本级，防回潮）：ledger 门与 distill 单源走 attributedChangedFiles', () => {
+  const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+  assert.match(src, /splitOwnVsForeignDiffFiles/, '复用他侧声明切分器')
+  const uses = src.split('attributedChangedFiles()').length - 1
+  assert.ok(uses >= 2, `ledger 门与 distill 双消费（实测 ${uses} 处）——distill 不得直取 git diff`)
 })
 
 test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {

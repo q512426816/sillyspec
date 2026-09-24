@@ -20,7 +20,7 @@
 import { existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
-import { wrapSection, verifyMarkers, reanchorText, bodyHash } from './machine-draft.js'
+import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks } from './machine-draft.js'
 
 const AMEND_CMD = (change) => `sillyspec flow amend-draft --change ${change}`
 const GUARD_NOTE = '整段改写会被 flow done 拒收'
@@ -387,4 +387,50 @@ export function verifyDesignRecordFilled({ changeDir }) {
   return { applicable: true, emptySlots }
 }
 
-export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, draftDesignRecord, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+/**
+ * 幂等补起草（2026-09-25-thin-dogfood-fixes 修复①）：draft 谱系是 flow start 时点快照——
+ * 工具升级新增工件（如 design.md）后，在途变更重入 start 拿不到新稿。缺哪补哪、已存在不碰
+ * （agent 已填槽/已 amend 段零影响）、ledger 合并（新文件段落入账，既有段与 amendments 原样）。
+ * criteria 来源：input 显式 > 既有 proposal 的 proposal-criteria 机器段回提（input 缺省不退化
+ * 为兜底单行）> 空（draft 各自兜底）。
+ */
+export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot }) {
+  // criteria 回提：input 缺省时从既有 proposal 机器段解析编号行（机器段指纹保证原文可信）
+  let criteria = input ? extractSuccessCriteria(input) : null
+  if (criteria === null || (Array.isArray(criteria) && criteria.length === 0)) {
+    try {
+      const pText = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
+      const block = parseMarkerBlocks(pText).find((b) => b.key === 'proposal-criteria')
+      if (block) {
+        criteria = block.contentLines
+          .map((l) => l.trim())
+          .filter((l) => /^\d+[.、]\s+/.test(l))
+          .map((l) => l.replace(/^\d+[.、]\s+/, ''))
+      }
+    } catch { /* 无 proposal 可回提 → 空，draft 各自兜底 */ }
+  }
+  const crit = Array.isArray(criteria) && criteria.length > 0 ? criteria : null
+  const withTasks = existsSync(join(changeDir, 'tasks'))
+  const drafts = [
+    { file: 'proposal.md', make: () => draftProposal({ change, input, criteria: crit }) },
+    { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit }) },
+    { file: 'design.md', make: () => draftDesignRecord({ change }) },
+    { file: 'tasks.md', make: () => draftTasks({ change, criteria: crit, withTasks }) },
+  ]
+  const ledgerPath = draftLedgerPath(runtimeRoot, change)
+  let ledger = null
+  try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { ledger = null }
+  const drafted = []
+  for (const { file, make } of drafts) {
+    if (existsSync(join(changeDir, file))) continue
+    const d = make()
+    writeAtomicSync(join(changeDir, file), d.text)
+    drafted.push(file)
+    if (!ledger) ledger = { schemaVersion: 1, change, generatedAt: new Date().toISOString(), files: {}, amendments: [] }
+    ledger.files[file] = d.sections
+  }
+  if (drafted.length > 0) writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
+  return { drafted }
+}
+
+export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }

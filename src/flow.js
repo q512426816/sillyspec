@@ -137,6 +137,15 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
       console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
       process.exit(2)
     }
+    // 幂等补起草（2026-09-25-thin-dogfood-fixes 修复①）：draft 谱系是 start 时点快照，工具
+    // 升级新增工件后重入补缺（已存在不碰、ledger 合并）——恢复简报前执行，简报读到补齐后的盘面。
+    try {
+      const { redraftMissingArtifacts } = await import('./flow-draft.js')
+      const r = redraftMissingArtifacts({ changeDir, change, input, runtimeRoot })
+      if (r.drafted.length > 0) {
+        console.log(`📌 重入补生成缺失机器稿 ${r.drafted.length} 件：${r.drafted.join('、')}（工具升级晚于 start 的在途变更补件；已存在文件未动）`)
+      }
+    } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st })
     return { recovery: true }
   }
@@ -251,6 +260,22 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     process.exit(2)
   }
   const runtimeRoot = resolveRuntimeRoot({}, specBase)
+  // 归属收窄清单（2026-09-25-thin-dogfood-fixes 修复②）：baseline..HEAD 不分作者——并行会话在
+  // start..done 之间的提交会混入本变更实测面与 FR 域路由。复用 verify 对账同款切分器：他侧显式
+  // 声明（quick --files / design 清单）的文件剔除归他者；未声明文件保留（fail-closed 不因并行漏跑）。
+  // ledger 门与 distill 的 deliverableFiles 单源走这里（此前 distill 直取 git diff 未切分）。
+  const attributedChangedFiles = async () => {
+    let files = changedFilesSinceBaseline(cwd, st.baseline_commit)
+    try {
+      const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
+      const { own, foreign } = splitOwnVsForeignDiffFiles(cwd, change, files, { specBase })
+      if (foreign.length > 0) {
+        console.log(`🔗 归属收窄：剔除 ${foreign.length} 个他侧声明文件（${foreign.slice(0, 5).map((x) => x.file).join(', ')}${foreign.length > 5 ? ' 等' : ''}）——不进本变更实测面与 FR 域路由`)
+        return own
+      }
+    } catch { /* 切分失败 fail-closed 保留全量 */ }
+    return files
+  }
   let markDir = changeDir
   const mark = (k) => { writeFlowState(markDir, { substeps: { [k]: 'done' } }); doneList.push(k) }
   const doneList = []
@@ -286,7 +311,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   // ② ledger：P2 账本对账+亲测（runQuickTestLintGate 同源：账本优先→真跑→recordTestLedger 落账）
   if (st.substeps?.ledger === 'done') { skip('ledger') } else {
     const { runQuickTestLintGate } = await import('./run/quick-audit.js')
-    const changedFiles = changedFilesSinceBaseline(cwd, st.baseline_commit)
+    const changedFiles = await attributedChangedFiles()
     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
@@ -297,6 +322,12 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       reportMidFail('ledger')
       process.exit(1)
     }
+    // 实测面对账（2026-09-25 修复③）：agent 可核对自己的测试有没有被扫到——命令/时长/结果文件
+    // 一行打全（skip 路径 test/lint 为 null 显示 —；结果文件 test-result.json 含完整文件清单可回溯）。
+    const fmt = (r) => r
+      ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}`
+      : '—'
+    console.log(`🧾 实测面对账 — test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`)
     mark('ledger')
   }
 
@@ -330,7 +361,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       const { indexRequirements } = await import('./fr-index.js')
       const knowledgeRoot = join(specBase, 'knowledge')
       const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
-      const deliverableFiles = changedFilesSinceBaseline(cwd, st.baseline_commit)
+      const deliverableFiles = await attributedChangedFiles()
       const r = indexRequirements({ changeDir, knowledgeRoot, headHash: typeof head === 'string' ? head.trim() : '', deliverableFiles })
       if (r && Array.isArray(r.written) && r.written.length > 0) {
         console.log(`📚 FR 索引提炼：${r.written.map((w) => w.id).join('、')} → knowledge/fr/（域=${r.written[0].file}）`)
