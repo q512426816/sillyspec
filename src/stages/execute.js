@@ -481,6 +481,7 @@ review.json 已落盘（checklist=逐项核验表）+ checklist 摘要与偏差�
 5. 汇总测试结果
 
 ### 铁律
+- **写完不回读**——写出的代码/文档落盘即可，verify 门禁机械校验，回读是纯上下文税
 - 长测试/构建/lint 命令必须**前台同步执行**，禁止 run_in_background:true / & / nohup / disown——后台任务易被会话生命周期回收导致中断无果
 - **长输出跑批纪律（token 减负，R9 实证 verify 段 13.8M 输入中 4-6M 是裸输出摄取）**：全量/多文件测试与 lint 的输出重定向落文件（如 \`> .runtime/test-out.log 2>&1\`），上下文只回看尾部摘要与失败段（\`tail -50\` / \`grep -E "FAIL|✗|Error"\`）——长输出全文进上下文是单会话 token 累积大头；CLI 门禁自跑的测试已是摘要输出，不受本条约束
 

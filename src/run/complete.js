@@ -766,8 +766,21 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
         console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
         console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
+      } else if (stageName === 'execute') {
+        // 阶段断崖（2026-09-24 第一性原理落地）：execute→verify 是上下文最贵的跳变
+        // （R11 实测 verify 71 轮 × 300K/轮 = 21.3M，其中 ~17M 是 execute 历史重放税）。
+        // verify 的每一步输入都在盘上（design/tasks/review/verify-probes），零对话依赖。
+        // ⛔ directive 级——agent 看到应当执行 handoff 而非硬续。
+        console.log(``)
+        console.log(`⛔ 阶段断崖：execute 已收口，verify 必须在新的瘦会话执行。`)
+        console.log(`   本会话上下文已含 execute 全部历史（R11 实测 verify 阶段因历史重放多付 ~17M token——占总 24%）。`)
+        console.log(`   verify 的全部输入在盘上（design.md/tasks/review.json/verify-probes），新会话零背景可续跑。`)
+        console.log(`   动作：`)
+        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（含机器预览态）`)
+        console.log(`   2. 新会话/子代理：粘贴交接块 → run verify --change ${changeName}`)
+        console.log(`   同会话硬续不阻断（应急逃生口），但会在收口时再提示一次。`)
       } else {
-        console.log(`💡 瘦会话模式：下一阶段可在新会话/子代理续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——CLI prompt 自足，verify/archive 尤其适合（读盘即恢复，R11 实测可省 24% 总 token）`)
+        console.log(`💡 瘦会话模式：下一阶段可在新会话/子代理续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——CLI prompt 自足`)
       }
     }
 
