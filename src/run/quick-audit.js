@@ -11,7 +11,7 @@
  *     本模块被 command.js 静态 import，顶部静态拉 @inquirer/prompts 会进**每条** run 命令
  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
  */
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { parsePorcelainPath, safeGit } from './shared.js'
 import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
 
@@ -608,6 +608,24 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       lint = runVerifyLintCheck({ cwd, specBase })
     }
     const failed = []
+    // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：guard.tasks.md 全勾但零完成
+    // 证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
+    try {
+      const { detectFakeCheckCompletion } = await import('../sentinel-assertions.js')
+      const quickTasksPath = guard && guard.tasksPath ? guard.tasksPath : null
+      const tasksDir = quickTasksPath || (changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null)
+      if (tasksDir && existsSync(tasksDir)) {
+        const commitRange = guard && guard.baselineCommit ? `${guard.baselineCommit}..HEAD` : 'HEAD~10..HEAD'
+        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', commitRange]) : null; const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
+        const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitSubjects.split('\n').filter(Boolean) })
+        if (sent.status === 'fake') {
+          console.error(`
+🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据：${sent.missing.join('、')}`)
+          console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+          failed.push('sentinel')
+        }
+      }
+    } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行）: ${(e && e.message) || e}`) }
     // 纯超时降档（R4 门禁价值考古：36/106 失败是 600s 帽杀纯超时假拦——超时=未完成非测试挂）。
     // 所有失败单元 reason 均含超时 → advisory 不计入 failed；任一单元真实挂测 → 维持硬拦。
     if (test.status === 'failed') {

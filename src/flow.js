@@ -421,6 +421,24 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   if (st.substeps?.ledger === 'done') { skip('ledger') } else {
     const { runQuickTestLintGate } = await import('./run/quick-audit.js')
     const changedFiles = await attributedChangedFiles()
+    // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交 subject 无
+    // task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
+    try {
+      const { detectFakeCheckCompletion } = await import('./sentinel-assertions.js')
+      const tasksPath = join(changeDir, 'tasks.md')
+      if (existsSync(tasksPath)) {
+        const commitSubjects = String(gitQuiet(cwd, ['log', '--format=%s', `${st.baseline_commit}..HEAD`]) || '').split('\n').filter(Boolean)
+        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitSubjects })
+        if (sent.status === 'fake') {
+          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交无 token、无 review.json）：${sent.missing.join('、')}`)
+          console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+          appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
+          reportMidFail('ledger')
+          process.exit(1)
+        }
+        if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+      }
+    } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
