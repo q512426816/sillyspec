@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-release-pack",
+  "rows": [
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-thin-release-pack:flow:FR-02",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-release-pack"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-thin-release-pack:flow:FR-03",
+      "tests": [
+        "test/flow-parity.test.mjs",
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-release-pack"
+    }
+  ]
+}

@@ -1,0 +1,286 @@
+diff --git a/package.json b/package.json
+index f18060fa..963bede6 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.29.9",
++  "version": "3.30.0",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index ea082340..bf212025 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -75,6 +75,9 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
+       ? '豁免（低风险证据齐全' + (review.sampled ? '' : '') + '）'
+       : `${review.verdict}（reviewer 见 review.json${Number.isFinite(review.findingsP1) ? `，P1 ${review.findingsP1}` : ''}）`
+     : '—'
++  const headNote = head && baseline && head === baseline
++    ? '（等于基线——交付代码尚未提交，冻结面以 change.patch 实际内容为准）'
++    : ''
+   return [
+     `---`,
+     `author: flow-machine-draft`,
+@@ -83,7 +86,7 @@ export function renderVerifyReceipt({ change, baseline, head, gateSummary, revie
+     `# 验证回执（flow）— ${change}`,
+     ``,
+     `- **结论**：PASS（flow done 2/2 协议调用收口）`,
+-    `- **基线..HEAD**：${baseline ? baseline.slice(0, 10) : '?'}..${head ? head.slice(0, 10) : '?'}`,
++    `- **基线..收口时 HEAD**：${baseline ? baseline.slice(0, 10) : '?'}..${head ? head.slice(0, 10) : '?'}${headNote}`,
+     `- **实测面**：${gateSummary || '—'}`,
+     `- **独立评审**：${reviewLine}`,
+     `- **测试绑定**：${traceCount > 0 ? `${traceCount} 行（test-trace.json，已随发号提升）` : '0（无锚行）'}`,
+diff --git a/src/flow.js b/src/flow.js
+index c1456d38..04d69115 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -25,7 +25,7 @@
+  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
++import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, statSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import { join, relative } from 'node:path'
+ import yaml from 'js-yaml'
+@@ -167,6 +167,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+           `══════════════════════════════════════`,
+           `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
++          `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
+           ``,
+           `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+           ``,
+@@ -285,6 +286,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
+     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
+     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
++    `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
++    `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
+     ``,
+     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
+@@ -664,6 +667,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       try { patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8')) } catch { /* 无冻结件 */ }
+       let traceCount = 0
+       try { traceCount = (JSON.parse(readFileSync(join(changeDir, 'test-trace.json'), 'utf8')).rows || []).length } catch { /* 无锚行 */ }
++      // 实测面回填（断点续跑 ledger 已 skip 时 gateSummaryText 为 null——从 verify-runs 最新
++      // test-result.json 回读，回执不留占位；无记录保持 —）
++      if (!gateSummaryText) {
++        try {
++          const runsDir = join(runtimeRoot, 'verify-runs')
++          const runs = readdirSync(runsDir).map((d) => join(runsDir, d)).filter((rp) => existsSync(join(rp, 'test-result.json')))
++          if (runs.length > 0) {
++            const latest = runs.sort((x, y) => statSync(y).mtimeMs - statSync(x).mtimeMs)[0]
++            const tr = JSON.parse(readFileSync(join(latest, 'test-result.json'), 'utf8'))
++            const seg = (r) => r ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''} 结果：${join(latest, 'test-result.json')}` : '—'
++            gateSummaryText = `test: ${seg(tr)}（断点续跑回读最新实测记录）`
++          }
++        } catch { /* 回读失败留 — */ }
++      }
+       const headNow = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+       writeFileSync(join(changeDir, 'verify-result.md'), renderVerifyReceipt({
+         change, baseline: st.baseline_commit, head: typeof headNow === 'string' ? headNow.trim() : null,
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 393384b0..2c593d29 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -68,6 +68,7 @@ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅
+   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   assert.match(s1.stdout, /协议调用 1\/2/)
++  assert.match(s1.stdout, /交付纪律/, '先提交后 done 纪律行')
+   assert.match(s1.stdout, /flow done/)
+   assert.match(s1.stdout, /材料路径清单/)
+   const specBase = join(cwd, '.sillyspec')
+@@ -382,6 +383,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 
+   assert.ok(existsSync(join(archDir, archived, 'verify-result.md')), 'verify-result 回执随归档留档')
+   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /结论\*\*：PASS/, '回执含结论')
+   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /独立评审\*\*：PASS/, '回执含评审结论')
++  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /（断点续跑回读最新实测记录）/, '回执实测面回填（ledger skip 后不留占位）')
+   const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.change === change).pop()
+   assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')
+   rmSync(cwd, { recursive: true, force: true })
+diff --git a/.sillyspec/changes/2026-09-25-thin-release-pack/design.md b/.sillyspec/changes/2026-09-25-thin-release-pack/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-release-pack/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:22:30.207Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-release-pack
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++立即包三件：①package.json 3.29.6→3.30.0——AGENTS.md 受管段升级靠版本差触发，停更版本则九个变更的模板/指令面改进对已装仓全部传播失效；②flow start 简报（fresh+adopt 双路）钉交付纪律一行：收口前交付代码显式 pathspec 提交，冻结件范围=baseline..HEAD 提交面（R16 评审 P2 实证根因——agent 提交晚于 done 致冻结件漏全部代码）；③verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读（mtime 排序），HEAD 字段改名「基线..收口时 HEAD」且等于基线时注明代码未提交。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++package.json 版本；src/flow.js 简报两行+statSync 导入+回填块；src/flow-parity.js 回执 headNote；测试 ①⑮ 各加一断言。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：版本号静态字符串、简报纯文案、回填只读最新实测记录（mtime 排序确定性受文件系统时间戳精度限制——同秒多记录场景取字典序后者，可接受）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=版本 bump 后已装仓重跑 init 触发受管段升级——手改过 AGENTS.md 的仓会走「未自动更新（保留你的改动）」分支提示手动迁移，属预期交互非破坏；死路=靠改 template 内容而不 bump 版本——版本感知幂等逻辑同版本不更新，传播零效果（本片动机）。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-release-pack/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-release-pack/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-release-pack/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 41b3490da82e69382b4e772cb830d400f43a7e89
++updatedAt: '2026-09-24T22:27:33.105Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-release-pack/proposal.md b/.sillyspec/changes/2026-09-25-thin-release-pack/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-release-pack/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:22:30.206Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-release-pack
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:b6830df0ee17e84c2ee8f834100a3cc2c19742b1c5d6c014718620af2670f299:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++任务原话转写：动机：立即包三件——版本号 3.29.6 停更致 AGENTS 受管段升级失效（同版本 init 不更新，九个变更的模板/指令面改进传播不出去）；R16 评审 P2 根因（agent 提交晚于收口，patch 冻结件漏全部代码交付）需协议纪律钉死；verify-result 回执断点续跑后实测面显示占位、HEAD 字段语义含混。
++成功标准：
++- package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
++- flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD 提交面，未提交代码不进审计
++- verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读；HEAD 字段改名收口时 HEAD，等于基线时注明代码未提交
++- 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:d7f5bf405f583943a9b563013a1fffa1d286fa06c3433343ab5b2c6ec5c95d0a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
++2. flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD 提交面，未提交代码不进审计
++3. verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读；HEAD 字段改名收口时 HEAD，等于基线时注明代码未提交
++4. 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:a3f93580ec3a6682947fa1fe8cfba78af7cb1bc89f2d0584f962102b916fe357:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++1. package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
++2. flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD 提交面，未提交代码不进审计
++3. verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读；HEAD 字段改名收口时 HEAD，等于基线时注明代码未提交
++4. 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-release-pack/requirements.md b/.sillyspec/changes/2026-09-25-thin-release-pack/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-release-pack/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:22:30.207Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-release-pack
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:6fdeca9abfc247367b460be4c2d8d72a00f8f2e06ce27abb94c197fba740ae6b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++### FR-01: package.json 版本 3.29.6→3.30.0（AGENTS.md 
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
++
++### FR-02: flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD 提交面，未提交代码不进审计
++
++### FR-03: verify-result 回执：实测面断点续跑后从 verify-runs 最
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读；HEAD 字段改名收口时 HEAD，等于基线时注明代码未提交
++
++### FR-04: 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++package.json version 字段（发版面人工核对）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ①（交付纪律行断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑮（回填断言）+ test/flow-parity.test.mjs ②（回执六要素）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + stage-burst 全套 + test:core 176
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-release-pack/tasks.md b/.sillyspec/changes/2026-09-25-thin-release-pack/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-release-pack/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:22:30.207Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-release-pack
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:0f3851a1e71d70c992efa8fc37d7c3a72dda740df04cac273a2c3147b09be3ad:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-release-pack 留痕重锚 -->
++- [ ] task-01: package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
++- [ ] task-02: flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交
++- [ ] task-03: verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回
++- [ ] task-04: 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

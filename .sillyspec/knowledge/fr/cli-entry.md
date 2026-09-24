@@ -684,3 +684,63 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢复；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-platform-args/requirements.md#FR-05
 最近确认：f7ef9258f9f1df6260e12734370b162d48aa0234
+
+## FR-cli-entry-040 package.json 版本 3.29.6→3.30.0（AGENTS.md
+变更：2026-09-25-thin-release-pack
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
+全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-01
+最近确认：a0ba25c12d8e23f99e4c530656aae68854c45617
+
+## FR-cli-entry-041 flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收
+变更：2026-09-25-thin-release-pack
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HE
+全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-02
+最近确认：a0ba25c12d8e23f99e4c530656aae68854c45617
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-release-pack:flow:FR-02
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-release-pack
+  status: active
+
+## FR-cli-entry-042 verify-result 回执：实测面断点续跑后从 verify-runs 最
+变更：2026-09-25-thin-release-pack
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读；HEAD 字段改名收口时 HEAD，
+全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-03
+最近确认：a0ba25c12d8e23f99e4c530656aae68854c45617
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-release-pack:flow:FR-03
+  tests: test/flow-parity.test.mjs | test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-release-pack
+  status: active
+
+## FR-cli-entry-043 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
+变更：2026-09-25-thin-release-pack
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-04
+最近确认：a0ba25c12d8e23f99e4c530656aae68854c45617
