@@ -1,196 +1,197 @@
 ---
 author: qinyi
-created_at: 2026-06-19T12:40:00+08:00
+created_at: 2026-06-23 02:00:00
 ---
 
-# Known Issues
+# 已知坑 (Known Issues)
 
-## sqljs-wasm-only（已过期——引擎现为 node:sqlite，2026-09-23 勘误）
+## 🟡 sillyhub-daemon 于 2026-06-14 从 Python 重写为 Node.js
 
-~~项目使用 sql.js（WASM SQLite）~~——**历史状态**。进度库引擎已经过 sql.js → better-sqlite3 → **node:sqlite（DatabaseSync，src/db-engine.js 引擎抽象层）** 迁移：Node v22.13+ 内置原生 SQLite（免 flag，仍发 ExperimentalWarning），PRAGMA 逐条 exec（journal_mode=WAL + busy_timeout=5000 等在 db-engine 配置）。含义更新：多进程并发读写走 WAL（读并发+单写者+busy 重试）已具备，行级事务/乐观锁是原生能力，不再是 WASM 整文件载入/回写模型；native 扩展限制（FTS5 等）随引擎迁移解除，以 node:sqlite 实际编译面为准。勘误缘由：2026-09-23 会话按本条旧文误判并发模型（R11 预览账本设计讨论中被用户指出）。保留条目不删——引擎选型史与「知识条目须随实现迁移更新」的教训。
+`scripts/`、旧文档、部分模块卡片可能仍引用 Python 文件名（`daemon.py` / `agent_detector.py` / `task_runner.py`），实际代码已全部是 TypeScript（`daemon.ts` / `agent-detector.ts` / `task-runner.ts`，ESM/pnpm）。改 daemon 前确认看的是 `.ts` 源码，勿被旧 Python 文档误导。
 
-## Sub Package Isolation
+## 🔴 CI hook 复合命令可绕过 claude PreToolUse 层
 
-`packages/dashboard/` 是独立 Vue 3 子包，使用 Vite 构建。与 CLI 核心松耦合，仅通过共享 `sillyspec.db` 数据库文件交互。不要在 CLI 核心中直接引用 dashboard 子包的模块。
+两层 hook：claude `PreToolUse`（`git commit*` 前缀匹配 → 全量 mypy + frontend）+ git `pre-commit`（ruff）。坑：`git add && git commit` 这类**以 `git add` 开头的复合命令**会绕过 claude 层，只跑 ruff。需要全量检查时，应分开执行 `git add` 再 `git commit`，或单独触发。
 
-## Hook Import Restriction
+## 🟢 daemon 重启 session 恢复已修复（gap-8.3 / commit 40e21d3）
 
-`src/hooks/worktree-guard.js` 会被测试直接以 ESM 导入。不要在 hook 中引入 `package.json` 未声明的外部包；简单本地配置解析优先使用项目内已有实现或标准库，否则 `npm test` 会在导入阶段失败。
+daemon 重启后 interactive session 丢失致 turn 卡死的根因（`sillyhub-daemon/src/cli.ts` 漏传 persistence/recoveryClient）**已修复**（2026-06-20，commit 40e21d3，变更 `2026-06-19-fix-interactive-daemon-lifecycle` gap-8.3）：`sillyhub-daemon/src/cli.ts:773-776` 与 `:1214` 已装配 `JsonSessionPersistence` + `recoveryClient`（client 即 HubClient，实现 RecoveryCoordinator），backend 加 recovery 端点。有 `cli-session-manager-injection.test.ts` 守护。改 daemon session 逻辑可基于此已恢复前提。
 
-参见 `uncategorized.md` 中的 ql-20260604-001-7a4c。
+## 🟡 AgentRunLog 无 metadata 列 / 三层日志 metadata 丢失
 
-## Propose 死代码
+AgentRunLog 表无 metadata 列；三层日志（daemon/backend/前端）的 metadata 在 `submit_messages` 阶段会丢失。涉及 agent-run 日志/元数据传递的改动，需注意此约束（见变更 `agent-run-pipeline-fix`）。
 
-`src/stages/propose.js` 的 `definition` 标注 `@deprecated` 且**未在 `stageRegistry` 注册**，文件头注释明确「保留备用」。新增功能不要复用 propose，也不要误判它是活跃阶段（`sillyspec run propose` 不可用）。
+## 🟢 本机可能存在多个 daemon 实例
 
-## 平台审核占位
+连本地（daemon-start.bat）与连远程（手动 cmd）两类 daemon 可能并存。停 daemon 时按 `--server` 区分，勿误杀；无自动拉起机制。taskkill 禁用 `/IM` 通杀（会自杀当前 claude 会话），需按 PID 精确杀。
 
-`src/sync.js:406`/`:411` 的平台 approve/reject 流程是**占位实现，未真正可用**。接入平台变更审核功能前需先补全这两处。
+## 🟡 Docker backend 容器不热重载（挂载非 /app、无 --reload）
 
-## 无 Build/Lint 框架
+`deploy/docker-compose*.yml` 的 backend 容器挂载的是宿主项目目录到 `/host-projects`（便于读文件），**不是**把源码挂进 `/app`，且启动命令无 `--reload`。容器跑的是**镜像内构建时打包的代码**。改后端源码后 `docker compose restart backend` / `up -d --build backend` 不会加载新代码——必须 rebuild 镜像（`docker compose build backend && up -d`）。
+- 验证新端点/新逻辑是否生效：`curl` 实测端点响应（如 405≠401 说明新路由没进镜像），别只靠 tsc/pytest 本机通过。
+- 通用坑：全 Docker 部署 + 容器不挂源码/无 reload 的项目，改后端后 curl 实测端点行为变化是唯一可靠判据。
 
-sillyspec 纯源码分发（package.json 无 `build` script，无打包器）。无 eslint/prettier/biome，语法检查靠自定义 `test/check-syntax.mjs`。不要假设 `npm run build` 可用；CI/工具链改造时需注意无标准 lint。
+## 🟢 frontend healthcheck busybox 误报问题已解决（commit 46591be0）
 
-## Worktree Apply 三道坎（多会话归档实战，2026-09-11 cross-change-decision-guard 三连撞）
+frontend 容器**已移除 healthcheck 块**（`deploy/docker-compose.yml` 的 frontend 服务无 healthcheck；commit 46591be0 改用 node fetch 自检），不再有 busybox `wget` 走 `http_proxy` 误报 unhealthy 的问题。
+- 通用经验仍保留：busybox wget + 代理环境组合做健康探针会误报（busybox 不认 `no_proxy`，探测本机端口也被代理拦截）。未来若要给容器加 healthcheck，要么显式 `unset http_proxy https_proxy`，要么用 curl / node fetch 而非 busybox wget。
 
-**现象**：execute worktree 完成后 `sillyspec worktree apply` 连撞三道阻断——①文件清单校验拦「变更文件不在 design 清单也不在 review changedFiles」；②`--merge` 被「未跟踪工作树文件会被合并覆盖」拒绝启动；③合并真冲突留在主仓。
+## 🟡 daemon pnpm overrides 把 claude-agent-sdk 8 平台二进制硬钉 0.3.181
 
-**根因**：① task review.json 的 changedFiles 声明 `.sillyspec/` 路径时被 `collectReviewDeclaredFiles` 交付物过滤器（worktree-apply.js，`.sillyspec/` 前缀不进 allow）排除——声明面与过滤面口径错位，模块文档类交付物两头不靠；② execute 启动时 baseline checkpoint 会把主仓**未跟踪**文件（含崩溃转储等垃圾）快照进分支，apply --merge 要求主仓无同名未跟踪文件；③ 多会话对同一 changelog 追加（同位置各加一行）必然文本冲突。
+`sillyhub-daemon/package.json` 的 `pnpm.overrides` 把 `@anthropic-ai/claude-agent-sdk` 及其 8 个平台 optionalDependency（`@anthropic-ai/...-darwin-arm64/x64`、`linux-x64/arm64`、`win32-x64/arm64` 等）版本全部钉死在 `0.3.181`。升级 SDK 前必须同步改这些 overrides，否则 pnpm 装到的实际是旧版二进制（即便 dependencies 写新版）。范围扫描：改 daemon 依赖/升级 agent SDK 时务必检查 `pnpm.overrides` 全平台条目。
 
-**护栏**：① 交付物文件写进 design.md §文件变更清单（清单是 apply 的第二真相源）；② apply 前删主仓未跟踪垃圾文件（或 `git clean` 谨慎核对后）；③ changelog 冲突双行保留（双方条目都是有效历史）。
+## 🟢 frontend react-query 已正式启用（2026-07 OpenAPI 类型迁移，commit fecaa155 / 29b3c86b）
 
-**证据**：49be5c0 归档链（design 补 `_module-map.yaml` 行解①、rm bash.exe.stackdump 解②、runtime.changelog 双行保留解③）；`--skip-overlap` 不跳过「已提交推进」类重叠，只能 --merge。
+frontend 已在 `frontend/src/lib/providers.tsx:10` 挂载 `QueryClientProvider`，`use-daemon-runtimes.ts` / `use-agent-runs.ts` / `daemon-audit.ts` / `runtimes/page.tsx` 等多处用 `useQuery`。**新数据请求应优先用 react-query**（与 OpenAPI 生成类型 `api-types.ts` 配套）。旧 `apiFetch` + zustand 仍存在于已写页面，改动既有页面时沿用既有模式避免割裂。
+- 注：`@tanstack/react-query` 在 2026-06-23 前确实仅声明未启用，本条由原"未启用"修订（见变更 `2026-07-01-react-query-migration` / `2026-07-04-frontend-openapi-types`）。
 
-## ql-ID 双占用（分配竞态，坑 ql-id-double-occupancy）
+## 🟡 frontend 与 daemon 各自独立 lockfile + 双 UI 库并存
 
-quick 启动预留的 ql-ID 写入 guard.json 后，QUICKLOG 条目可被并行 git 操作回滚丢失——分配端 scanExisting 看不见已预留的序号/后缀 → 并行会话复用同一 ID（实证 2026-09-13 ql-20260913-007-1351、历史 ql-20260604-001-7a4c 同款）。护栏三层（2026-09-14 修复）：分配时 maxSeq 并入他者活跃会话 guard 预留 + 盘上容错扫描；--done 落最终 ID 前校验——盘上同 ID ≥2 条硬拦（不猜归属），他者 guard 仍预留同 ID 则本会话换新号完成；最终 ID 回写 guard + 条目丢失原 ID 补建自愈。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quicklog-ql-id-race.test.mjs。
+- frontend 与 daemon **各自独立 lockfile**（`frontend/pnpm-lock.yaml` + `sillyhub-daemon/pnpm-lock.yaml`），无 monorepo workspace 聚合，依赖互不可见。
+- UI 库 **antd v6 与 shadcn 双 UI 库并存**（`frontend/package.json` antd `^6.4.4`），新增组件沿用所在页/模块既有 UI 库风格，别混用引入第三套。
 
-## quick 单活跃变更无条件自动关联（坑 quick-single-change-auto-link）
+## 🟡 audit_hooks 只在测试 lifespan 注册，生产审计要业务代码显式写 AuditLog
 
-quick 启动未带 --linked-changes 时，库里恰好一个活跃变更会被无条件自动关联（resolveQuickLinkedChanges `return [activeChanges[0]]`，2026-07-02 单用户流假设）——多 agent 仓库里唯一活跃变更常是他者会话遗留：挂载污染 tasks.md，且 --done 僵尸清理通道（closeQuickLinkedChanges）可把他者变更当僵尸误归档。修复（2026-09-14）：单候选也跑双信号打分（脏文件×design 清单 / 任务描述×proposal），score>0 才自动关联+提示+autoLinked 溯源（guard.linkedChangesAuto）；归档闸对仅被自动关联的变更 skip（机器猜测非协作声明不触发破坏性归档）。显式 --linked-changes 关联不受影响。详见 docs/sillyspec/quick-sync-block-filenotes-and-quicklog-mixed-commit.md；回归 test/quick-single-change-auto-link.test.mjs。
+`backend/app/core/audit_hooks.py` 提供了 SQLAlchemy `after_flush` 事件钩子，但 `register_audit_hooks()` 仅在 `tests/conftest.py` 的测试 lifespan 调用，**生产 `backend/app/main.py` 的 lifespan 没注册**（2026-07-05 核实仍如此）。
 
-## default 空目录物化 + explore --done 拒绝提示缺自身出口（坑 default-empty-dir-materialized / explore-done-change-default-hint，2026-09-14 用户反馈）
+- 后果：依赖 "audit_hooks 自动捕获" 的 service（roles/organizations CRUD）写完代码跑通单测，但部署后 `audit_logs` 表没有任何 `role.*` / `organization.*` 行；E2E 审计覆盖检查会暴露。
+- 规避：业务 service 自己写 `AuditLog` 行，参考 `users_service.py` 的模式（id/workspace_id=None/actor_id/action/resource_type/resource_id/details_json/timestamp）。或在 main.py lifespan 显式调用 `register_audit_hooks(engine)`，但要先验证 hooks 对所有 ORM 模型的覆盖面。
+- 排查：`docker compose ... exec -T postgres psql -U platform -d platform -tAc "SELECT action, count(*) FROM audit_logs GROUP BY action ORDER BY action"` 看是否有 `user.*` / `role.*` / `organization.*` 三类。
 
-**现象**：①辅助阶段（explore 等）不带 --change 启动时进度挂 DB `default` 变更行，但 `initChange` 会顺手物化 `changes/default/` 空目录——next.js 对它报「变更目录为空→清理该空目录」误导、resolveChangeNameAuto 目录计数被搅动、spec 树上行空目录（本仓实证 09-11 建目录零文件）。②多活跃变更库（多 agent 常态）里 `explore --done` 无 --change 被防幻影守卫拒绝，报错 ③ 只提示 brainstorm 新建路径，不提示进度就在 default 行（用户实证要靠 --status 才摸出来）。
+## 🟡 全 Docker 部署本地 PG 容器端口未映射 host，host 跑 alembic/pytest 连不上
 
-**修复（2026-09-14）**：①initChange 对 default 同 quick-<hex8> 系统键待遇停建目录；②目录停建后辅助阶段续跑锚定显式化——resolveAuxiliaryDefaultAffinity（default 行在途本阶段 → 锚回），done-like 守卫加 !progress 前置；③守卫报错补 explore 分支（default 在活跃列表 → 提示 --change default）。另同批修复 explore --done 的墓碑 409 回执刷屏（change_deleted 变更级噪音闸，见 sync 模块卡）。回归 test/default-no-dir-and-affinity.test.mjs + test/sync-change-deleted-noise.test.mjs。
+- 现象：本项目全 Docker 部署（backend + postgres 同 compose 网络），`docker ps` 显示 postgres 容器 `5432/tcp` 但**无 `0.0.0.0:5432->5432` host 映射**；worktree backend 无 `.env`。后果：host 上 `uv run alembic upgrade` / 并发 pytest 连 `localhost:5432` 失败（拒绝连接）。
+- 影响：需 host 连 PG 的验证（alembic online 往返、PostgreSQL 并发证明等）本地受限，只能用 offline SQL + metadata 对比 / SQLite fixture 等效验证，online apply 待 CI/部署补。
+- 通用坑：全 Docker 部署项目，host 上跑需 DB 的命令前，先确认 PG 容器端口映射到 host；否则用 `docker exec` 进容器跑，或 SQLite fixture 等效验证 + 标注"PG 并发证明待 CI 补"。
 
-## hook 依赖必须显式存在
+## 🟡 ppm 导出 export-excel 路由必须前置于 item_id 路由
 
-`src/hooks/worktree-guard.js` 会被测试直接以 ESM 导入。不要在 hook 中引入 `package.json` 未声明的外部包；简单本地配置解析优先使用项目内已有实现或标准库，否则 `npm test` 会在导入阶段失败。
+FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（或 `/simple-list` 等）若声明在 `/xxx/{item_id}` **之后**，`export-excel` 会被 `{item_id}` 路径参数吞掉当 UUID 解析，返回 `422 uuid_parsing`（不是 404）。
 
-## parseSimpleYaml 缩进判断必须用原始 line 而非 trimmed
+- 已复现 3 次：problem（ql-020）、project（已有 test_router 守护）、plan（ql-20260714-001，里程碑明细 + 计划节点模板导出按钮双双 422）。
+- 规避：新增任何 `/export-excel`、`/simple-list` 等字面量子路径端点时，**必须注册在对应 `{item_id}` GET 路由之前**，并在文件内留 `⚠ 必须前置` 注释（参照 problem/plan router）。
+- 守护：加路由顺序回归测试，断言字面量路径返回 200 + 合法 xlsx（修复前为 422）。参照 `backend/app/modules/ppm/plan/tests/test_router.py`、`ppm/project/tests/test_router.py`。
+- 详见 `docs/backend/modules/ppm.md` 注意事项。
 
-`src/sync.js` 的 `parseSimpleYaml` 判断「行是否为缩进子段」时必须用原始 `line.startsWith(' ')`，不能用 `trimmed.startsWith(' ')`——trimmed 已 `.trim()` 去掉前导空格，`startsWith(' ')` 恒为 false，导致所有缩进子段（如 `platform:` 下的 `url`/`token`/`last_connected`）被误判为 root 行，section 恒解析为空 `{}`。后果：`SyncManager._getPlatform()` 返回 `{}`，`sync`/`syncDocuments`/`checkApproval`/`approve`/`reject` 的 `platform.url` 为 undefined，所有平台请求必失败。机器接口 v1 变更（2026-07-09，task-05）修复此 pre-existing bug。建议归类到 known-issues.md 或 patterns.md（配置解析）。
+## 🔴 alembic 并行变更撞 revision 多 head：启动 crash-loop
 
-## Windows 下 process.exit 触发 UV_HANDLE_CLOSING assertion 覆盖退出码
+`backend/migrations/versions/` 已 144+ 个 migration（2026-08-18 实测 144，随并行 change 持续增长）。并行变更撞 revision/down_revision 即产生多 head → **应用启动 crash-loop**；SQLite 单测抓不到（PG 才暴露）。
 
-CLI 命令用 `process.exit(exitCode)` 强制退出时，若事件循环仍有未关闭的异步 handle（如 ProgressManager 的 sql.js db、dynamic import 残留），Windows 上会触发 `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`（src/win/async.c），把正确的 exitCode 覆盖成 127，破坏 daemon 依赖的退出码契约（0/1/2）。解法：用 `process.exitCode = exitCode` + `break`/return 让进程自然排空退出（与 sync.js approve/reject 一致风格）。机器接口 v1 的 gate/derive 路由（src/index.js task-03）踩此坑并修复。建议归类到 known-issues.md（平台特定坑）。
+- 规则：新 migration 必须接**真实当前 head**（先 `cd backend && uv run alembic heads` 确认，不凭记忆猜）+ 唯一 revision id；多 head 已发生时用 down_revision 收敛单 head（fix-platform-progress-pk change 踩过）。
+- 关联 uncategorized「Alembic migration 目录与 schema 领先版本号的处理」条目（目录在 `backend/migrations/versions/` + stamp 手段），本条补并行多 head 坑。
 
-## progress.quickGuard 在 db 零持久化，quick --done 跨进程收尾失效
+## 🔴 前端测试闸门缺口：gen:types:check 未进 CI，E2E 零落地
 
-`progress.quickGuard`（baseline + linkedChanges + allowedFiles）是 JS 对象，但 `_write`（`src/progress.js`）只持久化 `data.stages` / `data.batchProgress`，**不持久化顶层 quickGuard**。read 也不还原。导致 quick `--done`（独立进程）read 出的 progress 无 quickGuard → completeStep 的收尾块（`auditQuickCompletion` + session 目录清理）`if (progress.quickGuard)` 恒 falsy 不执行 → session 目录残留成僵尸。这是既有架构限制（单文件 quick-guard.json 时代同样失效），非 Bug2 引入。修法：completeStep 改从 session 目录的 guard.json 读 guard 驱动收尾（不依赖 DB progress.quickGuard）。建议归类到 known-issues.md。
+- **`gen:types:check`（api-types.ts 重生成 + git diff --exit-code）未进任何 CI workflow**（`.github/workflows/` 全目录 0 命中；frontend-ci 只跑 lint/typecheck/test/build）。后端 schema 改动漏跑 regen 时前端 tsc **照样绿**（对着旧类型编译），失同步只在实际请求时暴露——当前仅靠 CLAUDE.md 规则 21 流程纪律拦截，别指望 CI 兜底；改后端 DTO 后必须自觉 `pnpm gen:types` 并同 change 提交 `api-types.ts` + `backend/openapi.json`。
+- **E2E 零落地**：`@playwright/test ^1.60` + `puppeteer ^24.43` 声明在 devDependencies，但 playwright.config 与 *.spec.ts 全仓 0 命中。登录/扫描/Agent Run SSE/daemon 会话等关键流程无端到端保护，两套自动化依赖是死重——验收时别假设有 E2E 兜底，链路级问题靠手工过流程。
 
-## quick 的 --change 被复用为 linkedChanges，非 changeName
+## 🟡 mcp Python SDK 锁死 v1 线：v2 移除 FastMCP 与平台 mount 冲突
 
-`src/run/command.js:616-654` quick 阶段把 `--change` 解析为 `linkedChanges`（关联变更），并把 changeName 清成 null。这与 design 常规假设"`--change` 指定 changeName"在 quick 语义不成立。Bug2 task-02 修复：`--change quick-<uuid8>`（单值匹配 sessionId 正则）识别为 sessionId 作 changeName，多值或非 sessionId 形态仍走 linkedChanges（向后兼容）。写 design/需求时要记得 quick 的 --change 是"关联变更"，不是"指定会话"。
+`backend/pyproject.toml` 锁 `mcp>=1.29,<2`（L30-34 注释写明原因）：mcp SDK v2.0.0（2026-07-28）breaking 移除 FastMCP 改用 MCPServer，与 mcp_gateway 的 FastMCP ASGI mount 写法冲突，锁 v1 线取 1.29.x。v1 仅持续收 critical bugfix / security patch；未来升 v2 需重构 mcp_gateway mount 方案。
 
-## _resolveMainRepoRoot 用 existsSync('git rev-parse --git-common-dir') 该命令返回相对 .git
+- 联动：daemon 侧 `@modelcontextprotocol/sdk ^1.29.0` 与 backend 同在 1.x 线；backend 升 2.x 时 daemon 须同步评估（升级任一方必跑 daemon `tests/mcp-server.test.ts` + `tests/mcp-config.test.ts` 验证 MCP 工具契约）。
 
-`src/worktree.js:417` 的 `_resolveMainRepoRoot` 用 `existsSync(commonDir)` 校验 `git rev-parse --git-common-dir` 返回值，但该命令返回**相对路径 `.git`**（非绝对）。`existsSync('.git')` 相对 `process.cwd()`——生产时 cwd=主仓库解析正确；但**测试时 process.cwd=测试运行目录**（如 sillyspec 主仓库根或 test/），worktreeBase 会解析到运行目录的 `.sillyspec/.runtime/worktrees` 而非临时仓库 d。后果：`new WorktreeManager({cwd:d}).getMeta('tc')` 在错误 worktreeBase 找 meta.json → 返回 null → applyWorktree 报"worktree not found: tc"。解法（测试侧，已采）：worktree 测试 `process.chdir(d)` 让解析落在临时仓库；根治（未采）：`_resolveMainRepoRoot` 应 `resolve(this.cwd, commonDir)` 把相对 .git 锚定到 this.cwd。execute-worktree-platform-gaps 变更 task-07（worktree-apply-merge-fallback 测试）踩此坑。**附带发现**：worktree-native-overlay test1 用 `console.assert`（条件假只打印不抛错）+ 无条件 `console.log('✅')`，掩盖了同一问题——实际 `_resolveMainRepoRoot(d)` 在测试环境返回非 d 也显示通过。建议归类到 known-issues.md（测试构造坑）/ patterns.md（worktree-isolation）。
+## 🟡 Windows Docker bind mount stat 性能断崖：spec_root fs 重循环必炸
 
-## spec-dir.test.mjs 全量套件 Windows 罕见进程级崩溃（flaky）
+本机 Docker 部署的 workspace spec_root 是 Windows bind mount，每次 `stat`/`is_file` ≈ **1.45ms**（比原生 Linux 慢约 3 个数量级）。对 spec 树做大量 stat 的循环会性能断崖——Linux/CI 上测不出，Windows 本机 Docker 才暴露。
 
-`test/spec-dir.test.mjs` 在全量套件下**罕见**进程级崩溃：run-tests.mjs 报 `spec-dir.test.mjs exited with code N`，但 spec-dir 自身**无内部断言汇总**（断言 ❌ 型失败会有 `✅ 通过:N ❌ 失败:M` 汇总；进程崩溃无）。隔离单跑恒过（38/38）。实证复现率 ~13%（15 次跑 2 次）。**排除的根因**：① execSync 10s timeout——子进程常态 <1s（scan/brainstorm/plan/verify/quick 全测过），全量负载下不会从 <1s 涨到 >10s；② Test 5 不带 --spec-dir 撞 home .sillyspec——Test 5 init 后 projectDir 自带 .sillyspec，scan `--dir projectDir` 命中本地不上溯。**疑似根因**（未稳定抓 stderr 证实）：CLI 子进程罕见非0退出（sillyspec.db 锁 / home 指针 `.sillyspec-platform.json` 竞态 / fs 句柄），`run()` 未 try-catch → spec-dir 进程裸崩。**已采处置**（非根因治愈）：`run()` 加失败诊断（打印 cmd+stderr）+ 1 次重试吸收偶发崩溃 + timeout 10s→30s。**待办**：若未来复现且重试仍失败，错误信息会含 exit code + stderr，届时可定位真因根治。建议归类到 known-issues.md（测试 flaky）。
+- 典型事故（ql-20260813-008，修复 commit ba9188cc）：change parser 加 `rglob("*")+is_file()+stat()` 算 mtime，每文件 2 次 stat；196 变更 ~3000 文件堆到 12s，reparse 总 33s 超 Next.js 代理 ~30s → 前端 ECONNRESET/500。**指纹**：backend 日志「幽灵 200」（status_code 200 + duration_ms 30000+ + slow.request warning）——后端实际跑完了，是代理放弃，别误判成后端崩。
+- 规则：容器内遍历 spec/文件树一律 `os.scandir` 单遍 + DirEntry 缓存 stat（每文件 1 次 syscall；实测 12.4s→1.7s），禁止 rglob + is_file + stat 多遍组合。排查用容器内 cProfile 看 `posix.stat` 的 ncalls/tottime。
 
-## task 卡 frontmatter 列表项含半角「冒号+空格」会炸 jsYaml 静默吞掉契约字段
+## 🟡 worktree 过期租约无自动 GC：expires_at 与索引闲置
 
-task 卡 frontmatter 的列表标量中出现 `X: `（半角冒号+空格，如「剥 NEW: 前缀」）会让 jsYaml 把该项误判为 mapping entry 抛「bad indentation of a mapping entry」；parseTaskContracts 对解析失败 catch 后返回空 provides/expects_from——表象是 plan-postcheck 报「consumer 期望的字段未被 provider 承诺」，真实根因在 provider 卡的 YAML 非法。规避：frontmatter 列表项内避免半角冒号+空格（用中文冒号、去空格或给整项加单引号）；调试时用 jsYaml.load 单独解析可疑卡的 frontmatter 定位。（来源：2026-09-06-ir-stage-p3a task-03 前置排查，plan Step5 实证拦截）
+`backend/app/modules/worktree/`：expires_at 列与 `ix_worktree_expires` 索引存在，但**没有任何后台任务/调度扫描回收**（旧 `gc_expired_leases` 已不在 service 中）。runtime-session 流程现状靠显式 release；未 release 的 worktree 目录与 askpass 脚本会滞留磁盘累积。
 
-## JS 正则转义全角括号会静默失配（V8 行为）
-
-在 JS 正则里写 `\）` 或 `\（`（转义全角括号）不报错但永不匹配预期文本——V8 对非 ASCII 字符的冗余转义处理与 ASCII 不同，正则应裸写全角括号 `）`。排查特征：断言「理应命中」的中文文本匹配静默返回 null。（来源：2026-09-07-ir-stage-p3b task-05 E3 组实证）
-
-## 2026-09-10 平台通道活体发现的两个平台侧缺口（待平台仓修复，sillyspec 侧兜底已就绪）
-
-- **worker 结论不落 artifacts**：mission 77470369（read_only PI worker，13min completed）get_worker_result 返 artifacts:[]，完整审查结论只在 get_run_logs 的 [ASSISTANT] 流。sillyspec 侧行为正确（completed-no-artifact → 人工核对指引兜底，不崩不静默）。平台侧修法：终态时把最终 assistant 消息/结构化段落为 kind=summary artifact。已列平台侧提示词 P0-1。
-- **配额池不独立**：本地 agent 子代理与平台 worker（pi-coding-agent）同吃账号级池（429/1308 同锁两边，15:30-18:31 全通道瘫痪实证）——「本地耗尽→平台兜底」价值主张需平台 worker 支持独立 provider/key 才成立。已列平台侧提示词 P0-2。
-- 附带实证：平台独立 worker 抓到了归档 task-04.md frontmatter YAML 缩进缺陷（主代理自审与 CLI 门禁均漏过）——独立审查通道有效性的直接证据。
-- **存量债（2026-09-10 全量体检）**：归档 task 卡 16 张 frontmatter YAML 严格解析失败（mapping values/缩进类，跨 2026-07-06-execute-deps-gate-deadlock、2026-08-08-progress-db-concurrency、2026-08-15-docs-signals-o12、2026-08-16-scan-diff-command、2026-08-19-reopen-and-execute-batch-guard、2026-09-08-docs-fix-capability、2026-09-08-ir-verify-facts、2026-09-09-plan-derived 共 8 个历史变更）——CLI 自有解析宽容故流程无阻，属归档态化妆品债；触发点是平台独立 worker 用严格 YAML 解析审查时暴露。批量治理候选：写一次性修复脚本（dedent 列表后误缩进的键）+ taskcard 骨架生成时 YAML 校验。
-
-## 2026-09-11 平台侧 artifacts 代报竞态（真变更场景实测暴露，短任务躲过）
-
-- mission c4731a06（真变更 brainstorm 审查，~3 分钟）：worker 终态落库 10:21:11，最终 [ASSISTANT] 消息 10:22:06 才到日志——daemon 终态后代报立即执行，此刻 result 空白被门控③拦 → artifacts:[]。此前 v2/v3 短验证任务（<90s）终消息先于终态到达，恰好躲过竞态——「修复已验证」的结论被长任务推翻。另：终消息 override 标记 uuid（a30cd81a…）与 thinking 段 uuid（699c18e8…）不一致，事件流配对也需平台侧核查。
-- 修法建议（平台侧）：代报延迟重试（终态后短窗内轮询 result 非空白再报，或对空白 result 定长重试 N 次）；根治是 worker_done 工具自报通道（结构化提交不受消息时序影响）。
-- sillyspec 侧：completed-no-artifact 兜底路径正确触发（记录保留+人工核对指引）；结论可从 get_run_logs 尾部人工捞回。
-
-## bash-heredoc-truncation（2026-09-12 双会话实证）
-
-本机 bash 通道对**长 heredoc**（大段内嵌脚本/文档经 `cat << 'EOF' > file` 落盘）发生静默截断——文件尾部丢失、无报错（pi 会话与本仓会话同款现象）。特征：截断点不稳定、重跑可变。
-
-**规避**：长内容一律改用 **Write 工具直接落盘**（不经 shell 通道，无长度截断面）；bash heredoc 仅用于短段（< 数十行）。需要 bash 执行的脚本先 Write 落 .mjs/.sh 再 `node <file>` 引用，不内嵌。
-
-## execute prompt 指引的 wt-commit 是幽灵命令（runWtCommit 未接线 dispatch）
-
-execute Wave prompt（src/stages/execute.js 调度要求段）指示 agent 用 `sillyspec wt-commit --change <名> -- <文件>` 串行提交，且 index.js:324? 的 worktree-cwd 守卫还专门豁免了 wt-commit 命令名——但 CLI dispatch 根本没有 `case 'wt-commit'`：src/wt-commit.js 的 `runWtCommit` 自 bd1cb91 引入以来无任何调用点（孤儿模块）。实际跑会报「未知命令: wt-commit」并打帮助。规避：主代理作为唯一提交者时，在 worktree 内手工 `git add -- <显式路径> && git commit`（串行无竞态，等价安全）；根治需给 index.js 补 dispatch 接线。（来源：2026-09-14-knowledge-loop-close execute W1，task-01 review notes 记档）
-
-**已根治**（ql-20260914-016-8786，2026-09-14）：index.js 补 wt-commit dispatch case（--change/-m/--pathspec-from-file/-- pathspec 解析 + worktree cwd 推断 changeName）+ help 注册；新增 test/wt-commit-dispatch.test.mjs 5 断言锁三面（接通/参数面/豁免补强——原 worktree-cwd-guard 断言「未知命令也算过」的弱口已收紧为鬼命令回归哨兵）。
-
-## worktree 隔离期跨仓命令锚定错位（guard 无路径感知，待立项）
-
-三仓项目（EHS 形态：主仓 + sub-grid-security/spdemo 兄弟仓）execute 期在 worktree 内跑跨仓测试命令 `cd ../sub-grid-security && npx eslint` 有两重坑：①**锚点错位**——`../` 相对 worktree 根解析到 `.sillyspec/.runtime/worktrees/` 而非主仓侧真实兄弟仓，命令跑错地方或直接失败；②**审批摩擦**——worktree-guard 的 isSingleCommandReadonly 是命令名白名单制（READONLY_COMMANDS + local.yaml worktreeHook.readonlyCommands 扩展），不解析 cd 目标路径、不感知 repos 注册表，`cd` 不在白名单 → 整条复合命令进人工审批。
-
-**已兑现**（2026-09-16 quick-b54011b6，guard 路径感知三分支落齐）：①worktree cwd 全放行不变，`cd ../注册仓` 的 shell 实际解析（callerCwd 基准）落 worktrees 存储目录时 stderr 纠偏留痕（双基准备析：shell 基准 vs 主仓根意图基准，给出真实兄弟仓路径）；②非 execute/quick 阶段（verify 等）主仓 cwd 的 `cd 注册仓 && 测试/lint 类` 从严放行（三条件：cd 意图基准命中 repos 注册根 + 其余片段全部测试类（npm test/npx eslint|tsc|jest|vitest|mocha|stylelint|prettier/node --test）+ 危险黑名单不沾）；③写类/混合/未注册维持原判 fail-closed。测试 test/worktree-guard-cross-repo-cd.test.mjs 15 断言。同族参照：worktree-deps 侧 368c7e2。（来源：2026-09-15 EHS 生产实证 + 2026-09-16 落地）
-
-## QUICKLOG 多会话条目交织（提交需手工剥离并行条目，待立项）
-
-QUICKLOG 是多会话共享追加的单文件；某会话提交时 `git add` 整文件会夹带并行会话未完成条目（违反显式 pathspec 隔离纪律），只能"备份 → python 剥离并行条目 → commit pathspec → 恢复"四步舞。实证频次：2026-09-15/16 单个会话 6 次；e97251d（"QUICKLOG 与并行会话条目同文件未暂存，随其会话提交"）、42cef77（"以本变更暂存 blob 提交"）各自处理过同款。根因：单文件追加形态 × git 暂存按文件粒度 = 条目级归属无文件边界。
-
-**修法建议（中等完整流程变更，写入方/读取方/归档方全动）**：QUICKLOG 条目文件化——每 ql-ID 独立 sidecar 文件（`quicklog/entries/<ql-id>.md`），主文件退化为聚合渲染产物（命令重建或追加渲染）；提交按 sidecar 文件收编零剥离。可行性佐证：patches sidecar（`quicklog/patches/<ql>.json/.patch` 范围快照冻结件）已证明 per-ql 文件形态运转正常。注意轮转文件（QUICKLOG-qinyi-<日期>.md）也要一并纳入方案。（来源：2026-09-16 本会话 6 次剥离舞步 + 历史提交注记）
-
-**v1 已工具化**（9d299a6，2026-09-16 quick-deed7456 / ql-20260916-015-44dd）：`sillyspec quicklog commit [--change <quick会话ID>] -m <信息> [--ql <ql-id>]... [-- <额外pathspec...>]` 一键收编——持用户 QUICKLOG 锁全程，恒扫主文件+轮转归档定位本会话条目（含已取消）→ 切片（HEAD 基线+本会话条目块）→ 显式 pathspec 提交（QUICKLOG+patches sidecar+额外 pathspec）→ finally 恢复工作区全量（并行条目留未提交态；.runtime 落备份兜底；fail-fast 附人工四步舞文案）。测试 test/quicklog-commit-slice.test.mjs 7 用例。**完整文件化（entries sidecar 权威+聚合渲染）仍待立项**——v1 是止血不是根治：提交侧摩擦已消，文件仍是单文件追加形态，读侧/归档侧未动。
-
-## probe5 跨仓前端调用面不纳入扫描（parity 扫描根单仓）——**已兑现更正**
-
-三端变更（EHS 形态：主仓后端 + 前端兄弟仓）verify 探针 5 的前端调用扫描根恒单仓（contract-matrix.js verifyApiParity frontendRoot :545——worktree 或 scan-root 二选一），跨仓 task 卡的仓不在扫描根内，跨端 API 契约对账实际只做了主仓半边（EHS 实证「0 frontend calls」误导性 advisory）。现仅渲染边界注记（verify-probes.js:993-994「parity 扫描面只含主仓——另有 N 张跨仓 task 卡的仓不在扫描根内」）。**已兑现**（368c7e2，2026-09-16 00:58——早于本条 17:00 的「待立项」登记；登记时基于 head 截断的 grep 误判现状，特此更正）：contract-matrix.js 跨仓前端调用并集落地——声明源双取（task 卡 cross-repo: 前缀 + design 清单 repoKeys 解析）、仓根经 repos 注册表解析、各仓按声明文件集收窄后并入 frontendCalls、未注册/不可达现身注记不静默；配套 unused 分层与兄弟仓 deps 分类。测试 test/probe5-cross-repo-scan.test.mjs 4/4。
-
-## archive 对账表跨仓文件恒标「计划未动」（live worktree 形态缺 per-repo advisory，待立项）
-
-archive 对账的 actual 面经 resolveVerifyChangedFiles(cwd, change, null)——ctx 显式 null 是 D-004 决策（跨仓 diff 并入会全落③类噪音），副作用是声明侧跨仓文件在对账表恒标「计划未动」（EHS 实证：22 个跨仓文件全标未动，机器不可见、全靠 agent 口头解释）。worktree 已清理形态已支持分支回落（index.js「跨仓 repo 已回落 N 个文件变更，分支保留作 review 锚点」），但 **live worktree 形态**缺对应可见性。**部分兑现**：verify 侧 per-repo advisory 已落地（113e19d：src/cross-repo-reconcile.js 注册表→仓根→双源 actual→三类差集+软桶，gates.js verify 块接线 printCrossRepoReconcile，test/cross-repo-probe7-anchor.test.mjs）。**剩余待立项**（收窄）：archive 对账表本身——归档表跨仓行仍标「计划未动」，方向改为复用 cross-repo-reconcile 结果在 archive 输出面渲染 per-repo 分组行（advisory），不再需要新建对账链路。（来源：2026-09-15 wp EHS 实证 + 2026-09-16 第二批登记 + 同日更正）
-
-## 能力域撞车无预警（quick 无声明面，文件冲突预警不触发，待立项）
-
-2026-09-16 实证：cross-layer-contract-probe 方案 A（design 契约枢纽探针）与凌晨 ed540c6（quick 落地的探针8 载荷字段契约对账）同族撞车——quick 无 design 声明面，现有「跨变更文件冲突预警」（按声明文件交集）不触发，靠 plan 独立审查子代理回读 git log 碰运气回收。若审查未抓到即双探针8 事故。**待立项方向**：brainstorm 方案步 / plan Step 1 启动时，CLI 按「目标模块 + 能力关键词」（--input/design 段落 token 化）扫近 24h 的 quicklog 条目标题与 git log --oneline，token 重叠 ≥阈值 → advisory 预警「近期已有同能力域落地/在途，先核对再开工」。（来源：2026-09-16 撞车实证 + 独立审查回收报告）
-
-## test_strategy: skip 只短路主仓、跨仓无条件跑（口径分裂，待立项）
-
-主仓 test_strategy: skip（真跳过留审计，D-005@v2）不作用于跨仓仓——mergeCrossRepoResults 无条件逐仓跑 own local.yaml commands.test / fallback npm test。2026-09-15 EHS 会话靠手工给 spdemo 造 own local.yaml 绕过（B2 已修「无 test script」形态，但「显式配 skip 仍跨仓照跑」的分裂仍在）。**待立项方向**：per-repo 覆盖（local.yaml repos:<key>: test_strategy:）或主仓 skip 语义透传跨仓（附 note）；注意跨仓测试可能是变更唯一测试面，透传需带「跨仓有 own local.yaml 显式命令时仍跑」的例外。（来源：EHS 复盘 B4 + 2026-09-16 二轮盘点）
-
-## worktree 内直跑全量测试的环境性失败族（stash 基线对照成本，待立项）
-
-execute 期在隔离 worktree 内跑 `npm test` 全量时，CLI 子进程类测试（spec-dir/mcp-server/init-*/platform-*/run-* 等族）被 src/index.js 顶层 worktree-cwd 硬拦守卫拦下——2026-09-16 cross-layer-contract-probe 实证 13 文件假红，实现子代理被迫 stash 基线对照自证 IDENTICAL-FAILURE-SETS（实打实的 token/时间成本）。--done 主路径已被隔离快照覆盖（gate-snapshot），但「worktree 内自验全量」仍是摩擦面。**待立项方向**：worktree cwd 下自动豁免该守卫族（known_failures 注入或 run-tests 探测 worktree 跳过守卫族文件），或 execute prompt 注入「worktree 内自验用定向测试面，全量留给 --done 快照」指引。（来源：2026-09-16 实现子代理基线对照报告）
-
-## quick-gate-required-evidence-flake（2026-09-19，未解）
-**现象**：quick --done 实测门（runModuleSubset deps(auto) 30 文件）三连红于 test/verify-required-evidence-check.test.mjs（~155ms 'test failed'，无断言明细）；同一命令在主代理环境八上下文全绿（单跑/配对/5 文件模拟/30 文件 spawnSync/execSync 同款/env 注入/5 轮循环）。
-**根因**：未定位——差异仅在 CLI 进程内派生子进程的未识别条件（疑并发压力或 hook 环境）。
-**护栏**：audit 逃逸通道（SILLYSPEC_QUICK_TEST_GATE=skip 带证据留痕）；复现时先独立验证同命令再定性。
-**证据**：quick-450636f3 三连红输出；主代理 8 次复现全绿（含 env 注入假说排除）。
-
-## blast 自举声明表未落 main（2026-09-19-ceremony-pricing-five-cuts 归档 --skip-apply 遗留）
-
-**事实**：main 的 `.sillyspec/docs/sillyspec/modules/_module-map.yaml` 无 blast 段——上一变更的 30 前缀 blast 自举表只存在于悬空提交 bbe30ab（无分支包含），归档走 --skip-apply 留下缺口（skip-apply.record.json 在案）。
-**影响**：main 定价 blast 轴全仓 S1 起步（声明面缺失=无命中，不缺省不拦截）——本应 S3/S2 的危险域声明（worktree/progress 等）在 main 不生效。
-**恢复路径**：独立变更自 bbe30ab 取 blast 段文本落 map（`git show bbe30ab:.sillyspec/docs/sillyspec/modules/_module-map.yaml`）。本变更（2026-09-19-span-risk-pattern-migration）按硬约束 D-002 未触碰（不新增不恢复 blast 段，只登记不修）。
-
-## span 六域通用路径表已退役为项目声明（无声明项目维度关闭）
-
-2026-09-19-span-risk-pattern-migration 起，旧六域硬编码表（src/change-risk-profile.js 的 QUICK_RISK_PATH_PATTERNS，auth/permission/billing/migration/lock/scheduling）退役删除：span 模式维（ceremony 定价 span 轴第三维）与 quick 画像 riskTable 只认 `_module-map.yaml` 顶层 `span_risk` 段（装载 src/span-risk-surface.js）。**行为面变化**：无声明项目不再有 auth/billing 等六域命中——span 轴不再推 S2、quick 不再因风险路径升 L2 + runtimeEvidence='required'（blast 迁移同款取舍：未配置禁回退，R-01）；项目按需自声明，声明示例见 src/span-risk-surface.js 头注。
-
-
-## verify 报告探针预填段禁止摘要化改写（防篡改门按锚点对比）
-
-写 verify-result.md 时把 CLI 预填的探针段（探针 1 未实现标记清单/探针 3 测试存在性/探针 5 parity 锚行等）改写成自己的语义总结，会触发「探针一致性抽查」ERROR 级阻断（重跑计数 vs 正文锚点不符，疑似篡改）——即使总结内容属实。正确姿势：预填段逐字保留，语义复核以 ℹ️ 注记行追加在段尾；想重新拿预填段须删文件重跑 `verify-probes --init`（已存在不覆盖）。另：agent 执行段（探针 2/4/7）才是自由填写面。（2026-09-19-review-material-cli-wiring verify 会话实证：3 次 gate 回滚其一）
-
-## docs/prompt 镜像 _verify 失配数随「变更时代」漂移（动态阶段示例值）
-
-docs/prompt/_extract.mjs 抽取的 plan/execute 动态步骤 prompt 会内嵌**当前变更上下文的示例值**（如 change 路径 `2026-09-21-r5-efficiency-batch1\.sillyspec\changes\...`）；_sync.mjs 对 plan/execute 两阶段按 DYNAMIC 名单跳过机械同步（md fence 带示例值人工策展）。因此 worktree 里重生 json 后，md fence 里上一时代的示例路径会让 _verify 多出失配（如 batch1→batch2 时代路径 diff 使 plan#3 失配），并非源码/镜像真漂移。收口动作：把 mirror fence 里的旧时代 change 名 sed 成当前变更名即可追平；往 mirror fence 里手加「条件注入行示例」（如推荐分组行）反而会破坏逐字匹配（json 里的探测渲染不含该行）——条件注入的正确镜像写法是 fence 上方加注记段，不是 fence 内加示例。判据：_verify 失配清单与主仓基线逐条对比，多出的条目先查是不是时代示例值。（来源：2026-09-21-r5-efficiency-batch2 task-05）
-
-## 修 gate-snapshot 自身的变更在 verify 门遇「快照分叉假红」鸡生蛋
-
-verify 门（--done 实测）跑在主仓进程、用主仓**当前已 apply** 的 gate-snapshot 代码装配隔离快照（HEAD+本变更文件 overlay 自 worktree）。若本变更恰好修 gate-snapshot 的双写分叉语义（如 2026-09-21-r5-efficiency-batch2 M2/D-002@v2 分叉取 worktree），修复未 apply 前门仍用旧语义（分叉取主仓）——此时主仓侧同文件若有并行会话在途异动（③态成立），快照会装入**主仓并行版**而非本变更 worktree 版，本变更的新测试对旧码断言→确定性假红（实证：module[cli-core,run-gates]+deps 2 行，主仓 execute.js+1 行并行 quick 修复窗口）。判据：快照挂而 worktree 定向全量绿 + 快照警告日志含「双写分叉：…取主仓」旧文案。处置：CLI 排查路径② `SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF=1` 回退主仓口径对照过门（如实披露口径差异），apply 后主仓复跑终局对账——修复随 apply 生效后此场景永久消失。勿改测试迁就旧码。（来源：2026-09-21-r5-efficiency-batch2 verify，D-002@v2 修复场景活实证）
-
-## execute worktree 内跑全量 npm test 的 worktree 守卫假红族（12 文件级）
-
-在隔离 execute worktree 内跑全量套件时，spawn `sillyspec` 子进程的测试族（config-schema / init-* / platform-* / spec-dir / mcp-server / sillyhub / run-help-shortcircuit）会被 CLI 的「当前在隔离 worktree 内」守卫拦下整文件挂（exit 非 0）——这是环境性假红不是回归。判定法：基线 A/B（同 worktree 环境跑基线提交）同挂即存量；或单跑对照（套件顺序 flake 单跑双绿）。规避：全量回归在主仓跑（或基线 A/B 归因后留痕）；worktree 内只跑定向测试文件。另：cursor-agent-transcript-detect 在全量套件内有顺序性 flake（单跑稳定绿）。（来源：2026-09-22-stage-burst-fold task-05 基线 A/B 实证）
-
-## 影子审查回收是拉模式——完成结论到平台面板、CLI 侧盲到下个阶段检查点（推送缺口）
-
-fire-and-forget 派发的平台影子审查，结论回收只挂主线索引点（下个阶段 --done 的 status 模式 / doctor 影子对照）——mission 完成后到下一个检查点之间，用户在平台面板已看到结论，而 CLI/agent 侧 stage-reviews-shadow/ 仍是空。2026-09-23 R11 实证：brainstorm 收口派发 16:07 → 影子审出 fail×2/gap×2（用户从面板先看到）→ plan 早已收口、execute 已按旧设计动工，协调者靠用户转贴才收到结论做 Reverse Sync——若回收是推模式，plan 阶段就能带着修正走。改进方向：回收挂「任意下一条 CLI 命令的轻量轮询」（in-flight 台账存在 .runtime/review-dispatch-shadow-*.json，顺手 status 拉一次）或经 events 通道推送；排期随事件通道部署那批。同族病：知识收件箱可见性（2026-09-23 已修）——完成类事件都需要推送面。
-
-## 快照 overlay 排除「会话内修改的前序脏文件」→ 门禁假红（快照分叉家族第三 sibling）
-
-quick 门禁隔离快照的 overlay 文件集来自会话边界审计：会话开始前已脏的文件（含并行会话在途 hunk）被记为「前序 baseline」不进 overlay——若本会话随后又修改了这些文件，快照装的是 HEAD 旧版而非本会话新版：新增导出缺失 → 快照内测试 import 即炸（SyntaxError: does not provide an export），门禁假红且重跑恒红（不是 flake）。实证：2026-09-23 ql-017 收口，verify-postcheck/quick-audit 双文件三连撞。判定法：快照失败输出含 import/导出错误 + 主仓口径同命令全绿 + 失败文件在会话启动前已脏。处置：SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF=1 主仓口径收口（口径差异披露）——注意阀名是 QUICK 前缀（verify 门禁阀是 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，两者不同，用错照挂）。根治方向：边界审计对「前序脏文件在本会话窗口内再次变更」的形态改记为本会话文件（内容哈希对比会话首末，而非仅会话启动时刻快照）。（来源：2026-09-23 ql-017 三轮收口实证）
-
-## 快照内 pytest 启动态冻结——junction 机制已排除（五组对照实验），组合态根因未定
-
-2026-09-23 R9 verify --done R2 轮：快照内 pytest 冻结于启动态（3MB/0CPU，7 分钟零进展）。当时（agent 报告与协调者）归因「venv junction 缺陷」——**误判，已实验排除**：用同一真实 venv（R9 worktree uv venv）做最小复现五组对照全过——A junction 路径直起 python/B 真实路径/C 真实路径+cwd=junction/D junction pytest.exe shim（uv trampoline）/E python -m pytest 绕 shim/F 长收集 10s 杀直接子后 2s 再起（模拟 R1 超时杀→R2 冻结时序）——全部正常。结论：纯 junction+venv+pytest+杀进程竞态不构成冻结；剩余嫌疑=快照组合态（overlay 文件集不完整致 import 悬挂/被杀轮次孤儿进程持锁/Defender 扫新临时目录），原快照已清理无法尸检。方法论教训：进程级归因（「3MB/0CPU=冻结」）+ 表面相关（junction 在场）≠ 根因，需对照实验才可定罪——本条即先例。现状兜底：600s 超时帽+冻结鉴别（零输出标注）+快照超时/冻结自动回退主仓（ql-017）已覆盖损失面；根因复现条件=下次再发时保留快照目录与进程 dump（tasklist/wmic ProcessId cmdline+CPU 采样）再定。（来源：2026-09-23 R9 R2 轮 + 当晚五组对照实验）
+- 改 worktree / runtime-session 相关功能时勿假设过期自动回收；长期运行的 workspace 需人工清理残留 worktree。
+- 依据：`.sillyspec/docs/SillyHub/flows/runtime-session.md`（「现状无自动 GC」）、`.sillyspec/docs/backend/modules/worktree.md`。
+
+## 🟡 spec_guardian 死代码与 tool_gateway 注释失配：守护门从未在生产生效
+
+- `backend/app/modules/workflow/spec_guardian.py` 的 `run_guard` 全仓仅被 `tests/test_spec_guardian.py` 引用——G3-G7 质量/文档/组件守护门**从未在生产路径生效**，变更验收别指望它把关。
+- `backend/app/modules/tool_gateway/tool_policy.py:175` docstring 写「loaded by the caller (e.g., ToolGatewayService._load_policy)」但全仓无 `def _load_policy` 定义——注释与实现不一致（项目规则 18），策略装配链路现状以代码为准，勿按 docstring 理解。
+- 2026-08-18 全量重扫 grep 实测；清理或接线前先确认调用方是否真的缺失。
+
+## 🟢 daemon 三个 3000+ 行 god 文件（daemon.ts 4047 / session-manager.ts 3897 / task-runner.ts 3156）
+
+2026-08-18 wc -l 实测：`src/daemon.ts` 4047、`src/interactive/session-manager.ts` 3897、`src/task-runner.ts` 3156。高耦合、跨文件契约靠约定、lease payload 鸭子类型几十处，**无低风险切片路径**。
+
+- 改任一文件都需大范围定向回归（tests/ 顶层 81 + interactive/ 36 个测试文件）；涉及这三个文件的变更在 plan 阶段就应把回归面算进工作量。拆分是长期债，按触碰时机渐进处理。
+
+
+## 会话日志 TOOL_RESULT 中文乱码（Windows 控制台码页，落库即坏不可导出还原）
+
+- **现象**（2026-09-15 用户实测会话导出）：full.json 里 `[TOOL_RESULT]` 中文全乱码（如
+  "EHSϵ bcm-……"），同会话 MD 摘要里 agent 正文正常——正文走 SDK message 通道，TOOL_RESULT
+  文本行走子进程 stdout 捕获通道。
+- **根因链**：Windows 上工具子进程（如 python 无 `PYTHONIOENCODING`）按控制台码页 GBK 编码
+  输出 → 捕获方按 UTF-8 解码（lossy，产生 U+FFFD 替换字符）→ `agent_run_logs.content_redacted`
+  落库即坏。替换字符有损，**导出层无法还原**（导出只原样搬运列值）。
+- **规避**：agent 侧跑 Bash/python 工具时显式 `PYTHONIOENCODING=utf-8`（用户实证 agent 设过
+  后拿到正确文本）；或 chcp 65001。
+- **根治进展**（ql-20260915-005-3268）：daemon 非 SDK 链（pi/cursor/codex/task-runner 捕获层）
+  已加码页探测解码（spawn-env.ts `decodeProcessOutputMaybe` 立即版 + `CodepageDetectorDecoder`
+  有状态流式版，覆盖全部捕获点）；**Claude SDK 链（claude CLI stdout 由上游
+  @anthropic-ai/claude-agent-sdk setEncoding('utf8')）字节在 SDK 边界已固化，daemon 侧探测
+  救不回**——治本已落地：buildSpawnEnv 出口缺省注入 `PYTHONIOENCODING=utf-8`+
+  `PYTHONUTF8=1`（仅键缺失/空串填入，显式配置优先），claude→Bash→工具孙进程全链
+  继承，新会话起生效（存量乱码行仍不可还原）。
+- **勘误**（ql-20260916-003）：上段「有状态流式版」原实现（StringDecoder 失败切 GBK）
+  是死代码——Node `StringDecoder.write()` 从不抛错，流式捕获链的 GBK 输出实际仍乱码；
+  已重写为增量 UTF-8 严格校验 + 非法字节切 GBK 流式（未决尾字节一并重解），非 SDK
+  链根治至此真正闭合。
+- **登记于**：ql-20260915-004（2026-09-14-session-export 用户验收反馈 P2-2）。
+
+## 🟡 后台任务写通道宽限无界（hasBackgroundTaskGrace 无 TTL，R-01 已接受观察项）
+
+- **暴露差**（2026-09-16 风险审查发现）：同类第一放行源 `withinStaleFlipGrace` 有界 60min
+  （`STALE_RUN_WRITE_GRACE_MS = 60 * 60_000`，sillyhub-daemon/src/interactive/session-manager/types.ts:452，
+  permission.ts `withinStaleFlipGrace` 消费），而 bg-task 第三放行源 `hasBackgroundTaskGrace`
+  （permission.ts）无时间上限——注册表条目（`mgr._backgroundTasks`）仅 task_notification 终态
+  注销与会话终态 `clearBackgroundTasks` 两路注销，条目有 `startedAt`/`lastProgressAt` 但无 TTL；
+  若 SDK 丢失终态通知，条目永驻 → 后台锚点 `currentRunId` 永不清 → 写通道放行直至会话终态。
+- **缓解链**（维持有效）：仅放行「通道存在性」（allowed_roots/policyEngine 写策略 + 人审链路
+  全程生效）；下次 inject 正常切新 run 即收敛；会话终态兜底清锚点；daemon 重启内存注册表丢失
+  自然 fail-closed。前作 R-01
+  （2026-09-15-background-task-permission-lockout/design.md 风险登记表）已按此接受为 P1。
+- **重估触发条件**：线上再现注册表泄漏实证（守卫放行但无对应存活后台任务），或
+  policy_audit_log 出现锚点态误放行线索。
+- **未来修复首选**：双窗兜底——条目存活 = 静默 <60min（对齐 stale-flip 先例，`lastProgressAt`
+  已有信号）且总时长 <4h 绝对上限；原事故任务存活 94.5min（1030 次重试/~$46），双窗防误杀，
+  静默阈值小于先例会重演权限锁死。
+- **登记于**：2026-09-16-background-task-grace-timeout（D-001@v1 用户裁决「不改代码」，
+  文档载体方案 A）。
+
+
+## 🟡 嵌套 test-runner 环境让孙代 node --test 把挂测误判 passed（NODE_TEST_* 注入）
+
+- **现象**（2026-09-24 readside 实测）：在 node --test 单测内经 runOneModule spawn 孙代
+  node --test 时，**必挂的测试文件被判 passed**（R4 用例失败、隔离直跑同场景正确 failed）。
+- **根因链**：外层 test runner 给子进程注入 NODE_TEST_* 环境变量（child 上下文/reporter 通道）；
+  孙代 node --test 继承后误连外层 reporter，退出码语义被劫持——真实门禁进程（bin/sillyspec.js）
+  无此变量，零影响，纯嵌套场景坑。
+- **护栏**：runTraceResidual spawn 前剥除所有 NODE_TEST_* 环境变量、finally 还原（同步窗口安全）；
+  src/verify-postcheck.js（1dad1353）。既有 runOneModule 消费方若在单测内 spawn node --test，
+  同款剥离。
+- **证据**：test/verify-trace-residual.test.mjs R4（未剥时 6 用例挂 1，剥后 6/6）。
+
+## 🟡 npm 12 默认拒抓 remote tarball 依赖 + 并行会话清空共享 node_modules
+
+- **现象**（2026-09-24 readside 收口时两次实测）：npm install 报「Fetching packages of type
+  "remote" have been disabled…yoctocolors-cjs@npmmirror…tgz」拒装；且 node_modules 被并行会话
+  反复清空（worktree 的 junction 完好但目标目录 0 项）→ 全 worktree js-yaml 等解析失败。
+- **根因链**：①npm 12 起 remote 型（tarball 直链）依赖默认禁抓，lock 里有 npmmirror 直链条目；
+  ②worktree node_modules 是指向主仓的 junction——任一会话重装/清理期间，全部 worktree 同时不可用。
+- **规避**：npm install --allow-remote=all 恢复；装完立即 require.resolve 抽验；被并行清理时
+  在间隙抢装并复验。勿在 worktree 内重装（junction 穿透主仓）。
+- **证据**：2026-09-24 readside execute 收口链（backfill-reviews 两连 ERR_MODULE_NOT_FOUND，
+  重装后过）；npm 12.0.1 --help 含 --allow-remote <all|none|root>。
+
+## 🟢 npm 重装顺带改写 package-lock.json 会被 worktree apply 清单校验拦
+
+- **现象**：依赖恢复后 apply 报「package-lock.json 不在 design 清单/review changedFiles」两连拦；
+  主仓与 worktree 两侧各出现 +2/-2 伪差。
+- **根因链**：npm install 解析 remote 条目后回写 lock（+2/-2）；lock 不属变更交付面，apply
+  清单校验按「清单外文件=越权」拦（拦得对）。
+- **护栏/规避**：依赖恢复后两侧各 git checkout -- package-lock.json 还原再 apply；lock 变更
+  若真属变更须显式进 design §6 清单。
+- **证据**：2026-09-24 readside apply 修复序列（还原两侧后 apply 过，交付面恰 4 文件）。

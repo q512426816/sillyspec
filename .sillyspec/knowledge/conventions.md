@@ -1,120 +1,96 @@
 ---
 author: qinyi
-created_at: 2026-06-19T12:40:00+08:00
+created_at: 2026-06-23 02:00:00
 ---
 
-# Conventions
+# 项目约定 (Conventions)
 
-## ESM Only
+## SillySpec 文档驱动开发流程
 
-项目 `"type": "module"`，**顶层**统一使用 ES Module（`import`/`export`）。
+本项目使用 SillySpec 文档驱动开发（见 `.claude/CLAUDE.md` 硬性规则）：
 
-**CJS 例外**：函数体内允许 `require()` 懒加载（推迟启动开销 / 打破循环依赖 / `doctor.js` 内嵌 bash 诊断需独立 node 进程无 ESM 上下文）。命中位置：`run.js`、`worktree-apply.js`、`stages/execute.js`、`stages/doctor.js`。顶层仍必须用 `import`。
+- **执行顺序：文档 → 读现有代码 → 写测试 → 写实现 → 跑测试 → 验收**
+- 禁止无文档改代码、禁止先写代码再补文档
+- 新功能/大改动走完整流程：`sillyspec run brainstorm` → plan → execute → verify
+- 小修复/小调整：`sillyspec run quick`
+- 修改代码前必须说明依据的文档路径；实现完成后对照文档验收
+- 本项目未正式上线，数据可清空，不考虑版本迭代兼容
+- 提交被 hook 拦截时禁止跳过，必须解决问题再提交
 
-`.cjs` 文件（如 git hooks）可用 CJS。
+## 子项目构建 / 测试 / lint 命令
+> **测试命令身份纪律（2026-09-24，5d102aee）**：测试命令真源=各仓 gitignored 的 local.yaml commands.test——**禁止调用点硬编码命令字面量**（npm test 字面量入账本键曾致跨命令误复用旧绿：full 与 test:core 映射同键）。test-ledger 键 v2 起按 specBase 实解命令+local.yaml 原文指纹入键（改配置任何字节即换键）；新消费方一律传 specBase 走 resolveTestSetIdentity，勿传命令串。
 
-最低 Node.js 18，可安全使用 `fs/promises`、`structuredClone`、`fetch` 等原生 API。
 
-## Naming
+monorepo 根无统一命令，必须 cd 到对应子项目：
 
-| 类型 | 规范 | 示例 |
-|------|------|------|
-| 文件名 | kebab-case | `change-list.js` |
-| 函数名 | camelCase | `parseFileChangeList` |
-| 导出类 | PascalCase | `DB`、`ProgressManager` |
-| 常量/配置 | UPPER_SNAKE_CASE 或小写字符串 | `SCAN_STATUS` |
+| 子项目 | 技术栈 | test | lint |
+|---|---|---|---|
+| backend | FastAPI + uv | `cd backend && uv run pytest` | `cd backend && uv run ruff check .` |
+| frontend | Next.js + pnpm | `cd frontend && pnpm test` | `cd frontend && pnpm lint` |
+| sillyhub-daemon | Node + pnpm (ESM) | `cd sillyhub-daemon && pnpm test` | `cd sillyhub-daemon && pnpm lint` |
 
-## Error Handling
+frontend/daemon 构建用 `pnpm build`；backend（Python）无独立 build 步骤。
 
-- CLI 层：`process.exit(1)` 终止并打印错误信息
-- 业务逻辑层：抛出具体错误消息字符串，由调用方捕获
-- 数据库操作：`DB` 类封装错误处理
-- 无自定义 Error 类，使用原生 `Error` 或字符串消息
+## 目录约定
 
-## Logging
+- `backend/` — FastAPI 后端（app/core 基础设施 + app/modules/<domain> 业务模块）
+- `frontend/` — Next.js 14 前端（src/app App Router）
+- `sillyhub-daemon/` — Node.js 本地守护进程（src/，ESM）
+- `deploy/` — Docker Compose 部署配置
+- `docs/` — 项目级设计文档
+- `.sillyspec/` — SillySpec 规范、扫描文档、变更、知识库
 
-- `console.log` / `console.error` / `console.warn` 直接输出
-- 用户友好提示用 `chalk` 着色
-- 进度展示用 `ora`（spinner）
-- 交互式提示用 `@inquirer/prompts`
+## 提交规范
 
-## CLI Entry
+commit message 用类型前缀 + 中文描述，例：`fix(agent-run): 修复调度 scan 链路`、`feat(frontend): 新增 SSE hook`。常见前缀：feat / fix / docs / refactor / test / chore。
 
-`bin/sillyspec.js` → `src/index.js`，所有命令通过 `main()` 函数分发。单入口，不使用 bin 多文件。
+## SillySpec 变更状态机（StageEnum + TRANSITION map）
 
-## Zero Config Init
+SillySpec 变更生命周期是显式 FSM，定义在工具内部 StageEnum + TRANSITION 映射：
+- **StageEnum**：PROPOSE → PLAN → EXECUTE → VERIFY → ARCHIVE（正常前进），外加 BLOCKED（异常态）。
+- **TRANSITION**：VERIFY **通过** → ARCHIVE（验收 OK 收尾）；VERIFY **不通过** → BLOCKED → 回退到 PROPOSE/PLAN/EXECUTE 之一重做（按失败原因）。
+- 改 SillySpec 工具自身逻辑（stage 流转、auto_dispatch、verify 判定）时，所有状态变迁必须走 TRANSITION map，禁止跳态（如 EXECUTE 直接到 ARCHIVE）。
+- 副作用约束：变更进入 ARCHIVE 后 `current_stage` 清空、`status=archived` 是终态判据，不复活。
 
-`sillyspec init` 自动检测开发工具（Claude Code、Cursor 等），非交互式默认。`sillyspec init --interactive` 保留完整引导。
+## backend Python 工程约定（model.py 单数 / ruff 配置）
 
-## Stage Definition Shape
+- **文件名单数**：SQLModel 数据模型文件名是 `model.py`（非 `models.py`），与 router.py / service.py 同级；找模型类 grep `model.py` 而非 `models.py`。
+- **ruff 配置**（`backend/pyproject.toml`）：`line-length = 100`；select 含 `E/F/I/B/UP/N/SIM/RUF/BLE`；ignore = `E501 N818 RUF001-003 BLE001 SIM105 SIM117 B008 RUF012 RUF006 RUF005 UP037`（含 `mypy` 侧 `disable_error_code = ["attr-defined","union-attr","assignment","arg-type","valid-type","operator","call-overload","call-arg","unused-ignore"]`）。
+- 提交前格式化：`cd backend && uv run ruff format .`（staged 文件先 format 再 add 再 commit，否则 pre-commit hook 拦）。
+- APIRouter 统一 `prefix="/api"`（见 Backend 模块组织）。
 
-`src/stages/*.js` 统一导出 `definition = { name, title, description, auxiliary?, _globalGuardrails?, steps }`：
-- `name` 必须等于文件名（如 `scan.js` → `name: 'scan'`）
-- 辅助阶段（scan/quick/explore/archive/status/doctor）必带 `auxiliary: true`
-- 只读校验类阶段（verify）必带下划线前缀的 `_globalGuardrails`
-- 新增阶段需在 `src/stages/index.js` 的 `stageRegistry` 注册
+## daemon ESM import 必须带 .js 扩展名
 
-## 铁律段格式
+`sillyhub-daemon` 是 Node ESM（`"type": "module"`），**所有相对路径 import 必须显式写 `.js` 后缀**（即便源文件是 `.ts`）：`import { X } from './config.js'`、`from './types.js'`。
+- 漏 `.js` 会在 `pnpm build`（tsc/tsx）或运行时报 ERR_MODULE_NOT_FOUND。
+- 改 daemon import 时养成习惯：源码 `.ts`，import 路径写 `.js`；类型 import 用 `import type`。
 
-派发给子代理的 step prompt 结尾必须含 `### 铁律`（或 `### ⚠️ 铁律`）固定段，用 `❌/✅/⚠️` emoji + 中文短句声明禁止动作（如「不要编造 CLI 子命令」「完成后立即执行 --done」「不要回头修改已完成步骤」）。新增/修改步骤 prompt 时须保留此段。
+## backend 模块分层与基类/异常约定（router/service/schema + BaseModel + AppError）
 
-## 资产保护注释
+backend 业务模块（`app/modules/<域>/`）除 `model.py` 单数命名外，还有三条隐形硬约定，新增模块 / 加表 / 抛业务异常时必须遵守：
 
-触碰 `.sillyspec/changes/`、`projects/`、`sillyspec.db` 的清理/写入代码必须带中文注释 `// ⚠️ 必须保护真实资产`，防止误删真实数据。修改这类代码时不可删除该注释。
+- **四文件分层**：`router.py`（FastAPI APIRouter，HTTP 层）+ `service.py`（业务）+ `model.py`（SQLModel 表）+ `schema.py`（Pydantic IO DTO）。`app/main.py` 注册 router 统一 `prefix="/api"`。
+- **service 在请求处理函数内实例化、注入 session**（非模块级单例）：router 里 `async def handler(session: SessionDep, ...): svc = IncidentService(session); ...`。保证异步会话隔离，别在模块级 `svc = XService(...)`。
+- **数据模型必须继承 `app.models/base.py` 的 `BaseModel`**（`class BaseModel(SQLModel): pass`，文件注释明示 "Inherit from this — not SQLModel"），写成 `class Foo(BaseModel, table=True)`。绕过它直接继承 `SQLModel` 会脱离共享 metadata 对象（Alembic autogenerate 扫的是 `BaseModel` 的 metadata），导致迁移漏表。
+- **领域错误继承 `app/core/errors.py` 的 `AppError`**（带类属性 `code` / `http_status`，可经 `__init__` 实例级覆盖），子类**按事件命名**（`IncidentNotFound` / `LlmProviderNotFound` / `PlanNotFound`），**不带 `Error` 后缀**——这正是 ruff `N818` 被显式关闭的原因。全局异常处理器按 `AppError` → HTTP 映射，业务 service 抛 `AppError` 子类而非裸 `HTTPException`。
 
-## crypto.randomUUID 全局是 Node 19+，Node 18 需 import
+## 前端 SSE 消费统一 fetch-sse：token 走 Authorization header，禁用 EventSource
 
-`crypto.randomUUID()` 作为全局是 Node 19+ 才有；Node 18 需 `import { randomUUID } from 'crypto'`。本项目 `engines: node>=18`，故 Bug2 task-01 从 `node:crypto` import（而非用全局）。仍零新增依赖（node 内置模块）。建议归类到 conventions.md（Node 版本兼容）。
+frontend 所有 SSE / 流式消费统一走 `frontend/src/lib/fetch-sse.ts`（fetch + ReadableStream 实现的 EventSource 替代品），**禁止新代码用浏览器原生 EventSource**：
 
-## 新增写入方不得无中生有建判别器依赖的文件
+- **动机（安全）**：EventSource 无法自定义请求头，token 只能拼 URL query，会被访问日志明文记录；fetch-sse 把 token 放 Authorization header（backend auth_deps 已 header-only，不认 query token）。
+- 接口形状贴齐 EventSource（onopen/onmessage/onerror/addEventListener/readyState/close），从 EventSource 迁移只改构造方式。
+- **SSE 一律走 fetch-sse + Next route handler 透传**（`frontend/src/app/api/**/stream/route.ts`）；页面直连后端流式端点会被 Next 代理缓冲，route handler 是唯一合法流式出口，且 handler 自带鉴权。
+- 新增流式功能（agent-run 流 / daemon 会话 / 导入进度等）复用 fetch-sse，勿再新写裸 EventSource 或散写 fetch+ReadableStream 解析。样板：`frontend/src/lib/agent-stream.ts`、`frontend/src/lib/daemon.ts`。
 
-gates 侧 backfill（verify-facts 回填）曾对无 facts 的存量变更凭空创建 verify-facts.json，而 checkProbeConsistency 存在「有 facts 无探针子节 → error」判别——凭空建文件把相邻判别器对存量变更的 skip 误升 error（e2e run-complete-step-verify 抓出）。规则：给既有判别器生态新增写入方时，必须枚举所有「以文件存在性为输入」的判别器并核对创建语义；底稿类文件的创建应收敛到单一入口（如 verify-probes --init），回填只固化既有文件。（2026-09-08-ir-verify-facts）
+## Tailwind md: 是视口断点非容器断点：侧栏内嵌组件禁用响应式前缀
 
-## 双维度报同一漂移信号时后加维度须豁免
+Tailwind 的 `md:` / `lg:` 等前缀按**浏览器视口**宽度生效，与组件所在容器的实际宽度无关：
 
-checkProbeConsistency 增 facts 基线对比维度后，probe6 在 HEAD 前移场景与既有 md 锚点维度重复报同一漂移（一条信号两条告警）。规则：给既有检测新增第二维度时，识别「同一根因产生多路信号」的场景并在后加维度里豁免（HEAD-advance 时 facts 侧 probe6 不报，漂移由 md 锚点维度单报）。（2026-09-08-ir-verify-facts）
+- 桌面视口下，即使组件被塞进 320px 侧栏/折叠卡，`md:grid-cols-2` 仍强制两栏把内容挤崩。已两次踩坑（change-detail-layout-rework + ql-20260811-002：侧栏折叠卡内嵌 md: 两栏文件树/会话区挤崩，最终改宽 Dialog 承载）。
+- 规范：**容器内布局决策不用视口断点前缀**；侧栏里的宽内容改用宽 Dialog（radix Portal 脱离侧栏容器，max-w 可放开）承载，参照 `frontend/src/components/changes/detail/` 的做法。
+- 该认知已固化进代码注释与测试标题（`frontend/src/components/changes/detail/change-sessions-card.tsx:20`、`__tests__/quicklog-drawer.test.tsx:81`），review 时把侧栏内嵌组件里的 `md:` 前缀当坏味道拦。
 
-## 判级/定价/门禁输入必须项目声明，禁全宇宙词表
+## 模块卡片 H1 用中文名（module-id）
 
-危险度信号（判级 / 仪式定价 / 证据门）必须来自项目自己的声明面（路径前缀 / 结构件，如 `_module-map.yaml` blast 段），禁止工具自带的全宇宙关键词表当危险度——通用词表换个仓库全是噪声（HTTP session / lifecycle 回调 / 变量名 entryPoint 均为良性词），且判级引擎自身的源码与教学文案写满关键词，按「文档措辞 / 文件内容」判级必然打伤改引擎自身的变更（自指陷阱：扫变更面〔路径 / 行级 diff〕，不扫全文件不扫措辞）。显式人工通道（risk_level 类 frontmatter）是逃生补丁不是定价规则——出现「门禁逼 agent 虚标才放行」的信号时追输入源设计，不给机械字符串匹配加精度（否定抑制 / 枚举继承那类精修是给错误的仪器上油）；首次判级/定价早于显式声明落盘时声明会被粘住，此类机制必须给后补声明留重算通道。（2026-09-19-ceremony-pricing-five-cuts，api-matrix 变更因 design 措辞撞词被定 S3 顶档实证）
-
-  实测成本对照（2026-09-19 材料包口径首日，同日同仓同规模变更）：Design Grill 154万→34.7万 token、
-  plan 审 81万→18.5万、execute QA 228万→43.8万、填卡 229万双批→80万单批——**单价约 1/4，发现质量不降**
-  （每轮零阻断、gap 全有锚、QA 抓到真 bug specBase 推导错层）。省的是「每轮评审从零重建仓库认知」（~200x
-  信息放大），不是审的东西。评审轮次结构不动（少审这条路不通——两轮 QA 拦下错层与假设反转的价值
-  大于全部评审成本）。后续命中注入的会话：这是已验证的数字不是估计。
-
-## env 敏感测试必须双模式跑+行为翻转走被跟踪文件
-
-两类实测坑（2026-09-22 R7 dogfood 复盘，2026-09-22-r7-protocol-surgery 双实证）：
-①**套件阀自噬**：测试对 env 门控行为（如 SILLYSPEC_WATCHER=0 的 disabled 语义）做断言时，测试
-runner 注入的全局阀会继承进测试内 spawn 的 env——裸跑绿、套件内红。规则：凡断言 env 门控
-分支的测试，构造 spawn env 时**显式剥净全部相关变量**（delete NODE_TEST_CONTEXT /
-SILLYSPEC_WATCHER 等），且收口前双模式各跑一遍（裸 + 套件阀生效形态）才算绿。
-②**gitignored 配置翻转不可见**：门禁快照 overlay=HEAD+会话**被跟踪**文件，测试中途改
-local.yaml（gitignored）对快照内实测不可见→「修好了还红」假象。规则：测试内翻转被测行为
-一律走**被跟踪文件**（check.js+pass.flag 模式），不走 gitignored 配置。（来源：
-test/watcher.test.mjs env 剥离双清 / test/flow-protocol.test.mjs ③ pass.flag）
-
-## Windows 控制台子进程调用必须带 windowsHide（detached 进程链闪窗根治）
-
-detached/无控制台进程（watcher、bg-sync）派生的控制台子程序（git.exe 等）若 spawn 选项缺 `windowsHide: true`，Windows 会为每个子进程创建可见 cmd 窗、跑完即灭——用户侧表现为周期性闪窗（watcher 每轮轮询 3-4 条 git，几秒一闪闪一天，易被当病毒排查）。修复口径：全仓统一 git 入口（git-helper.js execFileSync 双点）+ 其余 git 调用点（commit-guard/docs-check/gate-snapshot/green-cache）一律补 `windowsHide: true`（跨平台安全，非 Windows 忽略）。与「detached 长驻子进程自杀三闸」（2026-09-22 孤儿 watcher 条目）互补：三闸治不该活的，windowsHide 治该活但别闪的。新增外部命令调用点时此选项为必带项。（来源：2026-09-23 用户实证「弹窗出来又立马消失」，quick ql-20260923-011-d859）
-
-## execution_mode 缺省=main 直写 + verify 门禁绿结果指纹复用（R8 对撞后行为契约）
-
-两契约变更：①plan.md frontmatter `execution_mode` 缺省/非法值回退 **main**（主代理直写），显式 `dispatch` 才派发——判据=任务真可并行×单任务规模大（>30min）×上下文需分片三者齐备；对撞双实证派发税（R7 直写进码 7′ vs 派发 70′；R8 execute 80′ vs 单上下文同规模 14′=3.6×，子代理冷启动上下文重建 887 万 token+伪并行+小任务全额开销）。②gate verify/--done 的 verify-test/verify-lint 接绿结果指纹缓存（src/run/green-cache.js）：指纹=HEAD+代码脏面（剔 .sillyspec/docs/*.md——verify 收敛循环修订 verify-result.md 不击穿缓存）+local.yaml 哈希（换命令即失效）；TTL 30min；SILLYSPEC_GREEN_CACHE_OFF=1 全关/TTL_MIN 覆盖；命中合成等价 passed 并强制披露 cached=本次未重跑（真实性口径：结果必须真跑出来过，但不必重复产生）。治基线实证同一套测试收敛循环内重复真跑 ~13min（gate×3+--done 收口）。（来源：R8 对撞实验，quick ql-20260923-010-32f9）
-
-## detached 长驻子进程必须有独立于 spawn 环境的自杀条件（41 孤儿 watcher 泄漏实证）
-
-现象：全量测试套件后 41 个 watcher 孤儿进程存活，每 3s 轮询 git（每秒十几次 git/conhost 闪现，用户侧当病毒排查）。
-根因：spawn 侧环境闸（NODE_TEST_CONTEXT/SILLYSPEC_WATCHER）只拦「我拉起的这条路」，测试内 CLI 子进程自带自定义 env 绕过；而 watcher 设计上未连平台也 spawn+自刷心跳租约=无外部判死锚，测试临时目录又不清理 → 永续孤儿。
-护栏（三闸模式，通用）：①出生即死——首拍已是终态（对象不存在）立即退出；②外部资源蒸发——依赖的外部资源（git 仓/目录）连续 N 拍消失即退；③硬寿命帽——无论活跃与否 T 小时绝对退出。另：套件 runner 注入全局逃生阀（run-tests.mjs SILLYSPEC_WATCHER=0）+真子进程回归钉（主路径而非只边缘路径——本次常量缺失崩启动恰是只测边缘路径漏掉的）。
-证据：2026-09-22 用户会话抓现行 41 进程+杀灭后零闪现；src/watcher.js 三闸+test/watcher.test.mjs 两枚真子进程钉。（来源：2026-09-22-r7-protocol-surgery task-01）
-
-## 进度库引擎 = node:sqlite（Node 内置原生 SQLite——非 WASM、非 npm 原生模块）
-
-src/db-engine.js 是唯一换引擎点（方案 B/D-002）：封装 node:sqlite DatabaseSync（Node v22.13+ 免 flag，仍发 ExperimentalWarning），消解 better-sqlite3→node:sqlite 三缺口（pragma→exec / transaction→手写 SAVEPOINT 栈 / pluck→Object.values）；WAL + busy_timeout=5000 经 applyPragmas 逐条 exec，BUSY 退避重试在 db.js wrapper 外层。选型史：sql.js（WASM 全内存 load/save）→ better-sqlite3（npm 原生绑定）→ **node:sqlite（内置原生——零外部 sqlite 依赖，跨三平台免编译约束的最终形态）**。并发语义按原生 SQLite 理解：多进程读并发 + 单写者 + busy 重试是现成能力，勿按 WASM 整文件模型推断（旧模型是 last-writer-wins lost update 根因，2026-08 已根治）。文档纪律：引擎类根本事实迁移时 known-issues/模块卡/架构账须同步过一遍——2026-09-23 实证三层只跟一层（known-issues 停在 sql.js、core-engine 卡停在 better-sqlite3、源码已是 node:sqlite），预览账本设计讨论中被误引。
-
-## 换会话的编排权在平台/用户——会话不能自建会话（CLI 只产信号与接力载荷）
-
-架构约束（用户既定决策，2026-09-23 再次明确）：agent 会话本身**不能创建新会话**——「跨阶段 handoff 换瘦会话」类方案不得默认 agent 自己开新会话续跑（R9 后 token 减负方案初版犯过此错）。正确分工：①CLI/agent 侧只做两件事——检测该换会话的信号（同会话连续多阶段/肥上下文累积）+ 用 \`sillyspec handoff\` 生成接力块；②新会话的创建者是**平台**（SillyHub session-fork 基建：2026-09-22-session-fork-continuation 的 fork 端点/种子/轮级入口/谱系——平台可以创建会话）或**用户**（人工开新会话贴接力块，Wave 边界既有 advisory 即此形态）。平台侧自动 fork 是后期方向：CLI 落结构化信号（marker/event），平台 daemon 消费后建会话注入接力块——与 events channel 消费端衔接。方案表述纪律：写「建议新会话续跑」类提示时必须写明动作主体是用户或平台，不是 agent。（来源：用户 2026-09-23 纠正；patterns.md 对撞度量条目姊妹约束）
+平台（SillyHub）文档列表按 markdown 首个 H1 提取 title 展示（backend scan_docs parser._extract_title）。模块卡片 H1 必须写「# 中文短名（module-id）」全角括号格式（如 `# 变更中心（change）`），不能只写英文 module-id——否则平台文档列表显示一墙英文代号不可读。scan 文档/flows/术语表同理用中文标题。墓碑卡中文名带「已删除」标记。2026-08-18 ql-20260818-003 补齐 200 张卡片时确立。

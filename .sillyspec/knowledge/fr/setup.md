@@ -13,6 +13,7 @@ created_at: 2026-09-20T18:20:21.442Z
 变更：2026-09-21-flow-command-cards
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given 一个未初始化（或重跑）的项目目录；When `sillyspec init --tools zcode` 执行；Then `.zcode/commands/sillyspec/` 下出现 7 张卡（run-brainstorm/plan/execute/verify/archive
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-01
@@ -22,6 +23,7 @@ created_at: 2026-09-20T18:20:21.442Z
 变更：2026-09-21-flow-command-cards
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given 目标卡已存在；When 重跑 init 且尾部锚行在、剥离锚行重算的落盘正文 sha 与锚行记录一致（完好）；Then 与包内资产正文一致 → 不写（mtime 不动）；不一致（CLI 版本更新）→ 覆盖写新；锚行缺失（外来同名文件）或重算 sha 不符（用户手改正文）→ war
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-02
@@ -31,6 +33,7 @@ created_at: 2026-09-20T18:20:21.442Z
 变更：2026-09-21-flow-command-cards
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given init tools 含 claude；Then `.claude/commands/sillyspec/` 下同 7 张卡，语义同 FR-01/02
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-03
@@ -40,6 +43,7 @@ created_at: 2026-09-20T18:20:21.442Z
 变更：2026-09-21-flow-command-cards
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given 任一张包内卡资产；When 检视其内容
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-04
@@ -49,6 +53,7 @@ created_at: 2026-09-20T18:20:21.442Z
 变更：2026-09-21-flow-command-cards
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given init 交互菜单或 --tools 校验；When 选择/传入 zcode；Then 被接受（VALID_TOOLS 新增项），且 zcode 工具同时获得 AGENTS.md 注入（跨工具通用标准内容源）+ 命令卡注入
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-05
@@ -58,6 +63,7 @@ created_at: 2026-09-20T18:20:21.442Z
 变更：2026-09-21-flow-command-cards
 状态：active
 摘要：默认场景
+待复核：recent-quick
 场景正文：
 - 场景：默认场景 — Given 注入执行；When 目标目录存在用户自建文件；Then 仅触碰 sillyspec 命名空间的 7 张卡文件，其余文件零接触
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-06

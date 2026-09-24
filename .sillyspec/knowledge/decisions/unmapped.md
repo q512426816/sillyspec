@@ -2,515 +2,1083 @@
 
 > decision-distill 从变更 decisions.md 幂等提炼（「最近确认」= 归档时 HEAD）。条目字段行为 docs-check 机械解析契约，勿手改。
 
-## D-001@v1 : 本变更范围 = IR 提案 P3a，不含 P3b/c/d
+## D-003@v1 : 平台共享智能体绑定的守护进程取管理员自己名下
 状态：implemented
-变更：2026-09-06-ir-stage-p3a
 锚点：未记录
-最近确认：11aa319
-理由：仅 P3a（种子稿第 6 节）：plan 侧 task 卡 target_files 声明 + execute 侧机器对账（scope creep 检出）。P3b（verify 结论表）、P3c（design facts）、P3d（archive delta 回灌）各自独立变更立项。
+最近确认：3b2df3ff
+理由：仅平台管理员自己名下的在线 daemon runtime。依据：避免引入「管理员
 
-## D-001@v1 : P3b 范围 = verify 结论表机器半边 + 探针一致性抽查 + claims 三层标注
+## D-002@v2 : 平台共享智能体会话——源码只读 + 指定目录可写
 状态：implemented
-变更：2026-09-07-ir-stage-p3b
 锚点：未记录
-最近确认：6d72aca
-理由：种子稿 §4 三点全部落地：①验证结论表的机器半边（CLI 全权生成 verify-facts.json：探针命令行+首跑关键指标快照）②探针复跑抽查（verify gate 重跑对比防篡改）③claims 三层分级标注（确定性检查/可复跑探针/人工判断）。不做 verify.facts.yaml 的 agent 半边（agent 手写 IR 是已知前科风险，判断层保持 verify-result.md 散文）。
+最近确认：3b2df3ff
+理由：用户实答（重问轮）：「允许某个目录下写操作，可以生成点文档原型图
+supersedes：D-002@v1
 
-## D-001@v1 quick ownFiles 须并入 baselineFiles
+## D-004@v2 : 共享机器/智能体由用户在会话中显式选择
 状态：implemented
-变更：2026-08-08-concurrent-write-preflight
 锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
-理由：否。`review.changedFiles`（shared.js:1313? push）在 shared.js:1313? `if (isBaselineFile(file)) continue` 处排除了 baseline 文件——而多 agent 脏工作树起 quick 时，baselineFiles 正是本会话预存改动。仅用 changedFiles 会把自身预存文件误报为他者（§1 core 场景直接失效）。
+最近确认：3b2df3ff
+理由：用户实答（重问轮）：「会话选择共享的机器和智能体呀，用户自己选」
+supersedes：D-004@v1
 
-## D-002@v1 execute ownFiles 源优先级链 + in-place 噪音决策
+## D-006@v1 : 实现方案选 B——统一授权表 daemon_runtime_grants
 状态：implemented
-变更：2026-08-08-concurrent-write-preflight
 锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
-理由：不可接受「空」。in-place 模式（`meta.mode==='in-place-fallback'`，gates.js:744 / complete-handlers.js:744）下主仓 git status 含本会话 src/ 交付文件，空 ownFiles 会把自身交付全报他者。worktree 模式下主仓看不见交付文件，空 ownFiles 无害。
+最近确认：3b2df3ff
+理由：用户选定方案 B：新建 daemon_runtime_grants 统一授权表，工作区共享与
 
-## D-004@v1 detectConcurrentChanges 强制 safeGit trim:false
+## D-011@v1 : 打破 daemon 零改动 Non-Goal——session 级 overlay roots 写守卫增量（spike-02 B 裁决）
 状态：implemented
-变更：2026-08-08-concurrent-write-preflight
 锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
+最近确认：3b2df3ff
+理由：选项 II（最小 daemon 增量）：_judgeWriteViaPolicyEngine 增加 per-session
+
+## D-012@v1 : platform grant 的 pinned runtime 不经共享档案直接钉定 → 404
+状态：implemented
+锚点：未记录
+最近确认：3b2df3ff
+理由：否——共享的是智能体而非裸 runtime：authorize_pinned_runtime 的
+
+## D-002@v1 : 服务器重新部署范围
+状态：implemented
+变更：2026-08-29-daemon-platform-resilience
+锚点：未记录
+最近确认：bdef3a21
+理由：仅后端进程重启（docker 容器重启/发新版镜像），数据库保留，daemon 的 api_key 与注册信息仍有效
+
+## D-003@v1 : 前端回显纳入范围
+状态：implemented
+变更：2026-08-29-daemon-platform-resilience
+锚点：未记录
+最近确认：bdef3a21
+理由：包含关键前端修复——断线状态提示、卡住的「运行中」轮次兜底、审批面板断线重连
+
+## D-004@v1 : 改造深度
+状态：implemented
+变更：2026-08-29-daemon-platform-resilience
+锚点：未记录
+最近确认：bdef3a21
+理由：允许结构改造——可新增接口/协议（控制消息补拉接口、lease 过期回收后台任务、SSE 游标增强等），彻底解决断线窗口丢消息
+
+## D-005@v1 : 实现方案选型
+状态：implemented
+变更：2026-08-29-daemon-platform-resilience
+锚点：未记录
+最近确认：bdef3a21
+理由：方案 A——控制指令落库待发（参考 DaemonChangeWrite 占坑-轮询-GC 先例）+ WS 推送保即时性 + daemon 重连后 HTTP 补拉幂等消费；分层加固：daemon 退避重连+register 重试、终态上报入 outbox、backend lease GC 接线与 WS 断开即时降级、会话 suspended 挂起语义、前端连接状态与看门狗兜底
+
+## D-006@v1 : 六段设计整体确认
+状态：implemented
+变更：2026-08-29-daemon-platform-resilience
+锚点：未记录
+最近确认：bdef3a21
+理由：确认。变更名 2026-08-29-daemon-platform-resilience，原型 prototype-session-connection-states.html 六状态快照
+
+## D-003@v1 : 三条线打包 = 单变更三波交付（+revision 1 并入波 4）
+状态：implemented
+变更：2026-08-29-change-delete-closure-and-spec-pull
+锚点：未记录
+最近确认：0ec935c9
+理由：删除收敛+防复活基建（波 1）/删除入口（波 2）/拉取口子（波 3）一个变更三波，波与波共享防复活基建（波 1 建）；进行中可见性经 revision 1 重开 brainstorm 并入为波 4——与波 1-3 同文件（platform_sync/change/changes 页面），并入避免并行变更冲突（规则 19）。跨仓配套（X1-X4）以 repo: sillyspec 任务卡入列，不另开变更。
+
+## D-003@v2 : 磁盘旁路探测方式与 disk_change 直启路径（Grill B1/B2 修正）
+状态：implemented
+变更：2026-08-29-daemon-selfupdate-safety
+锚点：未记录
+最近确认：HEAD
+理由：探测=读 bundle 文件正则提取 BUILD_ID（gen-build-id.mjs 格式 regex 兼容，无 spawn）；disk_change 触发后走独立直启路径——不下载不查 manifest，空闲即 stop+respawn 到盘上版本（操作者换文件即意图，multica trySelfReload 同款）；server_command 仍走现有下载链
+supersedes：D-003@v1
+
+## D-004@v1 : 方案选型 A3 完整形态
+状态：implemented
+变更：2026-08-29-daemon-selfupdate-safety
+锚点：未记录
+最近确认：HEAD
+理由：A3——A1 全部（空闲屏障/所有权 CAS+失败释放/磁盘探测/pending 本地 status 可见）+ 心跳上报 pending_update 字段 + backend 机器视图透出 + 前端机器卡展示「等待空闲升级」原因
+
+## D-005@v1 : 保留既有优势语义
+状态：implemented
+变更：2026-08-29-daemon-selfupdate-safety
+锚点：未记录
+最近确认：HEAD
+理由：保留「拉起失败旧进程保活」（multica 没有的优点）并补全其半边语义——交接失败必须释放更新所有权与屏障，让下一条 SELF_UPDATE 指令可再触发；下载原子替换/防降级/noop 保活等既有行为不变
+
+## D-006@v1 : 设计整体确认
+状态：implemented
+变更：2026-08-29-daemon-selfupdate-safety
+锚点：未记录
+最近确认：HEAD
+理由：确认。变更名 2026-08-29-daemon-selfupdate-safety，原型 prototype-machine-update-status.html
+
+## D-001@v1 : 会话继承触发范围
+状态：implemented
+变更：2026-08-29-batch-session-inherit
+锚点：未记录
+最近确认：HEAD
+理由：仅 infra 中断继承——lease 过期自动重派（daemon 掉线/断连）attempt+1 继承原会话继续；lease 内 spawn 重试维持现状清空 resume（R-10 防副作用）；手动重跑走 dispatch_to_daemon 全新 lease 天然新会话
+
+## D-003@v1 : 方案选型 A 最小闭环
+状态：implemented
+变更：2026-08-29-batch-session-inherit
+锚点：未记录
+最近确认：HEAD
+理由：A——backend handle_lease_expiry 继承原 lease metadata+注入 resume_session_id/work_dir；daemon work_dir 同一性守卫+resume 失败降级。零迁移零新端点零前端，全消费既有链路
+
+## D-004@v1 : 设计整体确认
+状态：implemented
+变更：2026-08-29-batch-session-inherit
+锚点：未记录
+最近确认：HEAD
+理由：确认。变更名 2026-08-29-batch-session-inherit；无 UI 变化不产出 HTML 原型
+
+## D-005@v1 : P0 方向重定位——worker 重派继承（Grill C-01 裁定）
+状态：implemented
+变更：2026-08-29-batch-session-inherit
+锚点：未记录
+最近确认：HEAD
+理由：转向 worker 重派继承——interactive worker 会话（AgentSession.role 含 worker 或 parent_session_id 非空）daemon 掉线后不 suspended 而是 failed+自动重派继承原会话（worker 是临时会话无人手恢复，挂起无意义）；主会话（orchestrator/用户 chat）保持挂起语义不变
+
+## D-001@v1 : 缓存范围 = has_permission + data_scope 一并覆盖
+状态：implemented
+变更：2026-07-23-rbac-permission-cache
+锚点：未记录
+最近确认：163e1065
+理由：同时覆盖 has_permission(collect_permissions* 集合)与 data_scope(manager_project_ids / is_super_admin)。两套都是高频热路径,一并做避免二次返工。
+
+## D-002@v2 : 失效策略 = 整体清空 + 失效失败 ERROR 告警(supersedes D-002@v1)
+状态：implemented
+变更：2026-07-23-rbac-permission-cache
+锚点：未记录
+最近确认：163e1065
+理由：所有权限变更触发点统一执行 invalidate_all_permissions 清空 perm:* + ppm-scope:* 全部(继承 v1)。v2 增补:invalidate 失败升 **ERROR 级日志**(可监控告警),非 warning——失效失败是安全事件,可能留下最长 TTL 的越权窗口;读/写业务缓存故障仍降级静默(不影响请求)。
+supersedes：D-002@v1
+
+## D-003@v2 : 缓存粒度 = 拆键 platform/all/workspace + everywhere 内存并集(supersedes D-003@v1)
+状态：implemented
+变更：2026-07-23-rbac-permission-cache
+锚点：未记录
+最近确认：163e1065
+理由：**不能共用**(v1 错误)。三者返回语义不同的集合(rbac.py:37-84 实证):platform=平台级、all=全工作区并集、everywhere=platform∪all。v2 拆为三键:`perm:{u}:platform`、`perm:{u}:all`、`perm:{u}:{workspace_id}`;everywhere 读 platform+all 内存并集,**不单独存**。has_permission 在所有调用先判 platform,workspace_id=None 时再判 all,workspace_id 指定时判单工作区键。
+supersedes：D-003@v1
+
+## D-004@v1 : 无 Redis 降级 = 回退查 DB(不加本地兜底)
+状态：implemented
+变更：2026-07-23-rbac-permission-cache
+锚点：未记录
+最近确认：163e1065
+理由：沿用 api_key_service 约定,Redis 故障 try/except 回退查 DB,不加本地内存 TTL 兜底。保证正确性优先;本地兜底引入多实例一致性问题,得不偿失。
+
+## D-005@v1 : ppm-scope uuid 反序列化保证类型
+状态：implemented
+变更：2026-07-23-rbac-permission-cache
+锚点：未记录
+最近确认：163e1065
+理由：JSON 只能存 str,但 data_scope 下游用 uuid 做判断(`problem_operable` 的 `project_id in manager_pids`,project_id 是 uuid)。get_cached_ppm_scope 反序列化时必须把 manager_project_ids 还原为 `set[uuid.UUID(...)]`,is_super_admin 还原为 `bool`。否则 uuid-in-set[str] 恒 False,经理编辑/删除问题静默失效。
+
+## D-006@v1 : WorkspaceService.create 失效点补全
+状态：implemented
+变更：2026-07-23-rbac-permission-cache
+锚点：未记录
+最近确认：163e1065
+理由：补入。`_ensure_creator_as_owner`(`workspace/service.py:729`,line 770 写 UserWorkspaceRole 授 owner)的**所有调用方**——`create`(`:148/165/222`)与 `scan_generate`(`:609`,daemon-client 建工作区独立路径,`:669` 调用,不经 create)——commit 后都需调 invalidate_all_permissions,创建者的 all/everywhere 缓存才及时失效(否则最长 TTL 内缺新 ws 权限——权限缺失方向,非越权,但仍是错误)。plan-review 发现 scan_generate 遗漏(Design Grill X2 当时未穷尽 `_ensure_creator_as_owner` 调用方,属误判闭合,现补)。bootstrap 启动种子(auth/service.py seed_*)免失效(进程冷启无缓存)。
+
+## D-001@v1 : 会话面板基元统一方向 = antd
+状态：implemented
+变更：2026-08-22-session-panel-unify
+锚点：未记录
+最近确认：6fdabce0
+理由：用户拍板 antd（AskUserQuestion 2026-08-22）。
+
+## D-002@v1 : 实施方式 = 一次性原子改造
+状态：implemented
+变更：2026-08-22-session-panel-unify
+锚点：未记录
+最近确认：6fdabce0
+理由：用户选方案 A：同一变更内一次做完，单轮验收。
+
+## D-003@v1 : TurnStatusBadge 纳入 antd 化（Grill U-01）
+状态：implemented
+变更：2026-08-22-session-panel-unify
+锚点：未记录
+最近确认：6fdabce0
+理由：用户拍板一并换 antd（贯彻「整个会话 UI 家族统一」）。
+
+## D-004@v1 : 按钮尺寸 = 主操作 32px / 打断 small 24px（Grill U-02）
+状态：implemented
+变更：2026-08-22-session-panel-unify
+锚点：未记录
+最近确认：6fdabce0
+理由：用户拍板：主操作 antd 默认 32px，打断对齐 page 惯例 small 24px。
+
+## D-005@v1 : 📎 附件按钮 antd 映射 = type="text"（Grill U-03）
+状态：implemented
+变更：2026-08-22-session-panel-unify
+锚点：未记录
+最近确认：6fdabce0
+理由：设计内定 type="text"（对应 ghost 无边框语义）。
+
+## D-001@v1 : 团队=会话内能力而非独立会话类型
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：用户明确：团队类似子代理——当前会话的 agent（主控）通过 MCP 工具派分身（worker），进度与结果回到当前消息流，全程不离开对话。不新增会话类型、不新增列表条目、没有独立团队页面。
+
+## D-002@v2 : 团队工具常驻注入（Claude 引擎，分身会话除外）
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：谓词收窄：provider==='claude' 且 stage 非 worker 标识（stage 为空=普通会话或 'orchestrator'=存量主控 → 注入；分身角色/'mission_worker' → 不注入）。用户授权来源同 v1（按推荐继续）。
+supersedes：D-002@v1
+
+## D-003@v1 : 一期 Claude 专属，Codex 按钮置灰
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：一期仅在 Claude 引擎会话提供团队能力；Codex 会话中触发入口置灰并提示「团队需要 Claude 引擎」。Codex MCP 注入另立后续变更（codex driver 契约注释已标"留后续任务"）。
+
+## D-004@v1 : 触发四路等价
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：原型 v2 确认四条等价路径：①输入区「派团队」按钮+配置弹层 ②/team 指令前缀 ③自然语言（agent 常驻工具自主判断）④AskUser 卡选择。四路最终统一到同一条后端链路（显式预建或懒建 mission）。
+
+## D-005@v1 : 删除独立团队页面与入口
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：删除 /workspaces/[id]/missions、/projects/[id]/missions 两个页面路由、mission-console 组件与「Agent 团队」菜单项；普通会话面板的「用团队分析」按钮改为在当前会话直接触发团队；历史 mission 数据不做迁移（项目未上线允许重置）。
+
+## D-006@v1 : AgentMission 新增 session_id 列绑定发起会话
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：代码查证：AgentMission 无 session_id 列，旧"用团队分析"把 session_id 塞 constraints JSON 且全链路无消费（死参数）。本变更新增 agent_missions.session_id 列（FK agent_sessions，索引），废弃 constraints.session_id 约定。
+
+## D-007@v2 : worker 派发链路复用（治理门查询加判别）
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：收窄为"派发链路（worktree/scope 校验/治理门规则/预算扣减）复用"；control.py 等查询条件加 role!='orchestrator' 判别。
+supersedes：D-007@v1
+
+## D-008@v1 : 会话结束与团队任务并存
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：worker 独立 lease 存活不受会话影响；mission 收敛由主控工具调用与 patrol 兜底完成；用户重新开启会话（reopen 基建已有）可继续看到任务块与结果。
+
+## D-009@v1 : 主控轮双标记 mission_id + role='orchestrator'
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：会话存在活跃 mission 时 inject 当轮 AgentRun 回填 mission_id + role='orchestrator' 双标记；_get_main_run 取该 mission 最新 orchestrator run（存量 external mission 同规则天然兼容）；治理门/统计查询加 role!='orchestrator' 判别。
+
+## D-010@v1 : converge 语义重定义（session 定位 + busy 引导 + 独立置位）
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：converge 按 X-Session-Id 解析 mission；分身未全终态返回 status=busy 引导 agent 等待；全终态直接置 converged_at（不依赖主控 run 状态）→ finalize 锚点=最新 orchestrator run；响应 status ∈ converged/busy/conflict/needs_manual。
+
+## D-011@v1 : 旧 mission 端点删除范围精确化
+状态：implemented
+变更：2026-08-22-team-session-unify
+锚点：未记录
+最近确认：4d7adc1d
+理由：删除范围=create+list 四端点及对应前端 client；保留 GET /missions/{id}、POST /missions/{id}/cancel、全部 MCP 端点；team-progress.tsx 不动。
+
+## D-001@v1 : 三入口统一为一个门户组件（以 /sessions 为准）
+状态：implemented
+变更：2026-08-22-workspace-sessions-portal
+锚点：未记录
+最近确认：c06c7934
+理由：以 /sessions 为准抽共享 SessionsPortal（scope 判别联合），三入口渲染同一组件（用户三轮 AskUserQuestion 拍板：范围两处一起/方案A/设计确认）。
+
+## D-002@v1 : 变更详情承载=专属路由门户
+状态：implemented
+变更：2026-08-22-workspace-sessions-portal
+锚点：未记录
+最近确认：c06c7934
+理由：方案A：卡片变入口（前 3 条预览+打开按钮）跳专属路由（用户选，对比页内展开/全屏弹窗两案）。
+
+## D-003@v2 : scope 列表数据源=全局端点+服务端过滤（取代 D-003@v1 客户端过滤）
+状态：implemented
+变更：2026-08-22-workspace-sessions-portal
+锚点：未记录
+最近确认：c06c7934
+理由：后端 GET /sessions 增 workspace_id/change_id 可选过滤参；前端 scope 复用全局端点（owner-scoped+全字段+筛选+分页），v2 的降级矩阵/客户端过滤/筛选隐藏全部退场。
+supersedes：D-003@v1
+
+## D-004@v1 : ?session= 升级为门户统一能力
+状态：implemented
+变更：2026-08-22-workspace-sessions-portal
+锚点：未记录
+最近确认：c06c7934
+理由：SessionsPortal 统一支持 ?session=<id> 初始选中（迁移旧 :95-113 能力，无效 id 静默忽略），三入口通用。
+
+## D-005@v1 : ended 会话恢复自动→手动（以 /sessions 行为为准）
+状态：implemented
+变更：2026-08-22-workspace-sessions-portal
+锚点：未记录
+最近确认：c06c7934
+理由：统一为 page 模式手动重开——用户「以 /sessions 为准」原则的直接推论；design §4.E 明示为有意交互变更。
+
+## D-001@v1 : 方案 A——daemon 消费 SDK task_* + agent_task_status SSE 通道扩展
+状态：implemented
+变更：2026-08-27-background-subagent-progress
+锚点：未记录
+最近确认：debd368d
+理由：daemon session-manager 拦截 SDK `task_started/task_progress/task_notification` system 消息，映射为扩展的 `agent_task_status` SSE 事件（复用 Redis `agent_session:{id}` 频道模式），异步启动回执解析做兜底。否决方案 B（daemon 透传 system 落库、backend 解析派生：事件与日志两套真相源，历史回看重放解析脆弱）；否决方案 C（前端纯展示层聚合：永远缺终态信号，卡片转圈到会话结束）。
+
+## D-002@v1 : 生命周期双写——SSE 事件 + [TASK_*] 持久日志行
+状态：implemented
+变更：2026-08-27-background-subagent-progress
+锚点：未记录
+最近确认：debd368d
+理由：生命周期节点除发 SSE 外，同步落 `[TASK_STARTED]/[TASK_PROGRESS]/[TASK_NOTIFICATION]` 前缀的 stdout 日志行（单行 JSON，行级带 parent_tool_use_id）。前端 assembler 识别前缀解析为段元数据，回放与实时同源；行带 parent 自动享受跨轮归位。
+
+## D-003@v1 : 跨轮归位在 backend 落库时做（submit_messages 重映射 run_id）
+状态：implemented
+变更：2026-08-27-background-subagent-progress
+锚点：未记录
+最近确认：debd368d
+理由：backend `submit_messages` 落库时，带 parent_tool_use_id 的行查 tool_use_id→run_id 映射（进程内 LRU + agent_run_logs tool_call 行冷启动反查）改写为派发 run。否决前端会话级链接（每个消费日志的页面都要适配，容易漏）。历史数据不迁移（项目未上线）。
+
+## D-004@v1 : 空 prompt 防御——后端 422 为主，前端禁点为辅
+状态：implemented
+变更：2026-08-27-background-subagent-progress
+锚点：未记录
+最近确认：debd368d
+理由：backend `inject_session` 对 strip 后为空的 prompt 抛 422（中文文案，领域类 SessionEmptyPrompt，过 l10n 守护）；前端发送按钮空内容 disabled 为辅助。服务端拒绝是权威（防任何调用方）。
+
+## D-002@v1 : ctx 指标落库（AgentRun 加列）
+状态：implemented
+变更：2026-08-27-session-token-usage-fix
+锚点：未记录
+最近确认：c7f48562
+理由：落库。不落库则刷新页面/重进会话后上下文环拿不到数值。项目未上线（CLAUDE.md 规则 11），允许直接加列迁移。
+
+## D-003@v1 : 历史会话（无 ctx 数据）环显示未知
+状态：implemented
+变更：2026-08-27-session-token-usage-fix
+锚点：未记录
+最近确认：c7f48562
+理由：如实显示"未知/—"（不算百分比），不用旧口径估算（旧口径 input 是该轮所有调用求和，数字本身失真）。
+
+## D-005@v1 : 实现方案选 A（复用 usage 附带管线 + daemon 按轮重置）
+状态：implemented
+变更：2026-08-27-session-token-usage-fix
+锚点：未记录
+最近确认：c7f48562
+理由：方案 A。daemon 在现有 usage 字典加 ctx_tokens（message_start 算本次调用 input+cache_read+cache_creation）；轮边界重置累积器使实时值=本轮至今量（与终态口径一致）；backend/frontend 全链路加字段透传（AgentRun.ctx_tokens 列 + SSE + SessionRunRead）。完全符合 D-001~D-004。否决 B（改动面翻倍且旧通道无法删除，两套并存反而更乱）；否决 C（环仍爆表、跳变仅被隐藏）。
+
+## D-001@v2 : 统一=本轮增量；终态 SDK result 权威校准
+状态：implemented
+变更：2026-08-27-session-token-usage-fix
+锚点：未记录
+最近确认：c7f48562
+理由：统一仍为本轮增量；终态以 SDK result 值为权威覆盖（校准语义）。消除的是"语义级"跳变（会话累计暴涨→本轮骤降）；若两路数值有小出入，表现为终态定格时小幅校正。execute 首任务跑真实会话 spike 验证，偏差 >5% 启用 fallback（close 仅当 result > 实时值才覆盖 input/output）。
+supersedes：D-001@v1
+
+## D-006@v1 : ctx_tokens 仅 main 桶计算与注入
+状态：implemented
+变更：2026-08-27-session-token-usage-fix
+锚点：未记录
+最近确认：c7f48562
+理由：lastCallCtxTokens 仅 'main' 桶计算与注入 pendingUsage；子桶 pendingUsage 不含 ctx_tokens（backend usage.get 缺失即跳过，天然兼容）。turnInput/turnOutput 所有桶照常（子代理计费量并入本轮）。
+
+## D-001@v1 : 关联入口双向都要
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：双向都要——任务/问题侧提供"发起会话"入口（详情/列表处），会话输入框 @联想扩展支持选择 PPM 任务/问题，与现有变更/快速修复绑定体验一致。
+
+## D-002@v1 : 全状态可关联
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：全状态可关联。列表/联想默认展示"进行中"，但已完成/未开始的任务也能手动关联（如复盘场景）。
+
+## D-003@v1 : 附件真注入 + 降级文字清单
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：真附件注入——后端尝试读取附件内容作为真附件传给 agent（能看图/读文件）；读取失败的降级为文字清单（附件名+链接）。
+
+## D-007@v1 : PPM 附件访问控制复用 _can_access
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：复用 FileService._can_access 同口径校验：有权条目物化注入；无权条目降级文字清单仅列文件名并注明「无权访问」（不带链接）。行为对齐 PPM UI 现状（batch_meta 同样静默剔除无权行），不引入跨用户文件读取。
+
+## D-006@v1 : PPM 附件物化为 SessionAttachment
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：创建会话携带 ppm item 时，后端把任务 file_urls 对应 File 读取 bytes → 写入 session attachment storage → 物化 SessionAttachment 行（session_id 直接回填、user_id=创建者），并入现有 attachment_ids 组装链路（assemble_inject_attachments/download 回调/标记行/前端展示全复用，daemon 零改动）。
+
+## D-005@v1 : 统一 PPM 绑定表（方案 B）
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：方案 B——一张 `ppm_item_session_links` 表（kind 字段区分 plan_task/problem），一套绑定 helper + 一个统一前导构建器；@联想/会话筛选/任务侧卡片前端逻辑复用一套。
+
+## D-004@v2 : 工作区排序键定死 workspace_id 升序
+状态：implemented
+变更：2026-08-28-session-ppm-task-binding
+锚点：未记录
+最近确认：73a4eda3
+理由：workspace_id 升序（UUID 字典序）为唯一排序键，后端 link.workspace_id 写入与前端预选同键，消除分叉。
+supersedes：D-004@v1
+
+## D-004@v1 : 数据链路实现方案
+状态：implemented
+变更：2026-08-29-session-usage-stats
+锚点：未记录
+最近确认：0ea25728
+理由：方案 A——新增 GET /api/daemon/sessions/{id}/usage 聚合端点：agent_run_model_usage 按 session 的 runs 聚合为主、AgentRun 六 token 列兜底无明细行的老 run，返回会话汇总+按模型分组；与 /runtimes/usage 先例同模式
+
+## D-001@v1 : 注入通道选前导拼接，不动 system_prompt 与 daemon
+状态：implemented
+变更：2026-08-29-session-user-preamble
+锚点：未记录
+最近确认：c7346118
+理由：现有 4 条注入通道中选「前导拼接」：backend `daemon/session/context.py` 新增前导构建函数，`session/service.py` create_session 的 `_prefix_parts` 接线（变更/页面/PPM/团队简报四前导同款模式）。否决 system_prompt 通道（仅 claude 消费，codex 不支持，且是 per-AgentProfile 语义）与 daemon 侧注入（daemon 纯透传、不认识用户）。
+
+## D-002@v1 : 仅首轮注入 + 覆盖重派重渲染路径；后续轮次与服务身份注入不带
+状态：implemented
+变更：2026-08-29-session-user-preamble
+锚点：未记录
+最近确认：c7346118
+理由：仅首轮（用户信息+规则留在上下文持续生效，避免每轮膨胀）；掉线重派（batch-session-inherit 的 prompt 重渲染路径）须确认重渲染时同样带上。后续轮次 `_inject_into_session` 与平台审批代写等服务身份注入不带用户前导（由「仅首轮」自然满足）。
+
+## D-003@v2 : 不加 Role 字段，角色名称直接给 agent 自行判断沟通风格
+状态：implemented
+变更：2026-08-29-session-user-preamble
+锚点：未记录
+最近确认：c7346118
+理由：用户在 brainstorm step 6 明确推翻 Role 加字段方案：「直接给角色名称给 agent 分析就行，不要加字段了」。用户信息块内列出角色名称原文 + 一小段静态沟通适配指引文案，由 agent 根据角色名自行判断用业务语言还是技术语言。无 schema 迁移、无 admin/前端改动，变更范围缩小为 backend daemon/session 模块。
+supersedes：D-003@v1
+
+## D-004@v1 : SillySpec 工具规则条件注入（工作区根存在 .sillyspec/ 才拼）
+状态：implemented
+变更：2026-08-29-session-user-preamble
+锚点：未记录
+最近确认：c7346118
+理由：条件注入：仅会话绑定的工作区根目录检测到 `.sillyspec/` 目录才拼入。无条件注入会诱导 agent 在非 SillySpec 项目擅自 `sillyspec init` 污染用户仓库。无工作区会话不注入该块。
+
+## D-005@v1 : batch（批量任务）路径本期不注入
+状态：implemented
+变更：2026-08-29-session-user-preamble
+锚点：未记录
+最近确认：c7346118
+理由：本期仅做交互会话（interactive session）；batch 已有 CLAUDE.md prepend 通道，将来可复用同一套模板函数，不纳入本变更范围。
+
+## D-007@v1 : 整体方案选 A（后端前导拼接 + Role 受众字段），否决 B（纯 prompt 猜测）与 C（system_prompt 通道）
+状态：implemented
+变更：2026-08-29-session-user-preamble
+锚点：未记录
+最近确认：c7346118
+理由：用户在 explore 阶段看到完整对比表后确认「帮我实现吧」= 选 A。A 是唯一同时满足 D-001~D-006 的方案；B 违反 D-003（自由文本角色名不可靠推断）且画像判定失控；C 违反 D-001（codex 不支持 systemPrompt，provider 不对称）。
+
+## D-002@v1 : token 统计范围 = 派发执行 ∪ 关联会话执行（按 run 去重）
+状态：implemented
+变更：2026-08-30-change-center-usage-stats
+锚点：未记录
+最近确认：84a5b960
+理由：并集去重（用户 AskUserQuestion 确认）。变更侧 = 直接挂 change_id 的 run ∪ 关联会话（change_session_links）内全部 run，按 run id 去重合并。跨变更共享会话时同一份消耗会在多个变更各显示一次——口径特性非 bug，详情页注明。快速修复无派发链路，恒走 quicklog_session_links→agent_sessions→agent_runs 会话链路（代码事实，非选项）。
+
+## D-003@v1 : 落地方式 = 实时聚合计算字段（零迁移）
+状态：implemented
+变更：2026-08-30-change-center-usage-stats
+锚点：未记录
+最近确认：84a5b960
+理由：实时聚合（用户 AskUserQuestion 确认）。查询时从 agent_runs / agent_run_model_usage 现算，DTO 计算字段，不新建表列、零 migration；数字与最新执行终态一致。列表用批量聚合（一条 SQL 按变更分组）。否决「冗余入表」。
+
+## D-004@v1 : 展示位置 = 列表 + 详情都要
+状态：implemented
+变更：2026-08-30-change-center-usage-stats
+锚点：未记录
+最近确认：84a5b960
+理由：列表 + 详情都要（用户 AskUserQuestion 确认）。变更中心「变更」tab 与「快速修复」tab 列表各加摘要列（耗时 + token 总量档）；变更详情页与快速修复抽屉展示完整五指标（输入/输出/缓存读/缓存写/调用次数 + 轮次）+ 分模型明细。对齐运行时页/会话页用量卡先例。
+
+## D-005@v1 : API 形态 = 方案 A（独立用量端点 + 列表内嵌摘要）
+状态：implemented
+变更：2026-08-30-change-center-usage-stats
+锚点：未记录
+最近确认：84a5b960
+理由：方案 A（用户 AskUserQuestion 确认）。列表 DTO（ChangeSummary / QuicklogEntryListItem）内嵌摘要字段，批量聚合一条 SQL 挂既有富化管道（零 N+1）；完整五指标+分模型明细走两个新独立端点；前端一个可复用用量组件覆盖变更详情页与快速修复抽屉。否决 B（详情响应膨胀、分模型明细无处安放、与先例不一致）与 C（run DTO 仅输入/输出两维，数据面不成立——session-usage-stats 先例已核实）。
+
+## D-006@v1 : 软删会话的执行计入统计
+状态：implemented
+变更：2026-08-30-change-center-usage-stats
+锚点：未记录
+最近确认：84a5b960
+理由：计入。消耗真实发生，用量口径=真实成本；UI 隐藏是展示层整洁考虑，两者不矛盾——详情卡注脚声明（R-07）。孤儿 run（agent_session_id 已置空）经派发锚点 change_id 仍可命中，不丢数。
+
+## D-007@v1 : 用量卡取数用 react-query useQuery（非 useEffect）
+状态：implemented
+变更：2026-08-30-change-center-usage-stats
+锚点：未记录
+最近确认：84a5b960
+理由：useQuery。两个目标渲染点的既有卡片（change-sessions-card.tsx:60 / quicklog-sessions-card.tsx:60）均用 useQuery 且都在 QueryClientProvider 内；session-usage-bar 规避的是会话浮窗零 react-query 约束，本变更两渲染点无此约束。变更详情页「本页禁新增网络请求」注释（[cid]/page.tsx:339）经核实为 last-signal 功能局部语境（禁的是为派生小字段加轮询，同页 sessions 卡已自取数）。
+
+## D-001@v1 : 缺口①触发形态 — 心跳恢复事件触发
+状态：implemented
+变更：2026-08-30-daemon-self-heal
+锚点：未记录
+最近确认：ecdae9ba
+理由：`_sendHeartbeatOnce` 成功分支、degraded 累计 >720s 守卫、复用 boot
+
+## D-003@v1 : 下载校验口径 — 零子进程
+状态：implemented
+变更：2026-08-30-daemon-self-heal
+锚点：未记录
+最近确认：ecdae9ba
+理由：buffer ≥64KB 且 `BUILD_ID` 正则可提取（与 `DISK_BUILD_ID_RE` 同款，
+
+## D-005@v1 : respawn 最后防线 — 不退出保活
+状态：implemented
+变更：2026-08-30-daemon-self-heal
+锚点：未记录
+最近确认：ecdae9ba
+理由：spawn 前同款校验，不过 → error 日志 + 提前 return 不退出；返回类型
+
+## D-009@v1 : respawn 前校验提前到 stop 之前（主拦截点）
+状态：implemented
+变更：2026-08-30-daemon-self-heal
+锚点：未记录
+最近确认：ecdae9ba
+理由：新增 `validateBundleOnDisk` 导出；`_tryUpdate` 在 stop() **之前**调用：
+
+## D-003@v1 : 实现方案——daemon 自发现 + 日志 tail 推导 + 第一方事件汇聚（方案 1）
+状态：implemented
+变更：2026-09-07-agent-liveness-states
+锚点：未记录
+最近确认：e76e191d9
+理由：方案 1。唯一同时满足"全托管会话有状态灯（含 zcode 非托管登记）"与"blocked 确定性"的路线，CLI 契约零变更零回归（草案 D-005），五层既有地基全复用；代价是 daemon 侧工作量最大，由 P1a 先行消化。方案 2 违反"CLI 非执行体"既定定位且覆盖不了登记盲区；方案 3 放弃 zcode/裸会话覆盖，G-1 达不成
+
+## D-004@v1 : 状态展示两层——会话列表小灯+悬浮卡，完整总览放工作台
+状态：implemented
+变更：2026-09-07-agent-liveness-states
+锚点：未记录
+最近确认：e76e191d9
+理由：A。会话列表每行行尾只加 ~18px 状态小灯（五态色+呼吸闪烁，不新增列不改布局），悬停弹详情小卡（静默时长/关联 ctx/证据摘要）；完整「Agent 状态总览」卡片（分组计数+等人跳转）放工作台首页。用户原话背景：会话列表没那么大空间展示这些信息
+
+## D-003@v1 : PPM 个人工作台头像维持首字占位（用户头像功能非目标）
+状态：implemented
+锚点：未记录
+最近确认：41c3b37
+理由：2026-09-10-account-avatar-upload——PPM 已上线模块不动，WorkbenchProfile.avatar_text 维持首字；展示范围圈定为个人中心+顶栏+群聊（用户选定）。后续要接入再单独立变更。
+
+## D-001@v1 实施路线——渐进下沉（双轨兼容）而非契约替换或最小注册表
+状态：implemented
+变更：2026-09-03-agent-provider-abstraction
+锚点：未记录
+最近确认：c6c74aa49
+理由：方案A 渐进下沉。driver 内归一化吐 AgentEvent，backend/前端双轨兼容新旧两种事件格式，验证稳定后再退役旧文本协议（退役为后续 change）
+
+## D-002@v1 会话级信号的承载方式——status 事件 subtype + 有状态归一化器，raw 降格为调试通道
+状态：implemented
+变更：2026-09-03-agent-provider-abstraction
+锚点：未记录
+最近确认：c6c74aa49
+理由：①会话级信号全部事件化为 status 型 + subtype 枚举（session_started/bash_status/plan_mode/agent_task_status/task_notification），SessionManager 改按 subtype 分发；②depth 状态机等跨消息状态由有状态归一化器类（ClaudeEventNormalizer，每会话实例）内部维护；③envelope.raw 仅在 SILLYHUB_DEBUG_RAW_EVENTS=1 时携带，下游禁止依赖（cli.ts 的 SDKMessage 接线随之演进）
+
+## D-003@v1 usage 实时透传语义——任意携带 usage 的事件即更新，不限 turn_result
+状态：implemented
+变更：2026-09-03-agent-provider-abstraction
+锚点：未记录
+最近确认：c6c74aa49
+理由：对齐现行为：任意携带 usage 的 AgentEvent（含 partial text/thinking flush 事件）→ daemon lift → backend 更新 agent_runs token 统计 + SSE summary 实时透传（现链路锚点 daemon.ts:3564-3586、service.py:357-370）
+
+## D-004@v1 partial override 撤回的事件化表达——override:true + segment_id
+状态：implemented
+变更：2026-09-03-agent-provider-abstraction
+锚点：未记录
+最近确认：c6c74aa49
+理由：text/thinking 事件增加可选 override:boolean——true 表示替换同 segment_id 已落库 partial 行；backend 行为对齐现有 stale 撤回链（DELETE by (run_id, segment_id) → INSERT）。partial/override 归一化逻辑移植自 daemon session-manager 现实现（非 backend _extract_sdk_messages，后者对 stream_event 恒返回空）
+
+## D-005@v1 AgentEvent v2 契约补遗——status 增 thinking_tokens 子类型、usage 增 ctx_tokens 字段
+状态：implemented
+变更：2026-09-03-agent-provider-abstraction
+锚点：未记录
+最近确认：c6c74aa49
+理由：契约微扩：AgentStatusSubtype += 'thinking_tokens'；AgentEventUsage += ctx_tokens?: number。归一化器对应产出（thinking_tokens 子类型事件、usage 差分携带 ctx_tokens）
+
+## D-006@v1 双轨渲染已知改进差异的取舍——主 agent Task tool_result 配对（新轨 call_id 优先）与 cache_* 完整帧聚合（新轨更全）
+状态：implemented
+变更：2026-09-03-agent-provider-abstraction
+锚点：未记录
+最近确认：c6c74aa49
+理由：均接受为已知改进差异（新轨行为更正确），以豁免/可执行登记形式固化（dual-path fixture 豁免 #2 + TestDocumentedFormatDivergences/§2 差异冻结测试），不要求新轨复刻旧轨缺陷；旧轨本身零改动（回退轨保真）
+
+## D-001@v1 命令下发通道——机器级即时 WS 指令（方案 A）
+状态：implemented
+变更：2026-09-04-conflict-resolve-entry
+锚点：未记录
+最近确认：0d7e66502
+理由：方案 A。复用机器级 fire-and-forget WS 指令先例（self_update/cleanup/sillyspec_update 同款，`POST /machines/{id}/sillyspec-update` router.py:1269）：backend 校验权限后经 DaemonWsHub 即时下发，daemon 侧 handler 本地 execFile 执行 sillyspec CLI（sillyspec-manager 30s 超时模式），执行结果缓存于 daemon 内存并随下次心跳 sillyspec_status 通道上报（≤60s 页面自动回绿）。B 的离线补拉增益对本场景为负（sillyspec 操作必须机器在线，离线排队上线时现场可能已变）且六处协议扩展过重；C 的 host_fs RPC 挂会话上下文无页面载体、字符级白名单对变长 change 名脆弱，不适配
+
+## D-003@v1 操作权限——机器所有者 + 平台管理员
+状态：implemented
+变更：2026-09-04-conflict-resolve-entry
+锚点：未记录
+最近确认：0d7e66502
+理由：机器所有者 + 平台管理员。冲突数据挂机器维度，机器主人最清楚现场，管理员兜底无主机器；其他成员只读红灯不可操作。活跃阶段变更（非 archived）的冲突行加警示标注 + 确认弹窗加重文案，不硬禁（机器主人有最终裁量）
+
+## D-004@v1 心跳 sillyspec_command_result 落库语义——两态清除 + register 恒清（Grill X-04 修订）
+状态：implemented
+变更：2026-09-04-conflict-resolve-entry
+锚点：未记录
+最近确认：0d7e66502
+理由：两态。对象=整包直写、键不出现=置 NULL 清除，与 sillyspec_status 现状（model.py:108-109、runtime/service.py:525-529）语义一致；daemon 终态窗过期后直接停发该键，不发送显式 null；register 恒清（service.py:232-235 先例）堵 daemon 重启后 DB 残留。三态需在心跳面新增 absent/null 判别，唯一先例 router.py:988 display_alias PUT 属 PUT 端点非心跳，无谓引入新机制
+
+## D-001@v1 cursor 交互式 driver 架构——每轮 respawn + --resume chatId 薄 driver
+状态：implemented
+变更：2026-09-08-cursor-interactive-session
+锚点：未记录
+最近确认：35f3d6528
+理由：方案A 每轮 respawn。每个 UserTurnInput spawn 一次 `cursor-agent -p --output-format stream-json [--resume chatId] [--model] <prompt>`，NDJSON 逐帧归一化为 AgentEvent v2，result 帧 + 进程退出 = turn 收敛；chatId 从帧内 session_id 捕获（`create-chat` 子命令兜底）；Windows 经 resolveWindowsCmdShim（含 cursor 坏 ps1 版本目录增强）。B/C 否决：worker 实测是 Cursor 云端 worker 注册通道（K8s 探针/标签/池分配，非本地 stdio 会话协议）；cursor-agent 无 --input-format/SDK 控制协议（批量适配 D-008@v1 已证参数集分叉），ClaudeSdkDriver 握手必挂
+
+## D-002@v1 接入范围——仅交互式会话最小闭环
+状态：implemented
+变更：2026-09-08-cursor-interactive-session
+锚点：未记录
+最近确认：35f3d6528
+理由：仅最小闭环：补齐交互式会话链路（driver + 归一化器 + 注册表 + 三端 caps + 前端白名单 + 测试 + 冒烟），对齐 pi 接入先例。liveness 推导器注册与平台侧 Cursor 凭证配置（llm_provider agent_kind 扩展 + CursorCredentialInjector）留后续变更
+
+## D-004@v1 caps 守护测试 EXPECTED_PROVIDERS 同步必改（Grill B-01）
+状态：implemented
+变更：2026-09-08-cursor-interactive-session
+锚点：未记录
+最近确认：35f3d6528
+理由：否。`backend/app/modules/agent/tests/test_provider_caps_alignment.py:52` EXPECTED_PROVIDERS 为硬编码 `{"claude","codex","pi"}`，test_provider_sets_identical 对三端表断言集合相等——三端表加 cursor 后守护测试必失败。必须同 commit 同步 EXPECTED_PROVIDERS 加 'cursor'（pi 接入 commit 7c4dd4efd 同款先例）。设计文件清单已补该文件
+
+## D-001@v1 派生粒度=工具调用聚合为单任务
+状态：implemented
+变更：2026-09-07-pi-task-events
+锚点：未记录
+最近确认：35f3d6528
+理由：以「一轮（turn）内的活动」聚合为单条任务：turn_start 建/复running行（task_id=pi-run-<runId> 稳定键，task_name 取首轮用户消息或'执行任务'），tool_execution_start 刷新 last_tool_name/tool_uses 累计/summary（'正在调用 X'），tool_execution_end 保持 running（工具成败不等于任务成败），turn_end 按 stopReason 映射终态（error→failed 其余→completed）置 message/finished_at。子代理粒度（claude Task 工具那种）pi 原始流无对应概念，不做
+
+## D-002@v1 派生位置选归一化器（方案 A）——⚠️ 自主决策待用户复核
+状态：implemented
+变更：2026-09-07-pi-task-events
+锚点：未记录
+最近确认：35f3d6528
+理由：选 A。PiEventNormalizer 增实例级 turnTask 聚合状态产出 status/agent_task_status——贴 claude-events 同位置派生信号的既有架构，session-manager/_dispatchStatusEvent→cli 上报链路零改动，纯函数测试范式可延续；代价是归一化器从逐行纯函数升级为实例级状态机（turn 边界做状态推进点，normalizeRpcLine 单行解析仍独立）
+
+## D-003@v1 设计整体确认——⚠️ 自主决策待用户复核
+状态：implemented
+变更：2026-09-07-pi-task-events
+锚点：未记录
+最近确认：35f3d6528
+理由：按 D-001/D-002 定稿确认。原型跳过理由：纯数据链路补齐，前端任务执行面板零改动（pi 会话从空态变有数据，无界面变化，原型分级「纯后端无界面变化」档）
+
+## D-004@v1 design-grill 修正——stopReason 枚举实证与测试路径
+状态：implemented
+变更：2026-09-07-pi-task-events
+锚点：未记录
+最近确认：35f3d6528
+理由：修正三处：①fixture 全量实证 stopReason 仅 stop/error 两值，aborted 是 ame.error 的 reason（流层中止）非 stopReason——删除 aborted→stopped 映射，被打断的轮按 completed 收行；②测试路径实存 tests/interactive/pi-events.test.ts，新增集成用例定名 tests/interactive/pi-task-dispatch.test.ts；③R-01 应对改写：既有用例 expected 数组需追加派生事件（预期适配非破坏）
+
+## D-002@v2 品牌色派生 token 三主题分值（blue 不继承紫）
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：品牌色派生 token（--aurora-*/--row-active(-ring)/--shadow-glow/--shadow-primary）按既有 --shadow-primary 三主题分值惯例写满 :root/[data-theme="blue"]/[data-theme="dark"] 三块，blue 给蓝系取值
+supersedes：D-002@v1
+
+## D-003@v1 消息形态 = 气泡 + 头像
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：用户选定「气泡 + 头像」——现有气泡骨架保留，agent 消息加品牌渐变头像（Bot/引擎图标），用户消息维持右对齐品牌色气泡
+
+## D-004@v1 范围含群聊面板
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：会话页 + 群聊一起改——group-chat-panel 的消息行同步焕新（头像/气泡层级/代码块已由 MarkdownText 共享自动获益）
+
+## D-005@v1 dark 主题底色一起调
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：连主题底色一起调——dark 主题 card/border 取值微调拉大页面底与卡片反差（themes.ts darkTheme + globals.css dark 变量块同步，取值仍限 Tailwind v3 zinc 阶默认值）；全站受益，回归面经 build+主页面实拍控制
+
+## D-006@v3 群聊 agent 成员无自定义头像时统一 Bot 渐变光环（取舍记录）
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：取舍为维持统一光环——发送者区分由消息行成员名行承担且群聊本就渲染成员名；统一 agent 视觉锚点（与单聊一致）价值大于分色辨识（分色仍保留在成员面板/facepile 等非消息行场景）；自定义头像（avatar 入参）优先级不变
+supersedes：D-006@v2
+
+## D-007@v1 高级感设计语言（v2 原型定调）
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：v2 原型定调六根杠杆——①环境极光背景（品牌色径向渐变光晕，浅/dark 双套取值）；②多层弥散阴影替代硬边框（边框统一降透明 --border-soft）；③玻璃拟态（顶栏/面板头/列表列 backdrop-blur + saturate）；④渐变点睛收敛到三处：标题「智能体」渐变字、agent 光环头像、发送按钮；⑤macOS 风深空代码块（三色窗点+语言标签+复制钮）；⑥微交互（发送钮 hover 浮起/点击回弹、plus 钮 hover 渐变填充、composer 聚焦光环+弥散阴影）
+
+## D-008@v1 v3 修正——玻璃可读性 + 删流光顶条
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：①玻璃拟态不可读的根因是极光只铺内容区、玻璃面板底下是纯色底没有东西可透——v3 把极光铺满整个应用底（body background-attachment: fixed），侧栏/列表列/面板整体降透明 + backdrop-blur，玻璃下有色彩可透才读得出玻璃感；②panel-accent 渐变流光顶条整体删除——运行态氛围收敛为脉冲状态点 + 任务条 spinner 两个既有元素，克制优先，不再加新动效载体
+
+## D-009@v1 v4 自查修正（用户要求"你自己看看效果图"后的逐项自审）
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：自审五条——①浅色下用户气泡紫色面积太大太吵（max-width 76%→72% + shadow-primary 降重：阴影 alpha 减半）；②composer 聚焦光环 v3 过浓且原型硬编码常驻焦点态（dark 下呈 RGB 霓虹圈游戏感）——改 3px/10% 透明度柔环、阴影不再跳档、原型展示常态；③列表/导航选中态两主题都太弱——inset 描边从 border-soft 换品牌色 22%/30% 透明度（--row-active-ring 新 token）；④浅色右上极光泛紫过浓（13%→9%）；⑤dark 极光太弱整体死黑（四团光晕各加 3-4 个百分点）
+
+## D-010@v1 RoundDivider 状态六态映射
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：status 改六态判别联合，着色映射：completed=success / failed+killed=error / running=info / pending+interrupting=neutral
+
+## D-011@v1 死 token 删除 + G-02 43px 悬空口径修正
+状态：implemented
+变更：2026-09-09-sessions-visual-refresh
+锚点：未记录
+最近确认：1f515ddce
+理由：①四 token 全删（消费面 Tailwind 阶已达成同观感，留死定义徒增维护面）；②G-02 作废——task-05 的 43px 对齐要求删除（对话视图无过程行，全部视图按 G-03 不动，turn-segment-views 零改动是正确实现）；③design 文件清单 layout.tsx 行改指 app-shell.tsx（极光实际落点）
+
+## D-009@v1
+状态：rejected
+变更：2026-09-11-agent-log-attribution-refactor
+锚点：未记录
+最近确认：353eb11b0
+理由：否——用户明确「不应该限制 agent 类型」，跨 harness 同变更挂接是需求而非缺陷
+否决理由：与「同变更就挂」需求直接冲突
+复潮条件：未来出现同变更跨 harness 归属仍需区分展示的需求
+
+## D-010@v1
+状态：rejected
+变更：2026-09-11-agent-log-attribution-refactor
+锚点：未记录
+最近确认：353eb11b0
+理由：否——首次错标仍会发生、subagent 归属仍靠 cwd 猜，治标不治本
+否决理由：治标；不满足 FR-01
+复潮条件：锚定方案在某个 harness 上不可实施时的局部回退
+
+## D-011@v1
+状态：rejected
+变更：2026-09-11-agent-log-attribution-refactor
+锚点：未记录
+最近确认：353eb11b0
+理由：否——动表结构与 D-005 冲突；现有 change/quicklog links 表已能表达「会话↔ctx」登记
+否决理由：违反已确认的「不动表结构」决策；现有 links 表能力足够
+复潮条件：ctx owner 解析出现性能问题或需要显式管理界面
+
+## D-003@v2 聚合形态 = 编译期聚合（落点修订）
+状态：implemented
+变更：2026-09-11-provider-adapter-registry
+锚点：未记录
+最近确认：f0211bbcf
+理由：Grill 复审发现 @v1 表述「新建 provider-adapter.ts」与实际最优落点不符——ProviderDescriptor（providers.ts:262）已承载五要素，原地扩展 INTERACTIVE_PROVIDERS 为 ProviderAdapter 聚合表改动面最小。@v2 修订：落点=providers.ts 内扩展，不另立契约文件。
+supersedes：D-003@v1
+
+## D-001@v1 预会话草稿键细分，消除跨入口串台
+状态：implemented
+变更：2026-09-13-session-group-ux-fixes
+锚点：未记录
+最近确认：39d3d8c5c
+理由：代码查证：真会话草稿按 sessionId 隔离（sillyhub.sessions.draft.<sid>）且所有 7 个 SessionPanel 宿主均有 key={sessionId} 强制重挂载，rAF 门闩（draftHydratedRef）时序推演在重挂载/非重挂载两路径均正确；唯预会话（sessionId=null）草稿用固定键 __pre__（frontend/src/components/daemon/session-panel/turn-state.ts:304），跨工作区/跨机器入口共享——用户在不同入口开新会话时上一入口未发送内容必然带入，与用户「a 会话内容带到 b 会话」实测吻合。修复：预会话草稿键按 workspaceId+runtimeId 细分（__pre__:<ws>:<runtime>），真会话逻辑不动仅补测试覆盖。
+
+## D-002@v2 拖拽不使用 setPointerCapture（Grill 修正）
+状态：implemented
+变更：2026-09-13-session-group-ux-fixes
+锚点：未记录
+最近确认：39d3d8c5c
+理由：不用。frontend/src/components/ui/panel-resizer.tsx:11-13 真实先例明文因 jsdom 无实现而不用 setPointerCapture，window 级 pointermove/pointerup 监听已保证拖出元素收事件；测试走 fireEvent(window) 同路径（explorer-page.test.tsx 补坐标方案）。@v1 表述中「+ setPointerCapture」为 brainstorm 期误引，以本版为准。
+supersedes：D-002@v1
+
+## D-003@v1 群聊跨工作区可见性——后端返回可见工作区集合
+状态：implemented
+变更：2026-09-13-session-group-ux-fixes
+锚点：未记录
+最近确认：39d3d8c5c
+理由：选后端方案：list_groups 响应组装时为每个群计算 visible_workspace_ids（直接 workspace_id + project 经 PpmProjectWorkspace 关联的全部 workspace_id，批量查询无 N+1），GroupChatListItemRead 加字段；前端各消费点（桌面 session-list-panel / 移动 mobile-session-list / 悬浮宿主如有群分区）过滤改为 includes 判定。理由：单一数据源、全部消费点免费获益、避免每个消费点各自拉项目-工作区映射造成数据不一致与重复查询。可见性口径：仅放宽列表展示（用户须是群成员才看得到，现有 member 过滤不动），打开群后的访问控制仍走群成员校验，权限语义零变化。
+
+## D-004@v1 整体方案选 A——后端可见集合 + 预会话键细分 + Pointer Events
+状态：implemented
+变更：2026-09-13-session-group-ux-fixes
+锚点：未记录
+最近确认：39d3d8c5c
+理由：用户选定方案 A。理由要点：单一数据源、全部消费点免费获益、改动聚焦（backend 2 + frontend 5 文件）；否决 B（逻辑复制 3 处、映射独立加载有时序窗口）；否决 C（真会话串台未证实，为未证实问题重构违反 YAGNI）。
+
+## D-001@v1 修复方案——锚点 + 协议标记（方案 A）
+状态：implemented
+变更：2026-09-15-background-task-permission-lockout
+锚点：未记录
+最近确认：e21bf19cc
+理由：A。daemon `onResult` 在会话的后台任务注册表非空时保留 currentRunId 作后台锚点（任务全部终态注销时清）；写通道守卫 `writeChannelGuardDeny` 新增「status=active + currentRunId 在 + 注册表有存活任务」放行条件；权限请求协议加 `background_task` 标记，backend `handle_permission_request` 据此放宽 active-turn 校验为「按 run_id 直查 + 会话归属校验」
+故障面：注册表泄漏（task_notification 永不到达）会让锚点 currentRunId 永不清 → 守卫放行窗口变长；缓解＝锚点仅在 status=active 时有效，下一次 inject 正常切新 run，写策略/人审链路仍全程生效，放行的只是「通道存在性」而非权限本身
+退役判据：SDK 未来提供 per-task 权限上下文（canUseTool 带 task 归属）时，锚点机制可退役为直连 task→run 权限路由
+
+## D-001@v1 游标修复方案——before_id 附加参数 + 块内复合过滤（方案 A）
+状态：implemented
+变更：2026-09-16-logs-cursor-tiebreaker
+锚点：未记录
+最近确认：b204034fb
+理由：A。backend get_agent_session_logs 新增可选 before_id 查询参数，before_id 非空时过滤改 `(ts < before) OR (ts = before AND id < before_id)`，缺省保持现行 `ts <= before` 旧语义；ORDER BY（run 块序 anchor_ts→ts→id）零改动；openapi/gen:types 同步；前端游标升级 (ts,id) 二元组 + pageKey 追加 id 后缀 + loadEarlierOnce 进度判定二元组化
+故障面：WHERE 裸 ts 过滤与 run 块序排序键不对齐是既有已接受局限（跨 run 时间交叠时 ts 游标可跳行）——顺序会话（一会话一活跃轮）不受影响，本变更不扩大该局限（复合过滤仅在块内收紧）
+退役判据：若未来日志查询改为全局 (ts,id) 序的专用分页端点或换 cursor token 协议，before_id 参数随 before 一并退役
+
+## D-001@v1 对齐范围 = 变更中心列表页 + 详情页的功能补齐
+状态：implemented
+变更：2026-09-16-mobile-changes-parity
+锚点：未记录
+最近确认：d33092ea3
+理由：变更中心在 PC 端由两个路由承载——列表页 `/workspaces/[id]/changes`（含 quicklog tab）与详情页 `/workspaces/[id]/changes/[cid]`；移动端对应 `/m/workspaces/[id]/changes` 与 `/m/workspaces/[id]/changes/[cid]`。对齐范围为这两对页面。
+
+## D-002@v1 任务看板 / 任务执行页维持桌面引导，不在本次对齐
+状态：implemented
+变更：2026-09-16-mobile-changes-parity
+锚点：未记录
+最近确认：d33092ea3
+理由：不移植。原变更 2026-08-26-mobile-workspace-page D-002 已明确将任务域裁剪出移动端核心版，移动详情页保留「任务区桌面引导条」；任务看板+执行页是独立大块功能（非列表/详情的信息呈现），用户指令针对「变更中心内容」，未点名任务域。
+故障面：用户若预期任务看板也上手机端，本决策遗漏该预期——汇报中显式列为可否决项
+
+## D-005@v1 实现方案 = 方案 A「既有组件复用挂载 + 移动壳适配」
+状态：implemented
+变更：2026-09-16-mobile-changes-parity
+锚点：未记录
+最近确认：d33092ea3
+理由：选方案 A。三案对比：A=PC 既有卡组件（ChangeUsageCard/ChangeLastSignal/ScopeAuditCommandCard/ChangeActivityBadge）布局无 lg 依赖可直接挂载，数据层函数与 query key 全部复用，移动壳（筛选抽屉/⋯菜单/折叠卡）沿用本页既有范式；B=每卡重写移动版，违反移动端代码明文约束「数据层 100% 复用桌面（禁止复制第二份实现）」（每份移动页头部注释均载），制造双实现漂移面；C=废弃 /m/ 路由体系改响应式，推翻 2026-08-26-mobile-workspace-page 整个架构决策，牵连 m/layout 钻取路由、MobileWorkspaceHeader、底部 Tab 等全部移动基建。A 是仓库惯例的直接推论，非开放取舍。
+故障面：若某桌面组件在小屏实测溢出（如 ScopeAuditCommandCard 明细表），需就地加移动断点而非重写——执行时验证
+退役判据：若未来移动端整体转向响应式单套页面（方案 C 复活），本决策随之退役
+
+## D-001@v1 知识来源范围——会话记录 + 手工录入 + 变更归档
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：用户多选确认：会话记录、手工录入、变更归档三项；事件复盘（incident postmortem）不在 v1 范围。
+
+## D-002@v1 蒸馏引擎=派发 agent 会话（非后端直调 LLM）
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：用户单选确认：派发 agent 会话。理由（用户选项描述）：能力最强，agent 能读文件、能跑 sillyspec knowledge propose 等命令，产物直接落在 .sillyspec 树内，与 CLI 口径天然一致。
+故障面：派发依赖 daemon 在线与 lease 可用；daemon 离线时蒸馏任务排队/失败需有反馈路径。
+退役判据：若 agent 会话蒸馏成本/时延不可接受且后端 LiteLLM 直调已能覆盖同等质量，可复议 D-002@v2。
+
+## D-003@v1 入库位置=.sillyspec/knowledge 树（与 sillyspec CLI 同源）
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：用户单选确认：写入 .sillyspec/knowledge。候选先进待审区（proposed/），人工审核后合并进正式知识文件并更新 INDEX，经现有 spec 同步（spec_version bump → daemon lease claim 按 latest_spec_version 拉取）回流各端；CLI 与网页看到同一份。
+故障面：平台侧写入与 daemon 上行同步可能撞 manifest 乐观锁（冲突走既有 conflict 路径人工拍板）。
+退役判据：若知识规模/并发写入增长到文件树形态不可维护（数千条目/多人同时写常态），复议为文件真相源之上加 DB 读索引，而非放弃与 CLI 同源。
+
+## D-005@v1 平台侧写路径=方案A 平台直写（服务端权威写 + 蒸馏上行复用现有同步）
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：用户单选确认：方案A 平台直写。手工录入与审核合并由 backend 直接写服务器 spec_root（维护 SpecFileManifest 单写者语义：行版本 +1、spec_version bump、软删备份），网页即时生效不依赖 daemon 在线；agent 蒸馏任务在会话内写本地 .sillyspec 后照现有上行同步回流（pull/push 维持主动快照语义，daemon 决策库 D-004@v1）。与上行同步撞同文件冲突走既有 manifest conflict 人工拍板路径（知识文件写入低频，冲突面可控）。否决方案B（全走 daemon 代写 outbox：daemon 离线即阻塞、异步排队体验差）；否决方案C（分期：人为拖慢用户明确要的蒸馏能力）。
+故障面：平台直写与 daemon 上行同步并发改同一知识文件时触发 manifest 冲突（走既有 conflict 人工拍板）；repo-native junction 场景下行应用会改用户 git 工作树，需 git 感知提示。
+退役判据：若知识写入频率升高导致冲突常态化，复议 D-005@v2 转代写队列或合并写协调器。
+
+## D-007@v1 merge 两段式 apply + 三类映射目标 + 路由关键词人工输入（Design Grill B-1/B-3 修正）
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：两段式：第一段 apply_ops([update(目标文件), update(INDEX.md)])，确认返回无 conflict 后第二段 apply_ops([delete(proposed)])；第二段失败=候选残留幂等可重试。合并目标 v1 限定三类 INDEX 映射文件（known-issues.md/patterns.md/conventions.md）；路由关键词由审核人人工填写（KnowledgeMergeIn.keywords），不做自动派生。另定 path 字段规范：entry.path 保留 .sillyspec/knowledge/ 前缀（顶层条目值不变，兑现兼容承诺），filename 扩展为含子目录段的相对路径，zone 由 filename 首段派生（Grill B-2 定论）。
+故障面：两段间窗口内另一端同步改动 proposed 文件 → 第二段 conflict，候选残留（可重试，无知识丢失）。
+退役判据：apply_ops 若未来提供事务性整批中止（all-or-nothing）语义，可合并回单段。
+
+## D-008@v2 R-08 三洞修复落定——附件通道取数 + --spec-dir 指路回流 + 三重护栏（supersedes D-008@v1）
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：实现期调查（2026-09-17，commit 2c7873e5e）修正前提：**spec 树三策略统一下发 daemon 本地 `~/.sillyhub/daemon/specs/{ws_id}`（交互会话启动 pull + 会话结束 postSpecSync 增量回传，`knowledge/` 在同步集内）**——v1 判断"platform-managed 下 daemon 本地无树"不成立，洞二实为"树在缺指路"。修正落定：①洞一取数走**附件通道**（导出会话日志为 Markdown→SessionAttachmentService 上传→create_session attachment_ids→daemon 落盘 {cwd}/attachments/ 供 agent 读，不污染知识库树；替代 v1 的 .runtime 导出方案——.runtime 在同步排除集内送不到 daemon，v1 方案不可行）；②洞二回流=prompt 统一带 `--spec-dir ~/.sillyhub/daemon/specs/{ws_id}` 指路（CLI 实测 propose 只认 --spec-dir 不认 --spec-root，scan 参数不可照搬）；③洞三护栏=turn>2000 422/单条 8KB 截断/总量 19MB 422 引导 resume；④非多模态引擎（附件通道依赖 provider_caps.multimodal，仅 claude/pi）fresh 会话源 422 守卫。
+supersedes：D-008@v1
+故障面：附件下载 daemon 侧 60s 超时（既有链路）；postSpecSync 乐观锁冲突靠 pending_push 自愈（既有）；超大对话 resume 模式上下文超限由引擎 compact 兜底。
+退役判据：若 daemon 侧未来提供会话记录查询 MCP 工具，可弃附件导出通道。
+
+## D-009@v1 会话源蒸馏默认走原会话续接（reopen+inject），新 agent 为可选项
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：会话源默认=原会话续接——平台既有 reopen_session（（续接入口 reopen_session，见 backend/app/modules/daemon/session/service/session_lifecycle.py），续接已结束 claude/codex 会话，SDK resume 保留完整对话历史+prompt cache）+ inject_session(prompt=...)（（inject_session，见 backend/app/modules/daemon/service.py））把提炼指令发进原会话。一举兑现三好处（快/省 token/高质量）并化解 R-08 洞一（原会话读自己，无需取数通道）。新 agent（现状 bootstrap 新建 AgentRun）保留为可选项，用于：会话已删/引擎不支持 resume/用户想换视角。变更源天然走新 agent（文件树无"原会话"概念）。引擎限制：续接仅 claude/codex（provider caps 门控）+ 仅已结束会话可 reopen（进行中用 inject）+ 归档区禁写。原型未体现"谁去干"——前端补选择 UI（会话源默认勾选"原会话续接（推荐）"，旁保留"新建 agent"）。
+故障面：续接会话可能比新 agent 更"固执"于原上下文视角（用户已有认知，故保留换 agent 选项）；reopen 对进行中会话报错需引导用 inject 而非 reopen。
+退役判据：若后续所有引擎均支持 resume 且用户实测续接质量稳定，可收窄新 agent 选项为高级设置。
+
+## D-010@v1 沉淀闭环增强——已沉淀标签+知识点反链 / quicklog 第三来源 / 新建 agent 复用 create_session / 蒸馏会话隔离
+状态：implemented
+变更：2026-09-17-knowledge-precipitation
+锚点：未记录
+最近确认：e83c21744
+理由：四项全做，源码可行性已核实：①已沉淀标签=查该源有无 distill run（AgentRun.agent_session_id 关联+metadata_.kind 落档，无需新表），proposed frontmatter 的 source 字段为反链载体（backend/app/modules/knowledge/writer.py 的 frontmatter source 行 现写 manual，蒸馏写 session:<id>/change:<key>/quick:<id>）；合并时把目标小节锚点记入反链（因合并后 proposed 文件删除入备份区，反链须指到合并后目标小节 known-issues.md#某节而非已删 proposed 文件）；②quicklog 与 knowledge 同构（GET /quicklog 现成 backend/app/modules/knowledge/router.py:197），数据在文件树 .sillyspec/quicklog/，新 agent 直接读、连 R-08 洞一取数问题都没有——来源类型扩 quick，单条 ql 小故来源多选；③新建 agent 复用 create_session（backend/app/modules/daemon/session/service/（create_session 入口，见 backend/app/modules/daemon/session/service/create.py） 原生支持 runtime_id 钉机器+provider/agent_profile_id/llm_provider_id/model 完整形态），后端代触发而非用户手点，title 带「提炼」前缀；④AgentSession.metadata_（backend/app/modules/daemon/model.py:457 JSON 列）写 origin=knowledge-distill，常规会话页列表过滤排除，知识库侧 DistillTaskRead 保留 agent_session_id 可跳转——会话有据可循+不污染常规列表双兑现。
+故障面：反链映射在合并时若目标小节重命名会失效（锚点漂移，需以 file+section_title 双键而非裸锚点）；蒸馏会话过滤若靠 metadata 判空，老会话（无 origin 字段）默认可见需零回归兜底。
+退役判据：若常规会话页引入通用「会话用途」过滤维度，蒸馏隔离可并入该维度不再单列 origin 键。
+
+## D-001@v1 变更范围=知识库效果面板三件套
+状态：implemented
+变更：2026-09-20-knowledge-effect-panel
+锚点：未记录
+最近确认：095869924
+理由：用户对话逐条点单：①使用统计+热力图（知识库被用起来的节奏）②决策库展示效果化（裸文件→卡片，体现防复潮价值）③fr/ 目录（FR 索引，fr-index 新产物）展示效果化（状态/取代链/场景全埋正文里看不见）。统一主题=知识库从「能看到」升级到「看效果」。
+故障面：hits 上行链路新增 daemon 改动面（此前 knowledge 变更零 daemon 改动）。
+退役判据：若 hits 遥测被 CLI 侧改为直接上报平台 HTTP 端点，daemon 豁免上行可撤。
+
+## D-003@v1 上行链路=daemon 同步豁免 hits 文件增量上报（非 CLI 直报）
+状态：implemented
+变更：2026-09-20-knowledge-effect-panel
+锚点：未记录
+最近确认：095869924
+理由：复用既有 spec 同步通道而非改 CLI：daemon 在 spec 同步流程单独摘出 spec 目录下 .runtime/knowledge-hits.jsonl（豁免 UPLOAD_EXCLUDE 的这一个文件），按「已上行字节数/行数」断点增量 POST 到平台新端点批量落库。离线容忍（下次补传）、CLI 零改动、多端各报各的天然合并。
+故障面：行截断（上行时本地正 append）——按完整行断点，尾行不完整留下次。
+退役判据：CLI 未来原生支持遥测上报时可退役 daemon 豁免通道。
+
+## D-006@v2 总体方案 A 确认（用户亲答）
+状态：implemented
+变更：2026-09-20-knowledge-effect-panel
+锚点：未记录
+最近确认：095869924
+理由：用户亲答（2026-09-20）：认可方案 A（daemon 豁免增量上行+落库聚合+卡片渲染器+日历热力图），附加要求：上行链路必须解决多用户单工作区问题（见 D-007）。
+supersedes：D-006@v1
+
+## D-007@v1 多用户单工作区=各端独立上报+行 hash 幂等去重+行带 daemon 归属
+状态：implemented
+变更：2026-09-20-knowledge-effect-panel
+锚点：未记录
+最近确认：095869924
+理由：用户亲答提出此问题，方案：①汇聚——各 daemon 只报本机 hits 增量（.runtime 不同步各端文件独立），服务器按行内容 sha256 做幂等去重（唯一约束 workspace_id+line_hash，INSERT ON CONFLICT DO NOTHING），多端天然合并零重复，重装/offset 丢失全量重报亦兜底；②断点——每 daemon 在自身家目录状态文件记已上报 offset（不落 spec 树防同步污染）；③归属——上报经 daemon 鉴权，行落库带 daemon_id（可关联注册用户），展示默认聚合总量（热力图=工作区整体节奏），数据层留归属供后续按人视图。
+故障面：两端同一毫秒并发 INSERT 同 hash——唯一约束+ON CONFLICT 兜底，无竞态。
+
+## D-004@v2 统一条目渲染器覆盖全部 zone（supersedes D-004@v1）
+状态：implemented
+变更：2026-09-20-knowledge-effect-panel
+锚点：未记录
+最近确认：095869924
+理由：用户亲答（2026-09-20 原型反馈）：整个知识库下各目录结构应统一，都搞成人类阅读更友好的形式，参考本仓与 sillyspec 仓的知识结构。统一条目模型（两仓实证同构）：手册文件=## 小节多条目、decisions/fr=## ID+字段行、generated=单条目、INDEX=路由目录页。统一渲染器三形态：①正文小节卡（手册：小节标题+markdown 正文+条目级 🔥 徽标——手册命中本就是 条目#锚点 粒度）②结构化字段卡（决策/FR：状态/字段/理由/取代链/互跳）③目录导航卡（INDEX：分类段+路由行→点击跳对应条目）。每文件保留「原文」tab 切回 md 视图。
+supersedes：D-004@v1
+
+## D-009@v1 热力图删除，换运营指标仪表盘（用户亲答 a）
+状态：implemented
+变更：2026-09-20-knowledge-effect-panel
+锚点：未记录
+最近确认：095869924
+理由：用户亲答选 a：删除日历热力图。顶部换运营指标仪表盘四卡：①知识覆盖率（被命中条目/全部条目+趋势）②死条目（90 天零命中，可点开清单引导清理）③每任务命中密度（均值趋势，过低=检索没跟上/过高=注入过肥）④新知识生效速度（近 30 天新增条目已被使用比例）。使用榜改日均使用率排序（命中次数÷条目存在天数，消除老条目累计偏差；绝对次数作副信息）。
+
+## D-001@v1 维持 R-01 接受不修代码，文档登记观察项（方案 A）
+状态：implemented
+变更：2026-09-16-background-task-grace-timeout
+锚点：未记录
+最近确认：83b402f6b
+理由：D（不改代码），文档载体方案 A。维持 2026-09-15-background-task-permission-lockout R-01 已接受的 P1 风险；本变更收窄为 known-issues.md 观察条目（四要素：暴露差/缓解链/重估触发/未来修复首选）+ 本变更 design.md 否定决策存档
+故障面：若未来线上实证注册表泄漏（守卫放行但无对应存活任务），无界宽限暴露面超出设计先例——观察项记录的重估触发条件命中时按「未来修复首选：双窗兜底（条目存活=静默<60min 对齐先例 且 总时长<4h 绝对上限）」重开变更
+退役判据：SDK 提供 per-task 权限上下文（canUseTool 带 task 归属）或 task_notification 可靠送达保证时，本观察项与 R-01 一并退役
+
+## D-001@v1 变更期 trace 载体 = changes/<名>/test-trace.json
+状态：implemented
+变更：2026-09-24-fr-test-bindings
+锚点：未记录
+最近确认：6ac260bd
 理由：
 
-## D-005@v1 「活跃变更目录」术语澄清
+## D-002@v1 两处真源 + 单点解析模块（src/test-bindings.js）
 状态：implemented
-变更：2026-08-08-concurrent-write-preflight
+变更：2026-09-24-fr-test-bindings
 锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
+最近确认：6ac260bd
 理由：
 
-## D-007@v1 verify/archive --done 排除理由
+## D-003@v1 晋升时机 = verify --done 矩阵门通过时
 状态：implemented
-变更：2026-08-08-concurrent-write-preflight
+变更：2026-09-24-fr-test-bindings
 锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
+最近确认：6ac260bd
 理由：
 
-## D-003@v1 quick 钩子 review=null brownfield 兜底
+## D-004@v1 quick 行落 candidate（诚实优先）
 状态：implemented
-变更：2026-08-08-concurrent-write-preflight
+变更：2026-09-24-fr-test-bindings
 锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
-理由：complete-handlers.js:1453 `let review = null`，仅 `if(guard)` 内赋值。brownfield 无 guard 时 review=null → `review.changedFiles` 抛 TypeError。design §5 只给 execute「取不到则空」兜底，quick 缺。
-
-## D-006@v1 措辞「写操作前预检」vs 实际「完成时报告」
-状态：implemented
-变更：2026-08-08-concurrent-write-preflight
-锚点：未记录
-最近确认：a69021cc85e6d19af0893fd5d74fe833ba61cea8
+最近确认：6ac260bd
 理由：
 
-## D-004@v1 verify 阶段 prompt 锚点措辞三形态化（task-04 边界扩容）
+## D-005@v1 orphan 行身份 = acc-<index>-<textHash8>
 状态：implemented
-变更：2026-09-17-feedback-hardening
+变更：2026-09-24-fr-test-bindings
 锚点：未记录
-最近确认：60e90c1
-理由：扩 task-04 边界收口：src/stages/verify.js:163 措辞改三形态+行号可省；docs/prompt/verify.md 镜像 fence 手改同步（不跑 _extract.mjs——_extracted.json 正被并行会话 docs-bracket-reanchor 占用，避免 apply 面冲突；流水线刷新留其会话/后续统一跑）。
-
-## D-001@v1 方括号段=完整括号对并列形态，不做字符类放宽
-状态：implemented
-变更：2026-09-17-docs-bracket-reanchor
-锚点：未记录
-最近确认：3ec09b3
-理由：文件段展开循环迭代体并列第三种段形态 `\[类+\]`（与圆括号段同位同权），不把 `[`/`]` 加进普通段字符类。
-故障面：散文形如「arr[0] 点 js 行 12」从残段提取变全量提取（Grill CC-10 实测 invalid 计数 1→1 不变，无净增面）
-退役判据：引用锚迁移到结构化解析器（非正则）时本形态随 REF_RE 一并退役
-
-## D-002@v1 陈旧基线自动重锚（已实测不劣于远端即落盘），守卫拦 checkOpts 一次性覆盖
-状态：implemented
-变更：2026-09-17-docs-bracket-reanchor
-锚点：未记录
-最近确认：3ec09b3
-理由：自动重锚——writeBaseline(current) + 消息披露重锚前后值与依据；守卫拦 checkOpts 四键（paths/skip/keywordAssert/crossRepoRoots）任一显式传入（一次性异口径不写盘），不拦 local.yaml 持久口径（measure 与 current 同读该配置，读写自洽）。
-故障面：并行会话同时重锚 last-write-wins（双方写的都是已验证不劣于远端的值，无害）；--against 模式落盘提交树计数与工作区瞬差（与 --init-baseline --against 既有语义一致）
-退役判据：基线机制整体退役（docs gate 换语义）时随 gate 一并退役
-
-## D-003@v1 docs-fix-capability D-001「gate --delta-only 不做」非复潮声明
-状态：implemented
-变更：2026-09-17-docs-bracket-reanchor
-锚点：未记录
-最近确认：3ec09b3
-理由：非复潮——本变更不是 delta-only 门（拦增量/放存量的门语义不变），是陈旧分支的落盘动作；用户实证（基线 404 < 远端 414 提示反复出现）即该留账等候的「第二次批量事件」。
-
-## D-001@v2 PASS 资格事实面封顶——blocking 级口径与 facts 锚定输入（supersedes D-001@v1 的条件②与输入形态）
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：D-001@v1 两处需修正：①条件②「handover 有效行>0」一刀切会训练 agent **漏报移交项保 PASS**（防滥用只防「NOTES 洗 PASS」防不了「少写」）；②validator 内嵌四个 reader 各自解析 MD 会长成第二个 god-check，且条件③的「apply 文件集」在 verify 时点不存在（verify 先于 apply，manifest 未落盘）——时序 bug。
-故障面：同 v1（事实误判假红）+ severity 钻空面（见 D-005@v2 应对）。
-退役判据：同 v1（CONDITIONAL 档或批次 C smoke 统一判定面）。
-
-## D-002@v1 risk_level 显式豁免洞分层封死 + 集成回执口径收紧
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：stage-contract.js:646-652——design frontmatter 显式声明 risk_level 后，PASS WITH NOTES 完全绕过集成证据门（「explicit + NOTES 视为对残留项的诚实声明」）。同时 EHS 实证暴露回执口径漏洞：mvn compile + JUnitCore 纯单测的三条 log 通过了集成回执四条件校验——**单测/编译类回执被当成集成实测**。
-故障面：「跨层调用证据」的机械判定可能假阴（如集成脚本名不带关键词）——判定表用「回执命令来源」而非日志内容猜测，见 D-006。
-退役判据：smoke 金路径落地（批次 C）后，「集成实测已跑」改由 smoke 回执判定，本条口径表并入彼处。
-
-## D-003@v1 probe7 partial/uncovered 联动 handover——存在性门槛起步
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：validateAcceptanceMatrix（stage-contract.js:833-880）只拦 unfilled/缺锚点；partial/uncovered 是合法填值不进任何阻断——FR「部分实现」静默带过（EHS：FR-01/12/13/15 四条 partial 出门）。
-故障面：handover 成为万能逃生门——由 D-005 互锁与 archive 注入约束。
-退役判据：逐行关联 advisory 攒满一轮实证且假红率可接受后升硬门。
-
-## D-004@v1 Runtime Evidence「不涉及」纳入事实面 + 提示语补降级路径
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：verify-result「## Runtime Evidence [层：人工判断]」（verify-probes.js:1900）允许 agent 自声明「服务端点不涉及（服务未启动）」——integration-critical 变更的运行时缺口以诚实申报形态蒸发（EHS 实证）。
-故障面：「不涉及」行文识别过宽误伤纯库类变更——判定限定在判级 integration/deployment-critical 的变更内。
-退役判据：批次 C smoke 回执落地后，端点行由 smoke 回执机械填充，人工声明面收敛。
-
-## D-005@v2 handover severity 分层——防漏报与防滥用双面（supersedes D-005@v1 的类型一刀切口径）
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：D-001@v1 把「任何移交项在场」都当封顶条件，训练 agent 漏报移交项保 PASS（perverse incentive）——D-005@v1 的互锁只防「滥用 NOTES 洗 PASS」，防不了「少写」。
-故障面：降级理由造假——抽查面核理由非空且含依据锚点；漏报（整行不写）由机器算的①③④事实条件独立兜住，钻空面有界。
-退役判据：若 handover 升级为独立跟踪实体（批次 E 方向），severity 随迁。
-
-## D-006@v1 「集成实测已跑」判定口径表
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：D-001/D-002 依赖「集成实测未跑」这一事实判定，但口径不定会两头翻车：过宽误伤（module 档跑过子集被当未跑）、过窄放过（compile+单测 log 被当集成——EHS 实证翻车点）。
-故障面：「跨层调用」按命令来源判定的启发式可能漏标新形态命令——留 escape：变更可在 design frontmatter 声明等效验证先例（verify_precedents 同思想）。
-退役判据：批次 C commands.smoke 落地后由 smoke 回执一票判定。
-
-## D-007@v1 fix.sql 声明门（apply/archive-confirm 侧，零连库）
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：h1 缺陷修复配套的 `2026-09-15-rp-fix.sql`（先库后码同批部署）只是 verify-result 移交项 notes，无任何机器门——用户手测第一张保存即撞 `Field 'rp_number' doesn't have a default value`。
-故障面：声明造假（写了「已执行」实际没执行）——本门定位是「防遗忘」非「防伪造」；连库实测档补齐后闭环。
-退役判据：information_schema 实测档落地后降级为兜底。
-
-## D-008@v1 配套四小修——把门的眼睛修好（与语义同批）
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：语义收紧了但门自身半盲会留半盲窗口：① test_strategy: skip 只短路主仓，跨仓仍无条件跑（fallback npm test 假败，EHS 打回一次）；② 跨仓 task 官方通道（手写+backfill --adopt）的 tasks.md checkbox 断链（writtenBy 白名单不含 adopt + 零 diff 守卫只看主仓 diff，complete.js:1072/1091）；③ probe7 测试文件内容读取只有 cwd→wtRoot 双根，跨仓测试文件命中恒空恒预填 partial（verify-probes.js:864-874）；④ design 清单无「## <repo> 仓变更」段头时仍按主仓根核，跨仓「修改」条目被逼 NEW: 前缀（design-facts.js:461-468 残留）。
-故障面：skip 跨仓短路过宽会失明（跨仓有意义的空套件烟雾被跳过）——已按「自配 commands.test 仍跑」收窄。
-退役判据：跨仓对账全面接入 worktree diff 后，②的 diff 源统一收口。
-
-## D-011@v1 facts 锚定纯函数实现纪律 + 双源 fail-closed
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：封顶事实若由 validator 内嵌 reader 现解析 MD，批次 C 加条件要改 validator 本体，且与 checkProbeConsistency 的防篡改抽查不同源。
-故障面：facts schema 加字段（additive）——verify-facts-schema 校验面同步登记，可选字段缺省不炸。
-退役判据：facts 管线若整体重构为独立事实服务，本纪律并入彼处。
-
-## D-012@v1 事实③ verify 时点源修正——声明面/diff 判定，apply 门兜底
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：D-001@v1 条件③用「apply 文件集」为源，但 verify 先于 apply 执行，apply manifest 在 verify 时点不存在——条件恒空转。
-故障面：design 清单漏列 sql 文件 → verify 侧漏判——apply 兜底门按实际文件集拦截，双门互补。
-退役判据：若 apply 前置到 verify 内（流程重构），verify 侧改读 manifest。
-
-## D-013@v1 Wave 步骤完成度门——execute 逐 Wave --done 校验本 Wave 任务全勾
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：2026-09-17 本变更执行中实证：Wave 2 步骤在 task-02 未实现、checkbox 未勾、review 仍是 CLI 自动草稿（cannot_verify）的状态下被 `execute --done` 放行推进（review write 失败退出码被 shell 管道吞掉后 --done 落在下一 Wave 步）——现有防护（可选 `--step` 意图断言、60s 并发横幅）都拦不住「未完成 Wave 被标完成」。
-故障面：①任务确实完成但 checkbox 通道断裂（跨仓 adopt 勾选断链正是 task-05 要修的）→ 门会把人拦在 --done——错误文案给两条出路（修勾选通道 / --reopen），且 task-05 落地后断链消失；②plan.md Wave 段解析失败 → fail-open warn 不误伤（与隐式 Wave 语义共存）。
-退役判据：若 execute 迁移到任务级依赖图调度（逐任务推进取代 Wave 粗粒度），本门随 Wave 语义退役。
-
-## D-010@v1 事实面封顶采用集中式 validator（方案 A）
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：用户选 A——新增 `validatePassEligibility`（与 validateAcceptanceMatrix 同构注册进 verify validators），四个事实条件（集成未跑/handover 在场/db 脚本未声明/矩阵 partial 无 handover）单点收口判定；事实输入由现成函数供给（parseHandoverRows、quality-scan 实测记录、probe7 矩阵槽、apply 文件集）；批次 C smoke 回执落地时加第五个事实条件即插即用。B 否决理由：同一事实两处判定口径漂移（EHS 复盘教训）；C 否决理由：结论枚举 breaking（槽行解析/facts/平台同步/存量变更兼容面），NOTES+handover 已能承载。
-故障面：~~装配函数跨四事实源，某源取数失败（qualityScan 记录缺失/applyFileSet 为 null）时 fail-open 跳过该条件并注记~~（Grill X-06 追注：本条款已被 D-011 收窄——fail-open 仅限 producer 侧输入缺失；consumer 侧 facts 缺失走双源 fail-closed，以 design §1 口径为准）。
-退役判据：若结论枚举重构出 CONDITIONAL 档或批次 C smoke 回执统一判定面落地，validator 收敛为单事实条件插位。
-
-## D-009@v1 prompt/清单层实证口径升级（同批轻量落地）
-状态：implemented
-变更：2026-09-17-pass-cap-semantics
-锚点：未记录
-最近确认：f254733
-理由：brainstorm 实证清单「角色 enname 存在」深度不够——EHS 的 RpLeader 等三角色 tenant_id=NULL，存在但按生产口径（tenant 过滤查询）解析不到人，联调时领导下拉全空；另需求入口（菜单一/菜单二）被解读为路由，design 漏了 sys_menu DML，grill 抓了页面组件缺失没抓菜单注册。
-故障面：清单条目增多拉长审查——仅对命中条件（涉及角色/新页面）注入。
-退役判据：若 brainstorm 探针化（自动核角色可解析性）落地，条目退役。
-
-## D-001@v1 信封加法式可选 code，不升 schema_version 2
-状态：implemented
-变更：2026-09-17-mi-diagnostic-codes
-锚点：未记录
-最近确认：51225ae
-理由：errors 是 string[]（中文散文），消费方要分支只能正则匹配散文；但 interface-contract.md 是冻结的 v1 对账基准，errors 升对象数组 {code,message} 属破坏性语义变更，需 SillyHub 协同改造。
-故障面：codes 与 errors 的对应关系被消费方误读为逐下标映射——契约明示 codes 是去重聚合非 1:1；check.code 恒在场（含通过时）消除「有时无」的歧义。
-退役判据：v2 升版（errors 对象化）落地时，codes[] 聚合键退役，check.code 并入对象元素。
-
-## D-004@v1 码表单一源模块 + parity 双向测试
-状态：implemented
-变更：2026-09-17-mi-diagnostic-codes
-锚点：未记录
-最近确认：51225ae
-理由：OpenSpec 的 agent-contract.md 靠人工审计保真（文档头 capstone audit，仓内无文档↔代码 parity 测试），码漂移只能等下次审计或集成方挂掉——这是它的已实证弱点。
-故障面：码表膨胀失控——首期 10 码硬边界（D-002），二期扩面走变更流程追加。
-退役判据：v2 码表结构重构时冻结表键值迁移，parity 测试同步改写。
-
-## D-001@v1 commands.smoke 配置键——CLI 亲跑与 commands.test 同哲学
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：运行时验证需要真实执行冒烟脚本，执行主体是谁？agent 自报无核验（EHS 实证「集成证据自报告、CLI 只校验字面存在」的坑）；CLI 亲跑才与「不信口头」一致。
-故障面：冒烟脚本起服慢拖累 verify——prompt 指引并行起服（脚本内部后台起+轮询，墙钟增量≈冒烟本体）；脚本挂死——CLI 亲跑超时帽（与 gate_snapshot.commands 同款 300s 先例）+ 失败即封顶信号。
-退役判据：若未来 E2E 平台化（浏览器 Tier 2）统一接管运行时验证，smoke 键并入彼处。
-
-## D-002@v1 facts.smokeRan 第五事实条件——初版封顶不 fail
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：「smoke 缺失」如何进入批次 A 的封顶？直接 fail 过狠（存量变更无 smoke 基建会全炸）；不进封顶则键形同虚设。
-故障面：判级误伤（关键词误判 critical 的变更被要求 smoke）——既有显式 risk_level 降级逃生通道保留（unit-sufficient 不触发）。
-退役判据：smoke 回执判定面稳定后升 fail 档（D-001@v1 退役判据同源）。
-
-## D-003@v1 smoke 回执由 CLI 亲跑自动落盘——消灭 agent 手填伪造面
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：EHS 实证三条 compile+单测 log 混过回执四条件（批次 A 已用 sourceTag 堵口径）；但回执本身仍是 agent 手填路径——CLI 亲跑 smoke 的 log/mtime/exit 应机器落盘。
-故障面：CLI 亲跑与 agent 后续补跑的回执并存——机器段只认 CLI 记录（sourceTag='cross-layer' 标记），agent 追加段单独标注来源。
-退役判据：若回执槽整体重构为 facts-only，机器段并入 facts.smokeReceipt。
-
-## D-004@v1 接口验证覆盖矩阵——表驱动行数 fail-closed + 用例锚点
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：冒烟「测什么」无依据物则退回 agent 自由发挥（EHS 复盘：单测有转移表可依所以扎实，接口层无依据物所以没人派生用例——P1 全长在这层）。
-故障面：接口表写法千奇百怪解析不全 → 行数偏低漏覆盖——tolerant 解析 + 解析失败降级（D-005）；矩阵行与 probe7 行混淆——章节独立命名+骨架注释口径注记（同 probe3/probe7 并排先例）。
-退役判据：若接口定义迁入结构化产物（design-frontmatter/api.yaml 类），矩阵预填源切换。
-
-## D-005@v1 接口表 tolerant 解析 + 失败降级声明
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：design 接口定义表无 normative 格式（批次 A 复盘确认「探针 1 解析的是文件清单不是接口表」），强格式契约会打爆存量变更。
-故障面：agent 声明行数造假（声明 0 端点躲矩阵）——与 fix.sql 声明门同理定位「防遗忘非防伪造」；判级 critical 变更声明零端点时 warning 提示复核。
-退役判据：格式实证充分后升 normative（存量豁免窗口关闭）。
-
-## D-006@v1 消费面维度——端点×消费端展开，payload 构造点为锚
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：EHS 实证 P1-1/P1-2 抓不到的根因之一是「按 design 字段名发载荷接口当然通」——消费面（前端实际发的形状）才是字段漂移的暴露面；且提取点必须是 payload 构造处（model save effect/表单 handleSubmit），services 封装层零字段名（批次 C 设计讨论实证纠偏）。
-故障面：消费端归类错（文件面启发式）→ advisory 仅提示无阻断，假红无害。
-退役判据：批次 B（probe8 代码级直比）落地后消费面维度由 probe8 机械覆盖，矩阵消费行退役。
-
-## D-007@v1 表间交叉完备性校验（advisory）——治「表缺行」型缺陷
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：派生框架忠实继承 design 表的洞——EHS P1-4（submit 越权）大概率是权限矩阵缺 submit 行而非「格没人派生」；表自身完备性无机械检查。
-故障面：权限矩阵段识别不准 → 误报/漏报 warning——advisory 无阻断，格式实证后收紧。
-退役判据：权限矩阵结构化后升硬门。
-
-## D-008@v1 smoke 脚本纪律进 prompt——表驱动派生 + 负向下界 + 并行起服
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：脚本断言无依据物会退回自由发挥；起服串行会把 110s 冷启全算进墙钟。
-故障面：prompt 膨胀——纪律段仅在配置 commands.smoke 或判级 critical 时注入（命中条件注入，同 D-009 批次 A 条目形态）。
-退役判据：冒烟模板脚手架化（sillyspec init 生成模板脚本）后纪律段指向模板。
-
-## D-010@v1 方案 A——CLI 亲跑 + 矩阵行数 fail-closed
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：用户选 A——commands.smoke 由 CLI 亲跑（回执机器段落盘零伪造面）；接口矩阵行数对账 fail-closed（纯机械事实无假红面）；消费端行/表间完备性 advisory（语义关联后软）。B 否决理由：回执文本层伪造面（EHS compile log 混门实证）；C 否决理由：批次 A 已实证 advisory 无阻断力。
-故障面：CLI 亲跑超时/挂死——300s 超时帽（gate_snapshot.commands 先例）+ 失败定性为封顶信号非崩溃；存量 critical 变更首跑被拦——handover 承载出路。
-退役判据：执行面若平台化（SillyHub driver 统一跑命令），亲跑语义并入彼处。
-
-## D-009@v1 非目标（批次 C 边界）
-状态：implemented
-变更：2026-09-17-api-coverage-smoke
-锚点：未记录
-最近确认：cbc712f
-理由：范围蔓延风险——批次 C 是地板不是全家桶。
-
-## D-001@v1 稳定 FR id 归档发号，幂等键=全局 id
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：FR-NN 是 change 局部编号（change A 的 FR-01 ≠ change B 的 FR-01），无跨 change 身份则索引/取代/召回全部无处着力。
-故障面：域归属误判把 FR 发进错域文件——域解析复用 moduleIndex 同源（design 文件清单×_module-map），unmapped 兜底可见可迁移。
-退役判据：L3 活规格树落地时全局 id 平移为树内条目 id，本索引降级为检索面。
-
-## D-002@v1 取代靠显式承接引用，未声明删除 L1 无感知（只观察不门禁）
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：需求是活对象，后来 change 改掉/删掉某行为时旧条目需标记，否则索引腐烂成坟场（评审：无取代的索引就是坟场）。但「未声明的删除」检测是 L3 合并门禁领地。
-故障面：承接行写错 id（域拼错/号不存在）→ 发号时校验：引用不存在=warn 留痕不阻断（typo 不该炸归档）。
-退役判据：L3 合并门禁落地时承接升级为声明义务（undeclared deletion 拦截）。
-
-## D-003@v1 存储镜像 decision-distill（knowledge/fr/ 域文件+INDEX 路由），零新树
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：L3 之前不该建活规格树（第三真相源冲突未裁决），但索引需要可注入可解析的落盘面。
-故障面：与 decisions 域文件格式漂移——fr/ 子目录隔离 + 头注释钉契约；docs-check 覆盖面含 .sillyspec/docs 但 knowledge/ 是否在扫面按现行配置不动（不扩）。
-退役判据：L3 落地时 fr/ 索引整体迁移进活规格树，路由行重指。
-
-## D-004@v1 注入=brainstorm step8 定向 digest，superseded 默认藏
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：防「写重复 FR」的前提是写作期能看见现行 FR；全量索引注入会撑爆 prompt。
-故障面：触达域解析错（design 清单漏写文件）→ digest 缺域——digest 末行注记「域解析自 design 文件清单，漏域先核对清单」自纠。
-退役判据：L2 模块卡挂指针后 digest 与卡片契约摘要合流。
-
-## D-006@v1 观察指标是验收面——三指标进 design 进 verify
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：L1 的战略价值=L3 证据发生器，指标若只是「以后看看」必然烂尾。
-故障面：事件流无人读——本期 verify 实测读回+knowledge-stats 接入列为后续变更钩子。
-退役判据：L3 裁决完成日，三指标完成历史使命归档进裁决文档。
-
-## D-008@v1 证伪条款+指标可算性+删除缺口探针（审核三护栏）
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：三条护栏：①实验可能失败但「已有索引就不能不盖房」的沉没成本绑架无出口；②三指标中拦截/取代两项若无机制发生器，计数恒零实验失真；③L1 不许假装能拦漏删，但删除信号是 L3 裁决最缺的数据。
-故障面：fr-unreferenced 噪音大（触达域≠全量行为变更）——本就是趋势信号非判定，遥测字段带 domain+count 供 L3 裁决时按域加权。
-退役判据：L3 裁决日无论成败，四类事件+本条款一起归档进裁决文档。
-
-## D-007@v1 D14 第四检查=epoch 分界加行，存量豁免走既有账本
-状态：implemented
-变更：2026-09-18-fr-index-l1
-锚点：未记录
-最近确认：aae25a4
-理由：「归档 change 的 FR 索引条目在场+取代已标记」需要事后可查，但 93 份存量归档不回填（评审裁决不补历史）。
-故障面：本变更自身归档即首个 epoch 后样本——索引写入失败会当场被 D14 新检查抓到（自举验证）。
-退役判据：L3 活规格落地后此检查并入树完整性检查。
-
-## D-001@v1 probe8 diff 源替换——design 清单声明面 → worktree diff 实际面
-状态：implemented
-变更：2026-09-18-probe8-direct-compare
-锚点：未记录
-最近确认：1fd78d4
-理由：probe8 现读 design 文件清单（声明面）——design 清单漏写/路径写错时整条探针静默失明（EHS 实证 C-07：design 清单与实际交付面错位是常态）。
-故障面：worktree 缺失/非 worktree 模式（in-place）→ fallback design 清单源（fail-open 注记模式）；跨仓 diff 双失败 → 探针跳过注记。
-退役判据：若前后端元数据标准化（OpenAPI 生成等），直比面切换标准产物。
-
-## D-002@v1 probe8 代码级字段直比——前端 payload 构造点字段集 vs 后端实体/DTO 字段集
-状态：implemented
-变更：2026-09-18-probe8-direct-compare
-锚点：未记录
-最近确认：1fd78d4
-理由：现行 probe8 只对账 design 契约面声明的字段（agent 声明什么对什么），不碰代码——EHS P1-1（leaderUserId≠rpLeaderUserId）三处字段错位正是代码与代码的错位，声明面对账天然盲。
-故障面：提取正则假阳/假阴（动态字段名 obj[key] 不可枚举）→ advisory 档不阻断+escape hatch；前端框架 DSL 差异（Vue/React/原生）→ 按文件后缀选匹配族+未识别后缀跳过注记。
-退役判据：批次 C smoke 落地后运行时抓字段漂移（payload 从构造点导出），静态直比降为早期预警补充。
-
-## D-003@v1 Controller 必填校验器提取——@NotNull/@NotBlank/@RequestParam(required) 三形态
-状态：implemented
-变更：2026-09-18-probe8-direct-compare
-锚点：未记录
-最近确认：1fd78d4
-理由：后端「必填」面在 Controller/Service/DTO 三层分散（注解+显式校验+DB NOT NULL），probe8 需要机械可提取的必填集做漏发对账。
-故障面：自定义校验框架不识别 → 必填集不完整（漏报侧，advisory 可接受）；校验调用误匹配（假阳）→ warning 多一条，escape hatch 兜底。
-退役判据：若后端元数据标准产物（OpenAPI spec）可用，三形态提取退役。
-
-## D-004@v1 advisory 档起步——硬门升格为后续独立决策
-状态：implemented
-变更：2026-09-18-probe8-direct-compare
-锚点：未记录
-最近确认：1fd78d4
-理由：直比 warning 的假阳率未实证——升硬门（warning→error）需要一轮真实变更的攒证。
-故障面：advisory 无阻断力（批次 A 已实证）——但直比本批定位「预警+攒证」，运行时兜底归批次 C smoke。
-退役判据：一轮实证假阳率 < 5% 后升硬门（后续变更）。
-
-## D-005@v1 非目标
-状态：implemented
-变更：2026-09-18-probe8-direct-compare
-锚点：未记录
-最近确认：1fd78d4
+最近确认：6ac260bd
 理由：
 
-## D-006@v1 方案 A——probe8 内新增 direct-compare 子段
+## D-001@v1 锚点集=task 卡 requirement_ids 并集；差集保守向
 状态：implemented
-变更：2026-09-18-probe8-direct-compare
+变更：2026-09-24-fr-test-readside
 锚点：未记录
-最近确认：1fd78d4
-理由：用户选 A——probe8 载荷字段契约对账探针内新增 direct-compare 子段（现有 design 契约面 advisory 保留，代码直比为并行新增维度）；extractFrontendPayloadFields/extractBackendRequiredFields 独立导出，未来升 probe10/plugin 只挪注册不改逻辑。B 否决：探针膨胀+碎片化；C 否决：当前 Java+JS 两族用不上插件接口（D-005 违背）。
-故障面：probe8 文件膨胀——提取函数+对账逻辑独立区块注释锚定，膨胀可控。
-退役判据：若直比面升独立探针（攒证后），提取函数整体迁出。
+最近确认：82002514
+理由：
 
-## D-001@v1 接线点选 prompt.js tier 注入块（同链注入），不另立派发前置步
+## D-002@v1 现选测逐字保留，残差只在结果层加法
 状态：implemented
-变更：2026-09-19-review-material-cli-wiring
+变更：2026-09-24-fr-test-readside
 锚点：未记录
-最近确认：33fca7f
-理由：复用 prompt.js 既有 tier 注入块（src/run/prompt.js:1378 起 `['brainstorm','plan','execute'].includes(stageName) && promptText.includes('{REVIEW_TIER}')` 分支）：{REVIEW_TIER}/{REVIEW_JSON_CONTRACT}/{PRIOR_REVIEW_FACTS} 已在此链机械填充，{REVIEW_MATERIALS} 同链同框架填充（stageName 分流三形态）。理由：①派发 prompt 本来就经此链渲染给主代理，槽位与既有占位符同址，主代理复制即得；②不新增步骤/状态机面；③降级分支（catch 内 join ''）同款容错沿用。
-故障面：组装失败若不加兜底会让占位符残留——沿既有 catch 降级 join('') 消解
-退役判据：若材料包实测导致评审漏检率上升（P0/P1 逃逸到后续阶段），重审注入内容的下限构成
+最近确认：82002514
+理由：
 
-## D-002@v1 混合组包边界——CLI 抽素材半边、主代理点名半边留位，不改 buildReviewMaterialPack schema
+## D-003@v1 runner 复用 buildDepsBatches 推断面
 状态：implemented
-变更：2026-09-19-review-material-cli-wiring
+变更：2026-09-24-fr-test-readside
 锚点：未记录
-最近确认：33fca7f
-理由：CLI 半边＝机械可抽取素材：grill-first 的 designDigest（章节行号索引＋背景/设计目标节体）与 fileList（design.md 文件变更清单表路径列）；plan-review 的 hardConstraints（design.md「## 全局硬约束」节行，缺节时 decisions.md P0/P1 条目标题兜底）；execute-qa 的 diffSummary（extractDiffSummary 委托 resolveVerifyChangedFiles）＋design 热区＋checklist（REVIEW_CHECKLISTS.execute）。主代理半边＝语义点名：五交叉点（grill）、planDelta 逐约束判定（plan-review）——不预填，包内对应节渲染既有「（无——主代理未点名…）」缺件提示，模板散文指示主代理派发前补该节（偷懒→评审者 cannot_verify 自检拦，R-04 兜底不变）。buildReviewMaterialPack 零 schema 改动（已归档契约不回改）。
-故障面：CLI 抽取源缺节/解析失败→包变薄——best-effort 降级为「（无）」行，评审者自检列缺件
-退役判据：若主代理补位率实测过低（点名半边长期空），评估把点名半边也机械化（如按 design 交叉点清单生成候选）
+最近确认：82002514
+理由：
 
-## D-003@v1 非空注入以装配函数为可测单元，端到端以源码钉＋渲染断言双保险
+## D-004@v1 悬空硬错=门入口 fail-fast
 状态：implemented
-变更：2026-09-19-review-material-cli-wiring
+变更：2026-09-24-fr-test-readside
 锚点：未记录
-最近确认：33fca7f
-理由：拆两层：①assembleStageReviewMaterials 为导出纯装配函数（入参 stage/cwd/changeName/specBase，临时 fixture 可直接断言三形态非空）；②prompt.js 接线用源码断言钉（调用点在场＋join 非''字面量），既有测试组二的 joins≥2 断言保持绿。不在测试里跑 outputStep 全链（既有测试先例 worktree-execute-spec-drift.test.mjs 走子进程 runCommand 才隔离 exit，本变更不引入该重量）。
-故障面：源码钉只证调用在场不证运行时值——装配函数单测＋CLI 亲跑冒烟（本变更 dogfood 路径）补
+最近确认：82002514
+理由：
 
-## D-001@v1 红线 v1 取模式级断言，不做 AST/语义级
+## D-005@v1 披露真源=JSON sidecar
 状态：implemented
-变更：2026-09-20-redline-machine-check
+变更：2026-09-24-fr-test-readside
 锚点：未记录
-最近确认：a17fcab
-理由：语义级约束（「不得假运行」）无法直接机检；AST 级实现成本高且跨语言（TS/Py/Go 消费者仓）。
-故障面：正则过宽误报（advisory 渲染+攒误报率数据）；过漏（require 兜底存在性检查）。
-退役判据：跨语言 AST 基建落地时逐条升级。
+最近确认：82002514
+理由：
 
-## D-002@v1 清单消费者仓自持，sillyspec 只供机制
+## D-006@v1 trace 非空变更账本停复用（fail-closed）
 状态：implemented
-变更：2026-09-20-redline-machine-check
+变更：2026-09-24-fr-test-readside
 锚点：未记录
-最近确认：a17fcab
-理由：红线是消费者仓的项目知识，不是工具自带物。
-故障面：清单腐化无人维护——origin 锚引用文档行号，docs check 可校验引用有效性（后续接线）。
-退役判据：无。
-
-## D-001@v1 依据决策（D→FR）入条目与 digest
-状态：implemented
-变更：2026-09-20-fr-index-l2
-锚点：未记录
-最近确认：4222a90b
-理由：行为条目与决策账（knowledge/decisions）互不引用——翻案场景（想改某行为）从 FR 条目跳不到「当年依据/否决了什么」，防复潮链断头。
-故障面：矩阵格式漂移解析空——降级省略行（不阻断归档，fr-inject 遥测可见）。
-退役判据：无。
-
-## D-001@v1 蒸馏尾内联 quick --done（单一入口），不设独立收口命令
-状态：implemented
-变更：2026-09-20-quick-asset-tail
-锚点：未记录
-最近确认：611b6890
-理由：薄通道的资产产出点缺失；若做成 `sillyspec quick-close` 独立命令，终态又靠 agent 自觉记命令——autocompact 实证没人记得收口。
-故障面：quick --done 收尾变重——蒸馏函数纯内存秒级，lite 归档一次 rename；fail-open 不拦。
-退役判据：无。
-
-## D-003@v1 FR needs_review 标记（module-map 同款模式），非 L3 门禁
-状态：implemented
-变更：2026-09-20-quick-asset-tail
-锚点：未记录
-最近确认：611b6890
-理由：钩子#1 只记遥测——quick 改 FR 覆盖行为后索引腐烂不可见，信号躺在 jsonl 无人消费。
-故障面：误标（触达≠行为变更）——advisory 信号人裁，注入行明示"待复核非失效"。
-退役判据：L3 门禁上线时升级为声明义务。
-
-## D-004@v1 lite 归档轻实现（9 处重门全跳，S2 核数勘误），不复用 archiveChangeDirectory
-状态：implemented
-变更：2026-09-20-quick-asset-tail
-锚点：未记录
-最近确认：611b6890
-理由：archiveChangeDirectory 含 6 处 exit(1) 重门（未 apply 交付面等 worktree 导向）——linked quick 变更无 worktree 语义会被误拦。
-故障面：rename 失败中途态——unregister 前 rename，失败时 change 留 active 可重试（顺序保证）。
-退役判据：无。
+最近确认：82002514
+理由：
