@@ -353,6 +353,44 @@ export function queryByAnchor({ specBase, knowledgeRoot, anchor }) {
   return out
 }
 
+/** 测试文件归属解析（R2 定向化消费面，watcher 调用）：files → 归属锚行（FR 条目+ql 面，
+ *  仅 active·非 superseded 行）。返回 Map<normPath, Array<{anchor, row_id, source_change}>>。 */
+export function resolveTestFileOwners({ specBase, files }) {
+  const map = new Map()
+  const norm = (p) => String(p).replace(/\\/g, '/')
+  const want = new Set((files || []).map(norm))
+  if (want.size === 0) return map
+  const push = (file, entry) => {
+    const k = norm(file)
+    if (!map.has(k)) map.set(k, [])
+    map.get(k).push(entry)
+  }
+  try {
+    const knowledgeRoot = join(specBase, 'knowledge')
+    const dir = join(knowledgeRoot, 'fr')
+    if (existsSync(dir)) {
+      for (const f of readdirSync(dir).filter((x) => x.endsWith('.md')).sort()) {
+        const text = readFileSync(join(dir, f), 'utf8')
+        for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
+          for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
+            if (r.state !== 'active' || r.status === 'superseded') continue
+            for (const t of r.tests) if (want.has(norm(t))) push(t, { anchor: m[1], row_id: r.row_id, source_change: r.source_change })
+          }
+        }
+      }
+    }
+  } catch { /* FR 面读失败 → 只回 ql 面 */ }
+  try {
+    for (const [qlId, rows] of Object.entries(readQlBindings(specBase))) {
+      for (const r of rows || []) {
+        if (r.state !== 'active' || r.status === 'superseded') continue
+        for (const t of r.tests) if (want.has(norm(t))) push(t, { anchor: qlId, row_id: r.row_id, source_change: r.source_change })
+      }
+    }
+  } catch { /* ql 面读失败 → 只回 FR 面 */ }
+  return map
+}
+
 export function queryByChange({ specBase, knowledgeRoot, sourceChange }) {
   const out = []
   try {

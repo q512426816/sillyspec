@@ -34,13 +34,13 @@ function snap(over = {}) {
 }
 
 /** 引擎直驱：默认 baseEvents=inferEvents（与子进程循环同源），state 默认新初值。 */
-function run(prev, next, { state, now, baseEvents, changeDir, readImpl, readdirImpl } = {}) {
+function run(prev, next, { state, now, baseEvents, changeDir, readImpl, readdirImpl, bindResolveImpl } = {}) {
   return applySentinelRules({
     prev, next,
     baseEvents: baseEvents === undefined ? inferEvents(prev, next) : baseEvents,
     state: state || createSentinelState(prev.ts),
     now: now === undefined ? next.ts : now,
-    changeDir, readImpl, readdirImpl,
+    changeDir, readImpl, readdirImpl, bindResolveImpl,
   })
 }
 
@@ -473,4 +473,49 @@ test('哨兵总阀：SILLYSPEC_SENTINEL=0 → stall/drift 双条件在场零告�
     })
     assert.equal(warnings.length, 0, '总阀关 → 四规则零告警（watcher 仍记录中性事件）')
   } finally { rmSync(changeDir, { recursive: true, force: true }) }
+})
+
+// ───────────────────── R2 定向化（2026-09-24 fr-test-binding §1.1，ql-20260924-006）─────────────────────
+
+test('R2 定向正例：被改测试文件绑定 FR 且场景正文未改 → test-tamper-bound 点名锚', () => {
+  const bind = (files) => new Map(files.map((f) => [f, [{ anchor: 'FR-core-001', row_id: 'chg-a:task-01:acc-0-11111111', source_change: 'chg-a' }]]))
+  const s1 = snap({ scanStatus: { status: 'failed', ranAt: 't1' }, scan: scanFail, dirtyCode: [] })
+  let st = createSentinelState(s1.ts)
+  st = run(snap(), s1, { state: st }).state
+  const s2 = snap({ ts: s1.ts + 3000, scanStatus: { status: 'failed', ranAt: 't1' }, scan: scanFail, dirtyCode: ['test/a.test.mjs'] })
+  st = run(s1, s2, { state: st }).state
+  const s3 = snap({ ts: s2.ts + 3000, scanStatus: { status: 'passed', ranAt: 't2' }, scan: scanPass, dirtyCode: ['test/a.test.mjs'] })
+  const { warnings } = run(s2, s3, { state: st, bindResolveImpl: bind })
+  const w = warnings.find((x) => x.rule === 'test-tamper-bound')
+  assert.ok(w, '应有定向 warning')
+  assert.match(w.detail, /FR-core-001/, '点名锚')
+  assert.match(w.detail, /场景正文未改/, '三联证据文案')
+  assert.equal(rulesOf(warnings).includes('test-tamper'), false, '全归属时无 generic')
+})
+
+test('R2 定向抑制：来源变更 requirements.md 同窗改动 → 定向不成立，窗口级 generic 保留（永不比旧版安静）', () => {
+  const bind = (files) => new Map(files.map((f) => [f, [{ anchor: 'FR-core-001', row_id: 'r', source_change: 'chg-a' }]]))
+  const s1 = snap({ scanStatus: { status: 'failed', ranAt: 't1' }, scan: scanFail, dirtyCode: [] })
+  let st = createSentinelState(s1.ts)
+  st = run(snap(), s1, { state: st }).state
+  const s2 = snap({ ts: s1.ts + 3000, scanStatus: { status: 'failed', ranAt: 't1' }, scan: scanFail, dirtyCode: ['test/a.test.mjs', '.sillyspec/changes/chg-a/requirements.md'] })
+  st = run(s1, s2, { state: st }).state
+  const s3 = snap({ ts: s2.ts + 3000, scanStatus: { status: 'passed', ranAt: 't2' }, scan: scanPass, dirtyCode: ['test/a.test.mjs', '.sillyspec/changes/chg-a/requirements.md'] })
+  const { warnings } = run(s2, s3, { state: st, bindResolveImpl: bind })
+  assert.equal(rulesOf(warnings).includes('test-tamper-bound'), false, '定向被抑制')
+  assert.ok(warnings.some((x) => x.rule === 'test-tamper'), '窗口级 generic 保留')
+})
+
+test('R2 定向无归属：绑定解析空 → generic（注记无绑定锚）', () => {
+  const s1 = snap({ scanStatus: { status: 'failed', ranAt: 't1' }, scan: scanFail, dirtyCode: [] })
+  let st = createSentinelState(s1.ts)
+  st = run(snap(), s1, { state: st }).state
+  const s2 = snap({ ts: s1.ts + 3000, scanStatus: { status: 'failed', ranAt: 't1' }, scan: scanFail, dirtyCode: ['test/x.test.mjs'] })
+  st = run(s1, s2, { state: st }).state
+  const s3 = snap({ ts: s2.ts + 3000, scanStatus: { status: 'passed', ranAt: 't2' }, scan: scanPass, dirtyCode: ['test/x.test.mjs'] })
+  const { warnings } = run(s2, s3, { state: st, bindResolveImpl: () => new Map() })
+  const w = warnings.find((x) => x.rule === 'test-tamper')
+  assert.ok(w, 'generic 保留')
+  assert.match(w.detail, /无绑定锚/, '注记归属缺口')
+  assert.equal(rulesOf(warnings).includes('test-tamper-bound'), false)
 })

@@ -34,9 +34,10 @@ import {
   readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
 } from 'fs';
 import { createHash } from 'crypto';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { gitQuiet } from './git-helper.js';
 import { normalizePath, globMatch } from './change-list.js';
+import { resolveTestFileOwners } from './test-bindings.js';
 
 export const WATCHER_LOCK_FILENAME = 'watcher.lock';
 const WATCHER_LOG_FILENAME = 'watcher.log';
@@ -486,35 +487,68 @@ function ruleFakeCheck(prev, next, ts) {
 }
 
 const testDirtyOf = (dirtyCode) => (Array.isArray(dirtyCode) ? dirtyCode.filter((p) => p.startsWith('test/')) : []);
+const normPath = (p) => String(p).replace(/\\/g, '/');
 
 /**
- * R2 改测试凑绿（FR-03）：账本 FAIL → 窗口内**新增**测试改动 → 账本 PASS → warning。
- * FAIL 锚按账本 statKey（mtime:size）判「新记录」——同一 FAIL 记录跨拍持续只累计证据不
- * 重锚（重锚会洗掉窗口内已观察的测试改动）；testDirtyAtFail 快照区分窗口前遗留脏面
- * （Grill 修正①）。skipped 不参与；FAIL→PASS 无新增测试改动不告警。
+ * R2 改测试凑绿（FR-03；2026-09-24 定向化，fr-test-binding §1.1 受益注记）：
+ * 账本 FAIL → 窗口内**新增**测试改动 → 账本 PASS → warning。
+ * 定向升级：窗口被改测试文件经绑定面（resolveTestFileOwners——FR 条目行+ql 面，
+ * active·非 superseded）解析归属；归属成立且该锚来源变更的 requirements.md 未在
+ * 窗口内改动 → 定向 warning test-tamper-bound（绑定测试被改 ∩ 场景正文未改 ∩
+ * FAIL→PASS，点名锚——绑定后 R2 从窗口级粗粒度升级为 FR 级定向，误报大降）；
+ * 无归属或被规格变更抑制的文件保留窗口级 generic warning——**永不比旧版更安静**。
+ * 恒 warning 档：测试纠错是无规格变更的合法场景，三联证据收窄误报不消除。
+ * FAIL 锚按账本 statKey（mtime:size）判「新记录」——同一 FAIL 记录跨拍持续只累计
+ * 证据不重锚；testDirtyAtFail 快照区分窗口前遗留脏面（Grill 修正①）。skipped 不参与。
  */
-function ruleTestTamper(prev, next, state, ts) {
+function ruleTestTamper(prev, next, state, ts, resolveOwners = null) {
   const status = next.scanStatus ? next.scanStatus.status : null;
   const commitHashes = new Set((next.commits || []).map((c) => c.hash));
   if (status === 'failed') {
     const statKey = next.scan ? `${next.scan.mtimeMs}:${next.scan.size}` : String(ts);
     if (!state.testTamper || state.testTamper.statKey !== statKey) {
-      state.testTamper = { statKey, failAt: ts, testDirtyAtFail: new Set(testDirtyOf(next.dirtyCode)), testChanged: false, anchoredCommits: commitHashes };
+      state.testTamper = { statKey, failAt: ts, testDirtyAtFail: new Set(testDirtyOf(next.dirtyCode)), testChanged: false, testChangedFiles: new Set(), anchoredCommits: commitHashes };
     } else {
       const anchor = state.testTamper;
       const dirtyNow = testDirtyOf(next.dirtyCode);
-      if (dirtyNow.some((p) => !anchor.testDirtyAtFail.has(p))) anchor.testChanged = true;
-      if ((next.commits || []).some((c) => !anchor.anchoredCommits.has(c.hash) && (c.files || []).some((f) => f.startsWith('test/')))) anchor.testChanged = true;
+      if (dirtyNow.some((p) => !anchor.testDirtyAtFail.has(p))) { anchor.testChanged = true; for (const p of dirtyNow) if (!anchor.testDirtyAtFail.has(p)) anchor.testChangedFiles.add(normPath(p)); }
+      for (const c of next.commits || []) {
+        if (anchor.anchoredCommits.has(c.hash)) continue;
+        for (const f of c.files || []) if (String(f).startsWith('test/')) { anchor.testChanged = true; anchor.testChangedFiles.add(normPath(f)); }
+      }
     }
     return [];
   }
   if (state.testTamper && status === 'passed') {
     const anchor = state.testTamper;
     state.testTamper = null;
-    if (anchor.testChanged) {
-      return [mkWarning('test-tamper', '测试账本 FAIL→PASS 且窗口内测试文件被改——改测试凑绿嫌疑（测试本身写错是合法场景，人判不阻断）', ts)];
+    const changed = Array.isArray(anchor.testChangedFiles) || anchor.testChangedFiles instanceof Set
+      ? [...(anchor.testChangedFiles || new Set())].map(normPath)
+      : []; // 旧态锚（仅 testChanged 布尔，无清单）→ 无法定向，走 generic
+    if (!anchor.testChanged && changed.length === 0) return [];
+    const generic = (note) => [mkWarning('test-tamper', `测试账本 FAIL→PASS 且窗口内测试文件被改——改测试凑绿嫌疑（${note}）（测试本身写错是合法场景，人判不阻断）`, ts)];
+    if (!resolveOwners || changed.length === 0) return generic('窗口级粗粒度');
+    let owners = null;
+    try { owners = resolveOwners(changed) } catch { owners = null }
+    if (!owners || owners.size === 0) return generic(`${changed.length} 个改动测试文件无绑定锚`);
+    // 窗口全文件面（脏面 ∪ 已提交文件）——来源变更 requirements.md 同窗改动则「场景正文未改」不成立，定向抑制
+    const windowFiles = new Set([
+      ...((next.dirtyCode || []).map(normPath)),
+      ...((next.commits || []).flatMap((c) => c.files || []).map(normPath)),
+    ]);
+    const warnings = [];
+    const genericFiles = new Set();
+    for (const f of changed) {
+      const owns = owners.get(normPath(f)) || owners.get(f);
+      if (!owns || owns.length === 0) { genericFiles.add(f); continue }
+      const live = owns.filter((o) => o.source_change && ![...windowFiles].some((w) => w.includes(`/${o.source_change}/requirements.md`)))
+      if (live.length === 0) { genericFiles.add(f); continue }
+      warnings.push(mkWarning('test-tamper-bound', `${[...new Set(live.map((o) => o.anchor))].join('、')} 绑定测试被改（${f}）∩ 场景正文未改 ∩ 账本 FAIL→PASS——定向改测试凑绿嫌疑（测试纠错仍合法，人判不阻断）`, ts))
     }
-    return [];
+    if (genericFiles.size > 0) {
+      warnings.push(mkWarning('test-tamper', `测试账本 FAIL→PASS 且窗口内测试文件被改（${[...genericFiles].join('、')}——无绑定锚或场景正文同窗变更，定向不成立，窗口级嫌疑保留）（测试本身写错是合法场景，人判不阻断）`, ts))
+    }
+    return warnings;
   }
   return [];
 }
@@ -632,7 +666,7 @@ function ruleStall(prev, next, baseEvents, state, ts) {
  * 哨兵规则引擎主入口（纯函数；prev 缺新字段按空集/null 容错 fail-open）。
  * @returns {{warnings:Array, state:Object}} warnings 恒 provisional:true；archived 拍不判。
  */
-export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync, env = process.env } = {}) {
+export function applySentinelRules({ prev, next, baseEvents = [], state = null, now = Date.now(), changeDir = null, readImpl = readFileSync, readdirImpl = readdirSync, env = process.env, bindResolveImpl = null } = {}) {
   const st = state || createSentinelState(next && next.ts);
   const warnings = [];
   if (!prev || !next || next.archived) return { warnings, state: st };
@@ -647,7 +681,7 @@ export function applySentinelRules({ prev, next, baseEvents = [], state = null, 
   }
   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
   try { warnings.push(...ruleFakeCheck(prev, next, now)); } catch { /* R1 本轮跳过 */ }
-  try { warnings.push(...ruleTestTamper(prev, next, st, now)); } catch { /* R2 本轮跳过 */ }
+  try { warnings.push(...ruleTestTamper(prev, next, st, now, bindResolveImpl)); } catch { /* R2 本轮跳过 */ }
   let declaredScope = null;
   try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }
   try { warnings.push(...ruleScopeDrift(next, st, declaredScope, now)); } catch { /* R3 本轮跳过 */ }
@@ -886,7 +920,9 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
     // warning 不计 lastActivityAt（不是活动）、不触发 archived 自退（终态只认基础事件）。
     let warnings = [];
     try {
-      const r = applySentinelRules({ prev, next: snap, baseEvents: events, state: sentinelState, now: Date.now(), changeDir });
+      // R2 定向解析器（fr-test-binding §1.1）：changeDir 推 specBase，绑定面（FR 条目+ql 机器面）
+      // 解析被改测试文件归属锚——解析异常/无绑定回落窗口级 generic（ruleTestTamper 内兜底）
+      const r = applySentinelRules({ prev, next: snap, baseEvents: events, state: sentinelState, now: Date.now(), changeDir, bindResolveImpl: changeDir ? (files) => resolveTestFileOwners({ specBase: resolve(changeDir, '..', '..'), files }) : null });
       sentinelState = r.state;
       warnings = r.warnings;
     } catch (e) {

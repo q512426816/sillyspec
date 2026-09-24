@@ -219,3 +219,17 @@ test('E1 归档提升端到端：indexRequirements 消费 test-trace → 条目�
   assert.equal(readFrBindings({ knowledgeRoot: kRoot, frId: newId }).length, 1, 'E1: 重放零漂移')
   assert.ok(res2.written.length === 0 || res2.skipped, 'E1: 重放 no-op')
 })
+
+test('B10 resolveTestFileOwners：FR 面+ql 面 active 行归属；candidate/superseded 不归属（R2 定向消费面）', async () => {
+  const { resolveTestFileOwners } = await import('../src/test-bindings.js')
+  const root = specFixture()
+  const specBase = join(root)
+  const kRoot = join(root, 'knowledge')
+  upsertFrBindings({ knowledgeRoot: kRoot, frId: 'FR-core-001', rows: [cand({ state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: 'h' })] }) // tests: test/a.test.mjs (active)
+  upsertFrBindings({ knowledgeRoot: kRoot, frId: 'FR-core-002', rows: [cand({ row_id: 'chg-a:task-09:acc-0-22222222', state: 'candidate', confirmed_by: null })] }) // candidate 不归属
+  upsertQlBindings({ specBase, qlId: 'ql-20260924-001-ab12', rows: [cand({ anchor: 'ql-20260924-001-ab12', row_id: 'quick-1:win:test/b.test.mjs', tests: ['test/b.test.mjs'], state: 'active', discovery: 'agent', confirmed_by: 'agent', source_change: 'quick-1' })] })
+  const owners = resolveTestFileOwners({ specBase, files: ['test/a.test.mjs', 'test/b.test.mjs', 'test/c.test.mjs'] })
+  assert.deepEqual((owners.get('test/a.test.mjs') || []).map(o => o.anchor), ['FR-core-001'], 'B10: FR 面归属')
+  assert.deepEqual((owners.get('test/b.test.mjs') || []).map(o => o.anchor), ['ql-20260924-001-ab12'], 'B10: ql 面归属')
+  assert.equal(owners.has('test/c.test.mjs'), false, 'B10: 未绑定文件无归属')
+})
