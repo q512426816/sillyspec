@@ -1,0 +1,25 @@
+{
+  "change": "2026-09-25-thin-upgrade-consent",
+  "baseline": "c18053529a23bfe6f1bbea0ecf9ed17ebc7108a7",
+  "head": "c80addc013fb9cd8c4277ebb94626e66c44b7d49",
+  "files": [
+    "src/flow.js",
+    "src/run/command.js",
+    "templates/agents-instruction.md",
+    "test/flow-protocol.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-upgrade-consent/design.md",
+    ".sillyspec/changes/2026-09-25-thin-upgrade-consent/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-upgrade-consent/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-upgrade-consent/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-upgrade-consent/tasks.md"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 187,
+    "deletions": 17
+  },
+  "savedAt": "2026-09-24T17:48:07.938Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "f8aa5a15547e816ba375a1a139b2cc6bede52708d8c617c3546cb34d01c679e2",
+  "patchStatus": "ok"
+}

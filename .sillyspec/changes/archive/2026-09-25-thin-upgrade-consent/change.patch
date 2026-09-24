@@ -1,0 +1,323 @@
+diff --git a/src/flow.js b/src/flow.js
+index 2ff7689c..a337ae97 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -204,14 +204,16 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+   }
+ 
+   // 复杂度预判（2026-09-25-thin-default-flip：升档前半句）——input 命中完整流程特征关键词时
+-  // 打一行升厚建议（advisory 不阻断：坚持薄跑由实测失败自动升厚兜底）。与清晰度门互补：
+-  // 清晰度门管「需求说不清楚」，预判管「说清楚了但活大」。
++  // 提示用户裁决（advisory，**升厚与否是用户决策**——agent 不得自行转道；R16 实证驱动加硬：
++  // 混跑回退侧已加 --upgrade-thick 同意门）。与清晰度门互补：清晰度门管「需求说不清楚」，
++  // 预判管「说清楚了但活大」。
+   try {
+     const { classifyChange } = await import('./classify-change.js')
+     const cl = classifyChange({ description: String(input || '') })
+     if (cl && cl.mode === 'full') {
+-      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——建议走完整流程：run brainstorm → plan → execute（Wave 编排/设计期对抗）。`)
+-      console.log(`   坚持薄跑：实测失败将自动升厚兜底（tier=thick 后剩余流程按厚档走）。`)
++      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——是否升厚走完整流程【由用户裁决，agent 勿自行转道】：`)
++      console.log(`   · 问用户；用户同意升厚 → 继续干活后按用户指示转 run <stage>（届时需带 --upgrade-thick 同意门）`)
++      console.log(`   · 用户选择薄跑或未表态 → 留在薄道（干活 → flow done；实测失败时档位自动升厚兜底归档语义）`)
+     }
+   } catch { /* 预判失败不阻断启动 */ }
+ 
+diff --git a/src/run/command.js b/src/run/command.js
+index 7dd9624f..730e4155 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -722,6 +722,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
+     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
+     '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
++    '--upgrade-thick', // 薄→厚升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
+     '-h',
+   ])
+   for (let i = 0; i < flags.length; i++) {
+@@ -1352,7 +1353,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     // SILLYSPEC_WATCHER=0 逃生阀。default 容器行不监听（非真实变更）。
+     if (effectiveChange !== 'default') {
+       // ── 混跑回退写侧（R7 切片二 / FR-06 / D-002：thin change 上跑 run <stage> = 该 change
+-      // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。──
++      // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。）──
++      // 升厚同意门（2026-09-25-thin-upgrade-consent，R16 实测驱动）：薄→厚是成本数倍的资源
++      // 决策，归属用户——agent 不得凭 CLI 的 advisory 自行转道。混跑回退须显式 --upgrade-thick
++      // （=「用户已同意」的落痕 flag，同 --force 留痕先例）；无 flag 拒跑指路。
+       try {
+         const flowStatePath = join(specRoot, 'changes', effectiveChange, 'flow-state.yaml')
+         if (existsSync(flowStatePath)) {
+@@ -1360,11 +1364,17 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+           const changeDir = join(specRoot, 'changes', effectiveChange)
+           const st = readFlowState(changeDir)
+           if (st && !st.legacy_fallback) {
+-            writeFlowState(changeDir, { legacy_fallback: true })
+-            console.warn(`⚠️ [flow] thin change「${effectiveChange}」跑了 run ${stageName}——已混跑回退 legacy（flow done 将按厚档拒裁并指路；两套记账不叠加）`)
++            if (!flags.includes('--upgrade-thick')) {
++              console.error(`⛔ 本变更在薄跑道上（flow-state 在场）——升厚走完整流程需用户同意，agent 不得自行转道：`)
++              console.error(`   · 征得用户同意后带 --upgrade-thick 重跑本命令（落痕留档，首次转厚即转）`)
++              console.error(`   · 用户未确认或选择薄跑 → 继续薄道：直接干活，收口 sillyspec flow done --change ${effectiveChange}`)
++              process.exit(2)
++            }
++            writeFlowState(changeDir, { legacy_fallback: true, upgraded_by_consent: new Date().toISOString() })
++            console.warn(`⚠️ [flow] thin change「${effectiveChange}」经用户同意（--upgrade-thick 落痕）升厚——已混跑回退 legacy（flow done 将按厚档拒裁并指路；两套记账不叠加）`)
+           }
+         }
+-      } catch { /* 探测失败不阻断既有 run 流程 */ }
++      } catch { /* 探测失败不阻断既有 run 流程（process.exit 直出不经 catch） */ }
+       try {
+         const { spawnWatcher } = await import('../watcher.js')
+         const r = await spawnWatcher(cwd, effectiveChange, { ...platformOpts, specBase })
+@@ -1735,7 +1745,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+   }
+ 
+   // 默认：输出当前步骤
+-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
++  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch'), sameSession: flags.includes('--same-session') })
+ }
+ 
+ /**
+@@ -2261,7 +2271,7 @@ export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlF
+       const { execFileSync } = await import('node:child_process')
+       const binSelf = resolveBinSelfPath()
+       try {
+-        execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd() })
++        execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd(), windowsHide: true })
+       } catch { /* continue 失败（非 waiting 态等）静默——回三段式由 agent 走 */ }
+     }
+   } catch (e) {
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 1fa3bf77..2b9cb522 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -8,7 +8,7 @@
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **需求已含决策的常规变更走薄流程（默认快道）**：`sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"` → 直接干活（改代码写测试，治理工件 CLI 机器起草）→ `sillyspec flow done --change <名>`。全程 2 次协议调用：机器起草 proposal/requirements（每条 FR 带测试绑定槽）/design 四节槽，收口带实测门、测试绑定提升、patch 留档；需求不清晰时 CLI 会拦下给两选一。
+ 4. **需求不明确先头脑风暴预段**：`sillyspec run brainstorm --change <名>`（人机交互探索需求、出 design/决策/原型）→ 完成后 `sillyspec flow start --change <名>`，头脑风暴产物自动收编续跑薄道（不重复起草；design 以头脑风暴版为准）。
+-5. **大改动 / 跨模块 / 需要计划编排的复杂变更走完整流程**：`brainstorm → plan → execute → verify → archive`（薄流程实测失败会自动升厚走此道）。
++5. **大改动 / 跨模块 / 需要计划编排的复杂变更走完整流程**：`brainstorm → plan → execute → verify → archive`。**薄→厚升档是用户决策**：CLI 预判命中只提示，转道须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；薄道实测失败会自动升厚档位语义兜底归档校验。
+ 6. **quick 为存量过渡通道**（退役中——新工作不再用）：仅用于收尾进行中的 quick 会话；新的小修复一律走薄流程（规则 3）。
+ 7. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+ 8. **判规模选道**：需求明确、无跨模块取舍 → 薄流程（规则 3）；需求不明 → 头脑风暴预段后转薄流程（规则 4）；并发/鉴权/DB/跨模块大变更或需 Wave 计划编排 → 完整流程（规则 5）；微小修补 → quick（规则 6，过渡）。
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index e8e0bfd0..d8a16da0 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -149,16 +149,22 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+-test('⑤ 混跑回退写读两侧：thin change 跑 run <stage> → legacy_fallback 落档；flow done 拒裁 exit 2', () => {
++test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒跑；带 flag 落 legacy_fallback 留痕；flow done 拒裁 exit 2', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t5'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+-  // 混跑：run brainstorm 渲染一步（真实 run <stage> 路径）
+-  const mix = cli(cwd, ['run', 'brainstorm', '--change', change])
+-  assert.equal(mix.status, 0, `run 应正常: ${mix.stdout}\n${mix.stderr}`)
+-  assert.match(mix.stdout + mix.stderr, /混跑回退 legacy/)
++  // 同意门（2026-09-25-thin-upgrade-consent）：agent 不得自行升厚
++  const blocked = cli(cwd, ['run', 'brainstorm', '--change', change])
++  assert.equal(blocked.status, 2, '无同意 flag 应拒跑')
++  assert.match(blocked.stderr, /需用户同意/)
++  assert.match(blocked.stderr, /--upgrade-thick/)
++  // 用户同意落痕 → 放行并落 legacy_fallback
++  const mix = cli(cwd, ['run', 'brainstorm', '--change', change, '--upgrade-thick'])
++  assert.equal(mix.status, 0, `带同意 flag 应放行: ${mix.stdout}\n${mix.stderr}`)
++  assert.match(mix.stdout + mix.stderr, /经用户同意（--upgrade-thick 落痕）升厚/)
+   const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
+   assert.match(st, /legacy_fallback: true/)
++  assert.match(st, /upgraded_by_consent:/, '同意时点留痕')
+   // 读侧：flow done 拒裁并指路
+   const done = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(done.status, 2)
+@@ -334,7 +340,8 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /thin 薄跑道/, '缺省走薄跑道')
+   assert.match(s.stdout, /复杂变更特征命中/, 'classify 预判提示在场')
+-  assert.match(s.stdout, /建议走完整流程/, '升厚建议文案')
++  assert.match(s.stdout, /由用户裁决/, '升厚裁决权归用户文案')
++  assert.match(s.stdout, /--upgrade-thick/, '同意门指引在场')
+   // 无复杂特征输入不打建议（负例）
+   const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
+   assert.equal(s2.status, 0)
+diff --git a/.sillyspec/changes/2026-09-25-thin-upgrade-consent/design.md b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:41:52.765Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-upgrade-consent
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++升厚同意门三件：①run 族混跑回退写侧（command.js :1362 区）加门——thin change 跑 run <stage> 未带 --upgrade-thick 则拒跑 exit 2 指路（征得用户同意带 flag 重跑 / 未确认回薄道），带 flag 才落 legacy_fallback 且写 upgraded_by_consent 时点留痕；--upgrade-thick 登记进 run 族已知参数表（防未知参数拦截）；②flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户、指明同意门，删照办式表述）；③agents-instruction 规则 5 同步。R16 实测驱动：advisory 被 agent 当指令自行转厚，用户毫不知情。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/run/command.js（同意门+已知参数登记）、src/flow.js（预判文案）、templates/agents-instruction.md（规则 5）、test/flow-protocol.test.mjs（⑤ 改两态断言+⑭ 文案断言）。无导出面变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用。2. 并发写：flow-state 写为原子读改写，同意门先判后写一次性置位。3. 切换/中断：拒跑路径不写任何状态（exit 2 直出）；同意路径一次性置位幂等。4. 作用域：门只作用于「flow-state 在场且未回退」的变更，legacy 既有变更与无状态新变更零影响。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=agent 谎报同意（带 flag 但没真问用户）——flag 的价值是落痕可审计（upgraded_by_consent 时点进 flow-state，事后可对质）而非密码学保证，与 --force 留痕先例同哲学。死路=靠纯文案劝阻（R16 实证失效——advisory 文案被当指令执行），门必须机械化。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-upgrade-consent/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: c18053529a23bfe6f1bbea0ecf9ed17ebc7108a7
++updatedAt: '2026-09-24T17:48:07.073Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-upgrade-consent/proposal.md b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:41:52.764Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-upgrade-consent
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:4d1a4567bc8dc9a321771e739a55a60d66a0619fe1daa3d97cf5aa49095b2fb5:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++任务原话转写：动机：R16 实测暴露——复杂度预判是 advisory，但 agent 把建议当指令自行升厚转完整流程，用户毫不知情。升厚=成本数倍的资源决策，必须用户点头才转。
++成功标准：
++- 混跑回退写侧加升厚同意门：thin change 跑 run <stage> 未带 --upgrade-thick 时拒跑 exit 2 并指路（征得同意带 flag 重跑 / 未确认回薄道）；带 flag 才落 legacy_fallback 且留痕同意时点
++- flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户，不再出现照办式表述）
++- agents-instruction 规则同步（升厚需用户同意）
++- 测试：无 flag 拒跑/带 flag 放行留痕两态；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:70a021a2753f262fade384986dd09fdebd8858704d8ed4c260799f6c5643fb5f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. 混跑回退写侧加升厚同意门：thin change 跑 run <stage> 未带 --upgrade-thick 时拒跑 exit 2 并指路（征得同意带 flag 重跑 / 未确认回薄道）；带 flag 才落 legacy_fallback 且留痕同意时点
++2. flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户，不再出现照办式表述）
++3. agents-instruction 规则同步（升厚需用户同意）
++4. 测试：无 flag 拒跑/带 flag 放行留痕两态；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:4c757e50f6b18c219877c6a5c28bb8a4008647e42fa3fb52e0144912744f2e6b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++1. 混跑回退写侧加升厚同意门：thin change 跑 run <stage> 未带 --upgrade-thick 时拒跑 exit 2 并指路（征得同意带 flag 重跑 / 未确认回薄道）；带 flag 才落 legacy_fallback 且留痕同意时点
++2. flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户，不再出现照办式表述）
++3. agents-instruction 规则同步（升厚需用户同意）
++4. 测试：无 flag 拒跑/带 flag 放行留痕两态；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-upgrade-consent/requirements.md b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:41:52.765Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-upgrade-consent
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:8851bc88ddd8af88a60fb4acbc3fd7c5bbacacc20b9565ee76a8c0d768d08344:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++### FR-01: 混跑回退写侧加升厚同意门：thin change 跑 run <stage> 未
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 混跑回退写侧加升厚同意门：thin change 跑 run <stage> 未带 --upgrade-thick 时拒跑 exit 2 并指路（征得同意带 flag 重跑 / 未确认回薄道）；带 flag 才落 legacy_fallback 且留痕同意时点
++
++### FR-02: flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户，不再出现照
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户，不再出现照办式表述）
++
++### FR-03: agents-instruction 规则同步（升厚需用户同意）
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then agents-instruction 规则同步（升厚需用户同意）
++
++### FR-04: 测试：无 flag 拒跑/带 flag 放行留痕两态；flow 系全绿
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 测试：无 flag 拒跑/带 flag 放行留痕两态；flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑤（无 flag 拒跑/带 flag 留痕两态断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑭（由用户裁决文案断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++templates/agents-instruction.md 规则 5（人工核对面）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + test/stage-burst.test.mjs 43 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-upgrade-consent/tasks.md b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-upgrade-consent/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:41:52.765Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-upgrade-consent
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:caf2acaab17a2415f91083e43562443c6ff16b2e77c085584e75ff48992b4311:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-upgrade-consent 留痕重锚 -->
++- [ ] task-01: 混跑回退写侧加升厚同意门：thin change 跑 run <stage> 未带 --upgrade-thick 时拒
++- [ ] task-02: flow start 复杂度预判文案改为用户裁决框架（升厚与否问用户，不再出现照办式表述）
++- [ ] task-03: agents-instruction 规则同步（升厚需用户同意）
++- [ ] task-04: 测试：无 flag 拒跑/带 flag 放行留痕两态；flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++
