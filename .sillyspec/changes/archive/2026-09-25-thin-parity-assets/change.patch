@@ -1,0 +1,623 @@
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+new file mode 100644
+index 00000000..ea082340
+--- /dev/null
++++ b/src/flow-parity.js
+@@ -0,0 +1,130 @@
++/**
++ * flow-parity.js — 薄道资产对齐三件（2026-09-25-thin-parity-assets，能力/资产对照表终核收口）。
++ *
++ * ① reconcileModuleDocs：模块文档同步对账——厚道 module-impact 死信门的薄道等价物（advisory）：
++ *    交付文件命中模块图 → 点名模块与文档路径；模块代码变了而文档未动 → 强提示。模块文档是
++ *    后续变更 module 命中/门禁收窄/知识注入的原料（verify -68% 那笔账的来源），失供是复利折旧。
++ * ② renderVerifyReceipt：verify-result 机器回执——人类可读收口结论（实测面/评审/绑定/冻结 sha），
++ *    厚道有薄道缺的审计资产；机器合成勿手改。
++ * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——薄变更决策
++ *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
++ */
++import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
++import { join } from 'node:path'
++import yaml from 'js-yaml'
++import { writeAtomicSync } from './fs-atomic.js'
++
++/** 找模块图：.sillyspec/docs/<project>/modules/_module-map.yaml（首个命中；内部面）。 */
++function findModuleMapFile(specBase) {
++  try {
++    const docsDir = join(specBase, 'docs')
++    for (const proj of readdirSync(docsDir)) {
++      const p = join(docsDir, proj, 'modules', '_module-map.yaml')
++      if (existsSync(p)) return { mapPath: p, project: proj }
++    }
++  } catch { /* 无 docs 结构 → 无对账面 */ }
++  return null
++}
++
++/**
++ * 模块文档对账（advisory）。@param ownFiles 交付文件（posix）；@param committedRaw 含 .sillyspec 的原始提交面
++ * （模块文档在 .sillyspec/docs/ 下，交付面过滤会剔除——文档是否更新需查原始提交面）。
++ * @returns {{lines: string[], hits: number}} lines 为空=无命中零输出。
++ */
++export function reconcileModuleDocs({ specBase, ownFiles, committedRaw }) {
++  const found = findModuleMapFile(specBase)
++  if (!found) return { lines: [], hits: 0 }
++  let map
++  try { map = yaml.load(readFileSync(found.mapPath, 'utf8')) } catch { return { lines: [], hits: 0 } }
++  if (!map || typeof map !== 'object') return { lines: [], hits: 0 }
++  const deliverables = new Set((ownFiles || []).map((f) => String(f).replace(/\\/g, '/')))
++  const committed = new Set((committedRaw || []).map((f) => String(f).replace(/\\/g, '/')))
++  const lines = []
++  let hits = 0
++  for (const [modId, mod] of Object.entries(map)) {
++    if (!mod || typeof mod !== 'object') continue
++    const paths = Array.isArray(mod.paths) ? mod.paths : []
++    const hitFiles = paths.filter((pp) => {
++      const norm = String(pp).replace(/\\/g, '/')
++      return [...deliverables].some((f) => f === norm || f.startsWith(norm.endsWith('/') ? norm : norm + '/'))
++    })
++    if (hitFiles.length === 0) continue
++    hits++
++    const docRel = mod.doc ? `docs/${found.project}/${String(mod.doc).replace(/^modules\//, 'modules/')}` : null
++    const docAbs = docRel ? join(specBase, docRel) : null
++    const docTouched = docAbs ? [...committed].some((f) => f.replace(/\\/g, '/') === docRel) : false
++    if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
++    else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
++  }
++  if (hits > 0) {
++    return {
++      lines: [`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`, ...lines],
++      hits,
++    }
++  }
++  return { lines: [], hits: 0 }
++}
++
++/**
++ * verify-result 机器回执（归档前合成，随变更目录留档）。
++ */
++export function renderVerifyReceipt({ change, baseline, head, gateSummary, review, traceCount, patchMeta, generatedAt }) {
++  const sha = patchMeta && patchMeta.patchSha256 ? patchMeta.patchSha256.slice(0, 12) : null
++  const reviewLine = review
++    ? review.verdict === 'exempt'
++      ? '豁免（低风险证据齐全' + (review.sampled ? '' : '') + '）'
++      : `${review.verdict}（reviewer 见 review.json${Number.isFinite(review.findingsP1) ? `，P1 ${review.findingsP1}` : ''}）`
++    : '—'
++  return [
++    `---`,
++    `author: flow-machine-draft`,
++    `created_at: ${generatedAt}`,
++    `---`,
++    `# 验证回执（flow）— ${change}`,
++    ``,
++    `- **结论**：PASS（flow done 2/2 协议调用收口）`,
++    `- **基线..HEAD**：${baseline ? baseline.slice(0, 10) : '?'}..${head ? head.slice(0, 10) : '?'}`,
++    `- **实测面**：${gateSummary || '—'}`,
++    `- **独立评审**：${reviewLine}`,
++    `- **测试绑定**：${traceCount > 0 ? `${traceCount} 行（test-trace.json，已随发号提升）` : '0（无锚行）'}`,
++    `- **交付冻结**：${sha ? `change.patch（sha256 ${sha}…）` : '（无冻结件）'}`,
++    `- **生成**：${generatedAt}（机器合成，勿手改；明细见 flow-telemetry.jsonl / change-patch.json）`,
++    ``,
++  ].join('\n')
++}
++
++/**
++ * design 槽4（风险与死路）实质作答收割 → decisions.md（已有不覆盖）。
++ * @returns {{harvested: boolean, reason?: string}}
++ */
++export function harvestSlot4Decision({ changeDir, change }) {
++  const decPath = join(changeDir, 'decisions.md')
++  if (existsSync(decPath)) return { harvested: false, reason: 'decisions.md 已在场（不覆盖）' }
++  let dText
++  try { dText = readFileSync(join(changeDir, 'design.md'), 'utf8') } catch { return { harvested: false, reason: '无 design.md' } }
++  const lines = dText.replace(/\r\n/g, '\n').split('\n')
++  let inSlot = false
++  const buf = []
++  for (const line of lines) {
++    if (/^<!--\s*AGENT:槽4/.test(line)) { inSlot = true; continue }
++    if (inSlot && (/^<!--/.test(line) || /^#{1,6}\s/.test(line))) break
++    if (inSlot) buf.push(line)
++  }
++  const answer = buf.join('\n').trim()
++  if (!answer || /^不适用/.test(answer)) return { harvested: false, reason: '槽4 空/不适用' }
++  const text = [
++    '---',
++    `author: flow-machine-draft`,
++    `created_at: ${new Date().toISOString()}`,
++    '---',
++    `# 决策记录（Decisions）— ${change}`,
++    '',
++    `## D-001@v1: 风险与死路（design 槽4 收割）`,
++    `- 决策：${answer.replace(/\n+/g, '\n  ')}`,
++    '',
++  ].join('\n')
++  writeAtomicSync(decPath, text)
++  return { harvested: true }
++}
++
++export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision }
+diff --git a/src/flow.js b/src/flow.js
+index a337ae97..16637d11 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -25,7 +25,7 @@
+  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+-import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
++import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+ import { join, relative } from 'node:path'
+ import yaml from 'js-yaml'
+@@ -352,6 +352,19 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+   const doneList = []
+   const skip = (k) => { doneList.push(`${k}(skip)`) }
+   let reviewOutcome = null
++  let gateSummaryText = null
++  // 遥测单点（2026-09-25-thin-parity-assets 修评审 P2①：失败路径 exit 前也要落账——校准信号
++  // 不许在失败面丢失；成功收口走函数末尾同款记录，失败面只多不少）
++  const appendTelemetry = (review) => {
++    try {
++      appendFileSync(join(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
++        ts: new Date().toISOString(), change, protocolCalls: 2,
++        draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
++        routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
++        review,
++      }) + '\n', 'utf8')
++    } catch { /* 遥测 best-effort */ }
++  }
+   const reportMidFail = (failed) => {
+     console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
+     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
+@@ -414,7 +427,8 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     const fmt = (r) => r
+       ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}`
+       : '—'
+-    console.log(`🧾 实测面对账 — test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`)
++    gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
++    console.log(`🧾 实测面对账 — ${gateSummaryText}`)
+     mark('ledger')
+   }
+ 
+@@ -435,8 +449,8 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       } else {
+         const ownPrefix = `.sillyspec/changes/${change}/`
+         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
+-        let committed = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+-          .filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
++        const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
++        let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
+         try {
+           const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
+           committed = splitOwnVsForeignDiffFiles(cwd, change, committed, { specBase }).own
+@@ -486,6 +500,13 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+           }
+           writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+           console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
++          // 模块文档对账（2026-09-25-thin-parity-assets：厚道 module-impact 死信门的薄道 advisory
++          // 等价物——模块文档是后续变更门禁收窄/知识注入的原料，失供是复利折旧）
++          try {
++            const { reconcileModuleDocs } = await import('./flow-parity.js')
++            const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
++            if (rec.hits > 0) for (const l of rec.lines) console.log(l)
++          } catch { /* 对账 best-effort */ }
+           patchOk = true
+         }
+       }
+@@ -499,7 +520,22 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
+   // 多证并举、豁免者 1/4 定额抽查采样。评审任务书由 CLI 渲染（agent 起干净上下文子代理执行，
+   // 协议调用数不变）；FAIL 或 P1 发现=拦截（修复后删件重评再重跑 done，断点续）。
+-  if (st.substeps?.review === 'done') { skip('review') } else {
++  if (st.substeps?.review === 'done') {
++    skip('review')
++    // 回填（修评审 P2②：续跑成功轮遥测不失忆——review 已发生但子步已标，从留档件回读结论）
++    try {
++      const { validateReviewJson } = await import('./flow-review.js')
++      const rp = join(changeDir, 'review.json')
++      if (existsSync(rp)) {
++        const v = validateReviewJson(rp)
++        reviewOutcome = v.ok
++          ? { required: true, sampled: false, verdict: v.review.verdict, findingsP1: (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || ''))).length, backfilled: true }
++          : { required: true, sampled: false, verdict: 'invalid', backfilled: true }
++      } else {
++        reviewOutcome = { required: false, sampled: false, verdict: 'exempt', backfilled: true }
++      }
++    } catch { reviewOutcome = { required: null, verdict: 'done', backfilled: true } }
++  } else {
+     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
+     let patchText = null
+     try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
+@@ -512,6 +548,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
+       console.log(renderReviewerTaskbook({ change, changeDir }))
+       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
++      appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
+       reportMidFail('review')
+       process.exit(1)
+     } else {
+@@ -519,6 +556,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       if (!v.ok) {
+         console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
+         reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
++        appendTelemetry(reviewOutcome) // 修评审 P2①
+         reportMidFail('review')
+         process.exit(1)
+       }
+@@ -529,6 +567,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+         for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
+         console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
+         reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
++        appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
+         reportMidFail('review')
+         process.exit(1)
+       }
+@@ -555,6 +594,13 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+   // requirements 永不进 knowledge/fr，知识复利在新默认道断流；薄变更无 design.md，域路由
+   // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
+   if (st.substeps?.distill === 'done') { skip('distill') } else {
++    // 槽4收割（2026-09-25-thin-parity-assets：design「风险与死路」实质作答合成 decisions.md——
++    // 薄变更决策产出从零到一；已有 decisions 不覆盖）
++    try {
++      const { harvestSlot4Decision } = await import('./flow-parity.js')
++      const h = harvestSlot4Decision({ changeDir, change })
++      if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（随蒸馏链进 knowledge）`)
++    } catch { /* 收割 best-effort */ }
+     try {
+       const { distillIntoKnowledge } = await import('./decision-distill.js')
+       const knowledgeRoot = join(specBase, 'knowledge')
+@@ -596,6 +642,21 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+ 
+   // ⑤ archive：归档经 runArchiveChain（thin 薄工件面跳过 plan.md 硬校验；thick 不跳）
+   if (st.substeps?.archive === 'done') { skip('archive') } else {
++    // verify-result 机器回执（2026-09-25-thin-parity-assets：人类可读收口结论，随归档留档）
++    try {
++      const { renderVerifyReceipt } = await import('./flow-parity.js')
++      let patchMeta = null
++      try { patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8')) } catch { /* 无冻结件 */ }
++      let traceCount = 0
++      try { traceCount = (JSON.parse(readFileSync(join(changeDir, 'test-trace.json'), 'utf8')).rows || []).length } catch { /* 无锚行 */ }
++      const headNow = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++      writeFileSync(join(changeDir, 'verify-result.md'), renderVerifyReceipt({
++        change, baseline: st.baseline_commit, head: typeof headNow === 'string' ? headNow.trim() : null,
++        gateSummary: gateSummaryText, review: reviewOutcome, traceCount, patchMeta,
++        generatedAt: new Date().toISOString(),
++      }))
++      console.log('🧾 验证回执已合成：verify-result.md（随归档留档）')
++    } catch (e) { console.warn(`⚠️ 回执合成失败（不阻断归档）：${(e && e.message) || e}`) }
+     const { ProgressManager } = await import('./progress.js')
+     const { runArchiveChain } = await import('./run/complete-handlers.js')
+     const { archiveDestDirName } = await import('./stage-contract.js')
+@@ -637,15 +698,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       process.exit(1)
+     }
+   }
+-  try {
+-    const { appendFileSync } = await import('node:fs')
+-    appendFileSync(join(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
+-      ts: new Date().toISOString(), change, protocolCalls: 2,
+-      draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
+-      routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
+-      review: reviewOutcome,
+-    }) + '\n', 'utf8')
+-  } catch { /* 遥测 best-effort */ }
++  appendTelemetry(reviewOutcome) // 成功收口（失败面已在各失败路径提前落账，appendTelemetry 单点）
+ 
+   console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
+   // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
+diff --git a/test/flow-parity.test.mjs b/test/flow-parity.test.mjs
+new file mode 100644
+index 00000000..6e4368f6
+--- /dev/null
++++ b/test/flow-parity.test.mjs
+@@ -0,0 +1,95 @@
++/**
++ * flow-parity.test.mjs — 薄道资产对齐三件（2026-09-25-thin-parity-assets）
++ *
++ * 覆盖验收面：
++ *   ① reconcileModuleDocs：命中点名/文档已同步 vs 未更新强提示/无图零输出；
++ *   ② renderVerifyReceipt：回执六要素（结论/基线区间/实测面/评审/绑定/冻结 sha）；
++ *   ③ harvestSlot4Decision：实质作答收割/不适用跳过/已有 decisions 不覆盖。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision } from '../src/flow-parity.js'
++
++function makeSpecBase() {
++  const specBase = mkdtempSync(join(tmpdir(), 'fp-parity-'))
++  const modDir = join(specBase, 'docs', 'proj-x', 'modules')
++  mkdirSync(modDir, { recursive: true })
++  writeFileSync(join(modDir, '_module-map.yaml'), [
++    'cli-entry:', '    status: active', '    doc: modules/cli-entry.md', '    paths:', '      - src/flow.js', '',
++    'progress:', '    status: active', '    doc: modules/progress.md', '    paths:', '      - src/progress.js', '',
++  ].join('\n'))
++  writeFileSync(join(modDir, 'cli-entry.md'), '# cli-entry\n')
++  return specBase
++}
++
++test('① 模块文档对账：命中/文档未更新强提示/已同步/无图零输出', () => {
++  const specBase = makeSpecBase()
++  // 命中 cli-entry 且文档未动 → 强提示
++  let r = reconcileModuleDocs({ specBase, ownFiles: ['src/flow.js', 'README.md'], committedRaw: ['src/flow.js'] })
++  assert.equal(r.hits, 1)
++  assert.ok(r.lines.some((l) => /⚠️ cli-entry.*未随变更更新/.test(l)), JSON.stringify(r.lines))
++  // 文档随变更更新 → ✓ 行
++  r = reconcileModuleDocs({ specBase, ownFiles: ['src/flow.js'], committedRaw: ['src/flow.js', 'docs/proj-x/modules/cli-entry.md'] })
++  assert.equal(r.hits, 1)
++  assert.ok(r.lines.some((l) => /✓ cli-entry.*已同步/.test(l)))
++  // 前缀命中（目录 paths）
++  r = reconcileModuleDocs({ specBase, ownFiles: ['src/progress.js/sub.py'], committedRaw: [] })
++  assert.equal(r.hits, 1)
++  // 交付面不命中 → 零输出
++  r = reconcileModuleDocs({ specBase, ownFiles: ['other/x.js'], committedRaw: [] })
++  assert.equal(r.hits, 0)
++  assert.deepEqual(r.lines, [])
++  // 无模块图 → 零输出
++  const bare = mkdtempSync(join(tmpdir(), 'fp-bare-'))
++  r = reconcileModuleDocs({ specBase: bare, ownFiles: ['src/a.js'], committedRaw: [] })
++  assert.equal(r.hits, 0)
++  rmSync(specBase, { recursive: true, force: true })
++  rmSync(bare, { recursive: true, force: true })
++})
++
++test('② verify-result 回执：六要素合成', () => {
++  const text = renderVerifyReceipt({
++    change: 'c1', baseline: '0123456789abcdef', head: 'fedcba9876543210',
++    gateSummary: 'test: passed ← pytest（1.0s）｜lint: passed｜门文件 3 个',
++    review: { required: true, verdict: 'PASS', findingsP1: 0 },
++    traceCount: 2, patchMeta: { patchSha256: 'a'.repeat(64) }, generatedAt: '2026-09-25T00:00:00Z',
++  })
++  assert.match(text, /结论\*\*：PASS/)
++  assert.match(text, /0123456789\.\.fedcba9876/)
++  assert.match(text, /test: passed/)
++  assert.match(text, /独立评审\*\*：PASS/)
++  assert.match(text, /2 行/)
++  assert.match(text, /sha256 aaaaaaaaaaaa/)
++  assert.match(text, /机器合成，勿手改/)
++})
++
++test('③ 槽4收割：实质作答→decisions.md；不适用跳过；已有不覆盖', () => {
++  const root = mkdtempSync(join(tmpdir(), 'fp-hv-'))
++  const changeDir = join(root, 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  const design = [
++    '# d', '<!--AGENT:槽4 风险与死路作答 -->', '风险：X；死路：试过 A 方案因 B 放弃', '',
++  ].join('\n')
++  writeFileSync(join(changeDir, 'design.md'), design)
++  let h = harvestSlot4Decision({ changeDir, change: 'c1' })
++  assert.equal(h.harvested, true)
++  const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
++  assert.match(decText, /D-001@v1: 风险与死路（design 槽4 收割）/)
++  assert.match(decText, /死路：试过 A 方案/)
++  // 已有不覆盖
++  h = harvestSlot4Decision({ changeDir, change: 'c1' })
++  assert.equal(h.harvested, false)
++  assert.match(h.reason, /已在场/)
++  // 不适用跳过
++  const d2 = mkdtempSync(join(tmpdir(), 'fp-hv2-'))
++  const cd2 = join(d2, 'c2')
++  mkdirSync(cd2, { recursive: true })
++  writeFileSync(join(cd2, 'design.md'), '# d\n<!--AGENT:槽4 x -->\n不适用：无\n')
++  h = harvestSlot4Decision({ changeDir: cd2, change: 'c2' })
++  assert.equal(h.harvested, false)
++  rmSync(root, { recursive: true, force: true })
++  rmSync(d2, { recursive: true, force: true })
++})
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index d8a16da0..8c85035e 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -379,7 +379,10 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 
+   const archDir = join(specBase, 'changes', 'archive')
+   const archived = readdirSync(archDir)[0]
+   assert.ok(existsSync(join(archDir, archived, 'review.json')), 'review.json 随归档留档')
+-  const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.change === change)
++  assert.ok(existsSync(join(archDir, archived, 'verify-result.md')), 'verify-result 回执随归档留档')
++  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /结论\*\*：PASS/, '回执含结论')
++  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /独立评审\*\*：PASS/, '回执含评审结论')
++  const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.change === change).pop()
+   assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+@@ -403,6 +406,8 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复
+   assert.match(f.stdout + f.stderr, /\[P1\] 承诺违反/, 'P1 明细列出')
+   assert.match(f.stdout + f.stderr, /修复后删除 review\.json/, '重评指引')
+   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change)), '未归档')
++  const tlFail = readFileSync(join(cwd, '.sillyspec', '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.change === change && r.review)
++  assert.equal(tlFail.review.verdict, 'FAIL', '失败面评审结论已落遥测（修 P2①）')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+diff --git a/.sillyspec/changes/2026-09-25-thin-parity-assets/design.md b/.sillyspec/changes/2026-09-25-thin-parity-assets/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-parity-assets/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:50:32.021Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-parity-assets
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++新建 src/flow-parity.js 三件并接线：①reconcileModuleDocs（模块文档同步对账 advisory——交付文件∩模块图命中点名模块与文档路径，代码变而文档未动给强提示；厚道 module-impact 死信门的薄道等价物）挂 patch 子步留档后；②renderVerifyReceipt（人类可读收口回执：结论/基线区间/实测面/评审/绑定行数/冻结 sha）挂 archive 子步归档前；③harvestSlot4Decision（design 槽4 风险与死路实质作答合成 decisions.md，已有不覆盖）挂 distill 子步蒸馏前。另修评审 P2×2：appendTelemetry 单点（失败路径 exit 前落账）+ review 子步续跑 skip 时从留档件回填结论。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增 src/flow-parity.js（reconcileModuleDocs/renderVerifyReceipt/harvestSlot4Decision）；flow.js：committedRaw 保留、patch 后对账打印、gateSummaryText 捕获、review 失败面遥测+回填、distill 收割、archive 回执、遥测单点。模块图登记。无导出面变化（findModuleMapFile 内部化）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯同步读盘合成与打印，无时序/共享可变状态；对账与收割均为 best-effort 失败零副作用。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=模块对账 advisory 可能被无视（与厚道死信门 blocking 的差别）——薄道哲学先 advisory，无视率进遥测后可升档。死路=把对账做成 blocking——薄道零仪式前提下面板误报会拦死收口，先观察。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-parity-assets/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-parity-assets/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-parity-assets/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 6a54e5b6cfa3c617614f89b65a04458c05dfcaa2
++updatedAt: '2026-09-24T18:02:29.111Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-parity-assets/proposal.md b/.sillyspec/changes/2026-09-25-thin-parity-assets/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-parity-assets/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:50:32.020Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-parity-assets
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:a0356a346abbb85d229887ac0cf7413b7e4475e27948af87332302fcad35058e:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++任务原话转写：动机：能力/资产对照表终核——四个真缺口收口：模块文档同步对账（厚道 module-impact 死信门的薄道等价物，复利资产最隐蔽缺口）；verify-result 机器回执（人类可读收口结论，厚道有薄道缺）；design 槽4 风险与死路作答蒸馏进 decisions/knowledge（薄变更决策产出为零）；独立评审发现的 P2×2 遥测洞（失败面评审结论不落账、断点续跑不回填）。
++成功标准：
++- flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动给强提示（advisory）
++- 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档留档
++- distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随既有蒸馏链进 knowledge
++- 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
++- 新增测试四件；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:934474a2760ec504a6a70e496ff14cbb8fb3f029460a9165fd29de88d06ad03d:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动给强提示（advisory）
++2. 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档留档
++3. distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随既有蒸馏链进 knowledge
++4. 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
++5. 新增测试四件；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:ed1aedc12363d08ed46b4f142d0f77c35ab24415a646e5dfd2a322ba19bb75ab:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++1. flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动给强提示（advisory）
++2. 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档留档
++3. distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随既有蒸馏链进 knowledge
++4. 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
++5. 新增测试四件；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-parity-assets/requirements.md b/.sillyspec/changes/2026-09-25-thin-parity-assets/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-parity-assets/requirements.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:50:32.021Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-parity-assets
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:e826caad509176f4ee0dc63cae88f4797da3e4e2027a085dd7e11d2873b149f7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++### FR-01: flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动给强提示（advisory）
++
++### FR-02: 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档留档
++
++### FR-03: distill 收割 design 槽4 实质作答合成 decisions.md
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随既有蒸馏链进 knowledge
++
++### FR-04: 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
++
++### FR-05: 新增测试四件；flow 系全绿
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 新增测试四件；flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ①（命中/未更新/已同步/前缀/无图五态）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ② + test/flow-protocol.test.mjs ⑮（归档回执断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ③（收割/不适用/不覆盖三态）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑯（FAIL 遥测断言）+ ⑮（末条 PASS 断言）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + flow-parity + stage-burst 46 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-parity-assets/tasks.md b/.sillyspec/changes/2026-09-25-thin-parity-assets/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-parity-assets/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:50:32.021Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-parity-assets
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:52a17043b57b6352b66880df45edc981a33c890d2dca414c47e4db38ab48652f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-parity-assets 留痕重锚 -->
++- [ ] task-01: flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动
++- [ ] task-02: 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档
++- [ ] task-03: distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随
++- [ ] task-04: 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
++- [ ] task-05: 新增测试四件；flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

@@ -498,3 +498,96 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-25-thin-upgrade-consent
   status: active
+
+## FR-cli-entry-030 flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列
+变更：2026-09-25-thin-parity-assets
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动给强提示（advisory）
+全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-01
+最近确认：1d997c601a4a9f95cb43244d40dcd1bc446a7430
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-parity-assets:flow:FR-01
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-parity-assets
+  status: active
+
+## FR-cli-entry-031 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审
+变更：2026-09-25-thin-parity-assets
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档留档
+全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-02
+最近确认：1d997c601a4a9f95cb43244d40dcd1bc446a7430
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-parity-assets:flow:FR-02
+  tests: test/flow-parity.test.mjs | test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-parity-assets
+  status: active
+
+## FR-cli-entry-032 distill 收割 design 槽4 实质作答合成 decisions.md
+变更：2026-09-25-thin-parity-assets
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随既有蒸馏链进 knowledge
+全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-03
+最近确认：1d997c601a4a9f95cb43244d40dcd1bc446a7430
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-parity-assets:flow:FR-03
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-parity-assets
+  status: active
+
+## FR-cli-entry-033 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑
+变更：2026-09-25-thin-parity-assets
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
+全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-04
+最近确认：1d997c601a4a9f95cb43244d40dcd1bc446a7430
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-parity-assets:flow:FR-04
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-parity-assets
+  status: active
+
+## FR-cli-entry-034 新增测试四件；flow 系全绿
+变更：2026-09-25-thin-parity-assets
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试四件；flow 系全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-05
+最近确认：1d997c601a4a9f95cb43244d40dcd1bc446a7430
