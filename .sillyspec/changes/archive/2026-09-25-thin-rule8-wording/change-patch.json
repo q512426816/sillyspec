@@ -1,0 +1,22 @@
+{
+  "change": "2026-09-25-thin-rule8-wording",
+  "baseline": "3df87fe9800ae8a4f3de5a675a16d2de2220cada",
+  "head": "0c21462ff96552799a23888abaae69430a74e752",
+  "files": [
+    "templates/agents-instruction.md",
+    ".sillyspec/changes/2026-09-25-thin-rule8-wording/design.md",
+    ".sillyspec/changes/2026-09-25-thin-rule8-wording/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-rule8-wording/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-rule8-wording/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-rule8-wording/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 132,
+    "deletions": 1
+  },
+  "savedAt": "2026-09-24T23:01:27.773Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "319f782855e6956132cb3806151987fef7e4b798a3afeab346d8f2ccae261231",
+  "patchStatus": "ok"
+}

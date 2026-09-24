@@ -1,0 +1,173 @@
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index c4278d66..0a01e7f0 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -11,7 +11,7 @@
+ 5. **大改动 / 跨模块 / 需要计划编排的复杂变更走完整流程**：`brainstorm → plan → execute → verify → archive`。**薄→厚转道是用户决策**：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；薄道实测失败自动升厚档位语义兜底归档校验。选道不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。
+ 6. **quick 为存量过渡通道**（退役中——新工作不再用）：仅用于收尾进行中的 quick 会话；新的小修复一律走薄流程（规则 3）。
+ 7. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+-8. **判规模选道**：需求明确、无跨模块取舍 → 薄流程（规则 3）；需求不明 → 头脑风暴预段后转薄流程（规则 4）；并发/鉴权/DB/跨模块大变更或需 Wave 计划编排 → 完整流程（规则 5）；微小修补 → quick（规则 6，过渡）。
++8. **判规模选道**：需求明确、无跨模块取舍 → 薄流程（规则 3）；需求不明 → 头脑风暴预段后转薄流程（规则 4）；**需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗的大变更** → 完整流程（规则 5）；微小修补 → quick（规则 6，过渡）。选道看流程形态需求，不看技术关键词——风险面由收口评审按证据判定。
+ 9. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用薄流程收尾：`sillyspec flow start --change <名> --input "<已做改动的描述＋成功标准>"` → `sillyspec flow done`（实测门+测试绑定+patch 留档一步收口，改动如实登记为变更级归档）；存量 quick 会话仍可 `quick --done` 收尾。
+ 10. **实证核验再 `--done`**：触及 `src`/`test` 的改动，CLI 会在 `quick --done` 时**亲自实测** `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（门禁：实测失败阻断 --done 回 pending；纯 doc/配置与未配置命令自动跳过；倒推 B 模式按 --files 声明边界兜底判定）。agent 侧预跑**可选**——想省「--done 被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动无需跑。以落盘文件与测试结果为准，不信口头"已完成"。
+ 11. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
+diff --git a/.sillyspec/changes/2026-09-25-thin-rule8-wording/design.md b/.sillyspec/changes/2026-09-25-thin-rule8-wording/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-rule8-wording/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:59:32.389Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-rule8-wording
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++抽查评审 P3 收口：规则 8 的选道指引从技术关键词列举（并发/鉴权/DB/跨模块）改为形态面措辞（需要 Wave 计划编排/多阶段治理/设计期人机对抗的大变更），并补一句与规则 5 一致的原则句（选道看流程形态需求，不看技术关键词）。纯模板措辞，零行为面。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++仅 templates/agents-instruction.md 规则 8 一处。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯文档措辞。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=无。死路=保留关键词列举加免责注——两读措辞只会让 agent 各取所需，直接删净。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-rule8-wording/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-rule8-wording/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-rule8-wording/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 3df87fe9800ae8a4f3de5a675a16d2de2220cada
++updatedAt: '2026-09-24T23:01:27.124Z'
++gate_summary: >-
++  test: passed ← module[cli-core,run-gates]+deps(js30)（48.8s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260924230052\test-result.json｜lint: passed
++  ← npm run lint（34.9s）｜门文件 46 个
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-rule8-wording/proposal.md b/.sillyspec/changes/2026-09-25-thin-rule8-wording/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-rule8-wording/proposal.md
+@@ -0,0 +1,31 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:59:32.387Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-rule8-wording
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:6a5de1fe1b080f1f850657c4637dec87af4574398d6b69912f1eeb8d217665cb:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++任务原话转写：动机：抽查评审 P3——agents-instruction 规则 8 仍以并发/鉴权/DB 技术关键词指引选道，与规则 5 新原则（选道不看技术关键词，风险面归收口评审按证据判定）措辞矛盾。
++成功标准：
++- 规则 8 选道指引改为形态面措辞（需要 Wave 计划编排/多阶段治理的大变更），删技术关键词列举
++- 全文无与规则 5 原则冲突的选道措辞
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:abe6afe8b8eaf6eb96a1029816069e63f5522aab67f2eff44892e1b30c575452:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++按成功标准机械推导，共 2 条验收面：
++1. 规则 8 选道指引改为形态面措辞（需要 Wave 计划编排/多阶段治理的大变更），删技术关键词列举
++2. 全文无与规则 5 原则冲突的选道措辞
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:2572ff1d4f6fdb53c30487cccf8c0faf7c69c5ebe4149fb37ed382e2cc91beab:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++1. 规则 8 选道指引改为形态面措辞（需要 Wave 计划编排/多阶段治理的大变更），删技术关键词列举
++2. 全文无与规则 5 原则冲突的选道措辞
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-rule8-wording/requirements.md b/.sillyspec/changes/2026-09-25-thin-rule8-wording/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-rule8-wording/requirements.md
+@@ -0,0 +1,28 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:59:32.389Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-rule8-wording
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:e2811105e4240ac24793cb8a18cb0b8143119b503fbea0e50d3601364918231f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++### FR-01: 规则 8 选道指引改为形态面措辞（需要 Wave 计划编排/多阶段治理的大变更）
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 规则 8 选道指引改为形态面措辞（需要 Wave 计划编排/多阶段治理的大变更），删技术关键词列举
++
++### FR-02: 全文无与规则 5 原则冲突的选道措辞
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 全文无与规则 5 原则冲突的选道措辞
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：纯模板措辞变更，人工核对面（grep 全文无技术关键词式选道残留即达标）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：纯模板措辞变更，人工核对面（grep 全文无技术关键词式选道残留即达标）
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-rule8-wording/tasks.md b/.sillyspec/changes/2026-09-25-thin-rule8-wording/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-rule8-wording/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:59:32.389Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-rule8-wording
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:1bb2be08cf7ac631abf634e6528507a45b391faa7710b02a0f3756c40d950094:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-rule8-wording 留痕重锚 -->
++- [ ] task-01: 规则 8 选道指引改为形态面措辞（需要 Wave 计划编排/多阶段治理的大变更），删技术关键词列举
++- [ ] task-02: 全文无与规则 5 原则冲突的选道措辞
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++
