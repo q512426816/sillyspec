@@ -105,6 +105,49 @@ function draftRequirements({ change, criteria }) {
   return { text, sections: collectSections(text) }
 }
 
+/**
+ * design.md 机器骨架（2026-09-24 v3 设计记录全档化第一片）：机器段=固定问题模板（指纹保护，
+ * 问题不可被删改），AGENT 槽=作答面。盲维四问钉死在「边界与并发」节——对撞实验 5 个 P1 全落在
+ * 乱序/并发/切换/作用域四维且全是承诺未落盘形态，问题模板化让危险问题每跑必被问；小改动槽里
+ * 一行「不适用：<理由>」即合规（档位伸缩后续片）。
+ */
+export function draftDesignRecord({ change }) {
+  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+  const text = [
+    '---',
+    `author: flow-machine-draft`,
+    `created_at: ${new Date().toISOString()}`,
+    '---',
+    `# 设计记录（Design Record）— ${change}`,
+    '',
+    '> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。',
+    '> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。',
+    '',
+    '## 做法概述',
+    wrapped('design-approach', '本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。'),
+    AGENT_SLOT(1, '做法概述作答'),
+    '',
+    '## 接口契约',
+    wrapped('design-contract', '动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？'),
+    AGENT_SLOT(2, '接口契约作答'),
+    '',
+    '## 边界与并发（盲维四问——每问必答，答不了即设计缺口）',
+    wrapped('design-boundaries', [
+      '1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？',
+      '2. 并发写：两个执行体同时操作同一数据/文件会发生什么？',
+      '3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？',
+      '4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？',
+    ].join('\n')),
+    AGENT_SLOT(3, '盲维四问作答'),
+    '',
+    '## 风险与死路',
+    wrapped('design-risks', '本方案最大的风险是什么？试过但放弃的方案及放弃理由？'),
+    AGENT_SLOT(4, '风险与死路作答'),
+    '',
+  ].join('\n')
+  return { text, sections: collectSections(text) }
+}
+
 /** tasks 机器稿（成功标准 → checkbox 行）。任务卡分岔：withTasks 才生成 tasks/task-NN.md。 */
 function draftTasks({ change, criteria, withTasks }) {
   const crit = criteria || []
@@ -203,6 +246,7 @@ export function draftAll({ changeDir, change, input, withTasks = false, runtimeR
   const outputs = [
     { file: 'proposal.md', draft: draftProposal({ change, input, criteria }) },
     { file: 'requirements.md', draft: draftRequirements({ change, criteria }) },
+    { file: 'design.md', draft: draftDesignRecord({ change }) },
     { file: 'tasks.md', draft: draftTasks({ change, criteria, withTasks }) },
   ]
   const written = []
@@ -305,4 +349,42 @@ export function verifyFlowDrafts({ changeDir, change, runtimeRoot }) {
   return { applicable: true, violations }
 }
 
-export default { draftAll, amendFlowDraft, verifyFlowDrafts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+/**
+ * design.md AGENT 槽空槽判定（flow done 工件子步消费面）。槽内容 = 槽标记行之后到下一个
+ * 标记/标题之前的非空行；「不适用：<理由>」是非空行，天然视作已答（档位伸缩的 S0 出口）。
+ * 纯读盘面；无 design.md → not-applicable（存量变更/混跑回退面）。
+ */
+export function verifyDesignRecordFilled({ changeDir }) {
+  const path = join(changeDir, 'design.md')
+  if (!existsSync(path)) return { applicable: false, emptySlots: [] }
+  const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n')
+  const emptySlots = []
+  let current = null
+  let hasContent = false
+  let slotCount = 0
+  const flush = () => {
+    if (current && !hasContent) emptySlots.push(current)
+  }
+  for (const line of lines) {
+    if (/^<!--\s*AGENT:/.test(line)) {
+      flush()
+      current = (line.match(/AGENT:(\S+)/) || [])[1] || '槽'
+      hasContent = false
+      slotCount++
+      continue
+    }
+    if (/^<!--\s*MACHINE-DRAFT:/.test(line) || /^#{1,6}\s/.test(line)) {
+      flush()
+      current = null
+      continue
+    }
+    if (current && line.trim()) hasContent = true
+  }
+  flush()
+  // 防绕过：design.md 在场但零 AGENT 槽（骨架被整删/手写替代）——机器段指纹只护 ledger 在案
+  // 变更，非在案面（如工具升级前的在途变更）唯一的守卫就是这里
+  if (slotCount === 0) return { applicable: true, emptySlots: ['（骨架缺失——design.md 无任何 AGENT 作答槽，被整删或手写替代；恢复机器骨架后作答）'] }
+  return { applicable: true, emptySlots }
+}
+
+export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, draftDesignRecord, draftDecisions, extractSuccessCriteria, draftLedgerPath }

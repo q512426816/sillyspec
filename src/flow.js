@@ -188,6 +188,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     ``,
     `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
     `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
+    `⚠️ design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险）动码前后顺手作答——每节至少一行，`,
+    `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
     ``,
     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
@@ -260,12 +262,21 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
 
   // ① artifacts：机器稿指纹校验（draft-ledger 在场时三态拒收——标记缺失/哈希失配/手工重锚
   // 未审计；AGENT 槽是合法书写面不参与指纹；缺 ledger=not-applicable 放行）
+  //    + 设计记录空槽拒收（2026-09-24 v3 设计记录全档化第一片：盲维四问每跑必答——空槽=未答，
+  //    「不适用：<理由>」也是答；纯文档检查前置于实测门，秒级失败秒级返工）
   if (st.substeps?.artifacts === 'done') { skip('artifacts') } else {
-    const { verifyFlowDrafts } = await import('./flow-draft.js')
+    const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
     const r = verifyFlowDrafts({ changeDir, change, runtimeRoot })
     if (r.applicable && r.violations.length > 0) {
       console.error(`❌ 工件校验拒收（机器稿指纹三态）：`)
       for (const v of r.violations) console.error(`   - ${v}`)
+      reportMidFail('artifacts')
+      process.exit(1)
+    }
+    const dr = verifyDesignRecordFilled({ changeDir })
+    if (dr.applicable && dr.emptySlots.length > 0) {
+      console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
+      console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
       reportMidFail('artifacts')
       process.exit(1)
     }

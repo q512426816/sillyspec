@@ -50,6 +50,12 @@ function cli(cwd, args) {
   })
 }
 
+/** agent 例行动作（2026-09-24 设计记录全档化契约）：给 design.md 四个 AGENT 槽各写一行作答。 */
+function fillDesignSlots(cwd, change) {
+  const p = join(cwd, '.sillyspec', 'changes', change, 'design.md')
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
+}
+
 test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅两次协议调用，归档注销', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t1'
@@ -70,6 +76,7 @@ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅�
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  fillDesignSlots(cwd, change)
 
   // 协议调用 2/2：flow done
   const s2 = cli(cwd, ['flow', 'done', '--change', change])
@@ -103,6 +110,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   const change = 'flow-h2-t3'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
+  fillDesignSlots(cwd, change)
   const specBase = join(cwd, '.sillyspec')
 
   // 实测失败 → 整单 FAIL exit 1，change 仍 active（不可假绿）
@@ -169,6 +177,7 @@ test('⑥ FR 索引提炼接线：薄变更 flow done 后 requirements 进 knowl
   writeFileSync(join(cwd, 'backend', 'app', 'deliv.txt'), 'x\n')
   execFileSync('git', ['add', 'backend'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'deliv'], { cwd, stdio: 'pipe' })
+  fillDesignSlots(cwd, change)
 
   const s2 = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
@@ -177,6 +186,30 @@ test('⑥ FR 索引提炼接线：薄变更 flow done 后 requirements 进 knowl
   const frText = readFileSync(frFile, 'utf8')
   assert.match(frText, new RegExp(`FR-auto-backend-001`))
   assert.match(frText, new RegExp(`变更：${change}`))
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done exit 1 点名空槽；填后放行归档', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t6b'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  writeFileSync(join(cwd, 'work.txt'), 'done\n')
+  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  const specBase = join(cwd, '.sillyspec')
+
+  // 空槽 → artifacts 子步拒收 exit 1，点名四个槽，change 仍 active
+  const fail = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(fail.status, 1, `空槽应拒收: ${fail.stdout}\n${fail.stderr}`)
+  assert.match(fail.stdout + fail.stderr, /设计记录未作答/)
+  assert.match(fail.stdout + fail.stderr, /中断于子步「artifacts」/)
+  assert.ok(existsSync(join(specBase, 'changes', change)), '未归档')
+
+  // 补答（不适用+理由）→ done 全绿归档
+  fillDesignSlots(cwd, change)
+  const ok = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
+  assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
 })
 

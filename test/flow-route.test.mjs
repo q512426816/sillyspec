@@ -62,6 +62,12 @@ function amendWithRatio(cwd, change, ratio) {
   return spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
 }
 
+/** agent 例行动作（2026-09-24 设计记录全档化契约）：design 槽各写一行，防 artifacts 子步空槽拒收。 */
+function fillDesignSlots(cwd, change) {
+  const p = join(cwd, '.sillyspec', 'changes', change, 'design.md')
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
+}
+
 test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
   const change = 'fr-r1'
@@ -76,6 +82,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒�
 
   // advisory（缺省）：测绿 → flow done exit 0 + 醒目打印 + 遥测记一笔
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  fillDesignSlots(cwd, change)
   const done = cli(['flow', 'done', '--change', change])
   assert.equal(done.status, 0, `advisory 应薄档过: ${done.stdout}\n${done.stderr}`)
   assert.match(done.stdout + done.stderr, /route_hint: thick/)
@@ -102,6 +109,7 @@ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
   const big = amendWithRatio(cwd, change, 0.75)
   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  fillDesignSlots(cwd, change)
   const done = cli(['flow', 'done', '--change', change])
   assert.equal(done.status, 1, 'block 档应阻断')
   assert.match(done.stdout + done.stderr, /edit_ratio_enforcement=block/)
