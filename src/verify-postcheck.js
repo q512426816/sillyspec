@@ -28,7 +28,8 @@ import { IR_STRICT_SINCE } from './constants.js'
 import { gitQuiet } from './git-helper.js'
 import { resolveRuntimeRoot } from './run/shared.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
-import { join } from 'path'
+import { join, resolve } from 'path'
+import { readChangeTrace } from './test-bindings.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { reconcileCrossRepoDeclarations } from './cross-repo-reconcile.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
@@ -1898,6 +1899,8 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   // 主仓 skipped（test_strategy: skip / evidence-auto 推荐跳过 / module 0 命中）→ 进短路档：
   // 未自配 commands.test 的跨仓不再 fallback npm test 假败（task-05 / FR-07，见
   // runCrossRepoTestUnderMainSkip 逐仓三态）。
+  // ── trace residual 并入（读侧）：悬空 fail-fast / 空残差直通 / 保守差集 / 残差段加法 ──
+  mainResult = applyTraceResidual({ mainResult, action, cwd, specBase, changeName, depsAutoFiles, hits, knownFailures })
   return mergeCrossRepoResults(mainResult, ctx)
 }
 
@@ -2359,6 +2362,129 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
   if (jsRun.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsRun.join(' ')}`, count: jsRun.length, dropped: js.length - jsRun.length })
   return batches
+}
+
+// ── trace residual adapter（2026-09-24-fr-test-readside，fr-test-binding §3.3/§3.6 读侧）──
+// 锚点集=本变更 task 卡 requirement_ids 并集；残差=trace active 行 tests 并集按保守差集
+// （仅 deps-auto-subset 文件集可证覆盖，命令型动作一律全补——禁解析命令串猜覆盖面）。
+// 现选测（decideVerifyTestAction 及各执行分支）逐字保留，残差只在结果层加法（D-002@v1）。
+
+/** 锚点集：tasks/*.md frontmatter requirement_ids 局部号并集（无 tasks 目录 → 空，fail-open） */
+export function resolveVerifyAnchorSet({ specBase, changeName }) {
+  const ids = new Set()
+  try {
+    const tasksDir = join(specBase, 'changes', changeName, 'tasks')
+    if (existsSync(tasksDir)) {
+      for (const f of readdirSync(tasksDir).filter(x => /^task-[\d.]+\.md$/.test(x))) {
+        const m = readFileSync(join(tasksDir, f), 'utf8').match(/^requirement_ids:\s*\[([^\]]*)\]/m)
+        if (m) for (const x of m[1].split(',')) { const t = x.trim().replace(/['"]/g, ''); if (t) ids.add(t) }
+      }
+    }
+  } catch { /* fail-open：锚点集空 → 残差空 → 完全沿用现选测 */ }
+  return [...ids]
+}
+
+/** 残差解析：active·非 superseded·锚命中的 trace 行 → { anchors, rows, files, dangling } */
+export function resolveTraceResidual({ specBase, changeName, cwd }) {
+  const anchors = resolveVerifyAnchorSet({ specBase, changeName })
+  if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [] }
+  const rows = readChangeTrace(join(specBase, 'changes', changeName))
+    .filter(r => anchors.includes(r.anchor) && r.state === 'active' && r.status !== 'superseded')
+  const files = [...new Set(rows.flatMap(r => r.tests || []))].sort()
+  const dangling = files.filter(f => !existsSync(resolve(cwd, f)))
+  return { anchors, rows, files, dangling }
+}
+
+/** 残差执行段：按 buildDepsBatches 同口径组卷（扩展名分语言/pytest 前缀自模块命令推断），
+ * 30/块分卷破 deps 面的帽（残差是绑定面钦定必须跑的，不适用发现面防膨胀帽）。 */
+function runTraceResidual({ cwd, files, hits, knownFailures = [] }) {
+  // 嵌套 test-runner 防污染：孙代 node --test 会误连外层 reporter（NODE_TEST_* 环境变量，
+  // 单测实测：嵌套下挂测被误判 passed）——spawn 前剥除、跑完还原（同步窗口安全；真实门禁
+  // 进程无此变量，零影响）。
+  const savedEnv = { ...process.env }
+  const strippedKeys = []
+  for (const k of Object.keys(process.env)) { if (k.startsWith('NODE_TEST')) { strippedKeys.push(k); delete process.env[k] } }
+  try {
+    return runTraceResidualInner({ cwd, files, hits, knownFailures })
+  } finally {
+    for (const k of strippedKeys) process.env[k] = savedEnv[k]
+  }
+}
+function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
+  const norm = (p) => String(p).replace(/\\/g, '/')
+  const segments = []
+  for (let i = 0; i < files.length; i += 30) {
+    const chunk = files.slice(i, i + 30)
+    const batches = buildDepsBatches({ deps: chunk, changedFiles: files, hits })
+    for (const b of batches) {
+      const isPy = b.short === 'py'
+      const segFiles = chunk.filter(f => (norm(f).endsWith('.py') === isPy))
+      const r = runOneModule(b.name, b.command, cwd, knownFailures)
+      segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : 'node --test', files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
+    }
+  }
+  return segments
+}
+
+/** 披露 sidecar（D-005@v1：JSON 真源+console 一行；覆盖式幂等） */
+export function writeTraceDisclosure({ specBase, changeName, payload }) {
+  const p = join(specBase, 'changes', changeName, 'verify-trace-disclosure.json')
+  writeAtomicSync(p, JSON.stringify({ schemaVersion: 1, change: changeName, ...payload }, null, 2) + '\n')
+  console.log(`📎 trace 披露：锚点 ${payload.anchors.length} 个 / 行 ${(payload.rows || []).length} / 残差 ${(payload.residualFiles || []).length} 文件（可证覆盖来源：${payload.provableSource}）→ ${p}`)
+}
+
+/** 主入口：悬空 fail-fast（D-004@v1）→ 空残差直通（零行为漂移）→ 披露 → 保守差集 → 残差并入 */
+export function applyTraceResidual({ mainResult, action, cwd, specBase, changeName, depsAutoFiles, hits, knownFailures }) {
+  let tr
+  try { tr = resolveTraceResidual({ specBase, changeName, cwd }) } catch { return mainResult }
+  if (tr.dangling.length > 0) {
+    return {
+      status: 'failed', command: null, exitCode: 1, durationMs: 0, outputTail: null,
+      reason: `⛔ 测试绑定悬空：锚点集内 active 行引用的 ${tr.dangling.length} 个文件缺失（${tr.dangling.join('、')}）——悬空行让绑定表成谎言，比没表更糟（方案 §3.4 写时闸同款）。修复：sillyspec tests --unbind --anchor <锚> --row-id <行>，或 --bind 重绑到现存路径`,
+      resultPath: null, mode: 'trace-dangling', fallbackReason: null,
+    }
+  }
+  if (tr.files.length === 0) return mainResult
+  const provable = action === 'deps-auto-subset'
+    ? new Set((depsAutoFiles || []).map(f => String(f).replace(/\\/g, '/'))) : new Set()
+  const residualFiles = tr.files.filter(f => !provable.has(f))
+  try {
+    writeTraceDisclosure({
+      specBase, changeName,
+      payload: {
+        anchors: tr.anchors,
+        rows: tr.rows.map(r => ({ anchor: r.anchor, row_id: r.row_id, tests: r.tests })),
+        traceFiles: tr.files,
+        provableSource: action === 'deps-auto-subset' ? 'deps-auto-subset' : 'none(command-shaped)',
+        residualFiles,
+        action,
+        ranAt: new Date().toISOString(),
+      },
+    })
+  } catch { /* 披露失败不拦门（sidecar 可复跑重写） */ }
+  if (residualFiles.length === 0) return mainResult
+  let segs
+  try {
+    segs = runTraceResidual({ cwd, files: residualFiles, hits, knownFailures })
+  } catch (e) {
+    return { ...mainResult, status: 'failed', reason: `trace 残差段执行异常（fail-closed）：${e && e.message ? e.message : e}` }
+  }
+  const failed = segs.filter(x => x.status === 'failed')
+  const mainSkipped = mainResult && mainResult.status === 'skipped'
+  const status = (mainResult && mainResult.status === 'failed') || failed.length > 0 ? 'failed' : 'passed'
+  const mode = mainSkipped ? 'trace-residual' : `${(mainResult && mainResult.mode) || action}+trace(${residualFiles.length})`
+  return {
+    ...mainResult,
+    status,
+    mode,
+    command: [mainResult && mainResult.command, ...segs.map(x => x.runnerKind + '(' + x.files.length + ')')].filter(Boolean).join(' + '),
+    exitCode: status === 'passed' ? 0 : 1,
+    durationMs: ((mainResult && mainResult.durationMs) || 0) + segs.reduce((n, x) => n + (x.durationMs || 0), 0),
+    outputTail: [mainResult && mainResult.outputTail, ...segs.map(x => `── trace-residual ${x.runnerKind} ${x.files.length} 文件 (${x.status}) ──\n${x.outputTail || ''}`)].filter(Boolean).join('\n'),
+    reason: failed.length > 0
+      ? `trace 残差段失败（${failed.map(x => x.runnerKind).join(', ')}）${mainResult && mainResult.reason ? '；主跑：' + mainResult.reason : ''}`
+      : (mainResult && mainResult.reason) || null,
+  }
 }
 
 function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [] }) {

@@ -957,6 +957,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     //    不可得/键不等/无记录 → 真跑（走下方原路径，行为不变）。咨询异常整体按无账本（fail-open
     //    不影响门禁）。优先级：P2 账本（三键精确）> P0-1 质量扫描复用 > 真跑。──
     let ledgerReuse = null
+    // ── 账本停复用护栏（2026-09-24-fr-test-readside task-05，D-006@v1）：trace 含 active 行
+    //    的变更残差并入跑面，v2 键（config+整目录面）不再描述实际执行——fail-closed 跳过
+    //    consult/record（宁多跑一轮不误复用未含残差的旧绿；退役判据=账本键 v3 携 aggregate
+    //    run plan）。空 trace/缺失 → 照用 v2（行为不变）。──
+    let traceHasActiveRows = false
+    try {
+      const { readChangeTrace } = await import('../test-bindings.js')
+      traceHasActiveRows = readChangeTrace(join(specBase, 'changes', changeName)).some(r => r.state === 'active')
+      if (traceHasActiveRows) console.log('ℹ️ 本变更含 active 测试绑定行——账本停复用（残差跑面静态不可键化，fail-closed）')
+    } catch { /* 读失败按无 trace（照用账本） */ }
+    if (!traceHasActiveRows) {
     try {
       const { consultTestLedger } = await import('./test-ledger.js')
       const consult = consultTestLedger({
@@ -965,6 +976,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       })
       if (consult.reuse) ledgerReuse = consult
     } catch { /* 账本咨询异常 → 真跑 */ }
+    }
     if (ledgerReuse) {
       testCheck = {
         status: 'passed',
@@ -985,6 +997,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx })
       printVerifyTestCheck(testCheck)
       // P2 记账（fail-closed 层②：只有通过结果落账本——失败永不缓存，修复后重跑才能记）
+      if (!traceHasActiveRows) {
       try {
         const { recordTestLedger } = await import('./test-ledger.js')
         if (testCheck && testCheck.status === 'passed') {
@@ -995,6 +1008,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           })
         }
       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
+      }
     }
     // ── trace 晋升（2026-09-24-fr-test-bindings task-04，fr-test-binding §3.2/D-003@v1）：
     //    verify 门通过点按矩阵判定列晋升 candidate→active（covered/covered-service→active+
