@@ -82,9 +82,6 @@ test('T3 polyglot：Python 仓 deps 发现（service.py → from app.modules.x i
 
 test('T4 deps 分批：py/js 双批、变更测试优先、pytest 前缀推断（经导出函数直测）', async () => {
   const mod = await import('../src/verify-postcheck.js')
-  // buildDepsBatches 未导出——用最小 fixture 走 runModuleSubset 不现实（需模块命令执行环境），
-  // 改为对导出面 + 命令形态的行为断言：在含 py+js 依赖的仓跑 deps-auto-default，
-  // 断言 command 含 deps(auto-py)（pytest 推断兜底 python -m pytest）且 js 批在场。
   const fx = mk('deps-batch-')
   for (const d of ['backend/app/mod1/tests', 'test', 'src', '.sillyspec']) mkdirSync(join(fx, d), { recursive: true })
   const wf = (p2, c) => writeFileSync(join(fx, p2), c)

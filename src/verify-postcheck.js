@@ -285,6 +285,7 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
       timeout: LINT_TIMEOUT_MS,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
@@ -1286,6 +1287,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
       timeout: TEST_TIMEOUT_MS,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
@@ -2093,6 +2095,7 @@ function runCrossRepoFullTest(entry) {
       timeout: TEST_TIMEOUT_MS,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     })
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
@@ -2208,7 +2211,7 @@ function isPortOccupiedSync(port) {
   try {
     const r = spawnSync(process.execPath, ['-e',
       `const n=require('node:net');const s=n.connect(${port},'127.0.0.1',()=>{console.log('Y');s.end()});s.on('error',()=>console.log('N'));setTimeout(()=>{console.log('N');process.exit(0)},1500)`],
-      { encoding: 'utf8', timeout: 4000 })
+      { encoding: 'utf8', timeout: 4000, windowsHide: true })
     return (r.stdout || '').trim().endsWith('Y')
   } catch { return false }
 }
@@ -2262,6 +2265,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
       timeout: timeoutMs,
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
@@ -2352,17 +2356,25 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
   const jsCap = CAP - pyCap
   const pyRun = py.slice(0, pyCap)
   const jsRun = js.slice(0, jsCap)
-  // .py 运行器推断：命中模块命令串中找 pytest 前缀（形如 <...> pytest），否则 python -m pytest
+  // .py 运行器推断：命中模块命令串中找 pytest 段（含其 cd <dir> && 链前缀），否则 python -m pytest。
+  // cd 前缀保留（2026-09-25-deps-cwd-prefix，R15/R16 实证）：剥前缀后从 worktree 根跑 uv，根上无
+  // pyproject.toml → uv 解析到无 dev extras 的错环境 → aiobotocore 假红（两轮 known_failures 顶着）。
+  // 前缀在则批次文件路径按该 dir 重定基（模块命令的文件参即 dir 相对口径，如 app/modules/...）。
   let pyRunner = 'python -m pytest'
   for (const h of hits || []) {
-    const m = /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(String(h.test || ''))
+    const cmd = String(h.test || '')
+    const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
     if (m) { pyRunner = m[1].trim(); break }
   }
+  const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
+  const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
   const batches = []
-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
+  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
   if (jsRun.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsRun.join(' ')}`, count: jsRun.length, dropped: js.length - jsRun.length })
   return batches
 }
+
+export { buildDepsBatches }
 
 // ── trace residual adapter（2026-09-24-fr-test-readside，fr-test-binding §3.3/§3.6 读侧）──
 // 锚点集=本变更 task 卡 requirement_ids 并集；残差=trace active 行 tests 并集按保守差集
