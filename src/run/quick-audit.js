@@ -537,7 +537,15 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     } else {
     try {
       const { createGateSnapshot } = await import('./gate-snapshot.js')
-      snapshot = createGateSnapshot({ cwd, files })
+      // 账本 runtimeRoot（2026-09-24-gate-snapshot-lifecycle task-03）：同本文件 P2 三键
+      // 账本咨询口径（下方 ~570 行 resolveRuntimeRoot(null, specBase)）单源；解析失败传 null
+      // （账本链路 no-op，禁从 cwd 猜）
+      let runtimeRoot = null
+      try {
+        const { resolveRuntimeRoot } = await import('./shared.js')
+        runtimeRoot = resolveRuntimeRoot(null, specBase)
+      } catch { runtimeRoot = null }
+      snapshot = createGateSnapshot({ cwd, files, runtimeRoot })
       if (snapshot) {
         gateCwd = snapshot.snapshotRoot
         gateSpecBase = join(snapshot.snapshotRoot, '.sillyspec')
