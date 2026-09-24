@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-24-fr-test-bindings",
+  "generatedAt": "2026-09-24T05:00:30.392Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "matches": 37,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "tasks": 7,
+        "hasTest": 7
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-bindings",
+      "metrics": {
+        "checkedFiles": 8,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "handover": {
+    "count": 0,
+    "items": []
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/test-bindings.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "tests": {
+    "command": "cd backend && uv run pytest app/modules/platform_sync -q (ledger-reuse)",
+    "exitCode": 0,
+    "strategy": null,
+    "failedRemaining": [],
+    "passedAt": "2026-09-24T05:05:00.521Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

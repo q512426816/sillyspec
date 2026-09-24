@@ -1,0 +1,100 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "6ac260bd849d493b723647c7ce34d239a57ebf0c",
+  "totals": {
+    "files": 10,
+    "additions": 816,
+    "deletions": 4
+  },
+  "rows": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "meta.json",
+      "additions": 28,
+      "deletions": 2,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "package.json",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "src/fr-index.js",
+      "additions": 30,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/index.js",
+      "additions": 72,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "additions": 21,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/gates.js",
+      "additions": 19,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "additions": 31,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "src/test-bindings.js",
+      "additions": 392,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    },
+    {
+      "path": "test/test-bindings.test.mjs",
+      "additions": 221,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "b783d51abe23706f49da65aeb04b8397dc3cd4858df067644cfefd1c2c45f386",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-24T04:58:07.697Z"
+}

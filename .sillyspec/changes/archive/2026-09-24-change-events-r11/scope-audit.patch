@@ -1,0 +1,6 @@
+diff --git a/backend/r11_e2e_creds.json b/backend/r11_e2e_creds.json
+new file mode 100644
+--- /dev/null
++++ b/backend/r11_e2e_creds.json
+@@ -0,0 +1,1 @@
++{"workspace_id": "e8d4c37a-a5cf-4960-a68e-32464645f79a", "user_email": "r11-e2e@example.com", "shpsync_token": "shpsync_Cq28LD3D6vMxd-_CuzQUitlkGUpTmWK67rMNzXECxSY"}

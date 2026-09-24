@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-24-fr-test-bindings",
+  "appliedAt": "2026-09-24T05:06:35.573Z",
+  "baseHash": "6ac260bd849d493b723647c7ce34d239a57ebf0c",
+  "files": [
+    {
+      "path": ".sillyspec/docs/sillyspec/modules/_module-map.yaml",
+      "sha256": "6faed5508794ecedb0c27060ca6db3b16fabaf480d9e444f03a8dfd1cd42243a"
+    },
+    {
+      "path": "package.json",
+      "sha256": "6e4ef038e3309d761ad38252e136082697c856ca3067885cea0d5841f5c9246b"
+    },
+    {
+      "path": "src/fr-index.js",
+      "sha256": "8835c6124d274d85e3a051596477253cfbe41bd3a9c74ef8a85adcd861cb0188"
+    },
+    {
+      "path": "src/index.js",
+      "sha256": "66597baebce218e985aeffaa24a9352985502093f5c66eb28737ade01aafb46a"
+    },
+    {
+      "path": "src/run/complete-handlers.js",
+      "sha256": "cc6ae818ef9a92ede21cf8f4fa7dd66ff7e69d26fc764fdbab04e85fc1ec583d"
+    },
+    {
+      "path": "src/run/gates.js",
+      "sha256": "000edf42e32035f3b1599d972a3b6aa570bdba09dce147f7eac642631a958496"
+    },
+    {
+      "path": "src/verify-probes.js",
+      "sha256": "1ca861892109d646e1df4300af682d92f990bbd5b94939995164a948ead3bed2"
+    },
+    {
+      "path": "src/test-bindings.js",
+      "sha256": "1b0c8991a5dd713ad9c4f2a2123f3e24b13e84985713e7aee9f4fe91f90bdb45"
+    },
+    {
+      "path": "test/test-bindings.test.mjs",
+      "sha256": "bac70bd679ebc85bb5f84b44d29b76f1f3f5c19adc3de023d829bdcb48a8fec8"
+    }
+  ]
+}

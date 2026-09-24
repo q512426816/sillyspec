@@ -1,0 +1,946 @@
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 536ed050..7b9e0ada 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -97,6 +97,7 @@ modules:
+       - src/contract-matrix.js
+       - src/endpoint-extractor.js
+       - src/verify-probes.js
++      - src/test-bindings.js
+       - src/verify-facts-schema.js
+       - src/foreign-declared.js
+       - src/cross-repo-reconcile.js
+diff --git a/meta.json b/meta.json
+index 913a35ef..773d9714 100644
+--- a/meta.json
++++ b/meta.json
+@@ -4,8 +4,34 @@
+   "branch": "sillyspec/2026-09-24-fr-test-bindings",
+   "baseBranch": "main",
+   "baseHash": "5d102aee5cd25085231648fe9fb091a325cb31d5",
++  "actualBaseHash": "6ac260bd849d493b723647c7ce34d239a57ebf0c",
++  "createdAt": "2026-09-24T04:42:16.248Z",
+   "worktreePath": "C:\\Users\\qinyi\\IdeaProjects\\sillyspec\\.sillyspec\\.runtime\\worktrees\\2026-09-24-fr-test-bindings",
+   "mode": "worktree",
+-  "createdAt": "2026-09-24T04:42:13.461Z",
+-  "provisioning": true
++  "baselineFiles": [
++    ".idea/vcs.xml",
++    "docs/sillyspec/fr-test-binding-proposal-2026-09-24.md",
++    "round5/export-r9sf-html.mjs",
++    "round5/export-r9sf-session.mjs",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/README.md",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/analysis.html",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/full.json",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/messages.jsonl",
++    "round5/exports/R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570/transcript.md",
++    "round5/fork-verify-window.mjs",
++    "test/cross-repo-tap-summary.test.mjs"
++  ],
++  "baselineCommit": "6ac260bd849d493b723647c7ce34d239a57ebf0c",
++  "baselineHash": "8b531dff044060e5",
++  "syncDiagnostic": {
++    "status": "ahead",
++    "defaultBranch": "main",
++    "behind": 0,
++    "ahead": 40
++  },
++  "depsStatus": "linked",
++  "depsMethod": "junction",
++  "depsSource": "main-checkout",
++  "depsLockHash": "337f491dae3b3308",
++  "depsCheckedAt": "2026-09-24T04:42:16.206Z"
+ }
+diff --git a/package.json b/package.json
+index 4078afae..583f17ac 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/fr-index.js b/src/fr-index.js
+index b3fc127f..9e86f840 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -17,6 +17,7 @@
+  *     syncIndexRoutingLines/discoverModuleIndex），不复制实现。
+  */
+ 
++import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines } from './test-bindings.js'
+ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+ import { join } from 'path';
+ import {
+@@ -378,6 +379,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+           `superseded_by：${id}`,
+           `取代链：${refId} ← ${id}（${changeName} 承接）`,
+           ...(reason ? [`退役理由：${reason}`] : []));
++        // 绑定行同步退役（2026-09-24-fr-test-bindings task-06，fr-test-binding §3.2 四硬约束④）：
++        // 被承接条目的绑定行 status→superseded（内存态翻转——文件稍后统一落盘，禁死锚）
++        try {
++          target.lines = applySupersededToEntryLines(target.lines);
++        } catch { /* 绑定翻转 fail-open：翻链语义不受影响 */ }
+         // scenario-loss 检测（对标 OpenSpec 同名检查）：被取代条目的场景名在新 FR 场景集
+         //（scenarios 名字数组 ∪ scenarioBodies 名）无对应 → warning 提示核对（advisory 不阻断
+         //——场景名合法漂移存在，人裁）。旧条目无场景信息（摘要「（无场景名）」/空）不比对。
+@@ -425,6 +431,30 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+     const stx = all.get(d);
+     writeFileSync(join(frDirPath(knowledgeRoot), `${d}.md`), joinKnowledgeFile(stx.preamble, stx.sections));
+   }
++  // ── 归档提升（2026-09-24-fr-test-bindings task-06，fr-test-binding §3.2）：本变更 test-trace
++  //    的 FR 局部锚行随发号映射铸全局后 upsert 进活库条目机器子块（source_change+row_id 键、
++  //    内容全等 no-op、机器不删 agent 行）；orphan/ql 行不在此面（前者留档审计，后者在
++  //    quicklog 机器面）。fail-open：提升异常只告警不炸归档（幂等可重跑）。──
++  const promotedBindings = [];
++  try {
++    const traceRows = readChangeTrace(changeDir);
++    if (traceRows.length > 0) {
++      // 局部→全局映射：本函数发号段 written[{id}] 与 parsed.frs 逐条对应（同循环序）
++      const localToGlobal = new Map();
++      parsed.frs.forEach((fr, i) => { if (written[i] && written[i].id) localToGlobal.set(fr.local, written[i].id); });
++      for (const [local, globalId] of localToGlobal) {
++        const rows = traceRows.filter((r) => r.anchor === local);
++        if (rows.length === 0) continue;
++        const res = upsertFrBindings({ knowledgeRoot, frId: globalId, rows });
++        if (res.ok) promotedBindings.push({ fr: globalId, rows: rows.length, changed: res.changed });
++      }
++      if (promotedBindings.length > 0) {
++        console.log(`🔗 测试绑定归档提升：${promotedBindings.map((p) => `${p.fr}(${p.rows}行)`).join('、')} → knowledge/fr/ 机器子块`);
++      }
++    }
++  } catch (e) {
++    console.warn(`⚠️ 测试绑定归档提升失败（fail-open，可重跑归档幂等重试）：${e && e.message ? e.message : e}`);
++  }
+   if (written.length > 0 || superseded.length > 0) {
+     syncIndexRoutingLines(knowledgeRoot, {
+       section: 'FR 需求索引',
+diff --git a/src/index.js b/src/index.js
+index b471aaf1..a18fa3e5 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -9,7 +9,7 @@
+ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from 'fs';
+ import { writeAtomicSync } from './fs-atomic.js';
+ import { basename, dirname, extname, join, resolve, isAbsolute, sep, relative } from 'path';
+-import { safeGit, git } from './git-helper.js';
++import { safeGit, git, gitQuiet } from './git-helper.js';
+ import { getVersion } from './version.js';
+ 
+ // E22（性能#2）：progress.js（拖 db.js→node:sqlite 链 ~48ms）与 run/shared.js（拖 stages 全家
+@@ -2980,6 +2980,77 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+       await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir })
+       break
+     }
++    // ── sillyspec tests（2026-09-24-fr-test-bindings task-02，fr-test-binding §3.2/§5）：
++    //    绑定面视图 + 唯一合法修理工。锚可解析+路径存在硬校验——修理工不得制造悬空。──
++    case 'tests': {
++      const {
++        queryByAnchor, queryByChange, upsertFrBindings, upsertQlBindings,
++        unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow,
++      } = await import('./test-bindings.js')
++      const effDir = specDir ? dir : resolveEffectiveDir(dir)
++      const specBase = specDir || join(effDir, '.sillyspec')
++      const knowledgeRoot = join(specBase, 'knowledge')
++      const flag = (name) => { const i = filteredArgs.indexOf(name); return i !== -1 && i + 1 < filteredArgs.length ? filteredArgs[i + 1] : null }
++      const has = (name) => filteredArgs.includes(name)
++      const anchor = flag('--anchor')
++      const change = flag('--change')
++      const rowId = flag('--row-id')
++      const testsArg = flag('--tests')
++      const reason = flag('--reason') || 'spec'
++      const fail = (msg) => { console.error(`❌ ${msg}`); process.exitCode = 1 }
++      if (!anchor && !change) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression]'); break }
++      // 变更期局部锚（FR-NN 未铸全局）只读拒绝修改——修理工仅面向提升后行
++      const isLocalAnchor = anchor && /^FR-\d+$/.test(anchor)
++      if ((has('--bind') || has('--unbind')) && isLocalAnchor) { fail(`变更期局部锚「${anchor}」只读——修理工仅面向提升后的全局锚（FR-<域>-NNN / ql-…）`); break }
++      if (has('--bind') || has('--unbind')) {
++        if (!anchor) { fail('--bind/--unbind 须配 --anchor'); break }
++        if (!anchorResolvable({ specBase, knowledgeRoot, anchor })) { fail(`锚不可解析「${anchor}」（FR=活库条目 / ql=QUICKLOG 在册）——修理工不得制造悬空锚`); break }
++      }
++      if (has('--bind')) {
++        const tests = (testsArg || '').split(',').map(s => s.trim()).filter(Boolean)
++        if (tests.length === 0) { fail('--bind 须配 --tests <p1,p2>（仓根相对路径）'); break }
++        const missing = tests.filter(p => !existsSync(resolve(effDir, p)))
++        if (missing.length > 0) { fail(`tests 路径不存在：${missing.join('、')}（相对 ${effDir}）——修理工不得制造悬空路径`); break }
++        const head = (() => { try { return gitQuiet(effDir, ['rev-parse', 'HEAD']) || null } catch { return null } })()
++        const row = { anchor, row_id: rowId || `manual:${Date.now().toString(36)}:${tests[0]}`, tests, reason, state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: head, source_change: change || 'manual' }
++        try {
++          normalizeRow(row)
++          if (/^FR-/.test(anchor)) upsertFrBindings({ knowledgeRoot, frId: anchor, rows: [row] })
++          else upsertQlBindings({ specBase, qlId: anchor, rows: [row] })
++          console.log(`✅ 绑定写入：${anchor} ← ${tests.join(', ')}（confirmed_by=agent${head ? ` @${head.slice(0, 8)}` : ''}）`)
++        } catch (e) { fail(`绑定写入被拒：${e && e.message ? e.message : e}`) }
++        break
++      }
++      if (has('--unbind')) {
++        const ids = rowId ? [rowId] : (testsArg || '').split(',').map(s => s.trim()).filter(Boolean)
++        if (ids.length === 0) { fail('--unbind 须配 --row-id <id> 或 --tests <p1,…>'); break }
++        if (/^FR-/.test(anchor)) {
++          const cur = queryByAnchor({ specBase, knowledgeRoot, anchor })
++          const del = cur.filter(r => ids.includes(r.row_id) || (testsArg && ids.length === 1 && r.tests.some(t => ids.includes(t)))).map(r => r.row_id)
++          if (del.length === 0) { fail(`未命中可解绑行（anchor=${anchor}，给=${ids.join(',')}）`); break }
++          unbindFrRows({ knowledgeRoot, frId: anchor, rowIds: del })
++          console.log(`✅ 解绑 ${del.length} 行（${anchor}）`)
++        } else {
++          const cur = queryByAnchor({ specBase, knowledgeRoot, anchor })
++          const del = cur.filter(r => ids.includes(r.row_id)).map(r => r.row_id)
++          if (del.length === 0) { fail(`未命中可解绑行（anchor=${anchor}）`); break }
++          unbindQlRows({ specBase, qlId: anchor, rowIds: del })
++          console.log(`✅ 解绑 ${del.length} 行（${anchor}）`)
++        }
++        break
++      }
++      // 视图
++      const rows = anchor
++        ? queryByAnchor({ specBase, knowledgeRoot, anchor })
++        : queryByChange({ specBase, knowledgeRoot, sourceChange: change })
++      if (rows.length === 0) { console.log(`（无绑定行：${anchor || change}）`); break }
++      console.log(`${anchor || change} — ${rows.length} 行`)
++      for (const r of rows) {
++        console.log(`  ${r.state === 'active' ? '🟢' : '⚪'} ${r.tests.join(', ')}｜reason=${r.reason}｜discovery=${r.discovery}｜confirmed_by=${r.confirmed_by || '-'}${r.confirmed_at ? '@' + String(r.confirmed_at).slice(0, 8) : ''}｜status=${r.status}`)
++        console.log(`     row=${r.row_id}｜source=${r.source_change || '-'}`)
++      }
++      break
++    }
+     case 'dashboard': {
+       // Parse dashboard options
+       let port = 3456;
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index cf1e2296..59051e2c 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -1898,6 +1898,27 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
+         softFiles,
+       })
+       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
++      // ── ql 绑定行落盘（2026-09-24-fr-test-bindings task-05，fr-test-binding §3.2/D-004@v1）：
++      //    窗口测试文件（命名三信号）机械落 candidate（discovery=machine/confirmed_by=null——
++      //    gate 实测证明「跑过且过」，不证明绑定关系正确，诚实恒 candidate；确认走 tests --bind）。
++      //    fail-open：落行异常不拦收尾。──
++      try {
++        const stripAnno = (f) => String(f).replace(/（[^）]*）$/,'').trim()
++        const isTestFile = (p) => /(^|\/)(test|tests|__tests__)(\/|$)/i.test(p) || /^test_/i.test(p.slice(p.lastIndexOf('/')+1)) || /[._](test|spec)\.[^.]+$/i.test(p)
++        const testFiles = [...new Set((annotatedRealFiles || []).map(stripAnno).filter(isTestFile))]
++        if (testFiles.length > 0) {
++          const { upsertQlBindings } = await import('../test-bindings.js')
++          upsertQlBindings({
++            specBase, qlId,
++            rows: testFiles.map((f, i) => ({
++              anchor: qlId, row_id: `${changeName}:win-${i}:${f}`, tests: [f],
++              reason: 'regression', state: 'candidate', discovery: 'machine', confirmed_by: null,
++              source_change: changeName,
++            })),
++          })
++          console.log(`🔗 ql 绑定候选落盘：${testFiles.length} 行（${qlId}，candidate——确认走 sillyspec tests --bind）`)
++        }
++      } catch { /* ql 绑定落行 fail-open */ }
+       // 范围快照/patch 审计级落盘（quick-359a48f1）：quicklog/patches/<qlId>.json+.patch——按
+       // ql-ID 对齐 QUICKLOG 条目（平台按条目抓取），json 冗余 sessionId 供 guard 清理后记录态
+       // 反查（computeQuickAudit → findQuickPatchRecord 同链）。patch 为 --done 时点全量冻结
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 46c81fca..9daef5d5 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -996,6 +996,25 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         }
+       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
+     }
++    // ── trace 晋升（2026-09-24-fr-test-bindings task-04，fr-test-binding §3.2/D-003@v1）：
++    //    verify 门通过点按矩阵判定列晋升 candidate→active（covered/covered-service→active+
++    //    confirmed_by=agent；partial 留；uncovered/non-testable 删行）。fail-open：晋升异常不拦门。──
++    try {
++      const verifyMdForPromo = join(specBase, 'changes', changeName, 'verify-result.md')
++      if (existsSync(verifyMdForPromo)) {
++        const { extractAcceptanceMatrixSlots } = await import('../stage-contract.js')
++        const { promoteTraceFromMatrix } = await import('../test-bindings.js')
++        const slots = extractAcceptanceMatrixSlots(readFileSync(verifyMdForPromo, 'utf8'))
++        if (slots.present && Array.isArray(slots.rows) && slots.rows.length > 0) {
++          const promo = promoteTraceFromMatrix({
++            changeDir: join(specBase, 'changes', changeName), changeName, matrixRows: slots.rows,
++          })
++          if (promo.promoted > 0 || promo.dropped > 0) {
++            console.log(`🔗 绑定晋升：${promo.promoted} 行→active（confirmed_by=agent），${promo.dropped} 行删（uncovered/non-testable），${promo.kept} 行保持`)
++          }
++        }
++      }
++    } catch { /* 晋升 fail-open（不拦 verify 门，归档以 trace 现态为准） */ }
+     // tests 段二次回填（2026-09-08-ir-verify-facts FR-03 次序：实测在 runValidators 之后，
+     // tests 快照此刻才可得；不参与门禁——供 P3d 追溯）
+     try {
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index f404fcde..c6fc0ded 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -33,6 +33,7 @@ import {
+ } from './verify-facts-schema.js'
+ import { parseFileChangeListDetailed } from './change-list.js'
+ import { parseDecisions } from './decision-distill.js'
++import { writeChangeTrace, orphanAccRef } from './test-bindings.js'
+ import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+ import { parseTaskFrontmatter } from './taskcard-frontmatter.js'
+@@ -2222,6 +2223,36 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+           hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
+         })
+       }
++      // ── trace 落盘（2026-09-24-fr-test-bindings task-03，fr-test-binding 写侧）：矩阵归属
++      //    行→candidate（requirement_ids join→局部 FR 锚；无锚→orphan 指纹 row_id，D-005）。
++      //    预填≠确认（discovery=machine/confirmed_by=null）；fail-open：落盘异常不炸探针。──
++      try {
++        if (probe7.applicable && changeName) {
++          const traceRows = []
++          for (const t of probe7.tasks) {
++            if (!Array.isArray(t.testFiles) || t.testFiles.length === 0) continue
++            const card = cards.find(c => c.task === t.task)
++            const reqIds = ((String(card && card.raw || '').match(/^requirement_ids:\s*\[([^\]]*)\]/m) || [])[1] || '')
++              .split(',').map(x => x.trim().replace(/['"]/g, '')).filter(Boolean)
++            ;(t.acceptance || []).forEach((item, i) => {
++              traceRows.push({
++                anchor: reqIds[0] || null,
++                row_id: changeName + ':' + t.task + ':' + orphanAccRef(i, String(item)),
++                tests: t.testFiles,
++                reason: 'spec',
++                state: 'candidate',
++                discovery: 'machine',
++                confirmed_by: null,
++                source_change: changeName,
++              })
++            })
++          }
++          if (traceRows.length > 0) {
++            const w = writeChangeTrace(join(specBase, 'changes', changeName), changeName, traceRows)
++            if (w.changed) console.log('🔗 探针 7 绑定候选落盘：' + traceRows.length + ' 行 → ' + w.path)
++          }
++        }
++      } catch { /* trace 落盘 fail-open（探针行为不变，下次构建重试） */ }
+     }
+   }
+diff --git a/src/test-bindings.js b/src/test-bindings.js
+new file mode 100644
+--- /dev/null
++++ b/src/test-bindings.js
+@@ -0,0 +1,392 @@
++/**
++ * test-bindings.js — 验收×测试绑定 写侧基座（2026-09-24-fr-test-bindings，fr-test-binding 方案 §3.1/§3.2）
++ *
++ * 单点解析纪律（D-002@v1）：两处真源仅本模块解析读写——
++ *   真源① FR：knowledge/fr/<域>.md 条目内「测试绑定：」机器子块；
++ *   真源② ql：.sillyspec/quicklog/test-bindings.json（quicklog 侧机器面）。
++ * 变更期载体（D-001@v1）：changes/<名>/test-trace.json（局部锚 FR-NN；归档提升铸全局）。
++ *
++ * 行模型（方案 §3.1）：anchor∈{FR-<域>-NNN | ql-<id> | null}（禁 CAP 第四空间）；
++ * reason∈{spec|capability|regression}；state∈{candidate|active}；discovery∈{machine|agent}；
++ * confirmed_by∈{agent|null}——预填/机械产物≠确认（未确认行恒 candidate+confirmed_by:null）。
++ * row_id 锚无关恒填：<change>:<task-id>:<accRef>；orphan accRef=acc-<index>-<sha256(原文)前8>
++ * （D-005@v1：禁易漂移纯序号作长期主键，插行后按指纹对齐）。
++ *
++ * 字段级所有权四硬约束（方案 §3.2）：机器晋升按 (source_change, row_id) upsert、内容全等
++ * no-op、不删 agent 行；--bind/--unbind 原子写（writeAtomicSync）；FR supersede 同步置
++ * status=superseded（markFrBindingsSuperseded，fr-index 承接翻链调用）。
++ */
++import { createHash } from 'crypto'
++import { existsSync, readFileSync, readdirSync } from 'fs'
++import { join } from 'path'
++import { writeAtomicSync } from './fs-atomic.js'
++import { gitQuiet } from './git-helper.js'
++import { quicklogSidecarPath } from './quicklog.js'
++
++const sha256 = (s) => createHash('sha256').update(String(s || '')).digest('hex')
++export const ANCHOR_RE = /^(FR-[A-Za-z0-9-]+-\d+|FR-\d+|ql-[0-9]{8}-\d{3}-[0-9a-f]{4}|null)$/
++const REASONS = ['spec', 'capability', 'regression']
++const STATES = ['candidate', 'active']
++const BINDING_BLOCK_HEAD = '测试绑定：'
++const BINDING_BLOCK_NOTE = '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->'
++
++/** 行校验/归一（违例抛错拒绝写入——枚举红线在入口收口）。entryMode：条目内行不带 anchor（锚=条目 id），跳过锚枚举 */
++export function normalizeRow(row, opts = {}) {
++  const entryMode = !!opts.entryMode
++  const anchor = row.anchor === null || row.anchor === undefined ? null : String(row.anchor)
++  if (!entryMode) {
++    if (!(anchor === null || ANCHOR_RE.test(anchor))) {
++      throw new Error(`绑定行 anchor 非法「${row.anchor}」——合法枚举 {FR-<域>-NNN | ql-<id> | null}（禁 CAP 第四空间）`)
++    }
++    if (anchor === null && !String(row.row_id || '').includes(':')) {
++      throw new Error('orphan 行（anchor:null）row_id 必填且含任务段（<change>:<task-id>:<accRef>）')
++    }
++  }
++  if (!REASONS.includes(row.reason)) throw new Error(`绑定行 reason 非法「${row.reason}」（${REASONS.join('|')}）`)
++  if (!STATES.includes(row.state)) throw new Error(`绑定行 state 非法「${row.state}」（${STATES.join('|')}）`)
++  if (!row.row_id) throw new Error('绑定行 row_id 必填（<change>:<task-id>:<accRef>）')
++  if (row.state === 'active' && row.confirmed_by !== 'agent') {
++    throw new Error('active 行必须 confirmed_by=agent（预填/机械产物≠确认）')
++  }
++  const tests = [...new Set((row.tests || []).map(t => String(t).replace(/\\/g, '/')))].filter(Boolean).sort()
++  if (tests.length === 0) throw new Error('绑定行 tests 非空（空绑定=伪行）')
++  return {
++    anchor: anchor || null,
++    row_id: String(row.row_id),
++    tests,
++    reason: row.reason,
++    state: row.state,
++    discovery: row.discovery === 'agent' ? 'agent' : 'machine',
++    confirmed_by: row.confirmed_by === 'agent' ? 'agent' : null,
++    confirmed_at: row.confirmed_at && row.confirmed_at !== 'null' ? row.confirmed_at : null,
++    reconfirm: ['unchanged', 'rebound'].includes(row.reconfirm) ? row.reconfirm : null,
++    status: row.status === 'superseded' ? 'superseded' : 'active',
++    source_change: row.source_change && row.source_change !== 'null' ? row.source_change : null,
++  }
++}
++
++/** orphan accRef（D-005@v1）：index 只作快照，身份=原文指纹 */
++export function orphanAccRef(index, acceptanceText) {
++  return `acc-${index}-${sha256(acceptanceText).slice(0, 8)}`
++}
++
++// ── 变更期载体（D-001@v1）：changes/<名>/test-trace.json ──
++
++export function changeTracePath(changeDir) { return join(changeDir, 'test-trace.json') }
++
++export function readChangeTrace(changeDir) {
++  try {
++    const p = changeTracePath(changeDir)
++    if (!existsSync(p)) return []
++    const j = JSON.parse(readFileSync(p, 'utf8'))
++    return Array.isArray(j.rows) ? j.rows : []
++  } catch { return [] }
++}
++
++/** 写 trace（幂等：序列化字节不变跳写；原子：writeAtomicSync） */
++export function writeChangeTrace(changeDir, changeName, rows) {
++  const normalized = rows.map(normalizeRow)
++  const payload = JSON.stringify({
++    schemaVersion: 1, change: changeName, rows: normalized,
++  }, null, 2) + '\n'
++  const p = changeTracePath(changeDir)
++  try { if (existsSync(p) && readFileSync(p, 'utf8') === payload) return { changed: false, path: p } } catch { /* 读失败照写 */ }
++  writeAtomicSync(p, payload)
++  return { changed: true, path: p }
++}
++
++/** verify --done 晋升（D-003@v1）：判定列驱动 candidate→active；uncovered/non-testable 删行。
++ *  matrixRows = extractAcceptanceMatrixSlots().rows（{task, verdict} 按文档序）——与 trace 行
++ *  按 task 分组后顺序 zip（矩阵行由 acceptance 列表渲染，1:1 同源；计数不齐的 task 跳过不晋升）。 */
++export function promoteTraceFromMatrix({ changeDir, changeName, matrixRows }) {
++  const head = (() => { try { return gitQuiet(process.cwd(), ['rev-parse', 'HEAD'])?.trim() || null } catch { return null } })()
++  const byTask = new Map()
++  for (const m of (matrixRows || [])) {
++    if (!m || !m.task) continue
++    if (!byTask.has(m.task)) byTask.set(m.task, [])
++    byTask.get(m.task).push(m.verdict)
++  }
++  const rows = readChangeTrace(changeDir)
++  const traceByTask = new Map()
++  for (const r of rows) {
++    const t = String(r.row_id).split(':')[1] || ''
++    if (!traceByTask.has(t)) traceByTask.set(t, [])
++    traceByTask.get(t).push(r)
++  }
++  const out = []
++  let promoted = 0, kept = 0, dropped = 0
++  for (const r of rows) {
++    const t = String(r.row_id).split(':')[1] || ''
++    const verdicts = byTask.get(t) || []
++    const idx = traceByTask.get(t).indexOf(r)
++    const verdict = verdicts.length === traceByTask.get(t).length ? verdicts[idx] : undefined
++    if (verdict === 'uncovered' || verdict === 'non-testable') { dropped++; continue }
++    if ((verdict === 'covered' || verdict === 'covered-service') && r.state !== 'active') {
++      out.push(normalizeRow({ ...r, state: 'active', confirmed_by: 'agent', confirmed_at: head || r.confirmed_at })); promoted++
++    } else { out.push(normalizeRow(r)); kept++ }
++  }
++  const res = writeChangeTrace(changeDir, changeName, out)
++  return { promoted, kept, dropped, ...res }
++}
++
++// ── 真源① FR：knowledge/fr/<域>.md 条目「测试绑定：」子块 ──
++
++/** 解析条目文本内的绑定子块 → rows（条目内行不带 anchor——锚=条目 id 本身） */
++export function parseEntryBindings(entryText) {
++  const lines = String(entryText || '').replace(/\r\n/g, '\n').split('\n')
++  const rows = []
++  let inBlock = false
++  let cur = null
++  for (const line of lines) {
++    if (line.trim() === BINDING_BLOCK_HEAD) { inBlock = true; continue }
++    if (inBlock && /^##\s/.test(line)) break
++    if (!inBlock) continue
++    const rowMatch = line.match(/^-\s+row:\s*(.+)$/)
++    if (rowMatch) {
++      if (cur) rows.push(cur)
++      cur = { row_id: rowMatch[1].trim(), anchor: 'ENTRY' }
++      continue
++    }
++    if (!cur) continue
++    const kv = line.match(/^\s{2}(\w+):\s*(.*)$/)
++    if (!kv) continue
++    const [, k, v] = kv
++    if (k === 'tests') cur.tests = v.split('|').map(s => s.trim()).filter(Boolean)
++    else cur[k] = v.trim() || null
++  }
++  if (cur) rows.push(cur)
++  return rows.map(r => normalizeRow(r, { entryMode: true }))
++}
++
++function renderBindingBlock(rows) {
++  if (!rows || rows.length === 0) return []
++  const L = [BINDING_BLOCK_HEAD, BINDING_BLOCK_NOTE]
++  for (const r of rows) {
++    L.push(`- row: ${r.row_id}`)
++    L.push(`  tests: ${r.tests.join(' | ')}`)
++    L.push(`  reason: ${r.reason}`)
++    L.push(`  state: ${r.state}`)
++    L.push(`  discovery: ${r.discovery}`)
++    L.push(`  confirmed_by: ${r.confirmed_by || 'null'}`)
++    L.push(`  confirmed_at: ${r.confirmed_at || 'null'}`)
++    L.push(`  source_change: ${r.source_change || 'null'}`)
++    L.push(`  status: ${r.status}`)
++  }
++  return L
++}
++
++/** 在域文件内定位条目并 upsert 绑定行（surgical：只动条目段内的绑定子块） */
++export function upsertFrBindings({ knowledgeRoot, frId, rows }) {
++  const normalized = rows.map(r => normalizeRow({ ...r, anchor: frId }))
++  const dir = join(knowledgeRoot, 'fr')
++  if (!existsSync(dir)) return { ok: false, error: `knowledge/fr 不存在（${dir}）` }
++  for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
++    const p = join(dir, f)
++    const text = readFileSync(p, 'utf8')
++    const lines = text.split(/\r?\n/)
++    const start = lines.findIndex(l => l.startsWith(`## ${frId} `) || l === `## ${frId}`)
++    if (start === -1) continue
++    let end = lines.length
++    for (let i = start + 1; i < lines.length; i++) { if (/^##\s/.test(lines[i])) { end = i; break } }
++    const entryLines = lines.slice(start, end)
++    // 剥旧绑定子块（含头注行），保留其余行原样——蒸馏字段与绑定字段互不越权
++    const kept = []
++    let skipping = false
++    for (const l of entryLines) {
++      if (l.trim() === BINDING_BLOCK_HEAD) { skipping = true; continue }
++      if (skipping && (/^-\s+row:/.test(l) || /^\s{2}\w+:/.test(l) || l.trim() === BINDING_BLOCK_NOTE)) continue
++      skipping = false
++      kept.push(l)
++    }
++    while (kept.length && kept[kept.length - 1].trim() === '') kept.pop()
++    // 合并：既有行（含 agent 修复行）按 (source_change,row_id) 与新行合并——机器不删 agent 行
++    const existing = parseEntryBindings(entryLines.join('\n'))
++    const merged = new Map()
++    for (const e of existing) merged.set(`${e.source_change}::${e.row_id}`, e)
++    for (const n of normalized) {
++      const key = `${n.source_change}::${n.row_id}`
++      const cur = merged.get(key)
++      // agent 行优先保留（confirmed_by=agent 且新行是 machine 来源的，不覆盖）
++      if (cur && cur.confirmed_by === 'agent' && n.discovery === 'machine') continue
++      merged.set(key, n)
++    }
++    const block = renderBindingBlock([...merged.values()].sort((a, b) => (a.source_change + a.row_id).localeCompare(b.source_change + b.row_id)))
++    const newEntry = [...kept, ...(block.length ? ['', ...block] : []), '']
++    const next = [...lines.slice(0, start), ...newEntry, ...lines.slice(end)]
++    const nextText = next.join('\n')
++    if (nextText === text) return { ok: true, changed: false, file: p }
++    writeAtomicSync(p, nextText)
++    return { ok: true, changed: true, file: p }
++  }
++  return { ok: false, error: `条目 ${frId} 未在 knowledge/fr/*.md 中找到` }
++}
++
++/** FR supersede 同步（四硬约束④）：条目全部绑定行 status→superseded（禁死锚） */
++export function markFrBindingsSuperseded({ knowledgeRoot, frId }) {
++  const rows = readFrBindings({ knowledgeRoot, frId })
++  if (rows.length === 0) return { ok: true, changed: false, rows: [] }
++  return upsertFrBindingsRaw({ knowledgeRoot, frId, rows: rows.map(r => ({ ...r, status: 'superseded' })) })
++}
++
++/** 条目行级 supersede 翻转（fr-index 承接翻链在内存态调用——文件尚未落盘，不能走文件级 API） */
++export function applySupersededToEntryLines(lines) {
++  const text = lines.join('\n')
++  const rows = parseEntryBindings(text)
++  if (rows.length === 0) return lines
++  const flipped = rows.map(r => ({ ...r, status: 'superseded' }))
++  const block = renderBindingBlock(flipped)
++  const out = []
++  let skipping = false
++  for (const l of lines) {
++    if (l.trim() === BINDING_BLOCK_HEAD) { skipping = true; continue }
++    if (skipping && (/^-\s+row:/.test(l) || /^\s{2}\w+:/.test(l) || l.trim() === BINDING_BLOCK_NOTE)) continue
++    skipping = false
++    out.push(l)
++  }
++  while (out.length && out[out.length - 1].trim() === '') out.pop()
++  return [...out, '', ...block, '']
++}
++
++/** 删 FR 条目绑定行（--unbind 通道；修理工专用） */
++export function unbindFrRows({ knowledgeRoot, frId, rowIds }) {
++  const rows = readFrBindings({ knowledgeRoot, frId }).filter(r => !rowIds.includes(r.row_id))
++  return upsertFrBindingsRaw({ knowledgeRoot, frId, rows })
++}
++
++function upsertFrBindingsRaw({ knowledgeRoot, frId, rows }) {
++  // 与 upsertFrBindings 同定位/重写逻辑，但行已是权威态（supersede 翻链用，不做 agent 保护）
++  const dir = join(knowledgeRoot, 'fr')
++  for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
++    const p = join(dir, f)
++    const text = readFileSync(p, 'utf8')
++    const lines = text.split(/\r?\n/)
++    const start = lines.findIndex(l => l.startsWith(`## ${frId} `) || l === `## ${frId}`)
++    if (start === -1) continue
++    let end = lines.length
++    for (let i = start + 1; i < lines.length; i++) { if (/^##\s/.test(lines[i])) { end = i; break } }
++    const entryLines = lines.slice(start, end)
++    const kept = []
++    let skipping = false
++    for (const l of entryLines) {
++      if (l.trim() === BINDING_BLOCK_HEAD) { skipping = true; continue }
++      if (skipping && (/^-\s+row:/.test(l) || /^\s{2}\w+:/.test(l) || l.trim() === BINDING_BLOCK_NOTE)) continue
++      skipping = false
++      kept.push(l)
++    }
++    while (kept.length && kept[kept.length - 1].trim() === '') kept.pop()
++    const block = renderBindingBlock(rows.map(r => normalizeRow({ ...r, anchor: frId })))
++    const next = [...lines.slice(0, start), ...kept, ...(block.length ? ['', ...block] : []), '', ...lines.slice(end)]
++    const nextText = next.join('\n')
++    if (nextText === text) return { ok: true, changed: false, file: p }
++    writeAtomicSync(p, nextText)
++    return { ok: true, changed: true, file: p }
++  }
++  return { ok: false, error: `条目 ${frId} 未找到` }
++}
++
++/** 读单条目绑定行（全局锚回填） */
++export function readFrBindings({ knowledgeRoot, frId }) {
++  const dir = join(knowledgeRoot, 'fr')
++  try {
++    for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
++      const text = readFileSync(join(dir, f), 'utf8')
++      const lines = text.split(/\r?\n/)
++      const start = lines.findIndex(l => l.startsWith(`## ${frId} `) || l === `## ${frId}`)
++      if (start === -1) continue
++      let end = lines.length
++      for (let i = start + 1; i < lines.length; i++) { if (/^##\s/.test(lines[i])) { end = i; break } }
++      return parseEntryBindings(lines.slice(start, end).join('\n')).map(r => ({ ...r, anchor: frId }))
++    }
++  } catch { /* 读失败 → 空 */ }
++  return []
++}
++
++// ── 真源② ql：.sillyspec/quicklog/test-bindings.json ──
++
++function qlBindingsPath(specBase) { return join(specBase, 'quicklog', 'test-bindings.json') }
++
++export function readQlBindings(specBase) {
++  try {
++    const p = qlBindingsPath(specBase)
++    if (!existsSync(p)) return {}
++    const j = JSON.parse(readFileSync(p, 'utf8'))
++    return j && j.rows && typeof j.rows === 'object' && !Array.isArray(j.rows) ? j.rows : {}
++  } catch { return {} }
++}
++
++/** ql 行 upsert（键=ql-id+row_id；原子+幂等） */
++export function upsertQlBindings({ specBase, qlId, rows }) {
++  const all = readQlBindings(specBase)
++  const cur = new Map((all[qlId] || []).map(r => [r.row_id, r]))
++  for (const r0 of rows) {
++    const r = normalizeRow({ ...r0, anchor: qlId })
++    if (cur.has(r.row_id) && cur.get(r.row_id).confirmed_by === 'agent' && r.discovery === 'machine') continue
++    cur.set(r.row_id, r)
++  }
++  all[qlId] = [...cur.values()].sort((a, b) => a.row_id.localeCompare(b.row_id))
++  const payload = JSON.stringify({ schemaVersion: 1, rows: all }, null, 2) + '\n'
++  const p = qlBindingsPath(specBase)
++  try { if (existsSync(p) && readFileSync(p, 'utf8') === payload) return { changed: false, path: p } } catch { /* 照写 */ }
++  writeAtomicSync(p, payload)
++  return { changed: true, path: p }
++}
++
++/** 删 ql 行（--unbind 通道；修理工专用） */
++export function unbindQlRows({ specBase, qlId, rowIds }) {
++  const all = readQlBindings(specBase)
++  const cur = (all[qlId] || []).filter(r => !rowIds.includes(r.row_id))
++  const removed = (all[qlId] || []).length - cur.length
++  all[qlId] = cur
++  writeAtomicSync(qlBindingsPath(specBase), JSON.stringify({ schemaVersion: 1, rows: all }, null, 2) + '\n')
++  return { removed }
++}
++
++// ── 视图查询（两真源合并）──
++
++export function queryByAnchor({ specBase, knowledgeRoot, anchor }) {
++  const out = []
++  if (/^FR-/.test(anchor)) {
++    for (const r of readFrBindings({ knowledgeRoot, anchor })) out.push(r)
++  } else if (/^ql-/.test(anchor)) {
++    for (const r of readQlBindings(specBase)[anchor] || []) out.push(r)
++  }
++  return out
++}
++
++export function queryByChange({ specBase, knowledgeRoot, sourceChange }) {
++  const out = []
++  try {
++    const dir = join(knowledgeRoot, 'fr')
++    for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
++      const text = readFileSync(join(dir, f), 'utf8')
++      for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
++        for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
++          if (r.source_change === sourceChange) out.push(r)
++        }
++      }
++    }
++  } catch { /* fr 面读失败 → 只回 ql 面 */ }
++  for (const rows of Object.values(readQlBindings(specBase))) {
++    for (const r of rows) if (r.source_change === sourceChange) out.push(r)
++  }
++  return out
++}
++
++/** 锚可解析校验（修理工入口硬校验——修理工不得制造悬空锚） */
++export function anchorResolvable({ specBase, knowledgeRoot, anchor }) {
++  if (/^FR-/.test(anchor)) return frEntryExists(knowledgeRoot, anchor)
++  if (/^ql-/.test(anchor)) {
++    try { return existsSync(quicklogSidecarPath(specBase, anchor)) } catch { return false }
++  }
++  return false
++}
++
++function frEntryExists(knowledgeRoot, frId) {
++  try {
++    const dir = join(knowledgeRoot, 'fr')
++    for (const f of readdirSync(dir).filter(x => x.endsWith('.md'))) {
++      if (readFileSync(join(dir, f), 'utf8').split(/\r?\n/).some(l => l.startsWith(`## ${frId} `) || l === `## ${frId}`)) return true
++    }
++  } catch { /* 读失败 → 不存在 */ }
++  return false
++}
+
+diff --git a/test/test-bindings.test.mjs b/test/test-bindings.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/test-bindings.test.mjs
+@@ -0,0 +1,221 @@
++/**
++ * test-bindings 单测（2026-09-24-fr-test-bindings task-01~07）
++ *
++ * 红线（方案 §3.1/§3.2/§5 写侧契约）：
++ * 1. 枚举违例抛错（anchor 禁 CAP、reason/state 枚举、active 必 confirmed_by=agent）
++ * 2. upsert 幂等：同内容重放零漂移；机器晋升不删/不覆盖 agent 行
++ * 3. 晋升：covered/covered-service→active；partial 留 candidate；uncovered/non-testable 删行
++ * 4. supersede 同步：FR 退役 → 绑定行 status=superseded
++ * 5. orphan accRef 指纹恒稳（插行漂移由指纹兜身份）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import {
++  normalizeRow, orphanAccRef, changeTracePath, readChangeTrace, writeChangeTrace,
++  promoteTraceFromMatrix, parseEntryBindings, upsertFrBindings, readFrBindings,
++  markFrBindingsSuperseded, unbindFrRows, readQlBindings, upsertQlBindings, unbindQlRows,
++  queryByAnchor, queryByChange, anchorResolvable,
++} from '../src/test-bindings.js'
++
++const roots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); roots.push(d); return d }
++test.after(() => { for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function specFixture() {
++  const root = mk('tb-spec-')
++  mkdirSync(join(root, 'knowledge', 'fr'), { recursive: true })
++  mkdirSync(join(root, 'quicklog'), { recursive: true })
++  mkdirSync(join(root, 'test'), { recursive: true })
++  writeFileSync(join(root, 'test', 'a.test.mjs'), 'x\n')
++  writeFileSync(join(root, 'test', 'b.test.mjs'), 'y\n')
++  writeFileSync(join(root, 'knowledge', 'fr', 'core.md'), [
++    '# FR 索引：core', '',
++    '## FR-core-001 标题甲', '变更：2026-09-01-x', '状态：active', '摘要：s', '最近确认：h1', '',
++    '## FR-core-002 标题乙', '变更：2026-09-02-y', '状态：active', '摘要：s', '最近确认：h2', '',
++  ].join('\n'))
++  return root
++}
++
++const cand = (over = {}) => normalizeRow({
++  anchor: 'FR-01', row_id: 'chg-a:task-01:acc-0-abc12345', tests: ['test/a.test.mjs'],
++  reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: 'chg-a', ...over,
++})
++
++test('B1 行模型红线：枚举违例抛错、active 必 agent 确认、orphan row_id 含任务段', () => {
++  assert.throws(() => cand({ anchor: 'CAP-01' }), /anchor 非法/)
++  assert.throws(() => cand({ reason: 'other' }), /reason 非法/)
++  assert.throws(() => cand({ state: 'x' }), /state 非法/)
++  assert.throws(() => cand({ state: 'active', confirmed_by: null }), /confirmed_by=agent/)
++  assert.throws(() => cand({ anchor: null, row_id: 'no-task-seg' }), /任务段/)
++  assert.doesNotThrow(() => cand({ anchor: null, row_id: 'chg:task-02:acc-1-ffff0000' }))
++  assert.throws(() => cand({ tests: [] }), /tests 非空/)
++})
++
++test('B2 变更期 trace：写读回放 + 幂等（内容不变跳写）', () => {
++  const dir = mk('tb-chg-')
++  const r1 = writeChangeTrace(dir, 'chg-a', [cand()])
++  assert.equal(r1.changed, true, 'B2: 首写落盘')
++  const before = readFileSync(changeTracePath(dir), 'utf8')
++  const r2 = writeChangeTrace(dir, 'chg-a', [cand()])
++  assert.equal(r2.changed, false, 'B2: 同内容跳写')
++  assert.equal(readFileSync(changeTracePath(dir), 'utf8'), before, 'B2: 字节零漂移')
++  assert.deepEqual(readChangeTrace(dir).map(r => r.row_id), ['chg-a:task-01:acc-0-abc12345'])
++})
++
++test('B3 晋升：covered→active（confirmed_by=agent）、partial 留 candidate、uncovered 删行、重跑零漂移', () => {
++  const dir = mk('tb-promo-')
++  const rows = [
++    cand(),
++    cand({ row_id: 'chg-a:task-01:acc-1-def00001', tests: ['test/b.test.mjs'] }),
++    cand({ row_id: 'chg-a:task-02:acc-0-22222222' }),
++    cand({ row_id: 'chg-a:task-02:acc-1-33333333', tests: ['test/b.test.mjs'] }),
++  ]
++  writeChangeTrace(dir, 'chg-a', rows)
++  const res = promoteTraceFromMatrix({
++    changeDir: dir, changeName: 'chg-a',
++    matrixRows: [
++      { task: 'task-01', verdict: 'covered' },
++      { task: 'task-01', verdict: 'partial' },
++      { task: 'task-02', verdict: 'uncovered' },
++      { task: 'task-02', verdict: 'covered-service' },
++    ],
++  })
++  assert.equal(res.promoted, 2, 'B3: covered+covered-service 晋升')
++  assert.equal(res.dropped, 1, 'B3: uncovered 删行')
++  const after = readChangeTrace(dir)
++  assert.equal(after.length, 3, 'B3: 3 行存活')
++  assert.equal(after[0].state, 'active', 'B3: covered 行 active')
++  assert.equal(after[0].confirmed_by, 'agent', 'B3: confirmed_by=agent')
++  assert.equal(after[1].state, 'candidate', 'B3: partial 留 candidate')
++  assert.equal(after[2].state, 'active', 'B3: covered-service 行 active')
++  const res2 = promoteTraceFromMatrix({
++    changeDir: dir, changeName: 'chg-a',
++    matrixRows: [{ task: 'task-01', verdict: 'covered' }, { task: 'task-01', verdict: 'partial' }, { task: 'task-02', verdict: 'covered-service' }],
++  })
++  assert.equal(res2.promoted, 0, 'B3: 重跑零晋升（幂等）')
++})
++
++test('B4 条目 upsert：插入/幂等零漂移/agent 行保护/他源行不动', () => {
++  const root = specFixture()
++  const k = { knowledgeRoot: join(root, 'knowledge') }
++  const r1 = upsertFrBindings({ ...k, frId: 'FR-core-001', rows: [cand()] })
++  assert.equal(r1.ok && r1.changed, true, 'B4: 首次插入')
++  const entry1 = readFileSync(r1.file, 'utf8')
++  const r2 = upsertFrBindings({ ...k, frId: 'FR-core-001', rows: [cand()] })
++  assert.equal(r2.changed, false, 'B4: 同内容重放 no-op')
++  assert.equal(readFileSync(r2.file, 'utf8'), entry1, 'B4: 条目字节零漂移')
++  // 他源行不动
++  upsertFrBindings({ ...k, frId: 'FR-core-001', rows: [cand({ row_id: 'chg-b:task-01:acc-0-99999999', source_change: 'chg-b', tests: ['test/b.test.mjs'] })] })
++  const rows2 = readFrBindings({ ...k, frId: 'FR-core-001' })
++  assert.equal(rows2.length, 2, 'B4: 他源行共存')
++  // agent 行保护：机器晋升（内容变化）不覆盖 confirmed_by=agent 行
++  upsertFrBindings({ ...k, frId: 'FR-core-001', rows: [cand({ tests: ['test/a.test.mjs', 'test/b.test.mjs'] })] })
++  const rows3 = readFrBindings({ ...k, frId: 'FR-core-001' })
++  const chgA = rows3.find(r => r.source_change === 'chg-a')
++  assert.deepEqual(chgA.tests, ['test/a.test.mjs', 'test/b.test.mjs'], 'B4: machine 行新内容按 upsert 更新（agent 行才有保护）')
++})
++
++test('B4b agent 行保护：confirmed_by=agent 行不被 machine 重放覆盖', () => {
++  const root = specFixture()
++  const k = { knowledgeRoot: join(root, 'knowledge') }
++  const agentRow = cand({ state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: 'h9' })
++  upsertFrBindings({ ...k, frId: 'FR-core-002', rows: [agentRow] })
++  // machine 重放同键不同内容 → 不覆盖 agent 行
++  upsertFrBindings({ ...k, frId: 'FR-core-002', rows: [cand({ anchor: 'FR-02', row_id: 'chg-a:task-09:acc-0-abc12345', tests: ['test/b.test.mjs'] })] })
++  const rows = readFrBindings({ ...k, frId: 'FR-core-002' })
++  const hit = rows.find(r => r.row_id === 'chg-a:task-01:acc-0-abc12345')
++  assert.equal(hit.confirmed_by, 'agent', 'B4b: agent 行保留')
++  assert.equal(hit.confirmed_at, 'h9', 'B4b: agent 字段未被冲掉')
++})
++
++test('B5 supersede 同步 + unbind：status=superseded；定向删行', () => {
++  const root = specFixture()
++  const k = { knowledgeRoot: join(root, 'knowledge') }
++  upsertFrBindings({ ...k, frId: 'FR-core-001', rows: [cand()] })
++  const sup = markFrBindingsSuperseded({ ...k, frId: 'FR-core-001' })
++  assert.equal(sup.changed, true, 'B5: supersede 落写')
++  assert.equal(readFrBindings({ ...k, frId: 'FR-core-001' })[0].status, 'superseded', 'B5: 行 status=superseded')
++  const unb = unbindFrRows({ ...k, frId: 'FR-core-001', rowIds: ['chg-a:task-01:acc-0-abc12345'] })
++  assert.equal(unb.ok, true, 'B5: unbind 成功')
++  assert.equal(readFrBindings({ ...k, frId: 'FR-core-001' }).length, 0, 'B5: 行已删')
++})
++
++test('B6 ql 面：upsert 幂等/agent 保护/unbind/视图查询', () => {
++  const root = specFixture()
++  const specBase = join(root)
++  const qlRow = cand({ anchor: 'ql-20260924-001-ab12', row_id: 'quick-1:win:test/a.test.mjs', source_change: 'quick-1' })
++  const w1 = upsertQlBindings({ specBase, qlId: 'ql-20260924-001-ab12', rows: [qlRow] })
++  assert.equal(w1.changed, true, 'B6: 首写')
++  const w2 = upsertQlBindings({ specBase, qlId: 'ql-20260924-001-ab12', rows: [qlRow] })
++  assert.equal(w2.changed, false, 'B6: 幂等跳写')
++  assert.equal(queryByAnchor({ specBase, knowledgeRoot: join(root, 'knowledge'), anchor: 'ql-20260924-001-ab12' }).length, 1, 'B6: 锚查询命中')
++  const rm = unbindQlRows({ specBase, qlId: 'ql-20260924-001-ab12', rowIds: ['quick-1:win:test/a.test.mjs'] })
++  assert.equal(rm.removed, 1, 'B6: unbind 删行')
++  assert.equal(readQlBindings(specBase)['ql-20260924-001-ab12'].length, 0)
++})
++
++test('B7 锚可解析：FR 在/不在；ql sidecar 在/不在（修理工硬校验面）', () => {
++  const root = specFixture()
++  const specBase = join(root)
++  const k = { specBase, knowledgeRoot: join(root, 'knowledge') }
++  assert.equal(anchorResolvable({ ...k, anchor: 'FR-core-001' }), true, 'B7: 活库条目在')
++  assert.equal(anchorResolvable({ ...k, anchor: 'FR-core-999' }), false, 'B7: 条目不在')
++  assert.equal(anchorResolvable({ ...k, anchor: 'CAP-01' }), false, 'B7: 第四空间锚不可解析')
++  // ql sidecar 存在 → 可解析（真实路径：<specBase>/.runtime/quicklog-sidecar/<ql-id>.json）
++  const scDir = join(specBase, '.runtime', 'quicklog-sidecar')
++  mkdirSync(scDir, { recursive: true })
++  writeFileSync(join(scDir, 'ql-20260924-002-cd34.json'), '{}')
++  assert.equal(anchorResolvable({ ...k, anchor: 'ql-20260924-002-cd34' }), true, 'B7: ql sidecar 在')
++  assert.equal(anchorResolvable({ ...k, anchor: 'ql-20260924-003-0000' }), false, 'B7: ql 不在册')
++})
++
++test('B8 orphan accRef：同文恒稳、异文异指纹（D-005）', () => {
++  assert.match(orphanAccRef(0, '文本'), /^acc-0-[0-9a-f]{8}$/, 'B8: 形态 acc-<index>-<hash8>')
++  assert.equal(orphanAccRef(0, '文本A') === orphanAccRef(0, '文本A'), true, 'B8: 同文恒稳')
++  assert.notEqual(orphanAccRef(0, '文本A'), orphanAccRef(0, '文本B'), 'B8: 异文异指纹')
++})
++
++test('B9 queryByChange：跨 FR 面 + ql 面合并', () => {
++  const root = specFixture()
++  const specBase = join(root)
++  const k = { specBase, knowledgeRoot: join(root, 'knowledge') }
++  upsertFrBindings({ knowledgeRoot: k.knowledgeRoot, frId: 'FR-core-001', rows: [cand()] })
++  upsertQlBindings({ specBase, qlId: 'ql-20260924-001-ab12', rows: [cand({ anchor: 'ql-20260924-001-ab12', row_id: 'quick-1:win:test/a.test.mjs', source_change: 'quick-1' })] })
++  const hits = queryByChange({ ...k, sourceChange: 'chg-a' })
++  assert.equal(hits.length, 1, 'B9: FR 面 chg-a 行命中（ql 行 source=quick-1 不混入）')
++})
++
++test('E1 归档提升端到端：indexRequirements 消费 test-trace → 条目绑定子块 + 承接 supersede 同步', async () => {
++  const { indexRequirements } = await import('../src/fr-index.js')
++  const root = specFixture()
++  const kRoot = join(root, 'knowledge')
++  // 旧条目预置一行绑定（将被承接退役）
++  upsertFrBindings({ knowledgeRoot: kRoot, frId: 'FR-core-001', rows: [cand({ state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: 'h0' })] })
++  // 变更目录：requirements.md（FR-01 承接 FR-core-001）+ test-trace.json（FR-01 局部锚 active 行）
++  const chg = mk('tb-chg-e2-')
++  writeFileSync(join(chg, 'requirements.md'), [
++    '# 需求', '',
++    '### FR-01: 新能力', '承接: FR-core-001（退役理由：升级替代）', '',
++    '#### 场景：用一', 'Given a', 'When b', 'Then c', '',
++  ].join('\n'))
++  writeChangeTrace(chg, 'chg-c', [
++    cand({ anchor: 'FR-01', row_id: 'chg-c:task-01:acc-0-aaaa1111', state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: 'h1' }),
++  ])
++  const res = indexRequirements({ changeDir: chg, knowledgeRoot: kRoot, headHash: 'hE2' })
++  assert.ok(res.written.length >= 1, 'E1: 新条目已铸')
++  const newId = res.written[0].id
++  const promoted = readFrBindings({ knowledgeRoot: kRoot, frId: newId })
++  assert.equal(promoted.length, 1, 'E1: 新条目绑定子块 1 行（局部锚→全局提升）')
++  assert.equal(promoted[0].state, 'active', 'E1: 行状态保留')
++  assert.ok(res.superseded.some(s => s.from === 'FR-core-001'), 'E1: 承接翻链发生')
++  const retired = readFrBindings({ knowledgeRoot: kRoot, frId: 'FR-core-001' })
++  assert.equal(retired.length, 1, 'E1: 旧条目绑定行仍在（不死删）')
++  assert.equal(retired[0].status, 'superseded', 'E1: 旧条目绑定行随承接退役（禁死锚）')
++  // 同源重放：再跑一次归档 → 幂等（已有来源变更条目 → no-op，不重复写）
++  const res2 = indexRequirements({ changeDir: chg, knowledgeRoot: kRoot, headHash: 'hE2' })
++  assert.equal(readFrBindings({ knowledgeRoot: kRoot, frId: newId }).length, 1, 'E1: 重放零漂移')
++  assert.ok(res2.written.length === 0 || res2.skipped, 'E1: 重放 no-op')
++})

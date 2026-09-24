@@ -1,0 +1,132 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "head-uncommitted-window",
+  "totals": {
+    "files": 14,
+    "additions": 1,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "backend/r11_e2e_creds.json",
+      "additions": 1,
+      "deletions": 0,
+      "kind": "new",
+      "planned": null,
+      "verdict": "unplanned"
+    },
+    {
+      "path": "backend/app/modules/platform_sync/model.py",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "NEW:backend/migrations/versions/20260924030000_add_platform_change_events.py",
+      "planned": "新增",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "backend/app/modules/platform_sync/schema.py",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "backend/app/modules/platform_sync/service.py",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "backend/app/modules/platform_sync/router.py",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "backend/app/modules/platform_sync/tests/conftest.py",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "NEW:backend/app/modules/platform_sync/tests/test_change_events.py",
+      "planned": "新增",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "backend/openapi.json",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "frontend/src/lib/api-types.ts",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "NEW:frontend/src/lib/change-events.ts",
+      "planned": "新增",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "NEW:frontend/src/components/changes/detail/change-events-card.tsx",
+      "planned": "新增",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/page.tsx",
+      "planned": "修改",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    },
+    {
+      "path": "NEW:frontend/src/components/changes/detail/__tests__/change-events-card.test.tsx",
+      "planned": "新增",
+      "additions": 0,
+      "deletions": 0,
+      "kind": "modified",
+      "verdict": "untouched"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "4ff6a7856bfc5d3ad7d67643bc75167037cac59c3b54ac20719dc6da157a2513",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-23T19:13:02.046Z"
+}

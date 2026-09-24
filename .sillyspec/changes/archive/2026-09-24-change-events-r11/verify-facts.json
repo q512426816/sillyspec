@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-24-change-events-r11",
+  "generatedAt": "2026-09-23T19:14:55.842Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 1
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 4
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "backendEndpoints": 1651,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-24-change-events-r11",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "runtimeEvidence": [
+    {
+      "claim": "后端 platform_sync 模块测试全绿（新事件五组+既有零回归）",
+      "command": "cd backend && uv run pytest app/modules/platform_sync -q",
+      "exitCode": 0,
+      "logPath": "e2e-record.md §7（252 passed, 64.60s）"
+    },
+    {
+      "claim": "前端变更域测试全绿（新组件四组+详情页既有面零回归）",
+      "command": "cd frontend && pnpm vitest run \"src/app/(dashboard)/workspaces\" src/components/changes",
+      "exitCode": 0,
+      "logPath": "e2e-record.md §7（33 files / 374 passed, 25.38s）"
+    },
+    {
+      "claim": "E2E 实服五条推送/正序/去重/since/鉴权矩阵全过（独立库 platform_r11_e2e，uvicorn 127.0.0.1:8011）",
+      "command": "curl POST/GET /api/changes/2026-09-24-change-events-r11/events（Bearer shpsync_/JWT/无凭据三形态）",
+      "exitCode": 0,
+      "logPath": ".sillyspec/changes/2026-09-24-change-events-r11/e2e-record.md §1–§6"
+    }
+  ],
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "面板真人浏览器视觉核验（默认展开/琥珀高亮/角标/provisional 悬停）",
+        "condition": "具浏览器环境会话：起 dev 后端（独立 E2E 库）+ Next dev（INTERNAL_API_BASE_URL 指向后端），登录 r11-e2e 账号进变更详情页，对照 e2e-record.md §6 清单走查；逻辑面已由 change-events-card.test.tsx 四组覆盖",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "E2E 临时环境清理：dev 后端/Next dev 进程、backend/.env、backend/r11_e2e_creds.json、PG 库 platform_r11_e2e",
+        "condition": "归档后停服进程、删凭据文件与临时库（.env 已 gitignore，凭据文件不提交）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 2,
+  "apiFace": {
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/api/changes/{name}/events",
+        "rowIdx": 1
+      },
+      {
+        "method": "GET",
+        "path": "/api/changes/{name}/events",
+        "rowIdx": 2
+      }
+    ],
+    "declared": 2,
+    "writeEndpoints": [
+      {
+        "method": "POST",
+        "path": "/api/changes/{name}/events",
+        "rowIdx": 1
+      }
+    ]
+  },
+  "consumerHints": {
+    "script": [
+      "backend/app/modules/platform_sync/tests/conftest.py",
+      "backend/app/modules/platform_sync/tests/test_change_events.py"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "cd backend && uv run pytest app/modules/platform_sync -q",
+    "exitCode": 0,
+    "strategy": "full",
+    "failedRemaining": [],
+    "passedAt": "2026-09-23T19:37:05.377Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

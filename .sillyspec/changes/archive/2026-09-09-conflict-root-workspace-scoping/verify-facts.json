@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-09-conflict-root-workspace-scoping",
+  "generatedAt": "2026-09-09T14:28:32.777Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-09-conflict-root-workspace-scoping",
+      "metrics": {
+        "matches": 1,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-09-conflict-root-workspace-scoping",
+      "metrics": {
+        "tasks": 6,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-09-conflict-root-workspace-scoping",
+      "metrics": {
+        "backendEndpoints": 2087,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-09-conflict-root-workspace-scoping",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    }
+  },
+  "conclusion": "PASS",
+  "runtimeEvidence": [
+    {
+      "claim": "integration-critical 真实集成验证（跨进程联调）——独立库 verify_crws（docker postgres）+ worktree backend（uvicorn :18000）+ 真实 daemon 进程（worktree 构建、隔离 SILLYHUB_DAEMON_DIR、X-API-Key 认证、WS 真实连接 ws_daemon_connected），预写工作区映射与投毒单槽位，6 项证据全过，验证后清理（backend 停/库删/目录清，生产栈零影响）",
+      "command": "① uvicorn app.main:app --port 18000（DATABASE_URL=verify_crws） ② node dist/cli.js start --server http://127.0.0.1:18000 --api-key shk_live_…（隔离 env） ③ curl GET compare（命中/未命中/非成员）④ curl POST resolve（缺 ws/未命中/命中）",
+      "exitCode": 0,
+      "logPath": ".sillyspec/changes/2026-09-09-conflict-root-workspace-scoping/verify-integration.log"
+    }
+  ],
+  "tests": {
+    "command": "module[frontend,sillyhub-daemon,daemon]",
+    "exitCode": 0,
+    "strategy": "module-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-10T00:50:54.802Z"
+  },
+  "requiredEvidence": [
+    {
+      "task": "task-01",
+      "status": "missing",
+      "verifiedFiles": [
+        "sillyhub-daemon/src/sillyspec-manager.ts",
+        "sillyhub-daemon/tests/sillyspec-conflict-snapshot.test.ts",
+        "sillyhub-daemon/tests/sillyspec-platform-command.test.ts"
+      ],
+      "exempt": true,
+      "exemptionReason": "（豁免：改动已随主仓提交 28b758edc 落地（apply→commit 先于本步，working diff 已空致 diffHit=false；mtime 核验过、文件在提交 28b758edc 内、per-task review changedFiles 已声明——TDD 测试锚定 102 用例绿）"
+    },
+    {
+      "task": "task-02",
+      "status": "missing",
+      "verifiedFiles": [
+        "sillyhub-daemon/src/daemon.ts",
+        "sillyhub-daemon/tests/daemon-status-root-persistence.test.ts",
+        "sillyhub-daemon/tests/daemon-heartbeat-sillyspec.test.ts"
+      ],
+      "exempt": true,
+      "exemptionReason": "（豁免：改动已随主仓提交 28b758edc 落地，同 task-01 diff 通道说明；daemon 全量 214 文件/3830 用例绿）"
+    },
+    {
+      "task": "task-03",
+      "status": "missing",
+      "verifiedFiles": [
+        "backend/app/modules/daemon/sillyspec_compare.py",
+        "backend/app/modules/daemon/tests/test_sillyspec_compare.py"
+      ],
+      "exempt": true,
+      "exemptionReason": "（豁免：改动已随主仓提交 28b758edc 落地，同 task-01 diff 通道说明；compare 30 用例绿）"
+    },
+    {
+      "task": "task-04",
+      "status": "missing",
+      "verifiedFiles": [
+        "backend/app/modules/daemon/router/machines.py",
+        "backend/app/modules/daemon/ws_hub.py",
+        "backend/app/modules/daemon/tests/test_sillyspec_platform_commands.py"
+      ],
+      "exempt": true,
+      "exemptionReason": "（豁免：改动已随主仓提交 28b758edc 落地，同 task-01 diff 通道说明；platform-commands 42 用例绿）"
+    },
+    {
+      "task": "task-05",
+      "status": "missing",
+      "verifiedFiles": [
+        "backend/app/modules/daemon/sillyspec_compare.py",
+        "backend/app/modules/daemon/tests/test_sillyspec_compare.py"
+      ],
+      "exempt": true,
+      "exemptionReason": "（豁免：改动已随主仓提交 28b758edc 落地，同 task-01 diff 通道说明；文案分叉 3 用例绿）"
+    },
+    {
+      "task": "task-06",
+      "status": "missing",
+      "verifiedFiles": [
+        "frontend/src/lib/api-types.ts",
+        "backend/openapi.json",
+        "frontend/src/components/changes/conflict-compare-modal.tsx",
+        "frontend/src/components/changes/__tests__/conflict-compare-modal.test.tsx"
+      ],
+      "exempt": true,
+      "exemptionReason": "（豁免：改动已随主仓提交 28b758edc 落地（含 sillyhub-daemon/src/api-types.ts 同源产物）"
+    }
+  ],
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

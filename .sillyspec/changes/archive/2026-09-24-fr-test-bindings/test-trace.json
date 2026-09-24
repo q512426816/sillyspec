@@ -1,0 +1,328 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-24-fr-test-bindings",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-01:acc-0-51d246e4",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-01:acc-1-78043252",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-01:acc-2-e71a53b1",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-01:acc-3-cebdfb96",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-24-fr-test-bindings:task-02:acc-0-47e78e16",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-24-fr-test-bindings:task-02:acc-1-e3b33f8b",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-24-fr-test-bindings:task-02:acc-2-305ae83e",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-03:acc-0-bcd6deef",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-03:acc-1-3e6bf0f5",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-03:acc-2-a18f4a5f",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-24-fr-test-bindings:task-04:acc-0-1522f9df",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-24-fr-test-bindings:task-04:acc-1-1b2634c8",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-24-fr-test-bindings:task-04:acc-2-681ac3ba",
+      "tests": [
+        "src/test-bindings.js",
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-24-fr-test-bindings:task-05:acc-0-db654bed",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-24-fr-test-bindings:task-05:acc-1-5a6066b6",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-24-fr-test-bindings:task-05:acc-2-6c65358e",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-bindings:task-06:acc-0-cd06e5b3",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-bindings:task-06:acc-1-dddeb61c",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-bindings:task-06:acc-2-964247dc",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-07:acc-0-71a4c768",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-bindings:task-07:acc-1-af4c425d",
+      "tests": [
+        "test/test-bindings.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-bindings"
+    }
+  ]
+}

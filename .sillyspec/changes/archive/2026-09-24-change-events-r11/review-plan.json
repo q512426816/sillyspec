@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "docHash": "8d223d9e0da574e0fe7e8e4487ef444b39558a41dec70f0a578593ff84601a81",
+  "reviewType": "plan",
+  "stage": "plan",
+  "change": "2026-09-24-change-events-r11",
+  "verdict": "pass",
+  "specVerdict": "pass",
+  "qualityVerdict": "pass",
+  "reviewedFiles": [
+    ".sillyspec/changes/2026-09-24-change-events-r11/plan.md",
+    ".sillyspec/changes/2026-09-24-change-events-r11/tasks.md",
+    ".sillyspec/changes/2026-09-24-change-events-r11/design.md"
+  ],
+  "reviewerNotes": [
+    "降级：环境无子代理可用（宿主为受试会话 R11-SF 子代理上下文，无 Agent tool）——按 step 指引降级条款自审替代，逐条结论附锚点。",
+    "brainstorm Grill 已实证结论（鉴权依赖存在/alembic 单头/conftest 模式/ChangeRead.change_key）直接引用未重验；本审查只审 plan 特有面。"
+  ],
+  "checked": [
+    {
+      "item": "task 编号与 Wave 格式正确（execute 解析依赖）",
+      "status": "pass",
+      "note": "plan.md 五个 Wave 段均为纯 ID 引用行（- task-01 形态，无 checkbox 无任务名）；tasks.md 为 - [ ] task-XX: 一句话名 格式，target_files 行内标注。"
+    },
+    {
+      "item": "plan_level 档位匹配",
+      "status": "pass",
+      "note": "full 正确：13 文件跨 backend/frontend 两模块、新表+迁移+新端点+前端组件，均超出 none/light 豁免面。"
+    },
+    {
+      "item": "文件覆盖：design 清单每文件被 task 覆盖",
+      "status": "pass",
+      "note": "13 项逐一映射：model.py/migration/conftest→task-01；schema/service/router/test_change_events→task-02；openapi.json/api-types.ts/lib/change-events.ts→task-03；card/page.tsx/card 测试→task-04；e2e-record.md→task-05。无漏。"
+    },
+    {
+      "item": "无 P0/P1 unresolved blocker 残留",
+      "status": "pass",
+      "note": "decisions.md D-001~007 全部 accepted；review.json（brainstorm）unresolved_blockers=[]。"
+    },
+    {
+      "item": "无实现细节泄漏到 plan.md",
+      "status": "pass",
+      "note": "plan.md 仅含 Wave/总表/关键路径/全局硬约束（模板要求自 design 逐字抄录）/验收/覆盖矩阵；接口签名在 design.md 接口定义节，实现细节归 TaskCard。"
+    },
+    {
+      "item": "关键路径与 Wave 依赖合理",
+      "status": "pass",
+      "note": "task-01→02→03→04→05 线性：service 依赖 model、gen:types 依赖 openapi（端点落地后）、组件依赖 lib、E2E 依赖全部。无循环、无同 Wave 依赖。"
+    },
+    {
+      "item": "连带测试归属（既有测试失效风险）",
+      "status": "pass",
+      "note": "风险点：page.tsx 挂新卡后既有详情页测试（__tests__/page-last-signal.test.tsx 等）可能因组件发起新 fetch 未 mock 而炸——已列入 task-04 说明（related_tests 在 TaskCard 生成时声明，测试路径须在允许面内）。"
+    },
+    {
+      "item": "execution_mode 声明合规",
+      "status": "pass",
+      "note": "plan.md 未写 execution_mode 键=缺省 main 直写；判据核验：任务线性不可并行压缩、单任务预估 <30min、单会话上下文足够——不满足 dispatch 判据，缺省正确。"
+    }
+  ],
+  "fixes_needed": [],
+  "blockers": [],
+  "question_distribution": {
+    "immediately_answered": 0,
+    "needs_thinking": 0,
+    "unresolved": 0
+  },
+  "unresolved_blockers": []
+}

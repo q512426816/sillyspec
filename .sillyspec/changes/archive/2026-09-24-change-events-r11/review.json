@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "docHash": "8aca4b47aba31d59478c23ffccaa2452becccbe87707e6d995d2b09df3100d2b",
+  "reviewType": "design",
+  "stage": "brainstorm",
+  "change": "2026-09-24-change-events-r11",
+  "verdict": "pass",
+  "specVerdict": "pass",
+  "qualityVerdict": "pass",
+  "reviewedFiles": [
+    ".sillyspec/changes/2026-09-24-change-events-r11/design.md",
+    ".sillyspec/changes/2026-09-24-change-events-r11/requirements.md",
+    ".sillyspec/changes/2026-09-24-change-events-r11/tasks.md",
+    ".sillyspec/changes/2026-09-24-change-events-r11/decisions.md"
+  ],
+  "reviewerNotes": [
+    "降级：环境无子代理可用（宿主为受试会话 R11-SF 子代理上下文，无 Agent tool）——按 step 指引降级条款切换主代理审查者角色自审替代，逐条结论附源码锚点补偿独立性。",
+    "请求预算对齐：本审查共定向核证 6 处源码锚点（auth.py 分流 / model.py 先例 / router.py 读端点 / schema.py ChangeRead / alembic head / conftest 建表），未做全仓扫读。"
+  ],
+  "checked": [
+    {
+      "item": "定义层：模糊概念可测试化（warning/provisional/上限/去重键）",
+      "status": "pass",
+      "note": "warning=severity 字符串等值（FR-06，前端仅样式分类）；provisional=CLI 字段原样存储展示、恒不被消费（FR-07 红线，有测试位）；上限=MAX_EVENTS_PER_CHANGE=5000 常量；去重键=id 或 ts|rule（rule None 补空串），均可写断言。"
+    },
+    {
+      "item": "一致性：FR 与 design 数据模型/接口对齐",
+      "status": "pass",
+      "note": "FR-01~07 与 design 接口定义逐条对上（POST body 字段=FR-01、since 严格大于=FR-02、dedup_key=FR-03、鉴权矩阵=FR-04、截断=FR-05、折叠交互=FR-06/07）。决策覆盖矩阵 D-001~007 全挂 FR。"
+    },
+    {
+      "item": "一致性：前端取名字段（X-001，已修正）",
+      "status": "pass",
+      "note": "原设计写 change.name 传入，ChangeRead 实际无 name 字段、标识字段为 change_key（backend/app/modules/change/schema.py:74）；design.md 文件变更清单已修正为 change_key。事件端点 {name} 语义=platform_change_progress.change_name 同口径。"
+    },
+    {
+      "item": "可行性：鉴权依赖复用真实存在",
+      "status": "pass",
+      "note": "require_platform_sync_write/require_platform_sync/_read_args 均存在于 backend/app/modules/platform_sync/auth.py:102-176 与 router.py:88-101，直接 import 复用无编造。"
+    },
+    {
+      "item": "可行性：迁移 down_revision 接单头",
+      "status": "pass",
+      "note": "alembic heads 实测单头 20260922194500（backend uv run alembic heads），新迁移接此头不产生分叉（tests/test_migrations_graph.py 会校验）。"
+    },
+    {
+      "item": "可行性：双方言截断与幂等",
+      "status": "pass",
+      "note": "SQLite 不支持 DELETE ORDER BY LIMIT → 子查询选 id 形态已写入 D-003 应对；唯一约束撞 IntegrityError → R-03 捕获转 deduplicated 计数，均可在 SQLite 测试库实测。"
+    },
+    {
+      "item": "一致性：tasks 范围 vs 非目标",
+      "status": "pass",
+      "note": "task-01~06 未含 SSE/移动端/CLI watcher 改动/事件管理端，与非目标清单一致；page.tsx 仅 task-05 触碰，卡片/测试文件路径与文件变更清单一致。"
+    },
+    {
+      "item": "可行性：conftest 建表基座",
+      "status": "pass",
+      "note": "platform_sync/tests/conftest.py:17-46 autouse ensure_platform_sync_table 建表清单模式现成，追加 PlatformChangeEventORM.__table__ 即可，测试自包含不动根 conftest。"
+    }
+  ],
+  "fixes_needed": [],
+  "blockers": [],
+  "question_distribution": {
+    "immediately_answered": 1,
+    "needs_thinking": 0,
+    "unresolved": 0
+  },
+  "unresolved_blockers": []
+}
