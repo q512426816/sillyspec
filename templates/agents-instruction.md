@@ -20,7 +20,7 @@
 14. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
 15. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
 16. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突。
-17. **quicklog 结构化落盘**（存量通道——新工作不再产生 quicklog 条目，轻量变更变更级归档取代；仅收尾存量 quick 会话时适用）：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
+17. **quicklog 结构化落盘**（存量通道——新工作不再产生 quicklog 条目，轻量变更以变更级归档取代；仅收尾存量 quick 会话时适用）：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
 18. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
 19. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
 20. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
