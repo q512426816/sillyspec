@@ -1,0 +1,24 @@
+{
+  "change": "2026-09-25-thin-precheck-removal",
+  "baseline": "c128d562445c49304ec98e71e62d79f4fb0d76a6",
+  "head": "b4cfb50860532d62fdc3ee5c2185cf8c36d11252",
+  "files": [
+    "src/flow.js",
+    "templates/agents-instruction.md",
+    "test/flow-protocol.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-precheck-removal/design.md",
+    ".sillyspec/changes/2026-09-25-thin-precheck-removal/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-precheck-removal/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-precheck-removal/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-precheck-removal/tasks.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 165,
+    "deletions": 18
+  },
+  "savedAt": "2026-09-24T22:56:36.325Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "73c15051458b4179270d10f4e40d085a66a76545cc79eae42395996d8f8223e6",
+  "patchStatus": "ok"
+}

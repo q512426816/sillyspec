@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-precheck-removal",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "模板规则 8 仍含技术关键词式选道指引，与规则 5 新句『选道不看技术关键词』存在措辞张力",
+      "evidence": "规则 8 原文『并发/鉴权/DB/跨模块大变更或需 Wave 计划编排 → 完整流程（规则 5）』——『DB/鉴权』即技术关键词；而规则 5 末句刚声明『选道不看技术关键词——风险面由收口评审按证据判定』。agent 按规则 8 字面仍可凭 DB 关键词选厚道，削弱本次变更的原则声明。FR-03 范围仅规则 5，属相邻面未同步，非行为缺陷。",
+      "location": "templates/agents-instruction.md:14"
+    },
+    {
+      "severity": "P3",
+      "title": "『三断言反转』措辞与实交两反转一删除存在两读偏差",
+      "evidence": "design 槽2 与 FR-01 测试绑定均称『三断言』。⑭ 实际：s 输出仅反转 2 条（复杂变更特征命中 / 由用户裁决，test:345-346），原第三条 match --upgrade-thick 被删除而非反转；按 ⑭ 内 doesNotMatch 总数（含 s2 既有负例 test:350）恰为 3，措辞可自洽。已核 flow start 输出无 --upgrade-thick 文案（flow.js 仅注释提及），反转第三条本可通过——删除仅轻微弱化负例覆盖，行为面无影响。",
+      "location": "test/flow-protocol.test.mjs:345-350"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-24T22:58:44Z"
+}

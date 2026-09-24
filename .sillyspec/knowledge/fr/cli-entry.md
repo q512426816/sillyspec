@@ -744,3 +744,63 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-04
 最近确认：a0ba25c12d8e23f99e4c530656aae68854c45617
+
+## FR-cli-entry-044 flow start 删除复杂度预判块（classifyChange 关键词升厚
+变更：2026-09-25-thin-precheck-removal
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 删除复杂度预判块（classifyChange 关键词升厚建议不再出现在薄道简报——选道只剩形态信号：清晰度门管需求不明，升厚只留用户决策
+全文：.sillyspec/changes/archive/2026-09-25-thin-precheck-removal/requirements.md#FR-01
+最近确认：b4cfb50860532d62fdc3ee5c2185cf8c36d11252
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-precheck-removal:flow:FR-01
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-precheck-removal
+  status: active
+
+## FR-cli-entry-045 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
+变更：2026-09-25-thin-precheck-removal
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
+全文：.sillyspec/changes/archive/2026-09-25-thin-precheck-removal/requirements.md#FR-02
+最近确认：b4cfb50860532d62fdc3ee5c2185cf8c36d11252
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-precheck-removal:flow:FR-02
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-precheck-removal
+  status: active
+
+## FR-cli-entry-046 agents-instruction 规则 5 同步（选道不看技术关键词，风险面
+变更：2026-09-25-thin-precheck-removal
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then agents-instruction 规则 5 同步（选道不看技术关键词，风险面归收口评审证据判定）
+全文：.sillyspec/changes/archive/2026-09-25-thin-precheck-removal/requirements.md#FR-03
+最近确认：b4cfb50860532d62fdc3ee5c2185cf8c36d11252
+
+## FR-cli-entry-047 flow 系全绿
+变更：2026-09-25-thin-precheck-removal
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow 系全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-precheck-removal/requirements.md#FR-04
+最近确认：b4cfb50860532d62fdc3ee5c2185cf8c36d11252

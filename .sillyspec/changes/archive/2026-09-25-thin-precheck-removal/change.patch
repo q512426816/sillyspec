@@ -1,0 +1,245 @@
+diff --git a/src/flow.js b/src/flow.js
+index 1b922464..94912d62 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -219,19 +219,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     }
+   }
+ 
+-  // 复杂度预判（2026-09-25-thin-default-flip：升档前半句）——input 命中完整流程特征关键词时
+-  // 提示用户裁决（advisory，**升厚与否是用户决策**——agent 不得自行转道；R16 实证驱动加硬：
+-  // 混跑回退侧已加 --upgrade-thick 同意门）。与清晰度门互补：清晰度门管「需求说不清楚」，
+-  // 预判管「说清楚了但活大」。
+-  try {
+-    const { classifyChange } = await import('./classify-change.js')
+-    const cl = classifyChange({ description: String(input || '') })
+-    if (cl && cl.mode === 'full') {
+-      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——是否升厚走完整流程【由用户裁决，agent 勿自行转道】：`)
+-      console.log(`   · 问用户；用户同意升厚 → 继续干活后按用户指示转 run <stage>（届时需带 --upgrade-thick 同意门）`)
+-      console.log(`   · 用户选择薄跑或未表态 → 留在薄道（干活 → flow done；实测失败时档位自动升厚兜底归档语义）`)
+-    }
+-  } catch { /* 预判失败不阻断启动 */ }
++  // 升厚预判已删除（2026-09-25-thin-precheck-removal）：技术面关键词（数据库/迁移等）测错轴——
++  // R16 实证碰迁移的变更薄道带评审最优收口，预判反诱发误升厚（臂 A 129M）与误报打断。选道只留
++  // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
++  // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
+ 
+   pm.initChange(cwd, change, {})
+   try {
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 2b9cb522..c4278d66 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -8,7 +8,7 @@
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+ 3. **需求已含决策的常规变更走薄流程（默认快道）**：`sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"` → 直接干活（改代码写测试，治理工件 CLI 机器起草）→ `sillyspec flow done --change <名>`。全程 2 次协议调用：机器起草 proposal/requirements（每条 FR 带测试绑定槽）/design 四节槽，收口带实测门、测试绑定提升、patch 留档；需求不清晰时 CLI 会拦下给两选一。
+ 4. **需求不明确先头脑风暴预段**：`sillyspec run brainstorm --change <名>`（人机交互探索需求、出 design/决策/原型）→ 完成后 `sillyspec flow start --change <名>`，头脑风暴产物自动收编续跑薄道（不重复起草；design 以头脑风暴版为准）。
+-5. **大改动 / 跨模块 / 需要计划编排的复杂变更走完整流程**：`brainstorm → plan → execute → verify → archive`。**薄→厚升档是用户决策**：CLI 预判命中只提示，转道须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；薄道实测失败会自动升厚档位语义兜底归档校验。
++5. **大改动 / 跨模块 / 需要计划编排的复杂变更走完整流程**：`brainstorm → plan → execute → verify → archive`。**薄→厚转道是用户决策**：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；薄道实测失败自动升厚档位语义兜底归档校验。选道不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。
+ 6. **quick 为存量过渡通道**（退役中——新工作不再用）：仅用于收尾进行中的 quick 会话；新的小修复一律走薄流程（规则 3）。
+ 7. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+ 8. **判规模选道**：需求明确、无跨模块取舍 → 薄流程（规则 3）；需求不明 → 头脑风暴预段后转薄流程（规则 4）；并发/鉴权/DB/跨模块大变更或需 Wave 计划编排 → 完整流程（规则 5）；微小修补 → quick（规则 6，过渡）。
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index b3400e84..024861b2 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -340,10 +340,11 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
+   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /thin 薄跑道/, '缺省走薄跑道')
+-  assert.match(s.stdout, /复杂变更特征命中/, 'classify 预判提示在场')
+-  assert.match(s.stdout, /由用户裁决/, '升厚裁决权归用户文案')
+-  assert.match(s.stdout, /--upgrade-thick/, '同意门指引在场')
+-  // 无复杂特征输入不打建议（负例）
++  // 预判已删（2026-09-25-thin-precheck-removal）：技术关键词不再触发升厚建议——碰迁移的
++  // 薄道照样最优收口（R16 实证），风险面归收口评审按证据判定
++  assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
++  assert.doesNotMatch(s.stdout, /由用户裁决/, '无升厚裁决文案')
++  // 无复杂特征输入同款零打扰（负例归并）
+   const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
+   assert.equal(s2.status, 0)
+   assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
+diff --git a/.sillyspec/changes/2026-09-25-thin-precheck-removal/design.md b/.sillyspec/changes/2026-09-25-thin-precheck-removal/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-precheck-removal/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:52:37.391Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-precheck-removal
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++删除 flow start 的复杂度预判块（classifyChange 关键词→升厚建议整段移除，留注释存证）。选道信号收敛为纯形态面：清晰度门管需求不明（预段收编），升厚只留用户决策（--upgrade-thick 同意门）与运行时证据（实测失败升档/edit_ratio 路由/评审定档——承诺词/diff 原语/盲维作答在收口时点按证据判风险面）。测试 ⑭ 反转为负例（迁移关键词零升厚建议），agents-instruction 规则 5 同步（选道不看技术关键词）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/flow.js 删预判块；test/flow-protocol.test.mjs ⑭ 三断言反转；templates/agents-instruction.md 规则 5 措辞。classifyChange 本体不动（run auto 模式仍消费）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯删减，无新增状态与路径。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=失去事前大任务提醒——但两次实测证明关键词既误报（R16 迁移误触发）又诱发误执行（臂 A 129M），事前猜测的期望价值为负；大任务真信号（需求不明/实测失败/决策密度）全在运行时面保留。死路=收窄关键词表再试一轮——仍是在错误轴上猜，证据不支持第三次尝试。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-precheck-removal/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-precheck-removal/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-precheck-removal/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: c128d562445c49304ec98e71e62d79f4fb0d76a6
++updatedAt: '2026-09-24T22:56:35.646Z'
++gate_summary: >-
++  test: passed ← module[cli-core,run-gates]+deps(js30)（50.9s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260924225601\test-result.json｜lint: passed
++  ← npm run lint（33.6s）｜门文件 48 个
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-precheck-removal/proposal.md b/.sillyspec/changes/2026-09-25-thin-precheck-removal/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-precheck-removal/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:52:37.390Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-precheck-removal
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:e2c7822f0ce2b3c15ddb60418f0077e6c2bcfd01c607f7b14d7d79191c92dbed:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++任务原话转写：动机：升厚预判按技术面关键词（数据库/迁移等）猜选道，测错了轴——R16 实证碰迁移的变更薄道带评审最优收口（46.9M/0.80×OS），预判反而诱发误升厚（臂 A 129M 教训）；风险面应由收口评审按证据（承诺词/diff 原语/盲维作答）在正确时点判定，事前关键词两次实证全错，删除。
++成功标准：
++- flow start 删除复杂度预判块（classifyChange 关键词升厚建议不再出现在薄道简报——选道只剩形态信号：清晰度门管需求不明，升厚只留用户决策与运行时信号）
++- 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
++- agents-instruction 规则 5 同步（选道不看技术关键词，风险面归收口评审证据判定）
++- flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:14ba73e2fb35fdf49276ac03269b195e8aa8c58d9c50177263d219e4e91a7cf4:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. flow start 删除复杂度预判块（classifyChange 关键词升厚建议不再出现在薄道简报——选道只剩形态信号：清晰度门管需求不明，升厚只留用户决策与运行时信号）
++2. 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
++3. agents-instruction 规则 5 同步（选道不看技术关键词，风险面归收口评审证据判定）
++4. flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:e8eb3e7c33efc1e3751f00f76214551cf2b3d0c3704c52dd50a98032c59fda27:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++1. flow start 删除复杂度预判块（classifyChange 关键词升厚建议不再出现在薄道简报——选道只剩形态信号：清晰度门管需求不明，升厚只留用户决策与运行时信号）
++2. 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
++3. agents-instruction 规则 5 同步（选道不看技术关键词，风险面归收口评审证据判定）
++4. flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-precheck-removal/requirements.md b/.sillyspec/changes/2026-09-25-thin-precheck-removal/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-precheck-removal/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:52:37.391Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-precheck-removal
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:8cf4805ec973a8c1305af6f16c62a4d171ef766507a73f73562a4d6563e3b91b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++### FR-01: flow start 删除复杂度预判块（classifyChange 关键词升厚
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow start 删除复杂度预判块（classifyChange 关键词升厚建议不再出现在薄道简报——选道只剩形态信号：清晰度门管需求不明，升厚只留用户决策与运行时信号）
++
++### FR-02: 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
++
++### FR-03: agents-instruction 规则 5 同步（选道不看技术关键词，风险面
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then agents-instruction 规则 5 同步（选道不看技术关键词，风险面归收口评审证据判定）
++
++### FR-04: flow 系全绿
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑭（迁移关键词 doesNotMatch 三断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑭ 同上（反转即覆盖）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++templates/agents-instruction.md 规则 5（人工核对面）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + stage-burst 50 例 + test:core 176 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-precheck-removal/tasks.md b/.sillyspec/changes/2026-09-25-thin-precheck-removal/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-precheck-removal/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T22:52:37.391Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-precheck-removal
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:322e94b893c2dd45ec6437105a0148e3706cc0091a564b1eb10c5284c630a2f3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-precheck-removal 留痕重锚 -->
++- [ ] task-01: flow start 删除复杂度预判块（classifyChange 关键词升厚建议不再出现在薄道简报——选道只剩形态信
++- [ ] task-02: 测试 ⑭ 反转：含迁移关键词的 input 不再出现任何升厚建议文案
++- [ ] task-03: agents-instruction 规则 5 同步（选道不看技术关键词，风险面归收口评审证据判定）
++- [ ] task-04: flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++
