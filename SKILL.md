@@ -1,6 +1,6 @@
 ---
 name: sillyspec
-description: "多 agent 仓库的变更账本 + 确定性验收层，规范驱动开发工具包。绿地用 /sillyspec:init，棕地用 /sillyspec:scan，全自动用 /sillyspec:auto。完整流程：scan → brainstorm → plan → execute → verify → archive。核心能力：CLI 实测验收门禁（自报不算、亲测才算）、多 agent 并发控制（会话/worktree/跨仓隔离 + 竞态硬门）、SQLite 持久账本断点恢复、范围对账与 API 契约矩阵。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini。"
+description: "多 agent 仓库的变更账本 + 确定性验收层，规范驱动开发工具包。默认快道=薄流程（flow start/done 2 次调用：机器起草治理工件+每条 FR 测试绑定槽+收口实测门+patch 留档；需求不清晰 CLI 拦下指路头脑风暴预段，产物自动收编）。复杂变更走完整流程 scan → brainstorm → plan → execute → verify → archive（薄道实测失败自动升厚）；绿地 /sillyspec:init，棕地 /sillyspec:scan，全自动 /sillyspec:auto。核心能力：CLI 实测验收门禁（自报不算、亲测才算）、多 agent 并发控制（会话/worktree/跨仓隔离 + 竞态硬门）、SQLite 持久账本断点恢复、范围对账与 API 契约矩阵。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini。"
 ---
 
 # SillySpec
@@ -12,6 +12,8 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
 
 | 场景 | 命令 |
 |---|---|
+| 常规变更（需求已明确）——默认快道 | `sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"` → 干活 → `sillyspec flow done`（2 次调用，机器起草治理工件+测试绑定+patch 留档） |
+| 需求不明确（先头脑风暴预段） | `sillyspec run brainstorm --change <名>` → 完成后 `sillyspec flow start --change <名>` 收编续跑薄道 |
 | 全自动流程 | `/sillyspec:auto <需求描述>` |
 | 全新项目（空目录） | `/sillyspec:init` |
 | 已有代码的项目 | `/sillyspec:scan` |
@@ -21,6 +23,8 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
 ## 完整工作流
 
 ```
+默认快道（薄流程）：flow start → 干活 → flow done（需求不清晰时 CLI 拦下指路头脑风暴预段，产物自动收编）
+复杂变更（完整流程）：brainstorm → plan → execute → verify → archive（薄道实测失败自动升厚至此）
 绿地：init → brainstorm → plan → execute → verify → archive
 棕地：scan → brainstorm → plan → execute → verify → archive
 全自动：auto（自动推进全部阶段，支持用户确认门控）

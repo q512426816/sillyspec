@@ -135,6 +135,41 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   if (existsSync(changeDir)) {
     const st = readFlowState(changeDir)
     if (!st) {
+      // adopt 收编（2026-09-25-thin-brainstorm-prestage）：头脑风暴预段产物（proposal/design 在场、
+      // 无 flow-state）收编进薄道——brainstorm 是 run 族预段，先跑后到不触发混跑守卫；产物原样
+      // 保留，机器只补缺件与绑定面。无产物 = 真 legacy 既有变更，维持原拒收。
+      const hasBsArtifacts = existsSync(join(changeDir, 'proposal.md')) || existsSync(join(changeDir, 'design.md'))
+      if (hasBsArtifacts) {
+        const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+        const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
+        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', baseline_commit: baseline, substeps: {} })
+        try {
+          const { redraftMissingArtifacts, ensureBindingSlots } = await import('./flow-draft.js')
+          const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
+          if (r.drafted.length > 0) console.log(`📌 收编补生成缺失机器稿：${r.drafted.join('、')}（brainstorm 未产的工件机器补齐，criteria 从 proposal 成功标准回提；已存在文件未动）`)
+          const b = ensureBindingSlots({ changeDir })
+          if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——干活时作答，flow done 校验）`)
+        } catch (e) { console.warn(`⚠️ 收编补件失败（best-effort）: ${(e && e.message) || e}`) }
+        try {
+          const { spawnWatcher } = await import('./watcher.js')
+          const w = await spawnWatcher(cwd, change, { specBase })
+          if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+        } catch { /* 观测旁路 best-effort */ }
+        const materials = materialPaths(specBase, change, changeDir)
+        console.log([
+          `🧲 头脑风暴产物已收编进薄跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
+          `══════════════════════════════════════`,
+          `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+          `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+          ``,
+          `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+          ``,
+          `材料路径清单（按需 Read）：`,
+          ...materials.map((p) => `  - ${p}`),
+        ].join('\n'))
+        try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+        return { adopted: true, change, baseline }
+      }
       console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
       process.exit(2)
     }
@@ -149,6 +184,20 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st })
     return { recovery: true }
+  }
+
+  // 需求清晰度门（2026-09-25-thin-brainstorm-prestage）：薄跑道假定输入已含决策——--input 缺失
+  // 或成功标准提取 0 条时不建变更、exit 2 给两选一（头脑风暴预段 / 补成功标准重跑）。
+  // 重入与 adopt 路径在上方分支早退，不受此门影响。CLI 只产信号，选择权归用户/agent。
+  {
+    const { extractSuccessCriteria } = await import('./flow-draft.js')
+    if (!input || extractSuccessCriteria(input).length === 0) {
+      console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——薄跑道假定输入已含决策，两选一：`)
+      console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
+      console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑薄道`)
+      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<含『成功标准：』条目的完整需求>"`)
+      process.exit(2)
+    }
   }
 
   pm.initChange(cwd, change, {})
@@ -299,12 +348,18 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       reportMidFail('artifacts')
       process.exit(1)
     }
-    const dr = verifyDesignRecordFilled({ changeDir })
-    if (dr.applicable && dr.emptySlots.length > 0) {
-      console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
-      console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
-      reportMidFail('artifacts')
-      process.exit(1)
+    // 头脑风暴预段设计豁免（2026-09-25-thin-brainstorm-prestage）：adopted 变更的 design 是
+    // brainstorm 人机交互产物（比四节骨架丰富）——承诺以其为准，槽位门不适用
+    if (st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))) {
+      console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
+    } else {
+      const dr = verifyDesignRecordFilled({ changeDir })
+      if (dr.applicable && dr.emptySlots.length > 0) {
+        console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
+        console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
+        reportMidFail('artifacts')
+        process.exit(1)
+      }
     }
     // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings：每条 FR 至少一行测试锚或「不适用：理由」）
     const { verifyRequirementBindings } = await import('./flow-draft.js')

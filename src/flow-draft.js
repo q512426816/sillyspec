@@ -477,7 +477,8 @@ export function verifyDesignRecordFilled({ changeDir }) {
  * 为兜底单行）> 空（draft 各自兜底）。
  */
 export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot }) {
-  // criteria 回提：input 缺省时从既有 proposal 机器段解析编号行（机器段指纹保证原文可信）
+  // criteria 回提：input 显式 > 既有 proposal 机器段（薄道自产，指纹保证原文可信）> proposal
+  // 手写「成功标准」节（brainstorm 预段产物，adopt 路径）> 空（draft 各自兜底）
   let criteria = input ? extractSuccessCriteria(input) : null
   if (criteria === null || (Array.isArray(criteria) && criteria.length === 0)) {
     try {
@@ -488,6 +489,8 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
           .map((l) => l.trim())
           .filter((l) => /^\d+[.、]\s+/.test(l))
           .map((l) => l.replace(/^\d+[.、]\s+/, ''))
+      } else {
+        criteria = extractSuccessCriteria(pText)
       }
     } catch { /* 无 proposal 可回提 → 空，draft 各自兜底 */ }
   }
@@ -515,4 +518,26 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
   return { drafted }
 }
 
-export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+/**
+ * 收编追加测试绑定槽（2026-09-25-thin-brainstorm-prestage adopt 路径消费面）：头脑风暴产物
+ * requirements 是 agent 手写、无绑定面——按文中实际 FR 编号（###/## FR-NN 标题）追加机器
+ * 绑定节（纯 AGENT 槽面，不指纹）；已有绑定槽/无 requirements → no-op（redraft 先产新稿自带槽）。
+ */
+export function ensureBindingSlots({ changeDir }) {
+  const path = join(changeDir, 'requirements.md')
+  if (!existsSync(path)) return { appended: false, slots: 0 }
+  let text = readFileSync(path, 'utf8')
+  if (/<!--\s*AGENT:测试绑定/.test(text)) return { appended: false, slots: 0 }
+  const ids = []
+  for (const m of text.matchAll(/(?:^|\n)#{2,4}\s*(FR-\d+)[^\n]*/g)) {
+    const id = m[1]
+    if (!ids.includes(id)) ids.push(id)
+  }
+  const list = ids.length > 0 ? ids : ['FR-01']
+  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
+  const section = `\n## 测试绑定（收编追加——每条 FR 至少一行：test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）\n\n${slots.join('\n\n')}\n`
+  writeAtomicSync(path, text.endsWith('\n') ? text + section : text + '\n' + section)
+  return { appended: true, slots: list.length }
+}
+
+export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, ensureBindingSlots, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }

@@ -65,7 +65,7 @@ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅�
   const change = 'flow-h2-t1'
 
   // 协议调用 1/2：flow start
-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件'])
+  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   assert.match(s1.stdout, /协议调用 1\/2/)
   assert.match(s1.stdout, /flow done/)
@@ -94,9 +94,9 @@ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅�
 test('② flow start 重入 → 恢复简报（盘面状态信号：dirty/子步标记/下一步）', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t2'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   writeFileSync(join(cwd, 'wip.txt'), 'wip\n')
-  const r = cli(cwd, ['flow', 'start', '--change', change])
+  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
   assert.equal(r.status, 0)
   assert.match(r.stdout, /恢复简报/)
   assert.match(r.stdout, /dirty 文件 1 个/)
@@ -112,7 +112,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
   const change = 'flow-h2-t3'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
   fillDesignSlots(cwd, change)
   const specBase = join(cwd, '.sillyspec')
@@ -151,7 +151,7 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
 test('⑤ 混跑回退写读两侧：thin change 跑 run <stage> → legacy_fallback 落档；flow done 拒裁 exit 2', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t5'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   // 混跑：run brainstorm 渲染一步（真实 run <stage> 路径）
   const mix = cli(cwd, ['run', 'brainstorm', '--change', change])
   assert.equal(mix.status, 0, `run 应正常: ${mix.stdout}\n${mix.stderr}`)
@@ -196,7 +196,7 @@ test('⑥ FR 索引提炼接线：薄变更 flow done 后 requirements 进 knowl
 test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done exit 1 点名空槽；填后放行归档', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t6b'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
@@ -257,9 +257,9 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
 test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t6c'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   rmSync(join(cwd, '.sillyspec', 'changes', change, 'design.md'), { force: true }) // 模拟工具升级前的在途变更
-  const r = cli(cwd, ['flow', 'start', '--change', change])
+  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
   assert.equal(r.status, 0)
   assert.match(r.stdout, /重入补生成缺失机器稿 1 件：design\.md/, '补生成提示点名')
   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'design.md')), '骨架已补回')
@@ -271,6 +271,52 @@ test('⑧ 归属收窄接线钉（文本级，防回潮）：ledger 门与 disti
   assert.match(src, /splitOwnVsForeignDiffFiles/, '复用他侧声明切分器')
   const uses = src.split('attributedChangedFiles()').length - 1
   assert.ok(uses >= 2, `ledger 门与 distill 双消费（实测 ${uses} 处）——distill 不得直取 git diff`)
+})
+
+test('⑫ 需求清晰度门：--input 缺失或成功标准 0 条 → exit 2 两选一（不建变更）', () => {
+  const { cwd } = makeRepo()
+  const r1 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12'])
+  assert.equal(r1.status, 2)
+  assert.match(r1.stderr, /需求不够清晰/, '缺失 input 拦下')
+  assert.match(r1.stderr, /头脑风暴预段/, '两选一含预段')
+  assert.match(r1.stderr, /成功标准/, '两选一含补输入')
+  const r2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12', '--input', '只有动机没有验收条目'])
+  assert.equal(r2.status, 2, '有 input 无成功标准同样拦下')
+  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', 'flow-h2-t12')), '未建变更目录')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（补缺件+绑定槽+design 豁免）→ done 全绿', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t13'
+  // 模拟 brainstorm 预段产物（agent 手写、无 flow-state、无指纹）
+  const changeDir = join(cwd, '.sillyspec', 'changes', change)
+  mkdirSync(changeDir, { recursive: true })
+  writeFileSync(join(changeDir, 'proposal.md'), [
+    '# 提案书', '', '## 动机', '需要一个守护行为', '',
+    '## 成功标准', '- 守护行为 X 发生', '- 崩溃不影响主流程', '',
+  ].join('\n'))
+  writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：乱序不适用\n')
+  const s = cli(cwd, ['flow', 'start', '--change', change])
+  assert.equal(s.status, 0, `收编失败: ${s.stdout}\n${s.stderr}`)
+  assert.match(s.stdout, /头脑风暴产物已收编进薄跑道/, '收编简报')
+  const st = readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8')
+  assert.match(st, /adopted_from: brainstorm/, 'flow-state 记 adopted_from')
+  assert.ok(existsSync(join(changeDir, 'requirements.md')), '缺件 requirements 机器补齐（criteria 回提自 proposal）')
+  assert.match(readFileSync(join(changeDir, 'requirements.md'), 'utf8'), /守护行为 X 发生/, 'criteria 回提成功')
+  assert.match(readFileSync(join(changeDir, 'requirements.md'), 'utf8'), /<!--AGENT:测试绑定/, '绑定槽收编追加')
+  assert.ok(existsSync(join(changeDir, 'tasks.md')), '缺件 tasks 补齐')
+
+  // 干活 + 绑定槽作答 → done（design 四节槽豁免、绑定门生效）
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  writeFileSync(join(changeDir, 'requirements.md'), readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑬ 收编用例'))
+  const done = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
+  assert.match(done.stdout, /豁免 design 四节槽门/, 'adopted design 豁免提示')
+  rmSync(cwd, { recursive: true, force: true })
 })
 
 test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {

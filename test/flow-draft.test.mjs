@@ -23,7 +23,7 @@ const CLI = join(ROOT, 'src', 'index.js')
 const {
   draftAll, amendFlowDraft, verifyFlowDrafts, extractSuccessCriteria, draftLedgerPath, draftDecisions,
   draftDesignRecord, verifyDesignRecordFilled, redraftMissingArtifacts,
-  verifyRequirementBindings, extractRequirementBindings,
+  verifyRequirementBindings, extractRequirementBindings, ensureBindingSlots,
 } = await import('../src/flow-draft.js')
 // decisions 起草器：零真实决策=不落文件（转写任务通常为零）；有输入才有产物——锚定存在性+空态语义
 if (draftDecisions({ change: 'x', decisions: [] }) !== null) throw new Error('draftDecisions 空态应返回 null（不落文件）')
@@ -158,6 +158,24 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
   assert.deepEqual(rows[0].tests, ['test/flow-draft.test.mjs', 'test/flow-protocol.test.mjs'])
   assert.equal(rows[0].state, 'candidate')
   assert.equal(rows[0].row_id, 'c1:flow:FR-01')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('⑫ ensureBindingSlots：按 requirements 实际 FR 编号追加/幂等/无文件 no-op', () => {
+  const { root, changeDir } = makeFixtureDir()
+  assert.deepEqual(ensureBindingSlots({ changeDir }), { appended: false, slots: 0 }, '无 requirements no-op')
+  writeFileSync(join(changeDir, 'requirements.md'), [
+    '# 需求', '', '### FR-02: 行为甲', 'Given x', 'When y', 'Then z', '',
+    '### FR-05: 行为乙', 'Given x', '', '## 决策覆盖', '散文', '',
+  ].join('\n'))
+  const r1 = ensureBindingSlots({ changeDir })
+  assert.equal(r1.appended, true)
+  assert.equal(r1.slots, 2, '按实际编号 FR-02/FR-05')
+  const text = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+  assert.match(text, /测试绑定FR-02/, '槽 id 用实际编号')
+  assert.match(text, /测试绑定FR-05/)
+  const r2 = ensureBindingSlots({ changeDir })
+  assert.equal(r2.appended, false, '二次调用幂等 no-op')
   rmSync(root, { recursive: true, force: true })
 })
 
