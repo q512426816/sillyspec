@@ -204,14 +204,16 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   }
 
   // 复杂度预判（2026-09-25-thin-default-flip：升档前半句）——input 命中完整流程特征关键词时
-  // 打一行升厚建议（advisory 不阻断：坚持薄跑由实测失败自动升厚兜底）。与清晰度门互补：
-  // 清晰度门管「需求说不清楚」，预判管「说清楚了但活大」。
+  // 提示用户裁决（advisory，**升厚与否是用户决策**——agent 不得自行转道；R16 实证驱动加硬：
+  // 混跑回退侧已加 --upgrade-thick 同意门）。与清晰度门互补：清晰度门管「需求说不清楚」，
+  // 预判管「说清楚了但活大」。
   try {
     const { classifyChange } = await import('./classify-change.js')
     const cl = classifyChange({ description: String(input || '') })
     if (cl && cl.mode === 'full') {
-      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——建议走完整流程：run brainstorm → plan → execute（Wave 编排/设计期对抗）。`)
-      console.log(`   坚持薄跑：实测失败将自动升厚兜底（tier=thick 后剩余流程按厚档走）。`)
+      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——是否升厚走完整流程【由用户裁决，agent 勿自行转道】：`)
+      console.log(`   · 问用户；用户同意升厚 → 继续干活后按用户指示转 run <stage>（届时需带 --upgrade-thick 同意门）`)
+      console.log(`   · 用户选择薄跑或未表态 → 留在薄道（干活 → flow done；实测失败时档位自动升厚兜底归档语义）`)
     }
   } catch { /* 预判失败不阻断启动 */ }
 

@@ -149,16 +149,22 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('⑤ 混跑回退写读两侧：thin change 跑 run <stage> → legacy_fallback 落档；flow done 拒裁 exit 2', () => {
+test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒跑；带 flag 落 legacy_fallback 留痕；flow done 拒裁 exit 2', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t5'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
-  // 混跑：run brainstorm 渲染一步（真实 run <stage> 路径）
-  const mix = cli(cwd, ['run', 'brainstorm', '--change', change])
-  assert.equal(mix.status, 0, `run 应正常: ${mix.stdout}\n${mix.stderr}`)
-  assert.match(mix.stdout + mix.stderr, /混跑回退 legacy/)
+  // 同意门（2026-09-25-thin-upgrade-consent）：agent 不得自行升厚
+  const blocked = cli(cwd, ['run', 'brainstorm', '--change', change])
+  assert.equal(blocked.status, 2, '无同意 flag 应拒跑')
+  assert.match(blocked.stderr, /需用户同意/)
+  assert.match(blocked.stderr, /--upgrade-thick/)
+  // 用户同意落痕 → 放行并落 legacy_fallback
+  const mix = cli(cwd, ['run', 'brainstorm', '--change', change, '--upgrade-thick'])
+  assert.equal(mix.status, 0, `带同意 flag 应放行: ${mix.stdout}\n${mix.stderr}`)
+  assert.match(mix.stdout + mix.stderr, /经用户同意（--upgrade-thick 落痕）升厚/)
   const st = readFileSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'utf8')
   assert.match(st, /legacy_fallback: true/)
+  assert.match(st, /upgraded_by_consent:/, '同意时点留痕')
   // 读侧：flow done 拒裁并指路
   const done = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(done.status, 2)
@@ -334,7 +340,8 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /thin 薄跑道/, '缺省走薄跑道')
   assert.match(s.stdout, /复杂变更特征命中/, 'classify 预判提示在场')
-  assert.match(s.stdout, /建议走完整流程/, '升厚建议文案')
+  assert.match(s.stdout, /由用户裁决/, '升厚裁决权归用户文案')
+  assert.match(s.stdout, /--upgrade-thick/, '同意门指引在场')
   // 无复杂特征输入不打建议（负例）
   const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
   assert.equal(s2.status, 0)

@@ -722,6 +722,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
     '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
+    '--upgrade-thick', // 薄→厚升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -1352,7 +1353,10 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     // SILLYSPEC_WATCHER=0 逃生阀。default 容器行不监听（非真实变更）。
     if (effectiveChange !== 'default') {
       // ── 混跑回退写侧（R7 切片二 / FR-06 / D-002：thin change 上跑 run <stage> = 该 change
-      // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。──
+      // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。）──
+      // 升厚同意门（2026-09-25-thin-upgrade-consent，R16 实测驱动）：薄→厚是成本数倍的资源
+      // 决策，归属用户——agent 不得凭 CLI 的 advisory 自行转道。混跑回退须显式 --upgrade-thick
+      // （=「用户已同意」的落痕 flag，同 --force 留痕先例）；无 flag 拒跑指路。
       try {
         const flowStatePath = join(specRoot, 'changes', effectiveChange, 'flow-state.yaml')
         if (existsSync(flowStatePath)) {
@@ -1360,11 +1364,17 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           const changeDir = join(specRoot, 'changes', effectiveChange)
           const st = readFlowState(changeDir)
           if (st && !st.legacy_fallback) {
-            writeFlowState(changeDir, { legacy_fallback: true })
-            console.warn(`⚠️ [flow] thin change「${effectiveChange}」跑了 run ${stageName}——已混跑回退 legacy（flow done 将按厚档拒裁并指路；两套记账不叠加）`)
+            if (!flags.includes('--upgrade-thick')) {
+              console.error(`⛔ 本变更在薄跑道上（flow-state 在场）——升厚走完整流程需用户同意，agent 不得自行转道：`)
+              console.error(`   · 征得用户同意后带 --upgrade-thick 重跑本命令（落痕留档，首次转厚即转）`)
+              console.error(`   · 用户未确认或选择薄跑 → 继续薄道：直接干活，收口 sillyspec flow done --change ${effectiveChange}`)
+              process.exit(2)
+            }
+            writeFlowState(changeDir, { legacy_fallback: true, upgraded_by_consent: new Date().toISOString() })
+            console.warn(`⚠️ [flow] thin change「${effectiveChange}」经用户同意（--upgrade-thick 落痕）升厚——已混跑回退 legacy（flow done 将按厚档拒裁并指路；两套记账不叠加）`)
           }
         }
-      } catch { /* 探测失败不阻断既有 run 流程 */ }
+      } catch { /* 探测失败不阻断既有 run 流程（process.exit 直出不经 catch） */ }
       try {
         const { spawnWatcher } = await import('../watcher.js')
         const r = await spawnWatcher(cwd, effectiveChange, { ...platformOpts, specBase })
@@ -1735,7 +1745,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
   }
 
   // 默认：输出当前步骤
-  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch') })
+  return await runStage(pm, progress, stageName, cwd, effectiveChange, isSkipApproval, platformOpts, { quickFiles, isAllowNew, isAllowDelete, isForceBaseline, isForceRescan, linkedChanges, linkedChangesAuto: linkedAuto, taskDescription: inputText, adoptBranch: stageName === 'execute' && flags.includes('--adopt-branch'), sameSession: flags.includes('--same-session') })
 }
 
 /**
@@ -2261,7 +2271,7 @@ export async function maybeWaitInteractive(stepDef, changeName, stageName, { rlF
       const { execFileSync } = await import('node:child_process')
       const binSelf = resolveBinSelfPath()
       try {
-        execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd() })
+        execFileSync(process.execPath, [binSelf, 'run', 'auto', '--continue', '--answer', answer.trim(), '--change', changeName], { stdio: 'inherit', cwd: process.cwd(), windowsHide: true })
       } catch { /* continue 失败（非 waiting 态等）静默——回三段式由 agent 走 */ }
     }
   } catch (e) {
