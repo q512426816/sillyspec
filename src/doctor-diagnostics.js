@@ -31,6 +31,7 @@ import { gitQuiet } from './git-helper.js'
 import jsYaml from 'js-yaml';
 import { pruneTimestampedEntries } from './runtime-hygiene.js';
 import { CHECK_SEVERITY } from './constants.js';
+import { readGateSnapshotLedger, selectStaleSnapshots } from './run/gate-snapshot-ledger.js'
 import { checkPlatformManaged, isSelfReferentialSpecRoot, PLATFORM_MANAGED_FILENAME, QUICK_SID_RE, resolveRuntimeRoot } from './run/shared.js';
 import { readFrictionLedger } from './friction-ledger.js';
 // FR 索引消费（2026-09-18-fr-index-l1 L1，D-007）：D14 第四检查——epoch 后归档的索引在场+取代完整。
@@ -1430,6 +1431,34 @@ export function renderDoctorSummary(diagnostics) {
 import * as _wtm from './worktree.js'
 function require_wtm() { return _wtm }
 
+/**
+ * 门禁快照泄漏探测（task-04，2026-09-24-gate-snapshot-lifecycle / FR-03 / D-007@v1）：
+ * 账本内「守卫通过 ∧ 超 TTL（env/24h 单源）∧ pid 明确死」的条目即失活残留——门禁快照
+ * （%TEMP%/sillyspec-gate-*）在进程被杀/Windows 删除失败时必然泄漏且此前零可见面。
+ * 只读：只报不修（零修复），warning 级不阻断（doctor --json 的 overall_status 与退出码
+ * 沿用现行全局口径）。runtimeRoot 缺失/账本损坏→ok（fail-open 零误报）。
+ */
+export function detectGateSnapshotLeak({ runtimeRoot = null, now = Date.now(), staleHours, isProcessAlive } = {}) {
+  if (!runtimeRoot) {
+    return { name: 'gate_snapshot_leak', label: '门禁快照泄漏', pass: true, severity: null, findings: [], safe_actions: [] }
+  }
+  let leaked = []
+  try {
+    const { stale } = selectStaleSnapshots(readGateSnapshotLedger(runtimeRoot), { now, staleHours, isProcessAlive })
+    leaked = stale.map((e) => ({ root: e.snapshotRoot, ageHours: Math.max(0, Math.round((now - e.createdAt) / 3600000)) }))
+  } catch { leaked = [] }
+  return {
+    name: 'gate_snapshot_leak',
+    label: '门禁快照泄漏',
+    pass: leaked.length === 0,
+    severity: leaked.length > 0 ? CHECK_SEVERITY.WARNING : null,
+    findings: leaked.length > 0
+      ? leaked.map((x) => `残留快照 ${x.root}（账龄约 ${x.ageHours}h，超 TTL 且登记进程已失活——下个门禁建快照时自动回收，也可 rm -rf 后 git worktree prune）`)
+      : [],
+    safe_actions: [],
+  }
+}
+
 export async function runDoctorDiagnostics({ cwd }) {
   const pointer = resolvePointer(cwd);
   const multiDb = detectMultiDb(cwd, pointer);
@@ -1464,7 +1493,11 @@ export async function runDoctorDiagnostics({ cwd }) {
   // task-06（2026-09-18-ceremony-risk-pricing / FR-04 / R-04）：影子对照——轻/重 catch 差异报告 +
   // 转正判据计数（纯增量挂载，只读不阻断；无影子数据跳过不误报）
   const ceremonyShadow = detectCeremonyShadowComparison(cwd, authoritySpecDir)
-  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow];
+  // task-04（2026-09-24-gate-snapshot-lifecycle / FR-03 / D-007@v1）：门禁快照泄漏
+  // （%TEMP%/sillyspec-gate-* 崩溃残留——warning 级只读可见面；阈值与 create 前扫共用
+  // env SILLYSPEC_GATE_SNAPSHOT_STALE_HOURS/24h 单源，顶层 doctor 无 --stale-hours 参数面）
+  const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: authoritySpecDir ? join(authoritySpecDir, '.runtime') : null })
+  const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak];
 
   return {
     dimensions,
