@@ -219,19 +219,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     }
   }
 
-  // 复杂度预判（2026-09-25-thin-default-flip：升档前半句）——input 命中完整流程特征关键词时
-  // 提示用户裁决（advisory，**升厚与否是用户决策**——agent 不得自行转道；R16 实证驱动加硬：
-  // 混跑回退侧已加 --upgrade-thick 同意门）。与清晰度门互补：清晰度门管「需求说不清楚」，
-  // 预判管「说清楚了但活大」。
-  try {
-    const { classifyChange } = await import('./classify-change.js')
-    const cl = classifyChange({ description: String(input || '') })
-    if (cl && cl.mode === 'full') {
-      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——是否升厚走完整流程【由用户裁决，agent 勿自行转道】：`)
-      console.log(`   · 问用户；用户同意升厚 → 继续干活后按用户指示转 run <stage>（届时需带 --upgrade-thick 同意门）`)
-      console.log(`   · 用户选择薄跑或未表态 → 留在薄道（干活 → flow done；实测失败时档位自动升厚兜底归档语义）`)
-    }
-  } catch { /* 预判失败不阻断启动 */ }
+  // 升厚预判已删除（2026-09-25-thin-precheck-removal）：技术面关键词（数据库/迁移等）测错轴——
+  // R16 实证碰迁移的变更薄道带评审最优收口，预判反诱发误升厚（臂 A 129M）与误报打断。选道只留
+  // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
+  // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
 
   pm.initChange(cwd, change, {})
   try {

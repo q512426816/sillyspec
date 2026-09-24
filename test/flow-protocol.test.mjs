@@ -340,10 +340,11 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /thin 薄跑道/, '缺省走薄跑道')
-  assert.match(s.stdout, /复杂变更特征命中/, 'classify 预判提示在场')
-  assert.match(s.stdout, /由用户裁决/, '升厚裁决权归用户文案')
-  assert.match(s.stdout, /--upgrade-thick/, '同意门指引在场')
-  // 无复杂特征输入不打建议（负例）
+  // 预判已删（2026-09-25-thin-precheck-removal）：技术关键词不再触发升厚建议——碰迁移的
+  // 薄道照样最优收口（R16 实证），风险面归收口评审按证据判定
+  assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
+  assert.doesNotMatch(s.stdout, /由用户裁决/, '无升厚裁决文案')
+  // 无复杂特征输入同款零打扰（负例归并）
   const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
   assert.equal(s2.status, 0)
   assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
