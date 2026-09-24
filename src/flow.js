@@ -25,7 +25,7 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import yaml from 'js-yaml'
@@ -352,6 +352,19 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   const doneList = []
   const skip = (k) => { doneList.push(`${k}(skip)`) }
   let reviewOutcome = null
+  let gateSummaryText = null
+  // 遥测单点（2026-09-25-thin-parity-assets 修评审 P2①：失败路径 exit 前也要落账——校准信号
+  // 不许在失败面丢失；成功收口走函数末尾同款记录，失败面只多不少）
+  const appendTelemetry = (review) => {
+    try {
+      appendFileSync(join(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
+        ts: new Date().toISOString(), change, protocolCalls: 2,
+        draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
+        routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
+        review,
+      }) + '\n', 'utf8')
+    } catch { /* 遥测 best-effort */ }
+  }
   const reportMidFail = (failed) => {
     console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
@@ -414,7 +427,8 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     const fmt = (r) => r
       ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}`
       : '—'
-    console.log(`🧾 实测面对账 — test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`)
+    gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
+    console.log(`🧾 实测面对账 — ${gateSummaryText}`)
     mark('ledger')
   }
 
@@ -435,8 +449,8 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       } else {
         const ownPrefix = `.sillyspec/changes/${change}/`
         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
-        let committed = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
-          .filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
+        const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+        let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
         try {
           const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
           committed = splitOwnVsForeignDiffFiles(cwd, change, committed, { specBase }).own
@@ -486,6 +500,13 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
           }
           writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
           console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
+          // 模块文档对账（2026-09-25-thin-parity-assets：厚道 module-impact 死信门的薄道 advisory
+          // 等价物——模块文档是后续变更门禁收窄/知识注入的原料，失供是复利折旧）
+          try {
+            const { reconcileModuleDocs } = await import('./flow-parity.js')
+            const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
+            if (rec.hits > 0) for (const l of rec.lines) console.log(l)
+          } catch { /* 对账 best-effort */ }
           patchOk = true
         }
       }
@@ -499,7 +520,22 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
   // 多证并举、豁免者 1/4 定额抽查采样。评审任务书由 CLI 渲染（agent 起干净上下文子代理执行，
   // 协议调用数不变）；FAIL 或 P1 发现=拦截（修复后删件重评再重跑 done，断点续）。
-  if (st.substeps?.review === 'done') { skip('review') } else {
+  if (st.substeps?.review === 'done') {
+    skip('review')
+    // 回填（修评审 P2②：续跑成功轮遥测不失忆——review 已发生但子步已标，从留档件回读结论）
+    try {
+      const { validateReviewJson } = await import('./flow-review.js')
+      const rp = join(changeDir, 'review.json')
+      if (existsSync(rp)) {
+        const v = validateReviewJson(rp)
+        reviewOutcome = v.ok
+          ? { required: true, sampled: false, verdict: v.review.verdict, findingsP1: (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || ''))).length, backfilled: true }
+          : { required: true, sampled: false, verdict: 'invalid', backfilled: true }
+      } else {
+        reviewOutcome = { required: false, sampled: false, verdict: 'exempt', backfilled: true }
+      }
+    } catch { reviewOutcome = { required: null, verdict: 'done', backfilled: true } }
+  } else {
     const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
     let patchText = null
     try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
@@ -512,6 +548,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
       console.log(renderReviewerTaskbook({ change, changeDir }))
       reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+      appendTelemetry(reviewOutcome) // 修评审 P2①：失败面先落账再 exit（校准信号不丢）
       reportMidFail('review')
       process.exit(1)
     } else {
@@ -519,6 +556,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       if (!v.ok) {
         console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
         reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
+        appendTelemetry(reviewOutcome) // 修评审 P2①
         reportMidFail('review')
         process.exit(1)
       }
@@ -529,6 +567,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
         for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
         console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
         reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
+        appendTelemetry(reviewOutcome) // 修评审 P2①：sampled+FAIL 恰是误豁免率校准的最关键信号
         reportMidFail('review')
         process.exit(1)
       }
@@ -555,6 +594,13 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   // requirements 永不进 knowledge/fr，知识复利在新默认道断流；薄变更无 design.md，域路由
   // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
   if (st.substeps?.distill === 'done') { skip('distill') } else {
+    // 槽4收割（2026-09-25-thin-parity-assets：design「风险与死路」实质作答合成 decisions.md——
+    // 薄变更决策产出从零到一；已有 decisions 不覆盖）
+    try {
+      const { harvestSlot4Decision } = await import('./flow-parity.js')
+      const h = harvestSlot4Decision({ changeDir, change })
+      if (h.harvested) console.log(`🌱 槽4（风险与死路）收割 → decisions.md（随蒸馏链进 knowledge）`)
+    } catch { /* 收割 best-effort */ }
     try {
       const { distillIntoKnowledge } = await import('./decision-distill.js')
       const knowledgeRoot = join(specBase, 'knowledge')
@@ -596,6 +642,21 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
 
   // ⑤ archive：归档经 runArchiveChain（thin 薄工件面跳过 plan.md 硬校验；thick 不跳）
   if (st.substeps?.archive === 'done') { skip('archive') } else {
+    // verify-result 机器回执（2026-09-25-thin-parity-assets：人类可读收口结论，随归档留档）
+    try {
+      const { renderVerifyReceipt } = await import('./flow-parity.js')
+      let patchMeta = null
+      try { patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8')) } catch { /* 无冻结件 */ }
+      let traceCount = 0
+      try { traceCount = (JSON.parse(readFileSync(join(changeDir, 'test-trace.json'), 'utf8')).rows || []).length } catch { /* 无锚行 */ }
+      const headNow = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+      writeFileSync(join(changeDir, 'verify-result.md'), renderVerifyReceipt({
+        change, baseline: st.baseline_commit, head: typeof headNow === 'string' ? headNow.trim() : null,
+        gateSummary: gateSummaryText, review: reviewOutcome, traceCount, patchMeta,
+        generatedAt: new Date().toISOString(),
+      }))
+      console.log('🧾 验证回执已合成：verify-result.md（随归档留档）')
+    } catch (e) { console.warn(`⚠️ 回执合成失败（不阻断归档）：${(e && e.message) || e}`) }
     const { ProgressManager } = await import('./progress.js')
     const { runArchiveChain } = await import('./run/complete-handlers.js')
     const { archiveDestDirName } = await import('./stage-contract.js')
@@ -637,15 +698,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       process.exit(1)
     }
   }
-  try {
-    const { appendFileSync } = await import('node:fs')
-    appendFileSync(join(runtimeRoot, 'flow-telemetry.jsonl'), JSON.stringify({
-      ts: new Date().toISOString(), change, protocolCalls: 2,
-      draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
-      routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
-      review: reviewOutcome,
-    }) + '\n', 'utf8')
-  } catch { /* 遥测 best-effort */ }
+  appendTelemetry(reviewOutcome) // 成功收口（失败面已在各失败路径提前落账，appendTelemetry 单点）
 
   console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
   // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）

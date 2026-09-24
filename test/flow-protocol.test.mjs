@@ -379,7 +379,10 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS �
   const archDir = join(specBase, 'changes', 'archive')
   const archived = readdirSync(archDir)[0]
   assert.ok(existsSync(join(archDir, archived, 'review.json')), 'review.json 随归档留档')
-  const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.change === change)
+  assert.ok(existsSync(join(archDir, archived, 'verify-result.md')), 'verify-result 回执随归档留档')
+  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /结论\*\*：PASS/, '回执含结论')
+  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /独立评审\*\*：PASS/, '回执含评审结论')
+  const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.change === change).pop()
   assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')
   rmSync(cwd, { recursive: true, force: true })
 })
@@ -403,6 +406,8 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复�
   assert.match(f.stdout + f.stderr, /\[P1\] 承诺违反/, 'P1 明细列出')
   assert.match(f.stdout + f.stderr, /修复后删除 review\.json/, '重评指引')
   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change)), '未归档')
+  const tlFail = readFileSync(join(cwd, '.sillyspec', '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.change === change && r.review)
+  assert.equal(tlFail.review.verdict, 'FAIL', '失败面评审结论已落遥测（修 P2①）')
   rmSync(cwd, { recursive: true, force: true })
 })
 
