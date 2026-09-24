@@ -18,6 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
 import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
+import { registerGateSnapshot, unregisterGateSnapshot, reclaimStaleGateSnapshots } from './gate-snapshot-ledger.js'
 
 /**
  * worktree 会话跳快照判定（2026-09-23 R9/R10 双实证根治）：cwd 位于 sillyspec 会话专属
@@ -35,6 +36,55 @@ export function shouldSkipGateSnapshotForWorktree(cwd) {
 
 function git(cwd, args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true }).trim()
+}
+
+/** worktree 注册是否仍登记该 root（跨平台路径归一 + win32 大小写不敏感） */
+function worktreeListContains(cwd, snapshotRoot) {
+  const out = git(cwd, ['worktree', 'list', '--porcelain'])
+  const norm = (s) => {
+    const v = String(s).replace(/\\/g, '/')
+    return process.platform === 'win32' ? v.toLowerCase() : v
+  }
+  const target = norm(snapshotRoot)
+  return out.split('\n').some((line) => line.startsWith('worktree ') && norm(line.slice('worktree '.length)) === target)
+}
+
+/**
+ * 快照目录 + worktree 注册的清理体（2026-09-24-gate-snapshot-lifecycle task-02，FR-02）——
+ * Windows 硬化：rmSync 带重试（EPERM/junction 锁是本次 41 个残留目录的实证成因），
+ * worktree remove 失败后补 prune 清 prunable 注册（本次实证 2 条）。
+ * git/删目录/存在性判定的依赖均可注入（故障注入测试见 test/gate-snapshot-cleanup.test.mjs）。
+ * 返回双清结果供调用方决定账本销账（D-004@v2）；全失败不抛（fail-open）。
+ */
+const REMOVE_DIR_RETRY = { maxRetries: 5, retryDelay: 100 }
+
+export function cleanupSnapshot({
+  snapshotRoot,
+  cwd,
+  runGit = (c, a) => git(c, a),
+  removeDir = (p, opts) => rmSync(p, { recursive: true, force: true, ...opts }),
+  dirExists = (p) => existsSync(p),
+  worktreeRegistered = (c, p) => worktreeListContains(c, p),
+} = {}) {
+  let worktreeCleaned = true
+  try {
+    // 注：worktree remove/prune 无 --quiet 选项（非法 flag 会必抛并被 catch 吞掉——旧实现
+    // 正是因此让 git remove 每次都失败、只剩无重试 rmSync 兜底，41 个残留目录的根因之一）
+    runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
+  } catch {
+    worktreeCleaned = false
+  }
+  let dirRemoved = !dirExists(snapshotRoot)
+  if (!dirRemoved) {
+    try { removeDir(snapshotRoot, REMOVE_DIR_RETRY) } catch { /* 删不掉→下方按实际存在性判定 */ }
+    dirRemoved = !dirExists(snapshotRoot)
+  }
+  if (!worktreeCleaned) {
+    // remove 失败：prune 清掉「目录已不在但注册悬空」的 prunable 条目
+    try { runGit(cwd, ['worktree', 'prune']) } catch { /* prune 失败→下方复核 */ }
+    try { worktreeCleaned = !worktreeRegistered(cwd, snapshotRoot) } catch { worktreeCleaned = false }
+  }
+  return { dirRemoved, worktreeCleaned }
 }
 
 /**
@@ -400,11 +450,24 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
  * @param {{ cwd: string, files: string[] }} opts cwd=主仓根；files=本会话变更文件（仓库根相对 POSIX）
  * @returns {{ snapshotRoot: string, cleanup: () => void, reason?: string }|null} 失败返回 null（调用方回退主仓）
  */
-export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null }) {
+export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSmoke = false, mergeBase = null, runtimeRoot = null }) {
   let snapshotRoot = null
   try {
     // 前置：主仓须是 git 仓且有 HEAD（无 git 环境回退主仓现行为）
     git(cwd, ['rev-parse', 'HEAD'])
+
+    // 陈旧快照自愈（2026-09-24-gate-snapshot-lifecycle，D-002@v1/D-003@v2/D-004@v2）：
+    // 建快照前同步回收账本内「守卫通过 ∧ 超 TTL ∧ pid 明确死」的条目（目录+worktree 注册
+    // 双清，删不掉的保留待下轮）。全 try/catch 恒吞——回收异常零阻断建快照；reclaimed 空
+    // 时零输出（正常路径逐字节不变）。runtimeRoot 缺失→账本链路退 no-op（禁 cwd 猜）。
+    try {
+      if (runtimeRoot) {
+        const { reclaimed, skipped } = reclaimStaleGateSnapshots({ runtimeRoot, cwd })
+        if (reclaimed.length > 0) {
+          console.log(`🧹 门禁快照自愈：回收 ${reclaimed.length} 个失活残留${skipped.length > 0 ? `（${skipped.length} 个删不掉，留账本待下轮）` : ''}`)
+        }
+      }
+    } catch { /* 回收异常 fail-open 退现状 */ }
 
     // symlink-store 布局探测（坑 gate-snapshot-pnpm-store-break，2026-09-12 驾驭第十七批②，
     // 用户第三次踩「lint 沙箱临时目录跑 pnpm 必假败」）：pnpm/bun/lerna 的 node_modules 内部
@@ -418,6 +481,8 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
 
     snapshotRoot = mkdtempSync(join(tmpdir(), 'sillyspec-gate-'))
     git(cwd, ['worktree', 'add', '--detach', '--quiet', snapshotRoot, 'HEAD'])
+    // 登记账本（D-004@v2）：进程被杀时 cleanup 不跑，条目是残留唯一的可追踪凭据
+    registerGateSnapshot({ runtimeRoot, snapshotRoot })
 
     // 会话文件 overlay：主仓工作区版本覆盖进快照（本会话的最新态；文件不存在=已删，跳过）。
     // sourceRoot（verify 门定向跑用，2026-09-10 驾驭小结第八批）：overlay 源切换为本变更
@@ -599,16 +664,23 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     }
 
     const cleanup = () => {
-      try { git(cwd, ['worktree', 'remove', '--force', '--quiet', snapshotRoot]) } catch {
-        try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch { /* 残留交 OS tmp 清理 */ }
-      }
+      // 残留不再「交 OS tmp 清理」（%TEMP% 不会被 OS 清）——删不掉的快照由账本回收路径
+      // （下个 create 前按 TTL×pid 双闸自愈，2026-09-24-gate-snapshot-lifecycle）兜底；
+      // 销账只在「目录+worktree 注册双清确认」后执行（D-004@v2），删不掉保留条目待下轮
+      try {
+        const { dirRemoved, worktreeCleaned } = cleanupSnapshot({ snapshotRoot, cwd })
+        if (dirRemoved && worktreeCleaned) unregisterGateSnapshot({ runtimeRoot, snapshotRoot })
+      } catch { /* 双失败已由 cleanupSnapshot 吞掉；条目保留 */ }
     }
     return { snapshotRoot, cleanup, overlaid, pinnedCacheLinks }
   } catch (e) {
-    // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓
+    // 基建失败（worktree add 拒绝/磁盘满/…）：尽力清理后回退主仓；销账同走双清确认
+    // （D-004@v2：清不掉的条目保留待回收——它不是悬空条目，是待回收记录）
     if (snapshotRoot) {
-      try { git(cwd, ['worktree', 'remove', '--force', '--quiet', snapshotRoot]) } catch {}
-      try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch {}
+      try {
+        const { dirRemoved, worktreeCleaned } = cleanupSnapshot({ snapshotRoot, cwd })
+        if (dirRemoved && worktreeCleaned) unregisterGateSnapshot({ runtimeRoot, snapshotRoot })
+      } catch {}
     }
     return null
   }
@@ -739,6 +811,10 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
   try {
     const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
     const { resolveRuntimeRoot } = await import('./shared.js')
+    // 账本 runtimeRoot（2026-09-24-gate-snapshot-lifecycle task-03）：函数级解析一次，
+    // 平台/漂移模式口径与本函数内他处一致；解析失败退 null（账本链路 no-op，禁 cwd 猜）
+    let verifyRuntimeRoot = null
+    try { verifyRuntimeRoot = resolveRuntimeRoot(platformOpts, specBase) } catch { verifyRuntimeRoot = null }
     const { splitOwnVsForeignDiffFiles } = await import('../foreign-declared.js')
     let changeFiles = resolveVerifyChangedFiles(cwd, changeName, null, {
       specBase, includeWorkingTree: true,
@@ -748,8 +824,7 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
     // 并入后主仓全部在途文件进场——他者活跃变更显式声明的文件（quick --files / 他者 design
     // 清单）剔除，只留本变更相关面（无主文件保留，fail-closed 口径与 probe6 一致）。
     try {
-      const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
-      const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, changeFiles, { specBase, runtimeRoot })
+      const { foreign } = splitOwnVsForeignDiffFiles(cwd, changeName, changeFiles, { specBase, runtimeRoot: verifyRuntimeRoot })
       if (foreign.length > 0) {
         const foreignSet = new Set(foreign.map(x => x.file))
         changeFiles = changeFiles.filter(f => !foreignSet.has(f))
@@ -782,7 +857,7 @@ export async function createVerifyGateSnapshot({ cwd, changeName, specBase, plat
       }
     } catch { /* meta 读取失败 → 主仓 cwd 源（files 已含本变更 working-tree 改动） */ }
 
-    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase })
+    const snap = createGateSnapshot({ cwd, files: changeFiles, sourceRoot, mergeBase: snapMergeBase, runtimeRoot: verifyRuntimeRoot })
     if (!snap) return null
 
     // 变更文档随快照：module-impact.md（test_strategy=evidence-auto 消费）/tasks.md 等
