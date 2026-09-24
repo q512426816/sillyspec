@@ -1,0 +1,14 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+baseline_commit: dac45ed8b0c93ec9aace768de04ccbc187a96f3c
+updatedAt: '2026-09-24T16:00:34.798Z'
+

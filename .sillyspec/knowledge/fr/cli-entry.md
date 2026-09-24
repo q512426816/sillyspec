@@ -18,3 +18,30 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试门实测通过+工件指纹校验通过
 全文：.sillyspec/changes/archive/2026-09-22-thin-fr-distill-sync/requirements.md#FR-01
 最近确认：38a25f17
+
+## FR-cli-entry-002 flow start 为每个新变更机器起草 changes/<名>/design
+变更：2026-09-24-thin-design-record
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 为每个新变更机器起草 changes/<名>/design.md：四节骨架（做法概述/接口契约/边界与并发盲维四问/风险与死路），机器段为
+全文：.sillyspec/changes/archive/2026-09-24-thin-design-record/requirements.md#FR-01
+最近确认：bd4f574726c2121743dd65e3e5f38f51f792c494
+
+## FR-cli-entry-003 flow done 工件子步对 design.md 做指纹三态校验，且 AGEN
+变更：2026-09-24-thin-design-record
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 工件子步对 design.md 做指纹三态校验，且 AGENT 槽空槽拒收（写不适用加理由视作已填）
+全文：.sillyspec/changes/archive/2026-09-24-thin-design-record/requirements.md#FR-02
+最近确认：bd4f574726c2121743dd65e3e5f38f51f792c494
+
+## FR-cli-entry-004 新增测试覆盖骨架生成与空槽拒收两档用例，flow 系测试面全绿
+变更：2026-09-24-thin-design-record
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖骨架生成与空槽拒收两档用例，flow 系测试面全绿
+全文：.sillyspec/changes/archive/2026-09-24-thin-design-record/requirements.md#FR-03
+最近确认：bd4f574726c2121743dd65e3e5f38f51f792c494
