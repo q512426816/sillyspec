@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-brainstorm-prestage",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-thin-brainstorm-prestage:flow:FR-01",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-brainstorm-prestage"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-thin-brainstorm-prestage:flow:FR-02",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-brainstorm-prestage"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-thin-brainstorm-prestage:flow:FR-03",
+      "tests": [
+        "test/flow-draft.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-brainstorm-prestage"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-25-thin-brainstorm-prestage:flow:FR-05",
+      "tests": [
+        "test/flow-draft.test.mjs",
+        "test/flow-protocol.test.mjs",
+        "test/flow-route.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-brainstorm-prestage"
+    }
+  ]
+}

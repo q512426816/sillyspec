@@ -1,0 +1,27 @@
+{
+  "change": "2026-09-25-thin-brainstorm-prestage",
+  "baseline": "ed0d89628cad5082869a3a6535a8be124e6d9353",
+  "head": "82b3d9c1e86c166f8b7ba9fb2fdfe3721bd369fe",
+  "files": [
+    "SKILL.md",
+    "src/flow-draft.js",
+    "src/flow.js",
+    "templates/agents-instruction.md",
+    "test/flow-draft.test.mjs",
+    "test/flow-protocol.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-brainstorm-prestage/design.md",
+    ".sillyspec/changes/2026-09-25-thin-brainstorm-prestage/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-brainstorm-prestage/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-brainstorm-prestage/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-brainstorm-prestage/tasks.md"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 346,
+    "deletions": 34
+  },
+  "savedAt": "2026-09-24T16:50:02.298Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "7051718efa13360f298fbfff5415014eb44533e51769eb94cbd49e5c670c9db2",
+  "patchStatus": "ok"
+}

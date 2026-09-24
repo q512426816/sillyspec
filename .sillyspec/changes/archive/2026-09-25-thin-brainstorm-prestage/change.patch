@@ -1,0 +1,561 @@
+diff --git a/SKILL.md b/SKILL.md
+index be5b8164..16336179 100644
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -1,6 +1,6 @@
+ ---
+ name: sillyspec
+-description: "多 agent 仓库的变更账本 + 确定性验收层，规范驱动开发工具包。绿地用 /sillyspec:init，棕地用 /sillyspec:scan，全自动用 /sillyspec:auto。完整流程：scan → brainstorm → plan → execute → verify → archive。核心能力：CLI 实测验收门禁（自报不算、亲测才算）、多 agent 并发控制（会话/worktree/跨仓隔离 + 竞态硬门）、SQLite 持久账本断点恢复、范围对账与 API 契约矩阵。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini。"
++description: "多 agent 仓库的变更账本 + 确定性验收层，规范驱动开发工具包。默认快道=薄流程（flow start/done 2 次调用：机器起草治理工件+每条 FR 测试绑定槽+收口实测门+patch 留档；需求不清晰 CLI 拦下指路头脑风暴预段，产物自动收编）。复杂变更走完整流程 scan → brainstorm → plan → execute → verify → archive（薄道实测失败自动升厚）；绿地 /sillyspec:init，棕地 /sillyspec:scan，全自动 /sillyspec:auto。核心能力：CLI 实测验收门禁（自报不算、亲测才算）、多 agent 并发控制（会话/worktree/跨仓隔离 + 竞态硬门）、SQLite 持久账本断点恢复、范围对账与 API 契约矩阵。兼容 Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini。"
+ ---
+ 
+ # SillySpec
+@@ -12,6 +12,8 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
+ 
+ | 场景 | 命令 |
+ |---|---|
++| 常规变更（需求已明确）——默认快道 | `sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"` → 干活 → `sillyspec flow done`（2 次调用，机器起草治理工件+测试绑定+patch 留档） |
++| 需求不明确（先头脑风暴预段） | `sillyspec run brainstorm --change <名>` → 完成后 `sillyspec flow start --change <名>` 收编续跑薄道 |
+ | 全自动流程 | `/sillyspec:auto <需求描述>` |
+ | 全新项目（空目录） | `/sillyspec:init` |
+ | 已有代码的项目 | `/sillyspec:scan` |
+@@ -21,6 +23,8 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
+ ## 完整工作流
+ 
+ ```
++默认快道（薄流程）：flow start → 干活 → flow done（需求不清晰时 CLI 拦下指路头脑风暴预段，产物自动收编）
++复杂变更（完整流程）：brainstorm → plan → execute → verify → archive（薄道实测失败自动升厚至此）
+ 绿地：init → brainstorm → plan → execute → verify → archive
+ 棕地：scan → brainstorm → plan → execute → verify → archive
+ 全自动：auto（自动推进全部阶段，支持用户确认门控）
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 6a06db98..e46ff3a8 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -477,7 +477,8 @@ export function verifyDesignRecordFilled({ changeDir }) {
+  * 为兜底单行）> 空（draft 各自兜底）。
+  */
+ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot }) {
+-  // criteria 回提：input 缺省时从既有 proposal 机器段解析编号行（机器段指纹保证原文可信）
++  // criteria 回提：input 显式 > 既有 proposal 机器段（薄道自产，指纹保证原文可信）> proposal
++  // 手写「成功标准」节（brainstorm 预段产物，adopt 路径）> 空（draft 各自兜底）
+   let criteria = input ? extractSuccessCriteria(input) : null
+   if (criteria === null || (Array.isArray(criteria) && criteria.length === 0)) {
+     try {
+@@ -488,6 +489,8 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+           .map((l) => l.trim())
+           .filter((l) => /^\d+[.、]\s+/.test(l))
+           .map((l) => l.replace(/^\d+[.、]\s+/, ''))
++      } else {
++        criteria = extractSuccessCriteria(pText)
+       }
+     } catch { /* 无 proposal 可回提 → 空，draft 各自兜底 */ }
+   }
+@@ -515,4 +518,26 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+   return { drafted }
+ }
+ 
+-export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
++/**
++ * 收编追加测试绑定槽（2026-09-25-thin-brainstorm-prestage adopt 路径消费面）：头脑风暴产物
++ * requirements 是 agent 手写、无绑定面——按文中实际 FR 编号（###/## FR-NN 标题）追加机器
++ * 绑定节（纯 AGENT 槽面，不指纹）；已有绑定槽/无 requirements → no-op（redraft 先产新稿自带槽）。
++ */
++export function ensureBindingSlots({ changeDir }) {
++  const path = join(changeDir, 'requirements.md')
++  if (!existsSync(path)) return { appended: false, slots: 0 }
++  let text = readFileSync(path, 'utf8')
++  if (/<!--\s*AGENT:测试绑定/.test(text)) return { appended: false, slots: 0 }
++  const ids = []
++  for (const m of text.matchAll(/(?:^|\n)#{2,4}\s*(FR-\d+)[^\n]*/g)) {
++    const id = m[1]
++    if (!ids.includes(id)) ids.push(id)
++  }
++  const list = ids.length > 0 ? ids : ['FR-01']
++  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
++  const section = `\n## 测试绑定（收编追加——每条 FR 至少一行：test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）\n\n${slots.join('\n\n')}\n`
++  writeAtomicSync(path, text.endsWith('\n') ? text + section : text + '\n' + section)
++  return { appended: true, slots: list.length }
++}
++
++export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, ensureBindingSlots, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+diff --git a/src/flow.js b/src/flow.js
+index cdafa038..cff0df53 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -135,6 +135,41 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+   if (existsSync(changeDir)) {
+     const st = readFlowState(changeDir)
+     if (!st) {
++      // adopt 收编（2026-09-25-thin-brainstorm-prestage）：头脑风暴预段产物（proposal/design 在场、
++      // 无 flow-state）收编进薄道——brainstorm 是 run 族预段，先跑后到不触发混跑守卫；产物原样
++      // 保留，机器只补缺件与绑定面。无产物 = 真 legacy 既有变更，维持原拒收。
++      const hasBsArtifacts = existsSync(join(changeDir, 'proposal.md')) || existsSync(join(changeDir, 'design.md'))
++      if (hasBsArtifacts) {
++        const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++        const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
++        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', baseline_commit: baseline, substeps: {} })
++        try {
++          const { redraftMissingArtifacts, ensureBindingSlots } = await import('./flow-draft.js')
++          const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
++          if (r.drafted.length > 0) console.log(`📌 收编补生成缺失机器稿：${r.drafted.join('、')}（brainstorm 未产的工件机器补齐，criteria 从 proposal 成功标准回提；已存在文件未动）`)
++          const b = ensureBindingSlots({ changeDir })
++          if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——干活时作答，flow done 校验）`)
++        } catch (e) { console.warn(`⚠️ 收编补件失败（best-effort）: ${(e && e.message) || e}`) }
++        try {
++          const { spawnWatcher } = await import('./watcher.js')
++          const w = await spawnWatcher(cwd, change, { specBase })
++          if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
++        } catch { /* 观测旁路 best-effort */ }
++        const materials = materialPaths(specBase, change, changeDir)
++        console.log([
++          `🧲 头脑风暴产物已收编进薄跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
++          `══════════════════════════════════════`,
++          `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
++          `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
++          ``,
++          `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
++          ``,
++          `材料路径清单（按需 Read）：`,
++          ...materials.map((p) => `  - ${p}`),
++        ].join('\n'))
++        try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
++        return { adopted: true, change, baseline }
++      }
+       console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
+       process.exit(2)
+     }
+@@ -151,6 +186,20 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     return { recovery: true }
+   }
+ 
++  // 需求清晰度门（2026-09-25-thin-brainstorm-prestage）：薄跑道假定输入已含决策——--input 缺失
++  // 或成功标准提取 0 条时不建变更、exit 2 给两选一（头脑风暴预段 / 补成功标准重跑）。
++  // 重入与 adopt 路径在上方分支早退，不受此门影响。CLI 只产信号，选择权归用户/agent。
++  {
++    const { extractSuccessCriteria } = await import('./flow-draft.js')
++    if (!input || extractSuccessCriteria(input).length === 0) {
++      console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——薄跑道假定输入已含决策，两选一：`)
++      console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
++      console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑薄道`)
++      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<含『成功标准：』条目的完整需求>"`)
++      process.exit(2)
++    }
++  }
++
+   pm.initChange(cwd, change, {})
+   try {
+     const { resolveSessionIdentity } = await import('./progress.js')
+@@ -299,12 +348,18 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       reportMidFail('artifacts')
+       process.exit(1)
+     }
+-    const dr = verifyDesignRecordFilled({ changeDir })
+-    if (dr.applicable && dr.emptySlots.length > 0) {
+-      console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
+-      console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
+-      reportMidFail('artifacts')
+-      process.exit(1)
++    // 头脑风暴预段设计豁免（2026-09-25-thin-brainstorm-prestage）：adopted 变更的 design 是
++    // brainstorm 人机交互产物（比四节骨架丰富）——承诺以其为准，槽位门不适用
++    if (st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))) {
++      console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
++    } else {
++      const dr = verifyDesignRecordFilled({ changeDir })
++      if (dr.applicable && dr.emptySlots.length > 0) {
++        console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
++        console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
++        reportMidFail('artifacts')
++        process.exit(1)
++      }
+     }
+     // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings：每条 FR 至少一行测试锚或「不适用：理由」）
+     const { verifyRequirementBindings } = await import('./flow-draft.js')
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 01f31ba7..87565c00 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -6,19 +6,21 @@
+ ## 核心规则
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+ 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
+-3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
+-4. **小修复 / 小调整走 quick**（= 无需要落盘的设计决策的改动，选道判据见第 6 条）：`sillyspec run quick`。
+-5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
+-6. **判规模选档**：看本次改动有无需要落盘的设计决策——有（新能力 / 行为契约变更 / 跨模块取舍 / 多阶段推进）走完整流程，无（范围明确的局部修补）走 `quick`。文件数不是选道判据，只作出口绊线——改动大或跨模块时 quick 收尾门禁会自动加查（分级提示补文件注记 / 测试增量 / 模块文档认领）。
+-7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `quick --done` 收尾 + 补 quicklog 条目，把已落盘改动如实登记进进度库。
+-8. **实证核验再 `--done`**：触及 `src`/`test` 的改动，CLI 会在 `quick --done` 时**亲自实测** `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（门禁：实测失败阻断 --done 回 pending；纯 doc/配置与未配置命令自动跳过；倒推 B 模式按 --files 声明边界兜底判定）。agent 侧预跑**可选**——想省「--done 被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动无需跑。以落盘文件与测试结果为准，不信口头"已完成"。
+-9. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
+-10. **实现完成后对照文档验收**（design.md / 模块文档），并检查是否影响已有测试。
+-11. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
+-12. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
+-13. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
+-14. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突。
+-15. **quicklog 结构化落盘**：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
+-16. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
+-17. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
+-18. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
++3. **需求已含决策的常规变更走薄流程（默认快道）**：`sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"` → 直接干活（改代码写测试，治理工件 CLI 机器起草）→ `sillyspec flow done --change <名>`。全程 2 次协议调用：机器起草 proposal/requirements（每条 FR 带测试绑定槽）/design 四节槽，收口带实测门、测试绑定提升、patch 留档；需求不清晰时 CLI 会拦下给两选一。
++4. **需求不明确先头脑风暴预段**：`sillyspec run brainstorm --change <名>`（人机交互探索需求、出 design/决策/原型）→ 完成后 `sillyspec flow start --change <名>`，头脑风暴产物自动收编续跑薄道（不重复起草；design 以头脑风暴版为准）。
++5. **大改动 / 跨模块 / 需要计划编排的复杂变更走完整流程**：`brainstorm → plan → execute → verify → archive`（薄流程实测失败会自动升厚走此道）。
++6. **小修复走 quick**（过渡通道，逐步由薄流程取代——薄道已覆盖其场景）：`sillyspec run quick`。
++7. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
++8. **判规模选道**：需求明确、无跨模块取舍 → 薄流程（规则 3）；需求不明 → 头脑风暴预段后转薄流程（规则 4）；并发/鉴权/DB/跨模块大变更或需 Wave 计划编排 → 完整流程（规则 5）；微小修补 → quick（规则 6，过渡）。
++9. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `quick --done` 收尾 + 补 quicklog 条目，把已落盘改动如实登记进进度库。
++10. **实证核验再 `--done`**：触及 `src`/`test` 的改动，CLI 会在 `quick --done` 时**亲自实测** `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（门禁：实测失败阻断 --done 回 pending；纯 doc/配置与未配置命令自动跳过；倒推 B 模式按 --files 声明边界兜底判定）。agent 侧预跑**可选**——想省「--done 被拦→修复→重跑」一轮时才预跑；纯 doc/配置改动无需跑。以落盘文件与测试结果为准，不信口头"已完成"。
++11. **中途停下不靠额外命令存进度**——进度已由上一次 `--done` 自动落盘；恢复时用 `sillyspec progress show` 查看进度，再用 `sillyspec run <stage>` 续跑，不直接 commit 半成品。
++12. **实现完成后对照文档验收**（design.md / 模块文档），并检查是否影响已有测试。
++13. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
++14. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
++15. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。
++16. **任务记录隔离**：永不重置 / reset / 清零已存在的 change；多个活跃 change 各自 `--change <名>` 隔离不重叠；quick 同一 QUICKLOG 按 ql-ID 条目追加，不冲突。
++17. **quicklog 结构化落盘**：末步 `--done` 用四参数 `--req/--cause/--solution/--result`（CLI 合成结构化 output 并自动提取标题/四段分行）；文件括注用 `--file-notes "path::注 || path2"`。骨架由 CLI 接管，`--done` 后按需核对即可，勿手拼模板。
++18. **代码可能随时在修改**（多 agent 并行），Edit 前重跑 + 查最新态；破坏性 git op 前先备份。
++19. **不奉承用户**，禁止"你说得对"类话术，直接给结论、依据、方案。
++20. **禁止目录级 git add / git add -A**（多会话共享仓）：.sillyspec/ 等目录里有并行会话的进行中文件与已提交文档，目录级暂存会夹带他者改动甚至误删已提交文件（2026-09-10 实证）。提交一律用显式 pathspec（git add -- 文件1 文件2），提交前 git status 核对暂存面只含本会话文件。
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 60071f8c..fd347c33 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -23,7 +23,7 @@ const CLI = join(ROOT, 'src', 'index.js')
+ const {
+   draftAll, amendFlowDraft, verifyFlowDrafts, extractSuccessCriteria, draftLedgerPath, draftDecisions,
+   draftDesignRecord, verifyDesignRecordFilled, redraftMissingArtifacts,
+-  verifyRequirementBindings, extractRequirementBindings,
++  verifyRequirementBindings, extractRequirementBindings, ensureBindingSlots,
+ } = await import('../src/flow-draft.js')
+ // decisions 起草器：零真实决策=不落文件（转写任务通常为零）；有输入才有产物——锚定存在性+空态语义
+ if (draftDecisions({ change: 'x', decisions: [] }) !== null) throw new Error('draftDecisions 空态应返回 null（不落文件）')
+@@ -161,6 +161,24 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
++test('⑫ ensureBindingSlots：按 requirements 实际 FR 编号追加/幂等/无文件 no-op', () => {
++  const { root, changeDir } = makeFixtureDir()
++  assert.deepEqual(ensureBindingSlots({ changeDir }), { appended: false, slots: 0 }, '无 requirements no-op')
++  writeFileSync(join(changeDir, 'requirements.md'), [
++    '# 需求', '', '### FR-02: 行为甲', 'Given x', 'When y', 'Then z', '',
++    '### FR-05: 行为乙', 'Given x', '', '## 决策覆盖', '散文', '',
++  ].join('\n'))
++  const r1 = ensureBindingSlots({ changeDir })
++  assert.equal(r1.appended, true)
++  assert.equal(r1.slots, 2, '按实际编号 FR-02/FR-05')
++  const text = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  assert.match(text, /测试绑定FR-02/, '槽 id 用实际编号')
++  assert.match(text, /测试绑定FR-05/)
++  const r2 = ensureBindingSlots({ changeDir })
++  assert.equal(r2.appended, false, '二次调用幂等 no-op')
++  rmSync(root, { recursive: true, force: true })
++})
++
+ test('② extractSuccessCriteria：节内条目与无节回退列表行', () => {
+   assert.deepEqual(extractSuccessCriteria(INPUT_WITH_CRITERIA), ['事件恒带 provisional:true', '崩溃零影响主流程'])
+   assert.deepEqual(extractSuccessCriteria('- 甲条件\n- 乙条件'), ['甲条件', '乙条件'])
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index b385b191..30832707 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -65,7 +65,7 @@ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅
+   const change = 'flow-h2-t1'
+ 
+   // 协议调用 1/2：flow start
+-  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件'])
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   assert.match(s1.stdout, /协议调用 1\/2/)
+   assert.match(s1.stdout, /flow done/)
+@@ -94,9 +94,9 @@ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅
+ test('② flow start 重入 → 恢复简报（盘面状态信号：dirty/子步标记/下一步）', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t2'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'wip.txt'), 'wip\n')
+-  const r = cli(cwd, ['flow', 'start', '--change', change])
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
+   assert.equal(r.status, 0)
+   assert.match(r.stdout, /恢复简报/)
+   assert.match(r.stdout, /dirty 文件 1 个/)
+@@ -112,7 +112,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+   execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
+   const change = 'flow-h2-t3'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
+   fillDesignSlots(cwd, change)
+   const specBase = join(cwd, '.sillyspec')
+@@ -151,7 +151,7 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
+ test('⑤ 混跑回退写读两侧：thin change 跑 run <stage> → legacy_fallback 落档；flow done 拒裁 exit 2', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t5'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   // 混跑：run brainstorm 渲染一步（真实 run <stage> 路径）
+   const mix = cli(cwd, ['run', 'brainstorm', '--change', change])
+   assert.equal(mix.status, 0, `run 应正常: ${mix.stdout}\n${mix.stderr}`)
+@@ -196,7 +196,7 @@ test('⑥ FR 索引提炼接线：薄变更 flow done 后 requirements 进 knowl
+ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done exit 1 点名空槽；填后放行归档', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t6b'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+@@ -257,9 +257,9 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
+ test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t6c'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change]).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   rmSync(join(cwd, '.sillyspec', 'changes', change, 'design.md'), { force: true }) // 模拟工具升级前的在途变更
+-  const r = cli(cwd, ['flow', 'start', '--change', change])
++  const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
+   assert.equal(r.status, 0)
+   assert.match(r.stdout, /重入补生成缺失机器稿 1 件：design\.md/, '补生成提示点名')
+   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'design.md')), '骨架已补回')
+@@ -273,6 +273,52 @@ test('⑧ 归属收窄接线钉（文本级，防回潮）：ledger 门与 disti
+   assert.ok(uses >= 2, `ledger 门与 distill 双消费（实测 ${uses} 处）——distill 不得直取 git diff`)
+ })
+ 
++test('⑫ 需求清晰度门：--input 缺失或成功标准 0 条 → exit 2 两选一（不建变更）', () => {
++  const { cwd } = makeRepo()
++  const r1 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12'])
++  assert.equal(r1.status, 2)
++  assert.match(r1.stderr, /需求不够清晰/, '缺失 input 拦下')
++  assert.match(r1.stderr, /头脑风暴预段/, '两选一含预段')
++  assert.match(r1.stderr, /成功标准/, '两选一含补输入')
++  const r2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12', '--input', '只有动机没有验收条目'])
++  assert.equal(r2.status, 2, '有 input 无成功标准同样拦下')
++  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', 'flow-h2-t12')), '未建变更目录')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（补缺件+绑定槽+design 豁免）→ done 全绿', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t13'
++  // 模拟 brainstorm 预段产物（agent 手写、无 flow-state、无指纹）
++  const changeDir = join(cwd, '.sillyspec', 'changes', change)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'proposal.md'), [
++    '# 提案书', '', '## 动机', '需要一个守护行为', '',
++    '## 成功标准', '- 守护行为 X 发生', '- 崩溃不影响主流程', '',
++  ].join('\n'))
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：乱序不适用\n')
++  const s = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(s.status, 0, `收编失败: ${s.stdout}\n${s.stderr}`)
++  assert.match(s.stdout, /头脑风暴产物已收编进薄跑道/, '收编简报')
++  const st = readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8')
++  assert.match(st, /adopted_from: brainstorm/, 'flow-state 记 adopted_from')
++  assert.ok(existsSync(join(changeDir, 'requirements.md')), '缺件 requirements 机器补齐（criteria 回提自 proposal）')
++  assert.match(readFileSync(join(changeDir, 'requirements.md'), 'utf8'), /守护行为 X 发生/, 'criteria 回提成功')
++  assert.match(readFileSync(join(changeDir, 'requirements.md'), 'utf8'), /<!--AGENT:测试绑定/, '绑定槽收编追加')
++  assert.ok(existsSync(join(changeDir, 'tasks.md')), '缺件 tasks 补齐')
++
++  // 干活 + 绑定槽作答 → done（design 四节槽豁免、绑定门生效）
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  writeFileSync(join(changeDir, 'requirements.md'), readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑬ 收编用例'))
++  const done = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
++  assert.match(done.stdout, /豁免 design 四节槽门/, 'adopted design 豁免提示')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {
+   const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+   const hits = src.split('await triggerSync(cwd, change)').length - 1
+diff --git a/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/design.md b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:40:05.518Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-brainstorm-prestage
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++头脑风暴降级为薄流程预段：①flow start 需求清晰度门——--input 缺失或成功标准提取 0 条时 exit 2 给两选一（头脑风暴预段/补输入重跑），不建变更，CLI 只产信号选择归用户；②adopt 收编——变更目录有 brainstorm 产物（proposal/design 在场）且无 flow-state 时收编进薄道：写 flow-state（adopted_from=brainstorm）、redraftMissingArtifacts 补缺件（criteria 回提兜底手写成功标准节）、ensureBindingSlots 按实际 FR 编号追加绑定槽；③flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，绑定门不豁免）；④指令面更新——agents-instruction.md 规则 3-8 改为薄流程主推+预段+完整流程保留+quick 过渡标注，SKILL.md 快速开始/工作流/description 同步。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow.js cmdFlowStart 新增清晰度门与 adopt 分支、cmdFlowDone design 门豁免；flow-draft.js 新增 ensureBindingSlots 导出、redraftMissingArtifacts criteria 回提加手写成功标准节兜底；templates/agents-instruction.md 与 SKILL.md 指令面更新。无命令签名变化（新增 exit 2 形态）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用。2. 并发写：adopt 是一次性收编（写 flow-state 后重入走恢复简报分支，幂等）；brainstorm 产物 agent 已停笔。3. 切换/中断：adopt 后中断走既有断点续；清晰度门在建变更前拦截，无半态。4. 作用域：adopt 只读本变更目录产物；清晰度门对所有新变更生效（重入/adopt 在门之前早退不受影响——实测 5 处旧夹具需补输入，契约涟漪已按新契约更新）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=清晰度门误伤（需求实际清晰但没写成功标准节）——出口即两选一的选项②补一行标准即可重跑，成本一轮；夹具实测误伤面=5 处。死路=考虑过启发式猜测需求清晰度（关键词/长度）——猜错方向比问一句贵，两选一是确定性最低成本方案。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++baseline_commit: ed0d89628cad5082869a3a6535a8be124e6d9353
++updatedAt: '2026-09-24T16:50:01.583Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/proposal.md b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:40:05.518Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-brainstorm-prestage
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:cc447dd7cdb331234a6183b48fd9713db73aa7e8369b808fa8d645be3d7fc432:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++任务原话转写：动机：头脑风暴保留为薄流程预段——需求不清晰时先进 brainstorm 出设计与原型，产出被 flow start 收编后续跑薄道实现归档；指令面（agents-instruction 模板与 SKILL.md）同步新流程拓扑。
++成功标准：
++- flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段 / 补成功标准重跑）；重入与 adopt 路径不受此门影响
++- adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-state 时，flow start 收编进薄道——写 flow-state（adopted_from=brainstorm）、redraft 只补缺件（criteria 从 proposal 成功标准回提）、requirements 无测试绑定槽则机器追加绑定节
++- flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明）；绑定门不豁免
++- agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快速开始补薄流程入口
++- 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:407fc71af1fb55b5edcb79f0d03a485f21d5c75ef9baa058ba146c8561958c1c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段 / 补成功标准重跑）；重入与 adopt 路径不受此门影响
++2. adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-state 时，flow start 收编进薄道——写 flow-state（adopted_from=brainstorm）、redraft 只补缺件（criteria 从 proposal 成功标准回提）、requirements 无测试绑定槽则机器追加绑定节
++3. flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明）；绑定门不豁免
++4. agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快速开始补薄流程入口
++5. 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:0b399b2a3dd3b7dba56f5ec61dbbe15230af91b5c7500d5dccb650e12a7144bd:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++1. flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段 / 补成功标准重跑）；重入与 adopt 路径不受此门影响
++2. adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-state 时，flow start 收编进薄道——写 flow-state（adopted_from=brainstorm）、redraft 只补缺件（criteria 从 proposal 成功标准回提）、requirements 无测试绑定槽则机器追加绑定节
++3. flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明）；绑定门不豁免
++4. agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快速开始补薄流程入口
++5. 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/requirements.md b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/requirements.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:40:05.518Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-brainstorm-prestage
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:6aa2393b53219c8c718b005947d19e2cec643f396d80980cf6c79e678af05342:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++### FR-01: flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段 / 补成功标准重跑）；重入与 adopt 路径不受此门影响
++
++### FR-02: adopt 收编：变更目录存在 brainstorm 产物（proposal/d
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-state 时，flow start 收编进薄道——写 flow-state（adopted_from=brainstorm）、redraft 只补缺件（criteria 从 proposal 成功标准回提）、requirements 无测试绑定槽则机器追加绑定节
++
++### FR-03: flow done 对 adopted 变更豁免 design 四节槽门（bra
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明）；绑定门不豁免
++
++### FR-04: agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快速开始补薄流程入口
++
++### FR-05: 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑫ 用例（两选一/不建变更断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑬ 用例（收编/补缺件/回提/绑定槽/豁免全链断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs ⑫ 用例（实际编号追加/幂等/no-op）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++templates/agents-instruction.md 规则 3-8 与 SKILL.md 快速开始/工作流段（人工核对面）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs + test/flow-protocol.test.mjs + test/flow-route.test.mjs 全套 25 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/tasks.md b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-brainstorm-prestage/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T16:40:05.518Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-brainstorm-prestage
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:812feed78d868fb8f3e2779717525c9b4c5b102604ce594bcfcafe3dd77bfd87:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-brainstorm-prestage 留痕重锚 -->
++- [ ] task-01: flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段
++- [ ] task-02: adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-sta
++- [ ] task-03: flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明
++- [ ] task-04: agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快
++- [ ] task-05: 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

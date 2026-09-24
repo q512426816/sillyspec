@@ -228,3 +228,96 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-25-thin-patch-scope-fix
   status: active
+
+## FR-cli-entry-016 flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时
+变更：2026-09-25-thin-brainstorm-prestage
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段 / 补成功标准重跑）；重入与 adop
+全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-01
+最近确认：82b3d9c1e86c166f8b7ba9fb2fdfe3721bd369fe
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-brainstorm-prestage:flow:FR-01
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-brainstorm-prestage
+  status: active
+
+## FR-cli-entry-017 adopt 收编：变更目录存在 brainstorm 产物（proposal/d
+变更：2026-09-25-thin-brainstorm-prestage
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-state 时，flow start 收编进薄
+全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-02
+最近确认：82b3d9c1e86c166f8b7ba9fb2fdfe3721bd369fe
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-brainstorm-prestage:flow:FR-02
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-brainstorm-prestage
+  status: active
+
+## FR-cli-entry-018 flow done 对 adopted 变更豁免 design 四节槽门（bra
+变更：2026-09-25-thin-brainstorm-prestage
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明）；绑定门不豁免
+全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-03
+最近确认：82b3d9c1e86c166f8b7ba9fb2fdfe3721bd369fe
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-brainstorm-prestage:flow:FR-03
+  tests: test/flow-draft.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-brainstorm-prestage
+  status: active
+
+## FR-cli-entry-019 agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴
+变更：2026-09-25-thin-brainstorm-prestage
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快速开始补薄流程入口
+全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-04
+最近确认：82b3d9c1e86c166f8b7ba9fb2fdfe3721bd369fe
+
+## FR-cli-entry-020 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
+变更：2026-09-25-thin-brainstorm-prestage
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-05
+最近确认：82b3d9c1e86c166f8b7ba9fb2fdfe3721bd369fe
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-brainstorm-prestage:flow:FR-05
+  tests: test/flow-draft.test.mjs | test/flow-protocol.test.mjs | test/flow-route.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-brainstorm-prestage
+  status: active
