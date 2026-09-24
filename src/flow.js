@@ -25,7 +25,7 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import yaml from 'js-yaml'
@@ -447,6 +447,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       : '—'
     gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
+    try { writeFlowState(changeDir, { gate_summary: gateSummaryText }) } catch { /* 存档 best-effort */ }
     mark('ledger')
   }
 
@@ -667,18 +668,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       try { patchMeta = JSON.parse(readFileSync(join(changeDir, 'change-patch.json'), 'utf8')) } catch { /* 无冻结件 */ }
       let traceCount = 0
       try { traceCount = (JSON.parse(readFileSync(join(changeDir, 'test-trace.json'), 'utf8')).rows || []).length } catch { /* 无锚行 */ }
-      // 实测面回填（断点续跑 ledger 已 skip 时 gateSummaryText 为 null——从 verify-runs 最新
-      // test-result.json 回读，回执不留占位；无记录保持 —）
+      // 实测面回填（断点续跑 ledger 已 skip 时本轮 var 为 null——从 flow-state.gate_summary 回读。
+      // 不回读 verify-runs/test-result.json：隔离快照模式的结果落在临时快照目录且收尾即清，不可靠）
       if (!gateSummaryText) {
         try {
-          const runsDir = join(runtimeRoot, 'verify-runs')
-          const runs = readdirSync(runsDir).map((d) => join(runsDir, d)).filter((rp) => existsSync(join(rp, 'test-result.json')))
-          if (runs.length > 0) {
-            const latest = runs.sort((x, y) => statSync(y).mtimeMs - statSync(x).mtimeMs)[0]
-            const tr = JSON.parse(readFileSync(join(latest, 'test-result.json'), 'utf8'))
-            const seg = (r) => r ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''} 结果：${join(latest, 'test-result.json')}` : '—'
-            gateSummaryText = `test: ${seg(tr)}（断点续跑回读最新实测记录）`
-          }
+          const stNow = readFlowState(changeDir)
+          if (stNow && stNow.gate_summary) gateSummaryText = String(stNow.gate_summary) + '（断点续跑回读）'
         } catch { /* 回读失败留 — */ }
       }
       const headNow = gitQuiet(cwd, ['rev-parse', 'HEAD'])

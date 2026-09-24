@@ -383,7 +383,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS �
   assert.ok(existsSync(join(archDir, archived, 'verify-result.md')), 'verify-result 回执随归档留档')
   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /结论\*\*：PASS/, '回执含结论')
   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /独立评审\*\*：PASS/, '回执含评审结论')
-  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /（断点续跑回读最新实测记录）/, '回执实测面回填（ledger skip 后不留占位）')
+  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /（断点续跑回读）/, '回执实测面回填（ledger skip 后不留占位）')
   const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.change === change).pop()
   assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')
   rmSync(cwd, { recursive: true, force: true })
