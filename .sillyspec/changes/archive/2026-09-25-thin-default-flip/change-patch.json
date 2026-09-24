@@ -1,0 +1,27 @@
+{
+  "change": "2026-09-25-thin-default-flip",
+  "baseline": "c175252152c5917e6c06ff6e20cea36481eeb424",
+  "head": "ac229db8c4e186754dc15e72d57b336f6c834e2c",
+  "files": [
+    "src/config-schema.js",
+    "src/flow.js",
+    "src/run/stage.js",
+    "templates/agents-instruction.md",
+    "test/flow-protocol.test.mjs",
+    "test/stage-burst.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-default-flip/design.md",
+    ".sillyspec/changes/2026-09-25-thin-default-flip/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-default-flip/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-default-flip/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-default-flip/tasks.md"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 273,
+    "deletions": 17
+  },
+  "savedAt": "2026-09-24T17:01:07.237Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "c337e66f2de87ddbfdd9e17443d300e83a7c6e3b6e4fe84dbe98d9cc57b21f01",
+  "patchStatus": "ok"
+}
