@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-deps-cwd-prefix",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-deps-cwd-prefix:flow:FR-01",
+      "tests": [
+        "test/deps-cwd-prefix.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-deps-cwd-prefix"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-deps-cwd-prefix:flow:FR-02",
+      "tests": [
+        "test/deps-cwd-prefix.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-deps-cwd-prefix"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-deps-cwd-prefix:flow:FR-03",
+      "tests": [
+        "test/deps-cwd-prefix.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-deps-cwd-prefix"
+    }
+  ]
+}

@@ -1,0 +1,315 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 33239520..6b221cdc 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -285,6 +285,7 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
+       timeout: LINT_TIMEOUT_MS,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -1286,6 +1287,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
+       timeout: TEST_TIMEOUT_MS,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -2093,6 +2095,7 @@ function runCrossRepoFullTest(entry) {
+       timeout: TEST_TIMEOUT_MS,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     })
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -2208,7 +2211,7 @@ function isPortOccupiedSync(port) {
+   try {
+     const r = spawnSync(process.execPath, ['-e',
+       `const n=require('node:net');const s=n.connect(${port},'127.0.0.1',()=>{console.log('Y');s.end()});s.on('error',()=>console.log('N'));setTimeout(()=>{console.log('N');process.exit(0)},1500)`],
+-      { encoding: 'utf8', timeout: 4000 })
++      { encoding: 'utf8', timeout: 4000, windowsHide: true })
+     return (r.stdout || '').trim().endsWith('Y')
+   } catch { return false }
+ }
+@@ -2262,6 +2265,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
+       timeout: timeoutMs,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -2352,18 +2356,26 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
+   const jsCap = CAP - pyCap
+   const pyRun = py.slice(0, pyCap)
+   const jsRun = js.slice(0, jsCap)
+-  // .py 运行器推断：命中模块命令串中找 pytest 前缀（形如 <...> pytest），否则 python -m pytest
++  // .py 运行器推断：命中模块命令串中找 pytest 段（含其 cd <dir> && 链前缀），否则 python -m pytest。
++  // cd 前缀保留（2026-09-25-deps-cwd-prefix，R15/R16 实证）：剥前缀后从 worktree 根跑 uv，根上无
++  // pyproject.toml → uv 解析到无 dev extras 的错环境 → aiobotocore 假红（两轮 known_failures 顶着）。
++  // 前缀在则批次文件路径按该 dir 重定基（模块命令的文件参即 dir 相对口径，如 app/modules/...）。
+   let pyRunner = 'python -m pytest'
+   for (const h of hits || []) {
+-    const m = /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(String(h.test || ''))
++    const cmd = String(h.test || '')
++    const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
+     if (m) { pyRunner = m[1].trim(); break }
+   }
++  const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
++  const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
+   const batches = []
+-  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
++  if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
+   if (jsRun.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsRun.join(' ')}`, count: jsRun.length, dropped: js.length - jsRun.length })
+   return batches
+ }
+ 
++export { buildDepsBatches }
++
+ // ── trace residual adapter（2026-09-24-fr-test-readside，fr-test-binding §3.3/§3.6 读侧）──
+ // 锚点集=本变更 task 卡 requirement_ids 并集；残差=trace active 行 tests 并集按保守差集
+ // （仅 deps-auto-subset 文件集可证覆盖，命令型动作一律全补——禁解析命令串猜覆盖面）。
+diff --git a/test/deps-cwd-prefix.test.mjs b/test/deps-cwd-prefix.test.mjs
+new file mode 100644
+index 00000000..18882b11
+--- /dev/null
++++ b/test/deps-cwd-prefix.test.mjs
+@@ -0,0 +1,36 @@
++/**
++ * deps-cwd-prefix.test.mjs — deps(auto-py) 运行器 cd 前缀保留与路径重定基（2026-09-25-deps-cwd-prefix）
++ *
++ * R15/R16 实证缺陷：py 运行器推断剥掉模块命令的 `cd backend &&` 前缀，从 worktree 根跑
++ * `uv run pytest`——根上无 pyproject.toml，uv 解析到无 dev extras 的错环境，aiobotocore 假红。
++ * 验收面：①带 cd 前缀的模块命令 → 批次命令保留前缀且文件剥前导目录重定基；②裸 pytest 段
++ * 命令行为不变；③无命中模块兜底 python -m pytest；④js 组不受影响。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { buildDepsBatches } from '../src/verify-postcheck.js'
++
++test('① cd 前缀保留 + 路径重定基（R15/R16 病灶的正解形态）', () => {
++  const b = buildDepsBatches({
++    deps: ['backend/tests/test_a.py', 'backend/tests/test_b.py', 'frontend/x.test.ts'],
++    changedFiles: ['backend/app/x.py'],
++    hits: [{ test: 'cd backend && uv run pytest app/modules/observation -q' }],
++  })
++  const py = b.find((x) => x.name === 'deps(auto-py)')
++  assert.ok(py, 'py 批次在场')
++  assert.match(py.command, /^cd backend && uv run pytest /, 'cd 前缀保留（不再从根跑）')
++  assert.ok(py.command.includes('tests/test_a.py') && !py.command.includes('backend/tests/test_a.py'), '路径按 backend/ 重定基')
++})
++
++test('② 裸 pytest 段命令：行为不变（回归保护）', () => {
++  const b = buildDepsBatches({ deps: ['tests/test_a.py'], changedFiles: [], hits: [{ test: 'pytest -q tests' }] })
++  assert.match(b[0].command, /^pytest tests\/test_a\.py$/)
++})
++
++test('③ 无命中模块兜底 + ④ js 组不受影响', () => {
++  const b = buildDepsBatches({ deps: ['a.test.ts', 'b.test.ts'], changedFiles: [], hits: [] })
++  assert.equal(b.length, 1)
++  assert.match(b[0].command, /^node --test /)
++  const b2 = buildDepsBatches({ deps: ['x.py'], changedFiles: [], hits: [] })
++  assert.match(b2[0].command, /^python -m pytest x\.py$/)
++})
+diff --git a/test/verify-deps-auto-default.test.mjs b/test/verify-deps-auto-default.test.mjs
+index b2e1d44d..0bc06745 100644
+--- a/test/verify-deps-auto-default.test.mjs
++++ b/test/verify-deps-auto-default.test.mjs
+@@ -82,9 +82,6 @@ test('T3 polyglot：Python 仓 deps 发现（service.py → from app.modules.x i
+ 
+ test('T4 deps 分批：py/js 双批、变更测试优先、pytest 前缀推断（经导出函数直测）', async () => {
+   const mod = await import('../src/verify-postcheck.js')
+-  // buildDepsBatches 未导出——用最小 fixture 走 runModuleSubset 不现实（需模块命令执行环境），
+-  // 改为对导出面 + 命令形态的行为断言：在含 py+js 依赖的仓跑 deps-auto-default，
+-  // 断言 command 含 deps(auto-py)（pytest 推断兜底 python -m pytest）且 js 批在场。
+   const fx = mk('deps-batch-')
+   for (const d of ['backend/app/mod1/tests', 'test', 'src', '.sillyspec']) mkdirSync(join(fx, d), { recursive: true })
+   const wf = (p2, c) => writeFileSync(join(fx, p2), c)
+diff --git a/.sillyspec/changes/2026-09-25-deps-cwd-prefix/design.md b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:34:04.422Z
++---
++# 设计记录（Design Record）— 2026-09-25-deps-cwd-prefix
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++deps(auto-py) 运行器推断改为链前缀整体提取：正则先试 ^((?:cds+[^&|;]+&&s*)*[^&|;]*?pytest) 保留 cd <dir> && 前缀（惰性到首个 pytest 段），不匹配再退旧段级正则（裸 pytest 命令行为不变）；前缀在场时批次文件路径按该 dir 重定基（剥前导目录——模块命令的文件参即 dir 相对口径）。根因：剥前缀后从 worktree 根跑 uv，根上无 pyproject.toml，uv 解析到无 dev extras 的错环境致 aiobotocore 假红（R15/R16 两轮 known_failures 豁免顶着）。buildDepsBatches 导出供测。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/verify-postcheck.js buildDepsBatches（推断正则+rebase+export）；test/deps-cwd-prefix.test.mjs 新增三态单测；verify-deps-auto-default 旧「未导出」注释清理。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用（纯命令串构造）。2. 并发写：无状态。3. 切换：批次构造每轮重算幂等。4. 作用域：rebase 只对带 cd 前缀的 py 批次文件；不以该 dir 开头的 py 文件保持原样（混合布局罕见，注释声明口径）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=cd 目录推断按 S+ 取词，引号路径或带空格目录名不支持——模块命令惯例为无引号简单目录（local.yaml 模板与 R15/R16 实配均如此），不支持面留注释；死路=把 deps 批次 cwd 切到模块目录再拼根相对路径——等价但要动批次执行器两处，重定基一处收口更小。
+
+diff --git a/.sillyspec/changes/2026-09-25-deps-cwd-prefix/flow-state.yaml b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 954b89467bf211f6f310b1f5bbbaff754e26112e
++updatedAt: '2026-09-24T23:37:50.354Z'
++gate_summary: >-
++  test: passed ← module[cli-core,run-gates]+deps(js30)（53.0s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260924233713\test-result.json｜lint: passed
++  ← npm run lint（36.9s）｜门文件 45 个
++
+
+diff --git a/.sillyspec/changes/2026-09-25-deps-cwd-prefix/proposal.md b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:34:04.421Z
++---
++# 提案书（Proposal）— 2026-09-25-deps-cwd-prefix
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:96f50a1ed18f6472b53b35f83eeebaeea1efd8b41e5298655d9047281189409b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++任务原话转写：动机：deps(auto-py) cwd 口径缺陷（R15/R16 两轮 known_failures 豁免顶着）——.py 依赖批次的运行器推断把模块命令的 cd backend && 前缀剥掉，从 worktree 根跑 uv run pytest，根上无 pyproject.toml 解析到错环境，aiobotocore 假红。
++成功标准：
++- buildDepsBatches 的 py 运行器推断保留 cd <dir> && 前缀（首个 pytest 段含链前缀整体提取），且批次内文件路径按该 dir 重定基（剥前导目录）
++- 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 python -m pytest 不变
++- buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定基/裸命令不变/兜底三态
++- flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:b9bff54dea2224a42720935f5bd6324d516f18b5b426a73b9b496b34eb9501b7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. buildDepsBatches 的 py 运行器推断保留 cd <dir> && 前缀（首个 pytest 段含链前缀整体提取），且批次内文件路径按该 dir 重定基（剥前导目录）
++2. 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 python -m pytest 不变
++3. buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定基/裸命令不变/兜底三态
++4. flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:1b0dcb235ea1d8f4f99bd8e9c0ce5d32b7bf2788a1a070cae5dfd152c0e1807d:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++1. buildDepsBatches 的 py 运行器推断保留 cd <dir> && 前缀（首个 pytest 段含链前缀整体提取），且批次内文件路径按该 dir 重定基（剥前导目录）
++2. 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 python -m pytest 不变
++3. buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定基/裸命令不变/兜底三态
++4. flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-deps-cwd-prefix/requirements.md b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:34:04.422Z
++---
++# 需求规格（Requirements）— 2026-09-25-deps-cwd-prefix
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:62235e0ec3bfea50ce492f642b97cb593c6d7840f25906b8f5969b2b28feed52:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++### FR-01: buildDepsBatches 的 py 运行器推断保留 cd <dir> &
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then buildDepsBatches 的 py 运行器推断保留 cd <dir> && 前缀（首个 pytest 段含链前缀整体提取），且批次内文件路径按该 dir 重定基（剥前导目录）
++
++### FR-02: 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 p
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 python -m pytest 不变
++
++### FR-03: buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定基/裸命令不变/兜底三态
++
++### FR-04: flow 系与 test:core 全绿
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/deps-cwd-prefix.test.mjs ①②（前缀保留+重定基+裸命令回归）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/deps-cwd-prefix.test.mjs ②（裸 pytest 段不变）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/deps-cwd-prefix.test.mjs ①③（export 直测）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + stage-burst + verify-deps-auto-default + deps-cwd-prefix 57 例 + test:core 176 例
+
+diff --git a/.sillyspec/changes/2026-09-25-deps-cwd-prefix/tasks.md b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-deps-cwd-prefix/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:34:04.423Z
++---
++# 任务注册表（Tasks）— 2026-09-25-deps-cwd-prefix
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:ad51f7bfa9e5119a1cd769fe6b63eeeffe71f697e5461cfdccd88141b46e35bd:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-deps-cwd-prefix 留痕重锚 -->
++- [ ] task-01: buildDepsBatches 的 py 运行器推断保留 cd <dir> && 前缀（首个 pytest 段含链前缀
++- [ ] task-02: 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 python -m pytest 不变
++- [ ] task-03: buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定基/裸命令不变/兜底三态
++- [ ] task-04: flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

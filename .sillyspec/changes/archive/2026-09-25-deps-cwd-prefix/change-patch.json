@@ -1,0 +1,24 @@
+{
+  "change": "2026-09-25-deps-cwd-prefix",
+  "baseline": "954b89467bf211f6f310b1f5bbbaff754e26112e",
+  "head": "3ab70d08d737b30b488d80e17a1e1288f27a3bd5",
+  "files": [
+    "src/verify-postcheck.js",
+    "test/deps-cwd-prefix.test.mjs",
+    "test/verify-deps-auto-default.test.mjs",
+    ".sillyspec/changes/2026-09-25-deps-cwd-prefix/design.md",
+    ".sillyspec/changes/2026-09-25-deps-cwd-prefix/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-deps-cwd-prefix/proposal.md",
+    ".sillyspec/changes/2026-09-25-deps-cwd-prefix/requirements.md",
+    ".sillyspec/changes/2026-09-25-deps-cwd-prefix/tasks.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 207,
+    "deletions": 7
+  },
+  "savedAt": "2026-09-24T23:37:51.130Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "7f22610646fcb56d7d9f22b182f6d604b50092877d27c9a6d51f4136cbbc7b53",
+  "patchStatus": "ok"
+}

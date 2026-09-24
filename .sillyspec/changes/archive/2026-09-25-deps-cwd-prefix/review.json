@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F-1",
+      "severity": "P2",
+      "title": "冻结 patch 含 5 处非本变更意图 hunk（windowsHide 追加）",
+      "detail": "change.patch 在 src/verify-postcheck.js 五处 spawn/exec 选项追加 `windowsHide: true`（runVerifyLintCheck ~L288、runOneModule ~L1290、runCrossRepoFullTest ~L2098、isPortOccupiedSync ~L2214、runFullCommand ~L2268）。design.md 接口契约槽仅声明 buildDepsBatches（正则+rebase+export）+ deps-cwd-prefix.test.mjs + verify-deps-auto-default 注释清理；requirements.md 四条 FR 与 proposal 成功标准均未含此项。行为本身良性（Windows 下隐藏控制台窗，与 cd 链 shell 执行可能相关），但属未声明搭车面——多会话共享仓中提交/归档前需认领（补 design 契约留痕）或从本变更剥离，防夹带他侧改动。",
+      "evidence": "change.patch 行 5-45（五个 hunk）；design.md 接口契约槽（仅列 buildDepsBatches/两测试文件）"
+    },
+    {
+      "id": "F-2",
+      "severity": "P2",
+      "title": "cdDir 变体形态下 rebase 静默失效而 cd 前缀仍保留 → 文件口径错位假红",
+      "detail": "首个正则的 cd 迭代 `cd\\s+[^&|;]+&&` 对目录词形态宽容（尾斜杠 `cd backend/`、`cd ./backend`、多 cd 链 `cd a && cd b &&` 均能整链提取进 pyRunner），但 cdDir 提取 `(?:^|\\s)cd\\s+(\\S+)\\s*&&` 取首个裸词：`backend/`/`./backend`/多链取 `a`（实效 cwd 是 `b`）。这些形态下 `f.startsWith(cdDir + '/')` 恒假 → 不重定基，但命令已 cd 进目录 → 批次文件按目录内口径解析 → pytest file-not-found（exit 4）假红拦门。design 槽4 仅声明引号/带空格目录不支持；尾斜杠、./ 前缀、多 cd 链三类未声明且同样触发静默错位。",
+      "evidence": "src/verify-postcheck.js L2366-2370（两正则形态不对称）；design.md 风险槽（仅声明 S+ 取词的引号/空格限制）"
+    },
+    {
+      "id": "F-3",
+      "severity": "P3",
+      "title": "混合布局口径「保持原样」低估语义变化（已声明但表述失准）",
+      "detail": "py 依赖不全在 cdDir 下时（混合布局），不以 dir/ 开头的文件字符串保持原样，但此前（剥前缀从根跑）根相对路径解析正确；现在命令带 cd 前缀，同一字符串在 cd 后目录内解析 → file-not-found。即「保持原样」≠「行为不变」，是从『错环境跑』换成『路径找不到』。design 槽3 已声明混合布局罕见、注释声明口径，故降 P3——建议注释措辞点明『不匹配前缀的 py 文件将以目录内口径解析失败』而非『保持原样』。",
+      "evidence": "design.md 盲维四问槽 4；src/verify-postcheck.js L2370（rebase 只剥匹配前缀，无 else 分支处理）"
+    },
+    {
+      "id": "F-4",
+      "severity": "P3",
+      "title": "前缀保留仅覆盖链头形态：pytest 不在链首段时落回旧正则、cd 被剥",
+      "detail": "新正则锚定 `^`：命令首段无 pytest（如 `npm test && cd backend && uv run pytest x`）、行首有空白（` cd backend && …`，^cd 不匹配且 `[^&|;]*?` 首段无 pytest）、`;` 分隔（`cd backend; uv run pytest`）等形态均使首正则失败 → 退回旧段级正则 → 提取 `uv run pytest`（cd 剥掉）→ R15/R16 病灶在该形态复现。属旧路径行为保留（FR-02 承诺的正是『无 cd 前缀形态不变』的广义面），非回归，但病灶并未全形态根治，留痕备查。",
+      "evidence": "src/verify-postcheck.js L2366（`||` 退路）；手工推演三种形态均落退路"
+    },
+    {
+      "id": "F-5",
+      "severity": "P3",
+      "title": "deps 路径未归一化：反斜杠路径将躲过 rebase（依赖上游口径）",
+      "detail": "buildDepsBatches 内 `norm()` 只用于 changedSet，py/js 分组与命令拼装用原串。若上游 deps 出反斜杠（Windows 口径），`f.startsWith(cdDir + '/')` 失配 → 与 F-2 同类的口径错位。现上游（discoverModuleDependentTests 的 git 口径）为正斜杠，实际触发面低；rebase 处补 `norm(f)` 一行可闭。",
+      "evidence": "src/verify-postcheck.js L2349-2353（norm 仅入 changedSet）、L2370（rebase 用原串）"
+    }
+  ],
+  "dimensionNotes": {
+    "regex": " checklist-1 通过：`^((?:cd\\s+[^&|;]+&&\\s*)*[^&|;]*?pytest)` 对 R15/R16 形态 `cd backend && uv run pytest app/modules/observation -q` 提取 `cd backend && uv run pytest`（手工推演：cd 迭代吃 `cd backend && `，惰性 `[^&|;]*?pytest` 停在首个 pytest，文件参 `-q` 等不入组）；裸命令 `pytest -q tests` 新旧均得 `pytest`、`uv run pytest` 均得 `uv run pytest`——FR-02 行为不变成立。附带收益：惰性修复了旧贪婪回溯缺陷（段内含 `test_pytest_*.py` 文件名时旧正则回溯到最后一个 pytest 子串、把文件参吞进 runner；新路径下首正则惰性取首个 pytest 不吞；该缺陷仅在退路正则残留，见 F-4）。",
+    "rebase": " checklist-2 基本通过：兜底 `python -m pytest` 无 cd → cdDir undefined → `cdDir && …` 短路 → rebase 恒等；`backendX/y.py` 不被误剥（startsWith 含斜杠边界）；退路正则捕获组 `[^&|;]*` 不含 `&` → 不可能带出 cd 前缀，cdDir 只来自新正则——两正则口径自洽。例外形态（尾斜杠/./ /多 cd/引号）见 F-2/F-3。",
+    "consumers": " checklist-3 通过：py.command 两处消费（runModuleSubset L2513、runTraceResidualInner L2434）均经 runOneModule → execSync（恒 shell 执行，`cd backend && …` 合法且子 shell 不外泄父进程 cwd，Windows cmd 与 POSIX sh 均成立）；trace residual segments.push 的 runner 字段仅台账披露；segments.files 保留根相对原串（rebase 只进 command）——与 provable/depsAutoFiles 根相对口径匹配，覆盖记账正确，这是正确取舍。known_failures 豁免（partitionFailures L1004-1058）匹配的是测试输出失败行（小写子串），CNF 环境缺件检测（detectCommandMissingFailure）扫输出尾窗——两者均不解析命令串，新命令形态零影响，『匹配输出行不匹配命令』核实成立；warnPortRaceBeforeRun 收命令串但仅做端口信号正则，前缀无害。",
+    "patchScope": " checklist-4：非本变更意图 hunk 共 5 处（全部为 windowsHide 追加），已列 F-1。其余 hunk（buildDepsBatches 正则/rebase/export、deps-cwd-prefix.test.mjs 新增、verify-deps-auto-default T4 注释清理、变更目录五文件）均在本变更意图内且与 design/requirements 对齐。",
+    "tests": " 三态单测与 FR-01/02/03 逐条对齐（①前缀保留+重定基 ②裸命令回归 ③兜底+js 不受影响），②的 `^pytest tests\\/test_a\\.py$` 断言经手工推演可过。FR-04 依 flow-state.yaml gate_summary 记录（test passed 53.0s + lint passed 36.9s，门文件 45 个）采信；本轮只读纪律未复跑测试套。"
+  },
+  "reviewedAt": "2026-09-24T23:41:35Z",
+  "reviewer": "subagent"
+}
