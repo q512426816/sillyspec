@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-24-fr-test-readside",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-readside:task-01:acc-0-a6712e34",
+      "tests": [
+        "src/test-bindings.js",
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-readside:task-01:acc-1-8c9c98e3",
+      "tests": [
+        "src/test-bindings.js",
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-readside:task-01:acc-2-a3b566ec",
+      "tests": [
+        "src/test-bindings.js",
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-24-fr-test-readside:task-02:acc-0-ad5bed88",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-24-fr-test-readside:task-02:acc-1-57ffdb67",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-24-fr-test-readside:task-02:acc-2-e9d57f71",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-readside:task-03:acc-0-0757aeb5",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-readside:task-03:acc-1-5fce2602",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-readside:task-03:acc-2-2bbb616e",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-fr-test-readside:task-03:acc-3-ab11fe60",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-24-fr-test-readside:task-04:acc-0-26bd3105",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-24-fr-test-readside:task-04:acc-1-085ad9bd",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-24-fr-test-readside:task-05:acc-0-28f4e3e3",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-24-fr-test-readside:task-05:acc-1-f7cdf6ed",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-fr-test-readside:task-06:acc-0-403c4d5c",
+      "tests": [
+        "test/verify-trace-residual.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-fr-test-readside"
+    }
+  ]
+}
