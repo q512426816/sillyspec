@@ -1,0 +1,1334 @@
+# author: qinyi
+# created_at: 2026-08-18 01:25:00
+schema_version: 2
+project: backend
+source_commit: 744e3de4
+generated_at: 2026-08-19 22:32:00
+generator: sillyspec-scan
+
+modules:
+  # ── core 模块 ──────────────────────────────────────────────
+
+  core:
+    status: active
+    doc: modules/core.md
+    paths:
+      - app/core/**
+    tags: [config, database, redis, auth, security, crypto, logging, telemetry, errors, audit, paths, ssrf]
+    aliases: [infrastructure, 基础设施]
+    entrypoints:
+      - get_settings
+      - get_engine
+      - get_session_factory
+      - get_logger
+      - configure_logging
+      - register_exception_handlers
+      - register_audit_hooks
+      - get_redis
+      - get_cipher
+      - require_permission
+      - require_permission_any
+    main_symbols:
+      - Settings
+      - AppError
+      - TokenPayload
+      - create_access_token
+      - decode_access_token
+      - CredentialCipher
+      - SpecPathResolver
+      - repo_root
+      - resolve_spec_data_root
+      - UnsafeRepoUrl  # core/ssrf.py（security-backend-guardrails 新增）
+      - assert_public_url
+      - assert_safe_repo_url
+      - register_audit_hooks
+      - get_engine
+      - get_session_factory
+      - get_cached_permissions  # core/permission_cache.py（rbac-permission-cache 新增）
+      - set_cached_permissions
+      - get_cached_ppm_scope
+      - set_cached_ppm_scope
+      - invalidate_all_permissions
+    depends_on: []
+    used_by:
+      - auth
+      - workspace
+      - change
+      - task
+      - agent
+      - daemon
+      - worktree
+      - git_identity
+      - git_gateway
+      - change_writer
+      - tool_gateway
+      - scan_docs
+      - release
+      - incident
+      - workflow
+      - knowledge
+      - runtime
+      - settings
+      - health
+      - spec_profile
+      - spec_workspace
+      - admin
+      - ppm
+      - mcp_gateway
+      - platform_sync
+      - llm_provider
+      - storage
+      - file
+      - skills
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  models:
+    status: active
+    doc: modules/models.md
+    paths:
+      - app/models/**
+    tags: [base-model, orm]
+    aliases: [shared-models]
+    entrypoints:
+      - BaseModel
+    main_symbols:
+      - BaseModel  # app/models/base.py（SQLModel 基类）
+    depends_on: []
+    used_by:
+      - auth
+      - workspace
+      - change
+      - task
+      - agent
+      - daemon
+      - worktree
+      - git_identity
+      - git_gateway
+      - tool_gateway
+      - scan_docs
+      - incident
+      - release
+      - spec_profile
+      - spec_workspace
+      - workflow
+      - settings
+      - admin
+      - ppm
+      - mcp_gateway
+      - platform_sync
+      - llm_provider
+      - file
+      - skills
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ── business 模块 ──────────────────────────────────────────
+
+  health:
+    status: active
+    doc: modules/health.md
+    paths:
+      - app/modules/health/**
+    tags: [health, monitoring, version, system-status, 健康检查]
+    aliases: []
+    entrypoints:
+      - /api/health
+      - /api/version
+      - /api/system-status
+    main_symbols:
+      - HealthResponse
+      - VersionResponse
+      - SystemStatusResponse
+      - health_router
+    depends_on:
+      - core
+      - auth
+      - ppm  # system_status 延迟 import ppm plan/project model 做 db 检查
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  notification:
+    status: active
+    doc: modules/notification.md
+    paths:
+      - app/modules/notification/**
+    tags: [notification, approval, sse, redis, bell, 通知, 审批]
+    aliases: [notice, inbox]
+    entrypoints:
+      - /api/notifications
+      - /api/notifications/unread-count
+      - /api/notifications/events (SSE)
+    main_symbols:
+      - NotificationService (backend/app/modules/notification/service.py, 广播/定向/幂等/消解)
+      - InAppChannel (backend/app/modules/notification/service.py, Redis notifications:new 合并 publish)
+      - _stream_notifications_events (backend/app/modules/notification/router.py, SSE 服务端过滤)
+    depends_on: [auth]
+    used_by: [platform_sync, change, daemon, frontend]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  auth:
+    status: active
+    doc: modules/auth.md
+    paths:
+      - app/modules/auth/**
+    tags: [auth, jwt, rbac, login, token, api-key, captcha, 认证, 登录, 验证码]
+    aliases: [authentication]
+    entrypoints:
+      - /api/auth/login
+      - /api/auth/logout
+      - /api/auth/refresh
+      - /api/auth/me
+      - /api/auth/change-password
+      - /api/auth/captcha/verify
+      - /api/auth/captcha/confirm
+      - /api/auth/api-keys
+    main_symbols:
+      - AuthService
+      - ApiKeyService
+      - CaptchaService
+      - User
+      - Session
+      - Role
+      - RolePermission
+      - ApiKey
+      - UserWorkspaceRole
+      - Permission
+      - TokenPair
+      - auth_router
+    depends_on:
+      - core
+      - models
+      - admin  # rbac 延迟 import admin.model.UserRole
+      - workflow
+      - workspace
+    used_by:
+      - admin
+      - agent
+      - change
+      - daemon
+      - file
+      - git_gateway
+      - git_identity
+      - health
+      - incident
+      - knowledge
+      - llm_provider
+      - mcp_gateway
+      - platform_sync
+      - ppm
+      - release
+      - runtime
+      - scan_docs
+      - settings
+      - skills
+      - spec_workspace
+      - task
+      - tool_gateway
+      - workflow
+      - workspace
+      - worktree
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  workspace:
+    status: active
+    doc: modules/workspace.md
+    paths:
+      - app/modules/workspace/**
+    tags: [workspace, crud, scan, topology, relation, ppm-link, member-runtime, 工作区]
+    aliases: [workspaces]
+    entrypoints:
+      - /api/workspaces
+      - /api/workspaces/{workspace_id}/members
+      - /api/workspaces/{workspace_id}/ppm-projects  # link_router（workspace↔PPM 项目绑定）
+      - /api/workspaces/{workspace_id}/my-binding
+      - /api/workspaces/{workspace_id}/shared-daemons  # member_runtimes 子域
+    main_symbols:
+      - WorkspaceService
+      - WorkspaceScanner
+      - TopologyBuilder
+      - ComponentCatalogService
+      - SkillsViewService
+      - MemberBindingResolver  # member_runtimes/resolver.py（daemon 归属解析）
+      - Workspace
+      - WorkspaceRelation
+      - ChangeWorkspace
+      - TaskWorkspace
+      - AgentRunWorkspace
+      - PpmProjectWorkspace
+      - slugify
+      - workspace_router
+      - members_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - agent
+      - change
+      - change_writer  # member_runtimes/resolver 延迟 import DaemonClientNoActiveSession
+      - daemon
+      - ppm
+      - settings
+      - spec_workspace
+    used_by:
+      - admin
+      - agent
+      - change
+      - change_writer
+      - daemon
+      - file
+      - knowledge
+      - mcp_gateway
+      - platform_sync
+      - ppm
+      - runtime
+      - scan_docs
+      - spec_workspace
+      - task
+      - worktree
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  change:
+    status: active
+    doc: modules/change.md
+    paths:
+      - app/modules/change/**
+    tags: [change, proposal, design, stage, 变更, on-demand, conversation-driven, session-link]
+    aliases: [changes]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/changes
+    main_symbols:
+      - ChangeService
+      - ChangeService.reparse  # scope 参数——scoped 零 delete + created 自动绑定最近活跃会话
+      - ChangeService._project_current_stage  # read-only join platform_change_progress 投影 current_stage
+      - SillySpecStageDispatchService  # dispatch.py（形态A 按需触发）
+      - StageProjectionService  # projection.py compute_pending_review
+      - Change
+      - ChangeDocument
+      - ChangeSessionLink  # change↔session 多对多（conversation-driven）
+      - ChangeEventORM
+      - StageEnum
+      - ChangeParser
+      - change_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - workspace
+      - agent
+      - daemon
+      - knowledge
+      - platform_sync
+      - spec_workspace
+      - workflow
+    used_by:
+      - agent
+      - change_writer
+      - daemon
+      - mcp_gateway
+      - platform_sync
+      - scan_docs
+      - spec_workspace
+      - task
+      - workflow
+      - worktree
+      - workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  platform_sync:
+    status: active
+    doc: modules/platform_sync.md
+    paths:
+      - app/modules/platform_sync/**
+    tags: [platform-sync, sillyspec, progress-sync, spec-sync, manifest, incremental, quicklog, workspace-isolation, token, projection, contract, public-api, 进度同步]
+    aliases: [progress-sync, sillyhub-sync]
+    entrypoints:
+      - POST /api/changes/{name}/progress  # CLI 工具上行进度（require_platform_sync，shpsync_ 派生 workspace）
+      - GET /api/changes  # 收件箱列表（workspace 隔离）
+      - GET /api/changes/{name}/progress
+      - GET /api/changes/-/spec-manifest  # spec 树权威清单（spec-file-incremental-sync）
+      - POST /api/changes/-/spec-sync  # spec 文件增量同步（hash/rename/base_version 识别）
+      - GET|POST /api/changes/{name}/approval  # 审批读写闭环（platform-sync-docs-approval）
+      - POST /api/changes/{name}/documents  # 文档上行
+      - POST /api/quicklog-entries  # quicklog 条目上行
+      - /api/workspaces/{workspace_id}/platform-sync-tokens  # 签发 shpsync_ token
+      - POST /api/workspaces/resolve-by-root-path  # connect 换发
+    main_symbols:
+      - PlatformSyncService  # upsert_progress/list_lightweight/get_progress
+      - PlatformSyncTokenService  # shpsync_ 签发/authenticate 派生 (user, workspace_id)
+      - require_platform_sync  # Bearer 三路径分流
+      - PlatformChangeProgressORM  # workspace_id + change_name 复合唯一
+      - PlatformSyncTokenORM
+      - SpecManifestResponse  # SpecManifestFileEntry 权威清单
+      - SpecSyncRequest
+      - SpecSyncResponse
+      - QuicklogEntryORM
+      - QuicklogEntryPushRequest
+      - DocumentsSyncRequest  # RootModel 裸 map 文档上行
+      - platform_sync_router  # inline /changes + /quicklog-entries
+      - platform_sync_workspace_router  # prefix=/workspaces
+    depends_on:
+      - core
+      - models
+      - auth
+      - change
+      - spec_workspace
+      - workspace
+    used_by:
+      - change  # enrich read-only join 投影 current_stage
+      - daemon
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  task:
+    status: active
+    doc: modules/task.md
+    paths:
+      - app/modules/task/**
+    tags: [task, todo, board, 任务]
+    aliases: [tasks]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/changes/{change_id}/tasks
+      - /api/workspaces/{workspace_id}/changes/{change_id}/tasks/board
+      - /api/workspaces/{workspace_id}/changes/{change_id}/tasks/reparse
+    main_symbols:
+      - TaskService
+      - Task
+      - TaskParser
+      - TaskBoard
+      - task_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - change
+      - spec_workspace
+      - workspace
+    used_by:
+      - agent
+      - tool_gateway
+      - workflow
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  agent:
+    status: active
+    doc: modules/agent.md
+    paths:
+      - app/modules/agent/**
+    tags: [agent, claude-code, execution, coordinator, mission, profile, kill, daemon-only, 智能体]
+    aliases: [agents, ai]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/agent/runs  # 含 kill/resume/approve/input/checkpoint/logs/stream 子路由
+      - /api/workspaces/{workspace_id}/missions
+      - /api/workspaces/{workspace_id}/dialogs
+      - /api/workspaces/{workspace_id}/agent-sessions
+      - /api/workspaces/{workspace_id}/tasks/{task_id}/agent/runs
+      - /api/agent-runs/{run_id}/execution-context
+    main_symbols:
+      - AgentService
+      - ExecutionCoordinatorService
+      - RunPlacementService
+      - MissionService
+      - MissionControlService
+      - MissionExecutionService
+      - AgentProfileService  # agent/profile/（三层配置：daemon→agent→workspace）
+      - NoOnlineDaemonError
+      - AgentRun
+      - AgentMission
+      - AgentProfile
+      - AgentRunLog
+      - AgentGroupChat  # 群聊两表（session_kind=group/group_member 影子，2026-09-01-session-group-chat）
+      - AgentGroupMember
+      - AgentKillResponse  # 统一 kill 通道（daemon-kill-channel）
+      - build_spec_bundle
+      - agent_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - change
+      - daemon
+      - file
+      - git_gateway
+      - git_identity
+      - skills
+      - spec_profile
+      - spec_workspace
+      - storage
+      - task
+      - workspace
+      - worktree
+    used_by:
+      - change
+      - daemon
+      - mcp_gateway
+      - spec_workspace
+      - workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  daemon:
+    status: active
+    doc: modules/daemon.md
+    paths:
+      - app/modules/daemon/**
+    tags: [daemon, runtime, heartbeat, lease, websocket, session, audit, change-write, group-chat, 守护进程]
+    aliases: [daemons]
+    entrypoints:
+      - /api/daemon  # register/heartbeat/runtimes/*（含 usage/page/self-update/allowed-roots）
+      - /api/daemon/ws
+      - /api/daemon/audit/batch  # audit 子域批量审计上行
+      - /api/daemon/runtimes/{runtime_id}/pending-change-writes  # change_write 子域（claim/complete/progress）
+      - /api/daemon/dist  # dist_router 版本分发（tags=daemon-distribution）
+      - /api/daemon/group-chats  # group 子域（群聊 CRUD/成员/消息 @路由/typing，paths 由 app/modules/daemon/** 覆盖，2026-09-01-session-group-chat）
+    main_symbols:
+      - DaemonService  # facade
+      - DaemonLeaseService  # lease_service.py
+      - DaemonPermissionService  # permission_service.py
+      - DaemonRuntime
+      - DaemonInstance
+      - DaemonChangeWrite  # change_write_router（写 claim 通道）
+      # 子包 service（facade 委托）：
+      - RuntimeService  # daemon/runtime/service.py
+      - LeaseService  # daemon/lease/service.py（含 provider_switch 通知）
+      - RunSyncService  # daemon/run_sync/service.py
+      - SessionService  # daemon/session/service.py（inject_session_as_service 服务身份注入）
+      - PatchService  # daemon/patch/service.py
+      - AuditService  # daemon/audit/service.py（audit-system-completion）
+      - ws_hub  # ws_hub.py WS 连接枢纽
+      - GroupChatService  # daemon/group/service.py（@路由/影子懒建/互@护栏/typing+presence，2026-09-01-session-group-chat）
+      - group_router  # daemon/group/router.py（/api/daemon/group-chats 端点族）
+      - daemon_router
+      - authorize_pinned_runtime  # daemon/grants/queries.py（会话钉定授权判定 owner/工作区 grant/platform 直传 404[D-012]，2026-08-28-daemon-agent-share；2026-09-11-skills-central-library task-04 自文件尾误植位归位——该行原本游离在 build 模块后致整文件 YAML 不可解析）
+    depends_on:
+      - core
+      - models
+      - auth
+      - agent
+      - change
+      - git_gateway
+      - llm_provider
+      - mcp_gateway
+      - mcp_registry  # daemon_rpc mcp/config 换源渲染（函数体内惰性 import）
+      - platform_sync
+      - settings
+      - spec_workspace
+      - workspace
+    used_by:
+      - agent
+      - change
+      - change_writer
+      - llm_provider  # service 延迟 import lease.provider_switch
+      - mcp_gateway
+      - runtime
+      - spec_workspace
+      - workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  mcp_gateway:
+    status: active
+    doc: modules/mcp_gateway.md
+    paths:
+      - app/modules/mcp_gateway/**
+    tags: [mcp, model-context-protocol, gateway, fastmcp, streamable-http, sse, token, webhook, public-api, mission, change-stage, on-demand]
+    aliases: [mcp-gateway, public-mcp]
+    entrypoints:
+      - /mcp/  # 对外 FastMCP streamable HTTP（McpAuthMiddleware 鉴权）
+      - /api/workspaces/{workspace_id}/mcp-tokens
+      - /api/workspaces/{workspace_id}/mcp-webhooks
+      - /api/workspaces/{workspace_id}/missions/{mission_id}/events  # SSE 事件流（sse.py）
+    main_symbols:
+      - mcp  # FastMCP("sillyhub-public")
+      - mount_mcp
+      - McpAuthMiddleware
+      - McpAuthContext
+      - McpTokenService
+      - McpWebhookService
+      - WebhookDispatcher
+      - McpTokenORM
+      - McpWebhookORM
+      - mcp_gateway_router
+      # 12 个 @mcp.tool()（tools.py：8 mission 层复用 agent service，4 change 阶层复用 change service）
+      - dispatch_worker
+      - get_worker_result
+      - list_workers
+      - converge_mission
+      - report_progress
+      - list_agent_profiles
+      - create_mission
+      - get_run_logs
+      - advance_change_stage
+      - submit_stage_review
+      - run_verify_gate
+      - get_change_stage
+    depends_on:
+      - core
+      - models
+      - auth
+      - agent
+      - change
+      - daemon
+      - workspace
+    used_by:
+      - daemon
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  scan_docs:
+    status: active
+    doc: modules/scan_docs.md
+    paths:
+      - app/modules/scan_docs/**
+    tags: [scan, docs, parser, conflict, 文档扫描]
+    aliases: [scan-docs]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/scan-docs
+      - /api/workspaces/{workspace_id}/scan-docs/reparse
+      - /api/workspaces/{workspace_id}/scan-docs/{doc_id}/conflicts
+    main_symbols:
+      - ScanDocsService
+      - ScanDocsParser
+      - ScanDocConflictService
+      - ScanDocument
+      - ScanDocConflictHistory
+      - scan_docs_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - change
+      - spec_workspace
+      - workspace
+    used_by:
+      - spec_workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  knowledge:
+    status: active
+    doc: modules/knowledge.md
+    paths:
+      - app/modules/knowledge/**
+    tags: [knowledge, quicklog, 知识库]
+    aliases: []
+    entrypoints:
+      - /api/workspaces/{workspace_id}/knowledge
+      - /api/workspaces/{workspace_id}/quicklog
+    main_symbols:
+      - KnowledgeService
+      - KnowledgeParser
+      - KnowledgeEntry
+      - QuicklogEntry
+      - knowledge_router
+    depends_on:
+      - core
+      - auth
+      - spec_workspace
+      - workspace
+    used_by:
+      - change
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  git_identity:
+    status: active
+    doc: modules/git_identity.md
+    paths:
+      - app/modules/git_identity/**
+    tags: [git, identity, pat, github, credentials, 凭据]
+    aliases: [git-identities]
+    entrypoints:
+      - /api/git/identities  # 含 access-check 子路由
+    main_symbols:
+      - GitIdentityService
+      - GitIdentity
+      - GitHubProvider
+      - check_access
+      - git_identity_router
+    depends_on:
+      - core
+      - models
+      - auth
+    used_by:
+      - agent
+      - git_gateway
+      - worktree
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  llm_provider:
+    status: active
+    doc: modules/llm_provider.md
+    paths:
+      - app/modules/llm_provider/**
+    tags: [llm, provider, credential, crypto, anthropic, openai-format, litellm, api-key, model, vendor, 供应商]
+    aliases: [llm-providers, 供应商管理]
+    entrypoints:
+      - /api/llm-providers  # 含 fetch-models / quota / default 切换子路由
+    main_symbols:
+      - LlmProviderService
+      - LlmProvider
+      - ProviderProbeResult  # probe.py 探活
+      - FetchModelsRequest
+      - LlmProviderQuotaResponse
+      - LlmProviderSsrfBlocked
+      - llm_provider_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - daemon  # service 延迟 import lease.context/provider_switch
+      - tool_gateway  # probe 复用 ToolPolicyService SSRF 校验
+    used_by:
+      - daemon
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  worktree:
+    status: active
+    doc: modules/worktree.md
+    paths:
+      - app/modules/worktree/**
+    tags: [worktree, git, lease, 工作树]
+    aliases: [worktrees]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/worktrees  # 含 acquire/release/extend 子路由
+    main_symbols:
+      - WorktreeService
+      - WorktreeLease
+      - GitRunner
+      - ExecEnvBuilder
+      - worktree_router
+      - lease_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - git_identity
+      - workspace
+    used_by:
+      - agent
+      - change_writer
+      - git_gateway
+      - tool_gateway
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  git_gateway:
+    status: active
+    doc: modules/git_gateway.md
+    paths:
+      - app/modules/git_gateway/**
+    tags: [git, gateway, audit, proxy, 注入防护]
+    aliases: [git-ops]
+    entrypoints:
+      - POST /api/worktrees/{lease_id}/git
+      - GET /api/git/operations
+    main_symbols:
+      - GitGatewayService
+      - GitOperationLog
+      - RetryPolicy
+      - redact_output
+      - git_gateway_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - git_identity
+      - worktree
+    used_by:
+      - agent
+      - daemon
+      - tool_gateway
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  change_writer:
+    status: active
+    doc: modules/change_writer.md
+    paths:
+      - app/modules/change_writer/**
+    tags: [change-writer, markdown, document, daemon-claim, 变更写入]
+    aliases: [writer]
+    entrypoints: []  # 2026-08-14 conversation-driven 起 5 个 HTTP 端点下线，router 留空壳供 main.py 挂载；服务层经 daemon change-write claim 通道调用
+    main_symbols:
+      - ChangeWriterService
+      - proxy_create_change
+      - build_proposal_md
+      - build_design_md
+      - build_plan_md
+      - build_master_md
+      - build_requirements_md
+      - classify_change_type
+      - DaemonClientNoActiveSession
+    depends_on:
+      - core
+      - change
+      - daemon
+      - workspace
+      - worktree
+    used_by:
+      - workspace  # member_runtimes/resolver 延迟 import
+    needs_review: false
+    concerns: [router-empty-shell]
+    review_reasons: []
+
+  workflow:
+    status: active
+    doc: modules/workflow.md
+    paths:
+      - app/modules/workflow/**
+    tags: [workflow, fsm, approval, spec-guardian, audit, 审批]
+    aliases: []
+    entrypoints:
+      - /api/workspaces/{workspace_id}/changes/{change_id}/reviews
+      - /api/workspaces/{workspace_id}/audit
+      - /api/workspaces/{workspace_id}/tasks/{task_id}/transition
+    main_symbols:
+      - WorkflowService
+      - FSM
+      - ChangeReview
+      - AuditLog
+      - run_guard
+      - workflow_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - change
+      - task
+      - workspace
+    used_by:
+      - admin
+      - auth
+      - daemon
+      - settings
+      - spec_workspace
+      - tool_gateway
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  runtime:
+    status: active
+    doc: modules/runtime.md
+    paths:
+      - app/modules/runtime/**
+    tags: [runtime, progress, artifacts, 运行时]
+    aliases: []
+    entrypoints:
+      - /api/workspaces/{workspace_id}/runtime
+      - /api/workspaces/{workspace_id}/runtime/user-inputs
+      - /api/workspaces/{workspace_id}/runtime/artifacts
+    main_symbols:
+      - RuntimeLiveService
+      - RuntimeProgress
+      - StageProgress
+      - StageStep
+      - UserInputEntry
+      - ArtifactEntry
+      - runtime_router
+      - RuntimeNotBound
+      - RuntimeDaemonOffline
+      - RuntimeTransferInterrupted
+      - RuntimeRpcTimeout
+      - RuntimeDaemonForbidden
+      - RuntimePathNotFound
+      - RuntimeDaemonTooOld
+      - RuntimeArtifactTooLarge
+      - RuntimeDaemonRemoteError
+    depends_on:
+      - core
+      - auth
+      - daemon
+      - spec_workspace
+      - workspace
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  release:
+    status: active
+    doc: modules/release.md
+    paths:
+      - app/modules/release/**
+    tags: [release, approval, 发布]
+    aliases: [releases]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/releases  # 含 approve/deploy/promote/rollback 子路由
+    main_symbols:
+      - ReleaseService
+      - Release
+      - ReleaseApproval
+      - release_router
+    depends_on:
+      - core
+      - models
+      - auth
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  incident:
+    status: active
+    doc: modules/incident.md
+    paths:
+      - app/modules/incident/**
+    tags: [incident, postmortem, fsm, 故障]
+    aliases: [incidents]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/incidents  # 含 postmortem 子路由
+    main_symbols:
+      - IncidentService
+      - Incident
+      - Postmortem
+      - incident_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - ppm  # resolve_owner 代填冒名防护
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  tool_gateway:
+    status: active
+    doc: modules/tool_gateway.md
+    paths:
+      - app/modules/tool_gateway/**
+    tags: [tool, gateway, policy, audit, approvals, ssrf, 工具]
+    aliases: [tools]
+    entrypoints:
+      - POST /api/worktrees/{lease_id}/tools
+      - /api/workspaces/{workspace_id}/approvals/pending  # 审批流（含 history/approve/reject）
+      - /api/workspaces/{workspace_id}/tool-policies  # CRUD（policy_router）
+    main_symbols:
+      - ToolGatewayService
+      - ToolPolicyService
+      - ToolPolicy
+      - ToolOperationLog
+      - ToolExecuteRequest
+      - ToolExecuteResponse
+      - SsrfBlocked
+      - tool_gateway_router
+      - policy_crud_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - git_gateway
+      - task
+      - workflow
+      - worktree
+    used_by:
+      - llm_provider
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  settings:
+    status: active
+    doc: modules/settings.md
+    paths:
+      - app/modules/settings/**
+    tags: [settings, config, admin, users, mcp-platform, 系统设置]
+    aliases: [platform-settings]
+    entrypoints:
+      - /api/settings
+      - /api/platform-settings/mcp-whitelist  # 旧 /mcp 两端点已移除（2026-09-10-mcp-central-registry task-13，D-003）
+      - /api/users
+    main_symbols:
+      - PlatformSetting
+      - SettingsBulkRead
+      - settings_router
+      - _redact_mcp_env  # workspace/skills_view_service 跨模块复用（env secret 遮蔽）
+    depends_on:
+      - core
+      - models
+      - admin
+      - auth
+      - workflow
+    used_by:
+      - daemon  # mcp/config 端点读 mcp.whitelist KV
+      - mcp_registry  # render 诊断读 mcp.whitelist（D-007 白名单治理留 settings）
+      - workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  mcp_registry:
+    status: active
+    doc: modules/mcp_registry.md
+    paths:
+      - app/modules/mcp_registry/**
+    tags: [mcp, model-context-protocol, registry, crud, binding, encryption, import, template, diagnostics, 中央资产库]
+    aliases: [mcp-servers, mcp-registry]
+    entrypoints:
+      - /api/mcp-servers  # 列表（?scope=platform|mine|visible）+ 创建（201，stdio-only）
+      - /api/mcp-servers/{server_id}  # 详情/部分更新/删除（跨用户私有 404 防枚举）
+      - /api/mcp-servers/{server_id}/bindings  # POST 加绑定 + DELETE {scope_type}[/{scope_ref}] 解绑
+      - /api/mcp-servers/import-json  # JSON 粘贴导入（三包装探测 + 逐条容错 skipped）
+      - /api/mcp-servers/workspace-scan  # 只读扫描候选（dedup_key 三态 new/duplicate/renamed，零写库）
+      - /api/mcp-servers/workspace-import-apply  # apply 落库（按 workspace 重读明文，幂等）
+      - /api/mcp-servers/templates  # GET（6 预置惰性 seed）+ POST 存为模板（双形态互斥）
+      - /api/mcp-servers/diagnostics  # 平台注入集预检五项（SETTINGS_ADMIN）
+    main_symbols:
+      - McpRegistryService  # service.py：CRUD/双层可见性/binding 约束/CredentialCipher 逐键加密
+      - render_injection_set  # render.py：注入集渲染（platform ∪ user binding，daemon mcp/config 换源）
+      - precheck_diagnostics  # render.py：D-011 五项诊断
+      - import_from_json
+      - scan_workspaces
+      - apply_workspace_import
+      - ensure_preset_templates
+      - McpServer
+      - McpServerBinding
+      - McpTemplate
+      - mcp_registry_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - daemon  # importer 惰性复用 daemon_rpc._read_mcp_config_raw 读 workspace .mcp.json
+      - settings  # render 诊断读 mcp.whitelist KV
+      - spec_workspace
+      - workspace
+    used_by:
+      - daemon  # daemon_rpc mcp/config platform 位换源 render_injection_set（函数体内惰性 import，双向懒加载不成环）
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  spec_workspace:
+    status: active
+    doc: modules/spec_workspace.md
+    paths:
+      - app/modules/spec_workspace/**
+    tags: [spec, workspace, bootstrap, validator, import, incremental-sync, 增量同步]
+    aliases: [spec-ws]
+    entrypoints:
+      - /api/workspaces/{workspace_id}/spec-workspace  # GET/PATCH/POST import（SSE）
+      - /api/workspaces/{workspace_id}/spec-workspace/bundle
+      - /api/workspaces/{workspace_id}/spec-conflicts
+    main_symbols:
+      - SpecWorkspaceService
+      - SpecWorkspaceService.apply_ops  # change_dirs 标注触发 scoped change reparse
+      - SpecBootstrapService
+      - SpecWorkspace
+      - SpecValidator
+      - FileOp
+      - SpecFileManifest
+      - SpecIncrementalSyncRequest  # 文件增量同步（hash/base_version 识别）
+      - SyncStatusUpdate
+      - spec_workspace_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - agent
+      - change
+      - daemon
+      - scan_docs
+      - spec_profile
+      - workflow
+      - workspace
+    used_by:
+      - change
+      - knowledge
+      - platform_sync
+      - runtime
+      - scan_docs
+      - task
+      - workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  spec_profile:
+    status: active
+    doc: modules/spec_profile.md
+    paths:
+      - app/modules/spec_profile/**
+    tags: [spec, profile, conflict, 规范档位]
+    aliases: [spec-profile]
+    entrypoints: []
+    main_symbols:
+      - SpecProfileManifest
+      - SpecProfileProvider
+      - DocumentPolicy
+      - StagePolicy
+      - SpecConflict
+    depends_on:
+      - core
+      - models
+    used_by:
+      - agent
+      - spec_workspace
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ── platform / admin 模块 ──────────────────────────────────
+
+  admin:
+    status: active
+    doc: modules/admin.md
+    paths:
+      - app/modules/admin/**
+    tags: [admin, organization, role, user-management, 后台管理]
+    aliases: [administration]
+    entrypoints:
+      - /api/admin
+    main_symbols:
+      - OrganizationService
+      - UserService
+      - RoleService
+      - Organization
+      - UserOrganization
+      - UserRole
+      - admin_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - workflow
+      - workspace
+    used_by:
+      - auth
+      - ppm
+      - settings
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  ppm:
+    status: active
+    doc: modules/ppm.md
+    paths:
+      - app/modules/ppm/**
+    tags: [ppm, project, problem, plan, task-execute, kanban, workbench, migration, 项目管理]
+    aliases: [project-problem-management, ppdmq]
+    entrypoints:
+      - /api/ppm/projects
+      - /api/ppm/plans
+      - /api/ppm/tasks
+      - /api/ppm/problems
+      - /api/ppm/kanban
+      - /api/ppm/workbench  # workbench 子域（profile/summary/calendar/todos）
+    main_symbols:
+      - ProjectMaintenanceService
+      - CustomerMaintenanceService
+      - PlanService
+      - PlanTaskService
+      - TaskExecuteService
+      - WorkHourService
+      - ProblemService
+      - PpdKanbanService
+      - PsProjectPlan
+      - PlanTask
+      - TaskExecute
+      - WorkHour
+      - PpmProblemList
+      - ppm_project_router
+      - ppm_plan_router
+      - ppm_task_router
+      - ppm_problem_router
+      - ppm_kanban_router
+      - ppm_workbench_router
+    depends_on:
+      - core
+      - models
+      - admin
+      - auth
+      - file
+      - storage
+      - workspace
+    used_by:
+      - health
+      - incident
+      - workspace
+    needs_review: false
+    concerns: [large-domain]
+    review_reasons: []
+
+  storage:
+    status: active
+    doc: modules/storage.md
+    paths:
+      - app/modules/storage/**
+    tags: [storage, object-storage, s3, minio, abstraction, 对象存储]
+    aliases: [object-storage]
+    entrypoints:
+      - get_storage_backend
+      - init_storage_backend
+    main_symbols:
+      - StorageBackend
+      - MinioStorage
+      - ObjectStat
+    depends_on:
+      - core
+    used_by:
+      - agent
+      - file
+      - ppm
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  file:
+    status: active
+    doc: modules/file.md
+    paths:
+      - app/modules/file/**
+    tags: [file, attachment, upload, object-storage, 文件]
+    aliases: [file-center, attachment-center]
+    entrypoints:
+      - /api/file/upload
+      - /api/file/list
+      - /api/file/{file_id}
+      - /api/file/{file_id}/meta
+      - /api/file/batch-meta
+    main_symbols:
+      - File
+      - FileService
+      - FileUploadResp
+      - FileMetaResp
+      - file_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - storage
+      - workspace
+    used_by:
+      - agent
+      - ppm
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  skills:
+    status: active
+    doc: modules/skills.md
+    paths:
+      - app/modules/skills/**
+    tags: [skills, custom-skills, admin, crud, mcp, 技能]
+    aliases: [custom-skills]
+    entrypoints:
+      - /api/custom-skills
+      - /api/custom-skills/{skill_id}
+    main_symbols:
+      - CustomSkill
+      - CustomSkillService
+      - CustomSkillDetail
+      - skills_router
+    depends_on:
+      - core
+      - models
+      - auth
+    used_by:
+      - agent
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # 2026-09-11-skills-central-library task-04：git 技能源 + 用户启用绑定 + 技能库聚合。
+  skill_source:
+    status: active
+    doc: modules/skill_source.md
+    paths:
+      - app/modules/skill_source/**
+    tags: [skills, git-source, shallow-clone, enable-binding, library, ssrf, 技能源]
+    aliases: [skill-sources, skills-library]
+    entrypoints:
+      - /api/skill-sources  # GET 列表 + POST 创建（均 SETTINGS_ADMIN）
+      - /api/skill-sources/{source_id}  # PATCH 部分更新 + DELETE 删除（连带清绑定+缓存目录）
+      - /api/skill-sources/{source_id}/refresh  # 手动刷新（admin）
+      - /api/skills/library  # 技能库三源聚合 + 我的启用态（登录即可）
+      - /api/skills/{skill_key}/enable  # POST/DELETE 本人启用绑定（skill_key=<source_id>:<目录名> 含冒号）
+    main_symbols:
+      - SkillSourceService  # 源 CRUD/拉取接线/技能库聚合/启用绑定
+      - SkillSource
+      - UserSkillEnable  # UNIQUE(user_id, skill_key)；skill_key 刻意不做 FK（删源按前缀连带清）
+      - LibraryView
+      - LibrarySkillItem
+      - EnableOp
+      - parse_skill_key  # <source_id>:<目录名> 解析（422）
+      - skills_git_cache_root  # <spec_data_root>/skills_git_cache
+      - source_cache_dir  # skills_git_cache/<source_id>/
+      - skill_source_router
+    depends_on:
+      - core
+      - models
+      - auth
+      - skills  # list_library 三源聚合读 CustomSkill
+      - agent  # 顶层复用 skills_bundle_service._parse_skill_frontmatter/SKILLS_GLOB（收集侧反向惰性 import 本模块，不成环）
+    used_by:
+      - agent  # skills_bundle_service._collect_enabled_git_skills 函数体内惰性 import（bundle 第三源，D-010）
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ── infra 模块 ─────────────────────────────────────────────
+
+  migrations:
+    status: active
+    doc: modules/migrations.md
+    paths:
+      - migrations/**
+    tags: [alembic, migration, database, 数据库迁移]
+    aliases: [db-migration]
+    entrypoints: []
+    main_symbols: []
+    depends_on: []
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  build:
+    status: active
+    doc: modules/build.md
+    paths:
+      - pyproject.toml
+      - Dockerfile
+      - alembic.ini
+      - ruff.toml
+    tags: [build, config, 构建]
+    aliases: [project-config]
+    entrypoints: []
+    main_symbols: []
+    depends_on: []
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+

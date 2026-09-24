@@ -1,0 +1,99 @@
+---
+schema_version: 1
+doc_type: module-card
+module_id: daemon
+author: qinyi
+created_at: 2026-08-18 01:45:00
+---
+
+# 守护进程主类（daemon）
+
+## 定位
+
+守护进程主类，编排核心（约 4000 行）。只做组装不实现子能力（探测/HTTP/WS/子进程/
+git 都在前置模块）。生命周期：preflight → 探测 agent → runtime lock 单实例 →
+per-daemon 注册 → 崩溃会话恢复 → skills 同步 → 四循环（heartbeat / lease 轮询 /
+WS / sillyspec 自动升级检查）→ WS RPC handler + 消息路由 → lease 状态机（claim →
+start → execute → complete）按 kind 分流 batch / interactive / init / change-write。
+
+## 契约摘要
+
+- `Daemon(options: DaemonOptions)` + `start()` / `stop()`；DaemonOptions 可注入
+  mock detector / wsClientFactory / taskRunner / sessionManager / persistence /
+  recoveryClient / lockManager / sillyspecManager（测试口，缺省构造真实
+  SillySpecManager，isBusy 接 `_isBusyForUpdate` 三臂忙判定）。
+- 导出纯函数与端口：`translateSpecRoot(prompt, specRootMap)`（spec_root_map
+  "from:to" 容器路径→宿主路径翻译，按**首个** ':' 分割容忍盘符冒号）；
+  `RecoveryCoordinator` / `SessionRecoverStatus`（重启恢复鸭子类型端口）；
+  `LEASE_POLL_SKIP_MS = 90_000`（轮询门控常量）。
+- 依赖契约全为鸭子类型子集（DetectorLike / ClientLike / TaskRunnerLike /
+  WsClientLike / RuntimeLockLike / InteractiveCredentialManager），避免硬耦合。
+- interactive 桥接回调：`onTurnMessage`（→ submitMessages 流式上报）、
+  `onTurnResult`（→ notifyRunResult，含 usage/cost/duration + ModelError）、
+  `onSessionEnd`（→ notifySessionEnd + spec 回灌）。
+
+## 关键逻辑
+
+```
+start():
+  runPreflight(失败不阻断) → detectAgents → 逐 provider acquireLock(失败回滚+抛)
+  → _registerDaemon(单次 POST /register，注册前 manager probeLocal/probeLatest
+    一次使报文即带 sillyspec 版本) → _recoverSessionsOnBoot → syncSkills
+  → _fire 四循环 + sessionManager.start() + 信号 handler
+_sillyspecLoop(): 第四循环（2026-08-31-machine-sillyspec-version）——间隔
+  config.sillyspec_update_interval_sec(默认 3600s，0/非法=关闭即返回)，每拍
+  manager.checkAndUpgrade('auto')：latest+local 探测 → 未安装/落后才升级
+_pollLoop(): WS isConnected 且 lastMessageAt < 90s → 跳过该轮 HTTP 轮询（假活/断连恢复 30s 兜底）
+_runLeaseStateMachine(): claimLease → 归一化 execPayload(snake→camel，嵌套/平铺两形态)
+  → startLease → 按 kind/mode 分流 → completeLease
+batch → taskRunner.runLease；interactive → _startInteractiveSession；
+  init lease → task-runner 内 runSillyspecInit 链路
+_executeChangeWrite(): claim → taskRunner.runChangeWrite(轻量分支，不启 agent) → complete
+  → kind=spec-sync 时整树回灌 postSpecSync（严格不走 lease 状态机）
+_sendHeartbeatOnce(): 每拍透传 sillyspec 快照（manager.getSnapshot 纯同步零
+  spawn）作 heartbeat 第 5 可选参——version/latest 非 null 才带（backend 保留）、
+  update 非 null 才带（无键=backend 清除），三键全无不占位（旧 4 参形态零回归）
+_handleWsMessage(): TASK_AVAILABLE / HEARTBEAT_ACK(同步 allowed_roots+PolicyCache) /
+  LEASE_CANCEL(taskRunner.cancel 杀子进程) / SESSION_INJECT|INTERRUPT|END|RESUME /
+  PERMISSION_RESPONSE / PROVIDER_CONFIG_CHANGED / SELF_UPDATE / CLEANUP(缓存清理,
+  交互会话运行中或已有清理在跑时跳过) / SILLYSPEC_UPDATE(void 调 manager.
+  requestUpgrade('server_command')，fire-and-forget，状态经心跳回传) / session_switch_config
+RPC handler 注册: list_dir / host_fs.* / get_spec_bundle
+```
+
+## 注意事项
+
+- **execPayload 归一化是历史事故多发点**：backend claim 返回 snake_case，必须逐字段
+  camel 化；遗漏曾致 agent_run_id 空串 422（ql-20260616-006）、transport 漏传致
+  interactive spec 从不同步（ql-20260627）、mode/platform_config 漏传致 init lease
+  落入无 prompt spawn（ql-20260711）。给 lease payload 加字段时同步补这里。
+- runtime lock 强制单实例（同 host+user+provider 一 daemon）：任一 provider 锁被
+  活跃进程持有 → releaseAll + 抛错阻止三循环启动；防双开共享 runtime_id 致
+  ownership 双通过 + WS 重连风暴。
+- 并发控制：`_inflightLeases` 去重 + `max_concurrent_tasks` 上限（超限丢轮等下次）；
+  change-write 有独立的 `_inflightChangeWrites` 去重。
+- interactive 会话 spec 同步：session 开始按 spec_strategy 三分支
+  （platform-managed / repo-mirrored / repo-native）经 pullSpecBundle 初始化；
+  结束经 syncSpecTreeIfNeeded 回灌（specSyncCtx ctx-guarded，仅 scan/stage 会话有，
+  quick-chat/shared no-op）。
+- 借用（borrow）沙箱：backend placement 下发 `metadata.cwd = "borrow-sandbox:<slug>"`
+  marker，daemon 检测前缀 → 提取 slug → 创建独立沙箱目录作 cwd（marker 不进真实
+  路径），并登记按 lease 隔离的只读 policy。
+- usage/cost 上报走 ResilienceService（notifyRunResult + mergeAdapterUsage）非
+  submitMessages 直传；FileOutbox 防 WS 断线丢消息。
+- SILLYSPEC_TEMP_ROOTS 常量放行 /dev/null（含 Windows C:/dev/null 形态）+ tmpdir，
+  供 sillyspec 写临时文件过 PolicyCache 白名单；写死不接受外部输入。
+- 模块级常量 `daemon:session_switch_config`（会话内切档案/供应商）暂收口在本文件，
+  protocol.ts MSG 表未收录——升级 protocol 时注意回收。
+
+## 人工备注
+
+<!-- MANUAL_NOTES_START -->
+- ql-20260831-005：SESSION_INJECT 四条静默丢弃路径改为立即回报 run failed（实机案：生产 wp 机会话 84cf91ab——inject delivered 后被 _routeSessionControl 校验丢弃只 warn，run 挂 pending 10 分钟才被 GC 用笼统 interactive_inject_send_failed 收敛，丢弃原因永不到前端）。新增 _reportInjectDropped(raw, reason)：payload 自带 run_id/lease_id/claim_token 三件齐才上报（P2b 同款 notifyRunResult error_during_execution+result_summary，summary 落 output_redacted 经 SessionRunRead.failure_summary 透出，接 ql-20260831-004 链）；缺 run_id/claim_token 仅 warn（backend 10min GC 兜底仍在）。接入点：no_manager / session_not_found（重试后）/ lease_mismatch / missing_fields（仅 run_id 在时），INTERRUPT/END 的 not_found 是良性终态收敛维持纯 warn。
+- ql-20260831-006：cwd 守卫（interactive-cwd-guard / checkWorkspaceBoundCwd，2026-08-28-fix-cross-machine-worker-dispatch task-05 引入）加 workspaceRoot 可选参数——工作区绑定会话 cwd 落在工作区根内（复用 assertWithinAllowedRoots 同一 containment 口径）时跳过机器 allowed_roots 白名单，存在性检查（错机试金石）保留。用户决策：默认工作目录在工作区内按工作区范围直接放行；实机案：wp 机会话 84cf91ab 首轮被 cwd_forbidden 拒——工作区 sgm 根 E:\sgm 不在机器白名单，主会话没起来导致后续 inject 全丢弃（与 005 同案两因）。daemon.ts 调用点传 rawRootPath（非借用路径 cwd 恒等于它）；不传参数行为零回归。
+- ql-20260907-003-271d：_awaitSessionThenRoute（SESSION_INJECT 早到等待，006 引入）新增在途 lease 延长——实机案（会话 1a9c601c）：backend 等 ready 仅 8s 即 fallback 发 inject，daemon create 全链偶发超 60s 基础窗口，超时被当会话不存在丢弃 + 报 run failed（重发即恢复的瞬时竞态）。修法：该 inject 的 lease_id 仍在 _inflightLeases（_executeTask try/finally 全程维护，create 在途证据）期间逐拍续推 deadline 至 now+waitMs，硬顶 waitMs+extendMaxMs（DEFAULT_INJECT_WAIT_INFLIGHT_EXTEND_MS=240s，总 5min，env SILLYHUB_INJECT_WAIT_INFLIGHT_EXTEND_MS 可调）；lease 离开在途（create 完成/失败）即停推，窗口余量到期回落原 005 丢弃上报；lease 不在途的真不存在会话零回归。timeout 日志/丢弃原因的等待时长改用实际 waited_ms（延长后可大于基础窗）。
+- ql-20260907-005-5858：create 链分步计时埋点（003 的配套归因手段——实机 >60s 慢启动案无分步数据只能猜）。_startInteractiveSession 头部建 timings 收集器（endStep 闭包），各段完成即记 interactive_create_step（session_id/step/elapsed_ms；后置步骤挂死时已完成的分步可定位停点）：borrow_sandbox_ms（仅借用路径）/ skills_ms（linkSkillsToWorkdir 全量重拷段）/ spec_pull_ms（含版本比对，shared 模式 ~0 即「跳过生效」证据）/ mcp_prefetch_ms（无 workspaceId ~0）/ create_ms（SessionManager.create 含 spawn）；interactive_session_started 与 interactive_session_create_failed 汇总 timings + total_ms。未埋点段（字段校验/守卫/spec_root 翻译/buildSpawnEnv）均内存级。已知大头背景：spec pull 30s 级瓶颈已于 ql-20260904-016 修（gzip+缓存+并行解包，热路径 ~1.5s），下次慢启动直接看 interactive_session_started 的 timings 归因。
+- ql-20260907-006-2972：_startInteractiveSession 前置链并行化——skills 拷贝 / spec pull / MCP 预取三步互相无数据依赖（skills 只需 cwd；spec 写 specs 本地缓存；MCP 写会话级缓存只需 create 前完成），由串行改 Promise.all 并行，临界路径从三者和变最慢者（Windows 慢启动主因之一）。各步闭包外层防御 catch（任何一步意外异常不炸 create 链，warn 继续）；specSyncCtx/MCP 缓存写入仍由 Promise.all 收口保证先于 create；分步计时（005）不变，并行后各段之和可大于 total_ms 属预期。配套 skill-manager linkSkillsToWorkdir 版本跳过见 skill-manager.md。MCP 工作区级缓存本轮不做：并行化后已不在临界路径，且失效语义（workspace-mcp-edit 后短窗旧配置）需设计，待 timings 数据说话。
+- ql-20260907-010-38f5：spec 拉取工作区级化——心跳驱动后台预取 + single-flight。实机根因：spec pull 挂在会话创建关键路径（specStep），47MB 树 / ~0.4MB/s 公网链路下每次版本落后现场下载 40s+（2057cde1/834486c1 的 spec_pull_ms 44408/42548），且并发会话各拉一份抢同一链路。三件套：① _pullSpecShared single-flight（Map<ws,Promise>，并发创建与心跳预取共享同一拉取）；② 心跳对答（请求 spec_cache=本机 specs 清单 → backend 响应 spec_versions 权威版本，协议见 backend/modules/daemon.md 同 ql 条目）→ 本地落后且该工作区无活跃会话 → 后台预取 + bumpLocalSpecVersion 对齐（pull 整树换目录不含 .runtime，不 bump 则恒落后反复预取）；③ 活跃会话门控（_specSessionActiveWs 记账：agent 正在读写 spec 目录时绝不后台动盘；清账=create catch + SESSION_END + 心跳自愈三路）。pull 上下文（strategy/rootPath）按工作区记账复用，防 repo-native junction 被默认参数降级覆盖。spec 缓存上报/预取均 _running 门控（未启动 daemon 不上报——心跳位置参数保持旧形态，既有心跳断言零回归）。心跳第 8 参 specCache 追加末位，占位链扩展（5/6/7 槽在 specCache 在场时齐占位防滑位）。失效冷却 60s 防失败重试刷日志。
+- quick-c1ac3c85（SWR）：specStep 加 stale-while-revalidate——010 的遗留缺口（实机会话 a982654f：本地 v200/服务器 v201，活跃会话门控挡住心跳预取后，版本一前进下一个新建会话必吃 41s 内联全量下载）。修法：lease latestSpec_version 与本地版本不一致但本地有版本记录（readLocalSpecVersion 非 null）→ 不再内联 pull，直接放行创建吃旧缓存（日志 interactive_spec_stale_serve + interactive_spec_pulled skipped=stale_while_revalidate），create 成功 + notifySessionReady 之后 fire _revalidateSpecCacheInBackground 后台对齐（fire-and-forget，失败仅 warn）。边界：本地无版本记录（首次 / D-001@v1 前旧缓存）或 lease 未带版本（旧 backend）→ 维持内联 pull 旧行为；create 失败路径不 fire。与心跳预取的差异：不查活跃会话门控（触发源是刚创建的会话自身，查则恒拦；内联 pull 时代同样在其他会话活跃时覆盖缓存，风险面不扩大——pull 自带 push-before-pull D-008，回灌 postSpecSync 是增量 ops + 服务端 base_version 冲突检测，旧基座不会整树覆盖冲掉他端改动）；复用 _pullSpecShared single-flight；bump 条件化只前进不回退（共享在途拉取已被对齐到更新版本时不倒扣，日志 spec_revalidate_skip_bump）。日志族：spec_revalidate_started/done/failed/skip_bump。生效需 daemon 发版（bundle + backend 镜像 /app/daemon-dist 上架，存量 daemon 自更新拉新）。
+<!-- MANUAL_NOTES_END -->

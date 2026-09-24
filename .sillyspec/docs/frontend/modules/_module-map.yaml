@@ -1,0 +1,2127 @@
+# author: qinyi
+# created_at: 2026-08-18 01:25:00
+schema_version: 2
+project: frontend
+source_commit: 744e3de4
+generated_at: 2026-08-22 02:45:00
+generator: sillyspec-scan
+# 全量重扫：基线 6e78b29a(62 模块) → 保留 62 + 新增 16 = 78 模块；
+# 剔除已消失路径/符号（form-layout、health-card、component-detail-drawer、sillyspec-step-progress、
+# server-status-card、daemon-dir-browser、ui Skeleton/Tag/Tooltip、create-change 路由）；
+# 新增域：sessions 门户 / agent-profiles / m 移动端 / 变更中心组件重构 / llm-providers / 文件中心 lib 拆分。
+
+modules:
+  # ─── App Router Pages (top-level) ──────────────────────────────────
+
+  app-pages:
+    status: active
+    doc: modules/app-pages.md
+    paths:
+      - "frontend/src/app/page.tsx"
+      - "frontend/src/app/(auth)/login/page.tsx"
+      - "frontend/src/app/(dashboard)/workspaces/page.tsx"
+      - "frontend/src/app/(dashboard)/runtimes/page.tsx"
+      - "frontend/src/app/(dashboard)/runtimes/[id]/audit/page.tsx"
+      - "frontend/src/app/(dashboard)/settings/page.tsx"
+      - "frontend/src/app/(dashboard)/settings/git-identities/page.tsx"
+      - "frontend/src/app/(dashboard)/settings/api-keys/page.tsx"
+      - "frontend/src/app/(dashboard)/settings/mcp/page.tsx"
+      - "frontend/src/app/(dashboard)/settings/providers/page.tsx"
+      - "frontend/src/app/(dashboard)/settings/skills/page.tsx"
+      - "frontend/src/app/(dashboard)/account/page.tsx"
+    tags: [pages, nextjs-app-router, routes, settings, llm-providers]
+    aliases: [pages, 路由, 页面, 供应商设置]
+    entrypoints:
+      - HomePage             # /
+      - LoginPage            # /login
+      - WorkspacesPage       # /workspaces
+      - RuntimesPage         # /runtimes
+      - RuntimeAuditPage     # /runtimes/[id]/audit
+      - SettingsPage         # /settings
+      - GitIdentitiesPage    # /settings/git-identities
+      - ApiKeysSettingsPage  # /settings/api-keys
+      - McpSettingsPage      # /settings/mcp
+      - LlmProvidersPage     # /settings/providers（新增）
+      - SkillsSettingsPage   # /settings/skills
+      - AccountPage          # /account
+    main_symbols:
+      - HomePage
+      - LoginPage
+      - WorkspacesPage
+      - RuntimesPage
+      - RuntimeAuditPage
+      - SettingsPage
+      - GitIdentitiesPage
+      - ApiKeysSettingsPage
+      - McpSettingsPage
+      - LlmProvidersPage
+      - SkillsSettingsPage
+      - AccountPage
+    depends_on: [components-ui, components-shared, components-layout, components-llm-providers, lib-api, lib-health, lib-daemon-audit, lib-use-daemon-machines, stores-session]
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── App Router Pages (admin 后台) ─────────────────────────────────
+
+  app-admin-pages:
+    status: active
+    doc: modules/app-admin-pages.md
+    paths:
+      - "frontend/src/app/(dashboard)/admin/**/*.tsx"
+    tags: [pages, nextjs-app-router, admin]
+    aliases: [admin-pages]
+    entrypoints:
+      - AdminLayout           # /admin
+      - AdminUsersPage        # /admin/users
+      - AdminRolesPage        # /admin/roles
+      - AdminOrganizationsPage # /admin/organizations
+    main_symbols:
+      - AdminLayout
+      - AdminUsersPage
+      - AdminRolesPage
+      - AdminOrganizationsPage
+    depends_on: [components-ui, components-layout, lib-admin, lib-permission, lib-menu-permissions, lib-api, stores-session]
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── App Router Pages (PPM 项目管理) ───────────────────────────────
+
+  app-ppm-pages:
+    status: active
+    doc: modules/app-ppm-pages.md
+    paths:
+      - "frontend/src/app/(dashboard)/ppm/**/*.tsx"
+    tags: [pages, nextjs-app-router, ppm, project-management, weekly-plan]
+    aliases: [ppm-pages, 项目管理页面]
+    entrypoints:
+      - PpmIndexPage              # /ppm
+      - PpmProjectsPage           # /ppm/projects
+      - PpmCustomersPage          # /ppm/customers
+      - PpmProjectMembersPage     # /ppm/project-members
+      - MilestoneDetailsPage      # /ppm/milestone-details
+      - TaskExecutePage           # /ppm/task-execute
+      - PpmProjectStakeholdersPage # /ppm/project-stakeholders
+      - PlanNodesPage             # /ppm/plan-nodes
+      - KanbanPage                # /ppm/kanban
+      - WorkbenchPage             # /ppm/workbench
+      - ProblemListPage           # /ppm/problem-list
+      - ProjectPlansPage          # /ppm/project-plans
+      - TaskPlansPage             # /ppm/task-plans
+      - WeeklyPlanPage            # /ppm/weekly-plan（新增）
+      - WorkHoursPage             # /ppm/work-hours
+      - WorkHourStatisticsPage    # /ppm/work-hour-statistics
+    main_symbols:
+      - PpmIndexPage
+      - PpmProjectsPage
+      - PpmCustomersPage
+      - PpmProjectMembersPage
+      - MilestoneDetailsPage
+      - TaskExecutePage
+      - KanbanPage
+      - WorkbenchPage
+      - ProblemListPage
+      - WeeklyPlanPage
+    depends_on: [components-ui, components-layout, components-charts, components-ppm, components-workspace, lib-ppm, stores-kanban, lib-api, stores-session]
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+  # ─── App Router Pages (workspace-scoped) ───────────────────────────
+
+  app-workspace-pages:
+    status: active
+    doc: modules/app-workspace-pages.md
+    paths:
+      - "frontend/src/app/(dashboard)/workspaces/[id]/**/*.tsx"
+    tags: [pages, nextjs-app-router, workspace-scoped, sessions, mcp-tokens, files]
+    aliases: [workspace-pages, 工作区页面]
+    entrypoints:
+      - WorkspaceDetailPage       # /workspaces/[id]
+      - ChangesPage               # /workspaces/[id]/changes
+      - ChangeDetailPage          # /workspaces/[id]/changes/[cid]
+      - TaskBoardPage             # /workspaces/[id]/changes/[cid]/tasks
+      - TaskDetailPage            # /workspaces/[id]/changes/[cid]/tasks/[tid]
+      - AgentPage                 # /workspaces/[id]/agent
+      - WorkspaceAgentProfilesPage # /workspaces/[id]/agent-profiles（新增）
+      - ComponentsPage            # /workspaces/[id]/components
+      - TopologyPage              # /workspaces/[id]/components/topology
+      - ScanDocsPage              # /workspaces/[id]/scan-docs
+      - KnowledgePage             # /workspaces/[id]/knowledge
+      - WorkspaceFilesPage        # /workspaces/[id]/files（新增，文件中心）
+      - RuntimePage               # /workspaces/[id]/runtime
+      - ReleasesPage              # /workspaces/[id]/releases
+      - ApprovalsPage             # /workspaces/[id]/approvals
+      - AuditPage                 # /workspaces/[id]/audit
+      - IncidentsPage             # /workspaces/[id]/incidents
+      - IncidentDetailPage        # /workspaces/[id]/incidents/[iid]
+      - MissionsPage              # /workspaces/[id]/missions
+      - MembersPage               # /workspaces/[id]/members
+      - WorkspaceSessionsPage     # /workspaces/[id]/sessions（新增）
+      - WorkspaceMcpPage          # /workspaces/[id]/mcp
+      - WorkspaceMcpTokensPage    # /workspaces/[id]/mcp-tokens（新增）
+      - WorkspaceSkillsPage       # /workspaces/[id]/skills
+    main_symbols:
+      - WorkspaceDetailPage
+      - ChangesPage
+      - ChangeDetailPage
+      - TaskBoardPage
+      - TaskDetailPage
+      - AgentPage
+      - WorkspaceAgentProfilesPage
+      - WorkspaceSessionsPage
+      - WorkspaceMcpTokensPage
+      - WorkspaceFilesPage
+    depends_on: [components-ui, components-shared, components-layout, components-changes, components-agent, components-agent-profile, components-workspace, lib-api, stores-session, lib-agent-stream, lib-use-agent-run-stream, lib-use-agent-runs, components-agent-log, lib-changes, lib-quicklog, lib-tasks, lib-workflow, lib-components, lib-scan-docs, lib-scan-docs-tree, lib-knowledge, lib-runtime, lib-releases, lib-incidents, lib-approvals, lib-audit, lib-workspace-members, lib-agent-profiles, lib-mcp-tokens]
+    used_by: []
+    needs_review: false
+    concerns:
+      - create-change 独立页已移除（创建入口并入 changes 列表/会话驱动流程）
+    review_reasons: []
+
+  # ─── App Router Pages (sessions 会话门户，新增) ────────────────────
+
+  app-sessions-pages:
+    status: active
+    doc: modules/app-sessions-pages.md
+    paths:
+      - "frontend/src/app/(dashboard)/sessions/**/*.tsx"
+    tags: [pages, nextjs-app-router, sessions, daemon, 会话]
+    aliases: [sessions-pages, 会话门户]
+    entrypoints:
+      - SessionsPortalPage # /sessions
+    main_symbols:
+      - SessionsPortalPage
+    # SessionPanel 已提取至 components-daemon（2026-08-21-session-message-queue），
+    # 本页 1473→117 行外壳化，面板本体见 components-daemon.main_symbols
+    depends_on: [components-ui, components-sessions, components-permissions, components-daemon, lib-use-daemon-machines, lib-llm-providers, lib-fetch-sse, lib-agent-profiles, stores-session]
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── App Router Pages (agent-profiles 全局档案，新增) ──────────────
+
+  app-agent-profiles-pages:
+    status: active
+    doc: modules/app-agent-profiles-pages.md
+    paths:
+      - "frontend/src/app/(dashboard)/agent-profiles/**/*.tsx"
+    tags: [pages, nextjs-app-router, agent-profiles, 档案]
+    aliases: [agent-profiles-pages, 全局档案页]
+    entrypoints:
+      - AgentProfilesGlobalPage # /agent-profiles
+    main_symbols:
+      - AgentProfilesGlobalPage
+    depends_on: [components-ui, components-agent-profile, lib-agent-profiles, lib-llm-providers, stores-session]
+    used_by: []
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（AgentProfile 配置层变更派生），modules/app-agent-profiles-pages.md 卡片待下次 scan 生成
+
+  # ─── App Router Pages (m/ 移动端，新增) ────────────────────────────
+
+  app-mobile-pages:
+    status: active
+    doc: modules/app-mobile-pages.md
+    paths:
+      - "frontend/src/app/m/**/*.tsx"
+    tags: [pages, nextjs-app-router, mobile, 移动端]
+    aliases: [mobile-pages, m-pages, 移动端页面]
+    entrypoints:
+      - MobileLayoutShell  # /m（布局）
+      - MobileLoginPage    # /m/login
+      - WorkspacesMobilePage # /m/workspaces
+      - MobileAccountPage  # /m/account
+      - WorkbenchMobilePage # /m/ppm/workbench
+    main_symbols:
+      - MobileLayoutShell
+      - MobileLoginPage
+      - WorkspacesMobilePage
+      - MobileAccountPage
+      - WorkbenchMobilePage
+    depends_on: [components-mobile, lib-auth-route-guard, lib-ppm, components-ui, stores-session]
+    used_by: []
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（移动端 PPM 域），modules/app-mobile-pages.md 卡片待下次 scan 生成
+
+  # ─── App Layouts ───────────────────────────────────────────────────
+
+  app-layouts:
+    status: active
+    doc: modules/app-layouts.md
+    paths:
+      - "frontend/src/app/layout.tsx"
+      - "frontend/src/app/(dashboard)/layout.tsx"
+      - "frontend/src/app/(dashboard)/admin/layout.tsx"
+      - "frontend/src/app/(dashboard)/ppm/workbench/layout.tsx"
+      - "frontend/src/app/(dashboard)/workspaces/[id]/layout.tsx"
+    tags: [layouts, nextjs-app-router]
+    aliases: [layouts, 布局]
+    entrypoints:
+      - RootLayout
+      - DashboardLayout
+    main_symbols:
+      - RootLayout
+      - DashboardLayout
+    depends_on: [components-shared, components-layout, stores-session, lib-permission, lib-menu-permissions]
+    used_by: [app-pages, app-admin-pages, app-ppm-pages, app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── API Route Handlers ────────────────────────────────────────────
+
+  app-api-routes:
+    status: active
+    doc: modules/app-api-routes.md
+    paths:
+      - "frontend/src/app/api/**/route.ts"
+    tags: [api-routes, nextjs-app-router, sse-proxy, sse-relay]
+    aliases: [api-routes, SSE 中继]
+    entrypoints:
+      - GET # /api/workspaces/[workspaceId]/agent/runs/[runId]/stream
+      - GET # /api/daemon-chat/[runId]/stream
+      - GET # /api/daemon/sessions/[sessionId]/stream（sessions 门户用）
+    main_symbols:
+      - GET
+    depends_on: []
+    used_by: [lib-agent-stream, lib-daemon, components-permissions]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+  # ─── Shared Components ─────────────────────────────────────────────
+
+  components-shared:
+    status: active
+    doc: modules/components-shared.md
+    paths:
+      - "frontend/src/components/app-shell.tsx"
+      - "frontend/src/components/workspace-card.tsx"
+      - "frontend/src/components/workspace-scan-dialog.tsx"
+      - "frontend/src/components/top-bar.tsx"
+      - "frontend/src/components/antd-providers.tsx"
+      - "frontend/src/components/error-boundary.tsx"
+      - "frontend/src/components/logout-confirm-dialog.tsx"
+      - "frontend/src/components/workspace-tabs.tsx"
+      - "frontend/src/components/workspace-daemon-switcher.tsx"
+      - "frontend/src/components/workspace-path-fields.tsx"
+      - "frontend/src/components/workspace-session-section.tsx"
+      - "frontend/src/components/agent-run-panel.tsx"
+      - "frontend/src/components/AgentModelInput.tsx"
+      - "frontend/src/components/AgentProviderSelect.tsx"
+      - "frontend/src/components/mission-console.tsx"
+      - "frontend/src/components/mission-summary-card.tsx"
+    tags: [components, shared-ui]
+    aliases: [shared-components, 组件]
+    entrypoints: []
+    main_symbols:
+      - AppShell
+      - WorkspaceCard
+      - WorkspaceScanDialog
+      - TopBar
+      - AntdProviders
+      - ErrorBoundary
+      - WorkspaceSessionSection
+      - AgentRunPanel
+      - AgentModelInput
+      - AgentProviderSelect
+      - MissionConsole
+      - MissionSummaryCard
+    depends_on: [components-ui, components-layout, stores-session, lib-utils, lib-errors]
+    used_by: [app-pages, app-admin-pages, app-ppm-pages, app-workspace-pages, app-layouts]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── UI Primitive Components ───────────────────────────────────────
+
+  components-ui:
+    status: active
+    doc: modules/components-ui.md
+    paths:
+      - "frontend/src/components/ui/*.tsx"
+    tags: [components, ui-primitives, design-system, shadcn]
+    aliases: [ui-components]
+    entrypoints: []
+    main_symbols:
+      - Button
+      - Input
+      - Badge
+      - Avatar
+      - Card
+      - Dialog
+      - DropdownMenu
+      - EmptyState
+      - StatusBadge
+      - ConfirmCaptcha
+      - JsonEditor
+      - MarkdownText
+    depends_on: [lib-utils]
+    used_by: [components-shared, components-agent-log, components-daemon, components-layout, components-mobile, components-changes, components-sessions, components-agent-profile, app-pages, app-admin-pages, app-ppm-pages, app-workspace-pages, app-sessions-pages, app-mobile-pages]
+    needs_review: false
+    concerns:
+      - Skeleton/Tag/Tooltip 原语已移除（当前 12 个原语文件）
+    review_reasons: []
+
+  # ─── Layout Components（页面骨架/表格/表单） ──────────────────────
+
+  components-layout:
+    status: active
+    doc: modules/components-layout.md
+    paths:
+      - "frontend/src/components/layout/*.tsx"
+      - "frontend/src/components/layout/index.ts"
+    tags: [components, layout, data-table, page-shell]
+    aliases: [layout-components]
+    entrypoints: []
+    main_symbols:
+      - PageContainer
+      - PageHeader
+      - SectionCard
+      - SearchBar
+      - SearchBarActions
+      - DataTable
+    depends_on: [components-ui, lib-utils]
+    used_by: [components-shared, app-pages, app-admin-pages, app-ppm-pages, app-workspace-pages, app-layouts]
+    needs_review: false
+    concerns:
+      - FormLayout 已删除（不再存在）
+    review_reasons: []
+
+  # ─── Agent Log Viewer ──────────────────────────────────────────────
+
+  components-agent-log:
+    status: active
+    doc: modules/components-agent-log.md
+    paths:
+      - "frontend/src/components/agent-log-viewer.tsx"
+      - "frontend/src/components/agent-log/*.ts"
+      - "frontend/src/components/agent-log/*.tsx"
+    tags: [components, agent, log-viewer]
+    aliases: [agent-log]
+    entrypoints: []
+    main_symbols:
+      - AgentLogViewer
+      - parseToolCallContent
+      - parseScanCheckOutput
+      - isPendingReplied
+      - classifyLog
+      - buildErrorLogItem
+      - mergeAssistantPiece
+      - mergeThinkingPiece
+    depends_on: [components-ui]
+    used_by: [app-workspace-pages, components-changes]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Daemon Components（运行时/机器/会话交互） ─────────────────────
+
+  components-daemon:
+    status: active
+    doc: modules/components-daemon.md
+    paths:
+      - "frontend/src/components/daemon/*.tsx"
+      - "frontend/src/components/daemon/*.ts"
+    tags: [components, daemon, runtime-session, machine-card, interactive]
+    aliases: [daemon-components]
+    entrypoints: []
+    main_symbols:
+      - SessionPanel # 共享会话面板（mode: page|dialog，2026-08-21-session-message-queue 自 sessions 页提取 + ISP dialog 分支并入）
+      - InteractiveSessionPanel # 127 行薄适配层（props 映射 → SessionPanel mode="dialog"，导出签名零变更）
+      - MessageQueueBar # 排队消息展示条（三态 chip/重试删除/满员提示）
+      - RuntimeSessionDialog
+      - MachineCard
+      - RemoteFolderPicker
+      - ProviderBadge
+      - AgentsList
+      - getStatusMeta
+      - getProviderLabel
+      - PROVIDER_TONES
+    depends_on: [components-ui, lib-daemon, lib-agent, stores-session, hooks-message-queue]
+    used_by: [app-pages, app-workspace-pages, app-sessions-pages]
+    needs_review: false
+    concerns:
+      - 结构重排：旧 SessionsSidebar/SessionHistoryView 拆为 session-list-layout/session-input-bar/turn-timeline 等细粒度文件
+    review_reasons: []
+
+  # ─── Hooks（src/hooks 会话消息排队，2026-08-21-session-message-queue 新增）──
+
+  hooks-message-queue:
+    status: active
+    doc: modules/hooks-message-queue.md
+    paths:
+      - "frontend/src/hooks/**"
+    tags: [hooks, queue, sessions, 会话排队]
+    aliases: [message-queue-hook]
+    entrypoints: []
+    main_symbols:
+      - useMessageQueue # 排队/投递状态机（D-001~D-004：等 active 投递、上限5、失败留队头、附件 ids）
+      - QueueEntry
+    depends_on: []
+    used_by: [components-daemon]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Charts Components（ECharts 图表） ────────────────────────────
+
+  components-charts:
+    status: active
+    doc: modules/components-charts.md
+    paths:
+      - "frontend/src/components/charts/*.tsx"
+    tags: [components, charts, echarts, ppm, runtime-usage]
+    aliases: [charts-components]
+    entrypoints: []
+    main_symbols:
+      - WorkHourBarChart
+      - WorkHourPieChart
+      - RuntimeUsageLineChart
+    depends_on: [components-ui]
+    used_by: [app-ppm-pages, components-llm-providers]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Permissions Components（会话权限面板/对话框上下文） ──────────
+
+  components-permissions:
+    status: active
+    doc: modules/components-permissions.md
+    paths:
+      - "frontend/src/components/permissions/*.tsx"
+    tags: [components, permissions, dialog-context]
+    aliases: [permissions-components]
+    entrypoints: []
+    main_symbols:
+      - SessionPermissionPanel
+      - DialogContextBar
+    depends_on: [components-ui, lib-permission, lib-menu-permissions, lib-fetch-sse]
+    used_by: [app-layouts, app-sessions-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── PPM Components（项目管理通用组件） ───────────────────────────
+
+  components-ppm:
+    status: active
+    doc: modules/components-ppm.md
+    paths:
+      - "frontend/src/components/ppm-*.tsx"
+      - "frontend/src/components/ppm/milestone/*.tsx"
+      - "frontend/src/components/ppm/problem/*.tsx"
+    tags: [components, ppm, project-management, milestone, problem]
+    aliases: [ppm-components]
+    entrypoints: []
+    main_symbols:
+      - PpmDictSelect
+      - PpmProjectMembersTable
+      - PpmProjectMembersGroupTable
+      - PpmProjectPlanDetail
+      - PpmProjectPlanForm
+      - PpmResourceTable
+      - PpmStatusActions
+      - PpmUserSelect
+    depends_on: [components-ui, components-layout, lib-ppm]
+    used_by: [app-ppm-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Admin Components（组织/角色/用户/杂项管理对话框） ────────────
+
+  components-admin:
+    status: active
+    doc: modules/components-admin.md
+    paths:
+      - "frontend/src/components/admin-*.tsx"
+      - "frontend/src/components/api-key-create-dialog.tsx"
+      - "frontend/src/components/mcp-token-create-dialog.tsx"
+      - "frontend/src/components/workspace-member-*.tsx"
+      - "frontend/src/components/permission-approval-*.tsx"
+      - "frontend/src/components/ask-user-dialog-card.tsx"
+      - "frontend/src/components/custom-skill-edit-dialog.tsx"
+      - "frontend/src/components/skill-content-drawer.tsx"
+    tags: [components, admin, organization, role, api-key, mcp-token, skills]
+    aliases: [admin-components]
+    entrypoints: []
+    main_symbols:
+      - AdminOrganizationTree
+      - AdminOrgTree
+      - AdminRolePermissionPicker
+      - AdminUserDrawer
+      - ApiKeyCreateDialog
+      - McpTokenCreateDialog
+      - WorkspaceMemberAddDialog
+      - WorkspaceMemberRow
+      - PermissionApprovalCard
+      - AskUserDialogCard
+      - CustomSkillEditDialog
+      - SkillContentDrawer
+    depends_on: [components-ui, components-layout, lib-admin, lib-menu-permissions, lib-api-keys, lib-mcp-tokens, lib-workspace-members, lib-mcp-skills]
+    used_by: [app-admin-pages, app-pages, app-workspace-pages]
+    needs_review: false
+    concerns:
+      - daemon-dir-browser 已删除
+    review_reasons: []
+
+  # ─── File Center Components（文件上传/预览/图片） ─────────────────
+
+  components-file-center:
+    status: active
+    doc: modules/components-file-center.md
+    paths:
+      - "frontend/src/components/file-upload.tsx"
+      - "frontend/src/components/file-viewer.tsx"
+      - "frontend/src/components/file-image.tsx"
+    tags: [components, files, minio, upload, preview]
+    aliases: [file-components]
+    entrypoints: []
+    main_symbols:
+      - FileUpload
+      - FileViewer
+      - FileImage
+    depends_on: [components-ui, lib-file-api]
+    used_by: [app-workspace-pages, app-ppm-pages, components-ppm]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - API 调用已迁移至 lib/file/api.ts（lib-file-api 模块），本模块卡片待下次 scan 生成
+
+  # ─── Workspace Config Components（绑定/配置/守卫/切换） ──────────
+
+  components-workspace-config:
+    status: active
+    doc: modules/components-workspace-config.md
+    paths:
+      - "frontend/src/components/workspace-binding-dialog.tsx"
+      - "frontend/src/components/workspace-binding-guard.tsx"
+      - "frontend/src/components/workspace-config-card.tsx"
+      - "frontend/src/components/workspace-access-guide.tsx"
+      - "frontend/src/components/workspace-path-picker.tsx"
+      - "frontend/src/components/workspace-switcher.tsx"
+      - "frontend/src/components/daemon-required-notice.tsx"
+    tags: [components, workspace, binding, config, guard]
+    aliases: [workspace-config-components]
+    entrypoints: []
+    main_symbols:
+      - WorkspaceBindingDialog
+      - WorkspaceBindingGuard
+      - WorkspaceConfigCard
+      - WorkspaceAccessGuide
+      - WorkspacePathPicker
+      - WorkspaceSwitcher
+      - DaemonRequiredNotice
+    depends_on: [components-ui, components-layout, lib-workspace-context, lib-workspace-members, stores-workspace, stores-session]
+    used_by: [app-pages, app-workspace-pages, app-layouts]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - modules/components-workspace-config.md 卡片待下次 scan 生成
+
+  # ─── Agent Profile Components（档案表单/选择/卡片，新增） ─────────
+
+  components-agent-profile:
+    status: active
+    doc: modules/components-agent-profile.md
+    paths:
+      - "frontend/src/components/agent-profile-form.tsx"
+      - "frontend/src/components/agent-profile-select.tsx"
+      - "frontend/src/components/agent-profile/*.tsx"
+    tags: [components, agent-profile, 档案]
+    aliases: [agent-profile-components]
+    entrypoints: []
+    main_symbols:
+      - AgentProfileForm
+      - AgentProfileSelect
+      - AgentProfileCardGrid
+      - AgentProfileCard
+      - AgentProfilePreview
+      - toCreateBody
+      - toUpdateBody
+    depends_on: [components-ui, components-layout, lib-agent-profiles, lib-llm-providers]
+    used_by: [app-agent-profiles-pages, app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（AgentProfile 配置层变更派生），modules/components-agent-profile.md 卡片待下次 scan 生成
+
+  # ─── Mobile Components（移动端外壳/标签栏/卡片列表，新增） ────────
+
+  components-mobile:
+    status: active
+    doc: modules/components-mobile.md
+    paths:
+      - "frontend/src/components/mobile/*.tsx"
+    tags: [components, mobile, 移动端]
+    aliases: [mobile-components]
+    entrypoints: []
+    main_symbols:
+      - MobileAppShell
+      - MobileTabBar
+      - MOBILE_TABS
+      - isTabActive
+      - MobileCardList
+      - MobileFilterDrawer
+      - MobileDetailSheet
+      - MobileActionMenu
+    depends_on: [components-ui, lib-utils]
+    used_by: [app-mobile-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（移动端 PPM 域），modules/components-mobile.md 卡片待下次 scan 生成
+
+  # ─── Change Center Components（变更中心组件群，新增） ─────────────
+
+  components-changes:
+    status: active
+    doc: modules/components-changes.md
+    paths:
+      - "frontend/src/components/changes/*.tsx"
+      - "frontend/src/components/changes/detail/*.tsx"
+      - "frontend/src/components/change-file-tree.tsx"
+      - "frontend/src/components/stage-team-config.tsx"
+      - "frontend/src/components/team-progress.tsx"
+    tags: [components, changes, change-center, quicklog, 变更中心]
+    aliases: [change-center-components, 变更中心组件]
+    entrypoints: []
+    main_symbols:
+      - ChangeSessionSection
+      - ChangeStepBadge
+      - QuicklogDrawer
+      - QuicklogTable
+      - ChangeStageHeader
+      - ChangeStepTimeline
+      - ChangeFilesCard
+      - ChangeTaskBoardCard
+      - ChangeStageActions
+      - StageTeamConfig
+      - TeamProgress
+      - ChangeFileTree
+    depends_on: [components-ui, components-agent-log, lib-changes, lib-quicklog, lib-change-files, lib-agent, lib-react-query]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（变更中心列表页重做 + 详情页左主右辅重做 + 会话驱动化翻转派生），modules/components-changes.md 卡片待下次 scan 生成
+
+  # ─── Sessions Components（会话门户面板，新增） ────────────────────
+
+  components-sessions:
+    status: active
+    doc: modules/components-sessions.md
+    paths:
+      - "frontend/src/components/sessions/*.tsx"
+    tags: [components, sessions, 会话]
+    aliases: [session-components]
+    entrypoints: []
+    main_symbols:
+      - SessionsPortal
+      - SessionListPanel
+      - PreSessionPicker
+      - SessionConfigBar
+      - buildDefaultSwitchPrompt
+      - formatRelativeTime
+      - NEW_SESSION_MACHINE_LS_KEY
+      - resolveDefaultMachineId
+    depends_on: [components-ui, lib-use-daemon-machines, lib-llm-providers, lib-agent-profiles]
+    used_by: [app-sessions-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（会话门户/切换交互系列变更派生），modules/components-sessions.md 卡片待下次 scan 生成
+
+  # ─── LLM Providers Components（供应商管理 UI，新增） ──────────────
+
+  components-llm-providers:
+    status: active
+    doc: modules/components-llm-providers.md
+    paths:
+      - "frontend/src/components/llm-providers/*.tsx"
+    tags: [components, llm-providers, 供应商, provider]
+    aliases: [llm-provider-components]
+    entrypoints: []
+    main_symbols:
+      - LlmProviderForm
+      - LlmProviderSection
+      - ModelInputWithFetch
+      - UsageFooter
+    depends_on: [components-ui, lib-llm-providers, config-llm-provider-presets, components-charts]
+    used_by: [app-pages, app-sessions-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（llm-provider-openai-format 变更派生），modules/components-llm-providers.md 卡片待下次 scan 生成
+
+  # ─── Agent Components（borrowed-solution 借用方案，新增） ─────────
+
+  components-agent:
+    status: active
+    doc: modules/components-agent.md
+    paths:
+      - "frontend/src/components/agent/*.tsx"
+    tags: [components, agent, borrowed-solution]
+    aliases: [agent-components]
+    entrypoints: []
+    main_symbols:
+      - BorrowedSolutionFilesPanel
+      - BorrowedSolutionFiles
+    depends_on: [components-ui, lib-file-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块，modules/components-agent.md 卡片待下次 scan 生成
+
+  # ─── Workspace Components（PPM↔workspace 关联/共享 daemon，新增） ─
+
+  components-workspace:
+    status: active
+    doc: modules/components-workspace.md
+    paths:
+      - "frontend/src/components/workspace/*.tsx"
+    tags: [components, workspace, ppm-linking, shared-daemon]
+    aliases: [workspace-components-dir]
+    entrypoints: []
+    main_symbols:
+      - LinkWorkspaceDialog
+      - LinkedProjectsSection
+      - SharedDaemonManager
+      - SharedDaemonToggle
+    depends_on: [components-ui, lib-workspace, stores-session]
+    used_by: [app-ppm-pages, app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（PPM 项目与 workspace 关联 + 共享 daemon 管理），modules/components-workspace.md 卡片待下次 scan 生成
+  # ─── API Client Core ───────────────────────────────────────────────
+
+  lib-api:
+    status: active
+    doc: modules/lib-api.md
+    paths:
+      - "frontend/src/lib/api.ts"
+      - "frontend/src/lib/api-types.ts"
+    tags: [api, fetch, http-client, core, openapi-generated]
+    aliases: [api-client, lib, api]
+    entrypoints: []
+    main_symbols:
+      - apiFetch
+      - getApiBaseUrl
+      - getDirectApiBaseUrl
+      - ApiError
+    depends_on: [stores-session]
+    used_by:
+      - lib-auth
+      - lib-workspaces
+      - lib-changes
+      - lib-agent
+      - lib-agent-profiles
+      - lib-llm-providers
+      - lib-components
+      - lib-scan-docs
+      - lib-knowledge
+      - lib-tasks
+      - lib-workflow
+      - lib-releases
+      - lib-incidents
+      - lib-approvals
+      - lib-audit
+      - lib-health
+      - lib-settings
+      - lib-git-identities
+      - lib-git-gateway
+      - lib-tool-gateway
+      - lib-worktree
+      - lib-runtime
+      - lib-spec-workspaces
+      - lib-archive
+      - lib-change-writer
+      - lib-daemon
+      - lib-daemon-audit
+      - lib-admin
+      - lib-api-keys
+      - lib-workspace-members
+      - lib-mcp-tokens
+      - lib-quicklog
+      - lib-change-files
+      - lib-file-api
+      - lib-use-agent-runs
+      - lib-use-daemon-machines
+      - lib-ppm
+      - app-pages
+      - app-admin-pages
+      - app-ppm-pages
+      - app-workspace-pages
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Auth Client ───────────────────────────────────────────────────
+
+  lib-auth:
+    status: active
+    doc: modules/lib-auth.md
+    paths:
+      - "frontend/src/lib/auth.ts"
+    tags: [api, auth, login]
+    aliases: [auth]
+    entrypoints: []
+    main_symbols:
+      - login
+      - refreshTokens
+      - logout
+    depends_on: [lib-api, stores-session]
+    used_by: [app-pages, app-mobile-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Mobile Route Guard（移动端路由白名单守卫，新增） ─────────────
+
+  lib-auth-route-guard:
+    status: active
+    doc: modules/lib-auth-route-guard.md
+    paths:
+      - "frontend/src/lib/auth/route-guard.ts"
+    tags: [auth, mobile, route-guard, whitelist]
+    aliases: [route-guard, mobile-guard]
+    entrypoints: []
+    main_symbols:
+      - useMobileRouteGuard
+      - MOBILE_WORKSPACE_WHITELIST
+    depends_on: [stores-session]
+    used_by: [app-mobile-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（移动端路由守卫），modules/lib-auth-route-guard.md 卡片待下次 scan 生成
+
+  # ─── Token Refresh Single-Flight ───────────────────────────────────
+
+  lib-token-refresh:
+    status: active
+    doc: modules/lib-token-refresh.md
+    paths:
+      - "frontend/src/lib/token-refresh.ts"
+    tags: [api, auth, token, single-flight, refresh]
+    aliases: [token-refresh]
+    entrypoints: []
+    main_symbols:
+      - ensureFreshAccessToken
+      - decodeJwtExp
+    depends_on: [stores-session, lib-api]
+    used_by: [lib-api, lib-auth, lib-ppm, components-shared]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - modules/lib-token-refresh.md 卡片待下次 scan 生成
+
+  # ─── Workspaces Client ─────────────────────────────────────────────
+
+  lib-workspaces:
+    status: active
+    doc: modules/lib-workspaces.md
+    paths:
+      - "frontend/src/lib/workspaces.ts"
+    tags: [api, workspaces]
+    aliases: [workspaces-api]
+    entrypoints: []
+    main_symbols:
+      - scanWorkspace
+      - scanGenerate
+      - activateWorkspace
+      - listWorkspaces
+      - createWorkspace
+      - rescanWorkspace
+      - reparseWorkspace
+      - deleteWorkspace
+      - getWorkspace
+      - getWorkspaceRelations
+      - createRelation
+      - deleteRelation
+      - getTopology
+    depends_on: [lib-api]
+    used_by: [app-pages, app-workspace-pages, lib-components]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Workspace Linking Client（PPM↔workspace 关联，新增） ─────────
+
+  lib-workspace:
+    status: active
+    doc: modules/lib-workspace.md
+    paths:
+      - "frontend/src/lib/workspace.ts"
+    tags: [api, workspace, ppm, linking]
+    aliases: [workspace-link-api]
+    entrypoints: []
+    main_symbols:
+      - listLinkedProjects
+      - linkProject
+      - unlinkProject
+      - listProjectWorkspaces
+      - linkWorkspace
+      - unlinkWorkspace
+      - WorkspaceBrief
+    depends_on: [lib-api]
+    used_by: [components-workspace]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（PPM 项目绑定 workspace），modules/lib-workspace.md 卡片待下次 scan 生成
+
+  # ─── Changes Client ────────────────────────────────────────────────
+
+  lib-changes:
+    status: active
+    doc: modules/lib-changes.md
+    paths:
+      - "frontend/src/lib/changes.ts"
+    tags: [api, changes, sillyspec, stage, review]
+    aliases: [changes-api, 变更]
+    entrypoints: []
+    main_symbols:
+      - listChanges
+      - getChange
+      - reparseChanges
+      - approveChange
+      - rejectChange
+      - updateStageProfile
+      - transitionChange
+      - advanceChangeStage
+      - runVerifyGate
+      - triggerDispatch
+      - getAgentStatus
+      - checkArchiveGate
+      - proposalReview
+      - planReview
+      - humanTest
+      - archiveConfirm
+      - submitStageReview
+      - submitReview
+      - listReviews
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages, components-changes]
+    needs_review: false
+    concerns:
+      - 旧 createChange/executeChange/submitFeedback/getChangeDocuments 系列已移除（会话驱动化翻转后走 change-files / 会话端点）
+    review_reasons: []
+
+  # ─── Change Files Client（变更文件树/读写，新增） ─────────────────
+
+  lib-change-files:
+    status: active
+    doc: modules/lib-change-files.md
+    paths:
+      - "frontend/src/lib/change-files.ts"
+    tags: [api, changes, files, tree]
+    aliases: [change-files-api]
+    entrypoints: []
+    main_symbols:
+      - listChangeFiles
+      - getChangeFileContent
+      - ChangeFileEntry
+      - ChangeFileTreeNode
+      - PendingFileEntry
+    depends_on: [lib-api]
+    used_by: [components-changes]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（变更文件增量同步变更派生），modules/lib-change-files.md 卡片待下次 scan 生成
+
+  # ─── Quicklog Client（QUICKLOG 条目轮询，新增） ───────────────────
+
+  lib-quicklog:
+    status: active
+    doc: modules/lib-quicklog.md
+    paths:
+      - "frontend/src/lib/quicklog.ts"
+    tags: [api, quicklog, sillyspec, poll]
+    aliases: [quicklog-api]
+    entrypoints: []
+    main_symbols:
+      - listQuicklogEntries
+      - getQuicklogDetail
+      - quicklogPollInterval
+      - QuicklogEntryListItem
+      - QuicklogStatus
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages, components-changes]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（QUICKLOG 视图从 lib-knowledge 拆出独立客户端），modules/lib-quicklog.md 卡片待下次 scan 生成
+
+  # ─── Agent Client ──────────────────────────────────────────────────
+
+  lib-agent:
+    status: active
+    doc: modules/lib-agent.md
+    paths:
+      - "frontend/src/lib/agent.ts"
+    tags: [api, agent]
+    aliases: [agent-api]
+    entrypoints: []
+    main_symbols:
+      - createAgentRun
+      - getAgentRun
+      - listAgentRuns
+      - getAgentRunLogs
+      - streamAgentRunLogs
+      - killAgentRun
+      - submitAgentRunInput
+      - listDaemonRuntimes
+    depends_on: [lib-api, stores-session]
+    used_by: [lib-agent-stream, lib-use-agent-run-stream, lib-use-agent-runs, lib-spec-workspaces, components-daemon, components-changes, app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Agent Stream Client ───────────────────────────────────────────
+
+  lib-agent-stream:
+    status: active
+    doc: modules/lib-agent-stream.md
+    paths:
+      - "frontend/src/lib/agent-stream.ts"
+    tags: [api, agent, sse, streaming]
+    aliases: [agent-stream]
+    entrypoints: []
+    main_symbols:
+      - AgentRunStreamClient
+    depends_on: [lib-api, lib-agent, stores-session]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Fetch SSE（原生 fetch SSE 解析器，新增） ─────────────────────
+
+  lib-fetch-sse:
+    status: active
+    doc: modules/lib-fetch-sse.md
+    paths:
+      - "frontend/src/lib/fetch-sse.ts"
+    tags: [sse, streaming, parser, fetch]
+    aliases: [fetch-sse]
+    entrypoints: []
+    main_symbols:
+      - fetchSse
+      - parseSseChunk
+      - FetchSseEvent
+      - FetchSseOptions
+    depends_on: []
+    used_by: [lib-daemon, components-permissions]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（通用 SSE 解析，替代 EventSource 场景），modules/lib-fetch-sse.md 卡片待下次 scan 生成
+
+  # ─── useAgentRunStream Hook（前端流式订阅） ──────────────────────
+
+  lib-use-agent-run-stream:
+    status: active
+    doc: modules/lib-use-agent-run-stream.md
+    paths:
+      - "frontend/src/lib/use-agent-run-stream.ts"
+    tags: [hook, react, agent, sse, streaming]
+    aliases: [use-agent-run-stream]
+    entrypoints: []
+    main_symbols:
+      - useAgentRunStream
+      - UseAgentRunStreamOptions
+      - UseAgentRunStreamResult
+      - AgentRunInputStream
+    depends_on: [lib-agent, lib-agent-stream]
+    used_by: [components-daemon, app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── useAgentRuns Hook（agent 运行列表轮询，新增） ───────────────
+
+  lib-use-agent-runs:
+    status: active
+    doc: modules/lib-use-agent-runs.md
+    paths:
+      - "frontend/src/lib/use-agent-runs.ts"
+    tags: [hook, react, agent, poll]
+    aliases: [use-agent-runs]
+    entrypoints: []
+    main_symbols:
+      - useAgentRuns
+      - agentRunsRefetchInterval
+    depends_on: [lib-agent, lib-react-query]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块，modules/lib-use-agent-runs.md 卡片待下次 scan 生成
+
+  # ─── useDaemonMachines Hook（daemon 机器列表，新增） ──────────────
+
+  lib-use-daemon-machines:
+    status: active
+    doc: modules/lib-use-daemon-machines.md
+    paths:
+      - "frontend/src/lib/use-daemon-machines.ts"
+    tags: [hook, react, daemon, machines]
+    aliases: [use-daemon-machines]
+    entrypoints: []
+    main_symbols:
+      - useDaemonMachines
+    depends_on: [lib-api, lib-react-query]
+    used_by: [app-pages, app-sessions-pages, components-sessions]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（会话门户机器选择派生），modules/lib-use-daemon-machines.md 卡片待下次 scan 生成
+
+  # ─── Agent Profiles Client（档案 CRUD/hooks，新增） ───────────────
+
+  lib-agent-profiles:
+    status: active
+    doc: modules/lib-agent-profiles.md
+    paths:
+      - "frontend/src/lib/agent-profiles.ts"
+    tags: [api, agent-profiles, 档案]
+    aliases: [agent-profiles-api]
+    entrypoints: []
+    main_symbols:
+      - listWorkspaceAgentProfiles
+      - createWorkspaceAgentProfile
+      - getWorkspaceAgentProfile
+      - updateWorkspaceAgentProfile
+      - deleteWorkspaceAgentProfile
+      - copyWorkspaceAgentProfile
+      - listPlatformAgentProfiles
+      - listMineAgentProfiles
+      - useWorkspaceAgentProfiles
+      - usePlatformAgentProfiles
+      - listWorkspaceToolPolicies
+      - VISIBILITY_LABEL
+    depends_on: [lib-api]
+    used_by: [app-agent-profiles-pages, app-workspace-pages, app-sessions-pages, components-agent-profile, components-sessions]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（AgentProfile 配置层变更派生），modules/lib-agent-profiles.md 卡片待下次 scan 生成
+
+  # ─── LLM Providers Client（供应商 CRUD/用量，新增） ───────────────
+
+  lib-llm-providers:
+    status: active
+    doc: modules/lib-llm-providers.md
+    paths:
+      - "frontend/src/lib/api/llm-providers.ts"
+    tags: [api, llm-providers, provider, usage, 供应商]
+    aliases: [llm-providers-api]
+    entrypoints: []
+    main_symbols:
+      - listProviders
+      - createProvider
+      - updateProvider
+      - deleteProvider
+      - setDefaultProvider
+      - unsetDefaultProvider
+      - fetchProviderModels
+      - queryUsage
+      - getProviderQuota
+      - LlmProviderRead
+      - LlmProviderFormValues
+    depends_on: [lib-api]
+    used_by: [app-pages, app-sessions-pages, components-llm-providers, components-agent-profile, components-sessions]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（llm-provider-openai-format 变更派生），modules/lib-llm-providers.md 卡片待下次 scan 生成
+
+  # ─── LLM Provider Presets（供应商预设配置，新增） ─────────────────
+
+  config-llm-provider-presets:
+    status: active
+    doc: modules/config-llm-provider-presets.md
+    paths:
+      - "frontend/src/config/llmProviderPresets.ts"
+    tags: [config, llm-providers, presets, 预设]
+    aliases: [llm-provider-presets]
+    entrypoints: []
+    main_symbols:
+      - LLM_PROVIDER_PRESETS
+      - PRESETS_BY_CATEGORY
+      - PRESET_BY_KEY
+      - LlmProviderPreset
+    depends_on: []
+    used_by: [components-llm-providers]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（src/config 目录首个文件），modules/config-llm-provider-presets.md 卡片待下次 scan 生成
+
+  # ─── Components Client ─────────────────────────────────────────────
+
+  lib-components:
+    status: active
+    doc: modules/lib-components.md
+    paths:
+      - "frontend/src/lib/components.ts"
+    tags: [api, components]
+    aliases: [components-api]
+    entrypoints: []
+    main_symbols:
+      - listComponents
+      - getComponent
+      - reparseComponents
+      - getTopology
+    depends_on: [lib-api, lib-workspaces]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Scan Docs Client ──────────────────────────────────────────────
+
+  lib-scan-docs:
+    status: active
+    doc: modules/lib-scan-docs.md
+    paths:
+      - "frontend/src/lib/scan-docs.ts"
+    tags: [api, scan-docs]
+    aliases: [scan-docs-api]
+    entrypoints: []
+    main_symbols:
+      - listScanDocs
+      - getScanDoc
+      - reparseScanDocs
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages, lib-scan-docs-tree]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Scan Docs Tree（文档树构建，新增） ───────────────────────────
+
+  lib-scan-docs-tree:
+    status: active
+    doc: modules/lib-scan-docs-tree.md
+    paths:
+      - "frontend/src/lib/scan-docs-tree.ts"
+    tags: [scan-docs, tree, docs]
+    aliases: [scan-docs-tree]
+    entrypoints: []
+    main_symbols:
+      - buildTree
+      - TreeNode
+    depends_on: [lib-scan-docs]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（scan-into-session 变更域），modules/lib-scan-docs-tree.md 卡片待下次 scan 生成
+
+  # ─── Knowledge Client ──────────────────────────────────────────────
+
+  lib-knowledge:
+    status: active
+    doc: modules/lib-knowledge.md
+    paths:
+      - "frontend/src/lib/knowledge.ts"
+    tags: [api, knowledge]
+    aliases: [knowledge-api]
+    entrypoints: []
+    main_symbols:
+      - listKnowledge
+      - getKnowledge
+      - listQuicklog
+      - getQuicklog
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns:
+      - QUICKLOG 条目级轮询已拆到 lib-quicklog（本模块仍保留文档级 listQuicklog/getQuicklog）
+    review_reasons: []
+
+  # ─── Tasks Client ──────────────────────────────────────────────────
+
+  lib-tasks:
+    status: active
+    doc: modules/lib-tasks.md
+    paths:
+      - "frontend/src/lib/tasks.ts"
+    tags: [api, tasks]
+    aliases: [tasks-api]
+    entrypoints: []
+    main_symbols:
+      - listTasks
+      - getTask
+      - getTaskBoard
+      - reparseTasks
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+  # ─── Workflow Client ───────────────────────────────────────────────
+
+  lib-workflow:
+    status: active
+    doc: modules/lib-workflow.md
+    paths:
+      - "frontend/src/lib/workflow.ts"
+    tags: [api, workflow, transitions]
+    aliases: [workflow-api]
+    entrypoints: []
+    main_symbols:
+      - transitionChange
+      - submitReview
+      - listReviews
+      - transitionTask
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Releases Client ───────────────────────────────────────────────
+
+  lib-releases:
+    status: active
+    doc: modules/lib-releases.md
+    paths:
+      - "frontend/src/lib/releases.ts"
+    tags: [api, releases]
+    aliases: [releases-api]
+    entrypoints: []
+    main_symbols:
+      - listReleases
+      - createRelease
+      - approveRelease
+      - listApprovals
+      - deployRelease
+      - promoteRelease
+      - rollbackRelease
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Incidents Client ──────────────────────────────────────────────
+
+  lib-incidents:
+    status: active
+    doc: modules/lib-incidents.md
+    paths:
+      - "frontend/src/lib/incidents.ts"
+    tags: [api, incidents]
+    aliases: [incidents-api]
+    entrypoints: []
+    main_symbols:
+      - listIncidents
+      - createIncident
+      - getIncident
+      - updateIncident
+      - createPostmortem
+      - getPostmortem
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Approvals Client ──────────────────────────────────────────────
+
+  lib-approvals:
+    status: active
+    doc: modules/lib-approvals.md
+    paths:
+      - "frontend/src/lib/approvals.ts"
+    tags: [api, approvals]
+    aliases: [approvals-api]
+    entrypoints: []
+    main_symbols:
+      - listPendingApprovals
+      - listApprovalHistory
+      - approveRequest
+      - rejectRequest
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Audit Client ──────────────────────────────────────────────────
+
+  lib-audit:
+    status: active
+    doc: modules/lib-audit.md
+    paths:
+      - "frontend/src/lib/audit.ts"
+    tags: [api, audit]
+    aliases: [audit-api]
+    entrypoints: []
+    main_symbols:
+      - listAuditLogs
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Daemon Audit Client（daemon 策略审计，新增） ─────────────────
+
+  lib-daemon-audit:
+    status: active
+    doc: modules/lib-daemon-audit.md
+    paths:
+      - "frontend/src/lib/daemon-audit.ts"
+    tags: [api, daemon, audit, policy]
+    aliases: [daemon-audit-api]
+    entrypoints: []
+    main_symbols:
+      - fetchPolicyAudit
+      - fetchPolicyAuditByRuntime
+      - usePolicyAudit
+      - usePolicyAuditByRuntime
+      - AuditLogRead
+    depends_on: [lib-api, lib-react-query]
+    used_by: [app-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（daemon 审计页 /runtimes/[id]/audit 数据源），modules/lib-daemon-audit.md 卡片待下次 scan 生成
+
+  # ─── Health Client ─────────────────────────────────────────────────
+
+  lib-health:
+    status: active
+    doc: modules/lib-health.md
+    paths:
+      - "frontend/src/lib/health.ts"
+    tags: [api, health]
+    aliases: [health-api]
+    entrypoints: []
+    main_symbols:
+      - getHealth
+    depends_on: [lib-api]
+    used_by: [app-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Settings Client ───────────────────────────────────────────────
+
+  lib-settings:
+    status: active
+    doc: modules/lib-settings.md
+    paths:
+      - "frontend/src/lib/settings.ts"
+    tags: [api, settings, users]
+    aliases: [settings-api]
+    entrypoints: []
+    main_symbols:
+      - listSettings
+      - updateSettings
+      - listUsers
+      - createUser
+      - updateUser
+      - deleteUser
+    depends_on: [lib-api]
+    used_by: [app-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Git Identities Client ─────────────────────────────────────────
+
+  lib-git-identities:
+    status: active
+    doc: modules/lib-git-identities.md
+    paths:
+      - "frontend/src/lib/git-identities.ts"
+    tags: [api, git, identities]
+    aliases: [git-identities-api]
+    entrypoints: []
+    main_symbols:
+      - listGitIdentities
+      - createGitIdentity
+      - getGitIdentity
+      - revokeGitIdentity
+      - checkGitAccess
+    depends_on: [lib-api]
+    used_by: [app-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Git Gateway Client ────────────────────────────────────────────
+
+
+  # ─── Tool Gateway Client ───────────────────────────────────────────
+
+
+  # ─── Worktree Client ───────────────────────────────────────────────
+
+
+  # ─── Runtime Client ────────────────────────────────────────────────
+
+  lib-runtime:
+    status: active
+    doc: modules/lib-runtime.md
+    paths:
+      - "frontend/src/lib/runtime.ts"
+    tags: [api, runtime]
+    aliases: [runtime-api]
+    entrypoints: []
+    main_symbols:
+      - getRuntimeProgress
+      - getRuntimeUserInputsRaw
+      - getRuntimeArtifacts
+      - getRuntimeArtifactContent
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Spec Workspaces Client ────────────────────────────────────────
+
+  lib-spec-workspaces:
+    status: active
+    doc: modules/lib-spec-workspaces.md
+    paths:
+      - "frontend/src/lib/spec-workspaces.ts"
+    tags: [api, spec-workspaces, sillyspec, platform-sync]
+    aliases: [spec-workspaces-api]
+    entrypoints: []
+    main_symbols:
+      - getSpecWorkspace
+      - importSpecWorkspace
+      - syncSpecWorkspace
+      - bootstrapSpecWorkspace
+      - updateSpecWorkspace
+      - listSpecConflicts
+      - resolveSpecConflict
+    depends_on: [lib-api, lib-agent]
+    used_by: [app-workspace-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Archive Client ────────────────────────────────────────────────
+
+
+  # ─── Change Writer Client ──────────────────────────────────────────
+
+
+  # ─── Daemon Client ─────────────────────────────────────────────────
+
+  lib-daemon:
+    status: active
+    doc: modules/lib-daemon.md
+    paths:
+      - "frontend/src/lib/daemon.ts"
+    tags: [api, daemon, sse]
+    aliases: [daemon-api]
+    entrypoints: []
+    main_symbols:
+      - listDaemonRuntimes
+      - getDaemonRuntime
+      - quickChat
+      - getQuickChatResult
+      - isVersionBelow
+    depends_on: [lib-api, lib-fetch-sse, app-api-routes]
+    used_by: [app-pages, components-daemon]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Error Message & Notify Helpers ────────────────────────────────
+
+  lib-errors:
+    status: active
+    doc: modules/lib-errors.md
+    paths:
+      - "frontend/src/lib/errors.ts"
+      - "frontend/src/lib/errors.test.ts"
+    tags: [errors, notify, antd, i18n, ux]
+    aliases: [errors-lib, error-message]
+    entrypoints: []
+    main_symbols:
+      - errMessage
+      - useNotify
+    depends_on: [lib-api]
+    used_by:
+      - app-pages
+      - app-workspace-pages
+      - app-admin-pages
+      - app-ppm-pages
+      - components-shared
+      - components-admin
+      - stores-kanban
+    needs_review: false
+    concerns:
+      - 非测试导入方已达 27 处（错误展示策略事实上的全局标准）
+    review_reasons: []
+
+  # ─── Admin Client（用户/角色/组织管理 API） ──────────────────────
+
+  lib-admin:
+    status: active
+    doc: modules/lib-admin.md
+    paths:
+      - "frontend/src/lib/admin.ts"
+    tags: [api, admin, users, roles, organizations]
+    aliases: [admin-api]
+    entrypoints: []
+    main_symbols:
+      - listUsers
+      - getUser
+      - createUser
+      - updateUser
+      - deleteUser
+      - listUserSessions
+      - revokeUserSession
+      - revokeAllUserSessions
+      - listUserAudit
+      - listUserWorkspaces
+      - resetUserPassword
+      - disableUserLogin
+      - enableUserLogin
+      - listOrganizations
+      - createOrganization
+      - updateOrganization
+      - disableOrganization
+      - enableOrganization
+      - deleteOrganization
+      - listRoles
+      - createRole
+      - updateRole
+      - deleteRole
+      - listRoleUsers
+    depends_on: [lib-api]
+    used_by: [app-admin-pages, components-admin]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── API Keys Client ───────────────────────────────────────────────
+
+  lib-api-keys:
+    status: active
+    doc: modules/lib-api-keys.md
+    paths:
+      - "frontend/src/lib/api-keys.ts"
+    tags: [api, api-keys]
+    aliases: [api-keys-api]
+    entrypoints: []
+    main_symbols:
+      - listApiKeys
+      - createApiKey
+      - revokeApiKey
+      - getLatestActiveApiKey
+    depends_on: [lib-api]
+    used_by: [app-pages, components-admin]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── MCP Tokens Client（workspace MCP 令牌，新增） ─────────────────
+
+  lib-mcp-tokens:
+    status: active
+    doc: modules/lib-mcp-tokens.md
+    paths:
+      - "frontend/src/lib/mcp-tokens.ts"
+    tags: [api, mcp, tokens]
+    aliases: [mcp-tokens-api]
+    entrypoints: []
+    main_symbols:
+      - listMcpTokens
+      - createMcpToken
+      - revokeMcpToken
+      - McpScope
+      - McpTokenCreated
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages, components-admin]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（mcp-token-management-ui 变更派生），modules/lib-mcp-tokens.md 卡片待下次 scan 生成
+
+  # ─── File Center API（上传/列表/下载，新增） ──────────────────────
+
+  lib-file-api:
+    status: active
+    doc: modules/lib-file-api.md
+    paths:
+      - "frontend/src/lib/file/api.ts"
+    tags: [api, files, minio, upload, download]
+    aliases: [file-api]
+    entrypoints: []
+    main_symbols:
+      - uploadFile
+      - listFiles
+      - fetchFileMetaBatch
+      - getFileDownloadUrl
+      - fetchFileBlob
+      - downloadFile
+    depends_on: [lib-api]
+    used_by: [components-file-center, components-agent, app-workspace-pages]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - 新增模块（文件中心 API 从组件内联调用抽出），modules/lib-file-api.md 卡片待下次 scan 生成
+
+  # ─── Workspace Members Client ──────────────────────────────────────
+
+  lib-workspace-members:
+    status: active
+    doc: modules/lib-workspace-members.md
+    paths:
+      - "frontend/src/lib/workspace-members.ts"
+    tags: [api, workspace-members]
+    aliases: [workspace-members-api]
+    entrypoints: []
+    main_symbols:
+      - listMembers
+      - searchUsersForInvite
+      - addMember
+      - updateMemberRole
+      - removeMember
+      - transferOwnership
+    depends_on: [lib-api]
+    used_by: [app-workspace-pages, components-admin]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Permission Helpers（菜单/权限判定） ──────────────────────────
+
+  lib-permission:
+    status: active
+    doc: modules/lib-permission.md
+    paths:
+      - "frontend/src/lib/permission.ts"
+    tags: [permission, rbac, menu]
+    aliases: [permission-helpers]
+    entrypoints: []
+    main_symbols:
+      - hasAdminPermission
+      - hasAnyPermission
+      - canSeeMenu
+      - visibleMenusBySection
+    depends_on: [stores-session]
+    used_by: [app-layouts, components-permissions, components-shared]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Menu Permissions（菜单权限定义） ─────────────────────────────
+
+  lib-menu-permissions:
+    status: active
+    doc: modules/lib-menu-permissions.md
+    paths:
+      - "frontend/src/lib/menu-permissions.ts"
+    tags: [permission, menu, rbac]
+    aliases: [menu-permissions]
+    entrypoints: []
+    main_symbols:
+      - MENU_PERMISSION_GROUPS
+      - MENU_SECTION_ORDER
+      - MENU_SECTION_LABEL
+    depends_on: []
+    used_by: [app-layouts, components-permissions, lib-permission]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── PPM Client（项目管理 API 客户端集合） ───────────────────────
+
+  lib-ppm:
+    status: active
+    doc: modules/lib-ppm.md
+    paths:
+      - "frontend/src/lib/ppm/*.ts"
+    tags: [api, ppm, project-management, kanban, weekly-plan]
+    aliases: [ppm-api, ppm-lib]
+    entrypoints: []
+    main_symbols:
+      - listProjects
+      - listPlans
+      - listProblems
+      - listTasks
+      - fetchKanban
+      - downloadExcel
+      - statusLabel
+      - KanbanGrouping
+    depends_on: [lib-api]
+    used_by: [app-ppm-pages, app-mobile-pages, components-ppm, stores-kanban]
+    needs_review: false
+    concerns:
+      - 子文件已扩至 15 个（新增 weekly-plan/types/index 等）
+    review_reasons: []
+
+  # ─── Path / Format 辅助工具 ───────────────────────────────────────
+
+  lib-utils:
+    status: active
+    doc: modules/lib-utils.md
+    paths:
+      - "frontend/src/lib/utils.ts"
+      - "frontend/src/lib/client-path.ts"
+      - "frontend/src/lib/workspace-path.ts"
+      - "frontend/src/lib/format-token.ts"
+      - "frontend/src/lib/status-labels.ts"
+    tags: [utils, tailwind, clsx, format, labels]
+    aliases: [utils]
+    entrypoints: []
+    main_symbols:
+      - cn
+      - normalizeClientPath
+      - joinClientPath
+      - parentClientPath
+      - isDaemonClientWorkspace
+      - workspacePathSourceLabel
+      - formatDaemonRuntimeSummary
+      - daemonRuntimeStatusVariant
+      - formatTokenCount
+      - STATUS_LABELS
+      - DAEMON_RUNTIME_STATUS_LABELS
+      - AUDIT_RESOURCE_TYPE_LABELS
+      - APPROVAL_STATUS_LABELS
+      - labelOf
+    depends_on: []
+    used_by: [components-ui, app-workspace-pages, components-shared, components-mobile, app-pages, app-ppm-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── React Query Infrastructure（query-client/query-keys） ────────
+
+  lib-react-query:
+    status: active
+    doc: modules/lib-react-query.md
+    paths:
+      - "frontend/src/lib/query-client.ts"
+      - "frontend/src/lib/query-keys.ts"
+    tags: [react-query, tanstack, data-fetching, cache]
+    aliases: [react-query-lib]
+    entrypoints: []
+    main_symbols:
+      - queryClient
+      - QueryKeys
+    depends_on: []
+    used_by: [app-layouts, app-pages, app-workspace-pages, app-ppm-pages, lib-use-agent-runs, lib-use-daemon-machines, lib-daemon-audit, components-changes]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - modules/lib-react-query.md 卡片待下次 scan 生成
+
+  # ─── Workspace Context Hooks（绑定/daemon 状态/上下文） ──────────
+
+  lib-workspace-context:
+    status: active
+    doc: modules/lib-workspace-context.md
+    paths:
+      - "frontend/src/lib/use-workspace-context.ts"
+      - "frontend/src/lib/workspace-binding.ts"
+      - "frontend/src/lib/workspace-daemon-status.ts"
+    tags: [hooks, workspace, daemon-binding, context]
+    aliases: [workspace-context]
+    entrypoints: []
+    main_symbols:
+      - useWorkspaceContext
+      - resolveWorkspaceBinding
+      - daemonStatusVariant
+    depends_on: [stores-session, stores-workspace, lib-api]
+    used_by: [app-workspace-pages, components-workspace-config]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - modules/lib-workspace-context.md 卡片待下次 scan 生成
+
+  # ─── MCP / Skills Client（mcp-settings/custom-skills/skills-view） ──
+
+  lib-mcp-skills:
+    status: active
+    doc: modules/lib-mcp-skills.md
+    paths:
+      - "frontend/src/lib/mcp-settings.ts"
+      - "frontend/src/lib/custom-skills.ts"
+      - "frontend/src/lib/workspace-skills-view.ts"
+    tags: [api, mcp, skills, claude-code]
+    aliases: [mcp-skills-lib]
+    entrypoints: []
+    main_symbols:
+      - listMcpSettings
+      - updateMcpSettings
+      - listCustomSkills
+      - saveCustomSkill
+      - getWorkspaceSkillsView
+    depends_on: [lib-api]
+    used_by: [app-pages, app-workspace-pages, components-admin]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - modules/lib-mcp-skills.md 卡片待下次 scan 生成
+
+  # ─── Session Store ─────────────────────────────────────────────────
+
+  stores-session:
+    status: active
+    doc: modules/stores-session.md
+    paths:
+      - "frontend/src/stores/session.ts"
+    tags: [store, zustand, auth, session, persist]
+    aliases: [session-store, 状态管理]
+    entrypoints: []
+    main_symbols:
+      - useSession
+      - SessionUser
+      - SessionTokens
+    depends_on: []
+    used_by:
+      - lib-api
+      - lib-auth
+      - lib-auth-route-guard
+      - lib-agent
+      - lib-agent-stream
+      - lib-permission
+      - app-layouts
+      - components-shared
+      - components-daemon
+      - app-pages
+      - app-admin-pages
+      - app-ppm-pages
+      - app-workspace-pages
+      - app-sessions-pages
+      - app-mobile-pages
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Kanban Store（看板筛选状态） ────────────────────────────────
+
+  stores-kanban:
+    status: active
+    doc: modules/stores-kanban.md
+    paths:
+      - "frontend/src/stores/kanban.ts"
+    tags: [store, zustand, kanban, ppm]
+    aliases: [kanban-store]
+    entrypoints: []
+    main_symbols:
+      - useKanbanStore
+      - KanbanFilters
+    depends_on: [lib-ppm]
+    used_by: [app-ppm-pages]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Workspace Store（当前工作区/daemon 绑定状态） ───────────────
+
+  stores-workspace:
+    status: active
+    doc: modules/stores-workspace.md
+    paths:
+      - "frontend/src/stores/workspace.ts"
+    tags: [store, zustand, workspace, daemon-binding]
+    aliases: [workspace-store]
+    entrypoints: []
+    main_symbols:
+      - useWorkspaceStore
+    depends_on: []
+    used_by: [app-workspace-pages, app-layouts, components-shared, lib-workspace-context]
+    needs_review: false
+    concerns: [new-module-pending-card]
+    review_reasons:
+      - modules/stores-workspace.md 卡片待下次 scan 生成
+
+  # ─── Test Infrastructure ───────────────────────────────────────────
+
+  test-utils:
+    status: active
+    doc: modules/test-utils.md
+    paths:
+      - "frontend/src/test/setup.ts"
+      - "frontend/src/lib/__tests__/*.test.ts"
+      - "frontend/src/lib/api/__tests__/*"
+      - "frontend/src/lib/ppm/__tests__/*"
+      - "frontend/src/components/__tests__/*.test.tsx"
+      - "frontend/src/components/agent-log/__tests__/*"
+      - "frontend/src/components/agent/__tests__/*"
+      - "frontend/src/components/agent-profile/__tests__/*"
+      - "frontend/src/components/daemon/__tests__/*"
+      - "frontend/src/components/sessions/__tests__/*"
+      - "frontend/src/components/workspace/__tests__/*"
+      - "frontend/src/app/**/*.test.tsx"
+    tags: [testing, vitest]
+    aliases: [tests, 测试, test]
+    entrypoints: []
+    main_symbols: []
+    depends_on: [lib-api, lib-agent, lib-spec-workspaces, lib-admin, lib-permission, lib-menu-permissions, lib-utils, lib-ppm, lib-use-agent-run-stream, lib-daemon, lib-llm-providers, lib-mcp-tokens]
+    used_by: []
+    needs_review: false
+    concerns:
+      - 测试集中在 lib 层与组件单测，页面级集成测试仍偏低（仅少数 page.test.tsx）
+    review_reasons: []
+
+  # ─── Styles ────────────────────────────────────────────────────────
+
+  styles:
+    status: active
+    doc: modules/styles.md
+    paths:
+      - "frontend/src/app/globals.css"
+      - "frontend/src/styles/fonts.ts"
+      - "frontend/src/styles/index.ts"
+      - "frontend/src/styles/tokens.ts"
+    tags: [css, tailwind, theme, variables, design-tokens]
+    aliases: [styles, 样式]
+    entrypoints: []
+    main_symbols: []
+    depends_on: []
+    used_by: [app-layouts]
+    needs_review: false
+    concerns: []
+    review_reasons: []
+
+  # ─── Build Config ──────────────────────────────────────────────────
+
+  build:
+    status: active
+    doc: modules/build.md
+    paths:
+      - "frontend/package.json"
+      - "frontend/next.config.mjs"
+      - "frontend/tailwind.config.ts"
+      - "frontend/tsconfig.json"
+      - "frontend/vitest.config.ts"
+      - "frontend/postcss.config.mjs"
+      - "frontend/Dockerfile"
+      - "frontend/components.json"
+    tags: [build, config]
+    aliases: [project-config, build]
+    entrypoints: []
+    main_symbols: []
+    depends_on: []
+    used_by: []
+    needs_review: false
+    concerns: []
+    review_reasons: []

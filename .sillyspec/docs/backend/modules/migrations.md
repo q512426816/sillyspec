@@ -1,0 +1,53 @@
+---
+schema_version: 1
+doc_type: module-card
+module_id: migrations
+author: qinyi
+created_at: 2026-08-18 01:45:00
+---
+
+# 数据库迁移（migrations）
+
+## 定位
+Alembic 数据库迁移目录（`backend/migrations/`：env.py + versions/ + script.py.mako），承载全部 schema 演进。现状（2026-08-17 时点核实）：**versions/ 下 143 个 revision 脚本，单 head `20260817100000_merge_quicklog_and_run_sender`**（merge revision），父节点无缺失。
+
+## 契约摘要
+- `env.py`：用 `get_settings()` 的同一份配置现场建 async engine 跑迁移（与应用共享 URL/池配置，但不复用应用 lifespan）；支持 autogenerate diff。
+- `env.py` 顶部 eager import 全部 feature 模块的 model（admin/agent(+profile)/auth/change/daemon(+audit)/file/git_gateway/git_identity/incident/llm_provider/mcp_gateway/platform_sync/ppm 六子域/release/scan_docs(+conflict)/settings/skills/spec_profile/spec_workspace/task/tool_gateway(+policy)/workflow/workspace），确保 autogenerate 扫到全部表。
+- revision 命名混用两种风格：日期时间戳式（`20260817100000`）与 alembic 默认 hex 式（`d7a1f5c2b9e4`）。
+- versions/ 内存在多个 merge revision（`d7a1f5c2b9e4_merge_platform_progress_and_session_config` / `dceb0c45ab3e_merge` / `20260817100000_merge_quicklog_and_run_sender` 等），是历史上并行 change 各出迁移后收敛多 head 的痕迹。
+
+## 关键逻辑
+```
+alembic revision --autogenerate -m "..."   # 前提: 新 model 已在 env.py 登记
+alembic upgrade head                       # head = 20260817100000（单 head）
+多 head 出现时: alembic merge <heads> 生成 merge revision 收敛
+表结构变更走 batch_alter_table（SQLite 兼容场景, 如 20260814220000 加列）
+```
+
+## 注意事项
+- **新 model 必须先在 env.py import 清单登记再 autogenerate**，否则表不在 metadata、autogenerate 判定多余/漏建（2026-08-14 architecture-4a §8 就是补这个登记）。
+- 多 agent 并行 change 各自生成迁移时 `down_revision` 易撞出多 head：提交前核对单 head（alembic heads 或 DAG 脚本），出现多 head 用 merge revision 收敛——历史上至少三次（见 versions/ 内多个 merge 文件）。
+- 新 revision 的 `down_revision` 必须指向当时最新 head；日期式编号建议精确到秒避免同日撞号（历史撞号曾迫使另一 change 改号收敛）。
+- 迁移文件会被 pre-commit 的 ruff 重排格式，首次 commit 后核对文件真的落盘（历史上有 ruff 重排致 commit 静默不落地先例）。
+- **DML 方言兼容（2026-09-13）**：迁移/运维脚本内 SQL 不得用 PG-only 函数（`now()` 等）——SQLite 环境直接 OperationalError；时间戳一律 Python 侧生成走绑定参数（`sa.text(...).bindparams(ts=...)`，先例 backend/scripts/reset_agent_log_attribution.py `apply_reset`，全仓首条裸 now() DML 由 24h 审查抓出后先修于 20260912050000 迁移、后随部署裁决迁入脚本）。
+- **单头守护测试（2026-09-13）**：`backend/tests/test_migrations_graph.py` AST 静态解析 versions/*.py 断言单 head + down_revision 引用闭合 + revision 唯一（compose 启动命令即 `alembic upgrade head`，双头 = 后端容器起不来；两周内两次复发——20260910130000 与更早 6756e634f119——测试建表走 metadata 不走迁移链，CI 原本拦不住）。解析须同时接老式 `revision = "x"` 与新模板 `revision: str = "x"`（AnnAssign）两种形态。
+- 本项目除 PPM 外未正式上线，不要求历史兼容与完整 down-grade，以 head 前进为准。
+
+- 20260825230000_add_quicklog_session_links（2026-08-25-session-spec-binding）：建表 + agent_sessions.change_id 存量播种至 change_session_links（ON CONFLICT DO NOTHING）；downgrade drop 表、播种行保留无害。
+- 20260831150000_add_daemon_sillyspec_fields（2026-08-31-machine-sillyspec-version）：daemon_instances 加 3 列——sillyspec_version / sillyspec_latest_version VARCHAR(50) NULL + sillyspec_update JSON NULL（只加列，写入/清除语义 D-002@v1 在 RuntimeService register/heartbeat）；down_revision 接 20260831130000，downgrade 对称删列。
+
+## 人工备注
+
+<!-- MANUAL_NOTES_START -->
+
+<!-- MANUAL_NOTES_END -->
+
+## 20260912110000_add_scheduled_message_origin
+
+- 2026-09-12-chat-turn-auto-recovery FR-4.1：`agent_session_scheduled_messages` + `origin TEXT NULL`（'auto_resume:<源 run uuid>' = close 钩子 quota 分支自动续跑排期；NULL = 用户预约存量语义不变）。down_revision=1d763051eb15 线性追加，downgrade 对称 drop；soft-add 无索引（与 20260910120000 queued origin 同论证）。
+
+## 20260912050000_agent_log_attribution_reset（2026-09-13 部署裁决改 no-op）
+
+- 2026-09-11-agent-log-attribution-refactor task-05 纯数据清库迁移（清归属列 + tool_report 聚合键会话软删 + 两张 links 表全清，DG-04 用户裁决）。**2026-09-13 部署裁决改 no-op**：compose 启动命令 `alembic upgrade head` 自动前滚会把破坏性 DML 在 CLI 升级前自动执行（DG-03 时序为 backend 发布→CLI 升级→手动清库），清空白做；且 downgrade→upgrade 重放会把已重建的正确数据再清一遍。白名单/stop-revision 不可行（与 20260911220000 是兄弟分叉），env 门控有"stamp 后跳过的 DML 永不重跑"死结——DML 抽出到一次性运维脚本 `backend/scripts/reset_agent_log_attribution.py`（dry-run 默认 + `--apply` 单事务 + 前后计数回报）。revision id 保留占位维持图完整（已 stamp 环境不受影响）；downgrade 维持 no-op（D-004@v2）。
+- 同日早间修订已被本裁决吸收：软删时间戳 SQL `now()`（PG-only）改 Python 侧 bindparams——现落在脚本 `apply_reset` 内，方言无关语义不变。
