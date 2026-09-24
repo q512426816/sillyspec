@@ -1,0 +1,733 @@
+diff --git a/src/flow-review.js b/src/flow-review.js
+new file mode 100644
+index 00000000..0cf2e9a8
+--- /dev/null
++++ b/src/flow-review.js
+@@ -0,0 +1,172 @@
++/**
++ * flow-review.js — 薄流程独立评审（2026-09-25-thin-review-slice）。
++ *
++ * 定档哲学：危险证据累积制，体积/文件数出局（撞实验 F-02 实证——几行 ref 清零的小改是 P1，
++ * 30 文件的改名无风险）。信号五路，任一命中即需评审；缺省要评审、豁免要多证并举：
++ *   ① 高危交付语义词（一票升级，任何信号压不住）——at-least-once/exactly-once/幂等/不丢失/
++ *      不重复/串台类承诺是 P1 高发区（R15-F-01 即承诺-实现落差）；
++ *   ② 盲维四问实质作答——设计记录「边界与并发」槽有非「不适用」开头的作答=该维风险面存在
++ *      （作答即信号：没有那个维度就不会写出实质内容；adopted 无槽设计退化为机制词全文扫描）；
++ *   ③ 交付 diff 原语——冻结 patch 里的并发/冲突/游标/取消类原语（物证，不依赖自述）；
++ *   ④ 决策密度——edit_ratio 超阈（amend 改写比例=真实取舍密度的机械代理）；
++ *   ⑤ 声明通道——--review / --no-review 一票（上下文最全的人直接表态）。
++ *
++ * 豁免 ≠ 免责：全信号不命中而豁免的变更按 1/4 定额抽查采样（确定性哈希分桶），采样命中照评
++ * 并进遥测——误豁免率可测量可校准（先例：review-dispatch shadow 影子期 N=10 转正判据）。
++ */
++import { existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++/** 高危交付语义承诺词（一票升级）。 */
++const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|幂等|不丢失|不重复|不丢不重|不重不漏|串台/i
++
++/** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */
++const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|多实例串|游标推进/
++
++/** 交付 diff 危险原语（物证面）。 */
++const PRIMITIVE_RE = /asyncio\.(?:Lock|Event|Queue|gather)|threading\.|with_for_update|IntegrityError|ON CONFLICT|AbortSignal|AbortController|signal\.abort|\.rollback\(|since=|\bcursor\b/i
++
++/** 豁免抽查采样：确定性哈希 1/4 定额（SALT 防碰巧连坐，调表需同步核对既有夹具零碰撞）。 */
++const SAMPLE_SALT = 7
++export function sampleBucket(name) {
++  let h = 0
++  for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0
++  return (((h ^ SAMPLE_SALT) >>> 0) % 4) === 0
++}
++
++/** 读 AGENT 槽作答（标记行之后到下一标记/标题之前的非空行拼接）。 */
++function readSlotAnswer(text, markerRe) {
++  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
++  let inSlot = false
++  const buf = []
++  for (const line of lines) {
++    if (markerRe.test(line)) { inSlot = true; continue }
++    if (inSlot && (/^<!--/.test(line) || /^#{1,6}\s/.test(line))) break
++    if (inSlot) buf.push(line)
++  }
++  return buf.join('\n').trim()
++}
++
++/** 剥 MACHINE-DRAFT 机器段（design.md 的问题模板自带「串台」等承诺词字样——模板自污染面，
++ * 扫描只看 agent 作答面；proposal/requirements 的机器段承载用户原话不剥）。 */
++function stripMachineSections(text) {
++  return String(text || '')
++    .replace(/<!--\s*MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin[^\n]*-->[\s\S]*?<!--\s*MACHINE-DRAFT:[\w.-]+:end\s*-->/g, '')
++    .replace(/<!--\s*MACHINE-DRAFT:[\w.-]+:[^\n]*:begin[^\n]*-->[\s\S]*?<!--\s*MACHINE-DRAFT:[\w.-]+:end\s*-->/g, '')
++}
++
++/**
++ * 危险证据定档。@returns {{required: boolean, reasons: string[], exemptEvidence: string[], sampled: boolean}}
++ */
++export function classifyReviewNeed({ changeDir, input = '', patchText = null, editRatio = null, reviewForce = null, change = '' }) {
++  if (reviewForce === true) return { required: true, reasons: ['显式 --review 声明（一票）'], exemptEvidence: [], sampled: false }
++  if (reviewForce === false) return { required: false, reasons: [], exemptEvidence: ['显式 --no-review 声明（一票）'], sampled: false }
++  const reasons = []
++  const exemptEvidence = []
++
++  // ① 承诺词：input + 治理工件全文（design 只扫作答面——机器问题模板含「串台」字样属模板自污染）
++  const texts = [String(input || '')]
++  for (const f of ['proposal.md', 'requirements.md', 'design.md']) {
++    try {
++      const t = readFileSync(join(changeDir, f), 'utf8')
++      texts.push(f === 'design.md' ? stripMachineSections(t) : t)
++    } catch { /* 缺件由 redraft/槽位门兜底 */ }
++  }
++  const all = texts.join('\n')
++  const hit = all.match(PROMISE_RE)
++  if (hit) reasons.push(`高危交付语义承诺词命中「${hit[0]}」（一票升级）`)
++  else exemptEvidence.push('无高危承诺词')
++
++  // ② 盲维四问作答：实质作答=风险面（adopted 无槽退化机制词扫描）
++  try {
++    const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
++    if (/<!--\s*AGENT:槽3/.test(dText)) {
++      const answer = readSlotAnswer(dText, /^<!--\s*AGENT:槽3/)
++      if (!answer) exemptEvidence.push('盲维四问未作答（将由槽位门拦收）')
++      else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
++      else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
++    } else if (MECHANISM_RE.test(dText)) {
++      reasons.push('头脑风暴设计含并发/时序类机制词（adopted 扫描）')
++    } else {
++      exemptEvidence.push('adopted 设计无机制词命中')
++    }
++  } catch { /* 无 design → 槽位门/redraft 面兜底 */ }
++
++  // ③ 交付 diff 原语
++  if (patchText != null && String(patchText).trim()) {
++    if (PRIMITIVE_RE.test(patchText)) reasons.push('交付 diff 含并发/游标/取消类原语')
++    else exemptEvidence.push('diff 无危险原语')
++  } else {
++    exemptEvidence.push('无交付 diff（纯治理面变更）')
++  }
++
++  // ④ 决策密度
++  if (typeof editRatio === 'number' && editRatio > 0.5) reasons.push(`决策密度高（edit_ratio=${editRatio}）`)
++  else exemptEvidence.push('决策密度低（无 amend 或未超阈）')
++
++  if (reasons.length > 0) return { required: true, reasons, exemptEvidence, sampled: false }
++  if (sampleBucket(change)) return { required: true, reasons: ['豁免抽查采样（1/4 定额）'], exemptEvidence, sampled: true }
++  return { required: false, reasons, exemptEvidence, sampled: false }
++}
++
++/**
++ * 评审员任务书（flow done 首次命中需评审时打印——agent 起干净上下文子代理执行）。
++ * 材料有界（change.patch 为冻结件；治理工件已含字节帽意识）；请求预算硬帽防失控勘察（R14 教训）。
++ */
++export function renderReviewerTaskbook({ change, changeDir }) {
++  return [
++    `⚖️ 独立评审任务书 — ${change}`,
++    `══════════════════════════════════════`,
++    `【角色】你是独立评审员（干净上下文，未参与实现）——拿承诺对代码，不信自述，零误报标准。`,
++    ``,
++    `【材料（按需 Read，请求预算硬帽 12 次——超帽即止，包不足以作答写 cannot_verify）】`,
++    `  - ${join(changeDir, 'requirements.md')}（FR 承诺 + 每条 FR 的测试绑定作答）`,
++    `  - ${join(changeDir, 'design.md')}（设计承诺：做法/接口契约/盲维四问作答/风险）`,
++    `  - ${join(changeDir, 'change.patch')}（交付 diff 冻结件——代码事实的唯一来源）`,
++    ``,
++    `【检查单（逐条作答，P1=承诺被违反或有数据正确性风险）】`,
++    `  1. FR↔实现↔测试三方一致：每条 FR 的实现兑现承诺？绑定作答声称的测试真存在且断言该行为？`,
++    `  2. 盲维四问真实性：design 作答说「不适用」的维度，diff 代码真的没有该风险面吗？（重点：乱序到达/并发写/切换清理/多工作区作用域）`,
++    `  3. 作答中的防护声明（如有）：声称的防护机制在代码里真实存在且生效？`,
++    `  4. 生成物同步（如涉及）：类型/契约文件与实现对齐？`,
++    ``,
++    `【纪律】只读——禁止修改任何文件、禁止 git 操作；唯一产物是 review.json。`,
++    ``,
++    `【产物 schema（写到 ${join(changeDir, 'review.json')}，UTF-8 JSON）】`,
++    `{`,
++    `  "schemaVersion": 1, "change": "${change}", "reviewer": "subagent",`,
++    `  "verdict": "PASS" | "FAIL",`,
++    `  "findings": [ { "severity": "P1|P2|P3", "title": "…", "evidence": "代码锚点+机理一句话", "location": "file:line" } ],`,
++    `  "dimensionNotes": { "乱序": "ok|finding|n/a", "并发": "ok|finding|n/a", "切换": "ok|finding|n/a", "作用域": "ok|finding|n/a" },`,
++    `  "reviewedAt": "<ISO 时间>"`,
++    `}`,
++    ``,
++    `完成后由主会话重跑：sillyspec flow done --change ${change}（断点续，已完成子步幂等跳过）`,
++  ].join('\n')
++}
++
++/**
++ * review.json 校验（三态：ok / schema 错误清单）。FAIL 或含 P1 由调用方拦截。
++ */
++export function validateReviewJson(path) {
++  let raw
++  try { raw = readFileSync(path, 'utf8') } catch { return { ok: false, errors: [`review.json 不可读：${path}`], review: null } }
++  let r
++  try { r = JSON.parse(raw) } catch (e) { return { ok: false, errors: [`review.json 不是合法 JSON：${e.message}`], review: null } }
++  const errors = []
++  if (r.schemaVersion !== 1) errors.push('schemaVersion 必须为 1')
++  if (!['PASS', 'FAIL'].includes(r.verdict)) errors.push('verdict 必须为 PASS|FAIL')
++  if (!Array.isArray(r.findings)) errors.push('findings 必须为数组')
++  else {
++    r.findings.forEach((f, i) => {
++      if (!f || typeof f !== 'object') { errors.push(`findings[${i}] 非对象`); return }
++      if (!/^P[123]$/i.test(String(f.severity || ''))) errors.push(`findings[${i}].severity 必须 P1|P2|P3`)
++      if (!f.title) errors.push(`findings[${i}].title 缺失`)
++    })
++  }
++  if (!r.reviewer || typeof r.reviewer !== 'string') errors.push('reviewer 缺失')
++  if (errors.length > 0) return { ok: false, errors, review: null }
++  return { ok: true, errors: [], review: r }
++}
++
++export default { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, sampleBucket }
+diff --git a/src/flow.js b/src/flow.js
+index 1232002b..2ff7689c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -34,7 +34,7 @@ import { writeAtomicSync } from './fs-atomic.js'
+ import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
+ 
+ const FLOW_STATE_FILE = 'flow-state.yaml'
+-const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'probes', 'distill', 'archive', 'events']
++const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
+ 
+ /** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
+ export function readFlowState(changeDir) {
+@@ -122,7 +122,7 @@ function materialPaths(specBase, changeName, changeDir) {
+  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
+  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
+  */
+-export async function cmdFlowStart({ change, input, thick = false, withTasks = false, cwd, specBase, json = false }) {
++export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, json = false }) {
+   const cfg = readFlowConfig(specBase)
+   if (cfg.mode === 'legacy') {
+     console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')
+@@ -145,7 +145,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+       if (hasBsArtifacts) {
+         const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+         const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
+-        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', baseline_commit: baseline, substeps: {} })
++        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {} })
+         try {
+           const { redraftMissingArtifacts, ensureBindingSlots } = await import('./flow-draft.js')
+           const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
+@@ -239,6 +239,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     // 恒走 skipPlanCheck，防「升厚后无 plan.md 归档死锁」；厚面出身（--thick 起步）才要 plan.md）
+     born_face: thick ? 'thick' : 'thin',
+     with_tasks: Boolean(withTasks),
++    review_force: reviewForce,
+     baseline_commit: baseline,
+     substeps: {},
+   })
+@@ -264,6 +265,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
+     `⚠️ design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险）动码前后顺手作答——每节至少一行，`,
+     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
++    `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
++    `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
++    `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+     ``,
+     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
+@@ -345,6 +349,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+   const mark = (k) => { writeFlowState(markDir, { substeps: { [k]: 'done' } }); doneList.push(k) }
+   const doneList = []
+   const skip = (k) => { doneList.push(`${k}(skip)`) }
++  let reviewOutcome = null
+   const reportMidFail = (failed) => {
+     console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
+     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
+@@ -488,6 +493,53 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     if (patchOk) mark('patch')
+   }
+ 
++  // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
++  // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
++  // 多证并举、豁免者 1/4 定额抽查采样。评审任务书由 CLI 渲染（agent 起干净上下文子代理执行，
++  // 协议调用数不变）；FAIL 或 P1 发现=拦截（修复后删件重评再重跑 done，断点续）。
++  if (st.substeps?.review === 'done') { skip('review') } else {
++    const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
++    let patchText = null
++    try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
++    const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
++    if (!tier.required) {
++      console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
++      reviewOutcome = { required: false, sampled: false, verdict: 'exempt' }
++      mark('review')
++    } else if (!existsSync(join(changeDir, 'review.json'))) {
++      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
++      console.log(renderReviewerTaskbook({ change, changeDir }))
++      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
++      reportMidFail('review')
++      process.exit(1)
++    } else {
++      const v = validateReviewJson(join(changeDir, 'review.json'))
++      if (!v.ok) {
++        console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
++        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
++        reportMidFail('review')
++        process.exit(1)
++      }
++      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
++      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
++      if (v.review.verdict === 'FAIL' || p1s.length > 0) {
++        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
++        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
++        console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
++        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
++        reportMidFail('review')
++        process.exit(1)
++      }
++      if (others.length > 0) {
++        console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
++        for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
++      }
++      console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
++      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
++      mark('review')
++    }
++  }
++
+   // ③ probes：thin 薄跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
+   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
+   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
+@@ -589,6 +641,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       ts: new Date().toISOString(), change, protocolCalls: 2,
+       draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
+       routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
++      review: reviewOutcome,
+     }) + '\n', 'utf8')
+   } catch { /* 遥测 best-effort */ }
+ 
+@@ -615,6 +668,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+       input: getFlag('--input') || undefined,
+       thick: hasFlag('--thick'),
+       withTasks: hasFlag('--with-tasks'),
++      reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
+       cwd, specBase,
+       json: hasFlag('--json'),
+     })
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index f02a2b5b..e8e0bfd0 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -112,7 +112,8 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+   execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
+   const change = 'flow-h2-t3'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
++  // --no-review：本用例测 fail-closed 测试门，非评审面——声明一票豁免评审（名字撞 1/4 采样桶）
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
+   fillDesignSlots(cwd, change)
+   const specBase = join(cwd, '.sillyspec')
+@@ -296,7 +297,7 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（
+     '# 提案书', '', '## 动机', '需要一个守护行为', '',
+     '## 成功标准', '- 守护行为 X 发生', '- 崩溃不影响主流程', '',
+   ].join('\n'))
+-  writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：乱序不适用\n')
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：无特殊场景假设\n')
+   const s = cli(cwd, ['flow', 'start', '--change', change])
+   assert.equal(s.status, 0, `收编失败: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /头脑风暴产物已收编进薄跑道/, '收编简报')
+@@ -341,6 +342,74 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
++test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t15'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入幂等收敛']).status, 0)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  fillDesignSlots(cwd, change)
++  const specBase = join(cwd, '.sillyspec')
++  const changeDir = join(specBase, 'changes', change)
++
++  // 首跑：承诺词命中 → 评审任务书下发 exit 1（断点在 review 子步）
++  const f1 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(f1.status, 1, `首跑应在 review 断点: ${f1.stdout}\n${f1.stderr}`)
++  assert.match(f1.stdout, /需要独立评审（.*承诺词.*）/, '承诺词定档理由')
++  assert.match(f1.stdout, /独立评审任务书/, '任务书渲染')
++  assert.match(f1.stdout, /请求预算硬帽 12/, '预算帽在场')
++  assert.match(f1.stdout + f1.stderr, /中断于子步「review」/, '断点报位')
++
++  // 子代理产物 review.json（PASS）→ 重跑通过归档
++  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
++    schemaVersion: 1, change, reviewer: 'subagent', verdict: 'PASS', findings: [],
++    dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
++  }))
++  const ok = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(ok.status, 0, `复跑应通过: ${ok.stdout}\n${ok.stderr}`)
++  assert.match(ok.stdout, /独立评审通过（reviewer=subagent）/)
++  const archDir = join(specBase, 'changes', 'archive')
++  const archived = readdirSync(archDir)[0]
++  assert.ok(existsSync(join(archDir, archived, 'review.json')), 'review.json 随归档留档')
++  const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.change === change)
++  assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复后删件重评', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t16'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  fillDesignSlots(cwd, change)
++  const changeDir = join(cwd, '.sillyspec', 'changes', change)
++  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
++    schemaVersion: 1, change, reviewer: 'subagent', verdict: 'FAIL',
++    findings: [{ severity: 'P1', title: '承诺违反：声称的收敛未实现', evidence: 'diff 无重试路径', location: 'work.js:1' }],
++    dimensionNotes: {}, reviewedAt: new Date().toISOString(),
++  }))
++  const f = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(f.status, 1, 'P1 必须拒归档')
++  assert.match(f.stdout + f.stderr, /\[P1\] 承诺违反/, 'P1 明细列出')
++  assert.match(f.stdout + f.stderr, /修复后删除 review\.json/, '重评指引')
++  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change)), '未归档')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t17'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
++  fillDesignSlots(cwd, change)
++  const f = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(f.status, 1, '无产物无声明外的他信号，--review 单独即必评')
++  assert.match(f.stdout, /显式 --review 声明/, '声明一票理由')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {
+   const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+   const hits = src.split('await triggerSync(cwd, change)').length - 1
+diff --git a/test/flow-review.test.mjs b/test/flow-review.test.mjs
+new file mode 100644
+index 00000000..983aa2be
+--- /dev/null
++++ b/test/flow-review.test.mjs
+@@ -0,0 +1,109 @@
++/**
++ * flow-review.test.mjs — 薄流程独立评审（2026-09-25-thin-review-slice）
++ *
++ * 覆盖验收面：
++ *   ① 危险证据定档矩阵：承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票/全静豁免/采样桶；
++ *   ② 评审任务书渲染：材料路径/预算帽/只读纪律/schema 契约；
++ *   ③ review.json 校验三态：合法 PASS / 字段错误清单 / FAIL+P1 形状。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import {
++  classifyReviewNeed, renderReviewerTaskbook, validateReviewJson, sampleBucket,
++} from '../src/flow-review.js'
++
++function makeChangeDir(designText, requirementsText) {
++  const root = mkdtempSync(join(tmpdir(), 'frv-'))
++  const changeDir = join(root, 'changes', 'c-x')
++  mkdirSync(changeDir, { recursive: true })
++  if (designText) writeFileSync(join(changeDir, 'design.md'), designText)
++  if (requirementsText) writeFileSync(join(changeDir, 'requirements.md'), requirementsText)
++  return { root, changeDir }
++}
++
++const DESIGN_SLOTS = [
++  '# 设计记录',
++  '<!-- MACHINE-DRAFT:design-boundaries:0000000000000000000000000000000000000000000000000000000000000000:begin x -->',
++  '1. 乱序……',
++  '<!-- MACHINE-DRAFT:design-boundaries:end -->',
++  '<!--AGENT:槽3 盲维四问作答 -->',
++  '__ANSWER__',
++  '',
++].join('\n')
++
++test('① 定档矩阵：五路信号与豁免举证', () => {
++  // 承诺词一票（requirements 命中「幂等」）
++  let { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n写入收敛幂等\n')
++  let t = classifyReviewNeed({ changeDir, patchText: '', change: 'q1' })
++  assert.equal(t.required, true)
++  assert.ok(t.reasons.some((r) => /承诺词/.test(r)), `承诺词一票: ${t.reasons}`)
++  rmSync(root, { recursive: true, force: true })
++
++  // 盲维实质作答（非「不适用」开头）
++  ;({ root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '1. 乱序：用队列缓冲晚到事件'), '# 需求\n普通\n'))
++  t = classifyReviewNeed({ changeDir, patchText: '', change: 'q2' })
++  assert.ok(t.reasons.some((r) => /盲维四问有实质作答/.test(r)), `盲维信号: ${t.reasons}`)
++  rmSync(root, { recursive: true, force: true })
++
++  // diff 危险原语（物证）
++  t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: '+++ x\n+asyncio.Lock()', change: 'q3' })
++  assert.ok(t.reasons.some((r) => /原语/.test(r)), `原语信号: ${t.reasons}`)
++
++  // 决策密度
++  t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: '', editRatio: 0.75, change: 'q4' })
++  assert.ok(t.reasons.some((r) => /决策密度/.test(r)), `密度信号: ${t.reasons}`)
++
++  // 声明一票（双向）
++  t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: 'x', reviewForce: true, change: 'q5' })
++  assert.equal(t.required, true)
++  t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: '+++ a\n+asyncio.Lock()', reviewForce: false, change: 'q6' })
++  assert.equal(t.required, false, '--no-review 压过原语命中')
++
++  // 全静 + 非采样桶名 → 豁免且证据可列
++  const quiet = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无风险面'), '# 需求\n普通\n')
++  const offBucket = 'name-off-bucket'
++  assert.equal(sampleBucket(offBucket), false, '夹具名确在桶外（若改 SALT 请重选）')
++  t = classifyReviewNeed({ changeDir: quiet.changeDir, patchText: '+++ a\n+let x = 1', change: offBucket })
++  assert.equal(t.required, false)
++  assert.ok(t.exemptEvidence.length >= 3, `豁免证据齐全: ${t.exemptEvidence}`)
++  rmSync(quiet.root, { recursive: true, force: true })
++
++  // 全静 + 采样桶名 → 抽查必评
++  let bucket0 = 'b0'
++  for (let i = 0; !sampleBucket(bucket0); i++) bucket0 = `b0-${i}`
++  t = classifyReviewNeed({ changeDir: mkdtempSync(join(tmpdir(), 'frv-')), patchText: '', change: bucket0 })
++  assert.equal(t.required, true)
++  assert.equal(t.sampled, true)
++  assert.ok(t.reasons.some((r) => /抽查采样/.test(r)))
++})
++
++test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
++  const book = renderReviewerTaskbook({ change: 'c1', changeDir: '/x/c1' })
++  assert.match(book, /请求预算硬帽 12/)
++  assert.match(book, /只读——禁止修改任何文件/)
++  assert.match(book, /review\.json/)
++  assert.match(book, /requirements\.md/)
++  assert.match(book, /change\.patch/)
++  assert.match(book, /"verdict": "PASS" \| "FAIL"/)
++  assert.match(book, /盲维四问真实性/)
++})
++
++test('③ review.json 校验三态', () => {
++  const root = mkdtempSync(join(tmpdir(), 'frv-'))
++  const p = join(root, 'review.json')
++  writeFileSync(p, JSON.stringify({ schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'PASS', findings: [], dimensionNotes: {}, reviewedAt: '2026' }))
++  assert.equal(validateReviewJson(p).ok, true, '合法 PASS')
++  const fail = { schemaVersion: 1, change: 'c', reviewer: 'subagent', verdict: 'FAIL', findings: [{ severity: 'P1', title: '承诺违反', evidence: 'x', location: 'a.py:1' }], dimensionNotes: {}, reviewedAt: '2026' }
++  writeFileSync(p, JSON.stringify(fail))
++  const v = validateReviewJson(p)
++  assert.equal(v.ok, true, 'FAIL+P1 形状合法（拦截语义由调用方判）')
++  assert.equal(v.review.findings.length, 1)
++  writeFileSync(p, JSON.stringify({ schemaVersion: 2, verdict: 'MAYBE', findings: 'x', reviewer: '' }))
++  const bad = validateReviewJson(p)
++  assert.equal(bad.ok, false)
++  assert.ok(bad.errors.length >= 4, `字段错误逐条列出: ${bad.errors}`)
++  rmSync(root, { recursive: true, force: true })
++})
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index 980b71f7..26c086b0 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -74,7 +74,8 @@ function fillDesignSlots(cwd, change) {
+ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
+   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
+   const change = 'fr-r1'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
++  // --no-review：本用例测 route 面——大改 amend 的 editRatio 会触发评审必评抢先拦截，声明豁免
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
+   // 大改（≥0.75 行）→ route_hint
+   const big = amendWithRatio(cwd, change, 0.75)
+   assert.equal(big.status, 0)
+@@ -108,7 +109,8 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒
+ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
+   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n  edit_ratio_enforcement: block\n')
+   const change = 'fr-b1'
+-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
++  // --no-review：本用例测 route block 面——editRatio 0.75 会触发评审必评抢先拦截，声明豁免
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
+   const big = amendWithRatio(cwd, change, 0.75)
+   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+diff --git a/.sillyspec/changes/2026-09-25-thin-review-slice/design.md b/.sillyspec/changes/2026-09-25-thin-review-slice/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-review-slice/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:20:40.227Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-review-slice
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++新建 src/flow-review.js 三件（classifyReviewNeed 危险证据定档 / renderReviewerTaskbook 评审任务书 / validateReviewJson 三态校验）+ flow.js 接线：SUBSTEPS 增 review 子步（patch 后）——定档不需评则豁免记账，需评且 review.json 缺失则打印任务书 exit 1 断点续，在场则校验（FAIL 或 P1 发现拦截列明细，修复后删件重评）；--review/--no-review 声明一票落 flow-state.review_force；评审结果进 flow-telemetry。定档五路信号：高危交付语义词一票、盲维四问实质作答（作答即信号，不另造问卷）、冻结 diff 危险原语扫描、决策密度 editRatio、声明一票；文件数出局。豁免需多证并举且 1/4 定额抽查采样（确定性哈希桶）。design.md 机器问题模板含语义词字样属模板自污染——扫描面剥 MACHINE-DRAFT 段只看 agent 作答。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增 src/flow-review.js（导出三件+sampleBucket）；flow.js SUBSTEPS 八子步、cmdFlowStart 增 reviewForce 参数与简报预告、cmdFlowDone 增 review 子步与遥测 review 字段；模块图登记 flow-review.js。无既有命令签名变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用（纯同步文本/文件操作）。2. 并发写：不适用——review.json 由评审子代理单写、CLI 只读校验；change 目录按变更名隔离。3. 切换/中断：评审断点幂等（子步标记 done 后重入 skip），FAIL 后修复重跑不产生半态假绿。4. 作用域：定档只读本变更目录工件与冻结 patch；采样哈希只依赖变更名，无全局状态。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=关键词表有盲区（新型风险词扫不到）+ 自述偏差（四问全答不适用但实际没想到）——兜底是 1/4 抽查采样与遥测回流校准，规则可随数据迭代。死路=按文件数/影响面定档——撞实验 F-02 实证几行小改是 P1、大批量改名无风险，体积代理指标两个方向都误判，已弃。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-review-slice/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-review-slice/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-review-slice/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++baseline_commit: 462fce363f700c4a9b352020420b4ffb3d3d1a99
++updatedAt: '2026-09-24T17:32:52.677Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-review-slice/proposal.md b/.sillyspec/changes/2026-09-25-thin-review-slice/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-review-slice/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:20:40.225Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-review-slice
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:7887489886c41a9556747632b47ff804b405b2be612e70223423c540544dd285:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++任务原话转写：动机：薄道唯一缺失的质量件——独立评审。撞实验 5 个 P1 全由独立评审抓住，薄道目前测试绿即过、无第二双眼睛。定档采用危险证据累积制（体积/文件数出局）：高危交付语义词一票升级；盲维四问有实质作答=该维风险面（作答即信号，不另造问卷）；交付 diff 原语扫描；决策密度 editRatio；--review/--no-review 声明一票。缺省要评审、豁免要多证并举，豁免者按 1/4 定额抽查采样进遥测（误豁免率可校准）。
++成功标准：
++- flow done 新增 review 子步（patch 后）：定档→需评审且 review.json 缺失则打印评审任务书（材料包+盲维检查单+预算帽+只读纪律+schema 契约）exit 1 断点续；review.json 在场则校验，FAIL 或 P1 发现拦截并列明细，修复后删件重评
++- 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈任一即需评审；全部不命中且无声明才豁免；豁免变更 1/4 定额抽查采样
++- flow start 支持 --review/--no-review 声明通道（落 flow-state），简报预告定档机制
++- 评审结果进 flow-telemetry（required/sampled/verdict/发现数）
++- 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flow 系全绿且既有夹具零采样碰撞
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:b3d0f0918f02dc822fcc0087366c8aa64fb0e48b5e22f3a48769cfcd712e4e86:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. flow done 新增 review 子步（patch 后）：定档→需评审且 review.json 缺失则打印评审任务书（材料包+盲维检查单+预算帽+只读纪律+schema 契约）exit 1 断点续；review.json 在场则校验，FAIL 或 P1 发现拦截并列明细，修复后删件重评
++2. 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈任一即需评审；全部不命中且无声明才豁免；豁免变更 1/4 定额抽查采样
++3. flow start 支持 --review/--no-review 声明通道（落 flow-state），简报预告定档机制
++4. 评审结果进 flow-telemetry（required/sampled/verdict/发现数）
++5. 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flow 系全绿且既有夹具零采样碰撞
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:780ea4f2a2307827223cfec3a01e3f73b1b7e38aca3bcbaae7563479b44a9387:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++1. flow done 新增 review 子步（patch 后）：定档→需评审且 review.json 缺失则打印评审任务书（材料包+盲维检查单+预算帽+只读纪律+schema 契约）exit 1 断点续；review.json 在场则校验，FAIL 或 P1 发现拦截并列明细，修复后删件重评
++2. 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈任一即需评审；全部不命中且无声明才豁免；豁免变更 1/4 定额抽查采样
++3. flow start 支持 --review/--no-review 声明通道（落 flow-state），简报预告定档机制
++4. 评审结果进 flow-telemetry（required/sampled/verdict/发现数）
++5. 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flow 系全绿且既有夹具零采样碰撞
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-review-slice/requirements.md b/.sillyspec/changes/2026-09-25-thin-review-slice/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-review-slice/requirements.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:20:40.226Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-review-slice
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:6b54cd504985f4a9e674c0fa7648b7d4181e6b7bce658739443b4e9fad3417cd:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++### FR-01: flow done 新增 review 子步（patch 后）：定档→需评审且 
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow done 新增 review 子步（patch 后）：定档→需评审且 review.json 缺失则打印评审任务书（材料包+盲维检查单+预算帽+只读纪律+schema 契约）exit 1 断点续；review.json 在场则校验，FAIL 或 P1 发现拦截并列明细，修复后删件重评
++
++### FR-02: 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈任一即需评审；全部不命中且无声明才豁免；豁免变更 1/4 定额抽查采样
++
++### FR-03: flow start 支持 --review/--no-review 声明通道（
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow start 支持 --review/--no-review 声明通道（落 flow-state），简报预告定档机制
++
++### FR-04: 评审结果进 flow-telemetry（required/sampled/ve
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 评审结果进 flow-telemetry（required/sampled/verdict/发现数）
++
++### FR-05: 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flo
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flow 系全绿且既有夹具零采样碰撞
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-review.test.mjs ①②③ 用例 + test/flow-protocol.test.mjs ⑮⑯（任务书/回收/P1 拦截全链）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-review.test.mjs ①（五路信号矩阵与采样桶断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑰（--review 一票）与 ③/--no-review 夹具（豁免一票复用）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑮（遥测 review.verdict 断言）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + test/stage-burst.test.mjs 43 例 + test:core 176 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-review-slice/tasks.md b/.sillyspec/changes/2026-09-25-thin-review-slice/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-review-slice/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T17:20:40.227Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-review-slice
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:d0053b814783165ca1042db7dbf68da4c81749014a56e14e35336c982d6015e3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-review-slice 留痕重锚 -->
++- [ ] task-01: flow done 新增 review 子步（patch 后）：定档→需评审且 review.json 缺失则打印评审任
++- [ ] task-02: 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈任一即需评审；全部不命中且无声明才豁免；
++- [ ] task-03: flow start 支持 --review/--no-review 声明通道（落 flow-state），简报预告定档
++- [ ] task-04: 评审结果进 flow-telemetry（required/sampled/verdict/发现数）
++- [ ] task-05: 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flow 系全绿且既有夹具零采样碰撞
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

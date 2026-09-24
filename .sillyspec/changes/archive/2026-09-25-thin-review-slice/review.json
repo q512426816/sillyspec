@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-review-slice",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FAIL/missing/invalid 评审结论永不落遥测——FR-04 在失败面未兑现，采样校准信号丢失",
+      "evidence": "review 三条失败路径（missing flow.js:514 / invalid flow.js:521 / FAIL flow.js:531）均 reportMidFail 后 process.exit(1)，先于函数末尾的遥测 append（flow.js:640-645）——flow-telemetry 的 review.verdict 只可能出现 exempt/PASS/null，永不出现 FAIL/missing/invalid；design 槽4 声称「兜底是 1/4 抽查采样与遥测回流校准误豁免率」，而 sampled+FAIL 恰是校准所需的最关键信号，系统性不落账。另 PASS 路遥测只记 findingsP1:0，无 P2/P3 发现数（flow.js:538），FR-04「发现数」不完整。阻断行为本身正确（exit 1 拒归档）。",
+      "location": "src/flow.js:529-531"
+    },
+    {
+      "severity": "P2",
+      "title": "断点续跑 skip('review') 不回填 reviewOutcome——续跑成功轮遥测记 review:null，评审已发生但遥测失忆",
+      "evidence": "review 先完成并 mark（flow.js:508/539）后若后续中断（如 edit_ratio_enforcement=block 在 flow.js:633-635 exit 1——events 已 mark 而 telemetry 未写；或 runArchiveChain flow.js:604 抛错），重跑时 st.substeps.review==='done' 走 skip（flow.js:500）仅记 doneList、reviewOutcome 保持 null，最终遥测记录 review:null——FR-04 字段在可达续跑路径上数据错误。",
+      "location": "src/flow.js:500"
+    },
+    {
+      "severity": "P3",
+      "title": "「无交付 diff（纯治理面变更）」豁免证据混淆 patch 采集失败与真无交付",
+      "evidence": "patch 子步 fail-soft 不阻断（flow.js:490-493，patchOk=false 不 mark 但流程继续），采集失败时 review 子步 readFileSync 落 catch 得 patchText=null（flow.js:503）→ classifyReviewNeed 记豁免证据「无交付 diff（纯治理面变更）」（flow-review.js:105-107）——有真实代码交付但 patch 采集失败的变更，可凭该误标证据+其余信号全静+采样桶外而整体豁免评审。",
+      "location": "src/flow-review.js:105-107"
+    },
+    {
+      "severity": "P3",
+      "title": "--review/--no-review 对在途变更（resume）静默失效——FR-03 声明通道未覆盖已 start 的变更",
+      "evidence": "cmdFlow 入口解析并传入 reviewForce（flow.js:671），但 flow-state 已存在的 resume 分支只 printRecoveryBriefing 后 return（flow.js:188-189），不写 review_force——已 start 的变更补跑 flow start --review 无法追加强评（fail-open 方向），补 --no-review 也无效（该方向 fail-safe）；FR-03 文本未限定仅新变更。新变更/adopt 收编两路已正确落 state（flow.js:148/214）。",
+      "location": "src/flow.js:188-189"
+    },
+    {
+      "severity": "P3",
+      "title": "头注释「高危承诺词一票升级，任何信号压不住」与实现矛盾（--no-review 可整体压制）",
+      "evidence": "flow-review.js:12-13 注释绝对化，但 flow-review.js:69 reviewForce===false 先于承诺词/原语/盲维判定直接豁免，测试①明确断言「--no-review 压过原语命中」——声明一票双向系设计槽1 与提案原文明文（非违约），FR-02「任一即需评审…全部不命中且无声明才豁免」字面与该实现存在读法张力；注释表述误导后续维护者对豁免面的安全预期。",
+      "location": "src/flow-review.js:12-13"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-24T17:38:58Z"
+}

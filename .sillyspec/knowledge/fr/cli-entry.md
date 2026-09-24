@@ -321,3 +321,108 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-25-thin-brainstorm-prestage
   status: active
+
+## FR-cli-entry-021 flow done 新增 review 子步（patch 后）：定档→需评审且
+变更：2026-09-25-thin-review-slice
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 新增 review 子步（patch 后）：定档→需评审且 review.json 缺失则打印评审任务书（材料包+盲维检查单+预算帽+只读纪
+全文：.sillyspec/changes/archive/2026-09-25-thin-review-slice/requirements.md#FR-01
+最近确认：ca7133a9411fab448f4e1e009b28dbbaa44f9f41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-review-slice:flow:FR-01
+  tests: test/flow-protocol.test.mjs | test/flow-review.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-review-slice
+  status: active
+
+## FR-cli-entry-022 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈
+变更：2026-09-25-thin-review-slice
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 定档函数三态：承诺词命中/盲维实质作答/diff 原语/editRatio 超阈任一即需评审；全部不命中且无声明才豁免；豁免变更 1/4 定额抽查采样
+全文：.sillyspec/changes/archive/2026-09-25-thin-review-slice/requirements.md#FR-02
+最近确认：ca7133a9411fab448f4e1e009b28dbbaa44f9f41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-review-slice:flow:FR-02
+  tests: test/flow-review.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-review-slice
+  status: active
+
+## FR-cli-entry-023 flow start 支持 --review/--no-review 声明通道（
+变更：2026-09-25-thin-review-slice
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 支持 --review/--no-review 声明通道（落 flow-state），简报预告定档机制
+全文：.sillyspec/changes/archive/2026-09-25-thin-review-slice/requirements.md#FR-03
+最近确认：ca7133a9411fab448f4e1e009b28dbbaa44f9f41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-review-slice:flow:FR-03
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-review-slice
+  status: active
+
+## FR-cli-entry-024 评审结果进 flow-telemetry（required/sampled/ve
+变更：2026-09-25-thin-review-slice
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 评审结果进 flow-telemetry（required/sampled/verdict/发现数）
+全文：.sillyspec/changes/archive/2026-09-25-thin-review-slice/requirements.md#FR-04
+最近确认：ca7133a9411fab448f4e1e009b28dbbaa44f9f41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-review-slice:flow:FR-04
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-review-slice
+  status: active
+
+## FR-cli-entry-025 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flo
+变更：2026-09-25-thin-review-slice
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试：定档矩阵/任务书渲染/schema 校验/P1 拦截/豁免路径；flow 系全绿且既有夹具零采样碰撞
+全文：.sillyspec/changes/archive/2026-09-25-thin-review-slice/requirements.md#FR-05
+最近确认：ca7133a9411fab448f4e1e009b28dbbaa44f9f41
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-review-slice:flow:FR-05
+  tests: test/stage-burst.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-review-slice
+  status: active

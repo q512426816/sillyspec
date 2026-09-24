@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-review-slice",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-thin-review-slice:flow:FR-01",
+      "tests": [
+        "test/flow-protocol.test.mjs",
+        "test/flow-review.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-review-slice"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-thin-review-slice:flow:FR-02",
+      "tests": [
+        "test/flow-review.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-review-slice"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-thin-review-slice:flow:FR-03",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-review-slice"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-thin-review-slice:flow:FR-04",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-review-slice"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-25-thin-review-slice:flow:FR-05",
+      "tests": [
+        "test/stage-burst.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-review-slice"
+    }
+  ]
+}
