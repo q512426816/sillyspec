@@ -25,6 +25,7 @@
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
@@ -32,7 +33,7 @@ import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
 
 const FLOW_STATE_FILE = 'flow-state.yaml'
-const SUBSTEPS = ['artifacts', 'ledger', 'probes', 'distill', 'archive', 'events']
+const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'probes', 'distill', 'archive', 'events']
 
 /** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
 export function readFlowState(changeDir) {
@@ -305,6 +306,15 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       reportMidFail('artifacts')
       process.exit(1)
     }
+    // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings：每条 FR 至少一行测试锚或「不适用：理由」）
+    const { verifyRequirementBindings } = await import('./flow-draft.js')
+    const rb = verifyRequirementBindings({ changeDir })
+    if (rb.applicable && rb.emptySlots.length > 0) {
+      console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
+      console.error(`   每条 FR 至少一行：test 文件路径或用例名（distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
+      reportMidFail('artifacts')
+      process.exit(1)
+    }
     mark('artifacts')
   }
 
@@ -329,6 +339,59 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       : '—'
     console.log(`🧾 实测面对账 — test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`)
     mark('ledger')
+  }
+
+  // ②b patch：变更级 patch 留档（2026-09-25-thin-patch-bindings，noAI）：quicklog/patches 生态
+  // 退役后审计件挂变更自身。范围=归属收窄后的本变更文件面（他侧声明剔除、含工作树未提交与
+  // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
+  // 不标 done（重入 done 重试）。
+  if (st.substeps?.patch === 'done') { skip('patch') } else {
+    let patchOk = false
+    try {
+      const ownFiles = (await attributedChangedFiles()).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
+      if (!st.baseline_commit) {
+        console.log('📦 patch 留档跳过：无 git 基线（无历史仓）')
+        patchOk = true
+      } else if (ownFiles.length === 0) {
+        console.log('📦 patch 留档跳过：归属文件面为空')
+        patchOk = true
+      } else {
+        const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
+        const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
+        const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
+        let additions = 0
+        let deletions = 0
+        for (const f of ownFiles) {
+          const s = stats.get(f)
+          if (s && Number.isFinite(s.additions)) additions += s.additions
+          if (s && Number.isFinite(s.deletions)) deletions += s.deletions
+        }
+        const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+        const meta = {
+          change,
+          baseline: st.baseline_commit,
+          head: typeof head === 'string' ? head.trim() : null,
+          files: ownFiles,
+          totals: { files: ownFiles.length, additions, deletions },
+          savedAt: new Date().toISOString(),
+          note: 'flow done 时点冻结（归属收窄后本变更文件面；含工作树未提交与 untracked）',
+        }
+        if (typeof frozen === 'string' && frozen) {
+          const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
+          writeFileSync(join(changeDir, 'change.patch'), patchText)
+          meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+          meta.patchStatus = 'ok'
+        } else {
+          meta.patchStatus = 'failed'
+        }
+        writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+        console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
+        patchOk = true
+      }
+    } catch (e) {
+      console.warn(`⚠️ patch 留档失败（fail-soft 不阻断归档；重入 flow done 从断点重试）：${(e && e.message) || e}`)
+    }
+    if (patchOk) mark('patch')
   }
 
   // ③ probes：thin 薄跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
@@ -357,6 +420,17 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     } catch (e) {
       console.warn(`⚠️ distill best-effort 失败（不阻断归档链）: ${(e && e.message) || e}`)
     }
+    // 测试绑定行落盘（2026-09-25-thin-patch-bindings）：requirements 绑定槽 → test-trace.json
+    // （FR 局部锚/candidate/machine），紧接的 indexRequirements 发号后随既有归档提升铸全局。
+    try {
+      const { extractRequirementBindings } = await import('./flow-draft.js')
+      const rows = extractRequirementBindings({ changeDir, change })
+      if (rows.length > 0) {
+        const { writeChangeTrace } = await import('./test-bindings.js')
+        const w = writeChangeTrace(changeDir, change, rows)
+        if (w.changed) console.log(`🔗 测试绑定行落盘：${rows.length} 行 → test-trace.json（随 indexRequirements 发号归档提升）`)
+      }
+    } catch (e) { console.warn(`⚠️ 测试绑定行落盘失败（fail-open）：${(e && e.message) || e}`) }
     try {
       const { indexRequirements } = await import('./fr-index.js')
       const knowledgeRoot = join(specBase, 'knowledge')

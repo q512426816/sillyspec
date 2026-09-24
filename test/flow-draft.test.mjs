@@ -23,6 +23,7 @@ const CLI = join(ROOT, 'src', 'index.js')
 const {
   draftAll, amendFlowDraft, verifyFlowDrafts, extractSuccessCriteria, draftLedgerPath, draftDecisions,
   draftDesignRecord, verifyDesignRecordFilled, redraftMissingArtifacts,
+  verifyRequirementBindings, extractRequirementBindings,
 } = await import('../src/flow-draft.js')
 // decisions 起草器：零真实决策=不落文件（转写任务通常为零）；有输入才有产物——锚定存在性+空态语义
 if (draftDecisions({ change: 'x', decisions: [] }) !== null) throw new Error('draftDecisions 空态应返回 null（不落文件）')
@@ -127,6 +128,39 @@ test('⑧ 幂等补起草：缺哪补哪/已存在不碰/ledger 合并/criteria 
   rmSync(root, { recursive: true, force: true })
 })
 
+test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
+  const { root, changeDir, runtimeRoot } = makeFixtureDir()
+  draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, runtimeRoot })
+  const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+  assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 2, '两条 criteria→两枚绑定槽')
+  assert.match(reqs, /## 测试绑定/, '绑定节标题在场')
+
+  // 槽位门：新稿全空 → 全列；填路径/不适用 → 放行；旧骨架（剥掉绑定槽）→ 指引补生成
+  let v = verifyRequirementBindings({ changeDir })
+  assert.equal(v.emptySlots.length, 2, '两槽空被点名')
+  writeFileSync(join(changeDir, 'requirements.md'), reqs
+    .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/flow-draft.test.mjs ⑩ 绑定提取用例')
+    .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：崩溃零影响为运行时属性，无独立断言面'))
+  v = verifyRequirementBindings({ changeDir })
+  assert.equal(v.emptySlots.length, 0, '路径+不适用均视作已答')
+  writeFileSync(join(changeDir, 'requirements.md'), reqs.replace(/^<!--AGENT:测试绑定.*$/gm, '').replace(/^## 测试绑定.*$/m, ''))
+  v = verifyRequirementBindings({ changeDir })
+  assert.equal(v.emptySlots.length, 1)
+  assert.match(v.emptySlots[0], /骨架过旧/, '旧骨架指引删文件重入补生成')
+
+  // 提取：路径行→行（tests 解析去前导./）；不适用→跳过
+  writeFileSync(join(changeDir, 'requirements.md'), reqs
+    .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\n覆盖于 ./test/flow-draft.test.mjs 与 test/flow-protocol.test.mjs')
+    .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：运行时属性'))
+  const rows = extractRequirementBindings({ changeDir, change: 'c1' })
+  assert.equal(rows.length, 1, '只有 FR-01 产行')
+  assert.equal(rows[0].anchor, 'FR-01')
+  assert.deepEqual(rows[0].tests, ['test/flow-draft.test.mjs', 'test/flow-protocol.test.mjs'])
+  assert.equal(rows[0].state, 'candidate')
+  assert.equal(rows[0].row_id, 'c1:flow:FR-01')
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('② extractSuccessCriteria：节内条目与无节回退列表行', () => {
   assert.deepEqual(extractSuccessCriteria(INPUT_WITH_CRITERIA), ['事件恒带 provisional:true', '崩溃零影响主流程'])
   assert.deepEqual(extractSuccessCriteria('- 甲条件\n- 乙条件'), ['甲条件', '乙条件'])
@@ -195,9 +229,11 @@ test('⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   const p = join(changeDir, 'proposal.md')
   writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽1[^\n]*-->)/, '$1\n例外：无'))
-  // 设计记录四槽例行作答（2026-09-24 契约：空槽 flow done 拒收）
+  // 设计记录四槽例行作答（2026-09-24 契约：空槽 flow done 拒收）+ 测试绑定槽（09-25 契约）
   const dp = join(changeDir, 'design.md')
   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具一行答'))
+  const rp = join(changeDir, 'requirements.md')
+  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
   const snapshotBefore = readdirSync(changeDir).sort()
   assert.deepEqual(snapshotBefore, ['design.md', 'flow-state.yaml', 'proposal.md', 'requirements.md', 'tasks.md'], '产物面=五件+状态（零手写额外文件）')
 

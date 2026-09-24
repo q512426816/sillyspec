@@ -83,13 +83,19 @@ function draftProposal({ change, input, criteria }) {
   return { text, sections: collectSections(text) }
 }
 
-/** requirements 机器稿（成功标准 → FR 条目）。 */
+/** requirements 机器稿（成功标准 → FR 条目 + 每条 FR 一枚「测试绑定」AGENT 槽——2026-09-25
+ * thin-patch-bindings：薄道 FR 从诞生就要测试锚，撞实验 5 个 P1 全是承诺无锚形态）。 */
 function draftRequirements({ change, criteria }) {
   const crit = criteria || []
   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
   const frBodies = crit.length > 0
     ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
     : '### FR-01: flow done 全绿\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
+  const n = crit.length > 0 ? crit.length : 1
+  const bindingSlots = Array.from({ length: n }, (_, i) => {
+    const id = `FR-${String(i + 1).padStart(2, '0')}`
+    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
+  }).join('\n\n')
   const text = [
     '---',
     `author: flow-machine-draft`,
@@ -101,8 +107,84 @@ function draftRequirements({ change, criteria }) {
     wrapped('requirements-frs', frBodies),
     AGENT_SLOT(1, '需求例外裁决'),
     '',
+    '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
+    '',
+    bindingSlots,
+    '',
   ].join('\n')
   return { text, sections: collectSections(text) }
+}
+
+/**
+ * requirements「测试绑定」槽位门（flow done artifacts 子步消费面）：每条 FR 的绑定槽非空
+ * （「不适用：理由」=已答）；FR 机器段在场但零绑定槽 = 骨架早于本机制的旧版——修复路径是
+ * 删 requirements.md 重入 flow start（redraft 按 proposal 机器段回提 criteria 重新起草）。
+ * 纯读盘面；无 requirements.md → not-applicable（redraft 补生成）。
+ */
+export function verifyRequirementBindings({ changeDir }) {
+  const path = join(changeDir, 'requirements.md')
+  if (!existsSync(path)) return { applicable: false, emptySlots: [] }
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+  const lines = text.split('\n')
+  const hasFrSection = /MACHINE-DRAFT:requirements-frs/.test(text)
+  const emptySlots = []
+  let current = null
+  let hasContent = false
+  let slotCount = 0
+  const flush = () => { if (current && !hasContent) emptySlots.push(current) }
+  for (const line of lines) {
+    if (/^<!--\s*AGENT:测试绑定/.test(line)) {
+      flush()
+      current = (line.match(/AGENT:(测试绑定\S+)/) || [])[1] || '测试绑定'
+      hasContent = false
+      slotCount++
+      continue
+    }
+    if (/^<!--/.test(line) || /^#{1,6}\s/.test(line)) { flush(); current = null; continue }
+    if (current && line.trim()) hasContent = true
+  }
+  flush()
+  if (hasFrSection && slotCount === 0) {
+    return { applicable: true, emptySlots: ['（骨架过旧——requirements 有 FR 机器段但无测试绑定槽；修复：删除 requirements.md 后重入 flow start 补生成，criteria 会从 proposal 机器段回提）'] }
+  }
+  return { applicable: true, emptySlots }
+}
+
+/**
+ * 从「测试绑定」槽提取绑定行（flow done distill 子步消费面 → writeChangeTrace →
+ * indexRequirements 归档提升铸全局）。锚=FR 局部编号（FR-01…，与机器 FR 序一致）；
+ * 「不适用」/无路径 token 的作答不产行；tests=作答文本里的测试文件路径（去重）。
+ */
+export function extractRequirementBindings({ changeDir, change }) {
+  const path = join(changeDir, 'requirements.md')
+  if (!existsSync(path)) return []
+  const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n')
+  const rows = []
+  let current = null
+  let buf = []
+  const flush = () => {
+    if (!current) return
+    const content = buf.join('\n').trim()
+    buf = []
+    if (!content || /^不适用/.test(content)) return
+    const tests = [...new Set((content.match(/[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g) || [])
+      .map((t) => t.replace(/^[./\\]+/, '').replace(/\\/g, '/')))]
+      .filter((t) => /(^|\/)(test|tests)\//.test(t) || /\.(test|spec)\./.test(t) || /_test\b/.test(t) || /_spec\b/.test(t))
+    if (tests.length === 0) return
+    rows.push({ anchor: current.replace(/^测试绑定/, ''), row_id: `${change}:flow:${current.replace(/^测试绑定/, '')}`, tests, reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: change })
+  }
+  for (const line of lines) {
+    if (/^<!--\s*AGENT:测试绑定\S/.test(line)) {
+      flush()
+      current = (line.match(/AGENT:(测试绑定\S+)/) || [])[1] || null
+      buf = []
+      continue
+    }
+    if (/^<!--/.test(line) || /^#{1,6}\s/.test(line)) { flush(); current = null; continue }
+    if (current) buf.push(line)
+  }
+  flush()
+  return rows
 }
 
 /**
@@ -433,4 +515,4 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
   return { drafted }
 }
 
-export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }

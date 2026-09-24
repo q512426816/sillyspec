@@ -62,10 +62,13 @@ function amendWithRatio(cwd, change, ratio) {
   return spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
 }
 
-/** agent 例行动作（2026-09-24 设计记录全档化契约）：design 槽各写一行，防 artifacts 子步空槽拒收。 */
+/** agent 例行动作（设计记录+测试绑定契约）：槽各写一行，防 artifacts 子步空槽拒收。 */
 function fillDesignSlots(cwd, change) {
-  const p = join(cwd, '.sillyspec', 'changes', change, 'design.md')
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
+  const base = join(cwd, '.sillyspec', 'changes', change)
+  const dp = join(base, 'design.md')
+  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
+  const rp = join(base, 'requirements.md')
+  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
 }
 
 test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {

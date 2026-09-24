@@ -50,10 +50,14 @@ function cli(cwd, args) {
   })
 }
 
-/** agent 例行动作（2026-09-24 设计记录全档化契约）：给 design.md 四个 AGENT 槽各写一行作答。 */
+/** agent 例行动作（2026-09-24 设计记录契约 + 09-25 测试绑定契约）：design 四槽与 requirements
+ *  每条 FR 的测试绑定槽各写一行作答。 */
 function fillDesignSlots(cwd, change) {
-  const p = join(cwd, '.sillyspec', 'changes', change, 'design.md')
-  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
+  const base = join(cwd, '.sillyspec', 'changes', change)
+  const dp = join(base, 'design.md')
+  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
+  const rp = join(base, 'requirements.md')
+  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
 }
 
 test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅两次协议调用，归档注销', () => {
@@ -205,12 +209,41 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.match(fail.stdout + fail.stderr, /中断于子步「artifacts」/)
   assert.ok(existsSync(join(specBase, 'changes', change)), '未归档')
 
-  // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）
+  // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）+ patch 留档 + 绑定链
   fillDesignSlots(cwd, change)
   const ok = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
   assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
+  assert.match(ok.stdout, /变更 patch 留档/, 'patch 留档行（noAI 冻结）')
+  const archDir = join(specBase, 'changes', 'archive')
+  const archived = readdirSync(archDir)[0]
+  assert.ok(existsSync(join(archDir, archived, 'change.patch')), 'change.patch 随归档留存')
+  assert.ok(existsSync(join(archDir, archived, 'change-patch.json')), 'change-patch.json 随归档留存')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落盘并随发号提升', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t9'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  const base = join(cwd, '.sillyspec', 'changes', change)
+  // design 四槽 + 绑定槽写真实测试路径（触发行提取与提升）
+  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：绑定链夹具'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑨ 绑定链用例'))
+  const done = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
+  assert.match(done.stdout, /测试绑定行落盘：1 行/, '绑定行落盘输出')
+  assert.match(done.stdout, /测试绑定归档提升/, '发号后提升进 knowledge/fr')
+  const archDir = join(cwd, '.sillyspec', 'changes', 'archive')
+  const archived = readdirSync(archDir)[0]
+  const trace = JSON.parse(readFileSync(join(archDir, archived, 'test-trace.json'), 'utf8'))
+  assert.equal(trace.rows.length, 1)
+  assert.equal(trace.rows[0].anchor, 'FR-01')
+  assert.deepEqual(trace.rows[0].tests, ['test/flow-protocol.test.mjs'])
   rmSync(cwd, { recursive: true, force: true })
 })
 
