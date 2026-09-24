@@ -15,9 +15,10 @@
  * change 仍 active，重入从断点续不新开 change。
  *
  * 配置（local.yaml，config-schema 注册；design 措辞 `flow: thin|legacy` 落地为单键
- * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 legacy（2026-09-22-stage-burst-fold D-010@v2
- * 用户裁定翻回——flow 族保留为实验通道，薄道不再缺省敞开）；legacy=既有 run <stage>
- * 全族逐字不动，flow start 拒跑并指路（回滚一行 yaml）。thin change 上跑 run <stage> =
+ * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 thin（2026-09-25-thin-default-flip
+ * 入口归一——D-010@v2 实验通道定位由薄道加固件【设计记录/测试绑定/patch 留档/预段收编】推翻，
+ * quick 退役第 1 步）；legacy=显式回旧道，既有 run <stage> 全族逐字不动，flow start 拒跑并指路
+ * （切回一行 yaml）。thin change 上跑 run <stage> =
  * 混跑回退（flow-state 落 legacy_fallback，flow done 按厚档裁决——两套记账不叠加）。
  *
  * 状态落文件不落 DB（红线）：.sillyspec/changes/<名>/flow-state.yaml（tier/baseline_commit/
@@ -60,12 +61,14 @@ export function writeFlowState(changeDir, patch) {
   }, { lineWidth: 120 }) + '\n')
 }
 
-/** 读 local.yaml 的 flow 配置（缺省 legacy——2026-09-22-stage-burst-fold D-010@v2 翻转；文本级读同既有习惯）。 */
+/** 读 local.yaml 的 flow 配置（缺省 thin——2026-09-25-thin-default-flip 翻转：入口归一，
+ * D-010@v2 实验通道定位由薄道加固件（设计记录/测试绑定/patch 留档/预段收编）的数据推翻；
+ * 显式 mode: legacy 的仓维持旧道。文本级读同既有习惯）。 */
 export function readFlowConfig(specBase) {
   try {
     const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
     const m = raw.match(/^\s*mode\s*:\s*(thin|legacy)\s*$/m)
-    let mode = m ? m[1] : 'legacy'
+    let mode = m ? m[1] : 'thin'
     if (/^flow\s*:\s*(thin|legacy)\s*$/m.test(raw)) mode = raw.match(/^flow\s*:\s*(thin|legacy)\s*$/m)[1]
     const th = raw.match(/^\s*edit_ratio_threshold\s*:\s*([0-9.]+)\s*$/m)
     const en = raw.match(/^\s*edit_ratio_enforcement\s*:\s*(advisory|block)\s*$/m)
@@ -75,7 +78,7 @@ export function readFlowConfig(specBase) {
       editRatioEnforcement: en ? en[1] : 'advisory',
     }
   } catch {
-    return { mode: 'legacy', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
+    return { mode: 'thin', editRatioThreshold: 0.5, editRatioEnforcement: 'advisory' }
   }
 }
 
@@ -122,8 +125,8 @@ function materialPaths(specBase, changeName, changeDir) {
 export async function cmdFlowStart({ change, input, thick = false, withTasks = false, cwd, specBase, json = false }) {
   const cfg = readFlowConfig(specBase)
   if (cfg.mode === 'legacy') {
-    console.error('❌ 本项目配置 flow.mode=legacy——2-调用薄协议未启用，走既有流程：sillyspec run <stage> --change <名>')
-    console.error('   回滚一行 yaml：local.yaml 删掉 mode: legacy 或改为 mode: thin（缺省即 legacy）')
+    console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')
+    console.error('   切回薄跑道（2026-09-25 起缺省即 thin）：local.yaml 删掉 mode: legacy 或改为 mode: thin')
     process.exit(2)
   }
   const { ProgressManager } = await import('./progress.js')
@@ -199,6 +202,18 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
       process.exit(2)
     }
   }
+
+  // 复杂度预判（2026-09-25-thin-default-flip：升档前半句）——input 命中完整流程特征关键词时
+  // 打一行升厚建议（advisory 不阻断：坚持薄跑由实测失败自动升厚兜底）。与清晰度门互补：
+  // 清晰度门管「需求说不清楚」，预判管「说清楚了但活大」。
+  try {
+    const { classifyChange } = await import('./classify-change.js')
+    const cl = classifyChange({ description: String(input || '') })
+    if (cl && cl.mode === 'full') {
+      console.log(`⚠️ 复杂变更特征命中（${cl.reason || '关键词'}）——建议走完整流程：run brainstorm → plan → execute（Wave 编排/设计期对抗）。`)
+      console.log(`   坚持薄跑：实测失败将自动升厚兜底（tier=thick 后剩余流程按厚档走）。`)
+    }
+  } catch { /* 预判失败不阻断启动 */ }
 
   pm.initChange(cwd, change, {})
   try {

@@ -319,6 +319,28 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（�
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征命中打升厚建议', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'fp-default-'))
+  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
+  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
+  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+  // 无 flow 配置——2026-09-25 起缺省即 thin
+  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
+  writeFileSync(join(cwd, 'base.txt'), 'b\n')
+  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+  const change = 'flow-h2-t14'
+  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
+  assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
+  assert.match(s.stdout, /thin 薄跑道/, '缺省走薄跑道')
+  assert.match(s.stdout, /复杂变更特征命中/, 'classify 预判提示在场')
+  assert.match(s.stdout, /建议走完整流程/, '升厚建议文案')
+  // 无复杂特征输入不打建议（负例）
+  const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
+  assert.equal(s2.status, 0)
+  assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {
   const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
   const hits = src.split('await triggerSync(cwd, change)').length - 1

@@ -153,6 +153,9 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'gitignore 生成物（如构建期产出的 src/build-id.ts）不在 git 树也不进 untracked overlay（ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸 Failed to load url——create 期按本清单从主仓复制供给（2026-09-15-worktree-dual-truth-gates 坑③，D-003@v1）。块列表或 inline flow 数组均可解析。',
       keys: [
         { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
+        { path: 'worktree.policy.adopt_branch', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create 分支冲突守卫 (src/worktree.js)'], desc: '分支已存在冲突的选择记忆：true = 自动收编既有分支（等效常备 --adopt-branch，meta 记 adoptViaPolicy 留痕）。缺省 false = 既有三选一 fail-closed 菜单。显式 flag 优先于 policy。', example: 'true' },
+        { path: 'worktree.policy.apply_overlap', type: 'enum', values: ['manual', 'force', 'skip'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree guard 相交拦截 (src/worktree-apply.js)'], desc: 'apply 与活跃 quick 会话在途声明相交时的处置记忆：manual（缺省）= 既有 fail-closed 报错；force = 放行并留痕（overlapForced.via 记 policy 来源）；skip = 无人值守软跳过（同 autoApply 路径）。--force 显式 flag 优先。', example: 'manual' },
+        { path: 'worktree.policy.stash_dirty', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree 4.4 stash 段 (src/worktree-apply.js)'], desc: '主仓在途改动自动 stash 的选择记忆：true = 等效常备 --stash-dirty（stash SHA 显著打印 + 失败绝不 drop）。缺省 false = 显式 flag opt-in。', example: 'false' },
       ],
     },
     {
@@ -169,9 +172,18 @@ export const LOCAL_YAML_SCHEMA = {
       title: '2-调用薄协议（R7 切片二）',
       note: 'flow start/done 协议形状开关与路由参数。design 措辞 flow: thin|legacy 落地为单键 flow.mode（YAML 单键形态，语义一致）。',
       keys: [
-        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：legacy（缺省——2026-09-22-stage-burst-fold 翻回，flow 族保留为实验通道）= 既有 run <stage> 全族行为逐字不动，flow start 拒跑并指路；thin = 新 change 走 flow start/done 薄跑道（协议必需交互=2）。回滚一行 yaml。', example: 'legacy' },
+        { path: 'flow.mode', type: 'enum', values: ['thin', 'legacy'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '2-调用薄协议开关：thin（缺省——2026-09-25-thin-default-flip 翻转，入口归一：常规变更默认薄跑道，需求不清晰 CLI 拦下指路头脑风暴预段，实测失败自动升厚）= flow start/done 薄跑道；legacy = 显式回旧道（run <stage> 全族行为逐字不动，flow start 拒跑并指路）。切回一行 yaml。', example: 'thin' },
         { path: 'flow.edit_ratio_threshold', type: 'number', optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: '机器稿改写比例路由阈值（amend 通道计算的行级 editRatio 超阈 → 厚档提示 route_hint）。缺省 0.5。', example: '0.5' },
         { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可薄档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
+      ],
+    },
+    {
+      id: 'stage',
+      title: '阶段说明书下发与会话墙',
+      note: 'run <stage> 渲染与阶段边界行为开关。burst 管「一次下发多少说明书」；wall 管「阶段边界要不要强制换会话」（瘦会话模式强制力）。',
+      keys: [
+        { path: 'stage.burst', type: 'boolean', optional: true, status: 'live', readers: ['readStageBurst (src/run/shared.js)'], desc: 'burst 模式：一次渲染阶段内全部剩余步骤说明书、一次 --done 收口（CLI 内部循环逐步推进）。R13 对撞实测：CLI 往返锐减（×19→×4）但 token 反创系列新高（单次载荷变肥 + 逐轮全量回放）——只减往返不减 token，非默认推荐（体验项）。env SILLYSPEC_STAGE_BURST=0/1 强制。', example: 'false' },
+        { path: 'stage.wall', type: 'enum', values: ['advisory', 'hard'], optional: true, status: 'live', readers: ['readStageWall (src/run/shared.js) + runStage 入口墙 (src/run/stage.js)'], desc: '阶段边界会话墙：advisory（缺省）= 阶段完成时提示可 handoff 换会话，不阻断；hard = 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）→ run <stage> 拒启动（exit 1），指引 sillyspec handoff 生成交接块换新会话续跑；--same-session 显式逃生口（应急/平台编排）。墙后阶段 = execute/verify（上下文最贵两段：R15 实测 execute 均轮 263K，断崖拆会话后回落 120-170K）。stage-session ledger 缺失/会话标识不可判定 → 放行（fail-open，与账本 best-effort 一致）。', example: 'hard' },
       ],
     },
     {
@@ -374,6 +386,18 @@ dispatch:
 #   mode: thin               # thin=flow start/done 薄跑道（协议必需交互=2）| legacy=既有 run <stage> 全族（回滚一行）
 #   edit_ratio_threshold: 0.5   # 机器稿改写比例路由阈值（超阈提示厚档；缺省 0.5）
 #   edit_ratio_enforcement: advisory   # advisory=测绿可薄过只提示（缺省）| block=超阈阻断
+
+# ── 阶段说明书下发与会话墙（R16 减负批次）──
+# stage:
+#   # burst: true   # 一次下发全阶段说明书（R13 实测：往返↓ token↑，体验项非默认）
+#   # wall: hard    # 阶段边界会话墙（hard=同会话硬续 execute/verify 拒启动，指引 handoff；缺省 advisory 提示不阻断）
+
+# ── worktree 守卫选择记忆（R16 减负批次；显式 flag > policy > fail-closed 缺省）──
+# worktree:
+#   policy:
+#     # adopt_branch: true    # 分支已存在冲突自动收编（等效常备 --adopt-branch）
+#     # apply_overlap: manual # manual=fail-closed（缺省）| force=放行留痕 | skip=软跳过
+#     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
 
 # ── monorepo 子模块映射（test_strategy: module 时按 git diff 命中模块收窄测试）──
 # 只支持 inline flow 形态（嵌套展开式解析不出）：

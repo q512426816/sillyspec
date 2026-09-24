@@ -236,12 +236,12 @@ test('⑨ 尾随 stale 拉回（FR-03/D-003@v2）：渲染集合=完成集合，
   assert.equal(p.stages.brainstorm.steps[5].status, 'completed', '前置 pending 步正常推进')
 })
 
-test('⑩ flow 缺省翻转（FR-05/D-010@v2）：readFlowConfig 空配置→legacy；显式 thin 照旧', async () => {
+test('⑩ flow 缺省翻转（2026-09-25-thin-default-flip 再翻转，接替 D-010@v2 钉）：readFlowConfig 空配置→thin；显式 legacy 照旧', async () => {
   const { readFlowConfig } = await import('../src/flow.js')
   const empty = mkFlowRepo({ burst: false })
-  assert.equal(readFlowConfig(join(empty.cwd, '.sillyspec')).mode, 'legacy', '无 flow 配置 → legacy（翻转后缺省）')
-  const thin = makeRepo('project:\n  type: generic\nflow:\n  mode: thin\n')
-  assert.equal(readFlowConfig(join(thin, '.sillyspec')).mode, 'thin', '显式 mode: thin 照旧生效')
+  assert.equal(readFlowConfig(join(empty.cwd, '.sillyspec')).mode, 'thin', '无 flow 配置 → thin（入口归一后缺省）')
+  const legacy = makeRepo('project:\n  type: generic\nflow:\n  mode: legacy\n')
+  assert.equal(readFlowConfig(join(legacy, '.sillyspec')).mode, 'legacy', '显式 mode: legacy 照旧生效（回旧道出口）')
 })
 
 test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ } } })
