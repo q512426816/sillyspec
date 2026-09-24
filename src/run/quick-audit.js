@@ -612,11 +612,9 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
     // 证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
     try {
       const { detectFakeCheckCompletion } = await import('../sentinel-assertions.js')
-      const quickTasksPath = guard && guard.tasksPath ? guard.tasksPath : null
-      const tasksDir = quickTasksPath || (changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null)
+      const tasksDir = changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null
       if (tasksDir && existsSync(tasksDir)) {
-        const commitRange = guard && guard.baselineCommit ? `${guard.baselineCommit}..HEAD` : 'HEAD~10..HEAD'
-        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', commitRange]) : null; const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
+        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', 'HEAD~10..HEAD']) : null; const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
         const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitSubjects.split('\n').filter(Boolean) })
         if (sent.status === 'fake') {
           console.error(`
