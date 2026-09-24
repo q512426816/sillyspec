@@ -219,6 +219,13 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   const archived = readdirSync(archDir)[0]
   assert.ok(existsSync(join(archDir, archived, 'change.patch')), 'change.patch 随归档留存')
   assert.ok(existsSync(join(archDir, archived, 'change-patch.json')), 'change-patch.json 随归档留存')
+  // 零泄漏（2026-09-25-thin-patch-scope-fix）：patch 面 = 提交面 ∪ 本变更目录——非本变更目录的
+  // .sillyspec 文件不得入 patch（上变更实测并行会话 WIP 被冻结进来）
+  const patchMeta = JSON.parse(readFileSync(join(archDir, archived, 'change-patch.json'), 'utf8'))
+  assert.ok(patchMeta.files.includes('work.txt'), '提交面 work.txt 入 patch')
+  const leaked = patchMeta.files.filter((f) => f.startsWith('.sillyspec/') && !f.startsWith(`.sillyspec/changes/${change}/`))
+  assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
+  assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
 })

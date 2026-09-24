@@ -24,9 +24,9 @@
  * 六子步完成标记/legacy_fallback/route_hint）——fs-atomic 原子写，缺文件=未参与 thin。
  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
@@ -348,45 +348,69 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   if (st.substeps?.patch === 'done') { skip('patch') } else {
     let patchOk = false
     try {
-      const ownFiles = (await attributedChangedFiles()).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
+      // patch 面 = 本变更可归属变化（2026-09-25-thin-patch-scope-fix 收窄：dirty 全扫面会把并行
+      // 会话未声明 WIP 冻结进来——上变更实测 49 文件泄漏）：①baseline..HEAD 提交面（.sillyspec/
+      // 治理面只留本变更目录，他侧 quicklog/knowledge WIP 不入）②本变更目录全部工作树件（未提交
+      // 治理面/槽位作答）——排除 patch 自引用。提交面再过他侧声明切分（他侧同窗口提交的防线）。
       if (!st.baseline_commit) {
         console.log('📦 patch 留档跳过：无 git 基线（无历史仓）')
         patchOk = true
-      } else if (ownFiles.length === 0) {
-        console.log('📦 patch 留档跳过：归属文件面为空')
-        patchOk = true
       } else {
-        const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
-        const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
-        const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
-        let additions = 0
-        let deletions = 0
-        for (const f of ownFiles) {
-          const s = stats.get(f)
-          if (s && Number.isFinite(s.additions)) additions += s.additions
-          if (s && Number.isFinite(s.deletions)) deletions += s.deletions
+        const ownPrefix = `.sillyspec/changes/${change}/`
+        const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
+        let committed = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+          .filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
+        try {
+          const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
+          committed = splitOwnVsForeignDiffFiles(cwd, change, committed, { specBase }).own
+        } catch { /* 切分失败 fail-closed 保留提交面 */ }
+        const changeDirFiles = []
+        const walk = (dir) => {
+          for (const e of readdirSync(dir, { withFileTypes: true })) {
+            const p = join(dir, e.name)
+            if (e.isDirectory()) walk(p)
+            else changeDirFiles.push(relative(cwd, p).replace(/\\/g, '/'))
+          }
         }
-        const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
-        const meta = {
-          change,
-          baseline: st.baseline_commit,
-          head: typeof head === 'string' ? head.trim() : null,
-          files: ownFiles,
-          totals: { files: ownFiles.length, additions, deletions },
-          savedAt: new Date().toISOString(),
-          note: 'flow done 时点冻结（归属收窄后本变更文件面；含工作树未提交与 untracked）',
-        }
-        if (typeof frozen === 'string' && frozen) {
-          const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
-          writeFileSync(join(changeDir, 'change.patch'), patchText)
-          meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
-          meta.patchStatus = 'ok'
+        try { walk(changeDir) } catch { /* 目录异常=空面 */ }
+        const ownFiles = [...new Set([...committed, ...changeDirFiles])]
+          .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
+        if (ownFiles.length === 0) {
+          console.log('📦 patch 留档跳过：本变更可归属文件面为空')
+          patchOk = true
         } else {
-          meta.patchStatus = 'failed'
+          const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
+          const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
+          const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
+          let additions = 0
+          let deletions = 0
+          for (const f of ownFiles) {
+            const s = stats.get(f)
+            if (s && Number.isFinite(s.additions)) additions += s.additions
+            if (s && Number.isFinite(s.deletions)) deletions += s.deletions
+          }
+          const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+          const meta = {
+            change,
+            baseline: st.baseline_commit,
+            head: typeof head === 'string' ? head.trim() : null,
+            files: ownFiles,
+            totals: { files: ownFiles.length, additions, deletions },
+            savedAt: new Date().toISOString(),
+            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）',
+          }
+          if (typeof frozen === 'string' && frozen) {
+            const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
+            writeFileSync(join(changeDir, 'change.patch'), patchText)
+            meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
+            meta.patchStatus = 'ok'
+          } else {
+            meta.patchStatus = 'failed'
+          }
+          writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+          console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
+          patchOk = true
         }
-        writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
-        console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
-        patchOk = true
       }
     } catch (e) {
       console.warn(`⚠️ patch 留档失败（fail-soft 不阻断归档；重入 flow done 从断点重试）：${(e && e.message) || e}`)
@@ -498,7 +522,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     }) + '\n', 'utf8')
   } catch { /* 遥测 best-effort */ }
 
-  console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——六子步 ${doneList.join('、')}；change 已归档注销。`)
+  console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
   // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
   try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
   return { change, substeps: doneList }
