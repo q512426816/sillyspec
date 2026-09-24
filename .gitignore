@@ -31,3 +31,5 @@ sa-rename-probe/
 *.stackdump
 /r7-test-env/demo-project/
 /round5/_gsd/
+.sillyspec/sillyspec.db/
+.sillyspec/sillyspec.db
