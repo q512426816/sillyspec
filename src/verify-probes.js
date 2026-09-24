@@ -33,6 +33,7 @@ import {
 } from './verify-facts-schema.js'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { parseDecisions } from './decision-distill.js'
+import { writeChangeTrace, orphanAccRef } from './test-bindings.js'
 import { parseAllowedPaths, parseRepo, parseRepoRegistry } from './stages/plan-postcheck.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { parseTaskFrontmatter } from './taskcard-frontmatter.js'
@@ -2222,6 +2223,36 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
           hints: buildAcceptanceHints(card.acceptance, testFiles, cwd, wtRoot, probe7CrossRoots),
         })
       }
+      // ── trace 落盘（2026-09-24-fr-test-bindings task-03，fr-test-binding 写侧）：矩阵归属
+      //    行→candidate（requirement_ids join→局部 FR 锚；无锚→orphan 指纹 row_id，D-005）。
+      //    预填≠确认（discovery=machine/confirmed_by=null）；fail-open：落盘异常不炸探针。──
+      try {
+        if (probe7.applicable && changeName) {
+          const traceRows = []
+          for (const t of probe7.tasks) {
+            if (!Array.isArray(t.testFiles) || t.testFiles.length === 0) continue
+            const card = cards.find(c => c.task === t.task)
+            const reqIds = ((String(card && card.raw || '').match(/^requirement_ids:\s*\[([^\]]*)\]/m) || [])[1] || '')
+              .split(',').map(x => x.trim().replace(/['"]/g, '')).filter(Boolean)
+            ;(t.acceptance || []).forEach((item, i) => {
+              traceRows.push({
+                anchor: reqIds[0] || null,
+                row_id: changeName + ':' + t.task + ':' + orphanAccRef(i, String(item)),
+                tests: t.testFiles,
+                reason: 'spec',
+                state: 'candidate',
+                discovery: 'machine',
+                confirmed_by: null,
+                source_change: changeName,
+              })
+            })
+          }
+          if (traceRows.length > 0) {
+            const w = writeChangeTrace(join(specBase, 'changes', changeName), changeName, traceRows)
+            if (w.changed) console.log('🔗 探针 7 绑定候选落盘：' + traceRows.length + ' 行 → ' + w.path)
+          }
+        }
+      } catch { /* trace 落盘 fail-open（探针行为不变，下次构建重试） */ }
     }
   }
 

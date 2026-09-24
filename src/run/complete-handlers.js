@@ -1898,6 +1898,27 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
         softFiles,
       })
       console.log(`📝 QUICKLOG 条目 ${qlId} 已标记完成`)
+      // ── ql 绑定行落盘（2026-09-24-fr-test-bindings task-05，fr-test-binding §3.2/D-004@v1）：
+      //    窗口测试文件（命名三信号）机械落 candidate（discovery=machine/confirmed_by=null——
+      //    gate 实测证明「跑过且过」，不证明绑定关系正确，诚实恒 candidate；确认走 tests --bind）。
+      //    fail-open：落行异常不拦收尾。──
+      try {
+        const stripAnno = (f) => String(f).replace(/（[^）]*）$/,'').trim()
+        const isTestFile = (p) => /(^|\/)(test|tests|__tests__)(\/|$)/i.test(p) || /^test_/i.test(p.slice(p.lastIndexOf('/')+1)) || /[._](test|spec)\.[^.]+$/i.test(p)
+        const testFiles = [...new Set((annotatedRealFiles || []).map(stripAnno).filter(isTestFile))]
+        if (testFiles.length > 0) {
+          const { upsertQlBindings } = await import('../test-bindings.js')
+          upsertQlBindings({
+            specBase, qlId,
+            rows: testFiles.map((f, i) => ({
+              anchor: qlId, row_id: `${changeName}:win-${i}:${f}`, tests: [f],
+              reason: 'regression', state: 'candidate', discovery: 'machine', confirmed_by: null,
+              source_change: changeName,
+            })),
+          })
+          console.log(`🔗 ql 绑定候选落盘：${testFiles.length} 行（${qlId}，candidate——确认走 sillyspec tests --bind）`)
+        }
+      } catch { /* ql 绑定落行 fail-open */ }
       // 范围快照/patch 审计级落盘（quick-359a48f1）：quicklog/patches/<qlId>.json+.patch——按
       // ql-ID 对齐 QUICKLOG 条目（平台按条目抓取），json 冗余 sessionId 供 guard 清理后记录态
       // 反查（computeQuickAudit → findQuickPatchRecord 同链）。patch 为 --done 时点全量冻结

@@ -17,6 +17,7 @@
  *     syncIndexRoutingLines/discoverModuleIndex），不复制实现。
  */
 
+import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines } from './test-bindings.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import {
@@ -378,6 +379,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
           `superseded_by：${id}`,
           `取代链：${refId} ← ${id}（${changeName} 承接）`,
           ...(reason ? [`退役理由：${reason}`] : []));
+        // 绑定行同步退役（2026-09-24-fr-test-bindings task-06，fr-test-binding §3.2 四硬约束④）：
+        // 被承接条目的绑定行 status→superseded（内存态翻转——文件稍后统一落盘，禁死锚）
+        try {
+          target.lines = applySupersededToEntryLines(target.lines);
+        } catch { /* 绑定翻转 fail-open：翻链语义不受影响 */ }
         // scenario-loss 检测（对标 OpenSpec 同名检查）：被取代条目的场景名在新 FR 场景集
         //（scenarios 名字数组 ∪ scenarioBodies 名）无对应 → warning 提示核对（advisory 不阻断
         //——场景名合法漂移存在，人裁）。旧条目无场景信息（摘要「（无场景名）」/空）不比对。
@@ -424,6 +430,30 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
   for (const d of dirtyDomains) {
     const stx = all.get(d);
     writeFileSync(join(frDirPath(knowledgeRoot), `${d}.md`), joinKnowledgeFile(stx.preamble, stx.sections));
+  }
+  // ── 归档提升（2026-09-24-fr-test-bindings task-06，fr-test-binding §3.2）：本变更 test-trace
+  //    的 FR 局部锚行随发号映射铸全局后 upsert 进活库条目机器子块（source_change+row_id 键、
+  //    内容全等 no-op、机器不删 agent 行）；orphan/ql 行不在此面（前者留档审计，后者在
+  //    quicklog 机器面）。fail-open：提升异常只告警不炸归档（幂等可重跑）。──
+  const promotedBindings = [];
+  try {
+    const traceRows = readChangeTrace(changeDir);
+    if (traceRows.length > 0) {
+      // 局部→全局映射：本函数发号段 written[{id}] 与 parsed.frs 逐条对应（同循环序）
+      const localToGlobal = new Map();
+      parsed.frs.forEach((fr, i) => { if (written[i] && written[i].id) localToGlobal.set(fr.local, written[i].id); });
+      for (const [local, globalId] of localToGlobal) {
+        const rows = traceRows.filter((r) => r.anchor === local);
+        if (rows.length === 0) continue;
+        const res = upsertFrBindings({ knowledgeRoot, frId: globalId, rows });
+        if (res.ok) promotedBindings.push({ fr: globalId, rows: rows.length, changed: res.changed });
+      }
+      if (promotedBindings.length > 0) {
+        console.log(`🔗 测试绑定归档提升：${promotedBindings.map((p) => `${p.fr}(${p.rows}行)`).join('、')} → knowledge/fr/ 机器子块`);
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️ 测试绑定归档提升失败（fail-open，可重跑归档幂等重试）：${e && e.message ? e.message : e}`);
   }
   if (written.length > 0 || superseded.length > 0) {
     syncIndexRoutingLines(knowledgeRoot, {

@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from 'fs';
 import { writeAtomicSync } from './fs-atomic.js';
 import { basename, dirname, extname, join, resolve, isAbsolute, sep, relative } from 'path';
-import { safeGit, git } from './git-helper.js';
+import { safeGit, git, gitQuiet } from './git-helper.js';
 import { getVersion } from './version.js';
 
 // E22（性能#2）：progress.js（拖 db.js→node:sqlite 链 ~48ms）与 run/shared.js（拖 stages 全家
@@ -2978,6 +2978,77 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
     case 'knowledge': {
       const { cmdKnowledge } = await import('./stages/knowledge.js')
       await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir })
+      break
+    }
+    // ── sillyspec tests（2026-09-24-fr-test-bindings task-02，fr-test-binding §3.2/§5）：
+    //    绑定面视图 + 唯一合法修理工。锚可解析+路径存在硬校验——修理工不得制造悬空。──
+    case 'tests': {
+      const {
+        queryByAnchor, queryByChange, upsertFrBindings, upsertQlBindings,
+        unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow,
+      } = await import('./test-bindings.js')
+      const effDir = specDir ? dir : resolveEffectiveDir(dir)
+      const specBase = specDir || join(effDir, '.sillyspec')
+      const knowledgeRoot = join(specBase, 'knowledge')
+      const flag = (name) => { const i = filteredArgs.indexOf(name); return i !== -1 && i + 1 < filteredArgs.length ? filteredArgs[i + 1] : null }
+      const has = (name) => filteredArgs.includes(name)
+      const anchor = flag('--anchor')
+      const change = flag('--change')
+      const rowId = flag('--row-id')
+      const testsArg = flag('--tests')
+      const reason = flag('--reason') || 'spec'
+      const fail = (msg) => { console.error(`❌ ${msg}`); process.exitCode = 1 }
+      if (!anchor && !change) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression]'); break }
+      // 变更期局部锚（FR-NN 未铸全局）只读拒绝修改——修理工仅面向提升后行
+      const isLocalAnchor = anchor && /^FR-\d+$/.test(anchor)
+      if ((has('--bind') || has('--unbind')) && isLocalAnchor) { fail(`变更期局部锚「${anchor}」只读——修理工仅面向提升后的全局锚（FR-<域>-NNN / ql-…）`); break }
+      if (has('--bind') || has('--unbind')) {
+        if (!anchor) { fail('--bind/--unbind 须配 --anchor'); break }
+        if (!anchorResolvable({ specBase, knowledgeRoot, anchor })) { fail(`锚不可解析「${anchor}」（FR=活库条目 / ql=QUICKLOG 在册）——修理工不得制造悬空锚`); break }
+      }
+      if (has('--bind')) {
+        const tests = (testsArg || '').split(',').map(s => s.trim()).filter(Boolean)
+        if (tests.length === 0) { fail('--bind 须配 --tests <p1,p2>（仓根相对路径）'); break }
+        const missing = tests.filter(p => !existsSync(resolve(effDir, p)))
+        if (missing.length > 0) { fail(`tests 路径不存在：${missing.join('、')}（相对 ${effDir}）——修理工不得制造悬空路径`); break }
+        const head = (() => { try { return gitQuiet(effDir, ['rev-parse', 'HEAD']) || null } catch { return null } })()
+        const row = { anchor, row_id: rowId || `manual:${Date.now().toString(36)}:${tests[0]}`, tests, reason, state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: head, source_change: change || 'manual' }
+        try {
+          normalizeRow(row)
+          if (/^FR-/.test(anchor)) upsertFrBindings({ knowledgeRoot, frId: anchor, rows: [row] })
+          else upsertQlBindings({ specBase, qlId: anchor, rows: [row] })
+          console.log(`✅ 绑定写入：${anchor} ← ${tests.join(', ')}（confirmed_by=agent${head ? ` @${head.slice(0, 8)}` : ''}）`)
+        } catch (e) { fail(`绑定写入被拒：${e && e.message ? e.message : e}`) }
+        break
+      }
+      if (has('--unbind')) {
+        const ids = rowId ? [rowId] : (testsArg || '').split(',').map(s => s.trim()).filter(Boolean)
+        if (ids.length === 0) { fail('--unbind 须配 --row-id <id> 或 --tests <p1,…>'); break }
+        if (/^FR-/.test(anchor)) {
+          const cur = queryByAnchor({ specBase, knowledgeRoot, anchor })
+          const del = cur.filter(r => ids.includes(r.row_id) || (testsArg && ids.length === 1 && r.tests.some(t => ids.includes(t)))).map(r => r.row_id)
+          if (del.length === 0) { fail(`未命中可解绑行（anchor=${anchor}，给=${ids.join(',')}）`); break }
+          unbindFrRows({ knowledgeRoot, frId: anchor, rowIds: del })
+          console.log(`✅ 解绑 ${del.length} 行（${anchor}）`)
+        } else {
+          const cur = queryByAnchor({ specBase, knowledgeRoot, anchor })
+          const del = cur.filter(r => ids.includes(r.row_id)).map(r => r.row_id)
+          if (del.length === 0) { fail(`未命中可解绑行（anchor=${anchor}）`); break }
+          unbindQlRows({ specBase, qlId: anchor, rowIds: del })
+          console.log(`✅ 解绑 ${del.length} 行（${anchor}）`)
+        }
+        break
+      }
+      // 视图
+      const rows = anchor
+        ? queryByAnchor({ specBase, knowledgeRoot, anchor })
+        : queryByChange({ specBase, knowledgeRoot, sourceChange: change })
+      if (rows.length === 0) { console.log(`（无绑定行：${anchor || change}）`); break }
+      console.log(`${anchor || change} — ${rows.length} 行`)
+      for (const r of rows) {
+        console.log(`  ${r.state === 'active' ? '🟢' : '⚪'} ${r.tests.join(', ')}｜reason=${r.reason}｜discovery=${r.discovery}｜confirmed_by=${r.confirmed_by || '-'}${r.confirmed_at ? '@' + String(r.confirmed_at).slice(0, 8) : ''}｜status=${r.status}`)
+        console.log(`     row=${r.row_id}｜source=${r.source_change || '-'}`)
+      }
       break
     }
     case 'dashboard': {

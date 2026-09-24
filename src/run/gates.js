@@ -996,6 +996,25 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         }
       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
     }
+    // ── trace 晋升（2026-09-24-fr-test-bindings task-04，fr-test-binding §3.2/D-003@v1）：
+    //    verify 门通过点按矩阵判定列晋升 candidate→active（covered/covered-service→active+
+    //    confirmed_by=agent；partial 留；uncovered/non-testable 删行）。fail-open：晋升异常不拦门。──
+    try {
+      const verifyMdForPromo = join(specBase, 'changes', changeName, 'verify-result.md')
+      if (existsSync(verifyMdForPromo)) {
+        const { extractAcceptanceMatrixSlots } = await import('../stage-contract.js')
+        const { promoteTraceFromMatrix } = await import('../test-bindings.js')
+        const slots = extractAcceptanceMatrixSlots(readFileSync(verifyMdForPromo, 'utf8'))
+        if (slots.present && Array.isArray(slots.rows) && slots.rows.length > 0) {
+          const promo = promoteTraceFromMatrix({
+            changeDir: join(specBase, 'changes', changeName), changeName, matrixRows: slots.rows,
+          })
+          if (promo.promoted > 0 || promo.dropped > 0) {
+            console.log(`🔗 绑定晋升：${promo.promoted} 行→active（confirmed_by=agent），${promo.dropped} 行删（uncovered/non-testable），${promo.kept} 行保持`)
+          }
+        }
+      }
+    } catch { /* 晋升 fail-open（不拦 verify 门，归档以 trace 现态为准） */ }
     // tests 段二次回填（2026-09-08-ir-verify-facts FR-03 次序：实测在 runValidators 之后，
     // tests 快照此刻才可得；不参与门禁——供 P3d 追溯）
     try {

@@ -97,6 +97,7 @@ modules:
       - src/contract-matrix.js
       - src/endpoint-extractor.js
       - src/verify-probes.js
+      - src/test-bindings.js
       - src/verify-facts-schema.js
       - src/foreign-declared.js
       - src/cross-repo-reconcile.js
