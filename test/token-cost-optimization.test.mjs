@@ -106,6 +106,9 @@ function buildCascadeFixture() {
     '## 兼容策略', '', '- 旧字段保留一个版本周期', '',
     '## 数据模型', '', '（长节，按需读）', '',
   ].join('\n'))
+  // 2026-09-23 起 plan.md execution_mode 缺省翻 main（55ab9b73 R8 对撞，M4 契约）：
+  // 「子代理 prompt 要点」第 4 条（moduleDocPoint）为 !mainMode 变体，需显式声明 dispatch
+  writeFileSync(join(changeDir, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
   return { root, specBase, changeDir }
 }
 
@@ -164,9 +167,12 @@ console.log('── 3. buildWavePrompt：模块卡分级 + design 热区（P0a/P
   assert(out.includes('{{include: testcase-design}}'), 'testcase-design include 原样保留')
 }
 {
-  // 零回归：无 changeDir（无 map / 无 design）→ 新段全部不注入，原文案保留
+  // 零回归：无模块文档/design（changeDir 仅声明 execution_mode: dispatch）→ 新段全部不注入，
+  // 子代理要点 4 原文案保留（M4 契约：要点变体需 !mainMode，故给最小 dispatch changeDir）
   const wave = { index: 1, tasks: [{ index: 1, name: 'x' }] }
-  const out = buildWavePrompt(wave, 1, null, '/tmp/wt')
+  const bareCd = mkTmp('bare-dispatch')
+  writeFileSync(join(bareCd, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
+  const out = buildWavePrompt(wave, 1, bareCd, '/tmp/wt')
   assert(!out.includes('### 模块卡分级'), '无 changeDir → 不注入模块卡分级段')
   assert(!out.includes('### design.md 热区'), '无 changeDir → 不注入热区段')
   assert(out.includes('读取 design.md 的「非目标」与「兼容策略」章节'), 'Wave 开始前第 1 条保留原文案')

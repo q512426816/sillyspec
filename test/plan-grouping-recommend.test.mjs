@@ -196,7 +196,9 @@ test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true
 function makeChangeDir(n, { skipCards = [] } = {}) {
   const cd = mk('grp-rec-')
   mkdirSync(join(cd, 'tasks'), { recursive: true })
-  const planLines = ['---', 'plan_level: full', '---', '', '# 实现计划', '', '## Wave 1（并行）', '']
+  // execution_mode: dispatch（2026-09-23 55ab9b73 起缺省翻 main，M4 契约）：推荐分组段为
+  // !mainMode 门控（execution_mode=main 零注入），断言分组注入的用例须显式声明 dispatch
+  const planLines = ['---', 'plan_level: full', 'execution_mode: dispatch', '---', '', '# 实现计划', '', '## Wave 1（并行）', '']
   for (let i = 1; i <= n; i++) {
     const id = `task-${String(i).padStart(2, '0')}`
     planLines.push(`- ${id}`)
@@ -232,8 +234,16 @@ test('B2 无可并批（n=3 护栏预算 0）→ 零注入，插入位相邻字�
   assert.ok(!wp.includes('推荐分组'), 'B2: 无推荐零注入')
   assert.ok(wp.includes('- 组大小不超过 3 个 task\n\n任一条件不满足'),
     'B2: 「- 组大小不超过 3 个 task」与「任一条件不满足」保持相邻原形态（未插入任何字节）')
-  assert.equal(wp, buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), undefined),
-    'B2: options 缺省与 {dispatchMode:local} 输出逐字节一致')
+  // options 缺省走 getDispatchMode()（读 cwd 的 MCP 配置）：主仓 local.yaml 带 mcp 段时缺省
+  // 解析≠local（环境性红）。chdir 到无配置的 fixture 目录使缺省确定性解析为 local 再比逐字节。
+  const prevCwd = process.cwd()
+  try {
+    process.chdir(cd)
+    assert.equal(wp, buildWavePrompt(waveOf(3), 1, cd, join(cd, 'wt'), undefined),
+      'B2: options 缺省与 {dispatchMode:local} 输出逐字节一致')
+  } finally {
+    process.chdir(prevCwd)
+  }
 })
 
 test('B3 SillyHub 互斥：dispatchMode=sillyhub 零注入；local-fallback（实际派发走 Local）照注入', () => {

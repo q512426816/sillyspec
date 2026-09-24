@@ -12,10 +12,24 @@
  * 对应用例（task-truth-contract.test.mjs ⑧/⑨）与本文对应新场景承接。
  */
 import { validatePlanForExecute, buildWavePrompt } from '../src/stages/execute.js'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 let failed = 0
 let total = 0
 const failures = []
+
+// 2026-09-23 起 plan.md execution_mode 缺省翻 main（55ab9b73 R8 对撞，M4 契约）：
+// dispatchExecSection（batch 指导/调度要求/角色清单）为 !mainMode 变体——断言调度指令
+// 文案的用例须提供声明 execution_mode: dispatch 的 changeDir。
+const tempDirs = []
+function makeDispatchChangeDir() {
+  const d = mkdtempSync(join(tmpdir(), 'pec-dispatch-'))
+  tempDirs.push(d)
+  writeFileSync(join(d, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
+  return d
+}
 
 function assert(condition, msg) {
   total++
@@ -261,7 +275,7 @@ console.log('\n--- buildWavePrompt：implicit Wave 串行指令 / 显式 Wave �
     { index: 2, name: '前端调用', file: 'src/ui.js' },
   ]
   // 隐式 Wave（parseWavesFromPlan 合成形态：plan.md 无显式划分 → implicit:true 单 Wave）
-  const implicitPrompt = buildWavePrompt({ index: 1, implicit: true, tasks: mkTasks() }, 1, null, null)
+  const implicitPrompt = buildWavePrompt({ index: 1, implicit: true, tasks: mkTasks() }, 1, makeDispatchChangeDir(), null)
   assert(implicitPrompt.includes('## Wave 1（隐式合成——plan.md 无显式 Wave 划分，串行执行）'),
     'implicit 头应含「隐式合成」+「串行执行」标注')
   assert(implicitPrompt.includes('隐式 Wave 串行铁律') && implicitPrompt.includes('禁止并行启动'),
@@ -272,7 +286,7 @@ console.log('\n--- buildWavePrompt：implicit Wave 串行指令 / 显式 Wave �
     'implicit batch 条件 2 括注应收敛为串行口径（防同 prompt 自相矛盾）')
   // 显式 Wave（无 implicit 标记）→ 并行原文（2026-09-21 r4-followup 并发帽后：并行启动 + 在飞 ≤3，
   // 旧「必须并行启动」措辞退役——R4-L 实证 4 路齐发触发额度耗尽中断 17min）
-  const explicitPrompt = buildWavePrompt({ index: 1, tasks: mkTasks() }, 1, null, null)
+  const explicitPrompt = buildWavePrompt({ index: 1, tasks: mkTasks() }, 1, makeDispatchChangeDir(), null)
   assert(explicitPrompt.includes('并行启动、batch 内部串行，且同时在飞 ≤3'), '显式 Wave 调度要求含并行+并发帽 ≤3 新契约')
   assert(explicitPrompt.includes('同 Wave 内可并行'), '显式 Wave 角色清单仍含「同 Wave 内可并行」')
   assert(!explicitPrompt.includes('隐式合成'), '显式 Wave 不应含「隐式合成」头标注')
@@ -303,6 +317,7 @@ console.log('\n--- 注册表无编号行失败 ---')
 }
 
 // ── 结果 ──
+for (const d of tempDirs) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } }
 console.log(`\n${'='.repeat(50)}`)
 console.log(`✅ 通过: ${total - failed}/${total}  ❌ 失败: ${failed}`)
 if (failures.length > 0) {

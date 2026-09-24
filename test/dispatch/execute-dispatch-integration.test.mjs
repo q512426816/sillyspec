@@ -54,6 +54,17 @@ function withoutSillyHubEnv() {
   }
 }
 
+// 2026-09-23 起 plan.md execution_mode 缺省翻 main（55ab9b73 R8 对撞，M4 契约）：派发段 /
+// 工作目录 JSON 示例 / batch 指导段均 !mainMode 门控——测派发路径的用例须提供声明
+// execution_mode: dispatch 的 changeDir（frontmatter 显式声明），跟上新契约。
+const dispatchChangeDirs = []
+function makeDispatchChangeDir() {
+  const d = mkdtempSync(join(tmpdir(), 'execdisp-'))
+  dispatchChangeDirs.push(d)
+  writeFileSync(join(d, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
+  return d
+}
+
 console.log('=== execute 派发集成测试（task-09）===\n')
 
 // ── 1. Local 零回归（无 env，不传 dispatchMode）──
@@ -86,7 +97,7 @@ console.log('--- 1. Local 零回归（options.dispatchMode=local 强制本地派
 console.log('\n--- 2. SillyHub 路径（dispatchMode=sillyhub，options 覆盖）---')
 {
   const restore = withoutSillyHubEnv()
-  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'sillyhub' })
+  const out = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'sillyhub' })
   // execute.js 外层拼的段标题
   assertContains(out, '### 派发后端：SillyHub MCP（探测可用，一 Wave 一 mission）',
     'SillyHub 输出含外层派发段标题')
@@ -98,7 +109,7 @@ console.log('\n--- 2. SillyHub 路径（dispatchMode=sillyhub，options 覆盖�
   assertContains(out, 'worktree_path', 'SillyHub 输出含 dispatch_worker 的 worktree_path 参数（路径A）')
   assertContains(out, worktreePath, 'SillyHub 输出把 contract.worktreePath 注入派发指令（非占位符）')
   // worktreePath 守卫：为空时即使 dispatchMode=sillyhub 也不注入（无 worktree 无谓派发）
-  const noWt = buildWavePrompt(wave, 1, null, null, { dispatchMode: 'sillyhub' })
+  const noWt = buildWavePrompt(wave, 1, makeDispatchChangeDir(), null, { dispatchMode: 'sillyhub' })
   assertNotContains(noWt, '派发后端：SillyHub', 'worktreePath 为空时 sillyhub 也不注入派发段（守卫生效）')
   restore()
 }
@@ -108,7 +119,7 @@ console.log('\n--- 2. SillyHub 路径（dispatchMode=sillyhub，options 覆盖�
 console.log('\n--- 3. local-fallback 路径（dispatchMode=local-fallback，短提示）---')
 {
   const restore = withoutSillyHubEnv()
-  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'local-fallback' })
+  const out = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'local-fallback' })
   // 短提示文案
   assertContains(out, '路径A 未落地', 'local-fallback 输出含「路径A 未落地」短提示')
   assertContains(out, '派发后端提示', 'local-fallback 输出含「派发后端提示」段（区分完整 SillyHub 指令）')
@@ -125,7 +136,7 @@ console.log('\n--- 3. local-fallback 路径（dispatchMode=local-fallback，短�
 console.log('\n--- 4. 一 Wave 一 mission（D-008）---')
 {
   const restore = withoutSillyHubEnv()
-  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'sillyhub' })
+  const out = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'sillyhub' })
   assertContains(out, '一 Wave 一 mission', 'SillyHub 输出含「一 Wave 一 mission」语义')
   assertContains(out, 'create_mission', 'mission 创建走 create_mission tool（每 Wave 一个）')
   assertContains(out, '并行 dispatch', 'SillyHub 输出声明 Wave 内 task→worker 并行 dispatch')
@@ -196,7 +207,7 @@ console.log('\n--- 6. 无 ctx 单仓退化（D-012 零回归）---')
 {
   const restore = withoutSillyHubEnv()
   const w = { index: 1, tasks: [{ index: 1, name: 'task-01: 主仓', file: 'src/x.js' }] }
-  const out = buildWavePrompt(w, 1, null, worktreePath)
+  const out = buildWavePrompt(w, 1, makeDispatchChangeDir(), worktreePath)
   // 旧单值 worktreeSection 关键字（workdir 强制必传 + JSON 单值示例）
   assertContains(out, '### 工作目录', '无 ctx：worktreeSection 为旧单值标题（非 per-task）')
   assertContains(out, `"workdir": "${worktreePath}"`, '无 ctx：worktreeSection JSON 示例注入单 worktreePath')
@@ -286,6 +297,8 @@ console.log('\n--- 9. ctx 单仓（无跨仓 task）退化为单值 worktreeSect
   const changeDir = mkdtempSync(join(tmpdir(), 'chg08c-'))
   task08TempDirs.push(changeDir)
   writeTaskCard(changeDir, '01', null) // 主仓 task
+  // M4 契约：单值 worktreeSection（含 workdir JSON 示例）为 !mainMode 变体，需显式声明 dispatch
+  writeFileSync(join(changeDir, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
   const wm = makeWm08(new Map([['c1', { mode: 'worktree', worktreePath: mainRepo, baseHash }]]))
   const ctx = new MultiRepoContext({
     cwd: mainRepo, changeName: 'c1', declaredRepos: ['main'],
@@ -309,7 +322,7 @@ console.log('\n--- 9. ctx 单仓（无跨仓 task）退化为单值 worktreeSect
 console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责边界 / 越权即停 / 并行铁律 / 旧文案移除）---')
 {
   const restore = withoutSillyHubEnv()
-  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'local' })
+  const out = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'local' })
 
   // a. 三条件分组指导存在（①文件正交 ②无契约链 ③组大小上限 3）
   assertContains(out,
@@ -359,7 +372,7 @@ console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责
   assertContains(out, 'batch 分组指导仅适用于本地 Agent tool 派发',
     'batch 分组指导仅适用于本地 Agent tool 派发')
   // 互斥句在 SillyHub 派发段注入时同样在场（batch 指导与派发段共存时消歧）
-  const shOut = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'sillyhub' })
+  const shOut = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'sillyhub' })
   assertContains(shOut, 'SillyHub 派发模式下按派发段执行（一 Wave 一 mission），不按 batch 分组',
     'SillyHub 模式输出同样含派发互斥句（与派发段共存消歧）')
 
@@ -367,7 +380,7 @@ console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责
 }
 
 // 清理 task-08 tmp 仓（最后用例后）
-for (const d of task08TempDirs) {
+for (const d of [...task08TempDirs, ...dispatchChangeDirs]) {
   try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ }
 }
 

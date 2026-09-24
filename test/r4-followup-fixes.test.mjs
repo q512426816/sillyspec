@@ -120,14 +120,19 @@ console.log('=== 4. runGate verify-lint parity 接线钉 ===')
 
 console.log('=== 5. buildWavePrompt 并发帽 ===')
 {
+  // 2026-09-23 起 plan.md execution_mode 缺省翻 main（55ab9b73，M4 契约）：并发帽/串行铁律
+  // 文案在 dispatchExecSection（!mainMode 变体）——需声明 execution_mode: dispatch 的 changeDir
+  const cd = mkdtempSync(join(tmpdir(), 'r4dispatch-'))
+  writeFileSync(join(cd, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
   const wave = { tasks: [{ index: 1 }, { index: 2 }, { index: 3 }, { index: 4 }] }
-  const p = buildWavePrompt(wave, 1, '/tmp/x', '/tmp/x', {})
+  const p = buildWavePrompt(wave, 1, cd, '/tmp/x', {})
   assert(p.includes('同时在飞子代理 ≤3'), '显式 Wave 派发行含并发帽 ≤3')
   assert(p.includes('并发帽 3'), '调度要求含并发帽说明')
   assert(p.includes('4 路齐发实证'), '含额度耗尽实证教训引据')
-  const pImplicit = buildWavePrompt({ implicit: true, tasks: [{ index: 1 }] }, 1, '/tmp/x', '/tmp/x', {})
+  const pImplicit = buildWavePrompt({ implicit: true, tasks: [{ index: 1 }] }, 1, cd, '/tmp/x', {})
   assert(pImplicit.includes('禁止并行启动'), '隐式 Wave 串行铁律不回退')
   assert(!pImplicit.includes('同时在飞子代理 ≤3'), '隐式 Wave 不注入并行帽文案（保持串行语义）')
+  rmSync(cd, { recursive: true, force: true })
 }
 
 console.log(`\n${failed === 0 ? 'ALL PASS' : 'FAILED'}: ${total - failed}/${total}`)

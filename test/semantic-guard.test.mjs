@@ -396,6 +396,13 @@ function captureConsoleText(fn) {
 
 test('gate：他者交付测试文件断言被改 → hits 点名 + 渲染 ⚠️（含变更名与样例行），action 判定不受影响', async () => {
   const d = makeRepo('sg-gate-hit-')
+  // 夹具封闭（2026-09-24）：deps-auto-default（2026-09-23 起）让未配置仓真跑「变更测试子集」
+  // ——夹具假测试文件无 node:test import 必挂（node --test 直跑 ReferenceError），且套件
+  // （裸 node 跑）与单跑（node --test 带 runner env）退出语义不同致环境性红/绿分裂。显式
+  // test_strategy: skip + commands unavailable 恢复本组用例「不真跑命令」的设计意图（见上
+  // 方注释），语义护栏检测在 skip 判定前执行不受影响。
+  mkdirSync(join(d, '.sillyspec'), { recursive: true })
+  writeFileSync(join(d, '.sillyspec', 'local.yaml'), 'commands:\n  test: unavailable\n  lint: unavailable\ntest_strategy: skip\n')
   const restoreEnv = gateTestEnv()
   try {
     commitFile(d, 'test/foo.test.js', "test('t', () => { expect(1).toBe(1) })\n", '变更 2026-09-04-other-change：修 A')

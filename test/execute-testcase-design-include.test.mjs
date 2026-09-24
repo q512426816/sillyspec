@@ -14,8 +14,9 @@ import { buildWavePrompt } from '../src/stages/execute.js'
 import { renderLocalInstruction } from '../src/dispatch/backends/local-agent.js'
 import { renderSillyHubInstruction } from '../src/dispatch/backends/sillyhub-mcp.js'
 import { resolvePromptIncludes } from '../src/run/shared.js'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -43,6 +44,17 @@ function withoutSillyHubEnv() {
 
 const wave = { index: 1, tasks: [{ index: 1, name: 'task-01: 示例', file: 'src/x.js' }] }
 const worktreePath = 'C:/wt/testcase'
+
+// 2026-09-23 起 plan.md execution_mode 缺省翻 main（55ab9b73 R8 对撞，M4 契约）：「子代理
+// prompt 要点」与派发段均 !mainMode 门控——断言子代理要点/派发路径的用例须提供声明
+// execution_mode: dispatch 的 changeDir。
+const tempDirs = []
+function makeDispatchChangeDir() {
+  const d = mkdtempSync(join(tmpdir(), 'tcdesign-'))
+  tempDirs.push(d)
+  writeFileSync(join(d, 'plan.md'), '---\nexecution_mode: dispatch\n---\n\n# plan\n')
+  return d
+}
 const contract = {
   brief: '示例任务', worktreePath, branch: 'main',
   allowedPaths: ['src/x.js'], readOnly: false, runId: 'r1',
@@ -69,7 +81,7 @@ console.log('--- 1. 模板文件 + include 解析 ---')
 console.log('\n--- 2. execute.js base 子代理 prompt 要点（默认 Local 模式）---')
 {
   const restore = withoutSillyHubEnv()
-  const out = buildWavePrompt(wave, 1, null, worktreePath)
+  const out = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath)
   const n = (out.match(/\{\{include: testcase-design\}\}/g) || []).length
   assertTrue(n === 1, `默认模式 buildWavePrompt 含 1 个 include（base 要点，实际 ${n}）`)
   assertTrue(out.includes('5. 任务含测试代码时，把下方「测试用例设计」整段复制进子代理 prompt'),
@@ -98,11 +110,11 @@ console.log('\n--- 4. sillyhub-mcp.js worker_prompt 覆写 ---')
 console.log('\n--- 5. SillyHub 模式（三条注入全带）---')
 {
   const restore = withoutSillyHubEnv()
-  const out = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'sillyhub' })
+  const out = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'sillyhub' })
   const n = (out.match(/\{\{include: testcase-design\}\}/g) || []).length
   assertTrue(n >= 3, `SillyHub 模式含 ≥3 个 include（base + worker_prompt + Local 兜底，实际 ${n}）`)
   // local-fallback：只有 base（短提示不带 renderLocalInstruction）
-  const fb = buildWavePrompt(wave, 1, null, worktreePath, { dispatchMode: 'local-fallback' })
+  const fb = buildWavePrompt(wave, 1, makeDispatchChangeDir(), worktreePath, { dispatchMode: 'local-fallback' })
   const nFb = (fb.match(/\{\{include: testcase-design\}\}/g) || []).length
   assertTrue(nFb === 1, `local-fallback 模式仍含 1 个 include（base，短提示不重复，实际 ${nFb}）`)
   restore()
@@ -118,6 +130,7 @@ console.log('\n--- 6. 关键措辞锁定 ---')
 }
 
 console.log(`\n${'='.repeat(50)}`)
+for (const d of tempDirs) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows EPERM best-effort */ } }
 const total = 19
 console.log(`✅ 通过: ${total - failed}  ❌ 失败: ${failed}`)
 if (failures.length > 0) { console.log('失败项:'); failures.forEach(f => console.log(`  - ${f}`)) }
