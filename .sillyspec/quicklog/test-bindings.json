@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "rows": {
+    "ql-20260924-006-cefa": [
+      {
+        "anchor": "ql-20260924-006-cefa",
+        "row_id": "quick-de406f60:win-0:test/sentinel-rules.test.mjs",
+        "tests": [
+          "test/sentinel-rules.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-de406f60"
+      },
+      {
+        "anchor": "ql-20260924-006-cefa",
+        "row_id": "quick-de406f60:win-1:test/test-bindings.test.mjs",
+        "tests": [
+          "test/test-bindings.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-de406f60"
+      }
+    ],
+    "ql-20260924-005-9300": [
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-0:test/dispatch/execute-dispatch-integration.test.mjs",
+        "tests": [
+          "test/dispatch/execute-dispatch-integration.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      },
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-1:test/execute-testcase-design-include.test.mjs",
+        "tests": [
+          "test/execute-testcase-design-include.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      },
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-2:test/plan-execute-contract.test.mjs",
+        "tests": [
+          "test/plan-execute-contract.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      },
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-3:test/plan-grouping-recommend.test.mjs",
+        "tests": [
+          "test/plan-grouping-recommend.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      },
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-4:test/r4-followup-fixes.test.mjs",
+        "tests": [
+          "test/r4-followup-fixes.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      },
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-5:test/semantic-guard.test.mjs",
+        "tests": [
+          "test/semantic-guard.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      },
+      {
+        "anchor": "ql-20260924-005-9300",
+        "row_id": "quick-1447eda3:win-6:test/token-cost-optimization.test.mjs",
+        "tests": [
+          "test/token-cost-optimization.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-1447eda3"
+      }
+    ]
+  }
+}
