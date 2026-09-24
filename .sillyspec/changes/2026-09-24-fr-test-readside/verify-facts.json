@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-24-fr-test-readside",
+  "generatedAt": "2026-09-24T05:29:47.641Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "matches": 12,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "tasks": 6,
+        "hasTest": 6
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-24-fr-test-readside",
+      "metrics": {
+        "checkedFiles": 7,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 1,
+    "items": [
+      {
+        "type": "other",
+        "item": "集成实测记录缺失（facts.integrationRan=not-ran）：本变更为 unit-sufficient CLI additive 扩展，--done 亲测（test:core 138/138 实跑）替代质量扫描步的时序记录",
+        "condition": "重跑质量扫描步（sillyspec run verify 质量扫描子步）落实测记录，或按 D-006 判定表接受 --done 亲测口径",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/verify-trace-residual.test.mjs"
+    ]
+  },
+  "smokeRan": "not-ran",
+  "tests": {
+    "command": "cd backend && uv run pytest app/modules/platform_sync -q (ledger-reuse)",
+    "exitCode": 0,
+    "strategy": null,
+    "failedRemaining": [],
+    "passedAt": "2026-09-24T05:33:03.084Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}
