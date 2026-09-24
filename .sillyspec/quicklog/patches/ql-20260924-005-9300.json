@@ -1,0 +1,84 @@
+{
+  "mode": "quick",
+  "ok": false,
+  "degradedReason": "quick 会话 quick-1447eda3 不存在（guard 已清理且 quicklog/patches/ 无记录——会话未产生改动或早于记录机制）",
+  "baseAnchor": null,
+  "totals": {
+    "files": 8,
+    "additions": 0,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "test/dispatch/execute-dispatch-integration.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/execute-testcase-design-include.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/plan-execute-contract.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/token-cost-optimization.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/plan-grouping-recommend.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/r4-followup-fixes.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/semantic-guard.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "docs/sillyspec/platform-interface-map.md",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260924-005-9300",
+  "sessionId": "quick-1447eda3",
+  "savedAt": "2026-09-24T06:20:40.782Z"
+}
