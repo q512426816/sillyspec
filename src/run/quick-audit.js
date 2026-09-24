@@ -556,7 +556,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         const { resolveRuntimeRoot } = await import('./shared.js')
         const consult = consultTestLedger({
           runtimeRoot: resolveRuntimeRoot(null, specBase), changeName,
-          projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+          projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), specBase: gateSpecBase, cwd: gateCwd,
         })
         if (consult.reuse) testLedgerReuse = consult
       } catch { /* 咨询异常 → 真跑 */ }
@@ -569,7 +569,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       console.log(`⏳ 开始 test+lint 实测${snapshot ? '（隔离快照内）' : ''}——大仓全量可达 15-20 分钟，期间无输出属正常；后台跑 + 长容忍（≥20 分钟），勿按超时杀进程（杀掉不丢进度，但每轮重建沙箱重跑实测耗时成倍）。`)
     }
     let test = testLedgerReuse
-      ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: 'npm test (ledger-reuse)', exitCode: 0, durationMs: 0, outputTail: null }
+      ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: `${testLedgerReuse.runPlan?.[0]?.runner || 'npm test'} (ledger-reuse)`, exitCode: 0, durationMs: 0, outputTail: null }
       // restrictFiles = 本会话声明文件（坑 quick-gate-并行全流程变更脏文件误伤）：模块选择
       // 与 deps(auto) 只取「实际变更 ∩ 本会话声明」，并行全流程变更 WIP 不再挡死本会话
       : runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, restrictFiles: files })
@@ -586,7 +586,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
         const { resolveRuntimeRoot } = await import('./shared.js')
         recordTestLedger({
           runtimeRoot: resolveRuntimeRoot(null, specBase), changeName,
-          projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+          projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), specBase: gateSpecBase, cwd: gateCwd,
           result: { pass: true, durationMs: test.durationMs ?? null, strategy: test.strategy ?? null },
         })
       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }

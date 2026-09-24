@@ -961,7 +961,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       const { consultTestLedger } = await import('./test-ledger.js')
       const consult = consultTestLedger({
         runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
-        changeName, projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+        changeName, projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), specBase: gateSpecBase, cwd: gateCwd,
       })
       if (consult.reuse) ledgerReuse = consult
     } catch { /* 账本咨询异常 → 真跑 */ }
@@ -969,7 +969,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       testCheck = {
         status: 'passed',
         reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${ledgerReuse.result.ranAt}，耗时 ${Math.round((ledgerReuse.result.durationMs || 0) / 1000)}s）`,
-        command: 'npm test (ledger-reuse)',
+        command: `${ledgerReuse.runPlan?.[0]?.runner || 'npm test'} (ledger-reuse)`,
         exitCode: 0, durationMs: 0, outputTail: null,
         resultPath: null, strategy: ledgerReuse.result.strategy || null,
       }
@@ -990,7 +990,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         if (testCheck && testCheck.status === 'passed') {
           recordTestLedger({
             runtimeRoot: resolveRuntimeRoot(platformOpts, specBase),
-            changeName, projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), command: 'npm test', cwd: gateCwd,
+            changeName, projectRoot: gateCwd, testRoot: join(gateCwd, 'test'), specBase: gateSpecBase, cwd: gateCwd,
             result: { pass: true, total: testCheck.total ?? null, failedFiles: [], durationMs: testCheck.durationMs ?? null, strategy: testCheck.strategy ?? null },
           })
         }

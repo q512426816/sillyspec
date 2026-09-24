@@ -1362,8 +1362,8 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
             // ③ 测试结果（与 verify 门对账同源优先级：P2 账本 > 扫描记录 > 无记录提示句）
             let vpTest = null;
             try {
-              const vpConsult = consultTestLedger({ runtimeRoot: vpRuntimeRoot, changeName: vpChange, projectRoot: dir, testRoot: join(dir, 'test'), command: 'npm test', cwd: dir });
-              if (vpConsult.reuse) vpTest = { source: 'ledger', command: 'npm test', status: 'passed', ranAt: vpConsult.result.ranAt, durationMs: vpConsult.result.durationMs, total: vpConsult.result.total ?? null };
+              const vpConsult = consultTestLedger({ runtimeRoot: vpRuntimeRoot, changeName: vpChange, projectRoot: dir, testRoot: join(dir, 'test'), specBase: vpSpecBase, cwd: dir });
+              if (vpConsult.reuse) vpTest = { source: 'ledger', command: vpConsult.runPlan?.[0]?.runner || 'npm test', status: 'passed', ranAt: vpConsult.result.ranAt, durationMs: vpConsult.result.durationMs, total: vpConsult.result.total ?? null };
             } catch { /* 账本咨询异常 → 下一源 */ }
             if (!vpTest) {
               try {

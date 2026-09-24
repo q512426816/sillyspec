@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
 import {
   computeTestLedgerKey, computeTestFaceDigest, computeCodeFingerprint, consultTestLedger, recordTestLedger, computeEnvProfile, testLedgerPath,
+  resolveTestSetIdentity, computeSelectedTestFaceDigest,
 } from '../src/run/test-ledger.js'
 
 const roots = []
@@ -41,7 +42,7 @@ test('L1 复用态：同码同环境记录后二次查询 → reuse=true；查�
   const repo = makeFixture()
   const runtimeRoot = join(repo, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
-  const args = { runtimeRoot, changeName: 'c-l1', projectRoot: repo, testRoot: join(repo, 'test'), command: 'npm test', cwd: repo, env: {} }
+  const args = { runtimeRoot, changeName: 'c-l1', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
 
   const before = consultTestLedger(args)
   assert.equal(before.reuse, false, 'L1: 无记录不复用')
@@ -62,7 +63,7 @@ test('L2 指纹变：改一行 src（已提交）/新增未提交文件 → 代�
   const repo = makeFixture()
   const runtimeRoot = join(repo, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
-  const args = { runtimeRoot, changeName: 'c-l2', projectRoot: repo, testRoot: join(repo, 'test'), command: 'npm test', cwd: repo, env: {} }
+  const args = { runtimeRoot, changeName: 'c-l2', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
   assert.equal(recordTestLedger({ ...args, result: { pass: true } }), true)
 
   writeFileSync(join(repo, 'src-app.js'), 'export const a = 2\n')
@@ -87,7 +88,7 @@ test('L3 环境分键：worktree 形态 cwd 与主仓 cwd 互不复用（detectC
 
   const runtimeRoot = join(repo, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
-  const mainArgs = { runtimeRoot, changeName: 'c-l3', projectRoot: repo, testRoot: join(repo, 'test'), command: 'npm test', cwd: repo, env: {} }
+  const mainArgs = { runtimeRoot, changeName: 'c-l3', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
   const wtArgs = { ...mainArgs, cwd: wtCwd }
   assert.equal(recordTestLedger({ ...mainArgs, result: { pass: true } }), true)
   assert.equal(consultTestLedger(mainArgs).reuse, true, 'L3: 主仓键内自洽复用')
@@ -104,7 +105,7 @@ test('L4 fail-closed：git 不可达不记不复用；失败结果永不记账',
   writeFileSync(join(notGit, 'test', 't.test.mjs'), 'x\n')
   const runtimeRoot = join(notGit, '.rt')
   mkdirSync(runtimeRoot, { recursive: true })
-  const args = { runtimeRoot, changeName: 'c-l4', projectRoot: notGit, testRoot: join(notGit, 'test'), command: 'npm test', cwd: notGit, env: {} }
+  const args = { runtimeRoot, changeName: 'c-l4', projectRoot: notGit, testRoot: join(notGit, 'test'), specBase: join(notGit, '.sillyspec'), cwd: notGit, env: {} }
 
   const miss = consultTestLedger(args)
   assert.equal(miss.reuse, false, 'L4: git 不可达 → 不复用')
@@ -118,7 +119,78 @@ test('L4 fail-closed：git 不可达不记不复用；失败结果永不记账',
   // 正常仓内失败同样拒记
   const repo = makeFixture()
   const rt2 = join(repo, '.rt'); mkdirSync(rt2, { recursive: true })
-  const ok = { runtimeRoot: rt2, changeName: 'c-l4b', projectRoot: repo, testRoot: join(repo, 'test'), command: 'npm test', cwd: repo, env: {} }
+  const ok = { runtimeRoot: rt2, changeName: 'c-l4b', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
   assert.equal(recordTestLedger({ ...ok, result: { pass: false } }), false, 'L4: 通过仓失败结果拒记')
   assert.equal(consultTestLedger(ok).reuse, false, 'L4: 无账可复用（失败后必须真跑修复——假绿源封死）')
+})
+
+// ── P0 键 v2（fr-test-binding 方案 §3.5 立项前置，ql-20260924-004-9875）──
+// 红线：local.yaml 是 gitignore 文件（不进 HEAD 也不进 porcelain）——v1 键只含调用方硬编码
+// 'npm test' 字面量，改 commands.test / test_strategy 均不换键 = 跨命令误复用旧绿。v2 起实解
+// 命令 + local.yaml 原文摘要入键。
+
+/** 带 gitignored local.yaml 的 fixture（等价真实仓：改配置不动 HEAD/porcelain → 隔离键②效应） */
+function makeCfgFixture(yaml) {
+  const repo = makeFixture()
+  writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
+  execSync('git add -A && git commit -qm gitignore', { cwd: repo })
+  mkdirSync(join(repo, '.sillyspec'), { recursive: true })
+  writeFileSync(join(repo, '.sillyspec', 'local.yaml'), yaml)
+  return repo
+}
+
+test('P0-1 命令身份：改 commands.test（gitignored，HEAD/porcelain 均不变）→ 换键不复用', () => {
+  const repo = makeCfgFixture('commands:\n  test: npm run test:core\n')
+  const rt = join(repo, '.rt'); mkdirSync(rt, { recursive: true })
+  const args = { runtimeRoot: rt, changeName: 'c-p01', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
+  assert.equal(recordTestLedger({ ...args, result: { pass: true } }), true, 'P0-1: 实解命令 npm run test:core 落账')
+  const hit = consultTestLedger(args)
+  assert.equal(hit.reuse, true, 'P0-1: 同配置自洽复用')
+  assert.deepEqual(hit.runPlan, [{ runner: 'npm run test:core', files: null }], 'P0-1: runPlan 如实回放实解命令')
+
+  writeFileSync(join(repo, '.sillyspec', 'local.yaml'), 'commands:\n  test: npm test\n')
+  const miss = consultTestLedger(args)
+  assert.equal(miss.reuse, false, 'P0-1: 改测试命令 → 不复用（v1 键恒 npm test 的身份错已治）')
+  assert.equal(miss.reason, 'key-mismatch', 'P0-1: 失因 key-mismatch（键分量可得，非 fail-closed）')
+})
+
+test('P0-2 配置指纹：同命令改 test_strategy（local.yaml 其余字节变化）→ 换键', () => {
+  const repo = makeCfgFixture('commands:\n  test: npm run test:core\n')
+  const rt = join(repo, '.rt'); mkdirSync(rt, { recursive: true })
+  const args = { runtimeRoot: rt, changeName: 'c-p02', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
+  assert.equal(recordTestLedger({ ...args, result: { pass: true } }), true, 'P0-2: 落账')
+  writeFileSync(join(repo, '.sillyspec', 'local.yaml'), 'commands:\n  test: npm run test:core\ntest_strategy: module\n')
+  assert.equal(consultTestLedger(args).reuse, false, 'P0-2: 选测策略变化 → 换键（选面不同不得复用旧绿）')
+})
+
+test('P0-3 v1 账本自然失效：schemaVersion 1 旧文件 consult 即不复用（不迁移）', () => {
+  const repo = makeFixture()
+  const rt = join(repo, '.rt'); mkdirSync(rt, { recursive: true })
+  const args = { runtimeRoot: rt, changeName: 'c-p03', projectRoot: repo, testRoot: join(repo, 'test'), specBase: join(repo, '.sillyspec'), cwd: repo, env: {} }
+  assert.equal(recordTestLedger({ ...args, result: { pass: true } }), true, 'P0-3: v2 落账')
+  const p = testLedgerPath(rt, 'c-p03')
+  assert.equal(JSON.parse(readFileSync(p, 'utf8')).schemaVersion, 2, 'P0-3: 落盘版本戳=2')
+  const j = JSON.parse(readFileSync(p, 'utf8')); j.schemaVersion = 1
+  writeFileSync(p, JSON.stringify(j, null, 2) + '\n')
+  const miss = consultTestLedger(args)
+  assert.equal(miss.reuse, false, 'P0-3: v1 文件自然失效')
+  assert.equal(miss.reason, 'ledger-invalid-or-failed-entry', 'P0-3: 失因显式版本不符')
+})
+
+test('P0-4 身份解析与选中集合摘要：runner 实解、specBase 缺席 fail-closed、选中面摘要定向', () => {
+  const repo = makeCfgFixture('commands:\n  test: npm run test:core\n')
+  const id = resolveTestSetIdentity({ specBase: join(repo, '.sillyspec') })
+  assert.equal(id.runPlan[0].runner, 'npm run test:core', 'P0-4: runner=实解命令')
+  assert.equal(id.runPlan[0].files, null, 'P0-4: 现阶段 files 一律 null（整目录摘要兜底）')
+  assert.ok(typeof id.configDigest === 'string' && id.configDigest.length === 64, 'P0-4: configDigest 就绪')
+  assert.equal(resolveTestSetIdentity({}), null, 'P0-4: specBase 缺席 → null（fail-closed，杜绝字面量回退）')
+
+  const d0 = computeSelectedTestFaceDigest(join(repo, 'test'), ['t.test.mjs'])
+  assert.ok(typeof d0 === 'string', 'P0-4: 选中摘要可算')
+  writeFileSync(join(repo, 'test', 'unselected.test.mjs'), 'x\n')
+  assert.equal(computeSelectedTestFaceDigest(join(repo, 'test'), ['t.test.mjs']), d0, 'P0-4: 未选中文件新增/改动不连坐换键')
+  writeFileSync(join(repo, 'test', 't.test.mjs'), 'import { test } from "node:test"\ntest("y", () => {})\n')
+  assert.notEqual(computeSelectedTestFaceDigest(join(repo, 'test'), ['t.test.mjs']), d0, 'P0-4: 选中文件内容变化 → 摘要变')
+  assert.equal(computeSelectedTestFaceDigest(join(repo, 'test'), null), null, 'P0-4: files=null → null（走整目录兜底）')
+  assert.equal(computeSelectedTestFaceDigest(join(repo, 'test'), ['missing.test.mjs']), null, 'P0-4: 选中文件缺失 → null（fail-closed）')
 })

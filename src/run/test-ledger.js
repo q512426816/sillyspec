@@ -6,7 +6,7 @@
  * verify 的 verify-test / quick --done 实测门 / gate --full（P1）。
  *
  * **fail-closed 三层（红线，D-001@v1）**：
- *   ① 键分量不可得（git 失败/测试面读不到）→ 不记不复用，永远真跑；
+ *   ① 键分量不可得（git 失败/测试面读不到/配置身份不可解析）→ 不记不复用，永远真跑；
  *   ② 失败结果永不缓存——只有通过的结果才落账本（失败走真跑修复路径，缓存失败=假绿源）；
  *   ③ 严格全等——key 为三键分量的 sha256 串比对，无模糊匹配、无时间窗放宽。
  *
@@ -14,8 +14,15 @@
  *   - codeFingerprint：{ head, dirtyDigest }——HEAD commit + porcelain 未提交摘要（路径+内容
  *     hash 归一）。与 verify-quality-scan 的代码指纹同思想（P0-1 先例），本模块独立实现不耦合
  *     （quality-scan 是 noAI 步→verify 门单向，本账本多消费点）。
- *   - testSetHash：{ command, testFaceDigest }——测试命令串 + 测试面（test/ 目录文件清单+内容
- *     摘要）。测试文件本身也是代码，改测试=改被测面，必须换键。
+ *   - testSet（**v2**，P0 修正——fr-test-binding 方案 §3.5 立项前置）：{ runPlan, configDigest,
+ *     testFaceDigest }——runPlan=[{ runner, files }]（runner=实解命令，resolveTestSetIdentity
+ *     经 extractTestCommand 单一解析源解析，调用方不再传字面量；files=段级选中集合，residual
+ *     adapter 落地后入键，现一律 null=整目录摘要兜底）；configDigest=local.yaml 原文摘要
+ *     （local.yaml 是 gitignore 文件——不进 HEAD 也不进 porcelain，v1 键只含调用方硬编码
+ *     'npm test' 字面量，改 commands.test / test_strategy / modules / known_failures 均**不换键**
+ *     =两个不同实际执行映射同一键、跨命令误复用旧绿；v2 起配置任何字节变化都换键——宁可
+ *     多跑一次，不复用错绿）；testFaceDigest=测试面（整目录或选中集合）内容摘要。测试文件
+ *     本身也是代码，改测试=改被测面，必须换键。
  *   - envProfile：结构化探针（布尔/枚举，**禁裸路径入键**）。探针清单不是拍脑袋列举——
  *     cwdInsideWorktree 用 detectCwdInsideWorktree 同源判定（batch2 实证：13 个 worktree-cwd
  *     环境族测试在主 worktree 全挂、在隔离快照全过，其判定信号就是「cwd 路径含
@@ -23,7 +30,8 @@
  *     分键）；另收 node 版本/平台名/行为开关 env 集（SILLYSPEC_STEP_GUIDE 等，P4 翻默认后
  *     直接影响输出形态族）/本地 spec 与平台指针存在性（resolveRuntimeRoot 分流信号）。
  *
- * 账本形态：.runtime/test-ledger-<changeName>.json 单条覆盖写（最近一次通过结果）——
+ * 账本形态：.runtime/test-ledger-<changeName>.json 单条覆盖写（最近一次通过结果；
+ * schemaVersion: 2——v1 旧账 consult 即失效【自然失效，不迁移】，首次通过后按 v2 重建）——
  * quick 会话名=quick-<hex> 天然 per-change 隔离，无并发互写面；写入走 writeAtomicSync
  * （meta.json 并发读先例同款约束）。
  */
@@ -33,6 +41,7 @@ import { join, relative, isAbsolute } from 'path'
 import { gitQuiet } from '../git-helper.js'
 import { detectCwdInsideWorktree } from './shared.js'
 import { writeAtomicSync } from '../fs-atomic.js'
+import { extractTestCommand } from '../verify-postcheck.js'
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex')
 
@@ -132,15 +141,70 @@ export function computeTestFaceDigest(testRoot, depth = 0) {
 }
 
 /**
- * 三键合成（全部分量就绪才出键；任一 null → null）。
+ * 键②身份解析（v2，P0 修正——fr-test-binding 方案 §3.5 立项前置）：runPlan.runner =
+ * 实解命令（extractTestCommand 单一解析源，未配置/unavailable 回退 'npm test'——与
+ * runVerifyTestCheck 主路径同口径）；configDigest = local.yaml 原文摘要（换行归一，EOL-only
+ * 重写不换键）。specBase 未提供/读取异常 → null（fail-closed 层①：身份不可知则键不可得，
+ * 调用方不得回退传字面量命令）。
+ * @returns {{ runPlan: Array<{runner: string, files: string[]|null}>, configDigest: string }|null}
+ */
+export function resolveTestSetIdentity({ specBase } = {}) {
+  try {
+    if (!specBase) return null
+    const yamlPath = join(specBase, 'local.yaml')
+    const text = existsSync(yamlPath) ? readFileSync(yamlPath, 'utf8') : null
+    const runner = extractTestCommand(text) || 'npm test'
+    return {
+      // files 段级选中集合：residual adapter 落地后入键；现一律 null = 整目录摘要兜底（保守向）
+      runPlan: [{ runner, files: null }],
+      configDigest: sha256((text ?? '(no-local.yaml)').replace(/\r\n?/g, '\n')),
+    }
+  } catch { return null }
+}
+
+/**
+ * 选中集合摘要（v2 结构位，P0 第三行）：files 非空 → 仅摘要选中文件内容（未选中测试文件
+ * 改动不再整目录连坐换键）；任一文件缺失/读失败 → null（fail-closed——选中面不可全知时
+ * 复用无意义）。files 空/非数组 → null（调用方走整目录 computeTestFaceDigest 兜底）。
+ * @param {string} testRoot
+ * @param {string[]|null} files 相对 testRoot 的路径
+ * @returns {string|null}
+ */
+export function computeSelectedTestFaceDigest(testRoot, files) {
+  try {
+    if (!Array.isArray(files) || files.length === 0) return null
+    const parts = []
+    for (const f of [...files].sort()) {
+      parts.push(f + ':' + sha256(readFileSync(join(testRoot, f))))
+    }
+    return sha256(parts.join('|'))
+  } catch { return null }
+}
+
+/**
+ * 三键合成（v2）：全部分量就绪才出键；任一 null → null。
+ * testSet = { runPlan, configDigest, testFaceDigest }（resolveTestSetIdentity + 面摘要合成）。
  * @returns {string|null} sha256 key
  */
-export function computeTestLedgerKey({ projectRoot, testRoot, command, cwd, env, ignoreFiles = [] }) {
+export function computeTestLedgerKey({ projectRoot, testSet, cwd, env, ignoreFiles = [] }) {
   const code = computeCodeFingerprint(projectRoot, { ignoreFiles })
-  const face = computeTestFaceDigest(testRoot)
   const profile = computeEnvProfile({ cwd, env })
-  if (!code || !face || !profile) return null
-  return sha256(JSON.stringify({ code, testSet: { command: String(command || ''), testFaceDigest: face }, env: profile }))
+  if (!code || !testSet || !testSet.testFaceDigest || !profile) return null
+  return sha256(JSON.stringify({ code, testSet, env: profile }))
+}
+
+/** consult/record 共用键计算（同源防两端口径漂移） */
+function ledgerKeyFor({ runtimeRoot, changeName, projectRoot, testRoot, specBase, cwd, env }) {
+  const selfIgnore = ledgerIgnorePath(runtimeRoot, changeName, projectRoot)
+  const identity = resolveTestSetIdentity({ specBase })
+  if (!identity) return { identity: null, key: null }
+  const face = computeSelectedTestFaceDigest(testRoot, identity.runPlan[0]?.files) || computeTestFaceDigest(testRoot)
+  const key = computeTestLedgerKey({
+    projectRoot,
+    testSet: { runPlan: identity.runPlan, configDigest: identity.configDigest, testFaceDigest: face },
+    cwd, env, ignoreFiles: selfIgnore ? [selfIgnore] : [],
+  })
+  return { identity, key }
 }
 
 /** 账本路径（per-change 单文件） */
@@ -149,22 +213,22 @@ export function testLedgerPath(runtimeRoot, changeName) {
 }
 
 /**
- * 查询：三键全等且有通过记录 → 复用。任一分量不可得/键不等/账本缺失损坏 → 不复用（fail-closed）。
- * @returns {{ reuse: boolean, result?: object, reason: string, key?: string }}
+ * 查询：三键全等且有通过记录 → 复用。任一分量不可得/键不等/账本缺失损坏/版本不符 → 不复用
+ * （fail-closed）。runPlan 随命中回放（供消费方如实展示实际命令）。
+ * @returns {{ reuse: boolean, result?: object, runPlan?: Array<object>|null, reason: string, key?: string }}
  */
-export function consultTestLedger({ runtimeRoot, changeName, projectRoot, testRoot, command, cwd, env }) {
-  const selfIgnore = ledgerIgnorePath(runtimeRoot, changeName, projectRoot)
-  const key = computeTestLedgerKey({ projectRoot, testRoot, command, cwd, env, ignoreFiles: selfIgnore ? [selfIgnore] : [] })
-  if (!key) return { reuse: false, reason: 'fail-closed: 键分量不可得（git/测试面/环境探针任一失败）' }
+export function consultTestLedger({ runtimeRoot, changeName, projectRoot, testRoot, specBase, cwd, env }) {
+  const { key } = ledgerKeyFor({ runtimeRoot, changeName, projectRoot, testRoot, specBase, cwd, env })
+  if (!key) return { reuse: false, reason: 'fail-closed: 键分量不可得（git/测试面/环境探针/配置身份任一失败）' }
   try {
     const p = testLedgerPath(runtimeRoot, changeName)
     if (!existsSync(p)) return { reuse: false, reason: 'no-ledger', key }
     const j = JSON.parse(readFileSync(p, 'utf8'))
-    if (!j || j.schemaVersion !== 1 || !j.key || !j.result || j.result.pass !== true) {
+    if (!j || j.schemaVersion !== 2 || !j.key || !j.result || j.result.pass !== true) {
       return { reuse: false, reason: 'ledger-invalid-or-failed-entry', key }
     }
     if (j.key !== key) return { reuse: false, reason: 'key-mismatch', key }
-    return { reuse: true, result: j.result, reason: 'match', key }
+    return { reuse: true, result: j.result, runPlan: Array.isArray(j.runPlan) ? j.runPlan : null, reason: 'match', key }
   } catch {
     return { reuse: false, reason: 'ledger-read-error', key }
   }
@@ -174,16 +238,17 @@ export function consultTestLedger({ runtimeRoot, changeName, projectRoot, testRo
  * 记账：只有通过结果落账（fail-closed 层②——失败永不缓存）。键不可得 → 不记（下次仍真跑）。
  * 返回是否落账。
  */
-export function recordTestLedger({ runtimeRoot, changeName, projectRoot, testRoot, command, cwd, env, result }) {
+export function recordTestLedger({ runtimeRoot, changeName, projectRoot, testRoot, specBase, cwd, env, result }) {
   if (!result || result.pass !== true) return false
-  const selfIgnore = ledgerIgnorePath(runtimeRoot, changeName, projectRoot)
-  const key = computeTestLedgerKey({ projectRoot, testRoot, command, cwd, env, ignoreFiles: selfIgnore ? [selfIgnore] : [] })
-  if (!key) return false
+  const { identity, key } = ledgerKeyFor({ runtimeRoot, changeName, projectRoot, testRoot, specBase, cwd, env })
+  if (!identity || !key) return false
   try {
     writeAtomicSync(testLedgerPath(runtimeRoot, changeName), JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       change: changeName,
       key,
+      // runPlan 回放（审计面：账本声称复用的实际执行身份；不参与键——键已含其摘要）
+      runPlan: identity.runPlan,
       result: {
         pass: true,
         total: result.total ?? null,
