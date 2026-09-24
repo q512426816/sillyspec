@@ -112,7 +112,8 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
   const change = 'flow-h2-t3'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+  // --no-review：本用例测 fail-closed 测试门，非评审面——声明一票豁免评审（名字撞 1/4 采样桶）
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
   fillDesignSlots(cwd, change)
   const specBase = join(cwd, '.sillyspec')
@@ -296,7 +297,7 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（�
     '# 提案书', '', '## 动机', '需要一个守护行为', '',
     '## 成功标准', '- 守护行为 X 发生', '- 崩溃不影响主流程', '',
   ].join('\n'))
-  writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：乱序不适用\n')
+  writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：无特殊场景假设\n')
   const s = cli(cwd, ['flow', 'start', '--change', change])
   assert.equal(s.status, 0, `收编失败: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /头脑风暴产物已收编进薄跑道/, '收编简报')
@@ -338,6 +339,74 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
   assert.equal(s2.status, 0)
   assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t15'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入幂等收敛']).status, 0)
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  fillDesignSlots(cwd, change)
+  const specBase = join(cwd, '.sillyspec')
+  const changeDir = join(specBase, 'changes', change)
+
+  // 首跑：承诺词命中 → 评审任务书下发 exit 1（断点在 review 子步）
+  const f1 = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(f1.status, 1, `首跑应在 review 断点: ${f1.stdout}\n${f1.stderr}`)
+  assert.match(f1.stdout, /需要独立评审（.*承诺词.*）/, '承诺词定档理由')
+  assert.match(f1.stdout, /独立评审任务书/, '任务书渲染')
+  assert.match(f1.stdout, /请求预算硬帽 12/, '预算帽在场')
+  assert.match(f1.stdout + f1.stderr, /中断于子步「review」/, '断点报位')
+
+  // 子代理产物 review.json（PASS）→ 重跑通过归档
+  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
+    schemaVersion: 1, change, reviewer: 'subagent', verdict: 'PASS', findings: [],
+    dimensionNotes: { 乱序: 'n/a', 并发: 'n/a', 切换: 'n/a', 作用域: 'n/a' }, reviewedAt: new Date().toISOString(),
+  }))
+  const ok = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(ok.status, 0, `复跑应通过: ${ok.stdout}\n${ok.stderr}`)
+  assert.match(ok.stdout, /独立评审通过（reviewer=subagent）/)
+  const archDir = join(specBase, 'changes', 'archive')
+  const archived = readdirSync(archDir)[0]
+  assert.ok(existsSync(join(archDir, archived, 'review.json')), 'review.json 随归档留档')
+  const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).find((r) => r.change === change)
+  assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复后删件重评', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t16'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  fillDesignSlots(cwd, change)
+  const changeDir = join(cwd, '.sillyspec', 'changes', change)
+  writeFileSync(join(changeDir, 'review.json'), JSON.stringify({
+    schemaVersion: 1, change, reviewer: 'subagent', verdict: 'FAIL',
+    findings: [{ severity: 'P1', title: '承诺违反：声称的收敛未实现', evidence: 'diff 无重试路径', location: 'work.js:1' }],
+    dimensionNotes: {}, reviewedAt: new Date().toISOString(),
+  }))
+  const f = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(f.status, 1, 'P1 必须拒归档')
+  assert.match(f.stdout + f.stderr, /\[P1\] 承诺违反/, 'P1 明细列出')
+  assert.match(f.stdout + f.stderr, /修复后删除 review\.json/, '重评指引')
+  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change)), '未归档')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t17'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
+  fillDesignSlots(cwd, change)
+  const f = cli(cwd, ['flow', 'done', '--change', change])
+  assert.equal(f.status, 1, '无产物无声明外的他信号，--review 单独即必评')
+  assert.match(f.stdout, /显式 --review 声明/, '声明一票理由')
   rmSync(cwd, { recursive: true, force: true })
 })
 

@@ -54,6 +54,7 @@ modules:
       - src/commit-suggest.js
       - src/flow.js
       - src/flow-draft.js
+      - src/flow-review.js
 
   progress:
     status: active
@@ -75,6 +76,7 @@ modules:
       - src/stage-contract.js
       - src/stage-contract-engine.js
       - src/stage-contract-spec.js
+      - src/stage-templates.js
       - src/check-primitives.js
       - src/stage-review.js
       - src/stage-review-checklist.js
@@ -149,6 +151,7 @@ modules:
       - src/worktree.js
       - src/worktree-apply.js
       - src/worktree-deps.js
+      - src/worktree-policy.js
       - src/worktree-cross.js
       - src/wt-commit.js
       - src/git-helper.js
@@ -331,6 +334,7 @@ blast:
       - src/worktree-apply.js
       - src/worktree-cross.js
       - src/worktree-deps.js
+      - src/worktree-policy.js
       - src/wt-commit.js
       - src/git-helper.js
       - src/review-dispatch.js
@@ -341,6 +345,7 @@ blast:
       - src/stage-contract.js
       - src/stage-contract-engine.js
       - src/stage-contract-spec.js
+      - src/stage-templates.js
       - src/verify-postcheck.js
       - src/verify-probes.js
       - src/ceremony-tier.js

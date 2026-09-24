@@ -74,7 +74,8 @@ function fillDesignSlots(cwd, change) {
 test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
   const change = 'fr-r1'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
+  // --no-review：本用例测 route 面——大改 amend 的 editRatio 会触发评审必评抢先拦截，声明豁免
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
   // 大改（≥0.75 行）→ route_hint
   const big = amendWithRatio(cwd, change, 0.75)
   assert.equal(big.status, 0)
@@ -108,7 +109,8 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒�
 test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n  edit_ratio_enforcement: block\n')
   const change = 'fr-b1'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A']).status, 0)
+  // --no-review：本用例测 route block 面——editRatio 0.75 会触发评审必评抢先拦截，声明豁免
+  assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
   const big = amendWithRatio(cwd, change, 0.75)
   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')

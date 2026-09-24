@@ -34,7 +34,7 @@ import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
 
 const FLOW_STATE_FILE = 'flow-state.yaml'
-const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'probes', 'distill', 'archive', 'events']
+const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
 
 /** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
 export function readFlowState(changeDir) {
@@ -122,7 +122,7 @@ function materialPaths(specBase, changeName, changeDir) {
  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
  */
-export async function cmdFlowStart({ change, input, thick = false, withTasks = false, cwd, specBase, json = false }) {
+export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, json = false }) {
   const cfg = readFlowConfig(specBase)
   if (cfg.mode === 'legacy') {
     console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')
@@ -145,7 +145,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
       if (hasBsArtifacts) {
         const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
         const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
-        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', baseline_commit: baseline, substeps: {} })
+        writeFlowState(changeDir, { tier: 'thin', born_face: 'thin', adopted_from: 'brainstorm', review_force: reviewForce, baseline_commit: baseline, substeps: {} })
         try {
           const { redraftMissingArtifacts, ensureBindingSlots } = await import('./flow-draft.js')
           const r = redraftMissingArtifacts({ changeDir, change, input: null, runtimeRoot })
@@ -239,6 +239,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     // 恒走 skipPlanCheck，防「升厚后无 plan.md 归档死锁」；厚面出身（--thick 起步）才要 plan.md）
     born_face: thick ? 'thick' : 'thin',
     with_tasks: Boolean(withTasks),
+    review_force: reviewForce,
     baseline_commit: baseline,
     substeps: {},
   })
@@ -264,6 +265,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
     `⚠️ design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险）动码前后顺手作答——每节至少一行，`,
     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
+    `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
+    `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
+    `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
     ``,
     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
@@ -345,6 +349,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
   const mark = (k) => { writeFlowState(markDir, { substeps: { [k]: 'done' } }); doneList.push(k) }
   const doneList = []
   const skip = (k) => { doneList.push(`${k}(skip)`) }
+  let reviewOutcome = null
   const reportMidFail = (failed) => {
     console.error(`❌ flow done 中断于子步「${failed}」。已完成：${doneList.length ? doneList.join('、') : '（无）'}；待办：${SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done' && k !== failed).join('、') || '（无）'}`)
     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
@@ -488,6 +493,53 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     if (patchOk) mark('patch')
   }
 
+  // ②c review：危险证据定档的独立评审（2026-09-25-thin-review-slice）。定档=证据累积制
+  // （承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票），文件数出局；缺省要评审、豁免要
+  // 多证并举、豁免者 1/4 定额抽查采样。评审任务书由 CLI 渲染（agent 起干净上下文子代理执行，
+  // 协议调用数不变）；FAIL 或 P1 发现=拦截（修复后删件重评再重跑 done，断点续）。
+  if (st.substeps?.review === 'done') { skip('review') } else {
+    const { classifyReviewNeed, renderReviewerTaskbook, validateReviewJson } = await import('./flow-review.js')
+    let patchText = null
+    try { patchText = readFileSync(join(changeDir, 'change.patch'), 'utf8') } catch { /* patch 子步 skip/失败面 */ }
+    const tier = classifyReviewNeed({ changeDir, input: null, patchText, editRatio: st.edit_ratio ?? null, reviewForce: st.review_force ?? null, change })
+    if (!tier.required) {
+      console.log(`⚖️ 评审豁免（低风险证据齐全）：${tier.exemptEvidence.join('；')}`)
+      reviewOutcome = { required: false, sampled: false, verdict: 'exempt' }
+      mark('review')
+    } else if (!existsSync(join(changeDir, 'review.json'))) {
+      console.log(`⚖️ 本变更需要独立评审（${tier.reasons.join('；')}）——评审任务书如下，起一个干净上下文的子代理执行后重跑本命令：\n`)
+      console.log(renderReviewerTaskbook({ change, changeDir }))
+      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'missing' }
+      reportMidFail('review')
+      process.exit(1)
+    } else {
+      const v = validateReviewJson(join(changeDir, 'review.json'))
+      if (!v.ok) {
+        console.error(`❌ review.json 校验失败（${v.errors.join('；')}）——按任务书 schema 修正后重跑`)
+        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'invalid' }
+        reportMidFail('review')
+        process.exit(1)
+      }
+      const p1s = (v.review.findings || []).filter((f) => /^P1$/i.test(String(f.severity || '')))
+      const others = (v.review.findings || []).filter((f) => !/^P1$/i.test(String(f.severity || '')))
+      if (v.review.verdict === 'FAIL' || p1s.length > 0) {
+        console.error(`❌ 独立评审未过（verdict=${v.review.verdict}，P1 发现 ${p1s.length} 项）——承诺与实现不一致，不许归档：`)
+        for (const f of [...p1s, ...others]) console.error(`   [${f.severity}] ${f.title} — ${f.evidence || ''}${f.location ? `（${f.location}）` : ''}`)
+        console.error(`   修复后删除 review.json 并重新执行评审任务书（起子代理重评），再重跑 flow done（断点续）`)
+        reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'FAIL', findingsP1: p1s.length }
+        reportMidFail('review')
+        process.exit(1)
+      }
+      if (others.length > 0) {
+        console.warn(`⚠️ 评审非阻断发现 ${others.length} 项（P2/P3，随归档留档）：`)
+        for (const f of others) console.warn(`   [${f.severity}] ${f.title} — ${f.evidence || ''}`)
+      }
+      console.log(`✅ 独立评审通过（reviewer=${v.review.reviewer}${tier.sampled ? '，豁免抽查采样命中' : ''}）`)
+      reviewOutcome = { required: true, sampled: tier.sampled, verdict: 'PASS', findingsP1: 0 }
+      mark('review')
+    }
+  }
+
   // ③ probes：thin 薄跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
@@ -589,6 +641,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
       ts: new Date().toISOString(), change, protocolCalls: 2,
       draftAmendments: st.edit_ratio != null ? 1 : 0, editRatio: st.edit_ratio ?? null,
       routeHint: st.route_hint ?? null, tier: st.tier, upgraded: st.upgrade_reason ?? null,
+      review: reviewOutcome,
     }) + '\n', 'utf8')
   } catch { /* 遥测 best-effort */ }
 
@@ -615,6 +668,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
       input: getFlag('--input') || undefined,
       thick: hasFlag('--thick'),
       withTasks: hasFlag('--with-tasks'),
+      reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
       cwd, specBase,
       json: hasFlag('--json'),
     })
