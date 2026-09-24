@@ -1119,7 +1119,7 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
         const { spawnSync } = await import('node:child_process');
         const { fileURLToPath } = await import('node:url');
         // ESM 无 __dirname（ql-20260911-029：此处曾直接引用，--apply 常态路径必 ReferenceError）
-        const r = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/sillyspec.js', import.meta.url)), '--dir', dir, ...childArgs], { stdio: 'inherit' });
+        const r = spawnSync(process.execPath, [fileURLToPath(new URL('../bin/sillyspec.js', import.meta.url)), '--dir', dir, ...childArgs], { stdio: 'inherit', windowsHide: true });
         process.exit(r.status === null ? 1 : r.status);
       }
       if (json) {
@@ -4415,7 +4415,7 @@ checkbox 行；depends_on 自动反填行内注解 "(depends_on: task-01,02)"；
       break;
     }
     case 'flow': {
-      // R7 切片二：2-调用薄协议命令族（start/done/amend-draft）——协议必需交互=2
+      // R7 切片二：2-调用轻量协议命令族（start/done/amend-draft）——协议必需交互=2
       const flowMod = await import('./flow.js');
       await flowMod.cmdFlow(filteredArgs.slice(1), dir, specDir);
       break;

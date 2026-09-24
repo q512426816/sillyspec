@@ -76,8 +76,8 @@ export const definition = {
       maxWaitRounds: 8,
       waitReason: '等待用户回答需求问题或澄清',
       waitOptions: ['回答见--answer', '信息够了，进入方案讨论'],
-      prompt: `### ⚡ 薄跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
-**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**薄跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。薄跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用薄跑、永不省**。
+      prompt: `### ⚡ 轻量跑判定（P0-3，2026-09-20 对撞实验驱动——需求已收敛来源走全仪探索是纯税）
+**需求来源已收敛**（满足任一：--input 显式声明承接/已澄清/方案已定；fork 或关联会话已多轮澄清过本需求，你已能不问自答全部 P0 歧义；任务书/评审结论直接给定方案与边界）→ 本步可**轻量跑**：A-D 节按已收敛事实直书结论（歧义零清单、范围直裁、决策若已有则引用源会话不重问），一次性完成不再多轮追问。轻量跑不降质量底线：范围结论与决策落盘照常，仅省「明知故问」的交互轮。Grill（Step 7）与规范文件（Step 8）**不适用轻量跑、永不省**。
 
 通过对话探索需求细节、分析原型（如有）、判断拆分/批量、并对歧义点做需求澄清 Grill。本步骤合并了原有的对话探索、原型分析、需求范围评估、需求澄清 Grill 四个环节——按下方 A→D 顺序按需执行。提问遵守「一次只问一个」（见 D 节追问策略）：必须问的问题逐个问，能查代码/文档解决的不问；不要把多个歧义打包成一屏清单一次抛给用户（用户记不住、答不全，反而漏掉关键约束）；也不要为凑数把单个问题拖成多轮。
 
@@ -537,109 +537,15 @@ created_at: <now-datetime>
 ---
 \`\`\`
 
-### proposal.md 格式要求
-\`\`\`markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-# 提案书（Proposal）
-
-## 动机
-为什么做、解决什么核心问题
-
-## 关键问题
-为什么现有方案不够（展开 2-3 个具体痛点）
-
-## 变更范围
-本次做什么
-
-## 不在范围内（显式清单）
-- 不做 X
-- 不做 Y
-
-## 成功标准（可验证）
-- 旧配置默认行为不变
-- 新功能在配置后可用
-- ...
-\`\`\`
+### 产物格式模板（出上下文——R16 减负批次 2026-09-24）
+proposal.md / requirements.md / tasks.md / decisions.md 四份产物的完整格式模板**不再内嵌本说明书**（每轮全量回放是 brainstorm 段 token 膨胀主源），已由 CLI 落盘：
+\`{SPEC_ROOT}/.runtime/templates/brainstorm-artifact-templates.md\`
+**生成任一规范文件前先 Read 该模板文件一次**，严格按模板结构与 frontmatter 产出——缺章节/缺 frontmatter 会被本步 --done 门禁逐条点名（brainstorm.design.* / four-piece 规则），届时重读模板修复即可。
+模板要点速览（细则以模板文件为准）：proposal=动机/关键问题/变更范围/不在范围内/成功标准；requirements=角色表 + FR-XX GWT 块（含覆盖决策行与承接行）+ 非功能需求 + 决策覆盖矩阵；tasks=task-NN checkbox 骨架（只列任务名，plan 阶段展开写回）；decisions=D-xxx@vN 九字段 + 可选字段（锚点/模块域/否决理由/复潮条件/故障面/退役判据）。
 
 ### 触达域现行 FR（FR 索引注入，2026-09-18-fr-index-l1）
 {FR_INDEX_DIGEST}
 写作纪律（防重复 FR——L1 索引实验的承接数据源）：改写/取代上列已有行为 → 对应新 FR 块**必须加承接行**引用全局 id（如 \`承接: FR-core-engine-003\`，多个逗号分隔）；全新行为 → 新 FR 块不加承接。承接行在归档时由 CLI 翻旧条目 superseded 并建取代链。
-
-### requirements.md 格式要求
-\`\`\`markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-# 需求规格（Requirements）
-
-## 角色
-| 角色 | 说明 |
-|---|---|
-| 开发者 | ... |
-
-## 功能需求
-
-### FR-01: 需求名称
-覆盖决策：D-001@v1, D-002@v1（如适用）
-承接: FR-<域>-NNN（如适用——改写/取代上列注入清单中的已有行为时必填，全新行为省略本行）
-Given 前提条件
-When 触发动作
-Then 期望结果
-
-（每个边界条件独立 GWT 块；场景名行 \`#### 场景：X\` 会被归档索引用作摘要，建议保留）
-（约束强度标注——RFC 2119 约定：FR 正文与非功能需求里的约束必须用固定词标硬度：MUST/必须=硬性要求（违反即缺陷）；MUST NOT/禁止=红线（绝对不允许，如「平台 MUST NOT 基于 provisional 事件内容做流程判定」）；SHOULD/应当=强烈建议（偏离须注明理由）；MAY/可以=可选。禁止裸写无强度词的约束句（「不做 X」读不出是描述还是禁令）。fr/ 归档索引逐字透传，强度词随知识注入带给后续变更——这是规范语言的全链路载体）
-
-## 非功能需求
-- 兼容性：...
-- 可回退：...
-- 可测试：...
-
-## 决策覆盖矩阵（如存在 decisions.md）
-| 决策 ID | 覆盖的 FR | 说明 |
-|---|---|---|
-| D-001@v1 | FR-01 | ... |
-\`\`\`
-
-### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
-\`\`\`markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-# 任务清单（Tasks）
-
-- [ ] task-01: <任务名>
-- [ ] task-02: <任务名>
-\`\`\`
-> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
-
-### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
-\`\`\`markdown
----
-author: <git-user>
-created_at: <now-datetime>
----
-
-# 决策记录（Decisions）
-
-## D-001@v1: 决策短标题
-- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
-- priority: P0 | P1 | P2
-- status: accepted | unresolved | rejected | superseded
-- supersedes:
-- source: user | code | docs
-- question: 被解决的问题
-- answer: 用户确认或代码查证结果
-- normalized_requirement: 可测试的约束
-- impacts: [FR-01, task-01, verify-01]
-- evidence: 用户回答轮次或代码/文档路径
-\`\`\`
-
-> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
 
 ### 后续变更包处理
 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：

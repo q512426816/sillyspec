@@ -134,8 +134,8 @@ export function parseChangeRequirements(changeDir) {
 /** 域解析（导出供注入/软门消费）：变更自身 design.md 文件变更清单表行（剥 NEW: 前缀）× moduleIndex paths 前缀匹配；
  * 无匹配 → 伪域回退（auto-<路径段>，按文件路径段投票——2026-09-21 R5R 实证主仓 706 条 FR 落
  * unmapped 大池且 INDEX 路由键为通用词无法命中，模块卡覆盖不足时 FR 复利断路）；无文件清单 → unmapped。
- * filesOverride（2026-09-22-thin-fr-distill-sync）：显式交付文件清单旁路 design.md 解析——薄流程
- * 变更无 design.md（薄工件面三件套），flow done 以基线以来交付 diff 供清单，伪域路由同口径。 */
+ * filesOverride（2026-09-22-thin-fr-distill-sync）：显式交付文件清单旁路 design.md 解析——轻量变更
+ * 变更无 design.md（轻量工件面三件套），flow done 以基线以来交付 diff 供清单，伪域路由同口径。 */
 export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = null) {
   const domains = new Set();
   const designPath = join(changeDir, 'design.md');
@@ -298,7 +298,7 @@ function nextIdForDomain(domain, allSections) {
 /**
  * 归档索引主入口（幂等）：解析 → 域解析 → 发号 → 承接翻链 → 写域文件 → INDEX 路由。
  * @param {{ changeDir: string, knowledgeRoot: string, headHash?: string, cwd?: string, deliverableFiles?: string[] }} args
- *   deliverableFiles：显式交付文件清单（薄流程无 design.md 时由调用方供基线 diff，域路由同口径）
+ *   deliverableFiles：显式交付文件清单（轻量变更无 design.md 时由调用方供基线 diff，域路由同口径）
  * @returns {{ skipped?: string, written: Array<{file,id,action}>, superseded: Array<{from,to,change}>, unreferenced: Array<{domain,count}>, warnings: string[] }}
  */
 export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', deliverableFiles = null }) {

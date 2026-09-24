@@ -655,7 +655,7 @@ export function buildArchiveModuleDocAdvisory({ specBase, deliverableFiles, docs
  * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
  *
  * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
- * flow thin 薄工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
+ * flow thin 轻量工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
  * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
  * → unregisterChange 终态一致化 → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
  * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
@@ -724,8 +724,8 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
   }
   // 移动前硬校验：变更包必须含 plan.md，否则不该归档。
   // 在移动前阻断（而非移动后），目录尚未动，用户可直接修复后重试。
-  // skipPlanCheck（R7 切片二 / task-03 flow 薄工件面）：flow-state 在场的 thin change 无
-  // plan.md（薄工件面四件套），flow done 归档子步传 true 旁路；既有 archive 流程缺省 false 零变化。
+  // skipPlanCheck（R7 切片二 / task-03 flow 轻量工件面）：flow-state 在场的 thin change 无
+  // plan.md（轻量工件面四件套），flow done 归档子步传 true 旁路；既有 archive 流程缺省 false 零变化。
   if (!skipPlanCheck && !existsSync(join(srcDir, 'plan.md'))) {
     console.error(`❌ 归档失败：变更目录缺少 plan.md（${srcDir}）`)
     console.error(`   plan.md 是归档的必需产物。请先补全 plan 阶段产出再归档。`)
@@ -1549,8 +1549,8 @@ export async function handleQuickStageCompletion({ stageName, steps, currentIdx,
 
     // ── quick 资产尾（2026-09-20-quick-asset-tail，D-001/D-002/D-005）：门禁过后三件机械
     // 事，agent 零新增命令/零写作义务，fail-open 全链（任何异常 warn 不拦 quick 完成）。
-    // ① 薄通道蒸馏尾：linked 真变更（非 quick-<hex>）→ decision-distill + fr-index（幂等）
-    //    + lite 归档（治「薄通道零资产 + 僵尸 brainstorm 态」——autocompact 对撞实证）。
+    // ① 轻量通道蒸馏尾：linked 真变更（非 quick-<hex>）→ decision-distill + fr-index（幂等）
+    //    + lite 归档（治「轻量通道零资产 + 僵尸 brainstorm 态」——autocompact 对撞实证）。
     //    挂点在门禁后（D-002 时序：防未实现设计进索引）。
     // ② 模块 changelog 机械追加：changedFiles×moduleIndex join → 边车存在才 append 一行
     //    （纯 quick 的检索面——QUICKLOG 是时间流水账，模块边车是空间索引）。
@@ -3041,7 +3041,7 @@ async function runArchiveCeremonyDualRunExit({ cwd, specBase, changeName, platfo
 // ── quick 资产尾（2026-09-20-quick-asset-tail，D-001/D-002/D-004）─────────────────
 
 /**
- * lite 归档（D-004）：薄通道（brainstorm→linked quick）变更的轻量收口——所有权 assert →
+ * lite 归档（D-004）：轻量通道（brainstorm→linked quick）变更的轻量收口——所有权 assert →
  * 命名 → rename → unregisterChange。不复用 archiveChangeDirectory 的 9 处重门（未 apply
  * 交付面等 worktree 导向，linked quick 变更无 worktree 语义会被误拦）；重件
  * （module-impact/ROADMAP/delta）明确豁免。自愈：源目录缺失但已在 archive/ 时补
@@ -3081,12 +3081,12 @@ export async function liteArchiveChange({ pm, cwd, specBase, changeName, platfor
   mkdirSync(archiveDir, { recursive: true })
   renameSync(srcDir, destDir) // 先 rename 后 unregister：失败时 change 留 active 可重试（D-004 顺序保证）
   pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
-  console.log(`📦 lite 归档：${changeName} → archive/${destName}/（薄通道轻收口：蒸馏已先行，module-impact/ROADMAP 豁免）`)
+  console.log(`📦 lite 归档：${changeName} → archive/${destName}/（轻量通道轻收口：蒸馏已先行，module-impact/ROADMAP 豁免）`)
   return { archivedTo: destDir }
 }
 
 /**
- * 薄通道蒸馏尾（D-001/D-002）：quick --done 门禁过后对 linked 真变更（非 quick-<hex>）跑
+ * 轻量通道蒸馏尾（D-001/D-002）：quick --done 门禁过后对 linked 真变更（非 quick-<hex>）跑
  * decision-distill + fr-index（均幂等）→ lite 归档。挂点在质量闸后（D-002：防未实现设计进
  * 索引——quick 中途废弃永不 --done 永不蒸馏）；两文件均缺失零打扰跳过；fail-open 全链
  * （任何异常 warn 留痕不拦 quick 完成）。
@@ -3124,7 +3124,7 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
       }
     }
     out.distilled = anyDistilled
-    // lite 归档（蒸馏后；仅四件套容器变更——requirements.md 在场=brainstorm 承接的薄通道形态；
+    // lite 归档（蒸馏后；仅四件套容器变更——requirements.md 在场=brainstorm 承接的轻量通道形态；
     // 纯信号自动关联的 proposal-only 变更不归档〔quick-single-change-auto-link §3 契约钉死〕）
     for (const linked of realChanges) {
       if (!existsSync(join(specBase, 'changes', linked, 'requirements.md'))) continue

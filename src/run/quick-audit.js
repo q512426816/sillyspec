@@ -378,7 +378,7 @@ const MIN_SRC_FILES_FOR_TEST_ADVISORY = 3
 /**
  * 测试最低面 advisory（资产三小件②，advisory 不阻断——测试门 fail-closed 语义零改动）。
  *
- * 背景：R7-L 重放实测测试量仅为旧流程 40%（1162 vs 2909 行）——薄道/burst 收口走
+ * 背景：R7-L 重放实测测试量仅为旧流程 40%（1162 vs 2909 行）——轻量变更/burst 收口走
  * runQuickTestLintGate，无 quick 出口 L1 门禁的 testDelta 检查，测试厚度零约束。
  * 判定：变更交付文件（非 .sillyspec）中 src 类文件（代码双通道判定 × 非测试文件）
  * ≥3 个而测试文件 0 个改动（P2 账本测试面亦无增量可对账——账本测试面=test/ 目录
@@ -398,7 +398,7 @@ export function buildTestSurfaceAdvisory(files) {
     if (CODE_PATH_SEGMENT_RE.test(f) || CODE_EXTENSION_RE.test(f)) srcCount++
   }
   if (srcCount < MIN_SRC_FILES_FOR_TEST_ADVISORY || testCount > 0) return null
-  return `⚠️ 测试面厚度 advisory：交付面 ${srcCount} 个 src 类文件但测试面为空（0 个测试文件改动，P2 账本测试面无增量可对账），确认无需测试增量？（advisory 不阻断——薄道/burst 实证测试量仅为旧流程 40%）`
+  return `⚠️ 测试面厚度 advisory：交付面 ${srcCount} 个 src 类文件但测试面为空（0 个测试文件改动，P2 账本测试面无增量可对账），确认无需测试增量？（advisory 不阻断——轻量变更/burst 实证测试量仅为旧流程 40%）`
 }
 
 /**
