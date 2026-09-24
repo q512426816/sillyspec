@@ -40,6 +40,7 @@ updated_at: 2026-09-11（2026-09-11 批次：friction-signal-hint task-07 摩擦
 - `src/review-tier.js`
 - `src/stage-review.js`
 - `src/run/multi-repo-context.js`（跨仓 task 支持：MultiRepoContext 运行时，进程级内存对象，execute 启动构造贯穿 apply/verify）
+- `src/run/gate-snapshot-ledger.js`（门禁快照生命周期账本，2026-09-24-gate-snapshot-lifecycle：账本文件 `.sillyspec/.runtime/active-gate-snapshots.json` 随 CLI 进程生死——create 登记、cleanup 双清确认后销账，进程被杀时条目是残留唯一可追踪凭据，下个门禁建快照前按 TTL×pid 双闸自愈回收；条目删除只经 isSafeLedgerEntry 守卫的回收路径，守卫不过零删除）
 
 运行时阶段列表以导入 `src/stages/index.js` 后得到的对象为准。当前导入结果：
 
