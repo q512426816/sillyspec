@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-rename-lightweight",
+  "reviewer": "subagent-r5-final",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "披露桩1（stage.js 墙修正）的依赖半件在冻结面之外：isStageWallBlocked 的 shared.js 实现从未提交，槽4『夹带内容均自洽（全套测试绿）』仅对工作树为真",
+      "evidence": "本轮终局划界的完备性判定本身成立（见 dimensionNotes/结论），但核验中发现披露准确性缺口：冻结 diff 的 stage.js hunk @@ -60,12 +60,13 动态导入 isStageWallBlocked（./shared.js），@@ -19,7 移除 STAGE_WALL_PREDECESSOR 静态导入。而 git grep 证实 head=c0cb9ab6 提交树的 src/run/shared.js 完全不含 readStageWall/STAGE_WALL_STAGES/STAGE_WALL_PREDECESSOR/isStageWallBlocked（git log -S 对 shared.js 全空——该实现从未存在于任何提交），仅存在于工作树未提交 +50 行（git status: M src/run/shared.js，isStageWallBlocked 在工作树 :2021）。后果：①提交树自 ac229db8 起 stage.js 即静态导入 shared.js 不存在的导出（ESM 链接失败，先存状态、非本变更引入，测试绿全靠工作树半件）；②冻结 change.patch 重放到 baseline 会得到动态导入缺导出→TypeError→被 try/catch fail-open 吞掉→硬墙静默失效的形态，即冻结面上的『墙修正』是交付即死码。槽4 系统性边界说明只覆盖『窗口并行提交被吸收/未声明提交无法剔除』方向，未覆盖本方向——已披露夹带桩的另一半既不在提交面也不在冻结件内（未提交工作树件）。建议：并行会话提交 shared.js 半件，或在槽4/decisions 补注该半件的未提交状态。",
+      "location": "change.patch:591-631 (src/run/stage.js @@ -19,7 / @@ -60,12 +60,13)；src/run/shared.js:2021（仅工作树）"
+    },
+    {
+      "severity": "P3",
+      "title": "冻结 patch 内嵌的 design.md 快照是槽4旧版（『共四桩』、无系统性边界段），槽4终版晚于冻结时点未随档",
+      "evidence": "change.patch:956-1000 内嵌的本变更 design.md 槽4 写『共四桩』且无『系统性边界』段、无第五桩（c0cb9ab6 的 docs/analysis R16 交叉审计段 +21 行）；而该 +21 行 hunk 就在同一冻结 patch 内（change.patch:60-84）。现盘 design.md 槽4（:43-44，五桩+系统性边界，mtime 09-25 07:26）晚于冻结时点（change-patch.json savedAt 2026-09-24T23:24:19Z），故快照必然滞后。以现盘 design.md 为裁决基准则五桩完备；仅当未来审计者只读冻结件自证时，会看到缺第五桩的披露清单。非阻断：权威披露面（现盘槽4）已完备。",
+      "location": "change.patch:998-1000（内嵌 design.md 槽4）vs design.md:43-44"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "finding",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-24T23:31:55Z",
+  "finalRoundScope": "第五轮终局只判一件事：冻结 diff（change.patch，head=c0cb9ab6）内全部非术语面 hunk 是否尽数落入槽4五桩披露 + 系统性边界说明在场。逐 hunk 清点（25 文件 74 hunk）：非术语面 hunk 共 7 枚——stage.js @@ -19,7（导入行，去 STAGE_WALL_PREDECESSOR）/ @@ -45,12（墙门注释重写）/ @@ -60,12+13（墙门逻辑 isStageWallBlocked 重构+文案）→桩1；index.js @@ -1119,7（spawnSync 增 windowsHide:true）→桩2；brainstorm.js @@ -537,110+16（四份产物格式模板内嵌段外置为 .runtime/templates 指针）→桩3；docs/analysis @@ -307,17（token 新鲜口径 46.9M→23.6M/5.5×→4.7× 及口径注）→桩4（7000afbf）；docs/analysis @@ -327,3+24（8.1 R16 交叉审计 +21 行）→桩5（c0cb9ab6）。其余 67 枚 hunk 逐一核对均为薄→轻量族纯术语替换（含测试断言串/console 串/注释/schema 描述/模板），变更目录 5 新文件为本变更自身治理工件（change-patch.json note 已注明入档口径）。系统性边界说明在场（design.md:44：移动靶/声明文件面归属/披露+冻结定点不追/回滚=死路）。完备性判定：成立；术语面与英文零变化依前三轮连续 PASS 不再重判。"
+}

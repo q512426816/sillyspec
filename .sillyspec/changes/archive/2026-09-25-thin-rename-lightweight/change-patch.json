@@ -1,0 +1,41 @@
+{
+  "change": "2026-09-25-thin-rename-lightweight",
+  "baseline": "8ed7457b418c2100e07c2f7e8f7ed5886034c95b",
+  "head": "c0cb9ab6f6c8a924768433a3e3374d55ee461fc2",
+  "files": [
+    "SKILL.md",
+    "docs/analysis/R8-R15-对撞实验阶段明细-2026-09-24.md",
+    "src/config-schema.js",
+    "src/flow-draft.js",
+    "src/flow-parity.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "src/fr-index.js",
+    "src/index.js",
+    "src/run/command.js",
+    "src/run/complete-handlers.js",
+    "src/run/quick-audit.js",
+    "src/run/stage.js",
+    "src/stages/brainstorm.js",
+    "templates/agents-instruction.md",
+    "test/flow-draft.test.mjs",
+    "test/flow-parity.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-review.test.mjs",
+    "test/flow-route.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-rename-lightweight/design.md",
+    ".sillyspec/changes/2026-09-25-thin-rename-lightweight/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-rename-lightweight/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-rename-lightweight/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-rename-lightweight/tasks.md"
+  ],
+  "totals": {
+    "files": 25,
+    "additions": 280,
+    "deletions": 208
+  },
+  "savedAt": "2026-09-24T23:24:19.720Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "1119a8eb37d05421d9b499dc6c30ff5740b96a92061601364ac0e35d32084e7f",
+  "patchStatus": "ok"
+}
