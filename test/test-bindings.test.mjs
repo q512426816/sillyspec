@@ -233,3 +233,13 @@ test('B10 resolveTestFileOwners：FR 面+ql 面 active 行归属；candidate/sup
   assert.deepEqual((owners.get('test/b.test.mjs') || []).map(o => o.anchor), ['ql-20260924-001-ab12'], 'B10: ql 面归属')
   assert.equal(owners.has('test/c.test.mjs'), false, 'B10: 未绑定文件无归属')
 })
+
+test('B11 queryByAnchor FR 分支：活库条目绑定行可查（回归 tests-fr-view-empty——anchor 曾误传 frId 键致 FR 视图恒空）', async () => {
+  const { queryByAnchor } = await import('../src/test-bindings.js')
+  const root = specFixture()
+  const kRoot = join(root, 'knowledge')
+  upsertFrBindings({ knowledgeRoot: kRoot, frId: 'FR-core-001', rows: [cand({ state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: 'h' })] })
+  const rows = queryByAnchor({ specBase: join(root), knowledgeRoot: kRoot, anchor: 'FR-core-001' })
+  assert.equal(rows.length, 1, 'B11: FR 视图命中')
+  assert.equal(rows[0].anchor, 'FR-core-001', 'B11: 锚回显')
+})

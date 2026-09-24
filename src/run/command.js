@@ -1367,7 +1367,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
       } catch { /* 探测失败不阻断既有 run 流程 */ }
       try {
         const { spawnWatcher } = await import('../watcher.js')
-        const r = await spawnWatcher(cwd, effectiveChange, platformOpts)
+        const r = await spawnWatcher(cwd, effectiveChange, { ...platformOpts, specBase })
         if (r.status === 'spawned') {
           console.log(`🔄 [watcher] 观测旁路已拉起（产物签名轮询，事件恒带 provisional:true）: ${effectiveChange}`)
         }
@@ -1931,7 +1931,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
   if (changeName && changeName !== 'default') {
     try {
       const { spawnWatcher } = await import('../watcher.js')
-      const r = await spawnWatcher(cwd, changeName, platformOpts)
+      const r = await spawnWatcher(cwd, changeName, { ...platformOpts, specBase })
       if (r.status === 'spawned') {
         console.log(`🔄 [watcher] 观测旁路已拉起（auto 路径补挂，事件恒带 provisional:true）: ${changeName}`)
       }

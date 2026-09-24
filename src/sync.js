@@ -8,10 +8,10 @@
  * HTTP 请求：Node.js 原生 fetch（Node 22+）
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, chmodSync, rmSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { writeAtomicSync } from './fs-atomic.js';
-import { join, dirname, basename, isAbsolute, relative } from 'path';
+import { join, dirname, basename, isAbsolute, relative, resolve as pathResolve } from 'path';
 import { homedir } from 'os';
 import { resolvePlatformSpecDir } from './progress.js';
 import { safeGit } from './git-helper.js';
@@ -66,6 +66,60 @@ function readLocalYaml(cwd) {
   } catch {
     return {};
   }
+}
+
+/**
+ * 平台凭据解析（含向上回退链，2026-09-24 fr-test-readside 平台断流实证修复）：
+ * env（SILLYHUB_PLATFORM_URL/TOKEN）最高优先 → cwd 的 local.yaml platform 段 →
+ * 向上最多 7 级父目录逐层找 <dir>/.sillyspec/local.yaml 的 platform 段。
+ * 治「平台根 worktree 内跑命令」：worktree 的 local.yaml 是 gitignored 凭据不随
+ * checkout 跟进 → 无 platform 段 → 判未连接 → triggerSync 静默 no-op（verify/archive
+ * 瘦会话 cwd 在平台 worktree 时同步全程断流，bg 日志 13:29 后零同步轮实证）。
+ * 向上回退天然覆盖「worktree → 宿主仓」布局（宿主仓 local.yaml 持有连接凭据）。
+ * @returns {{url:string, token:string}|null}
+ */
+export function readPlatformConfig(cwd, opts = {}) {
+  if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) {
+    return { url: process.env.SILLYHUB_PLATFORM_URL, token: process.env.SILLYHUB_PLATFORM_TOKEN };
+  }
+  const maxDepth = Number.isInteger(opts.maxDepth) ? opts.maxDepth : 7; // opts.maxDepth 供单测隔离
+  const fromDir = (d) => { const p = readLocalYaml(d).platform; return p && p.url && p.token ? p : null };
+  const dir = pathResolve(cwd || process.cwd());
+  // ① 定 git 顶层（worktree 的 .git 是文件，也算顶层标记）：无 git 的目录链只看本层
+  //    ——回退链只在仓内有界，禁爬出仓外（家目录/祖先仓的凭据不该被任意子目录继承；
+  //    坑 check-approval-status 回归：tmpdir fixture 判「未连接」曾被无界回退翻真）。
+  let top = null;
+  let cur = dir;
+  for (let i = 0; i < maxDepth; i++) {
+    if (existsSync(join(cur, '.git'))) { top = cur; break; }
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  if (!top) return fromDir(dir);
+  // ② 仓内 cwd→顶层逐层查
+  cur = dir;
+  for (;;) {
+    const hit = fromDir(cur);
+    if (hit) return hit;
+    if (cur === top) break;
+    cur = dirname(cur);
+  }
+  // ③ worktree（顶层 .git 是文件）→ 宿主仓根（gitdir: <host>/.git/worktrees/<name>，
+  //    从 dirname(gitdir) 再上溯两次到 <host>）
+  try {
+    const dotGit = join(top, '.git');
+    if (statSync(dotGit).isFile()) {
+      const m = readFileSync(dotGit, 'utf8').match(/^gitdir:\s*(.+)$/m);
+      if (m) {
+        let host = pathResolve(dirname(m[1].trim()));
+        for (let k = 0; k < 2; k++) host = dirname(host);
+        const hostHit = fromDir(host);
+        if (hostHit) return hostHit;
+      }
+    }
+  } catch { /* gitdir 指针损坏 → 按无宿主处理 */ }
+  return null;
 }
 
 /** 读 local.yaml 原始文本（保留注释/换行/结构），不存在返回 ''。供 connect/disconnect 文本级改写。 */
@@ -1251,14 +1305,9 @@ export class SyncManager {
    * （2026-08-26）后平台模式回传的主凭据实为 local.yaml platform 段（env 缺席时）。
    */
   _getPlatform() {
-    if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) {
-      return {
-        url: process.env.SILLYHUB_PLATFORM_URL,
-        token: process.env.SILLYHUB_PLATFORM_TOKEN,
-      };
-    }
-    const config = readLocalYaml(this.cwd);
-    return config.platform || null;
+    // 凭据走 readPlatformConfig 回退链（env → 本仓 local.yaml → 向上父目录）——平台根
+    // worktree cwd（gitignored 凭据不随 checkout 跟进）也能借宿主仓凭据连上（同 peek 修法）
+    return readPlatformConfig(this.cwd);
   }
 
   /**
@@ -2298,10 +2347,8 @@ export async function syncSpecTreeOnly(changeName, cwd, opts = {}) {
  * 未连接时不为一次注定 no-op 的同步 spawn 后台子进程（本地独立用户零开销零行为变化）。
  * 只做连接性预判不携带凭据：子进程自行经 _getPlatform 取全量配置（判据同源必一致）。
  */
-export function peekPlatformConnected(cwd) {
-  if (process.env.SILLYHUB_PLATFORM_URL && process.env.SILLYHUB_PLATFORM_TOKEN) return true;
-  const p = readLocalYaml(cwd).platform;
-  return Boolean(p && p.url && p.token);
+export function peekPlatformConnected(cwd, opts = {}) {
+  return Boolean(readPlatformConfig(cwd, opts));
 }
 
 // TBD-hub-api: approve/reject 端点路径与请求体以 SillyHub 仓库实际 API 为准；

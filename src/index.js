@@ -1451,6 +1451,15 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
           }
         } catch { /* 草稿预填失败不阻断 --init */ }
       }
+      // ── 产物落盘即推平台（2026-09-24 fr-test-readside 断流实证修复④）：--init/--force
+      //    写探针报告/骨架/facts 后不触发同步，verify 期步骤与文件迟到平台直到 --done——
+      //    补 triggerSync 与 stage 渲染同拍（bg 异步，不阻塞命令返回）。──
+      if (vpChange && (vpInit || vpForce)) {
+        try {
+          const { triggerSync } = await import('./run/shared.js')
+          triggerSync(dir, vpChange, { specRoot: vpSpecBase })
+        } catch { /* 同步触发失败不阻断探针命令 */ }
+      }
       break;
     }
     case 'review-dispatch': {

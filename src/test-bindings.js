@@ -346,7 +346,10 @@ export function unbindQlRows({ specBase, qlId, rowIds }) {
 export function queryByAnchor({ specBase, knowledgeRoot, anchor }) {
   const out = []
   if (/^FR-/.test(anchor)) {
-    for (const r of readFrBindings({ knowledgeRoot, anchor })) out.push(r)
+    // 坑 tests-fr-view-empty（2026-09-24 平台合并后实锤）：此处曾把 anchor 传成 frId
+    // 键——readFrBindings 取 frId=undefined → 全域查找落空 → FR 视图恒空（B6 只测 ql
+    // 分支放行）。键名对齐 readFrBindings 契约。
+    for (const r of readFrBindings({ knowledgeRoot, frId: anchor })) out.push(r)
   } else if (/^ql-/.test(anchor)) {
     for (const r of readQlBindings(specBase)[anchor] || []) out.push(r)
   }
