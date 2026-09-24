@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="qinyi">
+<meta name="created_at" content="2026-06-18T22:03:12">
+<title>daemon-interactive-session 设计原型</title>
+<style>
+body{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#0d1117;color:#c9d1d9;margin:0;padding:24px;line-height:1.5;max-width:1100px;margin:0 auto}
+h1{color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:8px;font-size:18px}
+h2{color:#79c0ff;margin-top:28px;font-size:15px;border-left:3px solid #58a6ff;padding-left:8px}
+section{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px 16px;margin:12px 0}
+pre{background:#0d1117;border:1px solid #30363d;border-radius:4px;padding:12px;overflow:auto;color:#8b949e;font-size:12px;margin:8px 0}
+.note{color:#8b949e}.ok{color:#3fb950}.warn{color:#d29922}
+table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}
+td,th{border:1px solid #30363d;padding:4px 8px;text-align:left}
+th{background:#21262d;color:#58a6ff}
+</style>
+</head>
+<body>
+<h1>daemon-interactive-session · 设计原型（D-002@v3 · 方案A 独立并存）</h1>
+<p class="note">author: qinyi · created_at: 2026-06-18T22:03:12 · 后端 driver 层 + 全栈，线框/ASCII 风格</p>
+
+<h2>1. 整体架构 — driver 与 TaskRunner 并存（lease.kind 分流）</h2>
+<section>
+<pre>
+                    +---------------------------------------------+
+   backend          | daemon_task_leases.kind 分流                 |
+   (claim lease) -->|   kind=batch       -> TaskRunner (不动)       |
+                    |   kind=interactive -> InteractiveSessionManager|
+                    +------------------+--------------------------+
+                                       | create session + 第一 turn
+                                       v
+           +--------------------------------------------+
+           | sillyhub-daemon/src/interactive/ (新增并存)  |
+           |  session-manager.ts   session 生命周期+内存Store|
+           |  claude-sdk-driver.ts SDK query/streamInput/...|
+           |  input-queue.ts       per-session AsyncIterable|
+           +----------------------+---------------------+
+                                  | pathToClaudeCodeExecutable = 系统 claude (决策4)
+                                  v
+                  @anthropic-ai/claude-agent-sdk  query(AsyncIterable)
+                                  | env 继承 ANTHROPIC_AUTH_TOKEN + BASE_URL
+                                  v
+                        系统 claude.exe 2.1.181 -> bigmodel/GLM
+</pre>
+<p class="note">现有 lease / WS / AgentRun / AgentRunLog / Redis / SSE / 权限审计全部保留。</p>
+</section>
+
+<h2>2. AgentSession 状态机（D-003）</h2>
+<section>
+<pre>
+   create --> active -----------------------------> ended
+                |   ^                               ^
+                |   | idle (等下一条 inject)          | session.end / 空闲 30min (D-004)
+                v   | running (turn 执行中)           |
+              running --interrupt()--> 当前 AgentRun=failed, session 仍 active (spike D1)
+                |
+                | 进程崩溃 (Wave1/2)
+                v
+              failed   --Wave3--> reconnecting --resume(agent_session_id)--> active (spike D3)
+</pre>
+<p class="note">Wave1/2 崩溃=failed（提示重开）；Wave3 resume 持久化。SDK 自动持久化 ~/.claude/projects/&lt;cwd&gt;/&lt;sid&gt;.jsonl。</p>
+</section>
+
+<h2>3. turn -> AgentRun 映射（spike D4：result = 边界）</h2>
+<section>
+<pre>
+   inject msg1 -> [turn1: SDK assistant msgs...] -> result#1 -> 关闭 AgentRun#1
+                                                            |
+   inject msg2 -> [turn2: SDK assistant msgs...] -> result#2 -> 关闭 AgentRun#2
+   (turn 级串行, 不支持运行中注入 -- spike S1)
+
+   一个 AgentSession = N 个 AgentRun (run.agent_session_id FK)
+   所有 turn 事件(含 Task 子agent)都在该 run 的 result 之前 -- 无孤儿事件
+</pre>
+</section>
+
+<h2>4. canUseTool 远程人审时序（决策2）</h2>
+<section>
+<pre>
+  SDK (claude 要调工具)
+      | canUseTool(tool,input) 回调触发
+      v
+  ClaudeSdkDriver --WS: tool_approval_request--> backend --SSE/WS--> frontend
+  (回调 await, claude 暂停)                                        | 弹审批卡
+      ^                                                             | [Allow] [Deny]
+      | resolve({allow|deny})                                       v
+      +--------- allow/deny 回传 <-------- backend <--------- frontend
+      |
+      | 超时 5min 未响应 -> deny (默认)
+      v
+  SDK 继续执行 (allow) 或收到 deny.message  (spike D2: 回调可 await 任意延迟, 不超时)
+</pre>
+</section>
+
+<h2>5. frontend 交互式会话 UI（线框）</h2>
+<section>
+<pre>
++----------------------------------------------------------------------+
+| SillyHub  |  交互式会话                                                |
+|-----------+----------------------------------------------------------|
+| 会话列表   |  会话: feat-x  [状态: active·running]   [interrupt][end] |
+|           |                                                          |
+| > feat-x  |  +--------------------------------------------------+   |
+|   idle    |  | user: 帮我重构 auth 模块                          |   |
+| [] feat-y |  | assistant: 好的，先读 model.py... (turn1 SSE)     |   |
+|   running |  | [tool] Write auth.py  [!] 待审批 [Allow][Deny]    |   |
+| [] bug-z  |  | assistant: 已完成 (turn1 result)                  |   |
+|   ended   |  | user: 再加测试  (turn2)                            |   |
+|           |  +--------------------------------------------------+   |
+|           |  +--------------------------------------------------+   |
+|           |  | 输入消息...                              [发送]    |   |
+|           |  +--------------------------------------------------+   |
++----------------------------------------------------------------------+
+   订阅 session 级 SSE (stream_session_logs, 聚合多 turn)
+</pre>
+</section>
+
+<h2>6. GLM caveat + 待验</h2>
+<section>
+<table>
+<tr><th>项</th><th>策略</th><th>来源</th></tr>
+<tr><td>GLM 工具失败 (Write 等)</td><td class="warn">错误透传: tool_result is_error 返给 claude 自处理 (决策3)</td><td>spike D2 caveat</td></tr>
+<tr><td>显式 pathToClaudeCodeExecutable=系统 claude</td><td class="warn">execute 前补验 (spike H1 验证的是默认内置 exe)</td><td>决策4</td></tr>
+<tr><td>运行中注入</td><td class="note">不支持, turn 级 (不承诺)</td><td>spike S1</td></tr>
+<tr><td>后台任务归属</td><td class="ok">result 是边界, 无孤儿事件</td><td>spike D4</td></tr>
+</table>
+</section>
+
+</body>
+</html>
