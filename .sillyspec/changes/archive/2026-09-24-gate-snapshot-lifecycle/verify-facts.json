@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-24-gate-snapshot-lifecycle",
+  "generatedAt": "2026-09-24T07:40:10.899Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "matches": 1,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 5
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "backendEndpoints": 4,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-24-gate-snapshot-lifecycle",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "handover": {
+    "count": 3,
+    "items": [
+      {
+        "type": "manual-acceptance",
+        "item": "task-05「npm run lint 绿（module-map 覆盖全、模块卡字数预算不超限）」无自动化测试承接——已人工执行 `npm run lint`：Checked 782 JavaScript files（src 162 + test 620），内容规则通过 + 未引用导出 0 + module-map 覆盖全",
+        "condition": "复跑：`npm run lint`，期望输出末行含「未引用导出 0 项（hard fail）+ module-map 覆盖全」",
+        "severity": "advisory"
+      },
+      {
+        "type": "manual-acceptance",
+        "item": "task-05「test:core 清单含新测试文件」无自动化测试承接——已人工核对 package.json test:core 含 test/gate-snapshot-lifecycle.test.mjs 与 test/gate-snapshot-cleanup.test.mjs，且 `npm run test:core` 可跑",
+        "condition": "复跑：`node -e \"console.log(require('./package.json').scripts['test:core'].includes('gate-snapshot-lifecycle'))\"` 期望 true",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "verify 阶段 CLI 实测选面降级（test_strategy: module + in-place 模式自动 checkpoint 2b5bb6e7 生成于执行半途 → 模块 0 命中 → commands.test 按「据 verify-result.md 自报告」跳过；真实全量证据由本报告测试结果节逐条登记）",
+        "condition": "复跑：待 in-place checkpoint 基线问题单独立项修复后，`sillyspec run verify --done` 将亲跑 commands.test；本次证据：全量 613/613（npm test，修复后）、新测试 30/30、lint 782 绿",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "not-ran",
+  "matrixPartialRows": 3,
+  "apiFace": {
+    "endpoints": [],
+    "declared": null,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/gate-snapshot-lifecycle.test.mjs",
+      "test/gate-snapshot-cleanup.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured",
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  }
+}

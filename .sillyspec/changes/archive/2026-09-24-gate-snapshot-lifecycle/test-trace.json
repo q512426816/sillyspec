@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-24-gate-snapshot-lifecycle",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-01:acc-0-9c874855",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-01:acc-1-684adbe3",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-01:acc-2-62b6fe30",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-01:acc-3-62438660",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-02:acc-0-e5e736e6",
+      "tests": [
+        "test/gate-snapshot-cleanup.test.mjs",
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-02:acc-1-903297f3",
+      "tests": [
+        "test/gate-snapshot-cleanup.test.mjs",
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-02:acc-2-30d16725",
+      "tests": [
+        "test/gate-snapshot-cleanup.test.mjs",
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-03:acc-0-32359079",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-03:acc-1-21374171",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-03:acc-2-e36cce3a",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-03:acc-3-95933cc0",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-03:acc-4-74f5abe1",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-04:acc-0-4bd1e77c",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-04:acc-1-732bacba",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-24-gate-snapshot-lifecycle:task-04:acc-2-4756ba1c",
+      "tests": [
+        "test/gate-snapshot-lifecycle.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-24-gate-snapshot-lifecycle"
+    }
+  ]
+}
