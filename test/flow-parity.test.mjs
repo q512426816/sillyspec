@@ -1,5 +1,5 @@
 /**
- * flow-parity.test.mjs — 薄道资产对齐三件（2026-09-25-thin-parity-assets）
+ * flow-parity.test.mjs — 轻量变更资产对齐三件（2026-09-25-thin-parity-assets）
  *
  * 覆盖验收面：
  *   ① reconcileModuleDocs：命中点名/文档已同步 vs 未更新强提示/无图零输出；

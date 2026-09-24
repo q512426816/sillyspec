@@ -19,7 +19,7 @@
 import { join, dirname } from 'node:path'
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES, STAGE_WALL_PREDECESSOR } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
@@ -45,12 +45,12 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
     }
   }
 
-  // ── 阶段墙 hard 门（R16 减负批次 A 相位，2026-09-24）──
-  // 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）且目标
-  // 阶段为首次进入 → 拒启动。两个不拦的口：①目标阶段已有 stage 数据（reopen/复跑重入——保住
-  // verify FAIL→execute --reopen→verify 复跑的修复回路）；②--same-session 显式逃生口（应急/
-  // 平台编排）。fail-open：ledger 缺失/读失败/会话标识缺省 → 放行（与账本 best-effort 一致，
-  // hard 门只拦「确证同会话硬续」一种形态）。
+  // ── 阶段墙 hard 门（R16 减负批次 A 相位，2026-09-24；R16-b 实证修正 2026-09-25）──
+  // 拦「前驱刚收口、未执行 handoff 切割、目标阶段首次进入」的硬续形态。三个放行口：
+  // ①sillyspec handoff 已在前驱收口后执行（ledger.handoffAt > ledger.at——handoff 协议要求
+  //   新会话保持同一 SILLYSPEC_SESSION_ID，SESSION_ID 相同不是硬续证据，切割凭证=handoff 动作）；
+  // ②目标阶段已有 stage 数据（reopen/复跑重入——保住 verify FAIL→execute --reopen 修复回路）；
+  // ③--same-session 显式逃生口。fail-open：ledger 缺失/读失败/会话标识缺省 → 放行。
   if (STAGE_WALL_STAGES.includes(stageName) && changeName && !(quickOpts && quickOpts.sameSession)) {
     try {
       if ((await readStageWall(cwd)) === 'hard') {
@@ -60,12 +60,13 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         const wallLedgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
         if (curSession && firstEntry && existsSync(wallLedgerPath)) {
           const wallLedger = JSON.parse(readFileSync(wallLedgerPath, 'utf8'))
-          if (wallLedger && wallLedger.sessionId === curSession && wallLedger.lastStage === STAGE_WALL_PREDECESSOR[stageName]) {
+          const { isStageWallBlocked } = await import('./shared.js')
+          if (isStageWallBlocked({ ledger: wallLedger, curSession, stageName, stageHasData: !firstEntry })) {
             console.error(``)
-            console.error(`⛔ 阶段墙（stage.wall=hard）：本会话（${curSession}）刚收口 ${wallLedger.lastStage}，${stageName} 必须在新的瘦会话执行。`)
+            console.error(`⛔ 阶段墙（stage.wall=hard）：本变更刚在会话标识 ${curSession} 下收口 ${wallLedger.lastStage}，${stageName} 须在新会话执行。`)
             console.error(`   单会话历史重放税实测：R15 execute 段均轮 263K 输入（断崖拆会话后回落 120-170K）——${stageName} 的全部输入在盘上（design/plan/tasks/review），新会话零背景可续跑。`)
             console.error(`   动作：`)
-            console.error(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（保持 SILLYSPEC_SESSION_ID 不变）`)
+            console.error(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，生成后墙自动放行）`)
             console.error(`   2. 新会话粘贴交接块 → sillyspec run ${stageName} --change ${changeName}`)
             console.error(`   逃生口：确认要同会话硬续（应急/平台编排）→ 加 --same-session 重跑本命令。`)
             process.exit(1)
@@ -366,8 +367,8 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // prompt 时每个新进程都进此块，按文件判幂等才不会重复分配 ql-ID / 重复写条目）。
   if (stageName === 'quick') {
     // 存量过渡横幅（2026-09-25-thin-default-flip：quick 退役第 2 步）——渲染入口打一行指路，
-    // --done 收尾不经 runStage 不受打扰；quick 全功能保留（存量会话收尾用，新工作走薄流程）。
-    console.warn(`⚠️ quick 为存量过渡通道（新工作请走薄流程：sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"，2 次调用带测试绑定与 patch 留档）——本命令仅供收尾进行中的 quick 会话。`)
+    // --done 收尾不经 runStage 不受打扰；quick 全功能保留（存量会话收尾用，新工作走轻量变更）。
+    console.warn(`⚠️ quick 为存量过渡通道（新工作请走轻量变更：sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"，2 次调用带测试绑定与 patch 留档）——本命令仅供收尾进行中的 quick 会话。`)
     // 受保护文件预告打印（坑 quick-protected-late-hint，2026-08-28 用户实证：scan 类文档
     // ARCHITECTURE/CONCERNS 属受保护基线，--files 声明了照样拦、必须 --force-baseline——
     // 设计合理但提示太晚。step1 即预告哪些声明文件会触发拦截，省一轮跑到 --done 才发现的往返）

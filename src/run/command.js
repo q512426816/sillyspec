@@ -722,7 +722,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--skip-apply', // 归档收口跳过 apply 校验（task-02 只注册透传不改行为，消费归 task-03 archive 接线）
     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
     '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
-    '--upgrade-thick', // 薄→厚升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
+    '--upgrade-thick', // 轻量→完整升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {
@@ -1354,7 +1354,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     if (effectiveChange !== 'default') {
       // ── 混跑回退写侧（R7 切片二 / FR-06 / D-002：thin change 上跑 run <stage> = 该 change
       // 回 legacy 记账——flow done 读侧拒裁并指路厚档；两套记账不叠加。一次性置位留痕。）──
-      // 升厚同意门（2026-09-25-thin-upgrade-consent，R16 实测驱动）：薄→厚是成本数倍的资源
+      // 升厚同意门（2026-09-25-thin-upgrade-consent，R16 实测驱动）：轻量→完整是成本数倍的资源
       // 决策，归属用户——agent 不得凭 CLI 的 advisory 自行转道。混跑回退须显式 --upgrade-thick
       // （=「用户已同意」的落痕 flag，同 --force 留痕先例）；无 flag 拒跑指路。
       try {
@@ -1365,9 +1365,9 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
           const st = readFlowState(changeDir)
           if (st && !st.legacy_fallback) {
             if (!flags.includes('--upgrade-thick')) {
-              console.error(`⛔ 本变更在薄跑道上（flow-state 在场）——升厚走完整流程需用户同意，agent 不得自行转道：`)
+              console.error(`⛔ 本变更在轻量跑道上（flow-state 在场）——升厚走完整流程需用户同意，agent 不得自行转道：`)
               console.error(`   · 征得用户同意后带 --upgrade-thick 重跑本命令（落痕留档，首次转厚即转）`)
-              console.error(`   · 用户未确认或选择薄跑 → 继续薄道：直接干活，收口 sillyspec flow done --change ${effectiveChange}`)
+              console.error(`   · 用户未确认或选择轻量跑 → 继续轻量变更：直接干活，收口 sillyspec flow done --change ${effectiveChange}`)
               process.exit(2)
             }
             writeFlowState(changeDir, { legacy_fallback: true, upgraded_by_consent: new Date().toISOString() })

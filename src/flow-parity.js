@@ -1,12 +1,12 @@
 /**
- * flow-parity.js — 薄道资产对齐三件（2026-09-25-thin-parity-assets，能力/资产对照表终核收口）。
+ * flow-parity.js — 轻量变更资产对齐三件（2026-09-25-thin-parity-assets，能力/资产对照表终核收口）。
  *
- * ① reconcileModuleDocs：模块文档同步对账——厚道 module-impact 死信门的薄道等价物（advisory）：
+ * ① reconcileModuleDocs：模块文档同步对账——厚道 module-impact 死信门的轻量变更等价物（advisory）：
  *    交付文件命中模块图 → 点名模块与文档路径；模块代码变了而文档未动 → 强提示。模块文档是
  *    后续变更 module 命中/门禁收窄/知识注入的原料（verify -68% 那笔账的来源），失供是复利折旧。
  * ② renderVerifyReceipt：verify-result 机器回执——人类可读收口结论（实测面/评审/绑定/冻结 sha），
- *    厚道有薄道缺的审计资产；机器合成勿手改。
- * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——薄变更决策
+ *    厚道有轻量变更缺的审计资产；机器合成勿手改。
+ * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——轻量变更决策
  *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'

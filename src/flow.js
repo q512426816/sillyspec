@@ -1,8 +1,8 @@
 /**
  * flow.js — 2-调用协议（R7 切片二 / D-002 D-003 D-007 / FR-03~06）。
  *
- * 协议形状属性（机械 harness 可验，非 agent 配额）：薄跑道 CLI 必需交互 = 2——
- *   ① `flow start`（一次下发：建 change + 基线锚定 + 薄流程说明 + 全部材料**路径**清单
+ * 协议形状属性（机械 harness 可验，非 agent 配额）：轻量跑道 CLI 必需交互 = 2——
+ *   ① `flow start`（一次下发：建 change + 基线锚定 + 轻量变更说明 + 全部材料**路径**清单
  *      ——稳定前缀=缓存最优；已存在 change → 恢复简报（盘面状态：checkbox/提交/账本/
  *      dirty files → 做到哪、剩什么））；
  *   ② `flow done`（唯一裁决点：六子步幂等——工件校验/P2 账本对账+亲测/探针/distill/
@@ -16,7 +16,7 @@
  *
  * 配置（local.yaml，config-schema 注册；design 措辞 `flow: thin|legacy` 落地为单键
  * `flow.mode: thin|legacy`——YAML 单键形态语义一致）：缺省 thin（2026-09-25-thin-default-flip
- * 入口归一——D-010@v2 实验通道定位由薄道加固件【设计记录/测试绑定/patch 留档/预段收编】推翻，
+ * 入口归一——D-010@v2 实验通道定位由轻量变更加固件【设计记录/测试绑定/patch 留档/预段收编】推翻，
  * quick 退役第 1 步）；legacy=显式回旧道，既有 run <stage> 全族逐字不动，flow start 拒跑并指路
  * （切回一行 yaml）。thin change 上跑 run <stage> =
  * 混跑回退（flow-state 落 legacy_fallback，flow done 按厚档裁决——两套记账不叠加）。
@@ -62,7 +62,7 @@ export function writeFlowState(changeDir, patch) {
 }
 
 /** 读 local.yaml 的 flow 配置（缺省 thin——2026-09-25-thin-default-flip 翻转：入口归一，
- * D-010@v2 实验通道定位由薄道加固件（设计记录/测试绑定/patch 留档/预段收编）的数据推翻；
+ * D-010@v2 实验通道定位由轻量变更加固件（设计记录/测试绑定/patch 留档/预段收编）的数据推翻；
  * 显式 mode: legacy 的仓维持旧道。文本级读同既有习惯）。 */
 export function readFlowConfig(specBase) {
   try {
@@ -126,7 +126,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   const cfg = readFlowConfig(specBase)
   if (cfg.mode === 'legacy') {
     console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')
-    console.error('   切回薄跑道（2026-09-25 起缺省即 thin）：local.yaml 删掉 mode: legacy 或改为 mode: thin')
+    console.error('   切回轻量跑道（2026-09-25 起缺省即 thin）：local.yaml 删掉 mode: legacy 或改为 mode: thin')
     process.exit(2)
   }
   // PM 锚定 specBase（平台参数面修复：此前裸构锚 resolveSpecDir(cwd)——DB 行/change 目录落本地，
@@ -142,7 +142,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     const st = readFlowState(changeDir)
     if (!st) {
       // adopt 收编（2026-09-25-thin-brainstorm-prestage）：头脑风暴预段产物（proposal/design 在场、
-      // 无 flow-state）收编进薄道——brainstorm 是 run 族预段，先跑后到不触发混跑守卫；产物原样
+      // 无 flow-state）收编进轻量变更——brainstorm 是 run 族预段，先跑后到不触发混跑守卫；产物原样
       // 保留，机器只补缺件与绑定面。无产物 = 真 legacy 既有变更，维持原拒收。
       const hasBsArtifacts = existsSync(join(changeDir, 'proposal.md')) || existsSync(join(changeDir, 'design.md'))
       if (hasBsArtifacts) {
@@ -163,7 +163,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         } catch { /* 观测旁路 best-effort */ }
         const materials = materialPaths(specBase, change, changeDir)
         console.log([
-          `🧲 头脑风暴产物已收编进薄跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
+          `🧲 头脑风暴产物已收编进轻量跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
           `══════════════════════════════════════`,
           `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
@@ -182,7 +182,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
       let dirEmpty = false
       try { dirEmpty = readdirSync(changeDir).length === 0 } catch { dirEmpty = false }
       if (dirEmpty) {
-        console.log('ℹ️ 预建空变更目录放行（平台 writer 形态）：按全新薄跑道 start 处理')
+        console.log('ℹ️ 预建空变更目录放行（平台 writer 形态）：按全新轻量跑道 start 处理')
         proceedFreshEmptyDir = true
       } else {
         console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
@@ -204,15 +204,15 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     }
   }
 
-  // 需求清晰度门（2026-09-25-thin-brainstorm-prestage）：薄跑道假定输入已含决策——--input 缺失
+  // 需求清晰度门（2026-09-25-thin-brainstorm-prestage）：轻量跑道假定输入已含决策——--input 缺失
   // 或成功标准提取 0 条时不建变更、exit 2 给两选一（头脑风暴预段 / 补成功标准重跑）。
   // 重入与 adopt 路径在上方分支早退，不受此门影响。CLI 只产信号，选择权归用户/agent。
   {
     const { extractSuccessCriteria } = await import('./flow-draft.js')
     if (!input || extractSuccessCriteria(input).length === 0) {
-      console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——薄跑道假定输入已含决策，两选一：`)
+      console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——轻量跑道假定输入已含决策，两选一：`)
       console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
-      console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑薄道`)
+      console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑轻量变更`)
       console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`)
       console.error(`      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`)
       process.exit(2)
@@ -220,7 +220,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   }
 
   // 升厚预判已删除（2026-09-25-thin-precheck-removal）：技术面关键词（数据库/迁移等）测错轴——
-  // R16 实证碰迁移的变更薄道带评审最优收口，预判反诱发误升厚（臂 A 129M）与误报打断。选道只留
+  // R16 实证碰迁移的变更轻量变更带评审最优收口，预判反诱发误升厚（臂 A 129M）与误报打断。选道只留
   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
   // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
 
@@ -244,7 +244,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   const baseline = typeof head === 'string' && head.trim() ? head.trim() : null
   writeFlowState(changeDir, {
     tier: thick ? 'thick' : 'thin',
-    // born_face=工件面出身（R7 切片四修正：失败升厚改 tier 只升仪式不回溯出身——薄面出身归档
+    // born_face=工件面出身（R7 切片四修正：失败升厚改 tier 只升仪式不回溯出身——轻量面出身归档
     // 恒走 skipPlanCheck，防「升厚后无 plan.md 归档死锁」；厚面出身（--thick 起步）才要 plan.md）
     born_face: thick ? 'thick' : 'thin',
     with_tasks: Boolean(withTasks),
@@ -261,12 +261,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     const r = draftAll({ changeDir, change, input, withTasks: thick || withTasks, runtimeRoot })
     drafted = r.written
   } catch (e) {
-    console.warn(`⚠️ 机器起草失败（薄工件面降级为 flow done 默认验收；best-effort 不阻断）: ${(e && e.message) || e}`)
+    console.warn(`⚠️ 机器起草失败（轻量工件面降级为 flow done 默认验收；best-effort 不阻断）: ${(e && e.message) || e}`)
   }
 
   const materials = materialPaths(specBase, change, changeDir)
   const lines = [
-    `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 薄跑道'}）: ${change}`,
+    `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
     ``,
@@ -292,7 +292,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     console.log(lines.join('\n'))
   }
   // 平台同步（2026-09-22-thin-fr-distill-sync：flow 走 index.js 分发不经 runCommand，此前后台
-  // spec-sync 从不触发——薄道 docs/knowledge 不推平台。对齐 run 族语义：尾部 best-effort 后台推）
+  // spec-sync 从不触发——轻量变更 docs/knowledge 不推平台。对齐 run 族语义：尾部 best-effort 后台推）
   try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
   return { change, baseline, materials }
 }
@@ -326,7 +326,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
 /**
  * flow done —— 第 2 次协议调用（唯一裁决点，六子步幂等）。
  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
- * → archive（归档经 runArchiveChain，thin 薄工件面跳过 plan.md 硬校验）→ events（事件收口）。
+ * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
  */
 export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true }) {
   const changeDir = join(specBase, 'changes', change)
@@ -510,7 +510,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           }
           writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
           console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
-          // 模块文档对账（2026-09-25-thin-parity-assets：厚道 module-impact 死信门的薄道 advisory
+          // 模块文档对账（2026-09-25-thin-parity-assets：厚道 module-impact 死信门的轻量变更 advisory
           // 等价物——模块文档是后续变更门禁收窄/知识注入的原料，失供是复利折旧）
           try {
             const { reconcileModuleDocs } = await import('./flow-parity.js')
@@ -591,7 +591,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     }
   }
 
-  // ③ probes：thin 薄跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
+  // ③ probes：thin 轻量跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
   if (st.substeps?.probes === 'done') { skip('probes') } else {
@@ -600,12 +600,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   }
 
   // ④ distill：决策提炼（rejected/needsWait 异态 → 升厚留人工裁决，不静默吞）+ FR 索引提炼
-  // （2026-09-22-thin-fr-distill-sync：薄道此前只蒸馏 decisions 不调 indexRequirements——
-  // requirements 永不进 knowledge/fr，知识复利在新默认道断流；薄变更无 design.md，域路由
+  // （2026-09-22-thin-fr-distill-sync：轻量变更此前只蒸馏 decisions 不调 indexRequirements——
+  // requirements 永不进 knowledge/fr，知识复利在新默认道断流；轻量变更无 design.md，域路由
   // 以基线以来交付 diff 供 deliverableFiles，伪域回退同口径）
   if (st.substeps?.distill === 'done') { skip('distill') } else {
     // 槽4收割（2026-09-25-thin-parity-assets：design「风险与死路」实质作答合成 decisions.md——
-    // 薄变更决策产出从零到一；已有 decisions 不覆盖）
+    // 轻量变更决策产出从零到一；已有 decisions 不覆盖）
     try {
       const { harvestSlot4Decision } = await import('./flow-parity.js')
       const h = harvestSlot4Decision({ changeDir, change })
@@ -650,7 +650,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     mark('distill')
   }
 
-  // ⑤ archive：归档经 runArchiveChain（thin 薄工件面跳过 plan.md 硬校验；thick 不跳）
+  // ⑤ archive：归档经 runArchiveChain（thin 轻量工件面跳过 plan.md 硬校验；thick 不跳）
   if (st.substeps?.archive === 'done') { skip('archive') } else {
     // verify-result 机器回执（2026-09-25-thin-parity-assets：人类可读收口结论，随归档留档）
     try {
@@ -711,7 +711,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // ── 切片四收口面：路由信号醒目打印 + 遥测四列记一笔（advisory 定案——只记录不判罚）──
   const cfg = readFlowConfig(specBase)
   if (st.route_hint === 'thick') {
-    console.warn(`🧭 route_hint: thick（机器稿改写比例 ${st.edit_ratio ?? '?'} > 阈值 ${cfg.editRatioThreshold}——决策覆盖度低，该走厚档；advisory 不强制，测绿已薄档过）`)
+    console.warn(`🧭 route_hint: thick（机器稿改写比例 ${st.edit_ratio ?? '?'} > 阈值 ${cfg.editRatioThreshold}——决策覆盖度低，该走厚档；advisory 不强制，测绿已轻量档过）`)
     if (cfg.editRatioEnforcement === 'block') {
       console.error('❌ flow.edit_ratio_enforcement=block：超阈阻断 done（降阈/改走 thick/回退 advisory 三选一）')
       process.exit(1)
@@ -792,14 +792,14 @@ export async function cmdFlow(args, cwd, specDir = null) {
       console.error('（无可重锚机器稿——draft ledger 不在案或稿件无标记段）')
       process.exit(1)
     }
-    // 切片四：editRatio 路由信号（D-005 advisory 定案——测绿可薄档过；超阈提示+route_hint 落档）
+    // 切片四：editRatio 路由信号（D-005 advisory 定案——测绿可轻量档过；超阈提示+route_hint 落档）
     const cfg = readFlowConfig(specBase)
     // 路由信号取段级最大改写比（任一段过半=该段决策未被输入覆盖——聚合比会被未改段稀释）；
     // 段级明细 sectionRatios 已随 amendment 入 ledger，遥测可见。
     const maxRatio = Math.max(0, ...Object.values(r.sectionRatios || {}))
     if (maxRatio > cfg.editRatioThreshold) {
       writeFlowState(changeDir, { route_hint: 'thick', edit_ratio: maxRatio })
-      console.warn(`⚠️ route_hint: thick——机器稿段级最大改写比例 ${maxRatio}（阈值 ${cfg.editRatioThreshold}）：决策覆盖度低，该走厚档（advisory：测绿可薄档过，不强制；flow done 将醒目提示+遥测记账）`)
+      console.warn(`⚠️ route_hint: thick——机器稿段级最大改写比例 ${maxRatio}（阈值 ${cfg.editRatioThreshold}）：决策覆盖度低，该走厚档（advisory：测绿可轻量档过，不强制；flow done 将醒目提示+遥测记账）`)
     } else {
       writeFlowState(changeDir, { edit_ratio: maxRatio })
     }

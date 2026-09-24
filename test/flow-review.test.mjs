@@ -1,5 +1,5 @@
 /**
- * flow-review.test.mjs — 薄流程独立评审（2026-09-25-thin-review-slice）
+ * flow-review.test.mjs — 轻量变更独立评审（2026-09-25-thin-review-slice）
  *
  * 覆盖验收面：
  *   ① 危险证据定档矩阵：承诺词一票/盲维实质作答/diff 原语/决策密度/声明一票/全静豁免/采样桶；

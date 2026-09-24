@@ -8,7 +8,7 @@
  *   ③ 三态拒收：机器段被改写（哈希失配）/标记被删（整份重写形态）→ verifyFlowDrafts violations；
  *   ④ AGENT 槽放行：槽内书写不触发拒收；
  *   ⑤ amend 留痕：重锚后 violations 清零+ledger amendments 在案+首版 body 未被覆盖；
- *   ⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness 验产物面）。
+ *   ⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness 验产物面）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -228,7 +228,7 @@ test('⑤ amend 留痕：重锚后放行+amendments 审计+首版 body 未覆盖
   rmSync(root, { recursive: true, force: true })
 })
 
-test('⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness 验产物面）', () => {
+test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness 验产物面）', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'fd-e2e-'))
   const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
   g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])

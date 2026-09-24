@@ -5,7 +5,7 @@
  *   ① computeEditRatio 纯函数：0 边界/半改写/全改写/插入删除——LCS 行 diff 口径；
  *   ② 阈值触发（0.5 边界两侧）：amend 大改（>50%）→ route_hint:thick 落档+amend 输出提示；
  *      小改（<50%）→ 无 route_hint；
- *   ③ advisory 定案：route_hint=thick + 测绿 → flow done 仍 exit 0（测绿可薄档过）+醒目打印+遥测记一笔；
+ *   ③ advisory 定案：route_hint=thick + 测绿 → flow done 仍 exit 0（测绿可轻量档过）+醒目打印+遥测记一笔；
  *   ④ enforcement=block：route_hint=thick 时 flow done 阻断 exit 1；
  *   ⑤ 失败升级通路真跑（fr-10）：verify 失败→tier thick+upgrade_reason（flow-protocol ③ 已覆盖
  *      行为面，此处补遥测账核对）。
@@ -71,7 +71,7 @@ function fillDesignSlots(cwd, change) {
   writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
 }
 
-test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
+test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+醒目打印+遥测；小改无 hint', () => {
   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
   const change = 'fr-r1'
   // --no-review：本用例测 route 面——大改 amend 的 editRatio 会触发评审必评抢先拦截，声明豁免
@@ -88,7 +88,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒�
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   fillDesignSlots(cwd, change)
   const done = cli(['flow', 'done', '--change', change])
-  assert.equal(done.status, 0, `advisory 应薄档过: ${done.stdout}\n${done.stderr}`)
+  assert.equal(done.status, 0, `advisory 应轻量档过: ${done.stdout}\n${done.stderr}`)
   assert.match(done.stdout + done.stderr, /route_hint: thick/)
   const telemetry = readFileSync(join(cwd, '.sillyspec', '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
   const rec = telemetry.find((r) => r.change === change)

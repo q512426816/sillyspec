@@ -2,7 +2,7 @@
  * flow-protocol.test.mjs — 2-调用协议（R7 切片二 task-03 / D-002 D-003 D-007 / FR-03~06）
  *
  * 覆盖验收面：
- *   ① 机械 harness 2 调用走通薄跑道：flow start → 造改动物 → flow done——全程仅两次 CLI
+ *   ① 机械 harness 2 调用走通轻量跑道：flow start → 造改动物 → flow done——全程仅两次 CLI
  *      协议调用（中间零协议必需交互），flow done exit 0 且 change 归档注销；
  *   ② flow start 重入 → 恢复简报（checkbox/提交/账本/dirty files 盘面状态→做到哪/剩什么/下一步）；
  *   ③ fail-closed 三句：实测失败=整单 FAIL exit≠0（不归档）；修复后重入断点续（已完成子步幂等跳过）
@@ -32,7 +32,7 @@ function makeRepo({ testCmd = 'node -e "0"' } = {}) {
   run(['config', 'user.email', 't@t'])
   run(['config', 'user.name', 't'])
   mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
-  // flow: mode: thin——2026-09-22-stage-burst-fold 缺省翻 legacy 后薄跑道测试需显式声明（①②③⑤⑥ 共用本造法；④ 另行整文件覆写 legacy）
+  // flow: mode: thin——2026-09-22-stage-burst-fold 缺省翻 legacy 后轻量跑道测试需显式声明（①②③⑤⑥ 共用本造法；④ 另行整文件覆写 legacy）
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "' + testCmd + '"\nflow:\n  mode: thin\n')
   writeFileSync(join(cwd, 'base.txt'), 'base\n')
   run(['add', '.'])
@@ -60,7 +60,7 @@ function fillDesignSlots(cwd, change) {
   writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
 }
 
-test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅两次协议调用，归档注销', () => {
+test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，仅两次协议调用，归档注销', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t1'
 
@@ -173,7 +173,7 @@ test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒�
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('⑥ FR 索引提炼接线：薄变更 flow done 后 requirements 进 knowledge/fr（无 design.md 走交付文件伪域）', () => {
+test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 knowledge/fr（无 design.md 走交付文件伪域）', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t6'
   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input',
@@ -294,7 +294,7 @@ test('⑫ 需求清晰度门：--input 缺失或成功标准 0 条 → exit 2 �
   rmSync(cwd, { recursive: true, force: true })
 })
 
-test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（补缺件+绑定槽+design 豁免）→ done 全绿', () => {
+test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变更（补缺件+绑定槽+design 豁免）→ done 全绿', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t13'
   // 模拟 brainstorm 预段产物（agent 手写、无 flow-state、无指纹）
@@ -307,7 +307,7 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编薄道（�
   writeFileSync(join(changeDir, 'design.md'), '# 设计\n人机交互产出的完整设计（无骨架槽）\n接口：foo()\n边界：无特殊场景假设\n')
   const s = cli(cwd, ['flow', 'start', '--change', change])
   assert.equal(s.status, 0, `收编失败: ${s.stdout}\n${s.stderr}`)
-  assert.match(s.stdout, /头脑风暴产物已收编进薄跑道/, '收编简报')
+  assert.match(s.stdout, /头脑风暴产物已收编进轻量跑道/, '收编简报')
   const st = readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8')
   assert.match(st, /adopted_from: brainstorm/, 'flow-state 记 adopted_from')
   assert.ok(existsSync(join(changeDir, 'requirements.md')), '缺件 requirements 机器补齐（criteria 回提自 proposal）')
@@ -339,9 +339,9 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   const change = 'flow-h2-t14'
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
-  assert.match(s.stdout, /thin 薄跑道/, '缺省走薄跑道')
+  assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
   // 预判已删（2026-09-25-thin-precheck-removal）：技术关键词不再触发升厚建议——碰迁移的
-  // 薄道照样最优收口（R16 实证），风险面归收口评审按证据判定
+  // 轻量变更照样最优收口（R16 实证），风险面归收口评审按证据判定
   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
   assert.doesNotMatch(s.stdout, /由用户裁决/, '无升厚裁决文案')
   // 无复杂特征输入同款零打扰（负例归并）

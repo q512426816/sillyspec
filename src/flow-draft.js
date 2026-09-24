@@ -1,11 +1,11 @@
 /**
  * flow-draft.js — 全件机器起草器（R7 切片三 task-05 / D-004 D-005 / FR-07 FR-08）。
  *
- * 薄跑道治理工件全部 CLI 机器起草（工件回填轮=0），agent 只裁例外：
+ * 轻量跑道治理工件全部 CLI 机器起草（工件回填轮=0），agent 只裁例外：
  *   - proposal：--input 机械转写（动机/关键问题/变更范围从任务原话摘段）；
  *   - requirements：机械摘「成功标准」条目 → FR 条目；
  *   - tasks：成功标准 → checkbox 任务行；任务卡分岔（用户裁定#3）：默认 thin+直写零任务卡
- *     （薄跑=quick 的协议兄弟）；--thick / --with-tasks 才生成 tasks/task-NN.md 卡；
+ *     （轻量跑=quick 的协议兄弟）；--thick / --with-tasks 才生成 tasks/task-NN.md 卡；
  *   - decisions：只记真实新增（转写任务通常为零——不落文件）。
  *
  * 机器段经 machine-draft.wrapSection 包裹（sha256 指纹标记对，guardNote 指向 flow done 拒收）；
@@ -84,13 +84,13 @@ function draftProposal({ change, input, criteria }) {
 }
 
 /** requirements 机器稿（成功标准 → FR 条目 + 每条 FR 一枚「测试绑定」AGENT 槽——2026-09-25
- * thin-patch-bindings：薄道 FR 从诞生就要测试锚，撞实验 5 个 P1 全是承诺无锚形态）。 */
+ * thin-patch-bindings：轻量变更 FR 从诞生就要测试锚，撞实验 5 个 P1 全是承诺无锚形态）。 */
 function draftRequirements({ change, criteria }) {
   const crit = criteria || []
   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
   const frBodies = crit.length > 0
-    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
-    : '### FR-01: flow done 全绿\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
+    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 轻量跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
+    : '### FR-01: flow done 全绿\nGiven flow 轻量跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
   const n = crit.length > 0 ? crit.length : 1
   const bindingSlots = Array.from({ length: n }, (_, i) => {
     const id = `FR-${String(i + 1).padStart(2, '0')}`
@@ -244,7 +244,7 @@ function draftTasks({ change, criteria, withTasks }) {
     '---',
     `# 任务注册表（Tasks）— ${change}`,
     '',
-    '> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；',
+    '> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；',
     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
     '',
     wrapped('tasks-rows', rows.join('\n')),
@@ -477,7 +477,7 @@ export function verifyDesignRecordFilled({ changeDir }) {
  * 为兜底单行）> 空（draft 各自兜底）。
  */
 export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot }) {
-  // criteria 回提：input 显式 > 既有 proposal 机器段（薄道自产，指纹保证原文可信）> proposal
+  // criteria 回提：input 显式 > 既有 proposal 机器段（轻量变更自产，指纹保证原文可信）> proposal
   // 手写「成功标准」节（brainstorm 预段产物，adopt 路径）> 空（draft 各自兜底）
   let criteria = input ? extractSuccessCriteria(input) : null
   if (criteria === null || (Array.isArray(criteria) && criteria.length === 0)) {
