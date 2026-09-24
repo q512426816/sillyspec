@@ -122,19 +122,22 @@ function materialPaths(specBase, changeName, changeDir) {
  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
  */
-export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, json = false }) {
+export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
   const cfg = readFlowConfig(specBase)
   if (cfg.mode === 'legacy') {
     console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')
     console.error('   切回薄跑道（2026-09-25 起缺省即 thin）：local.yaml 删掉 mode: legacy 或改为 mode: thin')
     process.exit(2)
   }
+  // PM 锚定 specBase（平台参数面修复：此前裸构锚 resolveSpecDir(cwd)——DB 行/change 目录落本地，
+  // specBase 侧无目录 → writeFlowState ENOENT 崩溃、进度与工件分裂两处根）
   const { ProgressManager } = await import('./progress.js')
-  const pm = new ProgressManager()
+  const pm = new ProgressManager({ specDir: specBase })
   const changesDir = join(specBase, 'changes')
   const changeDir = join(changesDir, change)
-  const runtimeRoot = resolveRuntimeRoot({}, specBase)
+  const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
 
+  let proceedFreshEmptyDir = false
   if (existsSync(changeDir)) {
     const st = readFlowState(changeDir)
     if (!st) {
@@ -173,9 +176,19 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
         return { adopted: true, change, baseline }
       }
-      console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
-      process.exit(2)
+      // 平台 writer 预建空目录放行（平台参数面）：平台派发先建目录后 spawn——空目录=全新 thin
+      // 起点而非 legacy 记账证据；非空且无头脑风暴产物才是真 legacy 拒收面
+      let dirEmpty = false
+      try { dirEmpty = readdirSync(changeDir).length === 0 } catch { dirEmpty = false }
+      if (dirEmpty) {
+        console.log('ℹ️ 预建空变更目录放行（平台 writer 形态）：按全新薄跑道 start 处理')
+        proceedFreshEmptyDir = true
+      } else {
+        console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
+        process.exit(2)
+      }
     }
+    if (!proceedFreshEmptyDir) {
     // 幂等补起草（2026-09-25-thin-dogfood-fixes 修复①）：draft 谱系是 start 时点快照，工具
     // 升级新增工件后重入补缺（已存在不碰、ledger 合并）——恢复简报前执行，简报读到补齐后的盘面。
     try {
@@ -187,6 +200,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st })
     return { recovery: true }
+    }
   }
 
   // 需求清晰度门（2026-09-25-thin-brainstorm-prestage）：薄跑道假定输入已含决策——--input 缺失
@@ -198,7 +212,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
       console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——薄跑道假定输入已含决策，两选一：`)
       console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
       console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑薄道`)
-      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<含『成功标准：』条目的完整需求>"`)
+      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`)
+      console.error(`      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`)
       process.exit(2)
     }
   }
@@ -319,7 +334,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
  * → archive（归档经 runArchiveChain，thin 薄工件面跳过 plan.md 硬校验）→ events（事件收口）。
  */
-export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true }) {
+export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
   if (!st) {
@@ -330,7 +345,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     console.error('❌ 本 change 已混跑回退 legacy（跑过 run <stage>）——剩余流程按厚档走 run <stage>，flow done 不再裁决')
     process.exit(2)
   }
-  const runtimeRoot = resolveRuntimeRoot({}, specBase)
+  const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
   // 归属收窄清单（2026-09-25-thin-dogfood-fixes 修复②）：baseline..HEAD 不分作者——并行会话在
   // start..done 之间的提交会混入本变更实测面与 FR 域路由。复用 verify 对账同款切分器：他侧显式
   // 声明（quick --files / design 清单）的文件剔除归他者；未声明文件保留（fail-closed 不因并行漏跑）。
@@ -659,6 +674,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
     } catch (e) { console.warn(`⚠️ 回执合成失败（不阻断归档）：${(e && e.message) || e}`) }
     const { ProgressManager } = await import('./progress.js')
     const { runArchiveChain } = await import('./run/complete-handlers.js')
+    // 锚定同 start（平台参数面）
     const { archiveDestDirName } = await import('./stage-contract.js')
     const pm = new ProgressManager()
     const date = new Date().toISOString().slice(0, 10)
@@ -710,14 +726,40 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
 export async function cmdFlow(args, cwd, specDir = null) {
   const sub = args[0] || ''
   const rest = args.slice(1)
-  const specBase = specDir || join(cwd, '.sillyspec')
+  // 平台参数面（2026-09-25-thin-platform-args，平台侧三子代理核对驱动）：specBase 统一走
+  // resolvePlatformSpecDir——显式 --spec-dir/--spec-root > .sillyspec-platform.json 指针（fail-closed，
+  // 指针失效报错不静默回退本地防状态分裂）> 本地。此前 flow 族零平台支持：--spec-dir 是 ENOENT
+  // 崩溃路径、指针不读、--spec-root 静默忽略——平台 thin 派发被完全挡住。
   const getFlag = (name) => {
     const i = rest.indexOf(name)
     return i !== -1 && i + 1 < rest.length ? rest[i + 1] : null
   }
   const hasFlag = (name) => rest.includes(name)
+  let specBase
+  try {
+    const { resolvePlatformSpecDir } = await import('./progress.js')
+    specBase = resolvePlatformSpecDir(cwd, specDir || getFlag('--spec-root'))
+  } catch (e) {
+    console.error(`❌ 平台 spec 根解析失败（fail-closed，不回退本地防状态分裂）：${(e && e.message) || e}`)
+    console.error('   修复：重跑平台 scan 重建 .sillyspec-platform.json 指针，或显式传 --spec-dir <specRoot>')
+    process.exit(2)
+  }
+  // --runtime-root 透传（start/done 内部 resolveRuntimeRoot 优先取 platformOpts.runtimeRoot）
+  const runtimeRootOpt = getFlag('--runtime-root') || null
+  // 变更名白名单（平台核对实证：穿越名 ../evil 实测逃逸、default/quick-<hex> 形态崩溃）——
+  // 词字符/点/横线/连字符/中文，拒路径分隔符与点穿越；default 与 quick-<8hex> 是进度库辅助键
+  // 非实体变更，flow 层直接拒收
+  const validateChangeName = (name, exitCode = 2) => {
+    const bad = !name || name === 'default' || /^quick-[0-9a-f]{8}$/.test(name)
+      || !/^[\w.\-一-鿿]{1,120}$/.test(name) || name.includes('..') || /[\/]/.test(name)
+    if (bad) {
+      console.error(`❌ 非法变更名「${name}」——flow 族要求：词字符/点/横线/中文，无路径分隔符与 ..，非 default/quick-<hex> 辅助键（平台键 <日期>-<slug>-<hex6> 天然合法）`)
+      process.exit(exitCode)
+    }
+  }
   if (sub === 'start') {
     const change = getFlag('--change') || `flow-${new Date().toISOString().slice(0, 10)}-${Math.random().toString(16).slice(2, 6)}`
+    validateChangeName(change)
     return cmdFlowStart({
       change,
       input: getFlag('--input') || undefined,
@@ -731,7 +773,8 @@ export async function cmdFlow(args, cwd, specDir = null) {
   if (sub === 'done') {
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
-    return cmdFlowDone({ change, cwd, specBase })
+    validateChangeName(change)
+    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt })
   }
   if (sub === 'amend-draft') {
     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；

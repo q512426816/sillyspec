@@ -422,6 +422,76 @@ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () =
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落外置根，本地 changes 零残留，ENOENT 消失）', () => {
+  const { cwd } = makeRepo()
+  const plat = mkdtempSync(join(tmpdir(), 'fp-plat-')) + '/spec-root/nested' // 故意不预建嵌套层——旧实现在此 ENOENT
+  const change = '2026-09-25-obs-events-ab12cd'
+  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--spec-dir', plat])
+  assert.equal(s.status, 0, `外置根 start 应通过（旧实现 ENOENT 崩溃）: ${s.stdout}\n${s.stderr}`)
+  assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), 'flow-state 落外置根（含嵌套目录自动创建）')
+  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', change)), '本地 changes 零残留（PM 锚定修复）')
+  assert.ok(existsSync(join(plat, '.runtime', 'sillyspec.db')), '进度库落外置根（DB 与工件同根）')
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  // 外置根无 .sillyspec 层——change 目录直挂 spec 根下，槽位内联填
+  const pc = join(plat, 'changes', change)
+  writeFileSync(join(pc, 'design.md'), readFileSync(join(pc, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
+  writeFileSync(join(pc, 'requirements.md'), readFileSync(join(pc, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
+  const d = cli(cwd, ['flow', 'done', '--change', change, '--spec-dir', plat])
+  assert.equal(d.status, 0, `外置根 done 应通过: ${d.stdout}\n${d.stderr}`)
+  assert.ok(existsSync(join(plat, 'changes', 'archive')), '归档落外置根')
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(plat, { recursive: true, force: true })
+})
+
+test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spawn）→ 全新 start，非空仍拒', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t19'
+  mkdirSync(join(cwd, '.sillyspec', 'changes', change), { recursive: true })
+  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
+  assert.equal(s.status, 0, `空目录应放行: ${s.stdout}\n${s.stderr}`)
+  assert.match(s.stdout, /预建空变更目录放行/)
+  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')))
+  // 非空且无头脑风暴产物 → legacy 拒收维持
+  const change2 = 'flow-h2-t19b'
+  mkdirSync(join(cwd, '.sillyspec', 'changes', change2), { recursive: true })
+  writeFileSync(join(cwd, '.sillyspec', 'changes', change2, 'plan.md'), '# legacy 残留\n')
+  const s2 = cli(cwd, ['flow', 'start', '--change', change2, '--input', '任务\n成功标准：\n- 行为 X'])
+  assert.equal(s2.status, 2, '非空无产物仍拒')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑳ 变更名白名单：穿越/分隔符/default/quick-hex 拒收，合法名放行', () => {
+  const { cwd } = makeRepo()
+  for (const bad of ['../evil', 'a/b', 'a\\b', 'default', 'quick-ab12cd34', '..']) {
+    const r = cli(cwd, ['flow', 'start', '--change', bad, '--input', '任务\n成功标准：\n- 行为 X'])
+    assert.equal(r.status, 2, `非法名「${bad}」应拒`)
+    assert.match(r.stderr, /非法变更名/)
+  }
+  const ok = cli(cwd, ['flow', 'start', '--change', '2026-09-25-中文名-a1b2c3', '--input', '任务\n成功标准：\n- 行为 X'])
+  assert.equal(ok.status, 0, '中文与平台键形态合法')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
+  const { cwd } = makeRepo()
+  const plat = mkdtempSync(join(tmpdir(), 'fp-ptr-'))
+  writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({ specRoot: plat }))
+  const change = 'flow-h2-t21'
+  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
+  assert.equal(s.status, 0, `指针恢复应落外置根: ${s.stdout}\n${s.stderr}`)
+  assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
+  rmSync(cwd, { recursive: true, force: true })
+  rmSync(plat, { recursive: true, force: true })
+  // 格式样例（清晰度门文案）
+  const cwd2 = makeRepo().cwd
+  const gate = cli(cwd2, ['flow', 'start', '--change', 'x1'])
+  assert.match(gate.stderr, /独立一行只写「成功标准：」/, '过门格式样例在场')
+  assert.match(gate.stderr, /- <可验证标准>/)
+  rmSync(cwd2, { recursive: true, force: true })
+})
+
 test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {
   const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
   const hits = src.split('await triggerSync(cwd, change)').length - 1
