@@ -220,8 +220,16 @@ function makeRepo() {
 test.after(() => { for (const d of repos) { try { rmSync(d, { recursive: true, force: true, maxRetries: 3 }) } catch { /* best-effort */ } } })
 
 function deadPid() {
-  const r = spawnSync(process.execPath, ['-e', '0'])
-  return r.pid // 已退出并被回收的进程 → ESRCH
+  // 防 pid 复用假红（独立审查 P2-2）：取一个经探针确认 ESRCH 的死 pid；万一被系统复用
+  // （高并行下可能），换一个再确认，最多 8 次
+  for (let i = 0; i < 8; i++) {
+    const r = spawnSync(process.execPath, ['-e', '0'])
+    const pid = r.pid
+    if (!Number.isInteger(pid) || pid <= 0) continue
+    try { process.kill(pid, 0); continue } catch (e) { if (e && e.code === 'ESRCH') return pid }
+  }
+  // 兜底：0 号 pid 在 POSIX/Windows 恒不存在（探针的 pid>0 前置使其不可用）——用极大值兜底
+  return 2147483647
 }
 function worktreeListHas(cwd, root) {
   const norm = (s) => String(s).replace(/\\/g, '/')
@@ -316,6 +324,10 @@ test('接线钉：runtimeRoot 形参/回收调用/登记/双清销账/quick 透�
   assert.ok(/if \(dirRemoved && worktreeCleaned\) unregisterGateSnapshot/.test(gs), 'cleanup/失败路径双清确认才销账')
   assert.ok(/createGateSnapshot\(\{ cwd, files, runtimeRoot \}\)/.test(qa), 'quick 调用点透传 runtimeRoot')
   assert.ok(qa.includes('resolveRuntimeRoot(null, specBase)'), 'quick 侧 runtimeRoot 解析口径同 test-ledger')
+  // 环境不完整早退与失败 catch 走同一清理体（审查 P1-1：早退曾残留旧式 --quiet 清理）
+  assert.ok(!gs.includes("'worktree', 'remove', '--force', '--quiet'"), '全文件零 --quiet 非法 flag 的 worktree remove')
+  const earlyExit = gs.slice(gs.indexOf('envMissing.length > 0'))
+  assert.ok(/envMissing\.length > 0[\s\S]{0,600}cleanupSnapshot\(/.test(earlyExit.slice(0, 800)), '环境早退走 cleanupSnapshot')
 })
 
 // ───────────────────────────────────────────────────────────────────────────

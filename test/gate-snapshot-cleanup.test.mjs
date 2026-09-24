@@ -69,3 +69,26 @@ test('目录仍在但 remove 成功→dirRemoved 反映实际存在性', () => {
   assert.equal(r.dirRemoved, false)
   assert.equal(r.worktreeCleaned, true)
 })
+
+test('remove 返回成功但 worktree list 仍含该 root→worktreeCleaned=false（双清契约 P1-2）', () => {
+  const r = cleanupSnapshot({
+    snapshotRoot: 'C:/wt/snap', cwd: 'C:/repo',
+    runGit: () => '',            // remove 退出码为零
+    removeDir: () => {},
+    dirExists: () => false,      // 目录已不在
+    worktreeRegistered: () => true, // 但注册仍在（如 prune 未生效）
+  })
+  assert.equal(r.dirRemoved, true)
+  assert.equal(r.worktreeCleaned, false, '退出码为零不等于注册已清——不得据此销账')
+})
+
+test('worktree list 查询抛异常→worktreeCleaned=false（异常按未清）', () => {
+  const r = cleanupSnapshot({
+    snapshotRoot: 'C:/wt/snap', cwd: 'C:/repo',
+    runGit: () => '',
+    removeDir: () => {},
+    dirExists: () => false,
+    worktreeRegistered: () => { throw new Error('git list failed') },
+  })
+  assert.equal(r.worktreeCleaned, false)
+})

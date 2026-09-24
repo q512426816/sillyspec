@@ -1495,8 +1495,17 @@ export async function runDoctorDiagnostics({ cwd }) {
   const ceremonyShadow = detectCeremonyShadowComparison(cwd, authoritySpecDir)
   // task-04（2026-09-24-gate-snapshot-lifecycle / FR-03 / D-007@v1）：门禁快照泄漏
   // （%TEMP%/sillyspec-gate-* 崩溃残留——warning 级只读可见面；阈值与 create 前扫共用
-  // env SILLYSPEC_GATE_SNAPSHOT_STALE_HOURS/24h 单源，顶层 doctor 无 --stale-hours 参数面）
-  const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: authoritySpecDir ? join(authoritySpecDir, '.runtime') : null })
+  // env SILLYSPEC_GATE_SNAPSHOT_STALE_HOURS/24h 单源，顶层 doctor 无 --stale-hours 参数面）。
+  // runtimeRoot 与 quick/verify 落账本处同源：平台指针 runtimeRoot 优先（否则 specBase/.runtime），
+  // 否则平台模式下账本写别处、doctor 恒读空（独立审查 P1-3）
+  let gateLeakRuntimeRoot = null
+  try {
+    gateLeakRuntimeRoot = resolveRuntimeRoot(
+      { runtimeRoot: pointer.present && pointer.runtimeRoot && existsSync(pointer.runtimeRoot) ? pointer.runtimeRoot : null },
+      authoritySpecDir || join(cwd, '.sillyspec'),
+    )
+  } catch { gateLeakRuntimeRoot = null }
+  const gateSnapshotLeak = detectGateSnapshotLeak({ runtimeRoot: gateLeakRuntimeRoot })
   const dimensions = [multiDb, pointerHealth, changesSplit, changeDb, executeMismatch, docBloat, repoNativeChain, lifecycleDoc, worktreeHealth, buildEnv, mcpEndpoints, applyManifestDrift, selfMaintenanceTax, archiveIntegrity, ceremonyShadow, gateSnapshotLeak];
 
   return {

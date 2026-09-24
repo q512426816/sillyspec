@@ -11,8 +11,10 @@
  * junction 复用主仓依赖（零拷贝），local.yaml 从主仓复制（gitignore 不进 HEAD），在快照
  * cwd 跑对账。快照基建任何失败 → 返回 null，调用方回退主仓现行为（零回归兜底）。
  *
- * 快照生命周期：一次门禁一批（create → run → cleanup）；崩溃残留由 git worktree prune /
- * 临时目录自然回收（OS tmp 清理），不进主仓 .runtime。
+ * 快照生命周期：一次门禁一批（create → run → cleanup）；崩溃残留（进程被杀时 cleanup
+ * 不跑）由账本回收路径兜底——gate-snapshot-ledger.js 登记 create、cleanup 双清确认后销账，
+ * 下个门禁建快照前按 TTL×pid 双闸自愈回收（账本落 runtime 域 .sillyspec/.runtime/，
+ * 不进 git 不上平台）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
@@ -82,8 +84,10 @@ export function cleanupSnapshot({
   if (!worktreeCleaned) {
     // remove 失败：prune 清掉「目录已不在但注册悬空」的 prunable 条目
     try { runGit(cwd, ['worktree', 'prune']) } catch { /* prune 失败→下方复核 */ }
-    try { worktreeCleaned = !worktreeRegistered(cwd, snapshotRoot) } catch { worktreeCleaned = false }
   }
+  // 双清契约（D-004@v2）：worktreeCleaned 只认 git worktree list 的确认答复——remove 退出码
+  // 为零不等于注册已清（prune 未生效或 list 仍含该 root 时仍可能残留）。查询异常按未清。
+  try { worktreeCleaned = !worktreeRegistered(cwd, snapshotRoot) } catch { worktreeCleaned = false }
   return { dirRemoved, worktreeCleaned }
 }
 
@@ -179,7 +183,7 @@ function smokeImportPython(pythonBin, snapshotRoot, relFile, byModule) {
     if (!mod || !/^[A-Za-z_][\w.]*$/.test(mod)) continue
     const pkgRoot = join(snapshotRoot, ...parts.slice(0, cut))
     const r = spawnSync(pythonBin, ['-c', `import ${mod}`], {
-      cwd: pkgRoot, encoding: 'utf-8', timeout: 10_000,
+      cwd: pkgRoot, encoding: 'utf-8', timeout: 10_000, windowsHide: true,
     })
     if (r.status === 0) return null
     const err = String((r.stderr || '') + (r.stdout || ''))
@@ -338,7 +342,7 @@ export function runGateSnapshotCommands(snapshotRoot, commands) {
     ran++
     let r = null
     try {
-      r = spawnSync(cmd, { shell: true, cwd: snapshotRoot, timeout: 300_000, encoding: 'utf8' })
+      r = spawnSync(cmd, { shell: true, cwd: snapshotRoot, timeout: 300_000, encoding: 'utf8', windowsHide: true })
     } catch (e) {
       const reason = `spawn 异常：${e && e.message ? e.message : e}`
       failed.push({ cmd, reason })
@@ -582,8 +586,12 @@ export function createGateSnapshot({ cwd, files, sourceRoot = null, skipImportSm
     const envMissing = envDirsLinked(cwd, snapshotRoot)
     if (envMissing.length > 0) {
       console.warn(`⚠️ 门禁快照环境不完整（${envMissing.join('、')} 在主仓存在、快照内缺失）——快照作废回退主仓实测（宁可主仓口径不可假沙箱硬挂；回退后失败先做污染归属鉴定）`)
-      try { git(cwd, ['worktree', 'remove', '--force', '--quiet', snapshotRoot]) } catch {}
-      try { rmSync(snapshotRoot, { recursive: true, force: true }) } catch {}
+      // 与正常 cleanup/失败 catch 同一清理体：双清确认才销账（该早退曾残留旧式 --quiet
+      // 清理与无重试 rmSync——独立审查 P1-1 根因未除尽的漏网面）
+      try {
+        const { dirRemoved: dGone, worktreeCleaned: wClean } = cleanupSnapshot({ snapshotRoot, cwd })
+        if (dGone && wClean) unregisterGateSnapshot({ runtimeRoot, snapshotRoot })
+      } catch {}
       return null
     }
 

@@ -78,8 +78,10 @@ export function unregisterGateSnapshot({ runtimeRoot, snapshotRoot }) {
 export function isSafeSnapshotRoot(snapshotRoot, { tmpBase = tmpdir() } = {}) {
   if (typeof snapshotRoot !== 'string' || !snapshotRoot) return false
   if (snapshotRoot.includes('..')) return false
+  // 路径比较口径：win32 不区分大小写（TEMP/TMP 跨进程大小写漂移会让合法残留永不满足守卫）
+  const fold = (p) => (process.platform === 'win32' ? p.toLowerCase() : p)
   const norm = resolve(snapshotRoot)
-  if (dirname(norm) !== resolve(tmpBase)) return false
+  if (fold(dirname(norm)) !== fold(resolve(tmpBase))) return false
   return /^sillyspec-gate-/.test(basename(norm))
 }
 
