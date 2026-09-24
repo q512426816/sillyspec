@@ -1,0 +1,68 @@
+{
+  "mode": "quick",
+  "ok": false,
+  "degradedReason": "quick 会话 quick-5ba07271 不存在（guard 已清理且 quicklog/patches/ 无记录——会话未产生改动或早于记录机制）",
+  "baseAnchor": null,
+  "totals": {
+    "files": 6,
+    "additions": 0,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/run/test-ledger.js",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/quick-audit.js",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/index.js",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/test-ledger.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "package.json",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260924-004-9875",
+  "sessionId": "quick-5ba07271",
+  "savedAt": "2026-09-24T04:24:52.559Z"
+}

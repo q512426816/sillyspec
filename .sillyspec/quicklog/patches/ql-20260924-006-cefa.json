@@ -1,0 +1,52 @@
+{
+  "mode": "quick",
+  "ok": false,
+  "degradedReason": "quick 会话 quick-de406f60 不存在（guard 已清理且 quicklog/patches/ 无记录——会话未产生改动或早于记录机制）",
+  "baseAnchor": null,
+  "totals": {
+    "files": 4,
+    "additions": 0,
+    "deletions": 0
+  },
+  "rows": [
+    {
+      "path": "src/watcher.js",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/test-bindings.js",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/sentinel-rules.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/test-bindings.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "qlId": "ql-20260924-006-cefa",
+  "sessionId": "quick-de406f60",
+  "savedAt": "2026-09-24T05:50:47.698Z"
+}
