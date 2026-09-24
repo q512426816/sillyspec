@@ -1,0 +1,421 @@
+diff --git a/src/flow.js b/src/flow.js
+index 16637d11..c1456d38 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -122,19 +122,22 @@ function materialPaths(specBase, changeName, changeDir) {
+  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
+  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
+  */
+-export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, json = false }) {
++export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
+   const cfg = readFlowConfig(specBase)
+   if (cfg.mode === 'legacy') {
+     console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')
+     console.error('   切回薄跑道（2026-09-25 起缺省即 thin）：local.yaml 删掉 mode: legacy 或改为 mode: thin')
+     process.exit(2)
+   }
++  // PM 锚定 specBase（平台参数面修复：此前裸构锚 resolveSpecDir(cwd)——DB 行/change 目录落本地，
++  // specBase 侧无目录 → writeFlowState ENOENT 崩溃、进度与工件分裂两处根）
+   const { ProgressManager } = await import('./progress.js')
+-  const pm = new ProgressManager()
++  const pm = new ProgressManager({ specDir: specBase })
+   const changesDir = join(specBase, 'changes')
+   const changeDir = join(changesDir, change)
+-  const runtimeRoot = resolveRuntimeRoot({}, specBase)
++  const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
+ 
++  let proceedFreshEmptyDir = false
+   if (existsSync(changeDir)) {
+     const st = readFlowState(changeDir)
+     if (!st) {
+@@ -173,9 +176,19 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+         return { adopted: true, change, baseline }
+       }
+-      console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
+-      process.exit(2)
++      // 平台 writer 预建空目录放行（平台参数面）：平台派发先建目录后 spawn——空目录=全新 thin
++      // 起点而非 legacy 记账证据；非空且无头脑风暴产物才是真 legacy 拒收面
++      let dirEmpty = false
++      try { dirEmpty = readdirSync(changeDir).length === 0 } catch { dirEmpty = false }
++      if (dirEmpty) {
++        console.log('ℹ️ 预建空变更目录放行（平台 writer 形态）：按全新薄跑道 start 处理')
++        proceedFreshEmptyDir = true
++      } else {
++        console.error(`❌ change 目录已存在但无 ${FLOW_STATE_FILE}（legacy 记账的既有变更）——混跑回退：走 run <stage> 续跑，勿用 flow`)
++        process.exit(2)
++      }
+     }
++    if (!proceedFreshEmptyDir) {
+     // 幂等补起草（2026-09-25-thin-dogfood-fixes 修复①）：draft 谱系是 start 时点快照，工具
+     // 升级新增工件后重入补缺（已存在不碰、ledger 合并）——恢复简报前执行，简报读到补齐后的盘面。
+     try {
+@@ -187,6 +200,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
+     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st })
+     return { recovery: true }
++    }
+   }
+ 
+   // 需求清晰度门（2026-09-25-thin-brainstorm-prestage）：薄跑道假定输入已含决策——--input 缺失
+@@ -198,7 +212,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+       console.error(`❓ 需求不够清晰（--input ${input ? '在场但「成功标准」条目提取 0 条' : '缺失'}）——薄跑道假定输入已含决策，两选一：`)
+       console.error(`   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`)
+       console.error(`      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑薄道`)
+-      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<含『成功标准：』条目的完整需求>"`)
++      console.error(`   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`)
++      console.error(`      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`)
+       process.exit(2)
+     }
+   }
+@@ -319,7 +334,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
+  * → archive（归档经 runArchiveChain，thin 薄工件面跳过 plan.md 硬校验）→ events（事件收口）。
+  */
+-export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true }) {
++export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
+   if (!st) {
+@@ -330,7 +345,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     console.error('❌ 本 change 已混跑回退 legacy（跑过 run <stage>）——剩余流程按厚档走 run <stage>，flow done 不再裁决')
+     process.exit(2)
+   }
+-  const runtimeRoot = resolveRuntimeRoot({}, specBase)
++  const runtimeRoot = resolveRuntimeRoot(runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {}, specBase)
+   // 归属收窄清单（2026-09-25-thin-dogfood-fixes 修复②）：baseline..HEAD 不分作者——并行会话在
+   // start..done 之间的提交会混入本变更实测面与 FR 域路由。复用 verify 对账同款切分器：他侧显式
+   // 声明（quick --files / design 清单）的文件剔除归他者；未声明文件保留（fail-closed 不因并行漏跑）。
+@@ -659,6 +674,7 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     } catch (e) { console.warn(`⚠️ 回执合成失败（不阻断归档）：${(e && e.message) || e}`) }
+     const { ProgressManager } = await import('./progress.js')
+     const { runArchiveChain } = await import('./run/complete-handlers.js')
++    // 锚定同 start（平台参数面）
+     const { archiveDestDirName } = await import('./stage-contract.js')
+     const pm = new ProgressManager()
+     const date = new Date().toISOString().slice(0, 10)
+@@ -710,14 +726,40 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+ export async function cmdFlow(args, cwd, specDir = null) {
+   const sub = args[0] || ''
+   const rest = args.slice(1)
+-  const specBase = specDir || join(cwd, '.sillyspec')
++  // 平台参数面（2026-09-25-thin-platform-args，平台侧三子代理核对驱动）：specBase 统一走
++  // resolvePlatformSpecDir——显式 --spec-dir/--spec-root > .sillyspec-platform.json 指针（fail-closed，
++  // 指针失效报错不静默回退本地防状态分裂）> 本地。此前 flow 族零平台支持：--spec-dir 是 ENOENT
++  // 崩溃路径、指针不读、--spec-root 静默忽略——平台 thin 派发被完全挡住。
+   const getFlag = (name) => {
+     const i = rest.indexOf(name)
+     return i !== -1 && i + 1 < rest.length ? rest[i + 1] : null
+   }
+   const hasFlag = (name) => rest.includes(name)
++  let specBase
++  try {
++    const { resolvePlatformSpecDir } = await import('./progress.js')
++    specBase = resolvePlatformSpecDir(cwd, specDir || getFlag('--spec-root'))
++  } catch (e) {
++    console.error(`❌ 平台 spec 根解析失败（fail-closed，不回退本地防状态分裂）：${(e && e.message) || e}`)
++    console.error('   修复：重跑平台 scan 重建 .sillyspec-platform.json 指针，或显式传 --spec-dir <specRoot>')
++    process.exit(2)
++  }
++  // --runtime-root 透传（start/done 内部 resolveRuntimeRoot 优先取 platformOpts.runtimeRoot）
++  const runtimeRootOpt = getFlag('--runtime-root') || null
++  // 变更名白名单（平台核对实证：穿越名 ../evil 实测逃逸、default/quick-<hex> 形态崩溃）——
++  // 词字符/点/横线/连字符/中文，拒路径分隔符与点穿越；default 与 quick-<8hex> 是进度库辅助键
++  // 非实体变更，flow 层直接拒收
++  const validateChangeName = (name, exitCode = 2) => {
++    const bad = !name || name === 'default' || /^quick-[0-9a-f]{8}$/.test(name)
++      || !/^[\w.\-一-鿿]{1,120}$/.test(name) || name.includes('..') || /[\/]/.test(name)
++    if (bad) {
++      console.error(`❌ 非法变更名「${name}」——flow 族要求：词字符/点/横线/中文，无路径分隔符与 ..，非 default/quick-<hex> 辅助键（平台键 <日期>-<slug>-<hex6> 天然合法）`)
++      process.exit(exitCode)
++    }
++  }
+   if (sub === 'start') {
+     const change = getFlag('--change') || `flow-${new Date().toISOString().slice(0, 10)}-${Math.random().toString(16).slice(2, 6)}`
++    validateChangeName(change)
+     return cmdFlowStart({
+       change,
+       input: getFlag('--input') || undefined,
+@@ -731,7 +773,8 @@ export async function cmdFlow(args, cwd, specDir = null) {
+   if (sub === 'done') {
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
+-    return cmdFlowDone({ change, cwd, specBase })
++    validateChangeName(change)
++    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt })
+   }
+   if (sub === 'amend-draft') {
+     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 8c85035e..393384b0 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -422,6 +422,76 @@ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () =
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
++test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落外置根，本地 changes 零残留，ENOENT 消失）', () => {
++  const { cwd } = makeRepo()
++  const plat = mkdtempSync(join(tmpdir(), 'fp-plat-')) + '/spec-root/nested' // 故意不预建嵌套层——旧实现在此 ENOENT
++  const change = '2026-09-25-obs-events-ab12cd'
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--spec-dir', plat])
++  assert.equal(s.status, 0, `外置根 start 应通过（旧实现 ENOENT 崩溃）: ${s.stdout}\n${s.stderr}`)
++  assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), 'flow-state 落外置根（含嵌套目录自动创建）')
++  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', change)), '本地 changes 零残留（PM 锚定修复）')
++  assert.ok(existsSync(join(plat, '.runtime', 'sillyspec.db')), '进度库落外置根（DB 与工件同根）')
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  // 外置根无 .sillyspec 层——change 目录直挂 spec 根下，槽位内联填
++  const pc = join(plat, 'changes', change)
++  writeFileSync(join(pc, 'design.md'), readFileSync(join(pc, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
++  writeFileSync(join(pc, 'requirements.md'), readFileSync(join(pc, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
++  const d = cli(cwd, ['flow', 'done', '--change', change, '--spec-dir', plat])
++  assert.equal(d.status, 0, `外置根 done 应通过: ${d.stdout}\n${d.stderr}`)
++  assert.ok(existsSync(join(plat, 'changes', 'archive')), '归档落外置根')
++  rmSync(cwd, { recursive: true, force: true })
++  rmSync(plat, { recursive: true, force: true })
++})
++
++test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spawn）→ 全新 start，非空仍拒', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t19'
++  mkdirSync(join(cwd, '.sillyspec', 'changes', change), { recursive: true })
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
++  assert.equal(s.status, 0, `空目录应放行: ${s.stdout}\n${s.stderr}`)
++  assert.match(s.stdout, /预建空变更目录放行/)
++  assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')))
++  // 非空且无头脑风暴产物 → legacy 拒收维持
++  const change2 = 'flow-h2-t19b'
++  mkdirSync(join(cwd, '.sillyspec', 'changes', change2), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'changes', change2, 'plan.md'), '# legacy 残留\n')
++  const s2 = cli(cwd, ['flow', 'start', '--change', change2, '--input', '任务\n成功标准：\n- 行为 X'])
++  assert.equal(s2.status, 2, '非空无产物仍拒')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑳ 变更名白名单：穿越/分隔符/default/quick-hex 拒收，合法名放行', () => {
++  const { cwd } = makeRepo()
++  for (const bad of ['../evil', 'a/b', 'a\\b', 'default', 'quick-ab12cd34', '..']) {
++    const r = cli(cwd, ['flow', 'start', '--change', bad, '--input', '任务\n成功标准：\n- 行为 X'])
++    assert.equal(r.status, 2, `非法名「${bad}」应拒`)
++    assert.match(r.stderr, /非法变更名/)
++  }
++  const ok = cli(cwd, ['flow', 'start', '--change', '2026-09-25-中文名-a1b2c3', '--input', '任务\n成功标准：\n- 行为 X'])
++  assert.equal(ok.status, 0, '中文与平台键形态合法')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
++  const { cwd } = makeRepo()
++  const plat = mkdtempSync(join(tmpdir(), 'fp-ptr-'))
++  writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({ specRoot: plat }))
++  const change = 'flow-h2-t21'
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
++  assert.equal(s.status, 0, `指针恢复应落外置根: ${s.stdout}\n${s.stderr}`)
++  assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
++  rmSync(cwd, { recursive: true, force: true })
++  rmSync(plat, { recursive: true, force: true })
++  // 格式样例（清晰度门文案）
++  const cwd2 = makeRepo().cwd
++  const gate = cli(cwd2, ['flow', 'start', '--change', 'x1'])
++  assert.match(gate.stderr, /独立一行只写「成功标准：」/, '过门格式样例在场')
++  assert.match(gate.stderr, /- <可验证标准>/)
++  rmSync(cwd2, { recursive: true, force: true })
++})
++
+ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次 triggerSync（文本级，防回潮）', () => {
+   const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+   const hits = src.split('await triggerSync(cwd, change)').length - 1
+diff --git a/.sillyspec/changes/2026-09-25-thin-platform-args/design.md b/.sillyspec/changes/2026-09-25-thin-platform-args/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-platform-args/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T18:12:42.772Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-platform-args
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++平台侧三子代理核对实证 flow 族零平台参数支持，四路修复：①cmdFlow 的 specBase 统一走 resolvePlatformSpecDir（显式 --spec-dir/--spec-root > .sillyspec-platform.json 指针 fail-closed > 本地），指针失效报错不静默回退防状态分裂；--runtime-root 透传 resolveRuntimeRoot；②cmdFlowStart/Done 全部 ProgressManager 以 specDir=specBase 构造（此前裸构锚 resolveSpecDir(cwd)——DB 行与 change 目录落本地、specBase 侧无目录致 writeFlowState ENOENT，进度与工件分裂同根修）；③平台 writer 预建空变更目录放行为全新 start（非空且无头脑风暴产物仍拒——legacy 拒收面不变）；④start/done/amend-draft 变更名白名单（词字符/点/横线/中文，拒分隔符/点穿越/default/quick-hex 辅助键），清晰度门两选一补过门格式样例（独立节头行+列表行——平台核对实证单行内联恒被拒）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/flow.js：cmdFlow 入口重写（resolvePlatformSpecDir/validateChangeName/runtimeRootOpt/getFlag --spec-root）、cmdFlowStart/Done 签名加 runtimeRootOpt、两处 PM 锚定、空目录放行分支、清晰度门样例。测试：⑱外置根全链（含嵌套目录 ENOENT 回归）/⑲空目录放行与非空拒收/⑳名称四态/㉑指针恢复+样例。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯路径解析与目录布局逻辑，无时序与共享可变状态；fail-closed 指针语义复用既有全仓单点（含 temp 残留治理与自指降级），未引入新的回退面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=外置根场景下 local.yaml（flow 配置/commands/known_failures）不在 spec 根——平台 spec 根由平台生成配置时负责携带，本片只管落点正确；死路=给 flow 单独再造一套指针解析——resolvePlatformSpecDir 是全仓 fail-closed 单点，重造即状态分裂。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-platform-args/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-platform-args/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-platform-args/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 4a9c79843225a370f1e2d0494dafd7d1b3aa377a
++updatedAt: '2026-09-24T18:19:48.739Z'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-platform-args/proposal.md b/.sillyspec/changes/2026-09-25-thin-platform-args/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-platform-args/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T18:12:42.771Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-platform-args
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:7b6bfe22485cbf21c0abe434d53ffa907acd478a19ee3b8db8ad4480d4289d7b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++任务原话转写：动机：平台侧（multi-agent-platform）三子代理核对实证——flow 命令族零平台参数支持：--spec-dir 对 start 是 ENOENT 崩溃路径（PM 未锚定 specBase，change 目录建在本地）、预建目录被当 legacy 拒收、不读 .sillyspec-platform.json 指针、--spec-root/--runtime-root 静默忽略、变更名零校验（穿越名实测逃逸）。平台 thin 派发被完全挡住，上游先修。
++成功标准：
++- cmdFlow 的 specBase 改经 resolvePlatformSpecDir（显式 --spec-dir/--spec-root > 平台指针 > 本地），指针失效 fail-closed 报错不静默回退；--runtime-root 透传 resolveRuntimeRoot
++- cmdFlowStart/Done 的 ProgressManager 全部以 specDir=specBase 构造（DB 行、change 目录、归档链与工件同根，ENOENT 消失）；平台 writer 预建的空变更目录放行为全新 start（非空且无头脑风暴产物仍拒）
++- flow start/done/amend-draft 变更名白名单校验（拒穿越/default/quick-hex/分隔符，exit 2 给合法格式）
++- 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
++- 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢复；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:ed7744f40bd03fb6478cc3536af6ef84dc7e4423e71df4a8dd1b957e0ac9a796:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. cmdFlow 的 specBase 改经 resolvePlatformSpecDir（显式 --spec-dir/--spec-root > 平台指针 > 本地），指针失效 fail-closed 报错不静默回退；--runtime-root 透传 resolveRuntimeRoot
++2. cmdFlowStart/Done 的 ProgressManager 全部以 specDir=specBase 构造（DB 行、change 目录、归档链与工件同根，ENOENT 消失）；平台 writer 预建的空变更目录放行为全新 start（非空且无头脑风暴产物仍拒）
++3. flow start/done/amend-draft 变更名白名单校验（拒穿越/default/quick-hex/分隔符，exit 2 给合法格式）
++4. 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
++5. 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢复；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:d86f2dcdc0c6d29f760feb7a2354c76ce07a871d39c06087347c58d31bcb0674:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++1. cmdFlow 的 specBase 改经 resolvePlatformSpecDir（显式 --spec-dir/--spec-root > 平台指针 > 本地），指针失效 fail-closed 报错不静默回退；--runtime-root 透传 resolveRuntimeRoot
++2. cmdFlowStart/Done 的 ProgressManager 全部以 specDir=specBase 构造（DB 行、change 目录、归档链与工件同根，ENOENT 消失）；平台 writer 预建的空变更目录放行为全新 start（非空且无头脑风暴产物仍拒）
++3. flow start/done/amend-draft 变更名白名单校验（拒穿越/default/quick-hex/分隔符，exit 2 给合法格式）
++4. 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
++5. 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢复；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-platform-args/requirements.md b/.sillyspec/changes/2026-09-25-thin-platform-args/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-platform-args/requirements.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T18:12:42.772Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-platform-args
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:b267cd0a57258d269031fcaad6e939742ce402616d4ec4fb1a99ebaafbeec8a3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++### FR-01: cmdFlow 的 specBase 改经 resolvePlatformSpe
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then cmdFlow 的 specBase 改经 resolvePlatformSpecDir（显式 --spec-dir/--spec-root > 平台指针 > 本地），指针失效 fail-closed 报错不静默回退；--runtime-root 透传 resolveRuntimeRoot
++
++### FR-02: cmdFlowStart/Done 的 ProgressManager 全部以 
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then cmdFlowStart/Done 的 ProgressManager 全部以 specDir=specBase 构造（DB 行、change 目录、归档链与工件同根，ENOENT 消失）；平台 writer 预建的空变更目录放行为全新 start（非空且无头脑风暴产物仍拒）
++
++### FR-03: flow start/done/amend-draft 变更名白名单校验（拒穿越
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then flow start/done/amend-draft 变更名白名单校验（拒穿越/default/quick-hex/分隔符，exit 2 给合法格式）
++
++### FR-04: 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
++
++### FR-05: 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留
++Given flow 薄跑道在跑
++When flow done 裁决执行
++Then 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢复；flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑱（外置根 start/done/本地零残留/.runtime 库断言）+ ㉑（指针恢复）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑲（空目录放行/非空拒收两态）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑳（穿越/分隔符/default/quick-hex/中文合法五态）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ㉑（独立节头行+列表行样例断言）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + stage-burst 50 例 + test:core 176 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-platform-args/tasks.md b/.sillyspec/changes/2026-09-25-thin-platform-args/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-platform-args/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T18:12:42.772Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-platform-args
++
++> 机器稿（成功标准机械推导）；薄跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:97e9fab3465ad109d29bce0c0b330e903af00bda974609eaeef184b59ca7f539:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-platform-args 留痕重锚 -->
++- [ ] task-01: cmdFlow 的 specBase 改经 resolvePlatformSpecDir（显式 --spec-dir/-
++- [ ] task-02: cmdFlowStart/Done 的 ProgressManager 全部以 specDir=specBase 构造（
++- [ ] task-03: flow start/done/amend-draft 变更名白名单校验（拒穿越/default/quick-hex/分
++- [ ] task-04: 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
++- [ ] task-05: 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

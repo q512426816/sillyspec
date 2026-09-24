@@ -1,0 +1,23 @@
+{
+  "change": "2026-09-25-thin-platform-args",
+  "baseline": "4a9c79843225a370f1e2d0494dafd7d1b3aa377a",
+  "head": "f7ef9258f9f1df6260e12734370b162d48aa0234",
+  "files": [
+    "src/flow.js",
+    "test/flow-protocol.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-platform-args/design.md",
+    ".sillyspec/changes/2026-09-25-thin-platform-args/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-platform-args/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-platform-args/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-platform-args/tasks.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 286,
+    "deletions": 10
+  },
+  "savedAt": "2026-09-24T18:19:49.491Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "12223cd732887e120e60c4261bccbdf55c0149722c412eabf20fcc1986f7c540",
+  "patchStatus": "ok"
+}

@@ -591,3 +591,96 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试四件；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-05
 最近确认：1d997c601a4a9f95cb43244d40dcd1bc446a7430
+
+## FR-cli-entry-035 cmdFlow 的 specBase 改经 resolvePlatformSpe
+变更：2026-09-25-thin-platform-args
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行
+全文：.sillyspec/changes/archive/2026-09-25-thin-platform-args/requirements.md#FR-01
+最近确认：f7ef9258f9f1df6260e12734370b162d48aa0234
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-platform-args:flow:FR-01
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-platform-args
+  status: active
+
+## FR-cli-entry-036 cmdFlowStart/Done 的 ProgressManager 全部以
+变更：2026-09-25-thin-platform-args
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then cmdFlowStart/Done 的 ProgressManager 全部以 specDir=specBase 构造（DB 行、change 目录、归档链与工
+全文：.sillyspec/changes/archive/2026-09-25-thin-platform-args/requirements.md#FR-02
+最近确认：f7ef9258f9f1df6260e12734370b162d48aa0234
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-platform-args:flow:FR-02
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-platform-args
+  status: active
+
+## FR-cli-entry-037 flow start/done/amend-draft 变更名白名单校验（拒穿越
+变更：2026-09-25-thin-platform-args
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start/done/amend-draft 变更名白名单校验（拒穿越/default/quick-hex/分隔符，exit 2 给合法格式）
+全文：.sillyspec/changes/archive/2026-09-25-thin-platform-args/requirements.md#FR-03
+最近确认：f7ef9258f9f1df6260e12734370b162d48aa0234
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-platform-args:flow:FR-03
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-platform-args
+  status: active
+
+## FR-cli-entry-038 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
+变更：2026-09-25-thin-platform-args
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 清晰度门两选一文案补过门格式样例（独立节头行+列表行）
+全文：.sillyspec/changes/archive/2026-09-25-thin-platform-args/requirements.md#FR-04
+最近确认：f7ef9258f9f1df6260e12734370b162d48aa0234
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-platform-args:flow:FR-04
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-platform-args
+  status: active
+
+## FR-cli-entry-039 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留
+变更：2026-09-25-thin-platform-args
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试：外置 spec 根全链（start→done 归档落外置根、本地零残留）、空目录预建放行、名称校验四态、指针恢复；flow 系全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-platform-args/requirements.md#FR-05
+最近确认：f7ef9258f9f1df6260e12734370b162d48aa0234
