@@ -139,6 +139,23 @@
         "status": "active",
         "source_change": "quick-1447eda3"
       }
+    ],
+    "ql-20260925-003-ad34": [
+      {
+        "anchor": "ql-20260925-003-ad34",
+        "row_id": "quick-f5af12a3:win-0:test/watcher.test.mjs",
+        "tests": [
+          "test/watcher.test.mjs"
+        ],
+        "reason": "regression",
+        "state": "candidate",
+        "discovery": "machine",
+        "confirmed_by": null,
+        "confirmed_at": null,
+        "reconfirm": null,
+        "status": "active",
+        "source_change": "quick-f5af12a3"
+      }
     ]
   }
 }

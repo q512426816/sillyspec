@@ -1,0 +1,71 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-f5af12a3",
+  "totals": {
+    "files": 2,
+    "additions": 173,
+    "deletions": 27
+  },
+  "rows": [
+    {
+      "path": "src/watcher.js",
+      "declared": true,
+      "additions": 75,
+      "deletions": 27,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/watcher.test.mjs",
+      "declared": true,
+      "additions": 98,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 4,
+    "codeFileCount": 2,
+    "testFileCount": 2,
+    "moduleSpan": 2,
+    "modules": [
+      {
+        "id": "cli-entry",
+        "files": [
+          "src/flow.js"
+        ]
+      },
+      {
+        "id": "sync",
+        "files": [
+          "src/watcher.js"
+        ]
+      }
+    ],
+    "unmappedFiles": [
+      "test/watcher.test.mjs",
+      "test/flow-checkpoints.test.mjs"
+    ],
+    "riskHits": [],
+    "level": "L1",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": false,
+      "testDelta": "ok",
+      "docClaim": "missing",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260925-003-ad34",
+  "sessionId": "quick-f5af12a3",
+  "savedAt": "2026-09-25T05:11:29.073Z",
+  "patchSha256": "5a200d951409a6a9b5fc3b46ec26df30fac4bcac04da30ee19ddab642940a89d",
+  "patchStatus": "ok"
+}

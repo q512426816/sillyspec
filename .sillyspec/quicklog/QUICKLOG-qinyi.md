@@ -402,3 +402,15 @@
 根因：墙的第一版按 SESSION_ID 相等判『同会话硬续』，但 handoff 交接块明确要求新会话 export 同一 SESSION_ID——R16-b 实测会话 A 完成后按协议 handoff，会话 B 粘贴交接块将被墙误拦；complete.js 分支序 crossStage 先于 plan ⛔，plan+brainstorm 同会话完成时（stageCount=2）⛔ 不显示（R16-b 17:04 实证只见告警）
 方案：切割凭证改为动作信号：sillyspec handoff 成功后给 stage-session ledger 盖 handoffAt 章（best-effort）；墙判定抽纯函数 isStageWallBlocked（shared.js）：拦『前驱刚收口 && 无更新的 handoffAt && 目标阶段首入』，handoffAt>ledger.at 即放行；--same-session/reopen/他会话/fail-open 口不变。complete.js 分支重排：plan ⛔ > execute ⛔ > crossStage 告警 > 💡
 结果：stage-wall 单测 7 组（含 handoffAt 新旧章/他会话/reopen/fail-open 全分支）+ handoff 测试全绿；全量 616/0；lint 绿；全局 sillyspec 已刷新（isStageWallBlocked/handoffAt/stage.js 三处核实在位）；R16-b 靶仓 ledger 已按实证发生的 handoff 补章，会话 B 可直入 execute
+
+## ql-20260925-003-ad34 | 2026-09-25 13:06:34 | watcher 事件流对接平台 observation 上行端点
+状态：已完成
+关联变更：（无）
+文件：
+- src/watcher.js（平台推送段重写（toObservationEvents 映射 + /api/observation/events + ≤500 分块）与 docstring/导出同步）
+- test/watcher.test.mjs（新增平台 observation 上行对接 4 用例（映射契约/端点分块凭据/降级三态））
+需求：watcher 事件流对接平台 observation 上行端点
+根因：watcher 平台推送原打点 POST /api/changes/{name}/events——平台从未实现该端点（跨系统依赖悬空）；平台侧 observation 服务已在前一变更（multi-agent-platform flow-2026-09-24-7f35）落地，路径与契约不同需对齐
+方案：src/watcher.js 新增导出纯函数 toObservationEvents 把 watcher 事件映射为平台 ObservationEventIn 六键契约（type=kind、告警透传 rule、stage/severity 收进 detail dict、event_ts=ISO UTC、change_key=change 名、provisional 恒 true，顶层零多余字段防平台 extra=forbid 422）；pushEventsToPlatform 切到 POST /api/observation/events 并按 ≤500 分块（平台批量闸），5s 熔断/批，凭据 env>local.yaml platform 段双通道与 best-effort 降级语义不变（失败本地 jsonl 兜底、SILLYSPEC_WATCHER_PUSH=0 逃生阀）；模块 docstring 同步
+结果：watcher.test.mjs 新增 4 用例（契约映射/端点+分块+Bearer/local.yaml 通道/降级三态），定向 node --test test/watcher.test.mjs 17/17 绿；npm test + npm run lint 由本步 CLI 门禁亲测
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：src/flow.js

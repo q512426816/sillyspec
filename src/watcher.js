@@ -16,11 +16,16 @@
  * 与 CLI 调用数解耦是验收钉，轮询天然满足）。轮询面收窄：change 子树已知产物 +
  * git HEAD 头指针 + verify-quality-scan 记录——不扫全仓。
  *
- * 平台推送：POST {platform.url}/api/changes/{name}/events 专用端点，实现模式循
+ * 平台推送：POST {platform.url}/api/observation/events 批量上行端点（平台侧
+ * multi-agent-platform flow-2026-09-24-7f35 已落地），实现模式循
  * src/agent-session-log.js 的 pushAgentLogToPlatform（凭据读取同 readPlatformPushConfig
  * 的 local.yaml platform 段/env 双通道——该函数未导出且 agent-session-log 属他任务
- * allowed_paths，此处同模式自建；5s 超时+best-effort+env SILLYSPEC_WATCHER_PUSH=0 开关；
- * 未配置/非 2xx/网络失败静默降级本地-only——平台未升级该端点是有声明的跨系统依赖）。
+ * allowed_paths，此处同模式自建；5s 超时/批+best-effort+env SILLYSPEC_WATCHER_PUSH=0
+ * 开关；未配置/非 2xx/网络失败静默降级本地-only）。事件经 toObservationEvents
+ * 映射为平台 ObservationEventIn 契约（type=kind、告警带 rule、stage/severity 收进
+ * detail dict、change_key=change 名、event_ts=ISO UTC、provisional 恒 true；顶层
+ * 不带多余字段——平台 body extra=forbid），批内 ≤500 分块；平台按业务字段 tz
+ * 规范化去重键幂等吸收重推（at-least-once 上行安全）。
  *
  * 副产品：阶段墙钟拆账（产物事件时间序列聚合）落 .runtime/watcher-stage-timing-<change>.
  * json，替代 transcript 抽取。
@@ -49,6 +54,8 @@ const IDLE_EXIT_MS = 6 * 60 * 60_1000;
 // 硬寿命帽：孤儿绝对上限（2026-09-22 泄漏实证兜底）——无论活跃与否 12h 必退
 const MAX_LIFETIME_MS = 12 * 60 * 60_000;
 const PUSH_TIMEOUT_MS = 5_000;
+// 平台 observation 上行端点单批上限（ObservationBatch.events max_length，422 闸）。
+const OBSERVATION_BATCH_MAX = 500;
 const LOG_TRUNCATE_THRESHOLD = 1_000_000;
 const LOG_TRUNCATE_KEEP = 512 * 1024;
 
@@ -719,34 +726,75 @@ function readWatcherPushConfig(specBase, env = process.env) {
 }
 
 /**
- * 事件批量推平台（best-effort，唯一非本地副作用）：专用 events 端点，5s 熔断，
- * 任何失败只 warn——本地 jsonl 已是事件唯一真相源，平台是展示面。
+ * watcher 事件 → 平台 ObservationEventIn 契约映射（纯函数，导出供测试）。
+ * 顶层仅 type/rule/detail/event_ts/change_key/provisional 六键——平台 body
+ * extra=forbid，多带字段整批 422；stage/severity 等 CLI 本地形态收进 detail
+ * dict（note=人类可读注记）。event_ts 统一 ISO UTC（Z），与平台 tz 规范化
+ * 去重键兼容：同事件重推同键，平台按已存在幂等吸收。
  */
-async function pushEventsToPlatform({ specBase, changeName, events, env = process.env, fetchImpl = fetch }) {
-  if (env.SILLYSPEC_WATCHER_PUSH === '0' || events.length === 0) return { pushed: null };
+export function toObservationEvents(changeName, events) {
+  const out = [];
+  for (const rec of events || []) {
+    if (!rec || typeof rec !== 'object') continue;
+    const numTs = typeof rec.ts === 'number' ? rec.ts : Number(rec.ts);
+    const iso = Number.isFinite(numTs)
+      ? new Date(numTs).toISOString()
+      : typeof rec.ts === 'string' && !Number.isNaN(Date.parse(rec.ts))
+        ? new Date(rec.ts).toISOString()
+        : new Date().toISOString();
+    const detail = { note: rec.detail ?? null, stage: rec.stage ?? null };
+    if (rec.severity != null) detail.severity = String(rec.severity);
+    out.push({
+      type: String(rec.kind || 'unknown').slice(0, 100),
+      rule: rec.rule ? String(rec.rule).slice(0, 200) : null,
+      detail,
+      event_ts: iso,
+      change_key: changeName,
+      provisional: true,
+    });
+  }
+  return out;
+}
+
+/**
+ * 事件批量推平台（best-effort，唯一非本地副作用）：observation 上行端点
+ * POST /api/observation/events，批内 ≤500 分块（平台批量闸），5s 熔断/批，
+ * 任何失败只 warn——本地 jsonl 已是事件唯一真相源，平台是展示面。失败批次
+ * 即弃（与旧语义一致，无重推水位）；平台侧业务字段幂等去重，后续若加重推
+ * 也安全（at-least-once 上行）。
+ */
+export async function pushEventsToPlatform({ specBase, changeName, events, env = process.env, fetchImpl = fetch }) {
+  if (env.SILLYSPEC_WATCHER_PUSH === '0' || !events || events.length === 0) return { pushed: null };
   const cfg = readWatcherPushConfig(specBase, env);
   if (!cfg) return { pushed: null, reason: 'no-config' };
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PUSH_TIMEOUT_MS);
-  try {
-    const res = await fetchImpl(`${cfg.url.replace(/\/+$/, '')}/api/changes/${encodeURIComponent(changeName)}/events`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
-      body: JSON.stringify({ events }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      console.warn(`[watcher] 事件推送 → HTTP ${res.status}（本地 jsonl 已兜底）`);
-      return { pushed: false, reason: `http-${res.status}` };
+  const base = cfg.url.replace(/\/+$/, '');
+  const mapped = toObservationEvents(changeName, events);
+  let pushed = 0;
+  for (let i = 0; i < mapped.length; i += OBSERVATION_BATCH_MAX) {
+    const batch = mapped.slice(i, i + OBSERVATION_BATCH_MAX);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PUSH_TIMEOUT_MS);
+    try {
+      const res = await fetchImpl(`${base}/api/observation/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
+        body: JSON.stringify({ events: batch }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        console.warn(`[watcher] 事件推送 → HTTP ${res.status}（本地 jsonl 已兜底）`);
+        return { pushed: pushed > 0, reason: `http-${res.status}` };
+      }
+      pushed += batch.length;
+    } catch (err) {
+      const msg = err && err.name === 'AbortError' ? '超时' : (err && err.message ? err.message : err);
+      console.warn(`[watcher] 事件推送失败: ${msg}（本地 jsonl 已兜底）`);
+      return { pushed: pushed > 0, reason: 'network' };
+    } finally {
+      clearTimeout(timer);
     }
-    return { pushed: true };
-  } catch (err) {
-    const msg = err && err.name === 'AbortError' ? '超时' : (err && err.message ? err.message : err);
-    console.warn(`[watcher] 事件推送失败: ${msg}（本地 jsonl 已兜底）`);
-    return { pushed: false, reason: 'network' };
-  } finally {
-    clearTimeout(timer);
   }
+  return { pushed: true, count: pushed };
 }
 
 /** 子进程起步截尾日志（>1MB 保后 512KB，整行边界起）。失败只影响日志体积。 */
@@ -970,4 +1018,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
 }
 
 export { isPidAlive };
-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents };
+export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toObservationEvents, pushEventsToPlatform };

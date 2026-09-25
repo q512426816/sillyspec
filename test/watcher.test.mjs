@@ -20,6 +20,7 @@ import { join } from 'node:path'
 const {
   inferEvents, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
   spawnWatcher, buildSnapshot, runWatcherFromEnv, WATCHER_LOCK_FILENAME,
+  toObservationEvents, pushEventsToPlatform,
 } = await import('../src/watcher.js')
 
 // 子侧入口经 node -e bootstrap 动态 import 消费（静态零引用属预期），此处锚定存在性
@@ -241,4 +242,101 @@ test('孤儿自愈：正常路径真子进程起跑（锁落盘+存活）——�
   // 等退出再删；清理失败不连坐（残留交 tmpdir/suiteTmp 清理——stage-burst test.after 同款前例）
   await new Promise((r) => { if (child.exitCode !== null) return r(); child.once('exit', r); setTimeout(r, 2000) })
   try { rmSync(root, { recursive: true, force: true }) } catch { /* Windows 句柄延迟残留，不阻断 */ }
+})
+
+// ── 平台 observation 上行对接（quick-f5af12a3：POST /api/observation/events）──
+
+test('toObservationEvents: ObservationEventIn 契约映射——六键顶层/stage 与 severity 收 detail/告警带 rule/event_ts ISO UTC', () => {
+  const ts = 1_740_000_000_000
+  const [stageEv, warnEv] = toObservationEvents('flow-x', [
+    { ts, kind: 'file', stage: 'proposal', detail: 'proposal.md 出现', provisional: true },
+    { ts: ts + 5, kind: 'warning', stage: null, rule: 'fake-check', severity: 'warning', detail: 'tasks 勾选 task-01 无对应提交', provisional: true },
+  ])
+  // 顶层恰好六键（平台 extra=forbid：多带字段整批 422）
+  assert.deepEqual(Object.keys(stageEv).sort(), ['change_key', 'detail', 'event_ts', 'provisional', 'rule', 'type'])
+  assert.equal(stageEv.type, 'file')
+  assert.equal(stageEv.rule, null)
+  assert.deepEqual(stageEv.detail, { note: 'proposal.md 出现', stage: 'proposal' })
+  assert.equal(stageEv.event_ts, new Date(ts).toISOString())
+  assert.equal(stageEv.change_key, 'flow-x')
+  assert.equal(stageEv.provisional, true)
+  // 告警：type=warning（平台前端自动展开判定口径）+ rule 透传 + severity 进 detail
+  assert.equal(warnEv.type, 'warning')
+  assert.equal(warnEv.rule, 'fake-check')
+  assert.equal(warnEv.detail.severity, 'warning')
+  assert.equal(warnEv.detail.note, 'tasks 勾选 task-01 无对应提交')
+})
+
+test('pushEventsToPlatform: 打点 /api/observation/events + Bearer 凭据 + 映射体 + ≤500 分块', async () => {
+  const calls = []
+  const fetchImpl = async (url, init) => { calls.push({ url, init }); return { ok: true } }
+  const events = []
+  for (let i = 0; i < 520; i += 1) {
+    events.push({ ts: 1_740_000_000_000 + i, kind: 'file', stage: 'proposal', detail: `e${i}`, provisional: true })
+  }
+  const r = await pushEventsToPlatform({
+    specBase: join(tmpdir(), 'no-such-spec-base'),
+    changeName: 'flow-chunk',
+    events,
+    env: { SILLYHUB_PLATFORM_URL: 'http://hub.test/', SILLYHUB_PLATFORM_TOKEN: 'shpsync_t' },
+    fetchImpl,
+  })
+  assert.equal(calls.length, 2)
+  assert.equal(calls[0].url, 'http://hub.test/api/observation/events')
+  assert.equal(calls[0].init.method, 'POST')
+  assert.equal(calls[0].init.headers.Authorization, 'Bearer shpsync_t')
+  const body0 = JSON.parse(calls[0].init.body)
+  assert.equal(body0.events.length, 500)
+  assert.equal(body0.events[0].type, 'file')
+  assert.equal(body0.events[0].change_key, 'flow-chunk')
+  assert.deepEqual(Object.keys(body0.events[0]).sort(), ['change_key', 'detail', 'event_ts', 'provisional', 'rule', 'type'])
+  assert.equal(JSON.parse(calls[1].init.body).events.length, 20)
+  assert.deepEqual(r, { pushed: true, count: 520 })
+})
+
+test('pushEventsToPlatform: local.yaml platform 段凭据通道（env 缺省时回落）', async () => {
+  const specBase = mkdtempSync(join(tmpdir(), 'watcher-push-yaml-'))
+  try {
+    writeFileSync(join(specBase, 'local.yaml'), 'platform:\n  url: "http://yaml-hub.test"\n  token: shpsync_yaml\n', 'utf8')
+    const calls = []
+    const fetchImpl = async (url, init) => { calls.push({ url, init }); return { ok: true } }
+    const r = await pushEventsToPlatform({
+      specBase, changeName: 'c-yaml',
+      events: [{ ts: 1_740_000_000_000, kind: 'commit', stage: null, detail: 'abc1234', provisional: true }],
+      env: {}, fetchImpl,
+    })
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].url, 'http://yaml-hub.test/api/observation/events')
+    assert.equal(calls[0].init.headers.Authorization, 'Bearer shpsync_yaml')
+    assert.equal(JSON.parse(calls[0].init.body).events[0].type, 'commit')
+    assert.deepEqual(r, { pushed: true, count: 1 })
+  } finally {
+    rmSync(specBase, { recursive: true, force: true })
+  }
+})
+
+test('pushEventsToPlatform: best-effort 降级三态——非 2xx / 无配置 / 逃生阀，均不抛', async () => {
+  const events = [{ ts: 1_740_000_000_000, kind: 'file', stage: 'plan', detail: 'x', provisional: true }]
+  const envCfg = { SILLYHUB_PLATFORM_URL: 'http://hub.test', SILLYHUB_PLATFORM_TOKEN: 'shpsync_t' }
+  // ① 非 2xx（含 422 批量闸/401 坏凭据）→ {pushed:false, reason:http-*}，不抛
+  let calls = 0
+  const r422 = await pushEventsToPlatform({
+    specBase: join(tmpdir(), 'no-such'), changeName: 'c', events, env: envCfg,
+    fetchImpl: async () => { calls += 1; return { ok: false, status: 422 } },
+  })
+  assert.deepEqual(r422, { pushed: false, reason: 'http-422' })
+  assert.equal(calls, 1)
+  // ② 无配置（env 与 local.yaml 双缺）→ {pushed:null, reason:no-config}，零网络
+  const rNone = await pushEventsToPlatform({
+    specBase: join(tmpdir(), 'no-such'), changeName: 'c', events, env: {},
+    fetchImpl: async () => { throw new Error('should not fetch') },
+  })
+  assert.deepEqual(rNone, { pushed: null, reason: 'no-config' })
+  // ③ 逃生阀 SILLYSPEC_WATCHER_PUSH=0 → {pushed:null}，零网络
+  const rOff = await pushEventsToPlatform({
+    specBase: join(tmpdir(), 'no-such'), changeName: 'c', events,
+    env: { ...envCfg, SILLYSPEC_WATCHER_PUSH: '0' },
+    fetchImpl: async () => { throw new Error('should not fetch') },
+  })
+  assert.deepEqual(rOff, { pushed: null })
 })
