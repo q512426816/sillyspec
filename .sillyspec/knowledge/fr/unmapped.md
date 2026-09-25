@@ -6059,12 +6059,14 @@
 全文：.sillyspec/changes/archive/workspace-spec-root-managed-p0/requirements.md#FR-04
 最近确认：98d3e56dd
 
+## FR-unmapped-714 现有测试不回归
 变更：workspace-spec-root-managed-p0
 状态：active
 摘要：（无场景名）
 全文：.sillyspec/changes/archive/workspace-spec-root-managed-p0/requirements.md#FR-05
 最近确认：98d3e56dd
 
+## FR-unmapped-715 工作区内容访问回归成员制（判定链收紧）
 变更：2026-09-20-workspace-member-visibility
 状态：active
 摘要：默认场景；非成员持平台级 workspace:read 访问工作区详情；非成员持平台级 mcp:read 读工作区 MCP 配置
@@ -6076,6 +6078,7 @@
 全文：.sillyspec/changes/archive/2026-09-20-workspace-member-visibility/requirements.md#FR-01
 最近确认：3642c3d0
 
+## FR-unmapped-716 平台管理员全量不受影响
 变更：2026-09-20-workspace-member-visibility
 状态：active
 摘要：默认场景
@@ -6085,6 +6088,7 @@
 全文：.sillyspec/changes/archive/2026-09-20-workspace-member-visibility/requirements.md#FR-02
 最近确认：3642c3d0
 
+## FR-unmapped-717 工作区列表按成员制返回
 变更：2026-09-20-workspace-member-visibility
 状态：active
 摘要：默认场景
@@ -6094,6 +6098,7 @@
 全文：.sillyspec/changes/archive/2026-09-20-workspace-member-visibility/requirements.md#FR-03
 最近确认：3642c3d0
 
+## FR-unmapped-718 通知收件人按成员制聚合
 变更：2026-09-20-workspace-member-visibility
 状态：active
 摘要：默认场景
@@ -6103,6 +6108,7 @@
 全文：.sillyspec/changes/archive/2026-09-20-workspace-member-visibility/requirements.md#FR-04
 最近确认：3642c3d0
 
+## FR-unmapped-719 功能入口效力保持不变
 变更：2026-09-20-workspace-member-visibility
 状态：active
 摘要：默认场景
@@ -6112,6 +6118,7 @@
 全文：.sillyspec/changes/archive/2026-09-20-workspace-member-visibility/requirements.md#FR-05
 最近确认：3642c3d0
 
+## FR-unmapped-720 创建者自动成员语义不受影响
 变更：2026-09-20-workspace-member-visibility
 状态：active
 摘要：默认场景
