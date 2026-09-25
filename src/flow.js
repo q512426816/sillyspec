@@ -118,6 +118,25 @@ function materialPaths(specBase, changeName, changeDir) {
   return paths.filter((p) => { try { return existsSync(p) } catch { return false } })
 }
 
+/** 变更目录实际产物枚举（2026-09-25-flow-tick-prototype，adopt 路径必读面）：adopt 时头脑风暴
+ * 产出的原型 HTML/决策清单等不在 materialPaths（那是稳定前缀 scan 面）——动态扫变更目录把实际
+ * 在场产物列成必读清单，原型显式点名（agent 看不到就不会用）。 */
+function changeArtifactPaths(changeDir) {
+  const out = []
+  try {
+    for (const e of readdirSync(changeDir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (e.name === 'prototypes') {
+          for (const f of readdirSync(join(changeDir, 'prototypes'))) out.push(join(changeDir, 'prototypes', f))
+        }
+        continue
+      }
+      if (/\.(md|html)$/i.test(e.name) && e.name !== FLOW_STATE_FILE) out.push(join(changeDir, e.name))
+    }
+  } catch { /* 目录异常 = 空清单 */ }
+  return out.filter((p) => { try { return existsSync(p) } catch { return false } })
+}
+
 /**
  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
@@ -162,18 +181,27 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
         } catch { /* 观测旁路 best-effort */ }
         const materials = materialPaths(specBase, change, changeDir)
+        const artifacts = changeArtifactPaths(changeDir)
+        const prototypePaths = artifacts.filter((p) => /\.html$/i.test(p))
         console.log([
           `🧲 头脑风暴产物已收编进轻量跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
           `══════════════════════════════════════`,
-          `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+          `📖 必读（头脑风暴产出——方案的承诺锚，先读完再动手）：`,
+          ...artifacts.map((p) => `   - ${p}`),
+          prototypePaths.length > 0
+            ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
+            : null,
+          `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+          `✅ 任务勾选纪律：干活时逐条勾选 tasks.md 的 \`- [ ] task-NN\` → \`- [x]\`（完成一条勾一条）——`,
+          `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
           ``,
           `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
           ``,
           `材料路径清单（按需 Read）：`,
           ...materials.map((p) => `  - ${p}`),
-        ].join('\n'))
+        ].filter(Boolean).join('\n'))
         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
         return { adopted: true, change, baseline }
       }
@@ -284,6 +312,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
+    `✅ 任务勾选纪律：干活时逐条勾选 tasks.md 的 \`- [ ] task-NN\` → \`- [x]\`（完成一条勾一条）——`,
+    `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -464,6 +494,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           process.exit(1)
         }
         if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+        // 勾选缺失 advisory（2026-09-25-flow-tick-prototype）：有任务行但全未勾（status='none' 且
+        // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
+        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitSubjects.length > 0) {
+          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitSubjects.length} 个提交）——`)
+          console.warn(`   规范动作是干活时逐条勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
+        }
         }
       }
     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
@@ -901,6 +937,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
       `📋 ${change}`,
       `   阶段：${phase}`,
       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
+      (() => { try { const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8'); const c = (t.match(/^- \[x\]/gm) || []).length; const tot = (t.match(/^- \[( |x)\]/gm) || []).length; return `   任务勾选：${c}/${tot}` } catch { return null } })(),
       `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
       subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
       st.legacy_fallback ? `   ⚠️ 已升厚（legacy_fallback）——剩余流程走 run <stage>` : '',
