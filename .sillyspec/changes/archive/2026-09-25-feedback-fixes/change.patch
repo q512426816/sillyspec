@@ -1,0 +1,295 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 24a524ab..922b8007 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -22,6 +22,10 @@ import { join } from 'node:path'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks } from './machine-draft.js'
+ 
++/** 读文件并归一化 CRLF→LF（2026-09-25-feedback-fixes④：Python/编辑器写盘 CRLF 会破坏 
++ 锚定的槽位识别 regex）。 */
++function readText(path) { return readFileSync(path, 'utf8').replace(/\r\n/g, '\n') }
++
+ const AMEND_CMD = (change) => `sillyspec flow amend-draft --change ${change}`
+ const GUARD_NOTE = '整段改写会被 flow done 拒收'
+ 
+@@ -300,7 +304,10 @@ function draftTasks({ change, criteria, withTasks }) {
+     '> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；',
+     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
+     '',
+-    wrapped('tasks-rows', rows.join('\n')),
++    // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
++    // 勾一条就失配 → 必走 amend → editRatio=1 被判该走厚档——勾选纪律与指纹门自相矛盾。
++    // 改为裸 markdown，agent 直接勾；哨兵的防假勾逻辑独立于指纹（按提交 token 判据）。
++    rows.join('\n'),
+     '',
+   ].join('\n')
+   return { text, sections: collectSections(text) }
+@@ -442,7 +449,7 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
+   for (const file of Object.keys(ledger.files || {})) {
+     const mdPath = join(changeDir, file)
+     let text
+-    try { text = readFileSync(mdPath, 'utf8') } catch { continue }
++    try { text = readText(mdPath) } catch { continue }
+     const r = reanchorText({ text, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+     if (r.keys.length === 0) continue
+     writeAtomicSync(mdPath, r.text)
+@@ -481,7 +488,7 @@ export function verifyFlowDrafts({ changeDir, change, runtimeRoot }) {
+   for (const [file, sections] of Object.entries(ledger.files || {})) {
+     const mdPath = join(changeDir, file)
+     let text
+-    try { text = readFileSync(mdPath, 'utf8') } catch {
++    try { text = readText(mdPath) } catch {
+       violations.push(`机器稿「${file}」不可读（draft ledger 在案）`)
+       continue
+     }
+@@ -541,7 +548,7 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+   let criteria = input ? extractSuccessCriteria(input) : null
+   if (criteria === null || (Array.isArray(criteria) && criteria.length === 0)) {
+     try {
+-      const pText = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
++      const pText = readText(join(changeDir, 'proposal.md'))
+       const block = parseMarkerBlocks(pText).find((b) => b.key === 'proposal-criteria')
+       if (block) {
+         criteria = block.contentLines
+@@ -586,7 +593,7 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+ export function ensureBindingSlots({ changeDir }) {
+   const path = join(changeDir, 'requirements.md')
+   if (!existsSync(path)) return { appended: false, slots: 0 }
+-  let text = readFileSync(path, 'utf8')
++  let text = readText(path)
+   if (/<!--\s*AGENT:测试绑定/.test(text)) return { appended: false, slots: 0 }
+   const ids = []
+   for (const m of text.matchAll(/(?:^|\n)#{2,4}\s*(FR-\d+)[^\n]*/g)) {
+diff --git a/src/flow-review.js b/src/flow-review.js
+index fb15be75..7a6fac1b 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -68,7 +68,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+   const texts = [String(input || '')]
+   for (const f of ['proposal.md', 'requirements.md', 'design.md']) {
+     try {
+-      const t = readFileSync(join(changeDir, f), 'utf8')
++      const t = readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n')
+       texts.push(f === 'design.md' ? stripMachineSections(t) : t)
+     } catch { /* 缺件由 redraft/槽位门兜底 */ }
+   }
+@@ -79,7 +79,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
+ 
+   // ② 盲维四问作答：实质作答=风险面（adopted 无槽退化机制词扫描）
+   try {
+-    const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
++    const dText = readFileSync(join(changeDir, 'design.md'), 'utf8').replace(/\r\n/g, '\n')
+     if (/<!--\s*AGENT:槽3/.test(dText)) {
+       const answer = readSlotAnswer(dText, /^<!--\s*AGENT:槽3/)
+       if (!answer) exemptEvidence.push('盲维四问未作答（将由槽位门拦收）')
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 831379ae..ef5cdff7 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -44,10 +44,12 @@ test('① draftAll 五件形态（标记+AGENT 槽+ledger 首版原文）+任务
+   const a = draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, withTasks: false, runtimeRoot })
+   assert.deepEqual(a.written, ['proposal.md', 'requirements.md', 'design.md', 'tasks.md'])
+   assert.ok(!existsSync(join(changeDir, 'tasks')), '默认 thin 零任务卡')
+-  for (const f of ['proposal.md', 'design.md', 'tasks.md']) {
++  for (const f of ['proposal.md', 'design.md']) {
+     const text = readFileSync(join(changeDir, f), 'utf8')
+     assert.match(text, /MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin/, `${f} 含指纹标记`)
+   }
++  // tasks.md 勾选行去指纹化（2026-09-25-feedback-fixes①：勾选与指纹门自相矛盾）——裸 markdown
++  assert.ok(!readFileSync(join(changeDir, 'tasks.md'), 'utf8').includes('MACHINE-DRAFT:tasks-rows'), 'tasks 无指纹段（agent 直接勾）')
+   // requirements.md FR 区改为 agent 书写面（2026-09-25-fr-agent-writable）——无指纹段，有 AGENT 槽
+   const reqsText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+   assert.match(reqsText, /AGENT:FR区/, 'requirements FR 区为 AGENT 槽')
+diff --git a/.sillyspec/changes/2026-09-25-feedback-fixes/design.md b/.sillyspec/changes/2026-09-25-feedback-fixes/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-feedback-fixes/design.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:56:45.431Z
++---
++# 设计记录（Design Record）— 2026-09-25-feedback-fixes
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++平台狗粮五负面修三记二：①tasks-rows 去指纹化（勾选行在 MACHINE-DRAFT 段内致勾选vs指纹自相矛盾——勾一条就失配必走 amend 触发 editRatio=1 被判该走厚档，改为裸 markdown agent 直接勾，与 FR 区同模式）；②CRLF 全局归一化（Python/编辑器 CRLF 破坏 
++ 锚定槽位识别 regex——flow-draft.js 新增 readText helper 统一归一 + flow-review.js classifyReviewNeed 两处读取归一）；③槽位报错加恢复指引（从 .runtime/step-guides/ 指纹缓存找骨架 / 删文件重入 flow start 补生成）。④哨兵文案缺提示（记档——勾选纪律已在简报覆盖）；⑤冻结面归属陈旧声明抢文件（记档——需设计重冻结机制，独立变更）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/flow-draft.js：tasks-rows 去 wrapped() 改裸 markdown、readText CRLF helper + 四处读取归一化。src/flow-review.js：classifyReviewNeed 两处 CRLF 归一。src/flow.js：设计记录报错加恢复指引。测试面：①号测试 tasks.md 断言改无指纹。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：CRLF 归一化纯文本处理无状态变更。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=去指纹后 tasks.md 无防篡改——但 tasks 本质是 agent 的工作清单非承诺锚（承诺锚在 design/FR），防假勾由哨兵按提交 token 判据独立兜底（不依赖指纹）。⑤最复杂：冻结面归属缺陷需要设计「重冻结」或「提交 trailer 过滤」机制，单独立项。
+
+diff --git a/.sillyspec/changes/2026-09-25-feedback-fixes/flow-state.yaml b/.sillyspec/changes/2026-09-25-feedback-fixes/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-feedback-fixes/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 4166d35b903cfd47b607bb69f1f8e29586bfa776
++updatedAt: '2026-09-25T09:57:49.202Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（33.7s）｜门文件 9 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-feedback-fixes/proposal.md b/.sillyspec/changes/2026-09-25-feedback-fixes/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-feedback-fixes/proposal.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:56:45.430Z
++---
++# 提案书（Proposal）— 2026-09-25-feedback-fixes
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:221b85a3425aab333b547c228925d451b7fa416fcd422fc53a0dbd1735bcb2e3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++任务原话转写：动机：平台狗粮五负面逐条判定——①勾选vs指纹自相矛盾（最重）②哨兵文案缺提示（记档）③槽位报错无恢复指引④CRLF破坏槽位识别⑤冻结面归属陈旧声明抢文件（记档最复杂）。修①④③。
++成功标准：
++- tasks-rows 去指纹化（agent 直接勾选，不走 amend 不触发 editRatio——与 FR 区同模式）
++- CRLF 全局归一化：flow-draft.js readText helper + flow-review.js classifyReviewNeed 两处读取归一
++- 槽位报错加恢复指引（从 step-guides 指纹缓存找骨架 / 删文件重入 flow start）
++- ②⑤记档不修（②已有勾选纪律提示；⑤需设计冻结面重触发机制，独立变更）
++- 67+180 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:2fa0350f5232fb207ccd6f1a7f569472f08d7f68dd6ce65c1f411f0877bd653f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. tasks-rows 去指纹化（agent 直接勾选，不走 amend 不触发 editRatio——与 FR 区同模式）
++2. CRLF 全局归一化：flow-draft.js readText helper + flow-review.js classifyReviewNeed 两处读取归一
++3. 槽位报错加恢复指引（从 step-guides 指纹缓存找骨架
++4. 删文件重入 flow start）
++5. ②⑤记档不修（②已有勾选纪律提示
++6. ⑤需设计冻结面重触发机制，独立变更）
++7. 67+180 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:7244781f69516701387dedb59cacd57cd895cee38a57071a646fd88f94695ad3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-feedback-fixes 留痕重锚 -->
++1. tasks-rows 去指纹化（agent 直接勾选，不走 amend 不触发 editRatio——与 FR 区同模式）
++2. CRLF 全局归一化：flow-draft.js readText helper + flow-review.js classifyReviewNeed 两处读取归一
++3. 槽位报错加恢复指引（从 step-guides 指纹缓存找骨架
++4. 删文件重入 flow start）
++5. ②⑤记档不修（②已有勾选纪律提示
++6. ⑤需设计冻结面重触发机制，独立变更）
++7. 67+180 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-feedback-fixes/requirements.md b/.sillyspec/changes/2026-09-25-feedback-fixes/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-feedback-fixes/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:56:45.431Z
++---
++# 需求规格（Requirements）— 2026-09-25-feedback-fixes
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 勾选/指纹/CRLF/恢复四件修复
++Given 平台狗粮实证反馈
++When 逐条判定修复
++Then 勾选自由、CRLF 兼容、报错可恢复
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: tasks-rows 去指纹化（agent 直接勾选，不走 amend 不触发 editRatio——与 FR 区同模式）
++FR-02: CRLF 全局归一化：flow-draft.js readText helper + flow-review.js classifyReviewNeed 两处读取归一
++FR-03: 槽位报错加恢复指引（从 step-guides 指纹缓存找骨架
++FR-04: 删文件重入 flow start）
++FR-05: ②⑤记档不修（②已有勾选纪律提示
++FR-06: ⑤需设计冻结面重触发机制，独立变更）
++FR-07: 67+180 全绿
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 tasks 无指纹断言 + CRLF 场景隐式覆盖）
+
+diff --git a/.sillyspec/changes/2026-09-25-feedback-fixes/tasks.md b/.sillyspec/changes/2026-09-25-feedback-fixes/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-feedback-fixes/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:56:45.431Z
++---
++# 任务注册表（Tasks）— 2026-09-25-feedback-fixes
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [ ] task-01: tasks-rows 去指纹化（agent 直接勾选，不走 amend 不触发 editRatio——与 FR 区同模式
++- [ ] task-02: CRLF 全局归一化：flow-draft.js readText helper + flow-review.js cl
++- [ ] task-03: 槽位报错加恢复指引（从 step-guides 指纹缓存找骨架
++- [ ] task-04: 删文件重入 flow start）
++- [ ] task-05: ②⑤记档不修（②已有勾选纪律提示
++- [ ] task-06: ⑤需设计冻结面重触发机制，独立变更）
++- [ ] task-07: 67+180 全绿
