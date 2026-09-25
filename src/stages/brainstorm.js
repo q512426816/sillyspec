@@ -53,10 +53,10 @@ export const definition = {
 - 多项目且用户已指定：直接确认，不需要等待
 - 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目
 
-### 早期规模筛查（判断是否该走 quick）
+### 早期规模筛查（判断是否该走轻量变更）
 加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
-- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走 quick 流程」+ 一句依据，给出建议命令 \`sillyspec run quick "<需求>"\`。用户同意则本阶段可在此收尾（\`--done\` 并提示转 quick），不必继续走完整设计流程。
-- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示 quick，继续进入下一步「对话式探索与需求澄清」。
+- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <名> --input "<需求>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
+- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
 - 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
 
 ### 输出
@@ -524,7 +524,7 @@ status: passed | needs-user-input | blocked | skipped
 ### 操作
 1. **按规模生成规范文件**：
    - **scale=large**：在 \`{SPEC_ROOT}/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
-   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → \`sillyspec run quick --linked-changes <变更名>\`
+   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 由轻量变更机器稿补齐），实现路径 → \`sillyspec flow start --change <变更名>\`（轻量变更收编头脑风暴产物，2 调用收口）
    - 两种规模都执行 \`git add {SPEC_ROOT}/changes/<change-name>/\` — 暂存本变更的规范文件（精确到变更目录，勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
 
 2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）

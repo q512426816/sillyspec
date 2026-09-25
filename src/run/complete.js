@@ -881,7 +881,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       // 历史教训：曾因此让 agent 在 brainstorm 完成后被误导去跑 scan。
       const _bscale = readDesignScale(specBase, changeName)
       if (_bscale === 'small') {
-        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec run quick --linked-changes ${changeName}`)
+        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口）`)
       } else {
         console.log(`\n👉 brainstorm 已完成。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（scale=large 或未标 small 走完整 plan）`)
       }
