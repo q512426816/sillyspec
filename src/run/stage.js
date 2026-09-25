@@ -17,14 +17,12 @@
  *   - 'child_process'（execSync）裸模块名不变
  */
 import { join, dirname } from 'node:path'
-import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, mkdirSync, rmSync, unlinkSync } from 'node:fs'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
+import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
 import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
 import { executeProgressConfirm } from './progress-confirm.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
-import { allocateQuicklogEntry, deriveTitleFromLinkedChange, sanitizeDesc, detectQuickConcurrencyAdvice } from '../quicklog.js'
-import { createHash } from 'node:crypto'
 import { checkTransition } from '../stage-contract.js'
 import { AUXILIARY_STAGES } from '../constants.js'
 import { completeStageGates } from './gates.js'
@@ -366,9 +364,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
   // （D-003@v1：顶层 quickGuard 不跨进程持久化；agent 在 step 间用 `run quick` 取下一步
   // prompt 时每个新进程都进此块，按文件判幂等才不会重复分配 ql-ID / 重复写条目）。
   if (stageName === 'quick') {
-    // 存量过渡横幅（2026-09-25-thin-default-flip：quick 退役第 2 步）——渲染入口打一行指路，
-    // --done 收尾不经 runStage 不受打扰；quick 全功能保留（存量会话收尾用，新工作走轻量变更）。
-    console.warn(`⚠️ quick 为存量过渡通道（新工作请走轻量变更：sillyspec flow start --change <名> --input "<含『成功标准：』条目的需求>"，2 次调用带测试绑定与 patch 留档）——本命令仅供收尾进行中的 quick 会话。`)
+    // quick 通道直接退役（2026-09-25-quick-channel-retire，接替 thin-default-flip 的第 2 步横幅劝导）：
+    // 新会话一律硬拒（见下方 !existingGuard 分支），在途会话（guard.json 存在）照常续跑/--done/--cancel
+    // 收尾——--done/--cancel 不经 runStage，本门只拦「新会话创建」，拒绝发生在任何写入之前（零副作用）。
     // 受保护文件预告打印（坑 quick-protected-late-hint，2026-08-28 用户实证：scan 类文档
     // ARCHITECTURE/CONCERNS 属受保护基线，--files 声明了照样拦、必须 --force-baseline——
     // 设计合理但提示太晚。step1 即预告哪些声明文件会触发拦截，省一轮跑到 --done 才发现的往返）
@@ -387,6 +385,8 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       if (existsSync(guardFile)) existingGuard = JSON.parse(readFileSync(guardFile, 'utf8'))
     } catch {}
     if (existingGuard) {
+      // 在途会话提示（每次渲染一行，防 agent 把后续新工作又开成 quick）：本会话收尾不受退役影响
+      console.log(`ℹ️ quick 通道已退役——本会话为升级前在途会话，可继续收尾（--done / --cancel）；新工作走轻量变更 flow start。`)
       // 跨进程重入：复用已分配的 ql-ID，跳过 baseline 重捕与分配（幂等）
       progress.quickGuard = existingGuard
       // 中途追加边界：会话中途发现要改启动声明外的文件，此前 resume 会把 --files 静默丢弃、
@@ -410,179 +410,29 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
         }
       }
     } else {
-      // baseline 采集用 safeGit（带 -c safe.directory，避免 linked worktree/容器异 uid/Windows 挂载点
-      // 下裸 `git status` 抛错）。safeGit 已消除 safe.directory 类失败；若仍失败（真非 git 目录等），
-      // 不硬阻断 quick 启动（平台模式/非 git 目录仍需渲染 step prompt），但 fail-visible：大声 warn +
-      // baseline 置空。--done 时 auditQuickCompletion 的 safeGit 同样失败 → blocked，故不存在「静默
-      // 完成」路径（multi-agent-review Q3）。
-      const statusResult = safeGit(cwd, ['status', '--porcelain'], { trim: false })
-      if (statusResult.error) {
-        console.warn(`⚠️ quick baseline 采集失败（git status）: ${statusResult.error}`)
-        console.warn(`   baseline 置空；--done 审计将因 git 不可用而阻断（无静默完成路径）。`)
-        console.warn(`   排查：仓库 safe.directory 配置 / 非 git 目录。`)
-      }
+      // quick 通道直接退役（2026-09-25-quick-channel-retire）：新会话硬拒 exit 1——本 else 分支
+      // 原是 ql-ID 分配 / guard 落盘 / QUICKLOG 条目写入发生处，拒绝置于所有写入之前（零副作用）。
+      // 判据与 D-003 幂等判据同源（guard.json 文件存在性），在途会话走上方 existingGuard 分支不受影响。
+      // 注：CLI 进程入口的新会话已被 index.js refuseRetiredQuickFreshStart 预门拦下，本门兜底
+      // 进程内直调 runCommand 的入口（测试/编程调用）与 --change 指向不存在会话的形态。
+      console.error(`❌ quick 通道已退役，无法启动 quick 会话（若带 --change 则该会话不存在或已清理）。`)
+      console.error(`   新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+      console.error(`   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。`)
+      // 进程内路径幻影残留清理（best-effort）：CLI 入口已被 index.js 预门拦下；进程内直调
+      // runCommand 的新会话形态在 command.js 已生成 sid + owner.json + current-quick-run-id +
+      // DB 活跃进度行。guard 从未落盘——清掉本 sid 的空会话目录、指向本 sid 的共享指针与 DB
+      // 幻影行（防污染 listChanges / 多活跃判定），防 --done fallback 命中幻影。保护：guard.json
+      // 存在（含损坏）绝不清目录/不注销（损坏可手修恢复，拒绝但保数据）；共享指针只在内容
+      // 等于本 sid 时才动，他者会话标记不碰。
       try {
-        const gitStatus = statusResult.value || ''
-        // 记录全部预存脏文件（含 untracked + .sillyspec/ 路径）。quick 会话期间自身写入的元数据
-        // （quicklog/.runtime/modules/_module-map 等）由 auditQuickCompletion 的 isQuickMetadata 精确豁免，
-        // 不需要这里粗放过滤 .sillyspec/——旧过滤致预存 untracked .sillyspec/changes/ 不进 baseline，
-        // 却在 audit 被当「危险(.sillyspec/)+新增」误判永久 blocked（ql-20260713-002-7628 修复）。
-        const baselineFiles = gitStatus
-          .split('\n').filter(Boolean)
-          .map(line => parsePorcelainPath(line))
-          .filter(Boolean)
-        const allowedFiles = quickOpts?.quickFiles || []
-        const allowNew = quickOpts?.isAllowNew || false
-        const allowDelete = quickOpts?.isAllowDelete || false
-        const forceBaseline = quickOpts?.isForceBaseline || false
-        const linkedChanges = Array.isArray(quickOpts?.linkedChanges) ? quickOpts.linkedChanges : []
-        // 受保护文件预告（坑 quick-protected-late-hint）：会话起步（step1）即点破，
-        // 判定与 --done 审计危险门同口径（predictProtectedQuickFiles）
-        const protectedPreview = predictProtectedQuickFiles(allowedFiles, { linkedChanges, forceBaseline })
-        if (protectedPreview.length > 0) warnProtectedQuickFiles(protectedPreview)
-        // 任务描述驱动预检（2026-09-09 刀批，轮次经济学 §3.4）：未预声明 --files 且未带
-        // forceBaseline 时，用当前脏文件 × 任务描述 token 粗匹配猜可能触及的文件，命中
-        // 受保护面即起步点破——省「--done 撞危险门 → 带 --force-baseline 重跑」一整轮。
-        // 启发式 advisory：猜错零代价（误报忽略），猜中省一轮；精确判定仍归 --done 审计。
-        if (protectedPreview.length === 0 && !forceBaseline) {
-          try {
-            const desc = quickOpts?.taskDescription || ''
-            if (desc) {
-              const dirty = String(safeGit(cwd, ['status', '--porcelain', '--untracked-files=all']).value || '')
-                .split('\n').map(l => l.slice(3).trim().split(' -> ').pop() || '')
-                .map(pp => pp.replace(/^"|"$/g, '').replace(/\\/g, '/'))
-                .filter(pp => pp && !pp.startsWith('.sillyspec/'))
-              const tokens = desc.toLowerCase().split(/[\s,，。；;:：/\\]+/).filter(t => t.length >= 3)
-              const guessed = dirty.filter(pp => tokens.some(t => pp.toLowerCase().includes(t) || t.includes(pp.split('/').pop().replace(/[.][a-z]+$/, '').toLowerCase())))
-              const guessedProtected = predictProtectedQuickFiles(guessed, { linkedChanges, forceBaseline })
-              if (guessedProtected.length > 0) {
-                console.warn(`⚠️ 任务描述可能触及受保护文件（启发式预检，精确判定在 --done）：${guessedProtected.slice(0, 3).join('、')}${guessedProtected.length > 3 ? ' …' : ''}`)
-                console.warn('   若确要改它们：重启 quick 带 --force-baseline 预声明，省 --done 被拦重跑一轮；误报忽略即可。')
-              }
-            }
-          } catch { /* 预检 fail-open */ }
+        if (!existsSync(guardFile)) {
+          if (existsSync(sessionGuardDir)) rmSync(sessionGuardDir, { recursive: true, force: true })
+          try { pm.unregisterChange(cwd, changeName) } catch { /* 行不存在等忽略 */ }
         }
-        // CLI 接管：分配 ql-ID + 写 QUICKLOG「进行中」条目 + 关联 tasks.md（持锁、当天唯一）
-        const gitUser = safeGit(cwd, ['config', 'user.name']).value || 'unknown'
-        // 标题回退：启动 quick 不带 --input 时，从关联变更的 proposal/design 提取语义标题，
-        // 避免 QUICKLOG/tasks.md 落 (quick 任务) 占位（deriveTitleFromLinkedChange 读不到则空→sanitizeDesc 回退占位）。
-        let quickDesc = quickOpts?.taskDescription || ''
-        if (!quickDesc && linkedChanges.length > 0) {
-          quickDesc = deriveTitleFromLinkedChange(specBase, linkedChanges[0])
-        }
-        const { qlId } = await allocateQuicklogEntry(specBase, gitUser, {
-          description: quickDesc,
-          linkedChanges,
-          allowedFiles,
-          // 他者会话 guard 预留让位（坑 ql-id-double-occupancy）：与 guard 落盘同源目录
-          // （Q4 单一解析，平台模式 runtimeRoot 分裂时也对齐）
-          sessionsDir: resolveQuickSessionsDir(platformOpts, specBase),
-        })
-        progress.quickGuard = {
-          sessionId: changeName,
-          // 锚定创建时的 specBase（坑 quick-cwd-drift-splits-specdir）：sessionId 全局复用但
-          // guard 按 specDir 落盘，记下归属让漂移可自证（detectQuickSessionDrift 靠目录定位即可，
-          // 此字段供诊断/未来一致性校验）。
-          specDir: specBase,
-          name_zh: '快速任务守卫',
-          baselineCommit: safeGit(cwd, ['rev-parse', 'HEAD']).value,
-          baselineFiles,
-          allowedFiles,
-          // task-01: 录每个 allowedFile 内容 sha256，供 --done auditQuickCompletion 检测同文件并发
-          // （allowedFile 在 baseline 且当前 hash ≠ 此值 = 我也改了 → 同文件并发 warn）。文件不存在/读失败跳过。
-          allowedFilesHash: Object.fromEntries(allowedFiles.flatMap(f => {
-            try { return [[f, createHash('sha256').update(readFileSync(join(cwd, f))).digest('hex')]] }
-            catch { return [] }
-          })),
-          allowNew,
-          allowDelete,
-          forceBaseline,
-          linkedChanges,
-          // 机器自动关联溯源（坑 quick-single-change-auto-link）：--done 归档闸对仅被自动
-          // 关联（信号命中猜测，非 --linked-changes 显式协作声明）的变更不触发轻量归档
-          linkedChangesAuto: Array.isArray(quickOpts?.linkedChangesAuto) ? quickOpts.linkedChangesAuto : [],
-          quicklogId: qlId,
-          // 刀①（2026-09-08）：启动 --input 的任务描述落 guard——prompt.js 渲染 step1 时据此做
-          // 模块上下文关键词匹配（changeName 是 quick-<hash> 无语义，step.prompt 全文噪音大）
-          taskDescription: quickDesc,
-          startedAt: new Date().toISOString(),
-        }
-        // 写入 .runtime/quick-sessions/<sessionId>/guard.json 供 worktree-guard hook 读取
-        // （D-002：按 session 存，多会话各自 guard 不互覆盖。runStage 作用域内 sessionId == changeName == quick-<uuid8>，见 §4.4/4.5）
-        mkdirSync(sessionGuardDir, { recursive: true })
-        writeAtomicSync(guardFile, JSON.stringify(progress.quickGuard, null, 2))
-        const parts = [`${baselineFiles.length} 个已有脏文件`]
-        if (allowedFiles.length > 0) parts.push(`${allowedFiles.length} 个 allowedFiles`)
-        if (allowNew) parts.push('允许新增文件')
-        if (allowDelete) parts.push('允许删除文件')
-        console.log(`🛡️ quick 变更边界已记录: ${parts.join(', ')}`)
-        // 归属点名（2026-09-11 用户实证：--done 审计的 allowedFiles 自动推断可漏实改文件，
-        // 被拦后与危险文件混推 --force-baseline。启动未显式 --files 时，把工作区 src/test 前缀
-        // 脏文件点名让用户当场确认归属——预声明即精确边界，免去收尾被拦一轮）。
-        if (allowedFiles.length === 0 && Array.isArray(baselineFiles)) {
-          const declCandidates = baselineFiles
-            .map((p) => String(p).split('\\').join('/'))
-            .filter((p) => p.startsWith('src/') || p.startsWith('test/'))
-          if (declCandidates.length > 0) {
-            console.log(`👀 工作区已有 ${declCandidates.length} 个 src/test 脏文件（本会话如会改到其中部分，建议现在声明边界；并行会话的他者改动勿声明）：`)
-            for (const p of declCandidates.slice(0, 8)) console.log(`   - ${p}`)
-            if (declCandidates.length > 8) console.log(`   … 共 ${declCandidates.length} 个`)
-            console.log(`   声明：sillyspec run quick --files <a.js,b.js> --change ${changeName}（恢复会话追加边界）`)
-          }
-        }
-        console.log(`📝 QUICKLOG 条目已创建: ${qlId}`)
-        // 空壳会话探测（坑 quick-duplicate-empty-shell，2026-09-03 用户实证：一次输出被吞 →
-        // agent 误判失败重跑 → 重复空壳会话，此前只能手工 reset + 删骨架）。新会话起步时点名
-        // 他者「已启动但零步骤完成」的会话 + 给官方清理口 --cancel（QUICKLOG 翻已取消 + 挂载行
-        // 移除）。advisory 不阻断：真在用的并行会话不受影响（有完成步骤即不列）。
-        try {
-          const shells = detectEmptyShellQuickSessions(platformOpts, specBase, changeName, pm, cwd)
-          if (shells.length > 0) {
-            console.warn('')
-            console.warn(`🧹 检测到 ${shells.length} 个疑似空壳 quick 会话（已启动但零步骤完成——常见于输出中断后误重启的残留）：`)
-            for (const s of shells) console.warn(`   - ${s.sessionId}（启动于 ${s.startedAt}）`)
-            console.warn(`   清理：sillyspec run quick --cancel --change <会话ID>；若确在用请忽略本提示。`)
-          }
-        } catch { /* fail-open：探测失败不打扰 quick 启动 */ }
-        // 并发错峰建议（ql-20260921-009 ③，2026-09-21 batch2 归档实证：多 quick 会话文件面
-        // 重叠+主仓脏文件在途时，工作区级互写/apply 相交拦截的摩擦集中爆发）。条件与探测在
-        // quicklog.js detectQuickConcurrencyAdvice（可测纯读）——他者活跃守卫（TTL 过滤后）≥1
-        // 且主仓已有 src/test 脏文件。advisory 不阻断；单会话常态零输出零成本。
-        try {
-          const advice = detectQuickConcurrencyAdvice({ specBase, changeName, baselineFiles })
-          if (advice.suggest) {
-            console.warn('')
-            console.warn(`⚠️ 检测到 ${advice.others.length} 个并行 quick 会话在途（${advice.others.slice(0, 5).join('、')}${advice.others.length > 5 ? ' 等' : ''}）且主仓已有 src/test 脏文件——若文件面重叠，工作区互写与 apply 相交拦截的摩擦会集中出现。`)
-            console.warn('   建议：错峰（等对方 --done 后再动手），或本会话立即声明边界（--files <a.js,b.js>）把交集显式化。')
-          }
-        } catch { /* fail-open：建议探测失败不打扰 quick 启动 */ }
-        // 缺 --input 且关联变更无可提取标题 → 条目落「(quick 任务)」占位标题，平台「快速修复」列表
-        // 默认隐藏进行中占位（task-06 口径），长会话全程不可见、语义标题要到最终 --done 才回填。
-        // 此刻会话刚起步零沉没成本，提示放弃重启带 --input 是最便宜的自愈点。
-        if (!quickDesc) {
-          console.warn('')
-          console.warn('⚠️ 本次 quick 未带 --input：QUICKLOG 条目将以占位标题「(quick 任务)」落盘')
-          console.warn('   平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 --done 才回填。')
-          console.warn('   长任务建议放弃本会话、带一句话任务描述重启（旧会话 run quick --reset --change <sessionId> 重置）：')
-          console.warn('     sillyspec run quick --input "<一句话任务描述>" [--linked-changes <a,b>] [--files <...>]')
-        }
-        // 回填 DB changes 行的 title + quicklog_id，让 quick-<hex> 可读、DB↔QUICKLOG 可对账。
-        // title 用 quickDesc（任务描述或关联变更标题）经 sanitizeDesc 压一行限长，与 QUICKLOG 条目标题同源。
-        try {
-          pm.updateChangeMeta(cwd, changeName, { title: sanitizeDesc(quickDesc), quicklogId: qlId });
-        } catch { /* 回填失败不阻断 quick 启动 */ }
-        pm._write(cwd, progress, changeName)
-        // ql-20260819-009：起步即推「进行中」占位条目到平台。runStage 前段三处 triggerSync
-        // （autoDetectChange / currentStage 切换 / stale 复位）全在本块之前执行——「进行中」骨架
-        // 此前要等第一次 --done 才上平台，平台快速修复列表存在起步盲窗。此刻骨架已分配 + 进度已
-        // 落盘，补一次 triggerSync 立即推 QUICKLOG（quick-<hex8> 会话自动降级 syncSpecTreeOnly
-        // 只推 spec 树；未连接平台静默跳过、8s 熔断 best-effort，均不阻断 quick 启动）。平台派发
-        // （claim）模式起步同样走 runStage 本块，一处插入全覆盖；guard 已存在的跨进程重入走上方
-        // existingGuard 分支跳过本块，条目已在平台，不重复推。
-        triggerSync(cwd, changeName, platformOpts)
-      } catch (e) {
-        console.warn(`⚠️ baseline 记录失败: ${e.message}`)
-      }
+        const marker = join(resolveRuntimeRoot(platformOpts, specBase), 'current-quick-run-id')
+        if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === changeName) unlinkSync(marker)
+      } catch { /* 清理失败不掩盖拒绝语义 */ }
+      process.exit(1)
     }
   }
 

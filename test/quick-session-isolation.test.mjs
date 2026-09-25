@@ -27,6 +27,7 @@ import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
 import { shouldBlock } from '../src/hooks/worktree-guard.js'
 import { DB } from '../src/db.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 // task-10 废 gate-status.json 后，readCurrentStage 直读 sillyspec.db。验收 4/5/5補 的 hook
 // 场景无 runCommand（不自带建库），需手动建 sillyspec.db 并种 active change 行，既让
@@ -74,7 +75,7 @@ function makeTmpDir(prefix) {
   return dir
 }
 
-/** 捕获 console.log 输出（runCommand 用 console.log 打印 sessionId） */
+/** 捕获 console.log 输出（runCommand 用 console.log 打印渲染内容） */
 async function captureStdout(fn) {
   const orig = console.log
   let buf = ''
@@ -89,12 +90,6 @@ async function captureStdout(fn) {
     console.error = origErr
   }
   return buf
-}
-
-/** 从 runCommand stdout 提取 sessionId（quick-<8hex>） */
-function extractSessionId(stdout) {
-  const m = stdout.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  return m ? m[1] : null
 }
 
 console.log('=== quick 会话隔离回归测试 ===\n')
@@ -118,15 +113,16 @@ console.log('--- 验收 1/2/3：多会话 DB 隔离 + --done 各推 + guard 按 
   const pmInit = new ProgressManager({ specDir: specBase })
   await pmInit.init(repo)
 
-  // ── 启动会话 A ──
-  const outA = await captureStdout(() => runCommand(['quick', 'fix bug A', '--non-interactive'], repo))
-  const sidA = extractSessionId(outA)
-  assert(sidA && /^quick-[0-9a-f]{8}$/.test(sidA), `会话 A 生成合法 sessionId（${sidA}）`)
+  // ── 会话 A（夹具预置「升级前在途」态 + 续跑渲染播种 steps；quick 退役后新会话被拒，
+  //    2026-09-25-quick-channel-retire——原为真实启动，隔离语义不变） ──
+  const { sid: sidA } = await seedQuickSession(repo, { taskDescription: 'fix bug A' })
+  await captureStdout(() => runCommand(['quick', '--change', sidA, '--non-interactive'], repo))
+  assert(/^quick-[0-9a-f]{8}$/.test(sidA), `会话 A 合法 sessionId（${sidA}）`)
 
-  // ── 启动会话 B（A 尚未 --done，模拟并发） ──
-  const outB = await captureStdout(() => runCommand(['quick', 'fix bug B', '--non-interactive'], repo))
-  const sidB = extractSessionId(outB)
-  assert(sidB && /^quick-[0-9a-f]{8}$/.test(sidB), `会话 B 生成合法 sessionId（${sidB}）`)
+  // ── 会话 B（A 尚未 --done，模拟并发） ──
+  const { sid: sidB } = await seedQuickSession(repo, { taskDescription: 'fix bug B' })
+  await captureStdout(() => runCommand(['quick', '--change', sidB, '--non-interactive'], repo))
+  assert(/^quick-[0-9a-f]{8}$/.test(sidB), `会话 B 合法 sessionId（${sidB}）`)
   assert(sidA !== sidB, '两会话 sessionId 互不相同（D-003 UUID8hex 防并发撞名）')
 
   // ── 验收 1：两会话 DB 行独立，steps 不互覆盖 ──

@@ -18,6 +18,7 @@ import { WorktreeManager } from '../src/worktree.js'
 import { resolveApplyAllowSet, collectReviewDeclaredFiles } from '../src/worktree-apply.js'
 import { reconcileTargetFiles } from '../src/verify-postcheck.js'
 import { autoReanchorDocRefs } from '../src/docs-check.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
@@ -238,10 +239,9 @@ try {
     git(proj, ['add', '.'])
     git(proj, ['commit', '-q', '-m', 'init'])
 
-    // 启动 quick（step1）声明 a.js——必须带 --input（无描述启动被拒）
-    const start = runCLI(['run', 'quick', '--files', 'a.js', '--input', 'fileNotes 边界口径测试', '--non-interactive'], proj)
-    const sid = (start.stdout.match(/quick-[0-9a-f]{8}/) || [])[0]
-    assert(sid, `quick 会话已启动（输出 ${start.combined.slice(0, 160)}）`)
+    // 预置在途会话：声明 a.js（quick 退役后新会话被拒，2026-09-25-quick-channel-retire——夹具等价启动态）
+    const { sid } = await seedQuickSession(proj, { taskDescription: 'fileNotes 边界口径测试', allowedFiles: ['a.js'], gitUser: 't' })
+    assert(/^quick-[0-9a-f]{8}$/.test(sid), 'quick 在途会话已预置')
 
     // 会话期间改 a.js + extra.js（后者未在 --files 声明）
     writeFileSync(join(proj, 'a.js'), 'a2\n')

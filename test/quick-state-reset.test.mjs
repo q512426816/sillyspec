@@ -16,6 +16,7 @@ import { execFileSync } from 'node:child_process'
 
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 let total = 0
 let failed = 0
@@ -52,11 +53,6 @@ async function captureStdout(fn) {
   try { await fn(); return buf } finally { console.log = orig; console.error = origErr; console.warn = origWarn }
 }
 
-function extractSessionId(out) {
-  const m = out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  return m ? m[1] : null
-}
-
 async function main() {
   const repo = makeTmpDir('qk-reset-')
   git(repo, ['init', '-q'])
@@ -71,10 +67,9 @@ async function main() {
   const pmInit = new ProgressManager({ specDir: specBase })
   await pmInit.init(repo)
 
-  // 1. 启动 quick 会话
-  const out1 = await captureStdout(() => runCommand(['quick', 'fix bug', '--non-interactive'], repo))
-  const sid = extractSessionId(out1)
-  assert(sid && /^quick-[0-9a-f]{8}$/.test(sid), `sessionId 生成（${sid}）`)
+  // 1. 预置在途 quick 会话（quick 退役后新会话被拒，2026-09-25-quick-channel-retire；夹具等价启动态）
+  const { sid } = await seedQuickSession(repo, { taskDescription: 'fix bug' })
+  assert(/^quick-[0-9a-f]{8}$/.test(sid), `sessionId（${sid}）`)
 
   // 2. --done step0（理解任务）→ step0 completed
   await captureStdout(() => runCommand(

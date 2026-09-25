@@ -47,6 +47,20 @@ function inferChange(changeDir, name, specBase) {
   const ev = (f) => join(specBase, 'changes', name, f)
   const t = countTasks(join(changeDir, 'tasks.md'))
 
+  // 轻量变更（thin/flow）优先分支（2026-09-25-quick-channel-retire 评审 P1）：flow-state.yaml
+  // 在场 = 轻量变更，续跑/收口走 flow 协议——run <stage> 对 thin 变更会被混跑守卫拒
+  //（升厚须用户同意带 --upgrade-thick），按 task 勾选给恢复/收口两态
+  if (has('flow-state.yaml')) {
+    const state = t.total > 0 && t.checked >= t.total
+      ? `${name}：轻量变更 task 全勾，待收口`
+      : `${name}：轻量变更进行中（task ${t.checked}/${t.total}）`
+    return {
+      state,
+      next: `sillyspec flow start --change ${name}（恢复简报；干完跑 flow done 收口）`,
+      evidence: [ev('flow-state.yaml'), ev('tasks.md')],
+    }
+  }
+
   if (!has('proposal.md') && !has('design.md') && !has('tasks.md') && !has('plan.md')) {
     return { state: `${name}：变更目录为空`, next: 'sillyspec run brainstorm（完善 proposal）或清理该空目录', evidence: [ev('（无产物）')] }
   }

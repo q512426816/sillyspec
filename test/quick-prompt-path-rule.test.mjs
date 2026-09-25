@@ -15,6 +15,7 @@ import { writeFileSync, mkdtempSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
 const root = join(__dirname, '..')
@@ -35,6 +36,9 @@ console.log('--- ① quick 会话：提示条件化，不再强制 changes/ 目�
 {
   const d = newTmp()
   writeFileSync(join(d, 'stub.txt'), 'x')
+  execSync('git init -q && git config user.email t@t && git config user.name t && git add stub.txt && git commit -qm init', { cwd: d, stdio: 'pipe' })
+  // 预置在途会话（quick 退役后新会话被拒，2026-09-25-quick-channel-retire）；sid 固定 deadbee1 以维持原断言
+  await seedQuickSession(d, { sid: 'quick-deadbee1', taskDescription: '修复一个纯代码小问题' })
   const out = run(`node "${binCLI}" --dir "${d}" run quick --change quick-deadbee1 "修复一个纯代码小问题"`)
   assert(out.includes('纯代码改动直接写源码目录，无目录限制'), '提示「纯代码改动直接写源码目录」')
   assert(out.includes('仅当本 quick 需要落 spec 文档'), '补文档场景才提 changes/ 目录（条件化）')

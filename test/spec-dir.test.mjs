@@ -151,11 +151,20 @@ console.log('\n=== Test 4: 平台模式 prompt 注入 ===')
   run(`node "${binCLI}" init "${projectDir}" --spec-dir "${specDir}"`)
   
   // execute 阶段会自动创建 worktree，在非 git 环境下会失败，跳过
-  const stages = ['scan', 'brainstorm', 'plan', 'verify', 'quick']
+  // quick 已退役（2026-09-25-quick-channel-retire）：新会话被拒，quick 阶段改夹具预置
+  // 在途会话（guard 落分离 specDir）后续跑渲染，验证同一平台模式 prompt 注入
+  const stages = ['scan', 'brainstorm', 'plan', 'verify']
   for (const stage of stages) {
     const output = run(`node "${binCLI}" --dir "${projectDir}" --spec-dir "${specDir}" run ${stage} --skip-approval --input "spec-dir 测试"`)
     assert(output.includes('平台模式'), `${stage}: 包含平台模式指令`)
     assert(output.includes(`规范目录（specDir）: \`${specDir}\``), `${stage}: 包含正确的 specDir 路径`)
+  }
+  {
+    const { seedQuickSession } = await import('./helpers/quick-session-fixture.mjs')
+    const { sid } = await seedQuickSession(projectDir, { specBase: specDir, taskDescription: 'spec-dir 测试' })
+    const output = run(`node "${binCLI}" --dir "${projectDir}" --spec-dir "${specDir}" run quick --change ${sid} --skip-approval`)
+    assert(output.includes('平台模式'), `quick: 包含平台模式指令`)
+    assert(output.includes(`规范目录（specDir）: \`${specDir}\``), 'quick: 包含正确的 specDir 路径')
   }
   
   // scan 额外检查

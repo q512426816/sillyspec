@@ -24,11 +24,11 @@ import { resolveQuickLinkedChanges } from '../src/run/quick-audit.js'
 import { closeQuickLinkedChanges } from '../src/run/complete-handlers.js'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 function makeTmp(prefix) { return mkdtempSync(join(tmpdir(), prefix)) }
 function git(d, a) { return execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() }
 async function hush(fn) { const o = console.log; console.log = () => {}; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = () => {}; try { await fn() } finally { console.log = o; console.error = oe; console.warn = ow } }
-function extractSid(s) { const m = s.match(/sessionId:\s*(quick-[0-9a-f]{8})/); return m ? m[1] : null }
 const STRUCTURED = '需求：自动关联门控测试\n根因：无，测试用例\n方案：单候选信号打分 + 止血\n结果：测试全绿'
 
 const tmpRoots = []
@@ -164,28 +164,31 @@ async function seedChange(repo, name, proposalText) {
   await pm.registerChange(repo, name)
   return pm
 }
-async function driveQuickToDone(repo, startArgs) {
-  let out = ''
-  { const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = (...a) => { out += a.join(' ') + '\n' }
-    try { await runCommand(startArgs, repo) } finally { console.log = o; console.error = oe; console.warn = ow } }
-  const sid = extractSid(out)
+// quick 退役（2026-09-25-quick-channel-retire）后新会话被拒，e2e 改夹具预置「升级前在途」
+// 会话；启动期自动关联的信号门控语义由 §1 单元（resolver 直测）保留覆盖，此处只验收
+// 关联溯源（linkedChangesAuto）贯穿到 --done 的归档止血链路。
+async function driveQuickToDone(repo, seedOpts) {
+  const { sid } = await seedQuickSession(repo, seedOpts)
   let doneOut = ''
-  { const o = console.log; console.log = (...a) => { doneOut += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = (...a) => { doneOut += a.join(' ') + '\n' }
+  { const o = console.log; console.log = (...a) => { doneOut += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}; const ow = console.warn; console.warn = () => { doneOut += a.join(' ') + '\n' }
     try {
       await runCommand(['quick', '--done', '--change', sid, '--output', 's1', '--confirm'], repo)
       await runCommand(['quick', '--done', '--change', sid, '--output', 's2', '--confirm'], repo)
       await runCommand(['quick', '--done', '--change', sid, '--output', STRUCTURED, '--confirm'], repo)
     } finally { console.log = o; console.error = oe; console.warn = ow } }
-  return { sid, out, doneOut }
+  return { sid, doneOut }
 }
 
-test('§3 e2e：信号命中自动关联 + guard 溯源 + --done 不误归档他者变更', async () => {
+test('§3 e2e：自动关联溯源 + --done 不误归档他者变更（升级前已自动关联的在途会话）', async () => {
   const repo = initRepo('qsal-e2e-auto-')
   const name = '2026-09-14-fix-login-race'
   await seedChange(repo, name, '修复登录校验的竞态窗口，登录并发场景下状态错乱。')
-  const { sid, out, doneOut } = await driveQuickToDone(repo, ['quick', '修复登录竞态问题', '--non-interactive'])
+  const { sid, doneOut } = await driveQuickToDone(repo, {
+    taskDescription: '修复登录竞态问题',
+    linkedChanges: [name],
+    linkedChangesAuto: [name], // 模拟升级前启动期信号命中的自动关联（guard 溯源字段）
+  })
   assert(sid !== null, `quick 会话完成（${sid}）`)
-  assert(out.includes('命中关联信号') && out.includes(name), `启动输出含自动关联提示（${out.includes(name) ? '含变更名' : '缺变更名'}）`)
 
   // 自动关联发生（tasks.md 有 ql 挂载行且已勾）但变更不被归档
   const specBase = join(repo, '.sillyspec')
@@ -202,7 +205,10 @@ test('§3 e2e 对照：显式 --linked-changes + 同僵尸形态 → 归档照�
   const repo = initRepo('qsal-e2e-explicit-')
   const name = '2026-09-14-fix-login-race'
   await seedChange(repo, name, '修复登录校验的竞态窗口，登录并发场景下状态错乱。')
-  const { sid } = await driveQuickToDone(repo, ['quick', '修复登录竞态问题', '--linked-changes', name, '--non-interactive'])
+  const { sid } = await driveQuickToDone(repo, {
+    taskDescription: '修复登录竞态问题',
+    linkedChanges: [name], // 显式关联（无 linkedChangesAuto 溯源）
+  })
   assert(sid !== null, `quick 会话完成（${sid}）`)
   const specBase = join(repo, '.sillyspec')
   const pm = new ProgressManager({ specDir: specBase })

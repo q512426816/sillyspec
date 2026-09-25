@@ -2,9 +2,13 @@
  * Q7：quick --done 不带 --change 时 fallback 读 current-quick-run-id 命中他者/已完成会话的并发污染守卫
  * change: multi-agent-review P1 #13 (Q7) — src/run/command.js
  *
- * 并发两 quick 会话，B 后启动覆盖 A 写入 .runtime/current-quick-run-id（单文件 last-writer-wins）；
+ * 并发两 quick 会话，B 的续跑渲染覆盖 A 写入 .runtime/current-quick-run-id（单文件 last-writer-wins）；
  * A 的 --done 不带 --change 会 fallback 读到 B（或已完成的 A）的 sessionId → 误操作他者会话的
  * progress/QUICKLOG。守卫：fallback 命中的会话若已完成或无可推进步骤，拒绝（exit 2）并要求显式 --change。
+ *
+ * quick 退役（2026-09-25-quick-channel-retire）后新会话被拒，两会话改 quick-session-fixture
+ * 预置「升级前在途」态；marker 仍走真实路径写入（续跑渲染 `run quick --change <sid>` 非 --done
+ * 分支写 current-quick-run-id，语义不变）。
  *
  * 覆盖：
  *   1. 正向：fallback 命中「已完成」会话 → 守卫 exit 2（非 rule 655 的 exit 1 误推 --reopen）
@@ -18,6 +22,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 let total = 0, failed = 0
 function assert(condition, msg) {
@@ -40,10 +45,6 @@ async function captureStdout(fn) {
   try { await fn() } finally { console.log = orig; console.error = origErr }
   return { stdout: buf, stderr: errBuf }
 }
-function extractSessionId(s) {
-  const m = s.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  return m ? m[1] : null
-}
 
 console.log('=== Q7：quick --done fallback 并发污染守卫 ===\n')
 
@@ -57,10 +58,9 @@ await new ProgressManager({ specDir: specBase }).init(repo)
 const idFile = join(specBase, '.runtime', 'current-quick-run-id')
 
 // ── 正向：fallback 命中「已完成」会话 → 守卫拒绝（exit 2）──
-const outA = await captureStdout(() => runCommand(['quick', 'Q7 正向', '--linked-changes', 'none', '--non-interactive'], repo))
-const sidA = extractSessionId(outA.stdout)
-assert(sidA !== null, `启动 quick 会话 A 分配 sidA: ${sidA}`)
-assert(readFileSync(idFile, 'utf8').trim() === sidA, 'A 启动写入 current-quick-run-id = sidA')
+const { sid: sidA } = await seedQuickSession(repo, { taskDescription: 'Q7 正向' })
+await captureStdout(() => runCommand(['quick', '--change', sidA, '--non-interactive'], repo))
+assert(readFileSync(idFile, 'utf8').trim() === sidA, 'A 续跑渲染写入 current-quick-run-id = sidA')
 
 // 模拟 A 已是「已完成」会话（并发场景：他者会话已收尾，current-quick-run-id 仍指向它）
 const pm = new ProgressManager({ specDir: specBase })
@@ -85,10 +85,10 @@ assert(posExit && posExit.message === 'EXIT_2', `fallback 命中已完成会话�
 assert(posErr.includes('已不可推进') && posErr.includes('--change'), '拒绝信息提示并发污染 + 要求显式 --change')
 
 // ── 负向：fallback 命中「可推进」会话 → 守卫不拦截，正常推进 ──
-const outB = await captureStdout(() => runCommand(['quick', 'Q7 负向', '--linked-changes', 'none', '--non-interactive'], repo))
-const sidB = extractSessionId(outB.stdout)
-assert(sidB !== null && sidB !== sidA, `启动 quick 会话 B（新 sid，覆盖 current-quick-run-id）: ${sidB}`)
-assert(readFileSync(idFile, 'utf8').trim() === sidB, 'B 启动覆盖 current-quick-run-id = sidB（last-writer-wins）')
+const { sid: sidB } = await seedQuickSession(repo, { taskDescription: 'Q7 负向' })
+await captureStdout(() => runCommand(['quick', '--change', sidB, '--non-interactive'], repo))
+assert(sidB !== sidA, `会话 B 为新 sid（夹具独立分配）: ${sidB}`)
+assert(readFileSync(idFile, 'utf8').trim() === sidB, 'B 续跑渲染覆盖 current-quick-run-id = sidB（last-writer-wins）')
 
 let negExit = null
 const origExit2 = process.exit

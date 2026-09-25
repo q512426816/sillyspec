@@ -13,6 +13,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync, spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const cliBin = join(fileURLToPath(import.meta.url).replace(/[\\/][^\\/]+$/, ''), '..', 'src', 'index.js')
 const tmpRoots = []
@@ -30,11 +31,11 @@ const git = (dir, args) => execFileSync('git', ['-C', dir, ...args], {
   encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'],
 }).trim()
 
-function quickFlow(dir, resultText) {
-  const start = spawnSync(process.execPath, [cliBin, 'run', 'quick', '--non-interactive', '--input', 'x', '--files', 'main.js'],
-    { cwd: dir, encoding: 'utf-8', timeout: 60_000 })
-  const sid = ((start.stdout || '') + (start.stderr || '')).match(/quick-[0-9a-f]{8}/)?.[0]
-  assert.ok(sid, `会话已建立（status=${start.status}；输出头 ${((start.stdout || '') + (start.stderr || '')).slice(0, 300)}）`)
+// quick 退役（2026-09-25-quick-channel-retire）后新会话被拒——夹具预置「升级前在途」会话
+// （声明 main.js），三步推进与虚报核对语义不变
+async function quickFlow(dir, resultText) {
+  const { sid } = await seedQuickSession(dir, { taskDescription: 'x', allowedFiles: ['main.js'], gitUser: 't' })
+  assert.ok(sid, '在途会话已预置')
   const run = (args) => spawnSync(process.execPath, [cliBin, ...args], { cwd: dir, encoding: 'utf-8', timeout: 120_000 })
   run(['run', 'quick', '--done', '--change', sid, '--output', 's1'])
   run(['run', 'quick', '--done', '--change', sid, '--output', 's2'])
@@ -42,7 +43,7 @@ function quickFlow(dir, resultText) {
   return { sid, done, out: (done.stdout || '') + (done.stderr || '') }
 }
 
-test('① 虚报形态：hash 提交面不含会话文件 → 警告 + 不阻断落账', () => {
+test('① 虚报形态：hash 提交面不含会话文件 → 警告 + 不阻断落账', async () => {
   const dir = makeRepo()
   git(dir, ['init', '-q']); git(dir, ['config', 'user.email', 't@t']); git(dir, ['config', 'user.name', 't']); git(dir, ['config', 'commit.gpgsign', 'false'])
   writeFileSync(join(dir, '.gitignore'), '.sillyspec/\n')
@@ -53,13 +54,13 @@ test('① 虚报形态：hash 提交面不含会话文件 → 警告 + 不阻断
   git(dir, ['add', 'other.js']); git(dir, ['commit', '-q', '-m', 'other'])
   const fakeHash = git(dir, ['rev-parse', 'HEAD'])
 
-  const { done, out } = quickFlow(dir, `6 用例绿；已提交 ${fakeHash} 推送 origin`)
+  const { done, out } = await quickFlow(dir, `6 用例绿；已提交 ${fakeHash} 推送 origin`)
   assert.equal(done.status, 0, `advisory 不阻断（实际 ${done.status}；尾 ${out.slice(-300)}）`)
   assert.ok(out.includes('均不在该提交面内'), '虚报警告出现（指向 git show 复核）')
   assert.ok(out.includes('已提交 ' + String(fakeHash).slice(0, 12).slice(0, 7)) || out.includes(String(fakeHash).slice(0, 7)), '警告点名可疑 hash')
 })
 
-test('② 对照：提交面确含会话文件 → 无警告', () => {
+test('② 对照：提交面确含会话文件 → 无警告', async () => {
   const dir = makeRepo()
   git(dir, ['init', '-q']); git(dir, ['config', 'user.email', 't@t']); git(dir, ['config', 'user.name', 't']); git(dir, ['config', 'commit.gpgsign', 'false'])
   writeFileSync(join(dir, '.gitignore'), '.sillyspec/\n')
@@ -67,19 +68,19 @@ test('② 对照：提交面确含会话文件 → 无警告', () => {
   git(dir, ['add', '.']); git(dir, ['commit', '-q', '-m', 'init'])
   const realHash = git(dir, ['rev-parse', 'HEAD'])
 
-  const { done, out } = quickFlow(dir, `全绿；已提交 ${realHash}`)
+  const { done, out } = await quickFlow(dir, `全绿；已提交 ${realHash}`)
   assert.equal(done.status, 0, '正常完成')
   assert.ok(!out.includes('均不在该提交面内'), '真命中不警告')
 })
 
-test('③ 结果不含 hash 声称 → 零介入（行为不变）', () => {
+test('③ 结果不含 hash 声称 → 零介入（行为不变）', async () => {
   const dir = makeRepo()
   git(dir, ['init', '-q']); git(dir, ['config', 'user.email', 't@t']); git(dir, ['config', 'user.name', 't']); git(dir, ['config', 'commit.gpgsign', 'false'])
   writeFileSync(join(dir, '.gitignore'), '.sillyspec/\n')
   writeFileSync(join(dir, 'main.js'), 'console.log(1)\n')
   git(dir, ['add', '.']); git(dir, ['commit', '-q', '-m', 'init'])
 
-  const { done, out } = quickFlow(dir, '3 用例绿，ruff 0（未提及提交）')
+  const { done, out } = await quickFlow(dir, '3 用例绿，ruff 0（未提及提交）')
   assert.equal(done.status, 0, '正常完成')
   assert.ok(!out.includes('均不在该提交面内') && !out.includes('无法解析'), '无 hash 声称零介入')
 })

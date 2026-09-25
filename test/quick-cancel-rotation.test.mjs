@@ -57,31 +57,34 @@ test('① 条目在轮转归档文件 → --cancel 可达（修复前只扫主�
   assert.ok(mainBody.includes('状态：进行中'), '主文件其他条目不受影响')
 })
 
-test('② 空壳会话（零步骤完成、guard 缺失）→ CLI 直清成功（修复前要求不可执行的 --ql）', () => {
+test('② 空壳会话（零步骤完成、guard 缺失）→ CLI 直清成功（修复前要求不可执行的 --ql）', async () => {
   const cwd = makeFixture()
   git(cwd, ['init', '-q']); git(cwd, ['config', 'user.name', 'tester']); git(cwd, ['config', 'user.email', 't@t'])
   git(cwd, ['commit', '-q', '--allow-empty', '-m', 'init'])
-  // 启动即建立进度行（零完成）但 guard/条目全无（启动被拒形态）
-  const r0 = runCli(cwd, ['run', 'quick', '--non-interactive', '--input', '空壳测试'])
-  const sid = (r0.out.match(/quick-[0-9a-f]{8}/) || [])[0]
-  assert.ok(sid, `会话已建立（${r0.out.slice(0, 120)}）`)
-  // 模拟空壳：删 guard 目录（启动被拒时本就不写）——进度行零完成
-  rmSync(join(cwd, '.sillyspec', '.runtime', 'quick-sessions', sid), { recursive: true, force: true })
+  // quick 退役（2026-09-25-quick-channel-retire）后新会话被拒，空壳形态（进度行零完成、
+  // guard/条目全无）直接用 ProgressManager 预置——与升级前启动即崩的残留形态等价
+  const sid = 'quick-22222222'
+  const { ProgressManager } = await import('../src/progress.js')
+  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
+  await pm.init(cwd)
+  pm.initChange(cwd, sid, { title: '空壳测试' })
 
   const r = runCli(cwd, ['run', 'quick', '--cancel', '--change', sid])
   assert.equal(r.status, 0, `空壳直清 exit 0（实际 ${r.status}；输出 ${r.out.slice(-200)}）`)
   assert.match(r.out, /空壳/, '输出明示空壳语义')
 })
 
-test('③ 非空壳且 guard 缺失 → 仍报错但含 --force 逃生门指引', () => {
+test('③ 非空壳且 guard 缺失 → 仍报错但含 --force 逃生门指引', async () => {
   const cwd = makeFixture()
   git(cwd, ['init', '-q']); git(cwd, ['config', 'user.name', 'tester']); git(cwd, ['config', 'user.email', 't@t'])
   git(cwd, ['commit', '-q', '--allow-empty', '-m', 'init'])
-  const r0 = runCli(cwd, ['run', 'quick', '--non-interactive', '--input', '有进度会话'])
-  const sid = (r0.out.match(/quick-[0-9a-f]{8}/) || [])[0]
-  assert.ok(sid, '会话已建立')
-  runCli(cwd, ['run', 'quick', '--done', '--change', sid, '--output', 'step1 done']) // 有完成步骤
-  rmSync(join(cwd, '.sillyspec', '.runtime', 'quick-sessions', sid), { recursive: true, force: true })
+  const sid = 'quick-33333333'
+  const { ProgressManager } = await import('../src/progress.js')
+  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
+  await pm.init(cwd)
+  pm.initChange(cwd, sid, { title: '有进度会话' })
+  // 有完成步骤（guard 缺失时 --done 跳过审计照常推进步骤——与升级前崩溃残留等价）
+  runCli(cwd, ['run', 'quick', '--done', '--change', sid, '--output', 'step1 done'])
 
   const r = runCli(cwd, ['run', 'quick', '--cancel', '--change', sid])
   assert.equal(r.status, 1, `非空壳拒绝 exit 1（实际 ${r.status}）`)

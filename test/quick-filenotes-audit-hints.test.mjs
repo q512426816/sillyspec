@@ -8,6 +8,7 @@ import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
 import { fileURLToPath } from 'node:url'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
 const root = join(__dirname, '..')
@@ -42,11 +43,10 @@ console.log('=== ① --file-notes 非末步前置 warn（坑 quick-file-notes-no
 {
   const d = mkRepo('fn')
   run(`node "${binCLI}" --dir "${d}" init`)
-  // 开 quick 会话（step1 起步）
-  const start = run(`node "${binCLI}" --dir "${d}" run quick --input "修一个纯代码小问题"`)
-  const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  assertTrue(sidM, 'quick 会话已启动（拿到 sessionId）')
-  const sid = sidM[1]
+  // 预置在途会话（quick 退役后新会话被拒，2026-09-25-quick-channel-retire；夹具与退役前启动等价）
+  const { sid: sidFn } = await seedQuickSession(d, { taskDescription: '修一个纯代码小问题' })
+  assertTrue(/^quick-[0-9a-f]{8}$/.test(sidFn), 'quick 在途会话已预置（拿到 sessionId）')
+  const sid = sidFn
   // step1 --done 带 --file-notes（非末步：三步中还有 2 个 pending）→ 硬拒绝（坑 quick-sync-block
   // 坑2 升级：2026-09-13 实证 warn 版仍「先收下再丢弃再告知」括注静默丢失，改 exit 2 拒绝）
   const r1 = run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --file-notes "src/a.js::测试" --output "step1 完成"`)
@@ -73,10 +73,9 @@ console.log('\n=== ② 危险文件拦截 + --files 追加不解锁 → 两套�
   fs.mkdirSync(docDir, { recursive: true })
   fs.writeFileSync(join(docDir, 'ARCHITECTURE.md'), '# 架构 v1\n')
   execSync('git add .sillyspec/docs && git commit -qm docs', { cwd: d, stdio: 'pipe' })
-  const start = run(`node "${binCLI}" --dir "${d}" run quick --input "改模块文档"`)
-  const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  const sid = sidM ? sidM[1] : null
-  assertTrue(!!sid, 'quick 会话已启动')
+  const { sid: sidProt } = await seedQuickSession(d, { taskDescription: '改模块文档' })
+  assertTrue(/^quick-[0-9a-f]{8}$/.test(sidProt), 'quick 在途会话已预置')
+  const sid = sidProt
   // step1 --done 后（会话期间）改模块文档——启动后改动不进 baseline，属「本轮新增」触发危险门
   run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --output "step1 完成"`)
   fs.writeFileSync(join(docDir, 'auth.md'), '# 模块卡 v2（本次 quick 改动）\n')

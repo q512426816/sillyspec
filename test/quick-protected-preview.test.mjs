@@ -3,16 +3,18 @@
  * scan 类文档 ARCHITECTURE/CONCERNS 属受保护基线，--files 声明了照样拦、必须
  * --force-baseline——设计合理但提示太晚，要等 --done 审计轮才发现，白跑一轮往返）。
  *
- * 修复：predictProtectedQuickFiles（与 auditQuickCompletion 危险门同口径）+
- * stage.js quick 起步（step1）与恢复追加两处预告打印。
+ * 修复：predictProtectedQuickFiles（与 auditQuickCompletion 危险门同口径）+ 预告打印。
+ * quick 退役（2026-09-25-quick-channel-retire）后起步（step1）预告随新会话代码删除，
+ * 存活预告口＝在途会话恢复追加边界（--files --change <sid>）；e2e 改测该口。
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { predictProtectedQuickFiles } from '../src/run/shared.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliBin = join(__dirname, '..', 'bin', 'sillyspec.js')
@@ -56,20 +58,25 @@ console.log('=== predictProtectedQuickFiles：与审计危险门同口径 ===\n'
   assert(r6.length === 1 && r6[0].includes('scan/ARCHITECTURE.md'), 'Windows 反斜杠路径归一后命中')
 }
 
-console.log('\n=== e2e：quick 起步（step1）即预告 ===\n')
+console.log('\n=== e2e：在途会话恢复追加边界即预告（退役后仅存预告口） ===\n')
 {
   const proj = mkTmp('e2e')
   const specBase = join(proj, '.sillyspec')
   const scanDir = join(specBase, 'docs', 'app', 'scan')
   mkdirSync(scanDir, { recursive: true })
   writeFileSync(join(scanDir, 'ARCHITECTURE.md'), '# Arch\n')
+  // git 仓初始化（夹具 baseline 采集依赖 safeGit）
+  for (const a of [['init', '-q'], ['config', 'user.email', 't@t.local'], ['config', 'user.name', 't'], ['config', 'commit.gpgsign', 'false']]) {
+    execFileSync('git', a, { cwd: proj, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  }
+  const { sid } = await seedQuickSession(proj, { taskDescription: '测试预告' })
   const res = spawnSync(process.execPath, [cliBin, 'run', 'quick',
-    '--input', '测试预告', '--files', '.sillyspec/docs/app/scan/ARCHITECTURE.md',
+    '--change', sid, '--files', '.sillyspec/docs/app/scan/ARCHITECTURE.md',
     '--spec-dir', specBase, '--non-interactive'], {
     cwd: proj, encoding: 'utf8', timeout: 120_000, stdio: ['pipe', 'pipe', 'pipe'],
   })
   const out = (res.stdout || '') + (res.stderr || '')
-  assert(res.status === 0, `quick 起步 exit 0（实际 ${res.status}；${out.slice(0, 200)}）`)
+  assert(res.status === 0, `恢复渲染 exit 0（实际 ${res.status}；${out.slice(0, 200)}）`)
   assert(out.includes('受保护/危险范围') && out.includes('--done 审计将拦截'),
     `输出含预告标题（实际片段：${out.split('\n').filter(l => l.includes('受保护') || l.includes('审计将拦截')).join(' | ').slice(0, 150)}）`)
   assert(out.includes('.sillyspec/docs/app/scan/ARCHITECTURE.md'), '预告点名具体文件')

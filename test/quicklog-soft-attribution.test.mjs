@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { strict as assert } from 'node:assert'
 import { matchSameModuleTestFiles } from '../src/run/shared.js'
 import { allocateQuicklogEntry, completeQuicklogEntry, setQuickFileNotes } from '../src/quicklog.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
 const root = join(__dirname, '..')
@@ -147,11 +148,10 @@ console.log('\n=== ③ CLI 端到端：声明 src 漏声明同模块测试 → �
   fs.writeFileSync(join(d, 'test', 'a.test.mjs'), 'import assert from "node:assert"\n')
   execSync('git add -A && git commit -qm base', { cwd: d, stdio: 'pipe' })
   run(`node "${binCLI}" --dir "${d}" init`)
-  // 启动声明 --files src/a.js（测试文件故意不声明 = 用户反馈场景）
-  const start = run(`node "${binCLI}" --dir "${d}" run quick --input "修软归属" --files src/a.js`)
-  const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  assertTrue(!!sidM, 'quick 会话已启动')
-  const sid = sidM[1]
+  // 预置在途会话：声明 --files src/a.js（测试文件故意不声明 = 用户反馈场景；quick 退役后
+  // 新会话被拒 2026-09-25-quick-channel-retire——夹具与退役前启动等价）
+  const { sid } = await seedQuickSession(d, { taskDescription: '修软归属', allowedFiles: ['src/a.js'], gitUser: 't' })
+  assertTrue(/^quick-[0-9a-f]{8}$/.test(sid), 'quick 在途会话已预置')
   run(`node "${binCLI}" --dir "${d}" run quick --done --change ${sid} --output "step1 完成"`)
   // 会话窗口内：改声明文件 + 改同模块测试文件（漏声明）
   fs.writeFileSync(join(d, 'src', 'a.js'), 'export const a = 1\n')

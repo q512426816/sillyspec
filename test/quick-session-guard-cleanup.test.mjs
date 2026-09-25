@@ -29,6 +29,7 @@ import { execFileSync } from 'node:child_process'
 
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 // step3 --done 的结构化结果（最后一步 --output 需含 需求/根因/方案/结果，见 stages/quick.js step3 模板 + run.js 结构校验）。
 // 本测试聚焦收尾/审计/清理语义，step3 用合规结构化 output 避开结构校验，step1/2 的短摘要不变（仅最后一步校验）。
@@ -81,12 +82,6 @@ async function captureStdout(fn) {
   return buf
 }
 
-/** 从 runCommand stdout 提取 sessionId（quick-<8hex>） */
-function extractSessionId(stdout) {
-  const m = stdout.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  return m ? m[1] : null
-}
-
 console.log('=== quick 收尾从 session guard.json 读 guard 回归测试 ===\n')
 
 // ─────────────────────────────────────────
@@ -105,10 +100,11 @@ console.log('--- 验收 1：跨进程 progress 无 quickGuard，收尾从文件�
   const pmInit = new ProgressManager({ specDir: specBase })
   await pmInit.init(repo)
 
-  // 启动 quick 会话（写 session guard.json）
-  const out = await captureStdout(() => runCommand(['quick', 'fix bug X', '--non-interactive'], repo))
-  const sid = extractSessionId(out)
-  assert(sid && /^quick-[0-9a-f]{8}$/.test(sid), `启动 quick 生成合法 sessionId（${sid}）`)
+  // 预置在途会话（写 session guard.json + QUICKLOG 条目 + ql-ID 回填；quick 退役后新会话被拒，
+  // 2026-09-25-quick-channel-retire——夹具与退役前启动同源，收尾/审计/清理语义不变）
+  const { sid } = await seedQuickSession(repo, { taskDescription: 'fix bug X' })
+  await captureStdout(() => runCommand(['quick', '--change', sid, '--non-interactive'], repo))
+  assert(/^quick-[0-9a-f]{8}$/.test(sid), `在途会话合法 sessionId（${sid}）`)
 
   const sessionDir = join(specBase, '.runtime', 'quick-sessions', sid)
   const guardFile = join(sessionDir, 'guard.json')
@@ -176,9 +172,9 @@ console.log('\n--- 验收 2：fallback 旧单文件 quick-guard.json 仍被审�
   const pmInit = new ProgressManager({ specDir: specBase })
   await pmInit.init(repo)
 
-  // 启动 quick（写 session guard.json）—— 然后删掉 session 目录，模拟「只有旧单文件」的老仓库
-  const out = await captureStdout(() => runCommand(['quick', 'fix legacy', '--non-interactive'], repo))
-  const sid = extractSessionId(out)
+  // 预置在途会话（写 session guard.json）—— 然后删掉 session 目录，模拟「只有旧单文件」的老仓库
+  const { sid } = await seedQuickSession(repo, { taskDescription: 'fix legacy' })
+  await captureStdout(() => runCommand(['quick', '--change', sid, '--non-interactive'], repo))
   const sessionDir = join(specBase, '.runtime', 'quick-sessions', sid)
   rmSync(sessionDir, { recursive: true, force: true })
 
@@ -221,8 +217,8 @@ console.log('\n--- 验收 3：无任何 guard 文件 → 跳过审计仅清理�
   const pmInit = new ProgressManager({ specDir: specBase })
   await pmInit.init(repo)
 
-  const out = await captureStdout(() => runCommand(['quick', 'fix noGuard', '--non-interactive'], repo))
-  const sid = extractSessionId(out)
+  const { sid } = await seedQuickSession(repo, { taskDescription: 'fix noGuard' })
+  await captureStdout(() => runCommand(['quick', '--change', sid, '--non-interactive'], repo))
   const sessionDir = join(specBase, '.runtime', 'quick-sessions', sid)
   const legacyGuardFile = join(specBase, '.runtime', 'quick-guard.json')
 
@@ -270,10 +266,10 @@ console.log('\n--- 验收 4：guard + QUICKLOG 双缺 → 复用启动 ql-ID（�
   const pmInit = new ProgressManager({ specDir: specBase })
   await pmInit.init(repo)
 
-  const out = await captureStdout(() => runCommand(['quick', 'fix reuseId', '--non-interactive'], repo))
-  const sid = extractSessionId(out)
+  const { sid } = await seedQuickSession(repo, { taskDescription: 'fix reuseId' })
+  await captureStdout(() => runCommand(['quick', '--change', sid, '--non-interactive'], repo))
   const sessionDir = join(specBase, '.runtime', 'quick-sessions', sid)
-  assert(sid, '会话已启动')
+  assert(/^quick-[0-9a-f]{8}$/.test(sid), '会话已预置')
 
   // 启动分配的 ql-ID 落在进度库 quicklog_id（复用源）
   const startupQlId = pmInit.getQuicklogId(repo, sid)

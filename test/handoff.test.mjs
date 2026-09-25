@@ -90,6 +90,19 @@ function makeRepoAtStage(stage) {
   assert(bad.ok === false && bad.error.includes('变更不存在'), '3a 不存在的变更 → 报错')
 }
 
+// ── 2f/2g. 轻量变更（thin）感知：flow-state.yaml 在场 → 交接命令走 flow 入口 ──
+{
+  const { proj, change } = makeRepoAtStage('brainstorm')
+  // 造 thin 标记（flow start 落的 flow-state.yaml；这里直接落文件等价）
+  writeFileSync(join(proj, '.sillyspec', 'changes', change, 'flow-state.yaml'), 'mode: thin\n')
+  const ho = await buildHandoff({ cwd: proj, changeName: change })
+  assert(ho.ok === true, `2f thin 变更 handoff 成功（${ho.error || 'ok'}）`)
+  const text = ho.lines.join('\n')
+  assert(text.includes(`sillyspec flow start --change ${change}`), '2g thin 交接块命令为 flow start（run <stage> 会被混跑守卫拒）')
+  assert(!text.includes('sillyspec run brainstorm --change') && !text.includes('sillyspec run plan --change'), '2g thin 交接块不含 run <stage> 续跑命令')
+  assert(ho.suggestion.reason.includes('轻量变更'), '2g thin 建议理由点明轻量变更')
+}
+
 // ── 4. CLI 端到端 --json ──
 {
   const { proj, change } = makeRepoAtStage('brainstorm')

@@ -24,6 +24,7 @@ import {
 } from '../src/quicklog.js'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 let total = 0, failed = 0
 function assert(c, m) { total++; if (!c) { failed++; console.log(`  ❌ FAIL: ${m}`) } else console.log(`  ✅ PASS: ${m}`) }
@@ -38,7 +39,6 @@ const tmpRoots = []
 function tmp(p) { const d = makeTmpDir(p); tmpRoots.push(d); return d }
 function git(d, a) { return execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() }
 async function hush(fn) { const o = console.log; console.log = () => {}; const oe = console.error; console.error = () => {}; try { await fn() } finally { console.log = o; console.error = oe } }
-function extractSid(s) { const m = s.match(/sessionId:\s*(quick-[0-9a-f]{8})/); return m ? m[1] : null }
 const STRUCTURED = '需求：占用校验测试\n根因：无，测试用例\n方案：分配查重 + 完成校验\n结果：测试全绿'
 
 console.log('=== ql-ID 分配竞态回归测试 ===\n')
@@ -156,15 +156,13 @@ function initRepo(prefix) {
   git(repo, ['add', '.']); git(repo, ['commit', '-q', '-m', 'init'])
   return repo
 }
+// quick 退役（2026-09-25-quick-channel-retire）后新会话被拒，改夹具预置「升级前在途」会话
 async function startQuickToStep3(repo) {
-  let out = ''
-  { const o = console.log; console.log = (...a) => { out += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}
-    try { await runCommand(['quick', 'ql-ID 竞态测试任务', '--linked-changes', 'none', '--non-interactive'], repo) } finally { console.log = o; console.error = oe } }
-  const sid = extractSid(out)
-  const m = out.match(/QUICKLOG 条目已创建:\s*(ql-\S+)/)
+  const { sid, qlId } = await seedQuickSession(repo, { taskDescription: 'ql-ID 竞态测试任务', gitUser: 't' })
+  await hush(() => runCommand(['quick', '--change', sid, '--non-interactive'], repo))
   await hush(() => runCommand(['quick', '--done', '--change', sid, '--output', 's1 理解', '--confirm'], repo))
   await hush(() => runCommand(['quick', '--done', '--change', sid, '--output', 's2 实现', '--confirm'], repo))
-  return { sid, qlId: m ? m[1] : null }
+  return { sid, qlId }
 }
 function readQuicklog(repo) {
   return readFileSync(join(repo, '.sillyspec', 'quicklog', 'QUICKLOG-t.md'), 'utf8')

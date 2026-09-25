@@ -15,11 +15,11 @@ import { writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { makeRepo, runCLI, cleanup, report } from './_cli-step-harness.mjs'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
 
-const SID_RE = /sessionId: (quick-[0-9a-f]{8})/
 const APPEND_MARK = 'quick 边界已追加'
 
 const guardOf = (specBase, sid) => JSON.parse(readFileSync(join(specBase, '.runtime', 'quick-sessions', sid, 'guard.json'), 'utf8'))
@@ -33,9 +33,8 @@ console.log('=== quick 中途追加 --files 边界（坑 quick-files-frozen-at-s
 console.log('--- ① 恢复带新 --files → 追加进 guard + hash + 确认输出 ---')
 {
   const { cwd, specBase } = makeRepo('qs-files-app-')
-  const start = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--non-interactive', '--input', '测试任务', '--files', 'src/a.js'], { cwd })
-  const sid = start.combined.match(SID_RE)?.[1]
-  assert(Boolean(sid), `会话已启动（${sid}）`)
+  const { sid } = await seedQuickSession(cwd, { taskDescription: '测试任务', allowedFiles: ['src/a.js'] })
+  assert(Boolean(sid), `在途会话已预置（${sid}）`)
   writeFileSync(join(cwd, 'src-b.js'), 'export const b = 1\n')
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--files', 'src-b.js', '--change', sid], { cwd })
   assert(r.status === 0, `恢复成功（实际 ${r.status}）`)
@@ -50,8 +49,7 @@ console.log('--- ① 恢复带新 --files → 追加进 guard + hash + 确认输
 console.log('\n--- ② 重复传已声明文件 → 不重复、无追加输出 ---')
 {
   const { cwd, specBase } = makeRepo('qs-files-dup-')
-  const start = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--non-interactive', '--input', '测试任务', '--files', 'src/a.js'], { cwd })
-  const sid = start.combined.match(SID_RE)?.[1]
+  const { sid } = await seedQuickSession(cwd, { taskDescription: '测试任务', allowedFiles: ['src/a.js'] })
   runCLI(['--dir', cwd, 'run', 'quick', '--files', 'src-b.js', '--change', sid], { cwd })
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--files', 'src/a.js,src-b.js', '--change', sid], { cwd })
   assert(r.status === 0, `恢复成功（实际 ${r.status}）`)
@@ -64,8 +62,7 @@ console.log('\n--- ② 重复传已声明文件 → 不重复、无追加输出 
 console.log('\n--- ③ 不带 --files 恢复 → 边界原样保留 ---')
 {
   const { cwd, specBase } = makeRepo('qs-files-keep-')
-  const start = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--non-interactive', '--input', '测试任务', '--files', 'src/a.js,src/b.js'], { cwd })
-  const sid = start.combined.match(SID_RE)?.[1]
+  const { sid } = await seedQuickSession(cwd, { taskDescription: '测试任务', allowedFiles: ['src/a.js', 'src/b.js'] })
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', sid], { cwd })
   assert(r.status === 0, `恢复成功（实际 ${r.status}）`)
   assert(!r.combined.includes(APPEND_MARK), '不带 --files 无追加输出')
@@ -80,9 +77,8 @@ console.log('\n--- ④ 追加后全流程 --done → 追加文件归属进文件
   mkdirSync(join(cwd, 'src'))
   writeFileSync(join(cwd, 'src', 'extra.js'), 'export const x = 1\n')
   git(cwd, ['add', '.']); git(cwd, ['commit', '-q', '-m', 'seed extra'])
-  const start = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--non-interactive', '--input', '测试任务', '--files', 'README.md'], { cwd })
-  const sid = start.combined.match(SID_RE)?.[1]
-  assert(Boolean(sid), `会话已启动（${sid}）`)
+  const { sid } = await seedQuickSession(cwd, { taskDescription: '测试任务', allowedFiles: ['README.md'] })
+  assert(Boolean(sid), `在途会话已预置（${sid}）`)
   const app = runCLI(['--dir', cwd, 'run', 'quick', '--files', 'src/extra.js', '--change', sid], { cwd })
   assert(app.combined.includes(APPEND_MARK), '追加确认出现')
   writeFileSync(join(cwd, 'src', 'extra.js'), 'export const x = 2\n')

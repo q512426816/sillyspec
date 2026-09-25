@@ -50,7 +50,8 @@ Claude Code / Cursor / Codex / OpenCode / OpenClaw / Gemini 通用。
 | `/sillyspec:status` · `/sillyspec:state` | 查看项目进度和状态 |
 | `/sillyspec:continue` | 自动判断并执行下一步 |
 | `/sillyspec:explore` | 自由思考模式 |
-| `/sillyspec:quick` | 快速任务，跳过完整流程 |
+| `/sillyspec:flow` | 轻量变更（默认快道）：flow start → 干活 → flow done |
+| `/sillyspec:quick` | （已退役，重定向到 flow）仅存量在途会话收尾 |
 | `/sillyspec:resume` | 恢复工作 |
 | `/sillyspec:doctor` | 项目自检 |
 | `/sillyspec:commit` | 智能提交 |
@@ -68,7 +69,8 @@ sillyspec run plan            执行实现计划阶段
 sillyspec run execute         执行开发阶段（子代理并行 + worktree 隔离）
 sillyspec run verify          执行验证阶段
 sillyspec run archive         执行归档阶段
-sillyspec run quick           快速任务
+sillyspec flow start/done/status  轻量变更（默认快道，2 次调用收口）
+sillyspec run quick           （已退役，仅存量在途会话 --done/--cancel 收尾）
 sillyspec run explore         自由探索
 sillyspec progress show       显示当前项目状态
 sillyspec setup               安装推荐 MCP 工具

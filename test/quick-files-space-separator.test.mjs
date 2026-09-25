@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { detectSpaceSeparatedFiles } from '../src/run/command.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const BIN = resolve(__dirname, '..', 'bin', 'sillyspec.js')
@@ -54,10 +55,13 @@ git(['init', '-q']); git(['config', 'user.email', 't@t.local']); git(['config', 
 writeFileSync(join(repo, '.gitignore'), '.sillyspec/\n')
 writeFileSync(join(repo, 'm.js'), 'console.log(1)\n')
 git(['add', '.']); git(['commit', '-q', '-m', 'init'])
+// quick 退役（2026-09-25-quick-channel-retire）后新会话被拒——E2E 改在途会话续跑形态
+// （检测在旗标装载层，续跑渲染同样触发）
+const { sid: SEED_SID } = await seedQuickSession(repo, { taskDescription: '测', gitUser: 't' })
 
 function spawnQuick(extraArgs) {
-  // node bin/sillyspec.js run quick <desc> --linked-changes none <extraArgs> --non-interactive
-  const argv = [BIN, 'run', 'quick', '测', '--linked-changes', 'none', ...extraArgs, '--non-interactive']
+  // node bin/sillyspec.js run quick <extraArgs> --change <sid> --non-interactive（在途续跑）
+  const argv = [BIN, 'run', 'quick', ...extraArgs, '--change', SEED_SID, '--non-interactive']
   try {
     const stdout = execFileSync('node', argv, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 })
     return { code: 0, stdout, stderr: '' }

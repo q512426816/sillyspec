@@ -53,11 +53,7 @@ SillySpec CLI — 规范驱动开发工具包
     --json                             输出 JSON（程序化读取）
 
   阶段特有参数:
-    quick:   --linked-changes none|a,b   显式关联变更（取代 --change，推荐）
-             --files a.js,b.js           显式声明允许修改的文件
-             --allow-new                 允许新增文件（默认禁止）
-             --force-baseline            允许覆盖 baseline 受保护文件
-             --confirm                   完成时确认接受变更审计
+    quick:   （通道已退役 v3.31.0——仅收尾升级前在途会话：--done/--cancel/--change <会话ID>；新工作走 flow start）
     scan:    --quick | --standard | --deep   显式选择 profile（优先于规模自动判定；三档互斥）
              --force-rescan              覆盖已有 scan 文档保护
              --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
@@ -170,11 +166,10 @@ SillySpec CLI — 规范驱动开发工具包
 示例:
   sillyspec init
   sillyspec run brainstorm --change 2026-07-03-add-login
-  sillyspec run quick --linked-changes none --done --output "修复手机号校验"
+  sillyspec flow start --change my-fix --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用）
   sillyspec run verify --done --output "验证通过，测试全绿"
   sillyspec run archive --done --confirm --output "归档完成"
   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
-  sillyspec run quick --non-interactive --done --output "CI 内的快修"  # 脚本/CI
   sillyspec progress show
   sillyspec progress show --all         # 多变更汇总时无信号变更全量单行列出（默认折叠超 8 个）
   sillyspec progress show --json        # 全局总览 envelope（面板/脚本消费）
@@ -197,6 +192,36 @@ async function withJsonOutput(json, fn) {
     console.log = origLog;
     console.info = origInfo;
   }
+}
+
+// quick 通道直接退役（2026-09-25-quick-channel-retire）：CLI 入口预门——拦「新会话启动形态」的
+// quick 调用。必须在 process entry 层拒绝：run/command.js 对新会话的 id 生成 / owner.json 落盘 /
+// 「📌 已建立」公告都发生在 runStage 之前，晚于此处拒绝会留幻影会话残留（违背零副作用承诺）。
+// 放行面（在途收尾与校验路径，全部先于 command.js 会话建立、零副作用）：
+//   ① --done/--cancel/--status/--skip/--reset/--reopen/--help——收尾/只读/帮助
+//   ② --change quick-<8hex>——在途续跑（指向不存在会话的由 stage.js 第二道网拒绝）
+//   ③ 含「新启合法集」之外旗标的形态——未知旗标由 command.js 未知参数校验 exit 2（该校验
+//      2026-09-19 已上移至会话建立之前），放行不产生副作用；漏放行的合法收尾形态同理被
+//      stage.js 兜底网拒绝。进程内直调 runCommand 的入口不经此门，亦由 stage.js 兜底。
+const QUICK_FRESH_START_FLAGS = new Set([
+  '--input', '--linked-changes', '--files', '--file-notes',
+  '--allow-new', '--allow-delete', '--force-baseline',
+  '--non-interactive', '--interactive', '--session',
+  '--json', '--dir', '--spec-dir', '--spec-root', '--runtime-root', '--workspace-id',
+  '--skip-approval', '--no-docs', '--confirm-mode',
+])
+function refuseRetiredQuickFreshStart(stageArgs) {
+  const flags = stageArgs.slice(1).filter((a) => String(a).startsWith('-'))
+  const passThrough = flags.some((f) => !QUICK_FRESH_START_FLAGS.has(f))
+    || (() => {
+      const i = stageArgs.indexOf('--change')
+      return i !== -1 && /^quick-[0-9a-f]{8}$/.test(String(stageArgs[i + 1] || ''))
+    })()
+  if (passThrough) return false
+  console.error('❌ quick 通道已退役，不再接受新会话（v3.31.0 起）。')
+  console.error('   新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+  console.error('   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。')
+  process.exit(1)
 }
 
 async function main() {
@@ -2698,6 +2723,9 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         break
       }
       const { runCommand } = await import('./run.js')
+      // quick 通道退役预门（2026-09-25-quick-channel-retire）：`run quick` 新会话形态在进
+      // runCommand（及其前置副作用：sid 生成/owner.json/已建立公告）之前拒绝
+      if (filteredArgs[1] === 'quick') refuseRetiredQuickFreshStart(filteredArgs.slice(1))
       // 平台模式（--spec-dir 已指定）时，--dir 是明确的 source_root，不应被 resolveEffectiveDir 纠正
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
       // 下行 pull：对齐顶层 stage 别名块（task-10 / D-009 / FR-04）。修复前 case 'run' 漏接，
@@ -2974,8 +3002,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
     case 'verify':
     case 'auto':
     case 'archive': {
-      const { runCommand } = await import('./run.js')
       const stageArgs = [command, ...filteredArgs.slice(1)]
+      // quick 通道退役预门（2026-09-25-quick-channel-retire）：顶层 quick 别名的新会话形态
+      // 在进 runCommand（及其前置副作用）之前拒绝
+      if (command === 'quick') refuseRetiredQuickFreshStart(stageArgs)
+      const { runCommand } = await import('./run.js')
       const effectiveDir = specDir ? dir : resolveEffectiveDir(dir)
       // 下行 pull：stage 命令（run/--done，含 archive）启动时拉一次（task-10 / D-009 / FR-04）
       // 不在每步 pull，仅低频边界点；未连接平台静默跳过

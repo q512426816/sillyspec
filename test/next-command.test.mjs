@@ -82,6 +82,19 @@ console.log('--- 3. 活跃变更产物链推断 ---')
   assert(r.state.includes('待归档') && r.next.includes('archive'), '有 verify-result → archive')
 }
 
+console.log('--- 3b. 轻量变更（thin）优先分支：flow-state.yaml 在场 → flow 入口 ---')
+{
+  const dir = makeTmpDir('next-thin-')
+  const changeDir = join(dir, '.sillyspec', 'changes', '2026-08-21-thin-demo')
+  mkdirSync(changeDir, { recursive: true })
+  writeFileSync(join(changeDir, 'flow-state.yaml'), 'mode: thin\n')
+  writeFileSync(join(changeDir, 'tasks.md'), '- [ ] task-01: a\n- [x] task-02: b\n')
+  const r = detectNextStep({ cwd: dir })
+  assert(r.state.includes('轻量变更'), `flow-state.yaml 在场 → 轻量变更状态（实际：${r.state}）`)
+  assert(r.next.includes('sillyspec flow start --change 2026-08-21-thin-demo'), 'thin 下一步走 flow start（恢复简报/收口）')
+  assert(!r.next.includes('run plan') && !r.next.includes('run execute'), 'thin 不再建议 run <stage>（混跑守卫会拒）')
+}
+
 console.log('--- 4. 已扫描无变更 / 绿地需求 ---')
 {
   const dir = makeTmpDir('next-')

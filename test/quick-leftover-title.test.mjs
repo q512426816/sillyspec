@@ -10,6 +10,7 @@ import { execSync } from 'child_process'
 import { fileURLToPath } from 'node:url'
 import { deriveTitleFromLinkedChange, allocateQuicklogEntry } from '../src/quicklog.js'
 import { auditQuickCompletion } from '../src/run/shared.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const __dirname = fileURLToPath(import.meta.url).replace(/[^/\\]+$/, '')
 const root = join(__dirname, '..')
@@ -56,12 +57,11 @@ console.log('=== ② 标题剥取（坑 linked-task-placeholder-title）===\n')
     const got = deriveTitleFromLinkedChange(join(d, '.sillyspec'), cn)
     assertTrue(got === want, `${h.slice(0, 18)}… → ${JSON.stringify(got)}`)
   }
-  // e2e：启动 quick（--linked-changes，无 --input）→ 关联 tasks.md 追加行带语义标题
+  // e2e：预置在途会话（--linked-changes，无 --input；quick 退役后新会话被拒，2026-09-25-quick-channel-retire
+  // ——夹具与退役前启动同源，标题回退走 deriveTitleFromLinkedChange）→ 关联 tasks.md 追加行带语义标题
   fs.writeFileSync(join(cd, 'proposal.md'), '# 提案书（Proposal）：修复表格列宽\n')
   run(`node "${binCLI}" --dir "${d}" init`)
-  const start = run(`node "${binCLI}" --dir "${d}" run quick --linked-changes ${cn}`)
-  const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  assertTrue(!!sidM, 'quick 会话启动')
+  await seedQuickSession(d, { linkedChanges: [cn], gitUser: 't' })
   const tasksMd = fs.readFileSync(join(cd, 'tasks.md'), 'utf8')
   const appended = tasksMd.split('\n').find(l => l.includes('ql-2026'))
   assertTrue(!!appended && appended.includes('修复表格列宽'), `tasks.md 追加行含语义标题（实际：${appended || '无'}）`)
@@ -81,11 +81,9 @@ console.log('\n=== ① 关联变更遗留放行（坑 linked-change-leftover-fal
   fs.mkdirSync(cd, { recursive: true })
   fs.writeFileSync(join(cd, 'proposal.md'), '---\nauthor: t\ncreated_at: 2026-08-22 00:00:00\n---\n# 提案书（Proposal）— 关联\n')
   execSync('git add .sillyspec/changes && git commit -qm linked', { cwd: d, stdio: 'pipe' }) // 已跟踪才走 leftover（untracked 折叠被 baseline 前缀放行）
-  // 启动 quick（baseline 快照时关联目录干净）
-  const start = run(`node "${binCLI}" --dir "${d}" run quick --linked-changes ${cn} "关联工作"`)
-  const sidM = start.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  const sid = sidM ? sidM[1] : null
-  assertTrue(!!sid, 'quick 会话启动')
+  // 预置在途会话（baseline 快照时关联目录干净；quick 退役后新会话被拒，夹具等价启动态）
+  const { sid } = await seedQuickSession(d, { linkedChanges: [cn], taskDescription: '关联工作', gitUser: 't' })
+  assertTrue(/^quick-[0-9a-f]{8}$/.test(sid), 'quick 在途会话已预置')
   // 启动后立即写他者遗留（step1 --done 的审计首次可见——其轻量归档会移走关联目录）
   fs.writeFileSync(join(cd, 'design.md'), '---\nauthor: other\ncreated_at: 2026-08-22 00:00:01\n---\n# 设计文档（Design）— 他者遗留\n')
   fs.mkdirSync(join(cd, 'tasks'), { recursive: true })
@@ -105,8 +103,7 @@ console.log('\n=== ① 关联变更遗留放行（坑 linked-change-leftover-fal
   fs.mkdirSync(scanDir, { recursive: true })
   fs.writeFileSync(join(scanDir, 'ARCHITECTURE.md'), '# v1\n')
   execSync('git add .sillyspec/docs && git commit -qm docs', { cwd: d2, stdio: 'pipe' })
-  const s2 = run(`node "${binCLI}" --dir "${d2}" run quick --input "x"`)
-  const sid2 = (s2.out.match(/sessionId:\s*(quick-[0-9a-f]{8})/) || [])[1]
+  const { sid: sid2 } = await seedQuickSession(d2, { taskDescription: 'x', gitUser: 't' })
   fs.writeFileSync(join(scanDir, 'ARCHITECTURE.md'), '# v2\n')
   run(`node "${binCLI}" --dir "${d2}" run quick --done --change ${sid2} --output "s1"`)
   run(`node "${binCLI}" --dir "${d2}" run quick --done --change ${sid2} --output "s2"`)

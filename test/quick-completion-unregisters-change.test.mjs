@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process'
 
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const structured = '需求：Q1 注销测试\n根因：无，测试用例\n方案：quick 收尾注销 changes 行\n结果：listChanges 不累积'
 
@@ -41,12 +42,10 @@ async function captureStdout(fn) {
   try { await fn() } finally { console.log = orig; console.error = e }
   return buf
 }
-function extractSessionId(stdout) { const m = stdout.match(/sessionId:\s*(quick-[0-9a-f]{8})/); return m ? m[1] : null }
 
+// quick 退役（2026-09-25-quick-channel-retire）：新会话被拒，改为夹具预置「升级前在途」会话再走收尾
 async function runQuickToCompletion(repo, taskDesc) {
-  const out = await captureStdout(() => runCommand(['quick', taskDesc, '--non-interactive'], repo))
-  const sid = extractSessionId(out)
-  if (!sid) throw new Error(`未提取到 sessionId：${out}`)
+  const { sid } = await seedQuickSession(repo, { taskDescription: taskDesc })
   // 3 步 --done（最后一步带结构化 output）
   await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's1', '--confirm'], repo))
   await captureStdout(() => runCommand(['quick', '--done', '--change', sid, '--output', 's2', '--confirm'], repo))

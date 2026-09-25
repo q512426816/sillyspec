@@ -2,8 +2,10 @@
  * quick CLI 接管 QUICKLOG — 端到端集成回归测试
  * change: B-1（CLI 接管 QUICKLOG 写入 + ql-ID 分配 + 并发加锁）
  *
- * 覆盖真实 quick 流程：
- *   1. 启动 quick（带 --linked-changes）→ CLI 分配 ql-ID + 写「进行中」条目 + tasks.md 未勾选
+ * quick 通道退役（2026-09-25-quick-channel-retire）后新会话被双层门拒绝，本测试改用
+ * quick-session-fixture 预置「升级前在途」会话（真实 allocateQuicklogEntry + 规范 guard 形状），
+ * 覆盖收尾链路：
+ *   1. 预置在途会话（带关联变更）→ QUICKLOG「进行中」条目 + tasks.md 未勾选
  *   2. 幂等：同 sessionId 重入 run quick（新 ProgressManager 模拟跨进程）不重复分配/写条目
  *   3. step1/2/3 done → 条目翻「已完成」+ 结果行 + tasks.md 勾选 - [x]
  *   4. 强校验：手动删除条目后 step3 done 被阻断（桩 process.exit 捕获）
@@ -16,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 let total = 0, failed = 0
 function assert(condition, msg) {
@@ -37,10 +40,6 @@ async function captureStdout(fn) {
   try { await fn() } finally { console.log = orig; console.error = origErr }
   return buf
 }
-function extractSessionId(stdout) {
-  const m = stdout.match(/sessionId:\s*(quick-[0-9a-f]{8})/)
-  return m ? m[1] : null
-}
 
 const tmpRoots = []
 function makeTmpDir(prefix) { const d = mkdtempSync(join(tmpdir(), prefix)); tmpRoots.push(d); return d }
@@ -61,9 +60,11 @@ const qlog = () => readdirSync(join(specBase, 'quicklog'))
 // 验收 1 关联到 2026-07-06-kanban-better-board，预建其 change 目录。
 mkdirSync(join(specBase, 'changes', '2026-07-06-kanban-better-board'), { recursive: true })
 
-// 验收 1：启动分配 ql-ID + 写条目 + tasks.md
-const out = await captureStdout(() => runCommand(['quick', '修手机校验', '--linked-changes', '2026-07-06-kanban-better-board', '--non-interactive'], repo))
-const sid = extractSessionId(out)
+// 验收 1：在途会话（带关联变更）→ ql-ID 已分配 + 条目 + tasks.md（夹具与退役前启动同源落盘）
+const { sid } = await seedQuickSession(repo, {
+  taskDescription: '修手机校验',
+  linkedChanges: ['2026-07-06-kanban-better-board'],
+})
 const guard = JSON.parse(readFileSync(join(specBase, '.runtime', 'quick-sessions', sid, 'guard.json'), 'utf8'))
 assert(/^ql-\d{8}-001-[0-9a-f]{4}$/.test(guard.quicklogId), `启动分配 ql-ID: ${guard.quicklogId}`)
 assert(qlog().includes(`## ${guard.quicklogId} |`), 'QUICKLOG 有进行中条目')
@@ -106,8 +107,7 @@ assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完�
 
 // 验收 3b：step3 --output 缺结构字段 → 阻断（exit 1），补全后可重跑完成
 {
-  const out3 = await captureStdout(() => runCommand(['quick', '结构校验测试', '--linked-changes', 'none', '--non-interactive'], repo))
-  const sidV = extractSessionId(out3)
+  const { sid: sidV } = await seedQuickSession(repo, { taskDescription: '结构校验测试' })
   await captureStdout(() => runCommand(['quick', '--done', '--change', sidV, '--output', '理解完成', '--confirm'], repo))
   await captureStdout(() => runCommand(['quick', '--done', '--change', sidV, '--output', '实现完成', '--confirm'], repo))
   const origExit = process.exit
@@ -128,8 +128,7 @@ assert(doneOut.includes('提交') && !doneOut.includes('run scan'), 'quick 完�
 //  条目丢失多为并行 git 操作回滚未提交 QUICKLOG，人工检查一轮纯属机械活；占用校验
 //  （双条目硬拦/他者 guard 占用换号）在补建之前，自愈不会压到他者条目。）
 {
-  const out3 = await captureStdout(() => runCommand(['quick', '删条目测试', '--linked-changes', 'none', '--non-interactive'], repo))
-  const sid2 = extractSessionId(out3)
+  const { sid: sid2 } = await seedQuickSession(repo, { taskDescription: '删条目测试' })
   const guard2 = JSON.parse(readFileSync(join(specBase, '.runtime', 'quick-sessions', sid2, 'guard.json'), 'utf8'))
   const qfile = join(specBase, 'quicklog', 'QUICKLOG-test.md')
   let lines = readFileSync(qfile, 'utf8').split('\n')

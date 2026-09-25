@@ -7,15 +7,16 @@
  * （exit 2，对齐 --files 空格检测 / assertSafeChangeName 先例）。
  *
  * 用例：
- *  1. --change <不存在名> → exit 2 + 报错文案含出路（拦截核心）
- *  2. --change <已存在变更名> → 放行（正常关联）
+ *  1. --change <不存在名> → exit 2 + 报错文案含出路（拦截核心；--change 不在预门新启旗标集内，放行给 command.js 守卫）
+ *  2. 预置在途会话（关联已存在变更）续跑渲染 → 放行（守卫不误伤正常关联）
  *  3. --done --change quick-<8hex>（sessionId 形态）→ 放行（特例优先，不被守卫误伤）
- *  4. --linked-changes <不存在名> → 同拦（显式写法同检）
- *  5. --linked-changes none → 放行（语义值，非变更名）
+ *  4. --linked-changes <不存在名> 新启形态 → 预门退役拒绝 exit 1（先于 command.js 守卫；进程内守卫仍兜底）
+ *  5. --linked-changes none 新启形态 → 预门退役拒绝 exit 1（新会话不可达，语义值判定不再触发）
  */
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeRepo, runCLI, cleanup, report } from './_cli-step-harness.mjs'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 const count = { passed: 0, failed: 0, failures: [] }
 const assert = (cond, msg) => { cond ? (count.passed++, console.log(`  ✅ PASS: ${msg}`)) : (count.failed++, count.failures.push(msg), console.log(`  ❌ FAIL: ${msg}`)) }
@@ -33,13 +34,14 @@ console.log('--- 用例1: --change <不存在名> → exit 2 + 出路文案 ---'
   assert(r.combined.includes('brainstorm'), '出路③建变更指路完整流程')
 }
 
-console.log('\n--- 用例2: --change <已存在变更名> → 放行 ---')
+console.log('\n--- 用例2: 预置在途会话（关联已存在变更）续跑渲染 → 放行 ---')
 {
   const { cwd, specBase } = makeRepo('ql-guard-ok-')
   // 预置一个存在的变更目录（quick 关联只查目录存在性）
   mkdirSync(join(specBase, 'changes', '2026-08-16-real-change', 'tasks'), { recursive: true })
   writeFileSync(join(specBase, 'changes', '2026-08-16-real-change', 'plan.md'), '# Plan\n')
-  const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', '2026-08-16-real-change'], { cwd })
+  const { sid } = await seedQuickSession(cwd, { taskDescription: '守卫测试', linkedChanges: ['2026-08-16-real-change'] })
+  const r = runCLI(['--dir', cwd, 'run', 'quick', '--change', sid, '--non-interactive'], { cwd })
   assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
   // 锚守卫专属文案（quick step1 prompt 正文自带「不存在则跳过」字样，不能用裸「不存在」断言）
   assert(!r.combined.includes('以下变更不存在'), '不触发守卫报错')
@@ -55,20 +57,20 @@ console.log('\n--- 用例3: --change quick-<8hex>（sessionId 形态）→ 放�
   assert(!r.combined.includes('以下变更不存在'), 'sessionId 形态不被守卫误伤')
 }
 
-console.log('\n--- 用例4: --linked-changes <不存在名> → 同拦 ---')
+console.log('\n--- 用例4: --linked-changes <不存在名> 新启形态 → 预门退役拒绝 ---')
 {
   const { cwd } = makeRepo('ql-guard-lc-')
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'ghost-change'], { cwd })
-  assert(r.status === 2, `exit 2（实际 ${r.status}）`)
-  assert(r.combined.includes('ghost-change'), '报错点名幻影变更名')
+  assert(r.status === 1, `预门 exit 1（实际 ${r.status}）`)
+  assert(r.combined.includes('已退役'), '拒绝文案含「已退役」——新会话先于 command.js 守卫被拦（进程内守卫仍兜底）')
 }
 
-console.log('\n--- 用例5: --linked-changes none → 放行（语义值） ---')
+console.log('\n--- 用例5: --linked-changes none 新启形态 → 预门退役拒绝 ---')
 {
   const { cwd } = makeRepo('ql-guard-none-')
   const r = runCLI(['--dir', cwd, 'run', 'quick', '--linked-changes', 'none', '--input', '守卫测试'], { cwd })
-  assert(r.status === 0, `exit 0（实际 ${r.status}，尾：${r.combined.slice(-150)}）`)
-  assert(!r.combined.includes('以下变更不存在'), '语义值 none 不触发守卫')
+  assert(r.status === 1, `预门 exit 1（实际 ${r.status}）`)
+  assert(r.combined.includes('已退役'), '新会话形态被退役门拒绝（新会话不可达，语义值判定不再触发）')
 }
 
 cleanup()

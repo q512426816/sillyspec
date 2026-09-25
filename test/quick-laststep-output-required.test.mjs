@@ -14,12 +14,12 @@ import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { runCommand } from '../src/run.js'
 import { ProgressManager } from '../src/progress.js'
+import { seedQuickSession } from './helpers/quick-session-fixture.mjs'
 
 let total = 0, failed = 0
 function assert(c, m) { total++; if (!c) { failed++; console.log(`  ❌ FAIL: ${m}`) } else console.log(`  ✅ PASS: ${m}`) }
 function git(d, a) { return execFileSync('git', a, { cwd: d, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() }
 async function hush(fn) { const o = console.log; console.log = () => {}; try { await fn() } finally { console.log = o } }
-function extractSid(s) { const m = s.match(/sessionId:\s*(quick-[0-9a-f]{8})/); return m ? m[1] : null }
 
 console.log('=== Q6：quick 末步 --done 必须带 --output ===\n')
 
@@ -31,12 +31,9 @@ git(repo, ['add', '.']); git(repo, ['commit', '-q', '-m', 'init'])
 const specBase = join(repo, '.sillyspec')
 await new ProgressManager({ specDir: specBase }).init(repo)
 
-// 启动 quick（捕获 stdout 取 sid）
-let startOut = ''
-{ const o = console.log; console.log = (...a) => { startOut += a.join(' ') + '\n' }; const oe = console.error; console.error = () => {}
-  try { await runCommand(['quick', 'Q6 末步 output 测试', '--linked-changes', 'none', '--non-interactive'], repo) } finally { console.log = o; console.error = oe } }
-const sid = extractSid(startOut)
-assert(sid !== null, `启动 quick 分配 sid: ${sid}`)
+// 预置在途会话（quick 退役后新会话被拒，2026-09-25-quick-channel-retire；夹具与退役前启动等价）
+const { sid } = await seedQuickSession(repo, { taskDescription: 'Q6 末步 output 测试' })
+assert(/^quick-[0-9a-f]{8}$/.test(sid), `在途会话 sid: ${sid}`)
 
 // 完成 step1 + step2（带 --output）
 await hush(() => runCommand(['quick', '--done', '--change', sid, '--output', 'step1 理解', '--confirm'], repo))

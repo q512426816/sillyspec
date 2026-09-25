@@ -116,6 +116,9 @@ console.log('--- ⑤ step2 prompt 内预告末步四字段（防线前移：验�
   const { cwd, specBase } = makeRepo('quick-preview-step2-')
   const sid = 'quick-cafe0005'
   await seed(cwd, specBase, sid, ['completed', 'pending', 'pending'])
+  // 渲染经 runStage quick 块——quick 退役（2026-09-25-quick-channel-retire）后 guard 缺失会被
+  // 兜底网拒绝（新会话形态），预置 guard 走在途续跑分支
+  writeGuard(specBase, sid)
 
   const r = runStage('quick', sid, cwd, {})
   assert(r.status === 0, `渲染 step2 prompt 成功（实际 ${r.status}）`)

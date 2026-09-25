@@ -38,7 +38,8 @@ test('fourpiece-init：三件骨架生成 + frontmatter/章节齐 + 幂等不覆
 test('MSYS 污染 output → exit 2 阻断（升档回归锁）', () => {
   const cwd = mkProj()
   try {
-    execFileSync(process.execPath, [bin, 'run', 'quick', '--input', 't'], { cwd, encoding: 'utf8' })
+    // quick 通道已退役（2026-09-25-quick-channel-retire）不再启动会话；MSYS 污染检测在
+    // command.js 旗标装载层（会话解析之前），--done 形态无需真实会话即可验证
     let blocked = false
     try {
       execFileSync(process.execPath, [bin, 'run', 'quick', '--done', '--change', 'quick-x', '--output', '/c/Program Files/Git/需求：脏标题'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })

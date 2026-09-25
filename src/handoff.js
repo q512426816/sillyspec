@@ -16,7 +16,7 @@
  */
 import { ProgressManager, resolveSpecDir } from './progress.js';
 import { MAIN_FLOW_ORDER, STAGE_LABELS } from './progress/shared.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** 交接块总行数帽（优化方案 C-2 B4a：把「任务太大爆窗」从硬墙变操作规程——块本身不许变大到失控） */
@@ -105,12 +105,14 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
   let target = changeName;
   let picked = false;
   if (!target) {
-    // 唯一活跃主流程变更自动选中（listChanges=目录+DB 联合口径，read 取 currentStage）
+    // 唯一活跃主流程变更自动选中（listChanges=目录+DB 联合口径，read 取 currentStage）；
+    // 轻量变更（flow-state.yaml 在场）同样入候选——thin 变更也需要跨会话交接（评审 P3 清偿）
+    const isThinChange = (cn) => existsSync(join(specRoot, 'changes', cn, 'flow-state.yaml'));
     const names = pm.listChanges(cwd) || [];
     const mains = [];
     for (const cn of names) {
       const p = pm.read(cwd, cn);
-      if (p && MAIN_FLOW_ORDER.includes(p.currentStage || '')) mains.push({ name: cn, stage: p.currentStage });
+      if (p && (MAIN_FLOW_ORDER.includes(p.currentStage || '') || isThinChange(cn))) mains.push({ name: cn, stage: p.currentStage });
     }
     if (mains.length === 1) {
       target = mains[0].name;
@@ -118,7 +120,7 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
     } else if (mains.length > 1) {
       return { ok: false, error: `多活跃主流程变更（${mains.length} 个：${mains.map((m) => m.name).join('、')}）——请带 --change <名> 指定` };
     } else {
-      return { ok: false, error: '无活跃主流程变更（quick/scan 会话或全部归档）——handoff 面向主流程阶段交接' };
+      return { ok: false, error: '无活跃主流程/轻量变更（quick/scan 会话或全部归档）——handoff 面向主流程与轻量变更交接' };
     }
   }
 
@@ -128,7 +130,14 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
   const currentStage = progress.currentStage || '';
   const stageData = (progress.stages && progress.stages[currentStage]) || null;
   const stageCompleted = !!(stageData && stageData.status === 'completed');
-  const suggestion = nextStageSuggestion(currentStage, stageCompleted);
+  let suggestion = nextStageSuggestion(currentStage, stageCompleted);
+  // 轻量变更（thin/flow）感知（2026-09-25-quick-channel-retire 评审 P1）：flow-state.yaml 在场 =
+  // 轻量变更，续跑/收口走 flow 协议——run <stage> 对 thin 变更会被混跑守卫拒（升厚须用户同意
+  // 带 --upgrade-thick），交接命令改写为 flow 入口
+  const isThin = existsSync(join(specRoot, 'changes', target, 'flow-state.yaml'));
+  if (isThin) {
+    suggestion = { next: 'flow', mode: 'resume', reason: '轻量变更（thin）——新会话重跑 flow start 看恢复简报，干完跑 flow done 收口；run <stage> 会被混跑守卫拒（升厚须用户同意带 --upgrade-thick）' };
+  }
   const sessionId = process.env.SILLYSPEC_SESSION_ID || null;
 
   const steps = Array.isArray(stageData && stageData.steps) ? stageData.steps : [];
@@ -147,7 +156,9 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
   if (sessionId) lines.push(`export SILLYSPEC_SESSION_ID=${sessionId}`);
   else lines.push('export SILLYSPEC_SESSION_ID=<本变更的会话标识——旧会话 echo $SILLYSPEC_SESSION_ID 取>');
   lines.push(`cd ${cwd}`);
-  if (suggestion.next) {
+  if (suggestion.next === 'flow') {
+    lines.push(`sillyspec flow start --change ${target}`);
+  } else if (suggestion.next) {
     lines.push(`sillyspec run ${suggestion.next} --change ${target}`);
   } else {
     lines.push('# （流程终态，无续跑命令）');
