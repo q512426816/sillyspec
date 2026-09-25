@@ -195,3 +195,23 @@ FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（
 - **护栏/规避**：依赖恢复后两侧各 git checkout -- package-lock.json 还原再 apply；lock 变更
   若真属变更须显式进 design §6 清单。
 - **证据**：2026-09-24 readside apply 修复序列（还原两侧后 apply 过，交付面恰 4 文件）。
+
+## 🟡 CLI flag 白名单死路：报错指引指向未登记 flag（双实例）
+- 现象：run verify 被 STAGE_WALL 拦时，报错文案指引「加 --same-session 重跑」；quick --cancel 拦时指引「可用 --force」——但两个 flag 均未登记 command.js knownFlags 白名单，照指引重跑直接 exit 2（死循环）。
+- 证据：command.js:704-727 白名单字面量（--same-session 消费于 :1748、--force 消费于 :1562）；stage.js:71 与 command.js:1577 报错文案。
+- 涉及：R17 臂3 实证（--same-session 四步绕行）+ 静态扫描新发现（--force）。修复：2026-09-25-cli-protocol-trust（登记+一致性钉 test/flag-contract.test.mjs 守护整类）。
+
+## 🟡 机器摘录碎片化：行级切分拆括号换行 + tasks 渲染 slice(0,60) 硬切
+- 现象：--input 成功标准含括号换行时被 extractSuccessCriteria 拆成两条碎片；tasks.md 每条摘录超 60 字被渲染层硬切半个词收尾（R17 臂2 实报 17 条截断 task、FR 括号断行）。
+- 证据：flow-draft.js:63-92 行级 split、:295 slice(0,60) 无句界感知；下游消费按 - [ ] task-NN 前缀锚（complete.js:1599），放宽截断安全。
+- 涉及：修复=续行合并（括号/引号未闭合跨行并回）+ 碎片特征检测（括号不平衡只警告）+ 渲染放宽，见 2026-09-25-cli-protocol-trust。句子级强切与标点自检已评审否决（误伤复合条目/无标点短条目）。
+
+## 🟡 verify 批量快进与 noAI 亲测步互锁（四步绕行）
+- 现象：--done 批量对齐把 noAI 亲测步（step4 verifyRunQualityScan）乐观标 completed → 亲测永不执行 → 收尾 PASS 封顶门因 integrationRan=not-ran 拒 → gate_rollback 回滚 → 需 --reopen --from-step 4 手动补亲测，四步绕行。
+- 证据：complete.js:1566-1573 批量乐观对齐 vs :642「批量不省任何门」注释承诺；gates.js:788-815 收尾时序（backfillFacts 先于 runValidators）。
+- 涉及：R17 臂3 拦截⑥实证。修复=批量对齐前自动补亲测（复用 executeVerifyQualityScan 幂等通道），见 2026-09-25-cli-protocol-trust。
+
+## 🟡 绿地/无模块图仓 FR 知识落伪域与 unmapped 大池断流
+- 现象：无模块图的新仓，轻量道 FR 落 auto-* 伪域、完整流程 FR 落 unmapped（R17 两臂各 10 条实证）；完整流程的直接成因是 archive 侧 indexRequirements 不传 deliverableFiles（域路由退化为 design 清单单源）。
+- 证据：archive-distill.js:52 与 complete-handlers.js:3121 缺 deliverableFiles 参数；本仓 unmapped.md 现状 720 条堆积同构。
+- 涉及：修复=flow start 绿地草案模块图 + archive 侧供清单对齐 + unmapped 告警配治理指引，见 2026-09-25-greenfield-bootstrap。
