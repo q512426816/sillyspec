@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-quick-channel-retire",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-quick-channel-retire:flow:FR-01",
+      "tests": [
+        "test/quick-retired.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-quick-channel-retire"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-quick-channel-retire:flow:FR-02",
+      "tests": [
+        "test/quick-cli-managed-e2e.test.mjs",
+        "test/quick-done-fallback-guard.test.mjs",
+        "test/quick-retired.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-quick-channel-retire"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-quick-channel-retire:flow:FR-03",
+      "tests": [
+        "test/quick-retired.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-quick-channel-retire"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-quick-channel-retire:flow:FR-04",
+      "tests": [
+        "test/commit-guard.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-quick-channel-retire"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-25-quick-channel-retire:flow:FR-06",
+      "tests": [
+        "test/command-cards.test.mjs",
+        "test/handoff.test.mjs",
+        "test/next-command.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-quick-channel-retire"
+    }
+  ]
+}
