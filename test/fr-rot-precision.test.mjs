@@ -99,6 +99,35 @@ function buildCleanupFixture(tmp) {
   return { specBase, arc, frPath: join(knowledge, 'fr', 'cli.md') }
 }
 
+test('②b 目录形态 coverage 的单向前缀匹配（rot 消费口径）', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'frp2b-'))
+  try {
+    const specBase = join(tmp, '.sillyspec')
+    const knowledge = join(specBase, 'knowledge')
+    mkdirSync(join(knowledge, 'fr'), { recursive: true })
+    const mapDir = join(specBase, 'docs', 'proj', 'modules')
+    mkdirSync(mapDir, { recursive: true })
+    writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
+    const arc = join(specBase, 'changes', 'archive')
+    mkdirSync(join(arc, 'hist-dir'), { recursive: true })
+    writeFileSync(join(arc, 'hist-dir', 'design.md'), '| 修改 | src/cli/ | 目录条目 |\n')
+    writeFileSync(join(knowledge, 'fr', 'cli.md'), [
+      '# FR 索引 — cli',
+      '',
+      '## FR-cli-001 目录覆盖条目',
+      '变更：hist-dir',
+      '状态：active',
+      '摘要：默认场景',
+      '全文：hist-dir/requirements.md#FR-01',
+      '最近确认：d1',
+      '',
+    ].join('\n'))
+    const { rotSuspectFlow } = await import(pathToFileURL(join(ROOT, 'src', 'flow.js')).href)
+    const r = await rotSuspectFlow({ specBase, change: 'c-dir', changeDir: join(specBase, 'changes', 'c-dir'), files: ['src/cli/deep/nested.js'] })
+    assert.equal(r.strong, 1, 'coverage 为目录（src/cli/）时文件级 changed 按前缀含命中（P3-1 补面）')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
 test('③ cleanupStaleReviewMarks：交集重算 + 幂等 + 并行写跳过', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'frp3-'))
   try {
@@ -114,10 +143,18 @@ test('③ cleanupStaleReviewMarks：交集重算 + 幂等 + 并行写跳过', ()
     const r2 = cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
     assert.equal(r2.removed, 0)
     assert.equal(r2.kept, 1)
-    // 并行写跳过：改写盘上文件后重跑 → 该文件 skipped 不覆盖
-    writeFileSync(frPath, readFileSync(frPath, 'utf8') + '\n<!-- 并行会话追加 -->\n')
-    const r3 = cleanupStaleReviewMarks({ specBase, archiveRoot: join(arc, 'elsewhere') })
-    assert.ok(Array.isArray(r3.skipped), '盘上内容变化时跳过该文件（返回结构合法）')
+    // 幂等第三跑：无变化时重跑文件 byte 级不变（skipped 分支在同步实现下窗口为零——
+    // 写前重读快照比对是异步化/多进程预留的防御面，此处验证可达的幂等语义）
+    const after1 = readFileSync(frPath, 'utf8')
+    cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
+    assert.equal(readFileSync(frPath, 'utf8'), after1, '判定结果不变时重跑不改文件（幂等 byte 级）')
+    // 在途变更跳过：ref 有活跃变更目录（未归档）→ 不判不删（收口落地后重跑再判——第二轮清理实证的误删面）
+    writeFileSync(frPath, after1.replace('待复核：hist-b', '待复核：active-wip-change'))
+    mkdirSync(join(specBase, 'changes', 'active-wip-change'), { recursive: true })
+    const r4 = cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
+    assert.equal(r4.inFlight, 1, '在途变更标记跳过（inFlight 计数）')
+    assert.equal(r4.removed, 0)
+    assert.ok(readFileSync(frPath, 'utf8').includes('待复核：active-wip-change'), '在途标记保留')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 

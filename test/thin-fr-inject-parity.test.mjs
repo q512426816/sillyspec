@@ -11,7 +11,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -148,7 +148,35 @@ test('② rotSuspectFlow：三分判据（strong 打标/skip 不动/unknown 不�
     assert.ok(fr.includes('待复核：c-rot'), 'strong 条目应被打待复核标记')
     assert.ok(fr.split('## FR-cli-002')[1].split('## FR-cli-003')[0].includes('待复核：quick-abc'), 'skip 条目的旧标记不动')
     assert.ok(!fr.split('## FR-cli-003')[1].includes('待复核：'), 'unknown 条目不打标')
-    const miss = await rotSuspectFlow({ specBase, change: 'c-rot2', changeDir: join(specBase, 'changes', 'c-rot2'), files: ['docs/other/x.md'] })
+    const { readActiveFrDigest } = await import(pathToFileURL(join(ROOT, 'src', 'fr-index.js')).href)
+  const dig = readActiveFrDigest(join(specBase, 'knowledge'), ['cli'])
+  const fr1 = dig.find((f) => f.id === 'FR-cli-001')
+  assert.deepEqual(fr1.bindings, ['test/cli.test.mjs'], 'bindings 子块解析（顶格机器注释不终止收集——评审 P1 修复面）')
+  // 源3命中用例：hist-e 归档文件面与 changed 无交集，但其绑定 test 文件在 changed 内 → strong 靠 bindings
+  const arc = join(specBase, 'changes', 'archive')
+  mkdirSync(join(arc, 'hist-e'), { recursive: true })
+  writeFileSync(join(arc, 'hist-e', 'change-patch.json'), JSON.stringify({ change: 'hist-e', files: ['src/unrelated/deep.js'] }))
+  const frPath = join(specBase, 'knowledge', 'fr', 'cli.md')
+  writeFileSync(frPath, readFileSync(frPath, 'utf8') + [
+    '',
+    '## FR-cli-004 登录导出报表',
+    '变更：hist-e',
+    '状态：active',
+    '摘要：默认场景',
+    '场景正文：',
+    '- 场景：默认场景 — Given 登录后 When 请求报表 Then 导出',
+    '全文：hist-e/requirements.md#FR-01',
+    '最近确认：eeee4444',
+    '测试绑定：',
+    '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
+    '- row: hist-e:flow:FR-01',
+    '  tests: test/cli-report.test.mjs',
+    '  reason: spec',
+    '',
+  ].join('\n'))
+  const r2 = await rotSuspectFlow({ specBase, change: 'c-rot3', changeDir: join(specBase, 'changes', 'c-rot3'), files: ['src/cli/touch.js', 'test/cli-report.test.mjs'] })
+  assert.ok(r2.strong >= 1, '源3（bindings）单独命中也应 strong（评审 P1 修复验证）')
+  const miss = await rotSuspectFlow({ specBase, change: 'c-rot2', changeDir: join(specBase, 'changes', 'c-rot2'), files: ['docs/other/x.md'] })
     assert.equal(miss.warn, null, '非触达域文件应零告警')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })

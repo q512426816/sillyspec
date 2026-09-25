@@ -75,14 +75,16 @@ export function frCoverageFiles({ archiveRoot, changeName }) {
   return [...out].filter((p) => !p.startsWith('.sillyspec/'));
 }
 
-/** 条目「测试绑定：」子块的 tests 文件提取（多文件 | 分隔；锚定子块防条目正文误匹配——
- * fr-rot-precision 评审 P3）。readActiveFrDigest.bindings 与 cleanupStaleReviewMarks 共用。 */
+/** 条目「测试绑定：」子块的 tests 文件提取（多文件 | 分隔）。边界=下一个 ## 节头（FR 节）——
+ * 子块内顶格的 `<!-- test-bindings -->` 机器注释与 `- row:` 行不终止收集（评审 P1 修复：
+ * 原「任意顶格行 break」遇子块首行顶格注释即断，生产库 bindings 恒空；缩进 tests: 键名 +
+ * 节头边界已足够防条目正文误匹配）。readActiveFrDigest.bindings 与 cleanupStaleReviewMarks 共用。 */
 function readEntryBindings(lines) {
   const idx = lines.findIndex((l) => l.startsWith('测试绑定：'));
   if (idx === -1) return [];
   const out = [];
   for (const l of lines.slice(idx + 1)) {
-    if (l && !/\s/.test(l[0])) break; // 顶格行=子块结束
+    if (/^##\s/.test(l)) break; // 下一节头=条目边界
     const m = l.match(/^\s+tests:\s*(.+)$/);
     if (m) {
       for (const t of m[1].split('|')) {
@@ -797,8 +799,9 @@ export function markFrNeedsReview(knowledgeRoot, frIds, refNote) {
  * 交集。ref 无归档或任一侧 coverage 空 → 删（自然覆盖 quick 侧 ref——quick 永不归档无文件面；
  * 与运行时 unknown 不打标口径一致：宁漏勿滥，漏标只损失注入排序优先级）。
  * 并发安全：写前重读比对快照，盘上已被并行会话改写的文件跳过（幂等可重跑消化）；原子写。
- * superseded 条目不碰（无 active 语义）。
- * @returns {{ removed: number, kept: number, skipped: string[], files: string[], byRef: Record<string, number> }}
+ * superseded 条目不碰（无 active 语义）；**在途变更的标记跳过**（rot 打标在归档前、ref 必无
+ * 冻结件——误判面实证后修复：收口落地后重跑清理再判）。
+ * @returns {{ removed: number, kept: number, inFlight: number, skipped: string[], files: string[], byRef: Record<string, number> }}
  */
 export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
   const knowledgeRoot = join(specBase, 'knowledge');
@@ -816,7 +819,7 @@ export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
     if (!covCache.has(changeName)) covCache.set(changeName, frCoverageFiles({ archiveRoot, changeName }));
     return covCache.get(changeName);
   };
-  let removed = 0, kept = 0;
+  let removed = 0, kept = 0, inFlight = 0;
   const byRef = {};
   const dirty = new Set();
   const covHit = (frChange, bindings, refCover) => {
@@ -830,6 +833,9 @@ export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
       if (reviewLines.length === 0) continue;
       if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代：翻链自会清，不在此治理
       const ref = reviewLines[0].slice(FR_NEEDS_REVIEW_PREFIX.length).trim();
+      // 在途变更跳过（第二轮清理实证）：rot 打标发生在 flow done ledger（归档前），ref 指向的
+      // 变更此刻必无归档冻结件——coverage(ref) 恒空会误判全删。跳过，收口落地后重跑再判。
+      if (ref && existsSync(join(specBase, 'changes', ref))) { inFlight++; continue; }
       const keep = covHit(s.change, readEntryBindings(s.lines), coverageOf(ref));
       if (keep) { kept++; continue; }
       s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
@@ -853,5 +859,5 @@ export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
       files.push(fname);
     }
   }
-  return { removed, kept, skipped, files, byRef };
+  return { removed, kept, inFlight, skipped, files, byRef };
 }
