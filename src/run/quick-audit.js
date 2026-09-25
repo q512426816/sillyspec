@@ -473,7 +473,7 @@ export function mergeGateFiles(audited, declared) {
   return out
 }
 
-export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
+export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null, skipSentinel = false }) {
   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
     return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
   }
@@ -609,19 +609,22 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       lint = runVerifyLintCheck({ cwd, specBase })
     }
     const failed = []
-    // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：guard.tasks.md 全勾但零完成
+    // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
     // 证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
-    try {
+    // skipSentinel：flow done 调用方自带 baseline 哨兵（更可靠区间），传 true 跳过免双判。
+    if (!skipSentinel) try {
       const { detectFakeCheckCompletion } = await import('../sentinel-assertions.js')
       const tasksDir = changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null
       if (tasksDir && existsSync(tasksDir)) {
-        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', 'HEAD~10..HEAD']) : null; const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
-        const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitSubjects.split('\n').filter(Boolean) })
-        if (sent.status === 'fake') {
-          console.error(`
-🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据：${sent.missing.join('、')}`)
-          console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
-          failed.push('sentinel')
+        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', 'HEAD~10..HEAD']) : null
+        const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
+        if (commitSubjects) {
+          const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitSubjects.split('\n').filter(Boolean) })
+          if (sent.status === 'fake') {
+            console.error(`\n🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据：${sent.missing.join('、')}`)
+            console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+            failed.push('sentinel')
+          }
         }
       }
     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行）: ${(e && e.message) || e}`) }

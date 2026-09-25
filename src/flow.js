@@ -444,7 +444,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
       }
     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
-    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change })
+    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
