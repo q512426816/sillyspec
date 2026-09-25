@@ -642,9 +642,28 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // （测试对账/验收矩阵/module-impact 死信/PASS 封顶）照常全跑：批量省的是 --done
   // 肥上下文往返，不省任何门。镜像 execute 批量模式（乐观预标戳 + 失败一并回滚）。
   if (stageName === 'verify' && changeName) {
-    const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
-    if (_vb.batched && _vb.aligned > 0) {
-      console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
+    // 批量对齐前补亲测（cli-protocol-trust / R17 臂3 拦截⑥实证）：乐观对齐会把 noAI 亲测步
+    // （step4 verifyRunQualityScan）一并标 completed → 亲测永不执行 → 收尾 PASS 封顶门因
+    // integrationRan≠ran 拒 → gate_rollback → --reopen 四步绕行。对齐面含该步时先亲跑
+    // executeVerifyQualityScan（幂等+指纹复用——已有有效记录时秒回零重复实测），失败则放弃
+    // 批量保持单步推进（亲测步照 noAI 硬门走）——「批量省的是上下文往返，不省任何门」承诺恢复成立。
+    let _skipBatch = false
+    const pendingScanStep = steps.some(s => (s.status === 'pending' || s.status === 'in-progress') && s._cliAction === 'verifyRunQualityScan')
+    if (pendingScanStep) {
+      try {
+        const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
+        await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+        console.log('   🧪 批量对齐前已补 noAI 亲测（质量扫描记录落盘，亲测门不省）')
+      } catch (e) {
+        console.warn('   ⚠️ 亲测补跑失败——放弃批量对齐，保持单步推进（亲测步按 noAI 硬门走）：' + (e && e.message ? e.message : e))
+        _skipBatch = true
+      }
+    }
+    if (!_skipBatch) {
+      const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
+      if (_vb.batched && _vb.aligned > 0) {
+        console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
+      }
     }
   }
 

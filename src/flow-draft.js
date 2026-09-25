@@ -60,10 +60,59 @@ function splitCompoundCriteria(item) {
  * 行为语义）——正文编号条目数 ≥3 且多于节条目时取而代之（与节条目去重）。adopt/proposal
  * 回提路径经 opts.numberedChannel=false 关闭（proposal 其他节的编号列表会误劫持）。
  */
+/**
+ * 续行合并判定（cli-protocol-trust，R17 实证）：括号/引号未闭合，或行尾悬空连接符
+ * （冒号/顿号/逗号/开括号）→ 该行与下一行本是一条标准（--input 手写换行拆散）。
+ * 节标题行（成功标准：/动机：等）不参与合并——它们必须独立成行才能被节检测正则命中。
+ */
+const SECTION_HEAD_RE = /^(成功标准|验收标准|验收|acceptance|动机|背景|关键问题|变更范围|需求|非目标)[：:]?$/i
+function needsContinuationMerge(line) {
+  if (SECTION_HEAD_RE.test(line)) return false
+  if (/[：:、，,（(【\[「『]$/u.test(line)) return true // 行尾悬空连接符/开括号收尾
+  const pairs = [['(', ')'], ['（', '）'], ['【', '】'], ['[', ']'], ['「', '」'], ['『', '』']]
+  for (const [o, c] of pairs) {
+    const open = (line.match(new RegExp('\\' + o, 'g')) || []).length
+    const close = (line.match(new RegExp('\\' + c, 'g')) || []).length
+    if (open > close) return true
+  }
+  return false
+}
+
+/** 碎片特征检测（cli-protocol-trust）：括号不平衡/开括号收尾/闭括号开头——只警告不阻断
+ * （句子级强切与「完整标点收尾」自检经方案评审否决：误伤复合条目/无标点短条目）。 */
+function detectFragmentedCriteria(criteria, context) {
+  for (const c of criteria || []) {
+    const open = (c.match(/[（(【\[「『]/g) || []).length
+    const close = (c.match(/[）)】\]」』]/g) || []).length
+    if (open !== close || /[（(【\[「『]$/u.test(c) || /^[）)】\]」』]/.test(c)) {
+      console.warn(`⚠️ 摘录碎片特征：条目「${String(c).slice(0, 50)}${String(c).length > 50 ? '…' : ''}」括号不平衡（${open} 开/${close} 闭）——疑为切分残留，请核对 ${context || 'requirements/tasks'} 机器段`)
+    }
+  }
+}
+
+/** tasks 行截断（cli-protocol-trust）：60 字硬切改句界感知（窗内取末个句读，无则硬切），
+ * 带省略号收尾。下游消费按 `- [ ] task-NN` 前缀锚（complete.js 勾选正则/--step 断言），
+ * 不依赖截断长度——放宽安全（方案评审确认）。导出供 test/draft-continuation 直测。 */
+export function clipTaskText(s) {
+  const str = String(s || '')
+  if (str.length <= 80) return str
+  const win = str.slice(0, 80)
+  const m = win.match(/[。；;！!？?，,][^。；;！!？?，,]*$/)
+  const cut = m ? win.slice(0, win.length - m[0].length + 1) : win
+  return cut.replace(/[,，、;；\s]+$/, '') + '…'
+}
+
 export function extractSuccessCriteria(input, opts = {}) {
   if (!input) return []
   const NL = /\r\n|\r|\n/
-  const lines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
+  const rawLines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
+  // 续行合并（R17 实证：括号换行的单条标准被行级切分拆成两条碎片）
+  const lines = []
+  for (const l of rawLines) {
+    const prev = lines[lines.length - 1]
+    if (prev != null && needsContinuationMerge(prev)) lines[lines.length - 1] = prev + l
+    else lines.push(l)
+  }
   const criteria = []
   let inSection = false
   let sawSection = false
@@ -292,7 +341,7 @@ function draftTasks({ change, criteria, withTasks }) {
   const crit = criteria || []
   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
   const rows = crit.length > 0
-    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 60)}`)
+    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${clipTaskText(c)}`)
     : ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
   const text = [
     '---',
@@ -385,6 +434,7 @@ function collectSections(text) {
  */
 export function draftAll({ changeDir, change, input, withTasks = false, runtimeRoot }) {
   const criteria = extractSuccessCriteria(input)
+  detectFragmentedCriteria(criteria, `flow start --input 摘录（change=${change}）`)
   const outputs = [
     { file: 'proposal.md', draft: draftProposal({ change, input, criteria }) },
     { file: 'requirements.md', draft: draftRequirements({ change, criteria }) },

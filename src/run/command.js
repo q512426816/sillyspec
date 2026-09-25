@@ -723,6 +723,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
     '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
     '--upgrade-thick', // 轻量→完整升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
+    '--same-session', // R17 实验实证死路清偿（cli-protocol-trust）：STAGE_WALL 报错指引「加 --same-session 重跑」（stage.js 硬墙文案），消费在 runStage 逃生口——此前漏登记，照指引重跑即被本白名单 exit 2（指引指向死路的自我矛盾）
+    '--force', // 同族第二实例（静态扫描新发现）：quick --cancel 强清消费点与报错指引（可用 --force）在场但未登记——同死路；一致性钉 test/flag-contract.test.mjs 守护整类
     '-h',
   ])
   for (let i = 0; i < flags.length; i++) {

@@ -529,6 +529,21 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
   // changes 侧：本变更归档目录精确收窄（quick 轻量归档 closeSingleQuickLinkedChange 同款）
   safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
 
+  // knowledge 侧（cli-protocol-trust / R17 臂3 实证 distill 产物 untracked 漏提交）：本归档链
+  // distill 刚写的 fr 域文件/decisions/INDEX 必在 status 面——按 status 窄化逐文件精确 add
+  // （非目录级：避免扫入他侧并行会话的同目录 WIP；追加型共享面整文件提交与既有惯例一致）。
+  try {
+    const _knSt = gitQuiet(cwd, ['status', '--porcelain'])
+    if (_knSt) {
+      const knFiles = String(_knSt).split('\n').map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
+        .filter((p) => p.replace(/\\/g, '/').startsWith('.sillyspec/knowledge/'))
+      for (const batch of chunkPaths(knFiles)) safeGit(cwd, ['add', '--', ...batch])
+      if (knFiles.length > 0) console.log(`   📚 knowledge 蒸馏产物入暂存：${knFiles.length} 个文件（fr 域/decisions/INDEX）`)
+    }
+  } catch (e) {
+    console.warn(`⚠️ knowledge 侧 add 失败（fail-soft，不阻断归档链）：${e && e.message ? e.message : e}`)
+  }
+
   // docs 侧：module-impact「更新结果」done 行 → 精确文件集。
   // 三态（对齐修复④要求）：
   //   - module-impact.md 无「## 更新结果」段 / 文件缺失 / 读取异常 → docPaths=null → 回退目录级
