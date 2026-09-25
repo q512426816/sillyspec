@@ -38,10 +38,14 @@ test('① 模块文档对账：命中/文档未更新强提示/已同步/无图�
   // 前缀命中（目录 paths）
   r = reconcileModuleDocs({ specBase, ownFiles: ['src/progress.js/sub.py'], committedRaw: [] })
   assert.equal(r.hits, 1)
-  // 交付面不命中 → 零输出
+  // 交付面不命中模块但有未登记目录 → 🗺️ 提示（2026-09-25-thin-fr-quality：FR 落伪域点名）
   r = reconcileModuleDocs({ specBase, ownFiles: ['other/x.js'], committedRaw: [] })
   assert.equal(r.hits, 0)
-  assert.deepEqual(r.lines, [])
+  assert.ok(r.lines.some((l) => /🗺️ 未登记模块图的交付目录（other（1 文件））/.test(l)), JSON.stringify(r.lines))
+  assert.ok(r.lines.some((l) => /伪域 auto-\*/.test(l)))
+  // R16 实证形态：新模块目录不在图 → 点名 observation 目录
+  r = reconcileModuleDocs({ specBase, ownFiles: ['backend/app/modules/observation/service.py', 'backend/app/modules/observation/router.py'], committedRaw: [] })
+  assert.ok(r.lines.some((l) => /backend\/app\/modules\/observation（2 文件）/.test(l)), JSON.stringify(r.lines))
   // 无模块图 → 零输出
   const bare = mkdtempSync(join(tmpdir(), 'fp-bare-'))
   r = reconcileModuleDocs({ specBase: bare, ownFiles: ['src/a.js'], committedRaw: [] })

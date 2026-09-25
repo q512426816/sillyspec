@@ -32,8 +32,14 @@ export function draftLedgerPath(runtimeRoot, changeName) {
 
 const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`
 
-/** 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。 */
-export function extractSuccessCriteria(input) {
+/**
+ * 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。
+ * 编号条目通道（2026-09-25-thin-fr-quality，R16 实证驱动）：输入为完整任务书时行为需求以
+ * 「1. …n.」编号列在正文、成功标准节只有总括句（「上述 1-9 全部实现…」入库为 FR 是口号不是
+ * 行为语义）——正文编号条目数 ≥3 且多于节条目时取而代之（与节条目去重）。adopt/proposal
+ * 回提路径经 opts.numberedChannel=false 关闭（proposal 其他节的编号列表会误劫持）。
+ */
+export function extractSuccessCriteria(input, opts = {}) {
   if (!input) return []
   const NL = /\r\n|\r|\n/
   const lines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
@@ -49,6 +55,17 @@ export function extractSuccessCriteria(input) {
       const item = raw.replace(/^[-*•\d.)、]+\s*/, '')
       if (item && !/^#/.test(item)) criteria.push(item)
     }
+  }
+  // 编号条目通道：正文「1. …」行为条目（与节条目去重），数 ≥3 且多于节条目时取代
+  if (opts.numberedChannel !== false) {
+    const numbered = []
+    for (const raw of lines) {
+      const m = raw.match(/^\d{1,2}[.、)）]\s*(\S.*)$/)
+      if (!m) continue
+      const t = m[1].trim()
+      if (t && !numbered.includes(t) && !criteria.includes(t)) numbered.push(t)
+    }
+    if (numbered.length >= 3 && numbered.length > criteria.length) return numbered
   }
   return criteria
 }
@@ -89,8 +106,8 @@ function draftRequirements({ change, criteria }) {
   const crit = criteria || []
   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
   const frBodies = crit.length > 0
-    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 轻量跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
-    : '### FR-01: flow done 全绿\nGiven flow 轻量跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
+    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen ${c}`).join('\n\n')
+    : '### FR-01: flow done 全绿\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen 测试门实测通过+工件指纹校验通过'
   const n = crit.length > 0 ? crit.length : 1
   const bindingSlots = Array.from({ length: n }, (_, i) => {
     const id = `FR-${String(i + 1).padStart(2, '0')}`
@@ -105,7 +122,7 @@ function draftRequirements({ change, criteria }) {
     '',
     '## 功能需求（成功标准机械摘录）',
     wrapped('requirements-frs', frBodies),
-    AGENT_SLOT(1, '需求例外裁决'),
+    AGENT_SLOT(1, '需求例外裁决（FR 语义改写不走此槽——直接编辑机器段后跑 flow amend-draft 留痕，槽内容不进 FR 索引）'),
     '',
     '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
     '',
@@ -490,7 +507,8 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
           .filter((l) => /^\d+[.、]\s+/.test(l))
           .map((l) => l.replace(/^\d+[.、]\s+/, ''))
       } else {
-        criteria = extractSuccessCriteria(pText)
+        // adopt 回提关闭编号通道：proposal 其他节（变更范围/非目标）的编号列表会误劫持
+        criteria = extractSuccessCriteria(pText, { numberedChannel: false })
       }
     } catch { /* 无 proposal 可回提 → 空，draft 各自兜底 */ }
   }

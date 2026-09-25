@@ -244,4 +244,56 @@ test('⑩ flow 缺省翻转（2026-09-25-thin-default-flip 再翻转，接替 D-
   assert.equal(readFlowConfig(join(legacy, '.sillyspec')).mode, 'legacy', '显式 mode: legacy 照旧生效（回旧道出口）')
 })
 
+// ══════════ 坑 stage-burst-timeline-quality-collapse 回归（2026-09-24 实证，2026-09-25 修复）══════════
+// ① burst 单调时间戳（毫秒级循环 + 秒级串 → 剩余步全部同秒）② 拉回清残留（pending 挂
+// 完成面矛盾态）③ synthesizeStepOutput 窗口归属性 + 空名过滤（`?? dir/` pop 得空串）。
+const { synthesizeStepOutput } = await import('../src/run/complete.js')
+
+test('⑪ burst 收口时间戳单调递增（坑①）：连续完成步不再同秒', async () => {
+  const R = mkFlowRepo({ burst: true })
+  const pm = await seedBrainstorm(R.cwd, 'sb-ts', 5)
+  const d = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-ts'])
+  assert.notEqual(d.status, 0, '停在步 8 门禁断点（同⑦形态）')
+  const p = await pm.read(R.cwd, 'sb-ts')
+  const ts = [5, 6].map((i) => p.stages.brainstorm.steps[i].completedAt)
+  assert.ok(ts.every((t) => Number.isFinite(new Date(t).getTime())), `completedAt 可解析（${ts}）`)
+  assert.notEqual(ts[0], ts[1], `步 6/7 完成时刻字符串互异（${ts}）——同秒崩塌已修`)
+  assert.ok(new Date(ts[1]).getTime() > new Date(ts[0]).getTime(), `步 7 严格晚于步 6（${ts}）`)
+})
+
+test('⑫ burst 轮首拉回清完成面残留（坑③）：拉回 pending 的步不挂旧 output/completedAt', async () => {
+  const R = mkFlowRepo({ burst: true })
+  // 步 1-3 完成、步 4（requiresWait 选方案步）stale 且带旧完成面（坑现场：burst 先落
+  // output 后被 reopen 拉回）。轮首拉回 → 清残留转 pending → 无 --answer 撞 waiting
+  // 前置守卫断点 → 停在 pending——残留清除效果可稳定观察（不被后续完成覆盖）。
+  const pm = await seedBrainstorm(R.cwd, 'sb-cl', 3, {
+    3: { status: 'stale', output: '【CLI 合成】步骤「提出 2-3 种方案」完成；旧残留', completedAt: '2026/9/24 17:58:23' },
+  })
+  const d = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-cl'])
+  const out = d.stdout + d.stderr
+  assert.ok(out.includes('处于 stale，burst 轮首拉回待执行'), '轮首拉回日志在场')
+  assert.notEqual(d.status, 0, '拉回后 requiresWait 步无 --answer 撞等待守卫断点')
+  const p = await pm.read(R.cwd, 'sb-cl')
+  const s4 = p.stages.brainstorm.steps[3]
+  assert.equal(s4.status, 'pending', '步 4 拉回后停在 pending（等待守卫拦截）')
+  assert.ok(s4.output == null, `pending 步不带旧 output（矛盾态已清，实际 ${JSON.stringify(s4.output)}）`)
+  assert.ok(s4.completedAt == null, `pending 步不带旧 completedAt（实际 ${JSON.stringify(s4.completedAt)}）`)
+})
+
+test('⑬ synthesizeStepOutput 窗口归属性 + 空名过滤（坑②）', async () => {
+  const R = mkFlowRepo({ burst: false })
+  // 未跟踪目录条目 `?? newdir/`：basename pop 得空串 → 旧代码 join 出「（、）」
+  mkdirSync(join(R.cwd, 'newdir'), { recursive: true })
+  writeFileSync(join(R.cwd, 'newdir', 'inner.txt'), 'x\n')
+  const local = synthesizeStepOutput({ stageName: 'execute', stepName: '实现', cwd: R.cwd })
+  assert.ok(local.includes('变更窗口 1 文件'), `本地模式窗口在场且计数正确：${local}`)
+  assert.ok(!/（[、]*）/.test(local) && !/（、/.test(local), `空名括号已过滤：${local}`)
+  // 平台模式（specRoot 锚定）：变更文件不在 cwd 仓 → 窗口段整体缺省
+  const platform = synthesizeStepOutput({ stageName: 'execute', stepName: '实现', cwd: R.cwd, platformOpts: { specRoot: join(R.cwd, 'elsewhere') } })
+  assert.ok(!platform.includes('变更窗口') && !platform.includes('工作区无未提交变更'), `平台模式窗口缺省（错误窗口比没有更误导）：${platform}`)
+  // worktree 内执行（specDriftAnchor）：窗口归属正确，照常给出
+  const wt = synthesizeStepOutput({ stageName: 'execute', stepName: '实现', cwd: R.cwd, platformOpts: { specDriftAnchor: join(R.cwd, '.sillyspec') } })
+  assert.ok(wt.includes('变更窗口'), `worktree 锚定窗口在场：${wt}`)
+})
+
 test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ } } })

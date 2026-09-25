@@ -161,6 +161,42 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
   rmSync(root, { recursive: true, force: true })
 })
 
+test('⑬ 编号条目通道（R16 任务书形态）：编号行为条目取代总括句；adopt 回提关闭；新 GWT 语义字面', () => {
+  const taskBook = [
+    '为平台实现观测事件服务。',
+    '1. 新模块 observation：批量写入端点（单批上限 500 条）与查询端点',
+    '2. 写入鉴权：仅 shpsync_ token 可写，workspace 从 token 派生',
+    '3. 去重键对 tz 规范化后的业务字段逐字节稳定，重复写入收敛',
+    '4. 查询窗口上限与 (event_ts,id) 双列稳定排序',
+    '5. 前端 30s 轮询与展开只决策一次',
+    '成功标准：',
+    '- 上述 1-5 全部实现且定向测试全绿',
+    '- 每条承诺兑现且可指认',
+  ].join('\n')
+  // 编号 5 条 > 节条目 2 条 → 取编号（R16 实证修复：总括口号句不入库）
+  const got = extractSuccessCriteria(taskBook)
+  assert.equal(got.length, 5, '编号条目取代总括句')
+  assert.match(got[0], /批量写入端点/, '首条为行为语义')
+  assert.ok(!got.some((c) => /上述/.test(c)), '总括句不入')
+  // 关闭通道（adopt/proposal 回提路径）：保持节条目
+  const off = extractSuccessCriteria(taskBook, { numberedChannel: false })
+  assert.equal(off.length, 2)
+  assert.match(off[0], /上述 1-5/)
+  // 编号不足 3 条不触发：保持节条目
+  const few = extractSuccessCriteria('1. 只有两条编号\n2. 第二条\n成功标准：\n- 节条目甲\n- 节条目乙\n- 节条目丙')
+  assert.equal(few.length, 3)
+  assert.match(few[0], /节条目甲/)
+  // draftAll 产出的 requirements：FR 标题=条目语义 + 新 GWT 字面（无流程口号残留）
+  const { root, changeDir, runtimeRoot } = makeFixtureDir()
+  draftAll({ changeDir, change: 'c13', input: taskBook, runtimeRoot })
+  const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+  assert.match(reqs, /### FR-01: 新模块 observation：批量写入端点（单批上限 500 条）/, 'FR 标题为行为语义')
+  assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 5, '编号条目→5 枚绑定槽')
+  assert.match(reqs, /Given 平台按当前契约运行/, '新 GWT 字面')
+  assert.ok(!/轻量跑道在跑|flow done 裁决执行/.test(reqs), '流程口号字面清零')
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('⑫ ensureBindingSlots：按 requirements 实际 FR 编号追加/幂等/无文件 no-op', () => {
   const { root, changeDir } = makeFixtureDir()
   assert.deepEqual(ensureBindingSlots({ changeDir }), { appended: false, slots: 0 }, '无 requirements no-op')

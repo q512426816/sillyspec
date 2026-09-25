@@ -274,6 +274,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
     `⚠️ design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险）动码前后顺手作答——每节至少一行，`,
     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
+    `📜 requirements 的 FR 是机器摘录候选——语义要改写时直接编辑机器段后跑 flow amend-draft 留痕`,
+    `   （槽里写的不进 FR 索引）；输入含编号行为条目时机器已优先摘编号条目。`,
     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
@@ -538,7 +540,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           try {
             const { reconcileModuleDocs } = await import('./flow-parity.js')
             const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
-            if (rec.hits > 0) for (const l of rec.lines) console.log(l)
+            if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
           } catch { /* 对账 best-effort */ }
           patchOk = true
         }

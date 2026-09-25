@@ -56,13 +56,28 @@ export function reconcileModuleDocs({ specBase, ownFiles, committedRaw }) {
     if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
     else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
   }
-  if (hits > 0) {
-    return {
-      lines: [`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`, ...lines],
-      hits,
-    }
+  // 未登记模块目录检测（2026-09-25-thin-fr-quality，R16 实证：observation 新模块不在图 → FR
+  // 落伪域 auto-frontend）：交付目录不在任何模块 paths 下时点名提示登记——首个变更把家建好，
+  // 后续变更的模块命中/门禁收窄/知识注入才能吃到
+  const allPaths = []
+  for (const mod of Object.values(map)) {
+    if (mod && Array.isArray(mod.paths)) allPaths.push(...mod.paths.map((p) => String(p).replace(/\\/g, '/')))
   }
-  return { lines: [], hits: 0 }
+  const isCovered = (f) => allPaths.some((pp) => f === pp || f.startsWith(pp.endsWith('/') ? pp : pp + '/'))
+  const uncoveredDirs = new Map()
+  for (const f of deliverables) {
+    if (isCovered(f)) continue
+    const dir = String(f).split('/').slice(0, -1).join('/')
+    if (dir) uncoveredDirs.set(dir, (uncoveredDirs.get(dir) || 0) + 1)
+  }
+  const topDirs = [...uncoveredDirs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+  const out = [...lines]
+  if (hits > 0) out.unshift(`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`)
+  if (topDirs.length > 0) {
+    out.push(`🗺️ 未登记模块图的交付目录（${topDirs.map(([d, n]) => `${d}（${n} 文件）`).join('、')}${uncoveredDirs.size > 3 ? ' 等' : ''}）——本变更的 FR 将落伪域 auto-*`)
+    out.push(`   建议收口前在模块图（${found.mapPath}）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
+  }
+  return { lines: out, hits }
 }
 
 /**
