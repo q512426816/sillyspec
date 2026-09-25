@@ -276,6 +276,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
     `📜 requirements 的 FR 是机器摘录候选——语义要改写时直接编辑机器段后跑 flow amend-draft 留痕`,
     `   （槽里写的不进 FR 索引）；输入含编号行为条目时机器已优先摘编号条目。`,
+    `📦 交付代码先 git commit（显式 pathspec）再 flow done——patch 冻结面取 baseline..HEAD 提交面，`,
+    `   未提交代码不入审计件（会话专属 worktree 例外：dirty 交付面一并入冻结；R16 实证教训）。`,
     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
@@ -420,7 +422,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   }
 
   // ② ledger：P2 账本对账+亲测（runQuickTestLintGate 同源：账本优先→真跑→recordTestLedger 落账）
-  if (st.substeps?.ledger === 'done') { skip('ledger') } else {
+  if (st.substeps?.ledger === 'done') {
+    skip('ledger')
+    // 实测面回填（2026-09-25-thin-r16-patches 修复③：断点续跑收口的回执不失忆——review 回填同族）
+    if (!gateSummaryText) {
+      try {
+        const { backfillGateSummary } = await import('./flow-parity.js')
+        gateSummaryText = backfillGateSummary(runtimeRoot, change)
+      } catch { /* 回填 best-effort */ }
+    }
+  } else {
     const { runQuickTestLintGate } = await import('./run/quick-audit.js')
     const changedFiles = await attributedChangedFiles()
     // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交 subject 无
@@ -499,7 +510,25 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           }
         }
         try { walk(changeDir) } catch { /* 目录异常=空面 */ }
-        const ownFiles = [...new Set([...committed, ...changeDirFiles])]
+        // 冻结面收集（2026-09-25-thin-r16-patches 修复①）：committed 为主；会话专属 worktree
+        // （gate-snapshot 同款路径判定）下未提交 dirty 交付面一并入冻结——独占树内全归属本变更；
+        // 共享主仓 dirty 无法归属只警告（他侧声明免警告），审计缺口显式化不再静默。
+        let exclusive = false
+        try {
+          const { shouldSkipGateSnapshotForWorktree } = await import('./run/gate-snapshot.js')
+          exclusive = shouldSkipGateSnapshotForWorktree(cwd)
+        } catch { /* 判定异常按共享主仓 */ }
+        let freeze = null
+        try {
+          const { collectFreezeFiles } = await import('./flow-parity.js')
+          freeze = collectFreezeFiles({ cwd, specBase, change, committed, exclusive })
+        } catch { freeze = { files: [...committed], dirtyAdded: [], dirtyWarned: [] } }
+        if (freeze.dirtyAdded.length > 0) console.log(`🔒 会话专属 worktree：${freeze.dirtyAdded.length} 个未提交交付文件一并入冻结面`)
+        if (freeze.dirtyWarned.length > 0) {
+          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件不入冻结面（共享主仓无法归属）——本次冻结不含它们，收口后尽快 commit：`)
+          console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
+        }
+        const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
           .filter((f) => f && !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
         if (ownFiles.length === 0) {
           console.log('📦 patch 留档跳过：本变更可归属文件面为空')

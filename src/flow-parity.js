@@ -11,6 +11,8 @@
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import yaml from 'js-yaml'
 import { writeAtomicSync } from './fs-atomic.js'
 
@@ -145,4 +147,53 @@ export function harvestSlot4Decision({ changeDir, change }) {
   return { harvested: true }
 }
 
-export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision }
+export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary }
+
+/**
+ * patch 冻结面收集（2026-09-25-thin-r16-patches 修复①，R16 P2：agent 提交晚于 done →
+ * 冻结件只有治理件）。committed 提交面为主；exclusive（会话专属 worktree，调用方按
+ * gate-snapshot 同款判定注入）时未提交 dirty 交付面一并入冻结——独占树内 dirty 全归属本变更；
+ * 共享主仓无法归属 → 不入面只警告（他侧声明的 dirty 连警告都免）。
+ */
+export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive }) {
+  const deliverable = (f) => !String(f).replace(/\\/g, '/').startsWith('.sillyspec/')
+  let dirty = []
+  try {
+    const out = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf8', timeout: 30000, windowsHide: true })
+    for (const line of String(out).split('\n')) {
+      if (!line || line.length < 4) continue
+      const p = line.slice(3).trim().replace(/^"|"$/g, '')
+      const arrow = p.indexOf(' -> ')
+      const path = (arrow !== -1 ? p.slice(arrow + 4) : p).replace(/\\/g, '/')
+      if (deliverable(path) && !dirty.includes(path)) dirty.push(path)
+    }
+  } catch { /* git 失败零 dirty 面 */ }
+  if (exclusive) return { files: [...new Set([...committed, ...dirty])], dirtyAdded: dirty, dirtyWarned: [] }
+  let ownDirty = dirty
+  try {
+    const { splitOwnVsForeignDiffFiles } = splitOwnVsForeign
+    ownDirty = splitOwnVsForeignDiffFiles(cwd, change, dirty, { specBase }).own
+  } catch { /* 归属切分失败保留全量警告 */ }
+  return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
+}
+
+/**
+ * 实测面回填（修复③：ledger 子步断点续跑 skip 后回执不失忆）——从 verify-runs 最近
+ * test-result.json（带 change 键）重建摘要；无匹配返回 null。
+ */
+export function backfillGateSummary(runtimeRoot, change) {
+  try {
+    const runsDir = join(runtimeRoot, 'verify-runs')
+    if (!existsSync(runsDir)) return null
+    for (const d of [...readdirSync(runsDir)].sort().reverse()) {
+      const p = join(runsDir, d, 'test-result.json')
+      if (!existsSync(p)) continue
+      let r
+      try { r = JSON.parse(readFileSync(p, 'utf8')) } catch { continue }
+      if (r && r.change === change) {
+        return `test: ${r.status ?? '?'}${r.command ? ` ← ${r.command}` : ''}${typeof r.duration_ms === 'number' ? `（${(r.duration_ms / 1000).toFixed(1)}s）` : ''} 结果：${p}`
+      }
+    }
+  } catch { /* 回填 best-effort */ }
+  return null
+}

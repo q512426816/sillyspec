@@ -219,6 +219,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
 
   // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）+ patch 留档 + 绑定链
   fillDesignSlots(cwd, change)
+  writeFileSync(join(cwd, 'wip-dirty.txt'), 'uncommitted') // 未提交交付文件 → 冻结面警告（R16 P2 修复①）
   const ok = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
   assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
@@ -234,6 +235,8 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   const leaked = patchMeta.files.filter((f) => f.startsWith('.sillyspec/') && !f.startsWith(`.sillyspec/changes/${change}/`))
   assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
   assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
+  assert.ok(!patchMeta.files.includes('wip-dirty.txt'), '未提交交付文件不入冻结面')
+  assert.match(ok.stdout + ok.stderr, /个未提交交付文件不入冻结面/, 'dirty 警告点名')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
 })
@@ -340,6 +343,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
+  assert.match(s.stdout, /先 git commit（显式 pathspec）再 flow done/, '先提交后 done 简报钉死')
   // 预判已删（2026-09-25-thin-precheck-removal）：技术关键词不再触发升厚建议——碰迁移的
   // 轻量变更照样最优收口（R16 实证），风险面归收口评审按证据判定
   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
@@ -384,6 +388,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS �
   assert.ok(existsSync(join(archDir, archived, 'verify-result.md')), 'verify-result 回执随归档留档')
   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /结论\*\*：PASS/, '回执含结论')
   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /独立评审\*\*：PASS/, '回执含评审结论')
+  assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /test: (passed|skipped)/, '回执含实测面（断点续跑回填）')
   assert.match(readFileSync(join(archDir, archived, 'verify-result.md'), 'utf8'), /（断点续跑回读）/, '回执实测面回填（ledger skip 后不留占位）')
   const tl = readFileSync(join(specBase, '.runtime', 'flow-telemetry.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.change === change).pop()
   assert.equal(tl.review.verdict, 'PASS', '遥测记评审结论')

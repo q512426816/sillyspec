@@ -89,6 +89,8 @@ test('② 评审任务书：材料/预算帽/只读/schema 四要素', () => {
   assert.match(book, /change\.patch/)
   assert.match(book, /"verdict": "PASS" \| "FAIL"/)
   assert.match(book, /盲维四问真实性/)
+  assert.match(book, /披露边界显式裁决（必答，不许默认放行/, '边界裁决条款在场')
+  assert.match(book, /未裁决=未审/);
 })
 
 test('③ review.json 校验三态', () => {
