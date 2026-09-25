@@ -56,3 +56,9 @@ test('② 渲染放宽：tasks 行句界感知截断（不再 60 字硬切半词
 test('②b 短条目不截断（≤80 原样透传）', () => {
   assert.equal(clipTaskText('短条目原样保留'), '短条目原样保留')
 })
+
+test('①c markdown 节标题（## 成功标准：）不被误合并（评审 P2 清偿）', () => {
+  const crit = extractSuccessCriteria('## 成功标准：\n- 首条标准内容')
+  assert.equal(crit.length, 1, '## 前缀节标题应独立识别（不吞首条）')
+  assert.equal(crit[0], '首条标准内容')
+})

@@ -13,7 +13,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SRC = readFileSync(join(ROOT, 'src', 'run', 'command.js'), 'utf8')
@@ -53,4 +53,18 @@ test('③ 声明侧自检：白名单字面量解析非空且含锚点 flag', ()
   const declared = declaredFlags()
   assert.ok(declared.length >= 30, `白名单解析应非平凡（实际 ${declared.length}）`)
   for (const anchor of ['--done', '--input', '--change', '--session']) assert.ok(declared.includes(anchor), `${anchor} 应在白名单`)
+})
+
+/** FR-04 判定半边正向用例（评审 P1 清偿：初版读 s._cliAction 恒 false 死代码——DB 步骤行只有 name/status）。 */
+test('④ verify 批量亲测判定：DB 步骤行（无 _cliAction）按 stageRegistry 索引对齐命中', async () => {
+  const { hasPendingVerifyScanStep } = await import(pathToFileURL(join(ROOT, 'src/run/complete.js')).href)
+  // DB 形态：只有 name/status（_cliAction 不持久化）
+  const verifyDef = (await import(pathToFileURL(join(ROOT, 'src/stages/index.js')).href)).stageRegistry.verify
+  assert.ok(verifyDef.steps.some(s => s._cliAction === 'verifyRunQualityScan'), 'registry 定义面应在场（fixture 自检）')
+  const dbShapedSteps = verifyDef.steps.map(s => ({ name: s.name, status: 'pending' }))
+  assert.equal(hasPendingVerifyScanStep('verify', dbShapedSteps), true, 'DB 形态步骤应按索引对齐命中亲测步')
+  const allDone = dbShapedSteps.map(s => ({ ...s, status: 'completed' }))
+  assert.equal(hasPendingVerifyScanStep('verify', allDone), false, '无 pending 步不命中')
+  assert.equal(hasPendingVerifyScanStep('verify', []), false)
+  assert.equal(hasPendingVerifyScanStep('brainstorm', [{ name: 'x', status: 'pending' }]), false)
 })

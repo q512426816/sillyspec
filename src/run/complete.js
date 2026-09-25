@@ -51,6 +51,7 @@ import { formatExecuteSummary } from '../worktree-apply.js'
 import { validateDecisionModuleRefs } from '../design-facts.js'
 import { isEndToEndTaskText } from '../change-risk-profile.js'
 import { deriveTitleFromLinkedChange } from '../quicklog.js'
+import { stageRegistry } from '../stages/index.js' // hasPendingVerifyScanStep 判定面（cli-protocol-trust；缺 import 时 ReferenceError 被 fail-open catch 吞成恒 false——本行即其修复）
 
 // validateMetadata / readDesignScale / validateFileLocations 已迁至 ./gates.js（completeStageGates
 // 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
@@ -647,13 +648,15 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     // integrationRan≠ran 拒 → gate_rollback → --reopen 四步绕行。对齐面含该步时先亲跑
     // executeVerifyQualityScan（幂等+指纹复用——已有有效记录时秒回零重复实测），失败则放弃
     // 批量保持单步推进（亲测步照 noAI 硬门走）——「批量省的是上下文往返，不省任何门」承诺恢复成立。
+    // 判定经 hasPendingVerifyScanStep：DB 步骤行只有 {name,status}（_cliAction 不持久化——评审
+    // P1 修复：初版直接读 s._cliAction 恒 false 死代码），按 stageRegistry 定义索引对齐判。
     let _skipBatch = false
-    const pendingScanStep = steps.some(s => (s.status === 'pending' || s.status === 'in-progress') && s._cliAction === 'verifyRunQualityScan')
-    if (pendingScanStep) {
+    if (hasPendingVerifyScanStep(stageName, steps)) {
       try {
         const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
+        console.log('   🧪 批量对齐面含 noAI 亲测步——先亲测（幂等，有记录秒回）…')
         await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
-        console.log('   🧪 批量对齐前已补 noAI 亲测（质量扫描记录落盘，亲测门不省）')
+        console.log('   🧪 noAI 亲测完成（质量扫描记录落盘，亲测门不省）')
       } catch (e) {
         console.warn('   ⚠️ 亲测补跑失败——放弃批量对齐，保持单步推进（亲测步按 noAI 硬门走）：' + (e && e.message ? e.message : e))
         _skipBatch = true
@@ -1562,6 +1565,22 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
  * verify-facts.json 在场（探针跑过）+ 锚定步（step 1-2）已完成。批量只标剩余 step
  * completed，收尾门禁由阶段完成分支照常执行（批量不绕门）。
  */
+/**
+ * 批量对齐面是否含未完成的 verify 亲测步（cli-protocol-trust，评审 P1 修复的判定半边）：
+ * DB 步骤行只有 {name,status}——_cliAction 在 stageRegistry 的步骤定义上，按索引对齐判定
+ * （进度库步骤按定义种子，同序同名）；步对象自带 _cliAction 时兜底直读。导出供 test 直测。
+ */
+export function hasPendingVerifyScanStep(stageName, steps) {
+  try {
+    const defSteps = stageRegistry[stageName]?.steps || []
+    return (steps || []).some((s, i) =>
+      (s.status === 'pending' || s.status === 'in-progress') &&
+      (s._cliAction === 'verifyRunQualityScan' || defSteps[i]?._cliAction === 'verifyRunQualityScan'))
+  } catch {
+    return false // fail-open：判定异常不阻断批量（亲测门兜底由收尾对账承担）
+  }
+}
+
 export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
   if (!changeName) return { batched: false, aligned: 0 }
   try {

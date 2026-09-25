@@ -65,7 +65,7 @@ function splitCompoundCriteria(item) {
  * （冒号/顿号/逗号/开括号）→ 该行与下一行本是一条标准（--input 手写换行拆散）。
  * 节标题行（成功标准：/动机：等）不参与合并——它们必须独立成行才能被节检测正则命中。
  */
-const SECTION_HEAD_RE = /^(成功标准|验收标准|验收|acceptance|动机|背景|关键问题|变更范围|需求|非目标)[：:]?$/i
+const SECTION_HEAD_RE = /^(?:#+\s*)?(成功标准|验收标准|验收|acceptance|动机|背景|关键问题|变更范围|需求|非目标)[：:]?$/i
 function needsContinuationMerge(line) {
   if (SECTION_HEAD_RE.test(line)) return false
   if (/[：:、，,（(【\[「『]$/u.test(line)) return true // 行尾悬空连接符/开括号收尾

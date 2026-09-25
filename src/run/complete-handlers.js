@@ -535,10 +535,14 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
   try {
     const _knSt = gitQuiet(cwd, ['status', '--porcelain'])
     if (_knSt) {
-      const knFiles = String(_knSt).split('\n').map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
-        .filter((p) => p.replace(/\\/g, '/').startsWith('.sillyspec/knowledge/'))
+      const knFiles = String(_knSt).split('\n').map((l) => {
+        const p = l.slice(3).trim().replace(/^"|"$/g, '')
+        const arrow = p.indexOf(' -> ')
+        return arrow !== -1 ? p.slice(arrow + 4) : p // rename 形态取新路径（评审 P3 清偿）
+      }).filter((p) => p.replace(/\\/g, '/').startsWith('.sillyspec/knowledge/'))
       for (const batch of chunkPaths(knFiles)) safeGit(cwd, ['add', '--', ...batch])
       if (knFiles.length > 0) console.log(`   📚 knowledge 蒸馏产物入暂存：${knFiles.length} 个文件（fr 域/decisions/INDEX）`)
+      else console.log('   ℹ️ knowledge 面无待入暂存文件（本归档无蒸馏产物变更）')
     }
   } catch (e) {
     console.warn(`⚠️ knowledge 侧 add 失败（fail-soft，不阻断归档链）：${e && e.message ? e.message : e}`)
