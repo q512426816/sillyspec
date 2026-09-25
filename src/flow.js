@@ -864,7 +864,13 @@ export async function cmdFlow(args, cwd, specDir = null) {
     const changeDir = join(specBase, 'changes', change)
     const st = readFlowState(changeDir)
     if (!st) {
-      if (existsSync(join(changeDir, 'review.json')) || existsSync(join(changeDir, 'change.patch'))) {
+      // 归档检测：归档后目录搬至 changes/archive/<日期>-<名>（原目录不存在）——查 archive 目录
+      const archiveDir = join(specBase, 'changes', 'archive')
+      let isArchived = false
+      try {
+        if (existsSync(archiveDir)) isArchived = readdirSync(archiveDir).some((e) => e.includes(change))
+      } catch { /* best-effort */ }
+      if (isArchived) {
         console.log(`📦 ${change}：已归档`)
       } else if (existsSync(changeDir)) {
         console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
