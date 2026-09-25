@@ -897,3 +897,75 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then flow 系与 test:core 全绿
 全文：.sillyspec/changes/archive/2026-09-25-sentinel-wiring/requirements.md#FR-05
 最近确认：2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3
+
+## FR-cli-entry-053 extractSuccessCriteria 增编号条目通道：正文存在三条以上编
+变更：2026-09-25-thin-fr-quality
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行
+全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-01
+最近确认：716288a224048fda0dd7514aacfa058d974e0c57
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-fr-quality:flow:FR-01
+  tests: test/flow-draft.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-fr-quality
+  status: active
+
+## FR-cli-entry-054 draftRequirements 的 GWT 模板字面换为需求语义（Given
+变更：2026-09-25-thin-fr-quality
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改
+全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-02
+最近确认：716288a224048fda0dd7514aacfa058d974e0c57
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-fr-quality:flow:FR-02
+  tests: test/flow-draft.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-fr-quality
+  status: active
+
+## FR-cli-entry-055 reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块
+变更：2026-09-25-thin-fr-quality
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
+全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-03
+最近确认：716288a224048fda0dd7514aacfa058d974e0c57
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-fr-quality:flow:FR-03
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-fr-quality
+  status: active
+
+## FR-cli-entry-056 新增测试三件；flow 系全绿
+变更：2026-09-25-thin-fr-quality
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 新增测试三件；flow 系全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-04
+最近确认：716288a224048fda0dd7514aacfa058d974e0c57

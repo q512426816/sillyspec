@@ -1,0 +1,443 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index f8e9693a..7c55ac93 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -32,8 +32,14 @@ export function draftLedgerPath(runtimeRoot, changeName) {
+ 
+ const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`
+ 
+-/** 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。 */
+-export function extractSuccessCriteria(input) {
++/**
++ * 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。
++ * 编号条目通道（2026-09-25-thin-fr-quality，R16 实证驱动）：输入为完整任务书时行为需求以
++ * 「1. …n.」编号列在正文、成功标准节只有总括句（「上述 1-9 全部实现…」入库为 FR 是口号不是
++ * 行为语义）——正文编号条目数 ≥3 且多于节条目时取而代之（与节条目去重）。adopt/proposal
++ * 回提路径经 opts.numberedChannel=false 关闭（proposal 其他节的编号列表会误劫持）。
++ */
++export function extractSuccessCriteria(input, opts = {}) {
+   if (!input) return []
+   const NL = /\r\n|\r|\n/
+   const lines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
+@@ -50,6 +56,17 @@ export function extractSuccessCriteria(input) {
+       if (item && !/^#/.test(item)) criteria.push(item)
+     }
+   }
++  // 编号条目通道：正文「1. …」行为条目（与节条目去重），数 ≥3 且多于节条目时取代
++  if (opts.numberedChannel !== false) {
++    const numbered = []
++    for (const raw of lines) {
++      const m = raw.match(/^\d{1,2}[.、)）]\s*(\S.*)$/)
++      if (!m) continue
++      const t = m[1].trim()
++      if (t && !numbered.includes(t) && !criteria.includes(t)) numbered.push(t)
++    }
++    if (numbered.length >= 3 && numbered.length > criteria.length) return numbered
++  }
+   return criteria
+ }
+ 
+@@ -89,8 +106,8 @@ function draftRequirements({ change, criteria }) {
+   const crit = criteria || []
+   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+   const frBodies = crit.length > 0
+-    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 轻量跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
+-    : '### FR-01: flow done 全绿\nGiven flow 轻量跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
++    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen ${c}`).join('\n\n')
++    : '### FR-01: flow done 全绿\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen 测试门实测通过+工件指纹校验通过'
+   const n = crit.length > 0 ? crit.length : 1
+   const bindingSlots = Array.from({ length: n }, (_, i) => {
+     const id = `FR-${String(i + 1).padStart(2, '0')}`
+@@ -105,7 +122,7 @@ function draftRequirements({ change, criteria }) {
+     '',
+     '## 功能需求（成功标准机械摘录）',
+     wrapped('requirements-frs', frBodies),
+-    AGENT_SLOT(1, '需求例外裁决'),
++    AGENT_SLOT(1, '需求例外裁决（FR 语义改写不走此槽——直接编辑机器段后跑 flow amend-draft 留痕，槽内容不进 FR 索引）'),
+     '',
+     '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
+     '',
+@@ -490,7 +507,8 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+           .filter((l) => /^\d+[.、]\s+/.test(l))
+           .map((l) => l.replace(/^\d+[.、]\s+/, ''))
+       } else {
+-        criteria = extractSuccessCriteria(pText)
++        // adopt 回提关闭编号通道：proposal 其他节（变更范围/非目标）的编号列表会误劫持
++        criteria = extractSuccessCriteria(pText, { numberedChannel: false })
+       }
+     } catch { /* 无 proposal 可回提 → 空，draft 各自兜底 */ }
+   }
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index fe3f1689..73c1b926 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -56,13 +56,28 @@ export function reconcileModuleDocs({ specBase, ownFiles, committedRaw }) {
+     if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
+     else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
+   }
+-  if (hits > 0) {
+-    return {
+-      lines: [`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`, ...lines],
+-      hits,
+-    }
++  // 未登记模块目录检测（2026-09-25-thin-fr-quality，R16 实证：observation 新模块不在图 → FR
++  // 落伪域 auto-frontend）：交付目录不在任何模块 paths 下时点名提示登记——首个变更把家建好，
++  // 后续变更的模块命中/门禁收窄/知识注入才能吃到
++  const allPaths = []
++  for (const mod of Object.values(map)) {
++    if (mod && Array.isArray(mod.paths)) allPaths.push(...mod.paths.map((p) => String(p).replace(/\\/g, '/')))
++  }
++  const isCovered = (f) => allPaths.some((pp) => f === pp || f.startsWith(pp.endsWith('/') ? pp : pp + '/'))
++  const uncoveredDirs = new Map()
++  for (const f of deliverables) {
++    if (isCovered(f)) continue
++    const dir = String(f).split('/').slice(0, -1).join('/')
++    if (dir) uncoveredDirs.set(dir, (uncoveredDirs.get(dir) || 0) + 1)
++  }
++  const topDirs = [...uncoveredDirs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
++  const out = [...lines]
++  if (hits > 0) out.unshift(`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`)
++  if (topDirs.length > 0) {
++    out.push(`🗺️ 未登记模块图的交付目录（${topDirs.map(([d, n]) => `${d}（${n} 文件）`).join('、')}${uncoveredDirs.size > 3 ? ' 等' : ''}）——本变更的 FR 将落伪域 auto-*`)
++    out.push(`   建议收口前在模块图（${found.mapPath}）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
+   }
+-  return { lines: [], hits: 0 }
++  return { lines: out, hits }
+ }
+ 
+ /**
+diff --git a/src/flow.js b/src/flow.js
+index 4053db4e..289c6f62 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -274,6 +274,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
+     `⚠️ design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险）动码前后顺手作答——每节至少一行，`,
+     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
++    `📜 requirements 的 FR 是机器摘录候选——语义要改写时直接编辑机器段后跑 flow amend-draft 留痕`,
++    `   （槽里写的不进 FR 索引）；输入含编号行为条目时机器已优先摘编号条目。`,
+     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
+     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
+     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+@@ -538,7 +540,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           try {
+             const { reconcileModuleDocs } = await import('./flow-parity.js')
+             const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
+-            if (rec.hits > 0) for (const l of rec.lines) console.log(l)
++            if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
+           } catch { /* 对账 best-effort */ }
+           patchOk = true
+         }
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 185a9387..bf0900a5 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -161,6 +161,42 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
++test('⑬ 编号条目通道（R16 任务书形态）：编号行为条目取代总括句；adopt 回提关闭；新 GWT 语义字面', () => {
++  const taskBook = [
++    '为平台实现观测事件服务。',
++    '1. 新模块 observation：批量写入端点（单批上限 500 条）与查询端点',
++    '2. 写入鉴权：仅 shpsync_ token 可写，workspace 从 token 派生',
++    '3. 去重键对 tz 规范化后的业务字段逐字节稳定，重复写入收敛',
++    '4. 查询窗口上限与 (event_ts,id) 双列稳定排序',
++    '5. 前端 30s 轮询与展开只决策一次',
++    '成功标准：',
++    '- 上述 1-5 全部实现且定向测试全绿',
++    '- 每条承诺兑现且可指认',
++  ].join('\n')
++  // 编号 5 条 > 节条目 2 条 → 取编号（R16 实证修复：总括口号句不入库）
++  const got = extractSuccessCriteria(taskBook)
++  assert.equal(got.length, 5, '编号条目取代总括句')
++  assert.match(got[0], /批量写入端点/, '首条为行为语义')
++  assert.ok(!got.some((c) => /上述/.test(c)), '总括句不入')
++  // 关闭通道（adopt/proposal 回提路径）：保持节条目
++  const off = extractSuccessCriteria(taskBook, { numberedChannel: false })
++  assert.equal(off.length, 2)
++  assert.match(off[0], /上述 1-5/)
++  // 编号不足 3 条不触发：保持节条目
++  const few = extractSuccessCriteria('1. 只有两条编号\n2. 第二条\n成功标准：\n- 节条目甲\n- 节条目乙\n- 节条目丙')
++  assert.equal(few.length, 3)
++  assert.match(few[0], /节条目甲/)
++  // draftAll 产出的 requirements：FR 标题=条目语义 + 新 GWT 字面（无流程口号残留）
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  draftAll({ changeDir, change: 'c13', input: taskBook, runtimeRoot })
++  const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  assert.match(reqs, /### FR-01: 新模块 observation：批量写入端点（单批上限 500 条）/, 'FR 标题为行为语义')
++  assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 5, '编号条目→5 枚绑定槽')
++  assert.match(reqs, /Given 平台按当前契约运行/, '新 GWT 字面')
++  assert.ok(!/轻量跑道在跑|flow done 裁决执行/.test(reqs), '流程口号字面清零')
++  rmSync(root, { recursive: true, force: true })
++})
++
+ test('⑫ ensureBindingSlots：按 requirements 实际 FR 编号追加/幂等/无文件 no-op', () => {
+   const { root, changeDir } = makeFixtureDir()
+   assert.deepEqual(ensureBindingSlots({ changeDir }), { appended: false, slots: 0 }, '无 requirements no-op')
+diff --git a/test/flow-parity.test.mjs b/test/flow-parity.test.mjs
+index 8e751b8f..18257090 100644
+--- a/test/flow-parity.test.mjs
++++ b/test/flow-parity.test.mjs
+@@ -38,10 +38,14 @@ test('① 模块文档对账：命中/文档未更新强提示/已同步/无图
+   // 前缀命中（目录 paths）
+   r = reconcileModuleDocs({ specBase, ownFiles: ['src/progress.js/sub.py'], committedRaw: [] })
+   assert.equal(r.hits, 1)
+-  // 交付面不命中 → 零输出
++  // 交付面不命中模块但有未登记目录 → 🗺️ 提示（2026-09-25-thin-fr-quality：FR 落伪域点名）
+   r = reconcileModuleDocs({ specBase, ownFiles: ['other/x.js'], committedRaw: [] })
+   assert.equal(r.hits, 0)
+-  assert.deepEqual(r.lines, [])
++  assert.ok(r.lines.some((l) => /🗺️ 未登记模块图的交付目录（other（1 文件））/.test(l)), JSON.stringify(r.lines))
++  assert.ok(r.lines.some((l) => /伪域 auto-\*/.test(l)))
++  // R16 实证形态：新模块目录不在图 → 点名 observation 目录
++  r = reconcileModuleDocs({ specBase, ownFiles: ['backend/app/modules/observation/service.py', 'backend/app/modules/observation/router.py'], committedRaw: [] })
++  assert.ok(r.lines.some((l) => /backend\/app\/modules\/observation（2 文件）/.test(l)), JSON.stringify(r.lines))
+   // 无模块图 → 零输出
+   const bare = mkdtempSync(join(tmpdir(), 'fp-bare-'))
+   r = reconcileModuleDocs({ specBase: bare, ownFiles: ['src/a.js'], committedRaw: [] })
+diff --git a/test/stage-burst.test.mjs b/test/stage-burst.test.mjs
+index 9a38121e..cc7102cc 100644
+--- a/test/stage-burst.test.mjs
++++ b/test/stage-burst.test.mjs
+@@ -244,4 +244,56 @@ test('⑩ flow 缺省翻转（2026-09-25-thin-default-flip 再翻转，接替 D-
+   assert.equal(readFlowConfig(join(legacy, '.sillyspec')).mode, 'legacy', '显式 mode: legacy 照旧生效（回旧道出口）')
+ })
+ 
++// ══════════ 坑 stage-burst-timeline-quality-collapse 回归（2026-09-24 实证，2026-09-25 修复）══════════
++// ① burst 单调时间戳（毫秒级循环 + 秒级串 → 剩余步全部同秒）② 拉回清残留（pending 挂
++// 完成面矛盾态）③ synthesizeStepOutput 窗口归属性 + 空名过滤（`?? dir/` pop 得空串）。
++const { synthesizeStepOutput } = await import('../src/run/complete.js')
++
++test('⑪ burst 收口时间戳单调递增（坑①）：连续完成步不再同秒', async () => {
++  const R = mkFlowRepo({ burst: true })
++  const pm = await seedBrainstorm(R.cwd, 'sb-ts', 5)
++  const d = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-ts'])
++  assert.notEqual(d.status, 0, '停在步 8 门禁断点（同⑦形态）')
++  const p = await pm.read(R.cwd, 'sb-ts')
++  const ts = [5, 6].map((i) => p.stages.brainstorm.steps[i].completedAt)
++  assert.ok(ts.every((t) => Number.isFinite(new Date(t).getTime())), `completedAt 可解析（${ts}）`)
++  assert.notEqual(ts[0], ts[1], `步 6/7 完成时刻字符串互异（${ts}）——同秒崩塌已修`)
++  assert.ok(new Date(ts[1]).getTime() > new Date(ts[0]).getTime(), `步 7 严格晚于步 6（${ts}）`)
++})
++
++test('⑫ burst 轮首拉回清完成面残留（坑③）：拉回 pending 的步不挂旧 output/completedAt', async () => {
++  const R = mkFlowRepo({ burst: true })
++  // 步 1-3 完成、步 4（requiresWait 选方案步）stale 且带旧完成面（坑现场：burst 先落
++  // output 后被 reopen 拉回）。轮首拉回 → 清残留转 pending → 无 --answer 撞 waiting
++  // 前置守卫断点 → 停在 pending——残留清除效果可稳定观察（不被后续完成覆盖）。
++  const pm = await seedBrainstorm(R.cwd, 'sb-cl', 3, {
++    3: { status: 'stale', output: '【CLI 合成】步骤「提出 2-3 种方案」完成；旧残留', completedAt: '2026/9/24 17:58:23' },
++  })
++  const d = cliRun(R.cwd, ['run', 'brainstorm', '--done', '--change', 'sb-cl'])
++  const out = d.stdout + d.stderr
++  assert.ok(out.includes('处于 stale，burst 轮首拉回待执行'), '轮首拉回日志在场')
++  assert.notEqual(d.status, 0, '拉回后 requiresWait 步无 --answer 撞等待守卫断点')
++  const p = await pm.read(R.cwd, 'sb-cl')
++  const s4 = p.stages.brainstorm.steps[3]
++  assert.equal(s4.status, 'pending', '步 4 拉回后停在 pending（等待守卫拦截）')
++  assert.ok(s4.output == null, `pending 步不带旧 output（矛盾态已清，实际 ${JSON.stringify(s4.output)}）`)
++  assert.ok(s4.completedAt == null, `pending 步不带旧 completedAt（实际 ${JSON.stringify(s4.completedAt)}）`)
++})
++
++test('⑬ synthesizeStepOutput 窗口归属性 + 空名过滤（坑②）', async () => {
++  const R = mkFlowRepo({ burst: false })
++  // 未跟踪目录条目 `?? newdir/`：basename pop 得空串 → 旧代码 join 出「（、）」
++  mkdirSync(join(R.cwd, 'newdir'), { recursive: true })
++  writeFileSync(join(R.cwd, 'newdir', 'inner.txt'), 'x\n')
++  const local = synthesizeStepOutput({ stageName: 'execute', stepName: '实现', cwd: R.cwd })
++  assert.ok(local.includes('变更窗口 1 文件'), `本地模式窗口在场且计数正确：${local}`)
++  assert.ok(!/（[、]*）/.test(local) && !/（、/.test(local), `空名括号已过滤：${local}`)
++  // 平台模式（specRoot 锚定）：变更文件不在 cwd 仓 → 窗口段整体缺省
++  const platform = synthesizeStepOutput({ stageName: 'execute', stepName: '实现', cwd: R.cwd, platformOpts: { specRoot: join(R.cwd, 'elsewhere') } })
++  assert.ok(!platform.includes('变更窗口') && !platform.includes('工作区无未提交变更'), `平台模式窗口缺省（错误窗口比没有更误导）：${platform}`)
++  // worktree 内执行（specDriftAnchor）：窗口归属正确，照常给出
++  const wt = synthesizeStepOutput({ stageName: 'execute', stepName: '实现', cwd: R.cwd, platformOpts: { specDriftAnchor: join(R.cwd, '.sillyspec') } })
++  assert.ok(wt.includes('变更窗口'), `worktree 锚定窗口在场：${wt}`)
++})
++
+ test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* Windows 句柄延迟，残留交给 tmpdir 清理 */ } } })
+diff --git a/.sillyspec/changes/2026-09-25-thin-fr-quality/design.md b/.sillyspec/changes/2026-09-25-thin-fr-quality/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-fr-quality/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T01:11:36.723Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-fr-quality
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三件：①extractSuccessCriteria 增编号条目通道——正文「1. …」编号行为条目（与节条目去重）数 ≥3 且多于成功标准节条目时取代之（R16 实证：任务书场景下节条目是总括口号句，编号条目才是行为语义）；adopt/proposal 回提路径经 opts.numberedChannel=false 关闭（proposal 变更范围等节的编号列表会误劫持）。②draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改写走 flow amend-draft 留痕通道；flow start 简报加 FR 候选改写指引。③reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名「FR 将落伪域 auto-*」并指路模块图登记（R16 实证：observation 新模块不在图 → FR 落 auto-frontend 伪域）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow-draft.js（extractSuccessCriteria opts + draftRequirements 字面/槽提示 + redraft 回提关通道）、flow.js（简报两行 + 对账打印条件 rec.lines.length）、flow-parity.js（未覆盖目录检测）、测试三件（⑬ 编号通道四态 + parity ① 地图提示两态 + stage-burst ⑩ 并行改动回归修正）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯文本提取与提示输出，无状态无时序面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=编号通道误触发（非需求的编号列表被当 FR）——阈值 ≥3 且多于节条目双条件收窄；adopt 回提侧整路关闭。死路=靠提示词要求用户重排任务书格式——工具该扛住真实输入形态。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-fr-quality/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-fr-quality/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-fr-quality/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 05ab06bb742526b75a2b7892b5a0e6363005c6ab
++updatedAt: '2026-09-25T01:19:30.730Z'
++gate_summary: >-
++  test: passed ← module[cli-core,run-gates]+deps(js30)（47.1s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260925011859\test-result.json｜lint: passed
++  ← npm run lint（31.3s）｜门文件 50 个
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-fr-quality/proposal.md b/.sillyspec/changes/2026-09-25-thin-fr-quality/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-fr-quality/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T01:11:36.722Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-fr-quality
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:c7d9f5e318b5d06d06a80379384d0668e5c8a4891d3e95d1eeddcb054cd04ee0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++任务原话转写：动机：R16 实证 FR 挂载链路通但挂的东西不值钱——机器摘录在『输入=完整任务书』场景下产出总括口号句（『上述 1-9 全部实现…』入库为 FR）、新模块 observation 未登记致 FR 落伪域 auto-frontend、GWT 模板字面（『Given flow 薄跑道在跑』）入库。三件修：摘录编号条目通道、GWT 字面换语义、未登记模块目录显式提示。
++成功标准：
++- extractSuccessCriteria 增编号条目通道：正文存在三条以上编号行为条目且多于成功标准节条目时取而代之（去重）；adopt/proposal 回提路径关闭该通道维持原语义
++- draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改写走 flow amend-draft 留痕通道；flow start 简报加 FR 候选改写指引
++- reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
++- 新增测试三件；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:a2d85b09c2703bc9ace21dec0a1f358c17605a8b213514b7c06a976cc19b0df5:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. extractSuccessCriteria 增编号条目通道：正文存在三条以上编号行为条目且多于成功标准节条目时取而代之（去重）；adopt/proposal 回提路径关闭该通道维持原语义
++2. draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改写走 flow amend-draft 留痕通道；flow start 简报加 FR 候选改写指引
++3. reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
++4. 新增测试三件；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:9e1c5cd6c0716656ec5672432b2a574d35c93830b7cb47667b870c053780512d:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++1. extractSuccessCriteria 增编号条目通道：正文存在三条以上编号行为条目且多于成功标准节条目时取而代之（去重）；adopt/proposal 回提路径关闭该通道维持原语义
++2. draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改写走 flow amend-draft 留痕通道；flow start 简报加 FR 候选改写指引
++3. reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
++4. 新增测试三件；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-fr-quality/requirements.md b/.sillyspec/changes/2026-09-25-thin-fr-quality/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-fr-quality/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T01:11:36.723Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-fr-quality
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:6a9efd6091537f58f0dc231f936b1f98c51183db010c241f9f290dbdce677ed2:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++### FR-01: extractSuccessCriteria 增编号条目通道：正文存在三条以上编
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then extractSuccessCriteria 增编号条目通道：正文存在三条以上编号行为条目且多于成功标准节条目时取而代之（去重）；adopt/proposal 回提路径关闭该通道维持原语义
++
++### FR-02: draftRequirements 的 GWT 模板字面换为需求语义（Given
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改写走 flow amend-draft 留痕通道；flow start 简报加 FR 候选改写指引
++
++### FR-03: reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
++
++### FR-04: 新增测试三件；flow 系全绿
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then 新增测试三件；flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs ⑬（取代/关闭/不足/标题与字面四态断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs ⑬（新 GWT 字面 + 口号清零断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ①（other 单文件 + observation 双文件地图提示断言）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + stage-burst 54 例 + test:core 176 例
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-fr-quality/tasks.md b/.sillyspec/changes/2026-09-25-thin-fr-quality/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-fr-quality/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T01:11:36.724Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-fr-quality
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:8dccd19b180fefd036c31182ed4e32ed40952986e24620d733dfc16baa5ead95:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-fr-quality 留痕重锚 -->
++- [ ] task-01: extractSuccessCriteria 增编号条目通道：正文存在三条以上编号行为条目且多于成功标准节条目时取而代之
++- [ ] task-02: draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交
++- [ ] task-03: reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域
++- [ ] task-04: 新增测试三件；flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++
