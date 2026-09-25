@@ -168,12 +168,14 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
       if (deliverable(path) && !dirty.includes(path)) dirty.push(path)
     }
   } catch { /* git 失败零 dirty 面 */ }
-  if (exclusive) return { files: [...new Set([...committed, ...dirty])], dirtyAdded: dirty, dirtyWarned: [] }
+  // 归属切分单点：exclusive（worktree/--freeze-dirty）与共享主仓共用——他侧已声明 dirty 永不入冻
+  // （评审 P2 修复：--freeze-dirty 承诺「非他侧声明」，全量冻入会造成跨变更审计双计；worktree
+  // 下 own 恒为全量，切分无伤）
   let ownDirty = dirty
   try {
-    const { splitOwnVsForeignDiffFiles } = splitOwnVsForeign
     ownDirty = splitOwnVsForeignDiffFiles(cwd, change, dirty, { specBase }).own
-  } catch { /* 归属切分失败保留全量警告 */ }
+  } catch { /* 归属切分失败：exclusive 保留全量（声明即边界），共享主仓退全量警告 */ }
+  if (exclusive) return { files: [...new Set([...committed, ...ownDirty])], dirtyAdded: ownDirty, dirtyWarned: [] }
   return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
 }
 
