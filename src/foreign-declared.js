@@ -10,7 +10,7 @@
  * 独立零环模块：被 verify-postcheck / verify-probes / contract-matrix 共用（verify-
  * postcheck import contract-matrix，parity 侧不能反向 import verify-postcheck）。
  */
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { parseFileChangeListDetailed } from './change-list.js'
 import { safeGit, unquoteGitPath } from './git-helper.js'
@@ -131,6 +131,10 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
       } catch { /* 损坏/缺失跳过 */ }
     }
     // ② 其他变更的 design §6 清单（目录在即视为在途变更；archive/ 下不算）
+    // 时效判据（2026-09-25-platform-feedback-batch2 B）：变更目录 mtime 超 7 天未动 → 声明视为
+    // 陈旧忽略（平台狗粮实证：9-21 未归档旧变更 9-25 还在抢文件——活性被 dirty 反向喂活但
+    // 变更本身已死。mtime 是最便宜的活性信号：任何文件写入/勾选/槽位填写都会 touch 目录）。
+    const STALE_CHANGE_MS = 7 * 24 * 60 * 60 * 1000
     const changesDir = join(specBase, 'changes')
     let changeDirs = []
     try { changeDirs = readdirSync(changesDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) } catch {}
@@ -138,6 +142,13 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
       if (cn === currentChangeName || cn === 'archive') continue
       const designPath = join(changesDir, cn, 'design.md')
       if (!existsSync(designPath)) continue
+      // 时效：变更目录 mtime 超 7 天 → 陈旧，声明不生效（跳过整个变更）
+      try {
+        const dirMtime = statSync(join(changesDir, cn)).mtimeMs
+        if (Date.now() - dirMtime > STALE_CHANGE_MS) {
+          continue // 陈旧变更——声明已死，不抢活人的文件
+        }
+      } catch { /* stat 失败保守保留 */ }
       try {
         for (const e of parseFileChangeListDetailed(designPath)) add(e.path, cn)
       } catch { /* 清单解析失败跳过该变更 */ }

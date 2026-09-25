@@ -365,7 +365,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
 test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
   const { cwd } = makeRepo()
   const change = 'flow-h2-t15'
-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入幂等收敛']).status, 0)
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })

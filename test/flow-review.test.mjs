@@ -35,8 +35,8 @@ const DESIGN_SLOTS = [
 ].join('\n')
 
 test('① 定档矩阵：五路信号与豁免举证', () => {
-  // 承诺词一票（requirements 命中「幂等」）
-  let { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n写入收敛幂等\n')
+  // 承诺词一票（requirements 命中「不丢失」——D 收敛后幂等已移除，用交付语义词）
+  let { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n写入不丢失\n')
   let t = classifyReviewNeed({ changeDir, patchText: '', change: 'q1' })
   assert.equal(t.required, true)
   assert.ok(t.reasons.some((r) => /承诺词/.test(r)), `承诺词一票: ${t.reasons}`)

@@ -728,8 +728,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     }
     // 实测面对账（2026-09-25 修复③）：agent 可核对自己的测试有没有被扫到——命令/时长/结果文件
     // 一行打全（skip 路径 test/lint 为 null 显示 —；结果文件 test-result.json 含完整文件清单可回溯）。
+    // skipped 标因（2026-09-25-platform-feedback-batch2 C）：跳过必须说为什么——环境缺件/无测试面/
+    // 模块未命中/策略 skip 各有 reason，实测面透传首句让下游能区分。
     const fmt = (r) => r
-      ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}`
+      ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}${r.status === 'skipped' && r.reason ? ` — 跳过原因：${String(r.reason).split('。')[0]}。` : ''}`
       : '—'
     gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
@@ -865,6 +867,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
           } catch { /* 对账 best-effort */ }
+          // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
+          // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
+          // 阻断——可能是范围裁剪了但 design 没同步更新）
+          try {
+            const designPath = join(changeDir, 'design.md')
+            if (existsSync(designPath)) {
+              const { parseFileChangeListDetailed } = await import('./change-list.js')
+              const declared = parseFileChangeListDetailed(designPath).map((e) => e.path)
+              const frozenSet = new Set(ownFiles.map((f) => String(f).replace(/\\/g, '/')))
+              const missing = declared.filter((p) => !frozenSet.has(p) && !p.startsWith('.sillyspec/'))
+              if (missing.length > 0) {
+                console.warn(`⚠️ design 声明面自证：${missing.length} 个声明文件不在冻结面（${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ' 等' : ''}）——design 说了要改但交付里没有，确认是范围裁剪（请同步更新 design 清单）还是遗漏`)
+              }
+            }
+          } catch { /* 自证 best-effort */ }
           patchOk = true
         }
       }
