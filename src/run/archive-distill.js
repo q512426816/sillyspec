@@ -48,8 +48,10 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
 
   // ── FR 索引提炼（2026-09-18-fr-index-l1 L1：稳定 id 发号+承接翻链；同 best-effort 降级语义）──
   try {
-    const { indexRequirements } = await import('../fr-index.js')
-    const fr = indexRequirements({ changeDir, knowledgeRoot, headHash })
+    const { indexRequirements, archiveDeliverableFiles } = await import('../fr-index.js')
+    // greenfield-bootstrap：供 deliverableFiles（design 表 ∪ apply-manifest）——此前缺供致域路由
+    // 退化为 design 清单单源，全泛化段时落 unmapped（R17 臂3 实证），与轻量道口径对齐。
+    const fr = indexRequirements({ changeDir, knowledgeRoot, headHash, deliverableFiles: archiveDeliverableFiles(changeDir) })
     const frWritten = Array.isArray(fr && fr.written) ? fr.written : []
     if (fr && fr.skipped) {
       console.log(`\nℹ️  FR 索引零输出：${fr.skipped}`)

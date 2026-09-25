@@ -492,6 +492,25 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   }
 
   const materials = materialPaths(specBase, change, changeDir)
+  // 绿地 bootstrap（greenfield-bootstrap，R17 实证：无模块图仓 FR 全落伪域/unmapped，知识复利
+  // 从第一条断流）：模块图缺席且 --input 有路径语料 → 机器起草初始 _module-map.yaml 草案（按
+  // 目录段聚合 modules.<id>.paths；generator=flow-bootstrap-draft + status=draft 标识；不含
+  // blast 段——判级对缺席有安全降级；不覆盖已有文件）。草案身份醒目提示，指路 scan 校准。
+  try {
+    const { discoverModuleIndex } = await import('./decision-distill.js')
+    const knowledgeRoot = join(specBase, 'knowledge')
+    if (discoverModuleIndex(knowledgeRoot) === null) {
+      const bsPaths = extractInputPaths(input)
+      if (bsPaths.length > 0) {
+        const { draftModuleMap } = await import('./greenfield-bootstrap.js')
+        const r = draftModuleMap({ cwd, specBase, paths: bsPaths })
+        if (r.written) {
+          console.log(`🗺️ [绿地草案] 模块图缺席——已起草初始 _module-map.yaml（${r.modules} 个模块：${r.moduleIds.join('、')}）→ ${r.path}`)
+          console.log(`   草案身份（status: draft）：建议跑 sillyspec run scan 或 modules 校准后转正——不校准也可用，域路由按草案分流（不再全落 unmapped）`)
+        }
+      }
+    }
+  } catch (e) { console.warn(`⚠️ 绿地模块图草案起草失败（best-effort 不阻断 start）：${(e && e.message) || e}`) }
   // 知识注入（2026-09-25-thin-fr-inject-parity）：fresh 起点域路由用 --input 提取的路径样
   // token（best-effort）——brainstorm 的 {FR_INDEX_DIGEST}/{DECISION_HITS} 注入面对齐到轻量道。
   let digest = { lines: [], summary: { domains: [], frCount: 0, rejectedDecisions: 0, knowledgeEntries: 0 } }

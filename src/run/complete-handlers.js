@@ -3136,8 +3136,9 @@ export async function distillLinkedChangeAssets({ pm, cwd, specBase, changeName,
       // FR 索引（requirements.md → knowledge/fr/，幂等：同变更名 no-op）
       if (hasReqs) {
         try {
-          const { indexRequirements } = await import('../fr-index.js')
-          const r = indexRequirements({ changeDir, knowledgeRoot, headHash: '' })
+          const { indexRequirements, archiveDeliverableFiles } = await import('../fr-index.js')
+          // greenfield-bootstrap：供 deliverableFiles（同 archive-distill 口径——防域路由退化 unmapped）
+          const r = indexRequirements({ changeDir, knowledgeRoot, headHash: '', deliverableFiles: archiveDeliverableFiles(changeDir) })
           if (r && Array.isArray(r.written) && r.written.length > 0) { out.frCount += r.written.length; r.written.forEach((w) => { if (w && w.file && !out.frFiles.includes(w.file)) out.frFiles.push(w.file) }); anyDistilled = true }
         } catch (e) { out.warnings.push(`fr-index ${linked} 异常跳过：${e && e.message ? e.message : e}`) }
       }

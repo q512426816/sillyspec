@@ -535,6 +535,19 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
     });
   }
 
+  // ── 绿地知识面提醒（greenfield-bootstrap）：本变更条目落伪域/unmapped 时提示升级路径；
+  //    unmapped 域总条目超阈（50）告警配治理指引（本仓 720 条实证堆积病——告警不阻断）。──
+  try {
+    const pseudoHits = written.filter((w) => /^(auto-|unmapped$)/.test(String(w.file || '').replace(/^fr\//, '')))
+    if (pseudoHits.length > 0) {
+      console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）——补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准`)
+    }
+    const unm = all.get('unmapped')
+    if (unm && unm.sections.length > 50) {
+      console.warn(`⚠️ [unmapped 大池] ${unm.sections.length} 条 FR 堆积在 unmapped 域（>50）——治理动作：按目录段补模块卡迁移条目、或跑 modules rebuild 建图后新变更自动分流`)
+    }
+  } catch { /* 提醒 fail-open */ }
+
   return { written, superseded, unreferenced, warnings };
 }
 
@@ -791,6 +804,33 @@ export function markFrNeedsReview(knowledgeRoot, frIds, refNote) {
     if (!found) warnings.push(`markFrNeedsReview：${id} 不在索引中（跳过）`);
   }
   return { marked, warnings };
+}
+
+/**
+ * 归档侧 FR 域路由文件面（greenfield-bootstrap：archive 侧 indexRequirements 此前不传
+ * deliverableFiles——域路由退化为 design 清单单源，design 全泛化段/根文件时落 unmapped，
+ * R17 臂3 十条 FR 实证）：design 交付表 ∪ apply-manifest.json 的 files[].path（apply 链
+ * 落盘的真实交付清单）。与轻量道 attributedChangedFiles 口径对齐（文件面供域路由投票）。
+ */
+export function archiveDeliverableFiles(changeDir) {
+  const out = new Set()
+  try {
+    const dp = join(changeDir, 'design.md')
+    if (existsSync(dp)) {
+      for (const f of deliverableFilesFromDesignText(readFileSync(dp, 'utf8'))) out.add(f.replace(/\\/g, '/'))
+    }
+  } catch { /* fail-soft */ }
+  try {
+    const mp = join(changeDir, 'apply-manifest.json')
+    if (existsSync(mp)) {
+      const j = JSON.parse(readFileSync(mp, 'utf8'))
+      for (const f of Array.isArray(j && j.files) ? j.files : []) {
+        const p = String(f && f.path ? f.path : f || '').replace(/\\/g, '/').replace(/\/+$/, '')
+        if (p) out.add(p)
+      }
+    }
+  } catch { /* fail-soft */ }
+  return [...out].filter((p) => !p.startsWith('.sillyspec/'))
 }
 
 /**
