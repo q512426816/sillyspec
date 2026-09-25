@@ -1,0 +1,29 @@
+{
+  "change": "2026-09-25-greenfield-bootstrap",
+  "baseline": "d701671d3ec92dd1e5d3ed1b3a176e0dd2f9ed2b",
+  "head": "21c9be5139b8e3935fe2ba308b46775d30211869",
+  "files": [
+    "src/flow-review.js",
+    "src/flow.js",
+    "src/fr-index.js",
+    "src/greenfield-bootstrap.js",
+    "src/run/archive-distill.js",
+    "src/run/complete-handlers.js",
+    "test/greenfield-bootstrap.test.mjs",
+    "test/platform-feedback-batch2.test.mjs",
+    ".sillyspec/changes/2026-09-25-greenfield-bootstrap/design.md",
+    ".sillyspec/changes/2026-09-25-greenfield-bootstrap/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-greenfield-bootstrap/proposal.md",
+    ".sillyspec/changes/2026-09-25-greenfield-bootstrap/requirements.md",
+    ".sillyspec/changes/2026-09-25-greenfield-bootstrap/tasks.md"
+  ],
+  "totals": {
+    "files": 13,
+    "additions": 422,
+    "deletions": 13
+  },
+  "savedAt": "2026-09-25T16:09:32.625Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "29eec055ae773661d395e7395c557d95d024707753e50e96dfbe5ef479a79e7f",
+  "patchStatus": "ok"
+}

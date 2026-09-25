@@ -2,6 +2,7 @@
 变更：2026-09-18-fr-index-l1
 状态：active
 摘要：幂等重放；域兜底
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given 变更归档（noAI 步）且其 requirements.md 含 FR 块（`### FR-NN: 标题`）；When indexRequirements 执行（域=design 文件清单剥 NEW: 前缀×_module-map，unmapped 兜底）；Then 新 FR 按域计数器 max+1 发全局 id `FR-<域>-NNN` 并写入 knowledge/fr/<域>.md（条目含来源变更/状态 active/摘
 - 场景：幂等重放 — Given 同一变更的 indexRequirements 连续执行两次；Then 第二次 written/superseded 均空，索引文件零漂移
@@ -13,6 +14,7 @@
 变更：2026-09-18-fr-index-l1
 状态：active
 摘要：取代链完整
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given requirements.md FR 块含 `承接: FR-<域>-NNN[, ...]` 行（brainstorm step8 注入清单供引用） brains；When 归档索引执行 step8 prompt 渲染；Then 旧条目状态翻 superseded + superseded_by=新 id + 链注记；承接 id 不存在→warn 留痕不阻断；未引用旧 FR 的删除/修改
 - 场景：取代链完整 — Given change B 承接引用 change A 归档发的 FR-x-001；When B 归档；Then FR-x-001 状态 superseded、superseded_by=本次新号、摘要链注记在场
@@ -23,6 +25,7 @@
 变更：2026-09-18-fr-index-l1
 状态：active
 摘要：本变更自举采样
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given 三机制在位（step8 注入/step8 软门/归档承接——护栏②：任一被移除对应指标恒零即实验失真）+删除缺口探针；When 各机制动作发生；Then knowledge-hits.jsonl 落 fr-inject（条数+域）/fr-supersede（from/to/change）/fr-duplicate
 - 场景：本变更自举采样 — Given 本变更自身归档（首个 epoch 样本）；Then fr-superseded 与 fr-unreferenced 各至少一条真实事件落盘（verify 读回）
@@ -33,6 +36,7 @@
 变更：2026-09-18-fr-index-l1
 状态：active
 摘要：自举被抓即机制工作
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given doctor archive_integrity 重扫；When 归档日期前缀 ≥ FR_INDEX_EPOCH（2026-09-18）且非 quick/scale:small 豁免面；Then 变更名须在 fr 索引「来源变更」字段在场；其 requirements 含承接行则旧条目 superseded 须已标；违者 warning offender
 - 场景：自举被抓即机制工作 — Given 本变更归档时索引写入失败；When D14 重扫；Then 本变更作为 offender 出现（R-05 活证）
@@ -43,7 +47,7 @@
 变更：2026-09-18-ceremony-risk-pricing
 状态：active
 摘要：span 封顶防「单测档改半个仓」；agent 自报只升不降
-待复核：2026-09-25-platform-feedback-batch2
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given `src/ceremony-tier.js` 的 `computeCeremonyTier` 接收 blast（detectChangeRisk 输出+显式声明；When 任一分量达到更高档；Then `ceremony_tier = max(blast, span, friction)` 取封顶，档位 ∈ S0/S1/S2/S3（映射既有五档：doc-onl
 - 场景：span 封顶防「单测档改半个仓」 — Given detectChangeRisk 判 unit-sufficient（blast=S1）但声明文件数≥8 或模块跨度≥3 或命中 QUICK_RISK_PATH；When 定价；Then tier ≥ S2（span 分量封顶生效），reasons 含 span 命中明细
@@ -55,7 +59,7 @@
 变更：2026-09-18-ceremony-risk-pricing
 状态：active
 摘要：任务②同款不再全价
-待复核：2026-09-25-platform-feedback-batch2
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given classifyReviewTier 现行「planLevel 三分支+文件数≤3 启发式」；When 本变更落地后；Then 评审档由 computeCeremonyTier 决定（旧文件数规则降为 S0/S1 内部断路器保兼容）；plan 阶段 plan_level 输出仅为编排标签
 - 场景：任务②同款不再全价 — Given risk=unit-sufficient、span 未超阈、无摩擦记录的变更；When 进入 brainstorm Step7 审查与 plan 审查；Then 按档位化菜单执行轻仪（S1），不因「计划写得完整」进入 independent×2
@@ -66,7 +70,7 @@
 变更：2026-09-18-ceremony-risk-pricing
 状态：active
 摘要：懒 agent 低报被收口抓获
-待复核：2026-09-25-platform-feedback-batch2
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given verify --done 与 archive confirm 两出口可取实际 diff 文件集（resolveReconcileActualFiles 单点现；When 收口；Then 用实际 diff 重跑 blast+span 得事实档；声明档<事实档 → 硬 flag（verify errors / archive 阻断警告）+ 记摩擦账
 - 场景：懒 agent 低报被收口抓获 — Given design 声明面未提风险关键词（blast 判 S1）但实际 diff 命中 auth/migration 路径（事实档 S2+）；When verify --done 双跑；Then mismatch=error 硬 flag，摩擦账留档，次单预价按事实面
@@ -77,7 +81,7 @@
 变更：2026-09-18-ceremony-risk-pricing
 状态：active
 摘要：影子产物不污染主线
-待复核：2026-09-25-platform-feedback-batch2
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given 四阶段完成门（gate 评估点）读 friction-ledger 累计账；When gate_rollback/review_rejected 超阈；Then tier = min(S3, tier+1) 只升不降，迁移记录写 .runtime/ceremony-tier-<change>.json（withFileL
 - 场景：影子产物不污染主线 — Given 影子重评审 verdict=fail 落盘；When 主线 gate 经 getLatestStageReviewRunId 找评审产物；Then 不命中影子命名空间（stage-reviews-shadow/ 隔离），主线不受影子 verdict 阻断
@@ -115,6 +119,7 @@
 变更：2026-09-18-artifact-prefill
 状态：active
 摘要：核对改写
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given src/prefill.js 三纯函数（清单←target_files 并集/决策表←D-xxx 清单/ids←FR+D 抽取）；When 生成器或 refresh 调用；Then 白名单槽落预填值+来源行内注「(预填：核对后删本注)」；槽外一律不碰；无源文件时空槽+提示行（骨架行为不变）
 - 场景：核对改写 — Given task 卡 target_files 已声明六文件；When prefill-refresh 运行；Then design 清单槽出六行（NEW: 保形）带注——agent 核对删注即确认
@@ -125,6 +130,7 @@
 变更：2026-09-18-artifact-prefill
 状态：active
 摘要：人工保护
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given sillyspec prefill-refresh --change <名>；When 槽内预填注在场；Then 重放预填（幂等）；注已删=已确认→跳过不覆盖人工内容
 - 场景：人工保护 — Given 决策追踪表某行被 agent 改写且注已删；When refresh；Then 该槽跳过（confirmed 计数）
@@ -135,6 +141,7 @@
 变更：2026-09-18-artifact-prefill
 状态：active
 摘要：注清零校验
+待复核：2026-09-25-greenfield-bootstrap
 场景正文：
 - 场景：默认场景 — Given --done 门（brainstorm/plan）与归档前校验；When 白名单槽含未删注；Then --done advisory 提示；归档前 error 阻断（注清零=确认完成）；本变更对表数据（请求/上下文/摩擦 vs 基线 172/249k/9）落 b
 - 场景：注清零校验 — Given 归档前 design 清单槽仍有预填注；When verify 探针；Then error——预填未确认
@@ -262,6 +269,7 @@
 变更：2026-09-20-fr-index-l2
 状态：active
 摘要：默认场景
+待复核：2026-09-25-greenfield-bootstrap
 依据决策：D-001@v1
 场景正文：
 - 场景：默认场景 — Given requirements.md 含决策覆盖矩阵（D-xxx@vN → FR-NN 映射）；When 归档 indexRequirements 执行；Then 条目含「依据决策：」行、digest 条目含 decisions 数组；无矩阵/无命中省略行且不阻断
@@ -272,6 +280,7 @@
 变更：2026-09-20-fr-index-l2
 状态：active
 摘要：默认场景
+待复核：2026-09-25-greenfield-bootstrap
 依据决策：D-002@v1
 场景正文：
 - 场景：默认场景 — Given 任一 knowledge/fr/<域>.md 文件写入/更新；When 文件头 blockquote 落盘；Then 含「模块卡：modules/<域>.md」一行
@@ -282,6 +291,7 @@
 变更：2026-09-20-fr-index-l2
 状态：active
 摘要：默认场景
+待复核：2026-09-25-greenfield-bootstrap
 依据决策：D-003@v2
 场景正文：
 - 场景：默认场景 — Given requirements.md 含 Given/When/Then 行；When 归档 indexRequirements 执行；Then 条目含「场景正文：」块（每场景一行，各段截 80 字，≤5 场景）
@@ -292,6 +302,7 @@
 变更：2026-09-20-fr-index-l2
 状态：active
 摘要：默认场景
+待复核：2026-09-25-greenfield-bootstrap
 依据决策：D-003@v2
 场景正文：
 - 场景：默认场景 — Given knowledge/fr 存在 active 条目缺场景正文，且其来源变更归档目录 requirements.md 在场；When sillyspec fr-backfill 执行；Then 按标题匹配补齐正文（幂等：已有正文的条目跳过；匹配失败警告不阻断）

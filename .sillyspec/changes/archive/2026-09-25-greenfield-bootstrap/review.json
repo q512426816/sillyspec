@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-greenfield-bootstrap",
+  "reviewer": "独立评审员（干净上下文）",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "0",
+      "evidence": "[object Object]",
+      "location": "src/greenfield-bootstrap.js"
+    },
+    {
+      "severity": "P2",
+      "title": "1",
+      "evidence": "[object Object]",
+      "location": "src/greenfield-bootstrap.js"
+    },
+    {
+      "severity": "P2",
+      "title": "2",
+      "evidence": "[object Object]",
+      "location": "src/greenfield-bootstrap.js"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-25"
+}
