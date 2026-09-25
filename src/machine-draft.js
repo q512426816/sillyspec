@@ -21,9 +21,20 @@ import { createHash } from 'node:crypto'
 export const MARK_BEGIN_RE = /^<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin.*-->\s*$/
 const MARK_END_RE = /^<!--\s*MACHINE-DRAFT:([\w.-]+):end.*-->\s*$/
 
-/** 段内容哈希（CRLF 归一——跨平台写盘行尾漂移不炸指纹）。 */
+/**
+ * 任务勾选态归一（2026-09-25-thin-done-gate-calibration 坑1）：勾选是 flow start 横幅教的
+ * 预期写面（收口哨兵的证据面），不该参与「被改写」判定——哈希前把 `- [x] task-NN` 归一回
+ * `- [ ]`（draft 产出恒 [ ]，存量台账两侧归一后同哈希，兼容；真实改写任务文本/增删行仍失配）。
+ * 口径只认 task-NN 行，普通清单勾选行不归一（不扩大书写面）。
+ */
+const TASK_CHECK_STATE_RE = /^([-*] \[)[ xX]\](?= task-\d)/gm
+function normalizeTaskCheckboxState(s) {
+  return String(s).replace(TASK_CHECK_STATE_RE, '$1 ]')
+}
+
+/** 段内容哈希（CRLF 归一——跨平台写盘行尾漂移不炸指纹；task-NN 勾选态归一——见上）。 */
 export function bodyHash(s) {
-  return createHash('sha256').update(String(s).replace(/\r\n/g, '\n')).digest('hex')
+  return createHash('sha256').update(normalizeTaskCheckboxState(String(s).replace(/\r\n/g, '\n'))).digest('hex')
 }
 
 /**

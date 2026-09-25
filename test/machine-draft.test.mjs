@@ -81,3 +81,22 @@ test('reanchorText: 重锚后标记哈希=当前内容哈希，内容行不动',
   const ledger = { a: { hash: bodyHash(r.contentByKey.a) } }
   assert.deepEqual(verifyMarkers({ text: r.text, sections: ledger, amendCmd: AMEND }), [])
 })
+
+test('bodyHash 勾选态归一：task-NN 勾选翻转不改哈希，真实改写仍失配（2026-09-25 坑1）', () => {
+  const body = '- [ ] task-01: 干活\n- [ ] task-02: 测试'
+  const md = wrapSection({ key: 'tasks-rows', body, amendCmd: AMEND })
+  const sections = { 'tasks-rows': { hash: bodyHash(body) } }
+  assert.equal(bodyHash('- [x] task-01: a'), bodyHash('- [ ] task-01: a'), '[x] 与 [ ] 同哈希')
+  assert.equal(bodyHash('- [X] task-01: a'), bodyHash('- [ ] task-01: a'), '[X] 同归一')
+  assert.equal(bodyHash('* [x] task-02: a'), bodyHash('* [ ] task-02: a'), '星号 bullet 同口径')
+  // 正常勾选（flow start 横幅纪律动作）：指纹仍匹配——不需 amend-draft、不触发 edit_ratio
+  const ticked = md.replace('- [ ] task-02', '- [x] task-02')
+  assert.deepEqual(verifyMarkers({ text: ticked, sections, amendCmd: AMEND }), [], '勾选态不参与被改写判定')
+  // 真实改写（改任务文本）仍失配拒收——归一只抹勾选态，不松指纹防护
+  const rewritten = ticked.replace('task-01: 干活', 'task-01: 改了任务文本')
+  const v = verifyMarkers({ text: rewritten, sections, amendCmd: AMEND })
+  assert.equal(v.length, 1)
+  assert.match(v[0], /内容与指纹失配/)
+  // 非 task 行的勾选不归一——归一口径=任务勾选纪律的书写面，不扩大
+  assert.notEqual(bodyHash('- [x] 普通清单行'), bodyHash('- [ ] 普通清单行'))
+})

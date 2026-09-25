@@ -474,21 +474,24 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   } else {
     const { runQuickTestLintGate } = await import('./run/quick-audit.js')
     const changedFiles = await attributedChangedFiles()
-    // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交 subject 无
-    // task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
+    // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
+    // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
+    // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
+    // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
+    // 提交计数不因多行正文失真。
     try {
       const { detectFakeCheckCompletion } = await import('./sentinel-assertions.js')
       const tasksPath = join(changeDir, 'tasks.md')
       if (existsSync(tasksPath)) {
-        const _logRaw = gitQuiet(cwd, ['log', '--format=%s', `${st.baseline_commit}..HEAD`])
+        const _logRaw = gitQuiet(cwd, ['log', '--format=%B%x1e', `${st.baseline_commit}..HEAD`])
         if (!_logRaw) {
           console.log('ℹ️ 哨兵：git log 不可用，跳过（fail-open——空提交组照判会假拦）')
         } else {
-        const commitSubjects = String(_logRaw).split('\n').filter(Boolean)
-        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitSubjects })
+        const commitMessages = String(_logRaw).split('\x1e').map((x) => x.trim()).filter(Boolean)
+        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages })
         if (sent.status === 'fake') {
-          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交无 token、无 review.json）：${sent.missing.join('、')}`)
-          console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
+          console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
           reportMidFail('ledger')
           process.exit(1)
@@ -496,8 +499,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
         // 勾选缺失 advisory（2026-09-25-flow-tick-prototype）：有任务行但全未勾（status='none' 且
         // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
-        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitSubjects.length > 0) {
-          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitSubjects.length} 个提交）——`)
+        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitMessages.length > 0) {
+          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitMessages.length} 个提交）——`)
           console.warn(`   规范动作是干活时逐条勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
         }
         }

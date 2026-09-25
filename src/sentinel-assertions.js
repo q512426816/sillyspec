@@ -10,8 +10,9 @@
  *
  * 纯度口径：无副作用（零写盘/零 db），输出由参数+只读盘面（review.json 在场探测）决定；
  * 盘面探测可经 opts.listReviewsImpl 注入替身（单测零真 fs）。证据判据与 R1 同口径：
- * commit subject 含完整 token task-NN（负向前瞻，task-01 不证 task-010）或对应
- * review.json 在场（.runtime/execute-runs 任意 run 的 tasks 目录下对应任务子目录）。
+ * commit 消息（标题或正文——2026-09-25 起收口侧取 %B 整条消息）含完整 token task-NN
+ * （负向前瞻，task-01 不证 task-010）或对应 review.json 在场（.runtime/execute-runs
+ * 任意 run 的 tasks 目录下对应任务子目录）。
  */
 import { join, dirname } from 'path';
 import { existsSync, readdirSync } from 'fs';
