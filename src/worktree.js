@@ -21,6 +21,7 @@ import { git, gitQuiet, unquoteGitPath } from './git-helper.js';
 // foreign-declared 零环独立模块（仅依赖 change-list/git-helper/stages/plan-postcheck，
 // 链上无回边）——contract-matrix/verify-probes/task-review 等处已有同款 import 先例
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js';
+import { readWorktreePolicy } from './worktree-policy.js';
 
 // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
 // 必须原子写：半截 JSON 会让 getMeta 返回 null → 触发幽灵 worktree 强删（可能丢 gitignored 改动）。
@@ -220,7 +221,7 @@ export function unlinkNodeModulesLinks(worktreePath, meta = null, details = null
     try {
       if (process.platform === 'win32') {
         // Windows rmdir 删 junction（reparse point）不跟随目标；execFileSync 数组形式不经 shell
-        execFileSync('cmd.exe', ['/c', 'rmdir', nm]);
+        execFileSync('cmd.exe', ['/c', 'rmdir', nm], { windowsHide: true });
       } else {
         unlinkSync(nm);
       }
@@ -752,17 +753,28 @@ export class WorktreeManager {
     // 2. 检查分支是否已存在（坑 worktree-user-branch-conflict，2026-08-24 用户反馈五期①：
     // 「用户要求在指定分支上做」时既有同名分支让 execute 直接死锁，旧报错只说 Run cleanup
     // first、修复建议无条件推荐删分支——用户自建分支被引导误删。现给决策菜单；--adopt-branch
-    // 显式收编：检出该分支为 worktree 工作分支，分支现状作 baseline，仅后续新改动计入交付。）
+    // 显式收编：检出该分支为 worktree 工作分支，分支现状作 baseline，仅后续新改动计入交付。
+    // worktree.policy.adopt_branch（R16 减负批次 2026-09-24）：选择记忆——显式 flag 缺席时
+    // policy=true 等效常备 --adopt-branch（adoption 留痕同款），消「同一冲突每次重拦重问」。
     const branchExists = !!gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]);
     let adoptedBranch = false;
+    let adoptViaPolicy = false;
     if (branchExists && !adoptBranch) {
-      throw new Error(
-        `分支已存在：${branch}（worktree create 需新建同名分支，直接冲突）。按实际情况三选一：\n` +
-        `  ① 本变更的遗留分支（上次 execute 残留、内容已落地或作废）：确认后 git branch -D ${branch} 再重跑；\n` +
-        `  ② 该分支是你有意让本变更在其上做的（用户指定分支）：sillyspec run execute --change ${name} --adopt-branch\n` +
-        `     —— 收编为 worktree 工作分支，分支既有内容计入 baseline（仅后续新改动算交付 diff）；\n` +
-        `  ③ 换变更名重跑。`
-      );
+      const policy = readWorktreePolicy(this.cwd);
+      if (policy.adoptBranch) {
+        adoptBranch = true;
+        adoptViaPolicy = true;
+        console.log(`📌 worktree.policy.adopt_branch=true：分支 ${branch} 已存在，自动收编（等效 --adopt-branch，local.yaml 选择记忆）`);
+      } else {
+        throw new Error(
+          `分支已存在：${branch}（worktree create 需新建同名分支，直接冲突）。按实际情况三选一：\n` +
+          `  ① 本变更的遗留分支（上次 execute 残留、内容已落地或作废）：确认后 git branch -D ${branch} 再重跑；\n` +
+          `  ② 该分支是你有意让本变更在其上做的（用户指定分支）：sillyspec run execute --change ${name} --adopt-branch\n` +
+          `     —— 收编为 worktree 工作分支，分支既有内容计入 baseline（仅后续新改动算交付 diff）；\n` +
+          `     （每次都选②可在 local.yaml 配 worktree.policy.adopt_branch: true 记忆该选择）\n` +
+          `  ③ 换变更名重跑。`
+        );
+      }
     }
 
     // 3. 解析 base 分支
@@ -922,12 +934,13 @@ export class WorktreeManager {
       // 5.9 实供清单（纯记录面，doctor/审计可读；空供给省略字段——存量 meta 缺省兼容）
       ...(suppliedFiles.length > 0 ? { supplyFiles: suppliedFiles } : {}),
       ...(adoptedBranch ? { adoptedBranch: true } : {}),
+      ...(adoptViaPolicy ? { adoptViaPolicy: true } : {}),
     };
 
     const metaPath = join(worktreePath, META_FILE);
     writeMetaAtomic(metaPath, meta);
 
-    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic, ...(adoptedBranch ? { adoptedBranch: true } : {}) };
+    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic, ...(adoptedBranch ? { adoptedBranch: true } : {}), ...(adoptViaPolicy ? { adoptViaPolicy: true } : {}) };
   }
 
   /**

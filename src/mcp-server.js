@@ -93,6 +93,7 @@ function runCli(cliArgs) {
       cwd: process.cwd(),
       env: process.env,
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     })
     let out = ''
     let err = ''

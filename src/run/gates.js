@@ -746,6 +746,14 @@ async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progres
  */
 export async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx = null }) {
   const projectName = progress.project || basename(cwd)
+  // ── 纯文档门收集模式（R16 减负批次，2026-09-24）──
+  // 对撞 R15 实证「execute 收口连挡 4 次」：多门串行 fail-fast，每次 --done 只暴露一个门，
+  // 修复重跑才见下一个门。纯文档 blocking 门（validators / verify 死信与预填注 / Stage 与
+  // Task Review）改为收集：全部跑完 → 一次打印清单 → 统一 rollback 一次（detail 取首门，
+  // 进度库信号语义不变）。实测门（test/lint/parity/probe）保持文档面全清后才跑、内部 fail-fast
+  // 不变——贵的门只为真实代码问题付账。检查点 A=verify 实测门前；B=brainstorm/plan/execute
+  // Task Review Gate 后（friction 升档前——升档语义=「所有阻断门通过」）。
+  const docGateFailures = []
   // decisions.md header 自动补齐（坑 decisions-header-late-warning，2026-08-24 用户反馈二期）：
   // brainstorm step8 旧模板自带无 frontmatter 的 decisions 样例，存量变更照抄必缺 author/created_at，
   // 拖到平台同步/后续环节才提示。gate 前幂等补机械字段（先例：autoCheckPlanFromReviews 同层写
@@ -818,8 +826,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
     // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
     // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
-    // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'validators' })
+    // 收集模式（R16）：不再直接 return——继续跑完其余纯文档门（review 等）后由检查点统一
+    // rollback，一次 --done 暴露全部缺失面（R15 连挡 4 次的解）。
+    docGateFailures.push({ type: 'gate_rollback', detail: 'validators', label: `产物契约校验未过（${contractResult.errors.length} 条，明细见上）` })
   }
   if (contractResult.warnings.length > 0) {
     console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
@@ -879,7 +888,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
           for (const row of pendingRows) console.error(`   - ${row}`)
           console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+          docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `module-impact.md 存在 ${pendingRows.length} 个 pending/待办死信（明细见上）` })
         }
       }
     }
@@ -895,11 +904,21 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
         for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
         console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
+        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `预填注清零未过（${noteClearance.unclearedFiles.length} 文件，明细见上）` })
       }
     } catch (e) {
       console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
     }
+  }
+
+  // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
+  //    fail-fast 不变）。brainstorm/plan/execute 不走本检查点（其实测面为空，检查点 B 收口）。──
+  if (stageName === 'verify' && docGateFailures.length > 0) {
+    console.error(`\n❌ verify 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
+    docGateFailures.forEach((f, i) => console.error(`   ${i + 1}. ${f.label}`))
+    console.error(`   （各门明细见上方对应 ❌ 段落；实测门（test/lint）在文档面全清后才执行）`)
+    const firstFail = docGateFailures[0]
+    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: firstFail.type, detail: firstFail.detail })
   }
 
   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
@@ -1446,8 +1465,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         const reviewResult = gated.result
         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
         if (!reviewResult.ok) {
-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
-        }
+          docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: 'Stage Review 未过（stage-review，明细见上）' })
+        } else {
         // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
         // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
         // 与真子代理 review（事后可审计），与 ⚖️/🔍 软归属同哲学——可见的折损优于静默的伪装。
@@ -1468,11 +1487,13 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
         if (hasDelegatedWriteDisclosure(reviewResult.review)) {
           console.warn(`\n⚠️ Stage Review 代落盘披露：${stageName} review 的 reviewerNotes 首行标记「代落盘」——review.json 由主代理代（写通道故障的）审查者落盘，独立性依赖审查者结论回传的忠实性，建议人工抽查关键结论与回传文本一致性。`)
         }
+        }
       }
     } catch (e) {
       // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
+      //（收集模式：异常也入列，检查点 B 统一 rollback）
       console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
+      docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: `Stage Review Gate 异常（${e.message}）` })
     }
   }
 
@@ -1581,8 +1602,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
             console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
           }
-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
-        }
+          //（收集模式：检查点 B 统一 rollback）
+          docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review 未过（task-review，${reviewResult.errors.length} 条，明细见上）` })
+        } else {
 
         // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
         if (reviewResult.requiredEvidence.length > 0) {
@@ -1592,13 +1614,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
             console.log('   verify 阶段必须满足这些证据要求。')
           }
         }
+        }
       }
     } catch (e) {
       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
+      //（收集模式：异常也入列，检查点 B 统一 rollback）
       console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
       console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
+      docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review Gate 异常（${e.message}）` })
     }
+  }
+
+  // ── 收集模式检查点 B（brainstorm/plan/execute）：纯文档门（validators / Stage Review /
+  //    Task Review）全量收口——非空则一次打印清单、统一 rollback 一次（R15「连挡 4 次」的解；
+  //    detail 取首门，进度库信号语义不变）。verify 走检查点 A（其实测门在前）。──
+  if (stageName !== 'verify' && docGateFailures.length > 0) {
+    console.error(`\n❌ ${stageName} 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
+    docGateFailures.forEach((f, i) => console.error(`   ${i + 1}. ${f.label}`))
+    console.error(`   （各门明细见上方对应 ❌/⚠️ 段落）`)
+    const firstFail = docGateFailures[0]
+    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: firstFail.type, detail: firstFail.detail })
   }
 
   // ── 仪式档位摩擦升档检查点（task-03 / D-008，design 生命周期契约表「阶段门升档」行）──
@@ -2352,7 +2387,7 @@ export function killProcessTree(pid, sig = 'SIGTERM') {
   if (process.platform === 'win32') {
     // /T = 连同子进程树（shell 包装下的 python/node 服务本体）；/F = 强制（长驻服务常吞 SIGTERM 等价物）
     try {
-      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000 })
+      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000, windowsHide: true })
       return true
     } catch (e) {
       // taskkill 对不存在进程退出码 128（等价 ESRCH，已退出按回收静默）；其余（拒绝访问等）上抛
@@ -2371,7 +2406,7 @@ export function killProcessTree(pid, sig = 'SIGTERM') {
 /** ps 枚举直接子进程 PID（POSIX；失败返回空——杀不到子进程不阻断父进程回收） */
 function listChildPids(parentPid) {
   try {
-    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000 })
+    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000, windowsHide: true })
     const children = []
     for (const line of String(out).split('\n')) {
       const m = line.trim().match(/^(\d+)\s+(\d+)$/)

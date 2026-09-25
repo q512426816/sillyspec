@@ -26,6 +26,12 @@ const FORCE_QUICK_PATTERNS = [
   /更新文案|改文案|文案修改/i,
   /样式调整|style.*tweak/i,
   /修复.*\s*\bbug\b.*\bfix\b/i,
+  // R16 减负批次（2026-09-24，R5R 对撞实证 quick≈OS：8.3M vs 6.4M——判规模选道倾向 quick）：
+  // 补充明确无设计决策密度的常规任务面
+  /补注释|加注释|注释补充/i,
+  /重命名|rename\s+(变量|函数|文件|目录)/i,
+  /升级依赖|依赖升级|bump\s+(版本|deps|dependencies)/i,
+  /配置微调|配置小改|改配置项/i,
 ]
 
 /**

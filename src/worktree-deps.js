@@ -74,8 +74,22 @@ const ECOSYSTEMS = [
     marker: null,
     detect: (d) => existsSync(join(d, 'pyproject.toml')) || existsSync(join(d, 'requirements.txt')),
     // uv 优先（现代 Python 工具链，pyproject/uv.lock 项目走 uv sync 建 .venv + 装依赖，
-    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip
-    install: (d) => (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml')) ? 'uv sync' : 'pip install -r requirements.txt'),
+    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip。
+    // extras 探测（R14/R15 对撞实证 2026-09-24）：裸 uv sync 不装 [project.optional-dependencies]
+    // extras，worktree / verify deps 门重建的 .venv 缺 dev extras → `uv run pytest` 回落全局
+    // 环境报批量 ModuleNotFoundError（R14-OS 244 个，每次 6 轮自愈）。声明了 optional-dependencies
+    // 的仓补 --all-extras；[dependency-groups] 的 dev 组 uv sync 缺省已含，不加 flag。
+    // 白名单（INSTALL_BINARY_WHITELIST）按 binary 首 token 判定，--all-extras 无元字符天然放行。
+    install: (d) => {
+      if (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml'))) {
+        try {
+          const py = readFileSync(join(d, 'pyproject.toml'), 'utf8')
+          if (/^\s*\[project\.optional-dependencies\]/m.test(py)) return 'uv sync --all-extras'
+        } catch { /* pyproject 读不到（纯 uv.lock 残缺 checkout）按裸 uv sync */ }
+        return 'uv sync'
+      }
+      return 'pip install -r requirements.txt'
+    },
   },
   {
     type: 'go',
@@ -229,7 +243,7 @@ function tryLink(mainNodeModules, linkPath) {
   try {
     if (lstatSync(linkPath).isSymbolicLink()) {
       if (process.platform === 'win32') {
-        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } else {
         unlinkSync(linkPath);
       }
@@ -239,9 +253,9 @@ function tryLink(mainNodeModules, linkPath) {
     if (process.platform === 'win32') {
       // execFileSync 数组形式不经 shell：POSIX 双引号内 `/$() 会执行、cmd.exe 双引号内 %VAR% 仍展开，
       // linkPath 含 local.yaml 模块 path，属项目内可配置值（安全收敛，与 git-helper 同范式）
-      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     } else {
-      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     }
     // 创建后实物复核（坑 provision-silent-fake-installed 第②层，2026-08-21 实证：doctor 报
     // re-provisioned 成功但 junction 实际没建）——mklink/ln 退出码 0 不等于链接落盘（cmd.exe
@@ -325,9 +339,9 @@ function tryInstall(cmd, cwd, timeout) {
       if (process.platform === 'win32') {
         // Windows 包管理器是 .cmd 垫片，无 shell 的 spawn 无法解析——经 cmd.exe /c 传参；
         // 元字符（含 %）已拦，残余风险与 tryLink 的 mklink 同款
-        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } else {
-        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       }
     } catch (e) {
       const raw = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
@@ -454,7 +468,7 @@ export function sweepForeignNodeModulesJunctions(mainDir, { worktreesRoot, specB
       if (dryRun) continue;
       try {
         if (process.platform === 'win32') {
-          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
+          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
         } else {
           unlinkSync(linkPath);
         }

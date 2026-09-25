@@ -130,13 +130,13 @@ export function parseProjectOverview(projectPath) {
 
   // --- Git info ---
   try {
-    result.git.lastCommit = execSync('git log -1 --format=%s', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    result.git.lastCommit = execSync('git log -1 --format=%s', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
   } catch {}
   try {
-    result.git.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    result.git.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
   } catch {}
   try {
-    result.git.dirtyCount = parseInt(execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8' }).trim().split('\n').filter(Boolean).length, 10) || 0
+    result.git.dirtyCount = parseInt(execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim().split('\n').filter(Boolean).length, 10) || 0
   } catch {}
 
   return result
@@ -145,17 +145,17 @@ export function parseProjectOverview(projectPath) {
 export function parseGitDetail(projectPath) {
   const result = { branch: '', commits: [], untracked: [] }
   try {
-    result.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    result.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
   } catch {}
   try {
-    const log = execSync('git log -5 --format=%h|%s|%an|%aI', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    const log = execSync('git log -5 --format=%h|%s|%an|%aI', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
     result.commits = log.split('\n').filter(Boolean).map(line => {
       const [hash, message, author, date] = line.split('|')
       return { hash, message, author, date }
     })
   } catch {}
   try {
-    const status = execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    const status = execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
     result.untracked = status.split('\n').filter(Boolean).map(line => ({
       status: line.slice(0, 2).trim(),
       file: line.slice(3)
@@ -453,7 +453,7 @@ export function parseProjectState(projectPath) {
   // Use CLI to read current stage from SQLite
   try {
     const output = execSync('sillyspec progress show 2>/dev/null', {
-      cwd: projectPath, encoding: 'utf-8', timeout: 5000
+      cwd: projectPath, encoding: 'utf-8', timeout: 5000, windowsHide: true
     })
     const stageMatch = output.match(/当前阶段:\s*(\S+)/)
     if (stageMatch) currentStage = stageMatch[1]

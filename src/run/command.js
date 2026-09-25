@@ -2106,7 +2106,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     // 的事实性摘要合成（此前硬拒 exit 2 是用法守卫；SS-META 的 doneCommand 仍带 --output，
     // 照抄路径零变化，省略路径不再罚一轮）。
     const _autoStep = progress?.stages?.[currentStage]?.steps?.find((s) => s && ['pending', 'in-progress', 'blocked'].includes(s.status))
-    outputText = synthesizeStepOutput({ stageName: currentStage, stepName: _autoStep?.name || currentStage, cwd })
+    outputText = synthesizeStepOutput({ stageName: currentStage, stepName: _autoStep?.name || currentStage, cwd, platformOpts })
     console.log(`🤖 auto --done 未带 --output——CLI 已按事实合成步骤摘要（语义说明下次带 --output 手写）。`)
   }
 

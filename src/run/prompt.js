@@ -25,6 +25,7 @@ import jsYaml from 'js-yaml'
 import { writeAtomicSync } from '../fs-atomic.js'
 import { stageRegistry } from '../stages/index.js'
 import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
+import { materializeStageTemplates } from '../stage-templates.js'
 import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
 
 // ── M1 步骤指引静态段指纹（2026-09-21-r5-efficiency-batch2 task-01 / D-001@v1）──
@@ -824,6 +825,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // triggerStepStartSync 内（shared.js docstring 即本接线点的说明），Node 事件循环保证在飞
   // POST 落地后进程才退出。
   triggerStepStartSync(cwd, changeName, platformOpts)
+
+  // ── 阶段产物模板落盘（R16 减负批次 2026-09-24）：模板出上下文——prompt 只留指针，模板
+  //    幂等落盘 <specBase>/.runtime/templates/ 供 agent 写产物前 Read 一次。best-effort：
+  //    落盘失败零输出不阻断渲染（模板文件缺失时 --done 门禁会兜底点名）。──
+  try {
+    materializeStageTemplates(platformOpts?.specRoot || platformOpts?.specDriftAnchor || join(cwd, '.sillyspec'))
+  } catch { /* fail-soft */ }
 
   // ── 首个 agent 可见步索引（「首步一次建立」类注入的锚点）──
   // step0 为 noAI（brainstorm/execute/verify 的 step1「进度确认」，2026-09-07）时不渲染 prompt，
@@ -2009,6 +2017,7 @@ ${maskVolatileForGuide(guideTemplate)}
     console.log('- 变更目录改名用 `sillyspec change-rename <旧名> <新名>`：mv/rename 会漏改进度库引用，导致变更失联。')
     console.log('- 变更产物文档一律用 CLI 骨架命令生成（fourpiece-init / design-init / taskcard / module-impact / verify-probes --init）——骨架已预填 author/created_at/generated_by 元数据，勿删勿手拼 frontmatter；仅从零手写的补充文档才需手填 author（git 用户名）与 created_at（精确到秒）')
     console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
+    console.log('- **输出纪律（上下文卫生；R12 对撞实测均轮 134K vs 其他轮 181-234K）**：预计输出超过 ~50 行的命令（pytest / vitest / npm test / uv sync / 全量 JSON 等）一律重定向落盘 `.sillyspec/.runtime/logs/<名>.log 2>&1`，只回看 `tail -n 50` 判断结果；需要细节时 grep 该日志。禁止把命令全量输出读进上下文——长输出逐轮回放是 token 膨胀主源（CLI noAI 步的输出截断同理，勿整段复述）。')
   }
   // 平台模式 + 路径规则（安全关键，每步注入；step1+ 起带精简标题，不复述通用铁律）
   if (platformOpts?.specRoot || platformOpts?.runtimeRoot || changeName) {
@@ -2063,21 +2072,27 @@ ${maskVolatileForGuide(guideTemplate)}
   // 提示格式，且静态步骤名稳定无漂移风险）。
   const stepAssertFlag = (stageName === 'execute' && step?.name) ? ` --step "${step.name}"` : ''
   const doneCommand = `sillyspec run ${cmdStage} --done${confirmFlag}${stepAssertFlag}${changeFlag} --output "你的摘要"`
+  // 合并式完成命令（R16 减负批次 2026-09-24）：--done --answer 一步吞 wait+done——
+  // 未挂起时自动补全 waitAnswer（complete.js requiresWait 门），已挂起时 resolveWaitingStepWithAnswer
+  // 拉回收口。R15-SF 实证 brainstorm 8 次 CLI 调用中 4 次是三段式（wait/continue/done）补轮——
+  // 合并式主路径把每个 wait 步省 2 次调用；--wait 降级为「用户暂不可达需挂起」的备选。
+  const answerDoneCommand = `sillyspec run ${cmdStage} --done --answer "用户回答"${confirmFlag}${stepAssertFlag}${changeFlag} --output "你的摘要"`
   if (requiresWait) {
-    console.log(`本步骤必须等待用户输入，不能直接 --done：`)
+    console.log(`本步骤需要用户决策——主路径一步合并完成（--answer 自动补全 wait 状态，省 2 次 CLI 往返）：`)
+    console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+    console.log(``)
+    console.log(`若用户暂不可达需先挂起：`)
     console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
-    console.log(``)
-    console.log(`用户回答后执行：`)
-    console.log(`sillyspec run ${cmdStage} --continue --answer "用户回答"${changeFlag}`)
-    console.log(``)
-    console.log(`收到回答并完成本步骤总结后，再执行：`)
-  } else if (mayNeedWait) {
-    console.log(`如果需要用户决策（选择方案/确认设计等）：`)
-    console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待原因'}" --options "${(step.waitOptions || ['选项1', '选项2']).join(',')}"${changeFlag} --output "你的摘要"`)
-    console.log(``)
-    console.log(`如果不需要用户决策，正常完成：`)
+    console.log(`（挂起后拿到回答，仍用上方一步合并命令收口——无需 --continue 单独解等待）`)
+  } else {
+    if (mayNeedWait) {
+      console.log(`如果需要用户决策（选择方案/确认设计等），拿到回答后一步完成（--answer 自动补全 wait 状态）：`)
+      console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+      console.log(``)
+      console.log(`如果不需要用户决策，正常完成：`)
+    }
+    console.log(doneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
   }
-  console.log(doneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
   // P0-2（noai-ir-roadmap §3）：--output 可省略提示（auto 模式除外——auto driver 的
   // SS-META doneCommand 仍带 --output，照抄路径零变化；省略路径由 command.js 同源合成）。
   if (!autoMeta) {
@@ -2097,9 +2112,9 @@ ${maskVolatileForGuide(guideTemplate)}
       stepName: step.name,
       change: changeName || null,
       requiresUser: requiresWait || mayNeedWait || step.requiresConfirm === true,
-      doneCommand,
+      doneCommand: requiresWait ? answerDoneCommand : doneCommand,
       waitHint: (requiresWait || mayNeedWait)
-        ? 'requiresUser=true：先与用户交互（wait/continue 或 --wait-interactive 直通），再 done'
+        ? 'requiresUser=true：与用户交互拿到回答后，逐字跑 doneCommand（--done --answer 一步合并，自动补全 wait 状态）；用户暂不可达才先 --wait 挂起'
         : '直接执行任务后逐字跑 doneCommand',
     }
     console.log('<!--SS-META:' + JSON.stringify(meta) + '-->')

@@ -16,10 +16,11 @@
  * 异常面：全部 fail-open 吞掉（账本/回收任一异常零阻断，退现状残留）。
  */
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { writeAtomicSync } from '../fs-atomic.js'
+import { safeRemoveDirWithLinks, unlinkLinkPath, collectLinkPathsUnder } from './junction-rm.js'
 
 const LEDGER_FILE = 'active-gate-snapshots.json'
 const HOUR_MS = 3600_000
@@ -139,7 +140,11 @@ function defaultRunGit(cwd, args) {
 }
 
 function defaultRemoveDir(p) {
-  rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  // junction 安全删除（坑 junction-pierce-rm-sync，2026-09-24 实证）：残留快照内
+  // node_modules/venv junction 的目标是主仓真身，裸 rmSync(recursive) 穿透链接清空目标
+  // （收口期三次实证）——删前先解链（junction-rm.js 单一实现）；解链失败抛错由调用方
+  // 按「删不掉保留条目待下轮」处置，绝不回落裸 rmSync。
+  safeRemoveDirWithLinks(p, { maxRetries: 5, retryDelay: 100 })
 }
 
 /** worktree 注册是否仍登记该 root（跨平台路径归一 + win32 大小写不敏感） */
@@ -176,8 +181,19 @@ export function reclaimStaleGateSnapshots({
     for (const e of stale) {
       const root = e.snapshotRoot
       let removeFailed = false
-      try { runGit(cwd, ['worktree', 'remove', '--force', root]) } catch { removeFailed = true }
-      try { removeDir(root) } catch { /* 目录删不掉→下方双清判定保留条目 */ }
+      // 先解链（坑 git-worktree-remove-pierce，2026-09-24 实证：git worktree remove --force
+      // 在 Windows 跟随 junction 删主仓真身内容——残留快照内 node_modules/venv/copy 链接必须
+      // 先解链再删。解链失败按删不掉处置：保留条目待下轮，绝不带着链接跑删除）。
+      let linksCleared = true
+      try {
+        for (const link of collectLinkPathsUnder(root)) unlinkLinkPath(link)
+      } catch { linksCleared = false }
+      if (linksCleared) {
+        try { runGit(cwd, ['worktree', 'remove', '--force', root]) } catch { removeFailed = true }
+        try { removeDir(root) } catch { /* 目录删不掉→下方双清判定保留条目 */ }
+      } else {
+        removeFailed = true
+      }
       if (removeFailed) { try { runGit(cwd, ['worktree', 'prune']) } catch { /* prune 失败→下方判定保留 */ } }
       let dirGone = false
       let regGone = false

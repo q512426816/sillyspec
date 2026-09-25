@@ -183,6 +183,24 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
   lines.push('💡 为什么可行：CLI prompt 自足——进度快照/模块命中/知识注入由进度库与渲染提供，新会话零背景可续跑。');
   lines.push('⚠️ SILLYSPEC_SESSION_ID 必须保持不变（变更所有权/接管判定按此标识）；缺省降级机器级标识只拦他机。');
 
+  // handoffAt 切割凭证（R16-b 实证修正 2026-09-25）：stage.wall=hard 的墙按「前驱收口后
+  // 是否执行过 handoff」判定硬续（SESSION_ID 是所有权标识非会话标识，handoff 要求新会话
+  // 保持不变——SESSION_ID 相同不能当硬续证据）。本命令执行即切割：best-effort 给
+  // stage-session ledger 盖 handoffAt 章，墙据此放行新会话的 execute/verify 首入。
+  try {
+    const ledgerPath = join(specRoot, '.runtime', `stage-session-ledger-${target}.json`);
+    let ledger = null;
+    try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')); } catch { /* 无账本（阶段未收口）→ 无墙可放行，零动作 */ }
+    if (ledger && typeof ledger === 'object') {
+      ledger.handoffAt = new Date().toISOString();
+      try {
+        const { writeFileSync, mkdirSync } = await import('node:fs');
+        mkdirSync(join(specRoot, '.runtime'), { recursive: true });
+        writeFileSync(ledgerPath, JSON.stringify(ledger, null, 1) + '\n', 'utf8');
+      } catch { /* 盖章失败不影响交接块本体 */ }
+    }
+  } catch { /* handoffAt 盖章 best-effort */ }
+
   return {
     ok: true,
     change: target,

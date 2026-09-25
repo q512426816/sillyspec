@@ -20,7 +20,7 @@ import { createHash } from 'crypto'
 import jsYaml from 'js-yaml'
 import { VALID_VERDICTS, REVIEW_SCHEMA_VERSION } from './task-review.js'
 import { detectSpecDirTypo } from './spec-dir-typo.js'
-import { resolveRuntimeRoot } from './run/shared.js'
+import { resolveRuntimeRoot, resolveSpecDir } from './run/shared.js'
 
 // 文档型 stage review 的合法 reviewType
 const STAGE_REVIEW_TYPES = ['design', 'plan', 'proposal', 'code', 'acceptance']
@@ -825,7 +825,12 @@ export function registerStageReview({ changeName, stage, fromFile, cwd, platform
     throw new Error(`register-stage-review: stage 无效 "${stage}"（应为 brainstorm|plan|execute）`)
   }
 
-  const specBase = platformOpts.specRoot || join(cwd, '.sillyspec')
+  // specBase 回退走 resolveSpecDir 向上找根（坑 register-stage-review-cwd-pollution-no-hint，
+  // 2026-09-25 实证：bash cd 持久化停在 changes/<变更>/tasks/ 时 join(cwd,'.sillyspec') 拼出
+  // cwd 相对的事务性错误路径，报「主审查文档不存在」且无 cwd 提示）。与 run/gate 同源
+  // （run/shared.js resolveSpecDir 单一真相源，含 home/tmpdir 拒绝守卫），平台模式 specRoot
+  // 仍优先——与 shared.js:2123 规范写法 platformOpts?.specRoot || resolveSpecDir(cwd) 一致。
+  const specBase = platformOpts.specRoot || resolveSpecDir(cwd)
   const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
   const changeDir = join(specBase, 'changes', changeName)
   const reviewType = STAGE_REVIEW_TYPE[stage]

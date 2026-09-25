@@ -1920,14 +1920,14 @@ function detectInterruptedSyntaxResidue(changedFiles, candidateRoots) {
     }
     if (!abs) continue
     try {
-      execFileSync(process.execPath, ['--check', abs], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
+      execFileSync(process.execPath, ['--check', abs], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       if (isPlainJs(f)) {
         // 无 type:module 上下文的 .js：file-check 通过不代表语法完整（Node v24 实测假阴），
         // 再跑 stdin ESM 全量解析兜底——两路都挂才判残留
         let src = ''
         try { src = readFileSync(abs, 'utf8') } catch { continue }
         try {
-          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
+          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
         } catch (e2) {
           if (e2 && e2.killed) continue
           const line = _syntaxErrLine(e2)
@@ -1947,7 +1947,7 @@ function detectInterruptedSyntaxResidue(changedFiles, candidateRoots) {
       let src = ''
       try { src = readFileSync(abs, 'utf8') } catch { continue }
       try {
-        execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
+        execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       } catch (e2) {
         if (e2 && e2.killed) continue
         const line = _syntaxErrLine(e2) || _syntaxErrLine(e)

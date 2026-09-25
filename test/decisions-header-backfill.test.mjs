@@ -18,6 +18,7 @@ import { backfillFrontmatter, fixScanDocHeaders } from '../src/scan-postcheck.js
 import { ensureDecisionDocHeader } from '../src/stage-contract.js'
 import { definition as brainstormDef } from '../src/stages/brainstorm.js'
 import { definition as brainstormAutoDef } from '../src/stages/brainstorm-auto.js'
+import { BRAINSTORM_ARTIFACT_TEMPLATES_MD } from '../src/stage-templates.js'
 
 let passed = 0
 let failed = 0
@@ -33,8 +34,10 @@ function git(dir, args) {
 
 console.log('--- 1. 模板含 frontmatter（根治侧）---')
 {
+  // R16 减负批次（2026-09-24）：brainstorm step8 四件套模板出上下文（prompt 只留指针，模板
+  // 单一源迁 src/stage-templates.js → 幂等落盘 .runtime/templates/）——brainstorm 的根治侧
+  // 断言改钉模板源 + prompt 指针；brainstorm-auto 仍内嵌（#### decisions.md 形态）照旧钉。
   const prompts = [
-    ['brainstorm step8', brainstormDef.steps.map(s => s.prompt || '').join('\n')],
     ['brainstorm-auto', brainstormAutoDef.steps.map(s => s.prompt || '').join('\n')],
   ]
   for (const [name, text] of prompts) {
@@ -42,6 +45,15 @@ console.log('--- 1. 模板含 frontmatter（根治侧）---')
     assert(decisionsBlock.includes('author: <git-user>') && decisionsBlock.includes('created_at: <now-datetime>'),
       `${name} decisions 模板含 author/created_at frontmatter`)
   }
+  assert(BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('author: <git-user>')
+    && BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('created_at: <now-datetime>')
+    && BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('# 决策记录（Decisions）'),
+    'brainstorm step8 模板源（stage-templates.js）decisions 模板含 author/created_at frontmatter')
+  const step8Text = brainstormDef.steps.map(s => s.prompt || '').join('\n')
+  assert(step8Text.includes('.runtime/templates/brainstorm-artifact-templates.md'),
+    'brainstorm step8 prompt 含模板指针路径（模板出上下文）')
+  assert(!step8Text.includes('### proposal.md 格式要求'),
+    'brainstorm step8 prompt 不再内嵌四件套模板全文（出上下文，防回归）')
 }
 
 console.log('--- 2. backfillFrontmatter 纯函数 ---')

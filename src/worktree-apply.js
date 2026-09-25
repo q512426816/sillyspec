@@ -25,6 +25,7 @@ import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readRevi
 import { collectActiveQuickGuardFiles } from './quicklog.js';
 import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
 import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
+import { readWorktreePolicy } from './worktree-policy.js';
 
 const CHANGES_REL = '.sillyspec/changes';
 
@@ -1254,6 +1255,21 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
 
 export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false, stashDirty = false, force = false, autoApply = false } = {}) {
   const projectRoot = cwd || process.cwd();
+  // ── worktree.policy 选择记忆（R16 减负批次，2026-09-24）──
+  // 显式 flag > policy > fail-closed 缺省；policy 触发的 force/skip 走同一条留痕路径
+  //（overlapForced/overlapSkipped），不开新权限面——只消「同一冲突每次重拦重问」的摩擦轮。
+  let policyOverlapForced = false;
+  try {
+    const policy = readWorktreePolicy(projectRoot);
+    if (policy.applyOverlap === 'force' && !force && !autoApply) {
+      force = true;
+      policyOverlapForced = true;
+    }
+    if (policy.stashDirty && !stashDirty) {
+      stashDirty = true;
+      console.log(`📦 worktree.policy.stash_dirty=true：主仓在途改动将自动 stash（等效常备 --stash-dirty，local.yaml 选择记忆）`);
+    }
+  } catch { /* policy 读失败 → 全缺省 fail-closed，行为与无 policy 完全一致 */ }
   const wm = new WorktreeManager({ cwd: projectRoot });
   const meta = wm.getMeta(changeName);
   const result = {
@@ -1571,10 +1587,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
       const files = [...new Set(guardCheck.overlaps.map(o => o.file))];
       const pairLines = guardCheck.overlaps.map(o => `  [${o.sessionId}] ${o.file}`);
       if (force) {
-        // 显式解锁：放行并留痕（审计可见——自动路径永不带 force，overlapForced 只可能来自人工 --force）
-        result.overlapForced = { sessions, files };
+        // 显式解锁：放行并留痕（审计可见——自动路径永不带 force，overlapForced 只可能来自人工 --force
+        // 或 worktree.policy.apply_overlap=force 的选择记忆[R16 减负批次]，两种来源均留痕）
+        result.overlapForced = { sessions, files, ...(policyOverlapForced ? { via: 'worktree.policy.apply_overlap=force' } : {}) };
         result.warnings = (result.warnings || []).concat([
-          `--force 越过 guard 相交预检：${guardCheck.overlaps.length} 个会话×文件对与活跃 quick 会话声明重叠——` +
+          `${policyOverlapForced ? 'worktree.policy.apply_overlap=force 选择记忆放行（local.yaml）' : '--force 越过 guard 相交预检'}：${guardCheck.overlaps.length} 个会话×文件对与活跃 quick 会话声明重叠——` +
           pairLines.join('；') + `（对方会话在途改动可能被覆盖，overlapForced 留痕）`
         ]);
       } else if (autoApply) {

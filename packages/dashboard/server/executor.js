@@ -21,7 +21,8 @@ export function executeCommand(projectPath, command, onOutput, onComplete) {
   // .cmd 加 shell:true 而引入命令注入（体检 SEC-08）
   const proc = spawn(process.execPath, [SILLYSPEC_ENTRY, ...args], {
     cwd: projectPath,
-    env: { ...process.env }
+    env: { ...process.env },
+    windowsHide: true
   })
 
   proc.stdout.on('data', (data) => {

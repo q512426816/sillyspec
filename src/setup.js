@@ -171,7 +171,7 @@ export async function cmdSetup(dir, options = {}) {
     results['全局工具'] = {};
     for (const g of GLOBAL_TOOLS) {
       try {
-        execSync(g.checkCommand, { stdio: 'pipe', encoding: 'utf8' });
+        execSync(g.checkCommand, { stdio: 'pipe', encoding: 'utf8', windowsHide: true });
         results['全局工具'][g.id] = true;
       } catch {
         results['全局工具'][g.id] = false;
@@ -252,7 +252,7 @@ export async function cmdSetup(dir, options = {}) {
   const globalInstalled = new Set();
   for (const tool of GLOBAL_TOOLS) {
     try {
-      execSync(tool.checkCommand, { stdio: 'pipe', encoding: 'utf8' });
+      execSync(tool.checkCommand, { stdio: 'pipe', encoding: 'utf8', windowsHide: true });
       globalInstalled.add(tool.id);
     } catch {}
   }
@@ -379,7 +379,7 @@ export async function cmdSetup(dir, options = {}) {
     for (const tool of selectedGlobal) {
       const spinner = ora(`安装 ${tool.name}...`).start();
       try {
-        execSync(tool.installCommand, { stdio: 'pipe', encoding: 'utf8', timeout: 120000 });
+        execSync(tool.installCommand, { stdio: 'pipe', encoding: 'utf8', timeout: 120000, windowsHide: true });
         spinner.succeed(`${tool.name} 安装完成`);
       } catch (err) {
         spinner.fail(`${tool.name} 安装失败: ${err.message}`);

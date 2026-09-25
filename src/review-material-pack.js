@@ -132,9 +132,15 @@ export function buildReviewMaterialPack(stage, inputs = {}) {
     const delta = (inputs.planDelta || []).map(d => `- [${d.id}] ${d.status}${d.note ? '——' + d.note : ''}`).join('\n')
     body = ['### design 硬约束', hc || '（无）', '### plan 差量（逐约束判定：一致/偏离/未覆盖）', delta || '（无——主代理未提供差量，评审者按 cannot_verify 列缺件）'].join('\n\n')
   } else if (stage === 'execute-qa') {
+    // 测试清单（R16 减负批次 2026-09-24）：diff 命中的测试文件点名——QA 对「组装行为」条目
+    // 作答时不必全仓找测试（R14 对撞失控勘察子代理 2.33M 的反面教材后，包内点名收窄查证面）。
+    const testFiles = (inputs.diffSummary && inputs.diffSummary.files || [])
+      .filter(f => /(^|[\\/])(tests?|__tests__)([\\/])|\.(test|spec)\.[cm]?[jt]sx?$|_test\.(go|py)$|(^|[\\/])test_[^\\/]+\.py$/i.test(f))
+      .slice(0, 30)
     body = [
       '### diff 摘要', (inputs.diffSummary && inputs.diffSummary.files || []).map(f => '- ' + f).join('\n') || '（无）',
       inputs.diffSummary && inputs.diffSummary.stat ? '```diff\n' + inputs.diffSummary.stat + '\n```' : '',
+      '### 测试清单（diff 命中的测试文件）', testFiles.map(f => '- ' + f).join('\n') || '（diff 无测试文件——「组装行为」条目按包不足处理：cannot_verify 列缺件或定向查证并列明）',
       '### design 热区（CLI 抽取）', extractDesignHotZone(inputs.designContent || '') || '（无命中节）',
       '### 验收清单', (inputs.checklist || []).map(c => '- [ ] ' + c).join('\n') || '（无）',
     ].filter(Boolean).join('\n\n')

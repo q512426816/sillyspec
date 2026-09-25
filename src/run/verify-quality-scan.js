@@ -332,7 +332,7 @@ export async function runCoverageExistenceCheck({ cwd, specBase, changeName }) {
   const artifactRel = (yamlText.match(/^\s*coverage_artifact:\s*["']?([^"'\n#]+?)["']?\s*(?:#.*)?$/m) || [])[1] || 'coverage/lcov.info'
   let runNote = ''
   try {
-    execSync(covCmd.trim(), { cwd, encoding: 'utf8', timeout: 10 * 60 * 1000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
+    execSync(covCmd.trim(), { cwd, encoding: 'utf8', timeout: 10 * 60 * 1000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
     runNote = '命令退出码 0'
   } catch (e) {
     runNote = `命令退出非 0（${e.status ?? '?'}）——产物若已生成仍按产物判定`
@@ -442,7 +442,7 @@ function runSmokeCheck({ gateCwd, mainCwd, specBase, changeName, inSnapshot }) {
   let r = null
   let spawnError = null
   try {
-    r = spawnSync(command, { shell: true, cwd: gateCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+    r = spawnSync(command, { shell: true, cwd: gateCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true })
   } catch (e) { spawnError = e }
   let timedOut = isSyncTimeout(r)
   let fallbackMainRepo = false
@@ -452,7 +452,7 @@ function runSmokeCheck({ gateCwd, mainCwd, specBase, changeName, inSnapshot }) {
     fallbackMainRepo = true
     console.warn('⚠️ 快照 smoke 超时（node_modules junction I/O 慢）→ 主仓复跑 smoke（并行噪声可能混入——失败先做归属鉴定）')
     try {
-      r = spawnSync(command, { shell: true, cwd: mainCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+      r = spawnSync(command, { shell: true, cwd: mainCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true })
       spawnError = null
       ranCwd = mainCwd
       timedOut = isSyncTimeout(r)

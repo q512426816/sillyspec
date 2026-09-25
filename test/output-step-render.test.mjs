@@ -97,8 +97,8 @@ console.log('\n--- 平台 scan step0 + scanProfile：平台路径约束 + 严禁
   assert(r.stdout.includes('sillyspec run scan --done'), '完成后执行（scan 无 changeName）')
 }
 
-// ── Case 4: 非平台 quick requiresWait → 完成后执行 --wait/--continue 模板 ──
-console.log('\n--- quick requiresWait：完成后执行 --wait/--continue/--done 三段模板 ---')
+// ── Case 4: 非平台 quick requiresWait → 完成后执行合并式 + 挂起备选模板 ──
+console.log('\n--- quick requiresWait：--done --answer 一步合并主路径 + --wait 挂起备选 ---')
 {
   const { cwd } = makeRepo('os-quick-wait-')
   const cn = 'quick-abcd1234'
@@ -111,11 +111,13 @@ console.log('\n--- quick requiresWait：完成后执行 --wait/--continue/--done
 
   assert(!r.error, 'quick requiresWait 不应 process.exit')
   assert(r.stdout.includes('### 💻 你的角色：全栈老兵'), 'persona quick step0（全栈老兵）')
-  assert(r.stdout.includes('本步骤必须等待用户输入，不能直接 --done'), 'requiresWait → 必须等待提示')
-  assert(r.stdout.includes('sillyspec run quick --wait --reason "等待用户确认"'), '--wait 模板含 reason')
+  // R16 减负批次（2026-09-24）：三段式（wait/continue/done）改合并式主路径——
+  // --done --answer 一步吞 wait+done（complete.js 自动补 waitAnswer），省 2 次 CLI 往返
+  assert(r.stdout.includes('本步骤需要用户决策——主路径一步合并完成'), 'requiresWait → 合并式主路径提示')
+  assert(r.stdout.includes('sillyspec run quick --done --answer "用户回答" --change ' + cn), '合并式完成命令带 --change')
+  assert(r.stdout.includes('sillyspec run quick --wait --reason "等待用户确认"'), '--wait 挂起备选含 reason')
   assert(r.stdout.includes('--options "确认,取消"'), '--wait 模板含 options')
-  assert(r.stdout.includes('sillyspec run quick --continue --answer "用户回答" --change ' + cn), '--continue 模板带 --change')
-  assert(r.stdout.includes('sillyspec run quick --done --change ' + cn), 'requiresWait 末尾仍有 --done')
+  assert(!r.stdout.includes('--continue --answer'), '三段式 --continue 中段已移除（合并式取代）')
 }
 
 // ── Case 5: 越界防御 → console.error + return false ──

@@ -42,6 +42,29 @@ console.log('\n[worktree-deps] python 分支：detectProjectType + inferInstallC
   assert(inferInstallCommand('python', wt, null) === 'uv sync', 'uv.lock + pyproject → uv sync')
 }
 
+// Case 2b: pyproject 声明 [project.optional-dependencies] → uv sync --all-extras
+//（R14/R15 对撞实证：裸 uv sync 缺 dev extras → pytest 回落全局报批量 ModuleNotFoundError）
+{
+  const wt = newDir('rsr-py-extras-')
+  writeFileSync(join(wt, 'pyproject.toml'), '[project]\nname = "x"\n\n[project.optional-dependencies]\ndev = ["pytest"]\n')
+  assert(inferInstallCommand('python', wt, null) === 'uv sync --all-extras', 'pyproject optional-dependencies → uv sync --all-extras')
+}
+
+// Case 2c: pyproject 只声明 [dependency-groups]（无 optional-dependencies）→ 裸 uv sync
+//（uv sync 缺省已含 dev 组，不加 flag）
+{
+  const wt = newDir('rsr-py-groups-')
+  writeFileSync(join(wt, 'pyproject.toml'), '[project]\nname = "x"\n\n[dependency-groups]\ndev = ["pytest"]\n')
+  assert(inferInstallCommand('python', wt, null) === 'uv sync', 'dependency-groups only → 裸 uv sync（dev 组缺省已含）')
+}
+
+// Case 2d: 纯 uv.lock 无 pyproject（残缺 checkout）→ 裸 uv sync（读不到 pyproject 不加 extras）
+{
+  const wt = newDir('rsr-py-lockonly-')
+  writeFileSync(join(wt, 'uv.lock'), '')
+  assert(inferInstallCommand('python', wt, null) === 'uv sync', '纯 uv.lock → 裸 uv sync')
+}
+
 // Case 3: 纯 requirements.txt（无 pyproject）→ pip install -r requirements.txt
 {
   const wt = newDir('rsr-py-req-')
@@ -82,6 +105,6 @@ console.log('\n[worktree-deps] python 分支：detectProjectType + inferInstallC
 }
 
 console.log(`\n${'='.repeat(50)}`)
-console.log(`✅ 通过: ${7 - failures}  ❌ 失败: ${failures}`)
+console.log(`✅ 通过: ${10 - failures}  ❌ 失败: ${failures}`)
 for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
 if (failures > 0) throw new Error(`${failures} test(s) failed`)

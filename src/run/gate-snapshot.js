@@ -17,10 +17,11 @@
  * 不进 git 不上平台）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
 import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
 import { tmpdir } from 'node:os'
 import { registerGateSnapshot, unregisterGateSnapshot, reclaimStaleGateSnapshots } from './gate-snapshot-ledger.js'
+import { safeRemoveDirWithLinks, unlinkLinkPath, collectLinkPathsUnder } from './junction-rm.js'
 
 /**
  * worktree 会话跳快照判定（2026-09-23 R9/R10 双实证根治）：cwd 位于 sillyspec 会话专属
@@ -64,20 +65,38 @@ export function cleanupSnapshot({
   snapshotRoot,
   cwd,
   runGit = (c, a) => git(c, a),
-  removeDir = (p, opts) => rmSync(p, { recursive: true, force: true, ...opts }),
+  // junction 安全删除（坑 git-worktree-remove-pierce，2026-09-24 实证）：`git worktree remove
+  // --force` 的递归删在 Windows **跟随 junction 删目标内容**（实测 victim 复现；worktree.js
+  // cleanup 链的 unlinkNodeModulesLinks 先解链正是防它）——快照内 node_modules/venv/copy 面/
+  // 钉定缓存链接全部指向主仓真身，必须**先解链再交给 git/rmSync 删目录本体**。解链失败 →
+  // 保护性放弃本次删除（目录留账本待回收——双清契约天然兼容）。
+  removeDir = (p, opts) => safeRemoveDirWithLinks(p, opts),
   dirExists = (p) => existsSync(p),
   worktreeRegistered = (c, p) => worktreeListContains(c, p),
-} = {}) {
+}) {
   let worktreeCleaned = true
+  // 0. 先解链快照内全部 junction/reparse 点（含深层：venv 族与 gate_snapshot.copy 面在
+  //    子目录层）。解链失败不删目录（穿透风险下，保护主仓优先于清理彻底性）。
+  let linksCleared = true
   try {
+    for (const link of collectLinkPathsUnder(snapshotRoot)) unlinkLinkPath(link)
+  } catch (e) {
+    linksCleared = false
+    console.warn(`⚠️ 快照 junction 解链失败（保护主仓链接目标，本次不删快照目录——条目留账本待下轮回收）: ${e && e.message ? e.message : e}`)
+  }
+  if (linksCleared) {
     // 注：worktree remove/prune 无 --quiet 选项（非法 flag 会必抛并被 catch 吞掉——旧实现
     // 正是因此让 git remove 每次都失败、只剩无重试 rmSync 兜底，41 个残留目录的根因之一）
-    runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
-  } catch {
+    try {
+      runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
+    } catch {
+      worktreeCleaned = false
+    }
+  } else {
     worktreeCleaned = false
   }
   let dirRemoved = !dirExists(snapshotRoot)
-  if (!dirRemoved) {
+  if (linksCleared && !dirRemoved) {
     try { removeDir(snapshotRoot, REMOVE_DIR_RETRY) } catch { /* 删不掉→下方按实际存在性判定 */ }
     dirRemoved = !dirExists(snapshotRoot)
   }
@@ -434,7 +453,9 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
         viaLink = existsSync(dst)
       } catch { viaLink = false }
       if (!viaLink) {
-        try { rmSync(dst, { recursive: true, force: true }) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
+        // 假链接残留清理：dst 是 junction 本体——rmSync(dst) 在 Node v24 Windows 会穿透删
+        // 链接目标（主仓 copy 面真身，坑 junction-pierce-rm-sync），必须 rmdir 解链语义
+        try { unlinkLinkPath(dst) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
         if (srcStat.isDirectory()) copyDirRecursive(src, dst)
         else copyFileSync(src, dst)
       }

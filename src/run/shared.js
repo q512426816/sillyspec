@@ -1979,6 +1979,56 @@ export async function readStageBurst(cwd) {
 export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
 
 /**
+ * 阶段墙档位（R16 减负批次 A 相位，2026-09-24）：advisory（缺省——阶段完成时提示可 handoff
+ * 换会话，不阻断）| hard（同会话刚收口前驱阶段后硬续墙后阶段 → run <stage> 拒启动，
+ * --same-session 逃生口）。墙后阶段 = STAGE_WALL_STAGES（execute/verify——上下文最贵两段，
+ * R15 实测 execute 均轮 263K，断崖拆会话后回落 120-170K）。env SILLYSPEC_STAGE_WALL 强制。
+ */
+export async function readStageWall(cwd) {
+  const env = process.env.SILLYSPEC_STAGE_WALL
+  if (env === 'hard') return 'hard'
+  if (env === 'advisory') return 'advisory'
+  const raw = readLocalYamlRaw(cwd)
+  if (!raw) return 'advisory'
+  try {
+    const mod = await import('js-yaml')
+    const yamlLoad = mod.load || mod.default?.load
+    const doc = yamlLoad(raw)
+    const stage = doc && typeof doc === 'object' ? doc.stage : null
+    return stage && typeof stage === 'object' && stage.wall === 'hard' ? 'hard' : 'advisory'
+  } catch { /* 坏 YAML / js-yaml 不可用 → 缺省 advisory */ }
+  return 'advisory'
+}
+
+/** 墙后阶段（runStage 入口 hard 门的作用面；stage-session ledger 判定「同会话刚收口前驱」） */
+export const STAGE_WALL_STAGES = ['execute', 'verify']
+/** 墙后阶段的直接前驱（execute←plan / verify←execute） */
+export const STAGE_WALL_PREDECESSOR = { execute: 'plan', verify: 'execute' }
+
+/**
+ * 阶段墙拦截判定（纯函数，R16-b 实证修正 2026-09-25）：
+ * SILLYSPEC_SESSION_ID 是**变更所有权标识**（handoff 协议要求新会话保持不变）——它相同
+ * 不能当「同会话硬续」的证据。真切割的充分信号 = 前驱收口（ledger.at）之后执行过
+ * `sillyspec handoff`（ledger.handoffAt 更新）：交接块生成动作即切割凭证。墙只拦
+ * 「前驱刚收口、无更新 handoff、目标阶段首次进入」一种形态。
+ * @param {object} p
+ * @param {object|null} p.ledger        - stage-session ledger（缺 → 放行 fail-open）
+ * @param {string} p.curSession         - 当前 SILLYSPEC_SESSION_ID（空 → 放行）
+ * @param {string} p.stageName          - 目标阶段（须 ∈ STAGE_WALL_STAGES）
+ * @param {boolean} p.stageHasData      - 目标阶段已有进度（reopen/复跑重入 → 放行）
+ * @returns {boolean} true=拦截（runStage 应 exit 1 并指引 handoff）
+ */
+export function isStageWallBlocked({ ledger, curSession, stageName, stageHasData }) {
+  if (!STAGE_WALL_STAGES.includes(stageName)) return false
+  if (!ledger || typeof ledger !== 'object') return false
+  if (!curSession || ledger.sessionId !== curSession) return false
+  if (ledger.lastStage !== STAGE_WALL_PREDECESSOR[stageName]) return false
+  if (stageHasData) return false
+  if (ledger.handoffAt && (!ledger.at || String(ledger.handoffAt) > String(ledger.at))) return false
+  return true
+}
+
+/**
  * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。
  *
  * design §5.4 execute 启动段 + §7.2：扫 plan.md 所有 task 卡片 frontmatter，用 parseRepo 解析

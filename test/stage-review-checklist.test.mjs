@@ -53,6 +53,11 @@ const SNAPSHOT_BRAINSTORM_CROSS_POINTS = [
   'scan/module docs 或源码中的真实约束与 design.md 假设',
   '涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过',
   '涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）',
+  // 【快照随 R16 减负批次 2026-09-24 同步更新】交叉点自 8 条扩 10 条：新增「承诺可兑现性」
+  // 与「三方对齐」两条（R14/R15 对撞 5 个 P1 的成因维度前移到设计期评审——R15-F-01 at-least-once
+  // 破产、R14-P1-3/OS 审计③ spec 与实现矛盾均为此型）。
+  '**承诺可兑现性**：design 的每个可测承诺（如 at-least-once / 不重不漏 / 恒定窗口）逐条过最坏输入四维——乱序到达、并发写、会话或变更切换、多工作区作用域——实现能否兑现？不能兑现则降级承诺文案或改取简方案（如全量重拉结构性消灭整类时序缺陷），禁止立兑现不了的承诺（R14/R15 对撞 5 个 P1 全落此维，pytest 覆盖不到）',
+  '**三方对齐**：spec 文本、design、实现三者的取舍矛盾必须二选一对齐——不许"实现跟 design、spec 跟 design"各说各话（增量 vs 全量、有上限 vs 无上限是归档审计翻出的主型）；design 拒绝备选方案的理由不得同样适用于自选方案（自我论证矛盾）',
 ]
 // plan =「审查清单（读取 plan.md 的 plan_level，逐条核对）」下方条目（渲染为「- [ ] 」checkbox 行）
 const SNAPSHOT_PLAN = [
@@ -101,13 +106,18 @@ console.log('\n=== 内嵌迁移前快照逐条比对（钉死「迁移=逐字」
   assertDeepEqual(
     REVIEW_CHECKLISTS.brainstorm,
     [...SNAPSHOT_BRAINSTORM_LAYERS, ...SNAPSHOT_BRAINSTORM_CROSS_POINTS],
-    'brainstorm: 常量 == 迁移前三层检查(3) + 交叉点(8) 快照（逐字；task-06/FR-11 两条新交叉点同步在册）'
+    'brainstorm: 常量 == 迁移前三层检查(3) + 交叉点(10) 快照（逐字；task-06/FR-11 两条 + R16 减负批次两条同步在册）'
   )
   // FR-11 两条新条目字面钉住（角色/字典→生产查询口径；新页面→菜单/注册 DML 对账）
   assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('以生产查询口径可解析到目标结果') && it.includes('enname+tenant')),
     'FR-11: 清单含「以生产查询口径可解析到目标结果」条目（角色/权限/字典命中场景）')
   assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('用户入口 × 菜单/注册 DML 对账') && it.includes('菜单/注册 SQL')),
     'FR-11: 清单含「用户入口 × 菜单/注册 DML 对账」条目（新页面/前端路由场景）')
+  // R16 减负批次（2026-09-24）：承诺可兑现性 + 三方对齐两条字面钉住
+  assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('承诺可兑现性') && it.includes('最坏输入四维')),
+    'R16: 清单含「承诺可兑现性」条目（乱序/并发/切换/作用域四维，R14/R15 5 个 P1 成因前移）')
+  assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('三方对齐') && it.includes('自我论证矛盾')),
+    'R16: 清单含「三方对齐」条目（spec/design/实现矛盾二选一对齐）')
   assertDeepEqual(REVIEW_CHECKLISTS.plan, SNAPSHOT_PLAN, 'plan: 常量 == 迁移前审查清单(10 条) 快照（逐字）')
   assertDeepEqual(REVIEW_CHECKLISTS.execute, SNAPSHOT_EXECUTE, 'execute: 常量 == 迁移前三项必查(3 条) 快照（逐字）')
   // FR-07（task-06）：verify 键新增形态——快照逐字照 design §6 四段，首条内嵌命中条件

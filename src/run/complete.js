@@ -133,17 +133,32 @@ export function resolveWaitingStepWithAnswer(steps, doneAnswer, nowStr) {
  * 纯事实零编造（无「通过/成功」等判断词——判断在 gate，不在摘要）；语义性说明（方案
  * 取舍/用户反馈）不合成，摘要自带手写指引。长度控制在 MAX_OUTPUT(200) 截断线内。
  */
-export function synthesizeStepOutput({ stageName, stepName, cwd }) {
+export function synthesizeStepOutput({ stageName, stepName, cwd, platformOpts = {} }) {
+  // 窗口归属性判定（坑 stage-burst-timeline-quality-collapse ②，2026-09-24 实证）：
+  // git 窗口只在能归属到本变更文件根时给出——worktree 内执行（specDriftAnchor 锚定）
+  // 时 git 向上发现 worktree 根，窗口本就归属正确；平台模式（specRoot 锚定 daemon spec
+  // 根，变更文件不在 cwd 仓——常为主仓根）取不到可归属根，窗口段整体缺省：错误窗口
+  // （列出主仓无关文件）比没有更误导。纯本地模式 cwd 即变更仓，维持原行为。
+  const windowAttributable = platformOpts.specDriftAnchor ? true : !platformOpts.specRoot
   let windowNote = ''
-  try {
-    const porcelain = gitQuiet(cwd, ['status', '--porcelain'])
-    if (porcelain !== null) {
-      const paths = porcelain.split('\n').filter(Boolean).map((l) => (l.slice(3) || '').trim()).filter(Boolean)
-      windowNote = paths.length === 0
-        ? '；工作区无未提交变更'
-        : `；变更窗口 ${paths.length} 文件（${paths.slice(0, 3).map((p) => p.split(/[\\/]/).pop()).join('、')}${paths.length > 3 ? ' 等' : ''}）`
-    }
-  } catch { /* git 不可读 → 窗口段缺省（摘要仍成立） */ }
+  if (windowAttributable) {
+    try {
+      const porcelain = gitQuiet(cwd, ['status', '--porcelain'])
+      if (porcelain !== null) {
+        const paths = porcelain.split('\n').filter(Boolean).map((l) => (l.slice(3) || '').trim()).filter(Boolean)
+        if (paths.length === 0) {
+          windowNote = '；工作区无未提交变更'
+        } else {
+          // basename 在 pop 之后再过滤（坑 stage-burst ②）：未跟踪目录条目 `?? dir/` 尾段
+          // 为空串，pop 得 ''，join 出「（、）」空名——先取后滤，全空时只报计数不报名单。
+          const names = paths.slice(0, 3).map((p) => p.split(/[\\/]/).pop()).filter(Boolean)
+          windowNote = names.length === 0
+            ? `；变更窗口 ${paths.length} 文件`
+            : `；变更窗口 ${paths.length} 文件（${names.join('、')}${paths.length > 3 ? ' 等' : ''}）`
+        }
+      }
+    } catch { /* git 不可读 → 窗口段缺省（摘要仍成立） */ }
+  }
   return `【CLI 合成】步骤「${stepName}」完成${windowNote}；门禁以本次 CLI 校验输出为准（方案取舍等语义说明需 --output 手写）`
 }
 
@@ -238,7 +253,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // --output 手写——合成摘要自带该指引。quick 阶段除外（末步四字段硬契约
   // validateQuickResult，合成文本过不了四字段校验；quick 的省略提示由其阶段文案承担）。
   if (!outputText && stageName !== 'quick' && currentIdx !== -1 && steps[currentIdx]) {
-    outputText = synthesizeStepOutput({ stageName, stepName: steps[currentIdx].name, cwd })
+    outputText = synthesizeStepOutput({ stageName, stepName: steps[currentIdx].name, cwd, platformOpts })
     console.log(`🤖 --output 未提供——CLI 已按事实合成步骤摘要（gate 校验照常；方案取舍等语义说明下次带 --output 手写）。`)
   }
   // ── waiting 前置守卫（坑 archive-step3-wait-answer-hint-late）──
@@ -530,7 +545,12 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   steps[currentIdx].status = 'completed'
-  steps[currentIdx].completedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+  // burst 单调时钟（坑 stage-burst-timeline-quality-collapse ①，2026-09-24 实证）：
+  // completeStepBurst 毫秒级循环收口 + 秒级时间串会把剩余步骤全部戳成同一秒——平台
+  // 步骤时间线九步同秒不可读。burst 每轮传 completedAtOverride（轮间严格递增）；
+  // 单步路径不传，落真实时刻不变。
+  const _completedStamp = options.completedAtOverride instanceof Date ? options.completedAtOverride : new Date()
+  steps[currentIdx].completedAt = _completedStamp.toLocaleString('zh-CN',{hour12:false})
   if (outputText) {
     const MAX_OUTPUT = 200
     if (outputText.length > MAX_OUTPUT) {
@@ -762,10 +782,20 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         crossStage = r.crossStageAdvisory
         try { mkdirSync(join(specBase, '.runtime'), { recursive: true }); writeFileSync(ledgerPath, JSON.stringify(stageLedger, null, 1) + '\n', 'utf8') } catch { /* 账本 best-effort */ }
       } catch { /* ④ 升级提示 best-effort 零副作用 */ }
-      if (crossStage && stageLedger) {
-        console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
-        console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
-        console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
+      // R16-b 修正（2026-09-25）：plan ⛔ 优先于 crossStage 升级告警——plan+brainstorm 同会话
+      // 完成时（stageCount=2）此前走告警分支把 ⛔ 压掉了，agent 只见建议不见断崖动作。
+      if (stageName === 'plan') {
+        // 阶段断崖 B（R16 减负批次 A 相位，2026-09-24）：plan→execute 是第二大跳变——
+        // execute 是最大单段（R15 45.6M/173r/均轮 263K，占全流程 53%），带着 brainstorm+plan
+        // 的 14-16M 历史跑 execute 每轮都在重放。⛔ directive 级（同 execute→verify 模板）。
+        console.log(``)
+        console.log(`⛔ 阶段断崖：plan 已收口，execute 建议在新的瘦会话执行。`)
+        console.log(`   本会话上下文已含 brainstorm+plan 全部历史（R15 实测 execute 段 45.6M/173 轮/均轮 263K——大头是历史重放税，活只有十几 M）。`)
+        console.log(`   execute 的全部输入在盘上（design.md/plan.md/tasks/task-*.md），新会话零背景可续跑。`)
+        console.log(`   动作：`)
+        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，stage.wall=hard 下生成后墙自动放行）`)
+        console.log(`   2. 新会话/子代理：粘贴交接块 → run execute --change ${changeName}`)
+        console.log(`   同会话硬续会被 stage.wall=hard 在 run 入口拒（--same-session 逃生口）。`)
       } else if (stageName === 'execute') {
         // 阶段断崖（2026-09-24 第一性原理落地）：execute→verify 是上下文最贵的跳变
         // （R11 实测 verify 71 轮 × 300K/轮 = 21.3M，其中 ~17M 是 execute 历史重放税）。
@@ -776,9 +806,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         console.log(`   本会话上下文已含 execute 全部历史（R11 实测 verify 阶段因历史重放多付 ~17M token——占总 24%）。`)
         console.log(`   verify 的全部输入在盘上（design.md/tasks/review.json/verify-probes），新会话零背景可续跑。`)
         console.log(`   动作：`)
-        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（含机器预览态）`)
+        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，stage.wall=hard 下生成后墙自动放行）`)
         console.log(`   2. 新会话/子代理：粘贴交接块 → run verify --change ${changeName}`)
-        console.log(`   同会话硬续不阻断（应急逃生口），但会在收口时再提示一次。`)
+        console.log(`   同会话硬续会被 stage.wall=hard 在 run 入口拒（--same-session 应急逃生口）。`)
+      } else if (crossStage && stageLedger) {
+        console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
+        console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
+        console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
       } else {
         console.log(`💡 瘦会话模式：下一阶段可在新会话/子代理续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——CLI prompt 自足`)
       }
@@ -1246,6 +1280,8 @@ function prefetchDiffFileSet(ctx) {
 export async function completeStepBurst(pm, progress, stageName, cwd, outputText, inputText = null, options = {}) {
   if (outputText) console.log(`📦 burst 收口摘要：${outputText}`)
   let roundOptions = { ...options, printNext: false }
+  // burst 单调时钟基准（坑 stage-burst ①）：null=首轮（用真实时刻），此后每轮保严格递增
+  let burstClock = null
   const MAX_ROUNDS = 50
   let lastResult
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -1256,6 +1292,13 @@ export async function completeStepBurst(pm, progress, stageName, cwd, outputText
       if (firstOpenIdx !== -1 && stepsNow[firstOpenIdx].status === 'stale') {
         console.log(`⚠️  Step "${stepsNow[firstOpenIdx].name}" 处于 stale，burst 轮首拉回待执行。`)
         stepsNow[firstOpenIdx].status = 'pending'
+        // 拉回清残留（坑 stage-burst-timeline-quality-collapse ③，2026-09-24 实证）：拉回
+        // 仅改 status 不清 output/completedAt → 平台时间线出现「pending 步挂着已完成合成
+        // 文案」的矛盾态行。与 reopenStage fromStep 步口径一致（pending 必不带完成面）。
+        delete stepsNow[firstOpenIdx].output
+        delete stepsNow[firstOpenIdx].output_truncated
+        delete stepsNow[firstOpenIdx].output_original_length
+        delete stepsNow[firstOpenIdx].completedAt
         pm._write(cwd, progress, options.changeName)
       }
     }
@@ -1277,7 +1320,18 @@ export async function completeStepBurst(pm, progress, stageName, cwd, outputText
     const answerSnapshot = roundOptions.doneAnswer != null && Array.isArray(stepsForPending)
       ? stepsForPending.map(s => (s && s.waitAnswer) || null)
       : null
-    const result = await completeStep(pm, progress, stageName, cwd, null, inputText, roundOptions)
+    // 单调时钟（坑 stage-burst-timeline-quality-collapse ①）：completedAt 是秒级字符串——
+    // 比较必须取秒粒度（毫秒级真实推进落在同一秒内仍会产出相同字符串），同秒或追不上
+    // 上一轮戳 → +1s 递增，保轮间 completedAt 字符串严格互异且递增（平台时间线可读）。
+    const _now = new Date()
+    const _stamped = (!burstClock || Math.floor(_now.getTime() / 1000) > Math.floor(burstClock.getTime() / 1000))
+      ? _now
+      : new Date(burstClock.getTime() + 1000)
+    burstClock = _stamped
+    const result = await completeStep(pm, progress, stageName, cwd, null, inputText, {
+      ...roundOptions,
+      completedAtOverride: _stamped,
+    })
     lastResult = result
     // ④ 每轮后重读（completeStep 内部已落库；重读后下一轮谓词基于真实 DB 态）。
     // 注意 completeStep 正常完成单步也返回 truthy 进度对象（{stageCompleted:false, nextPendingIdx}）
