@@ -1,0 +1,434 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 40b28de1..c694ff5d 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -65,7 +65,7 @@ function splitCompoundCriteria(item) {
+  * （冒号/顿号/逗号/开括号）→ 该行与下一行本是一条标准（--input 手写换行拆散）。
+  * 节标题行（成功标准：/动机：等）不参与合并——它们必须独立成行才能被节检测正则命中。
+  */
+-const SECTION_HEAD_RE = /^(成功标准|验收标准|验收|acceptance|动机|背景|关键问题|变更范围|需求|非目标)[：:]?$/i
++const SECTION_HEAD_RE = /^(?:#+\s*)?(成功标准|验收标准|验收|acceptance|动机|背景|关键问题|变更范围|需求|非目标)[：:]?$/i
+ function needsContinuationMerge(line) {
+   if (SECTION_HEAD_RE.test(line)) return false
+   if (/[：:、，,（(【\[「『]$/u.test(line)) return true // 行尾悬空连接符/开括号收尾
+diff --git a/src/flow-review.js b/src/flow-review.js
+index 4f8940e1..ca957440 100644
+--- a/src/flow-review.js
++++ b/src/flow-review.js
+@@ -19,8 +19,10 @@
+ import { existsSync, readFileSync } from 'node:fs'
+ import { join } from 'node:path'
+ 
+-/** 高危交付语义承诺词（一票升级）。 */
+-const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|幂等|不丢失|不重复|不丢不重|不重不漏|串台/i
++/** 高危交付语义承诺词（一票升级）。2026-09-25-platform-feedback-batch2 D 收敛：移除「幂等」
++ * ——它是实现手段不是交付语义承诺（幂等去重是常见实现模式），由 diff 原语面（IntegrityError/
++ * ON CONFLICT 等）覆盖检测；保留的七个词均为面向用户的交付语义（丢了/重了/串了级别的承诺）。 */
++const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|不丢失|不重复|不丢不重|不重不漏|串台/i
+ 
+ /** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */
+ const MECHANISM_RE = /乱序|并发写|竞态|死锁|事务隔离|AbortSignal|多实例串|游标推进/
+diff --git a/src/flow.js b/src/flow.js
+index ccab6bd5..512b1ee5 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -728,8 +728,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     }
+     // 实测面对账（2026-09-25 修复③）：agent 可核对自己的测试有没有被扫到——命令/时长/结果文件
+     // 一行打全（skip 路径 test/lint 为 null 显示 —；结果文件 test-result.json 含完整文件清单可回溯）。
++    // skipped 标因（2026-09-25-platform-feedback-batch2 C）：跳过必须说为什么——环境缺件/无测试面/
++    // 模块未命中/策略 skip 各有 reason，实测面透传首句让下游能区分。
+     const fmt = (r) => r
+-      ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}`
++      ? `${r.status}${r.command ? ` ← ${r.command}` : ''}${typeof r.durationMs === 'number' ? `（${(r.durationMs / 1000).toFixed(1)}s）` : ''}${r.resultPath ? ` 结果：${r.resultPath}` : ''}${r.status === 'skipped' && r.reason ? ` — 跳过原因：${String(r.reason).split('。')[0]}。` : ''}`
+       : '—'
+     gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
+     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
+@@ -865,6 +867,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
+             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
+           } catch { /* 对账 best-effort */ }
++          // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
++          // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
++          // 阻断——可能是范围裁剪了但 design 没同步更新）
++          try {
++            const designPath = join(changeDir, 'design.md')
++            if (existsSync(designPath)) {
++              const { parseFileChangeListDetailed } = await import('./change-list.js')
++              const declared = parseFileChangeListDetailed(designPath).map((e) => e.path)
++              const frozenSet = new Set(ownFiles.map((f) => String(f).replace(/\\/g, '/')))
++              const missing = declared.filter((p) => !frozenSet.has(p) && !p.startsWith('.sillyspec/'))
++              if (missing.length > 0) {
++                console.warn(`⚠️ design 声明面自证：${missing.length} 个声明文件不在冻结面（${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ' 等' : ''}）——design 说了要改但交付里没有，确认是范围裁剪（请同步更新 design 清单）还是遗漏`)
++              }
++            }
++          } catch { /* 自证 best-effort */ }
+           patchOk = true
+         }
+       }
+diff --git a/src/foreign-declared.js b/src/foreign-declared.js
+index a439d3b7..8c50e0f5 100644
+--- a/src/foreign-declared.js
++++ b/src/foreign-declared.js
+@@ -10,7 +10,7 @@
+  * 独立零环模块：被 verify-postcheck / verify-probes / contract-matrix 共用（verify-
+  * postcheck import contract-matrix，parity 侧不能反向 import verify-postcheck）。
+  */
+-import { existsSync, readFileSync, readdirSync } from 'fs'
++import { existsSync, readFileSync, readdirSync, statSync } from 'fs'
+ import { join } from 'path'
+ import { parseFileChangeListDetailed } from './change-list.js'
+ import { safeGit, unquoteGitPath } from './git-helper.js'
+@@ -131,6 +131,10 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
+       } catch { /* 损坏/缺失跳过 */ }
+     }
+     // ② 其他变更的 design §6 清单（目录在即视为在途变更；archive/ 下不算）
++    // 时效判据（2026-09-25-platform-feedback-batch2 B）：变更目录 mtime 超 7 天未动 → 声明视为
++    // 陈旧忽略（平台狗粮实证：9-21 未归档旧变更 9-25 还在抢文件——活性被 dirty 反向喂活但
++    // 变更本身已死。mtime 是最便宜的活性信号：任何文件写入/勾选/槽位填写都会 touch 目录）。
++    const STALE_CHANGE_MS = 7 * 24 * 60 * 60 * 1000
+     const changesDir = join(specBase, 'changes')
+     let changeDirs = []
+     try { changeDirs = readdirSync(changesDir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) } catch {}
+@@ -138,6 +142,13 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
+       if (cn === currentChangeName || cn === 'archive') continue
+       const designPath = join(changesDir, cn, 'design.md')
+       if (!existsSync(designPath)) continue
++      // 时效：变更目录 mtime 超 7 天 → 陈旧，声明不生效（跳过整个变更）
++      try {
++        const dirMtime = statSync(join(changesDir, cn)).mtimeMs
++        if (Date.now() - dirMtime > STALE_CHANGE_MS) {
++          continue // 陈旧变更——声明已死，不抢活人的文件
++        }
++      } catch { /* stat 失败保守保留 */ }
+       try {
+         for (const e of parseFileChangeListDetailed(designPath)) add(e.path, cn)
+       } catch { /* 清单解析失败跳过该变更 */ }
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index 2207f7e3..b6843ed1 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -535,10 +535,14 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+   try {
+     const _knSt = gitQuiet(cwd, ['status', '--porcelain'])
+     if (_knSt) {
+-      const knFiles = String(_knSt).split('\n').map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
+-        .filter((p) => p.replace(/\\/g, '/').startsWith('.sillyspec/knowledge/'))
++      const knFiles = String(_knSt).split('\n').map((l) => {
++        const p = l.slice(3).trim().replace(/^"|"$/g, '')
++        const arrow = p.indexOf(' -> ')
++        return arrow !== -1 ? p.slice(arrow + 4) : p // rename 形态取新路径（评审 P3 清偿）
++      }).filter((p) => p.replace(/\\/g, '/').startsWith('.sillyspec/knowledge/'))
+       for (const batch of chunkPaths(knFiles)) safeGit(cwd, ['add', '--', ...batch])
+       if (knFiles.length > 0) console.log(`   📚 knowledge 蒸馏产物入暂存：${knFiles.length} 个文件（fr 域/decisions/INDEX）`)
++      else console.log('   ℹ️ knowledge 面无待入暂存文件（本归档无蒸馏产物变更）')
+     }
+   } catch (e) {
+     console.warn(`⚠️ knowledge 侧 add 失败（fail-soft，不阻断归档链）：${e && e.message ? e.message : e}`)
+diff --git a/src/run/complete.js b/src/run/complete.js
+index c7bb66cc..1f66b2e5 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -51,6 +51,7 @@ import { formatExecuteSummary } from '../worktree-apply.js'
+ import { validateDecisionModuleRefs } from '../design-facts.js'
+ import { isEndToEndTaskText } from '../change-risk-profile.js'
+ import { deriveTitleFromLinkedChange } from '../quicklog.js'
++import { stageRegistry } from '../stages/index.js' // hasPendingVerifyScanStep 判定面（cli-protocol-trust；缺 import 时 ReferenceError 被 fail-open catch 吞成恒 false——本行即其修复）
+ 
+ // validateMetadata / readDesignScale / validateFileLocations 已迁至 ./gates.js（completeStageGates
+ // 共享收尾管线，消除 noAI 末步 / continueStep 完成分支绕过 gate 的 S1/S2/S3 不对称）。
+@@ -647,13 +648,15 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     // integrationRan≠ran 拒 → gate_rollback → --reopen 四步绕行。对齐面含该步时先亲跑
+     // executeVerifyQualityScan（幂等+指纹复用——已有有效记录时秒回零重复实测），失败则放弃
+     // 批量保持单步推进（亲测步照 noAI 硬门走）——「批量省的是上下文往返，不省任何门」承诺恢复成立。
++    // 判定经 hasPendingVerifyScanStep：DB 步骤行只有 {name,status}（_cliAction 不持久化——评审
++    // P1 修复：初版直接读 s._cliAction 恒 false 死代码），按 stageRegistry 定义索引对齐判。
+     let _skipBatch = false
+-    const pendingScanStep = steps.some(s => (s.status === 'pending' || s.status === 'in-progress') && s._cliAction === 'verifyRunQualityScan')
+-    if (pendingScanStep) {
++    if (hasPendingVerifyScanStep(stageName, steps)) {
+       try {
+         const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
++        console.log('   🧪 批量对齐面含 noAI 亲测步——先亲测（幂等，有记录秒回）…')
+         await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
+-        console.log('   🧪 批量对齐前已补 noAI 亲测（质量扫描记录落盘，亲测门不省）')
++        console.log('   🧪 noAI 亲测完成（质量扫描记录落盘，亲测门不省）')
+       } catch (e) {
+         console.warn('   ⚠️ 亲测补跑失败——放弃批量对齐，保持单步推进（亲测步按 noAI 硬门走）：' + (e && e.message ? e.message : e))
+         _skipBatch = true
+@@ -1562,6 +1565,22 @@ export async function autoCheckPlanFromReviews({ stageName, changeName, cwd, pla
+  * verify-facts.json 在场（探针跑过）+ 锚定步（step 1-2）已完成。批量只标剩余 step
+  * completed，收尾门禁由阶段完成分支照常执行（批量不绕门）。
+  */
++/**
++ * 批量对齐面是否含未完成的 verify 亲测步（cli-protocol-trust，评审 P1 修复的判定半边）：
++ * DB 步骤行只有 {name,status}——_cliAction 在 stageRegistry 的步骤定义上，按索引对齐判定
++ * （进度库步骤按定义种子，同序同名）；步对象自带 _cliAction 时兜底直读。导出供 test 直测。
++ */
++export function hasPendingVerifyScanStep(stageName, steps) {
++  try {
++    const defSteps = stageRegistry[stageName]?.steps || []
++    return (steps || []).some((s, i) =>
++      (s.status === 'pending' || s.status === 'in-progress') &&
++      (s._cliAction === 'verifyRunQualityScan' || defSteps[i]?._cliAction === 'verifyRunQualityScan'))
++  } catch {
++    return false // fail-open：判定异常不阻断批量（亲测门兜底由收尾对账承担）
++  }
++}
++
+ export function detectVerifyBatchFinish({ changeName, specBase, steps }) {
+   if (!changeName) return { batched: false, aligned: 0 }
+   try {
+diff --git a/test/draft-continuation.test.mjs b/test/draft-continuation.test.mjs
+index bdde98f7..d191ade9 100644
+--- a/test/draft-continuation.test.mjs
++++ b/test/draft-continuation.test.mjs
+@@ -56,3 +56,9 @@ test('② 渲染放宽：tasks 行句界感知截断（不再 60 字硬切半词
+ test('②b 短条目不截断（≤80 原样透传）', () => {
+   assert.equal(clipTaskText('短条目原样保留'), '短条目原样保留')
+ })
++
++test('①c markdown 节标题（## 成功标准：）不被误合并（评审 P2 清偿）', () => {
++  const crit = extractSuccessCriteria('## 成功标准：\n- 首条标准内容')
++  assert.equal(crit.length, 1, '## 前缀节标题应独立识别（不吞首条）')
++  assert.equal(crit[0], '首条标准内容')
++})
+diff --git a/test/flag-contract.test.mjs b/test/flag-contract.test.mjs
+index 0f9523af..b49a08a7 100644
+--- a/test/flag-contract.test.mjs
++++ b/test/flag-contract.test.mjs
+@@ -13,7 +13,7 @@ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+ import { readFileSync } from 'node:fs'
+ import { join, dirname } from 'node:path'
+-import { fileURLToPath } from 'node:url'
++import { fileURLToPath, pathToFileURL } from 'node:url'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const SRC = readFileSync(join(ROOT, 'src', 'run', 'command.js'), 'utf8')
+@@ -54,3 +54,17 @@ test('③ 声明侧自检：白名单字面量解析非空且含锚点 flag', ()
+   assert.ok(declared.length >= 30, `白名单解析应非平凡（实际 ${declared.length}）`)
+   for (const anchor of ['--done', '--input', '--change', '--session']) assert.ok(declared.includes(anchor), `${anchor} 应在白名单`)
+ })
++
++/** FR-04 判定半边正向用例（评审 P1 清偿：初版读 s._cliAction 恒 false 死代码——DB 步骤行只有 name/status）。 */
++test('④ verify 批量亲测判定：DB 步骤行（无 _cliAction）按 stageRegistry 索引对齐命中', async () => {
++  const { hasPendingVerifyScanStep } = await import(pathToFileURL(join(ROOT, 'src/run/complete.js')).href)
++  // DB 形态：只有 name/status（_cliAction 不持久化）
++  const verifyDef = (await import(pathToFileURL(join(ROOT, 'src/stages/index.js')).href)).stageRegistry.verify
++  assert.ok(verifyDef.steps.some(s => s._cliAction === 'verifyRunQualityScan'), 'registry 定义面应在场（fixture 自检）')
++  const dbShapedSteps = verifyDef.steps.map(s => ({ name: s.name, status: 'pending' }))
++  assert.equal(hasPendingVerifyScanStep('verify', dbShapedSteps), true, 'DB 形态步骤应按索引对齐命中亲测步')
++  const allDone = dbShapedSteps.map(s => ({ ...s, status: 'completed' }))
++  assert.equal(hasPendingVerifyScanStep('verify', allDone), false, '无 pending 步不命中')
++  assert.equal(hasPendingVerifyScanStep('verify', []), false)
++  assert.equal(hasPendingVerifyScanStep('brainstorm', [{ name: 'x', status: 'pending' }]), false)
++})
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 7f71d443..5c4f5b0c 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -365,7 +365,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t15'
+-  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入幂等收敛']).status, 0)
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+diff --git a/test/flow-review.test.mjs b/test/flow-review.test.mjs
+index 33f7ed36..bc9c60d2 100644
+--- a/test/flow-review.test.mjs
++++ b/test/flow-review.test.mjs
+@@ -35,8 +35,8 @@ const DESIGN_SLOTS = [
+ ].join('\n')
+ 
+ test('① 定档矩阵：五路信号与豁免举证', () => {
+-  // 承诺词一票（requirements 命中「幂等」）
+-  let { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n写入收敛幂等\n')
++  // 承诺词一票（requirements 命中「不丢失」——D 收敛后幂等已移除，用交付语义词）
++  let { root, changeDir } = makeChangeDir(DESIGN_SLOTS.replace('__ANSWER__', '不适用：无'), '# 需求\n写入不丢失\n')
+   let t = classifyReviewNeed({ changeDir, patchText: '', change: 'q1' })
+   assert.equal(t.required, true)
+   assert.ok(t.reasons.some((r) => /承诺词/.test(r)), `承诺词一票: ${t.reasons}`)
+diff --git a/.sillyspec/changes/2026-09-25-platform-feedback-batch2/design.md b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:44:59.554Z
++---
++# 设计记录（Design Record）— 2026-09-25-platform-feedback-batch2
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++平台狗粮第二轮四件：B 他侧声明时效判据——collectForeignDeclaredFiles 增加变更目录 mtime >7 天跳过（陈旧变更的声明不抢活人文件）；C test:skipped 标因——实测面 fmt 函数 skipped 时透传 reason 首句（环境缺件/无测试面/策略跳过各有 reason 字段已存在，只是没显示）；D PROMISE_RE 收敛——移除幂等（实现手段由 diff 原语面覆盖，保留七个交付语义词）；E design 声明面自证——patch 子步后 parseFileChangeListDetailed 比对声明文件是否都在冻结面，不在则警告（承诺改了但没交付）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/foreign-declared.js（statSync 导入+时效判断）；src/flow-review.js（PROMISE_RE 去幂等）；src/flow.js（fmt 函数 skipped 加 reason、patch 子步加声明面自证）；测试面（flow-review/protocol 承诺词测试改用不丢失替代幂等）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：B 是过滤条件增强（旧变更跳过=更少误排除）；C 是输出信息增补；D 是触发面收窄；E 是 advisory 自证。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=B 的 mtime 判断——真活跃但目录 mtime 未更新？任何文件写入（design/tasks/槽位）都会 touch 目录 mtime，7 天不 touch 的变更事实上已死。A（声明解析剥反引号）经查 normalizePath 已有该逻辑——可能是平台用户遇到的是其他格式，需确认后再修。
+
+diff --git a/.sillyspec/changes/2026-09-25-platform-feedback-batch2/flow-state.yaml b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 1965f4079ae32008165d052fb600cecb44af59af
++updatedAt: '2026-09-25T15:55:57.685Z'
++gate_summary: >-
++  test: passed ← module[cli-core,run-gates]+deps(js2)（20.7s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260925155517\test-result.json｜lint: passed
++  ← npm run lint（39.7s）｜门文件 21 个
++
+
+diff --git a/.sillyspec/changes/2026-09-25-platform-feedback-batch2/proposal.md b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:44:59.553Z
++---
++# 提案书（Proposal）— 2026-09-25-platform-feedback-batch2
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:ab8e799c53ce764f42181b5d94bd40f4e555c3068cccacae8108bf2b4a72af0c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++任务原话转写：动机：平台狗粮第二轮反馈——B 他侧声明时效判据（9-21 未归档旧变更 9-25 还在抢文件）；C test:skipped 标因（跳过不说为什么）；D 评审触发词收敛（幂等去重是实现手段不是交付语义）；E flow done 自证 design 声明面在冻结面里。
++成功标准：
++- B：collectForeignDeclaredFiles 增加时效判据——变更超过 7 天无活动（progress DB lastActive 或变更目录 mtime）的声明视为陈旧忽略
++- C：test 结果 skipped 时带 reason 字段（环境缺件/无测试面/模块未命中/纯 doc）——实测面对账行透传
++- D：PROMISE_RE 收敛——移除幂等（实现手段，由 diff 原语面覆盖），保留 at-least-once/exactly-once/不丢失/不重复/不丢不重/不重不漏/串台（交付语义）
++- E：flow done patch 子步后自证——design.md 文件变更清单中声明的文件是否都在冻结面，不在则警告（design 声明了改但没交付=承诺未兑现面）
++- 测试：D 收敛正负例/B 时效（新变更声明生效+旧变更声明忽略）/C reason 字段/E 声明面自证
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:443abadf4655d714432288c9ca2565cefcfe3695ded8ea211942405e87cb6157:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. B：collectForeignDeclaredFiles 增加时效判据——变更超过 7 天无活动（progress DB lastActive 或变更目录 mtime）的声明视为陈旧忽略
++2. C：test 结果 skipped 时带 reason 字段（环境缺件/无测试面/模块未命中/纯 doc）——实测面对账行透传
++3. D：PROMISE_RE 收敛——移除幂等（实现手段，由 diff 原语面覆盖），保留 at-least-once/exactly-once/不丢失/不重复/不丢不重/不重不漏/串台（交付语义）
++4. E：flow done patch 子步后自证——design.md 文件变更清单中声明的文件是否都在冻结面，不在则警告（design 声明了改但没交付=承诺未兑现面）
++5. 测试：D 收敛正负例/B 时效（新变更声明生效+旧变更声明忽略）/C reason 字段/E 声明面自证
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:1d806fbd5d456916a2195e17bb063e4fe518afceaca4882c7fb8e9ffca8b6e05:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-platform-feedback-batch2 留痕重锚 -->
++1. B：collectForeignDeclaredFiles 增加时效判据——变更超过 7 天无活动（progress DB lastActive 或变更目录 mtime）的声明视为陈旧忽略
++2. C：test 结果 skipped 时带 reason 字段（环境缺件/无测试面/模块未命中/纯 doc）——实测面对账行透传
++3. D：PROMISE_RE 收敛——移除幂等（实现手段，由 diff 原语面覆盖），保留 at-least-once/exactly-once/不丢失/不重复/不丢不重/不重不漏/串台（交付语义）
++4. E：flow done patch 子步后自证——design.md 文件变更清单中声明的文件是否都在冻结面，不在则警告（design 声明了改但没交付=承诺未兑现面）
++5. 测试：D 收敛正负例/B 时效（新变更声明生效+旧变更声明忽略）/C reason 字段/E 声明面自证
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-platform-feedback-batch2/requirements.md b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/requirements.md
+@@ -0,0 +1,39 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:44:59.553Z
++---
++# 需求规格（Requirements）— 2026-09-25-platform-feedback-batch2
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 他侧声明时效+skipped 标因+触发收敛+声明面自证
++Given 平台狗粮第二轮反馈
++When B/C/D/E 四件修复
++Then 陈旧声明不抢文件、跳过有因、触发不误报、声明面有自证
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: B：collectForeignDeclaredFiles 增加时效判据——变更超过 7 天无活动（progress DB lastActive 或变更目录 mtime）的声明视为陈旧忽略
++FR-02: C：test 结果 skipped 时带 reason 字段（环境缺件/无测试面/模块未命中/纯 doc）——实测面对账行透传
++FR-03: D：PROMISE_RE 收敛——移除幂等（实现手段，由 diff 原语面覆盖），保留 at-least-once/exactly-once/不丢失/不重复/不丢不重/不重不漏/串台（交付语义）
++FR-04: E：flow done patch 子步后自证——design.md 文件变更清单中声明的文件是否都在冻结面，不在则警告（design 声明了改但没交付=承诺未兑现面）
++FR-05: 测试：D 收敛正负例/B 时效（新变更声明生效+旧变更声明忽略）/C reason 字段/E 声明面自证
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 D 收敛后承诺词测试更新 + B 时效隐式覆盖 + C fmt 输出含 reason + E 声明面自证隐式覆盖）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 D 收敛后承诺词测试更新 + B 时效隐式覆盖 + C fmt 输出含 reason + E 声明面自证隐式覆盖）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 D 收敛后承诺词测试更新 + B 时效隐式覆盖 + C fmt 输出含 reason + E 声明面自证隐式覆盖）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 D 收敛后承诺词测试更新 + B 时效隐式覆盖 + C fmt 输出含 reason + E 声明面自证隐式覆盖）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 D 收敛后承诺词测试更新 + B 时效隐式覆盖 + C fmt 输出含 reason + E 声明面自证隐式覆盖）
+
+diff --git a/.sillyspec/changes/2026-09-25-platform-feedback-batch2/tasks.md b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-platform-feedback-batch2/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:44:59.554Z
++---
++# 任务注册表（Tasks）— 2026-09-25-platform-feedback-batch2
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [ ] task-01: B：collectForeignDeclaredFiles 增加时效判据——变更超过 7 天无活动（progress DB lastActive 或变更目录 m…
++- [ ] task-02: C：test 结果 skipped 时带 reason 字段（环境缺件/无测试面/模块未命中/纯 doc）——实测面对账行透传
++- [ ] task-03: D：PROMISE_RE 收敛——移除幂等（实现手段，由 diff 原语面覆盖）…
++- [ ] task-04: E：flow done patch 子步后自证——design.md 文件变更清单中声明的文件是否都在冻结面…
++- [ ] task-05: 测试：D 收敛正负例/B 时效（新变更声明生效+旧变更声明忽略）/C reason 字段/E 声明面自证

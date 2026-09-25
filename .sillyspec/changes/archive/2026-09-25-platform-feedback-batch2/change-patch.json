@@ -1,0 +1,31 @@
+{
+  "change": "2026-09-25-platform-feedback-batch2",
+  "baseline": "1965f4079ae32008165d052fb600cecb44af59af",
+  "head": "35567c4125f349361a5e82d717eb82d45b4517d7",
+  "files": [
+    "src/flow-draft.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "src/foreign-declared.js",
+    "src/run/complete-handlers.js",
+    "src/run/complete.js",
+    "test/draft-continuation.test.mjs",
+    "test/flag-contract.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-review.test.mjs",
+    ".sillyspec/changes/2026-09-25-platform-feedback-batch2/design.md",
+    ".sillyspec/changes/2026-09-25-platform-feedback-batch2/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-platform-feedback-batch2/proposal.md",
+    ".sillyspec/changes/2026-09-25-platform-feedback-batch2/requirements.md",
+    ".sillyspec/changes/2026-09-25-platform-feedback-batch2/tasks.md"
+  ],
+  "totals": {
+    "files": 15,
+    "additions": 238,
+    "deletions": 14
+  },
+  "savedAt": "2026-09-25T15:55:58.658Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "c3a71107d515c41dfbdfff5abc1c7b14278eb6fd0952bf3a520032ead78bb0f7",
+  "patchStatus": "ok"
+}
