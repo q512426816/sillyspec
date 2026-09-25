@@ -276,8 +276,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
     `📜 requirements 的 FR 是机器摘录候选——语义要改写时直接编辑机器段后跑 flow amend-draft 留痕`,
     `   （槽里写的不进 FR 索引）；输入含编号行为条目时机器已优先摘编号条目。`,
-    `📦 交付代码先 git commit（显式 pathspec）再 flow done——patch 冻结面取 baseline..HEAD 提交面，`,
-    `   未提交代码不入审计件（会话专属 worktree 例外：dirty 交付面一并入冻结；R16 实证教训）。`,
+    `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
+    `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
+    `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
@@ -332,7 +333,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
  */
-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true }) {
+export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
   if (!st) {
@@ -513,19 +514,27 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // 冻结面收集（2026-09-25-thin-r16-patches 修复①）：committed 为主；会话专属 worktree
         // （gate-snapshot 同款路径判定）下未提交 dirty 交付面一并入冻结——独占树内全归属本变更；
         // 共享主仓 dirty 无法归属只警告（他侧声明免警告），审计缺口显式化不再静默。
-        let exclusive = false
-        try {
-          const { shouldSkipGateSnapshotForWorktree } = await import('./run/gate-snapshot.js')
-          exclusive = shouldSkipGateSnapshotForWorktree(cwd)
-        } catch { /* 判定异常按共享主仓 */ }
+        let exclusiveFrom = null // 'flag' | 'worktree' | null——入冻路径来源（输出标签区分）
+        if (freezeDirty === true) {
+          exclusiveFrom = 'flag' // --freeze-dirty：显式声明非他侧声明 dirty 全归属本变更（独占树自动路径的手动版）
+        } else {
+          try {
+            const { shouldSkipGateSnapshotForWorktree } = await import('./run/gate-snapshot.js')
+            if (shouldSkipGateSnapshotForWorktree(cwd)) exclusiveFrom = 'worktree'
+          } catch { /* 判定异常按共享主仓 */ }
+        }
+        const exclusive = exclusiveFrom != null
         let freeze = null
         try {
           const { collectFreezeFiles } = await import('./flow-parity.js')
           freeze = collectFreezeFiles({ cwd, specBase, change, committed, exclusive })
         } catch { freeze = { files: [...committed], dirtyAdded: [], dirtyWarned: [] } }
-        if (freeze.dirtyAdded.length > 0) console.log(`🔒 会话专属 worktree：${freeze.dirtyAdded.length} 个未提交交付文件一并入冻结面`)
+        if (freeze.dirtyAdded.length > 0) {
+          console.log(`🔒 ${exclusiveFrom === 'flag' ? '--freeze-dirty 显式声明' : '会话专属 worktree'}：${freeze.dirtyAdded.length} 个未提交交付文件一并入冻结面`)
+        }
         if (freeze.dirtyWarned.length > 0) {
-          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件不入冻结面（共享主仓无法归属）——本次冻结不含它们，收口后尽快 commit：`)
+          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
+          console.warn(`   ① 本次接受缺口（审计面少这些文件）② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 下次用会话专属 worktree。Git 中间提交可归档后压扁（见收口指引）`)
           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
         }
         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
@@ -774,6 +783,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   appendTelemetry(reviewOutcome) // 成功收口（失败面已在各失败路径提前落账，appendTelemetry 单点）
 
   console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
+  // Git 历史整理指引（2026-09-25-thin-freeze-git-hygiene）：多轮中间提交可压扁为单提交——审计
+  // 真相在 change.patch（sha256 锚定）与归档产物，不依赖历史形态；baseline 在 change-patch.json。
+  try {
+    const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
+    if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
+      console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
+      console.log(`   审计真相已冻结在归档件 change.patch（sha256 锚定）+ verify-result + review.json，不依赖 git 历史；`)
+      console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
+    }
+  } catch { /* 指引 best-effort */ }
   // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
   try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
   return { change, substeps: doneList }
@@ -831,7 +850,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
     validateChangeName(change)
-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt })
+    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
   }
   if (sub === 'amend-draft') {
     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；

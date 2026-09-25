@@ -57,7 +57,9 @@ function fillDesignSlots(cwd, change) {
   const dp = join(base, 'design.md')
   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
   const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
+  writeFileSync(rp, readFileSync(rp, 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 协议测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
 }
 
 test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，仅两次协议调用，归档注销', () => {
@@ -236,7 +238,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
   assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
   assert.ok(!patchMeta.files.includes('wip-dirty.txt'), '未提交交付文件不入冻结面')
-  assert.match(ok.stdout + ok.stderr, /个未提交交付文件不入冻结面/, 'dirty 警告点名')
+  assert.match(ok.stdout + ok.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
 })
@@ -251,7 +253,9 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
   const base = join(cwd, '.sillyspec', 'changes', change)
   // design 四槽 + 绑定槽写真实测试路径（触发行提取与提升）
   writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：绑定链夹具'))
-  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑨ 绑定链用例'))
+  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 绑定链行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen test-trace 落盘并提升')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑨ 绑定链用例'))
   const done = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
   assert.match(done.stdout, /测试绑定行落盘：1 行/, '绑定行落盘输出')
@@ -323,6 +327,7 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变�
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
   writeFileSync(join(changeDir, 'requirements.md'), readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 收编行为\nGiven 头脑风暴产物在场\nWhen flow start 收编\nThen design 豁免+绑定槽追加')
     .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑬ 收编用例'))
   const done = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
@@ -343,7 +348,8 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
-  assert.match(s.stdout, /先 git commit（显式 pathspec）再 flow done/, '先提交后 done 简报钉死')
+  assert.match(s.stdout, /冻结面在 flow done 时点采集/, '冻结面规则简报在场')
+  assert.match(s.stdout, /--freeze-dirty/, '显式声明通道指引在场')
   // 预判已删（2026-09-25-thin-precheck-removal）：技术关键词不再触发升厚建议——碰迁移的
   // 轻量变更照样最优收口（R16 实证），风险面归收口评审按证据判定
   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
@@ -445,7 +451,9 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落�
   // 外置根无 .sillyspec 层——change 目录直挂 spec 根下，槽位内联填
   const pc = join(plat, 'changes', change)
   writeFileSync(join(pc, 'design.md'), readFileSync(join(pc, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
-  writeFileSync(join(pc, 'requirements.md'), readFileSync(join(pc, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
+  writeFileSync(join(pc, 'requirements.md'), readFileSync(join(pc, 'requirements.md'), 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 平台参数面行为\nGiven 外置 spec 根\nWhen flow start\nThen 全链落外置根')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
   const d = cli(cwd, ['flow', 'done', '--change', change, '--spec-dir', plat])
   assert.equal(d.status, 0, `外置根 done 应通过: ${d.stdout}\n${d.stderr}`)
   assert.ok(existsSync(join(plat, 'changes', 'archive')), '归档落外置根')
@@ -504,4 +512,26 @@ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次
   const src = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
   const hits = src.split('await triggerSync(cwd, change)').length - 1
   assert.ok(hits >= 2, `flow.js 应在 start/done 两处尾部触发 triggerSync（实际 ${hits} 处）`)
+})
+
+test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
+  const { cwd } = makeRepo()
+  const change = 'flow-h2-t19'
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+  writeFileSync(join(cwd, 'late-dirty.py'), 'x = 1\n') // 未提交交付文件 → --freeze-dirty 并入
+  fillDesignSlots(cwd, change)
+  const ok = cli(cwd, ['flow', 'done', '--change', change, '--freeze-dirty'])
+  assert.equal(ok.status, 0, `done 失败: ${ok.stdout}\n${ok.stderr}`)
+  assert.match(ok.stdout + ok.stderr, /显式声明.*并入冻结面|--freeze-dirty.*并入冻结/, '声明入冻提示')
+  assert.match(ok.stdout, /Git 历史可自由整理/, '压扁指引在场')
+  assert.match(ok.stdout, /reset --soft/, 'reset 指引含基线')
+  const archDir = join(cwd, '.sillyspec', 'changes', 'archive')
+  const archived = readdirSync(archDir)[0]
+  const meta = JSON.parse(readFileSync(join(archDir, archived, 'change-patch.json'), 'utf8'))
+  assert.ok(meta.files.includes('late-dirty.py'), '未提交文件经 --freeze-dirty 入冻结面')
+  assert.ok(meta.files.includes('work.js'), '提交面照常入冻结')
+  rmSync(cwd, { recursive: true, force: true })
 })
