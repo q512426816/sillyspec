@@ -425,7 +425,9 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
       // 存在（含损坏）绝不清目录/不注销（损坏可手修恢复，拒绝但保数据）；共享指针只在内容
       // 等于本 sid 时才动，他者会话标记不碰。
       try {
-        if (!existsSync(guardFile)) {
+        if (!existsSync(guardFile) && /^quick-[0-9a-f]{8}$/.test(changeName)) {
+          // 形态门（独立评审 P2 清偿）：清理/注销只对 quick 会话 id 形态执行——防任何把
+          // 真实变更名带进本分支的路径误注销其 DB 行；非 sid 形态只拒绝不清理
           if (existsSync(sessionGuardDir)) rmSync(sessionGuardDir, { recursive: true, force: true })
           try { pm.unregisterChange(cwd, changeName) } catch { /* 行不存在等忽略 */ }
         }

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-quick-channel-retire",
+  "reviewer": "subagent",
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "FR-05「全量 npm test 绿」无兑现证据：收口门禁记录 test: skipped（0 模块命中），且与测试绑定作答声称的「flow done 亲测 npm test」直接矛盾",
+      "evidence": "冻结件 flow-state.yaml gate_summary 记录 'test: skipped — 跳过原因：test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。｜lint: passed'——本变更实改 src/index.js、src/run/stage.js、src/run/command.js、src/handoff.js、src/run/next.js 等核心入口并改造约 25 个测试文件，lint 有实测（39.7s passed）而 npm test 全量从未执行；FR-05 绑定作答称「全量门禁由 flow done CLI 实测门亲测 npm test＋npm run lint（P2 账本无记录时 fail-closed 亲跑）」，实证记录显示亲跑未发生（skipped 非亲测）。以落盘结果为准，FR-05 承诺缺乏任何证据支撑。",
+      "location": ".sillyspec/changes/2026-09-25-quick-channel-retire/flow-state.yaml:11"
+    },
+    {
+      "severity": "P2",
+      "title": "stage.js 兜底网幻影清理的 unregisterChange 无 quick-<8hex> 形态门：`run quick --change <已存在普通变更名>` 会注销该真实主流程变更的 DB 行",
+      "evidence": "预门将 --change（不在 QUICK_FRESH_START_FLAGS 集内）一律放行给 command.js；command.js 关联存在性守卫对已存在变更名放行（patch 前 quick-linked-change-existence-guard.test.mjs 用例 2 实证该形态可达渲染），随后 stage.js quick 块走 guard 不存在的 else 分支：rmSync(sessionGuardDir) 与 marker 比对（内容===changeName）对该形态天然 no-op 无害，但 `pm.unregisterChange(cwd, changeName)` 无条件以传入名执行——changeName 为普通变更名时即注销该变更的 DB 活跃/进度行（目录产物虽在，listChanges/流程进度侧丢失）。防护应限定 changeName 匹配 /^quick-[0-9a-f]{8}$/ 才清理（patch 内无此判据；若 progress.js 实现侧也无前缀门则风险实发）。设计声明「--change quick-<8hex> 之外的值放行给 command.js 校验」这一边界组合下游清理后裁不可接受。",
+      "location": "src/run/stage.js:414（patch hunk @@ -410,179 +410,29 @@ 新分支内 pm.unregisterChange 调用）"
+    },
+    {
+      "severity": "P3",
+      "title": "patch 冻结面（71 文件）混入约四分之一并行变更内容，超出本变更承诺面（审计归因混淆风险，非承诺违反）",
+      "evidence": "冻结 diff 含 src/greenfield-bootstrap.js+test/greenfield-bootstrap.test.mjs（2026-09-25-greenfield-bootstrap）、src/foreign-declared.js 七天时效 / src/flow-review.js PROMISE_RE 收敛 / src/flow.js skipped 标因与声明面自证（2026-09-25-platform-feedback-batch2 B/C/D/E）、src/run/complete.js hasPendingVerifyScanStep+test/flag-contract.test.mjs ④（cli-protocol-trust）等他变更提交被 baseline..HEAD 冻结面卷入；另 proposal 动机声明「不触碰并行会话在改文件（含 src/run/command.js）」而本变为兑现 FR-06 实改 command.js 两处文案（auto 分类/--status 无会话指路）——design 槽1 已显式声明「评审驱动扩面」，裁可接受，但冻结面无法按文件区分归属，后续审计需知悉。",
+      "location": "change.patch 内 src/greenfield-bootstrap.js:1 等并行变更文件（另见 src/run/complete.js、src/foreign-declared.js、src/flow.js 相关 hunk）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-09-25T23:13:13Z"
+}

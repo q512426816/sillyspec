@@ -45,6 +45,4 @@ test/quick-retired.test.mjs 文档断言组：模板与 AGENTS.md 含「已退�
 test/command-cards.test.mjs（8 卡资产+flow 卡内容锚+run-quick 墓碑断言）+ test/handoff.test.mjs 2f/2g（thin 交接走 flow start）+ test/next-command.test.mjs 3b（thin 下一步走 flow start）。
 
 <!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
-不适用：单文件——全量门禁由 flow done CLI 实测门亲测 `npm test`＋`npm run lint`（P2 账本无记录时 fail-closed 亲跑）。
-
-<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
+会话侧亲跑全量：`npm test` 633 个测试文件 0 失败 exit 0（2026-09-26，日志 /tmp/sillyspec-full-test.log）＋ `npm run lint` 809 文件绿；CLI 实测门 lint passed（39.7s）——test 按本地 test_strategy=module 且 0 模块命中跳过（账本 gate_summary 如实记录 skipped），故全量证据由会话侧补证而非声称 CLI 亲测（独立评审 P1 清偿，如实改口）。
