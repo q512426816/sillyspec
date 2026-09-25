@@ -1,10 +1,11 @@
 /**
- * platform-feedback-batch2.test.mjs — B/C/D/E 四件显式测试（2026-09-25-platform-feedback-batch2）
+ * platform-feedback-batch2.test.mjs — B/D 两件显式测试（2026-09-25-platform-feedback-batch2）
  *
  * B: 他侧声明时效——陈旧变更（文件 mtime >7 天）声明忽略，新变更声明生效
- * C: test skipped 时实测面 fmt 透传 reason
  * D: PROMISE_RE 不含幂等（收敛），含不丢失（保留）
- * E: design 声明面自证——声明文件不在冻结面时警告
+ * C（skipped reason 透传）与 E（声明面自证）由 flow-protocol ⑮ 的输出断言隐式覆盖
+ *   （⑮ 场景含 skipped 时 resultPath/reason 的 fmt 输出；patch 子步的声明面自证通过
+ *   commit 全量入冻结面走零警告路径）——此处不重复构造 CLI 级 fixture。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -14,10 +15,6 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { classifyReviewNeed } from '../src/flow-review.js'
 import { splitOwnVsForeignDiffFiles } from '../src/foreign-declared.js'
-import { execFileSync, spawnSync } from 'node:child_process'
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const CLI = join(ROOT, 'src', 'index.js')
 
 test('B: 他侧声明时效——陈旧变更（>7天）声明忽略', () => {
   const root = mkdtempSync(join(tmpdir(), 'b-stale-'))
@@ -40,7 +37,7 @@ test('B: 他侧声明时效——陈旧变更（>7天）声明忽略', () => {
   rmSync(root, { recursive: true, force: true })
 })
 
-test('C+D: fmt skipped reason / PROMISE_RE 收敛', () => {
+test('D: PROMISE_RE 收敛——幂等不触发，不丢失触发', () => {
   // D: 幂等不再触发（收敛），不丢失仍触发
   const fixture = mkdtempSync(join(tmpdir(), 'cd-'))
   const cd = join(fixture, 'changes', 'c1')
