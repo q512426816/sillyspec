@@ -472,7 +472,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
     `✅ 任务勾选纪律：干活时逐条勾选 tasks.md 的 \`- [ ] task-NN\` → \`- [x]\`（完成一条勾一条）——`,
-    `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
+    `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
+    `   flow status 随时看勾选进度。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -715,10 +716,30 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
         const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
         let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
+        // 提交面不过 foreign 声明切分（2026-09-25-sentinel-evidence-freeze ⑤：已提交的文件就是
+        // 本变更的——陈旧声明的旧变更不该抢走 baseline..HEAD 里我实际提交的文件，静默少文件+门禁
+        // 静默 skipped 是平台狗粮实证。foreign 声明切分保留给 dirty 面与 attributedChangedFiles
+        // （实测面/FR 域路由）——那里归属确实模糊。）
+        // dirty 面切分 + 警告不再静默：
+        let dirtyForeign = []
         try {
           const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
-          committed = splitOwnVsForeignDiffFiles(cwd, change, committed, { specBase }).own
-        } catch { /* 切分失败 fail-closed 保留提交面 */ }
+          const statusOut = gitQuiet(cwd, ['status', '--porcelain'])
+          const dirtyAll = String(statusOut || '').split('\n').map((l) => {
+            if (!l || l.length < 4) return null
+            const p = line => line.slice(3).trim().replace(/^"|"$/g, '')
+            const raw = l.slice(3).trim().replace(/^"|"$/g, '')
+            const arrow = raw.indexOf(' -> ')
+            return (arrow !== -1 ? raw.slice(arrow + 4) : raw).replace(/\\/g, '/')
+          }).filter(Boolean).filter((f) => !f.startsWith('.sillyspec/'))
+          if (dirtyAll.length > 0) {
+            const dirtySplit = splitOwnVsForeignDiffFiles(cwd, change, dirtyAll, { specBase })
+            dirtyForeign = dirtySplit.foreign
+          }
+        } catch { /* dirty 切分失败不阻断 */ }
+        if (dirtyForeign.length > 0) {
+          console.warn(`⚠️ patch 留档：${dirtyForeign.length} 个 dirty 文件被其他活跃变更声明排除（${dirtyForeign.slice(0, 3).map((x) => `${x.file}←${x.owners[0]}`).join(', ')}${dirtyForeign.length > 3 ? ' 等' : ''}）——如有误（陈旧声明），清理该旧变更或用 --refreeze 重冻结`)
+        }
         const changeDirFiles = []
         const walk = (dir) => {
           for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -1126,6 +1147,16 @@ export async function cmdFlow(args, cwd, specDir = null) {
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
     validateChangeName(change)
+    // --refreeze（2026-09-25-sentinel-evidence-freeze ⑤）：重置 patch 子步标记强制下次重冻结
+    // （冻结面归属有误时的人工逃生口——提交面已不过 foreign 切分，dirty 面排除有警告指引到此）
+    if (hasFlag('--refreeze')) {
+      const cd = join(specBase, 'changes', change)
+      const stRf = readFlowState(cd)
+      if (stRf) {
+        writeFlowState(cd, { substeps: { patch: null } })
+        console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
+      }
+    }
     return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
   }
   if (sub === 'amend-draft') {
