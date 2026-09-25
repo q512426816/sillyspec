@@ -3,7 +3,9 @@
  *
  * 定档哲学：危险证据累积制，体积/文件数出局（撞实验 F-02 实证——几行 ref 清零的小改是 P1，
  * 30 文件的改名无风险）。信号五路，任一命中即需评审；缺省要评审、豁免要多证并举：
- *   ① 高危交付语义词（一票升级，任何信号压不住）——at-least-once/exactly-once/幂等/不丢失/
+ *   ① 高危交付语义词（一票升级，任何信号压不住——唯⑤声明通道 --no-review 显式豁免除外；
+ *      实现即此优先序：--no-review 先判，fr-governance-sweep 头注释清偿）——at-least-once/
+ *      exactly-once/幂等/不丢失/
  *      不重复/串台类承诺是 P1 高发区（R15-F-01 即承诺-实现落差）；
  *   ② 盲维四问实质作答——设计记录「边界与并发」槽有非「不适用」开头的作答=该维风险面存在
  *      （作答即信号：没有那个维度就不会写出实质内容；adopted 无槽设计退化为机制词全文扫描）；
@@ -93,11 +95,16 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
   } catch { /* 无 design → 槽位门/redraft 面兜底 */ }
 
   // ③ 交付 diff 原语
+  // 分径（fr-governance-sweep 评审 P3 清偿）：null=patch 采集失败（flow.js patch 子步 fail-soft
+  // 的 catch 传 null）≠ 空=真无交付 diff——前者不能作为「纯治理面变更」豁免证据（有真实交付但
+  // patch 恰好失败的变更会凭误标证据整体豁免评审——防线虚焊），改判需评审。
   if (patchText != null && String(patchText).trim()) {
     if (PRIMITIVE_RE.test(patchText)) reasons.push('交付 diff 含并发/游标/取消类原语')
     else exemptEvidence.push('diff 无危险原语')
-  } else {
+  } else if (patchText != null) {
     exemptEvidence.push('无交付 diff（纯治理面变更）')
+  } else {
+    reasons.push('交付 diff 不可得（patch 留档失败）——豁免证据不成立，需评审')
   }
 
   // ④ 决策密度

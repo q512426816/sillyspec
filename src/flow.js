@@ -412,6 +412,13 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         console.log(`📌 重入补生成缺失机器稿 ${r.drafted.length} 件：${r.drafted.join('、')}（工具升级晚于 start 的在途变更补件；已存在文件未动）`)
       }
     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
+    // 声明通道 resume 生效（fr-governance-sweep 评审 P3 清偿）：--review/--no-review 对在途
+    // 变更重入 start 时落盘 review_force——与新变更/adopt 两路口径一致（此前 resume 只打简报
+    // 即 return，flag 静默失效）。幂等：未带 flag（null）不覆盖既有声明。
+    if (reviewForce !== null) {
+      writeFlowState(changeDir, { review_force: reviewForce })
+      console.log(`⚖️ 已更新评审声明通道：review_force=${reviewForce}（resume 落盘）`)
+    }
     // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
     // changedFilesSinceBaseline（fr-rot-precision 评审 P2：含未提交工作树/untracked、剔 .sillyspec，
     // 与收口口径同源；裸 git diff 双提交区间会漏干活期未提交文件）；best-effort 不阻断恢复简报。
@@ -1143,7 +1150,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
       const archiveDir = join(specBase, 'changes', 'archive')
       let isArchived = false
       try {
-        if (existsSync(archiveDir)) isArchived = readdirSync(archiveDir).some((e) => e.includes(change))
+        if (existsSync(archiveDir)) isArchived = readdirSync(archiveDir).some((e) => e === change) // 精确匹配（fr-governance-sweep：归档目录名恒等 change 名，includes 子串会把 flow-check 误命中 flow-checkpoints）
       } catch { /* best-effort */ }
       if (isArchived) {
         console.log(`📦 ${change}：已归档`)
