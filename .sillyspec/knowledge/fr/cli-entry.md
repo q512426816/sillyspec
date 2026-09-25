@@ -804,3 +804,96 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-precheck-removal/requirements.md#FR-04
 最近确认：b4cfb50860532d62fdc3ee5c2185cf8c36d11252
+
+## FR-cli-entry-048 run/complete.js 的 --done 链接入 detectFakeC
+变更：2026-09-25-sentinel-wiring
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then run/complete.js 的 --done 链接入 detectFakeCheckCompletion：tasks.md 全勾但零完成证据（区间提交 su
+全文：.sillyspec/changes/archive/2026-09-25-sentinel-wiring/requirements.md#FR-01
+最近确认：2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-sentinel-wiring:flow:FR-01
+  tests: test/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-sentinel-wiring
+  status: active
+
+## FR-cli-entry-049 轻量变更 flow done 的 artifacts 子步同判接入（change
+变更：2026-09-25-sentinel-wiring
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 轻量变更 flow done 的 artifacts 子步同判接入（changeDir 内 tasks.md 全勾零证据同拒）——两道收口同一哨兵
+全文：.sillyspec/changes/archive/2026-09-25-sentinel-wiring/requirements.md#FR-02
+最近确认：2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-sentinel-wiring:flow:FR-02
+  tests: test/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-sentinel-wiring
+  status: active
+
+## FR-cli-entry-050 提交区间口径：quick 用 quick 基线区间提交、flow 用 basel
+变更：2026-09-25-sentinel-wiring
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 提交区间口径：quick 用 quick 基线区间提交、flow 用 baseline..HEAD（与既有归属收窄单源一致）
+全文：.sillyspec/changes/archive/2026-09-25-sentinel-wiring/requirements.md#FR-03
+最近确认：2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-sentinel-wiring:flow:FR-03
+  tests: test/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-sentinel-wiring
+  status: active
+
+## FR-cli-entry-051 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 fl
+变更：2026-09-25-sentinel-wiring
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 flow 侧至少一道 e2e）
+全文：.sillyspec/changes/archive/2026-09-25-sentinel-wiring/requirements.md#FR-04
+最近确认：2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-sentinel-wiring:flow:FR-04
+  tests: test/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-sentinel-wiring
+  status: active
+
+## FR-cli-entry-052 flow 系与 test:core 全绿
+变更：2026-09-25-sentinel-wiring
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then flow 系与 test:core 全绿
+全文：.sillyspec/changes/archive/2026-09-25-sentinel-wiring/requirements.md#FR-05
+最近确认：2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3

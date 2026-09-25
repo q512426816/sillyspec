@@ -1,0 +1,383 @@
+diff --git a/src/flow.js b/src/flow.js
+index 94166a2b..4053db4e 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -421,7 +421,30 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   if (st.substeps?.ledger === 'done') { skip('ledger') } else {
+     const { runQuickTestLintGate } = await import('./run/quick-audit.js')
+     const changedFiles = await attributedChangedFiles()
+-    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change })
++    // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交 subject 无
++    // task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
++    try {
++      const { detectFakeCheckCompletion } = await import('./sentinel-assertions.js')
++      const tasksPath = join(changeDir, 'tasks.md')
++      if (existsSync(tasksPath)) {
++        const _logRaw = gitQuiet(cwd, ['log', '--format=%s', `${st.baseline_commit}..HEAD`])
++        if (!_logRaw) {
++          console.log('ℹ️ 哨兵：git log 不可用，跳过（fail-open——空提交组照判会假拦）')
++        } else {
++        const commitSubjects = String(_logRaw).split('\n').filter(Boolean)
++        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitSubjects })
++        if (sent.status === 'fake') {
++          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交无 token、无 review.json）：${sent.missing.join('、')}`)
++          console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
++          appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
++          reportMidFail('ledger')
++          process.exit(1)
++        }
++        if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
++        }
++      }
++    } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
++    const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
+     if (gate && gate.action === 'fail') {
+       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
+       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 516f3b8c..0b9e3aa1 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -11,7 +11,8 @@
+  *     本模块被 command.js 静态 import，顶部静态拉 @inquirer/prompts 会进**每条** run 命令
+  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
+  */
+-import { join } from 'node:path'
++import { join, dirname } from 'node:path'
++import { existsSync, readFileSync } from 'node:fs'
+ import { parsePorcelainPath, safeGit } from './shared.js'
+ import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
+ 
+@@ -472,7 +473,7 @@ export function mergeGateFiles(audited, declared) {
+   return out
+ }
+ 
+-export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null }) {
++export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], declaredFiles = [], changeName = null, skipSentinel = false }) {
+   if (process.env.SILLYSPEC_QUICK_TEST_GATE === 'skip') {
+     return { action: 'skip', failed: [], reason: 'SILLYSPEC_QUICK_TEST_GATE=skip 显式跳过（审计留痕）', test: null, lint: null }
+   }
+@@ -608,6 +609,25 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+       lint = runVerifyLintCheck({ cwd, specBase })
+     }
+     const failed = []
++    // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
++    // 证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
++    // skipSentinel：flow done 调用方自带 baseline 哨兵（更可靠区间），传 true 跳过免双判。
++    if (!skipSentinel) try {
++      const { detectFakeCheckCompletion } = await import('../sentinel-assertions.js')
++      const tasksDir = changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null
++      if (tasksDir && existsSync(tasksDir)) {
++        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', 'HEAD~10..HEAD']) : null
++        const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
++        if (commitSubjects) {
++          const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitSubjects.split('\n').filter(Boolean) })
++          if (sent.status === 'fake') {
++            console.error(`\n🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据：${sent.missing.join('、')}`)
++            console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
++            failed.push('sentinel')
++          }
++        }
++      }
++    } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行）: ${(e && e.message) || e}`) }
+     // 纯超时降档（R4 门禁价值考古：36/106 失败是 600s 帽杀纯超时假拦——超时=未完成非测试挂）。
+     // 所有失败单元 reason 均含超时 → advisory 不计入 failed；任一单元真实挂测 → 维持硬拦。
+     if (test.status === 'failed') {
+diff --git a/test/sentinel-wiring.test.mjs b/test/sentinel-wiring.test.mjs
+new file mode 100644
+index 00000000..5cfd884d
+--- /dev/null
++++ b/test/sentinel-wiring.test.mjs
+@@ -0,0 +1,96 @@
++/**
++ * sentinel-wiring.test.mjs — 哨兵断言两道收口接线（2026-09-25-sentinel-wiring）
++ *
++ * 验收面：①flow done 侧：tasks.md 全勾零证据 → 拒收 exit 1 点名缺失任务；全勾+提交带
++ * task-NN token → 放行；非全勾 → 放行不变；②接线钉（quick 侧与 flow 侧同源 import）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'sw-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf-8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++  return { cwd, cli }
++}
++
++function fillSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
++}
++
++test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非全勾放行', () => {
++  // 形态 A：全勾零证据 → 拒
++  {
++    const { cwd, cli } = makeRepo()
++    const change = 'sw-fake'
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++    const cd = join(cwd, '.sillyspec', 'changes', change)
++    fillSlots(cwd, change)
++    // tasks.md 全勾（机器段内改勾须走 amend 留痕重锚——模拟真实勾选面）
++    writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
++    spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000 })
++    writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++    execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++    execFileSync('git', ['commit', '-q', '-m', 'work（无 task token）'], { cwd, stdio: 'pipe' })
++    const f = cli(['flow', 'done', '--change', change])
++    assert.equal(f.status, 1, '全勾零证据应拒')
++    assert.match(f.stdout + f.stderr, /哨兵断言拒收/, '哨兵文案')
++    rmSync(cwd, { recursive: true, force: true })
++  }
++  // 形态 B：全勾 + 提交带 token → 过（哨兵绿行，收口继续）
++  {
++    const { cwd, cli } = makeRepo()
++    const change = 'sw-real'
++    // --no-review：amend 改勾触发 edit_ratio=1 → 评审必评会拦在收口前，本用例测哨兵不测评审
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
++    const cd = join(cwd, '.sillyspec', 'changes', change)
++    fillSlots(cwd, change)
++    writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
++    spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000 })
++    writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++    execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++    execFileSync('git', ['commit', '-q', '-m', 'feat: task-01 行为 X'], { cwd, stdio: 'pipe' })
++    const ok = cli(['flow', 'done', '--change', change])
++    assert.equal(ok.status, 0, `全勾+token 应放行收口: ${ok.stdout}\n${ok.stderr}`)
++    assert.match(ok.stdout, /哨兵：全勾/, '哨兵绿行在场')
++    rmSync(cwd, { recursive: true, force: true })
++  }
++  // 形态 C：非全勾（默认未勾）→ 哨兵 status=none 不拦（既有全部测试已隐式覆盖——显式断言一次）
++  {
++    const { cwd, cli } = makeRepo()
++    const change = 'sw-partial'
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++    fillSlots(cwd, change)
++    writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++    execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++    execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++    const ok = cli(['flow', 'done', '--change', change])
++    assert.equal(ok.status, 0, '非全勾放行不变')
++    assert.doesNotMatch(ok.stdout, /哨兵断言拒收/)
++    rmSync(cwd, { recursive: true, force: true })
++  }
++})
++
++test('② 接线钉：flow done 与 quick 门两侧同源 import detectFakeCheckCompletion', () => {
++  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  const quickSrc = readFileSync(join(ROOT, 'src', 'run', 'quick-audit.js'), 'utf8')
++  assert.match(flowSrc, /sentinel-assertions/, 'flow 侧接线')
++  assert.match(quickSrc, /sentinel-assertions/, 'quick 侧接线')
++})
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-wiring/design.md b/.sillyspec/changes/2026-09-25-sentinel-wiring/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-wiring/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:43:30.368Z
++---
++# 设计记录（Design Record）— 2026-09-25-sentinel-wiring
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++sentinel-assertions.detectFakeCheckCompletion 接入两道收口：①flow done ledger 子步入口——tasks.md 全勾但零完成证据（baseline..HEAD 提交 subject 无 task-NN token 且无对应 review.json）→ 拒收 exit 1 点名缺失任务（遥测记 sentinel:fake），全勾有证据打绿行，非全勾/无勾选行放行不变，fail-open；②quick 门（runQuickTestLintGate）failed 数组同判——guard.tasksPath 或 change 目录 tasks.md 全勾零证据 → failed.push(sentinel)。两道同源 import 同判据（watcher R1 口径的硬门版），提交区间各按自家基线。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/flow.js ledger 子步哨兵块；src/run/quick-audit.js（dirname 导入+哨兵块+safeGit 单次调用）；test/sentinel-wiring.test.mjs 三态 e2e（全勾零证据拒/全勾 token 放/非全勾放）+接线钉。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用（每轮重算）。2. 并发写：只读 tasks.md+git log。3. 切换：fail-open 断言失败放行不产生假拦。4. 作用域：commit 区间 flow=baseline..HEAD、quick=guard.baselineCommit..HEAD（缺省 HEAD~10..HEAD 兜底）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=quick 侧 guard.tasksPath 字段不在（guard 形状按 change 目录兜底拼路径）——缺省走 changes/<名>/tasks.md，quick 的变更目录即此形状；死路=只在 flow 侧接——quick 是存量主道，单侧接线等于半根管线。
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-wiring/flow-state.yaml b/.sillyspec/changes/2026-09-25-sentinel-wiring/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-wiring/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 55f8568052ceb82e69aafd9a198ce72c1579cd68
++updatedAt: '2026-09-24T23:52:34.976Z'
++gate_summary: >-
++  test: passed ← module[cli-core,run-gates]+deps(js30)（52.4s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260924235158\test-result.json｜lint: passed
++  ← npm run lint（35.6s）｜门文件 45 个
++
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-wiring/proposal.md b/.sillyspec/changes/2026-09-25-sentinel-wiring/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-wiring/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:43:30.367Z
++---
++# 提案书（Proposal）— 2026-09-25-sentinel-wiring
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:2e85fa06032064e598dbfd3fa96ea03351e5f85b1ea039ff88c7905e011b2c19:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++任务原话转写：动机：sentinel-assertions.js 交付两日零调用方（注释自证「接线留下批」）——L0 假勾选硬门只在单测里活着，真实收口从不执行；R16 评审抓的真缺陷（64KiB 码点 bug）修完即散，无沉淀通道。
++成功标准：
++- run/complete.js 的 --done 链接入 detectFakeCheckCompletion：tasks.md 全勾但零完成证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 拒收 exit 1 点名缺失任务；非全勾/零勾选行放行不变
++- 轻量变更 flow done 的 artifacts 子步同判接入（changeDir 内 tasks.md 全勾零证据同拒）——两道收口同一哨兵
++- 提交区间口径：quick 用 quick 基线区间提交、flow 用 baseline..HEAD（与既有归属收窄单源一致）
++- 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 flow 侧至少一道 e2e）
++- flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:4988f5db8c104e47794bb650b4e7a22e9f3db704b31887bd862c8e598c0dffb1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. run/complete.js 的 --done 链接入 detectFakeCheckCompletion：tasks.md 全勾但零完成证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 拒收 exit 1 点名缺失任务；非全勾/零勾选行放行不变
++2. 轻量变更 flow done 的 artifacts 子步同判接入（changeDir 内 tasks.md 全勾零证据同拒）——两道收口同一哨兵
++3. 提交区间口径：quick 用 quick 基线区间提交、flow 用 baseline..HEAD（与既有归属收窄单源一致）
++4. 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 flow 侧至少一道 e2e）
++5. flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:5b9d537948426bb2522666f76e166321682b6079d0dee6228a07fde0804aba4a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++1. run/complete.js 的 --done 链接入 detectFakeCheckCompletion：tasks.md 全勾但零完成证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 拒收 exit 1 点名缺失任务；非全勾/零勾选行放行不变
++2. 轻量变更 flow done 的 artifacts 子步同判接入（changeDir 内 tasks.md 全勾零证据同拒）——两道收口同一哨兵
++3. 提交区间口径：quick 用 quick 基线区间提交、flow 用 baseline..HEAD（与既有归属收窄单源一致）
++4. 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 flow 侧至少一道 e2e）
++5. flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-wiring/requirements.md b/.sillyspec/changes/2026-09-25-sentinel-wiring/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-wiring/requirements.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:43:30.368Z
++---
++# 需求规格（Requirements）— 2026-09-25-sentinel-wiring
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:ee856abf83916fc57df9aafd333fe6468cde42a9413303215af785d3f4328f3d:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++### FR-01: run/complete.js 的 --done 链接入 detectFakeC
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then run/complete.js 的 --done 链接入 detectFakeCheckCompletion：tasks.md 全勾但零完成证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 拒收 exit 1 点名缺失任务；非全勾/零勾选行放行不变
++
++### FR-02: 轻量变更 flow done 的 artifacts 子步同判接入（change
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then 轻量变更 flow done 的 artifacts 子步同判接入（changeDir 内 tasks.md 全勾零证据同拒）——两道收口同一哨兵
++
++### FR-03: 提交区间口径：quick 用 quick 基线区间提交、flow 用 basel
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then 提交区间口径：quick 用 quick 基线区间提交、flow 用 baseline..HEAD（与既有归属收窄单源一致）
++
++### FR-04: 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 fl
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 flow 侧至少一道 e2e）
++
++### FR-05: flow 系与 test:core 全绿
++Given flow 轻量跑道在跑
++When flow done 裁决执行
++Then flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-wiring.test.mjs ① 形态 A/B（全勾零证据拒收/全勾 token 放行）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-wiring.test.mjs ① 形态 B（--no-review 下去全链收口）+ ② 接线钉（两侧 import）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-wiring.test.mjs ① 形态 C（非全勾放行）+ 既有 55 例全套隐式回归（所有 e2e 均走非全勾路径零假拦）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-wiring.test.mjs ①② + flow 系 + deps-cwd 55 例 + test:core 176 例
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：缺号
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-wiring/tasks.md b/.sillyspec/changes/2026-09-25-sentinel-wiring/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-wiring/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-24T23:43:30.368Z
++---
++# 任务注册表（Tasks）— 2026-09-25-sentinel-wiring
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:01dc9f4f07dfbdf0cf6e31b513afb7e56e70bb0ddf7f6c34030bf4b3273821f7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-wiring 留痕重锚 -->
++- [ ] task-01: run/complete.js 的 --done 链接入 detectFakeCheckCompletion：tasks
++- [ ] task-02: 轻量变更 flow done 的 artifacts 子步同判接入（changeDir 内 tasks.md 全勾零证据
++- [ ] task-03: 提交区间口径：quick 用 quick 基线区间提交、flow 用 baseline..HEAD（与既有归属收窄单源一
++- [ ] task-04: 新增集成测试：全勾零证据拒/全勾有提交证据放/非全勾放 三态（run 侧或 flow 侧至少一道 e2e）
++- [ ] task-05: flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

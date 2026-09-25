@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-sentinel-wiring",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-sentinel-wiring:flow:FR-01",
+      "tests": [
+        "test/sentinel-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-sentinel-wiring"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-sentinel-wiring:flow:FR-02",
+      "tests": [
+        "test/sentinel-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-sentinel-wiring"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-sentinel-wiring:flow:FR-03",
+      "tests": [
+        "test/sentinel-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-sentinel-wiring"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-sentinel-wiring:flow:FR-04",
+      "tests": [
+        "test/sentinel-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-sentinel-wiring"
+    }
+  ]
+}

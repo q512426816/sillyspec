@@ -1,0 +1,24 @@
+{
+  "change": "2026-09-25-sentinel-wiring",
+  "baseline": "55f8568052ceb82e69aafd9a198ce72c1579cd68",
+  "head": "2b5c087f8dde8981ca11fbdc24cc3c1c525ae4c3",
+  "files": [
+    "src/flow.js",
+    "src/run/quick-audit.js",
+    "test/sentinel-wiring.test.mjs",
+    ".sillyspec/changes/2026-09-25-sentinel-wiring/design.md",
+    ".sillyspec/changes/2026-09-25-sentinel-wiring/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-sentinel-wiring/proposal.md",
+    ".sillyspec/changes/2026-09-25-sentinel-wiring/requirements.md",
+    ".sillyspec/changes/2026-09-25-sentinel-wiring/tasks.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 309,
+    "deletions": 3
+  },
+  "savedAt": "2026-09-25T00:09:43.468Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "16f7d715515607cbeed72994f4eed10a3ddc1ab1706017e9b3c882dd968f55b3",
+  "patchStatus": "ok"
+}
