@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-flow-checkpoints",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "归档检测 includes 子串匹配存在低概率误报",
+      "evidence": "readdirSync(archiveDir).some((e) => e.includes(change)) 为子串匹配：查询名恰为另一归档目录名子串时误报「已归档」（如查 flow-check 而存量 2026-09-25-flow-checkpoints）。归档名带日期前缀，实际碰撞概率低，非阻断",
+      "location": "src/flow.js:871"
+    },
+    {
+      "severity": "P3",
+      "title": "注释与归档命名实现的轻微出入（无功能影响）",
+      "evidence": "注释称归档目录为 changes/archive/<日期>-<名>，但 stage-contract.js archiveDestDirName 实际保持原变更名不变；includes 恰好兼容两种命名格式，检测行为正确",
+      "location": "src/flow.js:867 与 src/stage-contract.js:1684-1686"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "n/a",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-25T13:30:00+08:00",
+  "reviewScope": "复审轮（上轮 P1 修复核验）：只核 src/flow.js status 子命令归档检测分支改查 changes/archive/ 目录",
+  "verification": {
+    "fixConfirmed": true,
+    "evidence": [
+      "src/flow.js:866-874 —— readFlowState(changeDir) 为 null 时，归档检测改为 archiveDir = join(specBase, 'changes', 'archive')（:868），existsSync 守卫 + readdirSync(archiveDir).some((e) => e.includes(change))（:871），命中输出「📦 已归档」",
+      "src/flow.js:40-48 —— readFlowState 对目录缺失（归档后搬走）catch 返回 null，必然进入归档检测分支，触发链路完整",
+      "src/flow.js:28 —— existsSync/readdirSync 均已从 node:fs 导入，无 ReferenceError 被 try/catch 吞掉的风险",
+      "src/stage-contract.js:1684-1686 + flow.js:756-757 —— 归档目标目录名 = 原变更名（archiveDestDirName 原样返回），includes 对精确名必命中，匹配契约一致",
+      "分支顺序正确：isArchived 优先于「目录在场无 flow-state」与「变更不存在」，归档态不再被误报为不存在"
+    ]
+  }
+}
