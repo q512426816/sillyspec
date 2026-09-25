@@ -1,0 +1,25 @@
+{
+  "change": "2026-09-25-flow-tick-prototype",
+  "baseline": "b9e4071a79166ad6aaf088885ebad0e41ef7bab1",
+  "head": "c43b9825fcaf591a3abb0d8bbd7ac4dd782581aa",
+  "files": [
+    "src/flow-draft.js",
+    "src/flow.js",
+    "test/flow-tick-prototype.test.mjs",
+    "test/fr-compound-split.test.mjs",
+    ".sillyspec/changes/2026-09-25-flow-tick-prototype/design.md",
+    ".sillyspec/changes/2026-09-25-flow-tick-prototype/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-flow-tick-prototype/proposal.md",
+    ".sillyspec/changes/2026-09-25-flow-tick-prototype/requirements.md",
+    ".sillyspec/changes/2026-09-25-flow-tick-prototype/tasks.md"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 329,
+    "deletions": 3
+  },
+  "savedAt": "2026-09-25T06:09:44.456Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "020ab90492274e3b0ef3fdc811627f71fb371f84ecc94e51aafd3b88e1c4502a",
+  "patchStatus": "ok"
+}

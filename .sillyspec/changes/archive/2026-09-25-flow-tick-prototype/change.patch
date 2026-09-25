@@ -1,0 +1,440 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 02001c9a..24a524ab 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -32,6 +32,23 @@ export function draftLedgerPath(runtimeRoot, changeName) {
+ 
+ const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`
+ 
++/**
++ * 复合标准拆分（2026-09-25-fr-compound-split）：条目内「A/B」「A；B」的合取标准拆为独立条目
++ * （FR 区 agent 书写架构下，摘录一行 A/B 会被直抄成粒度失真的单条 FR）。路径感知：含扩展
++ * 名点或超一处斜杠的条目不按斜杠拆（src/flow.js 之类不能劈）。
++ */
++function splitCompoundCriteria(item) {
++  const parts = String(item).split(/[；;]/).map((s) => s.trim()).filter(Boolean)
++  const out = []
++  for (const part of parts) {
++    const pathLike = /\.[A-Za-z]{1,5}\b/.test(part) || (part.match(/\//g) || []).length > 1
++    if (!pathLike && /[／/]/.test(part)) {
++      for (const seg of part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)) out.push(seg)
++    } else out.push(part)
++  }
++  return out
++}
++
+ /**
+  * 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。
+  * 编号条目通道（2026-09-25-thin-fr-quality，R16 实证驱动）：输入为完整任务书时行为需求以
+@@ -53,7 +70,7 @@ export function extractSuccessCriteria(input, opts = {}) {
+     if (!sawSection && /^[-*•]\s+\S/.test(raw)) { criteria.push(raw.replace(/^[-*•]\s+/, '')); continue }
+     if (inSection) {
+       const item = raw.replace(/^[-*•\d.)、]+\s*/, '')
+-      if (item && !/^#/.test(item)) criteria.push(item)
++      if (item && !/^#/.test(item)) criteria.push(...splitCompoundCriteria(item))
+     }
+   }
+   // 编号条目通道：正文「1. …」行为条目（与节条目去重），数 ≥3 且多于节条目时取代
+diff --git a/src/flow.js b/src/flow.js
+index 17bdf550..289710f3 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -118,6 +118,25 @@ function materialPaths(specBase, changeName, changeDir) {
+   return paths.filter((p) => { try { return existsSync(p) } catch { return false } })
+ }
+ 
++/** 变更目录实际产物枚举（2026-09-25-flow-tick-prototype，adopt 路径必读面）：adopt 时头脑风暴
++ * 产出的原型 HTML/决策清单等不在 materialPaths（那是稳定前缀 scan 面）——动态扫变更目录把实际
++ * 在场产物列成必读清单，原型显式点名（agent 看不到就不会用）。 */
++function changeArtifactPaths(changeDir) {
++  const out = []
++  try {
++    for (const e of readdirSync(changeDir, { withFileTypes: true })) {
++      if (e.isDirectory()) {
++        if (e.name === 'prototypes') {
++          for (const f of readdirSync(join(changeDir, 'prototypes'))) out.push(join(changeDir, 'prototypes', f))
++        }
++        continue
++      }
++      if (/\.(md|html)$/i.test(e.name) && e.name !== FLOW_STATE_FILE) out.push(join(changeDir, e.name))
++    }
++  } catch { /* 目录异常 = 空清单 */ }
++  return out.filter((p) => { try { return existsSync(p) } catch { return false } })
++}
++
+ /**
+  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
+  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
+@@ -162,18 +181,27 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+         } catch { /* 观测旁路 best-effort */ }
+         const materials = materialPaths(specBase, change, changeDir)
++        const artifacts = changeArtifactPaths(changeDir)
++        const prototypePaths = artifacts.filter((p) => /\.html$/i.test(p))
+         console.log([
+           `🧲 头脑风暴产物已收编进轻量跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
+           `══════════════════════════════════════`,
+-          `【你要做的】直接干活：改代码、写测试。brainstorm 的 design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
++          `📖 必读（头脑风暴产出——方案的承诺锚，先读完再动手）：`,
++          ...artifacts.map((p) => `   - ${p}`),
++          prototypePaths.length > 0
++            ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
++            : null,
++          `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
++          `✅ 任务勾选纪律：干活时逐条勾选 tasks.md 的 \`- [ ] task-NN\` → \`- [x]\`（完成一条勾一条）——`,
++          `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
+           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
+           ``,
+           `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+           ``,
+           `材料路径清单（按需 Read）：`,
+           ...materials.map((p) => `  - ${p}`),
+-        ].join('\n'))
++        ].filter(Boolean).join('\n'))
+         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+         return { adopted: true, change, baseline }
+       }
+@@ -284,6 +312,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
+     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
++    `✅ 任务勾选纪律：干活时逐条勾选 tasks.md 的 \`- [ ] task-NN\` → \`- [x]\`（完成一条勾一条）——`,
++    `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+@@ -464,6 +494,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           process.exit(1)
+         }
+         if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
++        // 勾选缺失 advisory（2026-09-25-flow-tick-prototype）：有任务行但全未勾（status='none' 且
++        // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
++        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitSubjects.length > 0) {
++          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitSubjects.length} 个提交）——`)
++          console.warn(`   规范动作是干活时逐条勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
++        }
+         }
+       }
+     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
+@@ -901,6 +937,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+       `📋 ${change}`,
+       `   阶段：${phase}`,
+       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
++      (() => { try { const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8'); const c = (t.match(/^- \[x\]/gm) || []).length; const tot = (t.match(/^- \[( |x)\]/gm) || []).length; return `   任务勾选：${c}/${tot}` } catch { return null } })(),
+       `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
+       subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
+       st.legacy_fallback ? `   ⚠️ 已升厚（legacy_fallback）——剩余流程走 run <stage>` : '',
+diff --git a/test/flow-tick-prototype.test.mjs b/test/flow-tick-prototype.test.mjs
+new file mode 100644
+index 00000000..ce739242
+--- /dev/null
++++ b/test/flow-tick-prototype.test.mjs
+@@ -0,0 +1,87 @@
++/**
++ * flow-tick-prototype.test.mjs — 任务勾选纪律 + adopt 产物必读（2026-09-25-flow-tick-prototype）
++ *
++ * 验收面：
++ *   ① fresh 简报含任务勾选纪律；
++ *   ② adopt 简报动态枚举变更目录产物（design/decisions/原型 HTML）并显式点名原型必看；
++ *   ③ flow status 显示任务勾选进度；
++ *   ④ flow done 勾选缺失 advisory（不阻断）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'ftp-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
++  g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-q', '-m', 'b'])
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++  return { cwd, cli }
++}
++
++function fillSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：夹具'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 夹具行为\nGiven x\nWhen y\nThen z')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：夹具'))
++}
++
++test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
++  const { cwd, cli } = makeRepo()
++  const s = cli(['flow', 'start', '--change', 'ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
++  assert.equal(s.status, 0)
++  assert.match(s.stdout, /任务勾选纪律/, 'fresh 勾选纪律')
++  assert.match(s.stdout, /完成一条勾一条/, '动作说明')
++  const st = cli(['flow', 'status', '--change', 'ftp-1'])
++  assert.match(st.stdout, /任务勾选：0\/1/, 'status 显示勾选进度')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② adopt 简报枚举产物 + 原型点名', () => {
++  const { cwd, cli } = makeRepo()
++  const change = 'ftp-2'
++  const cd = join(cwd, '.sillyspec', 'changes', change)
++  mkdirSync(join(cd, 'prototypes'), { recursive: true })
++  writeFileSync(join(cd, 'proposal.md'), '# 提案\n## 成功标准\n- 行为甲\n')
++  writeFileSync(join(cd, 'design.md'), '# 设计\n交互流程：见原型\n')
++  writeFileSync(join(cd, 'decisions.md'), '# 决策\n## D-001@v1: 取舍\n- 决策：甲\n')
++  writeFileSync(join(cd, 'prototypes', 'ui-mock.html'), '<html>mock</html>\n')
++  const s = cli(['flow', 'start', '--change', change])
++  assert.equal(s.status, 0, s.stderr)
++  assert.match(s.stdout, /必读（头脑风暴产出/, '必读段')
++  assert.match(s.stdout, /design\.md/, '列 design')
++  assert.match(s.stdout, /decisions\.md/, '列 decisions')
++  assert.match(s.stdout, /ui-mock\.html/, '列原型文件')
++  assert.match(s.stdout, /原型在场（1 个 HTML）|原型/, '原型点名')
++  assert.match(s.stdout, /任务勾选纪律/, 'adopt 也有勾选纪律')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', () => {
++  const { cwd, cli } = makeRepo()
++  const change = 'ftp-3'
++  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++  fillSlots(cwd, change)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work（不勾选）'], { cwd, stdio: 'pipe' })
++  const d = cli(['flow', 'done', '--change', change])
++  assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
++  assert.match(d.stdout + d.stderr, /任务勾选缺失/, 'advisory 在场')
++  assert.match(d.stdout + d.stderr, /逐条勾选/, '指引')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/fr-compound-split.test.mjs b/test/fr-compound-split.test.mjs
+new file mode 100644
+index 00000000..c7716f88
+--- /dev/null
++++ b/test/fr-compound-split.test.mjs
+@@ -0,0 +1,34 @@
++/**
++ * fr-compound-split.test.mjs — 复合标准拆分（2026-09-25-fr-compound-split）
++ * 验收面：①「A/B」拆两条、「A；B」拆两条（经 extractSuccessCriteria）；②路径形态不拆；
++ *   ③拆后进入 FR 区参考摘录（FR-01/02/03 形态）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { extractSuccessCriteria, draftAll } from '../src/flow-draft.js'
++
++test('① 复合拆分：斜杠与分号形态', () => {
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 后端端点可访问/鉴权生效\n- 前端正常渲染'),
++    ['后端端点可访问', '鉴权生效', '前端正常渲染'])
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 写入幂等；重试收敛'), ['写入幂等', '重试收敛'])
++})
++
++test('② 路径形态不拆：扩展名点或多斜杠', () => {
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- src/flow.js 补冻结面/提示'),
++    ['src/flow.js 补冻结面/提示'])
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- backend/app/x.py 与 frontend/y.ts 对齐'),
++    ['backend/app/x.py 与 frontend/y.ts 对齐'])
++})
++
++test('③ 拆后进入参考摘录（FR-01/02/03 形态）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'fcs-'))
++  draftAll({ changeDir: root, change: 'c1', input: '成功标准：\n- 后端端点可访问/鉴权生效\n- 前端正常渲染', runtimeRoot: root })
++  const reqs = readFileSync(join(root, 'requirements.md'), 'utf8')
++  assert.match(reqs, /FR-01: 后端端点可访问/)
++  assert.match(reqs, /FR-02: 鉴权生效/)
++  assert.match(reqs, /FR-03: 前端正常渲染/)
++  rmSync(root, { recursive: true, force: true })
++})
+diff --git a/.sillyspec/changes/2026-09-25-flow-tick-prototype/design.md b/.sillyspec/changes/2026-09-25-flow-tick-prototype/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-flow-tick-prototype/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T06:04:13.840Z
++---
++# 设计记录（Design Record）— 2026-09-25-flow-tick-prototype
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++两缺口四件修：①勾选纪律进 fresh 与 adopt 简报（完成一条勾一条——勾选是收口哨兵证据面）；②changeArtifactPaths 新函数动态扫变更目录产物（.md/.html + prototypes/），adopt 简报列必读清单、原型 HTML 显式点名必看必用、design 承诺优先；③flow status 显示 tasks.md 勾选进度；④flow done 勾选缺失 advisory（有任务全未勾但有提交 → 警告指引不阻断——不勾选是漏账非假勾）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/flow.js：changeArtifactPaths 新函数、adopt 简报重写（必读清单+原型点名+勾选纪律）、fresh 简报加勾选纪律、status 加勾选进度行、tone done 哨兵块加 advisory。test/flow-tick-prototype.test.mjs 三用例。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：输出与只读扫描，无状态变更。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=adopt 必读清单随目录增长可能变长——限定 .md/.html 两类+prototypes 目录，实际变更目录文件数个位数，可接受。死路=把勾选做成阻断门——机器 draft 的任务行与真实工作单元非一一对应（如一条 FR 拆多步），硬拦会逼假勾（正好是哨兵要防的），advisory 是正确力度。
+
+diff --git a/.sillyspec/changes/2026-09-25-flow-tick-prototype/flow-state.yaml b/.sillyspec/changes/2026-09-25-flow-tick-prototype/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-flow-tick-prototype/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: b9e4071a79166ad6aaf088885ebad0e41ef7bab1
++updatedAt: '2026-09-25T06:09:42.973Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（55.3s）｜门文件 10 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-flow-tick-prototype/proposal.md b/.sillyspec/changes/2026-09-25-flow-tick-prototype/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-flow-tick-prototype/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T06:04:13.839Z
++---
++# 提案书（Proposal）— 2026-09-25-flow-tick-prototype
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:8a925849e288c03cf3af0051adffd40c2362e60974bc1989fa3c7dc620193d9e:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++任务原话转写：动机：轻量变更两处执行面缺口——①执行过程不勾选 tasks.md（哨兵只防假勾选，全不勾无驱动；恢复简报统计勾选但首跑没人告诉 agent 要勾）②adopt 路径简报只说 design/decisions 是承诺锚，变更目录实际产物（原型 HTML/决策清单等）不在材料清单里——头脑风暴产的原型 agent 看不到就不会用。
++成功标准：
++- fresh 与 adopt 简报加任务勾选纪律：干活时逐条勾选 tasks.md 的 - [ ] task-NN → [x]（勾选=收口哨兵证据面；全勾无证据会被拒收）
++- adopt 简报动态枚举变更目录实际产物（design.md/decisions.md/proposal.md/requirements.md/prototypes/*.html/*.md）为必读列表——原型显式点名必看必用
++- flow status 显示 tasks.md 勾选进度（checked/total）
++- flow done 收口 advisory：有 tasks 且全未勾但有交付提交时提醒（不阻断——不勾选是记账缺失非假勾）
++- 测试：简报勾选纪律断言/adopt 产物列举断言/status 勾选显示/收口 advisory 三面
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:5b21edf82b1d3f246b3995220f949af3976af111afd4c3db8ab2d144c351e51c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. fresh 与 adopt 简报加任务勾选纪律：干活时逐条勾选 tasks.md 的 - [ ] task-NN → [x]（勾选=收口哨兵证据面；全勾无证据会被拒收）
++2. adopt 简报动态枚举变更目录实际产物（design.md/decisions.md/proposal.md/requirements.md/prototypes/*.html/*.md）为必读列表——原型显式点名必看必用
++3. flow status 显示 tasks.md 勾选进度（checked/total）
++4. flow done 收口 advisory：有 tasks 且全未勾但有交付提交时提醒（不阻断——不勾选是记账缺失非假勾）
++5. 测试：简报勾选纪律断言/adopt 产物列举断言/status 勾选显示/收口 advisory 三面
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:18255272fdf5e099d4514bb186c8da4356d50f27c0562ed2c00fb7e8b7782f8b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++1. fresh 与 adopt 简报加任务勾选纪律：干活时逐条勾选 tasks.md 的 - [ ] task-NN → [x]（勾选=收口哨兵证据面；全勾无证据会被拒收）
++2. adopt 简报动态枚举变更目录实际产物（design.md/decisions.md/proposal.md/requirements.md/prototypes/*.html/*.md）为必读列表——原型显式点名必看必用
++3. flow status 显示 tasks.md 勾选进度（checked/total）
++4. flow done 收口 advisory：有 tasks 且全未勾但有交付提交时提醒（不阻断——不勾选是记账缺失非假勾）
++5. 测试：简报勾选纪律断言/adopt 产物列举断言/status 勾选显示/收口 advisory 三面
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-flow-tick-prototype/requirements.md b/.sillyspec/changes/2026-09-25-flow-tick-prototype/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-flow-tick-prototype/requirements.md
+@@ -0,0 +1,39 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T06:04:13.840Z
++---
++# 需求规格（Requirements）— 2026-09-25-flow-tick-prototype
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 勾选纪律与产物必读
++Given 轻量变更执行期
++When fresh 或 adopt 路径启动
++Then 简报含勾选纪律、adopt 列产物必读清单、status 显勾选进度
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: fresh 与 adopt 简报加任务勾选纪律：干活时逐条勾选 tasks.md 的 - [ ] task-NN → [x]（勾选=收口哨兵证据面；全勾无证据会被拒收）
++FR-02: adopt 简报动态枚举变更目录实际产物（design.md/decisions.md/proposal.md/requirements.md/prototypes/*.html/*.md）为必读列表——原型显式点名必看必用
++FR-03: flow status 显示 tasks.md 勾选进度（checked/total）
++FR-04: flow done 收口 advisory：有 tasks 且全未勾但有交付提交时提醒（不阻断——不勾选是记账缺失非假勾）
++FR-05: 测试：简报勾选纪律断言/adopt 产物列举断言/status 勾选显示/收口 advisory 三面
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-tick-prototype.test.mjs 三用例（勾选纪律/产物枚举/缺失 advisory）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-tick-prototype.test.mjs 三用例（勾选纪律/产物枚举/缺失 advisory）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-tick-prototype.test.mjs 三用例（勾选纪律/产物枚举/缺失 advisory）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-tick-prototype.test.mjs 三用例（勾选纪律/产物枚举/缺失 advisory）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-tick-prototype.test.mjs 三用例（勾选纪律/产物枚举/缺失 advisory）
+
+diff --git a/.sillyspec/changes/2026-09-25-flow-tick-prototype/tasks.md b/.sillyspec/changes/2026-09-25-flow-tick-prototype/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-flow-tick-prototype/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T06:04:13.840Z
++---
++# 任务注册表（Tasks）— 2026-09-25-flow-tick-prototype
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:73129e7797ca76034e7fb6f40b00926a4c0d4ac1b849b9c8f6790a163a4a2efb:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-flow-tick-prototype 留痕重锚 -->
++- [ ] task-01: fresh 与 adopt 简报加任务勾选纪律：干活时逐条勾选 tasks.md 的 - [ ] task-NN → [
++- [ ] task-02: adopt 简报动态枚举变更目录实际产物（design.md/decisions.md/proposal.md/requ
++- [ ] task-03: flow status 显示 tasks.md 勾选进度（checked/total）
++- [ ] task-04: flow done 收口 advisory：有 tasks 且全未勾但有交付提交时提醒（不阻断——不勾选是记账缺失非假勾
++- [ ] task-05: 测试：简报勾选纪律断言/adopt 产物列举断言/status 勾选显示/收口 advisory 三面
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

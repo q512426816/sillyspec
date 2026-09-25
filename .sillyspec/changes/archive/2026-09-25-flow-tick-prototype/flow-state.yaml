@@ -1,0 +1,18 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+baseline_commit: b9e4071a79166ad6aaf088885ebad0e41ef7bab1
+updatedAt: '2026-09-25T06:09:46.202Z'
+gate_summary: 'test: skipped｜lint: passed ← npm run lint（55.3s）｜门文件 10 个'
+
