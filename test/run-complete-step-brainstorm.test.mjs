@@ -8,7 +8,7 @@
  *   - runValidators('brainstorm') 通过（四件套齐全 + design 无生命周期关键词）
  *   - Stage Review Gate：design 变更文件 ≤3 → tier=self，降级自审放行（不需 review.json）
  *   - stageData.status='completed' + completedAt + user-inputs.md 追加
- *   - scale=small → 下一步提示 quick --linked-changes（历史 bug：曾误推 plan）
+ *   - scale=small → 下一步提示轻量变更 flow start（2026-09-25 quick 退役改指；历史 bug：曾误推 plan）
  *   - --reopen --from-step N 后 --done：stale 步骤同步回填 completed
  *   - 单步 --done（非末步，design.md 已落盘）→ changes.title 即刷新为 design 首个 #
  *     标题的中文描述，不等阶段完成（历史 bug：brainstorm 全程 title 存英文 autoName 兜底）
@@ -79,7 +79,7 @@ console.log('--- 末步 + 四件套齐全 + design≤3 文件 → 阶段完成�
   assert(inputs.includes('生成规范完成'), 'user-inputs.md 含本次 output')
 }
 
-console.log('\n--- design.md scale=small → 下一步 quick --linked-changes（修历史 bug：曾硬编码 plan） ---')
+console.log('\n--- design.md scale=small → 下一步轻量变更 flow start（quick 退役改指；修历史 bug：曾硬编码 plan） ---')
 {
   const { cwd, specBase } = makeRepo('cli-brainstorm-scale-')
   const cn = '2026-07-25-brainstorm-small'
@@ -99,8 +99,8 @@ console.log('\n--- design.md scale=small → 下一步 quick --linked-changes（
   const r = runStage('brainstorm', cn, cwd, { done: true, output: '生成规范完成', answer: '确认' })
 
   assert(r.status === 0, `scale=small exit 0（实际 ${r.status}，输出尾：${r.combined.slice(-150)}）`)
-  assert(r.combined.includes('下一步：sillyspec run quick') || r.combined.includes('run quick'), 'scale=small → 下一步提示 quick')
-  assert(r.combined.includes(`--linked-changes ${cn}`) || r.combined.includes('--linked-changes'), 'quick 用 --linked-changes 而非 --change')
+  assert(r.combined.includes('sillyspec flow start'), 'scale=small → 下一步提示轻量变更 flow start')
+  assert(r.combined.includes(`--change ${cn}`) || r.combined.includes('--change'), 'flow start 用 --change')
   assert(!r.combined.includes('run plan'), 'scale=small 不应再提示 plan（历史 bug 已修）')
   assert(!r.combined.includes('run scan'), 'brainstorm 完成不再误推 scan')
 }
