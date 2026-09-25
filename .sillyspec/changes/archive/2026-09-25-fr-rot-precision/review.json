@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-fr-rot-precision",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "误删的待复核标记（72 条 sentinel + 修复声明的 88 条口径）无自动恢复路径——「闭环恢复」声明对已终局归档 ref 不成立；工作树处于误删后状态未复原（HEAD 数据完好，一步 git checkout 可复原）",
+      "evidence": "当前工作树全库「待复核：」标记为 0 条；HEAD 的 cli-entry.md 留存 72 条「待复核：2026-09-25-sentinel-evidence-freeze」标记（首跑 112dc5d0 按文件面交集保留的存量），用修复后代码（节头边界 readEntryBindings + 在途跳过）对 HEAD 快照逐条重算 covHit，判决 keep=72/del=0——即工作树中这 72 条的删除是修复前 bug 版 cleanup 的误删残留，非修复后代码的合法判决。cleanupStaleReviewMarks 只删不补，幂等重跑不恢复任何标记；sentinel 变更已归档（83d792b5）不会再走 flow done 打标，其标记恢复只能等未来变更再次触及同 FR 文件面（被动、不确定）或手工 git checkout HEAD -- .sillyspec/knowledge/fr/cli-entry.md。修复声明「收口后 rot 会按新判据重打、归档后重跑清理闭环恢复、无需手工回滚」仅对仍在途变更（下次 flow done ledger 的 rot 会重评重打）成立，对已终局归档 ref 不成立。危害面为 advisory 信号缺失（代码自述「宁漏勿滥，漏标只损失注入排序优先级」），FR 条目本体与测试绑定数据完好，不阻断归档；留档建议：择机 git checkout 复原该 72 条，并把修复声明中的「闭环恢复」表述修正为「在途 ref 由下次收口重打、终局 ref 损失已接受」。另注：修复现场残留 scripts-tmp-frfix.mjs 临时脚本未清理。",
+      "location": "src/fr-index.js:838 / .sillyspec/knowledge/fr/cli-entry.md (working tree)"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-25T12:02:08Z"
+}

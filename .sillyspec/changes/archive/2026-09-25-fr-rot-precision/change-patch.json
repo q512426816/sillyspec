@@ -1,0 +1,26 @@
+{
+  "change": "2026-09-25-fr-rot-precision",
+  "baseline": "83d792b59b428a5fafcc5b39f1f46c9f8eacd33b",
+  "head": "112dc5d0bc74a3ca9249c32cc36f5d53f6840ff0",
+  "files": [
+    "src/flow.js",
+    "src/fr-index.js",
+    "src/stage-contract.js",
+    "test/fr-rot-precision.test.mjs",
+    "test/thin-fr-inject-parity.test.mjs",
+    ".sillyspec/changes/2026-09-25-fr-rot-precision/design.md",
+    ".sillyspec/changes/2026-09-25-fr-rot-precision/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-fr-rot-precision/proposal.md",
+    ".sillyspec/changes/2026-09-25-fr-rot-precision/requirements.md",
+    ".sillyspec/changes/2026-09-25-fr-rot-precision/tasks.md"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 667,
+    "deletions": 39
+  },
+  "savedAt": "2026-09-25T11:42:39.906Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "956f2c2b39309d6e420e67a18467287c456c682793989cec471b354deb4ba641",
+  "patchStatus": "ok"
+}

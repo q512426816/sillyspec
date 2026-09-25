@@ -1625,3 +1625,243 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given 平台狗粮五负面逐条收口；When ②证据面扩全消息 ⑤冻结面修复三件；Then 全部负面有解无遗留
 全文：.sillyspec/changes/archive/2026-09-25-sentinel-evidence-freeze/requirements.md#FR-01
 最近确认：9d15795d8befee8e4c362a2ee1168fe3ad427b74
+
+## FR-cli-entry-090 frCoverageFiles 三源并集
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given rot 打标需要 FR 覆盖文件集，单源（design 交付表）对 thin 归档覆盖率 0；When fr-index.js 新增导出 frCoverageFiles（归档 design.md 交付表剥反引号 ∪ change-patch.json files，；Then thin 归档 27/30 可从 change-patch.json 补位；反引号交付条目（实测 29.4%）剥壳后可匹配
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-01
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-01
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-091 readActiveFrDigest 新增 bindings 字段
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given rot coverage 第三源是条目测试绑定的 test 文件；When readActiveFrDigest 解析「测试绑定：」子块（锚定子块防正文误匹配，多文件 | 分隔）；Then 返回对象新增 bindings: string[]，纯增量——既有消费方（prompt.js 注入渲染等）零影响
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-02
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-02
+  tests: test/cli.test.mjs | test/thin-fr-inject-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-092 交付表解析抽公共
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given design 表格行正则只存在于 resolveTouchedDomains 内部（两处复用会复制漂移）；When 抽为导出 deliverableFilesFromDesignText（含反引号剥壳）；Then resolveTouchedDomains 改调用（反引号条目现在能命中模块域——原失明面改良）；frCoverageFiles 同源使用
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-03
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-03
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-093 rotSuspectFlow 三分判据
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 域级全标产生 ⚠️ 通胀（本仓实测一次 88 条，keep-latest 每收口全量刷新）；When coverage（来源变更文件面 ∪ bindings）与本次归属文件面单向匹配；Then 交集非空→strong 打标；coverage 空→unknown 不打标（遥测单列，宁漏勿滥——漏标只损失注入排序优先级）；非空无交集→skip；遥测 cou
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-04
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-04
+  tests: test/thin-fr-inject-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-094 匹配口径单向
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given changed 恒为文件级路径、coverage 含目录形态；When 判定用「相等 || changed.startsWith(cov 补 / 结尾)」；Then 口径单侧定义，目录条目按前缀含
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-05
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-05
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-095 dup 软门最高重叠对 + 场景名
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 侧取首个过阈者与 brainstorm 软门（取最高）微差，且命中提示缺场景上下文；When frDupGateFlow 改取最高重叠对并附 active 条目场景名（过滤（无场景名）占位）；Then 多命中时指认最相近条目；agent 改写承接可直接对照场景（OpenSpec MODIFIED 整块拷贝语义的轻量等价）
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-06
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-06
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-096 阈值常量公共化
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 0.6 在 flow.js 与 stage-contract.js 各写一份（最小漂移面）；When fr-index.js 导出 FR_TITLE_OVERLAP_THRESHOLD，两处改 import；Then 文本钉（限两文件）断言无裸 >= 0.6 且常量 import 在场（verify-probes.js 的第三处 0.6 是另一语义不纳入）
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-07
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-07
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-097 resume 域路由口径
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 裸 git diff 双提交区间漏干活期未提交文件且不带 .sillyspec 剔除；When resume 注入改用 changedFilesSinceBaseline（含 untracked/dirty、剔 .sillyspec，与收口口径同源）；Then 干活中途 resume 也有域路由依据；文本钉防回潮
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-08
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-08
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-098 cleanupStaleReviewMarks 并发安全
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 存量 200 条标记（recent-quick 112 + sentinel 88）多为通胀产物，且域文件被多会话共享；When 清理函数原子写（writeAtomicSync）+ 写前重读比对快照 + 幂等可重跑；Then 盘上被并行改写的文件跳过不覆盖（重跑消化）；superseded 条目不碰
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-09
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-09
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-099 清理判据泛化
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given quick 永不归档（ref 无文件面），逐 ref 特判是特例；When 判据统一为 keep iff coverage(FR 来源变更)∪bindings 与 coverage(ref 变更) 有文件面交集（任一侧空→删）；Then 自然覆盖 quick 侧 112 条 recent-quick 与带 changeName 的 quick ref；与运行时 unknown 不打标口径一致
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-10
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-10
+  tests: test/fr-rot-precision.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active
+
+## FR-cli-entry-100 清理时序
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 清理早于代码合入会被旧判据重标；When 清理执行于代码合入后（本变更内先提交 src 再跑清理）；Then 治理产物与判据同版生效
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-11
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+## FR-cli-entry-101 测试覆盖
+变更：2026-09-25-fr-rot-precision
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 新逻辑六面（三源/bindings/抽公共/三分/常量/清理）；When test/fr-rot-precision.test.mjs 六用例 + 改写 thin-fr-inject-parity 测试②（fixture 补归档件+绑；Then 11/11 绿；flow 族+fr-index+decision 底座+contract 面共 116 用例全绿
+全文：.sillyspec/changes/archive/2026-09-25-fr-rot-precision/requirements.md#FR-12
+最近确认：4f391b8ff8c71c8f75e587a30b22a31c09cc6baf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-rot-precision:flow:FR-12
+  tests: test/fr-rot-precision.test.mjs | test/thin-fr-inject-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-rot-precision
+  status: active

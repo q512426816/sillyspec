@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-fr-rot-precision",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-01",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-02",
+      "tests": [
+        "test/cli.test.mjs",
+        "test/thin-fr-inject-parity.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-03",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-04",
+      "tests": [
+        "test/thin-fr-inject-parity.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-05",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-06",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-07",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-08",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-09",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-09",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-10",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-10",
+      "tests": [
+        "test/fr-rot-precision.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    },
+    {
+      "anchor": "FR-12",
+      "row_id": "2026-09-25-fr-rot-precision:flow:FR-12",
+      "tests": [
+        "test/fr-rot-precision.test.mjs",
+        "test/thin-fr-inject-parity.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-rot-precision"
+    }
+  ]
+}
