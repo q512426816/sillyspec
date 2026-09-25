@@ -285,6 +285,15 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
     ``,
+    `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+    `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+    `      等用户确认方案再动手写代码——方案错了返工最贵。`,
+    `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
+    `      等用户确认再跑收口。`,
+    `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
+    `   用户明确说「直接跑完/不用问我」→ 三断点全跳过（agent 自主干到底）。`,
+    `   随时可查进度：sillyspec flow status --change ${change}`,
+    ``,
     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
     ``,
@@ -782,6 +791,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   }
   appendTelemetry(reviewOutcome) // 成功收口（失败面已在各失败路径提前落账，appendTelemetry 单点）
 
+  console.log(`📦 归档断点：全部子步完成，即将归档——agent 把收口结果（子步清单+评审结论+验证回执）给用户看。`)
   console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
   // Git 历史整理指引（2026-09-25-thin-freeze-git-hygiene）：多轮中间提交可压扁为单提交——审计
   // 真相在 change.patch（sha256 锚定）与归档产物，不依赖历史形态；baseline 在 change-patch.json。
@@ -845,6 +855,51 @@ export async function cmdFlow(args, cwd, specDir = null) {
       cwd, specBase,
       json: hasFlag('--json'),
     })
+  }
+  if (sub === 'status') {
+    // 三断点配套（2026-09-25-flow-checkpoints）：随时可查当前变更阶段/槽位/子步进度
+    const change = getFlag('--change')
+    if (!change) { console.error('❌ flow status 需 --change <名>'); process.exit(2) }
+    validateChangeName(change)
+    const changeDir = join(specBase, 'changes', change)
+    const st = readFlowState(changeDir)
+    if (!st) {
+      if (existsSync(join(changeDir, 'review.json')) || existsSync(join(changeDir, 'change.patch'))) {
+        console.log(`📦 ${change}：已归档`)
+      } else if (existsSync(changeDir)) {
+        console.log(`📁 ${change}：变更目录在场但无 flow-state（可能头脑风暴预段产物，尚未进入轻量变更）`)
+      } else {
+        console.log(`❓ ${change}：变更不存在`)
+      }
+      return
+    }
+    const subDone = SUBSTEPS.filter((k) => st.substeps?.[k] === 'done')
+    const subLeft = SUBSTEPS.filter((k) => st.substeps?.[k] !== 'done')
+    // 槽位快检
+    let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
+    try {
+      const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
+      designFilled = Array.from(dText.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
+    } catch { /* 无 design */ }
+    try {
+      const rText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+      frFilled = /### FR-\d+:/.test(rText.replace(/<!--[\s\S]*?-->/g, ''))
+      bindingsTotal = (rText.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length
+      bindingsFilled = (rText.match(/<!--AGENT:测试绑定FR-\d+[^\n]*-->\n\S/g) || []).length
+    } catch { /* 无 requirements */ }
+    // 阶段推断
+    let phase = '① spec（填 FR + design 槽）'
+    if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) phase = '② 执行（写代码跑测试）→ ①卡点：spec 摘要给用户确认'
+    if (subDone.includes('ledger')) phase = '③ 归档（flow done 收口）'
+    console.log([
+      `📋 ${change}`,
+      `   阶段：${phase}`,
+      `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
+      `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
+      subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
+      st.legacy_fallback ? `   ⚠️ 已升厚（legacy_fallback）——剩余流程走 run <stage>` : '',
+    ].filter(Boolean).join('\n'))
+    return
   }
   if (sub === 'done') {
     const change = getFlag('--change')
