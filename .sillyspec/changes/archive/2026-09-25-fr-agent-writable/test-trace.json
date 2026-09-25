@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-fr-agent-writable",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-fr-agent-writable:flow:FR-01",
+      "tests": [
+        "test/fr-agent-writable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-agent-writable"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-fr-agent-writable:flow:FR-02",
+      "tests": [
+        "test/fr-agent-writable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-agent-writable"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-fr-agent-writable:flow:FR-03",
+      "tests": [
+        "test/fr-agent-writable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-agent-writable"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-fr-agent-writable:flow:FR-04",
+      "tests": [
+        "test/fr-agent-writable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-agent-writable"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-25-fr-agent-writable:flow:FR-05",
+      "tests": [
+        "test/fr-agent-writable.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-agent-writable"
+    }
+  ]
+}

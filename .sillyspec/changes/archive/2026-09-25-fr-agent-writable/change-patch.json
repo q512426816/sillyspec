@@ -1,0 +1,28 @@
+{
+  "change": "2026-09-25-fr-agent-writable",
+  "baseline": "f23b54b1f4d16cbf6c2af25d4987f9fef6a20d43",
+  "head": "401baa221bbc37b0a88ad29ab83289c14631e0ca",
+  "files": [
+    "src/flow-draft.js",
+    "src/flow.js",
+    "test/flow-draft.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-route.test.mjs",
+    "test/fr-agent-writable.test.mjs",
+    "test/sentinel-wiring.test.mjs",
+    ".sillyspec/changes/2026-09-25-fr-agent-writable/design.md",
+    ".sillyspec/changes/2026-09-25-fr-agent-writable/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-fr-agent-writable/proposal.md",
+    ".sillyspec/changes/2026-09-25-fr-agent-writable/requirements.md",
+    ".sillyspec/changes/2026-09-25-fr-agent-writable/tasks.md"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 386,
+    "deletions": 47
+  },
+  "savedAt": "2026-09-25T05:08:19.602Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "88e1a976423a74715a278e02804ecb1c09b3a7defcbbc08e66a645a38bc1a495",
+  "patchStatus": "ok"
+}
