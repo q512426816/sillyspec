@@ -1292,3 +1292,87 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given 上述三件行为；When 跑 flow 系测试；Then flag 入冻/三选一文案/压扁指引均有断言且全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-04
 最近确认：dc281c3659ee9d34d2151dc3a90f8b866fe31cce
+
+## FR-cli-entry-071 轻量变更三断点可控性
+变更：2026-09-25-flow-checkpoints
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 轻量变更 2 调用协议；When agent 执行任务；Then 用户在三个断点可以看到进度并确认
+全文：.sillyspec/changes/archive/2026-09-25-flow-checkpoints/requirements.md#FR-01
+最近确认：6db77d5e6faedf28270ba6a0ded9814542e21b74
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-flow-checkpoints:flow:FR-01
+  tests: test/flow-checkpoints.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-flow-checkpoints
+  status: active
+
+## FR-cli-entry-072 合取标准拆分为独立 FR
+变更：2026-09-25-fr-compound-split
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 成功标准条目内含「A/B」或「A；B」的合取标准；When extractSuccessCriteria 收集节内条目；Then 合取标准拆为独立条目（分号恒拆；斜杠仅在非路径形态拆）
+全文：.sillyspec/changes/archive/2026-09-25-fr-compound-split/requirements.md#FR-01
+最近确认：65a025c9a2ff843897cb56df2208faf1bed150c1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-compound-split:flow:FR-01
+  tests: test/fr-compound-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-compound-split
+  status: active
+
+## FR-cli-entry-073 路径形态不拆
+变更：2026-09-25-fr-compound-split
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 条目含扩展名点或多处斜杠（src/flow.js、backend/app/x.py 形态）；When 复合拆分判定；Then 条目完整保留不被斜杠误劈
+全文：.sillyspec/changes/archive/2026-09-25-fr-compound-split/requirements.md#FR-02
+最近确认：65a025c9a2ff843897cb56df2208faf1bed150c1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-compound-split:flow:FR-02
+  tests: test/fr-compound-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-compound-split
+  status: active
+
+## FR-cli-entry-074 拆后条目进入参考摘录
+变更：2026-09-25-fr-compound-split
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 成功标准为「后端端点可访问/鉴权生效」与「前端正常渲染」；When flow start 起草 requirements；Then 参考摘录呈现 FR-01 后端端点可访问、FR-02 鉴权生效、FR-03 前端正常渲染三行
+全文：.sillyspec/changes/archive/2026-09-25-fr-compound-split/requirements.md#FR-03
+最近确认：65a025c9a2ff843897cb56df2208faf1bed150c1
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-fr-compound-split:flow:FR-03
+  tests: test/fr-compound-split.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-fr-compound-split
+  status: active
