@@ -237,5 +237,8 @@ test('孤儿自愈：正常路径真子进程起跑（锁落盘+存活）——�
   }
   try { child.kill() } catch {}
   assert.ok(ok, `正常路径子进程应在 8s 内落锁存活（exitCode=${child.exitCode} stderr=${err.slice(0, 300)}）`)
-  rmSync(root, { recursive: true, force: true })
+  // Windows 清理竞态（2026-09-25 推送门实证：kill 异步，子进程未退时 rmSync 撞开着的锁文件 EPERM）：
+  // 等退出再删；清理失败不连坐（残留交 tmpdir/suiteTmp 清理——stage-burst test.after 同款前例）
+  await new Promise((r) => { if (child.exitCode !== null) return r(); child.once('exit', r); setTimeout(r, 2000) })
+  try { rmSync(root, { recursive: true, force: true }) } catch { /* Windows 句柄延迟残留，不阻断 */ }
 })
