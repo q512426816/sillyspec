@@ -20,8 +20,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** 高危交付语义承诺词（一票升级）。2026-09-25-platform-feedback-batch2 D 收敛：移除「幂等」
- * ——它是实现手段不是交付语义承诺（幂等去重是常见实现模式），由 diff 原语面（IntegrityError/
- * ON CONFLICT 等）覆盖检测；保留的七个词均为面向用户的交付语义（丢了/重了/串了级别的承诺）。 */
+ * （实现手段非交付语义，由 diff 原语面覆盖）；保留的七个词均为面向用户的交付语义承诺。 */
 const PROMISE_RE = /at[- ]least[- ]once|exactly[- ]once|不丢失|不重复|不丢不重|不重不漏|串台/i
 
 /** adopted（头脑风暴预段）design 无槽时的机制词全文扫描（窄表防误报）。 */

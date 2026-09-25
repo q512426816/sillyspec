@@ -142,10 +142,15 @@ export function collectForeignDeclaredFiles(cwd, currentChangeName, opts = {}) {
       if (cn === currentChangeName || cn === 'archive') continue
       const designPath = join(changesDir, cn, 'design.md')
       if (!existsSync(designPath)) continue
-      // 时效：变更目录 mtime 超 7 天 → 陈旧，声明不生效（跳过整个变更）
+      // 时效：变更目录内最新文件 mtime 超 7 天 → 陈旧（目录 mtime 在 POSIX 上只反映子项增删
+      // 不反映文件内容修改——用目录内所有文件的最大 mtime 做活性信号，跨平台一致）
       try {
-        const dirMtime = statSync(join(changesDir, cn)).mtimeMs
-        if (Date.now() - dirMtime > STALE_CHANGE_MS) {
+        let newestMtime = 0
+        const changePath = join(changesDir, cn)
+        for (const fe of readdirSync(changePath)) {
+          try { const m = statSync(join(changePath, fe)).mtimeMs; if (m > newestMtime) newestMtime = m } catch { /* 个别文件 stat 失败跳过 */ }
+        }
+        if (newestMtime > 0 && Date.now() - newestMtime > STALE_CHANGE_MS) {
           continue // 陈旧变更——声明已死，不抢活人的文件
         }
       } catch { /* stat 失败保守保留 */ }
