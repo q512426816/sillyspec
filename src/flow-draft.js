@@ -33,6 +33,23 @@ export function draftLedgerPath(runtimeRoot, changeName) {
 const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`
 
 /**
+ * 复合标准拆分（2026-09-25-fr-compound-split）：条目内「A/B」「A；B」的合取标准拆为独立条目
+ * （FR 区 agent 书写架构下，摘录一行 A/B 会被直抄成粒度失真的单条 FR）。路径感知：含扩展
+ * 名点或超一处斜杠的条目不按斜杠拆（src/flow.js 之类不能劈）。
+ */
+function splitCompoundCriteria(item) {
+  const parts = String(item).split(/[；;]/).map((s) => s.trim()).filter(Boolean)
+  const out = []
+  for (const part of parts) {
+    const pathLike = /\.[A-Za-z]{1,5}\b/.test(part) || (part.match(/\//g) || []).length > 1
+    if (!pathLike && /[／/]/.test(part)) {
+      for (const seg of part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)) out.push(seg)
+    } else out.push(part)
+  }
+  return out
+}
+
+/**
  * 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。
  * 编号条目通道（2026-09-25-thin-fr-quality，R16 实证驱动）：输入为完整任务书时行为需求以
  * 「1. …n.」编号列在正文、成功标准节只有总括句（「上述 1-9 全部实现…」入库为 FR 是口号不是
@@ -53,7 +70,7 @@ export function extractSuccessCriteria(input, opts = {}) {
     if (!sawSection && /^[-*•]\s+\S/.test(raw)) { criteria.push(raw.replace(/^[-*•]\s+/, '')); continue }
     if (inSection) {
       const item = raw.replace(/^[-*•\d.)、]+\s*/, '')
-      if (item && !/^#/.test(item)) criteria.push(item)
+      if (item && !/^#/.test(item)) criteria.push(...splitCompoundCriteria(item))
     }
   }
   // 编号条目通道：正文「1. …」行为条目（与节条目去重），数 ≥3 且多于节条目时取代
