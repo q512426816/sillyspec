@@ -172,13 +172,15 @@
 
 ## FR-runtime-020 flow.mode 缺省翻回 legacy
 变更：2026-09-22-stage-burst-fold
-状态：active
+状态：superseded
+superseded_by：FR-cli-entry-102
+取代链：FR-runtime-020 ← FR-cli-entry-102（2026-09-25-fr-governance-sweep 承接）
 摘要：默认场景
 依据决策：D-010@v2
 场景正文：
 - 场景：默认场景 — Given 仓库 local.yaml 无 flow 配置（或读取失败）；When 调 readFlowConfig(specBase)；Then mode === 'legacy'；显式 `mode: thin` / `flow: thin` 照旧生效；受影响测试 fixture（test/flow-pr
 全文：.sillyspec/changes/archive/2026-09-22-stage-burst-fold/requirements.md#FR-05
-最近确认：9f9450d0
+最近确认：ba8068438a34437daead41adeccb72009c174423
 
 ## FR-runtime-021 command.js 两处 --done 分发接线
 变更：2026-09-22-stage-burst-fold

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-fr-governance-sweep",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-03 空 patch 豁免分支在当前 flow.js 管道内为防御性死码——patch 子步从不产生空白 change.patch",
+      "evidence": "classifyReviewNeed 的 patchText 只有一个来源：flow.js:898-899 重入读取 change.patch（readFileSync 失败→null）。而 patch 子步的三条出路均不产生空白文件：①ownFiles 为空→『patch 留档跳过』不写文件（flow.js:827-829）→评审时 null；②buildFrozenPatch 返回空串→flow.js:851 守卫（typeof frozen === 'string' && frozen）判假→不写 change.patch、patchStatus='failed'（851-858）→评审时 null（走 FR-02 需评审分径，fail-closed）；③仅 frozen 非空才写盘（852-853），git diff 输出必含非空白内容。故「patchText 为空串/纯空白且非 null」只能来自外部手放文件或未来调用方，flow-review.js:104-105 的 else if (patchText != null) 分支现管道不可达。FR-03 的 Given 叙述（空串=真无交付 diff 的纯治理面变更）与实际数据流不符——纯治理变更的治理文件本身入 ownFiles（flow.js:825 冻结面含本变更目录件），冻结出非空 diff。如实裁决：非承诺违反——『空→豁免照旧』语义如实保留且测试①以直调 classifyReviewNeed 钉住（不经 flow.js 管道，断言通过）；分支作为对外 API（classifyReviewNeed 默认参数 patchText=null 可被任意外部调用）的防御语义保留有价值。按指示记 P3 不阻断。",
+      "location": "src/flow-review.js:104-105 (死码分支) / src/flow.js:851-858 (不可达成因)"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-25T12:36:29Z"
+}

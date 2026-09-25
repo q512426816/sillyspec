@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-fr-governance-sweep",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-01",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-02",
+      "tests": [
+        "test/fr-governance-sweep.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-03",
+      "tests": [
+        "test/fr-governance-sweep.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-04",
+      "tests": [
+        "test/fr-governance-sweep.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-05",
+      "tests": [
+        "test/fr-governance-sweep.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-06",
+      "tests": [
+        "test/fr-governance-sweep.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-25-fr-governance-sweep:flow:FR-07",
+      "tests": [
+        "test/flow-review.test.mjs",
+        "test/fr-governance-sweep.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-fr-governance-sweep"
+    }
+  ]
+}
