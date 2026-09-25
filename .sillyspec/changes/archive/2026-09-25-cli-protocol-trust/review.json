@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F-1",
+      "severity": "P3",
+      "title": "上轮 P3 遗留未清偿：flag 钉对第四消费形态仍失明（无注释/自检补盲）",
+      "detail": "test/flag-contract.test.mjs 的 consumedFlags() 只扫 flags.includes('…') 与 getFlagValue/autoFlagValue('…') 两族正则；全文件无任何关于盲维的注释或自检（grep 第四/盲/失明/不在钉内 = 0 命中）。本仓存在活的第四形态实例：src/run/command.js L74 `flags.indexOf('--files')`——字面量 flag 经 indexOf 消费，不在钉的扫描面内；若未来 --files 从 knownFlags 除名，钉不会红（与 --same-session/--force 同类的死路将无声复活）。现况 --files 在白名单在案（60 项，实测解析核对），无现行死路，属潜在钉盲而非活缺陷。上轮已定性 P3 不阻断，本轮如实登记移交。",
+      "evidence": "test/flag-contract.test.mjs consumedFlags()（两族正则，无盲维注释）；src/run/command.js L74（flags.indexOf('--files') 字面量消费）；knownFlags 解析 60 项含 --files（node 实测）"
+    },
+    {
+      "id": "F-2",
+      "severity": "P3",
+      "title": "调用点注释残留失位步号「step4」——亲测步实为索引 5（第 6 步）",
+      "detail": "src/run/complete.js verify 批量分支注释称「乐观对齐会把 noAI 亲测步（step4 verifyRunQualityScan）一并标 completed」。实测 stageRegistry.verify.steps：索引 0-6 依次为 进度确认/加载规范并锚定/逐项检查任务/对照设计检查/任务蓝图验收/运行测试和质量扫描（_cliAction='verifyRunQualityScan'）/输出验证报告——无论 0 基还是 1 基编号，「step4」均不指向亲测步。1965f407 与 68a4530a 两版 verify.js 步表逐行相同（排除期间改步），该步号自写注释起即失位。代码按索引对齐不读此注释（P1 修复本身正确），纯误导性面包屑，顺手改一处步号即可。",
+      "evidence": "src/run/complete.js L649 附近注释（「step4 verifyRunQualityScan」）；node 实测 stageRegistry.verify.steps 索引枚举（索引 5 = 运行测试和质量扫描）；git show 1965f407/68a4530a:src/stages/verify.js name 行相同"
+    }
+  ],
+  "dimensionNotes": {
+    "p1-fix": " 通过（双死因均闭）。① import 在场：src/run/complete.js L54 `import { stageRegistry } from '../stages/index.js'`，行内注释即留档初版缺 import 被 fail-open catch 吞成恒 false 的死因。② 实现正确：导出的 hasPendingVerifyScanStep(stageName, steps)（complete.js ~L1573）按 stageRegistry[stageName].steps 索引对齐判 _cliAction（保留 s._cliAction 直读兜底）+ status∈{pending,in-progress}；索引对齐的数据链核实成立——ensureStageSteps（command.js L171）种子 steps.map(s=>({name,status:'pending'})) 且顺序取自 getStageSteps（verify 非动态阶段，恒返回注册表定义数组原序），progress.js 落库 ordering=i、读取 ORDER BY ordering，漂移重播种亦按定义序重建；runtime 实测 stageRegistry.verify.steps[5]._cliAction==='verifyRunQualityScan'（与任务书口径一致）。③ 正向用例真实：test/flag-contract ④ 以注册表定义映射出纯 {name,status} 的 DB 形态步骤断言命中 true，另带 completed/空表/brainstorm 三路阴性对照与注册表面在场自检；对旧代码（直读 s._cliAction→undefined→false）本用例必红，非空转覆盖。独立复跑 flag-contract 4/4 绿。",
+    "fail-open-lesson": " 通过（按「至少注释留痕」标尺）：hasPendingVerifyScanStep 的 catch 行内注释明示 fail-open 取舍与兜底去向（「判定异常不阻断批量（亲测门兜底由收尾对账承担）」——收尾 PASS 封顶/integrationRan≠ran 门确为该兜底，R17 臂3 拦截⑥链路成立）；import 行注释同款留档。外层亲测执行 catch 有 console.warn 非静默。备注：判定 catch 仅注释留痕、无运行时 warn——标尺已满足，若后续再动此函数建议补一行 warn 使运维面可见（不另立发现）。",
+    "p2-fix": " 通过。SECTION_HEAD_RE 补 `(?:#+\\s*)?` 前缀豁免（flow-draft.js L68）：病根在 needsContinuationMerge 用原始行判节标题而摘录路径已自行剥 # 前缀——`## 成功标准：` 因行尾冒号命中续行合并条件被并入下一条、吞掉首条标准；豁免后两口径一致。误报面评估：条目行以 -/数字起头且需先整词命中九个节名，#+ 豁免不引入新误报。test/draft-continuation ①c（## 前缀节标题独立识别、首条不吞）复跑绿（5/5）。",
+    "p3-fix": " 通过。complete-handlers.js archiveNarrowedGitAdd：porcelain rename 形态（`R  old -> new`）slice(3) 后按 ` -> ` 取新路径入 add（rename 归档后应暂存的正是新侧路径，方向正确；普通/引号形态不受 arrow 分支影响）；零回执补 `else console.log('ℹ️ knowledge 面无待入暂存文件…')`，空面不再无声。node --check 三文件解析通过。",
+    "t15-causality": " 旁证链闭合，⑮ 工作树红与本变更无关：① 本变更两笔提交（1965f407/68a4530a）文件清单均为 flow-draft.js/run/command.js/run/complete-handlers.js/run/complete.js/draft-continuation.test.mjs/flag-contract.test.mjs，不含 flow-review.js/flow.js/flow-protocol.test.mjs/flow-review.test.mjs；② git show 68a4530a:src/flow-review.js 的 PROMISE_RE 仍含「幂等」（该 HEAD 下 ⑮ 用例输入「重复写入幂等收敛」可命中，纯净态绿——与主会话 stash 后 22/22 记录一致，本轮只读未重演 stash）；③ 当时工作树红因并行会话 WIP 先改 PROMISE_RE 去「幂等」而 ⑮ 输入未同步——该 WIP 已由并行会话以 35567c41 整体提交（PROMISE_RE 收敛 + ⑮ 输入改「不丢失不重复」+ flow-review ① 夹具同改，源自含自洽），因果完全外置。",
+    "regression": " 本变更门面复跑：flag-contract 4/4、draft-continuation 5/5 独立绿；另加跑近邻回归 verify-batch-finish（8/8 内部检查过）与 noai-completion-gate（过，5.3s）均绿。flow-state.yaml gate_summary 记 test: skipped｜lint: passed（npm run lint 31.5s，门文件 12）——CLI 侧测试门当时跳过，以本轮独立复跑补位采信。工作树现存的 quick-*/index/stage 等未提交改动属第三路并行会话（quick-channel-retire），不在本变更评审面。"
+  },
+  "reviewedAt": "2026-09-25T16:02:22Z",
+  "reviewer": "subagent"
+}

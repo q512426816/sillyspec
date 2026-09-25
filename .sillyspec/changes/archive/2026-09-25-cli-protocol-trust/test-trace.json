@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-cli-protocol-trust",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-cli-protocol-trust:flow:FR-01",
+      "tests": [
+        "test/flag-contract.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-cli-protocol-trust"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-cli-protocol-trust:flow:FR-02",
+      "tests": [
+        "test/flag-contract.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-cli-protocol-trust"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-cli-protocol-trust:flow:FR-03",
+      "tests": [
+        "test/draft-continuation.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-cli-protocol-trust"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-25-cli-protocol-trust:flow:FR-04",
+      "tests": [
+        "test/run-complete-noai-done-gate.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-cli-protocol-trust"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-25-cli-protocol-trust:flow:FR-05",
+      "tests": [
+        "test/archive-chain.test.mjs",
+        "test/archive-cli-git-add.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-cli-protocol-trust"
+    }
+  ]
+}

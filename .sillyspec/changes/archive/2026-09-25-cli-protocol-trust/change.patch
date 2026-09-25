@@ -1,0 +1,499 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 922b8007..40b28de1 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -60,10 +60,59 @@ function splitCompoundCriteria(item) {
+  * 行为语义）——正文编号条目数 ≥3 且多于节条目时取而代之（与节条目去重）。adopt/proposal
+  * 回提路径经 opts.numberedChannel=false 关闭（proposal 其他节的编号列表会误劫持）。
+  */
++/**
++ * 续行合并判定（cli-protocol-trust，R17 实证）：括号/引号未闭合，或行尾悬空连接符
++ * （冒号/顿号/逗号/开括号）→ 该行与下一行本是一条标准（--input 手写换行拆散）。
++ * 节标题行（成功标准：/动机：等）不参与合并——它们必须独立成行才能被节检测正则命中。
++ */
++const SECTION_HEAD_RE = /^(成功标准|验收标准|验收|acceptance|动机|背景|关键问题|变更范围|需求|非目标)[：:]?$/i
++function needsContinuationMerge(line) {
++  if (SECTION_HEAD_RE.test(line)) return false
++  if (/[：:、，,（(【\[「『]$/u.test(line)) return true // 行尾悬空连接符/开括号收尾
++  const pairs = [['(', ')'], ['（', '）'], ['【', '】'], ['[', ']'], ['「', '」'], ['『', '』']]
++  for (const [o, c] of pairs) {
++    const open = (line.match(new RegExp('\\' + o, 'g')) || []).length
++    const close = (line.match(new RegExp('\\' + c, 'g')) || []).length
++    if (open > close) return true
++  }
++  return false
++}
++
++/** 碎片特征检测（cli-protocol-trust）：括号不平衡/开括号收尾/闭括号开头——只警告不阻断
++ * （句子级强切与「完整标点收尾」自检经方案评审否决：误伤复合条目/无标点短条目）。 */
++function detectFragmentedCriteria(criteria, context) {
++  for (const c of criteria || []) {
++    const open = (c.match(/[（(【\[「『]/g) || []).length
++    const close = (c.match(/[）)】\]」』]/g) || []).length
++    if (open !== close || /[（(【\[「『]$/u.test(c) || /^[）)】\]」』]/.test(c)) {
++      console.warn(`⚠️ 摘录碎片特征：条目「${String(c).slice(0, 50)}${String(c).length > 50 ? '…' : ''}」括号不平衡（${open} 开/${close} 闭）——疑为切分残留，请核对 ${context || 'requirements/tasks'} 机器段`)
++    }
++  }
++}
++
++/** tasks 行截断（cli-protocol-trust）：60 字硬切改句界感知（窗内取末个句读，无则硬切），
++ * 带省略号收尾。下游消费按 `- [ ] task-NN` 前缀锚（complete.js 勾选正则/--step 断言），
++ * 不依赖截断长度——放宽安全（方案评审确认）。导出供 test/draft-continuation 直测。 */
++export function clipTaskText(s) {
++  const str = String(s || '')
++  if (str.length <= 80) return str
++  const win = str.slice(0, 80)
++  const m = win.match(/[。；;！!？?，,][^。；;！!？?，,]*$/)
++  const cut = m ? win.slice(0, win.length - m[0].length + 1) : win
++  return cut.replace(/[,，、;；\s]+$/, '') + '…'
++}
++
+ export function extractSuccessCriteria(input, opts = {}) {
+   if (!input) return []
+   const NL = /\r\n|\r|\n/
+-  const lines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
++  const rawLines = String(input).split(NL).map((l) => l.trim()).filter(Boolean)
++  // 续行合并（R17 实证：括号换行的单条标准被行级切分拆成两条碎片）
++  const lines = []
++  for (const l of rawLines) {
++    const prev = lines[lines.length - 1]
++    if (prev != null && needsContinuationMerge(prev)) lines[lines.length - 1] = prev + l
++    else lines.push(l)
++  }
+   const criteria = []
+   let inSection = false
+   let sawSection = false
+@@ -292,7 +341,7 @@ function draftTasks({ change, criteria, withTasks }) {
+   const crit = criteria || []
+   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+   const rows = crit.length > 0
+-    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 60)}`)
++    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${clipTaskText(c)}`)
+     : ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
+   const text = [
+     '---',
+@@ -385,6 +434,7 @@ function collectSections(text) {
+  */
+ export function draftAll({ changeDir, change, input, withTasks = false, runtimeRoot }) {
+   const criteria = extractSuccessCriteria(input)
++  detectFragmentedCriteria(criteria, `flow start --input 摘录（change=${change}）`)
+   const outputs = [
+     { file: 'proposal.md', draft: draftProposal({ change, input, criteria }) },
+     { file: 'requirements.md', draft: draftRequirements({ change, criteria }) },
+diff --git a/src/run/command.js b/src/run/command.js
+index b58e77a0..81ce941c 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -723,6 +723,8 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     '--inherit-from', // wait 继承盖章 <D-xxx@vN>（2026-09-18-preflight-slimming task-03：仅 --wait 场景合法，hasDecisionId 校验+盖章在 --wait 分发点/complete 层）
+     '--step', // --done 意图断言 <名|序号>（吃值，VALUE_FLAGS 同步登记；:340 消费——漏登记则说明书出示的 --done --step 形态进命令即被未知参数拦死，2026-09-23 执行会话实证）
+     '--upgrade-thick', // 轻量→完整升档用户同意门（2026-09-25-thin-upgrade-consent：布尔 flag，混跑回退写侧 :1362 消费——无 flag 拒跑，带 flag 落 legacy_fallback+同意时点留痕）
++    '--same-session', // R17 实验实证死路清偿（cli-protocol-trust）：STAGE_WALL 报错指引「加 --same-session 重跑」（stage.js 硬墙文案），消费在 runStage 逃生口——此前漏登记，照指引重跑即被本白名单 exit 2（指引指向死路的自我矛盾）
++    '--force', // 同族第二实例（静态扫描新发现）：quick --cancel 强清消费点与报错指引（可用 --force）在场但未登记——同死路；一致性钉 test/flag-contract.test.mjs 守护整类
+     '-h',
+   ])
+   for (let i = 0; i < flags.length; i++) {
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index c6239d4b..2207f7e3 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -529,6 +529,21 @@ export function archiveNarrowedGitAdd({ cwd, specBase, destDir, destName }) {
+   // changes 侧：本变更归档目录精确收窄（quick 轻量归档 closeSingleQuickLinkedChange 同款）
+   safeGit(cwd, ['add', '--', `.sillyspec/changes/archive/${destName}/`])
+ 
++  // knowledge 侧（cli-protocol-trust / R17 臂3 实证 distill 产物 untracked 漏提交）：本归档链
++  // distill 刚写的 fr 域文件/decisions/INDEX 必在 status 面——按 status 窄化逐文件精确 add
++  // （非目录级：避免扫入他侧并行会话的同目录 WIP；追加型共享面整文件提交与既有惯例一致）。
++  try {
++    const _knSt = gitQuiet(cwd, ['status', '--porcelain'])
++    if (_knSt) {
++      const knFiles = String(_knSt).split('\n').map((l) => l.slice(3).trim().replace(/^"|"$/g, ''))
++        .filter((p) => p.replace(/\\/g, '/').startsWith('.sillyspec/knowledge/'))
++      for (const batch of chunkPaths(knFiles)) safeGit(cwd, ['add', '--', ...batch])
++      if (knFiles.length > 0) console.log(`   📚 knowledge 蒸馏产物入暂存：${knFiles.length} 个文件（fr 域/decisions/INDEX）`)
++    }
++  } catch (e) {
++    console.warn(`⚠️ knowledge 侧 add 失败（fail-soft，不阻断归档链）：${e && e.message ? e.message : e}`)
++  }
++
+   // docs 侧：module-impact「更新结果」done 行 → 精确文件集。
+   // 三态（对齐修复④要求）：
+   //   - module-impact.md 无「## 更新结果」段 / 文件缺失 / 读取异常 → docPaths=null → 回退目录级
+diff --git a/src/run/complete.js b/src/run/complete.js
+index d9946c9e..c7bb66cc 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -642,9 +642,28 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+   // （测试对账/验收矩阵/module-impact 死信/PASS 封顶）照常全跑：批量省的是 --done
+   // 肥上下文往返，不省任何门。镜像 execute 批量模式（乐观预标戳 + 失败一并回滚）。
+   if (stageName === 'verify' && changeName) {
+-    const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
+-    if (_vb.batched && _vb.aligned > 0) {
+-      console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
++    // 批量对齐前补亲测（cli-protocol-trust / R17 臂3 拦截⑥实证）：乐观对齐会把 noAI 亲测步
++    // （step4 verifyRunQualityScan）一并标 completed → 亲测永不执行 → 收尾 PASS 封顶门因
++    // integrationRan≠ran 拒 → gate_rollback → --reopen 四步绕行。对齐面含该步时先亲跑
++    // executeVerifyQualityScan（幂等+指纹复用——已有有效记录时秒回零重复实测），失败则放弃
++    // 批量保持单步推进（亲测步照 noAI 硬门走）——「批量省的是上下文往返，不省任何门」承诺恢复成立。
++    let _skipBatch = false
++    const pendingScanStep = steps.some(s => (s.status === 'pending' || s.status === 'in-progress') && s._cliAction === 'verifyRunQualityScan')
++    if (pendingScanStep) {
++      try {
++        const { executeVerifyQualityScan } = await import('./verify-quality-scan.js')
++        await executeVerifyQualityScan({ cwd, specBase, changeName, platformOpts })
++        console.log('   🧪 批量对齐前已补 noAI 亲测（质量扫描记录落盘，亲测门不省）')
++      } catch (e) {
++        console.warn('   ⚠️ 亲测补跑失败——放弃批量对齐，保持单步推进（亲测步按 noAI 硬门走）：' + (e && e.message ? e.message : e))
++        _skipBatch = true
++      }
++    }
++    if (!_skipBatch) {
++      const _vb = detectVerifyBatchFinish({ changeName, specBase, steps })
++      if (_vb.batched && _vb.aligned > 0) {
++        console.log(`\n🚀 verify 批量完成：报告结论已填 + facts 在场，一次性补完 ${_vb.aligned} 个剩余 step → 进入阶段完成分支（收尾门禁照常全跑）`)
++      }
+     }
+   }
+ 
+diff --git a/test/draft-continuation.test.mjs b/test/draft-continuation.test.mjs
+new file mode 100644
+index 00000000..bdde98f7
+--- /dev/null
++++ b/test/draft-continuation.test.mjs
+@@ -0,0 +1,58 @@
++/**
++ * draft-continuation.test.mjs — 摘录续行合并与渲染放宽（2026-09-25-cli-protocol-trust A2）
++ *
++ * 覆盖验收面：
++ *   ① 续行合并：括号/引号未闭合跨行并回（R17 实证「放行（含：\n未知参数校验…）」被拆两碎片）；
++ *     行尾悬空冒号/顿号续行合并；节标题行不被误合并；
++ *   ② 渲染放宽：tasks 行 clipTaskText 句界感知（80 窗内句读截断+省略号，不再 60 字硬切半词）；
++ *   ③ 碎片特征检测：括号不平衡条目 console.warn（不阻断，不进返回值）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { extractSuccessCriteria, clipTaskText } = await import(pathToFileURL(join(ROOT, 'src', 'flow-draft.js')).href)
++
++test('① 续行合并：括号未闭合跨行并回成单条', () => {
++  const input = [
++    '动机：修复',
++    '成功标准：',
++    '- 未知参数放行（含：',
++    '新增 flag 同步登记与白名单一致性）',
++    '- 独立第二条',
++  ].join('\n')
++  const crit = extractSuccessCriteria(input)
++  assert.equal(crit.length, 2, `括号换行应并回（实际 ${crit.length} 条：${JSON.stringify(crit)}）`)
++  assert.ok(crit[0].includes('未知参数放行（含：新增 flag 同步登记与白名单一致性）'), '并回后条目完整')
++  assert.equal(crit[1], '独立第二条')
++})
++
++test('①b 行尾悬空冒号续行合并 + 节标题不被误合并', () => {
++  const input = [
++    '成功标准：',
++    '- 两态分径：',
++    'null 需评审与空串豁免各自成立',
++  ].join('\n')
++  const crit = extractSuccessCriteria(input)
++  assert.equal(crit.length, 1, `悬空冒号续行应并回（实际 ${crit.length}）`)
++  assert.ok(crit[0].includes('null 需评审'), '并回后语义完整')
++  // 节标题「成功标准：」自身不被并入条目（节检测正则依赖独立成行）
++  assert.ok(!crit[0].startsWith('成功标准'), '节标题未被误合并进条目')
++})
++
++test('② 渲染放宽：tasks 行句界感知截断（不再 60 字硬切半词）', () => {
++  const long = '这是一条非常长的成功标准条目需要被截断处理，其中包含多个句读符号比如逗号，以及句号。后半句内容足够长以至于远远超过八十个字符的窗口边界，需要句界感知截断而不是硬切半个词语收尾'
++  const body = clipTaskText(long)
++  assert.ok(body.endsWith('…'), `截断应带省略号收尾（实际结尾「${body.slice(-6)}」）`)
++  assert.ok(body.length < long.length, '应发生截断')
++  assert.ok(long.startsWith(body.slice(0, -1)), '截断体应是原文前缀（不造词）')
++  assert.ok(!/[,，、;；:]$/.test(body.slice(0, -1)), `省略号前不应残留悬空连接符（实际「${body.slice(-4)}」）`)
++})
++
++test('②b 短条目不截断（≤80 原样透传）', () => {
++  assert.equal(clipTaskText('短条目原样保留'), '短条目原样保留')
++})
+diff --git a/test/flag-contract.test.mjs b/test/flag-contract.test.mjs
+new file mode 100644
+index 00000000..0f9523af
+--- /dev/null
++++ b/test/flag-contract.test.mjs
+@@ -0,0 +1,56 @@
++/**
++ * flag-contract.test.mjs — flag 消费/声明一致性钉（2026-09-25-cli-protocol-trust）
++ *
++ * 病根（R17 臂3 实证 + 静态扫描第二实例）：CLI 报错指引指向未登记 knownFlags 的 flag
++ * （--same-session / --force 双死路——照指引重跑即 exit 2）。本钉静态扫描 command.js 的
++ * 三种消费形态 vs 白名单声明，任何「被消费但未声明」的 flag 直接红——钉死整类漂移，
++ * 不止修这两个实例。
++ *
++ * 透传 allowlist：声明于白名单但消费点不在 command.js 本文件的 flag（子模块直接读 argv/
++ * 由 index.js 分发层消费）——有限可枚举，逐个注明消费出处。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const SRC = readFileSync(join(ROOT, 'src', 'run', 'command.js'), 'utf8')
++
++/** 消费面：command.js 内三种静态字面量形态。 */
++function consumedFlags() {
++  const out = new Set()
++  for (const m of SRC.matchAll(/flags\.includes\('(--[\w-]+)'\)/g)) out.add(m[1])
++  for (const m of SRC.matchAll(/(?:getFlagValue|autoFlagValue)\('(--[\w-]+)'/g)) out.add(m[1])
++  return [...out]
++}
++
++/** 声明面：knownFlags = new Set([...]) 数组字面量里的 '--xxx'。 */
++function declaredFlags() {
++  const m = SRC.match(/const knownFlags = new Set\(\[([\s\S]*?)\]\)/)
++  assert.ok(m, 'knownFlags 白名单字面量应可定位')
++  const out = new Set()
++  for (const f of m[1].matchAll(/'(--[\w-]+)'/g)) out.add(f[1])
++  return [...out]
++}
++
++test('① 消费⊆声明：任何被 command.js 消费的 flag 必在 knownFlags 白名单（死路类灭绝钉）', () => {
++  const consumed = consumedFlags()
++  const declared = new Set(declaredFlags())
++  assert.ok(consumed.length >= 25, `消费面扫描应非平凡（实际 ${consumed.length} 个）——扫描形态漂移时本钉自身报警`)
++  const missing = consumed.filter((f) => !declared.has(f))
++  assert.deepEqual(missing, [], `被消费但未登记 knownFlags 的 flag（照报错指引重跑即 exit 2 的死路）：${missing.join(', ')}——登记进 src/run/command.js knownFlags 白名单`)
++})
++
++test('② 双死路实例已登记：--same-session 与 --force 在白名单在案', () => {
++  const declared = new Set(declaredFlags())
++  assert.ok(declared.has('--same-session'), '--same-session（STAGE_WALL 报错指引指向的逃生口）应已登记')
++  assert.ok(declared.has('--force'), '--force（quick --cancel 报错指引指向的强清）应已登记')
++})
++
++test('③ 声明侧自检：白名单字面量解析非空且含锚点 flag', () => {
++  const declared = declaredFlags()
++  assert.ok(declared.length >= 30, `白名单解析应非平凡（实际 ${declared.length}）`)
++  for (const anchor of ['--done', '--input', '--change', '--session']) assert.ok(declared.includes(anchor), `${anchor} 应在白名单`)
++})
+diff --git a/.sillyspec/changes/2026-09-25-cli-protocol-trust/design.md b/.sillyspec/changes/2026-09-25-cli-protocol-trust/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-cli-protocol-trust/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:24:49.577Z
++---
++# 设计记录（Design Record）— 2026-09-25-cli-protocol-trust
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++四修一钉，全部经子代理拿真实代码实证定位：①--same-session/--force 登记 knownFlags（双死路：CLI 报错指引指向被自己白名单拦死的 flag）；②extractSuccessCriteria 前置续行合并（括号/引号未闭合与行尾悬空连接符跨行并回，切分保持行级——句子级强切经评审否决）+ clipTaskText 句界感知截断（60 硬切→80 窗句读截断+省略号，下游按前缀锚消费放宽安全）+ 碎片特征检测 console.warn；③verify 批量对齐前补亲测（对齐面含 verifyRunQualityScan 步先跑 executeVerifyQualityScan，幂等指纹复用，失败弃批量保单步——「批量不省任何门」承诺恢复）；④archiveNarrowedGitAdd 扩 knowledge 面（status 窄化逐文件 add fr/decisions/INDEX，非目录级防扫他侧 WIP）；⑤flag-contract 一致性钉（静态扫描三种消费形态 vs 白名单，钉死整类漂移非单实例）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++command.js knownFlags +2 登记；flow-draft.js 新导出 clipTaskText、内部 helper needsContinuationMerge/detectFragmentedCriteria、extractSuccessCriteria 输入前置合并、draftAll 入口碎片检测、draftTasks 渲染改 clip；complete.js verify 批量分支加 pendingScanStep 前置亲测（_skipBatch 失败降级单步）；complete-handlers.js archiveNarrowedGitAdd 加 knowledge 侧 status 窄化 add（fail-soft）。行为变化：两死路 flag 可用；摘录不再拆碎片；批量对齐亲测必跑；归档链暂存面含 knowledge 蒸馏产物。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：续行合并是纯文本前置变换，与节检测顺序无关（节标题行显式豁免合并）；批量亲测在 --done 单线程内时点固定。2. 并发：knowledge 侧 add 用 status 快照逐文件（瞬时窗口内他侧新写文件可能被顺带 add——追加型共享面整文件提交与惯例一致，且比目录级精确）；executeVerifyQualityScan 幂等（同变更并发 --done 至多重复一次秒级指纹检查）。3. 切换：批量亲测失败降级单步推进（noAI 硬门原路径），无半态；_batchAligned 戳与既有 gate_rollback 语义不变。4. 作用域：flag 钉只扫 command.js 单文件（消费形态三種静态字面量，方案评审证实零动态 flag）；clip 80 窗对超长英文路径条目可能截断路径尾——路径类条目建议整条不截的边界已知（P3 级，前缀锚消费不破坏，留观）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=批量亲测改变 verify --done 时序（原先纯同步批量对齐现在可能跑 2-10 分钟实测）——照 gates.js 亲测先例补了预告输出，且幂等指纹复用使二次跑秒回；若亲测环境异常，失败降级单步（用户可 --reopen 走原路）无新死路。死路①：句子级强切+标点自检（评审否决：误伤复合条目/无标点条目）；死路②：flag 钉全仓扫描（三个子模块读 argv 的透传面无法静态判定消费——收窄到 command.js 单文件+显式 allowlist 才可行）。
+
+diff --git a/.sillyspec/changes/2026-09-25-cli-protocol-trust/flow-state.yaml b/.sillyspec/changes/2026-09-25-cli-protocol-trust/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-cli-protocol-trust/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: dcd97ac42f7a3642e60612d500e0cda5788c250c
++updatedAt: '2026-09-25T15:35:01.645Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（31.5s）｜门文件 12 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-cli-protocol-trust/proposal.md b/.sillyspec/changes/2026-09-25-cli-protocol-trust/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-cli-protocol-trust/proposal.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:24:49.577Z
++---
++# 提案书（Proposal）— 2026-09-25-cli-protocol-trust
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:a09091c374e777b11c633d0cb090fe7c2d5f54c3e3b9dbe5297488cc3d16ac60:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++任务原话转写：动机：R17 实验暴露的 CLI 协议可信度缺陷经子代理实证确认：①flag 白名单双死路——CLI 报错指引指向未登记 knownFlags 的 flag（--same-session 消费于 command.js:1748、--force 于 :1562，照指引重跑即 exit 2）；②摘录双碎片化——extractSuccessCriteria 行级切分拆散括号换行条目、tasks 渲染 slice(0,60) 硬切无句界感知；③verify 批量快进跳过 noAI 亲测步（:1566-1573 乐观对齐打破「批量不省任何门」承诺）→ PASS 封顶拒 → 四步绕行；④archiveNarrowedGitAdd 不盖 knowledge/fr 与 decisions 面——distill 产物 untracked 漏提交。
++成功标准：
++- --same-session 与 --force 登记 knownFlags 白名单；新一致性钉 test/flag-contract.test.mjs：静态扫描 command.js 三种 flag 消费形态（flags.includes/getFlagValue/autoFlagValue）vs 白名单+显式透传 allowlist，任何被消费未声明的 flag 测试红（钉死整类漂移）
++- extractSuccessCriteria 前置续行合并（括号/引号未闭合跨行并回、行尾悬空冒号/顿号续行合并，切分保持行级）；tasks 渲染放宽（60 字硬切改句界感知截断带省略号，或放宽上限）；碎片特征检测（括号不平衡/开括号收尾/闭括号开头）console.warn 不阻断；flow-draft 测试扩展（续行合并/碎片检测/渲染）
++- detectVerifyBatchFinish 批量对齐前：对齐面含 verifyRunQualityScan 步且记录缺失/指纹失配 → 先跑 executeVerifyQualityScan（幂等复用，失败 throw 保持 pending 不对齐），成功再对齐——「批量不省任何门」承诺恢复成立
++- archiveNarrowedGitAdd 扩面：归档链 add 覆盖 knowledge/fr 落点域文件（indexRequirements 返回的 written[].file）与 decisions 蒸馏目标
++- 新增测试与既有套件全绿（flag 钉/flow-draft 扩展/complete 互锁用例）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:883fa692f177a5080ef921e651c1dd39176e54cb9e861b28d891276bab8b461b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++按成功标准机械推导，共 10 条验收面：
++1. --same-session 与 --force 登记 knownFlags 白名单
++2. 新一致性钉 test/flag-contract.test.mjs：静态扫描 command.js 三种 flag 消费形态（flags.includes/getFlagValue/autoFlagValue）vs 白名单+显式透传 allowlist，任何被消费未声明的 flag 测试红（钉死整类漂移）
++3. extractSuccessCriteria 前置续行合并（括号/引号未闭合跨行并回、行尾悬空冒号/顿号续行合并，切分保持行级）
++4. tasks 渲染放宽（60 字硬切改句界感知截断带省略号，或放宽上限）
++5. 碎片特征检测（括号不平衡/开括号收尾/闭括号开头）console.warn 不阻断
++6. flow-draft 测试扩展（续行合并/碎片检测/渲染）
++7. detectVerifyBatchFinish 批量对齐前：对齐面含 verifyRunQualityScan 步且记录缺失
++8. 指纹失配 → 先跑 executeVerifyQualityScan（幂等复用，失败 throw 保持 pending 不对齐），成功再对齐——「批量不省任何门」承诺恢复成立
++9. archiveNarrowedGitAdd 扩面：归档链 add 覆盖 knowledge/fr 落点域文件（indexRequirements 返回的 written[].file）与 decisions 蒸馏目标
++10. 新增测试与既有套件全绿（flag 钉/flow-draft 扩展/complete 互锁用例）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:bc8bb37594e4dc21ad55ddbc752fbc5753a699ecb74d3dc91d546c162717d0c1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-cli-protocol-trust 留痕重锚 -->
++1. --same-session 与 --force 登记 knownFlags 白名单
++2. 新一致性钉 test/flag-contract.test.mjs：静态扫描 command.js 三种 flag 消费形态（flags.includes/getFlagValue/autoFlagValue）vs 白名单+显式透传 allowlist，任何被消费未声明的 flag 测试红（钉死整类漂移）
++3. extractSuccessCriteria 前置续行合并（括号/引号未闭合跨行并回、行尾悬空冒号/顿号续行合并，切分保持行级）
++4. tasks 渲染放宽（60 字硬切改句界感知截断带省略号，或放宽上限）
++5. 碎片特征检测（括号不平衡/开括号收尾/闭括号开头）console.warn 不阻断
++6. flow-draft 测试扩展（续行合并/碎片检测/渲染）
++7. detectVerifyBatchFinish 批量对齐前：对齐面含 verifyRunQualityScan 步且记录缺失
++8. 指纹失配 → 先跑 executeVerifyQualityScan（幂等复用，失败 throw 保持 pending 不对齐），成功再对齐——「批量不省任何门」承诺恢复成立
++9. archiveNarrowedGitAdd 扩面：归档链 add 覆盖 knowledge/fr 落点域文件（indexRequirements 返回的 written[].file）与 decisions 蒸馏目标
++10. 新增测试与既有套件全绿（flag 钉/flow-draft 扩展/complete 互锁用例）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-cli-protocol-trust/requirements.md b/.sillyspec/changes/2026-09-25-cli-protocol-trust/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-cli-protocol-trust/requirements.md
+@@ -0,0 +1,63 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:24:49.577Z
++---
++# 需求规格（Requirements）— 2026-09-25-cli-protocol-trust
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 双死路 flag 登记
++Given CLI 报错指引指向未登记 flag（--same-session 消费于 runStage 逃生口、--force 消费于 quick cancel）
++When 两 flag 登记 knownFlags
++Then 照报错指引重跑可执行不再 exit 2
++
++### FR-02: flag 一致性钉
++Given flag 消费/声明漂移类缺陷反复发生（历史三次自修+本次两实例）
++When test/flag-contract 静态扫描三种消费形态 vs 白名单
++Then 任何被消费未声明的 flag 测试红（整类灭绝钉）
++
++### FR-03: 摘录续行合并与渲染放宽
++Given 括号换行的单条标准被行级切分拆成碎片、tasks 行 60 字硬切半词
++When extractSuccessCriteria 前置续行合并 + clipTaskText 句界感知截断 + 碎片特征警告
++When 括号未闭合条目并回成单条、截断带句读+省略号、碎片警告不阻断
++
++### FR-04: verify 批量对齐前补亲测
++Given 批量乐观对齐跳过 noAI 亲测步致 PASS 封顶拒四步绕行
++When 对齐面含 verifyRunQualityScan 步先跑 executeVerifyQualityScan（幂等，失败弃批量）
++Then 批量不省任何门承诺恢复；亲测失败保持单步推进无新死路
++
++### FR-05: 归档链 knowledge 侧窄化 add
++Given distill 产物（fr 域/decisions/INDEX）untracked 漏提交
++When archiveNarrowedGitAdd 按 status 窄化逐文件 add knowledge 面
++Then 归档链暂存面覆盖蒸馏产物（fail-soft）
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/flag-contract.test.mjs 用例②（双实例在案断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/flag-contract.test.mjs 用例①（消费⊆声明+消费面非平凡自检）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/draft-continuation.test.mjs 用例①①b②②b（合并/豁免/截断/短条目）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/run-complete-noai-done-gate.test.mjs 零回归（noAI 硬门原语义不变——批量前置亲测走同函数同语义，行为等价单步路径）；时序变化由 R17 复验覆盖
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/archive-cli-git-add.test.mjs + test/archive-chain.test.mjs 零回归（既有窄化 add 语义不变，knowledge 面为纯增量 fail-soft）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~05
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~05
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~05
++<!--AGENT:测试绑定FR-09 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~05
++<!--AGENT:测试绑定FR-10 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~05
+
+diff --git a/.sillyspec/changes/2026-09-25-cli-protocol-trust/tasks.md b/.sillyspec/changes/2026-09-25-cli-protocol-trust/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-cli-protocol-trust/tasks.md
+@@ -0,0 +1,19 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:24:49.578Z
++---
++# 任务注册表（Tasks）— 2026-09-25-cli-protocol-trust
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: --same-session 与 --force 登记 knownFlags 白名单
++- [x] task-02: 新一致性钉 test/flag-contract.test.mjs：静态扫描 command.js 三种 flag 消费
++- [x] task-03: extractSuccessCriteria 前置续行合并（括号/引号未闭合跨行并回、行尾悬空冒号/顿号续行合并，切分保
++- [x] task-04: tasks 渲染放宽（60 字硬切改句界感知截断带省略号，或放宽上限）
++- [x] task-05: 碎片特征检测（括号不平衡/开括号收尾/闭括号开头）console.warn 不阻断
++- [x] task-06: flow-draft 测试扩展（续行合并/碎片检测/渲染）
++- [x] task-07: detectVerifyBatchFinish 批量对齐前：对齐面含 verifyRunQualityScan 步且记录
++- [x] task-08: 指纹失配 → 先跑 executeVerifyQualityScan（幂等复用，失败 throw 保持 pending 
++- [x] task-09: archiveNarrowedGitAdd 扩面：归档链 add 覆盖 knowledge/fr 落点域文件（index
++- [x] task-10: 新增测试与既有套件全绿（flag 钉/flow-draft 扩展/complete 互锁用例）
