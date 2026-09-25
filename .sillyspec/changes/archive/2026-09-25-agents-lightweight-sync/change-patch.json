@@ -1,0 +1,22 @@
+{
+  "change": "2026-09-25-agents-lightweight-sync",
+  "baseline": "4e55f7dcaed928503db5f83b77c27b695af0083a",
+  "head": "5a9f7867815373339b590f08e3a0c622eba41051",
+  "files": [
+    "AGENTS.md",
+    ".sillyspec/changes/2026-09-25-agents-lightweight-sync/design.md",
+    ".sillyspec/changes/2026-09-25-agents-lightweight-sync/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-agents-lightweight-sync/proposal.md",
+    ".sillyspec/changes/2026-09-25-agents-lightweight-sync/requirements.md",
+    ".sillyspec/changes/2026-09-25-agents-lightweight-sync/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 161,
+    "deletions": 5
+  },
+  "savedAt": "2026-09-25T09:29:51.585Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "f3d688baead308fe17ad76d4428c010f07c155f1114365d17a2f1307f056a82e",
+  "patchStatus": "ok"
+}

@@ -1376,3 +1376,60 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-25-fr-compound-split
   status: active
+
+## FR-cli-entry-075 勾选纪律与产物必读
+变更：2026-09-25-flow-tick-prototype
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 轻量变更执行期；When fresh 或 adopt 路径启动；Then 简报含勾选纪律、adopt 列产物必读清单、status 显勾选进度
+全文：.sillyspec/changes/archive/2026-09-25-flow-tick-prototype/requirements.md#FR-01
+最近确认：c43b9825fcaf591a3abb0d8bbd7ac4dd782581aa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-flow-tick-prototype:flow:FR-01
+  tests: test/flow-tick-prototype.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-flow-tick-prototype
+  status: active
+
+## FR-cli-entry-076 第 3 条附注改为轻量变更默认快道口径
+变更：2026-09-25-agents-lightweight-sync
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 本仓 AGENTS.md 第 3 条附注仍称 `flow start/done` 薄协议为实验通道（local.yaml `flow.mode: thin` 显；When 按模板 templates/agents-instruction.md 规则 5 口径同步该附注；Then 附注不再含「实验通道」「不作默认」表述，改述为轻量变更默认快道（`flow.mode` 缺省即 thin，显式 `mode: legacy` 回旧道），并补轻量
+全文：.sillyspec/changes/archive/2026-09-25-agents-lightweight-sync/requirements.md#FR-01
+最近确认：5a9f7867815373339b590f08e3a0c622eba41051
+
+## FR-cli-entry-077 选道与倒推 B 模式改指轻量变更
+变更：2026-09-25-agents-lightweight-sync
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 第 4/6/7 条把小修复、选道判据、倒推 B 收尾指向退役中的 quick 道；When 同步模板规则 3/8/9 口径；Then 第 4 条小修复走 `flow start --input` → `flow done` 两调用；第 6 条选道按流程形态判（明确→轻量 / 不明→brains
+全文：.sillyspec/changes/archive/2026-09-25-agents-lightweight-sync/requirements.md#FR-02
+最近确认：5a9f7867815373339b590f08e3a0c622eba41051
+
+## FR-cli-entry-078 quicklog 落盘条目补存量通道括注
+变更：2026-09-25-agents-lightweight-sync
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 第 15 条 quicklog 结构化落盘规则未标注通道定位；When 补存量通道括注；Then 明确「存量通道——新工作不再产生 quicklog 条目，轻量变更以变更级归档取代；仅收尾存量 quick 会话时适用」
+全文：.sillyspec/changes/archive/2026-09-25-agents-lightweight-sync/requirements.md#FR-03
+最近确认：5a9f7867815373339b590f08e3a0c622eba41051
+
+## FR-cli-entry-079 其余条目零改动
+变更：2026-09-25-agents-lightweight-sync
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given AGENTS.md 其余条目（头注释与第 1-2、5、8-14、16-19 条，含本仓专属 git 纪律与会话身份条目）与本口径同步无关；When 修正仅限第 3/4/6/7/15 条；Then 其余条目逐字不动，以 `git diff -- AGENTS.md` 变更范围核对为证
+全文：.sillyspec/changes/archive/2026-09-25-agents-lightweight-sync/requirements.md#FR-04
+最近确认：5a9f7867815373339b590f08e3a0c622eba41051
