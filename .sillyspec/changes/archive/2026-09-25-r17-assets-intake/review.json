@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-r17-assets-intake",
+  "reviewer": "independent-reviewer (clean context)",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "dimension": "INDEX 路由行数据正确性",
+      "title": "4 条新路由行锚点双前导连字符，与 GitHub slugger 规则及仓内全部既有 emoji 条目先例不符，锚点跳转 4/4 不命中",
+      "detail": "INDEX.md:154-157 的锚点均为 `#--...`（双前导连字符）。仓内既有 emoji 条目路由 16 条全部为单前导连字符 `#-...`（如 :42/:45-59，源标题同为 `## 🟡/🟢/🔴 标题`，emoji 后仅一个空格——cat -A 实测新 4 条标题同样仅一个空格）。按 GitHub slug 规则（emoji 剔除、空格→连字符），`## 🟡 CLI flag 白名单死路：...` 应生成 `-cli-flag-白名单死路...` 而非 `--cli-flag-...`。锚点普查：`known-issues.md#-` 16 处 vs `known-issues.md#--` 4 处（后者全部为本变更新增）。后果：渲染态 markdown 点击 4 条路由均无法跳到条目；关键词 grep 消费面不受影响（非阻断）。",
+      "evidence": ".sillyspec/knowledge/INDEX.md:154-157 vs .sillyspec/knowledge/known-issues.md:199/204/209/214；grep 锚点普查 16×'#-' / 4×'#--' / 5×'#'（无 emoji 条目）",
+      "recommendation": "INDEX.md:154-157 四处 `#--` 改 `#-`（去一个前导连字符），可与 A+B/C 清偿变更搭车或即时小修。"
+    },
+    {
+      "id": "F2",
+      "severity": "P2",
+      "dimension": "审计链完整性（patch 冻结面）",
+      "title": "change.patch 冻结面不含 FR-02 主交付物（known-issues +20 行 / INDEX +5 行），知识入库的冻结审计证据缺失",
+      "detail": "change.patch 仅 6 文件（R17 报告 + 本变更目录 5 件），不含 .sillyspec/knowledge/known-issues.md 与 INDEX.md 差量。机制归因：flow-parity.js:159 `deliverable = (f) => !f.startsWith('.sillyspec/')`（dirty 面过滤）＋ committed 面按 flow.js:820 note 过滤 `.sillyspec/` 非本变更目录文件——knowledge 文件已随 git 552f5432 提交后走 committed 面被结构性排除，且 dirtyWarned 警告只覆盖 deliverable 路径，已提交路径下缺口静默。与 flow.js:514 系统自述「审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态」形成结构性张力：FR-02（成功标准 2/3）的物理交付在场，但冻结件层面无证据，审计真相实际依赖 git 提交 552f5432。属机制边界而非执行者过错，评审如实记录该缺口。",
+      "evidence": "change.patch grep '^diff --git' = 6 文件无 knowledge；git 552f5432 含 known-issues(+20)/INDEX(+5)/R17(+65)；src/flow-parity.js:158-180；src/flow.js:790-860（冻结面收集与 note）",
+      "recommendation": "短期接受（git 552f5432 在案可追）；机制层建议给 `.sillyspec/knowledge/` 提交面开归属通道或在本变更 change-patch.json/manual-notes 里补记 knowledge 差量清单，消除静默缺口。"
+    },
+    {
+      "id": "F3",
+      "severity": "P3",
+      "dimension": "INDEX 结构一致性",
+      "title": "4 条新路由行落位于文件尾部「## FR 需求索引」节内，而全部 22 条既有 known-issues 路由在「## Known Issues」节",
+      "detail": "INDEX.md:154-157 紧接 fr/auto-round5 行之后追加，归属在「## FR 需求索引」（:108 起）节内；既有 known-issues 路由先例全部位于「## Known Issues」节（:38-59）。按 INDEX 头注的消费方式（全文件关键词匹配）仍可命中，但分节语义错位，按节扫描的消费面会漏。另：新行链接显示文本用短标题（如「CLI flag 白名单死路」），先例多为标题全文（去 emoji）——纯风格差异，不计缺陷。",
+      "evidence": ".sillyspec/knowledge/INDEX.md:37-59（Known Issues 节）vs :108-157（FR 需求索引节尾部）",
+      "recommendation": "4 行上移至 Known Issues 节尾（可与 F1 同一次小修）。"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "dimension": "design 槽4 自陈如实性",
+      "title": "「A+B/C 号已预占」表述强于实际机制：仓内无任何预留工件，预留=纯前向引用软预留",
+      "detail": "实测 .sillyspec/changes/ 仅含本变更目录；2026-09-25-cli-protocol-trust 与 2026-09-25-greenfield-bootstrap 两号在 .sillyspec 全域（*.md/*.yaml/*.json）grep 仅 known-issues.md 自身提及——无登记簿、无队列、无防撞机制，「已预占/在案可追」的唯一载体就是 known-issues 条目本身（自指）。风险声明本身如实：槽3 明说「尚未落地，状态字段留有更新义务」，槽4 明说变号/拆并需回改并给出接受理由——「尚未落地」与事实相符（两目录确实不存在）。预留号方式本身可接受（日期名+known-issues 追踪义务），但表述宜降为「前向引用待落地」，且 A+B/C 收口时须兑现回改义务（修复状态字段+锚点测试 test/flag-contract.test.mjs 目前均不存在）。",
+      "evidence": "ls .sillyspec/changes/ 仅 2026-09-25-r17-assets-intake；grep -r 'cli-protocol-trust|greenfield-bootstrap' .sillyspec → 仅 knowledge/known-issues.md 命中；test/flag-contract.test.mjs 不存在",
+      "recommendation": "接受现状；A+B/C 落地时回改 known-issues 修复状态字段，避免悬挂前向引用长期化。"
+    }
+  ],
+  "dimensionNotes": {
+    "1-报告完整性": "PASS。R17 文件含全部承诺节：引言（生成日期/目的/口径对齐 R15/判据 19 探针/n=1 告诫——与 R16 先例形态 docs/analysis/R16-对撞-环境与提示词-2026-09-25.md 的 生成/目的/口径/判据对照 块引用结构一致）、总表、四条结论、副产品缺陷清单、成本细分、资产对比。内部算术复核全部吻合：16.44M/2.11M=7.8 倍；轻量 vs OpenSpec 低 8%（2.11/2.29）；成本比 36.04/5.47=6.6:1；臂2 输出高 41%（35.6K/25.2K）；各臂输入+输出与总表 tokens 对账相符（16.36+0.08≈16.44M 等）；成本按定价复算 ¥36.06/¥5.47/¥5.52 与表值吻合（±0.03 舍入）。两处口径小瑕（不阻断，属冻结实验数据入库）：a) 判据说 19 探针、总表统一黑盒验收记 16/16，19→16 差额报告内未解释（结论4 仅述 B1 探针修正）；b) 「输出侧占比 <7%」仅在 token 份额口径成立（各臂 ≤1.7%）或臂3 成本口径（6.2%）——臂1/臂2 按成本口径为 12.8%/18.2%，表述未注明口径。",
+    "2-known-issues-四条": "PASS。四条（known-issues.md:199-217）均含 现象/证据锚点/修复状态（修复状态=指向 A+B/C 变更号+具体修复方案描述），三要素齐备。证据锚点抽查 13/13 全部精确到行：command.js:704-727 knownFlags 字面量白名单（实测 --same-session 与裸 --force 确实缺席，仅 --force-baseline/--force-rescan 在册）；command.js:1748 sameSession: flags.includes('--same-session') 消费点；:1562 forceCancel=flags.includes('--force')；:1577 报错文案确实指引 --force；stage.js:71 报错文案确实指引 --same-session 重跑；flow-draft.js:63-92 extractSuccessCriteria 行级 split 无续行合并；:295 c.slice(0,60) 硬切实测在场；complete.js:642 「批量省的是…不省任何门」注释原文在场；:1566-1573 批量乐观对齐循环（pending/in-progress→completed+_batchAligned）；:1599 task-NN checkbox 正则前缀锚；gates.js:788-800 verify 收尾 backfill 先于 runValidators 次序注释；archive-distill.js:52 与 complete-handlers.js:3121 两处 indexRequirements 调用确均不传 deliverableFiles（fr-index.js:368-369 证实该参数存在且文档语义与条目断言一致——机制主张成立）。锚点准确率为本评审最好面。",
+    "3-INDEX-路由行": "PASS with F1/F3。行格式与先例一致（- 关键词|关键词 → [标题](known-issues.md#锚点)）；关键词可区分性成立（绿地|伪域|模块图|互锁|续行合并|flag 死路 等均为新面；unmapped/auto- 与 FR 索引行部分重叠但组合可区分）。缺陷见 F1（锚点 slug 4/4 双连字符错误）与 F3（节落位错）。",
+    "4-design-槽4-自陈": "如实（with F4 措辞级保留）。自陈的核心风险「修复状态指向未落地变更」与实测相符：两清偿变更目录均不存在于 .sillyspec/changes/；风险接受理由（回改义务+可追）已在槽3/槽4 落文字。「已预占/在案可追」的机制背书缺失见 F4——预留方式为纯前向引用，无防撞工件，合理性勉强可接受但弱于自陈措辞。"
+  },
+  "reviewedAt": "2026-09-25T15:23:06Z"
+}

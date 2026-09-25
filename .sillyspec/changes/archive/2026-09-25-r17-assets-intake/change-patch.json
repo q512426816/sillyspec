@@ -1,0 +1,22 @@
+{
+  "change": "2026-09-25-r17-assets-intake",
+  "baseline": "553bcfbe512f6372eaca507e15fcdefe3fcae532",
+  "head": "552f54326d77bc8ddb666e9938d975a8cb8cb193",
+  "files": [
+    "docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md",
+    ".sillyspec/changes/2026-09-25-r17-assets-intake/design.md",
+    ".sillyspec/changes/2026-09-25-r17-assets-intake/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-r17-assets-intake/proposal.md",
+    ".sillyspec/changes/2026-09-25-r17-assets-intake/requirements.md",
+    ".sillyspec/changes/2026-09-25-r17-assets-intake/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 203,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-25T15:16:27.595Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "a0aac083411ae0ee048beaeedaa3675738558e19576c1e4e448712817191e686",
+  "patchStatus": "ok"
+}

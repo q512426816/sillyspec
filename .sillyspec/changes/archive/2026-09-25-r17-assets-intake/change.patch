@@ -1,0 +1,238 @@
+diff --git a/docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md b/docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md
+new file mode 100644
+index 00000000..c8492768
+--- /dev/null
++++ b/docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md
+@@ -0,0 +1,65 @@
++# R17 对撞实验：三臂轻量变更 / 完整流程 / OpenSpec 对照（2026-09-25）
++
++> 生成：2026-09-25 ｜ 目的：以 R15 原版口径（真实体量任务、同构载体、干净上下文、严格按工具指引）回答两个问题——轻量道在重任务下成本是否压下来、质量门是否拦得住。三臂同任务（SPEC 驱动 todo CLI v2 升级，600 行级）。判据：过程计量=子代理 usage+CLI 调用序列；成本=db.sqlite 轮级切片×GLM-5.3 定价；质量=主会话统一黑盒验收器（19 探针）。注意 n=1/臂，方向性参考。
++
++口径对齐 R15 原版（docs/analysis/R8-R15-对撞实验阶段明细）：真实任务体量（SPEC 驱动 v2 升级，约 600 行级交付）、
++同构载体、干净上下文子代理、严格按各自工具指引；计量=子代理实际 usage+CLI 调用序列；质量=主会话统一黑盒验收器
++（19 探针：8 行为边界 P1+常规流 P2）。注意：n=1；db.sqlite 轮级切片未复刻（usage 替代）。
++
++## 总表
++
++| 维度 | 臂1 OpenSpec(opsx) | 臂2 sillyspec 轻量变更 | 臂3 sillyspec 完整流程 |
++|---|---|---|---|
++| CLI 调用 | 24 | **5**（协议 2） | 53 |
++| 拦截 | 3（instructions 参数猜谜——工具缺陷） | 2（input 格式门＋评审门——设计内） | 7（含 2 个 CLI 自身 bug＋绿地降级兜底） |
++| 自测 | 16/16 | 20/20 | 15/15 |
++| **统一黑盒验收** | **16/16** | **16/16** | **16/16** |
++| tokens | 2.29M | **2.11M** | **16.44M** |
++| 工具调用 | 51 | 41 | 151 |
++| 墙钟 | 9.4min | 10.5min | 23.4min |
++| 归档 | 成功（3 主 specs） | 成功（8 子步+审计链） | 成功（决策 1+FR 10 入库） |
++
++## 四条结论
++
++1. **R15 爬坡病复现＋解药实证（本实验核心数字）**：同任务下完整流程 16.44M vs 轻量 2.11M——**7.8 倍**，
++   复现原版「SF 完整流程 token 远超 OS」（86M/18.5M≈4.7 倍）的病；而轻量道把 token 压到 OpenSpec 水平线
++   （低 8%）——thin 化解决了 R15 系列六轮优化没压下来的曲线。
++2. **质量面三臂无区分（诚实记录未复现）**：R15 原版 SF 拦 2 P1/OS 放行的质量差在 R17 未复现——本任务边界
++   三臂全接住。结构性差异仍在（臂2 拦截均为设计内质量门 vs 臂1 validate 只查工件格式），但本样本无 P1 可拦。
++3. **摩擦面反转**：臂3 的 7 次拦截中 2 次是 sillyspec CLI 自身 bug（--same-session 未登记 knownFlags——
++   complete.js:1748 消费但 command.js 允许清单缺失；verify 批量快进与 noAI 亲测步互锁需四步绕行）——
++   完整流程的复杂度本身制造摩擦；轻量道把 CLI 复杂度暴露面一并缩掉（臂2 的 2 次拦截都是设计内门）。
++4. **验收器自我纠错插曲**：B1 探针初版踩进 SPEC 自身歧义（「id 永不复用」vs 括注「max+1」在删最大 id 场景
++   矛盾），误判臂1 FAIL 后修正探针重跑——规格歧义是常态，验收器也要接受被审。
++
++## 副产品：实验暴露的 CLI 真实缺陷（待办）
++
++- complete.js:1748 消费 --same-session 但 command.js knownFlags 允许清单缺失（臂3 拦截⑤）
++- verify 批量快进与 noAI 亲测步互锁（臂3 拦截⑥，四步绕行）
++- 机器摘录 FR/tasks 碎片化（截断 task、FR 括号断行——臂2 摩擦点）
++
++## 成本细分（GLM-5.3 国内站按量：输入 ¥8/M、缓存命中 ¥2/M、输出 ¥28/M；db.sqlite 轮级切片）
++
++| 臂 | 轮次 | 输入合计 | 缓存命中 | 未命中 | 输出 | 费用 |
++|---|---|---|---|---|---|---|
++| 臂3 SF完整流程 | 140 | 16.36M | 16.19M (98.9%) | 0.18M | 80.0K | **¥36.04** |
++| 臂1 OpenSpec | 45 | 2.27M | 2.22M (98.1%) | 0.04M | 25.2K | **¥5.50** |
++| 臂2 SF轻量 | 35 | 2.07M | 2.02M (97.3%) | 0.06M | 35.6K | **¥5.47** |
++
++成本比 6.6:1（完整:轻量）；缓存命中 97-99% 下成本主轴=轮次数×累积上下文（缓存读价是未命中 1/4）；
++输出侧占比 <7%——agent 时代成本几乎全在输入累积；臂2 输出比臂1 高 41%（自填治理槽的输出税）但输入远低（5 vs 24 次 CLI 的上下文重读），净成本持平。
++
++## 最终项目资产对比
++
++| 资产面 | 臂1 OpenSpec | 臂2 SF 轻量 | 臂3 SF 完整流程 |
++|---|---|---|---|
++| 交付代码 | 202 行 | 183 行 | 129 行（三者等价过 16 探针） |
++| 测试资产 | 192 行/16 例 | **286 行/20 例** | 221 行/15 例 |
++| 规划/治理工件 | 归档 9 件（proposal+3 delta specs+tasks） | 归档 11 件 | 归档 18 件（plan/module-impact/symbol-impact/scope-audit/verify-facts/tasks 卡×3） |
++| 知识沉淀 | 主 specs 3 文件（12 req/24 场景/150 行，capability 即域） | fr 索引 10 条（**落伪域 auto-claude**）+decisions | fr 索引 10 条（落 unmapped）+决策 1 条 |
++| 审计链 | 归档目录即审计（无哈希/无验证回执） | **change.patch 157KB sha256 冻结+review.json+verify-result** | 深度治理件全景（16.4M 买来） |
++| git 卫生 | 4 commits 树净 | 5 commits 树净 | 2 commits + **12 脏项**（治理产物未全提交） |
++
++资产三形态：臂1=干净的当前真相（极简无审计链）；臂2=薄审计链+知识索引（最小治理+机器可验冻结）；
++臂3=重治理全景（深度工件，成本 6.6 倍）。两 sillyspec 臂的 FR 均落伪域/unmapped——载体仓无模块图，
++域路由退化实例（与主仓已知问题同构）；臂3 树不净暴露 apply 链未收尾的提交纪律缺口。
+diff --git a/.sillyspec/changes/2026-09-25-r17-assets-intake/design.md b/.sillyspec/changes/2026-09-25-r17-assets-intake/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-r17-assets-intake/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:14:34.828Z
++---
++# 设计记录（Design Record）— 2026-09-25-r17-assets-intake
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++纯 doc 入库：R17 报告（SUMMARY 67 行）按 R16 先例格式入 docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md（引言补目的/口径/判据）；4 条实验知识（flag 死路类/摘录碎片化/verify 互锁/绿地伪域断流）入 known-issues.md（每条含现象/证据锚点/修复状态指向），INDEX.md 补 4 行路由（关键词可区分，知识命中面可及）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++零代码。新增 docs/analysis/R17-*.md 一份；known-issues.md 追加 4 条 🟡 条目；INDEX.md 追加 4 行路由行。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用——静态文档。2. 并发：known-issues/INDEX 为共享追加面，本会话独占窗口写入（追加式不覆盖既有行）。3. 切换：一次性写入无中间态。4. 作用域：报告内容来自实验目录 SUMMARY（数据冻结态），缺陷修复状态指向 A+B/C 变更号（尚未落地，状态字段留有更新义务——A+B/C 收口后按需回改状态，可接受滞后）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=知识条目的修复状态指向未落地变更（A+B/C 号已预占）——若 A+B/C 变号或拆并，known-issues 状态字段需回改；接受（变更号已在案可追）。死路：把 7 项缺陷全记流水账——只记 4 条有跨会话复利价值的类知识（实例与修复细节在 R17 报告），避免 known-issues 膨胀为变更日志。
+
+diff --git a/.sillyspec/changes/2026-09-25-r17-assets-intake/flow-state.yaml b/.sillyspec/changes/2026-09-25-r17-assets-intake/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-r17-assets-intake/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 553bcfbe512f6372eaca507e15fcdefe3fcae532
++updatedAt: '2026-09-25T15:16:26.755Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（32.5s）｜门文件 7 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-r17-assets-intake/proposal.md b/.sillyspec/changes/2026-09-25-r17-assets-intake/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-r17-assets-intake/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:14:34.828Z
++---
++# 提案书（Proposal）— 2026-09-25-r17-assets-intake
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:2d9b4c66004889e8c1df140be2ed7805c68c3574ede445996ac047322af96e78:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++任务原话转写：动机：R17 三臂对撞实验（OpenSpec/sillyspec 轻量/sillyspec 完整流程）已完成全过程计量、成本细分与资产对比，报告与缺陷发现尚在临时目录——按 R15/R16 先例应入 docs/analysis 成为系列资产；实验暴露的缺陷知识（CLI flag 白名单死路、摘录器碎片化、verify 批量互锁、绿地伪域断流）对后续会话有直接复利价值，应入 knowledge/known-issues 并配 INDEX 路由（知识命中面可及）。
++成功标准：
++- docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md 在场：按先例格式（引言含生成日期/目的/口径/判据+分节），含总表/四结论/成本细分/资产对比/缺陷清单
++- knowledge/known-issues.md 追加 4 条 R17 实验知识条目（flag 白名单死路类/摘录器行级切分坑/verify 批量快进互锁/绿地伪域断流），每条含现象/证据/涉及路径，标注修复状态（A+B/C 清偿变更编号）
++- knowledge/INDEX.md 补对应路由行（关键词可区分）
++- 纯 doc 变更零代码改动
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:cb0fbd0de4e6a18fc36582d0bd05592d283cae85b3e2c4f15ad4b7af8d5d4e3d:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md 在场：按先例格式（引言含生成日期/目的/口径/判据+分节），含总表/四结论/成本细分/资产对比/缺陷清单
++2. knowledge/known-issues.md 追加 4 条 R17 实验知识条目（flag 白名单死路类/摘录器行级切分坑/verify 批量快进互锁/绿地伪域断流），每条含现象/证据/涉及路径，标注修复状态（A+B/C 清偿变更编号）
++3. knowledge/INDEX.md 补对应路由行（关键词可区分）
++4. 纯 doc 变更零代码改动
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:b9cc186ba494d085da51fd03dca73edb7e768119e72fce062399aeb7d2af4c90:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-r17-assets-intake 留痕重锚 -->
++1. docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md 在场：按先例格式（引言含生成日期/目的/口径/判据+分节），含总表/四结论/成本细分/资产对比/缺陷清单
++2. knowledge/known-issues.md 追加 4 条 R17 实验知识条目（flag 白名单死路类/摘录器行级切分坑/verify 批量快进互锁/绿地伪域断流），每条含现象/证据/涉及路径，标注修复状态（A+B/C 清偿变更编号）
++3. knowledge/INDEX.md 补对应路由行（关键词可区分）
++4. 纯 doc 变更零代码改动
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-r17-assets-intake/requirements.md b/.sillyspec/changes/2026-09-25-r17-assets-intake/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-r17-assets-intake/requirements.md
+@@ -0,0 +1,33 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:14:34.828Z
++---
++# 需求规格（Requirements）— 2026-09-25-r17-assets-intake
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: R17 报告入库
++Given R17 三臂实验报告在临时目录
++When 按 R16 先例格式（引言含目的/口径/判据）入 docs/analysis/
++Then docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md 在场且含总表/四结论/成本细分/资产对比
++
++### FR-02: 实验知识入 known-issues
++Given 4 条实验知识有跨会话复利价值（flag 死路类/摘录碎片化/verify 互锁/绿地伪域断流）
++When 追加为 known-issues.md 条目
++Then 每条含现象/证据锚点/修复状态；INDEX.md 补可区分关键词路由行（知识命中面可及）
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++不适用：纯 doc 入库，文件在场性与内容结构人工核对（无行为面）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++不适用：纯 doc 入库；路由关键词可区分性由后续会话知识命中实测（本会话 flow start 已实证注入面工作）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01/02
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01/02
+
+diff --git a/.sillyspec/changes/2026-09-25-r17-assets-intake/tasks.md b/.sillyspec/changes/2026-09-25-r17-assets-intake/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-r17-assets-intake/tasks.md
+@@ -0,0 +1,13 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T15:14:34.829Z
++---
++# 任务注册表（Tasks）— 2026-09-25-r17-assets-intake
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: docs/analysis/R17-对撞-三臂轻量完整与openspec-2026-09-25.md 在场：按先例格式（
++- [x] task-02: knowledge/known-issues.md 追加 4 条 R17 实验知识条目（flag 白名单死路类/摘录器行
++- [x] task-03: knowledge/INDEX.md 补对应路由行（关键词可区分）
++- [x] task-04: 纯 doc 变更零代码改动
