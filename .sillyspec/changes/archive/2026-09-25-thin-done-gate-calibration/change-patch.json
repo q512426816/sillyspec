@@ -1,0 +1,27 @@
+{
+  "change": "2026-09-25-thin-done-gate-calibration",
+  "baseline": "762427f63eae069d8e408148749c796526a337fd",
+  "head": "d8c60ebc68a68a2364ad0e17ca8fbb202de53caa",
+  "files": [
+    "src/flow.js",
+    "src/machine-draft.js",
+    "src/run/quick-audit.js",
+    "src/sentinel-assertions.js",
+    "test/machine-draft.test.mjs",
+    "test/sentinel-wiring.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-done-gate-calibration/design.md",
+    ".sillyspec/changes/2026-09-25-thin-done-gate-calibration/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-done-gate-calibration/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-done-gate-calibration/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-done-gate-calibration/tasks.md"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 235,
+    "deletions": 27
+  },
+  "savedAt": "2026-09-25T09:37:45.553Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "79d7f935bb85877162987642c6375a1ad48ff89cc76951ece3b8e3ba7bcf1dc6",
+  "patchStatus": "ok"
+}

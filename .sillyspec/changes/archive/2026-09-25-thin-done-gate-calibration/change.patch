@@ -1,0 +1,405 @@
+diff --git a/src/flow.js b/src/flow.js
+index 289710f3..a33f8452 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -474,21 +474,24 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   } else {
+     const { runQuickTestLintGate } = await import('./run/quick-audit.js')
+     const changedFiles = await attributedChangedFiles()
+-    // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交 subject 无
+-    // task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
++    // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
++    // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
++    // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
++    // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
++    // 提交计数不因多行正文失真。
+     try {
+       const { detectFakeCheckCompletion } = await import('./sentinel-assertions.js')
+       const tasksPath = join(changeDir, 'tasks.md')
+       if (existsSync(tasksPath)) {
+-        const _logRaw = gitQuiet(cwd, ['log', '--format=%s', `${st.baseline_commit}..HEAD`])
++        const _logRaw = gitQuiet(cwd, ['log', '--format=%B%x1e', `${st.baseline_commit}..HEAD`])
+         if (!_logRaw) {
+           console.log('ℹ️ 哨兵：git log 不可用，跳过（fail-open——空提交组照判会假拦）')
+         } else {
+-        const commitSubjects = String(_logRaw).split('\n').filter(Boolean)
+-        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitSubjects })
++        const commitMessages = String(_logRaw).split('\x1e').map((x) => x.trim()).filter(Boolean)
++        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages })
+         if (sent.status === 'fake') {
+-          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交无 token、无 review.json）：${sent.missing.join('、')}`)
+-          console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
++          console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
++          console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
+           reportMidFail('ledger')
+           process.exit(1)
+@@ -496,8 +499,8 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+         // 勾选缺失 advisory（2026-09-25-flow-tick-prototype）：有任务行但全未勾（status='none' 且
+         // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
+-        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitSubjects.length > 0) {
+-          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitSubjects.length} 个提交）——`)
++        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitMessages.length > 0) {
++          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitMessages.length} 个提交）——`)
+           console.warn(`   规范动作是干活时逐条勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
+         }
+         }
+diff --git a/src/machine-draft.js b/src/machine-draft.js
+index c9504b4f..fe087c69 100644
+--- a/src/machine-draft.js
++++ b/src/machine-draft.js
+@@ -21,9 +21,20 @@ import { createHash } from 'node:crypto'
+ export const MARK_BEGIN_RE = /^<!--\s*MACHINE-DRAFT:([\w.-]+):([0-9a-f]{64}):begin.*-->\s*$/
+ const MARK_END_RE = /^<!--\s*MACHINE-DRAFT:([\w.-]+):end.*-->\s*$/
+ 
+-/** 段内容哈希（CRLF 归一——跨平台写盘行尾漂移不炸指纹）。 */
++/**
++ * 任务勾选态归一（2026-09-25-thin-done-gate-calibration 坑1）：勾选是 flow start 横幅教的
++ * 预期写面（收口哨兵的证据面），不该参与「被改写」判定——哈希前把 `- [x] task-NN` 归一回
++ * `- [ ]`（draft 产出恒 [ ]，存量台账两侧归一后同哈希，兼容；真实改写任务文本/增删行仍失配）。
++ * 口径只认 task-NN 行，普通清单勾选行不归一（不扩大书写面）。
++ */
++const TASK_CHECK_STATE_RE = /^([-*] \[)[ xX]\](?= task-\d)/gm
++function normalizeTaskCheckboxState(s) {
++  return String(s).replace(TASK_CHECK_STATE_RE, '$1 ]')
++}
++
++/** 段内容哈希（CRLF 归一——跨平台写盘行尾漂移不炸指纹；task-NN 勾选态归一——见上）。 */
+ export function bodyHash(s) {
+-  return createHash('sha256').update(String(s).replace(/\r\n/g, '\n')).digest('hex')
++  return createHash('sha256').update(normalizeTaskCheckboxState(String(s).replace(/\r\n/g, '\n'))).digest('hex')
+ }
+ 
+ /**
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 0b9e3aa1..ec037181 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -610,19 +610,20 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+     }
+     const failed = []
+     // 哨兵断言（2026-09-25-sentinel-wiring，与 flow done 同判）：tasks.md 全勾但零完成
+-    // 证据（区间提交 subject 无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
++    // 证据（区间提交消息标题与正文均无 task-NN token 且无对应 review.json）→ 计入 failed 拒收。
++    // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2，同 flow 侧 %B%x1e 口径）。
+     // skipSentinel：flow done 调用方自带 baseline 哨兵（更可靠区间），传 true 跳过免双判。
+     if (!skipSentinel) try {
+       const { detectFakeCheckCompletion } = await import('../sentinel-assertions.js')
+       const tasksDir = changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null
+       if (tasksDir && existsSync(tasksDir)) {
+-        const _log = safeGit ? safeGit(cwd, ['log', '--format=%s', 'HEAD~10..HEAD']) : null
+-        const commitSubjects = String((_log && !_log.error) ? _log.value : '') || ''
+-        if (commitSubjects) {
+-          const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitSubjects.split('\n').filter(Boolean) })
++        const _log = safeGit ? safeGit(cwd, ['log', '--format=%B%x1e', 'HEAD~10..HEAD']) : null
++        const commitMsgs = String((_log && !_log.error) ? _log.value : '') || ''
++        if (commitMsgs) {
++          const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitMsgs.split('\x1e').map((x) => x.trim()).filter(Boolean) })
+           if (sent.status === 'fake') {
+-            console.error(`\n🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据：${sent.missing.join('、')}`)
+-            console.error('   补证据（提交带 task-NN 或产 review.json）或取消勾选后重跑——假完成主张不许过门')
++            console.error(`\n🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token）：${sent.missing.join('、')}`)
++            console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
+             failed.push('sentinel')
+           }
+         }
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index 1de52875..2108f8ab 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -10,8 +10,9 @@
+  *
+  * 纯度口径：无副作用（零写盘/零 db），输出由参数+只读盘面（review.json 在场探测）决定；
+  * 盘面探测可经 opts.listReviewsImpl 注入替身（单测零真 fs）。证据判据与 R1 同口径：
+- * commit subject 含完整 token task-NN（负向前瞻，task-01 不证 task-010）或对应
+- * review.json 在场（.runtime/execute-runs 任意 run 的 tasks 目录下对应任务子目录）。
++ * commit 消息（标题或正文——2026-09-25 起收口侧取 %B 整条消息）含完整 token task-NN
++ * （负向前瞻，task-01 不证 task-010）或对应 review.json 在场（.runtime/execute-runs
++ * 任意 run 的 tasks 目录下对应任务子目录）。
+  */
+ import { join, dirname } from 'path';
+ import { existsSync, readdirSync } from 'fs';
+diff --git a/test/machine-draft.test.mjs b/test/machine-draft.test.mjs
+index be1bf2d1..8cfef516 100644
+--- a/test/machine-draft.test.mjs
++++ b/test/machine-draft.test.mjs
+@@ -81,3 +81,22 @@ test('reanchorText: 重锚后标记哈希=当前内容哈希，内容行不动',
+   const ledger = { a: { hash: bodyHash(r.contentByKey.a) } }
+   assert.deepEqual(verifyMarkers({ text: r.text, sections: ledger, amendCmd: AMEND }), [])
+ })
++
++test('bodyHash 勾选态归一：task-NN 勾选翻转不改哈希，真实改写仍失配（2026-09-25 坑1）', () => {
++  const body = '- [ ] task-01: 干活\n- [ ] task-02: 测试'
++  const md = wrapSection({ key: 'tasks-rows', body, amendCmd: AMEND })
++  const sections = { 'tasks-rows': { hash: bodyHash(body) } }
++  assert.equal(bodyHash('- [x] task-01: a'), bodyHash('- [ ] task-01: a'), '[x] 与 [ ] 同哈希')
++  assert.equal(bodyHash('- [X] task-01: a'), bodyHash('- [ ] task-01: a'), '[X] 同归一')
++  assert.equal(bodyHash('* [x] task-02: a'), bodyHash('* [ ] task-02: a'), '星号 bullet 同口径')
++  // 正常勾选（flow start 横幅纪律动作）：指纹仍匹配——不需 amend-draft、不触发 edit_ratio
++  const ticked = md.replace('- [ ] task-02', '- [x] task-02')
++  assert.deepEqual(verifyMarkers({ text: ticked, sections, amendCmd: AMEND }), [], '勾选态不参与被改写判定')
++  // 真实改写（改任务文本）仍失配拒收——归一只抹勾选态，不松指纹防护
++  const rewritten = ticked.replace('task-01: 干活', 'task-01: 改了任务文本')
++  const v = verifyMarkers({ text: rewritten, sections, amendCmd: AMEND })
++  assert.equal(v.length, 1)
++  assert.match(v[0], /内容与指纹失配/)
++  // 非 task 行的勾选不归一——归一口径=任务勾选纪律的书写面，不扩大
++  assert.notEqual(bodyHash('- [x] 普通清单行'), bodyHash('- [ ] 普通清单行'))
++})
+diff --git a/test/sentinel-wiring.test.mjs b/test/sentinel-wiring.test.mjs
+index 812515cc..2d105fef 100644
+--- a/test/sentinel-wiring.test.mjs
++++ b/test/sentinel-wiring.test.mjs
+@@ -1,8 +1,9 @@
+ /**
+  * sentinel-wiring.test.mjs — 哨兵断言两道收口接线（2026-09-25-sentinel-wiring）
+  *
+- * 验收面：①flow done 侧：tasks.md 全勾零证据 → 拒收 exit 1 点名缺失任务；全勾+提交带
+- * task-NN token → 放行；非全勾 → 放行不变；②接线钉（quick 侧与 flow 侧同源 import）。
++ * 验收面：①flow done 侧：tasks.md 全勾零证据 → 拒收 exit 1 点名缺失任务；全勾+提交标题或
++ * 正文带 task-NN token → 放行（勾选直改不走 amend——2026-09-25 哈希勾选态归一后正常勾选
++ * 不再触发指纹门，坑1/坑2 口径对齐）；非全勾 → 放行不变；②接线钉（同源 import）。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -45,33 +46,50 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非
+     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+-    // tasks.md 全勾（机器段内改勾须走 amend 留痕重锚——模拟真实勾选面）
++    // tasks.md 全勾——直接改勾选（哈希勾选态归一后是合法书写面，不走 amend：走 amend 反而
++    // 会计入 edit_ratio 触发 route_hint——坑1 修复后的规范动作）
+     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+-    spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000 })
+     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+     execFileSync('git', ['commit', '-q', '-m', 'work（无 task token）'], { cwd, stdio: 'pipe' })
+     const f = cli(['flow', 'done', '--change', change])
+     assert.equal(f.status, 1, '全勾零证据应拒')
++    assert.doesNotMatch(f.stdout + f.stderr, /指纹失配/, '坑1：正常勾选不再触发指纹门（拒在哨兵不在指纹）')
+     assert.match(f.stdout + f.stderr, /哨兵断言拒收/, '哨兵文案')
+     rmSync(cwd, { recursive: true, force: true })
+   }
+-  // 形态 B：全勾 + 提交带 token → 过（哨兵绿行，收口继续）
++  // 形态 B：全勾 + 提交标题带 token → 过（哨兵绿行，收口继续）
+   {
+     const { cwd, cli } = makeRepo()
+     const change = 'sw-real'
+-    // --no-review：amend 改勾触发 edit_ratio=1 → 评审必评会拦在收口前，本用例测哨兵不测评审
++    // --no-review：聚焦哨兵不测评审（勾选直改后无 edit_ratio，评审定档与本用例无关）
+     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+     writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+-    spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000 })
+     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+     execFileSync('git', ['commit', '-q', '-m', 'feat: task-01 行为 X'], { cwd, stdio: 'pipe' })
+     const ok = cli(['flow', 'done', '--change', change])
+     assert.equal(ok.status, 0, `全勾+token 应放行收口: ${ok.stdout}\n${ok.stderr}`)
+     assert.match(ok.stdout, /哨兵：全勾/, '哨兵绿行在场')
++    assert.doesNotMatch(ok.stdout + ok.stderr, /指纹失配/, '坑1：勾选直改过指纹门')
++    rmSync(cwd, { recursive: true, force: true })
++  }
++  // 形态 B2：全勾 + token 只在提交正文（标题无 token）→ 过（坑2：证据面=整条提交消息）
++  {
++    const { cwd, cli } = makeRepo()
++    const change = 'sw-body-token'
++    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
++    const cd = join(cwd, '.sillyspec', 'changes', change)
++    fillSlots(cwd, change)
++    writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
++    writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++    execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++    execFileSync('git', ['commit', '-q', '-m', 'feat: 行为 X 落地（token 在正文）\n\n任务证据（哨兵 token）：task-01'], { cwd, stdio: 'pipe' })
++    const ok = cli(['flow', 'done', '--change', change])
++    assert.equal(ok.status, 0, `正文 token 应过哨兵放行收口: ${ok.stdout}\n${ok.stderr}`)
++    assert.match(ok.stdout, /哨兵：全勾/, '哨兵绿行在场（正文 token 计证据）')
+     rmSync(cwd, { recursive: true, force: true })
+   }
+   // 形态 C：非全勾（默认未勾）→ 哨兵 status=none 不拦（既有全部测试已隐式覆盖——显式断言一次）
+diff --git a/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/design.md b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/design.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:28:51.309Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-done-gate-calibration
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++坑1（勾选态归一）：在 machine-draft.js 的 bodyHash 单点加归一——哈希前把 `^([-*] \[)[ xX](?= task-\d)` 归一回 `- [ ]`。选单点是因为 wrapSection 标记、verifyMarkers 判定、reanchorText 重锚、draft-ledger 台账四处哈希全走 bodyHash，天然同口径，不会分叉出第五套口径。语义依据：勾选是 flow start 横幅教的预期写面（哨兵证据面），不该参与「被改写」判定；draft 产出恒 `[ ]`，存量台账两侧归一后同哈希，兼容。替代方案（checkbox 行挪出机器段）改动大且丢掉「任务行=机器推导」的指纹保护，放弃。
++坑2（哨兵证据口径）：flow.js 与 run/quick-audit.js 两处哨兵取证的 git log 由 `--format=%s` 改 `--format=%B%x1e`（记录分隔符按提交切记录，标题+正文整条消息都是证据面；advisory「区间已有 N 个提交」的计数按记录数取，不被多行正文撑大），拒收文案同步写明「标题或正文」。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++- machine-draft.js：新增模块内归一函数 normalizeTaskCheckboxState（不导出——lint 未引用导出门，bodyHash 单点消费）；bodyHash(s) 行为变化=task-NN 勾选行的哈希与勾选态解耦（其余内容哈希逐字不变；消费方 verify-draft.js 的机器段无 task 勾选行，实测零影响）。
++- flow.js / run/quick-audit.js：内部 git log format 变更（%s→%B%x1e）+ 变量更名 commitSubjects→commitMessages，无导出签名变化；哨兵拒收文案由「提交带 task-NN」改为「提交标题或正文带 task-NN」。
++- sentinel-assertions.js：仅文件头注释口径更新（subject→标题或正文），detectFakeCheckCompletion 签名与判据不动（commits 数组本就接受整条消息字符串）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：勾选与收口校验都是对盘面全文的幂等重算——先勾后跑与先跑后勾重跑结果一致；勾选先于 start 的补起草（redraftMissingArtifacts 已存在不碰）与归一无交集。
++2. 并发写：draft-ledger 与 tasks.md 均单写者（CLI 原子写 / agent 手改）；两执行体同改 tasks.md 是 git 工作树层面既有问题，本变更不新增写点。
++3. 切换/中断：归一是纯函数、done 断点重入重算同哈希；%B%x1e 切分对空消息（trim 后滤除）与超长正文照常，git log 失败走既有 fail-open 跳过。
++4. 作用域：归一口径只认 task-NN 行（负向前瞻同哨兵），普通清单勾选行不归一——verify-result 机器段（跨件族消费方）无 task 行不串台。已知边界：watcher 哨兵源一仍取 subject（恒 provisional 观测旁路、不拒收），正文 token 在观测面会漏报成 advisory——不扩进本变更，留观测旁路降噪议题。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：存量在途变更若曾按旧口径「先勾选再 amend-draft」，台账里存的是 [x] 形态的哈希——升级后 verify 归一算的是 [ ] 形态哈希，会失配。触发面极窄（须勾选→amend→工具升级三连），撞上时按提示再跑一次 amend-draft 重锚即愈（amend 的 reanchorText 也走归一哈希，重锚后不再复发）。
++放弃的方案：①把 checkbox 行挪出机器段（机器段只留题面）——改动大、丢任务行指纹保护、所有在途台账失效；②只在 flow 侧归一不动共享 bodyHash——wrapSection/verifyMarkers 立刻分叉两套口径，恰好是要修的病。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 762427f63eae069d8e408148749c796526a337fd
++updatedAt: '2026-09-25T09:37:44.760Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（34.2s）｜门文件 12 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/proposal.md b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:28:51.308Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-done-gate-calibration
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:7814b5edf815d83e41fee20153cbc351be634d43c7dec777344d58f5872f4098:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++任务原话转写：动机：multi-agent-platform 仓 thin 收口四轮拒收实录（坑1与坑2，见该仓 docs 下 sillyspec 留档 thin-flow-done-gate-frictions.md）：flow start 横幅教 agent 正常勾选 task-NN，但勾选改变 tasks-rows 机器段哈希被指纹门拒收，只能借 amend-draft 重锚并付出 editRatio=1 的误报；哨兵拒收文案说提交带 task-NN 即证据，判据却只读提交标题行，token 写进提交正文重试照样被拦——生成侧指引与验收侧判据口径漂移。
++
++变更范围：src/machine-draft.js、src/flow.js、src/run/quick-audit.js、src/sentinel-assertions.js、test/machine-draft.test.mjs、test/sentinel-wiring.test.mjs
++
++成功标准：
++- 勾选态归一：段内容哈希计算前把 task-NN 勾选行的勾选态归一回未勾选，tasks.md 正常勾选后 flow done 工件校验不再指纹失配拒收，机器段真实改写仍拒收
++- 哨兵证据口径：收口哨兵取整条提交消息而非仅标题行，task-NN 出现在提交正文也算完成证据，拒收文案写明标题或正文
++- 补两例回归：勾选后指纹仍匹配、提交正文含 task-NN 过哨兵，相关套件全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:b25feeac5d82a2f0be185598af2ec8ced91f9300a85c7d4ed78044ae5e559517:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++按成功标准机械推导，共 3 条验收面：
++1. 勾选态归一：段内容哈希计算前把 task-NN 勾选行的勾选态归一回未勾选，tasks.md 正常勾选后 flow done 工件校验不再指纹失配拒收，机器段真实改写仍拒收
++2. 哨兵证据口径：收口哨兵取整条提交消息而非仅标题行，task-NN 出现在提交正文也算完成证据，拒收文案写明标题或正文
++3. 补两例回归：勾选后指纹仍匹配、提交正文含 task-NN 过哨兵，相关套件全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:766ca026e22188dea3cc5e8b6af11de44666f8baeae0a1771d507df5eab43aff:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++1. 勾选态归一：段内容哈希计算前把 task-NN 勾选行的勾选态归一回未勾选，tasks.md 正常勾选后 flow done 工件校验不再指纹失配拒收，机器段真实改写仍拒收
++2. 哨兵证据口径：收口哨兵取整条提交消息而非仅标题行，task-NN 出现在提交正文也算完成证据，拒收文案写明标题或正文
++3. 补两例回归：勾选后指纹仍匹配、提交正文含 task-NN 过哨兵，相关套件全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/requirements.md b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/requirements.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:28:51.309Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-done-gate-calibration
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: 勾选态归一：段内容哈希计算前把 task-NN 勾选行的勾选态归一回未勾选，tasks.md 正常勾选后 flow done 工件校验不再指纹失配拒收，机器段真实改写仍拒收
++FR-02: 哨兵证据口径：收口哨兵取整条提交消息而非仅标题行，task-NN 出现在提交正文也算完成证据，拒收文案写明标题或正文
++FR-03: 补两例回归：勾选后指纹仍匹配、提交正文含 task-NN 过哨兵，相关套件全绿
++-->
++
++### FR-01: 机器段哈希勾选态归一
++Given flow start 生成的 tasks.md 含 `- [ ] task-NN` 机器段且 tasks-rows 指纹在 draft-ledger 在案
++When agent 按横幅纪律把任务行勾选为 `- [x] task-NN`（不改任务文本、不跑 amend-draft）
++Then flow done 工件校验对 tasks-rows 验证通过（勾选态不参与「被改写」判定）；改任务文本或增删行仍判内容失配拒收
++
++### FR-02: 收口哨兵证据取整条提交消息
++Given tasks.md 全勾且区间某提交的标题行不含 task-NN、正文含完整 token
++When flow done 或 quick 收口哨兵取证
++Then 该任务计为有完成证据、不拒收；零证据拒收时文案写明「提交标题或正文带 task-NN」
++
++### FR-03: 回归用例钉住新契约
++Given machine-draft 三件套与哨兵接线测试面
++When 套件执行
++Then 「勾选后指纹仍匹配」「提交正文含 task-NN 过哨兵」两例在场（夹具不再借 amend-draft 绕指纹门），相关套件全绿
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/machine-draft.test.mjs（bodyHash 勾选态归一：[x]/[X] 与 [ ] 同哈希、勾选后 verifyMarkers 零 violation、真实改写仍失配、非 task 勾选行不归一）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-wiring.test.mjs 形态 B2（提交标题无 token、正文含 task-01 → flow done 放行收口）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/machine-draft.test.mjs + test/sentinel-wiring.test.mjs（形态 A/B 夹具去 amend 化：直接勾选 + doesNotMatch 指纹失配钉住 FR-01 的接线面）
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/tasks.md b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-done-gate-calibration/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T09:28:51.309Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-done-gate-calibration
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:6120ffbaa83c09eaa421fc2d040a7a8b82311557954e438ac6e4502f45bee7e1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-done-gate-calibration 留痕重锚 -->
++- [x] task-01: 勾选态归一：段内容哈希计算前把 task-NN 勾选行的勾选态归一回未勾选，tasks.md 正常勾选后 flow do
++- [x] task-02: 哨兵证据口径：收口哨兵取整条提交消息而非仅标题行，task-NN 出现在提交正文也算完成证据，拒收文案写明标题或正文
++- [x] task-03: 补两例回归：勾选后指纹仍匹配、提交正文含 task-NN 过哨兵，相关套件全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

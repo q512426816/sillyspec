@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-done-gate-calibration",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-03「相关套件全绿」缺机器实测证据：收口门记录 test: skipped 而 commands.test 已配置",
+      "evidence": "冻结件 .sillyspec/changes/2026-09-25-thin-done-gate-calibration/flow-state.yaml 记 gate_summary='test: skipped｜lint: passed ← npm run lint（34.2s）'，而 .sillyspec/local.yaml commands.test 已配置 'npm run test:core'，skip 原因未随摘要留痕——『套件全绿』无机器实测记录佐证。skipped≠failed，且两例新测试（machine-draft 勾选归一 / sentinel-wiring 形态 B2）的断言语义已逐条对照实现核实一致（bodyHash 单点归一 + detectFakeCheckCompletion 整串 re.test），故定性为证据缺口而非承诺违反或数据正确性风险。",
+      "location": ".sillyspec/changes/2026-09-25-thin-done-gate-calibration/flow-state.yaml:11"
+    },
+    {
+      "severity": "P3",
+      "title": "quick 侧哨兵 %B 接线无直接断言用例（FR-02 测试绑定仅覆盖 flow 侧）",
+      "evidence": "requirements 测试绑定 FR-02 只声明 sentinel-wiring 形态 B2（flow done 侧）；src/run/quick-audit.js 同步改为 --format=%B%x1e + split('\\x1e') 切分的接线在 test/ 目录无以哨兵为断言对象的用例（grep quick-gate/quick-test-gate 测试文件无 sentinel 断言）。两侧共享 detectFakeCheckCompletion 纯函数判据，接线为低风险重复面，留档备补。",
+      "location": "src/run/quick-audit.js:95-98"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok（边界已裁决：可接受——存量在途变更若按旧口径『先勾选再 amend-draft』，台账存 [x] 原始哈希，升级后归一算 [ ] 哈希失配；fail-closed 方向（误拦不误放），触发面窄（勾选→amend→升级三连），amend 重锚走同一 bodyHash 单点（src/machine-draft.js:121）自愈后不复发）",
+    "作用域": "ok（边界已裁决：可接受——watcher 哨兵源一仍取 subject（src/watcher.js:268/273 %h|%s、:488 只测 c.subject），但 watcher 产物恒 provisional:true 只展示不判定（watcher.js:7/305/379），正文 token 漏报仅降级为观测面 advisory 噪音，不进拒收路径；两道硬门（flow done/quick）均已取 %B 整条消息）"
+  },
+  "reviewedAt": "2026-09-25T09:41:51Z"
+}

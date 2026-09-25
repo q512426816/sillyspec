@@ -1433,3 +1433,66 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given AGENTS.md 其余条目（头注释与第 1-2、5、8-14、16-19 条，含本仓专属 git 纪律与会话身份条目）与本口径同步无关；When 修正仅限第 3/4/6/7/15 条；Then 其余条目逐字不动，以 `git diff -- AGENTS.md` 变更范围核对为证
 全文：.sillyspec/changes/archive/2026-09-25-agents-lightweight-sync/requirements.md#FR-04
 最近确认：5a9f7867815373339b590f08e3a0c622eba41051
+
+## FR-cli-entry-080 机器段哈希勾选态归一
+变更：2026-09-25-thin-done-gate-calibration
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow start 生成的 tasks.md 含 `- [ ] task-NN` 机器段且 tasks-rows 指纹在 draft-ledger 在案；When agent 按横幅纪律把任务行勾选为 `- [x] task-NN`（不改任务文本、不跑 amend-draft）；Then flow done 工件校验对 tasks-rows 验证通过（勾选态不参与「被改写」判定）；改任务文本或增删行仍判内容失配拒收
+全文：.sillyspec/changes/archive/2026-09-25-thin-done-gate-calibration/requirements.md#FR-01
+最近确认：d8c60ebc68a68a2364ad0e17ca8fbb202de53caa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-done-gate-calibration:flow:FR-01
+  tests: test/machine-draft.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-done-gate-calibration
+  status: active
+
+## FR-cli-entry-081 收口哨兵证据取整条提交消息
+变更：2026-09-25-thin-done-gate-calibration
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given tasks.md 全勾且区间某提交的标题行不含 task-NN、正文含完整 token；When flow done 或 quick 收口哨兵取证；Then 该任务计为有完成证据、不拒收；零证据拒收时文案写明「提交标题或正文带 task-NN」
+全文：.sillyspec/changes/archive/2026-09-25-thin-done-gate-calibration/requirements.md#FR-02
+最近确认：d8c60ebc68a68a2364ad0e17ca8fbb202de53caa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-done-gate-calibration:flow:FR-02
+  tests: test/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-done-gate-calibration
+  status: active
+
+## FR-cli-entry-082 回归用例钉住新契约
+变更：2026-09-25-thin-done-gate-calibration
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given machine-draft 三件套与哨兵接线测试面；When 套件执行；Then 「勾选后指纹仍匹配」「提交正文含 task-NN 过哨兵」两例在场（夹具不再借 amend-draft 绕指纹门），相关套件全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-done-gate-calibration/requirements.md#FR-03
+最近确认：d8c60ebc68a68a2364ad0e17ca8fbb202de53caa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-done-gate-calibration:flow:FR-03
+  tests: test/machine-draft.test.mjs | test/sentinel-wiring.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-done-gate-calibration
+  status: active

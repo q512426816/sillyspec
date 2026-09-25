@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-done-gate-calibration",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-25-thin-done-gate-calibration:flow:FR-01",
+      "tests": [
+        "test/machine-draft.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-done-gate-calibration"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-25-thin-done-gate-calibration:flow:FR-02",
+      "tests": [
+        "test/sentinel-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-done-gate-calibration"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-25-thin-done-gate-calibration:flow:FR-03",
+      "tests": [
+        "test/machine-draft.test.mjs",
+        "test/sentinel-wiring.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-25-thin-done-gate-calibration"
+    }
+  ]
+}
