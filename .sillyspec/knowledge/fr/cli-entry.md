@@ -1220,3 +1220,75 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-25-fr-agent-writable
   status: active
+
+## FR-cli-entry-067 --freeze-dirty 显式声明入冻
+变更：2026-09-25-thin-freeze-git-hygiene
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 共享主仓存在本变更的未提交交付文件；When flow done --freeze-dirty；Then 非他侧声明的 dirty 交付文件全归本变更并入冻结面（exclusiveFrom='flag' 标签区分）
+全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-01
+最近确认：dc281c3659ee9d34d2151dc3a90f8b866fe31cce
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-freeze-git-hygiene:flow:FR-01
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-freeze-git-hygiene
+  status: active
+
+## FR-cli-entry-068 共享主仓 dirty 警告三选一
+变更：2026-09-25-thin-freeze-git-hygiene
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — When flow done 时共享主仓有未提交交付文件且未声明；Then 警告点名三选一（接受缺口 / --freeze-dirty 重跑 / 专属 worktree），简报同步冻结面规则说明
+全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-02
+最近确认：dc281c3659ee9d34d2151dc3a90f8b866fe31cce
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-freeze-git-hygiene:flow:FR-02
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-freeze-git-hygiene
+  status: active
+
+## FR-cli-entry-069 归档后 git 压扁指引
+变更：2026-09-25-thin-freeze-git-hygiene
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — When flow done 归档完成且 head 不等于 baseline；Then 打印 reset --soft <baseline> 压扁为单提交指引，注明审计真相在 change.patch sha 锚定不依赖历史形态
+全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-03
+最近确认：dc281c3659ee9d34d2151dc3a90f8b866fe31cce
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-freeze-git-hygiene:flow:FR-03
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-freeze-git-hygiene
+  status: active
+
+## FR-cli-entry-070 测试覆盖
+变更：2026-09-25-thin-freeze-git-hygiene
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 上述三件行为；When 跑 flow 系测试；Then flag 入冻/三选一文案/压扁指引均有断言且全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-04
+最近确认：dc281c3659ee9d34d2151dc3a90f8b866fe31cce

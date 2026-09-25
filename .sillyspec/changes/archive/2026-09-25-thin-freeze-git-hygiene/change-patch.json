@@ -1,0 +1,29 @@
+{
+  "change": "2026-09-25-thin-freeze-git-hygiene",
+  "baseline": "f23b54b1f4d16cbf6c2af25d4987f9fef6a20d43",
+  "head": "356e4a33075ee1e557fb9aee206fb9b7bdfc01db",
+  "files": [
+    "src/flow-draft.js",
+    "src/flow-parity.js",
+    "src/flow.js",
+    "test/flow-draft.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-route.test.mjs",
+    "test/fr-agent-writable.test.mjs",
+    "test/sentinel-wiring.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/design.md",
+    ".sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/tasks.md"
+  ],
+  "totals": {
+    "files": 13,
+    "additions": 378,
+    "deletions": 50
+  },
+  "savedAt": "2026-09-25T05:08:48.939Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "d7211dd515608dc0b1a20b422e2e61e9db2f3df173f26451e483ec9740338500",
+  "patchStatus": "ok"
+}

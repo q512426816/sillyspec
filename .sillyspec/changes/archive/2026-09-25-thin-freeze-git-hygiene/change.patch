@@ -1,0 +1,707 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 7c55ac93..02001c9a 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -100,14 +100,18 @@ function draftProposal({ change, input, criteria }) {
+   return { text, sections: collectSections(text) }
+ }
+ 
+-/** requirements 机器稿（成功标准 → FR 条目 + 每条 FR 一枚「测试绑定」AGENT 槽——2026-09-25
+- * thin-patch-bindings：轻量变更 FR 从诞生就要测试锚，撞实验 5 个 P1 全是承诺无锚形态）。 */
+-function draftRequirements({ change, criteria }) {
++/** requirements 机器稿（骨架 + agent 填写 FR + 绑定槽——2026-09-25-fr-agent-writable，
++ * 平台狗粮驱动架构修正：FR 内容从机器指纹段改为 agent 书写面（同 design 槽模式）。
++ * 机器只搭骨架：节标题 + FR 空区（含参考摘录注释）+ 绑定槽。agent 干活时直接填 FR，
++ * 不走 amend、不触发 edit_ratio——机器摘录 FR 太薄（「flow done 全绿」级）是实证痛点，
++ * amend 改写被 route_hint:thick 误报打击改善积极性，且 FR 质量仍受限。 */
++function draftRequirements({ change, criteria, input }) {
+   const crit = criteria || []
+-  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+-  const frBodies = crit.length > 0
+-    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen ${c}`).join('\n\n')
+-    : '### FR-01: flow done 全绿\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen 测试门实测通过+工件指纹校验通过'
++  // 参考摘录（完整 HTML 注释包裹——确保解析器可跳过；非约束，agent 可采纳/改写/忽略）
++  const refComment = crit.length > 0
++    ? `\n<!--\n参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）\n${crit.map((c, i) => `FR-${String(i + 1).padStart(2, '0')}: ${c}`).join('\n')}\n-->\n`
++    : '\n<!-- 无成功标准摘录——agent 按任务语义自行编写 FR -->\n'
++  // 绑定槽：按摘录条目数生成（agent 增删 FR 后自行增删对应绑定槽）
+   const n = crit.length > 0 ? crit.length : 1
+   const bindingSlots = Array.from({ length: n }, (_, i) => {
+     const id = `FR-${String(i + 1).padStart(2, '0')}`
+@@ -120,9 +124,9 @@ function draftRequirements({ change, criteria }) {
+     '---',
+     `# 需求规格（Requirements）— ${change}`,
+     '',
+-    '## 功能需求（成功标准机械摘录）',
+-    wrapped('requirements-frs', frBodies),
+-    AGENT_SLOT(1, '需求例外裁决（FR 语义改写不走此槽——直接编辑机器段后跑 flow amend-draft 留痕，槽内容不进 FR 索引）'),
++    '## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）',
++    '',
++    `<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->${refComment}`,
+     '',
+     '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
+     '',
+@@ -143,13 +147,25 @@ export function verifyRequirementBindings({ changeDir }) {
+   if (!existsSync(path)) return { applicable: false, emptySlots: [] }
+   const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+   const lines = text.split('\n')
+-  const hasFrSection = /MACHINE-DRAFT:requirements-frs/.test(text)
+   const emptySlots = []
+   let current = null
+   let hasContent = false
+   let slotCount = 0
++  let frAreaFilled = false
++  let inFrArea = false
++  let inHtmlComment = false
+   const flush = () => { if (current && !hasContent) emptySlots.push(current) }
+   for (const line of lines) {
++    if (/^<!--\s*AGENT:FR区/.test(line)) { inFrArea = true; continue }
++    // HTML 注释跳过（参考摘录里的 FR 行不算 agent 填写）：<!-- 开非 AGENT 行入注释态，--> 出
++    if (/^<!--(?!.*AGENT)/.test(line.trim())) { inHtmlComment = !/-->/.test(line); continue }
++    if (inHtmlComment) { if (/-->/.test(line)) inHtmlComment = false; continue }
++    if (inFrArea && (/^<!--\s*AGENT:测试绑定/.test(line) || /^##\s/.test(line))) {
++      inFrArea = false
++      // FR 区内容检查：至少一行非注释非空的实质内容（### FR- 开头的行为需求）
++      if (!frAreaFilled) emptySlots.push('FR区（agent 未填写功能需求——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then）')
++    }
++    if (inFrArea && /^###\s+FR-/.test(line)) frAreaFilled = true
+     if (/^<!--\s*AGENT:测试绑定/.test(line)) {
+       flush()
+       current = (line.match(/AGENT:(测试绑定\S+)/) || [])[1] || '测试绑定'
+@@ -161,8 +177,11 @@ export function verifyRequirementBindings({ changeDir }) {
+     if (current && line.trim()) hasContent = true
+   }
+   flush()
+-  if (hasFrSection && slotCount === 0) {
+-    return { applicable: true, emptySlots: ['（骨架过旧——requirements 有 FR 机器段但无测试绑定槽；修复：删除 requirements.md 后重入 flow start 补生成，criteria 会从 proposal 机器段回提）'] }
++  // FR 区在文件尾的情况（无后续节）
++  if (inFrArea && !frAreaFilled) emptySlots.push('FR区（agent 未填写功能需求）')
++  if (slotCount === 0 && !/AGENT:FR区/.test(text) && !/MACHINE-DRAFT:requirements-frs/.test(text)) {
++    // 无 FR 区标记也无绑定槽 = 骨架过旧或异常
++    return { applicable: true, emptySlots: ['（requirements 结构异常——无 FR 区标记也无绑定槽；修复：删除 requirements.md 后重入 flow start 补生成）'] }
+   }
+   return { applicable: true, emptySlots }
+ }
+@@ -414,9 +433,15 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
+       const firstBody = ledger.files[file][k] && ledger.files[file][k].body
+       const ratio = firstBody != null ? computeEditRatio(firstBody, r.contentByKey[k]) : 0
+       sectionRatios[`${file}:${k}`] = Math.round(ratio * 1000) / 1000
+-      const aLines = String(firstBody || '').split('\n').length
+-      totalOrig += aLines
+-      totalChanged += Math.round(ratio * aLines)
++      // FR 段不进决策密度（2026-09-25-fr-quality-fix，平台狗粮驱动）：agent 丰富 FR 文本=需求
++      // 澄清非设计决策，计入 edit_ratio 会触发 route_hint:thick 误报，打击 FR 改善积极性。
++      // sectionRatios 照记（审计可见），只是不计入 totalOrig/totalChanged 的汇总。
++      const isFrSection = k === 'requirements-frs'
++      if (!isFrSection) {
++        const aLines = String(firstBody || '').split('\n').length
++        totalOrig += aLines
++        totalChanged += Math.round(ratio * aLines)
++      }
+       ledger.files[file][k] = { ...ledger.files[file][k], hash: bodyHash(r.contentByKey[k]) }
+     }
+     reanchored.push(`${file}（${r.keys.join('/')}）`)
+@@ -516,7 +541,7 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+   const withTasks = existsSync(join(changeDir, 'tasks'))
+   const drafts = [
+     { file: 'proposal.md', make: () => draftProposal({ change, input, criteria: crit }) },
+-    { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit }) },
++    { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit, input }) },
+     { file: 'design.md', make: () => draftDesignRecord({ change }) },
+     { file: 'tasks.md', make: () => draftTasks({ change, criteria: crit, withTasks }) },
+   ]
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index fd48b033..eeb334ea 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -168,12 +168,14 @@ export function collectFreezeFiles({ cwd, specBase, change, committed, exclusive
+       if (deliverable(path) && !dirty.includes(path)) dirty.push(path)
+     }
+   } catch { /* git 失败零 dirty 面 */ }
+-  if (exclusive) return { files: [...new Set([...committed, ...dirty])], dirtyAdded: dirty, dirtyWarned: [] }
++  // 归属切分单点：exclusive（worktree/--freeze-dirty）与共享主仓共用——他侧已声明 dirty 永不入冻
++  // （评审 P2 修复：--freeze-dirty 承诺「非他侧声明」，全量冻入会造成跨变更审计双计；worktree
++  // 下 own 恒为全量，切分无伤）
+   let ownDirty = dirty
+   try {
+-    const { splitOwnVsForeignDiffFiles } = splitOwnVsForeign
+     ownDirty = splitOwnVsForeignDiffFiles(cwd, change, dirty, { specBase }).own
+-  } catch { /* 归属切分失败保留全量警告 */ }
++  } catch { /* 归属切分失败：exclusive 保留全量（声明即边界），共享主仓退全量警告 */ }
++  if (exclusive) return { files: [...new Set([...committed, ...ownDirty])], dirtyAdded: ownDirty, dirtyWarned: [] }
+   return { files: [...committed], dirtyAdded: [], dirtyWarned: ownDirty }
+ }
+ 
+diff --git a/src/flow.js b/src/flow.js
+index bbe5a2f4..f8278c0e 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -276,8 +276,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
+     `📜 requirements 的 FR 是机器摘录候选——语义要改写时直接编辑机器段后跑 flow amend-draft 留痕`,
+     `   （槽里写的不进 FR 索引）；输入含编号行为条目时机器已优先摘编号条目。`,
+-    `📦 交付代码先 git commit（显式 pathspec）再 flow done——patch 冻结面取 baseline..HEAD 提交面，`,
+-    `   未提交代码不入审计件（会话专属 worktree 例外：dirty 交付面一并入冻结；R16 实证教训）。`,
++    `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
++    `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
++    `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
+     `⚖️ 独立评审定档（flow done 按危险证据判，不看文件数）：高危承诺词/盲维实质作答/diff 危险`,
+     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
+     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+@@ -332,7 +333,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
+  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
+  */
+-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true }) {
++export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
+   if (!st) {
+@@ -513,19 +514,27 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         // 冻结面收集（2026-09-25-thin-r16-patches 修复①）：committed 为主；会话专属 worktree
+         // （gate-snapshot 同款路径判定）下未提交 dirty 交付面一并入冻结——独占树内全归属本变更；
+         // 共享主仓 dirty 无法归属只警告（他侧声明免警告），审计缺口显式化不再静默。
+-        let exclusive = false
+-        try {
+-          const { shouldSkipGateSnapshotForWorktree } = await import('./run/gate-snapshot.js')
+-          exclusive = shouldSkipGateSnapshotForWorktree(cwd)
+-        } catch { /* 判定异常按共享主仓 */ }
++        let exclusiveFrom = null // 'flag' | 'worktree' | null——入冻路径来源（输出标签区分）
++        if (freezeDirty === true) {
++          exclusiveFrom = 'flag' // --freeze-dirty：显式声明非他侧声明 dirty 全归属本变更（独占树自动路径的手动版）
++        } else {
++          try {
++            const { shouldSkipGateSnapshotForWorktree } = await import('./run/gate-snapshot.js')
++            if (shouldSkipGateSnapshotForWorktree(cwd)) exclusiveFrom = 'worktree'
++          } catch { /* 判定异常按共享主仓 */ }
++        }
++        const exclusive = exclusiveFrom != null
+         let freeze = null
+         try {
+           const { collectFreezeFiles } = await import('./flow-parity.js')
+           freeze = collectFreezeFiles({ cwd, specBase, change, committed, exclusive })
+         } catch { freeze = { files: [...committed], dirtyAdded: [], dirtyWarned: [] } }
+-        if (freeze.dirtyAdded.length > 0) console.log(`🔒 会话专属 worktree：${freeze.dirtyAdded.length} 个未提交交付文件一并入冻结面`)
++        if (freeze.dirtyAdded.length > 0) {
++          console.log(`🔒 ${exclusiveFrom === 'flag' ? '--freeze-dirty 显式声明' : '会话专属 worktree'}：${freeze.dirtyAdded.length} 个未提交交付文件一并入冻结面`)
++        }
+         if (freeze.dirtyWarned.length > 0) {
+-          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件不入冻结面（共享主仓无法归属）——本次冻结不含它们，收口后尽快 commit：`)
++          console.warn(`⚠️ ${freeze.dirtyWarned.length} 个未提交交付文件未入冻结面（共享主仓无法归属）——三选一：`)
++          console.warn(`   ① 本次接受缺口（审计面少这些文件）② 确认全部归属本变更：重跑 flow done --freeze-dirty 并入冻结 ③ 下次用会话专属 worktree。Git 中间提交可归档后压扁（见收口指引）`)
+           console.warn(`   ${freeze.dirtyWarned.slice(0, 3).join('、')}${freeze.dirtyWarned.length > 3 ? ' 等' : ''}`)
+         }
+         const ownFiles = [...new Set([...freeze.files, ...changeDirFiles])]
+@@ -774,6 +783,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   appendTelemetry(reviewOutcome) // 成功收口（失败面已在各失败路径提前落账，appendTelemetry 单点）
+ 
+   console.log(`✅ flow done 完成（2/2 协议调用收口）：${change}——${SUBSTEPS.length} 子步 ${doneList.join('、')}；change 已归档注销。`)
++  // Git 历史整理指引（2026-09-25-thin-freeze-git-hygiene）：多轮中间提交可压扁为单提交——审计
++  // 真相在 change.patch（sha256 锚定）与归档产物，不依赖历史形态；baseline 在 change-patch.json。
++  try {
++    const finalHead = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++    if (st.baseline_commit && typeof finalHead === 'string' && finalHead.trim() && finalHead.trim() !== st.baseline_commit) {
++      console.log(`🧹 Git 历史可自由整理：多轮中间提交可压扁为单提交——git reset --soft ${st.baseline_commit.slice(0, 10)} && git commit -m "<最终提交信息>"`)
++      console.log(`   审计真相已冻结在归档件 change.patch（sha256 锚定）+ verify-result + review.json，不依赖 git 历史；`)
++      console.log(`   注：knowledge「最近确认」hash 为溯源快照，压扁后成孤儿引用属预期（非活引用）。`)
++    }
++  } catch { /* 指引 best-effort */ }
+   // 平台同步（同 flow start 尾部接线——归档后的 docs/knowledge/FR 面随本轮回推平台）
+   try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
+   return { change, substeps: doneList }
+@@ -831,7 +850,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
+     validateChangeName(change)
+-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt })
++    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
+   }
+   if (sub === 'amend-draft') {
+     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index bf0900a5..831379ae 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -44,10 +44,15 @@ test('① draftAll 五件形态（标记+AGENT 槽+ledger 首版原文）+任务
+   const a = draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, withTasks: false, runtimeRoot })
+   assert.deepEqual(a.written, ['proposal.md', 'requirements.md', 'design.md', 'tasks.md'])
+   assert.ok(!existsSync(join(changeDir, 'tasks')), '默认 thin 零任务卡')
+-  for (const f of ['proposal.md', 'requirements.md', 'design.md', 'tasks.md']) {
++  for (const f of ['proposal.md', 'design.md', 'tasks.md']) {
+     const text = readFileSync(join(changeDir, f), 'utf8')
+     assert.match(text, /MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin/, `${f} 含指纹标记`)
+   }
++  // requirements.md FR 区改为 agent 书写面（2026-09-25-fr-agent-writable）——无指纹段，有 AGENT 槽
++  const reqsText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  assert.match(reqsText, /AGENT:FR区/, 'requirements FR 区为 AGENT 槽')
++  assert.ok(!reqsText.includes('MACHINE-DRAFT:requirements-frs'), 'FR 区不再是机器指纹段')
++  assert.match(reqsText, /AGENT:测试绑定FR-01/, '绑定槽在场')
+   assert.match(readFileSync(join(changeDir, 'proposal.md'), 'utf8'), /<!--AGENT:槽/)
+   // design.md 四节机器段（含盲维四问）+ 四个 AGENT 槽（2026-09-24 v3 设计记录全档化）
+   const design = readFileSync(join(changeDir, 'design.md'), 'utf8')
+@@ -115,8 +120,8 @@ test('⑧ 幂等补起草：缺哪补哪/已存在不碰/ledger 合并/criteria
+   assert.deepEqual(r.drafted, ['requirements.md', 'design.md'], '只补缺的两件')
+   assert.equal(readFileSync(join(changeDir, 'proposal.md'), 'utf8'), proposalBefore, '已存在文件逐字未动')
+   const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+-  assert.match(reqs, /### FR-01: 事件恒带/, 'criteria 回提成功（非兜底文案）')
+-  assert.match(reqs, /### FR-02: 崩溃零影响/, '第二条 criteria 也回提')
++  assert.match(reqs, /事件恒带/, 'criteria 回提成功（参考摘录含标准文本）')
++  assert.match(reqs, /崩溃零影响/, '第二条 criteria 也回提')
+   assert.ok(existsSync(join(changeDir, 'design.md')), 'design 骨架补生成')
+   const ledgerAfter = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
+   assert.ok(ledgerAfter.files['requirements.md'] && ledgerAfter.files['design.md'], '新段入账')
+@@ -137,16 +142,17 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
+ 
+   // 槽位门：新稿全空 → 全列；填路径/不适用 → 放行；旧骨架（剥掉绑定槽）→ 指引补生成
+   let v = verifyRequirementBindings({ changeDir })
+-  assert.equal(v.emptySlots.length, 2, '两槽空被点名')
++  assert.equal(v.emptySlots.length, 3, 'FR区+两绑定槽空被点名')
+   writeFileSync(join(changeDir, 'requirements.md'), reqs
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 绑定提取\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 绑定提取正确')
+     .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/flow-draft.test.mjs ⑩ 绑定提取用例')
+     .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：崩溃零影响为运行时属性，无独立断言面'))
+   v = verifyRequirementBindings({ changeDir })
+   assert.equal(v.emptySlots.length, 0, '路径+不适用均视作已答')
+-  writeFileSync(join(changeDir, 'requirements.md'), reqs.replace(/^<!--AGENT:测试绑定.*$/gm, '').replace(/^## 测试绑定.*$/m, ''))
++  writeFileSync(join(changeDir, 'requirements.md'), reqs.replace(/^<!--AGENT:测试绑定.*$/gm, '').replace(/^## 测试绑定.*$/m, '').replace(/AGENT:FR区/, 'XX:FR区'))
+   v = verifyRequirementBindings({ changeDir })
+   assert.equal(v.emptySlots.length, 1)
+-  assert.match(v.emptySlots[0], /骨架过旧/, '旧骨架指引删文件重入补生成')
++  assert.match(v.emptySlots[0], /结构异常/, 'FR 区与绑定槽全失——结构异常指引')
+ 
+   // 提取：路径行→行（tests 解析去前导./）；不适用→跳过
+   writeFileSync(join(changeDir, 'requirements.md'), reqs
+@@ -186,14 +192,13 @@ test('⑬ 编号条目通道（R16 任务书形态）：编号行为条目取代
+   const few = extractSuccessCriteria('1. 只有两条编号\n2. 第二条\n成功标准：\n- 节条目甲\n- 节条目乙\n- 节条目丙')
+   assert.equal(few.length, 3)
+   assert.match(few[0], /节条目甲/)
+-  // draftAll 产出的 requirements：FR 标题=条目语义 + 新 GWT 字面（无流程口号残留）
++  // draftAll 产出的 requirements：FR 区为 agent 槽（参考摘录含行为语义）；绑定槽按条目数
+   const { root, changeDir, runtimeRoot } = makeFixtureDir()
+   draftAll({ changeDir, change: 'c13', input: taskBook, runtimeRoot })
+   const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+-  assert.match(reqs, /### FR-01: 新模块 observation：批量写入端点（单批上限 500 条）/, 'FR 标题为行为语义')
++  assert.match(reqs, /FR-01: 新模块 observation：批量写入端点/, 'FR 参考摘录为行为语义')
+   assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 5, '编号条目→5 枚绑定槽')
+-  assert.match(reqs, /Given 平台按当前契约运行/, '新 GWT 字面')
+-  assert.ok(!/轻量跑道在跑|flow done 裁决执行/.test(reqs), '流程口号字面清零')
++  assert.match(reqs, /AGENT:FR区/, 'FR 区为 agent 槽')
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
+@@ -287,7 +292,9 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
+   const dp = join(changeDir, 'design.md')
+   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具一行答'))
+   const rp = join(changeDir, 'requirements.md')
+-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: e2e 夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
+   const snapshotBefore = readdirSync(changeDir).sort()
+   assert.deepEqual(snapshotBefore, ['design.md', 'flow-state.yaml', 'proposal.md', 'requirements.md', 'tasks.md'], '产物面=五件+状态（零手写额外文件）')
+ 
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index a15a2aff..7f71d443 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -57,7 +57,9 @@ function fillDesignSlots(cwd, change) {
+   const dp = join(base, 'design.md')
+   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
+   const rp = join(base, 'requirements.md')
+-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 协议测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
+ }
+ 
+ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，仅两次协议调用，归档注销', () => {
+@@ -181,7 +183,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   const specBase = join(cwd, '.sillyspec')
+   const reqs = readFileSync(join(specBase, 'changes', change, 'requirements.md'), 'utf8')
+-  assert.match(reqs, /### FR-01:/, '机器稿 requirements 含 FR 块（供索引解析）')
++  assert.match(reqs, /AGENT:FR区/, 'requirements FR 区为 agent 槽（新格式）')
+ 
+   // agent 干活：交付文件落在 backend/ 目录（伪域路由信号；用 .txt——.py 交付物会触发门禁
+   // python 环境探测族（P17 同族预存行为，无解释器即挂），与本测试目的无关）
+@@ -236,7 +238,8 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+   assert.deepEqual(leaked, [], '非本变更目录的 .sillyspec 文件零泄漏')
+   assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
+   assert.ok(!patchMeta.files.includes('wip-dirty.txt'), '未提交交付文件不入冻结面')
+-  assert.match(ok.stdout + ok.stderr, /个未提交交付文件不入冻结面/, 'dirty 警告点名')
++  assert.match(ok.stdout + ok.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
++  assert.match(ok.stdout + ok.stderr, /三选一/, '三选一指引在场（评审 P2② 补断言）')
+   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+@@ -251,7 +254,9 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
+   const base = join(cwd, '.sillyspec', 'changes', change)
+   // design 四槽 + 绑定槽写真实测试路径（触发行提取与提升）
+   writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：绑定链夹具'))
+-  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑨ 绑定链用例'))
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 绑定链行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen test-trace 落盘并提升')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑨ 绑定链用例'))
+   const done = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
+   assert.match(done.stdout, /测试绑定行落盘：1 行/, '绑定行落盘输出')
+@@ -323,6 +328,7 @@ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
+   writeFileSync(join(changeDir, 'requirements.md'), readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 收编行为\nGiven 头脑风暴产物在场\nWhen flow start 收编\nThen design 豁免+绑定槽追加')
+     .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑬ 收编用例'))
+   const done = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
+@@ -343,7 +349,8 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
+   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
+-  assert.match(s.stdout, /先 git commit（显式 pathspec）再 flow done/, '先提交后 done 简报钉死')
++  assert.match(s.stdout, /冻结面在 flow done 时点采集/, '冻结面规则简报在场')
++  assert.match(s.stdout, /--freeze-dirty/, '显式声明通道指引在场')
+   // 预判已删（2026-09-25-thin-precheck-removal）：技术关键词不再触发升厚建议——碰迁移的
+   // 轻量变更照样最优收口（R16 实证），风险面归收口评审按证据判定
+   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
+@@ -445,7 +452,9 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落
+   // 外置根无 .sillyspec 层——change 目录直挂 spec 根下，槽位内联填
+   const pc = join(plat, 'changes', change)
+   writeFileSync(join(pc, 'design.md'), readFileSync(join(pc, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
+-  writeFileSync(join(pc, 'requirements.md'), readFileSync(join(pc, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
++  writeFileSync(join(pc, 'requirements.md'), readFileSync(join(pc, 'requirements.md'), 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 平台参数面行为\nGiven 外置 spec 根\nWhen flow start\nThen 全链落外置根')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：平台参数面夹具'))
+   const d = cli(cwd, ['flow', 'done', '--change', change, '--spec-dir', plat])
+   assert.equal(d.status, 0, `外置根 done 应通过: ${d.stdout}\n${d.stderr}`)
+   assert.ok(existsSync(join(plat, 'changes', 'archive')), '归档落外置根')
+@@ -505,3 +514,25 @@ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次
+   const hits = src.split('await triggerSync(cwd, change)').length - 1
+   assert.ok(hits >= 2, `flow.js 应在 start/done 两处尾部触发 triggerSync（实际 ${hits} 处）`)
+ })
++
++test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t19'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  writeFileSync(join(cwd, 'late-dirty.py'), 'x = 1\n') // 未提交交付文件 → --freeze-dirty 并入
++  fillDesignSlots(cwd, change)
++  const ok = cli(cwd, ['flow', 'done', '--change', change, '--freeze-dirty'])
++  assert.equal(ok.status, 0, `done 失败: ${ok.stdout}\n${ok.stderr}`)
++  assert.match(ok.stdout + ok.stderr, /显式声明.*并入冻结面|--freeze-dirty.*并入冻结/, '声明入冻提示')
++  assert.match(ok.stdout, /Git 历史可自由整理/, '压扁指引在场')
++  assert.match(ok.stdout, /reset --soft/, 'reset 指引含基线')
++  const archDir = join(cwd, '.sillyspec', 'changes', 'archive')
++  const archived = readdirSync(archDir)[0]
++  const meta = JSON.parse(readFileSync(join(archDir, archived, 'change-patch.json'), 'utf8'))
++  assert.ok(meta.files.includes('late-dirty.py'), '未提交文件经 --freeze-dirty 入冻结面')
++  assert.ok(meta.files.includes('work.js'), '提交面照常入冻结')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index 41839d7f..eb668e9e 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -68,7 +68,9 @@ function fillDesignSlots(cwd, change) {
+   const dp = join(base, 'design.md')
+   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
+   const rp = join(base, 'requirements.md')
+-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 路由测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
+ }
+ 
+ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+醒目打印+遥测；小改无 hint', () => {
+diff --git a/test/fr-agent-writable.test.mjs b/test/fr-agent-writable.test.mjs
+new file mode 100644
+index 00000000..d1c9afc3
+--- /dev/null
++++ b/test/fr-agent-writable.test.mjs
+@@ -0,0 +1,81 @@
++/**
++ * fr-agent-writable.test.mjs — FR 区 agent 书写面（2026-09-25-fr-agent-writable）
++ *
++ * 验收面：
++ *   ① 骨架形态：FR 区为 AGENT 槽（非 MACHINE-DRAFT 指纹段），input 摘录以注释形式在槽内；
++ *   ② agent 填写 FR 后 flow done 通过（不需要 amend）；
++ *   ③ FR 区空白 → flow done 拒收；
++ *   ④ 绑定槽行为不变（空槽拒收）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const { draftAll, verifyRequirementBindings } = await import('../src/flow-draft.js')
++
++function fixture() {
++  const root = mkdtempSync(join(tmpdir(), 'faw-'))
++  const changeDir = join(root, 'changes', 'c1')
++  const runtimeRoot = join(root, '.runtime')
++  mkdirSync(changeDir, { recursive: true })
++  mkdirSync(runtimeRoot, { recursive: true })
++  return { root, changeDir, runtimeRoot }
++}
++
++test('① 骨架形态：FR 区为 AGENT 槽（非指纹段），参考摘录在注释里', () => {
++  const { root, changeDir, runtimeRoot } = fixture()
++  draftAll({ changeDir, change: 'c1', input: '动机\n成功标准：\n- 标准 A\n- 标准 B', runtimeRoot })
++  const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  assert.match(reqs, /AGENT:FR区/, 'FR 区是 AGENT 槽')
++  assert.ok(!reqs.includes('MACHINE-DRAFT:requirements-frs'), 'FR 区不再是机器指纹段')
++  assert.match(reqs, /<!--[\s\S]*参考摘录/, '参考摘录在注释里')
++  assert.match(reqs, /标准 A/, '参考摘录含标准 A')
++  assert.match(reqs, /AGENT:测试绑定FR-01/, '绑定槽在场')
++  assert.match(reqs, /AGENT:测试绑定FR-02/, '第二条绑定槽在场')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('② agent 直接填写 FR（无 amend）——verifyRequirementBindings 通过', () => {
++  const { root, changeDir, runtimeRoot } = fixture()
++  draftAll({ changeDir, change: 'c1', input: '动机\n成功标准：\n- 标准 A', runtimeRoot })
++  // agent 填 FR + 绑定
++  let reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  reqs = reqs.replace('<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->',
++    `<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->\n### FR-01: 行为 A 正常工作\nGiven 系统就绪\nWhen 执行 A\nThen 结果正确`)
++  reqs = reqs.replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/foo.test.mjs 用例 1')
++  writeFileSync(join(changeDir, 'requirements.md'), reqs)
++  const v = verifyRequirementBindings({ changeDir })
++  assert.equal(v.emptySlots.length, 0, `agent 填写后应通过: ${JSON.stringify(v.emptySlots)}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('③ FR 区空白 → 拒收（agent 没填功能需求）', () => {
++  const { root, changeDir, runtimeRoot } = fixture()
++  draftAll({ changeDir, change: 'c1', input: '动机\n成功标准：\n- 标准 A', runtimeRoot })
++  // 只填绑定不填 FR
++  let reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  reqs = reqs.replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/foo.test.mjs')
++  writeFileSync(join(changeDir, 'requirements.md'), reqs)
++  const v = verifyRequirementBindings({ changeDir })
++  assert.ok(v.emptySlots.some((s) => s.includes('FR区')), `FR 区空白应拒: ${JSON.stringify(v.emptySlots)}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('④ 绑定槽空 → 拒收（现有行为回归）', () => {
++  const { root, changeDir, runtimeRoot } = fixture()
++  draftAll({ changeDir, change: 'c1', input: '动机\n成功标准：\n- 标准 A', runtimeRoot })
++  // 只填 FR 不填绑定
++  let reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  reqs = reqs.replace('<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->',
++    `<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->\n### FR-01: 行为 A\nGiven x\nWhen y\nThen z`)
++  writeFileSync(join(changeDir, 'requirements.md'), reqs)
++  const v = verifyRequirementBindings({ changeDir })
++  assert.ok(v.emptySlots.some((s) => s.includes('测试绑定')), `绑定空应拒: ${JSON.stringify(v.emptySlots)}`)
++  rmSync(root, { recursive: true, force: true })
++})
+diff --git a/test/sentinel-wiring.test.mjs b/test/sentinel-wiring.test.mjs
+index 5cfd884d..812515cc 100644
+--- a/test/sentinel-wiring.test.mjs
++++ b/test/sentinel-wiring.test.mjs
+@@ -32,7 +32,9 @@ function fillSlots(cwd, change) {
+   const dp = join(base, 'design.md')
+   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
+   const rp = join(base, 'requirements.md')
+-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 哨兵夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 哨兵通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
+ }
+ 
+ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非全勾放行', () => {
+diff --git a/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/design.md b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:54:34.562Z
++---
++# 设计记录（Design Record）— 2026-09-25-thin-freeze-git-hygiene
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++冻结面与 git 历史解耦（用户提出的留存形态问题）：原则=patch 冻结件是审计真相（sha256 锚定、随归档不可变），git 历史是展示层可自由重写。三件：①flow done 新增 --freeze-dirty——显式声明非他侧声明的 dirty 交付文件全归本变更并入冻结面（独占 worktree 自动路径的手动版，输出标签区分 flag/worktree 来源）；②共享主仓 dirty 警告改三选一指引（接受缺口/--freeze-dirty 重跑/下次专属 worktree）；③归档完成且 head≠baseline 时打印 reset --soft 压扁指引（多轮中间提交收成一个最终提交），注明 knowledge 最近确认 hash 压扁后成孤儿引用属预期；④简报从「先提交再 done」教条软化为冻结面规则说明。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow.js：cmdFlow dispatch 传 freezeDirty、签名收参、exclusiveFrom 来源标签（flag/worktree/null）、警告与归档指引输出、简报改写；test/flow-protocol.test.mjs：⑱ 新增（--freeze-dirty 入冻+压扁指引断言）+ ⑥b/⑭ 文案同步。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：flag 判定与指引输出均为纯同步逻辑；冻结收集是单次快照读，无时序面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=--freeze-dirty 在真多会话共享仓被滥用（把他侧未声明 WIP 冻进自己审计件）——出路口径同 --upgrade-thick 类留痕 flag（使用即声明，审计面可见）；滥用后果是审计件污染而非代码风险。死路=让 CLI 自动判定 dirty 归属——共享主仓无归属信号，判定即猜测（49 文件泄漏实证），显式声明是唯一诚实解。
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/flow-state.yaml b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/flow-state.yaml
+@@ -0,0 +1,14 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: f23b54b1f4d16cbf6c2af25d4987f9fef6a20d43
++updatedAt: '2026-09-25T05:01:14.115Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js4)（14.9s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260925050031\test-result.json｜lint: passed
++  ← npm run lint（41.3s）｜门文件 12 个
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/proposal.md b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:54:34.560Z
++---
++# 提案书（Proposal）— 2026-09-25-thin-freeze-git-hygiene
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:0bead5a4a7346611108ed4d9f6d492eb3685577bda6f75b5a9cef7a71600dc38:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++任务原话转写：动机：冻结面与 git 历史解耦——多轮修改的中间提交不该被迫留存，用户可能只要一个最终干净提交；全程零提交也该能完整冻结。原则：patch 冻结件=审计真相（sha 锚定不可变），git 历史=展示层可自由重写。
++成功标准：
++- flow done 新增 --freeze-dirty：显式声明非他侧声明的 dirty 交付文件全归本变更并入冻结面（独占 worktree 自动路径的手动版）
++- 共享主仓 dirty 警告文案改为三选一指引（commit 后重跑 / --freeze-dirty / 专属 worktree）；简报同步软化为冻结面规则说明
++- 归档完成时打印 git 整理指引：head 不等于 baseline 时提示 reset --soft 压扁为单提交，注明审计真相在冻结件不依赖历史形态
++- 新增/更新测试覆盖 flag 入冻与指引输出；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:703968d5162ed58ec78e87282b26973232b6ae0f1d18e36799ce6f93d462d00a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. flow done 新增 --freeze-dirty：显式声明非他侧声明的 dirty 交付文件全归本变更并入冻结面（独占 worktree 自动路径的手动版）
++2. 共享主仓 dirty 警告文案改为三选一指引（commit 后重跑 / --freeze-dirty / 专属 worktree）；简报同步软化为冻结面规则说明
++3. 归档完成时打印 git 整理指引：head 不等于 baseline 时提示 reset --soft 压扁为单提交，注明审计真相在冻结件不依赖历史形态
++4. 新增/更新测试覆盖 flag 入冻与指引输出；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:bd49f3a0f0727385ee2aef4cdc8b737520e1ac4241106c10e95752bdc2f46088:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++1. flow done 新增 --freeze-dirty：显式声明非他侧声明的 dirty 交付文件全归本变更并入冻结面（独占 worktree 自动路径的手动版）
++2. 共享主仓 dirty 警告文案改为三选一指引（commit 后重跑 / --freeze-dirty / 专属 worktree）；简报同步软化为冻结面规则说明
++3. 归档完成时打印 git 整理指引：head 不等于 baseline 时提示 reset --soft 压扁为单提交，注明审计真相在冻结件不依赖历史形态
++4. 新增/更新测试覆盖 flag 入冻与指引输出；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/requirements.md b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/requirements.md
+@@ -0,0 +1,49 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:54:34.561Z
++---
++# 需求规格（Requirements）— 2026-09-25-thin-freeze-git-hygiene
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: --freeze-dirty 显式声明入冻
++Given 共享主仓存在本变更的未提交交付文件
++When flow done --freeze-dirty
++Then 非他侧声明的 dirty 交付文件全归本变更并入冻结面（exclusiveFrom='flag' 标签区分）
++
++### FR-02: 共享主仓 dirty 警告三选一
++When flow done 时共享主仓有未提交交付文件且未声明
++Then 警告点名三选一（接受缺口 / --freeze-dirty 重跑 / 专属 worktree），简报同步冻结面规则说明
++
++### FR-03: 归档后 git 压扁指引
++When flow done 归档完成且 head 不等于 baseline
++Then 打印 reset --soft <baseline> 压扁为单提交指引，注明审计真相在 change.patch sha 锚定不依赖历史形态
++
++### FR-04: 测试覆盖
++Given 上述三件行为
++When 跑 flow 系测试
++Then flag 入冻/三选一文案/压扁指引均有断言且全绿
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: flow done 新增 --freeze-dirty：显式声明非他侧声明的 dirty 交付文件全归本变更并入冻结面（独占 worktree 自动路径的手动版）
++FR-02: 共享主仓 dirty 警告文案改为三选一指引（commit 后重跑 / --freeze-dirty / 专属 worktree）；简报同步软化为冻结面规则说明
++FR-03: 归档完成时打印 git 整理指引：head 不等于 baseline 时提示 reset --soft 压扁为单提交，注明审计真相在冻结件不依赖历史形态
++FR-04: 新增/更新测试覆盖 flag 入冻与指引输出；flow 系全绿
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑱（late-dirty.py 入冻 + work.js 照常 + 声明标签断言）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑥b（三选一文案断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs ⑱（Git 历史可自由整理 + reset --soft 断言）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol/flow-review/flow-parity/flow-route/stage-burst 套件 42 例（余 1 为并行会话 flow-draft WIP 连带红）
++test/flow-protocol/flow-review/flow-parity/flow-route/stage-burst 42 例（余 1 为并行会话 flow-draft WIP 连带红）
+
+diff --git a/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/tasks.md b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-thin-freeze-git-hygiene/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:54:34.562Z
++---
++# 任务注册表（Tasks）— 2026-09-25-thin-freeze-git-hygiene
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:a0b2c09be517594d7dbb81b3b253783452dbb0e4be2dbfa6beebe7e071d42ba5:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-thin-freeze-git-hygiene 留痕重锚 -->
++- [ ] task-01: flow done 新增 --freeze-dirty：显式声明非他侧声明的 dirty 交付文件全归本变更并入冻结面（
++- [ ] task-02: 共享主仓 dirty 警告文案改为三选一指引（commit 后重跑 / --freeze-dirty / 专属 work
++- [ ] task-03: 归档完成时打印 git 整理指引：head 不等于 baseline 时提示 reset --soft 压扁为单提交，注
++- [ ] task-04: 新增/更新测试覆盖 flag 入冻与指引输出；flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++
