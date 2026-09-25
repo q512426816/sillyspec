@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-fr-unmapped-repair",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P3",
+      "title": "测试②与本仓真实数据耦合，未来承接翻链会假红",
+      "evidence": "test/fr-unmapped-repair.test.mjs:62 断言 readActiveFrDigest 过滤 714-720 后恰 7 条；readActiveFrDigest（src/fr-index.js:711）会排除任何含 superseded_by： 行的条目。未来任一条 714-720 被新变更承接翻链（本仓已有先例：e01316fa 于 2026-09-25 将 FR-runtime-020 翻链退役）即从 digest 消失，repaired.length<7 对健康数据报红。当前数据下 7/7 可读、2/2 绿，非现行缺陷。",
+      "suggestion": "改为直接解析 unmapped.md 断言 7 个节头在场且标题非佚失（不经 active 过滤），或在测试注释显式接受该维护耦合。"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "title": "flow done 门记录 test: skipped，实测证据链不完整（无失败被掩盖）",
+      "evidence": "flow-state.yaml gate_summary 记「test: skipped（无命令/时长）｜lint: passed ← npm run lint（34.5s）」，而变更面含 test/fr-unmapped-repair.test.mjs 且 .sillyspec/local.yaml:58 已配置 commands.test: npm run test:core。跳过内分支未完全追溯（extractTestCommand 的引号+行尾注释+CRLF 形态均已处理，非「未配置」路径；疑与 module 策略或隔离快照上下文有关）。本评审独立实测补齐：变更测试 node --test 2/2 绿、npm run test:core 180/180 绿。",
+      "suggestion": "复查 gate 在「纯数据+新测试文件」变更面的 module 策略实测覆盖；跳过时在 gate_summary 附 reason 字段留痕。"
+    },
+    {
+      "id": "F3",
+      "severity": "P3",
+      "title": "change.patch 留档不含主数据修复（unmapped.md 7 行）",
+      "evidence": "change-patch.json files 共 6 项（test 文件+本变更目录工件），不含 .sillyspec/knowledge/fr/unmapped.md——机器归因过滤「过滤 .sillyspec/ 非本变更目录」将知识域文件排除。数据修复仅存于 commit 546685bb（diff 精确 7 行插入，可回溯，故非 P1）。",
+      "suggestion": "归档件注明数据修复 commit 引用，或调整归因口径使 knowledge 面改动入 patch 留档。"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "title": "无幽灵复发探测器（披露①残余面，非本变更承诺）",
+      "evidence": "写入面钉死后，同类人工合回损伤（80355e9b 型）复发时无机器发现通道：doctor-diagnostics.js 无「条目段内变更：字段集数≠1 / preamble 孤立字段行」探测。本变更未承诺此面，属改进机会。",
+      "suggestion": "doctor 增补该探测（本评审的四项扫描脚本口径可直接复用：preamble 孤立字段行、段内字段集数、必填字段缺失、重复 id）。"
+    }
+  ],
+  "dimensionNotes": {
+    "数据修复正确性": "PASS。7/7 标题与「全文：」锚点指向的归档 ### FR-NN: 标题逐字节一致（714→workspace-spec-root-managed-p0#FR-05 现有测试不回归；715-720→2026-09-20-workspace-member-visibility#FR-01~06 六条全对）；插入位置经 commit 546685bb diff 证实为各幽灵字段块顶部（前驱 p0#FR-04 条目与后继 FR-unmapped-700 节头均完整，未错插他条目段）；残留扫描四路全净：preamble 孤立字段行=0、段内变更：字段集数≠1 的块=0、缺变更/状态/全文的块=0、重复 id=0（720/720 唯一），全文零「佚失」。",
+    "根因论断验证": "PASS。renderFrLines（src/fr-index.js:309）首行无条件产出「## id title」——写入侧必然带节头，论断成立；测试①端到端证明（真 indexRequirements 产出+真 splitKnowledgeSections 解析）。幂等闸门（fr-index.js:387-392）按解析后 section 的 change 命中即全量 no-op——幽灵字段块被 sectionRegex 解析吸收进邻段/preamble，对闸门不可见，判定准确。一处措辞精确化：p0 变更经幸存 FR-01~04 段触发 no-op（design 机制描述精确）；member-visibility 六条全幽灵、全域无幸存同变更段，重跑不会 no-op 而会发新号重号+幽灵残骸并存——两分支下「弃重跑、必须显式补节头」结论均成立，槽4 表述略有过度概括但结论无损。",
+    "披露边界裁决": "①机器不防人工合回操作面——可接受：根因 commit 80355e9b（2026-09-24 知识面合回）已核实存在，损伤在 CLI 写入路径之外，写入面不可能产幽灵经源码+测试双证，边界如实披露；残余为无复发探测器（F4，P3）。②修复脚本整文件替换非原子写——可接受（限一次性）：独占窗口自陈、git 审查面完整（546685bb 恰 7 行插入无他触）、修复幂等；仓内未见该脚本入库（注：根目录 scripts-tmp-frfix.mjs 经查属另一变更 fr-quality-fix 的遗留自删脚本，与本变更无关，勿归因）；若此类脚本固化为可重放工具则口径不可接受，需改 writeAtomicSync（CLI 侧 fr-index.js:858 已有该口径）。③标题佚失 fallback 未触发——属实：7/7 与归档逐字节一致，数据零「佚失」，测试②断言与数据事实一致。",
+    "测试钉真实性": "PASS。用例①真实解析非恒真：temp 变更目录→真 indexRequirements（含 deliverableFiles 域路由）→读回写入产物→真 splitKnowledgeSections+生产 sectionRegex→断言 preamble 零孤立字段行且 sections 数=written 数，写入路径若真产幽灵必红。用例②依赖本仓真实数据（readActiveFrDigest 读 .sillyspec/knowledge/unmapped）——如实裁决：依赖使测试与数据演化耦合，未来承接翻链即假红（F1，P3）；标题机器契约下不太可能被改，新增 721+ 号不破坏。两用例本机实跑 2/2 绿。"
+  },
+  "reviewedAt": "2026-09-25T12:51:46Z"
+}

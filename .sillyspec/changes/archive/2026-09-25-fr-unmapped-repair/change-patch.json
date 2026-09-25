@@ -1,0 +1,22 @@
+{
+  "change": "2026-09-25-fr-unmapped-repair",
+  "baseline": "e01316fa5235e7746c72479cc188009bf6c139ec",
+  "head": "546685bb9cca3e4b0397f93d9e2bd67da002b5a7",
+  "files": [
+    "test/fr-unmapped-repair.test.mjs",
+    ".sillyspec/changes/2026-09-25-fr-unmapped-repair/design.md",
+    ".sillyspec/changes/2026-09-25-fr-unmapped-repair/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-fr-unmapped-repair/proposal.md",
+    ".sillyspec/changes/2026-09-25-fr-unmapped-repair/requirements.md",
+    ".sillyspec/changes/2026-09-25-fr-unmapped-repair/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 207,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-25T12:42:09.185Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "9f3547d7f2aae64d3429646b536631204f4bdf1ee7c0072bde9efa834e55951a",
+  "patchStatus": "ok"
+}
