@@ -44,10 +44,12 @@ test('① draftAll 五件形态（标记+AGENT 槽+ledger 首版原文）+任务
   const a = draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, withTasks: false, runtimeRoot })
   assert.deepEqual(a.written, ['proposal.md', 'requirements.md', 'design.md', 'tasks.md'])
   assert.ok(!existsSync(join(changeDir, 'tasks')), '默认 thin 零任务卡')
-  for (const f of ['proposal.md', 'design.md', 'tasks.md']) {
+  for (const f of ['proposal.md', 'design.md']) {
     const text = readFileSync(join(changeDir, f), 'utf8')
     assert.match(text, /MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin/, `${f} 含指纹标记`)
   }
+  // tasks.md 勾选行去指纹化（2026-09-25-feedback-fixes①：勾选与指纹门自相矛盾）——裸 markdown
+  assert.ok(!readFileSync(join(changeDir, 'tasks.md'), 'utf8').includes('MACHINE-DRAFT:tasks-rows'), 'tasks 无指纹段（agent 直接勾）')
   // requirements.md FR 区改为 agent 书写面（2026-09-25-fr-agent-writable）——无指纹段，有 AGENT 槽
   const reqsText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
   assert.match(reqsText, /AGENT:FR区/, 'requirements FR 区为 AGENT 槽')

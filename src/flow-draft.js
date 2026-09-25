@@ -22,6 +22,10 @@ import { join } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks } from './machine-draft.js'
 
+/** 读文件并归一化 CRLF→LF（2026-09-25-feedback-fixes④：Python/编辑器写盘 CRLF 会破坏 
+ 锚定的槽位识别 regex）。 */
+function readText(path) { return readFileSync(path, 'utf8').replace(/\r\n/g, '\n') }
+
 const AMEND_CMD = (change) => `sillyspec flow amend-draft --change ${change}`
 const GUARD_NOTE = '整段改写会被 flow done 拒收'
 
@@ -300,7 +304,10 @@ function draftTasks({ change, criteria, withTasks }) {
     '> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；',
     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
     '',
-    wrapped('tasks-rows', rows.join('\n')),
+    // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
+    // 勾一条就失配 → 必走 amend → editRatio=1 被判该走厚档——勾选纪律与指纹门自相矛盾。
+    // 改为裸 markdown，agent 直接勾；哨兵的防假勾逻辑独立于指纹（按提交 token 判据）。
+    rows.join('\n'),
     '',
   ].join('\n')
   return { text, sections: collectSections(text) }
@@ -442,7 +449,7 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
   for (const file of Object.keys(ledger.files || {})) {
     const mdPath = join(changeDir, file)
     let text
-    try { text = readFileSync(mdPath, 'utf8') } catch { continue }
+    try { text = readText(mdPath) } catch { continue }
     const r = reanchorText({ text, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
     if (r.keys.length === 0) continue
     writeAtomicSync(mdPath, r.text)
@@ -481,7 +488,7 @@ export function verifyFlowDrafts({ changeDir, change, runtimeRoot }) {
   for (const [file, sections] of Object.entries(ledger.files || {})) {
     const mdPath = join(changeDir, file)
     let text
-    try { text = readFileSync(mdPath, 'utf8') } catch {
+    try { text = readText(mdPath) } catch {
       violations.push(`机器稿「${file}」不可读（draft ledger 在案）`)
       continue
     }
@@ -541,7 +548,7 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
   let criteria = input ? extractSuccessCriteria(input) : null
   if (criteria === null || (Array.isArray(criteria) && criteria.length === 0)) {
     try {
-      const pText = readFileSync(join(changeDir, 'proposal.md'), 'utf8')
+      const pText = readText(join(changeDir, 'proposal.md'))
       const block = parseMarkerBlocks(pText).find((b) => b.key === 'proposal-criteria')
       if (block) {
         criteria = block.contentLines
@@ -586,7 +593,7 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
 export function ensureBindingSlots({ changeDir }) {
   const path = join(changeDir, 'requirements.md')
   if (!existsSync(path)) return { appended: false, slots: 0 }
-  let text = readFileSync(path, 'utf8')
+  let text = readText(path)
   if (/<!--\s*AGENT:测试绑定/.test(text)) return { appended: false, slots: 0 }
   const ids = []
   for (const m of text.matchAll(/(?:^|\n)#{2,4}\s*(FR-\d+)[^\n]*/g)) {

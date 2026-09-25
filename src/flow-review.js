@@ -68,7 +68,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
   const texts = [String(input || '')]
   for (const f of ['proposal.md', 'requirements.md', 'design.md']) {
     try {
-      const t = readFileSync(join(changeDir, f), 'utf8')
+      const t = readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n')
       texts.push(f === 'design.md' ? stripMachineSections(t) : t)
     } catch { /* 缺件由 redraft/槽位门兜底 */ }
   }
@@ -79,7 +79,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
 
   // ② 盲维四问作答：实质作答=风险面（adopted 无槽退化机制词扫描）
   try {
-    const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
+    const dText = readFileSync(join(changeDir, 'design.md'), 'utf8').replace(/\r\n/g, '\n')
     if (/<!--\s*AGENT:槽3/.test(dText)) {
       const answer = readSlotAnswer(dText, /^<!--\s*AGENT:槽3/)
       if (!answer) exemptEvidence.push('盲维四问未作答（将由槽位门拦收）')
