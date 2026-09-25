@@ -394,3 +394,75 @@
 - 场景：默认场景 — Given scope-audit 与 verify-postcheck 两消费方；When 跨仓 per-repo 采集；Then 均消费 collectRepoActual 共享内核（仓解析/路径归一/大小写折叠/porcelain 解析/锚点分级单点实现，行数采集留调用方）；reconc
 全文：.sillyspec/changes/archive/2026-09-20-scope-audit-cross-repo/requirements.md#FR-07
 最近确认：50c29406
+
+## FR-core-engine-039 buildDepsBatches 的 py 运行器推断保留 cd <dir> &
+变更：2026-09-25-deps-cwd-prefix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then buildDepsBatches 的 py 运行器推断保留 cd <dir> && 前缀（首个 pytest 段含链前缀整体提取），且批次内文件路径按该 dir
+全文：.sillyspec/changes/archive/2026-09-25-deps-cwd-prefix/requirements.md#FR-01
+最近确认：3ab70d08d737b30b488d80e17a1e1288f27a3bd5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-deps-cwd-prefix:flow:FR-01
+  tests: test/deps-cwd-prefix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-deps-cwd-prefix
+  status: active
+
+## FR-core-engine-040 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 p
+变更：2026-09-25-deps-cwd-prefix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 无 cd 前缀的模块命令行为不变（裸 pytest 段提取）；无命中模块兜底 python -m pytest 不变
+全文：.sillyspec/changes/archive/2026-09-25-deps-cwd-prefix/requirements.md#FR-02
+最近确认：3ab70d08d737b30b488d80e17a1e1288f27a3bd5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-deps-cwd-prefix:flow:FR-02
+  tests: test/deps-cwd-prefix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-deps-cwd-prefix
+  status: active
+
+## FR-core-engine-041 buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定
+变更：2026-09-25-deps-cwd-prefix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then buildDepsBatches 导出并新增单测：带 cd 前缀的命令与路径重定基/裸命令不变/兜底三态
+全文：.sillyspec/changes/archive/2026-09-25-deps-cwd-prefix/requirements.md#FR-03
+最近确认：3ab70d08d737b30b488d80e17a1e1288f27a3bd5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-deps-cwd-prefix:flow:FR-03
+  tests: test/deps-cwd-prefix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-deps-cwd-prefix
+  status: active
+
+## FR-core-engine-042 flow 系与 test:core 全绿
+变更：2026-09-25-deps-cwd-prefix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then flow 系与 test:core 全绿
+全文：.sillyspec/changes/archive/2026-09-25-deps-cwd-prefix/requirements.md#FR-04
+最近确认：3ab70d08d737b30b488d80e17a1e1288f27a3bd5

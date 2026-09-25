@@ -1,0 +1,4008 @@
+diff --git a/docs/sillyspec/file-lifecycle.md b/docs/sillyspec/file-lifecycle.md
+index ff961954..5033dfd1 100644
+--- a/docs/sillyspec/file-lifecycle.md
++++ b/docs/sillyspec/file-lifecycle.md
+@@ -291,7 +291,7 @@ execute --done 批量完成（2026-07-28，`run/complete.js`）
+ - scan 第 10 步「Extract Project Knowledge」把长期有效的项目知识写入 `.sillyspec/knowledge/`（`conventions.md`/`patterns.md`/`known-issues.md` + 更新 `INDEX.md`）；`scan-postcheck.js` 校验产物（INDEX.md 存在、引用文件真实存在）。
+ - execute 启动时由 `knowledge-match.js` 按 plan.md 的 task 关键词匹配知识库，命中报告注入 prompt 并写 `.runtime/knowledge-hit-report.json`。
+ - 平台模式残留清理只删缓存、保留权威状态（`worktrees/`、`sillyspec.db`、`global.json`、`contract-artifacts/`、`execute-runs/`），不再整删 `.runtime/`——否则 worktree meta 被清掉会导致 `depsStatus` 恒为 unknown、`branch already exists` 死循环、`worktree doctor` orphan 误判。
+-- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1338（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
++- plan→execute Contract 校验（2026-08-20-task-truth-unify D-001@v1 重构为双文件）：`validatePlanForExecute(tasksContent, planContent)`——任务注册表从 tasks.md 解析（`parseTaskRegistry`：checkbox 行 + [model:xxx]/(depends_on:) 行内标注），plan.md 只解析 `## Wave N` 段下纯 ID 引用行（`- task-XX`，遇到非 Wave 标题行退出段）；交叉校验：引用悬空/注册表任务未被任何 Wave 覆盖/一任务多 Wave 重复覆盖/编号断档/旧格式（plan.md 含任务名 checkbox 行）分别拦截并给可照抄新格式示例；三类根因诊断（tasks.md 无 task-XX 行 / Wave 段无 ID 引用 / 旧格式残留）；Wave 标题格式不对（W1/Wave1/波次1）显式报错（引用行不收容、静默退化隐式全并行）。light 级 plan.md 无任务区（任务全在 tasks.md）→ 注册表合成单隐式 Wave（`implicit: true`）串行执行。唯一运行时调用方 gates.js:1371（plan 完成门禁）；gates 三道门（extractTaskIdsFromRegistry/isCurrentWaveAllNoDepsVerify/enforceReviewJsonGate）、complete.js 机器勾选器与 detectExecuteBatchFinish、task-review/progress(doctor align)/doctor-diagnostics D5/taskcard/contract-matrix/run-prompt knowledge 匹配/plan-postcheck 对账/plan.js parseTaskCount·parseTaskNames 全部以 tasks.md 为任务源（Wave 结构仍取 plan.md）。
+ - `executePlanPostcheck`（`run/stage.js`）的 `resolveChangeDir` 从 `run/shared.js` 导入（W6 Step1 抽出的纯函数；历史上曾误从 `./modules.js` 导入，该模块未导出此函数）。
+ - `executePlanPostcheck`（noAI，execute 前最后关口）顺序跑确定性校验：`validateBlueprintConsistency`（task 结构/路径冲突/拓扑无环）、`validatePlanFeasibility`（TaskCard 字段齐全/依赖存在/id 连续；2026-08-24 坑 taskcard-placeholder-slip 起**骨架占位符硬拦**——`FR-XX`/`D-XXX`/`src/example/file.ts`/`一句话说明这个 task`/`具体步骤 1`/`可验证的验收条件 1`/`边界约束 1` 未替换视同缺字段，标记清单 `src/taskcard-placeholders.js` 与骨架同源、先剥 HTML 注释再匹配防骨架自述误伤）、`validateCrossTaskContracts`（consumer `expects_from` ↔ provider `provides` 字段对账）、`validateDesignFileCoverage`（`design.md` 文件变更清单 → tasks `allowed_paths` 覆盖对账；未覆盖的源码文件阻断 execute，避免子代理被 allowed_paths 锁死而无权改 → 漏改；2026-08-15 D-2 起 `.sillyspec/docs/` 模块文档亦须认领）、`validateBlueprintConsistency` 内含任务声明 ↔ tasks/ 卡片双向对账（2026-08-15 D-2b；2026-08-20-task-truth-unify 起声明源=tasks.md 注册表，plan.md 旧 checkbox 声明回退兼容：声明任务漏生成卡片——典型尾部文档同步任务——阻断，孤儿卡亦阻断）、`validatePlanArtifacts`（plan.md/tasks/ 产物存在）；Wave 段比对（坑 wave-dep-direction-unchecked，2026-08-24）：**依赖方向硬拦**（depends_on 落同 Wave——execute 同 Wave 强制并行——或后置 Wave → throw 阻断，报错指向 `sillyspec plan-adopt-waves --change <名>` 一键重排；plan-adopt-waves.js：tasks/*.md depends_on → topoSortWaves → 重写 `## Wave N` 段块 + best-effort 同步任务总表 W 列 + 写后复跑 validateBlueprintConsistency；--dry-run 只预览；幂等），仅分组数差异（手工过度串行化）合法保留 warning。`parseFileChangeList`（`change-list.js`）兼容表格与分类列表两种清单格式、表头列顺序自适应，跳过 `.sillyspec/` 非 docs 子路径与「不修改文件」子段，CRLF 容错（2026-08-15 D-2 起 plan 覆盖对账传 `keepSillyspecDocs: true`：`.sillyspec/docs/` 模块文档 = 交付物，须被 task `allowed_paths` 认领，与 worktree apply `resolveApplyAllowSet` 口径一致）；覆盖对账用双向前缀 + glob 容差匹配，与 `quick-recommend` 共用 `change-list.js` 的 `pathMatches`。
+ - Revision v1：`stages` 表新增 `revision`/`reopened_from_step`/`reopened_at`/`stale_reason` 列；阶段新增 `revising`/`stale` 状态；`sillyspec run <stage> --reopen --from-step <n>` 重开已完成阶段、级联标记下游 stale；`.runtime/postcheck-result.json` 由 `scan-postcheck.js` 的 `writeStructuredResult` 落盘（本地写 `specDir/.runtime`，平台写 `runtimeRoot/scan-runs/<id>`）。
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 2f99c488..23ee42e1 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -130,8 +130,8 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | 步骤 / 命令 | 链路 | 具体动作 | 源码触发点 |
+ |---|---|---|---|
+ | `platform connect <url> <token>` | A | GET health ping → POST resolve-by-root-path 换 shpsync_ token → 写 platform/mcp 段 | `sync.js:260` |
+-| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:296/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:221/155/177（启动/切换/stale 重置）；gates.js:564；command.js:1630/1785/1848/1859/2049 |
+-| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:47-58；command.js:2064/2118/2198 |
++| **每个进度落盘点**（step `--done` 完成、阶段启动/切换、stale 步骤重置、gate 拦截回滚等 `_write` 后） | A | `triggerSync` → POST `…/progress` 推六表进度（**默认转后台子进程异步执行**，2026-09-20：主命令零网络尾巴；inline 路径 8s 熔断，见 §7）。**本地/平台模式都执行**（2026-08-26 放行）：平台模式凭据经 env 通道（`_getPlatform`），无 env 且 local.yaml 无 platform 段时静默跳过 | complete.js:296/346/586/617/626/686/782（--done 后 `_write`+`triggerSync` 对）；stage.js:251/185/207（启动/切换/stale 重置）；gates.js:564；command.js:1630/1785/1848/1859/2049 |
++| **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2064/2118/2198 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:917（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4088；shared.js:989 |
+diff --git a/package-lock.json b/package-lock.json
+index c45308cd..035eaef9 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.29.4",
++  "version": "3.29.6",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sillyspec",
+-      "version": "3.29.4",
++      "version": "3.29.6",
+       "license": "MIT",
+       "dependencies": {
+         "@inquirer/prompts": "^7.10.1",
+diff --git a/package.json b/package.json
+index f18060fa..c875e689 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.29.9",
++  "version": "3.29.6",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/packages/dashboard/server/executor.js b/packages/dashboard/server/executor.js
+index 6b7deeae..40722f24 100644
+--- a/packages/dashboard/server/executor.js
++++ b/packages/dashboard/server/executor.js
+@@ -21,7 +21,8 @@ export function executeCommand(projectPath, command, onOutput, onComplete) {
+   // .cmd 加 shell:true 而引入命令注入（体检 SEC-08）
+   const proc = spawn(process.execPath, [SILLYSPEC_ENTRY, ...args], {
+     cwd: projectPath,
+-    env: { ...process.env }
++    env: { ...process.env },
++    windowsHide: true
+   })
+ 
+   proc.stdout.on('data', (data) => {
+diff --git a/packages/dashboard/server/parser.js b/packages/dashboard/server/parser.js
+index e6b3277e..2eff7497 100644
+--- a/packages/dashboard/server/parser.js
++++ b/packages/dashboard/server/parser.js
+@@ -130,13 +130,13 @@ export function parseProjectOverview(projectPath) {
+ 
+   // --- Git info ---
+   try {
+-    result.git.lastCommit = execSync('git log -1 --format=%s', { cwd: projectPath, encoding: 'utf-8' }).trim()
++    result.git.lastCommit = execSync('git log -1 --format=%s', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
+   } catch {}
+   try {
+-    result.git.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8' }).trim()
++    result.git.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
+   } catch {}
+   try {
+-    result.git.dirtyCount = parseInt(execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8' }).trim().split('\n').filter(Boolean).length, 10) || 0
++    result.git.dirtyCount = parseInt(execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim().split('\n').filter(Boolean).length, 10) || 0
+   } catch {}
+ 
+   return result
+@@ -145,17 +145,17 @@ export function parseProjectOverview(projectPath) {
+ export function parseGitDetail(projectPath) {
+   const result = { branch: '', commits: [], untracked: [] }
+   try {
+-    result.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8' }).trim()
++    result.branch = execSync('git branch --show-current', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
+   } catch {}
+   try {
+-    const log = execSync('git log -5 --format=%h|%s|%an|%aI', { cwd: projectPath, encoding: 'utf-8' }).trim()
++    const log = execSync('git log -5 --format=%h|%s|%an|%aI', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
+     result.commits = log.split('\n').filter(Boolean).map(line => {
+       const [hash, message, author, date] = line.split('|')
+       return { hash, message, author, date }
+     })
+   } catch {}
+   try {
+-    const status = execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8' }).trim()
++    const status = execSync('git status --porcelain', { cwd: projectPath, encoding: 'utf-8', windowsHide: true }).trim()
+     result.untracked = status.split('\n').filter(Boolean).map(line => ({
+       status: line.slice(0, 2).trim(),
+       file: line.slice(3)
+@@ -453,7 +453,7 @@ export function parseProjectState(projectPath) {
+   // Use CLI to read current stage from SQLite
+   try {
+     const output = execSync('sillyspec progress show 2>/dev/null', {
+-      cwd: projectPath, encoding: 'utf-8', timeout: 5000
++      cwd: projectPath, encoding: 'utf-8', timeout: 5000, windowsHide: true
+     })
+     const stageMatch = output.match(/当前阶段:\s*(\S+)/)
+     if (stageMatch) currentStage = stageMatch[1]
+diff --git a/src/classify-change.js b/src/classify-change.js
+index bb1614f5..8619b930 100644
+--- a/src/classify-change.js
++++ b/src/classify-change.js
+@@ -26,6 +26,12 @@ const FORCE_QUICK_PATTERNS = [
+   /更新文案|改文案|文案修改/i,
+   /样式调整|style.*tweak/i,
+   /修复.*\s*\bbug\b.*\bfix\b/i,
++  // R16 减负批次（2026-09-24，R5R 对撞实证 quick≈OS：8.3M vs 6.4M——判规模选道倾向 quick）：
++  // 补充明确无设计决策密度的常规任务面
++  /补注释|加注释|注释补充/i,
++  /重命名|rename\s+(变量|函数|文件|目录)/i,
++  /升级依赖|依赖升级|bump\s+(版本|deps|dependencies)/i,
++  /配置微调|配置小改|改配置项/i,
+ ]
+ 
+ /**
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 3b633e48..4b9c656f 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -153,6 +153,9 @@ export const LOCAL_YAML_SCHEMA = {
+       note: 'gitignore 生成物（如构建期产出的 src/build-id.ts）不在 git 树也不进 untracked overlay（ls-files --others --exclude-standard 尊重 .gitignore），worktree 缺失致构建炸 Failed to load url——create 期按本清单从主仓复制供给（2026-09-15-worktree-dual-truth-gates 坑③，D-003@v1）。块列表或 inline flow 数组均可解析。',
+       keys: [
+         { path: 'worktree.supplyFiles', type: 'array', optional: true, status: 'live', readers: ['readSupplyFilesConfig + _supplyGeneratedFiles (src/worktree.js — create step 5.9 供给步)'], desc: '随 worktree create 从主仓复制的生成物清单：精确路径或 glob（* 单层 / ** 多层），相对仓根。展开上限 200 文件超出截断警告；实供清单记 meta.supplyFiles；缺省 [] = 供给步空转零行为变化。', example: 'src/build-id.ts' },
++        { path: 'worktree.policy.adopt_branch', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → WorktreeManager.create 分支冲突守卫 (src/worktree.js)'], desc: '分支已存在冲突的选择记忆：true = 自动收编既有分支（等效常备 --adopt-branch，meta 记 adoptViaPolicy 留痕）。缺省 false = 既有三选一 fail-closed 菜单。显式 flag 优先于 policy。', example: 'true' },
++        { path: 'worktree.policy.apply_overlap', type: 'enum', values: ['manual', 'force', 'skip'], optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree guard 相交拦截 (src/worktree-apply.js)'], desc: 'apply 与活跃 quick 会话在途声明相交时的处置记忆：manual（缺省）= 既有 fail-closed 报错；force = 放行并留痕（overlapForced.via 记 policy 来源）；skip = 无人值守软跳过（同 autoApply 路径）。--force 显式 flag 优先。', example: 'manual' },
++        { path: 'worktree.policy.stash_dirty', type: 'boolean', optional: true, status: 'live', readers: ['readWorktreePolicy (src/worktree-policy.js) → applyWorktree 4.4 stash 段 (src/worktree-apply.js)'], desc: '主仓在途改动自动 stash 的选择记忆：true = 等效常备 --stash-dirty（stash SHA 显著打印 + 失败绝不 drop）。缺省 false = 显式 flag opt-in。', example: 'false' },
+       ],
+     },
+     {
+@@ -174,6 +177,15 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'flow.edit_ratio_enforcement', type: 'enum', values: ['advisory', 'block'], optional: true, status: 'live', readers: ['readFlowConfig (src/flow.js)'], desc: 'editRatio 超阈的执行档：advisory（缺省——测绿可薄档过，只提示+遥测）| block（超阈阻断 flow done）。用户裁定 advisory 定案，dogfood 后可按遥测翻 block。', example: 'advisory' },
+       ],
+     },
++    {
++      id: 'stage',
++      title: '阶段说明书下发与会话墙',
++      note: 'run <stage> 渲染与阶段边界行为开关。burst 管「一次下发多少说明书」；wall 管「阶段边界要不要强制换会话」（瘦会话模式强制力）。',
++      keys: [
++        { path: 'stage.burst', type: 'boolean', optional: true, status: 'live', readers: ['readStageBurst (src/run/shared.js)'], desc: 'burst 模式：一次渲染阶段内全部剩余步骤说明书、一次 --done 收口（CLI 内部循环逐步推进）。R13 对撞实测：CLI 往返锐减（×19→×4）但 token 反创系列新高（单次载荷变肥 + 逐轮全量回放）——只减往返不减 token，非默认推荐（体验项）。env SILLYSPEC_STAGE_BURST=0/1 强制。', example: 'false' },
++        { path: 'stage.wall', type: 'enum', values: ['advisory', 'hard'], optional: true, status: 'live', readers: ['readStageWall (src/run/shared.js) + runStage 入口墙 (src/run/stage.js)'], desc: '阶段边界会话墙：advisory（缺省）= 阶段完成时提示可 handoff 换会话，不阻断；hard = 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）→ run <stage> 拒启动（exit 1），指引 sillyspec handoff 生成交接块换新会话续跑；--same-session 显式逃生口（应急/平台编排）。墙后阶段 = execute/verify（上下文最贵两段：R15 实测 execute 均轮 263K，断崖拆会话后回落 120-170K）。stage-session ledger 缺失/会话标识不可判定 → 放行（fail-open，与账本 best-effort 一致）。', example: 'hard' },
++      ],
++    },
+     {
+       id: 'auto_mode',
+       title: '变更规模自动分类',
+@@ -375,6 +387,18 @@ dispatch:
+ #   edit_ratio_threshold: 0.5   # 机器稿改写比例路由阈值（超阈提示厚档；缺省 0.5）
+ #   edit_ratio_enforcement: advisory   # advisory=测绿可薄过只提示（缺省）| block=超阈阻断
+ 
++# ── 阶段说明书下发与会话墙（R16 减负批次）──
++# stage:
++#   # burst: true   # 一次下发全阶段说明书（R13 实测：往返↓ token↑，体验项非默认）
++#   # wall: hard    # 阶段边界会话墙（hard=同会话硬续 execute/verify 拒启动，指引 handoff；缺省 advisory 提示不阻断）
++
++# ── worktree 守卫选择记忆（R16 减负批次；显式 flag > policy > fail-closed 缺省）──
++# worktree:
++#   policy:
++#     # adopt_branch: true    # 分支已存在冲突自动收编（等效常备 --adopt-branch）
++#     # apply_overlap: manual # manual=fail-closed（缺省）| force=放行留痕 | skip=软跳过
++#     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
++
+ # ── monorepo 子模块映射（test_strategy: module 时按 git diff 命中模块收窄测试）──
+ # 只支持 inline flow 形态（嵌套展开式解析不出）：
+ modules:
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 5f6216bc..6a06db98 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -83,13 +83,19 @@ function draftProposal({ change, input, criteria }) {
+   return { text, sections: collectSections(text) }
+ }
+ 
+-/** requirements 机器稿（成功标准 → FR 条目）。 */
++/** requirements 机器稿（成功标准 → FR 条目 + 每条 FR 一枚「测试绑定」AGENT 槽——2026-09-25
++ * thin-patch-bindings：薄道 FR 从诞生就要测试锚，撞实验 5 个 P1 全是承诺无锚形态）。 */
+ function draftRequirements({ change, criteria }) {
+   const crit = criteria || []
+   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+   const frBodies = crit.length > 0
+     ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen ${c}`).join('\n\n')
+     : '### FR-01: flow done 全绿\nGiven flow 薄跑道在跑\nWhen flow done 裁决执行\nThen 测试门实测通过+工件指纹校验通过'
++  const n = crit.length > 0 ? crit.length : 1
++  const bindingSlots = Array.from({ length: n }, (_, i) => {
++    const id = `FR-${String(i + 1).padStart(2, '0')}`
++    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
++  }).join('\n\n')
+   const text = [
+     '---',
+     `author: flow-machine-draft`,
+@@ -101,10 +107,86 @@ function draftRequirements({ change, criteria }) {
+     wrapped('requirements-frs', frBodies),
+     AGENT_SLOT(1, '需求例外裁决'),
+     '',
++    '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
++    '',
++    bindingSlots,
++    '',
+   ].join('\n')
+   return { text, sections: collectSections(text) }
+ }
+ 
++/**
++ * requirements「测试绑定」槽位门（flow done artifacts 子步消费面）：每条 FR 的绑定槽非空
++ * （「不适用：理由」=已答）；FR 机器段在场但零绑定槽 = 骨架早于本机制的旧版——修复路径是
++ * 删 requirements.md 重入 flow start（redraft 按 proposal 机器段回提 criteria 重新起草）。
++ * 纯读盘面；无 requirements.md → not-applicable（redraft 补生成）。
++ */
++export function verifyRequirementBindings({ changeDir }) {
++  const path = join(changeDir, 'requirements.md')
++  if (!existsSync(path)) return { applicable: false, emptySlots: [] }
++  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
++  const lines = text.split('\n')
++  const hasFrSection = /MACHINE-DRAFT:requirements-frs/.test(text)
++  const emptySlots = []
++  let current = null
++  let hasContent = false
++  let slotCount = 0
++  const flush = () => { if (current && !hasContent) emptySlots.push(current) }
++  for (const line of lines) {
++    if (/^<!--\s*AGENT:测试绑定/.test(line)) {
++      flush()
++      current = (line.match(/AGENT:(测试绑定\S+)/) || [])[1] || '测试绑定'
++      hasContent = false
++      slotCount++
++      continue
++    }
++    if (/^<!--/.test(line) || /^#{1,6}\s/.test(line)) { flush(); current = null; continue }
++    if (current && line.trim()) hasContent = true
++  }
++  flush()
++  if (hasFrSection && slotCount === 0) {
++    return { applicable: true, emptySlots: ['（骨架过旧——requirements 有 FR 机器段但无测试绑定槽；修复：删除 requirements.md 后重入 flow start 补生成，criteria 会从 proposal 机器段回提）'] }
++  }
++  return { applicable: true, emptySlots }
++}
++
++/**
++ * 从「测试绑定」槽提取绑定行（flow done distill 子步消费面 → writeChangeTrace →
++ * indexRequirements 归档提升铸全局）。锚=FR 局部编号（FR-01…，与机器 FR 序一致）；
++ * 「不适用」/无路径 token 的作答不产行；tests=作答文本里的测试文件路径（去重）。
++ */
++export function extractRequirementBindings({ changeDir, change }) {
++  const path = join(changeDir, 'requirements.md')
++  if (!existsSync(path)) return []
++  const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n')
++  const rows = []
++  let current = null
++  let buf = []
++  const flush = () => {
++    if (!current) return
++    const content = buf.join('\n').trim()
++    buf = []
++    if (!content || /^不适用/.test(content)) return
++    const tests = [...new Set((content.match(/[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g) || [])
++      .map((t) => t.replace(/^[./\\]+/, '').replace(/\\/g, '/')))]
++      .filter((t) => /(^|\/)(test|tests)\//.test(t) || /\.(test|spec)\./.test(t) || /_test\b/.test(t) || /_spec\b/.test(t))
++    if (tests.length === 0) return
++    rows.push({ anchor: current.replace(/^测试绑定/, ''), row_id: `${change}:flow:${current.replace(/^测试绑定/, '')}`, tests, reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: change })
++  }
++  for (const line of lines) {
++    if (/^<!--\s*AGENT:测试绑定\S/.test(line)) {
++      flush()
++      current = (line.match(/AGENT:(测试绑定\S+)/) || [])[1] || null
++      buf = []
++      continue
++    }
++    if (/^<!--/.test(line) || /^#{1,6}\s/.test(line)) { flush(); current = null; continue }
++    if (current) buf.push(line)
++  }
++  flush()
++  return rows
++}
++
+ /**
+  * design.md 机器骨架（2026-09-24 v3 设计记录全档化第一片）：机器段=固定问题模板（指纹保护，
+  * 问题不可被删改），AGENT 槽=作答面。盲维四问钉死在「边界与并发」节——对撞实验 5 个 P1 全落在
+@@ -433,4 +515,4 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot
+   return { drafted }
+ }
+ 
+-export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
++export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+diff --git a/src/flow.js b/src/flow.js
+index 28e2400f..3294a37c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -25,6 +25,7 @@
+  * 幂等循 task-done 先例：子步各查自身完成标记，中断半态重入断点续，中段失败精确报告。
+  */
+ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
++import { createHash } from 'node:crypto'
+ import { join } from 'node:path'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+@@ -32,7 +33,7 @@ import { writeAtomicSync } from './fs-atomic.js'
+ import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
+ 
+ const FLOW_STATE_FILE = 'flow-state.yaml'
+-const SUBSTEPS = ['artifacts', 'ledger', 'probes', 'distill', 'archive', 'events']
++const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'probes', 'distill', 'archive', 'events']
+ 
+ /** 读 flow-state（缺文件/损坏 → null = 未参与 thin）。 */
+ export function readFlowState(changeDir) {
+@@ -305,6 +306,15 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+       reportMidFail('artifacts')
+       process.exit(1)
+     }
++    // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings：每条 FR 至少一行测试锚或「不适用：理由」）
++    const { verifyRequirementBindings } = await import('./flow-draft.js')
++    const rb = verifyRequirementBindings({ changeDir })
++    if (rb.applicable && rb.emptySlots.length > 0) {
++      console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
++      console.error(`   每条 FR 至少一行：test 文件路径或用例名（distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
++      reportMidFail('artifacts')
++      process.exit(1)
++    }
+     mark('artifacts')
+   }
+ 
+@@ -331,6 +341,59 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     mark('ledger')
+   }
+ 
++  // ②b patch：变更级 patch 留档（2026-09-25-thin-patch-bindings，noAI）：quicklog/patches 生态
++  // 退役后审计件挂变更自身。范围=归属收窄后的本变更文件面（他侧声明剔除、含工作树未提交与
++  // untracked 自拼 hunk），基=baseline，时点=done 冻结。fail-soft：失败只告警不阻断归档、
++  // 不标 done（重入 done 重试）。
++  if (st.substeps?.patch === 'done') { skip('patch') } else {
++    let patchOk = false
++    try {
++      const ownFiles = (await attributedChangedFiles()).map((f) => String(f).replace(/\\/g, '/')).filter(Boolean)
++      if (!st.baseline_commit) {
++        console.log('📦 patch 留档跳过：无 git 基线（无历史仓）')
++        patchOk = true
++      } else if (ownFiles.length === 0) {
++        console.log('📦 patch 留档跳过：归属文件面为空')
++        patchOk = true
++      } else {
++        const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
++        const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
++        const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
++        let additions = 0
++        let deletions = 0
++        for (const f of ownFiles) {
++          const s = stats.get(f)
++          if (s && Number.isFinite(s.additions)) additions += s.additions
++          if (s && Number.isFinite(s.deletions)) deletions += s.deletions
++        }
++        const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++        const meta = {
++          change,
++          baseline: st.baseline_commit,
++          head: typeof head === 'string' ? head.trim() : null,
++          files: ownFiles,
++          totals: { files: ownFiles.length, additions, deletions },
++          savedAt: new Date().toISOString(),
++          note: 'flow done 时点冻结（归属收窄后本变更文件面；含工作树未提交与 untracked）',
++        }
++        if (typeof frozen === 'string' && frozen) {
++          const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
++          writeFileSync(join(changeDir, 'change.patch'), patchText)
++          meta.patchSha256 = createHash('sha256').update(patchText.replace(/\r\n/g, '\n'), 'utf8').digest('hex')
++          meta.patchStatus = 'ok'
++        } else {
++          meta.patchStatus = 'failed'
++        }
++        writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
++        console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
++        patchOk = true
++      }
++    } catch (e) {
++      console.warn(`⚠️ patch 留档失败（fail-soft 不阻断归档；重入 flow done 从断点重试）：${(e && e.message) || e}`)
++    }
++    if (patchOk) mark('patch')
++  }
++
+   // ③ probes：thin 薄跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
+   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
+   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
+@@ -357,6 +420,17 @@ export async function cmdFlowDone({ change, cwd, specBase, confirmArchive = true
+     } catch (e) {
+       console.warn(`⚠️ distill best-effort 失败（不阻断归档链）: ${(e && e.message) || e}`)
+     }
++    // 测试绑定行落盘（2026-09-25-thin-patch-bindings）：requirements 绑定槽 → test-trace.json
++    // （FR 局部锚/candidate/machine），紧接的 indexRequirements 发号后随既有归档提升铸全局。
++    try {
++      const { extractRequirementBindings } = await import('./flow-draft.js')
++      const rows = extractRequirementBindings({ changeDir, change })
++      if (rows.length > 0) {
++        const { writeChangeTrace } = await import('./test-bindings.js')
++        const w = writeChangeTrace(changeDir, change, rows)
++        if (w.changed) console.log(`🔗 测试绑定行落盘：${rows.length} 行 → test-trace.json（随 indexRequirements 发号归档提升）`)
++      }
++    } catch (e) { console.warn(`⚠️ 测试绑定行落盘失败（fail-open）：${(e && e.message) || e}`) }
+     try {
+       const { indexRequirements } = await import('./fr-index.js')
+       const knowledgeRoot = join(specBase, 'knowledge')
+diff --git a/src/mcp-server.js b/src/mcp-server.js
+index b6766a85..9e02d7ca 100644
+--- a/src/mcp-server.js
++++ b/src/mcp-server.js
+@@ -93,6 +93,7 @@ function runCli(cliArgs) {
+       cwd: process.cwd(),
+       env: process.env,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     })
+     let out = ''
+     let err = ''
+diff --git a/src/review-material-pack.js b/src/review-material-pack.js
+index 69c67b4a..181e2104 100644
+--- a/src/review-material-pack.js
++++ b/src/review-material-pack.js
+@@ -132,9 +132,15 @@ export function buildReviewMaterialPack(stage, inputs = {}) {
+     const delta = (inputs.planDelta || []).map(d => `- [${d.id}] ${d.status}${d.note ? '——' + d.note : ''}`).join('\n')
+     body = ['### design 硬约束', hc || '（无）', '### plan 差量（逐约束判定：一致/偏离/未覆盖）', delta || '（无——主代理未提供差量，评审者按 cannot_verify 列缺件）'].join('\n\n')
+   } else if (stage === 'execute-qa') {
++    // 测试清单（R16 减负批次 2026-09-24）：diff 命中的测试文件点名——QA 对「组装行为」条目
++    // 作答时不必全仓找测试（R14 对撞失控勘察子代理 2.33M 的反面教材后，包内点名收窄查证面）。
++    const testFiles = (inputs.diffSummary && inputs.diffSummary.files || [])
++      .filter(f => /(^|[\\/])(tests?|__tests__)([\\/])|\.(test|spec)\.[cm]?[jt]sx?$|_test\.(go|py)$|(^|[\\/])test_[^\\/]+\.py$/i.test(f))
++      .slice(0, 30)
+     body = [
+       '### diff 摘要', (inputs.diffSummary && inputs.diffSummary.files || []).map(f => '- ' + f).join('\n') || '（无）',
+       inputs.diffSummary && inputs.diffSummary.stat ? '```diff\n' + inputs.diffSummary.stat + '\n```' : '',
++      '### 测试清单（diff 命中的测试文件）', testFiles.map(f => '- ' + f).join('\n') || '（diff 无测试文件——「组装行为」条目按包不足处理：cannot_verify 列缺件或定向查证并列明）',
+       '### design 热区（CLI 抽取）', extractDesignHotZone(inputs.designContent || '') || '（无命中节）',
+       '### 验收清单', (inputs.checklist || []).map(c => '- [ ] ' + c).join('\n') || '（无）',
+     ].filter(Boolean).join('\n\n')
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 77c25500..a61db9d9 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -766,6 +766,18 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+         console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
+         console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
+         console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
++      } else if (stageName === 'plan') {
++        // 阶段断崖 B（R16 减负批次 A 相位，2026-09-24）：plan→execute 是第二大跳变——
++        // execute 是最大单段（R15 45.6M/173r/均轮 263K，占全流程 53%），带着 brainstorm+plan
++        // 的 14-16M 历史跑 execute 每轮都在重放。⛔ directive 级（同 execute→verify 模板）。
++        console.log(``)
++        console.log(`⛔ 阶段断崖：plan 已收口，execute 建议在新的瘦会话执行。`)
++        console.log(`   本会话上下文已含 brainstorm+plan 全部历史（R15 实测 execute 段 45.6M/173 轮/均轮 263K——大头是历史重放税，活只有十几 M）。`)
++        console.log(`   execute 的全部输入在盘上（design.md/plan.md/tasks/task-*.md），新会话零背景可续跑。`)
++        console.log(`   动作：`)
++        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（含任务面/未决阻断/决策 ID 回源）`)
++        console.log(`   2. 新会话/子代理：粘贴交接块 → run execute --change ${changeName}`)
++        console.log(`   同会话硬续不阻断（stage.wall: hard 可强制拦截——run 入口拒启动）。`)
+       } else if (stageName === 'execute') {
+         // 阶段断崖（2026-09-24 第一性原理落地）：execute→verify 是上下文最贵的跳变
+         // （R11 实测 verify 71 轮 × 300K/轮 = 21.3M，其中 ~17M 是 execute 历史重放税）。
+diff --git a/src/run/gate-snapshot-ledger.js b/src/run/gate-snapshot-ledger.js
+index ff95ba35..680406f7 100644
+--- a/src/run/gate-snapshot-ledger.js
++++ b/src/run/gate-snapshot-ledger.js
+@@ -16,10 +16,11 @@
+  * 异常面：全部 fail-open 吞掉（账本/回收任一异常零阻断，退现状残留）。
+  */
+ import { execFileSync } from 'node:child_process'
+-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
++import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+ import { basename, dirname, join, resolve, sep } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { writeAtomicSync } from '../fs-atomic.js'
++import { safeRemoveDirWithLinks, unlinkLinkPath, collectLinkPathsUnder } from './junction-rm.js'
+ 
+ const LEDGER_FILE = 'active-gate-snapshots.json'
+ const HOUR_MS = 3600_000
+@@ -139,7 +140,11 @@ function defaultRunGit(cwd, args) {
+ }
+ 
+ function defaultRemoveDir(p) {
+-  rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
++  // junction 安全删除（坑 junction-pierce-rm-sync，2026-09-24 实证）：残留快照内
++  // node_modules/venv junction 的目标是主仓真身，裸 rmSync(recursive) 穿透链接清空目标
++  // （收口期三次实证）——删前先解链（junction-rm.js 单一实现）；解链失败抛错由调用方
++  // 按「删不掉保留条目待下轮」处置，绝不回落裸 rmSync。
++  safeRemoveDirWithLinks(p, { maxRetries: 5, retryDelay: 100 })
+ }
+ 
+ /** worktree 注册是否仍登记该 root（跨平台路径归一 + win32 大小写不敏感） */
+@@ -176,8 +181,19 @@ export function reclaimStaleGateSnapshots({
+     for (const e of stale) {
+       const root = e.snapshotRoot
+       let removeFailed = false
+-      try { runGit(cwd, ['worktree', 'remove', '--force', root]) } catch { removeFailed = true }
+-      try { removeDir(root) } catch { /* 目录删不掉→下方双清判定保留条目 */ }
++      // 先解链（坑 git-worktree-remove-pierce，2026-09-24 实证：git worktree remove --force
++      // 在 Windows 跟随 junction 删主仓真身内容——残留快照内 node_modules/venv/copy 链接必须
++      // 先解链再删。解链失败按删不掉处置：保留条目待下轮，绝不带着链接跑删除）。
++      let linksCleared = true
++      try {
++        for (const link of collectLinkPathsUnder(root)) unlinkLinkPath(link)
++      } catch { linksCleared = false }
++      if (linksCleared) {
++        try { runGit(cwd, ['worktree', 'remove', '--force', root]) } catch { removeFailed = true }
++        try { removeDir(root) } catch { /* 目录删不掉→下方双清判定保留条目 */ }
++      } else {
++        removeFailed = true
++      }
+       if (removeFailed) { try { runGit(cwd, ['worktree', 'prune']) } catch { /* prune 失败→下方判定保留 */ } }
+       let dirGone = false
+       let regGone = false
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 02d25adb..32aacff4 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -17,10 +17,11 @@
+  * 不进 git 不上平台）。
+  */
+ import { execFileSync, spawnSync } from 'node:child_process'
+-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
+ import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { registerGateSnapshot, unregisterGateSnapshot, reclaimStaleGateSnapshots } from './gate-snapshot-ledger.js'
++import { safeRemoveDirWithLinks, unlinkLinkPath, collectLinkPathsUnder } from './junction-rm.js'
+ 
+ /**
+  * worktree 会话跳快照判定（2026-09-23 R9/R10 双实证根治）：cwd 位于 sillyspec 会话专属
+@@ -64,20 +65,38 @@ export function cleanupSnapshot({
+   snapshotRoot,
+   cwd,
+   runGit = (c, a) => git(c, a),
+-  removeDir = (p, opts) => rmSync(p, { recursive: true, force: true, ...opts }),
++  // junction 安全删除（坑 git-worktree-remove-pierce，2026-09-24 实证）：`git worktree remove
++  // --force` 的递归删在 Windows **跟随 junction 删目标内容**（实测 victim 复现；worktree.js
++  // cleanup 链的 unlinkNodeModulesLinks 先解链正是防它）——快照内 node_modules/venv/copy 面/
++  // 钉定缓存链接全部指向主仓真身，必须**先解链再交给 git/rmSync 删目录本体**。解链失败 →
++  // 保护性放弃本次删除（目录留账本待回收——双清契约天然兼容）。
++  removeDir = (p, opts) => safeRemoveDirWithLinks(p, opts),
+   dirExists = (p) => existsSync(p),
+   worktreeRegistered = (c, p) => worktreeListContains(c, p),
+-} = {}) {
++}) {
+   let worktreeCleaned = true
++  // 0. 先解链快照内全部 junction/reparse 点（含深层：venv 族与 gate_snapshot.copy 面在
++  //    子目录层）。解链失败不删目录（穿透风险下，保护主仓优先于清理彻底性）。
++  let linksCleared = true
+   try {
++    for (const link of collectLinkPathsUnder(snapshotRoot)) unlinkLinkPath(link)
++  } catch (e) {
++    linksCleared = false
++    console.warn(`⚠️ 快照 junction 解链失败（保护主仓链接目标，本次不删快照目录——条目留账本待下轮回收）: ${e && e.message ? e.message : e}`)
++  }
++  if (linksCleared) {
+     // 注：worktree remove/prune 无 --quiet 选项（非法 flag 会必抛并被 catch 吞掉——旧实现
+     // 正是因此让 git remove 每次都失败、只剩无重试 rmSync 兜底，41 个残留目录的根因之一）
+-    runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
+-  } catch {
++    try {
++      runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
++    } catch {
++      worktreeCleaned = false
++    }
++  } else {
+     worktreeCleaned = false
+   }
+   let dirRemoved = !dirExists(snapshotRoot)
+-  if (!dirRemoved) {
++  if (linksCleared && !dirRemoved) {
+     try { removeDir(snapshotRoot, REMOVE_DIR_RETRY) } catch { /* 删不掉→下方按实际存在性判定 */ }
+     dirRemoved = !dirExists(snapshotRoot)
+   }
+@@ -434,7 +453,9 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
+         viaLink = existsSync(dst)
+       } catch { viaLink = false }
+       if (!viaLink) {
+-        try { rmSync(dst, { recursive: true, force: true }) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
++        // 假链接残留清理：dst 是 junction 本体——rmSync(dst) 在 Node v24 Windows 会穿透删
++        // 链接目标（主仓 copy 面真身，坑 junction-pierce-rm-sync），必须 rmdir 解链语义
++        try { unlinkLinkPath(dst) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
+         if (srcStat.isDirectory()) copyDirRecursive(src, dst)
+         else copyFileSync(src, dst)
+       }
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 9fb67846..36e07834 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -746,6 +746,14 @@ async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progres
+  */
+ export async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx = null }) {
+   const projectName = progress.project || basename(cwd)
++  // ── 纯文档门收集模式（R16 减负批次，2026-09-24）──
++  // 对撞 R15 实证「execute 收口连挡 4 次」：多门串行 fail-fast，每次 --done 只暴露一个门，
++  // 修复重跑才见下一个门。纯文档 blocking 门（validators / verify 死信与预填注 / Stage 与
++  // Task Review）改为收集：全部跑完 → 一次打印清单 → 统一 rollback 一次（detail 取首门，
++  // 进度库信号语义不变）。实测门（test/lint/parity/probe）保持文档面全清后才跑、内部 fail-fast
++  // 不变——贵的门只为真实代码问题付账。检查点 A=verify 实测门前；B=brainstorm/plan/execute
++  // Task Review Gate 后（friction 升档前——升档语义=「所有阻断门通过」）。
++  const docGateFailures = []
+   // decisions.md header 自动补齐（坑 decisions-header-late-warning，2026-08-24 用户反馈二期）：
+   // brainstorm step8 旧模板自带无 frontmatter 的 decisions 样例，存量变更照抄必缺 author/created_at，
+   // 拖到平台同步/后续环节才提示。gate 前幂等补机械字段（先例：autoCheckPlanFromReviews 同层写
+@@ -818,8 +826,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
+     // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
+     // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
+-    // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
+-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'validators' })
++    // 收集模式（R16）：不再直接 return——继续跑完其余纯文档门（review 等）后由检查点统一
++    // rollback，一次 --done 暴露全部缺失面（R15 连挡 4 次的解）。
++    docGateFailures.push({ type: 'gate_rollback', detail: 'validators', label: `产物契约校验未过（${contractResult.errors.length} 条，明细见上）` })
+   }
+   if (contractResult.warnings.length > 0) {
+     console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
+@@ -879,7 +888,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+           console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+           for (const row of pendingRows) console.error(`   - ${row}`)
+           console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
+-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++          docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `module-impact.md 存在 ${pendingRows.length} 个 pending/待办死信（明细见上）` })
+         }
+       }
+     }
+@@ -895,13 +904,23 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
+         for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
+         console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
+-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `预填注清零未过（${noteClearance.unclearedFiles.length} 文件，明细见上）` })
+       }
+     } catch (e) {
+       console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
+     }
+   }
+ 
++  // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
++  //    fail-fast 不变）。brainstorm/plan/execute 不走本检查点（其实测面为空，检查点 B 收口）。──
++  if (stageName === 'verify' && docGateFailures.length > 0) {
++    console.error(`\n❌ verify 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
++    docGateFailures.forEach((f, i) => console.error(`   ${i + 1}. ${f.label}`))
++    console.error(`   （各门明细见上方对应 ❌ 段落；实测门（test/lint）在文档面全清后才执行）`)
++    const firstFail = docGateFailures[0]
++    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: firstFail.type, detail: firstFail.detail })
++  }
++
+   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
+   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
+   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
+@@ -1446,8 +1465,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         const reviewResult = gated.result
+         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
+         if (!reviewResult.ok) {
+-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
+-        }
++          docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: 'Stage Review 未过（stage-review，明细见上）' })
++        } else {
+         // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
+         // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
+         // 与真子代理 review（事后可审计），与 ⚖️/🔍 软归属同哲学——可见的折损优于静默的伪装。
+@@ -1468,11 +1487,13 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         if (hasDelegatedWriteDisclosure(reviewResult.review)) {
+           console.warn(`\n⚠️ Stage Review 代落盘披露：${stageName} review 的 reviewerNotes 首行标记「代落盘」——review.json 由主代理代（写通道故障的）审查者落盘，独立性依赖审查者结论回传的忠实性，建议人工抽查关键结论与回传文本一致性。`)
+         }
++        }
+       }
+     } catch (e) {
+       // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
++      //（收集模式：异常也入列，检查点 B 统一 rollback）
+       console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
++      docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: `Stage Review Gate 异常（${e.message}）` })
+     }
+   }
+ 
+@@ -1581,8 +1602,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+             console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
+             console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
+           }
+-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
+-        }
++          //（收集模式：检查点 B 统一 rollback）
++          docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review 未过（task-review，${reviewResult.errors.length} 条，明细见上）` })
++        } else {
+ 
+         // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
+         if (reviewResult.requiredEvidence.length > 0) {
+@@ -1592,15 +1614,28 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+             console.log('   verify 阶段必须满足这些证据要求。')
+           }
+         }
++        }
+       }
+     } catch (e) {
+       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
++      //（收集模式：异常也入列，检查点 B 统一 rollback）
+       console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
+       console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
++      docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review Gate 异常（${e.message}）` })
+     }
+   }
+ 
++  // ── 收集模式检查点 B（brainstorm/plan/execute）：纯文档门（validators / Stage Review /
++  //    Task Review）全量收口——非空则一次打印清单、统一 rollback 一次（R15「连挡 4 次」的解；
++  //    detail 取首门，进度库信号语义不变）。verify 走检查点 A（其实测门在前）。──
++  if (stageName !== 'verify' && docGateFailures.length > 0) {
++    console.error(`\n❌ ${stageName} 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
++    docGateFailures.forEach((f, i) => console.error(`   ${i + 1}. ${f.label}`))
++    console.error(`   （各门明细见上方对应 ❌/⚠️ 段落）`)
++    const firstFail = docGateFailures[0]
++    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: firstFail.type, detail: firstFail.detail })
++  }
++
+   // ── 仪式档位摩擦升档检查点（task-03 / D-008，design 生命周期契约表「阶段门升档」行）──
+   // 级联末位（所有阻断门通过、本次 --done 即将成立）执行：读 friction-ledger 累计账 →
+   // escalateByFriction 超阈 min(S3, tier+1) → 迁移记录写 .runtime/ceremony-tier-<change>.json
+@@ -2352,7 +2387,7 @@ export function killProcessTree(pid, sig = 'SIGTERM') {
+   if (process.platform === 'win32') {
+     // /T = 连同子进程树（shell 包装下的 python/node 服务本体）；/F = 强制（长驻服务常吞 SIGTERM 等价物）
+     try {
+-      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000 })
++      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000, windowsHide: true })
+       return true
+     } catch (e) {
+       // taskkill 对不存在进程退出码 128（等价 ESRCH，已退出按回收静默）；其余（拒绝访问等）上抛
+@@ -2371,7 +2406,7 @@ export function killProcessTree(pid, sig = 'SIGTERM') {
+ /** ps 枚举直接子进程 PID（POSIX；失败返回空——杀不到子进程不阻断父进程回收） */
+ function listChildPids(parentPid) {
+   try {
+-    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000 })
++    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000, windowsHide: true })
+     const children = []
+     for (const line of String(out).split('\n')) {
+       const m = line.trim().match(/^(\d+)\s+(\d+)$/)
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 4585128d..ef6834a1 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -25,6 +25,7 @@ import jsYaml from 'js-yaml'
+ import { writeAtomicSync } from '../fs-atomic.js'
+ import { stageRegistry } from '../stages/index.js'
+ import { resolvePromptIncludes, resolveRuntimeRoot, safeGit, parsePorcelainPath, WAIT_MARKER_RE, QUICK_SID_RE, triggerStepStartSync } from './shared.js'
++import { materializeStageTemplates } from '../stage-templates.js'
+ import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-guard.js'
+ 
+ // ── M1 步骤指引静态段指纹（2026-09-21-r5-efficiency-batch2 task-01 / D-001@v1）──
+@@ -825,6 +826,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // POST 落地后进程才退出。
+   triggerStepStartSync(cwd, changeName, platformOpts)
+ 
++  // ── 阶段产物模板落盘（R16 减负批次 2026-09-24）：模板出上下文——prompt 只留指针，模板
++  //    幂等落盘 <specBase>/.runtime/templates/ 供 agent 写产物前 Read 一次。best-effort：
++  //    落盘失败零输出不阻断渲染（模板文件缺失时 --done 门禁会兜底点名）。──
++  try {
++    materializeStageTemplates(platformOpts?.specRoot || platformOpts?.specDriftAnchor || join(cwd, '.sillyspec'))
++  } catch { /* fail-soft */ }
++
+   // ── 首个 agent 可见步索引（「首步一次建立」类注入的锚点）──
+   // step0 为 noAI（brainstorm/execute/verify 的 step1「进度确认」，2026-09-07）时不渲染 prompt，
+   // persona/护栏/完成契约/铁律/平台路径约束等 step0 专属注入须顺延到首个渲染步，否则整段丢失
+@@ -2009,6 +2017,7 @@ ${maskVolatileForGuide(guideTemplate)}
+     console.log('- 变更目录改名用 `sillyspec change-rename <旧名> <新名>`：mv/rename 会漏改进度库引用，导致变更失联。')
+     console.log('- 变更产物文档一律用 CLI 骨架命令生成（fourpiece-init / design-init / taskcard / module-impact / verify-probes --init）——骨架已预填 author/created_at/generated_by 元数据，勿删勿手拼 frontmatter；仅从零手写的补充文档才需手填 author（git 用户名）与 created_at（精确到秒）')
+     console.log('- 执行构建/测试前必须先读 local.yaml，优先使用其中配置的命令、路径和环境变量；未配置时才使用默认值')
++    console.log('- **输出纪律（上下文卫生；R12 对撞实测均轮 134K vs 其他轮 181-234K）**：预计输出超过 ~50 行的命令（pytest / vitest / npm test / uv sync / 全量 JSON 等）一律重定向落盘 `.sillyspec/.runtime/logs/<名>.log 2>&1`，只回看 `tail -n 50` 判断结果；需要细节时 grep 该日志。禁止把命令全量输出读进上下文——长输出逐轮回放是 token 膨胀主源（CLI noAI 步的输出截断同理，勿整段复述）。')
+   }
+   // 平台模式 + 路径规则（安全关键，每步注入；step1+ 起带精简标题，不复述通用铁律）
+   if (platformOpts?.specRoot || platformOpts?.runtimeRoot || changeName) {
+@@ -2063,21 +2072,27 @@ ${maskVolatileForGuide(guideTemplate)}
+   // 提示格式，且静态步骤名稳定无漂移风险）。
+   const stepAssertFlag = (stageName === 'execute' && step?.name) ? ` --step "${step.name}"` : ''
+   const doneCommand = `sillyspec run ${cmdStage} --done${confirmFlag}${stepAssertFlag}${changeFlag} --output "你的摘要"`
++  // 合并式完成命令（R16 减负批次 2026-09-24）：--done --answer 一步吞 wait+done——
++  // 未挂起时自动补全 waitAnswer（complete.js requiresWait 门），已挂起时 resolveWaitingStepWithAnswer
++  // 拉回收口。R15-SF 实证 brainstorm 8 次 CLI 调用中 4 次是三段式（wait/continue/done）补轮——
++  // 合并式主路径把每个 wait 步省 2 次调用；--wait 降级为「用户暂不可达需挂起」的备选。
++  const answerDoneCommand = `sillyspec run ${cmdStage} --done --answer "用户回答"${confirmFlag}${stepAssertFlag}${changeFlag} --output "你的摘要"`
+   if (requiresWait) {
+-    console.log(`本步骤必须等待用户输入，不能直接 --done：`)
+-    console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
+-    console.log(``)
+-    console.log(`用户回答后执行：`)
+-    console.log(`sillyspec run ${cmdStage} --continue --answer "用户回答"${changeFlag}`)
++    console.log(`本步骤需要用户决策——主路径一步合并完成（--answer 自动补全 wait 状态，省 2 次 CLI 往返）：`)
++    console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+     console.log(``)
+-    console.log(`收到回答并完成本步骤总结后，再执行：`)
+-  } else if (mayNeedWait) {
+-    console.log(`如果需要用户决策（选择方案/确认设计等）：`)
+-    console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待原因'}" --options "${(step.waitOptions || ['选项1', '选项2']).join(',')}"${changeFlag} --output "你的摘要"`)
+-    console.log(``)
+-    console.log(`如果不需要用户决策，正常完成：`)
++    console.log(`若用户暂不可达需先挂起：`)
++    console.log(`sillyspec run ${cmdStage} --wait --reason "${step.waitReason || '等待用户输入'}" --options "${(step.waitOptions || ['确认']).join(',')}"${changeFlag} --output "你的问题/方案摘要"`)
++    console.log(`（挂起后拿到回答，仍用上方一步合并命令收口——无需 --continue 单独解等待）`)
++  } else {
++    if (mayNeedWait) {
++      console.log(`如果需要用户决策（选择方案/确认设计等），拿到回答后一步完成（--answer 自动补全 wait 状态）：`)
++      console.log(answerDoneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
++      console.log(``)
++      console.log(`如果不需要用户决策，正常完成：`)
++    }
++    console.log(doneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+   }
+-  console.log(doneCommand + (autoMeta ? '' : ' --input "用户原始需求/反馈"'))
+   // P0-2（noai-ir-roadmap §3）：--output 可省略提示（auto 模式除外——auto driver 的
+   // SS-META doneCommand 仍带 --output，照抄路径零变化；省略路径由 command.js 同源合成）。
+   if (!autoMeta) {
+@@ -2097,9 +2112,9 @@ ${maskVolatileForGuide(guideTemplate)}
+       stepName: step.name,
+       change: changeName || null,
+       requiresUser: requiresWait || mayNeedWait || step.requiresConfirm === true,
+-      doneCommand,
++      doneCommand: requiresWait ? answerDoneCommand : doneCommand,
+       waitHint: (requiresWait || mayNeedWait)
+-        ? 'requiresUser=true：先与用户交互（wait/continue 或 --wait-interactive 直通），再 done'
++        ? 'requiresUser=true：与用户交互拿到回答后，逐字跑 doneCommand（--done --answer 一步合并，自动补全 wait 状态）；用户暂不可达才先 --wait 挂起'
+         : '直接执行任务后逐字跑 doneCommand',
+     }
+     console.log('<!--SS-META:' + JSON.stringify(meta) + '-->')
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 1b12e898..1df9f52c 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1978,6 +1978,33 @@ export async function readStageBurst(cwd) {
+  */
+ export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
+ 
++/**
++ * 阶段墙档位（R16 减负批次 A 相位，2026-09-24）：advisory（缺省——阶段完成时提示可 handoff
++ * 换会话，不阻断）| hard（同会话刚收口前驱阶段后硬续墙后阶段 → run <stage> 拒启动，
++ * --same-session 逃生口）。墙后阶段 = STAGE_WALL_STAGES（execute/verify——上下文最贵两段，
++ * R15 实测 execute 均轮 263K，断崖拆会话后回落 120-170K）。env SILLYSPEC_STAGE_WALL 强制。
++ */
++export async function readStageWall(cwd) {
++  const env = process.env.SILLYSPEC_STAGE_WALL
++  if (env === 'hard') return 'hard'
++  if (env === 'advisory') return 'advisory'
++  const raw = readLocalYamlRaw(cwd)
++  if (!raw) return 'advisory'
++  try {
++    const mod = await import('js-yaml')
++    const yamlLoad = mod.load || mod.default?.load
++    const doc = yamlLoad(raw)
++    const stage = doc && typeof doc === 'object' ? doc.stage : null
++    return stage && typeof stage === 'object' && stage.wall === 'hard' ? 'hard' : 'advisory'
++  } catch { /* 坏 YAML / js-yaml 不可用 → 缺省 advisory */ }
++  return 'advisory'
++}
++
++/** 墙后阶段（runStage 入口 hard 门的作用面；stage-session ledger 判定「同会话刚收口前驱」） */
++export const STAGE_WALL_STAGES = ['execute', 'verify']
++/** 墙后阶段的直接前驱（execute←plan / verify←execute） */
++export const STAGE_WALL_PREDECESSOR = { execute: 'plan', verify: 'execute' }
++
+ /**
+  * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。
+  *
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 58bc100b..f286126f 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -19,7 +19,7 @@
+ import { join, dirname } from 'node:path'
+ import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
++import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES, STAGE_WALL_PREDECESSOR } from './shared.js'
+ import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+ import { executeProgressConfirm } from './progress-confirm.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+@@ -45,6 +45,36 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+     }
+   }
+ 
++  // ── 阶段墙 hard 门（R16 减负批次 A 相位，2026-09-24）──
++  // 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）且目标
++  // 阶段为首次进入 → 拒启动。两个不拦的口：①目标阶段已有 stage 数据（reopen/复跑重入——保住
++  // verify FAIL→execute --reopen→verify 复跑的修复回路）；②--same-session 显式逃生口（应急/
++  // 平台编排）。fail-open：ledger 缺失/读失败/会话标识缺省 → 放行（与账本 best-effort 一致，
++  // hard 门只拦「确证同会话硬续」一种形态）。
++  if (STAGE_WALL_STAGES.includes(stageName) && changeName && !(quickOpts && quickOpts.sameSession)) {
++    try {
++      if ((await readStageWall(cwd)) === 'hard') {
++        const curSession = process.env.SILLYSPEC_SESSION_ID || ''
++        const wallStageData = progress.stages && progress.stages[stageName]
++        const firstEntry = !wallStageData || !Array.isArray(wallStageData.steps) || wallStageData.steps.length === 0
++        const wallLedgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
++        if (curSession && firstEntry && existsSync(wallLedgerPath)) {
++          const wallLedger = JSON.parse(readFileSync(wallLedgerPath, 'utf8'))
++          if (wallLedger && wallLedger.sessionId === curSession && wallLedger.lastStage === STAGE_WALL_PREDECESSOR[stageName]) {
++            console.error(``)
++            console.error(`⛔ 阶段墙（stage.wall=hard）：本会话（${curSession}）刚收口 ${wallLedger.lastStage}，${stageName} 必须在新的瘦会话执行。`)
++            console.error(`   单会话历史重放税实测：R15 execute 段均轮 263K 输入（断崖拆会话后回落 120-170K）——${stageName} 的全部输入在盘上（design/plan/tasks/review），新会话零背景可续跑。`)
++            console.error(`   动作：`)
++            console.error(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（保持 SILLYSPEC_SESSION_ID 不变）`)
++            console.error(`   2. 新会话粘贴交接块 → sillyspec run ${stageName} --change ${changeName}`)
++            console.error(`   逃生口：确认要同会话硬续（应急/平台编排）→ 加 --same-session 重跑本命令。`)
++            process.exit(1)
++          }
++        }
++      }
++    } catch { /* fail-open：任何读取/解析失败放行，行为与无墙一致 */ }
++  }
++
+   // execute 阶段启动前检查审批
+   if (stageName === 'execute' && !skipApproval) {
+     const approval = await checkApproval(cwd, changeName, platformOpts)
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 1ef100f8..7edfb3b7 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -332,7 +332,7 @@ export async function runCoverageExistenceCheck({ cwd, specBase, changeName }) {
+   const artifactRel = (yamlText.match(/^\s*coverage_artifact:\s*["']?([^"'\n#]+?)["']?\s*(?:#.*)?$/m) || [])[1] || 'coverage/lcov.info'
+   let runNote = ''
+   try {
+-    execSync(covCmd.trim(), { cwd, encoding: 'utf8', timeout: 10 * 60 * 1000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] })
++    execSync(covCmd.trim(), { cwd, encoding: 'utf8', timeout: 10 * 60 * 1000, maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+     runNote = '命令退出码 0'
+   } catch (e) {
+     runNote = `命令退出非 0（${e.status ?? '?'}）——产物若已生成仍按产物判定`
+@@ -442,7 +442,7 @@ function runSmokeCheck({ gateCwd, mainCwd, specBase, changeName, inSnapshot }) {
+   let r = null
+   let spawnError = null
+   try {
+-    r = spawnSync(command, { shell: true, cwd: gateCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
++    r = spawnSync(command, { shell: true, cwd: gateCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true })
+   } catch (e) { spawnError = e }
+   let timedOut = isSyncTimeout(r)
+   let fallbackMainRepo = false
+@@ -452,7 +452,7 @@ function runSmokeCheck({ gateCwd, mainCwd, specBase, changeName, inSnapshot }) {
+     fallbackMainRepo = true
+     console.warn('⚠️ 快照 smoke 超时（node_modules junction I/O 慢）→ 主仓复跑 smoke（并行噪声可能混入——失败先做归属鉴定）')
+     try {
+-      r = spawnSync(command, { shell: true, cwd: mainCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
++      r = spawnSync(command, { shell: true, cwd: mainCwd, timeout: SMOKE_TIMEOUT_MS, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, windowsHide: true })
+       spawnError = null
+       ranCwd = mainCwd
+       timedOut = isSyncTimeout(r)
+diff --git a/src/setup.js b/src/setup.js
+index 42a9aae1..dd496296 100644
+--- a/src/setup.js
++++ b/src/setup.js
+@@ -171,7 +171,7 @@ export async function cmdSetup(dir, options = {}) {
+     results['全局工具'] = {};
+     for (const g of GLOBAL_TOOLS) {
+       try {
+-        execSync(g.checkCommand, { stdio: 'pipe', encoding: 'utf8' });
++        execSync(g.checkCommand, { stdio: 'pipe', encoding: 'utf8', windowsHide: true });
+         results['全局工具'][g.id] = true;
+       } catch {
+         results['全局工具'][g.id] = false;
+@@ -252,7 +252,7 @@ export async function cmdSetup(dir, options = {}) {
+   const globalInstalled = new Set();
+   for (const tool of GLOBAL_TOOLS) {
+     try {
+-      execSync(tool.checkCommand, { stdio: 'pipe', encoding: 'utf8' });
++      execSync(tool.checkCommand, { stdio: 'pipe', encoding: 'utf8', windowsHide: true });
+       globalInstalled.add(tool.id);
+     } catch {}
+   }
+@@ -379,7 +379,7 @@ export async function cmdSetup(dir, options = {}) {
+     for (const tool of selectedGlobal) {
+       const spinner = ora(`安装 ${tool.name}...`).start();
+       try {
+-        execSync(tool.installCommand, { stdio: 'pipe', encoding: 'utf8', timeout: 120000 });
++        execSync(tool.installCommand, { stdio: 'pipe', encoding: 'utf8', timeout: 120000, windowsHide: true });
+         spinner.succeed(`${tool.name} 安装完成`);
+       } catch (err) {
+         spinner.fail(`${tool.name} 安装失败: ${err.message}`);
+diff --git a/src/stage-review-checklist.js b/src/stage-review-checklist.js
+index b5c37d27..3a51ec88 100644
+--- a/src/stage-review-checklist.js
++++ b/src/stage-review-checklist.js
+@@ -29,6 +29,8 @@ export const REVIEW_CHECKLISTS = {
+     'scan/module docs 或源码中的真实约束与 design.md 假设',
+     '涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过',
+     '涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）',
++    '**承诺可兑现性**：design 的每个可测承诺（如 at-least-once / 不重不漏 / 恒定窗口）逐条过最坏输入四维——乱序到达、并发写、会话或变更切换、多工作区作用域——实现能否兑现？不能兑现则降级承诺文案或改取简方案（如全量重拉结构性消灭整类时序缺陷），禁止立兑现不了的承诺（R14/R15 对撞 5 个 P1 全落此维，pytest 覆盖不到）',
++    '**三方对齐**：spec 文本、design、实现三者的取舍矛盾必须二选一对齐——不许"实现跟 design、spec 跟 design"各说各话（增量 vs 全量、有上限 vs 无上限是归档审计翻出的主型）；design 拒绝备选方案的理由不得同样适用于自选方案（自我论证矛盾）',
+   ],
+   plan: [
+     'task 编号与 Wave checkbox 格式正确，execute 依赖此格式解析任务',
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 00ff06de..9dc1501f 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -537,110 +537,16 @@ created_at: <now-datetime>
+ ---
+ \`\`\`
+ 
+-### proposal.md 格式要求
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-# 提案书（Proposal）
+-
+-## 动机
+-为什么做、解决什么核心问题
+-
+-## 关键问题
+-为什么现有方案不够（展开 2-3 个具体痛点）
+-
+-## 变更范围
+-本次做什么
+-
+-## 不在范围内（显式清单）
+-- 不做 X
+-- 不做 Y
+-
+-## 成功标准（可验证）
+-- 旧配置默认行为不变
+-- 新功能在配置后可用
+-- ...
+-\`\`\`
++### 产物格式模板（出上下文——R16 减负批次 2026-09-24）
++proposal.md / requirements.md / tasks.md / decisions.md 四份产物的完整格式模板**不再内嵌本说明书**（每轮全量回放是 brainstorm 段 token 膨胀主源），已由 CLI 落盘：
++\`{SPEC_ROOT}/.runtime/templates/brainstorm-artifact-templates.md\`
++**生成任一规范文件前先 Read 该模板文件一次**，严格按模板结构与 frontmatter 产出——缺章节/缺 frontmatter 会被本步 --done 门禁逐条点名（brainstorm.design.* / four-piece 规则），届时重读模板修复即可。
++模板要点速览（细则以模板文件为准）：proposal=动机/关键问题/变更范围/不在范围内/成功标准；requirements=角色表 + FR-XX GWT 块（含覆盖决策行与承接行）+ 非功能需求 + 决策覆盖矩阵；tasks=task-NN checkbox 骨架（只列任务名，plan 阶段展开写回）；decisions=D-xxx@vN 九字段 + 可选字段（锚点/模块域/否决理由/复潮条件/故障面/退役判据）。
+ 
+ ### 触达域现行 FR（FR 索引注入，2026-09-18-fr-index-l1）
+ {FR_INDEX_DIGEST}
+ 写作纪律（防重复 FR——L1 索引实验的承接数据源）：改写/取代上列已有行为 → 对应新 FR 块**必须加承接行**引用全局 id（如 \`承接: FR-core-engine-003\`，多个逗号分隔）；全新行为 → 新 FR 块不加承接。承接行在归档时由 CLI 翻旧条目 superseded 并建取代链。
+ 
+-### requirements.md 格式要求
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-# 需求规格（Requirements）
+-
+-## 角色
+-| 角色 | 说明 |
+-|---|---|
+-| 开发者 | ... |
+-
+-## 功能需求
+-
+-### FR-01: 需求名称
+-覆盖决策：D-001@v1, D-002@v1（如适用）
+-承接: FR-<域>-NNN（如适用——改写/取代上列注入清单中的已有行为时必填，全新行为省略本行）
+-Given 前提条件
+-When 触发动作
+-Then 期望结果
+-
+-（每个边界条件独立 GWT 块；场景名行 \`#### 场景：X\` 会被归档索引用作摘要，建议保留）
+-（约束强度标注——RFC 2119 约定：FR 正文与非功能需求里的约束必须用固定词标硬度：MUST/必须=硬性要求（违反即缺陷）；MUST NOT/禁止=红线（绝对不允许，如「平台 MUST NOT 基于 provisional 事件内容做流程判定」）；SHOULD/应当=强烈建议（偏离须注明理由）；MAY/可以=可选。禁止裸写无强度词的约束句（「不做 X」读不出是描述还是禁令）。fr/ 归档索引逐字透传，强度词随知识注入带给后续变更——这是规范语言的全链路载体）
+-
+-## 非功能需求
+-- 兼容性：...
+-- 可回退：...
+-- 可测试：...
+-
+-## 决策覆盖矩阵（如存在 decisions.md）
+-| 决策 ID | 覆盖的 FR | 说明 |
+-|---|---|---|
+-| D-001@v1 | FR-01 | ... |
+-\`\`\`
+-
+-### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-# 任务清单（Tasks）
+-
+-- [ ] task-01: <任务名>
+-- [ ] task-02: <任务名>
+-\`\`\`
+-> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
+-
+-### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-
+-# 决策记录（Decisions）
+-
+-## D-001@v1: 决策短标题
+-- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
+-- priority: P0 | P1 | P2
+-- status: accepted | unresolved | rejected | superseded
+-- supersedes:
+-- source: user | code | docs
+-- question: 被解决的问题
+-- answer: 用户确认或代码查证结果
+-- normalized_requirement: 可测试的约束
+-- impacts: [FR-01, task-01, verify-01]
+-- evidence: 用户回答轮次或代码/文档路径
+-\`\`\`
+-
+-> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
+-
+ ### 后续变更包处理
+ 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：
+ 1. 读取 MASTER.md 中的变更包列表（包名 + 边界描述）
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index eafc183a..69eced00 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -1465,6 +1465,7 @@ ${roleItem1}
+ 3. 任务含测试代码时，按下方「测试用例设计」整节设计测试用例
+ 4. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——续跑时依据磁盘产物和该清单判断哪些已完成，避免重做已落盘的工作
+    **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**
++   **输出纪律**：测试/安装/构建类长输出命令一律重定向落盘（\`> {SPEC_ROOT}/.runtime/logs/<名>.log 2>&1\`，CLI 已替换为绝对路径）后 \`tail -n 50\` 回看结论、按需 grep——勿把全量输出读进上下文（长输出逐轮回放是 execute 段 token 膨胀主源，R12 对撞实证均轮 134K vs 其他 181-234K）
+ 5. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容。发现必须改其他 task 文件才能继续，先停下回到 plan 层重分任务边界，禁止私自越界`
+ 
+   const subagentPointsSection = `子代理 prompt 要点：
+diff --git a/src/task-review.js b/src/task-review.js
+index d5e46574..7419455a 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -1920,14 +1920,14 @@ function detectInterruptedSyntaxResidue(changedFiles, candidateRoots) {
+     }
+     if (!abs) continue
+     try {
+-      execFileSync(process.execPath, ['--check', abs], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
++      execFileSync(process.execPath, ['--check', abs], { timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+       if (isPlainJs(f)) {
+         // 无 type:module 上下文的 .js：file-check 通过不代表语法完整（Node v24 实测假阴），
+         // 再跑 stdin ESM 全量解析兜底——两路都挂才判残留
+         let src = ''
+         try { src = readFileSync(abs, 'utf8') } catch { continue }
+         try {
+-          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
++          execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+         } catch (e2) {
+           if (e2 && e2.killed) continue
+           const line = _syntaxErrLine(e2)
+@@ -1947,7 +1947,7 @@ function detectInterruptedSyntaxResidue(changedFiles, candidateRoots) {
+       let src = ''
+       try { src = readFileSync(abs, 'utf8') } catch { continue }
+       try {
+-        execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] })
++        execFileSync(process.execPath, ['--input-type=module', '--check'], { input: src, timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+       } catch (e2) {
+         if (e2 && e2.killed) continue
+         const line = _syntaxErrLine(e2) || _syntaxErrLine(e)
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 33239520..59bb1e40 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -285,6 +285,7 @@ export function runVerifyLintCheck({ cwd, specBase, timeoutMs } = {}) {
+       timeout: LINT_TIMEOUT_MS,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -1286,6 +1287,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
+       timeout: TEST_TIMEOUT_MS,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -2093,6 +2095,7 @@ function runCrossRepoFullTest(entry) {
+       timeout: TEST_TIMEOUT_MS,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     })
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -2208,7 +2211,7 @@ function isPortOccupiedSync(port) {
+   try {
+     const r = spawnSync(process.execPath, ['-e',
+       `const n=require('node:net');const s=n.connect(${port},'127.0.0.1',()=>{console.log('Y');s.end()});s.on('error',()=>console.log('N'));setTimeout(()=>{console.log('N');process.exit(0)},1500)`],
+-      { encoding: 'utf8', timeout: 4000 })
++      { encoding: 'utf8', timeout: 4000, windowsHide: true })
+     return (r.stdout || '').trim().endsWith('Y')
+   } catch { return false }
+ }
+@@ -2262,6 +2265,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
+       timeout: timeoutMs,
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
++      windowsHide: true,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+diff --git a/src/worktree-apply.js b/src/worktree-apply.js
+index 49e1605b..1144a318 100644
+--- a/src/worktree-apply.js
++++ b/src/worktree-apply.js
+@@ -25,6 +25,7 @@ import { resolveLatestExecuteRunId, resolveLatestExecuteRunIdWithTasks, readRevi
+ import { collectActiveQuickGuardFiles } from './quicklog.js';
+ import { appendWriteAudit, WRITE_AUDIT_FILE_CAP } from './write-audit.js';
+ import { detectCommittedDrift, formatCommittedDriftWarning } from './run/concurrent-detect.js';
++import { readWorktreePolicy } from './worktree-policy.js';
+ 
+ const CHANGES_REL = '.sillyspec/changes';
+ 
+@@ -1254,6 +1255,21 @@ function applyCrossRepoWorktrees(changeName, projectRoot, ctx, { checkOnly = fal
+ 
+ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = false, base = 'merge-base', ctx = null, skipOverlap = false, stashDirty = false, force = false, autoApply = false } = {}) {
+   const projectRoot = cwd || process.cwd();
++  // ── worktree.policy 选择记忆（R16 减负批次，2026-09-24）──
++  // 显式 flag > policy > fail-closed 缺省；policy 触发的 force/skip 走同一条留痕路径
++  //（overlapForced/overlapSkipped），不开新权限面——只消「同一冲突每次重拦重问」的摩擦轮。
++  let policyOverlapForced = false;
++  try {
++    const policy = readWorktreePolicy(projectRoot);
++    if (policy.applyOverlap === 'force' && !force && !autoApply) {
++      force = true;
++      policyOverlapForced = true;
++    }
++    if (policy.stashDirty && !stashDirty) {
++      stashDirty = true;
++      console.log(`📦 worktree.policy.stash_dirty=true：主仓在途改动将自动 stash（等效常备 --stash-dirty，local.yaml 选择记忆）`);
++    }
++  } catch { /* policy 读失败 → 全缺省 fail-closed，行为与无 policy 完全一致 */ }
+   const wm = new WorktreeManager({ cwd: projectRoot });
+   const meta = wm.getMeta(changeName);
+   const result = {
+@@ -1571,10 +1587,11 @@ export function applyWorktree(changeName, { cwd, checkOnly = false, merge = fals
+       const files = [...new Set(guardCheck.overlaps.map(o => o.file))];
+       const pairLines = guardCheck.overlaps.map(o => `  [${o.sessionId}] ${o.file}`);
+       if (force) {
+-        // 显式解锁：放行并留痕（审计可见——自动路径永不带 force，overlapForced 只可能来自人工 --force）
+-        result.overlapForced = { sessions, files };
++        // 显式解锁：放行并留痕（审计可见——自动路径永不带 force，overlapForced 只可能来自人工 --force
++        // 或 worktree.policy.apply_overlap=force 的选择记忆[R16 减负批次]，两种来源均留痕）
++        result.overlapForced = { sessions, files, ...(policyOverlapForced ? { via: 'worktree.policy.apply_overlap=force' } : {}) };
+         result.warnings = (result.warnings || []).concat([
+-          `--force 越过 guard 相交预检：${guardCheck.overlaps.length} 个会话×文件对与活跃 quick 会话声明重叠——` +
++          `${policyOverlapForced ? 'worktree.policy.apply_overlap=force 选择记忆放行（local.yaml）' : '--force 越过 guard 相交预检'}：${guardCheck.overlaps.length} 个会话×文件对与活跃 quick 会话声明重叠——` +
+           pairLines.join('；') + `（对方会话在途改动可能被覆盖，overlapForced 留痕）`
+         ]);
+       } else if (autoApply) {
+diff --git a/src/worktree-deps.js b/src/worktree-deps.js
+index e7689a5a..f7564996 100644
+--- a/src/worktree-deps.js
++++ b/src/worktree-deps.js
+@@ -74,8 +74,22 @@ const ECOSYSTEMS = [
+     marker: null,
+     detect: (d) => existsSync(join(d, 'pyproject.toml')) || existsSync(join(d, 'requirements.txt')),
+     // uv 优先（现代 Python 工具链，pyproject/uv.lock 项目走 uv sync 建 .venv + 装依赖，
+-    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip
+-    install: (d) => (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml')) ? 'uv sync' : 'pip install -r requirements.txt'),
++    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip。
++    // extras 探测（R14/R15 对撞实证 2026-09-24）：裸 uv sync 不装 [project.optional-dependencies]
++    // extras，worktree / verify deps 门重建的 .venv 缺 dev extras → `uv run pytest` 回落全局
++    // 环境报批量 ModuleNotFoundError（R14-OS 244 个，每次 6 轮自愈）。声明了 optional-dependencies
++    // 的仓补 --all-extras；[dependency-groups] 的 dev 组 uv sync 缺省已含，不加 flag。
++    // 白名单（INSTALL_BINARY_WHITELIST）按 binary 首 token 判定，--all-extras 无元字符天然放行。
++    install: (d) => {
++      if (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml'))) {
++        try {
++          const py = readFileSync(join(d, 'pyproject.toml'), 'utf8')
++          if (/^\s*\[project\.optional-dependencies\]/m.test(py)) return 'uv sync --all-extras'
++        } catch { /* pyproject 读不到（纯 uv.lock 残缺 checkout）按裸 uv sync */ }
++        return 'uv sync'
++      }
++      return 'pip install -r requirements.txt'
++    },
+   },
+   {
+     type: 'go',
+@@ -229,7 +243,7 @@ function tryLink(mainNodeModules, linkPath) {
+   try {
+     if (lstatSync(linkPath).isSymbolicLink()) {
+       if (process.platform === 'win32') {
+-        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+       } else {
+         unlinkSync(linkPath);
+       }
+@@ -239,9 +253,9 @@ function tryLink(mainNodeModules, linkPath) {
+     if (process.platform === 'win32') {
+       // execFileSync 数组形式不经 shell：POSIX 双引号内 `/$() 会执行、cmd.exe 双引号内 %VAR% 仍展开，
+       // linkPath 含 local.yaml 模块 path，属项目内可配置值（安全收敛，与 git-helper 同范式）
+-      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'] });
++      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+     } else {
+-      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+     }
+     // 创建后实物复核（坑 provision-silent-fake-installed 第②层，2026-08-21 实证：doctor 报
+     // re-provisioned 成功但 junction 实际没建）——mklink/ln 退出码 0 不等于链接落盘（cmd.exe
+@@ -325,9 +339,9 @@ function tryInstall(cmd, cwd, timeout) {
+       if (process.platform === 'win32') {
+         // Windows 包管理器是 .cmd 垫片，无 shell 的 spawn 无法解析——经 cmd.exe /c 传参；
+         // 元字符（含 %）已拦，残余风险与 tryLink 的 mklink 同款
+-        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
++        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+       } else {
+-        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
++        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+       }
+     } catch (e) {
+       const raw = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
+@@ -454,7 +468,7 @@ export function sweepForeignNodeModulesJunctions(mainDir, { worktreesRoot, specB
+       if (dryRun) continue;
+       try {
+         if (process.platform === 'win32') {
+-          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+         } else {
+           unlinkSync(linkPath);
+         }
+diff --git a/src/worktree.js b/src/worktree.js
+index b993d3dc..0523b6f0 100644
+--- a/src/worktree.js
++++ b/src/worktree.js
+@@ -21,6 +21,7 @@ import { git, gitQuiet, unquoteGitPath } from './git-helper.js';
+ // foreign-declared 零环独立模块（仅依赖 change-list/git-helper/stages/plan-postcheck，
+ // 链上无回边）——contract-matrix/verify-probes/task-review 等处已有同款 import 先例
+ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js';
++import { readWorktreePolicy } from './worktree-policy.js';
+ 
+ // meta.json 会被 hook 进程与其它 CLI 进程并发读取（worktree-guard / getMeta / create 幽灵判定），
+ // 必须原子写：半截 JSON 会让 getMeta 返回 null → 触发幽灵 worktree 强删（可能丢 gitignored 改动）。
+@@ -220,7 +221,7 @@ export function unlinkNodeModulesLinks(worktreePath, meta = null, details = null
+     try {
+       if (process.platform === 'win32') {
+         // Windows rmdir 删 junction（reparse point）不跟随目标；execFileSync 数组形式不经 shell
+-        execFileSync('cmd.exe', ['/c', 'rmdir', nm]);
++        execFileSync('cmd.exe', ['/c', 'rmdir', nm], { windowsHide: true });
+       } else {
+         unlinkSync(nm);
+       }
+@@ -752,17 +753,28 @@ export class WorktreeManager {
+     // 2. 检查分支是否已存在（坑 worktree-user-branch-conflict，2026-08-24 用户反馈五期①：
+     // 「用户要求在指定分支上做」时既有同名分支让 execute 直接死锁，旧报错只说 Run cleanup
+     // first、修复建议无条件推荐删分支——用户自建分支被引导误删。现给决策菜单；--adopt-branch
+-    // 显式收编：检出该分支为 worktree 工作分支，分支现状作 baseline，仅后续新改动计入交付。）
++    // 显式收编：检出该分支为 worktree 工作分支，分支现状作 baseline，仅后续新改动计入交付。
++    // worktree.policy.adopt_branch（R16 减负批次 2026-09-24）：选择记忆——显式 flag 缺席时
++    // policy=true 等效常备 --adopt-branch（adoption 留痕同款），消「同一冲突每次重拦重问」。
+     const branchExists = !!gitQuiet(this.cwd, ['rev-parse', '--verify', `refs/heads/${branch}`]);
+     let adoptedBranch = false;
++    let adoptViaPolicy = false;
+     if (branchExists && !adoptBranch) {
+-      throw new Error(
+-        `分支已存在：${branch}（worktree create 需新建同名分支，直接冲突）。按实际情况三选一：\n` +
+-        `  ① 本变更的遗留分支（上次 execute 残留、内容已落地或作废）：确认后 git branch -D ${branch} 再重跑；\n` +
+-        `  ② 该分支是你有意让本变更在其上做的（用户指定分支）：sillyspec run execute --change ${name} --adopt-branch\n` +
+-        `     —— 收编为 worktree 工作分支，分支既有内容计入 baseline（仅后续新改动算交付 diff）；\n` +
+-        `  ③ 换变更名重跑。`
+-      );
++      const policy = readWorktreePolicy(this.cwd);
++      if (policy.adoptBranch) {
++        adoptBranch = true;
++        adoptViaPolicy = true;
++        console.log(`📌 worktree.policy.adopt_branch=true：分支 ${branch} 已存在，自动收编（等效 --adopt-branch，local.yaml 选择记忆）`);
++      } else {
++        throw new Error(
++          `分支已存在：${branch}（worktree create 需新建同名分支，直接冲突）。按实际情况三选一：\n` +
++          `  ① 本变更的遗留分支（上次 execute 残留、内容已落地或作废）：确认后 git branch -D ${branch} 再重跑；\n` +
++          `  ② 该分支是你有意让本变更在其上做的（用户指定分支）：sillyspec run execute --change ${name} --adopt-branch\n` +
++          `     —— 收编为 worktree 工作分支，分支既有内容计入 baseline（仅后续新改动算交付 diff）；\n` +
++          `     （每次都选②可在 local.yaml 配 worktree.policy.adopt_branch: true 记忆该选择）\n` +
++          `  ③ 换变更名重跑。`
++        );
++      }
+     }
+ 
+     // 3. 解析 base 分支
+@@ -922,12 +934,13 @@ export class WorktreeManager {
+       // 5.9 实供清单（纯记录面，doctor/审计可读；空供给省略字段——存量 meta 缺省兼容）
+       ...(suppliedFiles.length > 0 ? { supplyFiles: suppliedFiles } : {}),
+       ...(adoptedBranch ? { adoptedBranch: true } : {}),
++      ...(adoptViaPolicy ? { adoptViaPolicy: true } : {}),
+     };
+ 
+     const metaPath = join(worktreePath, META_FILE);
+     writeMetaAtomic(metaPath, meta);
+ 
+-    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic, ...(adoptedBranch ? { adoptedBranch: true } : {}) };
++    return { branch, worktreePath, baseHash, mode: meta.mode, syncDiagnostic, ...(adoptedBranch ? { adoptedBranch: true } : {}), ...(adoptViaPolicy ? { adoptViaPolicy: true } : {}) };
+   }
+ 
+   /**
+diff --git a/test/decisions-header-backfill.test.mjs b/test/decisions-header-backfill.test.mjs
+index 0b14cdef..7360f3b3 100644
+--- a/test/decisions-header-backfill.test.mjs
++++ b/test/decisions-header-backfill.test.mjs
+@@ -18,6 +18,7 @@ import { backfillFrontmatter, fixScanDocHeaders } from '../src/scan-postcheck.js
+ import { ensureDecisionDocHeader } from '../src/stage-contract.js'
+ import { definition as brainstormDef } from '../src/stages/brainstorm.js'
+ import { definition as brainstormAutoDef } from '../src/stages/brainstorm-auto.js'
++import { BRAINSTORM_ARTIFACT_TEMPLATES_MD } from '../src/stage-templates.js'
+ 
+ let passed = 0
+ let failed = 0
+@@ -33,8 +34,10 @@ function git(dir, args) {
+ 
+ console.log('--- 1. 模板含 frontmatter（根治侧）---')
+ {
++  // R16 减负批次（2026-09-24）：brainstorm step8 四件套模板出上下文（prompt 只留指针，模板
++  // 单一源迁 src/stage-templates.js → 幂等落盘 .runtime/templates/）——brainstorm 的根治侧
++  // 断言改钉模板源 + prompt 指针；brainstorm-auto 仍内嵌（#### decisions.md 形态）照旧钉。
+   const prompts = [
+-    ['brainstorm step8', brainstormDef.steps.map(s => s.prompt || '').join('\n')],
+     ['brainstorm-auto', brainstormAutoDef.steps.map(s => s.prompt || '').join('\n')],
+   ]
+   for (const [name, text] of prompts) {
+@@ -42,6 +45,15 @@ console.log('--- 1. 模板含 frontmatter（根治侧）---')
+     assert(decisionsBlock.includes('author: <git-user>') && decisionsBlock.includes('created_at: <now-datetime>'),
+       `${name} decisions 模板含 author/created_at frontmatter`)
+   }
++  assert(BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('author: <git-user>')
++    && BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('created_at: <now-datetime>')
++    && BRAINSTORM_ARTIFACT_TEMPLATES_MD.includes('# 决策记录（Decisions）'),
++    'brainstorm step8 模板源（stage-templates.js）decisions 模板含 author/created_at frontmatter')
++  const step8Text = brainstormDef.steps.map(s => s.prompt || '').join('\n')
++  assert(step8Text.includes('.runtime/templates/brainstorm-artifact-templates.md'),
++    'brainstorm step8 prompt 含模板指针路径（模板出上下文）')
++  assert(!step8Text.includes('### proposal.md 格式要求'),
++    'brainstorm step8 prompt 不再内嵌四件套模板全文（出上下文，防回归）')
+ }
+ 
+ console.log('--- 2. backfillFrontmatter 纯函数 ---')
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 4306f5a7..60071f8c 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -23,6 +23,7 @@ const CLI = join(ROOT, 'src', 'index.js')
+ const {
+   draftAll, amendFlowDraft, verifyFlowDrafts, extractSuccessCriteria, draftLedgerPath, draftDecisions,
+   draftDesignRecord, verifyDesignRecordFilled, redraftMissingArtifacts,
++  verifyRequirementBindings, extractRequirementBindings,
+ } = await import('../src/flow-draft.js')
+ // decisions 起草器：零真实决策=不落文件（转写任务通常为零）；有输入才有产物——锚定存在性+空态语义
+ if (draftDecisions({ change: 'x', decisions: [] }) !== null) throw new Error('draftDecisions 空态应返回 null（不落文件）')
+@@ -127,6 +128,39 @@ test('⑧ 幂等补起草：缺哪补哪/已存在不碰/ledger 合并/criteria
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
++test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, runtimeRoot })
++  const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++  assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 2, '两条 criteria→两枚绑定槽')
++  assert.match(reqs, /## 测试绑定/, '绑定节标题在场')
++
++  // 槽位门：新稿全空 → 全列；填路径/不适用 → 放行；旧骨架（剥掉绑定槽）→ 指引补生成
++  let v = verifyRequirementBindings({ changeDir })
++  assert.equal(v.emptySlots.length, 2, '两槽空被点名')
++  writeFileSync(join(changeDir, 'requirements.md'), reqs
++    .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/flow-draft.test.mjs ⑩ 绑定提取用例')
++    .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：崩溃零影响为运行时属性，无独立断言面'))
++  v = verifyRequirementBindings({ changeDir })
++  assert.equal(v.emptySlots.length, 0, '路径+不适用均视作已答')
++  writeFileSync(join(changeDir, 'requirements.md'), reqs.replace(/^<!--AGENT:测试绑定.*$/gm, '').replace(/^## 测试绑定.*$/m, ''))
++  v = verifyRequirementBindings({ changeDir })
++  assert.equal(v.emptySlots.length, 1)
++  assert.match(v.emptySlots[0], /骨架过旧/, '旧骨架指引删文件重入补生成')
++
++  // 提取：路径行→行（tests 解析去前导./）；不适用→跳过
++  writeFileSync(join(changeDir, 'requirements.md'), reqs
++    .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\n覆盖于 ./test/flow-draft.test.mjs 与 test/flow-protocol.test.mjs')
++    .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：运行时属性'))
++  const rows = extractRequirementBindings({ changeDir, change: 'c1' })
++  assert.equal(rows.length, 1, '只有 FR-01 产行')
++  assert.equal(rows[0].anchor, 'FR-01')
++  assert.deepEqual(rows[0].tests, ['test/flow-draft.test.mjs', 'test/flow-protocol.test.mjs'])
++  assert.equal(rows[0].state, 'candidate')
++  assert.equal(rows[0].row_id, 'c1:flow:FR-01')
++  rmSync(root, { recursive: true, force: true })
++})
++
+ test('② extractSuccessCriteria：节内条目与无节回退列表行', () => {
+   assert.deepEqual(extractSuccessCriteria(INPUT_WITH_CRITERIA), ['事件恒带 provisional:true', '崩溃零影响主流程'])
+   assert.deepEqual(extractSuccessCriteria('- 甲条件\n- 乙条件'), ['甲条件', '乙条件'])
+@@ -195,9 +229,11 @@ test('⑥ 薄跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harness
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   const p = join(changeDir, 'proposal.md')
+   writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽1[^\n]*-->)/, '$1\n例外：无'))
+-  // 设计记录四槽例行作答（2026-09-24 契约：空槽 flow done 拒收）
++  // 设计记录四槽例行作答（2026-09-24 契约：空槽 flow done 拒收）+ 测试绑定槽（09-25 契约）
+   const dp = join(changeDir, 'design.md')
+   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具一行答'))
++  const rp = join(changeDir, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
+   const snapshotBefore = readdirSync(changeDir).sort()
+   assert.deepEqual(snapshotBefore, ['design.md', 'flow-state.yaml', 'proposal.md', 'requirements.md', 'tasks.md'], '产物面=五件+状态（零手写额外文件）')
+ 
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 246eae52..0f06f176 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -50,10 +50,14 @@ function cli(cwd, args) {
+   })
+ }
+ 
+-/** agent 例行动作（2026-09-24 设计记录全档化契约）：给 design.md 四个 AGENT 槽各写一行作答。 */
++/** agent 例行动作（2026-09-24 设计记录契约 + 09-25 测试绑定契约）：design 四槽与 requirements
++ *  每条 FR 的测试绑定槽各写一行作答。 */
+ function fillDesignSlots(cwd, change) {
+-  const p = join(cwd, '.sillyspec', 'changes', change, 'design.md')
+-  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
+ }
+ 
+ test('① 机械 harness 2 调用走通薄跑道：start→干活→done，仅两次协议调用，归档注销', () => {
+@@ -205,15 +209,44 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+   assert.match(fail.stdout + fail.stderr, /中断于子步「artifacts」/)
+   assert.ok(existsSync(join(specBase, 'changes', change)), '未归档')
+ 
+-  // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）
++  // 补答（不适用+理由）→ done 全绿归档 + 实测面对账行（2026-09-25 修复③）+ patch 留档 + 绑定链
+   fillDesignSlots(cwd, change)
+   const ok = cli(cwd, ['flow', 'done', '--change', change])
+   assert.equal(ok.status, 0, `补答后应通过: ${ok.stdout}\n${ok.stderr}`)
+   assert.match(ok.stdout, /实测面对账/, '实测面对账行输出（test/lint 命令与结果路径）')
++  assert.match(ok.stdout, /变更 patch 留档/, 'patch 留档行（noAI 冻结）')
++  const archDir = join(specBase, 'changes', 'archive')
++  const archived = readdirSync(archDir)[0]
++  assert.ok(existsSync(join(archDir, archived, 'change.patch')), 'change.patch 随归档留存')
++  assert.ok(existsSync(join(archDir, archived, 'change-patch.json')), 'change-patch.json 随归档留存')
+   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
++test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落盘并随发号提升', () => {
++  const { cwd } = makeRepo()
++  const change = 'flow-h2-t9'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
++  writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
++  execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  // design 四槽 + 绑定槽写真实测试路径（触发行提取与提升）
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：绑定链夹具'))
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\ntest/flow-protocol.test.mjs ⑨ 绑定链用例'))
++  const done = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(done.status, 0, `done 失败: ${done.stdout}\n${done.stderr}`)
++  assert.match(done.stdout, /测试绑定行落盘：1 行/, '绑定行落盘输出')
++  assert.match(done.stdout, /测试绑定归档提升/, '发号后提升进 knowledge/fr')
++  const archDir = join(cwd, '.sillyspec', 'changes', 'archive')
++  const archived = readdirSync(archDir)[0]
++  const trace = JSON.parse(readFileSync(join(archDir, archived, 'test-trace.json'), 'utf8'))
++  assert.equal(trace.rows.length, 1)
++  assert.equal(trace.rows[0].anchor, 'FR-01')
++  assert.deepEqual(trace.rows[0].tests, ['test/flow-protocol.test.mjs'])
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+ test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
+   const { cwd } = makeRepo()
+   const change = 'flow-h2-t6c'
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index df790275..980b71f7 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -62,10 +62,13 @@ function amendWithRatio(cwd, change, ratio) {
+   return spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+ }
+ 
+-/** agent 例行动作（2026-09-24 设计记录全档化契约）：design 槽各写一行，防 artifacts 子步空槽拒收。 */
++/** agent 例行动作（设计记录+测试绑定契约）：槽各写一行，防 artifacts 子步空槽拒收。 */
+ function fillDesignSlots(cwd, change) {
+-  const p = join(cwd, '.sillyspec', 'changes', change, 'design.md')
+-  writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
+ }
+ 
+ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿薄过+醒目打印+遥测；小改无 hint', () => {
+diff --git a/test/output-step-render.test.mjs b/test/output-step-render.test.mjs
+index c3d46ff3..1afbef44 100644
+--- a/test/output-step-render.test.mjs
++++ b/test/output-step-render.test.mjs
+@@ -97,8 +97,8 @@ console.log('\n--- 平台 scan step0 + scanProfile：平台路径约束 + 严禁
+   assert(r.stdout.includes('sillyspec run scan --done'), '完成后执行（scan 无 changeName）')
+ }
+ 
+-// ── Case 4: 非平台 quick requiresWait → 完成后执行 --wait/--continue 模板 ──
+-console.log('\n--- quick requiresWait：完成后执行 --wait/--continue/--done 三段模板 ---')
++// ── Case 4: 非平台 quick requiresWait → 完成后执行合并式 + 挂起备选模板 ──
++console.log('\n--- quick requiresWait：--done --answer 一步合并主路径 + --wait 挂起备选 ---')
+ {
+   const { cwd } = makeRepo('os-quick-wait-')
+   const cn = 'quick-abcd1234'
+@@ -111,11 +111,13 @@ console.log('\n--- quick requiresWait：完成后执行 --wait/--continue/--done
+ 
+   assert(!r.error, 'quick requiresWait 不应 process.exit')
+   assert(r.stdout.includes('### 💻 你的角色：全栈老兵'), 'persona quick step0（全栈老兵）')
+-  assert(r.stdout.includes('本步骤必须等待用户输入，不能直接 --done'), 'requiresWait → 必须等待提示')
+-  assert(r.stdout.includes('sillyspec run quick --wait --reason "等待用户确认"'), '--wait 模板含 reason')
++  // R16 减负批次（2026-09-24）：三段式（wait/continue/done）改合并式主路径——
++  // --done --answer 一步吞 wait+done（complete.js 自动补 waitAnswer），省 2 次 CLI 往返
++  assert(r.stdout.includes('本步骤需要用户决策——主路径一步合并完成'), 'requiresWait → 合并式主路径提示')
++  assert(r.stdout.includes('sillyspec run quick --done --answer "用户回答" --change ' + cn), '合并式完成命令带 --change')
++  assert(r.stdout.includes('sillyspec run quick --wait --reason "等待用户确认"'), '--wait 挂起备选含 reason')
+   assert(r.stdout.includes('--options "确认,取消"'), '--wait 模板含 options')
+-  assert(r.stdout.includes('sillyspec run quick --continue --answer "用户回答" --change ' + cn), '--continue 模板带 --change')
+-  assert(r.stdout.includes('sillyspec run quick --done --change ' + cn), 'requiresWait 末尾仍有 --done')
++  assert(!r.stdout.includes('--continue --answer'), '三段式 --continue 中段已移除（合并式取代）')
+ }
+ 
+ // ── Case 5: 越界防御 → console.error + return false ──
+diff --git a/test/stage-review-checklist.test.mjs b/test/stage-review-checklist.test.mjs
+index 7528a1b9..527c1ac7 100644
+--- a/test/stage-review-checklist.test.mjs
++++ b/test/stage-review-checklist.test.mjs
+@@ -53,6 +53,11 @@ const SNAPSHOT_BRAINSTORM_CROSS_POINTS = [
+   'scan/module docs 或源码中的真实约束与 design.md 假设',
+   '涉及角色/权限/字典类数据时，实证不能只看静态定义：须以生产查询口径可解析到目标结果——用真实租户/库下可执行的查询（如按 enname+tenant 查询）确认返回非空，仅 enname 存在不算通过',
+   '涉及新页面/前端路由时，用户入口 × 菜单/注册 DML 对账：入口路由与菜单表、角色-权限注册 DML 逐一对账——能点到的入口必有对应菜单与授权注册行，菜单/注册 SQL 必须出现在交付清单（design.md 文件变更清单或 db/ 脚本）',
++  // 【快照随 R16 减负批次 2026-09-24 同步更新】交叉点自 8 条扩 10 条：新增「承诺可兑现性」
++  // 与「三方对齐」两条（R14/R15 对撞 5 个 P1 的成因维度前移到设计期评审——R15-F-01 at-least-once
++  // 破产、R14-P1-3/OS 审计③ spec 与实现矛盾均为此型）。
++  '**承诺可兑现性**：design 的每个可测承诺（如 at-least-once / 不重不漏 / 恒定窗口）逐条过最坏输入四维——乱序到达、并发写、会话或变更切换、多工作区作用域——实现能否兑现？不能兑现则降级承诺文案或改取简方案（如全量重拉结构性消灭整类时序缺陷），禁止立兑现不了的承诺（R14/R15 对撞 5 个 P1 全落此维，pytest 覆盖不到）',
++  '**三方对齐**：spec 文本、design、实现三者的取舍矛盾必须二选一对齐——不许"实现跟 design、spec 跟 design"各说各话（增量 vs 全量、有上限 vs 无上限是归档审计翻出的主型）；design 拒绝备选方案的理由不得同样适用于自选方案（自我论证矛盾）',
+ ]
+ // plan =「审查清单（读取 plan.md 的 plan_level，逐条核对）」下方条目（渲染为「- [ ] 」checkbox 行）
+ const SNAPSHOT_PLAN = [
+@@ -101,13 +106,18 @@ console.log('\n=== 内嵌迁移前快照逐条比对（钉死「迁移=逐字」
+   assertDeepEqual(
+     REVIEW_CHECKLISTS.brainstorm,
+     [...SNAPSHOT_BRAINSTORM_LAYERS, ...SNAPSHOT_BRAINSTORM_CROSS_POINTS],
+-    'brainstorm: 常量 == 迁移前三层检查(3) + 交叉点(8) 快照（逐字；task-06/FR-11 两条新交叉点同步在册）'
++    'brainstorm: 常量 == 迁移前三层检查(3) + 交叉点(10) 快照（逐字；task-06/FR-11 两条 + R16 减负批次两条同步在册）'
+   )
+   // FR-11 两条新条目字面钉住（角色/字典→生产查询口径；新页面→菜单/注册 DML 对账）
+   assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('以生产查询口径可解析到目标结果') && it.includes('enname+tenant')),
+     'FR-11: 清单含「以生产查询口径可解析到目标结果」条目（角色/权限/字典命中场景）')
+   assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('用户入口 × 菜单/注册 DML 对账') && it.includes('菜单/注册 SQL')),
+     'FR-11: 清单含「用户入口 × 菜单/注册 DML 对账」条目（新页面/前端路由场景）')
++  // R16 减负批次（2026-09-24）：承诺可兑现性 + 三方对齐两条字面钉住
++  assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('承诺可兑现性') && it.includes('最坏输入四维')),
++    'R16: 清单含「承诺可兑现性」条目（乱序/并发/切换/作用域四维，R14/R15 5 个 P1 成因前移）')
++  assert(REVIEW_CHECKLISTS.brainstorm.some(it => it.includes('三方对齐') && it.includes('自我论证矛盾')),
++    'R16: 清单含「三方对齐」条目（spec/design/实现矛盾二选一对齐）')
+   assertDeepEqual(REVIEW_CHECKLISTS.plan, SNAPSHOT_PLAN, 'plan: 常量 == 迁移前审查清单(10 条) 快照（逐字）')
+   assertDeepEqual(REVIEW_CHECKLISTS.execute, SNAPSHOT_EXECUTE, 'execute: 常量 == 迁移前三项必查(3 条) 快照（逐字）')
+   // FR-07（task-06）：verify 键新增形态——快照逐字照 design §6 四段，首条内嵌命中条件
+diff --git a/test/worktree-deps-python.test.mjs b/test/worktree-deps-python.test.mjs
+index 52288ee8..98d9fd59 100644
+--- a/test/worktree-deps-python.test.mjs
++++ b/test/worktree-deps-python.test.mjs
+@@ -42,6 +42,29 @@ console.log('\n[worktree-deps] python 分支：detectProjectType + inferInstallC
+   assert(inferInstallCommand('python', wt, null) === 'uv sync', 'uv.lock + pyproject → uv sync')
+ }
+ 
++// Case 2b: pyproject 声明 [project.optional-dependencies] → uv sync --all-extras
++//（R14/R15 对撞实证：裸 uv sync 缺 dev extras → pytest 回落全局报批量 ModuleNotFoundError）
++{
++  const wt = newDir('rsr-py-extras-')
++  writeFileSync(join(wt, 'pyproject.toml'), '[project]\nname = "x"\n\n[project.optional-dependencies]\ndev = ["pytest"]\n')
++  assert(inferInstallCommand('python', wt, null) === 'uv sync --all-extras', 'pyproject optional-dependencies → uv sync --all-extras')
++}
++
++// Case 2c: pyproject 只声明 [dependency-groups]（无 optional-dependencies）→ 裸 uv sync
++//（uv sync 缺省已含 dev 组，不加 flag）
++{
++  const wt = newDir('rsr-py-groups-')
++  writeFileSync(join(wt, 'pyproject.toml'), '[project]\nname = "x"\n\n[dependency-groups]\ndev = ["pytest"]\n')
++  assert(inferInstallCommand('python', wt, null) === 'uv sync', 'dependency-groups only → 裸 uv sync（dev 组缺省已含）')
++}
++
++// Case 2d: 纯 uv.lock 无 pyproject（残缺 checkout）→ 裸 uv sync（读不到 pyproject 不加 extras）
++{
++  const wt = newDir('rsr-py-lockonly-')
++  writeFileSync(join(wt, 'uv.lock'), '')
++  assert(inferInstallCommand('python', wt, null) === 'uv sync', '纯 uv.lock → 裸 uv sync')
++}
++
+ // Case 3: 纯 requirements.txt（无 pyproject）→ pip install -r requirements.txt
+ {
+   const wt = newDir('rsr-py-req-')
+@@ -82,6 +105,6 @@ console.log('\n[worktree-deps] python 分支：detectProjectType + inferInstallC
+ }
+ 
+ console.log(`\n${'='.repeat(50)}`)
+-console.log(`✅ 通过: ${7 - failures}  ❌ 失败: ${failures}`)
++console.log(`✅ 通过: ${10 - failures}  ❌ 失败: ${failures}`)
+ for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
+ if (failures > 0) throw new Error(`${failures} test(s) failed`)
+diff --git a/round5/export-r9sf-html.mjs b/round5/export-r9sf-html.mjs
+new file mode 100644
+--- /dev/null
++++ b/round5/export-r9sf-html.mjs
+@@ -0,0 +1,1236 @@
++/**
++ * 从 full.json 生成可读性优先的单文件 HTML 分析页
++ */
++import { readFileSync, writeFileSync } from 'node:fs';
++import { join } from 'node:path';
++
++const DIR = join(
++  process.cwd(),
++  'round5',
++  'exports',
++  'R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570',
++);
++const full = JSON.parse(readFileSync(join(DIR, 'full.json'), 'utf8'));
++
++/**
++ * Bash 命令三类：
++ * - sillyspec：实际调用 sillyspec CLI（bin/sillyspec.js / sillyspec 子命令），不单凭路径含 .sillyspec
++ * - test：pytest / vitest / mypy / ruff / typecheck / pnpm|npm test|lint 等门禁与测试
++ * - other：其余 shell
++ */
++function classifyBash(cmd) {
++  const c = String(cmd || '');
++  // 路径常含 `.sillyspec/`，先抹掉再判 CLI，避免假阳性
++  const noDotDir = c.replace(/\.sillyspec\b/gi, '.SSDIR');
++
++  const isSillyCli =
++    /sillyspec\.js\b/i.test(noDotDir) ||
++    /[/\\]bin[/\\]sillyspec(?:\.js)?\b/i.test(noDotDir) ||
++    /(?:^|[\s"'`;|&])sillyspec(?:\.cmd)?\b/i.test(noDotDir) ||
++    (/SILLYSPEC_[A-Z0-9_]+=/.test(c) &&
++      (/sillyspec\.js\b/i.test(c) || /[/\\]bin[/\\]sillyspec/i.test(c) || /\bsillyspec\b/i.test(noDotDir)));
++
++  if (isSillyCli) return 'sillyspec';
++
++  // 去掉引号串，避免 grep "mypy|ruff|test" 探查命令被误判为测试执行
++  const forTest = c.replace(/"(?:\\.|[^"\\])*"/g, '""').replace(/'(?:\\.|[^'\\])*'/g, "''");
++
++  if (
++    /\b(?:uv\s+run\s+)?pytest\b/i.test(forTest) ||
++    /\bvitest\b/i.test(forTest) ||
++    /\bpnpm\s+(?:test|typecheck|lint)\b/i.test(forTest) ||
++    /\bnpm\s+(?:test|run\s+lint)\b/i.test(forTest) ||
++    /\b(?:uv\s+run\s+)?mypy\b/i.test(forTest) ||
++    /\bruff\s+(?:check|format)\b/i.test(forTest) ||
++    /\btsc\s+--noEmit\b/i.test(forTest) ||
++    /\btsc\b/i.test(forTest) && /\b--noEmit\b/i.test(forTest)
++  ) {
++    return 'test';
++  }
++  return 'other';
++}
++
++function summarizeBashKinds(timeline) {
++  const counts = { sillyspec: 0, test: 0, other: 0 };
++  for (const m of timeline) {
++    for (const p of m.parts || []) {
++      if (p.type === 'tool' && p.name === 'Bash' && p.bash_kind) {
++        counts[p.bash_kind] = (counts[p.bash_kind] || 0) + 1;
++      }
++    }
++  }
++  return counts;
++}
++
++function bashCommandOf(input) {
++  if (!input || typeof input !== 'object') return '';
++  return String(input.command || input.cmd || '');
++}
++
++/** 压缩时间线条目，去掉 step-start/finish 噪音，保留分析用字段 */
++function compactTimeline(timeline) {
++  return timeline.map((m) => {
++    const role = m.message?.role || 'unknown';
++    const finish = m.message?.finish || null;
++    const model = m.message?.modelId || m.message?.model?.modelID || null;
++    const agent = m.message?.agent || null;
++    const semantics = m.message?.semantics || null;
++    const synthetic = !!m.message?.synthetic;
++    const source = m.message?.source || null;
++    const tokens = m.message?.tokens || null;
++    const cost = m.message?.cost || null;
++
++    const parts = [];
++    for (const p of m.parts || []) {
++      const d = p.data || {};
++      const type = d.type;
++      if (type === 'step-start' || type === 'step-finish') continue;
++      if (type === 'timeline') {
++        parts.push({ type: 'timeline', title: d.title || '' });
++        continue;
++      }
++      if (type === 'text') {
++        parts.push({ type: 'text', text: d.text || '' });
++        continue;
++      }
++      if (type === 'reasoning') {
++        parts.push({ type: 'reasoning', text: d.text || d.content || '' });
++        continue;
++      }
++      if (type === 'tool') {
++        const st = d.state || {};
++        const name = d.tool || d.name || '?';
++        const input = st.input ?? d.input ?? null;
++        const entry = {
++          type: 'tool',
++          name,
++          status: st.status || '',
++          title: st.title || '',
++          input,
++          output: st.output !== undefined ? st.output : null,
++          error: st.error !== undefined ? st.error : null,
++          duration_ms: st.metadata?.duration_ms ?? st.time?.end - st.time?.start ?? null,
++        };
++        if (name === 'Bash') {
++          const cmd = bashCommandOf(input);
++          entry.bash_kind = classifyBash(cmd);
++          entry.command = cmd;
++        }
++        parts.push(entry);
++        continue;
++      }
++      parts.push({ type: type || 'unknown', raw: d });
++    }
++
++    return {
++      seq: m.sequence,
++      id: m.id,
++      time: m.time_created,
++      time_zh: m.time_created_zh,
++      role,
++      finish,
++      model,
++      agent,
++      synthetic,
++      source,
++      semantics,
++      tokens,
++      cost,
++      parts,
++    };
++  });
++}
++
++const payload = {
++  meta: {
++    session_id: full.session_id,
++    parent_session_id: full.parent_session_id,
++    title: full.title,
++    directory: full.session_meta?.directory,
++    path: full.session_meta?.path,
++    version: full.session_meta?.version,
++    task_type: full.session_meta?.task_type,
++    time_created: full.session_meta?.time_created,
++    time_updated: full.session_meta?.time_updated,
++    time_created_zh: full.session_meta?.time_created_zh,
++    time_updated_zh: full.session_meta?.time_updated_zh,
++    duration_min: full.session_meta?.duration_ms
++      ? +(full.session_meta.duration_ms / 60000).toFixed(1)
++      : null,
++    exported_at_zh: full.exported_at_zh,
++    counts: full.counts,
++  },
++  todos: (full.todos || []).map((t) => ({
++    content: t.content,
++    status: t.status,
++    priority: t.priority,
++    position: t.position,
++  })),
++  session_input: (full.session_input || []).map((s) => ({
++    status: s.status,
++    delivery: s.delivery,
++    text: s.payload?.text || JSON.stringify(s.payload),
++    time: s.time_created,
++  })),
++  turn_usage: full.turn_usage || [],
++  model_usage_summary: summarizeUsage(full.model_usage || []),
++  tool_usage_summary: summarizeTools(full.tool_usage || []),
++  timeline: compactTimeline(full.timeline || []),
++};
++
++function summarizeUsage(rows) {
++  const s = {
++    n: rows.length,
++    input: 0,
++    output: 0,
++    cache_read: 0,
++    duration_ms: 0,
++    models: {},
++    finish: {},
++    status: {},
++  };
++  for (const r of rows) {
++    s.input += r.input_tokens || 0;
++    s.output += r.output_tokens || 0;
++    s.cache_read += r.cache_read_input_tokens || 0;
++    s.duration_ms += r.duration_ms || 0;
++    if (r.model_id) s.models[r.model_id] = (s.models[r.model_id] || 0) + 1;
++    if (r.finish_reason) s.finish[r.finish_reason] = (s.finish[r.finish_reason] || 0) + 1;
++    if (r.status) s.status[r.status] = (s.status[r.status] || 0) + 1;
++  }
++  s.cache_pct = s.input ? +((s.cache_read / s.input) * 100).toFixed(1) : 0;
++  return s;
++}
++
++function summarizeTools(rows) {
++  const by = {};
++  const status = {};
++  let err = 0;
++  for (const r of rows) {
++    by[r.tool_name] = (by[r.tool_name] || 0) + 1;
++    status[r.status] = (status[r.status] || 0) + 1;
++    if (r.status === 'error') err++;
++  }
++  return { by, status, err, n: rows.length };
++}
++
++const STAGE_ORDER = ['setup', 'brainstorm', 'plan', 'execute', 'verify', 'archive', 'wrapup'];
++const STAGE_LABEL = {
++  setup: '环境准备',
++  brainstorm: '头脑风暴',
++  plan: '计划',
++  execute: '执行',
++  verify: '验证',
++  archive: '归档',
++  wrapup: '收尾/报告',
++};
++
++function annotateStages(timeline) {
++  let current = 'setup';
++  for (const m of timeline) {
++    const detected = detectStageTransition(m);
++    if (detected) current = detected;
++    m.stage = current;
++  }
++}
++
++function detectStageTransition(m) {
++  // 系统合成消息（Todo 提醒等）常夹带 todo 文案「终态自查报告」，不得切阶段
++  if (m.synthetic) return null;
++
++  for (const p of m.parts || []) {
++    if (p.type !== 'text' || !p.text) continue;
++    const t = p.text;
++    const start = t.match(/\*\*\s*(brainstorm|plan|execute|verify|archive)\s*开始\s*[：:]/i);
++    if (start) return start[1].toLowerCase();
++    const enter = t.match(/进入\s*(brainstorm|plan|execute|verify|archive)\s*阶段/i);
++    if (enter) return enter[1].toLowerCase();
++    if (m.role === 'assistant' && /启动\s*brainstorm/i.test(t)) return 'brainstorm';
++    // 仅认最终报告标题，避免 todo 列表文案误触
++    if (
++      m.role === 'assistant' &&
++      /#\s*R9-SF\s*受试会话终态自查报告|#\s*.*终态自查报告/i.test(t) &&
++      t.length > 800
++    ) {
++      return 'wrapup';
++    }
++  }
++  for (const p of m.parts || []) {
++    if (p.type !== 'tool' || p.name !== 'Bash' || !p.command) continue;
++    const noDot = p.command.replace(/\.sillyspec\b/gi, '.SSDIR');
++    const run = noDot.match(
++      /sillyspec(?:\.js)?["']?\s+run\s+(brainstorm|plan|execute|verify|archive)\b/i,
++    );
++    if (run) return run[1].toLowerCase();
++    const complete = noDot.match(
++      /complete-stage\s+(brainstorm|plan|execute|verify|archive)\b/i,
++    );
++    if (complete) return complete[1].toLowerCase();
++  }
++  return null;
++}
++
++function summarizeStages(timeline) {
++  const map = new Map();
++  for (const m of timeline) {
++    const s = m.stage || 'setup';
++    if (!map.has(s)) {
++      map.set(s, {
++        id: s,
++        label: STAGE_LABEL[s] || s,
++        seq_from: m.seq,
++        seq_to: m.seq,
++        time_from: m.time_zh || m.time,
++        time_to: m.time_zh || m.time,
++        messages: 0,
++        bash: { sillyspec: 0, test: 0, other: 0 },
++        tools: 0,
++      });
++    }
++    const row = map.get(s);
++    row.seq_to = m.seq;
++    row.time_to = m.time_zh || m.time;
++    row.messages += 1;
++    for (const p of m.parts || []) {
++      if (p.type === 'tool') {
++        row.tools += 1;
++        if (p.name === 'Bash' && p.bash_kind) {
++          row.bash[p.bash_kind] = (row.bash[p.bash_kind] || 0) + 1;
++        }
++      }
++    }
++  }
++  return STAGE_ORDER.filter((id) => map.has(id)).map((id) => map.get(id));
++}
++
++payload.bash_kind_summary = summarizeBashKinds(payload.timeline);
++annotateStages(payload.timeline);
++payload.stage_summary = summarizeStages(payload.timeline);
++
++const json = JSON.stringify(payload).replace(/</g, '\\u003c');
++
++const html = `<!DOCTYPE html>
++<html lang="zh-CN">
++<head>
++<meta charset="UTF-8" />
++<meta name="viewport" content="width=device-width, initial-scale=1" />
++<title>R9-SF 会话分析 · ${escapeHtml(full.title || '').slice(0, 40)}</title>
++<style>
++  :root {
++    --bg: #f6f3ee;
++    --bg-elev: #fffcf7;
++    --ink: #1c1917;
++    --muted: #78716c;
++    --line: #e7e0d5;
++    --accent: #0f766e;
++    --accent-soft: #ccfbf1;
++    --user: #1d4ed8;
++    --user-soft: #dbeafe;
++    --asst: #0f766e;
++    --asst-soft: #ecfdf5;
++    --tool: #a16207;
++    --tool-soft: #fef3c7;
++    --err: #b91c1c;
++    --err-soft: #fee2e2;
++    --warn: #c2410c;
++    --mono: "JetBrains Mono", "Cascadia Code", "SF Mono", Consolas, monospace;
++    --sans: "Source Han Sans SC", "Noto Sans SC", "Segoe UI", system-ui, sans-serif;
++    --radius: 10px;
++    --shadow: 0 1px 0 rgba(28,25,23,.04), 0 8px 24px rgba(28,25,23,.06);
++  }
++  * { box-sizing: border-box; }
++  html, body { margin: 0; height: 100%; }
++  body {
++    font-family: var(--sans);
++    color: var(--ink);
++    background:
++      radial-gradient(1200px 600px at 10% -10%, #ddf4ef 0%, transparent 55%),
++      radial-gradient(900px 500px at 100% 0%, #fde68a33 0%, transparent 50%),
++      var(--bg);
++    line-height: 1.55;
++  }
++  .app {
++    display: grid;
++    grid-template-columns: 320px 1fr;
++    grid-template-rows: auto 1fr;
++    height: 100vh;
++    max-width: 1600px;
++    margin: 0 auto;
++  }
++  header.top {
++    grid-column: 1 / -1;
++    padding: 16px 20px 12px;
++    border-bottom: 1px solid var(--line);
++    background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
++    backdrop-filter: blur(8px);
++    position: sticky;
++    top: 0;
++    z-index: 20;
++  }
++  header.top h1 {
++    margin: 0 0 4px;
++    font-size: 1.15rem;
++    font-weight: 700;
++    letter-spacing: -0.02em;
++  }
++  header.top .sub {
++    color: var(--muted);
++    font-size: .82rem;
++    display: flex;
++    flex-wrap: wrap;
++    gap: 8px 16px;
++  }
++  header.top code {
++    font-family: var(--mono);
++    font-size: .78rem;
++    background: #00000008;
++    padding: 1px 6px;
++    border-radius: 4px;
++  }
++  .stats {
++    display: flex;
++    flex-wrap: wrap;
++    gap: 8px;
++    margin-top: 10px;
++  }
++  .stat {
++    background: var(--bg-elev);
++    border: 1px solid var(--line);
++    border-radius: 999px;
++    padding: 4px 10px;
++    font-size: .78rem;
++    color: var(--muted);
++  }
++  .stat b { color: var(--ink); font-weight: 650; }
++  .stat.warn { border-color: #fdba74; background: #fff7ed; color: var(--warn); }
++  .stat.ok { border-color: #5eead4; background: var(--accent-soft); color: var(--accent); }
++
++  aside {
++    border-right: 1px solid var(--line);
++    background: color-mix(in srgb, var(--bg-elev) 70%, transparent);
++    overflow: hidden;
++    display: flex;
++    flex-direction: column;
++  }
++  .filters {
++    padding: 12px;
++    border-bottom: 1px solid var(--line);
++    display: grid;
++    gap: 8px;
++  }
++  .filters input, .filters select {
++    width: 100%;
++    border: 1px solid var(--line);
++    border-radius: 8px;
++    padding: 8px 10px;
++    font: inherit;
++    font-size: .85rem;
++    background: var(--bg-elev);
++    color: var(--ink);
++  }
++  .filters input:focus, .filters select:focus {
++    outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
++    border-color: var(--accent);
++  }
++  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
++  .chip {
++    border: 1px solid var(--line);
++    background: var(--bg-elev);
++    border-radius: 999px;
++    padding: 3px 9px;
++    font-size: .75rem;
++    cursor: pointer;
++    color: var(--muted);
++  }
++  .chip.active {
++    background: var(--accent);
++    border-color: var(--accent);
++    color: #fff;
++  }
++  .nav-list {
++    overflow: auto;
++    flex: 1;
++    padding: 8px;
++  }
++  .nav-item {
++    display: grid;
++    grid-template-columns: 44px 1fr;
++    gap: 8px;
++    padding: 8px;
++    border-radius: 8px;
++    cursor: pointer;
++    border: 1px solid transparent;
++    margin-bottom: 2px;
++  }
++  .nav-item:hover { background: #00000006; }
++  .nav-item.active {
++    background: var(--accent-soft);
++    border-color: #99f6e4;
++  }
++  .nav-item .seq {
++    font-family: var(--mono);
++    font-size: .72rem;
++    color: var(--muted);
++    padding-top: 2px;
++  }
++  .nav-item .meta { min-width: 0; }
++  .nav-item .role {
++    font-size: .78rem;
++    font-weight: 650;
++  }
++  .nav-item .role.user { color: var(--user); }
++  .nav-item .role.assistant { color: var(--asst); }
++  .nav-item .preview {
++    font-size: .72rem;
++    color: var(--muted);
++    white-space: nowrap;
++    overflow: hidden;
++    text-overflow: ellipsis;
++  }
++  .nav-item .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
++  .tag {
++    font-size: .65rem;
++    padding: 1px 5px;
++    border-radius: 4px;
++    background: #00000008;
++    color: var(--muted);
++  }
++  .tag.tool { background: var(--tool-soft); color: var(--tool); }
++  .tag.err { background: var(--err-soft); color: var(--err); }
++  .tag.syn { background: #f5f5f4; }
++  .tag.bash-silly { background: #dbeafe; color: #1d4ed8; }
++  .tag.bash-test { background: #ffedd5; color: #c2410c; }
++  .tag.bash-other { background: #e7e5e4; color: #44403c; }
++  .pill.bash-silly { background: #dbeafe; color: #1d4ed8; }
++  .pill.bash-test { background: #ffedd5; color: #c2410c; }
++  .pill.bash-other { background: #e7e5e4; color: #44403c; }
++  .part.tool.bash-silly { border-color: #93c5fd; }
++  .part.tool.bash-test { border-color: #fdba74; }
++  .part.tool.bash-other { border-color: #d6d3d1; }
++  .stage-tabs {
++    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
++  }
++  .stage-tab {
++    border: 1px solid var(--line);
++    background: var(--bg-elev);
++    border-radius: 8px;
++    padding: 6px 10px;
++    font-size: .78rem;
++    cursor: pointer;
++    color: var(--muted);
++    text-align: left;
++  }
++  .stage-tab:hover { border-color: var(--accent); color: var(--ink); }
++  .stage-tab.active {
++    background: var(--accent);
++    border-color: var(--accent);
++    color: #fff;
++  }
++  .stage-tab b { display: block; color: inherit; font-size: .85rem; }
++  .stage-tab .meta { opacity: .85; font-size: .68rem; margin-top: 2px; }
++  .stage-tab.active .meta { opacity: .9; }
++  .stage-banner {
++    position: sticky;
++    top: 0;
++    z-index: 5;
++    margin: 18px 0 12px;
++    padding: 12px 14px;
++    border-radius: var(--radius);
++    border: 1px solid var(--line);
++    background: linear-gradient(90deg, #0f766e 0%, #134e4a 100%);
++    color: #ecfdf5;
++    box-shadow: var(--shadow);
++    scroll-margin-top: 80px;
++  }
++  .stage-banner.plan { background: linear-gradient(90deg, #1d4ed8 0%, #1e3a8a 100%); color: #eff6ff; }
++  .stage-banner.setup { background: linear-gradient(90deg, #57534e 0%, #292524 100%); color: #fafaf9; }
++  .stage-banner.execute { background: linear-gradient(90deg, #a16207 0%, #713f12 100%); color: #fffbeb; }
++  .stage-banner.verify { background: linear-gradient(90deg, #c2410c 0%, #7c2d12 100%); color: #fff7ed; }
++  .stage-banner.archive { background: linear-gradient(90deg, #6d28d9 0%, #4c1d95 100%); color: #f5f3ff; }
++  .stage-banner.wrapup { background: linear-gradient(90deg, #0e7490 0%, #155e75 100%); color: #ecfeff; }
++  .stage-banner h3 { margin: 0 0 4px; font-size: 1rem; }
++  .stage-banner .sub { font-size: .75rem; opacity: .9; display: flex; flex-wrap: wrap; gap: 8px 14px; }
++  .nav-stage-label {
++    font-size: .68rem;
++    font-weight: 700;
++    color: var(--muted);
++    padding: 8px 8px 4px;
++    text-transform: none;
++    letter-spacing: .02em;
++  }
++  .bash-legend {
++    display: flex; flex-wrap: wrap; gap: 8px; font-size: .78rem; margin-top: 6px;
++  }
++  .bash-legend span {
++    display: inline-flex; align-items: center; gap: 5px;
++    padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line);
++  }
++
++  main {
++    overflow: auto;
++    padding: 16px 20px 48px;
++  }
++  .panel {
++    background: var(--bg-elev);
++    border: 1px solid var(--line);
++    border-radius: var(--radius);
++    box-shadow: var(--shadow);
++    padding: 14px 16px;
++    margin-bottom: 14px;
++  }
++  .panel h2 {
++    margin: 0 0 10px;
++    font-size: .95rem;
++    letter-spacing: -0.01em;
++  }
++  .grid-2 {
++    display: grid;
++    grid-template-columns: 1fr 1fr;
++    gap: 12px;
++  }
++  @media (max-width: 1100px) {
++    .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
++    aside { max-height: 280px; border-right: 0; border-bottom: 1px solid var(--line); }
++    .grid-2 { grid-template-columns: 1fr; }
++  }
++  table.mini {
++    width: 100%;
++    border-collapse: collapse;
++    font-size: .8rem;
++  }
++  table.mini th, table.mini td {
++    text-align: left;
++    padding: 5px 6px;
++    border-bottom: 1px solid var(--line);
++  }
++  table.mini th { color: var(--muted); font-weight: 600; }
++  pre.block, .text-body {
++    white-space: pre-wrap;
++    word-break: break-word;
++    font-family: var(--mono);
++    font-size: .78rem;
++    background: #1c191308;
++    border: 1px solid var(--line);
++    border-radius: 8px;
++    padding: 10px 12px;
++    margin: 0;
++    max-height: 420px;
++    overflow: auto;
++  }
++  .text-body.prose {
++    font-family: var(--sans);
++    font-size: .9rem;
++    line-height: 1.65;
++    background: transparent;
++    border: 0;
++    padding: 0;
++    max-height: none;
++  }
++  .msg {
++    border: 1px solid var(--line);
++    border-radius: var(--radius);
++    background: var(--bg-elev);
++    box-shadow: var(--shadow);
++    margin-bottom: 14px;
++    overflow: hidden;
++    scroll-margin-top: 90px;
++  }
++  .msg.hidden-by-filter { display: none; }
++  .stage-banner.hidden-by-filter { display: none; }
++  .msg-head {
++    display: flex;
++    flex-wrap: wrap;
++    gap: 8px 12px;
++    align-items: center;
++    padding: 10px 14px;
++    border-bottom: 1px solid var(--line);
++    background: linear-gradient(180deg, #fff 0%, #faf7f2 100%);
++  }
++  .msg.user .msg-head { background: linear-gradient(180deg, #eff6ff 0%, #dbeafe55 100%); }
++  .msg.assistant .msg-head { background: linear-gradient(180deg, #f0fdfa 0%, #ccfbf155 100%); }
++  .badge {
++    font-size: .72rem;
++    font-weight: 700;
++    padding: 2px 8px;
++    border-radius: 999px;
++    letter-spacing: .02em;
++  }
++  .badge.user { background: var(--user); color: #fff; }
++  .badge.assistant { background: var(--asst); color: #fff; }
++  .badge.unknown { background: #57534e; color: #fff; }
++  .msg-head .time { color: var(--muted); font-size: .75rem; font-family: var(--mono); }
++  .msg-head .id { color: var(--muted); font-size: .68rem; font-family: var(--mono); }
++  .msg-body { padding: 12px 14px; display: grid; gap: 10px; }
++  .part {
++    border: 1px solid var(--line);
++    border-radius: 8px;
++    overflow: hidden;
++  }
++  .part-h {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++    padding: 7px 10px;
++    background: #00000004;
++    font-size: .78rem;
++    font-weight: 650;
++    cursor: pointer;
++    user-select: none;
++  }
++  .part-h .pill {
++    font-weight: 600;
++    font-size: .68rem;
++    padding: 1px 6px;
++    border-radius: 4px;
++  }
++  .part.text .pill { background: var(--user-soft); color: var(--user); }
++  .part.reasoning .pill { background: #ede9fe; color: #5b21b6; }
++  .part.tool .pill { background: var(--tool-soft); color: var(--tool); }
++  .part.tool.error .pill, .part.tool .pill.err { background: var(--err-soft); color: var(--err); }
++  .part-b { padding: 10px; border-top: 1px solid var(--line); display: none; }
++  .part.open .part-b { display: block; }
++  .part.text.open .part-b, .part.text .part-b { display: block; }
++  .part.text .part-h { cursor: default; }
++  .toolbar-float {
++    position: fixed;
++    right: 18px;
++    bottom: 18px;
++    display: flex;
++    gap: 8px;
++    z-index: 30;
++  }
++  .toolbar-float button {
++    border: 1px solid var(--line);
++    background: var(--bg-elev);
++    border-radius: 999px;
++    padding: 8px 12px;
++    font: inherit;
++    font-size: .8rem;
++    cursor: pointer;
++    box-shadow: var(--shadow);
++  }
++  .toolbar-float button:hover { border-color: var(--accent); color: var(--accent); }
++  .empty {
++    color: var(--muted);
++    text-align: center;
++    padding: 40px 12px;
++  }
++  .kbd {
++    font-family: var(--mono);
++    font-size: .7rem;
++    border: 1px solid var(--line);
++    border-bottom-width: 2px;
++    border-radius: 4px;
++    padding: 0 5px;
++    background: #fff;
++  }
++</style>
++</head>
++<body>
++<div class="app">
++  <header class="top">
++    <h1 id="title">R9-SF 会话分析</h1>
++    <div class="sub" id="submeta"></div>
++    <div class="stats" id="stats"></div>
++    <div class="stage-tabs" id="stageTabs"></div>
++  </header>
++
++  <aside>
++    <div class="filters">
++      <input id="q" type="search" placeholder="搜索文本 / 工具名 / seq…" />
++      <select id="role">
++        <option value="all">全部角色</option>
++        <option value="user">仅 user</option>
++        <option value="assistant">仅 assistant</option>
++      </select>
++      <select id="tool">
++        <option value="all">全部工具</option>
++      </select>
++      <select id="bashKind">
++        <option value="all">Bash 分类：全部</option>
++        <option value="sillyspec">Bash · sillyspec CLI</option>
++        <option value="test">Bash · 测试/门禁</option>
++        <option value="other">Bash · 其它</option>
++      </select>
++      <select id="stage">
++        <option value="all">阶段：全部</option>
++      </select>
++      <div class="chip-row">
++        <button type="button" class="chip" data-filter="errors">仅错误</button>
++        <button type="button" class="chip" data-filter="tools">含工具</button>
++        <button type="button" class="chip" data-filter="bashSilly">含 sillyspec</button>
++        <button type="button" class="chip" data-filter="bashTest">含测试调用</button>
++        <button type="button" class="chip" data-filter="text">含回复文本</button>
++        <button type="button" class="chip" data-filter="human">人工/协调者</button>
++        <button type="button" class="chip active" data-filter="hideSyn">隐藏系统通知</button>
++      </div>
++      <div style="font-size:.72rem;color:var(--muted)">匹配 <b id="matchCount">0</b> / <span id="totalCount">0</span> · <span class="kbd">/</span> 聚焦搜索</div>
++    </div>
++    <div class="nav-list" id="nav"></div>
++  </aside>
++
++  <main id="main">
++    <div class="grid-2" id="overview"></div>
++    <div id="feed"></div>
++  </main>
++</div>
++
++<div class="toolbar-float">
++  <button type="button" id="expandAll">展开全部工具</button>
++  <button type="button" id="collapseAll">折叠工具/推理</button>
++  <button type="button" id="toTop">回顶</button>
++</div>
++
++<script id="DATA" type="application/json">${json}</script>
++<script>
++const DATA = JSON.parse(document.getElementById('DATA').textContent);
++const STAGE_LABEL = {
++  setup: '环境准备',
++  brainstorm: '头脑风暴',
++  plan: '计划',
++  execute: '执行',
++  verify: '验证',
++  archive: '归档',
++  wrapup: '收尾/报告',
++};
++const state = {
++  q: '',
++  role: 'all',
++  tool: 'all',
++  bashKind: 'all',
++  stage: 'all',
++  filters: new Set(['hideSyn']),
++};
++
++const BASH_KIND_LABEL = {
++  sillyspec: 'sillyspec CLI',
++  test: '测试/门禁',
++  other: '其它 shell',
++};
++
++function fmtNum(n) {
++  if (n == null) return '—';
++  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
++  if (n >= 1e3) return (n/1e3).toFixed(1) + 'k';
++  return String(n);
++}
++function esc(s) {
++  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
++}
++function previewOf(m) {
++  for (const p of m.parts) {
++    if (p.type === 'text' && p.text) return p.text.replace(/\\s+/g, ' ').slice(0, 80);
++    if (p.type === 'tool' && p.name === 'Bash' && p.bash_kind) {
++      const label = BASH_KIND_LABEL[p.bash_kind] || p.bash_kind;
++      const cmd = (p.command || '').replace(/\\s+/g, ' ').slice(0, 70);
++      return 'Bash/' + label + (cmd ? ' · ' + cmd : '');
++    }
++    if (p.type === 'tool') return '⚙ ' + p.name + (p.title ? ' · ' + p.title : '');
++  }
++  if (m.synthetic) return '(系统/后台通知)';
++  return '(无正文)';
++}
++function toolsOf(m) {
++  return m.parts.filter(p => p.type === 'tool').map(p => p.name);
++}
++function bashKindsOf(m) {
++  return m.parts.filter(p => p.type === 'tool' && p.name === 'Bash' && p.bash_kind).map(p => p.bash_kind);
++}
++function hasError(m) {
++  return m.parts.some(p => p.type === 'tool' && (p.status === 'error' || p.error));
++}
++function isHumanish(m) {
++  if (m.role !== 'user') return false;
++  if (m.synthetic) return false;
++  if (m.semantics?.origin === 'real_user') return true;
++  return !m.synthetic;
++}
++function matches(m) {
++  if (state.role !== 'all' && m.role !== state.role) return false;
++  if (state.tool !== 'all' && !toolsOf(m).includes(state.tool)) return false;
++  if (state.bashKind !== 'all' && !bashKindsOf(m).includes(state.bashKind)) return false;
++  if (state.stage !== 'all' && m.stage !== state.stage) return false;
++  if (state.filters.has('errors') && !hasError(m)) return false;
++  if (state.filters.has('tools') && toolsOf(m).length === 0) return false;
++  if (state.filters.has('bashSilly') && !bashKindsOf(m).includes('sillyspec')) return false;
++  if (state.filters.has('bashTest') && !bashKindsOf(m).includes('test')) return false;
++  if (state.filters.has('text') && !m.parts.some(p => p.type === 'text' && p.text)) return false;
++  if (state.filters.has('human') && !isHumanish(m)) return false;
++  if (state.filters.has('hideSyn') && m.synthetic) return false;
++  const q = state.q.trim().toLowerCase();
++  if (!q) return true;
++  if (String(m.seq) === q || String(m.seq).includes(q)) return true;
++  if ((m.id || '').toLowerCase().includes(q)) return true;
++  for (const p of m.parts) {
++    if (p.type === 'text' && (p.text || '').toLowerCase().includes(q)) return true;
++    if (p.type === 'reasoning' && (p.text || '').toLowerCase().includes(q)) return true;
++    if (p.type === 'tool') {
++      if ((p.name || '').toLowerCase().includes(q)) return true;
++      if ((p.title || '').toLowerCase().includes(q)) return true;
++      if ((p.bash_kind || '').toLowerCase().includes(q)) return true;
++      if ((p.command || '').toLowerCase().includes(q)) return true;
++      const blob = JSON.stringify(p.input || '') + JSON.stringify(p.output || '') + JSON.stringify(p.error || '');
++      if (blob.toLowerCase().includes(q)) return true;
++    }
++  }
++  return false;
++}
++
++function renderHeader() {
++  const m = DATA.meta;
++  document.getElementById('title').textContent = m.title || 'R9-SF 会话分析';
++  document.getElementById('submeta').innerHTML = [
++    '<span>session <code>' + esc(m.session_id) + '</code></span>',
++    '<span>parent <code>' + esc(m.parent_session_id) + '</code></span>',
++    '<span>' + esc(m.time_created_zh) + ' → ' + esc(m.time_updated_zh) + '</span>',
++    '<span>墙钟 <b>' + esc(m.duration_min) + ' min</b></span>',
++    '<span>' + esc(m.directory) + '</span>',
++  ].join('');
++  const u = DATA.model_usage_summary;
++  const t = DATA.tool_usage_summary;
++  const bk = DATA.bash_kind_summary || {};
++  const stats = [
++    ['消息', m.counts.messages],
++    ['模型请求', u.n],
++    ['Input', fmtNum(u.input)],
++    ['Cache命中', u.cache_pct + '%'],
++    ['Bash', (bk.sillyspec||0) + (bk.test||0) + (bk.other||0)],
++    ['↳ sillyspec', bk.sillyspec || 0],
++    ['↳ 测试', bk.test || 0],
++    ['↳ 其它', bk.other || 0],
++    ['工具错误', t.err],
++  ];
++  document.getElementById('stats').innerHTML = stats.map(([k,v]) => {
++    let cls = 'stat';
++    if (k === '工具错误' && v > 0) cls = 'stat warn';
++    if (k === '↳ sillyspec') cls = 'stat ok';
++    if (k === '↳ 测试') cls = 'stat warn';
++    return '<span class="' + cls + '">' + k + ' <b>' + esc(v) + '</b></span>';
++  }).join('');
++  renderStageTabs();
++}
++
++function renderStageTabs() {
++  const tabs = document.getElementById('stageTabs');
++  const rows = DATA.stage_summary || [];
++  const allBtn =
++    '<button type="button" class="stage-tab' + (state.stage === 'all' ? ' active' : '') + '" data-stage="all">' +
++    '<b>全部阶段</b><div class="meta">' + DATA.timeline.length + ' 条消息</div></button>';
++  tabs.innerHTML = allBtn + rows.map(s => {
++    const active = state.stage === s.id ? ' active' : '';
++    return '<button type="button" class="stage-tab' + active + '" data-stage="' + esc(s.id) + '">' +
++      '<b>' + esc(s.label) + '</b>' +
++      '<div class="meta">#' + s.seq_from + '–' + s.seq_to + ' · ' + s.messages + ' 条 · Bash ' +
++      ((s.bash.sillyspec||0)+(s.bash.test||0)+(s.bash.other||0)) + '</div></button>';
++  }).join('');
++  tabs.querySelectorAll('.stage-tab').forEach(btn => {
++    btn.addEventListener('click', () => {
++      state.stage = btn.getAttribute('data-stage');
++      document.getElementById('stage').value = state.stage;
++      apply();
++      if (state.stage !== 'all') {
++        const banner = document.getElementById('stage-banner-' + state.stage);
++        if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
++      } else {
++        document.getElementById('main').scrollTo({ top: 0, behavior: 'smooth' });
++      }
++    });
++  });
++}
++
++function renderOverview() {
++  const u = DATA.model_usage_summary;
++  const t = DATA.tool_usage_summary;
++  const bk = DATA.bash_kind_summary || { sillyspec: 0, test: 0, other: 0 };
++  const bashTotal = (bk.sillyspec||0) + (bk.test||0) + (bk.other||0);
++  const stageRows = (DATA.stage_summary || []).map(s =>
++    '<tr><td><b>' + esc(s.label) + '</b></td><td>#' + s.seq_from + '–' + s.seq_to + '</td><td>' +
++    esc(s.time_from) + ' → ' + esc(s.time_to) + '</td><td>' + s.messages + '</td><td>' + s.tools +
++    '</td><td>' + (s.bash.sillyspec||0) + ' / ' + (s.bash.test||0) + ' / ' + (s.bash.other||0) + '</td></tr>'
++  ).join('');
++  const toolRows = Object.entries(t.by).sort((a,b)=>b[1]-a[1])
++    .map(([k,v]) => '<tr><td>' + esc(k) + '</td><td>' + v + '</td></tr>').join('');
++  const todos = (DATA.todos || []).map(td =>
++    '<li><b>[' + esc(td.status) + ']</b> ' + esc(td.content) + '</li>'
++  ).join('') || '<li class="empty">无</li>';
++  const inputs = (DATA.session_input || []).map(si =>
++    '<pre class="block">' + esc(si.text) + '</pre>'
++  ).join('') || '<div class="empty">无协调者注入</div>';
++
++  document.getElementById('overview').innerHTML = \`
++    <div class="panel" style="grid-column:1/-1">
++      <h2>阶段总览（头脑风暴 / 计划 / …）</h2>
++      <table class="mini">
++        <thead><tr><th>阶段</th><th>seq</th><th>时间</th><th>消息</th><th>工具</th><th>Bash(s/t/o)</th></tr></thead>
++        <tbody>\${stageRows}</tbody>
++      </table>
++      <div style="font-size:.75rem;color:var(--muted);margin-top:8px">点击顶栏阶段卡片可只看该阶段；时间线内按阶段插入分隔条。</div>
++    </div>
++    <div class="panel">
++      <h2>Bash 三类分布</h2>
++      <table class="mini">
++        <thead><tr><th>类别</th><th>次数</th><th>占比</th></tr></thead>
++        <tbody>
++          <tr><td><span class="tag bash-silly">sillyspec CLI</span></td><td>\${bk.sillyspec||0}</td><td>\${bashTotal?(((bk.sillyspec||0)/bashTotal)*100).toFixed(1):0}%</td></tr>
++          <tr><td><span class="tag bash-test">测试/门禁</span></td><td>\${bk.test||0}</td><td>\${bashTotal?(((bk.test||0)/bashTotal)*100).toFixed(1):0}%</td></tr>
++          <tr><td><span class="tag bash-other">其它 shell</span></td><td>\${bk.other||0}</td><td>\${bashTotal?(((bk.other||0)/bashTotal)*100).toFixed(1):0}%</td></tr>
++          <tr><td><b>合计</b></td><td>\${bashTotal}</td><td>100%</td></tr>
++        </tbody>
++      </table>
++      <div class="bash-legend">
++        <span class="tag bash-silly">sillyspec</span> 实际调用 bin/sillyspec.js（忽略路径里的 .sillyspec 目录）
++        <span class="tag bash-test">测试</span> 实际跑 pytest / vitest / mypy / ruff check|format / tsc / pnpm test|lint|typecheck（grep 探查不算）
++        <span class="tag bash-other">其它</span> git / ls / curl / install 等
++      </div>
++    </div>
++    <div class="panel">
++      <h2>工具分布</h2>
++      <table class="mini"><thead><tr><th>工具</th><th>次数</th></tr></thead><tbody>\${toolRows}</tbody></table>
++    </div>
++    <div class="panel">
++      <h2>Todos</h2>
++      <ul style="margin:0;padding-left:18px;font-size:.85rem">\${todos}</ul>
++    </div>
++    <div class="panel" style="grid-column:1/-1">
++      <h2>协调者 / Session Input</h2>
++      \${inputs}
++    </div>
++    <div class="panel" style="grid-column:1/-1">
++      <h2>用量摘要</h2>
++      <table class="mini">
++        <tr><th>模型</th><td>\${esc(JSON.stringify(u.models))}</td></tr>
++        <tr><th>finish</th><td>\${esc(JSON.stringify(u.finish))}</td></tr>
++        <tr><th>模型耗时合计</th><td>\${((u.duration_ms||0)/60000).toFixed(1)} min</td></tr>
++        <tr><th>有效新 input（约）</th><td>\${fmtNum((u.input||0)-(u.cache_read||0))}</td></tr>
++      </table>
++    </div>
++  \`;
++}
++
++function fillToolSelect() {
++  const set = new Set();
++  for (const m of DATA.timeline) for (const n of toolsOf(m)) set.add(n);
++  const sel = document.getElementById('tool');
++  [...set].sort().forEach(name => {
++    const o = document.createElement('option');
++    o.value = name; o.textContent = name;
++    sel.appendChild(o);
++  });
++  const stageSel = document.getElementById('stage');
++  (DATA.stage_summary || []).forEach(s => {
++    const o = document.createElement('option');
++    o.value = s.id;
++    o.textContent = s.label + ' (#' + s.seq_from + '–' + s.seq_to + ')';
++    stageSel.appendChild(o);
++  });
++}
++
++function renderNav(matched) {
++  const nav = document.getElementById('nav');
++  let html = '';
++  let lastStage = null;
++  matched.forEach(m => {
++    if (m.stage !== lastStage) {
++      lastStage = m.stage;
++      html += '<div class="nav-stage-label">' + esc(STAGE_LABEL[m.stage] || m.stage || '?') + '</div>';
++    }
++    const tags = [];
++    const ts = toolsOf(m);
++    const bks = [...new Set(bashKindsOf(m))];
++    for (const k of bks) {
++      tags.push('<span class="tag bash-' + (k === 'sillyspec' ? 'silly' : k) + '">Bash/' + esc(BASH_KIND_LABEL[k] || k) + '</span>');
++    }
++    if (ts.filter(n => n !== 'Bash').length) {
++      const others = ts.filter(n => n !== 'Bash');
++      tags.push('<span class="tag tool">' + esc(others[0]) + (others.length>1?' +'+(others.length-1):'') + '</span>');
++    }
++    if (hasError(m)) tags.push('<span class="tag err">error</span>');
++    if (m.synthetic) tags.push('<span class="tag syn">synthetic</span>');
++    if (m.finish) tags.push('<span class="tag">' + esc(m.finish) + '</span>');
++    html += '<div class="nav-item" data-seq="' + m.seq + '">' +
++      '<div class="seq">#' + m.seq + '</div>' +
++      '<div class="meta"><div class="role ' + esc(m.role) + '">' + esc(m.role) + '</div>' +
++      '<div class="preview">' + esc(previewOf(m)) + '</div>' +
++      '<div class="tags">' + tags.join('') + '</div></div></div>';
++  });
++  nav.innerHTML = html || '<div class="empty">无匹配</div>';
++  nav.querySelectorAll('.nav-item').forEach(el => {
++    el.addEventListener('click', () => {
++      const seq = el.getAttribute('data-seq');
++      const target = document.getElementById('msg-' + seq);
++      if (target) {
++        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
++        nav.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
++        el.classList.add('active');
++      }
++    });
++  });
++}
++
++function partHtml(p, autoOpenText = true) {
++  if (p.type === 'text') {
++    return '<div class="part text open"><div class="part-h"><span class="pill">text</span><span>回复 / 提示</span></div>' +
++      '<div class="part-b"><div class="text-body prose">' + esc(p.text) + '</div></div></div>';
++  }
++  if (p.type === 'reasoning') {
++    return '<div class="part reasoning"><div class="part-h" data-toggle><span class="pill">reasoning</span><span>推理（点击展开）</span><span style="margin-left:auto;color:var(--muted)">' + (p.text||'').length + ' chars</span></div>' +
++      '<div class="part-b"><pre class="block">' + esc(p.text) + '</pre></div></div>';
++  }
++  if (p.type === 'tool') {
++    const err = p.status === 'error' || p.error;
++    const openClass = err ? ' open' : '';
++    const out = p.error != null ? p.error : p.output;
++    const outStr = typeof out === 'string' ? out : JSON.stringify(out, null, 2);
++    const inStr = JSON.stringify(p.input ?? {}, null, 2);
++    const bashKind = p.name === 'Bash' ? (p.bash_kind || 'other') : null;
++    const bashCls = bashKind ? ' bash-' + (bashKind === 'sillyspec' ? 'silly' : bashKind) : '';
++    const bashPill = bashKind
++      ? '<span class="pill bash-' + (bashKind === 'sillyspec' ? 'silly' : bashKind) + '">Bash · ' + esc(BASH_KIND_LABEL[bashKind] || bashKind) + '</span>'
++      : '';
++    const cmdPreview = bashKind && p.command
++      ? '<div style="font-size:.72rem;color:var(--muted);margin:0 0 8px;font-family:var(--mono);white-space:pre-wrap;word-break:break-word">' + esc(p.command) + '</div>'
++      : '';
++    return '<div class="part tool' + bashCls + (err?' error':'') + openClass + '"><div class="part-h" data-toggle>' +
++      '<span class="pill' + (err?' err':'') + '">tool</span><span>' + esc(p.name) + '</span>' + bashPill +
++      (p.title ? '<span style="color:var(--muted);font-weight:500">· ' + esc(p.title) + '</span>' : '') +
++      '<span class="pill" style="margin-left:auto">' + esc(p.status || '') + '</span></div>' +
++      '<div class="part-b">' + cmdPreview +
++      '<div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">input</div><pre class="block">' + esc(inStr) + '</pre>' +
++      '<div style="font-size:.75rem;color:var(--muted);margin:10px 0 6px">' + (p.error != null ? 'error' : 'output') + '</div>' +
++      '<pre class="block">' + esc(outStr ?? '') + '</pre></div></div>';
++  }
++  if (p.type === 'timeline') {
++    return '<div class="part open"><div class="part-h"><span class="pill">timeline</span>' + esc(p.title) + '</div></div>';
++  }
++  return '<div class="part open"><div class="part-h"><span class="pill">' + esc(p.type) + '</span></div>' +
++    '<div class="part-b"><pre class="block">' + esc(JSON.stringify(p.raw || p, null, 2)) + '</pre></div></div>';
++}
++
++function renderFeed(matched) {
++  const set = new Set(matched.map(m => m.seq));
++  const feed = document.getElementById('feed');
++  if (!feed.dataset.ready) {
++    const stageMeta = Object.fromEntries((DATA.stage_summary || []).map(s => [s.id, s]));
++    let html = '';
++    let lastStage = null;
++    DATA.timeline.forEach(m => {
++      if (m.stage !== lastStage) {
++        lastStage = m.stage;
++        const meta = stageMeta[m.stage] || {};
++        html += '<div class="stage-banner ' + esc(m.stage || '') + '" id="stage-banner-' + esc(m.stage || '') + '" data-stage="' + esc(m.stage || '') + '">' +
++          '<h3>' + esc(STAGE_LABEL[m.stage] || m.stage || '阶段') + '</h3>' +
++          '<div class="sub">' +
++          '<span>seq #' + (meta.seq_from ?? m.seq) + '–' + (meta.seq_to ?? m.seq) + '</span>' +
++          '<span>' + esc(meta.time_from || '') + ' → ' + esc(meta.time_to || '') + '</span>' +
++          '<span>' + (meta.messages || 0) + ' 条消息</span>' +
++          '<span>Bash s/t/o: ' + (meta.bash?.sillyspec||0) + '/' + (meta.bash?.test||0) + '/' + (meta.bash?.other||0) + '</span>' +
++          '</div></div>';
++      }
++      const err = hasError(m);
++      html += '<article class="msg ' + esc(m.role) + '" id="msg-' + m.seq + '" data-seq="' + m.seq + '" data-stage="' + esc(m.stage || '') + '">' +
++        '<div class="msg-head">' +
++        '<span class="badge ' + esc(m.role) + '">' + esc(m.role) + '</span>' +
++        '<span class="tag">' + esc(STAGE_LABEL[m.stage] || m.stage || '') + '</span>' +
++        '<span class="time">#' + m.seq + ' · ' + esc(m.time_zh || m.time || '') + '</span>' +
++        (m.finish ? '<span class="tag">' + esc(m.finish) + '</span>' : '') +
++        (m.model ? '<span class="tag">' + esc(m.model) + '</span>' : '') +
++        (m.synthetic ? '<span class="tag syn">synthetic</span>' : '') +
++        (err ? '<span class="tag err">tool error</span>' : '') +
++        '<span class="id">' + esc(m.id) + '</span>' +
++        '</div><div class="msg-body">' + m.parts.map(p => partHtml(p)).join('') + '</div></article>';
++    });
++    feed.innerHTML = html;
++    feed.dataset.ready = '1';
++    feed.addEventListener('click', (e) => {
++      const h = e.target.closest('[data-toggle]');
++      if (!h) return;
++      h.parentElement.classList.toggle('open');
++    });
++  }
++  feed.querySelectorAll('.msg').forEach(el => {
++    const seq = +el.dataset.seq;
++    el.classList.toggle('hidden-by-filter', !set.has(seq));
++  });
++  // 阶段横幅：该阶段下若无可见消息则隐藏
++  feed.querySelectorAll('.stage-banner').forEach(banner => {
++    const st = banner.getAttribute('data-stage');
++    const any = matched.some(m => m.stage === st);
++    banner.classList.toggle('hidden-by-filter', !any);
++  });
++  document.getElementById('matchCount').textContent = matched.length;
++  document.getElementById('totalCount').textContent = DATA.timeline.length;
++}
++
++function apply() {
++  const matched = DATA.timeline.filter(matches);
++  renderNav(matched);
++  renderFeed(matched);
++  renderStageTabs();
++}
++
++function bind() {
++  document.getElementById('q').addEventListener('input', e => { state.q = e.target.value; apply(); });
++  document.getElementById('role').addEventListener('change', e => { state.role = e.target.value; apply(); });
++  document.getElementById('tool').addEventListener('change', e => { state.tool = e.target.value; apply(); });
++  document.getElementById('bashKind').addEventListener('change', e => { state.bashKind = e.target.value; apply(); });
++  document.getElementById('stage').addEventListener('change', e => {
++    state.stage = e.target.value;
++    apply();
++    if (state.stage !== 'all') {
++      const banner = document.getElementById('stage-banner-' + state.stage);
++      if (banner) banner.scrollIntoView({ behavior: 'smooth', block: 'start' });
++    }
++  });
++  document.querySelectorAll('.chip').forEach(chip => {
++    chip.addEventListener('click', () => {
++      const f = chip.dataset.filter;
++      if (state.filters.has(f)) { state.filters.delete(f); chip.classList.remove('active'); }
++      else { state.filters.add(f); chip.classList.add('active'); }
++      apply();
++    });
++  });
++  document.getElementById('expandAll').addEventListener('click', () => {
++    document.querySelectorAll('.part.tool, .part.reasoning').forEach(p => p.classList.add('open'));
++  });
++  document.getElementById('collapseAll').addEventListener('click', () => {
++    document.querySelectorAll('.part.tool, .part.reasoning').forEach(p => p.classList.remove('open'));
++  });
++  document.getElementById('toTop').addEventListener('click', () => {
++    document.getElementById('main').scrollTo({ top: 0, behavior: 'smooth' });
++  });
++  document.addEventListener('keydown', (e) => {
++    if (e.key === '/' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
++      e.preventDefault();
++      document.getElementById('q').focus();
++    }
++  });
++}
++
++renderHeader();
++renderOverview();
++fillToolSelect();
++bind();
++apply();
++</script>
++</body>
++</html>`;
++
++function escapeHtml(s) {
++  return String(s).replace(/[&<>"']/g, (c) =>
++    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
++  );
++}
++
++const outPath = join(DIR, 'analysis.html');
++writeFileSync(outPath, html, 'utf8');
++console.log(
++  JSON.stringify(
++    {
++      out: outPath,
++      mb: +(Buffer.byteLength(html) / 1024 / 1024).toFixed(2),
++      messages: payload.timeline.length,
++    },
++    null,
++    2,
++  ),
++);
+
+diff --git a/round5/export-r9sf-session.mjs b/round5/export-r9sf-session.mjs
+new file mode 100644
+--- /dev/null
++++ b/round5/export-r9sf-session.mjs
+@@ -0,0 +1,330 @@
++/**
++ * 导出 zcode 子会话全部内容（不做 UI 隐藏过滤、不做 200 段窗口截断）。
++ * 会话：R9-SF sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570
++ */
++import { createRequire } from 'node:module';
++import { writeFileSync, mkdirSync } from 'node:fs';
++import { dirname, join } from 'node:path';
++
++const require = createRequire(import.meta.url);
++const { DatabaseSync } = require('node:sqlite');
++
++const SESS_ID = 'sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570';
++const OUT_DIR = join(
++  process.cwd(),
++  'round5',
++  'exports',
++  'R9-SF_sess_subagent_agent_7d5faf40-f0bc-4066-9201-aa7eb3c61570',
++);
++
++function parse(raw) {
++  if (raw == null) return null;
++  try {
++    return JSON.parse(raw);
++  } catch {
++    return { _raw: raw, _parseError: true };
++  }
++}
++
++function iso(ms) {
++  if (ms == null) return null;
++  return new Date(ms).toISOString();
++}
++
++function zh(ms) {
++  if (ms == null) return null;
++  return new Date(ms).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
++}
++
++mkdirSync(OUT_DIR, { recursive: true });
++const db = new DatabaseSync(`${process.env.USERPROFILE}/.zcode/cli/db/db.sqlite`, {
++  readOnly: true,
++});
++
++const session = db.prepare('SELECT * FROM session WHERE id = ?').get(SESS_ID);
++if (!session) {
++  console.error('session not found:', SESS_ID);
++  process.exit(1);
++}
++
++const messages = db
++  .prepare(
++    `SELECT id, session_id, sequence, time_created, time_updated, data
++     FROM message WHERE session_id = ? ORDER BY sequence ASC`,
++  )
++  .all(SESS_ID);
++
++const parts = db
++  .prepare(
++    `SELECT id, message_id, session_id, sequence, time_created, time_updated, data
++     FROM part WHERE session_id = ? ORDER BY time_created ASC, sequence ASC`,
++  )
++  .all(SESS_ID);
++
++const partsByMsg = new Map();
++for (const p of parts) {
++  if (!partsByMsg.has(p.message_id)) partsByMsg.set(p.message_id, []);
++  partsByMsg.get(p.message_id).push(p);
++}
++
++const modelUsage = db
++  .prepare(`SELECT * FROM model_usage WHERE session_id = ? ORDER BY started_at ASC`)
++  .all(SESS_ID);
++
++const toolUsage = db
++  .prepare(`SELECT * FROM tool_usage WHERE session_id = ? ORDER BY started_at ASC`)
++  .all(SESS_ID);
++
++const turnUsage = db.prepare(`SELECT * FROM turn_usage WHERE session_id = ?`).all(SESS_ID);
++const todos = db.prepare(`SELECT * FROM todo WHERE session_id = ? ORDER BY position`).all(SESS_ID);
++const sessionEntries = db
++  .prepare(`SELECT * FROM session_entry WHERE session_id = ? ORDER BY time_created`)
++  .all(SESS_ID);
++const sessionInputs = db
++  .prepare(`SELECT * FROM session_input WHERE session_id = ? ORDER BY time_created`)
++  .all(SESS_ID);
++
++const timeline = messages.map((m) => {
++  const data = parse(m.data);
++  const mparts = (partsByMsg.get(m.id) || []).map((p) => ({
++    id: p.id,
++    sequence: p.sequence,
++    time_created: iso(p.time_created),
++    time_updated: iso(p.time_updated),
++    data: parse(p.data),
++  }));
++  return {
++    sequence: m.sequence,
++    id: m.id,
++    time_created: iso(m.time_created),
++    time_created_zh: zh(m.time_created),
++    time_updated: iso(m.time_updated),
++    message: data,
++    parts: mparts,
++  };
++});
++
++const full = {
++  exported_at: new Date().toISOString(),
++  exported_at_zh: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
++  source_db: `${process.env.USERPROFILE}\\.zcode\\cli\\db\\db.sqlite`,
++  session_id: SESS_ID,
++  parent_session_id: session.parent_id,
++  title: session.title,
++  session_meta: {
++    ...session,
++    time_created: iso(session.time_created),
++    time_updated: iso(session.time_updated),
++    time_created_zh: zh(session.time_created),
++    time_updated_zh: zh(session.time_updated),
++    duration_ms: session.time_updated - session.time_created,
++    permission: parse(session.permission),
++    revert: parse(session.revert),
++  },
++  counts: {
++    messages: messages.length,
++    parts: parts.length,
++    model_usage: modelUsage.length,
++    tool_usage: toolUsage.length,
++    turn_usage: turnUsage.length,
++    todos: todos.length,
++    session_entry: sessionEntries.length,
++    session_input: sessionInputs.length,
++  },
++  todos,
++  turn_usage: turnUsage,
++  session_input: sessionInputs.map((r) => ({
++    ...r,
++    payload: parse(r.payload),
++    time_created: iso(r.time_created),
++    time_updated: iso(r.time_updated),
++  })),
++  session_entry: sessionEntries.map((r) => ({
++    ...r,
++    data: parse(r.data),
++    time_created: iso(r.time_created),
++    time_updated: iso(r.time_updated),
++  })),
++  model_usage: modelUsage.map((r) => ({
++    ...r,
++    started_at: iso(r.started_at),
++    first_token_at: iso(r.first_token_at),
++    completed_at: iso(r.completed_at),
++    raw_usage: parse(r.raw_usage_json),
++    provider_metadata: parse(r.provider_metadata_json),
++  })),
++  tool_usage: toolUsage.map((r) => ({
++    ...r,
++    started_at: iso(r.started_at),
++    first_output_at: iso(r.first_output_at),
++    completed_at: iso(r.completed_at),
++  })),
++  timeline,
++};
++
++// 1) 完整 JSON
++const jsonPath = join(OUT_DIR, 'full.json');
++writeFileSync(jsonPath, JSON.stringify(full, null, 2), 'utf8');
++
++// 2) JSONL：每行一条 message（含 parts）
++const jsonlPath = join(OUT_DIR, 'messages.jsonl');
++writeFileSync(
++  jsonlPath,
++  timeline.map((t) => JSON.stringify(t)).join('\n') + '\n',
++  'utf8',
++);
++
++// 3) 人类可读 Markdown 时间线（含 tool 输入/输出全文）
++const mdLines = [];
++mdLines.push(`# R9-SF 子会话完整导出`);
++mdLines.push('');
++mdLines.push(`- session_id: \`${SESS_ID}\``);
++mdLines.push(`- parent_id: \`${session.parent_id}\``);
++mdLines.push(`- title: ${session.title}`);
++mdLines.push(`- directory: ${session.directory}`);
++mdLines.push(`- 起止: ${zh(session.time_created)} → ${zh(session.time_updated)}`);
++mdLines.push(
++  `- 时长: ${((session.time_updated - session.time_created) / 60000).toFixed(1)} min`,
++);
++mdLines.push(`- messages: ${messages.length} / parts: ${parts.length}`);
++mdLines.push(`- exported_at: ${full.exported_at_zh}`);
++mdLines.push('');
++mdLines.push(`## Todos`);
++mdLines.push('');
++for (const t of todos) {
++  mdLines.push(`- [${t.status}] ${t.content}`);
++}
++mdLines.push('');
++mdLines.push(`## Session Input（协调者注入）`);
++mdLines.push('');
++for (const si of full.session_input) {
++  mdLines.push('```');
++  mdLines.push(typeof si.payload?.text === 'string' ? si.payload.text : JSON.stringify(si.payload, null, 2));
++  mdLines.push('```');
++  mdLines.push('');
++}
++mdLines.push(`## 对话时间线`);
++mdLines.push('');
++
++for (const item of timeline) {
++  const role = item.message?.role || 'unknown';
++  const finish = item.message?.finish || '';
++  const model = item.message?.modelId || item.message?.model?.modelID || '';
++  mdLines.push(`### [#${item.sequence}] ${role}${finish ? ` · ${finish}` : ''}${model ? ` · ${model}` : ''}`);
++  mdLines.push('');
++  mdLines.push(`- id: \`${item.id}\``);
++  mdLines.push(`- time: ${item.time_created_zh} (\`${item.time_created}\`)`);
++  if (item.message?.semantics) {
++    mdLines.push(`- semantics: \`${JSON.stringify(item.message.semantics)}\``);
++  }
++  if (item.message?.synthetic) {
++    mdLines.push(`- synthetic: true / source=${item.message.source || ''}`);
++  }
++  mdLines.push('');
++
++  for (const p of item.parts) {
++    const d = p.data || {};
++    const type = d.type || 'unknown';
++    if (type === 'text') {
++      mdLines.push('#### text');
++      mdLines.push('');
++      mdLines.push('```');
++      mdLines.push(d.text ?? '');
++      mdLines.push('```');
++      mdLines.push('');
++    } else if (type === 'reasoning') {
++      mdLines.push('#### reasoning');
++      mdLines.push('');
++      mdLines.push('<details><summary>展开推理</summary>');
++      mdLines.push('');
++      mdLines.push('```');
++      mdLines.push(d.text ?? d.content ?? '');
++      mdLines.push('```');
++      mdLines.push('');
++      mdLines.push('</details>');
++      mdLines.push('');
++    } else if (type === 'tool') {
++      const name = d.tool || d.name || '?';
++      const st = d.state || {};
++      mdLines.push(`#### tool · ${name} · ${st.status || ''}`);
++      mdLines.push('');
++      if (st.title) mdLines.push(`- title: ${st.title}`);
++      mdLines.push('<details><summary>input</summary>');
++      mdLines.push('');
++      mdLines.push('```json');
++      mdLines.push(JSON.stringify(st.input ?? d.input ?? {}, null, 2));
++      mdLines.push('```');
++      mdLines.push('');
++      mdLines.push('</details>');
++      mdLines.push('');
++      if (st.output !== undefined || st.error !== undefined) {
++        mdLines.push('<details><summary>output / error</summary>');
++        mdLines.push('');
++        mdLines.push('```');
++        const out =
++          st.error !== undefined
++            ? typeof st.error === 'string'
++              ? st.error
++              : JSON.stringify(st.error, null, 2)
++            : typeof st.output === 'string'
++              ? st.output
++              : JSON.stringify(st.output, null, 2);
++        mdLines.push(out ?? '');
++        mdLines.push('```');
++        mdLines.push('');
++        mdLines.push('</details>');
++        mdLines.push('');
++      }
++    } else if (type === 'step-start' || type === 'step-finish' || type === 'timeline') {
++      mdLines.push(`#### ${type}`);
++      mdLines.push('');
++      mdLines.push('```json');
++      mdLines.push(JSON.stringify(d, null, 2));
++      mdLines.push('```');
++      mdLines.push('');
++    } else {
++      mdLines.push(`#### ${type}`);
++      mdLines.push('');
++      mdLines.push('```json');
++      mdLines.push(JSON.stringify(d, null, 2));
++      mdLines.push('```');
++      mdLines.push('');
++    }
++  }
++  mdLines.push('---');
++  mdLines.push('');
++}
++
++const mdPath = join(OUT_DIR, 'transcript.md');
++writeFileSync(mdPath, mdLines.join('\n'), 'utf8');
++
++// 4) 索引 README
++const readme = `# R9-SF 子会话导出包
++
++- session_id: \`${SESS_ID}\`
++- parent: \`${session.parent_id}\`
++- title: ${session.title}
++- 导出时间: ${full.exported_at_zh}
++
++## 文件
++
++| 文件 | 说明 |
++|---|---|
++| \`full.json\` | 全量结构化导出（session + timeline + usage + todos + session_input/entry） |
++| \`messages.jsonl\` | 每行一条 message（含 parts），便于流式处理 |
++| \`transcript.md\` | 人类可读完整时间线（含 tool input/output、reasoning） |
++| \`README.md\` | 本说明 |
++
++## 计数
++
++${JSON.stringify(full.counts, null, 2)}
++`;
++writeFileSync(join(OUT_DIR, 'README.md'), readme, 'utf8');
++
++const sizes = {
++  full_json_mb: (Buffer.byteLength(JSON.stringify(full)) / 1024 / 1024).toFixed(2),
++  transcript_md_mb: (Buffer.byteLength(mdLines.join('\n')) / 1024 / 1024).toFixed(2),
++};
++
++console.log(JSON.stringify({ out_dir: OUT_DIR, counts: full.counts, sizes }, null, 2));
++db.close();
+
+diff --git a/round5/fork-verify-window.mjs b/round5/fork-verify-window.mjs
+new file mode 100644
+--- /dev/null
++++ b/round5/fork-verify-window.mjs
+@@ -0,0 +1,31 @@
++#!/usr/bin/env node
++// fork 变更 verify 窗口分析
++import { DatabaseSync } from 'node:sqlite';
++const db = new DatabaseSync('C:/Users/qinyi/.zcode/cli/db/db.sqlite', { readOnly: true });
++const W0 = Date.parse('2026-09-22T16:30:00Z');
++const rows = db.prepare("SELECT started_at t0, completed_at t1, input_tokens i FROM model_usage WHERE session_id LIKE '%1a74e642%' AND started_at > ? ORDER BY t0").all(W0);
++const tot = rows.reduce((s, r) => s + r.i, 0);
++console.log('verify 窗口主会话:', rows.length, '轮 |', (tot / 1e6).toFixed(1) + 'M | 轮均', (tot / rows.length / 1e3).toFixed(0) + 'K');
++let active = 0, idle = 0, prev = null; const gaps = [];
++for (const r of rows) {
++  const s = Number(r.t0), e = Number(r.t1);
++  active += e - s;
++  if (prev !== null && s - prev > 300000) { gaps.push([prev, s]); idle += s - prev; }
++  else if (prev !== null && s > prev) idle += s - prev;
++  prev = Math.max(prev || 0, e);
++}
++console.log('活跃', (active / 60000).toFixed(0) + 'min | 间隙', (idle / 60000).toFixed(0) + 'min');
++console.log('大空档:', gaps.slice(0, 10).map(g => new Date(g[0]).toISOString().slice(11, 16) + '→' + new Date(g[1]).toISOString().slice(11, 16) + '(' + Math.round((g[1] - g[0]) / 60000) + 'm)').join('  '));
++const cmds = {};
++for (const p of db.prepare("SELECT time_created, data FROM part WHERE session_id LIKE '%1a74e642%' AND time_created > ?").all(W0)) {
++  let d; try { d = JSON.parse(p.data); } catch { continue; }
++  if (!d || d.type !== 'tool' || !d.tool) continue;
++  let key = '[' + d.tool + ']';
++  if (d.tool === 'Bash' && d.state && d.state.input && d.state.input.command) {
++    const c = d.state.input.command.replace(/^cd\s+"[^"]*"\s*&&\s*/, '').replace(/^export\s+\S+\s*&&\s*/, '');
++    const m = c.match(/^(sillyspec|pnpm|npm|node|git|pytest|python)\s+\S+/);
++    key = m ? m[0] : c.slice(0, 36);
++  }
++  cmds[key] = (cmds[key] || 0) + 1;
++}
++console.log('工具分布:', Object.entries(cmds).sort((a, b) => b[1] - a[1]).slice(0, 16).map(([k, v]) => k + '×' + v).join(' | '));
+
+diff --git a/src/run/junction-rm.js b/src/run/junction-rm.js
+new file mode 100644
+--- /dev/null
++++ b/src/run/junction-rm.js
+@@ -0,0 +1,70 @@
++/**
++ * junction-rm.js — junction/reparse 点安全删除（坑 git-worktree-remove-pierce，2026-09-24 实证）
++ *
++ * 根因（R16 批次一收口期三次主仓 node_modules 清空，实证复现）：**`git worktree remove --force`
++ * 的递归删在 Windows 跟随 junction**，快照内 node_modules/venv/gate_snapshot.copy 链接的目标
++ * 是主仓真身——cleanupSnapshot 第一步 git remove 即清空主仓依赖树（js-yaml
++ * ERR_MODULE_NOT_FOUND 连环）。worktree.js cleanup 链的 unlinkNodeModulesLinks 先解链正是
++ * 防同一穿透（历史注释另点名 MSYS `rm -rf` 人工操作同款；Node v24 rmSync 在受控测试中
++ * 未复现穿透，但先解链对两种删除器都是稳健防御）。Windows 上唯一不跟随目标的删除是
++ * `cmd /c rmdir`（reparse 点语义）。
++ *
++ * 契约：safeRemoveDirWithLinks(p) = 递归收集 p 下全部 lstat 符号链接/junction → 逐个
++ * rmdir/unlink 解链 → 再 rmSync(p)。collectLinkPathsUnder/unlinkLinkPath 亦供「先解链再
++ * 交给 git 删」的调用序使用（cleanupSnapshot / reclaimStaleGateSnapshots）。任一解链失败
++ * → 抛错阻断删除（保护链接目标优先于清理彻底性；调用方留账本待下轮回收——双清契约兼容）。
++ */
++import { existsSync, readdirSync, lstatSync, rmSync, unlinkSync } from 'node:fs'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++
++/** 删除单个链接路径（junction/symlink 本体，不跟随目标） */
++export function unlinkLinkPath(p) {
++  if (process.platform === 'win32') {
++    execFileSync('cmd.exe', ['/c', 'rmdir', p], { windowsHide: true })
++  } else {
++    unlinkSync(p)
++  }
++}
++
++/**
++ * 递归收集 root 下全部符号链接/junction 绝对路径（lstat 判定；readdir withFileTypes 对
++ * junction 报 isDirectory 不可信）。lstat 失败（EPERM/杀毒锁）→ 抛错保护。
++ */
++export function collectLinkPathsUnder(root) {
++  const links = []
++  const walk = (dir) => {
++    let entries
++    try { entries = readdirSync(dir) } catch { return }
++    for (const name of entries) {
++      const p = join(dir, name)
++      let st
++      try { st = lstatSync(p) } catch (e) {
++        throw new Error(`junction 检测失败（疑似 EPERM：杀毒/索引锁——阻断删除以保护链接目标）：${p}: ${e.message}`)
++      }
++      if (st.isSymbolicLink()) {
++        links.push(p)
++        continue
++      }
++      if (st.isDirectory()) walk(p)
++    }
++  }
++  walk(root)
++  return links
++}
++
++/**
++ * 安全删除目录：先解链其下全部 junction/symlink 再 rmSync。
++ * @throws 解链失败时抛错（不回落裸 rmSync——那会穿透链接删目标，见文件首注释）
++ */
++export function safeRemoveDirWithLinks(p, opts = {}) {
++  if (!existsSync(p)) return
++  for (const link of collectLinkPathsUnder(p)) {
++    try {
++      unlinkLinkPath(link)
++    } catch (e) {
++      throw new Error(`junction 解链失败（保护链接目标，阻断删除——手动 rmdir "${link}" 后重试）: ${e.message}`)
++    }
++  }
++  rmSync(p, { recursive: true, force: true, ...opts })
++}
+
+diff --git a/src/stage-templates.js b/src/stage-templates.js
+new file mode 100644
+--- /dev/null
++++ b/src/stage-templates.js
+@@ -0,0 +1,157 @@
++/**
++ * stage-templates.js — 阶段产物模板出上下文（R16 减负批次，2026-09-24）
++ *
++ * 背景：brainstorm「生成规范文件」步内嵌 proposal/requirements/tasks/decisions 四份完整落盘
++ * 模板（~100 行）——说明书每轮全量回放（R15 实测 burst 单次载荷 1581 行/45K token，59 轮
++ * brainstorm 等于把说明书交了 59 遍钱），而模板只在真写产物的轮才需要。M1 指纹缓存只省
++ * 「复入重发」不省「每轮回放」，模板出上下文是唯一能把回放面砍掉的手段。
++ *
++ * 机制：模板单一源在本文件 → materializeStageTemplates 在 outputStep 渲染期幂等落盘
++ * `<specBase>/.runtime/templates/<name>.md` → 步骤 prompt 只留要点 + 文件路径 +「写该产物前
++ * Read 一次」。产物格式漂移由 --done 门禁兜底（brainstorm.design.* / four-piece 规则逐条
++ * 点名——模板没读会撞门禁，重读即修复，闭环在既有机制上）。
++ *
++ * 只收纯格式骨架；行为纪律（NEW: 前缀铁律/数据流标注/FR 承接纪律等）留在 prompt——规则
++ * 是判断依据须常驻，模板是抄写目标按需读。
++ */
++import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
++import { join } from 'path'
++
++/** brainstorm 四件套产物格式模板（自 stages/brainstorm.js「生成规范文件」步逐字迁移——
++ *  与 prompt 指针版本同源；decisions 九字段与可选字段说明一并迁入）。 */
++export const BRAINSTORM_ARTIFACT_TEMPLATES_MD = `# brainstorm 规范文件产物模板（proposal / requirements / tasks / decisions）
++
++> 写对应产物前读本文件一次，严格按模板结构与 frontmatter 产出；缺章节/缺 frontmatter 会被
++> 「生成规范文件」步 --done 门禁逐条点名（brainstorm.design.* / four-piece 规则）。
++
++## proposal.md 格式要求
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++# 提案书（Proposal）
++
++## 动机
++为什么做、解决什么核心问题
++
++## 关键问题
++为什么现有方案不够（展开 2-3 个具体痛点）
++
++## 变更范围
++本次做什么
++
++## 不在范围内（显式清单）
++- 不做 X
++- 不做 Y
++
++## 成功标准（可验证）
++- 旧配置默认行为不变
++- 新功能在配置后可用
++- ...
++\`\`\`
++
++## requirements.md 格式要求
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++# 需求规格（Requirements）
++
++## 角色
++| 角色 | 说明 |
++|---|---|
++| 开发者 | ... |
++
++## 功能需求
++
++### FR-01: 需求名称
++覆盖决策：D-001@v1, D-002@v1（如适用）
++承接: FR-<域>-NNN（如适用——改写/取代注入清单中的已有行为时必填，全新行为省略本行）
++Given 前提条件
++When 触发动作
++Then 期望结果
++
++（每个边界条件独立 GWT 块；场景名行 \`#### 场景：X\` 会被归档索引用作摘要，建议保留）
++（约束强度标注——RFC 2119 约定：FR 正文与非功能需求里的约束必须用固定词标硬度：MUST/必须=硬性要求（违反即缺陷）；MUST NOT/禁止=红线（绝对不允许，如「平台 MUST NOT 基于 provisional 事件内容做流程判定」）；SHOULD/应当=强烈建议（偏离须注明理由）；MAY/可以=可选。禁止裸写无强度词的约束句（「不做 X」读不出是描述还是禁令）。fr/ 归档索引逐字透传，强度词随知识注入带给后续变更——这是规范语言的全链路载体）
++
++## 非功能需求
++- 兼容性：...
++- 可回退：...
++- 可测试：...
++
++## 决策覆盖矩阵（如存在 decisions.md）
++| 决策 ID | 覆盖的 FR | 说明 |
++|---|---|---|
++| D-001@v1 | FR-01 | ... |
++\`\`\`
++
++## tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++# 任务清单（Tasks）
++
++- [ ] task-01: <任务名>
++- [ ] task-02: <任务名>
++\`\`\`
++> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
++
++## decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++
++# 决策记录（Decisions）
++
++## D-001@v1: 决策短标题
++- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
++- priority: P0 | P1 | P2
++- status: accepted | unresolved | rejected | superseded
++- supersedes:
++- source: user | code | docs
++- question: 被解决的问题
++- answer: 用户确认或代码查证结果
++- normalized_requirement: 可测试的约束
++- impacts: [FR-01, task-01, verify-01]
++- evidence: 用户回答轮次或代码/文档路径
++\`\`\`
++
++> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。「生成规范文件」步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
++`
++
++/** 模板清单（name → 内容）。新模板入册即自动被 materialize 落盘。 */
++const STAGE_TEMPLATE_FILES = {
++  'brainstorm-artifact-templates.md': BRAINSTORM_ARTIFACT_TEMPLATES_MD,
++}
++
++/**
++ * 幂等落盘全部阶段模板到 `<specBase>/.runtime/templates/`（内容有变才写，原子性靠短文件
++ * best-effort——模板只读消费，半写窗口下一次渲染会补齐）。
++ * @returns {string|null} 模板目录绝对路径（异常 → null，调用方 fail-soft）
++ */
++export function materializeStageTemplates(specBase) {
++  try {
++    if (!specBase) return null
++    // 只在已存在的 specBase 内落盘（坑：凭空新建 <cwd>/.sillyspec 会污染 spec-dir 向上
++    // 搜索语义——渲染测试曾在 test/ 目录下落出 test/.sillyspec，spec-dir-home-guard 向上
++    // 命中即断言失败）。specBase 不存在 = 本目录不是变更根，零动作。
++    if (!existsSync(specBase)) return null
++    const dir = join(specBase, '.runtime', 'templates')
++    mkdirSync(dir, { recursive: true })
++    for (const [name, content] of Object.entries(STAGE_TEMPLATE_FILES)) {
++      const p = join(dir, name)
++      let cur = null
++      try { cur = readFileSync(p, 'utf8') } catch { /* 首次 */ }
++      if (cur !== content) writeFileSync(p, content, 'utf8')
++    }
++    return dir
++  } catch {
++    return null
++  }
++}
+
+diff --git a/src/worktree-policy.js b/src/worktree-policy.js
+new file mode 100644
+--- /dev/null
++++ b/src/worktree-policy.js
+@@ -0,0 +1,42 @@
++/**
++ * worktree-policy.js — worktree 守卫选择记忆（R16 减负批次，2026-09-24）
++ *
++ * 背景：worktree/apply 三处守卫（分支冲突三选一 / guard 相交三态 / 主仓脏树 stash）此前
++ * 全是 fail-closed 抛错 + 文字菜单，选择只活在当次 flag 里不落任何配置——同一冲突下次
++ * 原样重拦重问（对撞 R15 实证：无人值守跑批时这类重拦是纯摩擦轮）。
++ *
++ * 本模块读 local.yaml `worktree.policy` 段（js-yaml，best-effort 绝不抛）：
++ *   adopt_branch:  true   → 分支已存在冲突时自动按「收编既有分支」处置（等效常备 --adopt-branch）
++ *   apply_overlap: force | skip | manual（缺省 manual = 既有 fail-closed）
++ *                          → guard 相交拦截的无人值守处置（force=放行留痕 / skip=软跳过）
++ *   stash_dirty:   true   → 主仓脏树时自动 stash（等效常备 --stash-dirty）
++ *
++ * 优先级铁律：显式 flag > policy > fail-closed 缺省。policy 只消「重复选择」，不开新权限面
++ * ——force/skip 经 policy 触发时同样落 overlapForced/overlapSkipped 留痕（审计可见）。
++ */
++import { readFileSync } from 'fs'
++import { join } from 'path'
++import jsYaml from 'js-yaml'
++
++/**
++ * 读 worktree.policy 段。
++ * @param {string} repoRoot - 主仓根（local.yaml 在 <repoRoot>/.sillyspec/local.yaml）
++ * @returns {{ adoptBranch: boolean, applyOverlap: 'manual'|'force'|'skip', stashDirty: boolean }}
++ *   文件缺/解析失败/段缺 → 全缺省（adoptBranch=false, applyOverlap='manual', stashDirty=false）。
++ */
++export function readWorktreePolicy(repoRoot) {
++  const fallback = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false }
++  try {
++    const text = readFileSync(join(repoRoot, '.sillyspec', 'local.yaml'), 'utf8')
++    const doc = jsYaml.load(text) || {}
++    const policy = doc && doc.worktree && doc.worktree.policy
++    if (!policy || typeof policy !== 'object') return fallback
++    return {
++      adoptBranch: policy.adopt_branch === true,
++      applyOverlap: policy.apply_overlap === 'force' || policy.apply_overlap === 'skip' ? policy.apply_overlap : 'manual',
++      stashDirty: policy.stash_dirty === true,
++    }
++  } catch {
++    return fallback
++  }
++}
+
+diff --git a/test/cross-repo-tap-summary.test.mjs b/test/cross-repo-tap-summary.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/cross-repo-tap-summary.test.mjs
+@@ -0,0 +1,50 @@
++// 跨仓 node:test TAP 摘要级判定（坑 verify-gate-worktree-crossrepo-three-defects 缺陷三）
++//
++// 实证（2026-09-21）：sillyspec 仓 npm test 自身 EXIT=0 全绿，但主仓 verify gate 把其
++// stdout 中通过用例的预期错误文案（❌/AssertionError 等 58 行 fixture 噪音）全计入
++// 「未豁免失败行」阻断——疑似外层命令链（管道/包装脚本）退出码丢失变非 0。
++//
++// 修复：runCrossRepoFullTest 对非 0 退出码做 TAP 摘要覆盖——输出含 `ℹ fail 0` +
++// `ℹ pass N≥1`（node:test 权威摘要行）时判包装层丢失，覆盖为通过。摘要 fail>0 /
++// 无摘要 → 旧行为不变。
++// 双层验证：① 源码契约（判定正则/门控条件存在）；② 行为级——真实 node:test 输出
++// 形态锚定（防 node 版本升级摘要行格式漂移导致覆盖静默失效）。
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++
++const src = readFileSync(new URL('../src/verify-postcheck.js', import.meta.url), 'utf8')
++
++const tmpRoots = []
++function makeRepo() {
++  const dir = mkdtempSync(join(tmpdir(), `tapsumm-${process.pid}-`))
++  tmpRoots.push(dir)
++  return dir
++}
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++test('① 源码契约：TAP 摘要覆盖判定存在且门控正确', () => {
++  assert.ok(/ℹ fail \(\\d\+\)/.test(src), 'TAP fail 摘要正则存在（^ℹ fail N$ 行锚定）')
++  assert.ok(/Number\(tapFail\[1\]\) === 0/.test(src), '仅 fail=0 覆盖（fail>0 维持失败）')
++  assert.ok(/Number\(tapPass\[1\]\) > 0/.test(src), '要求 pass≥1（防空摘要误判）')
++  assert.ok(/if \(exitCode !== 0\) \{[\s\S]*?tapFail/.test(src), '仅非 0 退出码时适用（exit 0 早退不变）')
++})
++
++test('② 行为锚定：真实 node:test stdout 含 ^ℹ fail 0$ 与 ^ℹ pass N≥1$ 摘要行', () => {
++  const dir = makeRepo()
++  writeFileSync(join(dir, 'ok.test.mjs'),
++    "import { test } from 'node:test'\ntest('passing', () => {})\n", 'utf8')
++  // node:test 摘要行走 stdout（spec reporter）——runCrossRepoFullTest 的 catch 路径合并
++  // e.stdout+e.stderr。⚠️ 剥 NODE_TEST_CONTEXT env：本测试自身经 node --test 跑，该 env
++  // 被内层 node --test 继承会静默零跑 exit 0 假绿（ql-20260919-007 实测踩），必须摘除。
++  const out = execFileSync(process.execPath, ['--test', 'ok.test.mjs'], {
++    cwd: dir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'],
++    env: { ...process.env, NODE_TEST_CONTEXT: undefined },
++  })
++  assert.match(out, /^ℹ fail 0$/m, `真实摘要含 ℹ fail 0（尾：${out.split('\n').slice(-6).join(' | ')}）`)
++  const mPass = out.match(/^ℹ pass (\d+)$/m)
++  assert.ok(mPass && Number(mPass[1]) >= 1, '真实摘要含 ℹ pass N≥1')
++})
+
+diff --git a/test/gate-snapshot-junction-pierce.test.mjs b/test/gate-snapshot-junction-pierce.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-junction-pierce.test.mjs
+@@ -0,0 +1,134 @@
++/**
++ * junction 穿透回归测试（坑 git-worktree-remove-pierce，2026-09-24 R16 批次一收口实证）
++ *
++ * 根因：`git worktree remove --force` 的递归删在 Windows **跟随 junction**——删含链接的
++ * 快照目录会把链接目标（主仓 node_modules/venv/gate_snapshot.copy 真身）内容一并删光
++ * （当晚主仓依赖树三次被清空、js-yaml ERR_MODULE_NOT_FOUND 连环的根因；git remove 本身
++ * 「成功」返回，穿透无声）。修复 = cleanupSnapshot / reclaimStaleGateSnapshots 先解链
++ * 全部 reparse 点再交给 git/rmSync 删目录本体（junction-rm.js）。
++ *
++ * 本测试用真实 junction 钉死四件事：
++ * 1. 环境自证（warn 级）：裸 rmSync 若穿透则提示（受控测试未复现，守护性保留）；
++ * 2. safeRemoveDirWithLinks 删含 junction 的目录：目标内容完好；
++ * 3. cleanupSnapshot removeDir 分支（runGit 注入抛错）：目标内容完好；
++ * 4. 端到端真 git 路径（真实仓 + worktree + junction + 真 git remove）：目标内容完好
++ *    ——当晚事故形态逐字复现的核心回归。
++ * 非 Windows 平台 junction 不可建，全组跳过。
++ *
++ * 设计依据：src/run/junction-rm.js、src/run/gate-snapshot.js cleanupSnapshot。
++ */
++import { safeRemoveDirWithLinks } from '../src/run/junction-rm.js'
++import { cleanupSnapshot } from '../src/run/gate-snapshot.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++
++let failures = 0
++const roots = []
++const assert = (cond, msg, warnOnly = false) => {
++  if (cond) console.log('  ✅ ' + msg)
++  else if (warnOnly) console.log('  ⚠️ ' + msg + '（环境不再复现穿透——守护性断言降级 warn）')
++  else { console.error('  ❌ ' + msg); failures++ }
++}
++const newDir = (prefix) => { const d = mkdtempSync(join(tmpdir(), prefix)); roots.push(d); return d }
++const mkJunction = (linkPath, targetPath) => {
++  mkdirSync(linkPath, { recursive: true })
++  // 清掉占位目录再建 junction（mklink 要求链接点不存在）
++  rmSync(linkPath, { recursive: true, force: true })
++  execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, targetPath], { windowsHide: true })
++}
++const makeVictim = (root) => {
++  const nm = join(root, 'node_modules', 'marker-pkg')
++  mkdirSync(nm, { recursive: true })
++  writeFileSync(join(nm, 'package.json'), '{"name":"marker-pkg"}', 'utf8')
++  return nm
++}
++
++console.log('\n[junction-pierce] 快照清理穿透回归（Node ' + process.version + ' / ' + process.platform + '）')
++
++if (process.platform !== 'win32') {
++  console.log('  ⏭️ 非 Windows 平台无 junction——全组跳过')
++} else {
++  // ── 1. 环境自证：裸 rmSync 穿透（Node 若修复则降级 warn，不影响 2/3 的守护价值）──
++  {
++    const root = newDir('jp-bare-')
++    const victim = makeVictim(root)
++    const holder = join(root, 'holder')
++    mkJunction(join(holder, 'node_modules'), victim)
++    // 占位文件保证 holder 非空（与真实快照形态一致：junction + 普通文件混布）
++    writeFileSync(join(holder, 'marker.txt'), 'x', 'utf8')
++    rmSync(holder, { recursive: true, force: true })
++    const pierced = !existsSync(join(victim, 'package.json'))
++    assert(pierced, '环境自证：裸 rmSync(recursive) 穿透 junction（目标内容被删）', true)
++  }
++
++  // ── 2. safeRemoveDirWithLinks：目标完好 ──
++  {
++    const root = newDir('jp-safe-')
++    const victim = makeVictim(root)
++    const holder = join(root, 'holder')
++    mkdirSync(holder, { recursive: true })
++    writeFileSync(join(holder, 'marker.txt'), 'x', 'utf8')
++    mkJunction(join(holder, 'node_modules'), victim)
++    safeRemoveDirWithLinks(holder)
++    assert(!existsSync(holder), 'safeRemoveDirWithLinks：含 junction 目录已删')
++    assert(existsSync(join(victim, 'package.json')), 'safeRemoveDirWithLinks：链接目标内容完好（marker-pkg 还在）')
++    // 嵌套形态：junction 在子目录层（venv/copy 面真实形态）
++    const victim2 = makeVictim(join(root, 'deep'))
++    const holder2 = join(root, 'holder2')
++    mkdirSync(join(holder2, 'sub', 'a'), { recursive: true })
++    writeFileSync(join(holder2, 'sub', 'a', 'f.txt'), 'x', 'utf8')
++    mkJunction(join(holder2, 'sub', 'a', 'node_modules'), victim2)
++    safeRemoveDirWithLinks(holder2)
++    assert(existsSync(join(victim2, 'package.json')), 'safeRemoveDirWithLinks：嵌套深层 junction 目标完好')
++  }
++
++  // ── 3. cleanupSnapshot 默认路径（快照清理真实入口；runGit 注入抛错走 removeDir 分支）──
++  {
++    const root = newDir('jp-cleanup-')
++    const victim = makeVictim(root)
++    const snap = join(root, 'snap')
++    mkdirSync(snap, { recursive: true })
++    writeFileSync(join(snap, 'marker.txt'), 'x', 'utf8')
++    mkJunction(join(snap, 'node_modules'), victim)
++    const r = cleanupSnapshot({
++      snapshotRoot: snap,
++      cwd: root,
++      runGit: () => { throw new Error('git remove 注入失败——逼 removeDir 分支') },
++      worktreeRegistered: () => false,
++    })
++    assert(r.dirRemoved === true && !existsSync(snap), 'cleanupSnapshot（removeDir 分支）：快照目录已删')
++    assert(existsSync(join(victim, 'package.json')),
++      'cleanupSnapshot（removeDir 分支）：junction 目标内容完好')
++  }
++
++  // ── 4. 端到端真 git 路径（当晚事故形态逐字复现）：真实仓 + worktree + junction +
++  //    cleanupSnapshot 默认 runGit=真 git worktree remove——修复前该路径实测穿透
++  //    （git remove「成功」且删光 victim 内容）。修复=先解链再交 git。──
++  if (process.platform === 'win32') {
++    const root = newDir('jp-e2e-')
++    const mainDir = join(root, 'main')
++    mkdirSync(mainDir, { recursive: true })
++    const G = (args) => execFileSync('git', args, { cwd: mainDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
++    G(['init', '-q'])
++    G(['config', 'user.email', 't@t'])
++    G(['config', 'user.name', 't'])
++    writeFileSync(join(mainDir, 'f.txt'), 'x', 'utf8')
++    G(['add', 'f.txt']); G(['commit', '-qm', 'init'])
++    const victim = makeVictim(mainDir) // main/node_modules/marker-pkg（主仓真身）
++    const snap = join(root, 'snap')
++    execFileSync('git', ['worktree', 'add', '--detach', '--quiet', snap, 'HEAD'], { cwd: mainDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
++    writeFileSync(join(snap, 'marker.txt'), 'x', 'utf8')
++    mkJunction(join(snap, 'node_modules'), victim)
++    const r = cleanupSnapshot({ snapshotRoot: snap, cwd: mainDir, worktreeRegistered: () => false })
++    assert(r.dirRemoved === true && !existsSync(snap), '端到端（真 git worktree remove 路径）：快照目录已删')
++    assert(existsSync(join(victim, 'package.json')) && readFileSync(join(victim, 'package.json'), 'utf8').includes('marker-pkg'),
++      '端到端（真 git worktree remove 路径）：主仓 node_modules 真身完好——当晚清空事故的核心回归断言')
++  }
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${3 - failures}  ❌ 失败: ${failures}`)
++for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* 清理 best-effort */ } }
++if (failures > 0) throw new Error(`${failures} test(s) failed`)
+
+diff --git a/test/stage-wall.test.mjs b/test/stage-wall.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/stage-wall.test.mjs
+@@ -0,0 +1,94 @@
++/**
++ * stage.wall 阶段墙档位测试（R16 减负批次 A 相位，2026-09-24）
++ *
++ * 验证：readStageWall 读 local.yaml stage.wall 段（hard/advisory），env SILLYSPEC_STAGE_WALL
++ * 强制优先，文件缺/段缺/坏 YAML → 缺省 advisory（fail-open——hard 门只拦「确证同会话硬续」）。
++ * runStage 入口 hard 门的集成行为（拒启动/--same-session 逃生/reopen 重入放行）由 R16 实验
++ * 环境冒烟覆盖（docs/analysis/R8-R15-改进落地方案-2026-09-24.md §三）。
++ *
++ * 设计依据：src/run/shared.js readStageWall / STAGE_WALL_STAGES / STAGE_WALL_PREDECESSOR。
++ */
++import { readStageWall, STAGE_WALL_STAGES, STAGE_WALL_PREDECESSOR } from '../src/run/shared.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { tmpdir } from 'os'
++import { join } from 'path'
++
++let failures = 0
++const tmpRoots = []
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg)
++  else { console.error('  ❌ ' + msg); failures++ }
++}
++const newDir = (prefix) => {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(d)
++  return d
++}
++const writeYaml = (root, text) => {
++  mkdirSync(join(root, '.sillyspec'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'local.yaml'), text, 'utf8')
++}
++const withEnv = async (val, fn) => {
++  const prev = process.env.SILLYSPEC_STAGE_WALL
++  if (val === undefined) delete process.env.SILLYSPEC_STAGE_WALL
++  else process.env.SILLYSPEC_STAGE_WALL = val
++  try { return await fn() } finally {
++    if (prev === undefined) delete process.env.SILLYSPEC_STAGE_WALL
++    else process.env.SILLYSPEC_STAGE_WALL = prev
++  }
++}
++
++console.log('\n[stage-wall] 档位读取：env 强制 > yaml > 缺省 advisory')
++
++// Case 1: 无 local.yaml → advisory
++{
++  const root = newDir('sw-none-')
++  const mode = await withEnv(undefined, () => readStageWall(root))
++  assert(mode === 'advisory', '无 local.yaml → advisory')
++}
++
++// Case 2: stage.wall: hard → hard
++{
++  const root = newDir('sw-hard-')
++  writeYaml(root, 'stage:\n  wall: hard\n')
++  const mode = await withEnv(undefined, () => readStageWall(root))
++  assert(mode === 'hard', 'stage.wall: hard → hard')
++}
++
++// Case 3: 段缺/值非法 → advisory
++{
++  const root = newDir('sw-soft-')
++  writeYaml(root, 'stage:\n  burst: true\n')
++  const mode = await withEnv(undefined, () => readStageWall(root))
++  assert(mode === 'advisory', 'wall 键缺 → advisory（burst 不误伤）')
++}
++
++// Case 4: env 强制优先（yaml hard 被 env advisory 压制；yaml 缺被 env hard 提升）
++{
++  const hardRoot = newDir('sw-env1-')
++  writeYaml(hardRoot, 'stage:\n  wall: hard\n')
++  assert(await withEnv('advisory', () => readStageWall(hardRoot)) === 'advisory', 'env=advisory 压制 yaml hard')
++  const noneRoot = newDir('sw-env2-')
++  assert(await withEnv('hard', () => readStageWall(noneRoot)) === 'hard', 'env=hard 提升（无 yaml）')
++}
++
++// Case 5: 坏 YAML → advisory 不抛
++{
++  const root = newDir('sw-broken-')
++  writeYaml(root, 'stage: [unclosed\n')
++  let mode = null
++  let threw = false
++  try { mode = await withEnv(undefined, () => readStageWall(root)) } catch { threw = true }
++  assert(!threw && mode === 'advisory', '坏 YAML → advisory 不抛')
++}
++
++// Case 6: 常量形态（墙后阶段与前驱映射——runStage 入口门与 handoff 提示共用的单一事实源）
++{
++  assert(JSON.stringify(STAGE_WALL_STAGES) === JSON.stringify(['execute', 'verify']), 'STAGE_WALL_STAGES = execute/verify')
++  assert(STAGE_WALL_PREDECESSOR.execute === 'plan' && STAGE_WALL_PREDECESSOR.verify === 'execute', '前驱映射：execute←plan / verify←execute')
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${6 - failures}  ❌ 失败: ${failures}`)
++for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
++if (failures > 0) throw new Error(`${failures} test(s) failed`)
+
+diff --git a/test/worktree-policy.test.mjs b/test/worktree-policy.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/worktree-policy.test.mjs
+@@ -0,0 +1,98 @@
++/**
++ * worktree-policy 选择记忆测试（R16 减负批次，2026-09-24）
++ *
++ * 验证：readWorktreePolicy 读 local.yaml worktree.policy 段三键（adopt_branch / apply_overlap /
++ * stash_dirty），文件缺/段缺/非法值/解析失败全落 fail-closed 缺省（false/'manual'/false）——
++ * policy 只消「重复选择」，缺省不开新权限面。纯函数单测，不碰真实 worktree。
++ *
++ * 设计依据：src/worktree-policy.js。
++ */
++import { readWorktreePolicy } from '../src/worktree-policy.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
++import { tmpdir } from 'os'
++import { join } from 'path'
++
++let failures = 0
++const tmpRoots = []
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg)
++  else { console.error('  ❌ ' + msg); failures++ }
++}
++const newDir = (prefix) => {
++  const d = mkdtempSync(join(tmpdir(), prefix))
++  tmpRoots.push(d)
++  return d
++}
++const writeYaml = (root, text) => {
++  mkdirSync(join(root, '.sillyspec'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'local.yaml'), text, 'utf8')
++}
++
++console.log('\n[worktree-policy] 选择记忆读取：三键 + fail-closed 缺省')
++
++const DEFAULTS = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false }
++
++// Case 1: 无 local.yaml → 全缺省
++{
++  const root = newDir('wp-none-')
++  const p = readWorktreePolicy(root)
++  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), '无 local.yaml → 全缺省 fail-closed')
++}
++
++// Case 2: 段缺 → 全缺省
++{
++  const root = newDir('wp-nosec-')
++  writeYaml(root, 'commands:\n  test: "npm test"\n')
++  const p = readWorktreePolicy(root)
++  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), '无 worktree.policy 段 → 全缺省')
++}
++
++// Case 3: 三键齐配 → 正确读取
++{
++  const root = newDir('wp-full-')
++  writeYaml(root, 'worktree:\n  policy:\n    adopt_branch: true\n    apply_overlap: force\n    stash_dirty: true\n')
++  const p = readWorktreePolicy(root)
++  assert(p.adoptBranch === true, 'adopt_branch: true → adoptBranch=true')
++  assert(p.applyOverlap === 'force', 'apply_overlap: force → force')
++  assert(p.stashDirty === true, 'stash_dirty: true → stashDirty=true')
++}
++
++// Case 4: apply_overlap 非法值 → 回 manual（不透传未知值）
++{
++  const root = newDir('wp-bad-')
++  writeYaml(root, 'worktree:\n  policy:\n    apply_overlap: nuke\n')
++  const p = readWorktreePolicy(root)
++  assert(p.applyOverlap === 'manual', 'apply_overlap 非法值 → manual（fail-closed）')
++}
++
++// Case 5: skip 档合法
++{
++  const root = newDir('wp-skip-')
++  writeYaml(root, 'worktree:\n  policy:\n    apply_overlap: skip\n')
++  const p = readWorktreePolicy(root)
++  assert(p.applyOverlap === 'skip', 'apply_overlap: skip → skip')
++}
++
++// Case 6: YAML 语法坏 → 全缺省不抛
++{
++  const root = newDir('wp-broken-')
++  writeYaml(root, 'worktree:\n  policy: [unclosed\n')
++  let p = null
++  let threw = false
++  try { p = readWorktreePolicy(root) } catch { threw = true }
++  assert(!threw, 'YAML 坏不抛（best-effort）')
++  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'YAML 坏 → 全缺省')
++}
++
++// Case 7: policy 段非对象（标量）→ 全缺省
++{
++  const root = newDir('wp-scalar-')
++  writeYaml(root, 'worktree:\n  policy: true\n')
++  const p = readWorktreePolicy(root)
++  assert(JSON.stringify(p) === JSON.stringify(DEFAULTS), 'policy 段标量 → 全缺省')
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${7 - failures}  ❌ 失败: ${failures}`)
++for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} }
++if (failures > 0) throw new Error(`${failures} test(s) failed`)

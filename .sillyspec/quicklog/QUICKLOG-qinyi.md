@@ -356,3 +356,49 @@
 状态：进行中
 关联变更：（无）
 文件：（见实际改动）
+
+## ql-20260924-008-24e5 | 2026-09-24 21:59:35 | R16 减负批次一：对撞实验 R8-R15 改进落地（输出纪律/模板出上下文/wait 合并式/收口一次性清单/worktree policy/deps ext…
+状态：已完成
+关联变更：（无）
+文件：
+- src/worktree-policy.js（新增：worktree 守卫选择记忆）
+- src/stage-templates.js（新增：模板单一源+幂等落盘）
+- src/run/gates.js（纯文档门收集模式）
+- src/run/stage.js（stage.wall hard 入口墙）
+- src/stages/brainstorm.js（step8 模板出上下文）
+- src/worktree-deps.js（uv sync extras 探测）
+需求：R16 减负批次一：对撞实验 R8-R15 改进落地（输出纪律/模板出上下文/wait 合并式/收口一次性清单/worktree policy/deps extras/stage 墙 A 相位/评审清单）
+根因：说明书内嵌模板逐轮回放+wait 三段式补轮+收口门串行连挡+守卫重问+uv sync 缺 extras 自愈+execute 背全史重放（对账文档 §五/§六 实证）
+方案：铁律增输出纪律；brainstorm 四件套模板迁 stage-templates.js 落盘按需读；requiresWait 改 --done --answer 合并式；纯文档门收集模式一次报全；worktree.policy 三键记忆；uv sync 探测 --all-extras；stage.wall hard 入口墙+plan→execute ⛔；评审清单加承诺可兑现性/三方对齐；execute-qa 包补测试清单
+结果：全量 615 通过/0 失败+test:core 176/0（基线 613+新测试 2 套，环境健康时实测两遍）；lint 0 告警；预期 R16 execute 段 45.6M→20-25M、brainstorm+plan→≤8M、wait 补轮/收口连挡/extras 自愈归零
+
+## ql-20260924-009-bde7 | 2026-09-24 22:52:08 | P1 修复：git worktree remove --force 在 Windows 跟随 junction 无声删主仓 node_modules（门禁快照清…
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/junction-rm.js（新增：junction/reparse 安全删除单一实现）
+- src/run/gate-snapshot.js（cleanupSnapshot 先解链再 git remove）
+- src/run/gate-snapshot-ledger.js（回收 sweep 同款先解链）
+- test/gate-snapshot-junction-pierce.test.mjs（端到端真 git 路径穿透回归）
+需求：P1 修复：git worktree remove --force 在 Windows 跟随 junction 无声删主仓 node_modules（门禁快照清理穿透）
+根因：快照清理链第一步 git worktree remove --force 删快照目录——git 递归删在 Windows 跟随 junction，快照内 node_modules/venv/copy 链接指向主仓真身，git remove 成功返回且删光主仓依赖树（收口期三次实证+端到端复现 PIERCED）；worktree.js cleanup 早有先解链防护，快照链漏抄
+方案：src/run/junction-rm.js 单一实现（递归收集 reparse 点→cmd rmdir 解链→再 rmSync）；cleanupSnapshot/账本回收改先解链→git remove→安全兜底，解链失败保护性放弃留账本；:437 假链接清理改 unlinkLinkPath
+结果：全量 616/0（含新增穿透回归）；lint 绿；gate-snapshot 30/0；本收口即 dogfood——门禁快照全链真跑后主仓 node_modules 完好
+
+## ql-20260925-001-34db | 2026-09-25 01:18:31 | P1 修复：stage.wall 用 SESSION_ID 判同会话硬续是错判（handoff 协议要求新会话保持同一 SESSION_ID）——改用 handoffAt 切割凭证；plan ⛔ 断崖分支被 crossStage 告警压制
+状态：进行中
+关联变更：（无）
+文件：（见实际改动）
+
+## ql-20260925-002-37e1 | 2026-09-25 01:18:53 | P1：stage.wall 误用 SESSION_ID 判同会话硬续——handoff 协议要求新会话保持同一 SESSION_ID（所有权标识）…
+状态：已完成
+关联变更：（无）
+文件：
+- src/run/shared.js（isStageWallBlocked 纯函数（handoffAt 切割凭证语义））
+- src/handoff.js（handoff 成功后盖 handoffAt 章）
+- src/run/stage.js（墙入口改用纯函数判定）
+- src/run/complete.js（plan ⛔ 优先于 crossStage 告警）
+需求：P1：stage.wall 误用 SESSION_ID 判同会话硬续——handoff 协议要求新会话保持同一 SESSION_ID（所有权标识），会话 B 会被墙误拦；plan ⛔ 断崖分支被 crossStage 告警压制不显示
+根因：墙的第一版按 SESSION_ID 相等判『同会话硬续』，但 handoff 交接块明确要求新会话 export 同一 SESSION_ID——R16-b 实测会话 A 完成后按协议 handoff，会话 B 粘贴交接块将被墙误拦；complete.js 分支序 crossStage 先于 plan ⛔，plan+brainstorm 同会话完成时（stageCount=2）⛔ 不显示（R16-b 17:04 实证只见告警）
+方案：切割凭证改为动作信号：sillyspec handoff 成功后给 stage-session ledger 盖 handoffAt 章（best-effort）；墙判定抽纯函数 isStageWallBlocked（shared.js）：拦『前驱刚收口 && 无更新的 handoffAt && 目标阶段首入』，handoffAt>ledger.at 即放行；--same-session/reopen/他会话/fail-open 口不变。complete.js 分支重排：plan ⛔ > execute ⛔ > crossStage 告警 > 💡
+结果：stage-wall 单测 7 组（含 handoffAt 新旧章/他会话/reopen/fail-open 全分支）+ handoff 测试全绿；全量 616/0；lint 绿；全局 sillyspec 已刷新（isStageWallBlocked/handoffAt/stage.js 三处核实在位）；R16-b 靶仓 ledger 已按实证发生的 handoff 补章，会话 B 可直入 execute

@@ -1,0 +1,339 @@
+diff --git a/src/run/gate-snapshot-ledger.js b/src/run/gate-snapshot-ledger.js
+index ff95ba35..680406f7 100644
+--- a/src/run/gate-snapshot-ledger.js
++++ b/src/run/gate-snapshot-ledger.js
+@@ -16,10 +16,11 @@
+  * 异常面：全部 fail-open 吞掉（账本/回收任一异常零阻断，退现状残留）。
+  */
+ import { execFileSync } from 'node:child_process'
+-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
++import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+ import { basename, dirname, join, resolve, sep } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { writeAtomicSync } from '../fs-atomic.js'
++import { safeRemoveDirWithLinks, unlinkLinkPath, collectLinkPathsUnder } from './junction-rm.js'
+ 
+ const LEDGER_FILE = 'active-gate-snapshots.json'
+ const HOUR_MS = 3600_000
+@@ -139,7 +140,11 @@ function defaultRunGit(cwd, args) {
+ }
+ 
+ function defaultRemoveDir(p) {
+-  rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
++  // junction 安全删除（坑 junction-pierce-rm-sync，2026-09-24 实证）：残留快照内
++  // node_modules/venv junction 的目标是主仓真身，裸 rmSync(recursive) 穿透链接清空目标
++  // （收口期三次实证）——删前先解链（junction-rm.js 单一实现）；解链失败抛错由调用方
++  // 按「删不掉保留条目待下轮」处置，绝不回落裸 rmSync。
++  safeRemoveDirWithLinks(p, { maxRetries: 5, retryDelay: 100 })
+ }
+ 
+ /** worktree 注册是否仍登记该 root（跨平台路径归一 + win32 大小写不敏感） */
+@@ -176,8 +181,19 @@ export function reclaimStaleGateSnapshots({
+     for (const e of stale) {
+       const root = e.snapshotRoot
+       let removeFailed = false
+-      try { runGit(cwd, ['worktree', 'remove', '--force', root]) } catch { removeFailed = true }
+-      try { removeDir(root) } catch { /* 目录删不掉→下方双清判定保留条目 */ }
++      // 先解链（坑 git-worktree-remove-pierce，2026-09-24 实证：git worktree remove --force
++      // 在 Windows 跟随 junction 删主仓真身内容——残留快照内 node_modules/venv/copy 链接必须
++      // 先解链再删。解链失败按删不掉处置：保留条目待下轮，绝不带着链接跑删除）。
++      let linksCleared = true
++      try {
++        for (const link of collectLinkPathsUnder(root)) unlinkLinkPath(link)
++      } catch { linksCleared = false }
++      if (linksCleared) {
++        try { runGit(cwd, ['worktree', 'remove', '--force', root]) } catch { removeFailed = true }
++        try { removeDir(root) } catch { /* 目录删不掉→下方双清判定保留条目 */ }
++      } else {
++        removeFailed = true
++      }
+       if (removeFailed) { try { runGit(cwd, ['worktree', 'prune']) } catch { /* prune 失败→下方判定保留 */ } }
+       let dirGone = false
+       let regGone = false
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index 02d25adb..32aacff4 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -17,10 +17,11 @@
+  * 不进 git 不上平台）。
+  */
+ import { execFileSync, spawnSync } from 'node:child_process'
+-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
++import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, existsSync, readdirSync, statSync, symlinkSync, readFileSync } from 'node:fs'
+ import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
+ import { tmpdir } from 'node:os'
+ import { registerGateSnapshot, unregisterGateSnapshot, reclaimStaleGateSnapshots } from './gate-snapshot-ledger.js'
++import { safeRemoveDirWithLinks, unlinkLinkPath, collectLinkPathsUnder } from './junction-rm.js'
+ 
+ /**
+  * worktree 会话跳快照判定（2026-09-23 R9/R10 双实证根治）：cwd 位于 sillyspec 会话专属
+@@ -64,20 +65,38 @@ export function cleanupSnapshot({
+   snapshotRoot,
+   cwd,
+   runGit = (c, a) => git(c, a),
+-  removeDir = (p, opts) => rmSync(p, { recursive: true, force: true, ...opts }),
++  // junction 安全删除（坑 git-worktree-remove-pierce，2026-09-24 实证）：`git worktree remove
++  // --force` 的递归删在 Windows **跟随 junction 删目标内容**（实测 victim 复现；worktree.js
++  // cleanup 链的 unlinkNodeModulesLinks 先解链正是防它）——快照内 node_modules/venv/copy 面/
++  // 钉定缓存链接全部指向主仓真身，必须**先解链再交给 git/rmSync 删目录本体**。解链失败 →
++  // 保护性放弃本次删除（目录留账本待回收——双清契约天然兼容）。
++  removeDir = (p, opts) => safeRemoveDirWithLinks(p, opts),
+   dirExists = (p) => existsSync(p),
+   worktreeRegistered = (c, p) => worktreeListContains(c, p),
+-} = {}) {
++}) {
+   let worktreeCleaned = true
++  // 0. 先解链快照内全部 junction/reparse 点（含深层：venv 族与 gate_snapshot.copy 面在
++  //    子目录层）。解链失败不删目录（穿透风险下，保护主仓优先于清理彻底性）。
++  let linksCleared = true
+   try {
++    for (const link of collectLinkPathsUnder(snapshotRoot)) unlinkLinkPath(link)
++  } catch (e) {
++    linksCleared = false
++    console.warn(`⚠️ 快照 junction 解链失败（保护主仓链接目标，本次不删快照目录——条目留账本待下轮回收）: ${e && e.message ? e.message : e}`)
++  }
++  if (linksCleared) {
+     // 注：worktree remove/prune 无 --quiet 选项（非法 flag 会必抛并被 catch 吞掉——旧实现
+     // 正是因此让 git remove 每次都失败、只剩无重试 rmSync 兜底，41 个残留目录的根因之一）
+-    runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
+-  } catch {
++    try {
++      runGit(cwd, ['worktree', 'remove', '--force', snapshotRoot])
++    } catch {
++      worktreeCleaned = false
++    }
++  } else {
+     worktreeCleaned = false
+   }
+   let dirRemoved = !dirExists(snapshotRoot)
+-  if (!dirRemoved) {
++  if (linksCleared && !dirRemoved) {
+     try { removeDir(snapshotRoot, REMOVE_DIR_RETRY) } catch { /* 删不掉→下方按实际存在性判定 */ }
+     dirRemoved = !dirExists(snapshotRoot)
+   }
+@@ -434,7 +453,9 @@ export function applyGateSnapshotCopy(cwd, snapshotRoot) {
+         viaLink = existsSync(dst)
+       } catch { viaLink = false }
+       if (!viaLink) {
+-        try { rmSync(dst, { recursive: true, force: true }) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
++        // 假链接残留清理：dst 是 junction 本体——rmSync(dst) 在 Node v24 Windows 会穿透删
++        // 链接目标（主仓 copy 面真身，坑 junction-pierce-rm-sync），必须 rmdir 解链语义
++        try { unlinkLinkPath(dst) } catch { /* 假链接残留清不掉 → 下方复制报错走 warn */ }
+         if (srcStat.isDirectory()) copyDirRecursive(src, dst)
+         else copyFileSync(src, dst)
+       }
+diff --git a/src/run/junction-rm.js b/src/run/junction-rm.js
+new file mode 100644
+--- /dev/null
++++ b/src/run/junction-rm.js
+@@ -0,0 +1,70 @@
++/**
++ * junction-rm.js — junction/reparse 点安全删除（坑 git-worktree-remove-pierce，2026-09-24 实证）
++ *
++ * 根因（R16 批次一收口期三次主仓 node_modules 清空，实证复现）：**`git worktree remove --force`
++ * 的递归删在 Windows 跟随 junction**，快照内 node_modules/venv/gate_snapshot.copy 链接的目标
++ * 是主仓真身——cleanupSnapshot 第一步 git remove 即清空主仓依赖树（js-yaml
++ * ERR_MODULE_NOT_FOUND 连环）。worktree.js cleanup 链的 unlinkNodeModulesLinks 先解链正是
++ * 防同一穿透（历史注释另点名 MSYS `rm -rf` 人工操作同款；Node v24 rmSync 在受控测试中
++ * 未复现穿透，但先解链对两种删除器都是稳健防御）。Windows 上唯一不跟随目标的删除是
++ * `cmd /c rmdir`（reparse 点语义）。
++ *
++ * 契约：safeRemoveDirWithLinks(p) = 递归收集 p 下全部 lstat 符号链接/junction → 逐个
++ * rmdir/unlink 解链 → 再 rmSync(p)。collectLinkPathsUnder/unlinkLinkPath 亦供「先解链再
++ * 交给 git 删」的调用序使用（cleanupSnapshot / reclaimStaleGateSnapshots）。任一解链失败
++ * → 抛错阻断删除（保护链接目标优先于清理彻底性；调用方留账本待下轮回收——双清契约兼容）。
++ */
++import { existsSync, readdirSync, lstatSync, rmSync, unlinkSync } from 'node:fs'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++
++/** 删除单个链接路径（junction/symlink 本体，不跟随目标） */
++export function unlinkLinkPath(p) {
++  if (process.platform === 'win32') {
++    execFileSync('cmd.exe', ['/c', 'rmdir', p], { windowsHide: true })
++  } else {
++    unlinkSync(p)
++  }
++}
++
++/**
++ * 递归收集 root 下全部符号链接/junction 绝对路径（lstat 判定；readdir withFileTypes 对
++ * junction 报 isDirectory 不可信）。lstat 失败（EPERM/杀毒锁）→ 抛错保护。
++ */
++export function collectLinkPathsUnder(root) {
++  const links = []
++  const walk = (dir) => {
++    let entries
++    try { entries = readdirSync(dir) } catch { return }
++    for (const name of entries) {
++      const p = join(dir, name)
++      let st
++      try { st = lstatSync(p) } catch (e) {
++        throw new Error(`junction 检测失败（疑似 EPERM：杀毒/索引锁——阻断删除以保护链接目标）：${p}: ${e.message}`)
++      }
++      if (st.isSymbolicLink()) {
++        links.push(p)
++        continue
++      }
++      if (st.isDirectory()) walk(p)
++    }
++  }
++  walk(root)
++  return links
++}
++
++/**
++ * 安全删除目录：先解链其下全部 junction/symlink 再 rmSync。
++ * @throws 解链失败时抛错（不回落裸 rmSync——那会穿透链接删目标，见文件首注释）
++ */
++export function safeRemoveDirWithLinks(p, opts = {}) {
++  if (!existsSync(p)) return
++  for (const link of collectLinkPathsUnder(p)) {
++    try {
++      unlinkLinkPath(link)
++    } catch (e) {
++      throw new Error(`junction 解链失败（保护链接目标，阻断删除——手动 rmdir "${link}" 后重试）: ${e.message}`)
++    }
++  }
++  rmSync(p, { recursive: true, force: true, ...opts })
++}
+
+diff --git a/test/gate-snapshot-junction-pierce.test.mjs b/test/gate-snapshot-junction-pierce.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-junction-pierce.test.mjs
+@@ -0,0 +1,134 @@
++/**
++ * junction 穿透回归测试（坑 git-worktree-remove-pierce，2026-09-24 R16 批次一收口实证）
++ *
++ * 根因：`git worktree remove --force` 的递归删在 Windows **跟随 junction**——删含链接的
++ * 快照目录会把链接目标（主仓 node_modules/venv/gate_snapshot.copy 真身）内容一并删光
++ * （当晚主仓依赖树三次被清空、js-yaml ERR_MODULE_NOT_FOUND 连环的根因；git remove 本身
++ * 「成功」返回，穿透无声）。修复 = cleanupSnapshot / reclaimStaleGateSnapshots 先解链
++ * 全部 reparse 点再交给 git/rmSync 删目录本体（junction-rm.js）。
++ *
++ * 本测试用真实 junction 钉死四件事：
++ * 1. 环境自证（warn 级）：裸 rmSync 若穿透则提示（受控测试未复现，守护性保留）；
++ * 2. safeRemoveDirWithLinks 删含 junction 的目录：目标内容完好；
++ * 3. cleanupSnapshot removeDir 分支（runGit 注入抛错）：目标内容完好；
++ * 4. 端到端真 git 路径（真实仓 + worktree + junction + 真 git remove）：目标内容完好
++ *    ——当晚事故形态逐字复现的核心回归。
++ * 非 Windows 平台 junction 不可建，全组跳过。
++ *
++ * 设计依据：src/run/junction-rm.js、src/run/gate-snapshot.js cleanupSnapshot。
++ */
++import { safeRemoveDirWithLinks } from '../src/run/junction-rm.js'
++import { cleanupSnapshot } from '../src/run/gate-snapshot.js'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++
++let failures = 0
++const roots = []
++const assert = (cond, msg, warnOnly = false) => {
++  if (cond) console.log('  ✅ ' + msg)
++  else if (warnOnly) console.log('  ⚠️ ' + msg + '（环境不再复现穿透——守护性断言降级 warn）')
++  else { console.error('  ❌ ' + msg); failures++ }
++}
++const newDir = (prefix) => { const d = mkdtempSync(join(tmpdir(), prefix)); roots.push(d); return d }
++const mkJunction = (linkPath, targetPath) => {
++  mkdirSync(linkPath, { recursive: true })
++  // 清掉占位目录再建 junction（mklink 要求链接点不存在）
++  rmSync(linkPath, { recursive: true, force: true })
++  execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, targetPath], { windowsHide: true })
++}
++const makeVictim = (root) => {
++  const nm = join(root, 'node_modules', 'marker-pkg')
++  mkdirSync(nm, { recursive: true })
++  writeFileSync(join(nm, 'package.json'), '{"name":"marker-pkg"}', 'utf8')
++  return nm
++}
++
++console.log('\n[junction-pierce] 快照清理穿透回归（Node ' + process.version + ' / ' + process.platform + '）')
++
++if (process.platform !== 'win32') {
++  console.log('  ⏭️ 非 Windows 平台无 junction——全组跳过')
++} else {
++  // ── 1. 环境自证：裸 rmSync 穿透（Node 若修复则降级 warn，不影响 2/3 的守护价值）──
++  {
++    const root = newDir('jp-bare-')
++    const victim = makeVictim(root)
++    const holder = join(root, 'holder')
++    mkJunction(join(holder, 'node_modules'), victim)
++    // 占位文件保证 holder 非空（与真实快照形态一致：junction + 普通文件混布）
++    writeFileSync(join(holder, 'marker.txt'), 'x', 'utf8')
++    rmSync(holder, { recursive: true, force: true })
++    const pierced = !existsSync(join(victim, 'package.json'))
++    assert(pierced, '环境自证：裸 rmSync(recursive) 穿透 junction（目标内容被删）', true)
++  }
++
++  // ── 2. safeRemoveDirWithLinks：目标完好 ──
++  {
++    const root = newDir('jp-safe-')
++    const victim = makeVictim(root)
++    const holder = join(root, 'holder')
++    mkdirSync(holder, { recursive: true })
++    writeFileSync(join(holder, 'marker.txt'), 'x', 'utf8')
++    mkJunction(join(holder, 'node_modules'), victim)
++    safeRemoveDirWithLinks(holder)
++    assert(!existsSync(holder), 'safeRemoveDirWithLinks：含 junction 目录已删')
++    assert(existsSync(join(victim, 'package.json')), 'safeRemoveDirWithLinks：链接目标内容完好（marker-pkg 还在）')
++    // 嵌套形态：junction 在子目录层（venv/copy 面真实形态）
++    const victim2 = makeVictim(join(root, 'deep'))
++    const holder2 = join(root, 'holder2')
++    mkdirSync(join(holder2, 'sub', 'a'), { recursive: true })
++    writeFileSync(join(holder2, 'sub', 'a', 'f.txt'), 'x', 'utf8')
++    mkJunction(join(holder2, 'sub', 'a', 'node_modules'), victim2)
++    safeRemoveDirWithLinks(holder2)
++    assert(existsSync(join(victim2, 'package.json')), 'safeRemoveDirWithLinks：嵌套深层 junction 目标完好')
++  }
++
++  // ── 3. cleanupSnapshot 默认路径（快照清理真实入口；runGit 注入抛错走 removeDir 分支）──
++  {
++    const root = newDir('jp-cleanup-')
++    const victim = makeVictim(root)
++    const snap = join(root, 'snap')
++    mkdirSync(snap, { recursive: true })
++    writeFileSync(join(snap, 'marker.txt'), 'x', 'utf8')
++    mkJunction(join(snap, 'node_modules'), victim)
++    const r = cleanupSnapshot({
++      snapshotRoot: snap,
++      cwd: root,
++      runGit: () => { throw new Error('git remove 注入失败——逼 removeDir 分支') },
++      worktreeRegistered: () => false,
++    })
++    assert(r.dirRemoved === true && !existsSync(snap), 'cleanupSnapshot（removeDir 分支）：快照目录已删')
++    assert(existsSync(join(victim, 'package.json')),
++      'cleanupSnapshot（removeDir 分支）：junction 目标内容完好')
++  }
++
++  // ── 4. 端到端真 git 路径（当晚事故形态逐字复现）：真实仓 + worktree + junction +
++  //    cleanupSnapshot 默认 runGit=真 git worktree remove——修复前该路径实测穿透
++  //    （git remove「成功」且删光 victim 内容）。修复=先解链再交 git。──
++  if (process.platform === 'win32') {
++    const root = newDir('jp-e2e-')
++    const mainDir = join(root, 'main')
++    mkdirSync(mainDir, { recursive: true })
++    const G = (args) => execFileSync('git', args, { cwd: mainDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
++    G(['init', '-q'])
++    G(['config', 'user.email', 't@t'])
++    G(['config', 'user.name', 't'])
++    writeFileSync(join(mainDir, 'f.txt'), 'x', 'utf8')
++    G(['add', 'f.txt']); G(['commit', '-qm', 'init'])
++    const victim = makeVictim(mainDir) // main/node_modules/marker-pkg（主仓真身）
++    const snap = join(root, 'snap')
++    execFileSync('git', ['worktree', 'add', '--detach', '--quiet', snap, 'HEAD'], { cwd: mainDir, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
++    writeFileSync(join(snap, 'marker.txt'), 'x', 'utf8')
++    mkJunction(join(snap, 'node_modules'), victim)
++    const r = cleanupSnapshot({ snapshotRoot: snap, cwd: mainDir, worktreeRegistered: () => false })
++    assert(r.dirRemoved === true && !existsSync(snap), '端到端（真 git worktree remove 路径）：快照目录已删')
++    assert(existsSync(join(victim, 'package.json')) && readFileSync(join(victim, 'package.json'), 'utf8').includes('marker-pkg'),
++      '端到端（真 git worktree remove 路径）：主仓 node_modules 真身完好——当晚清空事故的核心回归断言')
++  }
++}
++
++console.log(`\n${'='.repeat(50)}`)
++console.log(`✅ 通过: ${3 - failures}  ❌ 失败: ${failures}`)
++for (const d of roots) { try { rmSync(d, { recursive: true, force: true }) } catch { /* 清理 best-effort */ } }
++if (failures > 0) throw new Error(`${failures} test(s) failed`)

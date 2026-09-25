@@ -1,0 +1,108 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index a81a9f4b..c61a7382 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -725,27 +725,65 @@ function parseFlowValue(flowText, key) {
+  * @param {{cwd: string, changedFiles: string[], coveredCommands?: string[]}} args
+  * @returns {string[]} 相对 cwd 的测试文件路径（posix 形态，已排序；无可发现 → []）
+  */
++/**
++ * 测试文件判定（polyglot，2026-09-24 deps-auto 泛化）：JS/TS 测试（*.test/spec.[cm]js/ts）
++ * + Python 测试（test_*.py / *_test.py），任意目录深度（tests?/ 目录或散置均可）。
++ */
++function isTestFilePath(p) {
++  return /\.(test|spec)\.[cm]?(js|ts)$/.test(p) || /(^|\/)test_[^\/]+\.py$/.test(p) || /(^|\/)[^\/]+_test\.py$/.test(p)
++}
++
++/** 递归收集测试文件（跳过 node_modules/.venv/.git/dist/build/.runtime/.sillyspec，深度帽 6 层防野目录）。 */
++function collectTestFiles(rootDir, base = '', depth = 0, acc = []) {
++  if (depth > 6) return acc
++  let entries = []
++  try { entries = readdirSync(rootDir, { withFileTypes: true }) } catch { return acc }
++  for (const e of entries) {
++    if (['node_modules', '.venv', 'venv', '.git', 'dist', 'build', '.runtime', '.sillyspec'].includes(e.name)) continue
++    const rel = base ? `${base}/${e.name}` : e.name
++    if (e.isDirectory()) collectTestFiles(join(rootDir, e.name), rel, depth + 1, acc)
++    else if (isTestFilePath(rel)) acc.push(rel)
++  }
++  return acc
++}
++
++/** 变更 .py → 候选导入串（点串后缀族：完整模块及其各级包后缀——匹配 from X import / import X）。 */
++function pythonImportCandidates(changedPy) {
++  const parts = changedPy.replace(/\.py$/, '').split('/')
++  const out = new Set()
++  for (let take = 2; take <= parts.length; take++) {
++    out.add(parts.slice(parts.length - take).join('.'))
++  }
++  return [...out]
++}
++
+ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [] }) {
+   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
+   const norm = (p) => String(p).replace(/\\/g, '/')
+-  const changedSrc = [...new Set(changedFiles.map(norm))]
+-    .filter(p => p.startsWith('src/') && /\.(js|mjs|cjs|ts)$/.test(p))
+-  const changedTests = [...new Set(changedFiles.map(norm))]
+-    .filter(p => /^test\//.test(p) && /\.test\.[cm]?js$/.test(p))
++  const changedAll = [...new Set(changedFiles.map(norm))]
++  // 代码面：非测试文件本身（JS/TS + Python 源——deps-auto 泛化，不再限定 src/ 前缀与自家目录形态）
++  const changedSrc = changedAll.filter(p => !isTestFilePath(p) && /\.(js|mjs|cjs|ts|tsx|py)$/.test(p))
++  const changedTests = changedAll.filter(p => isTestFilePath(p))
+   if (changedSrc.length === 0 && changedTests.length === 0) return []
+   const covered = coveredCommands.filter(Boolean).join(' ')
+   const found = new Set()
+-  const testDir = join(cwd, 'test')
+-  let entries = []
+-  try { entries = readdirSync(testDir) } catch { entries = [] }
+-  for (const f of entries) {
+-    if (!/\.test\.[cm]?js$/.test(f)) continue
+-    if (covered.includes(f)) continue
++
++  const pyCandidates = new Set()
++  for (const src of changedSrc.filter(p => p.endsWith('.py'))) {
++    for (const d of pythonImportCandidates(src)) pyCandidates.add(d)
++  }
++  const jsSrc = changedSrc.filter(p => /\.(js|mjs|cjs|ts|tsx)$/.test(p))
++
++  for (const tf of collectTestFiles(cwd)) {
++    const fname = tf.split('/').pop()
++    if (covered.includes(fname) || covered.includes(tf)) continue
+     let content = ''
+-    try { content = readFileSync(join(testDir, f), 'utf8') } catch { continue }
+-    for (const src of changedSrc) {
+-      if (content.includes(`../${src}`)) { found.add(`test/${f}`); break }
++    try { content = readFileSync(join(cwd, tf), 'utf8') } catch { continue }
++    let hit = jsSrc.some(src => content.includes(src))
++    if (!hit) {
++      hit = [...pyCandidates].some(d => content.includes(`from ${d}`) || content.includes(`import ${d}`))
+     }
++    if (hit) found.add(tf)
+   }
+   for (const t of changedTests) {
+     const fname = t.split('/').pop()
+diff --git a/test/verify-deps-auto-default.test.mjs b/test/verify-deps-auto-default.test.mjs
+index f50ae4fa..4212201e 100644
+--- a/test/verify-deps-auto-default.test.mjs
++++ b/test/verify-deps-auto-default.test.mjs
+@@ -62,3 +62,20 @@ test('T2 端到端：改 add.js → deps 子集（只跑 add.test）；改无关
+   assert.notEqual(r.mode, 'module-subset', 'B 不走 deps 子集')
+   void r
+ })
++
++test('T3 polyglot：Python 仓 deps 发现（service.py → from app.modules.x import 的测试命中，无关不命中）', async () => {
++  const fx = mk('deps-py-')
++  for (const d of ['backend/app/modules/platform_sync/tests', 'backend/app/modules/other/tests']) {
++    mkdirSync(join(fx, d), { recursive: true })
++  }
++  const wf = (p2, c) => writeFileSync(join(fx, p2), c)
++  wf('backend/app/modules/platform_sync/service.py', 'def f(): pass\n')
++  wf('backend/app/modules/platform_sync/schema.py', 'x = 1\n')
++  wf('backend/app/modules/other/api.py', 'def g(): pass\n')
++  wf('backend/app/modules/platform_sync/tests/test_service.py', 'from app.modules.platform_sync.service import f\nfrom app.modules.platform_sync import schema\n')
++  wf('backend/app/modules/other/tests/test_api.py', 'from app.modules.other.api import g\n')
++  const { discoverModuleDependentTests } = await import('../src/verify-postcheck.js')
++  const deps = discoverModuleDependentTests({ cwd: fx, changedFiles: ['backend/app/modules/platform_sync/service.py', 'backend/app/modules/platform_sync/schema.py'], coveredCommands: [] })
++  assert.ok(deps.includes('backend/app/modules/platform_sync/tests/test_service.py'), `命中本包测试（${deps.join(',')}）`)
++  assert.ok(!deps.includes('backend/app/modules/other/tests/test_api.py'), '无关包测试不命中')
++})

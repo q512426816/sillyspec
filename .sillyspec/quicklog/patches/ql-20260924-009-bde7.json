@@ -1,0 +1,79 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-ed49698b",
+  "totals": {
+    "files": 5,
+    "additions": 252,
+    "deletions": 11
+  },
+  "rows": [
+    {
+      "path": "src/run/junction-rm.js src/run/gate-snapshot.js src/run/gate-snapshot-ledger.js test/gate-snapshot-junction-pierce.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/junction-rm.js",
+      "declared": true,
+      "additions": 70,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gate-snapshot.js",
+      "declared": true,
+      "additions": 28,
+      "deletions": 7,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gate-snapshot-ledger.js",
+      "declared": true,
+      "additions": 20,
+      "deletions": 4,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "test/gate-snapshot-junction-pierce.test.mjs",
+      "declared": true,
+      "additions": 134,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260924-009-bde7",
+  "sessionId": "quick-ed49698b",
+  "savedAt": "2026-09-24T14:54:04.997Z",
+  "patchSha256": "6c4c1f8c749eef72dccff3de0b42354bc32c85bd4dcc9019470f0c2eb8efbd26",
+  "patchStatus": "ok"
+}

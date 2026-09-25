@@ -1,0 +1,602 @@
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 9fb67846..36e07834 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -746,6 +746,14 @@ async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progres
+  */
+ export async function runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx = null }) {
+   const projectName = progress.project || basename(cwd)
++  // ── 纯文档门收集模式（R16 减负批次，2026-09-24）──
++  // 对撞 R15 实证「execute 收口连挡 4 次」：多门串行 fail-fast，每次 --done 只暴露一个门，
++  // 修复重跑才见下一个门。纯文档 blocking 门（validators / verify 死信与预填注 / Stage 与
++  // Task Review）改为收集：全部跑完 → 一次打印清单 → 统一 rollback 一次（detail 取首门，
++  // 进度库信号语义不变）。实测门（test/lint/parity/probe）保持文档面全清后才跑、内部 fail-fast
++  // 不变——贵的门只为真实代码问题付账。检查点 A=verify 实测门前；B=brainstorm/plan/execute
++  // Task Review Gate 后（friction 升档前——升档语义=「所有阻断门通过」）。
++  const docGateFailures = []
+   // decisions.md header 自动补齐（坑 decisions-header-late-warning，2026-08-24 用户反馈二期）：
+   // brainstorm step8 旧模板自带无 frontmatter 的 decisions 样例，存量变更照抄必缺 author/created_at，
+   // 拖到平台同步/后续环节才提示。gate 前幂等补机械字段（先例：autoCheckPlanFromReviews 同层写
+@@ -818,8 +826,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     console.error(`\n   提示：修复缺失产物后重新完成此步骤（--skip-approval 只跳过阶段转换/审批检查，不能跳过产物校验）`)
+     // 产物校验失败必须阻断完成 —— 否则 validator 形同虚设，
+     // verify 会带着 FAIL/缺 verify-result.md 被 ✅ 标记完成（历史教训）。
+-    // plan/execute 的专项契约校验（下方）在产物齐全后才需要继续跑，故此处先 return。
+-    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'validators' })
++    // 收集模式（R16）：不再直接 return——继续跑完其余纯文档门（review 等）后由检查点统一
++    // rollback，一次 --done 暴露全部缺失面（R15 连挡 4 次的解）。
++    docGateFailures.push({ type: 'gate_rollback', detail: 'validators', label: `产物契约校验未过（${contractResult.errors.length} 条，明细见上）` })
+   }
+   if (contractResult.warnings.length > 0) {
+     console.warn(`\n⚠️ 阶段 ${stageName} 校验警告：`)
+@@ -879,7 +888,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+           console.error(`\n❌ verify 阶段被阻断：module-impact.md「更新结果」表存在 ${pendingRows.length} 个未清 pending/待办项（死信）`)
+           for (const row of pendingRows) console.error(`   - ${row}`)
+           console.error('   文档同步是 verify 的收尾义务：请完成模块文档同步并回填状态为 done/skipped（说明原因），再重新完成 verify。')
+-          return rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++          docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `module-impact.md 存在 ${pendingRows.length} 个 pending/待办死信（明细见上）` })
+         }
+       }
+     }
+@@ -895,13 +904,23 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         console.error(`\n❌ verify 阶段被阻断：预填注清零校验未过（${noteClearance.unclearedFiles.length} 个文件的白名单槽仍含未删预填注——预填≠结论，注在场=未确认）：`)
+         for (const f of noteClearance.unclearedFiles) console.error(`   - ${f}`)
+         console.error('   修复：逐槽核对预填值后删除行尾「(预填：核对后删本注)」注（删注=确认动作）；散文含注字面量的命中改写该处措辞。清零后重新完成 verify（进度不丢）。')
+-        return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'gate_rollback', detail: 'verify-contract' })
++        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: `预填注清零未过（${noteClearance.unclearedFiles.length} 文件，明细见上）` })
+       }
+     } catch (e) {
+       console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
+     }
+   }
+ 
++  // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
++  //    fail-fast 不变）。brainstorm/plan/execute 不走本检查点（其实测面为空，检查点 B 收口）。──
++  if (stageName === 'verify' && docGateFailures.length > 0) {
++    console.error(`\n❌ verify 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
++    docGateFailures.forEach((f, i) => console.error(`   ${i + 1}. ${f.label}`))
++    console.error(`   （各门明细见上方对应 ❌ 段落；实测门（test/lint）在文档面全清后才执行）`)
++    const firstFail = docGateFailures[0]
++    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: firstFail.type, detail: firstFail.detail })
++  }
++
+   // verify 产物校验通过 + 结论非 FAIL（否则上面已阻断）。
+   // 再由 CLI 亲自执行 local.yaml 的测试命令，与 verify-result.md 的自报告对账：
+   // 自报告 PASS 但实测失败 → 阻断（防止"文案通过"绕过验证）。
+@@ -1446,8 +1465,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         const reviewResult = gated.result
+         printStageReviewResult(reviewResult, { stage: stageName, reviewRunId, runtimeRoot, changeName })
+         if (!reviewResult.ok) {
+-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
+-        }
++          docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: 'Stage Review 未过（stage-review，明细见上）' })
++        } else {
+         // 降级自审留痕（2026-09-10 用户反馈①：PI agent 等宿主无 Agent tool，prompt 降级条款允许
+         // 当前 agent 自审产出 review.json）。放行但独立性折损必须可见：⚠️ 审计行区分降级 review
+         // 与真子代理 review（事后可审计），与 ⚖️/🔍 软归属同哲学——可见的折损优于静默的伪装。
+@@ -1468,11 +1487,13 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         if (hasDelegatedWriteDisclosure(reviewResult.review)) {
+           console.warn(`\n⚠️ Stage Review 代落盘披露：${stageName} review 的 reviewerNotes 首行标记「代落盘」——review.json 由主代理代（写通道故障的）审查者落盘，独立性依赖审查者结论回传的忠实性，建议人工抽查关键结论与回传文本一致性。`)
+         }
++        }
+       }
+     } catch (e) {
+       // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
++      //（收集模式：异常也入列，检查点 B 统一 rollback）
+       console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'stage-review' })
++      docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: `Stage Review Gate 异常（${e.message}）` })
+     }
+   }
+ 
+@@ -1581,8 +1602,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+             console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
+             console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
+           }
+-          return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
+-        }
++          //（收集模式：检查点 B 统一 rollback）
++          docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review 未过（task-review，${reviewResult.errors.length} 条，明细见上）` })
++        } else {
+ 
+         // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
+         if (reviewResult.requiredEvidence.length > 0) {
+@@ -1592,15 +1614,28 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+             console.log('   verify 阶段必须满足这些证据要求。')
+           }
+         }
++        }
+       }
+     } catch (e) {
+       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
++      //（收集模式：异常也入列，检查点 B 统一 rollback）
+       console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
+       console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
+-      return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: 'review_rejected', detail: 'task-review' })
++      docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review Gate 异常（${e.message}）` })
+     }
+   }
+ 
++  // ── 收集模式检查点 B（brainstorm/plan/execute）：纯文档门（validators / Stage Review /
++  //    Task Review）全量收口——非空则一次打印清单、统一 rollback 一次（R15「连挡 4 次」的解；
++  //    detail 取首门，进度库信号语义不变）。verify 走检查点 A（其实测门在前）。──
++  if (stageName !== 'verify' && docGateFailures.length > 0) {
++    console.error(`\n❌ ${stageName} 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
++    docGateFailures.forEach((f, i) => console.error(`   ${i + 1}. ${f.label}`))
++    console.error(`   （各门明细见上方对应 ❌/⚠️ 段落）`)
++    const firstFail = docGateFailures[0]
++    return await rollbackCompletionAndReturn(pm, progress, stageData, steps, currentIdx, cwd, changeName, platformOpts, { type: firstFail.type, detail: firstFail.detail })
++  }
++
+   // ── 仪式档位摩擦升档检查点（task-03 / D-008，design 生命周期契约表「阶段门升档」行）──
+   // 级联末位（所有阻断门通过、本次 --done 即将成立）执行：读 friction-ledger 累计账 →
+   // escalateByFriction 超阈 min(S3, tier+1) → 迁移记录写 .runtime/ceremony-tier-<change>.json
+@@ -2352,7 +2387,7 @@ export function killProcessTree(pid, sig = 'SIGTERM') {
+   if (process.platform === 'win32') {
+     // /T = 连同子进程树（shell 包装下的 python/node 服务本体）；/F = 强制（长驻服务常吞 SIGTERM 等价物）
+     try {
+-      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000 })
++      execFileSync('taskkill', ['/PID', String(pidNum), '/T', '/F'], { stdio: 'ignore', timeout: 15000, windowsHide: true })
+       return true
+     } catch (e) {
+       // taskkill 对不存在进程退出码 128（等价 ESRCH，已退出按回收静默）；其余（拒绝访问等）上抛
+@@ -2371,7 +2406,7 @@ export function killProcessTree(pid, sig = 'SIGTERM') {
+ /** ps 枚举直接子进程 PID（POSIX；失败返回空——杀不到子进程不阻断父进程回收） */
+ function listChildPids(parentPid) {
+   try {
+-    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000 })
++    const out = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000, windowsHide: true })
+     const children = []
+     for (const line of String(out).split('\n')) {
+       const m = line.trim().match(/^(\d+)\s+(\d+)$/)
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 58bc100b..f286126f 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -19,7 +19,7 @@
+ import { join, dirname } from 'node:path'
+ import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES } from './shared.js'
++import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES, STAGE_WALL_PREDECESSOR } from './shared.js'
+ import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+ import { executeProgressConfirm } from './progress-confirm.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+@@ -45,6 +45,36 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+     }
+   }
+ 
++  // ── 阶段墙 hard 门（R16 减负批次 A 相位，2026-09-24）──
++  // 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）且目标
++  // 阶段为首次进入 → 拒启动。两个不拦的口：①目标阶段已有 stage 数据（reopen/复跑重入——保住
++  // verify FAIL→execute --reopen→verify 复跑的修复回路）；②--same-session 显式逃生口（应急/
++  // 平台编排）。fail-open：ledger 缺失/读失败/会话标识缺省 → 放行（与账本 best-effort 一致，
++  // hard 门只拦「确证同会话硬续」一种形态）。
++  if (STAGE_WALL_STAGES.includes(stageName) && changeName && !(quickOpts && quickOpts.sameSession)) {
++    try {
++      if ((await readStageWall(cwd)) === 'hard') {
++        const curSession = process.env.SILLYSPEC_SESSION_ID || ''
++        const wallStageData = progress.stages && progress.stages[stageName]
++        const firstEntry = !wallStageData || !Array.isArray(wallStageData.steps) || wallStageData.steps.length === 0
++        const wallLedgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
++        if (curSession && firstEntry && existsSync(wallLedgerPath)) {
++          const wallLedger = JSON.parse(readFileSync(wallLedgerPath, 'utf8'))
++          if (wallLedger && wallLedger.sessionId === curSession && wallLedger.lastStage === STAGE_WALL_PREDECESSOR[stageName]) {
++            console.error(``)
++            console.error(`⛔ 阶段墙（stage.wall=hard）：本会话（${curSession}）刚收口 ${wallLedger.lastStage}，${stageName} 必须在新的瘦会话执行。`)
++            console.error(`   单会话历史重放税实测：R15 execute 段均轮 263K 输入（断崖拆会话后回落 120-170K）——${stageName} 的全部输入在盘上（design/plan/tasks/review），新会话零背景可续跑。`)
++            console.error(`   动作：`)
++            console.error(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（保持 SILLYSPEC_SESSION_ID 不变）`)
++            console.error(`   2. 新会话粘贴交接块 → sillyspec run ${stageName} --change ${changeName}`)
++            console.error(`   逃生口：确认要同会话硬续（应急/平台编排）→ 加 --same-session 重跑本命令。`)
++            process.exit(1)
++          }
++        }
++      }
++    } catch { /* fail-open：任何读取/解析失败放行，行为与无墙一致 */ }
++  }
++
+   // execute 阶段启动前检查审批
+   if (stageName === 'execute' && !skipApproval) {
+     const approval = await checkApproval(cwd, changeName, platformOpts)
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 00ff06de..9dc1501f 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -537,110 +537,16 @@ created_at: <now-datetime>
+ ---
+ \`\`\`
+ 
+-### proposal.md 格式要求
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-# 提案书（Proposal）
+-
+-## 动机
+-为什么做、解决什么核心问题
+-
+-## 关键问题
+-为什么现有方案不够（展开 2-3 个具体痛点）
+-
+-## 变更范围
+-本次做什么
+-
+-## 不在范围内（显式清单）
+-- 不做 X
+-- 不做 Y
+-
+-## 成功标准（可验证）
+-- 旧配置默认行为不变
+-- 新功能在配置后可用
+-- ...
+-\`\`\`
++### 产物格式模板（出上下文——R16 减负批次 2026-09-24）
++proposal.md / requirements.md / tasks.md / decisions.md 四份产物的完整格式模板**不再内嵌本说明书**（每轮全量回放是 brainstorm 段 token 膨胀主源），已由 CLI 落盘：
++\`{SPEC_ROOT}/.runtime/templates/brainstorm-artifact-templates.md\`
++**生成任一规范文件前先 Read 该模板文件一次**，严格按模板结构与 frontmatter 产出——缺章节/缺 frontmatter 会被本步 --done 门禁逐条点名（brainstorm.design.* / four-piece 规则），届时重读模板修复即可。
++模板要点速览（细则以模板文件为准）：proposal=动机/关键问题/变更范围/不在范围内/成功标准；requirements=角色表 + FR-XX GWT 块（含覆盖决策行与承接行）+ 非功能需求 + 决策覆盖矩阵；tasks=task-NN checkbox 骨架（只列任务名，plan 阶段展开写回）；decisions=D-xxx@vN 九字段 + 可选字段（锚点/模块域/否决理由/复潮条件/故障面/退役判据）。
+ 
+ ### 触达域现行 FR（FR 索引注入，2026-09-18-fr-index-l1）
+ {FR_INDEX_DIGEST}
+ 写作纪律（防重复 FR——L1 索引实验的承接数据源）：改写/取代上列已有行为 → 对应新 FR 块**必须加承接行**引用全局 id（如 \`承接: FR-core-engine-003\`，多个逗号分隔）；全新行为 → 新 FR 块不加承接。承接行在归档时由 CLI 翻旧条目 superseded 并建取代链。
+ 
+-### requirements.md 格式要求
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-# 需求规格（Requirements）
+-
+-## 角色
+-| 角色 | 说明 |
+-|---|---|
+-| 开发者 | ... |
+-
+-## 功能需求
+-
+-### FR-01: 需求名称
+-覆盖决策：D-001@v1, D-002@v1（如适用）
+-承接: FR-<域>-NNN（如适用——改写/取代上列注入清单中的已有行为时必填，全新行为省略本行）
+-Given 前提条件
+-When 触发动作
+-Then 期望结果
+-
+-（每个边界条件独立 GWT 块；场景名行 \`#### 场景：X\` 会被归档索引用作摘要，建议保留）
+-（约束强度标注——RFC 2119 约定：FR 正文与非功能需求里的约束必须用固定词标硬度：MUST/必须=硬性要求（违反即缺陷）；MUST NOT/禁止=红线（绝对不允许，如「平台 MUST NOT 基于 provisional 事件内容做流程判定」）；SHOULD/应当=强烈建议（偏离须注明理由）；MAY/可以=可选。禁止裸写无强度词的约束句（「不做 X」读不出是描述还是禁令）。fr/ 归档索引逐字透传，强度词随知识注入带给后续变更——这是规范语言的全链路载体）
+-
+-## 非功能需求
+-- 兼容性：...
+-- 可回退：...
+-- 可测试：...
+-
+-## 决策覆盖矩阵（如存在 decisions.md）
+-| 决策 ID | 覆盖的 FR | 说明 |
+-|---|---|---|
+-| D-001@v1 | FR-01 | ... |
+-\`\`\`
+-
+-### tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-# 任务清单（Tasks）
+-
+-- [ ] task-01: <任务名>
+-- [ ] task-02: <任务名>
+-\`\`\`
+-> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
+-
+-### decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
+-\`\`\`markdown
+----
+-author: <git-user>
+-created_at: <now-datetime>
+----
+-
+-# 决策记录（Decisions）
+-
+-## D-001@v1: 决策短标题
+-- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
+-- priority: P0 | P1 | P2
+-- status: accepted | unresolved | rejected | superseded
+-- supersedes:
+-- source: user | code | docs
+-- question: 被解决的问题
+-- answer: 用户确认或代码查证结果
+-- normalized_requirement: 可测试的约束
+-- impacts: [FR-01, task-01, verify-01]
+-- evidence: 用户回答轮次或代码/文档路径
+-\`\`\`
+-
+-> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。本步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
+-
+ ### 后续变更包处理
+ 如果 MASTER.md 中规划了后续变更包（拆分后的子阶段），**必须同时为每个后续包创建独立变更目录**：
+ 1. 读取 MASTER.md 中的变更包列表（包名 + 边界描述）
+diff --git a/src/worktree-deps.js b/src/worktree-deps.js
+index e7689a5a..f7564996 100644
+--- a/src/worktree-deps.js
++++ b/src/worktree-deps.js
+@@ -74,8 +74,22 @@ const ECOSYSTEMS = [
+     marker: null,
+     detect: (d) => existsSync(join(d, 'pyproject.toml')) || existsSync(join(d, 'requirements.txt')),
+     // uv 优先（现代 Python 工具链，pyproject/uv.lock 项目走 uv sync 建 .venv + 装依赖，
+-    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip
+-    install: (d) => (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml')) ? 'uv sync' : 'pip install -r requirements.txt'),
++    // 与 execute worktree 环境预告一致）；纯 requirements.txt（无 pyproject）回退 pip。
++    // extras 探测（R14/R15 对撞实证 2026-09-24）：裸 uv sync 不装 [project.optional-dependencies]
++    // extras，worktree / verify deps 门重建的 .venv 缺 dev extras → `uv run pytest` 回落全局
++    // 环境报批量 ModuleNotFoundError（R14-OS 244 个，每次 6 轮自愈）。声明了 optional-dependencies
++    // 的仓补 --all-extras；[dependency-groups] 的 dev 组 uv sync 缺省已含，不加 flag。
++    // 白名单（INSTALL_BINARY_WHITELIST）按 binary 首 token 判定，--all-extras 无元字符天然放行。
++    install: (d) => {
++      if (existsSync(join(d, 'uv.lock')) || existsSync(join(d, 'pyproject.toml'))) {
++        try {
++          const py = readFileSync(join(d, 'pyproject.toml'), 'utf8')
++          if (/^\s*\[project\.optional-dependencies\]/m.test(py)) return 'uv sync --all-extras'
++        } catch { /* pyproject 读不到（纯 uv.lock 残缺 checkout）按裸 uv sync */ }
++        return 'uv sync'
++      }
++      return 'pip install -r requirements.txt'
++    },
+   },
+   {
+     type: 'go',
+@@ -229,7 +243,7 @@ function tryLink(mainNodeModules, linkPath) {
+   try {
+     if (lstatSync(linkPath).isSymbolicLink()) {
+       if (process.platform === 'win32') {
+-        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++        execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+       } else {
+         unlinkSync(linkPath);
+       }
+@@ -239,9 +253,9 @@ function tryLink(mainNodeModules, linkPath) {
+     if (process.platform === 'win32') {
+       // execFileSync 数组形式不经 shell：POSIX 双引号内 `/$() 会执行、cmd.exe 双引号内 %VAR% 仍展开，
+       // linkPath 含 local.yaml 模块 path，属项目内可配置值（安全收敛，与 git-helper 同范式）
+-      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'] });
++      execFileSync('cmd.exe', ['/c', 'mklink', '/J', linkPath, mainNodeModules], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+     } else {
+-      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++      execFileSync('ln', ['-s', mainNodeModules, linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+     }
+     // 创建后实物复核（坑 provision-silent-fake-installed 第②层，2026-08-21 实证：doctor 报
+     // re-provisioned 成功但 junction 实际没建）——mklink/ln 退出码 0 不等于链接落盘（cmd.exe
+@@ -325,9 +339,9 @@ function tryInstall(cmd, cwd, timeout) {
+       if (process.platform === 'win32') {
+         // Windows 包管理器是 .cmd 垫片，无 shell 的 spawn 无法解析——经 cmd.exe /c 传参；
+         // 元字符（含 %）已拦，残余风险与 tryLink 的 mklink 同款
+-        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
++        execFileSync('cmd.exe', ['/c', ...argv], { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+       } else {
+-        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'] });
++        execFileSync(argv[0], argv.slice(1), { cwd: curCwd, timeout, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+       }
+     } catch (e) {
+       const raw = e.killed ? `timeout after ${timeout}ms` : ((e.stderr && e.stderr.toString()) || e.message);
+@@ -454,7 +468,7 @@ export function sweepForeignNodeModulesJunctions(mainDir, { worktreesRoot, specB
+       if (dryRun) continue;
+       try {
+         if (process.platform === 'win32') {
+-          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'] });
++          execFileSync('cmd.exe', ['/c', 'rmdir', linkPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+         } else {
+           unlinkSync(linkPath);
+         }
+diff --git a/src/worktree-policy.js b/src/worktree-policy.js
+new file mode 100644
+--- /dev/null
++++ b/src/worktree-policy.js
+@@ -0,0 +1,42 @@
++/**
++ * worktree-policy.js — worktree 守卫选择记忆（R16 减负批次，2026-09-24）
++ *
++ * 背景：worktree/apply 三处守卫（分支冲突三选一 / guard 相交三态 / 主仓脏树 stash）此前
++ * 全是 fail-closed 抛错 + 文字菜单，选择只活在当次 flag 里不落任何配置——同一冲突下次
++ * 原样重拦重问（对撞 R15 实证：无人值守跑批时这类重拦是纯摩擦轮）。
++ *
++ * 本模块读 local.yaml `worktree.policy` 段（js-yaml，best-effort 绝不抛）：
++ *   adopt_branch:  true   → 分支已存在冲突时自动按「收编既有分支」处置（等效常备 --adopt-branch）
++ *   apply_overlap: force | skip | manual（缺省 manual = 既有 fail-closed）
++ *                          → guard 相交拦截的无人值守处置（force=放行留痕 / skip=软跳过）
++ *   stash_dirty:   true   → 主仓脏树时自动 stash（等效常备 --stash-dirty）
++ *
++ * 优先级铁律：显式 flag > policy > fail-closed 缺省。policy 只消「重复选择」，不开新权限面
++ * ——force/skip 经 policy 触发时同样落 overlapForced/overlapSkipped 留痕（审计可见）。
++ */
++import { readFileSync } from 'fs'
++import { join } from 'path'
++import jsYaml from 'js-yaml'
++
++/**
++ * 读 worktree.policy 段。
++ * @param {string} repoRoot - 主仓根（local.yaml 在 <repoRoot>/.sillyspec/local.yaml）
++ * @returns {{ adoptBranch: boolean, applyOverlap: 'manual'|'force'|'skip', stashDirty: boolean }}
++ *   文件缺/解析失败/段缺 → 全缺省（adoptBranch=false, applyOverlap='manual', stashDirty=false）。
++ */
++export function readWorktreePolicy(repoRoot) {
++  const fallback = { adoptBranch: false, applyOverlap: 'manual', stashDirty: false }
++  try {
++    const text = readFileSync(join(repoRoot, '.sillyspec', 'local.yaml'), 'utf8')
++    const doc = jsYaml.load(text) || {}
++    const policy = doc && doc.worktree && doc.worktree.policy
++    if (!policy || typeof policy !== 'object') return fallback
++    return {
++      adoptBranch: policy.adopt_branch === true,
++      applyOverlap: policy.apply_overlap === 'force' || policy.apply_overlap === 'skip' ? policy.apply_overlap : 'manual',
++      stashDirty: policy.stash_dirty === true,
++    }
++  } catch {
++    return fallback
++  }
++}
+
+diff --git a/src/stage-templates.js b/src/stage-templates.js
+new file mode 100644
+--- /dev/null
++++ b/src/stage-templates.js
+@@ -0,0 +1,157 @@
++/**
++ * stage-templates.js — 阶段产物模板出上下文（R16 减负批次，2026-09-24）
++ *
++ * 背景：brainstorm「生成规范文件」步内嵌 proposal/requirements/tasks/decisions 四份完整落盘
++ * 模板（~100 行）——说明书每轮全量回放（R15 实测 burst 单次载荷 1581 行/45K token，59 轮
++ * brainstorm 等于把说明书交了 59 遍钱），而模板只在真写产物的轮才需要。M1 指纹缓存只省
++ * 「复入重发」不省「每轮回放」，模板出上下文是唯一能把回放面砍掉的手段。
++ *
++ * 机制：模板单一源在本文件 → materializeStageTemplates 在 outputStep 渲染期幂等落盘
++ * `<specBase>/.runtime/templates/<name>.md` → 步骤 prompt 只留要点 + 文件路径 +「写该产物前
++ * Read 一次」。产物格式漂移由 --done 门禁兜底（brainstorm.design.* / four-piece 规则逐条
++ * 点名——模板没读会撞门禁，重读即修复，闭环在既有机制上）。
++ *
++ * 只收纯格式骨架；行为纪律（NEW: 前缀铁律/数据流标注/FR 承接纪律等）留在 prompt——规则
++ * 是判断依据须常驻，模板是抄写目标按需读。
++ */
++import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
++import { join } from 'path'
++
++/** brainstorm 四件套产物格式模板（自 stages/brainstorm.js「生成规范文件」步逐字迁移——
++ *  与 prompt 指针版本同源；decisions 九字段与可选字段说明一并迁入）。 */
++export const BRAINSTORM_ARTIFACT_TEMPLATES_MD = `# brainstorm 规范文件产物模板（proposal / requirements / tasks / decisions）
++
++> 写对应产物前读本文件一次，严格按模板结构与 frontmatter 产出；缺章节/缺 frontmatter 会被
++> 「生成规范文件」步 --done 门禁逐条点名（brainstorm.design.* / four-piece 规则）。
++
++## proposal.md 格式要求
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++# 提案书（Proposal）
++
++## 动机
++为什么做、解决什么核心问题
++
++## 关键问题
++为什么现有方案不够（展开 2-3 个具体痛点）
++
++## 变更范围
++本次做什么
++
++## 不在范围内（显式清单）
++- 不做 X
++- 不做 Y
++
++## 成功标准（可验证）
++- 旧配置默认行为不变
++- 新功能在配置后可用
++- ...
++\`\`\`
++
++## requirements.md 格式要求
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++# 需求规格（Requirements）
++
++## 角色
++| 角色 | 说明 |
++|---|---|
++| 开发者 | ... |
++
++## 功能需求
++
++### FR-01: 需求名称
++覆盖决策：D-001@v1, D-002@v1（如适用）
++承接: FR-<域>-NNN（如适用——改写/取代注入清单中的已有行为时必填，全新行为省略本行）
++Given 前提条件
++When 触发动作
++Then 期望结果
++
++（每个边界条件独立 GWT 块；场景名行 \`#### 场景：X\` 会被归档索引用作摘要，建议保留）
++（约束强度标注——RFC 2119 约定：FR 正文与非功能需求里的约束必须用固定词标硬度：MUST/必须=硬性要求（违反即缺陷）；MUST NOT/禁止=红线（绝对不允许，如「平台 MUST NOT 基于 provisional 事件内容做流程判定」）；SHOULD/应当=强烈建议（偏离须注明理由）；MAY/可以=可选。禁止裸写无强度词的约束句（「不做 X」读不出是描述还是禁令）。fr/ 归档索引逐字透传，强度词随知识注入带给后续变更——这是规范语言的全链路载体）
++
++## 非功能需求
++- 兼容性：...
++- 可回退：...
++- 可测试：...
++
++## 决策覆盖矩阵（如存在 decisions.md）
++| 决策 ID | 覆盖的 FR | 说明 |
++|---|---|---|
++| D-001@v1 | FR-01 | ... |
++\`\`\`
++
++## tasks.md 格式要求（scale=large 时生成骨架；任务清单唯一真相——plan 阶段展开细节并写回本文件）
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++# 任务清单（Tasks）
++
++- [ ] task-01: <任务名>
++- [ ] task-02: <任务名>
++\`\`\`
++> 骨架只列任务名。plan 阶段会把展开后的清单**写回本文件**（checkbox 行带一句话名，可附 [model:xxx]/(depends_on: …) 标注；保留 frontmatter/标题/ql-xxx 等非 task-XX 行）；execute 勾选与 verify 对照都在本文件。
++
++## decisions.md 格式要求（前序步骤已增量创建时对账即可；无决策的变更不生成）
++\`\`\`markdown
++---
++author: <git-user>
++created_at: <now-datetime>
++---
++
++# 决策记录（Decisions）
++
++## D-001@v1: 决策短标题
++- type: definition | consistency | feasibility | term | boundary | premise | architecture | compatibility | risk
++- priority: P0 | P1 | P2
++- status: accepted | unresolved | rejected | superseded
++- supersedes:
++- source: user | code | docs
++- question: 被解决的问题
++- answer: 用户确认或代码查证结果
++- normalized_requirement: 可测试的约束
++- impacts: [FR-01, task-01, verify-01]
++- evidence: 用户回答轮次或代码/文档路径
++\`\`\`
++
++> 可选字段（按需另加，旧格式决策缺这些字段不受影响）：**锚点**（决策落点主文件，\`<src 路径>:<行号或符号>\`；status=confirmed 时必填）；**模块域**（决策涉及的模块 ID，可多个逗号分隔——合法 id 只取**当前变更所属项目**的 \`{SPEC_ROOT}/docs/<project>/modules/_module-map.yaml\`，多项目仓勿读其他子项目的 map（核验不认，报错会点名归属）；规划中的新模块用 \`NEW:<名>\` 前缀声明，冒号后不加空格：\`NEW:foo\` 合法、\`NEW: foo\` 属书写错误。「生成规范文件」步 --done 的模块域核验对不认识的 id 直接阻断）；**否决理由**（status=rejected 时必填）；**复潮条件**（status=rejected 时必填）；**故障面**（本决策引入的新失败模式——新机制落地时留痕它引入什么失败模式；type=architecture 时建议填写，可选）；**退役判据**（出现什么信号时简化或删除本机制——信号出现就该简化它；type=architecture 时建议填写，可选）。
++`
++
++/** 模板清单（name → 内容）。新模板入册即自动被 materialize 落盘。 */
++const STAGE_TEMPLATE_FILES = {
++  'brainstorm-artifact-templates.md': BRAINSTORM_ARTIFACT_TEMPLATES_MD,
++}
++
++/**
++ * 幂等落盘全部阶段模板到 `<specBase>/.runtime/templates/`（内容有变才写，原子性靠短文件
++ * best-effort——模板只读消费，半写窗口下一次渲染会补齐）。
++ * @returns {string|null} 模板目录绝对路径（异常 → null，调用方 fail-soft）
++ */
++export function materializeStageTemplates(specBase) {
++  try {
++    if (!specBase) return null
++    // 只在已存在的 specBase 内落盘（坑：凭空新建 <cwd>/.sillyspec 会污染 spec-dir 向上
++    // 搜索语义——渲染测试曾在 test/ 目录下落出 test/.sillyspec，spec-dir-home-guard 向上
++    // 命中即断言失败）。specBase 不存在 = 本目录不是变更根，零动作。
++    if (!existsSync(specBase)) return null
++    const dir = join(specBase, '.runtime', 'templates')
++    mkdirSync(dir, { recursive: true })
++    for (const [name, content] of Object.entries(STAGE_TEMPLATE_FILES)) {
++      const p = join(dir, name)
++      let cur = null
++      try { cur = readFileSync(p, 'utf8') } catch { /* 首次 */ }
++      if (cur !== content) writeFileSync(p, content, 'utf8')
++    }
++    return dir
++  } catch {
++    return null
++  }
++}

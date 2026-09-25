@@ -1,503 +1,509 @@
 
-## ql-20260909-004-f629 | 2026-09-09 06:15:01 | archive 三重核对机械化——CLI 代算 + prompt 注入
+## ql-20260909-024-02ba | 2026-09-09 20:52:08 | sessions/page.test.tsx 12 用例失败修复——三重根因（视觉焕新漏跑断言过时/刻度轨阈值夹具/once 队列泄漏污染）
 状态：已完成
 关联变更：（无）
 文件：
-- src/archive-delta.js（audit）
-- src/stages/archive.js（prompt 消费化）
-- src/run/prompt.js（注入）
-- test/archive-closeout-mech.test.mjs（4 用例）
-需求：archive 三重核对机械化——CLI 代算 + prompt 注入
-根因：轮次经济学 §3.1 archive 收口项：让 agent 手跑 git diff 逐文件比对是纯机械轮
-方案：archive-delta auditModuleImpactAgainstDiff（三源 diff × 矩阵集合比对）；prompt.js {ARCHIVE_IMPACT_AUDIT} 注入；archive.js 步骤 prompt 消费化；卡+sidecar+镜像
-结果：closeout-mech 4/4；archive-delta/prompt 族回归 3/3 绿；lint 过；_verify 0
+- frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx（12 失败归零——轮次胶囊节点级断言×4+头像 title 断言+跳转夹具补第三轮+beforeEach mockReset 防 once 队列泄漏）
+需求：sessions/page.test.tsx 12 用例失败修复——三重根因（视觉焕新漏跑断言过时/刻度轨阈值夹具/once 队列泄漏污染）
+根因：视觉焕新提交（618bdaec2）只跑相关 40 套件未含本文件——轮尾换 RoundDivider 胶囊后轮次标签与状态拆成兄弟文本节点、头像换 ChatMessageAvatar 失去 aria-label；ql-20260909-005 刻度轨 <3 轮整条隐藏而轮次导航夹具仅 1-2 个 run；两类失败又经 vi.clearAllMocks 不清 mockResolvedValueOnce 队列的缺口连锁污染后继用例首屏
+方案：page.test.tsx 五处修——4 处 getByText(/第 N 轮 ·/) 改节点级 getByText("第 N 轮")；头像 getByLabelText("发送者 X") 改 getByTitle（我（名字）/他人名字）；桌面跳转公共夹具 2→3 轮（最旧 r-ancient completed 孤儿补建为已加载第1轮，UNLOADED_TICK_LABEL 第1轮→第2轮）+直跳单轮补两个更新 failed run；beforeEach 对 getAgentSessionLogs 加 mockReset 防 once 队列泄漏
+结果：page.test.tsx 36/36 两轮全绿（原 12 失败归零，文件时长 60s→9.7s）；tsc 0 错；eslint 0 error（4 warning 全预存）；frontend.changelog.md 已登记并勘正 ql-20260909-022 条目「存量环境债」误判
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/brainstorm-gate-agent-unavailable-and-list-path-parse.md
 
-## ql-20260909-005-9131 | 2026-09-09 09:52:47 | 审核修正批：lint 硬门 + 三重核对真接 map + 严格档结论槽必在 + 文档口径
+## ql-20260909-025-b045 | 2026-09-09 21:12:57 | 修冲突对比假差异——仅行尾/末尾换行差异的文件不再判 modified
 状态：已完成
 关联变更：（无）
 文件：
-- src/run/gates.js（硬门）
-- src/verify-postcheck.js（决策函数）
-- src/stage-contract.js（严格档槽）
-- src/archive-delta.js（第三重）
-- docs/sillyspec/file-lifecycle.md（十三维）
-- docs/sillyspec/round-trip-economics-2026-09-08.md（指针）
-- test/audit-fixes-batch.test.mjs（3 用例）
-需求：审核修正批：lint 硬门 + 三重核对真接 map + 严格档结论槽必在 + 文档口径
-根因：外部审核 3 P2 + 3 P3；lint 观察期数据已出（14 次 5 败全真阳性零误伤）
-方案：shouldBlockVerifyLint 纯函数+gates 接线（advisory 逃生）；auditImpactModuleAttribution 第三重 map 归属；isIrStrictVerifyChange 严格档删槽 ERROR（存量回退保留）；lifecycle 十三维；经济学 quicklog 目录化；启发式注记
-结果：audit-fixes-batch 3/3；回归 8 套件绿；docs 520 全过；lint 过
-审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/architecture-4a.md, docs/sillyspec/prompt-control-debt.md
+- backend/app/modules/daemon/sillyspec_compare.py（identical 判定改 _lines_equal 行尾归一化（全等短路+splitlines），docstring 同步）
+- backend/app/modules/daemon/tests/test_sillyspec_compare.py（新增 eol_only_diff_classified_identical 三形态用例（CRLF/LF、末尾换行、行尾+真实改动），平台侧 write_bytes 控行尾）
+需求：修冲突对比假差异——仅行尾/末尾换行差异的文件不再判 modified
+根因：状态判定用原始字符串全等（对 CRLF/LF 敏感），而 _aligned_diff_rows 用 splitlines（行尾不敏感），口径不一致——本地 Windows 检出 CRLF vs 平台副本 LF 的文件判 modified 但差异行全 equal、前端无高亮，实测某冲突记录 183 文件全为此类
+方案：sillyspec_compare.py 新增 _lines_equal（全等短路 + splitlines 行尾归一化）替代 identical 分支的原始全等，与 diff 渲染口径拉齐；diff 行生成不变，真实内容差异仍 modified；模块文档 daemon.md + daemon.changelog.md 同步
+结果：test_sillyspec_compare.py 24 passed（含新增 eol_only_diff_classified_identical 1 用例），ruff check/format 通过，mypy sillyspec_compare.py 0 错
 
-## ql-20260909-006-52eb | 2026-09-09 09:59:27 | 刀批 2：design 自检删除 + 危险预检前移 + module-docs-sync
+## ql-20260909-026-ff18 | 2026-09-09 21:26:48 | 修复 codex 交互会话必现卡死——早到 inject 竞态下 turn/start 未等 threadId 就绪被静默跳过
 状态：已完成
 关联变更：（无）
 文件：
-- src/stages/brainstorm.js（自检删除）
-- src/run/stage.js（预检）
-- src/module-impact.js（sync 函数）
-- src/index.js（命令）
-- test/knife-batch2.test.mjs（3 用例）
-需求：刀批 2：design 自检删除 + 危险预检前移 + module-docs-sync
-根因：轮次经济学未认领三刀：自检与门禁同款复刻/危险文件 --done 才拦/sidecar 两处手写
-方案：Step6 操作 4 改门禁承担声明；会话创建点任务描述×脏文件启发式预检；syncModuleDocSidecars + CLI（幂等）
-结果：knife-batch2 3/3；module-impact/quick 族 9 绿；lint 过；_verify 0
+- sillyhub-daemon/src/interactive/codex-app-server-driver.ts（_awaitThreadId 等待 + 超时 failed 收敛 + 可注入超时参数）
+- sillyhub-daemon/tests/interactive/codex-app-server-driver.test.ts（ql-20260909-026 两条竞态回归用例）
+- .sillyspec/docs/sillyhub-daemon/modules/interactive.md（常量行补 threadId 等待 + 人工备注条目）
+需求：修复 codex 交互会话必现卡死——早到 inject 竞态下 turn/start 未等 threadId 就绪被静默跳过
+根因：backend 建会话即派发首句，inject 走 inject_wait parked 路径在 create 完成后立即入队，consume 循环握手写完即取到输入，此刻 codex thread/start 响应未到（h.threadId=null），_writeTurnStart 静默 return 后死等 currentTurnPromise——消息丢失、run 永久 running、零日志（生产实机案会话 e05addf7）
+方案：codex-app-server-driver.ts consume 循环 beginTurn 后先 _awaitThreadId（50ms check-first 轮询等 thread/start|resume 响应，就绪零延迟）再写 turn/start，超时（默认 30s 可注入）按 turn failed 收敛并 console.warn，循环继续消费后续 inject 不再挂死；补 2 条竞态回归测试 + interactive.md 模块文档记录
+结果：vitest codex driver 套件 72 passed（含新增 2 条竞态回归）；pnpm typecheck 0 错误；本机 daemon bundle 更新与线上验证随后执行
 
-## ql-20260909-007-c720 | 2026-09-09 10:41:34 | lint 打印文案随门禁档位分支 + 经济学文补记 + 死参清理
+## ql-20260909-027-4b26 | 2026-09-09 22:17:13 | 修复 codex 用量全漏——thread/tokenUsage/updated 才是用量真源，driver 差值记账
 状态：已完成
 关联变更：（无）
 文件：
-- src/verify-postcheck.js（分支+JSDoc）
-- src/archive-delta.js（死参）
-- docs/sillyspec/round-trip-economics-2026-09-08.md（补记）
-- test/lint-print-branch.test.mjs（3 用例）
-需求：lint 打印文案随门禁档位分支 + 经济学文补记 + 死参清理
-根因：复核 P2 文案与 rollback 行为打架 / P3 文状态滞后
-方案：printVerifyLintCheck 按 shouldBlockVerifyLint 分支（硬门已阻断+逃生 / advisory 保留旧措辞）；经济学文 §3 翻已收口 + §4b 补三行；死参移除
-结果：lint-print-branch 3/3；回归 7 绿；lint 过
+- sillyhub-daemon/src/interactive/codex-app-server-driver.ts（tokenUsage/updated 解析+差值记账）
+- sillyhub-daemon/tests/interactive/codex-app-server-driver.test.ts（ql-20260909-027 三条用例）
+- .sillyspec/docs/sillyhub-daemon/modules/interactive.md（人工备注条目）
+需求：修复 codex 用量全漏——thread/tokenUsage/updated 才是用量真源，driver 差值记账
+根因：codex 0.147 的 turn/completed 不带 usage，适配器旧提取点恒空；用量在每次 API 调用后的 thread/tokenUsage/updated 通知（total 线程累计），生产 3 个 codex run token 全 NULL 实证
+方案：codex-app-server-driver.ts：handle 增 threadUsageTotal/usageBaseline 双基线；handleLine 解析该通知（在途时发本轮累计差值 usage_update 事件喂 ledger）；轮 start 快照基线、轮末差值补 outcome.usage（毛值拆桶：input=Δinput-Δcached-Δwrite）；total 回退时重置基线
+结果：vitest codex driver 套件 75 passed（新增 3 条：多调用差值+live 事件、跨轮基线、无通知零回归）；tsc 0 错误；E2E 实机对账随后统一执行
 
-## ql-20260909-008-c8a9 | 2026-09-09 12:19:59 | 修复 12 个测试满载并发假红：套件 HOME 隔离改锚 suiteTmp 根 + config-cat passedHome 截断
+## ql-20260909-028-2582 | 2026-09-09 22:25:43 | 修复 pi 用量严重低报——逐调用累加替代 turn_end 定格值 replace
 状态：已完成
 关联变更：（无）
 文件：
-- src/config-cat.js（resolveLocalYaml 补 passedHome 截断（经过 home 层后候选链整段截断））
-- test/run-tests.mjs（套件 HOME/USERPROFILE 改锚 suiteTmp 本身 + 根级 .gitconfig 补放）
-需求：修复 12 个测试满载并发假红：套件 HOME 隔离改锚 suiteTmp 根 + config-cat passedHome 截断
-根因：套件 HOME 指向 suiteTmp/home 子目录而 fixture 在 TEMP 兄弟层，home 守卫（originBelowHome）恒不激活，CLI 向上遍历撞真实 home 的 ~/.sillyspec，写入被劫持到真实 home 造成 fixture ENOENT + 历届污染积累
-方案：①run-tests.mjs HOME/USERPROFILE 改锚 suiteTmp 本身（fixture 恒在 fake home 子树，守卫全激活，passedHome 拦截 suiteTmp 之上一切层）+ suiteTmp 根补 .gitconfig；②config-cat.js resolveLocalYaml 补 passedHome 截断（与 resolveSpecDir e4f2855 同构，生产语义矩阵验证不变）；③备份后清理真实 home 历届测试污染（backup-20260909-121332，保留真实 local.yaml）
-结果：满载裸跑（SILLYSPEC_TEST_RETRY_FLAKY=0）连跑 3 轮 397 文件全绿零失败（修复前同口径 12 文件稳定假红）；标准 npm test 全绿；npm run lint 516 文件通过；真实 home 三轮跑后零新污染
+- sillyhub-daemon/src/interactive/pi-rpc-driver.ts（逐调用累加+turn_end 注入轮累计）
+- sillyhub-daemon/tests/interactive/pi-rpc-driver.test.ts（ql-20260909-028 两条用例）
+- .sillyspec/docs/sillyhub-daemon/modules/interactive.md（人工备注条目（含对账数据））
+需求：修复 pi 用量严重低报——逐调用累加替代 turn_end 定格值 replace
+根因：pi 每条 message.usage 是单次调用量（jsonl ground truth 实证），turn_end 只定格最后一次调用，driver replace 语义丢轮内工具循环中间调用——实测全会话只记到真实 in 5.7%/out 8.5%/cacheRead 1.9%
+方案：pi-rpc-driver.ts：handleLine 对 message_end assistant message.usage 逐条累加（turnUsageSum，轮 start 重置）；turn_end usage 事件以累加和为准（防定格值双计）并注入事件本体供 ledger/live；累加为空退回定格值零回归
+结果：vitest pi 套件 79 passed（新增 2 条：多调用累加+注入、无 usage 回退）；tsc 0 错误；E2E 实机对账随后执行
 
-## ql-20260909-009-bb26 | 2026-09-09 13:52:59 | 平台凭据 env 通道注释纠偏——四处「daemon 注入通道」改为「预留通道、daemon 未实现注入」。根因…
-状态：已完成
-关联变更：（无）
-文件：src/agent-session-log.js, src/run/shared.js, src/sync.js
-需求：平台凭据 env 通道注释纠偏——四处「daemon 注入通道」改为「预留通道、daemon 未实现注入」。
-根因：注释宣称凭据由 daemon 注入 env SILLYHUB_PLATFORM_URL/TOKEN 提供，但 daemon 仓全历史无此实现，排障方向被带偏。
-方案：sync.js _getPlatform / run/shared.js triggerSync / agent-session-log.js 两处 docstring 统一改写并澄清平台模式回传主凭据实为 local.yaml platform 段；随注释增行平移 platform-interface-map.md 三锚与 prompt-control-debt.md 一锚。
-结果：纯注释零逻辑变化；node --check 过；CLI 门禁 npm test 全绿 + lint 0 告警；docs check 行号锚归零（残余 2 条历史 change-name advisory 非阻断）。
-审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：docs/sillyspec/platform-interface-map.md, docs/sillyspec/prompt-control-debt.md
-
-## ql-20260910-001-7ae6 | 2026-09-10 09:00:54 | quick 收尾软归属：窗口内未声明同模块测试文件自动补入 QUICKLOG 文件行
+## ql-20260910-001-4560 | 2026-09-10 03:27:52 | 影子会话 pending 提问读侧放开——群成员可见成员提问卡
 状态：已完成
 关联变更：（无）
 文件：
-- src/run/shared.js（matchSameModuleTestFiles stem 匹配 + auditQuickCompletion 计算 review.softTestFiles）
-- src/quicklog.js（flipEntryInContent/completeQuicklogEntry 接 softFiles，文件行补软归属 bullet）
-- src/run/complete-handlers.js（审计行拆 ⚖️ 真未知 / 🔍 软归属单列 + softFiles 透传）
-- test/quicklog-soft-attribution.test.mjs（27 断言（纯函数/落盘/CLI 端到端））
-- .sillyspec/docs/sillyspec/modules/change-management.md（模块卡同步软归属口径）
-- .sillyspec/docs/sillyspec/modules/change-management.changelog.md（sidecar 追加 ql-20260910-001-7ae6）
-- docs/sillyspec/platform-interface-map.md（complete-handlers 行号引用随插入漂移重锚 1674→1688）
-需求：quick 收尾软归属：窗口内未声明同模块测试文件自动补入 QUICKLOG 文件行
-根因：file-notes 括注只落声明文件，测试文件漏声明时审计行有提示但文件行不自动补齐，连续两批需手工核对（2026-09-10 用户反馈）
-方案：matchSameModuleTestFiles（run/shared.js）按 stem 相等/前缀+分隔符匹配窗口内未声明测试文件，auditQuickCompletion 出 review.softTestFiles，flipEntryInContent 补入文件行 bullet 带软归属括注；审计行拆 ⚖️ 真未知与 🔍 软归属单列，硬归属口径声明即归属不变
-结果：test/quicklog-soft-attribution.test.mjs 27 断言全绿，相关回归 6 套与 lint 绿，docs check 520 引用通过，change-management 模块卡与 sidecar 同步
+- backend/app/modules/daemon/permission_service.py（list_pending_dialogs 读侧影子分支（复用答题侧助手））
+- backend/app/modules/daemon/tests/test_session_permissions.py（+3 读侧用例）
+需求：影子会话 pending 提问读侧放开——群成员可见成员提问卡
+根因：task-09 只放开答题端点，读侧 list_pending_dialogs 仍 owner/admin-only——非群主能答却看不见卡（askuser-pi-cursor 已知限制①）
+方案：list_pending_dialogs ownership 404 时复用 _resolve_shadow_member_answer_session 影子成员分支（条件与答题侧同源），命中放行读否则 404；单聊/群会话语义零变化
+结果：test_session_permissions 40 passed（+3：成员拉取成功/外人+移除成员 404/单聊非属主仍 404）；ruff/mypy/格式全净；未部署
 
-## ql-20260910-002-9beb | 2026-09-10 09:15:48 | stage review 降级自审 CLI 侧配套：无 Agent 宿主 tier=independent 降级可见可追溯
+## ql-20260910-002-dd6d | 2026-09-10 03:29:08 | 24h 审查风险修复第三批：群聊 pending 卡误关/pending 缓存 epoch 中毒/门户会话数据源断供/StrictMode 丢日志/多目标失败掩…
 状态：已完成
 关联变更：（无）
 文件：
-- src/stage-review.js（isDegradedSelfReview 首行降级检测 + 契约/缺件报错/gate FAILED 提示带降级出口）
-- src/run/gates.js（Stage Review Gate 放行时降级自审留 ⚠️ 审计行）
-- test/stage-review-degraded-selfreview.test.mjs（13 断言（检测/报错出口/契约文档化））
-- .sillyspec/docs/sillyspec/modules/core-engine.md（模块卡 stage-review 条目补降级配套）
-- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（sidecar 追加 ql-20260910-002-9beb）
-需求：stage review 降级自审 CLI 侧配套：无 Agent 宿主 tier=independent 降级可见可追溯
-根因：PI agent 等宿主环境无 Agent tool，tier=independent 硬要求子代理时只能降级自审（2026-09-10 用户反馈①，三处）；prompt 降级条款已有（并行会话未提交改动），但 gate 静默放行降级 review、缺件报错无降级出口，事后审计无法区分降级与真子代理审查
-方案：stage-review.js 新增 isDegradedSelfReview（reviewerNotes 首行降级 colon 约定检测，向后兼容不新增阻断），gates.js Stage Review Gate 放行时检测到降级标记留 ⚠️ 审计行；缺 review.json 报错与 gate FAILED 提示补降级出口指引，renderReviewJsonContract 契约文档化该约定
-结果：test/stage-review-degraded-selfreview.test.mjs 13 断言全绿，stage-review 回归 8 套与 lint 绿，core-engine 模块卡与 sidecar 同步
+- backend/app/modules/change/pending_cache.py（get 返读时 epoch/set 纯盖章+NX 初始化）
+- backend/app/modules/change/service.py（调用方透传 epoch）
+- backend/app/modules/change/tests/test_pending_cache.py（防中毒回归 3 例+FakeRedis nx）
+- frontend/src/components/group-chat/group-chat-panel.tsx（失败哨兵+快照开放态）
+- frontend/src/components/group-chat/__tests__/group-askuser-aggregate.test.tsx（拉取失败不关卡用例）
+- frontend/src/components/sessions/sessions-portal.tsx（补参+第七入口快照）
+- frontend/src/components/sessions/__tests__/sessions-portal.test.tsx（includeSessions+续接快照用例，mock 透传参）
+- frontend/src/components/floating/floating-session-host.tsx（补 includeSessions:true）
+- frontend/src/lib/use-agent-run-stream.ts（去重移出 updater）
+- frontend/src/lib/__tests__/use-agent-run-stream.test.ts（StrictMode 双调用例，旧实现验证变红）
+- sillyhub-daemon/src/sillyspec-manager.ts（轮内聚合清空）
+- sillyhub-daemon/tests/sillyspec-manager.test.ts（多目标掩蔽 4 例+harness targets/outcomeByCwd）
+- .sillyspec/docs/SillyHub/modules/change.md / frontend_lib.md / frontend_components.changelog.md / .sillyspec/docs/sillyhub-daemon/modules/sillyspec-manager.changelog.md（模块文档四处同步）
+需求：24h 审查风险修复第三批：群聊 pending 卡误关/pending 缓存 epoch 中毒/门户会话数据源断供/StrictMode 丢日志/多目标失败掩蔽/续接快照漏写六项
+根因：①拉取失败与无卡混同致已见卡永久转已答 ②set 重读 epoch 把旧集合盖新章中毒 5 分钟 ③轮询拆分漏传 includeSessions 致 sessions 恒空 ④Set.add 副作用在 updater 内被 StrictMode 双调丢条目 ⑤单槽位 statusError 被同轮后位成功清掉 ⑥第七个选中入口不写工作区快照致文件树串档
+方案：①queryFn 返回 failedShadowSessionIds+快照维持开放态 ②get 返读时 epoch/set 盖章不重读+NX 初始化 ③门户与悬浮宿主补 includeSessions:true ④去重移出 updater 纯追加 ⑤_collectOneTarget 返失败布尔+整轮聚合清空 ⑥onClick 补 setSelectedWorkspaceId(recentSession.workspace_id)
+结果：backend change 507 passed+ruff/format/mypy 0 问题；daemon sillyspec-manager 64 passed+tsc 0；前端 11+53+31+93 用例全绿+tsc 0+eslint 0 错误；StrictMode 用例旧实现验证变红后转绿
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：frontend/src/components/sessions/__tests__/sessions-portal.test.tsx, frontend/src/lib/__tests__/use-agent-run-stream.test.ts, sillyhub-daemon/tests/sillyspec-manager.test.ts
 
-## ql-20260910-003-2709 | 2026-09-10 09:34:54 | verify 证据核验时序两难与同步覆盖/夹带三坑修复
+## ql-20260910-003-0d35 | 2026-09-10 03:33:09 | codex/pi/cursor 用量接按模型明细表——驱动带 modelUsage 会话累计快照
 状态：已完成
 关联变更：（无）
 文件：
-- src/verify-postcheck.js（resolveVerifyChangedFiles worktree 并入补已提交口径（merge-base diff）+ trackVerifyResultRegression 高水位回退检测）
-- src/task-review.js（草稿归属并入同款已提交补齐（口径与 verify-postcheck 同源））
-- src/progress/change-registry.js（getStageStartedAt 只读访问器）
-- src/progress.js（facade 委托 getStageStartedAt）
-- src/run/gates.js（verifyStartAt 锚改 execute startedAt + 回退检测告警接线）
-- src/run/complete.js（quick 完成提示加 pathspec 禁令）
-- templates/agents-instruction.md（核心规则 18 目录级 git add 禁令）
-- AGENTS.md（本仓同步规则 18）
-- test/verify-window-regression.test.mjs（三段（worktree 已提交 diff / startedAt roundtrip / 回退检测））
-- .sillyspec/docs/sillyspec/modules/core-engine.md（模块卡同步）
-- .sillyspec/docs/sillyspec/modules/progress.md（模块卡同步）
-需求：verify 证据核验时序两难与同步覆盖/夹带三坑修复
-根因：PI 会话实证②：worktree 已提交改动对主仓 diff 与 status 双盲区致草稿 changedFiles 空，mtime 锚 execute 完成时刻把 execute 期间产的证据判旧，两核验互斥只能 missing+豁免收口；③ verify-result.md 被平台同步覆盖回旧版无告警；④ 目录级 git add 夹带并行会话文件甚至误删已提交文档（2026-09-10 用户反馈）
-方案：②a 两处 worktree 并入点补 merge-base(主仓HEAD, worktreeHEAD)..worktreeHEAD 已提交 diff；②b getStageStartedAt 锚点放宽（gates started 优先 completed 兜底）；③ trackVerifyResultRegression 高水位指纹（hash+mtime）检出内容回退+mtime 倒流即告警（覆盖者在仓外，CLI 侧保证可见）；④ agents 模板核心规则 18 + 本仓 AGENTS.md + quick 完成提示三处禁目录级 git add
-结果：test/verify-window-regression.test.mjs 3 断言组全绿（worktree 真实 git worktree 构造），回归 8 套与 lint 绿，core-engine/progress 模块卡与 sidecar 同步
+- sillyhub-daemon/src/interactive/driver.ts（DriverModelUsage 类型+helpers）
+- sillyhub-daemon/src/interactive/codex-app-server-driver.ts（threadModel+快照+result 附带）
+- sillyhub-daemon/src/interactive/pi-rpc-driver.ts（model_change+快照+result 附带）
+- sillyhub-daemon/src/interactive/cursor-driver.ts（init 模型+快照+result 附带）
+- .sillyspec/docs/sillyhub-daemon/modules/interactive.md（人工备注条目）
+需求：codex/pi/cursor 用量接按模型明细表——驱动带 modelUsage 会话累计快照
+根因：daemon 的 model_usage 差分拆行管线只服务 claude（SDK modelUsage 透传），其余三家 result 无该字段 → agent_run_model_usage 无行、按模型统计页空、api_requests 不写
+方案：InteractiveDriverResult 增 modelUsage（driver.ts 公共类型+helpers）；codex=thread/started 模型+tokenUsage 净值快照覆盖、pi=model_change 模型+message_end 逐调用累加、cursor=init 帧模型+result 帧逐轮累加，失败轮统一附带；daemon.ts/backend 零改动复用既有管线
+结果：相关 5 套件 200 passed（新增 3 条）+ daemon-interactive 58 passed、tsc 0 错误；E2E 实机验证 agent_run_model_usage 行随后执行
+审计：⚖️ 归属切分：5 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：frontend/src/lib/__tests__/use-agent-run-stream.test.ts, sillyhub-daemon/tests/interactive/codex-app-server-driver.test.ts, sillyhub-daemon/tests/interactive/cursor-driver.test.ts, sillyhub-daemon/tests/interactive/pi-rpc-driver.test.ts, sillyhub-daemon/tests/sillyspec-manager.test.ts
 
-## ql-20260910-004-b807 | 2026-09-10 10:40:12 | 独立审查通道优先序可配置（P1 垫底）：channel_priority 按用户配置序注入契约 + reviewer.channel 审计
-状态：已完成
-关联变更：2026-09-10-change-scope-audit
-文件：
-- src/stage-review.js（readReviewChannelPriority + classifyReviewerChannel + 契约通道段/reviewer 字段/骨架字段）
-- src/run/prompt.js（契约注入显式传配置序（精确 cwd））
-- src/run/gates.js（channel 审计分支（self ⚠️ / platform ℹ️ missionId / 其余静默））
-- .sillyspec/local.yaml.example（review_dispatch.channel_priority 配置块）
-- test/review-channel-priority.test.mjs（三段（配置语义/channel 识别/契约渲染））
-- .sillyspec/docs/sillyspec/modules/core-engine.md（模块卡 stage-review 条目扩通道批次）
-- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（sidecar 追加）
-需求：独立审查通道优先序可配置（P1 垫底）：channel_priority 按用户配置序注入契约 + reviewer.channel 审计
-根因：通道选择顺序是主观权衡（信本机子代理 vs 平台跨模型最大独立性），CLI 拍死任何固定序都会替用户做价值判断（2026-09-10 用户裁决）；PI 等「平台 MCP 可派独立审查但宿主无 Agent」的根治通道 review-dispatch 是 P2 架构级，先垫配置面与审计面
-方案：stage-review.js 新增 readReviewChannelPriority（local.yaml review_dispatch.channel_priority：缺省现状序零回归/未知值忽略/self 恒隐式垫底）与 classifyReviewerChannel（结构化落款 > 首行降级约定兼容 > unspecified）；renderReviewJsonContract 在 tier=independent 头部按配置序渲染审查执行通道段（platform 标注 P2 未落地暂跳过，不引用不存在命令）+ reviewer 可选字段契约与示例；register-stage-review 骨架带 reviewer 占位；gates.js 按 channel 分支留痕（self ⚠️ / platform ℹ️ missionId）；prompt.js 契约注入显式传精确 cwd 读配置
-结果：test/review-channel-priority.test.mjs 3 断言组全绿（配置语义 6 形态/channel 识别 9 形态/契约渲染），stage-review 回归 8 套与 lint 绿，core-engine 模块卡与 sidecar 同步
-审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/changes/2026-09-10-change-scope-audit/tasks/
-
-## ql-20260910-005-fb40 | 2026-09-10 12:41:09 | 平台侧 MCP 修复三遗留的消费侧落地：派发解析/成对凭据/daemon 在线探测
+## ql-20260910-004-db16 | 2026-09-10 03:55:23 | AskUser answered_by 透传链补全——他答人名缺失与 409 英文文案双收口
 状态：已完成
 关联变更：（无）
 文件：
-- src/sillyhub-mcp/client.js（dispatchWorker id 兜底解析 + getDaemonStatus 三态方法）
-- src/sync.js（connect mcp-tokens 成对签发（gateway_url+token 覆盖写/失败降级旧口径））
-- src/dispatch/probe.js（daemon 在线层（get_daemon_status false→daemon-offline，null fail-open）+ cwd 注入参数）
-- test/dispatch/path-a-probe.test.mjs（CLEAN_CWD 隔离（修环境泄漏））
-- test/dispatch/strategy.test.mjs（同款隔离）
-- test/sillyhub-mcp-platform-fixes.test.mjs（4 组（id 解析/getDaemonStatus/probe 三态/connect 成对写））
-- .sillyspec/docs/sillyspec/modules/sillyhub-mcp.md（模块卡同步）
-- .sillyspec/docs/sillyspec/modules/sillyhub-mcp.changelog.md（sidecar 追加）
-需求：平台侧 MCP 修复三遗留的消费侧落地：派发解析/成对凭据/daemon 在线探测
-根因：平台侧 22cdf89d1 已修 gateway 暴露/成对签发/get_daemon_status 并留三遗留：dispatchWorker 解析只认 worker_id 但平台实返 id（派发成功 workerId=null 轮询全断）；旧 mcp 段写入按 url 同源假设致凭据三头分裂永不愈合；daemon 不在线只能真派发才发现（no_online_daemon 快速失败）
-方案：client.js dispatchWorker 解析链补 id 兜底并新增 getDaemonStatus（isError/未配置→null fail-open）；sync.js connect 经 mcp-tokens API（scope=read+dispatch）取 gateway_url+token 成对覆盖写 mcp 段（陈旧段修复性覆盖，签发失败降级旧口径不覆盖手填段）；probe.js 连通后调 get_daemon_status——false→available false reason daemon-offline（不进负面缓存），true/null 透传 daemonOnline；另修既有测试环境泄漏（probeSillyHub 加 cwd 注入，dev 仓自身连平台时 no-config 用例读到真配置）
-结果：test/sillyhub-mcp-platform-fixes.test.mjs 4 组全绿，dispatch 族回归 5 套与 lint 绿，远端活体冒烟 available true + 旧 token daemonOnline null（fail-open 实证）；sillyhub-mcp 模块卡与 sidecar 同步
+- backend/app/modules/daemon/permission_service.py（DTO 双层 answered_by + 409 details 透传）
+- backend/app/modules/daemon/tests/test_session_permissions.py（+1 透传双通道用例）
+- frontend/src/components/ask-user-dialog-card.tsx（onAlreadyResolved 回调 + 409 本地关闭态）
+- frontend/src/components/group-chat/group-chat-panel.tsx（409 接线成员表映射人名）
+- frontend/src/components/ask-user-dialog-card.test.tsx（+2 409 用例）
+- frontend/src/components/group-chat/__tests__/group-askuser-aggregate.test.tsx（+1 他答 409 带名用例）
+需求：AskUser answered_by 透传链补全——他答人名缺失与 409 英文文案双收口
+根因：SessionDialogRead 无 answered_by 字段：历史/恢复读无法渲染答题人；409 已答抬错 details 也不带——第二答题端只能干等 ≤10s 轮询且永远无人名，并直出英文报错
+方案：backend：SessionDialogRead/WorkspaceDialogRead 增 answered_by（from_model 透传）+ DaemonDialogAlreadyResolved details 携带 answered_by；frontend：ask-user-dialog-card 增 onAlreadyResolved 回调（409 即时本地翻已答关闭态，不直出英文），group-chat-panel 接线经成员表映射人名
+结果：backend 41 passed（+1 双通道断言）+ workspace dialogs 9 不回归；frontend dialog-card 31（+2）+聚合 12（+1）全绿、tsc 0、eslint 0 error；双端生产构建 exit 0；dev 库验证数据已清零
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：sillyhub-daemon/tests/interactive/replay-real-log.test.ts
 
-## ql-20260910-006-2134 | 2026-09-10 13:03:10 | 成对签发消费侧 hotfix：client 端点双形态兼容（origin 拼 /mcp/ vs 完整端点不再叠加）
+## ql-20260910-005-ea38 | 2026-09-10 04:17:44 | 24h 审查风险修复第四批：并发答题先到先得原子化+软删群反例+reparse 停机排空+compare 行边界口径收紧
 状态：已完成
 关联变更：（无）
 文件：
-- src/sillyhub-mcp/client.js（_endpoint 双形态兼容（/mcp$ 尾不再叠加 /mcp/））
-- test/sillyhub-mcp-platform-fixes.test.mjs（端点双形态 5 断言 + getDaemonStatus 未配置用例 cwd 隔离）
-需求：成对签发消费侧 hotfix：client 端点双形态兼容（origin 拼 /mcp/ vs 完整端点不再叠加）
-根因：connect 原样写 gateway_url（完整端点）进 mcp.url，而 client 历来按 origin 语义自拼 /mcp/ → /mcp/mcp/ 必 404（活体首跑实证）；平台侧 daemon local-yaml-writer 也写 origin+/mcp 形态，两种形态在野，任一单侧修都会破坏另一形态
-方案：client 构造器端点解析改双形态：url 以 /mcp 结尾视为完整端点（补尾斜杠即用），否则视为 origin 拼 /mcp/；测试补端点 5 断言（origin/完整/尾斜杠/子路径/未配置）并修 getDaemonStatus 未配置用例的 cwd 隔离（仓自身 local.yaml 现为活配置，进程 cwd 会真发网）
-结果：test/sillyhub-mcp-platform-fixes.test.mjs 5 组全绿，dispatch 族回归不变绿；活体验证全链路点亮：endpoint 归一 https://crrcdt.ppdmq.top/mcp/ + probeDaemon true + daemonOnline true（成对 token read scope 生效）
+- backend/app/modules/daemon/permission_service.py（条件 UPDATE 先到先得）
+- backend/app/modules/daemon/sillyspec_compare.py（_normalized_lines 单一源）
+- backend/app/main.py（停机排空 reparse）
+- backend/app/modules/daemon/tests/test_session_permissions.py（竞态+软删群两用例）
+- backend/app/modules/daemon/tests/test_sillyspec_compare.py（口径矩阵+管线用例）
+需求：24h 审查风险修复第四批：并发答题先到先得原子化+软删群反例+reparse 停机排空+compare 行边界口径收紧
+根因：①守卫段 dialog 行无锁快照且行锁随守卫 commit 释放，并发双答后到者覆写 answered_by/answer 且 SSE 双发，影子答题放开后可达性放大 ②软删群答题反例无测试覆盖（审查 1.2 缺口）③停机 finally 不排空在飞 reparse 短事务 ④裸 splitlines 把 \v 等罕见分隔符当行边界吞掉，字节不同判 identical 超出原声称范围
+方案：①条件 UPDATE 仅 pending 可翻+0 行重读按终态抛 409 携先到者 ②软删群 404 用例+竞态窗口模拟用例 ③shutdown finally 补 drain_reparse_workers ④两处共用 _normalized_lines 单一源只归一三种真行尾
+结果：test_session_permissions 43+test_sillyspec_compare 26 全绿（竞态用例旧实现验证变红）；daemon+spec_workspace 全量 2144 passed 1 skipped（平台存量跳过）；ruff/format/mypy 0 问题
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：sillyhub-daemon/src/interactive/driver.ts
 
-## ql-20260910-007-124c | 2026-09-10 13:57:19 | 修驾驭小结三负面：exec-run runId 同秒碰撞误写 review.json + verify-probes 平台镜像回显混乱 + module-imp…
-状态：已完成
-关联变更：2026-09-10-review-dispatch
-文件：
-- src/task-review.js（claimExecuteRunId 排他认领 + isValid 后缀双形态 + drafts/writeTaskReview 两补写点接线）
-- src/run/stage.js（主写入点接 claim（保持 fail-loud 文案，行号+3 已补 platform-interface-map.md stage.js:226→221 锚点））
-- src/run/gates.js（fallback 写入点接 claim（直穿外层 fail-closed））
-- src/run/prompt.js（渲染降级写入点接 claim（catch 降级语义不变））
-- src/verify-probes.js（formatPlatformPathNote + writeVerifyFacts opts.platformNote）
-- src/index.js（verify-probes --init 三处回显 + facts 回传注记）
-- src/module-impact.js（sourceFiles 剥 NEW: 前缀+去重）
-- test/execute-run-id-collision.test.mjs（新增 5 断言组）
-- test/verify-probes-platform-note.test.mjs（新增 3 用例）
-- test/plan-module-impact-autogen.test.mjs（补 NEW: 表格形态用例）
-- .sillyspec/docs/sillyspec/modules/core-engine.md（task-review 行补 claim + 新增 verify-probes 行）
-- .sillyspec/docs/sillyspec/modules/runtime.md（marker 写入点行补排他认领）
-- .sillyspec/docs/sillyspec/modules/docs-consistency.md（module-impact 行补 NEW: 剥离）
-- docs/sillyspec/platform-interface-map.md（stage.js:226→221 行号漂移补偿）
-需求：修驾驭小结三负面：exec-run runId 同秒碰撞误写 review.json + verify-probes 平台镜像回显混乱 + module-impact NEW: 前缀失配
-根因：①generateExecuteRunId 秒级时间戳，并行会话同秒启动 execute 生成同一 runId，两变更 per-task review.json 落同一 execute-runs/<runId>/tasks/ 互相覆盖（用户两次实锤）；②平台模式 spec 根=hub 镜像，--init 回显镜像物理路径而产物经 daemon 同步落主仓，核对口径分裂显示混乱；③design 清单待建文件带 NEW: 前缀（表格 cell 解析器不剥），module-impact 归类比对漏剥前缀致 classifyFile 前缀匹配必失配、NEW 文件全落未匹配逼手动回填（pathMatches 比对侧早剥，此处漏同步）
-方案：①task-review.js 新增 claimExecuteRunId：非递归 mkdir 排他认领 run 目录（EEXIST=碰撞→4位随机后缀重试），认领即含 tasks/，isValidExecuteRunId 双形态兼容（存量秒级+可选短后缀，注入/穿越仍拒）；接线 stage.js 主点/gates.js/prompt.js/task-review 两补写点共五处 generate 写入点，分层 fail 语义不变。②verify-probes.js 新增 formatPlatformPathNote（平台模式回显行尾补镜像根+主仓同步位置注记，本地零变化）+ writeVerifyFacts opts.platformNote；index.js --init 三处回显接线。③module-impact.js sourceFiles 归一化剥 NEW: + 去重
-结果：新增测试 execute-run-id-collision 5/5、verify-probes-platform-note 3/3，plan-module-impact-autogen 补 NEW: 用例 7/7；回归 fail-loud/marker-drift/change-stamp/verify-probes 系全过；npm run lint 525 文件 0 hard fail；全量 npm test 403 过 2 挂均非本次（doc-ref 7 失效引用 HEAD 已存在实证 + sillyhub-mcp 并发 flake 单独跑 5/5、移除本变更新测试复跑仍挂）
-
-## ql-20260910-008-6d84 | 2026-09-10 14:32:00 | 修驾驭小结第二批三负面：apply 归档取证自相矛盾 + exec-run 串台残余 + docs check 输出噪音
-状态：已完成
-关联变更：2026-09-10-review-dispatch
-文件：
-- src/worktree-apply.js（resolveActiveOrArchiveChangeDir 归档回退 + allowset/assess 接线）
-- src/task-review.js（两 resolver fallback 排除有主 run）
-- src/index.js（docs check 渲染降噪）
-- test/apply-archive-docs-fallback.test.mjs（新增）
-- test/execute-run-change-stamp.test.mjs（增 ⑪⑫）
-- test/docs-check-output-noise.test.mjs（新增）
-- docs/sillyspec/*.md+ARCHITECTURE.md（重锚 20 处）
-- modules/*.md（worktree/core-engine/docs-consistency 更新）
-需求：修驾驭小结第二批三负面：apply 归档取证自相矛盾 + exec-run 串台残余 + docs check 输出噪音
-根因：①archive 对未 apply 的 worktree 有意保留期待归档后补 apply，归档却把变更目录 rename 到 changes/archive/，apply 读侧只认活跃路径 → 补 apply 时 allow 集恒空被 Gate1 整批误拦；②resolveLatestExecuteRunId/WithTasks 的 mtime fallback 仍拿走戳属他变更的 run，writeTaskReview 在 marker 缺失场景误写他变更 run（上批 claim 只治写侧同秒碰撞，这是读侧残余）；③docs check 硬失效与 advisory 混流、同行同引用重复与同名多处分悬空逐条刷屏
-方案：①worktree-apply.js 新增 resolveActiveOrArchiveChangeDir（活跃缺 design.md 而归档在→回退读归档目录），resolveApplyAllowSet 与 assess 段豁免集统一接线，不动归档回收策略；②两 resolver 的 mtime fallback 排除有主 run（戳属他变更即跳过，全部有主→null；无 changeName 旧调用零回归）；③index.js docs check 渲染层折叠重复硬失效（×N）+ advisory 尾部分区 + 按名聚合，invalid 集与 exit code 不动；顺手重锚 7 份活文档 20 处行号漂移（docs check 520 全过、gate 基线 0 恢复绿）
-结果：新增测试 4+1+2 断言组全绿（apply-archive-docs-fallback 4/4、docs-check-output-noise 1/1 含 exit 1 断言、change-stamp ⑪⑫ 25/25）；worktree-apply 回归 17/17、marker-drift/isolation/docs-check 系全绿；lint 527 文件 0 hard fail；全量 405 过 2 挂均他者在途（sillyhub-mcp flake 单独跑过、scope-audit 他者 AM 态）
-
-## ql-20260910-009-a684 | 2026-09-10 15:20:00 | scope-audit 归档形态支持——已归档变更可查
+## ql-20260910-006-4d12 | 2026-09-10 08:25:25 | 会话面板头部后台下拉弹层被消息流背景盖住
 状态：已完成
 关联变更：（无）
 文件：
-- src/index.js（归档预检双目录 + usage 文案）
-- src/scope-audit.js（resolveChangeDir/快照记录态/HEAD 兜底/排除面 note）
-- test/scope-audit.test.mjs（新契约改写 + 归档两用例）
-需求：scope-audit 归档形态支持——已归档变更可查
-根因：上一变更交付的 scope-audit 预检只认活跃目录 changes/<名>，归档后目录移入 changes/archive/ 即 exit 1；且 post-apply 无锚点形态行数恒降级 —、他者声明退栈文件无声消失（计划内文件误显计划未动不可解释）
-方案：index.js 预检双目录接受；scope-audit.js 目录解析兼容归档 + 归档且实时窗口空时读 execute 快照出记录态（快照缺失空表诚实说明）+ 无锚点行数按 HEAD 未提交窗口兜底 + 排除面计数 note 可见；测试按新契约改写并补归档两用例
-结果：node --test 11/11；npm test 全量 0 失败（doc-ref 锚点 ±5 容差窗内）；dogfood 实测归档变更出三态全表+真实行数 +1370/-35
-审计：⚖️ 归属切分：7 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/sillyspec/scan/ARCHITECTURE.md, docs/sillyspec/architecture-4a.md, docs/sillyspec/file-lifecycle.md, docs/sillyspec/prompt-control-debt.md, docs/sillyspec/sillyhub-path-a-contract.md, b2-core-engine.patch, b2-src_index.js.patch
+- frontend/src/components/daemon/session-panel/page-helpers.tsx（面板头常量补 relative z-20）
+- frontend/src/components/daemon/__tests__/session-panel-variant.test.tsx（回归锚字面量同步）
+- .sillyspec/docs/multi-agent-platform/modules/frontend.changelog.md（变更索引条目）
+需求：会话面板头部后台下拉弹层被消息流背景盖住
+根因：2026-09-09-sessions-visual-refresh task-07 给面板头部加 backdrop-blur-md 玻璃头，backdrop-filter 使头部自成层叠上下文，头部内 absolute z-30 弹层 z 值被困其中，被树序在后的消息流 relative 外包层（bg-background 不透明背景）整体覆盖
+方案：page-helpers.tsx 的 PANEL_HEADER_CLS_DESKTOP/MOBILE 补 relative z-20 抬升头部层叠层级（一并救活同头部子代理目录/搜索/mobile ⋯ 菜单弹层），同步更新 session-panel-variant.test.tsx 字面量回归锚与 frontend.changelog.md 变更索引
+结果：session-panel-variant 7 + activity-catalog 5 + session-panel-ctx-tokens 4 + session-panel-team 18 共 34 用例全绿，eslint 两改动文件 0 告警
 
-## ql-20260910-010-d973 | 2026-09-10 18:54:03 | scope-audit baseAnchor 修复——审计 tag merge-base 锚
-状态：已完成
-关联变更：2026-09-10-review-dispatch
-文件：
-- src/verify-postcheck.js（形态 B diffRef 三级解析（分支→审计 tag→null））
-- test/scope-audit.test.mjs（新增审计 tag 锚用例）
-需求：scope-audit baseAnchor 修复——审计 tag merge-base 锚
-根因：无，纯新增——apply+cleanup 删分支后形态 B 的 merge-base 源因分支 rev-parse 失败被静默省略，baseAnchor 恒 null，行数降级 HEAD 未提交窗口口径（不含已提交改动）；而 worktree.js:1065 早就打了 sillyspec-audit/<branch> 审计 tag，数据在却没用
-方案：resolveReconcileActualFiles 形态 B diffRef 三级解析：分支 → sillyspec-audit/<分支全名> tag → null；merge-base 与 B1 diff 用 tag ref 照算，baseAnchor 恢复真值、文件集与行数恢复完整锚定口径
-结果：node --test 12/12（新增 tag 锚用例+保留 HEAD 兜底用例双路径）；npm test 全量 0 失败；dogfood 实测本变更基点 3f22d6b 真锚、+2365/-101 完整行数
-
-## ql-20260910-011-a479 | 2026-09-10 19:22:47 | P2 模块卡正文补账
+## ql-20260910-007-ce62 | 2026-09-10 08:58:37 | codex 会话 AskUser 不弹选择的根因修复——spawn 内置官方特性开关
 状态：已完成
 关联变更：（无）
 文件：
-- .sillyspec/docs/sillyspec/modules/dispatch.md（D-007 显式例外定位段 + review-dispatch 契约条目）
-- .sillyspec/docs/sillyspec/modules/dispatch.changelog.md（sidecar 追加 P2 行）
-- .sillyspec/docs/sillyspec/modules/core-engine.md（stage-review-checklist 条目 + 在途区分说明）
-- .sillyspec/docs/sillyspec/modules/core-engine.changelog.md（sidecar 追加 P2 行）
-需求：P2 模块卡正文补账
-根因：archive step3 跳过致卡正文与 module-map 脱节
-方案：dispatch.md 落 D-007 显式例外与防泛化护栏并补 runReviewDispatch 三条目；core-engine.md 补 checklist 单源条目与在途区分；双 sidecar 追加
-结果：四文件落盘纯文档批次门禁自动跳过
+- sillyhub-daemon/src/interactive/codex-app-server-driver.ts（spawn args 内置 AskUser 特性开关）
+- sillyhub-daemon/tests/interactive/codex-app-server-driver.test.ts（+1 spawn 断言 + 3 旧 args 断言适配）
+需求：codex 会话 AskUser 不弹选择的根因修复——spawn 内置官方特性开关
+根因：codex 官方将 request_user_input 工具锁 Plan 模式（生产案会话 118406c3 模型自证），平台 app-server 无以 plan 建线程、运行时特性开关对 underDevelopment 不生效——工具从未被调用，桥接无从触发
+方案：daemon codex spawn 参数 unshift -c features.default_mode_request_user_input=true（app-server 子命令前；旧版未知键非 strict 仅告警向前兼容）；本机 ~/.codex/config.toml [features] 同步加键立即生效
+结果：0.147/0.154 双版本端到端探针验证工具真弹出（GOT requestUserInput + questions 载荷）；codex 驱动两套件 77 passed（+1 断言）；tsc 0；生产待用户重启 daemon/新开会话验证
 
-## ql-20260910-012-e069 | 2026-09-10 20:15:32 | 修驾驭小结第三批三负面：exec run 并行覆写结构化隔离 + 平台 init 产物双写主仓 + verify 服务进程树击杀
+## ql-20260910-008-415c | 2026-09-10 10:42:27 | run-error-item 系统错误码映射补齐——daemon_restarted 等三码进映射表，修「运行失败 · unknown」吓人兜底
 状态：已完成
 关联变更：（无）
 文件：
-- src/task-review.js（generateExecuteRunId(changeName) 哈希段 + isValid 0-2 段 + 两补写点传名）
-- src/run/stage.js,src/run/gates.js,src/run/prompt.js（generate 写入点传 changeName）
-- src/run/shared.js（mirrorPlatformArtifactToMainRepo）
-- src/index.js（三产物镜像 + design-init 镜像接线）
-- src/run/gates.js（killProcessTree + reapVerifyServices）
-- src/stages/verify.js（prompt 登记叶子 PID 指引）
-- test/*（collision/platform-note/concurrency/fail-loud 四文件）
-- docs/sillyspec/platform-interface-map.md（6 处重锚）
-- modules/core-engine.md,runtime.md（补记）
-需求：修驾驭小结第三批三负面：exec run 并行覆写结构化隔离 + 平台 init 产物双写主仓 + verify 服务进程树击杀
-根因：①两并行会话共用 exec run 目录互相覆写 review（task-01/02/03 被另一变更污染）——claim 排他认领只治同 ID 两主，不同变更同秒仍天生同 ID；②design-init/verify-probes --init 两次把产物写到 daemon specs 同步目录而非主仓 changeDir，单点依赖 spec-sync 回程兜底；③verify 收尾 PID 回收只杀登记的 shell 包装 PID，python 服务本体子进程成孤儿泄漏（坑 verify-service-process-leak）
-方案：①generateExecuteRunId(changeName) 附 change 名 FNV-1a 6 位 hex 段（两变更同秒必不同 runId、同变更幂等、无参裸秒级兼容），isValidExecuteRunId 放宽 0-2 段后缀，五处 generate 写入点全接线；②run/shared.js 新增 mirrorPlatformArtifactToMainRepo（pointer 态 agent 本地跑时 design.md/verify-result.md/verify-facts.json 双写镜像主仓 changeDir；daemon 显式 --spec-dir、本地无 changeDir、路径同构跳过），design-init 与 verify-probes --init 接线；③reapVerifyServices 改 killProcessTree（win32 taskkill /PID /T /F；POSIX ps 递归枚举子进程），ESRCH/128 静默保留；verify prompt 补登记服务本体 PID 指引
-结果：新增/扩展测试全绿（collision 9/9、platform-note 4/4、concurrency-fixes 28/28 含真实进程树实杀、fail-loud 锚同步后全过）；全量 npm test 409/409 全绿（含此前 flaky 两项）；lint 531 文件 0 hard fail；docs check 520 全过（index.js 漂移 6 处重锚）
+- frontend/src/components/agent-log/run-error-item.tsx（三码映射+errorMetaFor+徽标键）
+需求：run-error-item 系统错误码映射补齐——daemon_restarted 等三码进映射表，修「运行失败 · unknown」吓人兜底
+根因：MODEL_ERROR_META 仅按模型错误 type 查表，调度层系统码走 item.code 落 unknown 兜底，且徽标固定拼 item.type 露「… · unknown」
+方案：SYSTEM_ERROR_CODE_META 三码（服务重启中断/服务停止中断/任务中断，友好 defaultHint）+ errorMetaFor 统一入口（code 命中优先 type）+ 徽标键系统码命中显示 code；hint 链序不变
+结果：42 用例全绿（新增 5）；tsc/eslint 0；模块 changelog 已记
 
-## ql-20260910-013-6906 | 2026-09-10 20:46:35 | 修驾驭小结第四批三负面：模块文档 worktree 副本泄漏铁律 + 决策提炼扁平格式静默 0 条 + change_deleted 409 提示滞后
+## ql-20260910-009-14b6 | 2026-09-10 10:43:59 | 变更详情会话调试卡显示会话名称（title 优先空回退 id 短码）
 状态：已完成
 关联变更：（无）
 文件：
-- src/stages/execute.js（两处主仓铁律升格）
-- src/decision-distill.js（双格式解析 + zeroWithContent + distill warn）
-- src/sync.js（409 预期回执分流）
-- test/execute-prompt-mainrepo-docs.test.mjs（扫描锁定）
-- test/decision-distill-flat-list.test.mjs（5 用例）
-- test/platform-tombstone-and-activity-report.test.mjs（X1-4b 用例）
-- docs/sillyspec/platform-interface-map.md（sync.js 锚重锚）
-- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（sync.js 锚重锚）
-- .sillyspec/docs/sillyspec/modules/stages.md（铁律补记）
-- .sillyspec/docs/sillyspec/modules/docs-consistency.md（双格式补记）
-- .sillyspec/docs/sillyspec/modules/sync.md（409 分流补记）
-需求：修驾驭小结第四批三负面：模块文档 worktree 副本泄漏铁律 + 决策提炼扁平格式静默 0 条 + change_deleted 409 提示滞后
-根因：①task-13 子代理把模块文档写进 worktree 的 .sillyspec 副本而非主仓（原「只写主仓」规则埋在长 prompt 尾部一句带过未遵守），归档被迫 checkout 补救；②决策提炼器只认 ## 标题式条目，扁平列表格式 decisions.md 解析 0 条静默放行；③本地注销已由 CLI 完成（CLI 主动上行墓碑）撞平台 409 change_deleted，CLI 仍按「需排查」口吻 warn——提示语义滞后一个动作
-方案：①execute.js 两处升格铁律（Wave prompt 欠账段原地重申 + 派发 prompt 注意段 ⚠️ 铁律：主仓 {SPEC_ROOT} 绝对路径、点破 checkout 副本随 cleanup 蒸发、子代理透传绝对路径）；②parseDecisions 兼容扁平列表式（行内 ｜ 字段白名单 + 缩进子项字段 + applyField 补中文别名），0 条含 D-xxx 形态 → zeroWithContent + distill 显式 warn；③sync.js 409 分流：本地墓碑态降 ℹ️ 预期回执（注销已完成无需动作），active 态维持 ⚠️
-结果：新测试 execute-prompt-mainrepo-docs 2/2 + decision-distill-flat-list 5/5 + tombstone X1-4b（11/11）；distill 系回归 32/32；全量 npm test 410 文件仅 doc-ref 锚漂（我 sync.js 插入所致）已重锚 4 处，docs check 520 全过；lint 533 文件 0 hard fail
+- frontend/src/components/changes/detail/change-sessions-card.tsx（名称 title 优先/空回退短码）
+- frontend/src/components/changes/detail/__tests__/change-sessions-card.test.tsx（fixture 增 title 参数+两断言）
+- .sillyspec/docs/frontend/modules/components-changes.md（卡片形态描述刷新）
+需求：变更详情会话调试卡显示会话名称（title 优先空回退 id 短码）
+根因：卡片恒渲染 id.slice(0,8) 短码，后端列表端点早已注入 title（首条 user_input 摘要前 30 字）未被使用
+方案：条目名称 title 优先、null 回退短码（回退保留 font-mono，标题 truncate 防溢出）+ 测试补 title 优先与回退断言 + 模块文档同步入口卡现状
+结果：change-sessions-card vitest 3 用例全绿
 
-## ql-20260910-014-ad3b | 2026-09-10 21:08:55 | 修驾驭小结第五批三负面：daemon junction 锚与自指警告降频 + 探针 3 双根并集 + taskcard depends_on Wave 反填
+## ql-20260910-010-7626 | 2026-09-10 11:44:03 | MCP gateway 部署与派发链路实测缺陷修复（spike P2 六项）
+状态：已完成
+关联变更：（无）
+文件：backend/app/core/config.py, backend/app/modules/mcp_gateway/router.py, backend/app/modules/mcp_gateway/tools.py, docs/mcp/getting-started.md, docs/mcp/tools-reference.md
+需求：MCP gateway 部署与派发链路实测缺陷修复（spike P2 六项）
+根因：远端 nginx 未路由 /mcp 且 SDK DNS rebinding 防护默认只放行 localhost 系 Host（反代域名过鉴权后 421）；token 签发不回接入地址致 url/token 三头分裂；派发前无 daemon 在线性查询面；no-creator 报错无修复动作；参数文档缺口；agent_type 硬编码默认与实际执行器不一致
+方案：nginx 加 /mcp 路由 + mount_mcp 按部署配置重建 TransportSecuritySettings 白名单（MCP_GATEWAY_PUBLIC_BASE_URL/MCP_ALLOWED_HOSTS）；McpTokenCreated 成对下发 gateway_url（配置优先/转发头推导）；新增 get_daemon_status 工具（binding 明细+45s 阈值+ws_hub 实时态）；no-creator 文案与 hint 指明修复动作；dispatch_worker agent_type 默认改 ws.default_agent 驱动；tools-reference/getting-started/deploy SKILL 文档化全参数与成对原则；远端部署新 backend 镜像
+结果：mcp_gateway 126 passed + agent dispatch_worker 3 passed，ruff/format/mypy 0，gen:types 同步；远端实测回归（sillyspec client.js 直连公网）initialize/tools/list/get_daemon_status（daemon_online=true ws_connected=true）/create_mission external（workers=[] 零 orchestrator）/dispatch_worker read_only 真派发 completed（$0.65）/get_run_logs 全通；mcp_tokens 无 spike 残留、回归数据已清理
+审计：⚖️ 归属切分：7 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.zcode/skills/deploy-to-server/SKILL.md, backend/app/modules/mcp_gateway/server.py, backend/app/modules/mcp_gateway/tests/test_router.py, backend/app/modules/mcp_gateway/tests/test_tools_new.py, backend/openapi.json, docs/mcp/README.md, frontend/src/lib/api-types.ts
+
+## ql-20260910-011-3d92 | 2026-09-10 12:49:33 | 修复会话轮次排序错位:派发失败轮 started_at 为空被甩队尾
 状态：已完成
 关联变更：（无）
 文件：
-- src/progress.js（ptr.specRoot realpath 规范化）
-- src/run/shared.js（warnSelfRefPointerOnce 窗口 helper + writePlatformPointer 接线）
-- src/run/command.js（恢复链 warn 接线）
-- src/verify-probes.js（探针 3 双根并集）
-- src/taskcard.js（parsePlanWaveDeps + depsFor 双来源）
-- test/selfref-warn-window.test.mjs（新增 4 用例）
-- test/verify-probes-probe3-dualroot.test.mjs（新增真实 worktree 用例）
-- test/taskcard-depends-wave.test.mjs（新增 4 用例）
-- docs/sillyspec/platform-interface-map.md（锚重锚）
-- docs/sillyspec/prompt-control-debt.md（锚重锚）
-- docs/sillyspec/architecture-4a.md（锚重锚）
-- .sillyspec/docs/sillyspec/scan/ARCHITECTURE.md（锚重锚）
-- .sillyspec/docs/sillyspec/modules/runtime.md（第五批补记）
-- .sillyspec/docs/sillyspec/modules/core-engine.md（探针 3 补记）
-需求：修驾驭小结第五批三负面：daemon junction 锚与自指警告降频 + 探针 3 双根并集 + taskcard depends_on Wave 反填
-根因：①pointer specRoot 为 daemon 写入的 junction 路径（读写同文件无害但路径呈现漂移、junction 随 daemon 蒸发），自指检测在两处每命令重复 warn；②探针 3「主仓目录缺失才回退 worktree」条件在「目录在主仓已存在而新测试 untracked 在 worktree」时不触发，5 条假 warning 逼人工消解；③骨架 depends_on 唯一来源 tasks.md 行内注解常被漏写，三批子代理均发现空，拓扑退化全 Wave 1
-方案：①resolvePlatformSpecDir 对 ptr.specRoot realpath 规范化 + warnSelfRefPointerOnce 跨进程 10min 窗口降频两处自指 warn；②探针 3 改主仓 ∪ worktree 无条件双根并集（与探针 5 三根并集同族，in-place 零变化）；③cmdTaskcard depends_on 双来源（行内注解优先，缺失时 parsePlanWaveDeps 按 plan.md Wave 分组兜底：Wave N → Wave N-1 全部任务）
-结果：新测试 9 用例全绿（selfref 4/4 含 Windows junction 实测、probe3 双根 1/1 真实 git worktree、taskcard Wave 4/4）；相邻回归全绿；lint 536 文件 0 hard fail；全量 npm test 414/414；锚漂 12 处已重锚、docs check 520 全过
+- backend/app/modules/daemon/router/session_insights.py（排序 created_at + DTO created_at）
+- backend/app/modules/daemon/router/session_crud.py（current_run 排序统一）
+- frontend/src/components/daemon/session-panel/session-panel-page.tsx（orderedRuns 空值兜底）
+- frontend/src/lib/daemon/sessions.ts（interface 补 created_at）
+- frontend/src/lib/api-types.ts+backend/openapi.json（gen:types 重生成）
+- backend/app/modules/daemon/tests/test_session_runs_endpoint.py（新增 NULL started_at 定序用例）
+- frontend/src/app/(dashboard)/sessions/__tests__/page.test.tsx（新增派发失败轮用例+fixture 补字段）
+- frontend/src/components/daemon/__tests__/*.test.tsx（2 个 fixture 补 created_at）
+需求：修复会话轮次排序错位:派发失败轮 started_at 为空被甩队尾
+根因：派发失败轮(daemon 离线 inject 发送失败即收敛 failed)的 started_at 永远为空(run_sync 首事件才写),而 list_session_runs 按 started_at.desc() 排序(PG DESC 默认 NULLS FIRST 排首位)且前端轮次刻度 orderedRuns 按 started_at 正序把空值排队尾,导致线上会话 e3d7ddfa 第 8 轮被排到第 11 位、第 8~11 轮轮号与对话流时间线全体错位
+方案：后端排序统一改 created_at.desc()(轮次真实语义=run 创建序,对齐 agent 模块仓库惯例),SessionRunRead DTO/interface 透出 created_at;前端 orderedRuns 空值 fallback created_at(与对话流 user_input 日志时间轴一致);session_crud current_run 查询同款统一
+结果：后端 test_session_runs_endpoint 13 passed(新增 NULL started_at 用例)+session_router/service 71 passed;前端 page.test 53 passed(新增回真实轮位用例)+variant 7 passed;tsc 0 错误;gen:types 已重生成;待部署阿里云验证
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：frontend/src/components/daemon/__tests__/session-panel-ctx-tokens.test.tsx, frontend/src/components/daemon/__tests__/task-execution-panel.test.tsx
 
-## ql-20260910-015-8054 | 2026-09-10 22:09:39 | scope-audit 归档形态快照冻结——终止范围修复
+## ql-20260910-012-392f | 2026-09-10 15:14:09 | 平台同步区串台修复——变更中心改读工作区级 sillyspec 快照
 状态：已完成
 关联变更：（无）
 文件：
-- src/scope-audit.js（归档快照冻结优先+行数补采）
-- test/scope-audit.test.mjs（冻结优先/补采/缺失兜底三用例）
-需求：scope-audit 归档形态快照冻结——终止范围修复
-根因：归档后查询走实时开放区间无终止锚，主仓后续改动持续混入漂移；tag 封闭区间实测不可用（本变更改动未 commit 到分支）；既有快照优先分支只在窗口空时触发而窗口常有并行 WIP
-方案：归档形态无条件快照优先——文件集取 execute --done 冻结快照（apply 时点封闭）；快照行数缺失按 tag merge-base 对冻结文件集补采（口径标注）；快照缺失退实时开放区间并 note 漂移警告
-结果：node --test 13/13；npm test 全量无失败；dogfood 实测 17 文件冻结集+行数 +1670/-74 复活
+- frontend/src/components/changes/platform-sync-section.tsx（取数 map 优先 + 注释同步）
+- frontend/src/components/changes/__tests__/platform-sync-section.test.tsx（+2 工作区级取数用例）
+- .sillyspec/docs/multi-agent-platform/modules/frontend.md（变更索引 +ql-20260910-012；总览卡数据源描述纠正）
+需求：平台同步区串台修复——变更中心改读工作区级 sillyspec 快照
+根因：platform-sync-section.tsx 仍读机器级 sillyspec_status 单槽位；daemon 工作区级化后每轮采集逐目标覆盖单槽位，多工作区绑定时变更中心显示别区数据（总览卡 14a50351d 已改 map 优先，本组件漏改），用户实证总览卡 3 条冲突而变更中心不可见、无法在平台裁决
+方案：取数对齐 changes-overview-card 同款：sillyspec_status_map 非空按当前 workspaceId 取（缺席=整卡不渲染，不回退单槽位防串台）；map 为 null（旧 daemon）回退机器级单槽位；组件头注释与 frontend.md 模块文档同步（含总览卡数据源描述纠正 map 优先）
+结果：vitest 组件套件 14/14 passed（含新增 2 用例：map 优先不串台 / map 缺席整卡不渲染）；tsc --noEmit 零错；未重部署（阿里云需另行 deploy）
 
-## ql-20260910-016-6c94 | 2026-09-10 22:19:15 | scope-audit --file 单文件变化内容查看
+## ql-20260910-013-3b38 | 2026-09-10 15:42:50 | 变更详情页删除「任务看板」摘要卡与「审核历史」卡（用户裁定方案 A）。根因：平台审批链路零使用——本地 PG 341 变更 stages 带 review_hi…
 状态：已完成
 关联变更：（无）
 文件：
-- src/scope-audit.js（getFileDiff+resolveDiffRoot 抽取）
-- src/index.js（--file 参数分支+usage）
-- test/scope-audit.test.mjs（getFileDiff 三用例）
-- docs/sillyspec/platform-interface-map.md（6 锚点机械平移）
-需求：scope-audit --file 单文件变化内容查看
-根因：无，纯新增——scope-audit 只出文件级统计不出内容，用户要单文件详情；锚点选择（worktree/quick HEAD/归档快照基点）是隐性知识，用户无需手记
-方案：getFileDiff 新导出按对账同源锚点跑 git diff --no-color 出原生格式内容（resolveDiffRoot 抽共享 helper）；index.js --file 参数分支 --json 双面；untracked 新文件提示看本体
-结果：node --test 16/16；doc-ref-check 87/87（连带平移 6 锚点）；npm test 全量 0 失败；dogfood 实测 complete.js 出真 diff
+- frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/page.tsx（删两卡挂载/导入/taskBoard 取数/reviewHistory 派生，513→492 行）
+- frontend/src/components/changes/detail/change-task-board-card.tsx（删除（连同测试））
+- frontend/src/components/changes/detail/change-review-history-card.tsx（删除（连同测试，normalizeReviewHistory 一并退役））
+- frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/__tests__/page-team-toggle.test.tsx（清两卡 vi.mock，保留只读展示区断言收窄）
+- frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/__tests__/page-last-signal.test.tsx（清两卡 vi.mock 与 getTaskBoard mock）
+- frontend/src/components/__tests__/delete-change-confirm.test.tsx（清两卡 vi.mock + daemon mock 改 importActual 部分 mock（修 SESSION_ENGINE_OPTIONS 收集期炸旧债））
+- frontend/src/components/mobile/mobile-change-detail.tsx（X-03 落位清单 7/8 条注释标注桌面卡已删）
+- .sillyspec/docs/frontend/modules/components-changes.md（detail 卡 9→7、定位段记录 ql-20260910-013）
+- .sillyspec/docs/frontend/modules/app-workspace-pages.md（ChangeDetailPage 行数/右辅构成更新）
+- .sillyspec/docs/frontend/modules/lib-tasks.md（getTaskBoard 消费方变更记录）
+- .sillyspec/docs/multi-agent-platform/modules/frontend.md（变更索引追加 ql-20260910-013-3b38）
+需求：变更详情页删除「任务看板」摘要卡与「审核历史」卡（用户裁定方案 A）。
+根因：平台审批链路零使用——本地 PG 341 变更 stages 带 review_history 为 0 条、写入代码 2026-08-14 上线而平台内审批最后一次 2026-08-12（CLI 驱动工作流审批不落平台表），审核历史卡恒空；任务看板摘要须手动 reparse 才更新、状态英文裸显，与步骤条/时间线三重展示进度，均无消费价值。
+方案：page.tsx 删两卡挂载/导入/taskBoard 取数/reviewHistory 派生；删两组件及测试 4 文件；三个页面级测试清 vi.mock 并收窄断言；mobile-change-detail 复用清单注释同步；顺手修 delete-change-confirm.test 的 @/lib/daemon 整模块 mock 缺 SESSION_ENGINE_OPTIONS 旧债（改 importActual 部分 mock）；后端 review_history 写入端点与 lib/tasks getTaskBoard 保留。
+结果：4 个受影响测试文件 47 用例全绿、tsc --noEmit 0 错、eslint 零新增、docs check 824 处引用全过。
 
-## ql-20260910-017-73bd | 2026-09-10 22:35:10 | 落盘 noAI/CLI 接管与 IR 能力改进路线图（三方分析合并裁决版）
+## ql-20260910-014-6c29 | 2026-09-10 19:03:51 | 变更中心展示 scope-audit 范围对账命令（变更详情页与快速修复抽屉各挂可复制命令卡，表格版+--json 版）
 状态：已完成
 关联变更：（无）
 文件：
-- docs/sillyspec/noai-ir-roadmap.md（三方合并裁决版路线图：noAI 准入边界（分水岭）+P0/P1/P2 分批+8 条分歧裁决）
-需求：落盘 noAI/CLI 接管与 IR 能力改进路线图（三方分析合并裁决版）
-根因：三方分析（原始+两份评审）分散在会话中不可引用；后续 P0/P1 变更需要可依据的落盘文档，且评审含事实纠偏须裁决留痕
-方案：新增 docs/sillyspec/noai-ir-roadmap.md：基线事实核验表（40 步/8 种 noAI/13 解析点/重锚 31~67 提交实测）+ noAI 准入边界（语义归因步骤分水岭 + 砍步拦截历史取证判据）+ P0（测试步 noAI 化三前置/摘要合成/gate 预检/archive 并步留注视）P1（扫描集纳入/符号锚/tie 顺序/run --meta/QUICKLOG sidecar/decisions 单写入者/commit --apply 限 archive）P2（MCP 三阶段/coverage 存在性语义等）+ 实施依赖顺序 + 八条分歧裁决（含实测推翻「docs-check 已支持 ::symbol」断言）
-结果：纯文档新增无代码改动；docs check 531 处引用全通过 0 invalid（advisory 悬空项为存量与他文档无关）；未跑测试（未触 src/test，按规则自动跳过）
+- sillyhub-daemon/src/sillyspec-manager.ts（SillySpecStatusChangeItem 可选 ql_id + _attachChangeQlIds 后处理）
+- backend/app/modules/daemon/router/heartbeat.py（DaemonHeartbeatSillySpecChange 可选 ql_id）
+- frontend/src/components/changes/scope-audit-command-card.tsx（新组件，命令前缀单一取值点）
+- frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/page.tsx（右辅侧栏尾挂载（与并行会话删卡改动同文件，行不重叠））
+- frontend/src/components/changes/quicklog-drawer.tsx（结构化视图底部挂载）
+- backend/openapi.json（gen:types 重导出（含追平此前已提交后端改动））
+需求：变更中心展示 scope-audit 范围对账命令（变更详情页与快速修复抽屉各挂可复制命令卡，表格版+--json 版）
+根因：sillyspec 工具新增 scope-audit 命令（对账计划改动×实际改动），用户要求在变更中心可复制执行；快速修复条目平台侧只有 ql_id 而 scope-audit 只认 quick-<8hex> 会话名，缺一条 daemon→前端映射链
+方案：daemon 心跳 sillyspec_status.changes[] 对 quick-* 名 best-effort 读 guard.json 补可选 ql_id（镜像 pending_conflicts 同款先例）+ backend 心跳 DTO 宽松可选字段透传 + gen:types 三端同步；前端新组件 scope-audit-command-card（前缀单一取值点 node src/index.js，工具发版后改 sillyspec 只动一处），变更详情页代入 change_key、快速修复抽屉经机器快照按 ql_id 反查会话名（查不到回退占位符+手动替换提示）
+结果：daemon vitest 两套件 50 passed + tsc 0；backend pytest 39 passed + ruff 0；前端组件 6 + drawer 5 + 变更中心 6 相关套件 97 passed、tsc 0、eslint 定向 0 告警；docs check 无新增；未部署（daemon 升级+后端重启后生效）
 
-## ql-20260910-018-84f4 | 2026-09-10 23:02:40 | P0-1 verify 测试步 noAI 化：test/lint 实测提前 + 指纹复用 + 结论草稿预填 + 决策链矩阵机械预填
+## ql-20260910-014-0a5d | 2026-09-10 20:52:00 | MCP 资产库 verify NOTES ②③ 两项优化——cipher 懒加载 + daemon 端点 503 补结构化日志（mcp-central-registry 归档后收尾，用户 AskUserQuestion 裁决"现在做"）
+状态：已完成（分支 sillyspec/2026-09-10-mcp-central-registry 提交 83932255e，待随分支 ff 合并）
+关联变更：2026-09-10-mcp-central-registry（archive）
+文件：
+- backend/app/modules/mcp_registry/service.py（__init__ 饿汉 cipher → 懒 property：纯读路径 list/detail 不再被 master key 配置扣死——畸形 key 时列表 503 的根因，集成实测发现；显式注入 cipher 的测试路径不受影响）
+- backend/app/modules/daemon/router/daemon_rpc.py（渲染 503 except 补 log.warning daemon_mcp_render_failed：error_type/摘要 200 截断/user_id/workspace_id——原异常细节只进 HTTPException from 链，排障只能复现；补 get_logger 导入）
+验证：backend 176 passed（mcp_registry 153 + daemon mcp 端点 23）+ ruff/mypy clean
+备注：master key v2 重生成同窗口执行（backend/.env，用户裁决；dev 库 9 行 llm_provider 旧 v1 密文需重录）
+
+## ql-20260910-015-8e1b | 2026-09-10 22:30:53 | 用量上限类报错前端升级分类，Cursor usage limit 失败卡不再显「运行失败 · unknown」
 状态：已完成
 关联变更：（无）
 文件：
-- src/run/verify-quality-scan.js（新模块：指纹复用+归因透传+noAI 动作+草稿评估）
-- src/stages/verify.js（步骤 6 noAI 化（名不变兼容存量进度库））
-- src/run/gates.js（--done 复用接线+归因块迁出）
-- src/verify-probes.js（结论草稿槽变换+决策链矩阵）
-- src/index.js（verify-probes --init 两件预填接线）
-- test/verify-quality-scan.test.mjs（6 用例）
-- src/run/stage.js,src/run/complete.js（verifyRunQualityScan 分支）
-需求：P0-1 verify 测试步 noAI 化：test/lint 实测提前 + 指纹复用 + 结论草稿预填 + 决策链矩阵机械预填
-根因：noai-ir-roadmap §3 P0-1：verify「运行测试和质量扫描」步 agent 角色已退化为纯中继（旧 prompt 自述 CLI 在 --done 统一跑、实测 198s×2 重复跑）；长套件成本翻倍与手打结论是既知痛点
-方案：新模块 src/run/verify-quality-scan.js：①代码指纹（HEAD+非文档脏集+commands 配置；.sillyspec/docs/*.md 排除防窗口内文档产出触发失配）②noAI 动作 verifyRunQualityScan 接线 stage/complete 两分支——本步实测→指纹落盘→全绿自动盖步，失败打归因后 throw 不推进③gates --done 指纹匹配即复用免重跑（前置一）④归因鉴别迁出 gates 为 renderVerifyTestAttribution 单一实现两路径共用（前置二）⑤evaluateConclusionDraft 机械事实全绿才给 PASS 草稿（skip≠实测；integration/deployment 不预填），槽行变换显式草稿待确认标注、gate 判定链不动（前置三）⑥决策追踪矩阵 D→FR→task 链自 decisions.md×task卡 frontmatter 机械预填（Evidence/状态留 agent，未闭环显式标注）
-结果：新测试 6/6（test/verify-quality-scan.test.mjs）；回归 36/36（16 文件）；quick 门禁实测：test passed（module[cli-core,run-gates] 13.4s）+ lint passed（死码导出 qualityScanRecordPath 已补测试真实断言后复跑通过）
+- frontend/src/components/agent-log/normalize.ts（buildErrorLogItem 增 isUsageLimitRaw + unknown 升级 quota_exceeded 分支）
+- frontend/src/components/agent-log/__tests__/normalize.test.ts（ql-20260910-015 describe +4 用例）
+- .sillyspec/docs/multi-agent-platform/modules/frontend.md（变更索引加 ql-20260910-015 条目）
+需求：用量上限类报错前端升级分类，Cursor usage limit 失败卡不再显「运行失败 · unknown」
+根因：daemon 分类器非 claude 引擎一律兜底 unknown（D-001 扩展点未覆盖 cursor/codex），claude 规则 quota 判定又被 has429 前置——Cursor 的 usage limit 报错无 429 两条路都认不出，页面只剩兜底文案（生产实例会话 7fb5022f）
+方案：normalize.ts buildErrorLogItem 增 isUsageLimitRaw 特征识别（usage limit / insufficient[_ ]quota / exceeded your current quota / 中文额度·使用上限），type 未识别（unknown）且 raw 命中时升 quota_exceeded + 中文 message「供应商额度或用量已达上限」+ 切换/升级套餐 hint，raw 原样保留供查看详情；历史已落库 run 不改数据即修好显示（三消费点 turn-timeline/session-panel page/dialog 都走该函数）；后端已明确分类的不覆盖。照 isCliAuthTransient（ql-20260903-011）同款先例
+结果：normalize.test.ts +4 用例共 91 全绿；下游 session-panel-dialog + turn-timeline-auto-resume-badge + run-error-item 102 用例绿；tsc 我方 0 错误（scope-audit-command-card 2 个为并行会话在途预存）；未部署，需重新打包前端镜像后生效
 
-## ql-20260910-019-f91b | 2026-09-10 23:03:10 | 修驾驭小结第六批三负面：taskcard --all 镜像双写主仓 + quick 门禁隔离快照 + apply EXCLUDE-DIRTY 自动三方合并
-状态：已完成
-关联变更：quick-ad3c0ebe
-文件：
-- src/run/shared.js（mirror ensureParentDir）
-- src/index.js（taskcard case 镜像接线）
-- src/run/gate-snapshot.js（新建快照 helper）
-- src/run/quick-audit.js（门禁快照优先）
-- src/worktree-apply.js（mergeDirtyOverlapThreeWay + 4.5 接线）
-- test/taskcard-mirror-mainrepo.test.mjs（2 用例）
-- test/quick-gate-snapshot.test.mjs（4 用例）
-- test/apply-dirty-threeway.test.mjs（3 用例）
-- docs/sillyspec/*.md+knowledge/*.md（锚重锚 13 处）
-- modules/runtime.md,worktree.md（补记）
-需求：修驾驭小结第六批三负面：taskcard --all 镜像双写主仓 + quick 门禁隔离快照 + apply EXCLUDE-DIRTY 自动三方合并
-根因：①taskcard --all 经指针解析落 daemon 镜像根，spec-sync 回程前主仓无副本（两份副本窗口）；②门禁在主仓 cwd 实测，并行会话脏文件污染结果把无辜会话拦门（advisory 逃生口只是绕过不是修复）；③主仓脏改动与 worktree 交付不同区域的机器可合并场景也走人工 cp/patch（daemon.ts 实证）
-方案：①mirrorPlatformArtifactToMainRepo 增 ensureParentDir + taskcard case pointer 态逐卡镜像；②run/gate-snapshot.js createGateSnapshot（HEAD worktree+会话文件 overlay+node_modules junction+local.yaml 复制），runQuickTestLintGate 快照优先、基建失败 fallback 主仓；③mergeDirtyOverlapThreeWay（git merge-file clean 才写回、mergedDirtyFiles 审计、冲突维持拦截），4.5 接线残余集分流
-结果：新测试 9 用例全绿（mirror 2/2 含端到端、snapshot 4/4 含脏坏文件不拦门、threeway 3/3 真实 worktree）；apply 系回归 21/21；lint 545 文件 0 fail；全量 npm test 420/420；docs check 547 全过（漂移 13 处重锚含并行会话 knowledge 2 处）
-审计：⚖️ 归属切分：9 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.claude/skills/sillyspec-archive/SKILL.md, .claude/skills/sillyspec-auto/SKILL.md, .claude/skills/sillyspec-verify/SKILL.md, src/docs-check.js, src/stages/archive.js, test/decisions-lifecycle.test.mjs, test/output-synthesis-and-gate-precheck.test.mjs, src/run/archive-distill.js, test/archive-distill-noai.test.mjs
-
-## ql-20260910-020-660d | 2026-09-10 23:13:14 | P0-2 --output 摘要 CLI 合成 + P0-3 gate 预检前置进 prompt
-状态：已完成
-关联变更：quick-28fedcca
-文件：
-- src/run/complete.js（synthesizeStepOutput+completeStep 挂钩）
-- src/run/command.js（auto --done 同源合成替代 exit 2）
-- src/run/prompt.js（gate 预检行+output 可省略提示）
-- test/output-synthesis-and-gate-precheck.test.mjs（3 用例）
-需求：P0-2 --output 摘要 CLI 合成 + P0-3 gate 预检前置进 prompt
-根因：agent 手打 --output 摘要是每步命中的幻觉源（CLI 本就持有事实面）；gate 失败→rollback→重做一轮是最贵循环且多数失败是机械的
-方案：①synthesizeStepOutput 纯事实合成（步骤名+git 变更窗口计数+前3文件名+语义说明手写指引，零判断词）挂在 completeStep（非 quick 阶段，quick 四字段硬契约除外）②auto --done 缺 --output 由 exit 2 改同源合成③完成后执行段注入「sillyspec gate <stage> --change <c>」只读预检提示（主阶段才有）+ 非 auto 模式「--output 可省略」提示（auto 的 SS-META doneCommand 仍带 --output 照抄零变化）
-结果：新测试 3/3（test/output-synthesis-and-gate-precheck.test.mjs）；回归 8/8（output-step-render/archive-batch-31-tool-notes/auto-driver-meta）；quick 门禁 test+lint 由 --done 实测
-
-## ql-20260910-021-f569 | 2026-09-10 23:30:29 | P0-4 安全变体：archive decision-distill 步 noAI 化 + verify/archive/auto skill 同步
-状态：已完成
-关联变更：quick-28fedcca
-文件：
-- src/run/archive-distill.js（新模块：distill 机械执行动作）
-- src/stages/archive.js（distill 步 noAI 化+确认归档补 needsWait 段）
-- test/decisions-lifecycle.test.mjs（FR-03 契约随定义更新）
-- .claude/skills/*（三 skill 行为同步）
-需求：P0-4 安全变体：archive decision-distill 步 noAI 化 + verify/archive/auto skill 同步
-根因：distill 旧 prompt 本身就是「调 CLI 纯函数 distillIntoKnowledge 并转述输出」——全流程最纯中继步，LLM 零判断增量；全量并步（6→2）按路线图 §2 砍步判据需先做注视步拦截历史取证（完成度检查/sync-docs 有 documented 拦截史），先拿零争议步
-方案：①executeArchiveDistill 新动作：机械执行提炼（written 逐条打印/skipped 零输出注记/needsWait 打印补录或跳过裁决指引——收敛到确认归档 --confirm 的用户确认点/异常降级不抛）；②步骤名不变零迁移漂移，确认归档 prompt 补 needsWait 处理段；③FR-03 契约测试随定义合法更新（conditionalWait→noAI+archiveDistill）；④skill 同步：verify test/lint 段改「noAI 质量扫描+指纹复用+结论草稿」新语义、archive 步骤清单 5→6 纠错+distill noAI 说明、auto 补 --output 可省略（synthesizeStepOutput 跨文件引用在 command.js，追加声明过隔离 lint）
-结果：新测试 3/3（test/archive-distill-noai.test.mjs）；回归 43/43（archive 七件套+lifecycle）；npm run lint 全仓 0 未引用导出
-
-## ql-20260910-022-9b1d | 2026-09-10 23:37:31 | P1-1 docs-check 扫描集纳入 changes/ 与 knowledge/ + 23 处存量漂移清零
-状态：已完成
-关联变更：quick-28fedcca
-文件：
-- src/docs-check.js（DEFAULT_DOC_PATHS 扩两根）
-- .sillyspec/knowledge/decisions/stages.md（doctor.js 陈锚重锚）
-- .sillyspec/knowledge/uncategorized.md（run.js 陈锚重锚 2 处）
-需求：P1-1 docs-check 扫描集纳入 changes/ 与 knowledge/ + 23 处存量漂移清零
-根因：最活跃、最易产生行号漂移的变更目录与决策库此前零校验（noai-ir-roadmap §4 评为全清单性价比最高项）
-方案：DEFAULT_DOC_PATHS 扩 .sillyspec/changes/**/*.md 与 .sillyspec/knowledge/**/*.md 两根（archive/ 路径段与 doc_type:snapshot 双通道豁免不变，归档件不回检）；纳入后 verify/archive 收尾 autoReanchorDocRefs 自动覆盖变更文档；存量 23 处失效清零（--fix 机械 20 + 手工 3：拆分后陈路径 doctor.js→doctor-diagnostics.js:933、run.js→gates.js:274-294、command.js:616-654 重锚）
-结果：docs check 547/547 全通过（207 关键词断言）；回归 52/52；quick 门禁 test+lint 实测（src/docs-check.js 危险清单文件已 --force-baseline 预声明）
-
-## ql-20260910-023-68f5 | 2026-09-10 23:43:06 | P1-2 docs-check 符号锚语法：file.js::symbol 新引用即用，行漂移天然免疫
+## ql-20260910-016-e8e0 | 2026-09-10 22:43:49 | user_input 日志行 5000 截断放宽到 50000 单一常量，会话页长输入不再截断
 状态：已完成
 关联变更：（无）
 文件：
-- src/docs-check.js（SYMBOL_REF_RE+findSymbolDefLine+符号分支）
-- test/docs-check-symbol-anchor.test.mjs（3 用例）
-- docs/sillyspec/noai-ir-roadmap.md（P1-2 状态更新+假例改真例）
-需求：P1-2 docs-check 符号锚语法：file.js::symbol 新引用即用，行漂移天然免疫
-根因：行号锚漂移税是最大 IR 成本（31~67 个重锚提交、单批 47 处）；config-schema 的「引用符号名不用行号」规矩此前只有一处先例无机制支撑
-方案：SYMBOL_REF_RE 独立正则二遍扫描（与行号式互斥，QUICKLOG file-notes 的 path::注 因非 ASCII 标识符天然不触发）；findSymbolDefLine 按 function/const/let/var/class/def 定义行命中（仅使用不命中——符号锚指向定义文件）；失效只可能是拼错/归属错/删改名，fix 显式不可自动（非重锚可修）；存量行号锚按触碰时机增量迁移（政策：新引用一律符号锚）
-结果：新测试 3/3（含插 50 行漂移免疫对照）；docs-check 回归 25/25；docs check 548/548 全通过；本轮插入引发的 2 处行号锚漂移由 --fix 自动重锚（漂移税现场实证）
+- backend/app/modules/agent/model.py（USER_INPUT_LOG_MAX_CHARS 常量定义）
+- backend/app/modules/daemon/session/service/create.py（首 turn 写点）
+- backend/app/modules/daemon/session/service/inject.py（后续 turn 写点）
+- backend/app/modules/daemon/session/service/control.py（活跃 run 中途注入写点）
+- backend/app/modules/daemon/session/service/ppm_activation.py（PPM 激活写点）
+- backend/app/modules/daemon/group/service/messages.py（群聊消息写点）
+- backend/app/modules/daemon/group/service/shadow.py（群聊影子首句写点）
+- backend/app/modules/agent/worker_redispatch.py（worker 重派写点）
+- backend/app/modules/agent/mcp_tools.py（MCP 工具建会话写点）
+- backend/app/modules/spec_workspace/bootstrap.py（scan step_prompt 写点）
+- backend/app/modules/daemon/session/service/auto_resume.py（G5 截断检测改引单一源）
+- backend/app/modules/daemon/tests/test_session_user_log.py（截断断言 5000→常量）
+- backend/app/modules/daemon/tests/test_session_recovery.py（G5 反例夹具随口径）
+- .sillyspec/docs/multi-agent-platform/modules/backend.md（变更索引加 ql-20260910-016 条目）
+需求：user_input 日志行 5000 截断放宽到 50000 单一常量，会话页长输入不再截断
+根因：后端 9 个写点硬编码 content[:5000] 落 AgentRunLog(channel=user_input)，长输入的展示与「重新发送」都吃截断副本（生产库多条 user_input 行 len=5000 实证）；agent 实收的 SESSION_INJECT prompt 本就是全文，纯展示层截断
+方案：agent/model.py 新增 USER_INPUT_LOG_MAX_CHARS=50_000 单一取值源（模型层无服务依赖不成环），9 写点统一引用；auto_resume 截断检测常量改别名同值；对齐 run_sync submit 50k 既有口径，DB 列 Text 无上限；两处测试断言随口径适配
+结果：test_session_user_log + test_session_recovery + test_auto_resume_integration 34 passed；group_direct/group_mention_pipeline/mcp_tools/bootstrap_provider_model 115 passed；worker 派发 14 passed；ruff 全过 mypy 0 issue；未部署，需重发后端镜像生效
 
-## ql-20260910-024-d902 | 2026-09-10 23:44:32 | 坑文档化：pre-commit stash-restore 吞常规提交（三现）+ python replace 无 assert 静默流失入 troublesh…
+## ql-20260910-017-2006 | 2026-09-10 22:49:24 | 变更中心点击具体文件展示内容变化比对（红绿高亮弹窗，参考冲突比对弹窗视觉；快速修复抽屉与变更文件树两入口）
 状态：已完成
 关联变更：（无）
 文件：
-- docs/sillyspec/troubleshooting.md（§57 两坑条目）
-需求：坑文档化：pre-commit stash-restore 吞常规提交（三现）+ python replace 无 assert 静默流失入 troubleshooting §57
-根因：①stash 栈是多会话共享全局可变状态，hook stash 期间他者会话插队致 restore 按引用 pop 到错误快照（三现；与 §17 同族，hook 在 sillyspec 管理面之外只能 workaround 文档化）；②str.replace 目标不匹配时静默 no-op，修正流失到复审才暴露（用户自流程已改，实践条沉淀防复潮）
-方案：troubleshooting.md 追加 §57 两坑四段条目（症状/根因/workaround/关联）——workaround①=路径限定 git commit -- <pathspec>（三现验证唯一可靠，与 AGENTS 规则 18 显式 pathspec 同源互证）；workaround②=count-assert+grep 复核（fail-closed 同构）
-结果：纯 doc 改动；docs check 548 处引用全通过（新增条目零新失效）；lint/test 门禁未触发（无 src/test 触及）
+- sillyhub-daemon/src/sillyspec-manager.ts（fileDiff 方法 + Outcome 可选 stderr + 256KB 护栏）
+- sillyhub-daemon/src/daemon.ts（sillyspec_file_diff RPC 注册）
+- backend/app/modules/change/scope_audit.py（新 service（git_log 范式））
+- backend/app/modules/change/router.py（/sillyspec/file-diff 端点）
+- frontend/src/components/changes/scope-file-diff-modal.tsx（新弹窗（复用 parseUnifiedDiff））
+- frontend/src/components/changes/scope-audit-command-card.tsx（useQuickSessionName 抽出共用）
+- frontend/src/components/changes/quicklog-drawer.tsx（文件行点击入口）
+- frontend/src/components/change-file-tree.tsx（变化比对按钮（changeKey 可选 prop））
+需求：变更中心点击具体文件展示内容变化比对（红绿高亮弹窗，参考冲突比对弹窗视觉；快速修复抽屉与变更文件树两入口）
+根因：scope-audit --file 已能在本地看单文件 diff，但平台侧无入口——用户要求在查看变化时可直接点击文件比对；锚点解析逻辑在工具（quick=HEAD 窗口/归档=快照基点），平台三端需一条 daemon RPC + 工作区级端点 + 弹窗的透传链
+方案：daemon 新 sillyspec_file_diff RPC：spawn 本机 sillyspec 跑 scope-audit --change --file --json（锚点同源零自研，256KB 截断，未知命令→能力缺失错误码；Outcome 补可选 stderr 支撑能力检测）；backend change 模块 scope_audit.py service（git_log 范式绑定解析+RPC 转发+AppError 错误族）+ GET /workspaces/{ws}/sillyspec/file-diff（避开 /changes/{uuid} 段匹配坑）；前端新 scope-file-diff-modal（复用 git-log parseUnifiedDiff 红绿行渲染，note 态/422 升级引导/重试态分型）+ useQuickSessionName 抽出共用，抽屉文件行与变更文件树「变化比对」按钮两入口
+结果：daemon 4 套件 122 passed + tsc 0；backend 7 passed + mypy 0 + ruff 0；前端弹窗 5 + 抽屉 7 + 变更中心 14 套件 164 passed、tsc 0、eslint 零新增；gen:types 三端重生成；docs check 无新增；未部署（daemon 升级 + sillyspec 新版发布后端到端可用，版本门弹窗有分型引导）
+审计：⚖️ 归属切分：1 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：sillyhub-daemon/src/api-types.ts
 
-## ql-20260910-025-599e | 2026-09-10 23:47:13 | P1-3 run --meta：SS-META 机器块从 auto 专属毕业到常规模式
+## ql-20260910-018-d305 | 2026-09-10 23:13:27 | get_daemon_status 暴露 worker 执行器配额池标识，review-dispatch 消费方派发前预判独立兜底是否成立（P0-2 增补…
+状态：已完成
+关联变更：2026-09-10-review-dispatch-platform-fixes
+文件：
+- backend/app/modules/mcp_gateway/tools.py（quota_pool 探测+docstring 口径）
+- backend/app/modules/mcp_gateway/tests/test_tools_new.py（3 新用例+_make_llm_provider fixture）
+- .sillyspec/docs/backend/modules/mcp_gateway.md（13 tool 校正+quota_pool 行）
+需求：get_daemon_status 暴露 worker 执行器配额池标识，review-dispatch 消费方派发前预判独立兜底是否成立（P0-2 增补，关联 2026-09-10-review-dispatch-platform-fixes）。
+根因：该 tool 此前只有执行器（effective_agent）与在线性，无凭证池归属信息——worker 实际落在哪个配额池（独立 key 还是 daemon 本机凭证同池）派发前不可判，P0-2 的「本地耗尽平台兜底」价值无法预验证。
+方案：per-daemon quota_pool = binding 属主在 effective agent_kind 下的用户默认 LlmProvider 身份（claim 三级解析第三级；五键 {llm_provider_id,name,agent_kind,api_format,is_default}，不 decrypt 不出 key 材料）+ 顶层 effective_quota_pool 镜像首个 online 项；一条批量 in 查询不进循环；effective_agent 为 None 不查池。
+结果：test_tools_new.py 24 passed（3 新用例覆盖池命中/kind 过滤/跨属主映射、非默认行不构成池、无执行器不查池），ruff check+format 过；模块卡同步（13 个 tool 校正 + quota_pool 口径）；待部署远端后消费方即可预判。
+
+## ql-20260911-001-c0be | 2026-09-11 08:28:41 | scope-audit 命令卡升级为结果卡——对账结果（三态表+行数）在页面内直接跑出来渲染，不再只展示可复制命令
 状态：已完成
 关联变更：（无）
 文件：
-- src/run/prompt.js（SS-META 渲染条件毕业+change 字段）
-- src/run/command.js（--meta flag 解析+白名单）
-- test/run-meta-flag.test.mjs（2 用例）
-- src/run/complete.js（跨会话依赖追加声明（ql-020 synthesizeStepOutput））
-需求：P1-3 run --meta：SS-META 机器块从 auto 专属毕业到常规模式
-根因：run 拒绝 --json 且 SS-META 仅 auto 渲染——宿主 skill/脚本无法程序化取 prompt+doneCommand+状态（noai-ir-roadmap §4）
-方案：run <stage> --meta 布尔 flag（knownFlags 白名单）→ runCommand 置 SILLYSPEC_RUN_META=1 → outputStep 渲染同款 SS-META 块（单行正则可提取）；meta 增补 change 字段（向后兼容追加）；跨会话依赖 complete.js（synthesizeStepOutput，ql-020 未提交批次）追加声明过隔离快照
-结果：新测试 2/2；回归 6/6；wait-gates 38/38（门禁首两跑因隔离快照缺未提交依赖文件而模块级崩，追加声明后过）
+- sillyhub-daemon/src/sillyspec-manager.ts（auditTable + _runScopeAuditJson 共享执行器）
+- sillyhub-daemon/src/daemon.ts（sillyspec_scope_audit RPC）
+- backend/app/modules/change/scope_audit.py（_send_scope_rpc 共享 helper + get_scope_audit）
+- backend/app/modules/change/router.py（/sillyspec/scope-audit 端点）
+- frontend/src/components/changes/scope-audit-command-card.tsx（结果卡重构（摘要+明细弹窗+行联动 diff+命令折叠））
+- frontend/src/lib/changes.ts（getScopeAudit 取数）
+需求：scope-audit 命令卡升级为结果卡——对账结果（三态表+行数）在页面内直接跑出来渲染，不再只展示可复制命令
+根因：用户反馈命令卡只是展示命令不够——命令不是目的，看对账结果才是；daemon→backend→前端透传链已由单文件比对（ql-20260910-017-2006）建好，缺表模式一跳与结果渲染
+方案：daemon 新 sillyspec_scope_audit RPC（auditTable 方法跑 CLI 表模式 --json，信封投影：锚点短化/rows 500 护栏/totals 透传；执行器抽 _runScopeAuditJson 与 fileDiff 共享）+ backend 同族端点 GET /sillyspec/scope-audit（_send_scope_rpc 错误族抽共享 helper）+ 前端命令卡重构：挂载即取数出锚点+合计+三态计数 chips（full-flow verdict / quick attribution），查看明细弹窗渲染三态全表且行点击联动单文件 diff 弹窗，本地命令折叠为卡尾兜底
+结果：daemon 12 用例+回归 76 passed、tsc 0；backend 9 passed、mypy/ruff 0；前端卡 7 用例重写+变更中心 21 套件 237 passed、tsc 0、eslint 0；gen:types 三端重生成；docs check 无新增；未部署（daemon 升级+sillyspec 新版后端到端可用，降级态有命令兜底）
+审计：⚖️ 归属切分：2 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/page.tsx, sillyhub-daemon/src/api-types.ts
 
-## ql-20260911-001-138f | 2026-09-11 00:22:11 | P0-4 全量并步：archive 6 步→3 步 + archive 退出 auxiliary 重置修复
+## ql-20260911-002-4755 | 2026-09-11 08:51:11 | external 模式（orchestration_mode=external…
+状态：已完成
+关联变更：2026-09-10-review-dispatch-platform-fixes
+文件：
+- backend/app/modules/agent/model.py（resolve 回退 _mission_from_session_runs）
+- backend/app/modules/agent/mcp_tools.py（_worker_done_core external 成员资格）
+- backend/app/modules/agent/tests/test_worker_subsession_done.py（TestExternalModeWorkerDone 三例）
+- .sillyspec/docs/backend/modules/agent.md（external 打通条目）
+需求：external 模式（orchestration_mode=external，review-dispatch 经 MCP gateway 派发）worker 的 artifacts 恒空——daemon 代报 worker_done 被 404。
+根因：resolve_mission_for_session 沿 parent 链爬根（external worker parent=NULL 爬到自身）按 mission.session_id 匹配（external=NULL）必 miss；mission_worker_sessions_tree 对 external 恒 [] 会再 422。活体证据：backend 日志 POST /api/missions/worker_done 404 + lease metadata 已有 stage=mission_worker（①②③全非断点：stage 打标正常、caps.mcp=false 代报路径已走、pi override 提取正常 output_redacted=503 字符）。
+方案：resolve 爬根 miss 后按 run 归属回退（会话下最早带 mission_id 的 run 反查 mission，active/terminal 双形态）；_worker_done_core 成员资格对 external 以首 run 锚代替空树（session 模式树 422 判定序原样）。
+结果：test_worker_subsession_done.py 23 passed（external 三例：200+artifact+零唤醒/终态 409/无归属 404），广域 550 passed，ruff/mypy 过；daemon 侧零改动（代报本就工作）。
+
+## ql-20260911-003-355a | 2026-09-11 09:00:58 | 24h 审查风险修复批：MCP 资产库 P0 越权+P0 密钥毁坏（密钥类型改用户逐键自定义）+P1 解绑 422+P2 十一件
+状态：已完成
+关联变更：（无）
+文件：.sillyspec/docs/SillyHub/modules/frontend_app.md（+1/-0）, .sillyspec/docs/SillyHub/modules/frontend_components.md（+1/-0）, .sillyspec/docs/backend/modules/auth.md（+3/-1）, .sillyspec/docs/backend/modules/mcp_gateway.md（+1/-1）, .sillyspec/docs/backend/modules/mcp_registry.md（+27/-11）, .sillyspec/docs/multi-agent-platform/modules/backend.md（+1/-0）, .sillyspec/docs/multi-agent-platform/modules/sillyhub-daemon.md（+1/-0）, .sillyspec/docs/sillyhub-daemon/modules/interactive.md（+1/-0）, backend/app/core/errors.py（+7/-0）, backend/app/main.py（+5/-4）, backend/app/modules/auth/service.py（+27/-2）, backend/app/modules/mcp_gateway/router.py（+9/-6）, backend/app/modules/mcp_gateway/server.py（+12/-28）, backend/app/modules/mcp_gateway/tests/test_router.py（+5/-9）, backend/app/modules/mcp_registry/importer.py（+77/-8）, backend/app/modules/mcp_registry/model.py（+21/-3）, backend/app/modules/mcp_registry/render.py（+9/-4）, backend/app/modules/mcp_registry/router.py（+4/-1）, backend/app/modules/mcp_registry/schema.py（+37/-22）, backend/app/modules/mcp_registry/service.py（+160/-21）, backend/app/modules/mcp_registry/templates.py（+54/-47）, backend/app/modules/mcp_registry/tests/test_importer_workspace.py（+106/-4）, backend/app/modules/mcp_registry/tests/test_model_schema.py（+16/-13）, backend/app/modules/mcp_registry/tests/test_render.py（+49/-4）, backend/app/modules/mcp_registry/tests/test_router.py（+26/-7）, backend/app/modules/mcp_registry/tests/test_service.py（+242/-4）, backend/app/modules/mcp_registry/tests/test_templates.py（+24/-6）, backend/app/modules/spec_workspace/service.py（+29/-5）, backend/app/modules/spec_workspace/tests/test_reparse_scheduler.py（+27/-0）, backend/migrations/versions/20260911010000_mcp_template_secret_keys_unique.py（+48/-0）, backend/tests/modules/auth/test_my_avatar.py（+33/-2）, frontend/src/app/(dashboard)/account/page.tsx（+9/-0）, frontend/src/app/(dashboard)/settings/mcp/page.test.tsx（+8/-8）, frontend/src/app/(dashboard)/settings/mcp/page.tsx（+2/-0）, frontend/src/components/group-chat/group-member-avatar.tsx（+6/-2）, frontend/src/components/mcp-registry/server-card.tsx（+2/-6）, frontend/src/components/mcp-registry/server-form-modal.tsx（+108/-30）, frontend/src/components/mcp-registry/template-picker-modal.tsx（+5/-2）, frontend/src/lib/api/mcp-registry.ts（+35/-18）, sillyhub-daemon/src/agent-log/read-zcode-sqlite.ts（+23/-1）, sillyhub-daemon/src/cli.ts（+3/-0）, sillyhub-daemon/src/host-fs-handler.ts（+6/-0）, sillyhub-daemon/src/interactive/session-manager.ts（+7/-0）, sillyhub-daemon/src/interactive/types.ts（+10/-0）, sillyhub-daemon/tests/agent-log/read-zcode-sqlite.test.ts（+21/-0）, sillyhub-daemon/tests/agent-log/zcode-sqlite-dispatch.test.ts（+26/-12）, sillyhub-daemon/tests/interactive/session-manager-config-switch.test.ts（+8/-1）
+需求：24h 审查风险修复批：MCP 资产库 P0 越权+P0 密钥毁坏（密钥类型改用户逐键自定义）+P1 解绑 422+P2 十一件
+根因：P0-1 scan/apply 两端点无工作区成员校验可枚举并收编他人 .mcp.json（含 secret）；P0-2 前端回传脱敏占位 <set> 而后端无占位语义、整份重加密毁坏真实密钥不可恢复，且用户裁决密钥判定不得按键名子串自动猜（应为用户自定义类型）；P1-1 user 解绑 URL 缺 scope_ref 尾段后端恒 422；P2 批为 quota_pool 归一化缺失/无序抖动、file-diff 消息泄漏+超时写反、停机 drain 无界、代理对截断 500、SQLite 无预算、分派无存在性门、reload 基线残留、avatar 无 scheme 校验、gateway_url 信任转发头、桌面头像竞态、模板双 seed、渲染同名不确定
+方案：后端：importer _visible_workspace_ids 成员门（admin 放行+WORKSPACE_READ 可见集，越权 403 fail-fast）；McpServerCreate/Update.secret_env_keys 显式指定态+service 占位语义（<set>=保留密文/创建与新键 422/单改指定态升降级）+templates 键名列+预置名唯一索引迁移 20260911010000+render 同名 platform 先 user 后+读侧回显；前端：useToggleMcpBinding 带本人 uid 尾段、表单加密 Switch 逐键指定（缺省按键名建议）、edit <set>/copy 置空；P2：_normalize_lease_provider 归一+三查询 ORDER BY、RPC 135s+remote_message 仅日志、drain 15s 有界、truncateUtf16Safe、SQLite 20MB 预算+lstat 存在性门、onSessionReloaded 基线回收、avatar 422 校验、gateway_url 未配置 null、avatarBusy 串行化
+结果：backend mcp_registry 166+change 516+mcp_gateway 133+spec_workspace 4+auth 9 passed，ruff/mypy/format 0；daemon 定向 99 passed+tsc 0；frontend 25+43 passed+tsc 0；openapi+两份 api-types gen:types 两轮零漂移
+
+## ql-20260911-004-70fc | 2026-09-11 09:32:22 | get_daemon_status.effective_quota_pool 空值不可判——消费方无法预判本地配额耗尽时平台兜底是否成立（活体回执…
+状态：已完成
+关联变更：2026-09-10-review-dispatch-platform-fixes
+文件：
+- backend/app/modules/mcp_gateway/tools.py（_quota_pool_entry 三态 + 预填覆盖）
+- backend/app/modules/mcp_gateway/tests/test_tools_new.py（三态断言）
+- .sillyspec/docs/backend/modules/mcp_gateway.md（三态口径）
+需求：get_daemon_status.effective_quota_pool 空值不可判——消费方无法预判本地配额耗尽时平台兜底是否成立（活体回执：字段在值没填）。
+根因：远端 llm_providers 全为 claude 且无一 is_default=true（DB 实证），属主未配 pi 平台凭证时 probe 按设计返回 null，但 null 无法区分「同池（预期坏态）」与「未实现」。
+方案：quota_pool 改显式三态 pool_kind——independent（平台默认凭证命中，附 llm_provider_id/name/agent_kind/api_format）/ local_shared（未配→worker 落 daemon 本机凭证与本地同池，独立兜底不成立，附 hint）/ undetermined（无执行器可判）；随带并行会话的 default_agent 归一化（claude_code→claude 等）使 kind 匹配更稳。
+结果：test_tools_new.py 24 passed（三态断言），ruff/mypy 过；远端部署后 effective_quota_pool 将显式返回 local_shared——建 pi 独立凭证并设默认即翻 independent（运维动作，消费方一句可判）。
+审计：⚖️ 归属切分：3 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：backend/app/main.py, backend/app/modules/spec_workspace/service.py, backend/app/modules/spec_workspace/tests/test_reparse_scheduler.py
+
+## ql-20260911-017-a3c2 | 2026-09-11 09:05:00 | provider-registry 守护测试同步第 9 键 dialog（主仓预存红顺手修）
+状态：已完成
+关联变更：2026-09-11-skills-central-library（verify 门实测暴露；债务源 99a228add/2026-09-09-askuser-pi-cursor）
+文件：
+- sillyhub-daemon/tests/interactive/provider-registry.test.ts（8 键→9 键 + dialog 三态类型断言 string|boolean）
+验证：provider-registry 6 passed + typecheck 0
+
+## ql-20260911-018-5f6e | 2026-09-11 09:20:00 | use-daemon-machines 测试同步 includeSessions opt-in（预存红顺手修，HEAD 副本验证归属）
+状态：已完成
+关联变更：2026-09-11-skills-central-library（verify 门暴露；债务源 a1d7ffba4/ql-20260909-013）
+文件：
+- frontend/src/lib/__tests__/use-daemon-machines.test.ts（sessions 联动用例显式 { includeSessions: true }）
+验证：4 passed；head-check 干净 worktree 复核：本例 HEAD 即红（真债务）、delete-change-confirm HEAD 绿（并行 WIP 污染）
+
+## ql-20260911-019-1f01 | 2026-09-11 10:27:55 | 头像孤儿文件清理：换绑/清除/上传失败三路径遗留文件回收
 状态：已完成
 关联变更：（无）
 文件：
-- src/stages/archive.js（三步重排（distill noAI 前置+语义收尾+确认归档））
-- src/run/gates.js（auxiliary 重置排除 archive（终态终态一致性修复））
-- test/archive-*.test.mjs 等 13 文件（种子表与断言随定义合法更新）
-- .claude/skills/sillyspec-archive/SKILL.md（步骤清单 6→3）
-需求：P0-4 全量并步：archive 6 步→3 步 + archive 退出 auxiliary 重置修复
-根因：6 次 --done 往返中 4 次是仪式性的；路线图 §2 砍步取证完成——三处注视点（完成度暂停/文档同步异常裁决/确认 diff 注视）有 documented 拦截史全部保留，合并只砍往返
-方案：四语义步合并（migratedFrom 吸收存量 + conditionalWait 合并 + 名含 extract-module-impact 保 post_check 接线）；确认归档为末步并注入完成度快照（注视点前移到确认时刻）；运行时钩子定位到 auxiliary 重置与 unregister 终态互相覆盖的产品 bug——archive 终态阶段退出可重跑重置；13 测试文件随定义更新 + skill/roadmap 同步
-结果：archive 全家桶 72/72 全绿（batch-31/terminal/selfheal/tail/delta/git-add/impact/sync-wait/lifecycle/closeout 等 16 文件）；漂移守卫剧本按新三步表实测校准
+- backend/app/modules/file/service.py（reclaim_orphaned_file_by_url 共享回收入口）
+- backend/app/modules/auth/service.py（update_my_avatar 提交后回收旧值）
+- backend/app/modules/daemon/group/service/members.py（update_member 成员表提交后回收）
+- frontend/src/lib/file/api.ts（deleteFile+tryReclaimOrphanAvatarFile）
+- frontend/src/app/(dashboard)/account/page.tsx+src/app/m/account/page.tsx（保存失败回收新文件）
+- frontend/src/components/group-chat/member-panel.tsx（avatarMutation onError 回收）
+- frontend/src/app/(dashboard)/account/page.test.tsx（软归属·同模块测试，未声明）
+- frontend/src/components/group-chat/__tests__/member-panel.test.tsx（软归属·同模块测试，未声明）
+需求：头像孤儿文件清理：换绑/清除/上传失败三路径遗留文件回收
+根因：头像链路三路径漏回收：换绑与清除后旧文件中心文件失引用、上传成功但保存（PATCH）失败时新文件即刻孤儿，file 模块有 soft delete 能力但本链从不调用，MinIO 孤儿单调增长
+方案：后端 file/service.py 模块级 reclaim_orphaned_file_by_url（/api/file/{uuid} 形态 best-effort 软删，归属 uploaded_by 本人，异常静默不影响主写路径）+ 两写点接线（auth update_my_avatar 提交后回收旧值、group update_member 成员表提交后回收旧 avatar）；前端 lib/file/api.ts 增 deleteFile/tryReclaimOrphanAvatarFile，桌面+移动个人中心与 member-panel 三处在「上传成功但保存失败」catch 里回收新文件（恢复默认空串不触发）
+结果：backend 定向 87 passed（auth 13+group 35+file 39，含换绑/清除/外链/他人文件回收反例），ruff/mypy/format 0；frontend account 15+member-panel 44 passed，tsc 0；模块文档六卡同步+2 处预存引用债顺手修（daemon.md 裸文件名、code-quality 文档缺仓根前缀）
+审计：⚖️ 归属切分：12 个窗口内未声明脏文件未计入文件行（并行会话改动或本会话漏声明）：.sillyspec/docs/SillyHub/scan/CONCERNS.md, .sillyspec/docs/backend/scan/CONCERNS.md, .sillyspec/docs/backend/scan/CONVENTIONS.md, .sillyspec/docs/frontend/scan/CONVENTIONS.md, .sillyspec/docs/multi-agent-platform/scan/CONCERNS.md, backend/app/modules/daemon/tests/test_group_chat_management.py, backend/tests/modules/auth/test_my_avatar.py, docs/architecture-4a.md, docs/code-quality-hardening-2026-07-24.md, docs/research-ai-toolbox-config-management-2026-09-10.md, frontend/src/app/(dashboard)/account/page.tsx, frontend/src/app/m/account/page.tsx
+审计：🔍 软归属：2 个窗口内未声明同模块测试文件已补入文件行（若属并行会话改动请手工剔除）：frontend/src/app/(dashboard)/account/page.test.tsx（+51/-1）, frontend/src/components/group-chat/__tests__/member-panel.test.tsx（+44/-0）
 
-## ql-20260911-002-d257 | 2026-09-11 00:27:53 | P1-4 QUICKLOG 结构化 sidecar：终态 payload 写时持久化
+## ql-20260911-020-1da6 | 2026-09-11 12:38:20 | CI 失败与不稳定测试修复批：6 处测试自身缺陷（常量改名未同步、密钥模型未跟上、缺渲染等待、mock 被覆盖、sessions 未等待、心跳断言过严）
 状态：已完成
 关联变更：（无）
 文件：
-- src/quicklog.js（sidecar 三帮手+完成/取消两路接线）
-- test/quicklog-sidecar.test.mjs（3 用例）
-需求：P1-4 QUICKLOG 结构化 sidecar：终态 payload 写时持久化
-根因：md 双解析对齐税（JS buildPushPayloadFromRaw × 平台 quicklog_parser.py 同款口径）与 daemon/查询反复解析 md 的成本
-方案：同一解析器产物持久化：完成时 finalPayload（与推送同一对象）落 sidecar JSON（一次解析恒一致，schemaVersion 1）；取消翻态同步；md 仍是真相源，sidecar 是加速层（读取缺失/损坏/版本不符 null 回退）。平台侧 Python 解析器后续可转消费推送 payload 结构化字段（服务器侧另计）
-结果：新测试 3/3（同源一致/翻态与存量跳过/读取三态回退）；quicklog 族回归通过
+- backend/app/modules/change_writer/tests/test_proxy.py（PROXY_POLL_INTERVAL_SECONDS 改 patch PROXY_RECEIPT_DB_CHECK_SECONDS/PUBSUB_WINDOW_SECONDS）
+- backend/app/modules/daemon/tests/test_mcp_config_endpoint.py（种子助手增 secret_env_keys 参数，admin 脱敏对照与解密回填两用例显式传键）
+- frontend/src/components/sessions/__tests__/portal-file-panels.test.tsx（嵌套路径用例补 waitFor 子节点渲染）
+- frontend/src/components/changes/__tests__/platform-sync-section.test.tsx（renderSection 增 bindingOverride，隐藏用例改参数注入）
+- frontend/src/lib/__tests__/use-daemon-machines.test.ts（sessions 断言包 waitFor）
+- sillyhub-daemon/tests/daemon.test.ts（AC-05 心跳计数改稳定化断言）
+需求：CI 失败与不稳定测试修复批：6 处测试自身缺陷（常量改名未同步、密钥模型未跟上、缺渲染等待、mock 被覆盖、sessions 未等待、心跳断言过严）
+根因：c04ec8478 把回执轮询改 Redis pubsub 后常量改名测试未同步；e1492300d 密钥改用户逐键显式 secret_env_keys 后测试种子仍按旧子串自动抽列假设；portal-file-panels 新用例只等 fetchTree 调用没等子节点渲染（file-explorer 原版有等待）；platform-sync-section 隐藏用例的 null 绑定 mock 被 renderSection 内部默认值整体覆盖成断言竞态；use-daemon-machines 在 items 就绪后裸断言并行查询 sessions；daemon AC-05 断言停机瞬间零增长而实现允许在途一拍落账
+方案：test_proxy patch 改新常量并加注释；mcp 种子助手增 secret_env_keys 参数、两用例显式传键并修过期注释；portal-file-panels 补 waitFor 子节点文本；renderSection 增 bindingOverride 参数、隐藏用例改参数注入；sessions 断言包 waitFor；AC-05 改停后先收敛记基数再验证计数稳定
+结果：backend pytest 28 passed（test_proxy+test_mcp_config_endpoint）；frontend vitest 25 passed（3 文件）；daemon vitest 33 passed（daemon.test.ts 含 AC-05）；ruff 两文件 check+format 通过；eslint 0 error（2 条预存 warning）；daemon tsc --noEmit 通过
+审计：📝 文档欠账（D-8）：6 个源码文件改动未同步任何模块文档（涉及模块：backend · frontend）
 
-## ql-20260911-003-2f5c | 2026-09-11 00:32:53 | P1-5 decisions 单一写入者：decisions add/list 命令式 canonical 写入
+## ql-20260911-019-9d31 | 2026-09-11 11:40:00 | delete-change-confirm 补 scope-audit mock（32d311934 提交后成为正式预存债）
+状态：已完成
+关联变更：2026-09-11-skills-central-library（verify 门暴露；债务源 32d311934）
+文件：
+- frontend/src/components/__tests__/delete-change-confirm.test.tsx（+ScopeAuditCommandCard mock+useQuickSessionName 空实现）
+验证：19 passed
+
+## ql-20260911-021-89c3 | 2026-09-11 12:52:50 | 修复 zcode SQLite 分派存在性门功能回归——lstat 文件存在门换 rollout 目录门（安全语义保留：自登记任意路径仍被拦；死会话回看恢复）
+状态：进行中
+关联变更：（无）
+文件：sillyhub-daemon/src/host-fs-handler.ts, sillyhub-daemon/tests/agent-log/zcode-sqlite-dispatch.test.ts
+
+## ql-20260911-022-1614 | 2026-09-11 13:06:33 | 移动端账号页测试 mock 补 tryReclaimOrphanAvatarFile 导出（d9519026 头像兜底回收首次进 CI 暴露）
 状态：已完成
 关联变更：（无）
 文件：
-- src/decisions-io.js（新模块：canonical 写入者）
-- src/index.js（decisions add/list 子命令）
-- test/decisions-io.test.mjs（4 用例）
-- .sillyspec/docs/sillyspec/modules/_module-map.yaml（decisions-io 归属补录）
-需求：P1-5 decisions 单一写入者：decisions add/list 命令式 canonical 写入
-根因：decisions.md 由 agent 手拼自由 markdown 是 13 处解析点的事故源头（扁平列表静默 0 条/字段拼写漂移/CRLF 状态行恒失败）
-方案：CLI 拥有 canonical 格式：renderDecisionEntry 写入侧校验（D-xxx 形态/版本正整数/status/type 白名单）+ 序列化单源（applyField 白名单中文标签）；upsertDecision 同 id@v 整块替换幂等、新版本追加、散文保留、EOL/frontmatter 不动、原子写；CLI decisions add（多值 domain/note、缺省版本=既有同号最高+1）与 list 视图；读取侧零改动（round-trip 测试锁定双向兼容）；module-map 归属 docs-consistency 模块补录
-结果：新测试 4/4；回归 31/31（decisions-lifecycle/cross-change）
+- frontend/src/app/m/account/page.test.tsx（vi.mock 工厂补 tryReclaimOrphanAvatarFile 导出）
+需求：移动端账号页测试 mock 补 tryReclaimOrphanAvatarFile 导出（d9519026 头像兜底回收首次进 CI 暴露）
+根因：d95130926 给 handleAvatarFile catch 路径新增孤儿文件兜底回收调用，三个调用点中桌面账号页与 member-panel 的测试 mock 都补了导出，唯移动端 page.test.tsx 遗漏；上传失败用例断言通过后异步 handler 访问缺失导出抛未捕获错误，经定时器浮出把 vitest 进程打挂（3658 用例全过仍 exit 1）
+方案：移动端测试的 vi.mock 工厂补 tryReclaimOrphanAvatarFile 桩（fire-and-forget 语义返回 false 即可，移动端用例无需断言回收）并加注释说明来源
+结果：vitest 单文件 5 passed；eslint 0 error 0 warning
 
-## ql-20260911-004-2b1b | 2026-09-11 00:40:18 | P1-6 commit --apply（只限归档语境）+ 建议命令 pathspec 化
+## ql-20260911-023-226d | 2026-09-11 13:52:03 | 可观测性盲区修复——console-timestamp 补 debug 通道 + zcode 回落日志升级 info
 状态：已完成
 关联变更：（无）
 文件：
-- src/commit-suggest.js（scope 判定+apply 执行）
-- src/index.js（--apply 分支+建议行 pathspec 化）
-- test/commit-apply-archive.test.mjs（2 用例）
-需求：P1-6 commit --apply（只限归档语境）+ 建议命令 pathspec 化
-根因：commit 只建议不执行让 agent 手拼 git 命令（多会话仓最危险手工面）；agent 上下文「需人确认」是伪约束——收窄到归档语境（文件已验收+pathspec 显式）这一处执行
-方案：resolveArchiveCommitScope DB 直查语境（archived/current_stage=archive 才放行，DB 缺失拒绝）；applyArchiveCommit 用语义来源 message + stageArchiveArtifacts 既有 pathspec，git commit 带 -- paths 限定（共享 index 不扫他者暂存——测试实证他者文件不进提交且暂存原样保留）；建议文案退役 git add -A（规则 18 事故后不再教目录级 add）
-结果：新测试 2/2（语境三态+apply 双路含并行暂存安全）；commit-suggest 回归 25/25（断言随规则 18 合法更新）
+- sillyhub-daemon/src/console-timestamp.ts（五通道）
+- sillyhub-daemon/tests/console-timestamp.test.ts（debug 断言）
+- sillyhub-daemon/src/host-fs-handler.ts（回落 info）
+- sillyhub-daemon/tests/agent-log/zcode-sqlite-dispatch.test.ts（ZD3 断言）
+- .sillyspec/docs/SillyHub/modules/daemon.md（同步）
+- sillyhub-daemon/src/console-timestamp.ts（五通道）
+- sillyhub-daemon/tests/console-timestamp.test.ts（debug 断言）
+- sillyhub-daemon/src/host-fs-handler.ts（回落 info）
+- sillyhub-daemon/tests/agent-log/zcode-sqlite-dispatch.test.ts（ZD3 断言）
+- .sillyspec/docs/SillyHub/modules/daemon.md（同步）
+需求：可观测性盲区修复——console-timestamp 补 debug 通道 + zcode 回落日志升级 info
+根因：console-timestamp 只包四通道，console.debug 独立属性漏包即绕过；zcode 回落日志恰走 debug 生产无痕（ql-20260911-005）
+方案：包装器五通道补 debug+注释修正；回落日志 debug→info；debug 通道回归断言+ZD3 日志断言；daemon.md 同步
+结果：console-timestamp 5 用例+agent-log+console-timestamp 12 文件 116 用例全绿；typecheck 零错
+
+## ql-20260911-024-9098 | 2026-09-11 14:40:02 | sillyspec 平台命令结果回显提速两级（daemon 补发心跳 + 前端加速轮询）
+状态：已完成
+关联变更：2026-09-04-conflict-resolve-entry
+文件：
+- sillyhub-daemon/src/daemon.ts（_runSillySpecCommand 忙拒/finally 两出口调 _nudgeHeartbeatAfterCommandResult（新私有方法，void _sendHeartbeatOnce + debug 日志））
+- sillyhub-daemon/tests/sillyspec-platform-command.test.ts（新增 ql-024 describe 三用例 + makeNudgeHarness（真 manager+已注册 runtime+心跳 mock+WS 直达口））
+- frontend/src/components/changes/platform-sync-section.tsx（ECHO_FAST_POLL_MS/ECHO_FAST_WINDOW_MS 导出常量 + pollBoostUntil 状态与到期回退 effect + machines 查询动态 refetchInterval + 裁决/ghost 两下发点开窗）
+- frontend/src/components/changes/__tests__/platform-sync-section.test.tsx（fake timers 加速轮询节拍用例（窗内 5s×2 拉取/窗外回退 15s））
+需求：sillyspec 平台命令结果回显提速两级（daemon 补发心跳 + 前端加速轮询）
+根因：用户反馈裁决/清理回显基本都要十秒以上，实测命令本体仅 0.2-0.7s，大头是结果回显两级 15s 定时器叠加（daemon 心跳捎带平均等 7.5s + 前端 15s 轮询平均等 7.5s），与命令执行时长无关
+方案：daemon.ts _runSillySpecCommand 忙拒落槽与执行完成 finally 两出口均调新私有方法 _nudgeHeartbeatAfterCommandResult（void _sendHeartbeatOnce fire-and-forget，不阻塞 WS 接收、未注册静默跳过、与 15s 循环重叠无害——心跳无状态全量上报 last-write-wins）；前端 platform-sync-section.tsx 下发后开 15s 加速窗（ECHO_FAST_WINDOW_MS）内 machines 查询 refetchInterval 从 15s 切 5s（ECHO_FAST_POLL_MS≈5s×3 次），到期 setTimeout 清 pollBoostUntil 回退常规节拍；协议零改动不动 backend
+结果：daemon 侧 sillyspec-platform-command 41 用例全绿（含新增 3：WS 下发完成即补发且第 7 参携带新结果/忙拒路径同补发+放行后再补发/未注册 runtime 静默 no-op）+ 近邻 daemon-heartbeat-sillyspec 与 sillyspec-conflict-snapshot 49 用例回归绿，daemon tsc 0；前端 platform-sync-section 15 用例绿（含新增 1：fake timers 钉窗内 5s 节拍/窗外回退 15s），前端 tsc 0，eslint 仅 2 条存量 warning（HEAD 同报非本次引入）；模块文档 sillyhub-daemon.md/frontend.md 变更索引各补 ql-20260911-024-9098 条目；预期回显从平均 ~15s 压到 ~5-10s
+
+## ql-20260911-025-244d | 2026-09-11 14:47:11 | pre-commit 提交钩 auto-fix 改 check-only（吞提交坑修复落地）+ 坑文档实测修正
+状态：已完成
+关联变更：（无）
+文件：
+- backend/.pre-commit-config.yaml（check-only）
+- docs/sillyspec/pre-commit-autofix-swallows-commit.md（实测修正+修复落地）
+需求：pre-commit 提交钩 auto-fix 改 check-only（吞提交坑修复落地）+ 坑文档实测修正
+根因：auto-fix hook 在工作树有未暂存改动时触发 stash↔修复冲突回滚循环（exit 1 被管道掩码感知为静默吞提交，alembic 迁移曾因此只进镜像未进 git）
+方案：backend/.pre-commit-config.yaml 两 hook 改 ruff format --check / ruff check（去 --fix）；坑文档更新（状态已修复/实测修正节 exit 1 真相/修复落地节含 --no-stash 否决理由与 agent 习惯项）
+结果：临时分支三段验证（改前回滚循环→改后响亮 Would reformat→格式化后 exit 0）+ 主仓实测零冲突；全仓 format --check 1241 过；提交 d1d472795 推送
+
+## ql-20260911-026-094e | 2026-09-11 15:54:30 | 修复 MinIO client 单例存错对象致线上文件上传 500
+状态：已完成
+关联变更：（无）
+文件：
+- backend/app/modules/storage/minio_backend.py（_get_client 捕获 ctx.__aenter__() 返回值存单例）
+- backend/tests/modules/storage/test_minio_client_reuse.py（替身按真实契约建模+回归锁定测试）
+- .sillyspec/docs/backend/modules/storage.md（注意事项补记 ClientCreatorContext 契约陷阱）
+需求：修复 MinIO client 单例存错对象致线上文件上传 500
+根因：9/9 ql-20260909-012 client 惰性单例改造丢了 ctx.__aenter__() 返回值，把 ClientCreatorContext 本体存进单例，该对象无 put_object 等方法且无 __getattr__ 代理，文件中心上传/下载/删除全量 AttributeError→500；测试替身 create_client 直接返回 client（错误契约）掩盖了回归
+方案：minio_backend._get_client 捕获 __aenter__() 返回值（AioBaseClient）存单例；测试替身按真实契约建模（create_client 返回 _FakeCreatorContext，__aenter__ 返回 client 本体）+ 新增回归锁定测试；storage.md 补记契约陷阱
+结果：tests/modules/storage 4 passed（换回坏实现复跑 4 failed 证明可拦回归）；ruff format/check 通过；已重新打包部署到 47.113.145.252（commit 0618d86c6），线上实测全通——容器内签真实用户 token 走 POST /api/file/upload?owner_type=group_member_avatar 201 / GET 下载 200 内容一致 / DELETE 204，公网域名无 token 401（路由正常，500 消失）

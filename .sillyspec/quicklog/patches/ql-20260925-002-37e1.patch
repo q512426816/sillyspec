@@ -1,0 +1,184 @@
+diff --git a/src/handoff.js b/src/handoff.js
+index 42e1dcdd..7571eae4 100644
+--- a/src/handoff.js
++++ b/src/handoff.js
+@@ -183,6 +183,24 @@ export async function buildHandoff({ cwd, specBase, changeName } = {}) {
+   lines.push('💡 为什么可行：CLI prompt 自足——进度快照/模块命中/知识注入由进度库与渲染提供，新会话零背景可续跑。');
+   lines.push('⚠️ SILLYSPEC_SESSION_ID 必须保持不变（变更所有权/接管判定按此标识）；缺省降级机器级标识只拦他机。');
+ 
++  // handoffAt 切割凭证（R16-b 实证修正 2026-09-25）：stage.wall=hard 的墙按「前驱收口后
++  // 是否执行过 handoff」判定硬续（SESSION_ID 是所有权标识非会话标识，handoff 要求新会话
++  // 保持不变——SESSION_ID 相同不能当硬续证据）。本命令执行即切割：best-effort 给
++  // stage-session ledger 盖 handoffAt 章，墙据此放行新会话的 execute/verify 首入。
++  try {
++    const ledgerPath = join(specRoot, '.runtime', `stage-session-ledger-${target}.json`);
++    let ledger = null;
++    try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')); } catch { /* 无账本（阶段未收口）→ 无墙可放行，零动作 */ }
++    if (ledger && typeof ledger === 'object') {
++      ledger.handoffAt = new Date().toISOString();
++      try {
++        const { writeFileSync, mkdirSync } = await import('node:fs');
++        mkdirSync(join(specRoot, '.runtime'), { recursive: true });
++        writeFileSync(ledgerPath, JSON.stringify(ledger, null, 1) + '\n', 'utf8');
++      } catch { /* 盖章失败不影响交接块本体 */ }
++    }
++  } catch { /* handoffAt 盖章 best-effort */ }
++
+   return {
+     ok: true,
+     change: target,
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 77c25500..29a18669 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -762,10 +762,20 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+         crossStage = r.crossStageAdvisory
+         try { mkdirSync(join(specBase, '.runtime'), { recursive: true }); writeFileSync(ledgerPath, JSON.stringify(stageLedger, null, 1) + '\n', 'utf8') } catch { /* 账本 best-effort */ }
+       } catch { /* ④ 升级提示 best-effort 零副作用 */ }
+-      if (crossStage && stageLedger) {
+-        console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
+-        console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
+-        console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
++      // R16-b 修正（2026-09-25）：plan ⛔ 优先于 crossStage 升级告警——plan+brainstorm 同会话
++      // 完成时（stageCount=2）此前走告警分支把 ⛔ 压掉了，agent 只见建议不见断崖动作。
++      if (stageName === 'plan') {
++        // 阶段断崖 B（R16 减负批次 A 相位，2026-09-24）：plan→execute 是第二大跳变——
++        // execute 是最大单段（R15 45.6M/173r/均轮 263K，占全流程 53%），带着 brainstorm+plan
++        // 的 14-16M 历史跑 execute 每轮都在重放。⛔ directive 级（同 execute→verify 模板）。
++        console.log(``)
++        console.log(`⛔ 阶段断崖：plan 已收口，execute 建议在新的瘦会话执行。`)
++        console.log(`   本会话上下文已含 brainstorm+plan 全部历史（R15 实测 execute 段 45.6M/173 轮/均轮 263K——大头是历史重放税，活只有十几 M）。`)
++        console.log(`   execute 的全部输入在盘上（design.md/plan.md/tasks/task-*.md），新会话零背景可续跑。`)
++        console.log(`   动作：`)
++        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，stage.wall=hard 下生成后墙自动放行）`)
++        console.log(`   2. 新会话/子代理：粘贴交接块 → run execute --change ${changeName}`)
++        console.log(`   同会话硬续会被 stage.wall=hard 在 run 入口拒（--same-session 逃生口）。`)
+       } else if (stageName === 'execute') {
+         // 阶段断崖（2026-09-24 第一性原理落地）：execute→verify 是上下文最贵的跳变
+         // （R11 实测 verify 71 轮 × 300K/轮 = 21.3M，其中 ~17M 是 execute 历史重放税）。
+@@ -776,9 +786,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+         console.log(`   本会话上下文已含 execute 全部历史（R11 实测 verify 阶段因历史重放多付 ~17M token——占总 24%）。`)
+         console.log(`   verify 的全部输入在盘上（design.md/tasks/review.json/verify-probes），新会话零背景可续跑。`)
+         console.log(`   动作：`)
+-        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（含机器预览态）`)
++        console.log(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，stage.wall=hard 下生成后墙自动放行）`)
+         console.log(`   2. 新会话/子代理：粘贴交接块 → run verify --change ${changeName}`)
+-        console.log(`   同会话硬续不阻断（应急逃生口），但会在收口时再提示一次。`)
++        console.log(`   同会话硬续会被 stage.wall=hard 在 run 入口拒（--same-session 应急逃生口）。`)
++      } else if (crossStage && stageLedger) {
++        console.log(`\n⚠️ 肥上下文税升级告警：本会话（${stageLedger.sessionId}）已连续完成 ${stageLedger.stageCount} 个阶段（${(stageLedger.stages || []).join(' → ')}）——单上下文历史重放实测在累积（R9：五阶段 53.5M 输入、尾段单轮 30 万+、归档 3 分钟烧 7.2M）。`)
++        console.log(`   建议现在换会话：sillyspec handoff --change ${changeName}（交接块含机器预览态接力段——watcher 投影的进行态参考）→ 由**用户新开会话**（或平台 session-fork）续跑下一阶段；保持 SILLYSPEC_SESSION_ID 不变。`)
++        console.log(`   会话不能自建会话——编排权在用户/平台，CLI 只产信号与接力载荷（conventions 架构约束）。同会话硬续不阻断。`)
+       } else {
+         console.log(`💡 瘦会话模式：下一阶段可在新会话/子代理续跑（sillyspec handoff --change ${changeName} 生成交接块；保持 SILLYSPEC_SESSION_ID 不变）——CLI prompt 自足`)
+       }
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 1b12e898..d5a27d58 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1978,6 +1978,56 @@ export async function readStageBurst(cwd) {
+  */
+ export const STAGE_BURST_STAGES = ['brainstorm', 'plan', 'execute', 'verify', 'archive']
+ 
++/**
++ * 阶段墙档位（R16 减负批次 A 相位，2026-09-24）：advisory（缺省——阶段完成时提示可 handoff
++ * 换会话，不阻断）| hard（同会话刚收口前驱阶段后硬续墙后阶段 → run <stage> 拒启动，
++ * --same-session 逃生口）。墙后阶段 = STAGE_WALL_STAGES（execute/verify——上下文最贵两段，
++ * R15 实测 execute 均轮 263K，断崖拆会话后回落 120-170K）。env SILLYSPEC_STAGE_WALL 强制。
++ */
++export async function readStageWall(cwd) {
++  const env = process.env.SILLYSPEC_STAGE_WALL
++  if (env === 'hard') return 'hard'
++  if (env === 'advisory') return 'advisory'
++  const raw = readLocalYamlRaw(cwd)
++  if (!raw) return 'advisory'
++  try {
++    const mod = await import('js-yaml')
++    const yamlLoad = mod.load || mod.default?.load
++    const doc = yamlLoad(raw)
++    const stage = doc && typeof doc === 'object' ? doc.stage : null
++    return stage && typeof stage === 'object' && stage.wall === 'hard' ? 'hard' : 'advisory'
++  } catch { /* 坏 YAML / js-yaml 不可用 → 缺省 advisory */ }
++  return 'advisory'
++}
++
++/** 墙后阶段（runStage 入口 hard 门的作用面；stage-session ledger 判定「同会话刚收口前驱」） */
++export const STAGE_WALL_STAGES = ['execute', 'verify']
++/** 墙后阶段的直接前驱（execute←plan / verify←execute） */
++export const STAGE_WALL_PREDECESSOR = { execute: 'plan', verify: 'execute' }
++
++/**
++ * 阶段墙拦截判定（纯函数，R16-b 实证修正 2026-09-25）：
++ * SILLYSPEC_SESSION_ID 是**变更所有权标识**（handoff 协议要求新会话保持不变）——它相同
++ * 不能当「同会话硬续」的证据。真切割的充分信号 = 前驱收口（ledger.at）之后执行过
++ * `sillyspec handoff`（ledger.handoffAt 更新）：交接块生成动作即切割凭证。墙只拦
++ * 「前驱刚收口、无更新 handoff、目标阶段首次进入」一种形态。
++ * @param {object} p
++ * @param {object|null} p.ledger        - stage-session ledger（缺 → 放行 fail-open）
++ * @param {string} p.curSession         - 当前 SILLYSPEC_SESSION_ID（空 → 放行）
++ * @param {string} p.stageName          - 目标阶段（须 ∈ STAGE_WALL_STAGES）
++ * @param {boolean} p.stageHasData      - 目标阶段已有进度（reopen/复跑重入 → 放行）
++ * @returns {boolean} true=拦截（runStage 应 exit 1 并指引 handoff）
++ */
++export function isStageWallBlocked({ ledger, curSession, stageName, stageHasData }) {
++  if (!STAGE_WALL_STAGES.includes(stageName)) return false
++  if (!ledger || typeof ledger !== 'object') return false
++  if (!curSession || ledger.sessionId !== curSession) return false
++  if (ledger.lastStage !== STAGE_WALL_PREDECESSOR[stageName]) return false
++  if (stageHasData) return false
++  if (ledger.handoffAt && (!ledger.at || String(ledger.handoffAt) > String(ledger.at))) return false
++  return true
++}
++
+ /**
+  * 从 plan.md 内容聚合所有 task 卡片声明的 repo:（去重，含 'main' 隐式）。
+  *
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 75c37053..1a1bd862 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -19,7 +19,7 @@
+ import { join, dirname } from 'node:path'
+ import { existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES, STAGE_WALL_PREDECESSOR } from './shared.js'
++import { resolveSpecDir, resolveChangeDir, resolveRuntimeRoot, resolveQuickSessionsDir, triggerSync, safeGit, parsePorcelainPath, formatWaitOptions, checkApproval, getStageSteps, warnApprovalUnknown, predictProtectedQuickFiles, mergeQuickBoundaryFiles, detectEmptyShellQuickSessions, readStageBurst, STAGE_BURST_STAGES, readStageWall, STAGE_WALL_STAGES } from './shared.js'
+ import { computeScanProfile, applyScanProfileSteps, executeScanPreflight, executeScanPostcheck, executeScanDetectProjects, executeScanResumeCheck, executeScanFinalize } from './scan-profile.js'
+ import { executeProgressConfirm } from './progress-confirm.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+@@ -45,12 +45,12 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+     }
+   }
+ 
+-  // ── 阶段墙 hard 门（R16 减负批次 A 相位，2026-09-24）──
+-  // 同一会话（SILLYSPEC_SESSION_ID 相同）刚收口前驱阶段后硬续墙后阶段（execute/verify）且目标
+-  // 阶段为首次进入 → 拒启动。两个不拦的口：①目标阶段已有 stage 数据（reopen/复跑重入——保住
+-  // verify FAIL→execute --reopen→verify 复跑的修复回路）；②--same-session 显式逃生口（应急/
+-  // 平台编排）。fail-open：ledger 缺失/读失败/会话标识缺省 → 放行（与账本 best-effort 一致，
+-  // hard 门只拦「确证同会话硬续」一种形态）。
++  // ── 阶段墙 hard 门（R16 减负批次 A 相位，2026-09-24；R16-b 实证修正 2026-09-25）──
++  // 拦「前驱刚收口、未执行 handoff 切割、目标阶段首次进入」的硬续形态。三个放行口：
++  // ①sillyspec handoff 已在前驱收口后执行（ledger.handoffAt > ledger.at——handoff 协议要求
++  //   新会话保持同一 SILLYSPEC_SESSION_ID，SESSION_ID 相同不是硬续证据，切割凭证=handoff 动作）；
++  // ②目标阶段已有 stage 数据（reopen/复跑重入——保住 verify FAIL→execute --reopen 修复回路）；
++  // ③--same-session 显式逃生口。fail-open：ledger 缺失/读失败/会话标识缺省 → 放行。
+   if (STAGE_WALL_STAGES.includes(stageName) && changeName && !(quickOpts && quickOpts.sameSession)) {
+     try {
+       if ((await readStageWall(cwd)) === 'hard') {
+@@ -60,12 +60,13 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+         const wallLedgerPath = join(specBase, '.runtime', `stage-session-ledger-${changeName}.json`)
+         if (curSession && firstEntry && existsSync(wallLedgerPath)) {
+           const wallLedger = JSON.parse(readFileSync(wallLedgerPath, 'utf8'))
+-          if (wallLedger && wallLedger.sessionId === curSession && wallLedger.lastStage === STAGE_WALL_PREDECESSOR[stageName]) {
++          const { isStageWallBlocked } = await import('./shared.js')
++          if (isStageWallBlocked({ ledger: wallLedger, curSession, stageName, stageHasData: !firstEntry })) {
+             console.error(``)
+-            console.error(`⛔ 阶段墙（stage.wall=hard）：本会话（${curSession}）刚收口 ${wallLedger.lastStage}，${stageName} 必须在新的瘦会话执行。`)
++            console.error(`⛔ 阶段墙（stage.wall=hard）：本变更刚在会话标识 ${curSession} 下收口 ${wallLedger.lastStage}，${stageName} 须在新会话执行。`)
+             console.error(`   单会话历史重放税实测：R15 execute 段均轮 263K 输入（断崖拆会话后回落 120-170K）——${stageName} 的全部输入在盘上（design/plan/tasks/review），新会话零背景可续跑。`)
+             console.error(`   动作：`)
+-            console.error(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（保持 SILLYSPEC_SESSION_ID 不变）`)
++            console.error(`   1. sillyspec handoff --change ${changeName}   # 生成交接块（即切割凭证，生成后墙自动放行）`)
+             console.error(`   2. 新会话粘贴交接块 → sillyspec run ${stageName} --change ${changeName}`)
+             console.error(`   逃生口：确认要同会话硬续（应急/平台编排）→ 加 --same-session 重跑本命令。`)
+             process.exit(1)

@@ -1,0 +1,121 @@
+diff --git a/src/run/gate-snapshot.js b/src/run/gate-snapshot.js
+index e89b39ac..9c00e4b3 100644
+--- a/src/run/gate-snapshot.js
++++ b/src/run/gate-snapshot.js
+@@ -19,6 +19,20 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, existsSync
+ import { join, dirname, relative, resolve, isAbsolute } from 'node:path'
+ import { tmpdir } from 'node:os'
+ 
++/**
++ * worktree 会话跳快照判定（2026-09-23 R9/R10 双实证根治）：cwd 位于 sillyspec 会话专属
++ * execute worktree（.sillyspec/.runtime/worktrees/<change>）时，隔离快照的立命之本——
++ * 「主仓共享工作区并行会话脏文件不污染本会话门禁」——天然不成立问题不存在：worktree
++ * 本身就是单会话独占的隔离环境。而快照在此场景只剩纯成本：venv/node_modules junction
++ * 冻结与慢 I/O 面（R9 3MB/0CPU 冻结、R10 15min 慢跑均出自 Temp 快照内）、快照构建时延、
++ * 双层 overlay。跳过 = 直接在 worktree cwd 实测（口径与主仓 fallback 同构）。
++ * 判定（跨平台）：路径分隔符先归一为 /，再匹配 /.sillyspec/.runtime/worktrees/<name>。
++ */
++export function shouldSkipGateSnapshotForWorktree(cwd) {
++  const p = String(cwd || '').replace(/\\/g, '/')
++  return /\/\.sillyspec\/\.runtime\/worktrees\/[^/]+/.test(p)
++}
++
+ function git(cwd, args) {
+   return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000, windowsHide: true }).trim()
+ }
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 8d600aeb..f2f236a9 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -525,6 +525,16 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+   let gateSpecBase = specBase
+   let snapshot = null
+   if (files.length > 0 && !process.env.SILLYSPEC_QUICK_GATE_SNAPSHOT_OFF) {
++    // worktree 会话跳快照（2026-09-23 R9/R10 根治，与 verify-quality-scan 同款）：worktree
++    // 已是会话独占隔离，快照只剩 junction 冻结/慢 I/O 纯成本——直接 worktree 实测。
++    let skipForWorktree = false
++    try {
++      const { shouldSkipGateSnapshotForWorktree } = await import('./gate-snapshot.js')
++      skipForWorktree = shouldSkipGateSnapshotForWorktree(cwd)
++    } catch { /* 判定异常按不跳走原路 */ }
++    if (skipForWorktree) {
++      console.log('🔀 cwd 是会话专属 worktree——隔离快照冗余（并行会话不在场），直接在 worktree 实测')
++    } else {
+     try {
+       const { createGateSnapshot } = await import('./gate-snapshot.js')
+       snapshot = createGateSnapshot({ cwd, files })
+@@ -534,6 +544,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+         console.log(`🧪 门禁隔离快照（根：${snapshot.snapshotRoot}）：HEAD + 本会话 ${snapshot.overlaid} 个文件（并行会话脏文件不参与判定）`)
+       }
+     } catch { /* 快照链路异常 → 主仓现行为 */ }
++    }
+   }
+   try {
+     // ── P2 三键账本（D-001@v1，batch3 task-01）：同码同环境免重跑（fail-closed——无记录/
+@@ -550,6 +561,13 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+         if (consult.reuse) testLedgerReuse = consult
+       } catch { /* 咨询异常 → 真跑 */ }
+     }
++    if (!testLedgerReuse) {
++      // 沙箱实测预告（坑 quick-done-长静默与快照行尾假阳性 坑1，2026-09-21 实证）：快照内
++      // test+lint 实测大仓可达 841-1054s 且期间零输出——外层 exec 按「疑似挂死」杀进程每轮
++      // 重建沙箱耗时成倍。预告时长预期与勿杀指引（心跳输出需异步改造留专项，预告先消除
++      // 「零信息误判」主因）。
++      console.log(`⏳ 开始 test+lint 实测${snapshot ? '（隔离快照内）' : ''}——大仓全量可达 15-20 分钟，期间无输出属正常；后台跑 + 长容忍（≥20 分钟），勿按超时杀进程（杀掉不丢进度，但每轮重建沙箱重跑实测耗时成倍）。`)
++    }
+     let test = testLedgerReuse
+       ? { status: 'passed', reason: `♻️ P2 三键账本复用（代码×测试面×环境全等；实测于 ${testLedgerReuse.result.ranAt}）`, command: 'npm test (ledger-reuse)', exitCode: 0, durationMs: 0, outputTail: null }
+       // restrictFiles = 本会话声明文件（坑 quick-gate-并行全流程变更脏文件误伤）：模块选择
+diff --git a/src/run/verify-quality-scan.js b/src/run/verify-quality-scan.js
+index 6e3a4c5f..1ef100f8 100644
+--- a/src/run/verify-quality-scan.js
++++ b/src/run/verify-quality-scan.js
+@@ -596,6 +596,16 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+   // ⚠️ 口径可见。指纹（storeQualityScan）仍按主仓 cwd 算——--done 对账复用的指纹匹配口径不变。
+   let snap = null
+   if (!process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF) {
++    // worktree 会话跳快照（2026-09-23 R9/R10 根治）：worktree 已是会话独占隔离——快照只剩
++    // venv junction 冻结/慢 I/O 纯成本（R9 3MB/0CPU 冻结、R10 15min 慢跑实证），直接工作树实测。
++    let skipForWorktree = false
++    try {
++      const { shouldSkipGateSnapshotForWorktree } = await import('./gate-snapshot.js')
++      skipForWorktree = shouldSkipGateSnapshotForWorktree(cwd)
++    } catch { /* 判定异常按不跳走原路 */ }
++    if (skipForWorktree) {
++      console.log('🔀 cwd 是会话专属 worktree——隔离快照冗余（并行会话不在场；快照 venv junction 冻结/慢 I/O 面 R9/R10 双实证），直接在 worktree 实测')
++    } else {
+     try {
+       const { createVerifyGateSnapshot } = await import('./gate-snapshot.js')
+       snap = await createVerifyGateSnapshot({ cwd, changeName, specBase, platformOpts })
+@@ -603,6 +613,7 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
+         console.log(`🧪 noAI 扫描隔离快照（根：${snap.snapshotRoot}）：HEAD + 本变更 ${snap.changeFileCount} 个文件${snap.sourceRoot ? '（overlay 自 worktree——本变更分支内容定向跑）' : ''}（并行会话脏文件不参与判定）`)
+       }
+     } catch { /* 快照链路异常 → 主仓现行为 */ }
++    }
+   }
+   const gateCwd = snap ? snap.snapshotRoot : cwd
+   const gateSpecBase = snap ? join(snap.snapshotRoot, '.sillyspec') : specBase
+diff --git a/test/gate-snapshot-worktree-skip.test.mjs b/test/gate-snapshot-worktree-skip.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/test/gate-snapshot-worktree-skip.test.mjs
+@@ -0,0 +1,19 @@
++/**
++ * gate-snapshot worktree 跳过钉（2026-09-23 R9/R10 根治）：
++ * cwd 在会话专属 execute worktree（.sillyspec/.runtime/worktrees/<change>）→ 快照跳过判定 true；
++ * 主仓/普通目录/空 → false（原行为：主仓共享面快照照建）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { shouldSkipGateSnapshotForWorktree } from '../src/run/gate-snapshot.js'
++
++test('T1 判定：worktree 路径 true（正反斜杠/深层子目录），主仓与空 false', () => {
++  assert.equal(shouldSkipGateSnapshotForWorktree('C:/x/.sillyspec/.runtime/worktrees/2026-09-23-a'), true)
++  assert.equal(shouldSkipGateSnapshotForWorktree('C:/x/.sillyspec/.runtime/worktrees/abc/backend'), true)
++  assert.equal(shouldSkipGateSnapshotForWorktree('C:\\Users\\q\\repo\\.sillyspec\\.runtime\\worktrees\\abc\\backend'), true)
++  assert.equal(shouldSkipGateSnapshotForWorktree('C:/Users/qinyi/IdeaProjects/sillyspec'), false)
++  assert.equal(shouldSkipGateSnapshotForWorktree('C:/Users/q/IdeaProjects/mp/backend'), false)
++  assert.equal(shouldSkipGateSnapshotForWorktree('C:/x/.sillyspec/.runtime/other/abc'), false, 'runtime 下非 worktrees 不误伤')
++  assert.equal(shouldSkipGateSnapshotForWorktree(''), false)
++  assert.equal(shouldSkipGateSnapshotForWorktree(null), false)
++})

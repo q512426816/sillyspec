@@ -1,0 +1,79 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-9a83b636",
+  "totals": {
+    "files": 5,
+    "additions": 99,
+    "deletions": 16
+  },
+  "rows": [
+    {
+      "path": "src/run/shared.js src/run/stage.js src/handoff.js src/run/complete.js test/stage-wall.test.mjs",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/shared.js",
+      "declared": true,
+      "additions": 50,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/handoff.js",
+      "declared": true,
+      "additions": 18,
+      "deletions": 0,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/stage.js",
+      "declared": true,
+      "additions": 11,
+      "deletions": 10,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/complete.js",
+      "declared": true,
+      "additions": 20,
+      "deletions": 6,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260925-002-37e1",
+  "sessionId": "quick-9a83b636",
+  "savedAt": "2026-09-24T17:20:28.126Z",
+  "patchSha256": "59289ae4efa7dbcdee529c1a974f7e23a2ef4a9a0befc8c2591fd238d5da2064",
+  "patchStatus": "ok"
+}

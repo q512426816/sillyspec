@@ -1,0 +1,95 @@
+{
+  "mode": "quick",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "quick-window:quick-61be1b16",
+  "totals": {
+    "files": 7,
+    "additions": 304,
+    "deletions": 120
+  },
+  "rows": [
+    {
+      "path": "src/worktree-deps.js src/run/prompt.js src/stages/execute.js src/stage-review-checklist.js src/classify-change.js src/review-material-pack.js src/config-schema.js src/worktree.js src/worktree-apply.js src/worktree-policy.js src/run/gates.js src/run/shared.js src/run/stage.js src/run/complete.js src/run/command.js src/stages/brainstorm.js src/stage-templates.js test/worktree-deps-python.test.mjs test/stage-review-checklist.test.mjs test/worktree-policy.test.mjs test/stage-wall.test.mjs test/output-step-render.test.mjs test/decisions-header-backfill.test.mjs docs/sillyspec/platform-interface-map.md .sillyspec/docs/sillyspec/modules/_module-map.yaml docs/analysis/R8-R15-改进落地方案-2026-09-24.md docs/analysis/R8-R15-对撞实验阶段明细-2026-09-24.md",
+      "declared": true,
+      "additions": 0,
+      "deletions": 0,
+      "kind": "deleted",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-policy.js",
+      "declared": true,
+      "additions": 42,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stage-templates.js",
+      "declared": true,
+      "additions": 157,
+      "deletions": 0,
+      "kind": "new",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/gates.js",
+      "declared": true,
+      "additions": 47,
+      "deletions": 12,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/run/stage.js",
+      "declared": true,
+      "additions": 31,
+      "deletions": 1,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "declared": true,
+      "additions": 5,
+      "deletions": 99,
+      "kind": "modified",
+      "attribution": "declared"
+    },
+    {
+      "path": "src/worktree-deps.js",
+      "declared": true,
+      "additions": 22,
+      "deletions": 8,
+      "kind": "modified",
+      "attribution": "declared"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "quick --done 时点冻结（本文件落盘时采集）",
+  "gateProfile": {
+    "fileCount": 0,
+    "codeFileCount": 0,
+    "testFileCount": 0,
+    "moduleSpan": 0,
+    "modules": [],
+    "unmappedFiles": [],
+    "riskHits": [],
+    "level": "L0",
+    "degraded": false,
+    "checks": {
+      "perFileNotes": true,
+      "testDelta": "na",
+      "docClaim": "claimed",
+      "runtimeEvidence": "na"
+    }
+  },
+  "qlId": "ql-20260924-008-24e5",
+  "sessionId": "quick-61be1b16",
+  "savedAt": "2026-09-24T14:33:16.506Z",
+  "patchSha256": "deace028e5b11a902077dc48d227b11469832ef101cd73ef44285b07b22c5569",
+  "patchStatus": "ok"
+}

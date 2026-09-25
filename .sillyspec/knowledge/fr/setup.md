@@ -68,3 +68,111 @@ created_at: 2026-09-20T18:20:21.442Z
 - 场景：默认场景 — Given 注入执行；When 目标目录存在用户自建文件；Then 仅触碰 sillyspec 命名空间的 7 张卡文件，其余文件零接触
 全文：.sillyspec/changes/archive/2026-09-21-flow-command-cards/requirements.md#FR-06
 最近确认：61995a32
+
+## FR-setup-007 readFlowConfig 缺省 thin；legacy 拒跑文案与 conf
+变更：2026-09-25-thin-default-flip
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then readFlowConfig 缺省 thin；legacy 拒跑文案与 config-schema flow.mode 描述示例同步翻转；本仓 local.ya
+全文：.sillyspec/changes/archive/2026-09-25-thin-default-flip/requirements.md#FR-01
+最近确认：ac229db8c4e186754dc15e72d57b336f6c834e2c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-default-flip:flow:FR-01
+  tests: test/stage-burst.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-default-flip
+  status: active
+
+## FR-setup-008 run quick 渲染入口打一行过渡横幅指路 flow start（--don
+变更：2026-09-25-thin-default-flip
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then run quick 渲染入口打一行过渡横幅指路 flow start（--done 收尾不吵），quick 全功能不变
+全文：.sillyspec/changes/archive/2026-09-25-thin-default-flip/requirements.md#FR-02
+最近确认：ac229db8c4e186754dc15e72d57b336f6c834e2c
+
+## FR-setup-009 flow start 清晰度门通过后跑 classifyChange 预判：mo
+变更：2026-09-25-thin-default-flip
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 清晰度门通过后跑 classifyChange 预判：mode=full 时打一行升档建议，advisory 不阻断
+全文：.sillyspec/changes/archive/2026-09-25-thin-default-flip/requirements.md#FR-03
+最近确认：ac229db8c4e186754dc15e72d57b336f6c834e2c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-default-flip:flow:FR-03
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-default-flip
+  status: active
+
+## FR-setup-010 agents-instruction 规则 6、9、17 同步：quick 存量
+变更：2026-09-25-thin-default-flip
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then agents-instruction 规则 6、9、17 同步：quick 存量过渡、倒推 B 薄道优先、quicklog 存量标注
+全文：.sillyspec/changes/archive/2026-09-25-thin-default-flip/requirements.md#FR-04
+最近确认：ac229db8c4e186754dc15e72d57b336f6c834e2c
+
+## FR-setup-011 新增测试覆盖缺省 thin 与预判提示；flow 系与 test:core 全绿
+变更：2026-09-25-thin-default-flip
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖缺省 thin 与预判提示；flow 系与 test:core 全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-default-flip/requirements.md#FR-05
+最近确认：ac229db8c4e186754dc15e72d57b336f6c834e2c
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-default-flip:flow:FR-05
+  tests: test/stage-burst.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-default-flip
+  status: active
+
+## FR-setup-012 src 与 templates/SKILL/config-schema 的全部用
+变更：2026-09-25-thin-rename-lightweight
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then src 与 templates/SKILL/config-schema 的全部用户面文案（console 输出、机器稿模板、任务书、简报、横幅、schema 描
+全文：.sillyspec/changes/archive/2026-09-25-thin-rename-lightweight/requirements.md#FR-01
+最近确认：c0cb9ab6f6c8a924768433a3e3374d55ee461fc2
+
+## FR-setup-013 测试断言与新文案同步全绿
+变更：2026-09-25-thin-rename-lightweight
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试断言与新文案同步全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-rename-lightweight/requirements.md#FR-02
+最近确认：c0cb9ab6f6c8a924768433a3e3374d55ee461fc2
+
+## FR-setup-014 英文 thin 字面与行为零变化
+变更：2026-09-25-thin-rename-lightweight
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 英文 thin 字面与行为零变化
+全文：.sillyspec/changes/archive/2026-09-25-thin-rename-lightweight/requirements.md#FR-03
+最近确认：c0cb9ab6f6c8a924768433a3e3374d55ee461fc2
