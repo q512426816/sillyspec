@@ -1,0 +1,27 @@
+{
+  "change": "2026-09-25-thin-r16-patches",
+  "baseline": "8c22f2715cba46c5d8b90cfd1867933fca60d53c",
+  "head": "3a2020e4b658fd3f1ac05363536abea551f12db7",
+  "files": [
+    "src/flow-parity.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "test/flow-parity.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-review.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-r16-patches/design.md",
+    ".sillyspec/changes/2026-09-25-thin-r16-patches/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-r16-patches/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-r16-patches/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-r16-patches/tasks.md"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 248,
+    "deletions": 104
+  },
+  "savedAt": "2026-09-25T04:21:02.801Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "3cb4773dd0058fceb6ecbcacea5103e7c182cfb1eaa36d4a3ba140cec21851d7",
+  "patchStatus": "ok"
+}

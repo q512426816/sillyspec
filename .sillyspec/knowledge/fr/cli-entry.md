@@ -969,3 +969,75 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 新增测试三件；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-04
 最近确认：716288a224048fda0dd7514aacfa058d974e0c57
+
+## FR-cli-entry-057 patch 冻结面双修：flow start 简报钉死交付代码先提交再 done
+变更：2026-09-25-thin-r16-patches
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then patch 冻结面双修：flow start 简报钉死交付代码先提交再 done；会话专属 worktree 判定下未提交 dirty 交付面一并入冻结，共享主
+全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-01
+最近确认：3a2020e4b658fd3f1ac05363536abea551f12db7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-r16-patches:flow:FR-01
+  tests: test/flow-parity.test.mjs | test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-r16-patches
+  status: active
+
+## FR-cli-entry-058 评审任务书检查单加披露边界显式裁决条款：每条声明的设计边界/取舍必须写明可接受与
+变更：2026-09-25-thin-r16-patches
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then 评审任务书检查单加披露边界显式裁决条款：每条声明的设计边界/取舍必须写明可接受与否与理由，未裁决视为未审，不可接受边界按发现分级上报
+全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-02
+最近确认：3a2020e4b658fd3f1ac05363536abea551f12db7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-r16-patches:flow:FR-02
+  tests: test/flow-review.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-r16-patches
+  status: active
+
+## FR-cli-entry-059 ledger 子步断点续跑 skip 时从 verify-runs 最近 tes
+变更：2026-09-25-thin-r16-patches
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then ledger 子步断点续跑 skip 时从 verify-runs 最近 test-result 回填实测面摘要（回执不失忆）
+全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-03
+最近确认：3a2020e4b658fd3f1ac05363536abea551f12db7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-25-thin-r16-patches:flow:FR-03
+  tests: test/flow-parity.test.mjs | test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-25-thin-r16-patches
+  status: active
+
+## FR-cli-entry-060 新增测试覆盖三件；flow 系全绿
+变更：2026-09-25-thin-r16-patches
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then 新增测试覆盖三件；flow 系全绿
+全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-04
+最近确认：3a2020e4b658fd3f1ac05363536abea551f12db7
