@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-25-thin-fr-inject-parity",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "rot 域级全标语义的信号通胀（裁决：作为 advisory 可接受，登记后续加固）",
+      "evidence": "rotSuspectFlow 对触达域全部 active FR 打待复核（flow.js:210-231 调 markFrNeedsReview，fr-index.js:690-724 按域整批标）；忙域（如本仓 flow 域 82 条）一次全标后 ⚠️ 饱和，FR-01 的待复核优先排序退化为满屏同权。可接受理由：①语义是 quick-done 既有机制照搬（fr-index.js:676-689 JSDoc 载明 2026-09-20-quick-asset-tail 原侧语义），本变更目标即 parity 迁移，改语义超范围；②展示面有 top8 截断+溢出计数（flow.js:176-179）；③承接翻链时清除（fr-index.js:370-373）；④advisory 零阻断；⑤requirements FR-03 本身承诺的就是域级→active FR 口径，无承诺违背。",
+      "location": "src/flow.js:210"
+    },
+    {
+      "severity": "P3",
+      "title": "dup 软门 0.6 阈值为两处字面量，且取首中而非最高重叠（与 brainstorm 侧微差）",
+      "evidence": "判据函数 frTitleOverlap 为 import 共享（flow.js:234），但 0.6 常量在 flow.js:247 与 stage-contract.js:363 各写一份——正是死路③「复制即漂移」要防的最小漂移面（重校准一侧另一侧静默分歧）；另 brainstorm 侧取最大重叠对（stage-contract.js:360-362），flow 侧 for 循环首个 ≥0.6 即 break（flow.js:247），命中/不命中判定等价，仅多命中时指认的对不同。",
+      "location": "src/flow.js:247"
+    },
+    {
+      "severity": "P3",
+      "title": "resume 域路由只看已提交 diff（baseline..HEAD），未提交工作树文件不入域",
+      "evidence": "flow.js:377 用 git diff --name-only baseline..HEAD（双提交区间，不含工作树脏文件）——干活中未提交即 resume 时 diffFiles 为空，thin design.md 无文件清单表 → 空域诚实提示（降级非静默错数据，但「resume 是刷新点」存在 recall 缺口；改 git diff baseline（含工作树）可补）。",
+      "location": "src/flow.js:377"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-25T10:01:51Z"
+}

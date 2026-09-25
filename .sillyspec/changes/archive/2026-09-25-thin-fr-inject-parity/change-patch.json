@@ -1,0 +1,23 @@
+{
+  "change": "2026-09-25-thin-fr-inject-parity",
+  "baseline": "d8c60ebc68a68a2364ad0e17ca8fbb202de53caa",
+  "head": "4166d35b903cfd47b607bb69f1f8e29586bfa776",
+  "files": [
+    "src/flow.js",
+    "test/thin-fr-inject-parity.test.mjs",
+    ".sillyspec/changes/2026-09-25-thin-fr-inject-parity/design.md",
+    ".sillyspec/changes/2026-09-25-thin-fr-inject-parity/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-thin-fr-inject-parity/proposal.md",
+    ".sillyspec/changes/2026-09-25-thin-fr-inject-parity/requirements.md",
+    ".sillyspec/changes/2026-09-25-thin-fr-inject-parity/tasks.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 534,
+    "deletions": 3
+  },
+  "savedAt": "2026-09-25T09:56:16.450Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "070160690821423479158d16bdb843114365dbed47f8b153d6fd7e0aead36476",
+  "patchStatus": "ok"
+}
