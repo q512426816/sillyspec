@@ -1,0 +1,221 @@
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 7cfa4745..d9946c9e 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -881,7 +881,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+       // 历史教训：曾因此让 agent 在 brainstorm 完成后被误导去跑 scan。
+       const _bscale = readDesignScale(specBase, changeName)
+       if (_bscale === 'small') {
+-        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec run quick --linked-changes ${changeName}`)
++        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口）`)
+       } else {
+         console.log(`\n👉 brainstorm 已完成。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（scale=large 或未标 small 走完整 plan）`)
+       }
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index cc77790f..d8b4aa05 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -53,10 +53,10 @@ export const definition = {
+ - 多项目且用户已指定：直接确认，不需要等待
+ - 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目
+ 
+-### 早期规模筛查（判断是否该走 quick）
++### 早期规模筛查（判断是否该走轻量变更）
+ 加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
+-- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走 quick 流程」+ 一句依据，给出建议命令 \`sillyspec run quick "<需求>"\`。用户同意则本阶段可在此收尾（\`--done\` 并提示转 quick），不必继续走完整设计流程。
+-- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示 quick，继续进入下一步「对话式探索与需求澄清」。
++- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <名> --input "<需求>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
++- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
+ - 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
+ 
+ ### 输出
+@@ -524,7 +524,7 @@ status: passed | needs-user-input | blocked | skipped
+ ### 操作
+ 1. **按规模生成规范文件**：
+    - **scale=large**：在 \`{SPEC_ROOT}/changes/<change-name>/\` 下生成完整四件套（design.md / decisions.md 可选 / proposal.md / requirements.md / tasks.md），实现路径 → \`sillyspec run plan --change <变更名>\`
+-   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 对 quick 无用，不生成），实现路径 → \`sillyspec run quick --linked-changes <变更名>\`
++   - **scale=small**：只生成/补全 design.md（proposal/requirements/tasks 由轻量变更机器稿补齐），实现路径 → \`sillyspec flow start --change <变更名>\`（轻量变更收编头脑风暴产物，2 调用收口）
+    - 两种规模都执行 \`git add {SPEC_ROOT}/changes/<change-name>/\` — 暂存本变更的规范文件（精确到变更目录，勿用 .sillyspec/ 整目录——会裹挟其他活跃变更；不要 commit，由用户通过统一提交工具处理）。**平台模式跳过 git add**（specRoot 不在 sourceRoot 的 git repo 内）
+ 
+ 2. 生成完成后展示 design.md 摘要 + **规模评估结果（small/large + 一句依据）** + 实现路径建议，告知用户“如有异议直接说，可修改文件、改 scale 或 --reopen 回退”（不暂停，展示完直接 --done）
+diff --git a/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/design.md b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:24:04.252Z
++---
++# 设计记录（Design Record）— 2026-09-25-brainstorm-quick-remnant
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三处旧 quick 指引改指轻量变更：①complete.js:884 brainstorm small 完成文案 run quick --linked-changes → flow start 收编；②stages/brainstorm.js:58 早期规模筛查建议命令 run quick → flow start；③stages/brainstorm.js:527 规范文件模板 scale=small 实现路径 run quick --linked-changes → flow start。quick 末步四参数预告（complete.js:971）保留——存量 quick 会话收尾仍需。平台侧狗粮反馈驱动。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/run/complete.js 一处文案；src/stages/brainstorm.js 两处模板文本。零行为改动（纯 string 替换）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯文案替换。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=存量 quick 用户看到新文案找不到 quick 入口——run quick 命令本身仍在（退役过渡横幅指路），且四参数预告保留，无断裂。死路=一并删 quick 四参数预告——存量会话还在收尾，删了会拦死。
+
+diff --git a/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/flow-state.yaml b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 6288e800263202827425b87b2b2f356a55a7e253
++updatedAt: '2026-09-25T04:26:49.630Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（35.4s）｜门文件 6 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/proposal.md b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:24:04.251Z
++---
++# 提案书（Proposal）— 2026-09-25-brainstorm-quick-remnant
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:c0a87773550aa412dc3094d9416bc60605e6552fe6bb0576f11fa7cf8236b14c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++任务原话转写：动机：平台侧轻量变更两连狗粮反馈——brainstorm 完成提示的 small 档分叉仍指 run quick（退役通道），应改指轻量变更 flow start 收编；stages 模板内同款旧指引两处一并清理。
++成功标准：
++- complete.js brainstorm small 完成文案改指 flow start 收编（不再是 run quick --linked-changes）
++- stages/brainstorm.js 两处 small 档 quick 指引改指轻量变更（步骤 prompt 与规范文件模板各一处）
++- run/complete.js 的 quick 末步四参数预告文案保留（存量 quick 会话收尾仍需，不改）
++- 测试面无行为断言依赖旧文案；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:65e43513d486d0538c4cf9fc6a28187c55bdb0dba6dbb08dffaf6856a6def8f7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. complete.js brainstorm small 完成文案改指 flow start 收编（不再是 run quick --linked-changes）
++2. stages/brainstorm.js 两处 small 档 quick 指引改指轻量变更（步骤 prompt 与规范文件模板各一处）
++3. run/complete.js 的 quick 末步四参数预告文案保留（存量 quick 会话收尾仍需，不改）
++4. 测试面无行为断言依赖旧文案；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:63490fa00c00a67a00f0118d249a4c9dcd38821197ba076dcde39d4317ea0bf0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++1. complete.js brainstorm small 完成文案改指 flow start 收编（不再是 run quick --linked-changes）
++2. stages/brainstorm.js 两处 small 档 quick 指引改指轻量变更（步骤 prompt 与规范文件模板各一处）
++3. run/complete.js 的 quick 末步四参数预告文案保留（存量 quick 会话收尾仍需，不改）
++4. 测试面无行为断言依赖旧文案；flow 系全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/requirements.md b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:24:04.252Z
++---
++# 需求规格（Requirements）— 2026-09-25-brainstorm-quick-remnant
++
++## 功能需求（成功标准机械摘录）
++<!-- MACHINE-DRAFT:requirements-frs:10916e037666c9ef69a562c30f70c020b5bed127f5084fceccda7fe9649e2ec9:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++### FR-01: complete.js brainstorm small 完成文案改指 flow
++Given 平台按当前契约运行
++When 本变更交付并运行
++Then complete.js brainstorm small 完成文案改指 flow start 收编（不再是 run quick --linked-changes）
++
++### FR-02: stages/brainstorm.js 两处 small 档 quick 指引
++Given 平台按当前契约运行
++When 本变更交付并运行
++Then stages/brainstorm.js 两处 small 档 quick 指引改指轻量变更（步骤 prompt 与规范文件模板各一处）
++
++### FR-03: run/complete.js 的 quick 末步四参数预告文案保留（存量 q
++Given 平台按当前契约运行
++When 本变更交付并运行
++Then run/complete.js 的 quick 末步四参数预告文案保留（存量 quick 会话收尾仍需，不改）
++
++### FR-04: 测试面无行为断言依赖旧文案；flow 系全绿
++Given 平台按当前契约运行
++When 本变更交付并运行
++Then 测试面无行为断言依赖旧文案；flow 系全绿
++<!-- MACHINE-DRAFT:requirements-frs:end -->
++
++<!--AGENT:槽1 需求例外裁决（FR 语义改写不走此槽——直接编辑机器段后跑 flow amend-draft 留痕，槽内容不进 FR 索引）——例外裁决书写面（机器段之外合法） -->
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 全套（无行为断言依赖旧文案，57 例全绿即证零回归）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++同 FR-01（模板文本无独立测试面）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++src/run/complete.js:971 quick 四参数预告保留（人工核对）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs + stage-burst + deps-cwd + sentinel-wiring 57 例 + lint
+
+diff --git a/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/tasks.md b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-brainstorm-quick-remnant/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T04:24:04.252Z
++---
++# 任务注册表（Tasks）— 2026-09-25-brainstorm-quick-remnant
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++<!-- MACHINE-DRAFT:tasks-rows:a4f3eea58062d0ebc8d0c2da8c6242587cd8d4785154dfe24f3bbc520cf0dad9:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-brainstorm-quick-remnant 留痕重锚 -->
++- [ ] task-01: complete.js brainstorm small 完成文案改指 flow start 收编（不再是 run qu
++- [ ] task-02: stages/brainstorm.js 两处 small 档 quick 指引改指轻量变更（步骤 prompt 与规范
++- [ ] task-03: run/complete.js 的 quick 末步四参数预告文案保留（存量 quick 会话收尾仍需，不改）
++- [ ] task-04: 测试面无行为断言依赖旧文案；flow 系全绿
++<!-- MACHINE-DRAFT:tasks-rows:end -->
++

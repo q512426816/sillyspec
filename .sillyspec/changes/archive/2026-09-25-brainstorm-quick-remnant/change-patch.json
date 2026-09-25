@@ -1,0 +1,23 @@
+{
+  "change": "2026-09-25-brainstorm-quick-remnant",
+  "baseline": "6288e800263202827425b87b2b2f356a55a7e253",
+  "head": "0d126ee8f663f4091cceb58aff48d3f74554591f",
+  "files": [
+    "src/run/complete.js",
+    "src/stages/brainstorm.js",
+    ".sillyspec/changes/2026-09-25-brainstorm-quick-remnant/design.md",
+    ".sillyspec/changes/2026-09-25-brainstorm-quick-remnant/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-brainstorm-quick-remnant/proposal.md",
+    ".sillyspec/changes/2026-09-25-brainstorm-quick-remnant/requirements.md",
+    ".sillyspec/changes/2026-09-25-brainstorm-quick-remnant/tasks.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 157,
+    "deletions": 5
+  },
+  "savedAt": "2026-09-25T04:26:50.235Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "0f5f3d9d4932fc667912940149767f6b97223c6176051bcaf2cd71ecd860615e",
+  "patchStatus": "ok"
+}
