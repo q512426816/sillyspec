@@ -118,6 +118,142 @@ function materialPaths(specBase, changeName, changeDir) {
   return paths.filter((p) => { try { return existsSync(p) } catch { return false } })
 }
 
+/** --input 语料中的路径样 token 提取（fresh 起点的域路由依据——best-effort：无 design/diff 时
+ * 唯一可判材料；提取失败=空数组，走空域诚实提示）。 */
+function extractInputPaths(input) {
+  const out = new Set()
+  for (const m of String(input || '').matchAll(/[\w.@+-]+(?:\/[\w.@+-]+)+/g)) {
+    const p = m[0].replace(/\/+$/, '')
+    if (p.length > 1) out.add(p.replace(/\\/g, '/'))
+  }
+  return [...out]
+}
+
+/**
+ * 轻量道知识注入段（2026-09-25-thin-fr-inject-parity）：默认快道读取面对齐——
+ * {FR_INDEX_DIGEST}/{DECISION_HITS}/execute 知识命中报告此前只在 run 族装配，轻量道 fresh
+ * 不经 brainstorm，knowledge/fr 现行 FR、否决决策、已知坑对 agent 全不可见（实证：FR-runtime-020
+ * 与实现相反长期无人撞见）。域路由与 distill 同口径（resolveTouchedDomains 的 filesOverride
+ * 旁路）：fresh=--input 提取路径、resume=基线 diff、adopt=design 工件交付清单。
+ * 纯读 fail-open；注入段独立成块（材料清单稳定前缀不被动态内容污染）；空态留一行可见。
+ * @returns {{ lines: string[], summary: { domains: string[], frCount: number, rejectedDecisions: number, knowledgeEntries: number } }}
+ */
+export async function flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride }) {
+  const summary = { domains: [], frCount: 0, rejectedDecisions: 0, knowledgeEntries: 0 }
+  const lines = []
+  try {
+    const knowledgeRoot = join(specBase, 'knowledge')
+    const { discoverModuleIndex } = await import('./decision-distill.js')
+    const { resolveTouchedDomains, readActiveFrDigest } = await import('./fr-index.js')
+    const moduleIndex = discoverModuleIndex(knowledgeRoot)
+    let domains = []
+    let basis = ''
+    if (Array.isArray(filesOverride) && filesOverride.length > 0) {
+      domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride).filter((d) => d !== 'unmapped')
+      basis = filesOverride.length > 0 ? 'input/diff 路径' : ''
+    } else if (existsSync(join(changeDir, 'design.md'))) {
+      domains = resolveTouchedDomains(changeDir, moduleIndex).filter((d) => d !== 'unmapped')
+      basis = 'design.md 交付清单'
+    }
+    const frs = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
+    summary.domains = domains
+    summary.frCount = frs.length
+    lines.push(`🧠 知识注入（轻量道读取面——现行 FR/否决决策/已知坑，动手前扫一眼）：`)
+    if (domains.length === 0) {
+      lines.push(`   触达域：起点无依据（--input 无路径语料、无 design 清单）——干活涉及 src 后 resume/收口会补查；`)
+      lines.push(`   相关域现行 FR 可自行查 knowledge/fr/<域>.md（INDEX.md 有路由）。`)
+    } else {
+      lines.push(`   触达域（${basis}）：${domains.join('、')}`)
+      if (frs.length === 0) {
+        lines.push(`   现行 FR：（该域暂无 active FR 索引条目——本变更大概率是首批需求）`)
+      } else {
+        const flagged = frs.filter((f) => f.needsReview)
+        const ordered = [...flagged, ...frs.filter((f) => !f.needsReview)]
+        for (const f of ordered.slice(0, 8)) {
+          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}`)
+        }
+        if (ordered.length > 8) lines.push(`   （+${ordered.length - 8} 条见 knowledge/fr/ 对应域文件）`)
+      }
+    }
+    const { matchKnowledge } = await import('./knowledge-match.js')
+    const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
+    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected')
+    summary.rejectedDecisions = rejected.length
+    summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
+    if (rejected.length > 0) {
+      lines.push(`   ⚠️ 否决决策（历史已否决，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
+      for (const h of rejected.slice(0, 5)) {
+        lines.push(`   - ${h.id} ${h.title}（${h.file}）否决理由：${h.reason || '（未记录）'}`)
+      }
+    }
+    if (km.matched && (km.entries || []).length > 0) {
+      const src = km.entries.slice(0, 3).map((e) => (e.anchor ? `${e.file}#${e.anchor}` : e.file)).join('；')
+      lines.push(`   📚 知识命中（INDEX 关键词，按需 Read）：${src}`)
+    }
+    if (domains.length === 0 && rejected.length === 0 && !km.matched) {
+      lines.length = 0
+      lines.push(`🧠 知识注入（轻量道读取面）：语料未命中知识库（无触达域依据、无否决命中、INDEX 无对齐条目）——可自行查 knowledge/INDEX.md。`)
+    }
+  } catch (e) {
+    lines.length = 0
+    lines.push(`🧠 知识注入（轻量道读取面）：注入失败（${(e && e.message) || e}）——可自行读 knowledge/INDEX.md 与 knowledge/fr/`)
+  }
+  return { lines, summary }
+}
+
+/**
+ * flow done 收口的 FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道
+ * ——quick 退役后该检测面原侧悬空。归属文件面→模块域→active FR：记 fr-rot-suspect 遥测 + 待复核
+ * 标记（下次知识注入带 ⚠️，承接翻链时清除）。advisory 零阻断，fail-open。
+ * @returns {{ warn: string|null, domains: string[], count: number, marked: number }}
+ */
+export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+  const knowledgeRoot = join(specBase, 'knowledge')
+  const { discoverModuleIndex } = await import('./decision-distill.js')
+  const { resolveTouchedDomains, readActiveFrDigest, markFrNeedsReview } = await import('./fr-index.js')
+  const moduleIndex = discoverModuleIndex(knowledgeRoot)
+  // changeDir 仅为 design.md 兜底路由用（filesOverride 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
+  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, Array.isArray(files) ? files : []).filter((d) => d !== 'unmapped')
+  if (domains.length === 0) return { warn: null, domains: [], count: 0, marked: 0 }
+  const frs = readActiveFrDigest(knowledgeRoot, domains)
+  if (frs.length === 0) return { warn: null, domains, count: 0, marked: 0 }
+  const { appendKnowledgeHit } = await import('./knowledge-hits.js')
+  appendKnowledgeHit(join(specBase, '.runtime'), { type: 'fr-rot-suspect', change, domains, count: frs.length, source: 'flow-done' })
+  const mr = markFrNeedsReview(knowledgeRoot, frs.map((f) => f.id), change)
+  const warn = `⚠️ [FR 腐烂 suspect·advisory] 本次触达 ${domains.join('、')} 域的 ${frs.length} 条 active FR——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${mr.marked} 条；下次知识注入带 ⚠️）`
+  return { warn, domains, count: frs.length, marked: mr.marked }
+}
+
+/**
+ * flow done distill 前的 FR 重复嫌疑软门（2026-09-25-thin-fr-inject-parity）：brainstorm --done
+ * 判据迁轻量道——新 FR（无承接）× 同域 active 条目标题 bigram 重叠 ≥0.6 → advisory warning +
+ * fr-duplicate-warning 遥测。双出路：requirements 加承接行或改标题区分；不阻断。
+ * @returns {{ warn: string|null, hits: Array<{ local: string, active: string, title: string }> }}
+ */
+export async function frDupGateFlow({ specBase, change, changeDir, files }) {
+  const { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap } = await import('./fr-index.js')
+  const req = parseChangeRequirements(changeDir)
+  if (req.missing || req.frs.length === 0) return { warn: null, hits: [] }
+  const knowledgeRoot = join(specBase, 'knowledge')
+  const { discoverModuleIndex } = await import('./decision-distill.js')
+  const moduleIndex = discoverModuleIndex(knowledgeRoot)
+  const domains = resolveTouchedDomains(changeDir, moduleIndex, Array.isArray(files) ? files : []).filter((d) => d !== 'unmapped')
+  if (domains.length === 0) return { warn: null, hits: [] }
+  const active = readActiveFrDigest(knowledgeRoot, domains)
+  const hits = []
+  for (const fr of req.frs) {
+    if ((fr.supersedes || []).length > 0 || !fr.title) continue
+    for (const a of active) {
+      if (frTitleOverlap(fr.title, a.title) >= 0.6) { hits.push({ local: fr.local, active: a.id, title: a.title }); break }
+    }
+  }
+  if (hits.length === 0) return { warn: null, hits }
+  const { appendKnowledgeHit } = await import('./knowledge-hits.js')
+  appendKnowledgeHit(join(specBase, '.runtime'), { type: 'fr-duplicate-warning', change, hits: hits.length, source: 'flow-done' })
+  const warn = `⚠️ [FR 重复嫌疑·advisory] ${hits.length} 条新 FR 与同域 active 条目标题高度重叠（${hits.map((h) => `${h.local}↔${h.active}`).join('、')}）——双出路：requirements 加承接行（承接: FR-xxx）或改标题区分；本次放行不阻断`
+  return { warn, hits }
+}
+
 /** 变更目录实际产物枚举（2026-09-25-flow-tick-prototype，adopt 路径必读面）：adopt 时头脑风暴
  * 产出的原型 HTML/决策清单等不在 materialPaths（那是稳定前缀 scan 面）——动态扫变更目录把实际
  * 在场产物列成必读清单，原型显式点名（agent 看不到就不会用）。 */
@@ -183,6 +319,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         const materials = materialPaths(specBase, change, changeDir)
         const artifacts = changeArtifactPaths(changeDir)
         const prototypePaths = artifacts.filter((p) => /\.html$/i.test(p))
+        // 知识注入（2026-09-25-thin-fr-inject-parity）：adopt 路径域路由走 design.md 交付清单
+        let digestLines = []
+        try { digestLines = (await flowKnowledgeDigest({ specBase, change, changeDir, input: null })).lines } catch { /* 注入 best-effort */ }
         console.log([
           `🧲 头脑风暴产物已收编进轻量跑道: ${change}（adopted_from=brainstorm，baseline=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）`,
           `══════════════════════════════════════`,
@@ -201,6 +340,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
           ``,
           `材料路径清单（按需 Read）：`,
           ...materials.map((p) => `  - ${p}`),
+          ``,
+          ...digestLines,
         ].filter(Boolean).join('\n'))
         try { await triggerSync(cwd, change) } catch { /* 同步绝不阻断协议面 */ }
         return { adopted: true, change, baseline }
@@ -227,7 +368,19 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         console.log(`📌 重入补生成缺失机器稿 ${r.drafted.length} 件：${r.drafted.join('、')}（工具升级晚于 start 的在途变更补件；已存在文件未动）`)
       }
     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
-    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st })
+    // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线 diff——干活期的
+    // 交付面比 start 时点的 --input 语料更准；best-effort 不阻断恢复简报。
+    let resumeDigest = { lines: [], summary: null }
+    try {
+      if (st.baseline_commit) {
+        const diffFiles = String(gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`]) || '')
+          .split('\n').map((s) => s.trim()).filter(Boolean)
+        resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null, filesOverride: diffFiles })
+      } else {
+        resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null })
+      }
+    } catch { /* 注入 best-effort */ }
+    printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines })
     return { recovery: true }
     }
   }
@@ -293,6 +446,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   }
 
   const materials = materialPaths(specBase, change, changeDir)
+  // 知识注入（2026-09-25-thin-fr-inject-parity）：fresh 起点域路由用 --input 提取的路径样
+  // token（best-effort）——brainstorm 的 {FR_INDEX_DIGEST}/{DECISION_HITS} 注入面对齐到轻量道。
+  let digest = { lines: [], summary: { domains: [], frCount: 0, rejectedDecisions: 0, knowledgeEntries: 0 } }
+  try {
+    digest = await flowKnowledgeDigest({ specBase, change, changeDir, input, filesOverride: extractInputPaths(input) })
+  } catch { /* 注入 best-effort 不阻断 start */ }
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
@@ -329,9 +488,11 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     ``,
     `材料路径清单（稳定前缀，按需 Read）：`,
     ...materials.map((p) => `  - ${p}`),
+    ``,
+    ...digest.lines,
   ]
   if (json) {
-    console.log(JSON.stringify({ change, tier: thick ? 'thick' : 'thin', baseline, materials }))
+    console.log(JSON.stringify({ change, tier: thick ? 'thick' : 'thin', baseline, materials, knowledgeDigest: digest.summary }))
   } else {
     console.log(lines.join('\n'))
   }
@@ -342,7 +503,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
 }
 
 /** 恢复简报：盘面状态（checkbox/提交/账本/dirty files）→ 做到哪、剩什么、下一步。 */
-function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st }) {
+function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines = [] }) {
   const done = []
   const left = []
   for (const k of SUBSTEPS) (st.substeps?.[k] === 'done' ? done : left).push(k)
@@ -364,6 +525,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
     `- 六子步标记：${done.length ? `已完成 ${done.join('/')}` : '（无）'}${left.length ? `；待办 ${left.join('/')}` : '；全部完成'}`,
     `- 剩什么：${left.length === 0 && dirty === 0 ? '活已干完' : dirty > 0 ? '活未干完（继续改代码）' : '收尾待裁决'}`,
     `- 下一步：${left.length === 0 ? `sillyspec flow done --change ${change}` : `继续干活；干完跑 flow done（断点续）`}`,
+    ...(digestLines.length > 0 ? ['', ...digestLines] : []),
   ].join('\n'))
 }
 
@@ -445,6 +607,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       if (dr.applicable && dr.emptySlots.length > 0) {
         console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
         console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
+        console.error(`   恢复指引：槽标记（<!--AGENT:槽N）被删时，从 .runtime/step-guides/ 的指纹缓存可找骨架原文；或删 design.md 后重入 flow start 补生成（criteria 从 proposal 回提）`)
         reportMidFail('artifacts')
         process.exit(1)
       }
@@ -524,6 +687,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     gateSummaryText = `test: ${fmt(gate && gate.test)}｜lint: ${fmt(gate && gate.lint)}｜门文件 ${Array.isArray(changedFiles) ? changedFiles.length : '?'} 个`
     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
     try { writeFlowState(changeDir, { gate_summary: gateSummaryText }) } catch { /* 存档 best-effort */ }
+    // FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道（quick 退役后
+    // 原侧悬空）——归属文件面触达域的 active FR 打待复核标记，下次知识注入带 ⚠️。advisory 不阻断。
+    try {
+      const rot = await rotSuspectFlow({ specBase, change, changeDir, files: changedFiles })
+      if (rot.warn) console.warn(rot.warn)
+    } catch { /* rot fail-open */ }
     mark('ledger')
   }
 
@@ -751,6 +920,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const knowledgeRoot = join(specBase, 'knowledge')
       const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
       const deliverableFiles = await attributedChangedFiles()
+      // FR 重复嫌疑软门（2026-09-25-thin-fr-inject-parity）：brainstorm --done 判据迁轻量道——
+      // 新 FR × 同域 active 标题重叠 ≥0.6 → advisory（承接或改标题双出路），不阻断 distill。
+      try {
+        const dup = await frDupGateFlow({ specBase, change, changeDir, files: deliverableFiles })
+        if (dup.warn) console.warn(dup.warn)
+      } catch { /* 软门 fail-open */ }
       const r = indexRequirements({ changeDir, knowledgeRoot, headHash: typeof head === 'string' ? head.trim() : '', deliverableFiles })
       if (r && Array.isArray(r.written) && r.written.length > 0) {
         console.log(`📚 FR 索引提炼：${r.written.map((w) => w.id).join('、')} → knowledge/fr/（域=${r.written[0].file}）`)

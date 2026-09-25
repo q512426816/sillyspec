@@ -1,0 +1,188 @@
+/**
+ * thin-fr-inject-parity.test.mjs — 轻量道知识读取面对齐（2026-09-25-thin-fr-inject-parity）
+ *
+ * 验收面：
+ *   ① flowKnowledgeDigest：filesOverride 域路由命中 active FR（待复核 ⚠️ 优先）+ 否决决策命中
+ *      （matchKnowledge 复用）；无域依据/全空退化一行可见；
+ *   ② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测 + 待复核打标（quick-done 钩子迁移）；
+ *   ③ frDupGateFlow：新 FR × 同域 active 标题 bigram ≥0.6 → 告警 + fr-duplicate-warning 遥测；
+ *   ④ flow start fresh 简报端到端含知识注入段（--input 路径语料域路由）。
+ */
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, dirname } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const CLI = join(ROOT, 'src', 'index.js')
+const { flowKnowledgeDigest, rotSuspectFlow, frDupGateFlow } = await import(pathToFileURL(join(ROOT, 'src', 'flow.js')).href)
+
+/** 最小 specBase 夹具：cli 域（src/cli/ 前缀）+ active FR 两条（一条待复核）+ rejected 决策 + INDEX 路由。 */
+function buildSpecRoot(base) {
+  const specBase = join(base, '.sillyspec')
+  const knowledge = join(specBase, 'knowledge')
+  mkdirSync(join(knowledge, 'fr'), { recursive: true })
+  mkdirSync(join(knowledge, 'decisions'), { recursive: true })
+  const mapDir = join(specBase, 'docs', 'proj', 'modules')
+  mkdirSync(mapDir, { recursive: true })
+  writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
+  writeFileSync(join(knowledge, 'fr', 'cli.md'), [
+    '---',
+    'author: sillyspec-fr-index',
+    '---',
+    '',
+    '# FR 索引 — cli',
+    '',
+    '## FR-cli-001 登录必须校验会话',
+    '变更：hist-a',
+    '状态：active',
+    '摘要：默认场景',
+    '场景正文：',
+    '- 场景：默认场景 — Given 会话存在 When 调登录 Then 校验通过',
+    '全文：hist-a/requirements.md#FR-01',
+    '最近确认：aaaa1111',
+    '',
+    '## FR-cli-002 登录失败必须限流',
+    '变更：hist-b',
+    '状态：active',
+    '摘要：默认场景',
+    '场景正文：',
+    '- 场景：默认场景 — Given 连续失败 When 超阈 Then 限流',
+    '全文：hist-b/requirements.md#FR-01',
+    '最近确认：bbbb2222',
+    '待复核：quick-abc',
+    '',
+  ].join('\n'))
+  writeFileSync(join(knowledge, 'decisions', 'cli.md'), [
+    '# 决策 — cli',
+    '',
+    '## D-001@v1 登录页采用 Modal 弹窗',
+    '变更：hist-c',
+    '状态：rejected',
+    '否决理由：性能差且遮挡上下文',
+    '复潮条件：设计系统提供非模态登录组件',
+    '',
+  ].join('\n'))
+  writeFileSync(join(knowledge, 'INDEX.md'), [
+    '# 知识索引',
+    '',
+    '## Decisions',
+    '- 登录|决策|Modal → [decisions/cli.md](decisions/cli.md)',
+    '',
+  ].join('\n'))
+  return specBase
+}
+
+test('① flowKnowledgeDigest：域路由命中 active FR（待复核优先）+ 否决决策命中', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'fip1-'))
+  try {
+    const specBase = buildSpecRoot(tmp)
+    const changeDir = join(specBase, 'changes', 'c-digest')
+    mkdirSync(changeDir, { recursive: true })
+    const r = await flowKnowledgeDigest({ specBase, change: 'c-digest', changeDir, input: '登录流程重构', filesOverride: ['src/cli/login.js'] })
+    assert.ok(r.lines.some((l) => l.includes('触达域')), '应含触达域行')
+    assert.ok(r.lines.some((l) => l.includes('FR-cli-002')), '应含待复核条目')
+    assert.ok(r.lines.some((l) => l.includes('FR-cli-002') && l.includes('⚠️待复核')), '待复核条目应带 ⚠️ 且排在前面')
+    assert.ok(r.lines.some((l) => l.includes('FR-cli-001')), '应含普通 active 条目')
+    assert.ok(r.lines.some((l) => l.includes('D-001@v1') && l.includes('否决理由')), '应含否决决策命中及理由')
+    assert.equal(r.summary.frCount, 2)
+    assert.equal(r.summary.rejectedDecisions, 1)
+    const flaggedIdx = r.lines.findIndex((l) => l.includes('FR-cli-002'))
+    const plainIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))
+    assert.ok(flaggedIdx < plainIdx, '待复核条目应排在普通条目之前')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
+test('① flowKnowledgeDigest：无域依据且语料不命中 → 折叠一行可见（注入面存在性不因空消失）', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'fip2-'))
+  try {
+    const specBase = buildSpecRoot(tmp)
+    const changeDir = join(specBase, 'changes', 'c-empty')
+    mkdirSync(changeDir, { recursive: true })
+    const r = await flowKnowledgeDigest({ specBase, change: 'zzz-unrelated', changeDir, input: '', filesOverride: [] })
+    assert.equal(r.lines.length, 1, `应折叠为一行，实际：${JSON.stringify(r.lines)}`)
+    assert.ok(r.lines[0].includes('未命中') || r.lines[0].includes('无'), '空态行应说明未命中')
+    assert.equal(r.summary.frCount, 0)
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
+test('② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测 + 待复核打标', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'fip3-'))
+  try {
+    const specBase = buildSpecRoot(tmp)
+    const r = await rotSuspectFlow({ specBase, change: 'c-rot', files: ['src/cli/login.js'] })
+    assert.equal(r.count, 2)
+    assert.equal(r.marked, 2, '两条 active FR 均应打标')
+    const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
+    assert.ok(hits.includes('fr-rot-suspect') && hits.includes('"source":"flow-done"'))
+    const fr = readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8')
+    assert.ok(fr.includes('待复核：c-rot'), 'FR 条目应被打待复核标记')
+    const miss = await rotSuspectFlow({ specBase, change: 'c-rot2', files: ['docs/other/x.md'] })
+    assert.equal(miss.warn, null, '非触达域文件应零告警')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
+test('③ frDupGateFlow：标题重叠 ≥0.6 告警 + 遥测；承接行豁免；无关标题零告警', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'fip4-'))
+  try {
+    const specBase = buildSpecRoot(tmp)
+    const changeDir = join(specBase, 'changes', 'c-dup')
+    mkdirSync(changeDir, { recursive: true })
+    writeFileSync(join(changeDir, 'requirements.md'), [
+      '# 需求',
+      '',
+      '### FR-01: 登录必须校验会话',
+      'Given x',
+      'When y',
+      'Then z',
+      '',
+      '### FR-02: 完全无关的导出功能',
+      'Given a',
+      'When b',
+      'Then c',
+      '',
+    ].join('\n'))
+    const r = await frDupGateFlow({ specBase, change: 'c-dup', changeDir, files: ['src/cli/login.js'] })
+    assert.equal(r.hits.length, 1, `只应命中重叠标题，实际：${JSON.stringify(r.hits)}`)
+    assert.ok(r.warn.includes('FR-01↔FR-cli-001'), '告警应指明 local↔active 对')
+    const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
+    assert.ok(hits.includes('fr-duplicate-warning') && hits.includes('"source":"flow-done"'))
+    // 承接行豁免：FR-01 加承接后不再命中
+    writeFileSync(join(changeDir, 'requirements.md'), [
+      '# 需求',
+      '',
+      '### FR-01: 登录必须校验会话',
+      '承接: FR-cli-001',
+      'Given x',
+      'When y',
+      'Then z',
+      '',
+    ].join('\n'))
+    const r2 = await frDupGateFlow({ specBase, change: 'c-dup', changeDir, files: ['src/cli/login.js'] })
+    assert.equal(r2.warn, null, '有承接行的 FR 应豁免')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
+test('④ flow start fresh 简报端到端：知识注入段在场（--input 路径语料域路由）', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'fip5-'))
+  try {
+    const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
+    g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
+    writeFileSync(join(cwd, '.sillyspec.yaml'), 'project:\n  type: generic\n')
+    writeFileSync(join(cwd, 'base.txt'), 'b\n')
+    g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+    buildSpecRoot(cwd)
+    const r = spawnSync(process.execPath, [CLI, 'flow', 'start', '--change', 'e2e-inject', '--input',
+      '动机：登录流程调整，涉及 src/cli/login.js\n成功标准：\n- 登录行为保持'], {
+      cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
+    })
+    assert.equal(r.status, 0, `flow start 应成功，stderr：${r.stderr}`)
+    assert.ok(r.stdout.includes('🧠 知识注入'), 'fresh 简报应含知识注入段')
+    assert.ok(r.stdout.includes('FR-cli-001'), '注入段应含触达域现行 FR')
+    assert.ok(r.stdout.includes('材料路径清单'), '稳定前缀材料清单应保留且在前')
+    assert.ok(r.stdout.indexOf('材料路径清单') < r.stdout.indexOf('🧠 知识注入'), '注入段应在材料清单之后（不污染稳定前缀）')
+  } finally { rmSync(cwd, { recursive: true, force: true }) }
+})
