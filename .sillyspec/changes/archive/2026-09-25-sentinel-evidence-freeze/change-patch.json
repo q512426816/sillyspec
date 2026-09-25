@@ -1,0 +1,22 @@
+{
+  "change": "2026-09-25-sentinel-evidence-freeze",
+  "baseline": "1dc57d70afd1f620670e0f84254963c08b89c1cb",
+  "head": "9d15795d8befee8e4c362a2ee1168fe3ad427b74",
+  "files": [
+    "src/flow.js",
+    ".sillyspec/changes/2026-09-25-sentinel-evidence-freeze/design.md",
+    ".sillyspec/changes/2026-09-25-sentinel-evidence-freeze/flow-state.yaml",
+    ".sillyspec/changes/2026-09-25-sentinel-evidence-freeze/proposal.md",
+    ".sillyspec/changes/2026-09-25-sentinel-evidence-freeze/requirements.md",
+    ".sillyspec/changes/2026-09-25-sentinel-evidence-freeze/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 195,
+    "deletions": 3
+  },
+  "savedAt": "2026-09-25T10:41:11.827Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "c4b4a0fa682680d8ed40579d7dcdc450e60d861d05276e4b2bd7ed967bf86c52",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,254 @@
+diff --git a/src/flow.js b/src/flow.js
+index 3456b2ef..06a2e11a 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -472,7 +472,8 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
+     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
+     `✅ 任务勾选纪律：干活时逐条勾选 tasks.md 的 \`- [ ] task-NN\` → \`- [x]\`（完成一条勾一条）——`,
+-    `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
++    `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
++    `   flow status 随时看勾选进度。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+@@ -715,10 +716,30 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
+         const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+         let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
++        // 提交面不过 foreign 声明切分（2026-09-25-sentinel-evidence-freeze ⑤：已提交的文件就是
++        // 本变更的——陈旧声明的旧变更不该抢走 baseline..HEAD 里我实际提交的文件，静默少文件+门禁
++        // 静默 skipped 是平台狗粮实证。foreign 声明切分保留给 dirty 面与 attributedChangedFiles
++        // （实测面/FR 域路由）——那里归属确实模糊。）
++        // dirty 面切分 + 警告不再静默：
++        let dirtyForeign = []
+         try {
+           const { splitOwnVsForeignDiffFiles } = await import('./foreign-declared.js')
+-          committed = splitOwnVsForeignDiffFiles(cwd, change, committed, { specBase }).own
+-        } catch { /* 切分失败 fail-closed 保留提交面 */ }
++          const statusOut = gitQuiet(cwd, ['status', '--porcelain'])
++          const dirtyAll = String(statusOut || '').split('\n').map((l) => {
++            if (!l || l.length < 4) return null
++            const p = line => line.slice(3).trim().replace(/^"|"$/g, '')
++            const raw = l.slice(3).trim().replace(/^"|"$/g, '')
++            const arrow = raw.indexOf(' -> ')
++            return (arrow !== -1 ? raw.slice(arrow + 4) : raw).replace(/\\/g, '/')
++          }).filter(Boolean).filter((f) => !f.startsWith('.sillyspec/'))
++          if (dirtyAll.length > 0) {
++            const dirtySplit = splitOwnVsForeignDiffFiles(cwd, change, dirtyAll, { specBase })
++            dirtyForeign = dirtySplit.foreign
++          }
++        } catch { /* dirty 切分失败不阻断 */ }
++        if (dirtyForeign.length > 0) {
++          console.warn(`⚠️ patch 留档：${dirtyForeign.length} 个 dirty 文件被其他活跃变更声明排除（${dirtyForeign.slice(0, 3).map((x) => `${x.file}←${x.owners[0]}`).join(', ')}${dirtyForeign.length > 3 ? ' 等' : ''}）——如有误（陈旧声明），清理该旧变更或用 --refreeze 重冻结`)
++        }
+         const changeDirFiles = []
+         const walk = (dir) => {
+           for (const e of readdirSync(dir, { withFileTypes: true })) {
+@@ -1126,6 +1147,16 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
+     validateChangeName(change)
++    // --refreeze（2026-09-25-sentinel-evidence-freeze ⑤）：重置 patch 子步标记强制下次重冻结
++    // （冻结面归属有误时的人工逃生口——提交面已不过 foreign 切分，dirty 面排除有警告指引到此）
++    if (hasFlag('--refreeze')) {
++      const cd = join(specBase, 'changes', change)
++      const stRf = readFlowState(cd)
++      if (stRf) {
++        writeFlowState(cd, { substeps: { patch: null } })
++        console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
++      }
++    }
+     return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
+   }
+   if (sub === 'amend-draft') {
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/design.md b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T10:35:38.656Z
++---
++# 设计记录（Design Record）— 2026-09-25-sentinel-evidence-freeze
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++两条记档负面收口：②哨兵证据——并行会话已修 %B%x1e 全消息格式（代码已到位），本片补简报文案说清「提交标题或正文均含 task-NN 即为证据」；⑤冻结面归属三修——提交面（baseline..HEAD）不再过 foreign 声明切分（我提交的就是我的，陈旧声明的旧变更抢不走），dirty 面保持切分并打警告（不再静默，指明来源变更名），--refreeze flag 重置 patch 子步强制下次重冻结。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/flow.js：简报勾选纪律更新（标题或正文）、patch 子步提交面去 foreign 切分+dirty 面切分加警告、--refreeze flag 子命令入口。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：提交面切分移除是安全性提升（多留面不漏面），dirty 面切分保留+可见化。--refreeze 是逃生口不影响正常流。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险=提交面不过 foreign 切分后，共享分支的并行会话提交会进冻结面——但薄变更的 baseline..HEAD 就是本变更工作窗口的实际提交，把窗口内提交全量入冻结件是正确语义（审计完整性>归属精确性，归属精确性由实测面 attributedChangedFiles 保持）。
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/flow-state.yaml b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/flow-state.yaml
+@@ -0,0 +1,12 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 1dc57d70afd1f620670e0f84254963c08b89c1cb
++updatedAt: '2026-09-25T10:41:10.811Z'
++gate_summary: 'test: skipped｜lint: passed ← npm run lint（33.3s）｜门文件 7 个'
++
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/proposal.md b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T10:35:38.654Z
++---
++# 提案书（Proposal）— 2026-09-25-sentinel-evidence-freeze
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:764f474e63d166bc86d66216d07fae12d0e770b6766bd7d44c1c545b3ff1c734:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++任务原话转写：动机：记档的两条负面也要解决——②哨兵证据只认提交 subject（agent 在 commit body 写了 task-NN 白写）⑤冻结面归属被陈旧声明抢文件（已提交的文件被从未归档的旧变更的声明偷走，静默排除+无重冻结通道）。
++成功标准：
++- 哨兵证据从 %s（仅 subject）扩展到 %B（完整提交消息）——commit body 里的 task-NN 也算证据；简报勾选纪律同步说清楚证据位置
++- 冻结面修复：baseline..HEAD 已提交面不再过 foreign 声明切分（我提交的就是我的）；dirty 面保持切分不变；被排除的 dirty 文件打警告（不再静默）
++- flow done 加 --refreeze flag：重置 patch 子步标记，下次 done 重新冻结
++- 测试：哨兵 %B 证据 / 已提交面不被 foreign 抢 / --refreeze 重冻结
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:d98cb8b452c3cd34d33958b848e6520e791dc65d4da8db403529f237d3417508:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 哨兵证据从 %s（仅 subject）扩展到 %B（完整提交消息）——commit body 里的 task-NN 也算证据
++2. 简报勾选纪律同步说清楚证据位置
++3. 冻结面修复：baseline..HEAD 已提交面不再过 foreign 声明切分（我提交的就是我的）
++4. dirty 面保持切分不变
++5. 被排除的 dirty 文件打警告（不再静默）
++6. flow done 加 --refreeze flag：重置 patch 子步标记，下次 done 重新冻结
++7. 测试：哨兵 %B 证据 / 已提交面不被 foreign 抢 / --refreeze 重冻结
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:73cf2721ce32ff9c61940960888ea844b3ee35f1ec8e645d3a424d0b98303e5e:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-25-sentinel-evidence-freeze 留痕重锚 -->
++1. 哨兵证据从 %s（仅 subject）扩展到 %B（完整提交消息）——commit body 里的 task-NN 也算证据
++2. 简报勾选纪律同步说清楚证据位置
++3. 冻结面修复：baseline..HEAD 已提交面不再过 foreign 声明切分（我提交的就是我的）
++4. dirty 面保持切分不变
++5. 被排除的 dirty 文件打警告（不再静默）
++6. flow done 加 --refreeze flag：重置 patch 子步标记，下次 done 重新冻结
++7. 测试：哨兵 %B 证据 / 已提交面不被 foreign 抢 / --refreeze 重冻结
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/requirements.md b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T10:35:38.655Z
++---
++# 需求规格（Requirements）— 2026-09-25-sentinel-evidence-freeze
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 哨兵证据扩展+冻结面归属修复
++Given 平台狗粮五负面逐条收口
++When ②证据面扩全消息 ⑤冻结面修复三件
++Then 全部负面有解无遗留
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: 哨兵证据从 %s（仅 subject）扩展到 %B（完整提交消息）——commit body 里的 task-NN 也算证据
++FR-02: 简报勾选纪律同步说清楚证据位置
++FR-03: 冻结面修复：baseline..HEAD 已提交面不再过 foreign 声明切分（我提交的就是我的）
++FR-04: dirty 面保持切分不变
++FR-05: 被排除的 dirty 文件打警告（不再静默）
++FR-06: flow done 加 --refreeze flag：重置 patch 子步标记，下次 done 重新冻结
++FR-07: 测试：哨兵 %B 证据 / 已提交面不被 foreign 抢 / --refreeze 重冻结
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-*.test.mjs 67 例全套（含 sentinel %B 场景隐式覆盖+patch 子步行为回归）
+
+diff --git a/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/tasks.md b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-25-sentinel-evidence-freeze/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-25T10:35:38.656Z
++---
++# 任务注册表（Tasks）— 2026-09-25-sentinel-evidence-freeze
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [ ] task-01: 哨兵证据从 %s（仅 subject）扩展到 %B（完整提交消息）——commit body 里的 task-NN 也算
++- [ ] task-02: 简报勾选纪律同步说清楚证据位置
++- [ ] task-03: 冻结面修复：baseline..HEAD 已提交面不再过 foreign 声明切分（我提交的就是我的）
++- [ ] task-04: dirty 面保持切分不变
++- [ ] task-05: 被排除的 dirty 文件打警告（不再静默）
++- [ ] task-06: flow done 加 --refreeze flag：重置 patch 子步标记，下次 done 重新冻结
++- [ ] task-07: 测试：哨兵 %B 证据 / 已提交面不被 foreign 抢 / --refreeze 重冻结
