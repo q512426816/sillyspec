@@ -202,26 +202,59 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
 }
 
 /**
- * flow done 收口的 FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道
- * ——quick 退役后该检测面原侧悬空。归属文件面→模块域→active FR：记 fr-rot-suspect 遥测 + 待复核
- * 标记（下次知识注入带 ⚠️，承接翻链时清除）。advisory 零阻断，fail-open。
- * @returns {{ warn: string|null, domains: string[], count: number, marked: number }}
+ * flow done 收口的 FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity 起，fr-rot-precision 收紧）：
+ * quick-done 钩子迁轻量道 + 按文件面交集判相关度（域级全标→三分判据，评审实测基线 131 条 →
+ * strong 83 / unknown 8 / skip 40）。对触达域每条 active FR：coverage = frCoverageFiles(来源变更)
+ * ∪ bindings，与本次归属文件面单向匹配（changed 恒文件级：相等 || changed.startsWith(cov 补/）：
+ * 交集非空 → strong（打待复核标记，下次知识注入带 ⚠️）；coverage 空 → unknown（不打标，遥测
+ * 单列——宁漏勿滥：漏标只损失注入排序优先级）；非空无交集 → skip。
+ * 遥测 count 语义=strong（防污染 knowledge-stats 的 rotSuspectByDomain 消费读数，评审 P1-1）。
+ * advisory 零阻断，fail-open。
+ * @returns {{ warn: string|null, warnInfo?: string|null, domains: string[], strong: number, unknown: number, skip: number, marked: number }}
  */
 export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   const knowledgeRoot = join(specBase, 'knowledge')
+  const archiveRoot = join(specBase, 'changes', 'archive')
   const { discoverModuleIndex } = await import('./decision-distill.js')
-  const { resolveTouchedDomains, readActiveFrDigest, markFrNeedsReview } = await import('./fr-index.js')
+  const { resolveTouchedDomains, readActiveFrDigest, markFrNeedsReview, frCoverageFiles } = await import('./fr-index.js')
   const moduleIndex = discoverModuleIndex(knowledgeRoot)
+  const changed = (Array.isArray(files) ? files : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
   // changeDir 仅为 design.md 兜底路由用（filesOverride 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
-  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, Array.isArray(files) ? files : []).filter((d) => d !== 'unmapped')
-  if (domains.length === 0) return { warn: null, domains: [], count: 0, marked: 0 }
+  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, changed).filter((d) => d !== 'unmapped')
+  if (domains.length === 0) return { warn: null, warnInfo: null, domains: [], strong: 0, unknown: 0, skip: 0, marked: 0 }
   const frs = readActiveFrDigest(knowledgeRoot, domains)
-  if (frs.length === 0) return { warn: null, domains, count: 0, marked: 0 }
+  if (frs.length === 0) return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0, marked: 0 }
+  const covCache = new Map()
+  const strong = []
+  const unknownSources = new Set()
+  let skip = 0
+  for (const f of frs) {
+    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
+    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings : [])])
+    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); continue }
+    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
+    if (hit) strong.push(f)
+    else skip++
+  }
+  const unknown = frs.length - strong.length - skip
   const { appendKnowledgeHit } = await import('./knowledge-hits.js')
-  appendKnowledgeHit(join(specBase, '.runtime'), { type: 'fr-rot-suspect', change, domains, count: frs.length, source: 'flow-done' })
-  const mr = markFrNeedsReview(knowledgeRoot, frs.map((f) => f.id), change)
-  const warn = `⚠️ [FR 腐烂 suspect·advisory] 本次触达 ${domains.join('、')} 域的 ${frs.length} 条 active FR——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${mr.marked} 条；下次知识注入带 ⚠️）`
-  return { warn, domains, count: frs.length, marked: mr.marked }
+  appendKnowledgeHit(join(specBase, '.runtime'), {
+    type: 'fr-rot-suspect', change, domains,
+    strong: strong.length, unknown, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
+    unknownSources: [...unknownSources], source: 'flow-done',
+  })
+  let marked = 0
+  if (strong.length > 0) {
+    const mr = markFrNeedsReview(knowledgeRoot, strong.map((f) => f.id), change)
+    marked = mr.marked
+  }
+  const warn = strong.length > 0
+    ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${marked} 条；下次知识注入带 ⚠️）`
+    : null
+  const warnInfo = unknown > 0
+    ? `ℹ️ 另有 ${unknown} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${[...unknownSources].slice(0, 5).join('、')}${unknownSources.size > 5 ? ' 等' : ''}`
+    : null
+  return { warn, warnInfo, domains, strong: strong.length, unknown, skip, marked }
 }
 
 /**
@@ -231,7 +264,7 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
  * @returns {{ warn: string|null, hits: Array<{ local: string, active: string, title: string }> }}
  */
 export async function frDupGateFlow({ specBase, change, changeDir, files }) {
-  const { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap } = await import('./fr-index.js')
+  const { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap, FR_TITLE_OVERLAP_THRESHOLD } = await import('./fr-index.js')
   const req = parseChangeRequirements(changeDir)
   if (req.missing || req.frs.length === 0) return { warn: null, hits: [] }
   const knowledgeRoot = join(specBase, 'knowledge')
@@ -243,14 +276,25 @@ export async function frDupGateFlow({ specBase, change, changeDir, files }) {
   const hits = []
   for (const fr of req.frs) {
     if ((fr.supersedes || []).length > 0 || !fr.title) continue
+    // 取最高重叠对（fr-rot-precision：对齐 brainstorm 软门语义——多命中时指认最相近的，非首个过阈者）
+    let hit = null
     for (const a of active) {
-      if (frTitleOverlap(fr.title, a.title) >= 0.6) { hits.push({ local: fr.local, active: a.id, title: a.title }); break }
+      const o = frTitleOverlap(fr.title, a.title)
+      if (!hit || o > hit.o) hit = { a, o }
+    }
+    if (hit && hit.o >= FR_TITLE_OVERLAP_THRESHOLD) {
+      const scen = (hit.a.scenarios || []).filter((s) => s && s !== '（无场景名）').join('；')
+      hits.push({ local: fr.local, active: hit.a.id, title: hit.a.title, overlap: hit.o, scenarios: scen })
     }
   }
   if (hits.length === 0) return { warn: null, hits }
   const { appendKnowledgeHit } = await import('./knowledge-hits.js')
   appendKnowledgeHit(join(specBase, '.runtime'), { type: 'fr-duplicate-warning', change, hits: hits.length, source: 'flow-done' })
-  const warn = `⚠️ [FR 重复嫌疑·advisory] ${hits.length} 条新 FR 与同域 active 条目标题高度重叠（${hits.map((h) => `${h.local}↔${h.active}`).join('、')}）——双出路：requirements 加承接行（承接: FR-xxx）或改标题区分；本次放行不阻断`
+  const pairs = hits.map((h) => {
+    const scen = h.scenarios ? `（场景：${h.scenarios}）` : ''
+    return `${h.local}↔${h.active}「${h.title}」${scen}`
+  }).join('、')
+  const warn = `⚠️ [FR 重复嫌疑·advisory] ${hits.length} 条新 FR 与同域 active 条目标题高度重叠：${pairs}——双出路：requirements 加承接行（承接: FR-xxx，改写时对照上述场景）或改标题区分；本次放行不阻断`
   return { warn, hits }
 }
 
@@ -368,17 +412,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         console.log(`📌 重入补生成缺失机器稿 ${r.drafted.length} 件：${r.drafted.join('、')}（工具升级晚于 start 的在途变更补件；已存在文件未动）`)
       }
     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
-    // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线 diff——干活期的
-    // 交付面比 start 时点的 --input 语料更准；best-effort 不阻断恢复简报。
+    // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
+    // changedFilesSinceBaseline（fr-rot-precision 评审 P2：含未提交工作树/untracked、剔 .sillyspec，
+    // 与收口口径同源；裸 git diff 双提交区间会漏干活期未提交文件）；best-effort 不阻断恢复简报。
     let resumeDigest = { lines: [], summary: null }
     try {
-      if (st.baseline_commit) {
-        const diffFiles = String(gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`]) || '')
-          .split('\n').map((s) => s.trim()).filter(Boolean)
-        resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null, filesOverride: diffFiles })
-      } else {
-        resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null })
-      }
+      resumeDigest = await flowKnowledgeDigest({ specBase, change, changeDir, input: null, filesOverride: changedFilesSinceBaseline(cwd, st.baseline_commit) })
     } catch { /* 注入 best-effort */ }
     printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, st, digestLines: resumeDigest.lines })
     return { recovery: true }
@@ -693,6 +732,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     try {
       const rot = await rotSuspectFlow({ specBase, change, changeDir, files: changedFiles })
       if (rot.warn) console.warn(rot.warn)
+      if (rot.warnInfo) console.warn(rot.warnInfo)
     } catch { /* rot fail-open */ }
     mark('ledger')
   }

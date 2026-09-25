@@ -20,7 +20,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
 const { flowKnowledgeDigest, rotSuspectFlow, frDupGateFlow } = await import(pathToFileURL(join(ROOT, 'src', 'flow.js')).href)
 
-/** 最小 specBase 夹具：cli 域（src/cli/ 前缀）+ active FR 两条（一条待复核）+ rejected 决策 + INDEX 路由。 */
+/** 最小 specBase 夹具：cli 域（src/cli/ 前缀）+ 归档件（coverage 源：hist-a 触达 / hist-b 不触达 /
+ *  hist-c 缺归档=unknown）+ active FR 三条（含绑定/旧待复核标记）+ rejected 决策 + INDEX 路由。 */
 function buildSpecRoot(base) {
   const specBase = join(base, '.sillyspec')
   const knowledge = join(specBase, 'knowledge')
@@ -29,6 +30,12 @@ function buildSpecRoot(base) {
   const mapDir = join(specBase, 'docs', 'proj', 'modules')
   mkdirSync(mapDir, { recursive: true })
   writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
+  const arc = join(specBase, 'changes', 'archive')
+  mkdirSync(join(arc, 'hist-a'), { recursive: true })
+  writeFileSync(join(arc, 'hist-a', 'change-patch.json'), JSON.stringify({ change: 'hist-a', files: ['src/cli/login.js'] }))
+  mkdirSync(join(arc, 'hist-b'), { recursive: true })
+  writeFileSync(join(arc, 'hist-b', 'change-patch.json'), JSON.stringify({ change: 'hist-b', files: ['src/other/x.js'] }))
+  // hist-c 故意不建归档（unknown 用例：来源变更无归档件且无绑定）
   writeFileSync(join(knowledge, 'fr', 'cli.md'), [
     '---',
     'author: sillyspec-fr-index',
@@ -44,6 +51,11 @@ function buildSpecRoot(base) {
     '- 场景：默认场景 — Given 会话存在 When 调登录 Then 校验通过',
     '全文：hist-a/requirements.md#FR-01',
     '最近确认：aaaa1111',
+    '测试绑定：',
+    '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
+    '- row: hist-a:flow:FR-01',
+    '  tests: test/cli.test.mjs',
+    '  reason: spec',
     '',
     '## FR-cli-002 登录失败必须限流',
     '变更：hist-b',
@@ -54,6 +66,15 @@ function buildSpecRoot(base) {
     '全文：hist-b/requirements.md#FR-01',
     '最近确认：bbbb2222',
     '待复核：quick-abc',
+    '',
+    '## FR-cli-003 登录页必须显示品牌标识',
+    '变更：hist-c',
+    '状态：active',
+    '摘要：默认场景',
+    '场景正文：',
+    '- 场景：默认场景 — Given 登录页渲染 When 加载完成 Then 品牌标识可见',
+    '全文：hist-c/requirements.md#FR-01',
+    '最近确认：cccc3333',
     '',
   ].join('\n'))
   writeFileSync(join(knowledge, 'decisions', 'cli.md'), [
@@ -88,7 +109,7 @@ test('① flowKnowledgeDigest：域路由命中 active FR（待复核优先）+ 
     assert.ok(r.lines.some((l) => l.includes('FR-cli-002') && l.includes('⚠️待复核')), '待复核条目应带 ⚠️ 且排在前面')
     assert.ok(r.lines.some((l) => l.includes('FR-cli-001')), '应含普通 active 条目')
     assert.ok(r.lines.some((l) => l.includes('D-001@v1') && l.includes('否决理由')), '应含否决决策命中及理由')
-    assert.equal(r.summary.frCount, 2)
+    assert.equal(r.summary.frCount, 3)
     assert.equal(r.summary.rejectedDecisions, 1)
     const flaggedIdx = r.lines.findIndex((l) => l.includes('FR-cli-002'))
     const plainIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))
@@ -109,18 +130,25 @@ test('① flowKnowledgeDigest：无域依据且语料不命中 → 折叠一行�
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
-test('② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测 + 待复核打标', async () => {
+test('② rotSuspectFlow：三分判据（strong 打标/skip 不动/unknown 不打标）+ 遥测 count=strong', async () => {
   const tmp = mkdtempSync(join(tmpdir(), 'fip3-'))
   try {
     const specBase = buildSpecRoot(tmp)
-    const r = await rotSuspectFlow({ specBase, change: 'c-rot', files: ['src/cli/login.js'] })
-    assert.equal(r.count, 2)
-    assert.equal(r.marked, 2, '两条 active FR 均应打标')
+    const r = await rotSuspectFlow({ specBase, change: 'c-rot', changeDir: join(specBase, 'changes', 'c-rot'), files: ['src/cli/login.js'] })
+    // FR-001（hist-a 归档 files 含 src/cli/login.js + 绑定）→ strong；FR-002（hist-b 归档 src/other）→ skip；FR-003（hist-c 无归档无绑定）→ unknown
+    assert.equal(r.strong, 1, `strong 应为 1，实际 ${r.strong}`)
+    assert.equal(r.skip, 1, `skip 应为 1，实际 ${r.skip}`)
+    assert.equal(r.unknown, 1, `unknown 应为 1，实际 ${r.unknown}`)
+    assert.equal(r.marked, 1, '仅 strong 条目打标')
     const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
     assert.ok(hits.includes('fr-rot-suspect') && hits.includes('"source":"flow-done"'))
+    assert.ok(hits.includes('"strong":1') && hits.includes('"count":1'), '遥测 count 语义=strong（防污染 knowledge-stats）')
+    assert.ok(hits.includes('"unknown":1'), 'unknown 单列遥测')
     const fr = readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8')
-    assert.ok(fr.includes('待复核：c-rot'), 'FR 条目应被打待复核标记')
-    const miss = await rotSuspectFlow({ specBase, change: 'c-rot2', files: ['docs/other/x.md'] })
+    assert.ok(fr.includes('待复核：c-rot'), 'strong 条目应被打待复核标记')
+    assert.ok(fr.split('## FR-cli-002')[1].split('## FR-cli-003')[0].includes('待复核：quick-abc'), 'skip 条目的旧标记不动')
+    assert.ok(!fr.split('## FR-cli-003')[1].includes('待复核：'), 'unknown 条目不打标')
+    const miss = await rotSuspectFlow({ specBase, change: 'c-rot2', changeDir: join(specBase, 'changes', 'c-rot2'), files: ['docs/other/x.md'] })
     assert.equal(miss.warn, null, '非触达域文件应零告警')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })

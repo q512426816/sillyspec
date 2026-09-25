@@ -20,6 +20,7 @@
 import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines } from './test-bindings.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { writeAtomicSync } from './fs-atomic.js';
 import {
   splitKnowledgeSections,
   joinKnowledgeFile,
@@ -29,6 +30,74 @@ import {
 
 /** epoch：此前归档不检查/不索引（存量 93 份不回填——不伪造历史，D-007）。 */
 export const FR_INDEX_EPOCH = '2026-09-18';
+
+/** design.md 交付清单表行解析（「| 新增|修改|删除 | 路径 |」行，含 NEW: 前缀形态）——剥反引号：
+ * 实测 29.4% 厚道交付条目带壳（fr-rot-precision 评审 P1-2），不剥与 git 路径永不相等。
+ * 从 resolveTouchedDomains 内部正则抽出公共（frCoverageFiles 与域路由共用同一解析）。 */
+export function deliverableFilesFromDesignText(text) {
+  const out = [];
+  for (const line of String(text || '').replace(/\r\n/g, '\n').split('\n')) {
+    const m = line.match(/^\|\s*(?:新增|修改|删除)\s*\|\s*(?:NEW:)?([^\s|]+)\s*\|/);
+    if (m) out.push(m[1].trim().replace(/^`+|`+$/g, ''));
+  }
+  return out;
+}
+
+/**
+ * FR 覆盖文件集（fr-rot-precision：rot 三分判据/存量清理的文件面底座）——归档变更三源并集：
+ * ①design.md 交付表（厚道主源，剥反引号）②change-patch.json 的 files（thin 主源——thin 归档
+ * 27/30 在场，早期 3 份缺补位靠绑定）③（绑定由消费方并入——readActiveFrDigest.bindings）。
+ * 统一剔 .sillyspec/ 前缀（内部产物≠交付面）；POSIX 归一；fail-soft（缺件=空贡献）。
+ * 匹配口径（消费方约定）：changed 恒为文件级路径，判定用单向「相等 || changed.startsWith(cov 补/ 结尾)」。
+ */
+export function frCoverageFiles({ archiveRoot, changeName }) {
+  const out = new Set();
+  const dir = join(archiveRoot, String(changeName || ''));
+  try {
+    const dp = join(dir, 'design.md');
+    if (existsSync(dp)) {
+      for (const f of deliverableFilesFromDesignText(readFileSync(dp, 'utf8'))) {
+        const v = f.replace(/\\/g, '/').replace(/\/+$/, '');
+        if (v) out.add(v);
+      }
+    }
+  } catch { /* 源1 fail-soft */ }
+  try {
+    const pp = join(dir, 'change-patch.json');
+    if (existsSync(pp)) {
+      const j = JSON.parse(readFileSync(pp, 'utf8'));
+      for (const f of (Array.isArray(j && j.files) ? j.files : [])) {
+        const v = String(f || '').replace(/\\/g, '/').replace(/\/+$/, '');
+        if (v) out.add(v);
+      }
+    }
+  } catch { /* 源2 fail-soft */ }
+  return [...out].filter((p) => !p.startsWith('.sillyspec/'));
+}
+
+/** 条目「测试绑定：」子块的 tests 文件提取（多文件 | 分隔；锚定子块防条目正文误匹配——
+ * fr-rot-precision 评审 P3）。readActiveFrDigest.bindings 与 cleanupStaleReviewMarks 共用。 */
+function readEntryBindings(lines) {
+  const idx = lines.findIndex((l) => l.startsWith('测试绑定：'));
+  if (idx === -1) return [];
+  const out = [];
+  for (const l of lines.slice(idx + 1)) {
+    if (l && !/\s/.test(l[0])) break; // 顶格行=子块结束
+    const m = l.match(/^\s+tests:\s*(.+)$/);
+    if (m) {
+      for (const t of m[1].split('|')) {
+        const v = t.trim().replace(/^['"]|['"]$/g, '');
+        if (v) out.push(v.replace(/\\/g, '/'));
+      }
+    }
+  }
+  return out;
+}
+
+/** 标题 bigram 重叠判「重复嫌疑/承接漏写」的阈值（fr-index 判据函数与两处消费方——brainstorm
+ * 软门（stage-contract.js）与轻量道 dup 软门（flow.js）——共用同一常量，防两处各写一份字面量
+ * 漂移（fr-rot-precision 评审 P3 清偿：改阈值只改这里）。 */
+export const FR_TITLE_OVERLAP_THRESHOLD = 0.6;
 
 const FR_DIR = 'fr';
 /** FR 节头：## FR-<域>-NNN 标题（域=[a-z0-9-] **含连字符**——真实模块 id 多为 cli-entry/core-engine 等连字符形态，
@@ -163,10 +232,7 @@ export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = nu
     } catch {
       design = '';
     }
-    for (const line of design.replace(/\r\n/g, '\n').split('\n')) {
-      const m = line.match(/^\|\s*(?:新增|修改|删除)\s*\|\s*(?:NEW:)?([^\s|]+)\s*\|/);
-      if (!m) continue;
-      const filePath = m[1].trim();
+    for (const filePath of deliverableFilesFromDesignText(design)) {
       files.push(filePath);
       matchModules(filePath);
     }
@@ -649,7 +715,9 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
       // 注入面带 ⚠️ 提示后续变更核对——是信号非失效，承接翻链时清除。
       const reviewLine = s.lines.find((l) => l.startsWith('待复核：'));
       const needsReview = reviewLine ? reviewLine.replace(/^待复核：\s*/, '').trim() : null;
-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview });
+      // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
+      // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
+      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines) });
     }
   }
   return out;
@@ -721,4 +789,69 @@ export function markFrNeedsReview(knowledgeRoot, frIds, refNote) {
     if (!found) warnings.push(`markFrNeedsReview：${id} 不在索引中（跳过）`);
   }
   return { marked, warnings };
+}
+
+/**
+ * 存量待复核标记治理（fr-rot-precision 评审修正稿）：按「新判据下 ref 变更收口时该条会不会被
+ * 打标」重算——keep iff coverageFiles(FR 来源变更) ∪ bindings 与 coverageFiles(ref 变更) 有文件面
+ * 交集。ref 无归档或任一侧 coverage 空 → 删（自然覆盖 quick 侧 ref——quick 永不归档无文件面；
+ * 与运行时 unknown 不打标口径一致：宁漏勿滥，漏标只损失注入排序优先级）。
+ * 并发安全：写前重读比对快照，盘上已被并行会话改写的文件跳过（幂等可重跑消化）；原子写。
+ * superseded 条目不碰（无 active 语义）。
+ * @returns {{ removed: number, kept: number, skipped: string[], files: string[], byRef: Record<string, number> }}
+ */
+export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
+  const knowledgeRoot = join(specBase, 'knowledge');
+  const frDir = frDirPath(knowledgeRoot);
+  const snapshot = new Map();
+  try {
+    for (const f of readdirSync(frDir)) {
+      if (f.endsWith('.md')) snapshot.set(f, readFileSync(join(frDir, f), 'utf8'));
+    }
+  } catch { /* 目录不可读=空治理面 */ }
+  const all = scanAllDomains(knowledgeRoot);
+  const covCache = new Map();
+  const coverageOf = (changeName) => {
+    if (!changeName) return [];
+    if (!covCache.has(changeName)) covCache.set(changeName, frCoverageFiles({ archiveRoot, changeName }));
+    return covCache.get(changeName);
+  };
+  let removed = 0, kept = 0;
+  const byRef = {};
+  const dirty = new Set();
+  const covHit = (frChange, bindings, refCover) => {
+    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings : [])]);
+    if (frCov.size === 0 || refCover.length === 0) return false;
+    return [...frCov].some((p) => refCover.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/') || p.startsWith(c.endsWith('/') ? c : c + '/')));
+  };
+  for (const [domain, st] of all.entries()) {
+    for (const s of st.sections) {
+      const reviewLines = s.lines.filter((l) => l.startsWith(FR_NEEDS_REVIEW_PREFIX));
+      if (reviewLines.length === 0) continue;
+      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代：翻链自会清，不在此治理
+      const ref = reviewLines[0].slice(FR_NEEDS_REVIEW_PREFIX.length).trim();
+      const keep = covHit(s.change, readEntryBindings(s.lines), coverageOf(ref));
+      if (keep) { kept++; continue; }
+      s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
+      removed++;
+      byRef[ref] = (byRef[ref] || 0) + 1;
+      dirty.add(domain);
+    }
+  }
+  const files = [];
+  const skipped = [];
+  if (dirty.size > 0) {
+    mkdirSync(frDir, { recursive: true });
+    for (const d of dirty) {
+      const fname = `${d}.md`;
+      try {
+        const before = snapshot.get(fname);
+        const now = existsSync(join(frDir, fname)) ? readFileSync(join(frDir, fname), 'utf8') : null;
+        if (before == null || before !== now) { skipped.push(fname); continue; } // 并行写已发生——跳过，重跑消化
+      } catch { skipped.push(fname); continue; }
+      writeAtomicSync(join(frDir, fname), joinKnowledgeFile(all.get(d).preamble, all.get(d).sections));
+      files.push(fname);
+    }
+  }
+  return { removed, kept, skipped, files, byRef };
 }

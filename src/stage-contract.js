@@ -21,7 +21,7 @@ import { backfillFrontmatter } from './scan-postcheck.js'
 import { parseAllowedPaths } from './stages/plan-postcheck.js'
 // FR 索引消费（2026-09-18-fr-index-l1 L1）：重复嫌疑软门（advisory）——fr-index 是纯 fs+decision-distill
 // 叶子链，静态引入无环；knowledge-hits 同为叶子。
-import { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap } from './fr-index.js'
+import { parseChangeRequirements, resolveTouchedDomains, readActiveFrDigest, frTitleOverlap, FR_TITLE_OVERLAP_THRESHOLD } from './fr-index.js'
 import { discoverModuleIndex } from './decision-distill.js'
 import { appendKnowledgeHit } from './knowledge-hits.js'
 // design.md 文件清单解析（2026-09-17-pass-cap-semantics task-02 事实③）：change-list 是纯 fs
@@ -360,7 +360,7 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
             const o = frTitleOverlap(fr.title, a.title)
             if (!hit || o > hit.o) hit = { a, o }
           }
-          if (hit && hit.o >= 0.6) {
+          if (hit && hit.o >= FR_TITLE_OVERLAP_THRESHOLD) {
             warnings.push(`疑似重复 FR：新「${fr.local} ${fr.title}」与现行 ${hit.a.id}「${hit.a.title}」标题重叠度 ${(hit.o * 100).toFixed(0)}%——若为改写/取代请在该 FR 块加承接行 \`承接: ${hit.a.id}\`，若为不同需求请改标题区分（advisory，L1 观察指标）`)
             try {
               appendKnowledgeHit(join(specRoot || join(cwd, '.sillyspec'), '.runtime'), {
