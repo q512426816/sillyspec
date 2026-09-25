@@ -12,6 +12,7 @@
  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
  */
 import { join, dirname } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import { parsePorcelainPath, safeGit } from './shared.js'
 import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
 
