@@ -100,14 +100,18 @@ function draftProposal({ change, input, criteria }) {
   return { text, sections: collectSections(text) }
 }
 
-/** requirements 机器稿（成功标准 → FR 条目 + 每条 FR 一枚「测试绑定」AGENT 槽——2026-09-25
- * thin-patch-bindings：轻量变更 FR 从诞生就要测试锚，撞实验 5 个 P1 全是承诺无锚形态）。 */
-function draftRequirements({ change, criteria }) {
+/** requirements 机器稿（骨架 + agent 填写 FR + 绑定槽——2026-09-25-fr-agent-writable，
+ * 平台狗粮驱动架构修正：FR 内容从机器指纹段改为 agent 书写面（同 design 槽模式）。
+ * 机器只搭骨架：节标题 + FR 空区（含参考摘录注释）+ 绑定槽。agent 干活时直接填 FR，
+ * 不走 amend、不触发 edit_ratio——机器摘录 FR 太薄（「flow done 全绿」级）是实证痛点，
+ * amend 改写被 route_hint:thick 误报打击改善积极性，且 FR 质量仍受限。 */
+function draftRequirements({ change, criteria, input }) {
   const crit = criteria || []
-  const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
-  const frBodies = crit.length > 0
-    ? crit.map((c, i) => `### FR-${String(i + 1).padStart(2, '0')}: ${c.slice(0, 40)}\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen ${c}`).join('\n\n')
-    : '### FR-01: flow done 全绿\nGiven 平台按当前契约运行\nWhen 本变更交付并运行\nThen 测试门实测通过+工件指纹校验通过'
+  // 参考摘录（完整 HTML 注释包裹——确保解析器可跳过；非约束，agent 可采纳/改写/忽略）
+  const refComment = crit.length > 0
+    ? `\n<!--\n参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）\n${crit.map((c, i) => `FR-${String(i + 1).padStart(2, '0')}: ${c}`).join('\n')}\n-->\n`
+    : '\n<!-- 无成功标准摘录——agent 按任务语义自行编写 FR -->\n'
+  // 绑定槽：按摘录条目数生成（agent 增删 FR 后自行增删对应绑定槽）
   const n = crit.length > 0 ? crit.length : 1
   const bindingSlots = Array.from({ length: n }, (_, i) => {
     const id = `FR-${String(i + 1).padStart(2, '0')}`
@@ -120,9 +124,9 @@ function draftRequirements({ change, criteria }) {
     '---',
     `# 需求规格（Requirements）— ${change}`,
     '',
-    '## 功能需求（成功标准机械摘录）',
-    wrapped('requirements-frs', frBodies),
-    AGENT_SLOT(1, '需求例外裁决（FR 语义改写不走此槽——直接编辑机器段后跑 flow amend-draft 留痕，槽内容不进 FR 索引）'),
+    '## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）',
+    '',
+    `<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->${refComment}`,
     '',
     '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
     '',
@@ -143,13 +147,25 @@ export function verifyRequirementBindings({ changeDir }) {
   if (!existsSync(path)) return { applicable: false, emptySlots: [] }
   const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
   const lines = text.split('\n')
-  const hasFrSection = /MACHINE-DRAFT:requirements-frs/.test(text)
   const emptySlots = []
   let current = null
   let hasContent = false
   let slotCount = 0
+  let frAreaFilled = false
+  let inFrArea = false
+  let inHtmlComment = false
   const flush = () => { if (current && !hasContent) emptySlots.push(current) }
   for (const line of lines) {
+    if (/^<!--\s*AGENT:FR区/.test(line)) { inFrArea = true; continue }
+    // HTML 注释跳过（参考摘录里的 FR 行不算 agent 填写）：<!-- 开非 AGENT 行入注释态，--> 出
+    if (/^<!--(?!.*AGENT)/.test(line.trim())) { inHtmlComment = !/-->/.test(line); continue }
+    if (inHtmlComment) { if (/-->/.test(line)) inHtmlComment = false; continue }
+    if (inFrArea && (/^<!--\s*AGENT:测试绑定/.test(line) || /^##\s/.test(line))) {
+      inFrArea = false
+      // FR 区内容检查：至少一行非注释非空的实质内容（### FR- 开头的行为需求）
+      if (!frAreaFilled) emptySlots.push('FR区（agent 未填写功能需求——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then）')
+    }
+    if (inFrArea && /^###\s+FR-/.test(line)) frAreaFilled = true
     if (/^<!--\s*AGENT:测试绑定/.test(line)) {
       flush()
       current = (line.match(/AGENT:(测试绑定\S+)/) || [])[1] || '测试绑定'
@@ -161,8 +177,11 @@ export function verifyRequirementBindings({ changeDir }) {
     if (current && line.trim()) hasContent = true
   }
   flush()
-  if (hasFrSection && slotCount === 0) {
-    return { applicable: true, emptySlots: ['（骨架过旧——requirements 有 FR 机器段但无测试绑定槽；修复：删除 requirements.md 后重入 flow start 补生成，criteria 会从 proposal 机器段回提）'] }
+  // FR 区在文件尾的情况（无后续节）
+  if (inFrArea && !frAreaFilled) emptySlots.push('FR区（agent 未填写功能需求）')
+  if (slotCount === 0 && !/AGENT:FR区/.test(text) && !/MACHINE-DRAFT:requirements-frs/.test(text)) {
+    // 无 FR 区标记也无绑定槽 = 骨架过旧或异常
+    return { applicable: true, emptySlots: ['（requirements 结构异常——无 FR 区标记也无绑定槽；修复：删除 requirements.md 后重入 flow start 补生成）'] }
   }
   return { applicable: true, emptySlots }
 }
@@ -414,9 +433,15 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
       const firstBody = ledger.files[file][k] && ledger.files[file][k].body
       const ratio = firstBody != null ? computeEditRatio(firstBody, r.contentByKey[k]) : 0
       sectionRatios[`${file}:${k}`] = Math.round(ratio * 1000) / 1000
-      const aLines = String(firstBody || '').split('\n').length
-      totalOrig += aLines
-      totalChanged += Math.round(ratio * aLines)
+      // FR 段不进决策密度（2026-09-25-fr-quality-fix，平台狗粮驱动）：agent 丰富 FR 文本=需求
+      // 澄清非设计决策，计入 edit_ratio 会触发 route_hint:thick 误报，打击 FR 改善积极性。
+      // sectionRatios 照记（审计可见），只是不计入 totalOrig/totalChanged 的汇总。
+      const isFrSection = k === 'requirements-frs'
+      if (!isFrSection) {
+        const aLines = String(firstBody || '').split('\n').length
+        totalOrig += aLines
+        totalChanged += Math.round(ratio * aLines)
+      }
       ledger.files[file][k] = { ...ledger.files[file][k], hash: bodyHash(r.contentByKey[k]) }
     }
     reanchored.push(`${file}（${r.keys.join('/')}）`)
@@ -516,7 +541,7 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
   const withTasks = existsSync(join(changeDir, 'tasks'))
   const drafts = [
     { file: 'proposal.md', make: () => draftProposal({ change, input, criteria: crit }) },
-    { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit }) },
+    { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit, input }) },
     { file: 'design.md', make: () => draftDesignRecord({ change }) },
     { file: 'tasks.md', make: () => draftTasks({ change, criteria: crit, withTasks }) },
   ]

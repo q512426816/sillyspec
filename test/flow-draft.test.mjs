@@ -44,10 +44,15 @@ test('① draftAll 五件形态（标记+AGENT 槽+ledger 首版原文）+任务
   const a = draftAll({ changeDir, change: 'c1', input: INPUT_WITH_CRITERIA, withTasks: false, runtimeRoot })
   assert.deepEqual(a.written, ['proposal.md', 'requirements.md', 'design.md', 'tasks.md'])
   assert.ok(!existsSync(join(changeDir, 'tasks')), '默认 thin 零任务卡')
-  for (const f of ['proposal.md', 'requirements.md', 'design.md', 'tasks.md']) {
+  for (const f of ['proposal.md', 'design.md', 'tasks.md']) {
     const text = readFileSync(join(changeDir, f), 'utf8')
     assert.match(text, /MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin/, `${f} 含指纹标记`)
   }
+  // requirements.md FR 区改为 agent 书写面（2026-09-25-fr-agent-writable）——无指纹段，有 AGENT 槽
+  const reqsText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+  assert.match(reqsText, /AGENT:FR区/, 'requirements FR 区为 AGENT 槽')
+  assert.ok(!reqsText.includes('MACHINE-DRAFT:requirements-frs'), 'FR 区不再是机器指纹段')
+  assert.match(reqsText, /AGENT:测试绑定FR-01/, '绑定槽在场')
   assert.match(readFileSync(join(changeDir, 'proposal.md'), 'utf8'), /<!--AGENT:槽/)
   // design.md 四节机器段（含盲维四问）+ 四个 AGENT 槽（2026-09-24 v3 设计记录全档化）
   const design = readFileSync(join(changeDir, 'design.md'), 'utf8')
@@ -115,8 +120,8 @@ test('⑧ 幂等补起草：缺哪补哪/已存在不碰/ledger 合并/criteria 
   assert.deepEqual(r.drafted, ['requirements.md', 'design.md'], '只补缺的两件')
   assert.equal(readFileSync(join(changeDir, 'proposal.md'), 'utf8'), proposalBefore, '已存在文件逐字未动')
   const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
-  assert.match(reqs, /### FR-01: 事件恒带/, 'criteria 回提成功（非兜底文案）')
-  assert.match(reqs, /### FR-02: 崩溃零影响/, '第二条 criteria 也回提')
+  assert.match(reqs, /事件恒带/, 'criteria 回提成功（参考摘录含标准文本）')
+  assert.match(reqs, /崩溃零影响/, '第二条 criteria 也回提')
   assert.ok(existsSync(join(changeDir, 'design.md')), 'design 骨架补生成')
   const ledgerAfter = JSON.parse(readFileSync(draftLedgerPath(runtimeRoot, 'c1'), 'utf8'))
   assert.ok(ledgerAfter.files['requirements.md'] && ledgerAfter.files['design.md'], '新段入账')
@@ -137,16 +142,17 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
 
   // 槽位门：新稿全空 → 全列；填路径/不适用 → 放行；旧骨架（剥掉绑定槽）→ 指引补生成
   let v = verifyRequirementBindings({ changeDir })
-  assert.equal(v.emptySlots.length, 2, '两槽空被点名')
+  assert.equal(v.emptySlots.length, 3, 'FR区+两绑定槽空被点名')
   writeFileSync(join(changeDir, 'requirements.md'), reqs
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 绑定提取\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 绑定提取正确')
     .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/flow-draft.test.mjs ⑩ 绑定提取用例')
     .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：崩溃零影响为运行时属性，无独立断言面'))
   v = verifyRequirementBindings({ changeDir })
   assert.equal(v.emptySlots.length, 0, '路径+不适用均视作已答')
-  writeFileSync(join(changeDir, 'requirements.md'), reqs.replace(/^<!--AGENT:测试绑定.*$/gm, '').replace(/^## 测试绑定.*$/m, ''))
+  writeFileSync(join(changeDir, 'requirements.md'), reqs.replace(/^<!--AGENT:测试绑定.*$/gm, '').replace(/^## 测试绑定.*$/m, '').replace(/AGENT:FR区/, 'XX:FR区'))
   v = verifyRequirementBindings({ changeDir })
   assert.equal(v.emptySlots.length, 1)
-  assert.match(v.emptySlots[0], /骨架过旧/, '旧骨架指引删文件重入补生成')
+  assert.match(v.emptySlots[0], /结构异常/, 'FR 区与绑定槽全失——结构异常指引')
 
   // 提取：路径行→行（tests 解析去前导./）；不适用→跳过
   writeFileSync(join(changeDir, 'requirements.md'), reqs
@@ -186,14 +192,13 @@ test('⑬ 编号条目通道（R16 任务书形态）：编号行为条目取代
   const few = extractSuccessCriteria('1. 只有两条编号\n2. 第二条\n成功标准：\n- 节条目甲\n- 节条目乙\n- 节条目丙')
   assert.equal(few.length, 3)
   assert.match(few[0], /节条目甲/)
-  // draftAll 产出的 requirements：FR 标题=条目语义 + 新 GWT 字面（无流程口号残留）
+  // draftAll 产出的 requirements：FR 区为 agent 槽（参考摘录含行为语义）；绑定槽按条目数
   const { root, changeDir, runtimeRoot } = makeFixtureDir()
   draftAll({ changeDir, change: 'c13', input: taskBook, runtimeRoot })
   const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
-  assert.match(reqs, /### FR-01: 新模块 observation：批量写入端点（单批上限 500 条）/, 'FR 标题为行为语义')
+  assert.match(reqs, /FR-01: 新模块 observation：批量写入端点/, 'FR 参考摘录为行为语义')
   assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 5, '编号条目→5 枚绑定槽')
-  assert.match(reqs, /Given 平台按当前契约运行/, '新 GWT 字面')
-  assert.ok(!/轻量跑道在跑|flow done 裁决执行/.test(reqs), '流程口号字面清零')
+  assert.match(reqs, /AGENT:FR区/, 'FR 区为 agent 槽')
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -287,7 +292,9 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
   const dp = join(changeDir, 'design.md')
   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具一行答'))
   const rp = join(changeDir, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
+  writeFileSync(rp, readFileSync(rp, 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: e2e 夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
   const snapshotBefore = readdirSync(changeDir).sort()
   assert.deepEqual(snapshotBefore, ['design.md', 'flow-state.yaml', 'proposal.md', 'requirements.md', 'tasks.md'], '产物面=五件+状态（零手写额外文件）')
 

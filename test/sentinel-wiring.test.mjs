@@ -32,7 +32,9 @@ function fillSlots(cwd, change) {
   const dp = join(base, 'design.md')
   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
   const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
+  writeFileSync(rp, readFileSync(rp, 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 哨兵夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 哨兵通过')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
 }
 
 test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非全勾放行', () => {

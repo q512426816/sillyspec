@@ -183,7 +183,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   const specBase = join(cwd, '.sillyspec')
   const reqs = readFileSync(join(specBase, 'changes', change, 'requirements.md'), 'utf8')
-  assert.match(reqs, /### FR-01:/, '机器稿 requirements 含 FR 块（供索引解析）')
+  assert.match(reqs, /AGENT:FR区/, 'requirements FR 区为 agent 槽（新格式）')
 
   // agent 干活：交付文件落在 backend/ 目录（伪域路由信号；用 .txt——.py 交付物会触发门禁
   // python 环境探测族（P17 同族预存行为，无解释器即挂），与本测试目的无关）
@@ -239,6 +239,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
   assert.ok(patchMeta.files.every((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json')), 'patch 不自引用')
   assert.ok(!patchMeta.files.includes('wip-dirty.txt'), '未提交交付文件不入冻结面')
   assert.match(ok.stdout + ok.stderr, /个未提交交付文件未入冻结面/, 'dirty 警告点名')
+  assert.match(ok.stdout + ok.stderr, /三选一/, '三选一指引在场（评审 P2② 补断言）')
   assert.equal(existsSync(join(specBase, 'changes', change)), false, '归档搬走')
   rmSync(cwd, { recursive: true, force: true })
 })

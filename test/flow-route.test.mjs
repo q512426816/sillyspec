@@ -68,7 +68,9 @@ function fillDesignSlots(cwd, change) {
   const dp = join(base, 'design.md')
   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
   const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8').replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
+  writeFileSync(rp, readFileSync(rp, 'utf8')
+    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 路由测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
 }
 
 test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+醒目打印+遥测；小改无 hint', () => {
