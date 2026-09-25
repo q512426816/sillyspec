@@ -45,6 +45,17 @@ test('① draftModuleMap：目录段聚合起草 + draft 标识 + 不含 blast +
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
+test('①b 模块 id 消毒：大写/点段归一为可回读域（评审 P2 清偿）', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'gfb1b-'))
+  try {
+    const r = draftModuleMap({ cwd: tmp, specBase: join(tmp, '.sillyspec'), paths: ['Utils/helper.js', '.github/workflows/ci.yml'] })
+    assert.ok(r.written, `应起草（reason=${r.reason}）`)
+    assert.ok(r.moduleIds.includes('utils'), '大写段归一小写域')
+    assert.ok(r.moduleIds.includes('github'), '点前缀段消毒为裸段')
+    for (const id of r.moduleIds) assert.match(id, /^[a-z0-9-]+$/, '域 id 全部满足 FR 域正则')
+  } finally { rmSync(tmp, { recursive: true, force: true }) }
+})
+
 test('② archiveDeliverableFiles：design 表 ∪ apply-manifest files', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'gfb3-'))
   try {

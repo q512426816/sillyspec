@@ -24,8 +24,12 @@ function groupByModule(paths) {
     const segs = p.split('/').filter(Boolean)
     if (segs.length < 2) continue // 根文件：无目录段
     const dirSegs = segs.slice(0, -1)
-    const modId = dirSegs.find((s) => !GENERIC_SEGMENTS.has(s.toLowerCase()))
-    if (!modId) continue // 全泛化段（src/x.js）：无可命名模块——留给 unmapped 兜底
+    const rawMod = dirSegs.find((s) => !GENERIC_SEGMENTS.has(s.toLowerCase()))
+    if (!rawMod) continue // 全泛化段（src/x.js）：无可命名模块——留给 unmapped 兜底
+    // id 消毒（评审 P2 清偿）：FR 域正则 [a-z0-9-]——大写/点/下划线段会铸出不可回读域；
+    // 消毒后空（纯符号段如 .github → github，纯点段丢弃）则该路径不建模块
+    const modId = rawMod.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^[-.]+|[-.]+$/g, '')
+    if (!modId || /^-+$/.test(modId)) continue
     const dir = dirSegs.join('/') + '/'
     if (!mods.has(modId)) mods.set(modId, new Set())
     mods.get(modId).add(dir)
