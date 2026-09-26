@@ -13,7 +13,7 @@ created_at: 2026-09-26T00:21:43.802Z
 <!-- MACHINE-DRAFT:design-approach:end -->
 
 <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
-在 src/verify-postcheck.js 的 runVerifyTestCheck 命中源计算处做「空源回退」：strategy==='module' 与 strategy===null（deps-auto 缺省收窄）两个分支，各自在既有的 restrictFiles 过滤之后加一条判定——源为空数组且调用方传了 restrictFiles（非空）时，以归一化后的 restrictFiles 兜底作命中源（打印一行可见日志）。选此方案因为 restrictFiles 本就是会话范围真相（flow 的 baseline..HEAD 归属面 / quick 的审计∪声明面），与门禁隔离快照 overlay 同源，语义上「声明即边界」家族一致；改动单点收口在共享入口 runVerifyTestCheck，verify 阶段门（gates.js）与收口门（quick-audit）两个调用方同时受益。实证根因：thin 协议「先提交再 flow done」使门跑时 HEAD 已含全部改动，无 worktree meta 的变更命中源回退 git diff HEAD（仅未提交改动）恒空（2026-09-25-quick-channel-retire 收口实证：72 个门文件在手、test 门 skipped、诊断打印 diff 0 个文件；匹配器本身无辜——同清单实测命中 cli-core+run-gates）。
+在 src/verify-postcheck.js 的 runVerifyTestCheck 命中源计算处做「空源回退」：strategy==='module' 与 strategy===null（deps-auto 缺省收窄）两个分支，各自在既有的 restrictFiles 过滤之后加一条判定——源为空数组且调用方传了 restrictFiles（非空）时，以归一化后的 restrictFiles 兜底作命中源（打印一行可见日志）。选此方案因为 restrictFiles 本就是会话范围真相（flow 的 baseline..HEAD 归属面 / quick 的审计∪声明面），与门禁隔离快照 overlay 同源，语义上「声明即边界」家族一致；改动单点收口在共享入口 runVerifyTestCheck。作用范围（评审 P2 陈述清偿）：当前唯一传 restrictFiles 的调用方是收口门（quick-audit），回退仅在该路径可达——verify 阶段门（gates.js:1016 未传清单）在「变更全提交后跑门」同形下仍可能 0 命中假 skip，该路径接线留作后续变更。实证根因：thin 协议「先提交再 flow done」使门跑时 HEAD 已含全部改动，无 worktree meta 的变更命中源回退 git diff HEAD（仅未提交改动）恒空（2026-09-25-quick-channel-retire 收口实证：72 个门文件在手、test 门 skipped、诊断打印 diff 0 个文件；匹配器本身无辜——同清单实测命中 cli-core+run-gates）。
 
 ## 接口契约
 <!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-gate-module-source 留痕重锚 -->

@@ -33,4 +33,4 @@ test/verify-gate-restrict-source.test.mjs 用例 B（无清单 → skipped＋rea
 test/verify-gate-restrict-source.test.mjs 用例 C（未配置策略仓+清单含测试文件 → module[]+deps(js1) passed）。
 
 <!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
-会话侧亲跑全量 `npm test`＋`npm run lint`（结果随 flow done 实测面账本记录；lint 门亲测、test 若被策略收窄由会话全量补证并如实记录）。
+会话侧亲跑全量（2026-09-26）：`npm test` 637 个测试文件 0 失败 exit 0 ＋ `npm run lint` 813 文件绿；CLI 收口门本次实测面账本如实记录 `test: passed ← module[cli-core]+deps(js18)（13.3s）`＋`lint: passed（37.8s）`——本变更自身即修复路径的狗粮证据（评审 P3 补证落档）。

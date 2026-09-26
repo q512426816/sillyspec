@@ -1,0 +1,23 @@
+{
+  "change": "2026-09-26-thin-gate-module-source",
+  "baseline": "cb82979c324ca4c1e219a0c0bbd6de092a4db5f5",
+  "head": "5724497024ae011c28c93839b44f859afcd8c875",
+  "files": [
+    ".sillyspec/changes/2026-09-26-thin-gate-module-source/design.md",
+    ".sillyspec/changes/2026-09-26-thin-gate-module-source/flow-state.yaml",
+    ".sillyspec/changes/2026-09-26-thin-gate-module-source/proposal.md",
+    ".sillyspec/changes/2026-09-26-thin-gate-module-source/requirements.md",
+    ".sillyspec/changes/2026-09-26-thin-gate-module-source/tasks.md",
+    "src/verify-postcheck.js",
+    "test/verify-gate-restrict-source.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 267,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-26T00:31:22.475Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "e177670ca60f3c634533f8d4ac71148aa290775ba68c449ac45103d59f6e3324",
+  "patchStatus": "ok"
+}
