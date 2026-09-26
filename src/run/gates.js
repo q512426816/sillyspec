@@ -1013,7 +1013,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } else {
       // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
       console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
-      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx })
+      // restrictFiles 接线（2026-09-26-verify-gate-restrictfiles，评审 P2 留痕缺口的清偿）：
+      // quick 门（quick-audit.js:584）传声明文件收窄模块选择，verify 门此前没传——变更全提交后
+      // verify --done 同形下文件面解析 0 命中可能假 skip（该实测没实测）。与 :1135 lint scope
+      // 同源口径（includeWorkingTree 含 worktree 未提交）；空清单不传（restrict 空数组反而制造
+      // 假 skip——空=解析失败应走全量硬门，不降级）。
+      let _restrict = null
+      try {
+        const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
+        _restrict = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase: gateSpecBase })
+      } catch { /* 解析异常走全量（restrictFiles 不传） */ }
+      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
       printVerifyTestCheck(testCheck)
       // P2 记账（fail-closed 层②：只有通过结果落账本——失败永不缓存，修复后重跑才能记）
       if (!traceHasActiveRows) {

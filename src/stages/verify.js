@@ -59,6 +59,8 @@ export const definition = {
       name: '加载规范并锚定',
       prompt: `加载规范文件并确认。
 
+> 💡 **长会话税提示（2026-09-26-verify-gate-restrictfiles，R18 实证）**：若本会话已跨 brainstorm/plan/execute 多阶段（上下文已重），建议**新开会话跑 verify**（sillyspec run verify --change <名> 续跑，上下文重置）——verify 段轮均成本是 brainstorm 段的 3-4 倍，主因是每轮重读全历史；新会话只带工件进场，同动作成本立降。
+
 ### 操作
 1. 读取 proposal.md、design.md、tasks.md、requirements.md、plan.md
 2. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
