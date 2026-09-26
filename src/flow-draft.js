@@ -336,13 +336,60 @@ export function draftDesignRecord({ change }) {
   return { text, sections: collectSections(text) }
 }
 
-/** tasks 机器稿（成功标准 → checkbox 行）。任务卡分岔：withTasks 才生成 tasks/task-NN.md。 */
+/**
+ * 成功标准 → 工作单元聚类（2026-09-26-thin-workunits，R18 实证驱动）：thin 的 tasks.md 此前
+ * 是验收标准逐条镜像（R18-thin 15 条 checkbox）——勾选语义错配（一条标准的满足要横跨多文件
+ * 多阶段，判定时刻只在收口）导致「一把全勾」+进度信号失真+哨兵证据弱化+每轮粒度税。改为
+ * 机器聚类粗粒度工作单元（语义对齐 OpenSpec 的 agent 自拆工作分解，保留 thin 机器起草哲学）：
+ * ≤5 条不聚类（小变更逐条粒度本就合适，零变化）；>5 条按域关键词投桶（后端/前端/E2E/文档/
+ * 其他），每单元覆盖若干标准——勾=该域实现+测试绿的天然判定时刻。
+ */
+const WORK_UNIT_BUCKETS = [
+  { key: '后端', re: /(后端|backend|api|端点|接口|路由|pytest|迁移|存储|schema|鉴权|orm|数据库)/i },
+  { key: '前端', re: /(前端|frontend|面板|组件|页面|渲染|vitest|交互|轮询|徽标|折叠|高亮)/i },
+  { key: '端到端', re: /(e2e|端到端|curl|起\s*dev|真链路|验收演示|实测链路)/i },
+  { key: '文档', re: /(文档|usage|readme|说明|操作手册)/i },
+]
+
+export function groupCriteriaToUnits(criteria) {
+  const crit = criteria || []
+  if (crit.length <= 5) {
+    return crit.map((c, i) => ({ label: null, indexes: [i] }))
+  }  const buckets = new Map() // key -> [criteriaIndex]
+  const misc = []
+  for (let i = 0; i < crit.length; i++) {
+    const hit = WORK_UNIT_BUCKETS.find((b) => b.re.test(crit[i]))
+    if (hit) {
+      if (!buckets.has(hit.key)) buckets.set(hit.key, [])
+      buckets.get(hit.key).push(i)
+    } else misc.push(i)
+  }
+  const units = []
+  for (const [label, indexes] of buckets) units.push({ label, indexes })
+  // 未命中关键词的标准：数量少并入「实现与收口」单元；多（≥3）独立成单元
+  if (misc.length > 0) units.push({ label: misc.length >= 3 ? '实现与收口' : null, indexes: misc })
+  // 覆盖号顺序稳定（按首标准序排序单元）
+  units.sort((a, b) => a.indexes[0] - b.indexes[0])
+  return units
+}
+
+/** tasks 机器稿（成功标准 → 工作单元 checkbox 行；≤5 条标准退化为逐条）。任务卡分岔：withTasks 才生成 tasks/task-NN.md。 */
 function draftTasks({ change, criteria, withTasks }) {
   const crit = criteria || []
   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
-  const rows = crit.length > 0
-    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${clipTaskText(c)}`)
-    : ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
+  let rows
+  if (crit.length === 0) {
+    rows = ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
+  } else {
+    const units = groupCriteriaToUnits(crit)
+    rows = units.map((u, i) => {
+      const num = `task-${String(i + 1).padStart(2, '0')}`
+      if (u.label == null) return `- [ ] ${num}: ${clipTaskText(crit[u.indexes[0]])}` // ≤5 逐条（原形态）
+      const summary = u.indexes.slice(0, 3).map((j) => clipTaskText(crit[j]).replace(/[（(].*$/, '').slice(0, 24)).join('、')
+      const covers = u.indexes.map((j) => j + 1).join(',')
+      return `- [ ] ${num}: ${u.label}——${summary}等（覆盖标准 ${covers}）`
+    })
+  }
   const text = [
     '---',
     `author: flow-machine-draft`,
