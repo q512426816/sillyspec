@@ -13,6 +13,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-001@v1
 场景正文：
 - 场景：默认场景 — Given 活跃 change 且 watcher 拉起（detached+单飞锁+心跳租约）；When change 子树文件签名变化/git 新提交/工件出现或翻格；Then watcher-events-<change>.jsonl 追加事件（ts/kind/stage/detail/**provisional:true**），
@@ -23,6 +24,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-001@v1
 场景正文：
 - 场景：默认场景 — Given 产物 mtime 序列（proposal.md→requirements.md→design.md→tasks.md→checkbox 翻格→；When watcher 聚合执行；Then 每事件带推断 stage 字段；watcher-stage-timing-<change>.json 落阶段耗时拆账
@@ -33,6 +35,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-002@v1
 场景正文：
 - 场景：默认场景 — Given flow:thin（缺省）且新任务；When harness 无 agent 走薄跑道；Then CLI 必需调用恰为 flow start 与 flow done 两次；中间零协议必需交互
@@ -43,6 +46,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-002@v1
 场景正文：
 - 场景：默认场景 — Given flow start --change <名> --input "<任务原话>" [--thick|--with-tasks]；When 执行；Then 建 change（initChange 语义：目录+stages 行；ghost 免疫）+机器起草四件+输出
@@ -53,6 +57,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-003@v1
 场景正文：
 - 场景：默认场景 — Given flow done --change <名>；When 执行六子步（工件校验/账本对账/探针/distill/归档/事件收口）；Then 每子步查自身完成标记（幂等跳过）；中段失败精确报告已完成子步；重入断点续；
@@ -63,6 +68,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-002@v1
 场景正文：
 - 场景：默认场景 — Given local.yaml flow 键（config-schema 注册）；When flow:legacy（或一行改回）；Then 既有 run <stage> 全族行为逐字不变；thin change 上跑 run <stage>=该 change 回 legacy
@@ -73,6 +79,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-004@v1
 场景正文：
 - 场景：默认场景 — Given flow start 起草 proposal（--input 转写）/requirements（机械摘成功标准）/tasks（机械推导）/；When 薄跑道会话进行；Then agent 会话内 .sillyspec 写入仅例外裁决（AGENT 槽填充/amend-draft 留痕）——harness 验
@@ -83,6 +90,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-004@v1
 场景正文：
 - 场景：默认场景 — Given 机器段以 MACHINE-DRAFT sha256 标记对包裹+draft-ledger 台账（首版原文永存）；When flow done 验收；Then 三态拒收：标记删除/内容哈希失配/手工重锚未审计；AGENT 槽合法放行；
@@ -93,6 +101,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-005@v1
 场景正文：
 - 场景：默认场景 — Given agent 经 flow amend-draft 改写机器段（唯一合法通道）；When CLI 计算 ledger 首版原文 vs 当前内容的行级 editRatio；Then editRatio>阈值（flow.edit_ratio_threshold 缺省 0.5）→ **测绿可薄档过**（advisory
@@ -103,6 +112,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-005@v1
 场景正文：
 - 场景：默认场景 — Given flow done 的 verify 失败/审查否决/distill rejected|needsWait；When 升级判定执行；Then flow-state tier:thick+upgrade_reason，剩余流程按厚档走（完整仪式）；
@@ -113,6 +123,7 @@ created_at: 2026-09-22T09:42:59.537Z
 变更：2026-09-22-r7-protocol-surgery
 状态：active
 摘要：默认场景
+待复核：2026-09-26-thin-workunits
 依据决策：D-006@v1
 场景正文：
 - 场景：默认场景 — Given plan 阶段步骤指引文本（src/stages/plan.js）；When agent 按指引分解任务；Then 默认「实现+单测同卡」；不出现「纯接线/纯 module-map 录入/纯全量回归绿」独立成卡的

@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-thin-workunits",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F-1",
+      "severity": "P2",
+      "title": "misc==2 且总标准>5 时，第二条未命中标准在 tasks.md 渲染中不可见且无覆盖号标注",
+      "detail": "draftTasks 对 label==null 单元只渲染 indexes[0] 的文本（src/flow-draft.js:387，行内注释「≤5 逐条（原形态）」的假设对多 index misc 单元不成立）。实测：8 条标准（5 命中桶+2 misc）→ 末单元 {label:null,indexes:[6,7]} → 渲染仅显示第 7 条文本，第 8 条在 tasks.md 完全不可见、无「（覆盖标准 …）」标注——违反 proposal 验收面第 1 条「每单元行内标注覆盖标准号与摘要（验收锚可追）」对该单元的承诺，且未在 design 槽4 披露。伴生：src/flow-draft.js:369 注释与实现语义颠倒（「数量少并入实现与收口单元；多（≥3）独立成单元」——代码实为 ≥3 才挂『实现与收口』标签）。触发面现实（如「测试全绿」+「临时产物清理」两条尾项零关键词命中的 6-8 条变更）。",
+      "impact": "数据层 FR-01 恰好覆盖一次不变；勾选语义仍覆盖该标准（勾该行即含），但 agent 以 tasks.md 为工作面时可能看不到该标准；requirements/proposal 载全文、收口按 FR/测试门对账，验收正确性不受影响——故 P2 非 P1。",
+      "follow_up": "后续变更：misc<3 时逐条渲染，或统一带覆盖号标注；同时修正 369/387 两处注释。"
+    },
+    {
+      "id": "F-2",
+      "severity": "P3",
+      "title": "单元行整行未过 clipTaskText，covers 枚举无长度帽",
+      "detail": "摘要项各自经 clipTaskText+24 字切，但整行=域标签+3×24 摘要+覆盖号全枚举，未再过 clipTaskText；单桶覆盖 15 条时整行约 120+ 字，超出 clipTaskText 的 ~80 字规范。FR-02「行经 clipTaskText 长度管控」按组件成立、按整行为宽松成立；实际上限受标准数约束（covers 串 O(N)），粒度税目标仍达成。"
+    },
+    {
+      "id": "F-3",
+      "severity": "P3",
+      "title": "狗粮口径错位：声明「验证新形态」、实证的是旧形态兼容",
+      "detail": "proposal 验收面第 14 条与 tasks.md task-14 勾选均称「本变更自身 flow done 狗粮验证新形态」，但本变更 tasks.md 起草早于代码落地（baseline 5724497）、实为 14 行旧逐条形态——实际狗粮验证的是 FR-04 旧形态兼容路径；新形态的收口端到端（新形态 tasks.md 走 flow done 哨兵/advisory）仅由单测③④（数据+渲染）与 flow-tick 断言更新覆盖，无活体 flow-done 循环。agent 已在 requirements FR-04 绑定槽如实改写为「旧形态收口实证」（AGENT 槽为合法书写面），属可接受的口径重述，但 task-14 的勾选声明偏宽。"
+    },
+    {
+      "id": "F-4",
+      "severity": "P3",
+      "title": "用例①标题宣称「未命中并入」但夹具零 misc 条目",
+      "detail": "测试① 7 条夹具全命中域桶，misc 路径仅由测试③④（misc=3 挂『实现与收口』标签）间接覆盖；misc<3 分支（正是 F-1 缺陷面）无任何测试。"
+    },
+    {
+      "id": "F-5",
+      "severity": "P3",
+      "title": "措辞：单元覆盖数≤3 时摘要已穷尽仍缀「等」字",
+      "detail": "摘要取前 3 项后固定追加「等（覆盖标准 …）」，≤3 项单元的列举实为穷尽，「等」不准；无功能影响。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T00:47:44.916Z"
+}
