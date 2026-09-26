@@ -535,10 +535,11 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `   原语/决策密度任一命中即需评审（届时会收到评审任务书，起子代理产出 review.json）；豁免`,
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
-    `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
+    `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）；`,
+    `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
     `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
-    `   flow status 随时看勾选进度。`,
+    `   flow status 随时看勾选进度（②执行阶段勾选滞后时 status 会带提醒行——边干边勾）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -725,7 +726,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           reportMidFail('ledger')
           process.exit(1)
         }
-        if (sent.status === 'complete') console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+        if (sent.status === 'complete') {
+          console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
+          // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
+          // == 收口窗口最后提交（一把勾模式）→ 放行但打行为提醒（不阻断——token 证据已验，
+          // 这是提醒边干边勾纪律，非假勾）。tasks.md 全程 untracked（未随交付提交）时同款提醒。
+          try {
+            const tasksIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1', '--', tasksPath])
+            const lastIn = gitQuiet(cwd, ['log', '--format=%h', '-n', '1'])
+            if (!tasksIn) {
+              console.warn(`⚠️ 勾选时点：tasks.md 未随交付提交（untracked 直至归档）——勾选证据链靠归档兜底，git 历史不可回溯；下次收口前 tasks.md 一并显式 pathspec 提交`)
+            } else if (String(tasksIn).trim() === String(lastIn).trim()) {
+              console.warn(`⚠️ 勾选时点：tasks.md 的首次 git 提交 == 收口最后提交（一把勾模式）——token 证据齐放行，但边干边勾是进度锚（OS Guardrails 同款纪律），下次完成单元即勾`)
+            }
+          } catch { /* 时点判定 fail-soft */ }
+        }
         // 勾选缺失 advisory（2026-09-25-flow-tick-prototype）：有任务行但全未勾（status='none' 且
         // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
         if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitMessages.length > 0) {
@@ -1230,11 +1245,27 @@ export async function cmdFlow(args, cwd, specDir = null) {
     let phase = '① spec（填 FR + design 槽）'
     if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) phase = '② 执行（写代码跑测试）→ ①卡点：spec 摘要给用户确认'
     if (subDone.includes('ledger')) phase = '③ 归档（flow done 收口）'
+    // 勾选提醒（2026-09-26-tick-loop-nudge，R19 实证：起点简报一次性指令几小时后失效，OS 的
+    // 边干边勾靠 Guardrails 常驻干活循环——本行把提醒带进 agent 中途必经的 status 面）：
+    // ②执行阶段且有完成迹象（区间已有提交）但勾选滞后 → 一行轻推（不重复刷——只在滞后时出现）。
+    let tickNudge = null
+    try {
+      if (phase.startsWith('②')) {
+        const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
+        const c = (t.match(/^- \[x\]/gm) || []).length
+        const tot = (t.match(/^- \[( |x)\]/gm) || []).length
+        const commits = st.baseline_commit ? (gitQuiet(cwd, ['rev-list', '--count', `${st.baseline_commit}..HEAD`]) || '0').toString().trim() : '0'
+        if (tot > 0 && c < tot && parseInt(commits, 10) > 0) {
+          tickNudge = `   ✅ 勾选提醒：已完成单元请顺手勾（${c}/${tot}，区间已有 ${commits} 提交——边干边勾是哨兵证据面与进度锚，勿攒到收口一把勾）`
+        }
+      }
+    } catch { /* 提醒 fail-soft */ }
     console.log([
       `📋 ${change}`,
       `   阶段：${phase}`,
       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
       (() => { try { const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8'); const c = (t.match(/^- \[x\]/gm) || []).length; const tot = (t.match(/^- \[( |x)\]/gm) || []).length; return `   任务勾选：${c}/${tot}` } catch { return null } })(),
+      tickNudge,
       `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
       subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
       st.legacy_fallback ? `   ⚠️ 已升厚（legacy_fallback）——剩余流程走 run <stage>` : '',
