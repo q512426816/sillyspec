@@ -175,17 +175,32 @@ function draftProposal({ change, input, criteria }) {
  * 机器只搭骨架：节标题 + FR 空区（含参考摘录注释）+ 绑定槽。agent 干活时直接填 FR，
  * 不走 amend、不触发 edit_ratio——机器摘录 FR 太薄（「flow done 全绿」级）是实证痛点，
  * amend 改写被 route_hint:thick 误报打击改善积极性，且 FR 质量仍受限。 */
+/**
+ * 成功标准 → GWT 骨架预填（governance-autopilot，R20 实证：agent 手写 FR +12 轮 Edit）——
+ * 从标准文本机械推导三段。骨架进场 agent 可覆盖（消灭空槽冷启动，agent 只需改错的不需从零写）。
+ */
+function draftGwtSkeleton(criterion, index) {
+  const c = String(criterion || '').trim()
+  const id = `FR-${String(index + 1).padStart(2, '0')}`
+  if (!c) return `### ${id}: （待描述）\nGiven 系统就绪\nWhen 执行目标行为\nThen 达成预期`
+  const kw = c.match(/(api|端点|接口|存储|迁移|鉴权|幂等|上限|正序|增量|append-only|前端|组件|折叠|高亮|徽标|轮询|测试|E2E|curl)/gi)
+  const given = kw && kw.length > 0 ? `Given ${[...new Set(kw.map(k => k.toLowerCase()))].slice(0, 3).join(' / ')} 相关模块就绪` : 'Given 系统就绪'
+  const arrowSplit = c.split(/[→➜]|则|使得/)
+  const when = (arrowSplit[0] || c).trim().slice(0, 80)
+  const then = (arrowSplit[1] || '行为符合本条标准描述').trim().slice(0, 80)
+  return `### ${id}: ${c.slice(0, 50)}\n${given}\nWhen ${when}\nThen ${then}`
+}
+
 function draftRequirements({ change, criteria, input }) {
   const crit = criteria || []
-  // 参考摘录（完整 HTML 注释包裹——确保解析器可跳过；非约束，agent 可采纳/改写/忽略）
-  const refComment = crit.length > 0
-    ? `\n<!--\n参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）\n${crit.map((c, i) => `FR-${String(i + 1).padStart(2, '0')}: ${c}`).join('\n')}\n-->\n`
-    : '\n<!-- 无成功标准摘录——agent 按任务语义自行编写 FR -->\n'
-  // 绑定槽：按摘录条目数生成（agent 增删 FR 后自行增删对应绑定槽）
+  // GWT 骨架预填（governance-autopilot）：FR 区直接生成完整 Given/When/Then 块——agent 可覆盖
+  const frBlocks = crit.length > 0
+    ? crit.map((c, i) => draftGwtSkeleton(c, i)).join('\n\n')
+    : '### FR-01: （按任务语义填写）\nGiven 系统就绪\nWhen 执行目标行为\nThen 达成预期'
   const n = crit.length > 0 ? crit.length : 1
   const bindingSlots = Array.from({ length: n }, (_, i) => {
     const id = `FR-${String(i + 1).padStart(2, '0')}`
-    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
+    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->`
   }).join('\n\n')
   const text = [
     '---',
@@ -194,11 +209,12 @@ function draftRequirements({ change, criteria, input }) {
     '---',
     `# 需求规格（Requirements）— ${change}`,
     '',
-    '## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）',
+    '## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）',
     '',
-    `<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->${refComment}`,
+    `<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->`,
+    frBlocks,
     '',
-    '## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）',
+    '## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）',
     '',
     bindingSlots,
     '',

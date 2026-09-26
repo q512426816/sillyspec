@@ -142,11 +142,10 @@ test('⑩ 测试绑定三件：起草带槽/槽位门/绑定行提取', () => {
   assert.equal((reqs.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length, 2, '两条 criteria→两枚绑定槽')
   assert.match(reqs, /## 测试绑定/, '绑定节标题在场')
 
-  // 槽位门：新稿全空 → 全列；填路径/不适用 → 放行；旧骨架（剥掉绑定槽）→ 指引补生成
+  // 槽位门：GWT 骨架已预填（governance-autopilot）→ FR区不再空；绑定槽空 → 2 枚被点名
   let v = verifyRequirementBindings({ changeDir })
-  assert.equal(v.emptySlots.length, 3, 'FR区+两绑定槽空被点名')
+  assert.equal(v.emptySlots.length, 2, '两绑定槽空被点名（FR区已 GWT 预填非空）')
   writeFileSync(join(changeDir, 'requirements.md'), reqs
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 绑定提取\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 绑定提取正确')
     .replace(/(<!--AGENT:测试绑定FR-01[^\n]*-->)/g, '$1\ntest/flow-draft.test.mjs ⑩ 绑定提取用例')
     .replace(/(<!--AGENT:测试绑定FR-02[^\n]*-->)/g, '$1\n不适用：崩溃零影响为运行时属性，无独立断言面'))
   v = verifyRequirementBindings({ changeDir })
@@ -291,11 +290,11 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
   const p = join(changeDir, 'proposal.md')
   writeFileSync(p, readFileSync(p, 'utf8').replace(/(<!--AGENT:槽1[^\n]*-->)/, '$1\n例外：无'))
   // 设计记录四槽例行作答（2026-09-24 契约：空槽 flow done 拒收）+ 测试绑定槽（09-25 契约）
+  // FR 区不再手填（governance-autopilot：GWT 骨架已机器预填——requirements.md 直接可用）
   const dp = join(changeDir, 'design.md')
   writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具一行答'))
   const rp = join(changeDir, 'requirements.md')
   writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: e2e 夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
     .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：e2e 夹具——无独立测试面'))
   const snapshotBefore = readdirSync(changeDir).sort()
   assert.deepEqual(snapshotBefore, ['design.md', 'flow-state.yaml', 'proposal.md', 'requirements.md', 'tasks.md'], '产物面=五件+状态（零手写额外文件）')

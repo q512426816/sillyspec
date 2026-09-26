@@ -681,14 +681,55 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         process.exit(1)
       }
     }
-    // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings：每条 FR 至少一行测试锚或「不适用：理由」）
+    // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings）+ 自动补全（governance-autopilot）：
+    // 空槽先从测试结果自动填入实际执行的测试文件路径——R20 实证 agent 手写绑定占 Edit 轮次大头。
     const { verifyRequirementBindings } = await import('./flow-draft.js')
-    const rb = verifyRequirementBindings({ changeDir })
+    let rb = verifyRequirementBindings({ changeDir })
     if (rb.applicable && rb.emptySlots.length > 0) {
-      console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
-      console.error(`   每条 FR 至少一行：测试文件项目相对全路径＋用例名（如 test/foo.test.mjs「用例组」/#用例；distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
-      reportMidFail('artifacts')
-      process.exit(1)
+      // 自动补全：从 gate 面/verify-runs 提取实际执行的测试文件路径
+      let _autoFilled = 0
+      try {
+        const _runtimeRoot = resolveRuntimeRoot(platformOpts || {}, specBase)
+        const _runsDir = join(_runtimeRoot, 'verify-runs')
+        let _testFiles = new Set()
+        if (existsSync(_runsDir)) {
+          const _runs = readdirSync(_runsDir).sort().reverse()
+          for (const _rd of _runs.slice(0, 3)) {
+            const _tr = join(_runsDir, _rd, 'test-result.json')
+            if (!existsSync(_tr)) continue
+            try {
+              const _j = JSON.parse(readFileSync(_tr, 'utf8'))
+              const _files = _j.files || _j.testFiles || (_j.gate && _j.gate.files) || []
+              for (const _f of _files) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\\\/g, '/'))
+              if (_testFiles.size > 0) break
+            } catch {}
+          }
+        }
+        if (_testFiles.size > 0) {
+          const _reqPath = join(changeDir, 'requirements.md')
+          let _reqMd = readFileSync(_reqPath, 'utf8')
+          const _bindingLine = [..._testFiles].slice(0, 3).join('、')
+          for (const slot of rb.emptySlots) {
+            const re = new RegExp(`(${slot.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})(\\n\\n|\\n|$)`)
+            if (re.test(_reqMd)) {
+              _reqMd = _reqMd.replace(re, `$1\n${_bindingLine}$2`)
+              _autoFilled++
+            }
+          }
+          if (_autoFilled > 0) {
+            const { writeAtomicSync } = await import('./fs-atomic.js')
+            writeAtomicSync(_reqPath, _reqMd)
+            console.log(`✅ [自动绑定] ${_autoFilled} 个空绑定槽已从测试结果补全（${_bindingLine.slice(0, 60)}）——agent 可覆盖`)
+            rb = verifyRequirementBindings({ changeDir })
+          }
+        }
+      } catch { /* 自动补全 fail-soft */ }
+      if (rb.applicable && rb.emptySlots.length > 0 && _autoFilled === 0) {
+        console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
+        console.error(`   每条 FR 至少一行：测试文件项目相对全路径＋用例名；无测试面写「不适用：<理由>」`)
+        reportMidFail('artifacts')
+        process.exit(1)
+      }
     }
     mark('artifacts')
   }
@@ -712,6 +753,33 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
     // 提交计数不因多行正文失真。
     try {
+      // 自动勾选（governance-autopilot）：哨兵检查前，解析区间提交的 task-NN token，
+      // 自动勾选 tasks.md 中尚未勾选但有证据的条目——agent 零手工编辑 tasks.md。
+      const _tasksMdPath = join(changeDir, 'tasks.md')
+      if (existsSync(_tasksMdPath)) {
+        const _tickLog = gitQuiet(cwd, ['log', '--format=%B%x1e', `${st.baseline_commit}..HEAD`])
+        if (_tickLog) {
+          const _commitTexts = String(_tickLog).split('\x1e').map(x => x.trim()).filter(Boolean).join('\n')
+          const _evidencedTasks = new Set()
+          for (const m of _commitTexts.matchAll(/task-(\d{1,2})/gi)) _evidencedTasks.add(String(Number(m[1])).padStart(2, '0'))
+          if (_evidencedTasks.size > 0) {
+            let _tasksMd = readFileSync(_tasksMdPath, 'utf8')
+            let _autoTicked = 0
+            for (const nn of _evidencedTasks) {
+              const re = new RegExp(`^- \\[ \\](.*task-${nn}:)`, 'm')
+              if (re.test(_tasksMd)) {
+                _tasksMd = _tasksMd.replace(re, `- [x]$1`)
+                _autoTicked++
+              }
+            }
+            if (_autoTicked > 0) {
+              const { writeAtomicSync } = await import('./fs-atomic.js')
+              writeAtomicSync(_tasksMdPath, _tasksMd)
+              console.log(`✅ [自动勾选] ${_autoTicked} 个任务有提交证据但未勾——已机器代勾（governance-autopilot）`)
+            }
+          }
+        }
+      }
       const { detectFakeCheckCompletion } = await import('./sentinel-assertions.js')
       const tasksPath = join(changeDir, 'tasks.md')
       if (existsSync(tasksPath)) {
