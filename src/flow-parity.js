@@ -146,9 +146,10 @@ export function harvestSlot4Decision({ changeDir, change }) {
     // 且 type∈七类白名单，字段解析只认 `- 字段：值` 列表行形态——此前收割条目零字段致永不入选，
     // 「随蒸馏链进 knowledge」断链（thin-agent-tasks 教训留档归档而 knowledge 零落地的实证）。
     // 槽4 是定案的流程/方法论取舍，process+confirmed 语义成立。
-    `- 答案：${answer.replace(/\n+/g, '\n  ')}`,
+    `- 答案：${answer.replace(/\s*\n+\s*/g, ' ')}`,
     // 正文用「答案」标签（同修）：distill 落盘「理由：」行取 entry.answer——此前「- 决策：」非白名单
-    // 字段，正文不随条目进 knowledge（骨架落盘内容丢失）。
+    // 字段，正文不随条目进 knowledge（骨架落盘内容丢失）。一行展平（评审 P1 清偿）：字段解析是
+    // 单行契约，多行槽4 作答经 \n 续行会静默丢后续行——收割端压平为单行（空格分隔）保全文。
     '',
   ].join('\n')
   writeAtomicSync(decPath, text)

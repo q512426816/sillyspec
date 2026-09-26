@@ -34,17 +34,19 @@ function mkChangeDir(tmp, slot4Answer) {
 test('① 收割→蒸馏全链：状态字段补齐后入选并落 knowledge/decisions', () => {
   const tmp = mkdtempSync(join(tmpdir(), 's4f-'))
   try {
-    const changeDir = mkChangeDir(tmp, '枚举开放世界是错误方向——开放分类归 agent，机器只锚定封闭面。')
+    const changeDir = mkChangeDir(tmp, '枚举开放世界是错误方向——开放分类归 agent，机器只锚定封闭面。\n第二行教训：穷举错误不因规模变小而变对。\n第三行：实例三——域关键词分类表被用户否决。')
     const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
     assert.ok(h.harvested, `应收割（${h.reason}）`)
     const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
-    assert.ok(/状态：confirmed/.test(decText), '收割条目应含状态字段')
+    assert.ok(/- 状态：confirmed/.test(decText), '收割条目应含状态字段')
     const kr = join(tmp, 'knowledge'); mkdirSync(kr, { recursive: true })
     const r = distillIntoKnowledge(changeDir, kr, 'abc123', null)
     assert.ok(r.written.length > 0, `蒸馏应入选（实际 skipped=${r.skipped}）`)
     const files = readdirSync(join(kr, 'decisions'))
     const body = readFileSync(join(kr, 'decisions', files[0]), 'utf8')
-    assert.ok(body.includes('枚举开放世界'), '教训文本应落 knowledge')
+    assert.ok(body.includes('枚举开放世界'), '教训首行应落 knowledge')
+    assert.ok(body.includes('穷举错误不因规模变小而变对'), '多行答案的后续行不丢失（评审 P1：一行展平）')
+    assert.ok(body.includes('域关键词分类表'), '末行在场（全文落盘）')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
