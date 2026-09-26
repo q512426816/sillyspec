@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-task-review-retire",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-task-review-retire:flow:FR-01",
+      "tests": [
+        "test/align-execute-review-gate.test.mjs",
+        "test/review-unsupervised-exit.test.mjs",
+        "test/stage-completion-atomicity.test.mjs",
+        "test/task-review-retire.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-task-review-retire"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-task-review-retire:flow:FR-02",
+      "tests": [
+        "test/execute-batch-endtoend-checkbox.test.mjs",
+        "test/execute-run-dir-fail-loud.test.mjs",
+        "test/run-complete-step-execute-batch.test.mjs",
+        "test/task-review-retire.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-task-review-retire"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-task-review-retire:flow:FR-03",
+      "tests": [
+        "test/dispatch-contract.test.mjs",
+        "test/execution-mode-render.test.mjs",
+        "test/task-review-retire.test.mjs",
+        "test/task-truth-unify.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-task-review-retire"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-26-task-review-retire:flow:FR-04",
+      "tests": [
+        "test/task-review-retire.test.mjs",
+        "test/task-truth-unify.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-task-review-retire"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-26-task-review-retire:flow:FR-05",
+      "tests": [
+        "test/backfill-reviews.test.mjs",
+        "test/execute-run-marker-drift.test.mjs",
+        "test/review-json-field-gate.test.mjs",
+        "test/task-done.test.mjs",
+        "test/task-review-retire.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-task-review-retire"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-26-task-review-retire:flow:FR-06",
+      "tests": [
+        "test/task-review-retire.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-task-review-retire"
+    }
+  ]
+}

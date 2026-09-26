@@ -215,3 +215,8 @@ FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（
 - 现象：无模块图的新仓，轻量道 FR 落 auto-* 伪域、完整流程 FR 落 unmapped（R17 两臂各 10 条实证）；完整流程的直接成因是 archive 侧 indexRequirements 不传 deliverableFiles（域路由退化为 design 清单单源）。
 - 证据：archive-distill.js:52 与 complete-handlers.js:3121 缺 deliverableFiles 参数；本仓 unmapped.md 现状 720 条堆积同构。
 - 涉及：修复=flow start 绿地草案模块图 + archive 侧供清单对齐 + unmapped 告警配治理指引，见 2026-09-25-greenfield-bootstrap。
+
+## 🟢 Task Review 层（每任务 review.json 评审门）已退役
+- 现象（退役前）：execute 每任务 review.json 门在无嵌套派发环境全降自审表演——R18 对撞实证 15 次拦截中 5 次是它的形式合规（缺件/假 hash/枚举错），实质拦截为零；前置豁免通道（2026-09-26-review-unsupervised-exit）覆盖无派发环境后仍留形式拦截摩擦。
+- 状态：已退役（2026-09-26-task-review-retire）。三处消费门删除（gates.js 的 Execute Task Review Gate 整块与 enforceReviewJsonGate、enforceAlignExecuteReviewGate 的 Task Review 段）；生成侧停写（complete.js 两处 autoCheckPlanFromReviews + generateTaskReviewDrafts 兜底）；勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义）；假勾防线=detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账。Stage Review 层（阶段粒度）保留；task-review.js/stage-review.js 模块保留作历史归档 doctor/回放兼容读侧（writeVerifyRequiredEvidence/printReviewResult 两个零引用导出按 22e-b 死码裁决删除）；verify-required-evidence.json 停写、在场兼容读。旧变更若 resume 撞到「缺 review.json」类指引均为退役前文案，按手动勾选语义继续。
+- 涉及：docs/analysis/R18-对撞-*（实证依据）、2026-09-26-review-unsupervised-exit（前置豁免）、2026-09-26-task-review-retire（本退役）。

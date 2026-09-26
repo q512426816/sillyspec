@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-task-review-retire",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-08 知识面交付（known-issues.md 退役条目）不在 change.patch 冻结面内",
+      "evidence": "change.patch 文件清单（23 文件）不含 .sillyspec/knowledge/known-issues.md；工作树 known-issues.md:219-222 退役条目在场且逐项与实现一致（三消费门删除/生成侧停写/勾选手动化/假勾防线交接/模块保留/writeVerifyRequiredEvidence+printReviewResult 两导出删除/verify-required-evidence.json 兼容读）——内容无错、承诺已兑现，仅收口冻结面（baseline..HEAD 提交面）缺该交付，tasks.md task-09 勾选对应产物对审计件不可追溯",
+      "location": ".sillyspec/knowledge/known-issues.md:219"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——残存 review.json 走兼容读侧不再进门；design 槽3.1 声称的兼容消费方实证在位：index.js:809 review-write 钩子 / task-done.js:101 / complete-handlers.js:2966 assertWaveTasksComplete 内幂等 autoCheck）",
+    "并发": "ok（边界已裁决：可接受——勾选写入者从 CLI 自动勾改 agent 手动勾后，complete.js 两处 autoCheckPlanFromReviews 调用实证已删、CLI 自动补勾并发写面只减不增；checkExecuteCodeEvidence 假勾防线实证保留于 detectExecuteBatchFinish 内（complete.js:1594-1595），patch 无任何删除 hunk 触及；残余面=逐步 --done 路径 execute 级无 per-task 证据门，属退役决策本身披露的取舍且 verify 实测门不变，R18 实证支撑）",
+    "切换": "ok（边界已裁决：可接受——中断恢复锚 tasks.md checkbox 语义不变（写入者变、语义没变）；verify-required-evidence.json 停写+在场兼容读，消费点 runVerifyRequiredEvidenceCheck 在 gates.js 实证保留未动）",
+    "作用域": "ok（边界已裁决：可接受——改动全在主仓 CLI 源码+测试+变更文档；task-review.js/stage-review.js 导出实证保留（task-review-retire.test.mjs ④ 动态 import 验证）；stampCrossRepoHeadCommits 死导出保留有代码注释自曝且 lint 器对 src/stages/ 动态消费面整体豁免（check-syntax.mjs:96），FR-07「未引用导出 0 项」与 lint 实际语义一致）"
+  },
+  "reviewedAt": "2026-09-26T03:06:38Z"
+}

@@ -1,0 +1,1640 @@
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 1f66b2e5..7a040f70 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -45,7 +45,7 @@ import { executeProgressConfirm } from './progress-confirm.js'
+ import { AUXILIARY_STAGES } from '../constants.js'
+ import { executePlanPostcheck as runPlanPostcheckLib, parseRepoRegistry } from '../stages/plan-postcheck.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+-import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
++import { enforceDepsGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
+ import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, assertWaveTasksComplete } from './complete-handlers.js'
+ import { formatExecuteSummary } from '../worktree-apply.js'
+ import { validateDecisionModuleRefs } from '../design-facts.js'
+@@ -188,8 +188,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+   }
+ 
+   const steps = stageData.steps
+-  // blocked（deps/review.json 门控阻断标记）也视为当前步骤（坑 deps-gate-blocked-invisible，
+-  // 2026-08-27 实证）：门控阻断时 enforceDepsGate/enforceReviewJsonGate 把当前步置 blocked 后
++  // blocked（deps 门控阻断标记）也视为当前步骤（坑 deps-gate-blocked-invisible，
++  // 2026-08-27 实证）：门控阻断时 enforceDepsGate 把当前步置 blocked 后
+   // exit(1)，若谓词漏 blocked，被阻断步骤对 findIndex 永久隐身——重试 --done 落到其后第一个
+   // pending 步骤上（错步记账，DB 显示与事实脱节），且 blocked 步骤无任何恢复路径（状态机卡死，
+   // 只能 --reset 丢进度）。门控本身在下方会重新校验：deps 已修复 → 正常完成；未修复 → 再次
+@@ -389,9 +389,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+   // progress show/doctor 看到的仍是 pending，误导诊断）
+   const persistBlocked = () => pm._write(cwd, progress, changeName)
+   await enforceDepsGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts, persistBlocked)
+-  // review.json 字段硬门（坑 review-json-field-gap）：已勾 [x] task 的 review.json 必须 schema 完整，
+-  // 提前到每次 --done 校验（而非等 Task Review Gate 在整阶段收尾才暴露，迫使用户事后批量补）。
+-  await enforceReviewJsonGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts, persistBlocked)
++  // review.json 字段硬门（enforceReviewJsonGate）已随 Task Review 层退役删除
++  // （2026-09-26-task-review-retire）——勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾）。
+   // 符号影响面报告硬门（ql-20260816-005-3d7f）：execute「加载上下文」步产出落盘核验——
+   // symbol-impact.md 存在 + plan 每 task 有结论行；防前缀步被一句「上下文在会话内」盖章跳过。
+   await enforceSymbolImpactGate(stageName, changeName, steps[currentIdx]?.name, specBase)
+@@ -595,46 +594,14 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+ 
+   // execute 批量完成检测：plan 全勾 + 代码客观核验通过 → 剩余 step 一次性标 completed，
+   // 使本次 --done 直接进入阶段完成分支（治"3 Wave 做完仍逐次 +1、需重走 7 次 --done"）。
+-  // 先按 review.json pass 自动勾 plan checkbox（复用 continueStep 同源逻辑），再判批量条件。
++  // per-task 自动勾选与 review 草稿兜底已随 Task Review 层退役（2026-09-26-task-review-retire）：
++  // 勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义），假勾防线由
++  // detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账承担。
+   if (stageName === 'execute' && changeName) {
+-    const _ac = await autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts })
+-    if (_ac.autoChecked) {
+-      console.log(`   ✅ 自动勾选 ${_ac.checkedCount} 个 task checkbox（基于 review.json pass）`)
+-    }
+-    if (_ac.skippedCount > 0) {
+-      console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ 批量完成条件不满足，仍按单步推进`)
+-    }
+     const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
+     if (_bf.batched && _bf.aligned > 0) {
+       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
+     }
+-
+-    // per-task review 草稿兜底（坑 worktree-execute-apply-friction 坑2）：主 agent 直接实现模式
+-    // 无子代理 review 落盘 → Task Review Gate 报缺 review.json 阻断。每次 execute --done 跑（幂等，
+-    // 已存在跳过），据 git diff base..head 按 allowed_paths 归属生成 cannot_verify 草稿，进 gate 前就位。
+-    try {
+-      const { generateTaskReviewDrafts } = await import('../task-review.js')
+-      // W3 task-09：best-effort 构造 ctx 透传（D-013），跨仓 task 草稿用跨仓 gitDir 取 diff。
+-      // 失败降级 null（不阻断 execute 完成——草稿兜底本就是 best-effort，gate 会复校验）。
+-      let _draftCtx = null
+-      try {
+-        _draftCtx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts })
+-      } catch (e) {
+-        console.warn('   ⚠️ 草稿 ctx 构造失败，降级单仓草稿（' + (e && e.message ? e.message : e) + '）')
+-      }
+-      const _drafts = await generateTaskReviewDrafts({ changeName, cwd, platformOpts, ctx: _draftCtx })
+-      if (_drafts.generated > 0) {
+-        console.log('   📄 自动补写 ' + _drafts.generated + ' 个 per-task review.json 草稿（cannot_verify，主 agent 实现模式兜底，需 agent 复核后升级为 pass/fail）')
+-        if (_drafts.noAttribution > 0) {
+-          console.warn('   ⚠️ 其中 ' + _drafts.noAttribution + ' 个 task 的 allowed_paths 未命中本次 diff（无归属草稿，changedFiles 为空）——需人工确认实际改动后升级 verdict，确属未实现则回 fail')
+-        }
+-        if (_drafts.unattributed && _drafts.unattributed.length > 0) {
+-          console.warn('   ⚠️ ' + _drafts.unattributed.length + ' 个变更文件未归属任何 task（顺带修复/非源码），草稿未覆盖：' + _drafts.unattributed.join(', '))
+-        }
+-      }
+-    } catch (e) {
+-      console.warn('   ⚠️ per-task review 草稿生成失败（不阻断 execute 完成）：' + (e && e.message ? e.message : e))
+-    }
+   }
+ 
+   // verify 批量完成检测（P0-1 verify 尾巴瘦身，2026-09-20 对撞实验驱动）：报告产物齐
+@@ -2098,14 +2065,6 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
+       if (stageName === 'execute') {
+         console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
+         console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
+-        // plan.md checkbox auto-check：execute 完成 + review.json pass → 自动勾选（治本，比警告可靠）
+-        const _ac = await autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts })
+-        if (_ac.autoChecked) {
+-          console.log(`   ✅ 自动勾选 ${_ac.checkedCount} 个 task checkbox（基于 review.json pass）`)
+-        }
+-        if (_ac.skippedCount > 0) {
+-          console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ archive 会拦。补 review 后重跑 execute --done 触发自动勾`)
+-        }
+       }
+     }
+     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 47d3f640..5e414885 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -3,7 +3,9 @@
+  *
+  * 阶段完成校验 gate 级联 + execute deps 硬门 + 完成回滚（自洽叶子模块，仅被 completeStep 调用）：
+  *   - runStageCompletionGates：runValidators → verify-test 对账 → Plan→Execute contract →
+- *     Stage Review Gate → Execute Task Review Gate，任一失败走 rollbackCompletionAndReturn；
++ *     Stage Review Gate，任一失败走 rollbackCompletionAndReturn（Execute Task Review Gate
++ *     已随 2026-09-26-task-review-retire 退役——R18 实证任务粒度评审在无独立评审者供给时
++ *     全降形式合规、实质拦截为零）；
+  *     级联末位追仪式档位摩擦升档检查点（2026-09-18-ceremony-risk-pricing task-03：读
+  *     friction-ledger 累计账 → escalateByFriction → .runtime/ceremony-tier-<change>.json
+  *     迁移留痕，只升不降、fail-soft 不阻断完成）；verify 检查族末位接 ceremony 双跑收口第一
+@@ -39,7 +41,8 @@ import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './comple
+  * 环境（子代理不能再派子代理）里，阶段评审只能降级自审——三份自审 review.json 全 PASS 零信息
+  * 量纯表演，门仍硬拦形式合规（R18-full 15 次拦截里 5 次是 review 面形式）。诚实出口：agent 写
+  * 变更目录 review-unsupervised.md（一行声明：环境无嵌套派发能力+时间，须含 unsupervised 字样）
+- * → Stage Review Gate / Task Review Gate / doctor align 门 / --done 硬门四点共吃：有效
++ * → Stage Review Gate / doctor align 门两点共吃（Task Review 层与 --done review.json 硬门
++ * 已随 2026-09-26-task-review-retire 退役）：有效
+  * review.json ‖ 豁免声明二选一放行（warn+遥测，豁免率可观测）；两凭据皆无照旧 fail-closed。
+  * 真独立评审（有派发能力）不受影响——豁免是声明式自曝，不是绕门。
+  */
+@@ -265,8 +268,9 @@ function isCurrentWaveAllNoDepsVerify(stepName, changeDir) {
+  * 只读校验（不自动生成 marker/runId——恢复读场景缺失就是缺失，如实报告）：
+  *   1. Stage Review：tier=independent 时须存在有效 execute stage review.json（verdict 非 fail）；
+  *      tier=self 放行（与正常 gate 分级一致）。
+- *   2. Task Review：所有 task 的 review.json 齐备且 verdict 非 fail（runId 解析同 Task Review Gate：
+- *      marker → 含 tasks/ 目录扫描；不 generate）。
++ *   2. Task Review 段已退役（2026-09-26-task-review-retire：R18 实证任务粒度评审在无嵌套
++ *      派发环境全降自审表演、实质拦截为零——豁免通道不足以止损，层整体退役；残存 review.json
++ *      由 task-review.js 保留导出作历史兼容读侧）。
+  *
+  * @param {{ cwd: string, changeName: string, specBase: string, platformOpts?: object }} opts
+  * @returns {Promise<boolean>} true=被门阻断（CLI 应放弃 align 并 exit 1）；false=校验通过可继续
+@@ -284,7 +288,7 @@ export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase,
+   const blocked = (msgs) => {
+     console.error('\n❌ doctor --align-execute-progress 前置 review 校验未过——execute 完成审计不能绕过：')
+     for (const m of msgs) console.error('   - ' + m)
+-    console.error('   解法：补齐上述 review 后重跑 align（stage review：sillyspec register-stage-review --change ' + changeName + ' --stage execute；task review：按报错路径补 review.json）')
++    console.error('   解法：补齐上述 review 后重跑 align（stage review：sillyspec register-stage-review --change ' + changeName + ' --stage execute）')
+     return true
+   }
+ 
+@@ -321,36 +325,10 @@ export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase,
+     return true
+   }
+ 
+-  // 2. Task Review（runId 只读解析：marker → 含 tasks/ 扫描；不 generate）
+-  try {
+-    const { validateTaskReviews, printReviewResult, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('../task-review.js')
+-    const planPath = reviewChangeDir ? join(reviewChangeDir, 'plan.md') : null
+-    if (!planPath || !existsSync(planPath)) {
+-      return blocked(['plan.md 不存在，Task Review 无从校验（align 的 checkbox 判定依赖同目录，疑似路径解析异常）'])
+-    }
+-    const planContent = readFileSync(planPath, 'utf8')
+-    const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+-    let executeRunId = ''
+-    try {
+-      if (existsSync(runIdFile)) {
+-        const c = readFileSync(runIdFile, 'utf8').trim()
+-        if (c && isValidExecuteRunId(c)) executeRunId = c
+-      }
+-    } catch {}
+-    if (!executeRunId) {
+-      executeRunId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName }) || ''
+-    }
+-    if (!executeRunId) {
+-      return blocked(['execute runId 无法定位（marker 缺失且 execute-runs/ 无含 review 的 run 目录）——15/N 份 task review 所在 run 不可寻，无法对账'])
+-    }
+-    const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: reviewChangeDir, gitDir: cwd })
+-    printReviewResult(reviewResult, { runtimeRoot, executeRunId })
+-    if (!reviewResult.ok) return true // 报错明细已在 printReviewResult 输出
+-    console.log('✅ align 前置 review 校验通过（stage review + task review 均齐备），继续对齐')
+-  } catch (e) {
+-    console.error('❌ align 前置 Task Review 校验异常，阻断对齐: ' + e.message)
+-    return true
+-  }
++  // 2. Task Review 段已退役（2026-09-26-task-review-retire）——原「所有 task review.json 齐备
++  //    且 verdict 非 fail」校验随层退役删除；task 粒度审计改由 execute 收口的代码证据核验
++  //    （checkExecuteCodeEvidence）+ verify 测试对账承担。
++  console.log('✅ align 前置 review 校验通过（stage review；task review 段已退役），继续对齐')
+   return false
+ }
+ 
+@@ -378,7 +356,7 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
+ 
+   // main 侧就绪后的跨仓 worktree deps 校验（坑 cross-repo-no-worktree-isolation）：
+   // 跨仓仓供给失败同样无构建/测试能力（前端仓无 node_modules 建不了 build）。只校验已建
+-  // worktree 的跨仓仓（legacy 直写模式无 meta，维持原语义，下游 Task Review 兜底）。
++  // worktree 的跨仓仓（legacy 直写模式无 meta，维持原语义）。
+   // 放行返回 true；跨仓未就绪置 blocked + exit(1)。
+   const crossCheckOrExit = async () => {
+     let crossFailed = []
+@@ -482,91 +460,11 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
+   process.exit(1)
+ }
+ 
+-/**
+- * execute --done 硬门：已勾 [x] task 的 review.json 必须 schema 完整（坑 review-json-field-gap）。
+- *
+- * Task Review Gate（validateTaskReviews）只在 execute 整阶段完成时跑（complete.js 阶段完成分支的
+- * actualCompleted===actualTotal 守卫），单 task --done 不校验 → 子代理勾 checkbox 却漏写/漏字段
+- * review.json，要到收尾才暴露，用户被迫事后批量补。本门提前到每次 --done：校验 plan 里所有已勾
+- * task 的 review.json，缺字段/不存在/JSON 坏 → 置 step=blocked + exit(1)，与 enforceDepsGate 同范式
+- * （阻断前经 persist 回调落盘 blocked）。
+- * 未勾 task 不校验（还没做）。平台模式/无 marker/无 plan 时放行（下游 Task Review Gate 兜底）。
+- */
+-export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts, persist) {
+-  if (stageName !== 'execute' || !changeName) return true
+-  // 豁免凭据（review-unsupervised-exit）：unsupervised 声明在场时已勾 task 的 review.json
+-  // schema 硬门跳过（该环境本就不产 review.json——门拦的是缺件形式，非豁免面）
+-  if (readReviewUnsupervisedWaiver(join(specBase, 'changes', changeName))) {
+-    await waiveWithTelemetry({ changeName, gate: 'review-json-hard-gate', specBase })
+-    return true
+-  }
+-  // head 锡点自动落盘（2026-08-21 审计项③，D-010 补对称）：跨仓 task base_commit 已在派发时
+-  // CLI 落盘，head_commit 此前靠主 agent 按 prompt 手跑 rev-parse 手写（漏抄/抄错炸 review gate）。
+-  // 每次 --done 时机幂等补齐（已存在不覆盖）。best-effort：失败只 warn，不阻断 --done 主流程。
+-  try {
+-    const { stampCrossRepoHeadCommits } = await import('../stages/execute.js')
+-    const stamped = await stampCrossRepoHeadCommits({ changeName, cwd, specBase, platformOpts })
+-    if (stamped && stamped.stamped > 0) {
+-      console.log(`📌 已自动落盘跨仓 task head_commit 锡点：${stamped.stampedTasks.join(', ')}（幂等，此后 --done 不再重复写）`)
+-    }
+-  } catch (e) {
+-    console.warn(`⚠️ head_commit 锡点自动落盘失败（降级留给 agent 手写）: ${e.message}`)
+-  }
+-  const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+-  const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+-  const planPath = join(specBase, 'changes', changeName, 'plan.md')
+-  if (!existsSync(runIdFile) || !existsSync(planPath)) return true
+-  const { validateCheckedTaskReviews, resolveLatestExecuteRunIdWithTasks, isValidExecuteRunId } = await import('../task-review.js')
+-  // existsSync 与 read 之间 marker 可能被并发 cleanup/归档删除（多 agent 场景）：读失败按
+-  //「marker 缺失」处理，走漂移兜底重定位，不让 ENOENT 冒成顶层 stack（与 :426-435 口径对齐）
+-  let executeRunId = ''
+-  try {
+-    executeRunId = readFileSync(runIdFile, 'utf8').trim()
+-  } catch {
+-    console.warn('⚠️ execute run marker 读取失败（可能被并发清理），改扫真实 run 目录')
+-    executeRunId = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName }) || ''
+-  }
+-  // marker 是 agent 可写内容：格式校验防注入/穿越，非法视为缺失走漂移兜底重定位
+-  if (executeRunId && !isValidExecuteRunId(executeRunId)) {
+-    console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(executeRunId.slice(0, 60))}），改扫真实 run 目录`)
+-    executeRunId = ''
+-  }
+-  // 2026-08-20-task-truth-unify：已勾 task 清单源迁 tasks.md（勾选唯一落点）；tasks.md 缺失
+-  // 回退 planPath 内容（旧变更兼容读侧）。planPath 存在性已在上方把关。
+-  const tasksRegistryPath = join(specBase, 'changes', changeName, 'tasks.md')
+-  const planContent = existsSync(tasksRegistryPath)
+-    ? readFileSync(tasksRegistryPath, 'utf8')
+-    : readFileSync(planPath, 'utf8')
+-  // marker 读失败且重定位无果（无任何含 tasks/ 的 run）：无 run 可校验，放行（下游 Task Review Gate 兜底）
+-  if (!executeRunId) return true
+-  // marker 漂移兜底（gate-atom-a 正确修法）：marker 指向的 run 缺 tasks/（generateExecuteRunId 只写
+-  // marker 不建目录，漂移后新 run 不继承旧 review）时，无视 marker 改扫 execute-runs/ 取 mtime 最新
+-  // 且真正含 tasks/ 的 run，用其齐备的 review.json 校验，避免误报「review.json 不存在」。注意不能用
+-  // resolveLatestExecuteRunId——它见 marker 非空即原样返回（不校验目录），恰是本场景要绕开的值。
+-  if (executeRunId && !existsSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'))) {
+-    const relocated = resolveLatestExecuteRunIdWithTasks({ runtimeRoot, changeName })
+-    if (relocated && relocated !== executeRunId) {
+-      console.warn(`⚠️ execute run marker 漂移：${executeRunId} 无 tasks/，改用真实含 review 的 run ${relocated}`)
+-      executeRunId = relocated
+-    }
+-  }
+-  const result = validateCheckedTaskReviews({ planContent, runtimeRoot, executeRunId })
+-  if (result.ok) return true
+-  if (steps && steps[currentIdx]) {
+-    steps[currentIdx].status = 'blocked'
+-    steps[currentIdx].blockReason = 'review.json 字段校验阻断：补齐后重试 --done（backfill-reviews --adopt 可代填 mechanics）'
+-  }
+-  console.error('❌ ── review.json 字段校验阻断（本次 --done 未完成，进度未推进）──')
+-  console.error('   已勾选 [x] 的 task review.json 不完整（铁律：勾 checkbox 前必须先写完整 review.json）:')
+-  for (const f of result.failures) {
+-    const kindLabel = f.kind === 'missing' ? 'review.json 不存在' : (f.kind === 'parseError' ? 'JSON 解析失败' : '字段缺失')
+-    console.error(`   • ${f.taskId}（${kindLabel}）: ${f.reviewPath}`)
+-    for (const e of f.errors) console.error(`       - ${e}`)
+-  }
+-  console.error('   修复：mechanics 字段（base/head/changedFiles/schemaVersion）缺错可跑 sillyspec backfill-reviews --change ' + changeName + ' --adopt 一键代填（verdict 保留）；verdict/证据缺失需人工补全后重跑 execute --done。')
+-  if (persist) { try { await persist() } catch { /* 落盘失败不吞阻断语义 */ } }
+-  process.exit(1)
+-}
++// ── enforceReviewJsonGate 已退役（2026-09-26-task-review-retire）──
++// 原「execute --done 时已勾 [x] task 的 review.json schema 硬门」（坑 review-json-field-gap）
++// 随 Task Review 层整体退役删除：勾选语义回归 agent 手动（完成=实现+测试绿+wt-commit 即勾），
++// review.json 不再是任何门的输入；validateCheckedTaskReviews 纯函数保留在 task-review.js
++// （历史变更 doctor/回放兼容读侧，单元测试 review-json-field-gate.test.mjs 仍覆盖）。
+ 
+ /**
+  * 阶段完成校验失败时回滚状态。
+@@ -606,7 +504,7 @@ export function rollbackStageCompletion(stageData, steps, currentIdx) {
+  * 阶段完成校验失败后的统一收尾：回滚 stage/step 状态 + 落盘 + sync + 返回「未完成」。
+  *
+  * completeStep 的各 gate（runValidators / verify-test 对账 / plan→execute contract /
+- * Stage Review / Execute Task Review）失败时都走这套动作；原先每个失败分支手写重复
++ * Stage Review）失败时都走这套动作；原先每个失败分支手写重复
+  * ~7 次（含 lastActive 落盘 + triggerSync + return 结构），统一进来消坑，避免某分支
+  * 漏写 triggerSync / 写错 return 结构导致行为分裂。返回 nextPendingIdx=currentIdx，
+  * 让上层走「完成但不推进」分支，--done 被拒、agent 修复产物后重跑。
+@@ -781,7 +679,7 @@ async function escalateCeremonyTierAtGate({ cwd, specBase, platformOpts, progres
+ /**
+  * 阶段完成校验 gate 级联（从 completeStep 抽出，行为保持）。仅当所有步骤确实标记为 completed 时
+  * 由 completeStep 调用。顺序：runValidators → verify-test 对账 → Plan→Execute contract →
+- * Stage Review Gate → Execute Task Review Gate。任一 gate 失败 → rollbackCompletionAndReturn
++ * Stage Review Gate。任一 gate 失败 → rollbackCompletionAndReturn
+  * （统一回滚 + 返回 early-return 对象）；全部通过 → 返回 null（completeStep 继续收尾）。
+  *
+  * @returns {{stageCompleted:false,currentIdx,nextPendingIdx:number}|null}
+@@ -790,11 +688,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+   const projectName = progress.project || basename(cwd)
+   // ── 纯文档门收集模式（R16 减负批次，2026-09-24）──
+   // 对撞 R15 实证「execute 收口连挡 4 次」：多门串行 fail-fast，每次 --done 只暴露一个门，
+-  // 修复重跑才见下一个门。纯文档 blocking 门（validators / verify 死信与预填注 / Stage 与
+-  // Task Review）改为收集：全部跑完 → 一次打印清单 → 统一 rollback 一次（detail 取首门，
++  // 修复重跑才见下一个门。纯文档 blocking 门（validators / verify 死信与预填注 / Stage
++  // Review）改为收集：全部跑完 → 一次打印清单 → 统一 rollback 一次（detail 取首门，
+   // 进度库信号语义不变）。实测门（test/lint/parity/probe）保持文档面全清后才跑、内部 fail-fast
+   // 不变——贵的门只为真实代码问题付账。检查点 A=verify 实测门前；B=brainstorm/plan/execute
+-  // Task Review Gate 后（friction 升档前——升档语义=「所有阻断门通过」）。
++  // Stage Review Gate 后（friction 升档前——升档语义=「所有阻断门通过」）。
+   const docGateFailures = []
+   // decisions.md header 自动补齐（坑 decisions-header-late-warning，2026-08-24 用户反馈二期）：
+   // brainstorm step8 旧模板自带无 frontmatter 的 decisions 样例，存量变更照抄必缺 author/created_at，
+@@ -1229,7 +1127,8 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     const deletionCheck = runVerifyDeletionCheck({ cwd, specBase, changeName })
+     printVerifyDeletionCheck(deletionCheck)
+     // ── required-evidence 对账（2026-09-08-ir-verify-facts FR-03：v2 起 cannot_verify 不闭环阻断）──
+-    // execute Task Review Gate 把 cannot_verify 任务的 evidence 落盘 verify-required-evidence.json。
++    // verify-required-evidence.json 由退役前的 execute Task Review Gate 写入
++    // （2026-09-26-task-review-retire 起停写；在场则消费=历史变更兼容读，缺席=无 cannot_verify 任务）。
+     // v2 槽优先分类核验（FR-02）：blocked = missing 无豁免或 satisfied 核验不过 → 阻断 verify 完成
+     // （此前 advisory 只查「提及」——死链不闭环）；无槽存量 md 降级 legacy 子串对账（warning 不阻断）。
+     const { runVerifyRequiredEvidenceCheck, printVerifyRequiredEvidenceCheck, trackVerifyResultRegression } = await import('../verify-postcheck.js')
+@@ -1545,7 +1444,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         }
+       }
+     } catch (e) {
+-      // fail-closed：Gate 自身异常阻断完成，不静默放行（与 Task Review Gate 一致）
++      // fail-closed：Gate 自身异常阻断完成，不静默放行
+       //（收集模式：异常也入列，检查点 B 统一 rollback）
+       console.error('❌ Stage Review Gate 异常，阻断 ' + stageName + ' 完成: ' + e.message)
+       docGateFailures.push({ type: 'review_rejected', detail: 'stage-review', label: `Stage Review Gate 异常（${e.message}）` })
+@@ -1572,122 +1471,14 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     } catch { /* 提示失败不阻断 execute */ }
+   }
+ 
+-  // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
+-  if (stageName === 'execute') {
+-    try {
+-      // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境整块跳过（该环境不产 task review）
+-      const _trChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+-      if (readReviewUnsupervisedWaiver(_trChangeDir)) {
+-        await waiveWithTelemetry({ changeName, gate: 'execute-task-review', specBase: platformOpts?.specRoot || specBase })
+-      } else {
+-      const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence } = await import('../task-review.js')
+-      const effectiveSpecBase = platformOpts?.specRoot || specBase
+-      const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+-      const planPath = planFile ? join(planFile, 'plan.md') : null
+-
+-      if (planPath && existsSync(planPath)) {
+-        // 2026-08-20-task-truth-unify：任务清单源迁 tasks.md（validateTaskReviews 内按
+-        // checkbox 行解析，tasks.md 行格式兼容原正则）；缺失回退 plan.md（旧变更兼容读侧）
+-        const tasksRegistryPath = join(planFile, 'tasks.md')
+-        const planContent = existsSync(tasksRegistryPath)
+-          ? readFileSync(tasksRegistryPath, 'utf8')
+-          : readFileSync(planPath, 'utf8')
+-        const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
+-
+-        // execute run id：从变更专属标记文件读取（agent 可写内容，格式校验防注入/穿越）
+-        const runIdFile = join(runtimeRoot, `current-execute-run-id-${changeName}`)
+-        let executeRunId = ''
+-        try {
+-          if (existsSync(runIdFile)) {
+-            const c = readFileSync(runIdFile, 'utf8').trim()
+-            const { isValidExecuteRunId } = await import('../task-review.js')
+-            if (c && !isValidExecuteRunId(c)) {
+-              console.warn(`⚠️ execute run marker 内容非法（期望 exec-YYYY-MM-DD-HHMMSS，实得 ${JSON.stringify(c.slice(0, 60))}），视为缺失回退扫描`)
+-            } else {
+-              executeRunId = c
+-            }
+-          }
+-        } catch {}
+-        if (!executeRunId) {
+-          // marker 缺失：先扫描 execute-runs/ 既有目录找回真实 runId（与 getLatestStageReviewRunId
+-          // 目录扫描兜底同语义），避免 marker 丢失而 agent 已用旧 runId 落盘时，直接 generate 新 ID
+-          // 找不到旧 review、误判缺 review.json。仅当确实无既有 run 才 generate 新 ID 并落盘。
+-          const { generateExecuteRunId, resolveLatestExecuteRunId, stampExecuteRunChange, claimExecuteRunId } = await import('../task-review.js')
+-          executeRunId = resolveLatestExecuteRunId({ runtimeRoot, changeName }) || ''
+-          if (!executeRunId) {
+-            executeRunId = generateExecuteRunId(changeName)
+-            // 落盘（marker 缺失时 fallback 生成后写盘，保证后续 checkbox/gate 读到同一 ID）
+-            // D-001#1 fallback 写入点：mkdir execute-runs/<runId>/tasks 先于 marker（不变量：
+-            // marker 在则目录在）。不 try/catch——异常直穿外层 catch 走 fail-closed 阻断
+-            //（gate 自身写 run 目录失败不能静默放行完成）。
+-            // 排他认领（坑 exec-run-id-same-second-collision）：并行会话同秒碰撞在认领处消解
+-            executeRunId = claimExecuteRunId(runtimeRoot, executeRunId)
+-            mkdirSync(join(runtimeRoot, 'execute-runs', executeRunId, 'tasks'), { recursive: true })
+-            writeAtomicSync(runIdFile, executeRunId + '\n')
+-            stampExecuteRunChange(runtimeRoot, executeRunId, changeName)
+-          }
+-        }
+-
+-        // git 真实性校验目录：worktree 存在则用 worktree（base/head commit 在其中），否则主仓库。
+-        // 跨仓支持（task-07 / design §6 gates 行 + D-013）：
+-        //   - 有 ctx（execute 启动入口 task-09 构造的 MultiRepoContext 实例）→ 用
+-        //     ctx.resolve('main').gitDir 作为主仓 task 的校验 cwd。ctx 的 main entry 已在
+-        //     _buildMainEntry 内统一编码 worktreePath/cwd + in-place-fallback 兜底（与 task-review.js:724
+-        //     generateTaskReviewDrafts 的 in-place 逻辑同源），避免两处漂移。Task Review Gate 内部循环
+-        //     再按 review.repo ?? 'main' 从 ctx.resolve(repo).gitDir 切跨仓 task 的 gitDir（task-04 实现）。
+-        //   - 无 ctx（ctx=null 缺省，单仓 / 旧调用链）→ 走原逻辑（meta.worktreePath 或 cwd），零回归。
+-        let reviewGitDir = cwd
+-        if (ctx) {
+-          const mainEntry = ctx.resolve('main')
+-          if (mainEntry?.gitDir) reviewGitDir = mainEntry.gitDir
+-        } else {
+-          try {
+-            const { WorktreeManager } = await import('../worktree.js')
+-            const wm = new WorktreeManager({ cwd })
+-            const meta = wm.getMeta(changeName)
+-            if (meta?.worktreePath && meta.mode !== 'in-place-fallback' && existsSync(meta.worktreePath)) {
+-              reviewGitDir = meta.worktreePath
+-            }
+-          } catch {}
+-        }
+-
+-        const reviewResult = validateTaskReviews({ planContent, runtimeRoot, executeRunId, changeDir: planFile, gitDir: reviewGitDir, ctx })
+-        printReviewResult(reviewResult, { runtimeRoot, executeRunId })
+-
+-        if (!reviewResult.ok) {
+-          // Task review 校验失败，阻断 execute 完成
+-          // 检查是否存在 checkbox 已勾但 review 不通过的情况
+-          const uncheckedTasks = reviewResult.errors.filter(e => e.includes('缺少 review.json'))
+-          if (uncheckedTasks.length > 0) {
+-            console.error('\n⚠️  部分任务已在 tasks.md 中勾选，但 review.json 不存在。')
+-            console.error(`   请取消勾选这些任务的 checkbox，或补充对应的 review.json（execute run ID: ${executeRunId}）。`)
+-          }
+-          //（收集模式：检查点 B 统一 rollback）
+-          docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review 未过（task-review，${reviewResult.errors.length} 条，明细见上）` })
+-        } else {
+-
+-        // cannot_verify 的 requiredEvidence 写入 change 目录，供 verify 阶段消费
+-        if (reviewResult.requiredEvidence.length > 0) {
+-          const evidencePath = writeVerifyRequiredEvidence(join(effectiveSpecBase, 'changes', changeName), reviewResult.requiredEvidence)
+-          if (evidencePath) {
+-            console.log(`📄 verify-required-evidence.json 已写入: ${evidencePath}`)
+-            console.log('   verify 阶段必须满足这些证据要求。')
+-          }
+-        }
+-        }
+-      }
+-      }
+-    } catch (e) {
+-      // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
+-      //（收集模式：异常也入列，检查点 B 统一 rollback）
+-      console.error(`❌ Task Review Gate 异常，阻断 execute 完成: ${e.message}`)
+-      console.error('   请检查 review.json / plan.md 是否可读，修复后重新完成此步骤。')
+-      docGateFailures.push({ type: 'review_rejected', detail: 'task-review', label: `Task Review Gate 异常（${e.message}）` })
+-    }
+-  }
+-
+-  // ── 收集模式检查点 B（brainstorm/plan/execute）：纯文档门（validators / Stage Review /
+-  //    Task Review）全量收口——非空则一次打印清单、统一 rollback 一次（R15「连挡 4 次」的解；
++  // ── Execute Task Review Gate 已退役（2026-09-26-task-review-retire）──
++  // 原「所有 task 必须有 review.json 且 verdict 通过」块随层整体退役删除：R18 对撞实证该层在
++  // 无嵌套派发环境全降自审表演（15 次拦截 5 次形式合规、实质拦截为零），前置豁免通道
++  // （review-unsupervised-exit）已覆盖无派发环境。task 粒度审计由 execute 收口的代码证据核验
++  // （checkExecuteCodeEvidence，detectExecuteBatchFinish 内）+ verify 测试对账承担；Stage Review
++  // Gate（阶段粒度）保留。残存 review.json 走 task-review.js 保留导出（历史兼容读侧）。
++  // ── 收集模式检查点 B（brainstorm/plan/execute）：纯文档门（validators / Stage Review）
++  //    全量收口——非空则一次打印清单、统一 rollback 一次（R15「连挡 4 次」的解；
+   //    detail 取首门，进度库信号语义不变）。verify 走检查点 A（其实测门在前）。──
+   if (stageName !== 'verify' && docGateFailures.length > 0) {
+     console.error(`\n❌ ${stageName} 收口被 ${docGateFailures.length} 道纯文档门拦截（一次性全列——全部修复后重跑一次 --done，不必逐门连撞）：`)
+@@ -2009,7 +1800,7 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
+     pm._write(cwd, progress, changeName)
+   }
+ 
+-  // 阶段完成校验 gate 级联（runValidators → verify-test → Plan→Execute → Stage Review → Task Review）
++  // 阶段完成校验 gate 级联（runValidators → verify-test → Plan→Execute → Stage Review）
+   if (settledCount === total && total > 0) {
+     const _gateEarlyReturn = await runStageCompletionGates({ stageName, cwd, changeName, platformOpts, specBase, progress, pm, stageData, steps, currentIdx, ctx })
+     if (_gateEarlyReturn) return _gateEarlyReturn
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index d70fbaa5..0257b4a4 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -403,9 +403,8 @@ design.md 文件路径 + 自审结果
+ ### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省
+-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
++> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
+ - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+ {PRIOR_REVIEW_FACTS}
+ {REVIEW_JSON_CONTRACT}
+   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
+@@ -424,7 +423,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - S1：CLI 清单核验 + 定向探针抽查——机械项全查之外，对最高风险的 1-2 个交叉点做定向源码探针（读相关实现验证设计假设），无需独立子代理
+ - S2：独立评审×1——一个独立审查子代理完整执行下方交叉审查模型并产出 review.json
+ - S3：两轮独立评审 + Grill 深查——两个独立审查子代理分别审查（视角互补：一个查结构性矛盾/一致性，一个查可行性与外部约束），首轮未决项进第二轮复核；对 P0 歧义逐一压力测试（Grill 深查）
+-当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方降级兜底执行并留 degraded 痕（reviewerNotes「降级：环境无子代理可用」）；S0/S1 的 self 是档位定价的正常形态，不是降级。
++当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）；S0/S1 的 self 是档位定价的正常形态，不是降级。
+ 
+ ### 默认行为
+ 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index f1ff21b7..1e57fbca 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -438,15 +438,15 @@ const acceptanceSteps = [
+ ### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
+-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
++> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役）。有派发能力时本豁免不适用（真独立评审仍优待）。
+ - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
+ {PRIOR_REVIEW_FACTS}
+-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+ {REVIEW_JSON_CONTRACT}
+   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
+ 
+-  **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是"只看当前 task 的 diff"，这三项是它覆盖不到、只有 stage review 能兜住的：
++  **审查范围（Task Review 层已退役 2026-09-26——task 粒度不再有前置 review.json 可分层）**：QA 子代理对照 design×实际 diff 逐 task 核验实现一致性（含改动文件与 allowed_paths 对照），以下三项始终必查（task 粒度无前置评审兜底，全靠本层）：
+ ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + item).join('\n')}
++  **反例测试核对**（R5 接线，2026-09-26 起随 Task Review 退役自 task 级评审铁律移驻本层）：本次变更新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死。
+ 
+   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
+   **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
+@@ -454,7 +454,7 @@ ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + ite
+   **审查经济学三律（2026-09-20 对撞实验驱动，同 brainstorm/plan 审查步）**：①请求预算硬钳——QA 子代理请求上限 **15 次**（材料包+抽查 task 的 diff 文件+全量重审 task 的核心文件），到达即出 verdict；②FAIL 后增量复审——resume 原 QA 子代理只发修复说明+diff 验证阻断项（不全文重审，5 倍差实证），checklist 追加增量复核行；③并行化——tier=independent 时 run_in_background: true 派发后主代理继续下一知识库审阅步骤，回收在即将 --done 代码审查步骤前；④**审查只读纪律**——QA 子代理工具面只读（Read/Grep/只读 Bash），禁止 Edit/Write 被审产物（源码/四件套/review.json 之外的生成物），唯一可写 review.json——发现问题写 checklist/blockers 由主代理/对应 task 修复（2026-09-20 实证 Grill 越权改 design 15 处：独立性破坏+责任链断裂+回合爆炸；③并行化下同文件双写竞态的前置防线）。
+ 
+ ### 操作（材料包口径——2026-09-19-review-material-cli-wiring）
+-1. **评审材料包（基准面）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('execute-qa')：diff 摘要＋design 热区＋验收清单）——checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。task review 双 pass 抽查、未双 pass 全量重审的分级照旧（上方「审查范围分级」）；tier=independent 时把整包贴进 QA 子代理派发 prompt：
++1. **评审材料包（基准面）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('execute-qa')：diff 摘要＋design 热区＋验收清单）——checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。审查范围按上方「审查范围」整段执行；tier=independent 时把整包贴进 QA 子代理派发 prompt：
+ {REVIEW_MATERIALS}
+ 2. 逐一对照 design.md 中的设计要点与实际代码实现
+ 3. 检查接口签名、数据结构、模块划分是否一致
+@@ -799,7 +799,8 @@ export function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
+  * 跨仓 task head_commit 锡点自动落盘（2026-08-21 agent-手工产出审计项③，D-010 补对称）。
+  *
+  * base_commit 已在派发时 CLI 落盘，head_commit 此前靠主 agent 按 Wave prompt 指引手跑
+- * `rev-parse` 手写（漏抄/抄错直接炸 Task Review Gate 真实性校验）。本函数在 execute
++ * `rev-parse` 手写（漏抄/抄错直接炸原 Task Review Gate 真实性校验——该门已随
++ * 2026-09-26-task-review-retire 退役，本函数随之无活路径调用方，保留导出作历史回放兼容）。本函数在 execute
+  * --done 时机补齐另一半：扫描 task 卡，跨仓 task（repo≠main）缺 head_commit 的，实时
+  * `git -C <跨仓仓根> rev-parse HEAD` 幂等写入（**已存在不覆盖**——agent 手写的精确锚点优先）。
+  *
+@@ -975,7 +976,7 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
+   // 小任务全额派发开销）。**显式 `execution_mode: dispatch` 才走子代理派发**（判据：任务真可
+   // 并行 × 单任务规模大 × 上下文需分片，三者齐备才值得付派发税）。main 时：执行方式段换直写
+   // 指引、派发段/子代理工作目录强制段/并发帽段/M3 推荐分组段全抑制；worktree 隔离/写入守卫/
+-  // review.json/verify 门禁与锚点/review write 指引全保留（只换执行宿主，不换防线）。
++  // verify 门禁与勾选指引全保留（只换执行宿主，不换防线）。
+   // best-effort：plan 缺失/读取失败 = 缺省 main。严格小写（大小写漂移视为非法回退缺省）。
+   let executionMode = 'main'
+   try {
+@@ -1213,7 +1214,7 @@ ${indexLines}
+ **跨仓 worktree task（repo 已建 worktree 隔离）——像主仓 task 一样工作：**
+ - 子代理在 workdir（跨仓 worktree）内改+commit（git add + git commit 到 worktree 当前分支），**不要碰跨仓主工作副本**。
+ - apply 阶段 CLI 统一把各跨仓 worktree 的交付 patch 回对应跨仓主工作区（勿手工 apply）。
+-- base 已锚 worktree meta.baseHash（创建时快照），review 的 base/head 由 CLI 按 task 卡锡点解析。` : ''
++- base 已锚 worktree meta.baseHash（创建时快照）；task 卡锡点供归档回放/对账解析。` : ''
+     const crossLegacySection = crossLegacyItems.length > 0 ? `
+ 
+ **派发跨仓 task 前（base 锡点，CLI 已在 prompt 构造时落盘）：**
+@@ -1227,9 +1228,9 @@ ${indexLines}
+ 
+ ${crossLines}${crossWorktreeSection}${crossLegacySection}
+ 
+-**回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
+-- 子代理完成 commit 后，正常写 review.json（verdict/notes）即可——checkbox 由 CLI 按 review verdict 自动勾选（review write 落盘即勾）。execute \`--done\` 时 CLI 自动对跨仓仓（worktree 模式=该仓 worktree，legacy=仓根）\`git rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
+-- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`/\`diffPaths\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
++**回收跨仓 task（Task Review 层已退役，2026-09-26）：**
++- 子代理完成 commit 后，手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义）。
++- head 锡点自动落盘已随 enforceReviewJsonGate 退役移除；跨仓 task 卡如需 \`head_commit:\` 锚点（归档回放/对账用）可手写 \`git -C <跨仓仓根> rev-parse HEAD\`（base 锡点仍在派发时由 CLI 落盘）。
+ `
+   }
+ 
+@@ -1382,7 +1383,7 @@ ${worktreeNoticeSingle}
+       const recGroups = recommendWaveGroups(groupTasks)
+       if (recGroups.some(g => g.length >= 2)) {
+         const display = recGroups.map(g => `[${g.join(',')}]`).join(' / ')
+-        recommendBlock = `\n**推荐分组（CLI 已按上述三条件预计算）**：${display}\n按推荐分组派发与回收（组内逐 task 审查/review.json 照旧，主代理按组一次回收）；可偏离推荐分组，但偏离须在 Wave 完成摘要中披露理由——机械建议不夺裁决权。\n`
++        recommendBlock = `\n**推荐分组（CLI 已按上述三条件预计算）**：${display}\n按推荐分组派发与回收（组内逐 task 审查照旧、勾选手动，主代理按组一次回收）；可偏离推荐分组，但偏离须在 Wave 完成摘要中披露理由——机械建议不夺裁决权。\n`
+       }
+     } catch { /* 推荐分组 fail-open：计算失败零注入，不阻断 Wave prompt 组装 */ }
+   }
+@@ -1411,7 +1412,7 @@ ${worktreeNoticeSingle}
+     ? `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，逐个完成（串行——启动一个、等它完成并审查后再启动下一个，见「调度要求」串行铁律）`
+     : `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行——但同时在飞子代理 ≤3（见「调度要求」并发帽，超出的 batch 排队错峰）`
+   const scheduleItem1 = mainMode
+-    ? `1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 锚点/review write → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。`
++    ? `1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。`
+     : implicit
+       ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
+       : `1. **同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中。并发帽 3：Wave 内子代理超 3 个时分两批错峰——首批完成后回收槽位再派第二批；4 路齐发实证触发平台额度/限流耗尽，整 Wave 中断 17 分钟由用户手动恢复，得不偿失）。`
+@@ -1419,16 +1420,16 @@ ${worktreeNoticeSingle}
+   // ── M4 模式段变体（2026-09-21-r5-efficiency-batch2 task-04）：dispatch 分支为既有模板
+   // 逐字移植（缺省/非法回退 dispatch → 输出与改前逐字节一致，零回归由改动前后黄金快照
+   // diff + 既有钉测试双保证）；main 分支为直写指引——派发段/子代理工作目录强制段/并发帽
+-  // 段/M3 分组段全抑制，防线与锚点/review write 指引全保留（只换执行宿主，不换防线）。──
++  // 段/M3 分组段全抑制，防线与勾选指引全保留（只换执行宿主，不换防线）。──
+   const mainExecSection = `## 执行方式
+ 
+ **主代理直写（execution_mode: main）——你直接实现，不派子代理。**
+ 
+-逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 锚点写入与 review write（见下方 Task Review Gate——checkbox 由 CLI 自动勾选，勿手动勾选）→ 下一任务。
++逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
+ 
+-worktree 隔离 / 写入守卫（allowed_paths）/ review.json / verify 门禁全部保留——只换执行宿主，不换任何防线。
++worktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。
+ 
+-**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境才允许降级为主代理自审，且 review.json reviewerNotes 首行必须留「降级：环境无子代理可用」审计行。`
++**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。`
+ 
+   const dispatchExecSection = `## 执行方式
+ 
+@@ -1443,8 +1444,8 @@ ${recommendBlock}
+ 
+ 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
+ ${roleItem1}
+-2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
+-3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
++2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
++3. 完成一个任务（子代理返回+审查通过+测试绿+wt-commit）即手动勾选 tasks.md 对应 checkbox（2026-09-26 Task Review 退役起勾选回归 agent 手动；勾选是批量完成与中断续跑的事实锚）
+ 4. 记录改动文件和测试结果`
+ 
+   // main 模式无派发——SillyHub 互斥行随派发段一同抑制（无 batch 分组语义可互斥）
+@@ -1478,7 +1479,7 @@ ${roleItem1}
+ 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
+    **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
+ 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
+-8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task`
++8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task`
+ 
+   return `${waveHeader}
+ 
+@@ -1529,51 +1530,15 @@ ${scheduleItem1}
+    - 用户明确要求编译时
+ 4. 每个任务完成后：
+    - **使用 \`sillyspec wt-commit --change <change-name> -- <task-files>\` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 \`git add -A\` 互卷 WIP / 撞 index.lock；\`git add -A\` 还会把并行子代理未提交的半成品一并暂存——**禁 \`git add -A\`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 "does not exist in index"）
+-   - commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点
+-   - **写 review.json 即可**（checkbox 由 CLI 自动勾选，见下方 Task Review Gate）
+-   - **任务边界上报（每任务一次，主仓根目录）**：review write 落盘（CLI 已自动勾选）后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
++   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）
++   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）
++   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
+    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 \`ruff format\` / \`prettier --write\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 \`which <bin>\` 确认，缺则 \`uv tool install\` / \`uv sync\`）
+    - 记录改动文件和测试结果
+ 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
+ 
+-### Task Review Gate
+-
+-每个子代理完成后，你必须创建 task review（review write 落盘后 CLI 自动勾选 checkbox——P2-f 起勾选唯一写入者是 CLI）。
+-
+-**操作步骤：**
+-1. 读取当前 task 的 git diff（从 task 开始到完成的变更）
+-2. 对照 plan.md 中该 task 的描述和 tasks/task-XX.md（如果存在）检查实现是否符合要求
+-3. 写入 review.json 文件
+-4. **禁止手动勾选 tasks.md 的 checkbox**（P2-f task 真源归一：review.json verdict 是唯一真源，tasks.md 勾选是它的显示态，唯一写入者是 CLI——review write 落盘即勾、execute --done 时 autoCheckPlanFromReviews 兜底；agent 手勾与机器勾的漂移面就此退役）
+-
+-**review.json 路径：**
+-
+-task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json
+-
+-本 execute run 的固定 ID 是：{EXECUTE_RUN_ID}
+-**所有 task 的 review.json 必须使用这个 ID，不要自行创建新目录。**
+-
+-**review.json 必填字段：**
+-
+-{ "name_zh": "任务评审", "schemaVersion": {REVIEW_SCHEMA_VERSION}, "task": "task-XX", "base": "<git-base-commit>", "head": "<git-head-commit>",
+- "changedFiles": ["src/foo.js"], "specVerdict": "pass|fail|cannot_verify",
+- "qualityVerdict": "pass|fail|cannot_verify", "reviewerNotes": "评审说明",
+- "requiredEvidence": [] }
+-
+-**base/head 两种取法（按提交模式选其一）：**
+-- **per-task commit 模式**（默认，子代理每 task 一提交）：base=本 task 开始前的 commit，head=本 task 的 commit——base..head 天然就是本 task 的 diff，无需 diffPaths。
+-- **统一 commit 模式**（主代理统一实现/收尾一次性 commit，全部 task 一个提交）：base=基线 commit（worktree meta 的 baseHash），head=统一 commit，并**必填 \`diffPaths\`（本 task 卡的 allowed_paths 原样数组）**——评审与 CLI 校验的 diff 都是 \`git diff base..head -- diffPaths\` 的路径限定切片，任务边界由 diffPaths 机器可验，不再只靠 changedFiles 归属说明。changedFiles 填切片内实际改动的文件。
+-
+-**评审铁律：**
+-- 不信任 implementer 自报结果，对照 diff 和 task brief 验证
+-- 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
+-- \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
+-- \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
+-- **反例测试核对**（2026-09-21 R5 接线）：本 task 新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死
+-- **回收瘦身**：审查回收输出 = verdict 一行 + blockers（如有）+ review.json 路径——细节不转述，主代理按需 Read 工件；git diff 对账仍是回收真相源，本条只瘦身转述
+-
+ ### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
+-本 Wave 内所有 task 子代理完成、review.json 写好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：
++本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：
+ - 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照
+ - 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）
+ - **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index 3863331b..d4c59bf6 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -369,7 +369,6 @@ plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省
+ - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）
+-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+ - 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价
+ 
+ ### 审查清单（读取 plan.md 的 plan_level，逐条核对）
+@@ -382,7 +381,7 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
+ prompt 要点：
+ 1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
+ 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
++> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
+ 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
+ {REVIEW_JSON_CONTRACT}
+ 4. verdict=fail 时在 reviewerNotes 写明阻断项
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index 5d6c5b91..58333b3f 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -75,7 +75,7 @@ export const definition = {
+ 6. 标注每个文件的存在/不存在状态
+ 
+ ### Execute Evidence 传递检查
+-7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
++7. 检查 verify-required-evidence.json 是否存在（历史兼容读：该文件由退役前的 execute Task Review Gate 写入，2026-09-26-task-review-retire 起停写——在场则消费，缺席=无 cannot_verify 任务）
+    - 路径：变更目录下的 verify-required-evidence.json
+    - 文件 schema：\`{ items: [{ task, verdict, evidence: string[] }] }\`——顶层是 \`items\`，每项的 \`evidence\` 是字符串数组（不是 \`requiredEvidence\` 键）
+    - 如果存在 → 逐项读取 \`items\`，对每个 cannot_verify 任务逐条核对其 \`evidence\` 数组是否已满足
+@@ -102,7 +102,7 @@ export const definition = {
+     },
+     {
+       name: '逐项检查任务',
+-      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选唯一写入者是 CLI（review write 落盘即按 review.json verdict 勾选，execute --done 时 autoCheckPlanFromReviews 兜底；P2-f 起 agent 不再手勾），本阶段只读对照、不改勾。
++      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 agent 在任务完成（实现+测试绿+wt-commit）时手动写入（2026-09-26 Task Review 退役起，同 thin 工作单元语义），本阶段只读对照、不改勾。
+ 
+ ### 勾选状态（CLI 注入，勿手数）
+ {TASKS_CHECKBOX}
+diff --git a/src/task-review.js b/src/task-review.js
+index 7419455a..cc61eda1 100644
+--- a/src/task-review.js
++++ b/src/task-review.js
+@@ -815,29 +815,9 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null, opts = {})
+   return { ok: errors.length === 0, emptyDiff, errors, warnings, unavailable: false }
+ }
+ 
+-/**
+- * 将 cannot_verify 的 requiredEvidence 写入 change 目录
+- * 供 verify 阶段消费
+- *
+- * @param {string} changeDir - 变更目录（.sillyspec/changes/<name>）
+- * @param {Array<{task: string, verdict: string, evidence: string[]}>} requiredEvidence
+- * @returns {string|null} 写入的文件路径，null 表示无需写入
+- */
+-export function writeVerifyRequiredEvidence(changeDir, requiredEvidence) {
+-  if (!requiredEvidence || requiredEvidence.length === 0) return null
+-
+-  const filePath = join(changeDir, 'verify-required-evidence.json')
+-  const data = {
+-    generatedAt: new Date().toISOString(),
+-    schemaVersion: 1,
+-    items: requiredEvidence,
+-  }
+-
+-  mkdirSync(changeDir, { recursive: true })
+-  writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n')
+-
+-  return filePath
+-}
++// writeVerifyRequiredEvidence（cannot_verify 证据落盘 verify-required-evidence.json）已随
++// Task Review 层退役删除（2026-09-26-task-review-retire，唯一调用方 Execute Task Review Gate）：
++// 新变更停写该文件；verify 侧 runVerifyRequiredEvidenceCheck 兼容读在场存量（缺席=无 cannot_verify 任务）。
+ 
+ /**
+  * 生成 execute run id。
+@@ -2200,32 +2180,5 @@ export function ensureTaskReviewDir(runtimeRoot, executeRunId, taskId) {
+   return dir
+ }
+ 
+-/**
+- * 打印校验结果
+- * @param {{ ok: boolean, errors: string[], warnings: string[], requiredEvidence: Array }} result
+- */
+-export function printReviewResult(result, context = {}) {
+-  if (result.ok && result.warnings.length === 0) {
+-    console.log('\n✅ Task Review Gate — 所有任务评审通过')
+-    return
+-  }
+-
+-  if (result.errors.length > 0) {
+-    console.error('\n🚫 Task Review Gate — FAILED')
+-    for (const err of result.errors) {
+-      console.error(`   - ${err}`)
+-    }
+-    const hint = context.runtimeRoot && context.executeRunId
+-      ? `期望路径：${context.runtimeRoot}/execute-runs/${context.executeRunId}/tasks/<task-XX>/review.json`
+-      : '为缺失/失败的任务补充 review.json'
+-    console.error(`\n   提示：${hint}，然后重新 --done`)
+-  }
+-
+-  if (result.warnings.length > 0) {
+-    console.warn('\n⚠️ Task Review Gate — WARNING')
+-    for (const w of result.warnings) {
+-      console.warn(`   - ${w}`)
+-    }
+-    console.warn('\n   cannot_verify 的 requiredEvidence 将在 verify 阶段校验')
+-  }
+-}
++// printReviewResult（Task Review 校验结果打印）已随 Task Review 层退役删除
++// （2026-09-26-task-review-retire，调用方 gates.js 两个门均已退役）。
+diff --git a/test/align-execute-review-gate.test.mjs b/test/align-execute-review-gate.test.mjs
+index 636707d7..bcc1c769 100644
+--- a/test/align-execute-review-gate.test.mjs
++++ b/test/align-execute-review-gate.test.mjs
+@@ -5,11 +5,13 @@
+  * execute 的 Stage Review Gate 与 Task Review Gate 被整体跳过——worktree 清理后的恢复场景
+  * 恰是最需要审计的时刻（实证靠 15 份 task review + verify 全程补足覆盖）。
+  *
+- * 锁定语义：
+- *   1. task review 缺失 → --confirm 对齐被前置门阻断（exit 1，execute 仍 in-progress）
++ * 锁定语义（2026-09-26-task-review-retire 起 Task Review 段退役——R18 实证任务粒度评审
++ * 无独立评审者供给时全降形式合规；本门收窄为 Stage Review 段 + 豁免头）：
++ *   1. task review 缺失（tier=self）→ 门放行对齐（Task Review 段已退役，不再拦）
+  *   2. plan_level=full（tier=independent）且无 stage review → 阻断并给出 register-stage-review 指引
+- *   3. tier=self + task review 齐备且 pass → 门放行，对齐正常落盘（execute completed）
++ *   3. tier=self（task review 齐或不齐）→ 门放行，对齐正常落盘（execute completed）
+  *   4. dry-run 不触发前置门（保持只读语义）
++ *   5. 源码钉：enforceAlignExecuteReviewGate 不再含 Task Review 校验段（退役钉）
+  */
+ import { join } from 'node:path'
+ import { writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
+@@ -94,16 +96,16 @@ function commitFix(repo) {
+ 
+ console.log('=== doctor align 前置 review 门（坑 doctor-align-bypass-review-gate）===\n')
+ 
+-console.log('--- ① task review 缺失 → --confirm 被阻断，execute 仍 in-progress ---')
++console.log('--- ① task review 缺失（tier=self）→ 放行对齐（Task Review 段已退役，不再拦）---')
+ {
+   const repo = mkRepo('miss')
+   const cn = '2026-08-20-align-miss'
+   const { pm } = await seed(repo, cn)
+   const r = run(`node "${binCLI}" --dir "${repo}" doctor --align-execute-progress --change ${cn} --confirm`)
+-  assert(r.status !== 0, `exit 非 0（实际 ${r.status}）`)
+-  assert(r.out.includes('前置 review 校验未过') || r.out.includes('缺少 review.json'), '输出点名 review 缺失')
++  assert(r.status === 0, `exit 0（实际 ${r.status}，输出尾：${r.out.slice(-300)}）`)
++  assert(r.out.includes('前置 review 校验通过'), '放行日志在场（task review 段已退役）')
+   const after = pm.read(repo, cn)
+-  assert(after.stages.execute.status === 'in-progress', 'execute 未被置 completed（门生效）')
++  assert(after.stages.execute.status === 'completed', 'execute 对齐为 completed（Stage Review tier=self 放行）')
+   cleanup()
+ }
+ 
+@@ -121,7 +123,7 @@ console.log('--- ② plan_level=full 无 stage review → 阻断并给 register-
+   cleanup()
+ }
+ 
+-console.log('--- ③ tier=self + task review 齐 → 门放行，对齐落盘 ---')
++console.log('--- ③ tier=self → 门放行，对齐落盘（残存 review.json 不再参与判定）---')
+ {
+   const repo = mkRepo('pass')
+   const cn = '2026-08-20-align-pass'
+@@ -149,6 +151,20 @@ console.log('--- ④ dry-run 不触发前置门（只读语义保持）---')
+   cleanup()
+ }
+ 
++console.log('--- ⑤ 源码钉：enforceAlignExecuteReviewGate 不再含 Task Review 校验段（退役钉）---')
++{
++  const gatesSrc = readFileSync(join(root, 'src', 'run', 'gates.js'), 'utf8')
++  const fnStart = gatesSrc.indexOf('export async function enforceAlignExecuteReviewGate')
++  const fnEnd = gatesSrc.indexOf('\n}', fnStart)
++  const fnBody = gatesSrc.slice(fnStart, fnEnd)
++  assert(fnStart >= 0 && fnEnd > fnStart, 'enforceAlignExecuteReviewGate 函数定位成功')
++  assert(!fnBody.includes('validateTaskReviews'), 'Task Review 校验调用已退役（无 validateTaskReviews）')
++  assert(!fnBody.includes('resolveLatestExecuteRunIdWithTasks'), 'runId 解析兜底已退役')
++  assert(fnBody.includes('已退役'), '退役说明注释在场')
++  assert(fnBody.includes('register-stage-review'), 'Stage Review 补救指引保留（段 1 在场）')
++  assert(fnBody.includes('readReviewUnsupervisedWaiver'), '豁免头保留')
++}
++
+ console.log(`\n${'='.repeat(50)}`)
+ console.log(`✅ 通过: ${passed}  ❌ 失败: ${failed}`)
+ console.log('='.repeat(50))
+diff --git a/test/dispatch-contract.test.mjs b/test/dispatch-contract.test.mjs
+index 4a955b60..3b000ec7 100644
+--- a/test/dispatch-contract.test.mjs
++++ b/test/dispatch-contract.test.mjs
+@@ -14,7 +14,8 @@
+  * 4. 编号单调：全局硬约束恒 9 → 材料包顺延 10 → 轮数纪律/返回契约再顺延，缺位前移不撞车
+  *    （四种 gc×材料包组合全覆盖）
+  * 5. task-02 回归钉：材料包行有映射渲染、无映射零注入（本 task 追加不得破坏）
+- * 6. 红线钉：Task Review Gate 的 diff 对账步骤原样在位（本 task 只加 prompt 渲染文本）
++ * 6. 退役钉（2026-09-26-task-review-retire）：Task Review Gate 段/回收瘦身行已删，
++ *    wt-commit 与返回契约（diff 对账真相源）保留
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -62,24 +63,18 @@ test('子代理返回契约注入（C-1 B1：≤25 行结构化摘要）', () =>
+   rmSync(cd, { recursive: true, force: true })
+ })
+ 
+-test('回收瘦身行注入 Task Review Gate（C-1 B2：blockers 与 review.json 路径同现）', () => {
++test('退役钉：Task Review Gate 段与回收瘦身行已删（2026-09-26-task-review-retire），wt-commit/返回契约在位', () => {
+   const cd = makeChangeDir()
+   const wp = render(cd)
+-  assert.ok(wp.includes('回收瘦身'), '「回收瘦身」标题在位')
+-  const line = wp.split('\n').find(l => l.includes('回收瘦身'))
+-  assert.ok(line !== undefined && line.includes('blockers') && line.includes('review.json 路径'), 'blockers 与 review.json 路径同现一行')
+-  assert.ok(wp.includes('git diff 对账仍是回收真相源'), 'git diff 仍是回收真相源（红线语义钉）')
+-  assert.ok(wp.includes('主代理按需 Read 工件'), '细节不转述、主代理按需 Read 工件在位')
+-  rmSync(cd, { recursive: true, force: true })
+-})
+-
+-test('红线钉：Task Review Gate 的 diff 对账步骤原样在位（本 task 只加 prompt 文本）', () => {
+-  const cd = makeChangeDir()
+-  const wp = render(cd)
+-  assert.ok(wp.includes('每个子代理完成后，你必须创建 task review'), 'Task Review Gate 段头在位')
+-  assert.ok(wp.includes('1. 读取当前 task 的 git diff'), '操作步骤 1（读 git diff）原样在位')
+-  assert.ok(wp.includes('3. 写入 review.json 文件'), '操作步骤 3（写 review.json）原样在位')
+-  assert.ok(wp.includes('不信任 implementer 自报结果，对照 diff 和 task brief 验证'), '评审铁律首条原样在位')
++  // Task Review 层退役：段头/评审铁律/回收瘦身（task review 回收语境）不再注入
++  assert.ok(!wp.includes('### Task Review Gate'), 'Task Review Gate 段头已退役')
++  assert.ok(!wp.includes('每个子代理完成后，你必须创建 task review'), 'task review 创建指引已退役')
++  assert.ok(!wp.includes('不信任 implementer 自报结果'), 'task 级评审铁律已退役（反例测试条移驻 QA 阶段级）')
++  assert.ok(!wp.includes('回收瘦身'), 'task review 回收瘦身行已退役（无 task review 可回收）')
++  assert.ok(!wp.includes('review.json 路径'), 'blockers+review.json 路径行已退役')
++  // 保留面：wt-commit 逐任务提交 + 子代理返回契约（diff 对账真相源不变）
++  assert.ok(wp.includes('sillyspec wt-commit --change'), 'wt-commit 逐任务提交指引在位')
++  assert.ok(wp.includes('verdict（done|blocked）'), '子代理返回契约在位（回收真相源不变）')
+   rmSync(cd, { recursive: true, force: true })
+ })
+ 
+diff --git a/test/execute-run-dir-fail-loud.test.mjs b/test/execute-run-dir-fail-loud.test.mjs
+index 3cf4f66c..4827486e 100644
+--- a/test/execute-run-dir-fail-loud.test.mjs
++++ b/test/execute-run-dir-fail-loud.test.mjs
+@@ -1,26 +1,28 @@
+ /**
+  * execute-run-dir-fail-loud.test.mjs — task-01 / D-001@v1
+  *
+- * 四处 marker 写入点原子化 + 分层 fail：
+- *   - stage.js（execute 启动主写入点，:96-112）、gates.js:444、prompt.js:518、task-review.js:795
+- *     统一改为「mkdir execute-runs/<runId>/tasks 先于 marker 写入」（不变量：marker 在则目录在）。
++ * marker 写入点原子化 + 分层 fail（2026-09-26-task-review-retire 起 gates.js 写入点随
++ * Task Review Gate 退役删除，剩三处 + 退役行为钉）：
++ *   - stage.js（execute 启动主写入点）、prompt.js（休眠兼容注入路径——渲染面退役后不再
++ *     自带 {EXECUTE_RUN_ID}，本测合成占位符继续覆盖其原子性契约）、task-review.js（模块
++ *     兼容读侧）统一「mkdir execute-runs/<runId>/tasks 先于 marker 写入」（不变量：marker 在则目录在）。
+  *   - 失败分层语义：
+  *       stage.js    直接 throw（execute 启动即失败，优于事后 review 错配）
+- *       gates.js    gate 内 throw（外层 :494 catch fail-closed 阻断完成，不静默放行）
+  *       prompt.js   console.error 留痕 + 保留降级（渲染路径抛错会炸整个 prompt 输出）
+- *       task-review.js 去 catch 静默，console.error 留痕但保留 fail-open 契约（:763，不 throw）
++ *       task-review.js 去 catch 静默，console.error 留痕但保留 fail-open 契约（不 throw）
++ *   - 退役行为钉：execute-runs 损坏 + marker 缺失不再阻断 execute 完成（Task Review Gate 已删）。
+  *
+  * 策略（无 mock.module / 无 flag）：
+- *   - 失败注入用「真实 fs 障碍」：把 <runtimeRoot>/execute-runs 改成普通文件 → 四处 mkdir
++ *   - 失败注入用「真实 fs 障碍」：把 <runtimeRoot>/execute-runs 改成普通文件 → mkdir
+  *     必抛 ENOTDIR（Windows/Linux/macOS 一致；已验证 node v24，不依赖 chmod 语义）。
+  *     注意：只动 execute-runs 子树，不 rmSync runtimeRoot——测试进程 pm 持有的
+  *     sillyspec.db 就在 runtimeRoot 下，Windows 上 rmSync 含打开句柄的目录会 EPERM。
+- *   - 子进程（spawnSync bin/sillyspec.js）触发 stage.js / gates.js 路径（隔离 process.exit）。
++ *   - 子进程（spawnSync bin/sillyspec.js）触发 stage.js 路径（隔离 process.exit）。
+  *     prompt.js 渲染路径 CLI 层面无法隔离（marker 失败时 stage.js 主写入点先 throw，
+  *     prompt.js 永远跑不到）→ 直接 in-process 调 outputStep 触发，断言 console.error + 不抛。
+  *   - task-review.js in-process 调 generateTaskReviewDrafts；失败侧用「空 changedFiles 的 task」
+- *     隔离 marker 写入点语义（草稿循环本身的 mkdir 抛错是既有行为，由调用方 complete.js:244
+- *     / index.js:511 catch 兜底 fail-open，不在本写入点职责内）。
++ *     隔离 marker 写入点语义（草稿循环本身的 mkdir 抛错是既有行为，由调用方 catch
++ *     兜底 fail-open，不在本写入点职责内）。
+  */
+ import { spawnSync, execFileSync } from 'node:child_process'
+ import { mkdtempSync, writeFileSync, mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs'
+@@ -91,9 +93,9 @@ async function capture(fn) {
+ }
+ 
+ // ════════════════════════════════════════════════════════════════
+-console.log('=== 四处 marker 写入点原子化 + 分层 fail（D-001@v1）===\n')
++console.log('=== 三处 marker 写入点原子化 + 分层 fail（D-001@v1；gates.js 写入点已随 Task Review Gate 退役）===\n')
+ 
+-// ── ① 源码顺序扫描：四处写入点 mkdir …/tasks 先于 marker + 分层语义注释 ──
++// ── ① 源码顺序扫描：三处写入点 mkdir …/tasks 先于 marker + 分层语义注释 ──
+ console.log('--- ① 源码顺序扫描：mkdir execute-runs/<runId>/tasks 先于 marker 写入 ---')
+ {
+   const stageSrc = readFileSync(join(repoRoot, 'src', 'run', 'stage.js'), 'utf8')
+@@ -112,17 +114,15 @@ console.log('--- ① 源码顺序扫描：mkdir execute-runs/<runId>/tasks 先
+ 
+   // 调用形态 2026-09-10 第三批起带 changeName（哈希隔离）——扫描锚同步，不变量语义不变
+   const s1 = stageSrc.indexOf("currentExecuteRunId = generateExecuteRunId(changeName)")
+-  const g1 = gatesSrc.indexOf("executeRunId = generateExecuteRunId(changeName)")
+   const p1 = promptSrc.indexOf("runId = generateExecuteRunId(changeName)")
+   const t1 = trSrc.indexOf("executeRunId = generateExecuteRunId(changeName)")
+   assert(siteOrder(stageSrc, s1, 'runIdFile') === 1, 'stage.js 主写入点：mkdir …/tasks 先于 marker')
+-  assert(siteOrder(gatesSrc, g1, 'runIdFile') === 1, 'gates.js:444 fallback：mkdir …/tasks 先于 marker')
+-  assert(siteOrder(promptSrc, p1, 'runIdFile') === 1, 'prompt.js:518 fallback：mkdir …/tasks 先于 marker')
+-  assert(siteOrder(trSrc, t1, 'runIdFile') === 1, 'task-review.js:795 fallback：mkdir …/tasks 先于 marker')
++  assert(siteOrder(promptSrc, p1, 'runIdFile') === 1, 'prompt.js fallback：mkdir …/tasks 先于 marker')
++  assert(siteOrder(trSrc, t1, 'runIdFile') === 1, 'task-review.js fallback：mkdir …/tasks 先于 marker')
++  // 退役钉：gates.js 的写入点（原 Task Review Gate 内 fallback generate）随门删除
++  assert(!gatesSrc.includes('executeRunId = generateExecuteRunId(changeName)'), 'gates.js 写入点已随 Task Review Gate 退役')
+ 
+   assert(/throw new Error\(`execute run 目录创建失败/.test(stageSrc), 'stage.js throw fail-loud（含修复指引）')
+-  const gBlock = gatesSrc.slice(g1, g1 + 700)
+-  assert(!/try \{/.test(gBlock) && gBlock.includes('fail-closed'), 'gates.js 写入块无 try/catch（异常直穿外层 fail-closed catch）')
+   const pBlock = promptSrc.slice(p1, p1 + 700)
+   assert(pBlock.includes('execute run marker/目录写入失败') && pBlock.includes('} catch (e) {'),
+     'prompt.js catch 内 console.error 留痕 + 保留降级')
+@@ -188,10 +188,12 @@ console.log('\n--- ④ prompt.js：mkdir 失败 → console.error 留痕 + 保
+   const progress = await pm.read(cwd, cn)
+   const steps = await getStageSteps('execute', cwd, progress, null)
+   assert(steps && steps.length > 0, `buildExecuteSteps 产出步骤（${steps && steps.length}）`)
+-  // {EXECUTE_RUN_ID} 只在 Wave 执行步的 prompt 里（step 0「进度确认」不含）——必须定位到该步，
+-  // 否则 outputStep 的注入块整块跳过，后续断言全部空过（首版即踩此坑）。
+-  const waveIdx = steps.findIndex(s => (s.prompt || '').includes('{EXECUTE_RUN_ID}'))
+-  assert(waveIdx >= 0, `定位含 {EXECUTE_RUN_ID} 的 Wave 步骤（idx=${waveIdx}）`)
++  // Task Review 退役（2026-09-26-task-review-retire）后渲染面不再自带 {EXECUTE_RUN_ID}——
++  // prompt.js 注入块成为休眠兼容路径。此处把占位符合成进 Wave 执行步，继续覆盖该写入点的
++  // 原子性契约（marker 缺失 → fallback generate + mkdir → 障碍必抛 → 降级留痕不炸渲染）。
++  const waveIdx = steps.findIndex(s => (s.name || '').includes('Wave') && (s.name || '').includes('执行'))
++  assert(waveIdx >= 0, `定位 Wave 执行步骤（idx=${waveIdx}）`)
++  steps[waveIdx] = { ...steps[waveIdx], prompt: (steps[waveIdx].prompt || '') + '\n{EXECUTE_RUN_ID}\n' }
+ 
+   const { error, errBuf, logBuf } = await capture(() => outputStep('execute', waveIdx, steps, cwd, cn, 'p', {}))
+   assert(!error, `prompt.js mkdir 失败 → 不抛（降级，实际 error=${error && error.message}）`)
+@@ -203,16 +205,16 @@ console.log('\n--- ④ prompt.js：mkdir 失败 → console.error 留痕 + 保
+   assert(!existsSync(join(runtimeRoot, `current-execute-run-id-${cn}`)), 'marker 未写入（mkdir 失败先行）')
+ }
+ 
+-// ── ⑤ 分层语义 C：gates.js gate 内 throw → 外层 fail-closed 阻断完成 ──
++// ── ⑤ 退役行为钉（2026-09-26-task-review-retire）：execute-runs 损坏 + marker 缺失不再阻断完成 ──
+ // 路径：首跑 run execute 写 marker+tasks（mkdir 无障碍）；随后 execute-runs 改普通文件 + 删 marker
+-// → --done 批量完成 → Task Review Gate 读 marker 缺失 → fallback generate + mkdir 抛 → :494 catch
+-// fail-closed 阻断（exitCode 1，stage 未标 completed）。plan_level: light → Stage Review tier=self 不挡。
+-console.log('\n--- ⑤ gates.js：gate 内 mkdir 失败 → 外层 fail-closed 阻断（不静默放行完成）---')
++// → --done 末步 → 阶段完成。原 Task Review Gate 的 fallback generate+mkdir fail-closed 已随门
++// 退役——损坏的 execute-runs 与缺失 marker 不再参与任何 execute 完成判定，正常收口。
++console.log('\n--- ⑤ 退役钉：execute-runs 损坏/marker 缺失 → execute 完成不再阻断（Task Review Gate 已删）---')
+ {
+   const { cwd, specBase, runtimeRoot } = makeRepo()
+   const cn = 'gates-block'
+   const pm = await initPm(cwd, specBase, cn, true)
+-  // plan_level: light 让 Stage Review tier=self（否则 independent 缺 review 会先拦在 Stage Review Gate）
++  // plan_level: light 让 Stage Review tier=self（tier=independent 缺 stage review 会拦——Stage Review 保留面）
+   writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
+     '---\nplan_level: light\n---\n\n# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
+   mkdirSync(join(cwd, 'src'), { recursive: true })
+@@ -230,26 +232,23 @@ console.log('\n--- ⑤ gates.js：gate 内 mkdir 失败 → 外层 fail-closed 
+   assert(r.status === 0, `前置 execute 启动 exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-150)}）`)
+ 
+   // 种子进度：除末步外全部 completed、末步 pending → --done 末步 → 进阶段完成分支
+-  // （FR-04 后 review 缺失会阻断批量完成——gate 触发改走「末步完成」路径，不变量等价：
+-  //   阶段完成时 Task Review Gate 对损坏 execute-runs 仍 fail-closed，不静默放行）
+   const realSteps = (await pm.read(cwd, cn)).stages.execute.steps
+   const lastIdx = realSteps.length - 1
+   const progress = await pm.read(cwd, cn)
+   progress.stages.execute.steps = realSteps.map((s, i) => ({ name: s.name, status: i < lastIdx ? 'completed' : 'pending' }))
+   await pm._write(cwd, progress, cn)
+ 
+-  // 障碍：execute-runs 改普通文件 + 删 marker（gate fallback 重新 generate + mkdir 必抛）
++  // 障碍：execute-runs 改普通文件 + 删 marker（原 Task Review Gate fallback 会 generate+mkdir 抛）
+   rmSync(join(runtimeRoot, 'execute-runs'), { recursive: true, force: true })
+   writeFileSync(join(runtimeRoot, 'execute-runs'), 'not a directory\n')
+   rmSync(join(runtimeRoot, `current-execute-run-id-${cn}`), { force: true })
+ 
+   r = runCli(cwd, ['run', 'execute', '--done', '--change', cn, '--skip-approval', '--output', 'step done'])
+-  assert(r.status === 1, `gate 失败 → exit 1（fail-closed，实际 ${r.status}，尾输出：${r.combined.slice(-220)}）`)
+-  assert(r.combined.includes('Task Review Gate 异常'),
+-    `输出含 fail-closed 阻断文案「Task Review Gate 异常」（尾输出：${r.combined.slice(-260)}）`)
++  assert(r.status === 0, `Task Review 退役后：损坏 execute-runs 不阻断 → exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-220)}）`)
++  assert(!r.combined.includes('Task Review Gate'), '输出无 Task Review Gate 阻断文案（门已退役）')
+   const after = await pm.read(cwd, cn)
+-  assert(after.stages.execute.status !== 'completed',
+-    `DB: execute stage 未标 completed（rollback 生效，实际 ${after.stages.execute.status}）`)
++  assert(after.stages.execute.status === 'completed',
++    `DB: execute stage 正常 completed（实际 ${after.stages.execute.status}）`)
+ }
+ 
+ // ── ⑥ 分层语义 D：task-review.js 去静默保 fail-open（console.error 留痕，不 throw，返回统计）──
+diff --git a/test/execute-run-marker-drift.test.mjs b/test/execute-run-marker-drift.test.mjs
+index 8f4fac9f..eea32601 100644
+--- a/test/execute-run-marker-drift.test.mjs
++++ b/test/execute-run-marker-drift.test.mjs
+@@ -2,13 +2,12 @@
+  * execute run marker 漂移兜底 单元测试（prompt-control-debt.md gate-atom-a 正确修法）。
+  *
+  * 场景：generateExecuteRunId 只写 marker 字符串、run 目录由 ensureTaskReviewDir 在写 review.json
+- * 时才建。marker 漂到「尚未建目录/未写 review」的新 run 后，旧 run 里齐备的 review.json 失联，
+- * enforceReviewJsonGate 拿 marker 直接读会误报「review.json 不存在」。
+- *
+- * 本文件测新 helper resolveLatestExecuteRunIdWithTasks（无视 marker、只认真实含 tasks/ 的最新目录），
+- * 并用例锁定 gates.js enforceReviewJsonGate 的集成分支语义：
+- *   marker 指向的 run 缺 tasks/ → 用本 helper 重定位到真实含 review 的 run；全部 run 都无 tasks/ →
+- *   helper 返回 null，gate 维持原 marker 校验（缺失照报，不误放行）。
++ * 时才建。marker 漂到「尚未建目录/未写 review」的新 run 后，旧 run 里齐备的 review.json 失联。
++ * 2026-09-26-task-review-retire 起 gates.js 两个消费门（enforceReviewJsonGate / Task Review Gate）
++ * 已退役；本文件锁 helper 的兼容读侧语义（历史变更回放/doctor 仍经 resolveLatestExecuteRunIdWithTasks
++ * 重定位，validateCheckedTaskReviews 纯函数语义不变）：
++ *   marker 指向的 run 缺 tasks/ → helper 重定位到真实含 review 的 run；全部 run 都无 tasks/ →
++ *   helper 返回 null，调用方维持原 marker 校验（缺失照报，不误放行）。
+  */
+ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+ import { join } from 'node:path'
+diff --git a/test/execution-mode-render.test.mjs b/test/execution-mode-render.test.mjs
+index 89bb3abd..884bb046 100644
+--- a/test/execution-mode-render.test.mjs
++++ b/test/execution-mode-render.test.mjs
+@@ -137,17 +137,18 @@ test('T2 main → 直写指引段在位，派发段/工作目录强制段/并发
+   }
+ })
+ 
+-// ── 3. 两模式锚点 + review write 指引一致 ─────────────────────────
++// ── 3. 两模式锚点 + 手动勾选指引一致（Task Review 退役后）─────────
+ 
+-test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存在', () => {
++test('T3 两模式下 wt-commit / 手动勾选 checkbox 指引一致存在，Task Review Gate 已退役', () => {
+   const cdD = makeChangeDir(3, { fmExtra: ['execution_mode: dispatch'] })
+   const cdM = makeChangeDir(3, { fmExtra: ['execution_mode: main'] })
+   const wpD = render(cdD)
+   const wpM = render(cdM)
+   for (const [label, wp] of [['dispatch', wpD], ['main', wpM]]) {
+     assert.ok(wp.includes('sillyspec wt-commit --change'), `T3: ${label} 含 wt-commit 逐任务提交指引`)
+-    assert.ok(wp.includes('### Task Review Gate'), `T3: ${label} 含 Task Review Gate`)
+-    assert.ok(wp.includes('review.json'), `T3: ${label} 含 review.json 指引`)
++    assert.ok(wp.includes('手动勾选 tasks.md 对应 checkbox'), `T3: ${label} 含手动勾选指引（Task Review 退役起勾选回归 agent）`)
++    assert.ok(!wp.includes('### Task Review Gate'), `T3: ${label} Task Review Gate 段已退役`)
++    assert.ok(!wp.includes('写 review.json 即可'), `T3: ${label} review write 指引已退役`)
+   }
+ })
+ 
+diff --git a/test/review-json-field-gate.test.mjs b/test/review-json-field-gate.test.mjs
+index 260f78d0..059fb22c 100644
+--- a/test/review-json-field-gate.test.mjs
++++ b/test/review-json-field-gate.test.mjs
+@@ -2,8 +2,9 @@
+  * validateCheckedTaskReviews 单元测试（坑 review-json-field-gap）。
+  *
+  * 已勾 [x] task 的 review.json 必须 schema 完整；未勾 [ ] task 不校验。
+- * Task Review Gate 只在整阶段完成时跑，本函数补"每次 execute --done 提前校验"的纯逻辑，
+- * 让漏写/漏字段 review.json 在单 task --done 时就暴露，而非等到收尾。
++ * 2026-09-26-task-review-retire 起 enforceReviewJsonGate（每次 execute --done 的消费门）随
++ * Task Review 层退役删除；本纯函数保留在 task-review.js 作历史变更 doctor/回放兼容读侧，
++ * 本测试随模块保留（锁兼容读侧语义不回潮为活路径）。
+  */
+ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+ import { join } from 'node:path'
+diff --git a/test/review-unsupervised-exit.test.mjs b/test/review-unsupervised-exit.test.mjs
+index eda563d4..feeb4c62 100644
+--- a/test/review-unsupervised-exit.test.mjs
++++ b/test/review-unsupervised-exit.test.mjs
+@@ -3,8 +3,9 @@
+  *
+  * 覆盖验收面（R18-full 实证：无嵌套派发环境自审表演+形式拦截 5 次）：
+  *   ① readReviewUnsupervisedWaiver 三态：含 unsupervised 字样放行 / 不含拒认 / 缺文件 null；
+- *   ② 四消费点接线钉：doctor-align / review-json 硬门 / stage-review tier 分支 / execute-task-review
+- *      均先查豁免（gates.js 源码文本钉——豁免先于校验、warn+遥测在場）；
++ *   ② 消费点接线钉（2026-09-26-task-review-retire 起 Task Review 层退役，消费点收窄为两处）：
++ *      doctor-align / stage-review tier 分支均先查豁免（gates.js 源码文本钉——豁免先于校验、
++ *      warn+遥测在場）；原 review-json 硬门与 execute-task-review 两钉随门退役删除；
+  *   ③ 生成侧三处指引钉：brainstorm Grill / plan / execute QA 均含豁免句与文件名。
+  */
+ import { test } from 'node:test'
+@@ -32,15 +33,17 @@ test('① 豁免凭据三态：字样放行 / 无字样拒认 / 缺文件 null',
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+-test('② 四消费点接线钉（gates.js 源码）', () => {
++test('② 消费点接线钉（gates.js 源码；Task Review 层退役后收窄为两处）', () => {
+   const src = readFileSync(join(ROOT, 'src/run/gates.js'), 'utf8')
+   const sites = [
+     ['doctor-align 门', /enforceAlignExecuteReviewGate[\s\S]{0,900}readReviewUnsupervisedWaiver/],
+-    ['review-json 硬门', /enforceReviewJsonGate[\s\S]{0,600}readReviewUnsupervisedWaiver/],
+     ['stage-review tier 分支', /tier\.tier === 'self'[\s\S]{0,400}readReviewUnsupervisedWaiver/],
+-    ['execute-task-review', /Execute Task Review Gate[\s\S]{0,700}readReviewUnsupervisedWaiver/],
+   ]
+   for (const [name, re] of sites) assert.ok(re.test(src), `${name} 应先查豁免凭据`)
++  // 退役钉（2026-09-26-task-review-retire）：原另两消费点（review-json 硬门 / execute-task-review）
++  // 的门本体已删——enforceReviewJsonGate 不复存在，Execute Task Review Gate 只剩墓碑注释。
++  assert.ok(!src.includes('export async function enforceReviewJsonGate'), 'enforceReviewJsonGate 导出已退役')
++  assert.ok(!/── Execute Task Review Gate：所有 task 必须有 review.json/.test(src), 'Execute Task Review Gate 活块已删（仅存墓碑注释）')
+   assert.ok(src.includes('review-unsupervised-escape'), '豁免遥测事件名在场')
+ })
+ 
+diff --git a/test/run-blocked-recovery.test.mjs b/test/run-blocked-recovery.test.mjs
+index d1d29a88..c0f7d788 100644
+--- a/test/run-blocked-recovery.test.mjs
++++ b/test/run-blocked-recovery.test.mjs
+@@ -1,7 +1,7 @@
+ /**
+  * blocked 步骤死锁恢复测试（坑 deps-gate-blocked-invisible，2026-08-27 实证）。
+  *
+- * 实证链：enforceDepsGate/enforceReviewJsonGate 阻断时把当前步置 blocked（持久化），但
++ * 实证链：enforceDepsGate 阻断时把当前步置 blocked（持久化），但
+  * completeStep 的 currentIdx 谓词只查 pending/in-progress → 被阻断步骤永久隐身：
+  *   - 重试 --done 落到其后第一个 pending 步骤（错步记账，DB 与事实脱节）
+  *   - 裸 run execute（指引路径①「stale 会被转为 pending」）只转 stale 不转 blocked → 指引失效
+diff --git a/test/stage-completion-atomicity.test.mjs b/test/stage-completion-atomicity.test.mjs
+index e385301c..7732c0cd 100644
+--- a/test/stage-completion-atomicity.test.mjs
++++ b/test/stage-completion-atomicity.test.mjs
+@@ -271,12 +271,11 @@ console.log('\n--- (e) verify + runVerifyTestCheck throw Error("boom-verify") 
+ }
+ 
+ // ============================================================================
+-// task-07：gates.js ctx 透传（design §6 gates 行 + D-013）
+-// 验证 runStageCompletionGates 把 ctx 透传到两个调用点：
+-//   - runVerifyTestCheck（verify 分支）：opts.ctx === 传入的 ctx（或缺省 null）
+-//   - validateTaskReviews（execute Task Review Gate）：opts.ctx === 传入的 ctx +
+-//     opts.gitDir === ctx.resolve('main').gitDir（reviewGitDir ctx 兜底）
+-// 单仓零回归：ctx=null 缺省时 runVerifyTestCheck 收 ctx=null、validateTaskReviews 收 gitDir 走原逻辑。
++// task-07 原验证 gates.js ctx 透传到 validateTaskReviews（design §6 gates 行 + D-013）。
++// 2026-09-26-task-review-retire 起 Task Review Gate 退役——(f)/(g) 翻转为退役钉：
++//   - runVerifyTestCheck（verify 分支）的 ctx 透传契约不变（(h) 继续覆盖）；
++//   - validateTaskReviews 在 execute 完成门零消费（mock 在场证明「不被消费」而非「未接线」；
++//     task-review.js 模块与 mock 目标保留——历史变更 doctor/回放兼容读侧）。
+ // ============================================================================
+ 
+ // 轻量 stub ctx（无需构造真实 MultiRepoContext——只测 gates 透传契约，不测 ctx 内部）。
+@@ -284,16 +283,16 @@ console.log('\n--- (e) verify + runVerifyTestCheck throw Error("boom-verify") 
+ const STUB_MAIN_GIT_DIR = 'STUB-MAIN-GIT-DIR-SENTINEL'
+ const stubCtx = { resolve: (key) => key === 'main' ? { gitDir: STUB_MAIN_GIT_DIR } : null }
+ 
+-// ── (f) execute Task Review Gate：reviewGitDir 兜底 ctx.resolve('main').gitDir + 透传 ctx ──
+-console.log('\n--- (f) execute + ctx → validateTaskReviews 收 gitDir=ctx.resolve(main).gitDir + ctx 透传 ---')
++// ── (f) 退役钉：execute 完成门不再消费 validateTaskReviews（Task Review Gate 已删）──
++console.log('\n--- (f) execute + ctx → validateTaskReviews 零调用（Task Review 层退役，2026-09-26）---')
+ {
+   resetImpls()
+-  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] }) // execute validator 通过，进 Task Review Gate
++  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] }) // execute validator 通过
+   const EXEC_STEPS = [{ name: 'Wave 1 执行', status: 'completed' }]
+   const { cwd, specBase } = makeRepo('sca-f-')
+   const cn = 'sca-f-ctx-forward'
+   const pm = await initChange(cwd, specBase, cn)
+-  // plan 含已勾 task 触发 Task Review Gate（marker + plan.md 存在守卫过）
++  // 原 fixture（已勾 task + marker + run 目录）保留：证明「review.json 齐备与否」不再影响 execute 门
+   writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
+     '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
+   const runtimeRoot = join(specBase, '.runtime')
+@@ -304,17 +303,13 @@ console.log('\n--- (f) execute + ctx → validateTaskReviews 收 gitDir=ctx.reso
+   const r = await runCapturing(() =>
+     completeStageGates({ stageName: 'execute', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.execute, steps: EXEC_STEPS, currentIdx: 0, outputText: null, ctx: stubCtx }))
+ 
+-  assert(!r.error, '(f) Task Review Gate 不抛（mock validateTaskReviews 返回 ok）')
+-  assert(validateTaskReviewsCalls.length === 1, `(f) validateTaskReviews 被调一次（实际 ${validateTaskReviewsCalls.length}）`)
+-  if (validateTaskReviewsCalls.length === 1) {
+-    const call = validateTaskReviewsCalls[0]
+-    assert(call.ctx === stubCtx, '(f) ctx 透传到 validateTaskReviews（opts.ctx === stubCtx）')
+-    assert(call.gitDir === STUB_MAIN_GIT_DIR, `(f) reviewGitDir 取自 ctx.resolve('main').gitDir（实际 ${call.gitDir}，零回归应不等 cwd）`)
+-  }
++  assert(!r.error, '(f) 阶段完成门不抛（无 task review 消费）')
++  assert(r.result === null, '(f) completeStageGates 通过返回 null（不再被 Task Review 阻断）')
++  assert(validateTaskReviewsCalls.length === 0, `(f) validateTaskReviews 零调用（Task Review Gate 已退役，实际 ${validateTaskReviewsCalls.length}）`)
+ }
+ 
+-// ── (g) execute Task Review Gate：ctx=null 缺省 → reviewGitDir 走原逻辑（worktree/cwd）+ ctx 透传 null ──
+-console.log('\n--- (g) execute + 无 ctx（单仓零回归）→ validateTaskReviews 收 ctx=null + gitDir=原逻辑 ---')
++// ── (g) 退役钉（单仓）：ctx=null 缺省同样零调用（mock 在场证明「不被消费」而非「未接线」）──
++console.log('\n--- (g) execute + 无 ctx → validateTaskReviews 零调用（退役钉，单仓零回归面）---')
+ {
+   resetImpls()
+   runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] })
+@@ -332,14 +327,8 @@ console.log('\n--- (g) execute + 无 ctx（单仓零回归）→ validateTaskRev
+   const r = await runCapturing(() =>
+     completeStageGates({ stageName: 'execute', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.execute, steps: EXEC_STEPS, currentIdx: 0, outputText: null }))
+ 
+-  assert(!r.error, '(g) Task Review Gate 不抛（mock validateTaskReviews 返回 ok）')
+-  assert(validateTaskReviewsCalls.length === 1, `(g) validateTaskReviews 被调一次（实际 ${validateTaskReviewsCalls.length}）`)
+-  if (validateTaskReviewsCalls.length === 1) {
+-    const call = validateTaskReviewsCalls[0]
+-    assert(call.ctx === null, '(g) ctx=null 时透传 null 到 validateTaskReviews（单仓零回归）')
+-    // 无 ctx 走原逻辑：in-place-fallback（无 worktree meta）→ gitDir 退回 cwd
+-    assert(call.gitDir === cwd, `(g) reviewGitDir 原逻辑退 cwd（实际 ${call.gitDir}，期望 ${cwd}）`)
+-  }
++  assert(!r.error, '(g) 阶段完成门不抛（无 task review 消费）')
++  assert(validateTaskReviewsCalls.length === 0, `(g) validateTaskReviews 零调用（实际 ${validateTaskReviewsCalls.length}）`)
+ }
+ 
+ // ── (h) verify：runVerifyTestCheck 透传 ctx（有 ctx / ctx=null 两种）──
+diff --git a/test/task-review-retire.test.mjs b/test/task-review-retire.test.mjs
+new file mode 100644
+index 00000000..cbc10b6c
+--- /dev/null
++++ b/test/task-review-retire.test.mjs
+@@ -0,0 +1,84 @@
++/**
++ * task-review-retire.test.mjs — Task Review 层退役钉（2026-09-26-task-review-retire）
++ *
++ * 依据：R18 对撞实验实证（docs/analysis/R18-*）execute 每任务 review.json 评审层在无嵌套
++ * 派发环境全降自审表演（15 次拦截 5 次形式合规、实质拦截为零）。本变更把该层从「可豁免」
++ * 推进到「退役」；Stage Review 层（阶段粒度）保留。锁定：
++ *   ① gates.js 三处消费门退役：enforceReviewJsonGate 删导出、Execute Task Review Gate 活块删
++ *      （仅存墓碑注释）、align 门无 Task Review 校验段；
++ *   ② complete.js 生成侧停写：无 autoCheckPlanFromReviews 调用、无 generateTaskReviewDrafts
++ *      兜底；detectExecuteBatchFinish（checkExecuteCodeEvidence 假勾防线）保留；
++ *   ③ 勾选迁移文案钉：execute/verify 指引含手动勾选语义（完成=实现+测试绿+wt-commit 即勾），
++ *      旧「CLI 自动勾选/禁止手动勾选」条款退役；旧「降级自审」句删除（豁免声明句在场）；
++ *   ④ 保留面钉：task-review.js / stage-review.js 模块导出在场（历史归档 doctor/回放兼容读侧）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const read = (p) => readFileSync(join(ROOT, p), 'utf8')
++
++test('① gates.js 三处消费门退役', () => {
++  const src = read('src/run/gates.js')
++  // 消费门 ②：enforceReviewJsonGate 整函数删除（连导出一起）
++  assert.ok(!src.includes('export async function enforceReviewJsonGate'), 'enforceReviewJsonGate 导出已退役')
++  assert.ok(!src.includes('validateCheckedTaskReviews({'), 'gates.js 不再调用 validateCheckedTaskReviews（仅注释提及兼容读侧）')
++  // 消费门 ①：Execute Task Review Gate 活块删除，仅存墓碑注释
++  assert.ok(!/── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──/.test(src), '活块头已删')
++  assert.ok(!src.includes('validateTaskReviews({ planContent'), 'validateTaskReviews 调用已删')
++  assert.ok(src.includes('Execute Task Review Gate 已退役'), '墓碑注释在场（退役可追溯）')
++  // 消费门 ③：align 门只剩 Stage Review 段 + 豁免头
++  const fnStart = src.indexOf('export async function enforceAlignExecuteReviewGate')
++  const fnBody = src.slice(fnStart, src.indexOf('\n}', fnStart))
++  assert.ok(fnStart >= 0, 'enforceAlignExecuteReviewGate 保留（Stage Review 段仍硬拦）')
++  assert.ok(!fnBody.includes('validateTaskReviews'), 'align 门无 Task Review 校验段')
++  assert.ok(fnBody.includes('validateStageReview'), 'align 门保留 Stage Review 校验')
++  // Stage Review Gate 保留面：豁免分支与 tier 分级仍在
++  assert.ok(/tier\.tier === 'self'/.test(src), 'Stage Review tier 分级保留')
++  assert.ok(src.includes('readReviewUnsupervisedWaiver'), 'review-unsupervised 豁免凭据保留（Stage Review/align 消费）')
++})
++
++test('② complete.js 生成侧停写（批量完成与代码证据核验保留）', () => {
++  const src = read('src/run/complete.js')
++  assert.ok(!src.includes('await autoCheckPlanFromReviews('), '无 autoCheckPlanFromReviews 调用（--done/完成提示两处均删）')
++  assert.ok(!src.includes("await import('../task-review.js')") || !/import\('\.\.\/task-review\.js'\)[\s\S]{0,120}generateTaskReviewDrafts/.test(src), '无 per-task review 草稿兜底')
++  assert.ok(src.includes('detectExecuteBatchFinish'), 'detectExecuteBatchFinish 保留（批量完成）')
++  // 模块内 autoCheckPlanFromReviews 定义保留（兼容读侧：index.js review-write 钩子 / task-done 消费）
++  assert.ok(src.includes('export async function autoCheckPlanFromReviews'), 'autoCheckPlanFromReviews 定义保留（兼容导出）')
++})
++
++test('③ 勾选迁移文案钉（手动勾选语义在场，旧自动勾选条款退役）', () => {
++  const exec = read('src/stages/execute.js')
++  const verify = read('src/stages/verify.js')
++  // 新语义
++  assert.ok(exec.includes('手动勾选 tasks.md 对应 checkbox'), 'execute 指引：手动勾选在位')
++  assert.ok(exec.includes('完成=实现+测试绿+wt-commit 即勾'), 'execute 指引：完成判定三要素（实现+测试绿+wt-commit）')
++  assert.ok(verify.includes('勾选由 agent 在任务完成（实现+测试绿+wt-commit）时手动写入'), 'verify 逐项检查步：手动勾选口径句')
++  // 旧条款退役
++  assert.ok(!exec.includes('禁止手动勾选 tasks.md 的 checkbox'), '旧「禁止手动勾选」退役')
++  assert.ok(!exec.includes('checkbox 由 CLI 自动勾选'), '旧「CLI 自动勾选」句退役')
++  assert.ok(!exec.includes('写 review.json 即可'), '旧「写 review.json 即可」句退役')
++  assert.ok(!exec.includes('### Task Review Gate'), 'Task Review Gate 指引段已删')
++  // 降级自审句收敛（豁免声明句在场）
++  for (const f of ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js']) {
++    const t = read(f)
++    assert.ok(!t.includes('主代理切换为审查者角色自审替代'), `${f} 旧降级自审句已删`)
++    assert.ok(t.includes('review-unsupervised.md'), `${f} 豁免声明句在场`)
++  }
++  // 跨仓回收段
++  assert.ok(exec.includes('手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义）'), '跨仓回收段手动勾选句在位')
++})
++
++test('④ 保留面钉：task-review.js / stage-review.js 模块兼容读侧在场', async () => {
++  const tr = await import(pathToFileURL(join(ROOT, 'src/task-review.js')).href)
++  for (const name of ['validateTaskReviews', 'validateCheckedTaskReviews', 'generateTaskReviewDrafts', 'resolveLatestExecuteRunIdWithTasks', 'isValidExecuteRunId']) {
++    assert.equal(typeof tr[name], 'function', `task-review.js 导出 ${name}（历史变更 doctor/回放兼容读侧）`)
++  }
++  const sr = await import(pathToFileURL(join(ROOT, 'src/stage-review.js')).href)
++  for (const name of ['validateStageReview', 'classifyReviewerChannel']) {
++    assert.equal(typeof sr[name], 'function', `stage-review.js 导出 ${name}（Stage Review 层保留）`)
++  }
++})
+diff --git a/test/task-truth-unify.test.mjs b/test/task-truth-unify.test.mjs
+index 093d6fc4..8d21b5fb 100644
+--- a/test/task-truth-unify.test.mjs
++++ b/test/task-truth-unify.test.mjs
+@@ -1,9 +1,9 @@
+ /**
+- * task 真源归一（P2-f，noai-ir-roadmap §5）：review.json verdict 是唯一真源，tasks.md
+- * checkbox 是它的显示态——CLI 唯一勾选者。锁定：
+- *   - autoCheckPlanFromReviews（review write 落盘即勾 / --done 兜底同函数）导出可调：
+- *     marker + review.json pass → checkbox 勾上；fail 不勾；
+- *   - prompt 契约：execute/verify 步骤 prompt 禁止「手动勾选」指引、声明 CLI 唯一勾选者。
++ * task 真源归一（P2-f）历史行为锁 + 勾选语义迁移钉（2026-09-26-task-review-retire）：
++ *   - autoCheckPlanFromReviews（review write 落盘即勾 / --done 兜底同函数）导出可调（兼容读侧
++ *     保留：历史变更残存 review.json 仍可被 review-write 钩子/task-done 消费）；
++ *   - prompt 契约（退役后新语义）：勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾），
++ *     旧「CLI 唯一勾选者/禁止手动勾选」声明随 Task Review 层退役。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -52,14 +52,13 @@ test('autoCheck：review pass 勾 / fail 不勾（真源 = review.json verdict
+   } finally { try { rmSync(cwd, { recursive: true, force: true }) } catch {} }
+ })
+ 
+-test('prompt 契约：verify 逐项检查步声明 CLI 唯一勾选者、无手动勾选指引', async () => {
++test('prompt 契约：勾选回归 agent 手动（2026-09-26 Task Review 退役），旧 CLI 单写者声明退役', async () => {
+   const step = verifyDef.steps.find(s => s.name === '逐项检查任务')
+   assert.ok(step, '步骤在场')
+-  assert.ok(step.prompt.includes('勾选唯一写入者是 CLI'), '声明单写者')
+-  assert.ok(!step.prompt.includes('agent 按 review gate 手动勾'), '旧双路说明退役')
+-  // execute 的 task review 协议条目
+-  const { execSync: es } = await import('node:child_process')
++  assert.ok(step.prompt.includes('勾选由 agent 在任务完成（实现+测试绿+wt-commit）时手动写入'), '声明手动勾选语义')
++  assert.ok(!step.prompt.includes('勾选唯一写入者是 CLI'), '旧「CLI 唯一勾选者」声明退役（autoCheck 勾选层已退役）')
++  // execute 的勾选协议：手动勾在位、禁止手勾旧句退役
+   const src = rf(join(ROOT_ttu, 'src', 'stages', 'execute.js'), 'utf8')
+-  assert.ok(src.includes('禁止手动勾选 tasks.md 的 checkbox'), 'execute 协议：禁止手动勾选')
+-  assert.ok(!src.includes('才允许勾选 tasks.md 中对应任务的 checkbox'), '旧「先写 review 再允许勾」退役')
++  assert.ok(src.includes('手动勾选 tasks.md 对应 checkbox'), 'execute 协议：手动勾选指引在位')
++  assert.ok(!src.includes('禁止手动勾选 tasks.md 的 checkbox'), '旧「禁止手动勾选」协议退役')
+ })
+diff --git a/.sillyspec/changes/2026-09-26-task-review-retire/design.md b/.sillyspec/changes/2026-09-26-task-review-retire/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-task-review-retire/design.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:31:44.113Z
++---
++# 设计记录（Design Record）— 2026-09-26-task-review-retire
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++R18 对撞实验实证（docs/analysis/R18-*）：execute 每任务 review.json 评审层在无嵌套派发环境全降自审表演，15 次拦截中 5 次是它的形式合规（缺件/假 hash/枚举错），实质拦截为零；前置豁免通道（2026-09-26-review-unsupervised-exit，已归档）已覆盖无派发环境。本变更把 Task Review 层从「可豁免」推进到「退役」：删 gates.js 三处消费门（Execute Task Review Gate 整块含豁免分支、enforceReviewJsonGate 硬门、enforceAlignExecuteReviewGate 的 Task Review 段），停写生成侧（complete.js 两处 autoCheckPlanFromReviews 调用与 generateTaskReviewDrafts 兜底），勾选迁移为 agent 手动勾（完成=实现+测试绿+wt-commit，同 thin 工作单元语义），假勾防线由 checkExecuteCodeEvidence（detectExecuteBatchFinish 内，保留）+ verify 测试对账承担。Stage Review 层（阶段粒度）保留——R8 实证有真独立评审者时抓过真缺口；task-review.js / stage-review.js 模块保留作历史归档 doctor/回放兼容读侧。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++- gates.js：删导出 enforceReviewJsonGate（唯一调用方 complete.js 同步删调用与 import）；enforceAlignExecuteReviewGate 签名不变、行为收窄为豁免头+Stage Review 段（Task Review 段删）；runStageCompletionGates 级联不再含 Execute Task Review Gate 分支（verify-required-evidence.json 随之停写）。
++- complete.js：execute --done 路径不再自动勾选 tasks.md（两处 autoCheckPlanFromReviews 调用删）、不再生成 per-task review 草稿（generateTaskReviewDrafts 兜底块删）；detectExecuteBatchFinish 及 checkExecuteCodeEvidence 客观核验保留不动。
++- execute.js 指引：Task Review Gate 段整体删除；勾选语义改「完成一个任务（实现+测试绿+wt-commit）即手动勾 checkbox」；QA 子代理（阶段级）保留但分层前提改写（无 task review 层，统一按 design×diff 全量对照）；旧「无 Agent tool 降级自审」句删（豁免声明句已在）。
++- verify.js：verify-required-evidence.json 改兼容读（随 Task Review 退役停写——在场则消费，缺席=无 cannot_verify 任务）。
++- 无 CLI 命令签名变化；review write / task done / backfill-reviews 命令保留（历史变更兼容侧，残存 review.json 仍可被 doctor/回放读侧消费）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到到达：review.json 不再是任何门的输入，历史变更残存的 review.json 只走保留的兼容读侧（index.js review-write 钩子、task-done、assertWaveTasksComplete 内幂等 autoCheck——无 review 时纯 no-op），新变更零 review.json 零影响；勾选唯一写入者回到 agent 手动，tasks.md checkbox 语义（已勾=已完成，中断续跑跳过）不变。
++2. 并发写：tasks.md 勾选由 agent 串行手动写（thin 语义），CLI 不再有自动补勾并发写面；execute 批量完成仍经 checkExecuteCodeEvidence 客观 diff 核验（假勾→无代码证据→不批量成立），多 agent 并发面较退役前只减不增。
++3. 切换/生命周期：中断恢复锚 tasks.md checkbox（写入者变了、语义没变）；退役前生成的 verify-required-evidence.json 在场仍被 verify 消费（兼容读），缺席不再阻断；flow/进度库结构无变化。
++4. 作用域：改动全在主仓 CLI 源码（gates/complete/execute/verify 指引），worktree/跨仓机制不变；历史归档变更的 doctor/回放读侧依赖 task-review.js 导出——模块与导出一律保留。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：手动勾选引入假勾面（agent 未做即勾/顺手全勾）。缓解：detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验仍在 execute 收口跑（勾了但无 base..HEAD diff 证据→批量完成不成立、阻塞暴露）+ verify 阶段测试对账门禁不变（实测失败阻断收口）+ verify 逐项检查任务步仍只读对照勾选态。放弃的方案：①只加豁免不退役——前置变更已做，R18 实证豁免后仍留 5/15 形式拦截摩擦且「可豁免的门」诱导表演；②连 task-review.js 模块一起删——放弃，历史归档 doctor/回放兼容读侧依赖其导出（validateTaskReviews 等），review write/backfill-reviews 命令仍引用；③保留 Task Review 门但只对 independent tier 生效——放弃，tier 分级在 Stage Review 层已有，任务粒度无独立评审者供给时该门只剩形式校验（R18 实证）。
+
+diff --git a/.sillyspec/changes/2026-09-26-task-review-retire/flow-state.yaml b/.sillyspec/changes/2026-09-26-task-review-retire/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-task-review-retire/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 7b1be071dd7263a2a7ca3eca699c197f9222088c
++updatedAt: '2026-09-26T03:02:01.973Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js18)（11.1s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926030130\test-result.json｜lint: passed
++  ← npm run lint（30.8s）｜门文件 31 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-task-review-retire/proposal.md b/.sillyspec/changes/2026-09-26-task-review-retire/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-task-review-retire/proposal.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:31:44.112Z
++---
++# 提案书（Proposal）— 2026-09-26-task-review-retire
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:ba175784cf3d2b068ea8b723bb9a25c0911f8b720544bd486a4dc18bb177d8ce:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++任务原话转写：动机/背景：R18 对撞实验实证 execute 每任务 review.json 评审层在无嵌套派发环境全降自审表演——15 次拦截中 5 次仅形式合规（缺件/假 hash/枚举错），实质拦截为零；前置豁免通道（2026-09-26-review-unsupervised-exit）已落地归档。本变更把 Task Review 层（每任务粒度）从「可豁免」推进到「退役」；Stage Review 层（阶段粒度）保留（R8 实证有真独立评审者时抓过缺口，豁免通道已覆盖其余场景）。
++
++成功标准：
++- src/run/gates.js 三处消费门退役：Execute Task Review Gate 整块删除（含 review-unsupervised 豁免分支）、enforceReviewJsonGate 函数体退役、enforceAlignExecuteReviewGate 的 Task Review 段删除（doctor 门只留 Stage Review 段+豁免头）
++- 生成侧停写：complete.js 不再调用 autoCheckPlanFromReviews 与 generateTaskReviewDrafts 兜底；execute.js 指引三处改为手动勾选语义（完成=实现+测试绿+wt-commit 即手动勾 checkbox）
++- src/stages/verify.js 对 verify-required-evidence.json 改兼容读（随 Task Review 退役停写，在场则消费，缺席不阻断）
++- src/task-review.js 与 src/stage-review.js 模块保留不删（历史归档兼容读侧）
++- 门拦截测试重写/删除（align-execute-review-gate / review-json-field-gate），新增三消费点退役钉用例（源码文本钉+勾选新文案在场）；全量测试绿
++- .sillyspec/knowledge/known-issues.md 中 R18 系列 task-review 形式拦截条目状态更新为已退役并指向本变更号
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:f5175a210ce2595a3ed7639ad17d50732884563953e143ca9ce66fb2c1a6b90a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. src/run/gates.js 三处消费门退役：Execute Task Review Gate 整块删除（含 review-unsupervised 豁免分支）、enforceReviewJsonGate 函数体退役、enforceAlignExecuteReviewGate 的 Task Review 段删除（doctor 门只留 Stage Review 段+豁免头）
++2. 生成侧停写：complete.js 不再调用 autoCheckPlanFromReviews 与 generateTaskReviewDrafts 兜底
++3. execute.js 指引三处改为手动勾选语义（完成=实现+测试绿+wt-commit 即手动勾 checkbox）
++4. src/stages/verify.js 对 verify-required-evidence.json 改兼容读（随 Task Review 退役停写，在场则消费，缺席不阻断）
++5. src/task-review.js 与 src/stage-review.js 模块保留不删（历史归档兼容读侧）
++6. 门拦截测试重写/删除（align-execute-review-gate / review-json-field-gate），新增三消费点退役钉用例（源码文本钉+勾选新文案在场）
++7. 全量测试绿
++8. .sillyspec/knowledge/known-issues.md 中 R18 系列 task-review 形式拦截条目状态更新为已退役并指向本变更号
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:7a530cef0fd42f55647616230e07f5a126c35df6d92af059a725fbb9b91f31eb:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-task-review-retire 留痕重锚 -->
++1. src/run/gates.js 三处消费门退役：Execute Task Review Gate 整块删除（含 review-unsupervised 豁免分支）、enforceReviewJsonGate 函数体退役、enforceAlignExecuteReviewGate 的 Task Review 段删除（doctor 门只留 Stage Review 段+豁免头）
++2. 生成侧停写：complete.js 不再调用 autoCheckPlanFromReviews 与 generateTaskReviewDrafts 兜底
++3. execute.js 指引三处改为手动勾选语义（完成=实现+测试绿+wt-commit 即手动勾 checkbox）
++4. src/stages/verify.js 对 verify-required-evidence.json 改兼容读（随 Task Review 退役停写，在场则消费，缺席不阻断）
++5. src/task-review.js 与 src/stage-review.js 模块保留不删（历史归档兼容读侧）
++6. 门拦截测试重写/删除（align-execute-review-gate / review-json-field-gate），新增三消费点退役钉用例（源码文本钉+勾选新文案在场）
++7. 全量测试绿
++8. .sillyspec/knowledge/known-issues.md 中 R18 系列 task-review 形式拦截条目状态更新为已退役并指向本变更号
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-task-review-retire/requirements.md b/.sillyspec/changes/2026-09-26-task-review-retire/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-task-review-retire/requirements.md
+@@ -0,0 +1,70 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:31:44.113Z
++---
++# 需求规格（Requirements）— 2026-09-26-task-review-retire
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: gates.js 三处消费门退役
++Given execute 阶段完成（或 doctor --align-execute-progress --confirm）；When 阶段完成门级联/align 前置门执行；Then 不再校验任何 per-task review.json——Execute Task Review Gate 整块（含豁免分支）与 enforceReviewJsonGate 导出删除，enforceAlignExecuteReviewGate 只剩 Stage Review 段+豁免头（Stage Review 保留面不变）。
++
++### FR-02: 生成侧停写（勾选自动化迁移）
++Given execute 任一步 --done 或 execute 阶段完成；When CLI 走 completeStep；Then 不再调 autoCheckPlanFromReviews 自动勾选 tasks.md、不再跑 generateTaskReviewDrafts per-task 草稿兜底；勾选唯一写入者回归 agent 手动（完成=实现+测试绿+wt-commit 即勾），假勾防线由 detectExecuteBatchFinish 内 checkExecuteCodeEvidence + verify 测试对账承担。
++
++### FR-03: execute 指引手动勾选语义
++Given buildWavePrompt 渲染（main/dispatch 两模式）；When 注入执行方式/调度要求段；Then 指引为「手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义）」，Task Review Gate 指引段/「CLI 自动勾选」/「写 review.json 即可」句退役；QA 子代理（阶段级）保留但分层前提改写（无 task review 层）；跨仓回收段 head 锡点自动落盘承诺（随 enforceReviewJsonGate 删除）改为可选手写；brainstorm/plan/execute 旧「降级自审」句删除（review-unsupervised.md 豁免句在场）。
++
++### FR-04: verify-required-evidence.json 兼容读
++Given verify 阶段加载证据账；When 检查 verify-required-evidence.json；Then 该文件随 Task Review 退役停写——在场则消费（历史变更兼容读），缺席=无 cannot_verify 任务、不阻断；verify「逐项检查任务」步勾选口径句改手动语义。
++
++### FR-05: 模块保留面
++Given 历史归档变更的 doctor/回放兼容读侧；When 引用 task-review.js / stage-review.js；Then 模块与既有导出保留不删（validateTaskReviews/validateCheckedTaskReviews/generateTaskReviewDrafts 等），仅 writeVerifyRequiredEvidence 与 printReviewResult 两个零引用导出按 22e-b 死码裁决删除；review write / backfill-reviews / task-done 兼容路径不动。
++
++### FR-06: 测试面（门拦截测试重写/删 + 退役钉）
++Given 本变更交付的测试；When 跑受影响清单；Then align-execute-review-gate 场景①③语义翻转+⑤源码退役钉、review-unsupervised-exit 消费点钉收窄为两处+退役钉、execute-run-dir-fail-loud 写入点收窄三处+退役行为钉、stage-completion-atomicity (f)(g) 零消费钉、execution-mode-render/dispatch-contract/task-truth-unify 契约翻转；新增 test/task-review-retire.test.mjs（三消费点退役钉+勾选新文案钉+模块保留钉）。
++
++### FR-07: 全量测试绿
++Given .sillyspec/local.yaml commands.test（npm run test:core）与 commands.lint；When 收口实测；Then test:core 180/180 通过、lint 通过、受影响测试清单（22 文件）全绿。
++
++### FR-08: 知识面收尾
++Given R18 实证知识沉淀；When 收尾 knowledge 维护；Then known-issues.md 新增「Task Review 层已退役」条目（状态🟢 已退役、指向本变更号 2026-09-26-task-review-retire，含 R18 实证依据与假勾防线交接说明）。
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: src/run/gates.js 三处消费门退役：Execute Task Review Gate 整块删除（含 review-unsupervised 豁免分支）、enforceReviewJsonGate 函数体退役、enforceAlignExecuteReviewGate 的 Task Review 段删除（doctor 门只留 Stage Review 段+豁免头）
++FR-02: 生成侧停写：complete.js 不再调用 autoCheckPlanFromReviews 与 generateTaskReviewDrafts 兜底
++FR-03: execute.js 指引三处改为手动勾选语义（完成=实现+测试绿+wt-commit 即手动勾 checkbox）
++FR-04: src/stages/verify.js 对 verify-required-evidence.json 改兼容读（随 Task Review 退役停写，在场则消费，缺席不阻断）
++FR-05: src/task-review.js 与 src/stage-review.js 模块保留不删（历史归档兼容读侧）
++FR-06: 门拦截测试重写/删除（align-execute-review-gate / review-json-field-gate），新增三消费点退役钉用例（源码文本钉+勾选新文案在场）
++FR-07: 全量测试绿
++FR-08: .sillyspec/knowledge/known-issues.md 中 R18 系列 task-review 形式拦截条目状态更新为已退役并指向本变更号
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/task-review-retire.test.mjs「① gates.js 三处消费门退役」；test/align-execute-review-gate.test.mjs 场景①③+⑤；test/review-unsupervised-exit.test.mjs「② 消费点接线钉」退役断言；test/stage-completion-atomicity.test.mjs (f)(g)（validateTaskReviews 零消费）。
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/task-review-retire.test.mjs「② complete.js 生成侧停写（批量完成与代码证据核验保留）」；test/execute-run-dir-fail-loud.test.mjs 场景⑤（execute-runs 损坏不再阻断完成）；test/execute-batch-endtoend-checkbox.test.mjs / test/run-complete-step-execute-batch.test.mjs（批量完成不回归）。
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/task-review-retire.test.mjs「③ 勾选迁移文案钉」；test/execution-mode-render.test.mjs T3（两模式手动勾选在位、Task Review Gate 退役）；test/dispatch-contract.test.mjs 退役钉；test/task-truth-unify.test.mjs「prompt 契约：勾选回归 agent 手动」。
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/task-review-retire.test.mjs「③ 勾选迁移文案钉」verify 口径句断言；test/task-truth-unify.test.mjs verify 逐项检查步断言。（verify-required-evidence.json 缺席不阻断的既有行为由 gates.js verify 收口路径既有测试面覆盖，本变更未改其消费逻辑。）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/task-review-retire.test.mjs「④ 保留面钉：task-review.js / stage-review.js 模块兼容读侧在场」；test/review-json-field-gate.test.mjs + test/execute-run-marker-drift.test.mjs（模块纯函数兼容读侧语义不变）；test/backfill-reviews.test.mjs / test/task-done.test.mjs（兼容路径不回归）。
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/task-review-retire.test.mjs 全部四节（本变更新增退役钉用例）；各重写测试文件见 FR-01/02/03 绑定行。
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++npm run test:core（180/180，local.yaml commands.test 实测面）+ npm run lint（未引用导出 0 项）+ 受影响清单 22 个测试文件全绿（本次会话实测，exit 全 0）。
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：知识文档更新（known-issues.md 新增已退役条目），无行为面；其可追溯性由条目内变更号引用与归档目录锚定。
+
+diff --git a/.sillyspec/changes/2026-09-26-task-review-retire/tasks.md b/.sillyspec/changes/2026-09-26-task-review-retire/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-task-review-retire/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:31:44.113Z
++---
++# 任务注册表（Tasks）— 2026-09-26-task-review-retire
++
++> 任务面按实际实现路径覆写（保持 checkbox 行形态）；验收锚在 requirements。
++
++- [x] task-01: src/run/gates.js 三处消费门退役：Execute Task Review Gate 整块删除（含 review-unsupervised 豁免分支）、enforceReviewJsonGate 函数与导出删除（调用方 complete.js 同步删）、enforceAlignExecuteReviewGate 的 Task Review 段删除（doctor 门只留 Stage Review 段+豁免头）+ 文件头/级联注释同步
++- [x] task-02: complete.js 生成侧停写：:600 区 autoCheckPlanFromReviews 调用删（detectExecuteBatchFinish 保留）、per-task review 草稿兜底块删、execute 完成提示区第二处 autoCheck 调用删（退役后其「review.json 缺失→archive 会拦」警告成误导噪音）
++- [x] task-03: execute.js 指引改手动勾选语义：Task Review Gate 段整体删除；主模式/调度模式/调度要求段勾选句改「完成=实现+测试绿+wt-commit 即手动勾」；QA 子代理分层前提改写（无 task review 层）；任务边界上报段 review write 措辞删
++- [x] task-04: verify.js 兼容读：verify-required-evidence.json 检查项改「随 Task Review 退役停写——在场则消费」；「逐项检查任务」步勾选口径句（勾选唯一写入者是 CLI）改手动语义
++- [x] task-05: 指引收敛：brainstorm.js/plan.js/execute.js 旧「无 Agent tool 时降级自审」句删除（review-unsupervised.md 豁免句已在，措辞修为仅 Stage Review 门）；brainstorm 档位段对旧句的引用同步修
++- [x] task-06: 保留面验证：src/task-review.js 与 src/stage-review.js 模块不删（validateCheckedTaskReviews 等导出保留，review write/backfill-reviews/task-done 兼容路径不动）
++- [x] task-07: 测试面：align-execute-review-gate 场景①③语义翻转+新增源码退役钉；review-unsupervised-exit 的 review-json 硬门豁免钉删（align 门钉保留）；execute-run-marker-drift 改退役钉；新增三消费点退役钉用例（源码文本钉+勾选新文案在场）；review-json-field-gate 头注更新（模块兼容读侧测试）
++- [x] task-08: 全量测试绿（node --check 全部改动文件 + 受影响测试文件 + npm run test:core）
++- [x] task-09: .sillyspec/knowledge/known-issues.md 中 R18 系列 task-review 形式拦截条目状态更新为已退役并指向本变更号
