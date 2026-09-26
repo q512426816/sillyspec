@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-tick-loop-nudge",
+  "verdict": "PASS",
+  "reviewer": "独立评审员（干净上下文子代理）",
+  "reviewedAt": "2026-09-26T06:49:06Z",
+  "dimensionNotes": {
+    "FR-01 提醒条件逻辑": "源码齐备：phase.startsWith('②') + tot>0 && c<tot + parseInt(commits,10)>0 三条件在 src/flow.js L1251-1262；防噪面成立——①/③阶段不命中 startsWith('②')（③归档 ledger done 后 phase 覆写）、勾齐后 c<tot 不成立、零提交 parseInt('0')=0 不成立。phase 推导与 status 展示行同源三段变量（L1245-1247），②判定=design≥3槽+FR+绑定槽齐，与简报语义一致，判定准确。残留缺口见 findings[2]（提交计数未做归属收窄）。",
+    "FR-04 时点判定": "untracked 分支数据正确：Windows 绝对路径 pathspec 实测（backslash/fwdslash 对已跟踪文件均返回 hash，exit 0），tasks.md 判空确因 untracked 非解析失败；本变更自身 tasks.md 当前即 untracked，收口将触发该 warn——行为符合设计。一把勾分支存在超集缺口见 findings[0]（P2）。fail-soft 双层（gitQuiet 吞错返回 null + 外层 try/catch），但 null 吞错形态落进 untracked 分支产生误导文案，见 findings[1]。",
+    "FR-02/03 文案面": "flow-draft.js L358 纪律行（含完成判定语义+pathspec 提交要求）、flow.js L538-539 交付纪律两行、L542 交叉引用（②执行阶段勾选滞后时 status 会带提醒行）均在已提交源在场；模板字面量渲染无转义破坏（新行不含反引号，既有行 \\` 转义保持）；tasks 头部行位于去指纹化 rows 之前的机器序言区，指纹=ledger 起点快照，对在途变更无回溯影响。覆盖缺口（adopt 简报面未同步）见 findings[4]。",
+    "测试": "test/tick-loop-nudge.test.mjs 4 用例为源码文本级静态钉（src.includes），FR-01/FR-04 的运行时分支（phase 门/时点比对/null 过滤）无 temp git 仓 fixture 覆盖——已人工核 L1272 .filter(Boolean)（null tickNudge 不渲染）与 pathspec 解析（实测），静态钉可接受但强度有限，见 findings[3]。",
+    "披露①提醒噪音风险": "可接受。三条件限定把①阶段/勾齐/零提交全部静默（源码逐条核过）；重复刷=每次 status 同条件同文案一行，幂等不堆积，设计槽4已自认并押 R20 观测。残留=发现[2]的计数夸大（他侧提交计入），不改变静默面。",
+    "披露②warn 不阻断力度": "可接受。fake 拦截语义原样不动（L722-728），complete 分支=token 证据已验全勾为真（R19 实证勾选滞后≠假勾），改阻断只会制造 amend 循环（R18 同款摩擦）；warn 为收口时点一次性 console.warn，与「行为提醒非造假主张」的档位定位相称（对齐既有勾选缺失 advisory）。",
+    "披露③自动勾方案弃用": "可接受。thin-agent-tasks 政策本就要求 agent 覆写机器预填行，CLI 侧据 wt-commit 反推自动勾会消解 agent 对任务面的 ownership；且一单元多提交/行被覆写后 task-NN 映射失配，反推脆。保留 agent 手勾+status/tasks 头部/简报三通道提醒的替代方案自洽。"
+  },
+  "findings": [
+    {
+      "title": "FR-04 一把勾判定是「HEAD 触达 tasks.md」超集，未实际验证「首次提交==最后提交」，warn 文案断言与检查条件不一致",
+      "severity": "P2",
+      "evidence": "src/flow.js L735-736：tasksIn = git log --format=%h -n 1 -- tasksPath（最后触达 tasks.md 的提交），lastIn = git log --format=%h -n 1（HEAD）。相等仅证明 HEAD 提交触达 tasks.md，未验证 tasks.md 只被一次提交触达（真「首次==最后」需 --reverse 取首或计数==1）。对理想合规形态——边干边勾且每次随单元提交 tasks.md、末次交付提交仍含 tasks.md（恰是 FR-03 新纪律引导的形态）——tasksIn 仍等于 HEAD，误报「一把勾模式」，且 warn 文案断言『tasks.md 的首次 git 提交 == 收口最后提交』是未实际检查的事实主张。误报会污染 R20 行为迁移观测口径（观测者按 warn 行计数会高估一把勾发生率）。不阻断、无下游数据消费，判 P2 非 P1。",
+      "location": "src/flow.js:735-740",
+      "reviewer": "独立评审员（干净上下文子代理）"
+    },
+    {
+      "title": "哨兵时点 untracked 分支与 git 调用失败不可区分：gitQuiet 吞错返回 null 落进 !tasksIn，误报 untracked",
+      "severity": "P3",
+      "evidence": "git-helper.js L145-154：gitQuiet 失败（含 ENOBUFS/非零退出/异常）返回 null 不抛异常，外层 try/catch（src/flow.js L734-742）接不住。git 不可用或平台指针模式（specBase 在 cwd 仓外，绝对路径 pathspec 出仓 git 报 fatal）时，!tasksIn 成立 → 打出『tasks.md 未随交付提交（untracked 直至归档）』误导文案。advisory 不阻断；本仓常规形态（specBase=cwd 仓内 .sillyspec）不受影响——Windows 绝对路径 pathspec 已实测正确解析。",
+      "location": "src/flow.js:735-738, src/git-helper.js:145-154",
+      "reviewer": "独立评审员（干净上下文子代理）"
+    },
+    {
+      "title": "status 勾选提醒的「区间已有 N 提交」未做归属收窄，多 agent 共享仓下他侧提交可触发条件并夸大计数",
+      "severity": "P3",
+      "evidence": "src/flow.js L1257：git rev-list --count baseline..HEAD 全分支计数，不区分会话归属（AGENTS.md 明示多 agent 共享仓前提）。他侧会话的提交会计入 N 并可能在本会话零提交时使 commits>0 条件成立，提醒行「区间已有 N 提交」夸大。对照：flow done 侧 attributedChangedFiles（L620-631）有他侧声明切分，status 侧无同款。单行 advisory、触发前提仍是 c<tot（提醒勾已完成单元的语义大体仍成立），可接受，建议后续对齐归属口径。",
+      "location": "src/flow.js:1257-1259",
+      "reviewer": "独立评审员（干净上下文子代理）"
+    },
+    {
+      "title": "测试全部为源码文本级静态钉（src.includes），FR-01/FR-04 无运行时 fixture 覆盖",
+      "severity": "P3",
+      "evidence": "test/tick-loop-nudge.test.mjs 四用例均为读源码做字符串包含断言，不执行 cmdFlow/cmdFlowDone。findings[0] 的超集缺口正是「渐进提交 tasks.md→应无一把勾 warn」的 temp git 仓 fixture 用例能拦下的形态。关键运行时面已人工核：L1272 .filter(Boolean) 使 null tickNudge 不渲染；pathspec Windows 解析实测通过。静态钉作为文案钉可行，但时点判定属行为逻辑，建议补一条 fixture 用例（本评审不阻断）。",
+      "location": "test/tick-loop-nudge.test.mjs:1-48",
+      "reviewer": "独立评审员（干净上下文子代理）"
+    },
+    {
+      "title": "adopt（头脑风暴收编）简报面未同步 FR-03 文案：交付纪律行不含 tasks.md 提交要求，无 status 提醒交叉引用",
+      "severity": "P3",
+      "evidence": "src/flow.js L377-381（adopt 路径简报）仍是旧文案『⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件』，无「tasks.md 一并显式 pathspec 提交」也无「status 会带提醒行」交叉引用；收编变更与 fresh 变更有同等的 untracked-tasks 风险（其 tasks.md 由 redraftMissingArtifacts 补生成，同样 untracked）。FR-03 字面与测试钉均只锚 fresh 简报，判覆盖缺口非承诺违反。",
+      "location": "src/flow.js:377-381",
+      "reviewer": "独立评审员（干净上下文子代理）"
+    }
+  ]
+}
