@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "死锁诊断 hint 在阻断态（missing_declared）不上 console，只落盘——R18 死锁主manifestation面上 agent 先看到的恰是通用②类修复指引",
+      "evidence": "hint ⇒ actual 全空 ⇒ 声明全 missing ⇒ status='missing_declared'（hint 与 ok 不可能共存：ok 需全部声明 matched 而 files 空；skipped 各分支在 actual 解析前提前返回）。而 printReconcileTargetFilesCheck 只在 ok 分支渲染 notes（gates.js:2286 `for (const n of (r.notes||[])) console.log`）；missing_declared 分支（gates.js:2227-2235）打印 missing 清单+supportedFixes+sources，不含 notes——此时 console 给的修复指引是『完成声明的工作/或修正声明』（gates.js:2070-2071），对 R18 并行推进死锁形态正是误导方向（重做会被再扫走）。hint 的真实用户面出口仅剩 writeReconcileRunResult 落盘 reconcile-result.json 的 notes 字段（gates.js:2129）+ 阻断态 writeVerifyGatePointer 稳定锚点指针（gates.js:2151-2170，console.error 明示直读该文件）——链路真实通、但要求 agent 去读 json 才见诊断。machine-interface.js --full 预检（:427-440）消费 status/missing/undeclared，notes 整体丢弃。FR-02『经 notes 带出』字面兑现（结果对象+落盘件均含），但『诊断先行杜绝危险自救』在最高价值面（阻断时刻的 console）缺位。修复一行级：missing_declared 分支加 `for (const n of (r.notes||[])) console.error('   ' + n)`。",
+      "location": "src/run/gates.js:2227-2235（缺 notes 渲染）对照 :2286（ok 分支有）; src/verify-postcheck.js:3593-3595（push 进 notes）; src/machine-interface.js:427-440（notes 丢弃）"
+    },
+    {
+      "severity": "P3",
+      "title": "meta 扫描兜底分支引用作用域外标识符 sb：runtimeRoot 缺省时第三候选静默失效（当前调用面不可达，lint 抓不住）",
+      "evidence": "src/verify-postcheck.js:3348 `join(runtimeRoot || join(sb, '.runtime'), 'worktrees')`——sb 在 resolveReconcileActualFiles 函数体（:3300-3447）内无定义，亦无模块级定义（grep `^(const|let|var) sb` 零命中）。runtimeRoot 为假值时 `join(sb,...)` 抛 ReferenceError，被外层 try/catch（:3347/:3366）静默吞掉——本变更的核心功能在缺参调用下无声关闭。当前三个调用方全部传字符串 runtimeRoot（verify-postcheck.js:3592 rt、:3781 rt、scope-audit.js:896），运行时不可达，无行为缺陷；但兜底表达式是死代码+潜在陷阱（未来直调方只传 specBase 即静默失去第三候选），且 npm run lint 实为 test/check-syntax.mjs 内容规则检查（非 no-undef），独立复跑通过也证明抓不住此类问题。对照：同函数 B3 源 :3421 直接 join(runtimeRoot,...) 本就要求 runtimeRoot 为字符串——应删兜底或改为 join(specBase||join(cwd,'.sillyspec'),'.runtime')。",
+      "location": "src/verify-postcheck.js:3348"
+    },
+    {
+      "severity": "P3",
+      "title": "meta-branch 源串在 merge-base 验证前提前 push：非 main 默认分支仓库里 sources 谎报锚定源在用并抑制 hint；命中时 sources 双记",
+      "evidence": "对照两套时序：常规 B1 源串 'main:diff-merge-base' 在 merge-base 取得且 diff 成功后才 push（:3375-3380）；meta-branch 源串在扫描命中+rev-parse 通过即 push（:3357-3359），此后 merge-base 'main' 失败（默认分支叫 master 等仓，:3372-3374 注释自认该形态）时零贡献——sources 谎报 `main:diff-merge-base(meta-branch:X)` 在用，且 hint 条件 `!sources.some(s=>s.startsWith('main:diff-merge-base'))`（:3443）被该前缀抑制：B1 实际零贡献、porcelain 空、无 pathspec 的全空形态不出 hint（假阴性边角）。完全命中时 sources 双记（meta-branch 串 + main:diff-merge-base）。测试①仓库默认分支为 main 未覆盖此边。诊断可见性级缺陷（sources 是③类误报排查的第一入口），不影响差集数据正确性。修法：meta 源串延迟到 diffOk 后随常规源串一起 push（或命中时以 metaBranchRef 记录、:3380 处合并标注）。",
+      "location": "src/verify-postcheck.js:3357-3359（提前 push）对照 :3375-3380（常规时序）; :3443（hint 前缀判定受影响）"
+    }
+  ],
+  "reviewer": "subagent",
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T02:25:22.274Z",
+  "change": "2026-09-26-reconcile-source-isolation"
+}

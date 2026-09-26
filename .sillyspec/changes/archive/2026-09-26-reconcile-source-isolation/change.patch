@@ -1,0 +1,342 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 6f75c23e..064eb13a 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -3338,9 +3338,36 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+     const branch = 'sillyspec/' + changeName
+     const branchHash = gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', branch + '^{commit}'], { timeout: 30 * 1000 })
+     const auditTag = 'sillyspec-audit/' + branch
++    // 第三候选（2026-09-26-reconcile-source-isolation，R18-SF-full 对账死锁实证）：分支名约定
++    // sillyspec/<change> 对非约定命名的分支（实验分支 r18/sf-full 等）落空 → B1 全缺 → agent
++    // 发明「暂存物化」自救又被并行会话裸提交扫走（4 种面重建 matched=0 死循环）。硬化：扫
++    // worktrees meta 的 changeName 键匹配取真实 branch（meta.branch 由 worktree 建立时写入）。
++    let metaBranchRef = null
++    if (!(typeof branchHash === 'string' && branchHash.trim()) && !gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 })) {
++      try {
++        const wtBase = join(runtimeRoot || join(sb, '.runtime'), 'worktrees')
++        if (existsSync(wtBase)) {
++          for (const e of readdirSync(wtBase, { withFileTypes: true })) {
++            if (!e.isDirectory()) continue
++            try {
++              const mp = join(wtBase, e.name, 'meta.json')
++              if (!existsSync(mp)) continue
++              const m = JSON.parse(String(readFileSync(mp, 'utf8')).replace(/^\uFEFF/, ''))
++              if (m && m.changeName === changeName && typeof m.branch === 'string' && m.branch.trim()) {
++                if (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', m.branch.trim() + '^{commit}'], { timeout: 30 * 1000 })) {
++                  metaBranchRef = m.branch.trim()
++                  sources.push(`main:diff-merge-base(meta-branch:${metaBranchRef})`)
++                }
++                break
++              }
++            } catch { /* 单 meta 损坏试下一个 */ }
++          }
++        }
++      } catch { /* meta 扫描失败静默省略 */ }
++    }
+     const diffRef = (typeof branchHash === 'string' && branchHash.trim())
+       ? branch
+-      : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
++      : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : (metaBranchRef || null))
+     if (diffRef) {
+       // 形态 B 定义下 meta 已删，baseBranch 无从读 → 缺省 'main'（run/prompt.js:764 同缺省）；
+       // 主分支叫 master 等仓库 merge-base 失败 → 与分支不存在同处置（省略该源）
+@@ -3408,7 +3435,15 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
+   }
+ 
+   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
+-  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles }
++  // 多会话推进死锁诊断（reconcile-source-isolation，R18-SF-full 实证）：post-apply 形态下
++  // 实际面全空（B1 无 ref + porcelain 无未提交面 + 无 apply-pathspec 兜底）= 典型「主仓被
++  // 并行会话推进」形态（本变更提交/暂存被他人裸提交带走）——历史上 agent 被逼发明「暂存
++  // 物化」自救（touch 文件进共享暂存区），随即又被扫走形成 matched=0 死循环。诊断先行指明
++  // 安全出路，杜绝危险自救；消费方（reconcileTargetFiles/gates）把它带进 notes。
++  const parallelAdvanceHint = (form === 'post-apply' && files.length === 0 && union.size === 0 && !sources.some((s) => s.startsWith('main:diff-merge-base') || s.startsWith('apply-pathspec')))
++    ? '⚠️ actual 源全空（无分支锚点 diff + 主仓无未提交面 + 无 apply-pathspec 兜底）——典型「主仓被并行会话推进」形态（本变更的提交/暂存可能已被他侧裸提交扫走）。切勿用「暂存物化」自救（touch 文件进共享暂存区——会被再次扫走且污染他侧，R18-SF-full 实证 matched=0 死循环）；出路：① 恢复/登记本变更分支（worktree meta.json 的 branch 字段）让锚定 diff 生效后重跑 ② 确属全量已在他侧提交：与该会话按 AGENTS 规则 18 对账后以该提交为锚核销'
++    : null
++  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles, parallelAdvanceHint }
+ }
+ 
+ /**
+@@ -3555,6 +3590,9 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null,
+ 
+   // —— actual 侧（三源并集，两形态）——
+   const actual = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName })
++  if (actual.parallelAdvanceHint) {
++    notes.push(actual.parallelAdvanceHint)
++  }
+   if (actual.foreignExcluded > 0) {
+     notes.push(`主仓 status 捕入的 ${actual.foreignExcluded} 个并行会话声明文件已剔除（不参与本变更对账）`)
+   }
+diff --git a/test/reconcile-source-isolation.test.mjs b/test/reconcile-source-isolation.test.mjs
+new file mode 100644
+index 00000000..ee1eddf8
+--- /dev/null
++++ b/test/reconcile-source-isolation.test.mjs
+@@ -0,0 +1,71 @@
++/**
++ * reconcile-source-isolation.test.mjs — 对账源隔离（2026-09-26-reconcile-source-isolation）
++ *
++ * 覆盖验收面（R18-SF-full 实证：非约定分支名 → B1 猜不中 → agent「暂存物化」自救被并行
++ * 会话裸提交扫走 → matched=0 死循环）：
++ *   ① meta 分支锚点兜底：sillyspec/<change> 与审计 tag 均落空时，扫 worktrees meta 按
++ *      changeName 键匹配取真实 branch 作 diffRef（sources 记 meta-branch）；
++ *   ② 死锁诊断：post-apply 形态 actual 源全空时 parallelAdvanceHint 在场（指明形态+禁物化
++ *      自救+安全出路），带文件面时不误报。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { resolveReconcileActualFiles } = await import(pathToFileURL(join(ROOT, 'src/verify-postcheck.js')).href)
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'rsi-'))
++  const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe', encoding: 'utf8' })
++  g(['init', '-q', '-b', 'main']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
++  writeFileSync(join(cwd, 'base.txt'), 'b\n')
++  g(['add', '.']); g(['commit', '-qm', 'b'])
++  return { cwd, g }
++}
++
++test('① meta 分支锚点兜底：非约定分支名经 worktree meta 的 changeName 键命中', () => {
++  const { cwd, g } = makeRepo()
++  try {
++    // R18 形态：非约定命名分支锚住基线（merge-base 锚定语义：分叉点=变更基线），
++    // apply 已发生（main 侧已有变更提交）——diff merge-base..HEAD 应取到主仓前进面
++    writeFileSync(join(cwd, 'impl1.js'), 'a\n')
++    g(['add', 'impl1.js']); g(['commit', '-qm', 'impl1'])
++    const h1 = g(['rev-parse', 'HEAD']).trim()
++    g(['branch', 'r18/sf-full', h1]) // 分支指基线（worktree meta 记录的真实分支名）
++    writeFileSync(join(cwd, 'impl2.js'), 'b\n')
++    g(['add', 'impl2.js']); g(['commit', '-qm', 'impl2'])
++    // worktree meta：changeName 键匹配 + branch 指真实分支（sillyspec/<change> 与审计 tag 均不在）
++    const sb = join(cwd, '.sillyspec')
++    const rt = join(sb, '.runtime')
++    const wtDir = join(rt, 'worktrees', 'anything-else')
++    mkdirSync(wtDir, { recursive: true })
++    writeFileSync(join(wtDir, 'meta.json'), JSON.stringify({ changeName: 'c-x', branch: 'r18/sf-full', worktreePath: '/nonexistent', mode: 'native-worktree' }))
++    const r = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName: 'c-x' })
++    assert.equal(r.form, 'post-apply', 'meta 的 worktreePath 不存在 → 形态 B')
++    assert.ok(r.sources.some((s) => s.startsWith('main:diff-merge-base(meta-branch:r18/sf-full)')), `B1 应经 meta 分支锚定（sources=${JSON.stringify(r.sources)}）`)
++    assert.ok(r.files.includes('impl2.js'), `diff 面应含基线后前进文件（实际 ${JSON.stringify(r.files)}）`)
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('② 死锁诊断：post-apply 源全空 → parallelAdvanceHint（禁物化自救+出路）；有文件面不误报', () => {
++  const { cwd, g } = makeRepo()
++  try {
++    // 场景 a：无任何锚点（无 sillyspec/c-x 分支无 tag 无 meta）、主仓干净 → 源全空
++    const sb = join(cwd, '.sillyspec')
++    const rt = join(sb, '.runtime')
++    mkdirSync(rt, { recursive: true })
++    const a = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName: 'c-x' })
++    assert.equal(a.form, 'post-apply')
++    assert.ok(a.parallelAdvanceHint, '源全空应出诊断')
++    assert.ok(/并行会话推进/.test(a.parallelAdvanceHint) && /暂存物化/.test(a.parallelAdvanceHint), '诊断含形态说明与禁物化')
++    // 场景 b：工作树有文件（porcelain 有行）→ 不误报
++    writeFileSync(join(cwd, 'wip.js'), 'w\n')
++    const b = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName: 'c-x' })
++    assert.ok(!b.parallelAdvanceHint, '有未提交面不误报')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-09-26-reconcile-source-isolation/design.md b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:17:39.340Z
++---
++# 设计记录（Design Record）— 2026-09-26-reconcile-source-isolation
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++两件（R18-SF-full 对账死锁三因中的①③，调查结论：物化是 agent 自创行为，治本=锚定硬化+诊断先行）：①B1 第三候选——sillyspec/<change> 分支名约定与审计 tag 均落空时，扫 .runtime/worktrees/*/meta.json 按 changeName 键匹配取 meta.branch 真实分支名作 merge-base diffRef（非约定命名分支的锚定通路）；②死锁诊断——post-apply 形态 actual 源全空（无锚定 diff+porcelain 无未提交面+无 apply-pathspec）时 parallelAdvanceHint：指明并行推进形态、明禁暂存物化自救、给安全出路，经 notes 带到对账输出。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++verify-postcheck.js resolveReconcileActualFiles：形态 B 的 diffRef 解析加 metaBranchRef 第三候选（readdirSync worktrees 读 meta.json BOM 容错，rev-parse 验证 ref 存在）；返回对象新增 parallelAdvanceHint 字段（条件：form=post-apply 且 files/union 全空且无 diff/兜底源）；reconcileTargetFiles 消费侧把 hint push 进 notes。既有 B1/B2/B4/B3 源与形态 A 零改动。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：meta 扫描是读时点快照（meta 在 worktree 建立时写、分支 ref 由 git 保证）；多 worktree 目录首命中即用（changeName 键唯一——同名变更不并存，规则 8 隔离）。2. 并发：只读扫描零共享态；hint 是纯输出不落状态。3. 切换：hint 无副作用（重跑同形态同提示）；metaBranchRef 验证失败静默省略（回到既有降级路径）。4. 作用域：只影响形态 B 的 diffRef 候选序（sillyspec/ 前缀 > 审计 tag > meta.branch）；形态 A（worktree 存活）不走此路径。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=meta.branch 指向的分支已被删/移（rev-parse 验证挡住→静默省略回降级，不误锚）；meta.changeName 键与实际变更不匹配（worktree 建立时写入的键与 change 名同源——键漂移时第三候选同样落空回到现状，无恶化面）。死路：让 agent 在对账前「重建分支」的指引——这正是 R18 死循环的形态（4 种面重建 matched=0）；诊断给的出路是登记/恢复既有 ref 而非重建内容，弃。
+
+diff --git a/.sillyspec/changes/2026-09-26-reconcile-source-isolation/flow-state.yaml b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 0fa5b5be4681e46bc7a90739fac53f7c9f9793d4
++updatedAt: '2026-09-26T02:19:08.992Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js18)（10.4s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926021839\test-result.json｜lint: passed
++  ← npm run lint（29.4s）｜门文件 15 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-reconcile-source-isolation/proposal.md b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/proposal.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:17:39.339Z
++---
++# 提案书（Proposal）— 2026-09-26-reconcile-source-isolation
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:f5acfec432ee27d725fbdda1876336f243129809878477976b137dab61809315:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++任务原话转写：动机：R18-SF-full 实证 verify target_files 对账死锁——三因叠加：①B1 分支名约定 sillyspec/<change> 对非约定命名分支（实验分支 r18/sf-full）落空致锚定 diff 源缺失；②agent 被逼发明「暂存物化」自救（touch 文件进共享暂存区）随即被主仓并行会话裸提交扫走，4 种面重建 matched=0 死循环；③无死锁诊断指路。调查结论：物化是 agent 自创行为非 CLI 机制，治本=锚定源硬化+诊断先行。
++成功标准：
++- B1 第三候选：sillyspec/<change> 与审计 tag 均落空时扫 worktrees meta 按 changeName 键匹配取真实 branch 作 diffRef（meta.branch 由 worktree 建立时写入；sources 记 meta-branch 标识）
++- 死锁诊断：post-apply 形态 actual 源全空时 parallelAdvanceHint（指明「主仓被并行会话推进」形态+禁暂存物化自救+安全出路：恢复/登记分支锚定或按 AGENTS 规则 18 对账核销），经 notes 带出到对账输出
++- 有文件面/有锚定源时不误报（诊断条件限定 post-apply+全空）
++- 测试：meta 分支锚定（非约定分支名经 changeName 键命中+diff 面取到前进文件）/死锁诊断两态（全空出 hint 有文件不误报）+ reconcile/residual 相关 61 用例零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:4c8b86d731d1a6f3740af87f4f9f4bd835301298bd905966a005031718e11748:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. B1 第三候选：sillyspec
++2. <change> 与审计 tag 均落空时扫 worktrees meta 按 changeName 键匹配取真实 branch 作 diffRef（meta.branch 由 worktree 建立时写入
++3. sources 记 meta-branch 标识）
++4. 死锁诊断：post-apply 形态 actual 源全空时 parallelAdvanceHint（指明「主仓被并行会话推进」形态+禁暂存物化自救+安全出路：恢复
++5. 登记分支锚定或按 AGENTS 规则 18 对账核销），经 notes 带出到对账输出
++6. 有文件面
++7. 有锚定源时不误报（诊断条件限定 post-apply+全空）
++8. 测试：meta 分支锚定（非约定分支名经 changeName 键命中+diff 面取到前进文件）/死锁诊断两态（全空出 hint 有文件不误报）+ reconcile/residual 相关 61 用例零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:afa2814f9bc3f6dec06064c7945e83a2f8cfa8fa02cb684176f11cb26794975a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-reconcile-source-isolation 留痕重锚 -->
++1. B1 第三候选：sillyspec
++2. <change> 与审计 tag 均落空时扫 worktrees meta 按 changeName 键匹配取真实 branch 作 diffRef（meta.branch 由 worktree 建立时写入
++3. sources 记 meta-branch 标识）
++4. 死锁诊断：post-apply 形态 actual 源全空时 parallelAdvanceHint（指明「主仓被并行会话推进」形态+禁暂存物化自救+安全出路：恢复
++5. 登记分支锚定或按 AGENTS 规则 18 对账核销），经 notes 带出到对账输出
++6. 有文件面
++7. 有锚定源时不误报（诊断条件限定 post-apply+全空）
++8. 测试：meta 分支锚定（非约定分支名经 changeName 键命中+diff 面取到前进文件）/死锁诊断两态（全空出 hint 有文件不误报）+ reconcile/residual 相关 61 用例零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-reconcile-source-isolation/requirements.md b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:17:39.340Z
++---
++# 需求规格（Requirements）— 2026-09-26-reconcile-source-isolation
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: B1 meta 分支锚点第三候选
++Given 非约定命名分支（如实验分支 r18/sf-full）使 sillyspec/<change> 与审计 tag 均落空
++When 扫 worktrees meta 按 changeName 键匹配取 meta.branch（rev-parse 验证 ref 在场）
++When diffRef 命中该分支、merge-base diff 源恢复（sources 记 meta-branch 标识）
++
++### FR-02: 死锁诊断
++Given post-apply 形态 actual 源全空（典型「主仓被并行会话推进」——提交/暂存被他人裸提交扫走）
++When parallelAdvanceHint 在场并经 notes 带出
++When 提示含形态说明/明禁暂存物化自救/安全出路（登记分支锚定或按 AGENTS 规则 18 对账核销）
++
++### FR-03: 不误报
++Given 有文件面（porcelain 有行）或有锚定源（diff/apply-pathspec）
++When 诊断条件不满足
++Then 无 hint；既有源与形态 A 零变化（61 用例零回归）
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/reconcile-source-isolation.test.mjs 用例①（非约定分支经 meta 键命中+diff 面取到前进文件）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/reconcile-source-isolation.test.mjs 用例②场景 a（源全空出 hint 含并行推进/禁物化）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/reconcile-source-isolation.test.mjs 用例②场景 b（有未提交面不误报）+ reconcile/residual 相关 61 用例零回归
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
+
+diff --git a/.sillyspec/changes/2026-09-26-reconcile-source-isolation/tasks.md b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-reconcile-source-isolation/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T02:17:39.340Z
++---
++# 任务注册表（Tasks）— 2026-09-26-reconcile-source-isolation
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: B1 第三候选：sillyspec
++- [x] task-02: <change> 与审计 tag 均落空时扫 worktrees meta 按 changeName 键匹配取真实 branch 作 diffRef（meta.…
++- [x] task-03: sources 记 meta-branch 标识）
++- [x] task-04: 死锁诊断：post-apply 形态 actual 源全空时 parallelAdvanceHint（指明「主仓被并行会话推进」形态+禁暂存物化自救+安全出路：…
++- [x] task-05: 登记分支锚定或按 AGENTS 规则 18 对账核销），经 notes 带出到对账输出
++- [x] task-06: 有文件面
++- [x] task-07: 有锚定源时不误报（诊断条件限定 post-apply+全空）
++- [x] task-08: 测试：meta 分支锚定（非约定分支名经 changeName 键命中+diff 面取到前进文件）/死锁诊断两态（全空出 hint 有文件不误报）+ recon…
