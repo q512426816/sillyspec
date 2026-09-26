@@ -3338,9 +3338,36 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
     const branch = 'sillyspec/' + changeName
     const branchHash = gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', branch + '^{commit}'], { timeout: 30 * 1000 })
     const auditTag = 'sillyspec-audit/' + branch
+    // 第三候选（2026-09-26-reconcile-source-isolation，R18-SF-full 对账死锁实证）：分支名约定
+    // sillyspec/<change> 对非约定命名的分支（实验分支 r18/sf-full 等）落空 → B1 全缺 → agent
+    // 发明「暂存物化」自救又被并行会话裸提交扫走（4 种面重建 matched=0 死循环）。硬化：扫
+    // worktrees meta 的 changeName 键匹配取真实 branch（meta.branch 由 worktree 建立时写入）。
+    let metaBranchRef = null
+    if (!(typeof branchHash === 'string' && branchHash.trim()) && !gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 })) {
+      try {
+        const wtBase = join(runtimeRoot || join(sb, '.runtime'), 'worktrees')
+        if (existsSync(wtBase)) {
+          for (const e of readdirSync(wtBase, { withFileTypes: true })) {
+            if (!e.isDirectory()) continue
+            try {
+              const mp = join(wtBase, e.name, 'meta.json')
+              if (!existsSync(mp)) continue
+              const m = JSON.parse(String(readFileSync(mp, 'utf8')).replace(/^\uFEFF/, ''))
+              if (m && m.changeName === changeName && typeof m.branch === 'string' && m.branch.trim()) {
+                if (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', m.branch.trim() + '^{commit}'], { timeout: 30 * 1000 })) {
+                  metaBranchRef = m.branch.trim()
+                  sources.push(`main:diff-merge-base(meta-branch:${metaBranchRef})`)
+                }
+                break
+              }
+            } catch { /* 单 meta 损坏试下一个 */ }
+          }
+        }
+      } catch { /* meta 扫描失败静默省略 */ }
+    }
     const diffRef = (typeof branchHash === 'string' && branchHash.trim())
       ? branch
-      : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
+      : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : (metaBranchRef || null))
     if (diffRef) {
       // 形态 B 定义下 meta 已删，baseBranch 无从读 → 缺省 'main'（run/prompt.js:764 同缺省）；
       // 主分支叫 master 等仓库 merge-base 失败 → 与分支不存在同处置（省略该源）
@@ -3408,7 +3435,15 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
   }
 
   const files = [...new Set(filterDeliverableFiles([...union]).filter(Boolean))].sort()
-  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles }
+  // 多会话推进死锁诊断（reconcile-source-isolation，R18-SF-full 实证）：post-apply 形态下
+  // 实际面全空（B1 无 ref + porcelain 无未提交面 + 无 apply-pathspec 兜底）= 典型「主仓被
+  // 并行会话推进」形态（本变更提交/暂存被他人裸提交带走）——历史上 agent 被逼发明「暂存
+  // 物化」自救（touch 文件进共享暂存区），随即又被扫走形成 matched=0 死循环。诊断先行指明
+  // 安全出路，杜绝危险自救；消费方（reconcileTargetFiles/gates）把它带进 notes。
+  const parallelAdvanceHint = (form === 'post-apply' && files.length === 0 && union.size === 0 && !sources.some((s) => s.startsWith('main:diff-merge-base') || s.startsWith('apply-pathspec')))
+    ? '⚠️ actual 源全空（无分支锚点 diff + 主仓无未提交面 + 无 apply-pathspec 兜底）——典型「主仓被并行会话推进」形态（本变更的提交/暂存可能已被他侧裸提交扫走）。切勿用「暂存物化」自救（touch 文件进共享暂存区——会被再次扫走且污染他侧，R18-SF-full 实证 matched=0 死循环）；出路：① 恢复/登记本变更分支（worktree meta.json 的 branch 字段）让锚定 diff 生效后重跑 ② 确属全量已在他侧提交：与该会话按 AGENTS 规则 18 对账后以该提交为锚核销'
+    : null
+  return { ok: true, form, files, sources, foreignExcluded, foreignExcludedFiles, degradedReason: null, baseAnchor, commitWindowFiles, parallelAdvanceHint }
 }
 
 /**
@@ -3555,6 +3590,9 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
 
   // —— actual 侧（三源并集，两形态）——
   const actual = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName })
+  if (actual.parallelAdvanceHint) {
+    notes.push(actual.parallelAdvanceHint)
+  }
   if (actual.foreignExcluded > 0) {
     notes.push(`主仓 status 捕入的 ${actual.foreignExcluded} 个并行会话声明文件已剔除（不参与本变更对账）`)
   }
