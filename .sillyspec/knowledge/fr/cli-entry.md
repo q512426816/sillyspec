@@ -2967,3 +2967,102 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-26-governance-autopilot
   status: active
+
+## FR-cli-entry-156 execute --done 自动勾选
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given execute 阶段 --done 时 tasks.md 有未勾条目且近 20 提交含 task-NN token；When complete.js execute 完成路径解析 token 并代勾 有证据但未勾的条目被自动勾选；已勾不重复操作
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-01
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-full-autopilot-parity:flow:FR-01
+  tests: test/run-complete-noai-done-gate.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-full-autopilot-parity
+  status: active
+
+## FR-cli-entry-157 verify --done 自动绑定
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given verify 阶段测试门已跑（test-result.json 在场）且 requirements.md 有空绑定槽；When gates.js verify 测试门后从测试结果提取文件路径补全空槽 空槽被自动补全（agent 可覆盖）；无测试结果 fail-soft
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-02
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+
+## FR-cli-entry-158 向后兼容与边界
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 已有 agent 填写/勾选的内容；When 两条自动机制运行；Then 不覆盖；auto-bind 在复用分支（ledger-reuse/scan-reuse）不触发；GWT 预填不迁移（来源不同）
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-03
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+
+## FR-cli-entry-159 verify --done 自动绑定：verify 阶段收口测试门之后（test-result.js
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When verify --done 自动绑定：verify 阶段收口测试门之后（test-result.json 已生成），从测试结果自动补全空绑定槽——与 thin；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-02
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-full-autopilot-parity:flow:FR-02
+  tests: test/governance-autopilot.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-full-autopilot-parity
+  status: active
+
+## FR-cli-entry-160 GWT 预填不迁移（来源不同：full 的 requirements 来自对话演化非 input 文
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 迁移 相关模块就绪；When GWT 预填不迁移（来源不同：full 的 requirements 来自对话演化非 input 文本——brainstorm 步骤 8 已有 design 可；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-03
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-full-autopilot-parity:flow:FR-03
+  tests: test/flow-protocol.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-full-autopilot-parity
+  status: active
+
+## FR-cli-entry-161 两条均向后兼容（已有内容不覆盖）
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 两条均向后兼容（已有内容不覆盖）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-04
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+
+## FR-cli-entry-162 测试：execute auto-tick 接线钉+verify auto-bind 接线钉+既有套件
+变更：2026-09-26-full-autopilot-parity
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 测试：execute auto-tick 接线钉+verify auto-bind 接线钉+既有套件零回归；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-26-full-autopilot-parity/requirements.md#FR-05
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733

@@ -1,0 +1,23 @@
+{
+  "change": "2026-09-26-full-autopilot-parity",
+  "baseline": "e5262bb3d732cab6f59953e29251e22f44a25a60",
+  "head": "4d84c48d3195d0c69a3cf66cf87a885c5b5ea4bf",
+  "files": [
+    "src/run/complete.js",
+    "src/run/gates.js",
+    ".sillyspec/changes/2026-09-26-full-autopilot-parity/design.md",
+    ".sillyspec/changes/2026-09-26-full-autopilot-parity/flow-state.yaml",
+    ".sillyspec/changes/2026-09-26-full-autopilot-parity/proposal.md",
+    ".sillyspec/changes/2026-09-26-full-autopilot-parity/requirements.md",
+    ".sillyspec/changes/2026-09-26-full-autopilot-parity/tasks.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 241,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-26T10:53:53.739Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "827daa11346d8c354f92324ed920ff754d8cb5c0fabdfd4dffa5d434616ebca9",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-full-autopilot-parity",
+  "reviewer": "independent-reviewer (clean-context re-review)",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "[上轮留档续载] auto-tick 位于 Wave/批量完成判定之前（execute --done 时点勾选先于批完成对账）",
+      "evidence": "复审确认未恶化：修复提交 0bd1fe6f 仅触及 src/flow.js 与 src/run/gates.js（git show --stat 两文件），src/run/complete.js 的 auto-tick 段零 diff，上轮 P2 原样存续不阻断",
+      "location": "src/run/complete.js:601-634（0bd1fe6f 未触及）",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P2",
+      "title": "[上轮留档续载] auto-tick 的 task-NN token 正则边界（近 20 提交窗口可捕他变更 token，task-(\\d{1,2}) 无词边界）",
+      "evidence": "复审确认未恶化：complete.js 零 diff；误勾兜底仍依赖 checkExecuteCodeEvidence（设计槽 4 已述）",
+      "location": "src/run/complete.js:620-627（0bd1fe6f 未触及）",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P2",
+      "title": "P1 修复的 command 解析契约无功能性回归钉——接线钉是源码文本级断言，本 P1 的复发路径（写/读漂移无声再死）未钉住",
+      "evidence": "test/governance-autopilot.test.mjs:45-53 仅断言 src/flow.js 含 '_testFiles'/'test-result.json' 等字符串；0bd1fe6f 零测试改动（diff stat 仅 2 个 src 文件）。本次复审用 node 实测提交源正则方确认行为：'pytest app/tests/flow/test_change_events.py'→命中全路径；'vitest run src/components/card.test.tsx'→命中；'npm test'→空（正确，无具体路径落人工门）——但仓内无任何测试会在 writeRunResult 的 command 字段再演化（改名/换聚合形态）时报警，恰是上轮 P1 的成病机理",
+      "location": "test/governance-autopilot.test.mjs:45-53；契约写侧 src/verify-postcheck.js:2649",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P2",
+      "title": "auto-bind 读最近 3 个 verify-runs 无 change 归属过滤（_j.change 被忽略）——最新 run 解析为空时回退旧 run，可将他变更测试文件自动填进本变更绑定槽并过 thin 硬门",
+      "evidence": "flow.js:828-841 与 gates.js:976-990 均按目录时序取前 3、只读 _j.command；thin 硬门前重验（flow.js:858-859 后 _rb 复检）只查槽非空不查归属。回退触发是常态而非边缘：node 实测 module 聚合标签 'module[core,ui]+deps(py2+jsx3)' 解析为空、'npm test' 为空——本变更自身 gate_summary 即 module 模式（'module[cli-core]+deps(js19)'）且结果落临时快照目录（flow.js:1156 注释确认不回读），真 runtimeRoot 里最新可解析 run 大概率属他变更。缓解面：advisory（console 明示 agent 可覆盖）、fail-soft——与 auto-tick 跨变更窗口同族 P2 不阻断",
+      "location": "src/flow.js:827-841；src/run/gates.js:976-990",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P3",
+      "title": "module 模式顶层 command 为聚合标签，真实文件路径在 extra.modules[].command——auto-bind 不读，模块策略下召回为零（fail-soft 落人工门）",
+      "evidence": "writeRunResult 顶层写 result.command=module 聚合标签（verify-postcheck.js:2615 构造），逐模块 command 在 extra.modules[]（:2620-2631）；两处读侧只解析顶层 _j.command",
+      "location": "src/verify-postcheck.js:2615-2631；src/run/gates.js:983；src/flow.js:835",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P3",
+      "title": "过滤宽松：/test|spec/i 命中 token 任意位置——test/ 目录下非用例文件（conftest.py/helpers）与 glob 碎片（'*.spec.js' 解析出 '.spec.js' 伪路径）均可入绑定；旧（死）代码系文件名形态 /\\.test\\.|\\.spec\\./",
+      "evidence": "node 实测：'npx vitest run card.spec.tsx extra.md'→['card.spec.tsx']（extra.md 正确排除），但 'pytest app/tests/helpers/conftest.py' 将命中（路径含 tests）；mocha glob 'test/**/*.spec.js' 场景解析出 '.spec.js' 悬空片段。绑定值供 extractRequirementBindings 铸 trace，伪路径降低证据质量但不破门",
+      "location": "src/flow.js:837；src/run/gates.js:985",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P3",
+      "title": "flow.js:799 陈旧注释仍宣称「结果文件 test-result.json 含完整文件清单可回溯」——这正是上轮 P1 的错误前提，注释未随修复更新",
+      "evidence": "writeRunResult 实际落 command/exit_code/output_tail/failure 台账，从无文件清单键；该注释会误导后续维护者重拾死前提",
+      "location": "src/flow.js:798-799",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    },
+    {
+      "severity": "P3",
+      "title": "修复提交引用 task-06/task-07 token 但 tasks.md 仅注册 task-01..task-05（悬空任务引用）",
+      "evidence": "grep 计数 tasks.md 中 task-06/task-07 为 0；commit 0bd1fe6f 消息含 (task-06 task-07)。无功能影响（auto-tick 只匹配既有未勾行），纯留痕口径不一致",
+      "location": ".sillyspec/changes/2026-09-26-full-autopilot-parity/tasks.md；commit 0bd1fe6f",
+      "reviewer": "independent-reviewer (clean-context re-review)"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——thin/gates 两处 auto-bind 均在测试实测落盘之后读取（flow.js:817-818 注释与 e5262bb3 时序修复一致）；模块模式/无路径命令时空集回退旧 run 的乱序面见 P2 回退项",
+    "并发": "ok——补全写经 writeAtomicSync（flow.js:855-856 / gates.js:1002-1003），且仅填空槽不覆盖既有作答（幂等）",
+    "切换": "ok——两处 fail-soft（try/catch 吞异常不阻断收口），重入 done 重跑补全幂等",
+    "作用域": "注意——读侧 resolveRuntimeRoot 与写侧 writeRunResult 的 specBase/.runtime 在平台模式（runtimeRoot 分离）分裂（设计槽 4 已自认 fail-soft 接受）；3-run 回退无 change 过滤的跨变更串台面新增 P2 留档"
+  },
+  "reviewedAt": "2026-09-26T11:09:13.000Z"
+}

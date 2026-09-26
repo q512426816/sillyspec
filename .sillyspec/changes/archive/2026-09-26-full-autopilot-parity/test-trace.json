@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-full-autopilot-parity",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-full-autopilot-parity:flow:FR-01",
+      "tests": [
+        "test/run-complete-noai-done-gate.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-full-autopilot-parity"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-full-autopilot-parity:flow:FR-02",
+      "tests": [
+        "test/governance-autopilot.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-full-autopilot-parity"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-full-autopilot-parity:flow:FR-03",
+      "tests": [
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-full-autopilot-parity"
+    }
+  ]
+}
