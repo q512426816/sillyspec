@@ -376,7 +376,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
             : null,
           `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
-          `✅ 任务勾选纪律（工作单元，2026-09-26-thin-workunits）：完成一个工作单元（该域实现+测试绿）即勾对应 \`- [ ] task-NN\` → \`- [x]\`——`,
+          `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
           `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
           ``,
@@ -536,7 +536,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
-    `✅ 任务勾选纪律（工作单元，2026-09-26-thin-workunits）：完成一个工作单元（该域实现+测试绿）即勾对应 \`- [ ] task-NN\` → \`- [x]\`——`,
+    `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
     `   flow status 随时看勾选进度。`,
     ``,
@@ -730,7 +730,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
         if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitMessages.length > 0) {
           console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitMessages.length} 个提交）——`)
-          console.warn(`   规范动作是完成一个工作单元（该域实现+测试绿）即勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
+          console.warn(`   规范动作是把 tasks.md 覆写为自己的工作分解并完成一个单元即勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
         }
         }
       }
