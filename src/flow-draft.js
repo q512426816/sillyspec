@@ -267,7 +267,10 @@ export function verifyRequirementBindings({ changeDir }) {
  * 裸文件名/残缺路径段解析为项目相对全路径（直取存在优先，仓内唯一后缀命中，歧义原样保留）。
  */
 const TEST_PATH_TOKEN_RE = /[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g
-const CASE_ANCHOR_RE = /^\s*(?:(#[^\s：；;，。\n]+)|(::[^\s：；;，。\n]+)|(>\s*[^：；;，。\n]+)|(「[^」\n]+」(?:组|用例)?))/
+// 用例锚四形态（「X」＋可选 组/用例 后缀、#id、::id、> name）——字符类排除竖线：锚条目
+// 在 FR 机器子块按 `tests: a | b` 序列化、split('|') 回读（评审 P2），带竖线的锚在竖线处
+// 截断（诚实降级），不产出裂格式幻影条目。
+const CASE_ANCHOR_RE = /^\s*(?:(#[^\s：；;，。\n|]+)|(::[^\s：；;，。\n|]+)|(>\s*[^：；;，。\n|]+)|(「[^」\n|]+」(?:组|用例)?))/
 const isTestPathToken = (p) => /(^|\/)(test|tests)\//.test(p) || /\.(test|spec)\./.test(p) || /_test\b/.test(p) || /_spec\b/.test(p)
 
 /** 仓内文件索引（懒建：首个直取未命中的 token 才扫描；单次提取调用内缓存）。

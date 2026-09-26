@@ -98,6 +98,12 @@ test('④ testAnchorFile 四形态剥离＋无锚幂等（文件面消费统一�
   assert.equal(testAnchorFile('test/foo.test.mjs > x y'), 'test/foo.test.mjs')
   assert.equal(testAnchorFile('test/foo.test.mjs'), 'test/foo.test.mjs')
   assert.equal(testAnchorFile('test\\foo.test.mjs'), 'test/foo.test.mjs')
+  // 竖线排除（评审 P2）：锚文本含 | 时在竖线处截断——FR 机器子块 tests 行以 | 分隔，锚内竖线会裂格式
+  const { root, changeDir } = makeRepo({ 'test/foo.test.mjs': '' })
+  writeReq(changeDir, { 'FR-01': 'test/foo.test.mjs#a|b 竖线用例' })
+  const rows = byAnchor(extractRequirementBindings({ changeDir, change: 'c1' }))
+  assert.equal(rows['FR-01'].tests[0], 'test/foo.test.mjs#a')
+  rmSync(root, { recursive: true, force: true })
 })
 
 test('⑤ test-trace 写读 roundtrip：带锚条目完整落盘（展示面保锚）', () => {

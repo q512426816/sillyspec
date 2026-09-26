@@ -78,7 +78,8 @@ export function testAnchorFile(entry) {
 }
 
 /** orphan accRef（D-005@v1）：index 只作快照，身份=原文指纹 */
-export function orphanAccRef(index, acceptanceText) {  return `acc-${index}-${sha256(acceptanceText).slice(0, 8)}`
+export function orphanAccRef(index, acceptanceText) {
+  return `acc-${index}-${sha256(acceptanceText).slice(0, 8)}`
 }
 
 // ── 变更期载体（D-001@v1）：changes/<名>/test-trace.json ──
