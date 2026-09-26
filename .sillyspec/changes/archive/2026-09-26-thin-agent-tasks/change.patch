@@ -1,0 +1,447 @@
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 3359deee..47a0f529 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -336,60 +336,16 @@ export function draftDesignRecord({ change }) {
+   return { text, sections: collectSections(text) }
+ }
+ 
+-/**
+- * 成功标准 → 工作单元聚类（2026-09-26-thin-workunits，R18 实证驱动）：thin 的 tasks.md 此前
+- * 是验收标准逐条镜像（R18-thin 15 条 checkbox）——勾选语义错配（一条标准的满足要横跨多文件
+- * 多阶段，判定时刻只在收口）导致「一把全勾」+进度信号失真+哨兵证据弱化+每轮粒度税。改为
+- * 机器聚类粗粒度工作单元（语义对齐 OpenSpec 的 agent 自拆工作分解，保留 thin 机器起草哲学）：
+- * ≤5 条不聚类（小变更逐条粒度本就合适，零变化）；>5 条按域关键词投桶（后端/前端/E2E/文档/
+- * 其他），每单元覆盖若干标准——勾=该域实现+测试绿的天然判定时刻。
+- */
+-const WORK_UNIT_BUCKETS = [
+-  { key: '后端', re: /(后端|backend|api|端点|接口|路由|pytest|迁移|存储|schema|鉴权|orm|数据库)/i },
+-  { key: '前端', re: /(前端|frontend|面板|组件|页面|渲染|vitest|交互|轮询|徽标|折叠|高亮)/i },
+-  { key: '端到端', re: /(e2e|端到端|curl|起\s*dev|真链路|验收演示|实测链路)/i },
+-  { key: '文档', re: /(文档|usage|readme|说明|操作手册)/i },
+-]
+-
+-export function groupCriteriaToUnits(criteria) {
+-  const crit = criteria || []
+-  if (crit.length <= 5) {
+-    return crit.map((c, i) => ({ label: null, indexes: [i] }))
+-  }  const buckets = new Map() // key -> [criteriaIndex]
+-  const misc = []
+-  for (let i = 0; i < crit.length; i++) {
+-    const hit = WORK_UNIT_BUCKETS.find((b) => b.re.test(crit[i]))
+-    if (hit) {
+-      if (!buckets.has(hit.key)) buckets.set(hit.key, [])
+-      buckets.get(hit.key).push(i)
+-    } else misc.push(i)
+-  }
+-  const units = []
+-  for (const [label, indexes] of buckets) units.push({ label, indexes })
+-  // 未命中关键词的标准：数量少并入「实现与收口」单元；多（≥3）独立成单元
+-  if (misc.length > 0) units.push({ label: misc.length >= 3 ? '实现与收口' : null, indexes: misc })
+-  // 覆盖号顺序稳定（按首标准序排序单元）
+-  units.sort((a, b) => a.indexes[0] - b.indexes[0])
+-  return units
+-}
+-
+-/** tasks 机器稿（成功标准 → 工作单元 checkbox 行；≤5 条标准退化为逐条）。任务卡分岔：withTasks 才生成 tasks/task-NN.md。 */
++/** tasks 机器稿（成功标准 → 逐条 checkbox 预填草稿）。计划面归 agent（2026-09-26-thin-agent-tasks，
++ * 用户否决 thin-workunits 的域关键词聚类——开放世界任务形态不可穷举，枚举分类表是错误方向）：
++ * 预填只是零冷启动兜底，简报明示可按实际实现路径覆写（保持 `- [ ] task-NN:` 行形态）——
++ * 验收面锚定在 requirements FR（指纹保护），任务面不做机器分类。任务卡分岔：withTasks 才生成 tasks/task-NN.md。 */
+ function draftTasks({ change, criteria, withTasks }) {
+   const crit = criteria || []
+   const wrapped = (key, body) => wrapSection({ key, body, amendCmd: AMEND_CMD(change), guardNote: GUARD_NOTE })
+-  let rows
+-  if (crit.length === 0) {
+-    rows = ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
+-  } else {
+-    const units = groupCriteriaToUnits(crit)
+-    rows = units.map((u, i) => {
+-      const num = `task-${String(i + 1).padStart(2, '0')}`
+-      if (u.label == null) return `- [ ] ${num}: ${clipTaskText(crit[u.indexes[0]])}` // ≤5 逐条（原形态）
+-      const summary = u.indexes.slice(0, 3).map((j) => clipTaskText(crit[j]).replace(/[（(].*$/, '').slice(0, 24)).join('、')
+-      const covers = u.indexes.map((j) => j + 1).join(',')
+-      return `- [ ] ${num}: ${u.label}——${summary}等（覆盖标准 ${covers}）`
+-    })
+-  }
++  const rows = crit.length > 0
++    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${clipTaskText(c)}`)
++    : ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
+   const text = [
+     '---',
+     `author: flow-machine-draft`,
+@@ -397,7 +353,7 @@ function draftTasks({ change, criteria, withTasks }) {
+     '---',
+     `# 任务注册表（Tasks）— ${change}`,
+     '',
+-    '> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；',
++    '> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；',
+     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
+     '',
+     // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
+diff --git a/src/flow.js b/src/flow.js
+index d32ba5d5..c32c7bf8 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -376,7 +376,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+             : null,
+           `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+-          `✅ 任务勾选纪律（工作单元，2026-09-26-thin-workunits）：完成一个工作单元（该域实现+测试绿）即勾对应 \`- [ ] task-NN\` → \`- [x]\`——`,
++          `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+           `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
+           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
+           ``,
+@@ -536,7 +536,7 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `   也有 1/4 抽查采样。要强制/豁免可重启时带 --review / --no-review${reviewForce === true ? '（本变更已声明 --review）' : reviewForce === false ? '（本变更已声明 --no-review）' : ''}。`,
+     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
+     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）。`,
+-    `✅ 任务勾选纪律（工作单元，2026-09-26-thin-workunits）：完成一个工作单元（该域实现+测试绿）即勾对应 \`- [ ] task-NN\` → \`- [x]\`——`,
++    `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
+     `   flow status 随时看勾选进度。`,
+     ``,
+@@ -730,7 +730,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
+         if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitMessages.length > 0) {
+           console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitMessages.length} 个提交）——`)
+-          console.warn(`   规范动作是完成一个工作单元（该域实现+测试绿）即勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
++          console.warn(`   规范动作是把 tasks.md 覆写为自己的工作分解并完成一个单元即勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
+         }
+         }
+       }
+diff --git a/test/flow-tick-prototype.test.mjs b/test/flow-tick-prototype.test.mjs
+index b647f643..51a2a6f9 100644
+--- a/test/flow-tick-prototype.test.mjs
++++ b/test/flow-tick-prototype.test.mjs
+@@ -44,8 +44,7 @@ test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
+   const { cwd, cli } = makeRepo()
+   const s = cli(['flow', 'start', '--change', 'ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0)
+-  assert.match(s.stdout, /任务勾选纪律/, 'fresh 勾选纪律')
+-  assert.match(s.stdout, /工作单元（该域实现\+测试绿）/, '动作说明（thin-workunits 语义更新）')
++  assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
+   const st = cli(['flow', 'status', '--change', 'ftp-1'])
+   assert.match(st.stdout, /任务勾选：0\/1/, 'status 显示勾选进度')
+   rmSync(cwd, { recursive: true, force: true })
+@@ -67,7 +66,7 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
+   assert.match(s.stdout, /decisions\.md/, '列 decisions')
+   assert.match(s.stdout, /ui-mock\.html/, '列原型文件')
+   assert.match(s.stdout, /原型在场（1 个 HTML）|原型/, '原型点名')
+-  assert.match(s.stdout, /任务勾选纪律/, 'adopt 也有勾选纪律')
++  assert.match(s.stdout, /任务面归你/, 'adopt 也有任务面归属（覆写语义）')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+@@ -82,6 +81,6 @@ test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', ()
+   const d = cli(['flow', 'done', '--change', change])
+   assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
+   assert.match(d.stdout + d.stderr, /任务勾选缺失/, 'advisory 在场')
+-  assert.match(d.stdout + d.stderr, /工作单元（该域实现\+测试绿）/, '指引')
++  assert.match(d.stdout + d.stderr, /覆写/, '指引（thin-agent-tasks 覆写语义）')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+diff --git a/test/thin-workunits.test.mjs b/test/thin-workunits.test.mjs
+index 004b198b..7c86408d 100644
+--- a/test/thin-workunits.test.mjs
++++ b/test/thin-workunits.test.mjs
+@@ -1,84 +1,41 @@
+ /**
+- * thin-workunits.test.mjs — thin 任务面工作单元化（2026-09-26-thin-workunits）
++ * thin-workunits.test.mjs — 任务面归属（2026-09-26-thin-workunits 聚类方案 → thin-agent-tasks 回退覆写方案）
+  *
+- * 覆盖验收面（R18 实证驱动：标准镜像式 checkbox 的勾选语义错配）：
+- *   ① groupCriteriaToUnits：>5 条按域关键词聚桶（后端/前端/端到端/文档）+未命中处置+覆盖号稳定序；
+- *   ② ≤5 条不聚类（逐条原形态，小变更零变化）；
+- *   ③ draftTasks 单元渲染：task-NN: <域>——<摘要>等（覆盖标准 i,j,k）；单元数≤8；
+- *   ④ R18-thin 实录形态回放：15 条标准 → 后端/前端/端到端等少量单元（勾选语义恢复）。
++ * 演化记录：thin-workunits 的域关键词聚类（WORK_UNIT_BUCKETS）被用户否决——开放世界任务形态
++ * 不可穷举，枚举分类表是错误方向（本会话第三次同款错误）。本套件钉回退后的正确形态：
++ *   ① 聚类器清零：groupCriteriaToUnits/WORK_UNIT_BUCKETS 不再存在（回退钉）；
++ *   ② draftTasks 恢复逐条标准预填（≤任意条数都逐条，行经 clipTaskText）；
++ *   ③ 简报/advisory 文案为「预填草稿可覆写」语义，旧聚类文案零残留；
++ *   ④ tasks.md 头注释声明计划面归 agent。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+ import { join, dirname } from 'node:path'
+ import { readFileSync } from 'node:fs'
+-import { fileURLToPath, pathToFileURL } from 'node:url'
++import { fileURLToPath } from 'node:url'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+-const { groupCriteriaToUnits, extractSuccessCriteria } = await import(pathToFileURL(join(ROOT, 'src', 'flow-draft.js')).href)
+ 
+-test('① >5 条按域聚桶 + 未命中并入 + 覆盖号稳定序', () => {
+-  const crit = [
+-    'POST /api/changes/{name}/events 端点接收事件写入（后端）',
+-    '事件写入幂等去重（ts+rule 键，api）',
+-    '前端面板观测事件折叠区渲染',
+-    'GET since 正序增量（后端接口）',
+-    '组件测试覆盖高亮与空态（vitest）',
+-    'curl 推 5 条端到端验收演示',
+-    '迁移建表与存储 schema',
+-  ]
+-  const units = groupCriteriaToUnits(crit)
+-  assert.ok(units.length <= 8 && units.length < crit.length, `应聚合（${units.length} 单元 < ${crit.length} 条）`)
+-  const backend = units.find((u) => u.label === '后端')
+-  assert.ok(backend && backend.indexes.length >= 3, '后端桶应收端点/去重/GET/迁移')
+-  const fe = units.find((u) => u.label === '前端')
+-  assert.ok(fe && fe.indexes.length >= 2, '前端桶应收面板/组件测试')
+-  const e2e = units.find((u) => u.label === '端到端')
+-  assert.ok(e2e, 'curl 验收归端到端桶')
+-  const all = units.flatMap((u) => u.indexes).sort((a, b) => a - b)
+-  assert.deepEqual(all, crit.map((_, i) => i), '全部标准恰好被覆盖一次（无遗漏无重复）')
+-  for (let i = 1; i < units.length; i++) assert.ok(units[i].indexes[0] > units[i - 1].indexes[0], '单元按首标准序稳定')
++test('① 聚类器回退钉：groupCriteriaToUnits/WORK_UNIT_BUCKETS 零残留', () => {
++  const src = readFileSync(join(ROOT, 'src', 'flow-draft.js'), 'utf8')
++  assert.ok(!/groupCriteriaToUnits|WORK_UNIT_BUCKETS/.test(src), '聚类器应整体移除（枚举开放世界被否决——design 决策留痕）')
+ })
+ 
+-test('② ≤5 条不聚类（逐条原形态）', () => {
+-  const crit = ['标准一', '标准二', '标准三']
+-  const units = groupCriteriaToUnits(crit)
+-  assert.equal(units.length, 3)
+-  assert.ok(units.every((u) => u.label === null && u.indexes.length === 1), '逐条 1:1 单元')
++test('② draftTasks 逐条预填恢复（任意条数逐条镜像，不再分单元）', () => {
++  const src = readFileSync(join(ROOT, 'src', 'flow-draft.js'), 'utf8')
++  assert.ok(src.includes('crit.map((c, i) => `- [ ] task-'), '逐条渲染在场')
++  assert.ok(!/覆盖标准 \$\{covers\}/.test(src), '单元行渲染（覆盖标准号）应已随聚类器移除')
+ })
+ 
+-test('③④ R18-thin 实录形态回放：真实任务简报 → 少量工作单元行', async () => {
+-  // R18 任务简报的成功标准典型形态（后端 5 + 前端 4 + E2E + 收尾 = 15 条量级）
+-  const input = [
+-    '动机：事件通道消费端',
+-    '成功标准：',
+-    '- POST /api/changes/{name}/events 接收事件写入，既有平台 token 鉴权',
+-    '- 事件幂等去重（事件 id 或 ts+rule 去重键）',
+-    '- 单变更超 5000 条上限保护（截断最旧或拒绝）',
+-    '- GET /api/changes/{name}/events?since 正序增量',
+-    '- append-only 存储零业务判定，provisional 只展示不消费',
+-    '- pytest 覆盖收/取/去重/鉴权/上限五组',
+-    '- 变更详情页观测事件折叠区，warning 默认展开+角标计数',
+-    '- 时间线渲染 warning 琥珀高亮，provisional 徽标悬停提示',
+-    '- 打开 GET 一次+30s 轮询',
+-    '- 组件测试覆盖渲染/高亮/空态/角标',
+-    '- curl 推 5 条（2 warning）GET 正序去重 E2E 验收',
+-    '- 相关测试全绿，临时产物清理',
+-  ].join('\n')
+-  const criteria = extractSuccessCriteria(input)
+-  assert.ok(criteria.length > 5, `夹具应在 5 条以上（实际 ${criteria.length}）`)
+-  const units = groupCriteriaToUnits(criteria)
+-  assert.ok(units.length >= 2 && units.length <= 8, `工作单元数合理（实际 ${units.length}）：${units.map((u) => u.label).join('/')}`)
+-  const backend = units.find((u) => u.label === '后端')
+-  assert.ok(backend && backend.indexes.length >= 4, `后端单元应聚合多条（实际 ${backend.indexes.length}）`)
+-  // 单元行渲染形态（draftTasks 内联——此处断言单元数据足以驱动渲染：label+indexes 在场）
+-  assert.ok(units.every((u) => Array.isArray(u.indexes) && u.indexes.length > 0))
++test('③ 覆写语义文案钉：简报/advisory 三处 + 旧聚类文案零残留', () => {
++  const flow = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
++  const hits = (flow.match(/任务面归你/g) || []).length
++  assert.ok(hits >= 2, `fresh/adopt 简报应有覆写语义（实际 ${hits} 处）`)
++  assert.ok(flow.includes('按实际实现路径覆写'), '覆写指引在场')
++  assert.ok(!/完成一个工作单元（该域实现\+测试绿）/.test(flow), '聚类语义文案零残留')
+ })
+ 
+-test('⑤ 渲染行形态钉：draftTasks 单元行含覆盖标准号（读源码文本钉防回潮）', () => {
++test('④ tasks.md 头注释：计划面归 agent 声明', () => {
+   const src = readFileSync(join(ROOT, 'src', 'flow-draft.js'), 'utf8')
+-  assert.ok(src.includes('（覆盖标准 ${covers}）') || src.includes('覆盖标准'), '单元行应渲染覆盖标准号')
+-  assert.ok(src.includes('完成一个工作单元（该域实现+测试绿）') === false, 'flow.js 的文案不在本文件（防错位断言）')
+-  const flowSrc = readFileSync(join(ROOT, 'src', 'flow.js'), 'utf8')
+-  assert.ok(flowSrc.includes('任务勾选纪律（工作单元'), '简报纪律文案应为工作单元语义')
+-  assert.ok(!/完成一条勾一条/.test(flowSrc), '旧逐条纪律文案应已清除')
++  assert.ok(src.includes('任务面归 agent'), '头注释应声明覆写权')
+ })
+diff --git a/.sillyspec/changes/2026-09-26-thin-agent-tasks/design.md b/.sillyspec/changes/2026-09-26-thin-agent-tasks/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-agent-tasks/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T00:55:08.577Z
++---
++# 设计记录（Design Record）— 2026-09-26-thin-agent-tasks
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++方向修正（用户否决 thin-workunits 的域关键词聚类）：开放世界的任务形态不可穷举——WORK_UNIT_BUCKETS 四桶枚举在数据管道/CLI 工具/重构/基础设施任务上全落 misc（变相退回逐条），枚举分类表是错误方向。正确定位：任务是 agent 的实现计划（OS/厚道流程均 agent 自拆，实证贴合实际、边干边勾自然），机器稿的正确边界是验收面（proposal/requirements 标准受指纹锚定）而非计划面；tasks.md 去年已去指纹化，机器预填只是零冷启动兜底。修法：回退聚类器（draftTasks 恢复逐条标准预填）+ 简报/advisory/tasks 头注释三处改为「预填草稿可覆写」语义（agent 按实际实现路径重写，保持 task-NN 行形态）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow-draft.js：删 groupCriteriaToUnits/WORK_UNIT_BUCKETS（整体回退，不留死码），draftTasks 恢复逐条渲染，tasks 头注释声明计划面归 agent；flow.js：fresh/adopt 简报+done advisory 三处文案更新为覆写语义。行为变化：>5 条标准的 tasks.md 回到逐条镜像（不再是单元行）；agent 获得明示覆写权。哨兵/指纹/requirements 零改动。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：预填是 start 时点快照，覆写是 agent 自由文件操作（无协议交互），收口哨兵按最终 tasks.md 形态判（兼容逐条与任意覆写形态——哨兵只认 - [ ]/- [x] task-NN 行）。2. 并发：纯文本面无共享。3. 切换：覆写无中间态风险（文件级操作）；在途变更不受影响（幂等补起草不重写已存在文件）。4. 作用域：thick 任务卡面不动（本就 agent 写）；测试绑定/FR 面不动。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++决策记录（本会话第三次同款错误，升格为显式教训防再犯）：用枚举/关键词表穷举开放世界是错误方向——①R17 评审否决「完整标点收尾自检」（标点形态枚举不全）；②复合拆分劈碎「；」分隔的枚举词表（狗粮实证）；③本变更回退 WORK_UNIT_BUCKETS 域分类表（用户指出：任务单元形态不可穷举）。正确模式：开放世界的分类/计划归 agent（人有上下文），机器只锚定可枚举的封闭面（验收标准文本、字段格式契约）。风险=假勾退化（自写自勾可写巨型任务骗进度）——接受：哨兵证据重心本在提交面+测试门（任务面降级为进度信号）；追溯锚在 requirements FR 区不依赖任务面。死路：枚举更多桶/更多关键词——穷举错误不因规模变小而变对，弃。
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-agent-tasks/flow-state.yaml b/.sillyspec/changes/2026-09-26-thin-agent-tasks/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-agent-tasks/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 487d4c54c233412adae61d074757acdf87323926
++updatedAt: '2026-09-26T01:00:49.908Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js12)（9.5s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926010014\test-result.json｜lint: passed
++  ← npm run lint（35.1s）｜门文件 16 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-agent-tasks/proposal.md b/.sillyspec/changes/2026-09-26-thin-agent-tasks/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-agent-tasks/proposal.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T00:55:08.576Z
++---
++# 提案书（Proposal）— 2026-09-26-thin-agent-tasks
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:c37060af9bb03a44aca1a9954ef5b03c06eb5f11b40d19a445855c6c431ec5d7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++任务原话转写：动机：thin-workunits 的域关键词聚类（WORK_UNIT_BUCKETS 四桶枚举）被用户否决——开放世界的任务形态不可穷举（数据管道/CLI/重构/基础设施全落 misc），枚举分类表是错误方向（本会话第三次同款错误：标点自检被评审否决、复合拆分劈碎词表实证）。正确定位：任务是 agent 的实现计划（OS/厚道流程实证 agent 自拆贴合实际、边干边勾自然），机器稿的正确边界是验收面（proposal/requirements 标准受指纹锚定）而非计划面；tasks.md 去年已去指纹化，机器预填只是零冷启动兜底。修法：回退聚类器，tasks.md 恢复逐条标准预填+简报明示「预填草稿可按实际实现路径覆写（保持 - [ ] task-NN: 行形态），完成自己的任务单元即勾」；哨兵证据重心本就在提交面（任务面降级为进度信号）。
++成功标准：
++- groupCriteriaToUnits/WORK_UNIT_BUCKETS 聚类路径回退（draftTasks 恢复逐条标准预填渲染）；thin-workunits 的聚类测试同步回退
++- 简报（fresh/adopt）与 done advisory 三处文案改为「预填计划草稿+可覆写」语义（覆写保持 task-NN 行形态）
++- tasks.md 机器稿头注释同步（说明草稿可覆写）
++- design 槽4 把「枚举开放世界」教训落为决策记录（distill 蒸馏进 knowledge——第三次同款错误与正确定位）
++- 测试与既有套件零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:2e91ecd0f3265d28cfd8164ed9f5594dcaab513bd668e2343c9ddf8cb85acacc:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. groupCriteriaToUnits
++2. WORK_UNIT_BUCKETS 聚类路径回退（draftTasks 恢复逐条标准预填渲染）
++3. thin-workunits 的聚类测试同步回退
++4. 简报（fresh
++5. adopt）与 done advisory 三处文案改为「预填计划草稿+可覆写」语义（覆写保持 task-NN 行形态）
++6. tasks.md 机器稿头注释同步（说明草稿可覆写）
++7. design 槽4 把「枚举开放世界」教训落为决策记录（distill 蒸馏进 knowledge——第三次同款错误与正确定位）
++8. 测试与既有套件零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:b6c890335771737a8123e0e637a331b607155940da07fc186f420c120aab47cf:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-agent-tasks 留痕重锚 -->
++1. groupCriteriaToUnits
++2. WORK_UNIT_BUCKETS 聚类路径回退（draftTasks 恢复逐条标准预填渲染）
++3. thin-workunits 的聚类测试同步回退
++4. 简报（fresh
++5. adopt）与 done advisory 三处文案改为「预填计划草稿+可覆写」语义（覆写保持 task-NN 行形态）
++6. tasks.md 机器稿头注释同步（说明草稿可覆写）
++7. design 槽4 把「枚举开放世界」教训落为决策记录（distill 蒸馏进 knowledge——第三次同款错误与正确定位）
++8. 测试与既有套件零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-agent-tasks/requirements.md b/.sillyspec/changes/2026-09-26-thin-agent-tasks/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-agent-tasks/requirements.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T00:55:08.577Z
++---
++# 需求规格（Requirements）— 2026-09-26-thin-agent-tasks
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 聚类器回退
++Given WORK_UNIT_BUCKETS 域枚举无法穷举开放世界任务形态（用户否决）
++When 删除 groupCriteriaToUnits/WORK_UNIT_BUCKETS，draftTasks 恢复逐条标准预填
++When 源码零残留（回退钉）
++
++### FR-02: 覆写语义指引
++Given 任务面是 agent 的实现计划（机器预填只是零冷启动兜底）
++When fresh/adopt 简报与 advisory 三处文案改为「预填草稿可按实际实现路径覆写（保持 task-NN 行形态）」
++When tasks.md 头注释声明计划面归 agent
++
++### FR-03: 教训决策落档
++Given 本会话第三次犯「枚举开放世界」同款错误
++When design 槽4 写成显式决策记录（三次实例+正确模式：开放分类归 agent，机器锚定封闭面）
++When distill 蒸馏进 knowledge/decisions（下个会话知识注入可命中）
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/thin-workunits.test.mjs（改写后）用例①②（聚类器零残留钉+逐条渲染恢复钉）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/thin-workunits.test.mjs 用例③④（覆写语义文案钉+头注释钉）+ test/flow-tick-prototype.test.mjs 断言同步（行为正当更新）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++不适用：决策记录由 distill 蒸馏链落 knowledge（收口后人工核验 decisions 域文件——见收口后验证）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-agent-tasks/tasks.md b/.sillyspec/changes/2026-09-26-thin-agent-tasks/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-agent-tasks/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T00:55:08.578Z
++---
++# 任务注册表（Tasks）— 2026-09-26-thin-agent-tasks
++
++> 机器稿（成功标准机械推导）；轻量跑直写=零任务卡（任务即 checkbox 行）；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: 实现与收口——groupCriteriaToUnits、thin-workunits 的聚类测试同步回退、简报等（覆盖标准 1,3,4,5,7,8）
++- [x] task-02: 前端——WORK_UNIT_BUCKETS 聚类路径回退等（覆盖标准 2）
++- [x] task-03: 文档——tasks.md 机器稿头注释同步等（覆盖标准 6）

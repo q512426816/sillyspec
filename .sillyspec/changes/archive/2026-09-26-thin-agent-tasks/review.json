@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-thin-agent-tasks",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "聚类器回退与逐条恢复完全达标（确认项，非缺陷）",
+      "evidence": "grep 全 src/ 对 groupCriteriaToUnits/WORK_UNIT_BUCKETS 零命中（仅 test/thin-workunits.test.mjs 回退钉自身断言提及，属钉的正确形态）；src/flow-draft.js draftTasks 行渲染与 68a4530a（thin-workunits 之前）逐字一致（`- [ ] task-NN:` + clipTaskText 逐条镜像 + 单行兜底），唯一差异是头注释行按 FR-02 更新为覆写语义——有意分歧且已留注释（flow-draft.js:339-342 记载否决缘由）。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "advisory 文案缺「保持 task-NN 行形态」字面限定——覆写语义已一致，措辞完备性小缺口",
+      "evidence": "fresh（flow.js:539）与 adopt（flow.js:379）简报文案逐字一致，均含「按实际实现路径覆写…保持 `- [ ] task-NN:` 行形态」；done advisory（flow.js:733）为「把 tasks.md 覆写为自己的工作分解并完成一个单元即勾选（- [ ] → - [x]）」——覆写语义在场且 checkbox 行形态经「（- [ ] → - [x]）」隐式传达，但缺 requirements 引文中的「保持 task-NN 行形态」显式限定。tasks.md 头注释在场（flow-draft.js:356）。旧聚类文案（完成一个工作单元（该域实现+测试绿）/覆盖标准 ${covers}）零残留。advisory 为 warn-only 非门禁，无行为影响。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "教训决策记录质量达标；distill 落 knowledge 为收口后事项",
+      "evidence": "design 槽4 三实例均可独立溯源：①「完整标点收尾」自检否决见 flow-draft.js:82 注释（「经方案评审否决：误伤复合条目/无标点短条目」）；②复合拆分劈碎枚举词表见 splitCompoundCriteria 路径感知补丁（flow-draft.js:41-43，狗粮修复留痕）；③本变更自身。模式表述「开放分类归 agent（人有上下文），机器只锚定可枚举封闭面（验收标准文本、字段格式契约）」与本变更实际架构动作（计划面归还、验收面指纹锚定不动）一致；死路记录（加更多桶被弃）在场。三实例同族性成立（硬编码规则误判开放世界形态）。distill→knowledge/decisions 在测试绑定中如实标「不适用：收口后人工核验」——评审时点不可验，非隐瞒。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "自写自勾假勾退化——可接受（已披露且接受理由与架构事实相符）",
+      "evidence": "design 槽4 明示风险并接受，理由「哨兵证据重心本在提交面+测试门，任务面降级为进度信号；追溯锚在 requirements FR 区」。架构核实：detectFakeCheckCompletion（sentinel-assertions.js）仅在「task-NN 行全勾且区间提交标题/正文均无 token 且无 review.json」时拒收（flow.js:717 process.exit(1)）；测试门 runQuickTestLintGate 实测 local.yaml commands.test/lint；冻结件锚 baseline..HEAD 提交面。任务面本就不是 load-bearing 门——agent 重写自己的计划面对自己不构成反证，真正的对抗性证据（实测、提交冻结、独立评审、requirements 指纹）均独立于 tasks.md。接受成立。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "thin-workunits 归档件与回退后代码并存——审计一致，可接受",
+      "evidence": ".sillyspec/changes/archive/2026-09-26-thin-workunits/ 在场（历史留痕不可改写）；当前行为以 src/ 与回退钉测试为准。谱系桥接完整：本变更 design 槽1 明记「用户否决 thin-workunits 的域关键词聚类」、test/thin-workunits.test.mjs 头注释「演化记录」段记载聚类→回退全程。归档件反映彼时决策，不主张当前行为，无矛盾。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "覆写丢行形态→哨兵空真失效——可接受（已披露、非承重面），留一个小补强建议",
+      "evidence": "design 槽3 已披露「哨兵只认 - [ ]/- [x] task-NN 行」。机制核实：detectFakeCheckCompletion 仅解析匹配 task-NN 的 checkbox 行；agent 覆写为非 task-NN 行形态时 claimTotal=0 → status='none' → 假勾拒收不可能触发，且勾选缺失 advisory（flow.js:731-734）要求 claimTotal>0，同样静默——即「保持行形态」指引无机械兜底。后果有界：失守的只是进度信号与 warn-only 提醒，承重门（测试实测、提交冻结、requirements 指纹/绑定槽、评审）全部独立于 tasks.md 形态，与槽4 的任务面降级定位自洽。故可接受。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "测试数字口径：任务简报称 45/45，实测 test:core 180/180 全绿",
+      "evidence": "npm run test:core（local.yaml commands.test）实跑 180 tests / 180 pass / 0 fail，含本变更 4 条回退钉用例与 flow-tick-prototype 三处断言同步（47/69/84 行）。45 为简报口径（可能为收口时点子集计数），实际为超集全绿，方向安全，无数据正确性问题。",
+      "location": ""
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26"
+}
