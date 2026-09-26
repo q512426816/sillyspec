@@ -9,9 +9,12 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const {
-  parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline,
+  parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, loadChangeTasks,
 } = await import('../src/timeline.js')
 
 // ───────────────────── parseTaskLines ─────────────────────
@@ -55,9 +58,9 @@ test('inferFlipTimes：计数链断裂（0→2 后 3→5）标 broken 且不再�
   assert.deepEqual(r.times, [111, 111, null, null, null])
 })
 
-test('inferFlipTimes：链未覆盖全部任务（勾选面小于任务面）标 broken', () => {
+test('inferFlipTimes：链完整但未覆盖全部任务（在途未勾完）不标 broken（P2 语义收窄）', () => {
   const r = inferFlipTimes([td(0, 2, 111)], 4)
-  assert.equal(r.broken, true)
+  assert.equal(r.broken, false)
   assert.deepEqual(r.times, [111, 111, null, null])
 })
 
@@ -120,6 +123,21 @@ test('renderTimeline：三段齐备——诞生/时间轴/任务面/墙钟/诚�
   assert.match(out, /task-03\s+≈23:33.*丙单元无锚.*无提交锚⚠️/);
   assert.match(out, /勾选时刻为顺序推断/);
   assert.match(out, /事件 5 条｜提交 1｜任务 3\/3/);
+  assert.match(out, /阶段墙钟：.*requirements.*tasks.*archive/, '逐阶段墙钟（aggregateStageTiming 复用）');
+  assert.match(out, /墙钟：38min/, '总墙钟 fmtDur 格式（取整分）');
+})
+
+test('renderTimeline：已勾任务缺推断时刻 → ? 与专门注记（非笼统断裂注）', () => {
+  const events = [td(0, 2, new Date('2026-09-25T23:33:51').getTime())]
+  const tasks = [
+    { id: 'task-01', checked: true, desc: '甲' },
+    { id: 'task-02', checked: true, desc: '乙' },
+    { id: 'task-03', checked: true, desc: '丙——观测盲窗内勾选' },
+  ]
+  const out = renderTimeline({ change: 'demo', events, tasks, anchors: [], birthTs: null, tier: 'thin' })
+  assert.match(out, /已勾任务缺推断时刻——观测盲窗\/水位丢失/);
+  assert.doesNotMatch(out, /计数链中段断裂/);
+  assert.match(out, /task-03\s+\?/);
 })
 
 test('renderTimeline：任务面缺失降级标注；hash 失联只显 hash', () => {
@@ -136,4 +154,43 @@ test('renderTimeline：无事件流空态不抛', () => {
   const out = renderTimeline({ change: 'demo', events: [], tasks: [{ id: 'task-01', checked: false, desc: 'x' }], anchors: [], birthTs: null, tier: 'thin' })
   assert.match(out, /无事件——watcher 未观测到活动/);
   assert.match(out, /task-01\s+未勾/);
+})
+
+// ───────────────────── loadChangeTasks（tmpdir 双路径探测） ─────────────────────
+
+test('loadChangeTasks：活跃优先于归档', () => {
+  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
+  try {
+    writeFileSync(join(root, 'active.md'), 'x', 'utf8') // 占位防误删空目录
+    const active = join(root, 'changes', 'demo')
+    const archived = join(root, 'changes', 'archive', 'demo')
+    mkdirSync(active, { recursive: true })
+    mkdirSync(archived, { recursive: true })
+    writeFileSync(join(active, 'tasks.md'), '- [ ] task-01: 活跃面\n', 'utf8')
+    writeFileSync(join(archived, 'tasks.md'), '- [ ] task-01: 归档面\n', 'utf8')
+    const r = loadChangeTasks(root, 'demo')
+    assert.equal(r.changeDir, active)
+    assert.match(r.tasksMd, /活跃面/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('loadChangeTasks：仅归档在场时回退归档', () => {
+  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
+  try {
+    const archived = join(root, 'changes', 'archive', 'demo')
+    mkdirSync(archived, { recursive: true })
+    writeFileSync(join(archived, 'tasks.md'), '- [ ] task-01: 归档面\n', 'utf8')
+    const r = loadChangeTasks(root, 'demo')
+    assert.equal(r.changeDir, archived)
+    assert.match(r.tasksMd, /归档面/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('loadChangeTasks：双缺失返回 null', () => {
+  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
+  try {
+    const r = loadChangeTasks(root, 'nope')
+    assert.equal(r.changeDir, null)
+    assert.equal(r.tasksMd, null)
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

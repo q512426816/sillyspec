@@ -12,6 +12,7 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { aggregateStageTiming } from './watcher.js';
 
 /** tasks.md 勾选行解析：`- [x] task-01: 描述` / `- [ ] task-02 无冒号描述`。 */
 export function parseTaskLines(tasksMd) {
@@ -25,7 +26,9 @@ export function parseTaskLines(tasksMd) {
 
 /**
  * 翻格顺序推断（FR-04）：task-done（stage='tasks'）事件序列 → 每任务序号的勾选时刻。
- * 计数链衔接（from === 游标）才赋值；断裂标 broken（此后不再赋值——不编造）。
+ * 计数链衔接（from === 游标）才赋值；**中段**断裂（from ≠ 游标）标 broken 并停止赋值。
+ * 尾部未覆盖（链完整但拍数少于任务数——在途变更未勾完）不标 broken（2026-09-26-watcher-timeline-p2
+ * 语义收窄：那是自然态不是断裂；「已勾任务缺时刻」由渲染层按事实单独标注）。
  * @returns {{times:(number|null)[], broken:boolean}} times 按任务序号索引；未推断到 = null。
  */
 export function inferFlipTimes(events, total) {
@@ -42,7 +45,6 @@ export function inferFlipTimes(events, total) {
     for (let i = from; i < to && i < times.length; i++) times[i] = e.ts;
     cursor = to;
   }
-  if (cursor < times.length && times.some((t) => t != null)) broken = true; // 链未覆盖全部已勾——尾部断
   return { times, broken };
 }
 
@@ -108,6 +110,15 @@ function eventRow(e, anchors) {
   return `${fmtHMS(e.ts)}  ${icon} ${label}`;
 }
 
+/** 秒数 → 人类可读时长（<60s 秒、<60h 分、以上时分）。 */
+function fmtDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}min`;
+  return `${Math.floor(m / 60)}h${m % 60}min`;
+}
+
 /**
  * 合成渲染（纯函数，接线层 console.log）。
  * @param {object} args
@@ -131,7 +142,8 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
     L.push('');
     L.push('── 任务面（勾选时刻 ≈ 顺序推断｜tasks.md 描述行 × 提交锚）──');
     const { times, broken } = inferFlipTimes(events, tasks.length);
-    if (broken) L.push('（计数链断裂或未全覆盖——部分勾选时刻推断不可用，标 ?）');
+    if (broken) L.push('（计数链中段断裂——断裂点后勾选时刻推断不可用，标 ?）');
+    if (tasks.some((t, i) => t.checked && times[i] == null)) L.push('（已勾任务缺推断时刻——观测盲窗/水位丢失，标 ?）');
     for (let i = 0; i < tasks.length; i++) {
       const t = tasks[i];
       const when = t.checked
@@ -149,10 +161,14 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
   const evN = (events || []).length;
   const commits = anchors.length;
   const lastTs = evN > 0 ? events[events.length - 1].ts : birthTs;
-  const wall = birthTs != null && lastTs != null ? Math.max(0, Math.round((lastTs - birthTs) / 60000)) : null;
+  const wall = birthTs != null && lastTs != null ? Math.max(0, lastTs - birthTs) : null;
   const done = tasks ? tasks.filter((t) => t.checked).length : null;
+  const stages = aggregateStageTiming(events || []);
   L.push('');
-  L.push(`墙钟：${wall != null ? `${wall} 分钟` : '未知'}｜事件 ${evN} 条｜提交 ${commits}｜${tasks ? `任务 ${done}/${tasks.length} 勾选` : '任务面缺失'}`);
+  L.push(`墙钟：${wall != null ? fmtDur(wall) : '未知'}｜事件 ${evN} 条｜提交 ${commits}｜${tasks ? `任务 ${done}/${tasks.length} 勾选` : '任务面缺失'}`);
+  if (stages.length > 0) {
+    L.push(`阶段墙钟：${stages.map((s) => `${s.stage} ${fmtDur(s.durationMs)}`).join('｜')}`);
+  }
   L.push('注：观测起点≠诞生时刻（watcher 后拉起/单飞锁盲窗）；勾选时刻为顺序推断（事件不记任务 id）；描述行含机器稿截断。');
   return L.join('\n');
 }
