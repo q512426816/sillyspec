@@ -2381,11 +2381,33 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
     if (m) { pyRunner = m[1].trim(); break }
   }
+  // JSX 运行器推断（2026-09-26-residual-runner-parity，R18-SF-full 实证）：.tsx/.jsx 是 node
+  // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），与
+  // py 侧同法从命中命令串提取 vitest/jest；提不出则整批 skip 转项目运行器（不制造恒败段）。
+  // .ts/.js 照旧 node --test（原生可跑——deps-cwd-prefix ④既有钉）。
+  const _norm = (p2) => String(p2).replace(/\\/g, '/')
+  const NEEDS_PROJECT_RE = /\.(tsx|jsx)$/
+  const jsProject = jsRun.filter((f) => NEEDS_PROJECT_RE.test(_norm(f)))
+  const jsNative = jsRun.filter((f) => !NEEDS_PROJECT_RE.test(_norm(f)))
+  let jsxRunner = null
+  for (const h of hits || []) {
+    const cmd = String(h.test || '')
+    const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?(?:vitest|jest))(?=\s|$)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*(?:vitest|jest)(?:\s|$))/.exec(cmd)
+    if (m) { jsxRunner = m[1].trim(); break }
+  }
   const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
   const batches = []
   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
-  if (jsRun.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsRun.join(' ')}`, count: jsRun.length, dropped: js.length - jsRun.length })
+  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length })
+  if (jsProject.length > 0) {
+    if (jsxRunner) {
+      const isVitest = /vitest/.test(jsxRunner)
+      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebase).join(' ')}`, count: jsProject.length, dropped: 0 })
+    } else {
+      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且命中命令串无 vitest/jest 运行器——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+    }
+  }
   return batches
 }
 
@@ -2444,10 +2466,17 @@ function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
     const chunk = files.slice(i, i + 30)
     const batches = buildDepsBatches({ deps: chunk, changedFiles: files, hits })
     for (const b of batches) {
+      if (b.skip) {
+        // JSX 无项目运行器批（residual-runner-parity）：不跑不拦——残差披露如实记录转办，
+        // 由 agent 用项目运行器执行（verify 段指引已含「命中 warning 复核」面）。
+        segments.push({ runner: b.name, runnerKind: 'project-runner-transfer', files: b.files || [], status: 'skipped', reason: b.reason || '转项目运行器', durationMs: null, outputTail: null })
+        console.warn(`⚠️ ${b.name}：${b.reason}`)
+        continue
+      }
       const isPy = b.short === 'py'
-      const segFiles = chunk.filter(f => (norm(f).endsWith('.py') === isPy))
+      const segFiles = chunk.filter((f) => (norm(f).endsWith('.py') === isPy))
       const r = runOneModule(b.name, b.command, cwd, knownFailures)
-      segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : 'node --test', files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
+      segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : (b.short === 'jsx' ? 'vitest/jest' : 'node --test'), files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
     }
   }
   return segments
@@ -2525,8 +2554,14 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
   if (deps.length > 0) {
     depsBatches = buildDepsBatches({ deps, changedFiles, hits })
     for (const b of depsBatches) {
+      if (b.skip) {
+        // JSX 无项目运行器批（residual-runner-parity）：skip 不跑不拦，reason 点名让漏测可见
+        console.warn(`⚠️ ${b.name}：${b.reason}`)
+        perModule.push({ name: b.name, status: 'skipped', reason: b.reason || '转项目运行器', command: null, exitCode: null, durationMs: null, outputTail: null })
+        continue
+      }
       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures))
-      console.log(`ℹ️ module 子集附加依赖测试 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 前缀自模块命令推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
+      console.log(`ℹ️ module 子集附加依赖测试 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 前缀自模块命令推断' : b.short === 'jsx' ? 'vitest/jest 前缀自命中命令推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
     }
   }
   const status = aggregateStatus(perModule)
