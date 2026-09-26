@@ -735,6 +735,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
       }
     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
+    // 勾选节奏 advisory（2026-09-26-thin-check-cadence）：watcher 事件流 task-done 单拍跳 ≥2 格 =
+    // 一把全勾——per-task 时间戳/进度信号面失真（39 条流零例外实证）。warn 不阻断（对齐上方
+    // 「任务勾选缺失」advisory 档位：节奏是习惯问题非造假主张，L0 硬门另有其人）；观测旁路
+    // 缺席（无流/无事件/读失败）静默跳过——fail-open，watcher 非真相源。
+    try {
+      const { readWatcherEvents } = await import('./watcher.js')
+      const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
+      const stream = readWatcherEvents({ runtimeRoot, change })
+      const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+      if (batch) {
+        const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
+        console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选`)
+        console.warn('   规范动作是完成一个工作单元即勾一格（- [ ] → - [x]）；一把全勾使进度信号与 per-task 时间戳失真（本次放行不阻断）')
+      }
+    } catch { /* 节奏 advisory best-effort：读流失败静默 */ }
     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
