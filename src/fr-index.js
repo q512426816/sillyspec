@@ -785,16 +785,17 @@ export function activeFrCoverageHits({ specBase, change = null, changeDir = null
   const unknownSources = new Set()
   const covCache = new Map()
   let skip = 0
+  let unknownFrCount = 0
   for (const f of frs) {
     if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
     // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
     const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
-    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); continue }
+    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); unknownFrCount++; continue }
     const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
     if (hit) hits.push({ domain: f.domain, id: f.id, title: f.title, change: f.change, bindings: f.bindings || [], coverage: cov })
     else skip++
   }
-  return { domains, hits, unknownSources: [...unknownSources], skip, total: frs.length }
+  return { domains, hits, unknownSources: [...unknownSources], unknownFrCount, skip, total: frs.length }
 }
 
 /**

@@ -32,7 +32,7 @@ start 之后：按提示填 design.md 四节 AGENT 槽（做法/接口契约/边
 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md（如有））或现有代码依据，无依据不改。
 3. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
-4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测 `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（实测失败阻断收口；纯 doc/配置与未配置命令自动跳过）。以落盘文件与测试结果为准，不信口头"已完成"。
+4. **实证核验再收口**：触及 `src`/`test` 的改动，CLI 会在收口时亲自实测（实测失败阻断收口；纯 doc/配置自动跳过）。测试面按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断——无需配置）；lint 走 `.sillyspec/local.yaml` 的 `commands.lint`。以落盘文件与测试结果为准，不信口头"已完成"。
 5. **非测试逻辑本身有误时，禁止改测试来"通过"**——修逻辑，不修测试。
 6. **git hook 拦截提交时禁止跳过**（如 `.husky/pre-push`），修复问题后再提交。
 7. **代码必须兼容 Windows / Linux / macOS**（路径 / 换行 / 并发都要顾）。

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-dynamic-test-inference",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "rotSuspectFlow 重构后 telemetry unknown 语义漂移：FR 条数 → 去重来源变更数（与「判据语义逐字不变」声明不符）",
+      "evidence": "旧版 unknown = frs.length - strong.length - skip（空覆盖 FR 条数）；新版 unknown = unknownSources.length，而 unknownSources 是按 f.change 去重的 Set（fr-index.js:792）——同一来源变更产生多条空覆盖 FR 时新值少计；docstring 仍写「另有 N 条 active FR」。strong/skip/count=strong 等价，唯 unknown 口径变化；主消费方 knowledge-stats 只读 count，影响面=遥测记录与 warnInfo 文案",
+      "location": "src/flow.js:243 + src/fr-index.js:792-797"
+    },
+    {
+      "severity": "P2",
+      "title": "生成物失同步：init 注入下游项目的 templates/agents-instruction.md 规则4 仍是旧 commands.test 口径",
+      "evidence": "本仓 AGENTS.md 规则4 已改为「测试面按变更动态推断…lint 走 commands.lint」，但 sillyspec init 写入下游项目的完整模板（injectAgentsInstructions → AGENTS_TEMPLATE_PATH）未同步更新，仍教「CLI 会在收口时亲自实测 .sillyspec/local.yaml 的 commands.test / commands.lint」——commands.test 已退役为显式 full 逃生阀，新初始化项目拿到与新门禁行为相悖的指引；同版本号下 init 幂等不刷新，模板漂移会持续外发",
+      "location": "templates/agents-instruction.md:35"
+    },
+    {
+      "severity": "P3",
+      "title": "activeFrCoverageHits 的 frs 空早退分支缺 skip 字段——rotSuspectFlow 该路径 skip=undefined",
+      "evidence": "if (frs.length === 0) return { domains, hits: [], unknownSources: [] } 无 skip；rotSuspectFlow 解构后「域非空但无 active FR」时 telemetry 与返回值 skip=undefined（旧版显式 0），JSON 落盘丢键。另一早退（domains 空）被 rotSuspectFlow 前置分支兜住，仅此分支泄漏",
+      "location": "src/fr-index.js:783"
+    },
+    {
+      "severity": "P3",
+      "title": "design 槽2 接口契约所写 activeFrCoverageHits 签名与实现不符（文档漂移）",
+      "evidence": "design 写 activeFrCoverageHits({knowledgeRoot, archiveRoot, changedFiles, changeDir, change})；实现为 ({specBase, change, changeDir, files})，内部自派生 knowledgeRoot/archiveRoot。语义等价、双消费方（rotSuspectFlow/collectFrLinkedTests）均按实现签名调用，仅契约文档失真",
+      "location": "src/fr-index.js:774"
+    },
+    {
+      "severity": "P3",
+      "title": "applyTraceResidual 可证覆盖集（provable）无 30 帽语义——超帽弃掉文件若为 trace 绑定文件则不进残差（静默漏跑窗口）",
+      "evidence": "runVerifyTestCheck 把未截断的 scopeFiles 传作 provable 集，runModuleSubset 实际执行被 buildDepsBatches CAP=30/组截断——被弃文件在 provable 集内故不进 trace 残差（残差本「不适用防膨胀帽」会全跑）。FR 面经 priorityFiles 排序前置缓解、超帽在 console 披露（超帽弃 N）；该 optimistic 集结构在旧 deps-auto-subset 已存在，非本次引入，本次把 FR 面并入同一集",
+      "location": "src/verify-postcheck.js:1788-1789 + 2635"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 绑定作答声称「退役指引」有覆盖，实际无任何测试断言该 console.warn",
+      "evidence": "modules.*.test 不消费+不执行（verify-artifact-triage.test.mjs:242-244 断言 mode=dynamic-empty 且命令未触发）已覆盖；但「在场打印退役指引」（verify-postcheck.js:1724 的 console.warn）无测试捕获断言——绑定作答对覆盖面轻微夸大，行为本身真实存在",
+      "location": "test/verify-artifact-triage.test.mjs:225"
+    },
+    {
+      "severity": "P3",
+      "title": "local.yaml.example 脱敏模板未注释的 test_strategy: full 与其上方「缺省=动态子集」注释自相矛盾",
+      "evidence": "renderExample() 的注释块宣称缺省=动态子集，紧接着未注释行 test_strategy: full（连同 commands.test: npm test）；模板头指引「复制本文件为 local.yaml」——照抄者落在全量道而非宣称缺省。属逃生阀示范与缺省口径的展示取舍，建议注释化或改示例值",
+      "location": "src/config-schema.js:409"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T17:01:48Z"
+}

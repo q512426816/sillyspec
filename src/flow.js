@@ -219,14 +219,16 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   const { activeFrCoverageHits, markFrNeedsReview } = await import('./fr-index.js')
   const q = activeFrCoverageHits({ specBase, change, changeDir, files })
   const knowledgeRoot = join(specBase, 'knowledge')
-  const { domains, hits: strong, unknownSources, skip } = q
+  const { domains, hits: strong, unknownSources, unknownFrCount, skip } = q
   if (domains.length === 0) {
     return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0, marked: 0 }
   }
   const { appendKnowledgeHit } = await import('./knowledge-hits.js')
   appendKnowledgeHit(join(specBase, '.runtime'), {
     type: 'fr-rot-suspect', change, domains,
-    strong: strong.length, unknown: unknownSources.length, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
+    // unknown=覆盖面不可判定的 FR 条数（评审 P2-1 清偿：与旧版 frs.length-strong-skip 口径逐字等价，
+    // 非来源变更数）；unknownSources 披露来源名单（FR 多条可共享一个来源变更）
+    strong: strong.length, unknown: unknownFrCount, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
     unknownSources: [...unknownSources], source: 'flow-done',
   })
   let marked = 0
@@ -237,10 +239,10 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   const warn = strong.length > 0
     ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${marked} 条；下次知识注入带 ⚠️）`
     : null
-  const warnInfo = unknownSources.length > 0
-    ? `ℹ️ 另有 ${unknownSources.length} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
+  const warnInfo = unknownFrCount > 0
+    ? `ℹ️ 另有 ${unknownFrCount} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
     : null
-  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownSources.length, skip, marked }
+  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownFrCount, skip, marked }
 }
 
 /**
