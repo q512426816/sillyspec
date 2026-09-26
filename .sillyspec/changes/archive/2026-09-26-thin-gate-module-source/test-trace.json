@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-thin-gate-module-source",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-thin-gate-module-source:flow:FR-01",
+      "tests": [
+        "test/verify-gate-restrict-source.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-gate-module-source"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-thin-gate-module-source:flow:FR-02",
+      "tests": [
+        "test/verify-gate-restrict-source.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-gate-module-source"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-thin-gate-module-source:flow:FR-03",
+      "tests": [
+        "test/verify-gate-restrict-source.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-gate-module-source"
+    }
+  ]
+}
