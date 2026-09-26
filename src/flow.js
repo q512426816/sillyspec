@@ -681,12 +681,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         process.exit(1)
       }
     }
-    // 需求测试绑定槽位门（2026-09-25-thin-patch-bindings）+ 自动补全（governance-autopilot）：
-    // 空槽先从测试结果自动填入实际执行的测试文件路径——R20 实证 agent 手写绑定占 Edit 轮次大头。
+    // 需求测试绑定槽位门 + 自动补全（governance-autopilot，评审 P1 修正：逐行扫描替代正则转义）
     const { verifyRequirementBindings } = await import('./flow-draft.js')
     let rb = verifyRequirementBindings({ changeDir })
     if (rb.applicable && rb.emptySlots.length > 0) {
-      // 自动补全：从 gate 面/verify-runs 提取实际执行的测试文件路径
       let _autoFilled = 0
       try {
         const _runtimeRoot = resolveRuntimeRoot(platformOpts || {}, specBase)
@@ -700,25 +698,26 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             try {
               const _j = JSON.parse(readFileSync(_tr, 'utf8'))
               const _files = _j.files || _j.testFiles || (_j.gate && _j.gate.files) || []
-              for (const _f of _files) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\\\/g, '/'))
+              for (const _f of _files) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\/g, '/'))
               if (_testFiles.size > 0) break
             } catch {}
           }
         }
         if (_testFiles.size > 0) {
           const _reqPath = join(changeDir, 'requirements.md')
-          let _reqMd = readFileSync(_reqPath, 'utf8')
+          const _lines = readFileSync(_reqPath, 'utf8').split('\n')
           const _bindingLine = [..._testFiles].slice(0, 3).join('、')
-          for (const slot of rb.emptySlots) {
-            const re = new RegExp(`(${slot.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})(\\n\\n|\\n|$)`)
-            if (re.test(_reqMd)) {
-              _reqMd = _reqMd.replace(re, `$1\n${_bindingLine}$2`)
+          // 逐行扫描：AGENT:测试绑定 注释行后的第一个空行位置插入绑定内容（不转义、不依赖槽文本）
+          for (let _li = 0; _li < _lines.length - 1; _li++) {
+            if (/^<!--\s*AGENT:测试绑定/.test(_lines[_li]) && !_lines[_li + 1].trim()) {
+              _lines[_li + 1] = _bindingLine
               _autoFilled++
+              _li++ // 跳过刚填的行
             }
           }
           if (_autoFilled > 0) {
             const { writeAtomicSync } = await import('./fs-atomic.js')
-            writeAtomicSync(_reqPath, _reqMd)
+            writeAtomicSync(_reqPath, _lines.join('\n'))
             console.log(`✅ [自动绑定] ${_autoFilled} 个空绑定槽已从测试结果补全（${_bindingLine.slice(0, 60)}）——agent 可覆盖`)
             rb = verifyRequirementBindings({ changeDir })
           }
