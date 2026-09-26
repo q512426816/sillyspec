@@ -2403,7 +2403,11 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
   if (jsProject.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)
-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebase).join(' ')}`, count: jsProject.length, dropped: 0 })
+      // jsx 批的 cd 重定基（评审 MEDIUM 清偿）：cdDir 只源 pyRunner——jsxRunner 自带 cd 前缀
+      // （cd frontend && pnpm exec vitest）时文件未重定基产双前缀错路径；独立提取 jsxDir。
+      const jsxDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(jsxRunner)?.[1]
+      const rebaseJsx = (f) => (jsxDir && f.startsWith(jsxDir + '/')) ? f.slice(jsxDir.length + 1) : f
+      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).join(' ')}`, count: jsProject.length, dropped: 0 })
     } else {
       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且命中命令串无 vitest/jest 运行器——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }

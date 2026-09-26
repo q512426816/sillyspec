@@ -23,6 +23,16 @@ test('① vitest 推断批（补 run 子命令）', () => {
   assert.ok(!b.some((x) => x.short === 'js'), 'JSX 文件不再进 node --test 批')
 })
 
+test('①b jsx 批 cd 前缀重定基（评审 MEDIUM 清偿）', () => {
+  const b = buildDepsBatches({
+    deps: ['frontend/src/a.test.tsx'],
+    changedFiles: [],
+    hits: [{ test: 'cd frontend && pnpm exec vitest run src' }],
+  })
+  const jsx = b.find((x) => x.short === 'jsx')
+  assert.ok(jsx && /vitest run src\/a\.test\.tsx$/.test(jsx.command), `cd 前缀下文件应重定基（实际 ${jsx && jsx.command}）`)
+})
+
 test('② 无运行器整批 skip（不制造恒败段）', () => {
   const b = buildDepsBatches({ deps: ['card.test.tsx'], changedFiles: [], hits: [{ test: 'pytest -q tests' }] })
   const skip = b.find((x) => x.short === 'jsx-skip')
