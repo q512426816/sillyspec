@@ -324,6 +324,17 @@ function changeArtifactPaths(changeDir) {
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
  */
 export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
+  // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
+  // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
+  // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
+  // 才在收口处发现。恢复/adopt 路径的变更目录已存在时跳过（在途变更不因配置后补而拦）。
+  const _localYaml = join(specBase, 'local.yaml')
+  if (!existsSync(_localYaml) && !existsSync(join(specBase, 'changes', change))) {
+    console.error('❌ local.yaml 不存在——测试/lint 命令无配置源，flow done 的测试门将兜底到裸 python -m pytest（monorepo 下必假红）。')
+    console.error('   先跑 sillyspec init（生成 local.yaml 含模块探测），或参照 local.yaml.example 手动配置 modules + commands.test。')
+    console.error('   配置面：modules 映射（backend → cd backend && uv run pytest ...、frontend → cd frontend && pnpm exec vitest run ...）+ test_strategy: module')
+    process.exit(2)
+  }
   const cfg = readFlowConfig(specBase)
   if (cfg.mode === 'legacy') {
     console.error('❌ 本仓显式配置 flow.mode=legacy——走既有流程：sillyspec run <stage> --change <名>')

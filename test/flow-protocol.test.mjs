@@ -440,6 +440,8 @@ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () =
 test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落外置根，本地 changes 零残留，ENOENT 消失）', () => {
   const { cwd } = makeRepo()
   const plat = mkdtempSync(join(tmpdir(), 'fp-plat-')) + '/spec-root/nested' // 故意不预建嵌套层——旧实现在此 ENOENT
+  mkdirSync(plat, { recursive: true })
+  writeFileSync(join(plat, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n') // local.yaml 必需（R22 fail-fast 契约）
   const change = '2026-09-25-obs-events-ab12cd'
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--spec-dir', plat])
   assert.equal(s.status, 0, `外置根 start 应通过（旧实现 ENOENT 崩溃）: ${s.stdout}\n${s.stderr}`)
@@ -494,6 +496,8 @@ test('⑳ 变更名白名单：穿越/分隔符/default/quick-hex 拒收，合�
 test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
   const { cwd } = makeRepo()
   const plat = mkdtempSync(join(tmpdir(), 'fp-ptr-'))
+  mkdirSync(plat, { recursive: true })
+  writeFileSync(join(plat, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n') // local.yaml 必需（R22 fail-fast）
   writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({ specRoot: plat }))
   const change = 'flow-h2-t21'
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
