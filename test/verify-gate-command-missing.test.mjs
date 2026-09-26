@@ -134,7 +134,7 @@ test('T4 runVerifyTestCheck 全量路径：链尾二进制缺失（前段 runner
   assert.equal(r2.status, 'failed', '真实挂测不降档')
 })
 
-test('T5 module 子集：模块命令 CNF → 单元 skipped，聚合 skipped + reason 点名', () => {
+test('T5 全量命令 CNF → 环境缺件降档 skipped + reason 点名（模块道退役，CNF 防线经显式全量道）', () => {
   const dir = mk('testmod')
   const git = (args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', windowsHide: true })
   git(['init', '--quiet'])
@@ -144,18 +144,19 @@ test('T5 module 子集：模块命令 CNF → 单元 skipped，聚合 skipped + 
   writeFileSync(join(dir, 'backend/app/modules/x/mod.py'), 'v1\n')
   git(['add', '.'])
   git(['commit', '--quiet', '-m', 'init'])
-  writeFileSync(join(dir, 'backend/app/modules/x/mod.py'), 'v2-dirty\n') // 制造 diff 命中模块
+  writeFileSync(join(dir, 'backend/app/modules/x/mod.py'), 'v2-dirty\n') // 制造 diff
+  // 2026-09-26-dynamic-test-inference 迁移：modules.*.test 退役——CNF 降档防线经显式
+  // test_strategy: full 的 commands.test 触达（runFullCommand 同款 detectCommandMissingFailure）
   writeLocalYaml(dir, [
-    'test_strategy: module',
-    'modules:',
-    '  mx: { path: "backend/app/modules/x/", test: "definitely-missing-bin-qwe run" }',
+    'test_strategy: full',
+    'commands:',
+    '  test: definitely-missing-bin-qwe run',
     '',
   ].join('\n'))
   const r = runVerifyTestCheck({ cwd: dir, specBase: join(dir, '.sillyspec') })
-  assert.equal(r.status, 'skipped', '模块命令 CNF → 单元 skipped → 聚合 skipped')
-  assert.match(r.reason, /环境缺件跳过/)
-  assert.match(r.reason, /mx/)
-  assert.ok(Array.isArray(r.modules) && r.modules.some(u => u.name === 'mx' && u.status === 'skipped'), '逐模块结论含 skipped 单元')
+  assert.equal(r.status, 'skipped', '全量命令 CNF → 环境缺件降档 skipped（非代码失败不拦门）')
+  assert.match(r.reason, /环境缺件/)
+  assert.match(r.reason, /definitely-missing-bin-qwe/, 'reason 点名缺失二进制')
 })
 
 test('T6 classifyTestFailureArtifact：next CNF 行命中 sandbox-env-missing（签名两侧形态）', () => {

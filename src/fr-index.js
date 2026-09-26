@@ -17,9 +17,9 @@
  *     syncIndexRoutingLines/discoverModuleIndex），不复制实现。
  */
 
-import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile } from './test-bindings.js'
+import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile, resolveTestFileRel } from './test-bindings.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { basename, dirname, join } from 'path';
 import { writeAtomicSync } from './fs-atomic.js';
 import {
   splitKnowledgeSections,
@@ -369,7 +369,18 @@ function nextIdForDomain(domain, allSections) {
  *   deliverableFiles：显式交付文件清单（轻量变更无 design.md 时由调用方供基线 diff，域路由同口径）
  * @returns {{ skipped?: string, written: Array<{file,id,action}>, superseded: Array<{from,to,change}>, unreferenced: Array<{domain,count}>, warnings: string[] }}
  */
-export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', deliverableFiles = null }) {
+/** projectRoot 启发式（绑定路径仓根归一用）：specBase 目录名是 .sillyspec 且其父像仓根
+ * （.git/package.json/pyproject.toml 在场）→ 父目录；否则 null（不猜——归一跳过保原值）。 */
+function deriveProjectRootFromSpec(specBase) {
+  try {
+    const parent = dirname(specBase)
+    if (basename(specBase) === '.sillyspec'
+      && (existsSync(join(parent, '.git')) || existsSync(join(parent, 'package.json')) || existsSync(join(parent, 'pyproject.toml')))) return parent
+  } catch { /* 启发式失败 → null */ }
+  return null
+}
+
+export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', deliverableFiles = null, projectRoot = null }) {
   const changeName = changeDir.split(/[\\/]/).pop();
   const parsed = parseChangeRequirements(changeDir);
   if (parsed.missing) {
@@ -513,7 +524,8 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
       for (const [local, globalId] of localToGlobal) {
         const rows = traceRows.filter((r) => r.anchor === local);
         if (rows.length === 0) continue;
-        const res = upsertFrBindings({ knowledgeRoot, frId: globalId, rows });
+        // projectRoot 优先调用方（真仓根），缺省启发式自 specBase 推（.sillyspec 父目录像仓根才取）
+        const res = upsertFrBindings({ knowledgeRoot, frId: globalId, rows, projectRoot: projectRoot || deriveProjectRootFromSpec(dirname(changeDir)) });
         if (res.ok) promotedBindings.push({ fr: globalId, rows: rows.length, changed: res.changed });
       }
       if (promotedBindings.length > 0) {
@@ -747,6 +759,71 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
     }
   }
   return out;
+}
+
+// ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────
+// 查询核单源双消费：flow 侧 rotSuspectFlow 打待复核标记（信号面）；verify 侧
+// collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）。覆盖判定与
+// rot 完全同口径：来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
+
+/**
+ * 触达域内 active FR 的强命中集。
+ * @returns {{ domains: string[], hits: Array<{domain,id,title,change,bindings:string[],coverage:Set}>, unknownSources: string[] }}
+ *   hits=覆盖面与触碰文件相交者；unknownSources=覆盖源缺失（无 patch 无绑定）的来源变更名。
+ */
+export function activeFrCoverageHits({ specBase, change = null, changeDir = null, files = [] }) {
+  const knowledgeRoot = join(specBase, 'knowledge')
+  const archiveRoot = join(specBase, 'changes', 'archive')
+  const moduleIndex = discoverModuleIndex(knowledgeRoot)
+  const changed = (Array.isArray(files) ? files : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
+  // changeDir 仅为 design.md 兜底路由用（files 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
+  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, changed).filter((d) => d !== 'unmapped')
+  if (domains.length === 0) return { domains: [], hits: [], unknownSources: [] }
+  const frs = readActiveFrDigest(knowledgeRoot, domains)
+  if (frs.length === 0) return { domains, hits: [], unknownSources: [] }
+  const hits = []
+  const unknownSources = new Set()
+  const covCache = new Map()
+  let skip = 0
+  for (const f of frs) {
+    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
+    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
+    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
+    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); continue }
+    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
+    if (hit) hits.push({ domain: f.domain, id: f.id, title: f.title, change: f.change, bindings: f.bindings || [], coverage: cov })
+    else skip++
+  }
+  return { domains, hits, unknownSources: [...unknownSources], skip, total: frs.length }
+}
+
+/**
+ * 需求关联回归测试面（测试门三源之二）：强命中 FR 的绑定 tests 解析为仓根相对文件集。
+ * 路径解析三段（resolveTestFileRel）：根相对直取 → 子项目根前缀补全 → 裸文件名受限 glob；
+ * 解析失败路径不进测试面（unresolved 披露，宁缺勿错跑）。
+ * @returns {{ files: string[], frHits: Array<{domain,id,title,files:string[]}>, unresolved: string[], domains: string[] }}
+ */
+export function collectFrLinkedTests({ specBase, changeName = null, changedFiles = [], projectRoot }) {
+  const q = activeFrCoverageHits({
+    specBase,
+    change: changeName,
+    changeDir: changeName ? join(specBase, 'changes', changeName) : null,
+    files: changedFiles,
+  })
+  const filesSet = new Set()
+  const frHits = []
+  const unresolved = []
+  for (const h of q.hits) {
+    if (!Array.isArray(h.bindings) || h.bindings.length === 0) continue
+    const resolvedFiles = new Set()
+    for (const b of h.bindings) {
+      const filePart = testAnchorFile(b)
+      const rel = resolveTestFileRel(filePart, { projectRoot })
+      if (rel) { resolvedFiles.add(rel); filesSet.add(rel) } else unresolved.push(`${h.id}:${b}`)
+    }
+    if (resolvedFiles.size > 0) frHits.push({ domain: h.domain, id: h.id, title: h.title, files: [...resolvedFiles].sort() })
+  }
+  return { files: [...filesSet].sort(), frHits, unresolved, domains: q.domains }
 }
 
 /**

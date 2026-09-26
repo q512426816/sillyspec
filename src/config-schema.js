@@ -68,7 +68,7 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'detect 核验 package.json(或对应构建文件) scripts 存在性后才写对应键；缺失则不写。agent 可改。',
       keys: [
         { path: 'commands.build', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '构建命令。', example: 'npm run build' },
-        { path: 'commands.test', type: 'string', optional: true, status: 'live', readers: ['extractTestCommand (src/verify-postcheck.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '测试命令——verify 阶段 CLI 亲自执行此命令与 verify-result.md 对账，实测失败即阻断；quick --done 触及 src/test 时同款实测（P0-2 门禁）。', example: 'npm test' },
+        { path: 'commands.test', type: 'string', optional: true, status: 'deprecated', readers: ['extractTestCommand (src/verify-postcheck.js)', 'validateCommands (src/scan-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 退役为全量逃生阀】仅显式 test_strategy: full 时生效——测试面缺省按变更动态推断（本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断），不再依赖此配置；未配置且显式 full 时按 package.json scripts.test / pyproject 结构推断全量命令。', example: 'npm test' },
         { path: 'commands.lint', type: 'string', optional: true, status: 'live', readers: ['detectLocalYaml (src/local-detect.js)', 'runQuickTestLintGate (src/run/quick-audit.js)', 'validateCommands (src/scan-postcheck.js)'], desc: 'lint 命令——quick --done 触及 src/test 时 CLI 亲自执行（P0-2 门禁，失败阻断完成）。', example: 'npm run lint' },
         { path: 'commands.test_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['resolveTestTimeoutMs (src/verify-postcheck.js)'], desc: 'commands.test 超时秒数（R9 实证 2026-09-23：全量套件实测可达 27min，固定 600s 帽必杀）——优先级 local.yaml 本键 > env SILLYSPEC_TEST_TIMEOUT_MS > 缺省 600。慢仓在此提帽，防真慢套件被当超时失败。', example: '2400' },
         { path: 'commands.lint_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyLintCheck (src/verify-postcheck.js)'], desc: 'commands.lint 超时秒数——优先级 显式调用参 > 本键 > env SILLYSPEC_LINT_TIMEOUT_MS > 缺省 180（快照内 junction I/O 慢，快照路径调用侧显式传 300）。', example: '600' },
@@ -112,7 +112,7 @@ export const LOCAL_YAML_SCHEMA = {
       note: 'test_strategy: module 时，按 git diff 命中的模块子集收窄测试。只支持 inline flow 形态（extractModules 不解析嵌套展开式）。',
       keys: [
         { path: 'modules.<name>.path', type: 'string', optional: true, status: 'live', readers: ['extractModules (src/verify-postcheck.js)', 'parseLocalYamlModules (src/plan-postcheck.js)', 'extractModulePaths (src/worktree-deps.js)'], desc: '子模块目录路径（相对仓库根）。', example: 'frontend/' },
-        { path: 'modules.<name>.test', type: 'string', optional: true, status: 'live', readers: ['extractModules (src/verify-postcheck.js)'], desc: '该子模块的测试命令。', example: 'cd frontend && pnpm test' },
+        { path: 'modules.<name>.test', type: 'string', optional: true, status: 'deprecated', readers: ['extractModules (src/verify-postcheck.js，退役提示用）'], desc: '【2026-09-26-dynamic-test-inference 退役，不再消费】测试面按变更动态推断、runner 自项目结构（pyproject/uv.lock/package.json 就近祖先）推断。模块级 flaky 处置迁 known_failures。块在场时 CLI 打印退役指引。', example: 'cd frontend && pnpm test' },
       ],
     },
     {
@@ -120,7 +120,7 @@ export const LOCAL_YAML_SCHEMA = {
       title: '测试策略',
       note: 'verify 阶段 CLI 对账的收窄策略（D-005@v2：skip 接线兑现 + evidence-auto 新增，full/module 语义不变）。',
       keys: [
-        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: 'full=全量 commands.test；module=按 git diff 命中 modules 子集收窄（需配 modules）；skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹，R-07）；evidence-auto=按变更目录 module-impact.md 影响类型推荐检查组合（行为→module 聚焦测试、文档/prompt→docs-check、门禁契约→gate；缺失/不可解析降级 module 并注记）。缺省：配了 modules: 块 → module（v3.29.3 起缺省收窄，ql-20260920-010）；未配 modules → 全量。', example: 'full' },
+        { path: 'test_strategy', type: 'enum', values: ['full', 'module', 'skip', 'evidence-auto'], optional: true, status: 'live', readers: ['extractTestStrategy (src/verify-postcheck.js)', 'resolveTestStrategy (src/verify-postcheck.js)'], desc: '【2026-09-26-dynamic-test-inference 起】full=全量（commands.test 在场生效，否则结构推断）；module=已退役折算动态子集（超集覆盖：变更文件面收窄 + FR 关联回归 + import 依赖）；skip=真跳过（R-07 不变）；evidence-auto=按 module-impact.md 推荐（行为→动态子集、文档/门禁→skip）。缺省=动态子集：三源并集非空实测、空则不硬跑全量（防超时/预存失败面）。', example: 'full' },
       ],
     },
     {
@@ -399,17 +399,19 @@ dispatch:
 #     # apply_overlap: manual # manual=fail-closed（缺省）| force=放行留痕 | skip=软跳过
 #     # stash_dirty: false    # true=主仓在途改动自动 stash（等效常备 --stash-dirty）
 
-# ── monorepo 子模块映射（test_strategy: module 时按 git diff 命中模块收窄测试）──
-# 只支持 inline flow 形态（嵌套展开式解析不出）：
-modules:
-  frontend: { path: "frontend/", test: "cd frontend && pnpm test" }
-  backend: { path: "backend/", test: "cd backend && npm test" }
-
-# ── 测试策略（verify 实测收窄；full/module 语义不变，skip/evidence-auto 为 2026-08-23 新增）──
-# full=全量 commands.test | module=按命中模块收窄（需配 modules）
+# ── 测试策略（2026-09-26-dynamic-test-inference 起）──
+# 缺省=动态子集：本变更测试 ∪ FR 关联回归（active FR 覆盖面∩触碰文件→绑定 tests）∪ import 依赖，
+#   runner 自项目结构推断（pyproject/uv.lock/package.json 就近祖先）——modules.*.test 与 commands.test
+#   均不再需要（后者仅显式 full 时作全量逃生阀）。三源空（doc-only）不硬跑全量。
+# full=全量（commands.test 在场生效，否则按 package.json scripts.test / pyproject 推断）
 # skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹）
-# evidence-auto=按变更 module-impact.md 影响面推荐检查组合（行为→module 聚焦测试、文档→docs-check、门禁→gate；缺失降级 module）
+# evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
 test_strategy: full
+
+# ── monorepo 子模块路径映射（.path 仍被 plan/worktree-deps 消费；.test 已退役勿再配）──
+modules:
+  frontend: { path: "frontend/" }
+  backend: { path: "backend/" }
 
 # ── 决策库 behind 复核阈值（docs-check 决策规则：源码在「最近确认」后前进超阈值 → 待复核提示；缺省 10）──
 decisions:

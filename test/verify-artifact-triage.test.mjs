@@ -174,7 +174,7 @@ test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁�
     // 计数器脚本：真实执行才 append（去重跳过时不增）；打印失败行 + 退出 1
     writeFileSync(join(dir, 'count-fail.js'), 'console.log("\\u2715 Boom-counter test failed")\nrequire("fs").appendFileSync(__dirname + "/runs.txt", "x\\n")\nprocess.exit(1)\n')
     writeFileSync(join(dir, 'exit0.js'), 'process.exit(0)\n')
-    writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'commands:\n  test: node count-fail.js\n  lint: node exit0.js\n')
+    writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'test_strategy: full\ncommands:\n  test: node count-fail.js\n  lint: node exit0.js\n')
     const specBase = join(dir, '.sillyspec')
     const runCount = () => (existsSync(join(dir, 'runs.txt')) ? readFileSync(join(dir, 'runs.txt'), 'utf8').trim().split('\n').filter(Boolean).length : 0)
     const prevOff = process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF
@@ -207,7 +207,7 @@ test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁�
       await assert.rejects(executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' }), /实测测试失败/)
       assert.equal(runCount(), 3, '代码变化解封真跑')
       // 第五次：豁免面补救 → 键失配 → 重跑且豁免命中通过（假红补救全流程闭环）
-      writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'commands:\n  test: node count-fail.js\n  lint: node exit0.js\nknown_failures:\n  - Boom-counter\n')
+      writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'test_strategy: full\ncommands:\n  test: node count-fail.js\n  lint: node exit0.js\nknown_failures:\n  - Boom-counter\n')
       await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1' })
       assert.equal(runCount(), 4, '豁免面变化解封重跑且判 passed（不再 throw）')
       assert.equal(loadLastQualityScanRecord({ specBase, changeName: 'c1' }).testResult.status, 'passed')
@@ -222,7 +222,7 @@ test('质量扫描 E2E：失败签名未变不重跑；逃生阀/代码面/豁�
 
 // ── 修复一 c：module 缺省收窄 E2E ───────────────────────────────────
 
-test('缺省收窄：modules 已配未显式 test_strategy → module 子集（不落全量）', () => {
+test('缺省动态子集：modules 已退役不消费，变更无测试关系面 → 不落全量（不硬跑 exit1）', () => {
   const dir = makeRepo()
   try {
     writeFileSync(join(dir, 'modok.js'), 'console.log("ok")\n')
@@ -237,19 +237,21 @@ test('缺省收窄：modules 已配未显式 test_strategy → module 子集（�
     writeFileSync(join(specBase, 'local.yaml'),
       'commands:\n  test: node exit1.js\nmodules:\n  core: { path: "src/", test: "node modok.js" }\n')
     const r = runVerifyTestCheck({ cwd: dir, specBase, changeName: 'c1' })
-    assert.equal(r.mode, 'module-subset', '缺省收窄到 module 子集')
-    assert.equal(r.status, 'passed', '模块命令实测通过（全量 exit1 未被触发）')
-    assert.match(r.command, /^module\[core\]/)
+    // 2026-09-26-dynamic-test-inference：modules.*.test 退役不消费；变更（src/thing.js 无测试
+    // 关系面）→ 动态子集空，不硬跑全量（exit1 全量未触发、退役模块命令不执行）
+    assert.equal(r.mode, 'dynamic-empty', '缺省动态子集空（modules 退役）')
+    assert.equal(r.status, 'skipped', '不硬跑全量（防超时/预存失败面）')
+    assert.ok(!String(r.command || '').includes('exit1') && !String(r.command || '').includes('modok'), '全量与退役模块命令均未触发')
     // 对照 A：显式 test_strategy: full → 全量真跑（用户有意跑全量不受收窄影响）
     writeFileSync(join(specBase, 'local.yaml'),
       'commands:\n  test: node exit1.js\ntest_strategy: full\nmodules:\n  core: { path: "src/", test: "node modok.js" }\n')
     const rFull = runVerifyTestCheck({ cwd: dir, specBase, changeName: 'c1' })
     assert.equal(rFull.mode, 'full')
     assert.equal(rFull.status, 'failed', '显式 full 照跑全量（exit1 失败如实拦截）')
-    // 对照 B：未配 modules 且未配 test_strategy → 保持缺省全量（零打扰）
+    // 对照 B：未配 modules 且未配 test_strategy → 缺省动态子集（无测试关系面即空，零打扰）
     writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node exit1.js\n')
     const rNoMod = runVerifyTestCheck({ cwd: dir, specBase, changeName: 'c1' })
-    assert.equal(rNoMod.mode, 'full')
-    assert.equal(rNoMod.status, 'failed')
+    assert.equal(rNoMod.mode, 'dynamic-empty', '缺省动态子集（不再回退全量 commands.test）')
+    assert.equal(rNoMod.status, 'skipped')
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })

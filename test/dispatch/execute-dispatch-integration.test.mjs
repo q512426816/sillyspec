@@ -76,7 +76,7 @@ console.log('--- 1. Local 零回归（options.dispatchMode=local 强制本地派
   // 含现有结构关键词（先读源确认确切字符串）
   assertContains(out, '## 执行方式', 'Local 输出含现有「执行方式」段')
   assertContains(out, '### 工作目录', 'Local 输出含「工作目录」段（worktreePath 非空）')
-  assertContains(out, '### Task Review Gate', 'Local 输出含 Task Review Gate')
+  assertContains(out, 'tasks.md', 'Local 输出含勾选纪律面（Task Review Gate 段已退役，tasks.md 唯一真相接棒）')
   assertContains(out, '## Wave 1: 执行以下任务', 'Local 输出含 Wave 标题')
   // 零回归核心：dispatchSection=''，不含任何派发段
   assertNotContains(out, '派发后端：SillyHub', 'Local 输出不含 SillyHub 派发段（零回归核心）')
@@ -344,10 +344,10 @@ console.log('\n--- 10. batch 调度（三条件分组 / 逐 task 闭环 / 职责
 
   // c. 职责边界：batch 子代理不写 review.json、不勾选 checkbox（审查与勾选归主 agent）
   // 2026-08-20-task-truth-unify：勾选唯一落点迁 tasks.md
-  assertContains(out, '禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent',
-    'batch 子代理禁止写 review.json / 禁止勾选 checkbox（审查归主 agent）')
-  assertContains(out, 'batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent）',
-    '主 agent 角色段：审查/review.json/勾选仍归主 agent（batch 只合并实现不合并审查）')
+  assertContains(out, '禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent',
+    'batch 子代理禁止勾选 checkbox（审查归主 agent；review.json 面已随 Task Review 退役不再提及）')
+  assertContains(out, 'batch 子代理只做实现与自验，task 审查与 checkbox 勾选仍归你（主 agent）',
+    '主 agent 角色段：审查与勾选仍归主 agent（batch 只合并实现不合并审查）')
 
   // d. 越权即停（「立即停止」类表述）
   assertContains(out,

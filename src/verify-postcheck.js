@@ -30,6 +30,7 @@ import { resolveRuntimeRoot } from './run/shared.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
 import { readChangeTrace, testAnchorFile } from './test-bindings.js'
+import { collectFrLinkedTests } from './fr-index.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { reconcileCrossRepoDeclarations } from './cross-repo-reconcile.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
@@ -1255,19 +1256,14 @@ export function isTimeoutOnlyTestFailure(testCheck) {
   return units.every(u => /超时/.test(String(u.reason || '')))
 }
 
-export function decideVerifyTestAction({ strategy, modulesPresent, hitCount, depsAutoEligible = false }) {
+export function decideVerifyTestAction({ strategy, scopeCount = 0, gitUnavailable = false }) {
   if (strategy === 'skip') return 'skip'
-  if (strategy === 'module' && modulesPresent) {
-    if (hitCount > 0) return 'module-subset'
-    if (hitCount === 0) return 'module-zero-hit-skip'
-    return 'full' // hitCount === -1（git 不可用）→ 落全量兜底
-  }
-  // deps-auto-default（2026-09-23 用户裁定「cli 跑测试就跑对应开发相关的测试」）：未配置
-  // test_strategy 且未配置 modules: 的仓（多数用户态），diff 存在「import 被改 src 的测试 ∪
-  // 本次变更的 test 文件」（deps(auto) 同源口径）→ 跑该子集而非全量；deps 为空（改动与测试
-  // 面零关系）维持缺省 full 零打扰。显式 test_strategy: full 不受影响（strategy==='full' 直落）。
-  if (strategy === null && depsAutoEligible) return 'deps-auto-subset'
-  return 'full'
+  if (strategy === 'full') return 'full'
+  // 动态子集（2026-09-26-dynamic-test-inference 起缺省）：git 不可用无法算文件面 → 全量兜底；
+  // 三源（本变更测试/FR 关联回归/import 依赖）并集空 → dynamic-empty（不硬跑全量，防超时/
+  // 预存失败面）；非空 → dynamic-subset 实测。
+  if (gitUnavailable) return 'full'
+  return scopeCount > 0 ? 'dynamic-subset' : 'dynamic-empty-skip'
 }
 
 /**
@@ -1718,103 +1714,79 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     console.warn(`📋 known_failures 豁免清单已加载：${knownFailures.length} 条模式（local.yaml）`)
   }
 
-  // —— 缺省收窄（ql-20260920-010 修复一 c，对撞三轮 68 分钟单步构成之一=缺省全量）——
-  // modules: 已配置且未显式 test_strategy → 缺省按 module 子集实测。未配置 modules: 的仓
-  // 保持缺省 full 零打扰；显式 test_strategy: full 是用户有意跑全量，不受影响。
-  let defaultedToModule = false
-  if (rawStrategy === null && extractModules(yamlText)) {
-    defaultedToModule = true
-    console.warn('ℹ️ test_strategy 未配置但 modules: 已配置——缺省按 module 子集实测（v3.29.3 起收窄；显式写 test_strategy: full 恢复全量）')
+  // ── local.yaml 测试配置退役（2026-09-26-dynamic-test-inference）──
+  // modules.*.test 不再消费：静态配置写死单方向测试面、无法按变更收窄、并行变更须互改共享
+  // 配置（平台仓三形态路径混杂 + R22 裸 fallback 600s×8 实证）。测试面缺省动态推断：
+  // 本变更测试 ∪ FR 关联回归（active FR 覆盖面∩触碰文件→绑定 tests）∪ import 依赖测试；
+  // runner 自项目结构推断（pyproject/uv.lock/package.json 就近祖先）。commands.test 降格为
+  // 显式 test_strategy: full 的全量逃生阀；known_failures/test_strategy 照常生效。
+  if (extractModules(yamlText)) {
+    console.warn('ℹ️ local.yaml modules.*.test 已退役（2026-09-26-dynamic-test-inference）：测试面缺省按变更动态推断、runner 自项目结构推断——modules 块可删')
   }
 
-  // —— evidence-auto 生效策略解析（D-005@v2 / task-11）——
-  // 按变更目录 module-impact.md 影响面取生效策略（行为→module、纯文档/门禁→skip、
-  // 缺失/不可解析→降级 module 并注记）再进既有链路；full/module/skip/缺省四路径
-  // 不经此分支（消费语义逐字不变）。
-  let strategy = defaultedToModule ? 'module' : rawStrategy
+  // 策略折算：full/skip 显式语义保留；module / evidence-auto(解析 module) / 缺省统一进动态子集
+  // （module 的按模块收窄语义被动态子集超集覆盖：按变更文件面收窄且带 FR 关联回归）。
+  // evidence-auto 生效策略解析（D-005@v2 / task-11）照旧：按变更目录 module-impact.md 影响面
+  // 取生效策略（行为→实测、纯文档/门禁→skip、缺失/不可解析→降级实测并注记）。
+  let strategy = rawStrategy
   let evidenceAuto = null
+  let eaNote = ''
   if (rawStrategy === 'evidence-auto') {
     const changeDir = changeName ? join(specBase, 'changes', changeName) : null
     const resolution = resolveTestStrategy({ yamlText, changeDir })
     strategy = resolution.strategy
     evidenceAuto = resolution.evidence_auto_recommendation
-  }
-  // evidence-auto 解析为 module 后的 hint/reason 追加注记（full/module 路径为空串，输出逐字不变）
-  const eaNote = rawStrategy === 'evidence-auto' ? '（生效策略来自 test_strategy: evidence-auto 推荐）' : ''
-
-  // —— 模块子集路径（test_strategy: module）：算 modulesPresent / hitCount / hits ——
-  // resolveVerifyChangedFiles 返回 null 表示 git 不可用 → hitCount=-1（与 0 命中区分）。
-  // 注：module 子集策略只用主仓 diff（跨仓仓不参与 module 子集，design §6 + §5.4），
-  //     故此处不传 ctx（避免跨仓路径误命中主仓 module 映射）。
-  let modulesPresent = false
-  let hitCount = 0
-  let hits = []
-  let lastChangedFiles = [] // 0 命中诊断用（diff 文件样例可见性，坑 module-path-layout-mismatch）
-  // deps-auto-default 前置采集：未配置策略/模块的仓也需要 diff 面供 deps(auto) 判定
-  if (strategy === null) {
-    let cf = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
-    if (Array.isArray(restrictFiles) && restrictFiles.length > 0 && Array.isArray(cf)) {
-      const norm = (f) => String(f).replace(/\\/g, '/').replace(/^\.\//, '')
-      const restrictSet = new Set(restrictFiles.map(norm))
-      cf = cf.filter(f => restrictSet.has(norm(f)))
-    }
-    // 命中源空回退（2026-09-26-thin-gate-module-source）：thin 协议「先提交再收口」使
-    // git diff HEAD 恒空（quick 会话全提交同形）——源为空数组且调用方带了会话清单
-    // （restrictFiles，与快照 overlay 同源）时以清单兜底作命中源；仅兜空不替代非空源，
-    // null（git 不可用）语义不变
-    if (Array.isArray(cf) && cf.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
-      cf = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
-      console.log(`ℹ️ diff 命中源为空（先提交后收口的 thin 常态）——回退调用方清单 ${cf.length} 个文件作命中源（与快照 overlay 同源）`)
-    }
-    lastChangedFiles = Array.isArray(cf) ? cf : []
+    eaNote = '（生效策略来自 test_strategy: evidence-auto 推荐）'
   }
   if (strategy === 'module') {
-    const modules = extractModules(yamlText)
-    if (modules) {
-      modulesPresent = true
-      // includeWorkingTree（坑 module-subset-zero-hit-uncommitted）：子代理不 commit 的改动
-      // 也参与 module 命中判定，0 命中跳过不再误伤 worktree 未提交的真实变更
-      let changedFiles = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
-      // restrictFiles 收窄（坑 quick-gate-并行全流程变更脏文件误伤）：并行全流程变更的
-      // WIP 文件（未写 quick --files、其 design 清单在快照 HEAD 副本里不可见 → foreign
-      // 豁免失效）曾把 scan_docs 模块拉进 quick 会话的模块选择，被并行 WIP 的红挡死。
-      // 有 restrictFiles 时只留本会话声明文件——未声明脏文件留在 git diff 审计面不进实测面。
-      if (Array.isArray(changedFiles) && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
-        const restrictSet = new Set(restrictFiles.map(f => String(f).replace(/\\/g, '/').replace(/^\.\//, '')))
-        const before = changedFiles.length
-        changedFiles = changedFiles.filter(f => restrictSet.has(String(f).replace(/\\/g, '/').replace(/^\.\//, '')))
-        const dropped = before - changedFiles.length
+    console.warn('ℹ️ test_strategy: module 已退役——module 语义被动态子集覆盖（变更文件面收窄 + FR 关联回归 + import 依赖），本次按动态子集执行')
+    strategy = 'dynamic'
+  }
+  if (strategy === null) strategy = 'dynamic'
+
+  // 变更文件面（动态子集命中源）：主仓 diff（includeWorkingTree——坑 module-subset-zero-hit-
+  // uncommitted：子代理不 commit 的改动也参与判定）∩ restrictFiles（本会话声明面，坑并行
+  // 变更脏文件误伤）；thin「先提交后收口」使 diff 恒空时回退调用方清单（与快照 overlay 同源）。
+  // 跨仓仓不参与动态子集（design §6 + §5.4），故不传 ctx。
+  let lastChangedFiles = []
+  let gitUnavailable = false
+  if (strategy === 'dynamic') {
+    let cf = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+    if (cf === null) {
+      gitUnavailable = true
+    } else {
+      if (Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+        const norm = (f) => String(f).replace(/\\/g, '/').replace(/^\.\//, '')
+        const restrictSet = new Set(restrictFiles.map(norm))
+        const before = cf.length
+        cf = cf.filter(f => restrictSet.has(norm(f)))
+        const dropped = before - cf.length
         if (dropped > 0) {
-          console.log(`ℹ️ 模块选择已收窄到本会话声明的 ${changedFiles.length}/${before} 个变更文件（${dropped} 个未声明脏文件不进实测面——并行变更 WIP 留在审计记录）`)
+          console.log(`ℹ️ 文件面已收窄到本会话声明的 ${cf.length}/${before} 个变更文件（${dropped} 个未声明脏文件不进实测面——并行变更 WIP 留在审计记录）`)
         }
       }
-      // 命中源空回退（2026-09-26-thin-gate-module-source）：同上 strategy=null 分支注——thin
-      // 先提交后收口使 git diff HEAD 恒空 → 0 命中假 skip（2026-09-25-quick-channel-retire
-      // 收口实证：72 个门文件在手、test 门 skipped）。仅兜空不替代非空源，null 语义不变
-      if (Array.isArray(changedFiles) && changedFiles.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
-        changedFiles = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
-        console.log(`ℹ️ 模块命中源为空（thin 先提交后收口：git diff HEAD 恒空）——回退调用方清单 ${changedFiles.length} 个文件作命中源（与快照 overlay 同源；diff 非空时不替代）`)
+      if (Array.isArray(cf) && cf.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+        cf = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
+        console.log(`ℹ️ diff 命中源为空（先提交后收口的 thin 常态）——回退调用方清单 ${cf.length} 个文件作命中源（与快照 overlay 同源）`)
       }
-      lastChangedFiles = Array.isArray(changedFiles) ? changedFiles : []
-      if (changedFiles === null) {
-        hitCount = -1 // git 不可用 / 非仓库
-      } else {
-        hits = pickHitModules(changedFiles, modules)
-        hitCount = hits.length
-      }
+      lastChangedFiles = cf
     }
   }
 
-  // deps-auto-default 可得性：仅未配置仓缺省路径判定（模块路径/显式 full 不消耗这次扫描）
-  let depsAutoEligible = false
+  // 动态子集三源预计算（决策与 runModuleSubset 共用，免二次扫描）：
+  // ① 本变更测试 ∪ ③ import 依赖（discoverModuleDependentTests）；② FR 关联回归（fail-open）。
   let depsAutoFiles = []
-  if (strategy === null && lastChangedFiles.length > 0) {
+  let frPre = null
+  if (strategy === 'dynamic' && !gitUnavailable) {
     try {
       depsAutoFiles = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [] })
-      depsAutoEligible = depsAutoFiles.length > 0
-    } catch { depsAutoEligible = false }
+    } catch { depsAutoFiles = [] }
+    try {
+      frPre = collectFrLinkedTests({ specBase, changeName, changedFiles: lastChangedFiles, projectRoot: cwd })
+    } catch { frPre = null }
   }
-  const action = decideVerifyTestAction({ strategy, modulesPresent, hitCount, depsAutoEligible })
+  const scopeFiles = frPre ? [...new Set([...depsAutoFiles, ...frPre.files])] : [...new Set(depsAutoFiles)]
+  const action = decideVerifyTestAction({ strategy, scopeCount: scopeFiles.length, gitUnavailable })
   let mainResult
   if (action === 'skip') {
     // —— skip 真跳过（D-005@v2 / R-07）——
@@ -1823,7 +1795,7 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
     // evidence-auto→skip：测试不在推荐组合内（module-impact.md 无行为类影响），
     // reason 附推荐依据与否决路径。
     const reason = rawStrategy === 'skip'
-      ? '测试已按 test_strategy=skip 配置跳过（D-005@v2 兑现声明语义：不回退全量 commands.test）。⚠️ 行为变化提示（R-07）：此前配置 skip 实际仍跑全量，本版本起真跳过——本次 verify 结论不含测试客观核验；如需恢复实测，把 local.yaml 的 test_strategy 改回 full/module。'
+      ? '测试已按 test_strategy=skip 配置跳过（D-005@v2 兑现声明语义：不回退全量 commands.test）。⚠️ 行为变化提示（R-07）：此前配置 skip 实际仍跑全量，本版本起真跳过——本次 verify 结论不含测试客观核验；如需恢复实测，把 local.yaml 的 test_strategy 改回 full。'
       : `测试已按 test_strategy=evidence-auto 推荐跳过：${evidenceAuto && evidenceAuto.summary ? evidenceAuto.summary : 'module-impact.md 判定无行为类影响'}。本次 verify 结论不含测试客观核验。`
     mainResult = {
       status: 'skipped',
@@ -1853,59 +1825,39 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         } : {}),
       },
     })
-  } else if (action === 'module-subset') {
-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits, knownFailures, changedFiles: lastChangedFiles })
-  } else if (action === 'module-zero-hit-skip') {
-    // module 模式 0 命中：不静默回退注定超时/含预存失败的全量（坑 verify-worktree-... 修复方向 3）。
-    // 据 verify-result.md 自报告判定；想跑全量请显式设 test_strategy: full。
-    // 诊断可见性（坑 module-path-layout-mismatch，2026-08-22 实证：0 命中「靠第一次跑过的
-    // 记录兜底」——为何没命中完全黑箱）：落 modules 配置 path vs diff 文件样例，配置前缀
-    // 对不上（如 packages/frontend vs frontend/）一眼可见
-    const modules_ = extractModules(yamlText) || {}
-    const diagLines = [
-      `已配置 modules（${Object.keys(modules_).length} 个）: ${Object.entries(modules_).map(([k, m]) => `${k}→${m.path}`).join('、') || '（无）'}`,
-      `本次 diff（${lastChangedFiles.length} 个文件，前 5）: ${lastChangedFiles.slice(0, 5).join(', ') || '（空）'}`,
-    ]
-    console.warn(`⚠️ 模块 0 命中诊断（对照 path 前缀与 diff 布局是否一致，如 packages/<name> vs <name>/）：`)
-    for (const l of diagLines) console.warn(`   ${l}`)
-    // 变更测试兜底（ql-20260919-007，2026-09-19 实测踩：test-only 变更 0 模块命中时裸 skip，
-    // quick --done 的 test 门禁沦为「据自报告判定」虚设）：diff 含测试文件时按 deps(auto)
-    // 同款口径（discoverModuleDependentTests）直接跑「变更的测试文件」——范围仍限本次变更
-    // 不回退全量（0 命中防超时/预存失败的初衷不变）；无测试文件维持裸 skip（docs-only 等
-    // 变更无测试面）。hits 传空数组：runModuleSubset 内部同样经 deps(auto) 执行并落台账。
-    const zeroHitDeps = discoverModuleDependentTests({ cwd, changedFiles: lastChangedFiles, coveredCommands: [] })
-    if (zeroHitDeps.length > 0) {
-      console.log(`ℹ️ 模块 0 命中但 diff 含 ${zeroHitDeps.length} 个测试文件——按变更测试子集实测（不回退全量、不再裸 skip）`)
-      mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles })
-    } else {
-      mainResult = {
-        status: 'skipped',
-        command: null,
-        exitCode: null,
-        durationMs: null,
-        outputTail: null,
-        reason: 'test_strategy: module 但本次变更未命中任何已配置 modules（0 命中）。为避免回退到注定超时/含预存失败的全量 commands.test，CLI 未自动跑全量——据 verify-result.md 自报告判定测试。若需全量覆盖，显式设 test_strategy: full。' +
-          ` 诊断：${diagLines.join('；')}` + eaNote
-          + (defaultedToModule ? '（注：module 为缺省收窄——local.yaml 未显式配置 test_strategy；常跑全量请显式写 test_strategy: full）' : ''),
-        resultPath: null,
-        mode: 'module-zero-hit',
-        fallbackReason: null,
-      }
-    }
-  } else if (action === 'deps-auto-subset') {
-    // deps-auto-default（2026-09-23）：未配置仓缺省收窄——跑「import 被改 src 的测试 ∪ 本次
-    // 变更的 test 文件」子集（hits 空数组，runModuleSubset 内部经 deps(auto) 执行——与模块
-    // 0 命中测试兜底同款执行面）。范围=本次变更的关系闭包，全量语义留 CI/verify 兜底。
-    console.log(`ℹ️ 未配置 test_strategy/modules——缺省按变更关系子集实测（deps(auto) ${depsAutoFiles.length} 个：import 被改 src 的测试 ∪ 本次变更测试；显式 test_strategy: full 恢复全量）`)
-    mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles })
-  } else {
-    // —— 全量路径（full / module 无块 / module git 不可用）——
-    // fallbackReason 非 null 表示本次全量是"非显式"的（缺省/配置不全/未命中），需明示。
-    // evidence-auto 解析为 module 后落全量兜底时追加推荐来源注记（eaNote；其余路径空串零变化）。
-    let fallbackReason = computeFullFallbackReason({ strategy, modulesPresent, hitCount })
-    if (fallbackReason && eaNote) fallbackReason = fallbackReason + eaNote
-    if (fallbackReason && defaultedToModule) fallbackReason = fallbackReason + '（注：module 为缺省收窄——local.yaml 未显式配置 test_strategy）'
+  } else if (action === 'full') {
+    // —— 全量路径（显式 test_strategy: full / evidence-auto 解析 full / git 不可用兜底）——
+    // commands.test 在场仍生效（全量逃生阀）；否则自项目结构推断全量命令（package.json
+    // scripts.test / pytest 发现）——不再「未配置即 skipped」（R22 实证缺配置裸 skip/裸跑之痛）。
+    const fallbackReason = rawStrategy === 'full'
+      ? null
+      : gitUnavailable
+        ? 'git 不可用，动态子集文件面不可解析——全量兜底'
+        : 'evidence-auto 解析为 full' + eaNote
     mainResult = runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason, knownFailures })
+  } else if (action === 'dynamic-subset') {
+    // —— 动态子集（2026-09-26-dynamic-test-inference 缺省路径）——
+    // 三源并集：本变更测试 ∪ FR 关联回归 ∪ import 依赖；runner 自项目结构推断；
+    // 全量语义留 CI / 显式 test_strategy: full。
+    const frCount = frPre && frPre.files.length ? frPre.files.length : 0
+    console.log(`ℹ️ 动态测试子集（缺省）：本变更测试 ∪ FR 关联回归 ∪ import 依赖 = ${scopeFiles.length} 个（deps ${depsAutoFiles.length}${frCount ? ` + FR 绑定 ${frCount}` : ''}）；runner 自项目结构推断。显式 test_strategy: full 恢复全量`)
+    mainResult = runModuleSubset({ cwd, specBase, changeName, hits: [], knownFailures, changedFiles: lastChangedFiles, frPre })
+  } else {
+    // —— dynamic-empty：变更与测试面零关系——
+    // 无自身测试、无 import 依赖测试、无 FR 关联绑定 → 不硬跑全量（防超时/预存失败面，
+    // 同旧 module 0 命中防误伤初衷）；全量覆盖请显式 test_strategy: full。
+    mainResult = {
+      status: 'skipped',
+      command: null,
+      exitCode: null,
+      durationMs: null,
+      outputTail: null,
+      reason: `变更与测试面零关系（${lastChangedFiles.length} 个变更文件无自身测试、无 import 依赖测试、无 FR 关联绑定）——动态子集空，不硬跑全量（防超时/预存失败面）。全量覆盖请显式 test_strategy: full。` + eaNote,
+      resultPath: null,
+      mode: 'dynamic-empty',
+      fallbackReason: null,
+    }
+    writeRunResult({ specBase, changeName, result: mainResult, extra: { strategy: rawStrategy, scope: 'dynamic-empty', changed_files: lastChangedFiles.slice(0, 20) } })
   }
 
   // —— 跨仓仓 per-repo cwd 跑 full npm test（task-06 / D-004 / design §5.4 + §6 A6）——
@@ -1917,7 +1869,8 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   // 未自配 commands.test 的跨仓不再 fallback npm test 假败（task-05 / FR-07，见
   // runCrossRepoTestUnderMainSkip 逐仓三态）。
   // ── trace residual 并入（读侧）：悬空 fail-fast / 空残差直通 / 保守差集 / 残差段加法 ──
-  mainResult = applyTraceResidual({ mainResult, action, cwd, specBase, changeName, depsAutoFiles, hits, knownFailures })
+  // 可证覆盖集=动态子集实际跑的三源并集（scopeFiles）；命令型动作（full/skip）照旧全补。
+  mainResult = applyTraceResidual({ mainResult, action, cwd, specBase, changeName, depsAutoFiles: scopeFiles, hits: [], knownFailures })
   return mergeCrossRepoResults(mainResult, ctx)
 }
 
@@ -2249,21 +2202,32 @@ function warnPortRaceBeforeRun(command) {
 }
 
 function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fallbackReason = null, knownFailures = [] }) {
-  const command = extractTestCommand(yamlText)
-
+  let command = extractTestCommand(yamlText)
+  let inferredNote = null
   if (!command) {
-    return {
-      status: 'skipped',
-      command: null,
-      exitCode: null,
-      durationMs: null,
-      outputTail: null,
-      reason: yamlText
-        ? 'local.yaml 未配置 commands.test（或标记 unavailable）'
-        : `local.yaml 不存在（${localYamlPath}）`,
-      resultPath: null,
-      mode: 'full',
-      fallbackReason,
+    // 全量命令结构推断（2026-09-26-dynamic-test-inference）：无 commands.test 不再直接
+    // skipped——package.json scripts.test / 根 pytest 清单可推断即跑（R22 实证缺配置裸 skip
+    // 之痛）。commands.test 现仅作显式 test_strategy: full 的全量逃生阀（缺省路径已是动态
+    // 子集，不再依赖此配置）。
+    const inferred = inferFullTestCommand(cwd)
+    if (inferred) {
+      command = inferred.command
+      inferredNote = `（全量命令自项目结构推断：${inferred.source}）`
+      console.log(`ℹ️ local.yaml 未配置 commands.test——全量命令按项目结构推断：${command} ${inferredNote}`)
+    } else {
+      return {
+        status: 'skipped',
+        command: null,
+        exitCode: null,
+        durationMs: null,
+        outputTail: null,
+        reason: yamlText
+          ? 'local.yaml 未配置 commands.test 且项目结构无可推断全量命令（package.json scripts.test / pyproject pytest 均无）——全量无执行面。缺省路径无需此配置（动态子集实测）；确要全量请补 package.json scripts.test 或临时 commands.test'
+          : `local.yaml 不存在（${localYamlPath}）且项目结构无可推断全量命令——全量无执行面。缺省路径无需此配置（动态子集实测）；确要全量请先 sillyspec init`,
+        resultPath: null,
+        mode: 'full',
+        fallbackReason,
+      }
     }
   }
 
@@ -2352,6 +2316,81 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
  * 返回 shape 与 runFullCommand 一致（status/command/exitCode/durationMs/outputTail/reason/resultPath）。
  */
 
+// ── runner 结构推断（2026-09-26-dynamic-test-inference）────────────────────────────
+// local.yaml 测试命令退役后的执行层：从项目文件（pyproject.toml/uv.lock/package.json/锁文件）
+// 推断「怎么跑」。就近原则：测试文件最近的清单祖先是它的运行环境（monorepo 子项目各自独立）。
+
+/** .py 运行环境：自文件目录向上找最近 pyproject.toml/uv.lock 祖先（uv.lock 优先——uv 系环境
+ * 用 `uv run pytest` 防解析到错误解释器，deps-cwd-prefix 实证 aiobotocore 假红家族）。 */
+function inferPyRunner(projectRoot, pyFile) {
+  let dir = String(pyFile || '').replace(/\\/g, '/')
+  const i = dir.lastIndexOf('/')
+  dir = i === -1 ? '' : dir.slice(0, i)
+  for (;;) {
+    if (existsSync(join(projectRoot, dir, 'uv.lock'))) {
+      return { command: dir ? `cd ${dir} && uv run pytest` : 'uv run pytest', dir: dir || null }
+    }
+    if (existsSync(join(projectRoot, dir, 'pyproject.toml'))) {
+      return { command: dir ? `cd ${dir} && python -m pytest` : 'python -m pytest', dir: dir || null }
+    }
+    if (dir === '' || dir === '.') return { command: 'python -m pytest', dir: null }
+    const j = dir.lastIndexOf('/')
+    dir = j === -1 ? '' : dir.slice(0, j)
+  }
+}
+
+/** node 包管理器（最近 package.json 目录的锁文件）：pnpm-lock→pnpm / yarn.lock→yarn / 其余 npm */
+function inferPm(pkgDir) {
+  if (existsSync(join(pkgDir, 'pnpm-lock.yaml'))) return 'pnpm'
+  if (existsSync(join(pkgDir, 'yarn.lock'))) return 'yarn'
+  return 'npm'
+}
+
+/** .tsx/.jsx 运行环境：最近 package.json 祖先含 vitest/jest 依赖（或 scripts.test 提及）→
+ * `cd <dir> && <pm> exec <runner>`；找不到 → null（调用方整批 skip 转项目运行器，不造恒败段）。 */
+function inferJsxRunner(projectRoot, jsxFile) {
+  let dir = String(jsxFile || '').replace(/\\/g, '/')
+  const i = dir.lastIndexOf('/')
+  dir = i === -1 ? '' : dir.slice(0, i)
+  for (;;) {
+    const pkgPath = join(projectRoot, dir, 'package.json')
+    if (existsSync(pkgPath)) {
+      let pkg = null
+      try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) } catch { pkg = null }
+      if (pkg) {
+        const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }
+        const scriptsTest = String((pkg.scripts && pkg.scripts.test) || '')
+        let runner = null
+        if (deps.vitest || /\bvitest\b/.test(scriptsTest)) runner = 'vitest'
+        else if (deps.jest || /\bjest\b/.test(scriptsTest)) runner = 'jest'
+        if (runner) {
+          const pm = inferPm(join(projectRoot, dir))
+          return { command: dir ? `cd ${dir} && ${pm} exec ${runner}` : `${pm} exec ${runner}`, dir: dir || null }
+        }
+      }
+    }
+    if (dir === '' || dir === '.') return null
+    const j = dir.lastIndexOf('/')
+    dir = j === -1 ? '' : dir.slice(0, j)
+  }
+}
+
+/** 全量命令结构推断（显式 test_strategy: full 且无 commands.test 的逃生阀）：
+ * 根 package.json scripts.test → `<pm> run test`；否则根 pyproject/uv → pytest 全量；
+ * 均无 → null（调用方 skipped 带指引）。 */
+function inferFullTestCommand(projectRoot) {
+  const pkgPath = join(projectRoot, 'package.json')
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+      if (pkg.scripts && pkg.scripts.test) return { command: `${inferPm(projectRoot)} run test`, source: 'package.json scripts.test' }
+    } catch { /* 损坏 package.json 落 python 侧/无 */ }
+  }
+  if (existsSync(join(projectRoot, 'uv.lock'))) return { command: 'uv run pytest', source: 'uv.lock' }
+  if (existsSync(join(projectRoot, 'pyproject.toml'))) return { command: 'python -m pytest', source: 'pyproject.toml' }
+  return null
+}
+
 /**
  * deps(auto) 运行器推断 + 公平组卷（2026-09-24 R10 实证修复）：
  * - R10 缺陷①：deps 一律 `node --test` 执行——.py 依赖测试全 SyntaxError 伪败（只能靠豁免放行）。
@@ -2360,10 +2399,12 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
  * 每组按比例分 30 帽（保底 5）；.py 组运行器从命中模块命令推断（含 pytest 的命令取其 pytest
  * 前缀——如 `cd backend && uv run pytest` 的 `uv run pytest`；无命中模块兜底 python -m pytest）。
  */
-function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
+function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, priorityFiles = [] }) {
   const norm = (p2) => String(p2).replace(/\\/g, '/')
   const changedSet = new Set((changedFiles || []).map(norm))
-  const prio = (f) => changedSet.has(norm(f)) ? 0 : 1 // 变更测试文件优先
+  // priorityFiles（FR 关联回归面）：与变更自身测试同级优先——绑定面钦定的回归不该被字母序挤出跑面
+  const prioritySet = new Set((priorityFiles || []).map(norm))
+  const prio = (f) => (changedSet.has(norm(f)) || prioritySet.has(norm(f))) ? 0 : 1 // 变更/FR 回归测试文件优先
   const py = deps.filter(f => f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
   const js = deps.filter(f => !f.endsWith('.py')).sort((a, b) => (prio(a) > prio(b) ? 1 : prio(a) < prio(b) ? -1 : a.localeCompare(b)))
   const CAP = 30
@@ -2371,20 +2412,26 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
   const jsCap = CAP - pyCap
   const pyRun = py.slice(0, pyCap)
   const jsRun = js.slice(0, jsCap)
-  // .py 运行器推断：命中模块命令串中找 pytest 段（含其 cd <dir> && 链前缀），否则 python -m pytest。
+  // .py 运行器推断双源（2026-09-26-dynamic-test-inference）：① 命中模块命令串（旧路径，兼容期）；
+  // ② 无命中命令时自项目结构——首个 .py 文件最近 pyproject/uv.lock 祖先（uv 优先）。
   // cd 前缀保留（2026-09-25-deps-cwd-prefix，R15/R16 实证）：剥前缀后从 worktree 根跑 uv，根上无
   // pyproject.toml → uv 解析到无 dev extras 的错环境 → aiobotocore 假红（两轮 known_failures 顶着）。
   // 前缀在则批次文件路径按该 dir 重定基（模块命令的文件参即 dir 相对口径，如 app/modules/...）。
-  let pyRunner = 'python -m pytest'
+  let pyRunner = null
   for (const h of hits || []) {
     const cmd = String(h.test || '')
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
     if (m) { pyRunner = m[1].trim(); break }
   }
-  // JSX 运行器推断（2026-09-26-residual-runner-parity，R18-SF-full 实证）：.tsx/.jsx 是 node
-  // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），与
-  // py 侧同法从命中命令串提取 vitest/jest；提不出则整批 skip 转项目运行器（不制造恒败段）。
-  // .ts/.js 照旧 node --test（原生可跑——deps-cwd-prefix ④既有钉）。
+  if (!pyRunner && cwd && pyRun.length > 0) {
+    const inferred = inferPyRunner(cwd, pyRun[0])
+    pyRunner = inferred.command
+  }
+  if (!pyRunner) pyRunner = 'python -m pytest'
+  // JSX 运行器推断（2026-09-26-residual-runner-parity 起 + 结构推断源）：.tsx/.jsx 是 node
+  // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），
+  // ① 命中命令串提取 vitest/jest（旧路径）② 无命中命令时最近含 vitest/jest 的 package.json；
+  // 双源均提不出则整批 skip 转项目运行器（不制造恒败段）。.ts/.js 照旧 node --test（原生可跑）。
   const _norm = (p2) => String(p2).replace(/\\/g, '/')
   const NEEDS_PROJECT_RE = /\.(tsx|jsx)$/
   const jsProject = jsRun.filter((f) => NEEDS_PROJECT_RE.test(_norm(f)))
@@ -2394,6 +2441,10 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
     const cmd = String(h.test || '')
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?(?:vitest|jest))(?=\s|$)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*(?:vitest|jest)(?:\s|$))/.exec(cmd)
     if (m) { jsxRunner = m[1].trim(); break }
+  }
+  if (!jsxRunner && cwd && jsProject.length > 0) {
+    const inferred = inferJsxRunner(cwd, jsProject[0])
+    if (inferred) { jsxRunner = inferred.command }
   }
   const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
@@ -2409,7 +2460,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
       const rebaseJsx = (f) => (jsxDir && f.startsWith(jsxDir + '/')) ? f.slice(jsxDir.length + 1) : f
       batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).join(' ')}`, count: jsProject.length, dropped: 0 })
     } else {
-      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且命中命令串无 vitest/jest 运行器——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }
   }
   return batches
@@ -2469,7 +2520,7 @@ function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
   const segments = []
   for (let i = 0; i < files.length; i += 30) {
     const chunk = files.slice(i, i + 30)
-    const batches = buildDepsBatches({ deps: chunk, changedFiles: files, hits })
+    const batches = buildDepsBatches({ deps: chunk, changedFiles: files, hits, cwd })
     for (const b of batches) {
       if (b.skip) {
         // JSX 无项目运行器批（residual-runner-parity）：不跑不拦——残差披露如实记录转办，
@@ -2506,7 +2557,9 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
     }
   }
   if (tr.files.length === 0) return mainResult
-  const provable = action === 'deps-auto-subset'
+  // 可证覆盖集（2026-09-26-dynamic-test-inference 起）：动态子集（旧名 deps-auto-subset 兼容）
+  // 跑的文件面可证覆盖绑定行——残差只补差集；命令型动作（full/显式命令）一律全补。
+  const provable = (action === 'deps-auto-subset' || action === 'dynamic-subset')
     ? new Set((depsAutoFiles || []).map(f => String(f).replace(/\\/g, '/'))) : new Set()
   const residualFiles = tr.files.filter(f => !provable.has(f))
   try {
@@ -2516,7 +2569,7 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
         anchors: tr.anchors,
         rows: tr.rows.map(r => ({ anchor: r.anchor, row_id: r.row_id, tests: r.tests })),
         traceFiles: tr.files,
-        provableSource: action === 'deps-auto-subset' ? 'deps-auto-subset' : 'none(command-shaped)',
+        provableSource: (action === 'deps-auto-subset' || action === 'dynamic-subset') ? action : 'none(command-shaped)',
         residualFiles,
         action,
         ranAt: new Date().toISOString(),
@@ -2548,16 +2601,38 @@ export function applyTraceResidual({ mainResult, action, cwd, specBase, changeNa
   }
 }
 
-function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [] }) {
+function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], changedFiles = [], frPre = null }) {
   const subsetStartedAt = Date.now()
   const perModule = hits.map(h => runOneModule(h.name, h.test, cwd, knownFailures))
   // 依赖测试伪模块（module-test-face-rot，2026-09-16 本会话实证）：硬编码模块测试清单不含
   // 变更 src 文件的直接断言测试 → module 收窄漏全量断言。附加执行「import 变更 src 的测试 ∪
   // 变更的 test 文件」中未被命中模块命令覆盖的部分；无额外文件零行为（不新增失败面）。
   const deps = discoverModuleDependentTests({ cwd, changedFiles, coveredCommands: hits.map(h => h.test) })
+  // FR 关联回归源（2026-09-26-dynamic-test-inference 三源之二）：active FR 覆盖面（来源变更
+  // patch ∪ 绑定）∩ 本次触碰文件 ≠ ∅ 者，其绑定 tests 解析仓根相对后并入实测面——「需求→
+  // 用例」映射即测试需求。frPre 在场用调用方预计算（runVerifyTestCheck 决策已扫过，免二次
+  // 扫描）；fail-open：索引缺失/损坏零影响（三源其余照跑）。
+  let frLinked = []
+  let frReport = null
+  let fr = frPre
+  if (!fr) {
+    try { fr = collectFrLinkedTests({ specBase, changeName, changedFiles: changedFiles || [], projectRoot: cwd }) } catch { fr = null }
+  }
+  if (fr) {
+    if (fr.files.length > 0) {
+      const added = fr.files.filter(f => !deps.includes(f))
+      frLinked = added
+      frReport = { frCount: fr.frHits.length, fileCount: fr.files.length, addedCount: added.length }
+      console.log(`ℹ️ FR 关联回归：触达 ${fr.frHits.length} 条 active FR（${fr.frHits.slice(0, 3).map(h => h.id).join('、')}${fr.frHits.length > 3 ? ' 等' : ''}）→ 绑定测试 ${fr.files.length} 个${added.length < fr.files.length ? `（新增并入 ${added.length}）` : ''} 进实测面`)
+    }
+    if (fr.unresolved.length > 0) {
+      console.warn(`⚠️ ${fr.unresolved.length} 个 FR 绑定测试路径无法自仓根解析（不入实测面）：${fr.unresolved.slice(0, 3).join('、')}${fr.unresolved.length > 3 ? ' 等' : ''}——sillyspec tests repair-paths 可修`)
+    }
+  }
+  const depsAll = [...new Set([...deps, ...frLinked])].sort()
   let depsBatches = []
-  if (deps.length > 0) {
-    depsBatches = buildDepsBatches({ deps, changedFiles, hits })
+  if (depsAll.length > 0) {
+    depsBatches = buildDepsBatches({ deps: depsAll, changedFiles, hits, cwd, priorityFiles: frLinked })
     for (const b of depsBatches) {
       if (b.skip) {
         // JSX 无项目运行器批（residual-runner-parity）：skip 不跑不拦，reason 点名让漏测可见
@@ -2566,13 +2641,14 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
         continue
       }
       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures))
-      console.log(`ℹ️ module 子集附加依赖测试 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 前缀自模块命令推断' : b.short === 'jsx' ? 'vitest/jest 前缀自命中命令推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
+      console.log(`ℹ️ 动态子集批 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 运行器按最近 pyproject/uv 祖先推断' : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
     }
   }
   const status = aggregateStatus(perModule)
 
   let command = `module[${hits.map(h => h.name).join(',')}]`
   if (depsBatches.length > 0) command += `+deps(${depsBatches.map(b => `${b.short}${b.count}`).join('+')})`
+  if (frReport) command += `+fr(${frReport.fileCount})`
   const exitCode = status === 'passed' ? 0 : 1
   const durationMs = Date.now() - subsetStartedAt
 
@@ -2601,7 +2677,7 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
     outputTail: outputTail.length > OUTPUT_TAIL_CHARS ? '…' + outputTail.slice(-OUTPUT_TAIL_CHARS) : outputTail,
     reason,
     resultPath: null,
-    mode: 'module-subset',
+    mode: 'dynamic-subset',
     fallbackReason: null,
     exemptedCount: perModule.reduce((n, r) => n + (r.exemptedCount || 0), 0),
     // 判账行集聚合（坑 verify-test-reconcile-tail-blindspot）：合并 tail 会二次截断，行集不截——

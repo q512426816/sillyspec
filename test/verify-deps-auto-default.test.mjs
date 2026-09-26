@@ -20,12 +20,13 @@ const tmpRoots = []
 function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
 test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
 
-test('T1 纯决策：depsAutoEligible 分流', () => {
-  assert.equal(decideVerifyTestAction({ strategy: null, modulesPresent: false, hitCount: 0, depsAutoEligible: true }), 'deps-auto-subset')
-  assert.equal(decideVerifyTestAction({ strategy: null, modulesPresent: false, hitCount: 0, depsAutoEligible: false }), 'full', 'deps 空 → 缺省 full 零打扰')
-  assert.equal(decideVerifyTestAction({ strategy: 'full', modulesPresent: false, hitCount: 0, depsAutoEligible: true }), 'full', '显式 full 不受影响')
-  assert.equal(decideVerifyTestAction({ strategy: 'skip', modulesPresent: false, hitCount: 0, depsAutoEligible: true }), 'skip', 'skip 语义不变')
-  assert.equal(decideVerifyTestAction({ strategy: 'module', modulesPresent: true, hitCount: 2, depsAutoEligible: true }), 'module-subset', 'module 路径优先不变')
+test('T1 纯决策：scopeCount 分流（2026-09-26-dynamic-test-inference 契约）', () => {
+  assert.equal(decideVerifyTestAction({ strategy: null, scopeCount: 3 }), 'dynamic-subset')
+  assert.equal(decideVerifyTestAction({ strategy: null, scopeCount: 0 }), 'dynamic-empty-skip', '三源空 → 不硬跑全量（防超时/预存失败面）')
+  assert.equal(decideVerifyTestAction({ strategy: 'full', scopeCount: 3 }), 'full', '显式 full 不受影响')
+  assert.equal(decideVerifyTestAction({ strategy: 'skip', scopeCount: 3 }), 'skip', 'skip 语义不变')
+  assert.equal(decideVerifyTestAction({ strategy: 'module', scopeCount: 3 }), 'dynamic-subset', 'module 折算动态子集（超集覆盖）')
+  assert.equal(decideVerifyTestAction({ strategy: null, scopeCount: 0, gitUnavailable: true }), 'full', 'git 不可用 → full 兜底')
 })
 
 function fixtureRepo() {
@@ -53,13 +54,13 @@ test('T2 端到端：改 add.js → deps 子集（只跑 add.test）；改无关
   let r = runVerifyTestCheck({ cwd: fx, specBase: join(fx, '.sillyspec'), changeName: null })
   assert.equal(r.status, 'passed', `A passed (${r.reason || ''})`)
   assert.match(String(r.command), /deps\(/, `A command 为 deps 子集聚合（${r.command}）`)
-  assert.equal(r.mode, 'module-subset', 'A mode=module-subset（hits 空+deps 执行面）')
+  assert.equal(r.mode, 'dynamic-subset', 'A mode=dynamic-subset（三源并集执行面）')
   // 场景 B：改 README.md（无测试关系）→ full（commands.test 原样）
   writeFileSync(join(fx, 'src', 'add.js'), 'export function add(a, b) { return a + b }\n')
   execFileSync('git', ['checkout', '--', 'src/add.js'], { cwd: fx })
   writeFileSync(join(fx, 'README.md'), 'doc only\n')
   r = runVerifyTestCheck({ cwd: fx, specBase: join(fx, '.sillyspec'), changeName: null })
-  assert.notEqual(r.mode, 'module-subset', 'B 不走 deps 子集')
+  assert.equal(r.mode, 'dynamic-empty', `B doc-only → 动态子集空（mode=${r.mode}）`)
   void r
 })
 

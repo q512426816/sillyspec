@@ -31,6 +31,102 @@ const BINDING_BLOCK_HEAD = '测试绑定：'
 const BINDING_BLOCK_NOTE = '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->'
 
 /** 行校验/归一（违例抛错拒绝写入——枚举红线在入口收口）。entryMode：条目内行不带 anchor（锚=条目 id），跳过锚枚举 */
+// ── 测试路径仓根相对化（2026-09-26-dynamic-test-inference）──
+// 存量绑定 tests 路径三形态混杂（仓根相对 / 丢子项目前缀的 cwd 相对 / 裸文件名——平台仓
+// multi-agent-platform 实证）——写入侧归一 + 读侧解析统一走这里。子项目根探测 bounded：
+// 深度 ≤2、node_modules/.git/dist 等排除；裸文件名兜底 glob 有扫描预算（防大仓漫游）。
+
+const SUBPROJECT_SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', 'out', '.venv', 'venv', '__pycache__',
+  '.sillyspec', '.runtime', 'coverage', '.next', '.worktrees', '.turbo', 'target',
+  'public', 'assets', 'static', 'locales', 'migrations', '__snapshots__', '.storybook',
+])
+
+/** 子项目根探测：根 + 深度 ≤2 目录中带 package.json/pyproject.toml 者（posix 相对，''=根） */
+export function detectSubprojectRoots(projectRoot) {
+  const out = []
+  const hasManifest = (p) => existsSync(join(p, 'package.json')) || existsSync(join(p, 'pyproject.toml'))
+  try {
+    if (hasManifest(projectRoot)) out.push('')
+    for (const d1 of readdirSync(projectRoot, { withFileTypes: true })) {
+      if (!d1.isDirectory() || SUBPROJECT_SKIP_DIRS.has(d1.name) || d1.name.startsWith('.')) continue
+      const p1 = join(projectRoot, d1.name)
+      if (hasManifest(p1)) { out.push(d1.name); continue }
+      for (const d2 of readdirSync(p1, { withFileTypes: true })) {
+        if (!d2.isDirectory() || SUBPROJECT_SKIP_DIRS.has(d2.name) || d2.name.startsWith('.')) continue
+        if (hasManifest(join(p1, d2.name))) out.push(`${d1.name}/${d2.name}`)
+      }
+    }
+  } catch { /* 探测失败 → 只剩根（hasManifest 已计入） */ }
+  return out
+}
+
+/** 受限同名文件搜索：跳过依赖/产物目录，扫描预算耗尽放弃（返回空=未找到，不猜）。
+ * 预算 20000（平台仓实证：frontend/src+backend/app 全树 >6000，裸名深路径会预算内够不着） */
+function globBasenameMatches(projectRoot, basename, budget = 20000) {
+  const hits = []
+  let scanned = 0
+  const stack = ['']
+  while (stack.length && scanned < budget) {
+    const dir = stack.pop()
+    let entries
+    try { entries = readdirSync(join(projectRoot, dir || '.'), { withFileTypes: true }) } catch { continue }
+    for (const e of entries) {
+      scanned++
+      if (scanned > budget) break
+      if (e.isDirectory()) {
+        if (!SUBPROJECT_SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) stack.push(dir ? `${dir}/${e.name}` : e.name)
+      } else if (e.name === basename) {
+        hits.push(dir ? `${dir}/${e.name}` : e.name)
+      }
+    }
+  }
+  return hits
+}
+
+/**
+ * 测试路径解析为仓根相对：根相对直取 → 子项目根前缀补全（丢 frontend/ 前缀类）→
+ * 裸文件名受限 glob 兜底（多命中取最短路径）。解析失败返回 null（调用方决定保留原值或披露）。
+ */
+export function resolveTestFileRel(p, { projectRoot, subprojectRoots = null, basenameFallback = true } = {}) {
+  const norm = String(p || '').replace(/\\/g, '/').replace(/^\.\//, '')
+  if (!norm || !projectRoot) return null
+  const sprs = subprojectRoots || detectSubprojectRoots(projectRoot)
+  // 直接命中（含扩展名漂移兜底：绑定记 .ts 实为 .tsx——平台仓 34 处实证；只向 .tsx 漂，
+  // 反向会把 JSX 文件喂给 node --test 恒败）
+  const variants = /\.ts$/.test(norm) ? [norm, norm.replace(/\.ts$/, '.tsx')] : [norm]
+  for (const v of variants) {
+    if (existsSync(join(projectRoot, v))) return v
+    for (const spr of sprs) {
+      if (!spr) continue
+      if (existsSync(join(projectRoot, spr, v))) return `${spr}/${v}`
+    }
+  }
+  if (!basenameFallback) return null
+  const base = norm.split('/').pop()
+  // 裸文件名兜底仅对测试形态文件开（*.test.* / *.spec.* / test_*.py / *_test.*），防误命中同名源文件；
+  // 变体含 .ts→.tsx（绑定记 .ts 实为 .tsx 的扩展名漂移——平台仓实证）
+  const isTestShaped = /\.(test|spec)\.[cm]?[jt]sx?$/.test(base) || /^test_[\w.]+\.py$/.test(base) || /_test\.(go|py)$/.test(base)
+  if (!isTestShaped) return null
+  const baseVariants = /\.ts$/.test(base) ? [base, base.replace(/\.ts$/, '.tsx')] : [base]
+  const hits = []
+  for (const bv of baseVariants) hits.push(...globBasenameMatches(projectRoot, bv))
+  if (hits.length === 0) return null
+  hits.sort((a, b) => a.length - b.length || a.localeCompare(b))
+  return hits[0]
+}
+
+/** 绑定 tests 路径归一（保留用例锚后缀）：文件部分走 resolveTestFileRel，锚原样回接 */
+export function normalizeTestsRootRel(tests, { projectRoot } = {}) {
+  if (!projectRoot || !Array.isArray(tests)) return tests
+  return tests.map((t) => {
+    const filePart = testAnchorFile(String(t))
+    const anchorPart = String(t).slice(filePart.length)
+    const rel = resolveTestFileRel(filePart, { projectRoot })
+    return rel ? rel + anchorPart : String(t)
+  })
+}
+
 export function normalizeRow(row, opts = {}) {
   const entryMode = !!opts.entryMode
   const anchor = row.anchor === null || row.anchor === undefined ? null : String(row.anchor)
@@ -187,9 +283,16 @@ function renderBindingBlock(rows) {
   return L
 }
 
-/** 在域文件内定位条目并 upsert 绑定行（surgical：只动条目段内的绑定子块） */
-export function upsertFrBindings({ knowledgeRoot, frId, rows }) {
-  const normalized = rows.map(r => normalizeRow({ ...r, anchor: frId }))
+/** 在域文件内定位条目并 upsert 绑定行（surgical：只动条目段内的绑定子块）。
+ * projectRoot（可选，2026-09-26-dynamic-test-inference）：在场时 tests 路径写入前归一为
+ * 仓根相对（治三形态混杂：cwd 相对丢子项目前缀 / 裸文件名——机器行自命令串解析、agent 行
+ * 自子项目肌肉记忆都会产生）；解析失败的路径保留原值（repair-paths/门禁读侧另有披露）。 */
+export function upsertFrBindings({ knowledgeRoot, frId, rows, projectRoot = null }) {
+  const normalized = rows.map(r => {
+    const row = normalizeRow({ ...r, anchor: frId })
+    if (projectRoot) row.tests = [...new Set(normalizeTestsRootRel(row.tests, { projectRoot }))].sort()
+    return row
+  })
   const dir = join(knowledgeRoot, 'fr')
   if (!existsSync(dir)) return { ok: false, error: `knowledge/fr 不存在（${dir}）` }
   for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {
@@ -265,7 +368,7 @@ export function unbindFrRows({ knowledgeRoot, frId, rowIds }) {
   return upsertFrBindingsRaw({ knowledgeRoot, frId, rows })
 }
 
-function upsertFrBindingsRaw({ knowledgeRoot, frId, rows }) {
+export function upsertFrBindingsRaw({ knowledgeRoot, frId, rows }) {
   // 与 upsertFrBindings 同定位/重写逻辑，但行已是权威态（supersede 翻链用，不做 agent 保护）
   const dir = join(knowledgeRoot, 'fr')
   for (const f of readdirSync(dir).filter(x => x.endsWith('.md')).sort()) {

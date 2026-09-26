@@ -213,36 +213,20 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
  * @returns {{ warn: string|null, warnInfo?: string|null, domains: string[], strong: number, unknown: number, skip: number, marked: number }}
  */
 export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+  // 查询核迁 fr-index.activeFrCoverageHits 单源（2026-09-26-dynamic-test-inference）——
+  // 同一「覆盖面∩触碰文件」查询双消费：本函数打待复核标记（信号面）；verify 门
+  // collectFrLinkedTests 反用为需求关联回归测试面。判据语义逐字不变。
+  const { activeFrCoverageHits, markFrNeedsReview } = await import('./fr-index.js')
+  const q = activeFrCoverageHits({ specBase, change, changeDir, files })
   const knowledgeRoot = join(specBase, 'knowledge')
-  const archiveRoot = join(specBase, 'changes', 'archive')
-  const { discoverModuleIndex } = await import('./decision-distill.js')
-  const { resolveTouchedDomains, readActiveFrDigest, markFrNeedsReview, frCoverageFiles } = await import('./fr-index.js')
-  const { testAnchorFile } = await import('./test-bindings.js')
-  const moduleIndex = discoverModuleIndex(knowledgeRoot)
-  const changed = (Array.isArray(files) ? files : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
-  // changeDir 仅为 design.md 兜底路由用（filesOverride 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
-  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, changed).filter((d) => d !== 'unmapped')
-  if (domains.length === 0) return { warn: null, warnInfo: null, domains: [], strong: 0, unknown: 0, skip: 0, marked: 0 }
-  const frs = readActiveFrDigest(knowledgeRoot, domains)
-  if (frs.length === 0) return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0, marked: 0 }
-  const covCache = new Map()
-  const strong = []
-  const unknownSources = new Set()
-  let skip = 0
-  for (const f of frs) {
-    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
-    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
-    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
-    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); continue }
-    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
-    if (hit) strong.push(f)
-    else skip++
+  const { domains, hits: strong, unknownSources, skip } = q
+  if (domains.length === 0) {
+    return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0, marked: 0 }
   }
-  const unknown = frs.length - strong.length - skip
   const { appendKnowledgeHit } = await import('./knowledge-hits.js')
   appendKnowledgeHit(join(specBase, '.runtime'), {
     type: 'fr-rot-suspect', change, domains,
-    strong: strong.length, unknown, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
+    strong: strong.length, unknown: unknownSources.length, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
     unknownSources: [...unknownSources], source: 'flow-done',
   })
   let marked = 0
@@ -253,10 +237,10 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   const warn = strong.length > 0
     ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${marked} 条；下次知识注入带 ⚠️）`
     : null
-  const warnInfo = unknown > 0
-    ? `ℹ️ 另有 ${unknown} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${[...unknownSources].slice(0, 5).join('、')}${unknownSources.size > 5 ? ' 等' : ''}`
+  const warnInfo = unknownSources.length > 0
+    ? `ℹ️ 另有 ${unknownSources.length} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
     : null
-  return { warn, warnInfo, domains, strong: strong.length, unknown, skip, marked }
+  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownSources.length, skip, marked }
 }
 
 /**
@@ -330,9 +314,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   // 才在收口处发现。恢复/adopt 路径的变更目录已存在时跳过（在途变更不因配置后补而拦）。
   const _localYaml = join(specBase, 'local.yaml')
   if (!existsSync(_localYaml) && !existsSync(join(specBase, 'changes', change))) {
-    console.error('❌ local.yaml 不存在——测试/lint 命令无配置源，flow done 的测试门将兜底到裸 python -m pytest（monorepo 下必假红）。')
-    console.error('   先跑 sillyspec init（生成 local.yaml 含模块探测），或参照 local.yaml.example 手动配置 modules + commands.test。')
-    console.error('   配置面：modules 映射（backend → cd backend && uv run pytest ...、frontend → cd frontend && pnpm exec vitest run ...）+ test_strategy: module')
+    console.error('❌ local.yaml 不存在——先跑 sillyspec init（mode/lint/known_failures 等 init 级配置的落点）。')
+    console.error('   测试面无需在此配置（2026-09-26 起：测试门按变更动态推断——本变更测试 ∪ FR 关联回归 ∪ import 依赖，')
+    console.error('   runner 自项目结构 pyproject/package.json 推断；modules.*.test/commands.test 已退役，后者仅显式 test_strategy: full 生效）。')
     process.exit(2)
   }
   const cfg = readFlowConfig(specBase)

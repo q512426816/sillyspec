@@ -60,7 +60,8 @@ console.log('\n=== ② execute 派发提示子代理 commit（坑 subagent-uncom
   assertTrue(prompt.includes('sillyspec wt-commit --change'), 'Wave prompt 调度要求含 wt-commit 串行提交指令（坑 wt-parallel-commit-race）')
   assertTrue(prompt.includes('禁 `git add -A`'), '明令禁止 git add -A（结构性竞态源头）')
   assertTrue(prompt.includes('does not exist in index'), '点明不 commit 的后果（apply --3way 炸）')
-  assertTrue(prompt.includes('真实锚点'), '点明 commit 的附带收益（review head 锚点）')
+  // 2026-09-26-task-review-retire：review head 锚点收益随 Task Review 层退役——勾选语义接棒
+  assertTrue(prompt.includes('勾选'), '点明 commit 的附带收益（勾选 tasks.md 工作单元语义）')
 }
 
 console.log('\n=== ③ pull 部署噪声自愈（坑 pull-deploy-noise-conflict）===\n')

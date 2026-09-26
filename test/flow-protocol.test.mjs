@@ -117,10 +117,14 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   const change = 'flow-h2-t3'
   // --no-review：本用例测 fail-closed 测试门，非评审面——声明一票豁免评审（名字撞 1/4 采样桶）
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
-  writeFileSync(join(cwd, 'work.js'), 'export const x = 1\n')
+  // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——变更面放可翻转测试文件，
+  // 动态子集实测它（pass.flag 缺席→红）；原 fixtures 经 commands.test=node check.js 全量触达
+  writeFileSync(join(cwd, 'work.test.mjs'), "import { test } from 'node:test'\nimport { existsSync } from 'node:fs'\nimport assert from 'node:assert/strict'\ntest('flip', () => { assert.ok(existsSync('pass.flag'), 'pass.flag 缺席=失败') })\n")
   fillDesignSlots(cwd, change)
   const specBase = join(cwd, '.sillyspec')
 
+  // 嵌套 test-runner 防污染（实测注：内层 node --test 继承 NODE_TEST_CONTEXT 静默不跑）
+  delete process.env.NODE_TEST_CONTEXT
   // 实测失败 → 整单 FAIL exit 1，change 仍 active（不可假绿）
   const fail = cli(cwd, ['flow', 'done', '--change', change])
   assert.equal(fail.status, 1, `首跑应整单 FAIL: ${fail.stdout}\n${fail.stderr}`)

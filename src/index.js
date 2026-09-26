@@ -3028,10 +3028,57 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       const {
         queryByAnchor, queryByChange, upsertFrBindings, upsertQlBindings,
         unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow, testAnchorFile,
+        readFrBindings, upsertFrBindingsRaw, resolveTestFileRel,
       } = await import('./test-bindings.js')
       const effDir = specDir ? dir : resolveEffectiveDir(dir)
       const specBase = specDir || join(effDir, '.sillyspec')
       const knowledgeRoot = join(specBase, 'knowledge')
+      // ── repair-paths（2026-09-26-dynamic-test-inference）：存量绑定路径错形修复 ──
+      // 三形态混杂（根相对 ✓ / 丢子项目前缀的 cwd 相对 / 裸文件名——平台仓实证）统一归一为
+      // 仓根相对。缺省干跑预览，--write 落盘（upsertFrBindingsRaw 权威重写，路径级修复不触
+      // 行语义）。逐条经硬校验（resolveTestFileRel 只认磁盘在场文件），修复工不得制造悬空。
+      if (filteredArgs.slice(1).includes('repair-paths')) {
+        const write = filteredArgs.includes('--write')
+        const frDir = join(knowledgeRoot, 'fr')
+        if (!existsSync(frDir)) { console.error(`❌ knowledge/fr 不存在（${frDir}）——本仓无 FR 绑定面`); process.exitCode = 1; break }
+        let plannedRows = 0, plannedPaths = 0, unresolvable = []
+        const filePlan = []
+        for (const f of readdirSync(frDir).filter(x => x.endsWith('.md')).sort()) {
+          const p = join(frDir, f)
+          const lines = readFileSync(p, 'utf8').split(/\r?\n/)
+          const frIds = [...new Set(lines.filter(l => /^## (FR-[\w-]+-\d+)\s/.test(l)).map(l => l.match(/^## (FR-[\w-]+-\d+)/)[1]))]
+          for (const frId of frIds) {
+            const rows = readFrBindings({ knowledgeRoot, frId })
+            let rowChanged = 0
+            const fixedRows = rows.map(r => {
+              const fixedTests = (r.tests || []).map(t => {
+                const filePart = testAnchorFile(String(t))
+                const anchorPart = String(t).slice(filePart.length)
+                if (existsSync(resolve(effDir, filePart.replace(/\\/g, '/')))) return String(t) // 已是仓根相对
+                const rel = resolveTestFileRel(filePart, { projectRoot: effDir })
+                if (rel) { plannedPaths++; return rel + anchorPart }
+                unresolvable.push(`${frId}:${t}`)
+                return String(t)
+              })
+              if (JSON.stringify(fixedTests) !== JSON.stringify(r.tests || [])) { rowChanged++; return { ...r, tests: fixedTests } }
+              return r
+            })
+            if (rowChanged > 0) { plannedRows += rowChanged; filePlan.push({ file: f, frId, rows: fixedRows }) }
+          }
+        }
+        if (plannedPaths === 0) {
+          console.log(`✅ 绑定路径无需修复（fr/*.md 全部条目 tests 均可自仓根解析${unresolvable.length ? `；${unresolvable.length} 个无法定位需人工核（--write 也只保留原值）：${unresolvable.slice(0, 5).join('、')}${unresolvable.length > 5 ? ' 等' : ''}` : ''}）`)
+          break
+        }
+        console.log(`🔧 绑定路径修复${write ? '' : '预览（--write 落盘）'}：${plannedRows} 行 / ${plannedPaths} 个路径归一为仓根相对，涉及 ${filePlan.length} 个条目`)
+        for (const fp of filePlan.slice(0, 10)) console.log(`   ${fp.file} :: ${fp.frId}`)
+        if (filePlan.length > 10) console.log(`   … 共 ${filePlan.length} 个条目`)
+        if (unresolvable.length > 0) console.warn(`⚠️ ${unresolvable.length} 个路径无法自仓根定位（保留原值，人工核）：${unresolvable.slice(0, 5).join('、')}${unresolvable.length > 5 ? ' 等' : ''}`)
+        if (!write) break
+        for (const fp of filePlan) upsertFrBindingsRaw({ knowledgeRoot, frId: fp.frId, rows: fp.rows })
+        console.log(`✅ 已写入 ${filePlan.length} 个条目的归一路径`)
+        break
+      }
       const flag = (name) => { const i = filteredArgs.indexOf(name); return i !== -1 && i + 1 < filteredArgs.length ? filteredArgs[i + 1] : null }
       const has = (name) => filteredArgs.includes(name)
       const anchor = flag('--anchor')
@@ -3057,7 +3104,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         const row = { anchor, row_id: rowId || `manual:${Date.now().toString(36)}:${tests[0]}`, tests, reason, state: 'active', discovery: 'agent', confirmed_by: 'agent', confirmed_at: head, source_change: change || 'manual' }
         try {
           normalizeRow(row)
-          if (/^FR-/.test(anchor)) upsertFrBindings({ knowledgeRoot, frId: anchor, rows: [row] })
+          if (/^FR-/.test(anchor)) upsertFrBindings({ knowledgeRoot, frId: anchor, rows: [row], projectRoot: effDir })
           else upsertQlBindings({ specBase, qlId: anchor, rows: [row] })
           console.log(`✅ 绑定写入：${anchor} ← ${tests.join(', ')}（confirmed_by=agent${head ? ` @${head.slice(0, 8)}` : ''}）`)
         } catch (e) { fail(`绑定写入被拒：${e && e.message ? e.message : e}`) }

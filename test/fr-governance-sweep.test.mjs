@@ -57,6 +57,8 @@ test('② resume 声明通道：--review 对在途变更重入落盘 review_forc
     const g = (a) => execFileSync('git', a, { cwd, stdio: 'pipe' })
     g(['init', '-q']); g(['config', 'user.email', 't@t']); g(['config', 'user.name', 't'])
     writeFileSync(join(cwd, '.sillyspec.yaml'), 'project:\n  type: generic\n')
+    mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
+    writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n') // flow start fail-fast 契约：local.yaml 必须在场
     writeFileSync(join(cwd, 'base.txt'), 'b\n')
     g(['add', '.']); g(['commit', '-q', '-m', 'b'])
     const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })

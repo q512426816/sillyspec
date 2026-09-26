@@ -52,11 +52,13 @@ function makeRepo(withPackageJson = false, testCmd = null) {
   return d
 }
 
-/** 在仓根写 .sillyspec/local.yaml（配 commands.test）。命令需避免含单引号（extractTestCommand bare 正则会截断）。 */
+/** 在仓根写 .sillyspec/local.yaml（配 commands.test + 显式 test_strategy: full——2026-09-26
+ * 起 commands.test 仅显式 full 生效作全量逃生阀；本文件聚焦跨仓合并语义，主仓固定走全量道）。
+ * 命令需避免含单引号（extractTestCommand bare 正则会截断）。 */
 function writeLocalYaml(repoRoot, testCmd) {
   mkdirSync(join(repoRoot, '.sillyspec'), { recursive: true })
   writeFileSync(join(repoRoot, '.sillyspec', 'local.yaml'),
-    `commands:\n  test: ${testCmd}\n`)
+    `test_strategy: full\ncommands:\n  test: ${testCmd}\n`)
 }
 
 /** 在仓根写 worktree meta.json（resolveVerifyChangedFiles 读文件系统，不走 wm）。 */
@@ -187,23 +189,21 @@ test('跨仓仓 package.json 无 test 脚本：跳过不阻断，own local.yaml 
 // ──────────────────────────────────────────────────────────────────────────
 // 3. 跨仓仓不参与 module 子集策略（design §6 + §5.4）
 // ──────────────────────────────────────────────────────────────────────────
-test('跨仓仓不参与 module 子集：主仓 test_strategy:module 命中走子集，跨仓仓仍跑 full npm test', () => {
+test('跨仓仓不参与动态子集：主仓走动态子集，跨仓仓仍跑 full npm test', () => {
   const mainRepo = makeRepo(false)
   const crossRepo = makeRepo(true, 'echo cross-module-subset-pass')
 
-  // 主仓 local.yaml：test_strategy:module + 一个 backend 模块 + commands.test 兜底
+  // 主仓 local.yaml：不配策略（2026-09-26 起缺省=动态子集；modules 已退役不消费）
   mkdirSync(join(mainRepo, '.sillyspec'), { recursive: true })
   writeFileSync(join(mainRepo, '.sillyspec', 'local.yaml'),
-    `test_strategy: module\n` +
-    `modules:\n` +
-    `  backend: { path: "backend/", test: "echo main-backend-subset" }\n` +
-    `commands:\n  test: echo main-full-fallback\n`)
+    `commands:\n  test: echo main-full-fallback\n` +
+    `modules:\n  backend: { path: "backend/", test: "echo retired-not-run" }\n`)
 
-  // 主仓造一个 backend/ 改动（命中 module），跨仓仓改动与主仓 module 无关
+  // 主仓造一个测试文件改动（动态子集面：变更测试三源之一），跨仓仓改动与主仓无关
   const baseHash = execSync('git rev-parse HEAD', { cwd: mainRepo, encoding: 'utf8' }).trim()
-  mkdirSync(join(mainRepo, 'backend'), { recursive: true })
-  writeFileSync(join(mainRepo, 'backend', 'foo.js'), 'x')
-  execSync('git add . && git commit -q -m backend-change', { cwd: mainRepo, stdio: 'pipe' })
+  mkdirSync(join(mainRepo, 'test'), { recursive: true })
+  writeFileSync(join(mainRepo, 'test', 'main.test.mjs'), "import { test } from 'node:test'\ntest('m', () => {})\n")
+  execSync('git add . && git commit -q -m test-change', { cwd: mainRepo, stdio: 'pipe' })
 
   // resolveVerifyChangedFiles 读 meta.json 文件（不走 wm），需落盘
   writeMeta(mainRepo, 'c1', { mode: 'worktree', worktreePath: mainRepo, baseHash })
@@ -222,12 +222,14 @@ test('跨仓仓不参与 module 子集：主仓 test_strategy:module 命中走�
     ctx,
   })
 
-  // 主仓 module-subset 通过 + 跨仓仓 full npm test 通过 → 整体 passed
+  // 主仓动态子集通过 + 跨仓仓 full npm test 通过 → 整体 passed
   assert.equal(result.status, 'passed',
-    `主仓 module-subset + 跨仓仓 full 均通过 → 整体 passed（actual: ${result.status} / ${result.reason}）`)
-  // 主仓走 module-subset（不被跨仓路径污染成全量）
-  assert.ok(result.mode && result.mode.includes('module-subset'),
-    `主仓应走 module-subset（跨仓不污染 module 子集判定）（actual mode: ${result.mode}）`)
+    `主仓动态子集 + 跨仓仓 full 均通过 → 整体 passed（actual: ${result.status} / ${result.reason}）`)
+  // 主仓走 dynamic-subset（不被跨仓路径污染成全量；modules 命令不消费）
+  assert.ok(result.mode && result.mode.includes('dynamic-subset'),
+    `主仓应走 dynamic-subset（跨仓不污染子集判定；modules 退役）（actual mode: ${result.mode}）`)
+  assert.ok(!(result.command || '').includes('retired-not-run'),
+    `退役的 modules 命令不进执行面（actual command: ${result.command}）`)
   // 跨仓仓执行了 full npm test（mode 含 cross-repo 标记 + outputTail 含 crossC）
   assert.ok((result.outputTail || '').includes('crossC'),
     `跨仓仓 crossC 应执行 full npm test 并附入 outputTail（actual: ${(result.outputTail || '').slice(-200)}）`)

@@ -73,12 +73,15 @@ console.log('--- ③ extractTestCommand / extractTestStrategy：CRLF 无回归 -
   assert(extractTestStrategy(CRLF) === 'module', `CRLF test_strategy 解析（实际 ${extractTestStrategy(CRLF)}）`)
 }
 
-console.log('--- ④ 链路：CRLF local.yaml + module 策略 → 不再误判「无有效 modules 块」---')
+console.log('--- ④ 链路：CRLF local.yaml + module 策略 → 折算动态子集（modules 退役不再有 CRLF 误判面）---')
 {
+  // 2026-09-26-dynamic-test-inference：modules.*.test 已退役——module 策略统一折算动态子集
+  // （按变更文件面三源并集），extractModules 的 CRLF 解析不再影响选路（纯解析函数仍单测锁定）
   const mods = extractModules(CRLF)
   const present = mods !== null
-  const action = decideVerifyTestAction({ strategy: 'module', modulesPresent: present, hitCount: 2 })
-  assert(action === 'module-subset', `CRLF 下命中 module-subset（实际 ${action}，修复前 modulesPresent=false 恒 full → 600s 全量超时）`)
+  void present
+  const action = decideVerifyTestAction({ strategy: 'module', scopeCount: 2 })
+  assert(action === 'dynamic-subset', `CRLF 下 module 折算 dynamic-subset（实际 ${action}——修复前 modulesPresent=false 恒 full → 600s 全量超时的坑已随退役消解）`)
 }
 
 console.log('--- ⑤ modules.js 同类：showModuleStatus 的 \\\\r?\\\\n 拆分（经 _module-map.yaml 内容验证不在此文件单测，锁 split 源头无 CR 残留）---')

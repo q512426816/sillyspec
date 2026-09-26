@@ -33,13 +33,14 @@ function makeFixtureRepo() {
   execSync('git config user.email t@t.local', { cwd: dir })
   execSync('git config user.name t', { cwd: dir })
   writeFileSync(join(dir, 'README.md'), 'init\n')
+  // 命令用裸值形态（extractTestCommand 裸值正则排除引号——node -e "…" 解析不到，实测坑）。
+  // 2026-09-26-dynamic-test-inference：exit0/1 随基线提交（快照 HEAD 在场——门内 lint 引用可达）
+  writeFileSync(join(dir, 'exit0.js'), 'process.exit(0)\n')
+  writeFileSync(join(dir, 'exit1.js'), 'process.exit(1)\n')
   execSync('git add -A', { cwd: dir })
   execSync('git commit -qm init', { cwd: dir })
   mkdirSync(join(dir, '.sillyspec', 'changes', 'c1'), { recursive: true })
   mkdirSync(join(dir, '.sillyspec', '.runtime'), { recursive: true })
-  // 命令用裸值形态（extractTestCommand 裸值正则排除引号——node -e "…" 解析不到，实测坑）
-  writeFileSync(join(dir, 'exit0.js'), 'process.exit(0)\n')
-  writeFileSync(join(dir, 'exit1.js'), 'process.exit(1)\n')
   writeFileSync(join(dir, '.sillyspec', 'local.yaml'), 'commands:\n  test: node exit0.js\n  lint: node exit0.js\n')
   return dir
 }
@@ -304,12 +305,21 @@ test('noAI 动作：实测全绿 → 落记录不抛；实测失败 → throw（
   const dir = makeFixtureRepo()
   try {
     const specBase = join(dir, '.sillyspec')
+    // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——动态子集面放
+    // 可翻转测试文件（提交基线 + 未提交翻转）；原 fixtures 经 commands.test exit0/exit1 触达
+    delete process.env.NODE_TEST_CONTEXT // 嵌套 runner 防污染
+    const flipPath = join(dir, 'flip.test.mjs')
+    const flipOk = "import { test } from 'node:test'" + '\n' + "import assert from 'node:assert/strict'" + '\n' + "test('flip', () => { assert.ok(true) })" + '\n'
+    const flipBad = "import { test } from 'node:test'" + '\n' + "import assert from 'node:assert/strict'" + '\n' + "test('flip', () => { assert.fail('planned failure') })" + '\n'
+    writeFileSync(flipPath, flipOk)
+    execSync('git add flip.test.mjs && git commit -qm flip', { cwd: dir, stdio: 'ignore' })
+    writeFileSync(flipPath, flipOk + '// touched\n') // 未提交触碰（in-diff 通过版）
     await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
     const rec = loadReusableQualityScan({ specBase, cwd: dir, changeName: 'c1' })
     assert.ok(rec, '全绿后记录可回环（--done 复用面）')
     assert.equal(rec.testResult.status, 'passed')
-    // 失败路：test 退出码 1 → throw
-    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node exit1.js\n  lint: node exit0.js\n')
+    // 失败路：翻转失败版（代码指纹随动 → 去重失配真跑）→ throw；退役 commands.test 不参与判定
+    writeFileSync(flipPath, flipBad)
     await assert.rejects(
       () => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} }),
       (e) => {
@@ -362,8 +372,14 @@ test('RERUN 签名闸五态：同签名拒（throw=退出码非0 同源）/ 代�
   const dir = makeFixtureRepo()
   try {
     const specBase = join(dir, '.sillyspec')
+    // 2026-09-26-dynamic-test-inference 迁移：动态子集面放失败测试文件（原 commands.test exit1 触达）
+    delete process.env.NODE_TEST_CONTEXT // 嵌套 runner 防污染
+    const flipPath = join(dir, 'flip.test.mjs')
+    const flipBad = "import { test } from 'node:test'" + '\n' + "import assert from 'node:assert/strict'" + '\n' + "test('flip', () => { assert.fail('planned failure') })" + '\n'
+    writeFileSync(flipPath, flipBad)
+    execSync('git add flip.test.mjs && git commit -qm flip-bad', { cwd: dir, stdio: 'ignore' })
+    writeFileSync(flipPath, flipBad + '// touched' + '\n') // 未提交触碰（in-diff）
     // 造失败记录（RERUN 未设——真实时序：失败在先，重扫在后）
-    writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node exit1.js\n  lint: node exit0.js\n')
     await assert.rejects(() => executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c2', platformOpts: {} }))
     const rec0 = loadLastQualityScanRecord({ specBase, changeName: 'c2' })
     assert.ok(rec0.rerunSignature, '失败记录携带 rerunSignature（additive 落盘）')

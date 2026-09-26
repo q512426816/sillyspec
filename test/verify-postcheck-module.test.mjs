@@ -322,46 +322,48 @@ assertEqual(
 // ── decideVerifyTestAction（D-005@v2：skip 真跳过 + brownfield 兜底不变）──
 // R-07 行为变化锁定：配置 skip 不再回退全量——即使 modules 块存在且命中模块。
 
+// 2026-09-26-dynamic-test-inference 契约迁移：modules/commands.test 退役，决策签名改
+// {strategy, scopeCount, gitUnavailable}——full/skip 显式语义不变；缺省/module 落动态子集。
 assertEqual(
   'decideVerifyTestAction: skip → skip（真跳过，不回退全量）',
-  decideVerifyTestAction({ strategy: 'skip', modulesPresent: true, hitCount: 5 }),
+  decideVerifyTestAction({ strategy: 'skip', scopeCount: 5 }),
   'skip',
 )
 
 assertEqual(
-  'decideVerifyTestAction: skip 无 modules 块 → 仍 skip（不落 full 兜底）',
-  decideVerifyTestAction({ strategy: 'skip', modulesPresent: false, hitCount: 0 }),
+  'decideVerifyTestAction: skip 空面 → 仍 skip（不落 full 兜底）',
+  decideVerifyTestAction({ strategy: 'skip', scopeCount: 0 }),
   'skip',
 )
 
 assertEqual(
   'decideVerifyTestAction: full → full（brownfield 语义不变）',
-  decideVerifyTestAction({ strategy: 'full', modulesPresent: false, hitCount: 0 }),
+  decideVerifyTestAction({ strategy: 'full', scopeCount: 0 }),
   'full',
 )
 
 assertEqual(
-  'decideVerifyTestAction: 未配置 null → full（缺省全量兜底不变）',
-  decideVerifyTestAction({ strategy: null, modulesPresent: false, hitCount: 0 }),
+  'decideVerifyTestAction: 缺省 null 三源空 → dynamic-empty-skip（不硬跑全量，防超时/预存失败面）',
+  decideVerifyTestAction({ strategy: null, scopeCount: 0 }),
+  'dynamic-empty-skip',
+)
+
+assertEqual(
+  'decideVerifyTestAction: 缺省 null 三源非空 → dynamic-subset（动态子集实测）',
+  decideVerifyTestAction({ strategy: null, scopeCount: 7 }),
+  'dynamic-subset',
+)
+
+assertEqual(
+  'decideVerifyTestAction: git 不可用 → full 兜底（文件面算不出）',
+  decideVerifyTestAction({ strategy: null, scopeCount: 0, gitUnavailable: true }),
   'full',
 )
 
 assertEqual(
-  'decideVerifyTestAction: module 有块命中 → module-subset',
-  decideVerifyTestAction({ strategy: 'module', modulesPresent: true, hitCount: 2 }),
-  'module-subset',
-)
-
-assertEqual(
-  'decideVerifyTestAction: module 有块 0 命中 → module-zero-hit-skip',
-  decideVerifyTestAction({ strategy: 'module', modulesPresent: true, hitCount: 0 }),
-  'module-zero-hit-skip',
-)
-
-assertEqual(
-  'decideVerifyTestAction: module 无块 → full（brownfield 兜底不变）',
-  decideVerifyTestAction({ strategy: 'module', modulesPresent: false, hitCount: 0 }),
-  'full',
+  'decideVerifyTestAction: module 折算 dynamic（module 语义被动态子集超集覆盖）',
+  decideVerifyTestAction({ strategy: 'module', scopeCount: 3 }),
+  'dynamic-subset',
 )
 
 // ── resolveTestStrategy 五输入契约（task-11 契约 / task-13 回归锁定）──

@@ -231,6 +231,8 @@ test('④ flow start fresh 简报端到端：知识注入段在场（--input 路
     writeFileSync(join(cwd, 'base.txt'), 'b\n')
     g(['add', '.']); g(['commit', '-q', '-m', 'b'])
     buildSpecRoot(cwd)
+    // local.yaml（2026-09-26 起 flow start fail-fast：init 级配置缺席拒绝执行）
+    writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
     const r = spawnSync(process.execPath, [CLI, 'flow', 'start', '--change', 'e2e-inject', '--input',
       '动机：登录流程调整，涉及 src/cli/login.js\n成功标准：\n- 登录行为保持'], {
       cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },

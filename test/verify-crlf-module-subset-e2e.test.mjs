@@ -21,16 +21,21 @@ console.log('=== CRLF local.yaml → verify module 子集 e2e ===\n')
 {
   const repo = mkdtempSync(join(tmpdir(), `verify-crlf-e2e-${Date.now()}-`))
   try {
-    // git 仓 + 基线提交 + backend/ 目录改动（命中 backend 模块）
+    // git 仓 + 基线提交 + backend/ 改动（动态子集命中源）
+    // 2026-09-26-dynamic-test-inference 迁移：modules.*.test 退役——CRLF 配置解析不碎的断言
+    // 面改为「CRLF local.yaml（含退役 modules 块）+ 变更测试文件 → 动态子集真跑」；
+    // 原 fixtures 经 module 命令 marker 触达，现经变更测试文件 marker 触达（同款防线）。
     execSync('git init -b main && git config user.email t@t && git config user.name t', { cwd: repo, stdio: 'ignore' })
     mkdirSync(join(repo, 'backend'), { recursive: true })
     mkdirSync(join(repo, 'frontend'), { recursive: true })
     writeFileSync(join(repo, 'backend', 'app.py'), 'x = 1\n')
-    writeFileSync(join(repo, 'frontend', '.keep'), '') // frontend 模块不应命中（未改）
+    writeFileSync(join(repo, 'backend', 'smoke.test.mjs'), "import { test } from 'node:test'\nimport { writeFileSync } from 'node:fs'\ntest('m', () => { writeFileSync('backend-marker.txt', '1') })\n")
+    writeFileSync(join(repo, 'frontend', '.keep'), '') // frontend 无关（未改）
     execSync('git add . && git commit -m base', { cwd: repo, stdio: 'ignore' })
-    writeFileSync(join(repo, 'backend', 'app.py'), 'x = 2\n') // 未提交改动 → gitChangedFiles 命中 backend/
+    writeFileSync(join(repo, 'backend', 'app.py'), 'x = 2\n') // 未提交改动 + smoke.test.mjs 基线在场
+    writeFileSync(join(repo, 'backend', 'smoke.test.mjs'), "import { test } from 'node:test'\nimport { writeFileSync } from 'node:fs'\ntest('m', () => { writeFileSync('backend-marker.txt', '2') })\n")
 
-    // CRLF local.yaml：modules 映射 + module 策略；模块命令/全量命令各写不同 marker
+    // CRLF local.yaml：modules 映射（退役块在场——退役指引可打印即解析不碎）+ module 策略（折算动态）
     const specBase = join(repo, '.sillyspec')
     mkdirSync(specBase, { recursive: true })
     const crlf = [
@@ -46,14 +51,15 @@ console.log('=== CRLF local.yaml → verify module 子集 e2e ===\n')
     ].join('\r\n')
     writeFileSync(join(specBase, 'local.yaml'), crlf, 'utf8')
 
+    delete process.env.NODE_TEST_CONTEXT
     const r = runVerifyTestCheck({ cwd: repo, specBase, changeName: 'crlf-e2e' })
 
-    assert(r.status === 'passed', `module 子集执行 passed（实得 ${r.status}）`)
-    assert(String(r.command || '').startsWith('module['), `command 为模块子集聚合标签而非全量命令（command: ${r.command}）`)
-    assert(existsSync(join(repo, 'backend-marker.txt')), 'backend 模块命令真实执行（marker 落盘）')
+    assert(r.status === 'passed', `动态子集执行 passed（实得 ${r.status}）`)
+    assert(String(r.command || '').includes('deps('), `command 为动态子集聚合标签而非全量命令（command: ${r.command}）`)
+    assert(existsSync(join(repo, 'backend-marker.txt')), 'backend 变更测试真实执行（marker 落盘）')
     assert(!existsSync(join(repo, 'full-marker.txt')), '全量命令未执行（无回退）')
-    assert(!existsSync(join(repo, 'frontend-marker.txt')), '未命中模块（frontend）未执行')
-    assert((r.mode || '') !== '' && r.mode !== undefined, `结果携带 mode 字段（${r.mode}）`)
+    assert(!existsSync(join(repo, 'frontend-marker.txt')), '未触碰模块（frontend）的退役命令未执行')
+    assert(r.mode === 'dynamic-subset', `结果 mode=dynamic-subset（${r.mode}）`)
   } finally {
     try { rmSync(repo, { recursive: true, force: true }) } catch {}
   }

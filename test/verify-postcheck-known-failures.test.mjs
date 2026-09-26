@@ -419,14 +419,14 @@ assertEqual('capFailureLedger: 短列表原样', capFailureLedger(['a', 'b']), [
   }
 }
 
-// ── decideVerifyTestAction（Fix 3：0 命中 skip）─────────────────
+// ── decideVerifyTestAction（2026-09-26-dynamic-test-inference 契约：full/skip 显式语义
+//    保留；module 折算动态子集；缺省动态；三源空不硬跑全量；git 不可用 full 兜底）─────────────────
 
-assertEqual('decide: module + 命中 → subset', decideVerifyTestAction({ strategy: 'module', modulesPresent: true, hitCount: 2 }), 'module-subset')
-assertEqual('decide: module + 0 命中 → skip', decideVerifyTestAction({ strategy: 'module', modulesPresent: true, hitCount: 0 }), 'module-zero-hit-skip')
-assertEqual('decide: module + git 不可用(hitCount=-1) → full', decideVerifyTestAction({ strategy: 'module', modulesPresent: true, hitCount: -1 }), 'full')
-assertEqual('decide: module 但无 modules 块 → full', decideVerifyTestAction({ strategy: 'module', modulesPresent: false, hitCount: 0 }), 'full')
-assertEqual('decide: 显式 full → full', decideVerifyTestAction({ strategy: 'full', modulesPresent: false, hitCount: 0 }), 'full')
-assertEqual('decide: 缺省 null → full', decideVerifyTestAction({ strategy: null, modulesPresent: false, hitCount: 0 }), 'full')
+assertEqual('decide: module + 三源非空 → dynamic-subset', decideVerifyTestAction({ strategy: 'module', scopeCount: 2 }), 'dynamic-subset')
+assertEqual('decide: module + 三源空 → dynamic-empty-skip（不硬跑全量）', decideVerifyTestAction({ strategy: 'module', scopeCount: 0 }), 'dynamic-empty-skip')
+assertEqual('decide: 缺省 + git 不可用 → full', decideVerifyTestAction({ strategy: null, scopeCount: 0, gitUnavailable: true }), 'full')
+assertEqual('decide: 显式 full → full', decideVerifyTestAction({ strategy: 'full', scopeCount: 0 }), 'full')
+assertEqual('decide: 缺省 + 三源空 → dynamic-empty-skip', decideVerifyTestAction({ strategy: null, scopeCount: 0 }), 'dynamic-empty-skip')
 
 // ── 汇总 ─────────────────────────────────────────────────────────
 

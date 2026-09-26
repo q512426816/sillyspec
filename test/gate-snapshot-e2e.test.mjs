@@ -28,19 +28,23 @@ const { WorktreeManager } = await import('../src/worktree.js')
 const CHANGE = '2026-09-21-e2e-demo'
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, encoding: 'utf8' })
 
-/** 假项目夹具：git 仓 + service.js + probe.js（血统探针）+ local.yaml(test=probe) + 真实 worktree（WorktreeManager 建，meta/分支全真） */
+/** 假项目夹具：git 仓 + service.js + probe.test.mjs（血统探针，测试形态）+ local.yaml + 真实 worktree（WorktreeManager 建，meta/分支全真） */
 function makeFixture(tag) {
   const root = mkdtempSync(join(tmpdir(), `gs-e2e-${tag}-`))
   const repo = join(root, 'repo')
   mkdirSync(repo, { recursive: true })
   git(repo, 'init', '--quiet')
   writeFileSync(join(repo, 'service.js'), 'export const v = "base"\n', 'utf8')
-  writeFileSync(join(repo, 'probe.js'), [
-    "const fs = require('node:fs')",
-    "const s = fs.readFileSync('service.js', 'utf8')",
+  // 2026-09-26-dynamic-test-inference 迁移：探针改测试形态（.test.mjs）——血统断言经动态批
+  //（import 依赖发现：内容含 'service.js' 字串即命中）触达；原 fixtures 经 commands.test 全量跑
+  writeFileSync(join(repo, 'probe.test.mjs'), [
+    "import { readFileSync } from 'node:fs'",
+    "import { test } from 'node:test'",
+    "const s = readFileSync('service.js', 'utf8')",
     "const want = process.env.LINEAGE_EXPECT || ''",
-    "if (!s.includes(want)) { console.error('LINEAGE-MISMATCH want=' + want + ' got=' + s.trim()); process.exit(1) }",
-    "console.log('LINEAGE-OK ' + want)",
+    "test('lineage', () => {",
+    "  if (!s.includes(want)) { console.error('LINEAGE-MISMATCH want=' + want + ' got=' + s.trim()); process.exit(1) }",
+    "})",
   ].join('\n'), 'utf8')
   // checkWorktreeDirIgnored 用 git check-ignore 判 .sillyspec/.runtime/worktrees——
   // 尾斜杠目录模式在目录不存在时不命中（/tmp 实证），夹具须整体忽略 .sillyspec/
@@ -49,7 +53,7 @@ function makeFixture(tag) {
   git(repo, 'commit', '--quiet', '-m', 'base')
   const specBase = join(repo, '.sillyspec')
   mkdirSync(join(specBase, '.runtime'), { recursive: true })
-  writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node probe.js\n', 'utf8')
+  writeFileSync(join(specBase, 'local.yaml'), 'commands:\n  test: node --test probe.test.mjs\n', 'utf8')
   const wm = new WorktreeManager({ cwd: repo })
   const { worktreePath } = wm.create(CHANGE)
   return { root, repo, wt: worktreePath, specBase }
@@ -65,6 +69,8 @@ const editCommit = (cwd, content, msg) => {
 async function runScan({ repo, specBase }, expectMarker) {
   const prev = process.env.LINEAGE_EXPECT
   process.env.LINEAGE_EXPECT = expectMarker
+  // 嵌套 test-runner 防污染（实测注：内层 node --test 继承 NODE_TEST_CONTEXT 静默不跑）
+  delete process.env.NODE_TEST_CONTEXT
   const buf = []
   const ol = console.log, oe = console.error
   console.log = (...a) => buf.push(a.map(String).join(' '))

@@ -26,9 +26,10 @@ console.log('=== execute.js prompt 路径占位符化（坑 2）===\n')
 const bareHits = (executeSrc.match(/\.sillyspec\/\.runtime\//g) || []).length
 assertTrue(bareHits === 0, `无裸 .sillyspec/.runtime/ 硬编码（实际 ${bareHits} 处）`)
 
-// review.json 路径用占位符
-assertTrue(executeSrc.includes('{SPEC_ROOT}/.runtime/execute-runs/'),
-  'review.json 路径用 {SPEC_ROOT}/.runtime/execute-runs/ 占位符')
+// 长输出日志路径用占位符（review.json 面已随 2026-09-26-task-review-retire 退役——execute
+// prompt 不再携带 review.json 路径；execute-runs 只剩 complete.js 门侧消费）
+assertTrue(executeSrc.includes('{SPEC_ROOT}/.runtime/logs/'),
+  '长输出日志路径用 {SPEC_ROOT}/.runtime/logs/ 占位符')
 
 // endpoints.json 路径用占位符
 assertTrue(executeSrc.includes('{SPEC_ROOT}/.runtime/contract-artifacts/'),

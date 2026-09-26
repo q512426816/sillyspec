@@ -71,8 +71,11 @@ console.log('\n=== ② module 子集命中并入 worktree 未提交改动（坑 
   const base = execSync('git rev-parse HEAD', { cwd: d, encoding: 'utf8' }).trim()
   const wtDir = path.join(d, '.sillyspec', '.runtime', 'worktrees', cn)
   sh(`git worktree add "${wtDir}" -b sillyspec/${cn}`, d)
-  // 子代理改了 frontend 文件但【不 commit】——module 命中集须并入未提交改动
-  fs.writeFileSync(path.join(wtDir, 'frontend', 'app.js'), 'export const x = 1\n')
+  // 子代理改了 frontend 测试文件但【不 commit】——动态子集的变更测试源须并入未提交改动
+  // （2026-09-26-dynamic-test-inference 迁移：原 fixture 经 modules.frontend 命中触达同一
+  // 「未提交改动进文件面」防线；现走动态批——真实门禁在 worktree cwd 执行，本测同款传 wtDir）
+  fs.writeFileSync(path.join(wtDir, 'frontend', 'app.test.mjs'),
+    "import { test } from 'node:test'\nimport { writeFileSync } from 'node:fs'\ntest('fe', () => { writeFileSync('fe-marker.txt', '1') })\n")
   fs.writeFileSync(path.join(wtDir, 'meta.json'), JSON.stringify({
     changeName: cn, worktreePath: wtDir, mode: 'worktree',
     baseHash: base, baselineCommit: base, branch: `sillyspec/${cn}`,
@@ -83,9 +86,13 @@ console.log('\n=== ② module 子集命中并入 worktree 未提交改动（坑 
     ['commands:', '  test: node -e "1"', '', 'test_strategy: module', '', 'modules:',
      `  frontend: { path: "frontend/", test: "node -e \\"require('fs').writeFileSync('fe-marker.txt','1')\\"" }`, ''].join('\n'))
   process.chdir(d)
-  const r = runVerifyTestCheck({ cwd: d, specBase, changeName: cn })
-  assertTrue(r.mode === 'module-subset', `未提交的 frontend 改动命中模块 → module-subset（实得 ${r.mode}，修复前 zero-hit 跳过）`)
-  assertTrue(fs.existsSync(path.join(d, 'fe-marker.txt')), 'frontend 模块测试命令真实执行（marker 落盘）')
+  // 嵌套 test-runner 防污染（同 module-match-portrace 实测注）：内层 node --test 继承
+  // NODE_TEST_CONTEXT 会静默不跑——摘除后动态批才真正执行，marker 断言才有效
+  delete process.env.NODE_TEST_CONTEXT
+  const r = runVerifyTestCheck({ cwd: wtDir, specBase, changeName: cn })
+  assertTrue(r.mode === 'dynamic-subset', `未提交的 frontend 测试改动进动态子集（实得 ${r.mode}，修复前 zero-hit 跳过）`)
+  assertTrue(fs.existsSync(path.join(wtDir, 'fe-marker.txt')), '动态批测试真实执行（marker 落盘于 worktree）')
+  assertTrue(!String(r.command || '').includes('writeFileSync'), '退役 modules 命令不进执行面')
   sh(`git worktree remove --force "${wtDir}"`, d)
   process.chdir(os.tmpdir())
   fs.rmSync(d, { recursive: true, force: true })

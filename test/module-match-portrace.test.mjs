@@ -73,10 +73,12 @@ console.log('\n=== ①-b 0 命中诊断输出（黑箱可见化）===\n')
   let r
   try { r = runVerifyTestCheck({ cwd: d, specBase, changeName: 'zh' }) }
   finally { console.warn = ow }
-  assertTrue(r.mode === 'module-zero-hit', `0 命中维持 skip 语义（mode=${r.mode}）`)
+  // 2026-09-26-dynamic-test-inference：modules 退役，module 策略折算动态子集——无测试关系面
+  // → dynamic-empty（不硬跑全量，防超时/预存失败面）；modules 在场的退役指引可见。
+  assertTrue(r.mode === 'dynamic-empty', `三源空 → dynamic-empty skip 语义（mode=${r.mode}）`)
   const all = cap.join('\n') + (r.reason || '')
-  assertTrue(all.includes('已配置 modules') && all.includes('frontend→frontend/'), '诊断列 modules 配置 path')
-  assertTrue(all.includes('本次 diff') && all.includes('base.txt'), '诊断列 diff 文件样例——配置与布局对照一眼可见')
+  assertTrue(all.includes('已退役'), 'modules 退役指引输出（在场提示可删）')
+  assertTrue(all.includes('零关系'), 'skip reason 陈述变更与测试面零关系')
   fs.rmSync(d, { recursive: true, force: true })
 }
 
@@ -109,34 +111,36 @@ delete process.env.NODE_TEST_CONTEXT
   let r
   try { r = runVerifyTestCheck({ cwd: d, specBase, changeName: 'zht' }) }
   finally { console.warn = ow }
-  assertTrue(r.mode === 'module-subset', `0 命中+diff 含测试文件 → 变更测试子集兜底（mode=${r.mode}）`)
+  assertTrue(r.mode === 'dynamic-subset', `diff 含测试文件 → 动态子集实测（mode=${r.mode}）`)
   assertTrue(String(r.command).includes('deps(js'), `命令含 deps(auto) 变更测试（command=${r.command}）`)
   assertTrue(r.status === 'passed', `变更测试实测通过而非裸 skip（status=${r.status}${r.reason ? '，' + r.reason : ''}）`)
   assertTrue(fs.existsSync(path.join(d, 'ran-marker.txt')) && fs.readFileSync(path.join(d, 'ran-marker.txt'), 'utf8') === 'x-modified-ran',
     '跑的是工作区当前版测试（x-modified 版用例落了标记文件）')
-  assertTrue(cap.some(m => m.includes('已配置 modules')), '0 命中诊断仍输出（兜底不吞黑箱可见性）')
+  assertTrue(cap.some(m => m.includes('已退役')), 'modules 退役指引仍输出（黑箱可见性）')
   fs.rmSync(d, { recursive: true, force: true })
 }
 
 console.log('\n=== ② dev server 端口竞争预警 + EADDRINUSE 鉴别（坑 verify-devserver-port-race）===\n')
 {
-  // 2a：起一个真实监听服务占端口，测试命令带 --port → 实测前 warn 资源竞争
+  // 2a（2026-09-26-dynamic-test-inference 迁移）：modules 退役后 EADDRINUSE 鉴别经动态批触达
+  // ——变更的测试文件本身监听被占端口并打 EADDRINUSE 输出退出 1，runOneModule 判 failed 且
+  // reason 附资源竞争鉴别提示（原 fixtures 经 modules.web.test 命令触达同一防线）。
   const d = fs.mkdtempSync(path.join(os.tmpdir(), 'portrace-'))
   const specBase = path.join(d, '.sillyspec')
   fs.mkdirSync(specBase, { recursive: true })
+  fs.writeFileSync(path.join(specBase, 'local.yaml'), 'commands:\n  test: node -e "process.exit(0)"\n')
   const server = createServer()
   await new Promise(res => server.listen(0, '127.0.0.1', res))
   const port = server.address().port
-  // 测试命令：探测会占 ~1.5s（端口试连 timeout），为省时直接构造占用命中（node 起服务进程保持监听）
-  fs.writeFileSync(path.join(specBase, 'local.yaml'),
-    `commands:\n  test: node -e "process.exit(0)"\n\nmodules:\n  web: { path: "web/", test: "node -e \\"const n=require('net');const s=n.createServer();s.listen(${port});setTimeout(()=>{console.error('Error: listen EADDRINUSE :::${port}');process.exit(1)},300)\\"" }\n\ntest_strategy: module\n`)
-  fs.mkdirSync(path.join(d, 'web'), { recursive: true })
-  fs.writeFileSync(path.join(d, 'web', 'a.txt'), 'x') // 无 git 仓 → diff 不可用？需要 git
   sh('git init -q -b main', d)
   sh('git config user.email t@t && git config user.name t', d)
+  fs.mkdirSync(path.join(d, 'test'), { recursive: true })
+  fs.writeFileSync(path.join(d, 'test', 'port-race.test.mjs'), "import { test } from 'node:test'\ntest('p', () => {})\n")
   fs.writeFileSync(path.join(d, 'base.txt'), 'x\n')
   sh('git add -A && git commit -qm base', d)
-  fs.writeFileSync(path.join(d, 'web', 'a.txt'), 'changed\n') // 未提交 → 命中 web 模块
+  // 变更的测试文件：起服占已占端口 → EADDRINUSE 输出 + 退出 1（node --test 报为失败用例）
+  fs.writeFileSync(path.join(d, 'test', 'port-race.test.mjs'),
+    `import { createServer } from 'node:net'\nimport { test } from 'node:test'\ntest('port-race', () => new Promise((resolve, reject) => {\n  const s = createServer()\n  s.once('error', (e) => { console.error('Error: listen EADDRINUSE :::${port}'); reject(e) })\n  s.listen(${port}, '127.0.0.1', () => resolve())\n}))\n`)
 
   const cap = []
   const ow = console.warn, ol = console.log
@@ -147,7 +151,7 @@ console.log('\n=== ② dev server 端口竞争预警 + EADDRINUSE 鉴别（坑 v
     r = runVerifyTestCheck({ cwd: d, specBase, changeName: 'pr' })
   } finally { console.warn = ow; console.log = ol }
   server.close()
-  assertTrue(r.status === 'failed', `端口被占 → 模块测试 failed（实得 ${r.status}）`)
+  assertTrue(r.status === 'failed', `端口被占 → 动态批测试 failed（实得 ${r.status}）`)
   assertTrue((r.reason || '') + cap.join(' ').includes('EADDRINUSE'), '失败 reason 含 EADDRINUSE 信号')
   assertTrue(((r.reason || '') + cap.join(' ')).includes('资源竞争') || ((r.reason || '') + cap.join(' ')).includes('dev server'),
     '输出明示「资源竞争/dev server」鉴别——勿误报代码 FAIL')

@@ -42,7 +42,7 @@ console.log('\n--- 1. LOCAL_YAML_SCHEMA 结构健全 ---')
   assert(keys.length >= 12, `至少 12 个键（实际 ${keys.length}）`)
   for (const k of keys) {
     assert(typeof k.path === 'string' && k.path.length > 0, `键 path 非空：${k.path}`)
-    assert(['live', 'declared'].includes(k.status), `键 status 合法：${k.path}=${k.status}`)
+    assert(['live', 'declared', 'deprecated'].includes(k.status), `键 status 合法：${k.path}=${k.status}`)
     assert(Array.isArray(k.readers), `键 readers 是数组：${k.path}`)
     assert(typeof k.desc === 'string' && k.desc.length > 0, `键 desc 非空：${k.path}`)
   }

@@ -14,7 +14,7 @@
  * 风格：自研 assert（与 machine-interface.test.mjs 同），tmp fixture 不引入测试框架。
  */
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
 
@@ -54,6 +54,18 @@ function makeGateFixture({ yaml } = {}) {
     execFileSync('git', args, { cwd: proj, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
   }
   return { proj, specBase }
+}
+
+// 嵌套 test-runner 防污染（实测注：内层 node --test 继承 NODE_TEST_CONTEXT 静默不跑）
+delete process.env.NODE_TEST_CONTEXT
+
+/** 落盘真实测试文件（2026-09-26-dynamic-test-inference 迁移：动态子集按变更测试文件实测，
+ * 原 fixtures 经 commands.test 全量命令触达） */
+function writeTestFile(proj, rel, pass) {
+  mkdirSync(join(proj, dirname(rel)), { recursive: true })
+  const okCase = "import { test } from 'node:test'" + '\n' + "test('ok', () => {})" + '\n'
+  const boomCase = "import { test } from 'node:test'" + '\n' + "import assert from 'node:assert/strict'" + '\n' + "test('boom', () => { assert.fail('boom') })" + '\n'
+  writeFileSync(join(proj, rel), pass ? okCase : boomCase)
 }
 
 const SRC_FILES = ['src/index.js']
@@ -122,7 +134,8 @@ console.log('--- 5. 触及 src + test/lint 全过 ---')
   const { proj, specBase } = makeGateFixture({
     yaml: 'commands:\n  test: \'node -e "process.exit(0)"\'\n  lint: \'node -e "process.exit(0)"\'\n',
   })
-  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: SRC_FILES })
+  writeTestFile(proj, 'test/ok.test.mjs', true)
+  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [...SRC_FILES, 'test/ok.test.mjs'] })
   assert(gate.action === 'pass', `全过 → pass（实际 ${gate.action}）`)
   assert(gate.test.status === 'passed' && gate.lint.status === 'passed', 'test/lint 均 passed')
   assert(typeof gate.test.durationMs === 'number', 'test 记录 durationMs')
@@ -134,7 +147,8 @@ console.log('--- 6. 触及 src + test 失败（阻断语义）---')
   const { proj, specBase } = makeGateFixture({
     yaml: 'commands:\n  test: \'node -e "process.exit(1)"\'\n  lint: \'node -e "process.exit(0)"\'\n',
   })
-  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: SRC_FILES })
+  writeTestFile(proj, 'test/boom.test.mjs', false)
+  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [...SRC_FILES, 'test/boom.test.mjs'] })
   assert(gate.action === 'fail', `test 失败 → fail（实际 ${gate.action}）`)
   assert(gate.failed.includes('test') && !gate.failed.includes('lint'), `failed 精确含 test（实际 ${JSON.stringify(gate.failed)}）`)
   assert(gate.test.status === 'failed' && typeof gate.test.outputTail === 'string', 'test result failed + outputTail 供定位')
@@ -189,8 +203,9 @@ console.log('--- 9. 倒推 B 兜底：声明边界触及 src → 实测 ---')
   const { proj, specBase } = makeGateFixture({
     yaml: 'commands:\n  test: \'node -e "process.exit(0)"\'\n  lint: \'node -e "process.exit(0)"\'\n',
   })
-  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [], declaredFiles: SRC_FILES })
-  assert(gate.action === 'pass', `声明边界触及 src → 实测 pass（实际 ${gate.action}）`)
+  writeTestFile(proj, 'test/ok.test.mjs', true)
+  const gate = await runQuickTestLintGate({ cwd: proj, specBase, changedFiles: [], declaredFiles: [...SRC_FILES, 'test/ok.test.mjs'] })
+  assert(gate.action === 'pass', `声明边界触及 src+测试 → 实测 pass（实际 ${gate.action}）`)
   assert(gate.test.status === 'passed', '兜底口径下 test 真实执行')
 }
 
