@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-governance-autopilot",
+  "reviewer": "independent-reviewer",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "P2",
+      "title": "（上轮遗留，留档不阻断）auto-bind 证据源 verify-runs 跨变更无作用域",
+      "evidence": "自动补全从 join(resolveRuntimeRoot(...), 'verify-runs') 取最新 3 个 run 目录的 test-result.json（src/flow.js:690-705），不校验 run 归属变更——并行变更刚跑过测试时，他变更的测试文件路径会被自动填进本变更 requirements.md 绑定槽（agent 可覆盖，但默认值失真）。本次修复未触及该面，维持上轮 P2 裁决。",
+      "location": "src/flow.js:690-705",
+      "reviewer": "independent-reviewer",
+      "dimensionNotes": "证据源作用域缺失；非阻断，随后续变更收口",
+      "suggestion": "test-result.json 若含 change 字段则按当前变更过滤；否则在 run 目录名/内容中落 change 归属后再取。",
+      "reviewedAt": "2026-09-26T09:50:00Z"
+    },
+    {
+      "id": "F2",
+      "severity": "P3",
+      "title": "（上轮遗留，留档不阻断）requirements.md 残留 FR-05/FR-06 骨架槽",
+      "evidence": "本变更 requirements.md 尾部存在 FR-05/FR-06 两个「不适用：机器摘录拆行残段」槽——机器起草时成功标准摘录拆行残段被当成独立 FR 发槽。槽已作答（不适用+理由），门语义合规，仅为骨架保留字/残段噪音。",
+      "location": ".sillyspec/changes/2026-09-26-governance-autopilot/requirements.md",
+      "reviewer": "independent-reviewer",
+      "dimensionNotes": "骨架残段；已答合规，非阻断",
+      "suggestion": "draftRequirements 摘录时过滤拆行残段（如空标准/超短 token），或归档前手工清槽。",
+      "reviewedAt": "2026-09-26T09:50:00Z"
+    },
+    {
+      "id": "F3",
+      "severity": "P3",
+      "title": "（新观察，非阻断）_autoFilled===0 门条件在混合畸形形态下放行残余空槽",
+      "evidence": "收口门为 if (rb.applicable && rb.emptySlots.length > 0 && _autoFilled === 0)（src/flow.js:726）——当 ≥1 槽被自动补全（_autoFilled>0）而另一槽为畸形形态（槽注释行后紧跟非空非内容行如普通注释/标题，或槽注释为文件末行；逐行扫描判「下一行空」才填，verify 判「到下个注释/标题前无内容行为空」，两语义在此畸形形态分歧）时，重检 rb.emptySlots 仍非空但拒收分支被 _autoFilled>0 短路，空槽过门。旧正则版 _autoFilled 恒 0（P1 根因）故该旁路原为死代码，本次修复使其激活。实测：纯畸形单槽场景 n=0 仍走拒收（正常）；需「≥1 可填槽 + ≥1 畸形槽」混合才触发，机器模板不可能产出（槽注释后必有空行），仅 agent 手工破坏后可达，失败方向是门变松而非数据损坏。附：CRLF 文件下插入行不带 \\r 产生混合行尾，verify/extract 均先归一化解析，纯外观。",
+      "location": "src/flow.js:711-717, src/flow.js:726",
+      "reviewer": "independent-reviewer",
+      "dimensionNotes": "畸形手改输入下门强度弱化；正常/机器形态全覆盖验证通过",
+      "suggestion": "门条件去掉 _autoFilled === 0（补全后 rb 已重检，emptySlots>0 即拒收语义更严且更简）。",
+      "reviewedAt": "2026-09-26T09:50:00Z"
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "title": "（新观察，非阻断）修复轮 task-07 未登记 tasks.md",
+      "evidence": "修复提交 aff28f38 提交信息携带 (task-07) token，但变更 tasks.md 仅有 task-01..06 行——哨兵 token 证据面无对应可勾条目（不构成假证据，仅漂移）。另 flow-state.yaml gate_summary 记录于 09:31、先于 17:42 的修复提交，属评审-修复-复评流程的正常时序，本评审已独立实测补齐证据（见 dimensionNotes 回归面）。",
+      "location": ".sillyspec/changes/2026-09-26-governance-autopilot/tasks.md",
+      "reviewer": "independent-reviewer",
+      "dimensionNotes": "任务登记面与提交 token 漂移；无功能影响",
+      "suggestion": "评审清偿轮在 tasks.md 追加对应 task-NN 行再勾，或提交信息复用既有 task 编号。",
+      "reviewedAt": "2026-09-26T09:50:00Z"
+    }
+  ],
+  "dimensionNotes": {
+    "P1 修复正确性（核心裁决）": "PASS。上轮 P1 根因自修复前源码（28619d09）核实：verifyRequirementBindings 的 emptySlots 条目为 AGENT:(测试绑定\\S+) 捕获的「测试绑定FR-NN」token，该 token 在机器稿中恒处注释行内、后随空格，旧正则 (token)(\\n\\n|\\n|$) 要求 token 紧邻换行——结构上永不命中（4/4），与转义无关。新逐行扫描（src/flow.js:711-717）不依赖槽文本、不再从文件内容构造 RegExp，注入面消除。功能级实证（非转抄：从 src/flow.js 切片 711-717 行以 new Function 原样字节执行已发布循环，对真 draftAll 产物）：A) 真机器稿全空槽 2/2 命中、插入位=槽注释紧邻下一空行、write 后 verifyRequirementBindings 复检零空槽、FR 区 GWT 骨架零触碰；B) agent 已填槽（注释后非空行）不被覆盖（n=1，原内容逐字节保留）；C) 本变更真实 requirements.md 形态——原样全已答时零触碰（n=0、文件逐字节不变），全槽清空后 6/6 命中并清零空槽；D) CRLF 行尾仍 2/2 命中且复检通过。附带修复确认：测试结果路径归一化 /\\\\\\\\/g→/\\\\/g（旧版只替换连续双反斜杠，Windows 单反斜杠路径漏归一——同块潜在缺陷一并清偿，POSIX 无反斜杠无影响）。",
+    "回归面（FR-01/02/04 未破坏）": "PASS。node --test test/governance-autopilot.test.mjs test/flow-protocol.test.mjs test/flow-draft.test.mjs → 35/35 绿（与绑定声明一致）；npm run test:core（local.yaml commands.test）→ 208/208 绿；npm run lint → 825 文件通过。上轮已 PASS 的 FR-01（GWT 骨架预填，用例①实跑）、FR-02（自动勾选接线钉）、FR-04（向后兼容，用例⑩）均复跑通过。",
+    "下游消费面": "PASS。自动插入的「、」连接绑定行经 extractRequirementBindings 实测可解析为逐文件 tests 数组（a/b/c 三路径独立成条，、 不入 TEST_PATH_TOKEN_RE 字符类），distill→writeChangeTrace 消费链完好；flow done 后 agent 仍可整行覆盖（插入位独占一行）。",
+    "修复面纪律": "PASS。修复提交 aff28f38 仅触 src/flow.js（+9/-10），无搭车突变；change 自有工件（requirements/design/tasks/flow-state）未被他动；工作树其余未暂存改动属并行会话，不在本变更 patch 面（baseline 01659af9..HEAD=28619d09+aff28f38）。",
+    "上轮遗留处置": "P2（verify-runs 跨变更无作用域，F1）与 P3（骨架保留字/残段，F2）均复核在案且本次未恶化，按交接裁决留档不阻断。"
+  },
+  "reviewedAt": "2026-09-26T09:50:00Z"
+}

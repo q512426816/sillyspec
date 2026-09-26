@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-governance-autopilot",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-governance-autopilot:flow:FR-01",
+      "tests": [
+        "test/governance-autopilot.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-governance-autopilot"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-governance-autopilot:flow:FR-02",
+      "tests": [
+        "test/governance-autopilot.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-governance-autopilot"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-governance-autopilot:flow:FR-03",
+      "tests": [
+        "test/governance-autopilot.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-governance-autopilot"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-26-governance-autopilot:flow:FR-04",
+      "tests": [
+        "test/flow-draft.test.mjs",
+        "test/flow-protocol.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-governance-autopilot"
+    }
+  ]
+}
