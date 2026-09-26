@@ -1103,3 +1103,66 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：5d81f5526cee5f3d2da8a9ffd7443e5273cd34a5
 理由：最大风险=补录样本的域路由落 unmapped（治理类变更无模块域）——接受：unmapped 域已有 INDEX 路由行兜底，教训按关键词可命中（三组关键词实测命中）；后续若 unmapped 治理可迁移。死路：回溯批量补录全部历史断链条目——归档件是冻结审计面不回写，历史教训按需逐条重放（幂等），弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-review-unsupervised-exit
+锚点：未记录
+最近确认：0675d7d76cbde1b21ef55d24dbe8f135048c78c0
+理由：最大风险=豁免被滥用（有派发能力的环境也写声明逃避评审）——对抗面：声明是显式自曝文件随归档公开（审计可见）+遥测可观测豁免率（异常升高可查）+指引明示「有派发能力时豁免不适用」；不做密码学强验（agent 环境能力 CLI 无法机器判定——诚实暴露优于伪检测）。死路：CLI 检测派发能力（harness 工具集对 CLI 不可见）——伪检测比声明制更假，弃；死路：豁免凭据用 env/flag（不落盘不留痕=可静默滥用）——文件制随归档，弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-residual-runner-parity
+锚点：未记录
+最近确认：0c507e2ebe90ac31d847cd319669d4a9b13a3f91
+理由：最大风险=jsxRunner 提取的命令串形态不匹配项目实际（cd 链/嵌套 pnpm exec）——提取不到走 skip 批（安全侧：转办不假跑），提取到但命令错会 failed 由 known_failures/归属鉴定兜（与 py 侧推断同风险面同兜法）。死路：CLI 主动探测项目 vitest 配置（读 vite.config/tsconfig 判项目类型）——探测面无界且易过时，命令串推断+skip 转办是诚实分界，弃；死路：JSX 批也 node --test 顶着 known_failures——制造恒败段正是要修的病，弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-reconcile-source-isolation
+锚点：未记录
+最近确认：3eb3bfbff3b9962ef5430bd6c75ea299bfda9df5
+理由：最大风险=meta.branch 指向的分支已被删/移（rev-parse 验证挡住→静默省略回降级，不误锚）；meta.changeName 键与实际变更不匹配（worktree 建立时写入的键与 change 名同源——键漂移时第三候选同样落空回到现状，无恶化面）。死路：让 agent 在对账前「重建分支」的指引——这正是 R18 死循环的形态（4 种面重建 matched=0）；诊断给的出路是登记/恢复既有 ref 而非重建内容，弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-task-review-retire
+锚点：未记录
+最近确认：24260c180b447ccfdf55ae4feb4e0b01fea8dfa5
+理由：最大风险：手动勾选引入假勾面（agent 未做即勾/顺手全勾）。缓解：detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验仍在 execute 收口跑（勾了但无 base..HEAD diff 证据→批量完成不成立、阻塞暴露）+ verify 阶段测试对账门禁不变（实测失败阻断收口）+ verify 逐项检查任务步仍只读对照勾选态。放弃的方案：①只加豁免不退役——前置变更已做，R18 实证豁免后仍留 5/15 形式拦截摩擦且「可豁免的门」诱导表演；②连 task-review.js 模块一起删——放弃，历史归档 doctor/回放兼容读侧依赖其导出（validateTaskReviews 等），review write/backfill-reviews 命令仍引用；③保留 Task Review 门但只对 independent tier 生效——放弃，tier 分级在 Stage Review 层已有，任务粒度无独立评审者供给时该门只剩形式校验（R18 实证）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-thin-check-cadence
+锚点：未记录
+最近确认：d18d7c784b06ea4844483bdc6d8b8bec9ca0516e
+理由：最大风险=误报施压：两个任务真同时完成（一次提交带两个 task token）后一拍勾两格会被提示——接受（advisory 不阻断，且同拍双完成本就应分两次勾，提示方向正确）。放弃的方案：①收口硬门拒收一把全勾——节奏是习惯非造假主张，硬门会把合法快速变更拦死，与「任务勾选缺失」同为 advisory 的既有裁决一致；②加「贴近收口时刻」时间窗过滤——引入窗口参数且窗口内外行为不一致，简化为「任意单拍 ≥2 格」单一判据；③顺手改 watcher per-change 锁修观测盲区——超出本变更范围（本变更只解决「有观测时的行为矫正」，盲区另立变更）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-tick-loop-nudge
+锚点：未记录
+最近确认：195b55fe72328025bfe6636a5bd7bdba7da5e9b3
+理由：最大风险=提醒噪音化（agent 频繁 status 每次都刷同一行）——限定②阶段+滞后+有提交三条件，①阶段/勾齐后静默；R20 重跑可观测行为是否迁移。死路：把一把勾改成阻断（哨兵拒收）——token 证据已验全勾为真（R19 实证勾选滞后≠假勾），阻断只制造 amend 循环（R18 同款摩擦），弃；死路：CLI 侧自动勾（据 wt-commit 事件反推）——自动勾消解 agent 的 ownership（OS 实证自拆清单边勾是自然行为），且反推映射脆，弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-watcher-timeline
+锚点：未记录
+最近确认：bc7b8a77942378298c34d2199e2624a47a9afd95
+理由：最大风险=推断面的诚实性：勾选时刻是顺序推断（事件不记 id）、描述行继承机器稿 60 字截断、提交锚依赖仓内 hash 可达（合并重定基后失联降级只显 hash）。对策是显式标注：表头「≈」+ 尾注列数据源与盲区（观测起点≠诞生时刻、单飞锁盲窗）——宁可标注粗糙也不冒充精确。放弃的方案：①改 watcher 事件流带 checkedTasks id 明细——改写入面格式是侵入性变更，且历史流已定格无法回填，收益仅推断精度；②从 DB progress 库取阶段时间——thin 变更状态不落 DB（红线），无数据可取；③agent 干活时自述留痕——协议负担，违背 thin 立身之本（那是完整流程 --output 的能力面）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-watcher-timeline-p2
+锚点：未记录
+最近确认：6328ddda2229a76c82273efe7743b8efd9ca92cc
+理由：最大风险=语义修正引发回归——主变更有用例钉住旧「尾部标 broken」行为，需同步改期望（该用例钉的正是误标行为，改期望即清偿本体）。放弃的方案：inferFlipTimes 直接收 tasks 勾选态做尾部判断——把渲染关注度混进纯计数函数层次更脏；按层分责（计数函数管链、渲染层管已勾缺时刻）更清晰。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-binding-anchor-fidelity
+锚点：未记录
+最近确认：3d39f6337998662fb497e633079ac4986287460c
+理由：- 最大风险＝锚点后缀漏进文件面消费（残差实测会拿不存在路径去跑、watcher 归属匹配失联、rot 覆盖误判 skip）——已 grep 全量枚举 `.tests` 消费点逐一适配，新测试对每个消费点各钉一条回归。 - 次风险＝裸名解析误绑（basename 在仓内多处出现）——仅唯一命中才解析，零命中/多命中原样保留，dangling 校验自然暴露。 - 死路：用例锚做独立字段（cases:）——test-trace schema、FR 机器子块、md 解析三处格式连动且存量数据双形态并存，复杂度不成比例，弃。 - 死路：回写历史归档 test-trace 补锚——归档是冻结审计面不回写；新变更提取即生效，旧数据维持文件级（诚实），弃。

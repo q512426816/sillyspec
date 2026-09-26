@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-binding-anchor-fidelity",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "锚文本可含竖线，与 FR 机器子块 tests 的 | 分隔符冲突——md 读写 round-trip 产生幻影条目",
+      "evidence": "CASE_ANCHOR_RE 的「X」形（「[^」\\n]+」）、> name 形、#id 形字符类均不排除 |，故可捕获如「test/foo.test.mjs > a|b」的条目；而 FR 机器子块以 tests: a | b 序列化（test-bindings.js:177 join(' | ')）并按 v.split('|') 回读（test-bindings.js:165）——带 | 锚条目写后再读会裂成 ['test/foo.test.mjs > a','b'] 两条幻影条目，破坏「只摘不译」原形且污染知识面。触发需用例名含 |（少见但 jest/vitest 用例名合法），未被任何声明边界覆盖，也无测试钉住",
+      "location": "src/flow-draft.js:268 + src/test-bindings.js:165,177"
+    },
+    {
+      "severity": "P3",
+      "title": "design 风险槽高估回归钉面：「每个消费点各钉一条回归」不实",
+      "evidence": "design.md 槽4 称已对每个 .tests 消费点在新测试中各钉一条回归，但 test/flow-draft-binding-extract.test.mjs 仅钉 testAnchorFile 单元（④）、resolveTraceResidual（⑥）、resolveTestFileOwners（⑦）；covHit（fr-index.js:878）、rotSuspectFlow（flow.js:235）、--unbind 匹配（index.js:3072）三处适配无专属回归用例（代码经 grep 核实已正确接入 testAnchorFile，仅缺钉）。requirements FR-05 绑定作答本身只引 ④⑥⑦，是诚实的；失真仅在 design 措辞",
+      "location": ".sillyspec/changes/2026-09-26-binding-anchor-fidelity/design.md:54 与 test/flow-draft-binding-extract.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "orphanAccRef 函数体被无关格式突变（搭车改动）",
+      "evidence": "diff 将 orphanAccRef 的两行函数体合并到签名行（语义等价、纯格式变化），与本变更目标无关且未在任何文档声明；lint（check-syntax）可过，无行为影响，但属冻结 patch 中的无依据突变",
+      "location": "src/test-bindings.js:80"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T16:08:27+08:00"
+}

@@ -1,0 +1,698 @@
+diff --git a/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/design.md b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/design.md
+new file mode 100644
+index 00000000..4a394505
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/design.md
+@@ -0,0 +1,51 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:53:32.794Z
++---
++# 设计记录（Design Record）— 2026-09-26-binding-anchor-fidelity
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++- 提取侧（src/flow-draft.js extractRequirementBindings）：路径 token 仍全局定位（兼容散文引用），新增「邻接用例锚捕获」——路径后紧邻窗口（到下一路径 token 或行尾）里识别四形态用例锚（「…」＋可选 组/用例 后缀、#…、::…、> …），「：」后视为描述不捕；tests 条目从纯路径扩为「路径＋锚」。
++- 路径解析：裸文件名/路径段先按仓根存在性直取，不存在则仓内扫描（排除 node_modules/.git/.sillyspec 等）做后缀/基名唯一命中解析成项目相对全路径；无唯一命中原样保留（dangling 面自然暴露）。仓根从 changeDir 上两级推导，失效回退 cwd。
++- 消费侧（src/test-bindings.js 新导出 testAnchorFile 统一剥锚）：resolveTraceResidual（残差实测文件面）、resolveTestFileOwners（watcher 归属匹配）、fr-index covHit 与 flow.js rotSuspectFlow 的覆盖集、index.js --unbind 的 tests 匹配，共 5 处按文件路径取值点全部走剥锚；展示面（test-trace.json、FR 机器子块、tests 视图）保持完整锚点不剥。
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++- extractRequirementBindings 产出的 row.tests 条目语义扩展：`<项目相对路径>` 或 `<路径><用例锚>`（test/foo.test.mjs「X」组 / test/foo.test.mjs#x / test/foo.test.mjs::x / test/foo.test.mjs > x）——存书写原形（只摘不译），「不适用」跳过、非测试路径过滤、去重排序等既有不变量不变。
++- 新导出 testAnchorFile(entry) → string：剥用例锚取文件路径（无锚原样返回）；需要文件路径的消费方统一走它。
++- test-trace.json 的 tests 数组、knowledge/fr 机器子块 `tests:` 行（| 分隔）自此可携带锚点——旧纯路径条目双向兼容（testAnchorFile 幂等）。
++- 书写面契约：绑定槽模板（flow-draft.js 两处）与 flow 收口指引文案收紧为「项目相对全路径＋用例名」。
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：路径与用例锚的配对以「路径后紧邻、到下一路径 token 为界」的窗口判定——多文件同行时窗口切分确定；用例名写在路径前等非邻接形态不捕获（邻接是明确书写约定，宁漏勿误，漏捕只降级回文件级）。
++2. 并发写：提取只发生在 flow done distill 单点；test-trace 写入与 FR 子块 upsert 既有幂等；本变更不引入新写点与时序。
++3. 切换/生命周期：仓内扫描索引是单次提取调用内的闭包缓存，无跨调用/跨进程状态；中断重入后 extractRequirementBindings 幂等重放同一 requirements.md。
++4. 作用域：仓根推导自 changeDir 目录结构（<root>/.sillyspec/changes/<名>），主仓/worktree 同构；推导失效回退 process.cwd()。跨仓条目（repoKey: 前缀）不在本路径面，不串台；同名文件跨仓歧义时唯一命中规则天然不解析。
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++- 最大风险＝锚点后缀漏进文件面消费（残差实测会拿不存在路径去跑、watcher 归属匹配失联、rot 覆盖误判 skip）——已 grep 全量枚举 `.tests` 消费点逐一适配，新测试对每个消费点各钉一条回归。
++- 次风险＝裸名解析误绑（basename 在仓内多处出现）——仅唯一命中才解析，零命中/多命中原样保留，dangling 校验自然暴露。
++- 死路：用例锚做独立字段（cases:）——test-trace schema、FR 机器子块、md 解析三处格式连动且存量数据双形态并存，复杂度不成比例，弃。
++- 死路：回写历史归档 test-trace 补锚——归档是冻结审计面不回写；新变更提取即生效，旧数据维持文件级（诚实），弃。
+\ No newline at end of file
+diff --git a/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/flow-state.yaml b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/flow-state.yaml
+new file mode 100644
+index 00000000..a6f43ccd
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/flow-state.yaml
+@@ -0,0 +1,16 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++  patch: pending
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 6328ddda2229a76c82273efe7743b8efd9ca92cc
++updatedAt: '2026-09-26T08:11:37.339Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js19)（14.9s）
++  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-cqPOMm\.sillyspec\.runtime\verify-runs\20260926081053\test-result.json｜lint:
++  passed ← npm run lint（41.3s）｜门文件 16 个
++
+diff --git a/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/proposal.md b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/proposal.md
+new file mode 100644
+index 00000000..ceda0b52
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/proposal.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:53:32.794Z
++---
++# 提案书（Proposal）— 2026-09-26-binding-anchor-fidelity
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:1f7e1d0451e60ce767dc27af8d8ebe4e42ab855b57eb58f6860af3a75c9d3885:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++任务原话转写：FR 测试绑定提取两缺陷：①extractRequirementBindings 只认路径 token——绑定槽里「路径「用例」组」的方法级引用被截成文件级（坑 test-trace-extract-truncates-case-suffix），知识面永远到不了方法级；②裸文件名/残缺路径段不做解析，绑定行路径在仓里找不到文件，测试核对麻烦。修提取保真＋全路径解析，下游文件面消费不被锚点后缀破坏。
++
++成功标准：
++- 绑定槽路径后紧邻的用例锚（「…」组 / #… / ::… / > …四形态）完整进 test-trace tests 行；「：」后的描述文字不误捕
++- 裸文件名或路径段解析为项目相对全路径（存在性优先＋仓内唯一后缀命中；无唯一命中原样保留）
++- 消费面（残差实测 resolveTraceResidual / watcher 归属 resolveTestFileOwners / rot 覆盖判定 covHit 与 rotSuspectFlow）按文件路径取值不受锚点后缀破坏
++- 绑定槽模板与 flow 收口指引同步收紧书写约定（项目相对全路径＋用例名）
++- npm run test:core 与 npm run lint 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:c20171ccdf3f1cca4f445220650e0c0c23bcb54c0ced06695b1c83b7d0479e27:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 绑定槽路径后紧邻的用例锚（「…」组 / #… / ::… / > …四形态）完整进 test-trace tests 行
++2. 「：」后的描述文字不误捕
++3. 裸文件名或路径段解析为项目相对全路径（存在性优先＋仓内唯一后缀命中
++4. 无唯一命中原样保留）
++5. 消费面（残差实测 resolveTraceResidual / watcher 归属 resolveTestFileOwners / rot 覆盖判定 covHit 与 rotSuspectFlow）按文件路径取值不受锚点后缀破坏
++6. 绑定槽模板与 flow 收口指引同步收紧书写约定（项目相对全路径＋用例名）
++7. npm run test:core 与 npm run lint 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:b9b4815a16f65864e0b70167557204d73ae77155c4025257b46bbd410072a649:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-binding-anchor-fidelity 留痕重锚 -->
++1. 绑定槽路径后紧邻的用例锚（「…」组 / #… / ::… / > …四形态）完整进 test-trace tests 行
++2. 「：」后的描述文字不误捕
++3. 裸文件名或路径段解析为项目相对全路径（存在性优先＋仓内唯一后缀命中
++4. 无唯一命中原样保留）
++5. 消费面（残差实测 resolveTraceResidual / watcher 归属 resolveTestFileOwners / rot 覆盖判定 covHit 与 rotSuspectFlow）按文件路径取值不受锚点后缀破坏
++6. 绑定槽模板与 flow 收口指引同步收紧书写约定（项目相对全路径＋用例名）
++7. npm run test:core 与 npm run lint 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/requirements.md b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/requirements.md
+new file mode 100644
+index 00000000..53f6426f
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/requirements.md
+@@ -0,0 +1,57 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:53:32.794Z
++---
++# 需求规格（Requirements）— 2026-09-26-binding-anchor-fidelity
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 绑定槽路径邻接用例锚提取保真（四形态）
++- Given requirements 绑定槽作答含测试路径及其后紧邻的用例锚（「X」＋可选 组/用例 后缀、#id、::id、> name 四形态任一）；When flow done distill 执行 extractRequirementBindings；Then test-trace 行 tests 条目完整携带「路径＋用例锚」书写原形（只摘不译），不再截成纯文件级
++### FR-02: 描述文字不误捕（降级语义）
++- Given 路径后直接跟「：」引导的描述、或用例名与路径之间隔有其他文字（非邻接）；When 提取执行；Then 不捕任何锚——条目诚实降级为文件级（宁漏勿误）
++### FR-03: 裸文件名/路径段解析项目相对全路径
++- Given 作答引用裸文件名或残缺路径段（仓内该文件实际存在）；When 提取执行；Then 条目解析为项目相对全路径——直取存在优先，否则仓内扫描（排除 node_modules/.git/治理面）取后缀/基名唯一命中
++### FR-04: 歧义与未命中原样保留
++- Given 裸名/路径段在仓内零命中或多个命中；When 提取执行；Then 原样保留不猜（悬空由 dangling 校验自然暴露）
++### FR-05: 文件面消费点统一剥锚
++- Given tests 条目携带用例锚；When 残差实测（resolveTraceResidual）、watcher 归属（resolveTestFileOwners）、rot 覆盖判定（covHit/rotSuspectFlow）、tests --unbind 匹配消费；Then 一律经 testAnchorFile 剥锚按文件路径取值——锚点后缀不产生悬空/失联/误判；展示面（test-trace/FR 机器子块/tests 视图）保持完整锚点
++### FR-06: 书写约定收紧
++- Given 新变更的绑定槽模板与 flow 收口指引；Then 文案要求「项目相对全路径＋用例名」（如 test/foo.test.mjs「用例组」/#用例），不再接受裸文件名书写引导
++### FR-07: 回归与门禁
++- Given 本变更全部交付；When 新测试与既有锁定套件（flow-draft/test-bindings/verify-trace-residual/residual-runner-parity）及 test:core/lint 门禁运行；Then 全绿（新测试文件纳入 test:core 清单）
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: 绑定槽路径后紧邻的用例锚（「…」组 / #… / ::… / > …四形态）完整进 test-trace tests 行
++FR-02: 「：」后的描述文字不误捕
++FR-03: 裸文件名或路径段解析为项目相对全路径（存在性优先＋仓内唯一后缀命中
++FR-04: 无唯一命中原样保留）
++FR-05: 消费面（残差实测 resolveTraceResidual / watcher 归属 resolveTestFileOwners / rot 覆盖判定 covHit 与 rotSuspectFlow）按文件路径取值不受锚点后缀破坏
++FR-06: 绑定槽模板与 flow 收口指引同步收紧书写约定（项目相对全路径＋用例名）
++FR-07: npm run test:core 与 npm run lint 全绿
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft-binding-extract.test.mjs#①
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft-binding-extract.test.mjs#①
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft-binding-extract.test.mjs#②
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft-binding-extract.test.mjs#②
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft-binding-extract.test.mjs#④；test/flow-draft-binding-extract.test.mjs#⑥；test/flow-draft-binding-extract.test.mjs#⑦
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：指引文案收紧无机器可验断言面；模板生成链路由既有 flow-draft.test.mjs 套件锁定不破
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft-binding-extract.test.mjs：套件整体（7 用例）＋test:core 208/lint 门禁亲测
+diff --git a/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/tasks.md b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/tasks.md
+new file mode 100644
+index 00000000..0bd213c7
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:53:32.795Z
++---
++# 任务注册表（Tasks）— 2026-09-26-binding-anchor-fidelity
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: extractRequirementBindings 提取保真——路径邻接用例锚四形态（「…」组 / #… / ::… / > …）进 tests 行，「：」后描述不误捕；裸文件名/路径段解析为项目相对全路径（存在性优先＋仓内唯一命中，歧义原样保留）
++- [x] task-02: test-bindings.js 新增 testAnchorFile 导出；文件面消费点适配——resolveTraceResidual / resolveTestFileOwners / covHit 与 rotSuspectFlow 覆盖集 / index.js --unbind 匹配
++- [x] task-03: 绑定槽模板（flow-draft.js 两处）与 flow 收口指引文案收紧（项目相对全路径＋用例名）
++- [x] task-04: test/flow-draft-binding-extract.test.mjs 新测试＋既有 flow-draft / test-bindings / verify-trace-residual / residual-runner-parity 套件全绿；npm run test:core 与 lint 全绿
+diff --git a/package.json b/package.json
+index bc1fb282..56695326 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index a9370fee..87d99e92 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -17,8 +17,8 @@
+  * verifyMarkers 三态拒收（标记缺失/哈希失配/手工重锚未审计）；flow amend-draft 是唯一留痕
+  * 修改通道（reanchorText 重锚 + ledger amendments 审计）。
+  */
+-import { existsSync, readFileSync, mkdirSync } from 'node:fs'
+-import { join } from 'node:path'
++import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
++import { join, dirname } from 'node:path'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks } from './machine-draft.js'
+ 
+@@ -185,7 +185,7 @@ function draftRequirements({ change, criteria, input }) {
+   const n = crit.length > 0 ? crit.length : 1
+   const bindingSlots = Array.from({ length: n }, (_, i) => {
+     const id = `FR-${String(i + 1).padStart(2, '0')}`
+-    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
++    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
+   }).join('\n\n')
+   const text = [
+     '---',
+@@ -260,11 +260,81 @@ export function verifyRequirementBindings({ changeDir }) {
+  * 从「测试绑定」槽提取绑定行（flow done distill 子步消费面 → writeChangeTrace →
+  * indexRequirements 归档提升铸全局）。锚=FR 局部编号（FR-01…，与机器 FR 序一致）；
+  * 「不适用」/无路径 token 的作答不产行；tests=作答文本里的测试文件路径（去重）。
++ *
++ * 2026-09-26-binding-anchor-fidelity：tests 条目从纯路径扩为「路径＋可选用例锚」——
++ * 用例锚只在路径 token 后的紧邻窗口（到下一路径 token 或文本尾）捕获，四形态任一：
++ * 「X」＋可选 组/用例 后缀、#id、::id、> name（书写原形只摘不译，「：」后是描述不捕）；
++ * 裸文件名/残缺路径段解析为项目相对全路径（直取存在优先，仓内唯一后缀命中，歧义原样保留）。
+  */
++const TEST_PATH_TOKEN_RE = /[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g
++// 用例锚四形态（「X」＋可选 组/用例 后缀、#id、::id、> name）——字符类排除竖线：锚条目
++// 在 FR 机器子块按 `tests: a | b` 序列化、split('|') 回读（评审 P2），带竖线的锚在竖线处
++// 截断（诚实降级），不产出裂格式幻影条目。
++const CASE_ANCHOR_RE = /^\s*(?:(#[^\s：；;，。\n|]+)|(::[^\s：；;，。\n|]+)|(>\s*[^：；;，。\n|]+)|(「[^」\n|]+」(?:组|用例)?))/
++const isTestPathToken = (p) => /(^|\/)(test|tests)\//.test(p) || /\.(test|spec)\./.test(p) || /_test\b/.test(p) || /_spec\b/.test(p)
++
++/** 仓内文件索引（懒建：首个直取未命中的 token 才扫描；单次提取调用内缓存）。
++ *  排除依赖/生成物/治理面目录（点目录全跳）；条目上限熔断防病态大仓。 */
++function buildRepoFileIndex(root) {
++  const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', 'out', 'target', 'vendor', 'venv', '.venv', '__pycache__'])
++  const files = []
++  const walk = (dir) => {
++    if (files.length >= 100000) return
++    let ents
++    try { ents = readdirSync(dir, { withFileTypes: true }) } catch { return }
++    ents.sort((a, b) => (a.name < b.name ? -1 : 1))
++    for (const e of ents) {
++      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(join(dir, e.name)) }
++      else files.push(join(dir, e.name))
++    }
++  }
++  walk(root)
++  return files
++}
++
++/** 裸文件名/路径段 → 项目相对全路径：直取命中原样返回；否则仓内唯一命中（rel===p /
++ *  rel 以 /p 结尾 / 基名相等）解析；零/多命中原样保留（诚实——dangling 校验自然暴露）。 */
++function resolveTestPathRel(p, root, indexRef) {
++  if (!root || existsSync(join(root, p))) return p
++  if (!indexRef.files) indexRef.files = buildRepoFileIndex(root)
++  const want = p.replace(/\\/g, '/')
++  const hits = []
++  for (const abs of indexRef.files) {
++    const rel = abs.slice(root.length + 1).replace(/\\/g, '/')
++    if (rel === want || rel.endsWith('/' + want) || rel.split('/').pop() === want) hits.push(rel)
++    if (hits.length > 1) break
++  }
++  return hits.length === 1 ? hits[0] : p
++}
++
++function extractTestAnchors(content, root, indexRef) {
++  const matches = [...content.matchAll(TEST_PATH_TOKEN_RE)]
++  const out = []
++  for (let i = 0; i < matches.length; i++) {
++    const m = matches[i]
++    const raw = m[0].replace(/^[./\\]+/, '').replace(/\\/g, '/')
++    if (!isTestPathToken(raw)) continue
++    const winEnd = i + 1 < matches.length ? matches[i + 1].index : content.length
++    const cm = content.slice(m.index + m[0].length, winEnd).match(CASE_ANCHOR_RE)
++    const file = resolveTestPathRel(raw, root, indexRef)
++    const anchor = cm ? cm[0].trim().replace(/^>\s*/, ' > ') : ''
++    out.push(file + anchor)
++  }
++  return [...new Set(out)]
++}
++
+ export function extractRequirementBindings({ changeDir, change }) {
+   const path = join(changeDir, 'requirements.md')
+   if (!existsSync(path)) return []
+   const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n')
++  // 仓根推导：changeDir 形如 <root>/.sillyspec/changes/<名>（主仓/worktree 同构，三层上溯）；
++  // 推导失效（目录形态异构）回退 cwd
++  let root = null
++  try {
++    const r = dirname(dirname(dirname(changeDir)))
++    root = existsSync(join(r, '.sillyspec')) ? r : process.cwd()
++  } catch { root = process.cwd() }
++  const indexRef = { files: null }
+   const rows = []
+   let current = null
+   let buf = []
+@@ -273,9 +343,7 @@ export function extractRequirementBindings({ changeDir, change }) {
+     const content = buf.join('\n').trim()
+     buf = []
+     if (!content || /^不适用/.test(content)) return
+-    const tests = [...new Set((content.match(/[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g) || [])
+-      .map((t) => t.replace(/^[./\\]+/, '').replace(/\\/g, '/')))]
+-      .filter((t) => /(^|\/)(test|tests)\//.test(t) || /\.(test|spec)\./.test(t) || /_test\b/.test(t) || /_spec\b/.test(t))
++    const tests = extractTestAnchors(content, root, indexRef)
+     if (tests.length === 0) return
+     rows.push({ anchor: current.replace(/^测试绑定/, ''), row_id: `${change}:flow:${current.replace(/^测试绑定/, '')}`, tests, reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: change })
+   }
+@@ -655,7 +723,7 @@ export function ensureBindingSlots({ changeDir }) {
+     if (!ids.includes(id)) ids.push(id)
+   }
+   const list = ids.length > 0 ? ids : ['FR-01']
+-  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
++  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
+   const section = `\n## 测试绑定（收编追加——每条 FR 至少一行：test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）\n\n${slots.join('\n\n')}\n`
+   writeAtomicSync(path, text.endsWith('\n') ? text + section : text + '\n' + section)
+   return { appended: true, slots: list.length }
+diff --git a/src/flow.js b/src/flow.js
+index e23793b6..52c69df2 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -217,6 +217,7 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+   const archiveRoot = join(specBase, 'changes', 'archive')
+   const { discoverModuleIndex } = await import('./decision-distill.js')
+   const { resolveTouchedDomains, readActiveFrDigest, markFrNeedsReview, frCoverageFiles } = await import('./fr-index.js')
++  const { testAnchorFile } = await import('./test-bindings.js')
+   const moduleIndex = discoverModuleIndex(knowledgeRoot)
+   const changed = (Array.isArray(files) ? files : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
+   // changeDir 仅为 design.md 兜底路由用（filesOverride 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
+@@ -230,7 +231,8 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+   let skip = 0
+   for (const f of frs) {
+     if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
+-    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings : [])])
++    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
++    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
+     if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); continue }
+     const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
+     if (hit) strong.push(f)
+@@ -684,7 +686,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     const rb = verifyRequirementBindings({ changeDir })
+     if (rb.applicable && rb.emptySlots.length > 0) {
+       console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
+-      console.error(`   每条 FR 至少一行：test 文件路径或用例名（distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
++      console.error(`   每条 FR 至少一行：测试文件项目相对全路径＋用例名（如 test/foo.test.mjs「用例组」/#用例；distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
+       reportMidFail('artifacts')
+       process.exit(1)
+     }
+diff --git a/src/fr-index.js b/src/fr-index.js
+index bf368c9a..77af3140 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -17,7 +17,7 @@
+  *     syncIndexRoutingLines/discoverModuleIndex），不复制实现。
+  */
+ 
+-import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines } from './test-bindings.js'
++import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile } from './test-bindings.js'
+ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+ import { join } from 'path';
+ import { writeAtomicSync } from './fs-atomic.js';
+@@ -874,7 +874,8 @@ export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
+   const byRef = {};
+   const dirty = new Set();
+   const covHit = (frChange, bindings, refCover) => {
+-    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings : [])]);
++    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
++    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings.map((b) => testAnchorFile(b)) : [])]);
+     if (frCov.size === 0 || refCover.length === 0) return false;
+     return [...frCov].some((p) => refCover.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/') || p.startsWith(c.endsWith('/') ? c : c + '/')));
+   };
+diff --git a/src/index.js b/src/index.js
+index df4cccb6..01932958 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3027,7 +3027,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+     case 'tests': {
+       const {
+         queryByAnchor, queryByChange, upsertFrBindings, upsertQlBindings,
+-        unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow,
++        unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow, testAnchorFile,
+       } = await import('./test-bindings.js')
+       const effDir = specDir ? dir : resolveEffectiveDir(dir)
+       const specBase = specDir || join(effDir, '.sillyspec')
+@@ -3068,7 +3068,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         if (ids.length === 0) { fail('--unbind 须配 --row-id <id> 或 --tests <p1,…>'); break }
+         if (/^FR-/.test(anchor)) {
+           const cur = queryByAnchor({ specBase, knowledgeRoot, anchor })
+-          const del = cur.filter(r => ids.includes(r.row_id) || (testsArg && ids.length === 1 && r.tests.some(t => ids.includes(t)))).map(r => r.row_id)
++          // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——给路径也能命中带锚行
++          const del = cur.filter(r => ids.includes(r.row_id) || (testsArg && ids.length === 1 && r.tests.some(t => ids.includes(t) || ids.includes(testAnchorFile(t))))).map(r => r.row_id)
+           if (del.length === 0) { fail(`未命中可解绑行（anchor=${anchor}，给=${ids.join(',')}）`); break }
+           unbindFrRows({ knowledgeRoot, frId: anchor, rowIds: del })
+           console.log(`✅ 解绑 ${del.length} 行（${anchor}）`)
+diff --git a/src/test-bindings.js b/src/test-bindings.js
+index 65917c3e..e5354060 100644
+--- a/src/test-bindings.js
++++ b/src/test-bindings.js
+@@ -65,6 +65,18 @@ export function normalizeRow(row, opts = {}) {
+   }
+ }
+ 
++/**
++ * 剥用例锚取文件路径（2026-09-26-binding-anchor-fidelity）：tests 条目自本变更起可携带
++ * 用例锚（书写原形：path「X」组 / path#x / path::x / path > x——提取侧只摘不译）。需要把
++ * 条目当文件路径消费的面（残差实测/归属匹配/覆盖判定/unbind 匹配）统一走这里；展示面
++ * （test-trace/FR 机器子块/tests 视图）保持完整锚点不剥。无锚条目幂等原样返回。
++ */
++export function testAnchorFile(entry) {
++  const s = String(entry || '').replace(/\\/g, '/').trim()
++  const idxs = ['#', '::', '>', '「'].map((sep) => s.indexOf(sep)).filter((i) => i > 0)
++  return idxs.length ? s.slice(0, Math.min(...idxs)).trim() : s
++}
++
+ /** orphan accRef（D-005@v1）：index 只作快照，身份=原文指纹 */
+ export function orphanAccRef(index, acceptanceText) {
+   return `acc-${index}-${sha256(acceptanceText).slice(0, 8)}`
+@@ -377,7 +389,8 @@ export function resolveTestFileOwners({ specBase, files }) {
+         for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
+           for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
+             if (r.state !== 'active' || r.status === 'superseded') continue
+-            for (const t of r.tests) if (want.has(norm(t))) push(t, { anchor: m[1], row_id: r.row_id, source_change: r.source_change })
++            // 剥锚后按文件面匹配（tests 条目可携带用例锚——2026-09-26-binding-anchor-fidelity）
++            for (const t of r.tests) { const f = testAnchorFile(t); if (want.has(norm(f))) push(f, { anchor: m[1], row_id: r.row_id, source_change: r.source_change }) }
+           }
+         }
+       }
+@@ -387,7 +400,7 @@ export function resolveTestFileOwners({ specBase, files }) {
+     for (const [qlId, rows] of Object.entries(readQlBindings(specBase))) {
+       for (const r of rows || []) {
+         if (r.state !== 'active' || r.status === 'superseded') continue
+-        for (const t of r.tests) if (want.has(norm(t))) push(t, { anchor: qlId, row_id: r.row_id, source_change: r.source_change })
++        for (const t of r.tests) { const f = testAnchorFile(t); if (want.has(norm(f))) push(f, { anchor: qlId, row_id: r.row_id, source_change: r.source_change }) }
+       }
+     }
+   } catch { /* ql 面读失败 → 只回 FR 面 */ }
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 682e7e8c..fe6afd0a 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -29,7 +29,7 @@ import { gitQuiet } from './git-helper.js'
+ import { resolveRuntimeRoot } from './run/shared.js'
+ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
+ import { join, resolve } from 'path'
+-import { readChangeTrace } from './test-bindings.js'
++import { readChangeTrace, testAnchorFile } from './test-bindings.js'
+ import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
+ import { reconcileCrossRepoDeclarations } from './cross-repo-reconcile.js'
+ import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
+@@ -2443,7 +2443,8 @@ export function resolveTraceResidual({ specBase, changeName, cwd }) {
+   if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [] }
+   const rows = readChangeTrace(join(specBase, 'changes', changeName))
+     .filter(r => anchors.includes(r.anchor) && r.state === 'active' && r.status !== 'superseded')
+-  const files = [...new Set(rows.flatMap(r => r.tests || []))].sort()
++  // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚
++  const files = [...new Set(rows.flatMap(r => (r.tests || []).map(testAnchorFile)))].sort()
+   const dangling = files.filter(f => !existsSync(resolve(cwd, f)))
+   return { anchors, rows, files, dangling }
+ }
+diff --git a/test/flow-draft-binding-extract.test.mjs b/test/flow-draft-binding-extract.test.mjs
+new file mode 100644
+index 00000000..93808af6
+--- /dev/null
++++ b/test/flow-draft-binding-extract.test.mjs
+@@ -0,0 +1,159 @@
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++
++/**
++ * 2026-09-26-binding-anchor-fidelity：测试绑定提取保真（坑 test-trace-extract-truncates-case-suffix）
++ * ＋裸文件名/路径段解析全路径＋文件面消费点剥锚回归。
++ */
++const { extractRequirementBindings } = await import('../src/flow-draft.js')
++const { testAnchorFile, resolveTestFileOwners, writeChangeTrace, readChangeTrace } = await import('../src/test-bindings.js')
++const { resolveTraceResidual } = await import('../src/verify-postcheck.js')
++
++function makeRepo(files = {}) {
++  const root = mkdtempSync(join(tmpdir(), 'bafix-'))
++  const changeDir = join(root, '.sillyspec', 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  for (const [rel, content] of Object.entries(files)) {
++    const p = join(root, rel)
++    mkdirSync(dirname(p), { recursive: true })
++    writeFileSync(p, content ?? '')
++  }
++  return { root, changeDir, specBase: join(root, '.sillyspec') }
++}
++
++function writeReq(changeDir, slots) {
++  const lines = []
++  for (const [id, body] of Object.entries(slots)) {
++    lines.push(`<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
++    lines.push(body, '')
++  }
++  writeFileSync(join(changeDir, 'requirements.md'), lines.join('\n'))
++}
++
++const byAnchor = (rows) => Object.fromEntries(rows.map((r) => [r.anchor, r]))
++
++test('① 四形态用例锚捕获：「」组/#…/::…/> …；「：」后描述与非邻接形态不误捕', () => {
++  const { root, changeDir } = makeRepo({ 'test/foo.test.mjs': '' })
++  writeReq(changeDir, {
++    'FR-01': 'test/foo.test.mjs「inferFlipTimes」组：中段断裂标 broken、尾部未覆盖不标',
++    'FR-02': 'test/foo.test.mjs#lockstep 翻格顺序推断',
++    'FR-03': 'test/foo.test.mjs::test_bar[param] 的行为',
++    'FR-04': 'test/foo.test.mjs > renders timeline with anchors',
++    'FR-05': 'test/foo.test.mjs：渲染输出含「阶段墙钟」行与阶段名',
++    'FR-06': '覆盖见 test/foo.test.mjs 的「X」组（非邻接不捕）',
++  })
++  const rows = byAnchor(extractRequirementBindings({ changeDir, change: 'c1' }))
++  assert.equal(rows['FR-01'].tests[0], 'test/foo.test.mjs「inferFlipTimes」组')
++  assert.equal(rows['FR-02'].tests[0], 'test/foo.test.mjs#lockstep')
++  assert.equal(rows['FR-03'].tests[0], 'test/foo.test.mjs::test_bar[param]')
++  assert.equal(rows['FR-04'].tests[0], 'test/foo.test.mjs > renders timeline with anchors')
++  // 路径后直接「：」=描述引导 → 文件级；用例名写在路径前（非邻接）→ 文件级
++  assert.equal(rows['FR-05'].tests[0], 'test/foo.test.mjs')
++  assert.equal(rows['FR-06'].tests[0], 'test/foo.test.mjs')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('② 裸文件名/路径段解析项目相对全路径；歧义与未命中原样保留', () => {
++  const { root, changeDir } = makeRepo({
++    'test/foo.test.mjs': '',
++    'src/lib/test/bar.mjs': '',
++    'a/util.test.mjs': '',
++    'b/util.test.mjs': '',
++  })
++  writeReq(changeDir, {
++    'FR-01': 'foo.test.mjs「X」组：裸文件名解析',
++    'FR-02': 'lib/test/bar.mjs 路径段解析',
++    'FR-03': 'util.test.mjs 同名两处——歧义不解析',
++    'FR-04': 'test/nope.test.mjs 未命中——原样保留',
++  })
++  const rows = byAnchor(extractRequirementBindings({ changeDir, change: 'c1' }))
++  assert.equal(rows['FR-01'].tests[0], 'test/foo.test.mjs「X」组')
++  assert.equal(rows['FR-02'].tests[0], 'src/lib/test/bar.mjs')
++  assert.equal(rows['FR-03'].tests[0], 'util.test.mjs')
++  assert.equal(rows['FR-04'].tests[0], 'test/nope.test.mjs')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('③ 多路径一行各自配对；不适用与非测试路径行为不变', () => {
++  const { root, changeDir } = makeRepo({ 'test/a.test.mjs': '', 'test/b.test.mjs': '' })
++  writeReq(changeDir, {
++    'FR-01': 'test/a.test.mjs#x；test/b.test.mjs「Y」组',
++    'FR-02': '不适用：套件本身即验证',
++    'FR-03': 'src/foo.js 非测试路径不产行',
++  })
++  const rows = byAnchor(extractRequirementBindings({ changeDir, change: 'c1' }))
++  assert.deepEqual(rows['FR-01'].tests, ['test/a.test.mjs#x', 'test/b.test.mjs「Y」组'])
++  assert.equal(rows['FR-02'], undefined)
++  assert.equal(rows['FR-03'], undefined)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('④ testAnchorFile 四形态剥离＋无锚幂等（文件面消费统一入口）', () => {
++  assert.equal(testAnchorFile('test/foo.test.mjs「X」组'), 'test/foo.test.mjs')
++  assert.equal(testAnchorFile('test/foo.test.mjs#x'), 'test/foo.test.mjs')
++  assert.equal(testAnchorFile('test/foo.test.mjs::x'), 'test/foo.test.mjs')
++  assert.equal(testAnchorFile('test/foo.test.mjs > x y'), 'test/foo.test.mjs')
++  assert.equal(testAnchorFile('test/foo.test.mjs'), 'test/foo.test.mjs')
++  assert.equal(testAnchorFile('test\\foo.test.mjs'), 'test/foo.test.mjs')
++  // 竖线排除（评审 P2）：锚文本含 | 时在竖线处截断——FR 机器子块 tests 行以 | 分隔，锚内竖线会裂格式
++  const { root, changeDir } = makeRepo({ 'test/foo.test.mjs': '' })
++  writeReq(changeDir, { 'FR-01': 'test/foo.test.mjs#a|b 竖线用例' })
++  const rows = byAnchor(extractRequirementBindings({ changeDir, change: 'c1' }))
++  assert.equal(rows['FR-01'].tests[0], 'test/foo.test.mjs#a')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑤ test-trace 写读 roundtrip：带锚条目完整落盘（展示面保锚）', () => {
++  const { root, changeDir } = makeRepo()
++  writeChangeTrace(changeDir, 'c1', [{ anchor: 'FR-01', row_id: 'c1:flow:FR-01', tests: ['test/foo.test.mjs「X」组', 'test/foo.test.mjs#y'], reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: 'c1' }])
++  const rows = readChangeTrace(changeDir)
++  assert.equal(rows.length, 1)
++  assert.deepEqual(rows[0].tests, ['test/foo.test.mjs#y', 'test/foo.test.mjs「X」组'])
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑥ 残差实测文件面剥锚：带锚行 → files 干净路径、不 dangling', () => {
++  const { root, changeDir, specBase } = makeRepo({ 'test/foo.test.mjs': '' })
++  mkdirSync(join(changeDir, 'tasks'), { recursive: true })
++  writeFileSync(join(changeDir, 'tasks', 'task-01.md'), "---\nrequirement_ids: ['FR-01']\n---\n")
++  writeChangeTrace(changeDir, 'c1', [{ anchor: 'FR-01', row_id: 'c1:task-01:acc-0-abcdef12', tests: ['test/foo.test.mjs「X」组'], reason: 'spec', state: 'active', discovery: 'machine', confirmed_by: 'agent', source_change: 'c1' }])
++  const res = resolveTraceResidual({ specBase, changeName: 'c1', cwd: root })
++  assert.deepEqual(res.files, ['test/foo.test.mjs'])
++  assert.deepEqual(res.dangling, [])
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('⑦ watcher 归属匹配剥锚：带锚绑定行按文件面命中', () => {
++  const { root, specBase } = makeRepo({ 'test/foo.test.mjs': '' })
++  const frDir = join(specBase, 'knowledge', 'fr')
++  mkdirSync(frDir, { recursive: true })
++  writeFileSync(join(frDir, 'cli-entry.md'), [
++    '# FR 索引 — cli-entry',
++    '',
++    '## FR-cli-entry-01 某行为',
++    '变更：c1',
++    '状态：active',
++    '',
++    '测试绑定：',
++    '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++    '- row: c1:flow:FR-01',
++    '  tests: test/foo.test.mjs「X」组',
++    '  reason: spec',
++    '  state: active',
++    '  discovery: machine',
++    '  confirmed_by: agent',
++    '  confirmed_at: null',
++    '  source_change: c1',
++    '  status: active',
++    '',
++  ].join('\n'))
++  const map = resolveTestFileOwners({ specBase, files: ['test/foo.test.mjs'] })
++  assert.equal(map.size, 1)
++  const owners = map.get('test/foo.test.mjs')
++  assert.equal(owners.length, 1)
++  assert.equal(owners[0].anchor, 'FR-cli-entry-01')
++  rmSync(root, { recursive: true, force: true })
++})
+diff --git a/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/review.json b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-binding-anchor-fidelity/review.json
+@@ -0,0 +1,33 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-26-binding-anchor-fidelity",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P2",
++      "title": "锚文本可含竖线，与 FR 机器子块 tests 的 | 分隔符冲突——md 读写 round-trip 产生幻影条目",
++      "evidence": "CASE_ANCHOR_RE 的「X」形（「[^」\\n]+」）、> name 形、#id 形字符类均不排除 |，故可捕获如「test/foo.test.mjs > a|b」的条目；而 FR 机器子块以 tests: a | b 序列化（test-bindings.js:177 join(' | ')）并按 v.split('|') 回读（test-bindings.js:165）——带 | 锚条目写后再读会裂成 ['test/foo.test.mjs > a','b'] 两条幻影条目，破坏「只摘不译」原形且污染知识面。触发需用例名含 |（少见但 jest/vitest 用例名合法），未被任何声明边界覆盖，也无测试钉住",
++      "location": "src/flow-draft.js:268 + src/test-bindings.js:165,177"
++    },
++    {
++      "severity": "P3",
++      "title": "design 风险槽高估回归钉面：「每个消费点各钉一条回归」不实",
++      "evidence": "design.md 槽4 称已对每个 .tests 消费点在新测试中各钉一条回归，但 test/flow-draft-binding-extract.test.mjs 仅钉 testAnchorFile 单元（④）、resolveTraceResidual（⑥）、resolveTestFileOwners（⑦）；covHit（fr-index.js:878）、rotSuspectFlow（flow.js:235）、--unbind 匹配（index.js:3072）三处适配无专属回归用例（代码经 grep 核实已正确接入 testAnchorFile，仅缺钉）。requirements FR-05 绑定作答本身只引 ④⑥⑦，是诚实的；失真仅在 design 措辞",
++      "location": ".sillyspec/changes/2026-09-26-binding-anchor-fidelity/design.md:54 与 test/flow-draft-binding-extract.test.mjs"
++    },
++    {
++      "severity": "P3",
++      "title": "orphanAccRef 函数体被无关格式突变（搭车改动）",
++      "evidence": "diff 将 orphanAccRef 的两行函数体合并到签名行（语义等价、纯格式变化），与本变更目标无关且未在任何文档声明；lint（check-syntax）可过，无行为影响，但属冻结 patch 中的无依据突变",
++      "location": "src/test-bindings.js:80"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-09-26T16:08:27+08:00"
++}

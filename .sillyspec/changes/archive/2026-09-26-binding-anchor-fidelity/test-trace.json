@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-binding-anchor-fidelity",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-binding-anchor-fidelity:flow:FR-01",
+      "tests": [
+        "test/flow-draft-binding-extract.test.mjs#①"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-binding-anchor-fidelity"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-binding-anchor-fidelity:flow:FR-02",
+      "tests": [
+        "test/flow-draft-binding-extract.test.mjs#①"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-binding-anchor-fidelity"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-binding-anchor-fidelity:flow:FR-03",
+      "tests": [
+        "test/flow-draft-binding-extract.test.mjs#②"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-binding-anchor-fidelity"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-26-binding-anchor-fidelity:flow:FR-04",
+      "tests": [
+        "test/flow-draft-binding-extract.test.mjs#②"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-binding-anchor-fidelity"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-26-binding-anchor-fidelity:flow:FR-05",
+      "tests": [
+        "test/flow-draft-binding-extract.test.mjs#④",
+        "test/flow-draft-binding-extract.test.mjs#⑥",
+        "test/flow-draft-binding-extract.test.mjs#⑦"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-binding-anchor-fidelity"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-26-binding-anchor-fidelity:flow:FR-07",
+      "tests": [
+        "test/flow-draft-binding-extract.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-binding-anchor-fidelity"
+    }
+  ]
+}
