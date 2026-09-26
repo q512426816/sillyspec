@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-review-unsupervised-exit",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "[P3] 遗留自审降级条款与新豁免指引并存：三处 stage 模板对「无 Agent tool」同一场景给出两条相反指令",
+      "evidence": "change.patch 三处插入行的紧邻上下文保留了旧条款「宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录『降级：环境无子代理可用』」（brainstorm.js/plan.js/execute.js tier=independent 段内）；而新 blockquote 指引同一场景写「不产 review.json、不做自审表演……写 review-unsupervised.md 声明即豁免」。gates.js:1525-1544 对降级自审 channel 仍优待放行（⚠️ 留痕），两通道均可达成完成——agent 面临二选一困惑，R18-full 实证显示旧通道正是表演源头。",
+      "location": "src/stages/brainstorm.js:406 / src/stages/plan.js:385 / src/stages/execute.js:440（各插入行紧邻的 tier=independent 旧降级条款）"
+    },
+    {
+      "severity": "P3",
+      "title": "[P3] 四消费点的豁免放行行为只有源码文本钉（正则），无执行级行为断言",
+      "evidence": "test/review-unsupervised-exit.test.mjs 用例② 用 /enforceAlignExecuteReviewGate[\\s\\S]{0,900}readReviewUnsupervisedWaiver/ 等四条正则钉 gates.js 源码文本（豁免函数名出现在函数体前 N 字符内），未实际调用豁免在场路径断言返回值（align 门应 return false=放行、review-json 门应 return true=放行、tier 分支与 task-review 分支不产生 docGateFailures）。",
+      "location": "test/review-unsupervised-exit.test.mjs:24-34"
+    },
+    {
+      "severity": "P3",
+      "title": "[P4] Execute Task Review Gate 的 else 包裹体未随新增层级重缩进",
+      "evidence": "gates.js:1582 新开 else { 后，1583-1677 的原门体保持旧缩进（视觉上仍属上层），1678-1679 两层闭合括号连续收口。语义已核对正确（豁免分支只做 waiveWithTelemetry，不 push docGateFailures，检查点 B 放行；writeVerifyRequiredEvidence 在 else 内、豁免路径不写），lint 亦过。",
+      "location": "src/run/gates.js:1582-1679"
+    },
+    {
+      "severity": "P3",
+      "title": "[P4] 三处 blockquote 指引插在既有 markdown 列表中间，CommonMark 渲染下列表被切断重启",
+      "evidence": "plan.js 插在「prompt 要点」编号列表第 2/3 项之间，brainstorm.js/execute.js 插在 tier=self 与 tier=independent 两个 bullet 之间——独立 blockquote 行会结束前列表，后续列表项在新列表中重新起始。三处插入行均无反引号、无 ${ 模板插值、无未配对引号，JS 模板字符串层面转义安全（已逐行核对 patch 文本）。",
+      "location": "src/stages/plan.js:385（编号列表 2/3 间）/ src/stages/brainstorm.js:406、src/stages/execute.js:440（bullet 间）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T01:36:42.339Z"
+}

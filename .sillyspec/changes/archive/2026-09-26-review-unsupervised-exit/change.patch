@@ -1,0 +1,384 @@
+diff --git a/src/run/gates.js b/src/run/gates.js
+index de5eb859..47d3f640 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -33,6 +33,36 @@ import { writeAtomicSync } from '../fs-atomic.js'
+ import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
+ import { runValidators } from '../stage-contract.js'
+ import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
++
++/**
++ * 评审豁免凭据（2026-09-26-review-unsupervised-exit，R18-full 实证驱动）：无嵌套派发能力的
++ * 环境（子代理不能再派子代理）里，阶段评审只能降级自审——三份自审 review.json 全 PASS 零信息
++ * 量纯表演，门仍硬拦形式合规（R18-full 15 次拦截里 5 次是 review 面形式）。诚实出口：agent 写
++ * 变更目录 review-unsupervised.md（一行声明：环境无嵌套派发能力+时间，须含 unsupervised 字样）
++ * → Stage Review Gate / Task Review Gate / doctor align 门 / --done 硬门四点共吃：有效
++ * review.json ‖ 豁免声明二选一放行（warn+遥测，豁免率可观测）；两凭据皆无照旧 fail-closed。
++ * 真独立评审（有派发能力）不受影响——豁免是声明式自曝，不是绕门。
++ */
++export function readReviewUnsupervisedWaiver(changeDir) {
++  try {
++    if (!changeDir) return null
++    const p = join(changeDir, 'review-unsupervised.md')
++    if (!existsSync(p)) return null
++    const t = readFileSync(p, 'utf8')
++    return /unsupervised/i.test(t) ? t.trim().slice(0, 200) : null
++  } catch {
++    return null
++  }
++}
++
++/** 豁免放行的统一回显+遥测（调用点持 runtimeRoot/specBase）。 */
++async function waiveWithTelemetry({ changeName, gate, specBase }) {
++  console.warn(`⚠️ [评审豁免] review-unsupervised.md 在场（${gate}）——环境无嵌套派发能力，阶段评审降级留痕放行（不产自审 review.json 不表演）；声明随归档留痕，可经遥测观测豁免率`)
++  try {
++    const { appendKnowledgeHit } = await import('../knowledge-hits.js')
++    appendKnowledgeHit(join(specBase, '.runtime'), { type: 'review-unsupervised-escape', change: changeName, gate, source: 'gates' })
++  } catch { /* 遥测 fail-soft */ }
++}
+ import { detectConcurrentChanges, formatConcurrentWarning, detectCommittedDrift, formatCommittedDriftWarning } from './concurrent-detect.js'
+ import { stageRegistry } from '../stages/index.js'
+ import { normalizeTaskId } from '../taskcard.js'
+@@ -245,6 +275,12 @@ export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase,
+   const effectiveSpecBase = platformOpts?.specRoot || specBase
+   const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
+   const reviewChangeDir = resolveChangeDir(cwd, { currentChange: changeName }, platformOpts?.specRoot || null)
++  // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境两段校验整体降级留痕放行
++  if (readReviewUnsupervisedWaiver(reviewChangeDir)) {
++    await waiveWithTelemetry({ changeName, gate: 'doctor-align', specBase: effectiveSpecBase })
++    console.warn('   ℹ️ align 前置 review 门整体豁免（unsupervised 声明在场）——继续对齐')
++    return false
++  }
+   const blocked = (msgs) => {
+     console.error('\n❌ doctor --align-execute-progress 前置 review 校验未过——execute 完成审计不能绕过：')
+     for (const m of msgs) console.error('   - ' + m)
+@@ -458,6 +494,12 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
+  */
+ export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts, persist) {
+   if (stageName !== 'execute' || !changeName) return true
++  // 豁免凭据（review-unsupervised-exit）：unsupervised 声明在场时已勾 task 的 review.json
++  // schema 硬门跳过（该环境本就不产 review.json——门拦的是缺件形式，非豁免面）
++  if (readReviewUnsupervisedWaiver(join(specBase, 'changes', changeName))) {
++    await waiveWithTelemetry({ changeName, gate: 'review-json-hard-gate', specBase })
++    return true
++  }
+   // head 锡点自动落盘（2026-08-21 审计项③，D-010 补对称）：跨仓 task base_commit 已在派发时
+   // CLI 落盘，head_commit 此前靠主 agent 按 prompt 手跑 rev-parse 手写（漏抄/抄错炸 review gate）。
+   // 每次 --done 时机幂等补齐（已存在不覆盖）。best-effort：失败只 warn，不阻断 --done 主流程。
+@@ -1442,6 +1484,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+ 
+       if (tier.tier === 'self') {
+         console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
++      } else if (readReviewUnsupervisedWaiver(reviewChangeDir)) {
++        // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境不强制独立审查也不接受自审表演
++        await waiveWithTelemetry({ changeName, gate: 'stage-review:' + stageName, specBase: effectiveSpecBase })
+       } else {
+         let reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName, changeName)
+         if (!reviewRunId) {
+@@ -1530,6 +1575,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+   // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
+   if (stageName === 'execute') {
+     try {
++      // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境整块跳过（该环境不产 task review）
++      const _trChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
++      if (readReviewUnsupervisedWaiver(_trChangeDir)) {
++        await waiveWithTelemetry({ changeName, gate: 'execute-task-review', specBase: platformOpts?.specRoot || specBase })
++      } else {
+       const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence } = await import('../task-review.js')
+       const effectiveSpecBase = platformOpts?.specRoot || specBase
+       const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+@@ -1626,6 +1676,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+         }
+         }
+       }
++      }
+     } catch (e) {
+       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
+       //（收集模式：异常也入列，检查点 B 统一 rollback）
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index d8b4aa05..d70fbaa5 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -403,6 +403,7 @@ design.md 文件路径 + 自审结果
+ ### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省
++> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
+ - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
+   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+ {PRIOR_REVIEW_FACTS}
+diff --git a/src/stages/execute.js b/src/stages/execute.js
+index 69eced00..f1ff21b7 100644
+--- a/src/stages/execute.js
++++ b/src/stages/execute.js
+@@ -438,6 +438,7 @@ const acceptanceSteps = [
+ ### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
+ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
+ - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
++> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
+ - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
+ {PRIOR_REVIEW_FACTS}
+   宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
+diff --git a/src/stages/plan.js b/src/stages/plan.js
+index ba200ddc..3863331b 100644
+--- a/src/stages/plan.js
++++ b/src/stages/plan.js
+@@ -382,6 +382,7 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
+ prompt 要点：
+ 1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
+ 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
++> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
+ 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
+ {REVIEW_JSON_CONTRACT}
+ 4. verdict=fail 时在 reviewerNotes 写明阻断项
+diff --git a/test/review-unsupervised-exit.test.mjs b/test/review-unsupervised-exit.test.mjs
+new file mode 100644
+index 00000000..eda563d4
+--- /dev/null
++++ b/test/review-unsupervised-exit.test.mjs
+@@ -0,0 +1,53 @@
++/**
++ * review-unsupervised-exit.test.mjs — 评审豁免凭据（2026-09-26-review-unsupervised-exit）
++ *
++ * 覆盖验收面（R18-full 实证：无嵌套派发环境自审表演+形式拦截 5 次）：
++ *   ① readReviewUnsupervisedWaiver 三态：含 unsupervised 字样放行 / 不含拒认 / 缺文件 null；
++ *   ② 四消费点接线钉：doctor-align / review-json 硬门 / stage-review tier 分支 / execute-task-review
++ *      均先查豁免（gates.js 源码文本钉——豁免先于校验、warn+遥测在場）；
++ *   ③ 生成侧三处指引钉：brainstorm Grill / plan / execute QA 均含豁免句与文件名。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { readReviewUnsupervisedWaiver } = await import(pathToFileURL(join(ROOT, 'src/run/gates.js')).href)
++
++test('① 豁免凭据三态：字样放行 / 无字样拒认 / 缺文件 null', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'rue-'))
++  try {
++    const cd = join(tmp, 'changes', 'c-x')
++    mkdirSync(cd, { recursive: true })
++    assert.equal(readReviewUnsupervisedWaiver(cd), null, '缺文件=null')
++    writeFileSync(join(cd, 'review-unsupervised.md'), '# 降级留痕\n环境无嵌套派发能力（unsupervised），2026-09-26。\n')
++    const hit = readReviewUnsupervisedWaiver(cd)
++    assert.ok(hit && /unsupervised/i.test(hit), '含字样放行（返回声明文本）')
++    writeFileSync(join(cd, 'review-unsupervised.md'), '# 普通说明\n没有关键字。\n')
++    assert.equal(readReviewUnsupervisedWaiver(cd), null, '不含字样拒认（防误放）')
++    assert.equal(readReviewUnsupervisedWaiver(null), null, '无目录 null')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('② 四消费点接线钉（gates.js 源码）', () => {
++  const src = readFileSync(join(ROOT, 'src/run/gates.js'), 'utf8')
++  const sites = [
++    ['doctor-align 门', /enforceAlignExecuteReviewGate[\s\S]{0,900}readReviewUnsupervisedWaiver/],
++    ['review-json 硬门', /enforceReviewJsonGate[\s\S]{0,600}readReviewUnsupervisedWaiver/],
++    ['stage-review tier 分支', /tier\.tier === 'self'[\s\S]{0,400}readReviewUnsupervisedWaiver/],
++    ['execute-task-review', /Execute Task Review Gate[\s\S]{0,700}readReviewUnsupervisedWaiver/],
++  ]
++  for (const [name, re] of sites) assert.ok(re.test(src), `${name} 应先查豁免凭据`)
++  assert.ok(src.includes('review-unsupervised-escape'), '豁免遥测事件名在场')
++})
++
++test('③ 生成侧三处指引钉', () => {
++  for (const f of ['src/stages/brainstorm.js', 'src/stages/plan.js', 'src/stages/execute.js']) {
++    const t = readFileSync(join(ROOT, f), 'utf8')
++    assert.ok(t.includes('review-unsupervised.md'), `${f} 豁免句含声明文件名`)
++    assert.ok(t.includes('不做自审表演'), `${f} 豁免语义明确（不自审）`)
++  }
++})
+diff --git a/.sillyspec/changes/2026-09-26-review-unsupervised-exit/design.md b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:24:45.967Z
++---
++# 设计记录（Design Record）— 2026-09-26-review-unsupervised-exit
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++加法式豁免通道（向下兼容）：R18-full 实证无嵌套派发能力的环境（子代理不能再派子代理）阶段评审全降自审表演（三份自审全 PASS 零信息）+门硬拦形式合规（15 拦截中 5 次 review 形式）；R8 实证有派发能力时评审抓过真缺口——层有价值，价值条件=独立评审者。诚实出口：agent 写变更目录 review-unsupervised.md（含 unsupervised 字样声明）→ 四消费点（doctor-align 门/review-json 硬门/Stage Review tier 分支/Execute Task Review）二选一放行（warn+遥测 review-unsupervised-escape 观测豁免率）；生成侧三处指引（brainstorm Grill/plan/execute QA）加豁免分支（不自审表演）。Task Review 层退役清理（砍生成+砍门）独立收口不在本变更。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++gates.js 新导出 readReviewUnsupervisedWaiver(changeDir)+私有 waiveWithTelemetry（appendKnowledgeHit 遥测 fail-soft）；四消费点接线（豁免先于校验）；stages 三文件各插一行指引。既有有效 review.json 路径零变化（真独立评审仍强制）；两凭据皆无照旧 fail-closed。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：豁免凭据是变更目录文件（start 后任意时点写均有效——晚写者补历史豁免可接受：声明的是环境能力非时点事实）。2. 并发：凭据读是单文件 existsSync+read（原子性够）；遥测 appendKnowledgeHit 追加型。3. 切换：凭据文件随变更目录归档（留痕面自动持久）。4. 作用域：豁免只在 tier=independent 分支与 execute 评审门生效；tier=self 原语义不变；verify 终局评审（flow done 式）不在此豁免面（那是终局条件触发，另有 review_force 声明通道）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=豁免被滥用（有派发能力的环境也写声明逃避评审）——对抗面：声明是显式自曝文件随归档公开（审计可见）+遥测可观测豁免率（异常升高可查）+指引明示「有派发能力时豁免不适用」；不做密码学强验（agent 环境能力 CLI 无法机器判定——诚实暴露优于伪检测）。死路：CLI 检测派发能力（harness 工具集对 CLI 不可见）——伪检测比声明制更假，弃；死路：豁免凭据用 env/flag（不落盘不留痕=可静默滥用）——文件制随归档，弃。
+
+diff --git a/.sillyspec/changes/2026-09-26-review-unsupervised-exit/flow-state.yaml b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 0b04044e6e513d8ac6143a56ca02fc101ce4fe04
++updatedAt: '2026-09-26T01:33:23.318Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js12)（8.0s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926013253\test-result.json｜lint: passed
++  ← npm run lint（29.4s）｜门文件 17 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-review-unsupervised-exit/proposal.md b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/proposal.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:24:45.967Z
++---
++# 提案书（Proposal）— 2026-09-26-review-unsupervised-exit
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:a8607f747be19befcc872a6fe57fc3a642a03417c26050e12ca7b701560637d3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++任务原话转写：动机：R18-full 实证阶段评审层在无嵌套派发能力的环境（子代理不能再派子代理）全降级自审——三份自审 review.json 全 PASS 零信息量，纯表演；而门仍硬拦形式合规（15 次拦截里 5 次是 review 面形式：缺件/假 hash/枚举错），每次拦截在 300K+ 上下文重试。R8 基线（主会话有真派发能力）评审抓过真缺口——层本身有价值，价值条件=独立评审者可用。缺一条诚实出口：无派发能力时豁免生成+豁免门+留痕，不自审表演。
++成功标准：
++- 豁免凭据：变更目录 review-unsupervised.md（agent 一行声明：环境无嵌套派发能力+时间，含 unsupervised 字样）——Stage Review 门与 Task Review 校验点两处共吃：有效 review.json ‖ 豁免声明在场（warn 放行+遥测 review-unsupervised-escape 可观测豁免率）；两者皆无照旧硬拦
++- gates.js enforceAlignExecuteReviewGate（doctor 门）与 enforceReviewJsonGate（--done 硬门）同步吃豁免凭据
++- 生成侧指引（brainstorm Grill/plan/execute QA 三处）加豁免分支：无 Agent/Task 类派发工具 → 不产 review.json 不自审，写 review-unsupervised.md 声明即豁免，凭据随归档留痕
++- 既有有效 review.json 路径零变化（真独立评审仍强制优待）；测试：声明放行/无凭据仍拦/有效 review.json 照旧三态
++- Task Review 层的退役清理（砍生成+砍门）不在本变更——独立收口
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:d9a77889324c32f912b24b17ad87f726767d18ef484d81d8b274c656a6cff8f0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 豁免凭据：变更目录 review-unsupervised.md（agent 一行声明：环境无嵌套派发能力+时间，含 unsupervised 字样）——Stage Review 门与 Task Review 校验点两处共吃：有效 review.json ‖ 豁免声明在场（warn 放行+遥测 review-unsupervised-escape 可观测豁免率）
++2. 两者皆无照旧硬拦
++3. gates.js enforceAlignExecuteReviewGate（doctor 门）与 enforceReviewJsonGate（--done 硬门）同步吃豁免凭据
++4. 生成侧指引（brainstorm Grill/plan/execute QA 三处）加豁免分支：无 Agent/Task 类派发工具 → 不产 review.json 不自审，写 review-unsupervised.md 声明即豁免，凭据随归档留痕
++5. 既有有效 review.json 路径零变化（真独立评审仍强制优待）
++6. 测试：声明放行/无凭据仍拦/有效 review.json 照旧三态
++7. Task Review 层的退役清理（砍生成+砍门）不在本变更——独立收口
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:d1a48d1e73524ad1d6773453a637784198208bf4dae7ec36501b9cb7442de598:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-review-unsupervised-exit 留痕重锚 -->
++1. 豁免凭据：变更目录 review-unsupervised.md（agent 一行声明：环境无嵌套派发能力+时间，含 unsupervised 字样）——Stage Review 门与 Task Review 校验点两处共吃：有效 review.json ‖ 豁免声明在场（warn 放行+遥测 review-unsupervised-escape 可观测豁免率）
++2. 两者皆无照旧硬拦
++3. gates.js enforceAlignExecuteReviewGate（doctor 门）与 enforceReviewJsonGate（--done 硬门）同步吃豁免凭据
++4. 生成侧指引（brainstorm Grill/plan/execute QA 三处）加豁免分支：无 Agent/Task 类派发工具 → 不产 review.json 不自审，写 review-unsupervised.md 声明即豁免，凭据随归档留痕
++5. 既有有效 review.json 路径零变化（真独立评审仍强制优待）
++6. 测试：声明放行/无凭据仍拦/有效 review.json 照旧三态
++7. Task Review 层的退役清理（砍生成+砍门）不在本变更——独立收口
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-review-unsupervised-exit/requirements.md b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/requirements.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:24:45.967Z
++---
++# 需求规格（Requirements）— 2026-09-26-review-unsupervised-exit
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 豁免凭据三态
++Given 无嵌套派发能力环境需要诚实出口
++When readReviewUnsupervisedWaiver 读变更目录 review-unsupervised.md
++When 含 unsupervised 字样放行/不含拒认（防误放）/缺文件 null
++
++### FR-02: 四消费点接线
++Given 评审门四处（doctor-align/review-json 硬门/Stage Review tier 分支/Execute Task Review）
++When 豁免凭据在场
++When 先于校验放行（warn+遥测 review-unsupervised-escape）；两凭据皆无照旧 fail-closed
++
++### FR-03: 生成侧豁免指引
++Given brainstorm Grill/plan/execute QA 三处 tier=independent 指引只教派发
++When 插入豁免分支句
++When 无派发能力→不产 review.json 不自审表演→写声明文件即豁免（含文件名与 unsupervised 字样要求）
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/review-unsupervised-exit.test.mjs 用例①（三态）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/review-unsupervised-exit.test.mjs 用例②（四点接线钉+遥测事件名钉）+ 评审相关 35 用例零回归
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/review-unsupervised-exit.test.mjs 用例③（三文件指引钉：文件名+不自审语义）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
+
+diff --git a/.sillyspec/changes/2026-09-26-review-unsupervised-exit/tasks.md b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-review-unsupervised-exit/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:24:45.968Z
++---
++# 任务注册表（Tasks）— 2026-09-26-review-unsupervised-exit
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: 豁免凭据：变更目录 review-unsupervised.md（agent 一行声明：环境无嵌套派发能力+时间…
++- [x] task-02: 两者皆无照旧硬拦
++- [x] task-03: gates.js enforceAlignExecuteReviewGate（doctor 门）与 enforceReviewJsonGate（--done 硬…
++- [x] task-04: 生成侧指引（brainstorm Grill/plan/execute QA 三处）加豁免分支：无 Agent/Task 类派发工具 → 不产 review.j…
++- [x] task-05: 既有有效 review.json 路径零变化（真独立评审仍强制优待）
++- [x] task-06: 测试：声明放行/无凭据仍拦/有效 review.json 照旧三态
++- [x] task-07: Task Review 层的退役清理（砍生成+砍门）不在本变更——独立收口
