@@ -3356,7 +3356,8 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
               if (m && m.changeName === changeName && typeof m.branch === 'string' && m.branch.trim()) {
                 if (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', m.branch.trim() + '^{commit}'], { timeout: 30 * 1000 })) {
                   metaBranchRef = m.branch.trim()
-                  sources.push(`main:diff-merge-base(meta-branch:${metaBranchRef})`)
+                  // 源串在 merge-base 验证成功后 push（评审 P3 清偿：此处早 push 时若 merge-base
+                  // 失败——非 main 主分支名——sources 谎报该源在场且 hint 假阴性）
                 }
                 break
               }
@@ -3378,6 +3379,7 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
         if (files !== null) {
           diffOk = true
           sources.push('main:diff-merge-base')
+          if (diffRef === metaBranchRef) sources.push(`main:diff-merge-base(meta-branch:${metaBranchRef})`) // merge-base 验证成功才记源（评审 P3）
           for (const f of files) union.add(normalizeReconcilePath(f))
         }
       }
@@ -3591,6 +3593,9 @@ export function reconcileTargetFiles({ cwd, specBase = null, changeName = null, 
   // —— actual 侧（三源并集，两形态）——
   const actual = resolveReconcileActualFiles({ cwd, specBase: sb, runtimeRoot: rt, changeName })
   if (actual.parallelAdvanceHint) {
+    // console 直出（评审 P2 清偿）：死锁时刻 agent 先见的是 gates 的 missing_declared 红色
+    // 清单（通用修复指引），hint 只落 notes 会被淹没——诊断必须先于/伴随阻断清单可见。
+    console.warn(actual.parallelAdvanceHint)
     notes.push(actual.parallelAdvanceHint)
   }
   if (actual.foreignExcluded > 0) {
