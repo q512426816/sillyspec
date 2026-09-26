@@ -831,8 +831,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             if (!existsSync(_tr)) continue
             try {
               const _j = JSON.parse(readFileSync(_tr, 'utf8'))
-              const _files = _j.files || _j.testFiles || (_j.gate && _j.gate.files) || []
-              for (const _f of _files) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\/g, '/'))
+              // P1 修复：从 command 解析测试文件路径（匹配 test_*.py / *.test.ts / *.spec.tsx 等）
+              const _cmd = String(_j.command || '')
+              for (const _fm of _cmd.matchAll(/([\w\/\\.-]+\.\w{1,5})/g)) {
+                if (/test|spec/i.test(_fm[1])) _testFiles.add(_fm[1].replace(/\\/g, '/'))
+              }
               if (_testFiles.size > 0) break
             } catch {}
           }

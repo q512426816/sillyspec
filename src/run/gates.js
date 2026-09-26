@@ -979,7 +979,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
               if (!existsSync(_tr)) continue
               try {
                 const _j = JSON.parse(readFileSync(_tr, 'utf8'))
-                for (const _f of (_j.files || _j.testFiles || [])) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\/g, '/'))
+                // P1 修复：从 command 解析测试文件路径（匹配 test_*.py / *.test.ts 等）
+                const _cmd = String(_j.command || '')
+                for (const _fm of _cmd.matchAll(/([\w\/\\.-]+\.\w{1,5})/g)) {
+                  if (/test|spec/i.test(_fm[1])) _testFiles.add(_fm[1].replace(/\\/g, '/'))
+                }
                 if (_testFiles.size > 0) break
               } catch {}
             }
