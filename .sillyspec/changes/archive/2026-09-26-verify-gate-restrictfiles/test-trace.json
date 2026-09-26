@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-verify-gate-restrictfiles",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-verify-gate-restrictfiles:flow:FR-01",
+      "tests": [
+        "test/verify-gate-restrictfiles.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-verify-gate-restrictfiles"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-verify-gate-restrictfiles:flow:FR-02",
+      "tests": [
+        "test/verify-gate-restrictfiles.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-verify-gate-restrictfiles"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "change": "2026-09-26-verify-gate-restrictfiles",
+  "baseline": "0b053689deac6d96948650255f8f6f3265fe4dd1",
+  "head": "ff68545eaf1724482ef1b29e90bae8cb2d9a11ad",
+  "files": [
+    "src/run/gates.js",
+    "src/stages/verify.js",
+    "test/verify-gate-restrictfiles.test.mjs",
+    ".sillyspec/changes/2026-09-26-verify-gate-restrictfiles/design.md",
+    ".sillyspec/changes/2026-09-26-verify-gate-restrictfiles/flow-state.yaml",
+    ".sillyspec/changes/2026-09-26-verify-gate-restrictfiles/proposal.md",
+    ".sillyspec/changes/2026-09-26-verify-gate-restrictfiles/requirements.md",
+    ".sillyspec/changes/2026-09-26-verify-gate-restrictfiles/tasks.md"
+  ],
+  "totals": {
+    "files": 8,
+    "additions": 189,
+    "deletions": 1
+  },
+  "savedAt": "2026-09-26T01:17:10.804Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "780d6e4828d043d2db9ba31e691298791df73798a81224aca564176740af735e",
+  "patchStatus": "ok"
+}

@@ -1,0 +1,247 @@
+diff --git a/src/run/gates.js b/src/run/gates.js
+index 36e07834..de5eb859 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -1013,7 +1013,17 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     } else {
+       // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
+       console.log(`\n⏳ Verify 测试对账：CLI 亲自执行 local.yaml 的 commands.test（同步，耗时可能较长，请等待…）`)
+-      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx })
++      // restrictFiles 接线（2026-09-26-verify-gate-restrictfiles，评审 P2 留痕缺口的清偿）：
++      // quick 门（quick-audit.js:584）传声明文件收窄模块选择，verify 门此前没传——变更全提交后
++      // verify --done 同形下文件面解析 0 命中可能假 skip（该实测没实测）。与 :1135 lint scope
++      // 同源口径（includeWorkingTree 含 worktree 未提交）；空清单不传（restrict 空数组反而制造
++      // 假 skip——空=解析失败应走全量硬门，不降级）。
++      let _restrict = null
++      try {
++        const { resolveVerifyChangedFiles } = await import('../verify-postcheck.js')
++        _restrict = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase: gateSpecBase })
++      } catch { /* 解析异常走全量（restrictFiles 不传） */ }
++      testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
+       printVerifyTestCheck(testCheck)
+       // P2 记账（fail-closed 层②：只有通过结果落账本——失败永不缓存，修复后重跑才能记）
+       if (!traceHasActiveRows) {
+diff --git a/src/stages/verify.js b/src/stages/verify.js
+index 06693729..5d6c5b91 100644
+--- a/src/stages/verify.js
++++ b/src/stages/verify.js
+@@ -59,6 +59,8 @@ export const definition = {
+       name: '加载规范并锚定',
+       prompt: `加载规范文件并确认。
+ 
++> 💡 **长会话税提示（2026-09-26-verify-gate-restrictfiles，R18 实证）**：若本会话已跨 brainstorm/plan/execute 多阶段（上下文已重），建议**新开会话跑 verify**（sillyspec run verify --change <名> 续跑，上下文重置）——verify 段轮均成本是 brainstorm 段的 3-4 倍，主因是每轮重读全历史；新会话只带工件进场，同动作成本立降。
++
+ ### 操作
+ 1. 读取 proposal.md、design.md、tasks.md、requirements.md、plan.md
+ 2. 如果存在 decisions.md，必须读取并提取所有当前版本 D-xxx@vN 决策 ID
+diff --git a/test/verify-gate-restrictfiles.test.mjs b/test/verify-gate-restrictfiles.test.mjs
+new file mode 100644
+index 00000000..7e35a0bc
+--- /dev/null
++++ b/test/verify-gate-restrictfiles.test.mjs
+@@ -0,0 +1,31 @@
++/**
++ * verify-gate-restrictfiles.test.mjs — verify 测试对账门 restrictFiles 接线（2026-09-26）
++ *
++ * 覆盖验收面：
++ *   ① 接线钉：gates.js verify 门的 runVerifyTestCheck 调用带 restrictFiles（与 quick 门同形），
++ *      且空清单不传（restrict 空数组=假 skip 面而非全量硬门）；
++ *   ② 长会话税提示钉：verify 步骤渲染含新会话续跑建议。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++test('① gates.js verify 门 restrictFiles 接线钉（非空才传）', () => {
++  const src = readFileSync(join(ROOT, 'src/run/gates.js'), 'utf8')
++  const i = src.indexOf('testCheck = runVerifyTestCheck({ cwd: gateCwd')
++  assert.ok(i > 0, 'verify 门的 runVerifyTestCheck 调用应可定位')
++  const call = src.slice(i, src.indexOf('printVerifyTestCheck', i))
++  assert.ok(call.includes('restrictFiles'), `调用应含 restrictFiles 展开（实际：${call.slice(0, 140)}）`)
++  assert.ok(src.includes('resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase: gateSpecBase })'), '文件面解析与 lint scope（:1135）同源口径')
++  assert.ok(src.includes('_restrict.length > 0 ? { restrictFiles: _restrict } : {}'), '空清单不传（防 restrict 空数组制造假 skip）')
++})
++
++test('② verify 渲染长会话税提示钉', () => {
++  const src = readFileSync(join(ROOT, 'src/stages/verify.js'), 'utf8')
++  assert.ok(src.includes('长会话税提示'), '提示标题在场')
++  assert.ok(src.includes('新开会话跑 verify'), '新会话续跑建议在场')
++})
+diff --git a/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/design.md b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:13:44.373Z
++---
++# 设计记录（Design Record）— 2026-09-26-verify-gate-restrictfiles
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++两件小修：①gates.js verify 测试对账门的 runVerifyTestCheck 补传 restrictFiles（resolveVerifyChangedFiles includeWorkingTree 口径，与 :1135 lint scope/quick-audit:584 同源）——清偿归档留痕的评审 P2 缺口（变更全提交后 verify --done 同形下 0 命中假 skip=验收侧虚焊）；②verify.js 步骤渲染首部长会话税提示（R18 实证 verify 段轮均 3-4 倍——建议跨阶段会话新开 verify 续跑）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++gates.js verify 门调用点加 _restrict 解析（fail-open：解析异常走全量不传）与条件展开；verify.js 加载规范步 prompt 首部三行提示。零签名变化（runVerifyTestCheck 的 restrictFiles 为既有参数，quick 门在用）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：restrictFiles 是门调用时点快照，测试实测即时消费。2. 并发：resolveVerifyChangedFiles 与 lint scope 同函数同仓读——既有并发语义不变；空清单不传的分支防了「解析失败→restrict 空→假 skip」的反面虚焊。3. 切换：解析 try/catch fail-open 走全量硬门（不降级）。4. 作用域：只影响五阶段 verify 门；quick 门/flow done 实测门口径不动（各自已有收窄）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=restrictFiles 收窄后模块选择漏测（文件面解析错变更文件→选错模块子集）——与 quick 门同函数同风险面，quick 侧长期实证可接受；空清单防御分支保住「宁全量不假 skip」的 fail-closed 底线。死路：空清单也传（restrict []）——正是本变更要修的假 skip 形态的反面制造，弃。
+
+diff --git a/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/flow-state.yaml b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 0b053689deac6d96948650255f8f6f3265fe4dd1
++updatedAt: '2026-09-26T01:17:09.960Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js18)（11.8s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926011635\test-result.json｜lint: passed
++  ← npm run lint（34.5s）｜门文件 16 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/proposal.md b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/proposal.md
+@@ -0,0 +1,38 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:13:44.372Z
++---
++# 提案书（Proposal）— 2026-09-26-verify-gate-restrictfiles
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:134a80759ebbc1460a5ac9e20d225feefa374001f8533493ab7f31c07f8deaad:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++任务原话转写：动机：五阶段 verify 阶段门（gates.js:1016 runVerifyTestCheck）未传 restrictFiles——quick 门（quick-audit.js:584）传了本会话声明文件做模块收窄，verify 门同形下（变更全提交后跑 verify --done）文件面解析 0 命中可能假 skip（该实测的没实测）——验收侧虚焊。归档 design 与评审 P2 已留痕此缺口（并行会话转达）。
++成功标准：
++- gates.js verify 测试对账门的 runVerifyTestCheck 调用传入 restrictFiles=resolveVerifyChangedFiles（includeWorkingTree: true，与 gates.js:1135 lint scope 同源口径）；空清单时不传（走全量——防 restrict 空数组反而制造假 skip）
++- verify.js 步骤渲染首部加一行长会话提示（上下文已重时建议新会话跑 verify——R18 实证 verify 段轮均 3-4 倍长会话税）
++- 测试：gates 文本级接线钉（restrictFiles 在场）+ 既有 gates/verify 套件零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:34d8e1f0a8758e8d8b099b80e9622853d86eb6cf97d955f89289fc66fdf4674a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. gates.js verify 测试对账门的 runVerifyTestCheck 调用传入 restrictFiles=resolveVerifyChangedFiles（includeWorkingTree: true，与 gates.js:1135 lint scope 同源口径）
++2. 空清单时不传（走全量——防 restrict 空数组反而制造假 skip）
++3. verify.js 步骤渲染首部加一行长会话提示（上下文已重时建议新会话跑 verify——R18 实证 verify 段轮均 3-4 倍长会话税）
++4. 测试：gates 文本级接线钉（restrictFiles 在场）+ 既有 gates
++5. verify 套件零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:26c47ef851f4c2022cd03d5b4d0356eba4c4cc23f90ad6bff7fda304e27c87bf:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-verify-gate-restrictfiles 留痕重锚 -->
++1. gates.js verify 测试对账门的 runVerifyTestCheck 调用传入 restrictFiles=resolveVerifyChangedFiles（includeWorkingTree: true，与 gates.js:1135 lint scope 同源口径）
++2. 空清单时不传（走全量——防 restrict 空数组反而制造假 skip）
++3. verify.js 步骤渲染首部加一行长会话提示（上下文已重时建议新会话跑 verify——R18 实证 verify 段轮均 3-4 倍长会话税）
++4. 测试：gates 文本级接线钉（restrictFiles 在场）+ 既有 gates
++5. verify 套件零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/requirements.md b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/requirements.md
+@@ -0,0 +1,35 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:13:44.373Z
++---
++# 需求规格（Requirements）— 2026-09-26-verify-gate-restrictfiles
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: verify 门 restrictFiles 接线
++Given verify 测试对账门未传 restrictFiles（quick 门传了），变更全提交后同形下 0 命中可能假 skip
++When 门调用传入 resolveVerifyChangedFiles（includeWorkingTree，同 lint scope 口径）且空清单不传
++When 解析异常 fail-open 走全量硬门
++
++### FR-02: verify 渲染长会话税提示
++Given R18 实证 verify 段轮均上下文为 brainstorm 段 3-4 倍（长会话税）
++When verify 步骤说明书首部渲染提示
++Then 跨阶段会话得到「新开会话跑 verify 续跑」建议（上下文重置降轮均）
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/verify-gate-restrictfiles.test.mjs 用例①（接线钉+空清单不传钉+同源口径钉）+ gates 相关 25 用例零回归
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/verify-gate-restrictfiles.test.mjs 用例②（提示文本钉）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01/02
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01/02
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01/02
+
+diff --git a/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/tasks.md b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-verify-gate-restrictfiles/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:13:44.373Z
++---
++# 任务注册表（Tasks）— 2026-09-26-verify-gate-restrictfiles
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: gates.js verify 测试对账门的 runVerifyTestCheck 调用传入 restrictFiles=resolveVerifyChange…
++- [x] task-02: 空清单时不传（走全量——防 restrict 空数组反而制造假 skip）
++- [x] task-03: verify.js 步骤渲染首部加一行长会话提示（上下文已重时建议新会话跑 verify——R18 实证 verify 段轮均 3-4 倍长会话税）
++- [x] task-04: 测试：gates 文本级接线钉（restrictFiles 在场）+ 既有 gates
++- [x] task-05: verify 套件零回归

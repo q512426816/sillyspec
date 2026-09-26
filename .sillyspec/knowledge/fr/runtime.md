@@ -109,7 +109,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：（无场景名）
-待复核：2026-09-25-quick-channel-retire
+待复核：2026-09-26-verify-gate-restrictfiles
 依据决策：D-002@v1
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-01
 最近确认：27de9716
@@ -118,7 +118,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：（无场景名）
-待复核：2026-09-25-quick-channel-retire
+待复核：2026-09-26-verify-gate-restrictfiles
 依据决策：D-001@v1
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-02
 最近确认：27de9716
@@ -127,7 +127,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：（无场景名）
-待复核：2026-09-25-quick-channel-retire
+待复核：2026-09-26-verify-gate-restrictfiles
 依据决策：D-003@v1
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-03
 最近确认：27de9716
@@ -136,7 +136,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：默认场景
-待复核：2026-09-25-quick-channel-retire
+待复核：2026-09-26-verify-gate-restrictfiles
 依据决策：D-004@v1
 场景正文：
 - 场景：默认场景 — Given 全量测试在同一（代码×测试面×环境）态下重复执行；When gate/verify --done/quick --done 再次触发实测检查；Then 三键全等即复用最近结果（不重跑），任一分量变化或不可得即真跑——失败永不来自缓存

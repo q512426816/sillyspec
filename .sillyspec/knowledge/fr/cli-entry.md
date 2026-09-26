@@ -85,7 +85,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 新增 patch 子步（ledger 后 noAI）：buildFrozenPatch 以 baseline 为基、归属收窄后的本变更文件面
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-01
@@ -107,7 +107,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then requirements 机器稿每条 FR 附「测试绑定」AGENT 槽；flow done artifacts 校验槽非空（不适用加理由=已答；零槽=骨架过旧
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-02
@@ -129,7 +129,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-03
@@ -151,7 +151,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖三件，flow 系测试全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-04
@@ -523,7 +523,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-parity-assets
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done patch 子步后打模块文档对账：交付文件命中模块图模块→列出模块与文档路径，模块代码变更而文档未动给强提示（advisory）
 全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-01
@@ -545,7 +545,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-parity-assets
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 归档前机器合成 verify-result.md 落变更目录（结论/实测面/评审/绑定/冻结 sha/基线区间），随归档留档
 全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-02
@@ -567,7 +567,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-parity-assets
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then distill 收割 design 槽4 实质作答合成 decisions.md（已有 decisions 不覆盖），随既有蒸馏链进 knowledge
 全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-03
@@ -589,7 +589,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-parity-assets
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 评审失败路径（缺件/无效/FAIL）先落遥测再 exit；review 子步续跑 skip 时回填评审结论
 全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-04
@@ -611,7 +611,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-parity-assets
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试四件；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-parity-assets/requirements.md#FR-05
@@ -719,7 +719,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-release-pack
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then package.json 版本 3.29.6→3.30.0（AGENTS.md 受管段版本差升级链解锁）
 全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-01
@@ -729,7 +729,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-release-pack
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 简报（fresh 与 adopt 两路）钉交付纪律一行：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HE
 全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-02
@@ -751,7 +751,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-release-pack
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then verify-result 回执：实测面断点续跑后从 verify-runs 最新 test-result.json 回读；HEAD 字段改名收口时 HEAD，
 全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-03
@@ -773,7 +773,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-release-pack
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 测试：回执回填断言（⑮ 扩展）+ 简报纪律行断言；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-release-pack/requirements.md#FR-04
@@ -945,7 +945,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-01
@@ -967,7 +967,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-02
@@ -989,7 +989,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-03
@@ -1011,7 +1011,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 新增测试三件；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-04
@@ -1021,7 +1021,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-r16-patches
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then patch 冻结面双修：flow start 简报钉死交付代码先提交再 done；会话专属 worktree 判定下未提交 dirty 交付面一并入冻结，共享主
 全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-01
@@ -1043,7 +1043,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-r16-patches
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then 评审任务书检查单加披露边界显式裁决条款：每条声明的设计边界/取舍必须写明可接受与否与理由，未裁决视为未审，不可接受边界按发现分级上报
 全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-02
@@ -1065,7 +1065,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-r16-patches
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then ledger 子步断点续跑 skip 时从 verify-runs 最近 test-result 回填实测面摘要（回执不失忆）
 全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-03
@@ -1087,7 +1087,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-r16-patches
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then 新增测试覆盖三件；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-r16-patches/requirements.md#FR-04
@@ -1217,7 +1217,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 共享主仓存在本变更的未提交交付文件；When flow done --freeze-dirty；Then 非他侧声明的 dirty 交付文件全归本变更并入冻结面（exclusiveFrom='flag' 标签区分）
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-01
@@ -1239,7 +1239,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — When flow done 时共享主仓有未提交交付文件且未声明；Then 警告点名三选一（接受缺口 / --freeze-dirty 重跑 / 专属 worktree），简报同步冻结面规则说明
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-02
@@ -1261,7 +1261,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — When flow done 归档完成且 head 不等于 baseline；Then 打印 reset --soft <baseline> 压扁为单提交指引，注明审计真相在 change.patch sha 锚定不依赖历史形态
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-03
@@ -1283,7 +1283,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 上述三件行为；When 跑 flow 系测试；Then flag 入冻/三选一文案/压扁指引均有断言且全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-04
@@ -1293,7 +1293,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-flow-checkpoints
 状态：active
 摘要：默认场景
-待复核：2026-09-26-thin-agent-tasks
+待复核：2026-09-26-slot4-distill-fix
 场景正文：
 - 场景：默认场景 — Given 轻量变更 2 调用协议；When agent 执行任务；Then 用户在三个断点可以看到进度并确认
 全文：.sillyspec/changes/archive/2026-09-25-flow-checkpoints/requirements.md#FR-01
@@ -2365,3 +2365,45 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given 本会话第三次犯「枚举开放世界」同款错误；When design 槽4 写成显式决策记录（三次实例+正确模式：开放分类归 agent，机器锚定封闭面） distill 蒸馏进 knowledge/decision
 全文：.sillyspec/changes/archive/2026-09-26-thin-agent-tasks/requirements.md#FR-03
 最近确认：7b2bab89c0d80490d3e736521d56e24440a7fb00
+
+## FR-cli-entry-125 verify 门 restrictFiles 接线
+变更：2026-09-26-verify-gate-restrictfiles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given verify 测试对账门未传 restrictFiles（quick 门传了），变更全提交后同形下 0 命中可能假 skip；When 门调用传入 resolveVerifyChangedFiles（includeWorkingTree，同 lint scope 口径）且空清单不传 解析异常 f
+全文：.sillyspec/changes/archive/2026-09-26-verify-gate-restrictfiles/requirements.md#FR-01
+最近确认：bf1d0f2db9ee166f83ef1cce9f4c8cdc07c1a715
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-verify-gate-restrictfiles:flow:FR-01
+  tests: test/verify-gate-restrictfiles.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-verify-gate-restrictfiles
+  status: active
+
+## FR-cli-entry-126 verify 渲染长会话税提示
+变更：2026-09-26-verify-gate-restrictfiles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given R18 实证 verify 段轮均上下文为 brainstorm 段 3-4 倍（长会话税）；When verify 步骤说明书首部渲染提示；Then 跨阶段会话得到「新开会话跑 verify 续跑」建议（上下文重置降轮均）
+全文：.sillyspec/changes/archive/2026-09-26-verify-gate-restrictfiles/requirements.md#FR-02
+最近确认：bf1d0f2db9ee166f83ef1cce9f4c8cdc07c1a715
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-verify-gate-restrictfiles:flow:FR-02
+  tests: test/verify-gate-restrictfiles.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-verify-gate-restrictfiles
+  status: active
