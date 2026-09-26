@@ -29,7 +29,7 @@ import { gitQuiet } from './git-helper.js'
 import { resolveRuntimeRoot } from './run/shared.js'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
 import { join, resolve } from 'path'
-import { readChangeTrace } from './test-bindings.js'
+import { readChangeTrace, testAnchorFile } from './test-bindings.js'
 import { verifyApiParity, _readWorktreeMeta } from './contract-matrix.js'
 import { reconcileCrossRepoDeclarations } from './cross-repo-reconcile.js'
 import { parseFileChangeListDetailed, pathMatches } from './change-list.js'
@@ -2443,7 +2443,8 @@ export function resolveTraceResidual({ specBase, changeName, cwd }) {
   if (anchors.length === 0) return { anchors, rows: [], files: [], dangling: [] }
   const rows = readChangeTrace(join(specBase, 'changes', changeName))
     .filter(r => anchors.includes(r.anchor) && r.state === 'active' && r.status !== 'superseded')
-  const files = [...new Set(rows.flatMap(r => r.tests || []))].sort()
+  // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——文件面/悬空判定走剥锚
+  const files = [...new Set(rows.flatMap(r => (r.tests || []).map(testAnchorFile)))].sort()
   const dangling = files.filter(f => !existsSync(resolve(cwd, f)))
   return { anchors, rows, files, dangling }
 }

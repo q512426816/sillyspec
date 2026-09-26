@@ -3027,7 +3027,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
     case 'tests': {
       const {
         queryByAnchor, queryByChange, upsertFrBindings, upsertQlBindings,
-        unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow,
+        unbindFrRows, unbindQlRows, anchorResolvable, normalizeRow, testAnchorFile,
       } = await import('./test-bindings.js')
       const effDir = specDir ? dir : resolveEffectiveDir(dir)
       const specBase = specDir || join(effDir, '.sillyspec')
@@ -3068,7 +3068,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         if (ids.length === 0) { fail('--unbind 须配 --row-id <id> 或 --tests <p1,…>'); break }
         if (/^FR-/.test(anchor)) {
           const cur = queryByAnchor({ specBase, knowledgeRoot, anchor })
-          const del = cur.filter(r => ids.includes(r.row_id) || (testsArg && ids.length === 1 && r.tests.some(t => ids.includes(t)))).map(r => r.row_id)
+          // tests 条目可携带用例锚（2026-09-26-binding-anchor-fidelity）——给路径也能命中带锚行
+          const del = cur.filter(r => ids.includes(r.row_id) || (testsArg && ids.length === 1 && r.tests.some(t => ids.includes(t) || ids.includes(testAnchorFile(t))))).map(r => r.row_id)
           if (del.length === 0) { fail(`未命中可解绑行（anchor=${anchor}，给=${ids.join(',')}）`); break }
           unbindFrRows({ knowledgeRoot, frId: anchor, rowIds: del })
           console.log(`✅ 解绑 ${del.length} 行（${anchor}）`)

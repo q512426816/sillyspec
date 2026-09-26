@@ -65,9 +65,20 @@ export function normalizeRow(row, opts = {}) {
   }
 }
 
+/**
+ * 剥用例锚取文件路径（2026-09-26-binding-anchor-fidelity）：tests 条目自本变更起可携带
+ * 用例锚（书写原形：path「X」组 / path#x / path::x / path > x——提取侧只摘不译）。需要把
+ * 条目当文件路径消费的面（残差实测/归属匹配/覆盖判定/unbind 匹配）统一走这里；展示面
+ * （test-trace/FR 机器子块/tests 视图）保持完整锚点不剥。无锚条目幂等原样返回。
+ */
+export function testAnchorFile(entry) {
+  const s = String(entry || '').replace(/\\/g, '/').trim()
+  const idxs = ['#', '::', '>', '「'].map((sep) => s.indexOf(sep)).filter((i) => i > 0)
+  return idxs.length ? s.slice(0, Math.min(...idxs)).trim() : s
+}
+
 /** orphan accRef（D-005@v1）：index 只作快照，身份=原文指纹 */
-export function orphanAccRef(index, acceptanceText) {
-  return `acc-${index}-${sha256(acceptanceText).slice(0, 8)}`
+export function orphanAccRef(index, acceptanceText) {  return `acc-${index}-${sha256(acceptanceText).slice(0, 8)}`
 }
 
 // ── 变更期载体（D-001@v1）：changes/<名>/test-trace.json ──
@@ -377,7 +388,8 @@ export function resolveTestFileOwners({ specBase, files }) {
         for (const m of text.matchAll(/^## (FR-[A-Za-z0-9-]+-\d+) /gm)) {
           for (const r of readFrBindings({ knowledgeRoot, frId: m[1] })) {
             if (r.state !== 'active' || r.status === 'superseded') continue
-            for (const t of r.tests) if (want.has(norm(t))) push(t, { anchor: m[1], row_id: r.row_id, source_change: r.source_change })
+            // 剥锚后按文件面匹配（tests 条目可携带用例锚——2026-09-26-binding-anchor-fidelity）
+            for (const t of r.tests) { const f = testAnchorFile(t); if (want.has(norm(f))) push(f, { anchor: m[1], row_id: r.row_id, source_change: r.source_change }) }
           }
         }
       }
@@ -387,7 +399,7 @@ export function resolveTestFileOwners({ specBase, files }) {
     for (const [qlId, rows] of Object.entries(readQlBindings(specBase))) {
       for (const r of rows || []) {
         if (r.state !== 'active' || r.status === 'superseded') continue
-        for (const t of r.tests) if (want.has(norm(t))) push(t, { anchor: qlId, row_id: r.row_id, source_change: r.source_change })
+        for (const t of r.tests) { const f = testAnchorFile(t); if (want.has(norm(f))) push(f, { anchor: qlId, row_id: r.row_id, source_change: r.source_change }) }
       }
     }
   } catch { /* ql 面读失败 → 只回 FR 面 */ }

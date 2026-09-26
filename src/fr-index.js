@@ -17,7 +17,7 @@
  *     syncIndexRoutingLines/discoverModuleIndex），不复制实现。
  */
 
-import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines } from './test-bindings.js'
+import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile } from './test-bindings.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -874,7 +874,8 @@ export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
   const byRef = {};
   const dirty = new Set();
   const covHit = (frChange, bindings, refCover) => {
-    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings : [])]);
+    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
+    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings.map((b) => testAnchorFile(b)) : [])]);
     if (frCov.size === 0 || refCover.length === 0) return false;
     return [...frCov].some((p) => refCover.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/') || p.startsWith(c.endsWith('/') ? c : c + '/')));
   };

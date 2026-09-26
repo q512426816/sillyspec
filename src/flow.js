@@ -217,6 +217,7 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   const archiveRoot = join(specBase, 'changes', 'archive')
   const { discoverModuleIndex } = await import('./decision-distill.js')
   const { resolveTouchedDomains, readActiveFrDigest, markFrNeedsReview, frCoverageFiles } = await import('./fr-index.js')
+  const { testAnchorFile } = await import('./test-bindings.js')
   const moduleIndex = discoverModuleIndex(knowledgeRoot)
   const changed = (Array.isArray(files) ? files : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
   // changeDir 仅为 design.md 兜底路由用（filesOverride 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
@@ -230,7 +231,8 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   let skip = 0
   for (const f of frs) {
     if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
-    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings : [])])
+    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
+    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
     if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); continue }
     const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
     if (hit) strong.push(f)
@@ -684,7 +686,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const rb = verifyRequirementBindings({ changeDir })
     if (rb.applicable && rb.emptySlots.length > 0) {
       console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
-      console.error(`   每条 FR 至少一行：test 文件路径或用例名（distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
+      console.error(`   每条 FR 至少一行：测试文件项目相对全路径＋用例名（如 test/foo.test.mjs「用例组」/#用例；distill 时铸 test-trace 随发号提升全局）；无测试面写「不适用：<理由>」`)
       reportMidFail('artifacts')
       process.exit(1)
     }

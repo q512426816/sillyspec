@@ -17,8 +17,8 @@
  * verifyMarkers 三态拒收（标记缺失/哈希失配/手工重锚未审计）；flow amend-draft 是唯一留痕
  * 修改通道（reanchorText 重锚 + ledger amendments 审计）。
  */
-import { existsSync, readFileSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks } from './machine-draft.js'
 
@@ -185,7 +185,7 @@ function draftRequirements({ change, criteria, input }) {
   const n = crit.length > 0 ? crit.length : 1
   const bindingSlots = Array.from({ length: n }, (_, i) => {
     const id = `FR-${String(i + 1).padStart(2, '0')}`
-    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
+    return `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`
   }).join('\n\n')
   const text = [
     '---',
@@ -260,11 +260,78 @@ export function verifyRequirementBindings({ changeDir }) {
  * 从「测试绑定」槽提取绑定行（flow done distill 子步消费面 → writeChangeTrace →
  * indexRequirements 归档提升铸全局）。锚=FR 局部编号（FR-01…，与机器 FR 序一致）；
  * 「不适用」/无路径 token 的作答不产行；tests=作答文本里的测试文件路径（去重）。
+ *
+ * 2026-09-26-binding-anchor-fidelity：tests 条目从纯路径扩为「路径＋可选用例锚」——
+ * 用例锚只在路径 token 后的紧邻窗口（到下一路径 token 或文本尾）捕获，四形态任一：
+ * 「X」＋可选 组/用例 后缀、#id、::id、> name（书写原形只摘不译，「：」后是描述不捕）；
+ * 裸文件名/残缺路径段解析为项目相对全路径（直取存在优先，仓内唯一后缀命中，歧义原样保留）。
  */
+const TEST_PATH_TOKEN_RE = /[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g
+const CASE_ANCHOR_RE = /^\s*(?:(#[^\s：；;，。\n]+)|(::[^\s：；;，。\n]+)|(>\s*[^：；;，。\n]+)|(「[^」\n]+」(?:组|用例)?))/
+const isTestPathToken = (p) => /(^|\/)(test|tests)\//.test(p) || /\.(test|spec)\./.test(p) || /_test\b/.test(p) || /_spec\b/.test(p)
+
+/** 仓内文件索引（懒建：首个直取未命中的 token 才扫描；单次提取调用内缓存）。
+ *  排除依赖/生成物/治理面目录（点目录全跳）；条目上限熔断防病态大仓。 */
+function buildRepoFileIndex(root) {
+  const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', 'out', 'target', 'vendor', 'venv', '.venv', '__pycache__'])
+  const files = []
+  const walk = (dir) => {
+    if (files.length >= 100000) return
+    let ents
+    try { ents = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    ents.sort((a, b) => (a.name < b.name ? -1 : 1))
+    for (const e of ents) {
+      if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) walk(join(dir, e.name)) }
+      else files.push(join(dir, e.name))
+    }
+  }
+  walk(root)
+  return files
+}
+
+/** 裸文件名/路径段 → 项目相对全路径：直取命中原样返回；否则仓内唯一命中（rel===p /
+ *  rel 以 /p 结尾 / 基名相等）解析；零/多命中原样保留（诚实——dangling 校验自然暴露）。 */
+function resolveTestPathRel(p, root, indexRef) {
+  if (!root || existsSync(join(root, p))) return p
+  if (!indexRef.files) indexRef.files = buildRepoFileIndex(root)
+  const want = p.replace(/\\/g, '/')
+  const hits = []
+  for (const abs of indexRef.files) {
+    const rel = abs.slice(root.length + 1).replace(/\\/g, '/')
+    if (rel === want || rel.endsWith('/' + want) || rel.split('/').pop() === want) hits.push(rel)
+    if (hits.length > 1) break
+  }
+  return hits.length === 1 ? hits[0] : p
+}
+
+function extractTestAnchors(content, root, indexRef) {
+  const matches = [...content.matchAll(TEST_PATH_TOKEN_RE)]
+  const out = []
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i]
+    const raw = m[0].replace(/^[./\\]+/, '').replace(/\\/g, '/')
+    if (!isTestPathToken(raw)) continue
+    const winEnd = i + 1 < matches.length ? matches[i + 1].index : content.length
+    const cm = content.slice(m.index + m[0].length, winEnd).match(CASE_ANCHOR_RE)
+    const file = resolveTestPathRel(raw, root, indexRef)
+    const anchor = cm ? cm[0].trim().replace(/^>\s*/, ' > ') : ''
+    out.push(file + anchor)
+  }
+  return [...new Set(out)]
+}
+
 export function extractRequirementBindings({ changeDir, change }) {
   const path = join(changeDir, 'requirements.md')
   if (!existsSync(path)) return []
   const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n')
+  // 仓根推导：changeDir 形如 <root>/.sillyspec/changes/<名>（主仓/worktree 同构，三层上溯）；
+  // 推导失效（目录形态异构）回退 cwd
+  let root = null
+  try {
+    const r = dirname(dirname(dirname(changeDir)))
+    root = existsSync(join(r, '.sillyspec')) ? r : process.cwd()
+  } catch { root = process.cwd() }
+  const indexRef = { files: null }
   const rows = []
   let current = null
   let buf = []
@@ -273,9 +340,7 @@ export function extractRequirementBindings({ changeDir, change }) {
     const content = buf.join('\n').trim()
     buf = []
     if (!content || /^不适用/.test(content)) return
-    const tests = [...new Set((content.match(/[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g) || [])
-      .map((t) => t.replace(/^[./\\]+/, '').replace(/\\/g, '/')))]
-      .filter((t) => /(^|\/)(test|tests)\//.test(t) || /\.(test|spec)\./.test(t) || /_test\b/.test(t) || /_spec\b/.test(t))
+    const tests = extractTestAnchors(content, root, indexRef)
     if (tests.length === 0) return
     rows.push({ anchor: current.replace(/^测试绑定/, ''), row_id: `${change}:flow:${current.replace(/^测试绑定/, '')}`, tests, reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: change })
   }
@@ -655,7 +720,7 @@ export function ensureBindingSlots({ changeDir }) {
     if (!ids.includes(id)) ids.push(id)
   }
   const list = ids.length > 0 ? ids : ['FR-01']
-  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
+  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
   const section = `\n## 测试绑定（收编追加——每条 FR 至少一行：test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）\n\n${slots.join('\n\n')}\n`
   writeAtomicSync(path, text.endsWith('\n') ? text + section : text + '\n' + section)
   return { appended: true, slots: list.length }
