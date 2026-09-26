@@ -1758,6 +1758,14 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
       const restrictSet = new Set(restrictFiles.map(norm))
       cf = cf.filter(f => restrictSet.has(norm(f)))
     }
+    // 命中源空回退（2026-09-26-thin-gate-module-source）：thin 协议「先提交再收口」使
+    // git diff HEAD 恒空（quick 会话全提交同形）——源为空数组且调用方带了会话清单
+    // （restrictFiles，与快照 overlay 同源）时以清单兜底作命中源；仅兜空不替代非空源，
+    // null（git 不可用）语义不变
+    if (Array.isArray(cf) && cf.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+      cf = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
+      console.log(`ℹ️ diff 命中源为空（先提交后收口的 thin 常态）——回退调用方清单 ${cf.length} 个文件作命中源（与快照 overlay 同源）`)
+    }
     lastChangedFiles = Array.isArray(cf) ? cf : []
   }
   if (strategy === 'module') {
@@ -1779,6 +1787,13 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
         if (dropped > 0) {
           console.log(`ℹ️ 模块选择已收窄到本会话声明的 ${changedFiles.length}/${before} 个变更文件（${dropped} 个未声明脏文件不进实测面——并行变更 WIP 留在审计记录）`)
         }
+      }
+      // 命中源空回退（2026-09-26-thin-gate-module-source）：同上 strategy=null 分支注——thin
+      // 先提交后收口使 git diff HEAD 恒空 → 0 命中假 skip（2026-09-25-quick-channel-retire
+      // 收口实证：72 个门文件在手、test 门 skipped）。仅兜空不替代非空源，null 语义不变
+      if (Array.isArray(changedFiles) && changedFiles.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+        changedFiles = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
+        console.log(`ℹ️ 模块命中源为空（thin 先提交后收口：git diff HEAD 恒空）——回退调用方清单 ${changedFiles.length} 个文件作命中源（与快照 overlay 同源；diff 非空时不替代）`)
       }
       lastChangedFiles = Array.isArray(changedFiles) ? changedFiles : []
       if (changedFiles === null) {
