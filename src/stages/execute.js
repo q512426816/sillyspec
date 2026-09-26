@@ -438,15 +438,15 @@ const acceptanceSteps = [
 ### 执行方式（CLI 按变更规模判定，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self：当前 agent 汇总执行（对照 design.md 逐项检查 + 偏差说明）
-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役）。有派发能力时本豁免不适用（真独立评审仍优待）。
 - tier=independent：必须用 Agent tool 启动一个独立的 QA 子代理（独立上下文，不共享实现者的分析），子代理对照 design.md 逐项检查实现一致性并输出 review.json。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值；reviewedFiles 除主文档 design.md 外可追加 git diff 涉及的源码文件）:
 {PRIOR_REVIEW_FACTS}
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {REVIEW_JSON_CONTRACT}
   该 acceptance review 同时覆盖"代码审查"视角（风格/bug/安全/冗余），后续代码审查步骤仅需轻量复审。
 
-  **审查范围分级（省重复消耗，task review 已覆盖的不全量重审）**：每个 task 在 Task Review Gate 已产出 review.json（{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json，specVerdict/qualityVerdict 双 pass）。QA 子代理按它分层：双 pass 的 task 只**抽查**（读 1-2 个核心 diff 文件抽验 reviewerNotes 与实际改动相符，不必逐文件重审）；未双 pass（fail/cannot_verify/缺失）的 task 必须全量重审。无论抽查还是全量，以下三项始终必查——task review 铁律是"只看当前 task 的 diff"，这三项是它覆盖不到、只有 stage review 能兜住的：
+  **审查范围（Task Review 层已退役 2026-09-26——task 粒度不再有前置 review.json 可分层）**：QA 子代理对照 design×实际 diff 逐 task 核验实现一致性（含改动文件与 allowed_paths 对照），以下三项始终必查（task 粒度无前置评审兜底，全靠本层）：
 ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + item).join('\n')}
+  **反例测试核对**（R5 接线，2026-09-26 起随 Task Review 退役自 task 级评审铁律移驻本层）：本次变更新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死。
 
   **产物唯一化（省重复消耗）**：本步逐项对照结论**只落盘一份**——直接写进 review.json 的 \`checklist\` 数组（item=设计要点/FR/决策，note=实现状态 ✅/⚠️/❌ + 偏差说明 + commit 锚点），reviewerNotes 写汇总。**不要**另写独立的 design-check.md 长文（同一份 design×diff 二次消费；2026-08-22 实测该重复一遍 ≈8 分钟全量重读）。
   **执行纪律（坑 review-subagent-stall，2026-09-15 wp EHS 会话实证）**：brainstorm/plan 阶段已实证的结论（既往 stage-review checklist pass 项、file:line 锚点）直接引用勿重验；必读材料读完即逐条出结论落盘，仅结论存疑时定向补证，禁止循环扩大核验面（连续读文件 10+ 次仍零结论 = 基于已读材料立即收敛）。QA 子代理写操作持续被平台拒绝（session not in running turn 类）→ 重试 ≤3 次即停，完整结论（含 review.json 全文）回传主代理代落盘，reviewerNotes 首行留痕「代落盘：子代理写通道故障」；禁止长时间空转重试。
@@ -454,7 +454,7 @@ ${REVIEW_CHECKLISTS.execute.map((item, index) => '  ' + (index + 1) + '. ' + ite
   **审查经济学三律（2026-09-20 对撞实验驱动，同 brainstorm/plan 审查步）**：①请求预算硬钳——QA 子代理请求上限 **15 次**（材料包+抽查 task 的 diff 文件+全量重审 task 的核心文件），到达即出 verdict；②FAIL 后增量复审——resume 原 QA 子代理只发修复说明+diff 验证阻断项（不全文重审，5 倍差实证），checklist 追加增量复核行；③并行化——tier=independent 时 run_in_background: true 派发后主代理继续下一知识库审阅步骤，回收在即将 --done 代码审查步骤前；④**审查只读纪律**——QA 子代理工具面只读（Read/Grep/只读 Bash），禁止 Edit/Write 被审产物（源码/四件套/review.json 之外的生成物），唯一可写 review.json——发现问题写 checklist/blockers 由主代理/对应 task 修复（2026-09-20 实证 Grill 越权改 design 15 处：独立性破坏+责任链断裂+回合爆炸；③并行化下同文件双写竞态的前置防线）。
 
 ### 操作（材料包口径——2026-09-19-review-material-cli-wiring）
-1. **评审材料包（基准面）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('execute-qa')：diff 摘要＋design 热区＋验收清单）——checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。task review 双 pass 抽查、未双 pass 全量重审的分级照旧（上方「审查范围分级」）；tier=independent 时把整包贴进 QA 子代理派发 prompt：
+1. **评审材料包（基准面）**：CLI 已机械组装注入下方（src/review-material-pack.js assembleStageReviewMaterials('execute-qa')：diff 摘要＋design 热区＋验收清单）——checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。审查范围按上方「审查范围」整段执行；tier=independent 时把整包贴进 QA 子代理派发 prompt：
 {REVIEW_MATERIALS}
 2. 逐一对照 design.md 中的设计要点与实际代码实现
 3. 检查接口签名、数据结构、模块划分是否一致
@@ -799,7 +799,8 @@ export function writeBaseCommitToTaskCard(taskFilePath, baseCommit) {
  * 跨仓 task head_commit 锡点自动落盘（2026-08-21 agent-手工产出审计项③，D-010 补对称）。
  *
  * base_commit 已在派发时 CLI 落盘，head_commit 此前靠主 agent 按 Wave prompt 指引手跑
- * `rev-parse` 手写（漏抄/抄错直接炸 Task Review Gate 真实性校验）。本函数在 execute
+ * `rev-parse` 手写（漏抄/抄错直接炸原 Task Review Gate 真实性校验——该门已随
+ * 2026-09-26-task-review-retire 退役，本函数随之无活路径调用方，保留导出作历史回放兼容）。本函数在 execute
  * --done 时机补齐另一半：扫描 task 卡，跨仓 task（repo≠main）缺 head_commit 的，实时
  * `git -C <跨仓仓根> rev-parse HEAD` 幂等写入（**已存在不覆盖**——agent 手写的精确锚点优先）。
  *
@@ -975,7 +976,7 @@ ${prototypes.map(p => `- \`${path.join(protoRelDir, p)}\``).join('\n')}
   // 小任务全额派发开销）。**显式 `execution_mode: dispatch` 才走子代理派发**（判据：任务真可
   // 并行 × 单任务规模大 × 上下文需分片，三者齐备才值得付派发税）。main 时：执行方式段换直写
   // 指引、派发段/子代理工作目录强制段/并发帽段/M3 推荐分组段全抑制；worktree 隔离/写入守卫/
-  // review.json/verify 门禁与锚点/review write 指引全保留（只换执行宿主，不换防线）。
+  // verify 门禁与勾选指引全保留（只换执行宿主，不换防线）。
   // best-effort：plan 缺失/读取失败 = 缺省 main。严格小写（大小写漂移视为非法回退缺省）。
   let executionMode = 'main'
   try {
@@ -1213,7 +1214,7 @@ ${indexLines}
 **跨仓 worktree task（repo 已建 worktree 隔离）——像主仓 task 一样工作：**
 - 子代理在 workdir（跨仓 worktree）内改+commit（git add + git commit 到 worktree 当前分支），**不要碰跨仓主工作副本**。
 - apply 阶段 CLI 统一把各跨仓 worktree 的交付 patch 回对应跨仓主工作区（勿手工 apply）。
-- base 已锚 worktree meta.baseHash（创建时快照），review 的 base/head 由 CLI 按 task 卡锡点解析。` : ''
+- base 已锚 worktree meta.baseHash（创建时快照）；task 卡锡点供归档回放/对账解析。` : ''
     const crossLegacySection = crossLegacyItems.length > 0 ? `
 
 **派发跨仓 task 前（base 锡点，CLI 已在 prompt 构造时落盘）：**
@@ -1227,9 +1228,9 @@ ${indexLines}
 
 ${crossLines}${crossWorktreeSection}${crossLegacySection}
 
-**回收跨仓 task（head 锡点，CLI 自动落盘，勿手写）：**
-- 子代理完成 commit 后，正常写 review.json（verdict/notes）即可——checkbox 由 CLI 按 review verdict 自动勾选（review write 落盘即勾）。execute \`--done\` 时 CLI 自动对跨仓仓（worktree 模式=该仓 worktree，legacy=仓根）\`git rev-parse HEAD\` 写入该 task 卡 \`head_commit:\`（幂等，已存在不覆盖——你若手写了精确锚点则以你的为准）。
-- review.json 的 mechanics 字段（\`base\`/\`head\`/\`changedFiles\`/\`diffPaths\`）无需手算：\`base\` 取 task 卡 \`base_commit\`、\`head\` 取 task 卡 \`head_commit\`，写完跑 \`sillyspec backfill-reviews --change <变更名> --adopt\` 一键代填（verdict 保留）。
+**回收跨仓 task（Task Review 层已退役，2026-09-26）：**
+- 子代理完成 commit 后，手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义）。
+- head 锡点自动落盘已随 enforceReviewJsonGate 退役移除；跨仓 task 卡如需 \`head_commit:\` 锚点（归档回放/对账用）可手写 \`git -C <跨仓仓根> rev-parse HEAD\`（base 锡点仍在派发时由 CLI 落盘）。
 `
   }
 
@@ -1382,7 +1383,7 @@ ${worktreeNoticeSingle}
       const recGroups = recommendWaveGroups(groupTasks)
       if (recGroups.some(g => g.length >= 2)) {
         const display = recGroups.map(g => `[${g.join(',')}]`).join(' / ')
-        recommendBlock = `\n**推荐分组（CLI 已按上述三条件预计算）**：${display}\n按推荐分组派发与回收（组内逐 task 审查/review.json 照旧，主代理按组一次回收）；可偏离推荐分组，但偏离须在 Wave 完成摘要中披露理由——机械建议不夺裁决权。\n`
+        recommendBlock = `\n**推荐分组（CLI 已按上述三条件预计算）**：${display}\n按推荐分组派发与回收（组内逐 task 审查照旧、勾选手动，主代理按组一次回收）；可偏离推荐分组，但偏离须在 Wave 完成摘要中披露理由——机械建议不夺裁决权。\n`
       }
     } catch { /* 推荐分组 fail-open：计算失败零注入，不阻断 Wave prompt 组装 */ }
   }
@@ -1411,7 +1412,7 @@ ${worktreeNoticeSingle}
     ? `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，逐个完成（串行——启动一个、等它完成并审查后再启动下一个，见「调度要求」串行铁律）`
     : `1. 为每个任务启动一个子代理（Agent tool），或按上述三条件把多个任务合并为一个 batch 子代理，同 Wave 内可并行——但同时在飞子代理 ≤3（见「调度要求」并发帽，超出的 batch 排队错峰）`
   const scheduleItem1 = mainMode
-    ? `1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 锚点/review write → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。`
+    ? `1. **主代理直写纪律（execution_mode: main）**：逐任务串行闭环（读 task 卡 → worktree 内实现 → 跑该 task verify 命令 → wt-commit 逐任务提交 → 手动勾 tasks.md checkbox → 下一任务），不派子代理、不并行——直写模式串行是本通道契约；防线（worktree 隔离/写入守卫/verify 门禁）与模式无关恒在。`
     : implicit
       ? `1. **隐式 Wave 串行铁律**：本 Wave 由 plan.md 无显式 Wave 划分时合成——任务一律逐个完成（单子代理串行逐个实现，或逐个启动子代理并等待其完成再启动下一个），**禁止并行启动**（未做过文件正交/契约链核查，并行不安全；需要并行收益请在 plan.md 显式划分 Wave）。`
       : `1. **同一 Wave 的多个子代理（独立或 batch）并行启动、batch 内部串行，且同时在飞 ≤3**（batch 分组仅按文件正交 / 无契约链判定，不改变 Wave 依赖语义——Wave 定义=无依赖可并行；有依赖应在 plan.md 的不同 Wave 中。并发帽 3：Wave 内子代理超 3 个时分两批错峰——首批完成后回收槽位再派第二批；4 路齐发实证触发平台额度/限流耗尽，整 Wave 中断 17 分钟由用户手动恢复，得不偿失）。`
@@ -1419,16 +1420,16 @@ ${worktreeNoticeSingle}
   // ── M4 模式段变体（2026-09-21-r5-efficiency-batch2 task-04）：dispatch 分支为既有模板
   // 逐字移植（缺省/非法回退 dispatch → 输出与改前逐字节一致，零回归由改动前后黄金快照
   // diff + 既有钉测试双保证）；main 分支为直写指引——派发段/子代理工作目录强制段/并发帽
-  // 段/M3 分组段全抑制，防线与锚点/review write 指引全保留（只换执行宿主，不换防线）。──
+  // 段/M3 分组段全抑制，防线与勾选指引全保留（只换执行宿主，不换防线）。──
   const mainExecSection = `## 执行方式
 
 **主代理直写（execution_mode: main）——你直接实现，不派子代理。**
 
-逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 锚点写入与 review write（见下方 Task Review Gate——checkbox 由 CLI 自动勾选，勿手动勾选）→ 下一任务。
+逐任务闭环（串行，完成一个再下一个）：读 task 卡（路径见下方任务摘要）→ 在 worktree 内实现（TDD：先写测试再实现）→ 跑该 task 卡 verify 命令 → \`sillyspec wt-commit --change <change-name> -- <task-files>\` 逐任务提交 → 手动勾选 tasks.md 对应 checkbox（完成=实现+测试绿+wt-commit 即勾，2026-09-26 Task Review 退役起勾选回归 agent 手动，同 thin 工作单元语义）→ 下一任务。
 
-worktree 隔离 / 写入守卫（allowed_paths）/ review.json / verify 门禁全部保留——只换执行宿主，不换任何防线。
+worktree 隔离 / 写入守卫（allowed_paths）/ verify 门禁全部保留——只换执行宿主，不换任何防线。
 
-**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境才允许降级为主代理自审，且 review.json reviewerNotes 首行必须留「降级：环境无子代理可用」审计行。`
+**评审派发保留（2026-09-23 R9 教训）**：直写只免「实现」的子代理派发——Stage Review（tier=independent）仍须派独立子代理执行（harness 有 Agent/Task 类工具必派：小上下文干重读活，省主会话 token 且保审查实效，R8 基线实证审查抓过真缺口）；确实无派发工具的环境按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）。`
 
   const dispatchExecSection = `## 执行方式
 
@@ -1443,8 +1444,8 @@ ${recommendBlock}
 
 你的角色是调度者 + 审查者（batch 只合并实现、不合并审查）：
 ${roleItem1}
-2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查、review.json 产出与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
-3. checkbox 由 CLI 自动勾选（review write 落盘即按 verdict 勾选 tasks.md；勿手动勾选）
+2. 子代理完成后审查结果——batch 子代理只做实现与自验，task 审查与 checkbox 勾选仍归你（主 agent），在子代理返回后逐 task 进行；审查 batch 报告时逐 task 对照 allowed_paths 检查改动文件清单有无越权
+3. 完成一个任务（子代理返回+审查通过+测试绿+wt-commit）即手动勾选 tasks.md 对应 checkbox（2026-09-26 Task Review 退役起勾选回归 agent 手动；勾选是批量完成与中断续跑的事实锚）
 4. 记录改动文件和测试结果`
 
   // main 模式无派发——SillyHub 互斥行随派发段一同抑制（无 batch 分组语义可互斥）
@@ -1478,7 +1479,7 @@ ${roleItem1}
 6. **增量落盘与中断接手指引**：每完成一个可见产出（代码/测试/文档），立即写盘并执行一次最小验证（如语法检查、单跑相关测试）。工作过程中如被 429/API 配额/会话中断，应在最终回复里输出「已完成清单」（含文件路径、测试命令、当前卡点），不要只输出结论——主代理会依据磁盘产物和该清单判断哪些部分已完成，哪些需接手补做，避免重做已落盘的工作
    **中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done**（测选路引导，2026-09-18-preflight-slimming task-04：中间验证只跑本任务相关测试文件，全量套件留给 task 收口与 verify --done，防每步全量测试拖慢执行；与 taskcard-rules.md verify 段同款文案）
 7. **任务边界铁律**：严格只实现本 task 的 \`allowed_paths\` 内文件；若 design.md/plan.md 明确指定了接口/回调/钩子接入位置，必须逐字遵守；不允许顺手实现其他 task 的内容（如 task-01 不要把 task-02 的接入也做了）。如发现必须改其他 task 文件才能继续，先回到主代理由主代理决定是否重分 Wave 或调整 plan，禁止子代理私自越界
-8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止写 review.json、禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task`
+8. **batch 子代理协议**（仅当按「执行方式」节条件合并 batch 时附加进该子代理 prompt）：按 batch 内 task 顺序逐个完成实现闭环——读取 tasks/task-N.md → 实现 → 跑该 task 的 verify 命令 → 记录该 task 报告（改动文件清单 / verify 结果 / 卡点）→ 才开始下一个 task；最终回复输出逐 task 报告清单。禁止勾选 tasks.md checkbox——task 审查与勾选归主 agent，在子代理返回后逐 task 进行。越权即停：发现必须改 batch 内其他 task 或任何 batch 外 task 的 allowed_paths 文件 → 立即停止本 task 及后续，报告冲突文件与卡点，回主 agent 裁决（重分 Wave / 调整 plan / 回退独立子代理）。第 7 条任务边界铁律在 batch 语境下的「本 task」= 当前正在实现的 task`
 
   return `${waveHeader}
 
@@ -1529,51 +1530,15 @@ ${scheduleItem1}
    - 用户明确要求编译时
 4. 每个任务完成后：
    - **使用 \`sillyspec wt-commit --change <change-name> -- <task-files>\` 串行提交**（坑 wt-parallel-commit-race：同一 Wave 多子代理共享 worktree，裸 \`git add -A\` 互卷 WIP / 撞 index.lock；\`git add -A\` 还会把并行子代理未提交的半成品一并暂存——**禁 \`git add -A\`**；sillyspec wt-commit 自动处理分支切换与序列化，无需手动 git 操作；未 commit 的新文件不在 base commit 也不在 index，apply --3way 报 "does not exist in index"）
-   - commit 后 base..HEAD diff 完整、apply 顺畅，review.json 的 head 也有真实锚点
-   - **写 review.json 即可**（checkbox 由 CLI 自动勾选，见下方 Task Review Gate）
-   - **任务边界上报（每任务一次，主仓根目录）**：review write 落盘（CLI 已自动勾选）后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
+   - commit 后 base..HEAD diff 完整、apply 顺畅（apply 与对账都吃真实提交面）
+   - **手动勾选 tasks.md 对应 checkbox**（完成=实现+测试绿+wt-commit 即勾；勾选是批量完成与中断续跑的事实锚）
+   - **任务边界上报（每任务一次，主仓根目录）**：勾选 checkbox 后跑一次 \`sillyspec platform sync --change <change-name>\`——以任务粒度把「最后信号」（last_pushed_at）与 tasks.md 勾选状态推上平台（变更中心「进行中」可见性）；未连接平台时该命令静默跳过，无需先检查连接状态
    - **既跑 lint check 也跑 formatter**：凡变更涉及的源码跑项目的 lint 检查 **和** 格式化（如 \`ruff format\` / \`prettier --write\`），不要只跑 check——只 check 不 format 会把格式问题留到 commit 时被 pre-commit hook 拦截（worktree 内二进制可能缺失，先 \`which <bin>\` 确认，缺则 \`uv tool install\` / \`uv sync\`）
    - 记录改动文件和测试结果
 5. 遇到 BLOCKED → 记录原因，选择：重试/跳过/停止
 
-### Task Review Gate
-
-每个子代理完成后，你必须创建 task review（review write 落盘后 CLI 自动勾选 checkbox——P2-f 起勾选唯一写入者是 CLI）。
-
-**操作步骤：**
-1. 读取当前 task 的 git diff（从 task 开始到完成的变更）
-2. 对照 plan.md 中该 task 的描述和 tasks/task-XX.md（如果存在）检查实现是否符合要求
-3. 写入 review.json 文件
-4. **禁止手动勾选 tasks.md 的 checkbox**（P2-f task 真源归一：review.json verdict 是唯一真源，tasks.md 勾选是它的显示态，唯一写入者是 CLI——review write 落盘即勾、execute --done 时 autoCheckPlanFromReviews 兜底；agent 手勾与机器勾的漂移面就此退役）
-
-**review.json 路径：**
-
-task-XX 对应：{SPEC_ROOT}/.runtime/execute-runs/{EXECUTE_RUN_ID}/tasks/task-XX/review.json
-
-本 execute run 的固定 ID 是：{EXECUTE_RUN_ID}
-**所有 task 的 review.json 必须使用这个 ID，不要自行创建新目录。**
-
-**review.json 必填字段：**
-
-{ "name_zh": "任务评审", "schemaVersion": {REVIEW_SCHEMA_VERSION}, "task": "task-XX", "base": "<git-base-commit>", "head": "<git-head-commit>",
- "changedFiles": ["src/foo.js"], "specVerdict": "pass|fail|cannot_verify",
- "qualityVerdict": "pass|fail|cannot_verify", "reviewerNotes": "评审说明",
- "requiredEvidence": [] }
-
-**base/head 两种取法（按提交模式选其一）：**
-- **per-task commit 模式**（默认，子代理每 task 一提交）：base=本 task 开始前的 commit，head=本 task 的 commit——base..head 天然就是本 task 的 diff，无需 diffPaths。
-- **统一 commit 模式**（主代理统一实现/收尾一次性 commit，全部 task 一个提交）：base=基线 commit（worktree meta 的 baseHash），head=统一 commit，并**必填 \`diffPaths\`（本 task 卡的 allowed_paths 原样数组）**——评审与 CLI 校验的 diff 都是 \`git diff base..head -- diffPaths\` 的路径限定切片，任务边界由 diffPaths 机器可验，不再只靠 changedFiles 归属说明。changedFiles 填切片内实际改动的文件。
-
-**评审铁律：**
-- 不信任 implementer 自报结果，对照 diff 和 task brief 验证
-- 只看当前 task 的 diff（统一 commit 模式=路径限定切片），不做全仓库漫游审查
-- \`cannot_verify\` 只在确实无法验证且有待补充证据时使用，且 requiredEvidence 必须非空
-- \`sillyspec run execute --done\` 会校验所有 task 的 review.json，缺失或 fail 会阻断完成
-- **反例测试核对**（2026-09-21 R5 接线）：本 task 新增守卫/门控/校验分支时，核对配套反例测试——「守卫不该生效的场景确实不生效」断言（如：特性关闭时零写盘/无 spec 根零目录创建）。坑实证（R5 batch2 W1）：写盘分支守卫写成死赋值，三轮污染实证才修对——有反例一轮抓死
-- **回收瘦身**：审查回收输出 = verdict 一行 + blockers（如有）+ review.json 路径——细节不转述，主代理按需 Read 工件；git diff 对账仍是回收真相源，本条只瘦身转述
-
 ### module-impact.md 更新（主代理在本 Wave 所有 task 完成后汇总）
-本 Wave 内所有 task 子代理完成、review.json 写好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：
+本 Wave 内所有 task 完成、checkbox 勾好后，**由你（主代理/调度者）**汇总本 Wave 的实际代码变更，更新 {SPEC_ROOT}/changes/<change>/module-impact.md（plan 阶段已生成首版）：
 - 基于本 Wave 各 task 的实际 git diff（不是计划）+ {SPEC_ROOT}/docs/<project>/modules/_module-map.yaml 对照
 - 更新受影响模块的影响类型/说明（实际改动可能与 plan 首版预估不同，据实修正）
 - **不由各 task 子代理分别改**（同 Wave 并行子代理改同一文件会互相覆盖）——只由主代理在 Wave 收尾统一更新一次

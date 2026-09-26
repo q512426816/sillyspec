@@ -2,8 +2,9 @@
  * validateCheckedTaskReviews 单元测试（坑 review-json-field-gap）。
  *
  * 已勾 [x] task 的 review.json 必须 schema 完整；未勾 [ ] task 不校验。
- * Task Review Gate 只在整阶段完成时跑，本函数补"每次 execute --done 提前校验"的纯逻辑，
- * 让漏写/漏字段 review.json 在单 task --done 时就暴露，而非等到收尾。
+ * 2026-09-26-task-review-retire 起 enforceReviewJsonGate（每次 execute --done 的消费门）随
+ * Task Review 层退役删除；本纯函数保留在 task-review.js 作历史变更 doctor/回放兼容读侧，
+ * 本测试随模块保留（锁兼容读侧语义不回潮为活路径）。
  */
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

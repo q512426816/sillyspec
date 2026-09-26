@@ -403,9 +403,8 @@ design.md 文件路径 + 自审结果
 ### 审查执行方式（CLI 按 ceremony_tier 风险定价，占位符由 run.js 注入）
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self（ceremony 档 S0/S1）：当前 agent 按「仪式档位菜单」执行对应档轻仪交叉审查（S0=CLI 清单核验 / S1=CLI 清单核验+定向探针抽查）——轻仪是风险定价的正常形态而非降级，清单机械项一条不省
-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
 - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动一个独立的设计审查子代理（独立上下文，不共享你的分析与倾向），子代理按下方"交叉审查模型"审查 design.md 并输出 review.json——S2=独立评审×1；S3=两轮独立评审（两轮独立子代理交叉，第二轮聚焦首轮未决项与新增面）。review.json 产物契约（CLI Stage Review Gate 将硬校验，schema + 完整示例 + docHash 算法如下，照抄改值）:
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 {PRIOR_REVIEW_FACTS}
 {REVIEW_JSON_CONTRACT}
   子代理只产出 review + Unresolved Blockers，**是否调用 sillyspec run brainstorm --wait 仍由你（主 agent）根据其 verdict 决定**（子代理不直接操作 CLI 状态机）。
@@ -424,7 +423,7 @@ tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - S1：CLI 清单核验 + 定向探针抽查——机械项全查之外，对最高风险的 1-2 个交叉点做定向源码探针（读相关实现验证设计假设），无需独立子代理
 - S2：独立评审×1——一个独立审查子代理完整执行下方交叉审查模型并产出 review.json
 - S3：两轮独立评审 + Grill 深查——两个独立审查子代理分别审查（视角互补：一个查结构性矛盾/一致性，一个查可行性与外部约束），首轮未决项进第二轮复核；对 P0 歧义逐一压力测试（Grill 深查）
-当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方降级兜底执行并留 degraded 痕（reviewerNotes「降级：环境无子代理可用」）；S0/S1 的 self 是档位定价的正常形态，不是降级。
+当前档以注入的 ceremony_tier 行为准（run.js 注入 {REVIEW_TIER} 时随附菜单并标注）；档位由 blast/span/friction 三轴客观计算，agent 自报只可升不可降——按当前档如实执行，不自行升仪或降仪。S2/S3 评审通道全不可用时按上方评审豁免处理（写 review-unsupervised.md 声明，不自审表演）；S0/S1 的 self 是档位定价的正常形态，不是降级。
 
 ### 默认行为
 1. 默认必须执行一次交叉审查；不要让用户凭主观判断决定"要不要 Grill"。

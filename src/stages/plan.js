@@ -369,7 +369,6 @@ plan.md 审查通过后、进入 execute 前，若 plan_level=full（跨模块/�
 tier: {REVIEW_TIER}（{REVIEW_TIER_REASON}）
 - tier=self（ceremony 档 S0/S1）：当前 agent 直接执行下方审查清单——S0=CLI 清单核验；S1=CLI 清单核验+定向探针抽查（对最高风险条目定向读源码验证）。轻仪是风险定价的正常形态而非偷懒豁免，清单机械项一条不省
 - tier=independent（ceremony 档 S2/S3）：必须用 Agent tool 启动独立的计划审查子代理（独立上下文，不共享你生成 plan 时的分析与倾向），由子代理执行下方审查清单并输出 review.json——S2=单轮；S3=两轮独立评审（视角互补，第二轮聚焦首轮未决项）
-  宿主环境无 Agent tool 可用（调用报 Unknown agent / Available agents: none）→ 不卡死（降级兜底，仅评审通道全不可用时）：主代理切换为审查者角色自审替代，reviewerNotes 首行记录「降级：环境无子代理可用」，逐条结论附源码锚点（file:line 或 grep/read 证据）补偿独立性。
 - 仪式按 risk 计价，plan_level 仅编排：agent 自报 plan_level=full 而 CLI 判档 S0/S1 时，CLI 强制轻仪执行并在注入文案留审计痕（强制轻仪说明行随 tier 注入）——不因「计划写得完整」进入 independent×2，勿自行升仪对抗定价
 
 ### 审查清单（读取 plan.md 的 plan_level，逐条核对）
@@ -382,7 +381,7 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 prompt 要点：
 1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
-> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage Review 门见声明即放行并留痕（声明随归档；Task Review 层已退役 2026-09-26-task-review-retire）。有派发能力时本豁免不适用（真独立评审仍优待）。
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项

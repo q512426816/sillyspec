@@ -2,13 +2,12 @@
  * execute run marker 漂移兜底 单元测试（prompt-control-debt.md gate-atom-a 正确修法）。
  *
  * 场景：generateExecuteRunId 只写 marker 字符串、run 目录由 ensureTaskReviewDir 在写 review.json
- * 时才建。marker 漂到「尚未建目录/未写 review」的新 run 后，旧 run 里齐备的 review.json 失联，
- * enforceReviewJsonGate 拿 marker 直接读会误报「review.json 不存在」。
- *
- * 本文件测新 helper resolveLatestExecuteRunIdWithTasks（无视 marker、只认真实含 tasks/ 的最新目录），
- * 并用例锁定 gates.js enforceReviewJsonGate 的集成分支语义：
- *   marker 指向的 run 缺 tasks/ → 用本 helper 重定位到真实含 review 的 run；全部 run 都无 tasks/ →
- *   helper 返回 null，gate 维持原 marker 校验（缺失照报，不误放行）。
+ * 时才建。marker 漂到「尚未建目录/未写 review」的新 run 后，旧 run 里齐备的 review.json 失联。
+ * 2026-09-26-task-review-retire 起 gates.js 两个消费门（enforceReviewJsonGate / Task Review Gate）
+ * 已退役；本文件锁 helper 的兼容读侧语义（历史变更回放/doctor 仍经 resolveLatestExecuteRunIdWithTasks
+ * 重定位，validateCheckedTaskReviews 纯函数语义不变）：
+ *   marker 指向的 run 缺 tasks/ → helper 重定位到真实含 review 的 run；全部 run 都无 tasks/ →
+ *   helper 返回 null，调用方维持原 marker 校验（缺失照报，不误放行）。
  */
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

@@ -14,7 +14,8 @@
  * 4. 编号单调：全局硬约束恒 9 → 材料包顺延 10 → 轮数纪律/返回契约再顺延，缺位前移不撞车
  *    （四种 gc×材料包组合全覆盖）
  * 5. task-02 回归钉：材料包行有映射渲染、无映射零注入（本 task 追加不得破坏）
- * 6. 红线钉：Task Review Gate 的 diff 对账步骤原样在位（本 task 只加 prompt 渲染文本）
+ * 6. 退役钉（2026-09-26-task-review-retire）：Task Review Gate 段/回收瘦身行已删，
+ *    wt-commit 与返回契约（diff 对账真相源）保留
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -62,24 +63,18 @@ test('子代理返回契约注入（C-1 B1：≤25 行结构化摘要）', () =>
   rmSync(cd, { recursive: true, force: true })
 })
 
-test('回收瘦身行注入 Task Review Gate（C-1 B2：blockers 与 review.json 路径同现）', () => {
+test('退役钉：Task Review Gate 段与回收瘦身行已删（2026-09-26-task-review-retire），wt-commit/返回契约在位', () => {
   const cd = makeChangeDir()
   const wp = render(cd)
-  assert.ok(wp.includes('回收瘦身'), '「回收瘦身」标题在位')
-  const line = wp.split('\n').find(l => l.includes('回收瘦身'))
-  assert.ok(line !== undefined && line.includes('blockers') && line.includes('review.json 路径'), 'blockers 与 review.json 路径同现一行')
-  assert.ok(wp.includes('git diff 对账仍是回收真相源'), 'git diff 仍是回收真相源（红线语义钉）')
-  assert.ok(wp.includes('主代理按需 Read 工件'), '细节不转述、主代理按需 Read 工件在位')
-  rmSync(cd, { recursive: true, force: true })
-})
-
-test('红线钉：Task Review Gate 的 diff 对账步骤原样在位（本 task 只加 prompt 文本）', () => {
-  const cd = makeChangeDir()
-  const wp = render(cd)
-  assert.ok(wp.includes('每个子代理完成后，你必须创建 task review'), 'Task Review Gate 段头在位')
-  assert.ok(wp.includes('1. 读取当前 task 的 git diff'), '操作步骤 1（读 git diff）原样在位')
-  assert.ok(wp.includes('3. 写入 review.json 文件'), '操作步骤 3（写 review.json）原样在位')
-  assert.ok(wp.includes('不信任 implementer 自报结果，对照 diff 和 task brief 验证'), '评审铁律首条原样在位')
+  // Task Review 层退役：段头/评审铁律/回收瘦身（task review 回收语境）不再注入
+  assert.ok(!wp.includes('### Task Review Gate'), 'Task Review Gate 段头已退役')
+  assert.ok(!wp.includes('每个子代理完成后，你必须创建 task review'), 'task review 创建指引已退役')
+  assert.ok(!wp.includes('不信任 implementer 自报结果'), 'task 级评审铁律已退役（反例测试条移驻 QA 阶段级）')
+  assert.ok(!wp.includes('回收瘦身'), 'task review 回收瘦身行已退役（无 task review 可回收）')
+  assert.ok(!wp.includes('review.json 路径'), 'blockers+review.json 路径行已退役')
+  // 保留面：wt-commit 逐任务提交 + 子代理返回契约（diff 对账真相源不变）
+  assert.ok(wp.includes('sillyspec wt-commit --change'), 'wt-commit 逐任务提交指引在位')
+  assert.ok(wp.includes('verdict（done|blocked）'), '子代理返回契约在位（回收真相源不变）')
   rmSync(cd, { recursive: true, force: true })
 })
 

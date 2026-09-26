@@ -75,7 +75,7 @@ export const definition = {
 6. 标注每个文件的存在/不存在状态
 
 ### Execute Evidence 传递检查
-7. 检查 verify-required-evidence.json 是否存在（由 execute 阶段 Task Review Gate 写入）
+7. 检查 verify-required-evidence.json 是否存在（历史兼容读：该文件由退役前的 execute Task Review Gate 写入，2026-09-26-task-review-retire 起停写——在场则消费，缺席=无 cannot_verify 任务）
    - 路径：变更目录下的 verify-required-evidence.json
    - 文件 schema：\`{ items: [{ task, verdict, evidence: string[] }] }\`——顶层是 \`items\`，每项的 \`evidence\` 是字符串数组（不是 \`requiredEvidence\` 键）
    - 如果存在 → 逐项读取 \`items\`，对每个 cannot_verify 任务逐条核对其 \`evidence\` 数组是否已满足
@@ -102,7 +102,7 @@ export const definition = {
     },
     {
       name: '逐项检查任务',
-      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选唯一写入者是 CLI（review write 落盘即按 review.json verdict 勾选，execute --done 时 autoCheckPlanFromReviews 兜底；P2-f 起 agent 不再手勾），本阶段只读对照、不改勾。
+      prompt: `对照 tasks.md（任务注册表唯一真相）检查每个任务完成状态。勾选由 agent 在任务完成（实现+测试绿+wt-commit）时手动写入（2026-09-26 Task Review 退役起，同 thin 工作单元语义），本阶段只读对照、不改勾。
 
 ### 勾选状态（CLI 注入，勿手数）
 {TASKS_CHECKBOX}

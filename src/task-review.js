@@ -815,29 +815,9 @@ export function verifyReviewGitEvidence(review, gitDir, cache = null, opts = {})
   return { ok: errors.length === 0, emptyDiff, errors, warnings, unavailable: false }
 }
 
-/**
- * 将 cannot_verify 的 requiredEvidence 写入 change 目录
- * 供 verify 阶段消费
- *
- * @param {string} changeDir - 变更目录（.sillyspec/changes/<name>）
- * @param {Array<{task: string, verdict: string, evidence: string[]}>} requiredEvidence
- * @returns {string|null} 写入的文件路径，null 表示无需写入
- */
-export function writeVerifyRequiredEvidence(changeDir, requiredEvidence) {
-  if (!requiredEvidence || requiredEvidence.length === 0) return null
-
-  const filePath = join(changeDir, 'verify-required-evidence.json')
-  const data = {
-    generatedAt: new Date().toISOString(),
-    schemaVersion: 1,
-    items: requiredEvidence,
-  }
-
-  mkdirSync(changeDir, { recursive: true })
-  writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n')
-
-  return filePath
-}
+// writeVerifyRequiredEvidence（cannot_verify 证据落盘 verify-required-evidence.json）已随
+// Task Review 层退役删除（2026-09-26-task-review-retire，唯一调用方 Execute Task Review Gate）：
+// 新变更停写该文件；verify 侧 runVerifyRequiredEvidenceCheck 兼容读在场存量（缺席=无 cannot_verify 任务）。
 
 /**
  * 生成 execute run id。
@@ -2200,32 +2180,5 @@ export function ensureTaskReviewDir(runtimeRoot, executeRunId, taskId) {
   return dir
 }
 
-/**
- * 打印校验结果
- * @param {{ ok: boolean, errors: string[], warnings: string[], requiredEvidence: Array }} result
- */
-export function printReviewResult(result, context = {}) {
-  if (result.ok && result.warnings.length === 0) {
-    console.log('\n✅ Task Review Gate — 所有任务评审通过')
-    return
-  }
-
-  if (result.errors.length > 0) {
-    console.error('\n🚫 Task Review Gate — FAILED')
-    for (const err of result.errors) {
-      console.error(`   - ${err}`)
-    }
-    const hint = context.runtimeRoot && context.executeRunId
-      ? `期望路径：${context.runtimeRoot}/execute-runs/${context.executeRunId}/tasks/<task-XX>/review.json`
-      : '为缺失/失败的任务补充 review.json'
-    console.error(`\n   提示：${hint}，然后重新 --done`)
-  }
-
-  if (result.warnings.length > 0) {
-    console.warn('\n⚠️ Task Review Gate — WARNING')
-    for (const w of result.warnings) {
-      console.warn(`   - ${w}`)
-    }
-    console.warn('\n   cannot_verify 的 requiredEvidence 将在 verify 阶段校验')
-  }
-}
+// printReviewResult（Task Review 校验结果打印）已随 Task Review 层退役删除
+// （2026-09-26-task-review-retire，调用方 gates.js 两个门均已退役）。

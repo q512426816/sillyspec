@@ -1,9 +1,9 @@
 /**
- * task 真源归一（P2-f，noai-ir-roadmap §5）：review.json verdict 是唯一真源，tasks.md
- * checkbox 是它的显示态——CLI 唯一勾选者。锁定：
- *   - autoCheckPlanFromReviews（review write 落盘即勾 / --done 兜底同函数）导出可调：
- *     marker + review.json pass → checkbox 勾上；fail 不勾；
- *   - prompt 契约：execute/verify 步骤 prompt 禁止「手动勾选」指引、声明 CLI 唯一勾选者。
+ * task 真源归一（P2-f）历史行为锁 + 勾选语义迁移钉（2026-09-26-task-review-retire）：
+ *   - autoCheckPlanFromReviews（review write 落盘即勾 / --done 兜底同函数）导出可调（兼容读侧
+ *     保留：历史变更残存 review.json 仍可被 review-write 钩子/task-done 消费）；
+ *   - prompt 契约（退役后新语义）：勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾），
+ *     旧「CLI 唯一勾选者/禁止手动勾选」声明随 Task Review 层退役。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -52,14 +52,13 @@ test('autoCheck：review pass 勾 / fail 不勾（真源 = review.json verdict�
   } finally { try { rmSync(cwd, { recursive: true, force: true }) } catch {} }
 })
 
-test('prompt 契约：verify 逐项检查步声明 CLI 唯一勾选者、无手动勾选指引', async () => {
+test('prompt 契约：勾选回归 agent 手动（2026-09-26 Task Review 退役），旧 CLI 单写者声明退役', async () => {
   const step = verifyDef.steps.find(s => s.name === '逐项检查任务')
   assert.ok(step, '步骤在场')
-  assert.ok(step.prompt.includes('勾选唯一写入者是 CLI'), '声明单写者')
-  assert.ok(!step.prompt.includes('agent 按 review gate 手动勾'), '旧双路说明退役')
-  // execute 的 task review 协议条目
-  const { execSync: es } = await import('node:child_process')
+  assert.ok(step.prompt.includes('勾选由 agent 在任务完成（实现+测试绿+wt-commit）时手动写入'), '声明手动勾选语义')
+  assert.ok(!step.prompt.includes('勾选唯一写入者是 CLI'), '旧「CLI 唯一勾选者」声明退役（autoCheck 勾选层已退役）')
+  // execute 的勾选协议：手动勾在位、禁止手勾旧句退役
   const src = rf(join(ROOT_ttu, 'src', 'stages', 'execute.js'), 'utf8')
-  assert.ok(src.includes('禁止手动勾选 tasks.md 的 checkbox'), 'execute 协议：禁止手动勾选')
-  assert.ok(!src.includes('才允许勾选 tasks.md 中对应任务的 checkbox'), '旧「先写 review 再允许勾」退役')
+  assert.ok(src.includes('手动勾选 tasks.md 对应 checkbox'), 'execute 协议：手动勾选指引在位')
+  assert.ok(!src.includes('禁止手动勾选 tasks.md 的 checkbox'), '旧「禁止手动勾选」协议退役')
 })

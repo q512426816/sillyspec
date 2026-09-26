@@ -271,12 +271,11 @@ console.log('\n--- (e) verify + runVerifyTestCheck throw Error("boom-verify") �
 }
 
 // ============================================================================
-// task-07：gates.js ctx 透传（design §6 gates 行 + D-013）
-// 验证 runStageCompletionGates 把 ctx 透传到两个调用点：
-//   - runVerifyTestCheck（verify 分支）：opts.ctx === 传入的 ctx（或缺省 null）
-//   - validateTaskReviews（execute Task Review Gate）：opts.ctx === 传入的 ctx +
-//     opts.gitDir === ctx.resolve('main').gitDir（reviewGitDir ctx 兜底）
-// 单仓零回归：ctx=null 缺省时 runVerifyTestCheck 收 ctx=null、validateTaskReviews 收 gitDir 走原逻辑。
+// task-07 原验证 gates.js ctx 透传到 validateTaskReviews（design §6 gates 行 + D-013）。
+// 2026-09-26-task-review-retire 起 Task Review Gate 退役——(f)/(g) 翻转为退役钉：
+//   - runVerifyTestCheck（verify 分支）的 ctx 透传契约不变（(h) 继续覆盖）；
+//   - validateTaskReviews 在 execute 完成门零消费（mock 在场证明「不被消费」而非「未接线」；
+//     task-review.js 模块与 mock 目标保留——历史变更 doctor/回放兼容读侧）。
 // ============================================================================
 
 // 轻量 stub ctx（无需构造真实 MultiRepoContext——只测 gates 透传契约，不测 ctx 内部）。
@@ -284,16 +283,16 @@ console.log('\n--- (e) verify + runVerifyTestCheck throw Error("boom-verify") �
 const STUB_MAIN_GIT_DIR = 'STUB-MAIN-GIT-DIR-SENTINEL'
 const stubCtx = { resolve: (key) => key === 'main' ? { gitDir: STUB_MAIN_GIT_DIR } : null }
 
-// ── (f) execute Task Review Gate：reviewGitDir 兜底 ctx.resolve('main').gitDir + 透传 ctx ──
-console.log('\n--- (f) execute + ctx → validateTaskReviews 收 gitDir=ctx.resolve(main).gitDir + ctx 透传 ---')
+// ── (f) 退役钉：execute 完成门不再消费 validateTaskReviews（Task Review Gate 已删）──
+console.log('\n--- (f) execute + ctx → validateTaskReviews 零调用（Task Review 层退役，2026-09-26）---')
 {
   resetImpls()
-  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] }) // execute validator 通过，进 Task Review Gate
+  runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] }) // execute validator 通过
   const EXEC_STEPS = [{ name: 'Wave 1 执行', status: 'completed' }]
   const { cwd, specBase } = makeRepo('sca-f-')
   const cn = 'sca-f-ctx-forward'
   const pm = await initChange(cwd, specBase, cn)
-  // plan 含已勾 task 触发 Task Review Gate（marker + plan.md 存在守卫过）
+  // 原 fixture（已勾 task + marker + run 目录）保留：证明「review.json 齐备与否」不再影响 execute 门
   writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
     '# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
   const runtimeRoot = join(specBase, '.runtime')
@@ -304,17 +303,13 @@ console.log('\n--- (f) execute + ctx → validateTaskReviews 收 gitDir=ctx.reso
   const r = await runCapturing(() =>
     completeStageGates({ stageName: 'execute', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.execute, steps: EXEC_STEPS, currentIdx: 0, outputText: null, ctx: stubCtx }))
 
-  assert(!r.error, '(f) Task Review Gate 不抛（mock validateTaskReviews 返回 ok）')
-  assert(validateTaskReviewsCalls.length === 1, `(f) validateTaskReviews 被调一次（实际 ${validateTaskReviewsCalls.length}）`)
-  if (validateTaskReviewsCalls.length === 1) {
-    const call = validateTaskReviewsCalls[0]
-    assert(call.ctx === stubCtx, '(f) ctx 透传到 validateTaskReviews（opts.ctx === stubCtx）')
-    assert(call.gitDir === STUB_MAIN_GIT_DIR, `(f) reviewGitDir 取自 ctx.resolve('main').gitDir（实际 ${call.gitDir}，零回归应不等 cwd）`)
-  }
+  assert(!r.error, '(f) 阶段完成门不抛（无 task review 消费）')
+  assert(r.result === null, '(f) completeStageGates 通过返回 null（不再被 Task Review 阻断）')
+  assert(validateTaskReviewsCalls.length === 0, `(f) validateTaskReviews 零调用（Task Review Gate 已退役，实际 ${validateTaskReviewsCalls.length}）`)
 }
 
-// ── (g) execute Task Review Gate：ctx=null 缺省 → reviewGitDir 走原逻辑（worktree/cwd）+ ctx 透传 null ──
-console.log('\n--- (g) execute + 无 ctx（单仓零回归）→ validateTaskReviews 收 ctx=null + gitDir=原逻辑 ---')
+// ── (g) 退役钉（单仓）：ctx=null 缺省同样零调用（mock 在场证明「不被消费」而非「未接线」）──
+console.log('\n--- (g) execute + 无 ctx → validateTaskReviews 零调用（退役钉，单仓零回归面）---')
 {
   resetImpls()
   runValidatorsImpl = () => ({ ok: true, errors: [], warnings: [] })
@@ -332,14 +327,8 @@ console.log('\n--- (g) execute + 无 ctx（单仓零回归）→ validateTaskRev
   const r = await runCapturing(() =>
     completeStageGates({ stageName: 'execute', cwd, changeName: cn, platformOpts: {}, specBase, progress, pm, stageData: progress.stages.execute, steps: EXEC_STEPS, currentIdx: 0, outputText: null }))
 
-  assert(!r.error, '(g) Task Review Gate 不抛（mock validateTaskReviews 返回 ok）')
-  assert(validateTaskReviewsCalls.length === 1, `(g) validateTaskReviews 被调一次（实际 ${validateTaskReviewsCalls.length}）`)
-  if (validateTaskReviewsCalls.length === 1) {
-    const call = validateTaskReviewsCalls[0]
-    assert(call.ctx === null, '(g) ctx=null 时透传 null 到 validateTaskReviews（单仓零回归）')
-    // 无 ctx 走原逻辑：in-place-fallback（无 worktree meta）→ gitDir 退回 cwd
-    assert(call.gitDir === cwd, `(g) reviewGitDir 原逻辑退 cwd（实际 ${call.gitDir}，期望 ${cwd}）`)
-  }
+  assert(!r.error, '(g) 阶段完成门不抛（无 task review 消费）')
+  assert(validateTaskReviewsCalls.length === 0, `(g) validateTaskReviews 零调用（实际 ${validateTaskReviewsCalls.length}）`)
 }
 
 // ── (h) verify：runVerifyTestCheck 透传 ctx（有 ctx / ctx=null 两种）──

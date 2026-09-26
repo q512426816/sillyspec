@@ -137,17 +137,18 @@ test('T2 main → 直写指引段在位，派发段/工作目录强制段/并发
   }
 })
 
-// ── 3. 两模式锚点 + review write 指引一致 ─────────────────────────
+// ── 3. 两模式锚点 + 手动勾选指引一致（Task Review 退役后）─────────
 
-test('T3 两模式下 wt-commit / Task Review Gate / review.json 指引一致存在', () => {
+test('T3 两模式下 wt-commit / 手动勾选 checkbox 指引一致存在，Task Review Gate 已退役', () => {
   const cdD = makeChangeDir(3, { fmExtra: ['execution_mode: dispatch'] })
   const cdM = makeChangeDir(3, { fmExtra: ['execution_mode: main'] })
   const wpD = render(cdD)
   const wpM = render(cdM)
   for (const [label, wp] of [['dispatch', wpD], ['main', wpM]]) {
     assert.ok(wp.includes('sillyspec wt-commit --change'), `T3: ${label} 含 wt-commit 逐任务提交指引`)
-    assert.ok(wp.includes('### Task Review Gate'), `T3: ${label} 含 Task Review Gate`)
-    assert.ok(wp.includes('review.json'), `T3: ${label} 含 review.json 指引`)
+    assert.ok(wp.includes('手动勾选 tasks.md 对应 checkbox'), `T3: ${label} 含手动勾选指引（Task Review 退役起勾选回归 agent）`)
+    assert.ok(!wp.includes('### Task Review Gate'), `T3: ${label} Task Review Gate 段已退役`)
+    assert.ok(!wp.includes('写 review.json 即可'), `T3: ${label} review write 指引已退役`)
   }
 })
 

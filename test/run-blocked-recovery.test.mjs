@@ -1,7 +1,7 @@
 /**
  * blocked 步骤死锁恢复测试（坑 deps-gate-blocked-invisible，2026-08-27 实证）。
  *
- * 实证链：enforceDepsGate/enforceReviewJsonGate 阻断时把当前步置 blocked（持久化），但
+ * 实证链：enforceDepsGate 阻断时把当前步置 blocked（持久化），但
  * completeStep 的 currentIdx 谓词只查 pending/in-progress → 被阻断步骤永久隐身：
  *   - 重试 --done 落到其后第一个 pending 步骤（错步记账，DB 与事实脱节）
  *   - 裸 run execute（指引路径①「stale 会被转为 pending」）只转 stale 不转 blocked → 指引失效

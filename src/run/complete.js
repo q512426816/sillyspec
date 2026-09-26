@@ -45,7 +45,7 @@ import { executeProgressConfirm } from './progress-confirm.js'
 import { AUXILIARY_STAGES } from '../constants.js'
 import { executePlanPostcheck as runPlanPostcheckLib, parseRepoRegistry } from '../stages/plan-postcheck.js'
 import { outputStep, collectStageWaitHistory } from './prompt.js'
-import { enforceDepsGate, enforceReviewJsonGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
+import { enforceDepsGate, enforceSymbolImpactGate, warnMissingUiPrototype, completeStageGates, readDesignScale } from './gates.js'
 import { handleArchiveConfirmStep, handlePlanGeneratePlanStep, handleScanProjectListStep, handleWorkflowPostCheck, handleQuickStageCompletion, handleExecuteWaveArtifact, assertWaveTasksComplete } from './complete-handlers.js'
 import { formatExecuteSummary } from '../worktree-apply.js'
 import { validateDecisionModuleRefs } from '../design-facts.js'
@@ -188,8 +188,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   }
 
   const steps = stageData.steps
-  // blocked（deps/review.json 门控阻断标记）也视为当前步骤（坑 deps-gate-blocked-invisible，
-  // 2026-08-27 实证）：门控阻断时 enforceDepsGate/enforceReviewJsonGate 把当前步置 blocked 后
+  // blocked（deps 门控阻断标记）也视为当前步骤（坑 deps-gate-blocked-invisible，
+  // 2026-08-27 实证）：门控阻断时 enforceDepsGate 把当前步置 blocked 后
   // exit(1)，若谓词漏 blocked，被阻断步骤对 findIndex 永久隐身——重试 --done 落到其后第一个
   // pending 步骤上（错步记账，DB 显示与事实脱节），且 blocked 步骤无任何恢复路径（状态机卡死，
   // 只能 --reset 丢进度）。门控本身在下方会重新校验：deps 已修复 → 正常完成；未修复 → 再次
@@ -389,9 +389,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // progress show/doctor 看到的仍是 pending，误导诊断）
   const persistBlocked = () => pm._write(cwd, progress, changeName)
   await enforceDepsGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts, persistBlocked)
-  // review.json 字段硬门（坑 review-json-field-gap）：已勾 [x] task 的 review.json 必须 schema 完整，
-  // 提前到每次 --done 校验（而非等 Task Review Gate 在整阶段收尾才暴露，迫使用户事后批量补）。
-  await enforceReviewJsonGate(stageName, cwd, changeName, steps[currentIdx], steps, currentIdx, specBase, platformOpts, persistBlocked)
+  // review.json 字段硬门（enforceReviewJsonGate）已随 Task Review 层退役删除
+  // （2026-09-26-task-review-retire）——勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾）。
   // 符号影响面报告硬门（ql-20260816-005-3d7f）：execute「加载上下文」步产出落盘核验——
   // symbol-impact.md 存在 + plan 每 task 有结论行；防前缀步被一句「上下文在会话内」盖章跳过。
   await enforceSymbolImpactGate(stageName, changeName, steps[currentIdx]?.name, specBase)
@@ -595,45 +594,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
   // execute 批量完成检测：plan 全勾 + 代码客观核验通过 → 剩余 step 一次性标 completed，
   // 使本次 --done 直接进入阶段完成分支（治"3 Wave 做完仍逐次 +1、需重走 7 次 --done"）。
-  // 先按 review.json pass 自动勾 plan checkbox（复用 continueStep 同源逻辑），再判批量条件。
+  // per-task 自动勾选与 review 草稿兜底已随 Task Review 层退役（2026-09-26-task-review-retire）：
+  // 勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义），假勾防线由
+  // detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账承担。
   if (stageName === 'execute' && changeName) {
-    const _ac = await autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts })
-    if (_ac.autoChecked) {
-      console.log(`   ✅ 自动勾选 ${_ac.checkedCount} 个 task checkbox（基于 review.json pass）`)
-    }
-    if (_ac.skippedCount > 0) {
-      console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ 批量完成条件不满足，仍按单步推进`)
-    }
     const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
     if (_bf.batched && _bf.aligned > 0) {
       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
-    }
-
-    // per-task review 草稿兜底（坑 worktree-execute-apply-friction 坑2）：主 agent 直接实现模式
-    // 无子代理 review 落盘 → Task Review Gate 报缺 review.json 阻断。每次 execute --done 跑（幂等，
-    // 已存在跳过），据 git diff base..head 按 allowed_paths 归属生成 cannot_verify 草稿，进 gate 前就位。
-    try {
-      const { generateTaskReviewDrafts } = await import('../task-review.js')
-      // W3 task-09：best-effort 构造 ctx 透传（D-013），跨仓 task 草稿用跨仓 gitDir 取 diff。
-      // 失败降级 null（不阻断 execute 完成——草稿兜底本就是 best-effort，gate 会复校验）。
-      let _draftCtx = null
-      try {
-        _draftCtx = await getOrCreateMultiRepoContext({ cwd, changeName, platformOpts })
-      } catch (e) {
-        console.warn('   ⚠️ 草稿 ctx 构造失败，降级单仓草稿（' + (e && e.message ? e.message : e) + '）')
-      }
-      const _drafts = await generateTaskReviewDrafts({ changeName, cwd, platformOpts, ctx: _draftCtx })
-      if (_drafts.generated > 0) {
-        console.log('   📄 自动补写 ' + _drafts.generated + ' 个 per-task review.json 草稿（cannot_verify，主 agent 实现模式兜底，需 agent 复核后升级为 pass/fail）')
-        if (_drafts.noAttribution > 0) {
-          console.warn('   ⚠️ 其中 ' + _drafts.noAttribution + ' 个 task 的 allowed_paths 未命中本次 diff（无归属草稿，changedFiles 为空）——需人工确认实际改动后升级 verdict，确属未实现则回 fail')
-        }
-        if (_drafts.unattributed && _drafts.unattributed.length > 0) {
-          console.warn('   ⚠️ ' + _drafts.unattributed.length + ' 个变更文件未归属任何 task（顺带修复/非源码），草稿未覆盖：' + _drafts.unattributed.join(', '))
-        }
-      }
-    } catch (e) {
-      console.warn('   ⚠️ per-task review 草稿生成失败（不阻断 execute 完成）：' + (e && e.message ? e.message : e))
     }
   }
 
@@ -2098,14 +2065,6 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
       if (stageName === 'execute') {
         console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
         console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
-        // plan.md checkbox auto-check：execute 完成 + review.json pass → 自动勾选（治本，比警告可靠）
-        const _ac = await autoCheckPlanFromReviews({ stageName, changeName, cwd, platformOpts })
-        if (_ac.autoChecked) {
-          console.log(`   ✅ 自动勾选 ${_ac.checkedCount} 个 task checkbox（基于 review.json pass）`)
-        }
-        if (_ac.skippedCount > 0) {
-          console.warn(`   ⚠️ ${_ac.skippedCount} 个 task 未勾（review.json 缺失/fail）→ archive 会拦。补 review 后重跑 execute --done 触发自动勾`)
-        }
       }
     }
     return { stageCompleted: true, currentIdx, nextPendingIdx: -1 }

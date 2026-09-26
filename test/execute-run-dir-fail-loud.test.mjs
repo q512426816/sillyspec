@@ -1,26 +1,28 @@
 /**
  * execute-run-dir-fail-loud.test.mjs — task-01 / D-001@v1
  *
- * 四处 marker 写入点原子化 + 分层 fail：
- *   - stage.js（execute 启动主写入点，:96-112）、gates.js:444、prompt.js:518、task-review.js:795
- *     统一改为「mkdir execute-runs/<runId>/tasks 先于 marker 写入」（不变量：marker 在则目录在）。
+ * marker 写入点原子化 + 分层 fail（2026-09-26-task-review-retire 起 gates.js 写入点随
+ * Task Review Gate 退役删除，剩三处 + 退役行为钉）：
+ *   - stage.js（execute 启动主写入点）、prompt.js（休眠兼容注入路径——渲染面退役后不再
+ *     自带 {EXECUTE_RUN_ID}，本测合成占位符继续覆盖其原子性契约）、task-review.js（模块
+ *     兼容读侧）统一「mkdir execute-runs/<runId>/tasks 先于 marker 写入」（不变量：marker 在则目录在）。
  *   - 失败分层语义：
  *       stage.js    直接 throw（execute 启动即失败，优于事后 review 错配）
- *       gates.js    gate 内 throw（外层 :494 catch fail-closed 阻断完成，不静默放行）
  *       prompt.js   console.error 留痕 + 保留降级（渲染路径抛错会炸整个 prompt 输出）
- *       task-review.js 去 catch 静默，console.error 留痕但保留 fail-open 契约（:763，不 throw）
+ *       task-review.js 去 catch 静默，console.error 留痕但保留 fail-open 契约（不 throw）
+ *   - 退役行为钉：execute-runs 损坏 + marker 缺失不再阻断 execute 完成（Task Review Gate 已删）。
  *
  * 策略（无 mock.module / 无 flag）：
- *   - 失败注入用「真实 fs 障碍」：把 <runtimeRoot>/execute-runs 改成普通文件 → 四处 mkdir
+ *   - 失败注入用「真实 fs 障碍」：把 <runtimeRoot>/execute-runs 改成普通文件 → mkdir
  *     必抛 ENOTDIR（Windows/Linux/macOS 一致；已验证 node v24，不依赖 chmod 语义）。
  *     注意：只动 execute-runs 子树，不 rmSync runtimeRoot——测试进程 pm 持有的
  *     sillyspec.db 就在 runtimeRoot 下，Windows 上 rmSync 含打开句柄的目录会 EPERM。
- *   - 子进程（spawnSync bin/sillyspec.js）触发 stage.js / gates.js 路径（隔离 process.exit）。
+ *   - 子进程（spawnSync bin/sillyspec.js）触发 stage.js 路径（隔离 process.exit）。
  *     prompt.js 渲染路径 CLI 层面无法隔离（marker 失败时 stage.js 主写入点先 throw，
  *     prompt.js 永远跑不到）→ 直接 in-process 调 outputStep 触发，断言 console.error + 不抛。
  *   - task-review.js in-process 调 generateTaskReviewDrafts；失败侧用「空 changedFiles 的 task」
- *     隔离 marker 写入点语义（草稿循环本身的 mkdir 抛错是既有行为，由调用方 complete.js:244
- *     / index.js:511 catch 兜底 fail-open，不在本写入点职责内）。
+ *     隔离 marker 写入点语义（草稿循环本身的 mkdir 抛错是既有行为，由调用方 catch
+ *     兜底 fail-open，不在本写入点职责内）。
  */
 import { spawnSync, execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, rmSync, readFileSync } from 'node:fs'
@@ -91,9 +93,9 @@ async function capture(fn) {
 }
 
 // ════════════════════════════════════════════════════════════════
-console.log('=== 四处 marker 写入点原子化 + 分层 fail（D-001@v1）===\n')
+console.log('=== 三处 marker 写入点原子化 + 分层 fail（D-001@v1；gates.js 写入点已随 Task Review Gate 退役）===\n')
 
-// ── ① 源码顺序扫描：四处写入点 mkdir …/tasks 先于 marker + 分层语义注释 ──
+// ── ① 源码顺序扫描：三处写入点 mkdir …/tasks 先于 marker + 分层语义注释 ──
 console.log('--- ① 源码顺序扫描：mkdir execute-runs/<runId>/tasks 先于 marker 写入 ---')
 {
   const stageSrc = readFileSync(join(repoRoot, 'src', 'run', 'stage.js'), 'utf8')
@@ -112,17 +114,15 @@ console.log('--- ① 源码顺序扫描：mkdir execute-runs/<runId>/tasks 先�
 
   // 调用形态 2026-09-10 第三批起带 changeName（哈希隔离）——扫描锚同步，不变量语义不变
   const s1 = stageSrc.indexOf("currentExecuteRunId = generateExecuteRunId(changeName)")
-  const g1 = gatesSrc.indexOf("executeRunId = generateExecuteRunId(changeName)")
   const p1 = promptSrc.indexOf("runId = generateExecuteRunId(changeName)")
   const t1 = trSrc.indexOf("executeRunId = generateExecuteRunId(changeName)")
   assert(siteOrder(stageSrc, s1, 'runIdFile') === 1, 'stage.js 主写入点：mkdir …/tasks 先于 marker')
-  assert(siteOrder(gatesSrc, g1, 'runIdFile') === 1, 'gates.js:444 fallback：mkdir …/tasks 先于 marker')
-  assert(siteOrder(promptSrc, p1, 'runIdFile') === 1, 'prompt.js:518 fallback：mkdir …/tasks 先于 marker')
-  assert(siteOrder(trSrc, t1, 'runIdFile') === 1, 'task-review.js:795 fallback：mkdir …/tasks 先于 marker')
+  assert(siteOrder(promptSrc, p1, 'runIdFile') === 1, 'prompt.js fallback：mkdir …/tasks 先于 marker')
+  assert(siteOrder(trSrc, t1, 'runIdFile') === 1, 'task-review.js fallback：mkdir …/tasks 先于 marker')
+  // 退役钉：gates.js 的写入点（原 Task Review Gate 内 fallback generate）随门删除
+  assert(!gatesSrc.includes('executeRunId = generateExecuteRunId(changeName)'), 'gates.js 写入点已随 Task Review Gate 退役')
 
   assert(/throw new Error\(`execute run 目录创建失败/.test(stageSrc), 'stage.js throw fail-loud（含修复指引）')
-  const gBlock = gatesSrc.slice(g1, g1 + 700)
-  assert(!/try \{/.test(gBlock) && gBlock.includes('fail-closed'), 'gates.js 写入块无 try/catch（异常直穿外层 fail-closed catch）')
   const pBlock = promptSrc.slice(p1, p1 + 700)
   assert(pBlock.includes('execute run marker/目录写入失败') && pBlock.includes('} catch (e) {'),
     'prompt.js catch 内 console.error 留痕 + 保留降级')
@@ -188,10 +188,12 @@ console.log('\n--- ④ prompt.js：mkdir 失败 → console.error 留痕 + 保�
   const progress = await pm.read(cwd, cn)
   const steps = await getStageSteps('execute', cwd, progress, null)
   assert(steps && steps.length > 0, `buildExecuteSteps 产出步骤（${steps && steps.length}）`)
-  // {EXECUTE_RUN_ID} 只在 Wave 执行步的 prompt 里（step 0「进度确认」不含）——必须定位到该步，
-  // 否则 outputStep 的注入块整块跳过，后续断言全部空过（首版即踩此坑）。
-  const waveIdx = steps.findIndex(s => (s.prompt || '').includes('{EXECUTE_RUN_ID}'))
-  assert(waveIdx >= 0, `定位含 {EXECUTE_RUN_ID} 的 Wave 步骤（idx=${waveIdx}）`)
+  // Task Review 退役（2026-09-26-task-review-retire）后渲染面不再自带 {EXECUTE_RUN_ID}——
+  // prompt.js 注入块成为休眠兼容路径。此处把占位符合成进 Wave 执行步，继续覆盖该写入点的
+  // 原子性契约（marker 缺失 → fallback generate + mkdir → 障碍必抛 → 降级留痕不炸渲染）。
+  const waveIdx = steps.findIndex(s => (s.name || '').includes('Wave') && (s.name || '').includes('执行'))
+  assert(waveIdx >= 0, `定位 Wave 执行步骤（idx=${waveIdx}）`)
+  steps[waveIdx] = { ...steps[waveIdx], prompt: (steps[waveIdx].prompt || '') + '\n{EXECUTE_RUN_ID}\n' }
 
   const { error, errBuf, logBuf } = await capture(() => outputStep('execute', waveIdx, steps, cwd, cn, 'p', {}))
   assert(!error, `prompt.js mkdir 失败 → 不抛（降级，实际 error=${error && error.message}）`)
@@ -203,16 +205,16 @@ console.log('\n--- ④ prompt.js：mkdir 失败 → console.error 留痕 + 保�
   assert(!existsSync(join(runtimeRoot, `current-execute-run-id-${cn}`)), 'marker 未写入（mkdir 失败先行）')
 }
 
-// ── ⑤ 分层语义 C：gates.js gate 内 throw → 外层 fail-closed 阻断完成 ──
+// ── ⑤ 退役行为钉（2026-09-26-task-review-retire）：execute-runs 损坏 + marker 缺失不再阻断完成 ──
 // 路径：首跑 run execute 写 marker+tasks（mkdir 无障碍）；随后 execute-runs 改普通文件 + 删 marker
-// → --done 批量完成 → Task Review Gate 读 marker 缺失 → fallback generate + mkdir 抛 → :494 catch
-// fail-closed 阻断（exitCode 1，stage 未标 completed）。plan_level: light → Stage Review tier=self 不挡。
-console.log('\n--- ⑤ gates.js：gate 内 mkdir 失败 → 外层 fail-closed 阻断（不静默放行完成）---')
+// → --done 末步 → 阶段完成。原 Task Review Gate 的 fallback generate+mkdir fail-closed 已随门
+// 退役——损坏的 execute-runs 与缺失 marker 不再参与任何 execute 完成判定，正常收口。
+console.log('\n--- ⑤ 退役钉：execute-runs 损坏/marker 缺失 → execute 完成不再阻断（Task Review Gate 已删）---')
 {
   const { cwd, specBase, runtimeRoot } = makeRepo()
   const cn = 'gates-block'
   const pm = await initPm(cwd, specBase, cn, true)
-  // plan_level: light 让 Stage Review tier=self（否则 independent 缺 review 会先拦在 Stage Review Gate）
+  // plan_level: light 让 Stage Review tier=self（tier=independent 缺 stage review 会拦——Stage Review 保留面）
   writeFileSync(join(specBase, 'changes', cn, 'plan.md'),
     '---\nplan_level: light\n---\n\n# Plan\n\n## Wave 1\n\n- [x] task-01: a\n')
   mkdirSync(join(cwd, 'src'), { recursive: true })
@@ -230,26 +232,23 @@ console.log('\n--- ⑤ gates.js：gate 内 mkdir 失败 → 外层 fail-closed �
   assert(r.status === 0, `前置 execute 启动 exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-150)}）`)
 
   // 种子进度：除末步外全部 completed、末步 pending → --done 末步 → 进阶段完成分支
-  // （FR-04 后 review 缺失会阻断批量完成——gate 触发改走「末步完成」路径，不变量等价：
-  //   阶段完成时 Task Review Gate 对损坏 execute-runs 仍 fail-closed，不静默放行）
   const realSteps = (await pm.read(cwd, cn)).stages.execute.steps
   const lastIdx = realSteps.length - 1
   const progress = await pm.read(cwd, cn)
   progress.stages.execute.steps = realSteps.map((s, i) => ({ name: s.name, status: i < lastIdx ? 'completed' : 'pending' }))
   await pm._write(cwd, progress, cn)
 
-  // 障碍：execute-runs 改普通文件 + 删 marker（gate fallback 重新 generate + mkdir 必抛）
+  // 障碍：execute-runs 改普通文件 + 删 marker（原 Task Review Gate fallback 会 generate+mkdir 抛）
   rmSync(join(runtimeRoot, 'execute-runs'), { recursive: true, force: true })
   writeFileSync(join(runtimeRoot, 'execute-runs'), 'not a directory\n')
   rmSync(join(runtimeRoot, `current-execute-run-id-${cn}`), { force: true })
 
   r = runCli(cwd, ['run', 'execute', '--done', '--change', cn, '--skip-approval', '--output', 'step done'])
-  assert(r.status === 1, `gate 失败 → exit 1（fail-closed，实际 ${r.status}，尾输出：${r.combined.slice(-220)}）`)
-  assert(r.combined.includes('Task Review Gate 异常'),
-    `输出含 fail-closed 阻断文案「Task Review Gate 异常」（尾输出：${r.combined.slice(-260)}）`)
+  assert(r.status === 0, `Task Review 退役后：损坏 execute-runs 不阻断 → exit 0（实际 ${r.status}，尾输出：${r.combined.slice(-220)}）`)
+  assert(!r.combined.includes('Task Review Gate'), '输出无 Task Review Gate 阻断文案（门已退役）')
   const after = await pm.read(cwd, cn)
-  assert(after.stages.execute.status !== 'completed',
-    `DB: execute stage 未标 completed（rollback 生效，实际 ${after.stages.execute.status}）`)
+  assert(after.stages.execute.status === 'completed',
+    `DB: execute stage 正常 completed（实际 ${after.stages.execute.status}）`)
 }
 
 // ── ⑥ 分层语义 D：task-review.js 去静默保 fail-open（console.error 留痕，不 throw，返回统计）──

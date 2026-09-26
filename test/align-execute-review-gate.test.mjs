@@ -5,11 +5,13 @@
  * execute 的 Stage Review Gate 与 Task Review Gate 被整体跳过——worktree 清理后的恢复场景
  * 恰是最需要审计的时刻（实证靠 15 份 task review + verify 全程补足覆盖）。
  *
- * 锁定语义：
- *   1. task review 缺失 → --confirm 对齐被前置门阻断（exit 1，execute 仍 in-progress）
+ * 锁定语义（2026-09-26-task-review-retire 起 Task Review 段退役——R18 实证任务粒度评审
+ * 无独立评审者供给时全降形式合规；本门收窄为 Stage Review 段 + 豁免头）：
+ *   1. task review 缺失（tier=self）→ 门放行对齐（Task Review 段已退役，不再拦）
  *   2. plan_level=full（tier=independent）且无 stage review → 阻断并给出 register-stage-review 指引
- *   3. tier=self + task review 齐备且 pass → 门放行，对齐正常落盘（execute completed）
+ *   3. tier=self（task review 齐或不齐）→ 门放行，对齐正常落盘（execute completed）
  *   4. dry-run 不触发前置门（保持只读语义）
+ *   5. 源码钉：enforceAlignExecuteReviewGate 不再含 Task Review 校验段（退役钉）
  */
 import { join } from 'node:path'
 import { writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
@@ -94,16 +96,16 @@ function commitFix(repo) {
 
 console.log('=== doctor align 前置 review 门（坑 doctor-align-bypass-review-gate）===\n')
 
-console.log('--- ① task review 缺失 → --confirm 被阻断，execute 仍 in-progress ---')
+console.log('--- ① task review 缺失（tier=self）→ 放行对齐（Task Review 段已退役，不再拦）---')
 {
   const repo = mkRepo('miss')
   const cn = '2026-08-20-align-miss'
   const { pm } = await seed(repo, cn)
   const r = run(`node "${binCLI}" --dir "${repo}" doctor --align-execute-progress --change ${cn} --confirm`)
-  assert(r.status !== 0, `exit 非 0（实际 ${r.status}）`)
-  assert(r.out.includes('前置 review 校验未过') || r.out.includes('缺少 review.json'), '输出点名 review 缺失')
+  assert(r.status === 0, `exit 0（实际 ${r.status}，输出尾：${r.out.slice(-300)}）`)
+  assert(r.out.includes('前置 review 校验通过'), '放行日志在场（task review 段已退役）')
   const after = pm.read(repo, cn)
-  assert(after.stages.execute.status === 'in-progress', 'execute 未被置 completed（门生效）')
+  assert(after.stages.execute.status === 'completed', 'execute 对齐为 completed（Stage Review tier=self 放行）')
   cleanup()
 }
 
@@ -121,7 +123,7 @@ console.log('--- ② plan_level=full 无 stage review → 阻断并给 register-
   cleanup()
 }
 
-console.log('--- ③ tier=self + task review 齐 → 门放行，对齐落盘 ---')
+console.log('--- ③ tier=self → 门放行，对齐落盘（残存 review.json 不再参与判定）---')
 {
   const repo = mkRepo('pass')
   const cn = '2026-08-20-align-pass'
@@ -147,6 +149,20 @@ console.log('--- ④ dry-run 不触发前置门（只读语义保持）---')
   const after = pm.read(repo, cn)
   assert(after.stages.execute.status === 'in-progress', 'dry-run 不落盘')
   cleanup()
+}
+
+console.log('--- ⑤ 源码钉：enforceAlignExecuteReviewGate 不再含 Task Review 校验段（退役钉）---')
+{
+  const gatesSrc = readFileSync(join(root, 'src', 'run', 'gates.js'), 'utf8')
+  const fnStart = gatesSrc.indexOf('export async function enforceAlignExecuteReviewGate')
+  const fnEnd = gatesSrc.indexOf('\n}', fnStart)
+  const fnBody = gatesSrc.slice(fnStart, fnEnd)
+  assert(fnStart >= 0 && fnEnd > fnStart, 'enforceAlignExecuteReviewGate 函数定位成功')
+  assert(!fnBody.includes('validateTaskReviews'), 'Task Review 校验调用已退役（无 validateTaskReviews）')
+  assert(!fnBody.includes('resolveLatestExecuteRunIdWithTasks'), 'runId 解析兜底已退役')
+  assert(fnBody.includes('已退役'), '退役说明注释在场')
+  assert(fnBody.includes('register-stage-review'), 'Stage Review 补救指引保留（段 1 在场）')
+  assert(fnBody.includes('readReviewUnsupervisedWaiver'), '豁免头保留')
 }
 
 console.log(`\n${'='.repeat(50)}`)
