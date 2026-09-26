@@ -24,7 +24,7 @@ const {
   loadSnapshotWatermark, writeSnapshotWatermark, watcherSnapshotPath,
   STALL_EARLY_MS, STALL_EXECUTE_MS,
 } = await import('../src/watcher.js')
-const { detectFakeCheckCompletion } = await import('../src/sentinel-assertions.js')
+const { detectFakeCheckCompletion, detectBatchCheckCadence } = await import('../src/sentinel-assertions.js')
 
 function snap(over = {}) {
   return {
@@ -518,4 +518,51 @@ test('R2 定向无归属：绑定解析空 → generic（注记无绑定锚）',
   assert.ok(w, 'generic 保留')
   assert.match(w.detail, /无绑定锚/, '注记归属缺口')
   assert.equal(rulesOf(warnings).includes('test-tamper-bound'), false)
+})
+
+// ───────────────────── 勾选节奏检测（2026-09-26-thin-check-cadence） ─────────────────────
+
+/** watcher 事件形态直构（与 inferEvents 生成面同构）。 */
+const td = (from, to, ts = 1700000000000, stage = 'tasks') => ({ ts, kind: 'task-done', stage, detail: `checked ${from}→${to}`, provisional: true })
+
+test('节奏 正例：单拍 0→8 返回证据记录（字段完整）', () => {
+  const r = detectBatchCheckCadence([td(0, 8, 1790350431921)])
+  assert.deepEqual(r, { from: 0, to: 8, detail: 'checked 0→8', ts: 1790350431921 })
+})
+
+test('节奏 最大跳格选取：0→3 与 3→8 并存取 3→8', () => {
+  const r = detectBatchCheckCadence([td(0, 3, 111), td(3, 8, 222)])
+  assert.equal(r.from, 3)
+  assert.equal(r.to, 8)
+  assert.equal(r.ts, 222)
+})
+
+test('节奏 逐格勾选不判：0→1、1→2、2→3 全程返回 null', () => {
+  assert.equal(detectBatchCheckCadence([td(0, 1, 111), td(1, 2, 222), td(2, 3, 333)]), null)
+})
+
+test('节奏 单任务变更 0→1 不判；design 阶段同判', () => {
+  assert.equal(detectBatchCheckCadence([td(0, 1)]), null)
+  const r = detectBatchCheckCadence([td(0, 2, 999, 'design')])
+  assert.equal(r.to, 2, 'design.md 多格勾选同入判（STAGE_FILES 双工件面）')
+})
+
+test('节奏 容错：空清单/null/坏 detail/非 task-done/坏对象行不抛且返回 null', () => {
+  assert.equal(detectBatchCheckCadence([]), null)
+  assert.equal(detectBatchCheckCadence(null), null)
+  assert.equal(detectBatchCheckCadence([
+    null,
+    { ts: 1, kind: 'commit', stage: null, detail: 'abc1234', provisional: true },
+    { ts: 2, kind: 'task-done', stage: 'tasks', detail: 'checked X→Y', provisional: true },
+    { ts: 3, kind: 'task-done', stage: 'tasks', detail: null, provisional: true },
+    'not-an-object',
+  ]), null)
+})
+
+test('节奏 坏行夹好行：只取合法多格跳', () => {
+  const r = detectBatchCheckCadence([
+    { ts: 1, kind: 'task-done', stage: 'tasks', detail: 'garbage', provisional: true },
+    td(2, 5, 444),
+  ])
+  assert.deepEqual(r, { from: 2, to: 5, detail: 'checked 2→5', ts: 444 })
 })

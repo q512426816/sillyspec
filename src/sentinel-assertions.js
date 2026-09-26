@@ -90,4 +90,25 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = 
   return { status: missing.length === 0 ? 'complete' : 'fake', claimTotal, checked, missing };
 }
 
-export default { detectFakeCheckCompletion };
+/**
+ * 勾选节奏检测（2026-09-26-thin-check-cadence）：watcher 事件流里 task-done 单拍跳 ≥2 格 =
+ * 一把全勾（未按工作单元逐个勾）——thin-agent-tasks 纪律的收口侧 advisory 判定面（warn 不
+ * 阻断，接线在 flow done ledger 子步；节奏是习惯问题非造假主张，L0 硬门另有其人）。
+ * 纯函数：事件清单→最大跳格记录；无多格跳返回 null。detail 与 watcher inferEvents 生成
+ * 格式成对（`checked N→M`）；解析失配（格式漂移/坏行/非 task-done）按无证据静默——fail-open。
+ */
+export function detectBatchCheckCadence(events) {
+  let worst = null;
+  for (const e of events || []) {
+    if (!e || e.kind !== 'task-done') continue;
+    const m = /^checked (\d+)→(\d+)$/.exec(String(e.detail || ''));
+    if (!m) continue;
+    const from = Number(m[1]);
+    const to = Number(m[2]);
+    if (to - from < 2) continue;
+    if (!worst || to - from > worst.to - worst.from) worst = { from, to, detail: e.detail, ts: e.ts };
+  }
+  return worst;
+}
+
+export default { detectFakeCheckCompletion, detectBatchCheckCadence };
