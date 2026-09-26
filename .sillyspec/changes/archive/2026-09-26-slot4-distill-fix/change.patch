@@ -1,0 +1,282 @@
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index eeb334ea..9a73b43c 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -140,7 +140,15 @@ export function harvestSlot4Decision({ changeDir, change }) {
+     `# 决策记录（Decisions）— ${change}`,
+     '',
+     `## D-001@v1: 风险与死路（design 槽4 收割）`,
+-    `- 决策：${answer.replace(/\n+/g, '\n  ')}`,
++    `- 类型：process`,
++    `- 状态：confirmed`,
++    // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
++    // 且 type∈七类白名单，字段解析只认 `- 字段：值` 列表行形态——此前收割条目零字段致永不入选，
++    // 「随蒸馏链进 knowledge」断链（thin-agent-tasks 教训留档归档而 knowledge 零落地的实证）。
++    // 槽4 是定案的流程/方法论取舍，process+confirmed 语义成立。
++    `- 答案：${answer.replace(/\n+/g, '\n  ')}`,
++    // 正文用「答案」标签（同修）：distill 落盘「理由：」行取 entry.answer——此前「- 决策：」非白名单
++    // 字段，正文不随条目进 knowledge（骨架落盘内容丢失）。
+     '',
+   ].join('\n')
+   writeAtomicSync(decPath, text)
+diff --git a/test/slot4-distill-fix.test.mjs b/test/slot4-distill-fix.test.mjs
+new file mode 100644
+index 00000000..7dd39d24
+--- /dev/null
++++ b/test/slot4-distill-fix.test.mjs
+@@ -0,0 +1,65 @@
++/**
++ * slot4-distill-fix.test.mjs — 槽4 收割→决策蒸馏断链修复（2026-09-26-slot4-distill-fix）
++ *
++ * 病根：harvestSlot4Decision 产出条目无「状态：」字段，distillIntoKnowledge 只入选
++ * confirmed|accepted|rejected → 收割条目永不入选（宣称「随蒸馏链进 knowledge」断链，
++ * thin-agent-tasks 枚举教训留档归档而 knowledge 零落地的实证）。
++ *
++ * 覆盖验收面：
++ *   ① 收割条目含「状态：confirmed」且经 distillIntoKnowledge 实测入选落盘；
++ *   ② 无状态旧格式仍不入选（蒸馏既有行为回归——非收割来源的裸条目不该混入）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { harvestSlot4Decision } = await import(pathToFileURL(join(ROOT, 'src', 'flow-parity.js')).href)
++const { distillIntoKnowledge } = await import(pathToFileURL(join(ROOT, 'src', 'decision-distill.js')).href)
++
++function mkChangeDir(tmp, slot4Answer) {
++  const changeDir = join(tmp, 'changes', 'c-s4')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), [
++    '# 设计记录', '',
++    '<!--AGENT:槽4 风险与死路作答 -->',
++    slot4Answer, '',
++  ].join('\n'))
++  return changeDir
++}
++
++test('① 收割→蒸馏全链：状态字段补齐后入选并落 knowledge/decisions', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 's4f-'))
++  try {
++    const changeDir = mkChangeDir(tmp, '枚举开放世界是错误方向——开放分类归 agent，机器只锚定封闭面。')
++    const h = harvestSlot4Decision({ changeDir, change: 'c-s4' })
++    assert.ok(h.harvested, `应收割（${h.reason}）`)
++    const decText = readFileSync(join(changeDir, 'decisions.md'), 'utf8')
++    assert.ok(/状态：confirmed/.test(decText), '收割条目应含状态字段')
++    const kr = join(tmp, 'knowledge'); mkdirSync(kr, { recursive: true })
++    const r = distillIntoKnowledge(changeDir, kr, 'abc123', null)
++    assert.ok(r.written.length > 0, `蒸馏应入选（实际 skipped=${r.skipped}）`)
++    const files = readdirSync(join(kr, 'decisions'))
++    const body = readFileSync(join(kr, 'decisions', files[0]), 'utf8')
++    assert.ok(body.includes('枚举开放世界'), '教训文本应落 knowledge')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('② 无状态旧格式不入选（蒸馏既有行为回归）', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 's4f2-'))
++  try {
++    const changeDir = join(tmp, 'changes', 'c-old')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'decisions.md'), [
++      '---', 'author: x', '---', '# 决策', '',
++      '## D-001@v1: 无状态裸条目', '- 决策：不该入选', '',
++    ].join('\n'))
++    const kr = join(tmp, 'knowledge'); mkdirSync(kr, { recursive: true })
++    const r = distillIntoKnowledge(changeDir, kr, 'abc', null)
++    assert.equal(r.written.length, 0, '无状态条目不应入选（回归）')
++    assert.ok(!existsSync(join(kr, 'decisions')), '零输出不落盘')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-09-26-slot4-distill-fix/design.md b/.sillyspec/changes/2026-09-26-slot4-distill-fix/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-slot4-distill-fix/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:07:12.251Z
++---
++# 设计记录（Design Record）— 2026-09-26-slot4-distill-fix
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三重格式断链修复（用户核验暴露）：槽4 收割器（harvestSlot4Decision）产出的条目缺「- 类型：」「- 状态：」字段行且正文用非白名单标签「- 决策：」，而蒸馏链入选要 type∈七类白名单 ∧ status∈{confirmed|accepted|rejected}、字段解析只认  列表行、落盘「理由：」行取 entry.answer（answer|答案 标签）——三处不匹配叠加致收割条目永不入选且即便入选正文丢失。修：收割模板补  + （槽4 是定案流程取舍）+ 正文改 。附带：thin-agent-tasks 的枚举教训按新格式重放蒸馏补录进 knowledge/decisions/unmapped.md + INDEX 路由（一次性治理）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow-parity.js harvestSlot4Decision 模板三行改动（类型/状态/答案标签）；测试 test/slot4-distill-fix.test.mjs 两用例（收割→蒸馏全链入选落盘+无状态旧格式不入选回归）。行为变化：此后所有轻量变更的槽4 收割决策真实进 knowledge（此前全部只留档归档）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：收割在 distill 子步内序执行（收割→蒸馏同链），无时序窗口。2. 并发：knowledge 写盘沿 distillIntoKnowledge 既有单写入方幂等（同 ID 同版本重写不重复）。3. 切换：补录动作幂等可重跑；断链历史条目（已归档各变更的槽4 决策）不回溯批量补录——按需逐条治理（本变更只补录 thin-agent-tasks 一条作为验证样本）。4. 作用域：harvest 不覆盖已存在 decisions.md（agent 手写决策文件优先级不变）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=补录样本的域路由落 unmapped（治理类变更无模块域）——接受：unmapped 域已有 INDEX 路由行兜底，教训按关键词可命中（三组关键词实测命中）；后续若 unmapped 治理可迁移。死路：回溯批量补录全部历史断链条目——归档件是冻结审计面不回写，历史教训按需逐条重放（幂等），弃。
+
+diff --git a/.sillyspec/changes/2026-09-26-slot4-distill-fix/flow-state.yaml b/.sillyspec/changes/2026-09-26-slot4-distill-fix/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-slot4-distill-fix/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 0f00457b76332ed565fa5f0c8af4cad08b2bb996
++updatedAt: '2026-09-26T01:14:32.536Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js12)（9.6s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926011356\test-result.json｜lint: passed
++  ← npm run lint（36.2s）｜门文件 14 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-slot4-distill-fix/proposal.md b/.sillyspec/changes/2026-09-26-slot4-distill-fix/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-slot4-distill-fix/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:07:12.250Z
++---
++# 提案书（Proposal）— 2026-09-26-slot4-distill-fix
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:02c7a8353be17cf5fcaa19edd6239c2dc550ac402cb8d675f1867db0fde6c693:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++任务原话转写：动机：用户核验「枚举开放世界教训是否进知识库」暴露断链——槽4 收割器（harvestSlot4Decision）产出的 decisions.md 条目只有「- 决策：」行、无「状态：」字段，而决策蒸馏（distillIntoKnowledge）只入选 confirmed|accepted|rejected 状态条目 → 收割条目永不入选，「随蒸馏链进 knowledge」的宣称断链（thin-agent-tasks 的教训实证：留档在归档、knowledge/decisions 零落地、INDEX 零路由）。
++成功标准：
++- harvestSlot4Decision 收割条目补「状态：confirmed」行（槽4 是定案的风险取舍，confirmed 语义成立）——经 distillIntoKnowledge 实测入选并落 knowledge/decisions
++- 既有收割测试（如有）同步；thin-agent-tasks 的教训条目重放蒸馏补进 knowledge/decisions 与 INDEX 路由（幂等重跑）
++- 新用例：收割→蒸馏全链（收割条目经蒸馏入选）+ 无状态旧格式不入选的行为回归
++- 既有套件零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:d05f954958e3251b61bc877c3ea2a82d8e87db025f42530c5a3743b2ab5a27d7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. harvestSlot4Decision 收割条目补「状态：confirmed」行（槽4 是定案的风险取舍，confirmed 语义成立）——经 distillIntoKnowledge 实测入选并落 knowledge
++2. decisions
++3. 既有收割测试（如有）同步
++4. thin-agent-tasks 的教训条目重放蒸馏补进 knowledge
++5. decisions 与 INDEX 路由（幂等重跑）
++6. 新用例：收割→蒸馏全链（收割条目经蒸馏入选）+ 无状态旧格式不入选的行为回归
++7. 既有套件零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:9aa874de99bcc9fcd40026f7d1b69c9f1db4e1f5b20b7ae4b32bfc329542a9ec:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-slot4-distill-fix 留痕重锚 -->
++1. harvestSlot4Decision 收割条目补「状态：confirmed」行（槽4 是定案的风险取舍，confirmed 语义成立）——经 distillIntoKnowledge 实测入选并落 knowledge
++2. decisions
++3. 既有收割测试（如有）同步
++4. thin-agent-tasks 的教训条目重放蒸馏补进 knowledge
++5. decisions 与 INDEX 路由（幂等重跑）
++6. 新用例：收割→蒸馏全链（收割条目经蒸馏入选）+ 无状态旧格式不入选的行为回归
++7. 既有套件零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-slot4-distill-fix/requirements.md b/.sillyspec/changes/2026-09-26-slot4-distill-fix/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-slot4-distill-fix/requirements.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:07:12.251Z
++---
++# 需求规格（Requirements）— 2026-09-26-slot4-distill-fix
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 收割条目字段补齐
++Given 槽4 收割条目缺类型/状态字段且正文用非白名单标签，蒸馏永不入选（断链实证）
++When 收割模板补  +  + 正文改 
++When 收割→蒸馏全链入选并落 knowledge/decisions（教训文本随条目落盘）
++
++### FR-02: 旧格式行为回归
++Given 无状态裸条目（非收割来源）不该因本修复混入选
++When 蒸馏对无状态条目维持不入选
++
++### FR-03: 教训补录与注入面验证
++Given thin-agent-tasks 的枚举教训断链未入库
++When 按新格式重放蒸馏补录 + INDEX 路由
++When matchKnowledge 三组关键词（枚举开放世界/任务面覆写/分类表）实测命中
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/slot4-distill-fix.test.mjs 用例①（收割→蒸馏全链：入选+落盘+教训文本在场）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/slot4-distill-fix.test.mjs 用例②（无状态不入选回归）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++不适用：一次性补录+检索验证由收口前实测记录（matchKnowledge 三组命中 decisions/unmapped.md）；后续由知识注入面自然回归
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
+
+diff --git a/.sillyspec/changes/2026-09-26-slot4-distill-fix/tasks.md b/.sillyspec/changes/2026-09-26-slot4-distill-fix/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-slot4-distill-fix/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:07:12.251Z
++---
++# 任务注册表（Tasks）— 2026-09-26-slot4-distill-fix
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: harvestSlot4Decision 收割条目补「状态：confirmed」行（槽4 是定案的风险取舍…
++- [x] task-02: decisions
++- [x] task-03: 既有收割测试（如有）同步
++- [x] task-04: thin-agent-tasks 的教训条目重放蒸馏补进 knowledge
++- [x] task-05: decisions 与 INDEX 路由（幂等重跑）
++- [x] task-06: 新用例：收割→蒸馏全链（收割条目经蒸馏入选）+ 无状态旧格式不入选的行为回归
++- [x] task-07: 既有套件零回归

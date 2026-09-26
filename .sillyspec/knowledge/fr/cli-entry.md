@@ -2407,3 +2407,54 @@ created_at: 2026-09-22T12:40:09.727Z
   confirmed_at: null
   source_change: 2026-09-26-verify-gate-restrictfiles
   status: active
+
+## FR-cli-entry-127 收割条目字段补齐
+变更：2026-09-26-slot4-distill-fix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 槽4 收割条目缺类型/状态字段且正文用非白名单标签，蒸馏永不入选（断链实证）；When 收割模板补  +  + 正文改 收割→蒸馏全链入选并落 knowledge/decisions（教训文本随条目落盘）
+全文：.sillyspec/changes/archive/2026-09-26-slot4-distill-fix/requirements.md#FR-01
+最近确认：5d81f5526cee5f3d2da8a9ffd7443e5273cd34a5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-slot4-distill-fix:flow:FR-01
+  tests: test/slot4-distill-fix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-slot4-distill-fix
+  status: active
+
+## FR-cli-entry-128 旧格式行为回归
+变更：2026-09-26-slot4-distill-fix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 无状态裸条目（非收割来源）不该因本修复混入选；When 蒸馏对无状态条目维持不入选
+全文：.sillyspec/changes/archive/2026-09-26-slot4-distill-fix/requirements.md#FR-02
+最近确认：5d81f5526cee5f3d2da8a9ffd7443e5273cd34a5
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-26-slot4-distill-fix:flow:FR-02
+  tests: test/slot4-distill-fix.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-26-slot4-distill-fix
+  status: active
+
+## FR-cli-entry-129 教训补录与注入面验证
+变更：2026-09-26-slot4-distill-fix
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given thin-agent-tasks 的枚举教训断链未入库；When 按新格式重放蒸馏补录 + INDEX 路由 matchKnowledge 三组关键词（枚举开放世界/任务面覆写/分类表）实测命中
+全文：.sillyspec/changes/archive/2026-09-26-slot4-distill-fix/requirements.md#FR-03
+最近确认：5d81f5526cee5f3d2da8a9ffd7443e5273cd34a5

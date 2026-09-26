@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-slot4-distill-fix",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "src/flow-parity.js harvestSlot4Decision 模板行改为 `- 答案：${answer",
+      "evidence": "src/flow-parity.js harvestSlot4Decision 模板行改为 `- 答案：${answer.replace(/\\s*\\n+\\s*/g, ' ')}`——多行全文压平为单行（空格分隔）落盘。修复依据成立：decision-distill.js:315 落盘渲染 oneLine(entry.answer)、字段解析为逐行 FIELD_LABEL_RE 单行契约，旧格式 answer.replace(/\\n+/g, '\\n  ') 的续行确不入 entry.answer——病根诊断与修法对位。收割前 dText 已 \\r\\n→\\n 归一，Windows 换行不破。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "test/slot4-distill-fix.test.mjs 用例①改为三行答案，断言首行（枚举开放世界）/中行（穷举",
+      "evidence": "test/slot4-distill-fix.test.mjs 用例①改为三行答案，断言首行（枚举开放世界）/中行（穷举错误不因规模变小而变对）/末行（域关键词分类表）均落 knowledge——直接复现上轮 P1 场景。独立复跑 `node --test test/slot4-distill-fix.test.mjs`：tests 2 / pass 2 / fail 0。用例②无状态旧格式不入选回归维持在场。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": ".sillyspec/knowledge/decisions/unmapped.md D-001@v1（thin-age",
+      "evidence": ".sillyspec/knowledge/decisions/unmapped.md D-001@v1（thin-agent-tasks 枚举教训，最近确认：replay2，行 1090-1091）理由行含全文教训——grep『穷举错误不因规模变小』命中行 1091（死路句完整在场，非只剩首行截断）。",
+      "location": ""
+    },
+    {
+      "severity": "P3",
+      "title": "①断链历史条目不回溯批量补录（归档件冻结审计面不回写，按需逐条重放，幂等）；②补录样本域路由落 unmapped（治理类",
+      "evidence": "①断链历史条目不回溯批量补录（归档件冻结审计面不回写，按需逐条重放，幂等）；②补录样本域路由落 unmapped（治理类变更无模块域，INDEX 路由行兜底、关键词可命中）；③槽4 语义映射 process+confirmed（定案流程取舍，蒸馏链白名单内）。本笔修复（bf1d0f2d 仅触 flow-parity.js 展平正则 + 测试 + unmapped.md 重放标记）未触及任何披露面，三项仍是明示的范围边界而非缺陷。",
+      "location": ""
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T01:21:56.255Z"
+}

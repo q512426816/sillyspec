@@ -1,0 +1,23 @@
+{
+  "change": "2026-09-26-slot4-distill-fix",
+  "baseline": "0f00457b76332ed565fa5f0c8af4cad08b2bb996",
+  "head": "0b053689deac6d96948650255f8f6f3265fe4dd1",
+  "files": [
+    "src/flow-parity.js",
+    "test/slot4-distill-fix.test.mjs",
+    ".sillyspec/changes/2026-09-26-slot4-distill-fix/design.md",
+    ".sillyspec/changes/2026-09-26-slot4-distill-fix/flow-state.yaml",
+    ".sillyspec/changes/2026-09-26-slot4-distill-fix/proposal.md",
+    ".sillyspec/changes/2026-09-26-slot4-distill-fix/requirements.md",
+    ".sillyspec/changes/2026-09-26-slot4-distill-fix/tasks.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 235,
+    "deletions": 1
+  },
+  "savedAt": "2026-09-26T01:14:33.452Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "227444b8677fe0e674d4036ea5865d6ebd534d25e2de8eccaab75f61456c567b",
+  "patchStatus": "ok"
+}
