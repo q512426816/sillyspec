@@ -197,6 +197,7 @@ modules:
       - src/commit-guard.js
       - src/watcher.js
       - src/sentinel-assertions.js
+      - src/timeline.js
 
   sillyhub-mcp:
     status: active

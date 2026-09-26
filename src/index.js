@@ -93,6 +93,8 @@ SillySpec CLI — 规范驱动开发工具包
   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
   sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]
                                       哨兵告警查询（watcher 事件流只读可视化；--all 全事件、--follow 2s 轮询持续打印）
+  sillyspec watcher timeline --change <名> [--runtime-root <路径>]
+                                      变更合成时间线（事件流 × tasks.md × git 提交锚三源真实留痕渲染；活跃/归档变更均可）
   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
   sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
 
@@ -4967,12 +4969,63 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
       // 可选 --follow 轮询；不改 applySentinelRules、不做平台推送、不加新事件类型。
       // 子命令面：alerts；预留名（勿占）：events（原始流格式化）/ tail（时间窗过滤）。
       const watcherSub = filteredArgs[1];
-      if (watcherSub !== 'alerts') {
-        const sug = didYouMean(watcherSub || '', ['alerts']);
+      if (watcherSub !== 'alerts' && watcherSub !== 'timeline') {
+        const sug = didYouMean(watcherSub || '', ['alerts', 'timeline']);
         console.error(`❌ 未知子命令: watcher ${watcherSub || '(空)'}`);
         if (sug) console.error(`   你是想输入「watcher ${sug}」吗？`);
         console.error('用法: sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]');
+        console.error('      sillyspec watcher timeline --change <名> [--runtime-root <路径>]');
         process.exit(2);
+      }
+      // ── timeline 子命令（2026-09-26-watcher-timeline）：变更合成时间线只读出口 ──
+      // 三源 join（事件流 × tasks.md × git 提交锚）在 src/timeline.js 纯函数层；此处只做
+      // I/O 接线（runtimeRoot 解析与 alerts 同源；change 目录活跃>归档双路径探测）。
+      if (watcherSub === 'timeline') {
+        const tRest = filteredArgs.slice(2);
+        let tChange = null;
+        let tRuntimeRootFlag = null;
+        for (let i = 0; i < tRest.length; i++) {
+          if (tRest[i] === '--change' && tRest[i + 1]) tChange = tRest[++i];
+          else if (tRest[i] === '--runtime-root' && tRest[i + 1]) tRuntimeRootFlag = resolve(tRest[++i]);
+        }
+        if (!tChange) {
+          console.error('❌ watcher timeline 需要 --change <变更名>');
+          console.error('用法: sillyspec watcher timeline --change <名> [--runtime-root <路径>]');
+          process.exit(2);
+        }
+        assertSafeChangeName(tChange, '变更名');
+        const { resolveRuntimeRoot } = await import('./run/shared.js');
+        const { readWatcherEvents } = await import('./watcher.js');
+        const { loadChangeTasks, readBirthTs, resolveCommitAnchors, parseTaskLines, renderTimeline } = await import('./timeline.js');
+        const tSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+        const tPlatformOpts = resolvePlatformOpts(dir, specDir);
+        const tRuntimeRoot = resolveRuntimeRoot({ runtimeRoot: tRuntimeRootFlag || (tPlatformOpts && tPlatformOpts.runtimeRoot) || null }, tSpecBase);
+        const tRes = readWatcherEvents({ runtimeRoot: tRuntimeRoot, change: tChange });
+        if (!tRes.exists) {
+          console.error(`📭 ${tChange} 无事件流（未跑过 watcher），无从合成时间线`);
+          console.error(`   事件流路径：${join(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
+          process.exit(2);
+        }
+        const { changeDir, tasksMd } = loadChangeTasks(tSpecBase, tChange);
+        const tasks = tasksMd ? parseTaskLines(tasksMd) : null;
+        let tier = null;
+        if (changeDir) {
+          try {
+            const m = /^tier:\s*(\S+)/m.exec(readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8'));
+            if (m) tier = m[1];
+          } catch { /* 缺 flow-state（头脑风暴预段等）按未知 */ }
+        }
+        const { gitQuiet } = await import('./git-helper.js');
+        const anchors = resolveCommitAnchors(tRes.events, (hash) => {
+          const out = gitQuiet(dir, ['log', '-1', '--format=%h%x1f%aI%x1f%B', hash]);
+          if (typeof out !== 'string' || !out.trim()) return null;
+          const sep = out.indexOf('\x1f');
+          const rest = out.slice(sep + 1);
+          const sep2 = rest.indexOf('\x1f');
+          return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) };
+        });
+        console.log(renderTimeline({ change: tChange, events: tRes.events, tasks, anchors, birthTs: readBirthTs(changeDir), tier }));
+        break;
       }
       const wRest = filteredArgs.slice(2);
       let wChange = null;
