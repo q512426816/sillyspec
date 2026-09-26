@@ -681,55 +681,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         process.exit(1)
       }
     }
-    // 需求测试绑定槽位门 + 自动补全（governance-autopilot，评审 P1 修正：逐行扫描替代正则转义）
-    const { verifyRequirementBindings } = await import('./flow-draft.js')
-    let rb = verifyRequirementBindings({ changeDir })
-    if (rb.applicable && rb.emptySlots.length > 0) {
-      let _autoFilled = 0
-      try {
-        const _runtimeRoot = resolveRuntimeRoot(platformOpts || {}, specBase)
-        const _runsDir = join(_runtimeRoot, 'verify-runs')
-        let _testFiles = new Set()
-        if (existsSync(_runsDir)) {
-          const _runs = readdirSync(_runsDir).sort().reverse()
-          for (const _rd of _runs.slice(0, 3)) {
-            const _tr = join(_runsDir, _rd, 'test-result.json')
-            if (!existsSync(_tr)) continue
-            try {
-              const _j = JSON.parse(readFileSync(_tr, 'utf8'))
-              const _files = _j.files || _j.testFiles || (_j.gate && _j.gate.files) || []
-              for (const _f of _files) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\/g, '/'))
-              if (_testFiles.size > 0) break
-            } catch {}
-          }
-        }
-        if (_testFiles.size > 0) {
-          const _reqPath = join(changeDir, 'requirements.md')
-          const _lines = readFileSync(_reqPath, 'utf8').split('\n')
-          const _bindingLine = [..._testFiles].slice(0, 3).join('、')
-          // 逐行扫描：AGENT:测试绑定 注释行后的第一个空行位置插入绑定内容（不转义、不依赖槽文本）
-          for (let _li = 0; _li < _lines.length - 1; _li++) {
-            if (/^<!--\s*AGENT:测试绑定/.test(_lines[_li]) && !_lines[_li + 1].trim()) {
-              _lines[_li + 1] = _bindingLine
-              _autoFilled++
-              _li++ // 跳过刚填的行
-            }
-          }
-          if (_autoFilled > 0) {
-            const { writeAtomicSync } = await import('./fs-atomic.js')
-            writeAtomicSync(_reqPath, _lines.join('\n'))
-            console.log(`✅ [自动绑定] ${_autoFilled} 个空绑定槽已从测试结果补全（${_bindingLine.slice(0, 60)}）——agent 可覆盖`)
-            rb = verifyRequirementBindings({ changeDir })
-          }
-        }
-      } catch { /* 自动补全 fail-soft */ }
-      if (rb.applicable && rb.emptySlots.length > 0 && _autoFilled === 0) {
-        console.error(`❌ 需求测试绑定未作答：requirements.md ${rb.emptySlots.length} 处（${rb.emptySlots.slice(0, 4).join('、')}${rb.emptySlots.length > 4 ? ' 等' : ''}）`)
-        console.error(`   每条 FR 至少一行：测试文件项目相对全路径＋用例名；无测试面写「不适用：<理由>」`)
-        reportMidFail('artifacts')
-        process.exit(1)
-      }
-    }
     mark('artifacts')
   }
 
@@ -862,6 +813,56 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       if (rot.warnInfo) console.warn(rot.warnInfo)
     } catch { /* rot fail-open */ }
     mark('ledger')
+
+    // ── 绑定校验+自动补全（governance-autopilot，R21 实证 P1 修正：从 artifacts 移到 ledger
+    //    之后——测试已跑、verify-runs/test-result.json 已生成，auto-bind 才有数据可读）──
+    const { verifyRequirementBindings: _vrb } = await import('./flow-draft.js')
+    let _rb = _vrb({ changeDir })
+    if (_rb.applicable && _rb.emptySlots.length > 0) {
+      let _autoFilled = 0
+      try {
+        const _runtimeRoot = resolveRuntimeRoot(platformOpts || {}, specBase)
+        const _runsDir = join(_runtimeRoot, 'verify-runs')
+        let _testFiles = new Set()
+        if (existsSync(_runsDir)) {
+          const _runs = readdirSync(_runsDir).sort().reverse()
+          for (const _rd of _runs.slice(0, 3)) {
+            const _tr = join(_runsDir, _rd, 'test-result.json')
+            if (!existsSync(_tr)) continue
+            try {
+              const _j = JSON.parse(readFileSync(_tr, 'utf8'))
+              const _files = _j.files || _j.testFiles || (_j.gate && _j.gate.files) || []
+              for (const _f of _files) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\/g, '/'))
+              if (_testFiles.size > 0) break
+            } catch {}
+          }
+        }
+        if (_testFiles.size > 0) {
+          const _reqPath = join(changeDir, 'requirements.md')
+          const _lines = readFileSync(_reqPath, 'utf8').split('\n')
+          const _bindingLine = [..._testFiles].slice(0, 3).join('、')
+          for (let _li = 0; _li < _lines.length - 1; _li++) {
+            if (/^<!--\s*AGENT:测试绑定/.test(_lines[_li]) && !_lines[_li + 1].trim()) {
+              _lines[_li + 1] = _bindingLine
+              _autoFilled++
+              _li++
+            }
+          }
+          if (_autoFilled > 0) {
+            const { writeAtomicSync } = await import('./fs-atomic.js')
+            writeAtomicSync(_reqPath, _lines.join('\n'))
+            console.log(`✅ [自动绑定] ${_autoFilled} 个空绑定槽已从测试结果补全（${_bindingLine.slice(0, 60)}）——agent 可覆盖`)
+            _rb = _vrb({ changeDir })
+          }
+        }
+      } catch { /* 自动补全 fail-soft */ }
+      if (_rb.applicable && _rb.emptySlots.length > 0 && _autoFilled === 0) {
+        console.error(`❌ 需求测试绑定未作答：requirements.md ${_rb.emptySlots.length} 处（${_rb.emptySlots.slice(0, 4).join('、')}${_rb.emptySlots.length > 4 ? ' 等' : ''}）`)
+        console.error(`   每条 FR 至少一行：测试文件项目相对全路径＋用例名；无测试面写「不适用：<理由>」`)
+        reportMidFail('ledger')
+        process.exit(1)
+      }
+    }
   }
 
   // ②b patch：变更级 patch 留档（2026-09-25-thin-patch-bindings，noAI）：quicklog/patches 生态
