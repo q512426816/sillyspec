@@ -104,6 +104,16 @@
 - workspace|decision|决策 → [decisions/workspace.md](decisions/workspace.md)
 - admin|decision|决策 → [decisions/admin.md](decisions/admin.md)
 - frontend_lib|decision|决策 → [decisions/frontend_lib.md](decisions/frontend_lib.md)
+- change-management|decision|决策 → [decisions/change-management.md](decisions/change-management.md)
+- cli-entry|decision|决策 → [decisions/cli-entry.md](decisions/cli-entry.md)
+- core-engine|decision|决策 → [decisions/core-engine.md](decisions/core-engine.md)
+- docs-consistency|decision|决策 → [decisions/docs-consistency.md](decisions/docs-consistency.md)
+- hooks|decision|决策 → [decisions/hooks.md](decisions/hooks.md)
+- progress|decision|决策 → [decisions/progress.md](decisions/progress.md)
+- runtime|decision|决策 → [decisions/runtime.md](decisions/runtime.md)
+- setup|decision|决策 → [decisions/setup.md](decisions/setup.md)
+- stages|decision|决策 → [decisions/stages.md](decisions/stages.md)
+- worktree|decision|决策 → [decisions/worktree.md](decisions/worktree.md)
 
 ## FR 需求索引
 - host-fs-handler|FR|需求|承接 → [fr/host-fs-handler.md](fr/host-fs-handler.md)
@@ -155,3 +165,4 @@
 - 摘录|碎片|截断|slice|续行合并|括号换行 → [机器摘录碎片化](known-issues.md#机器摘录碎片化行级切分拆括号换行--tasks-渲染-slice060-硬切)
 - verify|批量快进|noAI|亲测|互锁|integrationRan → [verify 批量快进互锁](known-issues.md#verify-批量快进与-noai-亲测步互锁四步绕行)
 - 绿地|伪域|auto-|unmapped|模块图|bootstrap|deliverableFiles → [绿地伪域断流](known-issues.md#绿地无模块图仓-fr-知识落伪域与-unmapped-大池断流)
+- 枚举|开放世界|穷举|分类表|关键词表|任务面|工作分解|机器稿 → [decisions/unmapped.md](decisions/unmapped.md)

@@ -140,7 +140,15 @@ export function harvestSlot4Decision({ changeDir, change }) {
     `# 决策记录（Decisions）— ${change}`,
     '',
     `## D-001@v1: 风险与死路（design 槽4 收割）`,
-    `- 决策：${answer.replace(/\n+/g, '\n  ')}`,
+    `- 类型：process`,
+    `- 状态：confirmed`,
+    // 类型/状态字段（2026-09-26-slot4-distill-fix）：蒸馏链入选要 status∈{confirmed|accepted|rejected}
+    // 且 type∈七类白名单，字段解析只认 `- 字段：值` 列表行形态——此前收割条目零字段致永不入选，
+    // 「随蒸馏链进 knowledge」断链（thin-agent-tasks 教训留档归档而 knowledge 零落地的实证）。
+    // 槽4 是定案的流程/方法论取舍，process+confirmed 语义成立。
+    `- 答案：${answer.replace(/\n+/g, '\n  ')}`,
+    // 正文用「答案」标签（同修）：distill 落盘「理由：」行取 entry.answer——此前「- 决策：」非白名单
+    // 字段，正文不随条目进 knowledge（骨架落盘内容丢失）。
     '',
   ].join('\n')
   writeAtomicSync(decPath, text)
