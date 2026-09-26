@@ -544,7 +544,18 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
     }
     const unm = all.get('unmapped')
     if (unm && unm.sections.length > 50) {
-      console.warn(`⚠️ [unmapped 大池] ${unm.sections.length} 条 FR 堆积在 unmapped 域（>50）——治理动作：按目录段补模块卡迁移条目、或跑 modules rebuild 建图后新变更自动分流`)
+      // 基线消音（2026-09-26 修复轮）：本仓 unmapped 720 条是 MP 仓历史变更的跨仓知识基线
+      // （103 个来源变更全在归档，非新增堆积）——警告只对新增超基线时触发，不重复刷历史池。
+      // 基线锚定 local.yaml 的 fr_unmapped_baseline（缺省 0=无基线，警告行为不变）。
+      let baseline = 0
+      try {
+        const raw = readFileSync(join(knowledgeRoot, '..', 'local.yaml'), 'utf8')
+        const m = raw.match(/^fr_unmapped_baseline:\s*(\d+)\s*$/m)
+        if (m) baseline = parseInt(m[1], 10)
+      } catch { /* 无 local.yaml = 无基线 */ }
+      if (unm.sections.length > Math.max(50, baseline + 10)) {
+        console.warn(`⚠️ [unmapped 大池] ${unm.sections.length} 条 FR 堆积在 unmapped 域（基线 ${baseline} + 增量 >10）——若为跨仓历史基线可在 local.yaml 设 fr_unmapped_baseline: ${unm.sections.length} 消音；新变更落 unmapped 时建议补模块卡自动分流`)
+      }
     }
   } catch { /* 提醒 fail-open */ }
 
