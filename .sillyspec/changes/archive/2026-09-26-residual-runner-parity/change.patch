@@ -1,0 +1,321 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 77d45587..d59d0664 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2381,11 +2381,33 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [] }) {
+     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?pytest)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*pytest)/.exec(cmd)
+     if (m) { pyRunner = m[1].trim(); break }
+   }
++  // JSX 运行器推断（2026-09-26-residual-runner-parity，R18-SF-full 实证）：.tsx/.jsx 是 node
++  // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），与
++  // py 侧同法从命中命令串提取 vitest/jest；提不出则整批 skip 转项目运行器（不制造恒败段）。
++  // .ts/.js 照旧 node --test（原生可跑——deps-cwd-prefix ④既有钉）。
++  const _norm = (p2) => String(p2).replace(/\\/g, '/')
++  const NEEDS_PROJECT_RE = /\.(tsx|jsx)$/
++  const jsProject = jsRun.filter((f) => NEEDS_PROJECT_RE.test(_norm(f)))
++  const jsNative = jsRun.filter((f) => !NEEDS_PROJECT_RE.test(_norm(f)))
++  let jsxRunner = null
++  for (const h of hits || []) {
++    const cmd = String(h.test || '')
++    const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?(?:vitest|jest))(?=\s|$)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*(?:vitest|jest)(?:\s|$))/.exec(cmd)
++    if (m) { jsxRunner = m[1].trim(); break }
++  }
+   const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
+   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
+   const batches = []
+   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
+-  if (jsRun.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsRun.join(' ')}`, count: jsRun.length, dropped: js.length - jsRun.length })
++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length })
++  if (jsProject.length > 0) {
++    if (jsxRunner) {
++      const isVitest = /vitest/.test(jsxRunner)
++      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebase).join(' ')}`, count: jsProject.length, dropped: 0 })
++    } else {
++      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且命中命令串无 vitest/jest 运行器——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
++    }
++  }
+   return batches
+ }
+ 
+@@ -2444,10 +2466,17 @@ function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
+     const chunk = files.slice(i, i + 30)
+     const batches = buildDepsBatches({ deps: chunk, changedFiles: files, hits })
+     for (const b of batches) {
++      if (b.skip) {
++        // JSX 无项目运行器批（residual-runner-parity）：不跑不拦——残差披露如实记录转办，
++        // 由 agent 用项目运行器执行（verify 段指引已含「命中 warning 复核」面）。
++        segments.push({ runner: b.name, runnerKind: 'project-runner-transfer', files: b.files || [], status: 'skipped', reason: b.reason || '转项目运行器', durationMs: null, outputTail: null })
++        console.warn(`⚠️ ${b.name}：${b.reason}`)
++        continue
++      }
+       const isPy = b.short === 'py'
+-      const segFiles = chunk.filter(f => (norm(f).endsWith('.py') === isPy))
++      const segFiles = chunk.filter((f) => (norm(f).endsWith('.py') === isPy))
+       const r = runOneModule(b.name, b.command, cwd, knownFailures)
+-      segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : 'node --test', files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
++      segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : (b.short === 'jsx' ? 'vitest/jest' : 'node --test'), files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
+     }
+   }
+   return segments
+@@ -2525,8 +2554,14 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [],
+   if (deps.length > 0) {
+     depsBatches = buildDepsBatches({ deps, changedFiles, hits })
+     for (const b of depsBatches) {
++      if (b.skip) {
++        // JSX 无项目运行器批（residual-runner-parity）：skip 不跑不拦，reason 点名让漏测可见
++        console.warn(`⚠️ ${b.name}：${b.reason}`)
++        perModule.push({ name: b.name, status: 'skipped', reason: b.reason || '转项目运行器', command: null, exitCode: null, durationMs: null, outputTail: null })
++        continue
++      }
+       perModule.push(runOneModule(b.name, b.command, cwd, knownFailures))
+-      console.log(`ℹ️ module 子集附加依赖测试 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 前缀自模块命令推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
++      console.log(`ℹ️ module 子集附加依赖测试 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 前缀自模块命令推断' : b.short === 'jsx' ? 'vitest/jest 前缀自命中命令推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
+     }
+   }
+   const status = aggregateStatus(perModule)
+diff --git a/test/residual-runner-parity.test.mjs b/test/residual-runner-parity.test.mjs
+new file mode 100644
+index 00000000..a0ac55ca
+--- /dev/null
++++ b/test/residual-runner-parity.test.mjs
+@@ -0,0 +1,49 @@
++/**
++ * residual-runner-parity.test.mjs — JSX 测试文件运行器分拣（2026-09-26-residual-runner-parity）
++ *
++ * 覆盖验收面（R18-SF-full 实证：.tsx 用 node --test 直跑恒败 ~11 次尝试 99 分钟）：
++ *   ① vitest 推断批：.tsx + hits 含 vitest 命令 → deps(auto-jsx) 且 command 补 run 子命令；
++ *   ② 无运行器 skip 批：.tsx 无 hits → command null + skip true + reason（不制造恒败段）；
++ *   ③ jest 形态（不加 run）；④ 混合卷三批分拣（py/js 原生/jsx）与 .ts 原生不变（④既有钉复验）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const { buildDepsBatches } = await import(pathToFileURL(join(ROOT, 'src/verify-postcheck.js')).href)
++
++test('① vitest 推断批（补 run 子命令）', () => {
++  const b = buildDepsBatches({ deps: ['a.test.tsx', 'b.spec.jsx'], changedFiles: [], hits: [{ test: 'pnpm exec vitest run src' }] })
++  const jsx = b.find((x) => x.short === 'jsx')
++  assert.ok(jsx, '应有 jsx 批')
++  assert.match(jsx.command, /vitest run a\.test\.tsx b\.spec\.jsx$/)
++  assert.equal(jsx.count, 2)
++  assert.ok(!b.some((x) => x.short === 'js'), 'JSX 文件不再进 node --test 批')
++})
++
++test('② 无运行器整批 skip（不制造恒败段）', () => {
++  const b = buildDepsBatches({ deps: ['card.test.tsx'], changedFiles: [], hits: [{ test: 'pytest -q tests' }] })
++  const skip = b.find((x) => x.short === 'jsx-skip')
++  assert.ok(skip, '应有 jsx-skip 批')
++  assert.equal(skip.command, null)
++  assert.ok(skip.skip === true && /转项目运行器/.test(skip.reason), 'skip 批带转办 reason')
++})
++
++test('③ jest 形态（不加 run）', () => {
++  const b = buildDepsBatches({ deps: ['x.test.jsx'], changedFiles: [], hits: [{ test: 'npx jest src --silent' }] })
++  const jsx = b.find((x) => x.short === 'jsx')
++  assert.ok(jsx && /^npx jest x\.test\.jsx/.test(jsx.command), `jest 直拼（实际 ${jsx && jsx.command}）`)
++})
++
++test('④ 混合三批分拣 + .ts 原生不变', () => {
++  const b = buildDepsBatches({
++    deps: ['t.py', 'a.test.ts', 'c.test.tsx'],
++    changedFiles: [],
++    hits: [{ test: 'cd frontend && pnpm exec vitest run src' }],
++  })
++  assert.deepEqual(b.map((x) => x.short), ['py', 'js', 'jsx'], '三批：py / js 原生 / jsx 项目')
++  assert.match(b[1].command, /^node --test a\.test\.ts$/, '.ts 照旧 node --test（原生可跑——既有行为）')
++  assert.match(b[2].command, /vitest run c\.test\.tsx/)
++})
+diff --git a/.sillyspec/changes/2026-09-26-residual-runner-parity/design.md b/.sillyspec/changes/2026-09-26-residual-runner-parity/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-residual-runner-parity/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:48:39.387Z
++---
++# 设计记录（Design Record）— 2026-09-26-residual-runner-parity
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++buildDepsBatches 的 js 卷分拣（对齐 py 卷 pytest 推断先例）：.tsx/.jsx（node 原生 type stripping 不支持 JSX——R18-SF-full 残差段 node --test 直跑恒败 ~11 次尝试的坑）从命中命令串推断 vitest/jest——有则 deps(auto-jsx) 批（vitest 补 run 子命令），无则 deps(auto-jsx-skip) 整批 skip 转项目运行器（不制造恒败段）；.ts/.js 照旧 node --test（原生可跑，deps-cwd-prefix ④既有钉零变化）。两个消费点（残差段 runTraceResidualInner/主选测 module 子集）skip 批不跑不拦：warn+skipped 段留痕（漏测可见非静默）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++verify-postcheck.js buildDepsBatches：jsRun 分拣 jsProject/jsNative + jsxRunner 推断（正则对齐 py 侧两形态）+ 三批 push（skip 批 command:null skip:files reason）；runTraceResidualInner 与主选测循环加 b.skip 分支（skipped 段/模块留痕）。批次 short 新增 jsx/jsx-skip 两值。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：分拣是纯函数（deps+hits 时点快照）。2. 并发：无共享态。3. 切换：skip 批幂等（重跑同样 skip 同样留痕）。4. 作用域：py/js 原生批零变化（既有测试钉）；skip 批的漏测风险由 reason 点名+披露面承担（不静默——与「环境缺件跳过聚合」同款可见性语义）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=jsxRunner 提取的命令串形态不匹配项目实际（cd 链/嵌套 pnpm exec）——提取不到走 skip 批（安全侧：转办不假跑），提取到但命令错会 failed 由 known_failures/归属鉴定兜（与 py 侧推断同风险面同兜法）。死路：CLI 主动探测项目 vitest 配置（读 vite.config/tsconfig 判项目类型）——探测面无界且易过时，命令串推断+skip 转办是诚实分界，弃；死路：JSX 批也 node --test 顶着 known_failures——制造恒败段正是要修的病，弃。
+
+diff --git a/.sillyspec/changes/2026-09-26-residual-runner-parity/flow-state.yaml b/.sillyspec/changes/2026-09-26-residual-runner-parity/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-residual-runner-parity/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: fd33cfa401e6437cec5a21648e9a61dd7d94f721
++updatedAt: '2026-09-26T01:50:38.994Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js18)（10.1s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926015009\test-result.json｜lint: passed
++  ← npm run lint（29.6s）｜门文件 15 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-residual-runner-parity/proposal.md b/.sillyspec/changes/2026-09-26-residual-runner-parity/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-residual-runner-parity/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:48:39.386Z
++---
++# 提案书（Proposal）— 2026-09-26-residual-runner-parity
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:aade63a151a39d97873355c99f59b2b1f092f74ab1ac3fe3ce1dff586d1a1e14:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++任务原话转写：动机：R18-SF-full 实证 verify 残差段/依赖批对 .tsx/.jsx 测试文件用 node --test 直跑恒败（node 原生 type stripping 不支持 JSX——agent 烧 ~11 次尝试 99 分钟，最终被迫 verify 内改码把组件测试双宿主化绕过）。根因：buildDepsBatches 的 py 卷有运行器推断（hits 提取 pytest），js 卷一律 node --test 无分拣。
++成功标准：
++- buildDepsBatches js 卷分拣：.tsx/.jsx（JSX 原生不可跑）与 .ts/.js（原生可跑，既有行为）分离；JSX 卷从命中命令串推断 vitest/jest（与 py 侧 pytest 推断同法）——有则 deps(auto-jsx) 批（vitest 补 run 子命令），无则 deps(auto-jsx-skip) 整批 skip（command null，不制造恒败段）
++- 两个消费点（runTraceResidualInner 残差段/主选测 module 子集）skip 批不跑不拦：warn+skipped 段留痕（漏测可见非静默）
++- .ts 走 node --test 既有行为零变化（deps-cwd-prefix ④钉复验）
++- 测试：vitest 推断批/无运行器 skip 批/jest 形态/混合卷三批分拣 + deps-cwd-prefix 与 verify 相关套件零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:9286bca68d67e8d4e92c1b829fd4a6ad6c237f0d70e8682b71f7bcd62f21b82c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. buildDepsBatches js 卷分拣：.tsx/.jsx（JSX 原生不可跑）与 .ts/.js（原生可跑，既有行为）分离
++2. JSX 卷从命中命令串推断 vitest
++3. jest（与 py 侧 pytest 推断同法）——有则 deps(auto-jsx) 批（vitest 补 run 子命令），无则 deps(auto-jsx-skip) 整批 skip（command null，不制造恒败段）
++4. 两个消费点（runTraceResidualInner 残差段
++5. 主选测 module 子集）skip 批不跑不拦：warn+skipped 段留痕（漏测可见非静默）
++6. .ts 走 node --test 既有行为零变化（deps-cwd-prefix ④钉复验）
++7. 测试：vitest 推断批/无运行器 skip 批/jest 形态/混合卷三批分拣 + deps-cwd-prefix 与 verify 相关套件零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:8a6d610a541292136128370efe8fa8c02b15d8cf5a08b29e9f465cd71c19832f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-residual-runner-parity 留痕重锚 -->
++1. buildDepsBatches js 卷分拣：.tsx/.jsx（JSX 原生不可跑）与 .ts/.js（原生可跑，既有行为）分离
++2. JSX 卷从命中命令串推断 vitest
++3. jest（与 py 侧 pytest 推断同法）——有则 deps(auto-jsx) 批（vitest 补 run 子命令），无则 deps(auto-jsx-skip) 整批 skip（command null，不制造恒败段）
++4. 两个消费点（runTraceResidualInner 残差段
++5. 主选测 module 子集）skip 批不跑不拦：warn+skipped 段留痕（漏测可见非静默）
++6. .ts 走 node --test 既有行为零变化（deps-cwd-prefix ④钉复验）
++7. 测试：vitest 推断批/无运行器 skip 批/jest 形态/混合卷三批分拣 + deps-cwd-prefix 与 verify 相关套件零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-residual-runner-parity/requirements.md b/.sillyspec/changes/2026-09-26-residual-runner-parity/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-residual-runner-parity/requirements.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:48:39.387Z
++---
++# 需求规格（Requirements）— 2026-09-26-residual-runner-parity
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: JSX 卷运行器推断
++Given .tsx/.jsx 用 node --test 直跑恒败（node 原生不支持 JSX）
++When js 卷分拣出 JSX 文件并从命中命令串推断 vitest/jest（与 py 侧 pytest 推断同法）
++When 有运行器则 deps(auto-jsx) 批（vitest 补 run 子命令、jest 直拼）
++
++### FR-02: 无运行器整批 skip
++Given 命中命令串提不出 vitest/jest
++When deps(auto-jsx-skip)（command null）
++When 两消费点不跑不拦、warn+skipped 留痕（漏测可见非静默，转项目运行器执行）
++
++### FR-03: 原生批零变化
++Given .ts/.js node 原生可跑（既有行为）
++When 分拣后照旧 node --test
++Then deps-cwd-prefix ④钉复验通过
++
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/residual-runner-parity.test.mjs 用例①③（vitest 补 run/jest 直拼）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/residual-runner-parity.test.mjs 用例②（skip 批形态：command null+skip true+转办 reason）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」） -->
++test/residual-runner-parity.test.mjs 用例④（混合三批分拣+.ts 原生）+ test/deps-cwd-prefix.test.mjs 零回归
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录拆行残段，验收面并入 FR-01~03
+
+diff --git a/.sillyspec/changes/2026-09-26-residual-runner-parity/tasks.md b/.sillyspec/changes/2026-09-26-residual-runner-parity/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-residual-runner-parity/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T01:48:39.387Z
++---
++# 任务注册表（Tasks）— 2026-09-26-residual-runner-parity
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: buildDepsBatches js 卷分拣：.tsx/.jsx（JSX 原生不可跑）与 .ts/.js（原生可跑，既有行为）分离
++- [x] task-02: JSX 卷从命中命令串推断 vitest
++- [x] task-03: jest（与 py 侧 pytest 推断同法）——有则 deps(auto-jsx) 批（vitest 补 run 子命令）…
++- [x] task-04: 两个消费点（runTraceResidualInner 残差段
++- [x] task-05: 主选测 module 子集）skip 批不跑不拦：warn+skipped 段留痕（漏测可见非静默）
++- [x] task-06: .ts 走 node --test 既有行为零变化（deps-cwd-prefix ④钉复验）
++- [x] task-07: 测试：vitest 推断批/无运行器 skip 批/jest 形态/混合卷三批分拣 + deps-cwd-prefix 与 verify 相关套件零回归

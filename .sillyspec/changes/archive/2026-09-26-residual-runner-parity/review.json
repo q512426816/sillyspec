@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-residual-runner-parity",
+  "reviewer": "independent-reviewer (clean context)",
+  "verdict": "PASS",
+  "reviewedAt": "2026-09-26",
+  "reviewMethod": "只读评审：requirements/design/change.patch 通读 + src/verify-postcheck.js 源码核读（buildDepsBatches/aggregateStatus/两消费点/上游 skip 档）+ node --input-type=module 实测 buildDepsBatches 九形态矩阵（正则两形态/误命中/分拣/CAP 溢出）。测试绿（residual-runner-parity 4/4 + deps-cwd-prefix 3/3 + verify 相关 5/5）为任务书给定，本次未复跑套件、正则与分拣行为为独立实测。",
+  "findings": [
+    {
+      "title": "jsx 批 cd 前缀文件未重定基——cdDir 仅自 pyRunner 提取，命中命令带 cd <dir> && 时批路径双前缀错位",
+      "severity": "P2",
+      "evidence": "src/verify-postcheck.js:2398 cdDir 只从 pyRunner 正则提取；2406 jsx 批对 jsProject 调 rebase，但 py 侧无 cd 时 rebase 恒 no-op。node 实测：buildDepsBatches({deps:['frontend/src/c.test.tsx'], hits:[{test:'cd frontend && pnpm exec vitest run src'}]}) → jsx 批 cmd='cd frontend && pnpm exec vitest run frontend/src/c.test.tsx'（cd 进 frontend 后应传 src/c.test.tsx，实际双前缀，vitest 找不到文件）。test ④ 用裸文件名 'c.test.tsx'（无 frontend/ 前缀）恰好掩盖该形态。py 侧 deps-cwd-prefix 先例已解同型问题（剥前缀重定基），jsx 推断捕获了 cd 前缀进 runner 却未对齐重定基半边。",
+      "location": "src/verify-postcheck.js:2398-2406",
+      "dimensionNotes": "数据正确性（批命令构造）。降档依据：fail-loud 非静默——错路径 vitest exit 1 → failed → known_failures/归属鉴定兜（设计风险槽②声明的兜法），不产生假绿；且设计明言「与 py 侧同风险面同兜法」。但这是 py 先例已修复的同型缺口（可修的实现缺口，非不可避免环境风险），建议后续变更补：从 jsxRunner 亦提取 cdDir 对 jsProject 单独重定基。不构成承诺违反——FR-01 承诺的推断/补 run/直拼均已兑现。",
+      "reviewedAt": "2026-09-26"
+    },
+    {
+      "title": "jsNative 为空且 js 卷超帽时 dropped 披露丢失（纯 JSX 超帽场景「超帽弃 N」无处落）",
+      "severity": "P3",
+      "evidence": "src/verify-postcheck.js:2402 js 批以 if (jsNative.length > 0) 为 push 条件，dropped 的唯一载体是该批；实测 deps=32 个纯 .test.tsx（无 py）→ jsCap=30，仅 jsx-skip 批 count=30 dropped=0，被帽的 2 个文件零披露。改前该形态 jsRun.length>0 必 push js 批带 dropped:2。帽语义与总量守恒本身不破坏：jsProject+jsNative=jsRun 恒等（2373 先切帽后分），js 批存在时 count(js)+count(jsx)+dropped=js.length 仍自洽。",
+      "location": "src/verify-postcheck.js:2373,2402-2403",
+      "dimensionNotes": "数据正确性（披露面，非行为面）：被帽文件集合与改前完全一致（帽先切后分），仅可见性缺口。jsx/jsx-skip 批 dropped 恒 0 语义正确（无独立二次弃文件）。",
+      "reviewedAt": "2026-09-26"
+    },
+    {
+      "title": "独立词误命中面：命令串含 vitest/jest 独立词的非运行器命令被提取为运行器，存在假绿面（known_failures 不兜假绿）",
+      "severity": "P3",
+      "evidence": "node 实测：hits=[{test:'echo vitest'}] → jsx 批 cmd='echo vitest run t.tsx'——echo exit 0 → runOneModule 记 passed，批假绿（零测试执行）。反向边界有效：'node scripts/collect-vitest-logs.js'（中缀）不中 → 走 skip 批，(?=\\s|$)/(?:\\s|$) 边界比 py 侧（无边界）更严。命中面实测：R1 '^前缀' 形态覆盖 'cd x && pnpm exec vitest run src'（含 cd a && cd b && 链）、'npx jest src --silent'、裸 'vitest'；R2 '分隔符后' 形态覆盖 'npm run build && npx jest src'。",
+      "location": "src/verify-postcheck.js:2395",
+      "dimensionNotes": "误命中面与 py 侧 pytest 推断同构同度（设计风险槽声明「同风险面同兜法」）；hits.test 来自模块测试命令，含独立 vitest/jest 词的非运行器命令形态罕见。假绿方向 known_failures 兜不住（只兜假红），但概率与先例持平，接受。裸 vitest 命中后补 run 子命令行为正确（'vitest run t.tsx'）。",
+      "reviewedAt": "2026-09-26"
+    },
+    {
+      "title": "module-subset 聚合 reason 沿用 CNF 锚文案，对 jsx-skip 转办场景补救指引错位（「补装依赖后恢复实测」）",
+      "severity": "P3",
+      "evidence": "src/verify-postcheck.js:2567 aggregateStatus(perModule) 三值逻辑（871-876）：任一 failed 才 failed；含 skipped 且非全 passed → 'skipped'。jsx-skip 模块使整单 'skipped'（exitCode 1）而非 failed——不翻 failed ✓，与「环境缺件跳过聚合」先例（2580-2583 注释明言「不硬拦」）同路；上游 1956 mainSkipped 走主仓 skip 短路档按正常档处理，FR-02「不跑不拦」成立。但聚合 reason 固定文案「模块子集含环境缺件跳过（已跑模块全绿）…补装依赖后恢复实测」把转办误标为环境缺件，正确指引应是「用项目运行器补跑」；批次名 deps(auto-jsx-skip) 在 reason 中点名，可见性本身成立。",
+      "location": "src/verify-postcheck.js:2567,2580-2583",
+      "dimensionNotes": "可见性语义（非行为）：残差路径无此问题——skip 段不进 failed 过滤（2528），主 passed 时整单 passed，漏测靠 console.warn + outputTail 逐段 '(skipped)' 标注 + 披露 sidecar 可见，符合 FR-02 留痕承诺。另 INFO（不单列）：残差段 2477 jsx 批 segFiles=chunk 全非 py 集（含 jsNative 文件），与 js 批 files 归属重叠、command 摘要计数虚高——元数据精度小疵，非行为问题。",
+      "reviewedAt": "2026-09-26"
+    }
+  ],
+  "dimensionNotes": {
+    "check1-分拣正确性": "NEEDS_PROJECT_RE=/\\.(tsx|jsx)$/ 实测：.ts 不中（mixed 用例 a.test.ts 照旧 node --test a.test.ts，FR-03 零变化成立，deps-cwd-prefix ④钉在测试内复验）；.tsx/.jsx 中，Windows 反斜杠经 _norm 归一后测。CAP 语义：jsRun=js.slice(0,jsCap) 先切帽后分，jsProject+jsNative=jsRun 恒等，总量守恒；dropped=js.length-jsRun.length 计算不变、js 批存在时仍自洽（count 总和+dropped=js.length）；唯一缺口=jsNative 空且超帽时 dropped 载体消失（见 finding 2，LOW）。",
+    "check2-推断正则": "九形态实测全过：两形态（R1 ^前缀含 cd 链 / R2 分隔符后）对 'cd x && pnpm exec vitest run src'、'npx jest src --silent'、裸 'vitest'、'npm run build && npx jest src' 均正确命中且命令拼装符合预期（vitest 补 run、jest 直拼）；中缀不中（边界比 py 侧严）；'echo vitest' 误命中为假绿面（见 finding 3）；无运行器正确落 skip 批。cd 前缀场景的文件重定基缺口见 finding 1（MEDIUM）。",
+    "check3-skip 批消费": "aggregateStatus 对 skipped 的处理实证：永不翻 failed（仅 status==='failed' 翻 failed），含 skipped 时整单降为 'skipped'——主选测整单 'skipped'（非 failed）与 CNF 环境缺件先例完全同路，上游主仓 skip 短路档（1951-1959）确认非拦截；残差段 skip 段不进 failed 过滤（2528-2530），不拦整单。两消费点 skip 分支均 warn+留痕（2469-2474 / 2557-2561），FR-02 兑现。"
+  },
+  "disclosureAdjudication": {
+    "①提取不到走 skip（安全侧转办）": "可接受。不制造恒败段（正中动机——R18 11 连败的病），skip 批 command:null+skip:true+reason 点名文件数与转办去向，两消费点 warn+skipped 留痕，残差另有披露 sidecar——漏测可见非静默，FR-02 全兑现。skip 幂等（纯函数时点快照），重跑同样留痕。",
+    "②提取到但命令形态不匹配（failed 由 known_failures 兜）": "可接受，带一项保留。fail-loud 方向与 py 侧同风险面同兜法（failed→known_failures/归属鉴定，不产生静默假红）；但 finding 1 表明其最大实例（cd 前缀重定基缺失）是可修的实现缺口而非纯环境风险，应后续补齐而非长期靠兜。假绿方向（finding 3）known_failures 兜不住，概率低且与 py 先例同度，接受。",
+    "③skip 批漏测可见性（reason 点名）": "可接受。残差路径：warn+outputTail 逐段 '(skipped)'+sidecar 三重留痕；主选测路径：warn+perModule skipped 条目+聚合 reason 点名批次名。小瑕疵：聚合 reason 文案误用 CNF「补装依赖」锚（finding 4，LOW），指引进掉向但不影响可见性本身。"
+  },
+  "verdictRationale": "无 P1：三条 FR 均兑现且有测试钉（4/4+3/3+5/5）；分拣/CAP 守恒/聚合语义数据正确；披露边界三项裁决均可接受。1 MEDIUM（cd 重定基缺口，fail-loud 落已声明兜法，属后续可修质量缺口）+ 3 LOW，均不构成阻断。"
+}
