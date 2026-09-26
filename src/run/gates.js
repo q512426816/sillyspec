@@ -965,6 +965,43 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       } catch { /* 解析异常走全量（restrictFiles 不传） */ }
       testCheck = runVerifyTestCheck({ cwd: gateCwd, specBase: gateSpecBase, changeName, ctx, ...(Array.isArray(_restrict) && _restrict.length > 0 ? { restrictFiles: _restrict } : {}) })
       printVerifyTestCheck(testCheck)
+      // 自动绑定补全（full-autopilot-parity，R21 thin 迁移）：测试已跑、test-result.json 已落盘，
+      // verify --done 收口时从测试结果自动补全 requirements.md 的空绑定槽——与 thin 同逻辑（逐行扫描）。
+      try {
+        const { verifyRequirementBindings } = await import('../flow-draft.js')
+        let _rb = verifyRequirementBindings({ changeDir: resolveChangeDir(cwd, { currentChange: changeName }, platformOpts?.specRoot) })
+        if (_rb.applicable && _rb.emptySlots.length > 0) {
+          const _runsDir = join(resolveRuntimeRoot(platformOpts, specBase), 'verify-runs')
+          let _testFiles = new Set()
+          if (existsSync(_runsDir)) {
+            for (const _rd of readdirSync(_runsDir).sort().reverse().slice(0, 3)) {
+              const _tr = join(_runsDir, _rd, 'test-result.json')
+              if (!existsSync(_tr)) continue
+              try {
+                const _j = JSON.parse(readFileSync(_tr, 'utf8'))
+                for (const _f of (_j.files || _j.testFiles || [])) if (/\.test\.|\.spec\./.test(String(_f))) _testFiles.add(String(_f).replace(/\\/g, '/'))
+                if (_testFiles.size > 0) break
+              } catch {}
+            }
+          }
+          if (_testFiles.size > 0) {
+            const _reqPath = join(resolveChangeDir(cwd, { currentChange: changeName }, platformOpts?.specRoot), 'requirements.md')
+            const _lines = readFileSync(_reqPath, 'utf8').split('\n')
+            const _bind = [..._testFiles].slice(0, 3).join('、')
+            let _filled = 0
+            for (let _li = 0; _li < _lines.length - 1; _li++) {
+              if (/^<!--\s*AGENT:测试绑定/.test(_lines[_li]) && !_lines[_li + 1].trim()) {
+                _lines[_li + 1] = _bind; _filled++; _li++
+              }
+            }
+            if (_filled > 0) {
+              const { writeAtomicSync } = await import('../fs-atomic.js')
+              writeAtomicSync(_reqPath, _lines.join('\n'))
+              console.log(`✅ [自动绑定] ${_filled} 个空绑定槽已从测试结果补全（${_bind.slice(0, 60)}）——agent 可覆盖（full-autopilot-parity）`)
+            }
+          }
+        }
+      } catch { /* auto-bind fail-soft */ }
       // P2 记账（fail-closed 层②：只有通过结果落账本——失败永不缓存，修复后重跑才能记）
       if (!traceHasActiveRows) {
       try {

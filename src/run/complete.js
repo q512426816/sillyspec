@@ -598,6 +598,40 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
   // 勾选回归 agent 手动（完成=实现+测试绿+wt-commit 即勾，同 thin 工作单元语义），假勾防线由
   // detectExecuteBatchFinish 内 checkExecuteCodeEvidence 代码证据核验 + verify 测试对账承担。
   if (stageName === 'execute' && changeName) {
+    // 自动勾选（full-autopilot-parity，R21 thin 实证迁移）：execute --done 时解析 run 内提交的
+    // task-NN token，自动勾选 tasks.md 未勾条目——agent 手动勾选是 R19/R20 的行为惯性（tick-loop-nudge
+    // 提示词无效），机器代勾与 thin 的 flow done 同逻辑。fail-soft。
+    try {
+      const _tasksMdPath = join(specBase, 'changes', changeName, 'tasks.md')
+      if (existsSync(_tasksMdPath)) {
+        const _runIdFile = join(resolveRuntimeRoot(platformOpts, specBase), `current-execute-run-id-${changeName}`)
+        let _tickCommits = ''
+        try {
+          if (existsSync(_runIdFile)) {
+            _tickCommits = gitQuiet(cwd, ['log', '--format=%B%x1e', 'HEAD~20..HEAD']) || ''
+          }
+        } catch {}
+        if (!_tickCommits) _tickCommits = gitQuiet(cwd, ['log', '--format=%B%x1e', '-20']) || ''
+        if (_tickCommits) {
+          const _texts = String(_tickCommits).split('\x1e').map(x => x.trim()).filter(Boolean).join('\n')
+          const _evidenced = new Set()
+          for (const m of _texts.matchAll(/task-(\d{1,2})/gi)) _evidenced.add(String(Number(m[1])).padStart(2, '0'))
+          if (_evidenced.size > 0) {
+            let _md = readFileSync(_tasksMdPath, 'utf8')
+            let _ticked = 0
+            for (const nn of _evidenced) {
+              const re = new RegExp(`^- \\[ \\](.*task-${nn}[:\\s])`, 'm')
+              if (re.test(_md)) { _md = _md.replace(re, `- [x]$1`); _ticked++ }
+            }
+            if (_ticked > 0) {
+              const { writeAtomicSync } = await import('../fs-atomic.js')
+              writeAtomicSync(_tasksMdPath, _md)
+              console.log(`✅ [自动勾选] ${_ticked} 个任务有提交证据但未勾——已机器代勾（full-autopilot-parity）`)
+            }
+          }
+        }
+      }
+    } catch { /* auto-tick fail-soft */ }
     const _bf = await detectExecuteBatchFinish({ pm, stageName, changeName, cwd, specBase, platformOpts, steps })
     if (_bf.batched && _bf.aligned > 0) {
       console.log(`\n🚀 execute 批量完成：plan 全勾 + 代码核验通过，一次性补完 ${_bf.aligned} 个剩余 step → 进入阶段完成分支`)
