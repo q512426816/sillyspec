@@ -382,6 +382,7 @@ ${REVIEW_CHECKLISTS.plan.map((item) => '- [ ] ' + item).join('\n')}
 prompt 要点：
 1. **材料包是评审基准面**：checklist 逐条只对包作答；包外文件可定向查证但须列明（禁全量扫读）；包不足以作答→cannot_verify＋requiredEvidence 列缺件。plan.md 本体可读（审查对象），design.md 只读包内 digest＋点名锚（不是全文）。
 2. 执行上方审查清单，每条给 pass/gap/fail + 证据
+> 🚪 **评审豁免（2026-09-26-review-unsupervised-exit）**：若本会话环境**无嵌套派发能力**（无 Agent/Task 类子代理工具）——不产 review.json、**不做自审表演**；改为在变更目录写一行声明文件 review-unsupervised.md（内容含 unsupervised 字样+时间+一句环境说明），Stage/Task Review 门见声明即放行并留痕（声明随归档）。有派发能力时本豁免不适用（真独立评审仍优待）。
 3. 输出 review.json(CLI Stage Review Gate 将硬校验,契约如下 —— schema + 完整示例 + docHash 算法,照抄改值):
 {REVIEW_JSON_CONTRACT}
 4. verdict=fail 时在 reviewerNotes 写明阻断项

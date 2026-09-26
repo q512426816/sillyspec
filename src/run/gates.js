@@ -33,6 +33,36 @@ import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
 import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
+
+/**
+ * 评审豁免凭据（2026-09-26-review-unsupervised-exit，R18-full 实证驱动）：无嵌套派发能力的
+ * 环境（子代理不能再派子代理）里，阶段评审只能降级自审——三份自审 review.json 全 PASS 零信息
+ * 量纯表演，门仍硬拦形式合规（R18-full 15 次拦截里 5 次是 review 面形式）。诚实出口：agent 写
+ * 变更目录 review-unsupervised.md（一行声明：环境无嵌套派发能力+时间，须含 unsupervised 字样）
+ * → Stage Review Gate / Task Review Gate / doctor align 门 / --done 硬门四点共吃：有效
+ * review.json ‖ 豁免声明二选一放行（warn+遥测，豁免率可观测）；两凭据皆无照旧 fail-closed。
+ * 真独立评审（有派发能力）不受影响——豁免是声明式自曝，不是绕门。
+ */
+export function readReviewUnsupervisedWaiver(changeDir) {
+  try {
+    if (!changeDir) return null
+    const p = join(changeDir, 'review-unsupervised.md')
+    if (!existsSync(p)) return null
+    const t = readFileSync(p, 'utf8')
+    return /unsupervised/i.test(t) ? t.trim().slice(0, 200) : null
+  } catch {
+    return null
+  }
+}
+
+/** 豁免放行的统一回显+遥测（调用点持 runtimeRoot/specBase）。 */
+async function waiveWithTelemetry({ changeName, gate, specBase }) {
+  console.warn(`⚠️ [评审豁免] review-unsupervised.md 在场（${gate}）——环境无嵌套派发能力，阶段评审降级留痕放行（不产自审 review.json 不表演）；声明随归档留痕，可经遥测观测豁免率`)
+  try {
+    const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+    appendKnowledgeHit(join(specBase, '.runtime'), { type: 'review-unsupervised-escape', change: changeName, gate, source: 'gates' })
+  } catch { /* 遥测 fail-soft */ }
+}
 import { detectConcurrentChanges, formatConcurrentWarning, detectCommittedDrift, formatCommittedDriftWarning } from './concurrent-detect.js'
 import { stageRegistry } from '../stages/index.js'
 import { normalizeTaskId } from '../taskcard.js'
@@ -245,6 +275,12 @@ export async function enforceAlignExecuteReviewGate({ cwd, changeName, specBase,
   const effectiveSpecBase = platformOpts?.specRoot || specBase
   const runtimeRoot = resolveRuntimeRoot(platformOpts, effectiveSpecBase)
   const reviewChangeDir = resolveChangeDir(cwd, { currentChange: changeName }, platformOpts?.specRoot || null)
+  // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境两段校验整体降级留痕放行
+  if (readReviewUnsupervisedWaiver(reviewChangeDir)) {
+    await waiveWithTelemetry({ changeName, gate: 'doctor-align', specBase: effectiveSpecBase })
+    console.warn('   ℹ️ align 前置 review 门整体豁免（unsupervised 声明在场）——继续对齐')
+    return false
+  }
   const blocked = (msgs) => {
     console.error('\n❌ doctor --align-execute-progress 前置 review 校验未过——execute 完成审计不能绕过：')
     for (const m of msgs) console.error('   - ' + m)
@@ -458,6 +494,12 @@ export async function enforceDepsGate(stageName, cwd, changeName, step, steps, c
  */
 export async function enforceReviewJsonGate(stageName, cwd, changeName, step, steps, currentIdx, specBase, platformOpts, persist) {
   if (stageName !== 'execute' || !changeName) return true
+  // 豁免凭据（review-unsupervised-exit）：unsupervised 声明在场时已勾 task 的 review.json
+  // schema 硬门跳过（该环境本就不产 review.json——门拦的是缺件形式，非豁免面）
+  if (readReviewUnsupervisedWaiver(join(specBase, 'changes', changeName))) {
+    await waiveWithTelemetry({ changeName, gate: 'review-json-hard-gate', specBase })
+    return true
+  }
   // head 锡点自动落盘（2026-08-21 审计项③，D-010 补对称）：跨仓 task base_commit 已在派发时
   // CLI 落盘，head_commit 此前靠主 agent 按 prompt 手跑 rev-parse 手写（漏抄/抄错炸 review gate）。
   // 每次 --done 时机幂等补齐（已存在不覆盖）。best-effort：失败只 warn，不阻断 --done 主流程。
@@ -1442,6 +1484,9 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
 
       if (tier.tier === 'self') {
         console.log('\nℹ️  Stage Review: ' + stageName + ' tier=self（' + tier.reason + '），已降级为当前 agent 自审，不强制独立子代理。')
+      } else if (readReviewUnsupervisedWaiver(reviewChangeDir)) {
+        // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境不强制独立审查也不接受自审表演
+        await waiveWithTelemetry({ changeName, gate: 'stage-review:' + stageName, specBase: effectiveSpecBase })
       } else {
         let reviewRunId = getLatestStageReviewRunId(runtimeRoot, stageName, changeName)
         if (!reviewRunId) {
@@ -1530,6 +1575,11 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
   // ── Execute Task Review Gate：所有 task 必须有 review.json 且 verdict 通过 ──
   if (stageName === 'execute') {
     try {
+      // 豁免凭据（review-unsupervised-exit）：无嵌套派发能力环境整块跳过（该环境不产 task review）
+      const _trChangeDir = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
+      if (readReviewUnsupervisedWaiver(_trChangeDir)) {
+        await waiveWithTelemetry({ changeName, gate: 'execute-task-review', specBase: platformOpts?.specRoot || specBase })
+      } else {
       const { validateTaskReviews, printReviewResult, writeVerifyRequiredEvidence } = await import('../task-review.js')
       const effectiveSpecBase = platformOpts?.specRoot || specBase
       const planFile = resolveChangeDir(cwd, progress, platformOpts?.specRoot)
@@ -1625,6 +1675,7 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           }
         }
         }
+      }
       }
     } catch (e) {
       // fail-closed：Gate 自身异常时不能默认放行，否则异常成了绕过评审的通道
