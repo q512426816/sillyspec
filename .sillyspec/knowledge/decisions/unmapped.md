@@ -1166,3 +1166,80 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 理由：- 最大风险＝锚点后缀漏进文件面消费（残差实测会拿不存在路径去跑、watcher 归属匹配失联、rot 覆盖误判 skip）——已 grep 全量枚举 `.tests` 消费点逐一适配，新测试对每个消费点各钉一条回归。 - 次风险＝裸名解析误绑（basename 在仓内多处出现）——仅唯一命中才解析，零命中/多命中原样保留，dangling 校验自然暴露。 - 死路：用例锚做独立字段（cases:）——test-trace schema、FR 机器子块、md 解析三处格式连动且存量数据双形态并存，复杂度不成比例，弃。 - 死路：回写历史归档 test-trace 补锚——归档是冻结审计面不回写；新变更提取即生效，旧数据维持文件级（诚实），弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-governance-autopilot
+锚点：未记录
+最近确认：aff28f38a27d65a84221c73c68fb15f91ca65865
+理由：最大风险=GWT 骨架语义不准（关键词启发式的 Given 可能错域、箭头拆分的 When/Then 可能断错）——骨架标注「可编辑覆盖」，agent 修正错骨架比从零写省力（一次 Edit vs 三次）；索引进 knowledge/fr 的骨架质量依赖 agent 覆盖意愿（不覆盖时入库的是骨架不是精写——比空着不进库好，但不如精写——权衡接受）。死路：完全取消 agent 填写（纯机器 FR 入库）——索引质量退化为机械摘录，知识复利面受损；保留 agent 可覆盖是正确分界。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-full-autopilot-parity
+锚点：未记录
+最近确认：0bd1fe6fbfb3d9954c2a476ffe27e13ab951d733
+理由：最大风险=auto-tick 的近 20 提交窗口可能捕到其他变更的 task token（多 agent 共享仓）——窗口缩小到 run 范围更精确但 runId 解析复杂度高；20 窗口是 pragmatic 平衡，误勾由 checkExecuteCodeEvidence 兜底。auto-bind 的 test-result 路径在平台模式（runtime 分离根）可能读不到——fail-soft 跳过不阻断，与 thin 同风险面。死路：GWT 预填直接迁移（用 input 文本推导 full 的 FR）——full 的 requirements 来自对话演化，input 只是起点；直接迁移会产出生成式填空题质量低于 thin（无对话上下文），弃。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-26-dynamic-test-inference
+锚点：未记录
+最近确认：7372e0efe88964f7b5be299b98dab54a2a50a2a9
+理由：最大风险：动态子集的覆盖面判断错误→漏测放行（门禁漏跑=静默通过）。缓解：三源并集宁可多跑（import 闭包+FR 回归都是加法面）、deps 批超帽照旧（30/组保底 5）、全量语义留 test_strategy: full+CI 兜底；existing 测试大量断言 commands.test 执行——显式 full 逃生阀保住该路径语义，fixture 迁移成本可控。次风险：结构推断 runner 猜错（如 monorepo 双 package manager）——推断按「最近清单祖先」就近原则，猜不出降档 skipped 带指引不硬跑。放弃的方案：① 纯静态修补（继续 local.yaml 加 per-module 键）——治标，并行互改问题原样；② bindings 单源（只跑 FR 绑定测试）——冷启动仓索引空会饿死，且 bindings 是「上次跑过」非「必须跑」的形式化证明；③ agent 每变更自带测试命令参数——把配置问题转移成提示词纪律，无机器校验面。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-gate-face-binding-parity
+锚点：未记录
+最近确认：978beb6e8799b986d5a63c7ce2b8a10fa12c17aa
+理由：最大风险：faceOverride 旁路了快照 diff 的二次校验——若调用方面过声明（含未真改文件），动态子集可能多跑（宁多勿漏，方向安全）；权威面上游已过 foreign 归因收窄（splitOwnVsForeignDiffFiles），过声明面受双保险。次风险：brainstorm --done 追加槽改变 full 流程 requirements 形态，下游消费者（索引/对账）按 AGENT 槽注释扫描——槽是注释面不进指纹，verifyFlowDrafts 不校验 full 侧。放弃方案：快照锚 baseline commit（改 createGateSnapshot 全局面，波及 verify 门与 quick 通道）——影响面大且 thin 权威面已现成，不值。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-ui-visual-guidance
+锚点：未记录
+最近确认：4f85905373507953789367b59bb41792eb0e5431
+理由：最大风险：关键词启发式误判（非 UI 变更被注入须知/警告——噪音；或 UI 变更漏检——门没响）。对冲：双源检测（input 词表 + 声明文件面扩展名），默认档仅 warn（误判成本一行警告），正反例单测锁定词表。试过放弃：① 收口强制截图对账（用户否决——太麻烦且最后才卡死没意义，改为过程引导+在场性对账）；② CLI 内置浏览器截图（放弃——CLI 保持零浏览器依赖，截图由执行会话浏览器能力承担，CLI 只验痕迹）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-knowledge-digest
+锚点：未记录
+最近确认：a3b99f259e9ac7e7fc5b8a06ff0d65845a21a8b2
+理由：最大风险：阈值为拍脑袋初值（rot 100/inbox 20）——先按本仓实测量级定（本仓实测 305/39 首跑双超），连续安静或持续爆表都该调，防仪式化熔断在案。次风险：suggestDomainFromFiles 对扁平 src 布局返回 src（无意义域）——已接受（monorepo 规则在前覆盖；错建议不自动执行只提示，人工裁决兜底）。readFrBindings 逐条目扫描 O(条目×文件) 性本仓秒级可接受（周节奏消费）。放弃方案：rot 判据收紧——细看后收回：广域变更打 239 条标记是诚实信号（真触达），病在阅读面不在判据，digest 按域聚合即解。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-hunk-attribution-gate
+锚点：未记录
+最近确认：72be8fc7d2c78c132ca9fa612a3a8b14c469bd9c
+理由：最大风险：竞争检测的假阳/假阴——他变更声明面与提交面相交但实际各行其事（假阳：一行警告可接受）或他会话在途改动根本没立变更/没写清单（假阴：残留信号与既有文件级 advisory 兜底，无法根治——hunk 归属的语义判断终究要人，门的目标是把静默混合变成显式中断）。试过放弃：① 轻量道默认挂会话 worktree（用户否决——合并税过重，仓内 wt-parallel-commit-race 等坑史为证）；② hunk 语义归属（机器无法判定行归属，改为「竞争文件显式暴露+人核」的诚实口径）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-gate-docs-cleanup
+锚点：未记录
+最近确认：c3859534f48098d1a1fc64fbb3192a8b578a1b62
+理由：最大风险：注记与未来实现漂移（门档位语义再变时注记过时）——低（注记带变更名可溯源）。放弃方案：无（纯对齐性清理）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-confirm-on-use
+锚点：未记录
+最近确认：8cc2e201f6aac92a375593b47222eea24adf12a3
+理由：最大风险：橡皮图章——agent 全点确认。缓解三层：抽查式（注入至多点名 2 条）、证据机械校验（必须盘上真实测试文件，口头相符不收）、confirm 只翻绑定状态不改内容（错翻的代价=绑定行显示 active，门禁消费 candidate/active 无行为差异——宁多跑语义不变，长期准确性靠 digest 坏绑定卡兜）。次风险：upsertFrBindingsRaw 不走 agent 行保护（权威重写）——但行集来自 readFrBindings 全行读（含 agent 行原样回写），只改 confirmed_by/state 两字段，无删除面。放弃方案：FR 条目级 confirmed 状态（新机器字段）——绑定状态机已够用，条目级标题/域问题归 digest 信号与人工裁决，不为此发明第二套状态。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-tool-debt-cleanup
+锚点：未记录
+最近确认：9e4572e98afff1120e2670b5b099ac0e800b9306
+理由：最大风险：.sillyspec/docs/ 全保留可能把他会话在途的 docs WIP 冻进本变更 patch——对冲：docs 面提交前归属由既有夹带嫌疑 advisory 与 hunk 归属门（昨日变更）覆盖；本变更实测区间内 docs 提交均为本变更模块卡。放弃方案：只保留 modules/ 子目录（更窄）——放弃，scan/CONVENTIONS 等 docs 同为交付物，窄口径会再造下一个漏。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-redomain
+锚点：未记录
+最近确认：8b454e10018457d8a73086a3158e51c1a9eb2ad5
+理由：最大风险：ID 前缀与域不符的历史痕迹（FR-auto-backend-019 住 platform-sync.md）——有意取舍：换号会断绑定/supersede/最近确认三条寻址链，痕迹只影响美观；INDEX 路由按域文件而非 ID 前缀，注入/rot 查询全按文件域走。次风险：syncIndexRoutingLines 全目录同步在 INDEX 手改杂行时的行为——既有函数幂等语义（既有行 no-op），风险承袭不新增。放弃方案：迁域换号+三链改写——身份重写面太大且易漏，违背 D-001 单一身份。

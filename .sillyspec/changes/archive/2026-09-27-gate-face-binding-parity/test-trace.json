@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-gate-face-binding-parity",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-gate-face-binding-parity:flow:FR-01",
+      "tests": [
+        "test/gate-face-binding-parity.test.mjs「① faceOverride commit-then-done」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-gate-face-binding-parity"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-gate-face-binding-parity:flow:FR-02",
+      "tests": [
+        "test/gate-face-binding-parity.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-gate-face-binding-parity"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-27-gate-face-binding-parity:flow:FR-03",
+      "tests": [
+        "test/gate-face-binding-parity.test.mjs「② ensureBindingSlots 单源行为」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-gate-face-binding-parity"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-27-gate-face-binding-parity:flow:FR-05",
+      "tests": [
+        "test/config-schema.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-gate-face-binding-parity"
+    }
+  ]
+}

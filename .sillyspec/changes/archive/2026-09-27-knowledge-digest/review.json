@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-knowledge-digest",
+  "reviewer": "subagent-recheck",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "[首轮 P3-②·留档不阻断] 收件箱计数口径 h2-only，与 inbox/validate 消费方 h2+h3 兼容口径漂移",
+      "evidence": "本轮复核仍未处理（清偿提交 e6919fa4/861efbb7 未触及 scanFrFile 收件箱正则）：digest 只数 /^## (.+)$/（src/knowledge-digest.js:110），既有消费方 parseUncategorizedEntries/cmdValidate 均 /^#{2,3}\\s+\\S/ 兼容 h3。实害面仍为零——本仓 .sillyspec/knowledge/ 下 '^### FR-' 头 0 个、uncategorized.md h3 条目 0 个，39=39 两口径暂一致，属潜伏口径隐患留档。",
+      "location": "src/knowledge-digest.js:110"
+    },
+    {
+      "severity": "P3",
+      "status": "open",
+      "title": "[首轮 P3-③·留档不阻断] FR-02 伪域告警接线（indexRequirements→suggestDomainFromFiles）无集成测试锁定",
+      "evidence": "本轮复核仍未处理：suggestDomainFromFiles 消费接线在 src/fr-index.js:557-558（归档伪域告警附建议域），测试面仅 test/knowledge-digest.test.mjs:116 纯函数单测六断言，无用例断言 indexRequirements 告警文案真实携带建议域（接线被并行会话回归破坏时建议域静默消失）。本轮新增的①b 用例只锁 P1 锚口径，未覆盖本项。按首轮裁决留档不阻断。",
+      "location": "src/fr-index.js:556-560; test/knowledge-digest.test.mjs:116-123"
+    }
+  ],
+  "resolved": [
+    {
+      "severity": "P1",
+      "status": "resolved",
+      "title": "[首轮 P1·已清偿] 锚剥离手搓漏「」锚致 7/8 假阳性 → 已改 testAnchorFile 单源，本仓对拍 1=1 成立",
+      "evidence": "四步实证全过：① 源码面：src/knowledge-digest.js:19 import { testAnchorFile } from './test-bindings.js'，:94 const filePart = testAnchorFile(String(t))——手搓 split('#').split('::') 已删，单源成立（testAnchorFile 于 test-bindings.js:170-174 吃 '#'/'::'/'>'/'「' 四形态，与 repair-paths 读侧 496/506 同函数同源）。② 本仓实跑对拍：node bin/sillyspec.js knowledge digest → 坏绑定恰 1 个，明细 FR-cli-entry-091:test/cli.test.mjs；node bin/sillyspec.js tests repair-paths（干跑）→ 「绑定路径无需修复…1 个无法定位…FR-cli-entry-091:test/cli.test.mjs」。两侧计数 1=1、条目同一、结论一致（首轮 8 对 1 的假阳性面消失，7 个「」锚定好绑定不再入信号）。③ 防回归锁定：test/knowledge-digest.test.mjs:92-114 用例①b 真实锁行为——fixture 写在场文件 test/x.test.mjs + 「」锚绑定 test/x.test.mjs「用例组」 + 真缺失 test/really-missing.test.mjs，断言 unresolvedBindings===1（若回退手搓剥离，「」整串不可解析将得 2，用例必红）；实跑 node --test test/knowledge-digest.test.mjs：4/4 pass（①①b②④）。④ 附带核验：现跑底数 rot 305/收件箱 39/伪域 37 与首轮对账一致，无新异动。修复面 diff 复核（e2da65a0..861efbb7）：knowledge-digest.js 仅 6 行改动，existsSync 路径 join+反斜杠归一跨平台无虞。",
+      "location": "src/knowledge-digest.js:19,92-99; src/test-bindings.js:170-174; test/knowledge-digest.test.mjs:92-114"
+    },
+    {
+      "severity": "P3",
+      "status": "resolved",
+      "title": "[首轮 P3-①·已清偿] available 清单漏 digest → 已补",
+      "evidence": "src/stages/knowledge.js:667 available: ['search','inspect','validate','refresh','propose','classify','inbox','stats','digest']——digest 在列，unknown_subcommand 提示面可发现性缺口闭合。",
+      "location": "src/stages/knowledge.js:667"
+    }
+  ],
+  "dimensionNotes": {
+    "复审范围": "P1 与 P3-① 清偿验证（最新两提交 e6919fa4 fix + 861efbb7 test 修复）；P3-②/P3-③ 按裁决本轮不阻断仅留档复查在场性。全部实证为本轮亲自实跑，非采信声明。",
+    "P1 清偿判定链": "单源改写（源码面）→ 本仓对拍 digest 1 = repair-paths 干跑 1 同条目（行为面）→ 防回归用例真实锁「」锚且实跑绿（锁定面）→ 底数无新异动（回归面）。四链闭合判清偿。已清偿项按门禁契约移入顶层 resolved[]（PASS 时 findings[] 内不得携带 severity=P1 条目），机械判定面与审计面分离。",
+    "新增代码复核": "修复 diff 极小（6 行 src + 24 行 test + 1 行 available）；无新盲维引入，无新 P1/P2；test 修复提交（heredoc 转义→字符串拼接）属测试自身的机械重建，断言语义未放松（unresolvedBindings===1 仍在）。",
+    "纪律声明": "只读复审（除本 review.json 外零写面）；git 工作区他变更（他 change 目录删除、knowledge/*.md 在途修改）系并行会话面，未纳入本变更裁决也未触碰。"
+  },
+  "reviewedAt": "2026-09-27T05:46:45Z"
+}

@@ -1,0 +1,451 @@
+diff --git a/.sillyspec/changes/2026-09-27-confirm-on-use/design.md b/.sillyspec/changes/2026-09-27-confirm-on-use/design.md
+new file mode 100644
+index 00000000..90478a59
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-confirm-on-use/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:01:58.457Z
++---
++# 设计记录（Design Record）— 2026-09-27-confirm-on-use
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三层治理①层（消费时确认）：readActiveFrDigest 条目附 unconfirmed 计数（readEntryUnconfirmed 数绑定块内 confirmed_by≠agent 的 - row: 块，行块边界=下一 row:/节头）；flowKnowledgeDigest 注入面对未确认条目打 ⚪N未确认绑定 标记 + 追加抽查确认提示（至多点名 2 个 anchor，带 tests confirm 指引与「不符留给 digest 信号」出路）；CLI tests --confirm --anchor <FR id> --evidence <真实测试路径>：证据经 resolveTestFileRel（锚剥离单源）机械校验后，条目全部 candidate 机器行翻 active（confirmed_by=agent, confirmed_at=HEAD，upsertFrBindingsRaw 权威重写+projectRoot 归一），幂等（全 active 提示不写盘）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++readActiveFrDigest 返回条目新增 unconfirmed: number 字段（additive，既有消费方不受影响）；CLI 新子命令形态 sillyspec tests --confirm --anchor FR-<域>-NNN --evidence <路径>（exit 1：证据不可解析/anchor 无 FR 前缀/无绑定行）；注入摘要新增两行形态（⚪标记拼在条目行尾、抽查确认独立行）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++乱序：翻牌是整条目行集权威重写（幂等键=行集），并发读注入零冲突。并发写：--confirm 与归档提升同条目并发时 writeAtomicSync 原子性保最后一写者，行集同源（readFrBindings 全行读改写）不丢行。切换：幂等重跑安全；confirm 不依赖会话状态。作用域：evidence 锚 effDir（CLI 运行仓根）——跨仓证据拒绝（解析失败即拒）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：橡皮图章——agent 全点确认。缓解三层：抽查式（注入至多点名 2 条）、证据机械校验（必须盘上真实测试文件，口头相符不收）、confirm 只翻绑定状态不改内容（错翻的代价=绑定行显示 active，门禁消费 candidate/active 无行为差异——宁多跑语义不变，长期准确性靠 digest 坏绑定卡兜）。次风险：upsertFrBindingsRaw 不走 agent 行保护（权威重写）——但行集来自 readFrBindings 全行读（含 agent 行原样回写），只改 confirmed_by/state 两字段，无删除面。放弃方案：FR 条目级 confirmed 状态（新机器字段）——绑定状态机已够用，条目级标题/域问题归 digest 信号与人工裁决，不为此发明第二套状态。
+diff --git a/.sillyspec/changes/2026-09-27-confirm-on-use/flow-state.yaml b/.sillyspec/changes/2026-09-27-confirm-on-use/flow-state.yaml
+new file mode 100644
+index 00000000..9c9c1b56
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-confirm-on-use/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: d3f3852daf7858e8f6326330fd2d7588c1fdd71d
++updatedAt: '2026-09-27T09:07:23.068Z'
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(45)（11.0s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927090644\test-result.json｜lint: failed
++  ← npm run lint（38.6s）｜门文件 16 个
++
+diff --git a/.sillyspec/changes/2026-09-27-confirm-on-use/proposal.md b/.sillyspec/changes/2026-09-27-confirm-on-use/proposal.md
+new file mode 100644
+index 00000000..3b522950
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-confirm-on-use/proposal.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:01:58.456Z
++---
++# 提案书（Proposal）— 2026-09-27-confirm-on-use
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:2ce98a4b8f3b04a71d4218a78bb5720232ad0e50dbd94d76eeea4c4d9357b671:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++任务原话转写：知识注入已把触达域 active FR 摘要带进干活 agent 上下文，但 candidate 绑定行（confirmed_by=null，机器提升）永远无人翻牌——绑定状态机（candidate→active 需 confirmed_by=agent）有机制无消费者，长期准确性无兜底（R23 三臂全部 candidate 入库实证）。三层治理设计第①层：消费时确认。
++成功标准：
++- readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - row: 块的 confirmed_by≠agent 行）
++- 知识注入面：未确认条目带 ⚪N未确认 标记；追加一条抽查确认提示（至多点名 2 个未确认 anchor——相符则收口前 sillyspec tests confirm --anchor <id> --evidence <真实测试路径>，不符留给 knowledge digest 信号）
++- 新增 tests confirm 子命令：--anchor + --evidence（必须可自仓根解析为真实文件，机械防橡皮图章）→ 该条目全部 candidate 机器行翻 active（confirmed_by=agent, confirmed_at=HEAD）；已是 active 幂等提示；无绑定行/证据不可解析拒绝 exit 1
++- 全仓测试绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:12593e7ece7374f633fa91085629f462fb0c8f26aed3b06afa6f06e7da69f2d7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - row: 块的 confirmed_by≠agent 行）
++2. 知识注入面：未确认条目带 ⚪N未确认 标记
++3. 追加一条抽查确认提示（至多点名 2 个未确认 anchor——相符则收口前 sillyspec tests confirm --anchor <id> --evidence <真实测试路径>，不符留给 knowledge digest 信号）
++4. 新增 tests confirm 子命令：--anchor + --evidence（必须可自仓根解析为真实文件，机械防橡皮图章）→ 该条目全部 candidate 机器行翻 active（confirmed_by=agent, confirmed_at=HEAD）
++5. 已是 active 幂等提示
++6. 无绑定行
++7. 证据不可解析拒绝 exit 1
++8. 全仓测试绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:06699b1b2274917414a120d939d588e9b917c3f73a2d20b07a1b7c3365fc98ba:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-confirm-on-use 留痕重锚 -->
++1. readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - row: 块的 confirmed_by≠agent 行）
++2. 知识注入面：未确认条目带 ⚪N未确认 标记
++3. 追加一条抽查确认提示（至多点名 2 个未确认 anchor——相符则收口前 sillyspec tests confirm --anchor <id> --evidence <真实测试路径>，不符留给 knowledge digest 信号）
++4. 新增 tests confirm 子命令：--anchor + --evidence（必须可自仓根解析为真实文件，机械防橡皮图章）→ 该条目全部 candidate 机器行翻 active（confirmed_by=agent, confirmed_at=HEAD）
++5. 已是 active 幂等提示
++6. 无绑定行
++7. 证据不可解析拒绝 exit 1
++8. 全仓测试绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-26-dynamic-test-inference/requirements.md b/.sillyspec/changes/2026-09-27-confirm-on-use/requirements.md
+similarity index 55%
+rename from .sillyspec/changes/2026-09-26-dynamic-test-inference/requirements.md
+rename to .sillyspec/changes/2026-09-27-confirm-on-use/requirements.md
+index fdce1dc5..2d04eac8 100644
+--- a/.sillyspec/changes/2026-09-26-dynamic-test-inference/requirements.md
++++ b/.sillyspec/changes/2026-09-27-confirm-on-use/requirements.md
+@@ -1,45 +1,45 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-26T15:33:23.784Z
++created_at: 2026-09-27T09:01:58.457Z
+ ---
+-# 需求规格（Requirements）— 2026-09-26-dynamic-test-inference
++# 需求规格（Requirements）— 2026-09-27-confirm-on-use
+ 
+ ## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
+ 
+ <!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
+-### FR-01: 测试门（thin+full 共用 runVerifyTestCheck）缺省走动态推断：本变更测试 
+-Given 测试 相关模块就绪
+-When 测试门（thin+full 共用 runVerifyTestCheck）缺省走动态推断：本变更测试 ∪ FR 关联回归（active FR 覆盖面∩触碰文件
+-Then 其绑定 tests）∪ import 依赖测试
+-
+-### FR-02: runner 自项目结构推断（uv run pytest/vitest/jest/node --te
+-Given 测试 相关模块就绪
+-When runner 自项目结构推断（uv run pytest/vitest/jest/node --test），不依赖 local.yaml 测试配置
+-Then 行为符合本条标准描述
+-
+-### FR-03: local.yaml modules.*.test 不再消费（在场打印退役指引）
++### FR-01: readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - ro
+ Given 系统就绪
+-When local.yaml modules.*.test 不再消费（在场打印退役指引）
++When readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - row: 块的 confirmed_by≠agent 行）
+ Then 行为符合本条标准描述
+ 
+-### FR-04: commands.test 仅显式 test_strategy: full 时生效作全量逃生阀
++### FR-02: 知识注入面：未确认条目带 ⚪N未确认 标记
+ Given 系统就绪
+-When commands.test 仅显式 test_strategy: full 时生效作全量逃生阀
++When 知识注入面：未确认条目带 ⚪N未确认 标记
+ Then 行为符合本条标准描述
+ 
+-### FR-05: FR 绑定写入侧路径归一为仓根相对（upsertFrBindings 接受 projectRoot 
++### FR-03: 追加一条抽查确认提示（至多点名 2 个未确认 anchor——相符则收口前 sillyspec te
++Given 测试 相关模块就绪
++When 追加一条抽查确认提示（至多点名 2 个未确认 anchor——相符
++Then 收口前 sillyspec tests confirm --anchor <id> --evidence <真实测试路径>，不符留给 knowledge dig
++
++### FR-04: 新增 tests confirm 子命令：--anchor + --evidence（必须可自仓根解
+ Given 系统就绪
+-When FR 绑定写入侧路径归一为仓根相对（upsertFrBindings 接受 projectRoot 归一 tests）
++When 新增 tests confirm 子命令：--anchor + --evidence（必须可自仓根解析为真实文件，机械防橡皮图章）
++Then 该条目全部 candidate 机器行翻 active（confirmed_by=agent, confirmed_at=HEAD）
++
++### FR-05: 已是 active 幂等提示
++Given 幂等 相关模块就绪
++When 已是 active 幂等提示
+ Then 行为符合本条标准描述
+ 
+-### FR-06: 新增 tests repair-paths 子命令修复存量错形路径
++### FR-06: 无绑定行
+ Given 系统就绪
+-When 新增 tests repair-paths 子命令修复存量错形路径
++When 无绑定行
+ Then 行为符合本条标准描述
+ 
+-### FR-07: 平台仓 multi-agent-platform 修复后 fr/*.md 内 tests: 全部可自
++### FR-07: 证据不可解析拒绝 exit 1
+ Given 系统就绪
+-When 平台仓 multi-agent-platform 修复后 fr/*.md 内 tests: 全部可自仓根解析
++When 证据不可解析拒绝 exit 1
+ Then 行为符合本条标准描述
+ 
+ ### FR-08: 全仓测试绿
+@@ -50,16 +50,22 @@ Then 行为符合本条标准描述
+ ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
+ 
+ <!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/confirm-on-use.test.mjs「① readEntryUnconfirmed」（candidate 计 1/agent 计 0/无绑定块 0）+「②③ unconfirmed 透传」
+ 
+ <!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/confirm-on-use.test.mjs「②③ 注入面」（⚪1未确认标记、抽查提示点名 anchor 带 confirm 指引、确认后标记与提示双消失）
+ 
+ <!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/confirm-on-use.test.mjs「④ CLI tests --confirm」（证据解析→1/1 翻 active 落盘、幂等提示、坏证据 exit 1、无绑定行拒绝）
+ 
+ <!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/confirm-on-use.test.mjs「④」（nope.test.mjs 证据拒绝路径——resolveTestFileRel 机械校验实证）
+ 
+ <!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：证据语义属性——FR-03/04 的用例即证据校验与翻牌的锁定；抽查上限 2 由注入面用例覆盖（单条 fixture 点名恰 1）
+ 
+ <!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：整体验证面——test:core exit 0 + 触达面 44 绿（含 flow-protocol/thin-fr-inject-parity 注入面回归）
+ 
+ <!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+ 
+diff --git a/.sillyspec/changes/2026-09-27-confirm-on-use/tasks.md b/.sillyspec/changes/2026-09-27-confirm-on-use/tasks.md
+new file mode 100644
+index 00000000..4439f705
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-confirm-on-use/tasks.md
+@@ -0,0 +1,18 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:01:58.457Z
++---
++# 任务注册表（Tasks）— 2026-09-27-confirm-on-use
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - row: 块的 confirmed_by≠agent 行）
++- [x] task-02: 知识注入面：未确认条目带 ⚪N未确认 标记
++- [x] task-03: 追加一条抽查确认提示（至多点名 2 个未确认 anchor——相符则收口前 sillyspec tests confirm --anchor <id> --ev…
++- [x] task-04: 新增 tests confirm 子命令：--anchor + --evidence（必须可自仓根解析为真实文件…
++- [x] task-05: 已是 active 幂等提示
++- [ ] task-06: 无绑定行
++- [ ] task-07: 证据不可解析拒绝 exit 1
++- [ ] task-08: 全仓测试绿
+diff --git a/src/flow.js b/src/flow.js
+index c123dd90..d4ac418c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -172,9 +172,16 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+         const flagged = frs.filter((f) => f.needsReview)
+         const ordered = [...flagged, ...frs.filter((f) => !f.needsReview)]
+         for (const f of ordered.slice(0, 8)) {
+-          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}`)
++          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
+         }
+         if (ordered.length > 8) lines.push(`   （+${ordered.length - 8} 条见 knowledge/fr/ 对应域文件）`)
++        // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
++        // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
++        // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
++        const unconfirmed = ordered.filter((f) => f.unconfirmed > 0).slice(0, 2)
++        if (unconfirmed.length > 0) {
++          lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
++        }
+       }
+     }
+     const { matchKnowledge } = await import('./knowledge-match.js')
+diff --git a/src/fr-index.js b/src/fr-index.js
+index 6a27800c..476c3c8b 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -97,6 +97,27 @@ function readEntryBindings(lines) {
+   return out;
+ }
+ 
++/** 条目未确认绑定行计数（2026-09-27-confirm-on-use）：绑定子块内 confirmed_by≠agent 的
++ * `- row:` 块数——机器提升行恒 candidate/null（状态机有机制无消费者的病灶面），注入面据此
++ * 打 ⚪N未确认 标记 + 抽查确认提示。行块边界=下一个 `- row:` 或节头。 */
++export function readEntryUnconfirmed(lines) {
++  const idx = lines.findIndex((l) => l.startsWith('测试绑定：'));
++  if (idx === -1) return 0;
++  let unconfirmed = 0
++  let inRow = false
++  let rowConfirmed = false
++  for (const l of lines.slice(idx + 1)) {
++    if (/^##\s/.test(l)) break
++    if (/^-\s+row:/.test(l)) {
++      if (inRow && !rowConfirmed) unconfirmed++
++      inRow = true; rowConfirmed = false; continue
++    }
++    if (inRow && /^\s+confirmed_by:\s*agent\s*$/.test(l)) rowConfirmed = true
++  }
++  if (inRow && !rowConfirmed) unconfirmed++
++  return unconfirmed
++}
++
+ /** 标题 bigram 重叠判「重复嫌疑/承接漏写」的阈值（fr-index 判据函数与两处消费方——brainstorm
+  * 软门（stage-contract.js）与轻量道 dup 软门（flow.js）——共用同一常量，防两处各写一份字面量
+  * 漂移（fr-rot-precision 评审 P3 清偿：改阈值只改这里）。 */
+@@ -760,7 +781,7 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
+       const needsReview = reviewLine ? reviewLine.replace(/^待复核：\s*/, '').trim() : null;
+       // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
+       // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
+-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines) });
++      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
+     }
+   }
+   return out;
+diff --git a/src/index.js b/src/index.js
+index ac6bc074..1d790df1 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3129,6 +3129,27 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+         }
+         break
+       }
++      // ── confirm（2026-09-27-confirm-on-use 三层治理①层）：消费时确认翻牌 ──
++      // candidate 机器行（confirmed_by=null）批量翻 active（confirmed_by=agent）——抽查式
++      // 确认的写回通道。机械防橡皮图章：--evidence 必须是可自仓根解析的真实测试路径
++      // （resolveTestFileRel 单源），解析失败拒绝 exit 1。
++      if (has('--confirm')) {
++        if (!anchor || !/^FR-/.test(anchor)) { fail('用法: sillyspec tests --confirm --anchor FR-<域>-NNN --evidence <真实测试路径>'); break }
++        const evidenceRaw = flag('--evidence')
++        if (!evidenceRaw) { fail('--confirm 须配 --evidence <真实测试路径>（防橡皮图章：证据必须是盘上文件）'); break }
++        const { resolveTestFileRel: _rtf2 } = await import('./test-bindings.js')
++        const evRel = _rtf2(testAnchorFile(evidenceRaw), { projectRoot: effDir }) || (existsSync(resolve(effDir, evidenceRaw.replace(/\\/g, '/'))) ? evidenceRaw.replace(/\\/g, '/') : null)
++        if (!evRel) { fail(`证据路径不可解析：${evidenceRaw}（相对 ${effDir}）——确认必须指向盘上真实测试文件，不收口头相符`); break }
++        const rows = readFrBindings({ knowledgeRoot, frId: anchor })
++        if (rows.length === 0) { fail(`${anchor} 无绑定行——确认对象不存在（先 --bind 或经归档提升）`); break }
++        const head2 = (() => { try { return gitQuiet(effDir, ['rev-parse', 'HEAD']) || null } catch { return null } })()
++        const confirmed = rows.map((r) => r.confirmed_by === 'agent' ? r : { ...r, state: 'active', confirmed_by: 'agent', confirmed_at: head2 })
++        const flipped = confirmed.filter((r, i) => rows[i].confirmed_by !== 'agent').length
++        if (flipped === 0) { console.log(`ℹ️ ${anchor} 全部绑定行已 active（幂等，无需确认）`); break }
++        upsertFrBindingsRaw({ knowledgeRoot, frId: anchor, rows: confirmed, projectRoot: effDir })
++        console.log(`✅ 确认翻牌：${anchor} ${flipped}/${rows.length} 行 candidate→active（confirmed_by=agent${head2 ? ` @${head2.slice(0, 8)}` : ''}；证据=${evRel}）`)
++        break
++      }
+       // 视图
+       const rows = anchor
+         ? queryByAnchor({ specBase, knowledgeRoot, anchor })
+diff --git a/test/confirm-on-use.test.mjs b/test/confirm-on-use.test.mjs
+new file mode 100644
+index 00000000..3aef1baa
+--- /dev/null
++++ b/test/confirm-on-use.test.mjs
+@@ -0,0 +1,107 @@
++/**
++ * 2026-09-27-confirm-on-use 防回归（三层治理①层：消费时确认）：
++ * ① readEntryUnconfirmed：candidate/null 行计数、agent 行不计、无绑定块 0
++ * ② readActiveFrDigest.unconfirmed 透传
++ * ③ 注入面（flowKnowledgeDigest）：⚪N未确认标记 + 抽查确认提示（至多 2 个 anchor、带 tests confirm 指引）
++ * ④ CLI tests --confirm：证据可解析→candidate 批量翻 active（confirmed_by=agent@HEAD）；
++ *    幂等（全 active 提示不写）；证据不可解析拒绝 exit 1；无绑定行拒绝
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++import { dirname } from 'node:path'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const frIndex = await import(pathToFileURL(join(ROOT, 'src', 'fr-index.js')).href)
++const { readEntryUnconfirmed, readActiveFrDigest } = frIndex
++const { flowKnowledgeDigest } = await import(pathToFileURL(join(ROOT, 'src', 'flow.js')).href)
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++const NL = String.fromCharCode(10)
++
++function fixture({ confirmed = false } = {}) {
++  const root = mk('cou-')
++  const specBase = join(root, '.sillyspec')
++  const knowledge = join(specBase, 'knowledge')
++  mkdirSync(join(knowledge, 'fr'), { recursive: true })
++  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++  mkdirSync(join(root, 'test'), { recursive: true })
++  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:' + NL + '  core:' + NL + '    paths:' + NL + '      - src/')
++  writeFileSync(join(root, 'test', 'a.test.mjs'), "import { test } from 'node:test'" + NL + "test('a', () => {})" + NL)
++  writeFileSync(join(knowledge, 'fr', 'core.md'), [
++    '---', 'author: t', '---', '', '# FR 索引 — core', '',
++    '## FR-core-001 行为一', '变更：hist-a', '状态：active', '摘要：默认场景', '',
++    '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++    '- row: hist-a:task-01:FR-01',
++    '  tests: test/a.test.mjs',
++    '  reason: spec',
++    `  state: ${confirmed ? 'active' : 'candidate'}`,
++    '  discovery: machine',
++    `  confirmed_by: ${confirmed ? 'agent' : 'null'}`,
++    `  confirmed_at: ${confirmed ? 'abc123' : 'null'}`, '',
++  ].join(NL) + NL)
++  return { root, specBase, knowledge }
++}
++
++test('① readEntryUnconfirmed：candidate 行计 1、agent 行计 0、无绑定块 0', () => {
++  const { knowledge } = fixture({})
++  const text = readFileSync(join(knowledge, 'fr', 'core.md'), 'utf8')
++  const lines = text.split(NL)
++  assert.equal(readEntryUnconfirmed(lines), 1, 'candidate/null 行计 1')
++  const c = fixture({ confirmed: true })
++  const t2 = readFileSync(join(c.knowledge, 'fr', 'core.md'), 'utf8')
++  assert.equal(readEntryUnconfirmed(t2.split(NL)), 0, 'confirmed_by=agent 行不计')
++  const noBind = ['## FR-core-001 x', '状态：active']
++  assert.equal(readEntryUnconfirmed(noBind), 0, '无绑定块 0')
++})
++
++test('②③ 注入面：unconfirmed 透传 + ⚪ 标记 + 抽查提示（至多 2、带 confirm 指引）', async () => {
++  const f = fixture({})
++  const r = await flowKnowledgeDigest({ specBase: f.specBase, change: 'c1', changeDir: join(f.specBase, 'changes', 'c1'), filesOverride: ['src/a.js'] })
++  const digest = r.lines.join(NL)
++  assert.match(digest, /FR-core-001 .*⚪1未确认绑定/, '条目带 ⚪1未确认 标记')
++  assert.match(digest, /抽查确认（至多 [12] 条.*FR-core-001/, '抽查提示点名未确认 anchor')
++  assert.match(digest, /tests confirm --anchor <id> --evidence/, '提示带 confirm 指引')
++  const digest2 = readActiveFrDigest(f.knowledge, ['core'])
++  assert.equal(digest2[0].unconfirmed, 1, 'readActiveFrDigest.unconfirmed 透传')
++  // 确认后：标记消失、无抽查提示
++  const f2 = fixture({ confirmed: true })
++  const r2 = await flowKnowledgeDigest({ specBase: f2.specBase, change: 'c1', changeDir: join(f2.specBase, 'changes', 'c1'), filesOverride: ['src/a.js'] })
++  const d2 = r2.lines.join(NL)
++  assert.ok(!/未确认绑定/.test(d2), '确认后无 ⚪ 标记')
++  assert.ok(!/抽查确认/.test(d2), '确认后无抽查提示')
++})
++
++test('④ CLI tests --confirm：证据解析→翻 active；幂等；坏证据/无行拒绝', () => {
++  const f = fixture({})
++  const bin = join(ROOT, 'bin', 'sillyspec.js')
++  const run = (args) => execFileSync('node', [bin, ...args], { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++
++  // 坏证据 → exit 1
++  let refused = false
++  try { run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'nope.test.mjs']) } catch (e) { refused = e.status === 1 && /证据路径不可解析/.test(e.stderr || '') }
++  assert.ok(refused, '证据不可解析拒绝 exit 1（防橡皮图章）')
++
++  // 好证据 → 翻牌
++  const out = run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'test/a.test.mjs'])
++  assert.match(out, /确认翻牌：FR-core-001 1\/1 行 candidate→active/, 'candidate 翻 active')
++  assert.match(out, /confirmed_by=agent/, 'confirmed_by=agent 落盘')
++  const after = readFileSync(join(f.knowledge, 'fr', 'core.md'), 'utf8')
++  assert.match(after, /state: active/, '盘上 state=active')
++  assert.match(after, /confirmed_by: agent/, '盘上 confirmed_by=agent')
++
++  // 幂等
++  const out2 = run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'test/a.test.mjs'])
++  assert.match(out2, /已 active（幂等，无需确认）/, '幂等提示')
++
++  // 无绑定行 anchor
++  let noRows = false
++  try { run(['tests', '--confirm', '--anchor', 'FR-core-999', '--evidence', 'test/a.test.mjs']) } catch (e) { noRows = e.status === 1 && /无绑定行/.test(e.stderr || '') }
++  assert.ok(noRows, '无绑定行拒绝')
++})

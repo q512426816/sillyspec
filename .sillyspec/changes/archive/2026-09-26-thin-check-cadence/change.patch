@@ -1,0 +1,321 @@
+diff --git a/src/flow.js b/src/flow.js
+index c32c7bf8..cd32a026 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -735,6 +735,21 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+       }
+     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
++    // 勾选节奏 advisory（2026-09-26-thin-check-cadence）：watcher 事件流 task-done 单拍跳 ≥2 格 =
++    // 一把全勾——per-task 时间戳/进度信号面失真（39 条流零例外实证）。warn 不阻断（对齐上方
++    // 「任务勾选缺失」advisory 档位：节奏是习惯问题非造假主张，L0 硬门另有其人）；观测旁路
++    // 缺席（无流/无事件/读失败）静默跳过——fail-open，watcher 非真相源。
++    try {
++      const { readWatcherEvents } = await import('./watcher.js')
++      const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
++      const stream = readWatcherEvents({ runtimeRoot, change })
++      const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
++      if (batch) {
++        const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
++        console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选`)
++        console.warn('   规范动作是完成一个工作单元即勾一格（- [ ] → - [x]）；一把全勾使进度信号与 per-task 时间戳失真（本次放行不阻断）')
++      }
++    } catch { /* 节奏 advisory best-effort：读流失败静默 */ }
+     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
+     if (gate && gate.action === 'fail') {
+       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index 2108f8ab..a40cc94b 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -90,4 +90,25 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts =
+   return { status: missing.length === 0 ? 'complete' : 'fake', claimTotal, checked, missing };
+ }
+ 
+-export default { detectFakeCheckCompletion };
++/**
++ * 勾选节奏检测（2026-09-26-thin-check-cadence）：watcher 事件流里 task-done 单拍跳 ≥2 格 =
++ * 一把全勾（未按工作单元逐个勾）——thin-agent-tasks 纪律的收口侧 advisory 判定面（warn 不
++ * 阻断，接线在 flow done ledger 子步；节奏是习惯问题非造假主张，L0 硬门另有其人）。
++ * 纯函数：事件清单→最大跳格记录；无多格跳返回 null。detail 与 watcher inferEvents 生成
++ * 格式成对（`checked N→M`）；解析失配（格式漂移/坏行/非 task-done）按无证据静默——fail-open。
++ */
++export function detectBatchCheckCadence(events) {
++  let worst = null;
++  for (const e of events || []) {
++    if (!e || e.kind !== 'task-done') continue;
++    const m = /^checked (\d+)→(\d+)$/.exec(String(e.detail || ''));
++    if (!m) continue;
++    const from = Number(m[1]);
++    const to = Number(m[2]);
++    if (to - from < 2) continue;
++    if (!worst || to - from > worst.to - worst.from) worst = { from, to, detail: e.detail, ts: e.ts };
++  }
++  return worst;
++}
++
++export default { detectFakeCheckCompletion, detectBatchCheckCadence };
+diff --git a/test/sentinel-rules.test.mjs b/test/sentinel-rules.test.mjs
+index 35d50316..e4d9e14d 100644
+--- a/test/sentinel-rules.test.mjs
++++ b/test/sentinel-rules.test.mjs
+@@ -24,7 +24,7 @@ const {
+   loadSnapshotWatermark, writeSnapshotWatermark, watcherSnapshotPath,
+   STALL_EARLY_MS, STALL_EXECUTE_MS,
+ } = await import('../src/watcher.js')
+-const { detectFakeCheckCompletion } = await import('../src/sentinel-assertions.js')
++const { detectFakeCheckCompletion, detectBatchCheckCadence } = await import('../src/sentinel-assertions.js')
+ 
+ function snap(over = {}) {
+   return {
+@@ -519,3 +519,50 @@ test('R2 定向无归属：绑定解析空 → generic（注记无绑定锚）',
+   assert.match(w.detail, /无绑定锚/, '注记归属缺口')
+   assert.equal(rulesOf(warnings).includes('test-tamper-bound'), false)
+ })
++
++// ───────────────────── 勾选节奏检测（2026-09-26-thin-check-cadence） ─────────────────────
++
++/** watcher 事件形态直构（与 inferEvents 生成面同构）。 */
++const td = (from, to, ts = 1700000000000, stage = 'tasks') => ({ ts, kind: 'task-done', stage, detail: `checked ${from}→${to}`, provisional: true })
++
++test('节奏 正例：单拍 0→8 返回证据记录（字段完整）', () => {
++  const r = detectBatchCheckCadence([td(0, 8, 1790350431921)])
++  assert.deepEqual(r, { from: 0, to: 8, detail: 'checked 0→8', ts: 1790350431921 })
++})
++
++test('节奏 最大跳格选取：0→3 与 3→8 并存取 3→8', () => {
++  const r = detectBatchCheckCadence([td(0, 3, 111), td(3, 8, 222)])
++  assert.equal(r.from, 3)
++  assert.equal(r.to, 8)
++  assert.equal(r.ts, 222)
++})
++
++test('节奏 逐格勾选不判：0→1、1→2、2→3 全程返回 null', () => {
++  assert.equal(detectBatchCheckCadence([td(0, 1, 111), td(1, 2, 222), td(2, 3, 333)]), null)
++})
++
++test('节奏 单任务变更 0→1 不判；design 阶段同判', () => {
++  assert.equal(detectBatchCheckCadence([td(0, 1)]), null)
++  const r = detectBatchCheckCadence([td(0, 2, 999, 'design')])
++  assert.equal(r.to, 2, 'design.md 多格勾选同入判（STAGE_FILES 双工件面）')
++})
++
++test('节奏 容错：空清单/null/坏 detail/非 task-done/坏对象行不抛且返回 null', () => {
++  assert.equal(detectBatchCheckCadence([]), null)
++  assert.equal(detectBatchCheckCadence(null), null)
++  assert.equal(detectBatchCheckCadence([
++    null,
++    { ts: 1, kind: 'commit', stage: null, detail: 'abc1234', provisional: true },
++    { ts: 2, kind: 'task-done', stage: 'tasks', detail: 'checked X→Y', provisional: true },
++    { ts: 3, kind: 'task-done', stage: 'tasks', detail: null, provisional: true },
++    'not-an-object',
++  ]), null)
++})
++
++test('节奏 坏行夹好行：只取合法多格跳', () => {
++  const r = detectBatchCheckCadence([
++    { ts: 1, kind: 'task-done', stage: 'tasks', detail: 'garbage', provisional: true },
++    td(2, 5, 444),
++  ])
++  assert.deepEqual(r, { from: 2, to: 5, detail: 'checked 2→5', ts: 444 })
++})
+diff --git a/.sillyspec/changes/2026-09-26-thin-check-cadence/design.md b/.sillyspec/changes/2026-09-26-thin-check-cadence/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-check-cadence/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T06:24:50.288Z
++---
++# 设计记录（Design Record）— 2026-09-26-thin-check-cadence
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++src/sentinel-assertions.js 新增纯函数 `detectBatchCheckCadence(events)`：扫 watcher 事件流里 `kind==='task-done'` 且 detail 匹配 `checked N→M` 的事件，`M-N>=2` 即一拍多格（一把全勾）证据，返回跳格最大的记录（含 ts/detail），无多格跳返回 null。src/flow.js cmdFlowDone 的 ledger 子步、既有「任务勾选缺失」advisory 之后，独立 try/catch 调 `readWatcherEvents({runtimeRoot, change})` 读流，存在多格跳则 console.warn 两行（证据行+规范动作行），不阻断。选此方案：判据源（watcher jsonl）与读取 API（readWatcherEvents）均为在场既有件；与「任务勾选缺失」advisory 同位同模式——节奏是习惯问题不是造假主张（假勾选另有 L0 硬门 detectFakeCheckCompletion），warn 施压而非 gate 拒收。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出 `detectBatchCheckCadence(events) -> {from,to,detail,ts}|null`（sentinel-assertions.js 具名+default export 对象同步加键）；flow.js 无新导出（cmdFlowDone 内部接线）。无 CLI flag、无文件格式变更、无 db 变更。detail 解析正则 `^checked (\d+)→(\d+)$`，与 watcher.js inferEvents 的生成格式成对（同仓两处格式若漂移，解析失配按无证据静默——fail-open）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：jsonl 由 watcher 单写者 append-only，时序天然单调；检测取全流最大跳格，不依赖事件间顺序；重启补发的 backfill 事件同格式同判，「是否存在多格跳」判定不受回填影响。
++2. 并发写：读侧 readWatcherEvents 逐行解析、坏行跳过（既有 R-04 容差），并发 append 交错的半行按坏行丢弃——advisory 最多漏报一拍，无后果（best-effort 定位）。
++3. 切换/生命周期：断点续跑走 ledger skip 分支不重复告警（advisory 只在 fresh 分支）；flow done 中途崩了重入，事件流不变、再告一次——幂等 warn 无害；watcher 在收口时仍可能活着写流（archived 前），读到当前完整行为止，语义可接受。
++4. 作用域：事件流按变更名分文件（watcher-events-<change>.jsonl），readWatcherEvents 以 change 名锚定不串台；runtimeRoot 解析与 watcher 落盘同源（resolveRuntimeRoot）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=误报施压：两个任务真同时完成（一次提交带两个 task token）后一拍勾两格会被提示——接受（advisory 不阻断，且同拍双完成本就应分两次勾，提示方向正确）。放弃的方案：①收口硬门拒收一把全勾——节奏是习惯非造假主张，硬门会把合法快速变更拦死，与「任务勾选缺失」同为 advisory 的既有裁决一致；②加「贴近收口时刻」时间窗过滤——引入窗口参数且窗口内外行为不一致，简化为「任意单拍 ≥2 格」单一判据；③顺手改 watcher per-change 锁修观测盲区——超出本变更范围（本变更只解决「有观测时的行为矫正」，盲区另立变更）。
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-check-cadence/flow-state.yaml b/.sillyspec/changes/2026-09-26-thin-check-cadence/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-check-cadence/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 7a2324680f13cb12115c7073a6bd30ca80f4b46f
++updatedAt: '2026-09-26T06:30:40.338Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js18)（13.9s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260926063002\test-result.json｜lint: passed
++  ← npm run lint（37.3s）｜门文件 16 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-check-cadence/proposal.md b/.sillyspec/changes/2026-09-26-thin-check-cadence/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-check-cadence/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T06:24:50.286Z
++---
++# 提案书（Proposal）— 2026-09-26-thin-check-cadence
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:5f0bb9d53f4a66e3362694da6a5c49fb71b8db973e0f2605bf5e3b4b5631d403:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++任务原话转写：动机/背景：thin-agent-tasks 已把「完成一个工作单元即勾一格」定为明文纪律，但全部 39 条 watcher 事件流零例外仍是收口前一拍 checked 0→N 一把全勾——纪律无收口提醒，per-task 时间戳与进度信号面持续失真。对齐既有「任务勾选缺失」advisory 模式（warn 不阻断，持续施压养成逐单元勾选习惯）。
++成功标准：
++- flow done 收口时，watcher 事件流存在 task-done 单拍跳 ≥2 格记录则输出勾选节奏 advisory（引用跳格证据与时刻，不阻断收口）
++- 事件流文件缺失/无 task-done 事件/读取异常时静默跳过（best-effort fail-open，watcher 是观测旁路非真相源）
++- 单拍跳格 <2（单任务变更或逐格勾选）不告警
++- 跳格检测为纯函数并有单元测试（多格跳取最大、逐格不告警、无事件、坏 detail 容错）
++- npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:439a9d68e9c475c57bc6d375e5fe2af5524f349db0918adcf80175f92706f0c2:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. flow done 收口时，watcher 事件流存在 task-done 单拍跳 ≥2 格记录则输出勾选节奏 advisory（引用跳格证据与时刻，不阻断收口）
++2. 事件流文件缺失/无 task-done 事件/读取异常时静默跳过（best-effort fail-open，watcher 是观测旁路非真相源）
++3. 单拍跳格 <2（单任务变更或逐格勾选）不告警
++4. 跳格检测为纯函数并有单元测试（多格跳取最大、逐格不告警、无事件、坏 detail 容错）
++5. npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:684523467821e99e81bb918604a3b8e6b3b227c8aaa28a3b1540233d8b3ab560:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-thin-check-cadence 留痕重锚 -->
++1. flow done 收口时，watcher 事件流存在 task-done 单拍跳 ≥2 格记录则输出勾选节奏 advisory（引用跳格证据与时刻，不阻断收口）
++2. 事件流文件缺失/无 task-done 事件/读取异常时静默跳过（best-effort fail-open，watcher 是观测旁路非真相源）
++3. 单拍跳格 <2（单任务变更或逐格勾选）不告警
++4. 跳格检测为纯函数并有单元测试（多格跳取最大、逐格不告警、无事件、坏 detail 容错）
++5. npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-check-cadence/requirements.md b/.sillyspec/changes/2026-09-26-thin-check-cadence/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-check-cadence/requirements.md
+@@ -0,0 +1,59 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T06:24:50.288Z
++---
++# 需求规格（Requirements）— 2026-09-26-thin-check-cadence
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 勾选节奏 advisory 输出
++Given 本变更收口（flow done ledger 子步）时 watcher 事件流存在 task-done 事件单拍跳 ≥2 格
++When 收口执行到 ledger 子步「任务勾选缺失」advisory 之后
++Then console.warn 输出勾选节奏 advisory（引用跳格 detail 与事件时刻、规范动作指引），不阻断收口
++
++### FR-02: 观测旁路缺席静默
++Given watcher 事件流文件缺失、无 task-done 事件、或读取过程抛异常
++When 收口执行同一位置
++Then 静默跳过（无输出、异常不外泄、收口照常推进）
++
++### FR-03: 逐格勾选不告警
++Given 事件流中全部 task-done 单拍跳格均 <2（含单任务变更 0→1）
++When 收口执行同一位置
++Then 不输出勾选节奏 advisory
++
++### FR-04: 跳格检测纯函数与单测
++Given detectBatchCheckCadence(events) 为无副作用纯函数
++When 输入多格跳/逐格/无事件/坏 detail 的事件清单
++Then 返回最大跳格记录（含 from/to/detail/ts）或 null，行为由 test/sentinel-rules.test.mjs 新增用例钉住
++
++### FR-05: 套件实测全绿
++Given 本变更触及 src/ 与 test/
++When 运行 npm run test:core 与 npm run lint
++Then 全部通过
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: flow done 收口时，watcher 事件流存在 task-done 单拍跳 ≥2 格记录则输出勾选节奏 advisory（引用跳格证据与时刻，不阻断收口）
++FR-02: 事件流文件缺失/无 task-done 事件/读取异常时静默跳过（best-effort fail-open，watcher 是观测旁路非真相源）
++FR-03: 单拍跳格 <2（单任务变更或逐格勾选）不告警
++FR-04: 跳格检测为纯函数并有单元测试（多格跳取最大、逐格不告警、无事件、坏 detail 容错）
++FR-05: npm run test:core 与 npm run lint 实测全绿
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-rules.test.mjs「detectBatchCheckCadence」用例组：多格跳（0→8）返回证据记录（FR-01 判定面）；advisory 渲染是接线层 console.warn，循「任务勾选缺失」advisory 先例不测终端输出
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-rules.test.mjs：空事件清单/无 task-done 事件返回 null（判定面）；文件缺失路径走 readWatcherEvents 既有 exists:false 语义（test/watcher-alerts.test.mjs 已钉，不重复）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-rules.test.mjs：0→1 单任务与 0→1、1→2、2→3 逐格序列均返回 null
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-rules.test.mjs「detectBatchCheckCadence」用例组全组（坏 detail 容错/最大跳格选取/字段完整性）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：套件本身即验证——commands.test/lint 亲测是收口门执行动作，无独立用例可写
+
+diff --git a/.sillyspec/changes/2026-09-26-thin-check-cadence/tasks.md b/.sillyspec/changes/2026-09-26-thin-check-cadence/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-thin-check-cadence/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T06:24:50.289Z
++---
++# 任务注册表（Tasks）— 2026-09-26-thin-check-cadence
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++
++- [x] task-01: detectBatchCheckCadence 纯函数（src/sentinel-assertions.js，具名+default export 键）+ test/sentinel-rules.test.mjs 新用例组（多格跳取最大/0→1 与逐格不判/无事件/坏 detail 容错）
++- [x] task-02: flow.js cmdFlowDone ledger 子步接线勾选节奏 advisory（独立 try/catch fail-open）+ npm run test:core 186/186 与 lint 820 文件实测全绿（实测门由收口 CLI 亲测终裁）；本变更自身按单元逐格勾选（watcher 事件流 0→1、1→2 分拍在案）

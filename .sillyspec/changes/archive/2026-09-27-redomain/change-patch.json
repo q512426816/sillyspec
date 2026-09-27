@@ -1,0 +1,25 @@
+{
+  "change": "2026-09-27-redomain",
+  "baseline": "b1c2d2f1f46f050a994609e427785aba03a2e791",
+  "head": "86f8af6f830b9962edfb7183a5f3b9315f68953e",
+  "files": [
+    ".sillyspec/changes/2026-09-27-redomain/design.md",
+    ".sillyspec/changes/2026-09-27-redomain/flow-state.yaml",
+    ".sillyspec/changes/2026-09-27-redomain/proposal.md",
+    ".sillyspec/changes/2026-09-27-redomain/requirements.md",
+    ".sillyspec/changes/2026-09-27-redomain/tasks.md",
+    "src/fr-index.js",
+    "src/index.js",
+    "src/redomain.js",
+    "test/redomain.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 518,
+    "deletions": 2
+  },
+  "savedAt": "2026-09-27T11:50:17.646Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "patchSha256": "ee4481bf2d36d75d6ec00f34ac7ef5a5e5bd2fcac67946e49e049039d4dec21f",
+  "patchStatus": "ok"
+}

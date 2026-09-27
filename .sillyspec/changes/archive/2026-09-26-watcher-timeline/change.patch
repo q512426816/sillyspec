@@ -1,0 +1,651 @@
+diff --git a/package.json b/package.json
+index 92316034..bc1fb282 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/index.js b/src/index.js
+index b312fec0..df4cccb6 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -93,6 +93,8 @@ SillySpec CLI — 规范驱动开发工具包
+   sillyspec runtime list [--json]         枚举 .sillyspec/.runtime/ 运行时产物（只读，看手上有哪些证据/状态文件）
+   sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]
+                                       哨兵告警查询（watcher 事件流只读可视化；--all 全事件、--follow 2s 轮询持续打印）
++  sillyspec watcher timeline --change <名> [--runtime-root <路径>]
++                                      变更合成时间线（事件流 × tasks.md × git 提交锚三源真实留痕渲染；活跃/归档变更均可）
+   sillyspec dispatch <probe | hint>       SillyHub 派发能力探测 + 策略生成（agent 调用桥，仅渲染不执行 tool）
+   sillyspec agent-log [--detect] [--json]  本地 agent 会话日志查询/现场探测（run 命令自动上报平台 POST /api/agent-logs 并本地留底）
+ 
+@@ -4967,13 +4969,64 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+       // 可选 --follow 轮询；不改 applySentinelRules、不做平台推送、不加新事件类型。
+       // 子命令面：alerts；预留名（勿占）：events（原始流格式化）/ tail（时间窗过滤）。
+       const watcherSub = filteredArgs[1];
+-      if (watcherSub !== 'alerts') {
+-        const sug = didYouMean(watcherSub || '', ['alerts']);
++      if (watcherSub !== 'alerts' && watcherSub !== 'timeline') {
++        const sug = didYouMean(watcherSub || '', ['alerts', 'timeline']);
+         console.error(`❌ 未知子命令: watcher ${watcherSub || '(空)'}`);
+         if (sug) console.error(`   你是想输入「watcher ${sug}」吗？`);
+         console.error('用法: sillyspec watcher alerts --change <名> [--all] [--follow] [--runtime-root <路径>]');
++        console.error('      sillyspec watcher timeline --change <名> [--runtime-root <路径>]');
+         process.exit(2);
+       }
++      // ── timeline 子命令（2026-09-26-watcher-timeline）：变更合成时间线只读出口 ──
++      // 三源 join（事件流 × tasks.md × git 提交锚）在 src/timeline.js 纯函数层；此处只做
++      // I/O 接线（runtimeRoot 解析与 alerts 同源；change 目录活跃>归档双路径探测）。
++      if (watcherSub === 'timeline') {
++        const tRest = filteredArgs.slice(2);
++        let tChange = null;
++        let tRuntimeRootFlag = null;
++        for (let i = 0; i < tRest.length; i++) {
++          if (tRest[i] === '--change' && tRest[i + 1]) tChange = tRest[++i];
++          else if (tRest[i] === '--runtime-root' && tRest[i + 1]) tRuntimeRootFlag = resolve(tRest[++i]);
++        }
++        if (!tChange) {
++          console.error('❌ watcher timeline 需要 --change <变更名>');
++          console.error('用法: sillyspec watcher timeline --change <名> [--runtime-root <路径>]');
++          process.exit(2);
++        }
++        assertSafeChangeName(tChange, '变更名');
++        const { resolveRuntimeRoot } = await import('./run/shared.js');
++        const { readWatcherEvents } = await import('./watcher.js');
++        const { loadChangeTasks, readBirthTs, resolveCommitAnchors, parseTaskLines, renderTimeline } = await import('./timeline.js');
++        const tSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
++        const tPlatformOpts = resolvePlatformOpts(dir, specDir);
++        const tRuntimeRoot = resolveRuntimeRoot({ runtimeRoot: tRuntimeRootFlag || (tPlatformOpts && tPlatformOpts.runtimeRoot) || null }, tSpecBase);
++        const tRes = readWatcherEvents({ runtimeRoot: tRuntimeRoot, change: tChange });
++        if (!tRes.exists) {
++          console.error(`📭 ${tChange} 无事件流（未跑过 watcher），无从合成时间线`);
++          console.error(`   事件流路径：${join(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
++          process.exit(2);
++        }
++        const { changeDir, tasksMd } = loadChangeTasks(tSpecBase, tChange);
++        const tasks = tasksMd ? parseTaskLines(tasksMd) : null;
++        let tier = null;
++        if (changeDir) {
++          try {
++            const m = /^tier:\s*(\S+)/m.exec(readFileSync(join(changeDir, 'flow-state.yaml'), 'utf8'));
++            if (m) tier = m[1];
++          } catch { /* 缺 flow-state（头脑风暴预段等）按未知 */ }
++        }
++        const { gitQuiet } = await import('./git-helper.js');
++        const anchors = resolveCommitAnchors(tRes.events, (hash) => {
++          const out = gitQuiet(dir, ['log', '-1', '--format=%h%x1f%aI%x1f%B', hash]);
++          if (typeof out !== 'string' || !out.trim()) return null;
++          const sep = out.indexOf('\x1f');
++          const rest = out.slice(sep + 1);
++          const sep2 = rest.indexOf('\x1f');
++          return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) };
++        });
++        console.log(renderTimeline({ change: tChange, events: tRes.events, tasks, anchors, birthTs: readBirthTs(changeDir), tier }));
++        break;
++      }
+       const wRest = filteredArgs.slice(2);
+       let wChange = null;
+       let wRuntimeRootFlag = null;
+diff --git a/src/timeline.js b/src/timeline.js
+new file mode 100644
+index 00000000..ec7170a3
+--- /dev/null
++++ b/src/timeline.js
+@@ -0,0 +1,182 @@
++/**
++ * timeline.js — 变更合成时间线（2026-09-26-watcher-timeline）。
++ *
++ * 只读合成器：watcher 事件流（jsonl）× tasks.md 勾选行 × git 提交锚 → 人类可读时间线。
++ * 轻量变更无阶段 --done 步骤面（平台 UI 时间线只覆盖完整流程），本模块把既有留痕事后
++ * 合成——零新落盘、零协议负担。CLI 出口：sillyspec watcher timeline --change <名>
++ * （index.js watcher case，与 alerts 同族只读）。
++ *
++ * 纯度口径：本文件全部纯函数（git 经 gitLook 注入面，测试零真仓）；I/O 与退出码归接线层。
++ * 诚实面（FR-04）：事件流 task-done 只记计数不记任务 id——勾选时刻按翻格顺序推断，表头
++ * 显式「≈」，计数链断裂标「推断不可用」；提交 hash 不可解析只显 hash 并标注。
++ */
++import { readFileSync } from 'fs';
++import { join } from 'path';
++
++/** tasks.md 勾选行解析：`- [x] task-01: 描述` / `- [ ] task-02 无冒号描述`。 */
++export function parseTaskLines(tasksMd) {
++  const out = [];
++  for (const line of String(tasksMd || '').split(/\r?\n/)) {
++    const m = /^[-*] \[( |x|X)\] (task-\d+):?[ \t]*(.*)$/.exec(line);
++    if (m) out.push({ id: m[2], checked: m[1].toLowerCase() === 'x', desc: m[3].trim() });
++  }
++  return out;
++}
++
++/**
++ * 翻格顺序推断（FR-04）：task-done（stage='tasks'）事件序列 → 每任务序号的勾选时刻。
++ * 计数链衔接（from === 游标）才赋值；断裂标 broken（此后不再赋值——不编造）。
++ * @returns {{times:(number|null)[], broken:boolean}} times 按任务序号索引；未推断到 = null。
++ */
++export function inferFlipTimes(events, total) {
++  const times = new Array(Math.max(0, total || 0)).fill(null);
++  let cursor = 0;
++  let broken = false;
++  for (const e of events || []) {
++    if (!e || e.kind !== 'task-done' || (e.stage && e.stage !== 'tasks')) continue;
++    const m = /^checked (\d+)→(\d+)$/.exec(String(e.detail || ''));
++    if (!m) continue;
++    const from = Number(m[1]);
++    const to = Number(m[2]);
++    if (from !== cursor) { broken = true; break; }
++    for (let i = from; i < to && i < times.length; i++) times[i] = e.ts;
++    cursor = to;
++  }
++  if (cursor < times.length && times.some((t) => t != null)) broken = true; // 链未覆盖全部已勾——尾部断
++  return { times, broken };
++}
++
++/** 提交消息里的 task token 清单（去重保序）。 */
++function tokensOf(text) {
++  const out = [];
++  for (const t of String(text || '').match(/task-\d+(?!\d)/g) || []) {
++    if (!out.includes(t)) out.push(t);
++  }
++  return out;
++}
++
++/**
++ * 提交锚解析：事件流 kind=commit 的短 hash → gitLook 解析出主题/时间/token。
++ * @param {Function} gitLook (hash) => null | {hash, dateISO, message}（注入面，接线层包 gitQuiet）
++ * @returns {Array<{hash, ts, subject, tokens, resolvable}>} ts 取事件观测时刻（git 日期仅存证）。
++ */
++export function resolveCommitAnchors(events, gitLook) {
++  const out = [];
++  for (const e of events || []) {
++    if (!e || e.kind !== 'commit' || !e.detail) continue;
++    const hash = String(e.detail).trim();
++    let info = null;
++    try { info = gitLook ? gitLook(hash) : null; } catch { info = null; }
++    out.push({
++      hash,
++      ts: e.ts,
++      subject: info ? String(info.message || '').split(/\r?\n/)[0] : null,
++      tokens: info ? tokensOf(info.message) : [],
++      resolvable: Boolean(info),
++    });
++  }
++  return out;
++}
++
++/** 本地 HH:MM:SS（与 watcher alerts fmtLocal 同风格，供渲染层一致时间面）。 */
++function fmtHMS(ts) {
++  const d = new Date(Number(ts));
++  if (Number.isNaN(d.getTime())) return String(ts);
++  const p = (n) => String(n).padStart(2, '0');
++  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
++}
++
++const clip = (s, n) => {
++  const t = String(s ?? '');
++  return t.length > n ? t.slice(0, Math.max(0, n - 1)) + '…' : t;
++};
++
++/** 事件 → 时间轴行文本（图标+标签+剪裁 detail；提交行拼 subject）。 */
++function eventRow(e, anchors) {
++  const icon = { file: '📄', 'file-update': '📝', 'task-done': '✅', commit: '🔀', verify: '🔬', warning: '⚠️', archived: '📦' }[e.kind] || '·';
++  let label = e.detail || '';
++  if (e.kind === 'commit') {
++    const a = anchors.find((x) => x.hash === String(e.detail).trim());
++    label = a && a.resolvable
++      ? `${e.detail}  ${clip(a.subject, 56)}`
++      : `${e.detail}（subject 不可解析——hash 失联/他仓）`;
++  } else if (e.kind === 'warning') {
++    label = `${e.rule || 'warning'}  ${clip(e.detail, 64)}`;
++  } else {
++    label = clip(e.detail, 72);
++  }
++  return `${fmtHMS(e.ts)}  ${icon} ${label}`;
++}
++
++/**
++ * 合成渲染（纯函数，接线层 console.log）。
++ * @param {object} args
++ * @param {string} args.change 变更名
++ * @param {Array} args.events 事件流（readWatcherEvents.events）
++ * @param {Array|null} args.tasks parseTaskLines 产物（null=任务面缺失）
++ * @param {Array} args.anchors resolveCommitAnchors 产物
++ * @param {number|null} args.birthTs 诞生锚（工件 frontmatter created_at 毫秒；null=缺）
++ * @param {string|null} args.tier flow-state tier（null=缺/未知）
++ */
++export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }) {
++  const L = [];
++  L.push(`📅 ${change} — 合成时间线（${tier || 'tier 未知'}｜事件流 × tasks.md × git 提交锚）`);
++  L.push('');
++  L.push('── 事件时间轴 ──');
++  if (birthTs != null) L.push(`${fmtHMS(birthTs)}  🁢 变更诞生（工件 frontmatter created_at）`);
++  if (!events || events.length === 0) L.push('（无事件——watcher 未观测到活动）');
++  for (const e of events || []) L.push(eventRow(e, anchors));
++
++  if (tasks) {
++    L.push('');
++    L.push('── 任务面（勾选时刻 ≈ 顺序推断｜tasks.md 描述行 × 提交锚）──');
++    const { times, broken } = inferFlipTimes(events, tasks.length);
++    if (broken) L.push('（计数链断裂或未全覆盖——部分勾选时刻推断不可用，标 ?）');
++    for (let i = 0; i < tasks.length; i++) {
++      const t = tasks[i];
++      const when = t.checked
++        ? (times[i] != null ? `≈${fmtHMS(times[i])}` : '?')
++        : '未勾';
++      const anchor = anchors.filter((a) => a.tokens.includes(t.id)).sort((a, b) => a.ts - b.ts)[0];
++      const ev = anchor ? anchor.hash : (t.checked ? '无提交锚⚠️' : '—');
++      L.push(`${t.id}  ${when.padEnd(10)}  ${clip(t.desc, 44).padEnd(46)}${ev}`);
++    }
++  } else {
++    L.push('');
++    L.push('── 任务面缺失（change 目录无 tasks.md——活跃/归档双路径均未命中）──');
++  }
++
++  const evN = (events || []).length;
++  const commits = anchors.length;
++  const lastTs = evN > 0 ? events[events.length - 1].ts : birthTs;
++  const wall = birthTs != null && lastTs != null ? Math.max(0, Math.round((lastTs - birthTs) / 60000)) : null;
++  const done = tasks ? tasks.filter((t) => t.checked).length : null;
++  L.push('');
++  L.push(`墙钟：${wall != null ? `${wall} 分钟` : '未知'}｜事件 ${evN} 条｜提交 ${commits}｜${tasks ? `任务 ${done}/${tasks.length} 勾选` : '任务面缺失'}`);
++  L.push('注：观测起点≠诞生时刻（watcher 后拉起/单飞锁盲窗）；勾选时刻为顺序推断（事件不记任务 id）；描述行含机器稿截断。');
++  return L.join('\n');
++}
++
++/** change 目录双路径探测（活跃 > 归档）+ tasks.md 读取 → {changeDir, tasksMd}（缺 tasksMd=null）。 */
++export function loadChangeTasks(specBase, change) {
++  const active = join(specBase, 'changes', change);
++  const archived = join(specBase, 'changes', 'archive', change);
++  const dir = [active, archived].find((d) => { try { return readFileSync(join(d, 'tasks.md'), 'utf8') != null } catch { return false } });
++  if (!dir) return { changeDir: null, tasksMd: null };
++  return { changeDir: dir, tasksMd: readFileSync(join(dir, 'tasks.md'), 'utf8') };
++}
++
++/** 诞生锚：change 目录工件 frontmatter created_at（requirements > proposal > design > tasks）。 */
++export function readBirthTs(changeDir) {
++  if (!changeDir) return null;
++  for (const f of ['requirements.md', 'proposal.md', 'design.md', 'tasks.md']) {
++    try {
++      const m = /^created_at:\s*(\S+)/m.exec(readFileSync(join(changeDir, f), 'utf8'));
++      const t = m ? Date.parse(m[1]) : Number.NaN;
++      if (Number.isFinite(t)) return t;
++    } catch { /* 缺件续查 */ }
++  }
++  return null;
++}
++
++export default { parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, loadChangeTasks, readBirthTs };
+diff --git a/test/watcher-timeline.test.mjs b/test/watcher-timeline.test.mjs
+new file mode 100644
+index 00000000..1a968625
+--- /dev/null
++++ b/test/watcher-timeline.test.mjs
+@@ -0,0 +1,139 @@
++/**
++ * watcher-timeline.test.mjs — 合成时间线纯函数组（2026-09-26-watcher-timeline）。
++ *
++ * 覆盖面（零真仓零真 fs——git 经注入面、其余纯数据直构）：
++ *   ① parseTaskLines：勾选/未勾/无冒号/无 id 行不入判；
++ *   ② inferFlipTimes：多拍衔接赋值、逐拍、计数链断裂标 broken、链未全覆盖标 broken、空输入；
++ *   ③ resolveCommitAnchors：注入 gitLook 解析/失联、token 提取（含正文）与去重；
++ *   ④ renderTimeline：三段齐备渲染、任务面缺失降级、hash 失联标注、勾选时刻 ≈ 与 ? 形态。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++
++const {
++  parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline,
++} = await import('../src/timeline.js')
++
++// ───────────────────── parseTaskLines ─────────────────────
++
++test('parseTaskLines：勾选/未勾/无冒号描述/无 id 行不入判', () => {
++  const md = [
++    '# 任务注册表',
++    '- [x] task-01: 完成甲单元',
++    '- [ ] task-02 乙单元无冒号',
++    '- [X] task-03: 大写 X',
++    '- [x] 无 id 的勾选行',
++    '- 普通列表行',
++  ].join('\n')
++  const rows = parseTaskLines(md)
++  assert.equal(rows.length, 3)
++  assert.deepEqual(rows[0], { id: 'task-01', checked: true, desc: '完成甲单元' })
++  assert.deepEqual(rows[1], { id: 'task-02', checked: false, desc: '乙单元无冒号' })
++  assert.deepEqual(rows[2], { id: 'task-03', checked: true, desc: '大写 X' })
++  assert.equal(parseTaskLines(null).length, 0)
++})
++
++// ───────────────────── inferFlipTimes ─────────────────────
++
++const td = (from, to, ts, stage = 'tasks') => ({ ts, kind: 'task-done', stage, detail: `checked ${from}→${to}`, provisional: true })
++
++test('inferFlipTimes：0→2、2→5 衔接多拍按序赋值', () => {
++  const r = inferFlipTimes([td(0, 2, 111), td(2, 5, 222)], 5)
++  assert.equal(r.broken, false)
++  assert.deepEqual(r.times, [111, 111, 222, 222, 222])
++})
++
++test('inferFlipTimes：逐拍 0→1、1→2、2→3 各自时刻', () => {
++  const r = inferFlipTimes([td(0, 1, 111), td(1, 2, 222), td(2, 3, 333)], 3)
++  assert.equal(r.broken, false)
++  assert.deepEqual(r.times, [111, 222, 333])
++})
++
++test('inferFlipTimes：计数链断裂（0→2 后 3→5）标 broken 且不再赋值', () => {
++  const r = inferFlipTimes([td(0, 2, 111), td(3, 5, 222)], 5)
++  assert.equal(r.broken, true)
++  assert.deepEqual(r.times, [111, 111, null, null, null])
++})
++
++test('inferFlipTimes：链未覆盖全部任务（勾选面小于任务面）标 broken', () => {
++  const r = inferFlipTimes([td(0, 2, 111)], 4)
++  assert.equal(r.broken, true)
++  assert.deepEqual(r.times, [111, 111, null, null])
++})
++
++test('inferFlipTimes：design 阶段翻格不入任务面推断；空输入/零任务不抛', () => {
++  const r = inferFlipTimes([td(0, 1, 111, 'design'), td(0, 1, 222)], 1)
++  assert.equal(r.broken, false)
++  assert.deepEqual(r.times, [222])
++  assert.deepEqual(inferFlipTimes([], 3), { times: [null, null, null], broken: false })
++  assert.deepEqual(inferFlipTimes([td(0, 1, 1)], 0), { times: [], broken: false })
++})
++
++// ───────────────────── resolveCommitAnchors ─────────────────────
++
++test('resolveCommitAnchors：注入 gitLook 解析 subject/token（含正文 token 去重）', () => {
++  const gitLook = (h) => h === 'aaa1111'
++    ? { hash: h, dateISO: '2026-09-25T15:33:51Z', message: 'fix(cli): 标题行\n\n正文提到 task-01 与 task-02，task-01 重复\n' }
++    : null
++  const anchors = resolveCommitAnchors([
++    { ts: 111, kind: 'commit', stage: null, detail: 'aaa1111', provisional: true },
++    { ts: 222, kind: 'commit', stage: null, detail: 'fff9999', provisional: true },
++    { ts: 333, kind: 'file-update', stage: 'design', detail: 'design.md 内容变更', provisional: true },
++  ], gitLook)
++  assert.equal(anchors.length, 2)
++  assert.equal(anchors[0].resolvable, true)
++  assert.equal(anchors[0].subject, 'fix(cli): 标题行')
++  assert.deepEqual(anchors[0].tokens, ['task-01', 'task-02'])
++  assert.equal(anchors[1].resolvable, false)
++  assert.equal(anchors[1].subject, null)
++})
++
++test('resolveCommitAnchors：gitLook 抛异常按失联容错', () => {
++  const anchors = resolveCommitAnchors([{ ts: 1, kind: 'commit', stage: null, detail: 'abc1234', provisional: true }], () => { throw new Error('boom') })
++  assert.equal(anchors[0].resolvable, false)
++})
++
++// ───────────────────── renderTimeline ─────────────────────
++
++test('renderTimeline：三段齐备——诞生/时间轴/任务面/墙钟/诚实注', () => {
++  const events = [
++    { ts: new Date('2026-09-25T23:24:49').getTime(), kind: 'file', stage: 'requirements', detail: 'requirements.md 出现', provisional: true },
++    td(0, 3, new Date('2026-09-25T23:33:51').getTime()),
++    { ts: new Date('2026-09-25T23:33:52').getTime(), kind: 'warning', stage: null, rule: 'fake-check', severity: 'warning', detail: 'task-03 无对应提交', provisional: true },
++    { ts: new Date('2026-09-25T23:34:14').getTime(), kind: 'commit', stage: null, detail: 'aaa1111', provisional: true },
++    { ts: new Date('2026-09-26T00:03:20').getTime(), kind: 'archived', stage: 'archive', detail: 'change 目录已移入 archive', provisional: true },
++  ]
++  const anchors = resolveCommitAnchors(events, () => ({ hash: 'aaa1111', dateISO: '', message: 'fix: 标题（task-01 task-02）' }))
++  const tasks = [
++    { id: 'task-01', checked: true, desc: '甲单元' },
++    { id: 'task-02', checked: true, desc: '乙单元' },
++    { id: 'task-03', checked: true, desc: '丙单元无锚' },
++  ]
++  const out = renderTimeline({ change: 'demo', events, tasks, anchors, birthTs: new Date('2026-09-25T23:24:49').getTime(), tier: 'thin' })
++  assert.match(out, /📅 demo — 合成时间线（thin/);
++  assert.match(out, /🁢 变更诞生/);
++  assert.match(out, /✅ checked 0→3/);
++  assert.match(out, /⚠️ fake-check/);
++  assert.match(out, /aaa1111  fix: 标题/);
++  assert.match(out, /📦 change 目录已移入 archive/);
++  assert.match(out, /task-01\s+≈23:33.*甲单元.*aaa1111/);
++  assert.match(out, /task-03\s+≈23:33.*丙单元无锚.*无提交锚⚠️/);
++  assert.match(out, /勾选时刻为顺序推断/);
++  assert.match(out, /事件 5 条｜提交 1｜任务 3\/3/);
++})
++
++test('renderTimeline：任务面缺失降级标注；hash 失联只显 hash', () => {
++  const events = [{ ts: new Date('2026-09-25T23:33:51').getTime(), kind: 'commit', stage: null, detail: 'fff9999', provisional: true }]
++  const anchors = resolveCommitAnchors(events, () => null)
++  const out = renderTimeline({ change: 'demo', events, tasks: null, anchors, birthTs: null, tier: null })
++  assert.match(out, /任务面缺失/);
++  assert.match(out, /fff9999（subject 不可解析/);
++  assert.match(out, /tier 未知/);
++  assert.match(out, /墙钟：未知/);
++})
++
++test('renderTimeline：无事件流空态不抛', () => {
++  const out = renderTimeline({ change: 'demo', events: [], tasks: [{ id: 'task-01', checked: false, desc: 'x' }], anchors: [], birthTs: null, tier: 'thin' })
++  assert.match(out, /无事件——watcher 未观测到活动/);
++  assert.match(out, /task-01\s+未勾/);
++})
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline/design.md b/.sillyspec/changes/2026-09-26-watcher-timeline/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:13:30.152Z
++---
++# 设计记录（Design Record）— 2026-09-26-watcher-timeline
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++新建 src/timeline.js（纯函数合成器）+ index.js watcher 子命令 `timeline`（与 alerts 同族只读出口）。数据三源：①watcher 事件流 jsonl（readWatcherEvents 既有 API）②change 目录 tasks.md 勾选行（活跃 .sillyspec/changes/<名>/ 与归档 .sillyspec/changes/archive/<名>/ 双路径探测）③git 提交锚（事件流里 kind=commit 的短 hash 逐个 git log 解析出主题+时间+task token）。渲染分三段：事件时间轴（诞生锚取工件 frontmatter created_at，事件按 kind 图标+剪裁 detail）、任务面表格（task-NN × 描述行 × 勾选拍 × 提交锚）、墙钟统计（aggregateStageTiming 复用）。勾选时刻按翻格顺序推断（事件只记计数不记 id）并在表头显式标注「≈ 顺序推断」。选此方案：全部数据源是在场既有留痕，零新落盘、零协议负担；alerts 先例证明 watcher 子命令是低摩擦出口。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新 CLI 子命令 `sillyspec watcher timeline --change <名> [--runtime-root <路径>]`（index.js watcher case 子命令白名单 alerts→{alerts,timeline}）。新模块 src/timeline.js 导出纯函数：parseTaskLines(tasksMd)→[{id,desc,checked}]、inferFlipTimes(events,total)→Map<序号,ts>、resolveCommitAnchors(events,gitLook)→[{hash,ts,subject,tokens}]（gitLook 注入面，测试零真 git）、renderTimeline({...})→string。无文件写入、无 db、无平台推送、不改 watcher.js。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：jsonl append-only 单调；时间轴按 ts 原序渲染不重排；翻格顺序推断以事件到达序为准，跨拍乱序（理论上不发生——单写者）不影响计数守恒校验（from 与上一 to 衔接才入推断，断裂标「推断不可用」）。
++2. 并发写：只读命令与 watcher 写侧并发时坏行/半行由 readWatcherEvents 既有容差跳过；渲染瞬间快照语义，无锁无竞争。
++3. 切换/生命周期：命令是无状态只读，中断即弃无残留；对已归档变更，事件流与 change 目录（archive 路径）都还在盘上，随时可重渲染；活跃变更渲染时 tasks.md 可能正被勾选——渲染的是当下快照，可重跑。
++4. 作用域：--runtime-root 解析与 alerts/spawnWatcher 同源（resolveRuntimeRoot 单点）；change 名经 assertSafeChangeName；事件流按变更名分文件不串台；git 解析锚定当前仓（--runtime-root 指他处时提交锚可能失联——降级为只显 hash 并标注）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=推断面的诚实性：勾选时刻是顺序推断（事件不记 id）、描述行继承机器稿 60 字截断、提交锚依赖仓内 hash 可达（合并重定基后失联降级只显 hash）。对策是显式标注：表头「≈」+ 尾注列数据源与盲区（观测起点≠诞生时刻、单飞锁盲窗）——宁可标注粗糙也不冒充精确。放弃的方案：①改 watcher 事件流带 checkedTasks id 明细——改写入面格式是侵入性变更，且历史流已定格无法回填，收益仅推断精度；②从 DB progress 库取阶段时间——thin 变更状态不落 DB（红线），无数据可取；③agent 干活时自述留痕——协议负担，违背 thin 立身之本（那是完整流程 --output 的能力面）。
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline/flow-state.yaml b/.sillyspec/changes/2026-09-26-watcher-timeline/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: ce61c1924e5034715412277f51cb0f6307b8ce28
++updatedAt: '2026-09-26T07:21:39.344Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js19)（14.1s）
++  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-RQpV7w\.sillyspec\.runtime\verify-runs\20260926072102\test-result.json｜lint:
++  passed ← npm run lint（35.2s）｜门文件 12 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline/proposal.md b/.sillyspec/changes/2026-09-26-watcher-timeline/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline/proposal.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:13:30.151Z
++---
++# 提案书（Proposal）— 2026-09-26-watcher-timeline
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:367e1ae70f7c98c8bd3b0ae5b0c9e259a94b0fca24f227a0157652b1f0565b0c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++任务原话转写：动机/背景：轻量变更无阶段时间线（平台 UI 的步骤时间线只覆盖完整流程的 --done 步骤面）；watcher 事件流 + tasks.md 描述行 + git 提交锚三源真实留痕已齐，缺一个只读合成出口。前序姊妹变更 thin-check-cadence 已落勾选节奏 advisory（行为矫正面），本变更补渲染面：把留痕合成人类可读时间线。用户已在会话中看过并认可目标渲染形态（事件时间轴 + 任务面表格 + 墙钟统计）。
++成功标准：
++- sillyspec watcher timeline --change <名> 输出合成时间线：事件时间轴（工件/勾选/提交/告警/归档）+ 任务面表格（task-NN × tasks.md 描述行 × 提交锚）+ 墙钟统计
++- 归档变更与活跃变更都能渲染（change 目录双路径探测 active/archive）
++- 事件流缺失/任务面缺失时降级渲染不抛错（fail-open，缺哪块标注哪块）
++- 任务勾选时刻按翻格顺序推断并显式标注推断语义（事件流只记计数不记 id——诚实面）
++- 合成逻辑为纯函数（解析/推断/锚定/渲染）并有单元测试；npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:a7814bfc32b3475bc9bfc3fd96d1eb01fcbc121973e473141deea3cc50a8e8dc:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. sillyspec watcher timeline --change <名> 输出合成时间线：事件时间轴（工件/勾选/提交/告警/归档）+ 任务面表格（task-NN × tasks.md 描述行 × 提交锚）+ 墙钟统计
++2. 归档变更与活跃变更都能渲染（change 目录双路径探测 active
++3. archive）
++4. 事件流缺失
++5. 任务面缺失时降级渲染不抛错（fail-open，缺哪块标注哪块）
++6. 任务勾选时刻按翻格顺序推断并显式标注推断语义（事件流只记计数不记 id——诚实面）
++7. 合成逻辑为纯函数（解析/推断/锚定/渲染）并有单元测试
++8. npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:c906399f2e3cc12394de81e970f672fffca8daca1e4aff2a65e612e91517e967:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline 留痕重锚 -->
++1. sillyspec watcher timeline --change <名> 输出合成时间线：事件时间轴（工件/勾选/提交/告警/归档）+ 任务面表格（task-NN × tasks.md 描述行 × 提交锚）+ 墙钟统计
++2. 归档变更与活跃变更都能渲染（change 目录双路径探测 active
++3. archive）
++4. 事件流缺失
++5. 任务面缺失时降级渲染不抛错（fail-open，缺哪块标注哪块）
++6. 任务勾选时刻按翻格顺序推断并显式标注推断语义（事件流只记计数不记 id——诚实面）
++7. 合成逻辑为纯函数（解析/推断/锚定/渲染）并有单元测试
++8. npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline/requirements.md b/.sillyspec/changes/2026-09-26-watcher-timeline/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline/requirements.md
+@@ -0,0 +1,76 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:13:30.152Z
++---
++# 需求规格（Requirements）— 2026-09-26-watcher-timeline
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 合成时间线输出
++Given 一个变更存在 watcher 事件流与 tasks.md（活跃或归档）
++When 执行 sillyspec watcher timeline --change <名>
++Then 输出三段合成时间线：事件时间轴（诞生锚+工件/勾选/提交/告警/归档事件，本地时间到秒）、任务面表格（task-NN × tasks.md 描述行 × 勾选拍 × 提交锚 hash）、墙钟统计（复用 aggregateStageTiming 聚合）
++
++### FR-02: 归档与活跃双态渲染
++Given 变更目录在 .sillyspec/changes/<名>/（活跃）或 .sillyspec/changes/archive/<名>/（归档）
++When 执行同命令
++Then 双路径探测均能取到 tasks.md 渲染；两处都在时以活跃目录为准
++
++### FR-03: 降级渲染 fail-open
++Given 事件流缺失、tasks.md 缺失、或提交 hash 在当前仓不可解析
++When 执行同命令
++Then 不抛错：缺事件流时给出指引退码 2；缺任务面时时间轴照渲并标注「任务面缺失」；hash 失联时只显 hash 并标注「subject 不可解析」
++
++### FR-04: 勾选时刻推断的诚实标注
++Given 事件流 task-done 只记计数不记任务 id
++When 渲染任务面表格
++Then 勾选时刻按翻格顺序推断（0→2 拍赋前两个任务），表头显式标注「≈ 顺序推断」，计数链断裂（from≠上一 to）时该段标「推断不可用」
++
++### FR-05: 纯函数与单元测试
++Given parseTaskLines / inferFlipTimes / resolveCommitAnchors / renderTimeline 为无副作用纯函数（git 经注入面）
++When 输入合法/缺失/坏行/断裂计数链的合成数据
++Then 行为由 test/watcher-timeline.test.mjs 用例钉住
++
++### FR-06: 套件实测全绿
++Given 本变更触及 src/ 与 test/
++When 运行 npm run test:core 与 npm run lint
++Then 全部通过
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: sillyspec watcher timeline --change <名> 输出合成时间线：事件时间轴（工件/勾选/提交/告警/归档）+ 任务面表格（task-NN × tasks.md 描述行 × 提交锚）+ 墙钟统计
++FR-02: 归档变更与活跃变更都能渲染（change 目录双路径探测 active
++FR-03: archive）
++FR-04: 事件流缺失
++FR-05: 任务面缺失时降级渲染不抛错（fail-open，缺哪块标注哪块）
++FR-06: 任务勾选时刻按翻格顺序推断并显式标注推断语义（事件流只记计数不记 id——诚实面）
++FR-07: 合成逻辑为纯函数（解析/推断/锚定/渲染）并有单元测试
++FR-08: npm run test:core 与 npm run lint 实测全绿
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs「renderTimeline」用例组：三段齐备时输出含时间轴行/任务行/统计行（渲染判定面）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：双路径探测是 index.js 接线层 I/O（changeDir 解析传参），纯函数接收已解析路径；路径探测无独立逻辑分支可断言（join 两次 existsSync 二选一），由 FR-01 渲染面与 CLI 手动实测覆盖（收口前真实归档变更跑通为证）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs：任务面缺失标注、hash 失联只显 hash、坏行事件容错用例
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs「inferFlipTimes」用例组：0→2/2→5 顺序赋值、0→1 逐拍、计数链断裂标不可用
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs 全文件（parseTaskLines 勾选行/未勾行/无 id 行；resolveCommitAnchors 注入 git 替身）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：套件本身即验证——commands.test/lint 亲测是收口门执行动作
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录切分重复槽——对应本变更 FR-05（纯函数与单元测试），绑定见上（test/watcher-timeline.test.mjs 全文件）
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：机器摘录切分重复槽——对应本变更 FR-06（套件实测全绿），绑定见上（收口门亲测）
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline/tasks.md b/.sillyspec/changes/2026-09-26-watcher-timeline/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline/tasks.md
+@@ -0,0 +1,13 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:13:30.153Z
++---
++# 任务注册表（Tasks）— 2026-09-26-watcher-timeline
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: src/timeline.js 纯函数组合成器（parseTaskLines / inferFlipTimes / resolveCommitAnchors / renderTimeline，git 注入面）+ test/watcher-timeline.test.mjs 全量用例
++- [x] task-02: index.js 接线 watcher timeline 子命令（白名单+help+双路径 changeDir 探测+降级退出码）+ test:core 清单纳入新测试文件
++- [x] task-03: 真实归档变更（2026-09-25-cli-protocol-trust）实测渲染验收 + npm run test:core 与 lint 全绿

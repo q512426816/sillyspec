@@ -1,0 +1,26 @@
+{
+  "change": "2026-09-27-knowledge-digest",
+  "baseline": "cf1ec5e82c9445d6db2b47a0058c65fbeff492d8",
+  "head": "e2da65a0cafddef2c4c550f3f768428b3f589c06",
+  "files": [
+    ".sillyspec/changes/2026-09-27-knowledge-digest/design.md",
+    ".sillyspec/changes/2026-09-27-knowledge-digest/flow-state.yaml",
+    ".sillyspec/changes/2026-09-27-knowledge-digest/proposal.md",
+    ".sillyspec/changes/2026-09-27-knowledge-digest/requirements.md",
+    ".sillyspec/changes/2026-09-27-knowledge-digest/tasks.md",
+    "src/fr-index.js",
+    "src/index.js",
+    "src/knowledge-digest.js",
+    "src/stages/knowledge.js",
+    "test/knowledge-digest.test.mjs"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 469,
+    "deletions": 21
+  },
+  "savedAt": "2026-09-27T05:32:44.407Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "39cf4d11092106675ddb1f2c38466c8186c5b88fe0209eaa4e5e3145fcd528f9",
+  "patchStatus": "ok"
+}

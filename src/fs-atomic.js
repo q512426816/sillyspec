@@ -7,7 +7,7 @@
  * 注意：DB 持久化由 node:sqlite 引擎承担（提交即落盘 sillyspec.db + WAL 侧车），
  * 不经此处的 writeAtomicSync；sillyspec.db 不走原子写改名。
  */
-import { renameSync, unlinkSync, openSync, writeSync, fsyncSync, closeSync, statSync } from 'fs';
+import { renameSync, unlinkSync, openSync, writeSync, fsyncSync, closeSync, statSync, mkdirSync } from 'fs';
 import { randomBytes } from 'node:crypto';
 import { dirname, basename, join } from 'path';
 
@@ -64,6 +64,10 @@ export function renameSyncRetry(from, to, retries = 5) {
  */
 export function writeAtomicSync(filePath, content) {
   const dir = dirname(filePath);
+  // 父目录保位（坑 thin-flow-adopt-edge-cases 坑2，2026-09-25 实证）：adopt 收编补件等
+  // 「目录刚建、.runtime 尚不存在」的写点直接 ENOENT——原子写的契约是「写出完整文件」，
+  // 缺父目录按 mkdir -p 语义创建（已存在零成本）；权限类失败仍如实抛错。
+  try { mkdirSync(dir, { recursive: true }); } catch { /* 创建失败留给 openSync 抛真实原因 */ }
   // pid + 随机段双因子：Windows PID 重用激进，两进程可能撞同 pid，tmp 名碰撞 rename 互相覆盖。
   // crypto 随机源（Math.random 可预测，tmp 名被预猜中有 symlink 预放置理论面）
   const rnd = randomBytes(6).toString('hex');

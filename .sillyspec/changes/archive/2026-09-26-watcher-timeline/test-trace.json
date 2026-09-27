@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-watcher-timeline",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-watcher-timeline:flow:FR-01",
+      "tests": [
+        "test/watcher-timeline.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-watcher-timeline"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-watcher-timeline:flow:FR-03",
+      "tests": [
+        "test/watcher-timeline.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-watcher-timeline"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-26-watcher-timeline:flow:FR-04",
+      "tests": [
+        "test/watcher-timeline.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-watcher-timeline"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-26-watcher-timeline:flow:FR-05",
+      "tests": [
+        "test/watcher-timeline.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-watcher-timeline"
+    }
+  ]
+}

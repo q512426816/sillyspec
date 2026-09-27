@@ -1,9 +1,0 @@
-tier: thin
-legacy_fallback: false
-substeps: {}
-born_face: thin
-with_tasks: false
-review_force: null
-baseline_commit: cf1ec5e82c9445d6db2b47a0058c65fbeff492d8
-updatedAt: '2026-09-27T05:23:04.926Z'
-

@@ -1,0 +1,25 @@
+{
+  "change": "2026-09-27-confirm-on-use",
+  "baseline": "d3f3852daf7858e8f6326330fd2d7588c1fdd71d",
+  "head": "c3859534f48098d1a1fc64fbb3192a8b578a1b62",
+  "files": [
+    ".sillyspec/changes/2026-09-27-confirm-on-use/design.md",
+    ".sillyspec/changes/2026-09-27-confirm-on-use/flow-state.yaml",
+    ".sillyspec/changes/2026-09-27-confirm-on-use/proposal.md",
+    ".sillyspec/changes/2026-09-27-confirm-on-use/requirements.md",
+    ".sillyspec/changes/2026-09-27-confirm-on-use/tasks.md",
+    "src/flow.js",
+    "src/fr-index.js",
+    "src/index.js",
+    "test/confirm-on-use.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 307,
+    "deletions": 24
+  },
+  "savedAt": "2026-09-27T09:07:38.492Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "9090259b4730b08954ef1fe723c14e1e9ccb0f896ee74d9fc4ec5d62cf9c82c7",
+  "patchStatus": "ok"
+}

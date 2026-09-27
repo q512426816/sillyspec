@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-knowledge-digest",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-knowledge-digest:flow:FR-01",
+      "tests": [
+        "test/knowledge-digest.test.mjs「① 四信号阈值」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-knowledge-digest"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-knowledge-digest:flow:FR-02",
+      "tests": [
+        "test/knowledge-digest.test.mjs「④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-knowledge-digest"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-27-knowledge-digest:flow:FR-03",
+      "tests": [
+        "test/knowledge-digest.test.mjs「② suggestDomainFromFiles」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-knowledge-digest"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-27-knowledge-digest:flow:FR-04",
+      "tests": [
+        "test/knowledge-digest.test.mjs「①」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-knowledge-digest"
+    }
+  ]
+}

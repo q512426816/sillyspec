@@ -152,8 +152,14 @@ export function resolveSpecDir(cwd, opts = {}) {
     // 防止 home 子目录遍历经过 home 误命中 ~/.sillyspec；
     // passedHome：经过 home 后不再检查（覆盖遍历到真实 home 的场景）。
     if (!(passedHome || (dir === home && originBelowHome))) {
-      const candidate = join(dir, '.sillyspec')
-      if (existsSync(candidate)) return candidate
+      // 嵌套回环防护（坑 2026-09-27-spec-sync-413 根因2，2026-08-15 遗留实证）：
+      // .sillyspec 的合法布局恒为 <root>/.sillyspec（.runtime 在其内层），<…>/.runtime/
+      // .sillyspec 是历史残骸形态（内部常再递归 .runtime/，目录遍历/状态采集进圈即卡死
+      // 30s 超时）——该层候选不判命中，继续上溯真根。
+      if (basename(dir) !== '.runtime') {
+        const candidate = join(dir, '.sillyspec')
+        if (existsSync(candidate)) return candidate
+      }
     }
     if (dir === home) passedHome = true
     const parent = dirname(dir)
@@ -853,6 +859,26 @@ async function raceWithAbort(op, timeoutMs = resolveSyncTotalTimeoutMs()) {
 // 局部复制正则保持轻载——改形态时三处同改（prompt.js 经本导出消费，勿再复制一份）。
 export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
 
+// 未连接平台显眼告警（坑 2026-09-27-spec-sync-413-and-nested-runtime：主仓 local.yaml 无
+// platform 段 → --done 自动同步静默 no-op，用户误判「已同步」——平台断档 8 天才发现）。
+// 节流每日至多一次：本地独立使用是合法默认状态（sync.js 头注「不每步」契约保持），告警
+// 只破「静默」不变骚扰；marker 落 runtimeRoot（跨进程同源），读写失败不拦告警本身。
+function warnPlatformNotConnectedDaily(cwd, platformOpts = {}) {
+  const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
+  try {
+    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
+    const marker = join(runtimeRoot, 'platform-not-connected-notice.date')
+    const today = new Date().toISOString().slice(0, 10)
+    if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === today) return
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(marker, today, 'utf8')
+  } catch { /* marker 失败仍告警（宁可重复不静默） */ }
+  // 走 stdout 而非 stderr：advisory 性质；且顶层别名 vs run 前缀的字节级 stderr 平价
+  // 契约（cli-top-level-aliases）不被首报/复报差异打破。
+  console.log('⚠️ [spec-sync] 未连接平台——本命令的进度与 spec 树不会同步到平台（平台面板将停更）。')
+  console.log('   如需同步：sillyspec platform connect <平台地址> --token <token> 连接一次，此后 --done 自动增量同步；本地独立使用可忽略（本提示每日至多一次）。')
+}
+
 export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
   // ── 后台异步化（2026-09-20 用户反馈：--done 被网络尾巴拖住分钟级）──
   // 默认把同步整体挪进 detached 后台子进程：17 个调用点全部 fire-and-forget，但进程
@@ -873,7 +899,14 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
         return
       }
       if (r.status === 'coalesced') return // 活后台轮在跑，本轮状态已并入其下一轮
-      // not-connected → 落回 inline（内部静默 no-op，与旧行为一致）
+      // not-connected → 完成时刻显眼告警（每日一次，坑 2026-09-27-spec-sync-413；opts.completion
+      // 由 complete.js 步进/收口调用点传——渲染/诊断类调用点不告警，防顶层别名 vs run 前缀的
+      // 字节级输出平价契约被节流态首报/复报差异打破）+ 落回 inline（内部静默 no-op，旧行为）
+      if (r.status === 'not-connected') {
+        if (opts.completion) {
+          try { warnPlatformNotConnectedDaily(cwd, platformOpts) } catch { /* 告警失败不阻断 */ }
+        }
+      }
     } catch { /* 后台化失败降级 inline（best-effort 契约不变） */ }
   }
   // 平台模式不再整体跳过（2026-08-26 用户决策）：上行回传（进度 + 四件套 + spec 树）

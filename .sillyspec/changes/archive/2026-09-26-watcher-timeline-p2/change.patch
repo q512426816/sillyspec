@@ -1,0 +1,368 @@
+diff --git a/src/timeline.js b/src/timeline.js
+index ec7170a3..367dfa79 100644
+--- a/src/timeline.js
++++ b/src/timeline.js
+@@ -12,6 +12,7 @@
+  */
+ import { readFileSync } from 'fs';
+ import { join } from 'path';
++import { aggregateStageTiming } from './watcher.js';
+ 
+ /** tasks.md 勾选行解析：`- [x] task-01: 描述` / `- [ ] task-02 无冒号描述`。 */
+ export function parseTaskLines(tasksMd) {
+@@ -25,7 +26,9 @@ export function parseTaskLines(tasksMd) {
+ 
+ /**
+  * 翻格顺序推断（FR-04）：task-done（stage='tasks'）事件序列 → 每任务序号的勾选时刻。
+- * 计数链衔接（from === 游标）才赋值；断裂标 broken（此后不再赋值——不编造）。
++ * 计数链衔接（from === 游标）才赋值；**中段**断裂（from ≠ 游标）标 broken 并停止赋值。
++ * 尾部未覆盖（链完整但拍数少于任务数——在途变更未勾完）不标 broken（2026-09-26-watcher-timeline-p2
++ * 语义收窄：那是自然态不是断裂；「已勾任务缺时刻」由渲染层按事实单独标注）。
+  * @returns {{times:(number|null)[], broken:boolean}} times 按任务序号索引；未推断到 = null。
+  */
+ export function inferFlipTimes(events, total) {
+@@ -42,7 +45,6 @@ export function inferFlipTimes(events, total) {
+     for (let i = from; i < to && i < times.length; i++) times[i] = e.ts;
+     cursor = to;
+   }
+-  if (cursor < times.length && times.some((t) => t != null)) broken = true; // 链未覆盖全部已勾——尾部断
+   return { times, broken };
+ }
+ 
+@@ -108,6 +110,15 @@ function eventRow(e, anchors) {
+   return `${fmtHMS(e.ts)}  ${icon} ${label}`;
+ }
+ 
++/** 秒数 → 人类可读时长（<60s 秒、<60h 分、以上时分）。 */
++function fmtDur(ms) {
++  const s = Math.max(0, Math.round(ms / 1000));
++  if (s < 60) return `${s}s`;
++  const m = Math.floor(s / 60);
++  if (m < 60) return `${m}min`;
++  return `${Math.floor(m / 60)}h${m % 60}min`;
++}
++
+ /**
+  * 合成渲染（纯函数，接线层 console.log）。
+  * @param {object} args
+@@ -131,7 +142,8 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
+     L.push('');
+     L.push('── 任务面（勾选时刻 ≈ 顺序推断｜tasks.md 描述行 × 提交锚）──');
+     const { times, broken } = inferFlipTimes(events, tasks.length);
+-    if (broken) L.push('（计数链断裂或未全覆盖——部分勾选时刻推断不可用，标 ?）');
++    if (broken) L.push('（计数链中段断裂——断裂点后勾选时刻推断不可用，标 ?）');
++    if (tasks.some((t, i) => t.checked && times[i] == null)) L.push('（已勾任务缺推断时刻——观测盲窗/水位丢失，标 ?）');
+     for (let i = 0; i < tasks.length; i++) {
+       const t = tasks[i];
+       const when = t.checked
+@@ -149,10 +161,14 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
+   const evN = (events || []).length;
+   const commits = anchors.length;
+   const lastTs = evN > 0 ? events[events.length - 1].ts : birthTs;
+-  const wall = birthTs != null && lastTs != null ? Math.max(0, Math.round((lastTs - birthTs) / 60000)) : null;
++  const wall = birthTs != null && lastTs != null ? Math.max(0, lastTs - birthTs) : null;
+   const done = tasks ? tasks.filter((t) => t.checked).length : null;
++  const stages = aggregateStageTiming(events || []);
+   L.push('');
+-  L.push(`墙钟：${wall != null ? `${wall} 分钟` : '未知'}｜事件 ${evN} 条｜提交 ${commits}｜${tasks ? `任务 ${done}/${tasks.length} 勾选` : '任务面缺失'}`);
++  L.push(`墙钟：${wall != null ? fmtDur(wall) : '未知'}｜事件 ${evN} 条｜提交 ${commits}｜${tasks ? `任务 ${done}/${tasks.length} 勾选` : '任务面缺失'}`);
++  if (stages.length > 0) {
++    L.push(`阶段墙钟：${stages.map((s) => `${s.stage} ${fmtDur(s.durationMs)}`).join('｜')}`);
++  }
+   L.push('注：观测起点≠诞生时刻（watcher 后拉起/单飞锁盲窗）；勾选时刻为顺序推断（事件不记任务 id）；描述行含机器稿截断。');
+   return L.join('\n');
+ }
+diff --git a/test/watcher-timeline.test.mjs b/test/watcher-timeline.test.mjs
+index 1a968625..1425ef38 100644
+--- a/test/watcher-timeline.test.mjs
++++ b/test/watcher-timeline.test.mjs
+@@ -9,9 +9,12 @@
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
+ 
+ const {
+-  parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline,
++  parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, loadChangeTasks,
+ } = await import('../src/timeline.js')
+ 
+ // ───────────────────── parseTaskLines ─────────────────────
+@@ -55,9 +58,9 @@ test('inferFlipTimes：计数链断裂（0→2 后 3→5）标 broken 且不再
+   assert.deepEqual(r.times, [111, 111, null, null, null])
+ })
+ 
+-test('inferFlipTimes：链未覆盖全部任务（勾选面小于任务面）标 broken', () => {
++test('inferFlipTimes：链完整但未覆盖全部任务（在途未勾完）不标 broken（P2 语义收窄）', () => {
+   const r = inferFlipTimes([td(0, 2, 111)], 4)
+-  assert.equal(r.broken, true)
++  assert.equal(r.broken, false)
+   assert.deepEqual(r.times, [111, 111, null, null])
+ })
+ 
+@@ -120,6 +123,21 @@ test('renderTimeline：三段齐备——诞生/时间轴/任务面/墙钟/诚
+   assert.match(out, /task-03\s+≈23:33.*丙单元无锚.*无提交锚⚠️/);
+   assert.match(out, /勾选时刻为顺序推断/);
+   assert.match(out, /事件 5 条｜提交 1｜任务 3\/3/);
++  assert.match(out, /阶段墙钟：.*requirements.*tasks.*archive/, '逐阶段墙钟（aggregateStageTiming 复用）');
++  assert.match(out, /墙钟：38min/, '总墙钟 fmtDur 格式（取整分）');
++})
++
++test('renderTimeline：已勾任务缺推断时刻 → ? 与专门注记（非笼统断裂注）', () => {
++  const events = [td(0, 2, new Date('2026-09-25T23:33:51').getTime())]
++  const tasks = [
++    { id: 'task-01', checked: true, desc: '甲' },
++    { id: 'task-02', checked: true, desc: '乙' },
++    { id: 'task-03', checked: true, desc: '丙——观测盲窗内勾选' },
++  ]
++  const out = renderTimeline({ change: 'demo', events, tasks, anchors: [], birthTs: null, tier: 'thin' })
++  assert.match(out, /已勾任务缺推断时刻——观测盲窗\/水位丢失/);
++  assert.doesNotMatch(out, /计数链中段断裂/);
++  assert.match(out, /task-03\s+\?/);
+ })
+ 
+ test('renderTimeline：任务面缺失降级标注；hash 失联只显 hash', () => {
+@@ -137,3 +155,42 @@ test('renderTimeline：无事件流空态不抛', () => {
+   assert.match(out, /无事件——watcher 未观测到活动/);
+   assert.match(out, /task-01\s+未勾/);
+ })
++
++// ───────────────────── loadChangeTasks（tmpdir 双路径探测） ─────────────────────
++
++test('loadChangeTasks：活跃优先于归档', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
++  try {
++    writeFileSync(join(root, 'active.md'), 'x', 'utf8') // 占位防误删空目录
++    const active = join(root, 'changes', 'demo')
++    const archived = join(root, 'changes', 'archive', 'demo')
++    mkdirSync(active, { recursive: true })
++    mkdirSync(archived, { recursive: true })
++    writeFileSync(join(active, 'tasks.md'), '- [ ] task-01: 活跃面\n', 'utf8')
++    writeFileSync(join(archived, 'tasks.md'), '- [ ] task-01: 归档面\n', 'utf8')
++    const r = loadChangeTasks(root, 'demo')
++    assert.equal(r.changeDir, active)
++    assert.match(r.tasksMd, /活跃面/)
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('loadChangeTasks：仅归档在场时回退归档', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
++  try {
++    const archived = join(root, 'changes', 'archive', 'demo')
++    mkdirSync(archived, { recursive: true })
++    writeFileSync(join(archived, 'tasks.md'), '- [ ] task-01: 归档面\n', 'utf8')
++    const r = loadChangeTasks(root, 'demo')
++    assert.equal(r.changeDir, archived)
++    assert.match(r.tasksMd, /归档面/)
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('loadChangeTasks：双缺失返回 null', () => {
++  const root = mkdtempSync(join(tmpdir(), 'wt-tl-'))
++  try {
++    const r = loadChangeTasks(root, 'nope')
++    assert.equal(r.changeDir, null)
++    assert.equal(r.tasksMd, null)
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline-p2/design.md b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/design.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:28:26.622Z
++---
++# 设计记录（Design Record）— 2026-09-26-watcher-timeline-p2
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++2026-09-26-watcher-timeline 评审 P2 清偿（先例 3eb3bfbf 模式）：①inferFlipTimes 语义修正——broken 仅指中段计数不衔接（from≠游标即停），尾部未覆盖是在途变更的自然态不再误标；「已勾任务缺推断时刻」标注移到 renderTimeline 层按事实逐任务标 ? 并单独注记；②墙钟统计真实复用 watcher 的 aggregateStageTiming（主变更 design 原承诺）——逐阶段 first→last 事件差输出；③loadChangeTasks 补 tmpdir 用例钉双路径探测（活跃>归档、归档回退、双缺失 null）——修正主变更 FR-02 豁免理由与代码事实不符。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++src/timeline.js：inferFlipTimes 返回语义收窄（broken=仅中段断裂）；renderTimeline 输出面新增「阶段墙钟」行（aggregateStageTiming 产物）与已勾缺时刻注记；新增 import { aggregateStageTiming } from './watcher.js'（只读复用，不改 watcher）。CLI 命令面无变化（同命令输出更准）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：语义修正后 broken 判定仍只依赖事件到达序的单向游标（与主变更同机制）；逐阶段墙钟聚合按事件 min/max，不依赖事件间顺序。
++2. 并发写：只读命令，渲染瞬间快照；阶段聚合消费同一内存事件清单，无二次读盘无竞争。
++3. 切换/生命周期：无状态纯函数修正，无生命周期面（同主变更）。
++4. 作用域：aggregateStageTiming 为 watcher.js 既有稳定导出（其测试已在 test:core），import 不引入新作用域；其余同主变更。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险=语义修正引发回归——主变更有用例钉住旧「尾部标 broken」行为，需同步改期望（该用例钉的正是误标行为，改期望即清偿本体）。放弃的方案：inferFlipTimes 直接收 tasks 勾选态做尾部判断——把渲染关注度混进纯计数函数层次更脏；按层分责（计数函数管链、渲染层管已勾缺时刻）更清晰。
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline-p2/flow-state.yaml b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: bc7b8a77942378298c34d2199e2624a47a9afd95
++updatedAt: '2026-09-26T07:34:12.520Z'
++gate_summary: >-
++  test: passed ← module[cli-core]+deps(js19)（16.3s）
++  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-evP2it\.sillyspec\.runtime\verify-runs\20260926073325\test-result.json｜lint:
++  passed ← npm run lint（45.0s）｜门文件 10 个
++
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline-p2/proposal.md b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:28:26.621Z
++---
++# 提案书（Proposal）— 2026-09-26-watcher-timeline-p2
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:7da485401eb380411880f575b7757f51da5e843e0c5fc4189d31bd5fda49dbf6:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++任务原话转写：动机/背景：watcher-timeline 独立评审 PASS 但留 3 条 P2 未清偿：一、inferFlipTimes 尾部规则把「部分勾选的正常在途变更」误标计数链断裂——broken 语义应为中段断裂，尾部未覆盖只是未勾任务的自然态，渲染层按已勾任务缺时刻单独标注；二、design 承诺墙钟统计复用 aggregateStageTiming 但实现直接首尾相减——补真实复用并输出逐阶段墙钟；三、FR-02 测试绑定豁免理由与代码事实不符——loadChangeTasks 是独立可测函数，补 tmpdir 双路径探测用例。本变更为 2026-09-26-watcher-timeline 的评审清偿件（先例 3eb3bfbf 模式）。
++成功标准：
++- inferFlipTimes 仅在中段计数不衔接时标 broken，尾部未覆盖不再误标，配套用例更新
++- renderTimeline 输出逐阶段墙钟（复用 watcher 的 aggregateStageTiming），已勾任务缺推断时刻时单独标注而非笼统断裂注
++- loadChangeTasks 获 tmpdir 用例：活跃优先于归档、归档回退、双缺失返回 null
++- npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:5882b9d6460ceb9531e8b29722b5ef9fbeca93203893fbcaa38f4d2d4362bd4e:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. inferFlipTimes 仅在中段计数不衔接时标 broken，尾部未覆盖不再误标，配套用例更新
++2. renderTimeline 输出逐阶段墙钟（复用 watcher 的 aggregateStageTiming），已勾任务缺推断时刻时单独标注而非笼统断裂注
++3. loadChangeTasks 获 tmpdir 用例：活跃优先于归档、归档回退、双缺失返回 null
++4. npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:3adc17e2d5cb68ced3f9b94d3c68f20fb31d1f99e1370a7f2f6e04bc6c18a833:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-26-watcher-timeline-p2 留痕重锚 -->
++1. inferFlipTimes 仅在中段计数不衔接时标 broken，尾部未覆盖不再误标，配套用例更新
++2. renderTimeline 输出逐阶段墙钟（复用 watcher 的 aggregateStageTiming），已勾任务缺推断时刻时单独标注而非笼统断裂注
++3. loadChangeTasks 获 tmpdir 用例：活跃优先于归档、归档回退、双缺失返回 null
++4. npm run test:core 与 npm run lint 实测全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline-p2/requirements.md b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/requirements.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:28:26.622Z
++---
++# 需求规格（Requirements）— 2026-09-26-watcher-timeline-p2
++
++## 功能需求（agent 填写——每条 FR 格式 ### FR-NN: 标题 + Given/When/Then；FR 进知识索引，写清行为语义）
++
++<!--AGENT:FR区 agent 填写功能需求（直接书写，不走 amend） -->
++### FR-01: 断裂语义收窄
++Given 事件流翻格计数中段不衔接（某拍 from 不等于游标）
++When inferFlipTimes 判定
++Then 标 broken 且该拍起不再赋值；计数链完整但未覆盖全部任务（尾部未勾）不标 broken
++
++### FR-02: 已勾缺时刻的渲染层标注
++Given tasks.md 某任务已勾但推断时刻为 null（观测盲窗/水位丢失）
++When renderTimeline 渲染任务面
++Then 该任务行时刻列显示 ?，表下注记「已勾任务缺推断时刻」；不再以笼统断裂注覆盖此形态
++
++### FR-03: 逐阶段墙钟输出
++Given 事件流含带 stage 的事件
++When renderTimeline 渲染统计段
++Then 输出「阶段墙钟」行——复用 watcher 的 aggregateStageTiming 聚合，每阶段 first→last 差按时/分格式化
++
++### FR-04: 双路径探测用例
++Given loadChangeTasks 为活跃>归档双路径探测函数
++When tmpdir 下构造活跃/归档/双缺失三种盘面
++Then 活跃优先、归档回退、双缺失返回 null——由 test/watcher-timeline.test.mjs 新用例钉住（修正主变更 FR-02 豁免理由失实）
++
++### FR-05: 套件实测全绿
++Given 本变更触及 src/ 与 test/
++When 运行 npm run test:core 与 npm run lint
++Then 全部通过
++<!--
++参考摘录（非约束——agent 可采纳/改写/忽略；每条格式 ### FR-NN: 标题 + Given/When/Then）
++FR-01: inferFlipTimes 仅在中段计数不衔接时标 broken，尾部未覆盖不再误标，配套用例更新
++FR-02: renderTimeline 输出逐阶段墙钟（复用 watcher 的 aggregateStageTiming），已勾任务缺推断时刻时单独标注而非笼统断裂注
++FR-03: loadChangeTasks 获 tmpdir 用例：活跃优先于归档、归档回退、双缺失返回 null
++FR-04: npm run test:core 与 npm run lint 实测全绿
++-->
++
++
++## 测试绑定（每条 FR 至少一行——test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs「inferFlipTimes」组：中段断裂标 broken、尾部未覆盖不标（旧用例期望改写即清偿加钉）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs「renderTimeline」组：已勾任务缺时刻显示 ? 与专门注记行
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs：渲染输出含「阶段墙钟」行与阶段名
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++test/watcher-timeline.test.mjs「loadChangeTasks」组：tmpdir 三盘面用例
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->
++不适用：套件本身即验证——commands.test/lint 亲测是收口门执行动作
+
+diff --git a/.sillyspec/changes/2026-09-26-watcher-timeline-p2/tasks.md b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/tasks.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-26-watcher-timeline-p2/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-26T07:28:26.622Z
++---
++# 任务注册表（Tasks）— 2026-09-26-watcher-timeline-p2
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: inferFlipTimes 仅在中段计数不衔接时标 broken，尾部未覆盖不再误标，配套用例更新
++- [x] task-02: renderTimeline 输出逐阶段墙钟（复用 watcher 的 aggregateStageTiming），已勾任务缺推断时刻时单独标注而非笼统断裂注
++- [x] task-03: loadChangeTasks 获 tmpdir 用例：活跃优先于归档、归档回退、双缺失返回 null
++- [x] task-04: npm run test:core 与 npm run lint 实测全绿

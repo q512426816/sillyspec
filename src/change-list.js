@@ -316,6 +316,15 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
           const head = rawItem.slice(0, colonIdx).trim()
           if (looksLikePath(head)) rawItem = head
         }
+        // 「路径 ——尾注」同族（坑 thin-flow-freeze-foreign-declared-hijack 建议1，2026-09-25
+        // 实测：`- path ——说明` 整行 looksLikePath 不过被丢弃 → 自声明缺失 → 冻结面被他侧
+        // 陈旧声明劫持）。同冒号剥的口径：仅列表分支、前段须 looksLikePath（合法路径不含
+        // 双 em-dash，误伤面为零）。
+        const dashIdx = rawItem.search(/——/)
+        if (dashIdx > 0) {
+          const head = rawItem.slice(0, dashIdx).trim()
+          if (looksLikePath(head)) rawItem = head
+        }
       }
       const itemNorm = normalizePath(rawItem)
       const itemCross = preCross || splitCrossRepoPrefix(itemNorm, repoKeys)

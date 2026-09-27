@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-confirm-on-use",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "证据机械校验实施口径弱于声明：存在性即可过门——非测试文件与跨仓绝对路径实证放行，设计槽3「跨仓证据拒绝」被兜底分支证伪",
+      "evidence": "实证双探针（临时 fixture 跑 bin/sillyspec.js）：① --evidence package.json（仓内在场非测试文件）→ ✅ 翻牌成功且日志打印「证据=package.json」；② --evidence C:/Windows/win.ini（仓外绝对路径非测试文件）→ ✅ 翻牌成功。根因两处：resolveTestFileRel（src/test-bindings.js:91-104）直接命中分支对根相对路径无测试形态检查（isTestShaped 只约束裸文件名兜底 :109-110）；index.js confirm 分支的 existsSync(resolve(effDir, raw)) 兜底（src/index.js:3138）经 path.resolve 绝对路径语义放行任意仓外在场文件。与声明对照：design 槽3「跨仓证据拒绝（解析失败即拒）」证伪；design 槽4/提交信息/fail 报错文案「必须指向盘上真实测试文件」证伪（FR-04 原文仅「可自仓根解析为真实文件」，需求字面满足）。缓冲面核实：evidence 值不落盘（仅控制台日志）；错翻方向安全（见 boundaryDisclosure watcher 面为过度归属=宁多跑）；抽查层至多 2 anchor 限面。修法一行级：confirm 分支对剥锚后文件部施加 isTestShaped 同型检查并拒绝 resolve 出 effDir 外的绝对路径。",
+      "location": "src/index.js:3136-3141"
+    },
+    {
+      "severity": "P2",
+      "title": "冻结审计件 change.patch 的 requirements.md hunk 被错配为自 2026-09-26-dynamic-test-inference/requirements.md 的 rename（similarity 55%）",
+      "evidence": "change.patch:121-125 头部为「rename from .sillyspec/changes/2026-09-26-dynamic-test-inference/requirements.md → rename to …confirm-on-use/requirements.md」——并行会话正在归档 dynamic-test-inference（其目录已 staged 删除），git rename 检测将本变更未跟踪的 requirements.md 与彼删除件配对。+侧内容属实（本变更 requirements），change-patch.json 的 9 文件清单亦正确完整（baseline d3f3852..head c385953 提交面过滤+本目录工作树件），但审计件把另一活跃变更的文件误书为来源，血缘失真。与前例 gate-docs-cleanup P2 同族（CLI patch 冻结面生成缺陷，已留档待工具侧修复），本例程度较轻（文件不缺、仅 a/ 侧配对错）。",
+      "location": ".sillyspec/changes/2026-09-27-confirm-on-use/change.patch:121"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 测试绑定作答错位：指向「④ CLI tests --confirm」而 FR-03（注入面抽查提示）的实际覆盖在「②③ 注入面」",
+      "evidence": "requirements.md:58-59 FR-03 绑定槽写「④ CLI tests --confirm（证据解析→1/1 翻 active 落盘、幂等提示、坏证据 exit 1、无绑定行拒绝）」——该描述是 FR-04~07 的 CLI 面内容；FR-03 的 When（追加抽查确认提示、至多 2 anchor、带 confirm 指引）由 test ②③ 断言覆盖（/抽查确认（至多 [12] 条.*FR-core-001/、/tests confirm --anchor <id> --evidence/、确认后双消失）。属机器拆条错位后人工重排的残留错指：FR 行为已被测试覆盖（不产生验证缺口），但绑定记录指向错误用例，入知识索引后误导 rot 溯源。核对余条：FR-01/02/04/05/06/07/08 作答语义与用例名一致。",
+      "location": ".sillyspec/changes/2026-09-27-confirm-on-use/requirements.md:58"
+    },
+    {
+      "severity": "P3",
+      "title": "tasks.md task-06/07/08 未勾——对应工作已交付且测试绿，收口哨兵证据面不完整",
+      "evidence": "tasks.md:13-15 三条 [ ] 未勾；task-06（无绑定行）/task-07（坏证据 exit 1）由 test/confirm-on-use.test.mjs ④ 两分支实跑覆盖（本评审实测 3/3 绿），task-08（全仓测试绿）gate_summary test: passed。交付提交 c385953 信息亦只列 task-01~05，自洽但滞后。归档前须补勾，否则永久留档错示未完成态。",
+      "location": ".sillyspec/changes/2026-09-27-confirm-on-use/tasks.md:13"
+    },
+    {
+      "severity": "P3",
+      "title": "design 槽3/槽4 三处精度差：改写字段少计一、并发「不丢行」高估、「门禁消费无行为差异」漏 watcher 消费面",
+      "evidence": "① 槽4 称权威重写「只改 confirmed_by/state 两字段」，实际三字段（含 confirmed_at=HEAD，槽1 自身已如实列出）。② 槽3 称「行集同源（readFrBindings 全行读改写）不丢行」——readFrBindings→upsertFrBindingsRaw 是读改写两步：读后写前窗口内他写者（如归档提升）新增的行会被陈旧行集整体重写覆盖（lost update）；writeAtomicSync 只保原子/最后一写者，不防丢更新。窗口毫秒级、同条目并发罕见，且与既有 supersede/unbind 路径同型（本变更未引入新模式），故 P3。③ 槽4 称「门禁消费 candidate/active 无行为差异」——src/test-bindings.js:494/:505 resolveTestFileOwners（watcher R2 定向化消费面）按 state!=='active' 跳过：错翻会新增文件归属（过度触发定向跑）；方向仍是宁多跑/无漏测面，测试门与 rot 覆盖消费（fr-index.js bindings 用法）确为 state 盲，安全结论成立但「无行为差异」表述过强。",
+      "location": ".sillyspec/changes/2026-09-27-confirm-on-use/design.md:35"
+    },
+    {
+      "severity": "P3",
+      "title": "收口 lint 红：存量死导出旗（normalizeTestsRootRel），先于本变更、非本 diff 引入",
+      "evidence": "flow-state gate_summary 记录「lint: failed ← npm run lint」；实测 npm run lint 报「src/test-bindings.js: export normalizeTestsRootRel 在 src/+test/ 其余文件零引用」。归因核实：该导出于 4c13a5df（2026-09-26-dynamic-test-inference）引入，唯一消费者在其同文件内（:293，upsertFrBindings 传 projectRoot 时调用，src/index.js:3107 与 src/fr-index.js:550 两活调用点），而 check-syntax 22e-b 规则只计「其余文件」引用（test/check-syntax.mjs:47-48）——函数活、导出面死，属检查器口径+历史遗留；本变更 diff 未触 test-bindings.js。前例 gate-docs-cleanup 收口同为 lint: failed 态（其归档 flow-state 同记录），存量同态非本变更恶化。修法：去掉 export 关键字或教检查器计同文件引用。",
+      "location": "src/test-bindings.js:120"
+    }
+  ],
+  "resolved": [],
+  "dimensionNotes": {
+    "乱序": "ok——注入纯读零冲突；翻牌幂等键=confirmed_by 行集，重放收敛（全 active 提示不写盘）",
+    "并发": "部分准确——writeAtomicSync 原子性/最后一写者属实；「不丢行」高估：readFrBindings→upsertFrBindingsRaw 读改写窗口内他写者新行被陈旧行集覆盖（lost update），窗口毫秒级且与既有路径同型（findings P3）",
+    "切换": "ok——confirm 不依赖会话状态；中断重跑幂等收敛",
+    "作用域": "高估——evidence 相对路径确锚 effDir（跨仓相对路径拒）；绝对路径经 existsSync(resolve()) 兜底放行仓外文件（C:/Windows/win.ini 实测过门），「跨仓证据拒绝」被证伪（findings P2-1）"
+  },
+  "frVerification": {
+    "FR-01": "ok——src/fr-index.js readEntryUnconfirmed（绑定子块内 confirmed_by≠agent 的 - row: 块计数，行块边界=下一 row:/## 节头，无绑定块返 0）+ readActiveFrDigest 条目 unconfirmed 字段透传（:784，additive）；test ①（candidate 1/agent 0/无块 0）+②（digest.unconfirmed===1）实跑绿",
+    "FR-02": "ok——src/flow.js 注入条目行尾 ${f.unconfirmed > 0 ? ⚪N未确认绑定}（undefined 安全）；test ②③ 断言 ⚪1未确认绑定 在场、确认后消失，实跑绿",
+    "FR-03": "ok（绑定作答错位见 P3）——ordered.filter(unconfirmed>0).slice(0,2) 至多 2 anchor + 独立抽查确认行带 tests confirm --anchor <id> --evidence 指引与「不符留给 digest」出路；test ②③ 三断言全中",
+    "FR-04": "ok——src/index.js --confirm 分支：anchor 须 /^FR-/（局部锚与 ql 锚经无绑定行/用法拒）、证据经 testAnchorFile 剥锚+resolveTestFileRel+existsSync 兜底、readFrBindings 全行读→非 agent 行 {state:active, confirmed_by:agent, confirmed_at:HEAD}→upsertFrBindingsRaw 权威重写（projectRoot:effDir）；test ④ 1/1 翻牌+盘上 state:active/confirmed_by:agent 断言绿；证据校验口径弱于设计声明见 P2-1（FR 原文字面「真实文件」满足）",
+    "FR-05": "ok——flipped===0 分支 console 提示+break 先于 upsert（结构性不写盘）；test ④ 幂等提示断言绿",
+    "FR-06": "ok——rows.length===0 → fail exit 1；test ④ FR-core-999 分支绿",
+    "FR-07": "ok——evRel 为 null → fail exit 1（不存在/口头路径拒）；test ④ nope.test.mjs 分支绿；存在性之外的口径（测试文件形/跨仓绝对路径）不设防见 P2-1",
+    "FR-08": "ok——node --test test/confirm-on-use.test.mjs 本评审实测 3/3 pass（813ms）；gate_summary test: passed ← fr(45)+deps(js30) 11.0s；lint: failed 为存量债（P3-6）非测试面"
+  },
+  "blindSpotCheck": "四问皆非空作答，无「不适用」逃槽。槽3 并发/作用域两问与代码有精度差（P2-1/P3-5）：并发答「不丢行」实为 last-writer-wins 含丢更新窗口；作用域答「跨仓拒绝」被绝对路径兜底证伪。另 readEntryUnconfirmed 边界：绑定块后散文若出现缩进 confirmed_by: agent 行会把末行误判已确认（探针实测 stray 行→计数 0）——机器块「勿手改」约定下暴露面可忽略，不计级",
+  "boundaryDisclosure": "防橡皮图章三层裁决：①抽查点名（至多 2）核实成立（slice(0,2)+测试断言）；②证据机械校验——实施口径弱于声明（存在性≠测试文件形、绝对路径跨仓放行，P2-1），但口头/不存在路径确拒；③翻牌不改内容核实成立：仅 state/confirmed_by/confirmed_at 三字段变更，tests/row_id/reason/discovery 原样，evidence 不落盘，错翻代价=显示态+watcher 过度归属（宁多跑方向，无漏测面）。upsertFrBindingsRaw 权威重写行保护语义核实：agent 行（confirmed_by=agent）map 直通原样回写，行源=readFrBindings 全行解析无删除面，不设 agent 行保护与其「行已权威态」定位一致（该函数 2026-09-26 起即 supersede 翻链通道，本变更为第三消费者）。条目级 confirmed 状态方案放弃理由（绑定状态机已够用、条目级问题归 digest 信号与人工裁决、不发明第二套状态）与现状一致，裁决合理成立",
+  "protectionClaims": {
+    "幂等真不写盘": "成立——flipped===0 时 console+break 先于 upsertFrBindingsRaw；test ④ 断言提示语",
+    "agent 行原样保留": "成立——confirmed_by==='agent' 行 map 直通，normalizeRow 往返保字段（tests/reason/discovery/status 原样）",
+    "证据真拒口头路径": "成立——不存在路径 exit 1（test ④ nope.test.mjs + 本评审双探针）；但非测试文件与跨仓绝对路径过门（P2-1）",
+    "抽查至多 2 anchor": "成立——slice(0,2)，test ②③ 断言「至多 [12] 条」",
+    "unconfirmed 透传 additive": "成立——readActiveFrDigest 恒置字段，flow.js 消费用 f.unconfirmed > 0（undefined 安全），既有消费方零破坏"
+  },
+  "reviewedAt": "2026-09-27T09:17:11Z"
+}

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识资产人工审核 · 三层设计演示</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --ink: #1f2329; --sub: #646a73;
+    --line: #e5e6eb; --blue: #3370ff; --blue-bg: #f0f4ff;
+    --amber: #d46b08; --amber-bg: #fff7e6; --amber-line: #ffd591;
+    --green: #389e0d; --green-bg: #f6ffed; --green-line: #b7eb8f;
+    --red: #cf1322; --red-bg: #fff1f0; --gray-bg: #f2f3f5;
+    --radius: 10px; --mono: 'Cascadia Code', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); padding: 32px 16px 80px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  header.hero { text-align: center; margin-bottom: 28px; }
+  header.hero h1 { font-size: 24px; margin-bottom: 8px; }
+  header.hero p { color: var(--sub); font-size: 14px; }
+  .layernav { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; flex-wrap: wrap; }
+  .layernav a { text-decoration: none; font-size: 13px; padding: 7px 14px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); color: var(--ink); }
+  .layernav a:hover { border-color: var(--blue); color: var(--blue); }
+  .layernav a b { color: var(--blue); margin-right: 4px; }
+
+  section.layer { margin-bottom: 44px; }
+  .layer-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .layer-head .no { font-size: 12px; font-weight: 700; color: #fff; background: var(--blue); border-radius: 6px; padding: 2px 8px; }
+  .layer-head h2 { font-size: 18px; }
+  .layer-sub { color: var(--sub); font-size: 13px; margin-bottom: 16px; padding-left: 2px; }
+  .layer-sub code { background: var(--gray-bg); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: var(--mono); }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+
+  /* ---------- Layer 1 ---------- */
+  .session { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
+  @media (max-width: 860px) { .session { grid-template-columns: 1fr; } }
+  .ctx-card h3, .inject-card h3 { font-size: 13px; color: var(--sub); margin-bottom: 10px; letter-spacing: 1px; }
+  .ctx-item { font-size: 13px; padding: 8px 10px; background: var(--gray-bg); border-radius: 8px; margin-bottom: 8px; }
+  .ctx-item b { display: block; font-size: 13px; }
+  .ctx-item span { color: var(--sub); font-size: 12px; }
+  .fr { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; transition: all .25s; }
+  .fr .row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .fr .fid { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .fr .ftitle { font-size: 13px; flex: 1; min-width: 200px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .badge.active { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-line); }
+  .badge.candidate { background: var(--gray-bg); color: var(--sub); border: 1px solid var(--line); }
+  .badge.provisional { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
+  .badge.confirming { background: var(--blue-bg); color: var(--blue); border: 1px solid #b6d4ff; }
+  .fr .binding { font-family: var(--mono); font-size: 11px; color: var(--sub); background: var(--gray-bg); border-radius: 6px; padding: 5px 8px; margin-top: 6px; word-break: break-all; }
+  .fr .ops { display: flex; gap: 8px; margin-top: 8px; }
+  button { cursor: pointer; border-radius: 7px; border: 1px solid var(--line); background: #fff; font-size: 12px; padding: 5px 12px; transition: all .15s; }
+  button:hover { border-color: var(--blue); color: var(--blue); }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.primary:hover { opacity: .85; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .fr.ok { border-color: var(--green-line); background: linear-gradient(0deg, #fbfff6, #fbfff6); }
+  .fr.flagged { border-color: var(--amber-line); background: var(--amber-bg); }
+  .fr .note { font-size: 12px; color: var(--green); margin-top: 6px; display: none; }
+  .fr.ok .note { display: block; }
+  .fr.flagged .note2 { font-size: 12px; color: var(--amber); margin-top: 6px; display: block; }
+  .progress { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .progress b { color: var(--green); }
+
+  /* ---------- Layer 2 ---------- */
+  .digest-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .digest-top .tag { font-size: 12px; background: var(--blue-bg); color: var(--blue); border-radius: 14px; padding: 3px 10px; }
+  .signal { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; display: flex; gap: 14px; align-items: flex-start; }
+  .signal.done { opacity: .5; }
+  .signal .sig-no { min-width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; }
+  .sig-no.amber { background: var(--amber-bg); color: var(--amber); }
+  .sig-no.red { background: var(--red-bg); color: var(--red); }
+  .sig-no.blue { background: var(--blue-bg); color: var(--blue); }
+  .signal .body { flex: 1; }
+  .signal h4 { font-size: 14px; margin-bottom: 4px; }
+  .signal h4 .cnt { color: var(--red); font-family: var(--mono); }
+  .signal p { font-size: 12.5px; color: var(--sub); margin-bottom: 6px; line-height: 1.6; }
+  .signal ul { margin: 4px 0 8px 18px; font-size: 12.5px; color: var(--sub); line-height: 1.8; }
+  .signal ul li.struck { text-decoration: line-through; opacity: .55; }
+  .signal .fix { font-family: var(--mono); font-size: 11px; background: var(--gray-bg); padding: 4px 8px; border-radius: 6px; display: inline-block; margin-top: 2px; }
+
+  /* ---------- Layer 3 ---------- */
+  .archive-flow { display: grid; grid-template-columns: 1fr 320px; gap: 14px; }
+  @media (max-width: 860px) { .archive-flow { grid-template-columns: 1fr; } }
+  .frlist { font-size: 13px; }
+  .frlist .li { display: flex; gap: 8px; padding: 7px 4px; border-bottom: 1px dashed var(--line); }
+  .frlist .li:last-child { border-bottom: none; }
+  .frlist .fid { font-family: var(--mono); font-size: 12px; color: var(--blue); white-space: nowrap; }
+  .confirmbox { background: var(--blue-bg); border: 1px solid #b6d4ff; border-radius: 10px; padding: 16px; }
+  .confirmbox h4 { font-size: 14px; margin-bottom: 10px; }
+  .confirmbox select { width: 100%; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--line); font-size: 13px; margin-bottom: 12px; }
+  .toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(20px); bottom: 34px; background: var(--ink); color: #fff; font-size: 13px; padding: 10px 18px; border-radius: 10px; opacity: 0; transition: all .3s; pointer-events: none; z-index: 9; }
+  .toast.show { opacity: .96; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- 对比条 ---------- */
+  .compare { margin-top: 10px; }
+  .cmp-row { margin-bottom: 14px; }
+  .cmp-row .lbl { font-size: 12.5px; margin-bottom: 5px; color: var(--sub); }
+  .bar { height: 22px; border-radius: 6px; display: flex; overflow: hidden; font-size: 11px; color: #fff; }
+  .bar .seg { display: flex; align-items: center; justify-content: center; white-space: nowrap; transition: width .5s; }
+  footer { text-align: center; color: var(--sub); font-size: 12px; margin-top: 40px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>知识资产要不要人工审？——三层设计实测演示</h1>
+  <p>数据全部取自本机真实库（R23 三臂 + sillyspec 主仓，2026-09-26/27 实录）。可以点，点了看联动。</p>
+</header>
+
+<nav class="layernav">
+  <a href="#l1"><b>①</b>消费时确认（agent 干）</a>
+  <a href="#l2"><b>②</b>例外摘要（人看）</a>
+  <a href="#l3"><b>③</b>归档落域确认（人 1 秒）</a>
+  <a href="#cmp"><b>对比</b>全量人审 vs 三层</a>
+</nav>
+
+<!-- ================= Layer 1 ================= -->
+<section class="layer" id="l1">
+  <div class="layer-head"><span class="no">第 1 层</span><h2>逐条确认 → 给正在干活的 agent（confirm-on-use）</h2></div>
+  <div class="layer-sub">下一个变更启动时，知识注入本来就会把触达域的 FR 带进 agent 上下文——<b>候选（candidate）条目顺带让 agent 核一眼</b>：标题对不对、绑定是不是真测试。点下面两张卡试试：✓ 翻 active；✗ 进第②层异常摘要（注意右上角红点会 +1）。</div>
+
+  <div class="session">
+    <div class="card ctx-card">
+      <h3>当前会话（模拟）</h3>
+      <div class="ctx-item"><b>变更 2026-09-28-events-panel-tweak</b><span>触碰 platform_sync / frontend 详情页</span></div>
+      <div class="ctx-item"><b>flow start → 知识注入</b><span>触达域 auto-backend：active 2 条 + candidate 4 条</span></div>
+      <div class="ctx-item"><b>注入消费中…</b><span>agent 正在读这些条目干活——注意力已经付费，确认零额外成本</span></div>
+      <div class="progress">本会话确认进度：<b id="okCnt">0</b> / 4 条 candidate　待修正：<b id="flagCnt" style="color:var(--amber)">0</b> 条</div>
+    </div>
+    <div class="card inject-card">
+      <h3>注入面板（FR 摘要 + 绑定）</h3>
+
+      <div class="fr ok-static ok">
+        <div class="row1"><span class="fid">FR-auto-backend-007</span><span class="ftitle">平台同步写鉴权仅 shpsync_（读并集）</span><span class="badge active">active · 已确认</span></div>
+        <div class="binding">tests: backend/app/modules/platform_sync/tests/test_auth_matrix.py</div>
+      </div>
+      <div class="fr ok-static ok">
+        <div class="row1"><span class="fid">FR-auto-backend-012</span><span class="ftitle">同步失败暂存段与消解（blocked_segments）</span><span class="badge active">active · 已确认</span></div>
+        <div class="binding">tests: backend/app/modules/platform_sync/tests/test_sync_segments.py</div>
+      </div>
+
+      <div class="fr" id="fr1">
+        <div class="row1"><span class="fid">FR-auto-backend-019</span><span class="ftitle">前端详情页「观测事件」折叠区：缺省收起、warning 默认展开+角标</span><span class="badge candidate" id="b1">candidate · 未经确认</span></div>
+        <div class="binding">tests: test_change_events.py::test_post_event_receive_and_roundtrip（R23-thin 机器绑定）</div>
+        <div class="ops"><button class="primary" onclick="confirmFr(1)">✓ 与实态相符</button><button onclick="flagFr(1)">✗ 有问题（进人工摘要）</button></div>
+        <div class="note">✓ 已翻 active（confirmed_by=agent）——下次注入直接按已确认渲染</div>
+        <div class="note2" style="display:none">已标记待修正 → 已进第②层「条目质量」异常（人只看汇总）</div>
+      </div>
+
+      <div class="fr" id="fr2">
+        <div class="row1"><span class="fid">FR-auto-backend-020</span><span class="ftitle">pytest 五组（收/取/去重/鉴权/上限）与组件测试全绿</span><span class="badge candidate" id="b2">candidate · 未经确认</span></div>
+        <div class="binding">tests: test_change_events.py（五组 6 用例）</div>
+        <div class="ops"><button class="primary" onclick="confirmFr(2)">✓ 与实态相符</button><button onclick="flagFr(2)">✗ 有问题</button></div>
+        <div class="note">✓ 已翻 active（confirmed_by=agent）</div>
+        <div class="note2" style="display:none">已标记待修正 → 已进第②层异常摘要</div>
+      </div>
+
+      <div class="fr" id="fr3">
+        <div class="row1"><span class="fid">FR-auto-backend-021</span><span class="ftitle">E2E：curl 推 5 条 → GET 正序去重</span><span class="badge candidate" id="b3">candidate · 未经确认</span></div>
+        <div class="binding">tests: （绑定行缺失——这正是 agent 该核出的点）</div>
+        <div class="ops"><button class="primary" onclick="confirmFr(3)">✓ 与实态相符</button><button onclick="flagFr(3)">✗ 有问题</button></div>
+        <div class="note">✓ 已翻 active</div>
+        <div class="note2" style="display:none">已标记待修正 → 已进第②层异常摘要</div>
+      </div>
+
+      <div class="fr" id="fr4">
+        <div class="row1"><span class="fid">FR-auto-backend-022</span><span class="ftitle">面板高亮徽标</span><span class="badge candidate" id="b4">candidate · 未经确认（标题机器截断）</span></div>
+        <div class="binding">tests: test_change_events.py</div>
+        <div class="ops"><button class="primary" onclick="confirmFr(4)">✓ 与实态相符</button><button onclick="flagFr(4)">✗ 标题截断（进人工摘要）</button></div>
+        <div class="note">✓ 已翻 active</div>
+        <div class="note2" style="display:none">标题碎片化 → 已进第②层「条目质量」异常</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Layer 2 ================= -->
+<section class="layer" id="l2">
+  <div class="layer-head"><span class="no">第 2 层</span><h2>例外摘要 → 人只看这一页（触发式，不是逐条审）</h2></div>
+  <div class="layer-sub">没有人审时它是静默的；<b>信号触发才生成</b>：伪域、批量 rot、收件箱积压、绑定不可解析、agent 打回的待修正条目。每条带一键处理动作——点了就消账。预计每周 1 份、3 分钟。</div>
+
+  <div class="card">
+    <div class="digest-top">
+      <span class="tag">📬 知识资产异常摘要 · 第 40 周</span>
+      <span class="tag" style="background:var(--amber-bg);color:var(--amber)">信号 <b id="sigTotal">4</b> 类</span>
+      <span class="tag" style="background:var(--gray-bg);color:var(--sub)" id="digestTime">预计耗时 3 分钟</span>
+    </div>
+
+    <div class="signal" id="sig1">
+      <div class="sig-no amber">4 条</div>
+      <div class="body">
+        <h4>落域异常：R23-thin 的变更事件 FR 落进伪域 <code style="font-family:var(--mono)">auto-backend</code></h4>
+        <p>变更事件通道（platform_sync 模块 + 前端详情页）的 FR 落在 scaffold 时代伪域，正确域应为 platform-sync。R17 已报同款，本轮复发。</p>
+        <button class="primary" onclick="fixSig(1)">一键迁移 → platform-sync 域</button>
+      </div>
+    </div>
+
+    <div class="signal" id="sig2">
+      <div class="sig-no amber">239</div>
+      <div class="body">
+        <h4>rot 批量标记：单轮打标超阈（>100 条进摘要）</h4>
+        <p>2026-09-27-gate-face-binding-parity 收口触达 8 域，批量打待复核 239 条。Top：setup / runtime / bin / core-engine。</p>
+        <ul id="rotList">
+          <li>setup 域 71 条 —— 多为门禁文案类 FR（注入文案改版连动，属预期漂移）</li>
+          <li>runtime 域 52 条 —— 含 2026-09-26 动态推断改版波及面</li>
+        </ul>
+        <button class="primary" onclick="fixSig(2)">批量复核：文案漂移类 123 条批量承接</button>
+      </div>
+    </div>
+
+    <div class="signal" id="sig3">
+      <div class="sig-no red">40</div>
+      <div class="body">
+        <h4>知识收件箱积压：<span class="cnt">40</span> 条 uncategorized（阈值 20）</h4>
+        <p>R23-full 臂转达的存量（载体仓 multi-agent-platform）。样例：</p>
+        <ul>
+          <li class="struck">install.sh 改动需重建 backend 镜像 → 已归类 known-issues</li>
+          <li id="inbox2">sync_stage_status dual-db 时序问题</li>
+          <li id="inbox3">auto_dispatch_next_step 触发条件</li>
+          <li id="inbox4">自包含 conftest 建表须连带 fixture 依赖表（R23-full 本变更新增）</li>
+        </ul>
+        <button class="primary" onclick="fixSig(3)">清账：逐条归类（knowledge inbox / classify）</button>
+      </div>
+    </div>
+
+    <div class="signal" id="sig4">
+      <div class="sig-no blue">1</div>
+      <div class="body">
+        <h4>绑定不可解析：FR-cli-entry-091</h4>
+        <p>主仓 gate-face-binding 收口实录：绑定路径 <code style="font-family:var(--mono)">test/cli.test.mjs</code> 无法自仓根解析，未入回归面。</p>
+        <span class="fix">sillyspec tests repair-paths　# 机器可修</span>
+        <div style="margin-top:8px"><button class="primary" onclick="fixSig(4)">执行 repair-paths（干跑 → --write）</button></div>
+      </div>
+    </div>
+
+    <div class="signal" id="sig5" style="display:none; border-color:var(--amber-line); background:var(--amber-bg)">
+      <div class="sig-no amber" id="sig5no">0</div>
+      <div class="body">
+        <h4>agent 打回的待修正条目（confirm-on-use ✗ 通道）</h4>
+        <ul id="flagList"></ul>
+        <p>第①层 agent 标记「有问题」的条目落这里，人裁决改法（改标题 / 补绑定 / supersede）。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Layer 3 ================= -->
+<section class="layer" id="l3">
+  <div class="layer-head"><span class="no">第 3 层</span><h2>落域确认 → 人唯一必须停顿的一秒（归档时点）</h2></div>
+  <div class="layer-sub">归档收口最后一问：<b>这批 FR 落这个域对吗？</b>每变更一次 yes/no——专治 R17/R23 两轮实证的伪域病。选错域的代价是未来注入找错页，所以值得人工 1 秒。</div>
+
+  <div class="archive-flow">
+    <div class="card frlist">
+      <h3 style="font-size:13px;color:var(--sub);margin-bottom:8px">即将入库（2026-09-27-change-events-r23-thin · 6 条 FR + 6 行绑定）</h3>
+      <div class="li"><span class="fid">FR-01</span><span>POST /changes/{name}/events：鉴权/幂等/上限/append-only</span></div>
+      <div class="li"><span class="fid">FR-02</span><span>GET ?since 正序增量（严格大于）</span></div>
+      <div class="li"><span class="fid">FR-03</span><span>零业务判定红线（provisional 纯透传）</span></div>
+      <div class="li"><span class="fid">FR-04</span><span>pytest 五组全绿</span></div>
+      <div class="li"><span class="fid">FR-05</span><span>详情页观测事件折叠区（warning 展开+角标+琥珀高亮）</span></div>
+      <div class="li"><span class="fid">FR-06</span><span>provisional 徽标（悬停「旁路观测信号，非流程真相」）</span></div>
+    </div>
+    <div class="confirmbox" id="cbox">
+      <h4>📦 落域确认</h4>
+      <p style="font-size:12.5px;color:var(--sub);margin-bottom:8px">机器建议：<b style="color:var(--red)">auto-backend</b>（来自目录路由）——检测到该域为 scaffold 伪域。</p>
+      <select id="domainSel">
+        <option value="auto-backend">auto-backend（机器建议 · 疑伪域 ⚠️）</option>
+        <option value="platform-sync" selected>platform-sync（按模块归属建议 ✅）</option>
+        <option value="app-pages">app-pages（前端面板域）</option>
+        <option value="unmapped">unmapped（挂池待分）</option>
+      </select>
+      <button class="primary" style="width:100%" onclick="confirmDomain()">确认入库</button>
+      <p id="domainResult" style="font-size:12.5px;color:var(--green);margin-top:10px;display:none"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 对比 ================= -->
+<section class="layer compare" id="cmp">
+  <div class="layer-head"><span class="no">对比</span><h2>全量人工审 vs 三层——负担账（本周实测数据）</h2></div>
+  <div class="card">
+    <div class="cmp-row">
+      <div class="lbl"><b>方案 A：全量人工审</b>（每条资产都人看——Task Review 的老路）</div>
+      <div class="bar">
+        <div class="seg" style="width:55%;background:#cf1322">FR 47 条逐条读</div>
+        <div class="seg" style="width:30%;background:#d46b08">decisions 25 条</div>
+        <div class="seg" style="width:15%;background:#fa8c16">绑定 60 行</div>
+      </div>
+      <div class="lbl" style="margin-top:4px">≈ 每周 <b style="color:var(--red)">90+ 分钟</b> · 历史结局：Task Review 全量审 47 份 review.json，<b>0 实质捕获</b>，已退役</div>
+    </div>
+    <div class="cmp-row">
+      <div class="lbl"><b>方案 B：三层（本演示）</b></div>
+      <div class="bar">
+        <div class="seg" style="width:78%;background:#389e0d">① agent 顺带确认（0 人工分钟）</div>
+        <div class="seg" style="width:14%;background:#3370ff">② 周摘要 3 分钟</div>
+        <div class="seg" style="width:8%;background:#722ed1">③ 落域 5×1 秒</div>
+      </div>
+      <div class="lbl" style="margin-top:4px">≈ 每周 <b style="color:var(--green)">4 分钟</b> 人工 · agent 确认 47 条顺带完成 · 异常才见人</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  数据来源：R23 三臂实测（multi-agent-platform-r23-thin/full/os）+ sillyspec 主仓 2026-09-26/27 收口实录<br>
+  原型 · knowledge-review-layers · 2026-09-27
+</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+  let ok = 0, flag = 0, sigDone = 0;
+  const flagged = [];
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+  function confirmFr(n) {
+    const fr = document.getElementById('fr' + n);
+    if (fr.classList.contains('ok') || fr.classList.contains('flagged')) return;
+    fr.classList.add('ok');
+    const b = document.getElementById('b' + n);
+    b.textContent = 'active · agent 已确认'; b.className = 'badge active';
+    fr.querySelector('.ops').style.display = 'none';
+    ok++; document.getElementById('okCnt').textContent = ok;
+    toast('✓ FR-auto-backend-01' + (n + 8) + ' → active（confirmed_by=agent）');
+  }
+  function flagFr(n) {
+    const fr = document.getElementById('fr' + n);
+    if (fr.classList.contains('ok') || fr.classList.contains('flagged')) return;
+    fr.classList.add('flagged');
+    const b = document.getElementById('b' + n);
+    b.textContent = '待修正 → 人工摘要'; b.className = 'badge provisional';
+    fr.querySelector('.ops').style.display = 'none';
+    fr.querySelector('.note2').style.display = 'block';
+    flag++; document.getElementById('flagCnt').textContent = flag;
+    flagged.push(n);
+    const s5 = document.getElementById('sig5');
+    s5.style.display = 'flex';
+    document.getElementById('sig5no').textContent = flag;
+    const li = document.createElement('li');
+    li.textContent = 'FR-auto-backend-01' + (n + 8) + ' — agent 打回（会话 2026-09-28-events-panel-tweak）';
+    document.getElementById('flagList').appendChild(li);
+    sigTotalRefresh();
+    toast('✗ 已进第②层异常摘要——人只看汇总，不看过程');
+  }
+  function sigTotalRefresh() {
+    const extra = flag > 0 ? 1 : 0;
+    document.getElementById('sigTotal').textContent = (4 - sigDone + extra);
+  }
+  function fixSig(n) {
+    const s = document.getElementById('sig' + n);
+    s.classList.add('done');
+    const btn = s.querySelector('button.primary');
+    btn.disabled = true;
+    if (n === 1) { btn.textContent = '✅ 已迁移 4 条 → platform-sync'; toast('4 条 FR 已迁 platform-sync 域（INDEX 路由同步）'); }
+    if (n === 2) {
+      btn.textContent = '✅ 123 条文案漂移已批量承接';
+      document.getElementById('rotList').querySelectorAll('li').forEach(li => li.classList.add('struck'));
+      toast('rot 批量承接完成——剩余 116 条随下次触达逐条消化');
+    }
+    if (n === 3) {
+      btn.textContent = '✅ 收件箱已清账（40 → 0）';
+      s.querySelectorAll('ul li:not(.struck)').forEach(li => li.classList.add('struck'));
+      toast('知识收件箱 40 条清账完成');
+    }
+    if (n === 4) { btn.textContent = '✅ repair-paths：1 路径已归一'; toast('FR-cli-entry-091 绑定已修复入库'); }
+    sigDone++;
+    sigTotalRefresh();
+  }
+  function confirmDomain() {
+    const v = document.getElementById('domainSel').value;
+    const r = document.getElementById('domainResult');
+    r.style.display = 'block';
+    r.textContent = v === 'auto-backend'
+      ? '⚠️ 已按伪域入库——该选择会出现在下周第②层摘要里（落域异常）'
+      : '✅ 6 条 FR + 6 行绑定已入库 ' + v + ' 域（用时 1 秒）';
+    document.querySelector('#cbox button').disabled = true;
+    toast(v === 'auto-backend' ? '已入库 auto-backend（伪域风险已记录）' : '已入库 ' + v + ' 域');
+  }
+</script>
+</body>
+</html>

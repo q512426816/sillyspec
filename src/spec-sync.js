@@ -617,10 +617,48 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       // 服务器、不进冲突文件；服务器「冲突 op 跳过、其余照常 apply」语义下本会话真改动
       // 已落——follower 清空即视为本轮同步成功（写基线，下次起 pre-POST 即拦）。
       const serverVersions = body.server_versions || {};
+      // 墓碑拒收通道（runbook spec-push-conflict-recovery 待修①，2026-09-25 实证）：平台
+      // apply_ops 对带 platform_deleted 墓碑的路径**无条件拒收**（与版本无关，update 的
+      // base=version 完全匹配仍拒）。此前 CLI 只消费 server_versions → 墓碑拒收被译成
+      // 「又有更新/版本冲突」，resolve --keep-local 重推永远无效（转圈）。墓碑路径从版本
+      // 冲突叙事中分离：恢复走平台 manifest-heal 通道（2026-09-26-manifest-heal-endpoint）。
+      const tombstoned = Array.isArray(body.platform_deleted)
+        ? body.platform_deleted.filter((p) => typeof p === 'string')
+        : [];
+      const tombSet = new Set(tombstoned);
       const { followers, real } = opts.forcePush
         ? { followers: [], real: serverVersions }
         : partitionConflictPaths(serverVersions, localFiles, baseHashes, lastSyncTs);
-      const realPaths = Object.keys(real);
+      const realPaths = Object.keys(real).filter((p) => !tombSet.has(p));
+
+      // 纯墓碑形态：版本冲突面为空、拒收全是墓碑 → 不写/不清通用冲突标记（clear 会把
+      // 状态洗成「已消解」误导 status），单独落冲突文件 + 正确恢复指引。
+      if (realPaths.length === 0 && tombstoned.length > 0) {
+        let tombConflictPath = null;
+        try {
+          const runtimeDir = join(specRoot, '.runtime');
+          mkdirSync(runtimeDir, { recursive: true });
+          tombConflictPath = join(runtimeDir, `spec-sync-conflict-${changeName}.json`);
+          writeFileSync(tombConflictPath, JSON.stringify({
+            change: changeName,
+            kind: 'spec-tree',
+            created_at: new Date().toISOString(),
+            server_versions: {},
+            conflicting_paths: [],
+            platform_deleted: tombstoned,
+            note: '路径被平台删除墓碑拒收（非版本冲突，resolve 重推无效）。恢复通道：平台 manifest-heal 清墓碑后重推，或联系管理员确认删除是否有意。',
+          }, null, 2) + '\n', 'utf8');
+        } catch (e) {
+          console.warn(`[spec-sync] 墓碑冲突文件写入失败（信息仅打印）: ${e.message}`);
+        }
+        console.warn('');
+        console.warn(`⚠️ [spec-sync] ${tombstoned.length} 个路径被平台删除墓碑拒收（非版本冲突，resolve --keep-local 重推无效）: ${tombstoned.slice(0, 5).join(', ')}${tombstoned.length > 5 ? ' 等' : ''}`);
+        console.warn(`⚠️ 恢复通道：平台 manifest-heal（清墓碑后重推即闭环）；详情: ${tombConflictPath || '(写入失败)'}`);
+        return { synced: 0, conflict: true, serverVersions: {}, tombstoned, conflictPath: tombConflictPath };
+      }
+      const tombNote = tombstoned.length > 0
+        ? `\n⚠️ 另有 ${tombstoned.length} 个路径被平台删除墓碑拒收（非版本冲突，resolve 无效；恢复走平台 manifest-heal）: ${tombstoned.slice(0, 5).join(', ')}${tombstoned.length > 5 ? ' 等' : ''}`
+        : '';
 
       // 冲突横幅降噪（坑 spec-sync-conflict-banner-spam，与 sync() 进度侧 2026-08-23 修法同族）：
       // 未决 spec 树冲突存在期间，每步自动同步都会对同一批真冲突路径再撞一次——此前每轮
@@ -658,6 +696,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
           created_at: new Date().toISOString(),
           server_versions: real,
           conflicting_paths: realPaths,
+          ...(tombstoned.length > 0 ? { platform_deleted: tombstoned } : {}),
           auto_followed: followers,
           note: 'spec 树文件冲突（仅列本地真改动文件；本地未改动文件已自动跟随服务器）。resolve --keep-local 以本地为准重推；--take-platform 拉平台 bundle 覆盖冲突文件（接受服务器版本，2026-09-03 起支持）',
         }, null, 2) + '\n', 'utf8');
@@ -669,6 +708,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
       const shownPaths = realPaths.slice(0, 5).join(', ') + (realPaths.length > 5 ? ' 等' : '');
       console.warn('');
       console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${realPaths.length} 个文件: ${shownPaths}；逐文件服务器版本见冲突详情文件）`);
+      if (tombNote) console.warn(`⚠️ [spec-sync]${tombNote.trim()}`);
       console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
     }

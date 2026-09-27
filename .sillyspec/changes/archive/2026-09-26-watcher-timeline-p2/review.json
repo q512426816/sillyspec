@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-watcher-timeline-p2",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试文件头注释未随本变更同步：仍述旧语义「链未全覆盖标 broken」、声称「零真 fs」，且覆盖清单漏 loadChangeTasks 组",
+      "evidence": "头注释第 6 行写「链未全覆盖标 broken」，与其下方第 61-65 行本变更改写后的用例（同名场景断言 broken=false，P2 语义收窄本体）语义相反；第 4 行「零真仓零 fs——其余纯数据直构」与新增 loadChangeTasks 三用例（mkdtempSync/writeFileSync 真实 tmpdir fs，第 161-196 行）矛盾；第 4-8 行覆盖清单无 loadChangeTasks 条目。纯注释漂移，无行为影响，实跑 15/15 绿",
+      "location": "test/watcher-timeline.test.mjs:4-8（头注释）对 61-65、159-196"
+    },
+    {
+      "severity": "P3",
+      "title": "fmtDur 注释「<60h 分」与代码格式切换边界不符（实际 1h 起即切 h+min）",
+      "evidence": "注释称 <60h 显示分钟，代码 `if (m < 60) return \\`${m}min\\`` 的边界是 60 分钟——90min 输出「1h30min」而非分钟格式。输出本身正确（测试 38min 断言过），仅注释口径失实",
+      "location": "src/timeline.js:113-120（fmtDur 注释对实现）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——broken 判定仍为事件到达序单向游标（src/timeline.js:44 from!==cursor 即断）；阶段墙钟聚合按每 stage min/max 首末差（src/watcher.js:351-352），不依赖事件间顺序——design 槽3Q1 作答与代码一致。边界裁决：中段断裂=可接受（既有用例钉住，断裂点后不赋值不编造）",
+    "并发": "ok（本变更新增面）——阶段聚合消费同一内存事件清单无二次读盘（timeline.js:166 直接传 events 数组），属实；残留已知 P3：loadChangeTasks find 谓词与返回双 readFileSync 竞窗（src/timeline.js:180-182，主变更 review P3-6）本变更未触碰未承诺，不阻断",
+    "切换": "ok——本变更全部为无状态纯函数/纯测试改动，无生命周期面；独立实跑 node --test 该文件 15/15 通过（含 3 个新 tmpdir 用例，finally rmSync 自清理）",
+    "作用域": "ok——aggregateStageTiming 为 watcher.js 既有导出（src/watcher.js:342-358，返回含 durationMs）只读复用；watcher.js 零 timeline 引用（grep 证实无循环 import）；tmpdir 用例按变更名隔离目录不串台。边界裁决：「只读复用，不改 watcher」=可接受（diff 面证实 watcher.js 无改动）；「CLI 命令面无变化（同命令输出更准）」=可接受（全 test/ grep 无其他消费方钉旧墙钟文本格式）；「按层分责：计数函数管链、渲染层管已勾缺时刻」=可接受——inferFlipTimes 保持 (events,total) 签名可独立测，渲染层手持 t.checked 逐任务判缺（timeline.js:146），原 P2 漏报形态（全勾事件全丢）恰由渲染层注记兜住，分层未丢覆盖；FR-05 测试绑定「不适用：套件本身即验证」=可接受（flow-state.yaml gate_summary 记录 test/lint 双 passed，本评审另独立实跑验证）"
+  },
+  "reviewedAt": "2026-09-26T07:37:30Z"
+}

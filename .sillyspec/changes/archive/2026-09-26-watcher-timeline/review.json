@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-watcher-timeline",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "inferFlipTimes 尾部覆盖判定双向失准：对照总任务数而非已勾数，正常在途变更被误标「推断不可用」，事件全丢时反而无警告",
+      "evidence": "代码 `if (cursor < times.length && times.some(t => t != null)) broken = true`（注释称『链未覆盖全部已勾任务标 broken』）对照的是 times.length=全部任务数：①过报——进行中变更勾 2/4、链 0→2 干净衔接仍 broken=true，渲染出『计数链断裂或未全覆盖』警告行；②漏报——tasks.md 全勾但 task-done 事件全丢时 times 全 null，some() 为 false，broken=false，无任何警告。renderTimeline 手持 t.checked 却传 tasks.length，勾选面覆盖本可精确判定。FR-04 文面承诺的 from≠上一 to 断裂检测已由 from!==cursor 分支正确兑现，每行 ≈/? 数据仍诚实，故 P2 非 P1",
+      "location": "src/timeline.js:45（inferFlipTimes 尾部规则）"
+    },
+    {
+      "severity": "P2",
+      "title": "FR-01/design 承诺『墙钟统计复用 aggregateStageTiming 聚合』未兑现，实现为内联减法且无偏差披露",
+      "evidence": "src/watcher.js:342 导出的 aggregateStageTiming 在 timeline.js 与 index.js 接线中均未被引用；墙钟为内联 lastTs-birthTs 分钟取整（timeline.js 渲染段）。三段输出齐备、数值诚实（真墙钟+尾注盲区），proposal 用户冻结成功标准只写『墙钟统计』未绑定机制，属机制级承诺漂移无数据损害",
+      "location": "src/timeline.js:149-152（墙钟计算）；承诺面 requirements.md FR-01 / design.md 槽1"
+    },
+    {
+      "severity": "P2",
+      "title": "FR-02『不适用』绑定理由与代码事实不符，活跃>归档优先行为零自动覆盖",
+      "evidence": "绑定理由称『双路径探测是 index.js 接线层 I/O、纯函数接收已解析路径、join 两次 existsSync 二选一无分支可断言』；实际探测函数 loadChangeTasks 就在 src/timeline.js（导出、可直接测），用的是 readFileSync 非 existsSync，find([active, archived]) 的活跃优先顺序是可断言分支。行为本身实现正确，仅豁免理由失实+覆盖缺失",
+      "location": "src/timeline.js:161-167（loadChangeTasks）；豁免面 requirements.md FR-02 绑定槽"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 绑定声称的『坏行事件容错用例』不存在；测试头注释声称的『? 形态』渲染路径无断言",
+      "evidence": "test/watcher-timeline.test.mjs 无任何喂坏行事件给渲染/推断函数的用例（现有容错用例是 gitLook 抛异常与 design 阶段跳过，非坏行事件）；亦无用例断言 checked 且 times 为 null 时输出 '?' 的行形态（任务面缺失/hash 失联两用例真实存在）",
+      "location": "test/watcher-timeline.test.mjs:1-11（头注释）与 requirements.md FR-03 绑定槽"
+    },
+    {
+      "severity": "P3",
+      "title": "timeline.js 文件头『本文件全部纯函数』声明过宽",
+      "evidence": "导出的 loadChangeTasks/readBirthTs 直接 readFileSync（fs I/O 在本文件内），与文件头纯度口径矛盾；FR-05 点名的四函数确实纯、契约槽也只承诺那四个，仅文件级自述失实",
+      "location": "src/timeline.js:9（文件头注释）对 161-180（loadChangeTasks/readBirthTs）"
+    },
+    {
+      "severity": "P3",
+      "title": "loadChangeTasks 双读竞窗：find 谓词读一次、返回再读一次，归档迁移并发时第二次读取可抛未捕获 ENOENT",
+      "evidence": "归档迁移（renameSync 移目录）是真实并发写者，两读之间目录被移走则 return 处 readFileSync 抛错穿透到顶层；窗口极窄、只读命令可重跑",
+      "location": "src/timeline.js:163-166（find 谓词与返回双 readFileSync）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "finding（P2：尾部覆盖规则双向失准）；边界裁决：勾选时刻顺序推断=可接受（≈表头+尾注双披露，代码兑现）、观测起点≠诞生时刻/单飞锁盲窗=可接受（尾注明示，墙钟 max(0,·) 防负）；时间轴原序渲染不重排、jsonl 单调假设与 append-only 写侧一致——属实",
+    "并发": "finding（P3：loadChangeTasks 双读竞窗）；边界裁决：坏行/半行由 readWatcherEvents 既有容差跳过=可接受（watcher.js:451-458 逐行 JSON.parse try/catch + badLines 计数，实码证实）；快照语义无锁属实（全程只读）",
+    "切换": "ok（无状态只读、中断即弃无残留，接线无暂存无锁，代码证实）；边界裁决：归档变更随时重渲染=可接受（archive 路径探测+事件流按变更名分文件仍在盘）",
+    "作用域": "ok（resolveRuntimeRoot 于 run/shared.js:376 导出单点、assertSafeChangeName 在接线实调、事件流按变更名分文件不串台——均实码证实）；边界裁决：--runtime-root 指他仓时提交锚失联降级只显 hash=可接受（resolvable=false + 『subject 不可解析』标注，测试钉住）；描述行继承机器稿 60 字截断=可接受（tasks.md 机器稿既有形态，渲染端 clip(44)+省略号，尾注披露）"
+  },
+  "reviewedAt": "2026-09-26T07:27:04Z"
+}

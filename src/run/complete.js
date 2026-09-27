@@ -783,7 +783,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
     pm._write(cwd, progress, changeName)
-    triggerSync(cwd, changeName, platformOpts)
+    triggerSync(cwd, changeName, platformOpts, { completion: true })
 
     const total = steps.length
     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
@@ -932,7 +932,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
 
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName, platformOpts)
+  triggerSync(cwd, changeName, platformOpts, { completion: true })
   // 单步完成也刷新 change title：design.md 在 brainstorm step6 落盘，此后每次 --done 都该让
   // changes.title 反映中文描述，不等阶段收尾（机制见 refreshChangeTitleFromArtifacts）。
   refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
@@ -1860,7 +1860,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
 
   progress.lastActive = now
   pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName, platformOpts)
+  triggerSync(cwd, changeName, platformOpts, { completion: true })
 
   // 盖章路径的收尾提示独立分叉：wait 已在记录态完成（非等待用户），提示 --done 直接收尾；
   // 无 --inherit-from 路径输出与现状逐字节一致（兼容红线）。
@@ -1990,7 +1990,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
 
   progress.lastActive = now
   pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName, platformOpts)
+  triggerSync(cwd, changeName, platformOpts, { completion: true })
   // wait 解除持久化点（含 repeatable 多轮）同样刷新 change title——多轮确认期间 design.md 已存在
   refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
 
@@ -2158,7 +2158,7 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
   steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
   pm._write(cwd, progress, changeName)
-  triggerSync(cwd, changeName, platformOpts)
+  triggerSync(cwd, changeName, platformOpts, { completion: true })
 
   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
 

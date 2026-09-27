@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-thin-check-cadence",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-26-thin-check-cadence:flow:FR-01",
+      "tests": [
+        "test/sentinel-rules.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-check-cadence"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-26-thin-check-cadence:flow:FR-02",
+      "tests": [
+        "test/sentinel-rules.test.mjs",
+        "test/watcher-alerts.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-check-cadence"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-26-thin-check-cadence:flow:FR-03",
+      "tests": [
+        "test/sentinel-rules.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-check-cadence"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-26-thin-check-cadence:flow:FR-04",
+      "tests": [
+        "test/sentinel-rules.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-26-thin-check-cadence"
+    }
+  ]
+}

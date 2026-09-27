@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-confirm-on-use",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-01",
+      "tests": [
+        "test/confirm-on-use.test.mjs「① readEntryUnconfirmed」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-02",
+      "tests": [
+        "test/confirm-on-use.test.mjs「②③ 注入面」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-03",
+      "tests": [
+        "test/confirm-on-use.test.mjs「④ CLI tests --confirm」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-04",
+      "tests": [
+        "nope.test.mjs",
+        "test/confirm-on-use.test.mjs「④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-05",
+      "tests": [
+        "test/confirm-on-use.test.mjs「④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-06",
+      "tests": [
+        "test/confirm-on-use.test.mjs「④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-27-confirm-on-use:flow:FR-07",
+      "tests": [
+        "nope.test.mjs",
+        "test/confirm-on-use.test.mjs「④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-confirm-on-use"
+    }
+  ]
+}

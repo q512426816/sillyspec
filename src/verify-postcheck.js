@@ -2484,7 +2484,11 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
       // （cd frontend && pnpm exec vitest）时文件未重定基产双前缀错路径；独立提取 jsxDir。
       const jsxDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(jsxRunner)?.[1]
       const rebaseJsx = (f) => (jsxDir && f.startsWith(jsxDir + '/')) ? f.slice(jsxDir.length + 1) : f
-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).join(' ')}`, count: jsProject.length, dropped: 0 })
+      // R20（2026-09-27-thin-display-fix 实证，用户授权修复）：Windows cmd 执行器对含
+      // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
+      // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
+      const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
+      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProject.length, dropped: 0 })
     } else {
       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }

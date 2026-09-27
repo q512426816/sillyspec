@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-26-thin-check-cadence",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-01 文字面限定 tasks.md，实现与测试将 design.md 多格勾同判入 advisory，requirements 未同步该行为面",
+      "evidence": "detectBatchCheckCadence 仅按 kind==='task-done' 与 detail 正则过滤、不过滤 stage，watcher inferEvents 对 design 工件同样发 task-done（n.stage）；测试「单任务变更 0→1 不判；design 阶段同判」显式断言 design 阶段 0→2 入判并注明 STAGE_FILES 双工件面——行为是有意扩展且被测试钉住，非承诺违反（FR-01 Then 只承诺存在跳格≥2 时输出，未承诺 design 面不输出），但 FR 文字与行为面存在措辞漂移，建议 requirements 补一句 design 同判",
+      "location": "src/sentinel-assertions.js:47 (change.patch detectBatchCheckCadence); test/sentinel-rules.test.mjs:97-101"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-26T14:32:49+08:00"
+}

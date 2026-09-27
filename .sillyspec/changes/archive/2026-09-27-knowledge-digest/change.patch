@@ -1,0 +1,621 @@
+diff --git a/.sillyspec/changes/2026-09-27-knowledge-digest/design.md b/.sillyspec/changes/2026-09-27-knowledge-digest/design.md
+new file mode 100644
+index 00000000..43173993
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-knowledge-digest/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:23:04.935Z
++---
++# 设计记录（Design Record）— 2026-09-27-knowledge-digest
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++新模块 src/knowledge-digest.js（纯只读扫描）：collectKnowledgeDigest 四信号——rot 待复核行按域计数（阈 100）、uncategorized.md 收件箱（阈 20）、auto-*/unmapped 伪域条目（阈 0，unmapped 尊重 local.yaml fr_unmapped_baseline 基线消音只报增量）、绑定行经 resolveTestFileRel（与 repair-paths 同口径单源）解析失败（阈 0）；renderKnowledgeDigestText 人读出口。stages/knowledge.js 挂 digest 子命令（--json 全局旗标经 index.js 传 opts.json，进 data 面平铺）。落域机械改进：fr-index 归档伪域告警附 suggestDomainFromFiles 建议域（backend/app/modules/<seg> 最强 → daemon/frontend/backend → <pkg>/src/ → 目录段），与 digest 信号卡共用单源。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新 CLI：sillyspec knowledge digest [--json]（json 形 {ok,subcommand,generated_at,healthy,signals[],totals}）；suggestDomainFromFiles 导出；indexRequirements 伪域告警文案增强（附建议域+digest 指引）；cmdKnowledge opts +json。零写副作用。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++乱序/迟到：digest 每次现扫库态无缓存。并发写：只读扫描与写入方天然无竞态；伪域告警在归档写盘后打印，幂等重跑无重复副作用。切换/生命周期：--json 与文本双出口同源单算；基线消音键缺失=无基线恒报（与 fr-index 落库告警同口径）。作用域：projectRoot=CLI 运行目录，绑定解析锚仓根；digest 不跨仓（平台侧经 daemon RPC 到各仓分别采集）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：阈值为拍脑袋初值（rot 100/inbox 20）——先按本仓实测量级定（本仓实测 305/39 首跑双超），连续安静或持续爆表都该调，防仪式化熔断在案。次风险：suggestDomainFromFiles 对扁平 src 布局返回 src（无意义域）——已接受（monorepo 规则在前覆盖；错建议不自动执行只提示，人工裁决兜底）。readFrBindings 逐条目扫描 O(条目×文件) 性本仓秒级可接受（周节奏消费）。放弃方案：rot 判据收紧——细看后收回：广域变更打 239 条标记是诚实信号（真触达），病在阅读面不在判据，digest 按域聚合即解。
+diff --git a/.sillyspec/changes/2026-09-27-knowledge-digest/flow-state.yaml b/.sillyspec/changes/2026-09-27-knowledge-digest/flow-state.yaml
+new file mode 100644
+index 00000000..7f23184f
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-knowledge-digest/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: cf1ec5e82c9445d6db2b47a0058c65fbeff492d8
++updatedAt: '2026-09-27T05:32:28.975Z'
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(28)（26.7s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927053152\test-result.json｜lint: failed
++  ← npm run lint（36.1s）｜门文件 16 个
++
+diff --git a/.sillyspec/changes/2026-09-27-knowledge-digest/proposal.md b/.sillyspec/changes/2026-09-27-knowledge-digest/proposal.md
+new file mode 100644
+index 00000000..15a98375
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-knowledge-digest/proposal.md
+@@ -0,0 +1,39 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:23:04.934Z
++---
++# 提案书（Proposal）— 2026-09-27-knowledge-digest
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:f74e672a1629c8c677d709495d3bb35eacef858faba524b13dac755f3d0c5ddc:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++任务原话转写：知识资产治理现状：通用知识有 propose→平台人工合并闭环，但规格资产（FR 索引/绑定）全自动入库零人审——rot 待复核标记、收件箱积压（R23-full 载体仓 40 条实证）、伪域落库（R17/R23 两轮实证 auto-* 伪域病）、坏绑定（FR-cli-entry-091）四类信号沉睡在库内无人工出口。用户确认出口=平台页面（信号卡），CLI 先行供数据。
++成功标准：
++- 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析失败），带阈值（rot>100、inbox>20、伪域>0、unresolved>0 才进摘要），文本+--json 双出口（json 供平台 RPC 消费）
++- 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时，按交付路径推导建议域（backend/app/modules/<seg> → <seg> 等）并在归档输出显式提示（advisory 不阻断）；伪域条目+建议进 digest 信号
++- digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）
++- 全仓测试绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:feb37e2160b3dc2aa2ee9a6a093628f2542c0b1ea091e8807a8780e6256db32d:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析失败），带阈值（rot>100、inbox>20、伪域>0、unresolved>0 才进摘要），文本+--json 双出口（json 供平台 RPC 消费）
++2. 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时，按交付路径推导建议域（backend/app/modules/<seg> → <seg> 等）并在归档输出显式提示（advisory 不阻断）
++3. 伪域条目+建议进 digest 信号
++4. digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）
++5. 全仓测试绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:fde754143af591315827f856cbd821819893e6e70468b15c080388995b3b1cf3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-knowledge-digest 留痕重锚 -->
++1. 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析失败），带阈值（rot>100、inbox>20、伪域>0、unresolved>0 才进摘要），文本+--json 双出口（json 供平台 RPC 消费）
++2. 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时，按交付路径推导建议域（backend/app/modules/<seg> → <seg> 等）并在归档输出显式提示（advisory 不阻断）
++3. 伪域条目+建议进 digest 信号
++4. digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）
++5. 全仓测试绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-27-gate-face-binding-parity/requirements.md b/.sillyspec/changes/2026-09-27-knowledge-digest/requirements.md
+similarity index 51%
+rename from .sillyspec/changes/2026-09-27-gate-face-binding-parity/requirements.md
+rename to .sillyspec/changes/2026-09-27-knowledge-digest/requirements.md
+index a0391487..eede13f6 100644
+--- a/.sillyspec/changes/2026-09-27-gate-face-binding-parity/requirements.md
++++ b/.sillyspec/changes/2026-09-27-knowledge-digest/requirements.md
+@@ -1,38 +1,33 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-27T00:19:43.381Z
++created_at: 2026-09-27T05:23:04.935Z
+ ---
+-# 需求规格（Requirements）— 2026-09-27-gate-face-binding-parity
++# 需求规格（Requirements）— 2026-09-27-knowledge-digest
+ 
+ ## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
+ 
+ <!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
+-### FR-01: runVerifyTestCheck 接受 faceOverride：在场时跳过快照内二次推导（含收
+-Given 测试 相关模块就绪
+-When runVerifyTestCheck 接受 faceOverride：在场时跳过快照内二次推导（含收窄），直接用调用方权威面算动态子集——commit-then
+-Then 行为符合本条标准描述
+-
+-### FR-02: quick-audit 透传 faceOverride，flow done ledger 门接线（c
++### FR-01: 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/
+ Given 系统就绪
+-When quick-audit 透传 faceOverride，flow done ledger 门接线（changedFiles 即权威面）
++When 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析
+ Then 行为符合本条标准描述
+ 
+-### FR-03: full 流程 brainstorm --done 对有 FR 块而无绑定面的 requiremen
++### FR-02: 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时，按交付路径推导建议域（back
+ Given 系统就绪
+-When full 流程 brainstorm --done 对有 FR 块而无绑定面的 requirements 追加绑定槽（复用 thin 追加逻辑单源）
+-Then 行为符合本条标准描述
++When 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时，按交付路径推导建议域（backend/app/modules/<seg>
++Then <seg> 等）并在归档输出显式提示（advisory 不阻断）
+ 
+-### FR-04: verify 侧既有 auto-bind 因槽在场而闭环，R23-full 形态（trace 0 行
++### FR-03: 伪域条目+建议进 digest 信号
+ Given 系统就绪
+-When verify 侧既有 auto-bind 因槽在场而闭环，R23-full 形态（trace 0 行）不再复现
++When 伪域条目+建议进 digest 信号
+ Then 行为符合本条标准描述
+ 
+-### FR-05: renderExample 的 test_strategy 行注释化（主仓与实验快照一致）
++### FR-04: digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 
+ Given 系统就绪
+-When renderExample 的 test_strategy 行注释化（主仓与实验快照一致）
++When digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）
+ Then 行为符合本条标准描述
+ 
+-### FR-06: 全仓测试绿
++### FR-05: 全仓测试绿
+ Given 测试 相关模块就绪
+ When 全仓测试绿
+ Then 行为符合本条标准描述
+@@ -40,13 +35,16 @@ Then 行为符合本条标准描述
+ ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
+ 
+ <!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-digest.test.mjs「① 四信号阈值」＋「④ CLI --json 端到端」（healthy 静默/逐类超阈/unmapped 基线消音只报增量）
+ 
+ <!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-digest.test.mjs「④」（--json 平铺 data 面，signals 数组可直接消费）
+ 
+ <!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-digest.test.mjs「② suggestDomainFromFiles」（backend 模块最强/daemon/frontend/src 段/目录段兜底/空 null）
+ 
+ <!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-digest.test.mjs「①」坏绑定与 repair-paths 同口径（resolveTestFileRel 单源，实跑本仓 8 个全中）
+ 
+ <!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+-
+-<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：整体验证面——test:core exit 0 + 新测试 3 用例 + 触达面 16 绿；本仓实跑 digest 首跑即中 305/39/757/8 四信号（变更内 EXP 证据在收口输出）
+diff --git a/.sillyspec/changes/2026-09-27-knowledge-digest/tasks.md b/.sillyspec/changes/2026-09-27-knowledge-digest/tasks.md
+new file mode 100644
+index 00000000..89f7c481
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-knowledge-digest/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:23:04.935Z
++---
++# 任务注册表（Tasks）— 2026-09-27-knowledge-digest
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析…
++- [x] task-02: 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时…
++- [x] task-03: 伪域条目+建议进 digest 信号
++- [x] task-04: digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）
++- [x] task-05: 全仓测试绿
+diff --git a/src/fr-index.js b/src/fr-index.js
+index f155c1fd..6a27800c 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -18,6 +18,7 @@
+  */
+ 
+ import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile, resolveTestFileRel } from './test-bindings.js'
++import { suggestDomainFromFiles } from './knowledge-digest.js'
+ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+ import { basename, dirname, join } from 'path';
+ import { writeAtomicSync } from './fs-atomic.js';
+@@ -552,7 +553,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+   try {
+     const pseudoHits = written.filter((w) => /^(auto-|unmapped$)/.test(String(w.file || '').replace(/^fr\//, '')))
+     if (pseudoHits.length > 0) {
+-      console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）——补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准`)
++      // 落域机械改进（2026-09-27-knowledge-digest）：伪域告警附交付路径推导的建议域——
++      // 归档时转达人工 1 秒确认（建议器与 digest 信号卡共用 suggestDomainFromFiles 单源）
++      const suggested = suggestDomainFromFiles(deliverableFiles || [])
++      console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）${suggested ? `——按交付路径建议域：${suggested}（确认后可迁移；` : '（'}补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准）`)
++      if (suggested) console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
+     }
+     const unm = all.get('unmapped')
+     if (unm && unm.sections.length > 50) {
+diff --git a/src/index.js b/src/index.js
+index 8a094dc9..ac6bc074 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -3019,7 +3019,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语
+     }
+     case 'knowledge': {
+       const { cmdKnowledge } = await import('./stages/knowledge.js')
+-      await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir })
++      await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir, json })
+       break
+     }
+     // ── sillyspec tests（2026-09-24-fr-test-bindings task-02，fr-test-binding §3.2/§5）：
+diff --git a/src/knowledge-digest.js b/src/knowledge-digest.js
+new file mode 100644
+index 00000000..fe695b2a
+--- /dev/null
++++ b/src/knowledge-digest.js
+@@ -0,0 +1,160 @@
++/**
++ * knowledge-digest.js — 知识资产治理信号收集器（2026-09-27-knowledge-digest）
++ *
++ * 现状：通用知识走 propose→平台人工合并闭环，规格资产（FR 索引/绑定）全自动入库零人审——
++ * 四类信号沉睡库内无人工出口（R23-full 载体仓收件箱积压 40 条实证）。本模块把沉睡数据
++ * 变结构化摘要：`sillyspec knowledge digest`（人读文本）/ `--json`（平台 RPC 消费）。
++ *
++ * 四信号（阈值内静默、超阈才进摘要——安静即健康态，防仪式化）：
++ *   ① rot 待复核标记：knowledge/fr/*.md 条目内「待复核：」行，按域计数（阈值 100）
++ *   ② 收件箱积压：knowledge/uncategorized.md 的 `## <qlId> | <标题>` 条目（阈值 20）
++ *   ③ 伪域落库：auto-* 域文件条目数 + unmapped 池条目数（阈值 0——伪域本不该增长）
++ *   ④ 绑定路径解析失败：fr/*.md 绑定行经 resolveTestFileRel（与 repair-paths/门禁读侧
++ *      同口径单源）无法自仓根解析（阈值 0）
++ *
++ * 只读扫描，零写入——动作（迁移/清账/repair）由消费方另行执行。
++ */
++import { existsSync, readFileSync, readdirSync } from 'fs'
++import { join } from 'path'
++import { readFrBindings, resolveTestFileRel } from './test-bindings.js'
++
++/** 伪域判定：auto- 前缀（scaffold 时代机器蒸馏域）或 unmapped 池 */
++const isPseudoDomain = (domain) => /^auto[-_]/.test(domain) || domain === 'unmapped'
++
++/** 交付路径 → 建议域（落域机械改进的建议器，与 indexRequirements 的告警共用单源） */
++export function suggestDomainFromFiles(files) {
++  for (const raw of files || []) {
++    const p = String(raw || '').replace(/\\/g, '/')
++    let m
++    if ((m = /^backend\/app\/modules\/([\w-]+)\//.exec(p))) return m[1] // backend 模块归属最强
++    if ((m = /^sillyhub-daemon\//.exec(p))) return 'daemon'
++    if ((m = /^frontend\//.exec(p))) return 'frontend'
++    if ((m = /^backend\//.exec(p))) return 'backend'
++    if ((m = /^([\w-]+)\/src\//.exec(p))) return m[1]
++    if ((m = /^([\w-]+)\//.exec(p))) return m[1]
++  }
++  return null
++}
++
++/** 条目级解析：fr/<域>.md 的 `## <id> <标题>` 段头与「待复核：」行 */
++function scanFrFile(text) {
++  const entries = []
++  let cur = null
++  for (const line of text.split(/\r?\n/)) {
++    const h = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/.exec(line)
++    if (h) { cur = { id: h[1], needsReview: null }; entries.push(cur); continue }
++    if (cur) {
++      const r = /^待复核：(.+)$/.exec(line)
++      if (r) cur.needsReview = r[1].trim()
++    }
++  }
++  return entries
++}
++
++/**
++ * 收集治理信号（纯函数，只读）。
++ * @returns {{ generated_at: string, healthy: boolean, signals: Array<{kind, level, title, count, detail, suggestion?}>, totals: object }}
++ */
++export function collectKnowledgeDigest({ specBase, projectRoot }) {
++  const knowledgeRoot = join(specBase, 'knowledge')
++  const frDir = join(knowledgeRoot, 'fr')
++  const signals = []
++  const totals = { rot: 0, inbox: 0, pseudo: 0, unresolvedBindings: 0 }
++
++  const rotByDomain = new Map()
++  const pseudoByDomain = new Map()
++  const unresolved = []
++  const frFiles = existsSync(frDir) ? readdirSync(frDir).filter(f => f.endsWith('.md')).sort() : []
++  // unmapped 基线消音（与 fr-index 落库告警同口径）：跨仓历史基线不刷信号，只报增量
++  let unmappedBaseline = 0
++  try {
++    const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
++    const m = raw.match(/^fr_unmapped_baseline:\s*(\d+)\s*$/m)
++    if (m) unmappedBaseline = parseInt(m[1], 10)
++  } catch { /* 无 local.yaml = 无基线 */ }
++
++  for (const f of frFiles) {
++    const domain = f.replace(/\.md$/, '')
++    const text = readFileSync(join(frDir, f), 'utf8')
++    const entries = scanFrFile(text)
++    const rot = entries.filter(e => e.needsReview).length
++    if (rot > 0) { rotByDomain.set(domain, rot); totals.rot += rot }
++    if (isPseudoDomain(domain) && entries.length > 0) {
++      // 基线内的 unmapped 池不计（历史跨仓基线，非新增堆积）；auto-* 伪域无基线语义恒计
++      const count = domain === 'unmapped' ? Math.max(0, entries.length - unmappedBaseline) : entries.length
++      if (count > 0) { pseudoByDomain.set(domain, count); totals.pseudo += count }
++    }
++    // 绑定解析失败（与 repair-paths 同口径：先根相对直取，再 resolveTestFileRel）
++    for (const e of entries) {
++      const rows = readFrBindings({ knowledgeRoot, frId: e.id })
++      for (const row of rows) {
++        for (const t of row.tests || []) {
++          const filePart = String(t).split('#')[0].split('::')[0]
++          const rel = resolveTestFileRel(filePart, { projectRoot })
++          if (!rel && !existsSync(join(projectRoot, filePart.replace(/\\/g, '/')))) {
++            totals.unresolvedBindings++
++            unresolved.push(`${e.id}:${t}`)
++          }
++        }
++      }
++    }
++  }
++
++  // ② 收件箱（uncategorized.md 的 `## <qlId> | <标题>` 行）
++  let inboxTitles = []
++  const uncPath = join(knowledgeRoot, 'uncategorized.md')
++  if (existsSync(uncPath)) {
++    inboxTitles = readFileSync(uncPath, 'utf8').split(/\r?\n/)
++      .map(l => /^## (.+)$/.exec(l)?.[1]).filter(Boolean)
++    totals.inbox = inboxTitles.length
++  }
++
++  const mk = (kind, level, title, count, detail, suggestion) =>
++    signals.push({ kind, level, title, count, detail, ...(suggestion ? { suggestion } : {}) })
++
++  if (totals.rot > 100) {
++    mk('rot', 'warn', `rot 待复核批量标记（${totals.rot} 条 > 100）`, totals.rot,
++      [...rotByDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([d, n]) => `${d} ${n}`).join('、'),
++      '批量复核：文案漂移类可批量承接，行为类逐条对账')
++  }
++  if (totals.inbox > 20) {
++    mk('inbox', 'warn', `知识收件箱积压（${totals.inbox} 条 > 20）`, totals.inbox,
++      inboxTitles.slice(0, 5).join('；') + (inboxTitles.length > 5 ? ' 等' : ''),
++      'sillyspec knowledge inbox 逐条 classify 清账')
++  }
++  if (totals.pseudo > 0) {
++    mk('pseudo-domain', 'warn', `伪域在库（auto-*/unmapped 共 ${totals.pseudo} 条）`, totals.pseudo,
++      [...pseudoByDomain.entries()].map(([d, n]) => `${d} ${n}`).join('、'),
++      '按 suggestDomainFromFiles 建议迁移域（平台信号卡一键/手工 redomain）')
++  }
++  if (totals.unresolvedBindings > 0) {
++    mk('binding-unresolved', 'warn', `绑定路径解析失败（${totals.unresolvedBindings} 个）`, totals.unresolvedBindings,
++      unresolved.slice(0, 5).join('、') + (unresolved.length > 5 ? ' 等' : ''),
++      'sillyspec tests repair-paths（干跑预览 → --write 归一）')
++  }
++
++  return {
++    generated_at: new Date().toISOString(),
++    healthy: signals.length === 0,
++    signals,
++    totals,
++  }
++}
++
++/** 人读文本渲染（CLI 出口；平台走 --json） */
++export function renderKnowledgeDigestText(d) {
++  const lines = []
++  lines.push(`📬 知识资产治理摘要（${d.generated_at.slice(0, 16).replace('T', ' ')}）`)
++  if (d.healthy) {
++    lines.push('✅ 四类信号全部在阈内（rot/inbox/伪域/坏绑定）——安静即健康态，无需动作')
++  } else {
++    lines.push(`⚠️ ${d.signals.length} 类信号超阈：`)
++    for (const s of d.signals) {
++      lines.push(`  [${s.kind}] ${s.title}`)
++      if (s.detail) lines.push(`     明细：${s.detail}`)
++      if (s.suggestion) lines.push(`     处置：${s.suggestion}`)
++    }
++  }
++  lines.push(`底数：rot 待复核 ${d.totals.rot}｜收件箱 ${d.totals.inbox}｜伪域条目 ${d.totals.pseudo}｜坏绑定 ${d.totals.unresolvedBindings}`)
++  return lines.join('\n')
++}
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 6159bb09..25e8ea94 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -28,6 +28,16 @@ function resolveKnowledgeDir(dir, specDir) {
+   return join(base, 'knowledge')
+ }
+ 
++/**
++ * 锚点/标题容错归一（坑 knowledge-hits-anchor-drift T4）：锚点三代规则并存（CLI slug /
++ * INDEX 手写 / 平台 slugify_anchor）对 emoji 前缀、点号、斜杠、首尾中划线的处理互不一致
++ * ——归一到「仅字母数字 + 小写」后比对，三代产物归一相等；截断（60 字符）由调用方前缀
++ * 容忍处理。仅用于 validate 告警，不参与命中判定（单一源方向见 T2）。
++ */
++function normalizeAnchorForCompare(s) {
++  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
++}
++
+ function output(ok, data, error) {
+   const result = { ok, ...data }
+   if (error) result.error = error
+@@ -223,6 +233,41 @@ export async function cmdValidate(dir, args, opts = {}) {
+       }
+     }
+ 
++    // 2c. 路由行锚点与目标文件标题的一致性（坑 knowledge-hits-anchor-drift T4，2026-09-25
++    // 实证：INDEX 锚点与文件标题静默漂移——标题事后被改/emoji 前缀/点号差异使命中落空成
++    // 「幽灵锚」，平台知识页不计覆盖）。容错归一比对（剥 emoji/点号/斜杠/中划线/空白 +
++    // 小写 + 截断前缀容忍），**不**引入第四套严格 slug 规则（T2 单一源方向是平台侧归一，
++    // 此处只做告警不参与命中判定）；漂移只告警不报错（INDEX 手写面，修复由人拍板）。
++    for (const entry of entries) {
++      if (!entry.anchor) continue
++      const refPath = join(knowledgeDir, entry.file)
++      if (!existsSync(refPath)) continue // broken_reference 已报，不重复
++      const headings = []
++      try {
++        const content = readFileSync(refPath, 'utf8')
++        for (const m of content.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)) headings.push(m[1])
++      } catch { /* 读失败留给上层报 */ }
++      const target = normalizeAnchorForCompare(entry.anchor)
++      if (!target || headings.length === 0) continue
++      const hit = headings.some((h) => {
++        const hn = normalizeAnchorForCompare(h)
++        if (!hn) return false
++        if (hn === target) return true
++        // 截断容忍（锚点生成侧有 60 字符截断）：短的一方是长方前缀即视为同源
++        const [shorter, longer] = hn.length <= target.length ? [hn, target] : [target, hn]
++        return shorter.length >= 6 && longer.startsWith(shorter)
++      })
++      if (!hit) {
++        warnings.push({
++          code: 'anchor_drift',
++          path: join('knowledge', entry.file),
++          anchor: entry.anchor,
++          display: entry.display,
++          hint: '路由行锚点在目标文件无对应标题（标题已改或锚点生成规则漂移）——命中会落空成幽灵锚，按文件现标题修正 INDEX 路由行',
++        })
++      }
++    }
++
+     // 2b. flag 形态关键词（坑 knowledge-flag-as-value）：classify 曾把 flag-as-value 的
+     // 字面量 '--file' 写进路由行——目标文件存在、行格式合法，既有检查放行，此处补侦测
+     for (const entry of entries) {
+@@ -597,6 +642,24 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       }
+       return mod.cmdKnowledgeStats(dir, args.slice(1), opts)
+     }
++    case 'digest': {
++      // 治理信号摘要（2026-09-27-knowledge-digest）：四类沉睡信号（rot 待复核/收件箱积压/
++      // 伪域落库/绑定解析失败）超阈才见人——安静即健康态。--json 供平台 RPC 消费（信号卡）。
++      const specBase = opts.specDir || join(dir, '.sillyspec')
++      const rest = args.slice(1)
++      try {
++        const { collectKnowledgeDigest, renderKnowledgeDigestText } = await import('../knowledge-digest.js')
++        const d = collectKnowledgeDigest({ specBase, projectRoot: dir })
++        if (opts.json || rest.includes('--json')) { // --json 是全局旗标（index.js 顶层吞掉），opts.json 为正道，rest 兜底
++          output(true, { subcommand: 'digest', ...d }) // digest 进 data 面（第三参是 error 位）
++        } else {
++          console.log(renderKnowledgeDigestText(d))
++        }
++      } catch (e) {
++        output(false, {}, { code: 'digest_failed', message: String((e && e.message) || e) })
++      }
++      return
++    }
+     default:
+       output(false, {}, {
+         code: 'unknown_subcommand',
+diff --git a/test/knowledge-digest.test.mjs b/test/knowledge-digest.test.mjs
+new file mode 100644
+index 00000000..27e2c75b
+--- /dev/null
++++ b/test/knowledge-digest.test.mjs
+@@ -0,0 +1,110 @@
++/**
++ * 2026-09-27-knowledge-digest 防回归：
++ * ① collectKnowledgeDigest 四信号扫描与阈值（rot>100 / inbox>20 / 伪域>0（unmapped 基线消音）/ 坏绑定>0）
++ * ② suggestDomainFromFiles 交付路径→建议域（backend 模块归属最强/daemon/frontend/src 段）
++ * ③ renderKnowledgeDigestText 文本出口 + healthy 静默态
++ * ④ CLI knowledge digest --json 端到端
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { tmpdir } from 'node:os'
++import { execFileSync } from 'node:child_process'
++import { fileURLToPath } from 'node:url'
++import { collectKnowledgeDigest, renderKnowledgeDigestText, suggestDomainFromFiles } from '../src/knowledge-digest.js'
++
++const tmpRoots = []
++function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
++test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
++
++function fixture({ rotCount = 0, inboxCount = 0, autoDomain = false, unmappedCount = 0, unmappedBaseline = null, badBinding = false }) {
++  const root = mk('kd-')
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++  mkdirSync(join(root, 'backend', 'app', 'modules', 'platform_sync', 'tests'), { recursive: true })
++  writeFileSync(join(root, 'backend', 'app', 'modules', 'platform_sync', 'tests', 't.py'), 'x = 1\n')
++  const frLines = ['---', 'author: t', '---', '', '# FR 索引 — core', '']
++  frLines.push('## FR-core-001 行为一', '状态：active', rotCount > 0 ? '待复核：2026-09-27-某变更' : null,
++    '', '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++    '- row: src-change:task-01:FR-01',
++    `  tests: ${badBinding ? 'nope-missing.test.ts' : 'backend/app/modules/platform_sync/tests/t.py'}`,
++    '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '')
++  frLines.filter(Boolean).forEach(l => { })
++  writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), frLines.filter(l => l !== null).join('\n') + '\n')
++  if (rotCount > 1) {
++    const extra = []
++    for (let i = 2; i <= rotCount; i++) extra.push(`## FR-core-${String(i).padStart(3, '0')} 行为${i}`, '状态：active', '待复核：2026-09-27-某变更', '')
++    writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), frLines.filter(l => l !== null).join('\n') + '\n' + extra.join('\n') + '\n')
++  }
++  if (autoDomain) {
++    writeFileSync(join(specBase, 'knowledge', 'fr', 'auto-backend.md'), '---\nauthor: t\n---\n\n# FR 索引 — auto-backend\n\n## FR-auto-backend-001 伪域条目\n状态：active\n')
++  }
++  if (unmappedCount > 0) {
++    const lines = ['---', 'author: t', '---', '', '# FR 索引 — unmapped', '']
++    for (let i = 1; i <= unmappedCount; i++) lines.push(`## FR-unmapped-${String(i).padStart(3, '0')} 池条目${i}`, '状态：active', '')
++    writeFileSync(join(specBase, 'knowledge', 'fr', 'unmapped.md'), lines.join('\n') + '\n')
++  }
++  if (inboxCount > 0) {
++    const lines = ['# 未归类知识', '']
++    for (let i = 1; i <= inboxCount; i++) lines.push(`## 2026-06-05 — 收件箱条目${i}：某坑的描述`)
++    writeFileSync(join(specBase, 'knowledge', 'uncategorized.md'), lines.join('\n') + '\n')
++  }
++  if (unmappedBaseline != null) {
++    writeFileSync(join(specBase, 'local.yaml'), `fr_unmapped_baseline: ${unmappedBaseline}\n`)
++  }
++  return { root, specBase }
++}
++
++test('① 四信号阈值：全在阈内 healthy；各类超阈逐项进摘要；unmapped 基线消音', () => {
++  const q = fixture({})
++  const d = collectKnowledgeDigest({ specBase: q.specBase, projectRoot: q.root })
++  assert.equal(d.healthy, true, '空库healthy')
++  assert.equal(d.signals.length, 0)
++  assert.ok(renderKnowledgeDigestText(d).includes('安静即健康态'), 'healthy 文案')
++
++  const r = fixture({ rotCount: 101 })
++  const dr = collectKnowledgeDigest({ specBase: r.specBase, projectRoot: r.root })
++  assert.equal(dr.totals.rot, 101)
++  assert.ok(dr.signals.some(s => s.kind === 'rot' && s.count === 101), 'rot 超阈进摘要')
++
++  const i = fixture({ inboxCount: 21 })
++  const di = collectKnowledgeDigest({ specBase: i.specBase, projectRoot: i.root })
++  assert.ok(di.signals.some(s => s.kind === 'inbox' && s.count === 21), 'inbox 超阈进摘要')
++
++  const a = fixture({ autoDomain: true })
++  const da = collectKnowledgeDigest({ specBase: a.specBase, projectRoot: a.root })
++  assert.ok(da.signals.some(s => s.kind === 'pseudo-domain' && s.count === 1), 'auto-* 伪域恒计')
++
++  const u = fixture({ unmappedCount: 30, unmappedBaseline: 30 })
++  const du = collectKnowledgeDigest({ specBase: u.specBase, projectRoot: u.root })
++  assert.equal(du.totals.pseudo, 0, 'unmapped 基线内消音')
++  const u2 = fixture({ unmappedCount: 35, unmappedBaseline: 30 })
++  const du2 = collectKnowledgeDigest({ specBase: u2.specBase, projectRoot: u2.root })
++  assert.equal(du2.totals.pseudo, 5, '超基线只报增量 5')
++
++  const b = fixture({ badBinding: true })
++  const db = collectKnowledgeDigest({ specBase: b.specBase, projectRoot: b.root })
++  assert.equal(db.totals.unresolvedBindings, 1)
++  assert.ok(db.signals.some(s => s.kind === 'binding-unresolved' && /repair-paths/.test(s.suggestion)), '坏绑定给 repair 指引')
++})
++
++test('② suggestDomainFromFiles：backend 模块归属最强 → src 段 → 目录段兜底', () => {
++  assert.equal(suggestDomainFromFiles(['backend/app/modules/platform_sync/router.py', 'frontend/x.tsx']), 'platform_sync')
++  assert.equal(suggestDomainFromFiles(['sillyhub-daemon/src/a.ts']), 'daemon')
++  assert.equal(suggestDomainFromFiles(['frontend/src/app/page.tsx']), 'frontend')
++  assert.equal(suggestDomainFromFiles(['src/flow.js', 'src/run/gates.js']), 'src', '扁平 src 布局取首段（monorepo 子包由 <pkg>/src/ 规则在前覆盖）')
++  assert.equal(suggestDomainFromFiles(['docs/a.md']), 'docs')
++  assert.equal(suggestDomainFromFiles([]), null)
++})
++
++test('④ CLI knowledge digest --json 端到端', () => {
++  const q = fixture({ autoDomain: true, inboxCount: 25 })
++  const bin = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'sillyspec.js')
++  const out = execFileSync('node', [bin, 'knowledge', 'digest', '--json'], { cwd: q.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
++  const j = JSON.parse(out)
++  assert.equal(j.ok, true)
++  assert.ok(Array.isArray(j.signals) && j.signals.length >= 2, 'json 出信号数组（平台 RPC 消费面）')
++  assert.ok(j.signals.some(s => s.kind === 'pseudo-domain'))
++  assert.ok(j.signals.some(s => s.kind === 'inbox'))
++})
