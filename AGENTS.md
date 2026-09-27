@@ -1,4 +1,4 @@
-<!-- SillySpec v3.31.0 — 由 sillyspec init 生成，可自由编辑；重跑 init 同版本不更新 -->
+<!-- SillySpec v3.30.0 — 由 sillyspec init 生成，可自由编辑；重跑 init 同版本不更新 -->
 # Agent 指引
 
 ## 项目说明

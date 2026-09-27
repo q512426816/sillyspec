@@ -11,7 +11,7 @@
 1. **禁止绕过本文件规则和 SillySpec 流程**。维护 sillyspec 自身也走 sillyspec 流程，不裸改裸提交。
 2. **改代码前必须先说明依据**——依据的文档路径（design.md / 模块文档 / file-lifecycle.md）或现有代码依据，无依据不改。
 3. **新功能 / 大改动走完整流程**：`brainstorm → plan → execute → verify → archive`。
-4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"` → 直接干活 → `sillyspec flow done --change <名>`（quick 通道已退役 v3.31.0 起，仅存量在途会话可 --done/--cancel 收尾）。
+4. **小修复 / 小调整走轻量变更（默认快道）**：`sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"` → 直接干活 → `sillyspec flow done --change <名>`（quick 通道已退役 v3.30.0 起，仅存量在途会话可 --done/--cancel 收尾）。
 5. **执行顺序**：文档 → 读代码 → 写测试 → 写实现 → 跑测试 → 验收 → 更新文档。
 6. **判规模选档**：≤3 文件、范围明确走轻量变更；多阶段 / 架构级走完整流程。
 7. **代码先行不补流程（倒推 B 模式）**：代码若已先写好，**不回头补 brainstorm/plan 装样子**——用 `flow start --input "<已做改动＋成功标准>"` → `flow done` 收尾，把已落盘改动如实登记为变更级归档。

@@ -2010,7 +2010,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     const classification = classifyChange({ description: inputText || '', explicitMode, localConfig })
     if (classification.mode === 'quick') {
       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
-      console.log(`   小变更请走轻量变更（quick 通道已退役，v3.31.0 起拒绝新会话）：`)
+      console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话）：`)
       console.log(`   sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
       return
     }

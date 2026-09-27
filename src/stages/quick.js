@@ -1,7 +1,7 @@
 export const definition = {
   name: 'quick',
   title: '快速任务（已退役，仅存量在途会话收尾）',
-  description: 'quick 通道已退役（v3.31.0 起拒绝新会话）；新工作走轻量变更 flow start',
+  description: 'quick 通道已退役（v3.30.0 起拒绝新会话）；新工作走轻量变更 flow start',
   auxiliary: true,
   steps: [
     {

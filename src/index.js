@@ -53,7 +53,7 @@ SillySpec CLI — 规范驱动开发工具包
     --json                             输出 JSON（程序化读取）
 
   阶段特有参数:
-    quick:   （通道已退役 v3.31.0——仅收尾升级前在途会话：--done/--cancel/--change <会话ID>；新工作走 flow start）
+    quick:   （通道已退役 v3.30.0——仅收尾升级前在途会话：--done/--cancel/--change <会话ID>；新工作走 flow start）
     scan:    --quick | --standard | --deep   显式选择 profile（优先于规模自动判定；三档互斥）
              --force-rescan              覆盖已有 scan 文档保护
              --diff [--base <commit>] [--full] [--report]   scan 文档 vs 源码漂移清单（纯只读）
@@ -220,7 +220,7 @@ function refuseRetiredQuickFreshStart(stageArgs) {
       return i !== -1 && /^quick-[0-9a-f]{8}$/.test(String(stageArgs[i + 1] || ''))
     })()
   if (passThrough) return false
-  console.error('❌ quick 通道已退役，不再接受新会话（v3.31.0 起）。')
+  console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
   console.error('   新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
   console.error('   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。')
   process.exit(1)
