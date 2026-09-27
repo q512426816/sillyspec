@@ -33,6 +33,7 @@ import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
 
 const FLOW_STATE_FILE = 'flow-state.yaml'
 const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
@@ -1125,6 +1126,36 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       }
     } catch (e) {
       console.warn(`⚠️ UI 视觉证据探针异常（fail-soft 降级放行）：${(e && e.message) || e}`)
+    }
+    // hunk 归属门（2026-09-27-hunk-attribution-gate：提交面行级对账——规则 11 文件级 pathspec
+    // 防不住「同文件异行」的并行会话夹带，本会话 4f859053 实证。三类信号：未归因文件、跨变更
+    // 竞争、在途残留；hunk_gate warn 默认（警告）/error（阻断）/off。与「提交面夹带嫌疑
+    // advisory」互补：advisory 在冻结面采集处看文件名，本门在 probes 执法看 hunk 与竞争面。
+    try {
+      const gate = readHunkGate(specBase)
+      let committedForGate = []
+      try {
+        committedForGate = String(gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`]) || '')
+          .split('\n').map((x) => x.trim().replace(/\\/g, '/')).filter(Boolean)
+      } catch { /* 无 git/无基线 → 空面，模块内降级跳过 */ }
+      const hunkResult = await runHunkAttributionGate({
+        cwd, specBase, changeName: change, baselineCommit: st.baseline_commit,
+        committedFiles: committedForGate, gitFn: gitQuiet, gate,
+      })
+      for (const line of renderHunkAttributionLines(hunkResult)) {
+        if (line.startsWith('- ✅') || line.startsWith('- ℹ️')) console.log(`🔍 ${line.slice(2)}`)
+        else if (line.startsWith('- ⚠️')) {
+          if (gate === 'error') console.error(`❌ ${line.slice(2)}`)
+          else console.warn(`⚠️ ${line.slice(2)}`)
+        } else if (line.startsWith('- ❌')) console.error(`❌ ${line.slice(2)}`)
+      }
+      if (gate === 'error' && !hunkResult.ok) {
+        console.error('   修复：未归因文件补 design 自声明或协调归属；竞争文件逐 hunk 核对后协调串行或拆分提交。清零后重跑（断点续）。')
+        reportMidFail('probes')
+        process.exit(1)
+      }
+    } catch (e) {
+      console.warn(`⚠️ hunk 归属门异常（fail-soft 降级放行）：${(e && e.message) || e}`)
     }
     mark('probes')
   }
