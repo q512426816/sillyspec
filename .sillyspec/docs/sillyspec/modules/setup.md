@@ -1,7 +1,7 @@
 ---
 author: qinyi
 created_at: 2026-06-01T09:05:00+08:00
-updated_at: 2026-09-19T18:10:00+08:00
+updated_at: 2026-09-27T18:10:00+08:00
 ---
 
 # setup
@@ -86,3 +86,9 @@ setup 模块由三个文件组成，分别处理 SillySpec 生命周期的不同
 | 2026-08-19 | ql-20260819-015-65fa | init.js 子项目 repo 探测的 git remote get-url 改 execFileSync（去 shell 注入面） |
 | 2026-09-14 | 2026-09-14-change-ownership-guards | config-schema.js 登记 live 键 `change-ownership.heartbeat_minutes`（optional integer，缺省 15；reader=src/progress/change-registry.js `resolveHeartbeatMs`）+ local.yaml.example 注释段（task-01） |
 | 2026-09-19 | 2026-09-19-span-risk-pattern-migration | config-schema.js ceremony 段 note 补 span 轴路径模式输入源表述（项目声明 _module-map.yaml 顶层 span_risk 段、无声明项目该维关闭不回退内置表；无新 local 键） |
+
+## 配置键注记（2026-09-27-gate-docs-cleanup）
+
+- local.yaml 新增两枚分级门键（均 warn 默认、error 升阻断、off 关闭，缺席向后兼容）：
+  `ui_visual_gate`（UI 视觉证据门，读取方 src/ui-visual.js readUiVisualGate）；
+  `hunk_gate`（提交面行级归属门，读取方 src/hunk-attribution.js readHunkGate——error 档未归因与跨变更竞争阻断、在途残留恒警告）。

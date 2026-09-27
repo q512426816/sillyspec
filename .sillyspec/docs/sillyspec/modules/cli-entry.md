@@ -4,7 +4,7 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-22T00:00:00+08:00
+updated_at: 2026-09-27T00:00:00+08:00
 ---
 # cli-entry
 
@@ -104,3 +104,8 @@ runStage(pm, progress, stageName, cwd, changeName)
 plan-adopt-waves.js adoptPlanWaves 加 mode 参：proposal 只读产拓扑布局草稿（planMdDraft/rewritten，不落盘）供 postcheck 自动修复验证；write 档向后兼容（CLI 命令行为等价，测试锁定）。
 
 - 2026-09-23-watcher-preview-progress：`progress show` 增 `--preview` flag（预览行独立段带徽标+证据引用，缺省零行为变化）；`handoff` 输出追加「机器预览态」段（有预览带段/无预览零段，best-effort）。测试锚 test/preview-outlet.test.mjs。
+
+## 门接线注记（2026-09-27-gate-docs-cleanup）
+
+- flow start：`--input` 触及前端页面或 UI（detectUiTouch 关键词+声明文件面扩展名双源，src/ui-visual.js）→ 输出「UI 变更执行须知」（advisory 引导：改前定基准、边改边对照、证据落 visual-evidence.md、视觉降级须用户裁决留痕）。
+- flow done probes 子步双门执法：UI 视觉证据分级门（视觉降级无裁决留痕恒 error；ui_visual_gate 三档）+ hunk 归属门（未归因文件/跨变更竞争/在途残留；hunk_gate 三档，error 档阻断）。检测单点分别在 src/ui-visual.js 与 src/hunk-attribution.js（两新文件暂未入模块图 paths——归属本模块消费面）。

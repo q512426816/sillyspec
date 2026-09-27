@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-09-20T18:10:00+08:00
+updated_at: 2026-09-27T18:10:00+08:00
 author: qinyi
 created_at: 2026-06-01T09:05:00
 ---
@@ -193,3 +193,7 @@ detectWorktreeHealth（复用 WorktreeManager.doctor 薄适配 + sillyspec/* 残
 - 行为面变化：无 span_risk 段的项目 span 模式维度关闭（ceremony span 轴只剩文件数/跨模块两维；quick 画像 riskHits 恒空、runtimeEvidence 恒 'na'）——不回退内置表，与 blast「未配置禁回退」同款取舍，known-issues 已登记（见 docs-consistency 卡 knowledge 登记条目）。
 
 - 2026-09-23-watcher-preview-progress：DB v7——stages/steps 加 `authority`（DEFAULT 'cli'）与 `preview_evidence` 列+复合索引 (change_id, stage, authority)，幂等迁移；project.schema_version DEFAULT 同步 v7 四处一致。测试锚 test/preview-migration.test.mjs。
+
+## 探针族注记（2026-09-27-gate-docs-cleanup）
+
+- verify 探针族增员至 12：「探针 12 UI 视觉证据（分级门）」——UI 触达变更验 visual-evidence.md 在场性与降级裁决留痕；缺证据默认警告（ui_visual_gate=error 升阻断）、视觉降级无「用户裁决」留痕恒 error。实现 src/ui-visual.js（runUiVisualProbe/renderUiVisualProbeLines），runVerifyProbes fail-soft 计算、renderVerifyProbesReport 段渲染（旧 result 无键兜底零回归）。

@@ -130,7 +130,7 @@ export const LOCAL_YAML_SCHEMA = {
       keys: [
         { path: 'known_failures', type: 'array', optional: true, status: 'live', readers: ['extractKnownFailures (src/verify-postcheck.js)'], desc: '失败行模式列表（匹配测试输出失败行）。', example: 'tests/some-old-test' },
         { path: 'ui_visual_gate', type: 'string', optional: true, status: 'live', readers: ['runUiVisualProbe (src/ui-visual.js)'], desc: '【2026-09-27-ui-visual-guidance】UI 视觉证据分级门档位：warn（默认，缺 visual-evidence.md 仅警告）/ error（缺证据即阻断）/ off（探针整体关闭，含降级硬规则）。视觉降级无用户裁决留痕时无论档位恒阻断。', example: 'warn' },
-        { path: 'hunk_gate', type: 'string', optional: true, status: 'live', readers: ['runHunkAttributionGate (src/hunk-attribution.js)'], desc: '【2026-09-27-hunk-attribution-gate】提交面行级归属门档位：warn（默认，未归因文件/跨变更竞争/在途残留仅警告）/ error（三类信号任一在场均阻断收口）/ off（关闭）。', example: 'warn' },
+        { path: 'hunk_gate', type: 'string', optional: true, status: 'live', readers: ['runHunkAttributionGate (src/hunk-attribution.js)'], desc: '【2026-09-27-hunk-attribution-gate】提交面行级归属门档位：warn（默认，未归因文件/跨变更竞争/在途残留仅警告）/ error（未归因与跨变更竞争任一在场阻断收口；在途残留恒仅警告——并发 WIP 弱信号不硬拦）/ off（关闭）。', example: 'warn' },
       ],
     },
     {
