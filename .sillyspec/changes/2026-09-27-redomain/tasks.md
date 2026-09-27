@@ -14,8 +14,8 @@ created_at: 2026-09-27T11:37:00.043Z
 - [x] task-04: 段切割用 splitKnowledgeSections
 - [x] task-05: joinKnowledgeFile 单源
 - [x] task-06: 目标域文件缺席则按 loadDomainSections 同款头新建
-- [ ] task-07: 目标域无 INDEX 路由行则经 syncIndexRoutingLines 补
-- [ ] task-08: 全域迁移后源域文件剩 0 条目时删除源文件（防空壳域）
-- [ ] task-09: anchor 模式精确单条
-- [ ] task-10: 测试：单条迁移/全域迁移/目标文件新建/INDEX 补行/幂等（迁过的不再迁）/干跑不落盘
-- [ ] task-11: 全仓测试绿
+- [x] task-07: 目标域无 INDEX 路由行则经 syncIndexRoutingLines 补
+- [x] task-08: 全域迁移后源域文件剩 0 条目时删除源文件（防空壳域）
+- [x] task-09: anchor 模式精确单条
+- [x] task-10: 测试：单条迁移/全域迁移/目标文件新建/INDEX 补行/幂等（迁过的不再迁）/干跑不落盘
+- [x] task-11: 全仓测试绿

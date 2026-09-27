@@ -115,6 +115,7 @@ modules:
       - src/greenfield-bootstrap.js
       - src/fr-index.js
       - src/knowledge-digest.js
+      - src/redomain.js
       - src/doctor-diagnostics.js
       - src/fr-index.js
       - src/fs-atomic.js

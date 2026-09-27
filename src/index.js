@@ -3163,7 +3163,6 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         const fromD = flag('--from')
         const toD = flag('--to')
         if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--write]'); break }
-        const anchors = filteredArgs.filter((a, i) => a === '--anchor' ? (filteredArgs[i + 1] || '') : null).filter(Boolean)
         // 多 --anchor 收集
         const anchorList = []
         for (let i = 0; i < filteredArgs.length - 1; i++) if (filteredArgs[i] === '--anchor') anchorList.push(filteredArgs[i + 1])

@@ -32,7 +32,7 @@ created_at: 2026-09-27T11:37:00.043Z
 <!-- MACHINE-DRAFT:design-boundaries:end -->
 
 <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
-乱序：迁移是整段权威重写，幂等重跑（迁过的 ID 已在目标域=同 ID 冲突防线拦截而非重复迁移——防线即幂等）。并发写：writeAtomicSync 原子性；与 upsertFrBindings 并发时后者按 ID 全目录扫描定位，迁移中窗口内输者重跑安全。切换/生命周期：干跑零副作用；--write 中断（源已写目标未写）由冲突防线兜底重入。作用域：只动 knowledge/fr/<from|to>.md 与 INDEX.md，不触绑定语义/条目内容。
+乱序：迁移是整段权威重写，幂等重跑（迁过的 ID 已在目标域=同 ID 冲突防线拦截而非重复迁移——防线即幂等）。并发写：writeAtomicSync 原子性；与 upsertFrBindings 并发时后者按 ID 全目录扫描定位，迁移中窗口内输者重跑安全。切换/生命周期：干跑零副作用；--write 落盘序=目标域先写、源域后写（评审 P2-1 修正：首版答文写序倒置）——可达中断窗口是「目标已写源未写」，重入时同 ID 冲突防线拦截而非重复迁移，防线即幂等。并发自竞态（并发 --write 读改写交错可静默丢条目）窗口窄且为全知识面承袭模式（writeAtomicSync 只保单文件原子），评审 P2-4 留痕。作用域：只动 knowledge/fr/<from|to>.md 与 INDEX.md，不触绑定语义/条目内容。
 
 ## 风险与死路
 <!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-redomain 留痕重锚 -->

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-redomain",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "盲维槽3「切换/中断」作答方向与代码写序相反：代码目标先写、源后写，所述「源已写目标未写」窗口不可达且该状态下冲突防线并不兜底",
+      "evidence": "redomain.js:88-92 实际落盘顺序为 writeAtomicSync(toPath)（目标先追加）→ unlink/重写 fromPath（源后处理）。design.md:35 槽3 写「--write 中断（源已写目标未写）由冲突防线兜底重入」：(a) 该窗口在真实写序下不可达；(b) 若真处于该状态（源已切走、目标未写入），目标域无该 ID，同 ID 冲突防线不会触发，重入只会抛「无 FR 条目段/anchor 未命中」，条目内容已从源覆写消失。实际可达的中断态是镜像的「目标已写源未写」（条目双份），重入确会被冲突防线拦截（fail-safe）——机制结论碰巧成立，但作答对写序的描述与代码相反，盲维作答不忠实于代码。注：正因代码采用目标先写，中断安全性才成立，代码本身无数据丢失窗口（目标写原子、INDEX 同步失败被 catch 不拦主手术）。",
+      "location": "src/redomain.js:87-92; .sillyspec/changes/2026-09-27-redomain/design.md:35"
+    },
+    {
+      "severity": "P2",
+      "title": "FR-06「loadDomainSections 同款头」与注释「逐字同款」不实：newDomainPreamble 缺 2 行说明行，新建域文件头与 fr-index 分叉",
+      "evidence": "fr-index.js loadDomainSections 新建 preamble 含 '> superseded 条目保留供取代链回溯；brainstorm 注入默认只给 active。' 及按域条件行（auto- 域 '> 伪域（auto- 前缀）…' / 真域 '> 模块卡：modules/<域>.md…'）；redomain.js newDomainPreamble 只有到 '> fr-index 从归档变更…勿手改。' 为止，缺上述两行。段解析只认 FR_SECTION_RE 故无功能断裂（均为说明行），但形成第二个域文件头漂移源，且 FR-06 字面（同款头）与代码注释（逐字同款）均与实现不符。测试③只断言 targetCreated+文件在场，未比对头内容，三方核对在此缺口。",
+      "location": "src/redomain.js:29-42; src/fr-index.js:301-321; test/redomain.test.mjs:80-84"
+    },
+    {
+      "severity": "P2",
+      "title": "tasks.md task-07～task-11 五项未勾，与已交付并实测完成的工作不符（哨兵证据面滞后）",
+      "evidence": "task-07（INDEX 补行）、task-08（空壳删除）、task-09（anchor 单条）、task-10（测试）、task-11（全仓绿）对应工作均已交付且本轮评审亲测通过（redomain 5/5 绿、test:core 208/208 exit 0、lint module-map 覆盖全），commit 86f8af6f 亦宣称完成，但 tasks.md:17-21 仍为 [ ]。AGENTS.md/tasks.md 纪律要求完成即勾（勾选是收口哨兵证据面，勿攒收口一把勾）——勾选面与实际进度背离，收口前须补齐，否则哨兵证据失真。",
+      "location": ".sillyspec/changes/2026-09-27-redomain/tasks.md:17-21"
+    },
+    {
+      "severity": "P2",
+      "title": "盲维槽3「并发写」自答遗漏 redomain-vs-redomain 自竞态：并发 --write 读改写交错可静默丢条目",
+      "evidence": "槽3 并发答只覆盖 writeAtomicSync 原子性（属实：tmp+fsync+rename，fs-atomic.js:65-94）与 upsertFrBindings 按 ID 全目录扫描互操作（属实：test-bindings.js:371-374 扫 fr/*.md），未回答「两个 redomain 同时跑」：A/B 均在写前读源与目标（redomain.js:57-85 全为内存态，冲突防线只对读到的新态生效），交错序列 B 写目标→B 写源（仍含 A 锚条目）→A unlink 源，终态目标无 A 条目、源已删，A 条目静默丢失。平台「一键迁移」按钮双击/重放正是触发面。窗口窄（毫秒级）且读改写无锁是全知识面承袭模式（fr-index 归档提升同款），故 P2 非 P1；槽3 应如实披露此残余面或补串行化（如写前 mtime/stale 检测）。",
+      "location": "src/redomain.js:57-92; .sillyspec/changes/2026-09-27-redomain/design.md:35"
+    },
+    {
+      "severity": "P3",
+      "title": "index.js 死变量：anchors 收集后弃用，与 anchorList 重复计算",
+      "evidence": "src/index.js:3166 计算 anchors 后从未使用，3168-3169 另行构建 anchorList——同一逻辑两份，留漂移源，应删 3166 行。",
+      "location": "src/index.js:3166-3169"
+    },
+    {
+      "severity": "P3",
+      "title": "ID/标题二次正则 FR_HEADER_RE 冗余于 FR_SECTION_RE（splitKnowledgeSections 已给 s.number/s.title），@v 头标题受污染",
+      "evidence": "段已由 FR_SECTION_RE 切分（redomain.js:57/64），段对象自带 number（=ID，buildId 恒等）与 title；frEntryId 再用本地 FR_HEADER_RE（字符类 [\\w.-]，与 [a-z0-9-] 不同源）重抽。当前两正则对合法段头结果一致（切分已限定形态），但违背「单源」精神且为漂移源；附带缺陷：@v 形态头（如 '## FR-x-019@v2 标题'）FR_HEADER_RE 的 m[2] 含 '@v2'，moved[]/预览标题显示 '@v2 标题'。建议直接用 s.number/s.title。",
+      "location": "src/redomain.js:22-27,69,72"
+    },
+    {
+      "severity": "P3",
+      "title": "干跑零写断言仅覆盖源文件字节，目标文件与 INDEX 未入字节不变断言",
+      "evidence": "test ④:98-100 只对 fr/auto-backend.md 做前后字节相等断言。planRedomain 代码面确无任何写调用（仅 existsSync/readFileSync，redomain.js:117-141，代码核验通过），故零写副作用成立；但作为 FR-10「干跑不落盘」的机器证据面不完整，补目标文件与 INDEX.md 同款断言成本一行。",
+      "location": "test/redomain.test.mjs:97-100"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "finding",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-27T11:56:01Z"
+}
