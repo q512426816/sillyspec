@@ -89,6 +89,33 @@ test('① 四信号阈值：全在阈内 healthy；各类超阈逐项进摘要�
   assert.ok(db.signals.some(s => s.kind === 'binding-unresolved' && /repair-paths/.test(s.suggestion)), '坏绑定给 repair 指引')
 })
 
+test('①b 坏绑定锚剥离与 repair-paths 同口径（评审 P1 防回归）：「」锚不定为坏绑定', () => {
+  const root = mk('kd-anchor-')
+  const specBase = join(root, '.sillyspec')
+  mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
+  mkdirSync(join(root, 'test'), { recursive: true })
+  writeFileSync(join(root, 'test', 'x.test.mjs'), "import { test } from 'node:test'
+test('x', () => {})
+")
+  writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), [
+    '---', 'author: t', '---', '', '# FR 索引 — core', '',
+    '## FR-core-001 行为一', '状态：active', '',
+    '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
+    '- row: src:task-01:FR-01',
+    "  tests: test/x.test.mjs「用例组」", // 「」锚——文件在场，不得判坏
+    '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '',
+    '## FR-core-002 行为二', '状态：active', '',
+    '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
+    '- row: src:task-01:FR-02',
+    '  tests: test/really-missing.test.mjs', // 真缺失
+    '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '',
+  ].join('
+') + '
+')
+  const d = collectKnowledgeDigest({ specBase, projectRoot: root })
+  assert.equal(d.totals.unresolvedBindings, 1, `「」锚不定坏、真缺失计 1（实得 ${d.totals.unresolvedBindings}）`)
+})
+
 test('② suggestDomainFromFiles：backend 模块归属最强 → src 段 → 目录段兜底', () => {
   assert.equal(suggestDomainFromFiles(['backend/app/modules/platform_sync/router.py', 'frontend/x.tsx']), 'platform_sync')
   assert.equal(suggestDomainFromFiles(['sillyhub-daemon/src/a.ts']), 'daemon')

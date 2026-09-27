@@ -16,7 +16,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { readFrBindings, resolveTestFileRel } from './test-bindings.js'
+import { readFrBindings, resolveTestFileRel, testAnchorFile } from './test-bindings.js'
 
 /** 伪域判定：auto- 前缀（scaffold 时代机器蒸馏域）或 unmapped 池 */
 const isPseudoDomain = (domain) => /^auto[-_]/.test(domain) || domain === 'unmapped'
@@ -89,7 +89,9 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
       const rows = readFrBindings({ knowledgeRoot, frId: e.id })
       for (const row of rows) {
         for (const t of row.tests || []) {
-          const filePart = String(t).split('#')[0].split('::')[0]
+          // 锚剥离单源（评审 P1 清偿）：testAnchorFile 吃全部分隔形态（#/::/「」/>）——
+          // 手搓 split('#').split('::') 漏「」锚致 7/8 假阳性（目标文件全在场），与 repair-paths 口径对拍实证
+          const filePart = testAnchorFile(String(t))
           const rel = resolveTestFileRel(filePart, { projectRoot })
           if (!rel && !existsSync(join(projectRoot, filePart.replace(/\\/g, '/')))) {
             totals.unresolvedBindings++
