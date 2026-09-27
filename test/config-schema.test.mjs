@@ -97,6 +97,9 @@ console.log('\n--- 4. renderExample 防漂耦合（每个 live 键首段+末段�
 {
   const ex = renderExample()
   assert(ex.includes('# SillySpec local.yaml'), 'example 含标题')
+  // 缺省注释态钉（2026-09-27-gate-face-binding-parity 评审 P3-① 清偿）：test_strategy 必须
+  // 注释态（缺省=动态子集）；解注释回 full 会让「复制即全量道」陷阱复活（MP 根无 package.json 实证必炸）
+  assert(!/^test_strategy:/m.test(ex), 'test_strategy 缺省注释态（example 复制即动态子集，非全量道）')
   const liveKeys = flatKeys().filter((k) => k.status === 'live')
   for (const k of liveKeys) {
     // path 形如 mcp.url / worktree-hook.readonlyCommands / modules.<name>.path / test_strategy

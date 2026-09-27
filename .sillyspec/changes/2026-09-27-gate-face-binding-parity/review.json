@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-gate-face-binding-parity",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-05 测试绑定口径过声明：renderExample 的 test_strategy 注释态未被任何断言锁定",
+      "evidence": "requirements.md FR-05 绑定称「renderExample 模板契约 456 断言全绿，含 test_strategy 注释态」。核对 test/config-schema.test.mjs:98-138：断言组只检查 test_strategy token 在 example 中出现（firstRe 显式容忍注释前缀 `# `）、枚举四值齐全、注释含 skip=真跳过/evidence-auto——没有任何断言钉住「该行是注释态」（如 /^# test_strategy:/m 或非注释否定断言，对照组 decisions/auto_mode 的 131/132/137 行有非注释锚定）。把 src/config-schema.js:409 重新解注释回 `test_strategy: full`，456 断言仍全绿，FR-05 的回归钉不存在。生成物本身（模板行注释化+desc『缺省=动态子集』口径）已核实一致，仅绑定声明与实际断言面不符。",
+      "location": "test/config-schema.test.mjs:117-126"
+    },
+    {
+      "severity": "P3",
+      "title": "brainstorm 接线层（gates.js 新分支）零直接测试，FR-04 闭环链上唯一未测链节",
+      "evidence": "新测试只测 ensureBindingSlots 助手本身（test/gate-face-binding-parity.test.mjs 用例②），completeStageGates 的 stageName==='brainstorm' 分支（join(specBase)/existsSync/动态 import/日志/try-catch 降级）无任何用例触达。FR-04 绑定「不适用」的论证前提『槽在场（FR-03）』在接线层失败（异常被 best-effort 吞掉只 warn）时静默不成立，R23-full 缺口无感回归且无测试报警。口径本身如实（已披露『闭环证据是链路性』『E2E 级 full 流程复跑留 R24』），降级面=变更前现状（非变差），三处 completeStageGates 调用点均实传 specBase，实际风险低——记 P3 留 R24 兜底。",
+      "location": "src/run/gates.js:1811-1824"
+    },
+    {
+      "severity": "P3",
+      "title": "携带的他会话 WIP 段（.ts 框架 import 内容分流）在本仓零测试覆盖且混入本变更 patch 审计面",
+      "evidence": "verify-postcheck.js buildDepsBatches 的 needsProjectByContent/PROJECT_FRAMEWORK_IMPORT_RE 段（R19 core-pages-visual-redesign WIP）全仓无任何测试引用（grep test/ 与 src/ 除实现本身外零命中）；其验证归属另一变更面，本仓收口的 test:core（实测 208 绿）不覆盖该分支逻辑。披露链完整（提交信息『携带披露』+ design 槽3『同文件共存整文件提交』+ 用户授权声明），可接受；但 baseline..HEAD patch 冻结面因此含非本变更逻辑，归档对账时应注意归因。",
+      "location": "src/verify-postcheck.js:2443-2462"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-27T00:39:49.864Z"
+}
