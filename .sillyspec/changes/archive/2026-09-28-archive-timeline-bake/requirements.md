@@ -40,13 +40,14 @@ Then 行为符合本条标准描述
 ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
 
 <!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-
+test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一致」（rename 后链内位置由 runArchiveChain 接线，函数级直测等价面）
 <!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-
+test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：无事件流跳过，零文件产出带原因」＋「bakeArchiveTimeline：写失败 fail-open 返回 {ok:false} 不抛」
 <!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-
+test/archive-timeline-bake.test.mjs「readWatcherEvents：path 直读归档副本，坏行容忍计数，path 优先于 runtimeRoot」（CLI 接线层另经真实归档目录 × 真实事件流冒烟：空 .runtime 回退出完整时间线 + 来源注记行）
 <!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-
+test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：事件副本超帽只烤 timeline.md，头注记「尺寸超帽」」＋「尺寸帽缺省值钉 2MiB（防巨型事件流污染 git 的契约面）」
 <!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-
+test/archive-timeline-bake.test.mjs 全八用例（渲染两态/端到端/跳过/写失败/path 直读/超帽/尺寸帽钉值）
 <!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+不适用：FR 本身即「全量绿」验收——证据为收口门禁隔离快照实测（test: passed 60 文件动态子集 + lint: passed）+ 主会话全量 659/660（余 1 红 flow-protocol 满载竞态假红，单跑 22/22 绿非本变更面）

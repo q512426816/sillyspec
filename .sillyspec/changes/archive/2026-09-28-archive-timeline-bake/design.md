@@ -27,6 +27,9 @@ created_at: 2026-09-27T16:20:57.122Z
 - 归档目录新文件形态：archive/<变更名>/timeline.md 与 watcher-events.jsonl（随既有窄化 git add 进暂存，跨机进 git）。
 - CLI 行为变化：`sillyspec watcher timeline --change <已归档>` 在 .runtime 无事件流且归档包有副本时，由 exit 2 改为输出完整时间线 + 「事件源：归档包烤制快照」注记行。其余命令面零变化。
 
+文件变更清单（收口自声明——区间提交全部 15 文件均属本变更，无并行会话夹带）：
+src/timeline.js（renderBakedTimeline 新增）、src/watcher.js（readWatcherEvents path 形态）、src/run/complete-handlers.js（bakeArchiveTimeline + runArchiveChain 接线）、src/index.js（timeline 回退）、test/archive-timeline-bake.test.mjs（新测试）、package.json（test:core 纳入）、package-lock.json（版本字段 3.29.6→3.31.0 对齐，npm install 顺带校正）、docs/sillyspec/platform-interface-map.md（complete-handlers.js 锚 2553→2615 位移修准）、.sillyspec/docs/sillyspec/modules/sync.md（接口表 3 行）、.sillyspec/docs/sillyspec/modules/sync.changelog.md（登记）、.sillyspec/changes/2026-09-28-archive-timeline-bake/{design,requirements,proposal,tasks,flow-state.yaml}（本变更工件面）。
+
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 <!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
@@ -49,3 +52,5 @@ created_at: 2026-09-27T16:20:57.122Z
 <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
 最大风险：平台/漂移模式下 runtimeRoot 与 specBase/.runtime 分裂，烤制读错目录 → 静默漏烤。缓解：编排内用 resolvePlatformOpts + resolveRuntimeRoot 与既有消费者同链；跳过/失败均输出注记行保持可观测；测试用 fixture runtimeRoot 直验。次风险：巨型事件流污染 git——尺寸帽 2MiB 超帽只烤 timeline.md 并注记。
 放弃的方案：①watcher 活跃期直接把事件写进 changes 目录（放弃——改写侧协议面大，且活跃期事件属 .runtime 隐私/排除边界，D-002 语义不动）；②CLI 回退时把归档副本反向重建到 .runtime（放弃——制造两份真相源，违背「本地 jsonl 唯一真相源」既有口径）。
+
+评审留痕（独立评审 PASS 2×P3 清偿）：P3-1 副本读源失败时头注记虚报副本在场——已修（eventsCopySkipped 扩读源失败形态，注记文本改为「尺寸超帽或读源失败」与实际产出一致，补测试）；P3-2 「与 spawnWatcher 写侧同链」对 flow.js 各拉起位在平台极端漂移下存在既有分裂面——措辞修正：烤制的 runtimeRoot 解析与既有消费链（resolvePlatformOpts>resolveRuntimeRoot）同源，平台模式下若写读目录分裂属既有面，本设计的兜底是跳过时输出注记行保持可观测、非静默漏烤。

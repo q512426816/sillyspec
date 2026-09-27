@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-archive-timeline-bake",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "副本缺源只烤渲染面时，timeline.md 头注记仍声明「原始事件副本：本目录 watcher-events.jsonl」——注记与实际产出不一致",
+      "evidence": "bakeArchiveTimeline 内 eventsRaw 第二次读失败时 catch 置 null 后仅跳过副本写入，但 eventsCopySkipped 只在超帽时为 true，renderBakedTimeline 收到 false 便输出「副本在场」注记——该边缘态（首读 exists 成功、次读消失）下文件头指引读者去找一个不存在的副本文件；触发窗口极窄（watcher append-only 不删文件），属注记准确性瑕疵非数据损坏",
+      "location": "src/run/complete-handlers.js:705-715"
+    },
+    {
+      "severity": "P3",
+      "title": "作用域声明的「与 spawnWatcher 写侧同链」对 flow.js 拉起位不完全成立：flow.js:368/474 未展开 platformOpts，平台/漂移模式下写读目录分裂",
+      "evidence": "flow.js 两处 spawnWatcher(cwd, change, { specBase }) 不带 platformOpts（对比 command.js:1382/1946 的 { ...platformOpts, specBase }），平台模式下 flow 拉起的 watcher 写 specBase/.runtime 而烤制按 resolveRuntimeRoot(resolvePlatformOpts(cwd), specBase) 读平台 runtimeRoot → 找不到事件流即跳过；该分裂为既有行为（旧 timeline CLI 同样错过）非本 diff 引入，且跳过输出「⏭️ 时间线烤制跳过：无事件流（路径）」可观测，非静默",
+      "location": "src/flow.js:368"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——watcher 终拍晚于烤制未入快照属时点快照固有边界，timeline.js renderBakedTimeline 头部「末尾事件（含目录已移入 archive 终拍）可能晚于烤制未入快照」诚实注记在场，实证于 change.patch src/timeline.js 新增段）",
+    "并发": "ok（边界已裁决：可接受——烤制位于 rename 成功后 destDir 归链独占（complete-handlers.js:838 接线点在 rename 失败 process.exit(1) 之后）、两文件均为新名无覆盖竞争；.runtime 烤制期只读；双读间隙的并发 append 由同一条末尾事件注记覆盖语义）",
+    "切换": "ok（边界已裁决：可接受——无事件流跳过态零文件产出带原因（测试实证 existsSync 两侧 false）、写失败返回 {ok:false} 调用方一行警告、异常兜底 catch，三态均不阻断归档主流程；destDir 已存在校验先行故不可重复执行）",
+    "作用域": "finding（P3 边缘见 findings——读侧 resolveRuntimeRoot 平台链解析本身已裁决可接受：run/shared.js:382-386 与 command.js 写侧主路径同链、null 平台 opts 经 ?. 容忍；瑕疵仅在 flow.js 拉起位的既有分裂）"
+  },
+  "reviewedAt": "2026-09-28T01:35:58+08:00"
+}

@@ -1,0 +1,664 @@
+diff --git a/.sillyspec/changes/2026-09-28-archive-timeline-bake/design.md b/.sillyspec/changes/2026-09-28-archive-timeline-bake/design.md
+new file mode 100644
+index 00000000..453776dc
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-archive-timeline-bake/design.md
+@@ -0,0 +1,51 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T16:20:57.122Z
++---
++# 设计记录（Design Record）— 2026-09-28-archive-timeline-bake
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++在 runArchiveChain（src/run/complete-handlers.js，flow done 与 run archive 双入口共用的归档执行链）的目录搬移成功之后、unregisterChange 与窄化 git add 之前，插入「时间线烤制」步骤：用与 `watcher timeline` CLI 完全相同的合成面（readWatcherEvents 读事件流 × loadChangeTasks/readBirthTs/flow-state tier × resolveCommitAnchors(gitQuiet) → renderTimeline），把渲染结果写为 destDir/timeline.md，原始事件 jsonl 字节副本写为 destDir/watcher-events.jsonl（带尺寸帽，超帽只烤 timeline.md 并在文件头注记）。烤制整体 try/catch fail-open，一行警告不阻断归档。另给 `watcher timeline` 命令加回退：本机 .runtime 无事件流时读归档包内副本并输出来源注记行。选此方案：零新落盘协议（纯归档链内一次性旁产物）、复用既有合成纯函数、不新增模块（模块图已覆盖 timeline.js/watcher.js，避新模块登记面）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++- src/timeline.js 新增导出 renderBakedTimeline({ change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped }) → string（timeline.md 全文：快照头注记 + renderTimeline 输出）。
++- src/watcher.js readWatcherEvents 增加可选 path 直读形态：传 path 时按该路径解析（同一坏行容忍语义），供 CLI 回退读归档副本。
++- src/run/complete-handlers.js runArchiveChain 链内新增烤制步骤；新增导出 bakeArchiveTimeline（读事件流→合成→写两文件，供测试直调）。
++- 归档目录新文件形态：archive/<变更名>/timeline.md 与 watcher-events.jsonl（随既有窄化 git add 进暂存，跨机进 git）。
++- CLI 行为变化：`sillyspec watcher timeline --change <已归档>` 在 .runtime 无事件流且归档包有副本时，由 exit 2 改为输出完整时间线 + 「事件源：归档包烤制快照」注记行。其余命令面零变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：事件流是 append-only jsonl，watcher 终拍（含「目录已移入 archive」）可能晚于烤制落盘——timeline.md 文件头显式注明「快照烤制于归档链中，末尾事件可能未入快照」，诚实注记而非数据错误；烤制后 watcher 仍照常写 .runtime 原文件，副本只是时点快照。
++2. 并发写：destDir 在 rename 成功后归本链独占，timeline.md/watcher-events.jsonl 是新文件名无覆盖竞争；.runtime jsonl 烤制时只读；多 agent 并行归档不同 change 各自目录不串台。同一 change 的归档链本身有 destDir 存在即 fail 的既有互斥。
++3. 切换/生命周期：烤制失败 fail-open（一行警告）不阻断归档，归档主流程语义零变化；烤制位于 rename 之后不可能重复执行（destDir 已存在校验先行）；无事件流时跳过烤制并输出注记（不产出空壳 timeline.md）。
++4. 作用域：runtimeRoot 解析复用 resolveRuntimeRoot(resolvePlatformOpts(cwd), specBase)（平台指针 > specBase/.runtime），与 spawnWatcher 写侧同链——平台模式下事件流在平台 runtime 目录也能读对；CLI 回退读的是 tSpecBase 下归档目录，与 .runtime 无路径耦合。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：平台/漂移模式下 runtimeRoot 与 specBase/.runtime 分裂，烤制读错目录 → 静默漏烤。缓解：编排内用 resolvePlatformOpts + resolveRuntimeRoot 与既有消费者同链；跳过/失败均输出注记行保持可观测；测试用 fixture runtimeRoot 直验。次风险：巨型事件流污染 git——尺寸帽 2MiB 超帽只烤 timeline.md 并注记。
++放弃的方案：①watcher 活跃期直接把事件写进 changes 目录（放弃——改写侧协议面大，且活跃期事件属 .runtime 隐私/排除边界，D-002 语义不动）；②CLI 回退时把归档副本反向重建到 .runtime（放弃——制造两份真相源，违背「本地 jsonl 唯一真相源」既有口径）。
+diff --git a/.sillyspec/changes/2026-09-28-archive-timeline-bake/flow-state.yaml b/.sillyspec/changes/2026-09-28-archive-timeline-bake/flow-state.yaml
+new file mode 100644
+index 00000000..d6936860
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-archive-timeline-bake/flow-state.yaml
+@@ -0,0 +1,15 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 8ed525ff1003eee6f70a256b1bb33f2247ed2e3b
++updatedAt: '2026-09-27T17:30:49.511Z'
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(14)（88.8s）
++  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-U1No3C\.sillyspec\.runtime\verify-runs\20260927172855\test-result.json｜lint:
++  passed ← npm run lint（109.2s）｜门文件 9 个
++
+diff --git a/.sillyspec/changes/2026-09-28-archive-timeline-bake/proposal.md b/.sillyspec/changes/2026-09-28-archive-timeline-bake/proposal.md
+new file mode 100644
+index 00000000..28c0f35c
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-archive-timeline-bake/proposal.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T16:20:57.120Z
++---
++# 提案书（Proposal）— 2026-09-28-archive-timeline-bake
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:9f980c09b1376d559b9075501b711b5b22a29cc5592cafe07e5427a2027b1462:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++任务原话转写：watcher 事件流是合成时间线（每任务时刻/阶段墙钟）的唯一细粒度数据源，但落在 gitignore 的 .runtime 且机本位——实证：归档变更的事件文件在归档后即从本机消失（2026-09-27-change-birth-stage-brainstorm 的 jsonl 今日实测蒸发），跨机 clone 更无从合成。动机：归档时把合成时间线与原始事件副本烤进归档目录（归档目录提交进 git，天然跨机），让归档变更的时间线不再依赖 .runtime 存活。
++成功标准：
++- 归档链（runArchiveChain，flow done 与 run archive 双入口共用）在目录搬移成功后、窄化 git add 前，写 archive/<变更名>/timeline.md（合成时间线）与 archive/<变更名>/watcher-events.jsonl（原始事件副本）；烤制失败 fail-open（一行警告，不阻断归档）
++- 本机 .runtime 无事件流时，sillyspec watcher timeline --change <已归档变更> 自动回退读归档包内 watcher-events.jsonl 副本，输出完整时间线并标注事件来源
++- 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 git
++- 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态；全量 npm test 与 npm run lint 绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:d6a9d846e1ef20927bbbda7472d07c43105489c874410b5bd73ccaa1abaf2d0a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. 归档链（runArchiveChain，flow done 与 run archive 双入口共用）在目录搬移成功后、窄化 git add 前，写 archive/<变更名>/timeline.md（合成时间线）与 archive/<变更名>/watcher-events.jsonl（原始事件副本）
++2. 烤制失败 fail-open（一行警告，不阻断归档）
++3. 本机 .runtime 无事件流时，sillyspec watcher timeline --change <已归档变更> 自动回退读归档包内 watcher-events.jsonl 副本，输出完整时间线并标注事件来源
++4. 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 git
++5. 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态
++6. 全量 npm test 与 npm run lint 绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:65d7aa214bfcae4dbfeb725ae23b12fa4eb86af8ece41b3f3aa1a1d64b9b76b1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-archive-timeline-bake 留痕重锚 -->
++1. 归档链（runArchiveChain，flow done 与 run archive 双入口共用）在目录搬移成功后、窄化 git add 前，写 archive/<变更名>/timeline.md（合成时间线）与 archive/<变更名>/watcher-events.jsonl（原始事件副本）
++2. 烤制失败 fail-open（一行警告，不阻断归档）
++3. 本机 .runtime 无事件流时，sillyspec watcher timeline --change <已归档变更> 自动回退读归档包内 watcher-events.jsonl 副本，输出完整时间线并标注事件来源
++4. 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 git
++5. 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态
++6. 全量 npm test 与 npm run lint 绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-archive-timeline-bake/requirements.md b/.sillyspec/changes/2026-09-28-archive-timeline-bake/requirements.md
+new file mode 100644
+index 00000000..9e9b65b9
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-archive-timeline-bake/requirements.md
+@@ -0,0 +1,53 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T16:20:57.122Z
++---
++# 需求规格（Requirements）— 2026-09-28-archive-timeline-bake
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 归档链（runArchiveChain，flow done 与 run archive 双入口共用）
++Given 系统就绪
++When 归档链（runArchiveChain，flow done 与 run archive 双入口共用）在目录搬移成功后、窄化 git add 前，写 archiv
++Then 行为符合本条标准描述
++
++### FR-02: 烤制失败 fail-open（一行警告，不阻断归档）
++Given 系统就绪
++When 烤制失败 fail-open（一行警告，不阻断归档）
++Then 行为符合本条标准描述
++
++### FR-03: 本机 .runtime 无事件流时，sillyspec watcher timeline --cha
++Given 系统就绪
++When 本机 .runtime 无事件流时，sillyspec watcher timeline --change <已归档变更> 自动回退读归档包内 watcher-
++Then 行为符合本条标准描述
++
++### FR-04: 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 g
++Given 系统就绪
++When 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 git
++Then 行为符合本条标准描述
++
++### FR-05: 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态
++Given 测试 相关模块就绪
++When 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态
++Then 行为符合本条标准描述
++
++### FR-06: 全量 npm test 与 npm run lint 绿
++Given 系统就绪
++When 全量 npm test 与 npm run lint 绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一致」（rename 后链内位置由 runArchiveChain 接线，函数级直测等价面）
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：无事件流跳过，零文件产出带原因」＋「bakeArchiveTimeline：写失败 fail-open 返回 {ok:false} 不抛」
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/archive-timeline-bake.test.mjs「readWatcherEvents：path 直读归档副本，坏行容忍计数，path 优先于 runtimeRoot」（CLI 接线层另经真实归档目录 × 真实事件流冒烟：空 .runtime 回退出完整时间线 + 来源注记行）
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：事件副本超帽只烤 timeline.md，头注记「尺寸超帽」」＋「尺寸帽缺省值钉 2MiB（防巨型事件流污染 git 的契约面）」
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/archive-timeline-bake.test.mjs 全八用例（渲染两态/端到端/跳过/写失败/path 直读/超帽/尺寸帽钉值）
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：FR 本身即「全量绿」验收——证据为收口门禁隔离快照实测（test: passed 60 文件动态子集 + lint: passed）+ 主会话全量 659/660（余 1 红 flow-protocol 满载竞态假红，单跑 22/22 绿非本变更面）
+diff --git a/.sillyspec/changes/2026-09-28-archive-timeline-bake/tasks.md b/.sillyspec/changes/2026-09-28-archive-timeline-bake/tasks.md
+new file mode 100644
+index 00000000..99c2f58d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-archive-timeline-bake/tasks.md
+@@ -0,0 +1,18 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T16:20:57.122Z
++---
++# 任务注册表（Tasks）— 2026-09-28-archive-timeline-bake
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 烤制编排落地——complete-handlers.js 新增 bakeArchiveTimeline（resolvePlatformOpts>resolveRuntimeRoot 同链解析 runtimeRoot，与 watcher timeline CLI 同一合成面）+ runArchiveChain 接线（rename 成功后、unregisterChange/窄化 git add 前）；timeline.js 新增 renderBakedTimeline（快照头注记：机本位声明/终拍未入快照诚实面/副本两态）
++- [x] task-02: fail-open 三态留痕——无事件流 skip（零文件产出带原因）/ 失败 {ok:false}（调用方一行警告）/ 异常兜底 catch，均不阻断归档主流程
++- [x] task-03: watcher timeline CLI 回退——readWatcherEvents 增 path 直读形态（同一坏行容忍语义，path 优先）；.runtime 无事件流时读归档包 watcher-events.jsonl 副本输出完整时间线 + 事件来源注记行（副本也缺失保持既有 exit 2）
++- [x] task-04: 事件副本尺寸帽 BAKE_EVENTS_COPY_MAX_BYTES=2MiB——超帽只烤 timeline.md 且文件头注记「尺寸超帽」（缺省值测试钉）
++- [x] task-05: 新增 test/archive-timeline-bake.test.mjs 八用例（渲染两态/fixture 端到端双落盘字节一致/无事件跳过/写失败 fail-open/path 直读坏行容忍优先级/超帽/尺寸帽钉值）+ package.json test:core 纳入
++- [x] task-06: lint 全绿（841 文件、未引用导出 0、module-map 覆盖全）+ doc-ref-check 93/93（platform-interface-map complete-handlers.js 行号锚 2553→2615 随实现位移修准）+ 全量 npm test 绿（见收口实测）+ sync.md 接口表 3 行/changelog 登记
++
++> 完成证据注记（收口补）：实现单提交 + 本证据提交构成区间证据面；全量 npm test 659/660（余 1 红 flow-protocol 满载竞态假红，单跑 22/22 绿非本变更面）+ lint 全绿 + doc-ref 93/93 + CLI 回退/烤制双冒烟（真实归档目录 × 真实事件流端到端）。
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.changelog.md b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+index 9c41083b..54b0183b 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.changelog.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.changelog.md
+@@ -1,2 +1,3 @@
+ - ql-20260912-009-06b4 | computeSpecOps rename 检测 O(N×M)→hash 索引；hashFiles buf 随行携带消除变更文件双读
+ - ql-20260914-007-fcb7 | sync-noise.js 加变更级 change_deleted 回执噪音闸（syncChangeDeletedLog/Warn/noteChangeDeletedResolved，按变更名 marker 窗口）；sync() 三处回执行走闸 + 成功精清 + platform sync manual 旁路
++- 2026-09-28-archive-timeline-bake | 归档链时间线烤制：runArchiveChain rename 后把合成时间线烤为 archive/<变更名>/timeline.md + 原始事件副本 watcher-events.jsonl（2MiB 尺寸帽，超帽只烤渲染面；fail-open 不阻断归档）——事件流机本位（.runtime gitignore）不随 .runtime 存活消失，归档包进 git 跨机可读；readWatcherEvents 增 path 直读形态（坏行容忍同语义）；watcher timeline CLI 在本机 .runtime 无事件流时回退读归档副本并注记事件来源（副本也缺失保持既有 exit 2）。测试锚 test/archive-timeline-bake.test.mjs
+diff --git a/.sillyspec/docs/sillyspec/modules/sync.md b/.sillyspec/docs/sillyspec/modules/sync.md
+index b878d8a6..61a4ecea 100644
+--- a/.sillyspec/docs/sillyspec/modules/sync.md
++++ b/.sillyspec/docs/sillyspec/modules/sync.md
+@@ -53,8 +53,10 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同
+ | `collectStatus(cwd)` | 顶层便捷函数（platform status 扩展用） | `cwd` |
+ | `listConflictFiles(cwd)` | 顶层便捷函数（platform resolve 参数解析/报错兜底用，只读列 .runtime 未决冲突） | `cwd` |
+ | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
+-| `readWatcherEvents({runtimeRoot, change})` | watcher 事件流纯读（watcher alerts 命令消费）：jsonl 解析+告警过滤+坏行容忍 | `{runtimeRoot, change}` |
++| `readWatcherEvents({runtimeRoot, change, path?})` | watcher 事件流纯读（watcher alerts/timeline 命令消费）：jsonl 解析+告警过滤+坏行容忍；path 直读形态（2026-09-28-archive-timeline-bake）按该路径解析（归档包烤制副本回退），path 优先于 runtimeRoot/change | `{runtimeRoot, change, path?}` |
+ | `watcherEventsPath(runtimeRoot, changeName)` | 事件流文件路径锚（与子进程落盘名同源） | `runtimeRoot, changeName` |
++| `renderBakedTimeline({change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped})` | 归档烤制文本（timeline.js，2026-09-28-archive-timeline-bake）：快照头注记 + renderTimeline 全文，写归档包 timeline.md 进 git 跨机可读 | timeline.js 导出 |
++| `bakeArchiveTimeline({cwd, specBase, changeName, destDir, gitLook?, writeImpl?, readRawImpl?, eventsCopyMaxBytes?, nowIso?})` | 归档链时间线烤制（complete-handlers.js，runArchiveChain rename 后调用，fail-open）：合成 timeline.md + 原始事件副本 watcher-events.jsonl（2MiB 尺寸帽，超帽只烤渲染面） | complete-handlers.js 导出 |
+ 
+ ## 关键数据流
+ 1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 文本级定向写入 `.sillyspec/local.yaml` 的 `platform` 段（`replaceTopLevelSection` 原位替换，保留注释/其他段/数组/深嵌套）+ `mcp` 段（不存在时追加同源 url/token；文本级 `findTopLevelSectionRange('mcp')` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 2d27fd07..384293bd 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -114,7 +114,7 @@ mcp:
+ 
+ ## 4. 链路 C：scan 指针握手（平台模式专用）
+ 
+-scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2553` `handleScanStageCompleted`）：
++scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时，**不发任何 HTTP**，而是落盘供 daemon 轮询消费（`complete-handlers.js:2615` `handleScanStageCompleted`）：
+ 
+ 1. 写 `manifest.json`（workspace_id/scan_run_id/source_commit/spec_root/scan_profile/postcheck…）到 `specRoot`。
+ 2. 跑 `scan-postcheck` → 写 `postcheck-result.json`（结构化结果）。
+diff --git a/package-lock.json b/package-lock.json
+index 035eaef9..2d3a6751 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.29.6",
++  "version": "3.31.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "sillyspec",
+-      "version": "3.29.6",
++      "version": "3.31.0",
+       "license": "MIT",
+       "dependencies": {
+         "@inquirer/prompts": "^7.10.1",
+diff --git a/package.json b/package.json
+index 56695326..003314cd 100644
+--- a/package.json
++++ b/package.json
+@@ -24,7 +24,7 @@
+   ],
+   "license": "MIT",
+   "scripts": {
+-    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs",
++    "test:core": "node --test test/preview-migration.test.mjs test/preview-progress.test.mjs test/preview-outlet.test.mjs test/preview-gc.test.mjs test/preview-gate-isolation.test.mjs test/db-engine.test.mjs test/db-concurrency.test.mjs test/db-atomic-write.test.mjs test/platform-sync-schema.test.mjs test/platform-sync-serialization.test.mjs test/change-ownership-guards.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs test/watcher-timeline.test.mjs test/sentinel-rules.test.mjs test/handoff.test.mjs test/execution-mode-render.test.mjs test/knowledge-inbox.test.mjs test/knowledge-baseline.test.mjs test/quick-laststep-fourfields-preview.test.mjs test/doctor-align-execute-progress.test.mjs test/test-ledger.test.mjs test/test-bindings.test.mjs test/flow-draft-binding-extract.test.mjs test/gate-snapshot-lifecycle.test.mjs test/gate-snapshot-cleanup.test.mjs test/verify-trace-residual.test.mjs test/platform-creds-fallback.test.mjs test/archive-timeline-bake.test.mjs",
+     "test": "node test/run-tests.mjs",
+     "lint": "node test/check-syntax.mjs",
+     "eval:dry": "node eval/run.mjs --dry-run",
+diff --git a/src/index.js b/src/index.js
+index 76e33620..6d700c23 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -5104,7 +5104,19 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+         const tSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
+         const tPlatformOpts = resolvePlatformOpts(dir, specDir);
+         const tRuntimeRoot = resolveRuntimeRoot({ runtimeRoot: tRuntimeRootFlag || (tPlatformOpts && tPlatformOpts.runtimeRoot) || null }, tSpecBase);
+-        const tRes = readWatcherEvents({ runtimeRoot: tRuntimeRoot, change: tChange });
++        let tRes = readWatcherEvents({ runtimeRoot: tRuntimeRoot, change: tChange });
++        let tSourceNote = '';
++        if (!tRes.exists) {
++          // 归档包烤制副本回退（2026-09-28-archive-timeline-bake）：本机 .runtime 无事件流（跨机
++          // clone / 机本位清理）时读归档包内 watcher-events.jsonl 副本——时间线不随 .runtime 存活消失；
++          // 副本也缺失时保持既有 exit 2 提示语义。
++          const tBakedPath = join(tSpecBase, 'changes', 'archive', tChange, 'watcher-events.jsonl');
++          const tBaked = readWatcherEvents({ path: tBakedPath });
++          if (tBaked.exists) {
++            tRes = tBaked;
++            tSourceNote = `（事件源：归档包烤制快照 ${tBakedPath}——本机 .runtime 无事件流）`;
++          }
++        }
+         if (!tRes.exists) {
+           console.error(`📭 ${tChange} 无事件流（未跑过 watcher），无从合成时间线`);
+           console.error(`   事件流路径：${join(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
+@@ -5129,6 +5141,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
+           return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) };
+         });
+         console.log(renderTimeline({ change: tChange, events: tRes.events, tasks, anchors, birthTs: readBirthTs(changeDir), tier }));
++        if (tSourceNote) console.log(tSourceNote);
+         break;
+       }
+       const wRest = filteredArgs.slice(2);
+diff --git a/src/run/complete-handlers.js b/src/run/complete-handlers.js
+index a90e09e4..c2252cb4 100644
+--- a/src/run/complete-handlers.js
++++ b/src/run/complete-handlers.js
+@@ -670,13 +670,62 @@ export function buildArchiveModuleDocAdvisory({ specBase, deliverableFiles, docs
+   return `⚠️ 模块文档认领 advisory：交付面命中 ${cards.map((c) => c.id).join('、')} 模块但本次变更无 .sillyspec/docs/** 增量——未认领模块卡：${cards.map((c) => c.card).join('、')}（advisory 不阻断归档；确认无需文档增量可忽略，需落盘则先补模块卡再归档）`
+ }
+ 
++// ── 归档时间线烤制（2026-09-28-archive-timeline-bake）──
++// 事件流（.runtime/watcher-events-<change>.jsonl）机本位：gitignore + 平台同步排除区，归档后
++// 本机清理/跨机 clone 均无从合成时间线。本函数在归档链 rename 后调用：用与 `watcher timeline`
++// CLI 同一合成面（readWatcherEvents × parseTaskLines/readBirthTs/flow-state tier ×
++// resolveCommitAnchors(gitLook)）把渲染文本写 destDir/timeline.md、原始事件字节副本写
++// destDir/watcher-events.jsonl（尺寸帽防巨型事件流污染 git，超帽只烤渲染面）。整体 fail-open：
++// 异常返回 {ok:false} 由调用方一行警告，不阻断归档。runtimeRoot 解析与 spawnWatcher 写侧同链
++// （resolvePlatformOpts > resolveRuntimeRoot）——平台模式下事件流在平台 runtime 目录也能读对。
++// gitLook/写读函数/尺寸帽/nowIso 为测试注入面（缺省 gitQuiet 包装与 index.js timeline 接线同形）。
++export const BAKE_EVENTS_COPY_MAX_BYTES = 2 * 1024 * 1024
++
++export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, gitLook = null, writeImpl = writeFileSync, readRawImpl = readFileSync, eventsCopyMaxBytes = BAKE_EVENTS_COPY_MAX_BYTES, nowIso = null }) {
++  try {
++    const { resolvePlatformOpts } = await import('../progress.js')
++    const runtimeRoot = resolveRuntimeRoot(resolvePlatformOpts(cwd), specBase)
++    const { readWatcherEvents, watcherEventsPath } = await import('../watcher.js')
++    const res = readWatcherEvents({ runtimeRoot, change: changeName })
++    if (!res.exists) return { ok: true, skipped: true, reason: `无事件流（${watcherEventsPath(runtimeRoot, changeName)}）` }
++    const { parseTaskLines, renderBakedTimeline, resolveCommitAnchors, readBirthTs } = await import('../timeline.js')
++    let tasks = null
++    try { tasks = parseTaskLines(readRawImpl(join(destDir, 'tasks.md'), 'utf8')) } catch { /* 任务面缺失照烤（渲染层有降级段） */ }
++    let tier = null
++    try { const m = /^tier:\s*(\S+)/m.exec(readRawImpl(join(destDir, 'flow-state.yaml'), 'utf8')); if (m) tier = m[1] } catch { /* 头脑风暴预段等无 flow-state 按未知 */ }
++    const look = gitLook || ((hash) => {
++      const out = gitQuiet(cwd, ['log', '-1', '--format=%h%x1f%aI%x1f%B', hash])
++      if (typeof out !== 'string' || !out.trim()) return null
++      const sep = out.indexOf('\x1f')
++      const rest = out.slice(sep + 1)
++      const sep2 = rest.indexOf('\x1f')
++      return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) }
++    })
++    const anchors = resolveCommitAnchors(res.events, look)
++    let eventsRaw = null
++    try { eventsRaw = readRawImpl(watcherEventsPath(runtimeRoot, changeName), 'utf8') } catch { /* 副本缺源只烤渲染面 */ }
++    const oversize = eventsRaw != null && Buffer.byteLength(eventsRaw, 'utf8') > eventsCopyMaxBytes
++    const timelineMd = renderBakedTimeline({ change: changeName, events: res.events, tasks, anchors, birthTs: readBirthTs(destDir), tier, bakedAtIso: nowIso || new Date().toISOString(), eventsCopySkipped: oversize })
++    writeImpl(join(destDir, 'timeline.md'), timelineMd)
++    const files = ['timeline.md']
++    if (eventsRaw != null && !oversize) {
++      writeImpl(join(destDir, 'watcher-events.jsonl'), eventsRaw)
++      files.push('watcher-events.jsonl')
++    }
++    return { ok: true, skipped: false, files, eventsCopySkipped: oversize }
++  } catch (e) {
++    return { ok: false, skipped: false, error: e && e.message ? e.message : String(e) }
++  }
++}
++
+ /**
+  * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
+  *
+  * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
+  * flow thin 轻量工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
+  * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
+- * → unregisterChange 终态一致化 → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
++ * → 时间线烤制（fail-open，2026-09-28-archive-timeline-bake）→ unregisterChange 终态一致化
++ * → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
+  * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
+  *
+  * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
+@@ -783,6 +832,19 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
+     process.exit(1)
+   }
+ 
++  // ── 时间线烤制（2026-09-28-archive-timeline-bake）──事件流机本位（.runtime gitignore），
++  // 归档时把合成时间线 + 原始事件副本烤进归档目录（跨机进 git）；fail-open：跳过/失败一行
++  // 注记不阻断归档。位于 rename 之后（目录归本链独占、destName 文件面完整）、窄化 git add
++  // 之前（烤制文件随 archiveNarrowedGitAdd 确定性进暂存）。
++  try {
++    const baked = await bakeArchiveTimeline({ cwd, specBase, changeName, destDir })
++    if (baked.skipped) console.log(`⏭️ 时间线烤制跳过：${baked.reason}`)
++    else if (baked.ok) console.log(`📦 时间线烤制完成：${baked.files.join('、')}（随归档包进 git）`)
++    else console.warn(`⚠️ 时间线烤制失败（不阻断归档）: ${baked.error}`)
++  } catch (e) {
++    console.warn(`⚠️ 时间线烤制异常（不阻断归档）: ${e && e.message ? e.message : e}`)
++  }
++
+   // 正常路径同样走终态一致化（坑 manual-archive-desync-status-only）：标准 --done --confirm 流程
+   // 中 completeStep 随后也会逐项完成，此处先收尾是幂等写同值——保证任何走出本函数的归档终态一致
+   pm.unregisterChange(cwd, changeName, { archiveStepNames: typeof pm.archiveStepNamesForArchive === 'function' ? pm.archiveStepNamesForArchive() : null })
+diff --git a/src/timeline.js b/src/timeline.js
+index 367dfa79..4b94dbe8 100644
+--- a/src/timeline.js
++++ b/src/timeline.js
+@@ -173,6 +173,25 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
+   return L.join('\n');
+ }
+ 
++/**
++ * 归档烤制文本（2026-09-28-archive-timeline-bake）：快照头注记 + renderTimeline 全文。
++ * 事件流机本位（.runtime gitignore），本快照随归档包进 git 跨机可读；watcher 终拍可能晚于
++ * 烤制落盘——诚实注记而非数据错误。eventsCopySkipped=尺寸超帽未拷副本形态。
++ */
++export function renderBakedTimeline({ change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped = false }) {
++  const head = [
++    `# 合成时间线快照 — ${change}`,
++    '',
++    `> 烤制于归档链（${bakedAtIso}）：事件流机本位（.runtime gitignore），本快照随归档包进 git 跨机可读。`,
++    '> 末尾事件（含「目录已移入 archive」终拍）可能晚于烤制未入快照；勾选时刻为顺序推断（≈）。',
++    eventsCopySkipped
++      ? '> 原始事件副本未随包（尺寸超帽）——细粒度复核回本机 .runtime 或平台 observation 事件面。'
++      : '> 原始事件副本：本目录 watcher-events.jsonl（时点快照）。',
++    '',
++  ]
++  return head.join('\n') + renderTimeline({ change, events, tasks, anchors, birthTs, tier })
++}
++
+ /** change 目录双路径探测（活跃 > 归档）+ tasks.md 读取 → {changeDir, tasksMd}（缺 tasksMd=null）。 */
+ export function loadChangeTasks(specBase, change) {
+   const active = join(specBase, 'changes', change);
+@@ -195,4 +214,4 @@ export function readBirthTs(changeDir) {
+   return null;
+ }
+ 
+-export default { parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, loadChangeTasks, readBirthTs };
++export default { parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, renderBakedTimeline, loadChangeTasks, readBirthTs };
+diff --git a/src/watcher.js b/src/watcher.js
+index c0a8baa6..ef45b8f8 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -432,16 +432,19 @@ export function watcherEventsPath(runtimeRoot, changeName) {
+ }
+ 
+ /**
+- * 读事件流（纯读：解析+过滤，`watcher alerts` 命令与测试消费；不写盘不推平台）。
++ * 读事件流（纯读：解析+过滤，`watcher alerts`/`watcher timeline` 命令与测试消费；不写盘不推平台）。
+  * 坏行/残行/非对象行跳过并计数不抛（readKnowledgeHits 先例 R-04——并发 append 交错容忍）。
++ * path 直读形态（2026-09-28-archive-timeline-bake）：传 path 时按该路径解析（同一坏行容忍
++ * 语义），供 `watcher timeline` 回退读归档包内 watcher-events.jsonl 烤制副本——path 优先于
++ * runtimeRoot/change 组合路径。
+  * @returns {{exists:boolean, events:Array, warnings:Array, badLines:number}}
+  *   文件/目录缺失 → {exists:false, 空集}；warnings=告警子集（kind 或 severity 为
+  *   'warning' 即入——mkWarning 两者皆写，双字段容差防未来形态漂移）。
+  */
+-export function readWatcherEvents({ runtimeRoot, change }) {
++export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
+   let text;
+   try {
+-    text = readFileSync(watcherEventsPath(runtimeRoot, change), 'utf8');
++    text = readFileSync(eventsPath || watcherEventsPath(runtimeRoot, change), 'utf8');
+   } catch {
+     return { exists: false, events: [], warnings: [], badLines: 0 };
+   }
+diff --git a/test/archive-timeline-bake.test.mjs b/test/archive-timeline-bake.test.mjs
+new file mode 100644
+index 00000000..02a2c4d9
+--- /dev/null
++++ b/test/archive-timeline-bake.test.mjs
+@@ -0,0 +1,197 @@
++/**
++ * archive-timeline-bake.test.mjs — 归档时间线烤制（2026-09-28-archive-timeline-bake）。
++ *
++ * 覆盖面（零真仓零真 git——gitLook 注入、fs 用 tmpdir fixture）：
++ *   ① renderBakedTimeline：快照头注记、事件副本两态注记、透传 renderTimeline 主体；
++ *   ② bakeArchiveTimeline：fixture 端到端（events jsonl × tasks.md × flow-state）→
++ *      timeline.md + watcher-events.jsonl 双落盘、副本与源字节一致；
++ *   ③ bakeArchiveTimeline：无事件流跳过（零文件产出带原因）；写失败 fail-open 返回 {ok:false} 不抛；
++ *   ④ readWatcherEvents path 直读形态：归档副本解析、坏行容忍、path 优先于 runtimeRoot、缺失 exists:false；
++ *   ⑤ 尺寸帽：超帽只烤 timeline.md，副本跳过且头注记在场。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++const { renderBakedTimeline, parseTaskLines, resolveCommitAnchors } = await import('../src/timeline.js')
++const { readWatcherEvents } = await import('../src/watcher.js')
++const { bakeArchiveTimeline, BAKE_EVENTS_COPY_MAX_BYTES } = await import('../src/run/complete-handlers.js')
++
++const CHANGE = 'fixture-bake-change'
++
++// ───────────────────── fixture 组装 ─────────────────────
++
++function makeFixture() {
++  const root = mkdtempSync(join(tmpdir(), 'bake-'))
++  const specBase = join(root, '.sillyspec')
++  const runtimeRoot = join(specBase, '.runtime')
++  const destDir = join(specBase, 'changes', 'archive', CHANGE)
++  mkdirSync(runtimeRoot, { recursive: true })
++  mkdirSync(destDir, { recursive: true })
++  const eventsJsonl = [
++    `{"ts":1695800000000,"kind":"born","stage":"brainstorm","detail":"变更诞生"}`,
++    `{"ts":1695800010000,"kind":"task-done","stage":"tasks","detail":"checked 0→2","provisional":true}`,
++    `{"ts":1695800020000,"kind":"commit","stage":"tasks","detail":"abc1234 fix: 甲（task-01）"}`,
++  ].join('\n') + '\n'
++  writeFileSync(join(runtimeRoot, `watcher-events-${CHANGE}.jsonl`), eventsJsonl)
++  writeFileSync(join(destDir, 'tasks.md'), [
++    '---',
++    'author: test',
++    'created_at: 2026-09-28T09:00:00.000Z',
++    '---',
++    '# 任务注册表',
++    '- [x] task-01: 甲单元',
++    '- [x] task-02: 乙单元',
++    '',
++  ].join('\n'))
++  writeFileSync(join(destDir, 'flow-state.yaml'), 'tier: thin\n')
++  return { root, specBase, runtimeRoot, destDir, eventsJsonl }
++}
++
++const fakeGitLook = (hash) => ({
++  hash,
++  dateISO: '2026-09-28T10:00:00+08:00',
++  message: 'fix: 甲单元落地（task-01）',
++})
++
++const fakeEvents = [
++  { ts: 1695800000000, kind: 'born', stage: 'brainstorm', detail: '变更诞生' },
++  { ts: 1695800010000, kind: 'task-done', stage: 'tasks', detail: 'checked 0→2', provisional: true },
++  { ts: 1695800020000, kind: 'commit', stage: 'tasks', detail: 'abc1234 fix: 甲（task-01）' },
++]
++
++// ───────────────────── ① renderBakedTimeline ─────────────────────
++
++test('尺寸帽缺省值钉 2MiB（防巨型事件流污染 git 的契约面）', () => {
++  assert.equal(BAKE_EVENTS_COPY_MAX_BYTES, 2 * 1024 * 1024)
++})
++
++test('renderBakedTimeline：快照头注记 + 事件副本在场注记 + 透传主体三段', () => {
++  const anchors = resolveCommitAnchors(fakeEvents, fakeGitLook)
++  const md = renderBakedTimeline({
++    change: CHANGE, events: fakeEvents, tasks: parseTaskLines('- [x] task-01: 甲单元\n- [x] task-02: 乙单元'),
++    anchors, birthTs: 1695800000000, tier: 'thin', bakedAtIso: '2026-09-28T12:00:00.000Z',
++  })
++  assert.ok(md.includes(`# 合成时间线快照 — ${CHANGE}`))
++  assert.ok(md.includes('2026-09-28T12:00:00.000Z'))
++  assert.ok(md.includes('烤制于归档链'))
++  assert.ok(md.includes('末尾事件'))
++  assert.ok(md.includes('watcher-events.jsonl'))
++  assert.ok(md.includes('── 事件时间轴 ──'))
++  assert.ok(md.includes('── 任务面'))
++  assert.ok(md.includes('task-01'))
++  assert.ok(md.includes('注：'))
++})
++
++test('renderBakedTimeline：eventsCopySkipped=true 头注记改「尺寸超帽」不提副本文件', () => {
++  const md = renderBakedTimeline({
++    change: CHANGE, events: [], tasks: null, anchors: [], birthTs: null, tier: null,
++    bakedAtIso: '2026-09-28T12:00:00.000Z', eventsCopySkipped: true,
++  })
++  assert.ok(md.includes('尺寸超帽'))
++  assert.ok(!md.includes('本目录 watcher-events.jsonl'))
++  assert.ok(md.includes('（无事件——watcher 未观测到活动）'))
++})
++
++// ───────────────────── ② bakeArchiveTimeline 端到端 ─────────────────────
++
++test('bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一致', async () => {
++  const fx = makeFixture()
++  try {
++    const r = await bakeArchiveTimeline({
++      cwd: fx.root, specBase: fx.specBase, changeName: CHANGE, destDir: fx.destDir,
++      gitLook: fakeGitLook, nowIso: '2026-09-28T12:00:00.000Z',
++    })
++    assert.equal(r.ok, true)
++    assert.equal(r.skipped, false)
++    assert.deepEqual(r.files, ['timeline.md', 'watcher-events.jsonl'])
++    const md = readFileSync(join(fx.destDir, 'timeline.md'), 'utf8')
++    assert.ok(md.includes(`# 合成时间线快照 — ${CHANGE}`))
++    assert.ok(md.includes('task-01'))
++    assert.ok(md.includes('abc1234'))
++    assert.equal(readFileSync(join(fx.destDir, 'watcher-events.jsonl'), 'utf8'), fx.eventsJsonl)
++  } finally {
++    rmSync(fx.root, { recursive: true, force: true })
++  }
++})
++
++// ───────────────────── ③ 跳过态与 fail-open ─────────────────────
++
++test('bakeArchiveTimeline：无事件流跳过，零文件产出带原因', async () => {
++  const fx = makeFixture()
++  rmSync(join(fx.runtimeRoot, `watcher-events-${CHANGE}.jsonl`))
++  try {
++    const r = await bakeArchiveTimeline({
++      cwd: fx.root, specBase: fx.specBase, changeName: CHANGE, destDir: fx.destDir, gitLook: fakeGitLook,
++    })
++    assert.equal(r.ok, true)
++    assert.equal(r.skipped, true)
++    assert.ok(r.reason.includes('无事件流'))
++    assert.equal(existsSync(join(fx.destDir, 'timeline.md')), false)
++    assert.equal(existsSync(join(fx.destDir, 'watcher-events.jsonl')), false)
++  } finally {
++    rmSync(fx.root, { recursive: true, force: true })
++  }
++})
++
++test('bakeArchiveTimeline：写失败 fail-open 返回 {ok:false} 不抛', async () => {
++  const fx = makeFixture()
++  try {
++    const r = await bakeArchiveTimeline({
++      cwd: fx.root, specBase: fx.specBase, changeName: CHANGE, destDir: fx.destDir,
++      gitLook: fakeGitLook,
++      writeImpl: () => { throw new Error('disk full') },
++    })
++    assert.equal(r.ok, false)
++    assert.ok(String(r.error).includes('disk full'))
++  } finally {
++    rmSync(fx.root, { recursive: true, force: true })
++  }
++})
++
++// ───────────────────── ④ readWatcherEvents path 直读 ─────────────────────
++
++test('readWatcherEvents：path 直读归档副本，坏行容忍计数，path 优先于 runtimeRoot', async () => {
++  const fx = makeFixture()
++  try {
++    const copyPath = join(fx.destDir, 'watcher-events.jsonl')
++    writeFileSync(copyPath, fx.eventsJsonl + '{bad line\n\n' + fx.eventsJsonl.split('\n')[0] + '\n')
++    const r = readWatcherEvents({ path: copyPath })
++    assert.equal(r.exists, true)
++    assert.equal(r.events.length, 4)
++    assert.equal(r.badLines, 1)
++    // path 优先：runtimeRoot 指向空目录仍读 path
++    const r2 = readWatcherEvents({ runtimeRoot: join(fx.root, 'nowhere'), change: CHANGE, path: copyPath })
++    assert.equal(r2.exists, true)
++    assert.equal(r2.events.length, 4)
++    // 缺失路径 → exists:false 空集（既有语义）
++    const r3 = readWatcherEvents({ path: join(fx.destDir, 'nope.jsonl') })
++    assert.equal(r3.exists, false)
++    assert.equal(r3.events.length, 0)
++  } finally {
++    rmSync(fx.root, { recursive: true, force: true })
++  }
++})
++
++// ───────────────────── ⑤ 尺寸帽 ─────────────────────
++
++test('bakeArchiveTimeline：事件副本超帽只烤 timeline.md，头注记「尺寸超帽」', async () => {
++  const fx = makeFixture()
++  try {
++    const r = await bakeArchiveTimeline({
++      cwd: fx.root, specBase: fx.specBase, changeName: CHANGE, destDir: fx.destDir,
++      gitLook: fakeGitLook, eventsCopyMaxBytes: 10,
++    })
++    assert.equal(r.ok, true)
++    assert.deepEqual(r.files, ['timeline.md'])
++    assert.equal(r.eventsCopySkipped, true)
++    assert.equal(existsSync(join(fx.destDir, 'timeline.md')), true)
++    assert.equal(existsSync(join(fx.destDir, 'watcher-events.jsonl')), false)
++    const md = readFileSync(join(fx.destDir, 'timeline.md'), 'utf8')
++    assert.ok(md.includes('尺寸超帽'))
++  } finally {
++    rmSync(fx.root, { recursive: true, force: true })
++  }
++})

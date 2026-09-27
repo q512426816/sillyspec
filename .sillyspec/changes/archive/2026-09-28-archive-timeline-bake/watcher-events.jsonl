@@ -1,0 +1,13 @@
+{"ts":1790526112970,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790526125224,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790527304288,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790527304288,"kind":"task-done","stage":"tasks","detail":"checked 0→6","provisional":true}
+{"ts":1790527306735,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01、task-02、task-03、task-04、task-05、task-06 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790528209599,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1790529971693,"kind":"commit","stage":null,"detail":"9a58aab6","provisional":true}
+{"ts":1790530018026,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790530021557,"kind":"commit","stage":null,"detail":"f1856d1c","provisional":true}
+{"ts":1790530278424,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790530330580,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790530617426,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790530796763,"kind":"commit","stage":null,"detail":"a6884298","provisional":true}

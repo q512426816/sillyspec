@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-archive-timeline-bake",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-archive-timeline-bake:flow:FR-01",
+      "tests": [
+        "test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：fixture 端到端双落盘，副本与源字节一致」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-archive-timeline-bake"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-archive-timeline-bake:flow:FR-02",
+      "tests": [
+        "test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：无事件流跳过，零文件产出带原因」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-archive-timeline-bake"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-archive-timeline-bake:flow:FR-03",
+      "tests": [
+        "test/archive-timeline-bake.test.mjs「readWatcherEvents：path 直读归档副本，坏行容忍计数，path 优先于 runtimeRoot」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-archive-timeline-bake"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-archive-timeline-bake:flow:FR-04",
+      "tests": [
+        "test/archive-timeline-bake.test.mjs「bakeArchiveTimeline：事件副本超帽只烤 timeline.md，头注记「尺寸超帽」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-archive-timeline-bake"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-archive-timeline-bake:flow:FR-05",
+      "tests": [
+        "test/archive-timeline-bake.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-archive-timeline-bake"
+    }
+  ]
+}
