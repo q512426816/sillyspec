@@ -410,6 +410,10 @@ dispatch:
 # evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
 # test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
 
+# ── 证据门档位（2026-09-27-ui-visual-guidance / 2026-09-27-hunk-attribution-gate；注释态=缺省档位生效）──
+# ui_visual_gate: warn   # UI 视觉证据分级门：warn（缺省，缺 visual-evidence.md 仅警告）| error（缺证据即阻断）| off（探针整体关闭；视觉降级无用户裁决留痕时无论档位恒阻断）
+# hunk_gate: warn        # 提交面行级归属门：warn（缺省）| error（未归因文件/跨变更竞争任一在场阻断收口；在途残留恒仅警告——并发 WIP 弱信号不硬拦）| off（关闭）
+
 # ── monorepo 子模块路径映射（.path 仍被 plan/worktree-deps 消费；.test 已退役勿再配）──
 modules:
   frontend: { path: "frontend/" }

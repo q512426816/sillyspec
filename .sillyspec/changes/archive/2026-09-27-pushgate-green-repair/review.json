@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-pushgate-green-repair",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "行号锚是活契约，后续 src/run/shared.js 与 src/index.js 行布局再变会再红",
+      "evidence": "doc-ref-check 层2 关键词窗口校验依赖精确行号；本修复只对齐当前提交态，未引入锚自愈机制（design 槽4 已声明放弃理由）",
+      "location": "docs/sillyspec/platform-interface-map.md:L82-L214"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-27T13:05:31Z"
+}
