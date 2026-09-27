@@ -3142,7 +3142,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         // 评审 P2-1 清偿：证据须为测试形态文件（*.test.* / *.spec.* / test_*.py / *_test.*）——
         // resolveTestFileRel 直取分支无形态检查（package.json/win.ini 实证可绕），此处收口
         const evBase = evRel ? evRel.split('/').pop() : ''
-        const evShaped = !!evRel && (/\\.(test|spec)\\.[cm]?[jt]sx?$/.test(evBase) || /^test_[\\w.]+\\.py$/.test(evBase) || /_test\\.(go|py)$/.test(evBase))
+        const EV_TEST_SHAPE_RE = new RegExp('\\.(test|spec)\\.[cm]?[jt]sx?$')
+        const evShaped = !!evRel && (EV_TEST_SHAPE_RE.test(evBase) || /^test_[\w.]+\.py$/.test(evBase) || /_test\.(go|py)$/.test(evBase))
         if (!evShaped) { fail(`证据必须是盘上真实测试文件（*.test.* / test_*.py 等形态）：${evidenceRaw}——不收口头相符，不收非测试文件`); break }
         const rows = readFrBindings({ knowledgeRoot, frId: anchor })
         if (rows.length === 0) { fail(`${anchor} 无绑定行——确认对象不存在（先 --bind 或经归档提升）`); break }
