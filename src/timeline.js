@@ -173,6 +173,25 @@ export function renderTimeline({ change, events, tasks, anchors, birthTs, tier }
   return L.join('\n');
 }
 
+/**
+ * 归档烤制文本（2026-09-28-archive-timeline-bake）：快照头注记 + renderTimeline 全文。
+ * 事件流机本位（.runtime gitignore），本快照随归档包进 git 跨机可读；watcher 终拍可能晚于
+ * 烤制落盘——诚实注记而非数据错误。eventsCopySkipped=尺寸超帽未拷副本形态。
+ */
+export function renderBakedTimeline({ change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped = false }) {
+  const head = [
+    `# 合成时间线快照 — ${change}`,
+    '',
+    `> 烤制于归档链（${bakedAtIso}）：事件流机本位（.runtime gitignore），本快照随归档包进 git 跨机可读。`,
+    '> 末尾事件（含「目录已移入 archive」终拍）可能晚于烤制未入快照；勾选时刻为顺序推断（≈）。',
+    eventsCopySkipped
+      ? '> 原始事件副本未随包（尺寸超帽）——细粒度复核回本机 .runtime 或平台 observation 事件面。'
+      : '> 原始事件副本：本目录 watcher-events.jsonl（时点快照）。',
+    '',
+  ]
+  return head.join('\n') + renderTimeline({ change, events, tasks, anchors, birthTs, tier })
+}
+
 /** change 目录双路径探测（活跃 > 归档）+ tasks.md 读取 → {changeDir, tasksMd}（缺 tasksMd=null）。 */
 export function loadChangeTasks(specBase, change) {
   const active = join(specBase, 'changes', change);
@@ -195,4 +214,4 @@ export function readBirthTs(changeDir) {
   return null;
 }
 
-export default { parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, loadChangeTasks, readBirthTs };
+export default { parseTaskLines, inferFlipTimes, resolveCommitAnchors, renderTimeline, renderBakedTimeline, loadChangeTasks, readBirthTs };

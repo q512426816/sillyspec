@@ -670,13 +670,62 @@ export function buildArchiveModuleDocAdvisory({ specBase, deliverableFiles, docs
   return `⚠️ 模块文档认领 advisory：交付面命中 ${cards.map((c) => c.id).join('、')} 模块但本次变更无 .sillyspec/docs/** 增量——未认领模块卡：${cards.map((c) => c.card).join('、')}（advisory 不阻断归档；确认无需文档增量可忽略，需落盘则先补模块卡再归档）`
 }
 
+// ── 归档时间线烤制（2026-09-28-archive-timeline-bake）──
+// 事件流（.runtime/watcher-events-<change>.jsonl）机本位：gitignore + 平台同步排除区，归档后
+// 本机清理/跨机 clone 均无从合成时间线。本函数在归档链 rename 后调用：用与 `watcher timeline`
+// CLI 同一合成面（readWatcherEvents × parseTaskLines/readBirthTs/flow-state tier ×
+// resolveCommitAnchors(gitLook)）把渲染文本写 destDir/timeline.md、原始事件字节副本写
+// destDir/watcher-events.jsonl（尺寸帽防巨型事件流污染 git，超帽只烤渲染面）。整体 fail-open：
+// 异常返回 {ok:false} 由调用方一行警告，不阻断归档。runtimeRoot 解析与 spawnWatcher 写侧同链
+// （resolvePlatformOpts > resolveRuntimeRoot）——平台模式下事件流在平台 runtime 目录也能读对。
+// gitLook/写读函数/尺寸帽/nowIso 为测试注入面（缺省 gitQuiet 包装与 index.js timeline 接线同形）。
+export const BAKE_EVENTS_COPY_MAX_BYTES = 2 * 1024 * 1024
+
+export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, gitLook = null, writeImpl = writeFileSync, readRawImpl = readFileSync, eventsCopyMaxBytes = BAKE_EVENTS_COPY_MAX_BYTES, nowIso = null }) {
+  try {
+    const { resolvePlatformOpts } = await import('../progress.js')
+    const runtimeRoot = resolveRuntimeRoot(resolvePlatformOpts(cwd), specBase)
+    const { readWatcherEvents, watcherEventsPath } = await import('../watcher.js')
+    const res = readWatcherEvents({ runtimeRoot, change: changeName })
+    if (!res.exists) return { ok: true, skipped: true, reason: `无事件流（${watcherEventsPath(runtimeRoot, changeName)}）` }
+    const { parseTaskLines, renderBakedTimeline, resolveCommitAnchors, readBirthTs } = await import('../timeline.js')
+    let tasks = null
+    try { tasks = parseTaskLines(readRawImpl(join(destDir, 'tasks.md'), 'utf8')) } catch { /* 任务面缺失照烤（渲染层有降级段） */ }
+    let tier = null
+    try { const m = /^tier:\s*(\S+)/m.exec(readRawImpl(join(destDir, 'flow-state.yaml'), 'utf8')); if (m) tier = m[1] } catch { /* 头脑风暴预段等无 flow-state 按未知 */ }
+    const look = gitLook || ((hash) => {
+      const out = gitQuiet(cwd, ['log', '-1', '--format=%h%x1f%aI%x1f%B', hash])
+      if (typeof out !== 'string' || !out.trim()) return null
+      const sep = out.indexOf('\x1f')
+      const rest = out.slice(sep + 1)
+      const sep2 = rest.indexOf('\x1f')
+      return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) }
+    })
+    const anchors = resolveCommitAnchors(res.events, look)
+    let eventsRaw = null
+    try { eventsRaw = readRawImpl(watcherEventsPath(runtimeRoot, changeName), 'utf8') } catch { /* 副本缺源只烤渲染面 */ }
+    const oversize = eventsRaw != null && Buffer.byteLength(eventsRaw, 'utf8') > eventsCopyMaxBytes
+    const timelineMd = renderBakedTimeline({ change: changeName, events: res.events, tasks, anchors, birthTs: readBirthTs(destDir), tier, bakedAtIso: nowIso || new Date().toISOString(), eventsCopySkipped: oversize })
+    writeImpl(join(destDir, 'timeline.md'), timelineMd)
+    const files = ['timeline.md']
+    if (eventsRaw != null && !oversize) {
+      writeImpl(join(destDir, 'watcher-events.jsonl'), eventsRaw)
+      files.push('watcher-events.jsonl')
+    }
+    return { ok: true, skipped: false, files, eventsCopySkipped: oversize }
+  } catch (e) {
+    return { ok: false, skipped: false, error: e && e.message ? e.message : String(e) }
+  }
+}
+
 /**
  * runArchiveChain —— 归档执行链（R7 切片二 task-02 从 archiveChangeDirectory 抽出，纯搬运）。
  *
  * 链面：未 apply 交付面检查（--skip-apply 留痕旁路）→ plan.md 硬校验（skipPlanCheck 旁路：
  * flow thin 轻量工件面无 plan.md，task-03 flow done 归档子步传 true；既有 archive 流程缺省
  * false 行为零变化）→ module-impact pending 死信校验 → 目标目录检查 → 目录搬移（rename 重试）
- * → unregisterChange 终态一致化 → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
+ * → 时间线烤制（fail-open，2026-09-28-archive-timeline-bake）→ unregisterChange 终态一致化
+ * → archiveNarrowedGitAdd 窄化暂存 → 他者半归档残留探测。
  * 消费方：archiveChangeDirectory（既有 archive 流程）与 flow done 归档子步（R7）。
  *
  * @returns {Promise<void>} 失败面沿链内既有 process.exit 语义（纯搬运不改）。
@@ -781,6 +830,19 @@ export async function runArchiveChain({ pm, cwd, specBase, changeName, srcDir, d
   if (!existsSync(destDir) || existsSync(srcDir)) {
     console.error('❌ 归档校验失败：移动操作异常')
     process.exit(1)
+  }
+
+  // ── 时间线烤制（2026-09-28-archive-timeline-bake）──事件流机本位（.runtime gitignore），
+  // 归档时把合成时间线 + 原始事件副本烤进归档目录（跨机进 git）；fail-open：跳过/失败一行
+  // 注记不阻断归档。位于 rename 之后（目录归本链独占、destName 文件面完整）、窄化 git add
+  // 之前（烤制文件随 archiveNarrowedGitAdd 确定性进暂存）。
+  try {
+    const baked = await bakeArchiveTimeline({ cwd, specBase, changeName, destDir })
+    if (baked.skipped) console.log(`⏭️ 时间线烤制跳过：${baked.reason}`)
+    else if (baked.ok) console.log(`📦 时间线烤制完成：${baked.files.join('、')}（随归档包进 git）`)
+    else console.warn(`⚠️ 时间线烤制失败（不阻断归档）: ${baked.error}`)
+  } catch (e) {
+    console.warn(`⚠️ 时间线烤制异常（不阻断归档）: ${e && e.message ? e.message : e}`)
   }
 
   // 正常路径同样走终态一致化（坑 manual-archive-desync-status-only）：标准 --done --confirm 流程

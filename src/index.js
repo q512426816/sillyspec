@@ -5104,7 +5104,19 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
         const tSpecBase = resolvePlatformSpecDir(dir, specDir) || join(dir, '.sillyspec');
         const tPlatformOpts = resolvePlatformOpts(dir, specDir);
         const tRuntimeRoot = resolveRuntimeRoot({ runtimeRoot: tRuntimeRootFlag || (tPlatformOpts && tPlatformOpts.runtimeRoot) || null }, tSpecBase);
-        const tRes = readWatcherEvents({ runtimeRoot: tRuntimeRoot, change: tChange });
+        let tRes = readWatcherEvents({ runtimeRoot: tRuntimeRoot, change: tChange });
+        let tSourceNote = '';
+        if (!tRes.exists) {
+          // 归档包烤制副本回退（2026-09-28-archive-timeline-bake）：本机 .runtime 无事件流（跨机
+          // clone / 机本位清理）时读归档包内 watcher-events.jsonl 副本——时间线不随 .runtime 存活消失；
+          // 副本也缺失时保持既有 exit 2 提示语义。
+          const tBakedPath = join(tSpecBase, 'changes', 'archive', tChange, 'watcher-events.jsonl');
+          const tBaked = readWatcherEvents({ path: tBakedPath });
+          if (tBaked.exists) {
+            tRes = tBaked;
+            tSourceNote = `（事件源：归档包烤制快照 ${tBakedPath}——本机 .runtime 无事件流）`;
+          }
+        }
         if (!tRes.exists) {
           console.error(`📭 ${tChange} 无事件流（未跑过 watcher），无从合成时间线`);
           console.error(`   事件流路径：${join(tRuntimeRoot, `watcher-events-${tChange}.jsonl`)}；活跃变更跑任意 flow/run 命令会拉起 watcher`);
@@ -5129,6 +5141,7 @@ SillySpec pull — 拉取服务器 spec 快照到本地（X2 / FR-07）
           return { hash: out.slice(0, sep), dateISO: rest.slice(0, sep2), message: rest.slice(sep2 + 1) };
         });
         console.log(renderTimeline({ change: tChange, events: tRes.events, tasks, anchors, birthTs: readBirthTs(changeDir), tier }));
+        if (tSourceNote) console.log(tSourceNote);
         break;
       }
       const wRest = filteredArgs.slice(2);

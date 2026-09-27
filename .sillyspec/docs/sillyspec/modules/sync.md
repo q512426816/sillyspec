@@ -53,8 +53,10 @@ SillyHub 平台同步模块，负责与远程 SillyHub 服务建立连接、同�
 | `collectStatus(cwd)` | 顶层便捷函数（platform status 扩展用） | `cwd` |
 | `listConflictFiles(cwd)` | 顶层便捷函数（platform resolve 参数解析/报错兜底用，只读列 .runtime 未决冲突） | `cwd` |
 | `syncModule(args, cwd)` | CLI 入口：解析 args 并分发子命令 | `args: string[], cwd` |
-| `readWatcherEvents({runtimeRoot, change})` | watcher 事件流纯读（watcher alerts 命令消费）：jsonl 解析+告警过滤+坏行容忍 | `{runtimeRoot, change}` |
+| `readWatcherEvents({runtimeRoot, change, path?})` | watcher 事件流纯读（watcher alerts/timeline 命令消费）：jsonl 解析+告警过滤+坏行容忍；path 直读形态（2026-09-28-archive-timeline-bake）按该路径解析（归档包烤制副本回退），path 优先于 runtimeRoot/change | `{runtimeRoot, change, path?}` |
 | `watcherEventsPath(runtimeRoot, changeName)` | 事件流文件路径锚（与子进程落盘名同源） | `runtimeRoot, changeName` |
+| `renderBakedTimeline({change, events, tasks, anchors, birthTs, tier, bakedAtIso, eventsCopySkipped})` | 归档烤制文本（timeline.js，2026-09-28-archive-timeline-bake）：快照头注记 + renderTimeline 全文，写归档包 timeline.md 进 git 跨机可读 | timeline.js 导出 |
+| `bakeArchiveTimeline({cwd, specBase, changeName, destDir, gitLook?, writeImpl?, readRawImpl?, eventsCopyMaxBytes?, nowIso?})` | 归档链时间线烤制（complete-handlers.js，runArchiveChain rename 后调用，fail-open）：合成 timeline.md + 原始事件副本 watcher-events.jsonl（2MiB 尺寸帽，超帽只烤渲染面） | complete-handlers.js 导出 |
 
 ## 关键数据流
 1. **连接流程**：`connect(url, token)` -> `fetchJson(/api/health)` 验证 -> 文本级定向写入 `.sillyspec/local.yaml` 的 `platform` 段（`replaceTopLevelSection` 原位替换，保留注释/其他段/数组/深嵌套）+ `mcp` 段（不存在时追加同源 url/token；文本级 `findTopLevelSectionRange('mcp')` 守卫保留用户已手填 mcp 段不覆盖，R-09。不同源时 agent 手填 mcp 段或设 env）

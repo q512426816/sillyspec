@@ -432,16 +432,19 @@ export function watcherEventsPath(runtimeRoot, changeName) {
 }
 
 /**
- * 读事件流（纯读：解析+过滤，`watcher alerts` 命令与测试消费；不写盘不推平台）。
+ * 读事件流（纯读：解析+过滤，`watcher alerts`/`watcher timeline` 命令与测试消费；不写盘不推平台）。
  * 坏行/残行/非对象行跳过并计数不抛（readKnowledgeHits 先例 R-04——并发 append 交错容忍）。
+ * path 直读形态（2026-09-28-archive-timeline-bake）：传 path 时按该路径解析（同一坏行容忍
+ * 语义），供 `watcher timeline` 回退读归档包内 watcher-events.jsonl 烤制副本——path 优先于
+ * runtimeRoot/change 组合路径。
  * @returns {{exists:boolean, events:Array, warnings:Array, badLines:number}}
  *   文件/目录缺失 → {exists:false, 空集}；warnings=告警子集（kind 或 severity 为
  *   'warning' 即入——mkWarning 两者皆写，双字段容差防未来形态漂移）。
  */
-export function readWatcherEvents({ runtimeRoot, change }) {
+export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
   let text;
   try {
-    text = readFileSync(watcherEventsPath(runtimeRoot, change), 'utf8');
+    text = readFileSync(eventsPath || watcherEventsPath(runtimeRoot, change), 'utf8');
   } catch {
     return { exists: false, events: [], warnings: [], badLines: 0 };
   }
