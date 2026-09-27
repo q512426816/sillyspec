@@ -3087,7 +3087,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       const testsArg = flag('--tests')
       const reason = flag('--reason') || 'spec'
       const fail = (msg) => { console.error(`❌ ${msg}`); process.exitCode = 1 }
-      if (!anchor && !change) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression]'); break }
+      // repair-paths/--redomain 自带用法门，不走 anchor/change 前置守卫
+      if (!anchor && !change && !has('--repair-paths') && !filteredArgs.slice(1).includes('repair-paths') && !has('--redomain')) { fail('用法: sillyspec tests --anchor <FR-…|ql-…> | --change <名> [--bind|--unbind] [--tests <p1,p2>] [--row-id <id>] [--reason spec|capability|regression] | repair-paths | --redomain --from <域> --to <域>'); break }
       // 变更期局部锚（FR-NN 未铸全局）只读拒绝修改——修理工仅面向提升后行
       const isLocalAnchor = anchor && /^FR-\d+$/.test(anchor)
       if ((has('--bind') || has('--unbind')) && isLocalAnchor) { fail(`变更期局部锚「${anchor}」只读——修理工仅面向提升后的全局锚（FR-<域>-NNN / ql-…）`); break }
@@ -3153,6 +3154,36 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         if (flipped === 0) { console.log(`ℹ️ ${anchor} 全部绑定行已 active（幂等，无需确认）`); break }
         upsertFrBindingsRaw({ knowledgeRoot, frId: anchor, rows: confirmed, projectRoot: effDir })
         console.log(`✅ 确认翻牌：${anchor} ${flipped}/${rows.length} 行 candidate→active（confirmed_by=agent${head2 ? ` @${head2.slice(0, 8)}` : ''}；证据=${evRel}）`)
+        break
+      }
+      // ── redomain（2026-09-27-redomain，三层治理 v2 ③）：伪域条目机器迁移 ──
+      // --from <域> --to <域> [--anchor <FR-id> 可重复]；干跑缺省列条目，--write 落盘。
+      // 身份铁律：迁域不换号（绑定/supersede 链靠 ID 寻址）；平台伪域卡「一键迁移」的 CLI 端。
+      if (has('--redomain')) {
+        const fromD = flag('--from')
+        const toD = flag('--to')
+        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--write]'); break }
+        const anchors = filteredArgs.filter((a, i) => a === '--anchor' ? (filteredArgs[i + 1] || '') : null).filter(Boolean)
+        // 多 --anchor 收集
+        const anchorList = []
+        for (let i = 0; i < filteredArgs.length - 1; i++) if (filteredArgs[i] === '--anchor') anchorList.push(filteredArgs[i + 1])
+        try {
+          const { planRedomain, redomainFrEntries } = await import('./redomain.js')
+          if (!has('--write')) {
+            const plan = planRedomain({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null })
+            console.log(`🔧 域迁移预览（--write 落盘）：fr/${fromD}.md → fr/${toD}.md，${plan.entries.length} 条`)
+            for (const e of plan.entries.slice(0, 10)) console.log(`   ${e.id} ${e.title}`)
+            if (plan.entries.length > 10) console.log(`   … 共 ${plan.entries.length} 条`)
+            console.log(`   目标域文件${plan.targetExists ? '在场' : '将新建'}；源域${plan.sourceWillDelete ? '将删空壳' : '保留余条'}；ID 不变（身份保持）`)
+            break
+          }
+          const r = redomainFrEntries({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null })
+          console.log(`✅ 域迁移完成：${r.moved.length} 条 fr/${fromD}.md → fr/${toD}.md（ID 不变）`)
+          for (const m of r.moved.slice(0, 10)) console.log(`   ${m.id} ${m.title}`)
+          if (r.sourceDeleted) console.log(`   源域空壳已删：fr/${fromD}.md`)
+          if (r.targetCreated) console.log(`   目标域文件新建：fr/${toD}.md`)
+          if (r.indexLineAdded) console.log(`   INDEX 路由行已补：${toD}`)
+        } catch (e) { fail(`域迁移被拒：${(e && e.message) || e}`) }
         break
       }
       // 视图
