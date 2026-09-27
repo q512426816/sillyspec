@@ -172,9 +172,16 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
         const flagged = frs.filter((f) => f.needsReview)
         const ordered = [...flagged, ...frs.filter((f) => !f.needsReview)]
         for (const f of ordered.slice(0, 8)) {
-          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}`)
+          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
         }
         if (ordered.length > 8) lines.push(`   （+${ordered.length - 8} 条见 knowledge/fr/ 对应域文件）`)
+        // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
+        // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
+        // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
+        const unconfirmed = ordered.filter((f) => f.unconfirmed > 0).slice(0, 2)
+        if (unconfirmed.length > 0) {
+          lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
+        }
       }
     }
     const { matchKnowledge } = await import('./knowledge-match.js')

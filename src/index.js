@@ -3129,6 +3129,27 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         }
         break
       }
+      // ── confirm（2026-09-27-confirm-on-use 三层治理①层）：消费时确认翻牌 ──
+      // candidate 机器行（confirmed_by=null）批量翻 active（confirmed_by=agent）——抽查式
+      // 确认的写回通道。机械防橡皮图章：--evidence 必须是可自仓根解析的真实测试路径
+      // （resolveTestFileRel 单源），解析失败拒绝 exit 1。
+      if (has('--confirm')) {
+        if (!anchor || !/^FR-/.test(anchor)) { fail('用法: sillyspec tests --confirm --anchor FR-<域>-NNN --evidence <真实测试路径>'); break }
+        const evidenceRaw = flag('--evidence')
+        if (!evidenceRaw) { fail('--confirm 须配 --evidence <真实测试路径>（防橡皮图章：证据必须是盘上文件）'); break }
+        const { resolveTestFileRel: _rtf2 } = await import('./test-bindings.js')
+        const evRel = _rtf2(testAnchorFile(evidenceRaw), { projectRoot: effDir }) || (existsSync(resolve(effDir, evidenceRaw.replace(/\\/g, '/'))) ? evidenceRaw.replace(/\\/g, '/') : null)
+        if (!evRel) { fail(`证据路径不可解析：${evidenceRaw}（相对 ${effDir}）——确认必须指向盘上真实测试文件，不收口头相符`); break }
+        const rows = readFrBindings({ knowledgeRoot, frId: anchor })
+        if (rows.length === 0) { fail(`${anchor} 无绑定行——确认对象不存在（先 --bind 或经归档提升）`); break }
+        const head2 = (() => { try { return gitQuiet(effDir, ['rev-parse', 'HEAD']) || null } catch { return null } })()
+        const confirmed = rows.map((r) => r.confirmed_by === 'agent' ? r : { ...r, state: 'active', confirmed_by: 'agent', confirmed_at: head2 })
+        const flipped = confirmed.filter((r, i) => rows[i].confirmed_by !== 'agent').length
+        if (flipped === 0) { console.log(`ℹ️ ${anchor} 全部绑定行已 active（幂等，无需确认）`); break }
+        upsertFrBindingsRaw({ knowledgeRoot, frId: anchor, rows: confirmed, projectRoot: effDir })
+        console.log(`✅ 确认翻牌：${anchor} ${flipped}/${rows.length} 行 candidate→active（confirmed_by=agent${head2 ? ` @${head2.slice(0, 8)}` : ''}；证据=${evRel}）`)
+        break
+      }
       // 视图
       const rows = anchor
         ? queryByAnchor({ specBase, knowledgeRoot, anchor })

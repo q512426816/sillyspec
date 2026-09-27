@@ -97,6 +97,27 @@ function readEntryBindings(lines) {
   return out;
 }
 
+/** 条目未确认绑定行计数（2026-09-27-confirm-on-use）：绑定子块内 confirmed_by≠agent 的
+ * `- row:` 块数——机器提升行恒 candidate/null（状态机有机制无消费者的病灶面），注入面据此
+ * 打 ⚪N未确认 标记 + 抽查确认提示。行块边界=下一个 `- row:` 或节头。 */
+export function readEntryUnconfirmed(lines) {
+  const idx = lines.findIndex((l) => l.startsWith('测试绑定：'));
+  if (idx === -1) return 0;
+  let unconfirmed = 0
+  let inRow = false
+  let rowConfirmed = false
+  for (const l of lines.slice(idx + 1)) {
+    if (/^##\s/.test(l)) break
+    if (/^-\s+row:/.test(l)) {
+      if (inRow && !rowConfirmed) unconfirmed++
+      inRow = true; rowConfirmed = false; continue
+    }
+    if (inRow && /^\s+confirmed_by:\s*agent\s*$/.test(l)) rowConfirmed = true
+  }
+  if (inRow && !rowConfirmed) unconfirmed++
+  return unconfirmed
+}
+
 /** 标题 bigram 重叠判「重复嫌疑/承接漏写」的阈值（fr-index 判据函数与两处消费方——brainstorm
  * 软门（stage-contract.js）与轻量道 dup 软门（flow.js）——共用同一常量，防两处各写一份字面量
  * 漂移（fr-rot-precision 评审 P3 清偿：改阈值只改这里）。 */
@@ -760,7 +781,7 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
       const needsReview = reviewLine ? reviewLine.replace(/^待复核：\s*/, '').trim() : null;
       // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
       // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines) });
+      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
     }
   }
   return out;
