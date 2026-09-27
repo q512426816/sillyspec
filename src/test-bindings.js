@@ -117,7 +117,7 @@ export function resolveTestFileRel(p, { projectRoot, subprojectRoots = null, bas
 }
 
 /** 绑定 tests 路径归一（保留用例锚后缀）：文件部分走 resolveTestFileRel，锚原样回接 */
-export function normalizeTestsRootRel(tests, { projectRoot } = {}) {
+function normalizeTestsRootRel(tests, { projectRoot } = {}) {
   if (!projectRoot || !Array.isArray(tests)) return tests
   return tests.map((t) => {
     const filePart = testAnchorFile(String(t))

@@ -159,6 +159,18 @@ export function harvestSlot4Decision({ changeDir, change }) {
 export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary }
 
 /**
+ * patch 冻结面的提交面过滤（2026-09-27-tool-debt-cleanup 抽出为纯函数供单测锁定）：
+ * 非 .sillyspec/ 全留 + 本变更目录（治理工件）+ .sillyspec/docs/ 交付文档（dogfood 模块卡
+ * 是交付物——2026-09-27-gate-docs-cleanup 评审 P2 实证旧口径把已提交模块卡漏出审计 patch）。
+ * 他侧 .sillyspec/changes/**（quicklog/knowledge WIP）仍滤除。反斜杠归一。
+ */
+export function filterCommittedFace(committedRaw, ownPrefix) {
+  return committedRaw
+    .map((f) => String(f).replace(/\\/g, '/'))
+    .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith(ownPrefix) || p.startsWith('.sillyspec/docs/'))
+}
+
+/**
  * patch 冻结面收集（2026-09-25-thin-r16-patches 修复①，R16 P2：agent 提交晚于 done →
  * 冻结件只有治理件）。committed 提交面为主；exclusive（会话专属 worktree，调用方按
  * gate-snapshot 同款判定注入）时未提交 dirty 交付面一并入冻结——独占树内 dirty 全归属本变更；

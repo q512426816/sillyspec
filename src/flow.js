@@ -895,7 +895,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const ownPrefix = `.sillyspec/changes/${change}/`
         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
         const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
-        let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
+        // 提交面过滤抽为 flow-parity.filterCommittedFace（2026-09-27-tool-debt-cleanup：
+        // +.sillyspec/docs/ 交付文档保留——模块卡漏出审计 patch 的评审 P2 修复）
+        const { filterCommittedFace } = await import('./flow-parity.js')
+        let committed = filterCommittedFace(committedRaw, ownPrefix)
         // 夹带嫌疑 advisory（坑 parallel-session-stale-snapshot-carried-in-commit，2026-09-26
         // 实证：daemon 遥测主题提交整体夹带并行会话旧分叉 page.tsx，静默回滚 main 已落地三处
         // 功能——git 无冲突、聚焦测试不覆盖挂载面，绿灯直过）。提交面里未被本变更任何声明面
@@ -948,6 +951,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const changeDirFiles = []
         const walk = (dir) => {
           for (const e of readdirSync(dir, { withFileTypes: true })) {
+            // flow-state.yaml 是运行态（机器写、冻结后仍随子步推进变化）——不入审计 patch
+            //（2026-09-27-tool-debt-cleanup：旧口径把它当 new file 冻进 patch，评审 P2）
+            if (e.name === 'flow-state.yaml') continue
             const p = join(dir, e.name)
             if (e.isDirectory()) walk(p)
             else changeDirFiles.push(relative(cwd, p).replace(/\\/g, '/'))
@@ -1004,7 +1010,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             files: ownFiles,
             totals: { files: ownFiles.length, additions, deletions },
             savedAt: new Date().toISOString(),
-            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）',
+            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
           }
           if (typeof frozen === 'string' && frozen) {
             const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'

@@ -45,6 +45,8 @@ modules:
     paths:
       - src/handoff.js
       - src/index.js
+      - src/ui-visual.js
+      - src/hunk-attribution.js
       - bin/sillyspec.js
       - src/version.js
       - src/spec-dir-typo.js
@@ -112,6 +114,7 @@ modules:
       - src/knowledge-stats.js
       - src/greenfield-bootstrap.js
       - src/fr-index.js
+      - src/knowledge-digest.js
       - src/doctor-diagnostics.js
       - src/fr-index.js
       - src/fs-atomic.js
