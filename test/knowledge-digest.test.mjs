@@ -94,9 +94,8 @@ test('①b 坏绑定锚剥离与 repair-paths 同口径（评审 P1 防回归）
   const specBase = join(root, '.sillyspec')
   mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
   mkdirSync(join(root, 'test'), { recursive: true })
-  writeFileSync(join(root, 'test', 'x.test.mjs'), "import { test } from 'node:test'
-test('x', () => {})
-")
+  const NL = String.fromCharCode(10)
+  writeFileSync(join(root, 'test', 'x.test.mjs'), "import { test } from 'node:test'" + NL + "test('x', () => {})" + NL)
   writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), [
     '---', 'author: t', '---', '', '# FR 索引 — core', '',
     '## FR-core-001 行为一', '状态：active', '',
@@ -109,9 +108,7 @@ test('x', () => {})
     '- row: src:task-01:FR-02',
     '  tests: test/really-missing.test.mjs', // 真缺失
     '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '',
-  ].join('
-') + '
-')
+  ].join(NL) + NL)
   const d = collectKnowledgeDigest({ specBase, projectRoot: root })
   assert.equal(d.totals.unresolvedBindings, 1, `「」锚不定坏、真缺失计 1（实得 ${d.totals.unresolvedBindings}）`)
 })
