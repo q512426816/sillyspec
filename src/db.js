@@ -393,7 +393,8 @@ export class DB {
     // 旧版 changes 行出生 current_stage='scan'（db.js DDL 默认值 + progress.js 两处 INSERT），
     // thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」误导（scan 是 auxiliary，
     // shared.js MAIN_FLOW_ORDER 从不含它）。只改写「出生默认未被真跑过」的行：active 且
-    // stages.scan='pending'——setStage('scan') 置 in-progress，真在跑/已跑完 scan 的行不受影响。
+    // （stages.scan='pending' 或根本没有 stages.scan 行——registerChange 出生的行不带 stages 行，
+    // 评审 P3-2 缺口）——setStage('scan') 置 in-progress，真在跑/已跑完 scan 的行不受影响。
     // 同步刷 last_local_modified_ts（与 pm._touchLocalModified 同语义）：否则平台 pull 见本地
     // 无脏度会静默 import，把平台的旧 'scan' 导回来（platform-sync-pull 冲突保留本地现状）。
     // 幂等：改写后条件不再命中，重跑零效果。strftime 对齐 toISOString 形态（T 分隔 + ms + Z）。
@@ -403,7 +404,10 @@ export class DB {
           last_local_modified_ts = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       WHERE current_stage = 'scan'
         AND status = 'active'
-        AND id IN (SELECT change_id FROM stages WHERE stage = 'scan' AND status = 'pending')
+        AND (
+          id IN (SELECT change_id FROM stages WHERE stage = 'scan' AND status = 'pending')
+          OR NOT EXISTS (SELECT 1 FROM stages WHERE change_id = changes.id AND stage = 'scan')
+        )
     `);
   }
 

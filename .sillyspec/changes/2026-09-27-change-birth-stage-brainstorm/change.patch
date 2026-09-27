@@ -1,0 +1,1918 @@
+diff --git a/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/design.md b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/design.md
+new file mode 100644
+index 00000000..569e8cf8
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T12:42:47.563Z
++---
++# 设计记录（Design Record）— 2026-09-27-change-birth-stage-brainstorm
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三处出生硬编码（progress.js initChange/_readOrInit 两处 INSERT + db.js changes DDL DEFAULT）'scan'→'brainstorm'：scan 是 auxiliary（shared.js MAIN_FLOW_ORDER 不含、stage-machine 下一步推荐已跳过），从不是变更主流程起点，出生落它上面纯属 DDL 历史遗留。存量数据走 db.js _createSchema 末尾幂等 UPDATE 迁移（DB_SCHEMA_VERSION 7→8 触发戳失效重跑），只改写「active + stages.scan='pending'」的出生默认行——setStage('scan') 会置 in-progress，真在跑/已跑完 scan 的行天然不命中。改写行同时刷 last_local_modified_ts（与 pm._touchLocalModified 同语义），防平台 pull 见本地无脏度把旧 'scan' 静默导回。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++无新增函数/端点/命令；DB schema 版本 7→8（DB_SCHEMA_VERSION / project DDL DEFAULT / shared.js CURRENT_VERSION 三处 + progress.js read() 的 _version 由字面量 6 收敛为单一源 CURRENT_VERSION——v7 bump 漏改的第五处漂移顺带清偿）。对外可见行为变化：新建变更 current_stage 出生值 'scan'→'brainstorm'（progress show / overview stage_label 随之显示「🧠 需求探索」）；QUICK_CLOSE_ALLOWED_STAGES 已含 'brainstorm'，quick-close 阶段闸行为不变。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：迁移条件是状态谓词（current_stage/status/stages.scan 三列联判）不依赖事件顺序；某会话恰在迁移瞬间 setStage('scan') 时，SQLite WAL 单写者串行化，最终 Either 迁移已跑（该行保持 scan+in-progress，下次幂等补）或 setStage 先落（stages.scan=in-progress，迁移不命中）——两序都不产生错误态。
++2. 并发写：迁移在 _createSchema 内、init 事务路径上，与既有 busy_timeout=5000 + BUSY 有限重试同机制；UPDATE 单语句原子。
++3. 生命周期：迁移幂等（改写后条件不再命中），中断重入零重复效果；时间戳第二跑不 变（测试④断言）。
++4. 作用域：迁移在每项目各自的 .sillyspec/.runtime/sillyspec.db 内执行，不跨仓；标脏只影响本行平台同步冲突判定（冲突保留本地现状），无串台。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：迁移把「从未进主流程」的存量行改判为 brainstorm 后，滞留提示语义从「停在代码扫描」变「停在需求探索」——展示层措辞变化，用户已裁定接受（起步就是头脑风暴）。放弃的方案：① 从 VALID_STAGES/STAGE_ORDER 里整体移除 scan——放弃，scan 阶段本身（项目级扫描操作）合法存在，牵动 stage-contract/consistency 面太大且非本缺陷根因；② 只改出生默认不做存量迁移——放弃，存量误导行（governance-rpc-actions 类）会一直显示到归档才消失，修复不完整。
+diff --git a/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/flow-state.yaml b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/flow-state.yaml
+new file mode 100644
+index 00000000..a7bcbc68
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/flow-state.yaml
+@@ -0,0 +1,16 @@
++tier: thick
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 8b454e10018457d8a73086a3158e51c1a9eb2ad5
++updatedAt: '2026-09-27T13:10:40.675Z'
++upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(34)（78.7s）
++  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-aOBwNv\.sillyspec\.runtime\verify-runs\20260927130844\test-result.json｜lint:
++  passed ← npm run lint（111.3s）｜门文件 25 个
++
+diff --git a/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/proposal.md b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/proposal.md
+new file mode 100644
+index 00000000..ad547d0b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/proposal.md
+@@ -0,0 +1,38 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T12:42:47.562Z
++---
++# 提案书（Proposal）— 2026-09-27-change-birth-stage-brainstorm
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:1d3a96a29494fc4803f1e2df45b29580ad081ddfbd3fac2b5e2bb3c77a5a5119:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++任务原话转写：变更出生阶段误显「🔍 代码扫描」——changes 行出生 current_stage 硬编码 'scan'，thin/quick 等从不进主流程的变更全生命周期都显示代码扫描（本仓 multi-agent-platform 的 2026-09-27-governance-rpc-actions 实证），与 shared.js 已声明的 scan=auxiliary 语义矛盾。用户裁定：变更起步就是头脑风暴。
++成功标准：
++- initChange / _readOrInit 新建 changes 行 current_stage='brainstorm'（db.js DDL 默认值同步）
++- 存量库迁移：active 且 current_stage='scan' 且 stages.scan='pending'（从未真跑 scan）的行改写为 'brainstorm'；真在跑/跑完 scan 的行不动
++- DB_SCHEMA_VERSION 与 shared.js CURRENT_VERSION bump 8 触发戳失效重跑迁移，幂等可重入
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:ce47b672ef2a5c1019dd5578598d3cc0d0d9f0a378003d02f1e689f9a0826c75:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. initChange / _readOrInit 新建 changes 行 current_stage='brainstorm'（db.js DDL 默认值同步）
++2. 存量库迁移：active 且 current_stage='scan' 且 stages.scan='pending'（从未真跑 scan）的行改写为 'brainstorm'
++3. 真在跑
++4. 跑完 scan 的行不动
++5. DB_SCHEMA_VERSION 与 shared.js CURRENT_VERSION bump 8 触发戳失效重跑迁移，幂等可重入
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:d5fe0196119f12f8ec0df888be8263366d0207891044fa4be6ed82bb2bd4546b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->
++1. initChange / _readOrInit 新建 changes 行 current_stage='brainstorm'（db.js DDL 默认值同步）
++2. 存量库迁移：active 且 current_stage='scan' 且 stages.scan='pending'（从未真跑 scan）的行改写为 'brainstorm'
++3. 真在跑
++4. 跑完 scan 的行不动
++5. DB_SCHEMA_VERSION 与 shared.js CURRENT_VERSION bump 8 触发戳失效重跑迁移，幂等可重入
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/requirements.md b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/requirements.md
+new file mode 100644
+index 00000000..b77473a9
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T12:42:47.563Z
++---
++# 需求规格（Requirements）— 2026-09-27-change-birth-stage-brainstorm
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 变更出生阶段 brainstorm
++Given 一个 SillySpec 项目库
++When 任意路径新建变更行（progress.js initChange / _readOrInit 兜底建行 / db.js DDL 默认值）
++Then changes.current_stage 出生值为 'brainstorm'（起步就是头脑风暴——scan 是 auxiliary 从不是主流程起点；display 随之显示「🧠 需求探索」而非「🔍 代码扫描」）
++
++### FR-02: 存量出生默认行迁移
++Given 存量库存在旧出生默认行（active + current_stage='scan' + stages.scan='pending'，从未真跑过 scan）
++When DB_SCHEMA_VERSION 7→8 戳失效触发 _createSchema 重跑
++Then 该类行 current_stage 改写为 'brainstorm' 且 last_local_modified_ts 刷新（防平台 pull 静默导回旧值）
++
++### FR-03: 真在跑 scan 的行不动
++Given 存量行的 scan 阶段状态为 in-progress（setStage('scan') 置位，真在跑项目扫描）
++When v8 迁移执行
++Then 该类行 current_stage 保持 'scan' 不被改写
++
++### FR-04: 已跑完/已归档/主流程行不动
++Given 存量行 stages.scan='completed'（已跑完的辅助容器）、status='archived'（历史行）、或 current_stage 非 scan（主流程行）
++When v8 迁移执行
++Then 该类行一律不受迁移影响
++
++### FR-05: 迁移幂等可重入 + 版本四处一致
++Given 迁移已执行过的库
++When 再次触发 _createSchema（删戳/再失配）
++Then 改写值与脏度戳均不变（条件不再命中）；DB_SCHEMA_VERSION / project DDL DEFAULT / shared.js CURRENT_VERSION / progress.js read()._version 四处一致为 8（_version 单一源 CURRENT_VERSION）
++
++### FR-06: 阶段转换契约出生未入门态
++Given 变更 current_stage='brainstorm' 且 brainstorm 阶段 pending/无 stages 行（出生未入门态）
++When run 任意主流程阶段或 archive（thin/quick 归档、backfill、complete-step 直 run 路径）
++Then 转换放行（等价旧 scan auxiliary 出生语义）；真在 brainstorm 中（in-progress/completed）→ archive 仍拒绝
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-birth-stage-brainstorm.test.mjs「--- 1. 出生阶段 = brainstorm ---」三断言 + 「--- 2. DDL 默认 current_stage = brainstorm ---」；test/progress-get-change-stage.test.mjs「getChangeStage：未注册 → null；注册 → scan/active…」注册默认断言
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-birth-stage-brainstorm.test.mjs「--- 3. 存量迁移：三类行各得其所 ---」born-scan-stale 行断言（改写 brainstorm + 脏度戳 toISOString 形态）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-birth-stage-brainstorm.test.mjs「--- 3. 存量迁移」scan-inflight 行断言（真在跑 scan 行不动）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-birth-stage-brainstorm.test.mjs「--- 3. 存量迁移」scan-done / born-scan-archived / plan-row 行断言
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-birth-stage-brainstorm.test.mjs「--- 4. 幂等：迁移重跑零效果 ---」；test/platform-sync-schema.test.mjs「--- 1. 版本号四处一致（v8 bump）」+「--- 5. progress.js read()._version === 8」
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-birth-stage-brainstorm.test.mjs「--- 5. checkTransition：出生未入门态」9 断言；存量回归面 test/archive-delta.test.mjs、test/run-complete-step-execute-batch.test.mjs、test/run-complete-step-archive.test.mjs 等 18 文件
+diff --git a/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/tasks.md b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/tasks.md
+new file mode 100644
+index 00000000..92ba6f27
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-change-birth-stage-brainstorm/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: thin-agent
++created_at: 2026-09-27T12:42:47.563Z
++---
++# 任务注册表（Tasks）— 2026-09-27-change-birth-stage-brainstorm
++
++> 机器预填草稿已按实际实现路径覆写（多行成功标准被切碎的 task-03/04 合并回 task-02 的边界断言）。
++> 验收锚在 requirements；默认 thin：收口=flow done 唯一裁决。
++
++- [x] task-01: 出生阶段改 brainstorm——progress.js initChange/_readOrInit 两处 INSERT + db.js changes DDL 默认值（'scan'→'brainstorm'）
++- [x] task-02: 存量迁移（db.js _createSchema v8）——active + current_stage='scan' + stages.scan='pending'（出生默认未动过）改写 'brainstorm' 并标 last_local_modified_ts；in-progress/completed/archived/主流程行不动；幂等可重入
++- [x] task-03: DB_SCHEMA_VERSION 与 shared.js CURRENT_VERSION bump 8（戳失效触发迁移重跑）+ progress.js read() 的 _version 字面量 6 收敛为单一源 CURRENT_VERSION（v7 漏改的第五处漂移）
++- [x] task-05: 阶段转换契约出生未入门态——stage-contract.js checkTransition 把「brainstorm 仍 pending/无行」视同辅助态（archive 放行 + 主流程直入放行），等价继承旧 scan 出生语义；真在 brainstorm 中（in-progress/completed）守卫不变（18 个存量测试文件的回归锚，测试⑤组覆盖）
++- [x] task-04: 测试——新增 test/change-birth-stage-brainstorm.test.mjs 四组（出生/DDL 默认/迁移三类行/幂等）；随行为更新 5 处存量字面量（schema 守卫四处一致 8、ownership 戳 8、serialization 出生值+版本、pull 冲突保留出生值、get-change-stage 注册默认）
+diff --git a/docs/prototype/knowledge-review-layers-demo.html b/docs/prototype/knowledge-review-layers-demo.html
+new file mode 100644
+index 00000000..4d99d385
+--- /dev/null
++++ b/docs/prototype/knowledge-review-layers-demo.html
+@@ -0,0 +1,386 @@
++<!DOCTYPE html>
++<html lang="zh-CN">
++<head>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<title>知识资产人工审核 · 三层设计演示</title>
++<style>
++  :root {
++    --bg: #f5f6f8; --card: #ffffff; --ink: #1f2329; --sub: #646a73;
++    --line: #e5e6eb; --blue: #3370ff; --blue-bg: #f0f4ff;
++    --amber: #d46b08; --amber-bg: #fff7e6; --amber-line: #ffd591;
++    --green: #389e0d; --green-bg: #f6ffed; --green-line: #b7eb8f;
++    --red: #cf1322; --red-bg: #fff1f0; --gray-bg: #f2f3f5;
++    --radius: 10px; --mono: 'Cascadia Code', Consolas, monospace;
++  }
++  * { box-sizing: border-box; margin: 0; padding: 0; }
++  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); padding: 32px 16px 80px; }
++  .wrap { max-width: 1080px; margin: 0 auto; }
++  header.hero { text-align: center; margin-bottom: 28px; }
++  header.hero h1 { font-size: 24px; margin-bottom: 8px; }
++  header.hero p { color: var(--sub); font-size: 14px; }
++  .layernav { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; flex-wrap: wrap; }
++  .layernav a { text-decoration: none; font-size: 13px; padding: 7px 14px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); color: var(--ink); }
++  .layernav a:hover { border-color: var(--blue); color: var(--blue); }
++  .layernav a b { color: var(--blue); margin-right: 4px; }
++
++  section.layer { margin-bottom: 44px; }
++  .layer-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
++  .layer-head .no { font-size: 12px; font-weight: 700; color: #fff; background: var(--blue); border-radius: 6px; padding: 2px 8px; }
++  .layer-head h2 { font-size: 18px; }
++  .layer-sub { color: var(--sub); font-size: 13px; margin-bottom: 16px; padding-left: 2px; }
++  .layer-sub code { background: var(--gray-bg); padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: var(--mono); }
++
++  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
++
++  /* ---------- Layer 1 ---------- */
++  .session { display: grid; grid-template-columns: 300px 1fr; gap: 14px; }
++  @media (max-width: 860px) { .session { grid-template-columns: 1fr; } }
++  .ctx-card h3, .inject-card h3 { font-size: 13px; color: var(--sub); margin-bottom: 10px; letter-spacing: 1px; }
++  .ctx-item { font-size: 13px; padding: 8px 10px; background: var(--gray-bg); border-radius: 8px; margin-bottom: 8px; }
++  .ctx-item b { display: block; font-size: 13px; }
++  .ctx-item span { color: var(--sub); font-size: 12px; }
++  .fr { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; transition: all .25s; }
++  .fr .row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
++  .fr .fid { font-family: var(--mono); font-size: 12px; font-weight: 700; }
++  .fr .ftitle { font-size: 13px; flex: 1; min-width: 200px; }
++  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
++  .badge.active { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-line); }
++  .badge.candidate { background: var(--gray-bg); color: var(--sub); border: 1px solid var(--line); }
++  .badge.provisional { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); }
++  .badge.confirming { background: var(--blue-bg); color: var(--blue); border: 1px solid #b6d4ff; }
++  .fr .binding { font-family: var(--mono); font-size: 11px; color: var(--sub); background: var(--gray-bg); border-radius: 6px; padding: 5px 8px; margin-top: 6px; word-break: break-all; }
++  .fr .ops { display: flex; gap: 8px; margin-top: 8px; }
++  button { cursor: pointer; border-radius: 7px; border: 1px solid var(--line); background: #fff; font-size: 12px; padding: 5px 12px; transition: all .15s; }
++  button:hover { border-color: var(--blue); color: var(--blue); }
++  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
++  button.primary:hover { opacity: .85; }
++  button:disabled { opacity: .45; cursor: not-allowed; }
++  .fr.ok { border-color: var(--green-line); background: linear-gradient(0deg, #fbfff6, #fbfff6); }
++  .fr.flagged { border-color: var(--amber-line); background: var(--amber-bg); }
++  .fr .note { font-size: 12px; color: var(--green); margin-top: 6px; display: none; }
++  .fr.ok .note { display: block; }
++  .fr.flagged .note2 { font-size: 12px; color: var(--amber); margin-top: 6px; display: block; }
++  .progress { font-size: 12px; color: var(--sub); margin-top: 4px; }
++  .progress b { color: var(--green); }
++
++  /* ---------- Layer 2 ---------- */
++  .digest-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
++  .digest-top .tag { font-size: 12px; background: var(--blue-bg); color: var(--blue); border-radius: 14px; padding: 3px 10px; }
++  .signal { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; display: flex; gap: 14px; align-items: flex-start; }
++  .signal.done { opacity: .5; }
++  .signal .sig-no { min-width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; }
++  .sig-no.amber { background: var(--amber-bg); color: var(--amber); }
++  .sig-no.red { background: var(--red-bg); color: var(--red); }
++  .sig-no.blue { background: var(--blue-bg); color: var(--blue); }
++  .signal .body { flex: 1; }
++  .signal h4 { font-size: 14px; margin-bottom: 4px; }
++  .signal h4 .cnt { color: var(--red); font-family: var(--mono); }
++  .signal p { font-size: 12.5px; color: var(--sub); margin-bottom: 6px; line-height: 1.6; }
++  .signal ul { margin: 4px 0 8px 18px; font-size: 12.5px; color: var(--sub); line-height: 1.8; }
++  .signal ul li.struck { text-decoration: line-through; opacity: .55; }
++  .signal .fix { font-family: var(--mono); font-size: 11px; background: var(--gray-bg); padding: 4px 8px; border-radius: 6px; display: inline-block; margin-top: 2px; }
++
++  /* ---------- Layer 3 ---------- */
++  .archive-flow { display: grid; grid-template-columns: 1fr 320px; gap: 14px; }
++  @media (max-width: 860px) { .archive-flow { grid-template-columns: 1fr; } }
++  .frlist { font-size: 13px; }
++  .frlist .li { display: flex; gap: 8px; padding: 7px 4px; border-bottom: 1px dashed var(--line); }
++  .frlist .li:last-child { border-bottom: none; }
++  .frlist .fid { font-family: var(--mono); font-size: 12px; color: var(--blue); white-space: nowrap; }
++  .confirmbox { background: var(--blue-bg); border: 1px solid #b6d4ff; border-radius: 10px; padding: 16px; }
++  .confirmbox h4 { font-size: 14px; margin-bottom: 10px; }
++  .confirmbox select { width: 100%; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--line); font-size: 13px; margin-bottom: 12px; }
++  .toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(20px); bottom: 34px; background: var(--ink); color: #fff; font-size: 13px; padding: 10px 18px; border-radius: 10px; opacity: 0; transition: all .3s; pointer-events: none; z-index: 9; }
++  .toast.show { opacity: .96; transform: translateX(-50%) translateY(0); }
++
++  /* ---------- 对比条 ---------- */
++  .compare { margin-top: 10px; }
++  .cmp-row { margin-bottom: 14px; }
++  .cmp-row .lbl { font-size: 12.5px; margin-bottom: 5px; color: var(--sub); }
++  .bar { height: 22px; border-radius: 6px; display: flex; overflow: hidden; font-size: 11px; color: #fff; }
++  .bar .seg { display: flex; align-items: center; justify-content: center; white-space: nowrap; transition: width .5s; }
++  footer { text-align: center; color: var(--sub); font-size: 12px; margin-top: 40px; line-height: 1.8; }
++</style>
++</head>
++<body>
++<div class="wrap">
++
++<header class="hero">
++  <h1>知识资产要不要人工审？——三层设计实测演示</h1>
++  <p>数据全部取自本机真实库（R23 三臂 + sillyspec 主仓，2026-09-26/27 实录）。可以点，点了看联动。</p>
++</header>
++
++<nav class="layernav">
++  <a href="#l1"><b>①</b>消费时确认（agent 干）</a>
++  <a href="#l2"><b>②</b>例外摘要（人看）</a>
++  <a href="#l3"><b>③</b>归档落域确认（人 1 秒）</a>
++  <a href="#cmp"><b>对比</b>全量人审 vs 三层</a>
++</nav>
++
++<!-- ================= Layer 1 ================= -->
++<section class="layer" id="l1">
++  <div class="layer-head"><span class="no">第 1 层</span><h2>逐条确认 → 给正在干活的 agent（confirm-on-use）</h2></div>
++  <div class="layer-sub">下一个变更启动时，知识注入本来就会把触达域的 FR 带进 agent 上下文——<b>候选（candidate）条目顺带让 agent 核一眼</b>：标题对不对、绑定是不是真测试。点下面两张卡试试：✓ 翻 active；✗ 进第②层异常摘要（注意右上角红点会 +1）。</div>
++
++  <div class="session">
++    <div class="card ctx-card">
++      <h3>当前会话（模拟）</h3>
++      <div class="ctx-item"><b>变更 2026-09-28-events-panel-tweak</b><span>触碰 platform_sync / frontend 详情页</span></div>
++      <div class="ctx-item"><b>flow start → 知识注入</b><span>触达域 auto-backend：active 2 条 + candidate 4 条</span></div>
++      <div class="ctx-item"><b>注入消费中…</b><span>agent 正在读这些条目干活——注意力已经付费，确认零额外成本</span></div>
++      <div class="progress">本会话确认进度：<b id="okCnt">0</b> / 4 条 candidate　待修正：<b id="flagCnt" style="color:var(--amber)">0</b> 条</div>
++    </div>
++    <div class="card inject-card">
++      <h3>注入面板（FR 摘要 + 绑定）</h3>
++
++      <div class="fr ok-static ok">
++        <div class="row1"><span class="fid">FR-auto-backend-007</span><span class="ftitle">平台同步写鉴权仅 shpsync_（读并集）</span><span class="badge active">active · 已确认</span></div>
++        <div class="binding">tests: backend/app/modules/platform_sync/tests/test_auth_matrix.py</div>
++      </div>
++      <div class="fr ok-static ok">
++        <div class="row1"><span class="fid">FR-auto-backend-012</span><span class="ftitle">同步失败暂存段与消解（blocked_segments）</span><span class="badge active">active · 已确认</span></div>
++        <div class="binding">tests: backend/app/modules/platform_sync/tests/test_sync_segments.py</div>
++      </div>
++
++      <div class="fr" id="fr1">
++        <div class="row1"><span class="fid">FR-auto-backend-019</span><span class="ftitle">前端详情页「观测事件」折叠区：缺省收起、warning 默认展开+角标</span><span class="badge candidate" id="b1">candidate · 未经确认</span></div>
++        <div class="binding">tests: test_change_events.py::test_post_event_receive_and_roundtrip（R23-thin 机器绑定）</div>
++        <div class="ops"><button class="primary" onclick="confirmFr(1)">✓ 与实态相符</button><button onclick="flagFr(1)">✗ 有问题（进人工摘要）</button></div>
++        <div class="note">✓ 已翻 active（confirmed_by=agent）——下次注入直接按已确认渲染</div>
++        <div class="note2" style="display:none">已标记待修正 → 已进第②层「条目质量」异常（人只看汇总）</div>
++      </div>
++
++      <div class="fr" id="fr2">
++        <div class="row1"><span class="fid">FR-auto-backend-020</span><span class="ftitle">pytest 五组（收/取/去重/鉴权/上限）与组件测试全绿</span><span class="badge candidate" id="b2">candidate · 未经确认</span></div>
++        <div class="binding">tests: test_change_events.py（五组 6 用例）</div>
++        <div class="ops"><button class="primary" onclick="confirmFr(2)">✓ 与实态相符</button><button onclick="flagFr(2)">✗ 有问题</button></div>
++        <div class="note">✓ 已翻 active（confirmed_by=agent）</div>
++        <div class="note2" style="display:none">已标记待修正 → 已进第②层异常摘要</div>
++      </div>
++
++      <div class="fr" id="fr3">
++        <div class="row1"><span class="fid">FR-auto-backend-021</span><span class="ftitle">E2E：curl 推 5 条 → GET 正序去重</span><span class="badge candidate" id="b3">candidate · 未经确认</span></div>
++        <div class="binding">tests: （绑定行缺失——这正是 agent 该核出的点）</div>
++        <div class="ops"><button class="primary" onclick="confirmFr(3)">✓ 与实态相符</button><button onclick="flagFr(3)">✗ 有问题</button></div>
++        <div class="note">✓ 已翻 active</div>
++        <div class="note2" style="display:none">已标记待修正 → 已进第②层异常摘要</div>
++      </div>
++
++      <div class="fr" id="fr4">
++        <div class="row1"><span class="fid">FR-auto-backend-022</span><span class="ftitle">面板高亮徽标</span><span class="badge candidate" id="b4">candidate · 未经确认（标题机器截断）</span></div>
++        <div class="binding">tests: test_change_events.py</div>
++        <div class="ops"><button class="primary" onclick="confirmFr(4)">✓ 与实态相符</button><button onclick="flagFr(4)">✗ 标题截断（进人工摘要）</button></div>
++        <div class="note">✓ 已翻 active</div>
++        <div class="note2" style="display:none">标题碎片化 → 已进第②层「条目质量」异常</div>
++      </div>
++    </div>
++  </div>
++</section>
++
++<!-- ================= Layer 2 ================= -->
++<section class="layer" id="l2">
++  <div class="layer-head"><span class="no">第 2 层</span><h2>例外摘要 → 人只看这一页（触发式，不是逐条审）</h2></div>
++  <div class="layer-sub">没有人审时它是静默的；<b>信号触发才生成</b>：伪域、批量 rot、收件箱积压、绑定不可解析、agent 打回的待修正条目。每条带一键处理动作——点了就消账。预计每周 1 份、3 分钟。</div>
++
++  <div class="card">
++    <div class="digest-top">
++      <span class="tag">📬 知识资产异常摘要 · 第 40 周</span>
++      <span class="tag" style="background:var(--amber-bg);color:var(--amber)">信号 <b id="sigTotal">4</b> 类</span>
++      <span class="tag" style="background:var(--gray-bg);color:var(--sub)" id="digestTime">预计耗时 3 分钟</span>
++    </div>
++
++    <div class="signal" id="sig1">
++      <div class="sig-no amber">4 条</div>
++      <div class="body">
++        <h4>落域异常：R23-thin 的变更事件 FR 落进伪域 <code style="font-family:var(--mono)">auto-backend</code></h4>
++        <p>变更事件通道（platform_sync 模块 + 前端详情页）的 FR 落在 scaffold 时代伪域，正确域应为 platform-sync。R17 已报同款，本轮复发。</p>
++        <button class="primary" onclick="fixSig(1)">一键迁移 → platform-sync 域</button>
++      </div>
++    </div>
++
++    <div class="signal" id="sig2">
++      <div class="sig-no amber">239</div>
++      <div class="body">
++        <h4>rot 批量标记：单轮打标超阈（>100 条进摘要）</h4>
++        <p>2026-09-27-gate-face-binding-parity 收口触达 8 域，批量打待复核 239 条。Top：setup / runtime / bin / core-engine。</p>
++        <ul id="rotList">
++          <li>setup 域 71 条 —— 多为门禁文案类 FR（注入文案改版连动，属预期漂移）</li>
++          <li>runtime 域 52 条 —— 含 2026-09-26 动态推断改版波及面</li>
++        </ul>
++        <button class="primary" onclick="fixSig(2)">批量复核：文案漂移类 123 条批量承接</button>
++      </div>
++    </div>
++
++    <div class="signal" id="sig3">
++      <div class="sig-no red">40</div>
++      <div class="body">
++        <h4>知识收件箱积压：<span class="cnt">40</span> 条 uncategorized（阈值 20）</h4>
++        <p>R23-full 臂转达的存量（载体仓 multi-agent-platform）。样例：</p>
++        <ul>
++          <li class="struck">install.sh 改动需重建 backend 镜像 → 已归类 known-issues</li>
++          <li id="inbox2">sync_stage_status dual-db 时序问题</li>
++          <li id="inbox3">auto_dispatch_next_step 触发条件</li>
++          <li id="inbox4">自包含 conftest 建表须连带 fixture 依赖表（R23-full 本变更新增）</li>
++        </ul>
++        <button class="primary" onclick="fixSig(3)">清账：逐条归类（knowledge inbox / classify）</button>
++      </div>
++    </div>
++
++    <div class="signal" id="sig4">
++      <div class="sig-no blue">1</div>
++      <div class="body">
++        <h4>绑定不可解析：FR-cli-entry-091</h4>
++        <p>主仓 gate-face-binding 收口实录：绑定路径 <code style="font-family:var(--mono)">test/cli.test.mjs</code> 无法自仓根解析，未入回归面。</p>
++        <span class="fix">sillyspec tests repair-paths　# 机器可修</span>
++        <div style="margin-top:8px"><button class="primary" onclick="fixSig(4)">执行 repair-paths（干跑 → --write）</button></div>
++      </div>
++    </div>
++
++    <div class="signal" id="sig5" style="display:none; border-color:var(--amber-line); background:var(--amber-bg)">
++      <div class="sig-no amber" id="sig5no">0</div>
++      <div class="body">
++        <h4>agent 打回的待修正条目（confirm-on-use ✗ 通道）</h4>
++        <ul id="flagList"></ul>
++        <p>第①层 agent 标记「有问题」的条目落这里，人裁决改法（改标题 / 补绑定 / supersede）。</p>
++      </div>
++    </div>
++  </div>
++</section>
++
++<!-- ================= Layer 3 ================= -->
++<section class="layer" id="l3">
++  <div class="layer-head"><span class="no">第 3 层</span><h2>落域确认 → 人唯一必须停顿的一秒（归档时点）</h2></div>
++  <div class="layer-sub">归档收口最后一问：<b>这批 FR 落这个域对吗？</b>每变更一次 yes/no——专治 R17/R23 两轮实证的伪域病。选错域的代价是未来注入找错页，所以值得人工 1 秒。</div>
++
++  <div class="archive-flow">
++    <div class="card frlist">
++      <h3 style="font-size:13px;color:var(--sub);margin-bottom:8px">即将入库（2026-09-27-change-events-r23-thin · 6 条 FR + 6 行绑定）</h3>
++      <div class="li"><span class="fid">FR-01</span><span>POST /changes/{name}/events：鉴权/幂等/上限/append-only</span></div>
++      <div class="li"><span class="fid">FR-02</span><span>GET ?since 正序增量（严格大于）</span></div>
++      <div class="li"><span class="fid">FR-03</span><span>零业务判定红线（provisional 纯透传）</span></div>
++      <div class="li"><span class="fid">FR-04</span><span>pytest 五组全绿</span></div>
++      <div class="li"><span class="fid">FR-05</span><span>详情页观测事件折叠区（warning 展开+角标+琥珀高亮）</span></div>
++      <div class="li"><span class="fid">FR-06</span><span>provisional 徽标（悬停「旁路观测信号，非流程真相」）</span></div>
++    </div>
++    <div class="confirmbox" id="cbox">
++      <h4>📦 落域确认</h4>
++      <p style="font-size:12.5px;color:var(--sub);margin-bottom:8px">机器建议：<b style="color:var(--red)">auto-backend</b>（来自目录路由）——检测到该域为 scaffold 伪域。</p>
++      <select id="domainSel">
++        <option value="auto-backend">auto-backend（机器建议 · 疑伪域 ⚠️）</option>
++        <option value="platform-sync" selected>platform-sync（按模块归属建议 ✅）</option>
++        <option value="app-pages">app-pages（前端面板域）</option>
++        <option value="unmapped">unmapped（挂池待分）</option>
++      </select>
++      <button class="primary" style="width:100%" onclick="confirmDomain()">确认入库</button>
++      <p id="domainResult" style="font-size:12.5px;color:var(--green);margin-top:10px;display:none"></p>
++    </div>
++  </div>
++</section>
++
++<!-- ================= 对比 ================= -->
++<section class="layer compare" id="cmp">
++  <div class="layer-head"><span class="no">对比</span><h2>全量人工审 vs 三层——负担账（本周实测数据）</h2></div>
++  <div class="card">
++    <div class="cmp-row">
++      <div class="lbl"><b>方案 A：全量人工审</b>（每条资产都人看——Task Review 的老路）</div>
++      <div class="bar">
++        <div class="seg" style="width:55%;background:#cf1322">FR 47 条逐条读</div>
++        <div class="seg" style="width:30%;background:#d46b08">decisions 25 条</div>
++        <div class="seg" style="width:15%;background:#fa8c16">绑定 60 行</div>
++      </div>
++      <div class="lbl" style="margin-top:4px">≈ 每周 <b style="color:var(--red)">90+ 分钟</b> · 历史结局：Task Review 全量审 47 份 review.json，<b>0 实质捕获</b>，已退役</div>
++    </div>
++    <div class="cmp-row">
++      <div class="lbl"><b>方案 B：三层（本演示）</b></div>
++      <div class="bar">
++        <div class="seg" style="width:78%;background:#389e0d">① agent 顺带确认（0 人工分钟）</div>
++        <div class="seg" style="width:14%;background:#3370ff">② 周摘要 3 分钟</div>
++        <div class="seg" style="width:8%;background:#722ed1">③ 落域 5×1 秒</div>
++      </div>
++      <div class="lbl" style="margin-top:4px">≈ 每周 <b style="color:var(--green)">4 分钟</b> 人工 · agent 确认 47 条顺带完成 · 异常才见人</div>
++    </div>
++  </div>
++</section>
++
++<footer>
++  数据来源：R23 三臂实测（multi-agent-platform-r23-thin/full/os）+ sillyspec 主仓 2026-09-26/27 收口实录<br>
++  原型 · knowledge-review-layers · 2026-09-27
++</footer>
++</div>
++<div class="toast" id="toast"></div>
++
++<script>
++  let ok = 0, flag = 0, sigDone = 0;
++  const flagged = [];
++  function toast(msg) {
++    const t = document.getElementById('toast');
++    t.textContent = msg; t.classList.add('show');
++    setTimeout(() => t.classList.remove('show'), 2200);
++  }
++  function confirmFr(n) {
++    const fr = document.getElementById('fr' + n);
++    if (fr.classList.contains('ok') || fr.classList.contains('flagged')) return;
++    fr.classList.add('ok');
++    const b = document.getElementById('b' + n);
++    b.textContent = 'active · agent 已确认'; b.className = 'badge active';
++    fr.querySelector('.ops').style.display = 'none';
++    ok++; document.getElementById('okCnt').textContent = ok;
++    toast('✓ FR-auto-backend-01' + (n + 8) + ' → active（confirmed_by=agent）');
++  }
++  function flagFr(n) {
++    const fr = document.getElementById('fr' + n);
++    if (fr.classList.contains('ok') || fr.classList.contains('flagged')) return;
++    fr.classList.add('flagged');
++    const b = document.getElementById('b' + n);
++    b.textContent = '待修正 → 人工摘要'; b.className = 'badge provisional';
++    fr.querySelector('.ops').style.display = 'none';
++    fr.querySelector('.note2').style.display = 'block';
++    flag++; document.getElementById('flagCnt').textContent = flag;
++    flagged.push(n);
++    const s5 = document.getElementById('sig5');
++    s5.style.display = 'flex';
++    document.getElementById('sig5no').textContent = flag;
++    const li = document.createElement('li');
++    li.textContent = 'FR-auto-backend-01' + (n + 8) + ' — agent 打回（会话 2026-09-28-events-panel-tweak）';
++    document.getElementById('flagList').appendChild(li);
++    sigTotalRefresh();
++    toast('✗ 已进第②层异常摘要——人只看汇总，不看过程');
++  }
++  function sigTotalRefresh() {
++    const extra = flag > 0 ? 1 : 0;
++    document.getElementById('sigTotal').textContent = (4 - sigDone + extra);
++  }
++  function fixSig(n) {
++    const s = document.getElementById('sig' + n);
++    s.classList.add('done');
++    const btn = s.querySelector('button.primary');
++    btn.disabled = true;
++    if (n === 1) { btn.textContent = '✅ 已迁移 4 条 → platform-sync'; toast('4 条 FR 已迁 platform-sync 域（INDEX 路由同步）'); }
++    if (n === 2) {
++      btn.textContent = '✅ 123 条文案漂移已批量承接';
++      document.getElementById('rotList').querySelectorAll('li').forEach(li => li.classList.add('struck'));
++      toast('rot 批量承接完成——剩余 116 条随下次触达逐条消化');
++    }
++    if (n === 3) {
++      btn.textContent = '✅ 收件箱已清账（40 → 0）';
++      s.querySelectorAll('ul li:not(.struck)').forEach(li => li.classList.add('struck'));
++      toast('知识收件箱 40 条清账完成');
++    }
++    if (n === 4) { btn.textContent = '✅ repair-paths：1 路径已归一'; toast('FR-cli-entry-091 绑定已修复入库'); }
++    sigDone++;
++    sigTotalRefresh();
++  }
++  function confirmDomain() {
++    const v = document.getElementById('domainSel').value;
++    const r = document.getElementById('domainResult');
++    r.style.display = 'block';
++    r.textContent = v === 'auto-backend'
++      ? '⚠️ 已按伪域入库——该选择会出现在下周第②层摘要里（落域异常）'
++      : '✅ 6 条 FR + 6 行绑定已入库 ' + v + ' 域（用时 1 秒）';
++    document.querySelector('#cbox button').disabled = true;
++    toast(v === 'auto-backend' ? '已入库 auto-backend（伪域风险已记录）' : '已入库 ' + v + ' 域');
++  }
++</script>
++</body>
++</html>
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index fd058478..2d27fd07 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -1,6 +1,6 @@
+ # SillySpec 平台接口操作地图
+ 
+-> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:775`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
++> updated_at: 2026-08-26（平台模式上行回传放行：`triggerSync` 不再受 `isPlatformMode` 门禁——本地/平台模式都推进度/四件套/spec 树；平台模式凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，链路 D 同款两键齐全才生效）。下行 `triggerPull`/`checkApproval` 门禁保留。历史：2026-08-23 门禁收敛为 `isPlatformMode` 单源（`shared.js:792`）+ 自指回环豁免，变更 2026-08-23-repo-native-spec-backfill；链路 D agent 日志上报见 src/agent-session-log.js 与 docs/platform-agent-log-protocol.md）
+ > 范围：SillySpec CLI 在使用过程中**操作 SillyHub 平台接口**的全部触发点 —— 哪个步骤会发请求、打哪个端点、做什么事。
+ > 数据源：本文由源码（`src/sync.js` / `src/sillyhub-mcp/` / `src/dispatch/` / `src/run/`）实证归纳。改源码后同步本文。
+ > 配套文档：`sillyhub-progress-sync-contract.md`（同步协议契约）、`sillyhub-path-a-contract.md`（派发路径A）、`file-lifecycle.md`（运行时文件）、`interface-contract.md`、`sillyhub-api-reference.md`（接口参考——REST 8 端点 + MCP 12 tool 完整调用规范）、`api-verification-2026-08-14.md`（全接口实测报告——含 12 MCP tool + REST 8 端点验证快照与当日修复记录）。
+@@ -79,10 +79,10 @@ mcp:
+ `connect` / `disconnect` / `sync` / `syncDocuments` / `checkApproval` / `pull` / `pullList` / `resolve` / `collectStatus` / `approve` / `reject` 均 export 为顶层函数，`new SyncManager(cwd)` 包装。
+ 
+ ### run 流程里的三个触发器（`src/run/shared.js`）
+-- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:856`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:826`）。这是最常用的上推入口。bg 轮收尾带**归档终态补推扫描**（2026-09-23 quick ql-20260923-007，`collectTerminalSyncPending`）：DB 中 status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）的变更顺带补推终态+墓碑（幂等，last_active 倒序一轮 ≤3 条）——治「归档后最后一轮被吞则平台镜像永久停在旧阶段」（2026-09-22 session-fork-continuation 实证）。
+-- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:989`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
+-- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:1084`）：包 `syncMod.checkApproval`。
+-- **`triggerPullActiveChange`**（`shared.js:1013`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
++- **`triggerSync(cwd, changeName, platformOpts)`**（`shared.js:882`）：包 `sync()`，**默认转后台异步执行**（2026-09-20 起，`run/bg-sync.js`）：未连接平台预判（`sync.js peekPlatformConnected` 同源判据，未连接零开销不 spawn）→ detached 子进程执行同步（单飞锁防进程堆积 + rerunQueued 合并迟到状态 + 输出/结果留痕 `<runtimeRoot>/spec-sync-bg.log`）——主命令 spawn+unref 后立即返回，不再被网络尾巴拖住（此前 fire-and-forget 仍在飞 fetch 拖住事件循环，平台慢时 `--done` 分钟级不返回，2026-09-20 用户实证）。后台轮预算 = max(`SILLYSPEC_SYNC_TIMEOUT_MS` 解析值, 45s)，5 轮 / 总预算 ~2.5min 封顶。回落 inline 三条件：`opts.inline`（bg 子进程自身/测试断言进程内行为）/ env `SILLYSPEC_SYNC_BG=0`（逃生阀，回退旧行为）/ 本进程已是 bg 子进程（防 fork 链）。inline 路径保留 **8s 总超时熔断**（预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调，[1000,120000]ms 整数，非法回退 8s——`resolveSyncTotalTimeoutMs`，`shared.js:826`）。这是最常用的上推入口。bg 轮收尾带**归档终态补推扫描**（2026-09-23 quick ql-20260923-007，`collectTerminalSyncPending`）：DB 中 status=archived/deleted 且 `last_local_modified_ts` 脏于 `last_synced_platform_ts`（或从未同步）的变更顺带补推终态+墓碑（幂等，last_active 倒序一轮 ≤3 条）——治「归档后最后一轮被吞则平台镜像永久停在旧阶段」（2026-09-22 session-fork-continuation 实证）。
++- **`triggerPull(cwd, changeName, platformOpts)`**（`shared.js:1022`）：包 `pull()`，8s 熔断（同上 env 可调），`skipIfLocalDirty` 保守守卫（本地脏跳过 import，防平台旧快照覆盖本地领先进度，ql-20260818-008）。仅低频边界点触发，**不每步 pull**（避免高频写入/网络压力）。
++- **`checkApproval(cwd, changeName, platformOpts)`**（`shared.js:1117`）：包 `syncMod.checkApproval`。
++- **`triggerPullActiveChange`**（`shared.js:1046`）：`triggerPull` 便捷封装，未传 changeName 时自动推导单活跃变更（多/无活跃则跳过）。
+ 
+ ---
+ 
+@@ -134,12 +134,12 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | **execute 阶段启动前**（runStage / auto 流程，非平台模式，`--skip-approval` 可跳过） | A | `checkApproval` → GET `…/approval`：**rejected → `exit(1)` 硬阻断**；pending → 提示待审批；unknown → 放行 | stage.js:77-88；command.js:2076/2130/2210 |
+ | **run `<stage>` 入口**（所有 stage + 顶层别名，agent 环境内；平台/本地模式都上报，不受 sentinel 限制） | D | 探测本地 agent 会话日志（claude-code/codex/zcode 自动探测，env `SILLYSPEC_AGENT_LOG` 覆盖其他 CLI）→ 本地留底 + REST POST `…/api/agent-logs` 上报（best-effort 5s 熔断，失败不阻断；`SILLYSPEC_AGENT_LOG_PUSH=0` 可关） | command.js:917（`recordAgentLogInvocation`） |
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+-| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4168；shared.js:989 |
+-| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2736/3015；shared.js:1013 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4089；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4041；sync.js:2232 |
++| `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4225；shared.js:1022 |
++| **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2736/3015；shared.js:1046 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4145；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4097；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3854/3882；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3910/3882；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -153,7 +153,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ ### 本质
+ 平台模式是 **SillyHub daemon 调用 SillySpec CLI 时的模式**。它把默认落在 `cwd/.sillyspec/` 的产物目录（`specRoot`）和运行时目录（`runtimeRoot`）拆到别的位置，让 daemon 能多项目隔离管理。**人类本地用户默认不进平台模式。**
+ 
+-`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:362`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
++`specRoot` 是实际开关（平台模式判定只看 `specRoot || runtimeRoot` 任一存在，自指回环豁免见 §7）；`runtimeRoot` **可缺省**——缺省时经 `resolveRuntimeRoot` 回落 `<specBase>/.runtime`（`shared.js:382`：runtimeRoot > specDriftAnchor/.runtime > specBase/.runtime），即"只拆 specRoot、runtime 跟着走"也是合法平台模式。
+ 
+ ### 置位的两条路径（`command.js:245-317`）
+ 
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:3951`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4007`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+@@ -208,10 +208,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ 
+ ## 7. 关键开关与铁律
+ 
+-- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:672`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:855/834/902`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:672`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
++- **平台模式总开关**：`isPlatformMode(platformOpts, cwd)`（`shared.js:792`，判定式 `(specRoot || runtimeRoot) && !isSelfReferentialSpecRoot`）为真 → `triggerPull`/`triggerPullActiveChange`/`checkApproval` **early-return**（`shared.js:1024/1048/1119`）；**`triggerSync` 已放行（2026-08-26）**：平台模式上行回传照常执行，凭据经 env `SILLYHUB_PLATFORM_URL`+`SILLYHUB_PLATFORM_TOKEN`（daemon 注入通道，`sync.js _getPlatform`，优先级 env > local.yaml platform 段，两键齐全才生效）；未注入 env 且 local.yaml 无 platform 段时静默跳过（合法状态）。**自指回环豁免**：specRoot 经 realpath 解析回 `<cwd>/.sillyspec`（repo-native junction 回环，`isSelfReferentialSpecRoot`，`shared.js:792`）不视为平台模式，内置 sync/auto-pull 按本地语义运行。**§5 表中链路 A 的下行触发点（pull/审批）仅非平台模式真正发请求。** 置位机制见上节 §6。
+ - **未连接是合法默认**：`_getPlatform()`/`readMcpConfig()` 返回 null → 链路 A/B 静默跳过，不每步催连平台制造噪音。排查同步行为设 `SILLYSPEC_DEBUG_SYNC=1`（`debugLog` 在 `sync.js:50`）。
+ - **best-effort 边界**：除 `approve`/`reject`（显式用户动作，失败必须可见 exitCode=1），其余平台调用失败一律 warn 不阻断。
+-- **8s 熔断**：`triggerSync`（inline 路径）/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:838`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:826`，平台慢环境放宽用；放宽代价是 inline 路径 `--done` 最坏等待同比例变长）。**`triggerSync` 默认已转后台子进程**（2026-09-20，`run/bg-sync.js`）：熔断让路的是后台轮（预算 max(env 值, 45s)），主命令不再等网络；后台输出与结果留痕 `<runtimeRoot>/spec-sync-bg.log`，逃生阀 `SILLYSPEC_SYNC_BG=0` 回落 inline。
++- **8s 熔断**：`triggerSync`（inline 路径）/`triggerPull` 总超时 8s（`raceWithAbort`，`shared.js:844`），防 `--done` 在 sync 慢时体感 hang。熔断触发时 spec-sync 侧 warn 打「平台响应慢，本轮同步被总预算熔断让路」（`describeSyncError` 分类，`spec-sync.js:56`）——即旧版的英文 "This operation was aborted" 文本，不是 bug。总预算经 env `SILLYSPEC_SYNC_TIMEOUT_MS` 可调（`shared.js:826`，平台慢环境放宽用；放宽代价是 inline 路径 `--done` 最坏等待同比例变长）。**`triggerSync` 默认已转后台子进程**（2026-09-20，`run/bg-sync.js`）：熔断让路的是后台轮（预算 max(env 值, 45s)），主命令不再等网络；后台输出与结果留痕 `<runtimeRoot>/spec-sync-bg.log`，逃生阀 `SILLYSPEC_SYNC_BG=0` 回落 inline。
+ - **MCP 不硬试**：路径A 未落地保守回退 Local（R-04）；CLI 不碰 DB 持久化 worktree_path（D-004 / client.js:18）。
+ - **派发不双写**：worker 不 commit，SillySpec 自己 apply（D-004），不调 SillyHub 合并 tool。
+ 
+diff --git a/src/change-list.js b/src/change-list.js
+index a7215d59..b5e183f3 100644
+--- a/src/change-list.js
++++ b/src/change-list.js
+@@ -316,6 +316,15 @@ function _parseFileListDetailed(designMdPath, { keepSillyspecDocs = false, repoK
+           const head = rawItem.slice(0, colonIdx).trim()
+           if (looksLikePath(head)) rawItem = head
+         }
++        // 「路径 ——尾注」同族（坑 thin-flow-freeze-foreign-declared-hijack 建议1，2026-09-25
++        // 实测：`- path ——说明` 整行 looksLikePath 不过被丢弃 → 自声明缺失 → 冻结面被他侧
++        // 陈旧声明劫持）。同冒号剥的口径：仅列表分支、前段须 looksLikePath（合法路径不含
++        // 双 em-dash，误伤面为零）。
++        const dashIdx = rawItem.search(/——/)
++        if (dashIdx > 0) {
++          const head = rawItem.slice(0, dashIdx).trim()
++          if (looksLikePath(head)) rawItem = head
++        }
+       }
+       const itemNorm = normalizePath(rawItem)
+       const itemCross = preCross || splitCrossRepoPrefix(itemNorm, repoKeys)
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 846b07a0..ef536a57 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -410,6 +410,10 @@ dispatch:
+ # evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
+ # test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
+ 
++# ── 证据门档位（2026-09-27-ui-visual-guidance / 2026-09-27-hunk-attribution-gate；注释态=缺省档位生效）──
++# ui_visual_gate: warn   # UI 视觉证据分级门：warn（缺省，缺 visual-evidence.md 仅警告）| error（缺证据即阻断）| off（探针整体关闭；视觉降级无用户裁决留痕时无论档位恒阻断）
++# hunk_gate: warn        # 提交面行级归属门：warn（缺省）| error（未归因文件/跨变更竞争任一在场阻断收口；在途残留恒仅警告——并发 WIP 弱信号不硬拦）| off（关闭）
++
+ # ── monorepo 子模块路径映射（.path 仍被 plan/worktree-deps 消费；.test 已退役勿再配）──
+ modules:
+   frontend: { path: "frontend/" }
+diff --git a/src/db.js b/src/db.js
+index 47c308f3..a83d1e1c 100644
+--- a/src/db.js
++++ b/src/db.js
+@@ -7,7 +7,7 @@ import { dirname } from 'path';
+ // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
+ // node:sqlite（DatabaseSync）是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
+ // _createSchema 内 DDL 直接落盘，无需额外 _save。
+-const DB_SCHEMA_VERSION = 7;
++const DB_SCHEMA_VERSION = 8;
+ 
+ // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
+ // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
+@@ -252,7 +252,7 @@ export class DB {
+       CREATE TABLE IF NOT EXISTS project (
+         id INTEGER PRIMARY KEY DEFAULT 1,
+         name TEXT NOT NULL,
+-        schema_version INTEGER DEFAULT 7,
++        schema_version INTEGER DEFAULT 8,
+         created_at TEXT NOT NULL,
+         updated_at TEXT NOT NULL
+       )
+@@ -263,7 +263,7 @@ export class DB {
+       CREATE TABLE IF NOT EXISTS changes (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         name TEXT UNIQUE NOT NULL,
+-        current_stage TEXT DEFAULT 'scan',
++        current_stage TEXT DEFAULT 'brainstorm',
+         status TEXT DEFAULT 'active',
+         no_worktree INTEGER DEFAULT 0,
+         created_at TEXT NOT NULL,
+@@ -388,6 +388,23 @@ export class DB {
+     // change-registry 首建/claimChangeOwner（task-02 接线会话标识）；消费方=assertChangeOwnership
+     // （task-02）+ serializeForSync 平台同步投影。幂等 ALTER（列存在跳过，v5 先例同款）。
+     this._migrateAddColumn('changes', 'owner_session', 'TEXT');
++
++    // v8（2026-09-27-change-birth-stage-brainstorm）：出生阶段 'scan'→'brainstorm' 的存量数据迁移。
++    // 旧版 changes 行出生 current_stage='scan'（db.js DDL 默认值 + progress.js 两处 INSERT），
++    // thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」误导（scan 是 auxiliary，
++    // shared.js MAIN_FLOW_ORDER 从不含它）。只改写「出生默认未被真跑过」的行：active 且
++    // stages.scan='pending'——setStage('scan') 置 in-progress，真在跑/已跑完 scan 的行不受影响。
++    // 同步刷 last_local_modified_ts（与 pm._touchLocalModified 同语义）：否则平台 pull 见本地
++    // 无脏度会静默 import，把平台的旧 'scan' 导回来（platform-sync-pull 冲突保留本地现状）。
++    // 幂等：改写后条件不再命中，重跑零效果。strftime 对齐 toISOString 形态（T 分隔 + ms + Z）。
++    this.db.exec(`
++      UPDATE changes
++      SET current_stage = 'brainstorm',
++          last_local_modified_ts = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
++      WHERE current_stage = 'scan'
++        AND status = 'active'
++        AND id IN (SELECT change_id FROM stages WHERE stage = 'scan' AND status = 'pending')
++    `);
+   }
+ 
+   /**
+diff --git a/src/fs-atomic.js b/src/fs-atomic.js
+index 588b0c0c..ca6cc80e 100644
+--- a/src/fs-atomic.js
++++ b/src/fs-atomic.js
+@@ -7,7 +7,7 @@
+  * 注意：DB 持久化由 node:sqlite 引擎承担（提交即落盘 sillyspec.db + WAL 侧车），
+  * 不经此处的 writeAtomicSync；sillyspec.db 不走原子写改名。
+  */
+-import { renameSync, unlinkSync, openSync, writeSync, fsyncSync, closeSync, statSync } from 'fs';
++import { renameSync, unlinkSync, openSync, writeSync, fsyncSync, closeSync, statSync, mkdirSync } from 'fs';
+ import { randomBytes } from 'node:crypto';
+ import { dirname, basename, join } from 'path';
+ 
+@@ -64,6 +64,10 @@ export function renameSyncRetry(from, to, retries = 5) {
+  */
+ export function writeAtomicSync(filePath, content) {
+   const dir = dirname(filePath);
++  // 父目录保位（坑 thin-flow-adopt-edge-cases 坑2，2026-09-25 实证）：adopt 收编补件等
++  // 「目录刚建、.runtime 尚不存在」的写点直接 ENOENT——原子写的契约是「写出完整文件」，
++  // 缺父目录按 mkdir -p 语义创建（已存在零成本）；权限类失败仍如实抛错。
++  try { mkdirSync(dir, { recursive: true }); } catch { /* 创建失败留给 openSync 抛真实原因 */ }
+   // pid + 随机段双因子：Windows PID 重用激进，两进程可能撞同 pid，tmp 名碰撞 rename 互相覆盖。
+   // crypto 随机源（Math.random 可预测，tmp 名被预猜中有 symlink 预放置理论面）
+   const rnd = randomBytes(6).toString('hex');
+diff --git a/src/progress.js b/src/progress.js
+index eac0a4bd..cb3eb7d6 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -521,7 +521,9 @@ export class ProgressManager {
+     }
+ 
+     const result = {
+-      _version: 6,
++      // 版本单一源（2026-09-27-change-birth-stage-brainstorm 收敛）：此前是字面量 6，
++      // v7 bump（watcher-preview-progress）漏改此处成「四处一致」之外的第五处漂移。
++      _version: CURRENT_VERSION,
+       project: projectName,
+       currentChange: cName,
+       currentStage: currentStage || '',
+@@ -1164,10 +1166,12 @@ export class ProgressManager {
+       // 检查变更是否已存在
+       const existing = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+       if (existing === undefined) {
+-        // 插入 changes 行
++        // 插入 changes 行。出生阶段=brainstorm（2026-09-27 用户裁定「起步就是头脑风暴」）：
++        // scan 是 auxiliary（shared.js AUXILIARY_STAGES 语义），从未是变更主流程起点；
++        // 旧默认 'scan' 让 thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」误导。
+         sqlDb.prepare(
+           `INSERT INTO changes (name, current_stage, status, created_at, last_active, title, quicklog_id)
+-           VALUES (?, 'scan', 'active', ?, ?, ?, ?)`
++           VALUES (?, 'brainstorm', 'active', ?, ?, ?, ?)`
+         ).run(changeName, now, now, meta.title || null, meta.quicklogId || null);
+       }
+ 
+@@ -1242,7 +1246,7 @@ export class ProgressManager {
+           const sqlDb = db.getDb();
+           const now = new Date().toISOString();
+           const ins = sqlDb.prepare(
+-            `INSERT OR IGNORE INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, 'scan', 'active', ?, ?)`
++            `INSERT OR IGNORE INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, 'brainstorm', 'active', ?, ?)`
+           ).run(changeName, now, now);
+           const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
+           if (changeRow !== undefined) {
+diff --git a/src/progress/shared.js b/src/progress/shared.js
+index ab38c7c9..dda75696 100644
+--- a/src/progress/shared.js
++++ b/src/progress/shared.js
+@@ -27,8 +27,9 @@ export const STAGE_ORDER = ['scan', 'brainstorm', 'plan', 'execute', 'verify', '
+ export const MAIN_FLOW_ORDER = ['brainstorm', 'plan', 'execute', 'verify', 'archive'];
+ 
+ // progress 数据版本（v3 = SQLite；v4 = changes 加 base_ts / 本地脏度两列，platform-sync §8；
+-// v6 = changes 加 owner_session 所有权列，2026-09-14-change-ownership-guards D-005@v1）
+-export const CURRENT_VERSION = 7;
++// v6 = changes 加 owner_session 所有权列，2026-09-14-change-ownership-guards D-005@v1；
++// v8 = 出生阶段 'scan'→'brainstorm' + 存量出生默认行迁移，2026-09-27-change-birth-stage-brainstorm）
++export const CURRENT_VERSION = 8;
+ 
+ // 滞留提示阈值（天，2026-08-30 用户反馈②：7 个「代码全落地但流程没收口」的变更挂 38 天
+ // 无人发现）：活跃变更 last_active 距今超该天数且流程未收口（archive 未完成）时，progress
+diff --git a/src/run/complete.js b/src/run/complete.js
+index c1ebe3db..2a555976 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -783,7 +783,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+ 
+     // gate 全过：persist completed（task-01 移后）。此处到 _write 之间若崩，DB 仍 in-progress（内存已 completed 但未落盘），下次进 CLI 读 DB 即 in-progress，不产生"假 completed"。
+     pm._write(cwd, progress, changeName)
+-    triggerSync(cwd, changeName, platformOpts)
++    triggerSync(cwd, changeName, platformOpts, { completion: true })
+ 
+     const total = steps.length
+     console.log(`✅ ${stageName} 阶段已完成（${total}/${total} 步）`)
+@@ -932,7 +932,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+ 
+   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+   pm._write(cwd, progress, changeName)
+-  triggerSync(cwd, changeName, platformOpts)
++  triggerSync(cwd, changeName, platformOpts, { completion: true })
+   // 单步完成也刷新 change title：design.md 在 brainstorm step6 落盘，此后每次 --done 都该让
+   // changes.title 反映中文描述，不等阶段收尾（机制见 refreshChangeTitleFromArtifacts）。
+   refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
+@@ -1860,7 +1860,7 @@ export async function waitStep(pm, progress, stageName, cwd, outputText, waitRea
+ 
+   progress.lastActive = now
+   pm._write(cwd, progress, changeName)
+-  triggerSync(cwd, changeName, platformOpts)
++  triggerSync(cwd, changeName, platformOpts, { completion: true })
+ 
+   // 盖章路径的收尾提示独立分叉：wait 已在记录态完成（非等待用户），提示 --done 直接收尾；
+   // 无 --inherit-from 路径输出与现状逐字节一致（兼容红线）。
+@@ -1990,7 +1990,7 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
+ 
+   progress.lastActive = now
+   pm._write(cwd, progress, changeName)
+-  triggerSync(cwd, changeName, platformOpts)
++  triggerSync(cwd, changeName, platformOpts, { completion: true })
+   // wait 解除持久化点（含 repeatable 多轮）同样刷新 change title——多轮确认期间 design.md 已存在
+   refreshChangeTitleFromArtifacts(pm, cwd, specBase, changeName)
+ 
+@@ -2158,7 +2158,7 @@ export async function skipStep(pm, progress, stageName, cwd, changeName, platfor
+   steps[currentIdx].skippedAt = new Date().toLocaleString('zh-CN',{hour12:false})
+   progress.lastActive = new Date().toLocaleString('zh-CN',{hour12:false})
+   pm._write(cwd, progress, changeName)
+-  triggerSync(cwd, changeName, platformOpts)
++  triggerSync(cwd, changeName, platformOpts, { completion: true })
+ 
+   console.log(`⏭️ Step ${currentIdx + 1}/${steps.length} 已跳过：${steps[currentIdx].name}`)
+ 
+diff --git a/src/run/shared.js b/src/run/shared.js
+index d5a27d58..efc7928a 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -152,8 +152,14 @@ export function resolveSpecDir(cwd, opts = {}) {
+     // 防止 home 子目录遍历经过 home 误命中 ~/.sillyspec；
+     // passedHome：经过 home 后不再检查（覆盖遍历到真实 home 的场景）。
+     if (!(passedHome || (dir === home && originBelowHome))) {
+-      const candidate = join(dir, '.sillyspec')
+-      if (existsSync(candidate)) return candidate
++      // 嵌套回环防护（坑 2026-09-27-spec-sync-413 根因2，2026-08-15 遗留实证）：
++      // .sillyspec 的合法布局恒为 <root>/.sillyspec（.runtime 在其内层），<…>/.runtime/
++      // .sillyspec 是历史残骸形态（内部常再递归 .runtime/，目录遍历/状态采集进圈即卡死
++      // 30s 超时）——该层候选不判命中，继续上溯真根。
++      if (basename(dir) !== '.runtime') {
++        const candidate = join(dir, '.sillyspec')
++        if (existsSync(candidate)) return candidate
++      }
+     }
+     if (dir === home) passedHome = true
+     const parent = dirname(dir)
+@@ -853,6 +859,26 @@ async function raceWithAbort(op, timeoutMs = resolveSyncTotalTimeoutMs()) {
+ // 局部复制正则保持轻载——改形态时三处同改（prompt.js 经本导出消费，勿再复制一份）。
+ export const QUICK_SID_RE = /^quick-[0-9a-f]{8}$/
+ 
++// 未连接平台显眼告警（坑 2026-09-27-spec-sync-413-and-nested-runtime：主仓 local.yaml 无
++// platform 段 → --done 自动同步静默 no-op，用户误判「已同步」——平台断档 8 天才发现）。
++// 节流每日至多一次：本地独立使用是合法默认状态（sync.js 头注「不每步」契约保持），告警
++// 只破「静默」不变骚扰；marker 落 runtimeRoot（跨进程同源），读写失败不拦告警本身。
++function warnPlatformNotConnectedDaily(cwd, platformOpts = {}) {
++  const specBase = platformOpts?.specRoot || join(cwd, '.sillyspec')
++  try {
++    const runtimeRoot = resolveRuntimeRoot(platformOpts, specBase)
++    const marker = join(runtimeRoot, 'platform-not-connected-notice.date')
++    const today = new Date().toISOString().slice(0, 10)
++    if (existsSync(marker) && readFileSync(marker, 'utf8').trim() === today) return
++    mkdirSync(runtimeRoot, { recursive: true })
++    writeFileSync(marker, today, 'utf8')
++  } catch { /* marker 失败仍告警（宁可重复不静默） */ }
++  // 走 stdout 而非 stderr：advisory 性质；且顶层别名 vs run 前缀的字节级 stderr 平价
++  // 契约（cli-top-level-aliases）不被首报/复报差异打破。
++  console.log('⚠️ [spec-sync] 未连接平台——本命令的进度与 spec 树不会同步到平台（平台面板将停更）。')
++  console.log('   如需同步：sillyspec platform connect <平台地址> --token <token> 连接一次，此后 --done 自动增量同步；本地独立使用可忽略（本提示每日至多一次）。')
++}
++
+ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {}) {
+   // ── 后台异步化（2026-09-20 用户反馈：--done 被网络尾巴拖住分钟级）──
+   // 默认把同步整体挪进 detached 后台子进程：17 个调用点全部 fire-and-forget，但进程
+@@ -873,7 +899,14 @@ export async function triggerSync(cwd, changeName, platformOpts = {}, opts = {})
+         return
+       }
+       if (r.status === 'coalesced') return // 活后台轮在跑，本轮状态已并入其下一轮
+-      // not-connected → 落回 inline（内部静默 no-op，与旧行为一致）
++      // not-connected → 完成时刻显眼告警（每日一次，坑 2026-09-27-spec-sync-413；opts.completion
++      // 由 complete.js 步进/收口调用点传——渲染/诊断类调用点不告警，防顶层别名 vs run 前缀的
++      // 字节级输出平价契约被节流态首报/复报差异打破）+ 落回 inline（内部静默 no-op，旧行为）
++      if (r.status === 'not-connected') {
++        if (opts.completion) {
++          try { warnPlatformNotConnectedDaily(cwd, platformOpts) } catch { /* 告警失败不阻断 */ }
++        }
++      }
+     } catch { /* 后台化失败降级 inline（best-effort 契约不变） */ }
+   }
+   // 平台模式不再整体跳过（2026-08-26 用户决策）：上行回传（进度 + 四件套 + spec 树）
+diff --git a/src/spec-sync.js b/src/spec-sync.js
+index 78aa312d..9557c65b 100644
+--- a/src/spec-sync.js
++++ b/src/spec-sync.js
+@@ -617,10 +617,48 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+       // 服务器、不进冲突文件；服务器「冲突 op 跳过、其余照常 apply」语义下本会话真改动
+       // 已落——follower 清空即视为本轮同步成功（写基线，下次起 pre-POST 即拦）。
+       const serverVersions = body.server_versions || {};
++      // 墓碑拒收通道（runbook spec-push-conflict-recovery 待修①，2026-09-25 实证）：平台
++      // apply_ops 对带 platform_deleted 墓碑的路径**无条件拒收**（与版本无关，update 的
++      // base=version 完全匹配仍拒）。此前 CLI 只消费 server_versions → 墓碑拒收被译成
++      // 「又有更新/版本冲突」，resolve --keep-local 重推永远无效（转圈）。墓碑路径从版本
++      // 冲突叙事中分离：恢复走平台 manifest-heal 通道（2026-09-26-manifest-heal-endpoint）。
++      const tombstoned = Array.isArray(body.platform_deleted)
++        ? body.platform_deleted.filter((p) => typeof p === 'string')
++        : [];
++      const tombSet = new Set(tombstoned);
+       const { followers, real } = opts.forcePush
+         ? { followers: [], real: serverVersions }
+         : partitionConflictPaths(serverVersions, localFiles, baseHashes, lastSyncTs);
+-      const realPaths = Object.keys(real);
++      const realPaths = Object.keys(real).filter((p) => !tombSet.has(p));
++
++      // 纯墓碑形态：版本冲突面为空、拒收全是墓碑 → 不写/不清通用冲突标记（clear 会把
++      // 状态洗成「已消解」误导 status），单独落冲突文件 + 正确恢复指引。
++      if (realPaths.length === 0 && tombstoned.length > 0) {
++        let tombConflictPath = null;
++        try {
++          const runtimeDir = join(specRoot, '.runtime');
++          mkdirSync(runtimeDir, { recursive: true });
++          tombConflictPath = join(runtimeDir, `spec-sync-conflict-${changeName}.json`);
++          writeFileSync(tombConflictPath, JSON.stringify({
++            change: changeName,
++            kind: 'spec-tree',
++            created_at: new Date().toISOString(),
++            server_versions: {},
++            conflicting_paths: [],
++            platform_deleted: tombstoned,
++            note: '路径被平台删除墓碑拒收（非版本冲突，resolve 重推无效）。恢复通道：平台 manifest-heal 清墓碑后重推，或联系管理员确认删除是否有意。',
++          }, null, 2) + '\n', 'utf8');
++        } catch (e) {
++          console.warn(`[spec-sync] 墓碑冲突文件写入失败（信息仅打印）: ${e.message}`);
++        }
++        console.warn('');
++        console.warn(`⚠️ [spec-sync] ${tombstoned.length} 个路径被平台删除墓碑拒收（非版本冲突，resolve --keep-local 重推无效）: ${tombstoned.slice(0, 5).join(', ')}${tombstoned.length > 5 ? ' 等' : ''}`);
++        console.warn(`⚠️ 恢复通道：平台 manifest-heal（清墓碑后重推即闭环）；详情: ${tombConflictPath || '(写入失败)'}`);
++        return { synced: 0, conflict: true, serverVersions: {}, tombstoned, conflictPath: tombConflictPath };
++      }
++      const tombNote = tombstoned.length > 0
++        ? `\n⚠️ 另有 ${tombstoned.length} 个路径被平台删除墓碑拒收（非版本冲突，resolve 无效；恢复走平台 manifest-heal）: ${tombstoned.slice(0, 5).join(', ')}${tombstoned.length > 5 ? ' 等' : ''}`
++        : '';
+ 
+       // 冲突横幅降噪（坑 spec-sync-conflict-banner-spam，与 sync() 进度侧 2026-08-23 修法同族）：
+       // 未决 spec 树冲突存在期间，每步自动同步都会对同一批真冲突路径再撞一次——此前每轮
+@@ -658,6 +696,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+           created_at: new Date().toISOString(),
+           server_versions: real,
+           conflicting_paths: realPaths,
++          ...(tombstoned.length > 0 ? { platform_deleted: tombstoned } : {}),
+           auto_followed: followers,
+           note: 'spec 树文件冲突（仅列本地真改动文件；本地未改动文件已自动跟随服务器）。resolve --keep-local 以本地为准重推；--take-platform 拉平台 bundle 覆盖冲突文件（接受服务器版本，2026-09-03 起支持）',
+         }, null, 2) + '\n', 'utf8');
+@@ -669,6 +708,7 @@ export async function syncSpecTree(specRoot, platform, changeName, opts = {}) {
+       const shownPaths = realPaths.slice(0, 5).join(', ') + (realPaths.length > 5 ? ' 等' : '');
+       console.warn('');
+       console.warn(`⚠️ [spec-sync] 检测到 spec 树冲突（${realPaths.length} 个文件: ${shownPaths}；逐文件服务器版本见冲突详情文件）`);
++      if (tombNote) console.warn(`⚠️ [spec-sync]${tombNote.trim()}`);
+       console.warn(`⚠️ 处置：sillyspec platform resolve ${changeName} --keep-local | --take-platform | --abort（冲突详情: ${conflictPath || '(写入失败)'}）`);
+       return { synced: 0, conflict: true, serverVersions: real, autoResolved: followers.length, conflictPath };
+     }
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 7fae7585..f643e262 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -1954,6 +1954,14 @@ export function checkTransition(fromStage, toStage, options = {}) {
+     return { allowed: false, reason: `未知阶段: ${toStage}` }
+   }
+ 
++  // 出生未入门态（2026-09-27-change-birth-stage-brainstorm）：出生阶段自 'scan'（auxiliary）改
++  // 'brainstorm' 后，「辅助→主流程任意放行」不再天然覆盖出生态——但 thin/quick、backfill、
++  // complete-step 等大量路径从出生态直接 run 目标阶段（旧 scan 出生全都放行）。等价语义：
++  // brainstorm 仍 pending/无 stages 行（从未真正进入主流程）视同辅助态；真在 brainstorm 中
++  // （in-progress/completed）仍受主流程守卫约束。
++  const fromBirthUntouched = fromStage === 'brainstorm'
++    && (!fromStageData || !fromStageData.status || fromStageData.status === 'pending')
++
+   // 辅助阶段随时可执行（archive 除外：从主流程进入 archive 需要校验）
+   if (AUXILIARY_STAGES.includes(toStage) && toStage !== 'archive') {
+     return { allowed: true }
+@@ -1980,15 +1988,16 @@ export function checkTransition(fromStage, toStage, options = {}) {
+     if (fromStage === 'verify') {
+       return { allowed: true }
+     }
+-    // 独立运行 archive（无前置）也允许
+-    if (!fromStage || AUXILIARY_STAGES.includes(fromStage)) {
++    // 独立运行 archive（无前置）也允许；出生未入门态同放行（旧 scan 出生态等价——
++    // thin/quick 从未进主流程的变更直接归档走此路）
++    if (!fromStage || AUXILIARY_STAGES.includes(fromStage) || fromBirthUntouched) {
+       return { allowed: true }
+     }
+     return { allowed: false, reason: 'archive 的前置阶段是 verify，不能从 ' + fromStage + ' 跳转' }
+   }
+ 
+-  // 从辅助阶段进入主流程：允许
+-  if (AUXILIARY_STAGES.includes(fromStage)) {
++  // 从辅助阶段进入主流程：允许（出生未入门态同——见函数头注释）
++  if (AUXILIARY_STAGES.includes(fromStage) || fromBirthUntouched) {
+     return { allowed: true }
+   }
+ 
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 0bc11761..7df6b6d7 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -2484,7 +2484,11 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+       // （cd frontend && pnpm exec vitest）时文件未重定基产双前缀错路径；独立提取 jsxDir。
+       const jsxDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(jsxRunner)?.[1]
+       const rebaseJsx = (f) => (jsxDir && f.startsWith(jsxDir + '/')) ? f.slice(jsxDir.length + 1) : f
+-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).join(' ')}`, count: jsProject.length, dropped: 0 })
++      // R20（2026-09-27-thin-display-fix 实证，用户授权修复）：Windows cmd 执行器对含
++      // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
++      // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
++      const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
++      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProject.length, dropped: 0 })
+     } else {
+       batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+     }
+diff --git a/test/change-birth-stage-brainstorm.test.mjs b/test/change-birth-stage-brainstorm.test.mjs
+new file mode 100644
+index 00000000..d331eebe
+--- /dev/null
++++ b/test/change-birth-stage-brainstorm.test.mjs
+@@ -0,0 +1,207 @@
++/**
++ * 变更出生阶段 brainstorm（2026-09-27-change-birth-stage-brainstorm）
++ *
++ * 用户裁定：变更起步就是头脑风暴——scan 是 auxiliary（shared.js MAIN_FLOW_ORDER 不含），
++ * 旧出生 current_stage='scan' 让 thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」
++ * （multi-agent-platform 的 2026-09-27-governance-rpc-actions 实证）。
++ *
++ * 四组覆盖：
++ *   ① 出生阶段：initChange / _readOrInit 新建行 current_stage='brainstorm'
++ *   ② DDL 默认：raw INSERT 不带 current_stage → 默认 'brainstorm'
++ *   ③ 存量迁移（v8）：出生默认行（active + stages.scan='pending'）改写 brainstorm + 标本地脏度；
++ *      真在跑 scan（in-progress）/ 已归档行不动
++ *   ④ 幂等：迁移重跑零效果（时间戳不再变）
++ *
++ * fixture 风格沿用 platform-sync-schema.test.mjs（DB 原语直接构造，避免 PM 副作用）。
++ */
++import { DB } from '../src/db.js';
++import { ProgressManager } from '../src/progress.js';
++import { DatabaseSync } from 'node:sqlite';
++import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
++import { join } from 'path';
++import { tmpdir } from 'os';
++
++let failures = 0;
++const assert = (cond, msg) => {
++  if (cond) console.log('  ✅ ' + msg);
++  else { console.error('  ❌ ' + msg); failures++; }
++};
++
++const tmpRoot = join(tmpdir(), `sillyspec-birth-stage-${process.pid}-${Date.now()}`);
++const dbPath = () => join(tmpRoot, 'sillyspec.db');
++const stampPath = () => join(tmpRoot, 'sillyspec.db.schema-version');
++const fresh = () => {
++  rmSync(tmpRoot, { recursive: true, force: true });
++  mkdirSync(tmpRoot, { recursive: true });
++};
++const open = () => { const db = new DB(dbPath()); db.init(); return db; };
++const readStamp = () => {
++  try { return readFileSync(stampPath(), 'utf8').trim(); } catch { return null; }
++};
++const rowOf = (file, name, cols = 'current_stage, status, last_local_modified_ts') => {
++  const probe = new DatabaseSync(file, { readOnly: true });
++  try {
++    return probe.prepare(`SELECT ${cols} FROM changes WHERE name = ?`).get(name);
++  } finally {
++    probe.close();
++  }
++};
++
++console.log('\n[birth-stage] 变更出生阶段 brainstorm + 存量迁移（2026-09-27-change-birth-stage-brainstorm）');
++
++// ─────────────────────────────────────────
++// ① 出生阶段：initChange / _readOrInit 新建行 = brainstorm
++// ─────────────────────────────────────────
++console.log('\n--- 1. 出生阶段 = brainstorm ---');
++{
++  fresh();
++  const specDir = join(tmpRoot, 'spec');
++  mkdirSync(join(specDir, '.runtime'), { recursive: true });
++  const pmDb = join(specDir, '.runtime', 'sillyspec.db');
++  const pm = new ProgressManager({ specDir });
++  await pm.init('demo');
++
++  // initChange 路径（flow start / registerChange 首建走此）
++  await pm.initChange('demo', 'c-init');
++  let row = rowOf(pmDb, 'c-init');
++  assert(row && row.current_stage === 'brainstorm', `initChange 新建行 current_stage='brainstorm'（实际 ${row && row.current_stage}）`);
++  const data1 = await pm.read('demo', 'c-init');
++  assert(data1 && data1.currentStage === 'brainstorm', `read().currentStage='brainstorm'（实际 ${data1 && data1.currentStage}）`);
++
++  // _readOrInit 路径（读未注册变更名时兜底建行）
++  await pm._readOrInit('demo', 'c-readinit');
++  row = rowOf(pmDb, 'c-readinit');
++  assert(row && row.current_stage === 'brainstorm', `_readOrInit 兜底建行 current_stage='brainstorm'（实际 ${row && row.current_stage}）`);
++
++  try { if (pm._db) pm._db.close(); } catch { /* 已关忽略 */ }
++}
++
++// ─────────────────────────────────────────
++// ② DDL 默认值：raw INSERT 不带 current_stage → 'brainstorm'
++// ─────────────────────────────────────────
++console.log('\n--- 2. DDL 默认 current_stage = brainstorm ---');
++{
++  fresh();
++  const db = open();
++  db.getDb().prepare(
++    "INSERT INTO changes (name, status, created_at, last_active) VALUES ('raw-default', 'active', 't', 't')"
++  ).run();
++  db.close();
++  const row = rowOf(dbPath(), 'raw-default');
++  assert(row && row.current_stage === 'brainstorm', `raw INSERT 默认 current_stage='brainstorm'（实际 ${row && row.current_stage}）`);
++}
++
++// ─────────────────────────────────────────
++// ③ 存量迁移（v8）：出生默认行改写 / 真在跑·已归档不动
++// ─────────────────────────────────────────
++console.log('\n--- 3. 存量迁移：三类行各得其所 ---');
++{
++  fresh();
++  // 手工建 v7 形态旧库：changes（无 last_local_modified_ts / owner_session 等新列，_migrateAddColumn 补）+ stages
++  const oldDb = new DatabaseSync(dbPath());
++  oldDb.exec(`
++    CREATE TABLE changes (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      name TEXT UNIQUE NOT NULL,
++      current_stage TEXT DEFAULT 'scan',
++      status TEXT DEFAULT 'active',
++      no_worktree INTEGER DEFAULT 0,
++      created_at TEXT NOT NULL,
++      last_active TEXT NOT NULL
++    );
++    CREATE TABLE stages (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      change_id INTEGER NOT NULL,
++      stage TEXT NOT NULL,
++      status TEXT DEFAULT 'pending',
++      UNIQUE(change_id, stage)
++    );
++  `);
++  const insertChange = (name, currentStage, status) =>
++    oldDb.prepare("INSERT INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, ?, ?, 't', 't')").run(name, currentStage, status).lastInsertRowid;
++  const insertStage = (changeId, stage, status) =>
++    oldDb.prepare('INSERT INTO stages (change_id, stage, status) VALUES (?, ?, ?)').run(changeId, stage, status);
++
++  // a. 出生默认未动过：active + scan/pending（迁移目标——governance-rpc-actions 同形态）
++  const aId = insertChange('born-scan-stale', 'scan', 'active');
++  insertStage(aId, 'scan', 'pending');
++  insertStage(aId, 'brainstorm', 'pending');
++  // b. 真在跑 scan：active + scan/in-progress（setStage('scan') 置 in-progress）→ 不动
++  const bId = insertChange('scan-inflight', 'scan', 'active');
++  insertStage(bId, 'scan', 'in-progress');
++  // c. 已跑完 scan 的 default 辅助容器：active + scan/completed → 不动
++  const cId = insertChange('scan-done', 'scan', 'active');
++  insertStage(cId, 'scan', 'completed');
++  // d. 已归档的出生默认行：archived + scan/pending → 不动（历史行不重写）
++  const dId = insertChange('born-scan-archived', 'scan', 'archived');
++  insertStage(dId, 'scan', 'pending');
++  // e. 非出生默认主流程行：plan → 不动（防误伤对照）
++  const eId = insertChange('plan-row', 'plan', 'active');
++  insertStage(eId, 'plan', 'in-progress');
++  oldDb.close();
++
++  // 旧戳 '7' → 新版 init 重跑 _createSchema → v8 迁移
++  writeFileSync(stampPath(), '7');
++  const db = open();
++  db.close();
++
++  let row = rowOf(dbPath(), 'born-scan-stale');
++  assert(row && row.current_stage === 'brainstorm', `出生默认行迁移为 brainstorm（实际 ${row && row.current_stage}）`);
++  assert(row && row.last_local_modified_ts !== null, `迁移行标本地脏度 last_local_modified_ts=${row && row.last_local_modified_ts}（防平台 pull 静默导回 scan）`);
++  const migratedTs = row && row.last_local_modified_ts;
++  assert(row && typeof migratedTs === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(migratedTs), `脏度戳 toISOString 形态（实际 ${migratedTs}）`);
++
++  row = rowOf(dbPath(), 'scan-inflight');
++  assert(row && row.current_stage === 'scan', `真在跑 scan 行不动（实际 ${row && row.current_stage}）`);
++  row = rowOf(dbPath(), 'scan-done');
++  assert(row && row.current_stage === 'scan', `已跑完 scan 行不动（实际 ${row && row.current_stage}）`);
++  row = rowOf(dbPath(), 'born-scan-archived');
++  assert(row && row.current_stage === 'scan', `已归档出生行不动（实际 ${row && row.current_stage}）`);
++  row = rowOf(dbPath(), 'plan-row');
++  assert(row && row.current_stage === 'plan', `主流程行不受迁移影响（实际 ${row && row.current_stage}）`);
++
++  assert(readStamp() === '8', `迁移后 .schema-version 戳=8（实际 ${readStamp()}）`);
++
++  // ─────────────────────────────────────────
++  // ④ 幂等：迁移重跑零效果
++  // ─────────────────────────────────────────
++  console.log('\n--- 4. 幂等：迁移重跑零效果 ---');
++  writeFileSync(stampPath(), '7'); // 再度失配强制重跑
++  const db2 = open();
++  db2.close();
++  row = rowOf(dbPath(), 'born-scan-stale');
++  assert(row && row.current_stage === 'brainstorm' && row.last_local_modified_ts === migratedTs,
++    `重跑后值与脏度戳均不变（current_stage=${row && row.current_stage}, ts=${row && row.last_local_modified_ts}）`);
++}
++
++// ─────────────────────────────────────────
++// ⑤ 阶段转换契约：出生未入门态等价旧 scan 出生语义
++// （18 个存量测试文件的回归锚——archive-delta / run-complete-step-* 等从出生态直 run 目标阶段）
++// ─────────────────────────────────────────
++console.log('\n--- 5. checkTransition：出生未入门态（brainstorm pending）等价旧 scan 出生 ---');
++{
++  const { checkTransition } = await import('../src/stage-contract.js');
++  assert(checkTransition('brainstorm', 'archive', { fromStageData: { status: 'pending' } }).allowed === true,
++    'brainstorm(pending) → archive 放行（thin/quick 出生态归档）');
++  assert(checkTransition('brainstorm', 'archive', {}).allowed === true,
++    'brainstorm(无 stages 行) → archive 放行（存量行无 brainstorm 行的同形态）');
++  assert(checkTransition('brainstorm', 'execute', { fromStageData: { status: 'pending' } }).allowed === true,
++    'brainstorm(pending) → execute 放行（backfill/complete-step 直 run 路径）');
++  assert(checkTransition('brainstorm', 'archive', { fromStageData: { status: 'in-progress' } }).allowed === false,
++    'brainstorm(in-progress) → archive 拒绝（真在主流程中，守卫不放松）');
++  assert(checkTransition('brainstorm', 'archive', { fromStageData: { status: 'completed' } }).allowed === false,
++    'brainstorm(completed) → archive 拒绝（主流程空窗期不得跳归档）');
++  assert(checkTransition('verify', 'archive', {}).allowed === true, 'verify → archive 放行（不变）');
++  assert(checkTransition('scan', 'archive', {}).allowed === true, 'scan(auxiliary) → archive 放行（不变）');
++  assert(checkTransition('plan', 'archive', {}).allowed === false, 'plan → archive 拒绝（不变）');
++}
++
++// 清理（Windows WAL 句柄偶发延迟释放致 EPERM，吞错不阻断退出码）
++try { rmSync(tmpRoot, { recursive: true, force: true }); }
++catch { /* temp dir 由 OS 清理，不阻断退出码 */ }
++
++if (failures > 0) {
++  console.error(`\n[birth-stage] ❌ ${failures} 项失败`);
++  process.exit(1);
++}
++console.log('\n[birth-stage] ✅ 全部通过');
+diff --git a/test/change-list-dash-note.test.mjs b/test/change-list-dash-note.test.mjs
+new file mode 100644
+index 00000000..24630f6c
+--- /dev/null
++++ b/test/change-list-dash-note.test.mjs
+@@ -0,0 +1,45 @@
++/**
++ * 清单列表项「路径 ——尾注」剥离（坑 thin-flow-freeze-foreign-declared-hijack 建议1）
++ *
++ * 实测（2026-09-25，sillyspec 3.30.0）：design §6 自声明写成 `- backend/x.py ——新增服务`
++ * 时，整行 looksLikePath 不过被丢弃 → 本变更自声明缺失 → 冻结面（change.patch）被他侧
++ * 未归档旧变更的陈旧声明劫持（缺实现件 + 门禁 test: skipped）。冒号描述形态此前已剥
++ * （坑 brainstorm-gate-agent-unavailable 坑2），本测试锁 em-dash 尾注同口径剥离。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { parseFileChangeList } from '../src/change-list.js'
++
++const tmpRoots = []
++function writeDesign(body) {
++  const d = mkdtempSync(join(tmpdir(), 'cl-dash-'))
++  tmpRoots.push(d)
++  const changeDir = join(d, '.sillyspec', 'changes', 'c1')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'),
++    '---\nauthor: t\nscale: small\n---\n\n# Design\n\n## 文件变更清单\n\n' + body + '\n')
++  return join(changeDir, 'design.md')
++}
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++test('① `- path ——尾注` 剥离尾注取纯路径（自声明不再被丢弃）', () => {
++  const p = writeDesign('- backend/app/modules/scan_docs/service.py ——统计口径修复主实现\n- test/x.py ——补充用例\n')
++  const list = parseFileChangeList(p)
++  assert.ok(list.has('backend/app/modules/scan_docs/service.py'), `应剥出实现件路径：${[...list].join(',')}`)
++  assert.ok(list.has('test/x.py'), `第二行同样剥出：${[...list].join(',')}`)
++})
++
++test('② 既有形态回归：纯路径 / 反引号 / 冒号描述 / 非路径自由文本', () => {
++  const p = writeDesign([
++    '- src/a.js',
++    '- `src/b.js`',
++    '- src/c.js：冒号后描述',
++    '- 这只是一句自由文本说明不是路径',
++  ].join('\n'))
++  const list = parseFileChangeList(p)
++  assert.ok(list.has('src/a.js') && list.has('src/b.js') && list.has('src/c.js'), `三形态都在：${[...list].join(',')}`)
++  assert.equal(list.size, 3, `自由文本不入表（实际 ${list.size}）`)
++})
+diff --git a/test/change-ownership-guards.test.mjs b/test/change-ownership-guards.test.mjs
+index e53d4988..aa044012 100644
+--- a/test/change-ownership-guards.test.mjs
++++ b/test/change-ownership-guards.test.mjs
+@@ -152,9 +152,9 @@ test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量
+   assert.ok(cols.includes('title') && cols.includes('isolation_mode'), '历史幂等 ALTER 照常补齐（v5 先例同款）')
+   const legacy = db.getDb().prepare("SELECT owner_session FROM changes WHERE name = 'legacy'").get()
+   assert.equal(legacy.owner_session, null, '存量行 owner_session=NULL（无主，任何会话可接管）')
+-  assert.equal(readFileSync(stampPath, 'utf8').trim(), '7', 'schema 戳升 7（v7 authority 双轨列，2026-09-23-watcher-preview-progress）')
++  assert.equal(readFileSync(stampPath, 'utf8').trim(), '8', 'schema 戳升 8（v8 出生阶段 brainstorm，2026-09-27-change-birth-stage-brainstorm）')
+   const projDflt = db.getDb().prepare("SELECT dflt_value FROM pragma_table_info('project') WHERE name = 'schema_version'").get()
+-  assert.equal(String(projDflt.dflt_value), '7', 'project.schema_version DEFAULT 同步 bump 7（新建库口径）')
++  assert.equal(String(projDflt.dflt_value), '8', 'project.schema_version DEFAULT 同步 bump 8（新建库口径）')
+ 
+   // 幂等：删戳强制重跑 _createSchema——duplicate column 被吞，列数不翻倍、数据不丢
+   rmSync(stampPath)
+diff --git a/test/flow-done-carry-suspect-advisory.test.mjs b/test/flow-done-carry-suspect-advisory.test.mjs
+new file mode 100644
+index 00000000..4d317b95
+--- /dev/null
++++ b/test/flow-done-carry-suspect-advisory.test.mjs
+@@ -0,0 +1,92 @@
++/**
++ * flow done 提交面夹带嫌疑 advisory（坑 parallel-session-stale-snapshot-carried-in-commit）
++ *
++ * 实证（2026-09-26，main commit 304eba982）：daemon 遥测主题提交整体夹带并行会话旧分叉
++ * page.tsx，整文件覆盖等价于静默回滚 main 已落地三处功能——git 无冲突、聚焦测试不覆盖
++ * 挂载面，绿灯直过，直到线上用户发现卡片消失。
++ *
++ * 修复断言（src/flow.js patch 子步）：
++ * ① 提交面含未被本变更声明面（design 文件变更清单 ∪ requirements 测试绑定）提及的交付
++ *    文件 → 「夹带嫌疑」警告点名该文件（声明的 work.txt 不点名）；
++ * ② 声明面全空（无清单无绑定）→ 降为「无声明面」软提示，不指认夹带；
++ * ③ advisory 不阻断收口（exit 0、归档照常）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'fp-carry-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++}
++
++function fillSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：夹带告警夹具'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：夹带告警夹具——无独立测试面'))
++}
++
++test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；声明文件不点名；不阻断收口', () => {
++  const { cwd } = makeRepo()
++  const change = 'carry-suspect-a'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿', '--no-review']).status, 0)
++  fillSlots(cwd, change)
++  // design §6 自声明 work.txt（声明面锚点——坑 thin-flow-freeze-foreign-declared-hijack 绕过同款）
++  const dp = join(cwd, '.sillyspec', 'changes', change, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8') + '\n## 文件变更清单\n\n- work.txt\n')
++
++  // 干活提交 work.txt + 模拟并行会话在途文件被同一提交夹带（坑现场形态）
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  writeFileSync(join(cwd, 'foreign-page.tsx'), '// 并行会话旧分叉快照\nexport {}\n')
++  execFileSync('git', ['add', 'work.txt', 'foreign-page.tsx'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work（夹带 foreign-page.tsx）'], { cwd, stdio: 'pipe' })
++
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 应 advisory 不阻断: ${s2.stdout}\n${s2.stderr}`)
++  const carryLine = (s2.stdout + s2.stderr).split('\n').find((l) => l.includes('夹带嫌疑'))
++  assert.ok(carryLine, '夹带嫌疑警告在场')
++  assert.ok(carryLine.includes('foreign-page.tsx'), `点名夹带文件：${carryLine}`)
++  assert.ok(!carryLine.includes('work.txt'), `声明的 work.txt 不点名：${carryLine}`)
++  assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', 'archive')), true, '归档照常')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② 声明面全空：不指认夹带，降为「无声明面」软提示', () => {
++  const { cwd } = makeRepo()
++  const change = 'carry-suspect-b'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--no-review']).status, 0)
++  fillSlots(cwd, change)
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 不阻断: ${s2.stdout}\n${s2.stderr}`)
++  const out = s2.stdout + s2.stderr
++  assert.ok(!out.includes('夹带嫌疑'), '无声明面时不指认夹带')
++  assert.ok(out.split('\n').some((l) => l.includes('无任何文件声明面')), '降为软提示')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/knowledge-validate-anchor-drift.test.mjs b/test/knowledge-validate-anchor-drift.test.mjs
+new file mode 100644
+index 00000000..38487cc8
+--- /dev/null
++++ b/test/knowledge-validate-anchor-drift.test.mjs
+@@ -0,0 +1,80 @@
++/**
++ * knowledge validate 锚点漂移告警（坑 knowledge-hits-anchor-drift-and-upload-stall T4）
++ *
++ * 实证（2026-09-25）：INDEX 路由行锚点与目标文件标题静默漂移——标题事后被改 / emoji 前缀 /
++ * 点号 / 斜杠处理三代规则不一致 → 命中落空成幽灵锚（平台知识页不计覆盖、不计死条目清理）。
++ * 修复：validate 对带锚点的路由行做容错归一比对（剥非字母数字 + 小写 + 截断前缀容忍），
++ * 无对应标题 → anchor_drift 告警（不报错，修复由人拍板）。
++ * 本测试锁：①真漂移（标题已换代）→ 告警；②三代规则并存形态（emoji 前缀差异 / 点号差异 /
++ * 斜杠空格差异）→ 语义同源不告警；③长标题截断锚点 → 前缀容忍不告警。
++ */
++import { describe, it } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync } from 'node:child_process'
++import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++
++const CLI = join(import.meta.dirname, '..', 'bin', 'sillyspec.js')
++const roots = []
++function makeSpecRoot() {
++  const root = join(tmpdir(), `kv-adrift-${Math.random().toString(36).slice(2)}`)
++  roots.push(root)
++  const kd = join(root, 'knowledge')
++  mkdirSync(kd, { recursive: true })
++  return { root, kd }
++}
++const runValidate = (root) => JSON.parse(execFileSync(process.execPath,
++  [CLI, 'knowledge', 'validate', '--json', '--spec-dir', root],
++  { encoding: 'utf8', cwd: root }))
++
++describe('knowledge validate anchor_drift（坑 knowledge-hits T4）', () => {
++  it('① 真漂移：标题已换内容，锚点指向旧标题 → anchor_drift 告警', () => {
++    const { root, kd } = makeSpecRoot()
++    writeFileSync(join(kd, 'known-issues.md'), '---\nauthor: t\n---\n# K\n\n## 重写后的新标题形态\n\n正文。\n', 'utf8')
++    writeFileSync(join(kd, 'INDEX.md'),
++      '---\nauthor: t\n---\n\n# Knowledge Index\n\n## Known Issues\n\n- 旧问题|关键词 → [旧标题条目](known-issues.md#旧标题已被整体替换)\n', 'utf8')
++    const r = runValidate(root)
++    const drift = r.warnings.filter((w) => w.code === 'anchor_drift')
++    assert.equal(drift.length, 1, `应恰一条漂移告警：${JSON.stringify(r.warnings)}`)
++    assert.equal(drift[0].anchor, '旧标题已被整体替换')
++  })
++
++  it('② 三代规则并存形态：emoji 前缀 / 点号 / 斜杠空格差异 → 语义同源不告警', () => {
++    const { root, kd } = makeSpecRoot()
++    writeFileSync(join(kd, 'known-issues.md'), [
++      '---\nauthor: t\n---\n# K',
++      '## 🟡 sillyhub-daemon 于 2026-06-14 从 Python 重写为 Node.js',
++      '## daemon pnpm overrides 把 sdk 二进制硬钉 0.3.181',
++      '## 子项目构建 / 测试 / lint 命令',
++      '正文。',
++    ].join('\n\n') + '\n', 'utf8')
++    // 三条锚点分别取坑文件实测的三代形态（无前导杠 / 点号被丢 / 斜杠差异）
++    writeFileSync(join(kd, 'INDEX.md'),
++      '---\nauthor: t\n---\n\n# Knowledge Index\n\n## Known Issues\n\n' +
++      '- 关键词a → [daemon 重写](known-issues.md#sillyhub-daemon-于-2026-06-14-从-python-重写为-nodejs)\n' +
++      '- 关键词b → [硬钉版本](known-issues.md#daemon-pnpm-overrides-把-sdk-二进制硬钉-03181)\n' +
++      '- 关键词c → [构建命令](known-issues.md#子项目构建--测试--lint-命令)\n', 'utf8')
++    const r = runValidate(root)
++    assert.deepEqual(r.warnings.filter((w) => w.code === 'anchor_drift'), [],
++      `三代并存形态不应误报：${JSON.stringify(r.warnings)}`)
++  })
++
++  it('③ 截断容忍：超长标题的 60 字符截断锚点 → 前缀命中不告警', () => {
++    const { root, kd } = makeSpecRoot()
++    const longTitle = '这是一个非常长的知识条目标题用来验证锚点截断容忍机制在前后缀方向上都能正确工作且不误报'
++    writeFileSync(join(kd, 'patterns.md'), `---\nauthor: t\n---\n# P\n\n## ${longTitle}\n\n正文。\n`, 'utf8')
++    const anchor = longTitle.slice(0, 30) // 截断锚点（归一后为标题前缀）
++    writeFileSync(join(kd, 'INDEX.md'),
++      `---\nauthor: t\n---\n\n# Knowledge Index\n\n## Patterns\n\n- 关键词 → [长条目](patterns.md#${anchor})\n`, 'utf8')
++    const r = runValidate(root)
++    assert.deepEqual(r.warnings.filter((w) => w.code === 'anchor_drift'), [],
++      `截断锚点应前缀命中：${JSON.stringify(r.warnings)}`)
++  })
++})
++
++describe('teardown', () => {
++  it('cleanup', () => {
++    for (const t of roots) { try { rmSync(t, { recursive: true, force: true }) } catch { /* Windows 句柄延迟 */ } }
++  })
++})
+diff --git a/test/platform-sync-pull.test.mjs b/test/platform-sync-pull.test.mjs
+index 335ccbc3..623f3578 100644
+--- a/test/platform-sync-pull.test.mjs
++++ b/test/platform-sync-pull.test.mjs
+@@ -96,9 +96,9 @@ console.log('\n--- 2. 本地脏 + 平台更新 → 冲突 ---');
+   assert(r.ok === false && r.conflict === true, `冲突 → ok=false conflict=true（ok=${r.ok} conflict=${r.conflict}）`);
+   assert(r.imported === false, '冲突不 import');
+   assert(r.reason && r.reason.includes('冲突'), `reason 含冲突（实际 ${r.reason}）`);
+-  // 本地数据未被覆盖（current_stage 仍 scan，非平台的 plan）
++  // 本地数据未被覆盖（current_stage 仍出生值 brainstorm，非平台的 plan）
+   const cur = sql.prepare('SELECT current_stage FROM changes WHERE name = ?').get('rt-change');
+-  assert(cur.current_stage === 'scan', `冲突保留本地现状（current_stage 仍 scan，实际 ${cur.current_stage}）`);
++  assert(cur.current_stage === 'brainstorm', `冲突保留本地现状（current_stage 仍出生值 brainstorm，实际 ${cur.current_stage}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+diff --git a/test/platform-sync-schema.test.mjs b/test/platform-sync-schema.test.mjs
+index 45cc29d0..ecbde2cb 100644
+--- a/test/platform-sync-schema.test.mjs
++++ b/test/platform-sync-schema.test.mjs
+@@ -5,7 +5,7 @@
+ // 验收点（task-01.md acceptance）：
+ // 1. 全新 DB init 后 changes 表含两列且默认 NULL
+ // 2. 已有 schema 3 DB 经 _migrateAddColumn 幂等加列且新列 NULL，不丢既有数据
+-// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 7（v7：authority 双轨列，2026-09-23-watcher-preview-progress）
++// 3. DB_SCHEMA_VERSION / schema_version DEFAULT / CURRENT_VERSION / progress.js _version 四处全为 8（v8：出生阶段 scan→brainstorm + 存量迁移，2026-09-27-change-birth-stage-brainstorm；_version 自 v8 起单一源 CURRENT_VERSION——v7 漏改字面量 6 的漂移在此收敛）
+ //
+ // 用 DB 原语直接构造（对齐 db-atomic-write.test.mjs 风格），避免 ProgressManager 副作用干扰 DDL 断言。
+ import { DB } from '../src/db.js';
+@@ -44,22 +44,22 @@ const columnsOf = (file) => {
+   }
+ };
+ 
+-console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致（v7 authority 双轨列 bump——2026-09-23-watcher-preview-progress）');
++console.log('\n[platform-sync-schema] task-01：changes 加列 + 版本号四处一致（v8 出生阶段 brainstorm bump——2026-09-27-change-birth-stage-brainstorm）');
+ 
+ // ─────────────────────────────────────────
+-// 1. 版本号四处一致（v6 bump：owner_session 列，2026-09-14-change-ownership-guards）
++// 1. 版本号四处一致（v8 bump：出生阶段 scan→brainstorm + 存量迁移）
+ // ─────────────────────────────────────────
+-console.log('\n--- 1. 版本号四处一致（v6 bump：owner_session 列）---');
++console.log('\n--- 1. 版本号四处一致（v8 bump：出生阶段 brainstorm）---');
+ {
+   // (1) src/progress/shared.js CURRENT_VERSION（静态导出）
+-  assert(CURRENT_VERSION === 7, `src/progress/shared.js CURRENT_VERSION === 7（实际 ${CURRENT_VERSION}）`);
++  assert(CURRENT_VERSION === 8, `src/progress/shared.js CURRENT_VERSION === 8（实际 ${CURRENT_VERSION}）`);
+ 
+   // (2) src/db.js DB_SCHEMA_VERSION：经 init 后 .schema-version 戳内容间接验证（戳内容 == DB_SCHEMA_VERSION）
+   fresh();
+   let db = open();
+   db.close();
+   const stamp = readStamp();
+-  assert(stamp === '7', `DB_SCHEMA_VERSION === 7（init 后 .schema-version 戳=${stamp}）`);
++  assert(stamp === '8', `DB_SCHEMA_VERSION === 8（init 后 .schema-version 戳=${stamp}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+@@ -132,7 +132,7 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
+   // 写一个过期（schema 3）戳，使新版 init 判定 schemaCurrent=false → 重跑 _createSchema
+   writeFileSync(stampPath(), '3');
+ 
+-  // 用新版代码 init（DB_SCHEMA_VERSION=7，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
++  // 用新版代码 init（DB_SCHEMA_VERSION=8，戳失配 → _createSchema → _migrateAddColumn 幂等加列）
+   const db = open();
+   db.close();
+ 
+@@ -152,14 +152,14 @@ console.log('\n--- 3. 幂等迁移：schema 3 旧库（无新列+有数据）→
+     probe.close();
+   }
+ 
+-  // 戳已更新为 6
+-  assert(readStamp() === '7', `迁移后 .schema-version 戳更新为 6（实际 ${readStamp()}）`);
++  // 戳已更新为 8
++  assert(readStamp() === '8', `迁移后 .schema-version 戳更新为 8（实际 ${readStamp()}）`);
+ }
+ 
+ // ─────────────────────────────────────────
+-// 4. project.schema_version DEFAULT 6（连带第二处）
++// 4. project.schema_version DEFAULT 8（连带第二处）
+ // ─────────────────────────────────────────
+-console.log('\n--- 4. project.schema_version DEFAULT 6（连带）---');
++console.log('\n--- 4. project.schema_version DEFAULT 8（连带）---');
+ {
+   fresh();
+   // 手动 INSERT project（不带 schema_version 列 → 取 DEFAULT）
+@@ -172,16 +172,16 @@ console.log('\n--- 4. project.schema_version DEFAULT 6（连带）---');
+   const probe = new DatabaseSync(dbPath(), { readOnly: true });
+   try {
+     const row = probe.prepare('SELECT schema_version FROM project WHERE id=1').get();
+-    assert(row && row.schema_version === 7, `project.schema_version DEFAULT 7（实际 ${row && row.schema_version}）`);
++    assert(row && row.schema_version === 8, `project.schema_version DEFAULT 8（实际 ${row && row.schema_version}）`);
+   } finally {
+     probe.close();
+   }
+ }
+ 
+ // ─────────────────────────────────────────
+-// 5. progress.js read() 输出 _version: 6（连带第四处）
++// 5. progress.js read() 输出 _version: 8（连带第四处，v8 起单一源 CURRENT_VERSION）
+ // ─────────────────────────────────────────
+-console.log('\n--- 5. progress.js read()._version === 6（连带第四处）---');
++console.log('\n--- 5. progress.js read()._version === 8（连带第四处）---');
+ {
+   fresh();
+   const specDir = join(tmpRoot, 'spec');
+@@ -190,7 +190,7 @@ console.log('\n--- 5. progress.js read()._version === 6（连带第四处）---'
+   await pm.init('demo');
+   await pm.initChange('demo', 'c1');
+   const data = await pm.read('demo', 'c1');
+-  assert(data && data._version === 6, `pm.read()._version === 7（实际 ${data && data._version}）`);
++  assert(data && data._version === 8, `pm.read()._version === 8（实际 ${data && data._version}）`);
+   // ProgressManager 无 close()：手动释放底层 node:sqlite 句柄（Windows 下 WAL 句柄占开会导致
+   // 末尾 rmSync EPERM；node:sqlite close() 自动 checkpoint 合并 -wal/-shm）。
+   try { if (pm._db) pm._db.close(); } catch { /* 已关忽略 */ }
+diff --git a/test/platform-sync-serialization.test.mjs b/test/platform-sync-serialization.test.mjs
+index 0f0d5b19..24cdcc80 100644
+--- a/test/platform-sync-serialization.test.mjs
++++ b/test/platform-sync-serialization.test.mjs
+@@ -72,7 +72,7 @@ if (json) {
+   assert(ch && ch.name === 'test-change', `changes[0].name === 'test-change'（实际 ${ch && ch.name}）`);
+   assert(ch && ch.last_synced_platform_ts === '2026-08-10T00:00:00.000Z', 'changes 行含 last_synced_platform_ts');
+   assert(ch && ch.last_local_modified_ts === '2026-08-10T01:00:00.000Z', 'changes 行含 last_local_modified_ts');
+-  assert(ch && ch.current_stage === 'scan', `changes 行含 current_stage（实际 ${ch && ch.current_stage}）`);
++  assert(ch && ch.current_stage === 'brainstorm', `changes 行含 current_stage（出生阶段 brainstorm，实际 ${ch && ch.current_stage}）`);
+   const chKeys = Object.keys(ch);
+   assert(!chKeys.some(k => k.startsWith('isolation_')), 'changes 行不含 isolation_* 系列列');
+   assert(!chKeys.some(k => k.startsWith('platform_')), 'changes 行不含 platform_* 系列列（platform_change_id/workspace_id/last_sync/sync_enabled）');
+@@ -80,7 +80,7 @@ if (json) {
+ 
+   // project 全局行
+   assert(json.project && json.project.name === basename(cwd), `project.name === basename(cwd)（实际 ${json.project && json.project.name}）`);
+-  assert(json.project && json.project.schema_version === 7, `project.schema_version === 6（实际 ${json.project && json.project.schema_version}）`);
++  assert(json.project && json.project.schema_version === 8, `project.schema_version === 8（实际 ${json.project && json.project.schema_version}）`);
+ 
+   // stages：initChange 插入全部 VALID_STAGES，每行 change_name+stage
+   assert(Array.isArray(json.stages) && json.stages.length >= 5, `stages 数组非空（实际 ${json.stages.length} 行）`);
+diff --git a/test/progress-get-change-stage.test.mjs b/test/progress-get-change-stage.test.mjs
+index 2f4ad044..38cbae1f 100644
+--- a/test/progress-get-change-stage.test.mjs
++++ b/test/progress-get-change-stage.test.mjs
+@@ -3,7 +3,7 @@
+  *
+  * 覆盖（真实 DB，不用 mock——facade 转发 + ChangeRegistry 查询一起验）：
+  *   - 未注册变更 → null（未注册目录桩，调用方按轻量场景放行）
+- *   - registerChange 新行 → { current_stage: 'scan', status: 'active' }（表默认值）
++ *   - registerChange 新行 → { current_stage: 'brainstorm', status: 'active' }（出生默认，2026-09-27-change-birth-stage-brainstorm）
+  *   - stage 推进到 verify 后查询 → current_stage='verify'（阶段闸的判定输入）
+  *   - unregisterChange（archived）后查询仍返回行（status='archived'，stage 保留）
+  *
+@@ -30,12 +30,13 @@ test('getChangeStage：未注册 → null；注册 → scan/active；推进 →
+     // 未注册 → null
+     assert.equal(pm.getChangeStage(tmp, changeName), null, '未注册变更应返回 null')
+ 
+-    // registerChange → 表默认 scan/active（无 stages 行 → stage_status=null，ql-20260819-010）
++    // registerChange → 出生默认 brainstorm/active（2026-09-27-change-birth-stage-brainstorm：
++    // 起步就是头脑风暴；无 stages 行 → stage_status=null，ql-20260819-010）
+     pm.registerChange(tmp, changeName)
+     assert.deepEqual(
+       pm.getChangeStage(tmp, changeName),
+-      { current_stage: 'scan', status: 'active', stage_status: null },
+-      '注册后应返回默认 scan/active + stage_status null',
++      { current_stage: 'brainstorm', status: 'active', stage_status: null },
++      '注册后应返回默认 brainstorm/active + stage_status null',
+     )
+ 
+     // stage 推进（直接 SQL 模拟 verify 停留，不依赖 initChange 的阶段编排）
+diff --git a/test/spec-sync-not-connected-notice.test.mjs b/test/spec-sync-not-connected-notice.test.mjs
+new file mode 100644
+index 00000000..cd486254
+--- /dev/null
++++ b/test/spec-sync-not-connected-notice.test.mjs
+@@ -0,0 +1,90 @@
++/**
++ * 未连接平台显眼告警（坑 2026-09-27-spec-sync-413-and-nested-runtime 长期修复第三条）
++ * + resolveSpecDir 嵌套回环防护（同坑根因 2）
++ *
++ * 实证（2026-09-27）：主仓 local.yaml 无 platform 段 → --done 自动同步静默 no-op，
++ * 用户误判「已同步」，平台断档 8 天才发现；另 .sillyspec/.runtime/ 下嵌套 .sillyspec
++ * 残骸使状态采集 30s 超时。
++ *
++ * 修复断言（src/run/shared.js）：
++ * ① triggerSync 未连接 → 每日至多一次的显眼告警（含 connect 指引），第二次同日静默；
++ * ② resolveSpecDir 上溯遇 <…>/.runtime/.sillyspec 残骸候选跳过，命中的恒为真根
++ *    （仅残骸在场时不误取，回退 cwd 相对缺省）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++const { triggerSync, resolveSpecDir } = await import('../src/run/shared.js')
++
++const tmpRoots = []
++function fx() { const d = mkdtempSync(join(tmpdir(), 'snc-')); tmpRoots.push(d); return d }
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++async function captureOut(fn) {
++  const lines = []
++  const saved = console.log
++  console.log = (...a) => { lines.push(a.map(String).join(' ')) }
++  try { return { result: await fn(), lines } } finally { console.log = saved }
++}
++
++test('① 未连接告警：首报显眼（含 connect 指引），同日第二次静默', async () => {
++  const cwd = fx()
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  // 剥净平台 env（防宿主机 env 误判已连接）
++  const savedUrl = process.env.SILLYHUB_PLATFORM_URL
++  const savedTok = process.env.SILLYHUB_PLATFORM_TOKEN
++  const savedBg = process.env.SILLYSPEC_SYNC_BG
++  const savedBgCwd = process.env.SILLYSPEC_BG_SYNC_CWD
++  delete process.env.SILLYHUB_PLATFORM_URL
++  delete process.env.SILLYHUB_PLATFORM_TOKEN
++  delete process.env.SILLYSPEC_SYNC_BG
++  delete process.env.SILLYSPEC_BG_SYNC_CWD
++  try {
++    const r1 = await captureOut(() => triggerSync(cwd, 'snc-chg', {}, { inline: false, completion: true }))
++    const warn1 = r1.lines.find((l) => l.includes('未连接平台'))
++    assert.ok(warn1, `首报有显眼告警：${r1.lines.join(' | ').slice(0, 200)}`)
++    assert.ok(r1.lines.some((l) => l.includes('platform connect')), '含 connect 恢复指引')
++    const marker = join(cwd, '.sillyspec', '.runtime', 'platform-not-connected-notice.date')
++    assert.equal(readFileSync(marker, 'utf8').trim(), new Date().toISOString().slice(0, 10), '节流 marker 落盘')
++
++    const r2 = await captureOut(() => triggerSync(cwd, 'snc-chg', {}, { inline: false, completion: true }))
++    assert.ok(!r2.lines.some((l) => l.includes('未连接平台')), `同日第二次静默：${r2.lines.join(' | ').slice(0, 200)}`)
++    // 门控回归：非完成时刻（渲染/诊断类调用点）不告警——字节级输出平价契约的面
++    const cwd3 = fx()
++    mkdirSync(join(cwd3, '.sillyspec'), { recursive: true })
++    const r3 = await captureOut(() => triggerSync(cwd3, 'snc-chg3', {}, { inline: false }))
++    assert.ok(!r3.lines.some((l) => l.includes('未连接平台')), '非 completion 调用点不告警' )
++  } finally {
++    if (savedUrl !== undefined) process.env.SILLYHUB_PLATFORM_URL = savedUrl
++    if (savedTok !== undefined) process.env.SILLYHUB_PLATFORM_TOKEN = savedTok
++    if (savedBg !== undefined) process.env.SILLYSPEC_SYNC_BG = savedBg
++    if (savedBgCwd !== undefined) process.env.SILLYSPEC_BG_SYNC_CWD = savedBgCwd
++  }
++})
++
++test('② 嵌套回环防护：上溯遇 .runtime/.sillyspec 残骸跳过，命中真根', () => {
++  const cwd = fx()
++  mkdirSync(join(cwd, '.sillyspec', '.runtime', '.sillyspec', '.runtime'), { recursive: true }) // 残骸回环形态（真根同场）
++  const deep = join(cwd, '.sillyspec', '.runtime', 'worktrees', 'chg1')
++  mkdirSync(deep, { recursive: true })
++  assert.equal(resolveSpecDir(deep), join(cwd, '.sillyspec'), '命中真根而非残骸')
++
++  // 残骸路径形态必内含容器根（<root>/.sillyspec/.runtime/.sillyspec）：容器即合法真根，
++  // 期望命中容器、绝不取残骸本体
++  const cwd2 = fx()
++  mkdirSync(join(cwd2, '.sillyspec', '.runtime', '.sillyspec'), { recursive: true })
++  const deep2 = join(cwd2, '.sillyspec', '.runtime')
++  const hit2 = resolveSpecDir(deep2)
++  assert.equal(hit2, join(cwd2, '.sillyspec'), '命中容器真根')
++  assert.notEqual(hit2, join(deep2, '.sillyspec'), '绝不取 .runtime 下残骸')
++})
++
++test('③ 常规布局回归：.runtime 层自身的 .sillyspec 判定不影响真根命中', () => {
++  const cwd = fx()
++  writeFileSync(join(mkdirSync(join(cwd, '.sillyspec'), { recursive: true }), 'local.yaml'), 'project:\n  type: generic\n')
++  assert.equal(resolveSpecDir(join(cwd, '.sillyspec', '.runtime')), join(cwd, '.sillyspec'), '.runtime 层起向上命中 <root>/.sillyspec')
++  assert.equal(resolveSpecDir(cwd), join(cwd, '.sillyspec'), '根层照常命中')
++})
+diff --git a/test/spec-sync-platform-deleted-receipt.test.mjs b/test/spec-sync-platform-deleted-receipt.test.mjs
+new file mode 100644
+index 00000000..feb058ac
+--- /dev/null
++++ b/test/spec-sync-platform-deleted-receipt.test.mjs
+@@ -0,0 +1,107 @@
++// spec-sync 冲突回执 platform_deleted 消费（runbook spec-push-conflict-recovery 待修①）
++//
++// 实证形态（2026-09-25 生产）：平台 apply_ops 对带 platform_deleted 墓碑的路径无条件拒收
++// （与版本无关，update base=version 完全匹配仍拒）。此前 CLI 只消费 server_versions →
++// 墓碑拒收被译成「版本冲突/又有更新」，resolve --keep-local 重推永远无效（转圈）。
++//
++// 修复断言（src/spec-sync.js）：
++// ① 纯墓碑形态（版本冲突面为空、拒收全是墓碑）→ 专用横幅（删除墓碑 + manifest-heal
++//    恢复指引，不给 resolve 处置线）+ 冲突文件记 platform_deleted；
++// ② 混合形态（真版本冲突 + 墓碑拒收并存）→ 版本冲突照常全幅横幅，墓碑路径从待裁决
++//    集分离、单独一行提示 + 冲突文件附带 platform_deleted 字段。
++//
++// 隔离：tmpdir fixture + mock globalThis.fetch + 捕获 console.warn，不碰真实 .sillyspec。
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs'
++import { join } from 'path'
++import { tmpdir } from 'os'
++import { syncSpecTree } from '../src/spec-sync.js'
++
++const tmpRoots = []
++function makeFixture() {
++  const fx = mkdtempSync(join(tmpdir(), `sillyspec-tombreceipt-${process.pid}-`))
++  tmpRoots.push(fx)
++  return fx
++}
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++function mockFetch({ manifest = {}, postResponse }) {
++  const impl = async (url, options = {}) => {
++    if (String(url).endsWith('/spec-manifest')) {
++      return { ok: true, status: 200, json: async () => ({ files: manifest }) }
++    }
++    if (String(url).endsWith('/spec-sync') && (options.method || '') === 'POST') {
++      return { ok: true, status: 200, json: async () => postResponse }
++    }
++    return { ok: true, status: 200, json: async () => ({}) }
++  }
++  const saved = globalThis.fetch
++  globalThis.fetch = impl
++  return { restore: () => { globalThis.fetch = saved } }
++}
++
++async function captureWarn(fn) {
++  const lines = []
++  const saved = console.warn
++  console.warn = (...a) => { lines.push(a.map(String).join(' ')) }
++  try { return { result: await fn(), lines } } finally { console.warn = saved }
++}
++
++const CN = 'tomb-receipt-chg'
++
++function makeTwoFileFixture() {
++  const fx = makeFixture()
++  const specRoot = join(fx, '.sillyspec')
++  mkdirSync(join(specRoot, 'changes', CN), { recursive: true })
++  const manifest = {}
++  for (const f of ['real.md', 'tomb.md']) {
++    writeFileSync(join(specRoot, 'changes', CN, f), 'local v2\n', 'utf8')
++    manifest[`changes/${CN}/${f}`] = { hash: `SRV-${f}`, version: 2, exists: true }
++  }
++  return { specRoot, manifest, paths: Object.keys(manifest) }
++}
++
++test('① 纯墓碑形态：专用横幅（非版本冲突 + manifest-heal 指引），不给 resolve 处置线', async () => {
++  const { specRoot, manifest, paths } = makeTwoFileFixture()
++  const [realP, tombP] = paths
++  const m = mockFetch({
++    manifest,
++    postResponse: { ok: true, new_versions: {}, conflict: true, server_versions: { [realP]: 2, [tombP]: 2 }, platform_deleted: [realP, tombP] },
++  })
++  try {
++    const { result, lines } = await captureWarn(() => syncSpecTree(specRoot, { url: 'http://127.0.0.1:9', token: 't' }, CN))
++    assert.equal(result.conflict, true, '仍报 conflict（需人工恢复）')
++    assert.deepEqual(result.tombstoned, [realP, tombP], '墓碑路径清单透传')
++    const banner = lines.find((l) => l.includes('删除墓碑拒收'))
++    assert.ok(banner, '有墓碑专用横幅')
++    assert.ok(banner.includes('非版本冲突') && banner.includes('resolve --keep-local 重推无效'), '明示 resolve 无效')
++    assert.ok(lines.some((l) => l.includes('manifest-heal')), '恢复指引指向 manifest-heal')
++    assert.ok(!lines.some((l) => l.includes('--keep-local | --take-platform')), '不落版本冲突三态处置线')
++    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`), 'utf8'))
++    assert.deepEqual(cf.platform_deleted, [realP, tombP], '冲突文件记墓碑路径')
++    assert.equal(cf.conflicting_paths.length, 0, '版本冲突面为空（不误导 resolve）')
++  } finally { m.restore() }
++})
++
++test('② 混合形态：真冲突照常全幅横幅，墓碑路径分离单独提示 + 冲突文件附带字段', async () => {
++  const { specRoot, manifest, paths } = makeTwoFileFixture()
++  const [realP, tombP] = paths
++  const m = mockFetch({
++    manifest,
++    postResponse: { ok: true, new_versions: {}, conflict: true, server_versions: { [realP]: 2, [tombP]: 2 }, platform_deleted: [tombP] },
++  })
++  try {
++    const { result, lines } = await captureWarn(() => syncSpecTree(specRoot, { url: 'http://127.0.0.1:9', token: 't' }, CN))
++    assert.equal(result.conflict, true)
++    const banner = lines.find((l) => l.includes('检测到 spec 树冲突'))
++    assert.ok(banner, '版本冲突全幅横幅在场')
++    assert.ok(banner.includes('1 个文件'), '待裁决只剩 1 个（墓碑路径已分离）')
++    assert.ok(!banner.includes('tomb.md'), '墓碑路径不进版本冲突横幅')
++    const tombLine = lines.find((l) => l.includes('删除墓碑拒收'))
++    assert.ok(tombLine && tombLine.includes('tomb.md'), '墓碑路径单独一行提示')
++    const cf = JSON.parse(readFileSync(join(specRoot, '.runtime', `spec-sync-conflict-${CN}.json`), 'utf8'))
++    assert.deepEqual(cf.platform_deleted, [tombP], '冲突文件附带 platform_deleted')
++    assert.deepEqual(cf.conflicting_paths, [realP], '待裁决面只有真冲突路径')
++  } finally { m.restore() }
++})

@@ -13,7 +13,7 @@ created_at: 2026-09-27T12:42:47.563Z
 <!-- MACHINE-DRAFT:design-approach:end -->
 
 <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
-三处出生硬编码（progress.js initChange/_readOrInit 两处 INSERT + db.js changes DDL DEFAULT）'scan'→'brainstorm'：scan 是 auxiliary（shared.js MAIN_FLOW_ORDER 不含、stage-machine 下一步推荐已跳过），从不是变更主流程起点，出生落它上面纯属 DDL 历史遗留。存量数据走 db.js _createSchema 末尾幂等 UPDATE 迁移（DB_SCHEMA_VERSION 7→8 触发戳失效重跑），只改写「active + stages.scan='pending'」的出生默认行——setStage('scan') 会置 in-progress，真在跑/已跑完 scan 的行天然不命中。改写行同时刷 last_local_modified_ts（与 pm._touchLocalModified 同语义），防平台 pull 见本地无脏度把旧 'scan' 静默导回。
+三处出生硬编码（progress.js initChange/_readOrInit 两处 INSERT + db.js changes DDL DEFAULT）'scan'→'brainstorm'：scan 是 auxiliary（shared.js MAIN_FLOW_ORDER 不含、stage-machine 下一步推荐已跳过），从不是变更主流程起点，出生落它上面纯属 DDL 历史遗留。存量数据走 db.js _createSchema 末尾幂等 UPDATE 迁移（DB_SCHEMA_VERSION 7→8 触发戳失效重跑），只改写「active + 从未真跑 scan」的出生默认行——判据为 stages.scan='pending' 或根本没有 stages.scan 行（registerChange 出生行不带 stages 行，评审 P3-2 补面）；setStage('scan') 会置 in-progress，真在跑/已跑完 scan 的行天然不命中。改写行同时刷 last_local_modified_ts（与 pm._touchLocalModified 同语义），防平台 pull 见本地无脏度把旧 'scan' 静默导回。
 
 ## 接口契约
 <!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-change-birth-stage-brainstorm 留痕重锚 -->

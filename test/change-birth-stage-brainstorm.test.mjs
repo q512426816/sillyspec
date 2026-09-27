@@ -138,6 +138,9 @@ console.log('\n--- 3. 存量迁移：三类行各得其所 ---');
   // e. 非出生默认主流程行：plan → 不动（防误伤对照）
   const eId = insertChange('plan-row', 'plan', 'active');
   insertStage(eId, 'plan', 'in-progress');
+  // f. registerChange 出生的行（无任何 stages 行，stage_status=null 形态，ql-20260819-010）
+  //    ——评审 P3-2 缺口：无 stages.scan 行同样=从未真跑 scan，须命中迁移
+  insertChange('born-no-stages', 'scan', 'active');
   oldDb.close();
 
   // 旧戳 '7' → 新版 init 重跑 _createSchema → v8 迁移
@@ -159,6 +162,8 @@ console.log('\n--- 3. 存量迁移：三类行各得其所 ---');
   assert(row && row.current_stage === 'scan', `已归档出生行不动（实际 ${row && row.current_stage}）`);
   row = rowOf(dbPath(), 'plan-row');
   assert(row && row.current_stage === 'plan', `主流程行不受迁移影响（实际 ${row && row.current_stage}）`);
+  row = rowOf(dbPath(), 'born-no-stages');
+  assert(row && row.current_stage === 'brainstorm', `无 stages 行的出生默认行同样迁移（registerChange 形态，实际 ${row && row.current_stage}）`);
 
   assert(readStamp() === '8', `迁移后 .schema-version 戳=8（实际 ${readStamp()}）`);
 
