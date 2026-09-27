@@ -1257,3 +1257,31 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a419b37670355b1bec7891eb34c3cb1850e5aace
 理由：最大风险：迁移把「从未进主流程」的存量行改判为 brainstorm 后，滞留提示语义从「停在代码扫描」变「停在需求探索」——展示层措辞变化，用户已裁定接受（起步就是头脑风暴）。放弃的方案：① 从 VALID_STAGES/STAGE_ORDER 里整体移除 scan——放弃，scan 阶段本身（项目级扫描操作）合法存在，牵动 stage-contract/consistency 面太大且非本缺陷根因；② 只改出生默认不做存量迁移——放弃，存量误导行（governance-rpc-actions 类）会一直显示到归档才消失，修复不完整。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-thin-module-scope-persist
+锚点：未记录
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+理由：最大风险：平台把 advisory 数据当强承诺——`modules: []` 不等于「无影响」（可能是模块图未登记，未登记面要看 `uncoveredDirs`），展示侧应按「已知影响面」标注而非断言。缓解：键语义已在接口契约固定，`uncoveredDirs` 与 `modules` 并列落盘正是为了让「未登记」显式可见。 试过放弃：① 另立 module-scope.json 单独工件——放弃：change-patch.json 已是平台在读的冻结事实件（files/sha 都在那），多一个文件多一份生命周期与一致性成本；② 把结构化结果渲染进 verify-result.md——放弃：那是人读回执，机器消费面不应与人读面耦合；③ 只加落盘不修旧对账缺陷——放弃：实测旧实现命中恒 0（modules: 包层不进 + 多项目读错图），不修则落盘恒空数组，FR-01 形同虚设——四缺陷修复随本变更交付并各有限定测试锁定。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-watcher-push-endpoint
+锚点：未记录
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+理由：最大风险：平台端点再次演进（本仓注释曾指向已消亡的 observation 端点）——缓解：模块头注释锚定端点出处变更名（change-events-r18-full）可追溯；推送失败恒 warn 可见不静默吞。放弃方案：平台侧加 /api/observation/events 兼容层（在平台仓加死代码面更大，放弃）；恢复批量端点（平台已是单条契约且恒 200 语义，放弃）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-27-pushgate-birth-tests-sync
+锚点：未记录
+最近确认：48511fdc2075698795988139af8079b7001eb7bf
+理由：最大风险：若 eb3b4bce 的放行语义后续被裁决回退（出生态不允许直入主流程），本两处断言需随语义再翻转——留锚在转换表注释。放弃的方案：直接删掉 brainstorm→execute 表行与 1a 用例——被否：删断言等于丢防护面，保留带 fromStageData 的真入门变体才守住「跳步拦截」语义。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-28-archive-timeline-bake
+锚点：未记录
+最近确认：a688429853a0c5b11dd44ddd4b54dc29583daad7
+理由：最大风险：平台/漂移模式下 runtimeRoot 与 specBase/.runtime 分裂，烤制读错目录 → 静默漏烤。缓解：编排内用 resolvePlatformOpts + resolveRuntimeRoot 与既有消费者同链；跳过/失败均输出注记行保持可观测；测试用 fixture runtimeRoot 直验。次风险：巨型事件流污染 git——尺寸帽 2MiB 超帽只烤 timeline.md 并注记。 放弃的方案：①watcher 活跃期直接把事件写进 changes 目录（放弃——改写侧协议面大，且活跃期事件属 .runtime 隐私/排除边界，D-002 语义不动）；②CLI 回退时把归档副本反向重建到 .runtime（放弃——制造两份真相源，违背「本地 jsonl 唯一真相源」既有口径）。 评审留痕（独立评审 PASS 2×P3 清偿）：P3-1 副本读源失败时头注记虚报副本在场——已修（eventsCopySkipped 扩读源失败形态，注记文本改为「尺寸超帽或读源失败」与实际产出一致，补测试）；P3-2 「与 spawnWatcher 写侧同链」对 flow.js 各拉起位在平台极端漂移下存在既有分裂面——措辞修正：烤制的 runtimeRoot 解析与既有消费链（resolvePlatformOpts>resolveRuntimeRoot）同源，平台模式下若写读目录分裂属既有面，本设计的兜底是跳过时输出注记行保持可观测、非静默漏烤。

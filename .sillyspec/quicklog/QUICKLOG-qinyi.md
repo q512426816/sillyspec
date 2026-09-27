@@ -403,7 +403,7 @@
 方案：切割凭证改为动作信号：sillyspec handoff 成功后给 stage-session ledger 盖 handoffAt 章（best-effort）；墙判定抽纯函数 isStageWallBlocked（shared.js）：拦『前驱刚收口 && 无更新的 handoffAt && 目标阶段首入』，handoffAt>ledger.at 即放行；--same-session/reopen/他会话/fail-open 口不变。complete.js 分支重排：plan ⛔ > execute ⛔ > crossStage 告警 > 💡
 结果：stage-wall 单测 7 组（含 handoffAt 新旧章/他会话/reopen/fail-open 全分支）+ handoff 测试全绿；全量 616/0；lint 绿；全局 sillyspec 已刷新（isStageWallBlocked/handoffAt/stage.js 三处核实在位）；R16-b 靶仓 ledger 已按实证发生的 handoff 补章，会话 B 可直入 execute
 
-## ql-20260925-003-ad34 | 2026-09-25 13:06:34 | watcher 事件流对接平台 observation 上行端点
+## ql-20260925-003-ad34 | 2026-09-25 13:06:34 | a
 状态：已完成
 关联变更：（无）
 文件：

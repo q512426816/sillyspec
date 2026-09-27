@@ -885,3 +885,108 @@
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全仓测试绿；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-27-redomain/requirements.md#FR-11
 最近确认：8b454e10018457d8a73086a3158e51c1a9eb2ad5
+
+## FR-core-engine-064 buildFrozenPatch 的 diff 采集失败必须判采集失败（fail-closed），不得落 patchStatus ok 的伪完整 patch（评审 P1 清偿）
+变更：2026-09-27-thin-module-scope-persist
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 冻结 patch 生成时 `git diff <baseRef>` 执行失败（如 core.bare 误写、git 环境异常）；When buildFrozenPatch 被调用；Then 返回 null（调用方 patchStatus=failed 留痕），patch 正文不得只含 untracked 自拼 hunk 而缺全部 tracked 改
+全文：.sillyspec/changes/archive/2026-09-27-thin-module-scope-persist/requirements.md#FR-05
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-27-thin-module-scope-persist:flow:FR-05
+  tests: test/flow-parity.test.mjs | test/scope-audit.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-27-thin-module-scope-persist
+  status: active
+
+## FR-core-engine-065 flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块
+变更：2026-09-27-thin-module-scope-persist
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块 id/命中文件数/文档相对路径/文档是否随变更更新，及未登；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-27-thin-module-scope-persist/requirements.md#FR-01
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-27-thin-module-scope-persist:flow:FR-01
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-27-thin-module-scope-persist
+  status: active
+
+## FR-core-engine-066 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
+变更：2026-09-27-thin-module-scope-persist
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-27-thin-module-scope-persist/requirements.md#FR-02
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-27-thin-module-scope-persist:flow:FR-02
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-27-thin-module-scope-persist
+  status: active
+
+## FR-core-engine-067 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
+变更：2026-09-27-thin-module-scope-persist
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-27-thin-module-scope-persist/requirements.md#FR-03
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-27-thin-module-scope-persist:flow:FR-03
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-27-thin-module-scope-persist
+  status: active
+
+## FR-core-engine-068 有测试锁定结构化落盘行为与向后兼容行为
+变更：2026-09-27-thin-module-scope-persist
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 有测试锁定结构化落盘行为与向后兼容行为；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-27-thin-module-scope-persist/requirements.md#FR-04
+最近确认：206278f5f9a71352bff93bdd9857447e6648aaaf
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-27-thin-module-scope-persist:flow:FR-04
+  tests: test/flow-parity.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-27-thin-module-scope-persist
+  status: active

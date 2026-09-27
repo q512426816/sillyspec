@@ -1,0 +1,679 @@
+diff --git a/.sillyspec/changes/2026-09-27-thin-module-scope-persist/design.md b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/design.md
+new file mode 100644
+index 00000000..a0d74472
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/design.md
+@@ -0,0 +1,51 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T13:09:56.352Z
++---
++# 设计记录（Design Record）— 2026-09-27-thin-module-scope-persist
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++`reconcileModuleDocs`（src/flow-parity.js）旧实现只渲染 console 行，且落地实测发现四缺陷全哑：js-yaml 顶层迭代不进 `modules:` 包层→命中恒 0；字母序取首个项目图→多项目仓读错图（本仓 7 张图只读 backend 的）；子项目 paths 前缀缺失；docTouched 拿 specBase 相对路径比仓根相对 committedRaw→恒 false。本变更换用 module-resolve.collectModuleMaps 统一口径（收齐全部 docs/&lt;project&gt;/modules/_module-map.yaml、子项目 paths 前缀、normalizeMapPath 归一），同计算产出结构化返回面：`modules`（受影响模块：id/命中文件数/doc 路径/文档是否随变更更新/文档是否缺失）、`uncoveredDirs`（未登记模块图的交付目录：dir/文件数，全量降序）、`moduleMaps`（全部参与对账的图路径）；flow.js patch 子步把对账调用前移到 change-patch.json 写盘之前，三键随 meta 落盘——单一计算喂 console 与落盘两处，平台读 change-patch.json 即得影响模块范围，无需自建重算口径。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++- `reconcileModuleDocs`（src/flow-parity.js）签名增 `cwd` 参（子项目前缀判定 + specBase→仓根相对换算）；返回值 `{lines, hits}` → `{lines, hits, modules, uncoveredDirs, moduleMaps}`：旧键语义不变；新键 `modules: [{id, files: number, doc: string|null, docTouched: boolean, docMissing: boolean}]`、`uncoveredDirs: [{dir, files}]`、`moduleMaps: string[]`。仓内唯一调用方 flow.js patch 子步同步适配，外部无消费者。
++- `module-resolve.js` 导出 `normalizeMapPath`（原模块私有，路径归一单一口径防两处漂移）。
++- `change-patch.json`（flow done 时点写入）新增同名三键：零命中 → `modules: []`、无未登记 → `uncoveredDirs: []`、无模块图 → 三键空数组——键恒在场，平台读侧无需判 undefined。数据语义=done 时点冻结口径（与 `files[]` 同一时点语义），不随后续模块图变更回写。
++- CLI 命令面/退出码/其它工件格式无变化。
++- 评审 P1/P3 清偿追加：① `buildFrozenPatch`（src/scope-audit.js）diff 采集失败改 fail-closed 返回 null（jsdoc 原契约「不落伪 patch」首次真兑现——实证：本仓 core.bare 被外部误写 true 时 `git diff &lt;ref&gt;` 报「must be run in a work tree」，untracked 自拼 hunk 仍拼出 patchStatus ok 但正文零 tracked hunk 的伪完整件；环境项 core.bare 已还原 false，代码防线独立于环境）；② 对账输入改传冻结面 ownFiles（与 files[] 同口径——worktree/--freeze-dirty 场景 dirty 交付也计入模块命中，评审 P3 清偿）；③ 三键恒在场兜底空数组（对账整体异常路径不再缺键，评审 P3 清偿）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：模块对账是 done 时点一次性计算、一次性落盘；模块图事后变更不回写 change-patch.json（时点冻结件，与 files[] 同语义），平台展示的是收口时点口径——后续演进由后续变更自己的落盘携带。
++2. 并发写：change-patch.json 仍由 flow done 在本变更目录内单点写入，多会话 change 目录隔离；本变更不新增共享写面。
++3. 切换/生命周期：patch 子步断点续跑语义不变（已 done 则 skip 不重写；对账/落盘 fail-soft 不阻断归档，重入 done 重试）；测试面填入 git 已跟踪的 0 字节占位件 test/flow-parity.test.mjs，无新增文件生命周期。
++4. 作用域：模块图发现改为收齐全部项目图（collectModuleMaps 口径），`moduleMaps` 键落盘全部参与对账的图路径供平台消歧；子项目判定按「project 名=仓库顶层目录」前缀规则（与模块卡解析同口径），数据全在各自 change 目录内，跨仓/跨实例无串台。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：平台把 advisory 数据当强承诺——`modules: []` 不等于「无影响」（可能是模块图未登记，未登记面要看 `uncoveredDirs`），展示侧应按「已知影响面」标注而非断言。缓解：键语义已在接口契约固定，`uncoveredDirs` 与 `modules` 并列落盘正是为了让「未登记」显式可见。
++试过放弃：① 另立 module-scope.json 单独工件——放弃：change-patch.json 已是平台在读的冻结事实件（files/sha 都在那），多一个文件多一份生命周期与一致性成本；② 把结构化结果渲染进 verify-result.md——放弃：那是人读回执，机器消费面不应与人读面耦合；③ 只加落盘不修旧对账缺陷——放弃：实测旧实现命中恒 0（modules: 包层不进 + 多项目读错图），不修则落盘恒空数组，FR-01 形同虚设——四缺陷修复随本变更交付并各有限定测试锁定。
+diff --git a/.sillyspec/changes/2026-09-27-thin-module-scope-persist/requirements.md b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/requirements.md
+new file mode 100644
+index 00000000..d024823d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T13:09:56.352Z
++---
++# 需求规格（Requirements）— 2026-09-27-thin-module-scope-persist
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-05: buildFrozenPatch 的 diff 采集失败必须判采集失败（fail-closed），不得落 patchStatus ok 的伪完整 patch（评审 P1 清偿）
++Given 冻结 patch 生成时 `git diff <baseRef>` 执行失败（如 core.bare 误写、git 环境异常）
++When buildFrozenPatch 被调用
++Then 返回 null（调用方 patchStatus=failed 留痕），patch 正文不得只含 untracked 自拼 hunk 而缺全部 tracked 改动
++
++### FR-01: flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块
++Given 系统就绪
++When flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块 id/命中文件数/文档相对路径/文档是否随变更更新，及未登
++Then 行为符合本条标准描述
++
++### FR-02: 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
++Given 系统就绪
++When 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
++Then 行为符合本条标准描述
++
++### FR-03: 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
++Given 系统就绪
++When 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
++Then 行为符合本条标准描述
++
++### FR-04: 有测试锁定结构化落盘行为与向后兼容行为
++Given 测试 相关模块就绪
++When 有测试锁定结构化落盘行为与向后兼容行为
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ④ 集成：flow done 后归档件 change-patch.json 落盘模块对账三键（console 与落盘同源）；① 结构化返回：modules: 包层命中 + docTouched 仓根相对判定 + 与 console 行同源
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ①（lines 与 modules 同一 rec 断言）+ ④（flow done stdout 对账行与 change-patch.json 三键同源断言）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ② 无模块图 / 零命中向后兼容：空数组形态，不抛错；③ 子项目前缀 + doc 缺失标记
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs 全部 5 用例（①②③④⑤，node --test 定向跑 5/5 绿；回归 flow-protocol 22/22 + flow-route/review/draft 16/16 + scope-audit 41/41）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-parity.test.mjs ⑤ buildFrozenPatch fail-closed：diff 采集失败返回 null，不落伪 patch（评审 P1 清偿）+ test/scope-audit.test.mjs 回归 41/41
+diff --git a/.sillyspec/changes/2026-09-27-thin-module-scope-persist/tasks.md b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/tasks.md
+new file mode 100644
+index 00000000..bc6b1586
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T13:09:56.352Z
++---
++# 任务注册表（Tasks）— 2026-09-27-thin-module-scope-persist
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: `reconcileModuleDocs`（src/flow-parity.js）换 collectModuleMaps 统一口径——修旧实现四缺陷（modules: 包层解析/多项目全图非取首图/子项目 paths 前缀/doc 同步按仓根相对比对），结构化返回 `modules`/`uncoveredDirs`/`moduleMaps`（test/flow-parity.test.mjs ①②③ 锁定）
++- [x] task-02: flow.js patch 子步对账调用前移至 change-patch.json 写盘前，meta 新增三键（无图/零命中空数组兜底，fail-soft 不变；test/flow-parity.test.mjs ④ 集成锁定归档件三键与 console 同源）
++- [x] task-03: 填充 git 已跟踪 0 字节占位件 test/flow-parity.test.mjs：单元（结构化返回/无图/零命中/子项目前缀/doc 缺失）+ 集成（临时仓真跑 flow done 断言 change-patch.json）4 用例
++- [x] task-04: 验证面全绿：新测试 4/4 + 回归 flow-protocol 22/22 + flow-route/review/draft 16/16 + lint（check-syntax 840 文件，未引用导出 0）+ 交付显式 pathspec 提交
++- [x] task-05: 评审清偿（FAIL→修复→重评）：P1 buildFrozenPatch diff 失败 fail-closed 返 null 不落伪 patch（test/flow-parity.test.mjs ⑤ 锁定；环境项 core.bare 误写 true 已还原）+ P3 双清偿（对账输入改冻结面 ownFiles 口径 + 三键恒在场空数组兜底）；scope-audit 回归 41/41
+diff --git a/src/db.js b/src/db.js
+index a83d1e1c..f8a7a6e7 100644
+--- a/src/db.js
++++ b/src/db.js
+@@ -393,7 +393,8 @@ export class DB {
+     // 旧版 changes 行出生 current_stage='scan'（db.js DDL 默认值 + progress.js 两处 INSERT），
+     // thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」误导（scan 是 auxiliary，
+     // shared.js MAIN_FLOW_ORDER 从不含它）。只改写「出生默认未被真跑过」的行：active 且
+-    // stages.scan='pending'——setStage('scan') 置 in-progress，真在跑/已跑完 scan 的行不受影响。
++    // （stages.scan='pending' 或根本没有 stages.scan 行——registerChange 出生的行不带 stages 行，
++    // 评审 P3-2 缺口）——setStage('scan') 置 in-progress，真在跑/已跑完 scan 的行不受影响。
+     // 同步刷 last_local_modified_ts（与 pm._touchLocalModified 同语义）：否则平台 pull 见本地
+     // 无脏度会静默 import，把平台的旧 'scan' 导回来（platform-sync-pull 冲突保留本地现状）。
+     // 幂等：改写后条件不再命中，重跑零效果。strftime 对齐 toISOString 形态（T 分隔 + ms + Z）。
+@@ -403,7 +404,10 @@ export class DB {
+           last_local_modified_ts = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+       WHERE current_stage = 'scan'
+         AND status = 'active'
+-        AND id IN (SELECT change_id FROM stages WHERE stage = 'scan' AND status = 'pending')
++        AND (
++          id IN (SELECT change_id FROM stages WHERE stage = 'scan' AND status = 'pending')
++          OR NOT EXISTS (SELECT 1 FROM stages WHERE change_id = changes.id AND stage = 'scan')
++        )
+     `);
+   }
+ 
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 342d9bf2..32b2a9a3 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -4,82 +4,96 @@
+  * ① reconcileModuleDocs：模块文档同步对账——厚道 module-impact 死信门的轻量变更等价物（advisory）：
+  *    交付文件命中模块图 → 点名模块与文档路径；模块代码变了而文档未动 → 强提示。模块文档是
+  *    后续变更 module 命中/门禁收窄/知识注入的原料（verify -68% 那笔账的来源），失供是复利折旧。
++ *    （2026-09-27-thin-module-scope-persist：同一计算增加结构化返回面 modules/uncoveredDirs/
++ *    moduleMaps，随 change-patch.json 落盘供平台展示轻量变更影响模块范围。）
+  * ② renderVerifyReceipt：verify-result 机器回执——人类可读收口结论（实测面/评审/绑定/冻结 sha），
+  *    厚道有轻量变更缺的审计资产；机器合成勿手改。
+  * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——轻量变更决策
+  *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
+  */
+ import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
+-import { join } from 'node:path'
++import { join, relative } from 'node:path'
+ import { execFileSync } from 'node:child_process'
+ import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
+-import yaml from 'js-yaml'
++import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ 
+-/** 找模块图：.sillyspec/docs/<project>/modules/_module-map.yaml（首个命中；内部面）。 */
+-function findModuleMapFile(specBase) {
+-  try {
+-    const docsDir = join(specBase, 'docs')
+-    for (const proj of readdirSync(docsDir)) {
+-      const p = join(docsDir, proj, 'modules', '_module-map.yaml')
+-      if (existsSync(p)) return { mapPath: p, project: proj }
+-    }
+-  } catch { /* 无 docs 结构 → 无对账面 */ }
+-  return null
+-}
+-
+ /**
+- * 模块文档对账（advisory）。@param ownFiles 交付文件（posix）；@param committedRaw 含 .sillyspec 的原始提交面
+- * （模块文档在 .sillyspec/docs/ 下，交付面过滤会剔除——文档是否更新需查原始提交面）。
+- * @returns {{lines: string[], hits: number}} lines 为空=无命中零输出。
++ * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
++ * @param cwd 仓库根（子项目前缀判定 + specBase→仓根相对换算）
++ * @param ownFiles 交付文件（posix；.sillyspec/ 治理面内部滤除——模块命中只对账代码交付面，
++ * 否则本变更目录工件会污染未登记清单）
++ * @param committedRaw 含 .sillyspec 的原始提交面（仓根相对——模块文档是否随变更更新以此判定）
++ * @returns {{lines: string[], hits: number,
++ *   modules: Array<{id: string, files: number, doc: string|null, docTouched: boolean, docMissing: boolean}>,
++ *   uncoveredDirs: Array<{dir: string, files: number}>, moduleMaps: string[]}}
++ *   lines 为空=无命中零输出；结构化三键恒在场（无图/零命中=空数组），随 change-patch.json 落盘。
++ * 口径对齐 module-resolve.collectModuleMaps（2026-09-27-thin-module-scope-persist 修复旧实现
++ * 四缺陷：js-yaml 顶层迭代不进 modules: 包层致命中恒 0、字母序取首个项目图致多项目仓读错图、
++ * 子项目 paths 前缀缺失、docTouched 拿 specBase 相对路径比仓根相对 committedRaw 恒 false）。
+  */
+-export function reconcileModuleDocs({ specBase, ownFiles, committedRaw }) {
+-  const found = findModuleMapFile(specBase)
+-  if (!found) return { lines: [], hits: 0 }
+-  let map
+-  try { map = yaml.load(readFileSync(found.mapPath, 'utf8')) } catch { return { lines: [], hits: 0 } }
+-  if (!map || typeof map !== 'object') return { lines: [], hits: 0 }
+-  const deliverables = new Set((ownFiles || []).map((f) => String(f).replace(/\\/g, '/')))
++export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
++  let maps = []
++  try { maps = collectModuleMaps({ cwd: cwd || specBase, specBase }) } catch { maps = [] }
++  if (maps.length === 0) return { lines: [], hits: 0, modules: [], uncoveredDirs: [], moduleMaps: [] }
++  const deliverables = [...new Set((ownFiles || []).map((f) => String(f).replace(/\\/g, '/')))]
++    .filter((f) => !f.startsWith('.sillyspec/'))
+   const committed = new Set((committedRaw || []).map((f) => String(f).replace(/\\/g, '/')))
++  // specBase 相对 → 仓根相对（docTouched 比对基准：committedRaw 是 git diff 仓根相对输出）
++  const specRel = (() => {
++    if (!cwd) return ''
++    try {
++      const r = relative(cwd, specBase).replace(/\\/g, '/')
++      if (!r || r === '.') return ''
++      return r.replace(/\/+$/, '') + '/'
++    } catch { return '' }
++  })()
+   const lines = []
++  const modules = []
+   let hits = 0
+-  for (const [modId, mod] of Object.entries(map)) {
+-    if (!mod || typeof mod !== 'object') continue
+-    const paths = Array.isArray(mod.paths) ? mod.paths : []
+-    const hitFiles = paths.filter((pp) => {
+-      const norm = String(pp).replace(/\\/g, '/')
+-      return [...deliverables].some((f) => f === norm || f.startsWith(norm.endsWith('/') ? norm : norm + '/'))
+-    })
+-    if (hitFiles.length === 0) continue
+-    hits++
+-    const docRel = mod.doc ? `docs/${found.project}/${String(mod.doc).replace(/^modules\//, 'modules/')}` : null
+-    const docAbs = docRel ? join(specBase, docRel) : null
+-    const docTouched = docAbs ? [...committed].some((f) => f.replace(/\\/g, '/') === docRel) : false
+-    if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
+-    else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
++  for (const map of maps) {
++    for (const [modId, entry] of map.entries) {
++      const effs = (entry.paths || [])
++        .map((pp) => (map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
++        .filter(Boolean)
++      if (effs.length === 0) continue
++      const hitFiles = deliverables.filter((f) => effs.some((e) => f === e || f.startsWith(e + '/')))
++      if (hitFiles.length === 0) continue
++      hits++
++      const docRel = entry.doc ? `docs/${map.project}/${String(entry.doc).replace(/^\/+/, '')}` : null
++      const docAbs = docRel ? join(specBase, docRel) : null
++      const docTouched = docRel ? committed.has(specRel + docRel) : false
++      const docMissing = docAbs ? !existsSync(docAbs) : false
++      modules.push({ id: modId, files: hitFiles.length, doc: docRel, docTouched, docMissing })
++      if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
++      else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
++    }
+   }
+   // 未登记模块目录检测（2026-09-25-thin-fr-quality，R16 实证：observation 新模块不在图 → FR
+   // 落伪域 auto-frontend）：交付目录不在任何模块 paths 下时点名提示登记——首个变更把家建好，
+   // 后续变更的模块命中/门禁收窄/知识注入才能吃到
+   const allPaths = []
+-  for (const mod of Object.values(map)) {
+-    if (mod && Array.isArray(mod.paths)) allPaths.push(...mod.paths.map((p) => String(p).replace(/\\/g, '/')))
++  for (const map of maps) {
++    for (const entry of map.entries.values()) {
++      for (const pp of entry.paths || []) allPaths.push((map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
++    }
+   }
+-  const isCovered = (f) => allPaths.some((pp) => f === pp || f.startsWith(pp.endsWith('/') ? pp : pp + '/'))
+-  const uncoveredDirs = new Map()
++  const isCovered = (f) => allPaths.some((pp) => pp && (f === pp || f.startsWith(pp + '/')))
++  const uncoveredMap = new Map()
+   for (const f of deliverables) {
+     if (isCovered(f)) continue
+     const dir = String(f).split('/').slice(0, -1).join('/')
+-    if (dir) uncoveredDirs.set(dir, (uncoveredDirs.get(dir) || 0) + 1)
++    if (dir) uncoveredMap.set(dir, (uncoveredMap.get(dir) || 0) + 1)
+   }
+-  const topDirs = [...uncoveredDirs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
++  const uncoveredDirs = [...uncoveredMap.entries()].sort((a, b) => b[1] - a[1]).map(([dir, files]) => ({ dir, files }))
++  const topDirs = uncoveredDirs.slice(0, 3)
+   const out = [...lines]
+   if (hits > 0) out.unshift(`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`)
+   if (topDirs.length > 0) {
+-    out.push(`🗺️ 未登记模块图的交付目录（${topDirs.map(([d, n]) => `${d}（${n} 文件）`).join('、')}${uncoveredDirs.size > 3 ? ' 等' : ''}）——本变更的 FR 将落伪域 auto-*`)
+-    out.push(`   建议收口前在模块图（${found.mapPath}）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
++    out.push(`🗺️ 未登记模块图的交付目录（${topDirs.map((e) => `${e.dir}（${e.files} 文件）`).join('、')}${uncoveredDirs.length > 3 ? ' 等' : ''}）——本变更的 FR 将落伪域 auto-*`)
++    out.push(`   建议收口前在模块图（docs/<project>/modules/_module-map.yaml）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
+   }
+-  return { lines: out, hits }
++  return { lines: out, hits, modules, uncoveredDirs, moduleMaps: maps.map((m) => `docs/${m.project}/modules/_module-map.yaml`) }
+ }
+ 
+ /**
+diff --git a/src/flow.js b/src/flow.js
+index 020c67f0..c35220d5 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -1003,6 +1003,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             if (s && Number.isFinite(s.deletions)) deletions += s.deletions
+           }
+           const head = gitQuiet(cwd, ['rev-parse', 'HEAD'])
++          // 模块文档对账（2026-09-25-thin-parity-assets：厚道 module-impact 死信门的轻量变更 advisory
++          // 等价物——模块文档是后续变更门禁收窄/知识注入的原料，失供是复利折旧）。
++          // 2026-09-27-thin-module-scope-persist：调用前移至 meta 写盘前——结构化结果
++          // （modules/uncoveredDirs/moduleMaps）随 change-patch.json 落盘供平台展示影响模块
++          // 范围，单一计算喂 console 与落盘两处。ownFiles 传冻结面（与 files[] 同口径——
++          // worktree/--freeze-dirty 场景 dirty 交付也计入模块命中；.sillyspec 治理面对账内部
++          // 滤除）；三键恒在场（对账异常兜底空数组，评审 P3 清偿）；best-effort 不阻断。
++          let moduleScope = { modules: [], uncoveredDirs: [], moduleMaps: [] }
++          try {
++            const { reconcileModuleDocs } = await import('./flow-parity.js')
++            const rec = reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw })
++            if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
++            moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
++          } catch { /* 对账 best-effort（三键空数组兜底） */ }
+           const meta = {
+             change,
+             baseline: st.baseline_commit,
+@@ -1011,6 +1025,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             totals: { files: ownFiles.length, additions, deletions },
+             savedAt: new Date().toISOString(),
+             note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
++            // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径（与 files[]
++            // 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响（可能未登记——看 uncoveredDirs）
++            ...moduleScope,
+           }
+           if (typeof frozen === 'string' && frozen) {
+             const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
+@@ -1022,13 +1039,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+           }
+           writeFileSync(join(changeDir, 'change-patch.json'), JSON.stringify(meta, null, 2) + '\n')
+           console.log(`📦 变更 patch 留档：change.patch + change-patch.json（${ownFiles.length} 文件，+${additions}/-${deletions}${meta.patchStatus === 'ok' ? '，sha256 已锚' : '——patch 采集失败已留痕'}）`)
+-          // 模块文档对账（2026-09-25-thin-parity-assets：厚道 module-impact 死信门的轻量变更 advisory
+-          // 等价物——模块文档是后续变更门禁收窄/知识注入的原料，失供是复利折旧）
+-          try {
+-            const { reconcileModuleDocs } = await import('./flow-parity.js')
+-            const rec = reconcileModuleDocs({ specBase, ownFiles: committed, committedRaw })
+-            if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
+-          } catch { /* 对账 best-effort */ }
+           // design 声明面自证（2026-09-25-platform-feedback-batch2 E）：design.md 文件变更清单
+           // 声明的交付文件是否都在冻结面——不在=承诺改了但没交付（承诺未兑现面，advisory 不
+           // 阻断——可能是范围裁剪了但 design 没同步更新）
+diff --git a/src/module-resolve.js b/src/module-resolve.js
+index 3b83a2ef..f2fd704f 100644
+--- a/src/module-resolve.js
++++ b/src/module-resolve.js
+@@ -78,8 +78,10 @@ export function collectModuleMaps({ cwd, specBase }) {
+ /**
+  * 路径归一：反斜杠→正斜杠，剥尾部 glob（/** 与 /*）与目录斜杠。
+  * `backend/**` / `backend/` / `backend` → `backend`。
++ * （导出供 flow-parity.reconcileModuleDocs 复用——2026-09-27-thin-module-scope-persist：
++ * 模块对账与模块卡解析同一归一口径，防两处漂移）
+  */
+-function normalizeMapPath(raw) {
++export function normalizeMapPath(raw) {
+   return String(raw).replace(/\\/g, '/').replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '')
+ }
+ 
+diff --git a/src/scope-audit.js b/src/scope-audit.js
+index 7356c545..9f0ab1ae 100644
+--- a/src/scope-audit.js
++++ b/src/scope-audit.js
+@@ -321,7 +321,12 @@ export function buildFrozenPatch(root, files, { baseRef } = {}) {
+   const parts = []
+   try {
+     const r = safeGit(root, ['diff', '--no-color', baseRef], { timeout: 60 * 1000 })
+-    const filtered = filterPatchForFiles(r.error ? null : r.value, wanted)
++    // diff 采集失败 fail-closed（2026-09-27-thin-module-scope-persist 评审 P1 清偿：此前失败静默
++    // 跳过 tracked 段，untracked 自拼 hunk 仍拼出非空 patch → patchStatus ok 的伪完整件——实证
++    // core.bare 被误写 true 时 `git diff <ref>` 报「must be run in a work tree」，change.patch
++    // 只剩 proposal.md 一个 hunk 却标 ok。失败即 null（jsdoc 契约：调用方 fail-soft 不落伪 patch））
++    if (r.error) return null
++    const filtered = filterPatchForFiles(r.value, wanted)
+     if (filtered) parts.push(filtered)
+     const trackedOut = safeGit(root, ['ls-files'], { timeout: 30 * 1000 })
+     const trackedSet = new Set(String(trackedOut.value || '').split('\n').map(toPosix).filter(Boolean))
+diff --git a/test/change-birth-stage-brainstorm.test.mjs b/test/change-birth-stage-brainstorm.test.mjs
+index d331eebe..710797cc 100644
+--- a/test/change-birth-stage-brainstorm.test.mjs
++++ b/test/change-birth-stage-brainstorm.test.mjs
+@@ -138,6 +138,9 @@ console.log('\n--- 3. 存量迁移：三类行各得其所 ---');
+   // e. 非出生默认主流程行：plan → 不动（防误伤对照）
+   const eId = insertChange('plan-row', 'plan', 'active');
+   insertStage(eId, 'plan', 'in-progress');
++  // f. registerChange 出生的行（无任何 stages 行，stage_status=null 形态，ql-20260819-010）
++  //    ——评审 P3-2 缺口：无 stages.scan 行同样=从未真跑 scan，须命中迁移
++  insertChange('born-no-stages', 'scan', 'active');
+   oldDb.close();
+ 
+   // 旧戳 '7' → 新版 init 重跑 _createSchema → v8 迁移
+@@ -159,6 +162,8 @@ console.log('\n--- 3. 存量迁移：三类行各得其所 ---');
+   assert(row && row.current_stage === 'scan', `已归档出生行不动（实际 ${row && row.current_stage}）`);
+   row = rowOf(dbPath(), 'plan-row');
+   assert(row && row.current_stage === 'plan', `主流程行不受迁移影响（实际 ${row && row.current_stage}）`);
++  row = rowOf(dbPath(), 'born-no-stages');
++  assert(row && row.current_stage === 'brainstorm', `无 stages 行的出生默认行同样迁移（registerChange 形态，实际 ${row && row.current_stage}）`);
+ 
+   assert(readStamp() === '8', `迁移后 .schema-version 戳=8（实际 ${readStamp()}）`);
+ 
+diff --git a/test/flow-parity.test.mjs b/test/flow-parity.test.mjs
+index e69de29b..a3e3513b 100644
+--- a/test/flow-parity.test.mjs
++++ b/test/flow-parity.test.mjs
+@@ -0,0 +1,198 @@
++/**
++ * flow-parity.test.mjs — 轻量变更模块对账结构化落盘（2026-09-27-thin-module-scope-persist，FR-01~FR-04）
++ *
++ * 覆盖验收面：
++ *   ① reconcileModuleDocs 结构化返回：modules: 包层命中（旧实现 js-yaml 顶层迭代命中恒 0 的
++ *      修复锁定）+ docTouched 以仓根相对 committedRaw 判定（旧实现 specBase 相对比对恒 false 的
++ *      修复锁定）；console lines 与结构化值同源（FR-02）；
++ *   ② 无模块图 / 零命中向后兼容：空数组形态不抛错（FR-03）；
++ *   ③ .sillyspec 治理面不入对账（不污染 uncoveredDirs）；子项目 paths 前缀（collectModuleMaps 口径）；
++ *   ④ 集成：临时仓真跑 flow start → 干活 → done → 归档件 change-patch.json 含
++ *      modules/uncoveredDirs/moduleMaps 三键，console 对账行与落盘同一次计算（FR-01）。
++ *   ⑤ buildFrozenPatch fail-closed：diff 采集失败返回 null 不落伪 patch（评审 P1 清偿——
++ *      实证 core.bare 被误写 true 时 untracked 自拼 hunk 仍拼出 patchStatus ok 的伪完整件）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const { reconcileModuleDocs } = await import('../src/flow-parity.js')
++const { buildFrozenPatch } = await import('../src/scope-audit.js')
++
++/** 单元夹具：tmp 仓根 + .sillyspec specBase（docTouched 比对走真实相对层级）。 */
++function unitBase() {
++  const cwd = mkdtempSync(join(tmpdir(), 'mpar-'))
++  const specBase = join(cwd, '.sillyspec')
++  mkdirSync(specBase, { recursive: true })
++  return { cwd, specBase }
++}
++
++/** 写一张模块图（parseModuleMapSimple 行级口径：2 空格 id、4 空格字段、6 空格列表项）。 */
++function writeMap(specBase, project, yamlText) {
++  const dir = join(specBase, 'docs', project, 'modules')
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, '_module-map.yaml'), yamlText)
++  return dir
++}
++
++test('① 结构化返回：modules: 包层命中 + docTouched 仓根相对判定 + 与 console 行同源', () => {
++  const { cwd, specBase } = unitBase()
++  const dir = writeMap(specBase, 'demo', [
++    'modules:',
++    '  core:',
++    '    doc: modules/core.md',
++    '    paths:',
++    '      - src/core/',
++    '  ui:',
++    '    doc: modules/ui.md',
++    '    paths:',
++    '      - src/ui/widget.js',
++    '',
++  ].join('\n'))
++  writeFileSync(join(dir, 'core.md'), '# core\n')
++  writeFileSync(join(dir, 'ui.md'), '# ui\n')
++  const rec = reconcileModuleDocs({
++    cwd,
++    specBase,
++    ownFiles: ['src/core/a.js', 'src/core/deep/b.js', 'src/ui/widget.js', 'src/ui/other.js', '.sillyspec/changes/c/design.md'],
++    committedRaw: ['src/core/a.js', '.sillyspec/docs/demo/modules/core.md'],
++  })
++  assert.equal(rec.hits, 2, '两个模块命中（包层解析生效——旧实现恒 0）')
++  assert.deepEqual(rec.modules, [
++    { id: 'core', files: 2, doc: 'docs/demo/modules/core.md', docTouched: true, docMissing: false },
++    { id: 'ui', files: 1, doc: 'docs/demo/modules/ui.md', docTouched: false, docMissing: false },
++  ], '结构化模块面（docTouched 按仓根相对 committedRaw 判定——旧实现恒 false）')
++  assert.deepEqual(rec.uncoveredDirs, [{ dir: 'src/ui', files: 1 }], '未命中 paths 的交付目录点名（.sillyspec 治理面已滤除）')
++  assert.deepEqual(rec.moduleMaps, ['docs/demo/modules/_module-map.yaml'])
++  const text = rec.lines.join('\n')
++  assert.match(text, /📎 模块文档对账（advisory）：交付面命中 2 个模块/)
++  assert.match(text, new RegExp(`✓ core（2 文件）——文档 docs/demo/modules/core.md 已同步`))
++  assert.match(text, new RegExp(`⚠️ ui（1 文件）`))
++  assert.match(text, /未登记模块图的交付目录（src\/ui（1 文件））/)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② 无模块图 / 零命中向后兼容：空数组形态，不抛错', () => {
++  const { cwd, specBase } = unitBase()
++  const noMap = reconcileModuleDocs({ cwd, specBase, ownFiles: ['src/a.js'], committedRaw: [] })
++  assert.deepEqual(noMap, { lines: [], hits: 0, modules: [], uncoveredDirs: [], moduleMaps: [] }, '无图=三键空数组')
++  writeMap(specBase, 'demo', 'modules:\n  core:\n    paths:\n      - src/core/\n')
++  const zeroHit = reconcileModuleDocs({ cwd, specBase, ownFiles: ['lib/x.js'], committedRaw: [] })
++  assert.deepEqual(zeroHit.modules, [], '零命中=modules 空数组')
++  assert.deepEqual(zeroHit.uncoveredDirs, [{ dir: 'lib', files: 1 }])
++  assert.deepEqual(zeroHit.moduleMaps, ['docs/demo/modules/_module-map.yaml'], '图在场=moduleMaps 非空')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ 子项目前缀（project 名=仓库顶层目录 → paths 相对该子目录）+ doc 缺失标记', () => {
++  const { cwd, specBase } = unitBase()
++  mkdirSync(join(cwd, 'app'), { recursive: true })
++  writeMap(specBase, 'app', [
++    'modules:',
++    '  svc:',
++    '    doc: modules/svc.md',
++    '    paths:',
++    '      - src/',
++    '',
++  ].join('\n')) // svc.md 不写——docMissing true 面
++  const rec = reconcileModuleDocs({
++    cwd,
++    specBase,
++    ownFiles: ['app/src/a.js', 'src/stray.js'],
++    committedRaw: [],
++  })
++  assert.deepEqual(rec.modules, [
++    { id: 'svc', files: 1, doc: 'docs/app/modules/svc.md', docTouched: false, docMissing: true },
++  ], 'app/src/a.js 命中（前缀 app/ 生效）；根层 src/stray.js 不命中')
++  assert.deepEqual(rec.uncoveredDirs, [{ dir: 'src', files: 1 }])
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++/* ───── 集成：真跑 flow done，锁 change-patch.json 落盘三键（FR-01） ───── */
++
++function makeRepo(testCmd = 'node -e 0') {
++  const cwd = mkdtempSync(join(tmpdir(), 'mspr-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "' + testCmd + '"\nflow:\n  mode: thin\n')
++  // 模块图随基线入库（modules: 包层——锁真实 schema v2 形态，非顶层裸键）
++  const modDir = join(cwd, '.sillyspec', 'docs', 'demo', 'modules')
++  mkdirSync(modDir, { recursive: true })
++  writeFileSync(join(modDir, '_module-map.yaml'), 'modules:\n  core:\n    doc: modules/core.md\n    paths:\n      - src/core/\n')
++  writeFileSync(join(modDir, 'core.md'), '# core\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++function fillDesignSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
++    .replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：模块对账落盘夹具——一行作答即合规'))
++  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 模块对账结果随 change-patch.json 落盘\nGiven 仓内有模块图\nWhen flow done 执行\nThen change-patch.json 含 modules/uncoveredDirs/moduleMaps 三键')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：本变更为 flow done 行为本身（test/flow-parity.test.mjs ④ 集成锁定）'))
++}
++
++test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账三键（console 与落盘同源）', () => {
++  const { cwd, run } = makeRepo()
++  const change = 'msp-it1'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--no-review', '--input', '改 core 模块代码\n成功标准：\n- src/core/a.js 生成且 flow done 全绿\n- change-patch.json 含模块对账三键'])
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  // 干活：交付代码 + 模块文档同步更新（同一提交——锁 docTouched=true 面）
++  mkdirSync(join(cwd, 'src', 'core'), { recursive: true })
++  writeFileSync(join(cwd, 'src', 'core', 'a.js'), 'export const a = 1\n')
++  writeFileSync(join(cwd, '.sillyspec', 'docs', 'demo', 'modules', 'core.md'), '# core\na=1\n')
++  run(['add', 'src/core/a.js', '.sillyspec/docs/demo/modules/core.md'])
++  run(['commit', '-q', '-m', 'feat: core 变更（task-01）'])
++  fillDesignSlots(cwd, change)
++  const s2 = cli(cwd, ['flow', 'done', '--change', change])
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  assert.match(s2.stdout, /📎 模块文档对账（advisory）：交付面命中 1 个模块/, 'console 对账行走同一计算（FR-02）')
++  const archiveDir = join(cwd, '.sillyspec', 'changes', 'archive', change)
++  assert.ok(existsSync(archiveDir), '变更已归档')
++  const meta = JSON.parse(readFileSync(join(archiveDir, 'change-patch.json'), 'utf8'))
++  assert.deepEqual(meta.modules, [
++    { id: 'core', files: 1, doc: 'docs/demo/modules/core.md', docTouched: true, docMissing: false },
++  ], 'FR-01：受影响模块结构化落盘（文档随变更更新→docTouched true）')
++  assert.deepEqual(meta.uncoveredDirs, [], '全命中=未登记空数组（键恒在场）')
++  assert.deepEqual(meta.moduleMaps, ['docs/demo/modules/_module-map.yaml'])
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑤ buildFrozenPatch fail-closed：diff 采集失败返回 null，不落伪 patch（评审 P1 清偿）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'mspf-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' })
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  writeFileSync(join(cwd, 'a.txt'), 'a\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'a'])
++  const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd }).toString().trim()
++  writeFileSync(join(cwd, 'a.txt'), 'a2\n')
++  const ok = buildFrozenPatch(cwd, ['a.txt'], { baseRef: base })
++  assert.match(String(ok), /diff --git a\/a\.txt/, '正常态：tracked 改动进 patch 正文')
++  // core.bare=true → `git diff <ref>` 报「must be run in a work tree」→ 必须判采集失败
++  run(['config', 'core.bare', 'true'])
++  assert.equal(buildFrozenPatch(cwd, ['a.txt'], { baseRef: base }), null,
++    'diff 失败 fail-closed——不再静默跳过 tracked 段拼出 patchStatus ok 的伪完整件')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/.sillyspec/changes/2026-09-27-thin-module-scope-persist/proposal.md b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T13:09:56.350Z
++---
++# 提案书（Proposal）— 2026-09-27-thin-module-scope-persist
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:9c42a205682e7f207a250e3bf6480eb05c6e31223603cd9d1fbcc795778e2b9f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++任务原话转写：动机：平台侧（SillyHub 变更详情卡）要展示轻量变更的影响模块范围，但 flow done 时 reconcileModuleDocs 已算出的模块命中结果只打 console 不落盘，平台读不到、只能自建重算口径（两套口径会漂移）。
++成功标准：
++- flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块 id/命中文件数/文档相对路径/文档是否随变更更新，及未登记模块目录清单）
++- 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
++- 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
++- 有测试锁定结构化落盘行为与向后兼容行为
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:64580dab17612e583946154ef577c7d99d3a325f981b6541c00cee755acd82bf:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块 id/命中文件数/文档相对路径/文档是否随变更更新，及未登记模块目录清单）
++2. 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
++3. 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
++4. 有测试锁定结构化落盘行为与向后兼容行为
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:8892dd36cc1c1346de1e55677eaea92c8f06009901cc09e69619975fc5230fda:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->
++1. flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块 id/命中文件数/文档相对路径/文档是否随变更更新，及未登记模块目录清单）
++2. 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
++3. 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
++4. 有测试锁定结构化落盘行为与向后兼容行为
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+
+diff --git a/.sillyspec/changes/2026-09-27-thin-module-scope-persist/review.json b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-thin-module-scope-persist/review.json
+@@ -0,0 +1,14 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-27-thin-module-scope-persist",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [],
++  "dimensionNotes": {
++    "乱序": "ok（边界已裁决：可接受——done 时点一次性计算落盘、不随模块图后续变更回写，代码事实 flow.js:1014-1031 无回写路径，时点冻结件语义与 files[] 一致）",
++    "并发": "ok（边界已裁决：可接受——change-patch.json 由 flow done 单点写本变更目录（flow.js:1040），多会话 change 目录隔离，未新增共享写面）",
++    "切换": "ok（边界已裁决：可接受——对账 fail-soft（flow.js:1019 catch 兜底空数组）不阻断归档；frozen=null 走 patchStatus=failed 留痕（flow.js:1037-1038），不落伪件）",
++    "作用域": "ok（边界已裁决：可接受——collectModuleMaps 收齐全部项目图 + moduleMaps 落盘全部参与图路径供平台消歧（design 槽3-4）；子项目前缀口径测试③锁定；数据全在各自 change 目录内无串台）"
++  },
++  "reviewedAt": "2026-09-27T14:50:00.000Z"
++}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-thin-module-scope-persist",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——done 时点一次性计算落盘、不随模块图后续变更回写，代码事实 flow.js:1014-1031 无回写路径，时点冻结件语义与 files[] 一致）",
+    "并发": "ok（边界已裁决：可接受——change-patch.json 由 flow done 单点写本变更目录（flow.js:1040），多会话 change 目录隔离，未新增共享写面）",
+    "切换": "ok（边界已裁决：可接受——对账 fail-soft（flow.js:1019 catch 兜底空数组）不阻断归档；frozen=null 走 patchStatus=failed 留痕（flow.js:1037-1038），不落伪件）",
+    "作用域": "ok（边界已裁决：可接受——collectModuleMaps 收齐全部项目图 + moduleMaps 落盘全部参与图路径供平台消歧（design 槽3-4）；子项目前缀口径测试③锁定；数据全在各自 change 目录内无串台）"
+  },
+  "reviewedAt": "2026-09-27T14:50:00.000Z"
+}
