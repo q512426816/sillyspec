@@ -3,7 +3,7 @@
  *
  * 覆盖（真实 DB，不用 mock——facade 转发 + ChangeRegistry 查询一起验）：
  *   - 未注册变更 → null（未注册目录桩，调用方按轻量场景放行）
- *   - registerChange 新行 → { current_stage: 'scan', status: 'active' }（表默认值）
+ *   - registerChange 新行 → { current_stage: 'brainstorm', status: 'active' }（出生默认，2026-09-27-change-birth-stage-brainstorm）
  *   - stage 推进到 verify 后查询 → current_stage='verify'（阶段闸的判定输入）
  *   - unregisterChange（archived）后查询仍返回行（status='archived'，stage 保留）
  *
@@ -30,12 +30,13 @@ test('getChangeStage：未注册 → null；注册 → scan/active；推进 → 
     // 未注册 → null
     assert.equal(pm.getChangeStage(tmp, changeName), null, '未注册变更应返回 null')
 
-    // registerChange → 表默认 scan/active（无 stages 行 → stage_status=null，ql-20260819-010）
+    // registerChange → 出生默认 brainstorm/active（2026-09-27-change-birth-stage-brainstorm：
+    // 起步就是头脑风暴；无 stages 行 → stage_status=null，ql-20260819-010）
     pm.registerChange(tmp, changeName)
     assert.deepEqual(
       pm.getChangeStage(tmp, changeName),
-      { current_stage: 'scan', status: 'active', stage_status: null },
-      '注册后应返回默认 scan/active + stage_status null',
+      { current_stage: 'brainstorm', status: 'active', stage_status: null },
+      '注册后应返回默认 brainstorm/active + stage_status null',
     )
 
     // stage 推进（直接 SQL 模拟 verify 停留，不依赖 initChange 的阶段编排）

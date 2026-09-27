@@ -72,7 +72,7 @@ if (json) {
   assert(ch && ch.name === 'test-change', `changes[0].name === 'test-change'（实际 ${ch && ch.name}）`);
   assert(ch && ch.last_synced_platform_ts === '2026-08-10T00:00:00.000Z', 'changes 行含 last_synced_platform_ts');
   assert(ch && ch.last_local_modified_ts === '2026-08-10T01:00:00.000Z', 'changes 行含 last_local_modified_ts');
-  assert(ch && ch.current_stage === 'scan', `changes 行含 current_stage（实际 ${ch && ch.current_stage}）`);
+  assert(ch && ch.current_stage === 'brainstorm', `changes 行含 current_stage（出生阶段 brainstorm，实际 ${ch && ch.current_stage}）`);
   const chKeys = Object.keys(ch);
   assert(!chKeys.some(k => k.startsWith('isolation_')), 'changes 行不含 isolation_* 系列列');
   assert(!chKeys.some(k => k.startsWith('platform_')), 'changes 行不含 platform_* 系列列（platform_change_id/workspace_id/last_sync/sync_enabled）');
@@ -80,7 +80,7 @@ if (json) {
 
   // project 全局行
   assert(json.project && json.project.name === basename(cwd), `project.name === basename(cwd)（实际 ${json.project && json.project.name}）`);
-  assert(json.project && json.project.schema_version === 7, `project.schema_version === 6（实际 ${json.project && json.project.schema_version}）`);
+  assert(json.project && json.project.schema_version === 8, `project.schema_version === 8（实际 ${json.project && json.project.schema_version}）`);
 
   // stages：initChange 插入全部 VALID_STAGES，每行 change_name+stage
   assert(Array.isArray(json.stages) && json.stages.length >= 5, `stages 数组非空（实际 ${json.stages.length} 行）`);

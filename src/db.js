@@ -7,7 +7,7 @@ import { dirname } from 'path';
 // 每次 new ProgressManager 都过 init，靠版本戳跳过建表省开销）。
 // node:sqlite（DatabaseSync）是原生 SQLite 引擎，打开即持久化（不像 sql.js 纯内存需整库 export 落盘），
 // _createSchema 内 DDL 直接落盘，无需额外 _save。
-const DB_SCHEMA_VERSION = 7;
+const DB_SCHEMA_VERSION = 8;
 
 // SQLITE_BUSY 应用层有限重试（R-08 / NFR-03）：WAL 单写者模型，并发写第二者在
 // busy_timeout=5000（init PRAGMA）后抛 SQLITE_BUSY。busy_timeout 已在引擎层处理大部分等待；
@@ -252,7 +252,7 @@ export class DB {
       CREATE TABLE IF NOT EXISTS project (
         id INTEGER PRIMARY KEY DEFAULT 1,
         name TEXT NOT NULL,
-        schema_version INTEGER DEFAULT 7,
+        schema_version INTEGER DEFAULT 8,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -263,7 +263,7 @@ export class DB {
       CREATE TABLE IF NOT EXISTS changes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
-        current_stage TEXT DEFAULT 'scan',
+        current_stage TEXT DEFAULT 'brainstorm',
         status TEXT DEFAULT 'active',
         no_worktree INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
@@ -388,6 +388,23 @@ export class DB {
     // change-registry 首建/claimChangeOwner（task-02 接线会话标识）；消费方=assertChangeOwnership
     // （task-02）+ serializeForSync 平台同步投影。幂等 ALTER（列存在跳过，v5 先例同款）。
     this._migrateAddColumn('changes', 'owner_session', 'TEXT');
+
+    // v8（2026-09-27-change-birth-stage-brainstorm）：出生阶段 'scan'→'brainstorm' 的存量数据迁移。
+    // 旧版 changes 行出生 current_stage='scan'（db.js DDL 默认值 + progress.js 两处 INSERT），
+    // thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」误导（scan 是 auxiliary，
+    // shared.js MAIN_FLOW_ORDER 从不含它）。只改写「出生默认未被真跑过」的行：active 且
+    // stages.scan='pending'——setStage('scan') 置 in-progress，真在跑/已跑完 scan 的行不受影响。
+    // 同步刷 last_local_modified_ts（与 pm._touchLocalModified 同语义）：否则平台 pull 见本地
+    // 无脏度会静默 import，把平台的旧 'scan' 导回来（platform-sync-pull 冲突保留本地现状）。
+    // 幂等：改写后条件不再命中，重跑零效果。strftime 对齐 toISOString 形态（T 分隔 + ms + Z）。
+    this.db.exec(`
+      UPDATE changes
+      SET current_stage = 'brainstorm',
+          last_local_modified_ts = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE current_stage = 'scan'
+        AND status = 'active'
+        AND id IN (SELECT change_id FROM stages WHERE stage = 'scan' AND status = 'pending')
+    `);
   }
 
   /**

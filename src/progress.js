@@ -521,7 +521,9 @@ export class ProgressManager {
     }
 
     const result = {
-      _version: 6,
+      // 版本单一源（2026-09-27-change-birth-stage-brainstorm 收敛）：此前是字面量 6，
+      // v7 bump（watcher-preview-progress）漏改此处成「四处一致」之外的第五处漂移。
+      _version: CURRENT_VERSION,
       project: projectName,
       currentChange: cName,
       currentStage: currentStage || '',
@@ -1164,10 +1166,12 @@ export class ProgressManager {
       // 检查变更是否已存在
       const existing = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
       if (existing === undefined) {
-        // 插入 changes 行
+        // 插入 changes 行。出生阶段=brainstorm（2026-09-27 用户裁定「起步就是头脑风暴」）：
+        // scan 是 auxiliary（shared.js AUXILIARY_STAGES 语义），从未是变更主流程起点；
+        // 旧默认 'scan' 让 thin/quick 等不进主流程的变更全生命周期显示「🔍 代码扫描」误导。
         sqlDb.prepare(
           `INSERT INTO changes (name, current_stage, status, created_at, last_active, title, quicklog_id)
-           VALUES (?, 'scan', 'active', ?, ?, ?, ?)`
+           VALUES (?, 'brainstorm', 'active', ?, ?, ?, ?)`
         ).run(changeName, now, now, meta.title || null, meta.quicklogId || null);
       }
 
@@ -1242,7 +1246,7 @@ export class ProgressManager {
           const sqlDb = db.getDb();
           const now = new Date().toISOString();
           const ins = sqlDb.prepare(
-            `INSERT OR IGNORE INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, 'scan', 'active', ?, ?)`
+            `INSERT OR IGNORE INTO changes (name, current_stage, status, created_at, last_active) VALUES (?, 'brainstorm', 'active', ?, ?)`
           ).run(changeName, now, now);
           const changeRow = sqlDb.prepare('SELECT id FROM changes WHERE name = ?').get(changeName);
           if (changeRow !== undefined) {

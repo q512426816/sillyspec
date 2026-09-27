@@ -96,9 +96,9 @@ console.log('\n--- 2. 本地脏 + 平台更新 → 冲突 ---');
   assert(r.ok === false && r.conflict === true, `冲突 → ok=false conflict=true（ok=${r.ok} conflict=${r.conflict}）`);
   assert(r.imported === false, '冲突不 import');
   assert(r.reason && r.reason.includes('冲突'), `reason 含冲突（实际 ${r.reason}）`);
-  // 本地数据未被覆盖（current_stage 仍 scan，非平台的 plan）
+  // 本地数据未被覆盖（current_stage 仍出生值 brainstorm，非平台的 plan）
   const cur = sql.prepare('SELECT current_stage FROM changes WHERE name = ?').get('rt-change');
-  assert(cur.current_stage === 'scan', `冲突保留本地现状（current_stage 仍 scan，实际 ${cur.current_stage}）`);
+  assert(cur.current_stage === 'brainstorm', `冲突保留本地现状（current_stage 仍出生值 brainstorm，实际 ${cur.current_stage}）`);
 }
 
 // ─────────────────────────────────────────

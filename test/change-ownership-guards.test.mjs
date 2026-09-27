@@ -152,9 +152,9 @@ test('① 手工 v5 库（无 owner_session 列）→ init 自动加列 + 存量
   assert.ok(cols.includes('title') && cols.includes('isolation_mode'), '历史幂等 ALTER 照常补齐（v5 先例同款）')
   const legacy = db.getDb().prepare("SELECT owner_session FROM changes WHERE name = 'legacy'").get()
   assert.equal(legacy.owner_session, null, '存量行 owner_session=NULL（无主，任何会话可接管）')
-  assert.equal(readFileSync(stampPath, 'utf8').trim(), '7', 'schema 戳升 7（v7 authority 双轨列，2026-09-23-watcher-preview-progress）')
+  assert.equal(readFileSync(stampPath, 'utf8').trim(), '8', 'schema 戳升 8（v8 出生阶段 brainstorm，2026-09-27-change-birth-stage-brainstorm）')
   const projDflt = db.getDb().prepare("SELECT dflt_value FROM pragma_table_info('project') WHERE name = 'schema_version'").get()
-  assert.equal(String(projDflt.dflt_value), '7', 'project.schema_version DEFAULT 同步 bump 7（新建库口径）')
+  assert.equal(String(projDflt.dflt_value), '8', 'project.schema_version DEFAULT 同步 bump 8（新建库口径）')
 
   // 幂等：删戳强制重跑 _createSchema——duplicate column 被吞，列数不翻倍、数据不丢
   rmSync(stampPath)
