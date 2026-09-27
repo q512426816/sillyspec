@@ -1954,6 +1954,14 @@ export function checkTransition(fromStage, toStage, options = {}) {
     return { allowed: false, reason: `未知阶段: ${toStage}` }
   }
 
+  // 出生未入门态（2026-09-27-change-birth-stage-brainstorm）：出生阶段自 'scan'（auxiliary）改
+  // 'brainstorm' 后，「辅助→主流程任意放行」不再天然覆盖出生态——但 thin/quick、backfill、
+  // complete-step 等大量路径从出生态直接 run 目标阶段（旧 scan 出生全都放行）。等价语义：
+  // brainstorm 仍 pending/无 stages 行（从未真正进入主流程）视同辅助态；真在 brainstorm 中
+  // （in-progress/completed）仍受主流程守卫约束。
+  const fromBirthUntouched = fromStage === 'brainstorm'
+    && (!fromStageData || !fromStageData.status || fromStageData.status === 'pending')
+
   // 辅助阶段随时可执行（archive 除外：从主流程进入 archive 需要校验）
   if (AUXILIARY_STAGES.includes(toStage) && toStage !== 'archive') {
     return { allowed: true }
@@ -1980,15 +1988,16 @@ export function checkTransition(fromStage, toStage, options = {}) {
     if (fromStage === 'verify') {
       return { allowed: true }
     }
-    // 独立运行 archive（无前置）也允许
-    if (!fromStage || AUXILIARY_STAGES.includes(fromStage)) {
+    // 独立运行 archive（无前置）也允许；出生未入门态同放行（旧 scan 出生态等价——
+    // thin/quick 从未进主流程的变更直接归档走此路）
+    if (!fromStage || AUXILIARY_STAGES.includes(fromStage) || fromBirthUntouched) {
       return { allowed: true }
     }
     return { allowed: false, reason: 'archive 的前置阶段是 verify，不能从 ' + fromStage + ' 跳转' }
   }
 
-  // 从辅助阶段进入主流程：允许
-  if (AUXILIARY_STAGES.includes(fromStage)) {
+  // 从辅助阶段进入主流程：允许（出生未入门态同——见函数头注释）
+  if (AUXILIARY_STAGES.includes(fromStage) || fromBirthUntouched) {
     return { allowed: true }
   }
 

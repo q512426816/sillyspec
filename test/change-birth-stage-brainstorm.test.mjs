@@ -174,6 +174,28 @@ console.log('\n--- 3. 存量迁移：三类行各得其所 ---');
     `重跑后值与脏度戳均不变（current_stage=${row && row.current_stage}, ts=${row && row.last_local_modified_ts}）`);
 }
 
+// ─────────────────────────────────────────
+// ⑤ 阶段转换契约：出生未入门态等价旧 scan 出生语义
+// （18 个存量测试文件的回归锚——archive-delta / run-complete-step-* 等从出生态直 run 目标阶段）
+// ─────────────────────────────────────────
+console.log('\n--- 5. checkTransition：出生未入门态（brainstorm pending）等价旧 scan 出生 ---');
+{
+  const { checkTransition } = await import('../src/stage-contract.js');
+  assert(checkTransition('brainstorm', 'archive', { fromStageData: { status: 'pending' } }).allowed === true,
+    'brainstorm(pending) → archive 放行（thin/quick 出生态归档）');
+  assert(checkTransition('brainstorm', 'archive', {}).allowed === true,
+    'brainstorm(无 stages 行) → archive 放行（存量行无 brainstorm 行的同形态）');
+  assert(checkTransition('brainstorm', 'execute', { fromStageData: { status: 'pending' } }).allowed === true,
+    'brainstorm(pending) → execute 放行（backfill/complete-step 直 run 路径）');
+  assert(checkTransition('brainstorm', 'archive', { fromStageData: { status: 'in-progress' } }).allowed === false,
+    'brainstorm(in-progress) → archive 拒绝（真在主流程中，守卫不放松）');
+  assert(checkTransition('brainstorm', 'archive', { fromStageData: { status: 'completed' } }).allowed === false,
+    'brainstorm(completed) → archive 拒绝（主流程空窗期不得跳归档）');
+  assert(checkTransition('verify', 'archive', {}).allowed === true, 'verify → archive 放行（不变）');
+  assert(checkTransition('scan', 'archive', {}).allowed === true, 'scan(auxiliary) → archive 放行（不变）');
+  assert(checkTransition('plan', 'archive', {}).allowed === false, 'plan → archive 拒绝（不变）');
+}
+
 // 清理（Windows WAL 句柄偶发延迟释放致 EPERM，吞错不阻断退出码）
 try { rmSync(tmpRoot, { recursive: true, force: true }); }
 catch { /* temp dir 由 OS 清理，不阻断退出码 */ }
