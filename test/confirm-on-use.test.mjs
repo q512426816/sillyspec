@@ -85,8 +85,8 @@ test('④ CLI tests --confirm：证据解析→翻 active；幂等；坏证据/�
 
   // 坏证据 → exit 1
   let refused = false
-  try { run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'nope.test.mjs']) } catch (e) { refused = e.status === 1 && /证据路径不可解析/.test(e.stderr || '') }
-  assert.ok(refused, '证据不可解析拒绝 exit 1（防橡皮图章）')
+  try { run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'nope.test.mjs']) } catch (e) { refused = e.status === 1 && /必须是盘上真实测试文件/.test(e.stderr || '') }
+  assert.ok(refused, '证据不可解析/非测试形态拒绝 exit 1（防橡皮图章）')
 
   // 好证据 → 翻牌
   const out = run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'test/a.test.mjs'])
@@ -100,6 +100,11 @@ test('④ CLI tests --confirm：证据解析→翻 active；幂等；坏证据/�
   const out2 = run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'test/a.test.mjs'])
   assert.match(out2, /已 active（幂等，无需确认）/, '幂等提示')
 
+  // 非测试形态盘上文件（评审 P2-1 防回归：package.json 在场但不得作证据）
+  writeFileSync(join(f.root, 'package.json'), '{}')
+  let notTest = false
+  try { run(['tests', '--confirm', '--anchor', 'FR-core-001', '--evidence', 'package.json']) } catch (e) { notTest = e.status === 1 && /必须是盘上真实测试文件/.test(e.stderr || '') }
+  assert.ok(notTest, '非测试形态文件拒绝（package.json/win.ini 类不再放行）')
   // 无绑定行 anchor
   let noRows = false
   try { run(['tests', '--confirm', '--anchor', 'FR-core-999', '--evidence', 'test/a.test.mjs']) } catch (e) { noRows = e.status === 1 && /无绑定行/.test(e.stderr || '') }

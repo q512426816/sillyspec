@@ -3139,7 +3139,11 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
         if (!evidenceRaw) { fail('--confirm 须配 --evidence <真实测试路径>（防橡皮图章：证据必须是盘上文件）'); break }
         const { resolveTestFileRel: _rtf2 } = await import('./test-bindings.js')
         const evRel = _rtf2(testAnchorFile(evidenceRaw), { projectRoot: effDir }) || (existsSync(resolve(effDir, evidenceRaw.replace(/\\/g, '/'))) ? evidenceRaw.replace(/\\/g, '/') : null)
-        if (!evRel) { fail(`证据路径不可解析：${evidenceRaw}（相对 ${effDir}）——确认必须指向盘上真实测试文件，不收口头相符`); break }
+        // 评审 P2-1 清偿：证据须为测试形态文件（*.test.* / *.spec.* / test_*.py / *_test.*）——
+        // resolveTestFileRel 直取分支无形态检查（package.json/win.ini 实证可绕），此处收口
+        const evBase = evRel ? evRel.split('/').pop() : ''
+        const evShaped = !!evRel && (/\\.(test|spec)\\.[cm]?[jt]sx?$/.test(evBase) || /^test_[\\w.]+\\.py$/.test(evBase) || /_test\\.(go|py)$/.test(evBase))
+        if (!evShaped) { fail(`证据必须是盘上真实测试文件（*.test.* / test_*.py 等形态）：${evidenceRaw}——不收口头相符，不收非测试文件`); break }
         const rows = readFrBindings({ knowledgeRoot, frId: anchor })
         if (rows.length === 0) { fail(`${anchor} 无绑定行——确认对象不存在（先 --bind 或经归档提升）`); break }
         const head2 = (() => { try { return gitQuiet(effDir, ['rev-parse', 'HEAD']) || null } catch { return null } })()
