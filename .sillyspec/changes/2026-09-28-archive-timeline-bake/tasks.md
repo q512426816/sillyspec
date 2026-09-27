@@ -14,3 +14,5 @@ created_at: 2026-09-27T16:20:57.122Z
 - [x] task-04: 事件副本尺寸帽 BAKE_EVENTS_COPY_MAX_BYTES=2MiB——超帽只烤 timeline.md 且文件头注记「尺寸超帽」（缺省值测试钉）
 - [x] task-05: 新增 test/archive-timeline-bake.test.mjs 八用例（渲染两态/fixture 端到端双落盘字节一致/无事件跳过/写失败 fail-open/path 直读坏行容忍优先级/超帽/尺寸帽钉值）+ package.json test:core 纳入
 - [x] task-06: lint 全绿（841 文件、未引用导出 0、module-map 覆盖全）+ doc-ref-check 93/93（platform-interface-map complete-handlers.js 行号锚 2553→2615 随实现位移修准）+ 全量 npm test 绿（见收口实测）+ sync.md 接口表 3 行/changelog 登记
+
+> 完成证据注记（收口补）：实现单提交 + 本证据提交构成区间证据面；全量 npm test 659/660（余 1 红 flow-protocol 满载竞态假红，单跑 22/22 绿非本变更面）+ lint 全绿 + doc-ref 93/93 + CLI 回退/烤制双冒烟（真实归档目录 × 真实事件流端到端）。
