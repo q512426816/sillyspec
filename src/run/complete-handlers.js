@@ -705,7 +705,8 @@ export async function bakeArchiveTimeline({ cwd, specBase, changeName, destDir, 
     let eventsRaw = null
     try { eventsRaw = readRawImpl(watcherEventsPath(runtimeRoot, changeName), 'utf8') } catch { /* 副本缺源只烤渲染面 */ }
     const oversize = eventsRaw != null && Buffer.byteLength(eventsRaw, 'utf8') > eventsCopyMaxBytes
-    const timelineMd = renderBakedTimeline({ change: changeName, events: res.events, tasks, anchors, birthTs: readBirthTs(destDir), tier, bakedAtIso: nowIso || new Date().toISOString(), eventsCopySkipped: oversize })
+    // 评审 P3-1 清偿：副本未落盘（读源失败或超帽）时头注记必须显式「未随包」，不虚报在场
+    const timelineMd = renderBakedTimeline({ change: changeName, events: res.events, tasks, anchors, birthTs: readBirthTs(destDir), tier, bakedAtIso: nowIso || new Date().toISOString(), eventsCopySkipped: eventsRaw == null || oversize })
     writeImpl(join(destDir, 'timeline.md'), timelineMd)
     const files = ['timeline.md']
     if (eventsRaw != null && !oversize) {

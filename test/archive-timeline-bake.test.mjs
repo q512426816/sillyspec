@@ -195,3 +195,22 @@ test('bakeArchiveTimeline：事件副本超帽只烤 timeline.md，头注记「�
     rmSync(fx.root, { recursive: true, force: true })
   }
 })
+
+test('bakeArchiveTimeline：副本读源失败（评审 P3-1）只烤渲染面且头注记「未随包」不虚报在场', async () => {
+  const fx = makeFixture()
+  try {
+    const r = await bakeArchiveTimeline({
+      cwd: fx.root, specBase: fx.specBase, changeName: CHANGE, destDir: fx.destDir,
+      gitLook: fakeGitLook,
+      readRawImpl: (p, enc) => (String(p).endsWith('.jsonl') ? (() => { throw new Error('read race') })() : readFileSync(p, enc)),
+    })
+    assert.equal(r.ok, true)
+    assert.deepEqual(r.files, ['timeline.md'])
+    assert.equal(existsSync(join(fx.destDir, 'watcher-events.jsonl')), false)
+    const md = readFileSync(join(fx.destDir, 'timeline.md'), 'utf8')
+    assert.ok(md.includes('未随包'))
+    assert.ok(!md.includes('本目录 watcher-events.jsonl'))
+  } finally {
+    rmSync(fx.root, { recursive: true, force: true })
+  }
+})
