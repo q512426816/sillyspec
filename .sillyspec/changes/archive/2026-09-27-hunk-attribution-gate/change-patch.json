@@ -1,0 +1,28 @@
+{
+  "change": "2026-09-27-hunk-attribution-gate",
+  "baseline": "e2da65a0cafddef2c4c550f3f768428b3f589c06",
+  "head": "a3b99f259e9ac7e7fc5b8a06ff0d65845a21a8b2",
+  "files": [
+    ".sillyspec/changes/2026-09-27-hunk-attribution-gate/design.md",
+    ".sillyspec/changes/2026-09-27-hunk-attribution-gate/proposal.md",
+    ".sillyspec/changes/2026-09-27-hunk-attribution-gate/requirements.md",
+    ".sillyspec/changes/2026-09-27-hunk-attribution-gate/tasks.md",
+    "src/config-schema.js",
+    "src/flow.js",
+    "src/hunk-attribution.js",
+    "src/knowledge-digest.js",
+    "src/stages/knowledge.js",
+    "test/hunk-attribution-gate.test.mjs",
+    "test/knowledge-digest.test.mjs",
+    ".sillyspec/changes/2026-09-27-hunk-attribution-gate/flow-state.yaml"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 580,
+    "deletions": 3
+  },
+  "savedAt": "2026-09-27T05:47:52.960Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "1d570c51775ba1489024017f4a89c5ff91d99c5b4ca30f8d1904e3076f1ba77d",
+  "patchStatus": "ok"
+}

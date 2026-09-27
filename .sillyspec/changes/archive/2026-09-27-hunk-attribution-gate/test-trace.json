@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-hunk-attribution-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-hunk-attribution-gate:flow:FR-01",
+      "tests": [
+        "test/hunk-attribution-gate.test.mjs「声明面归集：design 清单 + requirements 绑定（NEW: 前缀与反斜杠归一）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-hunk-attribution-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-hunk-attribution-gate:flow:FR-02",
+      "tests": [
+        "test/hunk-attribution-gate.test.mjs「未归因 + 竞争 + 残留三信号全路径」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-hunk-attribution-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-27-hunk-attribution-gate:flow:FR-03",
+      "tests": [
+        "test/hunk-attribution-gate.test.mjs「未归因 + 竞争 + 残留三信号全路径」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-hunk-attribution-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-27-hunk-attribution-gate:flow:FR-04",
+      "tests": [
+        "test/hunk-attribution-gate.test.mjs「未归因 + 竞争 + 残留三信号全路径」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-hunk-attribution-gate"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-27-hunk-attribution-gate:flow:FR-05",
+      "tests": [
+        "test/hunk-attribution-gate.test.mjs「off 关闭与空面降级」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-hunk-attribution-gate"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-27-hunk-attribution-gate:flow:FR-06",
+      "tests": [
+        "test/hunk-attribution-gate.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-hunk-attribution-gate"
+    }
+  ]
+}

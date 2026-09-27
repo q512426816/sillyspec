@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-hunk-attribution-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "error 档阻断范围与自产 schema 描述不一致：在途残留单独在场不阻断",
+      "evidence": "config-schema.js:133 本变更新增的 hunk_gate 描述承诺「error（三类信号任一在场均阻断收口）」，但 result.ok 只聚合未归因+竞争（hunk-attribution.js:163 不含 residue），flow.js:1152 仅按 !ok 阻断——error 档下 residue-only 场景放行，文档承诺与实现矛盾",
+      "location": "src/hunk-attribution.js:163"
+    },
+    {
+      "severity": "P2",
+      "title": "冻结面混入已归档变更 2026-09-27-knowledge-digest 的三项交付，本变更零声明——即本门要防的跨变更夹带实例",
+      "evidence": "change.patch 含 src/knowledge-digest.js、src/stages/knowledge.js、test/knowledge-digest.test.mjs（锚剥离修复+digest 子命令注册），7 条 FR/tasks/design 均未提及，实查属 archive/2026-09-27-knowledge-digest；因对方已 archive，竞争检测（设计上排除 archive）对它失明，只剩未归因 warn 兜底——恰是 4f859053 事故形态在默认 warn 档下的重演路径。另本变更 design.md 无文件变更清单，自身交付（flow.js/config-schema.js/hunk-attribution.js）也全落未归因，信号被稀释",
+      "location": ".sillyspec/changes/2026-09-27-hunk-attribution-gate/change.patch:452"
+    },
+    {
+      "severity": "P3",
+      "title": "外邦声明面窄于 FR-01 并集定义：仅 design 清单，不含 requirements 测试绑定；无 design.md 的活跃变更整体跳过",
+      "evidence": "collectForeignDeclarations 只调 parseFileChangeList(design.md)（hunk-attribution.js:69-77），而 FR-01/FR-03 的「声明面」定义为 design 清单 ∪ requirements 绑定——他变更仅在测试绑定声明 test 路径时竞争漏报（假阴）",
+      "location": "src/hunk-attribution.js:69"
+    },
+    {
+      "severity": "P3",
+      "title": "fail-soft 渲染缺陷：degraded 恒 false、空面渲染出自相矛盾的 ✅ 清零行、off 档「不适用」行被接线方丢弃",
+      "evidence": "degraded 在 runHunkAttributionGate 中从未置位（hunk-attribution.js:118 声明后无人写），空面早退走主分支渲染同时输出「✅ 提交面全部文件归属清晰」与「跳过」注记；renderHunkAttributionLines 的「- 不适用（hunk_gate=off…）」行不匹配 flow.js:1146-1150 任何前缀分支被静默吞掉",
+      "location": "src/hunk-attribution.js:170"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 测试绑定声称「archive 排除」已测，但用例未构造 archive 目录",
+      "evidence": "makeScenario 只建本变更与 2026-09-27-other 两个目录（test/hunk-attribution-gate.test.mjs:522-554），archive 排除分支（hunk-attribution.js:68）无断言覆盖，by=['2026-09-27-other'] 仅间接覆盖本变更排除",
+      "location": "test/hunk-attribution-gate.test.mjs:546"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-27T05:53:35Z"
+}

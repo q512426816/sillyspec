@@ -1,0 +1,693 @@
+diff --git a/.sillyspec/changes/2026-09-27-hunk-attribution-gate/design.md b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/design.md
+new file mode 100644
+index 00000000..e9a2254d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:40:53.732Z
++---
++# 设计记录（Design Record）— 2026-09-27-hunk-attribution-gate
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++做法：新模块 src/hunk-attribution.js（纯函数 + git 只读调用）——① 声明面归集：复用 parseFileChangeList（change-list.js）与 extractRequirementBindings（flow-draft.js）合并 design 清单与 requirements 测试绑定路径；② 提交面对账：flow done 时 git diff baseline..HEAD --numstat 逐文件 + git diff 解析 hunk 头计 hunk 数，不在声明面的文件进未归因清单；③ 跨变更竞争：扫描 .sillyspec/changes/* 其他活跃变更（排除 archive 与本变更）各自声明面，与提交面相交 → 竞争文件+变更名+hunk 数（同文件无法按行归属，显式暴露代替静默）；④ 在途残留：提交面文件在当前工作树仍有未提交 diff → 活跃并发 WIP 信号。接线点单一：flow.js cmdFlowDone 提交面切分处（既有「提交面夹带嫌疑 advisory」块之后独立调用，不改对方代码）；local.yaml hunk_gate 三档（warn 默认、error、off）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出：src/hunk-attribution.js（collectDeclaredFace、runHunkAttributionGate、renderHunkAttributionLines）；flow.js 单点接线；config-schema.js 增 hunk_gate 键。无 CLI 命令签名变化；local.yaml 新增可选键向后兼容（缺席=warn）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用——git 只读快照（baseline..HEAD 与当前 status），无到达序。2. 并发写：探针只读（git diff 与 changes 目录读取）；与其他会话 flow done 并发跑同款对账幂等（同一提交面同结果）。3. 切换：无状态残留（每次全量重算，不落中间态）；异常 fail-soft 降级为一行跳过注记不阻断。4. 作用域：只读本仓 .sillyspec/changes 与 git 对象；跨仓零串台；竞争检测遍历活跃变更目录（排除 archive），多实例并发读一致。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：竞争检测的假阳/假阴——他变更声明面与提交面相交但实际各行其事（假阳：一行警告可接受）或他会话在途改动根本没立变更/没写清单（假阴：残留信号与既有文件级 advisory 兜底，无法根治——hunk 归属的语义判断终究要人，门的目标是把静默混合变成显式中断）。试过放弃：① 轻量道默认挂会话 worktree（用户否决——合并税过重，仓内 wt-parallel-commit-race 等坑史为证）；② hunk 语义归属（机器无法判定行归属，改为「竞争文件显式暴露+人核」的诚实口径）。
+diff --git a/.sillyspec/changes/2026-09-27-hunk-attribution-gate/proposal.md b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/proposal.md
+new file mode 100644
+index 00000000..5b688417
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/proposal.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:40:53.731Z
++---
++# 提案书（Proposal）— 2026-09-27-hunk-attribution-gate
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:5b367017fad3139f72994e58aa7a6747026071c4f8aafc9c5bc2a471c4a9d4f6:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++任务原话转写：背景：本会话实证事故——flow.js 被两个会话并发编辑，文件级 pathspec 提交把并行会话 25 行在途代码夹带进冻结面（规则 11 防文件级夹带，防不住同文件异行）；归档评审以「无承诺锚的活代码交付」抓出。用户裁决：不默认挂工作树（合并税过重，仓内 wt 系坑史为证），改为把提交面对账从文件级升到 hunk 级归属门。
++成功标准：
++- 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（parseFileChangeList 与 extractRequirementBindings 同源）
++- 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk 数，不在声明面的文件列入未归因清单并警告
++- 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件无法按行归属，显式暴露）
++- 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP
++- 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非 git 环境与异常 fail-soft 降级跳过
++- 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级
++- 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样，本门独立输出）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:9ca3d8761b0d7abe7aa1930b7f9d6ba6e6546dac83d3e66b74be40faac1cdb15:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（parseFileChangeList 与 extractRequirementBindings 同源）
++2. 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk 数，不在声明面的文件列入未归因清单并警告
++3. 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件无法按行归属，显式暴露）
++4. 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP
++5. 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非 git 环境与异常 fail-soft 降级跳过
++6. 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级
++7. 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样，本门独立输出）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:cb33673ddb591ca93cf587dfec836440d0b0a5ed7bf67e4a0cab24a5e80df896:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-hunk-attribution-gate 留痕重锚 -->
++1. 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（parseFileChangeList 与 extractRequirementBindings 同源）
++2. 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk 数，不在声明面的文件列入未归因清单并警告
++3. 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件无法按行归属，显式暴露）
++4. 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP
++5. 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非 git 环境与异常 fail-soft 降级跳过
++6. 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级
++7. 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样，本门独立输出）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-27-hunk-attribution-gate/requirements.md b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/requirements.md
+new file mode 100644
+index 00000000..b40d7715
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/requirements.md
+@@ -0,0 +1,66 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:40:53.732Z
++---
++# 需求规格（Requirements）— 2026-09-27-hunk-attribution-gate
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（
++Given 测试 相关模块就绪
++When 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（parseFileChangeList 与 extractR
++Then 行为符合本条标准描述
++
++### FR-02: 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk
++Given 系统就绪
++When 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk 数，不在声明面的文件列入未归因清单并警告
++Then 行为符合本条标准描述
++
++### FR-03: 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件
++Given 系统就绪
++When 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件无法按行归属，显式暴露）
++Then 行为符合本条标准描述
++
++### FR-04: 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP
++Given 系统就绪
++When 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP
++Then 行为符合本条标准描述
++
++### FR-05: 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非 
++Given 系统就绪
++When 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非 git 环境与异常 fail-soft 降级跳过
++Then 行为符合本条标准描述
++
++### FR-06: 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级
++Given 系统就绪
++When 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级
++Then 行为符合本条标准描述
++
++### FR-07: 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样
++Given 系统就绪
++When 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样，本门独立输出）
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/hunk-attribution-gate.test.mjs「声明面归集：design 清单 + requirements 绑定（NEW: 前缀与反斜杠归一）」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/hunk-attribution-gate.test.mjs「未归因 + 竞争 + 残留三信号全路径」（b.js 未归因断言含 hunk 计数 ≥1）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/hunk-attribution-gate.test.mjs「未归因 + 竞争 + 残留三信号全路径」（c.js 竞争断言 by=['2026-09-27-other']，archive 与本变更排除）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/hunk-attribution-gate.test.mjs「未归因 + 竞争 + 残留三信号全路径」（a.js 残留断言——porcelain XY 双列工作树位 M 命中）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/hunk-attribution-gate.test.mjs「off 关闭与空面降级」「readHunkGate：三档 + 缺席默认 warn + CRLF」「fail-soft：非 git 目录不炸」
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/hunk-attribution-gate.test.mjs 全部 6 用例（node --test 实测 6 pass 0 fail）+ check-syntax 未用导出清零（本变更侧）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：约束对账——git diff 核对 flow.js 仅 2 hunk 31 行新增全属本变更；「提交面夹带嫌疑 advisory」块零改动（git diff 无该区域 hunk）
+diff --git a/.sillyspec/changes/2026-09-27-hunk-attribution-gate/tasks.md b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/tasks.md
+new file mode 100644
+index 00000000..3bfc7969
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T05:40:53.733Z
++---
++# 任务注册表（Tasks）— 2026-09-27-hunk-attribution-gate
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: src/hunk-attribution.js 模块——声明面归集（复用 parseFileChangeList/extractRequirementBindings/testAnchorFile 同源）/hunk 计数/porcelain 双列在途检测/跨变更竞争扫描/三档分级/fail-soft (FR-01 FR-02 FR-03 FR-04 FR-05)
++- [x] task-02: flow.js probes 子步单点接线（warn 三类信号输出、error reportMidFail+exit 1 阻断、off 跳过）+ config-schema.js hunk_gate 键 (FR-05)
++- [x] task-03: 单测 6 用例（真实临时 git 仓走全信号路径：未归因含 hunk 数、竞争含对方变更名、残留含 porcelain 工作树列、归集含 NEW: 与反斜杠归一、off/空面降级、fail-soft）+ check-syntax 未用导出清理（3 内部函数去导出） (FR-06)
++- [x] task-04: 自食其力核对——提交前对 flow.js 逐 hunk 人工核对（2 hunk 31 行全属本变更，零外源；本变更防的正是 flow.js 夹带）+ 既有「提交面夹带嫌疑 advisory」块零改动核对 (FR-07)
+diff --git a/src/config-schema.js b/src/config-schema.js
+index c50551f8..99b26c5a 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -130,6 +130,7 @@ export const LOCAL_YAML_SCHEMA = {
+       keys: [
+         { path: 'known_failures', type: 'array', optional: true, status: 'live', readers: ['extractKnownFailures (src/verify-postcheck.js)'], desc: '失败行模式列表（匹配测试输出失败行）。', example: 'tests/some-old-test' },
+         { path: 'ui_visual_gate', type: 'string', optional: true, status: 'live', readers: ['runUiVisualProbe (src/ui-visual.js)'], desc: '【2026-09-27-ui-visual-guidance】UI 视觉证据分级门档位：warn（默认，缺 visual-evidence.md 仅警告）/ error（缺证据即阻断）/ off（探针整体关闭，含降级硬规则）。视觉降级无用户裁决留痕时无论档位恒阻断。', example: 'warn' },
++        { path: 'hunk_gate', type: 'string', optional: true, status: 'live', readers: ['runHunkAttributionGate (src/hunk-attribution.js)'], desc: '【2026-09-27-hunk-attribution-gate】提交面行级归属门档位：warn（默认，未归因文件/跨变更竞争/在途残留仅警告）/ error（三类信号任一在场均阻断收口）/ off（关闭）。', example: 'warn' },
+       ],
+     },
+     {
+diff --git a/src/flow.js b/src/flow.js
+index ee856b45..c123dd90 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -33,6 +33,7 @@ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
+ import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
++import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
+ 
+ const FLOW_STATE_FILE = 'flow-state.yaml'
+ const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
+@@ -1126,6 +1127,36 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     } catch (e) {
+       console.warn(`⚠️ UI 视觉证据探针异常（fail-soft 降级放行）：${(e && e.message) || e}`)
+     }
++    // hunk 归属门（2026-09-27-hunk-attribution-gate：提交面行级对账——规则 11 文件级 pathspec
++    // 防不住「同文件异行」的并行会话夹带，本会话 4f859053 实证。三类信号：未归因文件、跨变更
++    // 竞争、在途残留；hunk_gate warn 默认（警告）/error（阻断）/off。与「提交面夹带嫌疑
++    // advisory」互补：advisory 在冻结面采集处看文件名，本门在 probes 执法看 hunk 与竞争面。
++    try {
++      const gate = readHunkGate(specBase)
++      let committedForGate = []
++      try {
++        committedForGate = String(gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`]) || '')
++          .split('\n').map((x) => x.trim().replace(/\\/g, '/')).filter(Boolean)
++      } catch { /* 无 git/无基线 → 空面，模块内降级跳过 */ }
++      const hunkResult = await runHunkAttributionGate({
++        cwd, specBase, changeName: change, baselineCommit: st.baseline_commit,
++        committedFiles: committedForGate, gitFn: gitQuiet, gate,
++      })
++      for (const line of renderHunkAttributionLines(hunkResult)) {
++        if (line.startsWith('- ✅') || line.startsWith('- ℹ️')) console.log(`🔍 ${line.slice(2)}`)
++        else if (line.startsWith('- ⚠️')) {
++          if (gate === 'error') console.error(`❌ ${line.slice(2)}`)
++          else console.warn(`⚠️ ${line.slice(2)}`)
++        } else if (line.startsWith('- ❌')) console.error(`❌ ${line.slice(2)}`)
++      }
++      if (gate === 'error' && !hunkResult.ok) {
++        console.error('   修复：未归因文件补 design 自声明或协调归属；竞争文件逐 hunk 核对后协调串行或拆分提交。清零后重跑（断点续）。')
++        reportMidFail('probes')
++        process.exit(1)
++      }
++    } catch (e) {
++      console.warn(`⚠️ hunk 归属门异常（fail-soft 降级放行）：${(e && e.message) || e}`)
++    }
+     mark('probes')
+   }
+ 
+diff --git a/src/hunk-attribution.js b/src/hunk-attribution.js
+new file mode 100644
+index 00000000..329063f7
+--- /dev/null
++++ b/src/hunk-attribution.js
+@@ -0,0 +1,191 @@
++/**
++ * hunk-attribution —— 提交面行级归属门（2026-09-27-hunk-attribution-gate）。
++ *
++ * 背景事故（本仓 4f859053 实证）：两个会话并发编辑同一文件，文件级 pathspec 提交把并行
++ * 会话 25 行在途代码夹带进冻结面——规则 11 的文件级对账防「别的文件」，防不住「同一文件
++ * 里别人的行」。用户裁决：不默认挂工作树（合并税过重，wt-parallel-commit-race 等坑史为
++ * 证），改为把对账升到 hunk 级归属门。
++ *
++ * 三类信号（诚实口径：机器无法判定「哪行是谁的」，门的目标是把静默混合变成显式中断）：
++ *   ① 未归因文件：提交面文件不在本变更声明面（design 清单 ∪ requirements 测试绑定，
++ *      复用 parseFileChangeList / extractRequirementBindings / testAnchorFile 同源解析）；
++ *   ② 跨变更竞争：其他活跃变更的声明面与提交面相交——同文件无法按行归属，显式列出
++ *      竞争文件、对方变更名与 hunk 数，收口前人工核对；
++ *   ③ 在途残留：提交面文件当前工作树仍有未提交 diff——活跃并发 WIP 信号。
++ *
++ * 分级：local.yaml hunk_gate（warn 默认 / error / off）。error 档由接线方（flow.js probes
++ * 子步）阻断收口；本模块只产结果不执法。fail-soft：非 git 环境与异常降级跳过。
++ */
++import { existsSync, readFileSync, readdirSync } from 'node:fs'
++import { join } from 'node:path'
++
++/** local.yaml 读 hunk_gate（warn|error|off，默认 warn；CRLF 容错）。 */
++export function readHunkGate(specBase) {
++  try {
++    const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
++    const m = raw.match(/^\s*hunk_gate\s*:\s*['\"]?(warn|error|off)['\"]?\s*$/m)
++    return m ? m[1] : 'warn'
++  } catch {
++    return 'warn'
++  }
++}
++
++function normalizePath(p) {
++  return String(p).replace(/^NEW:\s*/, '').replace(/\\/g, '/').trim()
++}
++
++/**
++ * 本变更声明面（design 清单 ∪ requirements 测试绑定路径）。解析器与 flow done 既有
++ * 「提交面夹带嫌疑 advisory」同源（不二算口径一致）。
++ * @returns {{ declared: Set<string>, parseFailed: boolean }}
++ */
++export async function collectDeclaredFace(changeDir, change) {
++  const declared = new Set()
++  let parseFailed = false
++  try {
++    const { parseFileChangeList } = await import('./change-list.js')
++    for (const p of parseFileChangeList(join(changeDir, 'design.md'))) declared.add(normalizePath(p))
++  } catch { parseFailed = true }
++  try {
++    const { extractRequirementBindings } = await import('./flow-draft.js')
++    const { testAnchorFile } = await import('./test-bindings.js')
++    for (const row of extractRequirementBindings({ changeDir, change })) {
++      for (const t of row.tests || []) declared.add(normalizePath(testAnchorFile(t)))
++    }
++  } catch { parseFailed = true }
++  return { declared, parseFailed }
++}
++
++/** 其他活跃变更的声明面（排除 archive 与本变更；design 缺失的变更跳过）。 */
++async function collectForeignDeclarations(specBase, changeName) {
++  const map = new Map() // file -> Set<changeName>
++  const changesRoot = join(specBase, 'changes')
++  let dirs
++  try { dirs = readdirSync(changesRoot, { withFileTypes: true }) } catch { return map }
++  const { parseFileChangeList } = await import('./change-list.js')
++  for (const d of dirs) {
++    if (!d.isDirectory()) continue
++    if (d.name === 'archive' || d.name === changeName) continue
++    const designPath = join(changesRoot, d.name, 'design.md')
++    if (!existsSync(designPath)) continue
++    try {
++      for (const p of parseFileChangeList(designPath)) {
++        const f = normalizePath(p)
++        if (!map.has(f)) map.set(f, new Set())
++        map.get(f).add(d.name)
++      }
++    } catch { /* 单变更解析失败跳过（fail-soft） */ }
++  }
++  return map
++}
++
++/** 数某文件 baseline..HEAD 的 hunk 数（二进制/重命名无 @@ 头计 0——按文件级处理）。 */
++function countHunks(gitFn, cwd, baselineCommit, file) {
++  try {
++    const out = gitFn(cwd, ['diff', `${baselineCommit}..HEAD`, '--', file])
++    const text = String(out || '')
++    let n = 0
++    for (const line of text.split('\n')) if (line.startsWith('@@')) n++
++    return n
++  } catch {
++    return -1
++  }
++}
++
++/** 当前工作树未提交修改文件集（M 状态；新增未跟踪不算——residue 只关心已提交文件的并发改动）。 */
++function collectWorkingTreeModified(gitFn, cwd) {
++  try {
++    const out = gitFn(cwd, ['status', '--porcelain'])
++    const set = new Set()
++    for (const line of String(out || '').split('\n')) {
++      const status = line.slice(0, 2)
++      const path = normalizePath(line.slice(3).split(' -> ').pop())
++      // porcelain XY 双列：X=暂存位 Y=工作树位（" M a.js" 是未暂存修改）——任一列 M/A 都算在途
++      if ((status[0] === 'M' || status[0] === 'A' || status[1] === 'M' || status[1] === 'A') && path) set.add(path)
++    }
++    return set
++  } catch {
++    return null
++  }
++}
++
++/**
++ * 行级归属门主体。committedFiles 为 baseline..HEAD 提交面文件清单（相对路径正斜杠）。
++ * @returns {{ ok: boolean, degraded: boolean, gate: string, unattributed: Array,
++ *   contended: Array, residue: Array, notes: string[] }}
++ */
++export async function runHunkAttributionGate({ cwd, specBase, changeName, baselineCommit, committedFiles, gitFn, gate = 'warn' }) {
++  const result = { ok: true, degraded: false, gate, faceCount: 0, unattributed: [], contended: [], residue: [], notes: [] }
++  if (gate === 'off') {
++    result.notes.push('hunk_gate=off——归属门关闭')
++    return result
++  }
++  if (!baselineCommit || !Array.isArray(committedFiles) || committedFiles.length === 0) {
++    result.notes.push('提交面为空或基线缺失——归属门跳过')
++    return result
++  }
++  const changeDir = join(specBase, 'changes', changeName)
++  const { declared } = await collectDeclaredFace(changeDir, changeName)
++
++  const deliverables = committedFiles
++    .map(normalizePath)
++    .filter((f) => !f.startsWith('.sillyspec/'))
++  result.faceCount = deliverables.length
++
++  // ① 未归因文件（声明面全空时降为提示，不指认夹带——advisory 同口径）
++  if (declared.size > 0) {
++    for (const f of deliverables) {
++      if (!declared.has(f)) {
++        result.unattributed.push({ file: f, hunks: countHunks(gitFn, cwd, baselineCommit, f) })
++      }
++    }
++  } else {
++    result.notes.push('本变更无文件声明面（design 无清单、requirements 无绑定）——未归因判定降为提示')
++  }
++
++  // ② 跨变更竞争（同文件无法按行归属——显式暴露）
++  const foreign = await collectForeignDeclarations(specBase, changeName)
++  for (const f of deliverables) {
++    const by = foreign.get(f)
++    if (by && by.size > 0) {
++      result.contended.push({ file: f, by: [...by], hunks: countHunks(gitFn, cwd, baselineCommit, f) })
++    }
++  }
++
++  // ③ 在途残留（提交面文件当前仍有未提交修改——活跃并发 WIP）
++  const modified = collectWorkingTreeModified(gitFn, cwd)
++  if (modified) {
++    for (const f of deliverables) {
++      if (modified.has(f)) result.residue.push({ file: f })
++    }
++  }
++
++  result.ok = result.unattributed.length === 0 && result.contended.length === 0
++  return result
++}
++
++/** 渲染（warn/error 由接线方选择输出流；本函数只产行）。 */
++export function renderHunkAttributionLines(r) {
++  const L = []
++  if (!r || r.gate === 'off' || r.degraded) {
++    L.push(`- 不适用（${r && r.gate === 'off' ? 'hunk_gate=off' : '降级跳过（非 git 环境或异常）'}）`)
++    for (const n of (r && r.notes) || []) L.push(`- ℹ️ ${n}`)
++    return L
++  }
++  const attributed = r.faceCount - r.unattributed.length
++  L.push(`- ℹ️ 提交面 ${r.faceCount} 个交付文件对账：声明面归因 ${attributed}、未归因 ${r.unattributed.length}、跨变更竞争 ${r.contended.length}、在途残留 ${r.residue.length}`)
++  for (const u of r.unattributed) {
++    L.push(`- ⚠️ 未归因：\`${u.file}\`（${u.hunks >= 0 ? `${u.hunks} hunk` : 'hunk 数不可得'}）不在 design 清单与 requirements 测试绑定——属并行会话在途交付则须显式 pathspec 隔离并协调归属；属本变更则补 design 自声明`)
++  }
++  for (const c of r.contended) {
++    L.push(`- ⚠️ 跨变更竞争：\`${c.file}\` 同时被活跃变更 ${c.by.join('、')} 声明（${c.hunks >= 0 ? `${c.hunks} hunk` : '?'}）——同文件无法按行归属，收口前逐 hunk 核对全部改动确属本变更，否则协调串行或拆分提交`)
++  }
++  for (const s of r.residue) {
++    L.push(`- ⚠️ 在途残留：\`${s.file}\` 已进提交面但当前工作树仍有未提交修改——活跃并发 WIP 信号，确认无 interleaved 提交风险`)
++  }
++  if (r.unattributed.length === 0 && r.contended.length === 0 && r.residue.length === 0) {
++    L.push('- ✅ 提交面全部文件归属清晰（声明面覆盖、无跨变更竞争、无在途残留）')
++  }
++  for (const n of r.notes || []) L.push(`- ℹ️ ${n}`)
++  return L
++}
+diff --git a/src/knowledge-digest.js b/src/knowledge-digest.js
+index fe695b2a..90bb4ad9 100644
+--- a/src/knowledge-digest.js
++++ b/src/knowledge-digest.js
+@@ -16,7 +16,7 @@
+  */
+ import { existsSync, readFileSync, readdirSync } from 'fs'
+ import { join } from 'path'
+-import { readFrBindings, resolveTestFileRel } from './test-bindings.js'
++import { readFrBindings, resolveTestFileRel, testAnchorFile } from './test-bindings.js'
+ 
+ /** 伪域判定：auto- 前缀（scaffold 时代机器蒸馏域）或 unmapped 池 */
+ const isPseudoDomain = (domain) => /^auto[-_]/.test(domain) || domain === 'unmapped'
+@@ -89,7 +89,9 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
+       const rows = readFrBindings({ knowledgeRoot, frId: e.id })
+       for (const row of rows) {
+         for (const t of row.tests || []) {
+-          const filePart = String(t).split('#')[0].split('::')[0]
++          // 锚剥离单源（评审 P1 清偿）：testAnchorFile 吃全部分隔形态（#/::/「」/>）——
++          // 手搓 split('#').split('::') 漏「」锚致 7/8 假阳性（目标文件全在场），与 repair-paths 口径对拍实证
++          const filePart = testAnchorFile(String(t))
+           const rel = resolveTestFileRel(filePart, { projectRoot })
+           if (!rel && !existsSync(join(projectRoot, filePart.replace(/\\/g, '/')))) {
+             totals.unresolvedBindings++
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 25e8ea94..967e8961 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -664,7 +664,7 @@ export async function cmdKnowledge(args, dir, opts = {}) {
+       output(false, {}, {
+         code: 'unknown_subcommand',
+         subcommand: subCommand,
+-        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats'],
++        available: ['search', 'inspect', 'validate', 'refresh', 'propose', 'classify', 'inbox', 'stats', 'digest'],
+       })
+   }
+ }
+diff --git a/test/hunk-attribution-gate.test.mjs b/test/hunk-attribution-gate.test.mjs
+new file mode 100644
+index 00000000..4560b52b
+--- /dev/null
++++ b/test/hunk-attribution-gate.test.mjs
+@@ -0,0 +1,143 @@
++/**
++ * hunk 归属门单测（2026-09-27-hunk-attribution-gate FR-06）。
++ *
++ * 用真实临时 git 仓走全信号路径：
++ * 1. 声明面归集（design 清单 ∪ requirements 测试绑定——含 NEW: 前缀与反斜杠归一）
++ * 2. 未归因文件检测（提交面文件不在声明面，含 hunk 计数）
++ * 3. 跨变更竞争检测（他活跃变更声明面相交；archive 与本变更排除）
++ * 4. 在途残留（提交面文件当前工作树仍有未提交修改）
++ * 5. 三档分级（warn 结果同构 / off 关闭 / 空面降级）+ fail-soft（非 git 目录）
++ * 6. 渲染行形态（✅ 清零行 / ⚠️ 三类信号行）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { execFileSync } from 'node:child_process'
++
++import {
++  readHunkGate, collectDeclaredFace, runHunkAttributionGate, renderHunkAttributionLines,
++} from '../src/hunk-attribution.js'
++
++function git(cwd, args) {
++  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
++}
++
++/** 建临时仓：base 提交 → feature 提交（声明 a.js、未声明 b.js、竞争 c.js）→ 工作树改 a.js。 */
++function makeScenario({ withForeignChange = true, designList, requirements } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'hunk-gate-'))
++  git(cwd, ['init', '-q'])
++  git(cwd, ['config', 'user.email', 't@t'])
++  git(cwd, ['config', 'user.name', 't'])
++  writeFileSync(join(cwd, 'a.js'), 'a1\na2\n')
++  writeFileSync(join(cwd, 'b.js'), 'b1\n')
++  writeFileSync(join(cwd, 'c.js'), 'c1\nc2\nc3\n')
++  git(cwd, ['add', '.'])
++  git(cwd, ['commit', '-qm', 'base'])
++
++  writeFileSync(join(cwd, 'a.js'), 'a1\na2-改\na3\n')
++  writeFileSync(join(cwd, 'b.js'), 'b1\nb2\n')
++  writeFileSync(join(cwd, 'c.js'), 'c1\nc2-改\n')
++  git(cwd, ['add', '.'])
++  git(cwd, ['commit', '-qm', 'feature'])
++  const baseline = git(cwd, ['rev-parse', 'HEAD~1']).trim()
++
++  const specBase = join(cwd, '.sillyspec')
++  const changeName = '2026-09-27-x'
++  const changeDir = join(specBase, 'changes', changeName)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), designList ?? `# 设计\n## 文件变更清单\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | a.js |\n| 修改 | c.js |\n`)
++  writeFileSync(join(changeDir, 'requirements.md'), requirements ?? '# 需求\n## 测试绑定\n<!--AGENT:测试绑定FR-01 t -->\ntest/x.test.mjs「用例」\n')
++  if (withForeignChange) {
++    const other = join(specBase, 'changes', '2026-09-27-other')
++    mkdirSync(other, { recursive: true })
++    writeFileSync(join(other, 'design.md'), `# 他变更\n## 文件变更清单\n| 操作 | 文件路径 |\n|---|---|\n| 修改 | c.js |\n`)
++  }
++
++  const committed = ['a.js', 'b.js', 'c.js']
++  return { cwd, specBase, changeName, changeDir, baseline, committed, cleanup: () => rmSync(cwd, { recursive: true, force: true }) }
++}
++
++function gitFn(cwd, args) { return git(cwd, args) }
++
++test('未归因 + 竞争 + 残留三信号全路径', async () => {
++  const sc = makeScenario()
++  try {
++    // 残留：提交后再改 a.js（不提交）
++    writeFileSync(join(sc.cwd, 'a.js'), 'a1\na2-改\na3\na4-在途\n')
++    const r = await runHunkAttributionGate({
++      cwd: sc.cwd, specBase: sc.specBase, changeName: sc.changeName,
++      baselineCommit: sc.baseline, committedFiles: sc.committed,
++      gitFn: (c, a) => gitFn(c, a), gate: 'warn',
++    })
++    assert.deepEqual(r.unattributed.map((u) => u.file), ['b.js'])
++    assert.ok(r.unattributed[0].hunks >= 1, 'b.js 至少 1 hunk')
++    assert.deepEqual(r.contended.map((c) => c.file), ['c.js'])
++    assert.deepEqual(r.contended[0].by, ['2026-09-27-other'])
++    assert.deepEqual(r.residue.map((s) => s.file), ['a.js'])
++    assert.equal(r.ok, false)
++    assert.equal(r.faceCount, 3)
++  } finally { sc.cleanup() }
++})
++
++test('声明面归集：design 清单 + requirements 绑定（NEW: 前缀与反斜杠归一）', async () => {
++  const sc = makeScenario({
++    designList: `# 设计\n## 文件变更清单\n| 操作 | 文件路径 |\n|---|---|\n| 新增 | NEW:a.js |\n| 修改 | src\\ui\\x.tsx |\n`,
++  })
++  try {
++    const { declared } = await collectDeclaredFace(sc.changeDir, sc.changeName)
++    assert.ok(declared.has('a.js'), 'NEW: 前缀剥离')
++    assert.ok(declared.has('src/ui/x.tsx'), '反斜杠归一')
++    assert.ok(declared.has('test/x.test.mjs'), 'requirements 测试绑定路径入面')
++  } finally { sc.cleanup() }
++})
++
++test('全声明零信号 → ok=true，渲染含 ✅ 清零行', async () => {
++  const sc = makeScenario({ withForeignChange: false })
++  try {
++    const r = await runHunkAttributionGate({
++      cwd: sc.cwd, specBase: sc.specBase, changeName: sc.changeName,
++      baselineCommit: sc.baseline, committedFiles: ['a.js', 'c.js'],
++      gitFn, gate: 'warn',
++    })
++    assert.equal(r.ok, true)
++    assert.equal(r.unattributed.length, 0)
++    const lines = renderHunkAttributionLines(r)
++    assert.ok(lines.some((l) => l.startsWith('- ✅')))
++    assert.ok(lines[0].includes('提交面 2 个交付文件对账'))
++    assert.ok(lines.some((l) => l.includes('test/x.test.mjs') || l.includes('声明面归因 2')))
++  } finally { sc.cleanup() }
++})
++
++test('off 关闭与空面降级', async () => {
++  const sc = makeScenario()
++  try {
++    const off = await runHunkAttributionGate({ cwd: sc.cwd, specBase: sc.specBase, changeName: sc.changeName, baselineCommit: sc.baseline, committedFiles: sc.committed, gitFn, gate: 'off' })
++    assert.equal(off.ok, true)
++    assert.ok(off.notes.some((n) => n.includes('hunk_gate=off')))
++    const empty = await runHunkAttributionGate({ cwd: sc.cwd, specBase: sc.specBase, changeName: sc.changeName, baselineCommit: null, committedFiles: [], gitFn, gate: 'warn' })
++    assert.ok(empty.notes.some((n) => n.includes('跳过')))
++  } finally { sc.cleanup() }
++})
++
++test('fail-soft：非 git 目录不炸（声明面空 → 提示不指认口径）', async () => {
++  const dir = mkdtempSync(join(tmpdir(), 'hunk-gate-nogit-'))
++  try {
++    const r = await runHunkAttributionGate({ cwd: dir, specBase: dir, changeName: 'x', baselineCommit: 'deadbeef', committedFiles: ['a.js'], gitFn, gate: 'warn' })
++    assert.equal(r.unattributed.length, 0, '声明面全空不指认夹带（advisory 同口径）')
++    assert.ok(r.notes.some((n) => n.includes('无文件声明面')))
++    assert.equal(r.ok, true)
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('readHunkGate：三档 + 缺席默认 warn + CRLF', () => {
++  const base = mkdtempSync(join(tmpdir(), 'hunk-gate-cfg-'))
++  try {
++    assert.equal(readHunkGate(base), 'warn')
++    writeFileSync(join(base, 'local.yaml'), 'hunk_gate: error\n')
++    assert.equal(readHunkGate(base), 'error')
++    writeFileSync(join(base, 'local.yaml'), "hunk_gate: 'off'\r\n")
++    assert.equal(readHunkGate(base), 'off')
++  } finally { rmSync(base, { recursive: true, force: true }) }
++})
+diff --git a/test/knowledge-digest.test.mjs b/test/knowledge-digest.test.mjs
+index 27e2c75b..29c0a2ec 100644
+--- a/test/knowledge-digest.test.mjs
++++ b/test/knowledge-digest.test.mjs
+@@ -89,6 +89,30 @@ test('① 四信号阈值：全在阈内 healthy；各类超阈逐项进摘要
+   assert.ok(db.signals.some(s => s.kind === 'binding-unresolved' && /repair-paths/.test(s.suggestion)), '坏绑定给 repair 指引')
+ })
+ 
++test('①b 坏绑定锚剥离与 repair-paths 同口径（评审 P1 防回归）：「」锚不定为坏绑定', () => {
++  const root = mk('kd-anchor-')
++  const specBase = join(root, '.sillyspec')
++  mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++  mkdirSync(join(root, 'test'), { recursive: true })
++  const NL = String.fromCharCode(10)
++  writeFileSync(join(root, 'test', 'x.test.mjs'), "import { test } from 'node:test'" + NL + "test('x', () => {})" + NL)
++  writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), [
++    '---', 'author: t', '---', '', '# FR 索引 — core', '',
++    '## FR-core-001 行为一', '状态：active', '',
++    '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++    '- row: src:task-01:FR-01',
++    "  tests: test/x.test.mjs「用例组」", // 「」锚——文件在场，不得判坏
++    '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '',
++    '## FR-core-002 行为二', '状态：active', '',
++    '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
++    '- row: src:task-01:FR-02',
++    '  tests: test/really-missing.test.mjs', // 真缺失
++    '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '',
++  ].join(NL) + NL)
++  const d = collectKnowledgeDigest({ specBase, projectRoot: root })
++  assert.equal(d.totals.unresolvedBindings, 1, `「」锚不定坏、真缺失计 1（实得 ${d.totals.unresolvedBindings}）`)
++})
++
+ test('② suggestDomainFromFiles：backend 模块归属最强 → src 段 → 目录段兜底', () => {
+   assert.equal(suggestDomainFromFiles(['backend/app/modules/platform_sync/router.py', 'frontend/x.tsx']), 'platform_sync')
+   assert.equal(suggestDomainFromFiles(['sillyhub-daemon/src/a.ts']), 'daemon')
+diff --git a/.sillyspec/changes/2026-09-27-hunk-attribution-gate/flow-state.yaml b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-hunk-attribution-gate/flow-state.yaml
+@@ -0,0 +1,16 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: e2da65a0cafddef2c4c550f3f768428b3f589c06
++updatedAt: '2026-09-27T05:47:52.335Z'
++edit_ratio: 0
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(53)（6.7s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927054714\test-result.json｜lint: failed
++  ← npm run lint（37.4s）｜门文件 18 个
++

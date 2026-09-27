@@ -1,0 +1,22 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+baseline_commit: e2da65a0cafddef2c4c550f3f768428b3f589c06
+updatedAt: '2026-09-27T05:55:14.424Z'
+edit_ratio: 0
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(53)（6.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927054714\test-result.json｜lint: failed
+  ← npm run lint（37.4s）｜门文件 18 个
+
