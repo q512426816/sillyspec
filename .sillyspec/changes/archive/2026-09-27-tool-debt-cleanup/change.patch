@@ -1,0 +1,324 @@
+diff --git a/.sillyspec/changes/2026-09-27-tool-debt-cleanup/design.md b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/design.md
+new file mode 100644
+index 00000000..b099dc4d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:44:22.951Z
++---
++# 设计记录（Design Record）— 2026-09-27-tool-debt-cleanup
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++四笔清偿：① 提交面过滤抽为 flow-parity.filterCommittedFace 纯函数并扩展保留 .sillyspec/docs/ 交付文档（模块卡漏出审计 patch 的评审 P2 修复）；② flow.js 变更目录遍历排除 flow-state.yaml 运行态（不再当 new file 冻进 patch）；③ _module-map.yaml 登记 ui-visual.js 与 hunk-attribution.js（cli-entry）及他会话遗留的 knowledge-digest.js（core-engine，knowledge 系家族归属）；④ test-bindings.js 去除 normalizeTestsRootRel 冗余导出。③④ 使 check-syntax 全仓 lint 门解锁（pass 1 fail 0 实测）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出 filterCommittedFace（src/flow-parity.js）；flow.js patch 子步改用该函数 + walk 排除 flow-state.yaml + meta.note 更新；_module-map 三条 paths；test-bindings 去一导出。无 CLI 命令签名变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用（纯过滤函数与只读登记）。2. 并发写：共享文件提交前逐 hunk 人工核对（本会话新纪律），实测 5 hunk 全属本变更零外源。3. 切换：过滤函数无状态。4. 作用域：knowledge-digest.js 归属判定按 importer 家族（stages/knowledge.js 与 fr-index.js 均在 core-engine），非臆测。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：.sillyspec/docs/ 全保留可能把他会话在途的 docs WIP 冻进本变更 patch——对冲：docs 面提交前归属由既有夹带嫌疑 advisory 与 hunk 归属门（昨日变更）覆盖；本变更实测区间内 docs 提交均为本变更模块卡。放弃方案：只保留 modules/ 子目录（更窄）——放弃，scan/CONVENTIONS 等 docs 同为交付物，窄口径会再造下一个漏。
+diff --git a/.sillyspec/changes/2026-09-27-tool-debt-cleanup/proposal.md b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/proposal.md
+new file mode 100644
+index 00000000..7f9673b0
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:44:22.950Z
++---
++# 提案书（Proposal）— 2026-09-27-tool-debt-cleanup
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:aed895e15609c32262877597153b9279fd035685d0abd53759dce2cc5de3be1a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++任务原话转写：背景：本会话三次归档评审两次抓到 patch 冻结面口径缺陷——①flow.js 提交面过滤把 .sillyspec 目录下除本变更目录外全部滤除，致 gate-docs-cleanup 已提交的三张模块卡（交付文档）漏出审计 patch；②变更目录整目录遍历把 flow-state.yaml 运行态（未跟踪、机器写、冻结后仍变）收进 patch 当 new file。另有工具债：ui-visual.js 与 hunk-attribution.js 未入模块图；test-bindings.js 导出 normalizeTestsRootRel 无外部引用致 check-syntax 全仓 lint 门常红（他会话存量债，机械清偿解锁）。
++成功标准：
++- patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood 模块卡不再漏），过滤逻辑抽为 flow-parity 导出的纯函数供单测锁定
++- 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）
++- _module-map.yaml 的 cli-entry paths 登记 ui-visual.js 与 hunk-attribution.js
++- test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消费保留），check-syntax 本仓侧清零
++- 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）
++- 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:8b8520e8218780eaa8468dc8c8ca44426544e7a79c5a9cc5edb2071553c33dfc:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood 模块卡不再漏），过滤逻辑抽为 flow-parity 导出的纯函数供单测锁定
++2. 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）
++3. _module-map.yaml 的 cli-entry paths 登记 ui-visual.js 与 hunk-attribution.js
++4. test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消费保留），check-syntax 本仓侧清零
++5. 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）
++6. 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:58b6f48d62d53a7a34df8122547a048e10d7ebb9cb2c81a111ca88354c8f73c4:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-tool-debt-cleanup 留痕重锚 -->
++1. patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood 模块卡不再漏），过滤逻辑抽为 flow-parity 导出的纯函数供单测锁定
++2. 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）
++3. _module-map.yaml 的 cli-entry paths 登记 ui-visual.js 与 hunk-attribution.js
++4. test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消费保留），check-syntax 本仓侧清零
++5. 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）
++6. 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-27-tool-debt-cleanup/requirements.md b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/requirements.md
+new file mode 100644
+index 00000000..1e438dbb
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:44:22.951Z
++---
++# 需求规格（Requirements）— 2026-09-27-tool-debt-cleanup
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood
++Given 系统就绪
++When patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood 模块卡不再漏），过滤逻辑抽为 flow-parity 导出
++Then 行为符合本条标准描述
++
++### FR-02: 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）
++Given 系统就绪
++When 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）
++Then 行为符合本条标准描述
++
++### FR-03: _module-map.yaml 的 cli-entry paths 登记 ui-visual.js
++Given 系统就绪
++When _module-map.yaml 的 cli-entry paths 登记 ui-visual.js 与 hunk-attribution.js
++Then 行为符合本条标准描述
++
++### FR-04: test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消
++Given 系统就绪
++When test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消费保留），check-syntax 本仓侧清零
++Then 行为符合本条标准描述
++
++### FR-05: 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）
++Given 系统就绪
++When 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）
++Then 行为符合本条标准描述
++
++### FR-06: 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）
++Given 系统就绪
++When 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/filter-committed-face.test.mjs「.sillyspec/docs/ 交付文档保留（模块卡不再漏出审计 patch）」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：walk 排除为控制流一行（node --check + flow done 实测覆盖），无独立断言面
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：YAML 登记核对（check-syntax 未录 module-map 清零实测）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：去导出核对（check-syntax 未引用导出清零实测 pass 1 fail 0）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/filter-committed-face.test.mjs 全部 5 用例（node --test 实测 5 pass 0 fail）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/filter-committed-face.test.mjs「非 .sillyspec 交付全留」「本变更目录治理工件保留，他侧变更目录滤除」「knowledge 与他侧 docs 外的 .sillyspec 面仍滤除」+ 共享文件 hunk 核对（git diff 5 hunk 全属本变更）
+diff --git a/.sillyspec/changes/2026-09-27-tool-debt-cleanup/tasks.md b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/tasks.md
+new file mode 100644
+index 00000000..0b0bddbd
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-tool-debt-cleanup/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:44:22.951Z
++---
++# 任务注册表（Tasks）— 2026-09-27-tool-debt-cleanup
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: filterCommittedFace 纯函数（flow-parity 导出，先归一后过滤）+ flow.js 换用 + .sillyspec/docs/ 保留 + walk 排 flow-state.yaml + note 更新 (FR-01 FR-02)
++- [x] task-02: _module-map 登记 ui-visual.js、hunk-attribution.js（cli-entry）与 knowledge-digest.js（core-engine，importer 家族归属） (FR-03)
++- [x] task-03: test-bindings 去 normalizeTestsRootRel 冗余导出；check-syntax 全仓实测 pass 1 fail 0 解锁 (FR-04)
++- [x] task-04: 单测 5 用例锁定过滤契约（非 sillyspec 全留/本变更目录留/他侧变更滤除/docs 保留/knowledge 与 runtime 滤除/反斜杠归一）+ 共享文件 5 hunk 逐条人工核对零外源 (FR-05 FR-06)
+diff --git a/.sillyspec/docs/sillyspec/modules/_module-map.yaml b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+index 2d1f1d00..70414906 100644
+--- a/.sillyspec/docs/sillyspec/modules/_module-map.yaml
++++ b/.sillyspec/docs/sillyspec/modules/_module-map.yaml
+@@ -45,6 +45,8 @@ modules:
+     paths:
+       - src/handoff.js
+       - src/index.js
++      - src/ui-visual.js
++      - src/hunk-attribution.js
+       - bin/sillyspec.js
+       - src/version.js
+       - src/spec-dir-typo.js
+@@ -112,6 +114,7 @@ modules:
+       - src/knowledge-stats.js
+       - src/greenfield-bootstrap.js
+       - src/fr-index.js
++      - src/knowledge-digest.js
+       - src/doctor-diagnostics.js
+       - src/fr-index.js
+       - src/fs-atomic.js
+diff --git a/src/flow-parity.js b/src/flow-parity.js
+index 4287ab37..342d9bf2 100644
+--- a/src/flow-parity.js
++++ b/src/flow-parity.js
+@@ -158,6 +158,18 @@ export function harvestSlot4Decision({ changeDir, change }) {
+ 
+ export default { reconcileModuleDocs, renderVerifyReceipt, harvestSlot4Decision, collectFreezeFiles, backfillGateSummary }
+ 
++/**
++ * patch 冻结面的提交面过滤（2026-09-27-tool-debt-cleanup 抽出为纯函数供单测锁定）：
++ * 非 .sillyspec/ 全留 + 本变更目录（治理工件）+ .sillyspec/docs/ 交付文档（dogfood 模块卡
++ * 是交付物——2026-09-27-gate-docs-cleanup 评审 P2 实证旧口径把已提交模块卡漏出审计 patch）。
++ * 他侧 .sillyspec/changes/**（quicklog/knowledge WIP）仍滤除。反斜杠归一。
++ */
++export function filterCommittedFace(committedRaw, ownPrefix) {
++  return committedRaw
++    .map((f) => String(f).replace(/\\/g, '/'))
++    .filter((p) => !p.startsWith('.sillyspec/') || p.startsWith(ownPrefix) || p.startsWith('.sillyspec/docs/'))
++}
++
+ /**
+  * patch 冻结面收集（2026-09-25-thin-r16-patches 修复①，R16 P2：agent 提交晚于 done →
+  * 冻结件只有治理件）。committed 提交面为主；exclusive（会话专属 worktree，调用方按
+diff --git a/src/flow.js b/src/flow.js
+index d4ac418c..020c67f0 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -895,7 +895,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const ownPrefix = `.sillyspec/changes/${change}/`
+         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
+         const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+-        let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
++        // 提交面过滤抽为 flow-parity.filterCommittedFace（2026-09-27-tool-debt-cleanup：
++        // +.sillyspec/docs/ 交付文档保留——模块卡漏出审计 patch 的评审 P2 修复）
++        const { filterCommittedFace } = await import('./flow-parity.js')
++        let committed = filterCommittedFace(committedRaw, ownPrefix)
+         // 夹带嫌疑 advisory（坑 parallel-session-stale-snapshot-carried-in-commit，2026-09-26
+         // 实证：daemon 遥测主题提交整体夹带并行会话旧分叉 page.tsx，静默回滚 main 已落地三处
+         // 功能——git 无冲突、聚焦测试不覆盖挂载面，绿灯直过）。提交面里未被本变更任何声明面
+@@ -948,6 +951,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const changeDirFiles = []
+         const walk = (dir) => {
+           for (const e of readdirSync(dir, { withFileTypes: true })) {
++            // flow-state.yaml 是运行态（机器写、冻结后仍随子步推进变化）——不入审计 patch
++            //（2026-09-27-tool-debt-cleanup：旧口径把它当 new file 冻进 patch，评审 P2）
++            if (e.name === 'flow-state.yaml') continue
+             const p = join(dir, e.name)
+             if (e.isDirectory()) walk(p)
+             else changeDirFiles.push(relative(cwd, p).replace(/\\/g, '/'))
+@@ -1004,7 +1010,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             files: ownFiles,
+             totals: { files: ownFiles.length, additions, deletions },
+             savedAt: new Date().toISOString(),
+-            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）',
++            note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
+           }
+           if (typeof frozen === 'string' && frozen) {
+             const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'
+diff --git a/src/test-bindings.js b/src/test-bindings.js
+index 119316df..63b0387d 100644
+--- a/src/test-bindings.js
++++ b/src/test-bindings.js
+@@ -117,7 +117,7 @@ export function resolveTestFileRel(p, { projectRoot, subprojectRoots = null, bas
+ }
+ 
+ /** 绑定 tests 路径归一（保留用例锚后缀）：文件部分走 resolveTestFileRel，锚原样回接 */
+-export function normalizeTestsRootRel(tests, { projectRoot } = {}) {
++function normalizeTestsRootRel(tests, { projectRoot } = {}) {
+   if (!projectRoot || !Array.isArray(tests)) return tests
+   return tests.map((t) => {
+     const filePart = testAnchorFile(String(t))
+diff --git a/test/filter-committed-face.test.mjs b/test/filter-committed-face.test.mjs
+new file mode 100644
+index 00000000..cc40ec7f
+--- /dev/null
++++ b/test/filter-committed-face.test.mjs
+@@ -0,0 +1,44 @@
++/**
++ * patch 冻结面提交面过滤单测（2026-09-27-tool-debt-cleanup FR-05）。
++ *
++ * 锁定 filterCommittedFace 行为：非 .sillyspec 全留 / 本变更目录保留 /
++ * .sillyspec/docs/ 交付文档保留（模块卡漏出审计 patch 的评审 P2 修复）/
++ * 他侧 .sillyspec/changes/** 滤除 / 反斜杠归一。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++
++import { filterCommittedFace } from '../src/flow-parity.js'
++
++const OWN = '.sillyspec/changes/2026-09-27-tool-debt-cleanup/'
++
++test('非 .sillyspec 交付全留', () => {
++  const r = filterCommittedFace(['src/flow.js', 'test/x.test.mjs', 'bin/sillyspec.js'], OWN)
++  assert.deepEqual(r, ['src/flow.js', 'test/x.test.mjs', 'bin/sillyspec.js'])
++})
++
++test('本变更目录治理工件保留，他侧变更目录滤除', () => {
++  const r = filterCommittedFace(
++    [`${OWN}design.md`, '.sillyspec/changes/2026-09-27-other/design.md', '.sillyspec/QUICKLOG.md'],
++    OWN,
++  )
++  assert.deepEqual(r, [`${OWN}design.md`])
++})
++
++test('.sillyspec/docs/ 交付文档保留（模块卡不再漏出审计 patch）', () => {
++  const r = filterCommittedFace(
++    ['.sillyspec/docs/sillyspec/modules/setup.md', '.sillyspec/docs/sillyspec/modules/_module-map.yaml'],
++    OWN,
++  )
++  assert.deepEqual(r, ['.sillyspec/docs/sillyspec/modules/setup.md', '.sillyspec/docs/sillyspec/modules/_module-map.yaml'])
++})
++
++test('knowledge 与他侧 docs 外的 .sillyspec 面仍滤除', () => {
++  const r = filterCommittedFace(['.sillyspec/knowledge/fr/setup.md', '.sillyspec/.runtime/x.log'], OWN)
++  assert.deepEqual(r, [])
++})
++
++test('反斜杠路径归一后同口径判定', () => {
++  const r = filterCommittedFace(['.sillyspec\\docs\\sillyspec\\modules\\setup.md'], OWN)
++  assert.deepEqual(r, ['.sillyspec/docs/sillyspec/modules/setup.md'])
++})

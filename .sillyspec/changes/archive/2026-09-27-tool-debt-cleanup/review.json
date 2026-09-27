@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-tool-debt-cleanup",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "design 槽3 作用域证据半失实：stages/knowledge.js 不在 core-engine（属 stages 模块）",
+      "evidence": "design.md 槽3 称「knowledge-digest.js 归属判定按 importer 家族（stages/knowledge.js 与 fr-index.js 均在 core-engine）」。实测两个 importer：src/fr-index.js:21 与 src/stages/knowledge.js:651 均引用 knowledge-digest.js，但 _module-map.yaml 中 stages 模块 paths 含 `src/stages/`（line 16），故 stages/knowledge.js 属 stages 模块而非 core-engine；「均在 core-engine」只对 fr-index.js 成立。归属结论本身不受影响（fr-index.js 直接 importer 在 core-engine，且 knowledge-match/quicklog/hits/classify/stats 全家族均在 core-engine），纯证据面不实、无代码影响。",
+      "location": ".sillyspec/changes/2026-09-27-tool-debt-cleanup/design.md:35 对照 .sillyspec/docs/sillyspec/modules/_module-map.yaml:16"
+    },
+    {
+      "severity": "P3",
+      "title": "design 槽4 对冲链半失实：夹带嫌疑 advisory 不覆盖 .sillyspec/docs/，实际兜底仅 hunk 归属门",
+      "evidence": "design 槽4 称 docs 面归属「由既有夹带嫌疑 advisory 与 hunk 归属门覆盖」。实测 flow.js:918 advisory 声明面核对前置过滤 `committed.filter((f) => !f.startsWith('.sillyspec/'))`——.sillyspec/docs/ 文件根本不进 advisory 扫描面，该半句不成立。另一半成立：hunk 归属门（flow.js:1143-1172）喂入的是未过滤原始 baseline..HEAD 面（flow.js:1151），含 .sillyspec/docs/，未归因文件会被点名（warn 默认档）。即对冲实际只剩 hunk 门一道（且默认仅警告），比声明弱一档，但披露的核心风险（可能冻入他会话 docs WIP）本身已如实声明且最坏后果限于审计面污染非代码回滚——披露边界裁决仍可接受，此处仅对冲描述需修正。",
+      "location": "src/flow.js:918 对照 src/flow.js:1151"
+    },
+    {
+      "severity": "P3",
+      "title": "core-engine paths 存量重复条目 src/fr-index.js（非本变更加入，邻域顺手可清）",
+      "evidence": "_module-map.yaml core-engine paths 中 `src/fr-index.js` 出现两次（line 116 与 119），两行均为本变更 diff hunk 的上下文行——存量问题非本变更引入，零功能影响（前缀匹配去重无感）。登记本变更 hunk 正落在其邻域，后续变更可顺手去重。",
+      "location": ".sillyspec/docs/sillyspec/modules/_module-map.yaml:116"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "finding"
+  },
+  "reviewedAt": "2026-09-27T17:56:37+08:00"
+}

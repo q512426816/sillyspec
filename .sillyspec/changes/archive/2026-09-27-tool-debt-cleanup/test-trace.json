@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-tool-debt-cleanup",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-tool-debt-cleanup:flow:FR-01",
+      "tests": [
+        "test/filter-committed-face.test.mjs「.sillyspec/docs/ 交付文档保留（模块卡不再漏出审计 patch）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-tool-debt-cleanup"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-27-tool-debt-cleanup:flow:FR-05",
+      "tests": [
+        "test/filter-committed-face.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-tool-debt-cleanup"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-27-tool-debt-cleanup:flow:FR-06",
+      "tests": [
+        "test/filter-committed-face.test.mjs「非 .sillyspec 交付全留」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-tool-debt-cleanup"
+    }
+  ]
+}
