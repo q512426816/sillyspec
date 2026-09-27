@@ -20,7 +20,7 @@ import { join } from 'node:path'
 const {
   inferEvents, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
   spawnWatcher, buildSnapshot, runWatcherFromEnv, WATCHER_LOCK_FILENAME,
-  toObservationEvents, pushEventsToPlatform,
+  toPlatformChangeEvents, pushEventsToPlatform,
 } = await import('../src/watcher.js')
 
 // 子侧入口经 node -e bootstrap 动态 import 消费（静态零引用属预期），此处锚定存在性
@@ -244,36 +244,49 @@ test('孤儿自愈：正常路径真子进程起跑（锁落盘+存活）——�
   try { rmSync(root, { recursive: true, force: true }) } catch { /* Windows 句柄延迟残留，不阻断 */ }
 })
 
-// ── 平台 observation 上行对接（quick-f5af12a3：POST /api/observation/events）──
+// ── 平台事件上行对接（2026-09-27-watcher-push-endpoint：POST /api/changes/{name}/events 单条契约）──
 
-test('toObservationEvents: ObservationEventIn 契约映射——六键顶层/stage 与 severity 收 detail/告警带 rule/event_ts ISO UTC', () => {
+test('toPlatformChangeEvents: 单事件契约映射——七键含稳定内容 id/stage 并入 detail 前缀/告警带 rule+severity/ts ISO UTC', () => {
   const ts = 1_740_000_000_000
-  const [stageEv, warnEv] = toObservationEvents('flow-x', [
+  const [stageEv, warnEv] = toPlatformChangeEvents([
     { ts, kind: 'file', stage: 'proposal', detail: 'proposal.md 出现', provisional: true },
     { ts: ts + 5, kind: 'warning', stage: null, rule: 'fake-check', severity: 'warning', detail: 'tasks 勾选 task-01 无对应提交', provisional: true },
   ])
-  // 顶层恰好六键（平台 extra=forbid：多带字段整批 422）
-  assert.deepEqual(Object.keys(stageEv).sort(), ['change_key', 'detail', 'event_ts', 'provisional', 'rule', 'type'])
-  assert.equal(stageEv.type, 'file')
-  assert.equal(stageEv.rule, null)
-  assert.deepEqual(stageEv.detail, { note: 'proposal.md 出现', stage: 'proposal' })
-  assert.equal(stageEv.event_ts, new Date(ts).toISOString())
-  assert.equal(stageEv.change_key, 'flow-x')
+  // 顶层恰好七键（ChangeEventPushRequest + 铸的稳定 id，评审 P1：同拍多事件防去重吞）
+  assert.deepEqual(Object.keys(stageEv).sort(), ['detail', 'id', 'kind', 'provisional', 'rule', 'severity', 'ts'])
+  assert.equal(stageEv.kind, 'file')
+  assert.equal(stageEv.rule, 'watcher')
+  assert.equal(stageEv.severity, 'info')
+  assert.equal(stageEv.detail, 'proposal · proposal.md 出现')
+  assert.equal(stageEv.ts, new Date(ts).toISOString())
   assert.equal(stageEv.provisional, true)
-  // 告警：type=warning（平台前端自动展开判定口径）+ rule 透传 + severity 进 detail
-  assert.equal(warnEv.type, 'warning')
+  assert.ok(stageEv.id.length <= 512 && stageEv.id.includes('|'))
+  // 告警：kind=warning（平台前端自动展开判定口径）+ rule/severity 顶层透传
+  assert.equal(warnEv.kind, 'warning')
   assert.equal(warnEv.rule, 'fake-check')
-  assert.equal(warnEv.detail.severity, 'warning')
-  assert.equal(warnEv.detail.note, 'tasks 勾选 task-01 无对应提交')
+  assert.equal(warnEv.severity, 'warning')
+  assert.equal(warnEv.detail, 'tasks 勾选 task-01 无对应提交')
 })
 
-test('pushEventsToPlatform: 打点 /api/observation/events + Bearer 凭据 + 映射体 + ≤500 分块', async () => {
+test('toPlatformChangeEvents: 同拍多事件（同 ts 同 rule）内容 id 互异——平台去重不吞拍（评审 P1 钉子）', () => {
+  const ts = 1_740_000_000_000
+  // watcher 一轮 diff 常见形态：tasks.md 出现（file）+ 首批勾选（task-done）同拍
+  const [fileEv, doneEv] = toPlatformChangeEvents([
+    { ts, kind: 'file', stage: 'tasks', detail: 'tasks.md 出现', provisional: true },
+    { ts, kind: 'task-done', stage: 'tasks', detail: 'checked 0→3', provisional: true },
+  ])
+  assert.equal(fileEv.ts, doneEv.ts)
+  assert.equal(fileEv.rule, doneEv.rule)
+  assert.notEqual(fileEv.id, doneEv.id)  // 内容键分野——回退键 ts|watcher 会碰撞被吞
+})
+
+test('pushEventsToPlatform: 打点 /api/changes/{name}/events + Bearer 凭据 + 单条映射体逐条 POST', async () => {
   const calls = []
   const fetchImpl = async (url, init) => { calls.push({ url, init }); return { ok: true } }
-  const events = []
-  for (let i = 0; i < 520; i += 1) {
-    events.push({ ts: 1_740_000_000_000 + i, kind: 'file', stage: 'proposal', detail: `e${i}`, provisional: true })
-  }
+  const events = [
+    { ts: 1_740_000_000_000, kind: 'file', stage: 'proposal', detail: 'e0', provisional: true },
+    { ts: 1_740_000_000_001, kind: 'task-done', stage: 'tasks', detail: 'checked 0→1', provisional: true },
+  ]
   const r = await pushEventsToPlatform({
     specBase: join(tmpdir(), 'no-such-spec-base'),
     changeName: 'flow-chunk',
@@ -282,16 +295,14 @@ test('pushEventsToPlatform: 打点 /api/observation/events + Bearer 凭据 + 映
     fetchImpl,
   })
   assert.equal(calls.length, 2)
-  assert.equal(calls[0].url, 'http://hub.test/api/observation/events')
+  assert.equal(calls[0].url, 'http://hub.test/api/changes/flow-chunk/events')
   assert.equal(calls[0].init.method, 'POST')
   assert.equal(calls[0].init.headers.Authorization, 'Bearer shpsync_t')
   const body0 = JSON.parse(calls[0].init.body)
-  assert.equal(body0.events.length, 500)
-  assert.equal(body0.events[0].type, 'file')
-  assert.equal(body0.events[0].change_key, 'flow-chunk')
-  assert.deepEqual(Object.keys(body0.events[0]).sort(), ['change_key', 'detail', 'event_ts', 'provisional', 'rule', 'type'])
-  assert.equal(JSON.parse(calls[1].init.body).events.length, 20)
-  assert.deepEqual(r, { pushed: true, count: 520 })
+  assert.equal(body0.kind, 'file')
+  assert.deepEqual(Object.keys(body0).sort(), ['detail', 'id', 'kind', 'provisional', 'rule', 'severity', 'ts'])
+  assert.equal(JSON.parse(calls[1].init.body).kind, 'task-done')
+  assert.deepEqual(r, { pushed: true, count: 2 })
 })
 
 test('pushEventsToPlatform: local.yaml platform 段凭据通道（env 缺省时回落）', async () => {
@@ -306,9 +317,9 @@ test('pushEventsToPlatform: local.yaml platform 段凭据通道（env 缺省时�
       env: {}, fetchImpl,
     })
     assert.equal(calls.length, 1)
-    assert.equal(calls[0].url, 'http://yaml-hub.test/api/observation/events')
+    assert.equal(calls[0].url, 'http://yaml-hub.test/api/changes/c-yaml/events')
     assert.equal(calls[0].init.headers.Authorization, 'Bearer shpsync_yaml')
-    assert.equal(JSON.parse(calls[0].init.body).events[0].type, 'commit')
+    assert.equal(JSON.parse(calls[0].init.body).kind, 'commit')
     assert.deepEqual(r, { pushed: true, count: 1 })
   } finally {
     rmSync(specBase, { recursive: true, force: true })
@@ -318,7 +329,7 @@ test('pushEventsToPlatform: local.yaml platform 段凭据通道（env 缺省时�
 test('pushEventsToPlatform: best-effort 降级三态——非 2xx / 无配置 / 逃生阀，均不抛', async () => {
   const events = [{ ts: 1_740_000_000_000, kind: 'file', stage: 'plan', detail: 'x', provisional: true }]
   const envCfg = { SILLYHUB_PLATFORM_URL: 'http://hub.test', SILLYHUB_PLATFORM_TOKEN: 'shpsync_t' }
-  // ① 非 2xx（含 422 批量闸/401 坏凭据）→ {pushed:false, reason:http-*}，不抛
+  // ① 非 2xx（含 404 端点漂移/401 坏凭据）→ {pushed:false, reason:http-*}，不抛
   let calls = 0
   const r422 = await pushEventsToPlatform({
     specBase: join(tmpdir(), 'no-such'), changeName: 'c', events, env: envCfg,

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-watcher-push-endpoint",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "内容 id 不含 rule/severity——同毫秒同 kind/stage/detail 但不同 rule 的两条事件仍碰撞、被平台去重吸收",
+      "evidence": "idSrc=`${iso}|${kind}|${stage}|${note}`（src/watcher.js:752），rule/severity 不入键；平台 _event_dedup_key 以 id 为首选键（platform_sync/service.py:1276-1281），碰撞即静默 deduplicated。但这要求同毫秒+同 kind+同 stage+同 detail 跨 rule 精确碰撞，内容完全相同，吸收属内容恒等语义且实际不可达；与修复方案声明的 `ts|kind|stage|note` 键形一致，无需动作。",
+      "location": "src/watcher.js:752"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-27T23:03:04+08:00"
+}

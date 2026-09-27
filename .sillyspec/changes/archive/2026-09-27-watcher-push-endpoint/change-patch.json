@@ -1,0 +1,30 @@
+{
+  "change": "2026-09-27-watcher-push-endpoint",
+  "baseline": "206278f5f9a71352bff93bdd9857447e6648aaaf",
+  "head": "206278f5f9a71352bff93bdd9857447e6648aaaf",
+  "files": [
+    ".sillyspec/changes/2026-09-27-watcher-push-endpoint/design.md",
+    ".sillyspec/changes/2026-09-27-watcher-push-endpoint/proposal.md",
+    ".sillyspec/changes/2026-09-27-watcher-push-endpoint/requirements.md",
+    ".sillyspec/changes/2026-09-27-watcher-push-endpoint/tasks.md"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 127,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-27T14:54:49.383Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchStatus": "failed"
+}

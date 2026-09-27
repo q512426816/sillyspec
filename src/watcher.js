@@ -16,16 +16,17 @@
  * 与 CLI 调用数解耦是验收钉，轮询天然满足）。轮询面收窄：change 子树已知产物 +
  * git HEAD 头指针 + verify-quality-scan 记录——不扫全仓。
  *
- * 平台推送：POST {platform.url}/api/observation/events 批量上行端点（平台侧
- * multi-agent-platform flow-2026-09-24-7f35 已落地），实现模式循
+ * 平台推送：POST {platform.url}/api/changes/{name}/events 单事件上行端点（平台侧
+ * 2026-09-26-change-events-r18-full 契约；旧 /api/observation/events 批量端点随废弃
+ * 分支消亡——2026-09-27-watcher-push-endpoint 对齐），实现模式循
  * src/agent-session-log.js 的 pushAgentLogToPlatform（凭据读取同 readPlatformPushConfig
  * 的 local.yaml platform 段/env 双通道——该函数未导出且 agent-session-log 属他任务
- * allowed_paths，此处同模式自建；5s 超时/批+best-effort+env SILLYSPEC_WATCHER_PUSH=0
- * 开关；未配置/非 2xx/网络失败静默降级本地-only）。事件经 toObservationEvents
- * 映射为平台 ObservationEventIn 契约（type=kind、告警带 rule、stage/severity 收进
- * detail dict、change_key=change 名、event_ts=ISO UTC、provisional 恒 true；顶层
- * 不带多余字段——平台 body extra=forbid），批内 ≤500 分块；平台按业务字段 tz
- * 规范化去重键幂等吸收重推（at-least-once 上行安全）。
+ * allowed_paths，此处同模式自建；5s 超时/条+best-effort+env SILLYSPEC_WATCHER_PUSH=0
+ * 开关；未配置/非 2xx/网络失败静默降级本地-only）。事件经 toPlatformChangeEvents
+ * 映射为平台单条契约（kind/rule/severity/provisional/detail/ts；stage 以「stage · note」
+ * 前缀并入 detail 文本、provisional 恒 true、ts=ISO UTC；本地事件无 id 不带——
+ * 平台去重键回退 ts+'|'+rule），逐条 POST 恒 200 语义；平台按去重键
+ * 幂等吸收重推（at-least-once 上行安全）。
  *
  * 副产品：阶段墙钟拆账（产物事件时间序列聚合）落 .runtime/watcher-stage-timing-<change>.
  * json，替代 transcript 抽取。
@@ -54,8 +55,6 @@ const IDLE_EXIT_MS = 6 * 60 * 60_1000;
 // 硬寿命帽：孤儿绝对上限（2026-09-22 泄漏实证兜底）——无论活跃与否 12h 必退
 const MAX_LIFETIME_MS = 12 * 60 * 60_000;
 const PUSH_TIMEOUT_MS = 5_000;
-// 平台 observation 上行端点单批上限（ObservationBatch.events max_length，422 闸）。
-const OBSERVATION_BATCH_MAX = 500;
 const LOG_TRUNCATE_THRESHOLD = 1_000_000;
 const LOG_TRUNCATE_KEEP = 512 * 1024;
 
@@ -726,13 +725,16 @@ function readWatcherPushConfig(specBase, env = process.env) {
 }
 
 /**
- * watcher 事件 → 平台 ObservationEventIn 契约映射（纯函数，导出供测试）。
- * 顶层仅 type/rule/detail/event_ts/change_key/provisional 六键——平台 body
- * extra=forbid，多带字段整批 422；stage/severity 等 CLI 本地形态收进 detail
- * dict（note=人类可读注记）。event_ts 统一 ISO UTC（Z），与平台 tz 规范化
- * 去重键兼容：同事件重推同键，平台按已存在幂等吸收。
+ * watcher 事件 → 平台 ChangeEventPushRequest 单条契约映射（纯函数，导出供测试）。
+ * 2026-09-27-watcher-push-endpoint：旧 ObservationEventIn 批量契约随废弃分支
+ * （observation 模块不在平台 HEAD 线）消亡——对齐现端点 POST /api/changes/{name}/events
+ * 的单事件形态（kind/rule/severity/provisional/detail/ts/id）。id 铸稳定内容键
+ * ``ts|kind|stage|note``（>512 取 sha256，评审 P1：同拍多事件共享回退键 ts+rule 会被
+ * 平台去重静默吞掉除首条外全部——file 出现与 task-done 常同拍；内容键使同拍不同
+ * 事件各得其所、重推同键幂等吸收）。stage 无独立列——以「stage · note」前缀并入
+ * detail 文本（timeline 任务面推断与人类可读双用）。
  */
-export function toObservationEvents(changeName, events) {
+export function toPlatformChangeEvents(events) {
   const out = [];
   for (const rec of events || []) {
     if (!rec || typeof rec !== 'object') continue;
@@ -742,50 +744,55 @@ export function toObservationEvents(changeName, events) {
       : typeof rec.ts === 'string' && !Number.isNaN(Date.parse(rec.ts))
         ? new Date(rec.ts).toISOString()
         : new Date().toISOString();
-    const detail = { note: rec.detail ?? null, stage: rec.stage ?? null };
-    if (rec.severity != null) detail.severity = String(rec.severity);
+    const stageText = rec.stage ? String(rec.stage) : '';
+    const noteText = rec.detail != null ? String(rec.detail) : '';
+    const detail = noteText
+      ? (stageText ? `${stageText} · ${noteText}` : noteText)
+      : (stageText || null);
+    const idSrc = `${iso}|${String(rec.kind || 'unknown')}|${stageText}|${noteText}`;
     out.push({
-      type: String(rec.kind || 'unknown').slice(0, 100),
-      rule: rec.rule ? String(rec.rule).slice(0, 200) : null,
-      detail,
-      event_ts: iso,
-      change_key: changeName,
+      id: idSrc.length > 512 ? createHash('sha256').update(idSrc).digest('hex') : idSrc,
+      kind: String(rec.kind || 'unknown').slice(0, 64),
+      rule: rec.rule ? String(rec.rule).slice(0, 128) : 'watcher',
+      severity: rec.severity ? String(rec.severity).slice(0, 16) : 'info',
       provisional: true,
+      detail,
+      ts: iso,
     });
   }
   return out;
 }
 
 /**
- * 事件批量推平台（best-effort，唯一非本地副作用）：observation 上行端点
- * POST /api/observation/events，批内 ≤500 分块（平台批量闸），5s 熔断/批，
- * 任何失败只 warn——本地 jsonl 已是事件唯一真相源，平台是展示面。失败批次
- * 即弃（与旧语义一致，无重推水位）；平台侧业务字段幂等去重，后续若加重推
- * 也安全（at-least-once 上行）。
+ * 事件推平台（best-effort，唯一非本地副作用）：单事件上行端点
+ * POST /api/changes/{name}/events（2026-09-26-change-events-r18-full 契约，
+ * 逐条 POST、恒 200 语义），每条 5s 熔断，任何失败只 warn——本地 jsonl 已是
+ * 事件唯一真相源，平台是展示面。失败即弃剩余（与旧语义一致，无重推水位）；
+ * 平台侧去重键幂等（无 id 回退 ts+'|'+rule），后续若加重推也安全
+ * （at-least-once 上行）。
  */
 export async function pushEventsToPlatform({ specBase, changeName, events, env = process.env, fetchImpl = fetch }) {
   if (env.SILLYSPEC_WATCHER_PUSH === '0' || !events || events.length === 0) return { pushed: null };
   const cfg = readWatcherPushConfig(specBase, env);
   if (!cfg) return { pushed: null, reason: 'no-config' };
   const base = cfg.url.replace(/\/+$/, '');
-  const mapped = toObservationEvents(changeName, events);
+  const url = `${base}/api/changes/${encodeURIComponent(changeName)}/events`;
   let pushed = 0;
-  for (let i = 0; i < mapped.length; i += OBSERVATION_BATCH_MAX) {
-    const batch = mapped.slice(i, i + OBSERVATION_BATCH_MAX);
+  for (const ev of toPlatformChangeEvents(events)) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PUSH_TIMEOUT_MS);
     try {
-      const res = await fetchImpl(`${base}/api/observation/events`, {
+      const res = await fetchImpl(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.token}` },
-        body: JSON.stringify({ events: batch }),
+        body: JSON.stringify(ev),
         signal: controller.signal,
       });
       if (!res.ok) {
         console.warn(`[watcher] 事件推送 → HTTP ${res.status}（本地 jsonl 已兜底）`);
         return { pushed: pushed > 0, reason: `http-${res.status}` };
       }
-      pushed += batch.length;
+      pushed += 1;
     } catch (err) {
       const msg = err && err.name === 'AbortError' ? '超时' : (err && err.message ? err.message : err);
       console.warn(`[watcher] 事件推送失败: ${msg}（本地 jsonl 已兜底）`);
@@ -1018,4 +1025,4 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
 }
 
 export { isPidAlive };
-export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toObservationEvents, pushEventsToPlatform };
+export default { spawnWatcher, runWatcherFromEnv, readWatcherLock, isWatcherLeaseLive, isPidAlive, buildSnapshot, inferEvents, aggregateStageTiming, applySentinelRules, createSentinelState, parseGitLogWithFiles, parsePorcelainCodePaths, parseDesignListText, watcherSnapshotPath, loadSnapshotWatermark, writeSnapshotWatermark, watcherEventsPath, readWatcherEvents, toPlatformChangeEvents, pushEventsToPlatform };
