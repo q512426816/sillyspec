@@ -28,6 +28,16 @@ function resolveKnowledgeDir(dir, specDir) {
   return join(base, 'knowledge')
 }
 
+/**
+ * 锚点/标题容错归一（坑 knowledge-hits-anchor-drift T4）：锚点三代规则并存（CLI slug /
+ * INDEX 手写 / 平台 slugify_anchor）对 emoji 前缀、点号、斜杠、首尾中划线的处理互不一致
+ * ——归一到「仅字母数字 + 小写」后比对，三代产物归一相等；截断（60 字符）由调用方前缀
+ * 容忍处理。仅用于 validate 告警，不参与命中判定（单一源方向见 T2）。
+ */
+function normalizeAnchorForCompare(s) {
+  return String(s || '').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
+}
+
 function output(ok, data, error) {
   const result = { ok, ...data }
   if (error) result.error = error
@@ -219,6 +229,41 @@ export async function cmdValidate(dir, args, opts = {}) {
           path: join('knowledge', entry.file),
           referenced_in: 'INDEX.md',
           display: entry.display,
+        })
+      }
+    }
+
+    // 2c. 路由行锚点与目标文件标题的一致性（坑 knowledge-hits-anchor-drift T4，2026-09-25
+    // 实证：INDEX 锚点与文件标题静默漂移——标题事后被改/emoji 前缀/点号差异使命中落空成
+    // 「幽灵锚」，平台知识页不计覆盖）。容错归一比对（剥 emoji/点号/斜杠/中划线/空白 +
+    // 小写 + 截断前缀容忍），**不**引入第四套严格 slug 规则（T2 单一源方向是平台侧归一，
+    // 此处只做告警不参与命中判定）；漂移只告警不报错（INDEX 手写面，修复由人拍板）。
+    for (const entry of entries) {
+      if (!entry.anchor) continue
+      const refPath = join(knowledgeDir, entry.file)
+      if (!existsSync(refPath)) continue // broken_reference 已报，不重复
+      const headings = []
+      try {
+        const content = readFileSync(refPath, 'utf8')
+        for (const m of content.matchAll(/^#{1,6}\s+(.+?)\s*$/gm)) headings.push(m[1])
+      } catch { /* 读失败留给上层报 */ }
+      const target = normalizeAnchorForCompare(entry.anchor)
+      if (!target || headings.length === 0) continue
+      const hit = headings.some((h) => {
+        const hn = normalizeAnchorForCompare(h)
+        if (!hn) return false
+        if (hn === target) return true
+        // 截断容忍（锚点生成侧有 60 字符截断）：短的一方是长方前缀即视为同源
+        const [shorter, longer] = hn.length <= target.length ? [hn, target] : [target, hn]
+        return shorter.length >= 6 && longer.startsWith(shorter)
+      })
+      if (!hit) {
+        warnings.push({
+          code: 'anchor_drift',
+          path: join('knowledge', entry.file),
+          anchor: entry.anchor,
+          display: entry.display,
+          hint: '路由行锚点在目标文件无对应标题（标题已改或锚点生成规则漂移）——命中会落空成幽灵锚，按文件现标题修正 INDEX 路由行',
         })
       }
     }
@@ -596,6 +641,24 @@ export async function cmdKnowledge(args, dir, opts = {}) {
         return
       }
       return mod.cmdKnowledgeStats(dir, args.slice(1), opts)
+    }
+    case 'digest': {
+      // 治理信号摘要（2026-09-27-knowledge-digest）：四类沉睡信号（rot 待复核/收件箱积压/
+      // 伪域落库/绑定解析失败）超阈才见人——安静即健康态。--json 供平台 RPC 消费（信号卡）。
+      const specBase = opts.specDir || join(dir, '.sillyspec')
+      const rest = args.slice(1)
+      try {
+        const { collectKnowledgeDigest, renderKnowledgeDigestText } = await import('../knowledge-digest.js')
+        const d = collectKnowledgeDigest({ specBase, projectRoot: dir })
+        if (opts.json || rest.includes('--json')) { // --json 是全局旗标（index.js 顶层吞掉），opts.json 为正道，rest 兜底
+          output(true, { subcommand: 'digest', ...d }) // digest 进 data 面（第三参是 error 位）
+        } else {
+          console.log(renderKnowledgeDigestText(d))
+        }
+      } catch (e) {
+        output(false, {}, { code: 'digest_failed', message: String((e && e.message) || e) })
+      }
+      return
     }
     default:
       output(false, {}, {

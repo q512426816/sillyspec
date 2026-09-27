@@ -3019,7 +3019,7 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
     }
     case 'knowledge': {
       const { cmdKnowledge } = await import('./stages/knowledge.js')
-      await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir })
+      await cmdKnowledge(filteredArgs.slice(1), specDir ? dir : resolveEffectiveDir(dir), { specDir, json })
       break
     }
     // ── sillyspec tests（2026-09-24-fr-test-bindings task-02，fr-test-binding §3.2/§5）：

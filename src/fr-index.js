@@ -18,6 +18,7 @@
  */
 
 import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile, resolveTestFileRel } from './test-bindings.js'
+import { suggestDomainFromFiles } from './knowledge-digest.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -552,7 +553,11 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
   try {
     const pseudoHits = written.filter((w) => /^(auto-|unmapped$)/.test(String(w.file || '').replace(/^fr\//, '')))
     if (pseudoHits.length > 0) {
-      console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）——补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准`)
+      // 落域机械改进（2026-09-27-knowledge-digest）：伪域告警附交付路径推导的建议域——
+      // 归档时转达人工 1 秒确认（建议器与 digest 信号卡共用 suggestDomainFromFiles 单源）
+      const suggested = suggestDomainFromFiles(deliverableFiles || [])
+      console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）${suggested ? `——按交付路径建议域：${suggested}（确认后可迁移；` : '（'}补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准）`)
+      if (suggested) console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
     }
     const unm = all.get('unmapped')
     if (unm && unm.sections.length > 50) {
