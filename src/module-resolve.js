@@ -78,8 +78,10 @@ export function collectModuleMaps({ cwd, specBase }) {
 /**
  * 路径归一：反斜杠→正斜杠，剥尾部 glob（/** 与 /*）与目录斜杠。
  * `backend/**` / `backend/` / `backend` → `backend`。
+ * （导出供 flow-parity.reconcileModuleDocs 复用——2026-09-27-thin-module-scope-persist：
+ * 模块对账与模块卡解析同一归一口径，防两处漂移）
  */
-function normalizeMapPath(raw) {
+export function normalizeMapPath(raw) {
   return String(raw).replace(/\\/g, '/').replace(/\/\*\*$/, '').replace(/\/\*$/, '').replace(/\/$/, '')
 }
 

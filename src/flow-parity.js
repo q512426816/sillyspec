@@ -4,82 +4,96 @@
  * ① reconcileModuleDocs：模块文档同步对账——厚道 module-impact 死信门的轻量变更等价物（advisory）：
  *    交付文件命中模块图 → 点名模块与文档路径；模块代码变了而文档未动 → 强提示。模块文档是
  *    后续变更 module 命中/门禁收窄/知识注入的原料（verify -68% 那笔账的来源），失供是复利折旧。
+ *    （2026-09-27-thin-module-scope-persist：同一计算增加结构化返回面 modules/uncoveredDirs/
+ *    moduleMaps，随 change-patch.json 落盘供平台展示轻量变更影响模块范围。）
  * ② renderVerifyReceipt：verify-result 机器回执——人类可读收口结论（实测面/评审/绑定/冻结 sha），
  *    厚道有轻量变更缺的审计资产；机器合成勿手改。
  * ③ harvestSlot4Decision：design 槽4（风险与死路）实质作答收割合成 decisions.md——轻量变更决策
  *    产出为零的补口（死路与风险取舍正是 decisions.md 该记的内容；已有文件不覆盖）。
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
-import yaml from 'js-yaml'
+import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { writeAtomicSync } from './fs-atomic.js'
 
-/** 找模块图：.sillyspec/docs/<project>/modules/_module-map.yaml（首个命中；内部面）。 */
-function findModuleMapFile(specBase) {
-  try {
-    const docsDir = join(specBase, 'docs')
-    for (const proj of readdirSync(docsDir)) {
-      const p = join(docsDir, proj, 'modules', '_module-map.yaml')
-      if (existsSync(p)) return { mapPath: p, project: proj }
-    }
-  } catch { /* 无 docs 结构 → 无对账面 */ }
-  return null
-}
-
 /**
- * 模块文档对账（advisory）。@param ownFiles 交付文件（posix）；@param committedRaw 含 .sillyspec 的原始提交面
- * （模块文档在 .sillyspec/docs/ 下，交付面过滤会剔除——文档是否更新需查原始提交面）。
- * @returns {{lines: string[], hits: number}} lines 为空=无命中零输出。
+ * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
+ * @param cwd 仓库根（子项目前缀判定 + specBase→仓根相对换算）
+ * @param ownFiles 交付文件（posix；.sillyspec/ 治理面内部滤除——模块命中只对账代码交付面，
+ * 否则本变更目录工件会污染未登记清单）
+ * @param committedRaw 含 .sillyspec 的原始提交面（仓根相对——模块文档是否随变更更新以此判定）
+ * @returns {{lines: string[], hits: number,
+ *   modules: Array<{id: string, files: number, doc: string|null, docTouched: boolean, docMissing: boolean}>,
+ *   uncoveredDirs: Array<{dir: string, files: number}>, moduleMaps: string[]}}
+ *   lines 为空=无命中零输出；结构化三键恒在场（无图/零命中=空数组），随 change-patch.json 落盘。
+ * 口径对齐 module-resolve.collectModuleMaps（2026-09-27-thin-module-scope-persist 修复旧实现
+ * 四缺陷：js-yaml 顶层迭代不进 modules: 包层致命中恒 0、字母序取首个项目图致多项目仓读错图、
+ * 子项目 paths 前缀缺失、docTouched 拿 specBase 相对路径比仓根相对 committedRaw 恒 false）。
  */
-export function reconcileModuleDocs({ specBase, ownFiles, committedRaw }) {
-  const found = findModuleMapFile(specBase)
-  if (!found) return { lines: [], hits: 0 }
-  let map
-  try { map = yaml.load(readFileSync(found.mapPath, 'utf8')) } catch { return { lines: [], hits: 0 } }
-  if (!map || typeof map !== 'object') return { lines: [], hits: 0 }
-  const deliverables = new Set((ownFiles || []).map((f) => String(f).replace(/\\/g, '/')))
+export function reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw }) {
+  let maps = []
+  try { maps = collectModuleMaps({ cwd: cwd || specBase, specBase }) } catch { maps = [] }
+  if (maps.length === 0) return { lines: [], hits: 0, modules: [], uncoveredDirs: [], moduleMaps: [] }
+  const deliverables = [...new Set((ownFiles || []).map((f) => String(f).replace(/\\/g, '/')))]
+    .filter((f) => !f.startsWith('.sillyspec/'))
   const committed = new Set((committedRaw || []).map((f) => String(f).replace(/\\/g, '/')))
+  // specBase 相对 → 仓根相对（docTouched 比对基准：committedRaw 是 git diff 仓根相对输出）
+  const specRel = (() => {
+    if (!cwd) return ''
+    try {
+      const r = relative(cwd, specBase).replace(/\\/g, '/')
+      if (!r || r === '.') return ''
+      return r.replace(/\/+$/, '') + '/'
+    } catch { return '' }
+  })()
   const lines = []
+  const modules = []
   let hits = 0
-  for (const [modId, mod] of Object.entries(map)) {
-    if (!mod || typeof mod !== 'object') continue
-    const paths = Array.isArray(mod.paths) ? mod.paths : []
-    const hitFiles = paths.filter((pp) => {
-      const norm = String(pp).replace(/\\/g, '/')
-      return [...deliverables].some((f) => f === norm || f.startsWith(norm.endsWith('/') ? norm : norm + '/'))
-    })
-    if (hitFiles.length === 0) continue
-    hits++
-    const docRel = mod.doc ? `docs/${found.project}/${String(mod.doc).replace(/^modules\//, 'modules/')}` : null
-    const docAbs = docRel ? join(specBase, docRel) : null
-    const docTouched = docAbs ? [...committed].some((f) => f.replace(/\\/g, '/') === docRel) : false
-    if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
-    else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
+  for (const map of maps) {
+    for (const [modId, entry] of map.entries) {
+      const effs = (entry.paths || [])
+        .map((pp) => (map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
+        .filter(Boolean)
+      if (effs.length === 0) continue
+      const hitFiles = deliverables.filter((f) => effs.some((e) => f === e || f.startsWith(e + '/')))
+      if (hitFiles.length === 0) continue
+      hits++
+      const docRel = entry.doc ? `docs/${map.project}/${String(entry.doc).replace(/^\/+/, '')}` : null
+      const docAbs = docRel ? join(specBase, docRel) : null
+      const docTouched = docRel ? committed.has(specRel + docRel) : false
+      const docMissing = docAbs ? !existsSync(docAbs) : false
+      modules.push({ id: modId, files: hitFiles.length, doc: docRel, docTouched, docMissing })
+      if (docTouched) lines.push(`   ✓ ${modId}（${hitFiles.length} 文件）——文档 ${docRel} 已同步`)
+      else lines.push(`   ⚠️ ${modId}（${hitFiles.length} 文件）——文档${docAbs && existsSync(docAbs) ? ` ${docRel} ` : '（缺失）'}未随变更更新：若行为/接口有变请先补文档（模块文档是后续变更门禁收窄与知识注入的原料）`)
+    }
   }
   // 未登记模块目录检测（2026-09-25-thin-fr-quality，R16 实证：observation 新模块不在图 → FR
   // 落伪域 auto-frontend）：交付目录不在任何模块 paths 下时点名提示登记——首个变更把家建好，
   // 后续变更的模块命中/门禁收窄/知识注入才能吃到
   const allPaths = []
-  for (const mod of Object.values(map)) {
-    if (mod && Array.isArray(mod.paths)) allPaths.push(...mod.paths.map((p) => String(p).replace(/\\/g, '/')))
+  for (const map of maps) {
+    for (const entry of map.entries.values()) {
+      for (const pp of entry.paths || []) allPaths.push((map.prefix + normalizeMapPath(pp)).replace(/\/+$/, ''))
+    }
   }
-  const isCovered = (f) => allPaths.some((pp) => f === pp || f.startsWith(pp.endsWith('/') ? pp : pp + '/'))
-  const uncoveredDirs = new Map()
+  const isCovered = (f) => allPaths.some((pp) => pp && (f === pp || f.startsWith(pp + '/')))
+  const uncoveredMap = new Map()
   for (const f of deliverables) {
     if (isCovered(f)) continue
     const dir = String(f).split('/').slice(0, -1).join('/')
-    if (dir) uncoveredDirs.set(dir, (uncoveredDirs.get(dir) || 0) + 1)
+    if (dir) uncoveredMap.set(dir, (uncoveredMap.get(dir) || 0) + 1)
   }
-  const topDirs = [...uncoveredDirs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+  const uncoveredDirs = [...uncoveredMap.entries()].sort((a, b) => b[1] - a[1]).map(([dir, files]) => ({ dir, files }))
+  const topDirs = uncoveredDirs.slice(0, 3)
   const out = [...lines]
   if (hits > 0) out.unshift(`📎 模块文档对账（advisory）：交付面命中 ${hits} 个模块——`)
   if (topDirs.length > 0) {
-    out.push(`🗺️ 未登记模块图的交付目录（${topDirs.map(([d, n]) => `${d}（${n} 文件）`).join('、')}${uncoveredDirs.size > 3 ? ' 等' : ''}）——本变更的 FR 将落伪域 auto-*`)
-    out.push(`   建议收口前在模块图（${found.mapPath}）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
+    out.push(`🗺️ 未登记模块图的交付目录（${topDirs.map((e) => `${e.dir}（${e.files} 文件）`).join('、')}${uncoveredDirs.length > 3 ? ' 等' : ''}）——本变更的 FR 将落伪域 auto-*`)
+    out.push(`   建议收口前在模块图（docs/<project>/modules/_module-map.yaml）登记模块条目（模块 id + paths 指向目录 + doc），后续变更的模块命中/门禁收窄/知识注入才能吃到`)
   }
-  return { lines: out, hits }
+  return { lines: out, hits, modules, uncoveredDirs, moduleMaps: maps.map((m) => `docs/${m.project}/modules/_module-map.yaml`) }
 }
 
 /**
