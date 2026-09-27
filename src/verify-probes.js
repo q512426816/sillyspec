@@ -28,6 +28,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
 import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
 import { gitQuiet, unquoteGitPath } from './git-helper.js'
 import { hasUnconfirmedPrefill } from './prefill.js'
+import { runUiVisualProbe, renderUiVisualProbeLines, readUiVisualGate } from './ui-visual.js'
 import {
   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
 } from './verify-facts-schema.js'
@@ -2296,6 +2297,16 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     probe11.warnings = [`探针 11 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
   }
 
+  // ── 探针 12：UI 视觉证据（分级门；2026-09-27-ui-visual-guidance——过程引导的收口对账面：
+  // 只验证据在场不产新证据；缺证据默认 ⚠️，ui_visual_gate=error 升阻断；视觉降级无用户
+  // 裁决留痕恒 error（堵 D-004 型静默降级）。fail-soft 同 8-11。──
+  let probe12 = { applicable: false, uiTouched: false, level: 'ok', notes: [] }
+  try {
+    probe12 = runUiVisualProbe({ changeDir: join(specBase, 'changes', changeName), gate: readUiVisualGate(specBase) })
+  } catch (e) {
+    probe12.notes = [`探针 12 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+  }
+
   // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
   // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
   // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
@@ -2309,7 +2320,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
     }
   } catch { /* design 读/解析异常 → 空面（fail-soft） */ }
 
-  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, probe10, apiFace, consumerHints }
+  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, probe10, probe12, apiFace, consumerHints }
 }
 
 /**
@@ -2421,6 +2432,8 @@ export function renderVerifyProbesReport(result) {
   L.push(...(renderProbe10Lines(result.probe10 || { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] })))
   // 探针 11 紧随 10；旧 result 无 probe11 键 → 不适用兜底（8/9/10 同款零回归口径）。
   L.push(...(renderProbe11Lines(result.probe11 || { applicable: false, entryCount: 0, findings: [], warnings: [] })))
+  // 探针 12 紧随 11（UI 视觉证据分级门）；旧 result 无 probe12 键 → 不适用兜底零回归。
+  L.push(...(renderUiVisualProbeLines(result.probe12 || { applicable: false, notes: [] })))
   return L.join('\n')
 }
 

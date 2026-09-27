@@ -32,6 +32,7 @@ import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
 import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
+import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
 
 const FLOW_STATE_FILE = 'flow-state.yaml'
 const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
@@ -548,6 +549,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
     `   用户明确说「直接跑完/不用问我」→ 三断点全跳过（agent 自主干到底）。`,
     `   随时可查进度：sillyspec flow status --change ${change}`,
+    ...(detectUiTouch(input)
+      ? [...buildUiGuidanceLines(), '']
+      : []),
     ``,
     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
@@ -884,6 +888,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
         const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
         let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
+        // 夹带嫌疑 advisory（坑 parallel-session-stale-snapshot-carried-in-commit，2026-09-26
+        // 实证：daemon 遥测主题提交整体夹带并行会话旧分叉 page.tsx，静默回滚 main 已落地三处
+        // 功能——git 无冲突、聚焦测试不覆盖挂载面，绿灯直过）。提交面里未被本变更任何声明面
+        // （design 文件变更清单 ∪ requirements 测试绑定文件）提及的交付文件，收口前显式归因：
+        // 属并行会话在途 → pathspec 隔离（AGENTS.md 规则 11）；属本变更 → 补 design 自声明。
+        // advisory 不阻断（多会话并行是常态，提示归因而非拒绝收口）；声明面全空（adopt 等）时
+        // 降为「无声明面」提示，不指认夹带。
+        try {
+          const declared = new Set()
+          const { parseFileChangeList } = await import('./change-list.js')
+          for (const p of parseFileChangeList(join(changeDir, 'design.md'))) declared.add(p)
+          const { extractRequirementBindings } = await import('./flow-draft.js')
+          const { testAnchorFile } = await import('./test-bindings.js')
+          for (const row of extractRequirementBindings({ changeDir, change })) {
+            for (const t of row.tests || []) declared.add(testAnchorFile(t))
+          }
+          const deliverables = committed.filter((f) => !f.startsWith('.sillyspec/'))
+          const undeclared = deliverables.filter((f) => !declared.has(f))
+          if (declared.size > 0 && undeclared.length > 0) {
+            console.warn(`⚠️ 提交面夹带嫌疑：${undeclared.length} 个 baseline..HEAD 提交文件未被本变更声明面提及（design 文件变更清单/requirements 测试绑定）: ${undeclared.slice(0, 5).join('、')}${undeclared.length > 5 ? ' 等' : ''}`)
+            console.warn(`   属并行会话在途交付 → 整文件覆盖即静默回滚风险，收口提交用显式 pathspec 隔离（AGENTS.md 规则 11）；确属本变更 → 补 design「文件变更清单」自声明后重跑 flow done`)
+          } else if (declared.size === 0 && deliverables.length > 0) {
+            console.warn(`⚠️ 本变更无任何文件声明面（design 无清单、requirements 无绑定），提交面 ${deliverables.length} 个交付文件无法归因——建议补 design「文件变更清单」自声明（冻结面归属与夹带识别的锚点）`)
+          }
+        } catch { /* 声明面解析失败不阻断冻结 */ }
         // 提交面不过 foreign 声明切分（2026-09-25-sentinel-evidence-freeze ⑤：已提交的文件就是
         // 本变更的——陈旧声明的旧变更不该抢走 baseline..HEAD 里我实际提交的文件，静默少文件+门禁
         // 静默 skipped 是平台狗粮实证。foreign 声明切分保留给 dirty 面与 attributedChangedFiles
@@ -1080,6 +1109,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
   if (st.substeps?.probes === 'done') { skip('probes') } else {
     if (st.tier === 'thick') console.log('ℹ️ 厚档探针链：run verify --done 时经 verify-probes --init --draft 承接（第 3 批既有面）')
+    // 探针 12 error 档收口拦截（2026-09-27-ui-visual-guidance：UI 视觉证据分级门——
+    // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦；
+    // 默认 warn 档只警告不拦。与 run/gates.js verify 收尾同一检测单点，不二算）。
+    try {
+      const uiProbe = runUiVisualProbe({ changeDir, gate: readUiVisualGate(specBase) })
+      if (uiProbe.level === 'error') {
+        console.error('\n❌ UI 视觉证据门（探针 12 error 档）阻断收口：')
+        for (const n of uiProbe.notes) console.error(`   - ${n}`)
+        console.error(`   修复：补渲染对照证据到 ${join(changeDir, UI_EVIDENCE_FILENAME)}；降级项补「用户裁决」留痕段后重跑（断点续，已完成子步幂等跳过）。`)
+        reportMidFail('probes')
+        process.exit(1)
+      } else if (uiProbe.level === 'warn') {
+        console.warn(`⚠️ UI 视觉证据（探针 12 warn 档）：${uiProbe.notes.join('；')}`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ UI 视觉证据探针异常（fail-soft 降级放行）：${(e && e.message) || e}`)
+    }
     mark('probes')
   }
 

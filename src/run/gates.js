@@ -849,6 +849,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } catch (e) {
       console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
     }
+
+    // UI 视觉证据门·error 档（2026-09-27-ui-visual-guidance / 探针 12 分级门的 verify 收尾执法）：
+    // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦（默认 warn
+    // 只警告不拦）。检测单点 = runUiVisualProbe（与 flow done probes 子步、verify-probes --init
+    // 同源，不二算）。fail-soft 同预填注门。
+    try {
+      const { runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } = await import('../ui-visual.js')
+      const uiProbe = runUiVisualProbe({ changeDir: join(specBase, 'changes', changeName), gate: readUiVisualGate(specBase) })
+      if (uiProbe.level === 'error') {
+        console.error(`
+❌ verify 阶段被阻断：UI 视觉证据门未过（${uiProbe.notes.join('；')}）`)
+        console.error(`   修复：补渲染对照证据到 ${UI_EVIDENCE_FILENAME}；降级项补「用户裁决」留痕段。证据应在执行时按 flow start「UI 变更执行须知」随手产生——收口只验在场。`)
+        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'UI 视觉证据门未过（探针 12 error 档，明细见上）' })
+      } else if (uiProbe.level === 'warn') {
+        console.warn(`
+⚠️ UI 视觉证据（探针 12 warn 档）：${uiProbe.notes.join('；')}`)
+      }
+    } catch (e) {
+      console.warn(`⚠️ UI 视觉证据探针异常（降级放行，fail-soft）: ${(e && e.message) || e}`)
+    }
   }
 
   // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
