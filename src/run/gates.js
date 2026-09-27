@@ -1802,6 +1802,27 @@ export async function completeStageGates({ stageName, cwd, changeName, platformO
     }
   }
 
+  // ── full 流程绑定面补齐（2026-09-27-gate-face-binding-parity，R23-full 实证缺口）──
+  // 绑定槽此前只在 thin flow start 收编时追加（flow.js ensureBindingSlots）；full 流程
+  // requirements 由 brainstorm 产出、无绑定面且不经过 flow start → test-trace 恒空 →
+  // FR 入库永远无 tests 绑定，动态门 FR 回归源对 full 出身 FR 失效。此处单源复用
+  // ensureBindingSlots（已有槽/无 FR 块均 no-op），verify --done 的 auto-bind 因槽在场闭环。
+  // best-effort：追加失败只告警不阻断 brainstorm 收尾。
+  if (stageName === 'brainstorm' && changeName) {
+    try {
+      const changeDir = join(specBase, 'changes', changeName)
+      if (existsSync(join(changeDir, 'requirements.md'))) {
+        const { ensureBindingSlots } = await import('../flow-draft.js')
+        const b = ensureBindingSlots({ changeDir })
+        if (b.appended) {
+          console.log(`📌 追加测试绑定槽 ${b.slots} 枚（full 流程 requirements 无绑定面——plan/execute 写测试时作答，verify --done 将从实测结果自动补全空槽）`)
+        }
+      }
+    } catch (e) {
+      console.warn(`⚠️ 绑定槽追加失败（best-effort 不阻断）: ${(e && e.message) || e}`)
+    }
+  }
+
   // scan 平台 manifest + post-check（S1 平台受害者：noAI scanPostcheck 末步 / continueStep 现也走这里）
   const _scanResult = await handleScanStageCompleted({ stageName, currentIdx, cwd, progress, pm, stageData, changeName, outputText, platformOpts })
   if (_scanResult) return _scanResult

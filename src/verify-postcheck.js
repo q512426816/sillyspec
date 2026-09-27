@@ -1691,7 +1691,7 @@ function resolveMainChangedFiles(cwd, changeName, specBase = null) {
  *   resultPath: string|null,
  * }}
  */
-export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null }) {
+export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = null, restrictFiles = null, faceOverride = null }) {
   // restrictFiles（坑 quick-gate-并行全流程变更脏文件误伤，2026-09-21 实证）：本会话声明
   // 文件集（quick gate 传 allowedFiles）——提供时 module 子集的变更文件面收窄到
   // 「实际变更 ∩ restrictFiles」，窗口内未声明的并行全流程变更 WIP 文件不再进模块选择
@@ -1744,32 +1744,40 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   }
   if (strategy === null) strategy = 'dynamic'
 
-  // 变更文件面（动态子集命中源）：主仓 diff（includeWorkingTree——坑 module-subset-zero-hit-
-  // uncommitted：子代理不 commit 的改动也参与判定）∩ restrictFiles（本会话声明面，坑并行
-  // 变更脏文件误伤）；thin「先提交后收口」使 diff 恒空时回退调用方清单（与快照 overlay 同源）。
-  // 跨仓仓不参与动态子集（design §6 + §5.4），故不传 ctx。
+  // 变更文件面（动态子集命中源）。faceOverride 在场=调用方权威面（R23-thin 实证盲区修复：
+  // 快照锚 HEAD + thin「先提交再收口」⇒ 快照内 diff 只剩真未提交文件，与权威面相交后动态子集
+  // 假空跳过——权威面由 flow done 在主仓 cwd 按 baseline..HEAD+status 算好传入；快照只隔离
+  // 执行，不再重推文件面）。缺省走快照/仓内推导（includeWorkingTree ∩ restrictFiles，
+  // 坑 module-subset-zero-hit-uncommitted / 并行变更脏文件误伤；thin 先提交后收口 diff 恒空
+  // 时回退调用方清单）。跨仓仓不参与动态子集（design §6 + §5.4），故不传 ctx。
   let lastChangedFiles = []
   let gitUnavailable = false
   if (strategy === 'dynamic') {
-    let cf = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
-    if (cf === null) {
-      gitUnavailable = true
+    if (Array.isArray(faceOverride) && faceOverride.length > 0) {
+      const norm = (f) => String(f).replace(/\\/g, '/').replace(/^\.\//, '')
+      lastChangedFiles = [...new Set(faceOverride.map(norm))]
+      console.log(`ℹ️ 文件面=调用方权威面 ${lastChangedFiles.length} 个文件（含已提交交付——快照只隔离执行不重推文件面）`)
     } else {
-      if (Array.isArray(restrictFiles) && restrictFiles.length > 0) {
-        const norm = (f) => String(f).replace(/\\/g, '/').replace(/^\.\//, '')
-        const restrictSet = new Set(restrictFiles.map(norm))
-        const before = cf.length
-        cf = cf.filter(f => restrictSet.has(norm(f)))
-        const dropped = before - cf.length
-        if (dropped > 0) {
-          console.log(`ℹ️ 文件面已收窄到本会话声明的 ${cf.length}/${before} 个变更文件（${dropped} 个未声明脏文件不进实测面——并行变更 WIP 留在审计记录）`)
+      let cf = resolveVerifyChangedFiles(cwd, changeName, null, { includeWorkingTree: true, specBase })
+      if (cf === null) {
+        gitUnavailable = true
+      } else {
+        if (Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+          const norm = (f) => String(f).replace(/\\/g, '/').replace(/^\.\//, '')
+          const restrictSet = new Set(restrictFiles.map(norm))
+          const before = cf.length
+          cf = cf.filter(f => restrictSet.has(norm(f)))
+          const dropped = before - cf.length
+          if (dropped > 0) {
+            console.log(`ℹ️ 文件面已收窄到本会话声明的 ${cf.length}/${before} 个变更文件（${dropped} 个未声明脏文件不进实测面——并行变更 WIP 留在审计记录）`)
+          }
         }
+        if (Array.isArray(cf) && cf.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
+          cf = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
+          console.log(`ℹ️ diff 命中源为空（先提交后收口的 thin 常态）——回退调用方清单 ${cf.length} 个文件作命中源（与快照 overlay 同源）`)
+        }
+        lastChangedFiles = cf
       }
-      if (Array.isArray(cf) && cf.length === 0 && Array.isArray(restrictFiles) && restrictFiles.length > 0) {
-        cf = restrictFiles.map((f) => String(f).replace(/\\/g, '/').replace(/^\.\//, ''))
-        console.log(`ℹ️ diff 命中源为空（先提交后收口的 thin 常态）——回退调用方清单 ${cf.length} 个文件作命中源（与快照 overlay 同源）`)
-      }
-      lastChangedFiles = cf
     }
   }
 
@@ -2432,10 +2440,28 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   // 原生 type stripping 跑不了的（node --test 直跑恒败——R18 verify 段 ~11 次尝试的坑），
   // ① 命中命令串提取 vitest/jest（旧路径）② 无命中命令时最近含 vitest/jest 的 package.json；
   // 双源均提不出则整批 skip 转项目运行器（不制造恒败段）。.ts/.js 照旧 node --test（原生可跑）。
+  // R19（2026-09-27-core-pages-visual-redesign verify 实证，用户授权修复）：import 项目测试
+  // 框架（vitest/@playwright/jest/bun:test）的 .ts 文件与 .tsx 同病——node --test 直跑 import
+  // 解析/协议全不符恒败（frontend/src/styles/themes.test.ts + e2e/auth.spec.ts 两轮假红）。
+  // 按文件内容分流：内容命中框架 import 的 .ts/.js 归 jsProject（项目运行器），node:test/
+  // 纯 node 协议照旧 jsNative；文件读不到按 jsNative（保守，与旧口径一致）。
   const _norm = (p2) => String(p2).replace(/\\/g, '/')
+  const PROJECT_FRAMEWORK_IMPORT_RE =
+    /^\s*import[\s{][^;"']*}?\s*from\s*["'](vitest|@vitest\/|@playwright\/test|jest|bun:test)["']/m
+  const needsProjectByContent = (f) => {
+    try {
+      return PROJECT_FRAMEWORK_IMPORT_RE.test(readFileSync(join(cwd ?? '.', f), 'utf8'))
+    } catch {
+      return false
+    }
+  }
   const NEEDS_PROJECT_RE = /\.(tsx|jsx)$/
-  const jsProject = jsRun.filter((f) => NEEDS_PROJECT_RE.test(_norm(f)))
-  const jsNative = jsRun.filter((f) => !NEEDS_PROJECT_RE.test(_norm(f)))
+  const jsProject = jsRun.filter(
+    (f) => NEEDS_PROJECT_RE.test(_norm(f)) || needsProjectByContent(f),
+  )
+  const jsNative = jsRun.filter(
+    (f) => !NEEDS_PROJECT_RE.test(_norm(f)) && !needsProjectByContent(f),
+  )
   let jsxRunner = null
   for (const h of hits || []) {
     const cmd = String(h.test || '')

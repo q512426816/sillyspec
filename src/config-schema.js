@@ -406,7 +406,7 @@ dispatch:
 # full=全量（commands.test 在场生效，否则按 package.json scripts.test / pyproject 推断）
 # skip=真跳过测试（不回退全量，verify 输出显式标注留审计痕迹）
 # evidence-auto=按变更 module-impact.md 影响面推荐（行为→动态子集、文档→docs-check、门禁→gate）
-test_strategy: full
+# test_strategy: full   # 缺省注释态=动态子集（评审 P3-5 清偿：复制即全量道的自相矛盾陷阱——缺省注释才与上方「缺省=动态子集」一致）；确要全量再解注释
 
 # ── monorepo 子模块路径映射（.path 仍被 plan/worktree-deps 消费；.test 已退役勿再配）──
 modules:
