@@ -1007,14 +1007,16 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // 等价物——模块文档是后续变更门禁收窄/知识注入的原料，失供是复利折旧）。
           // 2026-09-27-thin-module-scope-persist：调用前移至 meta 写盘前——结构化结果
           // （modules/uncoveredDirs/moduleMaps）随 change-patch.json 落盘供平台展示影响模块
-          // 范围，单一计算喂 console 与落盘两处；best-effort 失败零键不阻断。
-          let moduleScope = null
+          // 范围，单一计算喂 console 与落盘两处。ownFiles 传冻结面（与 files[] 同口径——
+          // worktree/--freeze-dirty 场景 dirty 交付也计入模块命中；.sillyspec 治理面对账内部
+          // 滤除）；三键恒在场（对账异常兜底空数组，评审 P3 清偿）；best-effort 不阻断。
+          let moduleScope = { modules: [], uncoveredDirs: [], moduleMaps: [] }
           try {
             const { reconcileModuleDocs } = await import('./flow-parity.js')
-            const rec = reconcileModuleDocs({ cwd, specBase, ownFiles: committed, committedRaw })
+            const rec = reconcileModuleDocs({ cwd, specBase, ownFiles, committedRaw })
             if (rec.lines.length > 0) for (const l of rec.lines) console.log(l)
             moduleScope = { modules: rec.modules, uncoveredDirs: rec.uncoveredDirs, moduleMaps: rec.moduleMaps }
-          } catch { /* 对账 best-effort */ }
+          } catch { /* 对账 best-effort（三键空数组兜底） */ }
           const meta = {
             change,
             baseline: st.baseline_commit,
@@ -1025,7 +1027,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             note: 'flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）',
             // 模块对账结构化面（2026-09-27-thin-module-scope-persist）：done 时点口径（与 files[]
             // 同时点语义，不随模块图后续变更回写）；modules[] 空≠无影响（可能未登记——看 uncoveredDirs）
-            ...(moduleScope || {}),
+            ...moduleScope,
           }
           if (typeof frozen === 'string' && frozen) {
             const patchText = frozen.endsWith('\n') ? frozen : frozen + '\n'

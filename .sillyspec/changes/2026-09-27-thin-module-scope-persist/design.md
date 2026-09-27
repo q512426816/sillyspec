@@ -25,6 +25,7 @@ created_at: 2026-09-27T13:09:56.352Z
 - `module-resolve.js` 导出 `normalizeMapPath`（原模块私有，路径归一单一口径防两处漂移）。
 - `change-patch.json`（flow done 时点写入）新增同名三键：零命中 → `modules: []`、无未登记 → `uncoveredDirs: []`、无模块图 → 三键空数组——键恒在场，平台读侧无需判 undefined。数据语义=done 时点冻结口径（与 `files[]` 同一时点语义），不随后续模块图变更回写。
 - CLI 命令面/退出码/其它工件格式无变化。
+- 评审 P1/P3 清偿追加：① `buildFrozenPatch`（src/scope-audit.js）diff 采集失败改 fail-closed 返回 null（jsdoc 原契约「不落伪 patch」首次真兑现——实证：本仓 core.bare 被外部误写 true 时 `git diff &lt;ref&gt;` 报「must be run in a work tree」，untracked 自拼 hunk 仍拼出 patchStatus ok 但正文零 tracked hunk 的伪完整件；环境项 core.bare 已还原 false，代码防线独立于环境）；② 对账输入改传冻结面 ownFiles（与 files[] 同口径——worktree/--freeze-dirty 场景 dirty 交付也计入模块命中，评审 P3 清偿）；③ 三键恒在场兜底空数组（对账整体异常路径不再缺键，评审 P3 清偿）。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 <!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-thin-module-scope-persist 留痕重锚 -->

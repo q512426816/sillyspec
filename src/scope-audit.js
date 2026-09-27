@@ -321,7 +321,12 @@ export function buildFrozenPatch(root, files, { baseRef } = {}) {
   const parts = []
   try {
     const r = safeGit(root, ['diff', '--no-color', baseRef], { timeout: 60 * 1000 })
-    const filtered = filterPatchForFiles(r.error ? null : r.value, wanted)
+    // diff 采集失败 fail-closed（2026-09-27-thin-module-scope-persist 评审 P1 清偿：此前失败静默
+    // 跳过 tracked 段，untracked 自拼 hunk 仍拼出非空 patch → patchStatus ok 的伪完整件——实证
+    // core.bare 被误写 true 时 `git diff <ref>` 报「must be run in a work tree」，change.patch
+    // 只剩 proposal.md 一个 hunk 却标 ok。失败即 null（jsdoc 契约：调用方 fail-soft 不落伪 patch））
+    if (r.error) return null
+    const filtered = filterPatchForFiles(r.value, wanted)
     if (filtered) parts.push(filtered)
     const trackedOut = safeGit(root, ['ls-files'], { timeout: 30 * 1000 })
     const trackedSet = new Set(String(trackedOut.value || '').split('\n').map(toPosix).filter(Boolean))

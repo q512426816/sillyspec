@@ -9,6 +9,8 @@
  *   ③ .sillyspec 治理面不入对账（不污染 uncoveredDirs）；子项目 paths 前缀（collectModuleMaps 口径）；
  *   ④ 集成：临时仓真跑 flow start → 干活 → done → 归档件 change-patch.json 含
  *      modules/uncoveredDirs/moduleMaps 三键，console 对账行与落盘同一次计算（FR-01）。
+ *   ⑤ buildFrozenPatch fail-closed：diff 采集失败返回 null 不落伪 patch（评审 P1 清偿——
+ *      实证 core.bare 被误写 true 时 untracked 自拼 hunk 仍拼出 patchStatus ok 的伪完整件）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -21,6 +23,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CLI = join(ROOT, 'src', 'index.js')
 const { reconcileModuleDocs } = await import('../src/flow-parity.js')
+const { buildFrozenPatch } = await import('../src/scope-audit.js')
 
 /** 单元夹具：tmp 仓根 + .sillyspec specBase（docTouched 比对走真实相对层级）。 */
 function unitBase() {
@@ -171,5 +174,25 @@ test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账�
   ], 'FR-01：受影响模块结构化落盘（文档随变更更新→docTouched true）')
   assert.deepEqual(meta.uncoveredDirs, [], '全命中=未登记空数组（键恒在场）')
   assert.deepEqual(meta.moduleMaps, ['docs/demo/modules/_module-map.yaml'])
+  rmSync(cwd, { recursive: true, force: true })
+})
+
+test('⑤ buildFrozenPatch fail-closed：diff 采集失败返回 null，不落伪 patch（评审 P1 清偿）', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'mspf-'))
+  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' })
+  run(['init', '-q'])
+  run(['config', 'user.email', 't@t'])
+  run(['config', 'user.name', 't'])
+  writeFileSync(join(cwd, 'a.txt'), 'a\n')
+  run(['add', '.'])
+  run(['commit', '-q', '-m', 'a'])
+  const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd }).toString().trim()
+  writeFileSync(join(cwd, 'a.txt'), 'a2\n')
+  const ok = buildFrozenPatch(cwd, ['a.txt'], { baseRef: base })
+  assert.match(String(ok), /diff --git a\/a\.txt/, '正常态：tracked 改动进 patch 正文')
+  // core.bare=true → `git diff <ref>` 报「must be run in a work tree」→ 必须判采集失败
+  run(['config', 'core.bare', 'true'])
+  assert.equal(buildFrozenPatch(cwd, ['a.txt'], { baseRef: base }), null,
+    'diff 失败 fail-closed——不再静默跳过 tracked 段拼出 patchStatus ok 的伪完整件')
   rmSync(cwd, { recursive: true, force: true })
 })

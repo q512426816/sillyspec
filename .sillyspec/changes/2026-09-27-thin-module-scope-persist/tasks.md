@@ -12,3 +12,4 @@ created_at: 2026-09-27T13:09:56.352Z
 - [x] task-02: flow.js patch 子步对账调用前移至 change-patch.json 写盘前，meta 新增三键（无图/零命中空数组兜底，fail-soft 不变；test/flow-parity.test.mjs ④ 集成锁定归档件三键与 console 同源）
 - [x] task-03: 填充 git 已跟踪 0 字节占位件 test/flow-parity.test.mjs：单元（结构化返回/无图/零命中/子项目前缀/doc 缺失）+ 集成（临时仓真跑 flow done 断言 change-patch.json）4 用例
 - [x] task-04: 验证面全绿：新测试 4/4 + 回归 flow-protocol 22/22 + flow-route/review/draft 16/16 + lint（check-syntax 840 文件，未引用导出 0）+ 交付显式 pathspec 提交
+- [x] task-05: 评审清偿（FAIL→修复→重评）：P1 buildFrozenPatch diff 失败 fail-closed 返 null 不落伪 patch（test/flow-parity.test.mjs ⑤ 锁定；环境项 core.bare 误写 true 已还原）+ P3 双清偿（对账输入改冻结面 ownFiles 口径 + 三键恒在场空数组兜底）；scope-audit 回归 41/41
