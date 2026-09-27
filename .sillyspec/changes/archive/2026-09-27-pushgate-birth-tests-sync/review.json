@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-pushgate-birth-tests-sync",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "断言语义随 eb3b4bce 锚定，语义再翻转需同步",
+      "evidence": "两处期望直接依赖「出生未入门态等价旧 scan 出生态」设计语义；转换表已留注释锚",
+      "location": "test/stage-contract.test.mjs:L22-L25"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-27T15:30:53Z"
+}

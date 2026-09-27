@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-pushgate-birth-tests-sync",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-pushgate-birth-tests-sync:flow:FR-01",
+      "tests": [
+        "test/state-machine-guards.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-pushgate-birth-tests-sync"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-pushgate-birth-tests-sync:flow:FR-02",
+      "tests": [
+        "test/stage-contract.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-pushgate-birth-tests-sync"
+    }
+  ]
+}

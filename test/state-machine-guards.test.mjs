@@ -66,6 +66,10 @@ console.log('--- 1a. brainstorm 态直跑 verify --done → exit(1) 拦截 ---')
   const pm = await initChange(cwd, specBase, changeName)
   let progress = await pm.read(cwd, changeName)
   progress.currentStage = 'brainstorm'
+  // 显式入态（in-progress）：出生未入门（pending）等价旧 scan 出生态可直入主流程（eb3b4bce），
+  // 本用例守卫语义是「未合法走完主流程链直跳 verify 被拦」，须真在 brainstorm 中测。
+  progress.stages = progress.stages || {}
+  progress.stages.brainstorm = { status: 'in-progress' }
   await pm._write(cwd, progress, changeName)
 
   const r = runStageSpec('verify', changeName, cwd, specBase, { done: true, output: 'x' })

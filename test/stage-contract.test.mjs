@@ -19,7 +19,10 @@ const transitionTests = [
   // 跳步应被拦截
   ['', 'plan', false],
   ['', 'execute', false],
-  ['brainstorm', 'execute', false],
+  // 真在 brainstorm 中（in-progress）跳步仍拦（eb3b4bce 起「出生未入门态」走下方放行行）
+  ['brainstorm', 'execute', false, { fromStageData: { status: 'in-progress' } }],
+  // 出生未入门（brainstorm 仍 pending/无 stages 行）等价旧 scan 出生态：主流程直入放行
+  ['brainstorm', 'execute', true],
   ['plan', 'verify', false],
   ['execute', 'archive', false],
 
@@ -51,8 +54,8 @@ const transitionTests = [
 ]
 
 console.log('=== 状态转换测试 ===')
-for (const [from, to, expected] of transitionTests) {
-  const r = checkTransition(from, to)
+for (const [from, to, expected, opts] of transitionTests) {
+  const r = checkTransition(from, to, opts)
   const ok = r.allowed === expected
   if (!ok) failed++
   console.log(ok ? '✅' : '❌', `${from || '(起始)'} → ${to}: allowed=${r.allowed} (exp ${expected})${ok ? '' : ' reason: ' + r.reason}`)
