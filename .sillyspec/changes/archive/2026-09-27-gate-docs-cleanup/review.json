@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-gate-docs-cleanup",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "冻结审计件 change.patch 缺三张模块卡 diff，patch 面与 baseline..HEAD 提交面不一致",
+      "evidence": "change.patch 仅含 6 个路径（design.md/proposal.md/requirements.md/tasks.md/src/config-schema.js/flow-state.yaml），不含 .sillyspec/docs/sillyspec/modules/{cli-entry,core-engine,setup}.md；而实测 baseline(e44a9bf4)..HEAD(8fae1916) 提交面为 8 文件，三卡由交付提交 d3f3852d 一并修改（--stat：cli-entry +7/-1、core-engine +6/-1、setup +8/-1）。三卡增量是 FR-02/03/04/05 的主交付面，仅凭 patch 对账会漏验；且 patch 把当前未跟踪的 flow-state.yaml 收录为 new file，与 AGENTS.md「patch 冻结面=baseline..HEAD 提交面」口径两向不符（漏提交面文件、收未提交文件）。属审计件生成面缺陷，非交付缺失——三卡内容经盘面与提交双核属实。",
+      "location": ".sillyspec/changes/2026-09-27-gate-docs-cleanup/change.patch:1"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "frVerification": {
+    "FR-01": "ok——config-schema.js hunk_gate 新 desc「error（未归因与跨变更竞争任一在场阻断收口；在途残留恒仅警告）」与 src/hunk-attribution.js:163 result.ok = unattributed.length===0 && contended.length===0 逐字对齐；residue 不进 ok 判定、仅渲染 ⚠️（:183-185），「恒仅警告」属实",
+    "FR-02": "ok——cli-entry.md:108-111「门接线注记（2026-09-27-gate-docs-cleanup）」在场且已入提交面（d3f3852d）；锚点核验：detectUiTouch/detectUiTouchInPaths 双源属实（src/ui-visual.js:33/:39），src/hunk-attribution.js 在场",
+    "FR-03": "ok——core-engine.md:197-199「探针族注记（2026-09-27-gate-docs-cleanup）」在场且已入提交面；锚点核验：runUiVisualProbe（src/ui-visual.js:92）/renderUiVisualProbeLines（:157，参数名 p12 佐证探针 12）；探针 12 口径与前序交付提交 4f859053（verify 探针 12 在场性对账）一致",
+    "FR-04": "ok——setup.md:90-94「配置键注记（2026-09-27-gate-docs-cleanup）」在场且已入提交面；锚点核验：readUiVisualGate（src/ui-visual.js:63）/readHunkGate（src/hunk-attribution.js:23），两键三档 warn|error|off 与两读取函数正则一致，error 档范围表述与实现一致",
+    "FR-05": "ok——cli-entry.md updated_at 经 git show d3f3852d 证实由 2026-09-22T00:00:00+08:00 刷新为 2026-09-27；core-engine/setup 现值均 2026-09-27T18:10:00+08:00（本次刷新）",
+    "FR-06": "ok——git diff --name-only e44a9bf4..HEAD 实测 8 文件：4 个 .sillyspec/changes 治理件 + 3 张 .sillyspec/docs 模块卡 + src/config-schema.js（该文件仅 1 行 desc 字符串变更，+1/-1）；src 零行为改动属实"
+  },
+  "blindSpotCheck": "design 盲维四问全称不适用——diff 属实：变更面纯文档与一行描述字符串，无运行时逻辑/共享态/生命周期面，四问不适用成立",
+  "boundaryDisclosure": "无声明边界",
+  "protectionClaims": "无",
+  "reviewedAt": "2026-09-27T09:07:05Z"
+}

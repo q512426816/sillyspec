@@ -1,0 +1,22 @@
+{
+  "change": "2026-09-27-gate-docs-cleanup",
+  "baseline": "e44a9bf4d8b00dca90ea222a18ab613a04e0b0de",
+  "head": "8fae191686687698f334d58642c4cdca760bef38",
+  "files": [
+    ".sillyspec/changes/2026-09-27-gate-docs-cleanup/design.md",
+    ".sillyspec/changes/2026-09-27-gate-docs-cleanup/proposal.md",
+    ".sillyspec/changes/2026-09-27-gate-docs-cleanup/requirements.md",
+    ".sillyspec/changes/2026-09-27-gate-docs-cleanup/tasks.md",
+    "src/config-schema.js",
+    ".sillyspec/changes/2026-09-27-gate-docs-cleanup/flow-state.yaml"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 128,
+    "deletions": 24
+  },
+  "savedAt": "2026-09-27T09:03:42.301Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "9224b5fde32dab7fd3f1dfa4646ce5345871807662a6bde2430d2cd0333b3206",
+  "patchStatus": "ok"
+}

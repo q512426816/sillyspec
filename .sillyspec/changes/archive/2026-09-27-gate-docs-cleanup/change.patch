@@ -1,0 +1,240 @@
+diff --git a/.sillyspec/changes/2026-09-27-gate-docs-cleanup/design.md b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/design.md
+new file mode 100644
+index 00000000..e59daae8
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:00:56.676Z
++---
++# 设计记录（Design Record）— 2026-09-27-gate-docs-cleanup
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++纯文档清理：① config-schema.js 的 hunk_gate 描述与实现对齐（error 档未归因与跨变更竞争阻断、在途残留恒警告——residue 不进 ok 判定是评审 F1 的实现事实）；② 三张受影响模块卡（cli-entry、core-engine、setup）各追加带日期注记并刷新 updated_at，覆盖两道新门的接线点、探针 12 与两枚配置键。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++无接口变化：config-schema 仅字符串描述修正（键定义与解析零改动）；三张模块卡为文档增量。零代码行为改动。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用。2. 并发写：文档与描述行编辑，无共享态。3. 切换：不适用。4. 作用域：仅本仓文档与一行描述。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：注记与未来实现漂移（门档位语义再变时注记过时）——低（注记带变更名可溯源）。放弃方案：无（纯对齐性清理）。
+diff --git a/.sillyspec/changes/2026-09-27-gate-docs-cleanup/proposal.md b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/proposal.md
+new file mode 100644
+index 00000000..e16fc98b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/proposal.md
+@@ -0,0 +1,42 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T09:00:56.675Z
++---
++# 提案书（Proposal）— 2026-09-27-gate-docs-cleanup
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:222da6c1f2d426cad7ab1ef6458f12ba5584550765f8948e4d5a2bcfe9755305:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++任务原话转写：背景：2026-09-27-hunk-attribution-gate 归档评审留 P2 文档债（config-schema 的 hunk_gate error 档描述写「三类信号任一阻断」而实现只在未归因与跨变更竞争时阻断、在途残留恒警告）；两道新门（UI 视觉证据门、行级归属门）收口时模块卡认领 advisory 列了八张卡无增量。本变更为纯文档清理：描述对齐 + 三张实际受影响模块卡补增量。
++成功标准：
++- config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与跨变更竞争任一在场阻断、在途残留恒仅警告
++- cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow done probes 子步双门执法
++- core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预填与段渲染）
++- setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hunk_gate 两键及三档语义
++- 三卡 updated_at 刷新；零代码行为改动（config-schema 仅字符串描述）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:b0abb1c28bfa261a552882d71c3a9ead33cf33c1aa12c6d9706765b589fb87ea:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与跨变更竞争任一在场阻断、在途残留恒仅警告
++2. cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow done probes 子步双门执法
++3. core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预填与段渲染）
++4. setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hunk_gate 两键及三档语义
++5. 三卡 updated_at 刷新
++6. 零代码行为改动（config-schema 仅字符串描述）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:593a1494b4d0634d3441bc6a9742ead673f8462a6b54494ae5693bda87f7e7e4:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-gate-docs-cleanup 留痕重锚 -->
++1. config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与跨变更竞争任一在场阻断、在途残留恒仅警告
++2. cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow done probes 子步双门执法
++3. core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预填与段渲染）
++4. setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hunk_gate 两键及三档语义
++5. 三卡 updated_at 刷新
++6. 零代码行为改动（config-schema 仅字符串描述）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-27-gate-face-binding-parity/requirements.md b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/requirements.md
+similarity index 56%
+rename from .sillyspec/changes/2026-09-27-gate-face-binding-parity/requirements.md
+rename to .sillyspec/changes/2026-09-27-gate-docs-cleanup/requirements.md
+index a0391487..33e39eb5 100644
+--- a/.sillyspec/changes/2026-09-27-gate-face-binding-parity/requirements.md
++++ b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/requirements.md
+@@ -1,52 +1,58 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-27T00:19:43.381Z
++created_at: 2026-09-27T09:00:56.676Z
+ ---
+-# 需求规格（Requirements）— 2026-09-27-gate-face-binding-parity
++# 需求规格（Requirements）— 2026-09-27-gate-docs-cleanup
+ 
+ ## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
+ 
+ <!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
+-### FR-01: runVerifyTestCheck 接受 faceOverride：在场时跳过快照内二次推导（含收
+-Given 测试 相关模块就绪
+-When runVerifyTestCheck 接受 faceOverride：在场时跳过快照内二次推导（含收窄），直接用调用方权威面算动态子集——commit-then
++### FR-01: config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与
++Given 系统就绪
++When config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与跨变更竞争任一在场阻断、在途残留恒仅警告
+ Then 行为符合本条标准描述
+ 
+-### FR-02: quick-audit 透传 faceOverride，flow done ledger 门接线（c
++### FR-02: cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow d
+ Given 系统就绪
+-When quick-audit 透传 faceOverride，flow done ledger 门接线（changedFiles 即权威面）
++When cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow done probes 子步双门执法
+ Then 行为符合本条标准描述
+ 
+-### FR-03: full 流程 brainstorm --done 对有 FR 块而无绑定面的 requiremen
++### FR-03: core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预
+ Given 系统就绪
+-When full 流程 brainstorm --done 对有 FR 块而无绑定面的 requirements 追加绑定槽（复用 thin 追加逻辑单源）
++When core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预填与段渲染）
+ Then 行为符合本条标准描述
+ 
+-### FR-04: verify 侧既有 auto-bind 因槽在场而闭环，R23-full 形态（trace 0 行
++### FR-04: setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hun
+ Given 系统就绪
+-When verify 侧既有 auto-bind 因槽在场而闭环，R23-full 形态（trace 0 行）不再复现
++When setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hunk_gate 两键及三档语义
+ Then 行为符合本条标准描述
+ 
+-### FR-05: renderExample 的 test_strategy 行注释化（主仓与实验快照一致）
++### FR-05: 三卡 updated_at 刷新
+ Given 系统就绪
+-When renderExample 的 test_strategy 行注释化（主仓与实验快照一致）
++When 三卡 updated_at 刷新
+ Then 行为符合本条标准描述
+ 
+-### FR-06: 全仓测试绿
+-Given 测试 相关模块就绪
+-When 全仓测试绿
++### FR-06: 零代码行为改动（config-schema 仅字符串描述）
++Given 系统就绪
++When 零代码行为改动（config-schema 仅字符串描述）
+ Then 行为符合本条标准描述
+ 
+ ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
+ 
+ <!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：纯描述字符串对齐（无行为面），核对方式=文本 diff
+ 
+ <!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：模块卡文档增量（doc-only）
+ 
+ <!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：模块卡文档增量（doc-only）
+ 
+ <!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：模块卡文档增量（doc-only）
+ 
+ <!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：updated_at 刷新为元数据编辑（doc-only）
+ 
+ <!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：元数据刷新与零行为改动核对（git diff 仅文档与一行描述字符串，node --check config-schema 通过）
+diff --git a/.sillyspec/changes/2026-09-27-knowledge-digest/tasks.md b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/tasks.md
+similarity index 50%
+rename from .sillyspec/changes/2026-09-27-knowledge-digest/tasks.md
+rename to .sillyspec/changes/2026-09-27-gate-docs-cleanup/tasks.md
+index 89f7c481..2663085b 100644
+--- a/.sillyspec/changes/2026-09-27-knowledge-digest/tasks.md
++++ b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/tasks.md
+@@ -1,15 +1,12 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-27T05:23:04.935Z
++created_at: 2026-09-27T09:00:56.676Z
+ ---
+-# 任务注册表（Tasks）— 2026-09-27-knowledge-digest
++# 任务注册表（Tasks）— 2026-09-27-gate-docs-cleanup
+ 
+ > 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
+ > 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
+ > ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
+ 
+-- [x] task-01: 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析…
+-- [x] task-02: 落域机械改进：归档蒸馏落域为伪域（auto-*/unmapped）时…
+-- [x] task-03: 伪域条目+建议进 digest 信号
+-- [x] task-04: digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）
+-- [x] task-05: 全仓测试绿
++- [x] task-01: config-schema hunk_gate 描述对齐实现（error 档范围：未归因与跨变更竞争阻断、在途残留恒警告） (FR-01)
++- [x] task-02: 三张模块卡追加带日期注记并刷新 updated_at：cli-entry（flow 双门接线）、core-engine（探针 12）、setup（两枚配置键） (FR-02 FR-03 FR-04 FR-05)
+diff --git a/src/config-schema.js b/src/config-schema.js
+index 99b26c5a..846b07a0 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -130,7 +130,7 @@ export const LOCAL_YAML_SCHEMA = {
+       keys: [
+         { path: 'known_failures', type: 'array', optional: true, status: 'live', readers: ['extractKnownFailures (src/verify-postcheck.js)'], desc: '失败行模式列表（匹配测试输出失败行）。', example: 'tests/some-old-test' },
+         { path: 'ui_visual_gate', type: 'string', optional: true, status: 'live', readers: ['runUiVisualProbe (src/ui-visual.js)'], desc: '【2026-09-27-ui-visual-guidance】UI 视觉证据分级门档位：warn（默认，缺 visual-evidence.md 仅警告）/ error（缺证据即阻断）/ off（探针整体关闭，含降级硬规则）。视觉降级无用户裁决留痕时无论档位恒阻断。', example: 'warn' },
+-        { path: 'hunk_gate', type: 'string', optional: true, status: 'live', readers: ['runHunkAttributionGate (src/hunk-attribution.js)'], desc: '【2026-09-27-hunk-attribution-gate】提交面行级归属门档位：warn（默认，未归因文件/跨变更竞争/在途残留仅警告）/ error（三类信号任一在场均阻断收口）/ off（关闭）。', example: 'warn' },
++        { path: 'hunk_gate', type: 'string', optional: true, status: 'live', readers: ['runHunkAttributionGate (src/hunk-attribution.js)'], desc: '【2026-09-27-hunk-attribution-gate】提交面行级归属门档位：warn（默认，未归因文件/跨变更竞争/在途残留仅警告）/ error（未归因与跨变更竞争任一在场阻断收口；在途残留恒仅警告——并发 WIP 弱信号不硬拦）/ off（关闭）。', example: 'warn' },
+       ],
+     },
+     {
+diff --git a/.sillyspec/changes/2026-09-27-gate-docs-cleanup/flow-state.yaml b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-gate-docs-cleanup/flow-state.yaml
+@@ -0,0 +1,16 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: e44a9bf4d8b00dca90ea222a18ab613a04e0b0de
++updatedAt: '2026-09-27T09:03:09.891Z'
++edit_ratio: 0
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(34)（29.6s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927090232\test-result.json｜lint: failed
++  ← npm run lint（37.3s）｜门文件 13 个
++
