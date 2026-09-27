@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-change-birth-stage-brainstorm",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-change-birth-stage-brainstorm:flow:FR-01",
+      "tests": [
+        "test/change-birth-stage-brainstorm.test.mjs「--- 1. 出生阶段 = brainstorm ---」",
+        "test/progress-get-change-stage.test.mjs「getChangeStage：未注册 → null；注册 → scan/active…」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-change-birth-stage-brainstorm"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-change-birth-stage-brainstorm:flow:FR-02",
+      "tests": [
+        "test/change-birth-stage-brainstorm.test.mjs「--- 3. 存量迁移：三类行各得其所 ---」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-change-birth-stage-brainstorm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-27-change-birth-stage-brainstorm:flow:FR-03",
+      "tests": [
+        "test/change-birth-stage-brainstorm.test.mjs「--- 3. 存量迁移」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-change-birth-stage-brainstorm"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-27-change-birth-stage-brainstorm:flow:FR-04",
+      "tests": [
+        "test/change-birth-stage-brainstorm.test.mjs「--- 3. 存量迁移」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-change-birth-stage-brainstorm"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-27-change-birth-stage-brainstorm:flow:FR-05",
+      "tests": [
+        "test/change-birth-stage-brainstorm.test.mjs「--- 4. 幂等：迁移重跑零效果 ---」",
+        "test/platform-sync-schema.test.mjs「--- 1. 版本号四处一致（v8 bump）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-change-birth-stage-brainstorm"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-27-change-birth-stage-brainstorm:flow:FR-06",
+      "tests": [
+        "test/archive-delta.test.mjs",
+        "test/change-birth-stage-brainstorm.test.mjs「--- 5. checkTransition：出生未入门态」",
+        "test/run-complete-step-archive.test.mjs",
+        "test/run-complete-step-execute-batch.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-change-birth-stage-brainstorm"
+    }
+  ]
+}
