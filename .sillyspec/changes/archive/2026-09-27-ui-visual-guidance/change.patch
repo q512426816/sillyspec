@@ -1,0 +1,758 @@
+diff --git a/.sillyspec/changes/2026-09-27-ui-visual-guidance/design.md b/.sillyspec/changes/2026-09-27-ui-visual-guidance/design.md
+new file mode 100644
+index 00000000..967ffe93
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-ui-visual-guidance/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T04:26:07.088Z
++---
++# 设计记录（Design Record）— 2026-09-27-ui-visual-guidance
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++做法：三件套——① flow start 输出的 lines 数组按 `detectUiTouch(input)`（关键词启发式：页面/UI/视觉/样式/前端/tsx/vue 组件等正反例词表）条件插入「UI 变更执行须知」段（仓中立：不点名具体仓路径，指引用原型或黄金页或现有截图做基准、证据落变更目录 visual-evidence.md）；② verify 探针族新增「UI 视觉证据」分级探针（探针编号顺延，advisory 默认）：UI 触达（input 或声明文件面 .tsx/.vue/.html 命中）且缺 visual-evidence.md → ⚠️；local.yaml `ui_visual_gate: warn|error|off`（默认 warn）控制档位；③ 硬规则内嵌同探针：design/requirements 命中「降级 × 视觉族词共现」且无用户裁决留痕 → 恒 error（仅 off 豁免）。证据只验在场性（文件存在非空），不做内容语义判断——收口零新增负担，证据是执行时按须知顺手产生的。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出：src/ui-visual.js（detectUiTouch / buildUiGuidanceLines / runUiVisualProbe / UI_VISUAL_PROBE_HEADING）；flow.js start 输出插入须知段；verify-probes.js 注册新探针段（--init 骨架 + gate 复跑比对走既有探针管线）；config-schema.js 增 ui_visual_gate 枚举键（默认 warn）。无 CLI 命令签名变化；local.yaml 新增可选键向后兼容（缺席=warn）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用——检测为纯函数读既有文件，无到达序。2. 并发写：只读探针（读 design/requirements/visual-evidence.md），与 verify 既有探针同并发模型，零新增写面。3. 切换：visual-evidence.md 由 agent 随手写，中断时探针只报缺证据（fail-soft 警告默认档），不产生半态。4. 作用域：探针仅读本变更目录与 local.yaml（SPEC_ROOT 解析沿用既有 resolveVerifyProbesSpecBase），跨仓零串台；关键词启发式为 advisory 误判面（多警告一次），误漏面由文件面检测兜底。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：关键词启发式误判（非 UI 变更被注入须知/警告——噪音；或 UI 变更漏检——门没响）。对冲：双源检测（input 词表 + 声明文件面扩展名），默认档仅 warn（误判成本一行警告），正反例单测锁定词表。试过放弃：① 收口强制截图对账（用户否决——太麻烦且最后才卡死没意义，改为过程引导+在场性对账）；② CLI 内置浏览器截图（放弃——CLI 保持零浏览器依赖，截图由执行会话浏览器能力承担，CLI 只验痕迹）。
+diff --git a/.sillyspec/changes/2026-09-27-ui-visual-guidance/proposal.md b/.sillyspec/changes/2026-09-27-ui-visual-guidance/proposal.md
+new file mode 100644
+index 00000000..f05d5e3e
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-ui-visual-guidance/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T04:26:07.087Z
++---
++# 提案书（Proposal）— 2026-09-27-ui-visual-guidance
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:334a45fcc163d2f37fc828aec18f8d9e4e5a16e5b8792cf49f42694aa7d7f614:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++任务原话转写：背景：平台仓 2026-09-26-core-pages-visual-redesign 实证「视觉保真度全流程零承接」——design 写明三主题截图走查为硬门，verify 时以代码级佐证降级放行、DOM 对照原型类验收全部标 uncovered 移交部署后人工，最终仍 PASS，差距部署后才被肉眼发现。平台仓 2026-09-27-prototype-pipeline 已落「设计期桥梁」（原型即真码编译管线）；本变更在 sillyspec CLI 侧补「过程引导 + 收口痕迹对账」：引导前置到 flow start（开工即告知规程），收口只验证据在场、绝不要求现做，视觉降级无用户裁决留痕则硬拦。
++成功标准：
++- flow start 检测 --input 触及前端页面/UI（关键词启发式）时输出「UI 变更执行须知」段：改前确认视觉基准（原型/黄金页/现有截图）、边改边渲染对照、证据随手落变更目录 visual-evidence.md、视觉降级须用户裁决留痕
++- verify 新增「UI 视觉证据」分级探针：UI 触达变更缺 visual-evidence.md 证据时默认 ⚠️ 警告（advisory），local.yaml ui_visual_gate=error 升级阻断、off 关闭
++- 视觉降级硬规则：design.md/requirements.md 声明视觉降级（降级+视觉/UI/页面/样式共现）而变更目录无用户裁决留痕时，无论配置一律 error 阻断
++- 非 UI 变更零打扰：须知不注入、探针标不适用，flow start 输出与既有探针行为零变化
++- 新增单测覆盖：检测启发式（正反例）/探针三档（warn/error/off）/降级硬规则/骨架段落生成
++- CLI 通用性：须知与探针文案仓中立，不硬编码任何特定仓的路径
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:2cc54382218304ebc94d52eff4c377bc95b94bc77e705bca707c80a26c7a269f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. flow start 检测 --input 触及前端页面/UI（关键词启发式）时输出「UI 变更执行须知」段：改前确认视觉基准（原型/黄金页/现有截图）、边改边渲染对照、证据随手落变更目录 visual-evidence.md、视觉降级须用户裁决留痕
++2. verify 新增「UI 视觉证据」分级探针：UI 触达变更缺 visual-evidence.md 证据时默认 ⚠️ 警告（advisory），local.yaml ui_visual_gate=error 升级阻断、off 关闭
++3. 视觉降级硬规则：design.md/requirements.md 声明视觉降级（降级+视觉/UI/页面/样式共现）而变更目录无用户裁决留痕时，无论配置一律 error 阻断
++4. 非 UI 变更零打扰：须知不注入、探针标不适用，flow start 输出与既有探针行为零变化
++5. 新增单测覆盖：检测启发式（正反例）/探针三档（warn/error/off）/降级硬规则/骨架段落生成
++6. CLI 通用性：须知与探针文案仓中立，不硬编码任何特定仓的路径
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:5ea6eb037ccdd52789793afebca7c8a0cc0422c2e679f52c7550bfce8bd934f6:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-27-ui-visual-guidance 留痕重锚 -->
++1. flow start 检测 --input 触及前端页面/UI（关键词启发式）时输出「UI 变更执行须知」段：改前确认视觉基准（原型/黄金页/现有截图）、边改边渲染对照、证据随手落变更目录 visual-evidence.md、视觉降级须用户裁决留痕
++2. verify 新增「UI 视觉证据」分级探针：UI 触达变更缺 visual-evidence.md 证据时默认 ⚠️ 警告（advisory），local.yaml ui_visual_gate=error 升级阻断、off 关闭
++3. 视觉降级硬规则：design.md/requirements.md 声明视觉降级（降级+视觉/UI/页面/样式共现）而变更目录无用户裁决留痕时，无论配置一律 error 阻断
++4. 非 UI 变更零打扰：须知不注入、探针标不适用，flow start 输出与既有探针行为零变化
++5. 新增单测覆盖：检测启发式（正反例）/探针三档（warn/error/off）/降级硬规则/骨架段落生成
++6. CLI 通用性：须知与探针文案仓中立，不硬编码任何特定仓的路径
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-27-ui-visual-guidance/requirements.md b/.sillyspec/changes/2026-09-27-ui-visual-guidance/requirements.md
+new file mode 100644
+index 00000000..28735b32
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-ui-visual-guidance/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T04:26:07.088Z
++---
++# 需求规格（Requirements）— 2026-09-27-ui-visual-guidance
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: flow start 检测 UI 触达并输出「UI 变更执行须知」
++Given flow start 就绪
++When --input 文本命中前端页面或 UI 关键词启发式
++Then 输出须知段：改前确认视觉基准、边改边渲染对照、证据随手落变更目录 visual-evidence.md、视觉降级须用户裁决留痕
++
++### FR-02: verify 新增「UI 视觉证据」分级探针
++Given 变更触及 UI（声明文件面或 input 命中）
++When 收口时变更目录缺 visual-evidence.md 证据
++Then 默认 ⚠️ 警告（advisory）；local.yaml ui_visual_gate=error 升级阻断、off 关闭
++
++### FR-03: 视觉降级硬规则（不可配置降档）
++Given design.md 或 requirements.md 出现「降级」与「视觉、UI、页面、样式」共现声明
++When 变更目录无用户裁决留痕（visual-evidence.md 含「用户裁决」段或 decisions 记录）
++Then 无论 ui_visual_gate 配置一律 error 阻断（off 除外）
++
++### FR-04: 非 UI 变更零打扰
++Given 变更不触及 UI
++When flow start 与 verify 收口
++Then 须知不注入、探针标「不适用」，既有输出与探针行为零变化
++
++### FR-05: 单测覆盖
++Given 本变更交付
++When 跑新增测试文件
++Then 覆盖检测启发式正反例、探针三档（warn、error、off）、降级硬规则、骨架段落生成
++
++### FR-06: CLI 仓中立
++Given sillyspec 服务多仓
++When 须知与探针文案生成
++Then 不硬编码任何特定仓的路径或命令
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs「detectUiTouch 正例：页面/前端/UI/视觉/组件/tsx」「detectUiTouchInPaths：前端扩展名兜底」「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs「UI 触达缺证据：默认 warn / gate=error 升阻断 / off 关闭」「readUiVisualGate：三档 + 缺席默认 warn + CRLF 容错」「renderUiVisualProbeLines：不适用 / warn / error / ok 四形态」
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs「降级硬规则：视觉降级声明无用户裁决留痕 → 无论档位恒 error」「降级硬规则：带用户裁决留痕 → 放行（样式统一级降级案例）」+ 本变更自检实证（visual-evidence.md 补留痕前后 level 变化）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs「detectUiTouch 反例：后端/CLI/文档变更零命中」「非 UI 触达：不适用零打扰」+ renderUiVisualProbeLines undefined 兜底用例
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs 全部 12 用例（node --test 实测 12 pass 0 fail）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」断言无特定仓路径
+diff --git a/.sillyspec/changes/2026-09-27-ui-visual-guidance/tasks.md b/.sillyspec/changes/2026-09-27-ui-visual-guidance/tasks.md
+new file mode 100644
+index 00000000..6fd224b2
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-ui-visual-guidance/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-27T04:26:07.089Z
++---
++# 任务注册表（Tasks）— 2026-09-27-ui-visual-guidance
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: src/ui-visual.js 模块——检测启发式（input 词表+声明文件面扩展名兜底）/须知文案/分级探针/local.yaml 档位读取（CRLF 容错）/段落渲染 (FR-01 FR-02 FR-06)
++- [x] task-02: verify-probes.js 注册探针 12——runVerifyProbes 计算（fail-soft）+ return 对象 + renderVerifyProbesReport 段渲染（旧 result 无键兜底零回归） (FR-02)
++- [x] task-03: flow.js 双接线——start 输出按 detectUiTouch 条件注入「UI 变更执行须知」；flow done probes 子步 error 档拦截（reportMidFail+exit 1）/warn 档提示 (FR-01 FR-03)
++- [x] task-04: run/gates.js verify 收尾 error 门（探针 10 块后同款形状）+ config-schema.js ui_visual_gate 键（warn|error|off，默认 warn） (FR-02 FR-03)
++- [x] task-05: 单测 12 用例（检测正反例/三档/降级硬规则正反向/裁决放行/跨行不误配/CRLF/仓中立/四形态渲染）+ 相关回归 16 用例全绿；check-syntax 剩 test-bindings.js 存量债非本变更引入 (FR-04 FR-05)
++- [x] task-06: 自食其力验证——本变更触发探针 12 自检（uiTouched+降级声明双命中），补 visual-evidence.md 用户裁决留痕后 level=ok；补前为 error 恒拦路径实证 (FR-03)
+diff --git a/.sillyspec/changes/2026-09-27-ui-visual-guidance/visual-evidence.md b/.sillyspec/changes/2026-09-27-ui-visual-guidance/visual-evidence.md
+new file mode 100644
+index 00000000..d6f8419c
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-ui-visual-guidance/visual-evidence.md
+@@ -0,0 +1,16 @@
++# 视觉证据（visual-evidence.md）
++
++本变更是 CLI 行为变更（非页面交付），但触及「UI 视觉证据门」机制本身——检测启发式按
++input 关键词命中 UI 触达，design/requirements 含视觉降级规则表述，触发探针 12 自检路径。
++
++## 用户裁决
++
++2026-09-27 用户确认（对话裁决，zcode 会话）：
++
++1. 否决「收口强制交渲染截图+对照结论」原方案——理由：太麻烦，且过程中无引导、最后才卡
++   死没意义；改为「过程引导（flow start 注入）+ 收口只验证据在场」；
++2. 批准最终范围：flow start 须知注入 + verify 分级探针（warn 默认/error 可配/off 可关）+
++   视觉降级无用户裁决留痕恒 error 的硬规则；
++3. CLI 保持仓中立、不硬编码特定仓路径。
++
++本文件即该裁决的留痕（探针 12 的「用户裁决」字样段约定）。
+diff --git a/src/config-schema.js b/src/config-schema.js
+index f86c861f..c50551f8 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -129,6 +129,7 @@ export const LOCAL_YAML_SCHEMA = {
+       note: '变更前就失败的测试行，豁免后不计入 verify 阻断。支持块列表或 inline 数组。务必定期复核，避免误豁免本变更引入的真实失败。',
+       keys: [
+         { path: 'known_failures', type: 'array', optional: true, status: 'live', readers: ['extractKnownFailures (src/verify-postcheck.js)'], desc: '失败行模式列表（匹配测试输出失败行）。', example: 'tests/some-old-test' },
++        { path: 'ui_visual_gate', type: 'string', optional: true, status: 'live', readers: ['runUiVisualProbe (src/ui-visual.js)'], desc: '【2026-09-27-ui-visual-guidance】UI 视觉证据分级门档位：warn（默认，缺 visual-evidence.md 仅警告）/ error（缺证据即阻断）/ off（探针整体关闭，含降级硬规则）。视觉降级无用户裁决留痕时无论档位恒阻断。', example: 'warn' },
+       ],
+     },
+     {
+diff --git a/src/flow.js b/src/flow.js
+index 9cd46c2f..ee856b45 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -32,6 +32,7 @@ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
++import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+ 
+ const FLOW_STATE_FILE = 'flow-state.yaml'
+ const SUBSTEPS = ['artifacts', 'ledger', 'patch', 'review', 'probes', 'distill', 'archive', 'events']
+@@ -548,6 +549,9 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
+     `   用户明确说「直接跑完/不用问我」→ 三断点全跳过（agent 自主干到底）。`,
+     `   随时可查进度：sillyspec flow status --change ${change}`,
++    ...(detectUiTouch(input)
++      ? [...buildUiGuidanceLines(), '']
++      : []),
+     ``,
+     `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+     `  测试对账：P2 账本优先，无记录 CLI 亲测（fail-closed：实测失败/超时=整单 FAIL exit≠0；中断重入断点续）。`,
+@@ -884,6 +888,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         const diffOut = gitQuiet(cwd, ['diff', '--name-only', `${st.baseline_commit}..HEAD`])
+         const committedRaw = String(diffOut || '').split('\n').map((s) => s.trim().replace(/\\/g, '/')).filter(Boolean)
+         let committed = committedRaw.filter((f) => !f.startsWith('.sillyspec/') || f.startsWith(ownPrefix))
++        // 夹带嫌疑 advisory（坑 parallel-session-stale-snapshot-carried-in-commit，2026-09-26
++        // 实证：daemon 遥测主题提交整体夹带并行会话旧分叉 page.tsx，静默回滚 main 已落地三处
++        // 功能——git 无冲突、聚焦测试不覆盖挂载面，绿灯直过）。提交面里未被本变更任何声明面
++        // （design 文件变更清单 ∪ requirements 测试绑定文件）提及的交付文件，收口前显式归因：
++        // 属并行会话在途 → pathspec 隔离（AGENTS.md 规则 11）；属本变更 → 补 design 自声明。
++        // advisory 不阻断（多会话并行是常态，提示归因而非拒绝收口）；声明面全空（adopt 等）时
++        // 降为「无声明面」提示，不指认夹带。
++        try {
++          const declared = new Set()
++          const { parseFileChangeList } = await import('./change-list.js')
++          for (const p of parseFileChangeList(join(changeDir, 'design.md'))) declared.add(p)
++          const { extractRequirementBindings } = await import('./flow-draft.js')
++          const { testAnchorFile } = await import('./test-bindings.js')
++          for (const row of extractRequirementBindings({ changeDir, change })) {
++            for (const t of row.tests || []) declared.add(testAnchorFile(t))
++          }
++          const deliverables = committed.filter((f) => !f.startsWith('.sillyspec/'))
++          const undeclared = deliverables.filter((f) => !declared.has(f))
++          if (declared.size > 0 && undeclared.length > 0) {
++            console.warn(`⚠️ 提交面夹带嫌疑：${undeclared.length} 个 baseline..HEAD 提交文件未被本变更声明面提及（design 文件变更清单/requirements 测试绑定）: ${undeclared.slice(0, 5).join('、')}${undeclared.length > 5 ? ' 等' : ''}`)
++            console.warn(`   属并行会话在途交付 → 整文件覆盖即静默回滚风险，收口提交用显式 pathspec 隔离（AGENTS.md 规则 11）；确属本变更 → 补 design「文件变更清单」自声明后重跑 flow done`)
++          } else if (declared.size === 0 && deliverables.length > 0) {
++            console.warn(`⚠️ 本变更无任何文件声明面（design 无清单、requirements 无绑定），提交面 ${deliverables.length} 个交付文件无法归因——建议补 design「文件变更清单」自声明（冻结面归属与夹带识别的锚点）`)
++          }
++        } catch { /* 声明面解析失败不阻断冻结 */ }
+         // 提交面不过 foreign 声明切分（2026-09-25-sentinel-evidence-freeze ⑤：已提交的文件就是
+         // 本变更的——陈旧声明的旧变更不该抢走 baseline..HEAD 里我实际提交的文件，静默少文件+门禁
+         // 静默 skipped 是平台狗粮实证。foreign 声明切分保留给 dirty 面与 attributedChangedFiles
+@@ -1080,6 +1109,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
+   if (st.substeps?.probes === 'done') { skip('probes') } else {
+     if (st.tier === 'thick') console.log('ℹ️ 厚档探针链：run verify --done 时经 verify-probes --init --draft 承接（第 3 批既有面）')
++    // 探针 12 error 档收口拦截（2026-09-27-ui-visual-guidance：UI 视觉证据分级门——
++    // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦；
++    // 默认 warn 档只警告不拦。与 run/gates.js verify 收尾同一检测单点，不二算）。
++    try {
++      const uiProbe = runUiVisualProbe({ changeDir, gate: readUiVisualGate(specBase) })
++      if (uiProbe.level === 'error') {
++        console.error('\n❌ UI 视觉证据门（探针 12 error 档）阻断收口：')
++        for (const n of uiProbe.notes) console.error(`   - ${n}`)
++        console.error(`   修复：补渲染对照证据到 ${join(changeDir, UI_EVIDENCE_FILENAME)}；降级项补「用户裁决」留痕段后重跑（断点续，已完成子步幂等跳过）。`)
++        reportMidFail('probes')
++        process.exit(1)
++      } else if (uiProbe.level === 'warn') {
++        console.warn(`⚠️ UI 视觉证据（探针 12 warn 档）：${uiProbe.notes.join('；')}`)
++      }
++    } catch (e) {
++      console.warn(`⚠️ UI 视觉证据探针异常（fail-soft 降级放行）：${(e && e.message) || e}`)
++    }
+     mark('probes')
+   }
+ 
+diff --git a/src/run/gates.js b/src/run/gates.js
+index d2597fd1..cd6162f5 100644
+--- a/src/run/gates.js
++++ b/src/run/gates.js
+@@ -849,6 +849,26 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
+     } catch (e) {
+       console.warn(`⚠️ 预填注清零校验异常（降级放行，fail-soft——异常不是未清零，ceremony 双跑同款处置）: ${(e && e.message) || e}`)
+     }
++
++    // UI 视觉证据门·error 档（2026-09-27-ui-visual-guidance / 探针 12 分级门的 verify 收尾执法）：
++    // 视觉降级无用户裁决留痕恒拦；ui_visual_gate=error 时缺 visual-evidence.md 亦拦（默认 warn
++    // 只警告不拦）。检测单点 = runUiVisualProbe（与 flow done probes 子步、verify-probes --init
++    // 同源，不二算）。fail-soft 同预填注门。
++    try {
++      const { runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } = await import('../ui-visual.js')
++      const uiProbe = runUiVisualProbe({ changeDir: join(specBase, 'changes', changeName), gate: readUiVisualGate(specBase) })
++      if (uiProbe.level === 'error') {
++        console.error(`
++❌ verify 阶段被阻断：UI 视觉证据门未过（${uiProbe.notes.join('；')}）`)
++        console.error(`   修复：补渲染对照证据到 ${UI_EVIDENCE_FILENAME}；降级项补「用户裁决」留痕段。证据应在执行时按 flow start「UI 变更执行须知」随手产生——收口只验在场。`)
++        docGateFailures.push({ type: 'gate_rollback', detail: 'verify-contract', label: 'UI 视觉证据门未过（探针 12 error 档，明细见上）' })
++      } else if (uiProbe.level === 'warn') {
++        console.warn(`
++⚠️ UI 视觉证据（探针 12 warn 档）：${uiProbe.notes.join('；')}`)
++      }
++    } catch (e) {
++      console.warn(`⚠️ UI 视觉证据探针异常（降级放行，fail-soft）: ${(e && e.message) || e}`)
++    }
+   }
+ 
+   // ── 收集模式检查点 A（verify）：纯文档门全清后才进入实测门（test/lint/parity/probe 保持
+diff --git a/src/ui-visual.js b/src/ui-visual.js
+new file mode 100644
+index 00000000..6a34f307
+--- /dev/null
++++ b/src/ui-visual.js
+@@ -0,0 +1,175 @@
++/**
++ * ui-visual —— UI 视觉变更的「过程引导 + 收口痕迹对账」（2026-09-27-ui-visual-guidance）。
++ *
++ * 背景教训（平台仓 2026-09-26-core-pages-visual-redesign 实证）：视觉保真度在流程里零承接
++ * ——design 写明截图走查硬门，verify 以「代码级佐证」降级放行仍 PASS，差距部署后才被肉眼
++ * 发现。本模块补两件事（收口不产新证据，只验在场）：
++ *   ① flow start 引导前置：检测 --input 触及前端页面或 UI → 输出「UI 变更执行须知」
++ *      （改前确认视觉基准、边改边渲染对照、证据随手落变更目录 visual-evidence.md、
++ *      视觉降级须用户裁决留痕）——agent 开工即知规程，不是收口才被告知；
++ *   ② verify「UI 视觉证据」分级探针：UI 触达变更收口时验证据在场性——
++ *      缺 visual-evidence.md → 默认 ⚠️ 警告（local.yaml ui_visual_gate: warn|error|off，
++ *      默认 warn）；design/requirements 声明视觉降级而无用户裁决留痕 → 恒 ❌ error
++ *      （仅 off 豁免）——堵 D-004 型静默降级。
++ *
++ * 仓中立：不硬编码任何特定仓的路径或命令（须知指引通用口径：原型、黄金页或现有截图均可为基准）。
++ * 检测为纯函数；探针只读变更目录内文件，fail-soft 同探针 8-11 先例。
++ */
++import { existsSync, readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++export const UI_VISUAL_PROBE_HEADING = '#### 探针 12：UI 视觉证据（分级门）'
++export const UI_EVIDENCE_FILENAME = 'visual-evidence.md'
++
++/* ── 检测启发式（正反例单测锁定；误判面=默认档一行警告，误漏面由文件面扩展名兜底）── */
++
++const UI_TOUCH_PATTERNS = [
++  /页面/, /前端/, /\bUI\b/i, /视觉/, /样式/, /界面/, /布局/, /主题色/, /配色/,
++  /\.tsx?\b/, /\.jsx\b/, /\.vue\b/, /\.svelte\b/, /\.css\b/, /\.scss\b/, /\.html\b/,
++  /组件/, /原型/, /截图/, /渲染/,
++]
++
++/** input/规约文本是否触及前端页面或 UI（关键词启发式，≥1 命中即算）。 */
++export function detectUiTouch(text) {
++  if (!text || typeof text !== 'string') return false
++  return UI_TOUCH_PATTERNS.some((re) => re.test(text))
++}
++
++/** 声明文件面是否含前端产物文件（design 清单路径扩展名口径——input 漏检的兜底源）。 */
++export function detectUiTouchInPaths(paths) {
++  if (!Array.isArray(paths)) return false
++  return paths.some((p) =>
++    /\.(tsx|jsx|vue|svelte|css|scss|less|html)$/i.test(String(p).replace(/^NEW:\s*/, '')),
++  )
++}
++
++/* ── flow start 须知（仓中立；证据约定与探针同源）── */
++
++export function buildUiGuidanceLines() {
++  return [
++    `🎨 UI 变更执行须知（本变更触及前端页面或 UI——检测命中即插入，advisory 引导非门禁）：`,
++    `   1. 改前确认视觉基准：原型产物、黄金页或该页现有截图——没有基准的「改好看」无法验收；`,
++    `   2. 边改边渲染对照：每完成一个页面任务单元就渲染实页与基准并排比对，差异清零再勾任务；`,
++    `   3. 证据随手落盘：对照截图与结论逐页记入变更目录 ${UI_EVIDENCE_FILENAME}（干活时顺手写，收口只验在场）；`,
++    `   4. 视觉降级须用户裁决留痕：执行中因约束对不齐基准而降级（结构收敛、范围缩小、样式统一级）`,
++    `      必须带对比截图停下找用户签字，裁决记录写进 ${UI_EVIDENCE_FILENAME}（含「用户裁决」字样段）——`,
++    `      静默降级会在收口被「UI 视觉证据」探针硬拦（error 门）。`,
++  ]
++}
++
++/* ── 分级探针 ── */
++
++/** local.yaml 读 ui_visual_gate（warn|error|off，默认 warn；CRLF 容错——手写行扫描器坑先例）。 */
++export function readUiVisualGate(specBase) {
++  try {
++    const raw = readFileSync(join(specBase, 'local.yaml'), 'utf8')
++    const m = raw.match(/^\s*ui_visual_gate\s*:\s*['\"]?(warn|error|off)['\"]?\s*$/m)
++    return m ? m[1] : 'warn'
++  } catch {
++    return 'warn'
++  }
++}
++
++const DOWNGRADE_LINE = /(降级|样式统一级|partial)/
++const VISUAL_LINE = /(视觉|UI|页面|样式|界面)/
++
++/** design/requirements 是否声明「视觉降级」（同行共现口径——行级命中防跨行误配；runUiVisualProbe 内部消费）。 */
++function detectVisualDowngrade(designText, requirementsText) {
++  for (const t of [designText, requirementsText]) {
++    if (!t) continue
++    for (const line of t.split(/\r?\n/)) {
++      if (DOWNGRADE_LINE.test(line) && VISUAL_LINE.test(line)) return true
++    }
++  }
++  return false
++}
++
++/**
++ * UI 视觉证据探针（只读变更目录；fail-soft 由调用方 catch 兜底）。
++ * level 三态：error（降级无裁决留痕，或 gate=error 且缺证据）→ 收口阻断；
++ * warn（默认档缺证据）→ advisory 警告；ok（证据在场，或降级但有裁决留痕）。
++ */
++export function runUiVisualProbe({ changeDir, gate = 'warn' }) {
++  const read = (name) => {
++    try { return readFileSync(join(changeDir, name), 'utf8') } catch { return '' }
++  }
++  const designText = read('design.md')
++  const requirementsText = read('requirements.md')
++  const proposalText = read('proposal.md')
++  const evidenceText = read(UI_EVIDENCE_FILENAME)
++  const decisionsText = read('decisions.md')
++
++  const declaredPaths = extractQuotedPaths(designText)
++  const uiTouched =
++    detectUiTouch(`${proposalText}\n${requirementsText}`) ||
++    detectUiTouchInPaths(declaredPaths)
++
++  if (gate === 'off') {
++    return { applicable: false, uiTouched, level: 'ok', notes: ['ui_visual_gate=off——探针关闭（含降级硬规则）'] }
++  }
++  if (!uiTouched) {
++    return { applicable: false, uiTouched: false, level: 'ok', notes: [] }
++  }
++
++  const evidencePresent = evidenceText.trim().length > 0
++  const downgradeDeclared = detectVisualDowngrade(designText, requirementsText)
++  const rulingPresent = evidenceText.includes('用户裁决') || decisionsText.includes('用户裁决')
++
++  let level = 'ok'
++  const notes = []
++  if (downgradeDeclared && !rulingPresent) {
++    level = 'error'
++    notes.push('design/requirements 存在视觉降级声明而变更目录无用户裁决留痕（visual-evidence.md 或 decisions.md 含「用户裁决」）——静默降级禁止收口')
++  } else if (!evidencePresent) {
++    level = gate === 'error' ? 'error' : 'warn'
++    notes.push(`变更目录缺 ${UI_EVIDENCE_FILENAME}（渲染对照证据应在执行时随手落盘——收口只验在场不产新证据）`)
++  } else if (downgradeDeclared && rulingPresent) {
++    notes.push('视觉降级已带用户裁决留痕')
++  }
++
++  return {
++    applicable: true,
++    uiTouched: true,
++    evidencePresent,
++    downgradeDeclared,
++    rulingPresent,
++    level,
++    notes,
++  }
++}
++
++/** design 文件变更清单行的路径粗提（反引号/裸路径行——探针侧仅作 UI 扩展名兜底命中，不追求全解）。 */
++function extractQuotedPaths(designText) {
++  if (!designText) return []
++  const paths = []
++  for (const m of designText.matchAll(/`([^`]+)`/g)) {
++    if (/[\\/]/.test(m[1])) paths.push(m[1])
++  }
++  for (const line of designText.split(/\r?\n/)) {
++    const t = line.trim()
++    const m = t.match(/^(?:修改|新增|删除|NEW:)?\s*((?:frontend|src|web|app|client|ui)\b[\\/][^\s|]+)/i)
++    if (m) paths.push(m[1])
++  }
++  return paths
++}
++
++/** 探针 12 段渲染（renderProbe11Lines 同构：不适用 / ❌ error / ⚠️ warn / ✅ ok + 口径注记）。 */
++export function renderUiVisualProbeLines(p12) {
++  const L = [UI_VISUAL_PROBE_HEADING]
++  if (!p12 || !p12.applicable) {
++    L.push(`- 不适用（${p12 && p12.uiTouched ? 'ui_visual_gate=off' : '非 UI 触达变更（input/声明文件面均未命中）——零打扰'}）`)
++    for (const n of (p12 && p12.notes) || []) L.push(`- ℹ️ ${n}`)
++    return L
++  }
++  L.push('<!-- 口径注记：在场性检查非语义审计——只验 visual-evidence.md 存在非空与降级裁决留痕，不判对照结论对错（语义面归 verify-result 人工判断层）。证据应在执行时按 flow start「UI 变更执行须知」随手产生；本探针不要求收口现做。分级：缺证据默认 ⚠️（local.yaml ui_visual_gate=error 升阻断）；视觉降级无「用户裁决」留痕恒 ❌（off 豁免）。 -->')
++  if (p12.level === 'error') {
++    for (const n of p12.notes) L.push(`- ❌ ${n}`)
++    L.push('  - 修复：补渲染对照证据到 visual-evidence.md；降级项补用户裁决留痕（含「用户裁决」字样段）后重跑收口')
++  } else if (p12.level === 'warn') {
++    for (const n of p12.notes) L.push(`- ⚠️ ${n}`)
++  } else {
++    L.push(`- ✅ UI 视觉证据在场（${UI_EVIDENCE_FILENAME} 非空${p12.downgradeDeclared ? '，降级带用户裁决留痕' : ''}）`)
++    for (const n of p12.notes || []) L.push(`- ℹ️ ${n}`)
++  }
++  return L
++}
+diff --git a/src/verify-probes.js b/src/verify-probes.js
+index c6fc0ded..b28dc849 100644
+--- a/src/verify-probes.js
++++ b/src/verify-probes.js
+@@ -28,6 +28,7 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from '
+ import { join, dirname, basename, resolve, isAbsolute, relative } from 'path'
+ import { gitQuiet, unquoteGitPath } from './git-helper.js'
+ import { hasUnconfirmedPrefill } from './prefill.js'
++import { runUiVisualProbe, renderUiVisualProbeLines, readUiVisualGate } from './ui-visual.js'
+ import {
+   FACTS_SCHEMA_VERSION, EVIDENCE_SLOT_HEADING, RECEIPT_SLOT_HEADING, parseEvidenceSlots,
+ } from './verify-facts-schema.js'
+@@ -2296,6 +2297,16 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+     probe11.warnings = [`探针 11 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
+   }
+ 
++  // ── 探针 12：UI 视觉证据（分级门；2026-09-27-ui-visual-guidance——过程引导的收口对账面：
++  // 只验证据在场不产新证据；缺证据默认 ⚠️，ui_visual_gate=error 升阻断；视觉降级无用户
++  // 裁决留痕恒 error（堵 D-004 型静默降级）。fail-soft 同 8-11。──
++  let probe12 = { applicable: false, uiTouched: false, level: 'ok', notes: [] }
++  try {
++    probe12 = runUiVisualProbe({ changeDir: join(specBase, 'changes', changeName), gate: readUiVisualGate(specBase) })
++  } catch (e) {
++    probe12.notes = [`探针 12 执行失败（fail-soft 跳过）：${e && e.message ? e.message : e}`]
++  }
++
+   // ── 接口面 + 消费端归类（task-04 / FR-05 / D-005~D-007）：design.md 接口段 tolerant
+   // 解析 + 清单消费端归类——骨架「## 接口验证覆盖矩阵」段预填与 facts 落盘
+   // （backfillFactsFromMdAndTests）共用同一解析器（单一产物源，不各读各的）。fail-soft：
+@@ -2309,7 +2320,7 @@ export function runVerifyProbes({ cwd, changeName, specDir = null }) {
+     }
+   } catch { /* design 读/解析异常 → 空面（fail-soft） */ }
+ 
+-  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, probe10, apiFace, consumerHints }
++  return { probe1, probe3, probe5, probe6, probe7, probe8, probe9, probe10, probe12, apiFace, consumerHints }
+ }
+ 
+ /**
+@@ -2421,6 +2432,8 @@ export function renderVerifyProbesReport(result) {
+   L.push(...(renderProbe10Lines(result.probe10 || { applicable: false, checkedFiles: 0, unclearedFiles: [], notes: [] })))
+   // 探针 11 紧随 10；旧 result 无 probe11 键 → 不适用兜底（8/9/10 同款零回归口径）。
+   L.push(...(renderProbe11Lines(result.probe11 || { applicable: false, entryCount: 0, findings: [], warnings: [] })))
++  // 探针 12 紧随 11（UI 视觉证据分级门）；旧 result 无 probe12 键 → 不适用兜底零回归。
++  L.push(...(renderUiVisualProbeLines(result.probe12 || { applicable: false, notes: [] })))
+   return L.join('\n')
+ }
+ 
+diff --git a/test/ui-visual-guidance.test.mjs b/test/ui-visual-guidance.test.mjs
+new file mode 100644
+index 00000000..a828b65f
+--- /dev/null
++++ b/test/ui-visual-guidance.test.mjs
+@@ -0,0 +1,176 @@
++/**
++ * UI 视觉引导与分级门单测（2026-09-27-ui-visual-guidance FR-05）。
++ *
++ * 覆盖：
++ * 1. 检测启发式正反例（detectUiTouch / detectUiTouchInPaths）
++ * 2. runUiVisualProbe 分级：非 UI 不适用 / warn（默认档缺证据）/ error（gate=error 缺证据）/
++ *    off（整体关闭）/ ok（证据在场）/ 降级硬规则（无留痕恒 error，有留痕放行）
++ * 3. readUiVisualGate：local.yaml 三档 + 缺席默认 warn + CRLF 容错
++ * 4. buildUiGuidanceLines 仓中立与关键内容
++ * 5. 段落渲染（骨架探针 12 段）：标题/不适用/❌/⚠️/✅ 形态
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++
++import {
++  detectUiTouch, detectUiTouchInPaths, buildUiGuidanceLines, readUiVisualGate,
++  runUiVisualProbe, renderUiVisualProbeLines, UI_VISUAL_PROBE_HEADING, UI_EVIDENCE_FILENAME,
++} from '../src/ui-visual.js'
++
++function makeChangeDir({ proposal, design, requirements, evidence, decisions } = {}) {
++  const dir = mkdtempSync(join(tmpdir(), 'ui-visual-'))
++  mkdirSync(dir, { recursive: true })
++  if (proposal) writeFileSync(join(dir, 'proposal.md'), proposal)
++  if (design) writeFileSync(join(dir, 'design.md'), design)
++  if (requirements) writeFileSync(join(dir, 'requirements.md'), requirements)
++  if (evidence) writeFileSync(join(dir, UI_EVIDENCE_FILENAME), evidence)
++  if (decisions) writeFileSync(join(dir, 'decisions.md'), decisions)
++  return dir
++}
++
++/* ── 1. 检测启发式 ── */
++
++test('detectUiTouch 正例：页面/前端/UI/视觉/组件/tsx', () => {
++  assert.equal(detectUiTouch('重排工作区列表页面'), true)
++  assert.equal(detectUiTouch('前端样式统一'), true)
++  assert.equal(detectUiTouch('重构 UI 组件'), true)
++  assert.equal(detectUiTouch('视觉走查为硬门'), true)
++  assert.equal(detectUiTouch('修改 src/app/page.tsx'), true)
++})
++
++test('detectUiTouch 反例：后端/CLI/文档变更零命中', () => {
++  assert.equal(detectUiTouch('优化后端 API 分页查询性能'), false)
++  assert.equal(detectUiTouch('CLI 参数校验修复'), false)
++  assert.equal(detectUiTouch('数据库迁移脚本'), false)
++  assert.equal(detectUiTouch(''), false)
++  assert.equal(detectUiTouch(null), false)
++})
++
++test('detectUiTouchInPaths：前端扩展名兜底（NEW: 前缀剥离）', () => {
++  assert.equal(detectUiTouchInPaths(['NEW:frontend/src/app/page.tsx']), true)
++  assert.equal(detectUiTouchInPaths(['src/components/Button.vue']), true)
++  assert.equal(detectUiTouchInPaths(['src/lib/api.js', 'backend/app.py']), false)
++  assert.equal(detectUiTouchInPaths(null), false)
++})
++
++/* ── 2. 探针分级 ── */
++
++test('非 UI 触达：不适用零打扰', () => {
++  const dir = makeChangeDir({ proposal: '后端分页优化' })
++  try {
++    const p = runUiVisualProbe({ changeDir: dir, gate: 'warn' })
++    assert.equal(p.applicable, false)
++    assert.equal(p.level, 'ok')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('UI 触达缺证据：默认 warn / gate=error 升阻断 / off 关闭', () => {
++  const dir = makeChangeDir({ proposal: '工作区列表页面重排' })
++  try {
++    assert.equal(runUiVisualProbe({ changeDir: dir, gate: 'warn' }).level, 'warn')
++    assert.equal(runUiVisualProbe({ changeDir: dir, gate: 'error' }).level, 'error')
++    const off = runUiVisualProbe({ changeDir: dir, gate: 'off' })
++    assert.equal(off.applicable, false)
++    assert.equal(off.level, 'ok')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('证据在场：ok', () => {
++  const dir = makeChangeDir({
++    proposal: '工作区列表页面重排',
++    evidence: '# 视觉证据\n- 工作区列表 vs 原型：一致\n![shot](shots/list.png)',
++  })
++  try {
++    const p = runUiVisualProbe({ changeDir: dir, gate: 'error' })
++    assert.equal(p.level, 'ok')
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('降级硬规则：视觉降级声明无用户裁决留痕 → 无论档位恒 error', () => {
++  const dir = makeChangeDir({
++    proposal: '页面视觉对齐',
++    design: 'FR-04 partial：变更详情页 MetaPanel 六组视觉收敛降级为保留既有五卡',
++    requirements: '',
++  })
++  try {
++    for (const gate of ['warn', 'error']) {
++      assert.equal(runUiVisualProbe({ changeDir: dir, gate }).level, 'error')
++    }
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('降级硬规则：带用户裁决留痕 → 放行（样式统一级降级案例）', () => {
++  const dir = makeChangeDir({
++    proposal: '会话门户视觉重做',
++    design: 'FR-07 样式统一级达成：消息块结构保留，视觉语言统一',
++    evidence: '# 视觉证据\n## 用户裁决\n2026-09-27 用户确认：门户结构重排推迟专项，本期样式统一级可接受（对比截图已过目）。',
++  })
++  try {
++    const p = runUiVisualProbe({ changeDir: dir, gate: 'warn' })
++    assert.equal(p.level, 'ok')
++    assert.equal(p.rulingPresent, true)
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++test('降级声明行级共现口径：跨行不误配', () => {
++  const dir = makeChangeDir({
++    proposal: '前端页面调整',
++    design: '本段先谈视觉目标。\n另一行谈服务降级策略（熔断兜底）。',
++  })
++  try {
++    const p = runUiVisualProbe({ changeDir: dir, gate: 'error' })
++    assert.notEqual(p.level, 'downgrade') // 无此态；仅确认不因跨行误报 error
++    assert.equal(p.downgradeDeclared, false)
++    assert.equal(p.level, 'error') // gate=error 且无证据仍是 error（缺证据面）
++  } finally { rmSync(dir, { recursive: true, force: true }) }
++})
++
++/* ── 3. local.yaml 档位读取 ── */
++
++test('readUiVisualGate：三档 + 缺席默认 warn + CRLF 容错', () => {
++  const base = mkdtempSync(join(tmpdir(), 'ui-visual-cfg-'))
++  try {
++    assert.equal(readUiVisualGate(base), 'warn') // 无 local.yaml
++    writeFileSync(join(base, 'local.yaml'), 'commands:\n  lint: x\nui_visual_gate: error\n')
++    assert.equal(readUiVisualGate(base), 'error')
++    writeFileSync(join(base, 'local.yaml'), 'ui_visual_gate: "off"\r\n') // CRLF + 引号
++    assert.equal(readUiVisualGate(base), 'off')
++    writeFileSync(join(base, 'local.yaml'), 'ui_visual_gate: 非法值\n')
++    assert.equal(readUiVisualGate(base), 'warn') // 非法回落默认
++  } finally { rmSync(base, { recursive: true, force: true }) }
++})
++
++/* ── 4. 须知文案 ── */
++
++test('buildUiGuidanceLines：仓中立 + 证据约定与探针同源', () => {
++  const lines = buildUiGuidanceLines()
++  const text = lines.join('\n')
++  assert.ok(text.includes(UI_EVIDENCE_FILENAME))
++  assert.ok(text.includes('用户裁决'))
++  assert.ok(text.includes('边改边渲染对照'))
++  assert.ok(!/C:\\|IdeaProjects|multi-agent-platform/.test(text), '不得硬编码特定仓路径')
++})
++
++/* ── 5. 段落渲染 ── */
++
++test('renderUiVisualProbeLines：不适用 / warn / error / ok 四形态', () => {
++  const na = renderUiVisualProbeLines({ applicable: false, notes: [] })
++  assert.ok(na[0] === UI_VISUAL_PROBE_HEADING)
++  assert.ok(na[1].includes('不适用'))
++
++  const warn = renderUiVisualProbeLines({ applicable: true, level: 'warn', notes: ['缺证据'] })
++  assert.ok(warn.some((l) => l.startsWith('- ⚠️')))
++
++  const err = renderUiVisualProbeLines({ applicable: true, level: 'error', notes: ['降级无留痕'] })
++  assert.ok(err.some((l) => l.startsWith('- ❌')))
++  assert.ok(err.some((l) => l.includes('修复')))
++
++  const ok = renderUiVisualProbeLines({ applicable: true, level: 'ok', evidencePresent: true, downgradeDeclared: false, notes: [] })
++  assert.ok(ok.some((l) => l.startsWith('- ✅')))
++
++  // 旧 result 无 probe12 键（undefined）→ 不适用兜底零回归
++  assert.ok(renderUiVisualProbeLines(undefined)[1].includes('不适用'))
++})
+diff --git a/.sillyspec/changes/2026-09-27-ui-visual-guidance/flow-state.yaml b/.sillyspec/changes/2026-09-27-ui-visual-guidance/flow-state.yaml
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-27-ui-visual-guidance/flow-state.yaml
+@@ -0,0 +1,16 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 978beb6e8799b986d5a63c7ce2b8a10fa12c17aa
++updatedAt: '2026-09-27T04:38:27.257Z'
++edit_ratio: 0
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(53)（6.6s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260927043750\test-result.json｜lint: failed
++  ← npm run lint（36.7s）｜门文件 18 个
++

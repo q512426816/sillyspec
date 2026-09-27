@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-ui-visual-guidance",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "冻结面含未声明行为交付：flow done 新增「提交面夹带嫌疑 advisory」块，无任何承诺锚",
+      "evidence": "patch 在 cmdFlowDone 提交面切分处新增约 25 行 try 块（读 design 声明面+requirements 测试绑定，对未归因交付文件 console.warn 归因提示），引用 2026-09-26 坑 parallel-session-stale-snapshot-carried-in-commit——design「三件套」做法、6 条成功标准、tasks.md task-01~06 均未提及该块；其依赖 parseFileChangeList（src/change-list.js:351）/extractRequirementBindings（src/flow-draft.js:342）/testAnchorFile（src/test-bindings.js:170）导出真实存在，是活代码非死代码。advisory-only+fail-soft（catch 静默）无数据正确性风险，但违背文档驱动「先文档后代码」承诺纪律，审计面出现了无依据锚的行为变更。",
+      "location": "src/flow.js:891-916"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-01 接线（flow start 输出注入）无集成测试锁定",
+      "evidence": "cmdFlowStart 以 spread 条件注入须知段（detectUiTouch(input) ? buildUiGuidanceLines() : []），测试绑定声称的 3 个用例（detectUiTouch 正例/detectUiTouchInPaths/buildUiGuidanceLines）均存在且实跑通过，但全是模块级断言——无任何用例断言 flow start 输出含/不含须知段；多 agent 并行下该 3 行接线被回归破坏时门静默失效。",
+      "location": "src/flow.js:552-554"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-03 裁决留痕判定为全段子串命中，否定语境可绕过硬规则",
+      "evidence": "rulingPresent = evidenceText.includes('用户裁决') || decisionsText.includes('用户裁决')——FR 口径是「含『用户裁决』段或 decisions 记录」，实现是任意位置 4 字子串：证据文件写「无需用户裁决」「未做用户裁决」即判留痕在场，视觉降级硬门放行。属在场性弱信号门的固有弱化且 design 已披露「不做语义判断」，但与 FR 文本的「段」口径存在收敛差距。",
+      "location": "src/ui-visual.js:449"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——detectUiTouch/runUiVisualProbe 为纯函数同步读既有文件，flow done 探针子步（src/flow.js:1115）、gates.js verify 收尾（src/run/gates.js:859）、verify-probes（src/verify-probes.js:2305）三执法点每次收口独立重算，无到达序假设。边界已裁决：可接受（单点纯函数重算不二算）",
+    "并发": "ok——src/ui-visual.js 零写面（仅 readFileSync，import 的 existsSync 未使用），执法点只 console 输出+局部 docGateFailures push；与既有探针 8-11 同并发模型。边界已裁决：可接受（只读探针）",
+    "切换": "ok——探针无状态、重跑幂等；中断时探针只报缺证据（默认 warn fail-soft，异常路径双执法点均 catch 降级放行），无半态落盘。边界已裁决：可接受（fail-soft）",
+    "作用域": "ok——三消费点均以 changeDir/specBase 圈定本变更目录，readUiVisualGate 随 specBase 读 local.yaml（verify-probes 侧经 resolveVerifyProbesSpecBase 漂移锚定），跨仓零串台；须知与探针文案仓中立（单测断言无特定仓路径）。边界已裁决：可接受（启发式误判=默认档一行警告，漏检由声明文件面扩展名兜底）"
+  },
+  "reviewedAt": "2026-09-27T04:42:50Z"
+}

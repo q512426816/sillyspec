@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-27-ui-visual-guidance",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-27-ui-visual-guidance:flow:FR-01",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「detectUiTouch 正例：页面/前端/UI/视觉/组件/tsx」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-ui-visual-guidance"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-27-ui-visual-guidance:flow:FR-02",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「UI 触达缺证据：默认 warn / gate=error 升阻断 / off 关闭」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-ui-visual-guidance"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-27-ui-visual-guidance:flow:FR-03",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「降级硬规则：视觉降级声明无用户裁决留痕 → 无论档位恒 error」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-ui-visual-guidance"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-27-ui-visual-guidance:flow:FR-04",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「detectUiTouch 反例：后端/CLI/文档变更零命中」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-ui-visual-guidance"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-27-ui-visual-guidance:flow:FR-05",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-ui-visual-guidance"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-27-ui-visual-guidance:flow:FR-06",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-27-ui-visual-guidance"
+    }
+  ]
+}

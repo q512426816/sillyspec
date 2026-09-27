@@ -1,0 +1,28 @@
+{
+  "change": "2026-09-27-ui-visual-guidance",
+  "baseline": "978beb6e8799b986d5a63c7ce2b8a10fa12c17aa",
+  "head": "4f85905373507953789367b59bb41792eb0e5431",
+  "files": [
+    ".sillyspec/changes/2026-09-27-ui-visual-guidance/design.md",
+    ".sillyspec/changes/2026-09-27-ui-visual-guidance/proposal.md",
+    ".sillyspec/changes/2026-09-27-ui-visual-guidance/requirements.md",
+    ".sillyspec/changes/2026-09-27-ui-visual-guidance/tasks.md",
+    ".sillyspec/changes/2026-09-27-ui-visual-guidance/visual-evidence.md",
+    "src/config-schema.js",
+    "src/flow.js",
+    "src/run/gates.js",
+    "src/ui-visual.js",
+    "src/verify-probes.js",
+    "test/ui-visual-guidance.test.mjs",
+    ".sillyspec/changes/2026-09-27-ui-visual-guidance/flow-state.yaml"
+  ],
+  "totals": {
+    "files": 12,
+    "additions": 624,
+    "deletions": 1
+  },
+  "savedAt": "2026-09-27T04:38:27.868Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录 + 本变更目录工作树件；含未提交与 untracked）",
+  "patchSha256": "ec41e68af9432ea28dfb2b2596eabac54409b692be9683cdb68629e6ff4274d6",
+  "patchStatus": "ok"
+}
