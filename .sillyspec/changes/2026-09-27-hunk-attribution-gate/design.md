@@ -41,3 +41,12 @@ created_at: 2026-09-27T05:40:53.732Z
 
 <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
 最大风险：竞争检测的假阳/假阴——他变更声明面与提交面相交但实际各行其事（假阳：一行警告可接受）或他会话在途改动根本没立变更/没写清单（假阴：残留信号与既有文件级 advisory 兜底，无法根治——hunk 归属的语义判断终究要人，门的目标是把静默混合变成显式中断）。试过放弃：① 轻量道默认挂会话 worktree（用户否决——合并税过重，仓内 wt-parallel-commit-race 等坑史为证）；② hunk 语义归属（机器无法判定行归属，改为「竞争文件显式暴露+人核」的诚实口径）。
+
+## 冻结面归属说明（评审 F2 处置，2026-09-27）
+
+baseline（e2da65a0）锚定后、本变更提交（a3b99f25）前，并行会话落入两个 remediation 提交
+（e6919fa4 fix(knowledge)、861efbb7 test(knowledge)），致 baseline..HEAD 区间包含其交付：
+`src/knowledge-digest.js`、`src/stages/knowledge.js`、`test/knowledge-digest.test.mjs`。
+三文件系已归档变更 knowledge-digest 的评审清偿、经其自身提交落 main，**非本变更交付**，
+本变更对其零改动（git diff 可核）。probes 子步 hunk 归属门将其列为「未归因」警告属
+如实信号（区间跨他会话提交——正是本门设计要暴露的第三种夹带形态：区间吞并）。
