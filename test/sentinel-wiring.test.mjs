@@ -38,24 +38,42 @@ function fillSlots(cwd, change) {
     .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
 }
 
-test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非全勾放行', () => {
-  // 形态 A：全勾零证据 → 拒
+test('① flow done 哨兵：覆写全勾零证据拒收 / 镜像全勾零证据豁免 / 全勾+token 放行 / 非全勾放行', () => {
+  // 形态 A：覆写任务全勾零证据 → 拒（2026-09-28-sentinel-mirror-waiver 起：镜像任务豁免，
+  // 拒收路径须先覆写打破镜像——守卫语义不变，验的是 agent 认领过的任务面）
   {
     const { cwd, cli } = makeRepo()
     const change = '2026-09-02-sw-fake'
     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
-    // tasks.md 全勾——直接改勾选（哈希勾选态归一后是合法书写面，不走 amend：走 amend 反而
-    // 会计入 edit_ratio 触发 route_hint——坑1 修复后的规范动作）
-    writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+    // 覆写任务面（真实实现路径形态）再全勾——与机器稿逐字不同 → 无镜像豁免
+    writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \] task-\d+: [^\n]+/, '- [ ] task-01: 实现行为 X 的真实工作单元').replace(/- \[ \]/g, '- [x]'))
     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
     execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
     execFileSync('git', ['commit', '-q', '-m', 'work（无 task token）'], { cwd, stdio: 'pipe' })
     const f = cli(['flow', 'done', '--change', change])
-    assert.equal(f.status, 1, '全勾零证据应拒')
+    assert.equal(f.status, 1, '覆写全勾零证据应拒')
     assert.doesNotMatch(f.stdout + f.stderr, /指纹失配/, '坑1：正常勾选不再触发指纹门（拒在哨兵不在指纹）')
     assert.match(f.stdout + f.stderr, /哨兵断言拒收/, '哨兵文案')
+    rmSync(cwd, { recursive: true, force: true })
+  }
+  // 形态 A2：镜像任务全勾零证据 → 豁免放行（本变更新契约：与机器稿逐字相同的勾选＝成功标准
+  // 镜像面，免 per-task 证据——修「验 agent 从未认领的任务面」假阳性）
+  {
+    const { cwd, cli } = makeRepo()
+    const change = '2026-09-02-sw-mirror'
+    assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+    const cd = join(cwd, '.sillyspec', 'changes', change)
+    fillSlots(cwd, change)
+    writeFileSync(join(cd, 'tasks.md'), readFileSync(join(cd, 'tasks.md'), 'utf8').replace(/- \[ \]/g, '- [x]'))
+    writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+    execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+    execFileSync('git', ['commit', '-q', '-m', 'work（无 task token）'], { cwd, stdio: 'pipe' })
+    const ok = cli(['flow', 'done', '--change', change])
+    assert.equal(ok.status, 0, `镜像全勾零证据应豁免放行: ${ok.stdout}\n${ok.stderr}`)
+    assert.match(ok.stdout, /镜像任务勾选/, '豁免说明行在场')
+    assert.doesNotMatch(ok.stdout + ok.stderr, /哨兵断言拒收/, '不再拒收镜像面')
     rmSync(cwd, { recursive: true, force: true })
   }
   // 形态 B：全勾 + 提交标题带 token → 过（哨兵绿行，收口继续）

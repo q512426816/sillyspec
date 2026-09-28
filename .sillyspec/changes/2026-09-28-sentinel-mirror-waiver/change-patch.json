@@ -1,0 +1,62 @@
+{
+  "change": "2026-09-28-sentinel-mirror-waiver",
+  "baseline": "decac02868444a405fbbbe613a5599cb0eb00e66",
+  "head": "a76f8a49b7c43e6fb4a846e7cd52f1de50daf2bb",
+  "files": [
+    ".sillyspec/changes/2026-09-28-sentinel-mirror-waiver/design.md",
+    ".sillyspec/changes/2026-09-28-sentinel-mirror-waiver/flow-state.yaml",
+    ".sillyspec/changes/2026-09-28-sentinel-mirror-waiver/proposal.md",
+    ".sillyspec/changes/2026-09-28-sentinel-mirror-waiver/requirements.md",
+    ".sillyspec/changes/2026-09-28-sentinel-mirror-waiver/tasks.md",
+    "src/flow.js",
+    "src/route-hindsight.js",
+    "src/sentinel-assertions.js",
+    "src/watcher.js",
+    "test/sentinel-mirror-waiver.test.mjs",
+    "test/sentinel-wiring.test.mjs"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 366,
+    "deletions": 26
+  },
+  "savedAt": "2026-09-28T14:28:24.284Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    },
+    {
+      "dir": "src",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "e6999fe16875045eb109f48016abbb33b23adbcdc58ab1b2865435d5c34a5b7c",
+  "patchStatus": "ok"
+}

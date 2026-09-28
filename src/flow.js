@@ -744,6 +744,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     const changedFiles = await attributedChangedFiles()
     // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
     // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
+    let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
     // 提交计数不因多行正文失真。
@@ -783,7 +784,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           console.log('ℹ️ 哨兵：git log 不可用，跳过（fail-open——空提交组照判会假拦）')
         } else {
         const commitMessages = String(_logRaw).split('\x1e').map((x) => x.trim()).filter(Boolean)
-        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages })
+        // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选＝成功标准
+        // 镜像面，免 per-task 提交证据（要求了就是验 agent 从未认领的任务面——假阳性三连实证）；
+        // 无基线快照 fail-safe 维持旧判据（全部要求证据）。
+        const { readBaselineTasks } = await import('./route-hindsight.js')
+        const baselineTasksMd = readBaselineTasks({ specBase, change })
+        const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages, baselineTasksMd })
         if (sent.status === 'fake') {
           console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
           console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
@@ -791,6 +797,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           reportMidFail('ledger')
           process.exit(1)
         }
+        if (sent.mirrored && sent.mirrored.length > 0) {
+          console.log(`ℹ️ 哨兵：${sent.mirrored.length} 处镜像任务勾选（与机器稿逐字相同——成功标准镜像面，交付由实测门/patch/review 背书，免 per-task 提交证据）`)
+        }
+        _sentinelNonMirrorTasks = sent.claimTotal - ((sent.mirrored || []).length)
         if (sent.status === 'complete') {
           console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
           // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
@@ -824,7 +834,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
       const stream = readWatcherEvents({ runtimeRoot, change })
       const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
-      if (batch) {
+      if (batch && (_sentinelNonMirrorTasks === null || _sentinelNonMirrorTasks > 0)) {
+        // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：纯镜像任务面（成功标准镜像非 agent 工作单元）
+        // 批量勾选是常态非纪律失守——advisory 静默；仅覆写任务面存在时提示边干边勾。
         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
         console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选`)
         console.warn('   规范动作是完成一个工作单元即勾一格（- [ ] → - [x]）；一把全勾使进度信号与 per-task 时间戳失真（本次放行不阻断）')

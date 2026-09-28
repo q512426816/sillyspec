@@ -40,7 +40,9 @@ import {
   readFileSync, renameSync, statSync, unlinkSync, writeFileSync,
 } from 'fs';
 import { createHash } from 'crypto';
-import { join, resolve } from 'path';
+import { basename, dirname, join, resolve } from 'path';
+import { readBaselineTasks } from './route-hindsight.js';
+import { mirroredTaskIds } from './sentinel-assertions.js';
 import { gitQuiet } from './git-helper.js';
 import { normalizePath, globMatch } from './change-list.js';
 import { resolveTestFileOwners } from './test-bindings.js';
@@ -512,7 +514,7 @@ export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
  * 后续拍位证据补上（提交晚于勾选几十秒是常态——guidance-principles 36 秒实证）→ 发
  * fake-check-cleared info 事件并清 pending，时间线可见「警告已消解」而非永挂。
  */
-function ruleFakeCheck(prev, next, state, ts) {
+function ruleFakeCheck(prev, next, state, ts, changeDir) {
   const flipped = [];
   const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
   for (const key of keys) {
@@ -530,8 +532,21 @@ function ruleFakeCheck(prev, next, state, ts) {
   };
   const out = [];
   const pending = (state.fakeCheckPending = state.fakeCheckPending || {});
-  // 新翻格：零证据 → 警告并挂 pending
-  const unevidenced = flipped.filter((id) => !hasEvidence(id));
+  // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选＝成功标准
+  // 镜像面（非 agent 工作单元），免 per-task 证据——本拍不挂警告不进 pending（收口侧哨兵同判据）。
+  // 路径源=applySentinelRules 的 changeDir 入参（files 键是裸文件名，推不出路径——审查 P1 实证
+  // 首版按键推导是从未生效的死代码）。
+  let _mirroredIds = null
+  try {
+    if (changeDir) {
+      _mirroredIds = mirroredTaskIds({
+        tasksMd: readFileSync(join(changeDir, 'tasks.md'), 'utf8'),
+        baselineTasksMd: readBaselineTasks({ specBase: dirname(dirname(changeDir)), change: basename(changeDir) }),
+      })
+    }
+  } catch { /* 镜像判别 best-effort：读失败按无豁免从严 */ }
+  const flippedReal = _mirroredIds ? flipped.filter((id) => !_mirroredIds.has(id)) : flipped
+  const unevidenced = flippedReal.filter((id) => !hasEvidence(id));
   if (unevidenced.length > 0) {
     for (const id of unevidenced) pending[id] = true;
     out.push(mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts));
@@ -740,7 +755,7 @@ export function applySentinelRules({ prev, next, baseEvents = [], state = null, 
     st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
   }
   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
-  try { warnings.push(...ruleFakeCheck(prev, next, st, now)); } catch { /* R1 本轮跳过 */ }
+  try { warnings.push(...ruleFakeCheck(prev, next, st, now, changeDir)); } catch { /* R1 本轮跳过 */ }
   try { warnings.push(...ruleTestTamper(prev, next, st, now, bindResolveImpl)); } catch { /* R2 本轮跳过 */ }
   let declaredScope = null;
   try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }

@@ -25,6 +25,40 @@ function taskTokenRe(id) {
   return new RegExp(`${id}(?!\\d)`);
 }
 
+/** 任务行可比文本：`- [x] task-01: 描述` → `task-01: 描述`（剥 checkbox 态，保留 id+描述）。 */
+function taskLineComparable(line) {
+  const m = String(line || '').match(/^[-*] \[(?: |x|X)\] (.+)$/);
+  return m ? m[1].trim() : null;
+}
+
+/**
+ * 镜像任务 id 集（2026-09-28-sentinel-mirror-waiver）：当前 tasks.md 与机器稿基线
+ * （route-hindsight-baseline 快照的 tasks 全文）逐字相同的任务行——即 agent 未覆写的
+ * 「成功标准镜像」任务。此类勾选的证据面是整变更交付（实测门/patch/review），不要求
+ * per-task 提交 token——要求了就是验一个 agent 从未认领的任务面（本会话三连假阳性实证）。
+ * 纯函数；baselineTasksMd 空/失配 → 空集（fail-safe：全部按覆写任务从严）。
+ */
+export function mirroredTaskIds({ tasksMd, baselineTasksMd } = {}) {
+  const collect = (md) => {
+    const map = new Map();
+    for (const line of String(md || '').split(/\r?\n/)) {
+      const t = taskLineComparable(line);
+      if (t && /^task-\d+/.test(t)) {
+        const id = t.match(/^(task-\d+)/)[1];
+        map.set(id, t);
+      }
+    }
+    return map;
+  };
+  const cur = collect(tasksMd);
+  const base = collect(baselineTasksMd);
+  const out = new Set();
+  for (const [id, text] of cur) {
+    if (base.get(id) === text) out.add(id);
+  }
+  return out;
+}
+
 /**
  * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
  */
@@ -60,12 +94,15 @@ function listReviewEvidence(changeDir, opts) {
  * @param {string|null} args.tasksMd tasks.md 全文（判集=行首 checkbox+task-NN id 行）
  * @param {Array<string|{message:string}|{subject:string}>} args.commits 提交组（消息含
  *   task-NN 即该任务证据）
+ * @param {string|null} [args.baselineTasksMd] 机器稿基线 tasks.md 全文（route-hindsight-baseline
+ *   快照；null/缺省 → 无镜像豁免，全部按覆写任务判——fail-safe 维持旧行为）
  * @param {{listReviewsImpl?: Function}} [args.opts] 注入面（测试替身）
- * @returns {{status:'complete'|'fake'|'none', claimTotal:number, checked:number, missing:string[]}}
+ * @returns {{status:'complete'|'fake'|'none', claimTotal:number, checked:number, missing:string[], mirrored:string[]}}
  *   none=无完成主张（判集空或未全勾）；complete=全勾且零 missing；fake=全勾且有零证据
- *   任务（missing 列其 id，收口侧拒收依据）。
+ *   任务（missing 列其 id，收口侧拒收依据）；mirrored=已勾且与基线逐字相同的任务 id
+ *   （成功标准镜像面——不在 missing 内，消费方渲染豁免说明）。
  */
-export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = {} } = {}) {
+export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, baselineTasksMd = null, opts = {} } = {}) {
   const entries = [];
   for (const line of String(tasksMd || '').split(/\r?\n/)) {
     const m = line.match(CHECKED_TASK_LINE_RE);
@@ -73,21 +110,24 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, opts = 
   }
   const claimTotal = entries.length;
   const checked = entries.filter((e) => e.checked).length;
+  const mirror = mirroredTaskIds({ tasksMd, baselineTasksMd });
+  const mirrored = entries.filter((e) => e.checked && mirror.has(e.id)).map((e) => e.id);
   if (claimTotal === 0 || checked < claimTotal) {
-    return { status: 'none', claimTotal, checked, missing: [] };
+    return { status: 'none', claimTotal, checked, missing: [], mirrored };
   }
   const messages = (Array.isArray(commits) ? commits : [])
     .map((c) => (typeof c === 'string' ? c : String((c && (c.message ?? c.subject)) || '')));
   const reviews = listReviewEvidence(changeDir, opts);
   const missing = entries
     .filter((e) => {
+      if (mirror.has(e.id)) return false; // 镜像勾选免 per-task 证据（成功标准面由收口交付门背书）
       const re = taskTokenRe(e.id);
       const byCommit = messages.some((msg) => re.test(msg));
       const byReview = reviews.some((p) => p.includes(`/tasks/${e.id}/`));
       return !(byCommit || byReview);
     })
     .map((e) => e.id);
-  return { status: missing.length === 0 ? 'complete' : 'fake', claimTotal, checked, missing };
+  return { status: missing.length === 0 ? 'complete' : 'fake', claimTotal, checked, missing, mirrored };
 }
 
 /**

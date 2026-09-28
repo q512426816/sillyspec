@@ -112,6 +112,21 @@ export function snapshotBaseline({ specBase, change, changeDir }) {
 }
 
 /**
+ * 机器稿基线 tasks.md 全文读取（2026-09-28-sentinel-mirror-waiver：哨兵镜像豁免的判别源）。
+ * 文件缺失/损坏/字段非字符串 → null（消费方 fail-safe 按无基线从严）。
+ */
+export function readBaselineTasks({ specBase, change }) {
+  try {
+    const p = join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`)
+    if (!existsSync(p)) return null
+    const j = JSON.parse(readTextSafe(p))
+    return typeof j.tasks === 'string' ? j.tasks : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * 收口指标计算（封闭面：只读文件与既有记录，无语义判定）。
  * @param {{ changeDir: string, reviewJson: object|null, flowState: object|null }} p
  *   changeDir 布局=<specBase>/changes/<change>（specBase 与 change 名据此派生）；
