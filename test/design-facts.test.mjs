@@ -405,8 +405,8 @@ console.log('--- frontmatter / 标题 / 默认值兜底 ---')
 {
   const s = generateDesignSkeleton({ changeName: 'demo-change', author: 'alice', now: '2026-09-07 10:00:00' })
   assert(s.startsWith('---\n'), 'frontmatter 起始')
-  assert(s.includes('author: alice') && s.includes('created_at: 2026-09-07 10:00:00') && s.includes('scale: large'),
-    'frontmatter 三字段（author/created_at/scale: large）')
+  assert(s.includes('author: alice') && s.includes('created_at: 2026-09-07 10:00:00') && s.includes('scale: ""'),
+    'frontmatter 三字段（author/created_at/scale 留空待 Step 8 落值——2026-09-29-brainstorm-exit-thin-default 起不预填 large）')
   assert(s.includes('# 设计文档（Design）— demo-change'), 'H1 标题含变更名')
   const def = generateDesignSkeleton({})
   assert(def.includes('# 设计文档（Design）— <变更简述>'), 'changeName 缺省 → <变更简述> 占位')
