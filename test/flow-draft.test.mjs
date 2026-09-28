@@ -280,7 +280,7 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
   const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
 
-  const change = 'fd-e2e'
+  const change = '2026-09-01-fd-e2e'
   assert.equal(cli(['flow', 'start', '--change', change, '--input', INPUT_WITH_CRITERIA]).status, 0)
   const specBase = join(cwd, '.sillyspec')
   const changeDir = join(specBase, 'changes', change)

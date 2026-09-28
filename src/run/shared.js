@@ -81,7 +81,10 @@ export function assertSafeChangeName(name, label = '变更名') {
 // 历史 DB/目录已存在的旧变更不追诉（归档里 auto-flow-optimization 等 10 个无前缀名照常可读）。
 // 豁免：quick-<8hex> 会话 key 与 default 兜底 key 是系统生成名，非 agent 自拟描述名。
 // 日期只校验形状（月 01-12 日 01-31），不校验「当天」——跨天续跑/次日重命名不应被拦。
-const DATED_CHANGE_NAME_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-[a-zA-Z0-9][\w.\-]*$/
+// slug 首字符放宽含 CJK（一-鿿，与 flow 族 validateChangeName 同字符集）：flow start 2026-09-28
+// 起复用本校验器，中文名（平台键 2026-09-25-中文名-a1b2c3 形态）是 flow 族既有测试特性；
+// run 族不受影响——其上游 assertSafeChangeName 仅放行 ASCII [\w.\-]，中文在到达本门之前已被拦。
+const DATED_CHANGE_NAME_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-[a-zA-Z0-9一-鿿][\w.\-一-鿿]*$/
 export function assertDatedChangeName(name, label = '变更名') {
   if (name == null) return
   const s = String(name)

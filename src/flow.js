@@ -798,23 +798,6 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
-      // FAIL 三件套（2026-09-28-split-guard-and-gate-report，P6）：失败行样本 + 结果文件全路径 +
-      // 可粘贴重放的批命令——排障不再手翻 .runtime（快照模式回拷后同样可读）。
-      try {
-        const t = gate.test
-        if (t && t.resultPath && existsSync(t.resultPath)) {
-          const tr = JSON.parse(readFileSync(t.resultPath, 'utf8'))
-          const rem = tr.failure_remaining || []
-          if (rem.length > 0) {
-            console.error(`   失败行（前 5，完整清单在结果文件 failure_remaining）：`)
-            for (const l of rem.slice(0, 5)) console.error(`   - ${String(l).trim().slice(0, 140)}`)
-          }
-          for (const m of tr.modules || []) {
-            if (m.status && m.status !== 'passed' && m.command) console.error(`   重放（快照内命令，主仓同命令可复跑）：${m.command}`)
-          }
-          console.error(`   结果文件：${t.resultPath}`)
-        }
-      } catch { /* 三件套 best-effort：读不到不阻断 FAIL 主输出 */ }
       // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
       writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
       console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')

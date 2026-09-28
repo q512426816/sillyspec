@@ -42,17 +42,17 @@ function fillSlots(cwd, change) {
 
 test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
   const { cwd, cli } = makeRepo()
-  const s = cli(['flow', 'start', '--change', 'ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
+  const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0)
   assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
-  const st = cli(['flow', 'status', '--change', 'ftp-1'])
+  const st = cli(['flow', 'status', '--change', '2026-09-02-ftp-1'])
   assert.match(st.stdout, /任务勾选：0\/1/, 'status 显示勾选进度')
   rmSync(cwd, { recursive: true, force: true })
 })
 
 test('② adopt 简报枚举产物 + 原型点名', () => {
   const { cwd, cli } = makeRepo()
-  const change = 'ftp-2'
+  const change = '2026-09-01-ftp-2'
   const cd = join(cwd, '.sillyspec', 'changes', change)
   mkdirSync(join(cd, 'prototypes'), { recursive: true })
   writeFileSync(join(cd, 'proposal.md'), '# 提案\n## 成功标准\n- 行为甲\n')
@@ -72,7 +72,7 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
 
 test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', () => {
   const { cwd, cli } = makeRepo()
-  const change = 'ftp-3'
+  const change = '2026-09-01-ftp-3'
   assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
   fillSlots(cwd, change)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')

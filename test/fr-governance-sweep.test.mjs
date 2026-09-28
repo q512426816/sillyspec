@@ -63,13 +63,13 @@ test('② resume 声明通道：--review 对在途变更重入落盘 review_forc
     g(['add', '.']); g(['commit', '-q', '-m', 'b'])
     const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
     const INPUT = '动机：夹具\n成功标准：\n- 夹具行为'
-    const r1 = cli(['flow', 'start', '--change', 'c-rf', '--input', INPUT])
+    const r1 = cli(['flow', 'start', '--change', '2026-09-01-c-rf', '--input', INPUT])
     assert.equal(r1.status, 0, `首次 start 应成功: ${r1.stderr}`)
     // 在途变更 resume 带 --review → review_force 落盘
-    const r2 = cli(['flow', 'start', '--change', 'c-rf', '--review'])
+    const r2 = cli(['flow', 'start', '--change', '2026-09-01-c-rf', '--review'])
     assert.equal(r2.status, 0, `resume 应成功: ${r2.stderr}`)
     assert.ok(r2.stdout.includes('review_force=true'), 'resume 应打印落盘回执')
-    const state = readFileSync(join(cwd, '.sillyspec', 'changes', 'c-rf', 'flow-state.yaml'), 'utf8')
+    const state = readFileSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-c-rf', 'flow-state.yaml'), 'utf8')
     assert.ok(/review_force:\s*true/.test(state), 'flow-state 应含 review_force: true')
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })

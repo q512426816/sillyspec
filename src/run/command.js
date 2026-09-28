@@ -833,7 +833,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
             quickSessionId = recent
             quickFallbackUsed = true
           } else {
-            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
             process.exit(0)
           }
         } else {
@@ -2011,7 +2011,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts = 
     if (classification.mode === 'quick') {
       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
       console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话）：`)
-      console.log(`   sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+      console.log(`   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
       return
     }
     console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)

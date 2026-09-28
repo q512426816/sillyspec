@@ -10,12 +10,12 @@
 | 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用 |
 | 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
 | 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
-| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
+| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
 
 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
 
 ## 轻量变更（默认快道）
-`sillyspec flow start --change <名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
+`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
 
 `--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
 先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。

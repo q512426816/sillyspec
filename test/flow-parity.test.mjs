@@ -153,7 +153,7 @@ function fillDesignSlots(cwd, change) {
 
 test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账三键（console 与落盘同源）', () => {
   const { cwd, run } = makeRepo()
-  const change = 'msp-it1'
+  const change = '2026-09-01-msp-it1'
   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--no-review', '--input', '改 core 模块代码\n成功标准：\n- src/core/a.js 生成且 flow done 全绿\n- change-patch.json 含模块对账三键'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   // 干活：交付代码 + 模块文档同步更新（同一提交——锁 docTouched=true 面）

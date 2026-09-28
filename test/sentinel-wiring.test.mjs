@@ -42,7 +42,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非�
   // 形态 A：全勾零证据 → 拒
   {
     const { cwd, cli } = makeRepo()
-    const change = 'sw-fake'
+    const change = '2026-09-02-sw-fake'
     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
@@ -61,7 +61,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非�
   // 形态 B：全勾 + 提交标题带 token → 过（哨兵绿行，收口继续）
   {
     const { cwd, cli } = makeRepo()
-    const change = 'sw-real'
+    const change = '2026-09-01-sw-real'
     // --no-review：聚焦哨兵不测评审（勾选直改后无 edit_ratio，评审定档与本用例无关）
     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
@@ -79,7 +79,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非�
   // 形态 B2：全勾 + token 只在提交正文（标题无 token）→ 过（坑2：证据面=整条提交消息）
   {
     const { cwd, cli } = makeRepo()
-    const change = 'sw-body-token'
+    const change = '2026-09-01-sw-body-token'
     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
     const cd = join(cwd, '.sillyspec', 'changes', change)
     fillSlots(cwd, change)
@@ -95,7 +95,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非�
   // 形态 C：非全勾（默认未勾）→ 哨兵 status=none 不拦（既有全部测试已隐式覆盖——显式断言一次）
   {
     const { cwd, cli } = makeRepo()
-    const change = 'sw-partial'
+    const change = '2026-09-02-sw-partial'
     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
     fillSlots(cwd, change)
     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')

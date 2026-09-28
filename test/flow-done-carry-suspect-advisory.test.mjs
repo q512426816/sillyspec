@@ -52,7 +52,7 @@ function fillSlots(cwd, change) {
 
 test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；声明文件不点名；不阻断收口', () => {
   const { cwd } = makeRepo()
-  const change = 'carry-suspect-a'
+  const change = '2026-09-01-carry-suspect-a'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿', '--no-review']).status, 0)
   fillSlots(cwd, change)
   // design §6 自声明 work.txt（声明面锚点——坑 thin-flow-freeze-foreign-declared-hijack 绕过同款）
@@ -77,7 +77,7 @@ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；�
 
 test('② 声明面全空：不指认夹带，降为「无声明面」软提示', () => {
   const { cwd } = makeRepo()
-  const change = 'carry-suspect-b'
+  const change = '2026-09-02-carry-suspect-b'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--no-review']).status, 0)
   fillSlots(cwd, change)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')

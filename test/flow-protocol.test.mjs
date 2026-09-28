@@ -64,7 +64,7 @@ function fillDesignSlots(cwd, change) {
 
 test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，仅两次协议调用，归档注销', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t1'
+  const change = '2026-09-01-flow-h2-t1'
 
   // 协议调用 1/2：flow start
   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'])
@@ -96,7 +96,7 @@ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，�
 
 test('② flow start 重入 → 恢复简报（盘面状态信号：dirty/子步标记/下一步）', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t2'
+  const change = '2026-09-01-flow-h2-t2'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   writeFileSync(join(cwd, 'wip.txt'), 'wip\n')
   const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
@@ -114,7 +114,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
   writeFileSync(join(cwd, 'check.js'), "const { existsSync } = require('node:fs'); process.exit(existsSync('pass.flag') ? 0 : 1)\n")
   execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
-  const change = 'flow-h2-t3'
+  const change = '2026-09-01-flow-h2-t3'
   // --no-review：本用例测 fail-closed 测试门，非评审面——声明一票豁免评审（名字撞 1/4 采样桶）
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
   // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——变更面放可翻转测试文件，
@@ -149,7 +149,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后�
 test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回滚一行）', () => {
   const { cwd } = makeRepo()
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: legacy\n')
-  const r = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t4'])
+  const r = cli(cwd, ['flow', 'start', '--change', '2026-09-02-flow-h2-t4'])
   assert.equal(r.status, 2)
   assert.match(r.stderr, /legacy/)
   assert.match(r.stderr, /run <stage>/)
@@ -158,7 +158,7 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
 
 test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒跑；带 flag 落 legacy_fallback 留痕；flow done 拒裁 exit 2', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t5'
+  const change = '2026-09-01-flow-h2-t5'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   // 同意门（2026-09-25-thin-upgrade-consent）：agent 不得自行升厚
   const blocked = cli(cwd, ['run', 'brainstorm', '--change', change])
@@ -181,7 +181,7 @@ test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒�
 
 test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 knowledge/fr（无 design.md 走交付文件伪域）', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t6'
+  const change = '2026-09-01-flow-h2-t6'
   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input',
     'backend 守护任务\n成功标准：\n- backend 守护行为 X 发生'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
@@ -209,7 +209,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
 
 test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done exit 1 点名空槽；填后放行归档', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t6b'
+  const change = '2026-09-01-flow-h2-t6b'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
@@ -250,7 +250,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
 
 test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落盘并随发号提升', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t9'
+  const change = '2026-09-01-flow-h2-t9'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
@@ -276,7 +276,7 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
 
 test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t6c'
+  const change = '2026-09-01-flow-h2-t6c'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
   rmSync(join(cwd, '.sillyspec', 'changes', change, 'design.md'), { force: true }) // 模拟工具升级前的在途变更
   const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
@@ -295,20 +295,20 @@ test('⑧ 归属收窄接线钉（文本级，防回潮）：ledger 门与 disti
 
 test('⑫ 需求清晰度门：--input 缺失或成功标准 0 条 → exit 2 两选一（不建变更）', () => {
   const { cwd } = makeRepo()
-  const r1 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12'])
+  const r1 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t12'])
   assert.equal(r1.status, 2)
   assert.match(r1.stderr, /需求不够清晰/, '缺失 input 拦下')
   assert.match(r1.stderr, /头脑风暴预段/, '两选一含预段')
   assert.match(r1.stderr, /成功标准/, '两选一含补输入')
-  const r2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12', '--input', '只有动机没有验收条目'])
+  const r2 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t12', '--input', '只有动机没有验收条目'])
   assert.equal(r2.status, 2, '有 input 无成功标准同样拦下')
-  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', 'flow-h2-t12')), '未建变更目录')
+  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-flow-h2-t12')), '未建变更目录')
   rmSync(cwd, { recursive: true, force: true })
 })
 
 test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变更（补缺件+绑定槽+design 豁免）→ done 全绿', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t13'
+  const change = '2026-09-02-flow-h2-t13'
   // 模拟 brainstorm 预段产物（agent 手写、无 flow-state、无指纹）
   const changeDir = join(cwd, '.sillyspec', 'changes', change)
   mkdirSync(changeDir, { recursive: true })
@@ -349,7 +349,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
   writeFileSync(join(cwd, 'base.txt'), 'b\n')
   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
-  const change = 'flow-h2-t14'
+  const change = '2026-09-01-flow-h2-t14'
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
@@ -360,7 +360,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
   assert.doesNotMatch(s.stdout, /由用户裁决/, '无升厚裁决文案')
   // 无复杂特征输入同款零打扰（负例归并）
-  const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
+  const s2 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
   assert.equal(s2.status, 0)
   assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
   rmSync(cwd, { recursive: true, force: true })
@@ -368,7 +368,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征�
 
 test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t15'
+  const change = '2026-09-01-flow-h2-t15'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
@@ -408,7 +408,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS �
 
 test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复后删件重评', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t16'
+  const change = '2026-09-01-flow-h2-t16'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
@@ -432,7 +432,7 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复�
 
 test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t17'
+  const change = '2026-09-02-flow-h2-t17'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
   fillDesignSlots(cwd, change)
   const f = cli(cwd, ['flow', 'done', '--change', change])
@@ -470,14 +470,14 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落�
 
 test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spawn）→ 全新 start，非空仍拒', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t19'
+  const change = '2026-09-01-flow-h2-t19'
   mkdirSync(join(cwd, '.sillyspec', 'changes', change), { recursive: true })
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0, `空目录应放行: ${s.stdout}\n${s.stderr}`)
   assert.match(s.stdout, /预建空变更目录放行/)
   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')))
   // 非空且无头脑风暴产物 → legacy 拒收维持
-  const change2 = 'flow-h2-t19b'
+  const change2 = '2026-09-01-flow-h2-t19b'
   mkdirSync(join(cwd, '.sillyspec', 'changes', change2), { recursive: true })
   writeFileSync(join(cwd, '.sillyspec', 'changes', change2, 'plan.md'), '# legacy 残留\n')
   const s2 = cli(cwd, ['flow', 'start', '--change', change2, '--input', '任务\n成功标准：\n- 行为 X'])
@@ -503,7 +503,7 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
   mkdirSync(plat, { recursive: true })
   writeFileSync(join(plat, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n') // local.yaml 必需（R22 fail-fast）
   writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({ specRoot: plat }))
-  const change = 'flow-h2-t21'
+  const change = '2026-09-01-flow-h2-t21'
   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
   assert.equal(s.status, 0, `指针恢复应落外置根: ${s.stdout}\n${s.stderr}`)
   assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
@@ -511,7 +511,7 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
   rmSync(plat, { recursive: true, force: true })
   // 格式样例（清晰度门文案）
   const cwd2 = makeRepo().cwd
-  const gate = cli(cwd2, ['flow', 'start', '--change', 'x1'])
+  const gate = cli(cwd2, ['flow', 'start', '--change', '2026-09-01-x1'])
   assert.match(gate.stderr, /独立一行只写「成功标准：」/, '过门格式样例在场')
   assert.match(gate.stderr, /- <可验证标准>/)
   rmSync(cwd2, { recursive: true, force: true })
@@ -525,7 +525,7 @@ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次
 
 test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
   const { cwd } = makeRepo()
-  const change = 'flow-h2-t19'
+  const change = '2026-09-01-flow-h2-t19'
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })

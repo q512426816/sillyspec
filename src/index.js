@@ -168,7 +168,7 @@ SillySpec CLI — 规范驱动开发工具包
 示例:
   sillyspec init
   sillyspec run brainstorm --change 2026-07-03-add-login
-  sillyspec flow start --change my-fix --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用）
+  sillyspec flow start --change 2026-07-03-my-fix --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
   sillyspec run verify --done --output "验证通过，测试全绿"
   sillyspec run archive --done --confirm --output "归档完成"
   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
@@ -221,7 +221,7 @@ function refuseRetiredQuickFreshStart(stageArgs) {
     })()
   if (passThrough) return false
   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
-  console.error('   新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+  console.error('   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
   console.error('   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。')
   process.exit(1)
 }
