@@ -1,5 +1,5 @@
 /**
- * knowledge-reason-overlap.test.mjs — relScore 评分文本纳入理由前缀
+ * knowledge-reason-overlap.test.mjs — guard 组零分平局死路优先（近义措辞兜底）
  * （2026-09-28-knowledge-reason-overlap）
  *
  * 覆盖验收面：
@@ -50,7 +50,7 @@ test('① 近义措辞（穷举——词在理由不在标题）→ 死路条目
   const km = matchKnowledge(kb, '方案：穷举所有需求形态建分类')
   const idx = km.decisionHits.findIndex((h) => h.title.includes('枚举开放世界'))
   assert.ok(idx >= 0 && idx < 5, `应进前 5（实际第 ${idx + 1} 位）`)
-  assert.ok(idx === 0, `理由实词命中应置顶（实际第 ${idx + 1} 位）`)
+  assert.ok(idx === 0, `零分平局死路先验应置顶（实际第 ${idx + 1} 位）`)
   rmQuiet(kb)
 })
 
