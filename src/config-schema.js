@@ -74,6 +74,7 @@ export const LOCAL_YAML_SCHEMA = {
         { path: 'commands.lint_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyLintCheck (src/verify-postcheck.js)'], desc: 'commands.lint 超时秒数——优先级 显式调用参 > 本键 > env SILLYSPEC_LINT_TIMEOUT_MS > 缺省 180（快照内 junction I/O 慢，快照路径调用侧显式传 300）。', example: '600' },
         { path: 'commands.smoke', type: 'string', optional: true, status: 'live', readers: ['executeVerifyQualityScan (src/run/verify-quality-scan.js)'], desc: '接口冒烟命令——verify 阶段 CLI 亲跑（脚本自理服务生命周期：后台起服+轮询就绪+finally 杀），300s 超时帽，失败/超时只记失败态不阻断本步、触发 PASS 封顶（D-002）；指纹含此键，未变不重跑。', example: 'node scripts/smoke.mjs' },
         { path: 'commands.install', type: 'string', optional: true, status: 'live', readers: ['extractInstallCommand (src/worktree-deps.js)'], desc: '依赖安装命令（worktree 依赖 provisioning 用）。', example: 'npm install' },
+        { path: 'commands.knowledge-gate', type: 'boolean', optional: true, status: 'live', readers: ['completeStep (src/run/complete.js)'], desc: '【2026-09-28-unclear-req-to-brainstorm FR-03/D-004】brainstorm 方案步（提出 2-3 种方案）--done 知识检索命中回显开关——缺省 true=开（对 --output 与 decisions.md 条目跑既有检索匹配器，命中 warn 回显「须 evidence 回应或说明不复潮」不阻断）；false（或 off）关回显，无命中时输出与现状一致。', example: 'false' },
       ],
     },
     {
@@ -362,6 +363,7 @@ commands:
   # install: npm install   # worktree 依赖安装命令
   # test_timeout_sec: 2400   # commands.test 超时秒数（慢仓提帽；缺省 600，env SILLYSPEC_TEST_TIMEOUT_MS 同效）
   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
+  # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
 
 # ── SillyHub MCP 客户端凭据（派发到 worker 用）──
 # agent 手填，或 sillyspec platform connect 在 mcp 段缺失时同源自动填。

@@ -363,6 +363,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
           const b = ensureBindingSlots({ changeDir })
           if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——干活时作答，flow done 校验）`)
         } catch (e) { console.warn(`⚠️ 收编补件失败（best-effort）: ${(e && e.message) || e}`) }
+        // route-hindsight 首版快照（收编时点=redraftMissingArtifacts 首次落盘后）：adopt 的
+        // design 是头脑风暴产物、机器只补缺件——快照取收编时点内容，此后 agent 改写计入指标。
+        try {
+          const { snapshotBaseline } = await import('./route-hindsight.js')
+          snapshotBaseline({ specBase, change, changeDir })
+        } catch { /* 快照 best-effort（缺失=指标零信号） */ }
         try {
           const { spawnWatcher } = await import('./watcher.js')
           const w = await spawnWatcher(cwd, change, { specBase })
@@ -420,6 +426,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         console.log(`📌 重入补生成缺失机器稿 ${r.drafted.length} 件：${r.drafted.join('、')}（工具升级晚于 start 的在途变更补件；已存在文件未动）`)
       }
     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
+    // route-hindsight 首版快照（resume 补件后，首写者胜）：旧版本起步的在途变更此处首次取到
+    // 快照（偏晚=少计早期改写，方向保守不误标）；恢复简报渲染零变化（快照静默落盘）。
+    try {
+      const { snapshotBaseline } = await import('./route-hindsight.js')
+      snapshotBaseline({ specBase, change, changeDir })
+    } catch { /* 快照 best-effort */ }
     // 声明通道 resume 生效（fr-governance-sweep 评审 P3 清偿）：--review/--no-review 对在途
     // 变更重入 start 时落盘 review_force——与新变更/adopt 两路口径一致（此前 resume 只打简报
     // 即 return，flag 静默失效）。幂等：未带 flag（null）不覆盖既有声明。
@@ -499,6 +511,22 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     console.warn(`⚠️ 机器起草失败（轻量工件面降级为 flow done 默认验收；best-effort 不阻断）: ${(e && e.message) || e}`)
   }
 
+  // route-hindsight 首版快照（FR-02 后门，2026-09-28-unclear-req-to-brainstorm）：机器稿起草
+  // 时点锚定 design/tasks 首版副本（首写者胜幂等；R-04——取晚会让改写比恒 0 闭环失效）。
+  // 快照缺失=指标零信号（不误标），best-effort 不阻断 start。
+  try {
+    const { snapshotBaseline } = await import('./route-hindsight.js')
+    snapshotBaseline({ specBase, change, changeDir })
+  } catch { /* 快照 best-effort */ }
+
+  // route-hindsight 历史提示（FR-02 前门同屏注入）：上个轻量变更被标记「疑似该走预段未走」
+  // 时点名（渲染在下方自检段上方）。无标记文件 → null 零注入（未升级/新装仓输出与现状一致）。
+  let hindsightHint = null
+  try {
+    const { readHindsightHint } = await import('./route-hindsight.js')
+    hindsightHint = readHindsightHint({ specBase })
+  } catch { /* 提示读取 best-effort 不阻断 start */ }
+
   const materials = materialPaths(specBase, change, changeDir)
   // 绿地 bootstrap（greenfield-bootstrap，R17 实证：无模块图仓 FR 全落伪域/unmapped，知识复利
   // 从第一条断流）：模块图缺席且 --input 有路径语料 → 机器起草初始 _module-map.yaml 草案（按
@@ -528,6 +556,11 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   const lines = [
     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
     `══════════════════════════════════════`,
+    ...(hindsightHint ? [hindsightHint, ''] : []),
+    `🔎 选道自检——对本需求，你还有没有必须问用户才能动手的问题？`,
+    `   有 → sillyspec run brainstorm --change ${change}（它就是结构化问询协议，产物随后 flow start 自动收编续跑）；`,
+    `   无 → 继续轻量跑道。纯提示不阻断——不设声明 flag、不拦流程（选错了还有事后闭环指标兜底）。`,
+    ``,
     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
     ``,
     `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
@@ -1159,6 +1192,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       mark('review')
     }
   }
+
+  // ②d hindsight：事后闭环指标接线（FR-02 / D-005，2026-09-28-unclear-req-to-brainstorm）——
+  // patch/review 之后、archive 搬走 changeDir 之前：review.json（评审子步已定在场与否）、首版
+  // 快照 vs 终稿、verify-runs 记录面 → 封闭面指标四元组（diff 比例与计数，零语义判定 D-003）；
+  // 任一超阈 → per-repo 标记落库，下次 flow start 点名提示（「疑似」非定罪可无视）。
+  // best-effort：异常仅 warn 不阻断收口（断点续跑重入本块幂等——标记整文件覆盖同值）。
+  try {
+    const { computeHindsightMetrics, markHindsight } = await import('./route-hindsight.js')
+    let reviewJson = null
+    try { reviewJson = JSON.parse(readFileSync(join(changeDir, 'review.json'), 'utf8')) } catch { /* 评审豁免/缺件 → null（盲维计 0） */ }
+    const metrics = computeHindsightMetrics({ changeDir, reviewJson, flowState: st })
+    const marked = markHindsight({ cwd, specBase, change, metrics })
+    if (marked.marked) {
+      console.warn(`🕰️ route-hindsight 标记：本变更疑似该走预段未走（${marked.reasons.join('；')}）——下次 flow start 将点名提示（过程形态信号非定罪）`)
+    }
+  } catch (e) { console.warn(`⚠️ route-hindsight 指标接线失败（best-effort 不阻断收口）: ${(e && e.message) || e}`) }
 
   // ③ probes：thin 轻量跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft

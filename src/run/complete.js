@@ -451,6 +451,54 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
     }
   }
 
+  // ── 方案步 --done 知识检索命中回显（FR-03/D-004，2026-09-28-unclear-req-to-brainstorm）──
+  // 设计时点此前零检索面（自动注入只锚变更入口）——方案步 --done 对 --output 与 decisions.md
+  // 当前条目（D-xxx 标题+question 拼串；执行期裁决 D-007：条目无时间戳，「自上次 --done 新增」
+  // 无机械锚点，取全部条目为超集）跑既有检索匹配器 matchKnowledge（复用不另写）；命中 → warn
+  // 回显（decisionHits rejected 优先排序为匹配器既有行为）+ evidence 回应提示；v1 只 warn 不
+  // 阻断（D-004 故障面自留退路）。逃生阀 local.yaml commands.knowledge-gate: false/off 关回显
+  // （缺省开，config-schema 已登记）；无命中输出与现状一致。fail-open：检索异常静默放行。
+  if (stageName === 'brainstorm' && steps[currentIdx]?.name?.includes('提出 2-3 种方案') && changeName) {
+    try {
+      let _kgOn = true
+      try {
+        const _ly = readFileSync(join(specBase, 'local.yaml'), 'utf8')
+        const _kgm = _ly.match(/^\s*knowledge-gate\s*:\s*(true|false|on|off)\s*$/m)
+        if (_kgm && (_kgm[1] === 'false' || _kgm[1] === 'off')) _kgOn = false
+      } catch { /* 无 local.yaml = 缺省开 */ }
+      if (_kgOn) {
+        let _kgQuery = String(outputText || '')
+        try {
+          const _dm = readFileSync(join(specBase, 'changes', changeName, 'decisions.md'), 'utf8')
+          const _parts = []
+          for (const m of _dm.matchAll(/^##\s+(D-\d+@v\d+):\s*(.+)$/gm)) _parts.push(`${m[1]} ${m[2]}`)
+          for (const m of _dm.matchAll(/^- question:\s*(.+)$/gm)) _parts.push(m[1])
+          if (_parts.length > 0) _kgQuery += '\n' + _parts.join('\n')
+        } catch { /* 无 decisions.md = 仅 --output */ }
+        _kgQuery = _kgQuery.slice(0, 4000)
+        if (_kgQuery.trim()) {
+          const { matchKnowledge } = await import('../knowledge-match.js')
+          const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
+          const _hits = km.decisionHits || []
+          const _entries = km.matched ? (km.entries || []) : []
+          if (_hits.length > 0 || _entries.length > 0) {
+            console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
+            for (const h of _hits.slice(0, 5)) {
+              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${h.status === 'rejected' ? ` 否决理由：${h.reason || '（未记录）'}` : ''}`)
+            }
+            for (const e of _entries.slice(0, 3)) {
+              const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
+              console.warn(`   - 知识条目 ${_base}${e.display ? `（${e.display}）` : ''}`)
+            }
+            console.warn(`   须在对应决策的 evidence 回应或说明不复潮（v1 提示级；local.yaml commands.knowledge-gate: false 可关本回显）`)
+          }
+        }
+      }
+    } catch (_kgEx) {
+      console.warn(`   ⚠️ knowledge-gate 检索自身异常，fail-open 放行（不误拦本次完成）：${_kgEx && _kgEx.message ? _kgEx.message : _kgEx}`)
+    }
+  }
+
   // ── noAI 步骤硬门（坑 noai-done-bypass）：noAI 步骤的确定性校验不可被 --done 绕过 ──
   // 正常路径 agent 跑 `run <stage>` 推进到 noAI step 时，runStage 自动执行 _cliAction
   // （stage.js noAI 分支，不写 step output）；若 agent 对 noAI step 直接 --done，此前
