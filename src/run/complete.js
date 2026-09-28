@@ -967,10 +967,12 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       // 当 scan 未完成时会误推 scan（回头路），与 brainstorm 已完成、应进入 plan/quick 矛盾。
       // 历史教训：曾因此让 agent 在 brainstorm 完成后被误导去跑 scan。
       const _bscale = readDesignScale(specBase, changeName)
-      if (_bscale === 'small') {
-        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口）`)
+      if (_bscale === 'large') {
+        console.log(`\n👉 brainstorm 已完成（large）。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（完整五阶段）`)
       } else {
-        console.log(`\n👉 brainstorm 已完成。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（scale=large 或未标 small 走完整 plan）`)
+        // 未标/small 默认收编轻量道（2026-09-29-brainstorm-exit-thin-default：此前「未标走完整 plan」
+        // 是缺省即厚；翻转与 thin-default-flip 同哲学——升厚留运行时证据＋用户决策）
+        console.log(`\n👉 brainstorm 已完成（scale=${_bscale || '未标，默认 small'}）。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口；实测失败自动升厚 / --upgrade-thick 用户决策）`)
       }
     } else if (stageName === 'quick') {
       // quick 是收尾阶段（辅助流程，不走主链 scan→archive），完成后该提交，而非推 scan。

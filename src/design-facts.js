@@ -295,7 +295,9 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now 
   // P2-e provenance 戳（noai-ir-roadmap §5）：CLI 骨架出品的可审计标记——铁律 8 收窄为
   //「骨架优先，仅手写补文档才手填元数据」的依据（validateMetadata 未来可据此只认 CLI 戳）
   lines.push(`generated_by: sillyspec-design-init`)
-  lines.push('scale: large')
+  // scale 不预填（2026-09-29-brainstorm-exit-thin-default）：此前预填 large 是静默厚默认——
+  // 不主动改就是五阶段；现由 brainstorm Step 8 规模评估按复杂度/上下文轴落值，拿不准默认 small
+  lines.push('scale: ""  # TODO：Step 8 规模评估落值——单上下文可吞吐=small（flow start 收编）；需 Wave 编排/上下文分片/多阶段治理=large（run plan）；拿不准 small')
   lines.push('---')
   lines.push('')
   lines.push(`# 设计文档（Design）— ${change}`)
