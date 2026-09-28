@@ -1,0 +1,1029 @@
+diff --git a/package.json b/package.json
+index e3642cf6..003314cd 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "sillyspec",
+-  "version": "3.30.0",
++  "version": "3.31.0",
+   "description": "SillySpec CLI — 流程状态机，让 AI 严格按步骤来",
+   "icon": "logo.jpg",
+   "homepage": "https://sillyspec.ppdmq.top/",
+diff --git a/src/config-schema.js b/src/config-schema.js
+index ef536a57..f866d7d2 100644
+--- a/src/config-schema.js
++++ b/src/config-schema.js
+@@ -74,6 +74,7 @@ export const LOCAL_YAML_SCHEMA = {
+         { path: 'commands.lint_timeout_sec', type: 'number', optional: true, status: 'live', readers: ['runVerifyLintCheck (src/verify-postcheck.js)'], desc: 'commands.lint 超时秒数——优先级 显式调用参 > 本键 > env SILLYSPEC_LINT_TIMEOUT_MS > 缺省 180（快照内 junction I/O 慢，快照路径调用侧显式传 300）。', example: '600' },
+         { path: 'commands.smoke', type: 'string', optional: true, status: 'live', readers: ['executeVerifyQualityScan (src/run/verify-quality-scan.js)'], desc: '接口冒烟命令——verify 阶段 CLI 亲跑（脚本自理服务生命周期：后台起服+轮询就绪+finally 杀），300s 超时帽，失败/超时只记失败态不阻断本步、触发 PASS 封顶（D-002）；指纹含此键，未变不重跑。', example: 'node scripts/smoke.mjs' },
+         { path: 'commands.install', type: 'string', optional: true, status: 'live', readers: ['extractInstallCommand (src/worktree-deps.js)'], desc: '依赖安装命令（worktree 依赖 provisioning 用）。', example: 'npm install' },
++        { path: 'commands.knowledge-gate', type: 'boolean', optional: true, status: 'live', readers: ['completeStep (src/run/complete.js)'], desc: '【2026-09-28-unclear-req-to-brainstorm FR-03/D-004】brainstorm 方案步（提出 2-3 种方案）--done 知识检索命中回显开关——缺省 true=开（对 --output 与 decisions.md 条目跑既有检索匹配器，命中 warn 回显「须 evidence 回应或说明不复潮」不阻断）；false（或 off）关回显，无命中时输出与现状一致。', example: 'false' },
+       ],
+     },
+     {
+@@ -362,6 +363,7 @@ commands:
+   # install: npm install   # worktree 依赖安装命令
+   # test_timeout_sec: 2400   # commands.test 超时秒数（慢仓提帽；缺省 600，env SILLYSPEC_TEST_TIMEOUT_MS 同效）
+   # lint_timeout_sec: 600    # commands.lint 超时秒数（缺省 180）
++  # knowledge-gate: false    # 方案步 --done 知识检索命中回显开关（缺省 true 开；false 关回显）
+ 
+ # ── SillyHub MCP 客户端凭据（派发到 worker 用）──
+ # agent 手填，或 sillyspec platform connect 在 mcp 段缺失时同源自动填。
+diff --git a/src/flow.js b/src/flow.js
+index c1d16ec5..d09b5b9c 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -363,6 +363,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+           const b = ensureBindingSlots({ changeDir })
+           if (b.appended) console.log(`📌 收编追加测试绑定槽 ${b.slots} 枚（brainstorm requirements 无绑定面——干活时作答，flow done 校验）`)
+         } catch (e) { console.warn(`⚠️ 收编补件失败（best-effort）: ${(e && e.message) || e}`) }
++        // route-hindsight 首版快照（收编时点=redraftMissingArtifacts 首次落盘后）：adopt 的
++        // design 是头脑风暴产物、机器只补缺件——快照取收编时点内容，此后 agent 改写计入指标。
++        try {
++          const { snapshotBaseline } = await import('./route-hindsight.js')
++          snapshotBaseline({ specBase, change, changeDir })
++        } catch { /* 快照 best-effort（缺失=指标零信号） */ }
+         try {
+           const { spawnWatcher } = await import('./watcher.js')
+           const w = await spawnWatcher(cwd, change, { specBase })
+@@ -420,6 +426,12 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+         console.log(`📌 重入补生成缺失机器稿 ${r.drafted.length} 件：${r.drafted.join('、')}（工具升级晚于 start 的在途变更补件；已存在文件未动）`)
+       }
+     } catch (e) { console.warn(`⚠️ 补起草失败（不阻断恢复简报）: ${(e && e.message) || e}`) }
++    // route-hindsight 首版快照（resume 补件后，首写者胜）：旧版本起步的在途变更此处首次取到
++    // 快照（偏晚=少计早期改写，方向保守不误标）；恢复简报渲染零变化（快照静默落盘）。
++    try {
++      const { snapshotBaseline } = await import('./route-hindsight.js')
++      snapshotBaseline({ specBase, change, changeDir })
++    } catch { /* 快照 best-effort */ }
+     // 声明通道 resume 生效（fr-governance-sweep 评审 P3 清偿）：--review/--no-review 对在途
+     // 变更重入 start 时落盘 review_force——与新变更/adopt 两路口径一致（此前 resume 只打简报
+     // 即 return，flag 静默失效）。幂等：未带 flag（null）不覆盖既有声明。
+@@ -499,6 +511,22 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     console.warn(`⚠️ 机器起草失败（轻量工件面降级为 flow done 默认验收；best-effort 不阻断）: ${(e && e.message) || e}`)
+   }
+ 
++  // route-hindsight 首版快照（FR-02 后门，2026-09-28-unclear-req-to-brainstorm）：机器稿起草
++  // 时点锚定 design/tasks 首版副本（首写者胜幂等；R-04——取晚会让改写比恒 0 闭环失效）。
++  // 快照缺失=指标零信号（不误标），best-effort 不阻断 start。
++  try {
++    const { snapshotBaseline } = await import('./route-hindsight.js')
++    snapshotBaseline({ specBase, change, changeDir })
++  } catch { /* 快照 best-effort */ }
++
++  // route-hindsight 历史提示（FR-02 前门同屏注入）：上个轻量变更被标记「疑似该走预段未走」
++  // 时点名（渲染在下方自检段上方）。无标记文件 → null 零注入（未升级/新装仓输出与现状一致）。
++  let hindsightHint = null
++  try {
++    const { readHindsightHint } = await import('./route-hindsight.js')
++    hindsightHint = readHindsightHint({ specBase })
++  } catch { /* 提示读取 best-effort 不阻断 start */ }
++
+   const materials = materialPaths(specBase, change, changeDir)
+   // 绿地 bootstrap（greenfield-bootstrap，R17 实证：无模块图仓 FR 全落伪域/unmapped，知识复利
+   // 从第一条断流）：模块图缺席且 --input 有路径语料 → 机器起草初始 _module-map.yaml 草案（按
+@@ -528,6 +556,11 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+   const lines = [
+     `🏃 flow start（${thick ? 'thick 厚档（--thick 显式声明，人声明不做启发式）' : 'thin 轻量跑道'}）: ${change}`,
+     `══════════════════════════════════════`,
++    ...(hindsightHint ? [hindsightHint, ''] : []),
++    `🔎 选道自检——对本需求，你还有没有必须问用户才能动手的问题？`,
++    `   有 → sillyspec run brainstorm --change ${change}（它就是结构化问询协议，产物随后 flow start 自动收编续跑）；`,
++    `   无 → 继续轻量跑道。纯提示不阻断——不设声明 flag、不拦流程（选错了还有事后闭环指标兜底）。`,
++    ``,
+     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
+     ``,
+     `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
+@@ -1160,6 +1193,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     }
+   }
+ 
++  // ②d hindsight：事后闭环指标接线（FR-02 / D-005，2026-09-28-unclear-req-to-brainstorm）——
++  // patch/review 之后、archive 搬走 changeDir 之前：review.json（评审子步已定在场与否）、首版
++  // 快照 vs 终稿、verify-runs 记录面 → 封闭面指标四元组（diff 比例与计数，零语义判定 D-003）；
++  // 任一超阈 → per-repo 标记落库，下次 flow start 点名提示（「疑似」非定罪可无视）。
++  // best-effort：异常仅 warn 不阻断收口（断点续跑重入本块幂等——标记整文件覆盖同值）。
++  try {
++    const { computeHindsightMetrics, markHindsight } = await import('./route-hindsight.js')
++    let reviewJson = null
++    try { reviewJson = JSON.parse(readFileSync(join(changeDir, 'review.json'), 'utf8')) } catch { /* 评审豁免/缺件 → null（盲维计 0） */ }
++    const metrics = computeHindsightMetrics({ changeDir, reviewJson, flowState: st })
++    const marked = markHindsight({ cwd, specBase, change, metrics })
++    if (marked.marked) {
++      console.warn(`🕰️ route-hindsight 标记：本变更疑似该走预段未走（${marked.reasons.join('；')}）——下次 flow start 将点名提示（过程形态信号非定罪）`)
++    }
++  } catch (e) { console.warn(`⚠️ route-hindsight 指标接线失败（best-effort 不阻断收口）: ${(e && e.message) || e}`) }
++
+   // ③ probes：thin 轻量跑无 verify-result 骨架——探针产物面（probe1-8 事实核验）由 flow done
+   // 裁决自含（测试门+工件指纹）；升厚（tier=thick）时探针链由 run verify 的既有 --init --draft
+   // 产物面承接（第 3 批资产复用，不重做）。本子步记账占位：thin=not-applicable 直过。
+diff --git a/src/route-hindsight.js b/src/route-hindsight.js
+new file mode 100644
+index 00000000..83cc2788
+--- /dev/null
++++ b/src/route-hindsight.js
+@@ -0,0 +1,240 @@
++/**
++ * route-hindsight.js — 轻量道「疑似该走预段未走」事后闭环（2026-09-28-unclear-req-to-brainstorm FR-02）。
++ *
++ * 三层分工中的后门层：前门盘问（flow.js 渲染）管入口弱信号，本模块管收口事后指标——
++ * flow done 收口时计算过程形态指标，任一超阈即标记落库，下次 flow start 点名提示
++ * （「疑似」非定罪、可无视），形成 per-repo 自校准回路。
++ *
++ * D-003 禁区（rejected 决策，逐字遵守）：全部指标为封闭面——行级 diff 比例与记录计数，
++ * 零关键词/词表语义判定。需求清不清晰的判定归 agent，机器只产过程形态信号（D-005 弱信号）。
++ *
++ * 数据面（均 .runtime 下，跨平台 join + 原子写）：
++ *   - 首版快照 route-hindsight-baseline-<change>.json：start/adopt 机器稿首次落盘后由
++ *     flow.js 调 snapshotBaseline 存 design.md/tasks.md 全文副本；首写者胜（幂等，R-04：
++ *     快照锚定起草时点，重入不覆盖）。
++ *   - 标记文件 route-hindsight.json：per-repo 单条，每次标记整文件覆盖——提示语义即
++ *     「上个轻量变更」。
++ *
++ * 指标四元组（口径）：
++ *   designRewriteRatio / tasksRewriteRatio：终稿 vs 首版快照的行级改写比——复用
++ *     flow-draft.computeEditRatio 同款 LCS 口径（改写行/首版行数，纯增行不计入；CRLF/LF
++ *     归一后比对）。diff 面先做结构归一：剔 frontmatter 块、HTML 注释标记行（<!--）、空行
++ *     ——惰性脚手架行（机器稿里约占半数）会把真实换血稀释到阈值以下（实测整写机器段仅得
++ *     0.175-0.275，0.5 阈值永不可达=闭环失效面）；归一是纯结构过滤零语义判定（D-003）。
++ *     无快照（旧变更/起草失败）= 0（零信号，不是「实测 0% 改写」）。
++ *   blindDims：收口评审 review.json 的 dimensionNotes 中值为 'finding' 的维数——枚举值
++ *     计数（评审员已按任务书 schema 判定的结构化面），非机器语义判定；无 review.json
++ *     （评审豁免）= 0。
++ *   testFailures：.runtime/verify-runs/<ts>/test-result.json 记录面中 change 归属本变更且
++ *     status='failed' 的实测失败次数——每次失败收口尝试各落一条（writeRunResult 既有面）。
++ *     flow-state substeps 无失败计数面（执行期裁决 D-006：数据源从卡面所述「flow-state
++ *     substeps」改读同为既有记录面的 verify-runs 时间线，封闭面语义不变）。
++ */
++import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
++import { join, basename, dirname } from 'node:path'
++import { writeAtomicSync } from './fs-atomic.js'
++import { computeEditRatio } from './flow-draft.js'
++
++/** 超阈判定常量（可调；口径：比例两路为严格大于——恰等于阈值不算超，保守防误标 R-01；
++ * 计数两路为大于等于——2 维/2 次即系统性信号）。 */
++export const HINDSIGHT_THRESHOLDS = {
++  designRewriteRatio: 0.5, // design 机器稿改写比 > 0.5（50% 首版行被改写）
++  tasksRewriteRatio: 0.6,  // tasks 机器预填稿改写率 > 0.6
++  blindDims: 2,            // 评审盲维命中（dimensionNotes='finding'）≥ 2 维
++  testFailures: 2,         // 收口实测失败记录 ≥ 2 次
++}
++
++const BASELINE_PREFIX = 'route-hindsight-baseline-'
++const MARK_FILE = 'route-hindsight.json'
++
++/** CRLF/LF 归一（Windows/Linux/macOS 换行兼容——未归一的行比对会把换行差异计成改写）。 */
++function norm(text) {
++  return String(text || '').replace(/\r\n/g, '\n')
++}
++
++/** diff 面结构归一：剔 frontmatter 块、HTML 注释标记行（<!-- 机器段/槽标记）、空行——
++ * 只留正文行（惰性脚手架行不稀释改写比；纯结构过滤，零语义判定）。 */
++function contentSurface(text) {
++  const lines = norm(text).split('\n')
++  const out = []
++  let fmOpen = false, fmDone = false
++  for (let i = 0; i < lines.length; i++) {
++    const l = lines[i]
++    if (!fmDone) {
++      if (i === 0 && l === '---') { fmOpen = true; continue }
++      if (fmOpen) { if (l === '---') { fmOpen = false; fmDone = true } continue }
++      fmDone = true // 首行非 ---：无 frontmatter 的裸文本，全行入面
++    }
++    if (l.startsWith('<!--')) continue
++    if (l.trim() === '') continue
++    out.push(l)
++  }
++  return out.join('\n')
++}
++
++function readTextSafe(p) {
++  try { return readFileSync(p, 'utf8') } catch { return null }
++}
++
++function round4(x) {
++  return Math.round(x * 10000) / 10000
++}
++
++function num(v) {
++  const n = Number(v)
++  return Number.isFinite(n) ? n : 0
++}
++
++/**
++ * 首版快照：机器稿起草时点（start 的 draftAll / adopt·resume 的 redraftMissingArtifacts
++ * 首次落盘后）由 flow.js 调用。首写者胜——已存在不覆盖（重入/续跑取到的都是首版，R-04）。
++ * 缺件（起草失败的文件）存 null，指标面按零信号处理。
++ * @returns {{ captured: boolean, path?: string, reason?: string }}
++ */
++export function snapshotBaseline({ specBase, change, changeDir }) {
++  try {
++    const runtimeRoot = join(specBase, '.runtime')
++    const p = join(runtimeRoot, `${BASELINE_PREFIX}${change}.json`)
++    if (existsSync(p)) return { captured: false, reason: 'already-exists（首写者胜）' }
++    const payload = {
++      schemaVersion: 1,
++      change,
++      capturedAt: new Date().toISOString(),
++      design: readTextSafe(join(changeDir, 'design.md')),
++      tasks: readTextSafe(join(changeDir, 'tasks.md')),
++    }
++    mkdirSync(runtimeRoot, { recursive: true })
++    writeAtomicSync(p, JSON.stringify(payload, null, 2) + '\n')
++    return { captured: true, path: p }
++  } catch (e) {
++    return { captured: false, reason: (e && e.message) || String(e) }
++  }
++}
++
++/**
++ * 收口指标计算（封闭面：只读文件与既有记录，无语义判定）。
++ * @param {{ changeDir: string, reviewJson: object|null, flowState: object|null }} p
++ *   changeDir 布局=<specBase>/changes/<change>（specBase 与 change 名据此派生）；
++ *   reviewJson=flow done 评审子步已校验的 review.json 解析对象（豁免时 null）；
++ *   flowState=flow-state 对象（仅随 raw 记录，不参与判定）。
++ * @returns {{ designRewriteRatio: number, tasksRewriteRatio: number, blindDims: number, testFailures: number, raw: object }}
++ */
++export function computeHindsightMetrics({ changeDir, reviewJson, flowState }) {
++  const raw = { baselinePresent: false }
++  const change = basename(changeDir)
++  const specBase = dirname(dirname(changeDir))
++
++  // ① 首版快照 → 终稿行级改写比
++  let designRewriteRatio = 0
++  let tasksRewriteRatio = 0
++  const baselineRaw = readTextSafe(join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`))
++  let baseline = null
++  if (baselineRaw != null) { try { const j = JSON.parse(baselineRaw); baseline = j && typeof j === 'object' ? j : null } catch { baseline = null } }
++  if (baseline) {
++    raw.baselinePresent = true
++    const pairs = [['design', 'designRewriteRatio'], ['tasks', 'tasksRewriteRatio']]
++    for (const [key, outKey] of pairs) {
++      const first = typeof baseline[key] === 'string' ? contentSurface(baseline[key]) : null
++      const finalText = readTextSafe(join(changeDir, `${key}.md`))
++      if (first && finalText != null) {
++        const surface = contentSurface(finalText)
++        const ratio = round4(computeEditRatio(first, surface))
++        if (outKey === 'designRewriteRatio') designRewriteRatio = ratio
++        else tasksRewriteRatio = ratio
++        raw[`${key}BaselineLines`] = first.split('\n').length
++        raw[`${key}FinalLines`] = surface.split('\n').length
++      }
++    }
++  }
++
++  // ② 评审盲维命中：dimensionNotes 枚举值计数（'finding'——评审员结构化判定面）
++  let blindDims = 0
++  const dims = reviewJson && typeof reviewJson === 'object' && reviewJson.dimensionNotes
++    && typeof reviewJson.dimensionNotes === 'object' && !Array.isArray(reviewJson.dimensionNotes)
++    ? reviewJson.dimensionNotes : null
++  if (dims) {
++    for (const v of Object.values(dims)) if (v === 'finding') blindDims++
++    raw.dimensionNotesKeys = Object.keys(dims).length
++  }
++
++  // ③ 实测失败次数：verify-runs 记录面按 change 归属计数（status='failed' 枚举）
++  let testFailures = 0
++  const runsDir = join(specBase, '.runtime', 'verify-runs')
++  try {
++    for (const e of readdirSync(runsDir, { withFileTypes: true })) {
++      if (!e.isDirectory()) continue
++      const tr = readTextSafe(join(runsDir, e.name, 'test-result.json'))
++      if (tr == null) continue
++      try {
++        const j = JSON.parse(tr)
++        if (j && typeof j === 'object' && j.change === change && j.status === 'failed') testFailures++
++      } catch { /* 损坏记录不计 */ }
++    }
++  } catch { /* 无 verify-runs 目录 = 0 */ }
++  raw.failedRunCount = testFailures
++
++  // flowState 仅随 raw 留档（不参与判定——判定面恒为上方三个封闭面）
++  raw.flowTier = flowState && flowState.tier ? String(flowState.tier) : null
++  raw.adopted = Boolean(flowState && flowState.adopted_from)
++
++  return { designRewriteRatio, tasksRewriteRatio, blindDims, testFailures, raw }
++}
++
++/**
++ * 超阈判定＋标记落库（.sillyspec/.runtime/route-hindsight.json，per-repo 单条整文件覆盖）。
++ * @param {{ cwd: string, specBase: string, change: string, metrics: object }} p
++ * @returns {{ marked: boolean, reasons: string[] }}
++ */
++export function markHindsight({ cwd, specBase, change, metrics }) {
++  const base = specBase || join(cwd || '.', '.sillyspec')
++  const m = metrics || {}
++  const reasons = []
++  if (num(m.designRewriteRatio) > HINDSIGHT_THRESHOLDS.designRewriteRatio) {
++    reasons.push(`design 机器稿改写比 ${num(m.designRewriteRatio)} > ${HINDSIGHT_THRESHOLDS.designRewriteRatio}`)
++  }
++  if (num(m.tasksRewriteRatio) > HINDSIGHT_THRESHOLDS.tasksRewriteRatio) {
++    reasons.push(`tasks 机器预填稿改写率 ${num(m.tasksRewriteRatio)} > ${HINDSIGHT_THRESHOLDS.tasksRewriteRatio}`)
++  }
++  if (num(m.blindDims) >= HINDSIGHT_THRESHOLDS.blindDims) {
++    reasons.push(`评审盲维命中 ${num(m.blindDims)} 维 ≥ ${HINDSIGHT_THRESHOLDS.blindDims}`)
++  }
++  if (num(m.testFailures) >= HINDSIGHT_THRESHOLDS.testFailures) {
++    reasons.push(`实测失败 ${num(m.testFailures)} 次 ≥ ${HINDSIGHT_THRESHOLDS.testFailures}`)
++  }
++  if (reasons.length === 0) return { marked: false, reasons: [] }
++  const runtimeRoot = join(base, '.runtime')
++  mkdirSync(runtimeRoot, { recursive: true })
++  writeAtomicSync(join(runtimeRoot, MARK_FILE), JSON.stringify({
++    change,
++    marked_at: new Date().toISOString(),
++    metrics: {
++      designRewriteRatio: num(m.designRewriteRatio),
++      tasksRewriteRatio: num(m.tasksRewriteRatio),
++      blindDims: num(m.blindDims),
++      testFailures: num(m.testFailures),
++    },
++    reasons,
++  }, null, 2) + '\n')
++  return { marked: true, reasons }
++}
++
++/**
++ * 下次 flow start 的点名提示读取。无文件/无标记/损坏 → null（新装零影响——无 hindsight
++ * 文件的仓 flow start 输出与现状完全一致）。
++ * @returns { string | null }
++ */
++export function readHindsightHint({ specBase }) {
++  try {
++    const raw = readFileSync(join(specBase, '.runtime', MARK_FILE), 'utf8')
++    const j = JSON.parse(raw)
++    if (!j || typeof j !== 'object' || !j.change) return null
++    const m = j.metrics || {}
++    const pct = (v) => (Number.isFinite(Number(v)) ? `${Math.round(Number(v) * 100)}%` : '?')
++    const why = Array.isArray(j.reasons) && j.reasons.length > 0 ? j.reasons.join('；') : '过程形态超阈'
++    return `🕰️ route-hindsight：上个轻量变更「${j.change}」疑似该走头脑风暴预段未走（${why}；形态计数——design 改写比 ${pct(m.designRewriteRatio)}、tasks 改写率 ${pct(m.tasksRewriteRatio)}、评审盲维命中 ${m.blindDims ?? '?'}、实测失败 ${m.testFailures ?? '?'} 次）。「疑似」是过程形态信号非定罪——本次需求确实已含决策可无视；若拿不准，先 run brainstorm --change <名> 再回来收编。`
++  } catch {
++    return null
++  }
++}
++
++export default { HINDSIGHT_THRESHOLDS, snapshotBaseline, computeHindsightMetrics, markHindsight, readHindsightHint }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 2a555976..d5e9ff4a 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -451,6 +451,54 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+     }
+   }
+ 
++  // ── 方案步 --done 知识检索命中回显（FR-03/D-004，2026-09-28-unclear-req-to-brainstorm）──
++  // 设计时点此前零检索面（自动注入只锚变更入口）——方案步 --done 对 --output 与 decisions.md
++  // 当前条目（D-xxx 标题+question 拼串；执行期裁决 D-007：条目无时间戳，「自上次 --done 新增」
++  // 无机械锚点，取全部条目为超集）跑既有检索匹配器 matchKnowledge（复用不另写）；命中 → warn
++  // 回显（decisionHits rejected 优先排序为匹配器既有行为）+ evidence 回应提示；v1 只 warn 不
++  // 阻断（D-004 故障面自留退路）。逃生阀 local.yaml commands.knowledge-gate: false/off 关回显
++  // （缺省开，config-schema 已登记）；无命中输出与现状一致。fail-open：检索异常静默放行。
++  if (stageName === 'brainstorm' && steps[currentIdx]?.name?.includes('提出 2-3 种方案') && changeName) {
++    try {
++      let _kgOn = true
++      try {
++        const _ly = readFileSync(join(specBase, 'local.yaml'), 'utf8')
++        const _kgm = _ly.match(/^\s*knowledge-gate\s*:\s*(true|false|on|off)\s*$/m)
++        if (_kgm && (_kgm[1] === 'false' || _kgm[1] === 'off')) _kgOn = false
++      } catch { /* 无 local.yaml = 缺省开 */ }
++      if (_kgOn) {
++        let _kgQuery = String(outputText || '')
++        try {
++          const _dm = readFileSync(join(specBase, 'changes', changeName, 'decisions.md'), 'utf8')
++          const _parts = []
++          for (const m of _dm.matchAll(/^##\s+(D-\d+@v\d+):\s*(.+)$/gm)) _parts.push(`${m[1]} ${m[2]}`)
++          for (const m of _dm.matchAll(/^- question:\s*(.+)$/gm)) _parts.push(m[1])
++          if (_parts.length > 0) _kgQuery += '\n' + _parts.join('\n')
++        } catch { /* 无 decisions.md = 仅 --output */ }
++        _kgQuery = _kgQuery.slice(0, 4000)
++        if (_kgQuery.trim()) {
++          const { matchKnowledge } = await import('../knowledge-match.js')
++          const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
++          const _hits = km.decisionHits || []
++          const _entries = km.matched ? (km.entries || []) : []
++          if (_hits.length > 0 || _entries.length > 0) {
++            console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
++            for (const h of _hits.slice(0, 5)) {
++              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${h.status === 'rejected' ? ` 否决理由：${h.reason || '（未记录）'}` : ''}`)
++            }
++            for (const e of _entries.slice(0, 3)) {
++              const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
++              console.warn(`   - 知识条目 ${_base}${e.display ? `（${e.display}）` : ''}`)
++            }
++            console.warn(`   须在对应决策的 evidence 回应或说明不复潮（v1 提示级；local.yaml commands.knowledge-gate: false 可关本回显）`)
++          }
++        }
++      }
++    } catch (_kgEx) {
++      console.warn(`   ⚠️ knowledge-gate 检索自身异常，fail-open 放行（不误拦本次完成）：${_kgEx && _kgEx.message ? _kgEx.message : _kgEx}`)
++    }
++  }
++
+   // ── noAI 步骤硬门（坑 noai-done-bypass）：noAI 步骤的确定性校验不可被 --done 绕过 ──
+   // 正常路径 agent 跑 `run <stage>` 推进到 noAI step 时，runStage 自动执行 _cliAction
+   // （stage.js noAI 分支，不写 step output）；若 agent 对 noAI step 直接 --done，此前
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index cf12e2fc..99ea2490 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -207,8 +207,9 @@ export const definition = {
+ ### 操作
+ 1. 每种方案列出：核心思路、优势、劣势
+ 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
+-3. 给出推荐方案和理由
+-4. 用户选定方案后，把选择结果**当场追加**到 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
++3. 定稿前机制词检索（固定动作）：方案引入新机制词（如 分类/词表/枚举/门/协议/状态机——例词为举例非机制，不构成封闭清单）时，先跑 \`sillyspec knowledge search --query "<机制词>"\`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿方案
++4. 给出推荐方案和理由
++5. 用户选定方案后，把选择结果**当场追加**到 \`{SPEC_ROOT}/changes/<change-name>/decisions.md\`（增量落盘规则同「对话式探索」步：目录/文件缺失先创建、按 D-xxx@vN 判重）：type 用 architecture、source 用 user、question 记方案取舍问题、answer 记用户所选方案与理由要点、evidence 记方案选择轮次——方案选择是本变更最关键的用户决策，必须随答随落盘，不能只留在对话里
+ 
+ ### 铁律 — 必须等待用户选择方案
+ - 列出方案对比表和推荐后必须暂停等用户选择，**不要自己说"推荐方案 A"然后当用户选了**（命令由 CLI 在下方注入）
+@@ -234,9 +235,10 @@ export const definition = {
+ 1. 简单项目：几句话整体描述
+ 2. 复杂项目：按模块/Phase 分段展示，每段 200-300 字
+ 3. 展示完整设计方案（不要逐段停顿，一次性展示）
+-4. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
+-5. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
+-6. 暂停等待用户确认或修改意见
++4. 分段设计含新机制时同上检索（固定动作）：设计的分段内容引入新机制词（例词为举例非机制，不构成封闭清单）时，先跑 \`sillyspec knowledge search --query "<机制词>"\`，命中条目必读（尤其 status=rejected 的防复潮条目）再定稿设计
++5. 确认变更名（格式：\`YYYY-MM-DD-<简短描述>\`，例如 \`2026-05-13-user-auth\`——CLI 已强制：新建/改名不带日期前缀直接 exit 2）
++6. 按「HTML 原型分级」生成原型或写出跳过原因（二选一必填，见下）
++7. 暂停等待用户确认或修改意见
+ 
+ ### HTML 原型分级（按改动程度，不是"是否碰前端文件"）
+ 判定对象是**改造后的界面相对现状的变化程度**：
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index ff06ce67..a048d5c5 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -6,8 +6,8 @@
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+-| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用 |
+-| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
++| 需求已含决策（自检通过才走——对本需求，你还有没有必须问用户才能动手的问题？能不假思索答「无」且成功标准可直书，才走本行） | **轻量变更（自检通过才走）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用（start 时 CLI 会同屏再盘问一次；答错事后指标会标记） |
++| 需求不清晰 / 需要方案探索（负面信号举例——举例非机制、非封闭清单：改哪说不清／成功标准只能写空话／≥2 个方案待取舍／需要人看方案再定） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
+ | 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
+ | 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
+ 
+@@ -26,7 +26,7 @@ start 之后：按提示填 design.md 四节 AGENT 槽（做法/接口契约/边
+ - 跨会话交接：`sillyspec handoff --change <名>`（生成交接块，新会话零背景可续）
+ - 变更列表 / 状态：`sillyspec status`
+ - 自检修复：`sillyspec doctor`
+-- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
++- 知识库：`sillyspec knowledge search --query "<关键词>"`（入口注入不覆盖设计时点——方案/设计引入新机制词时主动检索，命中必读（尤其 status=rejected 的防复潮条目）；方案步 --done 门也会自动检索回显命中）
+ 
+ ## 核心规则
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+diff --git a/test/design-knowledge-check.test.mjs b/test/design-knowledge-check.test.mjs
+new file mode 100644
+index 00000000..c1fe0f3b
+--- /dev/null
++++ b/test/design-knowledge-check.test.mjs
+@@ -0,0 +1,148 @@
++/**
++ * design-knowledge-check.test.mjs — 方案步 --done 门知识检索命中回显＋config-schema 逃生阀
++ * （2026-09-28-unclear-req-to-brainstorm task-04 / FR-03 / D-004）
++ *
++ * 覆盖验收面：
++ *   ① 命中场景：brainstorm「提出 2-3 种方案」步 --done，--output/decisions.md 条目命中库内
++ *      INDEX/decisions 路由 → warn 回显命中摘要（rejected 优先＋否决理由）＋evidence 回应提示，
++ *      不阻断完成（exit 无）；
++ *   ② 无命中 → 输出与现状一致（零 knowledge-gate 行）；
++ *   ③ commands.knowledge-gate: false → 静默（开关逃生阀）；
++ *   ④ 顺带断言 task-02 指引文案在场（Step4/Step5 渲染文本含 knowledge search --query 固定动作）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { ProgressManager } from '../src/progress.js'
++import { completeStep } from '../src/run/complete.js'
++import { makeRepo, initChange, seedStage, runCapturing, cleanup } from './_complete-step-harness.mjs'
++import { getStageSteps } from '../src/run/shared.js'
++
++const CN = '2026-09-01-dkc-hits'
++
++/** Windows 静默清理（sqlite 句柄未释放时 rmSync EPERM——tmpdir 残留由 OS 清理，不判失败）。 */
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* EPERM 残留可接受 */ }
++}
++
++/** 造知识库：INDEX 枚举路由行 → decisions/unmapped.md 一条 rejected 决策 + 一条普通知识条目。 */
++function seedKnowledge(specBase) {
++  const k = join(specBase, 'knowledge')
++  mkdirSync(join(k, 'decisions'), { recursive: true })
++  writeFileSync(join(k, 'INDEX.md'), [
++    '# 知识索引',
++    '',
++    '## Patterns',
++    '- 枚举|词表 → [枚举开放世界是错误方向](decisions/unmapped.md#枚举开放世界)',
++    '- 互不相关词 → [无关条目](plain-entry.md)',
++    '',
++  ].join('\n'))
++  writeFileSync(join(k, 'decisions', 'unmapped.md'), [
++    '# unmapped 域决策',
++    '',
++    '## D-001@v1 枚举开放世界是错误方向',
++    '状态： rejected',
++    '否决理由：不要用枚举定义这个开放世界——机器只锚封闭面',
++    '',
++  ].join('\n'))
++  writeFileSync(join(k, 'plain-entry.md'), '# 无关条目\n内容\n')
++}
++
++/** 种入 brainstorm 进度：前三步完成，「提出 2-3 种方案」为当前步（全 8 步 seed——def↔DB 步数守卫要求一致）。 */
++async function seedPlanStep(cwd, specBase) {
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.init(cwd)
++  await pm.initChange(cwd, CN)
++  const all = ['进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案', '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件']
++  const progress = await seedStage(pm, cwd, CN, 'brainstorm',
++    all.map((name, i) => i < 3
++      ? { name, status: 'completed', completedAt: '2026/09/28 10:00:00' }
++      : { name, status: 'pending' }))
++  return { pm, progress }
++}
++
++test('① 命中场景：--output 含机制词 → warn 回显 rejected 条目＋evidence 提示，不阻断', async () => {
++  const { cwd, specBase } = makeRepo('dkc-hit-')
++  seedKnowledge(specBase)
++  const { pm, progress } = await seedPlanStep(cwd, specBase)
++  const r = await runCapturing(() =>
++    completeStep(pm, progress, 'brainstorm', cwd, '方案 A：用枚举词表分类需求形态', null, {
++      changeName: CN, doneAnswer: '用户选方案A', printNext: false,
++    }))
++  assert.equal(r.exitCode, null, `不阻断（实际 exit=${r.exitCode}，输出：${r.stdout.slice(-400)}）`)
++  assert.match(r.stdout, /\[knowledge-gate\] 方案\/决策知识命中/, '命中回显标题行')
++  assert.match(r.stdout, /D-001@v1 枚举开放世界是错误方向/, '回显条目 id+标题')
++  assert.match(r.stdout, /status=rejected/, 'rejected 优先展示')
++  assert.match(r.stdout, /否决理由：不要用枚举定义这个开放世界/, '回显一句话理由')
++  assert.match(r.stdout, /evidence 回应或说明不复潮/, 'evidence 回应提示')
++  const after = await pm.read(cwd, CN)
++  assert.equal(after.stages.brainstorm.steps[3].status, 'completed', '步骤正常标完成（warn 不阻断）')
++  rmQuiet(cwd)
++})
++
++test('① decisions.md 新增条目（标题/question）也进查询串：仅条目命中同样回显', async () => {
++  const { cwd, specBase } = makeRepo('dkc-dec-')
++  seedKnowledge(specBase)
++  const { pm, progress } = await seedPlanStep(cwd, specBase)
++  writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
++    '# 决策记录（Decisions）',
++    '',
++    '## D-001@v1: 方案引入枚举词表机制',
++    '- type: architecture',
++    '- status: accepted',
++    '- question: 需求形态要不要用词表枚举判定？',
++    '',
++  ].join('\n'))
++  const r = await runCapturing(() =>
++    completeStep(pm, progress, 'brainstorm', cwd, '方案已给出', null, {
++      changeName: CN, doneAnswer: '用户选方案B', printNext: false,
++    }))
++  assert.equal(r.exitCode, null, '不阻断')
++  assert.match(r.stdout, /\[knowledge-gate\]/, '条目命中 → 回显（--output 本身无关键词）')
++  rmQuiet(cwd)
++})
++
++test('② 无命中 → 输出与现状一致（零 knowledge-gate 行）', async () => {
++  const { cwd, specBase } = makeRepo('dkc-miss-')
++  seedKnowledge(specBase)
++  const { pm, progress } = await seedPlanStep(cwd, specBase)
++  const r = await runCapturing(() =>
++    completeStep(pm, progress, 'brainstorm', cwd, '方案 A：复用现有模块加只读接口', null, {
++      changeName: CN, doneAnswer: '用户选方案A', printNext: false,
++    }))
++  assert.equal(r.exitCode, null)
++  assert.ok(!r.stdout.includes('knowledge-gate'), `无命中零回显（实际：${r.stdout.slice(-200)}）`)
++  rmQuiet(cwd)
++})
++
++test('③ commands.knowledge-gate: false → 静默（逃生阀）', async () => {
++  const { cwd, specBase } = makeRepo('dkc-off-')
++  seedKnowledge(specBase)
++  writeFileSync(join(specBase, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  knowledge-gate: false\n')
++  const { pm, progress } = await seedPlanStep(cwd, specBase)
++  const r = await runCapturing(() =>
++    completeStep(pm, progress, 'brainstorm', cwd, '方案 A：用枚举词表分类需求形态', null, {
++      changeName: CN, doneAnswer: '用户选方案A', printNext: false,
++    }))
++  assert.equal(r.exitCode, null)
++  assert.ok(!r.stdout.includes('knowledge-gate'), '开关关闭 → 命中也不回显')
++  rmQuiet(cwd)
++})
++
++test('④ task-02 指引文案在场：Step4/Step5 渲染文本含 knowledge search --query 固定动作句', async () => {
++  const { cwd } = makeRepo('dkc-guide-')
++  const defs = await getStageSteps('brainstorm', cwd, null)
++  const step4 = defs.find((s) => s.name === '提出 2-3 种方案')
++  const step5 = defs.find((s) => s.name === '分段展示设计')
++  assert.ok(step4 && step5, '两步定义在场')
++  for (const step of [step4, step5]) {
++    assert.match(step.prompt, /knowledge search --query/, `${step.name} 含检索用法`)
++    assert.match(step.prompt, /命中条目必读/, `${step.name} 含「命中必读」字样`)
++    assert.match(step.prompt, /rejected/, `${step.name} 点名 rejected 防复潮条目`)
++    assert.match(step.prompt, /举例非机制/, `${step.name} 例词以「举例」身份出现`)
++  }
++  rmQuiet(cwd)
++})
++
++process.on('exit', cleanup)
+diff --git a/test/flow-clarity-probe.test.mjs b/test/flow-clarity-probe.test.mjs
+new file mode 100644
+index 00000000..ee49d6b8
+--- /dev/null
++++ b/test/flow-clarity-probe.test.mjs
+@@ -0,0 +1,203 @@
++/**
++ * flow-clarity-probe.test.mjs — 前门盘问渲染＋hindsight 提示注入＋收口指标接线
++ * （2026-09-28-unclear-req-to-brainstorm task-03 / FR-01 FR-02 / D-001 D-005）
++ *
++ * 覆盖验收面：
++ *   ① 新建路径输出含「选道自检」固定段（盘问重述措辞＋brainstorm 指路，纯提示不阻断）；
++ *   ② adopt（头脑风暴收编）/resume（重入恢复）路径输出不含自检段（D-002 精神：无重复仪式）；
++ *   ③ 清晰度门 exit 2 文案逐字保留（src/flow.js 既有六行不动）；
++ *   ④ hindsight 闭环：有标记 → start 点名提示（自检段上方）；无标记 → 输出与现状一致
++ *      （确定性头区逐字节等值——纯增量渲染段）；start/adopt 落首版快照；flow done 后
++ *      超阈指标 → per-repo 标记落库，下次 start 可见（端到端 FR-02 回路）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { markHindsight } from '../src/route-hindsight.js'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const SPEC = '.sillyspec'
++
++/** 造临时 git 仓 + local.yaml（thin 模式）+ 基线提交（同 flow-protocol 造法，test 命令置空转）。 */
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'fcp-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, SPEC), { recursive: true })
++  writeFileSync(join(cwd, SPEC, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], {
++    cwd, encoding: 'utf8', timeout: 180_000,
++    env: { ...process.env, SILLYSPEC_WATCHER: '0' },
++  })
++}
++
++const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
++
++/** 槽位作答（同 flow-protocol fillDesignSlots）。 */
++function fillSlots(cwd, change) {
++  const base = join(cwd, SPEC, 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：前门测试夹具——一行作答即合规'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 前门测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：前门测试夹具——无独立测试面'))
++}
++
++/** 输出确定性头区：起点 →「【你要做的】」之前（前门/提示注入段均在此区，无时间戳类噪声）。 */
++function headRegion(stdout) {
++  const i = stdout.indexOf('【你要做的】')
++  return i === -1 ? stdout : stdout.slice(0, i)
++}
++
++test('① 新建路径输出含选道自检段＋落首版快照；无 hindsight 文件时零 hindsight 行（新装零影响）', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-fcp-front-door'
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK])
++  assert.equal(s.status, 0, `start 失败: ${s.stderr}`)
++  assert.match(s.stdout, /选道自检——对本需求，你还有没有必须问用户才能动手的问题？/, '盘问重述措辞在场')
++  assert.match(s.stdout, /run brainstorm --change/, '头脑风暴指路在场')
++  assert.ok(!/route-hindsight/.test(s.stdout), '无 hindsight 文件 → 零 hindsight 行（输出与现状一致）')
++  assert.ok(existsSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${change}.json`)), 'start 落首版快照')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ 有 hindsight 标记 → 自检段上方点名提示；无标记 → 头区逐字节一致（纯增量渲染段）', () => {
++  const { cwd } = makeRepo()
++  // 第一变更：无标记环境
++  const c1 = '2026-09-01-fcp-clean'
++  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', INPUT_OK])
++  assert.equal(s1.status, 0)
++  const cleanHead = headRegion(s1.stdout).replaceAll(c1, '<CHANGE>')
++  assert.ok(!cleanHead.includes('route-hindsight'))
++  // 落一个标记（模拟上个轻量变更被标记）
++  markHindsight({ cwd, specBase: join(cwd, SPEC), change: '2026-09-01-fcp-old', metrics: { designRewriteRatio: 0.8, tasksRewriteRatio: 0.2, blindDims: 0, testFailures: 0 } })
++  const c2 = '2026-09-01-fcp-marked'
++  const s2 = cli(cwd, ['flow', 'start', '--change', c2, '--input', INPUT_OK])
++  assert.equal(s2.status, 0)
++  assert.match(s2.stdout, /route-hindsight：上个轻量变更「2026-09-01-fcp-old」疑似该走头脑风暴预段未走/, '点名提示含上个变更名')
++  const markedHead = headRegion(s2.stdout).replaceAll(c2, '<CHANGE>')
++  // 提示是纯增量：剥掉 hint 行（含其后注入的空行）后与无标记头区逐字节一致
++  const stripped = markedHead.replace(/🕰️ route-hindsight：[^\n]*\n\n/, '')
++  assert.equal(stripped, cleanHead, 'hindsight 注入=纯增量渲染段，其余输出零变化')
++  const hintIdx = markedHead.indexOf('🕰️ route-hindsight')
++  const probeIdx = markedHead.indexOf('🔎 选道自检')
++  assert.ok(hintIdx !== -1 && probeIdx !== -1 && hintIdx < probeIdx, '提示在自检段上方')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② adopt 路径：头脑风暴产物收编输出不含自检段；收编时点落首版快照', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-fcp-adopt'
++  const cd = join(cwd, SPEC, 'changes', change)
++  mkdirSync(cd, { recursive: true })
++  writeFileSync(join(cd, 'proposal.md'), '---\nauthor: t\ncreated_at: 2026-09-01 00:00:00\n---\n# 提案\n成功标准：\n- 夹具\n')
++  writeFileSync(join(cd, 'design.md'), '# 设计（头脑风暴产物）\n方案：夹具\n')
++  const s = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(s.status, 0, `adopt 失败: ${s.stderr}`)
++  assert.match(s.stdout, /收编/, '收编路径在场')
++  assert.ok(!/选道自检/.test(s.stdout), 'adopt 输出不含自检段（无重复仪式）')
++  assert.ok(!/route-hindsight：上个/.test(s.stdout), 'adopt 不注入历史提示')
++  assert.ok(existsSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${change}.json`)), 'adopt 落首版快照')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② resume 路径：重入恢复简报不含自检段', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-fcp-resume'
++  const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK])
++  assert.equal(s1.status, 0)
++  assert.match(s1.stdout, /选道自检/, '首进含自检段')
++  const s2 = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK])
++  assert.equal(s2.status, 0)
++  assert.match(s2.stdout, /恢复简报/, '重入走恢复简报')
++  assert.ok(!/选道自检/.test(s2.stdout), 'resume 输出不含自检段')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ 清晰度门 exit 2 文案逐字保留（--input 缺失两选一）', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-01-fcp-gate'
++  const s = cli(cwd, ['flow', 'start', '--change', change])
++  assert.equal(s.status, 2, 'exit 2 保留')
++  const expected = [
++    `❓ 需求不够清晰（--input 缺失）——轻量跑道假定输入已含决策，两选一：`,
++    `   ① 头脑风暴预段（需求不明时推荐）：sillyspec run brainstorm --change ${change}`,
++    `      人机交互探索需求、出 design/决策/原型；完成后回来 sillyspec flow start --change ${change}，产物自动收编续跑轻量变更`,
++    `   ② 确认输入已含决策：sillyspec flow start --change ${change} --input "<完整需求>"，input 过门格式：`,
++    `      先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」`,
++  ]
++  for (const line of expected) assert.ok(s.stderr.includes(line), `清晰度门文案逐字保留: ${line}`)
++  assert.ok(!/选道自检/.test(s.stderr), '清晰度门拒绝面不渲染自检段（未建变更）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 start 点名提示（best-effort 接线不阻断收口）', () => {
++  const { cwd } = makeRepo()
++  const c1 = '2026-09-01-fcp-loop'
++  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', INPUT_OK, '--no-review'])
++  assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
++  // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
++  execFileSync('git', ['commit', '-q', '-m', 'work'], { cwd, stdio: 'pipe' })
++  const cd = join(cwd, SPEC, 'changes', c1)
++  const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
++  const base = readFileSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${c1}.json`), 'utf8')
++  assert.ok(JSON.parse(base).design.includes(designV1.split('\n')[0] || ''), '快照锚定起草时点（start 时点内容）')
++  // 终稿：全部正文行换血（frontmatter/标记行保留——指纹门走 amend-draft 留痕通道），槽位作答合规
++  const v1Lines = designV1.split('\n')
++  const finalLines = []
++  let fmClosed = false
++  for (let i = 0; i < v1Lines.length; i++) {
++    const l = v1Lines[i]
++    if (!fmClosed) {
++      finalLines.push(l)
++      if (l === '---' && i > 0) fmClosed = true
++      continue
++    }
++    if (/^<!--/.test(l)) {
++      finalLines.push(l)
++      if (/^<!--AGENT:槽\d/.test(l)) finalLines.push('不适用：回路夹具——一行作答即合规')
++      continue
++    }
++    if (l.trim() === '') { finalLines.push(l); continue }
++    finalLines.push(`【换血 ${i}】用户推翻重述：另一条路径、另一组文件、另一套验证面——事后闭环指标触发形态。`)
++  }
++  writeFileSync(join(cd, 'design.md'), finalLines.join('\n'))
++  // 整写机器段的唯一合法通道：amend-draft 留痕重锚（route_hint 厚档 warn 属预期 advisory）
++  const sa = cli(cwd, ['flow', 'amend-draft', '--change', c1])
++  assert.equal(sa.status, 0, `amend-draft 失败: ${sa.stdout}\n${sa.stderr}`)
++  const rp = join(cd, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 回路夹具行为\nGiven 轻量变更收口\nWhen 指标超阈\nThen 标记落库')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：回路夹具——无独立测试面'))
++  const s2 = cli(cwd, ['flow', 'done', '--change', c1])
++  assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
++  const markPath = join(cwd, SPEC, '.runtime', 'route-hindsight.json')
++  assert.ok(existsSync(markPath), '超阈 → 标记落库')
++  const mark = JSON.parse(readFileSync(markPath, 'utf8'))
++  assert.equal(mark.change, c1)
++  assert.ok(mark.metrics.designRewriteRatio > 0.5, `design 改写比超阈: ${mark.metrics.designRewriteRatio}`)
++  assert.ok((mark.reasons || []).some((r) => r.includes('design')), `reasons 含 design 路: ${JSON.stringify(mark.reasons)}`)
++  assert.match(s2.stderr, /route-hindsight 标记/, 'done 输出含标记 warn（console.warn → stderr）')
++  // 下次 start（新变更）点名提示
++  const s3 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-fcp-loop-next', '--input', INPUT_OK])
++  assert.equal(s3.status, 0)
++  assert.match(s3.stdout, new RegExp(`route-hindsight：上个轻量变更「${c1}」疑似`), '下次 start 点名上个变更')
++  rmSync(cwd, { recursive: true, force: true })
++})
+diff --git a/test/route-hindsight.test.mjs b/test/route-hindsight.test.mjs
+new file mode 100644
+index 00000000..66422a68
+--- /dev/null
++++ b/test/route-hindsight.test.mjs
+@@ -0,0 +1,181 @@
++/**
++ * route-hindsight.test.mjs — 轻量道事后闭环指标（2026-09-28-unclear-req-to-brainstorm task-01 / FR-02）
++ *
++ * 覆盖验收面：
++ *   ① 指标计算正反例：首版快照→终稿行级 diff 比例（正例）；agent 只填槽/轻微编辑的
++ *      真实形态回放 FP=0（反例）；无快照=零信号；CRLF/LF 归一不虚增比例；
++ *   ② 阈值边界：designRewriteRatio >0.5（等于不过）/ tasksRewriteRatio >0.6 /
++ *      blindDims ≥2 / testFailures ≥2 四路常量边界；
++ *   ③ 落库幂等：超阈整文件覆盖（per-repo 单条），无超阈不落库（marked:false）；
++ *   ④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 含变更名与形态计数的「疑似」提示。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import {
++  computeHindsightMetrics, markHindsight, readHindsightHint, snapshotBaseline, HINDSIGHT_THRESHOLDS,
++} from '../src/route-hindsight.js'
++
++const CHANGE = '2026-09-28-c-x'
++
++/** root 即 specBase 角色（.runtime/ 与 changes/ 的父目录——与 flow.js 真实布局同构）。 */
++function makeRepo() {
++  const root = mkdtempSync(join(tmpdir(), 'rh-'))
++  const changeDir = join(root, 'changes', CHANGE)
++  mkdirSync(changeDir, { recursive: true })
++  return { root, changeDir, runtime: join(root, '.runtime') }
++}
++
++function writeBaseline(root, { design = null, tasks = null } = {}) {
++  mkdirSync(join(root, '.runtime'), { recursive: true })
++  writeFileSync(join(root, '.runtime', `route-hindsight-baseline-${CHANGE}.json`), JSON.stringify({
++    schemaVersion: 1, change: CHANGE, capturedAt: '2026-09-28T00:00:00.000Z', design, tasks,
++  }))
++}
++
++function writeRun(root, dir, fields) {
++  const d = join(root, '.runtime', 'verify-runs', dir)
++  mkdirSync(d, { recursive: true })
++  writeFileSync(join(d, 'test-result.json'), JSON.stringify({ command: 'npm test', exit_code: 1, ...fields }))
++}
++
++const REVIEW_OK = { dimensionNotes: { 乱序: 'ok', 并发: 'ok', 切换: 'n/a', 作用域: 'n/a' } }
++const REVIEW_2FINDING = { dimensionNotes: { 乱序: 'finding', 并发: 'finding', 切换: 'ok', 作用域: 'n/a' } }
++
++test('① 快照：首写捕获＋首写者胜（幂等，R-04）', () => {
++  const { root, changeDir } = makeRepo()
++  writeFileSync(join(changeDir, 'design.md'), '# 设计\nv1\n')
++  writeFileSync(join(changeDir, 'tasks.md'), '# 任务\nv1\n')
++  const r1 = snapshotBaseline({ specBase: root, change: CHANGE, changeDir })
++  assert.equal(r1.captured, true, `首次捕获: ${JSON.stringify(r1)}`)
++  const r2 = snapshotBaseline({ specBase: root, change: CHANGE, changeDir })
++  assert.equal(r2.captured, false, '二次调用不覆盖（首写者胜）')
++  const j = JSON.parse(readFileSync(join(root, '.runtime', `route-hindsight-baseline-${CHANGE}.json`), 'utf8'))
++  assert.equal(j.design, '# 设计\nv1\n')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('① 指标计算正例：四元组各就各位', () => {
++  const { root, changeDir } = makeRepo()
++  // design：4 行改 3 行 → LCS=1 → (4-1)/4 = 0.75
++  writeBaseline(root, { design: 'a\nb\nc\nd', tasks: 't1\nt2\nt3\nt4\nt5' })
++  writeFileSync(join(changeDir, 'design.md'), 'a\nx\ny\nz')
++  writeFileSync(join(changeDir, 'tasks.md'), 't1\nt2\nT3\nt4\nt5') // 5 行改 1 行 → 0.2
++  writeRun(root, '20260928T000001', { change: CHANGE, status: 'failed' })
++  writeRun(root, '20260928T000002', { change: CHANGE, status: 'failed' })
++  writeRun(root, '20260928T000003', { change: CHANGE, status: 'passed' }) // 通过不计
++  writeRun(root, '20260928T000004', { change: '别的变更', status: 'failed' }) // 他变更不计
++  const m = computeHindsightMetrics({ changeDir, reviewJson: REVIEW_2FINDING, flowState: { tier: 'thin' } })
++  assert.equal(m.designRewriteRatio, 0.75)
++  assert.equal(m.tasksRewriteRatio, 0.2)
++  assert.equal(m.blindDims, 2)
++  assert.equal(m.testFailures, 2)
++  assert.equal(m.raw.baselinePresent, true)
++  assert.equal(m.raw.flowTier, 'thin')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('① 反例（真实形态回放 FP=0）：agent 只填 AGENT 槽（纯增行）＋评审全 ok＋零实测失败 → 不标记', () => {
++  const { root, changeDir } = makeRepo()
++  const designV1 = [
++    '# 设计记录',
++    '<!--AGENT:槽1 做法 -->',
++    '<!--AGENT:槽2 接口契约 -->',
++    '<!--AGENT:槽3 盲维四问作答 -->',
++    '<!--AGENT:槽4 风险 -->',
++  ].join('\n')
++  // 终稿＝首版逐字保留＋槽下追加作答行（computeEditRatio 口径：纯增行不改写原文不计入）
++  const designFinal = designV1 + '\n复用既有模块，无新接口。\n不适用：单仓单进程\n不适用：无并发面\n风险低'
++  const tasksV1 = '- [ ] task-01: 初始草稿'
++  writeBaseline(root, { design: designV1, tasks: tasksV1 })
++  writeFileSync(join(changeDir, 'design.md'), designFinal)
++  writeFileSync(join(changeDir, 'tasks.md'), tasksV1 + '\n- [x] task-01: 已完成')
++  writeRun(root, '20260928T000009', { change: CHANGE, status: 'passed' })
++  const m = computeHindsightMetrics({ changeDir, reviewJson: REVIEW_OK, flowState: { tier: 'thin' } })
++  assert.equal(m.designRewriteRatio, 0)
++  assert.equal(m.tasksRewriteRatio, 0)
++  assert.equal(m.blindDims, 0)
++  assert.equal(m.testFailures, 0)
++  const mk = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics: m })
++  assert.equal(mk.marked, false)
++  assert.equal(existsSync(join(root, '.runtime', 'route-hindsight.json')), false, '无超阈不落库')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('① 无快照（旧变更/起草失败）→ 比例零信号，不误标', () => {
++  const { root, changeDir } = makeRepo()
++  writeFileSync(join(changeDir, 'design.md'), 'x\n')
++  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
++  assert.equal(m.designRewriteRatio, 0)
++  assert.equal(m.tasksRewriteRatio, 0)
++  assert.equal(m.blindDims, 0)
++  assert.equal(m.raw.baselinePresent, false)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('① CRLF 归一：首版 LF、终稿 CRLF，内容相同 → 比例 0（跨平台不虚增）', () => {
++  const { root, changeDir } = makeRepo()
++  writeBaseline(root, { design: 'l1\nl2\nl3' })
++  writeFileSync(join(changeDir, 'design.md'), 'l1\r\nl2\r\nl3')
++  const m = computeHindsightMetrics({ changeDir, reviewJson: null, flowState: null })
++  assert.equal(m.designRewriteRatio, 0)
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('② 阈值边界：等于不过（> 口径）／超过即过——四路常量', () => {
++  assert.equal(HINDSIGHT_THRESHOLDS.designRewriteRatio, 0.5)
++  assert.equal(HINDSIGHT_THRESHOLDS.tasksRewriteRatio, 0.6)
++  assert.equal(HINDSIGHT_THRESHOLDS.blindDims, 2)
++  assert.equal(HINDSIGHT_THRESHOLDS.testFailures, 2)
++  const mk = (root, metrics) => markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics })
++  const cases = [
++    [{ designRewriteRatio: 0.5 }, false], [{ designRewriteRatio: 0.51 }, true],
++    [{ tasksRewriteRatio: 0.6 }, false], [{ tasksRewriteRatio: 0.61 }, true],
++    [{ blindDims: 1 }, false], [{ blindDims: 2 }, true],
++    [{ testFailures: 1 }, false], [{ testFailures: 2 }, true],
++  ]
++  for (const [metrics, expect] of cases) {
++    const root = mkdtempSync(join(tmpdir(), 'rh-b-'))
++    const r = mk(root, metrics)
++    assert.equal(r.marked, expect, `边界 ${JSON.stringify(metrics)} 应 ${expect ? '标记' : '不标记'}`)
++    assert.equal(existsSync(join(root, '.runtime', 'route-hindsight.json')), expect)
++    rmSync(root, { recursive: true, force: true })
++  }
++})
++
++test('③ 落库幂等：重复 mark 同内容整文件覆盖，字段齐全（per-repo 单条）', () => {
++  const root = mkdtempSync(join(tmpdir(), 'rh-m-'))
++  const metrics = { designRewriteRatio: 0.8, tasksRewriteRatio: 0.1, blindDims: 0, testFailures: 0, raw: {} }
++  const r1 = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics })
++  assert.equal(r1.marked, true)
++  const p = join(root, '.runtime', 'route-hindsight.json')
++  const j1 = JSON.parse(readFileSync(p, 'utf8'))
++  assert.equal(j1.change, CHANGE)
++  assert.ok(j1.marked_at)
++  assert.deepEqual(j1.metrics, { designRewriteRatio: 0.8, tasksRewriteRatio: 0.1, blindDims: 0, testFailures: 0 })
++  assert.ok(Array.isArray(j1.reasons) && j1.reasons.length === 1 && j1.reasons[0].includes('design'), `reasons: ${JSON.stringify(j1.reasons)}`)
++  const r2 = markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics })
++  assert.equal(r2.marked, true)
++  const j2 = JSON.parse(readFileSync(p, 'utf8'))
++  assert.equal(j2.change, CHANGE, '整文件覆盖仍单条')
++  rmSync(root, { recursive: true, force: true })
++})
++
++test('④ readHindsightHint：无文件/损坏 JSON → null；有标记 → 疑似提示含变更名与计数', () => {
++  const root = mkdtempSync(join(tmpdir(), 'rh-h-'))
++  assert.equal(readHindsightHint({ specBase: root }), null, '无文件 → null')
++  mkdirSync(join(root, '.runtime'), { recursive: true })
++  writeFileSync(join(root, '.runtime', 'route-hindsight.json'), '{not json')
++  assert.equal(readHindsightHint({ specBase: root }), null, '损坏 JSON → null')
++  markHindsight({ cwd: root, specBase: root, change: CHANGE, metrics: { designRewriteRatio: 0.9, tasksRewriteRatio: 0.2, blindDims: 3, testFailures: 2 } })
++  const hint = readHindsightHint({ specBase: root })
++  assert.ok(typeof hint === 'string' && hint.length > 0, '有标记 → 文案')
++  assert.ok(hint.includes(CHANGE), `含变更名: ${hint}`)
++  assert.ok(hint.includes('疑似'), '措辞「疑似」非定罪')
++  assert.ok(hint.includes('90%'), `含 design 比例: ${hint}`)
++  assert.ok(hint.includes('盲维') && hint.includes('3'), `含盲维计数: ${hint}`)
++  assert.ok(hint.includes('2'), `含实测失败计数: ${hint}`)
++  rmSync(root, { recursive: true, force: true })
++})

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 2,
+  "change": "2026-09-28-unclear-req-to-brainstorm",
+  "generatedAt": "2026-09-28T11:30:14.320Z",
+  "probes": {
+    "probe1": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "matches": 0,
+        "skippedFiles": 0,
+        "worktreeHits": 0,
+        "globEntries": 0
+      }
+    },
+    "probe3": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "tasks": 5,
+        "hasTest": 3
+      }
+    },
+    "probe5": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "backendEndpoints": 3,
+        "frontendCalls": 0
+      }
+    },
+    "probe6": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "deletions": 0,
+        "unavailable": false
+      }
+    },
+    "probe8": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "mispairs": 0,
+        "feOnly": 0,
+        "missingNotNull": 0,
+        "contractCount": 0,
+        "contractOrphans": 0,
+        "missingRequired": 0,
+        "feKeys": 0,
+        "backendFields": 0
+      }
+    },
+    "probe9": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "javaFileCount": 0,
+        "groupCount": 0,
+        "inconsistentGroups": 0
+      }
+    },
+    "probe10": {
+      "command": "sillyspec verify-probes --change 2026-09-28-unclear-req-to-brainstorm",
+      "metrics": {
+        "checkedFiles": 6,
+        "unclearedFiles": 0
+      }
+    }
+  },
+  "conclusion": "PASS WITH NOTES",
+  "tests": {
+    "command": "module[]+deps(js18)+fr(17)",
+    "exitCode": 0,
+    "strategy": "dynamic-subset",
+    "failedRemaining": [],
+    "passedAt": "2026-09-28T11:33:35.279Z"
+  },
+  "factsConsistency": {
+    "checked": [
+      "probe1",
+      "probe3",
+      "probe5",
+      "probe6",
+      "probe8",
+      "probe9"
+    ],
+    "verdict": "match",
+    "detail": null
+  },
+  "handover": {
+    "count": 2,
+    "items": [
+      {
+        "type": "other",
+        "item": "lint 存量债：src/verify-postcheck.js export `stripNestedTestEnv` 未引用（22e-b 死码门）——并行变更 43e75370 面，文件不在本变更 cb6fc0a0 diff 内",
+        "condition": "由该并行变更收口时清偿（补引用或删导出）；清偿后 `npm run lint` 退出码 0 即闭环，本变更无需复跑",
+        "severity": "advisory"
+      },
+      {
+        "type": "other",
+        "item": "仓根 AGENTS.md 仍为 v3.30.0 完整态——init 四态幂等 4b 分支设计行为（完整态不覆盖、仅 stderr 提示保留用户改动，src/init.js:216-219），非缺陷",
+        "condition": "如需新模板：备份后删除 AGENTS.md 再跑 `sillyspec init`（temp dir 已实测 v3.31.0 生成新选道表传播面）",
+        "severity": "advisory"
+      }
+    ]
+  },
+  "dbScriptDeclarations": [],
+  "runtimeEndpointExcluded": false,
+  "integrationRan": "ran",
+  "matrixPartialRows": 0,
+  "apiFace": {
+    "endpoints": [],
+    "declared": 0,
+    "writeEndpoints": []
+  },
+  "consumerHints": {
+    "script": [
+      "test/route-hindsight.test.mjs",
+      "test/flow-clarity-probe.test.mjs",
+      "test/design-knowledge-check.test.mjs"
+    ]
+  },
+  "smokeRan": "not-configured"
+}

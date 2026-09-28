@@ -1,0 +1,100 @@
+{
+  "mode": "full-flow",
+  "ok": true,
+  "degradedReason": null,
+  "baseAnchor": "5e564b73c4c4eaecec2998f35d504c3429936543",
+  "totals": {
+    "files": 10,
+    "additions": 882,
+    "deletions": 9
+  },
+  "rows": [
+    {
+      "path": "package.json",
+      "additions": 1,
+      "deletions": 1,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/config-schema.js",
+      "additions": 2,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/flow.js",
+      "additions": 49,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/route-hindsight.js",
+      "additions": 240,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/run/complete.js",
+      "additions": 48,
+      "deletions": 0,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "additions": 7,
+      "deletions": 5,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "templates/agents-instruction.md",
+      "additions": 3,
+      "deletions": 3,
+      "kind": "modified",
+      "planned": "修改",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/design-knowledge-check.test.mjs",
+      "additions": 148,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/flow-clarity-probe.test.mjs",
+      "additions": 203,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    },
+    {
+      "path": "test/route-hindsight.test.mjs",
+      "additions": 181,
+      "deletions": 0,
+      "kind": "new",
+      "planned": "新增",
+      "verdict": "planned"
+    }
+  ],
+  "excluded": {
+    "foreignDeclared": []
+  },
+  "note": "execute --done 时点冻结（本文件落盘时采集）",
+  "patchSha256": "0e7fefed259fdf4867e47e44a4919353741779cc7c91c34d86fa413421ab1216",
+  "patchStatus": "ok",
+  "savedAt": "2026-09-28T11:14:53.573Z"
+}

@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-unclear-req-to-brainstorm",
+  "rows": [
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-01:acc-0-ef81dbf6",
+      "tests": [
+        "test/route-hindsight.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-01:acc-1-2bbfe66c",
+      "tests": [
+        "test/route-hindsight.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-01:acc-2-6fcea681",
+      "tests": [
+        "test/route-hindsight.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-01:acc-3-95eecc1a",
+      "tests": [
+        "test/route-hindsight.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-03:acc-0-918e58c9",
+      "tests": [
+        "test/flow-clarity-probe.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-03:acc-1-6150fd62",
+      "tests": [
+        "test/flow-clarity-probe.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-03:acc-2-6b130814",
+      "tests": [
+        "test/flow-clarity-probe.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-03:acc-3-361c974e",
+      "tests": [
+        "test/flow-clarity-probe.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-04:acc-0-8d801f40",
+      "tests": [
+        "test/design-knowledge-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-04:acc-1-5b114c1f",
+      "tests": [
+        "test/design-knowledge-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-04:acc-2-e8350fb5",
+      "tests": [
+        "test/design-knowledge-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-unclear-req-to-brainstorm:task-04:acc-3-967e266f",
+      "tests": [
+        "test/design-knowledge-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-unclear-req-to-brainstorm"
+    }
+  ]
+}

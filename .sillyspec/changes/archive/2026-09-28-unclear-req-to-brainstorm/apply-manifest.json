@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-unclear-req-to-brainstorm",
+  "appliedAt": "2026-09-28T11:13:25.165Z",
+  "baseHash": "8f3f7cb1b83f66a5a07a4d0dcf318096b05a136b",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "a0b34b244e1a9e0cadbf802c5d979077bec2b2d2c01a03a18f4207b5217585ab"
+    },
+    {
+      "path": "src/config-schema.js",
+      "sha256": "e95325b5297cfc4e2849b706c1ee4868f477cc5d58bb7f4f41c7ba8ded42d87a"
+    },
+    {
+      "path": "src/flow.js",
+      "sha256": "727be28489333f0267f7fbe5f07b9b3d13fb652db52fab8920f5f08a7f6128b2"
+    },
+    {
+      "path": "src/route-hindsight.js",
+      "sha256": "6ac0f93af1ae7481c77c5ff72279589681ada11c4f893ef52d15f7c3d20ad435"
+    },
+    {
+      "path": "src/run/complete.js",
+      "sha256": "ee631cd9489a4d01742bb66a624763c684b2610f93ca3aefbafdb053e24c04d8"
+    },
+    {
+      "path": "src/stages/brainstorm.js",
+      "sha256": "bcccbd68441defa1c9160f91fd33fca2f8b4bbcebdc24d6206da46fdbafa05c8"
+    },
+    {
+      "path": "templates/agents-instruction.md",
+      "sha256": "9e078657a8c6c95ba8456045e831f8a18f1c4a90c42b1745351fd351f31c36ee"
+    },
+    {
+      "path": "test/design-knowledge-check.test.mjs",
+      "sha256": "c7805bf67d0e5d6aac6153929d160eb366e21fdd518e14a3e789d452b0e8f3e7"
+    },
+    {
+      "path": "test/flow-clarity-probe.test.mjs",
+      "sha256": "f7337e0d7b42d13a079ef8286c86272330eef94a02e45637b046e5632cde85ef"
+    },
+    {
+      "path": "test/route-hindsight.test.mjs",
+      "sha256": "32709d37a049c6cfad2d5886312e038f9fac89a64f995b28c78520188494a851"
+    }
+  ]
+}
