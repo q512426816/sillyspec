@@ -28,7 +28,7 @@ function seedKb(root) {
   mkdirSync(join(root, 'decisions'), { recursive: true })
   writeFileSync(join(root, 'INDEX.md'), [
     '# 知识索引', '', '## Decisions',
-    '- 枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
+    '- unmapped|枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
   ].join('\n'))
   writeFileSync(join(root, 'decisions', 'unmapped.md'), [
     '# unmapped 域决策', '',
@@ -75,4 +75,13 @@ test('④ 真实库钉子：穷举/关键词表查询 → D-001@v1 枚举开放�
     const idx = km.decisionHits.findIndex((h) => /枚举.*开放世界|开放世界.*枚举/.test(h.title || ''))
     assert.ok(idx >= 0 && idx < 5, `「${q}」应让枚举开放世界进前 5（实际 ${idx >= 0 ? `第 ${idx + 1} 位` : '未命中'}）`)
   }
+})
+
+test('⑤ 评分剥数字标点：ASCII 变更名（unmapped-drill 形态）下数字 bigram 噪音归零、死路先验置顶', () => {
+  const kb = mkdtempSync(join(tmpdir(), 'ss-dn-'))
+  seedKb(kb)
+  const km = matchKnowledge(kb, '2026-09-28-unmapped-drill')
+  assert.ok(km.decisionHits.length >= 3, '路由 tag unmapped 命中')
+  assert.match(km.decisionHits[0].title || '', /枚举开放世界/, `死路先验置顶（实际首位：${JSON.stringify(km.decisionHits[0].title)}）`)
+  rmQuiet(kb)
 })
