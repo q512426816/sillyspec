@@ -338,7 +338,7 @@ export function matchKnowledge(indexDir, taskContext) {
   const decisionHits = [
     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
-  ]
+  ].map((h) => ({ ...h, score: relScore(h) }))
 
   return { matched: true, entries: matched, report, json, decisionHits }
 }

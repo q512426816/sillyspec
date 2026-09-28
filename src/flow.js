@@ -186,9 +186,10 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     }
     const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
     const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
-    // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking：教训型条目 status 多为
-    // implemented，按状态过滤恰丢最该防的——D-001@v1 枚举开放世界第四次复潮实证）
-    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected' || h.deathPath)
+    // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
+    // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
+    // 蹭进回显是行为实测三例的噪音源，不再注入）
+    const rejected = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
     summary.rejectedDecisions = rejected.length
     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
     if (rejected.length > 0) {

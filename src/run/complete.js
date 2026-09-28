@@ -468,8 +468,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       } catch { /* 无 local.yaml = 缺省开 */ }
       if (_kgOn) {
         let _kgQuery = String(outputText || '')
+        let _dm = ''
         try {
-          const _dm = readFileSync(join(specBase, 'changes', changeName, 'decisions.md'), 'utf8')
+          _dm = readFileSync(join(specBase, 'changes', changeName, 'decisions.md'), 'utf8')
           const _parts = []
           for (const m of _dm.matchAll(/^##\s+(D-\d+@v\d+):\s*(.+)$/gm)) _parts.push(`${m[1]} ${m[2]}`)
           for (const m of _dm.matchAll(/^- question:\s*(.+)$/gm)) _parts.push(m[1])
@@ -479,12 +480,23 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         if (_kgQuery.trim()) {
           const { matchKnowledge } = await import('../knowledge-match.js')
           const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
-          const _hits = km.decisionHits || []
+          // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
+          // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
+          const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+          // 已回应不重弹：decisions.md 正文已含「命中 id＋域文件名」共现（小白鼠回应形态
+          // 「unmapped.md D-001@v1」）→ 视为已甄别过，静默；同轮查询串仍含其词面属预期。
+          const _answered = _dm
+            ? (h) => {
+                const _dom = String(h.file || '').replace(/^decisions\//, '').replace(/\.md$/, '')
+                return _dm.includes(h.id) && _dm.includes(_dom)
+              }
+            : () => false
+          const _echoHits = _hits.filter((h) => !_answered(h))
           const _entries = km.matched ? (km.entries || []) : []
-          if (_hits.length > 0 || _entries.length > 0) {
+          if (_echoHits.length > 0 || _entries.length > 0) {
             const { deathPathNote } = await import('../knowledge-match.js')
             console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
-            for (const h of _hits.slice(0, 5)) {
+            for (const h of _echoHits.slice(0, 5)) {
               const _note = h.status === 'rejected'
                 ? ` 否决理由：${h.reason || '（未记录）'}`
                 : h.deathPath ? ` ⚰️死路注记：${deathPathNote(h.reason)}` : ''

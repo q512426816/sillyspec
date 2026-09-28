@@ -1296,9 +1296,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
       // 语料；与 execute 分支的 changeName 基底同口径）
       const decResult = matchKnowledge(decKnowledgeDir, changeName || '')
-      // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking 审查 P2 补齐：
-      // 与 flow.js 注入段/knowledge-gate 同构——教训型条目 status=implemented 不再被状态压制）
-      const rejectedHits = (decResult.decisionHits || []).filter(h => h.status === 'rejected' || h.deathPath)
+      // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（与 flow 注入段/knowledge-gate 同口径；
+      // score 零 rejected 不弹——2026-09-28-knowledge-gate-denoise）
+      const rejectedHits = (decResult.decisionHits || []).filter(h => h.deathPath || (h.status === 'rejected' && h.score > 0))
       let decInjected = ''
       if (rejectedHits.length > 0) {
         const lines = [
