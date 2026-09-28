@@ -1,0 +1,23 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+baseline_commit: 1498633129c36dcd9a0b4f4b9daa6cb95eebb742
+updatedAt: '2026-09-28T06:04:23.387Z'
+edit_ratio: 0
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(18)（31.2s）
+  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-LxeM6Y\.sillyspec\.runtime\verify-runs\20260928055729\test-result.json｜lint:
+  passed ← npm run lint（37.1s）｜门文件 8 个
+

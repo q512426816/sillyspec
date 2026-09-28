@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-guidance-principles",
+  "rows": [
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-guidance-principles:flow:FR-03",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-guidance-principles"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-guidance-principles:flow:FR-04",
+      "tests": [
+        "test/prompt-placeholders.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-guidance-principles"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-guidance-principles:flow:FR-05",
+      "tests": [
+        "test/guidance-output-neutrality.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-guidance-principles"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-28-guidance-principles:flow:FR-06",
+      "tests": [
+        "test/ui-visual-guidance.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-guidance-principles"
+    }
+  ]
+}

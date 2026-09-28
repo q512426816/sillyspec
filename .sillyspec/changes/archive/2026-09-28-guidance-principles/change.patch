@@ -1,0 +1,350 @@
+diff --git a/.sillyspec/changes/2026-09-28-guidance-principles/design.md b/.sillyspec/changes/2026-09-28-guidance-principles/design.md
+new file mode 100644
+index 00000000..9fcbfd67
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-guidance-principles/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T05:35:51.109Z
++---
++# 设计记录（Design Record）— 2026-09-28-guidance-principles
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三件落地加两条入档：① buildUiGuidanceLines 改写四条原则版（真码定稿、就近发现管线、手绘仅粗选、降级留痕——零生态词零命令零配置）；② brainstorm 方案对比步 prompt 增 {UI_VISUAL_GUIDANCE} 占位符，run/prompt.js 按变更目录 proposal+requirements+变更名做 detectUiTouch 检测命中注入同一须知（DECISION_HITS 同款 fail-soft，占位符入 VOLATILE 掩蔽清单防指纹漂移）；③ 引导输出断言测试（检查点是 agent 看到的输出而非源码文本——源码为探测示教注释引用生态词合法）；④⑤ 两条 FR（语言生态中立、门位原则）随本变更归档入知识索引。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++buildUiGuidanceLines 文案改写（导出面不变）；brainstorm.js 方案对比步 prompt 增占位符；run/prompt.js 增注入块与掩蔽项；test 新增 guidance-output-neutrality（3 用例）+ ui-visual-guidance 增 4 断言。无 CLI 命令签名与 local.yaml 键变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用（注入为 prompt 渲染时只读快照）。2. 并发写：共享文件提交前逐 hunk 人工核对。3. 切换：注入无状态（每次 prompt 渲染重算）；fail-soft 异常注入单行说明不留残留占位符。4. 作用域：检测语料仅本变更目录与变更名，跨变更零串台；文案零生态绑定（断言测试锁定）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：brainstorm 语料在 proposal 尚未生成的早期步骤可能只有变更名——变更名含 UI 词（如 apple-style 不含）则漏注入；对冲：方案对比步执行时 proposal 通常已落盘，且 flow start 注入兜底另一入口。放弃方案：①静态红线扫源码（用户指出误伤探测代码、示教 example 与历史注释，改为输出断言）；②local.yaml commands.prototype 配置位（用户指出多前端项目多生态仓不成立，仓自身 modules.*.test 退役史为证——改为就近发现原则文案）。
+diff --git a/.sillyspec/changes/2026-09-28-guidance-principles/proposal.md b/.sillyspec/changes/2026-09-28-guidance-principles/proposal.md
+new file mode 100644
+index 00000000..6621804c
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-guidance-principles/proposal.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T05:35:51.108Z
++---
++# 提案书（Proposal）— 2026-09-28-guidance-principles
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:56278878eda8a0d8bdb57f50891c29e69d78d3b83ac8e00666c11313e93cc430:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++任务原话转写：背景：2026-09-28 平台仓 frontend-apple-style 会话在头脑风暴阶段手绘单文件原型（遵循了 CLAUDE.md 旧指针），暴露三层缺口：①用户多次声明的「工具引导不限制语言框架」原则从未落知识库（昨日查证零记录）；②UI 执行须知只挂在 flow start，brainstorm 阶段（原型真正诞生地）无注入；③须知现文案只说「确认视觉基准」太虚，agent 不知道该就近发现本仓原型管线。用户同轮追加裁决：「门的位置应该跟错误的修复成本走，不是都堆在收口」也须入档。
++成功标准：
++- FR 落档两条并随归档入知识索引：工具引导产物语言生态中立（不绑定语言、框架、包管理器、构建工具；生态命令由仓与项目自描述，agent 就近发现）；门位原则（检查挂载时机与错误修复成本匹配：方向性错误开工引导、局部文本错误过程测试加收口兜底、累积性漂移三层都要）
++- UI 执行须知改写为四条原则版：定稿原型必须是可复跑真码产物、开工先就近发现本项目管线（多项目仓按触达路径就近）、手绘单文件仅限粗选、视觉降级须用户裁决留痕——零生态词零命令
++- brainstorm 阶段注入：方案对比步骤 prompt 增占位符，触达 UI 关键词时注入同一须知（fail-soft，指纹掩蔽防漂移）
++- 引导输出断言测试：跑全部引导构建函数断言输出不含生态命令词（pnpm、npm run、yarn、gradle、mvn、pip install 等形态）
++- 既有 ui-visual 测试同步断言新原则内容；过程与收口双时机可触发（动态测试推断自动绑定）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:aa9502aeb4db0abac38ad5fb198126e06c3babe96aacb7c34be52c7a8328271c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. FR 落档两条并随归档入知识索引：工具引导产物语言生态中立（不绑定语言、框架、包管理器、构建工具
++2. 生态命令由仓与项目自描述，agent 就近发现）
++3. 门位原则（检查挂载时机与错误修复成本匹配：方向性错误开工引导、局部文本错误过程测试加收口兜底、累积性漂移三层都要）
++4. UI 执行须知改写为四条原则版：定稿原型必须是可复跑真码产物、开工先就近发现本项目管线（多项目仓按触达路径就近）、手绘单文件仅限粗选、视觉降级须用户裁决留痕——零生态词零命令
++5. brainstorm 阶段注入：方案对比步骤 prompt 增占位符，触达 UI 关键词时注入同一须知（fail-soft，指纹掩蔽防漂移）
++6. 引导输出断言测试：跑全部引导构建函数断言输出不含生态命令词（pnpm、npm run、yarn、gradle、mvn、pip install 等形态）
++7. 既有 ui-visual 测试同步断言新原则内容
++8. 过程与收口双时机可触发（动态测试推断自动绑定）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:c0275ade62b1a1318229e73468355f6bfdded199ec997b8697c7082338df1dd5:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-guidance-principles 留痕重锚 -->
++1. FR 落档两条并随归档入知识索引：工具引导产物语言生态中立（不绑定语言、框架、包管理器、构建工具
++2. 生态命令由仓与项目自描述，agent 就近发现）
++3. 门位原则（检查挂载时机与错误修复成本匹配：方向性错误开工引导、局部文本错误过程测试加收口兜底、累积性漂移三层都要）
++4. UI 执行须知改写为四条原则版：定稿原型必须是可复跑真码产物、开工先就近发现本项目管线（多项目仓按触达路径就近）、手绘单文件仅限粗选、视觉降级须用户裁决留痕——零生态词零命令
++5. brainstorm 阶段注入：方案对比步骤 prompt 增占位符，触达 UI 关键词时注入同一须知（fail-soft，指纹掩蔽防漂移）
++6. 引导输出断言测试：跑全部引导构建函数断言输出不含生态命令词（pnpm、npm run、yarn、gradle、mvn、pip install 等形态）
++7. 既有 ui-visual 测试同步断言新原则内容
++8. 过程与收口双时机可触发（动态测试推断自动绑定）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-guidance-principles/requirements.md b/.sillyspec/changes/2026-09-28-guidance-principles/requirements.md
+new file mode 100644
+index 00000000..f9e70e8b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-guidance-principles/requirements.md
+@@ -0,0 +1,74 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T05:35:51.109Z
++---
++# 需求规格（Requirements）— 2026-09-28-guidance-principles
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 原则档案一——工具引导产物语言生态中立
++Given sillyspec 面向任意技术栈的多仓
++When 生成须知、探针文案、骨架、任务书等引导产物
++Then 不绑定语言、框架、包管理器、构建工具；生态命令由仓与项目自描述，agent 就近发现
++
++### FR-02: 原则档案二——门位原则
++Given 设计检查与门禁的挂载时机
++When 评估挂载位置
++Then 与错误修复成本匹配：方向性错误开工引导、局部文本错误过程测试加收口兜底、累积性漂移三层都要；不把所有检查堆在收口
++
++### FR-03: UI 执行须知改写为四条原则版
++Given UI 触达变更开工
++When 须知注入
++Then 四条原则在位：定稿原型必须是可复跑真码产物、开工先就近发现本项目管线（多项目仓按触达路径就近）、手绘单文件仅限一次性粗选、视觉降级须用户裁决留痕；零生态词零命令零配置
++
++### FR-04: brainstorm 阶段注入
++Given 头脑风暴方案对比步渲染 prompt
++When 变更目录语料命中 UI 触达检测
++Then 注入同一 UI 执行须知；无命中替换空串；异常 fail-soft 单行说明；占位符入指纹掩蔽清单
++
++### FR-05: 引导输出断言测试
++Given 引导构建函数输出
++When 跑断言测试
++Then 输出不含生态命令词形态（检查输出而非源码文本——源码为探测示教注释引用合法）
++
++### FR-06: 既有 ui-visual 测试同步
++Given 须知内容改写
++When 跑既有测试
++Then 新原则关键词断言在位（真码产物、就近发现、仅限一次性粗选、生态词零命中）
++
++### FR-07: 过程与收口双时机触发
++Given 引导文件被修改
++When 动态测试推断
++Then 断言测试自动入实测面（agent 写完即跑为过程拦、flow done 实测为收口拦）
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：原则档案本体（本条 FR 即档案，归档 distill 入索引即验收）
++不适用：原则档案本体（本条 FR 即档案，归档 distill 入索引即验收）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：原则档案本体（同上）
++不适用：原则档案本体（同上）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」（含真码产物、就近发现、仅限一次性粗选、生态词零命中断言）
++test/ui-visual-guidance.test.mjs「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」（含真码产物、就近发现、仅限一次性粗选、生态词零命中断言）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/prompt-placeholders.test.mjs 回归全绿（掩蔽清单变更零破坏）；注入块 fail-soft 与空串替换由 detectUiTouch 既有单测与 node --check 覆盖
++test/prompt-placeholders.test.mjs 回归全绿（掩蔽清单变更零破坏）+ 注入块 node --check；语料检测为 detectUiTouch 既有单测锁定
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/guidance-output-neutrality.test.mjs 全部 3 用例
++test/guidance-output-neutrality.test.mjs 全部 3 用例（node --test 实测 16/16 全绿）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/ui-visual-guidance.test.mjs 同 FR-03 用例（增 4 断言）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：机制属性（动态测试推断按 import 依赖自动绑定 test/guidance-output-neutrality.test.mjs——本变更收口实测即实证）
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：FR-01~07 已覆盖全部交付面（原机器摘录第 8 条为「双时机触发」语义并入 FR-07）
+diff --git a/.sillyspec/changes/2026-09-28-guidance-principles/tasks.md b/.sillyspec/changes/2026-09-28-guidance-principles/tasks.md
+new file mode 100644
+index 00000000..36d60179
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-guidance-principles/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T05:35:51.109Z
++---
++# 任务注册表（Tasks）— 2026-09-28-guidance-principles
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 两条 FR 落档（语言生态中立、门位原则）——本变更 requirements 即档案，归档随 distill 入知识索引 (FR-01 FR-02)
++- [x] task-02: buildUiGuidanceLines 四条原则版改写（真码定稿、就近发现管线、手绘仅粗选、降级留痕） (FR-03)
++- [x] task-03: brainstorm 注入——方案对比步占位符 + run/prompt.js 检测注入块 + VOLATILE 掩蔽 (FR-04)
++- [x] task-04: 引导输出断言测试（3 用例）+ ui-visual 既有测试增 4 断言；16/16 全绿含 prompt-placeholders 回归 (FR-05)
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index ef6834a1..59f103e6 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -33,7 +33,7 @@ import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-
+ // （漏登会令指纹误变——退化后果只是多一次全量重印，不产生错误指引；多登同理只多印）。
+ const VOLATILE_PLACEHOLDER_RES = [
+   /<now-datetime>/g, /<now-timestamp>/g, /<now-date>/g, /<now-iso-datetime>/g, /<git-head-short>/g, /<quicklog-id>/g,
+-  /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g,
++  /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g, /{UI_VISUAL_GUIDANCE}/g,
+   /{KNOWLEDGE_HIT_REPORT}/g, /{DOCS_DEBT}/g, /{MODULE_RESOLVE_TABLE}/g, /{REVIEW_MATERIALS}/g,
+   /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
+   /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
+@@ -1319,6 +1319,26 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+     }
+   }
+ 
++  // {UI_VISUAL_GUIDANCE} → UI 触达检测命中时注入「UI 变更执行须知」（2026-09-28-guidance-principles：
++  // 原型诞生地在头脑风暴的方案对比步——frontend-apple-style 会话实证手绘定稿原型因缺开工引导；
++  // 与 flow start 注入同源同文案，检测语料=变更目录 proposal 与 requirements + 变更名）。无命中
++  // 替换空串零输出；fail-soft 异常单行说明，不留残留占位符。
++  if (stageName === 'brainstorm' && promptText.includes('{UI_VISUAL_GUIDANCE}')) {
++    try {
++      const { detectUiTouch, buildUiGuidanceLines } = await import('../ui-visual.js')
++      const uiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
++      let corpus = changeName || ''
++      for (const name of ['proposal.md', 'requirements.md']) {
++        try {
++          corpus += '\n' + readFileSync(join(uiSpecBase, 'changes', changeName, name), 'utf8')
++        } catch { /* 缺席跳过 */ }
++      }
++      substitute(/\{UI_VISUAL_GUIDANCE\}/g, detectUiTouch(corpus) ? '\n' + buildUiGuidanceLines().join('\n') + '\n' : '')
++    } catch (e) {
++      substitute(/\{UI_VISUAL_GUIDANCE\}/g, `[ui-guidance] UI 须知注入异常（${e.message}），跳过`)
++    }
++  }
++
+   // Knowledge hit report: execute 阶段注入匹配结果
+   // 2026-09-14-knowledge-loop-close task-04（FR-04，X-004 升级既有机制）：命中清单报告 → 命中
+   // 正文注入——命中时占位符替换为「📚 命中知识」段（top-3 不同 file + 首 40 行截断，段头保留
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 0257b4a4..61c41c3a 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -203,7 +203,7 @@ export const definition = {
+       waitReason: '等待用户选择方案',
+       waitOptions: ['方案A', '方案B', '方案C'],
+       prompt: `基于需求理解和澄清结果，提出 2-3 种实现方案。
+-
++{UI_VISUAL_GUIDANCE}
+ ### 操作
+ 1. 每种方案列出：核心思路、优势、劣势
+ 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策
+diff --git a/src/ui-visual.js b/src/ui-visual.js
+index 6a34f307..73072784 100644
+--- a/src/ui-visual.js
++++ b/src/ui-visual.js
+@@ -47,12 +47,16 @@ export function detectUiTouchInPaths(paths) {
+ 
+ export function buildUiGuidanceLines() {
+   return [
+-    `🎨 UI 变更执行须知（本变更触及前端页面或 UI——检测命中即插入，advisory 引导非门禁）：`,
+-    `   1. 改前确认视觉基准：原型产物、黄金页或该页现有截图——没有基准的「改好看」无法验收；`,
+-    `   2. 边改边渲染对照：每完成一个页面任务单元就渲染实页与基准并排比对，差异清零再勾任务；`,
+-    `   3. 证据随手落盘：对照截图与结论逐页记入变更目录 ${UI_EVIDENCE_FILENAME}（干活时顺手写，收口只验在场）；`,
++    `🎨 UI 变更执行须知（本变更触及前端页面或 UI——advisory 引导非门禁）：`,
++    `   1. 定稿原型必须是可复跑的真码产物（与实现同方言、能被本项目工具链构建）——手绘单文件`,
++    `      仅限一次性粗选对比，不作为交付原型（2026-09-28 frontend-apple-style 实证：手绘定稿后每条意见都要反向翻译回真实代码）；`,
++    `   2. 开工先就近发现本项目原型管线：查本次变更触达项目自己的脚本、任务与工具链（多项目仓`,
++    `      按触达路径就近，不假设全仓共享一套）；已有则复用，没有则现场搭最小管线并把入口留在`,
++    `      项目惯例位置——下一个会话能自己发现；`,
++    `   3. 边改边渲染对照：每完成一个页面任务单元就渲染实页与基准并排比对，差异清零再勾任务；`,
++    `      对照截图与结论随手落变更目录 ${UI_EVIDENCE_FILENAME}（干活时顺手写，收口只验在场）；`,
+     `   4. 视觉降级须用户裁决留痕：执行中因约束对不齐基准而降级（结构收敛、范围缩小、样式统一级）`,
+-    `      必须带对比截图停下找用户签字，裁决记录写进 ${UI_EVIDENCE_FILENAME}（含「用户裁决」字样段）——`,
++    `      必须停下找用户签字，裁决记录写进 ${UI_EVIDENCE_FILENAME}（含「用户裁决」字样段）——`,
+     `      静默降级会在收口被「UI 视觉证据」探针硬拦（error 门）。`,
+   ]
+ }
+diff --git a/test/guidance-output-neutrality.test.mjs b/test/guidance-output-neutrality.test.mjs
+new file mode 100644
+index 00000000..8962a564
+--- /dev/null
++++ b/test/guidance-output-neutrality.test.mjs
+@@ -0,0 +1,47 @@
++/**
++ * 引导输出生态中立断言（2026-09-28-guidance-principles FR-04）。
++ *
++ * 检查点是「agent 最终看到的话」而非源码文本（源码内部为探测、示教、注释引用生态词合法）：
++ * 跑全部引导构建函数，断言输出不含生态命令词。动态测试推断将其与引导文件绑定——
++ * 过程（agent 写完即跑）与收口（flow done 实测）双时机触发。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++
++import { buildUiGuidanceLines, renderUiVisualProbeLines } from '../src/ui-visual.js'
++import { renderHunkAttributionLines } from '../src/hunk-attribution.js'
++
++const ECOSYSTEM_RE = /(pnpm|yarn|npx|npm\s+run|gradle|mvn|maven|pip\s+install|cargo\s+(build|run)|go\s+run|dotnet\s+build)\b/i
++
++test('UI 执行须知：零生态命令词 + 四条原则在位', () => {
++  const text = buildUiGuidanceLines().join('\n')
++  assert.equal(ECOSYSTEM_RE.test(text), false, `须知输出含生态命令词：${text.match(ECOSYSTEM_RE)?.[0]}`)
++  for (const key of ['真码产物', '就近发现', '仅限一次性粗选', '用户裁决', '边改边渲染对照']) {
++    assert.ok(text.includes(key), `须知缺原则关键词：${key}`)
++  }
++})
++
++test('探针 12 渲染输出：四形态全态零生态命令词', () => {
++  const samples = [
++    { applicable: false, notes: [] },
++    { applicable: true, level: 'warn', notes: ['缺证据'] },
++    { applicable: true, level: 'error', notes: ['降级无留痕'] },
++    { applicable: true, level: 'ok', evidencePresent: true, downgradeDeclared: true, notes: [] },
++  ]
++  for (const s of samples) {
++    const text = renderUiVisualProbeLines(s).join('\n')
++    assert.equal(ECOSYSTEM_RE.test(text), false)
++  }
++})
++
++test('hunk 归属门渲染输出：信号态零生态命令词', () => {
++  const samples = [
++    { gate: 'off', notes: [], degraded: false },
++    { gate: 'warn', faceCount: 2, unattributed: [{ file: 'a.js', hunks: 1 }], contended: [{ file: 'b.js', by: ['other'], hunks: 2 }], residue: [{ file: 'c.js' }], notes: [] },
++    { gate: 'warn', faceCount: 1, unattributed: [], contended: [], residue: [], notes: [] },
++  ]
++  for (const s of samples) {
++    const text = renderHunkAttributionLines(s).join('\n')
++    assert.equal(ECOSYSTEM_RE.test(text), false)
++  }
++})
+diff --git a/test/ui-visual-guidance.test.mjs b/test/ui-visual-guidance.test.mjs
+index a828b65f..1662a833 100644
+--- a/test/ui-visual-guidance.test.mjs
++++ b/test/ui-visual-guidance.test.mjs
+@@ -151,7 +151,12 @@ test('buildUiGuidanceLines：仓中立 + 证据约定与探针同源', () => {
+   assert.ok(text.includes(UI_EVIDENCE_FILENAME))
+   assert.ok(text.includes('用户裁决'))
+   assert.ok(text.includes('边改边渲染对照'))
++  // 2026-09-28-guidance-principles：四条原则版增断言（真码定稿、就近发现管线、手绘仅粗选）
++  assert.ok(text.includes('真码产物'))
++  assert.ok(text.includes('就近发现'))
++  assert.ok(text.includes('仅限一次性粗选'))
+   assert.ok(!/C:\\|IdeaProjects|multi-agent-platform/.test(text), '不得硬编码特定仓路径')
++  assert.ok(!/(pnpm|npm\s+run|yarn|gradle|mvn|pip\s+install)\b/i.test(text), '不得绑定生态命令')
+ })
+ 
+ /* ── 5. 段落渲染 ── */

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-guidance-principles",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "断言测试文件头注释 FR 编号误标（FR-04 应为 FR-05）",
+      "evidence": "test/guidance-output-neutrality.test.mjs 第 2 行注释写「2026-09-28-guidance-principles FR-04」，但 requirements.md 中 FR-04 是 brainstorm 阶段注入、FR-05 才是引导输出断言测试；该文件只 import ui-visual.js 与 hunk-attribution.js 并断言构建函数输出，不触及注入链路，测试绑定面也登记在 FR-05。实测 3/3 通过，仅注释编号与 requirements 不一致。",
+      "location": "test/guidance-output-neutrality.test.mjs:2"
+    },
+    {
+      "severity": "P3",
+      "title": "{UI_VISUAL_GUIDANCE} 掩蔽清单成员资格无测试锁定",
+      "evidence": "掩蔽项确已接入源码（src/run/prompt.js:36 VOLATILE_PLACEHOLDER_RES 含 /{UI_VISUAL_GUIDANCE}/g，实测生效）；但无任何测试断言该成员资格：test/prompt-placeholders.test.mjs 仅覆盖 applyRootPlaceholders（12 断言全过，与掩蔽清单无关），test/step-guide-fingerprint.test.mjs 的确定性用例仅抽查 <now-*>、{DOCS_DEBT}、{KNOWLEDGE_HIT_REPORT}、{EXECUTE_RUN_ID} 固定样本。若后续误删该掩蔽项无测试会红。退化后果按模块自身注释为良性（仅多一次全量重印，不产生错误指引），且 requirements FR-04 绑定声明只称「回归全绿（零破坏）」并未声称有成员资格断言——声明与事实相符，故仅记观察项。",
+      "location": "src/run/prompt.js:36"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T06:03:02Z"
+}
