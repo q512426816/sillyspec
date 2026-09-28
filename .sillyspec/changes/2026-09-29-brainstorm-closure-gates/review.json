@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-brainstorm-closure-gates",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "risk-mitigation 行末单元格剥离无法区分「缺应对策略列」的短 R-xx 行，缺列行逃过门",
+      "evidence": "src/stage-contract.js risk 判定：line.split('|').slice(1) 后若尾 cell 为空且行尾是 '|' 则 pop 一次——行「| R-01 | 风险 | P1 |」（3 列，第 4 列整体缺失）pop 后 lastCell='P1'（等级列），占位判定落在错误列上不报警；而「| R-01 | 风险 | P1 | |」（4 列空尾）正确报警。cells<2 守卫只拦「仅编号列」极端形态，3 列短行（cells=3）穿过。warning 级门 + 畸形行本属表结构问题，影响小。",
+      "location": "src/stage-contract.js:436-438"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-05 文本未声明 scale=small 豁免，实现却给 proposal/requirements/tasks 三条 no-placeholder 规则挂 condition scale≠small",
+      "evidence": "requirements.md FR-05 的 When/Then 无任何豁免字样（对照 FR-01 显式写了 small 豁免）；manifest 中 brainstorm.proposal/requirements/tasks.no-placeholder 三条均带 condition:{ctxField:'scale',ne:'small'}（design.no-placeholder 无条件）。豁免在 tasks.md task-02 有披露、且沿袭引擎既有的 brainstorm 阶段四件套约定（stage-contract-engine.js conditionHolds 注释），属 FR 文本与实现的一致性缺口而非行为错误：scale=small 且三文件在场时占位行不告警。",
+      "location": "src/stage-contract-spec.js:179-205"
+    },
+    {
+      "severity": "P3",
+      "title": "冻结 change.patch（baseline..HEAD）夹带约 10 个他变更文件，本变更审计面被污染",
+      "evidence": "patch 内 src/decision-distill.js、src/flow.js、src/knowledge-match.js、src/knowledge-vector.js、src/run/complete.js、src/run/prompt.js、src/stages/knowledge.js 及 test/decision-route-vocab.test.mjs、test/knowledge-vector-recall.test.mjs、test/decision-supersede.test.mjs 的 diff 均内注 2026-09-29-knowledge-vector-recall / 2026-09-29-decision-route-vocab 归属，与本变更 FR-01~08 无关——共享仓并行提交下 baseline..HEAD 机制的已知形态，协议合规，但审计件无法单从 patch 区分本变更真实交付面（实际相关：stage-contract-engine/spec/stage-contract + 三个测试文件）。",
+      "location": ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/change.patch:18"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-08「全量测试通过」与收口自述「5 挂」存在表述差，存量债归因无法在只读纪律下独立复核",
+      "evidence": "tasks.md task-07 自述全量 667/678、5 挂全部与本变更无关（3 个确定性挂称在干净 HEAD 复现、2 个称满载假红）——与 FR-08「全量测试通过」字面不符（按「零回归」口径达成）。本评审独立实测：三个绑定测试文件全绿（brainstorm-closure-gates 34/34、stage-contract-spec、stage-contract 全过），全量套两次运行捕获面均为绿 tally、未见失败聚合行；但「干净 HEAD 复现」需要 git 操作（评审纪律禁止），归因证据未独立复核。",
+      "location": ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/tasks.md:17"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-29T12:00:00.000Z"
+}

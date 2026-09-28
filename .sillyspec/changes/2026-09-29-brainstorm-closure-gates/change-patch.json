@@ -1,0 +1,100 @@
+{
+  "change": "2026-09-29-brainstorm-closure-gates",
+  "baseline": "1217e82b1b9a53594b9b0e41fdfc08a990eff6cf",
+  "head": "b8a7ccc9f572b09dbe993ae9c84a9841391181bf",
+  "files": [
+    ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/design.md",
+    ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/flow-state.yaml",
+    ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/proposal.md",
+    ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/requirements.md",
+    ".sillyspec/changes/2026-09-29-brainstorm-closure-gates/tasks.md",
+    "src/decision-distill.js",
+    "src/flow.js",
+    "src/knowledge-match.js",
+    "src/knowledge-vector.js",
+    "src/run/complete.js",
+    "src/run/prompt.js",
+    "src/stage-contract-engine.js",
+    "src/stage-contract-spec.js",
+    "src/stage-contract.js",
+    "src/stages/knowledge.js",
+    "test/brainstorm-closure-gates.test.mjs",
+    "test/decision-route-vocab.test.mjs",
+    "test/decision-supersede.test.mjs",
+    "test/knowledge-vector-recall.test.mjs",
+    "test/stage-contract-spec.test.mjs",
+    "test/stage-contract.test.mjs"
+  ],
+  "totals": {
+    "files": 21,
+    "additions": 1229,
+    "deletions": 47
+  },
+  "savedAt": "2026-09-28T17:07:23.787Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "stages",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/stages.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "runtime",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "docs-consistency",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/docs-consistency.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "bin",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/bin.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 6
+    },
+    {
+      "dir": "src",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "d5c7108c4118bd09a6785f5708d43b29047d5de13a8b7cb89f472a8d01e663bf",
+  "patchStatus": "ok"
+}
