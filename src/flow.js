@@ -31,7 +31,7 @@ import { join, relative } from 'node:path'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
-import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
+import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/shared.js'
 import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
 import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
 
@@ -798,6 +798,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
+      // FAIL 三件套（2026-09-28-split-guard-and-gate-report，P6）：失败行样本 + 结果文件全路径 +
+      // 可粘贴重放的批命令——排障不再手翻 .runtime（快照模式回拷后同样可读）。
+      try {
+        const t = gate.test
+        if (t && t.resultPath && existsSync(t.resultPath)) {
+          const tr = JSON.parse(readFileSync(t.resultPath, 'utf8'))
+          const rem = tr.failure_remaining || []
+          if (rem.length > 0) {
+            console.error(`   失败行（前 5，完整清单在结果文件 failure_remaining）：`)
+            for (const l of rem.slice(0, 5)) console.error(`   - ${String(l).trim().slice(0, 140)}`)
+          }
+          for (const m of tr.modules || []) {
+            if (m.status && m.status !== 'passed' && m.command) console.error(`   重放（快照内命令，主仓同命令可复跑）：${m.command}`)
+          }
+          console.error(`   结果文件：${t.resultPath}`)
+        }
+      } catch { /* 三件套 best-effort：读不到不阻断 FAIL 主输出 */ }
       // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
       writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
       console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')
@@ -1362,8 +1379,21 @@ export async function cmdFlow(args, cwd, specDir = null) {
     }
   }
   if (sub === 'start') {
-    const change = getFlag('--change') || `flow-${new Date().toISOString().slice(0, 10)}-${Math.random().toString(16).slice(2, 6)}`
+    const change = getFlag('--change') || `${new Date().toISOString().slice(0, 10)}-flow-${Math.random().toString(16).slice(2, 6)}`
     validateChangeName(change)
+    // 变更名日期前缀门禁（对齐 run/command.js 净新建门与 change-rename 门，brainstorm step6
+    // 规则 CLI 化）：轻量道此前无此门，roadmap-copy-purge 实证无前缀名被照单物化入档，打乱
+    // 归档字典序时间线。只拦净新建（changes/<名> 与 changes/archive/<名> 均不存在）；恢复/
+    // 头脑风暴收编/平台 writer 预建空目录均目录在场不追诉（旧无前缀存量照常可续跑）。
+    if (!existsSync(join(specBase, 'changes', change)) && !existsSync(join(specBase, 'changes', 'archive', change))) {
+      try {
+        assertDatedChangeName(change)
+      } catch (e) {
+        console.error(`❌ ${e.message}`)
+        console.error(`   重试：sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<需求>"`)
+        process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
+      }
+    }
     return cmdFlowStart({
       change,
       input: getFlag('--input') || undefined,

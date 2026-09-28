@@ -41,13 +41,22 @@ const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书�
  * （FR 区 agent 书写架构下，摘录一行 A/B 会被直抄成粒度失真的单条 FR）。路径感知：含扩展
  * 名点或超一处斜杠的条目不按斜杠拆（src/flow.js 之类不能劈）。
  */
+// 谓词词元（2026-09-28-split-guard-and-gate-report）：斜杠拆分的资格词表——拆分后每一段都
+// 含至少一个行为谓词才拆（「后端端点可访问/鉴权生效」双侧有谓词，拆开粒度才真）；成对短名词
+// （「节点/边」「页面/UI」「语言/框架」）无谓词，保持整条（2026-09-28 三变更实证误拆）。
+// 分号拆分与路径形态守卫（pathLike）不受此限——它们的语义不依赖段内谓词。
+const SEGMENT_PREDICATE_RE = /(访问|生效|可用|一致|通过|校验|支持|包含|输出|返回|存在|命中|阻断|启用|禁用|删除|新增|修改|生成|解析|渲染|编译|提交|回滚|触发|满足|锁定|收敛|幂等|对齐|补齐|清零|入仓|入库)/
+
 function splitCompoundCriteria(item) {
   const parts = String(item).split(/[；;]/).map((s) => s.trim()).filter(Boolean)
   const out = []
   for (const part of parts) {
     const pathLike = /\.[A-Za-z]{1,5}\b/.test(part) || (part.match(/\//g) || []).length > 1
     if (!pathLike && /[／/]/.test(part)) {
-      for (const seg of part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)) out.push(seg)
+      const segs = part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)
+      const everyHasPredicate = segs.length > 1 && segs.every((s) => SEGMENT_PREDICATE_RE.test(s))
+      if (everyHasPredicate) out.push(...segs)
+      else out.push(part)
     } else out.push(part)
   }
   return out

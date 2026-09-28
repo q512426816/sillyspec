@@ -12,7 +12,7 @@
  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
  */
 import { join, dirname } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, cpSync } from 'node:fs'
 import { parsePorcelainPath, safeGit } from './shared.js'
 import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
 
@@ -690,8 +690,32 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       semanticGuard,
     }
   } finally {
-    if (snapshot) { try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ } }
+    if (snapshot) {
+      // 快照证据回拷（2026-09-28-split-guard-and-gate-report，P6b）：快照内 verify-runs 结果
+      // 落快照临时目录、收尾即清——测试/lint FAIL 时先回拷主仓 .runtime 再清理，排障证据不蒸发。
+      try {
+        if (failed.length > 0) copySnapshotVerifyRuns(gateSpecBase, specBase)
+      } catch { /* 回拷 best-effort，不连坐门禁结论 */ }
+      try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ }
+    }
   }
+}
+
+/** 快照 .runtime/verify-runs 全量回拷主仓（同名目录不覆盖——主仓自己的结果优先）。 */
+function copySnapshotVerifyRuns(fromSpecBase, toSpecBase) {
+  const fromDir = join(fromSpecBase, '.runtime', 'verify-runs')
+  const toDir = join(toSpecBase, '.runtime', 'verify-runs')
+  if (!existsSync(fromDir)) return 0
+  let copied = 0
+  for (const d of readdirSync(fromDir)) {
+    const src = join(fromDir, d)
+    const dst = join(toDir, d)
+    if (existsSync(dst)) continue
+    cpSync(src, dst, { recursive: true })
+    copied++
+  }
+  if (copied > 0) console.warn(`📎 快照实测证据已回拷主仓：${copied} 个 verify-runs 目录（排障读主仓 .runtime 即可）`)
+  return copied
 }
 
 /**
