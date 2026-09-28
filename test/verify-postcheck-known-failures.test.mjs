@@ -19,7 +19,11 @@ import {
 import { readDecisionRulesConfig } from '../src/docs-check.js'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// 仓根锚定（run-tests.mjs 以 cwd=test/ 起本文件——裸相对路径会解析到 test/.sillyspec/… ENOENT）
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 let passed = 0
 let failed = 0
@@ -455,7 +459,7 @@ const j2 = judgeWithKnownFailures(1, "✖ 挂了\n", null, ["^✖ 挂了$"])
 assert('裁判: 锚定式命中无收敛提示', j2.reason.includes('全部为锚定式命中'), j2.reason)
 
 // 5. 合并装载：入库文件 + local.yaml 两源解析（同键同解析器）
-assertEqual('合并装载: 入库文件解析 24 条', extractKnownFailures(readFileSync('.sillyspec/known-failures.yaml', 'utf8')).length, 24)
+assertEqual('合并装载: 入库文件解析 24 条', extractKnownFailures(readFileSync(join(REPO_ROOT, '.sillyspec', 'known-failures.yaml'), 'utf8')).length, 24)
 assertEqual('合并装载: local 迁移后为空', extractKnownFailures('known_failures: []'), [])
 
 // ── 汇总 ─────────────────────────────────────────────────────────

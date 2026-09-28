@@ -7,8 +7,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { dirname, join, resolve } from 'node:path'
 
 import { judgeTapOutput } from '../src/verify-postcheck.js'
+
+// 仓根锚定（run-tests.mjs 以 cwd=test/ 起本文件——相对路径夹具会解析到 test/test/…，
+// 套件内恒挂快速 exit 1 而单跑恒过；夹具路径与 cwd 一律从 import.meta.url 推导）
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 const TAP_FAIL = [
   'TAP version 13',
@@ -62,7 +68,8 @@ test('TAP 失败无清单 → failed 且 not-ok 行全量入 remaining', () => {
 })
 
 test('集成：双报告器命令 stdout 为纯 TAP 且可判账', () => {
-  const args = ['--test', '--test-reporter=spec', '--test-reporter-destination=stderr', '--test-reporter=tap', '--test-reporter-destination=stdout', 'test/fr-compound-split.test.mjs', 'test/ui-visual-guidance.test.mjs']
+  const args = ['--test', '--test-reporter=spec', '--test-reporter-destination=stderr', '--test-reporter=tap', '--test-reporter-destination=stdout',
+    join(REPO_ROOT, 'test', 'fr-compound-split.test.mjs'), join(REPO_ROOT, 'test', 'ui-visual-guidance.test.mjs')]
   let out = ''
   let code = 0
   // 嵌套坑：父 node:test 进程带 NODE_TEST_CONTEXT env，子 node --test 会误入 child 模式
@@ -70,7 +77,7 @@ test('集成：双报告器命令 stdout 为纯 TAP 且可判账', () => {
   const env = { ...process.env }
   delete env.NODE_TEST_CONTEXT
   try {
-    out = execFileSync(process.execPath, args, { encoding: 'utf8', timeout: 120000, cwd: process.cwd(), stdio: ['ignore', 'pipe', 'ignore'], env })
+    out = execFileSync(process.execPath, args, { encoding: 'utf8', timeout: 120000, cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'], env })
   } catch (e) {
     code = e.status ?? 1
     out = e.stdout?.toString() || ''
