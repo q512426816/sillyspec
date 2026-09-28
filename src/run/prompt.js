@@ -1290,21 +1290,23 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
   // 全降级不抛（异常 → 单行说明）。
   if (stageName === 'brainstorm' && promptText.includes('{DECISION_HITS}')) {
     try {
-      const { matchKnowledge } = await import('../knowledge-match.js')
+      const { matchKnowledge, deathPathNote } = await import('../knowledge-match.js')
       const decSpecBase = resolvePromptSpecBase(platformOpts, cwd)
       const decKnowledgeDir = join(decSpecBase, 'knowledge')
       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
       // 语料；与 execute 分支的 changeName 基底同口径）
       const decResult = matchKnowledge(decKnowledgeDir, changeName || '')
-      const rejectedHits = (decResult.decisionHits || []).filter(h => h.status === 'rejected')
+      // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking 审查 P2 补齐：
+      // 与 flow.js 注入段/knowledge-gate 同构——教训型条目 status=implemented 不再被状态压制）
+      const rejectedHits = (decResult.decisionHits || []).filter(h => h.status === 'rejected' || h.deathPath)
       let decInjected = ''
       if (rejectedHits.length > 0) {
         const lines = [
-          '⚠️ 否决决策提示（历史已否决，防复潮）——下列决策此前已被否决。看到否决理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据：'
+          '⚠️ 否决决策/死路注记提示（历史已否决或已记死路，防复潮）——下列决策此前已被否决或已记死路。看到理由后，除非复潮条件明确满足，不要在本次方案中重新提出；若认为复潮条件已满足，须在本变更 decisions.md 记录新版本条目（D-xxx@vN+1）说明依据：'
         ]
         for (const h of rejectedHits) {
-          lines.push(`- ${h.id} ${h.title}（${h.file}）`)
-          lines.push(`  - 否决理由：${h.reason || '（未记录）'}`)
+          lines.push(`- ${h.id} ${h.title}（${h.file}）${h.status === 'rejected' ? '' : ' ⚰️死路注记'}`)
+          lines.push(`  - ${h.status === 'rejected' ? '否决理由' : '死路'}：${h.status === 'rejected' ? (h.reason || '（未记录）') : deathPathNote(h.reason)}`)
           lines.push(`  - 复潮条件：${h.revisitWhen || '（未记录）'}`)
         }
         decInjected = '\n\n' + lines.join('\n')

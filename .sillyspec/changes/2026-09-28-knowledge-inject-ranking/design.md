@@ -13,7 +13,7 @@ created_at: 2026-09-28T13:11:00.997Z
 <!-- MACHINE-DRAFT:design-approach:end -->
 
 <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
-做法：knowledge-match.js 三处——parseDecisionFile flush 时按「理由含『死路：』字面标记」置 deathPath；matchKnowledge decisionHits 改防复潮优先组（rejected ∪ deathPath）＋组内按 查询×(id+标题) bigram 重叠率降序（复用 fr-index frTitleOverlap，封闭面字符重叠非语义判定）；新增导出 deathPathNote 提取死路短句。消费方两处：flow.js flowKnowledgeDigest 过滤条件加 deathPath、渲染分「否决理由/⚰️死路」两态；complete.js knowledge-gate 回显同构。
+做法：knowledge-match.js 三处——parseDecisionFile flush 时按「理由含『死路：』字面标记」置 deathPath；matchKnowledge decisionHits 改防复潮优先组（rejected ∪ deathPath）＋组内按 查询×(id+标题) bigram 重叠率降序（复用 fr-index frTitleOverlap，封闭面字符重叠非语义判定）；新增导出 deathPathNote 提取死路短句。消费方三处：flow.js flowKnowledgeDigest、complete.js knowledge-gate、prompt.js {DECISION_HITS}（brainstorm Step2 注入——审查 P2 补齐）——三处过滤均 rejected∪deathPath、渲染同构分「否决理由/⚰️死路」两态。
 
 ## 接口契约
 <!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
