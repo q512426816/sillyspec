@@ -21,9 +21,9 @@ test('①b 谓词资格收窄（2026-09-28-split-guard-and-gate-report）：双�
   assert.deepEqual(extractSuccessCriteria('成功标准：\n- 后端端点可访问/鉴权生效'), ['后端端点可访问', '鉴权生效'])
   assert.deepEqual(extractSuccessCriteria('成功标准：\n- 产物入仓/重编译通过'), ['产物入仓', '重编译通过'])
   // 成对短名词（无谓词）：不拆——三次实证误拆的形态
-  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 节点与边 JSON 源描述'), ['节点与边 JSON 源描述'])
+  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 节点/边 JSON 源描述'), ['节点/边 JSON 源描述'])
   assert.deepEqual(extractSuccessCriteria('成功标准：\n- 覆盖页面/UI 双形态'), ['覆盖页面/UI 双形态'])
-  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 语言框架中立'), ['语言框架中立'])
+  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 语言/框架中立'), ['语言/框架中立'])
   // 单侧谓词：不拆（整体作为一个标准的组成部分）
   assert.deepEqual(extractSuccessCriteria('成功标准：\n- warn 默认/error 阻断'), ['warn 默认/error 阻断'])
 })

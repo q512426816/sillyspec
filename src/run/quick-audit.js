@@ -699,11 +699,9 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
           // 结果路径重映射（评审 P1 清偿）：快照内写下的 resultPath 指向快照临时目录——清理后
           // existsSync 恒 false，flow done 的 FAIL 三件套会静默失效。回拷后把 test/lint 的
           // resultPath 改写为主仓路径（对象即返回值，finally 在 return 落地前变异生效）。
-          if (copied > 0) {
-            for (const r of [test, lint]) {
-              if (r && typeof r.resultPath === 'string' && r.resultPath.startsWith(gateSpecBase)) {
-                r.resultPath = specBase + r.resultPath.slice(gateSpecBase.length)
-              }
+          for (const r of [test, lint]) {
+            if (r && typeof r.resultPath === 'string' && r.resultPath.startsWith(gateSpecBase)) {
+              r.resultPath = specBase + r.resultPath.slice(gateSpecBase.length)
             }
           }
         }

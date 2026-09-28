@@ -1016,10 +1016,12 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           // 的槽位作答/勾选要进审计件）。重叠文件归提交区间，避免双 hunk。
           const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
           const toPosix = (p) => String(p).replace(/\\/g, '/')
-          const committedSet = new Set(freeze.files.map(toPosix))
-          const dirOnly = ownFiles.filter((f) => !committedSet.has(toPosix(f)))
-          const frozenCommitted = buildFrozenPatch(cwd, freeze.files, { baseRef: st.baseline_commit, headRef: headCommit })
-          const frozenDir = dirOnly.length > 0 ? buildFrozenPatch(cwd, dirOnly, { baseRef: st.baseline_commit }) : ''
+          // 复审 P2/P3a 清偿：工作树口径集 = 治理工件目录（含已提交后又改的槽位/勾选——工作树
+          // diff 能捕捉提交后编辑）∪ 独占树未提交交付（dirtyAdded）；其余交付面走提交区间。
+          const worktreeSet = new Set([...changeDirFiles, ...((freeze.dirtyAdded) || [])].map(toPosix))
+          const committedFace = freeze.files.map(toPosix).filter((f) => !worktreeSet.has(f))
+          const frozenCommitted = buildFrozenPatch(cwd, committedFace, { baseRef: st.baseline_commit, headRef: headCommit })
+          const frozenDir = buildFrozenPatch(cwd, [...worktreeSet], { baseRef: st.baseline_commit })
           const frozen = [frozenCommitted, frozenDir].filter((p) => typeof p === 'string' && p).join('\n') || null
           const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
           let additions = 0
