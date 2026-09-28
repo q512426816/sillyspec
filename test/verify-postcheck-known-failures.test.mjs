@@ -247,7 +247,7 @@ Error: Not implemented: window.getComputedStyle(elt, pseudoElt)
     [' × tests/daemon.test.ts > Daemon > AC-09: 真实失败用例 (45 ms)'],
   )
 }
-assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { failureLines: [], exempted: [], remaining: [] })
+assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { failureLines: [], exempted: [], remaining: [], exemptedBy: [] })
 
 {
   // 坑 verify-pytest-warnings-noise（2026-09-01 multi-agent-platform backend 全量实证）：
@@ -324,7 +324,7 @@ assertEqual('partitionFailures: 空输出', partitionFailures('', ['x']), { fail
 assertEqual(
   'judge: exit 0 → passed（无需豁免）',
   judgeWithKnownFailures(0, PYTEST_OUT, null, ['test_ppm']),
-  { status: 'passed', reason: null, exemptedCount: 0, remainingLines: [], exemptedLines: [] },
+  { status: 'passed', reason: null, exemptedCount: 0, remainingLines: [], exemptedLines: [], exemptedBy: [] },
 )
 {
   const j = judgeWithKnownFailures(1, PYTEST_OUT, '退出码 1', [])
@@ -427,6 +427,36 @@ assertEqual('decide: module + 三源空 → dynamic-empty-skip（不硬跑全量
 assertEqual('decide: 缺省 + git 不可用 → full', decideVerifyTestAction({ strategy: null, scopeCount: 0, gitUnavailable: true }), 'full')
 assertEqual('decide: 显式 full → full', decideVerifyTestAction({ strategy: 'full', scopeCount: 0 }), 'full')
 assertEqual('decide: 缺省 + 三源空 → dynamic-empty-skip', decideVerifyTestAction({ strategy: null, scopeCount: 0 }), 'dynamic-empty-skip')
+
+// ── 2026-09-28-known-failures-hardening：锚定式语法 + 硬行保护 + 合并装载 ──────
+
+// 1. 锚定式豁免硬行（✖ 形态）
+let r = partitionFailures("✖ ⑮ 承诺词必评全链：任务书下发→review.json 回收\n", ["^✖ ⑮ 承诺词必评全链"])
+assertEqual('锚定式豁免硬行（✖）: exempted', r.exempted.length, 1)
+assertEqual('锚定式豁免硬行（✖）: remaining', r.remaining.length, 0)
+
+// 2. M1 kill-shot：裸子串不得豁免硬失败行
+r = partitionFailures("--- FAIL: TestSomething (0.01s)\n", ["--- "])
+assertEqual('M1: 裸 "--- " 不再吞 go --- FAIL: 行', r.remaining.length, 1)
+r = partitionFailures("AssertionError [ERR_ASSERTION]: 真实断言失败\n", ["AssertionError"])
+assertEqual('M1: 裸 "AssertionError" 不再吞真实断言行', r.remaining.length, 1)
+r = partitionFailures("✖ 真实用例挂了\n", ["✖"])
+assertEqual('M1: 裸 "✖" 不豁免硬行', r.remaining.length, 1)
+
+// 3. 兼容：裸子串仍豁免非硬行（fixture 文案）
+r = partitionFailures("count-fail.js exited with error: 1 (预期)\n", ["count-fail.js"])
+assertEqual('兼容: 裸子串豁免非硬 fixture 行', r.exempted.length, 1)
+
+// 4. 裁判披露：裸子串命中给收敛提示
+const j = judgeWithKnownFailures(1, "count-fail.js exited with error: 1 (预期)\n", null, ["count-fail.js"])
+assertEqual('裁判: 全命中豁免 → passed', j.status, 'passed')
+assert('裁判: 裸子串命中披露收敛提示', j.reason.includes('裸子串命中'), j.reason)
+const j2 = judgeWithKnownFailures(1, "✖ 挂了\n", null, ["^✖ 挂了$"])
+assert('裁判: 锚定式命中无收敛提示', j2.reason.includes('全部为锚定式命中'), j2.reason)
+
+// 5. 合并装载：入库文件 + local.yaml 两源解析（同键同解析器）
+assertEqual('合并装载: 入库文件解析 24 条', extractKnownFailures(readFileSync('.sillyspec/known-failures.yaml', 'utf8')).length, 24)
+assertEqual('合并装载: local 迁移后为空', extractKnownFailures('known_failures: []'), [])
 
 // ── 汇总 ─────────────────────────────────────────────────────────
 

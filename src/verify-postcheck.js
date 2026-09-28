@@ -938,7 +938,7 @@ export function extractKnownFailures(yamlText) {
 // 刻意用 FAIL/FAILED + 配合 SUMMARY_LINE_RE 排除汇总行：否则 pytest/jest 的
 // "N failed" 汇总会被误判为「需豁免的失败行」→ 永远 remaining>0 → known_failures 失效。
 // ×(U+00D7) 是 vitest 失败行的实际前缀标记（✕✗✘ 是 jest/mocha 形态）。
-const PER_TEST_FAIL_RE = /(FAILED|\bFAIL\b|✕|✗|✘|×|panic\s*:|assertionerror|traceback|---\s*fail|error:|exception)/i
+const PER_TEST_FAIL_RE = /(FAILED|\bFAIL\b|✖|✕|✗|✘|×|panic\s*:|assertionerror|traceback|---\s*fail|error:|exception)/i
 // 汇总/计数行（非单条失败）：pytest === 框、jest "Tests:"、vitest "Test Files  N failed"/"Tests  N failed | M passed"
 // （无冒号形态）、裸 "N failed/passed"、go "FAILED in Ns"、pnpm "ELIFECYCLE Test failed" 退出横幅等。
 const SUMMARY_LINE_RE = /(={2,}.*={2,}|^\s*\d+\s+(failed|passed|skipped|pending)\b|tests?\s*:|test\s+suites?\s*:|^\s*(?:test\s+files|tests?)\s+\d|failed\s+in\s+\d|failed\s+tests\s+\d|elifecycle)/i
@@ -995,6 +995,11 @@ const ADVISORY_LINE_RE = /^[ \t]*(?:⚠️?|ℹ️?|🔄)/
 const FAIL_COMPOUND_NEUTRALIZE_RE = /fail-(?:closed|open|soft|safe|loud|fast)/gi
 // ANSI 色码剥离（分类用）：TTY 捕获的输出里 ✓/× 前缀可能被色码包裹，行首锚定会失配。
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
+// 泛用裸模式（2026-09-28-known-failures-hardening）：整条模式文本是失败标记词本身或极短标点/
+// 符号串的裸子串，豁免资格停用（须改锚定式 ^…）——防「裸 "--- " 吞 go --- FAIL: 行」「裸
+// "AssertionError" 吞真实断言行」（M1 评审实证）。文件名/用例名等具体模式（主用例：按名豁免
+// 预存失败测试）不在此列，不受限。
+const GENERIC_BARE_PATTERN_RE = /^(?:[-=_~*#·✖✕✗✘×✗\s]{1,6}|assertionerror|error|fail|failed|failure|failing|not ok|exception|traceback|panic|assert|error:|fail:)$/i
 
 /**
  * 把测试输出按行筛出「失败行」，再按 known_failures 模式分为已豁免 / 未豁免。
@@ -1046,15 +1051,38 @@ export function partitionFailures(output, knownFailures) {
   // 工具复盘）：TTY 捕获的失败行里色码把可见词拦腰拆开（`× \x1b[31mtests/foo.test.ts\x1b[0m > case`
   // 连不成 `tests/foo.test.ts > case`），同一行被迫拆成两段各配一条模式才能豁免。模式侧同步剥
   // ANSI（从原始输出誊抄来的模式可能自带码）；返回仍保留原文（remaining/exempted 展示不变形）。
-  const pats = (knownFailures || []).map(p => String(p).replace(ANSI_RE, '').toLowerCase()).filter(Boolean)
+  //
+  // 锚定式与泛用裸模式停用（2026-09-28-known-failures-hardening，M1 评审实证「裸子串吞真失败」）：
+  // - 模式以 ^ 开头或以 $ 结尾 = 锚定式（对 trim 后的原始大小写整行跑正则）；
+  // - 泛用裸模式停用：整条模式文本就是失败标记词/极短标点串（如 "---"、"AssertionError"、"✖"）
+  //   的裸子串失去豁免资格（物理关闭「裸 "--- " 吞 go --- FAIL: 行」通路）——须改写为锚定式；
+  // - 具体裸模式（文件名、用例名——known_failures 的主用例：按名豁免预存失败测试）不受限，
+  //   硬失败行照常可被其豁免（跨仓零破坏）。
+  const pats = (knownFailures || [])
+    .map(p => String(p).replace(ANSI_RE, '').trim())
+    .filter(Boolean)
+    .map(p => {
+      const anchored = p.startsWith('^') || p.endsWith('$')
+      if (anchored) { try { return { sub: null, regex: new RegExp(p) } } catch { return { sub: p.toLowerCase(), regex: null } } }
+      if (GENERIC_BARE_PATTERN_RE.test(p)) return { sub: null, regex: null, refused: true }
+      return { sub: p.toLowerCase(), regex: null }
+    })
   const exempted = []
   const remaining = []
+  const exemptedBy = []
   for (const l of failureLines) {
-    const ll = l.replace(ANSI_RE, '').toLowerCase()
-    if (pats.some(p => ll.includes(p))) exempted.push(l)
-    else remaining.push(l)
+    const bare = l.replace(ANSI_RE, '')
+    const ll = bare.toLowerCase()
+    const trimmed = bare.trim()
+    let hit = null
+    for (let i = 0; i < pats.length; i++) {
+      const p = pats[i]
+      const matched = p.regex ? p.regex.test(trimmed) : (p.sub != null && ll.includes(p.sub))
+      if (matched) { hit = { pattern: (knownFailures || [])[i], anchored: !!p.regex }; break }
+    }
+    if (hit) { exempted.push(l); exemptedBy.push(hit) } else remaining.push(l)
   }
-  return { failureLines, exempted, remaining }
+  return { failureLines, exempted, remaining, exemptedBy }
 }
 
 /**
@@ -1075,19 +1103,27 @@ export function partitionFailures(output, knownFailures) {
  *             remainingLines: string[], exemptedLines: string[] }}
  */
 export function judgeWithKnownFailures(exitCode, output, baseReason, knownFailures) {
-  if (exitCode === 0) return { status: 'passed', reason: baseReason, exemptedCount: 0, remainingLines: [], exemptedLines: [] }
-  const { failureLines, exempted, remaining } = partitionFailures(output, knownFailures || [])
+  if (exitCode === 0) return { status: 'passed', reason: baseReason, exemptedCount: 0, remainingLines: [], exemptedLines: [], exemptedBy: [] }
+  const { failureLines, exempted, remaining, exemptedBy } = partitionFailures(output, knownFailures || [])
   if (!knownFailures || knownFailures.length === 0) {
     // 无清单分支同样带行集：豁免与否都不该丢判账依据（tail 盲区归因同权）
-    return { status: 'failed', reason: baseReason, exemptedCount: 0, remainingLines: remaining, exemptedLines: [] }
+    return { status: 'failed', reason: baseReason, exemptedCount: 0, remainingLines: remaining, exemptedLines: [], exemptedBy: [] }
   }
   if (failureLines.length > 0 && remaining.length === 0) {
+    // 豁免形态披露（2026-09-28-known-failures-hardening）：锚定式（^…/$…）与裸子串命中分别
+    // 计数——裸子串命中给收敛提示（硬行已不可被裸子串吞，非硬行的裸子串命中仍建议锚定收窄）。
+    const anchoredHits = (exemptedBy || []).filter(x => x && x.anchored).length
+    const bareHits = exempted.length - anchoredHits
+    const formNote = bareHits > 0
+      ? `；其中裸子串命中 ${bareHits} 行（建议收敛为锚定式 ^…，硬失败行已不可被裸子串豁免）`
+      : '（全部为锚定式命中）'
     return {
       status: 'passed',
-      reason: `全部 ${failureLines.length} 个失败行命中 known_failures 已豁免（${exempted.length} 条）— 请人工复核豁免清单是否过宽`,
+      reason: `全部 ${failureLines.length} 个失败行命中 known_failures 已豁免（${exempted.length} 条）${formNote} — 请人工复核豁免清单是否过宽`,
       exemptedCount: exempted.length,
       remainingLines: [],
       exemptedLines: exempted,
+      exemptedBy: exemptedBy || [],
     }
   }
   // 剩余未豁免失败行：列出具体行 + 预存债指引（坑 verify-known-failures-stale-list）。
@@ -1705,13 +1741,27 @@ export function runVerifyTestCheck({ cwd, specBase, changeName = null, ctx = nul
   const yamlText = existsSync(localYamlPath) ? readFileSync(localYamlPath, 'utf8') : null
 
   const rawStrategy = extractTestStrategy(yamlText)
-  const knownFailures = extractKnownFailures(yamlText)
+  // 分层豁免清单（2026-09-28-known-failures-hardening，P5）：入库的 .sillyspec/known-failures.yaml
+  // 承载工具债类模式（先例 redlines.yaml——跨机器可审计）；local.yaml 留机器特有类。两源同用
+  // extractKnownFailures 解析（同一 known_failures: 键），合并去重，入库文件在前（溯源优先）。
+  const versionedKfPath = join(specBase, 'known-failures.yaml')
+  const versionedKfText = existsSync(versionedKfPath) ? readFileSync(versionedKfPath, 'utf8') : null
+  const knownFailures = [...new Set([
+    ...extractKnownFailures(versionedKfText),
+    ...extractKnownFailures(yamlText),
+  ])]
   if (knownFailures.length > 0) {
     // 豁免清单加载可见性（坑 verify-known-failures-block-fragile-chain 的观测面）：条数即时报出
     // ——清单被块内残迹截断/误删段时「N 条」与预期不符一眼可见，不必等假红再反推。
     // 走 stderr（console.warn）：本模块运行期叙述统一不碰 stdout（machine-interface 调用时
     // stdout 留给机器可读输出）
-    console.warn(`📋 known_failures 豁免清单已加载：${knownFailures.length} 条模式（local.yaml）`)
+    const vCount = extractKnownFailures(versionedKfText).length
+    console.warn(`📋 known_failures 豁免清单已加载：${knownFailures.length} 条模式（入库 known-failures.yaml ${vCount} 条 + local.yaml ${knownFailures.length - vCount} 条）`)
+    // 泛用裸模式停用可见性（M1）：停用是静默安全行为，但要让维护者知道清单里有死条目
+    const refused = knownFailures.filter(p => !/^[^]*[$]$/.test(String(p)) && !(String(p).startsWith('^') || String(p).endsWith('$')) && GENERIC_BARE_PATTERN_RE.test(String(p).replace(ANSI_RE, '').trim()))
+    if (refused.length > 0) {
+      console.warn(`⚠️ ${refused.length} 条泛用裸模式已停用（整条即失败词——须改锚定式 ^…）：${refused.slice(0, 3).map(p => `"${p}"`).join('、')}${refused.length > 3 ? ' 等' : ''}`)
+    }
   }
 
   // ── local.yaml 测试配置退役（2026-09-26-dynamic-test-inference）──

@@ -1,0 +1,46 @@
+# known-failures.yaml —— 豁免清单·工具债类（入库版，2026-09-28-known-failures-hardening 自 local.yaml 迁移审计）
+#
+# 分层（P5）：本文件承载「工具误判类」豁免（node:test/pytest fixture 预期错误文案被门失败行
+# 正则误计——PER_TEST_FAIL_RE 跨仓残留面），入库可审计可移植（先例 redlines.yaml）；
+# 机器特有类（网络闪断、路径相关）仍留各机 local.yaml，loader 合并两源（入库在前）。
+#
+# 匹配语义（本变更起）：以 ^ 开头或以 $ 结尾 = 锚定式（对 trim 后整行跑正则，大小写敏感）；
+# 否则 = 裸子串（兼容旧语义）。硬失败行（✖/not ok/--- FAIL/failing tests:/行首 AssertionError
+# 等运行器权威失败标记）只能被锚定式豁免——裸子串吞真失败的通路已物理关闭。
+#
+# 删除项（审计裁决）：change-name.2026-08-06-xxx、change-name.2026-08-10-xxx（陈旧垃圾）；
+# 裸 "AssertionError"（改为下方锚定式——原裸子串可吞任何真实断言行）。
+# 结构化报告（P2）落地后，本清单多数条目应删除（误计源头消失）。
+
+known_failures:
+  # ── D 组：门内嵌套环境分叉（2026-09-28-guidance-principles 实证；P1 根修后删）──
+  - "^✖ ⑮ 承诺词必评全链"
+  # ── C 组同族：task-done 用例断言的 CLI 预期错误文案（非硬行，裸子串安全）──
+  - "[review.json] ❌ failed——已存在但 verdict 不一致"
+  - "[wt-commit] ❌ failed——--pathspec-from-file"
+  # ── C 组：node:test fixture 横幅/结果行（原裸 '--- ' 与 'Running ' 已锚定收窄——
+  #    裸 '--- ' 曾可吞 go 的 --- FAIL: 行，M1 实证）──
+  - "^--- .*---$"
+  - "^Running \\d+"
+  - "结果:"
+  - "summary:"
+  # ── 已知 fixture 断言行（锚定到具体用例文案；泛用 AssertionError 裸子串已废）──
+  - "^AssertionError \\[ERR_ASSERTION\\]: 回执实测面回填"
+  # ── 各测试 fixture 专属 token（形态独特、非硬行，裸子串低风险）──
+  - "jsonA="
+  - "jsonB="
+  - "配置: 8 进程"
+  - "域差异双向 WARNING"
+  - "WARNING 放行"
+  - "Delta：交付文件"
+  - "未实现标记"
+  - "count-fail.js"
+  - "Boom-counter"
+  - "node exit1.js"
+  - "deadbeef"
+  - "❌ QUICKLOG 条目"
+  # ── 待审计（含失败词/网络形态，裸子串有吞真风险——下次命中即锚定或删）──
+  - "API parity check failed"
+  - "JSON-RPC error"
+  - "请求失败: fetch failed"
+  - "usage: pytest"
