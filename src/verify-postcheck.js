@@ -1001,6 +1001,33 @@ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
 // 预存失败测试）不在此列，不受限。
 const GENERIC_BARE_PATTERN_RE = /^(?:[-=_~*#·✖✕✗✘×✗\s]{1,6}|assertionerror|error|fail|failed|failure|failing|not ok|exception|traceback|panic|assert|error:|fail:)$/i
 
+/** 豁免模式编译（partitionFailures 与 TAP 判账共用单点，2026-09-28-tap-judge）：锚定式（^…/$…
+ * 对 trim 后整行正则）／裸子串（兼容语义），泛用裸模式停用。 */
+function buildExemptPats(knownFailures) {
+  return (knownFailures || [])
+    .map(p => String(p).replace(ANSI_RE, '').trim())
+    .filter(Boolean)
+    .map(p => {
+      const anchored = p.startsWith('^') || p.endsWith('$')
+      if (anchored) { try { return { sub: null, regex: new RegExp(p) } } catch { return { sub: p.toLowerCase(), regex: null } } }
+      if (GENERIC_BARE_PATTERN_RE.test(p)) return { sub: null, regex: null, refused: true }
+      return { sub: p.toLowerCase(), regex: null }
+    })
+}
+
+/** 单行豁免匹配（剥 ANSI 后）：返回 {pattern, anchored} 或 null。 */
+function matchExemptLine(rawLine, pats, knownFailures) {
+  const bare = String(rawLine).replace(ANSI_RE, '')
+  const ll = bare.toLowerCase()
+  const trimmed = bare.trim()
+  for (let i = 0; i < pats.length; i++) {
+    const p = pats[i]
+    const matched = p.regex ? p.regex.test(trimmed) : (p.sub != null && ll.includes(p.sub))
+    if (matched) return { pattern: (knownFailures || [])[i], anchored: !!p.regex }
+  }
+  return null
+}
+
 /**
  * 把测试输出按行筛出「失败行」，再按 known_failures 模式分为已豁免 / 未豁免。
  * @param {string} output
@@ -1058,28 +1085,13 @@ export function partitionFailures(output, knownFailures) {
   //   的裸子串失去豁免资格（物理关闭「裸 "--- " 吞 go --- FAIL: 行」通路）——须改写为锚定式；
   // - 具体裸模式（文件名、用例名——known_failures 的主用例：按名豁免预存失败测试）不受限，
   //   硬失败行照常可被其豁免（跨仓零破坏）。
-  const pats = (knownFailures || [])
-    .map(p => String(p).replace(ANSI_RE, '').trim())
-    .filter(Boolean)
-    .map(p => {
-      const anchored = p.startsWith('^') || p.endsWith('$')
-      if (anchored) { try { return { sub: null, regex: new RegExp(p) } } catch { return { sub: p.toLowerCase(), regex: null } } }
-      if (GENERIC_BARE_PATTERN_RE.test(p)) return { sub: null, regex: null, refused: true }
-      return { sub: p.toLowerCase(), regex: null }
-    })
+  // 匹配器编译/单行匹配抽为 buildExemptPats/matchExemptLine 共用单点（2026-09-28-tap-judge）。
+  const pats = buildExemptPats(knownFailures)
   const exempted = []
   const remaining = []
   const exemptedBy = []
   for (const l of failureLines) {
-    const bare = l.replace(ANSI_RE, '')
-    const ll = bare.toLowerCase()
-    const trimmed = bare.trim()
-    let hit = null
-    for (let i = 0; i < pats.length; i++) {
-      const p = pats[i]
-      const matched = p.regex ? p.regex.test(trimmed) : (p.sub != null && ll.includes(p.sub))
-      if (matched) { hit = { pattern: (knownFailures || [])[i], anchored: !!p.regex }; break }
-    }
+    const hit = matchExemptLine(l, pats, knownFailures)
     if (hit) { exempted.push(l); exemptedBy.push(hit) } else remaining.push(l)
   }
   return { failureLines, exempted, remaining, exemptedBy }
@@ -1303,15 +1315,59 @@ export function decideVerifyTestAction({ strategy, scopeCount = 0, gitUnavailabl
 }
 
 /**
+ * TAP 结构化判账（2026-09-28-tap-judge，P2 一期）：node --test 双报告器（spec→stderr 人读、
+ * tap→stdout 机读）批次按 `not ok` 行用例粒度判账——自由文本正则误计（fixture 预期错误文案、
+ * 控制台噪声）对 TAP 路径物理消失。豁免匹配复用 buildExemptPats/matchExemptLine 单点
+ * （锚定式/裸子串/泛用停用语义与 partitionFailures 完全一致）。
+ * @returns {null | {status:'passed'|'failed', reason, exemptedCount, remainingLines, exemptedLines, exemptedBy, tap:{total,failed}}}
+ *   null=输出非 TAP（旧 node/异构命令）——调用方回退 legacy judgeWithKnownFailures。
+ */
+export function judgeTapOutput(exitCode, output, baseReason, knownFailures) {
+  const text = String(output || '')
+  if (!/^TAP version \d+/m.test(text.split('\n')[0] || '')) return null
+  const allLines = text.split(/\r?\n/)
+  const okCount = allLines.filter(l => /^ok\s+\d+/.test(l)).length
+  const notOkLines = allLines.filter(l => /^not ok\s+\d+/.test(l))
+  const tap = { total: okCount + notOkLines.length, failed: notOkLines.length }
+  if (exitCode === 0) {
+    return { status: 'passed', reason: `${baseReason || ''}（TAP ${tap.total} 用例 0 失败）`.trim(), exemptedCount: 0, remainingLines: [], exemptedLines: [], exemptedBy: [], tap }
+  }
+  if (!knownFailures || knownFailures.length === 0) {
+    return { status: 'failed', reason: baseReason, exemptedCount: 0, remainingLines: notOkLines, exemptedLines: [], exemptedBy: [], tap }
+  }
+  const pats = buildExemptPats(knownFailures)
+  const exempted = []
+  const remaining = []
+  const exemptedBy = []
+  for (const l of notOkLines) {
+    const hit = matchExemptLine(l, pats, knownFailures)
+    if (hit) { exempted.push(l); exemptedBy.push(hit) } else remaining.push(l)
+  }
+  if (remaining.length === 0 && notOkLines.length > 0) {
+    const anchoredHits = exemptedBy.filter(x => x && x.anchored).length
+    const formNote = exempted.length - anchoredHits > 0 ? `；其中裸子串命中 ${exempted.length - anchoredHits} 行（建议锚定式）` : '（全部锚定式命中）'
+    return { status: 'passed', reason: `TAP ${notOkLines.length} 个失败用例全部命中 known_failures 已豁免${formNote} — 请人工复核`, exemptedCount: exempted.length, remainingLines: [], exemptedLines: exempted, exemptedBy, tap }
+  }
+  const sample = remaining.slice(0, 5).map(l => String(l).trim().slice(0, 120))
+  return { status: 'failed', reason: `${baseReason || ''}（TAP ${tap.total} 用例 ${notOkLines.length} 失败，未豁免 ${remaining.length}）：${sample.join(' | ')}`.trim(), exemptedCount: exempted.length, remainingLines: remaining, exemptedLines: exempted, exemptedBy, tap }
+}
+
+/**
  * 跑单个模块的 test 命令（串行调用方逐个调用）。
  * @returns {{name, status:'passed'|'failed', command, exitCode, durationMs, outputTail, reason}}
  */
-function runOneModule(name, testCommand, cwd, knownFailures = []) {
+function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
   const startedAt = Date.now()
   let exitCode = 0
   let output = ''
   let reason = null
   warnPortRaceBeforeRun(testCommand)
+  // 嵌套测试环境清洗（2026-09-28-tap-judge 实证发现）：父级 node:test 进程带 NODE_TEST_CONTEXT
+  // env，本模块 execSync 全量继承——门在测试进程内被调用时（e2e 用例 spawn 内层 CLI 跑门），
+  // 内层 node --test 误入 child 模式 stdout 全空（⑮ 门内必挂/单独跑必过的根因家族）。
+  // 剥离该键：门内测试进程与普通进程行为一致。
+  const runEnv = { ...process.env }
+  delete runEnv.NODE_TEST_CONTEXT
   try {
     output = decodeShellOutput(execSync(testCommand, {
       cwd,
@@ -1320,6 +1376,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
+      env: runEnv,
     }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
@@ -1334,7 +1391,10 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
   }
   const durationMs = Date.now() - startedAt
   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
-  const judged = judgeWithKnownFailures(exitCode, output, reason, knownFailures)
+  // TAP 优先判账（2026-09-28-tap-judge）：tap 批次 stdout 为纯 TAP——用例粒度结构化判账；
+  // 输出非 TAP（旧 node/异常形态）自动回退 legacy 正则判账，零行为断裂。
+  const judged = (opts.tap ? judgeTapOutput(exitCode, output, reason, knownFailures) : null)
+    || judgeWithKnownFailures(exitCode, output, reason, knownFailures)
   // 环境缺件降档（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，2026-09-23 实证）：
   // 模块命令在缺失二进制处中止——CNF 是环境信号非代码失败，降档 skipped（aggregateStatus
   // 认识 skipped 单元）。护栏：判账行集全为 wrapper 噪声才降（真失败行在场维持硬拦）。
@@ -2526,7 +2586,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
   const batches = []
   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length })
+  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length, tap: true })
   if (jsProject.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)
@@ -2611,7 +2671,7 @@ function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
       }
       const isPy = b.short === 'py'
       const segFiles = chunk.filter((f) => (norm(f).endsWith('.py') === isPy))
-      const r = runOneModule(b.name, b.command, cwd, knownFailures)
+      const r = runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap })
       segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : (b.short === 'jsx' ? 'vitest/jest' : 'node --test'), files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
     }
   }
@@ -2720,7 +2780,7 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [], 
         perModule.push({ name: b.name, status: 'skipped', reason: b.reason || '转项目运行器', command: null, exitCode: null, durationMs: null, outputTail: null })
         continue
       }
-      perModule.push(runOneModule(b.name, b.command, cwd, knownFailures))
+      perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
       console.log(`ℹ️ 动态子集批 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 运行器按最近 pyproject/uv 祖先推断' : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
     }
   }
