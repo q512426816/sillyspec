@@ -85,7 +85,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 新增 patch 子步（ledger 后 noAI）：buildFrozenPatch 以 baseline 为基、归属收窄后的本变更文件面
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-01
@@ -107,7 +107,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then requirements 机器稿每条 FR 附「测试绑定」AGENT 槽；flow done artifacts 校验槽非空（不适用加理由=已答；零槽=骨架过旧
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-02
@@ -129,7 +129,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-03
@@ -151,7 +151,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-patch-bindings
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖三件，flow 系测试全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-patch-bindings/requirements.md#FR-04
@@ -239,7 +239,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-brainstorm-prestage
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow start 需求清晰度门：--input 缺失或成功标准提取 0 条时 exit 2 并给两选一（头脑风暴预段 / 补成功标准重跑）；重入与 adop
 全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-01
@@ -261,7 +261,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-brainstorm-prestage
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then adopt 收编：变更目录存在 brainstorm 产物（proposal/design 在场）且无 flow-state 时，flow start 收编进薄
 全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-02
@@ -283,7 +283,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-brainstorm-prestage
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then flow done 对 adopted 变更豁免 design 四节槽门（brainstorm 设计更丰富，打印豁免说明）；绑定门不豁免
 全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-03
@@ -305,7 +305,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-brainstorm-prestage
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then agents-instruction.md 模板核心规则改为薄流程主推+头脑风暴预段+完整流程保留；SKILL.md 快速开始补薄流程入口
 全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-04
@@ -315,7 +315,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-brainstorm-prestage
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 薄跑道在跑；When flow done 裁决执行；Then 新增测试覆盖清晰度门/adopt 收编/绑定槽追加；flow 系测试全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-brainstorm-prestage/requirements.md#FR-05
@@ -945,7 +945,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-01
@@ -967,7 +967,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then draftRequirements 的 GWT 模板字面换为需求语义（Given 平台按当前契约运行/When 本变更交付并运行/Then 条目），例外槽提示改
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-02
@@ -989,7 +989,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then reconcileModuleDocs 增未覆盖目录检测：交付目录不在任何模块 paths 下时点名提示『FR 将落伪域，建议登记模块卡』（advisory）
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-03
@@ -1011,7 +1011,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-fr-quality
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flow 轻量跑道在跑；When flow done 裁决执行；Then 新增测试三件；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-fr-quality/requirements.md#FR-04
@@ -1097,7 +1097,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-agent-writable
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 轻量变更的 requirements 需 agent 填写行为语义；When flow start 生成骨架后 agent 直接书写；Then FR 质量由 agent 保证、不走 amend、不触发 edit_ratio
 全文：.sillyspec/changes/archive/2026-09-25-fr-agent-writable/requirements.md#FR-01
@@ -1107,7 +1107,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-agent-writable
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then draftRequirements：FR 区从 MACHINE-DRAFT 指纹段改为 AGENT 槽（agent 直接书写）；input 提取的标准条目以注释
 全文：.sillyspec/changes/archive/2026-09-25-fr-agent-writable/requirements.md#FR-01
@@ -1129,7 +1129,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-agent-writable
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then amendFlowDraft：撤掉 requirements-frs 的特殊处理（FR 不再是机器段，无 amend 需求）
 全文：.sillyspec/changes/archive/2026-09-25-fr-agent-writable/requirements.md#FR-02
@@ -1151,7 +1151,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-agent-writable
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then flow done 校验：FR 区非空（agent 填了）+ 绑定槽非空（现有行为不变）
 全文：.sillyspec/changes/archive/2026-09-25-fr-agent-writable/requirements.md#FR-03
@@ -1173,7 +1173,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-agent-writable
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then adopt 路径兼容：brainstorm 的 requirements 是 agent 手写——ensureBindingSlots 按实际 FR 编号追加槽
 全文：.sillyspec/changes/archive/2026-09-25-fr-agent-writable/requirements.md#FR-04
@@ -1195,7 +1195,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-agent-writable
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then 测试：骨架形态（FR 区为 AGENT 槽含参考注释）/agent 填写后 flow done 通过/空白拒收 三面
 全文：.sillyspec/changes/archive/2026-09-25-fr-agent-writable/requirements.md#FR-05
@@ -1217,7 +1217,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 共享主仓存在本变更的未提交交付文件；When flow done --freeze-dirty；Then 非他侧声明的 dirty 交付文件全归本变更并入冻结面（exclusiveFrom='flag' 标签区分）
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-01
@@ -1239,7 +1239,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — When flow done 时共享主仓有未提交交付文件且未声明；Then 警告点名三选一（接受缺口 / --freeze-dirty 重跑 / 专属 worktree），简报同步冻结面规则说明
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-02
@@ -1261,7 +1261,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — When flow done 归档完成且 head 不等于 baseline；Then 打印 reset --soft <baseline> 压扁为单提交指引，注明审计真相在 change.patch sha 锚定不依赖历史形态
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-03
@@ -1283,7 +1283,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-thin-freeze-git-hygiene
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 上述三件行为；When 跑 flow 系测试；Then flag 入冻/三选一文案/压扁指引均有断言且全绿
 全文：.sillyspec/changes/archive/2026-09-25-thin-freeze-git-hygiene/requirements.md#FR-04
@@ -1315,7 +1315,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-compound-split
 状态：active
 摘要：默认场景
-待复核：2026-09-26-governance-autopilot
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 成功标准条目内含「A/B」或「A；B」的合取标准；When extractSuccessCriteria 收集节内条目；Then 合取标准拆为独立条目（分号恒拆；斜杠仅在非路径形态拆）
 全文：.sillyspec/changes/archive/2026-09-25-fr-compound-split/requirements.md#FR-01
@@ -1337,7 +1337,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-compound-split
 状态：active
 摘要：默认场景
-待复核：2026-09-26-governance-autopilot
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 条目含扩展名点或多处斜杠（src/flow.js、backend/app/x.py 形态）；When 复合拆分判定；Then 条目完整保留不被斜杠误劈
 全文：.sillyspec/changes/archive/2026-09-25-fr-compound-split/requirements.md#FR-02
@@ -1359,7 +1359,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-fr-compound-split
 状态：active
 摘要：默认场景
-待复核：2026-09-26-governance-autopilot
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 成功标准为「后端端点可访问/鉴权生效」与「前端正常渲染」；When flow start 起草 requirements；Then 参考摘录呈现 FR-01 后端端点可访问、FR-02 鉴权生效、FR-03 前端正常渲染三行
 全文：.sillyspec/changes/archive/2026-09-25-fr-compound-split/requirements.md#FR-03
@@ -1381,7 +1381,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-flow-tick-prototype
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 轻量变更执行期；When fresh 或 adopt 路径启动；Then 简报含勾选纪律、adopt 列产物必读清单、status 显勾选进度
 全文：.sillyspec/changes/archive/2026-09-25-flow-tick-prototype/requirements.md#FR-01
@@ -1509,7 +1509,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-feedback-fixes
 状态：active
 摘要：默认场景
-待复核：2026-09-26-governance-autopilot
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台狗粮实证反馈；When 逐条判定修复；Then 勾选自由、CRLF 兼容、报错可恢复
 全文：.sillyspec/changes/archive/2026-09-25-feedback-fixes/requirements.md#FR-01
@@ -2045,7 +2045,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-cli-protocol-trust
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given CLI 报错指引指向未登记 flag（--same-session 消费于 runStage 逃生口、--force 消费于 quick cancel）；When 两 flag 登记 knownFlags；Then 照报错指引重跑可执行不再 exit 2
 全文：.sillyspec/changes/archive/2026-09-25-cli-protocol-trust/requirements.md#FR-01
@@ -2067,7 +2067,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-cli-protocol-trust
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given flag 消费/声明漂移类缺陷反复发生（历史三次自修+本次两实例）；When test/flag-contract 静态扫描三种消费形态 vs 白名单；Then 任何被消费未声明的 flag 测试红（整类灭绝钉）
 全文：.sillyspec/changes/archive/2026-09-25-cli-protocol-trust/requirements.md#FR-02
@@ -2089,7 +2089,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-cli-protocol-trust
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 括号换行的单条标准被行级切分拆成碎片、tasks 行 60 字硬切半词；When extractSuccessCriteria 前置续行合并 + clipTaskText 句界感知截断 + 碎片特征警告 括号未闭合条目并回成单条、截断带句读+
 全文：.sillyspec/changes/archive/2026-09-25-cli-protocol-trust/requirements.md#FR-03
@@ -2111,7 +2111,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-cli-protocol-trust
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 批量乐观对齐跳过 noAI 亲测步致 PASS 封顶拒四步绕行；When 对齐面含 verifyRunQualityScan 步先跑 executeVerifyQualityScan（幂等，失败弃批量）；Then 批量不省任何门承诺恢复；亲测失败保持单步推进无新死路
 全文：.sillyspec/changes/archive/2026-09-25-cli-protocol-trust/requirements.md#FR-04
@@ -2133,7 +2133,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-cli-protocol-trust
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given distill 产物（fr 域/decisions/INDEX）untracked 漏提交；When archiveNarrowedGitAdd 按 status 窄化逐文件 add knowledge 面；Then 归档链暂存面覆盖蒸馏产物（fail-soft）
 全文：.sillyspec/changes/archive/2026-09-25-cli-protocol-trust/requirements.md#FR-05
@@ -2155,7 +2155,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-25-platform-feedback-batch2
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 平台狗粮第二轮反馈；When B/C/D/E 四件修复；Then 陈旧声明不抢文件、跳过有因、触发不误报、声明面有自证
 全文：.sillyspec/changes/archive/2026-09-25-platform-feedback-batch2/requirements.md#FR-01
@@ -2231,7 +2231,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-workunits
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given thin 的 tasks.md 是验收标准逐条镜像，勾选判定时刻只在收口（R18-thin 15 条一把全勾实证）；When >5 条标准时 groupCriteriaToUnits 按域关键词聚类为工作单元（后端/前端/端到端/文档+未命中并入） 单元数少于标准数且每标准恰好覆盖一次
 全文：.sillyspec/changes/archive/2026-09-26-thin-workunits/requirements.md#FR-01
@@ -2253,7 +2253,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-workunits
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 单元行是进度信号与验收锚的载体；When draftTasks 渲染 task-NN: <域标签>——<摘要>等（覆盖标准 i,j,k） 行经 clipTaskText 长度管控；≤5 条标准保持逐条原
 全文：.sillyspec/changes/archive/2026-09-26-thin-workunits/requirements.md#FR-02
@@ -2275,7 +2275,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-workunits
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 旧「完成一条勾一条」语义与单元形态错配；When fresh/adopt 简报与 done advisory 三处文案更新 文案为「完成一个工作单元（该域实现+测试绿）即勾」且旧文案清除（文本钉）
 全文：.sillyspec/changes/archive/2026-09-26-thin-workunits/requirements.md#FR-03
@@ -2297,7 +2297,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-workunits
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 在途变更的 tasks.md 为旧逐条形态；When 本变更不重写已存在工件；Then 旧形态照常收口（哨兵/指纹语义不变）；thick 任务卡面不动
 全文：.sillyspec/changes/archive/2026-09-26-thin-workunits/requirements.md#FR-04
@@ -2319,7 +2319,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-agent-tasks
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given WORK_UNIT_BUCKETS 域枚举无法穷举开放世界任务形态（用户否决）；When 删除 groupCriteriaToUnits/WORK_UNIT_BUCKETS，draftTasks 恢复逐条标准预填 源码零残留（回退钉）
 全文：.sillyspec/changes/archive/2026-09-26-thin-agent-tasks/requirements.md#FR-01
@@ -2341,7 +2341,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-agent-tasks
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 任务面是 agent 的实现计划（机器预填只是零冷启动兜底）；When fresh/adopt 简报与 advisory 三处文案改为「预填草稿可按实际实现路径覆写（保持 task-NN 行形态）」 tasks.md 头注释声明计划
 全文：.sillyspec/changes/archive/2026-09-26-thin-agent-tasks/requirements.md#FR-02
@@ -2363,7 +2363,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-thin-agent-tasks
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 本会话第三次犯「枚举开放世界」同款错误；When design 槽4 写成显式决策记录（三次实例+正确模式：开放分类归 agent，机器锚定封闭面） distill 蒸馏进 knowledge/decision
 全文：.sillyspec/changes/archive/2026-09-26-thin-agent-tasks/requirements.md#FR-03
@@ -2569,7 +2569,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-tick-loop-nudge
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 起点简报的勾选指令几小时后失效（R19 实证一把勾）；When flow status 在②执行阶段且勾选滞后且区间有提交 提醒行在场（边干边勾+勿攒收口）；①阶段或勾齐时不刷
 全文：.sillyspec/changes/archive/2026-09-26-tick-loop-nudge/requirements.md#FR-01
@@ -2591,7 +2591,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-tick-loop-nudge
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 任务面常驻工件是第二注入通道；When draftTasks 渲染头部含边干边勾纪律+完成判定语义（实现到位+测试跑绿即勾）+pathspec 提交要求
 全文：.sillyspec/changes/archive/2026-09-26-tick-loop-nudge/requirements.md#FR-02
@@ -2613,7 +2613,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-tick-loop-nudge
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given R19 发现 tasks.md untracked 直至归档；When 交付纪律行明示 tasks.md 一并 pathspec 提交 理由（勾选证据进 git 历史）与 status 提醒的交叉引用在场
 全文：.sillyspec/changes/archive/2026-09-26-tick-loop-nudge/requirements.md#FR-03
@@ -2635,7 +2635,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-tick-loop-nudge
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 一把勾模式（tasks.md 首次提交==最后提交）或 untracked 形态；When 哨兵 complete 分支（token 证据齐）放行时 warn 行为提醒各一（不阻断，fail-soft）
 全文：.sillyspec/changes/archive/2026-09-26-tick-loop-nudge/requirements.md#FR-04
@@ -2765,7 +2765,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-01
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2785,7 +2785,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-02
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2805,7 +2805,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-03
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2825,7 +2825,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-04
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2845,7 +2845,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-05
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2865,7 +2865,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-06
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2873,7 +2873,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-binding-anchor-fidelity
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：roadmap-copy-purge
 全文：.sillyspec/changes/archive/2026-09-26-binding-anchor-fidelity/requirements.md#FR-07
 最近确认：3d39f6337998662fb497e633079ac4986287460c
 
@@ -2893,7 +2893,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-governance-autopilot
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 成功标准列表；When draftRequirements 调 draftGwtSkeleton 逐条生成 Given/When/Then FR 区含完整 GWT 块（非空槽）且头部说
 全文：.sillyspec/changes/archive/2026-09-26-governance-autopilot/requirements.md#FR-01
@@ -2915,7 +2915,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-governance-autopilot
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given tasks.md 有未勾条目且区间提交含 task-NN token；When flow done 哨兵检查前解析 token 并代勾 有证据但未勾的条目被自动勾选（_autoTicked>0 时 console.log）；已勾的不重复操作
 全文：.sillyspec/changes/archive/2026-09-26-governance-autopilot/requirements.md#FR-02
@@ -2937,7 +2937,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-governance-autopilot
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 绑定槽为空且 verify-runs 有测试结果；When flow done 绑定校验前读 test-result.json 提取测试文件路径 空槽被自动补全（agent 可覆盖）；无测试结果时 fail-soft 放
 全文：.sillyspec/changes/archive/2026-09-26-governance-autopilot/requirements.md#FR-03
@@ -2959,7 +2959,7 @@ created_at: 2026-09-22T12:40:09.727Z
 变更：2026-09-26-governance-autopilot
 状态：active
 摘要：默认场景
-待复核：2026-09-27-thin-module-scope-persist
+待复核：roadmap-copy-purge
 场景正文：
 - 场景：默认场景 — Given 已有 agent 填写的内容（FR/绑定/勾选）；When 三条自动机制运行；Then 已有内容不被覆盖（tick 只代勾未勾的、bind 只填空槽、GWT 只在起草时生成）
 全文：.sillyspec/changes/archive/2026-09-26-governance-autopilot/requirements.md#FR-04
@@ -3456,3 +3456,30 @@ created_at: 2026-09-22T12:40:09.727Z
 - 场景：默认场景 — Given 系统就绪；When 全量 npm test 与 npm run lint 绿；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-28-archive-timeline-bake/requirements.md#FR-06
 最近确认：a688429853a0c5b11dd44ddd4b54dc29583daad7
+
+## FR-cli-entry-183 .sillyspec/ROADMAP.md 自本仓删除并显式 pathspec 提交
+变更：roadmap-copy-purge
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When .sillyspec/ROADMAP.md 自本仓删除并显式 pathspec 提交；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/roadmap-copy-purge/requirements.md#FR-01
+最近确认：6d467b738d6c732f7076e3f65283a57ba78053a8
+
+## FR-cli-entry-184 CLI 读侧零改动：next.js 绿地探测（面向用户自备文档的通用功能）保留、status 阶段
+变更：roadmap-copy-purge
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When CLI 读侧零改动：next.js 绿地探测（面向用户自备文档的通用功能）保留、status 阶段 cat 带 2>/dev/null 自失活、stages/a；Then ）不触发重建
+全文：.sillyspec/changes/archive/roadmap-copy-purge/requirements.md#FR-02
+最近确认：6d467b738d6c732f7076e3f65283a57ba78053a8
+
+## FR-cli-entry-185 纯 doc 删除，收口实测自动跳过代码面
+变更：roadmap-copy-purge
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 纯 doc 删除，收口实测自动跳过代码面；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/roadmap-copy-purge/requirements.md#FR-03
+最近确认：6d467b738d6c732f7076e3f65283a57ba78053a8

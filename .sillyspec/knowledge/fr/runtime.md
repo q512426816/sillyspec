@@ -2,7 +2,7 @@
 变更：2026-09-18-preflight-slimming
 状态：active
 摘要：失败清单前移
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 产出型步骤（brainstorm 写文档/生成规范、plan 生成计划、execute 任务步）的 prompt 渲染；When 该步骤 --done 将消费的 validator 存在当前失败项；Then prompt 含前置失败清单——只注本步相关 validator、条数帽 5、超时帽 3s/validator、异常静默不注（fail-open）、尾部固定「完
 - 场景：失败清单前移 — Given design.md 清单有一行幻觉路径；When 进入 brainstorm 生成规范文件步；Then prompt 直接列出该 design_file_ref_invalid 项——agent 本轮即修，不再 --done 被打回重一轮
@@ -13,7 +13,7 @@
 变更：2026-09-18-preflight-slimming
 状态：active
 摘要：摘要引用
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given .runtime/prompt-inject-<change>.json 账本（withFileLock 写入，archive 经 pruneArchivedC；When 同阶段非首步渲染；Then 模块上下文/scan 事实只注摘要行（digest 前 8 位+可 Read 路径引用）；账本读写异常回退每步全量（现状零回归）
 - 场景：摘要引用 — Given brainstorm 已在第 2 步全量注入模块上下文；When 第 6 步渲染；Then 注入为「本阶段上下文已于步骤 2 注入（digest xxxxxxxx）；需要时 Read <路径>」一行
@@ -24,7 +24,7 @@
 变更：2026-09-18-preflight-slimming
 状态：active
 摘要：继承盖章
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given run <stage> --wait --inherit-from D-xxx@vN（解析在 src/run/command.js，落账在 src/run/co；When decisions.md 字面存在该 ID（hasDecisionId 机械校验）；Then 同命令落答案轮「由 D-xxx@vN 继承确认（CLI 盖章）」；不存在则 exit 2（fail-closed）；不带 --inherit-from 行为与现
 - 场景：继承盖章 — Given 方案选择已由 D-005@v1 裁决；When run plan --wait --inherit-from D-005@v1；Then 同命令完成 wait 记录+盖章轮（省一次 --done --answer 往返）
@@ -35,7 +35,7 @@
 变更：2026-09-18-preflight-slimming
 状态：active
 摘要：守恒验收
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 任务卡规则模板（templates/prompts/taskcard-rules.md）与 execute 任务步 prompt；When 渲染；Then 含「中间验证定向优先：node --test <本任务测试文件>；全量 npm test 留 task 收口与 verify --done」；verify-re
 - 场景：守恒验收 — Given 批 2 落地后的首个变更；When verify；Then 摩擦账对比拦截数守恒、noAI 亲测双绿、prompt 中位统计不反弹
@@ -46,7 +46,7 @@
 变更：2026-09-20-quick-asset-tail
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-001@v1、D-002@v1、D-004@v1
 场景正文：
 - 场景：默认场景 — Given quick --done 且 test+lint 门禁 action ≠ fail 且 linkedChanges 含真变更（非 quick-<hex>）；When 收尾段执行；Then requirements.md 有 FR 块 → fr-index 入账（幂等）；decisions.md 有条目 → decision-distill 入账；
@@ -57,7 +57,7 @@
 变更：2026-09-20-quick-asset-tail
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-003@v1
 场景正文：
 - 场景：默认场景 — Given 纯 quick 或薄通道 quick 触达某域且该域有 active FR；When 钩子#1 命中
@@ -68,7 +68,7 @@
 变更：2026-09-20-quick-asset-tail
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-005@v1
 场景正文：
 - 场景：默认场景 — Given 纯 quick --done（无 linked 真变更）；When 收尾段执行；Then changedFiles×module-map 命中模块且边车存在 → changelog 追加一行 `- ql-id | 摘要`；--cause 原文 × I
@@ -79,7 +79,7 @@
 变更：2026-09-21-r5-efficiency-batch2
 状态：active
 摘要：（无场景名）
-待复核：2026-09-26-task-review-retire
+待复核：2026-09-28-guidance-principles
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-01
 最近确认：c1d22063
 
@@ -87,7 +87,7 @@
 变更：2026-09-21-r5-efficiency-batch2
 状态：active
 摘要：（无场景名）
-待复核：2026-09-26-task-review-retire
+待复核：2026-09-28-guidance-principles
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-02
 最近确认：c1d22063
 
@@ -95,7 +95,7 @@
 变更：2026-09-21-r5-efficiency-batch2
 状态：active
 摘要：（无场景名）
-待复核：2026-09-26-task-review-retire
+待复核：2026-09-28-guidance-principles
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-03
 最近确认：c1d22063
 
@@ -103,7 +103,7 @@
 变更：2026-09-21-r5-efficiency-batch2
 状态：active
 摘要：默认场景
-待复核：2026-09-26-task-review-retire
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 同一 (stage, step) 第二次渲染且静态段指纹一致；When run <stage> 复入输出步骤指引；Then 输出 ≤10 行（指纹+落盘路径+按需 Read 提示），动态段照常渲染，--json 模式全量输出不变
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch2/requirements.md#FR-04
@@ -113,7 +113,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-002@v1
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-01
 最近确认：27de9716
@@ -122,7 +122,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-001@v1
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-02
 最近确认：27de9716
@@ -131,7 +131,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：（无场景名）
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-003@v1
 全文：.sillyspec/changes/archive/2026-09-21-r5-efficiency-batch3/requirements.md#FR-03
 最近确认：27de9716
@@ -140,7 +140,7 @@
 变更：2026-09-21-r5-efficiency-batch3
 状态：active
 摘要：默认场景
-待复核：2026-09-28-archive-timeline-bake
+待复核：2026-09-28-guidance-principles
 依据决策：D-004@v1
 场景正文：
 - 场景：默认场景 — Given 全量测试在同一（代码×测试面×环境）态下重复执行；When gate/verify --done/quick --done 再次触发实测检查；Then 三键全等即复用最近结果（不重跑），任一分量变化或不可得即真跑——失败永不来自缓存
@@ -215,7 +215,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-25-brainstorm-quick-remnant
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then complete.js brainstorm small 完成文案改指 flow start 收编（不再是 run quick --linked-changes
 全文：.sillyspec/changes/archive/2026-09-25-brainstorm-quick-remnant/requirements.md#FR-01
@@ -225,7 +225,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-25-brainstorm-quick-remnant
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then stages/brainstorm.js 两处 small 档 quick 指引改指轻量变更（步骤 prompt 与规范文件模板各一处）
 全文：.sillyspec/changes/archive/2026-09-25-brainstorm-quick-remnant/requirements.md#FR-02
@@ -235,7 +235,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-25-brainstorm-quick-remnant
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then run/complete.js 的 quick 末步四参数预告文案保留（存量 quick 会话收尾仍需，不改）
 全文：.sillyspec/changes/archive/2026-09-25-brainstorm-quick-remnant/requirements.md#FR-03
@@ -245,7 +245,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-25-brainstorm-quick-remnant
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 平台按当前契约运行；When 本变更交付并运行；Then 测试面无行为断言依赖旧文案；flow 系全绿
 全文：.sillyspec/changes/archive/2026-09-25-brainstorm-quick-remnant/requirements.md#FR-04
@@ -255,7 +255,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-review-unsupervised-exit
 状态：active
 摘要：默认场景
-待复核：2026-09-27-ui-visual-guidance
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 无嵌套派发能力环境需要诚实出口；When readReviewUnsupervisedWaiver 读变更目录 review-unsupervised.md 含 unsupervised 字样放行/不含
 全文：.sillyspec/changes/archive/2026-09-26-review-unsupervised-exit/requirements.md#FR-01
@@ -277,7 +277,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-review-unsupervised-exit
 状态：active
 摘要：默认场景
-待复核：2026-09-27-ui-visual-guidance
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 评审门四处（doctor-align/review-json 硬门/Stage Review tier 分支/Execute Task Review）；When 豁免凭据在场 先于校验放行（warn+遥测 review-unsupervised-escape）；两凭据皆无照旧 fail-closed
 全文：.sillyspec/changes/archive/2026-09-26-review-unsupervised-exit/requirements.md#FR-02
@@ -299,7 +299,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-review-unsupervised-exit
 状态：active
 摘要：默认场景
-待复核：2026-09-27-ui-visual-guidance
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given brainstorm Grill/plan/execute QA 三处 tier=independent 指引只教派发；When 插入豁免分支句 无派发能力→不产 review.json 不自审表演→写声明文件即豁免（含文件名与 unsupervised 字样要求）
 全文：.sillyspec/changes/archive/2026-09-26-review-unsupervised-exit/requirements.md#FR-03
@@ -321,7 +321,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given execute 阶段完成（或 doctor --align-execute-progress --confirm）；When 阶段完成门级联/align 前置门
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-01
@@ -343,7 +343,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given execute 任一步 --done 或 execute 阶段完成；When CLI 走 completeStep；Then 不再调 autoCheckPlan
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-02
@@ -365,7 +365,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given buildWavePrompt 渲染（main/dispatch 两模式）；When 注入执行方式/调度要求段；Then 指引为「手动勾选 tasks.md 对
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-03
@@ -387,7 +387,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given verify 阶段加载证据账；When 检查 verify-required-evidence.json；Then 该文件随 Task Review 退役停写—
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-04
@@ -409,7 +409,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 历史归档变更的 doctor/回放兼容读侧；When 引用 task-review.js / stage-review.js；Then 模块与既有导出保留不删（
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-05
@@ -431,7 +431,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given 本变更交付的测试；When 跑受影响清单；Then align-execute-review-gate 场景①③语义翻转+⑤源码退役钉、review-unsup
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-06
@@ -453,7 +453,7 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given .sillyspec/local.yaml commands.test（npm run test:core）与 commands.lint；When 收口实测；
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-07
@@ -463,8 +463,119 @@ superseded_by：FR-cli-entry-102
 变更：2026-09-26-task-review-retire
 状态：active
 摘要：默认场景
-待复核：2026-09-27-change-birth-stage-brainstorm
+待复核：2026-09-28-guidance-principles
 场景正文：
 - 场景：默认场景 — Given R18 实证知识沉淀；When 收尾 knowledge 维护；Then known-issues.md 新增「Task Review 层已退役」条目（状态🟢
 全文：.sillyspec/changes/archive/2026-09-26-task-review-retire/requirements.md#FR-08
 最近确认：24260c180b447ccfdf55ae4feb4e0b01fea8dfa5
+
+## FR-runtime-037 原则档案一——工具引导产物语言生态中立
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given sillyspec 面向任意技术栈的多仓；When 生成须知、探针文案、骨架、任务书等引导产物；Then 不绑定语言、框架、包管理器、构建工具；生态命令由仓与项目自描述，agent 就近发现
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-01
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+## FR-runtime-038 原则档案二——门位原则
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 设计检查与门禁的挂载时机；When 评估挂载位置；Then 与错误修复成本匹配：方向性错误开工引导、局部文本错误过程测试加收口兜底、累积性漂移三层都要；不把所有检查堆在收口
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-02
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+## FR-runtime-039 UI 执行须知改写为四条原则版
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given UI 触达变更开工；When 须知注入；Then 四条原则在位：定稿原型必须是可复跑真码产物、开工先就近发现本项目管线（多项目仓按触达路径就近）、手绘单文件仅限一次性粗选、视觉降级须用户裁决留痕；零生态词零命令
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-03
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-28-guidance-principles:flow:FR-03
+  tests: test/ui-visual-guidance.test.mjs「buildUiGuidanceLines：仓中立 + 证据约定与探针同源」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-28-guidance-principles
+  status: active
+
+## FR-runtime-040 brainstorm 阶段注入
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 头脑风暴方案对比步渲染 prompt；When 变更目录语料命中 UI 触达检测；Then 注入同一 UI 执行须知；无命中替换空串；异常 fail-soft 单行说明；占位符入指纹掩蔽清单
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-04
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-28-guidance-principles:flow:FR-04
+  tests: test/prompt-placeholders.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-28-guidance-principles
+  status: active
+
+## FR-runtime-041 引导输出断言测试
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 引导构建函数输出；When 跑断言测试；Then 输出不含生态命令词形态（检查输出而非源码文本——源码为探测示教注释引用合法）
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-05
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-28-guidance-principles:flow:FR-05
+  tests: test/guidance-output-neutrality.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-28-guidance-principles
+  status: active
+
+## FR-runtime-042 既有 ui-visual 测试同步
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 须知内容改写；When 跑既有测试；Then 新原则关键词断言在位（真码产物、就近发现、仅限一次性粗选、生态词零命中）
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-06
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-28-guidance-principles:flow:FR-06
+  tests: test/ui-visual-guidance.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-28-guidance-principles
+  status: active
+
+## FR-runtime-043 过程与收口双时机触发
+变更：2026-09-28-guidance-principles
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 引导文件被修改；When 动态测试推断；Then 断言测试自动入实测面（agent 写完即跑为过程拦、flow done 实测为收口拦）
+全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-07
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7

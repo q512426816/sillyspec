@@ -1285,3 +1285,17 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：a688429853a0c5b11dd44ddd4b54dc29583daad7
 理由：最大风险：平台/漂移模式下 runtimeRoot 与 specBase/.runtime 分裂，烤制读错目录 → 静默漏烤。缓解：编排内用 resolvePlatformOpts + resolveRuntimeRoot 与既有消费者同链；跳过/失败均输出注记行保持可观测；测试用 fixture runtimeRoot 直验。次风险：巨型事件流污染 git——尺寸帽 2MiB 超帽只烤 timeline.md 并注记。 放弃的方案：①watcher 活跃期直接把事件写进 changes 目录（放弃——改写侧协议面大，且活跃期事件属 .runtime 隐私/排除边界，D-002 语义不动）；②CLI 回退时把归档副本反向重建到 .runtime（放弃——制造两份真相源，违背「本地 jsonl 唯一真相源」既有口径）。 评审留痕（独立评审 PASS 2×P3 清偿）：P3-1 副本读源失败时头注记虚报副本在场——已修（eventsCopySkipped 扩读源失败形态，注记文本改为「尺寸超帽或读源失败」与实际产出一致，补测试）；P3-2 「与 spawnWatcher 写侧同链」对 flow.js 各拉起位在平台极端漂移下存在既有分裂面——措辞修正：烤制的 runtimeRoot 解析与既有消费链（resolvePlatformOpts>resolveRuntimeRoot）同源，平台模式下若写读目录分裂属既有面，本设计的兜底是跳过时输出注记行保持可观测、非静默漏烤。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-28-guidance-principles
+锚点：未记录
+最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+理由：最大风险：brainstorm 语料在 proposal 尚未生成的早期步骤可能只有变更名——变更名含 UI 词（如 apple-style 不含）则漏注入；对冲：方案对比步执行时 proposal 通常已落盘，且 flow start 注入兜底另一入口。放弃方案：①静态红线扫源码（用户指出误伤探测代码、示教 example 与历史注释，改为输出断言）；②local.yaml commands.prototype 配置位（用户指出多前端项目多生态仓不成立，仓自身 modules.*.test 退役史为证——改为就近发现原则文案）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：roadmap-copy-purge
+锚点：未记录
+最近确认：6d467b738d6c732f7076e3f65283a57ba78053a8
+理由：最大风险：误判「无消费」——已全源码 grep 复核（ROADMAP 在 src/ 共 8 处：worktree.js×2 注释、complete-handlers×2 lite 豁免措辞、next.js×2 绿地探测、archive.js×1 条件指令、status.js×1 cat），无任何写侧、无条件不成立的读侧；.claude/skills 两处文案提及（archive 描述「+ 更新 ROADMAP」、explore cat 行）属提示面非行为面，文件缺席后自失活，留待后续产品级变更一并出清（不在本次批准面）。放弃的方案：保留但机器化维护—— lite/thin 归档豁免使其永远缺主力通道数据，且三套真源已覆盖，不值得维护。

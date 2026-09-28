@@ -1,0 +1,31 @@
+{
+  "change": "roadmap-copy-purge",
+  "baseline": "b9c4e181f50a074e0c19627fdd5e5ceaf0c5ed42",
+  "head": "6d467b738d6c732f7076e3f65283a57ba78053a8",
+  "files": [
+    ".sillyspec/changes/roadmap-copy-purge/tasks.md",
+    ".sillyspec/changes/roadmap-copy-purge/design.md",
+    ".sillyspec/changes/roadmap-copy-purge/proposal.md",
+    ".sillyspec/changes/roadmap-copy-purge/requirements.md"
+  ],
+  "totals": {
+    "files": 4,
+    "additions": 127,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-28T06:11:56.121Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "fc1c2786ee81acc9014c79b1fde1e65ec72bb87051f9b2c62a54938b03be9833",
+  "patchStatus": "ok"
+}

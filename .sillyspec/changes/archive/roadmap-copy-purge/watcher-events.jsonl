@@ -1,0 +1,10 @@
+{"ts":1790575759795,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790575769703,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790575769703,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1790575769932,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01、task-02、task-03 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790575792871,"kind":"commit","stage":null,"detail":"6d467b73","provisional":true}
+{"ts":1790575916503,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790576228535,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790576228535,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790576484787,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790576504513,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
