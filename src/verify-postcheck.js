@@ -1004,7 +1004,8 @@ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
  * 进程带 NODE_TEST_CONTEXT env，execSync 全量继承会让内层 node --test 误入 child 模式
  * stdout 全空——所有跑测试命令的 execSync 调用点统一经此剥离（普通进程本无此键零变化）。
  */
-export function stripNestedTestEnv(env = process.env) {
+// 摘 export（2026-09-29：lint 22e-b 死导出——src+test 其余文件零引用，本文件内三处调用保留）
+function stripNestedTestEnv(env = process.env) {
   const next = { ...env }
   delete next.NODE_TEST_CONTEXT
   return next

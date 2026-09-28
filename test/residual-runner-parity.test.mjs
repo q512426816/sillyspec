@@ -54,6 +54,8 @@ test('④ 混合三批分拣 + .ts 原生不变', () => {
     hits: [{ test: 'cd frontend && pnpm exec vitest run src' }],
   })
   assert.deepEqual(b.map((x) => x.short), ['py', 'js', 'jsx'], '三批：py / js 原生 / jsx 项目')
-  assert.match(b[1].command, /^node --test a\.test\.ts$/, '.ts 照旧 node --test（原生可跑——既有行为）')
+  // .ts 照旧 node --test 原生跑（bdd45b24 起带双报告器：spec→stderr 人读、tap→stdout 机读，
+  // 判账走 judgeTapOutput 用例粒度——锚从裸 `node --test <file>` 更新为带报告器形态）
+  assert.match(b[1].command, /^node --test .*a\.test\.ts$/, '.ts 照旧 node --test 原生跑（双报告器形态）')
   assert.match(b[2].command, /vitest run c\.test\.tsx/)
 })

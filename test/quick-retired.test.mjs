@@ -9,7 +9,7 @@
  * R3 --change 指向不存在会话：兜底网拒绝 exit 1
  * R4 在途会话收尾（FR-02）：夹具预置 → 渲染（含退役 ℹ️ 提示）→ 三步 --done 全通
  * R5 文档与版本（FR-03）：模板/AGENTS.md 含「已退役」墓碑、无「存量过渡通道」表述；
- *    package.json 3.30.0（init 按版本差刷新存量 AGENTS.md）
+ *    package.json 3.31.0（init 按版本差刷新存量 AGENTS.md）
  */
 import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
@@ -143,7 +143,7 @@ console.log('=== quick 通道退役：拒绝门与在途收尾 ===\n')
   assert(!agents.includes('run quick') && agents.includes('轻量变更') && agents.includes('flow start'),
     'R5 仓库 AGENTS.md：与模板同源（无 quick 通道指引，轻量变更默认道在位）')
   const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'))
-  assert(pkg.version === '3.30.0', `R5 package.json 版本 3.30.0（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
+  assert(pkg.version === '3.31.0', `R5 package.json 版本 3.31.0（实际 ${pkg.version}，init 按版本差刷新存量 AGENTS.md）`)
 }
 
 cleanupTmpDirs()
