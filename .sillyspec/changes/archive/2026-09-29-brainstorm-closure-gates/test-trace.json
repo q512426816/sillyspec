@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-brainstorm-closure-gates",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-01",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「proposal 缺成功标准 → warning／含成功标准不报／scale=small 豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-02",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「D-001@v1 已引用 D-002@v1 未引用 → 仅点名 D-002／剩余风险行含裸号亦算归属」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-03",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「自审存疑：无闭合 token → warning／含 D-xxx/R-xx/已解决不报／checklist 模板行（无冒号应用形态）不误报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-04",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「design-init 骨架 R-01（待填应对策略）→ warning／已填应对不报／接受：理由显式接受不报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-05",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「tasks.md 独立成行 TODO/待完善 → warning／正常任务行不报」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-06",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「决策追踪表待确认残留 → warning／改已覆盖后消除」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-07",
+      "tests": [
+        "test/brainstorm-closure-gates.test.mjs「literal-none 纯 kind 引擎判定」",
+        "test/stage-contract-spec.test.mjs「custom kind 引擎 skip」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-09-29-brainstorm-closure-gates:flow:FR-08",
+      "tests": [
+        "test/run-tests.mjs",
+        "test/stage-contract-spec.test.mjs「全齐 0 warning」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-closure-gates"
+    }
+  ]
+}
