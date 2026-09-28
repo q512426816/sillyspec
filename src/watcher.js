@@ -439,9 +439,12 @@ export function loadSnapshotWatermark(runtimeRoot, changeName) {
  * 写水位（best-effort，失败不抛）。cacheObj={last} 时内容去重（与上次序列化串相同跳过写，
  * 防 3s 周期空转 IO——Grill 修正③）。
  */
-export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null) {
+export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null, sentinel = null) {
   try {
-    const json = JSON.stringify(snap);
+    // sentinel 态搭水位车持久（2026-09-28-watcher-signal-widen 评审 P2 清偿：fakeCheckPending
+    // 纯内存时 watcher 重启即丢——pending 翻格的消解承诺落空。快照键不动，sentinel 挂
+    // 附加键（loadSnapshotWatermark 的形状校验只看 ts/archived，附加键对旧读方透明）。
+    const json = JSON.stringify(sentinel ? { ...snap, sentinel } : snap);
     if (cacheObj && cacheObj.last === json) return { written: false };
     writeFileSync(watcherSnapshotPath(runtimeRoot, changeName), json);
     if (cacheObj) cacheObj.last = json;
@@ -990,6 +993,10 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
   // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
   // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
   let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
+  // sentinel 态回补（评审 P2 清偿）：水位的 sentinel 附加键恢复 pending（旧水位无此键=空集，零变化）
+  if (useWatermark && watermark.sentinel && watermark.sentinel.fakeCheckPending) {
+    sentinelState.fakeCheckPending = { ...watermark.sentinel.fakeCheckPending };
+  }
   const watermarkCache = { last: null };
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -1047,7 +1054,7 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
     const batch = events.concat(warnings);
     prev = snap;
     // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）
-    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache);
+    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache, { fakeCheckPending: sentinelState.fakeCheckPending || {} });
     if (batch.length === 0) {
       if (Date.now() - lastActivityAt > IDLE_EXIT_MS) {
         console.log('[watcher] 空闲超时自退（6h 无事件）');
