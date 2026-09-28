@@ -621,13 +621,20 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       const tasksDir = changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null
       if (tasksDir && existsSync(tasksDir)) {
         const _log = safeGit ? safeGit(cwd, ['log', '--format=%B%x1e', 'HEAD~10..HEAD']) : null
-        const commitMsgs = String((_log && !_log.error) ? _log.value : '') || ''
-        if (commitMsgs) {
+        const _logOk = !!(_log && !_log.error)
+        const commitMsgs = _logOk ? String(_log.value) || '' : ''
+        if (_logOk) { // 空串（区间零提交）照跑——零提交不豁免，哨兵从严
           // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选免 per-task
           // 证据（quick 道现状无基线快照面——readBaselineTasks 恒 null 走 fail-safe 旧判据，接线为
           // 基线面将来扩到 quick 道时的零改动就绪）。
-          const { readBaselineTasks } = await import('../route-hindsight.js')
-          const _baselineTasksMd = changeName ? readBaselineTasks({ specBase, change: changeName }) : null
+          const { readBaselineTasksVerified } = await import('../route-hindsight.js')
+          let _anchored = null
+          try {
+            const _fsText = readFileSync(join(specBase, 'changes', changeName, 'flow-state.yaml'), 'utf8')
+            _anchored = (/^baseline_sha256:\s*([0-9a-f]+)\s*$/m.exec(_fsText) || [])[1] || null
+          } catch { /* 锚定缺失=过渡期信任 */ }
+          const _bv = changeName ? readBaselineTasksVerified({ specBase, change: changeName, anchoredSha256: _anchored }) : { tasksMd: null, tampered: false }
+          const _baselineTasksMd = _bv.tasksMd
           const sent = detectFakeCheckCompletion({ changeDir: dirname(tasksDir), tasksMd: readFileSync(tasksDir, 'utf8'), commits: commitMsgs.split('\x1e').map((x) => x.trim()).filter(Boolean), baselineTasksMd: _baselineTasksMd })
           if (sent.mirrored && sent.mirrored.length > 0) {
             console.log(`ℹ️ 哨兵：${sent.mirrored.length} 处镜像任务勾选（成功标准镜像面，免 per-task 提交证据）`)

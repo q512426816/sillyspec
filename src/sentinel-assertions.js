@@ -110,13 +110,15 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, baselin
   }
   const claimTotal = entries.length;
   const checked = entries.filter((e) => e.checked).length;
-  const mirror = mirroredTaskIds({ tasksMd, baselineTasksMd });
+  const messages = (Array.isArray(commits) ? commits : [])
+    .map((c) => (typeof c === 'string' ? c : String((c && (c.message ?? c.subject)) || '')));
+  // 零提交不豁免（2026-09-28-sentinel-waiver-hardening 角度 A 实证：镜像全勾＋区间零提交曾
+  // 空转收口——「实测门/patch/review 整体背书」论证在纯文档变更有缺口。豁免前提=有交付）。
+  const mirror = messages.length > 0 ? mirroredTaskIds({ tasksMd, baselineTasksMd }) : new Set();
   const mirrored = entries.filter((e) => e.checked && mirror.has(e.id)).map((e) => e.id);
   if (claimTotal === 0 || checked < claimTotal) {
     return { status: 'none', claimTotal, checked, missing: [], mirrored };
   }
-  const messages = (Array.isArray(commits) ? commits : [])
-    .map((c) => (typeof c === 'string' ? c : String((c && (c.message ?? c.subject)) || '')));
   const reviews = listReviewEvidence(changeDir, opts);
   const missing = entries
     .filter((e) => {

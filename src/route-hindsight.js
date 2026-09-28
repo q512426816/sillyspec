@@ -31,6 +31,7 @@
  *     substeps」改读同为既有记录面的 verify-runs 时间线，封闭面语义不变）。
  */
 import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join, basename, dirname } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { computeEditRatio } from './flow-draft.js'
@@ -109,6 +110,33 @@ export function snapshotBaseline({ specBase, change, changeDir }) {
   } catch (e) {
     return { captured: false, reason: (e && e.message) || String(e) }
   }
+}
+
+/**
+ * 基线文件 sha256（2026-09-28-sentinel-waiver-hardening：flow-state 锚定用——start/adopt 快照
+ * 时点记哈希，哨兵消费时校验，防 .runtime 明文基线被事后改写伪装镜像）。缺文件 → null。
+ */
+export function baselineSha256({ specBase, change }) {
+  try {
+    const p = join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`)
+    if (!existsSync(p)) return null
+    return createHash('sha256').update(readTextSafe(p)).digest('hex')
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 锚定验证读取（2026-09-28-sentinel-waiver-hardening F2：校验逻辑抽离可单测）——消费侧统一入口。
+ * 有锚定（anchoredSha256 非空）且与文件现哈希不符 → {tasksMd: null, tampered: true}（按无基线从严）；
+ * 无锚定（过渡期）/相符/缺文件 → {tasksMd, tampered: false}。
+ */
+export function readBaselineTasksVerified({ specBase, change, anchoredSha256 }) {
+  const tasksMd = readBaselineTasks({ specBase, change })
+  if (tasksMd == null || !anchoredSha256) return { tasksMd, tampered: false }
+  const now = baselineSha256({ specBase, change })
+  if (now && now !== anchoredSha256) return { tasksMd: null, tampered: true }
+  return { tasksMd, tampered: false }
 }
 
 /**

@@ -118,3 +118,41 @@ test('⑤ watcher R1 端到端：镜像翻格零证据不发 fake-check（change
   const nocd = applySentinelRules({ prev: snap([]), next: snap(['task-01']), state: null, changeDir: null })
   assert.ok(nocd.warnings.some((w) => w.rule === 'fake-check'), '无 changeDir 按无豁免从严')
 })
+
+test('⑥ 零提交不豁免（角度 A）：镜像全勾＋commits=[] → fake（空转变更不许过门）', () => {
+  const r = detectFakeCheckCompletion({
+    changeDir: null,
+    tasksMd: checkedMd(),
+    commits: [],
+    baselineTasksMd: BASELINE,
+    opts: { listReviewsImpl: () => [] },
+  })
+  assert.equal(r.status, 'fake', '零交付时镜像豁免不生效')
+  assert.deepEqual(r.missing.sort(), ['task-01', 'task-02', 'task-03'])
+  assert.deepEqual(r.mirrored, [], '零提交时 mirrored 不报告')
+})
+
+test('⑦ 基线锚定验证读取器（F2）：无锚信任/锚符放行/锚不符从严＋篡改标记', async () => {
+  const { baselineSha256, readBaselineTasksVerified } = await import('../src/route-hindsight.js')
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+  const spec = mkdtempSync(join(tmpdir(), 'ss-anchor-'))
+  const change = '2026-09-28-anchor'
+  mkdirSync(join(spec, '.runtime'), { recursive: true })
+  const bp = join(spec, '.runtime', 'route-hindsight-baseline-2026-09-28-anchor.json')
+  const payload = { schemaVersion: 1, change, design: null, tasks: BASELINE }
+  const dump = () => writeFileSync(bp, JSON.stringify(payload, null, 2) + String.fromCharCode(10))
+  dump()
+  const h = baselineSha256({ specBase: spec, change })
+  assert.ok(/^[0-9a-f]{64}$/.test(h), 'sha256 形态')
+  assert.equal(baselineSha256({ specBase: spec, change: 'no-such' }), null, '缺文件 null')
+  let v = readBaselineTasksVerified({ specBase: spec, change, anchoredSha256: null })
+  assert.equal(v.tampered, false, '无锚（过渡期）信任')
+  assert.equal(v.tasksMd, BASELINE)
+  v = readBaselineTasksVerified({ specBase: spec, change, anchoredSha256: h })
+  assert.equal(v.tampered, false, '锚符放行')
+  payload.tasks = BASELINE.replace('task-01', 'task-99')
+  dump()
+  v = readBaselineTasksVerified({ specBase: spec, change, anchoredSha256: h })
+  assert.equal(v.tampered, true, '篡改检出')
+  assert.equal(v.tasksMd, null, '按无基线从严')
+})

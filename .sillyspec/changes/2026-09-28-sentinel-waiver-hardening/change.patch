@@ -1,0 +1,380 @@
+diff --git a/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/flow-state.yaml b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/flow-state.yaml
+new file mode 100644
+index 00000000..080a4929
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/flow-state.yaml
+@@ -0,0 +1,9 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: ae743b55c285996f05b4dce48beae3b32afcc2a0
++updatedAt: '2026-09-28T14:57:31.361Z'
++
+diff --git a/src/flow.js b/src/flow.js
+index cd8606b1..6666317b 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -369,8 +369,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+         // route-hindsight 首版快照（收编时点=redraftMissingArtifacts 首次落盘后）：adopt 的
+         // design 是头脑风暴产物、机器只补缺件——快照取收编时点内容，此后 agent 改写计入指标。
+         try {
+-          const { snapshotBaseline } = await import('./route-hindsight.js')
++          const { snapshotBaseline, baselineSha256 } = await import('./route-hindsight.js')
+           snapshotBaseline({ specBase, change, changeDir })
++          const _bsha = baselineSha256({ specBase, change })
++          if (_bsha) writeFlowState(changeDir, { baseline_sha256: _bsha })
+         } catch { /* 快照 best-effort（缺失=指标零信号） */ }
+         try {
+           const { spawnWatcher } = await import('./watcher.js')
+@@ -432,8 +434,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+     // route-hindsight 首版快照（resume 补件后，首写者胜）：旧版本起步的在途变更此处首次取到
+     // 快照（偏晚=少计早期改写，方向保守不误标）；恢复简报渲染零变化（快照静默落盘）。
+     try {
+-      const { snapshotBaseline } = await import('./route-hindsight.js')
++      const { snapshotBaseline, baselineSha256 } = await import('./route-hindsight.js')
+       snapshotBaseline({ specBase, change, changeDir })
++      const _bsha2 = baselineSha256({ specBase, change })
++      if (_bsha2) writeFlowState(changeDir, { baseline_sha256: _bsha2 })
+     } catch { /* 快照 best-effort */ }
+     // 声明通道 resume 生效（fr-governance-sweep 评审 P3 清偿）：--review/--no-review 对在途
+     // 变更重入 start 时落盘 review_force——与新变更/adopt 两路口径一致（此前 resume 只打简报
+@@ -518,8 +522,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+   // 时点锚定 design/tasks 首版副本（首写者胜幂等；R-04——取晚会让改写比恒 0 闭环失效）。
+   // 快照缺失=指标零信号（不误标），best-effort 不阻断 start。
+   try {
+-    const { snapshotBaseline } = await import('./route-hindsight.js')
++    const { snapshotBaseline, baselineSha256 } = await import('./route-hindsight.js')
+     snapshotBaseline({ specBase, change, changeDir })
++    const _bsha3 = baselineSha256({ specBase, change })
++    if (_bsha3) writeFlowState(changeDir, { baseline_sha256: _bsha3 })
+   } catch { /* 快照 best-effort */ }
+ 
+   // route-hindsight 历史提示（FR-02 前门同屏注入）：上个轻量变更被标记「疑似该走预段未走」
+@@ -780,15 +786,25 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+       const tasksPath = join(changeDir, 'tasks.md')
+       if (existsSync(tasksPath)) {
+         const _logRaw = gitQuiet(cwd, ['log', '--format=%B%x1e', `${st.baseline_commit}..HEAD`])
+-        if (!_logRaw) {
++        if (_logRaw === null || _logRaw === undefined) {
+           console.log('ℹ️ 哨兵：git log 不可用，跳过（fail-open——空提交组照判会假拦）')
+-        } else {
++        } else { // 空串=区间零提交（哨兵照跑：零提交不豁免——角度 A 空转收口实证）
+         const commitMessages = String(_logRaw).split('\x1e').map((x) => x.trim()).filter(Boolean)
+         // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选＝成功标准
+         // 镜像面，免 per-task 提交证据（要求了就是验 agent 从未认领的任务面——假阳性三连实证）；
+         // 无基线快照 fail-safe 维持旧判据（全部要求证据）。
+-        const { readBaselineTasks } = await import('./route-hindsight.js')
+-        const baselineTasksMd = readBaselineTasks({ specBase, change })
++        const { readBaselineTasks, baselineSha256 } = await import('./route-hindsight.js')
++        let baselineTasksMd = readBaselineTasks({ specBase, change })
++        // 完整性锚定（2026-09-28-sentinel-waiver-hardening 角度 C）：基线文件在 .runtime 不进
++        // git，事后改写可伪装镜像骗豁免——flow-state 记 start/adopt 时点 sha256，消费时校验，
++        // 不符按无基线从严。无锚定的过渡期变更（豁免变更与本变更之间）维持信任基线。
++        if (baselineTasksMd != null && st.baseline_sha256) {
++          const _bshaNow = baselineSha256({ specBase, change })
++          if (_bshaNow && _bshaNow !== st.baseline_sha256) {
++            console.warn('⚠️ 哨兵：基线快照哈希与 flow-state 锚定不符（疑似篡改/损坏）——按无基线从严判据')
++            baselineTasksMd = null
++          }
++        }
+         const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages, baselineTasksMd })
+         if (sent.status === 'fake') {
+           console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
+diff --git a/src/route-hindsight.js b/src/route-hindsight.js
+index 938a9104..efcdbda1 100644
+--- a/src/route-hindsight.js
++++ b/src/route-hindsight.js
+@@ -31,6 +31,7 @@
+  *     substeps」改读同为既有记录面的 verify-runs 时间线，封闭面语义不变）。
+  */
+ import { existsSync, readFileSync, readdirSync, mkdirSync } from 'node:fs'
++import { createHash } from 'node:crypto'
+ import { join, basename, dirname } from 'node:path'
+ import { writeAtomicSync } from './fs-atomic.js'
+ import { computeEditRatio } from './flow-draft.js'
+@@ -111,6 +112,20 @@ export function snapshotBaseline({ specBase, change, changeDir }) {
+   }
+ }
+ 
++/**
++ * 基线文件 sha256（2026-09-28-sentinel-waiver-hardening：flow-state 锚定用——start/adopt 快照
++ * 时点记哈希，哨兵消费时校验，防 .runtime 明文基线被事后改写伪装镜像）。缺文件 → null。
++ */
++export function baselineSha256({ specBase, change }) {
++  try {
++    const p = join(specBase, '.runtime', `${BASELINE_PREFIX}${change}.json`)
++    if (!existsSync(p)) return null
++    return createHash('sha256').update(readTextSafe(p)).digest('hex')
++  } catch {
++    return null
++  }
++}
++
+ /**
+  * 机器稿基线 tasks.md 全文读取（2026-09-28-sentinel-mirror-waiver：哨兵镜像豁免的判别源）。
+  * 文件缺失/损坏/字段非字符串 → null（消费方 fail-safe 按无基线从严）。
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index 21caf7bb..1041e2cb 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -621,8 +621,9 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+       const tasksDir = changeName ? join(specBase, 'changes', changeName, 'tasks.md') : null
+       if (tasksDir && existsSync(tasksDir)) {
+         const _log = safeGit ? safeGit(cwd, ['log', '--format=%B%x1e', 'HEAD~10..HEAD']) : null
+-        const commitMsgs = String((_log && !_log.error) ? _log.value : '') || ''
+-        if (commitMsgs) {
++        const _logOk = !!(_log && !_log.error)
++        const commitMsgs = _logOk ? String(_log.value) || '' : ''
++        if (_logOk) { // 空串（区间零提交）照跑——零提交不豁免，哨兵从严
+           // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选免 per-task
+           // 证据（quick 道现状无基线快照面——readBaselineTasks 恒 null 走 fail-safe 旧判据，接线为
+           // 基线面将来扩到 quick 道时的零改动就绪）。
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index ca376c00..59b69a8d 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -110,13 +110,15 @@ export function detectFakeCheckCompletion({ changeDir, tasksMd, commits, baselin
+   }
+   const claimTotal = entries.length;
+   const checked = entries.filter((e) => e.checked).length;
+-  const mirror = mirroredTaskIds({ tasksMd, baselineTasksMd });
++  const messages = (Array.isArray(commits) ? commits : [])
++    .map((c) => (typeof c === 'string' ? c : String((c && (c.message ?? c.subject)) || '')));
++  // 零提交不豁免（2026-09-28-sentinel-waiver-hardening 角度 A 实证：镜像全勾＋区间零提交曾
++  // 空转收口——「实测门/patch/review 整体背书」论证在纯文档变更有缺口。豁免前提=有交付）。
++  const mirror = messages.length > 0 ? mirroredTaskIds({ tasksMd, baselineTasksMd }) : new Set();
+   const mirrored = entries.filter((e) => e.checked && mirror.has(e.id)).map((e) => e.id);
+   if (claimTotal === 0 || checked < claimTotal) {
+     return { status: 'none', claimTotal, checked, missing: [], mirrored };
+   }
+-  const messages = (Array.isArray(commits) ? commits : [])
+-    .map((c) => (typeof c === 'string' ? c : String((c && (c.message ?? c.subject)) || '')));
+   const reviews = listReviewEvidence(changeDir, opts);
+   const missing = entries
+     .filter((e) => {
+diff --git a/test/sentinel-mirror-waiver.test.mjs b/test/sentinel-mirror-waiver.test.mjs
+index 6c141209..0ca47fbb 100644
+--- a/test/sentinel-mirror-waiver.test.mjs
++++ b/test/sentinel-mirror-waiver.test.mjs
+@@ -118,3 +118,16 @@ test('⑤ watcher R1 端到端：镜像翻格零证据不发 fake-check（change
+   const nocd = applySentinelRules({ prev: snap([]), next: snap(['task-01']), state: null, changeDir: null })
+   assert.ok(nocd.warnings.some((w) => w.rule === 'fake-check'), '无 changeDir 按无豁免从严')
+ })
++
++test('⑥ 零提交不豁免（角度 A）：镜像全勾＋commits=[] → fake（空转变更不许过门）', () => {
++  const r = detectFakeCheckCompletion({
++    changeDir: null,
++    tasksMd: checkedMd(),
++    commits: [],
++    baselineTasksMd: BASELINE,
++    opts: { listReviewsImpl: () => [] },
++  })
++  assert.equal(r.status, 'fake', '零交付时镜像豁免不生效')
++  assert.deepEqual(r.missing.sort(), ['task-01', 'task-02', 'task-03'])
++  assert.deepEqual(r.mirrored, [], '零提交时 mirrored 不报告')
++})
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/design.md
+similarity index 52%
+rename from .sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
+rename to .sillyspec/changes/2026-09-28-sentinel-waiver-hardening/design.md
+index 3bf13b86..4d51cdca 100644
+--- a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
++++ b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/design.md
+@@ -1,30 +1,30 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-28T13:39:36.124Z
++created_at: 2026-09-28T14:57:31.393Z
+ ---
+-# 设计记录（Design Record）— 2026-09-28-knowledge-score-denoise
++# 设计记录（Design Record）— 2026-09-28-sentinel-waiver-hardening
+ 
+ > 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
+ > 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
+ 
+ ## 做法概述
+-<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
+ 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+ <!-- MACHINE-DRAFT:design-approach:end -->
+ 
+ <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
+-做法：matchKnowledge relScore 评分前以 contentChars 剥除数字、标点（\p{P}）与空白——只计内容字符（字母含 CJK）的 bigram 重叠。数字噪音源（变更名日期 2026-09-28 与条目 id D-009@v1 共享 -0/09）在 {DECISION_HITS} 场景（taskContext=纯 ASCII 变更名、无内容词）归零 → 全体零分平局 → 死路先验接管置顶。
++做法：三处——① sentinel-assertions：镜像豁免仅在区间提交非空时生效（零交付不豁免，空转变更回到从严）；② flow.js 三个快照点（adopt/resume/fresh——首版漏 fresh 路径是角度 C 复测未拦的根因）快照后即向 flow-state 写 baseline_sha256；哨兵消费前校验哈希，不符→按无基线从严＋篡改告警（.runtime 明文基线不可信面闭合）；③ 调用方空区间修正：git log 空串（区间零提交）与失败（null）分流——空串照跑哨兵（此前被 fail-open 跳过，角度 A 空转收口的真正卡点），quick-audit 同修。
+ 
+ ## 接口契约
+-<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
+ 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+ <!-- MACHINE-DRAFT:design-contract:end -->
+ 
+ <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
+-接口契约：contentChars 为 matchKnowledge 内局部函数（不导出）；frTitleOverlap 语义不动（FR 去重消费方零影响）；decisionHits 键与排序语义（重叠降序、零分平局死路优先）不变。
++接口契约：detectFakeCheckCompletion 零提交时 mirror=空集（mirrored 不报告、missing 全量）；route-hindsight 新导出 baselineSha256({specBase, change})→hex|null；flow-state 增可选键 baseline_sha256（writeFlowState 透传，旧变更无该键=过渡期信任基线）。
+ 
+ ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+-<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
+ 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+ 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+ 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+@@ -32,12 +32,12 @@ created_at: 2026-09-28T13:39:36.124Z
+ <!-- MACHINE-DRAFT:design-boundaries:end -->
+ 
+ <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
+-边界并发四问：不适用：纯函数文本归一＋评分改动，无状态无 IO 无并发面。
++边界并发四问：不适用：纯判据与哈希校验，快照-锚定同点写入无并发窗口（start/adopt 单趟）。
+ 
+ ## 风险与死路
+-<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
+ 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+ <!-- MACHINE-DRAFT:design-risks:end -->
+ 
+ <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
+-风险：① 剥数字后「含版本号/年份的语义查询」（如 查 FR-016 相关决策）丢失数字区分力——决策标题本无数字语义，可接受；② \p{P} 剥除连中英标点（含全角），标题实词不受影响。死路=正则 Unicode 类别写错会静默破坏主场景（首版 \W 误剥 CJK 被测试②当场拦截）——测试钉主场景/近义/ASCII 三面。退役判据=出现依赖数字 bigram 才能区分的相关性场景投诉。
++风险：①过渡期变更（镜像豁免变更与本变更之间 start 的）无锚定——信任基线（窗口一天内的少量变更，接受）；②agent 篡改 flow-state 里的 baseline_sha256 本身（change 目录内文件）——flow-state 属机器记账面，篡改它等于篡改 substeps/review_force 等全部收口依据，攻击面超出本哨兵职责（审计件 change.patch sha256 锚定兜底）。死路=把基线挪进 git 追踪（.runtime 惯例是本地观测面不进 git，为豁免破例不值）。退役判据=零提交从严误伤真实场景（如纯评审类变更无交付提交但有合法勾选）出现投诉。
+diff --git a/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/proposal.md b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/proposal.md
+new file mode 100644
+index 00000000..bd1dc9fd
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/proposal.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T14:57:31.391Z
++---
++# 提案书（Proposal）— 2026-09-28-sentinel-waiver-hardening
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:113974433c9984b1c255475ca77a9dca07d3fdb98f7c4688f888680b0cd34abe:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
++任务原话转写：镜像豁免两窟窿加固：零交付不豁免＋基线完整性锚定。
++
++动机：多角度攻击面实测两个回归窟窿（旧哨兵本会拦、镜像豁免放开）——① 零提交空转：镜像任务全勾＋区间零提交照样收口归档（live 实证，design「实测门/patch/review 整体背书」论证在纯文档变更有缺口：实测门跳过、评审可豁免、patch 面接受空）；② 基线篡改：route-hindsight-baseline 在 .runtime 不进 git，agent 可改写其 tasks 字段与覆写后任务对齐→全部伪装镜像→豁免绕过守卫（纯函数实证 status=complete）。
++
++成功标准：
++- 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）
++- flow-state 锚定基线文件 sha256（start/adopt 快照时点）；flow done 校验哈希不符→按无基线从严＋篡改告警文案
++- 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归
++- 单测覆盖零提交从严/篡改从严/哈希锚定；live 复测 A（零提交→拒收）与 C（篡改→拒收）双通过；npm test 与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:30a312af124afe2b90d47cf1cc82251d6086ccb1d879a261cccd98177258f8de:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）
++2. flow-state 锚定基线文件 sha256（start/adopt 快照时点）
++3. flow done 校验哈希不符→按无基线从严＋篡改告警文案
++4. 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归
++5. 单测覆盖零提交从严/篡改从严/哈希锚定
++6. live 复测 A（零提交→拒收）与 C（篡改→拒收）双通过
++7. npm test 与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:25971ef0417400ee8844d4b92a54a7aef79e71bae98e79d9f9a24e18b9a36fed:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-sentinel-waiver-hardening 留痕重锚 -->
++1. 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）
++2. flow-state 锚定基线文件 sha256（start/adopt 快照时点）
++3. flow done 校验哈希不符→按无基线从严＋篡改告警文案
++4. 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归
++5. 单测覆盖零提交从严/篡改从严/哈希锚定
++6. live 复测 A（零提交→拒收）与 C（篡改→拒收）双通过
++7. npm test 与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/requirements.md b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/requirements.md
+new file mode 100644
+index 00000000..531e11a6
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/requirements.md
+@@ -0,0 +1,66 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T14:57:31.392Z
++---
++# 需求规格（Requirements）— 2026-09-28-sentinel-waiver-hardening
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）
++Given 系统就绪
++When 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）
++Then 行为符合本条标准描述
++
++### FR-02: flow-state 锚定基线文件 sha256（start/adopt 快照时点）
++Given 系统就绪
++When flow-state 锚定基线文件 sha256（start/adopt 快照时点）
++Then 行为符合本条标准描述
++
++### FR-03: flow done 校验哈希不符→按无基线从严＋篡改告警文案
++Given 系统就绪
++When flow done 校验哈希不符
++Then 按无基线从严＋篡改告警文案
++
++### FR-04: 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归
++Given 系统就绪
++When 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归
++Then 行为符合本条标准描述
++
++### FR-05: 单测覆盖零提交从严/篡改从严/哈希锚定
++Given 系统就绪
++When 单测覆盖零提交从严/篡改从严/哈希锚定
++Then 行为符合本条标准描述
++
++### FR-06: live 复测 A（零提交→拒收）与 C（篡改→拒收）双通过
++Given 系统就绪
++When live 复测 A（零提交
++Then 拒收）与 C（篡改
++
++### FR-07: npm test 与 test:core 全绿
++Given 系统就绪
++When npm test 与 test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/sentinel-mirror-waiver.test.mjs「⑥零提交从严」＋test/sentinel-wiring.test.mjs（形态 A/A2 回归）＋live 角度 A/C 复测
+diff --git a/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/tasks.md b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/tasks.md
+new file mode 100644
+index 00000000..cb3b4688
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T15:20:00.000Z
++---
++# 任务注册表（Tasks）— 2026-09-28-sentinel-waiver-hardening
++
++> 按实际实现路径覆写（thin-agent-tasks）。
++
++- [x] task-01: 零提交不豁免（detectFakeCheckCompletion commits 空时 mirror=空集）＋调用方空区间分流（flow.js git log 空串照跑、quick-audit 同修）
++- [x] task-02: 基线完整性锚定——三快照点写 flow-state baseline_sha256（含 fresh 路径补漏）、哨兵消费前哈希校验不符从严＋告警、route-hindsight 导出 baselineSha256
++- [x] task-03: 测试与实弹——单测⑥零提交从严；live 角度 A（零提交→拒收）与角度 C（篡改→哈希告警→拒收）双复测通过；全量 53/53＋test:core 221/221

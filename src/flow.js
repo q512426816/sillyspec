@@ -369,8 +369,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
         // route-hindsight 首版快照（收编时点=redraftMissingArtifacts 首次落盘后）：adopt 的
         // design 是头脑风暴产物、机器只补缺件——快照取收编时点内容，此后 agent 改写计入指标。
         try {
-          const { snapshotBaseline } = await import('./route-hindsight.js')
+          const { snapshotBaseline, baselineSha256 } = await import('./route-hindsight.js')
           snapshotBaseline({ specBase, change, changeDir })
+          const _bsha = baselineSha256({ specBase, change })
+          if (_bsha && !(readFlowState(changeDir) || {}).baseline_sha256) writeFlowState(changeDir, { baseline_sha256: _bsha }) // 锚定首写者胜——重入不刷新
         } catch { /* 快照 best-effort（缺失=指标零信号） */ }
         try {
           const { spawnWatcher } = await import('./watcher.js')
@@ -432,8 +434,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
     // route-hindsight 首版快照（resume 补件后，首写者胜）：旧版本起步的在途变更此处首次取到
     // 快照（偏晚=少计早期改写，方向保守不误标）；恢复简报渲染零变化（快照静默落盘）。
     try {
-      const { snapshotBaseline } = await import('./route-hindsight.js')
+      const { snapshotBaseline, baselineSha256 } = await import('./route-hindsight.js')
       snapshotBaseline({ specBase, change, changeDir })
+      const _bsha2 = baselineSha256({ specBase, change })
+      if (_bsha2 && !(readFlowState(changeDir) || {}).baseline_sha256) writeFlowState(changeDir, { baseline_sha256: _bsha2 }) // 锚定首写者胜——resume 重入不刷新（审查 P1：重锚洗白篡改）
     } catch { /* 快照 best-effort */ }
     // 声明通道 resume 生效（fr-governance-sweep 评审 P3 清偿）：--review/--no-review 对在途
     // 变更重入 start 时落盘 review_force——与新变更/adopt 两路口径一致（此前 resume 只打简报
@@ -518,8 +522,10 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   // 时点锚定 design/tasks 首版副本（首写者胜幂等；R-04——取晚会让改写比恒 0 闭环失效）。
   // 快照缺失=指标零信号（不误标），best-effort 不阻断 start。
   try {
-    const { snapshotBaseline } = await import('./route-hindsight.js')
+    const { snapshotBaseline, baselineSha256 } = await import('./route-hindsight.js')
     snapshotBaseline({ specBase, change, changeDir })
+    const _bsha3 = baselineSha256({ specBase, change })
+    if (_bsha3) writeFlowState(changeDir, { baseline_sha256: _bsha3 })
   } catch { /* 快照 best-effort */ }
 
   // route-hindsight 历史提示（FR-02 前门同屏注入）：上个轻量变更被标记「疑似该走预段未走」
@@ -780,15 +786,20 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const tasksPath = join(changeDir, 'tasks.md')
       if (existsSync(tasksPath)) {
         const _logRaw = gitQuiet(cwd, ['log', '--format=%B%x1e', `${st.baseline_commit}..HEAD`])
-        if (!_logRaw) {
+        if (_logRaw === null || _logRaw === undefined) {
           console.log('ℹ️ 哨兵：git log 不可用，跳过（fail-open——空提交组照判会假拦）')
-        } else {
+        } else { // 空串=区间零提交（哨兵照跑：零提交不豁免——角度 A 空转收口实证）
         const commitMessages = String(_logRaw).split('\x1e').map((x) => x.trim()).filter(Boolean)
         // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选＝成功标准
         // 镜像面，免 per-task 提交证据（要求了就是验 agent 从未认领的任务面——假阳性三连实证）；
         // 无基线快照 fail-safe 维持旧判据（全部要求证据）。
-        const { readBaselineTasks } = await import('./route-hindsight.js')
-        const baselineTasksMd = readBaselineTasks({ specBase, change })
+        // 完整性锚定（2026-09-28-sentinel-waiver-hardening 角度 C／F2 验证读取器）：基线文件在
+        // .runtime 不进 git，事后改写可伪装镜像骗豁免——flow-state 首写者胜锚定 sha256，消费时
+        // 校验不符按无基线从严。无锚定的过渡期变更维持信任基线。
+        const { readBaselineTasksVerified } = await import('./route-hindsight.js')
+        const _bv = readBaselineTasksVerified({ specBase, change, anchoredSha256: st.baseline_sha256 || null })
+        if (_bv.tampered) console.warn('⚠️ 哨兵：基线快照哈希与 flow-state 锚定不符（疑似篡改/损坏）——按无基线从严判据')
+        const baselineTasksMd = _bv.tasksMd
         const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages, baselineTasksMd })
         if (sent.status === 'fake') {
           console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
