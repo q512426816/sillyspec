@@ -272,7 +272,7 @@ function asciiWordHit(sh, text) {
  * 目标词排 759）；查询侧只测自身几十词片，无挑选无 cap。机制词栖息在理由文本（模板标题不
  * 含词形——Mouse B 实测四查全零的根因）。无可回退返回 null（保持既有零命中行为）。
  */
-function fallbackByQueryShingles(indexDir, taskContext) {
+export function fallbackByQueryShingles(indexDir, taskContext) {
   const shingles = queryShingles(taskContext)
   if (shingles.length === 0) return null
   const all = parseDecisionEntries(indexDir)
@@ -339,7 +339,7 @@ function fallbackByQueryShingles(indexDir, taskContext) {
  *   命中的 Decisions 路由行所指向 decisions/<域>.md 内的全部 D-xxx@vN 条目，rejected 优先排序；
  *   无 decisions 库 / 路由行未命中 → decisionHits: []（其余字段行为与现状一致）。
  */
-export function matchKnowledge(indexDir, taskContext) {
+export function matchByRouting(indexDir, taskContext) {
   const indexPath = join(indexDir, 'INDEX.md')
 
   // INDEX.md 不存在
@@ -370,10 +370,6 @@ export function matchKnowledge(indexDir, taskContext) {
   })
 
   if (matched.length === 0) {
-    // 零命中查询侧词片回退（2026-09-29-decision-route-vocab）——机制词不在路由行上时路由恒空
-    // （Mouse B 实测四查全零）；回退无候选才落到既有零命中行为。
-    const fb = fallbackByQueryShingles(indexDir, taskContext)
-    if (fb) return fb
     return {
       matched: false,
       entries: [],
@@ -432,4 +428,16 @@ export function matchKnowledge(indexDir, taskContext) {
   ].map((h) => ({ ...h, score: relScore(h) }))
 
   return { matched: true, entries: matched, report, json, decisionHits }
+}
+
+/**
+ * 同步检索入口（既有行为不变）：路由 tag 命中 →（零命中）本地词片复现回退 → 空。
+ * 异步三层入口（平台向量优先于本地回退）见 knowledge-vector.js matchKnowledgeHybrid
+ * （2026-09-29-knowledge-vector-recall）——同步调用方与既有测试全部走本函数。
+ */
+export function matchKnowledge(indexDir, taskContext) {
+  const r = matchByRouting(indexDir, taskContext)
+  if (r.matched) return r
+  const fb = fallbackByQueryShingles(indexDir, taskContext)
+  return fb || r
 }

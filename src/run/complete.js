@@ -478,8 +478,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
         } catch { /* 无 decisions.md = 仅 --output */ }
         _kgQuery = _kgQuery.slice(0, 4000)
         if (_kgQuery.trim()) {
-          const { matchKnowledge } = await import('../knowledge-match.js')
-          const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
+          const { matchKnowledgeHybrid } = await import('../knowledge-vector.js')
+          const km = await matchKnowledgeHybrid(join(specBase, 'knowledge'), _kgQuery, { cwd })
           // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
           // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
           const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))

@@ -19,7 +19,8 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import { writeAtomicSync } from '../fs-atomic.js'
-import { parseKnowledgeIndex, matchKnowledge } from '../knowledge-match.js'
+import { parseKnowledgeIndex } from '../knowledge-match.js'
+import { matchKnowledgeHybrid } from '../knowledge-vector.js'
 
 // ── 工具函数 ──
 
@@ -106,8 +107,8 @@ export async function cmdSearch(dir, args, opts = {}) {
     return
   }
 
-  // 复用 knowledge-match 引擎
-  const result = matchKnowledge(knowledgeDir, query)
+  // 复用 knowledge-match 引擎（三层 hybrid：路由→平台向量→本地词片，2026-09-29-knowledge-vector-recall）
+  const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: dir })
 
   if (!result.matched) {
     output(true, { query, matches: [] })

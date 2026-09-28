@@ -27,7 +27,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { join, relative } from 'node:path'
+import { join, relative, dirname } from 'node:path'
 import yaml from 'js-yaml'
 import { git, gitQuiet } from './git-helper.js'
 import { writeAtomicSync } from './fs-atomic.js'
@@ -184,8 +184,9 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
         }
       }
     }
-    const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
-    const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
+    const { matchKnowledgeHybrid } = await import('./knowledge-vector.js')
+    const { deathPathNote } = await import('./knowledge-match.js')
+    const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase) })
     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
     // 蹭进回显是行为实测三例的噪音源，不再注入）
