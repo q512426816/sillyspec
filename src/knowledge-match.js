@@ -11,6 +11,7 @@
 
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { frTitleOverlap } from './fr-index.js'
 
 /**
  * 从 INDEX.md 解析所有知识条目
@@ -115,7 +116,13 @@ function parseDecisionFile(filePath, file) {
   const hits = []
   let cur = null
   const flush = () => {
-    if (cur) hits.push(cur)
+    if (cur) {
+      // 死路注记识别（2026-09-28-knowledge-inject-ranking）：「理由」含「死路：」字面标记的教训型
+      // 条目——记录它的决策本体是 accepted/implemented（死路只是理由里的注记），按状态过滤会被
+      // 压制到组外，恰丢最该防复潮的（实测：D-001@v1 枚举开放世界排 148/188 位永不回显）。
+      cur.deathPath = /死路[：:]/.test(cur.reason || '')
+      hits.push(cur)
+    }
     cur = null
   }
   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
@@ -207,6 +214,15 @@ export function matchDecisionsByFiles(indexDir, files) {
     }
   }
   return result
+}
+
+/** 死路注记短句提取（消费方渲染用）：理由里「死路：…」到首个句读为止；无标记时截前 60 字。
+ *  单一源供 flow 知识注入段与 complete.js knowledge-gate 回显共用（2026-09-28-knowledge-inject-ranking）。 */
+export function deathPathNote(reason) {
+  const r = String(reason || '')
+  const m = r.match(/死路[：:]\s*([^。；;，,\n]+)/)
+  if (m) return m[1].trim()
+  return r.slice(0, 60)
 }
 
 function escapeRegex(s) {
@@ -302,13 +318,19 @@ export function matchKnowledge(indexDir, taskContext) {
   }
 
   // decisionHits（task-04）：任务上下文命中的 Decisions 路由行 → 解析其指向的
-  // decisions/<域>.md 内全部条目；rejected 优先排序（防复潮信息最先可见，组内保持文件序）。
+  // decisions/<域>.md 内全部条目；防复潮优先（rejected ∪ 死路注记）＋组内按查询×标题
+  // bigram 重叠率降序（2026-09-28-knowledge-inject-ranking：此前 rejected 优先＋文件序，
+  // 空标题无关条目以文件序霸占回显前 N、相关条目沉底——实测 枚举/开放世界 查询下
+  // D-001@v1 排 148/188 位）。重叠判据复用 fr-index frTitleOverlap（字符 bigram，
+  // 封闭面非语义判定）。
   // 不引入新顶层 hits 字段，不改 matched/entries/report/json 四个既有键。
   const decisionRoutes = matched.filter(isDecisionRoute)
   const allDecisionHits = decisionRoutes.length > 0 ? parseDecisionEntries(indexDir, decisionRoutes) : []
+  const relScore = (h) => frTitleOverlap(taskContext, `${h.id} ${h.title}`)
+  const byOverlapDesc = (a, b) => relScore(b) - relScore(a)
   const decisionHits = [
-    ...allDecisionHits.filter(h => h.status === 'rejected'),
-    ...allDecisionHits.filter(h => h.status !== 'rejected')
+    ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
+    ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
   ]
 
   return { matched: true, entries: matched, report, json, decisionHits }

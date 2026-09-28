@@ -482,9 +482,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
           const _hits = km.decisionHits || []
           const _entries = km.matched ? (km.entries || []) : []
           if (_hits.length > 0 || _entries.length > 0) {
+            const { deathPathNote } = await import('../knowledge-match.js')
             console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
             for (const h of _hits.slice(0, 5)) {
-              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${h.status === 'rejected' ? ` 否决理由：${h.reason || '（未记录）'}` : ''}`)
+              const _note = h.status === 'rejected'
+                ? ` 否决理由：${h.reason || '（未记录）'}`
+                : h.deathPath ? ` ⚰️死路注记：${deathPathNote(h.reason)}` : ''
+              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${_note}`)
             }
             for (const e of _entries.slice(0, 3)) {
               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file

@@ -184,15 +184,18 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
         }
       }
     }
-    const { matchKnowledge } = await import('./knowledge-match.js')
+    const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
     const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
-    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected')
+    // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking：教训型条目 status 多为
+    // implemented，按状态过滤恰丢最该防的——D-001@v1 枚举开放世界第四次复潮实证）
+    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected' || h.deathPath)
     summary.rejectedDecisions = rejected.length
     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
     if (rejected.length > 0) {
-      lines.push(`   ⚠️ 否决决策（历史已否决，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
+      lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
       for (const h of rejected.slice(0, 5)) {
-        lines.push(`   - ${h.id} ${h.title}（${h.file}）否决理由：${h.reason || '（未记录）'}`)
+        const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
+        lines.push(`   - ${h.id} ${h.title}（${h.file}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
       }
     }
     if (km.matched && (km.entries || []).length > 0) {

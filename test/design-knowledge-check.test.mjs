@@ -103,6 +103,27 @@ test('① decisions.md 新增条目（标题/question）也进查询串：仅条
   rmQuiet(cwd)
 })
 
+test('①-b 命中场景（死路注记）：implemented＋理由含「死路：」→ ⚰️死路注记回显（不被状态压制）', async () => {
+  const { cwd, specBase } = makeRepo('dkc-death-')
+  seedKnowledge(specBase)
+  // 覆写为教训形态：status=implemented，死路只在理由注记里（2026-09-28-knowledge-inject-ranking）
+  writeFileSync(join(specBase, 'knowledge', 'decisions', 'unmapped.md'), [
+    '# unmapped 域决策', '',
+    '## D-001@v1 枚举开放世界是错误方向',
+    '状态： implemented',
+    '理由：正确模式：开放世界归 agent。死路：枚举更多桶/更多关键词——穷举错误不因规模变小而变对', '',
+  ].join('\n'))
+  const { pm, progress } = await seedPlanStep(cwd, specBase)
+  const r = await runCapturing(() =>
+    completeStep(pm, progress, 'brainstorm', cwd, '方案 A：用枚举词表分类需求形态', null, {
+      changeName: CN, doneAnswer: '用户选方案A', printNext: false,
+    }))
+  assert.equal(r.exitCode, null, '不阻断')
+  assert.match(r.stdout, /D-001@v1 枚举开放世界是错误方向/, '死路条目回显（不受 implemented 压制）')
+  assert.match(r.stdout, /⚰️死路注记：枚举更多桶/, '死路短句渲染')
+  rmQuiet(cwd)
+})
+
 test('② 无命中 → 输出与现状一致（零 knowledge-gate 行）', async () => {
   const { cwd, specBase } = makeRepo('dkc-miss-')
   seedKnowledge(specBase)
