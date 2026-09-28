@@ -411,6 +411,37 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
         )
       }
     }
+
+    // ── 闭环收口 custom 判定（2026-09-29-brainstorm-closure-gates）──
+    // doubt-closure：「自审存疑：」应用形态行须含闭合 token——只查带冒号的应用形态，裸词
+    // 判定会撞 design-init 自审 checklist 模板行（含裸词）常驻误报。
+    {
+      const doubtRule = getRule('brainstorm.design.doubt-closure')
+      const markerRe = new RegExp(doubtRule.data.markerPattern.pattern, doubtRule.data.markerPattern.flags)
+      const closureRe = new RegExp(doubtRule.data.closureTokens.join('|'), 'i')
+      for (const line of content.split(/\r?\n/)) {
+        if (!markerRe.test(line) || closureRe.test(line)) continue
+        warnings.push(doubtRule.failMessage.replaceAll('${line}', line.trim().slice(0, 60)))
+      }
+    }
+    // risk-mitigation：风险登记表 R-xx 行的应对策略列（行末单元格）非空且非占位——design-init
+    // 骨架预填「（待填应对策略）」命中即提醒填语义；「接受」显式接受是合法闭合（归属明确）。
+    {
+      const riskRule = getRule('brainstorm.design.risk-mitigation')
+      const rowRe = new RegExp(riskRule.data.rowPattern.pattern, riskRule.data.rowPattern.flags)
+      const cellPlaceholderRe = new RegExp(riskRule.data.placeholderCell, 'i')
+      for (const line of content.split(/\r?\n/)) {
+        const rowMatch = line.match(rowRe)
+        if (!rowMatch) continue
+        let cells = line.split('|').slice(1).map(c => c.trim())
+        if (cells.length > 0 && cells[cells.length - 1] === '' && line.trimEnd().endsWith('|')) cells.pop()
+        if (cells.length < 2) continue // 行形态不完整（仅编号列）——表结构问题交 Grill 审查，不在此硬判
+        const lastCell = cells[cells.length - 1].replace(/^[（(]/, '').replace(/[）)]$/, '').trim()
+        if (cellPlaceholderRe.test(lastCell)) {
+          warnings.push(riskRule.failMessage.replaceAll('${id}', rowMatch[1]))
+        }
+      }
+    }
   }
 
   const decisionsFile = join(changeDir, 'decisions.md')
@@ -425,10 +456,22 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
       warnings.push('decisions.md 存在但没有当前版本 D-xxx@vN 决策 ID')
     } else {
       const design = readIfExists(join(changeDir, 'design.md'))
-      const requirements = readIfExists(join(changeDir, 'requirements.md'))
-      const tasks = readIfExists(join(changeDir, 'tasks.md'))
-      // decision 的天然引用落点是 design.md；requirements（需求按 FR 组织）与
-      // tasks（骨架，待 plan 展开）不强求逐条引用每个架构决策，否则批量误报。
+      // requirements 的 D 覆盖点名（2026-09-29-brainstorm-closure-gates）：prompt 一直要求
+      // 「requirements.md 必须引用全部当前版本 D-xxx@vN，未覆盖的标注为剩余风险」，机器面原只盯
+      // design.md——闭环收口补齐：裸号词边界匹配（同 warnMissingIds 语义），裸号出现在决策覆盖
+      // 矩阵或「剩余风险」行都算归属（覆盖或显式登记=开口有主），不出现才点名。tasks 仍不强求
+      // （骨架，plan 阶段展开——plan --done 的 id-traceability 已覆盖 plan.md 侧）。
+      const requirementsForCoverage = readIfExists(join(changeDir, 'requirements.md'))
+      if (requirementsForCoverage) {
+        const reqUpper = requirementsForCoverage.toUpperCase()
+        const coverageFail = getRule('brainstorm.requirements.decision-coverage').failMessage
+        for (const id of decisionIds) {
+          const base = id.replace(/@V\d+$/, '')
+          if (!new RegExp(`\\b${base}\\b`).test(reqUpper)) {
+            warnings.push(coverageFail.replaceAll('${id}', id))
+          }
+        }
+      }
       warnMissingIds(warnings, decisionIds, design, 'design.md', 'decisions.md')
     }
     // 故障面/退役判据软警告（FR-01，2026-09-15-tax-governance）：architecture+accepted 缺字段

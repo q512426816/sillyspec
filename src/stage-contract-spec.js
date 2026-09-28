@@ -25,11 +25,12 @@
  *               (小变更只产 design.md)。判定见 stage-contract-engine.js conditionHolds(fail-safe:ctx 字段缺失时 ne 成立)。
  *
  * 纯 kind(stage-contract-engine.dispatchPure 直接判定):
- *   file-exists / dir-exists / literal-any / literal-all / regex / contains-section /
+ *   file-exists / dir-exists / literal-any / literal-all / literal-none / regex / contains-section /
  *   no-placeholder-line / field-present / header-field / list-non-empty / min-lines / dir-non-empty
- *   —— 语义:若 target 文件不存在,内容类规则(literal-any、literal-all、regex、contains-section、…、list-non-empty、
- *   min-lines)自动 skip(不报错,存在性由独立的 file-exists 规则保证);file-exists/dir-exists
- *   则是"不存在即 fail"。
+ *   —— 语义:若 target 文件不存在,内容类规则(literal-any、literal-all、literal-none、regex、contains-section、…、
+ *   list-non-empty、min-lines)自动 skip(不报错,存在性由独立的 file-exists 规则保证);file-exists/dir-exists
+ *   则是"不存在即 fail"。literal-none 是「不得含字面量」判定(2026-09-29-brainstorm-closure-gates),
+ *   服务 must-not-contain 契约(残留标记类:在场即未闭合)。
  *
  * custom kind(引擎 skip,validator 保留判定算法,但 import 本 manifest 的 data + failMessage):
  *   见 CUSTOM_KINDS。这些是复杂条件校验(lifecycle 多层豁免 / 入口接线多步对账 / decisions 解析 /
@@ -44,6 +45,9 @@ const CUSTOM_KINDS = new Set([
   'entry-point-wiring',      // design.md 入口实例化 → task allowed_paths 覆盖对账(validatePlanOutputs)
   'id-traceability',         // FR/D 引用追踪(extractIds / warnMissingIds)
   'decision-blocker',        // decisions.md P0/P1 未决阻塞(parseDecisionRecords)
+  'decision-coverage',       // requirements.md 对 decisions.md 当前版本 D 的覆盖缺口点名(2026-09-29-brainstorm-closure-gates,validateBrainstormOutputs)
+  'doubt-closure',           // design.md「自审存疑：」应用形态标记行的闭合 token 判定(同上)
+  'risk-mitigation',         // design.md 风险登记表 R-xx 行应对策略列空/占位判定(同上)
   'cross-task-contract',     // task 卡片 provides/expects_from 对账(plan-postcheck)
   'design-file-coverage',    // design.md 文件清单 vs allowed_paths 覆盖(plan-postcheck)
   'task-id-continuity',      // task-NN id 连续性
@@ -150,6 +154,101 @@ const BRAINSTORM_RULES = [
     data: {},
     spec: 'tasks.md 至少有一个任务列表项(行首 `-` / `*` / `数字.`)',
     failMessage: 'tasks.md 没有任务列表项',
+  },
+  // ── 闭环收口规则(2026-09-29-brainstorm-closure-gates)────────────────────────────
+  // 判据:开放可以,但每个开口必须能回答「谁、在哪个阶段、以什么证据关掉它」。六类无主开口全部
+  // 补机器收口,severity 全 warning 不阻断(存量零破坏——故障面/退役判据软警告棘轮先例,观测一个
+  // 周期误报率后再评估升 error)。纯 kind 走引擎,复杂判定 custom kind 留 validateBrainstormOutputs。
+  {
+    id: 'brainstorm.proposal.success-criteria',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'literal-any',
+    target: { root: 'change', path: 'proposal.md', scope: 'full' },
+    data: { literals: ['成功标准', 'Success Criteria', 'success criteria'] },
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: 'proposal.md 含「成功标准 / Success Criteria」章节(字面命中;问题→方案→成功标准主环最后一环——轻量道 flow start --input 对成功标准 0 条 exit 2,完整路径同理)',
+    failMessage: 'proposal.md 缺少「成功标准」章节(需字面命中其一:成功标准 / Success Criteria)——可验证的成功标准是收口验收面,轻量道同款要求',
+  },
+  {
+    id: 'brainstorm.design.no-placeholder',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
+    spec: 'design.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等——占位符在场=开口无人认领)',
+    failMessage: 'design.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
+  },
+  {
+    id: 'brainstorm.proposal.no-placeholder',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
+    target: { root: 'change', path: 'proposal.md', scope: 'full' },
+    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: 'proposal.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)',
+    failMessage: 'proposal.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
+  },
+  {
+    id: 'brainstorm.requirements.no-placeholder',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
+    target: { root: 'change', path: 'requirements.md', scope: 'full' },
+    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: 'requirements.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)',
+    failMessage: 'requirements.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
+  },
+  {
+    id: 'brainstorm.tasks.no-placeholder',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
+    target: { root: 'change', path: 'tasks.md', scope: 'full' },
+    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
+    condition: { ctxField: 'scale', ne: 'small' },
+    spec: 'tasks.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)',
+    failMessage: 'tasks.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
+  },
+  {
+    id: 'brainstorm.design.pending-confirm-residue',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'literal-none',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: { literals: ['待确认'] },
+    spec: 'design.md 无「待确认」残留——design-init 决策追踪表预填的「待确认」须逐行补覆盖点后改「已覆盖」(确无决策记录时删除预填行或写「无决策记录」)',
+    failMessage: 'design.md 残留「待确认」——决策追踪表(design-init 预填)须逐行补覆盖点并把「待确认」改为「已覆盖」;确无决策记录时删除预填行或写「无决策记录」',
+  },
+  // decision-coverage(custom):requirements.md 必须引用 decisions.md 全部当前版本 D-xxx@vN
+  // (裸号词边界匹配,D-001 即算引用 D-001@v1,大小写不敏感——与 warnMissingIds 同语义)。
+  // 「剩余风险」行含裸号亦算归属(显式登记为剩余风险=开口有主)。算法留 validateBrainstormOutputs
+  // (复用 extractCurrentDecisionIds),匹配口径/failMessage 从本 manifest 同源。
+  {
+    id: 'brainstorm.requirements.decision-coverage',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'decision-coverage',
+    target: { root: 'change', path: 'requirements.md', scope: 'full' },
+    data: {},
+    spec: 'requirements.md 引用 decisions.md 的全部当前版本 D-xxx@vN(裸号 D-001 词边界匹配即算;未覆盖的在「决策覆盖矩阵」补行,或显式标注为剩余风险——被覆盖或显式登记为剩余风险都算归属,不出现才算开口)',
+    failMessage: 'requirements.md 未引用 decisions.md 中的 ${id} — 在「决策覆盖矩阵」补覆盖行,或在剩余风险中显式标注该决策未覆盖(每个 D 须有归属:被覆盖或显式登记为剩余风险)',
+  },
+  // doubt-closure(custom):「自审存疑：」应用形态标记行须含闭合 token。查带冒号的应用形态而非
+  // 裸词——design-init 自审 checklist 模板行含裸词,裸词判定必常驻误报。算法留 validator。
+  {
+    id: 'brainstorm.design.doubt-closure',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'doubt-closure',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: {
+      markerPattern: { pattern: '自审存疑\\s*[:：]', flags: '' },
+      closureTokens: ['D-\\d+', 'R-\\d+', '已解决', '已闭合', '已确认', '不适用'],
+    },
+    spec: 'design.md 的「自审存疑：」标记行须含闭合 token(D-xxx/R-xx/已解决/已闭合/已确认)——已解决的改写为结论并引用 D/R,未解决的转 decisions.md D-xxx 或风险登记 R-xx;存疑标记不得原样带进 plan',
+    failMessage: 'design.md 存在未闭合的自审存疑:「${line}」——已解决的改写为结论并引用 D-xxx/R-xx,未解决的转 decisions.md 决策或风险登记 R-xx 后去标记;开放须有归属,存疑标记不得带进 plan',
+  },
+  // risk-mitigation(custom):风险登记表 R-xx 行应对策略列(行末单元格)非空且非占位。design-init
+  // 骨架预填「（待填应对策略）」——骨架行命中即提醒填语义;显式「接受」是合法闭合(接受=归属明确)。
+  {
+    id: 'brainstorm.design.risk-mitigation',
+    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'risk-mitigation',
+    target: { root: 'change', path: 'design.md', scope: 'full' },
+    data: {
+      rowPattern: { pattern: '^\\|\\s*(R-\\d+)', flags: '' },
+      placeholderCell: '待填|待补充|待定|TODO|TBD|仅占位|^\\s*[-—–]?\\s*$',
+      acceptToken: '接受',
+    },
+    spec: 'design.md 风险登记表每行 R-xx 的应对策略列(行末单元格)非空且非占位词(待填/待补充/待定/TODO/TBD)——每条风险须有应对;确实接受的风险显式写「接受：<理由>」(接受也是闭合),不得留空/占位',
+    failMessage: 'design.md 风险登记 ${id} 的应对策略列为空/占位——每条风险须有应对策略;确实接受的风险显式写「接受：<理由>」,不得留空或占位(风险无应对=开口无归属)',
   },
   // lifecycle(custom kind):design.md 命中生命周期关键词时必须含契约表或紧邻豁免。判定算法留 validator
   // (trigger/exemption/table 三段短路),data + failMessage/exemptionPassedMessage 从本 manifest 同源。

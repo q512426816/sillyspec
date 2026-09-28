@@ -10,7 +10,7 @@
  *     (plan-postcheck 注入 LF-normalizing reader),引擎拿到什么判什么,不在引擎层二次引入差异。
  *   - regex 每次 new RegExp:manifest 存 {pattern, flags} 字符串,规避 lastIndex 状态坑
  *     (旧代码多处 /g 正则跨调用复用需手写 lastIndex=0,是潜在 bug)。
- *   - 内容规则(literal-any、literal-all、regex、contains-section、field-present、header-field、list-non-empty、
+ *   - 内容规则(literal-any、literal-all、literal-none、regex、contains-section、field-present、header-field、list-non-empty、
  *     min-lines/no-placeholder-line)在 target 文件不存在时自动 skip(不报错)——存在性由独立的
  *     file-exists 规则保证,避免"文件缺失"被内容规则重复报。
  *   - custom kind 引擎 skip(不计 errors/warnings),由调用方 validator 保留判定算法,
@@ -75,6 +75,9 @@ function dispatchPure(rule, entry) {
   switch (rule.kind) {
     case 'literal-any': return (rule.data.literals || []).some(s => scoped.includes(s))
     case 'literal-all': return (rule.data.literals || []).every(s => scoped.includes(s))
+    // literal-none(2026-09-29-brainstorm-closure-gates):「不得含字面量」判定——与 literal-any 互补,
+    // 服务 must-not-contain 契约(残留标记类:待确认/自审存疑等"在场即未闭合"语义)。
+    case 'literal-none': return !(rule.data.literals || []).some(s => scoped.includes(s))
     case 'regex': return new RegExp(rule.data.pattern, rule.data.flags || '').test(scoped)
     case 'contains-section': return hasAllSections(scoped, rule.data.sections || [])
     case 'no-placeholder-line': return hasNoPlaceholderLine(scoped, rule.data.patterns)

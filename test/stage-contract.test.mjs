@@ -172,12 +172,15 @@ writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n### FR-01: A
 writeFileSync(join(traceDir, 'tasks.md'), '- [ ] task-01: implement naming (D-001@v1)\n')
 
 const brainstormTrace = runValidators('brainstorm', traceRoot, 'trace')
-// 修 B：requirements.md / tasks.md 不再强制引用每个 decision（decision 天然落点 design.md）。
-// 此处 requirements.md 没有 D-001，但 design.md 有，故不应报 requirements 未引用。
-if (brainstormTrace.ok === true && !brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用'))) {
-  console.log('✅ brainstorm validator 不再强制 requirements.md 引用 decision（修B：落点 design）')
+// 2026-09-29-brainstorm-closure-gates 取代修 B 的 requirements 侧放宽：brainstorm prompt（生成规范
+// 文件步）一直要求「requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的必须标注为剩余风险」，
+// 修 B 只放开了机器面——事前契约与事后门分叉。现按 prompt 契约收口为 warning（出路：决策覆盖矩阵
+// 补行或标剩余风险）；design.md 落点校验照旧。tasks.md 仍不强求（骨架，plan 阶段展开）。
+if (brainstormTrace.ok === true
+  && brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用') && w.includes('D-001@V1'))) {
+  console.log('✅ brainstorm validator 点名 requirements.md 未引用 D-001（闭环收口：覆盖或标剩余风险二选一）')
 } else {
-  console.log('❌ brainstorm validator 仍强制 requirements.md 引用 decision', brainstormTrace.warnings)
+  console.log('❌ brainstorm validator 未点名 requirements 的 D 覆盖缺口', brainstormTrace.warnings)
   failed++
 }
 

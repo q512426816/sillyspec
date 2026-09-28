@@ -99,7 +99,8 @@ console.log('\n=== 全齐 → 无 error 无 warning ===')
 {
   const { ctx, io } = makeCtx({
     [`${CD}/design.md`]: '# Design\n## 文件变更清单\n## 风险登记\n## 自审\n',
-    [`${CD}/proposal.md`]: '# P\n## 不在范围内\n',
+    // 2026-09-29-brainstorm-closure-gates：全齐基线按新契约含成功标准（proposal.success-criteria）
+    [`${CD}/proposal.md`]: '# P\n## 不在范围内\n## 成功标准（可验证）\n1. 测试全绿\n',
     [`${CD}/requirements.md`]: '# R\nFR-01\n',
     [`${CD}/tasks.md`]: '- task-01: 实现\n',
   })
@@ -118,7 +119,9 @@ console.log('\n=== custom kind 引擎 skip ===')
 console.log('\n=== 查询 API ===')
 {
   const bs = getRulesFor('brainstorm')
-  assert(bs.length === 11, `brainstorm 11 条规则(10 纯 + lifecycle custom,实际 ${bs.length})`)
+  // 2026-09-29-brainstorm-closure-gates：11 → 20（+7 纯 kind：success-criteria/no-placeholder×4/
+  // pending-confirm-residue；+3 custom：decision-coverage/doubt-closure/risk-mitigation）
+  assert(bs.length === 20, `brainstorm 20 条规则(17 纯 + 3 custom,实际 ${bs.length})`)
   assert(bs.some(r => r.id === 'brainstorm.design.lifecycle-table' && r.kind === 'lifecycle-exemption'), '含 lifecycle custom 规则')
   const r = getRule('brainstorm.design.file-change-list')
   assert(r !== null && r.kind === 'literal-any' && r.severity === 'warning', 'getRule 取到 literal-any/warning')
@@ -126,7 +129,7 @@ console.log('\n=== 查询 API ===')
   assert(getRule('nonexistent.id') === null, 'getRule 未知 id → null')
   // getRulesFor 按 source 过滤
   const bySource = getRulesFor('brainstorm', { source: 'validateBrainstormOutputs' })
-  assert(bySource.length === 11, 'getRulesFor source 过滤:brainstorm 全部来自 validateBrainstormOutputs')
+  assert(bySource.length === 20, 'getRulesFor source 过滤:brainstorm 全部来自 validateBrainstormOutputs')
   assert(getRulesFor('nonexistent').length === 0, '未知 stage → 空数组')
 }
 
