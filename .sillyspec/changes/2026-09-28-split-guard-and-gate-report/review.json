@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-split-guard-and-gate-report",
+  "reviewer": "subagent",
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "FR-02/03/04/05 测试绑定行串位：不适用理由各述他条 FR 主题，可测条目被谎记无断言面",
+      "evidence": "绑定槽注释按 FR 编号锚定（行50=FR-02、53=FR-03、56=FR-04、59=FR-05）。FR-02（成对短名词保持整条）槽内写「不适用：FAIL 三件套为控制台输出增强」——FAIL 三件套系 FR-04 主题，且 FR-02 实有断言面（①b 七断言含名词对不拆形态，design 槽4 与 FR-06 绑定行自证）。FR-03（分号拆分与路径守卫不变）槽内写「不适用：回拷为文件操作」——回拷系 FR-05 主题，FR-03 实由「① 复合拆分：斜杠与分号形态」「② 路径形态不拆」覆盖（FR-01 绑定行即引此二用例）。FR-04（门 FAIL 三件套透传）槽内写「fr-compound-split 全部用例 22/22」——该文件测拆分谓词与守卫，不断言三件套控制台输出，全绿是回归证据非本条覆盖；FR-04 的诚实写法恰是被错置于 FR-02 槽的「node --check + flow done 实测覆盖」。FR-05（快照证据回拷）槽内写「不适用：零夹带核对——git 事实 MM 态分离提交」——零夹带系 FR-07 主题。串位模式为不适用理由段整体后移两条（FR-02←FR-04、FR-03←FR-05、FR-05←FR-07），31eeb95d 仅补答 FR-06/07 未纠前串。审计证据面被污染：回归定位会按绑定行被引向错误面。",
+      "location": ".sillyspec/changes/2026-09-28-split-guard-and-gate-report/requirements.md:51,54,57,60"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-06 绑定行自相矛盾：「不适用」与「由①b 七断言锁定」同槽并存",
+      "evidence": "FR-06（测试扩展锁定新边界）实质由 ①b「谓词资格收窄：双侧含谓词才拆」七断言锁定（含双拆、双不拆、单侧不拆三类形态），绑定行前半称「不适用」后半却点名具体用例——既有覆盖应作正向绑定行（test/fr-compound-split.test.mjs＋用例名），非不适用裁决。信息正确、形式错误。",
+      "location": ".sillyspec/changes/2026-09-28-split-guard-and-gate-report/requirements.md:63"
+    },
+    {
+      "severity": "P3",
+      "title": "归属补充段未提区间内第三笔他会话操作提交 31d2f81e（完备性提示，不构成账面错误）",
+      "evidence": "git log 4b55fac2..HEAD 区间含三笔非 docs/fix(gate) 前缀提交：4f0a17a7、9dc75bf8（归属补充段已列）及 31d2f81e（fix(flow): 放回 2023ca2c 门失败三件套 hunk，未列）。经 git show --stat 核 31d2f81e 净 diff 仅 src/flow.js +17 行纯归还（相对 2023ca2c 零净变化），不向冻结件注入他会话交付内容，故「区间吞并他会话已提交交付」账面不含它不构成错误；但严格的区间构成说明可补一句「另含竞态归还提交 31d2f81e，内容归本变更」。",
+      "location": ".sillyspec/changes/2026-09-28-split-guard-and-gate-report/design.md:65-70"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T08:18:01Z"
+}
