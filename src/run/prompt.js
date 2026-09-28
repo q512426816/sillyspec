@@ -33,7 +33,7 @@ import { renderSemanticGuardBlock, readSemanticGuardEnabled } from '../semantic-
 // （漏登会令指纹误变——退化后果只是多一次全量重印，不产生错误指引；多登同理只多印）。
 const VOLATILE_PLACEHOLDER_RES = [
   /<now-datetime>/g, /<now-timestamp>/g, /<now-date>/g, /<now-iso-datetime>/g, /<git-head-short>/g, /<quicklog-id>/g,
-  /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g,
+  /{SCAN_STALENESS}/g, /{SCAN_FACTS}/g, /{QUICK_CONTEXT_DIGEST}/g, /{DECISION_HITS}/g, /{UI_VISUAL_GUIDANCE}/g,
   /{KNOWLEDGE_HIT_REPORT}/g, /{DOCS_DEBT}/g, /{MODULE_RESOLVE_TABLE}/g, /{REVIEW_MATERIALS}/g,
   /{EXECUTE_RUN_ID}/g, /{STAGE_REVIEW_RUN_ID}/g, /{PROGRESS_SNAPSHOT}/g, /{TASK_COMPLETION_REPORT}/g,
   /{WORKTREE_META}/g, /{WORKTREE_BASELINE_INFO}/g, /{TASKS_CHECKBOX}/g, /{GIT_DIRTY}/g,
@@ -1316,6 +1316,26 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
       writeAtomicSync(join(decRuntimeDir, 'decision-hits.json'), JSON.stringify({ matched: decResult.matched, decisionHits: decResult.decisionHits || [] }, null, 2) + '\n')
     } catch (e) {
       substitute(/\{DECISION_HITS\}/g, `[decisions] 决策命中检测异常（${e.message}），跳过`)
+    }
+  }
+
+  // {UI_VISUAL_GUIDANCE} → UI 触达检测命中时注入「UI 变更执行须知」（2026-09-28-guidance-principles：
+  // 原型诞生地在头脑风暴的方案对比步——frontend-apple-style 会话实证手绘定稿原型因缺开工引导；
+  // 与 flow start 注入同源同文案，检测语料=变更目录 proposal 与 requirements + 变更名）。无命中
+  // 替换空串零输出；fail-soft 异常单行说明，不留残留占位符。
+  if (stageName === 'brainstorm' && promptText.includes('{UI_VISUAL_GUIDANCE}')) {
+    try {
+      const { detectUiTouch, buildUiGuidanceLines } = await import('../ui-visual.js')
+      const uiSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+      let corpus = changeName || ''
+      for (const name of ['proposal.md', 'requirements.md']) {
+        try {
+          corpus += '\n' + readFileSync(join(uiSpecBase, 'changes', changeName, name), 'utf8')
+        } catch { /* 缺席跳过 */ }
+      }
+      substitute(/\{UI_VISUAL_GUIDANCE\}/g, detectUiTouch(corpus) ? '\n' + buildUiGuidanceLines().join('\n') + '\n' : '')
+    } catch (e) {
+      substitute(/\{UI_VISUAL_GUIDANCE\}/g, `[ui-guidance] UI 须知注入异常（${e.message}），跳过`)
     }
   }
 

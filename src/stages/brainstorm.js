@@ -203,7 +203,7 @@ export const definition = {
       waitReason: '等待用户选择方案',
       waitOptions: ['方案A', '方案B', '方案C'],
       prompt: `基于需求理解和澄清结果，提出 2-3 种实现方案。
-
+{UI_VISUAL_GUIDANCE}
 ### 操作
 1. 每种方案列出：核心思路、优势、劣势
 2. 如果上一步产生了 D-xxx@vN 决策记录，方案必须说明覆盖/违反哪些当前版本决策

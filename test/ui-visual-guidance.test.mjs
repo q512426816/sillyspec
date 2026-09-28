@@ -151,7 +151,12 @@ test('buildUiGuidanceLines：仓中立 + 证据约定与探针同源', () => {
   assert.ok(text.includes(UI_EVIDENCE_FILENAME))
   assert.ok(text.includes('用户裁决'))
   assert.ok(text.includes('边改边渲染对照'))
+  // 2026-09-28-guidance-principles：四条原则版增断言（真码定稿、就近发现管线、手绘仅粗选）
+  assert.ok(text.includes('真码产物'))
+  assert.ok(text.includes('就近发现'))
+  assert.ok(text.includes('仅限一次性粗选'))
   assert.ok(!/C:\\|IdeaProjects|multi-agent-platform/.test(text), '不得硬编码特定仓路径')
+  assert.ok(!/(pnpm|npm\s+run|yarn|gradle|mvn|pip\s+install)\b/i.test(text), '不得绑定生态命令')
 })
 
 /* ── 5. 段落渲染 ── */
