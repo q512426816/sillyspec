@@ -127,6 +127,8 @@ function buildResultFromPlatform(indexDir, pvResults) {
     (b.score - a.score) ||
     (((b.status === 'rejected' || b.deathPath) ? 1 : 0) - ((a.status === 'rejected' || a.deathPath) ? 1 : 0))
   )
+  // 缺 change 的同号锚点全量带回可放大（unmapped 实测 65 个 D-001@v1）——score 序封顶 20
+  if (decisionHits.length > 20) decisionHits.length = 20
   return {
     matched: true,
     entries: entries.slice(0, 3),

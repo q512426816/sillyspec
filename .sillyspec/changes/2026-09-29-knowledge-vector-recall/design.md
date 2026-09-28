@@ -13,7 +13,7 @@ created_at: 2026-09-28T16:48:52.215Z
 <!-- MACHINE-DRAFT:design-approach:end -->
 
 <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
-做法：新建 src/knowledge-vector.js——platformVectorRecall（读 readPlatformConfig：env SILLYHUB_PLATFORM_URL/TOKEN → local.yaml platform 段；POST /api/spec/knowledge/vector-search，Bearer 鉴权，3s 超时，任何失败返回 null 静默降级）＋ buildResultFromPlatform（spec_path+anchor(+change) 映射本地条目，策略面全本地解析，同号条目 change 消歧/缺省全量带回）＋ matchKnowledgeHybrid（路由→平台→本地词片三层编排）。knowledge-match.js 拆出 matchByRouting/fallbackByQueryShingles 导出，同步 matchKnowledge 行为零变化。四消费方切 hybrid（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）。
+做法：新建 src/knowledge-vector.js——platformVectorRecall（读 readPlatformConfig：env SILLYHUB_PLATFORM_URL/TOKEN → local.yaml platform 段；POST /api/spec/knowledge/vector-search，Bearer 鉴权，3s 超时，任何失败返回 null 静默降级）＋ buildResultFromPlatform（spec_path+anchor(+change) 映射本地条目，策略面全本地解析，同号条目 change 消歧/缺省全量带回）＋ matchKnowledgeHybrid（路由→平台→本地词片三层编排）。knowledge-match.js 拆出 matchByRouting/fallbackByQueryShingles 导出，同步 matchKnowledge 行为零变化。四消费方切 hybrid（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）。同步保留面三处不动（审查 R4 点名）：prompt.js buildKnowledgeInjection（execute 知识注入）、execute.js、complete-handlers.js——execute 期注入非本变更设计时点面，v1 范围外。
 
 ## 接口契约
 <!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
@@ -40,4 +40,4 @@ created_at: 2026-09-28T16:48:52.215Z
 <!-- MACHINE-DRAFT:design-risks:end -->
 
 <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
-风险：① 平台未实现期每个零命中查询打一次真实平台 404（静默、debug 可开——流量无害但可观测）；② 向量结果随 embedding 模型升级漂移（非确定性）——advisory 面可接受，确定性底座是本地层；③ 同号锚点缺 change 时全量带回可能放大回显条数——消费方 slice(0,5) 有界。退役判据=平台向量命中长期与主题无关（召回质量投诉）或平台放弃该端点（删本层即回两层）。
+风险：① 平台未实现期每个零命中查询打一次真实平台 404（静默、debug 可开——流量无害但可观测）；② 向量结果随 embedding 模型升级漂移（非确定性）——advisory 面可接受，确定性底座是本地层；③ 同号锚点缺 change 时全量带回可能放大（unmapped 实测 65 同号）——三层有界：构建侧 score 序封顶 20、flow/complete 渲染 slice(0,5)、prompt 渲染 slice(0,5)（审查 P2 补齐）。退役判据=平台向量命中长期与主题无关（召回质量投诉）或平台放弃该端点（删本层即回两层）。
