@@ -41,3 +41,12 @@ flow-draft.js（SEGMENT_PREDICATE_RE + splitCompoundCriteria 守卫）、flow.js
 
 <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
 最大风险：谓词词表漏词导致该拆的不拆（标准粒度变粗）——保守方向（不拆优于误拆，误拆需人工重写 FR，不拆只是粒度粗），词表可增量扩。放弃方案：取消斜杠拆分（推翻 2026-09-25 刻意决策且有测试锁定——评审否决）；全仓 env 白名单清洗（Windows 砍系统变量风险，归 P1 变更处理）。
+
+## 冻结面归属说明（三评 P1 处置，2026-09-28）
+
+baseline（4b55fac2）之后、本变更提交（2023ca2c）之前，并行会话落入 28619d09（治理交互减量，
+GWT 骨架预填+自动勾选+自动绑定补全，含其自身 task-01~06 证据锚）——该提交对 src/flow-draft.js
+的 extractTestAnchors 改动随之进入 baseline..HEAD 提交区间。冻结件中 flow-draft.js 除本变更
+splitCompoundCriteria hunk 外的 hunks 系 28619d09 归属，非本变更交付（本变更对其零改动，
+经 MM 态分离提交纪律实证）。工作树泄漏通路已被双口径冻结关闭（此前复评 P2 的修复真实生效——
+本处残留来自已提交内容，属区间吞并第三形态，先例见 2026-09-27-hunk-attribution-gate design 归属说明）。
