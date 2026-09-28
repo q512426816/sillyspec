@@ -1018,7 +1018,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           const toPosix = (p) => String(p).replace(/\\/g, '/')
           // 复审 P2/P3a 清偿：工作树口径集 = 治理工件目录（含已提交后又改的槽位/勾选——工作树
           // diff 能捕捉提交后编辑）∪ 独占树未提交交付（dirtyAdded）；其余交付面走提交区间。
-          const worktreeSet = new Set([...changeDirFiles, ...((freeze.dirtyAdded) || [])].map(toPosix))
+          // 排除项与 ownFiles 同款（change.patch/change-patch.json）——否则上一轮冻结件作为
+          // untracked 新文件被全文自嵌入（自引用循环：旧 patch 内容混进新 patch，三评 P1 根因）。
+          const dirFilesForPatch = changeDirFiles.filter((f) => !f.endsWith('change.patch') && !f.endsWith('change-patch.json'))
+          const worktreeSet = new Set([...dirFilesForPatch, ...((freeze.dirtyAdded) || [])].map(toPosix))
           const committedFace = freeze.files.map(toPosix).filter((f) => !worktreeSet.has(f))
           const frozenCommitted = buildFrozenPatch(cwd, committedFace, { baseRef: st.baseline_commit, headRef: headCommit })
           const frozenDir = buildFrozenPatch(cwd, [...worktreeSet], { baseRef: st.baseline_commit })
