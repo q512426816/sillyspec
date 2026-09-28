@@ -518,17 +518,17 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
   const waitParts = []
   const distillable = []
   for (const e of selected) {
-    if (e.selected === 'rejected' && (!e.rejectReason || !e.revisitWhen)) {
-      const missing = []
-      if (!e.rejectReason) missing.push('否决理由')
-      if (!e.revisitWhen) missing.push('复潮条件')
-      waitParts.push(`${e.id} 缺${missing.join('、')}`)
-    } else {
-      distillable.push(e)
-    }
+    // 标题必填（2026-09-29-decision-route-vocab：裸号条目检索面不可见——路由词形派生与回显
+    // 排序都吃标题，缺标题=知识入库即隐身）；rejected 缺否决理由/复潮条件 → 不写盘（其余照常）
+    const missing = []
+    if (!e.title) missing.push('标题（## D-xxx@vN 后接短标题——检索词形来源，裸号条目入库即隐身）')
+    if (e.selected === 'rejected' && !e.rejectReason) missing.push('否决理由')
+    if (e.selected === 'rejected' && !e.revisitWhen) missing.push('复潮条件')
+    if (missing.length > 0) waitParts.push(`${e.id} 缺${missing.join('、')}`)
+    else distillable.push(e)
   }
   const needsWait = waitParts.length > 0
-    ? `${waitParts.join('；')}——rejected 条目必填，补齐后重跑提炼`
+    ? `${waitParts.join('；')}——条目必填字段缺失，补齐后重跑提炼`
     : null
   if (distillable.length === 0) return { written: [], skipped: null, needsWait }
 

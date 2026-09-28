@@ -242,6 +242,93 @@ function keywordMatchesContext(keyword, contextLower) {
   return new RegExp(`(^|[^a-z0-9])${escapeRegex(kw)}([^a-z0-9]|$)`).test(contextLower)
 }
 
+/** 查询词片抽取：CJK 连续段 bigram ＋ ≥4 字符 ASCII 词（小写；短词与标点数字不参与；
+ * 纯 ASCII 查询不产词片——中文知识库，英文查询维持既有零命中行为）。 */
+function queryShingles(taskContext) {
+  const raw = String(taskContext || '')
+  const shingles = new Set()
+  if (/[\u4e00-\u9fff]/.test(raw)) {
+    for (const w of raw.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) || []) shingles.add(w)
+  }
+  for (const seg of raw.match(/[\u4e00-\u9fff]+/g) || []) {
+    for (let i = 0; i < seg.length - 1; i++) shingles.add(seg.slice(i, i + 2))
+  }
+  return [...shingles]
+}
+
+/** ASCII 词片词边界命中（CJK 词片 includes 即可）；转义防正则注入。 */
+function asciiWordHit(sh, text) {
+  if (!/^[a-z]/.test(sh)) return text.includes(sh)
+  return new RegExp(`(^|[^a-z0-9-])${sh.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}([^a-z0-9-]|$)`, 'i').test(text)
+}
+
+/**
+ * 零命中查询侧词片回退（2026-09-29-decision-route-vocab）：路由行零命中时，只测「查询自己的
+ * 词片」——逐 decisions 域文件数词片在条目文本（标题∪理由）的出现次数，落在「跨条目复现但
+ * 非泛在」窗（count ∈ [2, max(3, 5%·条目数)]）→ 文件级命中（合成路由条目进 entries，CLI
+ * search／digest 知识命中／门条目行三面共享）；条目级命中 = 该文件内含 ≥1 复现词片的条目
+ * （score=复现词片数，消费方 score>0 资格判定兼容）。
+ * 设计依据：入库侧词表派生死于「同窗词片按序截断=抽签」（unmapped n∈[2,3] 窗 1176 个、
+ * 目标词排 759）；查询侧只测自身几十词片，无挑选无 cap。机制词栖息在理由文本（模板标题不
+ * 含词形——Mouse B 实测四查全零的根因）。无可回退返回 null（保持既有零命中行为）。
+ */
+function fallbackByQueryShingles(indexDir, taskContext) {
+  const shingles = queryShingles(taskContext)
+  if (shingles.length === 0) return null
+  const all = parseDecisionEntries(indexDir)
+  if (all.length === 0) return null
+  const byFile = new Map()
+  for (const h of all) {
+    let st = byFile.get(h.file)
+    if (!st) { st = { entries: [], texts: [] }; byFile.set(h.file, st) }
+    st.entries.push(h)
+    st.texts.push(`${h.title} ${h.reason || ''}`)
+  }
+  const corroborated = new Map()
+  for (const [file, st] of byFile) {
+    const text = st.texts.join('\n')
+    const ceil = Math.max(2, Math.floor(st.entries.length * 0.05))
+    const hits = new Set()
+    for (const sh of shingles) {
+      if (!asciiWordHit(sh, text)) continue
+      const n = text.split(sh).length - 1
+      if (n >= 2 && n <= ceil) hits.add(sh)
+    }
+    if (hits.size > 0) corroborated.set(file, hits)
+  }
+  if (corroborated.size === 0) return null
+  const fbEntries = [...corroborated.entries()].slice(0, 3).map(([file, hits]) => ({
+    category: 'Decisions',
+    keywords: [...hits].slice(0, 5),
+    file,
+    anchor: '',
+    display: `${file}（查询词片复现命中）`,
+  }))
+  const decisionHits = []
+  for (const [file, hits] of corroborated) {
+    for (const h of byFile.get(file).entries) {
+      const text = `${h.title} ${h.reason || ''}`
+      let mc = 0
+      for (const sh of hits) if (asciiWordHit(sh, text)) mc++
+      if (mc > 0) decisionHits.push({ ...h, score: mc })
+    }
+  }
+  decisionHits.sort((a, b) =>
+    (b.score - a.score) ||
+    (((b.status === 'rejected' || b.deathPath) ? 1 : 0) - ((a.status === 'rejected' || a.deathPath) ? 1 : 0))
+  )
+  return {
+    matched: true,
+    entries: fbEntries,
+    report: `Status: fallback matched (${[...corroborated.keys()].join(', ')} by query shingles)`,
+    json: {
+      matched: true, entry_count: fbEntries.length, fallback: true,
+      entries: fbEntries.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
+    },
+    decisionHits,
+  }
+}
+
 /**
  * 用任务上下文匹配知识条目
  * @param {string} indexDir - knowledge 目录路径
@@ -283,6 +370,10 @@ export function matchKnowledge(indexDir, taskContext) {
   })
 
   if (matched.length === 0) {
+    // 零命中查询侧词片回退（2026-09-29-decision-route-vocab）——机制词不在路由行上时路由恒空
+    // （Mouse B 实测四查全零）；回退无候选才落到既有零命中行为。
+    const fb = fallbackByQueryShingles(indexDir, taskContext)
+    if (fb) return fb
     return {
       matched: false,
       entries: [],

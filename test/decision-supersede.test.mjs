@@ -52,11 +52,11 @@ console.log('--- Test 1: 被 supersede 的旧版本不警告 ---')
   // decisions.md: D-004@v2 supersedes D-004@v1
   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
 
-## D-004@v1
+## D-004@v1 旧版决策
 - status: accepted
 - priority: P1
 
-## D-004@v2
+## D-004@v2 修订版决策
 - status: accepted
 - priority: P1
 - supersedes: D-004@v1
@@ -110,11 +110,11 @@ console.log('\n--- Test 2: 无 supersede 关系时旧版本仍校验 ---')
   // decisions.md: 两个独立决策，无 supersede 关系
   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
 
-## D-004@v1
+## D-004@v1 旧版决策
 - status: accepted
 - priority: P1
 
-## D-005@v1
+## D-005@v1 独立决策
 - status: accepted
 - priority: P1
 `)
@@ -171,11 +171,11 @@ console.log('\n--- Test 3: status=superseded 的旧版本不警告（回归） -
 
   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
 
-## D-004@v1
+## D-004@v1 旧版决策
 - status: superseded
 - priority: P1
 
-## D-004@v2
+## D-004@v2 修订版决策
 - status: accepted
 - priority: P1
 `)
@@ -220,16 +220,16 @@ console.log('\n--- Test 4: 多级 supersede 链 ---')
 
   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
 
-## D-004@v1
+## D-004@v1 旧版决策
 - status: accepted
 - priority: P1
 
-## D-004@v2
+## D-004@v2 修订版决策
 - status: accepted
 - priority: P1
 - supersedes: D-004@v1
 
-## D-004@v3
+## D-004@v3 三代版决策
 - status: accepted
 - priority: P1
 - supersedes: D-004@v2
