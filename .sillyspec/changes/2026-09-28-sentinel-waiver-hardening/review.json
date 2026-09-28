@@ -2,56 +2,52 @@
   "schemaVersion": 1,
   "change": "2026-09-28-sentinel-waiver-hardening",
   "reviewer": "subagent",
-  "verdict": "FAIL",
+  "verdict": "PASS",
   "findings": [
     {
-      "severity": "P1",
-      "title": "锚定可被 resume 重锚刷新绕过——角度 C 的闭合对声明的攻击者模型不成立",
-      "evidence": "resume 路径（flow.js:436-441）每次重入 start 都无条件执行 baselineSha256(现有文件) → writeFlowState({baseline_sha256})，writeFlowState 的 `...patch` 展开覆盖既有键（flow.js:60）——锚定不是首写者胜，与 snapshotBaseline 的首写者胜（R-04）语义相反。攻击序列全在 agent 常规能力内：改写 .runtime/route-hindsight-baseline-<change>.json 的 tasks 字段与覆写后 tasks.md 对齐 → 重跑 `sillyspec flow start --change X`（AGENTS.md 明文鼓励的恢复动作，无身份校验）→ 锚被刷新为篡改内容哈希 → flow done:801-806 校验通过 → 镜像豁免照发。角度 C 的威胁模型恰是「能改 .runtime 的 agent」，其跑 CLI 与改 .runtime 同级容易，故哈希校验实际只防「篡改后不再跑 start」的攻击者——弱化到近乎装饰。design 槽4 只裁了「agent 篡改 flow-state 里 baseline_sha256 本身」这条路，漏了「用合法 CLI 重锚」这条更近的路；patch sha256 兜底同样拦不住重锚（重锚后的 flow-state 会被正常提交进 patch 面，无异常可见）。附注：无锚=信任的过渡期语义使一切未跑过新版 start 的变更永久处于可伪造面（无闭合判据），F1 修复后自然收敛。修复方向：三处写入点改首写者胜——readFlowState 后 st.baseline_sha256 已存在则跳过覆写；resume 对旧版本在途变更的补锚用途不受影响（本就只在键缺失时写）。",
-      "location": "src/flow.js:436-441（440 为覆写点；同型 375/528 一并改）"
-    },
-    {
-      "severity": "P2",
-      "title": "FR-05「单测覆盖篡改从严/哈希锚定」宣称与事实不符——消费侧校验逻辑零自动化覆盖",
-      "evidence": "grep baselineSha256|baseline_sha256 于 test/ 零命中（含本变更新增用例⑥的文件）。单测实际只钉了角度 A（⑥零提交从严）；flow.js:801-806 的哈希校验分支（锚定存在才校验/过渡期信任/不符置 null 从严＋告警）与 route-hindsight.baselineSha256 纯函数均无任何测试。提案成功标准 5 与 tasks task-02/03 宣称「单测覆盖零提交从严/篡改从严/哈希锚定」，篡改从严与哈希锚定两项仅靠一次性 live 复测背书（不可回归）。AGENTS.md 核心规则 4：以落盘测试结果为准，不信口头已完成。",
-      "location": "test/（缺失面）；宣称见 .sillyspec/changes/2026-09-28-sentinel-waiver-hardening/proposal.md:41、tasks.md:10-11"
-    },
-    {
-      "severity": "P2",
-      "title": "FR-07「npm test 全绿」与事实不符——HEAD 上存在预存确定性失败；tasks「全量 53/53」数字口径失实",
-      "evidence": "npm test 现态 663 通过/5 失败。逐项归属（五者均不落本变更触及文件及其 import 闭包，零回归结论本身成立）：① quick-retired.test.mjs 确定性失败——断言 package.json 版本 3.30.0，HEAD 为 3.31.0（祖先提交 cb6fc0a0 引入，早于本变更，单跑必挂）；② doc-ref-check.test.mjs——并行会话工作区态（archive 大批移动致文档行号引用漂移，单跑亦挂）；③④ tap-judge / verify-postcheck-known-failures——并发假红，单跑均过；⑤ residual-runner-parity ④.ts 分拣——单跑亦挂，与哨兵面无关。但收口宣称「npm test 与 test:core 全绿」（FR-07/proposal:43）在 HEAD 时点即不成立（quick-retired 在 HEAD 必挂）。另 tasks.md:11「全量 53/53」无任何口径对得上：定向五文件实数 43/43（上轮 review 已注明 53 为协调方高估，本轮简报沿用未纠）。",
-      "location": ".sillyspec/changes/2026-09-28-sentinel-waiver-hardening/{proposal.md:43, tasks.md:11}；预存失败引入点 cb6fc0a0"
+      "severity": "P3",
+      "title": "watcher 维持未校验读（advisory 容忍）未在 design 留痕——防御纵深决策无文档依据",
+      "evidence": "前轮 P3 的 watcher 半面：watcher.js:544 仍裸用 readBaselineTasks（不带锚定校验）。风险本身受控（watcher 仅产 advisory 人判警告，硬门在 flow done 已走 readBaselineTasksVerified——flow.js:800），且本变更已把 quick-audit 改走验证读取器（quick-audit.js:630-636，锚定值自 flow-state.yaml 正则提取），防御纵深较前轮改善。但 design.md 全文（槽1-4）无一句记录「watcher 侧容忍未校验、理由是 advisory 非硬门」——按本轮任务书明确要求记 P3。建议后续在 design 槽1 补一行留痕，或把校验下沉为 readBaselineTasks 可选入参统一三处（前轮建议仍有效）。",
+      "location": "src/watcher.js:544；.sillyspec/changes/2026-09-28-sentinel-waiver-hardening/design.md（缺留痕）"
     },
     {
       "severity": "P3",
-      "title": "基线消费的哈希校验面不完整（防御纵深不一致）——watcher 与 quick-audit 两消费点未校验",
-      "evidence": "readBaselineTasks 共三消费点：flow.js:797（已校验）、watcher.js:544、quick-audit.js:631（均未校验）。watcher 侧仅产 advisory 警告（fake-check 人判），硬门在 flow done 已校验，风险受控；quick-audit 侧依赖「quick 道无基线快照面→恒 null」的结构性不变量——snapshotBaseline 仅 flow.js 调用，当前成立，但若 quick 会话与 flow 变更同名即破且无防护。建议后续把校验下沉为 readBaselineTasks 的可选入参统一三处。",
-      "location": "src/watcher.js:544；src/run/quick-audit.js:631"
-    },
-    {
-      "severity": "P3",
-      "title": "design 槽3 盲维四问以单句「不适用」打包——Q2 并发理由不严，Q3 恰是 F1 洞所在",
-      "evidence": "「快照-锚定同点写入无并发窗口（start/adopt 单趟）」忽略两点：(a) writeFlowState 本身是读-改-写无锁（flow.js:53-64），与他写点（resume 的 review_force、子步记账）交错可丢键——属既有机械面，本变更新增键未加重风险，可容；(b) 「单趟」前提不真——resume 是可反复重入的合法路径，正是 F1 重锚洞。四问形式上已答（有理由），但两问的理由与事实有偏差。",
+      "title": "design 槽3 盲维四问理由未勘误——与上轮 FAIL 指出的偏差原文未动",
+      "evidence": "槽3 仍为单句「不适用：纯判据与哈希校验，快照-锚定同点写入无并发窗口（start/adopt 单趟）」——与上轮 finding 5 引用的原文逐字相同。(a)「start/adopt 单趟」仍不准确：resume 是可反复重入路径，只是重入现在被首写者胜守卫挡住不再写锚（P1 修复后代码面风险已闭合，槽3 的结论碰巧成立但理由未跟上修复）；(b) Q2 的 writeFlowState 读-改-写无锁丢键风险（flow.js:53-64）仍存在，属既有机械面可容但未在理由中承认。非阻断：四问形式已答、底层风险已由代码闭合，残余为文档理由精度。",
       "location": ".sillyspec/changes/2026-09-28-sentinel-waiver-hardening/design.md:35"
     },
     {
       "severity": "P3",
-      "title": "文档质量瑕疵：FR-06 GWT 骨架被「→」切断成病句；七条 FR 测试绑定槽全部同段复制",
-      "evidence": "requirements.md FR-06 的 When/Then 把「live 复测 A（零提交→拒收）与 C（篡改→拒收）」按 → 拆断成乱序病句（机器预填缺陷）；FR-01..07 测试绑定七槽均为同一段复制文本，其中 FR-02/03 绑定的用例实际不覆盖锚定行为（见 P2 finding 2），绑定面与真实覆盖面失配。",
-      "location": ".sillyspec/changes/2026-09-28-sentinel-waiver-hardening/requirements.md:35-66"
+      "title": "文档数字口径小失配：requirements FR-07 绑定槽沿「定向五文件 43/43」——修复后实为 44/44",
+      "evidence": "FR-07 绑定槽写「npm run test:core 221/221（定向五文件 43/43；…）」，43/43 是修复前轮（⑦ 未加）的口径；本轮实跑五文件 44/44（⑦ 新增一枚），tasks.md task-03 的「定向 44/44」正确——同一变更两份工件数字不一致，43 为 stale 复制。实质宣称（全绿＋全量失败逐项归因）与实跑相符，非阻断。",
+      "location": ".sillyspec/changes/2026-09-28-sentinel-waiver-hardening/requirements.md:66"
+    },
+    {
+      "severity": "P3",
+      "title": "残面观察（新）：删除 flow-state 后走 adopt 路径可对篡改基线重新补锚——破坏性路线，成本高但未闭合",
+      "evidence": "P1 主路径（resume 无条件重锚）已闭合；本条为重审中发现的相邻残面：删除 change 目录内 flow-state.yaml（保留 proposal/design）→ 重跑 start 走 adopt 收编（flow.js:357-361 写全新 state，无 baseline_sha256）→ snapshotBaseline 首写者胜不覆盖已篡改的 .runtime 基线（route-hindsight.js:99）→ 375 守卫见键缺失 → 把篡改内容哈希写成新锚。攻击成本为破坏性：ledger 全重置（baseline_commit 归当前 HEAD、substeps 清零、flow-state 落 adopted_from=brainstorm——归档审计件里可见的谎言）、patch 冻结面缩水可见。与槽4 裁定（篡改 flow-state 记账面超出哨兵职责）及上轮已接受的「无锚=信任」过渡语义同类，故记 P3 硬化建议非阻断：adopt 补锚前用基线 payload.capturedAt 与产物 mtime 交叉核，或把锚副本写进 progress DB 侧。",
+      "location": "src/flow.js:357-375（357 adopt 判定＋361 无锚 state＋375 补锚）"
     }
   ],
-  "fixDispositions": {},
+  "fixDispositions": {
+    "P1-resume重锚绕过": "FIXED——git show HEAD 证实两处显式首写者胜守卫：flow.js:375（adopt，`!(readFlowState()||{}).baseline_sha256` 才写，注释「重入不刷新」）与 flow.js:440（resume，注释点名「审查 P1：重锚洗白篡改」）；第三写入点 flow.js:528 无显式守卫但结构上恒为首写：全部既有态路径在 410（adopt return）/457（resume return）早退，能到 499 的只有真 fresh 与平台预建空目录（proceedFreshEmptyDir），499 刚以无 baseline_sha256 的 patch 创建 state，528 的写不可能是覆写；writeFlowState patch 合并（cur 展开）确认 446 review_force 写不冲掉既有锚；全仓 grep 证实无第四写入点（quick-audit.js:634 为正则读）。snapshotBaseline 本身首写者胜（route-hindsight.js:99）保证篡改文件不被重放快照洗白。攻击链「篡改→重跑 start→洗锚」在三路径上均断。残面一条另记 P3（finding 4）。",
+    "P2-锚定零单测": "FIXED——test/sentinel-mirror-waiver.test.mjs:135-158 新增⑦为真实单测：readBaselineTasksVerified 三态（anchoredSha256=null 信任放行、锚符相符放行、payload.tasks 篡改 task-01→task-99 后检出 tampered=true 且 tasksMd=null 按无基线从严）＋baselineSha256 形态（/^[0-9a-f]{64}$/）与缺文件 null；实跑面见 testRuns（44/44 含⑦）。",
+    "P2-宣称不实": "FIXED——tasks.md:11 改口径「定向 44/44＋test:core 221/221（npm test 全量失败项逐项归因均预存/并行面）」：本轮独立实跑 44/44、221/221 逐字复现，宣称与落盘事实相符；「53/53」消失；FR-07 半面以绑定槽归因注记处置（FR GWT 标题在机器保护段内不可改属可接受处置）。残余 stale 数字一处记 P3（finding 3）。",
+    "P3-watcher/quick-audit未校验": "PARTIAL→quick-audit FIXED / watcher 未留痕记 P3（finding 1）——quick-audit.js:628-638 已改走 readBaselineTasksVerified（锚定值自 flow-state.yaml 提取，缺锚=过渡期信任，changeName 缺席 fail-safe），前轮担心的「quick 会话与 flow 变更同名即破」面随之闭合（同名时校验生效）；watcher 维持 advisory 容忍但 design 未留痕。",
+    "P3-盲维理由": "NOT AMENDED→记 P3（finding 2）——design 槽3 原文未动；代码面风险已由 P1 修复闭合，残余为理由精度非阻断。",
+    "P3-FR06病句＋绑定同段复制": "FIXED——requirements.md:35-38 FR-06 为完整 GWT（Given 修复后的 CLI／When 实弹复测角度 A 与 C／Then 双拒收＋角度 C 告警行），病句消除；七条 FR 绑定槽逐 FR 分答（FR-01→⑥、FR-02→⑦＋接线钉、FR-03→①②③④＋wiring 回归、FR-04→wiring①＋⑤、FR-05→⑥⑦、FR-06→不适用 live 证据面、FR-07→core＋定向），同段复制消除且绑定面与真实覆盖面对齐。"
+  },
   "testRuns": {
-    "instructedFiveFiles": "node --test test/sentinel-mirror-waiver.test.mjs test/sentinel-wiring.test.mjs test/route-hindsight.test.mjs test/flow-clarity-probe.test.mjs test/watcher.test.mjs → 43/43 全绿（7+2+8+6+20，fail 0；协调方预估 53 仍为高估——上轮 review 已注明同源高估，全绿无 fail 为实质）",
-    "core": "npm run test:core → 221/221 全绿（fail 0）",
-    "fullSuite": "npm test → 663 通过/5 失败，逐项归属见 P2 finding 3：quick-retired（预存确定性，断言 3.30.0 vs HEAD 3.31.0，cb6fc0a0 引入）、doc-ref-check（并行会话 archive 移动的工作区态）、tap-judge＋verify-postcheck-known-failures（并发假红，单跑均过）、residual-runner-parity（.ts 分拣，与本变更无关）——无一落本变更触及面，已验行为零回归成立"
+    "instructedFiveFiles": "node --test test/sentinel-mirror-waiver.test.mjs test/sentinel-wiring.test.mjs test/watcher.test.mjs test/route-hindsight.test.mjs test/flow-clarity-probe.test.mjs → 44/44 全绿（fail 0；上轮 43＋⑦=44，与任务书预期一致）",
+    "core": "npm run test:core → 221/221 全绿（fail 0；test:core 文件清单不含 sentinel-mirror-waiver.test.mjs，故⑦新增不改变其计数，与宣称一致）",
+    "gateRecordNote": "本变更 .runtime/verify-runs 仅一条 20260928150524（164/164 pass，输出尾见⑤⑥无⑦）＝修复前轮的收口门记录；修复件在 758df4ac CommitDate 15:34:42Z 落盘后未再跑门（flow-state updatedAt 15:06Z 早于修复提交）。终态测试面由本轮独立实跑 44/44＋221/221 在 HEAD 上背书，宣称可信；门记录滞后属流程留痕问题，不阻断。另注：上轮 review.json reviewedAt 15:55 晚于其所在提交 CommitDate 15:34——手写时间戳失真，本轮取机器时钟。",
+    "liveRetestConsistency": "task-03 三条 live 复测声明（角度 A 零提交拒收／角度 C 篡改哈希告警拒收／P1 绕过路径重跑 start 不洗锚仍拒收）无法重放会话，按任务书核对代码一致性：A→flow.js:791 空串照跑＋⑥单测同判据；C→flow.js:800-802 验证读取器 tampered→tasksMd=null→从严＋801 告警行＋⑦单测；P1 绕过→440 守卫不刷新锚→800 校验锚为原哈希→不符从严。三链与代码守卫逻辑一致，⑦为可回归钉子，可信。"
   },
   "dimensionNotes": {
     "乱序": "ok——锚定为时点哈希、消费为单向校验，无乱序敏感面",
-    "并发": "weak-ok——writeFlowState 读-改-写无锁可丢键属既有机械面（substeps 同风险，本变更未加重）；槽3「无并发窗口」结论可容但理由不严（见 P3 finding 5）",
-    "切换": "FAIL 面——resume 中途重入正是 F1 重锚洞：篡改基线后重跑 flow start 即可刷新锚定穿透校验（见 P1 finding 1）",
+    "并发": "weak-ok——writeFlowState 读-改-写无锁丢键属既有机械面未加重；槽3「无并发窗口」结论可容但理由未勘误（见 finding 2）",
+    "切换": "ok——P1 修复后 resume 重入不再刷新锚（440 守卫），重锚洗白链断；破坏性残面（删 flow-state 走 adopt 补锚）另记 P3（finding 4），与已接受的槽4 职责边界同类",
     "作用域": "ok——基线文件/flow-state 均按 specBase＋change 名限定，跨仓跨工作区不串台"
   },
-  "reviewedAt": "2026-09-28T15:55:00.000Z"
+  "reviewedAt": "2026-09-28T15:44:07.000Z"
 }

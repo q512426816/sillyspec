@@ -63,4 +63,4 @@ test/sentinel-mirror-waiver.test.mjs「⑥⑦」（零提交从严/哈希锚定�
 不适用：live 实弹复测非单测面——证据在会话记录（角度 A/C 双拒收输出）与 verify-result 留档
 
 <!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-npm run test:core 221/221（定向五文件 43/43；npm test 全量失败项逐项归因均为预存/并行面，零落本变更触及面）
+npm run test:core 221/221（定向五文件 44/44；npm test 全量失败项逐项归因均为预存/并行面，零落本变更触及面）
