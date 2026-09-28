@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-watcher-signal-widen",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "P2 清偿的持久化往返无自动化测试锁定",
+      "evidence": "writeSnapshotWatermark 第 5 参 sentinel 写入水位（watcher.js:447）与启动回补 fakeCheckPending（watcher.js:997-999）经复审在实源两向在场且正确，但全仓 grep 调用点显示生产面唯一写点恒带 sentinel（watcher.js:1057）、无他处裸写可抹 pending；新测试仅覆盖内存态消解三拍（test/watcher.test.mjs「watcher-signal-widen: 假勾选 pending 消解路径」），test/sentinel-rules.test.mjs:321-327 既有水位用例不传 sentinel——重启丢 pending 的原始缺陷路径（write 带 sentinel → 重启 → load 恢复）无任何用例回归锁定，纯代码审读验证。建议后续变更补一条往返用例。",
+      "location": "test/watcher.test.mjs:53-66; test/sentinel-rules.test.mjs:321-327"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T10:11:36Z"
+}

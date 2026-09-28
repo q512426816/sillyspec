@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-watcher-signal-widen",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-watcher-signal-widen:flow:FR-01",
+      "tests": [
+        "test/watcher.test.mjs「watcher-signal-widen: gate-run 与 config-change 事件」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-watcher-signal-widen"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-watcher-signal-widen:flow:FR-02",
+      "tests": [
+        "test/watcher.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-watcher-signal-widen"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-watcher-signal-widen:flow:FR-03",
+      "tests": [
+        "test/watcher.test.mjs「watcher-signal-widen: 假勾选 pending 消解路径」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-watcher-signal-widen"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-watcher-signal-widen:flow:FR-05",
+      "tests": [
+        "test/watcher.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-watcher-signal-widen"
+    }
+  ]
+}

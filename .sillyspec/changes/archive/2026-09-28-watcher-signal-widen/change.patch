@@ -1,0 +1,437 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index ca2c4974..211cab1e 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -999,6 +999,17 @@ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
+ // 符号串的裸子串，豁免资格停用（须改锚定式 ^…）——防「裸 "--- " 吞 go --- FAIL: 行」「裸
+ // "AssertionError" 吞真实断言行」（M1 评审实证）。文件名/用例名等具体模式（主用例：按名豁免
+ // 预存失败测试）不在此列，不受限。
++/**
++ * 嵌套测试环境清洗（2026-09-28-tap-judge 实证根因 + 本变更具象为共用单点）：父级 node:test
++ * 进程带 NODE_TEST_CONTEXT env，execSync 全量继承会让内层 node --test 误入 child 模式
++ * stdout 全空——所有跑测试命令的 execSync 调用点统一经此剥离（普通进程本无此键零变化）。
++ */
++export function stripNestedTestEnv(env = process.env) {
++  const next = { ...env }
++  delete next.NODE_TEST_CONTEXT
++  return next
++}
++
+ const GENERIC_BARE_PATTERN_RE = /^(?:[-=_~*#·✖✕✗✘×✗\s]{1,6}|assertionerror|error|fail|failed|failure|failing|not ok|exception|traceback|panic|assert|error:|fail:)$/i
+ 
+ /** 豁免模式编译（partitionFailures 与 TAP 判账共用单点，2026-09-28-tap-judge）：锚定式（^…/$…
+@@ -1366,8 +1377,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
+   // env，本模块 execSync 全量继承——门在测试进程内被调用时（e2e 用例 spawn 内层 CLI 跑门），
+   // 内层 node --test 误入 child 模式 stdout 全空（⑮ 门内必挂/单独跑必过的根因家族）。
+   // 剥离该键：门内测试进程与普通进程行为一致。
+-  const runEnv = { ...process.env }
+-  delete runEnv.NODE_TEST_CONTEXT
++  const runEnv = stripNestedTestEnv()
+   try {
+     output = decodeShellOutput(execSync(testCommand, {
+       cwd,
+@@ -2182,6 +2192,7 @@ function runCrossRepoFullTest(entry) {
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
+       windowsHide: true,
++        env: stripNestedTestEnv(),
+     })
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -2363,6 +2374,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
+       windowsHide: true,
++       env: stripNestedTestEnv(),
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+diff --git a/src/watcher.js b/src/watcher.js
+index ef45b8f8..c17c85bf 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -297,6 +297,28 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
+   }
+   // 哨兵源四：review.json mtime 面
+   snap.reviews = collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl);
++  // 哨兵源五（2026-09-28-watcher-signal-widen）：门实测结论——verify-runs 下本变更最新
++  // test-result.json（目录名 YYYYMMDDHHMMSS 字典序即时序）。停滞判定的核心活跃信号：
++  // 门在跑/失败/过此前对观测面完全不可见（15 分钟苦战被判停滞的实证）。
++  try {
++    const runsDir = join(runtimeRoot, 'verify-runs');
++    let latest = null;
++    for (const d of readdirSyncImpl(runsDir)) {
++      try {
++        const raw = JSON.parse(readFileSyncImpl(join(runsDir, d, 'test-result.json'), 'utf8'));
++        if (raw && raw.change === changeName) {
++          if (!latest || String(d) > latest.dir) latest = { dir: String(d), status: String(raw.status || '?'), durationMs: typeof raw.duration_ms === 'number' ? raw.duration_ms : null };
++        }
++      } catch { /* 半写/坏行跳过 */ }
++    }
++    snap.gateRun = latest;
++  } catch { snap.gateRun = null; }
++  // 哨兵源六：本地配置变更事实（local.yaml mtime——gitignored 无 git 信号；内容不上行只留痕，
++  // 「门为何突然过了」的豁免配置变更在时间线可见）
++  try {
++    const cfgStat = statSyncImpl(join(resolve(changeDir, '..', '..'), 'local.yaml'));
++    snap.localConfig = { mtimeMs: Math.round(cfgStat.mtimeMs) };
++  } catch { snap.localConfig = null; }
+   return snap;
+ }
+ 
+@@ -332,6 +354,16 @@ export function inferEvents(prev, next) {
+   if (next.scan && (!prev.scan || prev.scan.mtimeMs !== next.scan.mtimeMs || prev.scan.size !== next.scan.size)) {
+     events.push(mk('verify', 'verify', prev.scan ? '质量扫描记录更新' : '质量扫描记录出现'));
+   }
++  // 门实测结论事件（2026-09-28-watcher-signal-widen）：新实测记录出现即事件（含结论与耗时
++  // ——停滞判定的活跃信号，ruleStall 经 baseEvents 非空自然计入 lastActivityAt）。
++  if (next.gateRun && (!prev.gateRun || prev.gateRun.dir !== next.gateRun.dir)) {
++    const dur = typeof next.gateRun.durationMs === 'number' ? `（${(next.gateRun.durationMs / 1000).toFixed(1)}s）` : '';
++    events.push(mk('gate-run', 'verify', `门实测 ${next.gateRun.status}${dur} · ${next.gateRun.dir}`));
++  }
++  // 本地配置变更事实事件（内容不上行——gitignored 文件只留 mtime 痕迹）
++  if (next.localConfig && (!prev.localConfig || prev.localConfig.mtimeMs !== next.localConfig.mtimeMs)) {
++    events.push(mk('config-change', null, prev.localConfig ? '本地配置 local.yaml 有变更（内容不上行）' : '本地配置 local.yaml 在场'));
++  }
+   return events;
+ }
+ 
+@@ -371,7 +403,7 @@ export const STALL_EXECUTE_MS = 15 * 60_000;
+ 
+ /** 引擎状态初值（ts=计时锚；task-04 重启回补时取 max(启动时刻, 水位 ts)）。 */
+ export function createSentinelState(ts = Date.now()) {
+-  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null };
++  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null, fakeCheckPending: {} };
+ }
+ 
+ function mkWarning(rule, detail, ts) {
+@@ -407,9 +439,12 @@ export function loadSnapshotWatermark(runtimeRoot, changeName) {
+  * 写水位（best-effort，失败不抛）。cacheObj={last} 时内容去重（与上次序列化串相同跳过写，
+  * 防 3s 周期空转 IO——Grill 修正③）。
+  */
+-export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null) {
++export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null, sentinel = null) {
+   try {
+-    const json = JSON.stringify(snap);
++    // sentinel 态搭水位车持久（2026-09-28-watcher-signal-widen 评审 P2 清偿：fakeCheckPending
++    // 纯内存时 watcher 重启即丢——pending 翻格的消解承诺落空。快照键不动，sentinel 挂
++    // 附加键（loadSnapshotWatermark 的形状校验只看 ts/archived，附加键对旧读方透明）。
++    const json = JSON.stringify(sentinel ? { ...snap, sentinel } : snap);
+     if (cacheObj && cacheObj.last === json) return { written: false };
+     writeFileSync(watcherSnapshotPath(runtimeRoot, changeName), json);
+     if (cacheObj) cacheObj.last = json;
+@@ -473,8 +508,11 @@ export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
+ /**
+  * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
+  * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
++ * 消解态（2026-09-28-watcher-signal-widen）：无证据翻格记入 state.fakeCheckPending；
++ * 后续拍位证据补上（提交晚于勾选几十秒是常态——guidance-principles 36 秒实证）→ 发
++ * fake-check-cleared info 事件并清 pending，时间线可见「警告已消解」而非永挂。
+  */
+-function ruleFakeCheck(prev, next, ts) {
++function ruleFakeCheck(prev, next, state, ts) {
+   const flipped = [];
+   const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
+   for (const key of keys) {
+@@ -483,16 +521,29 @@ function ruleFakeCheck(prev, next, ts) {
+       if (!pIds.has(id)) flipped.push(id);
+     }
+   }
+-  if (flipped.length === 0) return [];
+   const newCommits = newCommitsBetween(prev, next);
+-  const unevidenced = flipped.filter((id) => {
++  const hasEvidence = (id) => {
+     const re = taskTokenRe(id);
+     const byCommit = newCommits.some((c) => re.test(c.subject || ''));
+     const byReview = Object.entries(next.reviews || {}).some(([p, mtime]) => p.includes(`/tasks/${id}/`) && (prev.reviews || {})[p] !== mtime);
+-    return !(byCommit || byReview);
+-  });
+-  if (unevidenced.length === 0) return [];
+-  return [mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts)];
++    return byCommit || byReview;
++  };
++  const out = [];
++  const pending = (state.fakeCheckPending = state.fakeCheckPending || {});
++  // 新翻格：零证据 → 警告并挂 pending
++  const unevidenced = flipped.filter((id) => !hasEvidence(id));
++  if (unevidenced.length > 0) {
++    for (const id of unevidenced) pending[id] = true;
++    out.push(mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts));
++  }
++  // 消解：pending 中证据到位 → info 事件（含证据形态：提交号或 review 变更）
++  const cleared = Object.keys(pending).filter((id) => hasEvidence(id));
++  for (const id of cleared) {
++    delete pending[id];
++    const c = newCommits.find((x) => taskTokenRe(id).test(x.subject || ''));
++    out.push({ ts, kind: 'info', stage: null, rule: 'fake-check-cleared', severity: 'info', detail: `task ${id} 勾选证据补齐${c ? `（提交 ${c.hash}）` : '（review.json 变更）'}——前拍假勾选嫌疑消解`, provisional: true });
++  }
++  return out;
+ }
+ 
+ const testDirtyOf = (dirtyCode) => (Array.isArray(dirtyCode) ? dirtyCode.filter((p) => p.startsWith('test/')) : []);
+@@ -689,7 +740,7 @@ export function applySentinelRules({ prev, next, baseEvents = [], state = null,
+     st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
+   }
+   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
+-  try { warnings.push(...ruleFakeCheck(prev, next, now)); } catch { /* R1 本轮跳过 */ }
++  try { warnings.push(...ruleFakeCheck(prev, next, st, now)); } catch { /* R1 本轮跳过 */ }
+   try { warnings.push(...ruleTestTamper(prev, next, st, now, bindResolveImpl)); } catch { /* R2 本轮跳过 */ }
+   let declaredScope = null;
+   try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }
+@@ -942,6 +993,10 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+   // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
+   // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
+   let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
++  // sentinel 态回补（评审 P2 清偿）：水位的 sentinel 附加键恢复 pending（旧水位无此键=空集，零变化）
++  if (useWatermark && watermark.sentinel && watermark.sentinel.fakeCheckPending) {
++    sentinelState.fakeCheckPending = { ...watermark.sentinel.fakeCheckPending };
++  }
+   const watermarkCache = { last: null };
+   // eslint-disable-next-line no-constant-condition
+   while (true) {
+@@ -999,7 +1054,7 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+     const batch = events.concat(warnings);
+     prev = snap;
+     // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）
+-    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache);
++    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache, { fakeCheckPending: sentinelState.fakeCheckPending || {} });
+     if (batch.length === 0) {
+       if (Date.now() - lastActivityAt > IDLE_EXIT_MS) {
+         console.log('[watcher] 空闲超时自退（6h 无事件）');
+diff --git a/test/watcher.test.mjs b/test/watcher.test.mjs
+index d959e03a..fa5e1790 100644
+--- a/test/watcher.test.mjs
++++ b/test/watcher.test.mjs
+@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
+ import { join } from 'node:path'
+ 
+ const {
+-  inferEvents, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
++  inferEvents, createSentinelState, applySentinelRules, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
+   spawnWatcher, buildSnapshot, runWatcherFromEnv, WATCHER_LOCK_FILENAME,
+   toPlatformChangeEvents, pushEventsToPlatform,
+ } = await import('../src/watcher.js')
+@@ -30,6 +30,32 @@ function snap(over = {}) {
+   return { ts: 1700000000000, archived: false, head: null, files: {}, scan: null, ...over }
+ }
+ 
++test('watcher-signal-widen: gate-run 与 config-change 事件', () => {
++  const base = { ts: 1, archived: false, head: 'a', files: {}, scan: null, commits: [], dirtyCode: [], scanStatus: null, reviews: {}, gateRun: null, localConfig: null };
++  const mk = (over) => ({ ...base, ...over });
++  let ev = inferEvents(mk({}), mk({ ts: 2, gateRun: { dir: '20260928120000', status: 'failed', durationMs: 30000 } }));
++  assert.ok(ev.some((e) => e.kind === 'gate-run' && e.detail.includes('failed')), JSON.stringify(ev));
++  ev = inferEvents(mk({ gateRun: { dir: '20260928120000', status: 'failed', durationMs: 30000 } }), mk({ ts: 3, gateRun: { dir: '20260928120000', status: 'failed', durationMs: 30000 } }));
++  assert.ok(!ev.some((e) => e.kind === 'gate-run'));
++  ev = inferEvents(mk({ localConfig: { mtimeMs: 1 } }), mk({ ts: 4, localConfig: { mtimeMs: 99 } }));
++  assert.ok(ev.some((e) => e.kind === 'config-change' && e.detail.includes('有变更')));
++})
++
++test('watcher-signal-widen: 假勾选 pending 消解路径', () => {
++  const st = createSentinelState(1000)
++  const filesWith = (ids) => ({ 'tasks.md': { hash: 'h', stage: 'tasks', checked: ids.length, total: 4, checkedTasks: ids } })
++  const snapWith = (ids, commits = []) => ({ ts: 2, archived: false, head: 'a', files: filesWith(ids), scan: null, commits, dirtyCode: [], scanStatus: null, reviews: {} })
++  let r = applySentinelRules({ prev: snapWith([]), next: snapWith(['task-01']), state: st, now: 2000 })
++  assert.ok(r.warnings.some((w) => w.rule === 'fake-check' && w.detail.includes('task-01')), JSON.stringify(r.warnings))
++  assert.ok(st.fakeCheckPending['task-01'])
++  r = applySentinelRules({ prev: snapWith(['task-01']), next: snapWith(['task-01'], [{ hash: 'abc1234', subject: 'feat: 落地（task-01）', files: [] }]), state: st, now: 3000 })
++  const cleared = r.warnings.filter((e) => e.rule === 'fake-check-cleared')
++  assert.ok(cleared.length === 1 && cleared[0].kind === 'info' && cleared[0].detail.includes('abc1234'), JSON.stringify(r.warnings))
++  assert.ok(!st.fakeCheckPending['task-01'])
++  r = applySentinelRules({ prev: snapWith(['task-01']), next: snapWith(['task-01']), state: st, now: 4000 })
++  assert.ok(!r.warnings.some((e) => e.rule && e.rule.startsWith('fake-check')))
++})
++
+ test('inferEvents: 文件首现带阶段推断 + provisional:true', () => {
+   const next = snap({ files: { 'proposal.md': { hash: 'a', stage: 'proposal', checked: 0, total: 0 } } })
+   const ev = inferEvents(snap(), next)
+diff --git a/.sillyspec/changes/2026-09-28-watcher-signal-widen/design.md b/.sillyspec/changes/2026-09-28-watcher-signal-widen/design.md
+new file mode 100644
+index 00000000..1e95a86e
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-watcher-signal-widen/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:57:02.602Z
++---
++# 设计记录（Design Record）— 2026-09-28-watcher-signal-widen
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++四件：① buildSnapshot 增两源——verify-runs 本变更最新实测结论（目录名字典序即时序，gateRun={dir,status,durationMs}）与 specBase local.yaml mtime 事实（localConfig，gitignored 无 git 信号）；② inferEvents 增两条中性事件——gate-run（实测结论变化，含耗时；经 baseEvents 非空自然计入 ruleStall 的 lastActivityAt，停滞判定获得门活动信号）与 config-change（配置变更事实，内容不上行）；③ ruleFakeCheck 改带状态消解——无证据翻格记 fakeCheckPending 并警告，后续拍位证据补齐（提交晚到 36 秒是 guidance-principles 实证常态）发 fake-check-cleared info 事件（含提交号）并清 pending，时间线可见消解而非永挂；④ stripNestedTestEnv 抽为导出共用单点，runCrossRepoFullTest 与 runFullCommand 两处 execSync 补剥离（tap-judge 评审 P3 同族面）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++watcher.js：buildSnapshot 两源、inferEvents 两事件、ruleFakeCheck 签名加 state、createSentinelState 增 fakeCheckPending、dispatch 传 st；verify-postcheck.js：stripNestedTestEnv 导出、runOneModule 换用、两处 execSync 应用；test/watcher.test.mjs 增两用例。平台事件契约零变化（新 kind 走既有单事件上行端点）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：verify-runs 目录名字典序取最新，半写文件 JSON 解析失败跳过下轮重试。2. 并发写：watcher 只读快照 diff。3. 切换：pending 状态随水位文件持久（watcher 重启回补既有机制覆盖）；warning/info 皆 provisional。4. 作用域：gateRun 按 change 字段过滤只读本变更；localConfig 只留 mtime 不读内容。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：verify-runs 全目录逐文件 JSON 解析在运行目录多时变慢——3s 轮询周期内条目有限（实测当日 ~60 目录），必要时后续加目录名倒序早退。放弃方案：假勾选改「区间终态判定不预警」（丢失即时信号，拍位消解两全）；watcher 直读 local.yaml 内容上事件（隐私面拒绝）。
+diff --git a/.sillyspec/changes/2026-09-28-watcher-signal-widen/proposal.md b/.sillyspec/changes/2026-09-28-watcher-signal-widen/proposal.md
+new file mode 100644
+index 00000000..72066015
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-watcher-signal-widen/proposal.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:57:02.601Z
++---
++# 提案书（Proposal）— 2026-09-28-watcher-signal-widen
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:ac6b3cec5d7ae7bf812820ebf8040c5ff86ce2ac183571371babcace23199a2b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++任务原话转写：背景：guidance-principles 收口时间线暴露观测面三缺口——门实测/测试落盘/豁免配置变更不在事件面（15 分钟苦战被判停滞）；假勾选警告在勾选瞬间判定且永不消解（提交 36 秒后到达但警告永挂）；另 tap-judge 评审 P3 登记 runCrossRepoFullTest 与 runFullCommand 两处 execSync 为 NODE_TEST_CONTEXT 同族面。
++成功标准：
++- 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入 snap.gateRun）；specBase local.yaml mtime 事实（snap.localConfig，内容不上行只留痕）
++- 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivityAt）与 config-change（本地配置有变更事实）
++- 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告；后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared 事件并清 pending（时间线可见消解）
++- runCrossRepoFullTest 与 runFullCommand 两处 execSync 剥离 NODE_TEST_CONTEXT（与 runOneModule 同款单点）
++- 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗单点共用
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:3b28812b075eeade610b46369b8e5cdcc69c72cd38ca72d40950e6c5a40556ba:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入 snap.gateRun）
++2. specBase local.yaml mtime 事实（snap.localConfig，内容不上行只留痕）
++3. 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivityAt）与 config-change（本地配置有变更事实）
++4. 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告
++5. 后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared 事件并清 pending（时间线可见消解）
++6. runCrossRepoFullTest 与 runFullCommand 两处 execSync 剥离 NODE_TEST_CONTEXT（与 runOneModule 同款单点）
++7. 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗单点共用
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:34846f37625103fd2fdd19ddeba03a2451f2ed3c792800469c3429b005d11360:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-watcher-signal-widen 留痕重锚 -->
++1. 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入 snap.gateRun）
++2. specBase local.yaml mtime 事实（snap.localConfig，内容不上行只留痕）
++3. 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivityAt）与 config-change（本地配置有变更事实）
++4. 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告
++5. 后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared 事件并清 pending（时间线可见消解）
++6. runCrossRepoFullTest 与 runFullCommand 两处 execSync 剥离 NODE_TEST_CONTEXT（与 runOneModule 同款单点）
++7. 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗单点共用
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-watcher-signal-widen/requirements.md b/.sillyspec/changes/2026-09-28-watcher-signal-widen/requirements.md
+new file mode 100644
+index 00000000..97e37a7b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-watcher-signal-widen/requirements.md
+@@ -0,0 +1,66 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:57:02.602Z
++---
++# 需求规格（Requirements）— 2026-09-28-watcher-signal-widen
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入 
++Given 系统就绪
++When 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入 snap.gateRun）
++Then 行为符合本条标准描述
++
++### FR-02: specBase local.yaml mtime 事实（snap.localConfig，内容不上
++Given 系统就绪
++When specBase local.yaml mtime 事实（snap.localConfig，内容不上行只留痕）
++Then 行为符合本条标准描述
++
++### FR-03: 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivity
++Given 系统就绪
++When 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivityAt）与 config-change（本地配置有变更事实）
++Then 行为符合本条标准描述
++
++### FR-04: 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告
++Given 系统就绪
++When 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告
++Then 行为符合本条标准描述
++
++### FR-05: 后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared 
++Given 系统就绪
++When 后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared 事件并清 pending（时间线可见消解）
++Then 行为符合本条标准描述
++
++### FR-06: runCrossRepoFullTest 与 runFullCommand 两处 execSync 
++Given 系统就绪
++When runCrossRepoFullTest 与 runFullCommand 两处 execSync 剥离 NODE_TEST_CONTEXT（与 runOneM
++Then 行为符合本条标准描述
++
++### FR-07: 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗
++Given 测试 相关模块就绪
++When 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗单点共用
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/watcher.test.mjs「watcher-signal-widen: gate-run 与 config-change 事件」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/watcher.test.mjs 同上用例（gate-run 计入 baseEvents——停滞活跃信号由事件非空机制承接）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/watcher.test.mjs「watcher-signal-widen: 假勾选 pending 消解路径」（三拍：警告挂 pending → 提交到发 cleared info → 平态无事件）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：env 单点为三调用点共用（node --check + stripNestedTestEnv 导出；行为由 tap-judge 集成用例族覆盖同构面）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/watcher.test.mjs 全部 20 用例（node --test 实测 20/20）+ tap-judge 6/6、known-failures 回归全绿
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：平台事件契约零变化（新 kind 走既有单事件上行端点——toPlatformChangeEvents 映射既有机制承接，watcher.test.mjs 既有平台映射用例回归覆盖）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：watcher 只读快照（gateRun 按 change 字段过滤本变更、localConfig 只 mtime 不读内容）——由实现注释与 FR-01 用例间接锁定
+diff --git a/.sillyspec/changes/2026-09-28-watcher-signal-widen/tasks.md b/.sillyspec/changes/2026-09-28-watcher-signal-widen/tasks.md
+new file mode 100644
+index 00000000..952f276d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-watcher-signal-widen/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:57:02.602Z
++---
++# 任务注册表（Tasks）— 2026-09-28-watcher-signal-widen
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: buildSnapshot 两源（gateRun/localConfig）+ inferEvents 两条事件（gate-run/config-change） (FR-01 FR-02)
++- [x] task-02: ruleFakeCheck 状态化消解（pending → fake-check-cleared info 含提交号）+ createSentinelState/dispatch 接线 (FR-03)
++- [x] task-03: stripNestedTestEnv 共用单点导出 + runCrossRepoFullTest 与 runFullCommand 两处 execSync 补剥离 (FR-04)
++- [x] task-04: watcher 测试 +2（新源新事件、消解三拍路径）20/20 全绿 + tap-judge/known-failures 回归 (FR-05)
