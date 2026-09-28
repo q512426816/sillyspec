@@ -48,7 +48,7 @@ CLI 已接管全部手工收集（上次 commit 时间过滤 QUICKLOG 条目、�
 
 | 来源 | type | 示例 |
 |---|---|---|
-| 只有存量 quick 条目（旧项目遗留 QUICKLOG；quick 已退役不再产生新条目） | fix | fix: 手机号校验修复（含正则修正） |
+| 只有 quick 条目 | fix | fix: 手机号校验修复（含正则修正） |
 | 只有 execute 已勾 task | feat | feat: <变更名> 完成 task ×N |
 | 只有阶段产出 | docs | docs: sillyspec scan 完成 |
 | 混合来源 | 取最主要的 type | body 里列出所有条目 |

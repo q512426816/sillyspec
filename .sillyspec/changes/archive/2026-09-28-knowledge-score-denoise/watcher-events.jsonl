@@ -1,0 +1,13 @@
+{"ts":1790602874231,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790602874231,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790602874231,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790602874231,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1790602874441,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01、task-02、task-03、task-04、task-06 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790602878192,"kind":"commit","stage":null,"detail":"6324e6a1","provisional":true}
+{"ts":1790602878425,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-06 勾选证据补齐（提交 6324e6a1）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790602888196,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790602888196,"kind":"commit","stage":null,"detail":"decac028","provisional":true}
+{"ts":1790602888409,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-01 勾选证据补齐（提交 decac028）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790602888409,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-02 勾选证据补齐（提交 decac028）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790603791093,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1790604710029,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

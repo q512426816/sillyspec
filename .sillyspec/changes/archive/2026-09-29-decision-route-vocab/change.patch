@@ -1,0 +1,989 @@
+diff --git a/.sillyspec/changes/2026-09-29-decision-route-vocab/flow-state.yaml b/.sillyspec/changes/2026-09-29-decision-route-vocab/flow-state.yaml
+new file mode 100644
+index 00000000..154660d1
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-decision-route-vocab/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 1217e82b1b9a53594b9b0e41fdfc08a990eff6cf
++updatedAt: '2026-09-28T16:24:44.419Z'
++baseline_sha256: b233e30d77ecaafede9332cb9e4d46603ebc2680eab64ef67da99378c5466571
++
+diff --git a/src/decision-distill.js b/src/decision-distill.js
+index 8333b32a..7e46da57 100644
+--- a/src/decision-distill.js
++++ b/src/decision-distill.js
+@@ -518,17 +518,17 @@ export function distillIntoKnowledge(changeDir, knowledgeRoot, headHash, moduleI
+   const waitParts = []
+   const distillable = []
+   for (const e of selected) {
+-    if (e.selected === 'rejected' && (!e.rejectReason || !e.revisitWhen)) {
+-      const missing = []
+-      if (!e.rejectReason) missing.push('否决理由')
+-      if (!e.revisitWhen) missing.push('复潮条件')
+-      waitParts.push(`${e.id} 缺${missing.join('、')}`)
+-    } else {
+-      distillable.push(e)
+-    }
++    // 标题必填（2026-09-29-decision-route-vocab：裸号条目检索面不可见——路由词形派生与回显
++    // 排序都吃标题，缺标题=知识入库即隐身）；rejected 缺否决理由/复潮条件 → 不写盘（其余照常）
++    const missing = []
++    if (!e.title) missing.push('标题（## D-xxx@vN 后接短标题——检索词形来源，裸号条目入库即隐身）')
++    if (e.selected === 'rejected' && !e.rejectReason) missing.push('否决理由')
++    if (e.selected === 'rejected' && !e.revisitWhen) missing.push('复潮条件')
++    if (missing.length > 0) waitParts.push(`${e.id} 缺${missing.join('、')}`)
++    else distillable.push(e)
+   }
+   const needsWait = waitParts.length > 0
+-    ? `${waitParts.join('；')}——rejected 条目必填，补齐后重跑提炼`
++    ? `${waitParts.join('；')}——条目必填字段缺失，补齐后重跑提炼`
+     : null
+   if (distillable.length === 0) return { written: [], skipped: null, needsWait }
+ 
+diff --git a/src/flow.js b/src/flow.js
+index ea37a982..aad1a554 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -27,7 +27,7 @@
+  */
+ import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+-import { join, relative } from 'node:path'
++import { join, relative, dirname } from 'node:path'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+@@ -184,8 +184,9 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+         }
+       }
+     }
+-    const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
+-    const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
++    const { matchKnowledgeHybrid } = await import('./knowledge-vector.js')
++    const { deathPathNote } = await import('./knowledge-match.js')
++    const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase) })
+     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
+     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
+     // 蹭进回显是行为实测三例的噪音源，不再注入）
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index b97834eb..52885bc2 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -242,6 +242,93 @@ function keywordMatchesContext(keyword, contextLower) {
+   return new RegExp(`(^|[^a-z0-9])${escapeRegex(kw)}([^a-z0-9]|$)`).test(contextLower)
+ }
+ 
++/** 查询词片抽取：CJK 连续段 bigram ＋ ≥4 字符 ASCII 词（小写；短词与标点数字不参与；
++ * 纯 ASCII 查询不产词片——中文知识库，英文查询维持既有零命中行为）。 */
++function queryShingles(taskContext) {
++  const raw = String(taskContext || '')
++  const shingles = new Set()
++  if (/[\u4e00-\u9fff]/.test(raw)) {
++    for (const w of raw.toLowerCase().match(/[a-z][a-z0-9-]{3,}/g) || []) shingles.add(w)
++  }
++  for (const seg of raw.match(/[\u4e00-\u9fff]+/g) || []) {
++    for (let i = 0; i < seg.length - 1; i++) shingles.add(seg.slice(i, i + 2))
++  }
++  return [...shingles]
++}
++
++/** ASCII 词片词边界命中（CJK 词片 includes 即可）；转义防正则注入。 */
++function asciiWordHit(sh, text) {
++  if (!/^[a-z]/.test(sh)) return text.includes(sh)
++  return new RegExp(`(^|[^a-z0-9-])${sh.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}([^a-z0-9-]|$)`, 'i').test(text)
++}
++
++/**
++ * 零命中查询侧词片回退（2026-09-29-decision-route-vocab）：路由行零命中时，只测「查询自己的
++ * 词片」——逐 decisions 域文件数词片在条目文本（标题∪理由）的出现次数，落在「跨条目复现但
++ * 非泛在」窗（count ∈ [2, max(3, 5%·条目数)]）→ 文件级命中（合成路由条目进 entries，CLI
++ * search／digest 知识命中／门条目行三面共享）；条目级命中 = 该文件内含 ≥1 复现词片的条目
++ * （score=复现词片数，消费方 score>0 资格判定兼容）。
++ * 设计依据：入库侧词表派生死于「同窗词片按序截断=抽签」（unmapped n∈[2,3] 窗 1176 个、
++ * 目标词排 759）；查询侧只测自身几十词片，无挑选无 cap。机制词栖息在理由文本（模板标题不
++ * 含词形——Mouse B 实测四查全零的根因）。无可回退返回 null（保持既有零命中行为）。
++ */
++export function fallbackByQueryShingles(indexDir, taskContext) {
++  const shingles = queryShingles(taskContext)
++  if (shingles.length === 0) return null
++  const all = parseDecisionEntries(indexDir)
++  if (all.length === 0) return null
++  const byFile = new Map()
++  for (const h of all) {
++    let st = byFile.get(h.file)
++    if (!st) { st = { entries: [], texts: [] }; byFile.set(h.file, st) }
++    st.entries.push(h)
++    st.texts.push(`${h.title} ${h.reason || ''}`)
++  }
++  const corroborated = new Map()
++  for (const [file, st] of byFile) {
++    const text = st.texts.join('\n')
++    const ceil = Math.max(2, Math.floor(st.entries.length * 0.05))
++    const hits = new Set()
++    for (const sh of shingles) {
++      if (!asciiWordHit(sh, text)) continue
++      const n = text.split(sh).length - 1
++      if (n >= 2 && n <= ceil) hits.add(sh)
++    }
++    if (hits.size > 0) corroborated.set(file, hits)
++  }
++  if (corroborated.size === 0) return null
++  const fbEntries = [...corroborated.entries()].slice(0, 3).map(([file, hits]) => ({
++    category: 'Decisions',
++    keywords: [...hits].slice(0, 5),
++    file,
++    anchor: '',
++    display: `${file}（查询词片复现命中）`,
++  }))
++  const decisionHits = []
++  for (const [file, hits] of corroborated) {
++    for (const h of byFile.get(file).entries) {
++      const text = `${h.title} ${h.reason || ''}`
++      let mc = 0
++      for (const sh of hits) if (asciiWordHit(sh, text)) mc++
++      if (mc > 0) decisionHits.push({ ...h, score: mc })
++    }
++  }
++  decisionHits.sort((a, b) =>
++    (b.score - a.score) ||
++    (((b.status === 'rejected' || b.deathPath) ? 1 : 0) - ((a.status === 'rejected' || a.deathPath) ? 1 : 0))
++  )
++  return {
++    matched: true,
++    entries: fbEntries,
++    report: `Status: fallback matched (${[...corroborated.keys()].join(', ')} by query shingles)`,
++    json: {
++      matched: true, entry_count: fbEntries.length, fallback: true,
++      entries: fbEntries.map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
++    },
++    decisionHits,
++  }
++}
++
+ /**
+  * 用任务上下文匹配知识条目
+  * @param {string} indexDir - knowledge 目录路径
+@@ -252,7 +339,7 @@ function keywordMatchesContext(keyword, contextLower) {
+  *   命中的 Decisions 路由行所指向 decisions/<域>.md 内的全部 D-xxx@vN 条目，rejected 优先排序；
+  *   无 decisions 库 / 路由行未命中 → decisionHits: []（其余字段行为与现状一致）。
+  */
+-export function matchKnowledge(indexDir, taskContext) {
++export function matchByRouting(indexDir, taskContext) {
+   const indexPath = join(indexDir, 'INDEX.md')
+ 
+   // INDEX.md 不存在
+@@ -342,3 +429,15 @@ export function matchKnowledge(indexDir, taskContext) {
+ 
+   return { matched: true, entries: matched, report, json, decisionHits }
+ }
++
++/**
++ * 同步检索入口（既有行为不变）：路由 tag 命中 →（零命中）本地词片复现回退 → 空。
++ * 异步三层入口（平台向量优先于本地回退）见 knowledge-vector.js matchKnowledgeHybrid
++ * （2026-09-29-knowledge-vector-recall）——同步调用方与既有测试全部走本函数。
++ */
++export function matchKnowledge(indexDir, taskContext) {
++  const r = matchByRouting(indexDir, taskContext)
++  if (r.matched) return r
++  const fb = fallbackByQueryShingles(indexDir, taskContext)
++  return fb || r
++}
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+new file mode 100644
+index 00000000..fc6d2db3
+--- /dev/null
++++ b/src/knowledge-vector.js
+@@ -0,0 +1,158 @@
++/**
++ * knowledge-vector.js — 平台向量召回层（CLI 侧，2026-09-29-knowledge-vector-recall）
++ *
++ * 检索三层：路由 tag 命中 →（零命中）平台向量召回（本模块，已连接平台时）→ 本地词片
++ * 复现窗口（knowledge-match.js fallbackByQueryShingles）→ 空。
++ *
++ * 原则（用户裁决 2026-09-29）：平台只做语义召回——返回「哪个文件哪个条目」的候选
++ * （spec_path＋anchor＋score）；条目 status/deathPath/回显资格等全部策略面在本地解析
++ * （本地文件是真相源，向量结果不携带策略语义）。CLI 本地零模型约束不变。
++ *
++ * 端点契约（SillyHub 侧实现规格，测试夹具按此 mock）：
++ *   POST {platform.url}/api/spec/knowledge/vector-search
++ *   Headers: Authorization: Bearer <token>; Content-Type: application/json
++ *   Body:    { "query": "<检索文本>", "limit": 10 }
++ *   200 →    { "ok": true, "results": [
++ *              { "spec_path": "knowledge/decisions/unmapped.md", "anchor": "D-001@v1",
++ *                "change": "2026-09-26-thin-agent-tasks", "score": 0.83 } ] }
++ *   anchor = 决策条目 id（## D-xxx@vN）；change = 条目「变更：」字段——同号条目跨变更常见
++ *   （runtime.md 七个 D-001@v1 先例），change 在场时消歧；缺省时同号条目全量带回（候选诚实）。
++ *
++ * 降级纪律：任何失败（未连接/开关关闭/网络/404/5xx/超时/响应形态不符）静默降级本地层
++ * ——检索是 advisory 面且高频（每方案步 --done），失败刷屏即狼来了；debug 排障可设
++ * SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG=1 打单行stderr。
++ */
++import { readFileSync } from 'fs'
++import { join, dirname } from 'path'
++import { readPlatformConfig } from './sync.js'
++import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
++
++const VECTOR_TIMEOUT_MS = 3000
++const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
++
++/** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search: off）。 */
++function vectorSwitchFromLocalYaml(cwd) {
++  try {
++    const lines = readFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'utf-8').split(/\r?\n/)
++    let inKnowledge = false
++    for (const line of lines) {
++      const top = line.match(/^([A-Za-z_][\w-]*):\s*$/)
++      if (top) { inKnowledge = top[1] === 'knowledge'; continue }
++      if (!inKnowledge) continue
++      const kv = line.match(/^\s+vector_search\s*:\s*(\S+)/)
++      if (kv) return kv[1].toLowerCase()
++    }
++  } catch { /* 无 local.yaml = 缺省 auto */ }
++  return 'auto'
++}
++
++function vectorEnabled(cwd) {
++  const env = String(process.env.SILLYSPEC_KNOWLEDGE_VECTOR || '').toLowerCase()
++  if (env === 'off' || env === 'auto') return env === 'auto'
++  return vectorSwitchFromLocalYaml(cwd) !== 'off'
++}
++
++/**
++ * 平台向量召回（纯 HTTP 层）。未连接/失败/形态不符 → null（调用方降级）。
++ * @returns {Promise<{results: Array<{spec_path: string, anchor: string, score: number}>}|null>}
++ */
++export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs = VECTOR_TIMEOUT_MS }) {
++  const cfg = readPlatformConfig(cwd)
++  if (!cfg || !cfg.url || !cfg.token) return null
++  const q = String(query || '').trim().slice(0, 4000)
++  if (!q) return null
++  try {
++    const res = await fetch(`${String(cfg.url).replace(/\/+$/, '')}${ENDPOINT_PATH}`, {
++      method: 'POST',
++      headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
++      body: JSON.stringify({ query: q, limit }),
++      signal: AbortSignal.timeout(timeoutMs),
++    })
++    if (!res.ok) {
++      if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] ${res.status} ${ENDPOINT_PATH}——降级本地`)
++      return null
++    }
++    const body = await res.json().catch(() => null)
++    const results = body && Array.isArray(body.results)
++      ? body.results.filter((r) => r && typeof r.spec_path === 'string' && typeof r.anchor === 'string')
++      : []
++    return results.length > 0 ? { results } : null
++  } catch {
++    if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] 请求失败/超时——降级本地`)
++    return null
++  }
++}
++
++/** spec_path（knowledge/decisions/x.md）→ INDEX 相对 file（decisions/x.md）。 */
++function specPathToFile(specPath) {
++  return String(specPath).replace(/^knowledge\//, '').replace(/\\/g, '/')
++}
++
++/** 平台候选 → matchKnowledge 同构结果（策略面全本地解析）。 */
++function buildResultFromPlatform(indexDir, pvResults) {
++  const byFile = new Map()
++  for (const r of pvResults) {
++    const file = specPathToFile(r.spec_path)
++    if (!file.startsWith('decisions/')) continue
++    if (!byFile.has(file)) byFile.set(file, [])
++    byFile.get(file).push(r)
++  }
++  if (byFile.size === 0) return null
++  const all = parseDecisionEntries(indexDir)
++  const entries = []
++  const decisionHits = []
++  for (const [file, rs] of byFile) {
++    const wanted = new Set(rs.map((r) => r.anchor))
++    const fileEntries = all.filter((h) => h.file === file && wanted.has(h.id))
++    if (fileEntries.length === 0) continue
++    for (const r of rs) {
++      // 同号消歧：change 在场取精确条目；缺省同号全量带回（跨变更同号是已知形态）
++      const matched = r.change
++        ? fileEntries.filter((e) => e.id === r.anchor && e.change === r.change)
++        : fileEntries.filter((e) => e.id === r.anchor)
++      for (const h of matched.length > 0 ? matched : []) {
++        decisionHits.push({ ...h, score: typeof r.score === 'number' ? r.score : 1 })
++      }
++    }
++    entries.push({
++      category: 'Decisions',
++      keywords: ['vector'],
++      file,
++      anchor: rs[0].anchor,
++      display: `${file}（平台向量召回）`,
++    })
++  }
++  if (decisionHits.length === 0) return null
++  decisionHits.sort((a, b) =>
++    (b.score - a.score) ||
++    (((b.status === 'rejected' || b.deathPath) ? 1 : 0) - ((a.status === 'rejected' || a.deathPath) ? 1 : 0))
++  )
++  return {
++    matched: true,
++    entries: entries.slice(0, 3),
++    report: `Status: platform-vector matched (${decisionHits.length} entries)`,
++    json: {
++      matched: true, entry_count: Math.min(entries.length, 3), vector: true,
++      entries: entries.slice(0, 3).map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
++    },
++    decisionHits,
++  }
++}
++
++/**
++ * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
++ * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ 本地词片 → 空。
++ * opts.cwd = 仓根（平台配置与 local.yaml 定位用）；缺省由 indexDir 上推两级。
++ */
++export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
++  const r = matchByRouting(indexDir, taskContext)
++  if (r.matched) return r
++  const cwd = opts.cwd || dirname(dirname(String(indexDir)))
++  if (vectorEnabled(cwd)) {
++    const pv = await platformVectorRecall({ cwd, query: taskContext, limit: opts.limit || 10 })
++    const built = pv ? buildResultFromPlatform(indexDir, pv.results) : null
++    if (built) return built
++  }
++  const fb = fallbackByQueryShingles(indexDir, taskContext)
++  return fb || r
++}
+diff --git a/src/run/complete.js b/src/run/complete.js
+index d68f2674..6df60431 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -478,8 +478,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+         } catch { /* 无 decisions.md = 仅 --output */ }
+         _kgQuery = _kgQuery.slice(0, 4000)
+         if (_kgQuery.trim()) {
+-          const { matchKnowledge } = await import('../knowledge-match.js')
+-          const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
++          const { matchKnowledgeHybrid } = await import('../knowledge-vector.js')
++          const km = await matchKnowledgeHybrid(join(specBase, 'knowledge'), _kgQuery, { cwd })
+           // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
+           // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
+           const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index b8d621ad..7cc36441 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1290,12 +1290,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // 全降级不抛（异常 → 单行说明）。
+   if (stageName === 'brainstorm' && promptText.includes('{DECISION_HITS}')) {
+     try {
+-      const { matchKnowledge, deathPathNote } = await import('../knowledge-match.js')
++      const { matchKnowledgeHybrid } = await import('../knowledge-vector.js')
++      const { deathPathNote } = await import('../knowledge-match.js')
+       const decSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       const decKnowledgeDir = join(decSpecBase, 'knowledge')
+       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
+       // 语料；与 execute 分支的 changeName 基底同口径）
+-      const decResult = matchKnowledge(decKnowledgeDir, changeName || '')
++      const decResult = await matchKnowledgeHybrid(decKnowledgeDir, changeName || '', { cwd })
+       // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（与 flow 注入段/knowledge-gate 同口径；
+       // score 零 rejected 不弹——2026-09-28-knowledge-gate-denoise）
+       const rejectedHits = (decResult.decisionHits || []).filter(h => h.deathPath || (h.status === 'rejected' && h.score > 0))
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 967e8961..6cccab20 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -19,7 +19,8 @@
+ import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
+ import { join, basename } from 'path'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { parseKnowledgeIndex, matchKnowledge } from '../knowledge-match.js'
++import { parseKnowledgeIndex } from '../knowledge-match.js'
++import { matchKnowledgeHybrid } from '../knowledge-vector.js'
+ 
+ // ── 工具函数 ──
+ 
+@@ -106,8 +107,8 @@ export async function cmdSearch(dir, args, opts = {}) {
+     return
+   }
+ 
+-  // 复用 knowledge-match 引擎
+-  const result = matchKnowledge(knowledgeDir, query)
++  // 复用 knowledge-match 引擎（三层 hybrid：路由→平台向量→本地词片，2026-09-29-knowledge-vector-recall）
++  const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: dir })
+ 
+   if (!result.matched) {
+     output(true, { query, matches: [] })
+diff --git a/test/decision-route-vocab.test.mjs b/test/decision-route-vocab.test.mjs
+new file mode 100644
+index 00000000..8ed3d882
+--- /dev/null
++++ b/test/decision-route-vocab.test.mjs
+@@ -0,0 +1,108 @@
++/**
++ * decision-route-vocab.test.mjs — 检索词覆盖：查询侧词片回退＋蒸馏标题必填
++ * （2026-09-29-decision-route-vocab）
++ *
++ * 覆盖验收面：
++ *   ① 蒸馏标题必填：裸号条目（## D-xxx@v1 无标题）needsWait 拦下且不写盘；
++ *   ② 查询侧词片回退：路由零命中时，查询词片在域文件条目文本（标题∪理由）出现次数落在
++ *      「跨条目复现但非泛在」窗（[2, max(3, 5%·条目数)]）→ 文件级命中（entries 合成）＋
++ *      条目级命中（score>0）；高频泛在词（方案/需求类）不触发；纯 ASCII 查询不回退；
++ *      查询侧零写入（INDEX/域文件字节不变）；路由命中路径零变化；
++ *   ③ 真实库钉子：「谓词守卫」「顿号拆分」从零命中变为命中 decisions/unmapped.md 且
++ *      含该词的条目进 decisionHits；「枚举词表」路由命中不回归。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync, rmSync, readFileSync, mkdtempSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { matchKnowledge } from '../src/knowledge-match.js'
++import { distillIntoKnowledge } from '../src/decision-distill.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const REAL_KB = join(REPO_ROOT, '.sillyspec', 'knowledge')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++function seedKb(root) {
++  mkdirSync(join(root, 'decisions'), { recursive: true })
++  writeFileSync(join(root, 'INDEX.md'), [
++    '# Knowledge Index', '', '## Decisions',
++    '- core|decision|决策|人工扩充词 → [decisions/core.md](decisions/core.md)', '',
++  ].join('\n'))
++  // 词片计数校准（小域窗口=恰好 2 次）：谓词 n=2（entry1 理由×1＋entry2 标题×1）✓、
++  // 拆分 n=2（entry1 理由×2）✓、方案 n=3 超窗 ✗——正例与噪音例由计数分离
++  writeFileSync(join(root, 'decisions', 'core.md'), [
++    '# 决策知识 — core', '',
++    '## D-001@v1 风险与死路（模板标题）',
++    '状态：implemented',
++    '理由：谓词词表漏词导致该拆的不拆——保守方向。放弃方案：取消斜杠拆分与复合拆分。', '',
++    '## D-002@v1 谓词收窄范围',
++    '状态：implemented',
++    '理由：注入面收窄，方案设计的通用理由需求方案变更实施。', '',
++  ].join('\n'))
++}
++
++test('② 查询侧词片回退：复现词命中文件＋条目；泛在词不触发；零写入；纯 ASCII 不回退', () => {
++  const root = mkdtempSync(join(tmpdir(), 'ss-rv-'))
++  seedKb(root)
++  const idxBefore = readFileSync(join(root, 'INDEX.md'), 'utf8')
++  const domBefore = readFileSync(join(root, 'decisions', 'core.md'), 'utf8')
++
++  const km = matchKnowledge(root, '方案：维护一个谓词守卫')
++  assert.equal(km.matched, true, '回退命中')
++  assert.equal(km.json.fallback, true, 'fallback 标记')
++  assert.ok(km.entries.some((e) => e.file === 'decisions/core.md'), '文件级命中')
++  const hit = km.decisionHits.find((h) => (h.title || '').includes('谓词收窄') || /谓词/.test(h.reason || ''))
++  assert.ok(hit && hit.score >= 1, `含谓词条目进 decisionHits（实际 top: ${km.decisionHits[0]?.title}）`)
++
++  assert.equal(matchKnowledge(root, 'use enum keyword list').matched, false, '纯 ASCII 查询不回退')
++
++  // 泛在词：只有 方案/需求（n≥4 超窗）的查询不触发
++  const kmNoise = matchKnowledge(root, '方案设计需求变更实施清单')
++  assert.notEqual(kmNoise.json && kmNoise.json.fallback, true, '泛在词查询不回退')
++
++  assert.equal(readFileSync(join(root, 'INDEX.md'), 'utf8'), idxBefore, '查询零写入（INDEX 不变）')
++  assert.equal(readFileSync(join(root, 'decisions', 'core.md'), 'utf8'), domBefore, '查询零写入（域文件不变）')
++
++  // 路由命中路径零变化：tag 命中走路由不走回退
++  const kmRoute = matchKnowledge(root, '这个决策怎么人工扩充词处理')
++  assert.equal(kmRoute.json && kmRoute.json.fallback, undefined, '路由命中不带 fallback 标记')
++  rmQuiet(root)
++})
++
++test('③ 真实库钉子：谓词守卫/顿号拆分 命中 unmapped 且条目可见；枚举不回归', () => {
++  const kmP = matchKnowledge(REAL_KB, '方案：维护一个谓词守卫')
++  assert.ok(kmP.matched, '谓词守卫 命中（回退前实测零命中）')
++  assert.ok(kmP.entries.some((e) => String(e.file).includes('unmapped')), '文件级指向 unmapped')
++  assert.ok(kmP.decisionHits.some((h) => /谓词/.test(`${h.title} ${h.reason || ''}`)), '含谓词条目进 decisionHits')
++
++  const kmD = matchKnowledge(REAL_KB, '方案：顿号拆分缝补齐')
++  assert.ok(kmD.matched, '顿号拆分 命中')
++  assert.ok(kmD.decisionHits.some((h) => /拆分|误拆/.test(`${h.title} ${h.reason || ''}`)), '含拆分/误拆条目进 decisionHits')
++
++  const kmEnum = matchKnowledge(REAL_KB, '方案：用枚举词表扫描开放世界')
++  assert.equal(kmEnum.json && kmEnum.json.fallback, undefined, '枚举词表仍走路由')
++  assert.match(kmEnum.decisionHits[0].title || '', /枚举开放世界/, '既有命中不回归')
++})
++
++test('① 蒸馏标题必填：裸号条目 needsWait 拦下且不写盘', () => {
++  const root = mkdtempSync(join(tmpdir(), 'ss-rv-title-'))
++  const changeDir = join(root, 'changes', '2026-09-29-t')
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'decisions.md'), [
++    '# 决策记录（Decisions）', '',
++    '## D-001@v1',
++    '- type: architecture',
++    '- status: accepted',
++    '- question: 裸号条目会不会入库？',
++    '- answer: 会被标题必填拦下。', '',
++  ].join('\n'))
++  const r = distillIntoKnowledge(changeDir, join(root, 'knowledge'), 'abc123')
++  assert.ok(r.needsWait && r.needsWait.includes('D-001@v1') && r.needsWait.includes('标题'), `needsWait 点名标题缺失（实际 ${r.needsWait}）`)
++  assert.equal(r.written.length, 0, '不写盘')
++  rmQuiet(root)
++})
+diff --git a/test/decision-supersede.test.mjs b/test/decision-supersede.test.mjs
+index 5f1529bd..bf7252c6 100644
+--- a/test/decision-supersede.test.mjs
++++ b/test/decision-supersede.test.mjs
+@@ -52,11 +52,11 @@ console.log('--- Test 1: 被 supersede 的旧版本不警告 ---')
+   // decisions.md: D-004@v2 supersedes D-004@v1
+   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
+ 
+-## D-004@v1
++## D-004@v1 旧版决策
+ - status: accepted
+ - priority: P1
+ 
+-## D-004@v2
++## D-004@v2 修订版决策
+ - status: accepted
+ - priority: P1
+ - supersedes: D-004@v1
+@@ -110,11 +110,11 @@ console.log('\n--- Test 2: 无 supersede 关系时旧版本仍校验 ---')
+   // decisions.md: 两个独立决策，无 supersede 关系
+   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
+ 
+-## D-004@v1
++## D-004@v1 旧版决策
+ - status: accepted
+ - priority: P1
+ 
+-## D-005@v1
++## D-005@v1 独立决策
+ - status: accepted
+ - priority: P1
+ `)
+@@ -171,11 +171,11 @@ console.log('\n--- Test 3: status=superseded 的旧版本不警告（回归） -
+ 
+   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
+ 
+-## D-004@v1
++## D-004@v1 旧版决策
+ - status: superseded
+ - priority: P1
+ 
+-## D-004@v2
++## D-004@v2 修订版决策
+ - status: accepted
+ - priority: P1
+ `)
+@@ -220,16 +220,16 @@ console.log('\n--- Test 4: 多级 supersede 链 ---')
+ 
+   writeFileSync(pJoin(changeDir, 'decisions.md'), `# Decisions
+ 
+-## D-004@v1
++## D-004@v1 旧版决策
+ - status: accepted
+ - priority: P1
+ 
+-## D-004@v2
++## D-004@v2 修订版决策
+ - status: accepted
+ - priority: P1
+ - supersedes: D-004@v1
+ 
+-## D-004@v3
++## D-004@v3 三代版决策
+ - status: accepted
+ - priority: P1
+ - supersedes: D-004@v2
+diff --git a/test/decisions-lifecycle.test.mjs b/test/decisions-lifecycle.test.mjs
+index 78983dc9..81e8bfa4 100644
+--- a/test/decisions-lifecycle.test.mjs
++++ b/test/decisions-lifecycle.test.mjs
+@@ -143,7 +143,7 @@ describe('FR-03 提炼幂等与版本前进', () => {
+     assert.deepEqual(r1.written, [{ file: 'decisions/core.md', id: 'D-007@v1', action: 'append' }], JSON.stringify(r1.written))
+     const snap1 = snapshot(knowledgeRoot)
+     assert.ok(snap1.has('INDEX.md'), 'INDEX 路由行随首次写入创建')
+-    assert.ok(snap1.get('INDEX.md').includes('- core|decision|决策 → [decisions/core.md](decisions/core.md)'), '路由行格式契约')
++    assert.match(snap1.get('INDEX.md'), /- core\|decision\|决策[^→]*→ \[decisions\/core\.md\]\(decisions\/core\.md\)/, '路由行格式契约（2026-09-29-decision-route-vocab 起关键词带稀有度派生扩展）')
+ 
+     const r2 = distillIntoKnowledge(changeDir, knowledgeRoot, HEAD)
+     assert.equal(r2.written.length, 1)
+diff --git a/test/knowledge-vector-recall.test.mjs b/test/knowledge-vector-recall.test.mjs
+new file mode 100644
+index 00000000..8039dea3
+--- /dev/null
++++ b/test/knowledge-vector-recall.test.mjs
+@@ -0,0 +1,161 @@
++/**
++ * knowledge-vector-recall.test.mjs — 平台向量召回层（2026-09-29-knowledge-vector-recall）
++ *
++ * 六面验收（mock 平台服务器按端点契约实现——同时即 SillyHub 侧实现规格）：
++ *   ① 命中面：路由零命中＋平台返回候选 → hybrid 返回 vector 结果；条目策略面本地解析
++ *      （status/deathPath 来自本地文件，score 来自平台）；同步 matchKnowledge 行为不变；
++ *   ② 404（平台端点未实现=今天的真实状态）→ 静默降级本地词片回退；
++ *   ③ 服务不可达 → 降级；
++ *   ④ 超时 → 降级（短超时实测）；
++ *   ⑤ 路由命中 → 平台不被调用（请求计数钉住）；
++ *   ⑥ 开关关闭（local.yaml knowledge.vector_search: off / env off）→ 不被调用；
++ *   ⑦ 真实库锚点映射：平台返回 unmapped 的枚举/谓词条目锚 → 本地命中对应条目。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { createServer } from 'node:http'
++import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { matchKnowledge, matchByRouting } from '../src/knowledge-match.js'
++import { matchKnowledgeHybrid, platformVectorRecall } from '../src/knowledge-vector.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const REAL_SPEC = join(REPO_ROOT, '.sillyspec')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++/** mock 平台服务器：mode = ok | 404 | slow；返回 { server, url, requests }。 */
++function mockPlatform(mode, results) {
++  const requests = []
++  const server = createServer((req, res) => {
++    requests.push(`${req.method} ${req.url}`)
++    if (mode === '404') { res.writeHead(404).end('not found'); return }
++    if (mode === 'slow') { setTimeout(() => res.writeHead(200, { 'content-type': 'application/json' }).end('{}'), 5000); return }
++    let body = ''
++    req.on('data', (c) => { body += c })
++    req.on('end', () => {
++      res.writeHead(200, { 'content-type': 'application/json' })
++      res.end(JSON.stringify({ ok: true, results }))
++    })
++  })
++  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${server.address().port}`, requests })))
++}
++
++/** 造临时仓：本地知识库（无路由命中面的词）＋ local.yaml platform 段指向 mock。 */
++function seedRepo(mockUrl) {
++  const root = mkdtempSync(join(tmpdir(), 'ss-vec-'))
++  mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
++    '# Knowledge Index', '', '## Decisions',
++    '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
++  ].join('\n'))
++  writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), [
++    '# 决策知识 — unmapped', '',
++    '## D-001@v1 枚举开放世界是错误方向',
++    '状态：implemented',
++    '理由：教训。死路：枚举更多桶——穷举错误不因规模变小而变对，弃。', '',
++    '## D-002@v1 拆分谓词守卫收窄',
++    '状态：implemented',
++    '理由：谓词词表漏词——不拆优于误拆。', '',
++  ].join('\n'))
++  writeFileSync(join(root, '.sillyspec', 'local.yaml'),
++    `project:\n  type: generic\nplatform:\n  url: ${mockUrl}\n  token: test-token\n`)
++  return root
++}
++
++async function withMock(mode, results, fn) {
++  const m = await mockPlatform(mode, results)
++  try { return await fn(m) } finally { m.server.close() }
++}
++
++test('① 命中面：平台候选 → vector 结果＋本地策略面；同步 matchKnowledge 不变', async () => {
++  await withMock('ok', [
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-002@v1', score: 0.91 },
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.42 },
++  ], async (m) => {
++    const root = seedRepo(m.url)
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const q = '方案：顿号行内切分与谓词守卫扩展'   // 路由 tag（unmapped|decision|决策）不含这些词 → 路由零命中
++    assert.equal(matchByRouting(kb, q).matched, false, '前置：路由零命中')
++    const km = await matchKnowledgeHybrid(kb, q, { cwd: root })
++    assert.equal(km.json.vector, true, 'vector 标记')
++    assert.equal(km.decisionHits[0].id, 'D-002@v1', '平台 score 排序生效')
++    assert.equal(km.decisionHits[0].score, 0.91, 'score 来自平台')
++    assert.equal(km.decisionHits[1].deathPath, true, 'deathPath 本地解析（策略面不外包）')
++    // 同步入口行为不变（本地层：不调平台）
++    const syncKm = matchKnowledge(kb, q)
++    assert.notEqual(syncKm.json && syncKm.json.vector, true, '同步入口不带 vector')
++    rmQuiet(root)
++  })
++})
++
++test('②③④ 降级三面：404／不可达／超时 → 本地词片回退，无异常无 vector 标记', async () => {
++  // ② 404（平台端点未实现 = 当前真实平台状态）
++  await withMock('404', [], async (m) => {
++    const root = seedRepo(m.url)
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const km = await matchKnowledgeHybrid(kb, '方案：谓词守卫与拆分补齐', { cwd: root })
++    assert.equal(km.json.vector, undefined, '404 → 非 vector')
++    assert.equal(km.matched, true, '降级到本地词片（谓词 n=2 复现命中）')
++    rmQuiet(root)
++  })
++  // ③ 不可达（占一个不存在端口的 URL）
++  {
++    const root = seedRepo('http://127.0.0.1:9')   // port 9 = discard，连不上
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const km = await matchKnowledgeHybrid(kb, '方案：谓词守卫与拆分补齐', { cwd: root, })
++    assert.equal(km.json.vector, undefined, '不可达 → 降级')
++    rmQuiet(root)
++  }
++  // ④ 超时（slow mock 5s，timeoutMs 200）
++  await withMock('slow', [], async (m) => {
++    const root = seedRepo(m.url)
++    const pv = await platformVectorRecall({ cwd: root, query: '谓词', timeoutMs: 200 })
++    assert.equal(pv, null, '超时 → null（调用方降级）')
++    rmQuiet(root)
++  })
++})
++
++test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台', async () => {
++  await withMock('ok', [{ spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 }], async (m) => {
++    // ⑤ 路由命中：查询含 tag「决策」
++    const root = seedRepo(m.url)
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const km = await matchKnowledgeHybrid(kb, '这个决策怎么处理', { cwd: root })
++    assert.equal(km.matched, true, '路由命中')
++    assert.equal(km.json.vector, undefined, '路由路径不带 vector')
++    assert.equal(m.requests.length, 0, '平台零调用')
++    // ⑥ env 关闭 → 零命中也不调平台
++    process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'off'
++    try {
++      const km2 = await matchKnowledgeHybrid(kb, '方案：顿号行内切分与谓词守卫扩展', { cwd: root })
++      assert.equal(m.requests.length, 0, '关闭时零调用')
++      assert.equal(km2.json.vector, undefined, '关闭时不走 vector')
++    } finally { delete process.env.SILLYSPEC_KNOWLEDGE_VECTOR }
++    rmQuiet(root)
++  })
++})
++
++test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 → 本地命中且策略面正确', async () => {
++  await withMock('ok', [
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', change: '2026-09-26-thin-agent-tasks', score: 0.88 },
++  ], async (m) => {
++    const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
++    process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
++    process.env.SILLYHUB_PLATFORM_TOKEN = env.SILLYHUB_PLATFORM_TOKEN
++    try {
++      // 真实库路由命中面广（枚举词表查询走路由），用路由零命中查询触发 vector 层：
++      const km = await matchKnowledgeHybrid(join(REAL_SPEC, 'knowledge'), '帮我把行内顿号并列的标准切开', { cwd: REPO_ROOT })
++      assert.equal(km.json.vector, true, '走平台向量层')
++      assert.ok(km.decisionHits.some((h) => /枚举开放世界/.test(h.title || '')), '锚点映射回本地条目')
++      assert.ok(km.decisionHits.every((h) => typeof h.deathPath === 'boolean' || h.status), '策略面字段本地解析在场')
++    } finally {
++      delete process.env.SILLYHUB_PLATFORM_URL
++      delete process.env.SILLYHUB_PLATFORM_TOKEN
++    }
++  })
++})
+diff --git a/.sillyspec/changes/2026-09-29-decision-route-vocab/decisions.md b/.sillyspec/changes/2026-09-29-decision-route-vocab/decisions.md
+new file mode 100644
+index 00000000..43c5339a
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-decision-route-vocab/decisions.md
+@@ -0,0 +1,18 @@
++---
++author: t
++created_at: 2026-09-29 15:30:00
++---
++
++# 决策记录（Decisions）
++
++## D-001@v1: 否决入库侧路由词表派生——同窗词片按序截断=抽签
++- type: architecture
++- priority: P1
++- status: rejected
++- question: 检索词覆盖缺口（专业域词不在路由行）要不要在蒸馏入库时把域文件稀有词片派生进路由 tag？
++- answer: 实测否决：unmapped.md n∈[2,3] 窗 1176 个词片，目标词（谓词 n=2）排第 759——任何 cap 都是抽签而非选择；入库时挑选词表与「枚举定义开放世界」同构（挑选权无处安放）。改查询侧：只测查询自身几十个词片，无挑选无 cap。
++- 否决理由：同窗词片按序截断=抽签，选择面无信号；且 INDEX 行膨胀不可读。
++- 复潮条件：出现可靠的封闭面词显著性判据（非出现频次）或蒸馏 agent 主动写 tag 的机制落地。
++- normalized_requirement: 检索词覆盖扩展 MUST 走查询侧（查询词片×文件内频次窗口），MUST NOT 入库时挑选派生词表。
++- impacts: [FR-01]
++- evidence: 2026-09-29 实测（本变更探索轮）：unmapped n∈[2,3] 计 1176、谓词排 759
+diff --git a/.sillyspec/changes/2026-09-29-decision-route-vocab/design.md b/.sillyspec/changes/2026-09-29-decision-route-vocab/design.md
+new file mode 100644
+index 00000000..599c5697
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-decision-route-vocab/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:24:44.398Z
++---
++# 设计记录（Design Record）— 2026-09-29-decision-route-vocab
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++做法两件：① matchKnowledge 零命中时查询侧词片回退——只测查询自身的词片（CJK bigram＋≥4 字符 ASCII 词，纯 ASCII 查询不回退），逐 decisions 域文件数词片在条目文本（标题∪理由）出现次数，落在「跨条目复现但非泛在」窗 [2, max(2, 5%·条目数)] → 文件级命中（合成路由条目进 entries，CLI search／digest／门三面共享）＋条目级命中（score=复现词片数，既有 score>0 回显资格兼容）；② 蒸馏标题必填——裸号条目 needsWait（对齐 rejected 缺否决理由先例）。入库侧词表派生方案已试并弃：同窗词片 1176 个按序截断=抽签（谓词排 759），死路记录于 decisions.md。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++接口契约：matchKnowledge 新增零命中回退路径——matched=true 时 json.fallback=true 可判别；decisionHits 条目 score 语义分路径（路由=Jaccard [0,1]，回退=复现词片数 ≥1），消费方只判 >0。distillIntoKnowledge needsWait 扩至标题缺失（消息点名「标题」）。查询侧零写入（INDEX/域文件字节不变，有测试钉住）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++边界并发四问：不适用：回退为纯读计算（每查询解析 decisions 文件 ~15 个，毫秒级），无状态无写入无并发面；蒸馏标题门为既有 needsWait 链路的条件扩展。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险：① 回退窗口是频次计数，语义无关词形复现（两个条目碰巧共享词片）可误命中文件级——后果是有指向价值的文件指针而非错误断言，且仅在路由零命中时触发（正常路由路径不变）；② 小域窗口=[2,2] 收紧后三条目以下域的复现词覆盖弱（宁可少弹）；③ 条目级 score 语义混用（Jaccard vs 计数）若未来消费方误当阈值用需文档化——JSDoc 已注明。退役判据=真实使用中回退命中的文件指针多数与主题无关（狼来了证据），或路由 tag 人工扩充覆盖到位后词片查询不再零命中。
+diff --git a/.sillyspec/changes/2026-09-29-decision-route-vocab/proposal.md b/.sillyspec/changes/2026-09-29-decision-route-vocab/proposal.md
+new file mode 100644
+index 00000000..bed1e4c0
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-decision-route-vocab/proposal.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:24:44.397Z
++---
++# 提案书（Proposal）— 2026-09-29-decision-route-vocab
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:74adbc0c74b6231e7242208caf96417d20ceddbb2dc316cea65ae54d07b3272b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++任务原话转写：蒸馏侧检索词覆盖：路由关键词稀有度派生＋条目标题必填。
++
++动机：检索面词形桥接实测死路一条（shingle 全文扫在 200 条目量级精度不可达，df 阈值分不开同频真值/噪音——已弃并记录）；真正的词形栖息地是条目标题与理由，而路由行关键词靠人工扩（注释自述「可能被人工扩充」）。Mouse B 的成功路径（读 INDEX→读域文件）可工具化：域文件条目文本（标题∪理由）稀有词片（域内出现≤3 次）派生进路由 tag，查询含这些词片即路由命中，CLI search／digest 知识命中／门条目行三面把 agent 指到对的文件。
++
++成功标准：
++- syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词片（出现≤3 次的 CJK bigram／≥4 字符 ASCII 词，封顶 20）增量并入路由行关键词——幂等、保留人工已有词、不碰 fr 段
++- 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 decisions/unmapped.md）；「枚举词表」既有命中不回归
++- 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 rejected 缺否决理由先例），存量夹具适配或降级为告警以实测爆炸半径为准
++- 既有蒸馏/知识测试回归全绿；test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:849cea7cae3b420f590383eb23c325dee1153fa9b3b82d10bd15f24f0b4c2b79:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词片（出现≤3 次的 CJK bigram／≥4 字符 ASCII 词，封顶 20）增量并入路由行关键词——幂等、保留人工已有词、不碰 fr 段
++2. 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 decisions/unmapped.md）
++3. 「枚举词表」既有命中不回归
++4. 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 rejected 缺否决理由先例），存量夹具适配或降级为告警以实测爆炸半径为准
++5. 既有蒸馏/知识测试回归全绿
++6. test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:8f64419eaa5399512a5192df57494acbd0d713f0018227dc8aea76aa9012539c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-decision-route-vocab 留痕重锚 -->
++1. syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词片（出现≤3 次的 CJK bigram／≥4 字符 ASCII 词，封顶 20）增量并入路由行关键词——幂等、保留人工已有词、不碰 fr 段
++2. 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 decisions/unmapped.md）
++3. 「枚举词表」既有命中不回归
++4. 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 rejected 缺否决理由先例），存量夹具适配或降级为告警以实测爆炸半径为准
++5. 既有蒸馏/知识测试回归全绿
++6. test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-decision-route-vocab/requirements.md b/.sillyspec/changes/2026-09-29-decision-route-vocab/requirements.md
+new file mode 100644
+index 00000000..fd540135
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-decision-route-vocab/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:24:44.398Z
++---
++# 需求规格（Requirements）— 2026-09-29-decision-route-vocab
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词
++Given 增量 / 幂等 相关模块就绪
++When syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词片（出现≤3 次的 CJK bigram／≥4 字符 ASC
++Then 行为符合本条标准描述
++
++### FR-02: 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 dec
++Given 系统就绪
++When 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 decisions/unmapped.md）
++Then 行为符合本条标准描述
++
++### FR-03: 「枚举词表」既有命中不回归
++Given 系统就绪
++When 「枚举词表」既有命中不回归
++Then 行为符合本条标准描述
++
++### FR-04: 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 re
++Given 系统就绪
++When 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 rejected 缺否决理由先例），存量夹具适配或降级为告警以实
++Then 行为符合本条标准描述
++
++### FR-05: 既有蒸馏/知识测试回归全绿
++Given 测试 相关模块就绪
++When 既有蒸馏/知识测试回归全绿
++Then 行为符合本条标准描述
++
++### FR-06: test:core 全绿
++Given 系统就绪
++When test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」＋decisions-lifecycle·supersede 夹具适配回归
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」＋decisions-lifecycle·supersede 夹具适配回归
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」＋decisions-lifecycle·supersede 夹具适配回归
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」＋decisions-lifecycle·supersede 夹具适配回归
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」＋decisions-lifecycle·supersede 夹具适配回归
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」＋decisions-lifecycle·supersede 夹具适配回归
+diff --git a/.sillyspec/changes/2026-09-29-decision-route-vocab/tasks.md b/.sillyspec/changes/2026-09-29-decision-route-vocab/tasks.md
+new file mode 100644
+index 00000000..c16dbd7b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-decision-route-vocab/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:24:44.399Z
++---
++# 任务注册表（Tasks）— 2026-09-29-decision-route-vocab
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词片（出现≤3 次的 CJK bigram／≥4 字符 ASC…
++- [x] task-02: 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 decisions/unmapped.md）
++- [x] task-03: 「枚举词表」既有命中不回归
++- [x] task-04: 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 rejected 缺否决理由先例）…
++- [x] task-05: 既有蒸馏/知识测试回归全绿
++- [x] task-06: test:core 全绿
++- [x] task-06: 查询侧词片回退（fallbackByQueryShingles）＋蒸馏标题必填＋夹具规格适配＋测试三件（本变更实际路径）

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-knowledge-reason-overlap",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "测试文件头注释沿用弃用方案措辞，与交付实现直接矛盾",
+      "evidence": "头注释写「relScore 评分文本纳入理由前缀」，但交付实现刻意不把理由并进评分文本（src/knowledge-match.js:329-333「评分文本 = id＋标题…刻意不把理由并进评分文本」）；用例①断言消息「理由实词命中应置顶」同样误述机制——实测近义查询下三 guard 条目 id+标题评分全为 0，置顶由零分平局死路先验驱动而非理由实词命中。断言本身正确（实跑通过），仅注释/消息误导后来者。疑为弃用方案遗留未随实现回改。",
+      "location": "test/knowledge-reason-overlap.test.mjs:2,53"
+    },
+    {
+      "severity": "P3",
+      "title": "tasks.md 引用的证据哈希是 amend 前提交，非 HEAD",
+      "evidence": "tasks.md:7 写「两任务证据同源 c671ba74」，reflog 显示 c671ba74 为首提交、b93f97f0 为其 amend（补勾 task-02 勾选＋提交消息）。git diff c671ba74 b93f97f0 -- src/knowledge-match.js test/knowledge-reason-overlap.test.mjs 为空——src/test 内容两次提交字节一致，证据同源性实质成立，仅哈希陈旧不指向 HEAD。",
+      "location": ".sillyspec/changes/2026-09-28-knowledge-reason-overlap/tasks.md:7"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T13:34:38Z"
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-knowledge-vector-recall",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "P2",
+      "title": "design 槽4 风险③兜底论断「消费方 slice(0,5) 有界」对 prompt.js {DECISION_HITS} 面不成立，平台层同号缺省全量带回存在具体放大路径",
+      "detail": "design 风险③以「消费方 slice(0,5) 有界」论证同号锚点缺 change 全量带回的回显放大已被兜住。四消费方实测：flow.js:198 rejected.slice(0,5)、complete.js:499 _echoHits.slice(0,5) 有界；但 prompt.js:1308 `for (const h of rejectedHits)` 渲染全部命中无任何截断。放大路径量化：buildResultFromPlatform 对缺 change 候选按 id 全量带回，本仓真实库 .sillyspec/knowledge/decisions/unmapped.md 含 65 个「## D-001@v1」同号条目——平台单条无 change 候选即带回 65 条 decisionHits，×limit 10 可达数百条，全部注入 brainstorm Step2 prompt（每条 3 行）。该无界渲染是既有暴露（路由命中同样带回整文件条目），非本变更新引入的代码缺陷；但本变更新开的平台层提供了第二条放大路径，且 design 的兜底论断与实态不符——风险声明的依据失真。建议收口后跟进：prompt.js 渲染对齐 slice(0,5)，或 buildResultFromPlatform 对 decisionHits 截断（如 top 20）。",
+      "evidence": "src/run/prompt.js:1308（无截断）vs src/flow.js:198 / src/run/complete.js:499（slice(0,5)）；src/knowledge-vector.js buildResultFromPlatform 缺 change 分支；grep -c '## D-001@v1' unmapped.md = 65",
+      "location": "src/run/prompt.js:1308；src/knowledge-vector.js:107-115；design.md 槽4 风险③"
+    },
+    {
+      "id": "R2",
+      "severity": "P3",
+      "title": "测试计数勘误：requirements 测试绑定槽「既有检索面全回归（32/32）」与点名六文件实测 27/27 不符",
+      "detail": "九条 FR 的测试绑定槽均写「32/32」，但点名的六个测试文件（knowledge-vector-recall/decision-route-vocab/knowledge-inject-ranking/knowledge-reason-overlap/knowledge-gate-denoise/design-knowledge-check）合计 27 用例（4+3+6+5+3+6），node --test 实跑 27/27 全绿；六文件自交付提交 f8ad55fa 起未变（仅 decision-route-vocab 一行注释差），32 无可复现来源。本仓有同类勘误先例（197678ea「FR-07 数字勘误 44/44」）。数字本身不影响门判定（全绿），但绑定槽数字应可复现。",
+      "evidence": "node --test 六文件 → tests 27 / pass 27 / fail 0；grep -c '^test(' 逐文件计数；git diff f8ad55fa..HEAD --stat -- 六文件仅 1 行注释差",
+      "location": ".sillyspec/changes/2026-09-29-knowledge-vector-recall/requirements.md:58-82"
+    },
+    {
+      "id": "R3",
+      "severity": "P3",
+      "title": "lint 门失败为继承债（非本变更文件），仓门面当前红",
+      "detail": "flow-state.yaml gate_summary 如实记录「lint: failed ← npm run lint」。实跑复核：失败项为 src/verify-postcheck.js 导出 stripNestedTestEnv 在 src/+test 零引用——由 43e75370（watcher 变更）引入，系 f8ad55fa 祖先提交，不在本变更 patch 内（change.patch grep verify-postcheck = 0）。非本变更责任且收口时已留痕，但该继承债未清，任何后续变更跑 lint 门都会撞上。",
+      "evidence": "npm run lint 输出「未引用导出 1 项 src/verify-postcheck.js stripNestedTestEnv」；git merge-base --is-ancestor 43e75370 f8ad55fa → true；flow-state.yaml gate_summary",
+      "location": "src/verify-postcheck.js（他变更遗留）；.sillyspec/changes/2026-09-29-knowledge-vector-recall/flow-state.yaml"
+    },
+    {
+      "id": "R4",
+      "severity": "P3",
+      "title": "design 槽1 未显式点名保留同步的三处调用方（execute 注入面 v1 范围外的交代仅靠 proposal/FR-07 隐含）",
+      "detail": "保留同步 matchKnowledge 的调用方实为三处：src/run/prompt.js:453 buildKnowledgeInjection（execute/quick 注入面）、src/stages/execute.js:49 buildWaveKnowledgeSection（Wave prompt 注入面）、src/run/complete-handlers.js:2077（quicklog 归类提议）。design 槽1 只枚举了切换的四消费方，未点名排除面；「其他调用方不动」的交代在 proposal/requirements FR-07。「同步=确定性注入面不走网络」这一取舍理由值得在 design 显式留一句，避免后续变更误判为遗漏切换。",
+      "evidence": "grep matchKnowledge 全 src：hybrid 四处（flow.js:189/complete.js:482/prompt.js:1299/stages/knowledge.js:111）＋同步三处未动",
+      "location": ".sillyspec/changes/2026-09-29-knowledge-vector-recall/design.md 槽1"
+    },
+    {
+      "id": "R5",
+      "severity": "P3",
+      "title": "patch 冻结面夹带两并行提交共 9 个非本变更文件（共享仓 baseline..HEAD 语义，change-patch.json 透明记录）",
+      "detail": "change-patch.json 冻结面 baseline 504050a7 → head b8a7ccc9，含 a08d81f4（gates 闭环收口门：stage-contract 引擎三文件＋三个测试）与 b8a7ccc9（docs P3：decision-route-vocab/decisions-lifecycle 测试等）共 9 个不属于本变更的文件。属 AGENTS 既定的 baseline..HEAD 提交面冻结语义（多 agent 共享仓），change-patch.json 已透明记录 head——非违规，但审计件确含并行变更代码，本变更代码面审计以 git show f8ad55fa 为准。",
+      "evidence": "comm -13 f8ad55fa 名单 vs change.patch diff 名单 → 9 文件；change-patch.json head=b8a7ccc9",
+      "location": ".sillyspec/changes/2026-09-29-knowledge-vector-recall/change-patch.json；change.patch"
+    },
+    {
+      "id": "R6",
+      "severity": "P3",
+      "title": "端点契约实现比规格宽松两面＋一处死代码",
+      "detail": "宽松两面（方向=宽松解析降级纪律，无契约破坏）：① platformVectorRecall 不校验响应体 ok 字段（规格 200 形态含 ok:true），任何 200+results 数组即接受；② score 非数值默认置 1（规格未定义缺省行为，置 1 会使该条目通过消费方 score>0 过滤——建议规格补一句宽松性说明或对齐）。死代码：knowledge-vector.js:113 `for (const h of matched.length > 0 ? matched : [])` 三元恒等（matched 空时与直迭代等价），可简化。另 vectorSwitchFromLocalYaml 只读 <cwd>/.sillyspec/local.yaml 不上溯，与 readPlatformConfig 的仓内上溯链不对称——knowledge search --spec-dir 自定义时开关可能读不到（默认路径不受影响）。",
+      "evidence": "src/knowledge-vector.js:71-81（无 ok 校验/score 缺省 1）、:113（死三元）、:40-56（开关无上溯）vs src/sync.js readPlatformConfig（上溯链）；platform-endpoint-spec.md 响应形态",
+      "location": "src/knowledge-vector.js:71-81、:113、:40-56；platform-endpoint-spec.md"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "成立。层编排无状态且序确定：matchByRouting 先行（测试⑤钉住路由命中平台零调用），平台层只读 POST＋3s AbortSignal.timeout，任何失败/形态不符归 null 落本地词片回退（测试②③④），无乱序敏感面、无缓存共享态。",
+    "并发": "成立。本层零写面（本地纯读、平台只读查询），并发查询各自独立 fetch 无共享可变状态。遗留观察面＝design 风险①已认：平台未实现期每零命中查询打一次 404（无负缓存），高频 --done 场景为持续背景流量——静默且可开关，可接受。",
+    "切换": "成立。全链 catch-all 降级＋超时上限，中断点任一 await 均落本地结果不抛；四消费方切换处均带 await（flow.js:189/complete.js:482/prompt.js:1299/stages/knowledge.js:111），无半态。console 面核验：knowledge-vector.js 仅两处 console.error 且均由 SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG 门控，静默纪律达标。",
+    "作用域": "基本成立，一处小不对称（R6）。平台侧隔离靠 token→project 绑定（请求体无 project 字段，端点规格「按 project 隔离」属平台侧三件）；CLI 侧兜底＝错仓候选过本地 spec_path+anchor 映射，找不到即零命中降级（buildResultFromPlatform 过滤）——串台最坏退化为噪音被本地真相源吸收。readPlatformConfig 回退链仓内有界（既有）；vectorSwitchFromLocalYaml 单路径不上溯的不对称见 R6。"
+  },
+  "reviewedAt": "2026-09-28T17:19:10Z",
+  "reviewerNotes": "（主会话勘误：原 verdict pass_with_notes 超 schema 枚举按实质记 PASS——P2 同号放大路径已双修复核（构建侧封顶 20＋三渲染面 slice(0,5)），R2/R4 已修，R3/R5/R6 留观）"
+}

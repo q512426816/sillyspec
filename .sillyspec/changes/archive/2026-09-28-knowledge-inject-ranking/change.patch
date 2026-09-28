@@ -1,0 +1,445 @@
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/flow-state.yaml b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/flow-state.yaml
+new file mode 100644
+index 00000000..b44b5dd4
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: c46978041435fd2cac0b9a30a7a9f68ad19fc332
++updatedAt: '2026-09-28T13:16:29.027Z'
++
+diff --git a/src/flow.js b/src/flow.js
+index d09b5b9c..3aef6d11 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -184,15 +184,18 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+         }
+       }
+     }
+-    const { matchKnowledge } = await import('./knowledge-match.js')
++    const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
+     const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
+-    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected')
++    // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking：教训型条目 status 多为
++    // implemented，按状态过滤恰丢最该防的——D-001@v1 枚举开放世界第四次复潮实证）
++    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected' || h.deathPath)
+     summary.rejectedDecisions = rejected.length
+     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
+     if (rejected.length > 0) {
+-      lines.push(`   ⚠️ 否决决策（历史已否决，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
++      lines.push(`   ⚠️ 否决决策/死路注记（历史已否决或已记死路，防复潮——除非复潮条件满足勿重提，复潮须在本变更 decisions.md 记新版本）：`)
+       for (const h of rejected.slice(0, 5)) {
+-        lines.push(`   - ${h.id} ${h.title}（${h.file}）否决理由：${h.reason || '（未记录）'}`)
++        const note = h.status === 'rejected' ? (h.reason || '（未记录）') : `死路——${deathPathNote(h.reason)}`
++        lines.push(`   - ${h.id} ${h.title}（${h.file}）${h.status === 'rejected' ? '否决理由' : '⚰️'}：${note}`)
+       }
+     }
+     if (km.matched && (km.entries || []).length > 0) {
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 26d41f75..12fe5cfc 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -11,6 +11,7 @@
+ 
+ import { existsSync, readFileSync } from 'fs'
+ import { join } from 'path'
++import { frTitleOverlap } from './fr-index.js'
+ 
+ /**
+  * 从 INDEX.md 解析所有知识条目
+@@ -115,7 +116,13 @@ function parseDecisionFile(filePath, file) {
+   const hits = []
+   let cur = null
+   const flush = () => {
+-    if (cur) hits.push(cur)
++    if (cur) {
++      // 死路注记识别（2026-09-28-knowledge-inject-ranking）：「理由」含「死路：」字面标记的教训型
++      // 条目——记录它的决策本体是 accepted/implemented（死路只是理由里的注记），按状态过滤会被
++      // 压制到组外，恰丢最该防复潮的（实测：D-001@v1 枚举开放世界排 148/188 位永不回显）。
++      cur.deathPath = /死路[：:]/.test(cur.reason || '')
++      hits.push(cur)
++    }
+     cur = null
+   }
+   for (const line of content.replace(/\r\n/g, '\n').split('\n')) {
+@@ -209,6 +216,15 @@ export function matchDecisionsByFiles(indexDir, files) {
+   return result
+ }
+ 
++/** 死路注记短句提取（消费方渲染用）：理由里「死路：…」到首个句读为止；无标记时截前 60 字。
++ *  单一源供 flow 知识注入段与 complete.js knowledge-gate 回显共用（2026-09-28-knowledge-inject-ranking）。 */
++export function deathPathNote(reason) {
++  const r = String(reason || '')
++  const m = r.match(/死路[：:]\s*([^。；;，,\n]+)/)
++  if (m) return m[1].trim()
++  return r.slice(0, 60)
++}
++
+ function escapeRegex(s) {
+   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+ }
+@@ -302,13 +318,19 @@ export function matchKnowledge(indexDir, taskContext) {
+   }
+ 
+   // decisionHits（task-04）：任务上下文命中的 Decisions 路由行 → 解析其指向的
+-  // decisions/<域>.md 内全部条目；rejected 优先排序（防复潮信息最先可见，组内保持文件序）。
++  // decisions/<域>.md 内全部条目；防复潮优先（rejected ∪ 死路注记）＋组内按查询×标题
++  // bigram 重叠率降序（2026-09-28-knowledge-inject-ranking：此前 rejected 优先＋文件序，
++  // 空标题无关条目以文件序霸占回显前 N、相关条目沉底——实测 枚举/开放世界 查询下
++  // D-001@v1 排 148/188 位）。重叠判据复用 fr-index frTitleOverlap（字符 bigram，
++  // 封闭面非语义判定）。
+   // 不引入新顶层 hits 字段，不改 matched/entries/report/json 四个既有键。
+   const decisionRoutes = matched.filter(isDecisionRoute)
+   const allDecisionHits = decisionRoutes.length > 0 ? parseDecisionEntries(indexDir, decisionRoutes) : []
++  const relScore = (h) => frTitleOverlap(taskContext, `${h.id} ${h.title}`)
++  const byOverlapDesc = (a, b) => relScore(b) - relScore(a)
+   const decisionHits = [
+-    ...allDecisionHits.filter(h => h.status === 'rejected'),
+-    ...allDecisionHits.filter(h => h.status !== 'rejected')
++    ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
++    ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
+   ]
+ 
+   return { matched: true, entries: matched, report, json, decisionHits }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index d5e9ff4a..b1b1b5aa 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -482,9 +482,13 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+           const _hits = km.decisionHits || []
+           const _entries = km.matched ? (km.entries || []) : []
+           if (_hits.length > 0 || _entries.length > 0) {
++            const { deathPathNote } = await import('../knowledge-match.js')
+             console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
+             for (const h of _hits.slice(0, 5)) {
+-              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${h.status === 'rejected' ? ` 否决理由：${h.reason || '（未记录）'}` : ''}`)
++              const _note = h.status === 'rejected'
++                ? ` 否决理由：${h.reason || '（未记录）'}`
++                : h.deathPath ? ` ⚰️死路注记：${deathPathNote(h.reason)}` : ''
++              console.warn(`   - ${h.id} ${h.title}（${h.file}）status=${h.status || '?'}${_note}`)
+             }
+             for (const e of _entries.slice(0, 3)) {
+               const _base = e.anchor ? `${e.file}#${e.anchor}` : e.file
+diff --git a/test/design-knowledge-check.test.mjs b/test/design-knowledge-check.test.mjs
+index c1fe0f3b..340c9bb5 100644
+--- a/test/design-knowledge-check.test.mjs
++++ b/test/design-knowledge-check.test.mjs
+@@ -103,6 +103,27 @@ test('① decisions.md 新增条目（标题/question）也进查询串：仅条
+   rmQuiet(cwd)
+ })
+ 
++test('①-b 命中场景（死路注记）：implemented＋理由含「死路：」→ ⚰️死路注记回显（不被状态压制）', async () => {
++  const { cwd, specBase } = makeRepo('dkc-death-')
++  seedKnowledge(specBase)
++  // 覆写为教训形态：status=implemented，死路只在理由注记里（2026-09-28-knowledge-inject-ranking）
++  writeFileSync(join(specBase, 'knowledge', 'decisions', 'unmapped.md'), [
++    '# unmapped 域决策', '',
++    '## D-001@v1 枚举开放世界是错误方向',
++    '状态： implemented',
++    '理由：正确模式：开放世界归 agent。死路：枚举更多桶/更多关键词——穷举错误不因规模变小而变对', '',
++  ].join('\n'))
++  const { pm, progress } = await seedPlanStep(cwd, specBase)
++  const r = await runCapturing(() =>
++    completeStep(pm, progress, 'brainstorm', cwd, '方案 A：用枚举词表分类需求形态', null, {
++      changeName: CN, doneAnswer: '用户选方案A', printNext: false,
++    }))
++  assert.equal(r.exitCode, null, '不阻断')
++  assert.match(r.stdout, /D-001@v1 枚举开放世界是错误方向/, '死路条目回显（不受 implemented 压制）')
++  assert.match(r.stdout, /⚰️死路注记：枚举更多桶/, '死路短句渲染')
++  rmQuiet(cwd)
++})
++
+ test('② 无命中 → 输出与现状一致（零 knowledge-gate 行）', async () => {
+   const { cwd, specBase } = makeRepo('dkc-miss-')
+   seedKnowledge(specBase)
+diff --git a/test/knowledge-inject-ranking.test.mjs b/test/knowledge-inject-ranking.test.mjs
+new file mode 100644
+index 00000000..45958788
+--- /dev/null
++++ b/test/knowledge-inject-ranking.test.mjs
+@@ -0,0 +1,109 @@
++/**
++ * knowledge-inject-ranking.test.mjs — decisionHits 相关度排序＋死路注记识别
++ * （2026-09-28-knowledge-inject-ranking）
++ *
++ * 覆盖验收面：
++ *   ① 教训型死路条目（status=implemented＋理由含「死路：」）进防复潮优先组——不再被状态压制；
++ *   ② 组内按 查询×(id+标题) bigram 重叠率降序——相关条目置顶、空标题无关条目沉底；
++ *   ③ 精度不回归：无关查询不触发 decisionHits；
++ *   ④ 真实库钉子：本仓 knowledge 下「枚举词表/开放世界」查询必须让 D-001@v1 枚举开放世界
++ *      进 decisionHits 前 5（2026-09-28 实测它曾排 148/188 位——本测试防该回归）；
++ *   ⑤ 真实库 digest 钉子：flowKnowledgeDigest 注入段渲染该条目与死路短句。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { matchKnowledge, deathPathNote } from '../src/knowledge-match.js'
++import { flowKnowledgeDigest } from '../src/flow.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const REAL_KB = join(REPO_ROOT, '.sillyspec', 'knowledge')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++/** 造迷你知识库：枚举路由行 → decisions/unmapped.md（无关 rejected 空标题×2 + 教训型死路条目）。 */
++function seedKb(root) {
++  mkdirSync(join(root, 'decisions'), { recursive: true })
++  writeFileSync(join(root, 'INDEX.md'), [
++    '# 知识索引', '',
++    '## Decisions',
++    '- 枚举|词表|开放世界 → [决策](decisions/unmapped.md)', '',
++  ].join('\n'))
++  writeFileSync(join(root, 'decisions', 'unmapped.md'), [
++    '# unmapped 域决策', '',
++    '## D-009@v1',
++    '状态： rejected',
++    '否决理由：与需求直接冲突', '',
++    '## D-010@v1',
++    '状态： rejected',
++    '否决理由：治标', '',
++    '## D-001@v1 枚举开放世界是错误方向（任务面归还 agent）',
++    '状态： implemented',
++    '理由：决策记录：用枚举/关键词表穷举开放世界是错误方向。正确模式：开放世界的分类归 agent，机器只锚定可枚举的封闭面。死路：枚举更多桶/更多关键词——穷举错误不因规模变小而变对，弃。', '',
++  ].join('\n'))
++}
++
++test('① 死路注记条目（implemented）进防复潮优先组，不受状态压制', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-rank-1-'))
++  seedKb(kb)
++  const km = matchKnowledge(kb, '方案：用枚举词表扫描开放世界的模糊需求')
++  const idx = km.decisionHits.findIndex((h) => h.title.includes('枚举开放世界'))
++  assert.ok(idx >= 0, '死路条目在 decisionHits')
++  assert.ok(km.decisionHits[idx].deathPath === true, 'deathPath 标记在场')
++  assert.ok(idx < 5, `应进前 5（实际第 ${idx + 1} 位）`)
++  rmQuiet(kb)
++})
++
++test('② 相关度排序：相关死路条目排无关 rejected 空标题条目之前', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-rank-2-'))
++  seedKb(kb)
++  const km = matchKnowledge(kb, '方案：用枚举词表扫描开放世界的模糊需求')
++  assert.ok(km.decisionHits.length >= 3, '三条件目全进')
++  assert.match(km.decisionHits[0].title, /枚举开放世界/, '相关条目置顶（重叠率最高）')
++  assert.equal(km.decisionHits[1].title, '', '空标题无关 rejected 沉底其后')
++  rmQuiet(kb)
++})
++
++test('③ 精度不回归：无关查询不触发 decisionHits', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-rank-3-'))
++  seedKb(kb)
++  const km = matchKnowledge(kb, '更新 README 安装命令为 pnpm 形态')
++  assert.equal(km.decisionHits.length, 0, '路由行未命中 → 零 decisionHits')
++  rmQuiet(kb)
++})
++
++test('④ 真实库钉子：枚举词表查询 → D-001@v1 枚举开放世界进前 5（防 148/188 位回归）', () => {
++  const km = matchKnowledge(REAL_KB, '2026-09-28-inject-test\n方案：用枚举关键词表扫描开放世界的模糊需求')
++  const idx = km.decisionHits.findIndex((h) => /枚举.*开放世界|开放世界.*枚举/.test(h.title || ''))
++  assert.ok(idx >= 0, `真实库应含枚举开放世界条目（decisionHits 共 ${km.decisionHits.length} 条）`)
++  assert.ok(idx < 5, `必须进前 5（实际第 ${idx + 1} 位）`)
++  assert.ok(km.decisionHits[idx].status === 'rejected' || km.decisionHits[idx].deathPath === true,
++    '以 rejected 或死路注记身份进防复潮面')
++})
++
++test('⑤ 真实库 digest 钉子：flowKnowledgeDigest 注入段渲染该条目与死路短句', async () => {
++  const cd = mkdtempSync(join(tmpdir(), 'ss-rank-5-'))
++  const r = await flowKnowledgeDigest({
++    specBase: join(REPO_ROOT, '.sillyspec'),
++    change: '2026-09-28-knowledge-inject-ranking',
++    changeDir: cd,
++    input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
++  })
++  const line = r.lines.find((l) => /枚举.*开放世界/.test(l))
++  assert.ok(line, `注入段应含枚举开放世界条目（实际行：${r.lines.join(' | ').slice(0, 300)}）`)
++  assert.match(line, /死路|否决理由/, '带死路短句或否决理由渲染')
++  assert.ok(r.summary.rejectedDecisions >= 1, 'summary 计数含死路面')
++  rmQuiet(cd)
++})
++
++test('⑥ deathPathNote：死路句提取与无标记回退', () => {
++  assert.equal(deathPathNote('正确模式：机器只锚封闭面。死路：枚举更多桶——穷举错误不因规模变小而变对，弃。'),
++    '枚举更多桶——穷举错误不因规模变小而变对')
++  assert.equal(deathPathNote(''), '')
++  assert.equal(deathPathNote('普通理由前六十字' + 'x'.repeat(80)).length, 60, '无标记截前 60 字')
++})
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/design.md b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/design.md
+new file mode 100644
+index 00000000..23101a99
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:11:00.997Z
++---
++# 设计记录（Design Record）— 2026-09-28-knowledge-inject-ranking
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++做法：knowledge-match.js 三处——parseDecisionFile flush 时按「理由含『死路：』字面标记」置 deathPath；matchKnowledge decisionHits 改防复潮优先组（rejected ∪ deathPath）＋组内按 查询×(id+标题) bigram 重叠率降序（复用 fr-index frTitleOverlap，封闭面字符重叠非语义判定）；新增导出 deathPathNote 提取死路短句。消费方两处：flow.js flowKnowledgeDigest 过滤条件加 deathPath、渲染分「否决理由/⚰️死路」两态；complete.js knowledge-gate 回显同构。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++接口契约：decisionHits 条目新增布尔字段 deathPath（默认无=undefined 假值，消费方可选消费）；matchKnowledge 其余四键（matched/entries/report/json）语义不变；deathPathNote(reason: string) → string（死路句到首个句读，无标记截 60 字）。向后兼容：既有消费方只读 status/reason 不受影响。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++边界并发四问：不适用：纯函数级排序与解析改动，无状态、无并发面、无时序依赖（解析为读文件同步单趟）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险：① 长查询稀释重叠率（frTitleOverlap 并集含查询全长）——同查询内相对排序仍成立，跨查询不可比（仅用于排序非阈值判定）；② 「死路：」字面标记依赖蒸馏书写惯例——未按此惯例写的教训条目仍不进防复潮面（覆盖率问题，宁缺毋滥）；③ id 数字 bigram 微量串扰（如 2026-09-28 与 D-009@v1 共享 "09"）——分数远低于标题实词重叠，排序不受扰（测试②钉住）。死路=为 implemented 条目引入 rejected 语义提升——若知识库大量误标死路会造成防复潮面噪音，退役判据=回显噪音投诉或命中条目与主题长期无关。
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/proposal.md b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/proposal.md
+new file mode 100644
+index 00000000..628e8782
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/proposal.md
+@@ -0,0 +1,42 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:11:00.996Z
++---
++# 提案书（Proposal）— 2026-09-28-knowledge-inject-ranking
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:df5f08ffd84a5aa88bfe9f1a4b69aa1c02f923dd4739eea57fd23336f037236c:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++任务原话转写：修复知识库防复潮注入两个实测缺陷（入口 flowKnowledgeDigest 与设计时点 knowledge-gate 同源共犯）。
++
++动机：实测（函数级+主仓实弹）证实：① 教训型死路条目 status=implemented 被 rejected 过滤压制——D-001@v1「枚举开放世界是错误方向」排在 decisionHits 第 148/188 位永远不可见，恰是最该防复潮的；② routing 命中后整文件条目无相关度排序，回显前 5 全是无关噪音（空标题 SillyHub 决策）。
++
++成功标准：
++- 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHits 前 5，且 flow start 知识注入段与 knowledge-gate 回显均可见
++- 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染
++- 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在
++- 新增真实库钉子测试（枚举词表查询→目标条目必进前 5）；既有测试与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:518de2cbda32b8e46bdf3c2c24e465a64a470338f087de0082ef9bdf64f8ef38:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHits 前 5，且 flow start 知识注入段与 knowledge-gate 回显均可见
++2. 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染
++3. 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在
++4. 新增真实库钉子测试（枚举词表查询→目标条目必进前 5）
++5. 既有测试与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:9596390a62ef43ade537869b26e6da49c0ab0de72e98d507eb9070d6f302bbe4:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++1. 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHits 前 5，且 flow start 知识注入段与 knowledge-gate 回显均可见
++2. 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染
++3. 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在
++4. 新增真实库钉子测试（枚举词表查询→目标条目必进前 5）
++5. 既有测试与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/requirements.md b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/requirements.md
+new file mode 100644
+index 00000000..e4cf956e
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:11:00.997Z
++---
++# 需求规格（Requirements）— 2026-09-28-knowledge-inject-ranking
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHi
++Given 系统就绪
++When 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHits 前 5，且 flow start 知识注入段与 kno
++Then 行为符合本条标准描述
++
++### FR-02: 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染
++Given 系统就绪
++When 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染
++Then 行为符合本条标准描述
++
++### FR-03: 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在
++Given 系统就绪
++When 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在
++Then 行为符合本条标准描述
++
++### FR-04: 新增真实库钉子测试（枚举词表查询→目标条目必进前 5）
++Given 测试 相关模块就绪
++When 新增真实库钉子测试（枚举词表查询
++Then 目标条目必进前 5）
++
++### FR-05: 既有测试与 npm run test:core 全绿
++Given 测试 相关模块就绪
++When 既有测试与 npm run test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-inject-ranking.test.mjs「排序与死路面」＋test/design-knowledge-check.test.mjs「①-b 死路注记回显」＋test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-inject-ranking.test.mjs「排序与死路面」＋test/design-knowledge-check.test.mjs「①-b 死路注记回显」＋test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-inject-ranking.test.mjs「排序与死路面」＋test/design-knowledge-check.test.mjs「①-b 死路注记回显」＋test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-inject-ranking.test.mjs「排序与死路面」＋test/design-knowledge-check.test.mjs「①-b 死路注记回显」＋test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-inject-ranking.test.mjs「排序与死路面」＋test/design-knowledge-check.test.mjs「①-b 死路注记回显」＋test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/tasks.md b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/tasks.md
+new file mode 100644
+index 00000000..b9c29fc3
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:11:00.997Z
++---
++# 任务注册表（Tasks）— 2026-09-28-knowledge-inject-ranking
++
++> 按实际实现路径覆写（thin-agent-tasks）：单提交交付，三任务证据同源 07cbbe02。
++
++- [x] task-01: knowledge-match.js 防复潮优先组（rejected∪死路）＋组内 bigram 重叠降序＋deathPathNote 导出
++- [x] task-02: 消费方接线——flow.js 注入段过滤与渲染两态、complete.js knowledge-gate 死路短句回显
++- [x] task-03: 测试——knowledge-inject-ranking.test.mjs 六用例（含真实库钉子）＋design-knowledge-check ①-b 死路渲染

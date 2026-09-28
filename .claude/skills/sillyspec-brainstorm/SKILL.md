@@ -67,12 +67,12 @@ sillyspec run brainstorm --done --answer "..." --output "..."    # 一步完成 
 ```
                 ┌─ scale=large → plan（四件套齐）
 scan → brainstorm ┤
-                └─ scale=small → flow start 收编（仅 design.md）
+                └─ scale=small → quick --linked-changes（仅 design.md）
 ```
 
 brainstorm 完成时按 design.md frontmatter 的 `scale` 分叉：
 - **large**（多文件/跨模块/有状态机或 schema 变更）：四件套齐 + Design Grill 审查通过（tier=independent 时由独立审查子代理产出 stage review.json）→ `sillyspec run plan --change <变更名>`
-- **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec flow start --change <变更名>`（头脑风暴产物自动收编续跑轻量变更，不重复起草；design 以头脑风暴版为准）
+- **small**（≤2 文件、单模块、无跨模块依赖）：仅生成 design.md → `sillyspec run quick --linked-changes <变更名>`
 
 > 规模由 AI 在 brainstorm 最后一步评估并写入 design.md frontmatter。判错可手动改 `scale` 后再跑相应阶段。
 

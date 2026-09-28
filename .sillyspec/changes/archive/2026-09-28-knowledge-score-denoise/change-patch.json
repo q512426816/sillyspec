@@ -1,0 +1,47 @@
+{
+  "change": "2026-09-28-knowledge-score-denoise",
+  "baseline": "ebc3ae489dd88b6f5748f0be96e06349d3a0acf0",
+  "head": "decac02868444a405fbbbe613a5599cb0eb00e66",
+  "files": [
+    ".sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md",
+    ".sillyspec/changes/2026-09-28-knowledge-score-denoise/flow-state.yaml",
+    ".sillyspec/changes/2026-09-28-knowledge-score-denoise/proposal.md",
+    ".sillyspec/changes/2026-09-28-knowledge-score-denoise/requirements.md",
+    ".sillyspec/changes/2026-09-28-knowledge-score-denoise/tasks.md",
+    "src/knowledge-match.js",
+    "test/knowledge-reason-overlap.test.mjs"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 132,
+    "deletions": 14
+  },
+  "savedAt": "2026-09-28T13:42:49.633Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "a70cb1789d61017c4629f400f58038486e17236685dde0b2f50ea8267c38e744",
+  "patchStatus": "ok"
+}

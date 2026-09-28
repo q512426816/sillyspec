@@ -1,0 +1,299 @@
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/flow-state.yaml b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/flow-state.yaml
+new file mode 100644
+index 00000000..7ee37b52
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: b7699f92412bdcacf115d11395fc72920162195c
++updatedAt: '2026-09-28T13:29:59.227Z'
++
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 12fe5cfc..bcc41ac5 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -326,8 +326,12 @@ export function matchKnowledge(indexDir, taskContext) {
+   // 不引入新顶层 hits 字段，不改 matched/entries/report/json 四个既有键。
+   const decisionRoutes = matched.filter(isDecisionRoute)
+   const allDecisionHits = decisionRoutes.length > 0 ? parseDecisionEntries(indexDir, decisionRoutes) : []
++  // 评分文本 = id＋标题；近义措辞（查询词只在理由不在标题，如「穷举/关键词表」对「枚举开放世界」）
++  // 由 guard 组平局裁决兜底：分数并列时死路注记条目优先（2026-09-28-knowledge-reason-overlap）。
++  // 刻意不把理由并进评分文本：Jaccard 比率偏爱短文本——短理由无关条目（「与需求直接冲突」共享
++  // 一个 bigram 即得高比率）会压过长理由被稀释的相关条目，实测复现；宁用零分平局先验。
+   const relScore = (h) => frTitleOverlap(taskContext, `${h.id} ${h.title}`)
+-  const byOverlapDesc = (a, b) => relScore(b) - relScore(a)
++  const byOverlapDesc = (a, b) => (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
+   const decisionHits = [
+     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
+     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
+diff --git a/test/knowledge-reason-overlap.test.mjs b/test/knowledge-reason-overlap.test.mjs
+new file mode 100644
+index 00000000..3837ffe1
+--- /dev/null
++++ b/test/knowledge-reason-overlap.test.mjs
+@@ -0,0 +1,78 @@
++/**
++ * knowledge-reason-overlap.test.mjs — relScore 评分文本纳入理由前缀
++ * （2026-09-28-knowledge-reason-overlap）
++ *
++ * 覆盖验收面：
++ *   ① 近义措辞（词只在理由不在标题——穷举/关键词表/分类表）→ 相关死路条目进前 5；
++ *   ② 主场景（标题词 枚举/开放世界）排序不回归，仍置顶；
++ *   ③ 精度不回归：无关查询仍零 decisionHits；
++ *   ④ 真实库钉子：「穷举」「关键词表」查询 → D-001@v1 枚举开放世界进前 5（多角度加测实证过
++ *      修复前空标题 rejected 以文件序霸占前 3——本测试防回归）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { matchKnowledge } from '../src/knowledge-match.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const REAL_KB = join(REPO_ROOT, '.sillyspec', 'knowledge')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++function seedKb(root) {
++  mkdirSync(join(root, 'decisions'), { recursive: true })
++  writeFileSync(join(root, 'INDEX.md'), [
++    '# 知识索引', '', '## Decisions',
++    '- 枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
++  ].join('\n'))
++  writeFileSync(join(root, 'decisions', 'unmapped.md'), [
++    '# unmapped 域决策', '',
++    '## D-009@v1',
++    '状态： rejected',
++    '否决理由：与需求直接冲突', '',
++    '## D-010@v1',
++    '状态： rejected',
++    '否决理由：治标', '',
++    '## D-001@v1 枚举开放世界是错误方向（任务面归还 agent）',
++    '状态： implemented',
++    '理由：用枚举/关键词表穷举开放世界是错误方向。死路：枚举更多桶——穷举错误不因规模变小而变对，弃。', '',
++  ].join('\n'))
++}
++
++test('① 近义措辞（穷举——词在理由不在标题）→ 死路条目进前 5 且排无关 rejected 之前', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-ro-1-'))
++  seedKb(kb)
++  const km = matchKnowledge(kb, '方案：穷举所有需求形态建分类')
++  const idx = km.decisionHits.findIndex((h) => h.title.includes('枚举开放世界'))
++  assert.ok(idx >= 0 && idx < 5, `应进前 5（实际第 ${idx + 1} 位）`)
++  assert.ok(idx === 0, `理由实词命中应置顶（实际第 ${idx + 1} 位）`)
++  rmQuiet(kb)
++})
++
++test('② 主场景不回归：标题词（枚举/开放世界）仍置顶', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-ro-2-'))
++  seedKb(kb)
++  const km = matchKnowledge(kb, '方案：用枚举词表扫描开放世界的模糊需求')
++  assert.match(km.decisionHits[0].title, /枚举开放世界/, '主场景仍置顶')
++  rmQuiet(kb)
++})
++
++test('③ 精度不回归：无关查询零 decisionHits', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-ro-3-'))
++  seedKb(kb)
++  assert.equal(matchKnowledge(kb, '更新 README 安装命令为 pnpm').decisionHits.length, 0)
++  rmQuiet(kb)
++})
++
++test('④ 真实库钉子：穷举/关键词表查询 → D-001@v1 枚举开放世界进前 5', () => {
++  for (const q of ['方案：穷举所有形态分类', '方案：维护一个关键词表', '方案：建分类表归集形态']) {
++    const km = matchKnowledge(REAL_KB, q)
++    const idx = km.decisionHits.findIndex((h) => /枚举.*开放世界|开放世界.*枚举/.test(h.title || ''))
++    assert.ok(idx >= 0 && idx < 5, `「${q}」应让枚举开放世界进前 5（实际 ${idx >= 0 ? `第 ${idx + 1} 位` : '未命中'}）`)
++  }
++})
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/design.md b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
+similarity index 51%
+rename from .sillyspec/changes/2026-09-28-knowledge-inject-ranking/design.md
+rename to .sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
+index a66e94df..7535db28 100644
+--- a/.sillyspec/changes/2026-09-28-knowledge-inject-ranking/design.md
++++ b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
+@@ -1,30 +1,30 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-28T13:11:00.997Z
++created_at: 2026-09-28T13:26:52.951Z
+ ---
+-# 设计记录（Design Record）— 2026-09-28-knowledge-inject-ranking
++# 设计记录（Design Record）— 2026-09-28-knowledge-reason-overlap
+ 
+ > 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
+ > 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
+ 
+ ## 做法概述
+-<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
+ 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+ <!-- MACHINE-DRAFT:design-approach:end -->
+ 
+ <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
+-做法：knowledge-match.js 三处——parseDecisionFile flush 时按「理由含『死路：』字面标记」置 deathPath；matchKnowledge decisionHits 改防复潮优先组（rejected ∪ deathPath）＋组内按 查询×(id+标题) bigram 重叠率降序（复用 fr-index frTitleOverlap，封闭面字符重叠非语义判定）；新增导出 deathPathNote 提取死路短句。消费方三处：flow.js flowKnowledgeDigest、complete.js knowledge-gate、prompt.js {DECISION_HITS}（brainstorm Step2 注入——审查 P2 补齐）——三处过滤均 rejected∪deathPath、渲染同构分「否决理由/⚰️死路」两态。
++做法：relScore 维持 id＋标题口径不变，guard 组（rejected∪死路）排序比较器加二级裁决——分数并列时死路注记条目优先。刻意不把理由并进评分文本：Jaccard 比率偏爱短文本（短理由无关条目共享一个 bigram 即得高比率，压过长理由被稀释的相关条目——实测「穷举」查询下 D-009 与需求直接冲突 排到 D-001 前），宁用零分平局先验兜底近义场景。
+ 
+ ## 接口契约
+-<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
+ 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+ <!-- MACHINE-DRAFT:design-contract:end -->
+ 
+ <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
+-接口契约：decisionHits 条目新增布尔字段 deathPath（默认无=undefined 假值，消费方可选消费）；matchKnowledge 其余四键（matched/entries/report/json）语义不变；deathPathNote(reason: string) → string（死路句到首个句读，无标记截 60 字）。向后兼容：既有消费方只读 status/reason 不受影响。
++接口契约：byOverlapDesc 比较器语义=(重叠率降序,死路优先)；matchKnowledge 对外键与 decisionHits 字段零变化。向后兼容：非 guard 组 deathPath 恒假，二级裁决无效果，行为与上版一致。
+ 
+ ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+-<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
+ 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+ 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+ 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+@@ -32,12 +32,12 @@ created_at: 2026-09-28T13:11:00.997Z
+ <!-- MACHINE-DRAFT:design-boundaries:end -->
+ 
+ <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
+-边界并发四问：不适用：纯函数级排序与解析改动，无状态、无并发面、无时序依赖（解析为读文件同步单趟）。
++边界并发四问：不适用：纯排序比较器改动，无状态无 IO 无并发面。
+ 
+ ## 风险与死路
+-<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-inject-ranking 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
+ 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+ <!-- MACHINE-DRAFT:design-risks:end -->
+ 
+ <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
+-风险：① 长查询稀释重叠率（frTitleOverlap 并集含查询全长）——同查询内相对排序仍成立，跨查询不可比（仅用于排序非阈值判定）；② 「死路：」字面标记依赖蒸馏书写惯例——未按此惯例写的教训条目仍不进防复潮面（覆盖率问题，宁缺毋滥）；③ id 数字 bigram 微量串扰（如 2026-09-28 与 D-009@v1 共享 "09"）——分数远低于标题实词重叠，排序不受扰（测试②钉住）。死路=为 implemented 条目引入 rejected 语义提升——若知识库大量误标死路会造成防复潮面噪音，退役判据=回显噪音投诉或命中条目与主题长期无关。
++风险：①平局先验只兜「标题零命中」的近义查询，查询词命中了无关条目标题时先验不介入（主题信号优先于先验，属正确取舍）；②死路条目在文件序靠后时靠先验置顶而非相关度——先验普适于死路类（本变更全链路的立论即死路类是最强防复潮信号）。退役判据=死路先验导致高频无关置顶投诉。
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/proposal.md b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/proposal.md
+new file mode 100644
+index 00000000..3cd7d5fc
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/proposal.md
+@@ -0,0 +1,42 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:26:52.950Z
++---
++# 提案书（Proposal）— 2026-09-28-knowledge-reason-overlap
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:e69619f966d8932284108d387da566610f26cd887bdb1cc0cdbb74069ea45cd9:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++任务原话转写：排序评分纳入理由文本：近义措辞（词在理由不在标题）时死路条目仍可命中。
++
++动机：多角度加测实测——查询「穷举/关键词表/分类表」（这些词在 D-001 理由文本里、不在标题里）时相关死路条目不进前 5，前 3 被空标题 rejected 条目以文件序霸占；relScore 只算 id+标题重叠，理由里的实词不参与评分。
++
++成功标准：
++- 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条目进 decisionHits 前 5
++- 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶
++- 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目
++- 测试钉住近义/主场景/精度三面；npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:85e74a909052024a3015f20187fdacc2e7e6f9af8d25452d16ae15b6a815d342:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条目进 decisionHits 前 5
++2. 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶
++3. 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目
++4. 测试钉住近义/主场景/精度三面
++5. npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:1c7dbe8f9a28b257c9ef74e0d3e0e4d9fcc33c92d825c2cea14b9178a51b1bf1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++1. 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条目进 decisionHits 前 5
++2. 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶
++3. 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目
++4. 测试钉住近义/主场景/精度三面
++5. npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/requirements.md b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/requirements.md
+new file mode 100644
+index 00000000..ca338139
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:26:52.951Z
++---
++# 需求规格（Requirements）— 2026-09-28-knowledge-reason-overlap
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条
++Given 系统就绪
++When 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条目进 decisionHits 前 5
++Then 行为符合本条标准描述
++
++### FR-02: 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶
++Given 系统就绪
++When 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶
++Then 行为符合本条标准描述
++
++### FR-03: 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目
++Given 系统就绪
++When 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目
++Then 行为符合本条标准描述
++
++### FR-04: 测试钉住近义/主场景/精度三面
++Given 测试 相关模块就绪
++When 测试钉住近义/主场景/精度三面
++Then 行为符合本条标准描述
++
++### FR-05: npm run test:core 全绿
++Given 系统就绪
++When npm run test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」＋test/knowledge-inject-ranking.test.mjs（回归）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」＋test/knowledge-inject-ranking.test.mjs（回归）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」＋test/knowledge-inject-ranking.test.mjs（回归）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」＋test/knowledge-inject-ranking.test.mjs（回归）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」＋test/knowledge-inject-ranking.test.mjs（回归）
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/tasks.md b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/tasks.md
+new file mode 100644
+index 00000000..5f0275f4
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:45:00.000Z
++---
++# 任务注册表（Tasks）— 2026-09-28-knowledge-reason-overlap
++
++> 按实际实现路径覆写（thin-agent-tasks）：单提交交付，两任务证据同源 c671ba74。
++
++- [x] task-01: knowledge-match.js guard 组排序比较器加零分平局死路优先（理由并入评分的替代方案因 Jaccard 短文本偏置弃用）
++- [x] task-02: test/knowledge-reason-overlap.test.mjs 四用例（近义置顶/主场景不回归/精度/真实库钉子）

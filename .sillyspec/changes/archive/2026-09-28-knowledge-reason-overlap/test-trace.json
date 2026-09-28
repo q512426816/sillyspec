@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-knowledge-reason-overlap",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-knowledge-reason-overlap:flow:FR-01",
+      "tests": [
+        "test/knowledge-inject-ranking.test.mjs",
+        "test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-reason-overlap"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-knowledge-reason-overlap:flow:FR-02",
+      "tests": [
+        "test/knowledge-inject-ranking.test.mjs",
+        "test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-reason-overlap"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-knowledge-reason-overlap:flow:FR-03",
+      "tests": [
+        "test/knowledge-inject-ranking.test.mjs",
+        "test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-reason-overlap"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-knowledge-reason-overlap:flow:FR-04",
+      "tests": [
+        "test/knowledge-inject-ranking.test.mjs",
+        "test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-reason-overlap"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-knowledge-reason-overlap:flow:FR-05",
+      "tests": [
+        "test/knowledge-inject-ranking.test.mjs",
+        "test/knowledge-reason-overlap.test.mjs「①近义置顶／②主场景不回归／④真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-reason-overlap"
+    }
+  ]
+}

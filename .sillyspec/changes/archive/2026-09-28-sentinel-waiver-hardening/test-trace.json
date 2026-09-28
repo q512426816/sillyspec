@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-sentinel-waiver-hardening",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-sentinel-waiver-hardening:flow:FR-01",
+      "tests": [
+        "test/sentinel-mirror-waiver.test.mjs「⑥ 零提交不豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-sentinel-waiver-hardening"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-sentinel-waiver-hardening:flow:FR-02",
+      "tests": [
+        "test/sentinel-mirror-waiver.test.mjs「⑦ 锚定验证读取器（篡改检出/按无基线从严）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-sentinel-waiver-hardening"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-sentinel-waiver-hardening:flow:FR-03",
+      "tests": [
+        "test/sentinel-mirror-waiver.test.mjs「①②③④」",
+        "test/sentinel-wiring.test.mjs「形态 A/A2/B/B2/C」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-sentinel-waiver-hardening"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-sentinel-waiver-hardening:flow:FR-04",
+      "tests": [
+        "test/sentinel-wiring.test.mjs「① 形态 A/A2」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-sentinel-waiver-hardening"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-sentinel-waiver-hardening:flow:FR-05",
+      "tests": [
+        "test/sentinel-mirror-waiver.test.mjs「⑥⑦」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-sentinel-waiver-hardening"
+    }
+  ]
+}

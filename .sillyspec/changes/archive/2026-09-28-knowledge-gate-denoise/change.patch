@@ -1,0 +1,458 @@
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/flow-state.yaml b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/flow-state.yaml
+new file mode 100644
+index 00000000..99ba908c
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 197678ea3195b88c19a2f719a75e6993fa3dfba8
++updatedAt: '2026-09-28T16:00:58.247Z'
++baseline_sha256: 6fc382b0147b2d1e648edda32c6694d1fadb5e0e1c420c5cf6c35c09d46f2eaf
++
+diff --git a/src/flow.js b/src/flow.js
+index bc45e79b..ea37a982 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -186,9 +186,10 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     }
+     const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
+     const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
+-    // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking：教训型条目 status 多为
+-    // implemented，按状态过滤恰丢最该防的——D-001@v1 枚举开放世界第四次复潮实证）
+-    const rejected = (km.decisionHits || []).filter((h) => h.status === 'rejected' || h.deathPath)
++    // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
++    // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
++    // 蹭进回显是行为实测三例的噪音源，不再注入）
++    const rejected = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+     summary.rejectedDecisions = rejected.length
+     summary.knowledgeEntries = km.matched ? (km.entries || []).length : 0
+     if (rejected.length > 0) {
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 6af048c4..04ea2204 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -338,7 +338,7 @@ export function matchKnowledge(indexDir, taskContext) {
+   const decisionHits = [
+     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
+     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
+-  ]
++  ].map((h) => ({ ...h, score: relScore(h) }))
+ 
+   return { matched: true, entries: matched, report, json, decisionHits }
+ }
+diff --git a/src/run/complete.js b/src/run/complete.js
+index b1b1b5aa..d68f2674 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -468,8 +468,9 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+       } catch { /* 无 local.yaml = 缺省开 */ }
+       if (_kgOn) {
+         let _kgQuery = String(outputText || '')
++        let _dm = ''
+         try {
+-          const _dm = readFileSync(join(specBase, 'changes', changeName, 'decisions.md'), 'utf8')
++          _dm = readFileSync(join(specBase, 'changes', changeName, 'decisions.md'), 'utf8')
+           const _parts = []
+           for (const m of _dm.matchAll(/^##\s+(D-\d+@v\d+):\s*(.+)$/gm)) _parts.push(`${m[1]} ${m[2]}`)
+           for (const m of _dm.matchAll(/^- question:\s*(.+)$/gm)) _parts.push(m[1])
+@@ -479,12 +480,23 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+         if (_kgQuery.trim()) {
+           const { matchKnowledge } = await import('../knowledge-match.js')
+           const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
+-          const _hits = km.decisionHits || []
++          // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
++          // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
++          const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
++          // 已回应不重弹：decisions.md 正文已含「命中 id＋域文件名」共现（小白鼠回应形态
++          // 「unmapped.md D-001@v1」）→ 视为已甄别过，静默；同轮查询串仍含其词面属预期。
++          const _answered = _dm
++            ? (h) => {
++                const _dom = String(h.file || '').replace(/^decisions\//, '').replace(/\.md$/, '')
++                return _dm.includes(h.id) && _dm.includes(_dom)
++              }
++            : () => false
++          const _echoHits = _hits.filter((h) => !_answered(h))
+           const _entries = km.matched ? (km.entries || []) : []
+-          if (_hits.length > 0 || _entries.length > 0) {
++          if (_echoHits.length > 0 || _entries.length > 0) {
+             const { deathPathNote } = await import('../knowledge-match.js')
+             console.warn(`\n⚠️ [knowledge-gate] 方案/决策知识命中（设计时点防复潮提示，warn 不阻断）：`)
+-            for (const h of _hits.slice(0, 5)) {
++            for (const h of _echoHits.slice(0, 5)) {
+               const _note = h.status === 'rejected'
+                 ? ` 否决理由：${h.reason || '（未记录）'}`
+                 : h.deathPath ? ` ⚰️死路注记：${deathPathNote(h.reason)}` : ''
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 2834fadf..b8d621ad 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1296,9 +1296,9 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
+       // 语料；与 execute 分支的 changeName 基底同口径）
+       const decResult = matchKnowledge(decKnowledgeDir, changeName || '')
+-      // 防复潮面 = rejected ∪ 死路注记（2026-09-28-knowledge-inject-ranking 审查 P2 补齐：
+-      // 与 flow.js 注入段/knowledge-gate 同构——教训型条目 status=implemented 不再被状态压制）
+-      const rejectedHits = (decResult.decisionHits || []).filter(h => h.status === 'rejected' || h.deathPath)
++      // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（与 flow 注入段/knowledge-gate 同口径；
++      // score 零 rejected 不弹——2026-09-28-knowledge-gate-denoise）
++      const rejectedHits = (decResult.decisionHits || []).filter(h => h.deathPath || (h.status === 'rejected' && h.score > 0))
+       let decInjected = ''
+       if (rejectedHits.length > 0) {
+         const lines = [
+diff --git a/test/knowledge-gate-denoise.test.mjs b/test/knowledge-gate-denoise.test.mjs
+new file mode 100644
+index 00000000..6940d4e6
+--- /dev/null
++++ b/test/knowledge-gate-denoise.test.mjs
+@@ -0,0 +1,126 @@
++/**
++ * knowledge-gate-denoise.test.mjs — 门回显去重降噪：零分不弹＋已回应不重弹
++ * （2026-09-28-knowledge-gate-denoise）
++ *
++ * 覆盖验收面：
++ *   ① decisionHits 条目带 score（加法字段）；真实库枚举查询下 D-001@v1 置顶且可弹，
++ *      空标题零分 rejected（D-009/010/011）不再满足回显资格；
++ *   ② flowKnowledgeDigest 注入段同口径过滤——D-001 在场、空标题噪音三件套消失；
++ *   ③ 门已回应静默：decisions.md 正文含「命中 id＋域文件名」共现 → 该命中不再回显；
++ *      未回应时照常回显。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { ProgressManager } from '../src/progress.js'
++import { completeStep } from '../src/run/complete.js'
++import { makeRepo, seedStage, runCapturing, cleanup } from './_complete-step-harness.mjs'
++import { matchKnowledge } from '../src/knowledge-match.js'
++import { flowKnowledgeDigest } from '../src/flow.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const REAL_KB = join(REPO_ROOT, '.sillyspec', 'knowledge')
++const CN = '2026-09-01-kgd'
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++/** 造知识库：枚举路由行 → rejected 具名条目 + rejected 空标题条目。 */
++function seedKnowledge(specBase) {
++  const k = join(specBase, 'knowledge')
++  mkdirSync(join(k, 'decisions'), { recursive: true })
++  writeFileSync(join(k, 'INDEX.md'), [
++    '# 知识索引', '',
++    '## Decisions',
++    '- unmapped|枚举|词表 → [决策](decisions/unmapped.md)', '',
++  ].join('\n'))
++  writeFileSync(join(k, 'decisions', 'unmapped.md'), [
++    '# unmapped 域决策', '',
++    '## D-001@v1 枚举开放世界是错误方向',
++    '状态： rejected',
++    '否决理由：不要用枚举定义这个开放世界——机器只锚封闭面', '',
++    '## D-009@v1',
++    '状态： rejected',
++    '否决理由：与需求直接冲突', '',
++  ].join('\n'))
++}
++
++async function seedPlanStep(cwd, specBase) {
++  const pm = new ProgressManager({ specDir: specBase })
++  await pm.init(cwd)
++  await pm.initChange(cwd, CN)
++  const all = ['进度确认', '加载项目上下文', '对话式探索与需求澄清', '提出 2-3 种方案', '分段展示设计', '写设计文档并自审', 'Design Grill 交叉审查', '生成规范文件']
++  const progress = await seedStage(pm, cwd, CN, 'brainstorm',
++    all.map((name, i) => i < 3
++      ? { name, status: 'completed', completedAt: '2026/09/28 10:00:00' }
++      : { name, status: 'pending' }))
++  return { pm, progress }
++}
++
++test('① 真实库：score 字段在场；D-001 置顶可弹，空标题零分 rejected 无回显资格', () => {
++  const km = matchKnowledge(REAL_KB, '方案：用枚举词表扫描开放世界的模糊需求')
++  assert.ok(typeof km.decisionHits[0].score === 'number', 'score 字段在场（加法）')
++  assert.match(km.decisionHits[0].title, /枚举开放世界/, 'D-001 置顶')
++  const echoable = (h) => h.deathPath || (h.status === 'rejected' && h.score > 0)
++  const noise = km.decisionHits.filter((h) => h.id === 'D-009@v1' || h.id === 'D-010@v1' || h.id === 'D-011@v1')
++  assert.ok(noise.length > 0, '空标题噪音条目仍在 API 列表（过滤在消费方）')
++  for (const h of noise) assert.ok(!echoable(h), `${h.id} 零分非死路 → 无回显资格`)
++})
++
++test('② 真实库 digest：D-001 在场、空标题噪音三件套消失', async () => {
++  const cd = mkdtempSync(join(tmpdir(), 'ss-kgd-'))
++  const r = await flowKnowledgeDigest({
++    specBase: join(REPO_ROOT, '.sillyspec'),
++    change: '2026-09-28-kgd', changeDir: cd,
++    input: '方案探索：用枚举词表扫描开放世界形态的需求并自动分类',
++  })
++  const text = r.lines.join('\n')
++  assert.match(text, /D-001@v1 枚举开放世界/, 'D-001 死路注记注入')
++  assert.ok(!/D-009@v1/.test(text) && !/D-010@v1/.test(text) && !/D-011@v1/.test(text),
++    `空标题噪音三件套不应注入（实际：${r.lines.filter(l => /D-0\d+@v1/.test(l)).join(' | ')}）`)
++  rmQuiet(cd)
++})
++
++test('③ 门已回应静默：decisions 正文含 id＋域共现 → 不再回显；未回应照常回显', async () => {
++  // 未回应：D-001 照常弹
++  {
++    const { cwd, specBase } = makeRepo('kgd-echo-')
++    seedKnowledge(specBase)
++    const { pm, progress } = await seedPlanStep(cwd, specBase)
++    writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
++      '# 决策记录（Decisions）', '',
++      '## D-001@v1: 方案引入枚举词表机制',
++      '- question: 需求形态要不要用词表枚举判定？', '',
++    ].join('\n'))
++    const r = await runCapturing(() =>
++      completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
++        changeName: CN, doneAnswer: '代答', printNext: false,
++      }))
++    assert.match(r.stdout, /D-001@v1 枚举开放世界是错误方向/, '未回应 → 照常回显')
++    rmQuiet(cwd)
++  }
++  // 已回应：正文含 unmapped.md D-001@v1 共现 → 静默
++  {
++    const { cwd, specBase } = makeRepo('kgd-mute-')
++    seedKnowledge(specBase)
++    const { pm, progress } = await seedPlanStep(cwd, specBase)
++    writeFileSync(join(specBase, 'changes', CN, 'decisions.md'), [
++      '# 决策记录（Decisions）', '',
++      '## D-001@v1: 方案引入枚举词表机制',
++      '- question: 需求形态要不要用词表枚举判定？',
++      '- answer: knowledge-gate 回应——unmapped.md D-001@v1 已甄别：本方案为零枚举面，不复潮。', '',
++    ].join('\n'))
++    const r = await runCapturing(() =>
++      completeStep(pm, progress, 'brainstorm', cwd, '方案：用枚举词表分类', null, {
++        changeName: CN, doneAnswer: '代答', printNext: false,
++      }))
++    assert.ok(!r.stdout.includes('D-001@v1 枚举开放世界'), `已回应 → 静默（实际：${r.stdout.slice(-300)}）`)
++    rmQuiet(cwd)
++  }
++})
++
++process.on('exit', cleanup)
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/design.md
+similarity index 53%
+rename from .sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
+rename to .sillyspec/changes/2026-09-28-knowledge-gate-denoise/design.md
+index 7535db28..1a1f01fc 100644
+--- a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
++++ b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/design.md
+@@ -1,30 +1,30 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-28T13:26:52.951Z
++created_at: 2026-09-28T16:00:58.225Z
+ ---
+-# 设计记录（Design Record）— 2026-09-28-knowledge-reason-overlap
++# 设计记录（Design Record）— 2026-09-28-knowledge-gate-denoise
+ 
+ > 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
+ > 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
+ 
+ ## 做法概述
+-<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
+ 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+ <!-- MACHINE-DRAFT:design-approach:end -->
+ 
+ <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
+-做法：relScore 维持 id＋标题口径不变，guard 组（rejected∪死路）排序比较器加二级裁决——分数并列时死路注记条目优先。刻意不把理由并进评分文本：Jaccard 比率偏爱短文本（短理由无关条目共享一个 bigram 即得高比率，压过长理由被稀释的相关条目——实测「穷举」查询下 D-009 与需求直接冲突 排到 D-001 前），宁用零分平局先验兜底近义场景。
++做法：① matchKnowledge decisionHits 条目附加 score 字段（relScore 既有计算透出，加法不改排序与既有键）；② 三消费方回显收窄为「deathPath ∪ (rejected 且 score>0)」——flow.js 注入段、run/complete.js 门回显、run/prompt.js {DECISION_HITS} 同口径；③ 门已回应静默——complete.js 升格 decisions.md 全文读取，命中条目若与「自身 id＋域文件名」（如 unmapped.md D-001@v1）在正文共现则不回显（小白鼠回应书写形态即此）。
+ 
+ ## 接口契约
+-<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
+ 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+ <!-- MACHINE-DRAFT:design-contract:end -->
+ 
+ <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
+-接口契约：byOverlapDesc 比较器语义=(重叠率降序,死路优先)；matchKnowledge 对外键与 decisionHits 字段零变化。向后兼容：非 guard 组 deathPath 恒假，二级裁决无效果，行为与上版一致。
++接口契约：decisionHits 条目新增 number 型 score（[0,1] Jaccard 重叠率）；matchKnowledge 其余键与排序语义不变；API 层不过滤（空标题零分条目仍在列表）——过滤职责在消费方回显面；门静默判据为 _dm.includes(id) && _dm.includes(去路径域名) 共现。
+ 
+ ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+-<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
+ 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+ 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+ 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+@@ -32,12 +32,12 @@ created_at: 2026-09-28T13:26:52.951Z
+ <!-- MACHINE-DRAFT:design-boundaries:end -->
+ 
+ <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
+-边界并发四问：不适用：纯排序比较器改动，无状态无 IO 无并发面。
++边界并发四问：不适用：纯过滤与文本共现判断，无状态无 IO 新面（decisions.md 读取本就在场，仅扩大利用）。
+ 
+ ## 风险与死路
+-<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
+ 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+ <!-- MACHINE-DRAFT:design-risks:end -->
+ 
+ <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
+-风险：①平局先验只兜「标题零命中」的近义查询，查询词命中了无关条目标题时先验不介入（主题信号优先于先验，属正确取舍）；②死路条目在文件序靠后时靠先验置顶而非相关度——先验普适于死路类（本变更全链路的立论即死路类是最强防复潮信号）。退役判据=死路先验导致高频无关置顶投诉。
++风险：① 零分过滤可能压掉「标题与查询零重叠但语义相关」的真 rejected——防复潮面本就靠词面路由，标题零重叠即零证据，可接受（宁少勿噪，与狼来了面取舍一致）；② 已回应静默的共现判据有误静默面（正文恰含同 id＋域名但非回应语境）——误静默只损失一次 warn，下轮仍可弹（判据不落盘状态）；③ score 透出让消费方各取所需，若未来消费方误当阈值语义用需文档化。退役判据=噪音投诉消失后若出现「真命中被漏弹」实证，回退为仅死路优先。
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/proposal.md b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/proposal.md
+new file mode 100644
+index 00000000..a2847170
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/proposal.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:00:58.225Z
++---
++# 提案书（Proposal）— 2026-09-28-knowledge-gate-denoise
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:91cd370f75b2a42e9f63bb43bfa289d324e1b1c22ae9fe7b8741482b7f896304:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
++任务原话转写：knowledge-gate 回显去重降噪：零分不弹＋已回应不重弹。
++
++动机：行为实测（三只小白鼠）证实门回显噪音面：① 空标题 rejected 条目靠状态进 guard 组蹭进回显（D-009/010/011 与查询零主题重叠仍弹，小白鼠被迫逐条甄别——D-004 预警的狼来了效应行为级实锤）；② 同一命中每次方案步 --done 重弹，已回应过的照弹不误。
++
++成功标准：
++- matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）；门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 或 deathPath 才弹，空标题零分 rejected 噪音消失
++- 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
++- 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.md D-001@v1 形态）的命中在后续 --done 回显静默；未回应命中照常弹
++- 无命中/全静默时输出与现状一致；既有知识面测试回归全绿，test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:a1044acb9098bdb18d28348c58c2fc0eed7a9a00ec27b81fb64f3e68a8e5e9e0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）
++2. 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 或 deathPath 才弹，空标题零分 rejected 噪音消失
++3. 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
++4. 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.md D-001@v1 形态）的命中在后续 --done 回显静默
++5. 未回应命中照常弹
++6. 无命中
++7. 全静默时输出与现状一致
++8. 既有知识面测试回归全绿，test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:ca09ea270ee5856242746675cf93799656252dba850bce2e3205af305f7089c1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-gate-denoise 留痕重锚 -->
++1. matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）
++2. 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 或 deathPath 才弹，空标题零分 rejected 噪音消失
++3. 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
++4. 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.md D-001@v1 形态）的命中在后续 --done 回显静默
++5. 未回应命中照常弹
++6. 无命中
++7. 全静默时输出与现状一致
++8. 既有知识面测试回归全绿，test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/requirements.md b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/requirements.md
+new file mode 100644
+index 00000000..17133e60
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/requirements.md
+@@ -0,0 +1,74 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:00:58.225Z
++---
++# 需求规格（Requirements）— 2026-09-28-knowledge-gate-denoise
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）
++Given 系统就绪
++When matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）
++Then 行为符合本条标准描述
++
++### FR-02: 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 
++Given 系统就绪
++When 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 或 deathPath 才弹，空标题零分 rejected 
++Then 行为符合本条标准描述
++
++### FR-03: 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
++Given 系统就绪
++When 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
++Then 行为符合本条标准描述
++
++### FR-04: 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.m
++Given 系统就绪
++When 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.md D-001@v1 形态）的命中在后续 --done 回显
++Then 行为符合本条标准描述
++
++### FR-05: 未回应命中照常弹
++Given 系统就绪
++When 未回应命中照常弹
++Then 行为符合本条标准描述
++
++### FR-06: 无命中
++Given 系统就绪
++When 无命中
++Then 行为符合本条标准描述
++
++### FR-07: 全静默时输出与现状一致
++Given 系统就绪
++When 全静默时输出与现状一致
++Then 行为符合本条标准描述
++
++### FR-08: 既有知识面测试回归全绿，test:core 全绿
++Given 测试 相关模块就绪
++When 既有知识面测试回归全绿，test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-gate-denoise.test.mjs「①真实库资格面／②digest 过滤／③已回应静默」＋既有知识面四文件回归（25/25）
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/tasks.md b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/tasks.md
+new file mode 100644
+index 00000000..99478543
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-gate-denoise/tasks.md
+@@ -0,0 +1,19 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:00:58.226Z
++---
++# 任务注册表（Tasks）— 2026-09-28-knowledge-gate-denoise
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）
++- [x] task-02: 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 或 deathPath 才弹…
++- [x] task-03: 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
++- [x] task-04: 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.md D-001@v1 形态）的命中在后续 --done 回显…
++- [x] task-05: 未回应命中照常弹
++- [x] task-06: 无命中
++- [x] task-07: 全静默时输出与现状一致
++- [x] task-08: 既有知识面测试回归全绿，test:core 全绿
++- [x] task-06: score 字段透出＋三消费方零分过滤＋门已回应静默＋降噪测试三件（本变更实际路径）

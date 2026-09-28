@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-knowledge-inject-ranking",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "第三注入点 {DECISION_HITS}（brainstorm Step2）未纳入防复潮面——deathPath 条目在该处仍被状态过滤压制",
+      "evidence": "matchKnowledge 的 decisionHits 消费方共三处，本变更只改了 flow.js 与 complete.js 两处；src/run/prompt.js 的 {DECISION_HITS} 注入仍为 `.filter(h => h.status === 'rejected')`，理由含「死路：」的 implemented 教训条目在此注入点依旧不可见——与本变更动机（教训型条目被状态过滤压制）同类缺陷残留。design 槽1 声明「消费方两处」系不完全枚举。缓解因素：该注入点 taskContext 仅 changeName（如 2026-09-28-knowledge-inject-ranking），中文路由关键词（枚举/词表/开放世界）几乎不会出现在变更名中，实际暴露面窄；且不在 proposal 成功标准声明的两入口范围内（标准只点名 flow start 注入段＋knowledge-gate 回显），不构成验收违约。建议后续小变更补齐或记入知识库待办。",
+      "location": "src/run/prompt.js:1299"
+    },
+    {
+      "severity": "P3",
+      "title": "complete.js 既有注释未随匹配器语义更新，描述已过时",
+      "evidence": "本提交将匹配器 decisionHits 语义改为「rejected∪死路优先＋组内 bigram 重叠降序」，但 knowledge-gate 段落上方注释仍写「decisionHits rejected 优先排序为匹配器既有行为」——与本提交自己引入的新语义相矛盾，误导后续维护者。",
+      "location": "src/run/complete.js:458"
+    },
+    {
+      "severity": "P3",
+      "title": "deathPathNote 只提取首个「死路：」短句——多死路理由的后继死路在回显中不可见",
+      "evidence": "真实库 unmapped.md 多条 design 槽4 收割条目的理由含 2~4 个「死路：」标记（如 unmapped.md:1112 含两个、:1119 含两个），deathPathNote 的正则 /死路[：:]\\s*([^。；;，,\\n]+)/ 只命中第一个。design 槽2 契约措辞（「死路句到首个句读」）覆盖单句形态，多标记形态是未声明的静默截断。回显是短句提示非完整面，可接受，留档知悉。",
+      "location": "src/knowledge-match.js:223"
+    },
+    {
+      "severity": "P3",
+      "title": "提交链存在三个同码 sibling 提交（07cbbe02 / c8cef5ce / 84b3c005），审计锚漂移",
+      "evidence": "tasks.md 声明「三任务证据同源 07cbbe02」，审查指令指向 c8cef5ce，当前 HEAD 为 84b3c005——三者 src/ 与 test/ 五文件逐字节相同（diff 为空），仅变更目录工件（tasks.md/flow-state.yaml）有差，系 amend 链残留。被审查代码面无歧义，但任务注册表引用的哈希不是最终 HEAD，归档审计件留意。",
+      "location": ".sillyspec/changes/2026-09-28-knowledge-inject-ranking/tasks.md:7"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "n/a",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T13:22:46Z"
+}

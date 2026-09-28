@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-knowledge-score-denoise",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-knowledge-score-denoise:flow:FR-01",
+      "tests": [
+        "test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-score-denoise"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-knowledge-score-denoise:flow:FR-02",
+      "tests": [
+        "test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-score-denoise"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-knowledge-score-denoise:flow:FR-03",
+      "tests": [
+        "test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-score-denoise"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-knowledge-score-denoise:flow:FR-04",
+      "tests": [
+        "test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-score-denoise"
+    }
+  ]
+}

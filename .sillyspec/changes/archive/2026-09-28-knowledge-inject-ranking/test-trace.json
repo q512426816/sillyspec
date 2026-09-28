@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-knowledge-inject-ranking",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-knowledge-inject-ranking:flow:FR-01",
+      "tests": [
+        "test/design-knowledge-check.test.mjs「①-b 死路注记回显」",
+        "test/knowledge-inject-ranking.test.mjs「排序与死路面」",
+        "test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-inject-ranking"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-knowledge-inject-ranking:flow:FR-02",
+      "tests": [
+        "test/design-knowledge-check.test.mjs「①-b 死路注记回显」",
+        "test/knowledge-inject-ranking.test.mjs「排序与死路面」",
+        "test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-inject-ranking"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-knowledge-inject-ranking:flow:FR-03",
+      "tests": [
+        "test/design-knowledge-check.test.mjs「①-b 死路注记回显」",
+        "test/knowledge-inject-ranking.test.mjs「排序与死路面」",
+        "test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-inject-ranking"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-knowledge-inject-ranking:flow:FR-04",
+      "tests": [
+        "test/design-knowledge-check.test.mjs「①-b 死路注记回显」",
+        "test/knowledge-inject-ranking.test.mjs「排序与死路面」",
+        "test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-inject-ranking"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-knowledge-inject-ranking:flow:FR-05",
+      "tests": [
+        "test/design-knowledge-check.test.mjs「①-b 死路注记回显」",
+        "test/knowledge-inject-ranking.test.mjs「排序与死路面」",
+        "test/thin-fr-inject-parity.test.mjs「①否决决策命中回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-knowledge-inject-ranking"
+    }
+  ]
+}

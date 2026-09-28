@@ -340,10 +340,20 @@ function extractTestAnchors(content, root, indexRef) {
     const raw = m[0].replace(/^[./\\]+/, '').replace(/\\/g, '/')
     if (!isTestPathToken(raw)) continue
     const winEnd = i + 1 < matches.length ? matches[i + 1].index : content.length
-    const cm = content.slice(m.index + m[0].length, winEnd).match(CASE_ANCHOR_RE)
     const file = resolveTestPathRel(raw, root, indexRef)
-    const anchor = cm ? cm[0].trim().replace(/^>\s*/, ' > ') : ''
-    out.push(file + anchor)
+    // 连续锚段全收（坑 test-trace-tests-glue-bracket-note 边角，2026-09-27 实证：`path「a」「b」`
+    // 只粘首段、「b」静默丢弃）：路径后紧跟的每一段用例锚（四形态任意序列）各产一条
+    // 书写原形条目；无锚产纯路径条目（原行为零变化）。
+    let rest = content.slice(m.index + m[0].length, winEnd)
+    let anchored = false
+    for (;;) {
+      const cm = rest.match(CASE_ANCHOR_RE)
+      if (!cm) break
+      out.push(file + cm[0].trim().replace(/^>\s*/, ' > '))
+      rest = rest.slice(cm[0].length)
+      anchored = true
+    }
+    if (!anchored) out.push(file)
   }
   return [...new Set(out)]
 }

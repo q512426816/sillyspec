@@ -1,0 +1,44 @@
+{
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "P3",
+      "location": "src/run/complete.js:486-493；design.md 槽4 风险②",
+      "title": "「下轮仍可弹」表述不精确——静默由内容派生，内容不变则持续静默",
+      "detail": "design 槽4 风险②称误静默「下轮仍可弹（判据不落盘状态）」。实际 _answered 完全由 decisions.md 内容派生：正文同时含命中 id 与域 token 期间，后续每次 --done 都静默，不存在「下轮自动恢复」机制——只有正文变化（id 或域 token 消失）才恢复。『判据不落盘』只说明无永久压制状态，不说明会自动重弹。后果有界结论仍成立：仅损失一次 warn 面，且 flow digest 注入段与 {DECISION_HITS} 两条注入面不受静默影响，防复潮冗余在场。判可接受，留档措辞勘误。"
+    },
+    {
+      "id": "R2",
+      "severity": "P3",
+      "location": "src/run/complete.js:488-492；.sillyspec/knowledge/decisions/ 域名清单",
+      "title": "误静默实用面比 design 自述更宽——同号局部序号使判据常退化为域 token 单条件",
+      "detail": "变更自身 decisions.md 与知识库同用 D-xxx@vN 变更内局部序号（knowledge-match.js:173-177 自述跨变更同号条目常见、runtime.md 七个 D-001@v1 分属七变更）。变更自身有同号条目时 _dm.includes(h.id) 恒真，判据实际退化为『域 token 是否在正文出现』；真实库域名含 runtime/progress/change/sillyspec 等通用词（本仓 decisions.md 正文常引用 .runtime 路径等），同号＋通用域 token 共现即可误静默真未回应命中。另 _dm.includes('D-001@v1') 对 'D-001@v12' 前缀包含亦成立（子串前缀不精确，极边缘）。缓解面：warn-only 不阻断、双注入面（flow digest/{DECISION_HITS}）不套用静默、local.yaml knowledge-gate 逃生阀在场。判可接受，但该宽度应在后续若出现「真命中被漏弹」实证时按槽4 退役判据回退。"
+    },
+    {
+      "id": "R3",
+      "severity": "P3",
+      "location": "src/knowledge-match.js:250",
+      "title": "matchKnowledge JSDoc 返回类型未补 score 字段——design 风险③自陈的『需文档化』未落地",
+      "detail": "decisionHits 的 JSDoc 形状仍为 { file, id, title, status, reason, revisitWhen }，新增的 number 型 score（[0,1] Jaccard）未载。design 槽2/槽4 风险③自己声明的消费方误用防护（文档化），接口层文档未跟上（deathPath/change 既有未载属历史欠账，但 score 是本刀新增键，应同刀补）。低成本补齐项，不影响行为。"
+    },
+    {
+      "id": "R4",
+      "severity": "P3",
+      "location": "src/run/complete.js:496-510",
+      "title": "decision 命中全静默但 entries 仍命中时，warn 头尾残差——尾行仍指示『须 evidence 回应』",
+      "detail": "当 _echoHits 为空而 km.entries 非空时，warn 块仍打印头行与尾行「须在对应决策的 evidence 回应或说明不复潮」，仅剩知识条目段。entries 回显是既有行为（非本刀引入），但尾行指示在已全回应场景下与「已回应不重弹」精神有残差。无害（warn 级），留观。"
+    }
+  ],
+  "dimensionNotes": {
+    "过滤语义一致性": "三消费方过滤表达式逐字同口径实证：flow.js:192 与 complete.js:485 均为 (h) => h.deathPath || (h.status === 'rejected' && h.score > 0)，prompt.js:1301 同谓词仅箭头风格差异，语义零偏差。API 层确实未过滤：knowledge-match.js:338-341 仅 .map 附加 score，不做条目剔除；prompt.js:1318 runtime decision-hits.json 落盘同样未过滤全量。测试①对真实库断言 D-009/010/011 仍在 decisionHits 列表（noise.length>0）钉住该契约，实跑通过。注意一处文档化的行为收窄：complete.js 门回显收前是全量 decisionHits.slice(0,5)（任意 status 均可弹），本刀后 implemented 非死路条目亦不再进门回显——这是 proposal 标准二「score>0 或 deathPath 才弹」谓词的应有之义，文档与代码一致，非未声明变更。summary.rejectedDecisions 计数随注入收窄同步收窄，消费面在 flow.js 内部闭合，无外部断裂。",
+    "已回应静默正确性": "_answered 判据核验：_dm.includes(h.id) && _dm.includes(_dom)，_dom 由 h.file（INDEX 相对 decisions/<域>.md，parseDecisionEntries 恒定填写）剥前缀后缀而得，无空串退化路径（file 恒非空；纵然空串 includes('') 恒真也只是退化为 id 单条件）。变更自身条目同号不误触：测试③第一块钉住——decisions.md 含自身 ## D-001@v1 条目但无 'unmapped' token 时照常回显，域名共现条件生效。decisions.md 读取失败时 _dm='' → () => false，fail-open 不静默，正确。误静默后果有界判定成立：仅损一次 warn，两条注入面不受静默影响。宽度问题（同号序号＋通用域 token 退化）见 R2，判可接受。",
+    "回归面": "实跑五文件 node --test test/knowledge-gate-denoise.test.mjs test/knowledge-reason-overlap.test.mjs test/knowledge-inject-ranking.test.mjs test/design-knowledge-check.test.mjs test/thin-fr-inject-parity.test.mjs：25/25 全绿（含真实库钉子①②、静默③双块）。实跑 npm run test:core：221/221 全绿（12.1s）。lint 现跑失败：src/verify-postcheck.js export stripNestedTestEnv 零引用——该失败在基线 197678ea 即存在（引入于 43e75370，系其祖先；本 diff 未触及该文件），flow-state.yaml gate_summary 已如实留痕 lint: failed，归因前欠非本刀，不阻断。tasks.md 登记小瑕：行 19 实际路径复用 task-06 编号与行 16 镜像项撞号（两者均已勾、语义可辨），登记卫生级，不影响证据面。",
+    "边界裁决与盲维": "design 槽4 三条风险逐条裁决：① 零分压掉词面零重叠真 rejected——可接受：防复潮路由本就是词面先验（INDEX 关键词路由＋bigram 重叠），标题零重叠即零证据，与「宁少勿噪」取舍一致，且退役判据（真命中漏弹实证→回退仅死路优先）已留痕可执行。② 共现误静默——可接受（后果有界＋双注入面冗余），但措辞与宽度见 R1/R2 勘误。③ score 误用需文档化——可接受但未落地，见 R3。盲维四问『不适用』属实：decisions.md 读取在 197678ea 同 try 块已存在（服务 _kgQuery 拼串），本刀仅扩大利用既有读取，无新状态、无新 IO 面、无跨仓键；并发半写最坏后果为一次 warn 的误弹/误静默，有界。四件套一致性：proposal 八条验收面与 design 三做法、tasks 勾选、交付 diff 逐面对得上；FR-06/FR-07 为机器拆行的退化 GWT（When 子句即结论复述），无独立测试但③静默块实质覆盖『全静默→命中行消失』，thin 档可接受。"
+  },
+  "reviewedAt": "2026-09-28T16:09:22Z",
+  "schemaVersion": 1,
+  "reviewer": "subagent",
+  "change": "2026-09-28-knowledge-gate-denoise",
+  "reviewerNotes": "（主会话勘误：补齐 schemaVersion/reviewer 必填字段——审查结论不变，R1/R3 已修复，R2/R4 留观）"
+}

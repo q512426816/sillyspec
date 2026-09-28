@@ -1,0 +1,1364 @@
+diff --git a/.sillyspec/changes/2026-09-29-knowledge-vector-recall/flow-state.yaml b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/flow-state.yaml
+new file mode 100644
+index 00000000..db001a9b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 504050a701367111126c4b5d1be21a6980ddb895
++updatedAt: '2026-09-28T16:48:52.243Z'
++baseline_sha256: 2e20a83fa6be3290c031989f323602902013076342e6e2ccce5dfaec932f8ad0
++
+diff --git a/src/flow.js b/src/flow.js
+index ea37a982..aad1a554 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -27,7 +27,7 @@
+  */
+ import { existsSync, readFileSync, writeFileSync, readdirSync, appendFileSync } from 'node:fs'
+ import { createHash } from 'node:crypto'
+-import { join, relative } from 'node:path'
++import { join, relative, dirname } from 'node:path'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+@@ -184,8 +184,9 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+         }
+       }
+     }
+-    const { matchKnowledge, deathPathNote } = await import('./knowledge-match.js')
+-    const km = matchKnowledge(knowledgeRoot, `${change}\n${input || ''}`)
++    const { matchKnowledgeHybrid } = await import('./knowledge-vector.js')
++    const { deathPathNote } = await import('./knowledge-match.js')
++    const km = await matchKnowledgeHybrid(knowledgeRoot, `${change}\n${input || ''}`, { cwd: dirname(specBase) })
+     // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（2026-09-28-knowledge-inject-ranking 起 rejected∪死路；
+     // 2026-09-28-knowledge-gate-denoise 收紧：score 零的 rejected 与查询零主题重叠——空标题条目靠状态
+     // 蹭进回显是行为实测三例的噪音源，不再注入）
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index 16216dc2..8c69a575 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -265,14 +265,14 @@ function asciiWordHit(sh, text) {
+ /**
+  * 零命中查询侧词片回退（2026-09-29-decision-route-vocab）：路由行零命中时，只测「查询自己的
+  * 词片」——逐 decisions 域文件数词片在条目文本（标题∪理由）的出现次数，落在「跨条目复现但
+- * 非泛在」窗（count ∈ [2, max(3, 5%·条目数)]）→ 文件级命中（合成路由条目进 entries，CLI
++ * 非泛在」窗（count ∈ [2, max(2, floor(5%·条目数))]）→ 文件级命中（合成路由条目进 entries，CLI
+  * search／digest 知识命中／门条目行三面共享）；条目级命中 = 该文件内含 ≥1 复现词片的条目
+  * （score=复现词片数，消费方 score>0 资格判定兼容）。
+  * 设计依据：入库侧词表派生死于「同窗词片按序截断=抽签」（unmapped n∈[2,3] 窗 1176 个、
+  * 目标词排 759）；查询侧只测自身几十词片，无挑选无 cap。机制词栖息在理由文本（模板标题不
+  * 含词形——Mouse B 实测四查全零的根因）。无可回退返回 null（保持既有零命中行为）。
+  */
+-function fallbackByQueryShingles(indexDir, taskContext) {
++export function fallbackByQueryShingles(indexDir, taskContext) {
+   const shingles = queryShingles(taskContext)
+   if (shingles.length === 0) return null
+   const all = parseDecisionEntries(indexDir)
+@@ -339,7 +339,7 @@ function fallbackByQueryShingles(indexDir, taskContext) {
+  *   命中的 Decisions 路由行所指向 decisions/<域>.md 内的全部 D-xxx@vN 条目，rejected 优先排序；
+  *   无 decisions 库 / 路由行未命中 → decisionHits: []（其余字段行为与现状一致）。
+  */
+-export function matchKnowledge(indexDir, taskContext) {
++export function matchByRouting(indexDir, taskContext) {
+   const indexPath = join(indexDir, 'INDEX.md')
+ 
+   // INDEX.md 不存在
+@@ -370,10 +370,6 @@ export function matchKnowledge(indexDir, taskContext) {
+   })
+ 
+   if (matched.length === 0) {
+-    // 零命中查询侧词片回退（2026-09-29-decision-route-vocab）——机制词不在路由行上时路由恒空
+-    // （Mouse B 实测四查全零）；回退无候选才落到既有零命中行为。
+-    const fb = fallbackByQueryShingles(indexDir, taskContext)
+-    if (fb) return fb
+     return {
+       matched: false,
+       entries: [],
+@@ -433,3 +429,15 @@ export function matchKnowledge(indexDir, taskContext) {
+ 
+   return { matched: true, entries: matched, report, json, decisionHits }
+ }
++
++/**
++ * 同步检索入口（既有行为不变）：路由 tag 命中 →（零命中）本地词片复现回退 → 空。
++ * 异步三层入口（平台向量优先于本地回退）见 knowledge-vector.js matchKnowledgeHybrid
++ * （2026-09-29-knowledge-vector-recall）——同步调用方与既有测试全部走本函数。
++ */
++export function matchKnowledge(indexDir, taskContext) {
++  const r = matchByRouting(indexDir, taskContext)
++  if (r.matched) return r
++  const fb = fallbackByQueryShingles(indexDir, taskContext)
++  return fb || r
++}
+diff --git a/src/knowledge-vector.js b/src/knowledge-vector.js
+new file mode 100644
+index 00000000..fc6d2db3
+--- /dev/null
++++ b/src/knowledge-vector.js
+@@ -0,0 +1,158 @@
++/**
++ * knowledge-vector.js — 平台向量召回层（CLI 侧，2026-09-29-knowledge-vector-recall）
++ *
++ * 检索三层：路由 tag 命中 →（零命中）平台向量召回（本模块，已连接平台时）→ 本地词片
++ * 复现窗口（knowledge-match.js fallbackByQueryShingles）→ 空。
++ *
++ * 原则（用户裁决 2026-09-29）：平台只做语义召回——返回「哪个文件哪个条目」的候选
++ * （spec_path＋anchor＋score）；条目 status/deathPath/回显资格等全部策略面在本地解析
++ * （本地文件是真相源，向量结果不携带策略语义）。CLI 本地零模型约束不变。
++ *
++ * 端点契约（SillyHub 侧实现规格，测试夹具按此 mock）：
++ *   POST {platform.url}/api/spec/knowledge/vector-search
++ *   Headers: Authorization: Bearer <token>; Content-Type: application/json
++ *   Body:    { "query": "<检索文本>", "limit": 10 }
++ *   200 →    { "ok": true, "results": [
++ *              { "spec_path": "knowledge/decisions/unmapped.md", "anchor": "D-001@v1",
++ *                "change": "2026-09-26-thin-agent-tasks", "score": 0.83 } ] }
++ *   anchor = 决策条目 id（## D-xxx@vN）；change = 条目「变更：」字段——同号条目跨变更常见
++ *   （runtime.md 七个 D-001@v1 先例），change 在场时消歧；缺省时同号条目全量带回（候选诚实）。
++ *
++ * 降级纪律：任何失败（未连接/开关关闭/网络/404/5xx/超时/响应形态不符）静默降级本地层
++ * ——检索是 advisory 面且高频（每方案步 --done），失败刷屏即狼来了；debug 排障可设
++ * SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG=1 打单行stderr。
++ */
++import { readFileSync } from 'fs'
++import { join, dirname } from 'path'
++import { readPlatformConfig } from './sync.js'
++import { matchByRouting, fallbackByQueryShingles, parseDecisionEntries } from './knowledge-match.js'
++
++const VECTOR_TIMEOUT_MS = 3000
++const ENDPOINT_PATH = '/api/spec/knowledge/vector-search'
++
++/** local.yaml knowledge.vector_search 开关（行级扫描 knowledge: 段下 vector_search: off）。 */
++function vectorSwitchFromLocalYaml(cwd) {
++  try {
++    const lines = readFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'utf-8').split(/\r?\n/)
++    let inKnowledge = false
++    for (const line of lines) {
++      const top = line.match(/^([A-Za-z_][\w-]*):\s*$/)
++      if (top) { inKnowledge = top[1] === 'knowledge'; continue }
++      if (!inKnowledge) continue
++      const kv = line.match(/^\s+vector_search\s*:\s*(\S+)/)
++      if (kv) return kv[1].toLowerCase()
++    }
++  } catch { /* 无 local.yaml = 缺省 auto */ }
++  return 'auto'
++}
++
++function vectorEnabled(cwd) {
++  const env = String(process.env.SILLYSPEC_KNOWLEDGE_VECTOR || '').toLowerCase()
++  if (env === 'off' || env === 'auto') return env === 'auto'
++  return vectorSwitchFromLocalYaml(cwd) !== 'off'
++}
++
++/**
++ * 平台向量召回（纯 HTTP 层）。未连接/失败/形态不符 → null（调用方降级）。
++ * @returns {Promise<{results: Array<{spec_path: string, anchor: string, score: number}>}|null>}
++ */
++export async function platformVectorRecall({ cwd, query, limit = 10, timeoutMs = VECTOR_TIMEOUT_MS }) {
++  const cfg = readPlatformConfig(cwd)
++  if (!cfg || !cfg.url || !cfg.token) return null
++  const q = String(query || '').trim().slice(0, 4000)
++  if (!q) return null
++  try {
++    const res = await fetch(`${String(cfg.url).replace(/\/+$/, '')}${ENDPOINT_PATH}`, {
++      method: 'POST',
++      headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
++      body: JSON.stringify({ query: q, limit }),
++      signal: AbortSignal.timeout(timeoutMs),
++    })
++    if (!res.ok) {
++      if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] ${res.status} ${ENDPOINT_PATH}——降级本地`)
++      return null
++    }
++    const body = await res.json().catch(() => null)
++    const results = body && Array.isArray(body.results)
++      ? body.results.filter((r) => r && typeof r.spec_path === 'string' && typeof r.anchor === 'string')
++      : []
++    return results.length > 0 ? { results } : null
++  } catch {
++    if (process.env.SILLYSPEC_KNOWLEDGE_VECTOR_DEBUG) console.error(`[knowledge-vector] 请求失败/超时——降级本地`)
++    return null
++  }
++}
++
++/** spec_path（knowledge/decisions/x.md）→ INDEX 相对 file（decisions/x.md）。 */
++function specPathToFile(specPath) {
++  return String(specPath).replace(/^knowledge\//, '').replace(/\\/g, '/')
++}
++
++/** 平台候选 → matchKnowledge 同构结果（策略面全本地解析）。 */
++function buildResultFromPlatform(indexDir, pvResults) {
++  const byFile = new Map()
++  for (const r of pvResults) {
++    const file = specPathToFile(r.spec_path)
++    if (!file.startsWith('decisions/')) continue
++    if (!byFile.has(file)) byFile.set(file, [])
++    byFile.get(file).push(r)
++  }
++  if (byFile.size === 0) return null
++  const all = parseDecisionEntries(indexDir)
++  const entries = []
++  const decisionHits = []
++  for (const [file, rs] of byFile) {
++    const wanted = new Set(rs.map((r) => r.anchor))
++    const fileEntries = all.filter((h) => h.file === file && wanted.has(h.id))
++    if (fileEntries.length === 0) continue
++    for (const r of rs) {
++      // 同号消歧：change 在场取精确条目；缺省同号全量带回（跨变更同号是已知形态）
++      const matched = r.change
++        ? fileEntries.filter((e) => e.id === r.anchor && e.change === r.change)
++        : fileEntries.filter((e) => e.id === r.anchor)
++      for (const h of matched.length > 0 ? matched : []) {
++        decisionHits.push({ ...h, score: typeof r.score === 'number' ? r.score : 1 })
++      }
++    }
++    entries.push({
++      category: 'Decisions',
++      keywords: ['vector'],
++      file,
++      anchor: rs[0].anchor,
++      display: `${file}（平台向量召回）`,
++    })
++  }
++  if (decisionHits.length === 0) return null
++  decisionHits.sort((a, b) =>
++    (b.score - a.score) ||
++    (((b.status === 'rejected' || b.deathPath) ? 1 : 0) - ((a.status === 'rejected' || a.deathPath) ? 1 : 0))
++  )
++  return {
++    matched: true,
++    entries: entries.slice(0, 3),
++    report: `Status: platform-vector matched (${decisionHits.length} entries)`,
++    json: {
++      matched: true, entry_count: Math.min(entries.length, 3), vector: true,
++      entries: entries.slice(0, 3).map((e) => ({ file: e.file, anchor: e.anchor, keywords: e.keywords, category: e.category })),
++    },
++    decisionHits,
++  }
++}
++
++/**
++ * 异步三层检索入口（四消费方使用：flow 注入段／complete 门／prompt {DECISION_HITS}／
++ * knowledge search CLI）：路由 → 平台向量（已连接且开关开）→ 本地词片 → 空。
++ * opts.cwd = 仓根（平台配置与 local.yaml 定位用）；缺省由 indexDir 上推两级。
++ */
++export async function matchKnowledgeHybrid(indexDir, taskContext, opts = {}) {
++  const r = matchByRouting(indexDir, taskContext)
++  if (r.matched) return r
++  const cwd = opts.cwd || dirname(dirname(String(indexDir)))
++  if (vectorEnabled(cwd)) {
++    const pv = await platformVectorRecall({ cwd, query: taskContext, limit: opts.limit || 10 })
++    const built = pv ? buildResultFromPlatform(indexDir, pv.results) : null
++    if (built) return built
++  }
++  const fb = fallbackByQueryShingles(indexDir, taskContext)
++  return fb || r
++}
+diff --git a/src/run/complete.js b/src/run/complete.js
+index d68f2674..6df60431 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -478,8 +478,8 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+         } catch { /* 无 decisions.md = 仅 --output */ }
+         _kgQuery = _kgQuery.slice(0, 4000)
+         if (_kgQuery.trim()) {
+-          const { matchKnowledge } = await import('../knowledge-match.js')
+-          const km = matchKnowledge(join(specBase, 'knowledge'), _kgQuery)
++          const { matchKnowledgeHybrid } = await import('../knowledge-vector.js')
++          const km = await matchKnowledgeHybrid(join(specBase, 'knowledge'), _kgQuery, { cwd })
+           // 零分不弹（2026-09-28-knowledge-gate-denoise）：score 零且非死路的 rejected 与查询零主题
+           // 重叠——空标题条目靠状态蹭进回显是行为实测三例的噪音源；死路条目不受限（防复潮先验）。
+           const _hits = (km.decisionHits || []).filter((h) => h.deathPath || (h.status === 'rejected' && h.score > 0))
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index b8d621ad..7cc36441 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -1290,12 +1290,13 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+   // 全降级不抛（异常 → 单行说明）。
+   if (stageName === 'brainstorm' && promptText.includes('{DECISION_HITS}')) {
+     try {
+-      const { matchKnowledge, deathPathNote } = await import('../knowledge-match.js')
++      const { matchKnowledgeHybrid } = await import('../knowledge-vector.js')
++      const { deathPathNote } = await import('../knowledge-match.js')
+       const decSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+       const decKnowledgeDir = join(decSpecBase, 'knowledge')
+       // taskContext：changeName（brainstorm Step2 时 tasks.md 尚未生成，变更名是唯一稳定任务
+       // 语料；与 execute 分支的 changeName 基底同口径）
+-      const decResult = matchKnowledge(decKnowledgeDir, changeName || '')
++      const decResult = await matchKnowledgeHybrid(decKnowledgeDir, changeName || '', { cwd })
+       // 防复潮面 = 死路注记 ∪ 有主题重叠的 rejected（与 flow 注入段/knowledge-gate 同口径；
+       // score 零 rejected 不弹——2026-09-28-knowledge-gate-denoise）
+       const rejectedHits = (decResult.decisionHits || []).filter(h => h.deathPath || (h.status === 'rejected' && h.score > 0))
+diff --git a/src/stage-contract-engine.js b/src/stage-contract-engine.js
+index bf5eb43c..2f928b6e 100644
+--- a/src/stage-contract-engine.js
++++ b/src/stage-contract-engine.js
+@@ -10,7 +10,7 @@
+  *     (plan-postcheck 注入 LF-normalizing reader),引擎拿到什么判什么,不在引擎层二次引入差异。
+  *   - regex 每次 new RegExp:manifest 存 {pattern, flags} 字符串,规避 lastIndex 状态坑
+  *     (旧代码多处 /g 正则跨调用复用需手写 lastIndex=0,是潜在 bug)。
+- *   - 内容规则(literal-any、literal-all、regex、contains-section、field-present、header-field、list-non-empty、
++ *   - 内容规则(literal-any、literal-all、literal-none、regex、contains-section、field-present、header-field、list-non-empty、
+  *     min-lines/no-placeholder-line)在 target 文件不存在时自动 skip(不报错)——存在性由独立的
+  *     file-exists 规则保证,避免"文件缺失"被内容规则重复报。
+  *   - custom kind 引擎 skip(不计 errors/warnings),由调用方 validator 保留判定算法,
+@@ -75,6 +75,9 @@ function dispatchPure(rule, entry) {
+   switch (rule.kind) {
+     case 'literal-any': return (rule.data.literals || []).some(s => scoped.includes(s))
+     case 'literal-all': return (rule.data.literals || []).every(s => scoped.includes(s))
++    // literal-none(2026-09-29-brainstorm-closure-gates):「不得含字面量」判定——与 literal-any 互补,
++    // 服务 must-not-contain 契约(残留标记类:待确认/自审存疑等"在场即未闭合"语义)。
++    case 'literal-none': return !(rule.data.literals || []).some(s => scoped.includes(s))
+     case 'regex': return new RegExp(rule.data.pattern, rule.data.flags || '').test(scoped)
+     case 'contains-section': return hasAllSections(scoped, rule.data.sections || [])
+     case 'no-placeholder-line': return hasNoPlaceholderLine(scoped, rule.data.patterns)
+diff --git a/src/stage-contract-spec.js b/src/stage-contract-spec.js
+index 4f3a1789..cfcbf9f6 100644
+--- a/src/stage-contract-spec.js
++++ b/src/stage-contract-spec.js
+@@ -25,11 +25,12 @@
+  *               (小变更只产 design.md)。判定见 stage-contract-engine.js conditionHolds(fail-safe:ctx 字段缺失时 ne 成立)。
+  *
+  * 纯 kind(stage-contract-engine.dispatchPure 直接判定):
+- *   file-exists / dir-exists / literal-any / literal-all / regex / contains-section /
++ *   file-exists / dir-exists / literal-any / literal-all / literal-none / regex / contains-section /
+  *   no-placeholder-line / field-present / header-field / list-non-empty / min-lines / dir-non-empty
+- *   —— 语义:若 target 文件不存在,内容类规则(literal-any、literal-all、regex、contains-section、…、list-non-empty、
+- *   min-lines)自动 skip(不报错,存在性由独立的 file-exists 规则保证);file-exists/dir-exists
+- *   则是"不存在即 fail"。
++ *   —— 语义:若 target 文件不存在,内容类规则(literal-any、literal-all、literal-none、regex、contains-section、…、
++ *   list-non-empty、min-lines)自动 skip(不报错,存在性由独立的 file-exists 规则保证);file-exists/dir-exists
++ *   则是"不存在即 fail"。literal-none 是「不得含字面量」判定(2026-09-29-brainstorm-closure-gates),
++ *   服务 must-not-contain 契约(残留标记类:在场即未闭合)。
+  *
+  * custom kind(引擎 skip,validator 保留判定算法,但 import 本 manifest 的 data + failMessage):
+  *   见 CUSTOM_KINDS。这些是复杂条件校验(lifecycle 多层豁免 / 入口接线多步对账 / decisions 解析 /
+@@ -44,6 +45,9 @@ const CUSTOM_KINDS = new Set([
+   'entry-point-wiring',      // design.md 入口实例化 → task allowed_paths 覆盖对账(validatePlanOutputs)
+   'id-traceability',         // FR/D 引用追踪(extractIds / warnMissingIds)
+   'decision-blocker',        // decisions.md P0/P1 未决阻塞(parseDecisionRecords)
++  'decision-coverage',       // requirements.md 对 decisions.md 当前版本 D 的覆盖缺口点名(2026-09-29-brainstorm-closure-gates,validateBrainstormOutputs)
++  'doubt-closure',           // design.md「自审存疑：」应用形态标记行的闭合 token 判定(同上)
++  'risk-mitigation',         // design.md 风险登记表 R-xx 行应对策略列空/占位判定(同上)
+   'cross-task-contract',     // task 卡片 provides/expects_from 对账(plan-postcheck)
+   'design-file-coverage',    // design.md 文件清单 vs allowed_paths 覆盖(plan-postcheck)
+   'task-id-continuity',      // task-NN id 连续性
+@@ -151,6 +155,101 @@ const BRAINSTORM_RULES = [
+     spec: 'tasks.md 至少有一个任务列表项(行首 `-` / `*` / `数字.`)',
+     failMessage: 'tasks.md 没有任务列表项',
+   },
++  // ── 闭环收口规则(2026-09-29-brainstorm-closure-gates)────────────────────────────
++  // 判据:开放可以,但每个开口必须能回答「谁、在哪个阶段、以什么证据关掉它」。六类无主开口全部
++  // 补机器收口,severity 全 warning 不阻断(存量零破坏——故障面/退役判据软警告棘轮先例,观测一个
++  // 周期误报率后再评估升 error)。纯 kind 走引擎,复杂判定 custom kind 留 validateBrainstormOutputs。
++  {
++    id: 'brainstorm.proposal.success-criteria',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'literal-any',
++    target: { root: 'change', path: 'proposal.md', scope: 'full' },
++    data: { literals: ['成功标准', 'Success Criteria', 'success criteria'] },
++    condition: { ctxField: 'scale', ne: 'small' },
++    spec: 'proposal.md 含「成功标准 / Success Criteria」章节(字面命中;问题→方案→成功标准主环最后一环——轻量道 flow start --input 对成功标准 0 条 exit 2,完整路径同理)',
++    failMessage: 'proposal.md 缺少「成功标准」章节(需字面命中其一:成功标准 / Success Criteria)——可验证的成功标准是收口验收面,轻量道同款要求',
++  },
++  {
++    id: 'brainstorm.design.no-placeholder',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
++    target: { root: 'change', path: 'design.md', scope: 'full' },
++    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
++    spec: 'design.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等——占位符在场=开口无人认领)',
++    failMessage: 'design.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
++  },
++  {
++    id: 'brainstorm.proposal.no-placeholder',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
++    target: { root: 'change', path: 'proposal.md', scope: 'full' },
++    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
++    condition: { ctxField: 'scale', ne: 'small' },
++    spec: 'proposal.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)',
++    failMessage: 'proposal.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
++  },
++  {
++    id: 'brainstorm.requirements.no-placeholder',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
++    target: { root: 'change', path: 'requirements.md', scope: 'full' },
++    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
++    condition: { ctxField: 'scale', ne: 'small' },
++    spec: 'requirements.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)',
++    failMessage: 'requirements.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
++  },
++  {
++    id: 'brainstorm.tasks.no-placeholder',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'no-placeholder-line',
++    target: { root: 'change', path: 'tasks.md', scope: 'full' },
++    data: { patterns: ['待补充', 'TODO', 'TBD', '未分析', '根据项目情况', '根据实际情况', '按需填写', '待完善', '待设计', '待确认'] },
++    condition: { ctxField: 'scale', ne: 'small' },
++    spec: 'tasks.md 无独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)',
++    failMessage: 'tasks.md 存在独立成行占位词(待补充/TODO/TBD/未分析/待完善/待设计/待确认等)——占位符须替换为真实内容或删除该行',
++  },
++  {
++    id: 'brainstorm.design.pending-confirm-residue',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'literal-none',
++    target: { root: 'change', path: 'design.md', scope: 'full' },
++    data: { literals: ['待确认'] },
++    spec: 'design.md 无「待确认」残留——design-init 决策追踪表预填的「待确认」须逐行补覆盖点后改「已覆盖」(确无决策记录时删除预填行或写「无决策记录」)',
++    failMessage: 'design.md 残留「待确认」——决策追踪表(design-init 预填)须逐行补覆盖点并把「待确认」改为「已覆盖」;确无决策记录时删除预填行或写「无决策记录」',
++  },
++  // decision-coverage(custom):requirements.md 必须引用 decisions.md 全部当前版本 D-xxx@vN
++  // (裸号词边界匹配,D-001 即算引用 D-001@v1,大小写不敏感——与 warnMissingIds 同语义)。
++  // 「剩余风险」行含裸号亦算归属(显式登记为剩余风险=开口有主)。算法留 validateBrainstormOutputs
++  // (复用 extractCurrentDecisionIds),匹配口径/failMessage 从本 manifest 同源。
++  {
++    id: 'brainstorm.requirements.decision-coverage',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'decision-coverage',
++    target: { root: 'change', path: 'requirements.md', scope: 'full' },
++    data: {},
++    spec: 'requirements.md 引用 decisions.md 的全部当前版本 D-xxx@vN(裸号 D-001 词边界匹配即算;未覆盖的在「决策覆盖矩阵」补行,或显式标注为剩余风险——被覆盖或显式登记为剩余风险都算归属,不出现才算开口)',
++    failMessage: 'requirements.md 未引用 decisions.md 中的 ${id} — 在「决策覆盖矩阵」补覆盖行,或在剩余风险中显式标注该决策未覆盖(每个 D 须有归属:被覆盖或显式登记为剩余风险)',
++  },
++  // doubt-closure(custom):「自审存疑：」应用形态标记行须含闭合 token。查带冒号的应用形态而非
++  // 裸词——design-init 自审 checklist 模板行含裸词,裸词判定必常驻误报。算法留 validator。
++  {
++    id: 'brainstorm.design.doubt-closure',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'doubt-closure',
++    target: { root: 'change', path: 'design.md', scope: 'full' },
++    data: {
++      markerPattern: { pattern: '自审存疑\\s*[:：]', flags: '' },
++      closureTokens: ['D-\\d+', 'R-\\d+', '已解决', '已闭合', '已确认', '不适用'],
++    },
++    spec: 'design.md 的「自审存疑：」标记行须含闭合 token(D-xxx/R-xx/已解决/已闭合/已确认)——已解决的改写为结论并引用 D/R,未解决的转 decisions.md D-xxx 或风险登记 R-xx;存疑标记不得原样带进 plan',
++    failMessage: 'design.md 存在未闭合的自审存疑:「${line}」——已解决的改写为结论并引用 D-xxx/R-xx,未解决的转 decisions.md 决策或风险登记 R-xx 后去标记;开放须有归属,存疑标记不得带进 plan',
++  },
++  // risk-mitigation(custom):风险登记表 R-xx 行应对策略列(行末单元格)非空且非占位。design-init
++  // 骨架预填「（待填应对策略）」——骨架行命中即提醒填语义;显式「接受」是合法闭合(接受=归属明确)。
++  {
++    id: 'brainstorm.design.risk-mitigation',
++    stage: 'brainstorm', source: 'validateBrainstormOutputs', severity: 'warning', kind: 'risk-mitigation',
++    target: { root: 'change', path: 'design.md', scope: 'full' },
++    data: {
++      rowPattern: { pattern: '^\\|\\s*(R-\\d+)', flags: '' },
++      placeholderCell: '待填|待补充|待定|TODO|TBD|仅占位|^\\s*[-—–]?\\s*$',
++      acceptToken: '接受',
++    },
++    spec: 'design.md 风险登记表每行 R-xx 的应对策略列(行末单元格)非空且非占位词(待填/待补充/待定/TODO/TBD)——每条风险须有应对;确实接受的风险显式写「接受：<理由>」(接受也是闭合),不得留空/占位',
++    failMessage: 'design.md 风险登记 ${id} 的应对策略列为空/占位——每条风险须有应对策略;确实接受的风险显式写「接受：<理由>」,不得留空或占位(风险无应对=开口无归属)',
++  },
+   // lifecycle(custom kind):design.md 命中生命周期关键词时必须含契约表或紧邻豁免。判定算法留 validator
+   // (trigger/exemption/table 三段短路),data + failMessage/exemptionPassedMessage 从本 manifest 同源。
+   {
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index f643e262..62836111 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -411,6 +411,37 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
+         )
+       }
+     }
++
++    // ── 闭环收口 custom 判定（2026-09-29-brainstorm-closure-gates）──
++    // doubt-closure：「自审存疑：」应用形态行须含闭合 token——只查带冒号的应用形态，裸词
++    // 判定会撞 design-init 自审 checklist 模板行（含裸词）常驻误报。
++    {
++      const doubtRule = getRule('brainstorm.design.doubt-closure')
++      const markerRe = new RegExp(doubtRule.data.markerPattern.pattern, doubtRule.data.markerPattern.flags)
++      const closureRe = new RegExp(doubtRule.data.closureTokens.join('|'), 'i')
++      for (const line of content.split(/\r?\n/)) {
++        if (!markerRe.test(line) || closureRe.test(line)) continue
++        warnings.push(doubtRule.failMessage.replaceAll('${line}', line.trim().slice(0, 60)))
++      }
++    }
++    // risk-mitigation：风险登记表 R-xx 行的应对策略列（行末单元格）非空且非占位——design-init
++    // 骨架预填「（待填应对策略）」命中即提醒填语义；「接受」显式接受是合法闭合（归属明确）。
++    {
++      const riskRule = getRule('brainstorm.design.risk-mitigation')
++      const rowRe = new RegExp(riskRule.data.rowPattern.pattern, riskRule.data.rowPattern.flags)
++      const cellPlaceholderRe = new RegExp(riskRule.data.placeholderCell, 'i')
++      for (const line of content.split(/\r?\n/)) {
++        const rowMatch = line.match(rowRe)
++        if (!rowMatch) continue
++        let cells = line.split('|').slice(1).map(c => c.trim())
++        if (cells.length > 0 && cells[cells.length - 1] === '' && line.trimEnd().endsWith('|')) cells.pop()
++        if (cells.length < 2) continue // 行形态不完整（仅编号列）——表结构问题交 Grill 审查，不在此硬判
++        const lastCell = cells[cells.length - 1].replace(/^[（(]/, '').replace(/[）)]$/, '').trim()
++        if (cellPlaceholderRe.test(lastCell)) {
++          warnings.push(riskRule.failMessage.replaceAll('${id}', rowMatch[1]))
++        }
++      }
++    }
+   }
+ 
+   const decisionsFile = join(changeDir, 'decisions.md')
+@@ -425,10 +456,22 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
+       warnings.push('decisions.md 存在但没有当前版本 D-xxx@vN 决策 ID')
+     } else {
+       const design = readIfExists(join(changeDir, 'design.md'))
+-      const requirements = readIfExists(join(changeDir, 'requirements.md'))
+-      const tasks = readIfExists(join(changeDir, 'tasks.md'))
+-      // decision 的天然引用落点是 design.md；requirements（需求按 FR 组织）与
+-      // tasks（骨架，待 plan 展开）不强求逐条引用每个架构决策，否则批量误报。
++      // requirements 的 D 覆盖点名（2026-09-29-brainstorm-closure-gates）：prompt 一直要求
++      // 「requirements.md 必须引用全部当前版本 D-xxx@vN，未覆盖的标注为剩余风险」，机器面原只盯
++      // design.md——闭环收口补齐：裸号词边界匹配（同 warnMissingIds 语义），裸号出现在决策覆盖
++      // 矩阵或「剩余风险」行都算归属（覆盖或显式登记=开口有主），不出现才点名。tasks 仍不强求
++      // （骨架，plan 阶段展开——plan --done 的 id-traceability 已覆盖 plan.md 侧）。
++      const requirementsForCoverage = readIfExists(join(changeDir, 'requirements.md'))
++      if (requirementsForCoverage) {
++        const reqUpper = requirementsForCoverage.toUpperCase()
++        const coverageFail = getRule('brainstorm.requirements.decision-coverage').failMessage
++        for (const id of decisionIds) {
++          const base = id.replace(/@V\d+$/, '')
++          if (!new RegExp(`\\b${base}\\b`).test(reqUpper)) {
++            warnings.push(coverageFail.replaceAll('${id}', id))
++          }
++        }
++      }
+       warnMissingIds(warnings, decisionIds, design, 'design.md', 'decisions.md')
+     }
+     // 故障面/退役判据软警告（FR-01，2026-09-15-tax-governance）：architecture+accepted 缺字段
+diff --git a/src/stages/knowledge.js b/src/stages/knowledge.js
+index 967e8961..6cccab20 100644
+--- a/src/stages/knowledge.js
++++ b/src/stages/knowledge.js
+@@ -19,7 +19,8 @@
+ import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from 'fs'
+ import { join, basename } from 'path'
+ import { writeAtomicSync } from '../fs-atomic.js'
+-import { parseKnowledgeIndex, matchKnowledge } from '../knowledge-match.js'
++import { parseKnowledgeIndex } from '../knowledge-match.js'
++import { matchKnowledgeHybrid } from '../knowledge-vector.js'
+ 
+ // ── 工具函数 ──
+ 
+@@ -106,8 +107,8 @@ export async function cmdSearch(dir, args, opts = {}) {
+     return
+   }
+ 
+-  // 复用 knowledge-match 引擎
+-  const result = matchKnowledge(knowledgeDir, query)
++  // 复用 knowledge-match 引擎（三层 hybrid：路由→平台向量→本地词片，2026-09-29-knowledge-vector-recall）
++  const result = await matchKnowledgeHybrid(knowledgeDir, query, { cwd: dir })
+ 
+   if (!result.matched) {
+     output(true, { query, matches: [] })
+diff --git a/test/brainstorm-closure-gates.test.mjs b/test/brainstorm-closure-gates.test.mjs
+new file mode 100644
+index 00000000..710c9305
+--- /dev/null
++++ b/test/brainstorm-closure-gates.test.mjs
+@@ -0,0 +1,292 @@
++/**
++ * brainstorm 闭环收口门测试（2026-09-29-brainstorm-closure-gates）
++ *
++ * 判据：开放可以，但每个开口必须能回答「谁、在哪个阶段、以什么证据关掉它」。
++ * 两层验证：
++ *  - 纯 kind 规则经 evaluateRules mock-io 单元测试（literal-none 新 kind / success-criteria /
++ *    no-placeholder-line 接线 / pending-confirm-residue）
++ *  - custom kind 判定经 runValidators('brainstorm') 真文件测试（decision-coverage /
++ *    doubt-closure / risk-mitigation），含「完整合规变更 0 error 0 warning」反误报锚。
++ */
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { evaluateRules } from '../src/stage-contract-engine.js'
++import { runValidators } from '../src/stage-contract.js'
++
++let passed = 0
++let failed = 0
++function assert(cond, msg) {
++  if (cond) { console.log(`✅ ${msg}`); passed++ }
++  else { console.error(`❌ ${msg}`); failed++ }
++}
++
++const CD = '/fake/change'
++
++// helper：mock io（不碰 fs，纯单元）——同 stage-contract-spec.test.mjs 模式
++function makeCtx(files = {}) {
++  const ctx = { changeDir: CD }
++  const norm = (p) => String(p).replace(/\\/g, '/')
++  const io = {
++    readFile: (p) => { const f = files[norm(p)]; return f != null ? { exists: true, content: f } : { exists: false, content: '' } },
++    readDir: () => ({ exists: false, files: [] }),
++  }
++  return { ctx, io }
++}
++
++// 合规基线四件套（纯 kind 层不触发任何 warning 的底稿，各用例按需破坏一项）
++const CLEAN_DESIGN = [
++  '# 设计文档（Design）— 测试',
++  '## 文件变更清单', '', '| 操作 | 文件路径 | 说明 |', '|---|---|---|', '| 修改 | src/a.js | 新增方法 |', '',
++  '## 风险登记', '', '| 编号 | 风险 | 等级 | 应对策略 |', '|---|---|---|---|',
++  '| R-01 | 缓存击穿 | P1 | 空对象兜底＋短 TTL |',
++  '| R-02 | 文案措辞争议 | P2 | 接受：低风险不改 |', '',
++  '## 决策追踪', '', '| 决策 | 覆盖点 | 状态 |', '|---|---|---|', '| D-001@v1 | FR-01 §3 | 已覆盖 |', '',
++  '## 自审', '', '- 章节齐全', '- frontmatter 字段齐全', '',
++].join('\n')
++const CLEAN_PROPOSAL = '# 提案书（Proposal）— 测试\n## 动机\n修复问题 X\n## 变更范围\nsrc/a.js\n## 不在范围内\n不做 Y\n## 成功标准（可验证）\n1. 测试全绿\n'
++const CLEAN_REQUIREMENTS = '# 需求规格（Requirements）— 测试\n### FR-01: 某需求\nGiven 就绪\nWhen 行为\nThen 结果\n'
++const CLEAN_TASKS = '# 任务清单（Tasks）— 测试\n- task-01: 实现某需求\n'
++
++console.log('=== ① literal-none 纯 kind 引擎判定（新 kind） ===')
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: CLEAN_DESIGN,
++    [`${CD}/proposal.md`]: CLEAN_PROPOSAL,
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: CLEAN_TASKS,
++  })
++  const r = evaluateRules('brainstorm', ctx, io)
++  assert(!r.warnings.some(w => w.includes('待确认')), 'design 无待确认 → literal-none 通过')
++  assert(r.applied.includes('brainstorm.design.pending-confirm-residue'), 'pending-confirm-residue 规则被引擎应用')
++}
++{
++  const designWithResidue = CLEAN_DESIGN.replace('| D-001@v1 | FR-01 §3 | 已覆盖 |', '| D-001@v1 | FR-01 §3 | 待确认 |')
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: designWithResidue,
++    [`${CD}/proposal.md`]: CLEAN_PROPOSAL,
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: CLEAN_TASKS,
++  })
++  const r = evaluateRules('brainstorm', ctx, io)
++  assert(r.warnings.some(w => w.includes('残留「待确认」')), '决策追踪表待确认残留 → warning（表格单元格也命中）')
++  assert(r.warnings.some(w => w.includes('已覆盖')), 'warning 文案含出路（改「已覆盖」）')
++}
++
++console.log('\n=== ② proposal 成功标准（FR-01） ===')
++{
++  const noCriteria = CLEAN_PROPOSAL.replace('## 成功标准（可验证）\n1. 测试全绿\n', '')
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: CLEAN_DESIGN,
++    [`${CD}/proposal.md`]: noCriteria,
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: CLEAN_TASKS,
++  })
++  const r = evaluateRules('brainstorm', ctx, io)
++  assert(r.warnings.some(w => w.includes('成功标准')), 'proposal 缺成功标准章节 → warning')
++  assert(r.errors.length === 0, 'warning 级不阻断（0 error）')
++}
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: CLEAN_DESIGN,
++    [`${CD}/proposal.md`]: CLEAN_PROPOSAL.replace('## 成功标准（可验证）', '## Success Criteria'),
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: CLEAN_TASKS,
++  })
++  const r = evaluateRules('brainstorm', ctx, io)
++  assert(!r.warnings.some(w => w.includes('成功标准')), '英文 Success Criteria 亦字面命中 → 无 warning')
++}
++{
++  // scale=small：proposal 豁免（condition ne 'small' 不成立 → 规则跳过）
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: CLEAN_DESIGN,
++    [`${CD}/proposal.md`]: '# P\n## 不在范围内\n', // 无成功标准
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: CLEAN_TASKS,
++  })
++  const r = evaluateRules('brainstorm', { ...ctx, scale: 'small' }, io)
++  assert(!r.warnings.some(w => w.includes('成功标准')), 'scale=small → success-criteria 跳过（小变更只产 design.md）')
++  assert(r.skipped.includes('brainstorm.proposal.success-criteria'), 'success-criteria 计入 skipped 清单')
++}
++
++console.log('\n=== ③ no-placeholder-line 四文件接线（FR-05） ===')
++{
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: CLEAN_DESIGN,
++    [`${CD}/proposal.md`]: CLEAN_PROPOSAL,
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: '# T\n- task-01: x\nTODO\n- 待完善\n正文含 TODO 字样但非独立成行\n',
++  })
++  const r = evaluateRules('brainstorm', ctx, io)
++  const placeholderWarnings = r.warnings.filter(w => w.includes('独立成行占位词'))
++  assert(placeholderWarnings.length === 1, `tasks.md 独立成行 TODO/待完善 → 恰 1 条该文件 warning（实际 ${placeholderWarnings.length}）`)
++  assert(placeholderWarnings[0].includes('tasks.md'), 'warning 文案点名 tasks.md（${path} 替换）')
++}
++{
++  // 正文内嵌 TODO（非独立成行）不误报；design.md 独立成行占位 → 报
++  const { ctx, io } = makeCtx({
++    [`${CD}/design.md`]: CLEAN_DESIGN + '\n待设计\n',
++    [`${CD}/proposal.md`]: CLEAN_PROPOSAL + '\n说明：此处 TODO 指历史遗留说明文字，非占位。\n',
++    [`${CD}/requirements.md`]: CLEAN_REQUIREMENTS,
++    [`${CD}/tasks.md`]: CLEAN_TASKS,
++  })
++  const r = evaluateRules('brainstorm', ctx, io)
++  const ph = r.warnings.filter(w => w.includes('独立成行占位词'))
++  assert(ph.length === 1 && ph[0].includes('design.md'), 'design 独立成行「待设计」→ warning；proposal 正文内嵌 TODO 不报')
++}
++
++console.log('\n=== ④ runValidators 真文件：完整合规变更 0 error 0 warning（反误报锚） ===')
++const tmpRoots = []
++function makeTmpChange(name) {
++  const tmp = mkdtempSync(join(tmpdir(), 'bcg-'))
++  tmpRoots.push(tmp)
++  const changesDir = join(tmp, '.sillyspec', 'changes', name)
++  mkdirSync(changesDir, { recursive: true })
++  return { tmp, changeDir: changesDir }
++}
++{
++  const { tmp, changeDir } = makeTmpChange('2026-09-29-clean-change')
++  writeFileSync(join(changeDir, 'design.md'), CLEAN_DESIGN)
++  writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++  writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS)
++  writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++  const r = runValidators('brainstorm', tmp, '2026-09-29-clean-change', { specRoot: join(tmp, '.sillyspec') })
++  assert(r.ok === true, '完整合规 → ok=true')
++  assert(r.errors.length === 0, `完整合规 → 0 error（实际 ${JSON.stringify(r.errors)}）`)
++  assert(r.warnings.length === 0, `完整合规 → 0 warning（实际 ${JSON.stringify(r.warnings)}）`)
++}
++
++console.log('\n=== ⑤ decision-coverage：requirements 的 D 覆盖点名（FR-02） ===')
++{
++  const DECISIONS = [
++    '# 决策记录（Decisions）',
++    '## D-001@v1: 术语裁定',
++    '- type: term', '- priority: P1', '- status: accepted', '- source: user',
++    '- question: 实体叫什么', '- answer: 叫 X', '- normalized_requirement: 统一用 X',
++    '- impacts: [FR-01]', '- evidence: src/a.js:1',
++    '## D-002@v1: 边界裁定',
++    '- type: boundary', '- priority: P1', '- status: accepted', '- source: user',
++    '- question: 失败怎么处理', '- answer: 降级', '- normalized_requirement: 失败返回降级数据',
++    '- impacts: [FR-01]', '- evidence: src/a.js:2',
++  ].join('\n')
++  // 用例 a：requirements 只引 D-001 → 仅点名 D-002（design 决策追踪含 D-001/D-002 两行，
++  // 隔离存量 design id-traceability——它对缺失行同样点名，属既有行为不在本测面）
++  {
++    const designBoth = CLEAN_DESIGN.replace(
++      '| D-001@v1 | FR-01 §3 | 已覆盖 |',
++      '| D-001@v1 | FR-01 §3 | 已覆盖 |\n| D-002@v1 | FR-01 §4 | 已覆盖 |',
++    )
++    const { tmp, changeDir } = makeTmpChange('2026-09-29-coverage-gap')
++    writeFileSync(join(changeDir, 'design.md'), designBoth)
++    writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++    writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS + '\n覆盖决策：D-001\n')
++    writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++    writeFileSync(join(changeDir, 'decisions.md'), DECISIONS)
++    const r = runValidators('brainstorm', tmp, '2026-09-29-coverage-gap', { specRoot: join(tmp, '.sillyspec') })
++    const cov = r.warnings.filter(w => w.includes('未引用 decisions.md 中的'))
++    assert(cov.length === 1 && cov[0].includes('D-002@V1'), `只引 D-001 → 仅点名 D-002（实际 ${JSON.stringify(cov)}）`)
++    assert(!cov.some(w => w.includes('D-001')), 'D-001 已引用不点名')
++    assert(cov[0].includes('决策覆盖矩阵') || cov[0].includes('剩余风险'), '文案含闭环出路（覆盖矩阵/剩余风险）')
++  }
++  // 用例 b：剩余风险行含裸号 D-002 → 显式登记算归属，不点名
++  {
++    const designBoth = CLEAN_DESIGN.replace(
++      '| D-001@v1 | FR-01 §3 | 已覆盖 |',
++      '| D-001@v1 | FR-01 §3 | 已覆盖 |\n| D-002@v1 | 剩余风险 | 已覆盖 |',
++    )
++    const { tmp, changeDir } = makeTmpChange('2026-09-29-coverage-risk')
++    writeFileSync(join(changeDir, 'design.md'), designBoth)
++    writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++    writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS + '\n覆盖决策：D-001\n剩余风险：D-002 边界裁定暂不承接，显式登记\n')
++    writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++    writeFileSync(join(changeDir, 'decisions.md'), DECISIONS)
++    const r = runValidators('brainstorm', tmp, '2026-09-29-coverage-risk', { specRoot: join(tmp, '.sillyspec') })
++    assert(!r.warnings.some(w => w.includes('未引用 decisions.md 中的')), '剩余风险行含裸号 D-002 → 算归属不点名')
++  }
++}
++
++console.log('\n=== ⑥ doubt-closure：自审存疑应用形态闭合判定（FR-03） ===')
++{
++  const { tmp, changeDir } = makeTmpChange('2026-09-29-doubt-open')
++  writeFileSync(join(changeDir, 'design.md'), CLEAN_DESIGN + '\n⚠️ 自审存疑：缓存 TTL 取值未定\n')
++  writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++  writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS)
++  writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++  const r = runValidators('brainstorm', tmp, '2026-09-29-doubt-open', { specRoot: join(tmp, '.sillyspec') })
++  const doubt = r.warnings.filter(w => w.includes('未闭合的自审存疑'))
++  assert(doubt.length === 1, '自审存疑：无闭合 token → warning')
++  assert(doubt[0].includes('缓存 TTL'), 'warning 含存疑行摘要（${line} 替换）')
++  assert(doubt[0].includes('D-xxx') || doubt[0].includes('R-xx'), '文案含出路（转 D-xxx/R-xx）')
++}
++{
++  const closedDesign = CLEAN_DESIGN + [
++    '', '⚠️ 自审存疑：缓存 TTL 取值未定（已解决，见 D-001@v1）',
++    '⚠️ 自审存疑：并发面另记 R-01', '不确定的问题标注「⚠️ 自审存疑」', // checklist 模板行（裸词无冒号应用形态）
++  ].join('\n')
++  const { tmp, changeDir } = makeTmpChange('2026-09-29-doubt-closed')
++  writeFileSync(join(changeDir, 'design.md'), closedDesign)
++  writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++  writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS)
++  writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++  const r = runValidators('brainstorm', tmp, '2026-09-29-doubt-closed', { specRoot: join(tmp, '.sillyspec') })
++  assert(!r.warnings.some(w => w.includes('未闭合的自审存疑')), '含闭合 token（D-xxx/R-xx）不报；checklist 裸词模板行不误报')
++}
++
++console.log('\n=== ⑦ risk-mitigation：风险应对策略列判定（FR-04） ===')
++{
++  const { tmp, changeDir } = makeTmpChange('2026-09-29-risk-open')
++  const skeletonDesign = CLEAN_DESIGN.replace('| R-01 | 缓存击穿 | P1 | 空对象兜底＋短 TTL |', '| R-01 | （待填风险） | P1 | （待填应对策略） |')
++    .replace('| R-02 | 文案措辞争议 | P2 | 接受：低风险不改 |', '| R-02 | 某风险 | P2 |  |')
++  writeFileSync(join(changeDir, 'design.md'), skeletonDesign)
++  writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++  writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS)
++  writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++  const r = runValidators('brainstorm', tmp, '2026-09-29-risk-open', { specRoot: join(tmp, '.sillyspec') })
++  const risk = r.warnings.filter(w => w.includes('应对策略列为空/占位'))
++  assert(risk.length === 2, `design-init 骨架待填行＋空 cell 行 → 2 条 warning（实际 ${risk.length}）`)
++  assert(risk.some(w => w.includes('R-01')) && risk.some(w => w.includes('R-02')), '逐行点名 R-01/R-02')
++  assert(risk.every(w => w.includes('接受：')), '文案含「接受：」显式接受出路')
++}
++{
++  // 已填应对＋显式接受 → 零报（CLEAN 基线已含，单独锚定语义）
++  const { tmp, changeDir } = makeTmpChange('2026-09-29-risk-ok')
++  writeFileSync(join(changeDir, 'design.md'), CLEAN_DESIGN)
++  writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL)
++  writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS)
++  writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++  const r = runValidators('brainstorm', tmp, '2026-09-29-risk-ok', { specRoot: join(tmp, '.sillyspec') })
++  assert(!r.warnings.some(w => w.includes('应对策略')), '已填应对与「接受：理由」均不报')
++}
++
++console.log('\n=== ⑧ 组合面：六类开口同时在场 → 六类 warning 一次全亮（收口可见性） ===')
++{
++  const { tmp, changeDir } = makeTmpChange('2026-09-29-all-open')
++  writeFileSync(join(changeDir, 'design.md'), CLEAN_DESIGN
++    .replace('| D-001@v1 | FR-01 §3 | 已覆盖 |', '| D-001@v1 | FR-01 §3 | 待确认 |')
++    .replace('| R-01 | 缓存击穿 | P1 | 空对象兜底＋短 TTL |', '| R-01 | （待填风险） | P1 | （待填应对策略） |')
++    + '\n⚠️ 自审存疑：X 未定\n待完善\n')
++  writeFileSync(join(changeDir, 'proposal.md'), CLEAN_PROPOSAL.replace('## 成功标准（可验证）\n1. 测试全绿\n', ''))
++  writeFileSync(join(changeDir, 'requirements.md'), CLEAN_REQUIREMENTS + '\n覆盖决策：D-001\n') // D-002 缺
++  writeFileSync(join(changeDir, 'tasks.md'), CLEAN_TASKS)
++  writeFileSync(join(changeDir, 'decisions.md'), [
++    '# 决策记录（Decisions）',
++    '## D-001@v1: 术语裁定', '- type: term', '- priority: P1', '- status: accepted', '- source: user',
++    '- question: q', '- answer: a', '- normalized_requirement: n', '- impacts: [FR-01]', '- evidence: src/a.js:1',
++    '## D-002@v1: 边界裁定', '- type: boundary', '- priority: P1', '- status: accepted', '- source: user',
++    '- question: q', '- answer: a', '- normalized_requirement: n', '- impacts: [FR-01]', '- evidence: src/a.js:2',
++  ].join('\n'))
++  const r = runValidators('brainstorm', tmp, '2026-09-29-all-open', { specRoot: join(tmp, '.sillyspec') })
++  assert(r.ok === true && r.errors.length === 0, '全开口在场仍 0 error（warning 级不阻断存量）')
++  assert(r.warnings.some(w => w.includes('残留「待确认」')), '组合面：待确认残留在场')
++  assert(r.warnings.some(w => w.includes('未闭合的自审存疑')), '组合面：自审存疑在场')
++  assert(r.warnings.some(w => w.includes('独立成行占位词')), '组合面：占位词在场')
++  assert(r.warnings.some(w => w.includes('成功标准')), '组合面：成功标准缺失在场')
++  assert(r.warnings.some(w => w.includes('D-002@V1')), '组合面：D 覆盖缺口在场')
++  assert(r.warnings.some(w => w.includes('应对策略列为空/占位')), '组合面：风险应对占位在场（R-01 破坏为待填骨架行）')
++}
++
++// 清理
++for (const t of tmpRoots) { try { rmSync(t, { recursive: true, force: true }) } catch { /* Windows 句柄容忍 */ } }
++
++console.log(`\n=== 结果: ${passed} passed, ${failed} failed ===`)
++if (failed > 0) process.exit(1)
+diff --git a/test/decision-route-vocab.test.mjs b/test/decision-route-vocab.test.mjs
+index 8ed3d882..7ba00abd 100644
+--- a/test/decision-route-vocab.test.mjs
++++ b/test/decision-route-vocab.test.mjs
+@@ -5,7 +5,7 @@
+  * 覆盖验收面：
+  *   ① 蒸馏标题必填：裸号条目（## D-xxx@v1 无标题）needsWait 拦下且不写盘；
+  *   ② 查询侧词片回退：路由零命中时，查询词片在域文件条目文本（标题∪理由）出现次数落在
+- *      「跨条目复现但非泛在」窗（[2, max(3, 5%·条目数)]）→ 文件级命中（entries 合成）＋
++ *      「跨条目复现但非泛在」窗（[2, max(2, floor(5%·条目数))]）→ 文件级命中（entries 合成）＋
+  *      条目级命中（score>0）；高频泛在词（方案/需求类）不触发；纯 ASCII 查询不回退；
+  *      查询侧零写入（INDEX/域文件字节不变）；路由命中路径零变化；
+  *   ③ 真实库钉子：「谓词守卫」「顿号拆分」从零命中变为命中 decisions/unmapped.md 且
+diff --git a/test/decisions-lifecycle.test.mjs b/test/decisions-lifecycle.test.mjs
+index 81e8bfa4..78983dc9 100644
+--- a/test/decisions-lifecycle.test.mjs
++++ b/test/decisions-lifecycle.test.mjs
+@@ -143,7 +143,7 @@ describe('FR-03 提炼幂等与版本前进', () => {
+     assert.deepEqual(r1.written, [{ file: 'decisions/core.md', id: 'D-007@v1', action: 'append' }], JSON.stringify(r1.written))
+     const snap1 = snapshot(knowledgeRoot)
+     assert.ok(snap1.has('INDEX.md'), 'INDEX 路由行随首次写入创建')
+-    assert.match(snap1.get('INDEX.md'), /- core\|decision\|决策[^→]*→ \[decisions\/core\.md\]\(decisions\/core\.md\)/, '路由行格式契约（2026-09-29-decision-route-vocab 起关键词带稀有度派生扩展）')
++    assert.ok(snap1.get('INDEX.md').includes('- core|decision|决策 → [decisions/core.md](decisions/core.md)'), '路由行格式契约')
+ 
+     const r2 = distillIntoKnowledge(changeDir, knowledgeRoot, HEAD)
+     assert.equal(r2.written.length, 1)
+diff --git a/test/knowledge-vector-recall.test.mjs b/test/knowledge-vector-recall.test.mjs
+new file mode 100644
+index 00000000..8039dea3
+--- /dev/null
++++ b/test/knowledge-vector-recall.test.mjs
+@@ -0,0 +1,161 @@
++/**
++ * knowledge-vector-recall.test.mjs — 平台向量召回层（2026-09-29-knowledge-vector-recall）
++ *
++ * 六面验收（mock 平台服务器按端点契约实现——同时即 SillyHub 侧实现规格）：
++ *   ① 命中面：路由零命中＋平台返回候选 → hybrid 返回 vector 结果；条目策略面本地解析
++ *      （status/deathPath 来自本地文件，score 来自平台）；同步 matchKnowledge 行为不变；
++ *   ② 404（平台端点未实现=今天的真实状态）→ 静默降级本地词片回退；
++ *   ③ 服务不可达 → 降级；
++ *   ④ 超时 → 降级（短超时实测）；
++ *   ⑤ 路由命中 → 平台不被调用（请求计数钉住）；
++ *   ⑥ 开关关闭（local.yaml knowledge.vector_search: off / env off）→ 不被调用；
++ *   ⑦ 真实库锚点映射：平台返回 unmapped 的枚举/谓词条目锚 → 本地命中对应条目。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { createServer } from 'node:http'
++import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { matchKnowledge, matchByRouting } from '../src/knowledge-match.js'
++import { matchKnowledgeHybrid, platformVectorRecall } from '../src/knowledge-vector.js'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const REAL_SPEC = join(REPO_ROOT, '.sillyspec')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++/** mock 平台服务器：mode = ok | 404 | slow；返回 { server, url, requests }。 */
++function mockPlatform(mode, results) {
++  const requests = []
++  const server = createServer((req, res) => {
++    requests.push(`${req.method} ${req.url}`)
++    if (mode === '404') { res.writeHead(404).end('not found'); return }
++    if (mode === 'slow') { setTimeout(() => res.writeHead(200, { 'content-type': 'application/json' }).end('{}'), 5000); return }
++    let body = ''
++    req.on('data', (c) => { body += c })
++    req.on('end', () => {
++      res.writeHead(200, { 'content-type': 'application/json' })
++      res.end(JSON.stringify({ ok: true, results }))
++    })
++  })
++  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, url: `http://127.0.0.1:${server.address().port}`, requests })))
++}
++
++/** 造临时仓：本地知识库（无路由命中面的词）＋ local.yaml platform 段指向 mock。 */
++function seedRepo(mockUrl) {
++  const root = mkdtempSync(join(tmpdir(), 'ss-vec-'))
++  mkdirSync(join(root, '.sillyspec', 'knowledge', 'decisions'), { recursive: true })
++  writeFileSync(join(root, '.sillyspec', 'knowledge', 'INDEX.md'), [
++    '# Knowledge Index', '', '## Decisions',
++    '- unmapped|decision|决策 → [decisions/unmapped.md](decisions/unmapped.md)', '',
++  ].join('\n'))
++  writeFileSync(join(root, '.sillyspec', 'knowledge', 'decisions', 'unmapped.md'), [
++    '# 决策知识 — unmapped', '',
++    '## D-001@v1 枚举开放世界是错误方向',
++    '状态：implemented',
++    '理由：教训。死路：枚举更多桶——穷举错误不因规模变小而变对，弃。', '',
++    '## D-002@v1 拆分谓词守卫收窄',
++    '状态：implemented',
++    '理由：谓词词表漏词——不拆优于误拆。', '',
++  ].join('\n'))
++  writeFileSync(join(root, '.sillyspec', 'local.yaml'),
++    `project:\n  type: generic\nplatform:\n  url: ${mockUrl}\n  token: test-token\n`)
++  return root
++}
++
++async function withMock(mode, results, fn) {
++  const m = await mockPlatform(mode, results)
++  try { return await fn(m) } finally { m.server.close() }
++}
++
++test('① 命中面：平台候选 → vector 结果＋本地策略面；同步 matchKnowledge 不变', async () => {
++  await withMock('ok', [
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-002@v1', score: 0.91 },
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.42 },
++  ], async (m) => {
++    const root = seedRepo(m.url)
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const q = '方案：顿号行内切分与谓词守卫扩展'   // 路由 tag（unmapped|decision|决策）不含这些词 → 路由零命中
++    assert.equal(matchByRouting(kb, q).matched, false, '前置：路由零命中')
++    const km = await matchKnowledgeHybrid(kb, q, { cwd: root })
++    assert.equal(km.json.vector, true, 'vector 标记')
++    assert.equal(km.decisionHits[0].id, 'D-002@v1', '平台 score 排序生效')
++    assert.equal(km.decisionHits[0].score, 0.91, 'score 来自平台')
++    assert.equal(km.decisionHits[1].deathPath, true, 'deathPath 本地解析（策略面不外包）')
++    // 同步入口行为不变（本地层：不调平台）
++    const syncKm = matchKnowledge(kb, q)
++    assert.notEqual(syncKm.json && syncKm.json.vector, true, '同步入口不带 vector')
++    rmQuiet(root)
++  })
++})
++
++test('②③④ 降级三面：404／不可达／超时 → 本地词片回退，无异常无 vector 标记', async () => {
++  // ② 404（平台端点未实现 = 当前真实平台状态）
++  await withMock('404', [], async (m) => {
++    const root = seedRepo(m.url)
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const km = await matchKnowledgeHybrid(kb, '方案：谓词守卫与拆分补齐', { cwd: root })
++    assert.equal(km.json.vector, undefined, '404 → 非 vector')
++    assert.equal(km.matched, true, '降级到本地词片（谓词 n=2 复现命中）')
++    rmQuiet(root)
++  })
++  // ③ 不可达（占一个不存在端口的 URL）
++  {
++    const root = seedRepo('http://127.0.0.1:9')   // port 9 = discard，连不上
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const km = await matchKnowledgeHybrid(kb, '方案：谓词守卫与拆分补齐', { cwd: root, })
++    assert.equal(km.json.vector, undefined, '不可达 → 降级')
++    rmQuiet(root)
++  }
++  // ④ 超时（slow mock 5s，timeoutMs 200）
++  await withMock('slow', [], async (m) => {
++    const root = seedRepo(m.url)
++    const pv = await platformVectorRecall({ cwd: root, query: '谓词', timeoutMs: 200 })
++    assert.equal(pv, null, '超时 → null（调用方降级）')
++    rmQuiet(root)
++  })
++})
++
++test('⑤⑥ 触发纪律：路由命中不调平台；开关关闭不调平台', async () => {
++  await withMock('ok', [{ spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', score: 0.9 }], async (m) => {
++    // ⑤ 路由命中：查询含 tag「决策」
++    const root = seedRepo(m.url)
++    const kb = join(root, '.sillyspec', 'knowledge')
++    const km = await matchKnowledgeHybrid(kb, '这个决策怎么处理', { cwd: root })
++    assert.equal(km.matched, true, '路由命中')
++    assert.equal(km.json.vector, undefined, '路由路径不带 vector')
++    assert.equal(m.requests.length, 0, '平台零调用')
++    // ⑥ env 关闭 → 零命中也不调平台
++    process.env.SILLYSPEC_KNOWLEDGE_VECTOR = 'off'
++    try {
++      const km2 = await matchKnowledgeHybrid(kb, '方案：顿号行内切分与谓词守卫扩展', { cwd: root })
++      assert.equal(m.requests.length, 0, '关闭时零调用')
++      assert.equal(km2.json.vector, undefined, '关闭时不走 vector')
++    } finally { delete process.env.SILLYSPEC_KNOWLEDGE_VECTOR }
++    rmQuiet(root)
++  })
++})
++
++test('⑦ 真实库锚点映射：平台返回 unmapped 枚举/谓词条目锚 → 本地命中且策略面正确', async () => {
++  await withMock('ok', [
++    { spec_path: 'knowledge/decisions/unmapped.md', anchor: 'D-001@v1', change: '2026-09-26-thin-agent-tasks', score: 0.88 },
++  ], async (m) => {
++    const env = { ...process.env, SILLYHUB_PLATFORM_URL: m.url, SILLYHUB_PLATFORM_TOKEN: 'test-token' }
++    process.env.SILLYHUB_PLATFORM_URL = env.SILLYHUB_PLATFORM_URL
++    process.env.SILLYHUB_PLATFORM_TOKEN = env.SILLYHUB_PLATFORM_TOKEN
++    try {
++      // 真实库路由命中面广（枚举词表查询走路由），用路由零命中查询触发 vector 层：
++      const km = await matchKnowledgeHybrid(join(REAL_SPEC, 'knowledge'), '帮我把行内顿号并列的标准切开', { cwd: REPO_ROOT })
++      assert.equal(km.json.vector, true, '走平台向量层')
++      assert.ok(km.decisionHits.some((h) => /枚举开放世界/.test(h.title || '')), '锚点映射回本地条目')
++      assert.ok(km.decisionHits.every((h) => typeof h.deathPath === 'boolean' || h.status), '策略面字段本地解析在场')
++    } finally {
++      delete process.env.SILLYHUB_PLATFORM_URL
++      delete process.env.SILLYHUB_PLATFORM_TOKEN
++    }
++  })
++})
+diff --git a/test/stage-contract-spec.test.mjs b/test/stage-contract-spec.test.mjs
+index 659061f7..0b103db6 100644
+--- a/test/stage-contract-spec.test.mjs
++++ b/test/stage-contract-spec.test.mjs
+@@ -99,7 +99,8 @@ console.log('\n=== 全齐 → 无 error 无 warning ===')
+ {
+   const { ctx, io } = makeCtx({
+     [`${CD}/design.md`]: '# Design\n## 文件变更清单\n## 风险登记\n## 自审\n',
+-    [`${CD}/proposal.md`]: '# P\n## 不在范围内\n',
++    // 2026-09-29-brainstorm-closure-gates：全齐基线按新契约含成功标准（proposal.success-criteria）
++    [`${CD}/proposal.md`]: '# P\n## 不在范围内\n## 成功标准（可验证）\n1. 测试全绿\n',
+     [`${CD}/requirements.md`]: '# R\nFR-01\n',
+     [`${CD}/tasks.md`]: '- task-01: 实现\n',
+   })
+@@ -118,7 +119,9 @@ console.log('\n=== custom kind 引擎 skip ===')
+ console.log('\n=== 查询 API ===')
+ {
+   const bs = getRulesFor('brainstorm')
+-  assert(bs.length === 11, `brainstorm 11 条规则(10 纯 + lifecycle custom,实际 ${bs.length})`)
++  // 2026-09-29-brainstorm-closure-gates：11 → 20（+7 纯 kind：success-criteria/no-placeholder×4/
++  // pending-confirm-residue；+3 custom：decision-coverage/doubt-closure/risk-mitigation）
++  assert(bs.length === 20, `brainstorm 20 条规则(17 纯 + 3 custom,实际 ${bs.length})`)
+   assert(bs.some(r => r.id === 'brainstorm.design.lifecycle-table' && r.kind === 'lifecycle-exemption'), '含 lifecycle custom 规则')
+   const r = getRule('brainstorm.design.file-change-list')
+   assert(r !== null && r.kind === 'literal-any' && r.severity === 'warning', 'getRule 取到 literal-any/warning')
+@@ -126,7 +129,7 @@ console.log('\n=== 查询 API ===')
+   assert(getRule('nonexistent.id') === null, 'getRule 未知 id → null')
+   // getRulesFor 按 source 过滤
+   const bySource = getRulesFor('brainstorm', { source: 'validateBrainstormOutputs' })
+-  assert(bySource.length === 11, 'getRulesFor source 过滤:brainstorm 全部来自 validateBrainstormOutputs')
++  assert(bySource.length === 20, 'getRulesFor source 过滤:brainstorm 全部来自 validateBrainstormOutputs')
+   assert(getRulesFor('nonexistent').length === 0, '未知 stage → 空数组')
+ }
+ 
+diff --git a/test/stage-contract.test.mjs b/test/stage-contract.test.mjs
+index b68c958f..7f4c5903 100644
+--- a/test/stage-contract.test.mjs
++++ b/test/stage-contract.test.mjs
+@@ -172,12 +172,15 @@ writeFileSync(join(traceDir, 'requirements.md'), '# Requirements\n\n### FR-01: A
+ writeFileSync(join(traceDir, 'tasks.md'), '- [ ] task-01: implement naming (D-001@v1)\n')
+ 
+ const brainstormTrace = runValidators('brainstorm', traceRoot, 'trace')
+-// 修 B：requirements.md / tasks.md 不再强制引用每个 decision（decision 天然落点 design.md）。
+-// 此处 requirements.md 没有 D-001，但 design.md 有，故不应报 requirements 未引用。
+-if (brainstormTrace.ok === true && !brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用'))) {
+-  console.log('✅ brainstorm validator 不再强制 requirements.md 引用 decision（修B：落点 design）')
+-} else {
+-  console.log('❌ brainstorm validator 仍强制 requirements.md 引用 decision', brainstormTrace.warnings)
++// 2026-09-29-brainstorm-closure-gates 取代修 B 的 requirements 侧放宽：brainstorm prompt（生成规范
++// 文件步）一直要求「requirements.md 必须引用全部当前版本 D-xxx@vN；没有覆盖的必须标注为剩余风险」，
++// 修 B 只放开了机器面——事前契约与事后门分叉。现按 prompt 契约收口为 warning（出路：决策覆盖矩阵
++// 补行或标剩余风险）；design.md 落点校验照旧。tasks.md 仍不强求（骨架，plan 阶段展开）。
++if (brainstormTrace.ok === true
++  && brainstormTrace.warnings.some(w => w.includes('requirements.md 未引用') && w.includes('D-001@V1'))) {
++  console.log('✅ brainstorm validator 点名 requirements.md 未引用 D-001（闭环收口：覆盖或标剩余风险二选一）')
++} else {
++  console.log('❌ brainstorm validator 未点名 requirements 的 D 覆盖缺口', brainstormTrace.warnings)
+   failed++
+ }
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/design.md
+similarity index 52%
+rename from .sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
+rename to .sillyspec/changes/2026-09-29-knowledge-vector-recall/design.md
+index 3bf13b86..0642e8bb 100644
+--- a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
++++ b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/design.md
+@@ -1,30 +1,30 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-28T13:39:36.124Z
++created_at: 2026-09-28T16:48:52.215Z
+ ---
+-# 设计记录（Design Record）— 2026-09-28-knowledge-score-denoise
++# 设计记录（Design Record）— 2026-09-29-knowledge-vector-recall
+ 
+ > 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
+ > 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
+ 
+ ## 做法概述
+-<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
+ 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+ <!-- MACHINE-DRAFT:design-approach:end -->
+ 
+ <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
+-做法：matchKnowledge relScore 评分前以 contentChars 剥除数字、标点（\p{P}）与空白——只计内容字符（字母含 CJK）的 bigram 重叠。数字噪音源（变更名日期 2026-09-28 与条目 id D-009@v1 共享 -0/09）在 {DECISION_HITS} 场景（taskContext=纯 ASCII 变更名、无内容词）归零 → 全体零分平局 → 死路先验接管置顶。
++做法：新建 src/knowledge-vector.js——platformVectorRecall（读 readPlatformConfig：env SILLYHUB_PLATFORM_URL/TOKEN → local.yaml platform 段；POST /api/spec/knowledge/vector-search，Bearer 鉴权，3s 超时，任何失败返回 null 静默降级）＋ buildResultFromPlatform（spec_path+anchor(+change) 映射本地条目，策略面全本地解析，同号条目 change 消歧/缺省全量带回）＋ matchKnowledgeHybrid（路由→平台→本地词片三层编排）。knowledge-match.js 拆出 matchByRouting/fallbackByQueryShingles 导出，同步 matchKnowledge 行为零变化。四消费方切 hybrid（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）。
+ 
+ ## 接口契约
+-<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
+ 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+ <!-- MACHINE-DRAFT:design-contract:end -->
+ 
+ <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
+-接口契约：contentChars 为 matchKnowledge 内局部函数（不导出）；frTitleOverlap 语义不动（FR 去重消费方零影响）；decisionHits 键与排序语义（重叠降序、零分平局死路优先）不变。
++接口契约：端点规格见变更目录 platform-endpoint-spec.md（SillyHub 实现用）；hybrid 结果 json.vector=true 可判别来源；decisionHits.score 语义=平台相似度（[0,1]，与路由 Jaccard/回退词片计数并列，消费方只判 >0）；开关 env SILLYSPEC_KNOWLEDGE_VECTOR（off/auto）> local.yaml knowledge.vector_search（缺省 auto）。
+ 
+ ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+-<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
+ 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+ 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+ 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+@@ -32,12 +32,12 @@ created_at: 2026-09-28T13:39:36.124Z
+ <!-- MACHINE-DRAFT:design-boundaries:end -->
+ 
+ <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
+-边界并发四问：不适用：纯函数文本归一＋评分改动，无状态无 IO 无并发面。
++边界并发四问：不适用：HTTP 只读 POST 查询、3s 超时上限、失败降级路径无状态；无写面无并发面；平台配置读取复用 sync.js 既有 resolve 链。
+ 
+ ## 风险与死路
+-<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
+ 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+ <!-- MACHINE-DRAFT:design-risks:end -->
+ 
+ <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
+-风险：① 剥数字后「含版本号/年份的语义查询」（如 查 FR-016 相关决策）丢失数字区分力——决策标题本无数字语义，可接受；② \p{P} 剥除连中英标点（含全角），标题实词不受影响。死路=正则 Unicode 类别写错会静默破坏主场景（首版 \W 误剥 CJK 被测试②当场拦截）——测试钉主场景/近义/ASCII 三面。退役判据=出现依赖数字 bigram 才能区分的相关性场景投诉。
++风险：① 平台未实现期每个零命中查询打一次真实平台 404（静默、debug 可开——流量无害但可观测）；② 向量结果随 embedding 模型升级漂移（非确定性）——advisory 面可接受，确定性底座是本地层；③ 同号锚点缺 change 时全量带回可能放大回显条数——消费方 slice(0,5) 有界。退役判据=平台向量命中长期与主题无关（召回质量投诉）或平台放弃该端点（删本层即回两层）。
+diff --git a/.sillyspec/changes/2026-09-29-knowledge-vector-recall/platform-endpoint-spec.md b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/platform-endpoint-spec.md
+new file mode 100644
+index 00000000..5d0a1439
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/platform-endpoint-spec.md
+@@ -0,0 +1,30 @@
++# 平台向量召回端点规格（SillyHub 仓实现用，2026-09-29-knowledge-vector-recall）
++
++CLI 侧已上线（本变更），端点未实现期间自动 404 降级本地层——平台侧可独立排期。
++
++## 端点
++POST /api/spec/knowledge/vector-search
++Headers: Authorization: Bearer <token>（现行四轨 token 体系）；Content-Type: application/json
++
++## 请求
++{ "query": "<检索文本，≤4000 字符>", "limit": 10 }
++
++## 响应 200
++{ "ok": true, "results": [
++  { "spec_path": "knowledge/decisions/unmapped.md",   // spec 相对路径（CLI 剥 knowledge/ 前缀定位域文件）
++    "anchor": "D-001@v1",                              // 决策条目 id（## D-xxx@vN）
++    "change": "2026-09-26-thin-agent-tasks",           // 条目「变更：」字段——同号条目跨变更常见，消歧用（可选）
++    "score": 0.83 } ] }                                // 相似度（CLI 直接作 decisionHits.score）
++
++## 平台侧三件
++1. pgvector：知识条目向量（建议独立表 spec_knowledge_embeddings：project_id、spec_path、anchor、change、embedding vector(N)，锚=（project_id, spec_path, anchor, change）幂等 upsert）；
++2. ingest：spec-sync 知识文件上传时解析 `## D-xxx@vN` 条目（标题＋理由文本）→ embedding（中文模型选型是平台决策点）→ upsert；删除条目联动清理；
++3. 检索：query embedding → cosine top-K（按 project 隔离）。
++
++## 语义边界（CLI 侧已按此实现）
++- 平台只做召回（哪个文件哪个条目）；status/deathPath/回显资格等策略面 CLI 本地解析（本地文件是真相源）；
++- 超时 3s、任何失败静默降级（检索是 advisory 面高频调用，失败刷屏=狼来了）；
++- 开关：local.yaml knowledge.vector_search: off 或 env SILLYSPEC_KNOWLEDGE_VECTOR=off。
++
++## 参照实现
++mock 平台（契约演示件）：.sillyspec/.runtime/mock-platform.mjs；CLI 测试夹具：test/knowledge-vector-recall.test.mjs
+diff --git a/.sillyspec/changes/2026-09-29-knowledge-vector-recall/proposal.md b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/proposal.md
+new file mode 100644
+index 00000000..15374a94
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/proposal.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:48:52.214Z
++---
++# 提案书（Proposal）— 2026-09-29-knowledge-vector-recall
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:ca56f5d52fa4914e2860b27566e869755efe3db6380028198860bd8e03c775f3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
++任务原话转写：检索三层化：平台向量召回层（已连接平台时），本地零模型约束不变。
++
++动机：词片回退桥不了同义词（查询说拆分、条目写误拆——封闭面匹配原理性缺口）；平台（SillyHub/PG）可承载语义召回，CLI 已有平台连接链路（env SILLYHUB_PLATFORM_URL/TOKEN → local.yaml platform 段）与知识同步。用户裁决：连平台走平台向量查询，否则降级本地这套。
++
++成功标准：
++- 检索分层：路由 tag 命中 →（零命中）平台向量召回 → 本地词片复现窗口 → 空；平台只做语义召回（spec_path+anchor+score 候选），条目 status/deathPath/回显资格全部本地解析（文件是真相源）
++- 端点契约 POST /api/spec/knowledge/vector-search（Bearer token，query+limit → results[{spec_path,anchor,score}]）；平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断；local.yaml knowledge.vector_search: off 可关
++- 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid；既有同步 matchKnowledge 行为零变化（其他调用方不动）
++- mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面 + 真实库锚点映射正确；既有测试与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:e9428f9323e50d2326019976450cf6214ae905f8c494486ad32e5a3729962f02:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
++按成功标准机械推导，共 9 条验收面：
++1. 检索分层：路由 tag 命中 →（零命中）平台向量召回 → 本地词片复现窗口 → 空
++2. 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deathPath/回显资格全部本地解析（文件是真相源）
++3. 端点契约 POST /api/spec/knowledge/vector-search（Bearer token，query+limit → results[{spec_path,anchor,score}]）
++4. 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断
++5. local.yaml knowledge.vector_search: off 可关
++6. 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid
++7. 既有同步 matchKnowledge 行为零变化（其他调用方不动）
++8. mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面 + 真实库锚点映射正确
++9. 既有测试与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:7c8e9406eba587a8b1fb000999421f15f4960e45d4ece92b29981e3907c67c1a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-knowledge-vector-recall 留痕重锚 -->
++1. 检索分层：路由 tag 命中 →（零命中）平台向量召回 → 本地词片复现窗口 → 空
++2. 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deathPath/回显资格全部本地解析（文件是真相源）
++3. 端点契约 POST /api/spec/knowledge/vector-search（Bearer token，query+limit → results[{spec_path,anchor,score}]）
++4. 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断
++5. local.yaml knowledge.vector_search: off 可关
++6. 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid
++7. 既有同步 matchKnowledge 行为零变化（其他调用方不动）
++8. mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面 + 真实库锚点映射正确
++9. 既有测试与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-knowledge-vector-recall/requirements.md b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/requirements.md
+new file mode 100644
+index 00000000..5274ad37
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/requirements.md
+@@ -0,0 +1,82 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:48:52.215Z
++---
++# 需求规格（Requirements）— 2026-09-29-knowledge-vector-recall
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 检索分层：路由 tag 命中 →（零命中）平台向量召回 → 本地词片复现窗口 → 空
++Given 系统就绪
++When 检索分层：路由 tag 命中
++Then （零命中）平台向量召回
++
++### FR-02: 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deat
++Given 系统就绪
++When 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deathPath/回显资格全部本地解析（文件是真相源）
++Then 行为符合本条标准描述
++
++### FR-03: 端点契约 POST /api/spec/knowledge/vector-search（Bearer
++Given 端点 / api 相关模块就绪
++When 端点契约 POST /api/spec/knowledge/vector-search（Bearer token，query+limit
++Then results[{spec_path,anchor,score}]）
++
++### FR-04: 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断
++Given 系统就绪
++When 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断
++Then 行为符合本条标准描述
++
++### FR-05: local.yaml knowledge.vector_search: off 可关
++Given 系统就绪
++When local.yaml knowledge.vector_search: off 可关
++Then 行为符合本条标准描述
++
++### FR-06: 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/kn
++Given 系统就绪
++When 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid
++Then 行为符合本条标准描述
++
++### FR-07: 既有同步 matchKnowledge 行为零变化（其他调用方不动）
++Given 系统就绪
++When 既有同步 matchKnowledge 行为零变化（其他调用方不动）
++Then 行为符合本条标准描述
++
++### FR-08: mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面
++Given 系统就绪
++When mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面 + 真实库锚点映射正确
++Then 行为符合本条标准描述
++
++### FR-09: 既有测试与 test:core 全绿
++Given 测试 相关模块就绪
++When 既有测试与 test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
++
++<!--AGENT:测试绑定FR-09 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-vector-recall.test.mjs「①命中面／②③④降级三面／⑤⑥触发纪律／⑦真实库锚点映射」＋既有检索面全回归（32/32）
+diff --git a/.sillyspec/changes/2026-09-29-knowledge-vector-recall/tasks.md b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/tasks.md
+new file mode 100644
+index 00000000..c41d2638
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-knowledge-vector-recall/tasks.md
+@@ -0,0 +1,20 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T16:48:52.216Z
++---
++# 任务注册表（Tasks）— 2026-09-29-knowledge-vector-recall
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 检索分层：路由 tag 命中 →（零命中）平台向量召回 → 本地词片复现窗口 → 空
++- [x] task-02: 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deathPath/回显资格全部本地解析（文件是真相源）
++- [x] task-03: 端点契约 POST /api/spec/knowledge/vector-search（Bearer token…
++- [x] task-04: 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断
++- [x] task-05: local.yaml knowledge.vector_search: off 可关
++- [x] task-06: 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid
++- [x] task-07: 既有同步 matchKnowledge 行为零变化（其他调用方不动）
++- [x] task-08: mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面 + 真实库锚点映射正确
++- [x] task-09: 既有测试与 test:core 全绿
++- [x] task-06: knowledge-vector.js 三层编排＋knowledge-match 导出拆分＋四消费方切换＋端点规格文档＋mock 六面测试与实弹演示（本变更实际路径）

@@ -1,0 +1,19 @@
+{"ts":1790601310293,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790601310293,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790601310293,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790601310293,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1790601310477,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01、task-02、task-03、task-04、task-05 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790601382449,"kind":"commit","stage":null,"detail":"07cbbe02","provisional":true}
+{"ts":1790601382624,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-01 勾选证据补齐（提交 07cbbe02）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790601408507,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790601408507,"kind":"commit","stage":null,"detail":"c8cef5ce","provisional":true}
+{"ts":1790601408731,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-02 勾选证据补齐（提交 c8cef5ce）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790601408731,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-03 勾选证据补齐（提交 c8cef5ce）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790601431549,"kind":"commit","stage":null,"detail":"84b3c005","provisional":true}
+{"ts":1790601862804,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790601862804,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790601862804,"kind":"task-done","stage":"tasks","detail":"checked 3→4","provisional":true}
+{"ts":1790601863016,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-04 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790601908541,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1790601908541,"kind":"commit","stage":null,"detail":"b7699f92","provisional":true}
+{"ts":1790601908926,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-04 勾选证据补齐（提交 b7699f92）——前拍假勾选嫌疑消解","provisional":true}

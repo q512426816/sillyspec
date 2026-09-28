@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-decision-route-vocab",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-29-decision-route-vocab:flow:FR-01",
+      "tests": [
+        "test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-decision-route-vocab"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-29-decision-route-vocab:flow:FR-02",
+      "tests": [
+        "test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-decision-route-vocab"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-29-decision-route-vocab:flow:FR-03",
+      "tests": [
+        "test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-decision-route-vocab"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-29-decision-route-vocab:flow:FR-04",
+      "tests": [
+        "test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-decision-route-vocab"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-29-decision-route-vocab:flow:FR-05",
+      "tests": [
+        "test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-decision-route-vocab"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-29-decision-route-vocab:flow:FR-06",
+      "tests": [
+        "test/decision-route-vocab.test.mjs「①标题必填／②回退三面／③真实库钉子」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-decision-route-vocab"
+    }
+  ]
+}

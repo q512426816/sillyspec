@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-sentinel-mirror-waiver",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "残留观察（不阻断）：CRLF/空白归一行为缺专用钉子用例——上轮 F3 修复建议中的可选测试未随文档对齐一并补上",
+      "evidence": "grep CRLF/\\r\\n 于 test/sentinel-mirror-waiver.test.mjs 与 sentinel-wiring.test.mjs 零命中；design 槽4 风险③已改为「比对经行分割与 trim 归一——行尾/首尾空白漂移仍判镜像（宽松面有界）」并与 mirroredTaskIds 实现（split(/\\r?\\n/)＋taskLineComparable trim）一致——文档-实现失配本体已收敛，本条仅指行为钉面：未来若有人把归一改回逐字符比较，无测试会红。属完善项非缺陷。",
+      "location": "test/sentinel-mirror-waiver.test.mjs:84"
+    }
+  ],
+  "fixDispositions": {
+    "P1": "已修复——ruleFakeCheck 增 changeDir 第5参（src/watcher.js:517），applySentinelRules:758 实参传入；读路径 join(changeDir,'tasks.md')（:543）；specBase=dirname(dirname(changeDir))＋change=basename(changeDir)（:544），与 computeHindsightMetrics 同推导且 changeDir 确为变更目录（buildSnapshot:236/243 同参用法、主循环:1053 实传）；首版裸键正则死代码已删除。端到端用例 test ⑤（真临时 spec＋真 .runtime 基线 json＋裸键快照＋真 changeDir）三断言齐备：镜像翻格零证据零 fake-check 警告／覆写翻格有警告／changeDir=null 从严告警——实测全绿。",
+    "P2": "已修复——src/run/quick-audit.js:626-636 落地 readBaselineTasks 接线（dynamic import＋readBaselineTasks({specBase, change: changeName})＋baselineTasksMd 传参）与镜像 info 行；specBase/changeName 均在 runQuickTestLintGate 签名作用域（:476）；complete-handlers:1612 实传 changeName 无 skipSentinel，quick --done 道可达该接线；quick 道现状无基线快照→null 走 fail-safe 旧判据，代码注释如实声明（断言-现实失配本体已消）。tasks.md 增 task-04 记录三项修正，勾选面与落盘一致。",
+    "P3": "已修复——design 槽4 风险③改为归一宽松口径（行尾/空白漂移仍判镜像、内容改写即从严），与 mirroredTaskIds 实现逐点一致；上轮 F3 的「文档-实现口径相反」失配收敛（残留：可选的 CRLF 钉子用例未补，见 findings）。"
+  },
+  "testRuns": {
+    "instructedFourFiles": "node --test test/sentinel-mirror-waiver.test.mjs test/sentinel-wiring.test.mjs test/watcher.test.mjs test/watcher-alerts.test.mjs → 38/38 全绿（6+2+20+10，fail 0；上轮同集合 37，本轮 +1 即 P1 端到端用例⑤；协调方预估 53 为高估，全绿无 fail 为实质）",
+    "watcherFamilyRegression": "追加 test/sentinel-rules.test.mjs＋test/watcher-timeline.test.mjs → 56/56 全绿；watcher/sentinel 家族合计 94/94 全绿（P1 改动无新问题）",
+    "core": "npm run test:core → 221/221 全绿（fail 0）"
+  },
+  "dimensionNotes": {
+    "乱序": "n/a——镜像判别为单趟只读的两点快照差分，无乱序敏感面",
+    "并发": "ok——三消费方（flow/watcher/quick-audit）镜像判别均 best-effort try/catch 包裹，读失败/并发写坏 → null/空集按无豁免从严（fail-safe 方向正确）；无共享可变状态（mirroredTaskIds 纯函数）",
+    "切换": "ok——changeDir=null（用例⑤第三断言）与无基线（用例③）均回落旧判据从严；quick 道无基线快照 → readBaselineTasks 恒 null → 旧判据（代码注释如实声明，零改动就绪）；水位回补路径经 applySentinelRules 同参到达",
+    "作用域": "ok——豁免仅限与基线逐字相同的任务行；覆写任务零证据仍拒收有双钉（单测②＋sentinel-wiring 形态 A 真 CLI exit 1）；flow 侧 skipSentinel:true 单判不双判，quick-audit 接线不改变 quick 道现行行为（fail-safe）"
+  },
+  "reviewedAt": "2026-09-28T14:49:05.000Z"
+}

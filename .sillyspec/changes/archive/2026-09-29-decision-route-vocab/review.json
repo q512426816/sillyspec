@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-decision-route-vocab",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "回退窗口口径文档与代码不符：JSDoc/测试头注写 max(3, 5%·n)，代码实为 max(2, 5%·n)",
+      "evidence": "src/knowledge-match.js:268 JSDoc 写「count ∈ [2, max(3, 5%·条目数)]」，test/decision-route-vocab.test.mjs:11 头注同口径；但代码 line 290 为 `Math.max(2, Math.floor(st.entries.length * 0.05))`，design.md/commit message/任务书均为 max(2)。反证：若实现真是 max(3)，种子夹具（2 条目域，ceil=3）中泛在词「方案」n=3 会落入窗口 [2,3]，测试②的泛在词不触发断言将失败——代码确为 max(2)，两处文档面高估了窗口上界。纯文档误差，无行为影响。",
+      "location": "src/knowledge-match.js:268；test/decision-route-vocab.test.mjs:11"
+    },
+    {
+      "severity": "P3",
+      "title": "decisions-lifecycle INDEX 路由行断言被放宽，注释指向已弃特性的未交付行为",
+      "evidence": "test/decisions-lifecycle.test.mjs:146 将精确串断言放宽为正则 `/- core\\|decision\\|决策[^→]*→ …/`，注释称「2026-09-29-decision-route-vocab 起关键词带稀有度派生扩展」——但入库侧派生已被 D-001@v1 否决且 HEAD 无此代码（syncIndexRoutingLines 对存量路由行原样保留，无任何派生逻辑，src/decision-distill.js:413-470）。放宽并非测试通过所必需（精确串在当前实现下同样命中），系探索期残留：断言弱于真实契约，且注释描述了不存在的行为，误导后续维护者。",
+      "location": "test/decisions-lifecycle.test.mjs:146；src/decision-distill.js:413"
+    },
+    {
+      "severity": "P3",
+      "title": "D-001@v1 死路实测数字不可字节复现（决策量级与方向坐实，精确排名口径未留档）",
+      "evidence": "复测三口径：504050a7 提交版 unmapped.md（180 条目）标题∪理由 n∈[2,3] 计 1029、理由行裸号计 844（谓词 n=1——测量发生于当时工作树，含未提交蒸馏，提交版不含）；当前工作树（195 条目，已被并行会话变更）标题∪理由 n∈[2,3] 计 1168（≈1176 ✓）、谓词 n=2 ✓，排名按首见序 180／count 降序 405／全体 bigram count 降序 950——均非 759。结论：窗口池约千级、目标词深藏数百名、cap=20 即抽签的决策依据量级坐实；但 759 的排序口径未在 decisions.md 留档且文件已漂移，精确值永不可复核。决策逻辑不依赖精确名次，不影响裁决。",
+      "location": ".sillyspec/changes/2026-09-29-decision-route-vocab/decisions.md:18；.sillyspec/knowledge/decisions/unmapped.md"
+    },
+    {
+      "severity": "P3",
+      "title": "回退结果两集合不对称：文件级 entries 截 3 个（INDEX 路由序，非证据强度序），条目级 decisionHits 含全部佐证文件",
+      "evidence": "src/knowledge-match.js fallbackByQueryShingles：fbEntries 取 `[...corroborated.entries()].slice(0, 3)`（Map 迭代序=INDEX 路由行序，与命中词片数无关），decisionHits 则遍历全部 corroborated 文件——{DECISION_HITS} 门注入可引用 entries/report 面未出现的文件。消费面独立且门渲染只吃 title/reason/score（flow.js:193 过滤 deathPath∪rejected&&score>0），无功能破坏；仅为拓扑不对称＋理论无界的 hits 集，记录备查。",
+      "location": "src/knowledge-match.js:302-320（fallbackByQueryShingles 尾段）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "成立。回退是每查询从落盘 KB 现态纯派生的无状态计算，无到达顺序假设；迟到条目只改变未来查询的计数窗口。真实库钉子（谓词守卫/顿号拆分）实测命中且枚举词表路由命中不回归（测试③④绿）。",
+    "并发": "「无并发面」的表述略强：readFileSync 与并行会话的 distill 写入交叠时理论上可读到撕裂半文（Windows 面更宽），失败模式退化为该次查询窗口漏判/误判，下次查询自愈，无写放大无锁需求——良性，接受。查询零写入已由测试②字节级钉住（INDEX/域文件前后不变）。",
+    "切换": "成立。回退零中间态零落盘；蒸馏标题门是既有 needsWait 链路的条件扩展（消息从「rejected 条目必填」改为「条目必填字段缺失」，lifecycle 断言按字段点名仍兼容，混批其余条目照常提炼实测绿）。",
+    "作用域": "机制按 indexDir 圈定，无跨工作区串台。但测试③真实库钉子读的是活仓 .sillyspec/knowledge——共享可变夹具，并行会话蒸馏会移动词片计数（当前谓词 n=2、195 条目 ceil=9，余量充足）；属测试环境脆弱性而非机制缺陷。同步语义路由→本地回退在 HEAD 仍成立（f8ad55fa 后续变更为 matchByRouting＋wrapper，序不变）。"
+  },
+  "reviewedAt": "2026-09-29T01:00:00+08:00"
+}

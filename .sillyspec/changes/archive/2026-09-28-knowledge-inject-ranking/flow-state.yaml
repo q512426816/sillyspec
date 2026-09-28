@@ -1,0 +1,21 @@
+tier: thin
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: null
+baseline_commit: c46978041435fd2cac0b9a30a7a9f68ad19fc332
+updatedAt: '2026-09-28T13:25:09.803Z'
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(45)（21.0s）
+  结果：C:\Users\qinyi\AppData\Local\Temp\sillyspec-gate-Z5UkBQ\.sillyspec\.runtime\verify-runs\20260928131747\test-result.json｜lint:
+  failed ← npm run lint（36.0s）｜门文件 12 个
+

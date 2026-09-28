@@ -1,0 +1,234 @@
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/flow-state.yaml b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/flow-state.yaml
+new file mode 100644
+index 00000000..48a22b52
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: ebc3ae489dd88b6f5748f0be96e06349d3a0acf0
++updatedAt: '2026-09-28T13:41:14.735Z'
++
+diff --git a/src/knowledge-match.js b/src/knowledge-match.js
+index bcc41ac5..6af048c4 100644
+--- a/src/knowledge-match.js
++++ b/src/knowledge-match.js
+@@ -326,11 +326,14 @@ export function matchKnowledge(indexDir, taskContext) {
+   // 不引入新顶层 hits 字段，不改 matched/entries/report/json 四个既有键。
+   const decisionRoutes = matched.filter(isDecisionRoute)
+   const allDecisionHits = decisionRoutes.length > 0 ? parseDecisionEntries(indexDir, decisionRoutes) : []
+-  // 评分文本 = id＋标题；近义措辞（查询词只在理由不在标题，如「穷举/关键词表」对「枚举开放世界」）
+-  // 由 guard 组平局裁决兜底：分数并列时死路注记条目优先（2026-09-28-knowledge-reason-overlap）。
++  // 评分文本 = id＋标题；评分前剥除数字与标点（2026-09-28-knowledge-score-denoise：{DECISION_HITS}
++  // 场景 taskContext=ASCII 变更名，日期「2026-09-28」与 id「D-009@v1」共享 -0/09 数字 bigram 即
++  // 反超死路条目——数字噪音在无内容词场景主导排序；只计内容字符后该场景全零分 → 平局 →
++  // 死路先验接管）。近义措辞（查询词只在理由不在标题）同样由零分平局裁决兜底。
+   // 刻意不把理由并进评分文本：Jaccard 比率偏爱短文本——短理由无关条目（「与需求直接冲突」共享
+   // 一个 bigram 即得高比率）会压过长理由被稀释的相关条目，实测复现；宁用零分平局先验。
+-  const relScore = (h) => frTitleOverlap(taskContext, `${h.id} ${h.title}`)
++  const contentChars = (s) => String(s || '').replace(/[\d\p{P}\s_]+/gu, ' ')
++  const relScore = (h) => frTitleOverlap(contentChars(taskContext), contentChars(`${h.id} ${h.title}`))
+   const byOverlapDesc = (a, b) => (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
+   const decisionHits = [
+     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
+diff --git a/test/knowledge-reason-overlap.test.mjs b/test/knowledge-reason-overlap.test.mjs
+index 3f7f77ce..9d79af85 100644
+--- a/test/knowledge-reason-overlap.test.mjs
++++ b/test/knowledge-reason-overlap.test.mjs
+@@ -28,7 +28,7 @@ function seedKb(root) {
+   mkdirSync(join(root, 'decisions'), { recursive: true })
+   writeFileSync(join(root, 'INDEX.md'), [
+     '# 知识索引', '', '## Decisions',
+-    '- 枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
++    '- unmapped|枚举|词表|开放世界|穷举|分类表 → [决策](decisions/unmapped.md)', '',
+   ].join('\n'))
+   writeFileSync(join(root, 'decisions', 'unmapped.md'), [
+     '# unmapped 域决策', '',
+@@ -76,3 +76,12 @@ test('④ 真实库钉子：穷举/关键词表查询 → D-001@v1 枚举开放
+     assert.ok(idx >= 0 && idx < 5, `「${q}」应让枚举开放世界进前 5（实际 ${idx >= 0 ? `第 ${idx + 1} 位` : '未命中'}）`)
+   }
+ })
++
++test('⑤ 评分剥数字标点：ASCII 变更名（unmapped-drill 形态）下数字 bigram 噪音归零、死路先验置顶', () => {
++  const kb = mkdtempSync(join(tmpdir(), 'ss-dn-'))
++  seedKb(kb)
++  const km = matchKnowledge(kb, '2026-09-28-unmapped-drill')
++  assert.ok(km.decisionHits.length >= 3, '路由 tag unmapped 命中')
++  assert.match(km.decisionHits[0].title || '', /枚举开放世界/, `死路先验置顶（实际首位：${JSON.stringify(km.decisionHits[0].title)}）`)
++  rmQuiet(kb)
++})
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
+similarity index 59%
+rename from .sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
+rename to .sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
+index 7535db28..3bf13b86 100644
+--- a/.sillyspec/changes/2026-09-28-knowledge-reason-overlap/design.md
++++ b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md
+@@ -1,30 +1,30 @@
+ ---
+ author: flow-machine-draft
+-created_at: 2026-09-28T13:26:52.951Z
++created_at: 2026-09-28T13:39:36.124Z
+ ---
+-# 设计记录（Design Record）— 2026-09-28-knowledge-reason-overlap
++# 设计记录（Design Record）— 2026-09-28-knowledge-score-denoise
+ 
+ > 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
+ > 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
+ 
+ ## 做法概述
+-<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
+ 本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
+ <!-- MACHINE-DRAFT:design-approach:end -->
+ 
+ <!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
+-做法：relScore 维持 id＋标题口径不变，guard 组（rejected∪死路）排序比较器加二级裁决——分数并列时死路注记条目优先。刻意不把理由并进评分文本：Jaccard 比率偏爱短文本（短理由无关条目共享一个 bigram 即得高比率，压过长理由被稀释的相关条目——实测「穷举」查询下 D-009 与需求直接冲突 排到 D-001 前），宁用零分平局先验兜底近义场景。
++做法：matchKnowledge relScore 评分前以 contentChars 剥除数字、标点（\p{P}）与空白——只计内容字符（字母含 CJK）的 bigram 重叠。数字噪音源（变更名日期 2026-09-28 与条目 id D-009@v1 共享 -0/09）在 {DECISION_HITS} 场景（taskContext=纯 ASCII 变更名、无内容词）归零 → 全体零分平局 → 死路先验接管置顶。
+ 
+ ## 接口契约
+-<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
+ 动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
+ <!-- MACHINE-DRAFT:design-contract:end -->
+ 
+ <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
+-接口契约：byOverlapDesc 比较器语义=(重叠率降序,死路优先)；matchKnowledge 对外键与 decisionHits 字段零变化。向后兼容：非 guard 组 deathPath 恒假，二级裁决无效果，行为与上版一致。
++接口契约：contentChars 为 matchKnowledge 内局部函数（不导出）；frTitleOverlap 语义不动（FR 去重消费方零影响）；decisionHits 键与排序语义（重叠降序、零分平局死路优先）不变。
+ 
+ ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
+-<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
+ 1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
+ 2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
+ 3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
+@@ -32,12 +32,12 @@ created_at: 2026-09-28T13:26:52.951Z
+ <!-- MACHINE-DRAFT:design-boundaries:end -->
+ 
+ <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
+-边界并发四问：不适用：纯排序比较器改动，无状态无 IO 无并发面。
++边界并发四问：不适用：纯函数文本归一＋评分改动，无状态无 IO 无并发面。
+ 
+ ## 风险与死路
+-<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-reason-overlap 留痕重锚 -->
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
+ 本方案最大的风险是什么？试过但放弃的方案及放弃理由？
+ <!-- MACHINE-DRAFT:design-risks:end -->
+ 
+ <!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
+-风险：①平局先验只兜「标题零命中」的近义查询，查询词命中了无关条目标题时先验不介入（主题信号优先于先验，属正确取舍）；②死路条目在文件序靠后时靠先验置顶而非相关度——先验普适于死路类（本变更全链路的立论即死路类是最强防复潮信号）。退役判据=死路先验导致高频无关置顶投诉。
++风险：① 剥数字后「含版本号/年份的语义查询」（如 查 FR-016 相关决策）丢失数字区分力——决策标题本无数字语义，可接受；② \p{P} 剥除连中英标点（含全角），标题实词不受影响。死路=正则 Unicode 类别写错会静默破坏主场景（首版 \W 误剥 CJK 被测试②当场拦截）——测试钉主场景/近义/ASCII 三面。退役判据=出现依赖数字 bigram 才能区分的相关性场景投诉。
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/proposal.md b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/proposal.md
+new file mode 100644
+index 00000000..82dc3060
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/proposal.md
+@@ -0,0 +1,39 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:39:36.123Z
++---
++# 提案书（Proposal）— 2026-09-28-knowledge-score-denoise
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:c6939796f824d480d373c8e0b6544b3ceb9cdceb200cbfb10189829b8521d935:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++任务原话转写：decisionHits 评分剥除数字与标点：变更名场景的日期/id 数字 bigram 噪音主导排序。
++
++动机：「确定吗」追问下实弹复测 prompt.js {DECISION_HITS} 第三注入点（taskContext=ASCII 变更名）实测：变更名 2026-09-28-unmapped-drill 与 D-009@v1 共享 -0/09 两个数字 bigram，得分反超死路条目，D-001 枚举开放世界未置顶——数字噪音在「变更名纯 ASCII、无内容词」场景主导排序（此前判定「微量不受扰」只对标题词查询成立）。
++
++成功标准：
++- 评分只计内容字符（剥除数字与标点后取 bigram），变更名纯数字/ASCII 场景下各条目内容得分为零 → 零分平局 → 死路先验接管置顶
++- 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归
++- 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶；npm test 全量与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:a60c5d5e4eb707f04ed416d861560ef4eccb46820d5bb94dbf4d9024af3c55c7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. 评分只计内容字符（剥除数字与标点后取 bigram），变更名纯数字/ASCII 场景下各条目内容得分为零 → 零分平局 → 死路先验接管置顶
++2. 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归
++3. 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶
++4. npm test 全量与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:569d938e8e9ae6761ecdee99922abca2dae2bdb49405ba9316606252706314f8:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-knowledge-score-denoise 留痕重锚 -->
++1. 评分只计内容字符（剥除数字与标点后取 bigram），变更名纯数字/ASCII 场景下各条目内容得分为零 → 零分平局 → 死路先验接管置顶
++2. 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归
++3. 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶
++4. npm test 全量与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/requirements.md b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/requirements.md
+new file mode 100644
+index 00000000..f7306d03
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/requirements.md
+@@ -0,0 +1,42 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T13:39:36.124Z
++---
++# 需求规格（Requirements）— 2026-09-28-knowledge-score-denoise
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 评分只计内容字符（剥除数字与标点后取 bigram），变更名纯数字/ASCII 场景下各条目内容得分
++Given 系统就绪
++When 评分只计内容字符（剥除数字与标点后取 bigram），变更名纯数字/ASCII 场景下各条目内容得分为零
++Then 零分平局
++
++### FR-02: 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归
++Given 系统就绪
++When 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归
++Then 行为符合本条标准描述
++
++### FR-03: 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶
++Given 系统就绪
++When 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶
++Then 行为符合本条标准描述
++
++### FR-04: npm test 全量与 test:core 全绿
++Given 系统就绪
++When npm test 全量与 test:core 全绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-reason-overlap.test.mjs「⑤ ASCII 变更名死路置顶／②主场景／①近义回归」
+diff --git a/.sillyspec/changes/2026-09-28-knowledge-score-denoise/tasks.md b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/tasks.md
+new file mode 100644
+index 00000000..498d1deb
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-knowledge-score-denoise/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T14:20:00.000Z
++---
++# 任务注册表（Tasks）— 2026-09-28-knowledge-score-denoise
++
++> 按实际实现路径覆写（thin-agent-tasks）：单提交交付。
++
++- [x] task-01: matchKnowledge relScore 评分前 contentChars 剥除数字/标点/空白（只计内容字符 bigram）——ASCII 变更名场景数字噪音归零、死路先验接管
++- [x] task-02: 测试⑤（ASCII 变更名死路置顶）＋主场景/近义/精度回归（22/22）

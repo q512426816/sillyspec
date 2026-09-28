@@ -1,0 +1,16 @@
+{"ts":1790613336482,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790613336482,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790613336482,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790613336482,"kind":"task-done","stage":"tasks","detail":"checked 0→7","provisional":true}
+{"ts":1790613336482,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}
+{"ts":1790613336963,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-06、task-06 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790613361533,"kind":"commit","stage":null,"detail":"504050a7","provisional":true}
+{"ts":1790613361915,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-06 勾选证据补齐（提交 504050a7）——前拍假勾选嫌疑消解","provisional":true}
+{"ts":1790613442421,"kind":"gate-run","stage":"verify","detail":"门实测 failed（55.9s） · 20260928163722","provisional":true}
+{"ts":1790614346050,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1790614633608,"kind":"commit","stage":null,"detail":"f8ad55fa","provisional":true}
+{"ts":1790614726852,"kind":"gate-run","stage":"verify","detail":"门实测 passed（39.9s） · 20260928165845","provisional":true}
+{"ts":1790615108430,"kind":"commit","stage":null,"detail":"867d6ee2","provisional":true}
+{"ts":1790615180058,"kind":"commit","stage":null,"detail":"a08d81f4","provisional":true}
+{"ts":1790615223614,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790615223614,"kind":"file-update","stage":"proposal","detail":"decisions.md 内容变更","provisional":true}

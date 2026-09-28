@@ -157,3 +157,24 @@ test('⑦ watcher 归属匹配剥锚：带锚绑定行按文件面命中', () =>
   assert.equal(owners[0].anchor, 'FR-cli-entry-01')
   rmSync(root, { recursive: true, force: true })
 })
+
+test('⑤ 多段锚全收（坑 test-trace-tests-glue-bracket-note 边角，2026-09-27）：路径后连续锚段各产一条，不静默丢弃', () => {
+  const { root, changeDir } = makeRepo({ 'test/foo.test.mjs': '' })
+  writeReq(changeDir, {
+    'FR-01': 'test/foo.test.mjs「detectUiTouch 正例」「detectUiTouch 反例」组',
+    'FR-02': 'test/foo.test.mjs#a::b 混合形态连写',
+    'FR-03': 'test/foo.test.mjs「a」 注解文字不成锚',
+  })
+  const rows = byAnchor(extractRequirementBindings({ changeDir, change: 'c1' }))
+  assert.deepEqual(rows['FR-01'].tests, [
+    'test/foo.test.mjs「detectUiTouch 正例」',
+    'test/foo.test.mjs「detectUiTouch 反例」组',
+  ], '连续「」锚段各产一条（后段不再被丢弃）')
+  assert.deepEqual(rows['FR-02'].tests, [
+    'test/foo.test.mjs#a::b',
+  ], '跨形态连写按贪心单锚收（书写歧义不拆译；剥锚后同归一路径）')
+  assert.deepEqual(rows['FR-03'].tests, ['test/foo.test.mjs「a」'], '锚后普通注解文字不成锚（不误捕）')
+  // 文件面消费：剥锚后同为纯路径（testAnchorFile 文件头已导入）
+  assert.ok(rows['FR-01'].tests.every((t) => testAnchorFile(t) === 'test/foo.test.mjs'), '消费面剥锚后归一为纯路径')
+  rmSync(root, { recursive: true, force: true })
+})

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-knowledge-score-denoise",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-04「npm test 全量绿」与本机实测不符——5 个失败文件全部预存于 baseline，非本刀引入",
+      "evidence": "实跑 npm test（依赖完好态）：662 通过 / 5 失败文件（doc-ref-check、quick-retired、residual-runner-parity、tap-judge、verify-postcheck-known-failures）。于 baseline ebc3ae48 临时 worktree 复跑同名 5 文件全部同样失败（且多出 sillyhub-mcp-platform-fixes 一次环境性失败）——失败集在基线已存在，与本 diff（仅 src/knowledge-match.js + test/knowledge-reason-overlap.test.mjs）无因果。失败内容亦无关：doc-ref-check 为 docs/sillyspec/platform-interface-map.md L82/L214 引用 src/*/shared.js:826 行号漂移（该文档与 shared.js 均不在本 diff）；verify-postcheck-known-failures 为 ENOENT 找 test\\.sillyspec\\known-failures.yaml 的路径问题。test:core 221/221 全绿成立（EXIT=0）。结论：本刀零回归成立（变更自身门面 js22+fr17 亦绿，见 flow-state gate_summary），但 FR-04 措辞「全量绿」在本机当前态不可达成，需先清五处预存债——按验收面实质裁 PASS，措辞超面记录在案。",
+      "location": ".sillyspec/changes/2026-09-28-knowledge-score-denoise/requirements.md:25-28（FR-04）"
+    },
+    {
+      "severity": "P3",
+      "title": "flow done 门留痕 lint: failed——预存工具债（verify-postcheck 未引用导出），非本刀引入",
+      "evidence": "flow-state.yaml gate_summary 记录「lint: failed ← npm run lint（41.2s）」。实跑 npm run lint 复现：src/verify-postcheck.js 导出 stripNestedTestEnv 在 src+test 其余文件零引用。该文件最后改动于 43e75370（远早于 baseline ebc3ae48），不在本 diff 文件清单。收口在 lint 红面下完成——债不属本刀，但建议另开变更清偿（删导出或补引用）。",
+      "location": ".sillyspec/changes/2026-09-28-knowledge-score-denoise/flow-state.yaml:gate_summary；src/verify-postcheck.js"
+    },
+    {
+      "severity": "P3",
+      "title": "design 槽4 叙事「首版 \\W 被测试②当场拦截」归因不准——种子测试②在 \\W 下仍过，实际拦截者是真库钉子与本刀新增⑤",
+      "evidence": "git 历史（含 --all -S）与 stash 均无 \\W 版痕迹，叙事不可考。沙箱变异实测（现版正则替换为 [\\W_]+ 后跑四文件）：20/22，失败者＝knowledge-inject-ranking ④（真库钉子）与 knowledge-reason-overlap ⑤（\\W 保留数字，-0/09 噪音经 \\w 存活重新反超）；而种子库测试②在 \\W 下仍过——3 条目种子内全体零分平局、死路先验照样把 D-001 置顶，掩蔽了 CJK 剥除。保护性主张「测试钉主场景/近义/ASCII 三面」实质成立（变异确被拦），仅归因到具体用例的表述不准，对后来者略有误导。",
+      "location": ".sillyspec/changes/2026-09-28-knowledge-score-denoise/design.md:43（槽4）"
+    },
+    {
+      "severity": "P3",
+      "title": "正则边缘：全角数字（Nd）与数学符号（\\p{S}）不在剥除集——方向无害，记录备查",
+      "evidence": "\\d 仅匹配 ASCII 0-9（u 标志不扩），\\p{P} 不含 \\p{S}：实测 '２０２６年ＡＢ＋ＣＤ＝１' 归一后原样保留。方向无害：存活字符只稀释条目侧 Jaccard 分母，不可能与 ASCII 变更名形成假匹配；且 design 槽4 风险②仅主张「标点（含全角）剥除」，未越主张（全角标点 （）。，实测确被剥）。条目 id/标题实际字符集（ASCII 数字、CJK、中英标点）全部覆盖。",
+      "location": "src/knowledge-match.js:335"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——纯函数文本归一＋评分比较器改动，无输入次序假设；matchKnowledge 调用期同步快照语义未动",
+    "并发": "ok——contentChars 为 matchKnowledge 内局部闭包（全仓唯一出现于 knowledge-match.js:335-336，不导出）；无共享可变状态新增",
+    "切换": "ok——无状态、无生命周期面；调用中途中断不残留",
+    "作用域": "ok——frTitleOverlap 语义与 src/fr-index.js 未动，FR 去重消费方（src/flow.js:282、src/stage-contract.js:360）直调原函数，归一化仅封装在 matchKnowledge relScore 内，不串台"
+  },
+  "reviewedAt": "2026-09-28T14:07:03.002Z",
+  "reviewerNotes": " （主会话勘误：原 findings 两处 P4 超出 schema 枚举，按内容实质降格 P3——均为叙事精度类）"
+}

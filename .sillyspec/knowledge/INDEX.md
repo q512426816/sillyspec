@@ -167,3 +167,4 @@
 - 绿地|伪域|auto-|unmapped|模块图|bootstrap|deliverableFiles → [绿地伪域断流](known-issues.md#绿地无模块图仓-fr-知识落伪域与-unmapped-大池断流)
 - 枚举|开放世界|穷举|分类表|关键词表|任务面|工作分解|机器稿 → [decisions/unmapped.md](decisions/unmapped.md)
 - change-management|FR|需求|承接 → [fr/change-management.md](fr/change-management.md)
+- docs-consistency|FR|需求|承接 → [fr/docs-consistency.md](fr/docs-consistency.md)
