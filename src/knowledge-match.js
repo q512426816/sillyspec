@@ -265,7 +265,7 @@ function asciiWordHit(sh, text) {
 /**
  * 零命中查询侧词片回退（2026-09-29-decision-route-vocab）：路由行零命中时，只测「查询自己的
  * 词片」——逐 decisions 域文件数词片在条目文本（标题∪理由）的出现次数，落在「跨条目复现但
- * 非泛在」窗（count ∈ [2, max(3, 5%·条目数)]）→ 文件级命中（合成路由条目进 entries，CLI
+ * 非泛在」窗（count ∈ [2, max(2, floor(5%·条目数))]）→ 文件级命中（合成路由条目进 entries，CLI
  * search／digest 知识命中／门条目行三面共享）；条目级命中 = 该文件内含 ≥1 复现词片的条目
  * （score=复现词片数，消费方 score>0 资格判定兼容）。
  * 设计依据：入库侧词表派生死于「同窗词片按序截断=抽签」（unmapped n∈[2,3] 窗 1176 个、
