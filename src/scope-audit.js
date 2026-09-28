@@ -315,12 +315,19 @@ function verifyPatchIntegrity(recordedSha, patchText) {
  * @param {{ baseRef: string }} opts
  * @returns {string|null} null=采集失败（调用方 fail-soft 不落伪 patch）
  */
-export function buildFrozenPatch(root, files, { baseRef } = {}) {
+export function buildFrozenPatch(root, files, { baseRef, headRef } = {}) {
   if (!root || !baseRef) return null
   const wanted = new Set((Array.isArray(files) ? files : []).map(toPosix).filter(Boolean))
   const parts = []
   try {
-    const r = safeGit(root, ['diff', '--no-color', baseRef], { timeout: 60 * 1000 })
+    // headRef（2026-09-28-split-guard-and-gate-report 评审 P2 清偿）：缺省 `git diff <baseRef>` 比对
+    // 的是**工作树**——共享主仓里并行会话对同文件的未提交 hunk 会漏进冻结件（本变更实证
+    // extractTestAnchors hunk 夹带）。传 headRef 时改为提交区间 diff（baseRef..headRef），工作树
+    // 在途改动不再入冻；调用方对「治理工件目录的未提交槽位编辑」等确需工作树口径的场景不传
+    // headRef（变更目录归本变更独占，无他会话面）。
+    const r = safeGit(root, headRef
+      ? ['diff', '--no-color', baseRef, headRef]
+      : ['diff', '--no-color', baseRef], { timeout: 60 * 1000 })
     // diff 采集失败 fail-closed（2026-09-27-thin-module-scope-persist 评审 P1 清偿：此前失败静默
     // 跳过 tracked 段，untracked 自拼 hunk 仍拼出非空 patch → patchStatus ok 的伪完整件——实证
     // core.bare 被误写 true 时 `git diff <ref>` 报「must be run in a work tree」，change.patch

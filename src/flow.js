@@ -1010,7 +1010,17 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           patchOk = true
         } else {
           const { buildFrozenPatch, collectNumstatByPath } = await import('./scope-audit.js')
-          const frozen = buildFrozenPatch(cwd, ownFiles, { baseRef: st.baseline_commit })
+          // 双口径冻结（2026-09-28-split-guard-and-gate-report 评审 P2 清偿）：交付面（committed）
+          // 用 baseRef..HEAD 提交区间 diff——共享主仓里并行会话对同文件的未提交 hunk 不再漏进
+          // 冻结件；治理工件目录（changeDirFiles，本变更独占无他会话面）保留工作树口径（未提交
+          // 的槽位作答/勾选要进审计件）。重叠文件归提交区间，避免双 hunk。
+          const headCommit = String(gitQuiet(cwd, ['rev-parse', 'HEAD']) || '').trim() || null
+          const toPosix = (p) => String(p).replace(/\\/g, '/')
+          const committedSet = new Set(freeze.files.map(toPosix))
+          const dirOnly = ownFiles.filter((f) => !committedSet.has(toPosix(f)))
+          const frozenCommitted = buildFrozenPatch(cwd, freeze.files, { baseRef: st.baseline_commit, headRef: headCommit })
+          const frozenDir = dirOnly.length > 0 ? buildFrozenPatch(cwd, dirOnly, { baseRef: st.baseline_commit }) : ''
+          const frozen = [frozenCommitted, frozenDir].filter((p) => typeof p === 'string' && p).join('\n') || null
           const stats = collectNumstatByPath(cwd, ownFiles, { baseRef: st.baseline_commit })
           let additions = 0
           let deletions = 0

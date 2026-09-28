@@ -694,7 +694,19 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
       // 快照证据回拷（2026-09-28-split-guard-and-gate-report，P6b）：快照内 verify-runs 结果
       // 落快照临时目录、收尾即清——测试/lint FAIL 时先回拷主仓 .runtime 再清理，排障证据不蒸发。
       try {
-        if (failed.length > 0) copySnapshotVerifyRuns(gateSpecBase, specBase)
+        if (failed.length > 0) {
+          const copied = copySnapshotVerifyRuns(gateSpecBase, specBase)
+          // 结果路径重映射（评审 P1 清偿）：快照内写下的 resultPath 指向快照临时目录——清理后
+          // existsSync 恒 false，flow done 的 FAIL 三件套会静默失效。回拷后把 test/lint 的
+          // resultPath 改写为主仓路径（对象即返回值，finally 在 return 落地前变异生效）。
+          if (copied > 0) {
+            for (const r of [test, lint]) {
+              if (r && typeof r.resultPath === 'string' && r.resultPath.startsWith(gateSpecBase)) {
+                r.resultPath = specBase + r.resultPath.slice(gateSpecBase.length)
+              }
+            }
+          }
+        }
       } catch { /* 回拷 best-effort，不连坐门禁结论 */ }
       try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ }
     }
