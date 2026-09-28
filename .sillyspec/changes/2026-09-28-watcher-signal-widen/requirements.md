@@ -60,5 +60,7 @@ test/watcher.test.mjs「watcher-signal-widen: 假勾选 pending 消解路径」�
 test/watcher.test.mjs 全部 20 用例（node --test 实测 20/20）+ tap-judge 6/6、known-failures 回归全绿
 
 <!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+不适用：平台事件契约零变化（新 kind 走既有单事件上行端点——toPlatformChangeEvents 映射既有机制承接，watcher.test.mjs 既有平台映射用例回归覆盖）
 
 <!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+不适用：watcher 只读快照（gateRun 按 change 字段过滤本变更、localConfig 只 mtime 不读内容）——由实现注释与 FR-01 用例间接锁定
