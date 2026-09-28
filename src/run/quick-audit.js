@@ -12,7 +12,7 @@
  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
  */
 import { join, dirname } from 'node:path'
-import { existsSync, readFileSync, readdirSync, cpSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, cpSync, rmSync, renameSync } from 'node:fs'
 import { parsePorcelainPath, safeGit } from './shared.js'
 import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
 
@@ -713,7 +713,7 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
   }
 }
 
-/** 快照 .runtime/verify-runs 全量回拷主仓（同名目录不覆盖——主仓自己的结果优先）。 */
+/** 快照 .runtime/verify-runs 全量回拷主仓（同名目录不覆盖——主仓自己的结果优先；临时名+原子改名，崩溃残端可续拷）。 */
 function copySnapshotVerifyRuns(fromSpecBase, toSpecBase) {
   const fromDir = join(fromSpecBase, '.runtime', 'verify-runs')
   const toDir = join(toSpecBase, '.runtime', 'verify-runs')
@@ -723,7 +723,12 @@ function copySnapshotVerifyRuns(fromSpecBase, toSpecBase) {
     const src = join(fromDir, d)
     const dst = join(toDir, d)
     if (existsSync(dst)) continue
-    cpSync(src, dst, { recursive: true })
+    // 评审 P3 清偿：cpSync 非原子——中途失败留下残缺 dst 且同名跳过阻断续拷自愈。改为
+    // 临时名整拷 + renameSync 原子落位；崩溃只留 .part 残端，重跑时先清再拷（可续拷）。
+    const part = dst + '.part'
+    rmSync(part, { recursive: true, force: true })
+    cpSync(src, part, { recursive: true })
+    renameSync(part, dst)
     copied++
   }
   if (copied > 0) console.warn(`📎 快照实测证据已回拷主仓：${copied} 个 verify-runs 目录（排障读主仓 .runtime 即可）`)
