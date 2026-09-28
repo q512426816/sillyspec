@@ -1697,10 +1697,11 @@ export function validateFileLocations(cwd, stageName, progress, changeName, spec
   if (!existsSync(changeDir)) return
 
   // 每个阶段完成后预期存在的文件
-  // brainstorm:scale=small(小变更)只必产 design.md;large/未标 scale → 四件套全。
-  // 与 validateBrainstormOutputs 的 BRAINSTORM_RULES condition(scale≠small)同源,避免对合法 small 变更
-  // 误报"⬜ proposal/requirements/tasks 未找到"(本检查仅 advisory 打印不 gate,但误导输出仍要消除)。
-  const brainstormExpected = readDesignScale(specBase, effectiveChange) === 'small'
+  // brainstorm:scale=small/未标(收编轻量道,2026-09-29-brainstorm-exit-thin-default 起未标默认 small)只必产
+  // design.md;显式 large → 四件套全。避免对合法收编变更误报"⬜ proposal/requirements/tasks 未找到"
+  // (本检查仅 advisory 打印不 gate,但误导输出仍要消除)。注:stage-contract 硬门条件(ne:small)在并行
+  // 变更在途面,未标仍轻推补值——忘写 scale 的 agent 被门推向显式落值,v1 可接受。
+  const brainstormExpected = readDesignScale(specBase, effectiveChange) !== 'large'
     ? ['design.md']
     : ['design.md', 'proposal.md', 'requirements.md', 'tasks.md']
   const expectedFiles = {

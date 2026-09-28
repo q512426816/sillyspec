@@ -21,7 +21,7 @@ created_at: 2026-09-28T23:27:08.940Z
 <!-- MACHINE-DRAFT:design-contract:end -->
 
 <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
-接口契约：readDesignScale 解析不变（/^scale:["']?(\w+)/——空串注释无 word 捕获→null）；design 骨架 frontmatter scale 为 ""；AGENTS.md 模板零改动（选道表本就是复杂度措辞，无版本 bump 需要）。
+接口契约：readDesignScale 解析不变（/^scale:[ 	]*["']?(\w+)/——空串注释无 word 捕获→null）；design 骨架 frontmatter scale 为 ""；AGENTS.md 模板零改动（选道表本就是复杂度措辞，无版本 bump 需要）。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 <!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->

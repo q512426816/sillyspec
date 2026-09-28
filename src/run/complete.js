@@ -962,7 +962,7 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
       // verify 的"验证通过"提示延后到下方 validator 通过后才打印，
       // 避免校验失败（FAIL / 缺 verify-result.md）时仍声称"验证通过可以归档"。
     } else if (stageName === 'brainstorm') {
-      // brainstorm 下一步按 design.md 的 scale 分叉（与末步 prompt 的 large→plan / small→quick 对齐），
+      // brainstorm 下一步按 design.md 的 scale 分叉（2026-09-29-brainstorm-exit-thin-default：large→plan；small/未标→flow start 收编），
       // 不走下方 _getNextSuggestion —— 后者按全局状态机「第一个未完成且上游就绪的阶段」推荐，
       // 当 scan 未完成时会误推 scan（回头路），与 brainstorm 已完成、应进入 plan/quick 矛盾。
       // 历史教训：曾因此让 agent 在 brainstorm 完成后被误导去跑 scan。
@@ -2152,16 +2152,16 @@ export async function continueStep(pm, progress, stageName, cwd, answer, options
     // 阶段完成后明确下一步（agent 常卡：stageData completed 但不知要 run <下一阶段> 推进 currentStage）
     const nextStageHint = { brainstorm: 'plan', plan: 'execute', execute: 'verify', verify: 'archive' }[stageName]
     if (nextStageHint) {
-      // brainstorm 按 design.md frontmatter 的 scale 分叉（与末步 prompt 对齐）：
-      //   small → quick --linked-changes（小变更免走完整 plan）；large / 读不到 scale → plan（保守默认）。
-      // 修历史 bug：此处曾硬编码 brainstorm→plan 不读 scale，small 档与末步 prompt（quick）矛盾、误导小变更进 plan。
+      // brainstorm 按 design.md frontmatter 的 scale 分叉（2026-09-29-brainstorm-exit-thin-default
+      // 与 completeStep 主路径同口径）：large → run plan（完整五阶段）；small/未标 → flow start
+      // 收编轻量道（此前 small→quick --linked-changes 是旧收编通道、未标→plan 是缺省即厚，均已退役）。
       let hintStage = nextStageHint
       let hintChangeFlag = changeName ? ` --change ${changeName}` : ''
-      if (stageName === 'brainstorm' && changeName && readDesignScale(specBase, changeName) === 'small') {
-        hintStage = 'quick'
-        hintChangeFlag = ` --linked-changes ${changeName}`
+      if (stageName === 'brainstorm' && changeName && readDesignScale(specBase, changeName) !== 'large') {
+        console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口）`)
+      } else {
+        console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec run ${hintStage}${hintChangeFlag}`)
       }
-      console.log(`\n👉 ${stageName} 已完成。下一步：sillyspec run ${hintStage}${hintChangeFlag}`)
       if (stageName === 'execute') {
         console.log(`   ⚠️ 若 worktree 改动还没 apply 到主工作区，先：sillyspec worktree apply ${changeName}`)
         console.log(`   （apply 不需要先 commit，支持 working tree 未提交改动）`)
