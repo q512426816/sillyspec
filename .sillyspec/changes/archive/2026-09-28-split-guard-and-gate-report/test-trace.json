@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-split-guard-and-gate-report",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-split-guard-and-gate-report:flow:FR-01",
+      "tests": [
+        "test/fr-compound-split.test.mjs「①b 谓词资格收窄」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-split-guard-and-gate-report"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-split-guard-and-gate-report:flow:FR-02",
+      "tests": [
+        "test/fr-compound-split.test.mjs「①b 谓词资格收窄」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-split-guard-and-gate-report"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-split-guard-and-gate-report:flow:FR-03",
+      "tests": [
+        "test/fr-compound-split.test.mjs「① 复合拆分：斜杠与分号形态」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-split-guard-and-gate-report"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-28-split-guard-and-gate-report:flow:FR-06",
+      "tests": [
+        "test/fr-compound-split.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-split-guard-and-gate-report"
+    }
+  ]
+}

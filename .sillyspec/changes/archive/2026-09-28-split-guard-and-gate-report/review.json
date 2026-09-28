@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-split-guard-and-gate-report",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "治理文案计数与实现漂移：design/tasks 称「①b 七断言」「词表 30 词」，交付实测为 6 断言、34 词元",
+      "evidence": "test/fr-compound-split.test.mjs ①b 实含 6 条 assert.deepEqual（双侧谓词拆分 2 条＋名词对/单侧谓词保持整条 4 条），与冻结件 change.patch 的 ①b hunk（@@ -16,6 +16,18 @@）逐字一致；requirements.md 绑定行自身算术（FR-01「前两断言」＋FR-02「后四断言」＝6）也与实现一致——仅 design.md 槽2「fr-compound-split 测试增 ①b 七断言」与 tasks.md task-04「①b 七断言」多数一条。同型：design 槽1 称谓词词表「等 30 词」，src/flow-draft.js:48 SEGMENT_PREDICATE_RE 实为 34 个备选词元（工作树与冻结件一致）。纯描述性计数偏差，绑定面/测试面/冻结件三方互相自洽，不污染审计证据定位。",
+      "location": ".sillyspec/changes/2026-09-28-split-guard-and-gate-report/design.md:24"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T08:25:52Z"
+}
