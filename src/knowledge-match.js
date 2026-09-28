@@ -247,7 +247,7 @@ function keywordMatchesContext(keyword, contextLower) {
  * @param {string} indexDir - knowledge 目录路径
  * @param {string} taskContext - 任务上下文（task 名称 + 描述，用于关键词匹配）
  * @returns {{ matched: boolean, entries: Array, report: string, json: object,
- *   decisionHits: Array<{ file: string, id: string, title: string, status: string, reason: string, revisitWhen: string }> }}
+ *   decisionHits: Array<{ file: string, id: string, title: string, status: string, reason: string, revisitWhen: string, deathPath?: boolean, score?: number }}> }}
  *   matched/entries/report/json 既有四字段结构与语义不变；decisionHits（task-04 新增）= 任务上下文
  *   命中的 Decisions 路由行所指向 decisions/<域>.md 内的全部 D-xxx@vN 条目，rejected 优先排序；
  *   无 decisions 库 / 路由行未命中 → decisionHits: []（其余字段行为与现状一致）。
