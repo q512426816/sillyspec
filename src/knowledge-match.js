@@ -326,8 +326,12 @@ export function matchKnowledge(indexDir, taskContext) {
   // 不引入新顶层 hits 字段，不改 matched/entries/report/json 四个既有键。
   const decisionRoutes = matched.filter(isDecisionRoute)
   const allDecisionHits = decisionRoutes.length > 0 ? parseDecisionEntries(indexDir, decisionRoutes) : []
+  // 评分文本 = id＋标题；近义措辞（查询词只在理由不在标题，如「穷举/关键词表」对「枚举开放世界」）
+  // 由 guard 组平局裁决兜底：分数并列时死路注记条目优先（2026-09-28-knowledge-reason-overlap）。
+  // 刻意不把理由并进评分文本：Jaccard 比率偏爱短文本——短理由无关条目（「与需求直接冲突」共享
+  // 一个 bigram 即得高比率）会压过长理由被稀释的相关条目，实测复现；宁用零分平局先验。
   const relScore = (h) => frTitleOverlap(taskContext, `${h.id} ${h.title}`)
-  const byOverlapDesc = (a, b) => relScore(b) - relScore(a)
+  const byOverlapDesc = (a, b) => (relScore(b) - relScore(a)) || ((b.deathPath ? 1 : 0) - (a.deathPath ? 1 : 0))
   const decisionHits = [
     ...allDecisionHits.filter((h) => h.status === 'rejected' || h.deathPath).sort(byOverlapDesc),
     ...allDecisionHits.filter((h) => h.status !== 'rejected' && !h.deathPath).sort(byOverlapDesc),
