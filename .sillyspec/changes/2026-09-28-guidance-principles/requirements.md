@@ -71,3 +71,4 @@ test/ui-visual-guidance.test.mjs 同 FR-03 用例（增 4 断言）
 不适用：机制属性（动态测试推断按 import 依赖自动绑定 test/guidance-output-neutrality.test.mjs——本变更收口实测即实证）
 
 <!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+不适用：FR-01~07 已覆盖全部交付面（原机器摘录第 8 条为「双时机触发」语义并入 FR-07）
