@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-known-failures-hardening",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-known-failures-hardening:flow:FR-01",
+      "tests": [
+        "test/verify-postcheck-known-failures.test.mjs「锚定式豁免硬行（✖）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-known-failures-hardening"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-known-failures-hardening:flow:FR-02",
+      "tests": [
+        "test/verify-postcheck-known-failures.test.mjs「M1: 裸 --- 不再吞 go --- FAIL: 行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-known-failures-hardening"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-known-failures-hardening:flow:FR-03",
+      "tests": [
+        "test/verify-postcheck-known-failures.test.mjs「合并装载: 入库文件解析 24 条」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-known-failures-hardening"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-28-known-failures-hardening:flow:FR-04",
+      "tests": [
+        "test/verify-postcheck-known-failures.test.mjs「裁判: 裸子串命中披露收敛提示」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-known-failures-hardening"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-known-failures-hardening:flow:FR-05",
+      "tests": [
+        "test/verify-postcheck-known-failures.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-known-failures-hardening"
+    }
+  ]
+}

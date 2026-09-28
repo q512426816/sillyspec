@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-known-failures-hardening",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "GENERIC_BARE_PATTERN_RE 未覆盖冒号/多词失败标记拼写，FR-02 字面枚举形态的裸模式封堵不完整（改形裁决：可接受）",
+      "evidence": "字典（行1002）含 error:/fail: 但缺 panic:、failed:、not ok:；多词标记拼写如裸 '--- FAIL:'、'failing tests' 不被拒（标点类只匹配纯符号串≤6，单词备选须整串相等）——FR-02 字面列举的 '--- FAIL' 形态若被写成完整裸模式仍可吞对应硬行。本仓清单现无此类条目；M1 实证的懒模式形态（'--- '、'AssertionError'、'✖'）均已停用并有 kill-shot 测试锁定。同域残留：清单内 '结果:'/'summary:' 仍为活跃裸子串（阈值不一致，需先过 PER_TEST_FAIL_RE 才有吞行面，风险低且 C 组已注记）。披露边界裁决（必答）：改形为泛用裸模式停用【可接受】——①停用方向 fail-safe：拒豁免只会假 PASS→真 FAIL（响亮可诊断），绝不反向制造假 PASS，正是 M1 要修的方向；②回退理由可实证：按文件名/用例名裸豁免预存失败测试是主用例且该行本身即硬行，硬行只准锚定会误伤跨仓主路径；③装载警告点名停用条目并给出改锚定即恢复的修复路径，槽4 已留痕。",
+      "location": "src/verify-postcheck.js:1002"
+    },
+    {
+      "severity": "P3",
+      "title": "exemptedBy 命中归因索引错位（潜在，仅披露面）",
+      "evidence": "pats 经 .filter(Boolean)（行1061-1063）后索引相对 knownFailures 前移，而 hit.pattern=(knownFailures||[])[i]（行1081）按未过滤索引回取——前导模式经 ANSI 剥离+trim 后为空时（如纯色码条目）归因到错误模式名。装载路径 extractKnownFailures 已预滤空串故不触发；影响仅限披露字段指错模式名，不影响 pass/fail 判定。",
+      "location": "src/verify-postcheck.js:1061-1081"
+    },
+    {
+      "severity": "P3",
+      "title": "27→24 审计账目按文件头注记不可对平（差1去向无留痕）",
+      "evidence": "known-failures.yaml 头注删除项仅记 2 条陈旧垃圾 + 裸 AssertionError（'改为下方锚定式'=原地变形不减数）：27−2=25≠实际 24（测试断言 24 已跑绿证实）；差 1 条的删除/合并去向未注记。源清单（gitignored local.yaml）已清空为 known_failures: []，账目不可复核。属审计留痕完整性瑕疵，非行为缺陷。",
+      "location": ".sillyspec/known-failures.yaml:11-12"
+    },
+    {
+      "severity": "P3",
+      "title": "requirements.md 测试绑定槽与 FR 主题错位",
+      "evidence": "FR-04（27条审计）绑定到「裁判披露」用例（FR-05 主题），审计交付物仅经 FR-03 的条数断言间接覆盖；FR-06（测试扩展）绑定写跨仓零破坏说明（FR-07 主题）；FR-07 绑定写 PER_TEST_FAIL_RE 说明（不属任何 FR 条目）。聚合面每行为均有测试，仅槽位错记，属文档瑕疵。",
+      "location": ".sillyspec/changes/2026-09-28-known-failures-hardening/requirements.md:56-66"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T07:01:04Z"
+}
