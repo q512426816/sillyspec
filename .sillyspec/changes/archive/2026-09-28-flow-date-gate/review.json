@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-flow-date-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "legacy 模式仓库中非日期名 start 先吃日期门错误，重试后才见 legacy 拒跑（错误优先级次序）",
+      "evidence": "日期门位于 cmdFlow start 分支（validateChangeName 之后、cmdFlowStart 之前），而 flow.mode=legacy 拒跑在 cmdFlowStart 内部读配置后才发生——legacy 仓 + 无前缀名时用户先收到『缺日期前缀』教学文案，按提示换成日期名重试才见到真正的 legacy 指路；自纠正、无数据正确性风险",
+      "location": "src/flow.js:1388-1396"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-28T07:20:29Z"
+}

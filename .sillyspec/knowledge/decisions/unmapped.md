@@ -1299,3 +1299,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：6d467b738d6c732f7076e3f65283a57ba78053a8
 理由：最大风险：误判「无消费」——已全源码 grep 复核（ROADMAP 在 src/ 共 8 处：worktree.js×2 注释、complete-handlers×2 lite 豁免措辞、next.js×2 绿地探测、archive.js×1 条件指令、status.js×1 cat），无任何写侧、无条件不成立的读侧；.claude/skills 两处文案提及（archive 描述「+ 更新 ROADMAP」、explore cat 行）属提示面非行为面，文件缺席后自失活，留待后续产品级变更一并出清（不在本次批准面）。放弃的方案：保留但机器化维护—— lite/thin 归档豁免使其永远缺主力通道数据，且三套真源已覆盖，不值得维护。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-28-flow-date-gate
+锚点：未记录
+最近确认：31d2f81eb57cd7385ccff82207f9717fcf42c806
+理由：最大风险：既有 ~46 处 flow start 测试调用点用非日期名（fc-1 / flow-h2-t1 / sw-fake 等），过门后假红——逐文件把名字适配为日期前缀形态（固定 2026-09-01- 前缀，日期不验当天）。次风险：报错文案被测试断言（validateChangeName 非法名用例仍先触发、文案不变）。试过放弃：自动补前缀（名字漂移见槽1）；门放 cmdFlowStart 内部（会拦 mcp/平台工具直调与库调用，违背「门只在 CLI 边界」既定决策）。

@@ -1,0 +1,990 @@
+diff --git a/.sillyspec/changes/2026-09-28-flow-date-gate/design.md b/.sillyspec/changes/2026-09-28-flow-date-gate/design.md
+new file mode 100644
+index 00000000..b5195d71
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-flow-date-gate/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T06:51:06.976Z
++---
++# 设计记录（Design Record）— 2026-09-28-flow-date-gate
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++把厚流程既有的变更名日期前缀门禁（assertDatedChangeName，brainstorm step6 规则 CLI 化，已在 run --change / change-rename 两边界强制）补到轻量道入口：src/flow.js cmdFlow 的 start 分支在 validateChangeName 之后、cmdFlowStart 之前，对「净新建」名字（changes/<名> 与 changes/archive/<名> 均不存在）跑 assertDatedChangeName，不合规 exit 2 并附教学文案＋重试提示（与 run/command.js 同款语义）。选此方案而非自动规范化：厚流程先例是拒收教学（日期由 agent 给定，跨天续跑不重算），自动补前缀会造成 agent 所记名与物化名漂移（flow done 携原 name 反而查无此变更）。同时把 start 缺省自动名从 flow-<date>-<hex> 调整为 <date>-flow-<hex>，使其自身通过 DATED_CHANGE_NAME_RE。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++CLI 行为变化仅一条：sillyspec flow start --change <名>——净新建且名字非 YYYY-MM-DD-<简短描述> 形态时 exit 2（此前照单物化）。恢复（目录在场）、头脑风暴预段收编、平台 writer 预建空目录、归档同名均不拦截（存量不追诉，对齐 run 门）。缺省自动名形态变化：flow-2026-09-28-ab12 → 2026-09-28-flow-ab12。flow status/done/amend-draft 不动；库函数 cmdFlowStart/initChange 保持宽松（门只在 CLI 边界，测试/平台工具合法用任意名建 fixture）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：无事件序问题——门是单次同步校验；日期只验形状不验「当天」（assertDatedChangeName 既定语义），跨天续跑恢复路径走目录在场豁免，不受影响。
++2. 并发写：两 agent 同时 flow start 同名无前缀变更——两者都 exit 2，无物化竞争；一先一后建合规名，后者走恢复简报（既有幂等路径不变）。门只读 existsSync 不写盘，无新竞争面。
++3. 切换/生命周期：门在 start 解析层、任何物化（目录/DB/flow-state）之前执行，中断点不存在；已物化变更重入不再过门（目录在场）。
++4. 作用域：specBase（平台参数面）解析在前，门用同一 specBase 判目录在场——平台模式与本地模式各自对齐，不串台。多仓共享暂存区纪律不变（显式 pathspec 提交）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：既有 ~46 处 flow start 测试调用点用非日期名（fc-1 / flow-h2-t1 / sw-fake 等），过门后假红——逐文件把名字适配为日期前缀形态（固定 2026-09-01- 前缀，日期不验当天）。次风险：报错文案被测试断言（validateChangeName 非法名用例仍先触发、文案不变）。试过放弃：自动补前缀（名字漂移见槽1）；门放 cmdFlowStart 内部（会拦 mcp/平台工具直调与库调用，违背「门只在 CLI 边界」既定决策）。
+diff --git a/.sillyspec/changes/2026-09-28-flow-date-gate/requirements.md b/.sillyspec/changes/2026-09-28-flow-date-gate/requirements.md
+new file mode 100644
+index 00000000..3df859be
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-flow-date-gate/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T06:51:06.976Z
++---
++# 需求规格（Requirements）— 2026-09-28-flow-date-gate
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: flow start --change friction-signal-hint（净新建、无日期前缀
++Given 系统就绪
++When flow start --change friction-signal-hint（净新建、无日期前缀）exit 2 且报错含 YYYY-MM-DD-<简短描述>
++Then 行为符合本条标准描述
++
++### FR-02: flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
++Given 系统就绪
++When flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
++Then 行为符合本条标准描述
++
++### FR-03: 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉
++Given 系统就绪
++When 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉）
++Then 行为符合本条标准描述
++
++### FR-04: 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-D
++Given 系统就绪
++When 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-DD-flow-<hex> 形态）
++Then 行为符合本条标准描述
++
++### FR-05: 既有 flow 族测试全部适配通过（test+lint 双绿）
++Given 测试 相关模块就绪
++When 既有 flow 族测试全部适配通过（test+lint 双绿）
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-name-date-gate.test.mjs 用例7a（roadmap-copy-purge 净新建 exit 2 + 教学文案 + 未物化）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-name-date-gate.test.mjs 用例7b（2026-09-28-my-fix 放行物化）＋ test/flow-protocol.test.mjs ①②③（合规名全链）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-name-date-gate.test.mjs 用例7c（brainstorm 预段收编放行）/ 7d（归档名在场放行）＋ test/flow-protocol.test.mjs ②（flow-state 恢复简报）/ ⑬（adopt 收编）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-name-date-gate.test.mjs 用例7e（无 --change 物化名匹配 ^\d{4}-..-..-flow-[0-9a-f]+$）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-protocol.test.mjs（22/22）＋ flow-checkpoints/flow-draft/flow-parity/flow-route/flow-tick-prototype/flow-done-carry-suspect-advisory/sentinel-wiring/fr-governance-sweep/thin-fr-inject-parity（37/37）＋ npm run lint 双绿
+diff --git a/.sillyspec/changes/2026-09-28-flow-date-gate/tasks.md b/.sillyspec/changes/2026-09-28-flow-date-gate/tasks.md
+new file mode 100644
+index 00000000..159dde61
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-flow-date-gate/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T06:51:06.976Z
++---
++# 任务注册表（Tasks）— 2026-09-28-flow-date-gate
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: flow start --change friction-signal-hint（净新建、无日期前缀）exit 2 且报错含 YYYY-MM-DD-<简短描述>…
++- [x] task-02: flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
++- [x] task-03: 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉）
++- [x] task-04: 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-DD-flow-<hex> 形态）
++- [x] task-05: 既有 flow 族测试全部适配通过（test+lint 双绿）
+diff --git a/AGENTS.md b/AGENTS.md
+index b9b281c2..02ad0249 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -10,12 +10,12 @@
+ | 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用 |
+ | 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
+ | 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
+-| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
++| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
+ 
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+ ## 轻量变更（默认快道）
+-`sillyspec flow start --change <名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
++`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
+ 
+ `--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
+ 先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index b05d1975..53dc0bec 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -41,13 +41,22 @@ const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书
+  * （FR 区 agent 书写架构下，摘录一行 A/B 会被直抄成粒度失真的单条 FR）。路径感知：含扩展
+  * 名点或超一处斜杠的条目不按斜杠拆（src/flow.js 之类不能劈）。
+  */
++// 谓词词元（2026-09-28-split-guard-and-gate-report）：斜杠拆分的资格词表——拆分后每一段都
++// 含至少一个行为谓词才拆（「后端端点可访问/鉴权生效」双侧有谓词，拆开粒度才真）；成对短名词
++// （「节点/边」「页面/UI」「语言/框架」）无谓词，保持整条（2026-09-28 三变更实证误拆）。
++// 分号拆分与路径形态守卫（pathLike）不受此限——它们的语义不依赖段内谓词。
++const SEGMENT_PREDICATE_RE = /(访问|生效|可用|一致|通过|校验|支持|包含|输出|返回|存在|命中|阻断|启用|禁用|删除|新增|修改|生成|解析|渲染|编译|提交|回滚|触发|满足|锁定|收敛|幂等|对齐|补齐|清零|入仓|入库)/
++
+ function splitCompoundCriteria(item) {
+   const parts = String(item).split(/[；;]/).map((s) => s.trim()).filter(Boolean)
+   const out = []
+   for (const part of parts) {
+     const pathLike = /\.[A-Za-z]{1,5}\b/.test(part) || (part.match(/\//g) || []).length > 1
+     if (!pathLike && /[／/]/.test(part)) {
+-      for (const seg of part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)) out.push(seg)
++      const segs = part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)
++      const everyHasPredicate = segs.length > 1 && segs.every((s) => SEGMENT_PREDICATE_RE.test(s))
++      if (everyHasPredicate) out.push(...segs)
++      else out.push(part)
+     } else out.push(part)
+   }
+   return out
+@@ -331,10 +340,20 @@ function extractTestAnchors(content, root, indexRef) {
+     const raw = m[0].replace(/^[./\\]+/, '').replace(/\\/g, '/')
+     if (!isTestPathToken(raw)) continue
+     const winEnd = i + 1 < matches.length ? matches[i + 1].index : content.length
+-    const cm = content.slice(m.index + m[0].length, winEnd).match(CASE_ANCHOR_RE)
+     const file = resolveTestPathRel(raw, root, indexRef)
+-    const anchor = cm ? cm[0].trim().replace(/^>\s*/, ' > ') : ''
+-    out.push(file + anchor)
++    // 连续锚段全收（坑 test-trace-tests-glue-bracket-note 边角，2026-09-27 实证：`path「a」「b」`
++    // 只粘首段、「b」静默丢弃）：路径后紧跟的每一段用例锚（四形态任意序列）各产一条
++    // 书写原形条目；无锚产纯路径条目（原行为零变化）。
++    let rest = content.slice(m.index + m[0].length, winEnd)
++    let anchored = false
++    for (;;) {
++      const cm = rest.match(CASE_ANCHOR_RE)
++      if (!cm) break
++      out.push(file + cm[0].trim().replace(/^>\s*/, ' > '))
++      rest = rest.slice(cm[0].length)
++      anchored = true
++    }
++    if (!anchored) out.push(file)
+   }
+   return [...new Set(out)]
+ }
+diff --git a/src/flow.js b/src/flow.js
+index c35220d5..68d0288b 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -31,7 +31,7 @@ import { join, relative } from 'node:path'
+ import yaml from 'js-yaml'
+ import { git, gitQuiet } from './git-helper.js'
+ import { writeAtomicSync } from './fs-atomic.js'
+-import { resolveRuntimeRoot, triggerSync } from './run/shared.js'
++import { resolveRuntimeRoot, triggerSync, assertDatedChangeName } from './run/shared.js'
+ import { detectUiTouch, buildUiGuidanceLines, runUiVisualProbe, readUiVisualGate, UI_EVIDENCE_FILENAME } from './ui-visual.js'
+ import { runHunkAttributionGate, readHunkGate, renderHunkAttributionLines } from './hunk-attribution.js'
+ 
+@@ -798,6 +798,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     if (gate && gate.action === 'fail') {
+       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
+       console.error(`   ${gate.reason || gate.message || JSON.stringify(gate)}`)
++      // FAIL 三件套（2026-09-28-split-guard-and-gate-report，P6）：失败行样本 + 结果文件全路径 +
++      // 可粘贴重放的批命令——排障不再手翻 .runtime（快照模式回拷后同样可读）。
++      try {
++        const t = gate.test
++        if (t && t.resultPath && existsSync(t.resultPath)) {
++          const tr = JSON.parse(readFileSync(t.resultPath, 'utf8'))
++          const rem = tr.failure_remaining || []
++          if (rem.length > 0) {
++            console.error(`   失败行（前 5，完整清单在结果文件 failure_remaining）：`)
++            for (const l of rem.slice(0, 5)) console.error(`   - ${String(l).trim().slice(0, 140)}`)
++          }
++          for (const m of tr.modules || []) {
++            if (m.status && m.status !== 'passed' && m.command) console.error(`   重放（快照内命令，主仓同命令可复跑）：${m.command}`)
++          }
++          console.error(`   结果文件：${t.resultPath}`)
++        }
++      } catch { /* 三件套 best-effort：读不到不阻断 FAIL 主输出 */ }
+       // 失败触发升级（R7 切片四 / FR-10 / 护栏#4：不依赖 agent 主动）——剩余流程按厚档走
+       writeFlowState(changeDir, { tier: 'thick', upgrade_reason: `verify 实测失败（${gate.reason || 'test fail'}）——失败自动升厚` })
+       console.error('   ⬆️ 已自动升厚档（tier=thick）：重入修复后剩余流程按厚档语义（归档不跳过 plan.md 校验）')
+@@ -1362,8 +1379,21 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     }
+   }
+   if (sub === 'start') {
+-    const change = getFlag('--change') || `flow-${new Date().toISOString().slice(0, 10)}-${Math.random().toString(16).slice(2, 6)}`
++    const change = getFlag('--change') || `${new Date().toISOString().slice(0, 10)}-flow-${Math.random().toString(16).slice(2, 6)}`
+     validateChangeName(change)
++    // 变更名日期前缀门禁（对齐 run/command.js 净新建门与 change-rename 门，brainstorm step6
++    // 规则 CLI 化）：轻量道此前无此门，roadmap-copy-purge 实证无前缀名被照单物化入档，打乱
++    // 归档字典序时间线。只拦净新建（changes/<名> 与 changes/archive/<名> 均不存在）；恢复/
++    // 头脑风暴收编/平台 writer 预建空目录均目录在场不追诉（旧无前缀存量照常可续跑）。
++    if (!existsSync(join(specBase, 'changes', change)) && !existsSync(join(specBase, 'changes', 'archive', change))) {
++      try {
++        assertDatedChangeName(change)
++      } catch (e) {
++        console.error(`❌ ${e.message}`)
++        console.error(`   重试：sillyspec flow start --change <YYYY-MM-DD-简短描述> --input "<需求>"`)
++        process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
++      }
++    }
+     return cmdFlowStart({
+       change,
+       input: getFlag('--input') || undefined,
+diff --git a/src/index.js b/src/index.js
+index 88f9dfc0..de41c59e 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -168,7 +168,7 @@ SillySpec CLI — 规范驱动开发工具包
+ 示例:
+   sillyspec init
+   sillyspec run brainstorm --change 2026-07-03-add-login
+-  sillyspec flow start --change my-fix --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用）
++  sillyspec flow start --change 2026-07-03-my-fix --input "<动机与背景＋独立一行『成功标准：』＋每行一条『- 可验证标准』>"   # 轻量变更（默认快道，2 次调用；变更名须 YYYY-MM-DD-<简短描述> 日期前缀)
+   sillyspec run verify --done --output "验证通过，测试全绿"
+   sillyspec run archive --done --confirm --output "归档完成"
+   sillyspec run plan --reopen --from-step 2          # 修订 plan，从第 2 步重做
+@@ -221,7 +221,7 @@ function refuseRetiredQuickFreshStart(stageArgs) {
+     })()
+   if (passThrough) return false
+   console.error('❌ quick 通道已退役，不再接受新会话（v3.30.0 起）。')
+-  console.error('   新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
++  console.error('   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+   console.error('   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。')
+   process.exit(1)
+ }
+diff --git a/src/run/command.js b/src/run/command.js
+index dace18ed..ad2bd172 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -833,7 +833,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+             quickSessionId = recent
+             quickFallbackUsed = true
+           } else {
+-            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
++            console.log('   本仓无近期 quick 会话记录（current marker 与 quick-sessions 均空）——新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"')
+             process.exit(0)
+           }
+         } else {
+@@ -2011,7 +2011,7 @@ async function runAutoMode(pm, progress, cwd, flags, changeName, platformOpts =
+     if (classification.mode === 'quick') {
+       console.log(`📊 auto 模式分类：${classification.reason} 判为小变更`)
+       console.log(`   小变更请走轻量变更（quick 通道已退役，v3.30.0 起拒绝新会话）：`)
+-      console.log(`   sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
++      console.log(`   sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+       return
+     }
+     console.log(`📊 auto 模式分类：${classification.mode}（${classification.reason}）`)
+diff --git a/src/run/quick-audit.js b/src/run/quick-audit.js
+index a1c14b95..c5b847e0 100644
+--- a/src/run/quick-audit.js
++++ b/src/run/quick-audit.js
+@@ -12,7 +12,7 @@
+  *     启动路径（实测冷加载 100-150ms），而 checkbox 仅"≥2 活跃变更 + TTY"分支用到
+  */
+ import { join, dirname } from 'node:path'
+-import { existsSync, readFileSync } from 'node:fs'
++import { existsSync, readFileSync, readdirSync, cpSync } from 'node:fs'
+ import { parsePorcelainPath, safeGit } from './shared.js'
+ import { collectRecentForeignDelivery, detectAssertionRewrites, readSemanticGuardEnabled } from '../semantic-guard.js'
+ 
+@@ -690,8 +690,32 @@ export async function runQuickTestLintGate({ cwd, specBase, changedFiles = [], d
+       semanticGuard,
+     }
+   } finally {
+-    if (snapshot) { try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ } }
++    if (snapshot) {
++      // 快照证据回拷（2026-09-28-split-guard-and-gate-report，P6b）：快照内 verify-runs 结果
++      // 落快照临时目录、收尾即清——测试/lint FAIL 时先回拷主仓 .runtime 再清理，排障证据不蒸发。
++      try {
++        if (failed.length > 0) copySnapshotVerifyRuns(gateSpecBase, specBase)
++      } catch { /* 回拷 best-effort，不连坐门禁结论 */ }
++      try { snapshot.cleanup() } catch { /* 清理失败不连坐门禁结论 */ }
++    }
++  }
++}
++
++/** 快照 .runtime/verify-runs 全量回拷主仓（同名目录不覆盖——主仓自己的结果优先）。 */
++function copySnapshotVerifyRuns(fromSpecBase, toSpecBase) {
++  const fromDir = join(fromSpecBase, '.runtime', 'verify-runs')
++  const toDir = join(toSpecBase, '.runtime', 'verify-runs')
++  if (!existsSync(fromDir)) return 0
++  let copied = 0
++  for (const d of readdirSync(fromDir)) {
++    const src = join(fromDir, d)
++    const dst = join(toDir, d)
++    if (existsSync(dst)) continue
++    cpSync(src, dst, { recursive: true })
++    copied++
+   }
++  if (copied > 0) console.warn(`📎 快照实测证据已回拷主仓：${copied} 个 verify-runs 目录（排障读主仓 .runtime 即可）`)
++  return copied
+ }
+ 
+ /**
+diff --git a/src/run/shared.js b/src/run/shared.js
+index efc7928a..03d1590c 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -81,7 +81,10 @@ export function assertSafeChangeName(name, label = '变更名') {
+ // 历史 DB/目录已存在的旧变更不追诉（归档里 auto-flow-optimization 等 10 个无前缀名照常可读）。
+ // 豁免：quick-<8hex> 会话 key 与 default 兜底 key 是系统生成名，非 agent 自拟描述名。
+ // 日期只校验形状（月 01-12 日 01-31），不校验「当天」——跨天续跑/次日重命名不应被拦。
+-const DATED_CHANGE_NAME_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-[a-zA-Z0-9][\w.\-]*$/
++// slug 首字符放宽含 CJK（一-鿿，与 flow 族 validateChangeName 同字符集）：flow start 2026-09-28
++// 起复用本校验器，中文名（平台键 2026-09-25-中文名-a1b2c3 形态）是 flow 族既有测试特性；
++// run 族不受影响——其上游 assertSafeChangeName 仅放行 ASCII [\w.\-]，中文在到达本门之前已被拦。
++const DATED_CHANGE_NAME_RE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-[a-zA-Z0-9一-鿿][\w.\-一-鿿]*$/
+ export function assertDatedChangeName(name, label = '变更名') {
+   if (name == null) return
+   const s = String(name)
+diff --git a/src/run/stage.js b/src/run/stage.js
+index 4ecb0577..93321f70 100644
+--- a/src/run/stage.js
++++ b/src/run/stage.js
+@@ -416,7 +416,7 @@ export async function runStage(pm, progress, stageName, cwd, changeName, skipApp
+       // 注：CLI 进程入口的新会话已被 index.js refuseRetiredQuickFreshStart 预门拦下，本门兜底
+       // 进程内直调 runCommand 的入口（测试/编程调用）与 --change 指向不存在会话的形态。
+       console.error(`❌ quick 通道已退役，无法启动 quick 会话（若带 --change 则该会话不存在或已清理）。`)
+-      console.error(`   新工作请走轻量变更：sillyspec flow start --change <名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
++      console.error(`   新工作请走轻量变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<动机与背景；随后独立一行『成功标准：』；再每行一条『- <可验证标准>』>"`)
+       console.error(`   升级前进行中的 quick 会话仍可收尾：sillyspec run quick --change <会话ID> 续跑 / --done 收口 / --cancel 取消。`)
+       // 进程内路径幻影残留清理（best-effort）：CLI 入口已被 index.js 预门拦下；进程内直调
+       // runCommand 的新会话形态在 command.js 已生成 sid + owner.json + current-quick-run-id +
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 61c41c3a..cf12e2fc 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -55,7 +55,7 @@ export const definition = {
+ 
+ ### 早期规模筛查（判断是否该走轻量变更）
+ 加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
+-- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <名> --input "<需求>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
++- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
+ - **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
+ - 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
+ 
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index 9fa3d15c..ff06ce67 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -9,12 +9,12 @@
+ | 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用 |
+ | 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
+ | 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
+-| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
++| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
+ 
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+ ## 轻量变更（默认快道）
+-`sillyspec flow start --change <名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
++`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
+ 
+ `--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
+ 先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
+diff --git a/test/change-name-date-gate.test.mjs b/test/change-name-date-gate.test.mjs
+index a4340b70..69ba7cd0 100644
+--- a/test/change-name-date-gate.test.mjs
++++ b/test/change-name-date-gate.test.mjs
+@@ -11,16 +11,20 @@
+  *   1. run <stage> --change <非法名>（run/command.js 净新建门）
+  *   2. change-rename <旧> <非法新名>（index.js CLI 入口门）
+  *   3. assertDatedChangeName 校验器（run/shared.js，豁免 default / quick-<8hex>）
++ *   4. flow start --change <非法名>（flow.js 净新建门，2026-09-28-flow-date-gate——
++ *      roadmap-copy-purge 实证：轻量道此前无此门，无前缀名照单物化入档打乱归档时间线）
+  *
+  * 用例：
+- *  1. 校验器单元：合规/不合规/豁免名全矩阵（含事故名 friction-signal-hint）
++ *  1. 校验器单元：合规/不合规/豁免名全矩阵（含事故名 friction-signal-hint；
++ *     中文 slug 合规——flow 族中文名支持，run 族上游 assertSafeChangeName 仍拦中文）
+  *  2. CLI 净新建拦截：run brainstorm --change friction-signal-hint → exit 2 + 教学文案
+  *  3. CLI 合规名放行：run brainstorm --change 2026-09-11-xxx → exit 0
+  *  4. 存量自愈不追诉：预置 changes/auto-flow-optimization/ 目录 → run scan --change → 放行
+  *  5. done-like 守卫优先级：--done 幻影守卫先于日期门（分层顺序锁定）
+  *  6. change-rename 非法新名 → exit 2；合规新名 → 改名成功
++ *  7. flow 族门：start 净新建拦截 / 合规放行 / 存量（收编+归档名）不追诉 / 缺省自动名合规
+  */
+-import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
++import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
+ import { join } from 'node:path'
+ import { makeRepo, runCLI, cleanup, report, initChange } from './_cli-step-harness.mjs'
+ import { assertDatedChangeName } from '../src/run/shared.js'
+@@ -52,6 +56,8 @@ console.log('--- 用例1: 校验器单元矩阵 ---')
+   assert(!ok('2026-09-11-'), '空描述拦截')
+   assert(!ok('2026-09-11-_lead'), '描述以分隔符开头拦截')
+   assert(!ok('quick-1A2B3C4D'), '非会话形态（大写 hex）不豁免')
++  assert(ok('2026-09-25-中文名-a1b2c3'), '中文 slug 合规（flow 族中文名支持；run 族上游 assertSafeChangeName 仍拦中文无回潮）')
++  assert(!ok('2026-09-11-中文名/evil'), 'slug 含路径分隔符仍拦截（放宽不扩字符集）')
+ }
+ 
+ console.log('\n--- 用例2: CLI 净新建拦截（run brainstorm --change 事故名）---')
+@@ -109,6 +115,58 @@ console.log('\n--- 用例6: change-rename 新名门 ---')
+   assert(!existsSync(join(specBase, 'changes', '2026-09-11-old-name')), '旧名目录已迁走')
+ }
+ 
++console.log('\n--- 用例7: flow 族净新建门（轻量道，roadmap-copy-purge 实证）---')
++{
++  // 7a 净新建无前缀名 → exit 2 + 教学文案 + 未物化（roadmap-copy-purge 事故名）
++  const a = makeRepo('cngate-flw-')
++  mkdirSync(join(a.cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(a.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n') // flow start fail-fast 契约
++  const r = runCLI(['--dir', a.cwd, 'flow', 'start', '--change', 'roadmap-copy-purge', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: a.cwd })
++  assert(r.status === 2, `7a exit 2（实际 ${r.status}）`)
++  assert(r.combined.includes('YYYY-MM-DD'), '7a 报错给出格式模板')
++  assert(r.combined.includes('flow start'), '7a 报错给出 flow start 重试出路')
++  assert(!existsSync(join(a.cwd, '.sillyspec', 'changes', 'roadmap-copy-purge')), '7a 非法名目录未被物化')
++
++  // 7b 合规名放行 → 物化
++  const b = makeRepo('cngate-flw2-')
++  mkdirSync(join(b.cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(b.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
++  const ok = runCLI(['--dir', b.cwd, 'flow', 'start', '--change', '2026-09-28-my-fix', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: b.cwd })
++  assert(ok.status === 0, `7b exit 0（实际 ${ok.status}，尾：${ok.combined.slice(-150)}）`)
++  assert(existsSync(join(b.cwd, '.sillyspec', 'changes', '2026-09-28-my-fix', 'flow-state.yaml')), '7b 合规名轻量变更正常物化')
++
++  // 7c 存量不追诉：头脑风暴预段产物目录（无前缀名）→ 收编路径，不触发日期门
++  const c = makeRepo('cngate-flw3-')
++  mkdirSync(join(c.cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(c.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
++  const preDir = join(c.cwd, '.sillyspec', 'changes', 'legacy-bare-name')
++  mkdirSync(preDir, { recursive: true })
++  writeFileSync(join(preDir, 'proposal.md'), '# 提案\n\n## 成功标准\n- 行为 Y\n')
++  writeFileSync(join(preDir, 'design.md'), '# 设计\n完整设计\n')
++  const adopt = runCLI(['--dir', c.cwd, 'flow', 'start', '--change', 'legacy-bare-name'], { cwd: c.cwd })
++  assert(adopt.status === 0, `7c 收编放行（实际 ${adopt.status}，尾：${adopt.combined.slice(-150)}）`)
++  assert(!adopt.combined.includes('日期前缀'), '7c 存量名不触发日期门')
++
++  // 7d 归档同名在场 → 门跳过（历史归档名不追诉）
++  const d = makeRepo('cngate-flw4-')
++  mkdirSync(join(d.cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(d.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
++  mkdirSync(join(d.cwd, '.sillyspec', 'changes', 'archive', 'archived-bare-name'), { recursive: true })
++  const arch = runCLI(['--dir', d.cwd, 'flow', 'start', '--change', 'archived-bare-name', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: d.cwd })
++  assert(!arch.combined.includes('日期前缀'), '7d 归档在场不触发日期门')
++  assert(arch.status === 0, `7d 放行（实际 ${arch.status}，尾：${arch.combined.slice(-150)}）`)
++
++  // 7e 缺省自动名（无 --change）→ 物化名符合 DATED_CHANGE_NAME_RE（<日期>-flow-<hex>）
++  const e = makeRepo('cngate-flw5-')
++  mkdirSync(join(e.cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(e.cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
++  const def = runCLI(['--dir', e.cwd, 'flow', 'start', '--input', '任务\n成功标准：\n- 行为 X'], { cwd: e.cwd })
++  assert(def.status === 0, `7e exit 0（实际 ${def.status}，尾：${def.combined.slice(-150)}）`)
++  const created = readdirSync(join(e.cwd, '.sillyspec', 'changes')).filter((n) => n !== 'archive')
++  assert(created.length === 1 && /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-flow-[0-9a-f]+$/.test(created[0]),
++    `7e 缺省自动名带日期前缀（实际 ${JSON.stringify(created)}）`)
++}
++
+ cleanup()
+ report(count.passed, count.failed, count.failures)
+ if (count.failed > 0) process.exit(1)
+diff --git a/test/flow-checkpoints.test.mjs b/test/flow-checkpoints.test.mjs
+index b665c7af..a986f9d1 100644
+--- a/test/flow-checkpoints.test.mjs
++++ b/test/flow-checkpoints.test.mjs
+@@ -30,7 +30,7 @@ function makeRepo() {
+ 
+ test('① 简报含三断点纪律', () => {
+   const { cwd, cli } = makeRepo()
+-  const s = cli(['flow', 'start', '--change', 'fc-1', '--input', '任务\n成功标准：\n- 行为 X'])
++  const s = cli(['flow', 'start', '--change', '2026-09-01-fc-1', '--input', '任务\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0)
+   assert.match(s.stdout, /三断点纪律/, '三断点标题')
+   assert.match(s.stdout, /spec 断点/, '① spec 断点')
+@@ -43,12 +43,12 @@ test('① 简报含三断点纪律', () => {
+ test('② flow status 三态：不存在/进行中/已归档', () => {
+   const { cwd, cli } = makeRepo()
+   // 不存在
+-  const none = cli(['flow', 'status', '--change', 'fc-none'])
++  const none = cli(['flow', 'status', '--change', '2026-09-01-fc-none'])
+   assert.equal(none.status, 0)
+   assert.match(none.stdout, /不存在/)
+   // 进行中
+-  assert.equal(cli(['flow', 'start', '--change', 'fc-2', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+-  const active = cli(['flow', 'status', '--change', 'fc-2'])
++  assert.equal(cli(['flow', 'start', '--change', '2026-09-01-fc-2', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
++  const active = cli(['flow', 'status', '--change', '2026-09-01-fc-2'])
+   assert.equal(active.status, 0)
+   assert.match(active.stdout, /📋/, '标题')
+   assert.match(active.stdout, /spec.*填 FR/, '阶段=spec')
+diff --git a/test/flow-done-carry-suspect-advisory.test.mjs b/test/flow-done-carry-suspect-advisory.test.mjs
+index 4d317b95..f1fc18dc 100644
+--- a/test/flow-done-carry-suspect-advisory.test.mjs
++++ b/test/flow-done-carry-suspect-advisory.test.mjs
+@@ -52,7 +52,7 @@ function fillSlots(cwd, change) {
+ 
+ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；声明文件不点名；不阻断收口', () => {
+   const { cwd } = makeRepo()
+-  const change = 'carry-suspect-a'
++  const change = '2026-09-01-carry-suspect-a'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿', '--no-review']).status, 0)
+   fillSlots(cwd, change)
+   // design §6 自声明 work.txt（声明面锚点——坑 thin-flow-freeze-foreign-declared-hijack 绕过同款）
+@@ -77,7 +77,7 @@ test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；
+ 
+ test('② 声明面全空：不指认夹带，降为「无声明面」软提示', () => {
+   const { cwd } = makeRepo()
+-  const change = 'carry-suspect-b'
++  const change = '2026-09-02-carry-suspect-b'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成', '--no-review']).status, 0)
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 39bb26af..f89970a9 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -280,7 +280,7 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
+   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+   const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+ 
+-  const change = 'fd-e2e'
++  const change = '2026-09-01-fd-e2e'
+   assert.equal(cli(['flow', 'start', '--change', change, '--input', INPUT_WITH_CRITERIA]).status, 0)
+   const specBase = join(cwd, '.sillyspec')
+   const changeDir = join(specBase, 'changes', change)
+diff --git a/test/flow-parity.test.mjs b/test/flow-parity.test.mjs
+index a3e3513b..80dc3761 100644
+--- a/test/flow-parity.test.mjs
++++ b/test/flow-parity.test.mjs
+@@ -153,7 +153,7 @@ function fillDesignSlots(cwd, change) {
+ 
+ test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账三键（console 与落盘同源）', () => {
+   const { cwd, run } = makeRepo()
+-  const change = 'msp-it1'
++  const change = '2026-09-01-msp-it1'
+   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--no-review', '--input', '改 core 模块代码\n成功标准：\n- src/core/a.js 生成且 flow done 全绿\n- change-patch.json 含模块对账三键'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+   // 干活：交付代码 + 模块文档同步更新（同一提交——锁 docTouched=true 面）
+diff --git a/test/flow-protocol.test.mjs b/test/flow-protocol.test.mjs
+index 560ef78b..de45c225 100644
+--- a/test/flow-protocol.test.mjs
++++ b/test/flow-protocol.test.mjs
+@@ -64,7 +64,7 @@ function fillDesignSlots(cwd, change) {
+ 
+ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，仅两次协议调用，归档注销', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t1'
++  const change = '2026-09-01-flow-h2-t1'
+ 
+   // 协议调用 1/2：flow start
+   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input', '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'])
+@@ -96,7 +96,7 @@ test('① 机械 harness 2 调用走通轻量跑道：start→干活→done，
+ 
+ test('② flow start 重入 → 恢复简报（盘面状态信号：dirty/子步标记/下一步）', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t2'
++  const change = '2026-09-01-flow-h2-t2'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'wip.txt'), 'wip\n')
+   const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
+@@ -114,7 +114,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+   writeFileSync(join(cwd, 'check.js'), "const { existsSync } = require('node:fs'); process.exit(existsSync('pass.flag') ? 0 : 1)\n")
+   execFileSync('git', ['add', 'check.js'], { cwd, stdio: 'pipe' })
+   execFileSync('git', ['commit', '-q', '-m', 'check'], { cwd, stdio: 'pipe' })
+-  const change = 'flow-h2-t3'
++  const change = '2026-09-01-flow-h2-t3'
+   // --no-review：本用例测 fail-closed 测试门，非评审面——声明一票豁免评审（名字撞 1/4 采样桶）
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）', '--no-review']).status, 0)
+   // 2026-09-26-dynamic-test-inference 迁移：commands.test 全量道退役——变更面放可翻转测试文件，
+@@ -149,7 +149,7 @@ test('③ fail-closed：实测失败=整单 FAIL exit≠0 不归档；修复后
+ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回滚一行）', () => {
+   const { cwd } = makeRepo()
+   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: legacy\n')
+-  const r = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t4'])
++  const r = cli(cwd, ['flow', 'start', '--change', '2026-09-02-flow-h2-t4'])
+   assert.equal(r.status, 2)
+   assert.match(r.stderr, /legacy/)
+   assert.match(r.stderr, /run <stage>/)
+@@ -158,7 +158,7 @@ test('④ flow.mode=legacy → flow start 拒跑 exit 2 指路 run <stage>（回
+ 
+ test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒跑；带 flag 落 legacy_fallback 留痕；flow done 拒裁 exit 2', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t5'
++  const change = '2026-09-01-flow-h2-t5'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   // 同意门（2026-09-25-thin-upgrade-consent）：agent 不得自行升厚
+   const blocked = cli(cwd, ['run', 'brainstorm', '--change', change])
+@@ -181,7 +181,7 @@ test('⑤ 混跑回退写读两侧 + 升厚同意门：无 --upgrade-thick 拒
+ 
+ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 knowledge/fr（无 design.md 走交付文件伪域）', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t6'
++  const change = '2026-09-01-flow-h2-t6'
+   const s1 = cli(cwd, ['flow', 'start', '--change', change, '--input',
+     'backend 守护任务\n成功标准：\n- backend 守护行为 X 发生'])
+   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
+@@ -209,7 +209,7 @@ test('⑥ FR 索引提炼接线：轻量变更 flow done 后 requirements 进 kn
+ 
+ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done exit 1 点名空槽；填后放行归档', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t6b'
++  const change = '2026-09-01-flow-h2-t6b'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   writeFileSync(join(cwd, 'work.txt'), 'done\n')
+   execFileSync('git', ['add', 'work.txt'], { cwd, stdio: 'pipe' })
+@@ -250,7 +250,7 @@ test('⑥b 设计记录空槽拒收（CLI 级）：不填 design 槽 → done ex
+ 
+ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落盘并随发号提升', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t9'
++  const change = '2026-09-01-flow-h2-t9'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 行为甲发生']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+@@ -276,7 +276,7 @@ test('⑨ 绑定链 e2e：绑定槽写真实测试路径 → test-trace.json 落
+ 
+ test('⑥c 重入补起草：删 design.md 后重入 start → 幂等补生成 + 恢复简报前执行', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t6c'
++  const change = '2026-09-01-flow-h2-t6c'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）']).status, 0)
+   rmSync(join(cwd, '.sillyspec', 'changes', change, 'design.md'), { force: true }) // 模拟工具升级前的在途变更
+   const r = cli(cwd, ['flow', 'start', '--change', change, '--input', '成功标准：\n- 夹具标准 A（清晰度门契约）'])
+@@ -295,20 +295,20 @@ test('⑧ 归属收窄接线钉（文本级，防回潮）：ledger 门与 disti
+ 
+ test('⑫ 需求清晰度门：--input 缺失或成功标准 0 条 → exit 2 两选一（不建变更）', () => {
+   const { cwd } = makeRepo()
+-  const r1 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12'])
++  const r1 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t12'])
+   assert.equal(r1.status, 2)
+   assert.match(r1.stderr, /需求不够清晰/, '缺失 input 拦下')
+   assert.match(r1.stderr, /头脑风暴预段/, '两选一含预段')
+   assert.match(r1.stderr, /成功标准/, '两选一含补输入')
+-  const r2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t12', '--input', '只有动机没有验收条目'])
++  const r2 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t12', '--input', '只有动机没有验收条目'])
+   assert.equal(r2.status, 2, '有 input 无成功标准同样拦下')
+-  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', 'flow-h2-t12')), '未建变更目录')
++  assert.ok(!existsSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-flow-h2-t12')), '未建变更目录')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+ test('⑬ adopt 收编：brainstorm 产物目录 → flow start 收编轻量变更（补缺件+绑定槽+design 豁免）→ done 全绿', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t13'
++  const change = '2026-09-02-flow-h2-t13'
+   // 模拟 brainstorm 预段产物（agent 手写、无 flow-state、无指纹）
+   const changeDir = join(cwd, '.sillyspec', 'changes', change)
+   mkdirSync(changeDir, { recursive: true })
+@@ -349,7 +349,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\n')
+   writeFileSync(join(cwd, 'base.txt'), 'b\n')
+   g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+-  const change = 'flow-h2-t14'
++  const change = '2026-09-01-flow-h2-t14'
+   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '数据库迁移守护\n成功标准：\n- 迁移后数据完整'])
+   assert.equal(s.status, 0, `缺省 thin 应可跑: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /thin 轻量跑道/, '缺省走轻量跑道')
+@@ -360,7 +360,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+   assert.doesNotMatch(s.stdout, /复杂变更特征命中/, '迁移关键词不再给升厚建议')
+   assert.doesNotMatch(s.stdout, /由用户裁决/, '无升厚裁决文案')
+   // 无复杂特征输入同款零打扰（负例归并）
+-  const s2 = cli(cwd, ['flow', 'start', '--change', 'flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
++  const s2 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-flow-h2-t14b', '--input', '小修补\n成功标准：\n- 文案改正'])
+   assert.equal(s2.status, 0)
+   assert.doesNotMatch(s2.stdout, /复杂变更特征命中/, '无特征不打扰')
+   rmSync(cwd, { recursive: true, force: true })
+@@ -368,7 +368,7 @@ test('⑭ 入口归一实效：无 flow 配置缺省 thin 可跑；复杂特征
+ 
+ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 归档+遥测', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t15'
++  const change = '2026-09-01-flow-h2-t15'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '守护任务\n成功标准：\n- 重复写入不丢失不重复']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+@@ -408,7 +408,7 @@ test('⑮ 承诺词必评全链：任务书下发→review.json 回收→PASS 
+ 
+ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复后删件重评', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t16'
++  const change = '2026-09-01-flow-h2-t16'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+@@ -432,7 +432,7 @@ test('⑯ 评审 P1 拦截：FAIL+P1 发现 → 拒归档并列明细，修复
+ 
+ test('⑰ 声明通道：--review 一票必评 / --no-review 一票豁免', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t17'
++  const change = '2026-09-02-flow-h2-t17'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--review']).status, 0)
+   fillDesignSlots(cwd, change)
+   const f = cli(cwd, ['flow', 'done', '--change', change])
+@@ -470,14 +470,14 @@ test('⑱ 平台参数面：--spec-dir 外置根全链（start→done 归档落
+ 
+ test('⑲ 预建空目录放行：平台 writer 形态（先建空目录再 spawn）→ 全新 start，非空仍拒', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t19'
++  const change = '2026-09-01-flow-h2-t19'
+   mkdirSync(join(cwd, '.sillyspec', 'changes', change), { recursive: true })
+   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0, `空目录应放行: ${s.stdout}\n${s.stderr}`)
+   assert.match(s.stdout, /预建空变更目录放行/)
+   assert.ok(existsSync(join(cwd, '.sillyspec', 'changes', change, 'flow-state.yaml')))
+   // 非空且无头脑风暴产物 → legacy 拒收维持
+-  const change2 = 'flow-h2-t19b'
++  const change2 = '2026-09-01-flow-h2-t19b'
+   mkdirSync(join(cwd, '.sillyspec', 'changes', change2), { recursive: true })
+   writeFileSync(join(cwd, '.sillyspec', 'changes', change2, 'plan.md'), '# legacy 残留\n')
+   const s2 = cli(cwd, ['flow', 'start', '--change', change2, '--input', '任务\n成功标准：\n- 行为 X'])
+@@ -503,7 +503,7 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
+   mkdirSync(plat, { recursive: true })
+   writeFileSync(join(plat, 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: node -e 0\n') // local.yaml 必需（R22 fail-fast）
+   writeFileSync(join(cwd, '.sillyspec-platform.json'), JSON.stringify({ specRoot: plat }))
+-  const change = 'flow-h2-t21'
++  const change = '2026-09-01-flow-h2-t21'
+   const s = cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0, `指针恢复应落外置根: ${s.stdout}\n${s.stderr}`)
+   assert.ok(existsSync(join(plat, 'changes', change, 'flow-state.yaml')), '经 .sillyspec-platform.json 恢复 specRoot')
+@@ -511,7 +511,7 @@ test('㉑ 平台指针恢复 + 清晰度门格式样例', () => {
+   rmSync(plat, { recursive: true, force: true })
+   // 格式样例（清晰度门文案）
+   const cwd2 = makeRepo().cwd
+-  const gate = cli(cwd2, ['flow', 'start', '--change', 'x1'])
++  const gate = cli(cwd2, ['flow', 'start', '--change', '2026-09-01-x1'])
+   assert.match(gate.stderr, /独立一行只写「成功标准：」/, '过门格式样例在场')
+   assert.match(gate.stderr, /- <可验证标准>/)
+   rmSync(cwd2, { recursive: true, force: true })
+@@ -525,7 +525,7 @@ test('⑦ 平台同步接线登记钉：flow start 与 flow done 尾部各一次
+ 
+ test('⑱ --freeze-dirty 显式声明入冻 + 归档 git 整理指引', () => {
+   const { cwd } = makeRepo()
+-  const change = 'flow-h2-t19'
++  const change = '2026-09-01-flow-h2-t19'
+   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
+diff --git a/test/flow-route.test.mjs b/test/flow-route.test.mjs
+index eb668e9e..9469d2bc 100644
+--- a/test/flow-route.test.mjs
++++ b/test/flow-route.test.mjs
+@@ -75,7 +75,7 @@ function fillDesignSlots(cwd, change) {
+ 
+ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+醒目打印+遥测；小改无 hint', () => {
+   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n')
+-  const change = 'fr-r1'
++  const change = '2026-09-01-fr-r1'
+   // --no-review：本用例测 route 面——大改 amend 的 editRatio 会触发评审必评抢先拦截，声明豁免
+   assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
+   // 大改（≥0.75 行）→ route_hint
+@@ -99,7 +99,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+
+ 
+   // 小改（≤0.25）→ 无 route_hint
+   const s2 = makeRepo('flow:\n  mode: thin\n')
+-  const change2 = 'fr-r2'
++  const change2 = '2026-09-01-fr-r2'
+   assert.equal(s2.cli(['flow', 'start', '--change', change2, '--input', '成功标准：\n- 条件A']).status, 0)
+   const small = amendWithRatio(s2.cwd, change2, 0.25)
+   assert.equal(small.status, 0)
+@@ -110,7 +110,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+
+ 
+ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
+   const { cwd, cli } = makeRepo('flow:\n  mode: thin\n  edit_ratio_enforcement: block\n')
+-  const change = 'fr-b1'
++  const change = '2026-09-01-fr-b1'
+   // --no-review：本用例测 route block 面——editRatio 0.75 会触发评审必评抢先拦截，声明豁免
+   assert.equal(cli(['flow', 'start', '--change', change, '--input', '成功标准：\n- 条件A', '--no-review']).status, 0)
+   const big = amendWithRatio(cwd, change, 0.75)
+diff --git a/test/flow-tick-prototype.test.mjs b/test/flow-tick-prototype.test.mjs
+index 51a2a6f9..b0917773 100644
+--- a/test/flow-tick-prototype.test.mjs
++++ b/test/flow-tick-prototype.test.mjs
+@@ -42,17 +42,17 @@ function fillSlots(cwd, change) {
+ 
+ test('① fresh 简报含勾选纪律 + ③ status 显示勾选进度', () => {
+   const { cwd, cli } = makeRepo()
+-  const s = cli(['flow', 'start', '--change', 'ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
++  const s = cli(['flow', 'start', '--change', '2026-09-02-ftp-1', '--input', '任务\n成功标准：\n- 行为 X'])
+   assert.equal(s.status, 0)
+   assert.match(s.stdout, /任务面归你/, 'fresh 任务面归属（thin-agent-tasks 覆写语义）')
+-  const st = cli(['flow', 'status', '--change', 'ftp-1'])
++  const st = cli(['flow', 'status', '--change', '2026-09-02-ftp-1'])
+   assert.match(st.stdout, /任务勾选：0\/1/, 'status 显示勾选进度')
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
+ test('② adopt 简报枚举产物 + 原型点名', () => {
+   const { cwd, cli } = makeRepo()
+-  const change = 'ftp-2'
++  const change = '2026-09-01-ftp-2'
+   const cd = join(cwd, '.sillyspec', 'changes', change)
+   mkdirSync(join(cd, 'prototypes'), { recursive: true })
+   writeFileSync(join(cd, 'proposal.md'), '# 提案\n## 成功标准\n- 行为甲\n')
+@@ -72,7 +72,7 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
+ 
+ test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', () => {
+   const { cwd, cli } = makeRepo()
+-  const change = 'ftp-3'
++  const change = '2026-09-01-ftp-3'
+   assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+   fillSlots(cwd, change)
+   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+diff --git a/test/fr-compound-split.test.mjs b/test/fr-compound-split.test.mjs
+index c7716f88..143ec692 100644
+--- a/test/fr-compound-split.test.mjs
++++ b/test/fr-compound-split.test.mjs
+@@ -16,6 +16,18 @@ test('① 复合拆分：斜杠与分号形态', () => {
+   assert.deepEqual(extractSuccessCriteria('成功标准：\n- 写入幂等；重试收敛'), ['写入幂等', '重试收敛'])
+ })
+ 
++test('①b 谓词资格收窄（2026-09-28-split-guard-and-gate-report）：双侧含谓词才拆', () => {
++  // 双侧谓词：拆（原设计语义保留）
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 后端端点可访问/鉴权生效'), ['后端端点可访问', '鉴权生效'])
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 产物入仓/重编译通过'), ['产物入仓', '重编译通过'])
++  // 成对短名词（无谓词）：不拆——三次实证误拆的形态
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 节点与边 JSON 源描述'), ['节点与边 JSON 源描述'])
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 覆盖页面/UI 双形态'), ['覆盖页面/UI 双形态'])
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- 语言框架中立'), ['语言框架中立'])
++  // 单侧谓词：不拆（整体作为一个标准的组成部分）
++  assert.deepEqual(extractSuccessCriteria('成功标准：\n- warn 默认/error 阻断'), ['warn 默认/error 阻断'])
++})
++
+ test('② 路径形态不拆：扩展名点或多斜杠', () => {
+   assert.deepEqual(extractSuccessCriteria('成功标准：\n- src/flow.js 补冻结面/提示'),
+     ['src/flow.js 补冻结面/提示'])
+diff --git a/test/fr-governance-sweep.test.mjs b/test/fr-governance-sweep.test.mjs
+index f2591683..b9dceb57 100644
+--- a/test/fr-governance-sweep.test.mjs
++++ b/test/fr-governance-sweep.test.mjs
+@@ -63,13 +63,13 @@ test('② resume 声明通道：--review 对在途变更重入落盘 review_forc
+     g(['add', '.']); g(['commit', '-q', '-m', 'b'])
+     const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+     const INPUT = '动机：夹具\n成功标准：\n- 夹具行为'
+-    const r1 = cli(['flow', 'start', '--change', 'c-rf', '--input', INPUT])
++    const r1 = cli(['flow', 'start', '--change', '2026-09-01-c-rf', '--input', INPUT])
+     assert.equal(r1.status, 0, `首次 start 应成功: ${r1.stderr}`)
+     // 在途变更 resume 带 --review → review_force 落盘
+-    const r2 = cli(['flow', 'start', '--change', 'c-rf', '--review'])
++    const r2 = cli(['flow', 'start', '--change', '2026-09-01-c-rf', '--review'])
+     assert.equal(r2.status, 0, `resume 应成功: ${r2.stderr}`)
+     assert.ok(r2.stdout.includes('review_force=true'), 'resume 应打印落盘回执')
+-    const state = readFileSync(join(cwd, '.sillyspec', 'changes', 'c-rf', 'flow-state.yaml'), 'utf8')
++    const state = readFileSync(join(cwd, '.sillyspec', 'changes', '2026-09-01-c-rf', 'flow-state.yaml'), 'utf8')
+     assert.ok(/review_force:\s*true/.test(state), 'flow-state 应含 review_force: true')
+   } finally { rmSync(cwd, { recursive: true, force: true }) }
+ })
+diff --git a/test/sentinel-wiring.test.mjs b/test/sentinel-wiring.test.mjs
+index 2d105fef..ca390a3d 100644
+--- a/test/sentinel-wiring.test.mjs
++++ b/test/sentinel-wiring.test.mjs
+@@ -42,7 +42,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非
+   // 形态 A：全勾零证据 → 拒
+   {
+     const { cwd, cli } = makeRepo()
+-    const change = 'sw-fake'
++    const change = '2026-09-02-sw-fake'
+     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+@@ -61,7 +61,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非
+   // 形态 B：全勾 + 提交标题带 token → 过（哨兵绿行，收口继续）
+   {
+     const { cwd, cli } = makeRepo()
+-    const change = 'sw-real'
++    const change = '2026-09-01-sw-real'
+     // --no-review：聚焦哨兵不测评审（勾选直改后无 edit_ratio，评审定档与本用例无关）
+     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+@@ -79,7 +79,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非
+   // 形态 B2：全勾 + token 只在提交正文（标题无 token）→ 过（坑2：证据面=整条提交消息）
+   {
+     const { cwd, cli } = makeRepo()
+-    const change = 'sw-body-token'
++    const change = '2026-09-01-sw-body-token'
+     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X', '--no-review']).status, 0)
+     const cd = join(cwd, '.sillyspec', 'changes', change)
+     fillSlots(cwd, change)
+@@ -95,7 +95,7 @@ test('① flow done 哨兵：全勾零证据拒收 / 全勾+token 放行 / 非
+   // 形态 C：非全勾（默认未勾）→ 哨兵 status=none 不拦（既有全部测试已隐式覆盖——显式断言一次）
+   {
+     const { cwd, cli } = makeRepo()
+-    const change = 'sw-partial'
++    const change = '2026-09-02-sw-partial'
+     assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+     fillSlots(cwd, change)
+     writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
+diff --git a/test/thin-fr-inject-parity.test.mjs b/test/thin-fr-inject-parity.test.mjs
+index 9f1bd1df..132d044c 100644
+--- a/test/thin-fr-inject-parity.test.mjs
++++ b/test/thin-fr-inject-parity.test.mjs
+@@ -233,7 +233,7 @@ test('④ flow start fresh 简报端到端：知识注入段在场（--input 路
+     buildSpecRoot(cwd)
+     // local.yaml（2026-09-26 起 flow start fail-fast：init 级配置缺席拒绝执行）
+     writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'commands:\n  test: node -e "1"\n')
+-    const r = spawnSync(process.execPath, [CLI, 'flow', 'start', '--change', 'e2e-inject', '--input',
++    const r = spawnSync(process.execPath, [CLI, 'flow', 'start', '--change', '2026-09-01-e2e-inject', '--input',
+       '动机：登录流程调整，涉及 src/cli/login.js\n成功标准：\n- 登录行为保持'], {
+       cwd, encoding: 'utf8', timeout: 120_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' },
+     })
+diff --git a/.sillyspec/changes/2026-09-28-flow-date-gate/proposal.md b/.sillyspec/changes/2026-09-28-flow-date-gate/proposal.md
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-flow-date-gate/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T06:51:06.973Z
++---
++# 提案书（Proposal）— 2026-09-28-flow-date-gate
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:08768614e5d48c7356057b3aecd92351073ed14a34ff88d8790faa2d3875f864:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++任务原话转写：轻量变更（flow start）此前未设变更名日期前缀门禁：--change roadmap-copy-purge 类无日期前缀名被照单物化并入档，破坏归档字典序时间线与 brainstorm step6 既定规则（YYYY-MM-DD-<简短描述>，厚流程已在 run --change / change-rename 两处 CLI 边界强制）。本变更把同款门禁补到 flow 族：flow start 净新建（活跃/归档目录均无该名）时 assertDatedChangeName 拒收并给教学文案；恢复/收编路径不追诉；默认自动名对齐日期前缀形态。
++成功标准：
++- flow start --change friction-signal-hint（净新建、无日期前缀）exit 2 且报错含 YYYY-MM-DD-<简短描述> 教学文案与重试提示
++- flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
++- 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉）
++- 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-DD-flow-<hex> 形态）
++- 既有 flow 族测试全部适配通过（test+lint 双绿）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:c146b72181b3ae7789696ceafe603aaa73f3ffcbbd12ad80010980a5ceaf38a6:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. flow start --change friction-signal-hint（净新建、无日期前缀）exit 2 且报错含 YYYY-MM-DD-<简短描述> 教学文案与重试提示
++2. flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
++3. 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉）
++4. 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-DD-flow-<hex> 形态）
++5. 既有 flow 族测试全部适配通过（test+lint 双绿）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:85d627ad13cd7f3a0f08c601fcb74f6ecafcdf8c7776aa1fbeafdfb97d4cee78:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-flow-date-gate 留痕重锚 -->
++1. flow start --change friction-signal-hint（净新建、无日期前缀）exit 2 且报错含 YYYY-MM-DD-<简短描述> 教学文案与重试提示
++2. flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
++3. 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉）
++4. 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-DD-flow-<hex> 形态）
++5. 既有 flow 族测试全部适配通过（test+lint 双绿）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
