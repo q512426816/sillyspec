@@ -297,6 +297,28 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
   }
   // 哨兵源四：review.json mtime 面
   snap.reviews = collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl);
+  // 哨兵源五（2026-09-28-watcher-signal-widen）：门实测结论——verify-runs 下本变更最新
+  // test-result.json（目录名 YYYYMMDDHHMMSS 字典序即时序）。停滞判定的核心活跃信号：
+  // 门在跑/失败/过此前对观测面完全不可见（15 分钟苦战被判停滞的实证）。
+  try {
+    const runsDir = join(runtimeRoot, 'verify-runs');
+    let latest = null;
+    for (const d of readdirSyncImpl(runsDir)) {
+      try {
+        const raw = JSON.parse(readFileSyncImpl(join(runsDir, d, 'test-result.json'), 'utf8'));
+        if (raw && raw.change === changeName) {
+          if (!latest || String(d) > latest.dir) latest = { dir: String(d), status: String(raw.status || '?'), durationMs: typeof raw.duration_ms === 'number' ? raw.duration_ms : null };
+        }
+      } catch { /* 半写/坏行跳过 */ }
+    }
+    snap.gateRun = latest;
+  } catch { snap.gateRun = null; }
+  // 哨兵源六：本地配置变更事实（local.yaml mtime——gitignored 无 git 信号；内容不上行只留痕，
+  // 「门为何突然过了」的豁免配置变更在时间线可见）
+  try {
+    const cfgStat = statSyncImpl(join(resolve(changeDir, '..', '..'), 'local.yaml'));
+    snap.localConfig = { mtimeMs: Math.round(cfgStat.mtimeMs) };
+  } catch { snap.localConfig = null; }
   return snap;
 }
 
@@ -331,6 +353,16 @@ export function inferEvents(prev, next) {
   }
   if (next.scan && (!prev.scan || prev.scan.mtimeMs !== next.scan.mtimeMs || prev.scan.size !== next.scan.size)) {
     events.push(mk('verify', 'verify', prev.scan ? '质量扫描记录更新' : '质量扫描记录出现'));
+  }
+  // 门实测结论事件（2026-09-28-watcher-signal-widen）：新实测记录出现即事件（含结论与耗时
+  // ——停滞判定的活跃信号，ruleStall 经 baseEvents 非空自然计入 lastActivityAt）。
+  if (next.gateRun && (!prev.gateRun || prev.gateRun.dir !== next.gateRun.dir)) {
+    const dur = typeof next.gateRun.durationMs === 'number' ? `（${(next.gateRun.durationMs / 1000).toFixed(1)}s）` : '';
+    events.push(mk('gate-run', 'verify', `门实测 ${next.gateRun.status}${dur} · ${next.gateRun.dir}`));
+  }
+  // 本地配置变更事实事件（内容不上行——gitignored 文件只留 mtime 痕迹）
+  if (next.localConfig && (!prev.localConfig || prev.localConfig.mtimeMs !== next.localConfig.mtimeMs)) {
+    events.push(mk('config-change', null, prev.localConfig ? '本地配置 local.yaml 有变更（内容不上行）' : '本地配置 local.yaml 在场'));
   }
   return events;
 }
@@ -371,7 +403,7 @@ export const STALL_EXECUTE_MS = 15 * 60_000;
 
 /** 引擎状态初值（ts=计时锚；task-04 重启回补时取 max(启动时刻, 水位 ts)）。 */
 export function createSentinelState(ts = Date.now()) {
-  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null };
+  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null, fakeCheckPending: {} };
 }
 
 function mkWarning(rule, detail, ts) {
@@ -473,8 +505,11 @@ export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
 /**
  * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
  * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
+ * 消解态（2026-09-28-watcher-signal-widen）：无证据翻格记入 state.fakeCheckPending；
+ * 后续拍位证据补上（提交晚于勾选几十秒是常态——guidance-principles 36 秒实证）→ 发
+ * fake-check-cleared info 事件并清 pending，时间线可见「警告已消解」而非永挂。
  */
-function ruleFakeCheck(prev, next, ts) {
+function ruleFakeCheck(prev, next, state, ts) {
   const flipped = [];
   const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
   for (const key of keys) {
@@ -483,16 +518,29 @@ function ruleFakeCheck(prev, next, ts) {
       if (!pIds.has(id)) flipped.push(id);
     }
   }
-  if (flipped.length === 0) return [];
   const newCommits = newCommitsBetween(prev, next);
-  const unevidenced = flipped.filter((id) => {
+  const hasEvidence = (id) => {
     const re = taskTokenRe(id);
     const byCommit = newCommits.some((c) => re.test(c.subject || ''));
     const byReview = Object.entries(next.reviews || {}).some(([p, mtime]) => p.includes(`/tasks/${id}/`) && (prev.reviews || {})[p] !== mtime);
-    return !(byCommit || byReview);
-  });
-  if (unevidenced.length === 0) return [];
-  return [mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts)];
+    return byCommit || byReview;
+  };
+  const out = [];
+  const pending = (state.fakeCheckPending = state.fakeCheckPending || {});
+  // 新翻格：零证据 → 警告并挂 pending
+  const unevidenced = flipped.filter((id) => !hasEvidence(id));
+  if (unevidenced.length > 0) {
+    for (const id of unevidenced) pending[id] = true;
+    out.push(mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts));
+  }
+  // 消解：pending 中证据到位 → info 事件（含证据形态：提交号或 review 变更）
+  const cleared = Object.keys(pending).filter((id) => hasEvidence(id));
+  for (const id of cleared) {
+    delete pending[id];
+    const c = newCommits.find((x) => taskTokenRe(id).test(x.subject || ''));
+    out.push({ ts, kind: 'info', stage: null, rule: 'fake-check-cleared', severity: 'info', detail: `task ${id} 勾选证据补齐${c ? `（提交 ${c.hash}）` : '（review.json 变更）'}——前拍假勾选嫌疑消解`, provisional: true });
+  }
+  return out;
 }
 
 const testDirtyOf = (dirtyCode) => (Array.isArray(dirtyCode) ? dirtyCode.filter((p) => p.startsWith('test/')) : []);
@@ -689,7 +737,7 @@ export function applySentinelRules({ prev, next, baseEvents = [], state = null, 
     st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
   }
   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
-  try { warnings.push(...ruleFakeCheck(prev, next, now)); } catch { /* R1 本轮跳过 */ }
+  try { warnings.push(...ruleFakeCheck(prev, next, st, now)); } catch { /* R1 本轮跳过 */ }
   try { warnings.push(...ruleTestTamper(prev, next, st, now, bindResolveImpl)); } catch { /* R2 本轮跳过 */ }
   let declaredScope = null;
   try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }

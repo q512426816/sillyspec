@@ -999,6 +999,17 @@ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
 // 符号串的裸子串，豁免资格停用（须改锚定式 ^…）——防「裸 "--- " 吞 go --- FAIL: 行」「裸
 // "AssertionError" 吞真实断言行」（M1 评审实证）。文件名/用例名等具体模式（主用例：按名豁免
 // 预存失败测试）不在此列，不受限。
+/**
+ * 嵌套测试环境清洗（2026-09-28-tap-judge 实证根因 + 本变更具象为共用单点）：父级 node:test
+ * 进程带 NODE_TEST_CONTEXT env，execSync 全量继承会让内层 node --test 误入 child 模式
+ * stdout 全空——所有跑测试命令的 execSync 调用点统一经此剥离（普通进程本无此键零变化）。
+ */
+export function stripNestedTestEnv(env = process.env) {
+  const next = { ...env }
+  delete next.NODE_TEST_CONTEXT
+  return next
+}
+
 const GENERIC_BARE_PATTERN_RE = /^(?:[-=_~*#·✖✕✗✘×✗\s]{1,6}|assertionerror|error|fail|failed|failure|failing|not ok|exception|traceback|panic|assert|error:|fail:)$/i
 
 /** 豁免模式编译（partitionFailures 与 TAP 判账共用单点，2026-09-28-tap-judge）：锚定式（^…/$…
@@ -1366,8 +1377,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
   // env，本模块 execSync 全量继承——门在测试进程内被调用时（e2e 用例 spawn 内层 CLI 跑门），
   // 内层 node --test 误入 child 模式 stdout 全空（⑮ 门内必挂/单独跑必过的根因家族）。
   // 剥离该键：门内测试进程与普通进程行为一致。
-  const runEnv = { ...process.env }
-  delete runEnv.NODE_TEST_CONTEXT
+  const runEnv = stripNestedTestEnv()
   try {
     output = decodeShellOutput(execSync(testCommand, {
       cwd,
@@ -2182,6 +2192,7 @@ function runCrossRepoFullTest(entry) {
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
+        env: stripNestedTestEnv(),
     })
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1
@@ -2363,6 +2374,7 @@ function runFullCommand({ yamlText, localYamlPath, cwd, specBase, changeName, fa
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
+       env: stripNestedTestEnv(),
     }))
   } catch (e) {
     exitCode = typeof e.status === 'number' ? e.status : 1

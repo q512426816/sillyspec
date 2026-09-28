@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const {
-  inferEvents, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
+  inferEvents, createSentinelState, applySentinelRules, aggregateStageTiming, isWatcherLeaseLive, readWatcherLock,
   spawnWatcher, buildSnapshot, runWatcherFromEnv, WATCHER_LOCK_FILENAME,
   toPlatformChangeEvents, pushEventsToPlatform,
 } = await import('../src/watcher.js')
@@ -29,6 +29,32 @@ assert.equal(typeof runWatcherFromEnv, 'function')
 function snap(over = {}) {
   return { ts: 1700000000000, archived: false, head: null, files: {}, scan: null, ...over }
 }
+
+test('watcher-signal-widen: gate-run 与 config-change 事件', () => {
+  const base = { ts: 1, archived: false, head: 'a', files: {}, scan: null, commits: [], dirtyCode: [], scanStatus: null, reviews: {}, gateRun: null, localConfig: null };
+  const mk = (over) => ({ ...base, ...over });
+  let ev = inferEvents(mk({}), mk({ ts: 2, gateRun: { dir: '20260928120000', status: 'failed', durationMs: 30000 } }));
+  assert.ok(ev.some((e) => e.kind === 'gate-run' && e.detail.includes('failed')), JSON.stringify(ev));
+  ev = inferEvents(mk({ gateRun: { dir: '20260928120000', status: 'failed', durationMs: 30000 } }), mk({ ts: 3, gateRun: { dir: '20260928120000', status: 'failed', durationMs: 30000 } }));
+  assert.ok(!ev.some((e) => e.kind === 'gate-run'));
+  ev = inferEvents(mk({ localConfig: { mtimeMs: 1 } }), mk({ ts: 4, localConfig: { mtimeMs: 99 } }));
+  assert.ok(ev.some((e) => e.kind === 'config-change' && e.detail.includes('有变更')));
+})
+
+test('watcher-signal-widen: 假勾选 pending 消解路径', () => {
+  const st = createSentinelState(1000)
+  const filesWith = (ids) => ({ 'tasks.md': { hash: 'h', stage: 'tasks', checked: ids.length, total: 4, checkedTasks: ids } })
+  const snapWith = (ids, commits = []) => ({ ts: 2, archived: false, head: 'a', files: filesWith(ids), scan: null, commits, dirtyCode: [], scanStatus: null, reviews: {} })
+  let r = applySentinelRules({ prev: snapWith([]), next: snapWith(['task-01']), state: st, now: 2000 })
+  assert.ok(r.warnings.some((w) => w.rule === 'fake-check' && w.detail.includes('task-01')), JSON.stringify(r.warnings))
+  assert.ok(st.fakeCheckPending['task-01'])
+  r = applySentinelRules({ prev: snapWith(['task-01']), next: snapWith(['task-01'], [{ hash: 'abc1234', subject: 'feat: 落地（task-01）', files: [] }]), state: st, now: 3000 })
+  const cleared = r.warnings.filter((e) => e.rule === 'fake-check-cleared')
+  assert.ok(cleared.length === 1 && cleared[0].kind === 'info' && cleared[0].detail.includes('abc1234'), JSON.stringify(r.warnings))
+  assert.ok(!st.fakeCheckPending['task-01'])
+  r = applySentinelRules({ prev: snapWith(['task-01']), next: snapWith(['task-01']), state: st, now: 4000 })
+  assert.ok(!r.warnings.some((e) => e.rule && e.rule.startsWith('fake-check')))
+})
 
 test('inferEvents: 文件首现带阶段推断 + provisional:true', () => {
   const next = snap({ files: { 'proposal.md': { hash: 'a', stage: 'proposal', checked: 0, total: 0 } } })
