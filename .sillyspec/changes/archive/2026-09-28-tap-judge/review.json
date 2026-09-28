@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-tap-judge",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "NODE_TEST_CONTEXT 剥离仅覆盖 runOneModule，同族 execSync 路径（runCrossRepoFullTest / runFullCommand）仍全量继承 env",
+      "evidence": "实证复现确认根因主张：在 node:test 子进程内（NODE_TEST_CONTEXT=child-v8 实测捕获）execSync 内层『node --test 双报告器』命令，脏 env 全继承时 stdout=0 字节；delete 该键后 stdout=621 字节、首行『TAP version 13』。runOneModule 的清洗（src/verify-postcheck.js:1369-1370 构造 runEnv、:1379 env:runEnv）为单一 execSync 调用点，success 与 catch（读同一次 exec 的 e.stdout）两路均被覆盖。但 grep 全文件 execSync 另有三处：:283（runVerifyLintCheck，lint 命令无 node:test 语义，不受影响）、:2178（runCrossRepoFullTest）、:2359（runFullCommand）——后两处无 env 清洗，若门在 node:test 进程内被调用且走跨仓/全量命令路径且命令含 node --test，将复现同族空 stdout。方向为 fail-safe（空输出+非零退出→judgeWithKnownFailures 保守判 failed，不产生假 PASS），且 design 槽3 已显式声明跨仓/module 留 legacy、⑮ 所属 deps 批路径（:2674/:2783 两调用点均传 {tap:b.tap}）已修复并经 flow-protocol e2e 22/22 实测通过——信息级留痕，不阻断。",
+      "location": "src/verify-postcheck.js:2178,2359（对照修复点 1369-1379）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok——judgeTapOutput 是对运行器终态快照 stdout 的纯函数（行级过滤 ^ok/^not ok），无时序假设；design 槽3 Q1 答复与代码一致",
+    "并发": "ok——纯判账层零共享写；env 清洗为每次 spawn 的 {...process.env} 副本上单键删除，不污染父进程 env",
+    "切换": "ok——非 TAP 首行判定失败返回 null 回退 judgeWithKnownFailures（:1396-1397 短路），旧形态零断裂（tap-judge 用例1 实测）；exit≠0 且 not-ok 为 0（崩溃/bailout 边界）落入 failed 终支，fail-safe 方向保持",
+    "作用域": "ok——tap:true 仅标注 deps(auto-js) 批（:2589），module 命令（:2746 无 opts）与跨仓命令仍 legacy；豁免编译/匹配经 buildExemptPats/matchExemptLine 单点（:1006/:1019）双路复用（partitionFailures :1089/:1094、judgeTapOutput :1338/:1343），抽取体与原内联逻辑逐字符等价（diff 核对），known-failures 回归套件自报 74 通过 0 失败"
+  },
+  "reviewedAt": "2026-09-28T09:24:22Z"
+}

@@ -1,0 +1,439 @@
+diff --git a/src/verify-postcheck.js b/src/verify-postcheck.js
+index 27247520..ca2c4974 100644
+--- a/src/verify-postcheck.js
++++ b/src/verify-postcheck.js
+@@ -1001,6 +1001,33 @@ const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
+ // 预存失败测试）不在此列，不受限。
+ const GENERIC_BARE_PATTERN_RE = /^(?:[-=_~*#·✖✕✗✘×✗\s]{1,6}|assertionerror|error|fail|failed|failure|failing|not ok|exception|traceback|panic|assert|error:|fail:)$/i
+ 
++/** 豁免模式编译（partitionFailures 与 TAP 判账共用单点，2026-09-28-tap-judge）：锚定式（^…/$…
++ * 对 trim 后整行正则）／裸子串（兼容语义），泛用裸模式停用。 */
++function buildExemptPats(knownFailures) {
++  return (knownFailures || [])
++    .map(p => String(p).replace(ANSI_RE, '').trim())
++    .filter(Boolean)
++    .map(p => {
++      const anchored = p.startsWith('^') || p.endsWith('$')
++      if (anchored) { try { return { sub: null, regex: new RegExp(p) } } catch { return { sub: p.toLowerCase(), regex: null } } }
++      if (GENERIC_BARE_PATTERN_RE.test(p)) return { sub: null, regex: null, refused: true }
++      return { sub: p.toLowerCase(), regex: null }
++    })
++}
++
++/** 单行豁免匹配（剥 ANSI 后）：返回 {pattern, anchored} 或 null。 */
++function matchExemptLine(rawLine, pats, knownFailures) {
++  const bare = String(rawLine).replace(ANSI_RE, '')
++  const ll = bare.toLowerCase()
++  const trimmed = bare.trim()
++  for (let i = 0; i < pats.length; i++) {
++    const p = pats[i]
++    const matched = p.regex ? p.regex.test(trimmed) : (p.sub != null && ll.includes(p.sub))
++    if (matched) return { pattern: (knownFailures || [])[i], anchored: !!p.regex }
++  }
++  return null
++}
++
+ /**
+  * 把测试输出按行筛出「失败行」，再按 known_failures 模式分为已豁免 / 未豁免。
+  * @param {string} output
+@@ -1058,28 +1085,13 @@ export function partitionFailures(output, knownFailures) {
+   //   的裸子串失去豁免资格（物理关闭「裸 "--- " 吞 go --- FAIL: 行」通路）——须改写为锚定式；
+   // - 具体裸模式（文件名、用例名——known_failures 的主用例：按名豁免预存失败测试）不受限，
+   //   硬失败行照常可被其豁免（跨仓零破坏）。
+-  const pats = (knownFailures || [])
+-    .map(p => String(p).replace(ANSI_RE, '').trim())
+-    .filter(Boolean)
+-    .map(p => {
+-      const anchored = p.startsWith('^') || p.endsWith('$')
+-      if (anchored) { try { return { sub: null, regex: new RegExp(p) } } catch { return { sub: p.toLowerCase(), regex: null } } }
+-      if (GENERIC_BARE_PATTERN_RE.test(p)) return { sub: null, regex: null, refused: true }
+-      return { sub: p.toLowerCase(), regex: null }
+-    })
++  // 匹配器编译/单行匹配抽为 buildExemptPats/matchExemptLine 共用单点（2026-09-28-tap-judge）。
++  const pats = buildExemptPats(knownFailures)
+   const exempted = []
+   const remaining = []
+   const exemptedBy = []
+   for (const l of failureLines) {
+-    const bare = l.replace(ANSI_RE, '')
+-    const ll = bare.toLowerCase()
+-    const trimmed = bare.trim()
+-    let hit = null
+-    for (let i = 0; i < pats.length; i++) {
+-      const p = pats[i]
+-      const matched = p.regex ? p.regex.test(trimmed) : (p.sub != null && ll.includes(p.sub))
+-      if (matched) { hit = { pattern: (knownFailures || [])[i], anchored: !!p.regex }; break }
+-    }
++    const hit = matchExemptLine(l, pats, knownFailures)
+     if (hit) { exempted.push(l); exemptedBy.push(hit) } else remaining.push(l)
+   }
+   return { failureLines, exempted, remaining, exemptedBy }
+@@ -1302,16 +1314,60 @@ export function decideVerifyTestAction({ strategy, scopeCount = 0, gitUnavailabl
+   return scopeCount > 0 ? 'dynamic-subset' : 'dynamic-empty-skip'
+ }
+ 
++/**
++ * TAP 结构化判账（2026-09-28-tap-judge，P2 一期）：node --test 双报告器（spec→stderr 人读、
++ * tap→stdout 机读）批次按 `not ok` 行用例粒度判账——自由文本正则误计（fixture 预期错误文案、
++ * 控制台噪声）对 TAP 路径物理消失。豁免匹配复用 buildExemptPats/matchExemptLine 单点
++ * （锚定式/裸子串/泛用停用语义与 partitionFailures 完全一致）。
++ * @returns {null | {status:'passed'|'failed', reason, exemptedCount, remainingLines, exemptedLines, exemptedBy, tap:{total,failed}}}
++ *   null=输出非 TAP（旧 node/异构命令）——调用方回退 legacy judgeWithKnownFailures。
++ */
++export function judgeTapOutput(exitCode, output, baseReason, knownFailures) {
++  const text = String(output || '')
++  if (!/^TAP version \d+/m.test(text.split('\n')[0] || '')) return null
++  const allLines = text.split(/\r?\n/)
++  const okCount = allLines.filter(l => /^ok\s+\d+/.test(l)).length
++  const notOkLines = allLines.filter(l => /^not ok\s+\d+/.test(l))
++  const tap = { total: okCount + notOkLines.length, failed: notOkLines.length }
++  if (exitCode === 0) {
++    return { status: 'passed', reason: `${baseReason || ''}（TAP ${tap.total} 用例 0 失败）`.trim(), exemptedCount: 0, remainingLines: [], exemptedLines: [], exemptedBy: [], tap }
++  }
++  if (!knownFailures || knownFailures.length === 0) {
++    return { status: 'failed', reason: baseReason, exemptedCount: 0, remainingLines: notOkLines, exemptedLines: [], exemptedBy: [], tap }
++  }
++  const pats = buildExemptPats(knownFailures)
++  const exempted = []
++  const remaining = []
++  const exemptedBy = []
++  for (const l of notOkLines) {
++    const hit = matchExemptLine(l, pats, knownFailures)
++    if (hit) { exempted.push(l); exemptedBy.push(hit) } else remaining.push(l)
++  }
++  if (remaining.length === 0 && notOkLines.length > 0) {
++    const anchoredHits = exemptedBy.filter(x => x && x.anchored).length
++    const formNote = exempted.length - anchoredHits > 0 ? `；其中裸子串命中 ${exempted.length - anchoredHits} 行（建议锚定式）` : '（全部锚定式命中）'
++    return { status: 'passed', reason: `TAP ${notOkLines.length} 个失败用例全部命中 known_failures 已豁免${formNote} — 请人工复核`, exemptedCount: exempted.length, remainingLines: [], exemptedLines: exempted, exemptedBy, tap }
++  }
++  const sample = remaining.slice(0, 5).map(l => String(l).trim().slice(0, 120))
++  return { status: 'failed', reason: `${baseReason || ''}（TAP ${tap.total} 用例 ${notOkLines.length} 失败，未豁免 ${remaining.length}）：${sample.join(' | ')}`.trim(), exemptedCount: exempted.length, remainingLines: remaining, exemptedLines: exempted, exemptedBy, tap }
++}
++
+ /**
+  * 跑单个模块的 test 命令（串行调用方逐个调用）。
+  * @returns {{name, status:'passed'|'failed', command, exitCode, durationMs, outputTail, reason}}
+  */
+-function runOneModule(name, testCommand, cwd, knownFailures = []) {
++function runOneModule(name, testCommand, cwd, knownFailures = [], opts = {}) {
+   const startedAt = Date.now()
+   let exitCode = 0
+   let output = ''
+   let reason = null
+   warnPortRaceBeforeRun(testCommand)
++  // 嵌套测试环境清洗（2026-09-28-tap-judge 实证发现）：父级 node:test 进程带 NODE_TEST_CONTEXT
++  // env，本模块 execSync 全量继承——门在测试进程内被调用时（e2e 用例 spawn 内层 CLI 跑门），
++  // 内层 node --test 误入 child 模式 stdout 全空（⑮ 门内必挂/单独跑必过的根因家族）。
++  // 剥离该键：门内测试进程与普通进程行为一致。
++  const runEnv = { ...process.env }
++  delete runEnv.NODE_TEST_CONTEXT
+   try {
+     output = decodeShellOutput(execSync(testCommand, {
+       cwd,
+@@ -1320,6 +1376,7 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
+       maxBuffer: 32 * 1024 * 1024,
+       stdio: ['ignore', 'pipe', 'pipe'],
+       windowsHide: true,
++      env: runEnv,
+     }))
+   } catch (e) {
+     exitCode = typeof e.status === 'number' ? e.status : 1
+@@ -1334,7 +1391,10 @@ function runOneModule(name, testCommand, cwd, knownFailures = []) {
+   }
+   const durationMs = Date.now() - startedAt
+   const outputTail = output.length > OUTPUT_TAIL_CHARS ? '…' + output.slice(-OUTPUT_TAIL_CHARS) : output
+-  const judged = judgeWithKnownFailures(exitCode, output, reason, knownFailures)
++  // TAP 优先判账（2026-09-28-tap-judge）：tap 批次 stdout 为纯 TAP——用例粒度结构化判账；
++  // 输出非 TAP（旧 node/异常形态）自动回退 legacy 正则判账，零行为断裂。
++  const judged = (opts.tap ? judgeTapOutput(exitCode, output, reason, knownFailures) : null)
++    || judgeWithKnownFailures(exitCode, output, reason, knownFailures)
+   // 环境缺件降档（坑 quick-test-gate-frontend-lint-tempdir-no-nodemodules，2026-09-23 实证）：
+   // 模块命令在缺失二进制处中止——CNF 是环境信号非代码失败，降档 skipped（aggregateStatus
+   // 认识 skipped 单元）。护栏：判账行集全为 wrapper 噪声才降（真失败行在场维持硬拦）。
+@@ -2526,7 +2586,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
+   const rebase = (f) => (cdDir && f.startsWith(cdDir + '/')) ? f.slice(cdDir.length + 1) : f
+   const batches = []
+   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
+-  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length })
++  if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length, tap: true })
+   if (jsProject.length > 0) {
+     if (jsxRunner) {
+       const isVitest = /vitest/.test(jsxRunner)
+@@ -2611,7 +2671,7 @@ function runTraceResidualInner({ cwd, files, hits, knownFailures }) {
+       }
+       const isPy = b.short === 'py'
+       const segFiles = chunk.filter((f) => (norm(f).endsWith('.py') === isPy))
+-      const r = runOneModule(b.name, b.command, cwd, knownFailures)
++      const r = runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap })
+       segments.push({ runner: b.command, runnerKind: isPy ? 'pytest' : (b.short === 'jsx' ? 'vitest/jest' : 'node --test'), files: segFiles, status: r.status, reason: r.reason || null, durationMs: r.durationMs ?? null, outputTail: r.outputTail || null })
+     }
+   }
+@@ -2720,7 +2780,7 @@ function runModuleSubset({ cwd, specBase, changeName, hits, knownFailures = [],
+         perModule.push({ name: b.name, status: 'skipped', reason: b.reason || '转项目运行器', command: null, exitCode: null, durationMs: null, outputTail: null })
+         continue
+       }
+-      perModule.push(runOneModule(b.name, b.command, cwd, knownFailures))
++      perModule.push(runOneModule(b.name, b.command, cwd, knownFailures, { tap: b.tap }))
+       console.log(`ℹ️ 动态子集批 ${b.name}：${b.count} 个${b.dropped > 0 ? `（超帽弃 ${b.dropped}）` : ''}（${b.name === 'deps(auto-py)' ? 'pytest 运行器按最近 pyproject/uv 祖先推断' : b.short === 'jsx' ? 'vitest/jest 按最近 package.json 推断' : 'node --test'}——治 node 跑 .py 伪败与字母序偏科）`)
+     }
+   }
+diff --git a/test/tap-judge.test.mjs b/test/tap-judge.test.mjs
+new file mode 100644
+index 00000000..ef6f9d90
+--- /dev/null
++++ b/test/tap-judge.test.mjs
+@@ -0,0 +1,83 @@
++/**
++ * TAP 结构化判账单测（2026-09-28-tap-judge / P2 一期 FR）。
++ *
++ * 覆盖：非 TAP 回退 null、全过计数、失败用例豁免判定（锚定式命中/未命中）、全豁免通过披露、
++ * 真实双报告器命令集成（stdout 纯 TAP + judgeTapOutput 判 passed）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync } from 'node:child_process'
++
++import { judgeTapOutput } from '../src/verify-postcheck.js'
++
++const TAP_FAIL = [
++  'TAP version 13',
++  '# Subtest: ① 通过用例',
++  'ok 1 - ① 通过用例',
++  '# Subtest: ⑮ 承诺词必评全链',
++  'not ok 2 - ⑮ 承诺词必评全链：任务书下发',
++  '  ---',
++  '  error: 预期错误文案 fixture（通过用例故意打印）',
++  '  ...',
++  'not ok 3 - 真实失败用例甲',
++  '1..3',
++  '# tests 3',
++  '# fail 2',
++].join('\n')
++
++test('非 TAP 输出 → null（回退 legacy）', () => {
++  assert.equal(judgeTapOutput(1, '✖ some fail\nAssertionError boom', null, ['x']), null)
++  assert.equal(judgeTapOutput(0, '普通 stdout', null, []), null)
++})
++
++test('TAP 全过 exit 0 → passed 带计数', () => {
++  const tap = ['TAP version 13', 'ok 1 - a', 'ok 2 - b', '1..2'].join('\n')
++  const j = judgeTapOutput(0, tap, 'deps(auto-js)', [])
++  assert.equal(j.status, 'passed')
++  assert.deepEqual(j.tap, { total: 2, failed: 0 })
++})
++
++test('TAP 失败：锚定式豁免 1 条 + 未豁免 1 条 → failed 且 remaining 精确到用例行', () => {
++  const j = judgeTapOutput(1, TAP_FAIL, 'deps(auto-js)', ['^not ok 2 - ⑮ 承诺词必评全链'])
++  assert.equal(j.status, 'failed')
++  assert.equal(j.tap.failed, 2)
++  assert.equal(j.exemptedLines.length, 1)
++  assert.equal(j.remainingLines.length, 1)
++  assert.ok(j.remainingLines[0].includes('真实失败用例甲'))
++  // fixture 正文行（error: 预期错误文案）不再参与判账——自由文本误计对 TAP 路径消失
++  assert.ok(!j.remainingLines.some(l => l.includes('fixture')))
++})
++
++test('TAP 全豁免 → passed 带锚定式披露', () => {
++  const j = judgeTapOutput(1, TAP_FAIL, 'deps(auto-js)', ['^not ok 2 - ⑮', '^not ok 3 - 真实失败'])
++  assert.equal(j.status, 'passed')
++  assert.ok(j.reason.includes('全部命中'))
++  assert.ok(j.reason.includes('全部锚定式命中'))
++})
++
++test('TAP 失败无清单 → failed 且 not-ok 行全量入 remaining', () => {
++  const j = judgeTapOutput(1, TAP_FAIL, 'deps(auto-js)', [])
++  assert.equal(j.status, 'failed')
++  assert.equal(j.remainingLines.length, 2)
++})
++
++test('集成：双报告器命令 stdout 为纯 TAP 且可判账', () => {
++  const args = ['--test', '--test-reporter=spec', '--test-reporter-destination=stderr', '--test-reporter=tap', '--test-reporter-destination=stdout', 'test/fr-compound-split.test.mjs', 'test/ui-visual-guidance.test.mjs']
++  let out = ''
++  let code = 0
++  // 嵌套坑：父 node:test 进程带 NODE_TEST_CONTEXT env，子 node --test 会误入 child 模式
++  // （stdout 空）——剥掉该键再 spawn（与门进程 spawn 测试同族的嵌套隔离先例）。
++  const env = { ...process.env }
++  delete env.NODE_TEST_CONTEXT
++  try {
++    out = execFileSync(process.execPath, args, { encoding: 'utf8', timeout: 120000, cwd: process.cwd(), stdio: ['ignore', 'pipe', 'ignore'], env })
++  } catch (e) {
++    code = e.status ?? 1
++    out = e.stdout?.toString() || ''
++  }
++  assert.equal(code, 0)
++  assert.match(out.split('\n')[0], /^TAP version \d+/)
++  const j = judgeTapOutput(code, out, 'deps(auto-js)', [])
++  assert.equal(j.status, 'passed')
++  assert.ok(j.tap.total >= 2)
++})
+diff --git a/.sillyspec/changes/2026-09-28-tap-judge/design.md b/.sillyspec/changes/2026-09-28-tap-judge/design.md
+new file mode 100644
+index 00000000..be117971
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-tap-judge/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:15:41.329Z
++---
++# 设计记录（Design Record）— 2026-09-28-tap-judge
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三件：① deps(auto-js) 批命令升级双报告器（--test-reporter=spec→stderr 供人读、--test-reporter=tap→stdout 供机读），批对象带 tap 标记；runOneModule 对 tap 批优先走 judgeTapOutput——按 ^not ok 行用例粒度判账，fixture 正文/控制台噪声自由文本对 TAP 路径物理消失；输出非 TAP（旧 node/异构）自动回退 legacy。② 豁免匹配编译与单行匹配抽为 buildExemptPats/matchExemptLine 共用单点，partitionFailures 与 TAP 判账语义完全一致。③ P1 根因修复：集成测试发现父级 node:test 进程的 NODE_TEST_CONTEXT env 经 execSync 全量继承，内层 node --test 误入 child 模式 stdout 全空——脏 env 复现 0 输出、剥离后 flow-protocol 22/22（含 ⑮）全过；runOneModule execSync 统一剥离该键（普通进程零变化）。豁免 D 组三条按删除条件移除。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++verify-postcheck.js：judgeTapOutput 导出、buildDepsBatches js 批命令与 tap 标记、runOneModule opts.tap 与 env 清洗、匹配器抽取；test/tap-judge.test.mjs 六用例（含真实双报告器集成——集成用例自身需剥 NODE_TEST_CONTEXT，坑已注释）。无 CLI 签名变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序：不适用（TAP 输出为运行器终态快照）。2. 并发写：纯判账层。3. 切换：非 TAP 回退路径保证旧形态零断裂；env 剥离只删一个键（普通进程本无此键零变化）。4. 作用域：TAP 判账仅 deps(auto-js) 批；module 命令与跨仓命令仍 legacy；豁免单点保证两路口径一致不漂移。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：TAP 报告器为 node 18.17+ 特性——旧 node 消费仓的 auto-js 批（本就要求现代 node 跑 node --test）实际不构成风险，非 TAP 回退兜底。放弃方案：全量换 JSON 报告器（变化面更大，TAP 文本行与既有豁免模式语义更接近）。
+diff --git a/.sillyspec/changes/2026-09-28-tap-judge/proposal.md b/.sillyspec/changes/2026-09-28-tap-judge/proposal.md
+new file mode 100644
+index 00000000..ec01b578
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-tap-judge/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:15:41.328Z
++---
++# 提案书（Proposal）— 2026-09-28-tap-judge
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:413f946dc96ab7cf9e12739ddad4a857f042115f3cd2fc9086ec572973f8606a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++任务原话转写：倒推收尾：已做改动——P2 一期与 P1 根因修复在同批落地。背景：门失败行正则对自由文本误计（task-done fixture 文案两次实证）；e2e ⑮ 门内必挂单独跑必过悬案多轮。
++成功标准：
++- deps(auto-js) 批改 node:test 双报告器（spec 到 stderr 人读、tap 到 stdout 机读），judgeTapOutput 按 not ok 用例粒度判账，非 TAP 输出自动回退 legacy 正则零断裂
++- 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、裸子串、泛用停用语义与既有完全一致）
++- P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT（父级 node:test 进程 env 泄漏致内层 node --test 误入 child 模式 stdout 全空——脏 env 复现 0 输出、清洗后 flow-protocol 22/22 含 ⑮ 全过，实证闭环）
++- local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）
++- 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:0862c95908d9f9dad8447474d6f1ba58d82267bed22015b86436c2214399a1d1:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. deps(auto-js) 批改 node:test 双报告器（spec 到 stderr 人读、tap 到 stdout 机读），judgeTapOutput 按 not ok 用例粒度判账，非 TAP 输出自动回退 legacy 正则零断裂
++2. 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、裸子串、泛用停用语义与既有完全一致）
++3. P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT（父级 node:test 进程 env 泄漏致内层 node --test 误入 child 模式 stdout 全空——脏 env 复现 0 输出、清洗后 flow-protocol 22/22 含 ⑮ 全过，实证闭环）
++4. local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）
++5. 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:3fd92be75d53fa8bd2b88cad31f1f2b8e4e03e43f612ff36fb62631005de8cf7:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-28-tap-judge 留痕重锚 -->
++1. deps(auto-js) 批改 node:test 双报告器（spec 到 stderr 人读、tap 到 stdout 机读），judgeTapOutput 按 not ok 用例粒度判账，非 TAP 输出自动回退 legacy 正则零断裂
++2. 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、裸子串、泛用停用语义与既有完全一致）
++3. P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT（父级 node:test 进程 env 泄漏致内层 node --test 误入 child 模式 stdout 全空——脏 env 复现 0 输出、清洗后 flow-protocol 22/22 含 ⑮ 全过，实证闭环）
++4. local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）
++5. 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-28-tap-judge/requirements.md b/.sillyspec/changes/2026-09-28-tap-judge/requirements.md
+new file mode 100644
+index 00000000..64c6c230
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-tap-judge/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:15:41.329Z
++---
++# 需求规格（Requirements）— 2026-09-28-tap-judge
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: deps(auto-js) 批改 node:test 双报告器（spec 到 stderr 人读、t
++Given 系统就绪
++When deps(auto-js) 批改 node:test 双报告器（spec 到 stderr 人读、tap 到 stdout 机读），judgeTapOutput
++Then 零断裂
++
++### FR-02: 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、
++Given 系统就绪
++When 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、裸子串、泛用停用语义与既有完全一致）
++Then 行为符合本条标准描述
++
++### FR-03: P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT
++Given 系统就绪
++When P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT（父级 node:test 进程 env 泄漏致内层 nod
++Then 行为符合本条标准描述
++
++### FR-04: local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）
++Given 系统就绪
++When local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）
++Then 行为符合本条标准描述
++
++### FR-05: 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）
++Given 系统就绪
++When 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/tap-judge.test.mjs「TAP 失败：锚定式豁免 1 条 + 未豁免 1 条 → failed 且 remaining 精确到用例行」+「TAP 全过 exit 0 → passed 带计数」+「集成：双报告器命令 stdout 为纯 TAP 且可判账」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/verify-postcheck-known-failures.test.mjs 全部 74 断言回归全绿（共用单点抽取后语义零漂移）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/tap-judge.test.mjs「集成」用例（自身剥 NODE_TEST_CONTEXT 的坑注释）+ 脏 env 复现与清洗后 22/22 实测（design 槽1 记录）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：豁免清单删减核对（local.yaml gitignored 本地文件，D 组三条与根因修复一一对应）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/tap-judge.test.mjs 全部 6 用例（node --test 实测 6/6）+ task-done/flow-protocol/known-failures 回归全绿
+diff --git a/.sillyspec/changes/2026-09-28-tap-judge/tasks.md b/.sillyspec/changes/2026-09-28-tap-judge/tasks.md
+new file mode 100644
+index 00000000..a97a8134
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-28-tap-judge/tasks.md
+@@ -0,0 +1,14 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T09:15:41.329Z
++---
++# 任务注册表（Tasks）— 2026-09-28-tap-judge
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 双报告器批命令 + tap 标记 + judgeTapOutput 用例粒度判账 + 非 TAP 回退 (FR-01)
++- [x] task-02: buildExemptPats/matchExemptLine 共用单点抽取，partitionFailures 改用（语义回归全绿） (FR-02)
++- [x] task-03: runOneModule 剥离 NODE_TEST_CONTEXT（脏 env 0 输出复现 → 清洗后 22/22 含 ⑮ 全过，P1 实证闭环）；豁免 D 组三条按删除条件移除 (FR-03 FR-04)
++- [x] task-04: 单测六用例含真实双报告器集成（嵌套 env 坑发现并锁定）+ 全相关回归（tap-judge 6/6、task-done、flow-protocol、known-failures 全绿） (FR-05)

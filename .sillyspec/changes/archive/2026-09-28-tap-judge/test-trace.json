@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-28-tap-judge",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-28-tap-judge:flow:FR-01",
+      "tests": [
+        "test/tap-judge.test.mjs「TAP 失败：锚定式豁免 1 条 + 未豁免 1 条 → failed 且 remaining 精确到用例行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-tap-judge"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-28-tap-judge:flow:FR-02",
+      "tests": [
+        "test/verify-postcheck-known-failures.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-tap-judge"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-28-tap-judge:flow:FR-03",
+      "tests": [
+        "test/tap-judge.test.mjs「集成」用例"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-tap-judge"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-28-tap-judge:flow:FR-05",
+      "tests": [
+        "test/tap-judge.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-28-tap-judge"
+    }
+  ]
+}
