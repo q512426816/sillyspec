@@ -291,7 +291,10 @@ export function verifyRequirementBindings({ changeDir }) {
  * 「X」＋可选 组/用例 后缀、#id、::id、> name（书写原形只摘不译，「：」后是描述不捕）；
  * 裸文件名/残缺路径段解析为项目相对全路径（直取存在优先，仓内唯一后缀命中，歧义原样保留）。
  */
-const TEST_PATH_TOKEN_RE = /[A-Za-z0-9_/.-]+\.(?:mjs|cjs|js|ts|tsx|py)/g
+// 扩展名交替按长度降序（tsx 先于 ts——坑 fr-domain-suggest 同链实证：2026-09-28 归档绑定行
+// governance-cards.test.tsx 被截成 .test.ts，test-bindings 的 .ts→.tsx 变体兜底正是本序的
+// 历史代偿；正则交替贪心取首个命中，短扩展名在前吃掉长扩展名的尾字符）
+const TEST_PATH_TOKEN_RE = /[A-Za-z0-9_/.-]+\.(?:mjs|cjs|tsx|ts|js|py)/g
 // 用例锚四形态（「X」＋可选 组/用例 后缀、#id、::id、> name）——字符类排除竖线：锚条目
 // 在 FR 机器子块按 `tests: a | b` 序列化、split('|') 回读（评审 P2），带竖线的锚在竖线处
 // 截断（诚实降级），不产出裂格式幻影条目。
@@ -458,7 +461,7 @@ function draftTasks({ change, criteria, withTasks }) {
     '',
     '> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；',
     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
-    '> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29-flow-task-heartbeat 心跳协议）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。节拍器：每勾一格重跑 `sillyspec flow status --change <名>` 取下一个任务（②执行阶段 status 给下一任务指针与进度）。本文件收口前随交付显式 pathspec 提交。',
+    '> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。进度源即本文件：做一件 → 勾一格 → 继续下一条；`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。',
     '',
     // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
     // 勾一条就失配 → 必走 amend → editRatio=1 被判该走厚档——勾选纪律与指纹门自相矛盾。

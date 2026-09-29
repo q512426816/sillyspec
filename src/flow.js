@@ -402,8 +402,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
           `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
-          `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；执行走心跳循环协议：`,
-          `   flow status --change ${change} 取下一个任务 → 做一件 → 勾一格 → 重跑取下一个，全勾后 flow done。`,
+          `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；`,
+          `   flow status --change ${change} 为自愿查看/恢复面（非协议必需，D-007 中间零必需交互；恢复时给下一任务指针与进度）。`,
           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
           ``,
           `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
@@ -618,7 +618,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
     `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
-    `   执行期节拍器：flow status --change ${change}——每轮给下一个未勾任务与进度（做一件 → 勾一格 → 重跑取下一个，勿攒一把勾）。`,
+    `   纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -1565,10 +1565,10 @@ export async function cmdFlow(args, cwd, specDir = null) {
     let phase = '① spec（填 FR + design 槽）'
     if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) phase = '② 执行（写代码跑测试）→ ①卡点：spec 摘要给用户确认'
     if (subDone.includes('ledger')) phase = '③ 归档（flow done 收口）'
-    // 任务心跳（2026-09-29-flow-task-heartbeat，openspec apply 轮询形状移植）：②执行阶段把
-    // 「下一个任务」交给机器指——当场重读 tasks.md（唯一进度源）取第一个未勾行 + 进度 + 循环
-    // 协议指引。agent 不靠自己记进度：做一件 → 勾一格 → 重跑本命令取下一个；全勾改指 flow done。
-    // 勾选证据口径不变（收口哨兵逐 task 核提交 token/review.json）。
+    // 任务心跳（2026-09-29-flow-task-heartbeat + d007-incontext 纠偏）：②执行阶段把「下一个任务」
+    // 交给机器指——当场重读 tasks.md（唯一进度源）取第一个未勾行 + 进度。进度推进本身零 CLI
+    // （做一件→勾一格→继续下一条，D-007 中间零协议必需交互）；本面是自愿查看/恢复面——用户
+    // 问进度、断点续跑时一次调用拿到指针。全勾改指 flow done；勾选证据口径不变（哨兵逐 task）。
     let heartbeat = null
     try {
       if (phase.startsWith('②')) {
@@ -1580,7 +1580,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
           const m = next.match(/^- \[ \] (task-\d+):\s*(.*)$/)
           heartbeat = [
             `   ⏭️ 下一任务：${m[1]} ${String(m[2] || '').slice(0, 60)}`,
-            `   ✅ 进度：${c}/${tot}——边干边勾协议：做一件 → 勾一格（- [ ] → - [x]）→ 重跑本命令取下一个；勿攒一把勾（收口哨兵逐 task 核证据）`,
+            `   ✅ 进度：${c}/${tot}——边干边勾：做一件 → 勾一格（- [ ] → - [x]）→ 继续下一条（tasks.md 是进度源，勿攒一把勾；收口哨兵逐 task 核证据）。本面为自愿查看/恢复面——中间零协议必需交互（D-007）`,
           ]
         } else if (tot > 0 && c >= tot) {
           // 全勾判定用 c>=tot 而非「找不到未勾 task-NN 行」——行形态漂移（未勾行缺 task-NN

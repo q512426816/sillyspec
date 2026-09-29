@@ -16,7 +16,6 @@
 
 ## 恢复与查看
 - 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
-- 执行期节拍器（2026-09-29-flow-task-heartbeat）：thin 变更干活循环走 `flow status --change <名>`——每轮 CLI 给下一个未勾任务与进度，协议=取任务 → 做一件 → 勾一格（`- [ ]`→`- [x]`）→ 重跑取下一个；全勾后 `flow done`。勿攒一把勾（收口哨兵逐 task 核提交 token/review.json 证据）
 - 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
 - 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
 

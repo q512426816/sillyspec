@@ -35,7 +35,7 @@ test('③ 简报交付纪律含 tasks.md 提交要求', () => {
   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
   assert.ok(src.includes('tasks.md 一并显式 pathspec 提交'), '交付纪律行含 tasks.md')
   assert.ok(src.includes('勾选证据进 git 历史'), '理由（R19 实证）')
-  assert.ok(src.includes('执行期节拍器'), '简报交叉引用 status 心跳（2026-09-29-flow-task-heartbeat 接续）')
+  assert.ok(src.includes('执行期勾选纪律') || src.includes('自愿查看/恢复面'), '简报交叉引用 status（自愿语义，D-007 口径）')
 })
 
 test('④ 哨兵时点判定钉（一把勾 warn / untracked warn / fail-soft）', () => {

@@ -69,7 +69,8 @@ test('① ②执行阶段：下一任务指针 + 进度 + 循环协议指引', a
     assert.ok(out.includes('阶段：②'), `应判②执行阶段，实际：${out}`)
     assert.ok(out.includes('⏭️ 下一任务：task-03 第三件要做的下一件事'), '下一任务=第一个未勾行（id+标题）')
     assert.ok(out.includes('进度：2/4'), '进度 N/M 在场')
-    assert.ok(out.includes('做一件 → 勾一格') && out.includes('重跑本命令取下一个'), '循环协议指引在场')
+    assert.ok(out.includes('做一件 → 勾一格') && out.includes('继续下一条'), '循环协议指引在场（文件为进度源）')
+    assert.ok(out.includes('自愿查看/恢复面') && out.includes('D-007'), '自愿语义钉（非协议必需——D-007 纠偏 2026-09-29-heartbeat-d007-incontext）')
     assert.ok(out.includes('勿攒一把勾'), '纪律提示在场')
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
@@ -108,13 +109,16 @@ test('③b 行形态漂移（未勾行缺 task-NN 前缀）：不误刷「任务
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
 
-test('④ 协议文案三处同步钉（简报/tasks 头/AGENTS.md）', () => {
+test('④ 协议文案三处同步钉（简报/tasks 头/AGENTS.md——自愿语义，D-007 口径）', () => {
   const flowSrc = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
   assert.ok(flowSrc.includes('heartbeat'), '心跳变量在场')
-  assert.ok(flowSrc.includes('执行期节拍器'), '简报协议文案（fresh+resume 两路其一）')
+  assert.ok(flowSrc.includes('自愿查看/恢复面'), '简报自愿语义口径（fresh+resume 两路）')
   assert.ok(flowSrc.includes('做一件 → 勾一格'), '循环协议文案')
+  assert.ok(!flowSrc.includes('重跑本命令取下一个') && !flowSrc.includes('每轮给下一个未勾任务'), '不得残留每任务重跑口径（D-007 回退钉）')
   const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
-  assert.ok(draftSrc.includes('每勾一格重跑 `sillyspec flow status --change <名>` 取下一个任务'), 'tasks.md 头部节拍器指引')
+  assert.ok(draftSrc.includes('进度源即本文件'), 'tasks.md 头部进度源口径')
+  // AGENTS.md 瘦身钉（2026-09-29-title-and-agents-slim 主题）：勾选纪律细节不进 AGENTS.md
+  // （每会话全量注入面）——载体是 tasks.md 头部与 flow start 简报两个恰时面
   const agents = readFileSync(join(ROOT, '..', 'AGENTS.md'), 'utf8')
-  assert.ok(agents.includes('执行期节拍器'), 'AGENTS.md 恢复与查看段协议行')
+  assert.ok(!agents.includes('执行期勾选纪律') && !agents.includes('勿攒一把勾'), 'AGENTS.md 不得携带勾选纪律细节')
 })
