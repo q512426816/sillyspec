@@ -1438,3 +1438,52 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：bc68334cae0cfbf1adada8f8b25e62f83b9e57f3
 理由：风险：① 平台未实现期每个零命中查询打一次真实平台 404（静默、debug 可开——流量无害但可观测）；② 向量结果随 embedding 模型升级漂移（非确定性）——advisory 面可接受，确定性底座是本地层；③ 同号锚点缺 change 时全量带回可能放大（unmapped 实测 65 同号）——三层有界：构建侧 score 序封顶 20、flow/complete 渲染 slice(0,5)、prompt 渲染 slice(0,5)（审查 P2 补齐）。退役判据=平台向量命中长期与主题无关（召回质量投诉）或平台放弃该端点（删本层即回两层）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-brainstorm-exit-thin-default
+锚点：未记录
+最近确认：1f0ec6bae9a8c6daeda8f7925b88cbe9353d1c8e
+理由：风险：① 拿不准默认 small 可能低估真复杂变更——兜底三层：实测失败自动升厚（既有）、--upgrade-thick 用户决策（既有）、收编后 thin 道自身门禁（实测/评审/patch）；② 模板标题下 agent 忘写 scale→null→默认收编，行为与 small 一致（符合设计）；③ premise-fail 型需求（前提不成立）仍要走满 8 步——行为演习发现的真实摩擦，属早期短路道新课题（记残留在变更报告）。行为级闭环验收：小白鼠带模糊中等规模需求（测试慢优化）走全链——入口选道进头脑风暴（负面信号命中）、Step 8 按新判据落 scale=small、CLI 指路 flow start 收编、下一步命令即收编命令——原始问题「头脑风暴后直奔五阶段」的反例实测成立。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-title-and-agents-slim
+锚点：未记录
+最近确认：263542670c49870b8376c23395b5d1e58f7cd4b9
+理由：最大风险：AGENTS.md 瘦身后，无 skill 环境（如 codex 只读 AGENTS.md）的 agent 拿不到 --input 格式——已评估：flow start 清晰度门失败时 CLI 自己打印过门格式（运行时教学兜底），可接受。试过放弃：把标题写进 proposal 骨架 H1（# 提案书 — <中文>）——平台 normalize_display_title 把「类型词—任意后缀」全判模板回退英文 key，H1 通道不可靠，改走 body title 通道（SELECT 补列 + 平台侧收养）。已归档变更判无法回填标题（无后续推送面），留待需要时一次性脚本。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-rot-retire-inject-cap
+锚点：未记录
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+理由：最大风险：needsReview 字段存在未核证的隐性消费方导致运行时 undefined——已由三个只读子代理全仓 grep 核证仅 flow.js:172 与 prompt.js:1231 两处，且拆除顺序钉死「先拆消费、后拆字段」。次风险：剥行误伤条目正文中的「待复核」字样——剥离仅匹配行首前缀「^待复核：」，与机器契约行格式一致，另有测试断言剥后 grep 为零。 死路（已试弃，防复潮）：① 修 rot 判据精度（枢纽文件 df 降权）保留标记层——零消费实证下把信号修准仍是家具，先拆后看；② unmapped 池整池外移冻结——resolveTouchedDomains 兜底会重建池子、104 个来源变更的幂等闸门只扫 fr/ 会把搬走条目静默写回（子代理核证），本次只做注入排除；③ distill dup 升硬门——存量 active 标题 pairwise 38 对 ≥0.6（「测试覆盖」三条互撞 1.00）全是真独立需求，硬门逼假承接行污染取代链。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-flow-task-heartbeat
+锚点：未记录
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+理由：最大风险：心跳仍被 agent 无视（不轮询 status 直接干完）——与 openspec 同款的软约束边界，诚实披露：openspec 的剧本约束同样不强制（其 skill 文本也只是指令）；缓解=三处协议文案钉死+AGENTS.md 常驻面+哨兵硬门兜底真伪。弃案1：把「逐个勾」升为 flow done 时序硬门（勾选时刻与证据时刻配对核验）——误伤合法场景（一提交携带多 task token 是规范动作，时序配对会把正常批量提交判假）；逐 task 证据哨兵已存在故不再加码。弃案2：新增独立 flow next 子命令——与 status 职责重叠，AGENTS.md/恢复简报已统一指 status，多一个入口徒增记忆面。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-flow-skill-heartbeat-doc
+锚点：未记录
+最近确认：94d357e5ab2e7d4816a091db0e580cb0b72e2a0a
+理由：最大风险：skill 文案与 CLI 实际输出漂移——以刚实测的 flow start/status 输出为准照抄口径。无弃案（纯文案同步）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-heartbeat-d007-incontext
+锚点：未记录
+最近确认：02a7dca978ae5ec8cdaf59cd38bb3cdcbc7c73d2
+理由：最大风险：文案改口径后 agent 又回到「一把勾」旧行为——防线分层不变：tasks.md 头部+简报两个恰时面钉纪律、哨兵逐 task 硬门、watcher 人判；心跳渲染在自愿调用时仍给指针。弃案：保留 AGENTS.md 纪律行——每会话注入成本恒定发生，且恢复/简报面已覆盖，属非必要（用户裁决：非必要不放 AGENTS.md）。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-flow-skill-d007-doc
+锚点：未记录
+最近确认：34c04d9dd9249f261f837cf8072516cae83b3ba2
+理由：风险：与 src 口径再漂移——照抄 flow.js 简报现文案。无弃案。
