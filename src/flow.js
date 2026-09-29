@@ -1497,6 +1497,29 @@ export async function cmdFlow(args, cwd, specDir = null) {
       process.exit(exitCode)
     }
   }
+  // ── agent 会话日志登记 + 上报（2026-09-29-flow-agent-log-report，对齐 run 族）──
+  // runCommand 入口统一调 recordAgentLogInvocation（run/command.js 同款）——run 族全量覆盖；
+  // flow 走本独立入口此前从未接入，轻量变更的本地会话路径不上报平台（平台只见 CLI 阶段信息，
+  // 看不到 agent 实际执行日志）。各子命令 change 解析后 best-effort 调用：探测 agent 环境
+  // （Claude Code / Codex / ZCode transcript / SILLYSPEC_AGENT_LOG 覆盖）登记
+  // <runtimeRoot>/agent-session-log.json 并 REST 上报（POST /api/agent-logs，own 打标/推送
+  // 收敛/互斥语义复用同实现）。context.changeKey=flow change 名（flow 无 quick 会话概念，
+  // quickId 恒空）；hubSessionId 走 env SILLYHUB_SESSION_ID（daemon 注入通道，与 run 同源）。
+  // 推送上限 5s（PUSH_TIMEOUT_MS）、失败静默留底——best-effort，绝不阻断协议面。
+  const reportAgentLog = async (changeKey, subName) => {
+    try {
+      const { recordAgentLogInvocation } = await import('./agent-session-log.js')
+      const hubSessionIdEnv = typeof process.env.SILLYHUB_SESSION_ID === 'string' ? process.env.SILLYHUB_SESSION_ID.trim() : ''
+      await recordAgentLogInvocation({
+        cwd,
+        platformOpts: runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {},
+        specBase,
+        context: { hubSessionId: hubSessionIdEnv || null, changeKey: changeKey || null, quickId: null },
+        // 只记 flag 名不记值（对齐 run 口径：--input 等 flag 值是 agent 工作文本，不进产物）
+        command: [subName, ...rest.filter(t => typeof t === 'string' && t.startsWith('--'))].join(' '),
+      })
+    } catch { /* best-effort：登记失败不影响 flow 协议面 */ }
+  }
   if (sub === 'start') {
     const change = getFlag('--change') || `${new Date().toISOString().slice(0, 10)}-flow-${Math.random().toString(16).slice(2, 6)}`
     validateChangeName(change)
@@ -1513,6 +1536,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
         process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
       }
     }
+    await reportAgentLog(change, sub)
     return cmdFlowStart({
       change,
       input: getFlag('--input') || undefined,
@@ -1529,6 +1553,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow status 需 --change <名>'); process.exit(2) }
     validateChangeName(change)
+    await reportAgentLog(change, sub)
     const changeDir = join(specBase, 'changes', change)
     const st = readFlowState(changeDir)
     if (!st) {
@@ -1605,6 +1630,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
     validateChangeName(change)
+    await reportAgentLog(change, sub)
     // --refreeze（2026-09-25-sentinel-evidence-freeze ⑤）：重置 patch 子步标记强制下次重冻结
     // （冻结面归属有误时的人工逃生口——提交面已不过 foreign 切分，dirty 面排除有警告指引到此）
     if (hasFlag('--refreeze')) {
@@ -1622,6 +1648,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     // 首版原文 body 永存（切片四 editRatio 基准）。
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow amend-draft 需 --change <名>'); process.exit(2) }
+    await reportAgentLog(change, sub)
     const changeDir = join(specBase, 'changes', change)
     const runtimeRoot = resolveRuntimeRoot({}, specBase)
     const { amendFlowDraft } = await import('./flow-draft.js')
