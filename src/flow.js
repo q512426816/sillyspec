@@ -893,7 +893,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
           console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
         } else if (v.action === 'advisory') {
           const why = v.reason === 'autopilot-ticked'
-            ? `机器代勾 ${_autopilotTicked} 格（governance-autopilot 单拍机械写，非 agent 纪律面）`
+            ? `机器代勾 ${_autoN} 格（governance-autopilot 单拍机械写，非 agent 纪律面；本拍 ${_autopilotTicked}/持久化 ${_persistedAuto}）`
             : '哨兵非镜像面未知（fail-open 防误拒）'
           console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
         } else if (v.action === 'reject') {
