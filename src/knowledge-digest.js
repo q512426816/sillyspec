@@ -21,8 +21,50 @@ import { readFrBindings, resolveTestFileRel, testAnchorFile } from './test-bindi
 /** 伪域判定：auto- 前缀（scaffold 时代机器蒸馏域）或 unmapped 池 */
 const isPseudoDomain = (domain) => /^auto[-_]/.test(domain) || domain === 'unmapped'
 
-/** 交付路径 → 建议域（落域机械改进的建议器，与 indexRequirements 的告警共用单源） */
-export function suggestDomainFromFiles(files) {
+/** 编辑距离 ≤1 判定（短域串专用，单遍扫描） */
+function levenshteinAtMost1(a, b) {
+  if (a === b) return true
+  const [s, l] = a.length <= b.length ? [a, b] : [b, a]
+  if (l.length - s.length > 1) return false
+  let i = 0, j = 0, diff = 0
+  while (i < s.length && j < l.length) {
+    if (s[i] === l[j]) { i++; j++; continue }
+    if (++diff > 1) return false
+    if (s.length === l.length) { i++; j++ } else { j++ } // 等长=替换；差一=长串跳一格
+  }
+  return true // 尾部剩余 ≤1 字符差
+}
+
+/**
+ * 域词典守卫（坑 fr-domain-suggest-typo-and-no-split-migration 缺陷1，2026-09-28 生产实证
+ * auto-rontend）：候选域与既有域（fr/*.md 文件名 = 真域+伪域全集）编辑距离 ≤1 → 判拼写
+ * 漂移，吸附返回既有域名；已在典内 / 远距离（绿地新模块）/ 无词典 → null（不干预）。
+ * 域路由与建议器共用（pseudoDomainFromPaths / suggestDomainFromFiles）——任一上游路径
+ * 形态再出 mangle，伪域也不会凭空铸造拼写错域。
+ */
+export function snapDomainToDictionary(candidate, { knowledgeRoot } = {}) {
+  if (!candidate || !knowledgeRoot) return null
+  let names = []
+  try {
+    names = readdirSync(join(knowledgeRoot, 'fr')).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3))
+  } catch { /* fr 目录缺席=无词典，不干预 */ }
+  for (const n of names) {
+    if (n === candidate) return null
+    if (Math.abs(n.length - candidate.length) > 1) continue
+    if (levenshteinAtMost1(n, candidate)) return n
+  }
+  return null
+}
+
+/** 交付路径 → 建议域（落域机械改进的建议器，与 indexRequirements 的告警共用单源）。
+ * 产出过词典守卫（拼写漂移吸附，坑 fr-domain-suggest 缺陷1）。 */
+export function suggestDomainFromFiles(files, { knowledgeRoot } = {}) {
+  const raw = suggestDomainFromFilesRaw(files)
+  if (raw == null) return null
+  return snapDomainToDictionary(raw, { knowledgeRoot }) || raw
+}
+
+function suggestDomainFromFilesRaw(files) {
   for (const raw of files || []) {
     const p = String(raw || '').replace(/\\/g, '/')
     let m

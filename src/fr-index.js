@@ -18,7 +18,7 @@
  */
 
 import { readChangeTrace, upsertFrBindings, applySupersededToEntryLines, testAnchorFile, resolveTestFileRel } from './test-bindings.js'
-import { suggestDomainFromFiles } from './knowledge-digest.js'
+import { suggestDomainFromFiles, snapDomainToDictionary } from './knowledge-digest.js'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join } from 'path';
 import { writeAtomicSync } from './fs-atomic.js';
@@ -229,7 +229,7 @@ export function parseChangeRequirements(changeDir) {
  * unmapped 大池且 INDEX 路由键为通用词无法命中，模块卡覆盖不足时 FR 复利断路）；无文件清单 → unmapped。
  * filesOverride（2026-09-22-thin-fr-distill-sync）：显式交付文件清单旁路 design.md 解析——轻量变更
  * 变更无 design.md（轻量工件面三件套），flow done 以基线以来交付 diff 供清单，伪域路由同口径。 */
-export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = null) {
+export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = null, knowledgeRoot = null) {
   const domains = new Set();
   const designPath = join(changeDir, 'design.md');
   const files = [];
@@ -261,7 +261,9 @@ export function resolveTouchedDomains(changeDir, moduleIndex, filesOverride = nu
       matchModules(filePath);
     }
   }
-  if (domains.size === 0) domains.add(files.length > 0 ? pseudoDomainFromPaths(files) : 'unmapped');
+  // 伪域铸造过词典守卫（坑 fr-domain-suggest-typo-and-no-split-migration 缺陷1：路径段投票产出
+  // 拼写漂移段时吸附既有域，杜绝 auto-rontend 类伪域凭空出生；knowledgeRoot 缺席=无词典不干预）。
+  if (domains.size === 0) domains.add(files.length > 0 ? pseudoDomainFromPaths(files, knowledgeRoot) : 'unmapped');
   return [...domains];
 }
 
@@ -273,7 +275,7 @@ const GENERIC_PATH_SEGMENTS = new Set(['src', 'lib', 'test', 'tests', 'spec', 'd
  * 按出现次数投票取众数；全部泛化/根文件 → 'unmapped'。auto- 前缀保证与真实模块 id
  * （模块卡派生）不冲突，且在 fr 文件头与 INDEX 路由键里自明身份。
  */
-function pseudoDomainFromPaths(files) {
+function pseudoDomainFromPaths(files, knowledgeRoot = null) {
   const votes = new Map();
   for (const f of files) {
     const segs = String(f || '').replace(/\\/g, '/').split('/').filter(Boolean);
@@ -287,6 +289,10 @@ function pseudoDomainFromPaths(files) {
   }
   if (votes.size === 0) return 'unmapped';
   const top = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  // 词典守卫（坑 fr-domain-suggest 缺陷1）：top 与既有域编辑距离 ≤1 → 直接落既有域
+  //（fr/<既有域>.md 已在场，条目并入真域而非另铸 auto- 拼写漂移壳）；远距离=绿地新模块照旧。
+  const snapped = snapDomainToDictionary(top, { knowledgeRoot });
+  if (snapped) return snapped;
   return `auto-${top}`;
 }
 
@@ -414,7 +420,7 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
 
   const warnings = [...parsed.malformed];
   const moduleIndex = discoverModuleIndex(knowledgeRoot);
-  const domains = resolveTouchedDomains(changeDir, moduleIndex, deliverableFiles);
+  const domains = resolveTouchedDomains(changeDir, moduleIndex, deliverableFiles, knowledgeRoot);
   const all = scanAllDomains(knowledgeRoot);
 
   // 幂等闸门：任一域文件已有本变更「来源变更」条目 → 全量 no-op（同变更重跑零新增零漂移）
@@ -574,7 +580,7 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
     if (pseudoHits.length > 0) {
       // 落域机械改进（2026-09-27-knowledge-digest）：伪域告警附交付路径推导的建议域——
       // 归档时转达人工 1 秒确认（建议器与 digest 信号卡共用 suggestDomainFromFiles 单源）
-      const suggested = suggestDomainFromFiles(deliverableFiles || [])
+      const suggested = suggestDomainFromFiles(deliverableFiles || [], { knowledgeRoot })
       console.warn(`⚠️ [FR 域路由降级] 本变更 ${pseudoHits.length} 条 FR 落伪域/unmapped（${[...new Set(pseudoHits.map((w) => w.file))].join('、')}）${suggested ? `——按交付路径建议域：${suggested}（确认后可迁移；` : '（'}补模块卡（docs/<项目>/modules/_module-map.yaml 登记该目录）后，新变更将自动落回真域；绿地仓可跑 sillyspec run scan 校准）`)
       if (suggested) console.warn(`   迁移/存量清单：sillyspec knowledge digest（伪域信号卡）`)
     }
@@ -797,7 +803,7 @@ export function activeFrCoverageHits({ specBase, change = null, changeDir = null
   const moduleIndex = discoverModuleIndex(knowledgeRoot)
   const changed = (Array.isArray(files) ? files : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
   // changeDir 仅为 design.md 兜底路由用（files 在场时不读）；不可传 null——resolveTouchedDomains 无条件 join
-  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, changed).filter((d) => d !== 'unmapped')
+  const domains = resolveTouchedDomains(changeDir || join(specBase, 'changes', String(change || 'x')), moduleIndex, changed, knowledgeRoot).filter((d) => d !== 'unmapped')
   if (domains.length === 0) return { domains: [], hits: [], unknownSources: [] }
   const frs = readActiveFrDigest(knowledgeRoot, domains)
   if (frs.length === 0) return { domains, hits: [], unknownSources: [] }

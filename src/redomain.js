@@ -47,13 +47,23 @@ function newDomainPreamble(domain) {
   ]
 }
 
+/** 条目段「变更：<名>」行提取（--by-change 分批迁移的过滤键，坑 fr-domain-suggest 缺陷2） */
+function entrySourceChange(sectionLines) {
+  for (const l of sectionLines) {
+    const m = /^变更：(.+)$/m.exec(String(l || '').trim())
+    if (m) return m[1].trim()
+  }
+  return null
+}
+
 /**
  * 执行迁移（纯函数式落盘）。
- * @param {{knowledgeRoot: string, from: string, to: string, anchors?: string[]}} opts
+ * @param {{knowledgeRoot: string, from: string, to: string, anchors?: string[], byChange?: string}} opts
+ *   byChange：仅迁「变更：<名>」字段匹配的条目（unmapped 等混合池按来源变更分批治理）。
  * @returns {{moved: Array<{id,title}>, sourceDeleted: boolean, targetCreated: boolean, indexLineAdded: boolean}}
  * @throws 源域缺席 / 无匹配条目 / anchor 未命中
  */
-export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null }) {
+export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null, byChange = null }) {
   const frDir = join(knowledgeRoot, 'fr')
   const fromPath = join(frDir, `${from}.md`)
   const toPath = join(frDir, `${to}.md`)
@@ -75,10 +85,13 @@ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null }) {
     const id = frEntryId(s.lines[0] || '')
     if (!id) { staying.push(s); continue } // 非条目段（说明/杂项）留守
     if (anchorSet && !anchorSet.has(id)) { staying.push(s); continue }
+    if (byChange && entrySourceChange(s.lines) !== byChange) { staying.push(s); continue }
     moving.push({ id, title: (FR_HEADER_RE.exec(s.lines[0])?.[2] || '').trim(), section: s })
   }
   if (moving.length === 0) {
-    throw new Error(anchorSet ? `anchor 未命中（${[...anchorSet].join('、')} 不在 fr/${from}.md）` : `fr/${from}.md 无 FR 条目段`)
+    throw new Error(anchorSet
+      ? `anchor 未命中（${[...anchorSet].join('、')} 不在 fr/${from}.md）`
+      : byChange ? `「变更：${byChange}」条目在 fr/${from}.md 无命中` : `fr/${from}.md 无 FR 条目段`)
   }
   if (anchorSet && moving.length !== anchorSet.size) {
     const got = new Set(moving.map((m) => m.id))
@@ -119,8 +132,8 @@ export function redomainFrEntries({ knowledgeRoot, from, to, anchors = null }) {
   }
 }
 
-/** 干跑预览：列出将迁移条目，不落盘 */
-export function planRedomain({ knowledgeRoot, from, to, anchors = null }) {
+/** 干跑预览：列出将迁移条目，不落盘（byChange 同执行侧过滤） */
+export function planRedomain({ knowledgeRoot, from, to, anchors = null, byChange = null }) {
   const frDir = join(knowledgeRoot, 'fr')
   const fromPath = join(frDir, `${from}.md`)
   if (!existsSync(fromPath)) throw new Error(`源域文件不存在：fr/${from}.md`)
@@ -132,10 +145,13 @@ export function planRedomain({ knowledgeRoot, from, to, anchors = null }) {
     const id = frEntryId(s.lines[0] || '')
     if (!id) continue
     if (anchorSet && !anchorSet.has(id)) continue
-    candidates.push({ id, title: (FR_HEADER_RE.exec(s.lines[0])?.[2] || '').trim() })
+    if (byChange && entrySourceChange(s.lines) !== byChange) continue
+    candidates.push({ id, title: (FR_HEADER_RE.exec(s.lines[0])?.[2] || '').trim(), sourceChange: entrySourceChange(s.lines) })
   }
   if (candidates.length === 0) {
-    throw new Error(anchorSet ? `anchor 未命中（${[...anchorSet].join('、')}）` : `fr/${from}.md 无 FR 条目段`)
+    throw new Error(anchorSet
+      ? `anchor 未命中（${[...anchorSet].join('、')}）`
+      : byChange ? `「变更：${byChange}」条目在 fr/${from}.md 无命中` : `fr/${from}.md 无 FR 条目段`)
   }
   return {
     from,

@@ -3162,7 +3162,10 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
       if (has('--redomain')) {
         const fromD = flag('--from')
         const toD = flag('--to')
-        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--write]'); break }
+        // --by-change（坑 fr-domain-suggest-typo-and-no-split-migration 缺陷2）：unmapped 等
+        // 混合池按「变更：<名>」字段分批迁移——整域迁移会错置大部分条目，来源变更才是分批键。
+        const byChangeD = flag('--by-change')
+        if (!fromD || !toD) { fail('用法: sillyspec tests --redomain --from <源域> --to <目标域> [--anchor <FR-id>] [--by-change <变更名>] [--write]'); break }
         // 多 --anchor 收集
         const anchorList = []
         for (let i = 0; i < filteredArgs.length - 1; i++) if (filteredArgs[i] === '--anchor') anchorList.push(filteredArgs[i + 1])
@@ -3176,8 +3179,8 @@ ${generated.length} 个骨架已就绪——逐节把 <!--TODO--> 替换为语�
             console.log(`   目标域文件${plan.targetExists ? '在场' : '将新建'}；源域${plan.sourceWillDelete ? '将删空壳' : '保留余条'}；ID 不变（身份保持）`)
             break
           }
-          const r = redomainFrEntries({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null })
-          console.log(`✅ 域迁移完成：${r.moved.length} 条 fr/${fromD}.md → fr/${toD}.md（ID 不变）`)
+          const r = redomainFrEntries({ knowledgeRoot, from: fromD, to: toD, anchors: anchorList.length ? anchorList : null, byChange: byChangeD || null })
+          console.log(`✅ 域迁移完成：${r.moved.length} 条 fr/${fromD}.md → fr/${toD}.md（ID 不变${byChangeD ? `，仅「变更：${byChangeD}」` : ''}）`)
           for (const m of r.moved.slice(0, 10)) console.log(`   ${m.id} ${m.title}`)
           if (r.sourceDeleted) console.log(`   源域空壳已删：fr/${fromD}.md`)
           if (r.targetCreated) console.log(`   目标域文件新建：fr/${toD}.md`)
