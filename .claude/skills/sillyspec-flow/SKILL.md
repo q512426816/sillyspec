@@ -38,7 +38,7 @@ sillyspec flow start --change <变更名> --input "<需求>"
 改代码、写测试。治理工件（proposal/requirements/design）CLI 机器起草，你只需要：
 
 - 填 design.md 四节 AGENT 槽（做法概述/接口契约/边界并发四问/风险与死路）——每节至少一行，写「不适用：<理由>」也算答，空槽 flow done 拒收
-- 干活时逐条勾 tasks.md 的 `task-NN`（勾选是收口哨兵的证据面）
+- 干活走心跳循环：`flow status --change <名>` 取下一个任务 → 做一件 → 勾一格（`- [ ]` → `- [x]`）→ 重跑取下一个；全勾后 flow done（勾选是收口哨兵的证据面——逐 task 核提交 token/review.json，勿攒一把勾）
 - 交付代码用显式 pathspec 提交（`git commit -m "..." -- 文件1 文件2`；patch 冻结面=baseline..HEAD 提交面，未提交的代码不进审计件）
 
 ### ③ flow done（收口）
@@ -51,7 +51,7 @@ CLI 亲自实测（测试面按变更动态推断——本变更测试 ∪ FR �
 
 ## 边界
 
-- 中断恢复：进度已落盘，`sillyspec flow status --change <名>` 随时查看，重跑续接
+- 中断恢复：进度已落盘，`sillyspec flow status --change <名>` 随时查看，重跑续接（②执行阶段 status 是节拍器：给下一个未勾任务与进度）
 - 轻量→完整转道是用户决策：征得用户同意后带 `--upgrade-thick` 重启；轻量变更实测失败自动升厚
 - 流程状态、断点要求、收尾动作以 CLI 输出为准，不要自行编造或跳过
 
