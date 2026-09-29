@@ -29,10 +29,13 @@ Then 行为符合本条标准描述
 
 ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
 
-<!--AGENT:测试绑定FR-01 x -->
+<!--AGENT:测试绑定FR-01 test/flow-status-heartbeat.test.mjs「① …自愿语义钉（D-007 纠偏）」「④ …旧口径负向钉」 -->
+test/flow-status-heartbeat.test.mjs「① …自愿语义钉（D-007 纠偏）」「④ …旧口径负向钉」
 
-<!--AGENT:测试绑定FR-02 x -->
+<!--AGENT:测试绑定FR-02 test/flow-status-heartbeat.test.mjs「④ …AGENTS.md 不得携带勾选纪律细节（瘦身钉）」 -->
+test/flow-status-heartbeat.test.mjs「④ …AGENTS.md 不得携带勾选纪律细节（瘦身钉）」
 
-<!--AGENT:测试绑定FR-03 x -->
+<!--AGENT:测试绑定FR-03 test/flow-status-heartbeat.test.mjs 全四面 + test/tick-loop-nudge.test.mjs「③」+ test:core 全绿 -->
+test/flow-status-heartbeat.test.mjs 全四面 + test/tick-loop-nudge.test.mjs「③」+ test:core 全绿
 
 <!--AGENT:测试绑定FR-04 x -->

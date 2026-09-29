@@ -4767,3 +4767,75 @@ superseded_by：FR-cli-entry-198
 - 场景：默认场景 — Given 系统就绪；When 其余内容零改动；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-flow-skill-heartbeat-doc/requirements.md#FR-04
 最近确认：94d357e5ab2e7d4816a091db0e580cb0b72e2a0a
+
+## FR-cli-entry-259 flow start 简报两路、tasks.md 头部、AGENTS.md、status 心跳指引行
+变更：2026-09-29-heartbeat-d007-incontext
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When flow start 简报两路、tasks.md 头部、AGENTS.md、status 心跳指引行五处文案改为「以 tasks.md 为进度源：做一件；Then 勾一格
+全文：.sillyspec/changes/archive/2026-09-29-heartbeat-d007-incontext/requirements.md#FR-01
+最近确认：02a7dca978ae5ec8cdaf59cd38bb3cdcbc7c73d2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-heartbeat-d007-incontext:flow:FR-01
+  tests: test/flow-status-heartbeat.test.mjs「① …自愿语义钉（D-007 纠偏）」 | test/flow-status-heartbeat.test.mjs「④ …旧口径负向钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-heartbeat-d007-incontext
+  status: active
+
+## FR-cli-entry-260 flow status 自愿查看（非协议必需，D-007）」口径，不再出现「每勾一格重跑 flow
+变更：2026-09-29-heartbeat-d007-incontext
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When flow status 自愿查看（非协议必需，D-007）」口径，不再出现「每勾一格重跑 flow status」类指引；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-heartbeat-d007-incontext/requirements.md#FR-02
+最近确认：02a7dca978ae5ec8cdaf59cd38bb3cdcbc7c73d2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-heartbeat-d007-incontext:flow:FR-02
+  tests: test/flow-status-heartbeat.test.mjs「④ …AGENTS.md 不得携带勾选纪律细节（瘦身钉）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-heartbeat-d007-incontext
+  status: active
+
+## FR-cli-entry-261 status 心跳渲染本体保留（下一任务指针/进度/全勾指 done——恢复场景价值不变），仅指引文
+变更：2026-09-29-heartbeat-d007-incontext
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When status 心跳渲染本体保留（下一任务指针/进度/全勾指 done——恢复场景价值不变），仅指引文案改口径；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-heartbeat-d007-incontext/requirements.md#FR-03
+最近确认：02a7dca978ae5ec8cdaf59cd38bb3cdcbc7c73d2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-heartbeat-d007-incontext:flow:FR-03
+  tests: test/flow-status-heartbeat.test.mjs | test/tick-loop-nudge.test.mjs「③」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-heartbeat-d007-incontext
+  status: active
+
+## FR-cli-entry-262 相关测试钉同步（flow-status-heartbeat/tick-loop-nudge），flo
+变更：2026-09-29-heartbeat-d007-incontext
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 相关测试钉同步（flow-status-heartbeat/tick-loop-nudge），flow 系与 test:core 全绿；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-heartbeat-d007-incontext/requirements.md#FR-04
+最近确认：02a7dca978ae5ec8cdaf59cd38bb3cdcbc7c73d2
