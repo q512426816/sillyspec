@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-skill-prompt-retire",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "design 槽3「不适用」成立：纯静态资产删除与输出字符串改动，无事件序假设、无输入乱序面。",
+    "并发": "guard 提示为纯输出字符串无新代码路径；他 agent 会话若已加载被删 skill 属进程内 prompt 快照不受影响，且 quick 通道本身拒绝新会话，无并发破坏面。F-07 的误导性提示是他 agent 可见面（低危，已在案）。",
+    "切换": "flow-state.yaml 基线锁 76338b4d（sha256 306db37b…）；change.patch 冻结面（三目录 SKILL.md 删除 + worktree-guard.js 一行 + docs/prompt/README.md 一行 + 变更治理工件）与工作区实况逐项核对一致，tasks.md 三项勾选与落盘事实相符，无中途切换状态风险。",
+    "作用域": "init 同步为单向复制（动态枚举，F-02），仓库侧删除不会串台；但已装用户项目里的旧 skill 副本无卸载/清理路径会继续残留——作用域在仓库外、超出本变更承诺，仅记录不判。"
+  },
+  "reviewedAt": "2026-09-29T07:43:04Z"
+}

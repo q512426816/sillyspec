@@ -1,0 +1,9 @@
+{"ts":1790667438690,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790667438690,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790667438690,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790667438690,"kind":"task-done","stage":"tasks","detail":"checked 0→3","provisional":true}
+{"ts":1790667438891,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01、task-02、task-03 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790667449110,"kind":"commit","stage":null,"detail":"9a048476","provisional":true}
+{"ts":1790667472041,"kind":"gate-run","stage":"verify","detail":"门实测 passed（21.7s） · 20260929073750","provisional":true}
+{"ts":1790668023113,"kind":"commit","stage":null,"detail":"9a44c325","provisional":true}
+{"ts":1790668023315,"kind":"info","stage":null,"rule":"fake-check-cleared","severity":"info","detail":"task task-02 勾选证据补齐（提交 9a44c325）——前拍假勾选嫌疑消解","provisional":true}

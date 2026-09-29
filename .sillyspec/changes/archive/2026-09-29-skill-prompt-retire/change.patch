@@ -1,0 +1,460 @@
+diff --git a/.claude/skills/sillyspec-export/SKILL.md b/.claude/skills/sillyspec-export/SKILL.md
+deleted file mode 100644
+index 253da948..00000000
+--- a/.claude/skills/sillyspec-export/SKILL.md
++++ /dev/null
+@@ -1,57 +0,0 @@
+----
+-name: sillyspec:export
+-description: 导出成功方案为可复用模板
+----
+-
+----
+-
+-## CLI 边界（重要）
+-
+-sillyspec CLI **没有 `export` 顶层命令**。本 skill 通过直接复制变更文件到 `~/.sillyspec/templates/<change-name>/` 生成可复用模板，是纯文件操作。**不要编造 `sillyspec export ...` 子命令。**
+-
+-你现在是 SillySpec 的模板导出器。
+-
+-## 参数解析
+-
+-解析 `$ARGUMENTS`：
+-- 第一个参数为变更名（如 `user-auth`）
+-- `--to` 指定输出路径（默认 `~/.sillyspec/templates/<change-name>/`）
+-
+-## 流程
+-
+-### 1. 读取变更文件
+-
+-```bash
+-CHANGE_DIR=".sillyspec/changes/$ARGUMENTS"
+-cat "$CHANGE_DIR/proposal.md"
+-cat "$CHANGE_DIR/design.md"
+-cat "$CHANGE_DIR/specs/requirements.md" 2>/dev/null
+-```
+-
+-如果变更不存在 → 告诉用户"变更不存在，请确认变更名"
+-
+-### 2. 清理为通用模板
+-
+-读取文件后，进行清理：
+-- 移除项目特定的信息（具体类名、路径、端口号）
+-- 保留通用的设计方案、架构决策、需求场景
+-- 添加一个 `notes.md`，记录使用建议和适配要点
+-
+-### 3. 导出到模板目录
+-
+-```bash
+-mkdir -p ~/.sillyspec/templates/<change-name>
+-cp 清理后的文件到该目录
+-```
+-
+-### 4. 确认
+-
+-展示导出内容摘要，告知模板路径。
+-
+-### 最后说：
+-
+-> ✅ 方案已导出到 `~/.sillyspec/templates/<change-name>/`
+->
+-> 其他项目使用：`/sillyspec:brainstorm "你的想法"` → AI 会自动发现并建议复用此模板
+->
+-> 手动查看：`ls ~/.sillyspec/templates/<change-name>/`
+diff --git a/.claude/skills/sillyspec-quick/SKILL.md b/.claude/skills/sillyspec-quick/SKILL.md
+deleted file mode 100644
+index 4a82e633..00000000
+--- a/.claude/skills/sillyspec-quick/SKILL.md
++++ /dev/null
+@@ -1,116 +0,0 @@
+----
+-name: sillyspec:quick
+-description: 用于明确、低风险、范围很小的直接任务。适合用户说"直接改、快速修、顺手调整、改个文案、修个小 bug、更新一个文件、不要完整流程"。跳过 brainstorm/plan，但仍按 sillyspec quick 流程执行。
+----
+-
+-## 何时使用
+-
+-- 明确、低风险、范围小的直接修改：改文案、修小 bug、更新单个文件
+-- 用户说"直接改、快速修、顺手调整、不要完整流程"
+-- brainstorm 判定 `scale=small` 的变更：带 design.md 进 quick（`sillyspec run quick --linked-changes <变更名>`），design 当背景
+-- 跳过 brainstorm/plan，但仍走 quick 的 3 步流程（理解任务 → 实现 → 自检提交）
+-
+-## 多变更说明（quick 特殊，务必注意）
+-
+-quick 阶段的 `--change` 语义是「关联变更」**且会触发步骤重置**，**不要用 `--change` 来指定关联变更**。多活跃变更时改用：
+-
+-- `--linked-changes none`：不关联，仅记 QUICKLOG（CLI 启动时写入）
+-- `--linked-changes a,b`：显式关联到变更 a、b
+-- `--non-interactive`：CI/脚本环境，默认不关联（避免交互 prompt 崩溃）
+-
+-首次 `sillyspec run quick` 选定的关联会持久化到 `.runtime/quick-sessions/<quick-session-id>/guard.json`（每个 quick 会话独立，多会话并发不互覆盖），后续 `--done` 自动复用，**不会重复弹交互 prompt**。
+-
+-## 步骤生命周期（所有阶段通用）
+-
+-> `sillyspec quick` 是 `sillyspec run quick` 的顶层别名，两者等价。
+-
+-```bash
+-sillyspec run quick                            # 输出当前步骤 prompt（首次会记录 baseline）
+-sillyspec run quick --done --output "摘要"     # 完成当前步骤
+-sillyspec run quick --status                   # 查看阶段进度
+-sillyspec run quick --skip                     # 跳过可选步骤
+-sillyspec run quick --reset                    # 重置阶段（从头开始）
+-sillyspec run quick --reopen --from-step N     # 重新打开已完成阶段修订（N=序号或名称）
+-```
+-
+-### 已有进行中会话的恢复（sessionId）
+-
+-`sillyspec run quick` / `run quick --done` / `--status` **不带 `--change` 时，是启动一个新 quick 会话**（CLI 分配新 `quick-<hash>` + 新 ql-ID，QUICKLOG 追加「进行中」条目），不是恢复正在进行的旧会话。多会话并发或中断恢复时，必须带上启动时 CLI 打印的 sessionId：
+-
+-```bash
+-sillyspec run quick --change quick-<hash>        # 恢复查看该会话当前 step prompt
+-sillyspec run quick --done --change quick-<hash> --output "…"  # 完成该会话步骤
+-```
+-
+-- 这里的 `--change quick-<hash>` 是「恢复到该 CLI 生成的 session」，与下方 `--linked-changes` 的关联业务变更语义不同：想关联真实业务变更才用 `--linked-changes`。
+-- 误启动的空壳会话：`sillyspec run quick --cancel --change quick-<hash>` 一键取消（QUICKLOG 条目翻「已取消」+ tasks.md 挂载行移除 + 会话目录清理 + db 行注销；已完成/已勾选的拒绝取消）。
+-
+-## 通用参数（所有阶段适用）
+-
+-| 参数 | 说明 |
+-|---|---|
+-| `--spec-dir <path>` | 指定规范目录（默认 `<项目>/.sillyspec`） |
+-| `--input "<一句话任务描述>"` | 通用参数，**quick 启动时强烈建议带**：作为 QUICKLOG 条目标题，条目从第一分钟即语义可读。不带则落「(quick 任务)」占位标题——平台「快速修复」列表默认隐藏进行中的占位条目，语义标题要到最终 `--done` 才回填（关联变更有 proposal/design 标题时可自动提取，免传） |
+-| `--non-interactive` | CI/脚本下禁用交互式 prompt |
+-| `--interactive` | 强制交互（即便 stdin 非 TTY） |
+-| `--skip-approval` | 跳过阶段转换/审批检查（不能跳产物校验 gate——review.json/文档产物硬校验仍在） |
+-
+-## quick 特有参数
+-
+-| 参数 | 说明 |
+-|---|---|
+-| `--linked-changes none\|a,b` | **显式关联变更（取代 `--change`，推荐）**。none=不关联，a,b=关联列表 |
+-| `--files a.js,b.js` | 显式声明本次允许修改的文件（边界保护 + 声明即归属：多 agent 并发仓防他者窗口文件混入 QUICKLOG 文件行，未声明窗口文件进「审计：」行追溯；**他向亦然**——其他 active 会话已声明的文件在你的 `--done` 审计中自动剔除归该会话，不再误拦、无需 `--force-baseline`）。**中途可追加**：发现要改声明外文件（如新写的测试）时，带新增文件恢复会话即并入边界（追加不替换）——`sillyspec run quick --files <新增> --change <sessionId>`；不带 `--files` 恢复则边界原样保留 |
+-| `--file-notes "p::注 \|\| p::注"` | quick `--done` 用：QUICKLOG「文件：」行落盘为多行带括注 bullet（省事后手改文件行）。格式 `path::括注`，`\|\|` 分隔多条；**只随 step3 --done 同命令传**（CLI 短进程，step1/step2 传无效，不带到 step3） |
+-| `--allow-new` | 允许新增文件（默认禁止，防意外创建） |
+-| `--allow-delete` | 允许删除文件（默认 fail-closed，删除是破坏性操作；确认删除带此 flag 显式解锁） |
+-| `--force-baseline` | 允许覆盖 baseline 受保护文件 / 压制 `.sillyspec/` 危险判定（危险，慎用） |
+-| `--confirm` | ⚠️ 仅打印变更概览，**不解锁 blocked**（blocked 仍 exit 1）。真正解锁用 `--force-baseline`/`--allow-new`/`--allow-delete` |
+-
+-## 审计与并发变更（`--done` 边界审计）
+-
+-`--done` 收尾时对比 step1 baseline 与当前 `git status`，拦「危险文件 / 新增文件 / 覆盖 baseline」。要点：
+-
+-- **并发其他会话的 `.sillyspec/changes/<非关联变更>/` 不再被本 quick 拦截**。quick 自己没有 `changes/` 目录，该路径下非关联内容视为并发会话的工作，整体放行（确定性审计无法区分「并发工作」与「本 quick 偷建变更」，后者这类意图软判定留给 sillyhub）。
+-- **其他 active 会话已声明的文件自动豁免（`--files` 的他向语义）**。多 agent 并发时，并行 quick 会话 `--files` 显式声明的文件（如它的 `daemon/router.py`）出现在你的窗口内（它在你启动后改的、不在你的 baseline）——`--done` 审计自动剔除归该会话边界管，不再判危险 BLOCK、无需 `--force-baseline`。放行可见：输出 🔗 软警告逐文件列归属会话；若确系你的改动，恢复会话时 `--files` 追加声明；超 7 天未收尾的僵尸会话声明自动失效（`sillyspec run quick --cancel --change <他者会话ID>` 清理）。豁免只认他者**显式声明**——未声明的他者文件照旧走各门判定（漏声明的补 `--files`，危险文件仍需 `--force-baseline`）。
+-- **关联变更的文件仍走审计**：reverse-sync 改自己关联变更的 `design.md` 会被拦，需 `--force-baseline` 显式确认。
+-- **baseline 折叠目录前缀匹配**：step1 启动时整片 `changes/` 未跟踪会被 git 折叠成 `?? .sillyspec/changes/`（带尾斜杠 token）；审计时若该目录下文件被并发会话跟踪而展开成文件级路径，按尾斜杠 token 前缀放行其下所有文件，不误判。
+-- **同文件并发 warn（advisory，不阻断）**：step1 启动时若你的某个 `allowedFile` 已在他者脏文件列表里（他者也改了这文件），--done 时 CLI 会比对当前内容 hash 与启动时录入的 hash——不一致（你也改了它）即判「同文件并发」并 warn：整文件 pathspec 提交会夹带他者 hunk。warn 给出分离指引（`git add -p <file>` 交互选你自己的 hunk，或 `git diff <file> > mine.patch` 编辑后 `git apply --cached mine.patch` 再 commit）。这**不阻断** --done（你可能有意整文件提交），看 warn 后自行决定是否分离。
+-- **`--confirm` ≠ 解锁**：它只打印概览。blocked 时真正解锁的是 `--force-baseline`（压制 `.sillyspec/` 危险判定 + baseline 覆盖）/`--allow-new`（放行新增）/`--allow-delete`（放行删除，删除是破坏性操作默认 fail-closed，须显式 opt-in），三者可在 step1 或 `--done` 传，都生效。
+-
+-## 典型用法
+-
+-```bash
+-# 推荐启动：带一句话语义标题（QUICKLOG/平台快速修复列表进行中即可见可读）
+-sillyspec run quick --input "修复登录限流 INCR 计数误清" --linked-changes none --files src/auth.ts
+-
+-# 单变更项目，直接开始
+-sillyspec run quick
+-
+-# 多变更项目，显式不关联
+-sillyspec run quick --linked-changes none
+-
+-# 多变更项目，关联到指定变更
+-sillyspec run quick --linked-changes 2026-07-03-add-login
+-
+-# CI/脚本（非交互，避免 prompt 崩溃）
+-sillyspec run quick --non-interactive
+-sillyspec run quick --done --linked-changes none --output "修复手机号校验"
+-
+-# 限定修改文件范围
+-sillyspec run quick --files src/phone.ts,src/phone.test.ts
+-```
+-
+-## 铁律
+-
+-- **必须用 exec 工具（shell）执行 CLI，不要自己编造流程**
+-- quick 直接在主工作区改代码（不创建 worktree），范围必须小且明确
+-- 完成后立即 `--done`，不跳过
+-- QUICKLOG 记录的**骨架由 CLI 接管**：启动时 CLI 自动分配 ql-ID 并在 `.sillyspec/quicklog/QUICKLOG-<user>.md` 写「进行中」条目（含关联变更 tasks.md），`--done` 时 CLI 自动翻「已完成」+ 勾选 task + 回填文件路径。ql-ID 分配/状态/task 你无需手写，只需用注入的 `<quicklog-id>` 在模块文档变更索引引用
+-- **QUICKLOG 落盘已结构化（`--done` 后按需核对，多数无需手改）**：CLI 已落盘结构化条目——标题从 `--output` 的「需求：」自动提取、正文四字段自动分行、文件行用 `--file-notes` 时为多行带括注。`--done` 后只需核对：标题弱才改（禁留 `(quick 任务)` 占位）；没用 `--file-notes` 时文件行是单行、可事后补括注（参照同文件早期丰富条目）；正文 `需求：`/`根因：`/`方案：`/`结果：` 四段按需充实（禁只留一段「结果：」）。一条 quick = 一条独立 ql，不追加到旧条目
+-- **收尾顺序（模块文档在 `--done` 前，QUICKLOG 在 `--done` 后，别记混）**：① 命中模块→改模块文档→`git add`；② `sillyspec run quick --done --change <id> --output "四字段" [--file-notes "..."]`（CLI 自动翻完成 + 勾 task + 落盘 QUICKLOG 标题/文件/正文；若 `--linked-changes` 关联的真实变更其 tasks.md 已全部勾选**且该变更未进入完整流程**（进度库阶段停在 brainstorm 及之前），CLI 会自动将其归档到 `changes/archive/`；已走到 plan/execute/verify/archive 的变更不自动归档（tasks.md 全勾不等于流程收尾），须走原流程收尾）；③ 核对 QUICKLOG 标题（CLI 已从「需求：」提取并截断，写成短标题则无需改）→若改了再 `git add`
+-- **最后一步 `--done` 必须给全四字段**（逐项一句话）：🔧 **推荐四参数形式**（CLI 自动合成结构化模板，无格式事故面）：`--done --change <id> --req "一句语义化短标题" --cause "为什么改" --solution "怎么改的" --result "验证结果"`。兼容旧形式 `--output "需求：… 根因：… 方案：… 结果：…"`（手拼须懂截断规则、禁嵌套全角冒号，缺字段被拒 exit 1）。这是 QUICKLOG「结果：」归档的唯一来源。**`--req` 写一句语义化短标题**（写「改了什么」，如「登录限流修复——INCR 计数误清」）——CLI 把它提取为 QUICKLOG 条目标题，截到首个标点、超 80 字截断；写完整需求长句会被截成语义不完整的状语前半段，需求背景放 `--cause`/`--solution`。前两个 step 的 `--output` 是中间摘要，不用此模板
+-- **禁止**在没有运行 CLI 的情况下自行决定流程
+-
+-## 用户指令
+-$ARGUMENTS
+diff --git a/.claude/skills/sillyspec-resume/SKILL.md b/.claude/skills/sillyspec-resume/SKILL.md
+deleted file mode 100644
+index e6d0df4e..00000000
+--- a/.claude/skills/sillyspec-resume/SKILL.md
++++ /dev/null
+@@ -1,21 +0,0 @@
+----
+-name: sillyspec:resume
+-description: 恢复工作 — 从中断处继续
+----
+-
+-## 交互规范
+-
+-**当需要用户从多个选项中做出选择时，必须使用 Claude Code 内置的 AskUserQuestion 工具，将选项传入。** 不要用编号列表让用户手动输入数字。需要自由输入时在选项中加入"Other（自定义输入）"。
+-
+-## 流程
+-
+-1. **读进度**：跑 `sillyspec progress show`。
+-2. **有活跃变更**：把当前状态（变更/阶段/步骤）转述给用户，用 AskUserQuestion 问「直接继续执行下一步 / 查看更多细节」。
+-3. **无活跃变更**：跑 `sillyspec next`——CLI 已内置全套探测（文件存在性 → 推断阶段 → 建议命令 + 依据），按输出转述并执行建议命令。勿自行 ls/cat 重算（输出与实际不符时才手工核对）。
+-
+-## 关键原则
+-
+-- 进度存 SQLite（`.sillyspec/.runtime/sillyspec.db`），随 `sillyspec run <stage> --done` 自动更新，不需要手动保存、不需要从中途状态"恢复文件"——直接续跑即可。
+-
+-## 用户指令
+-$ARGUMENTS
+diff --git a/.sillyspec/changes/2026-09-29-skill-prompt-retire/flow-state.yaml b/.sillyspec/changes/2026-09-29-skill-prompt-retire/flow-state.yaml
+new file mode 100644
+index 00000000..de2140ed
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-skill-prompt-retire/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 76338b4d226129e72fc7558f90d832fa01e6b79f
++updatedAt: '2026-09-29T07:35:25.200Z'
++baseline_sha256: 306db37b89782c97c64e52d280275c6baa1f75aef9de19d88ba735f11b36d9c5
++
+diff --git a/docs/prompt/README.md b/docs/prompt/README.md
+index 13001128..d8702eee 100644
+--- a/docs/prompt/README.md
++++ b/docs/prompt/README.md
+@@ -15,7 +15,7 @@
+ | [execute](./execute.md) | 波次执行 | 主流程 | 12（动态） | 高级工程师 | `src/stages/execute.js` |
+ | [verify](./verify.md) | 验证 | 主流程 | 7 | QA 专家 | `src/stages/verify.js` |
+ | [scan](./scan.md) | 项目扫描 | 辅助 | 11 | — | `src/stages/scan.js` |
+-| [quick](./quick.md) | 快速任务 | 辅助 | 3 | 全栈老兵 | `src/stages/quick.js` |
++| [quick](./quick.md) | 快速任务（通道已退役 v3.30.0——仅存量会话收尾，新工作走 flow start） | 辅助 | 3 | 全栈老兵 | `src/stages/quick.js` |
+ | [explore](./explore.md) | 自由探索 | 辅助 | 1 | 技术探索伙伴 | `src/stages/explore.js` |
+ | [archive](./archive.md) | 归档 | 辅助 | 6 | — | `src/stages/archive.js` |
+ | [status](./status.md) | 项目快照 | 辅助 | 3 | — | `src/stages/status.js` |
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index dfd4cace..1b3430af 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -60,7 +60,7 @@ const STAGE_HINTS = {
+     '没有检测到活跃的 SillySpec 流程。',
+     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
+     '',
+-    '  BUG修复(skill sillyspec-quick)：sillyspec run quick "任务描述"',
++    '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+     '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
+     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
+   ],
+@@ -75,16 +75,16 @@ const STAGE_HINTS = {
+   ],
+   'verify': [
+     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
+-    '如需修改，请先回到 execute 阶段或使用 quick 模式：',
+-    '  sillyspec run quick "修改描述"',
++    '如需修改，请先回到 execute 阶段，或收口后开轻量变更：',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+   ],
+   'archive': [
+     '当前在 archive（归档）阶段，不修改源码。',
+-    '如需修改，请开启新变更：sillyspec run quick "修改描述"',
++    '如需修改，请开启新变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+   ],
+   'explore': [
+     '当前在 explore（探索）阶段，只读不写。',
+-    '确认方案后使用：sillyspec run brainstorm 或 sillyspec run quick',
++    '确认方案后使用：sillyspec run brainstorm，或小改动直接走轻量变更 sillyspec flow start',
+   ],
+ }
+diff --git a/.sillyspec/changes/2026-09-29-skill-prompt-retire/design.md b/.sillyspec/changes/2026-09-29-skill-prompt-retire/design.md
+new file mode 100644
+index 00000000..b150f047
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-skill-prompt-retire/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:35:25.179Z
++---
++# 设计记录（Design Record）— 2026-09-29-skill-prompt-retire
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++删除三个过时 skill（quick→退役通道、export→命令已不存在、resume→退役前恢复协议且 thin 面缺失 flow start），修正 worktree-guard (none) 拦截菜单（quick 行改 flow start 轻量道），docs/prompt README quick 行补退役标注。全仓 grep 零代码引用被删 skill。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++删 .claude/skills/{sillyspec-quick,sillyspec-export,sillyspec-resume} 三目录；src/hooks/worktree-guard.js STAGE_HINTS["(none)"] 首行菜单改 flow start 指引；docs/prompt/README.md 一行标注。无导出/命令面变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯删除与文案修正，无状态/并发面（guard 提示是纯输出字符串，无新代码路径）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险：误删仍有引用的 skill——已 grep 全仓（src/test/templates）零引用核验；resume 的恢复语义由 flow skill+AGENTS.md 承担、查看语义由 state skill 承担（职责无空洞）。弃案：保留 resume 改写为新恢复协议——与 flow skill 职责重叠，删比改省一面。
+diff --git a/.sillyspec/changes/2026-09-29-skill-prompt-retire/proposal.md b/.sillyspec/changes/2026-09-29-skill-prompt-retire/proposal.md
+new file mode 100644
+index 00000000..522378bb
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-skill-prompt-retire/proposal.md
+@@ -0,0 +1,40 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:35:25.178Z
++---
++# 提案书（Proposal）— 2026-09-29-skill-prompt-retire
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:be9d406bac93894534852af88537c201928495fb19501fce27bf1dc05339fd36:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++任务原话转写：动机：.claude/skills/ 与提示词面存在过时项：①sillyspec-quick skill 引导新工作走已退役的 quick 通道（v3.30.0 退役，仅剩在途收尾）；②sillyspec-export skill 指向已不存在的 export 命令；③sillyspec-resume skill 教的是退役前时代恢复协议（progress show/next），对 thin 变更不提 flow start 恢复简报——恢复口径已由 flow skill 与 AGENTS.md 承担、查看态由 state skill 承担；④src/hooks/worktree-guard.js 的 '(none)' 拦截菜单把 BUG 修复指去退役 quick 且缺默认快道 flow start（真·过时提示词）；⑤docs/prompt/README.md 总览表 quick 行未标退役。全仓零代码引用被删 skill（grep 核验）。
++
++成功标准：
++- 删除 .claude/skills/sillyspec-quick、sillyspec-export、sillyspec-resume 三个目录；其余 skill 零改动
++- worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为 flow start 轻量道（bug 修复/小改动的默认快道），brainstorm/auto 行保留
++- docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」标注
++- 既有测试全绿（worktree-guard 相关用例如断言旧文案则按新口径适配）
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:2942027e101e69b72bb36af894a564fd3db64a9d421afecb4c7c7eddb4b753f3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. 删除 .claude/skills/sillyspec-quick、sillyspec-export、sillyspec-resume 三个目录
++2. 其余 skill 零改动
++3. worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为 flow start 轻量道（bug 修复/小改动的默认快道），brainstorm/auto 行保留
++4. docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」标注
++5. 既有测试全绿（worktree-guard 相关用例如断言旧文案则按新口径适配）
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:a56279845d997031e8f174ff3b9ba93d0e14568954633f9dcc6688eb8fda0ec0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-skill-prompt-retire 留痕重锚 -->
++1. 删除 .claude/skills/sillyspec-quick、sillyspec-export、sillyspec-resume 三个目录
++2. 其余 skill 零改动
++3. worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为 flow start 轻量道（bug 修复/小改动的默认快道），brainstorm/auto 行保留
++4. docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」标注
++5. 既有测试全绿（worktree-guard 相关用例如断言旧文案则按新口径适配）
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-skill-prompt-retire/requirements.md b/.sillyspec/changes/2026-09-29-skill-prompt-retire/requirements.md
+new file mode 100644
+index 00000000..d0ffdadc
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-skill-prompt-retire/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:35:25.179Z
++---
++# 需求规格（Requirements）— 2026-09-29-skill-prompt-retire
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 删除 .claude/skills/sillyspec-quick、sillyspec-export
++Given 系统就绪
++When 删除 .claude/skills/sillyspec-quick、sillyspec-export、sillyspec-resume 三个目录
++Then 行为符合本条标准描述
++
++### FR-02: 其余 skill 零改动
++Given 系统就绪
++When 其余 skill 零改动
++Then 行为符合本条标准描述
++
++### FR-03: worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为 
++Given 系统就绪
++When worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为 flow start 轻量道（bug 修复/小改动的默认快道
++Then 行为符合本条标准描述
++
++### FR-04: docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」
++Given 系统就绪
++When docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」标注
++Then 行为符合本条标准描述
++
++### FR-05: 既有测试全绿（worktree-guard 相关用例如断言旧文案则按新口径适配）
++Given 测试 相关模块就绪
++When 既有测试全绿（worktree-guard 相关用例如断言旧文案
++Then 按新口径适配）
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 x -->
++不适用：纯删除与提示词文案，行为由 guard 系/quick-retired 既有用例守护（23/0 绿）
++
++<!--AGENT:测试绑定FR-02 x -->
++不适用：纯删除与提示词文案，行为由 guard 系/quick-retired 既有用例守护（23/0 绿）
++
++<!--AGENT:测试绑定FR-03 x -->
++不适用：纯删除与提示词文案，行为由 guard 系/quick-retired 既有用例守护（23/0 绿）
++
++<!--AGENT:测试绑定FR-04 x -->
++不适用：纯删除与提示词文案，行为由 guard 系/quick-retired 既有用例守护（23/0 绿）
++
++<!--AGENT:测试绑定FR-05 x -->
++不适用：纯删除与提示词文案，行为由 guard 系/quick-retired 既有用例守护（23/0 绿）
+diff --git a/.sillyspec/changes/2026-09-29-skill-prompt-retire/tasks.md b/.sillyspec/changes/2026-09-29-skill-prompt-retire/tasks.md
+new file mode 100644
+index 00000000..70c80364
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-skill-prompt-retire/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++---
++# 任务注册表（Tasks）— 2026-09-29-skill-prompt-retire
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++
++- [x] task-01: 删除 sillyspec-quick/sillyspec-export/sillyspec-resume 三 skill 目录（全仓零引用核验）
++- [x] task-02: worktree-guard (none) 菜单 quick 行改 flow start 轻量道指引
++- [x] task-03: docs/prompt README quick 行退役标注；guard 系+quick-retired 测试 23/0 绿
+diff --git a/.sillyspec/changes/2026-09-29-skill-prompt-retire/review.json b/.sillyspec/changes/2026-09-29-skill-prompt-retire/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-skill-prompt-retire/review.json
+@@ -0,0 +1,14 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-29-skill-prompt-retire",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [],
++  "dimensionNotes": {
++    "乱序": "design 槽3「不适用」成立：纯静态资产删除与输出字符串改动，无事件序假设、无输入乱序面。",
++    "并发": "guard 提示为纯输出字符串无新代码路径；他 agent 会话若已加载被删 skill 属进程内 prompt 快照不受影响，且 quick 通道本身拒绝新会话，无并发破坏面。F-07 的误导性提示是他 agent 可见面（低危，已在案）。",
++    "切换": "flow-state.yaml 基线锁 76338b4d（sha256 306db37b…）；change.patch 冻结面（三目录 SKILL.md 删除 + worktree-guard.js 一行 + docs/prompt/README.md 一行 + 变更治理工件）与工作区实况逐项核对一致，tasks.md 三项勾选与落盘事实相符，无中途切换状态风险。",
++    "作用域": "init 同步为单向复制（动态枚举，F-02），仓库侧删除不会串台；但已装用户项目里的旧 skill 副本无卸载/清理路径会继续残留——作用域在仓库外、超出本变更承诺，仅记录不判。"
++  },
++  "reviewedAt": "2026-09-29T07:43:04Z"
++}
