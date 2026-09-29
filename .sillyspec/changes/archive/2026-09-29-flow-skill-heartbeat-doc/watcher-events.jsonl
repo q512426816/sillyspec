@@ -1,0 +1,10 @@
+{"ts":1790664713548,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790664713548,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790664778913,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790664778913,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1790664779131,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790664795546,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790664795546,"kind":"task-done","stage":"tasks","detail":"checked 1→3","provisional":true}
+{"ts":1790664795766,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-02、task-03 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790664812205,"kind":"commit","stage":null,"detail":"94d357e5","provisional":true}
+{"ts":1790664842104,"kind":"gate-run","stage":"verify","detail":"门实测 passed（29.0s） · 20260929065400","provisional":true}

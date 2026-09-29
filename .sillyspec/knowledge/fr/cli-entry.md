@@ -4731,3 +4731,39 @@ superseded_by：FR-cli-entry-198
 摘要：（无场景名）
 全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-06
 最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+
+## FR-cli-entry-255 SKILL.md ②节勾选行改为心跳循环口径（做一件→勾一格→重跑 flow status 取下一个
+变更：2026-09-29-flow-skill-heartbeat-doc
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When SKILL.md ②节勾选行改为心跳循环口径（做一件；Then 勾一格
+全文：.sillyspec/changes/archive/2026-09-29-flow-skill-heartbeat-doc/requirements.md#FR-01
+最近确认：94d357e5ab2e7d4816a091db0e580cb0b72e2a0a
+
+## FR-cli-entry-256 全勾后 flow done）
+变更：2026-09-29-flow-skill-heartbeat-doc
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 全勾后 flow done）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-skill-heartbeat-doc/requirements.md#FR-02
+最近确认：94d357e5ab2e7d4816a091db0e580cb0b72e2a0a
+
+## FR-cli-entry-257 SKILL.md 边界节中断恢复行补节拍器语义（②执行阶段 status 给下一任务指针与进度）
+变更：2026-09-29-flow-skill-heartbeat-doc
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When SKILL.md 边界节中断恢复行补节拍器语义（②执行阶段 status 给下一任务指针与进度）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-skill-heartbeat-doc/requirements.md#FR-03
+最近确认：94d357e5ab2e7d4816a091db0e580cb0b72e2a0a
+
+## FR-cli-entry-258 其余内容零改动
+变更：2026-09-29-flow-skill-heartbeat-doc
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 其余内容零改动；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-skill-heartbeat-doc/requirements.md#FR-04
+最近确认：94d357e5ab2e7d4816a091db0e580cb0b72e2a0a

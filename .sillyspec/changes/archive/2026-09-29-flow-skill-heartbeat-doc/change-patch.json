@@ -1,0 +1,38 @@
+{
+  "change": "2026-09-29-flow-skill-heartbeat-doc",
+  "baseline": "00a9c3553df3afc1e4301c65cdf82e910f32ad87",
+  "head": "94d357e5ab2e7d4816a091db0e580cb0b72e2a0a",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-heartbeat-doc/design.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-heartbeat-doc/flow-state.yaml",
+    ".sillyspec/changes/2026-09-29-flow-skill-heartbeat-doc/proposal.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-heartbeat-doc/requirements.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-heartbeat-doc/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 120,
+    "deletions": 12
+  },
+  "savedAt": "2026-09-29T06:54:38.745Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-flow",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "6712d88069f4d49379cab2e7339ec1553d3a52dcd9d754c46b88fe8dbe471aff",
+  "patchStatus": "ok"
+}
