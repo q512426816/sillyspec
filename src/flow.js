@@ -809,6 +809,9 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               const { writeAtomicSync } = await import('./fs-atomic.js')
               writeAtomicSync(_tasksMdPath, _tasksMd)
               _autopilotTicked = _autoTicked
+              // 代勾事实持久化（二轮评审 P2-B）：重入时 tasks 已被代勾、本拍 _autoTicked=0，
+              // 但首拍代勾写下的单拍跳事件仍在流里——不持久化会把重入误判成 agent 一把勾拒收
+              try { writeFlowState(changeDir, { autopilot_ticked: _autoTicked }) } catch { /* 留痕 best-effort */ }
               console.log(`✅ [自动勾选] ${_autoTicked} 个任务有提交证据但未勾——已机器代勾（governance-autopilot）`)
             }
           }
@@ -879,9 +882,11 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
       const stream = readWatcherEvents({ runtimeRoot, change })
       const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
       if (batch) {
-        // 决策纯函数单源（resolveBatchTickAction）：四态与豁免优先序见其 JSDoc——autopilot 代勾/
-        // 哨兵面未知降 advisory，镜像-only 静默，未旁路的 agent 一把勾拒收
-        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autopilotTicked })
+        // 代勾计数取「本拍实时代勾 ∨ 持久化代勾」较大者（二轮 P2-B：重入漂移防护）；决策纯函数
+        // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
+        const _persistedAuto = Number(st?.autopilot_ticked) || 0
+        const _autoN = Math.max(_autopilotTicked, _persistedAuto)
+        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autoN })
         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
         if (v.action === 'bypass') {
           try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }

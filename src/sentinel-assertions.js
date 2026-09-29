@@ -158,9 +158,11 @@ export function detectBatchCheckCadence(events) {
  * 时的收口动作裁决。四态（决策顺序即豁免优先序）：
  *   'silent'   镜像-only（非镜像勾选面=0）——镜像豁免哲学：镜像批量勾是常态非纪律失守；
  *   'bypass'   --allow-batch-tick 显式旁路——留痕放行（同意门先例）；
- *   'advisory' 哨兵面未知（nonMirrorCount=null，fail-open 防误拒）或机器代勾
- *              （autopilotTicked>0——governance-autopilot 代勾是单拍多格机械写，非 agent 纪律面）；
- *   'reject'   非镜像面存在、非机器代勾、未旁路——agent 一把勾，拒收。
+ *   'advisory' 哨兵面未知（nonMirrorCount=null，fail-open 防误拒）；或机器代勾可解释整跳
+ *              （autopilotTicked >= 跳幅——governance-autopilot 代勾是单拍多格机械写，非 agent
+ *              纪律面；代勾数不可解释最大跳时落到 reject——防「留一格给代勾补、自身大跳蹭豁免」
+ *              的对抗绕过，二轮评审 P3-E）；
+ *   'reject'   非镜像面存在、代勾解释不了整跳、未旁路——agent 一把勾，拒收。
  * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number}} args
  * @returns {{action:'silent'|'advisory'|'bypass'|'reject', reason:string}}
  */
@@ -169,7 +171,7 @@ export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allow
   if (nonMirrorCount === 0) return { action: 'silent', reason: 'mirror-only' };
   if (allowBatchTick === true) return { action: 'bypass', reason: 'flag' };
   if (nonMirrorCount === null) return { action: 'advisory', reason: 'sentinel-unknown' };
-  if (autopilotTicked > 0) return { action: 'advisory', reason: 'autopilot-ticked' };
+  if (autopilotTicked >= batchTick.to - batchTick.from) return { action: 'advisory', reason: 'autopilot-ticked' };
   return { action: 'reject', reason: 'agent-batch-tick' };
 }
 

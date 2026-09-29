@@ -38,14 +38,19 @@ test('②b 决策纯函数行为级（resolveBatchTickAction 四态 + 豁免优�
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, allowBatchTick: true }).action, 'bypass', '非镜像+旗标→bypass')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null }).action, 'advisory', '哨兵面未知→advisory（fail-open）')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null, allowBatchTick: true }).action, 'bypass', '哨兵面未知仍可显式旁路')
-  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 3 }).action, 'advisory', '机器代勾→advisory（autopilot 单拍机械写不误拒）')
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 3 }).action, 'advisory', '机器代勾解释整跳（3>=3）→advisory（autopilot 单拍机械写不误拒）')
+  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'reject', '代勾解释不了整跳（1<3）→reject（防留格蹭豁免——二轮 P3-E）')
+  assert.equal(resolveBatchTickAction({ batchTick: { from: 3, to: 4, detail: 'checked 3→4', ts: 1 }, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'advisory', '小跳+代勾解释（1>=1）→advisory')
   assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3 }).action, 'reject', 'agent 一把勾→reject')
 })
 
-test('②c autopilot 交互钉（评审 P3 清偿）：代勾计数接线', () => {
+test('②c autopilot 交互钉（评审清偿）：代勾计数接线 + 重入持久化 + 解释整跳判据', () => {
   const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
   assert.ok(src.includes('_autopilotTicked = _autoTicked'), '代勾格数抬升到门作用域')
-  assert.ok(src.includes('autopilotTicked: _autopilotTicked'), '门决策入参接线')
+  assert.ok(src.includes('autopilot_ticked: _autoTicked'), '代勾事实持久化写 flow-state（二轮 P2-B 重入漂移防护）')
+  assert.ok(src.includes('Math.max(_autopilotTicked, _persistedAuto)'), '重入取 max(本拍, 持久化)')
+  const sen = readFileSync(join(ROOT, '..', 'src', 'sentinel-assertions.js'), 'utf8')
+  assert.ok(sen.includes('autopilotTicked >= batchTick.to - batchTick.from'), '代勾解释整跳判据在决策函数（P3-E 防蹭豁免）')
 })
 
 test('③ A 层文案钉：spec 定稿 + openspec 式循环（三处）', () => {

@@ -21,7 +21,7 @@ A+B 双层：A 层移植 openspec 骨架——任务面定稿提前到 ①spec �
 <!-- MACHINE-DRAFT:design-contract:end -->
 
 <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
-flow.js cmdFlowDone 新增 allowBatchTick 参数与 --allow-batch-tick 旗标解析；勾选节奏块三态分支（拒收 exit 1 + 遥测 sentinel:batch-tick / 旁路留痕 flow-state allow_batch_tick / 哨兵面未知 advisory）；简报两路与 draftTasks 头部文案升级（spec 定稿 + 循环指令）。无导出函数变化（detectBatchCheckCadence/readWatcherEvents 既有复用）。
+flow.js cmdFlowDone 新增 allowBatchTick 参数与 --allow-batch-tick 旗标解析；勾选节奏块三态分支（拒收 exit 1 + 遥测 sentinel:batch-tick / 旁路留痕 flow-state allow_batch_tick / 哨兵面未知 advisory）；简报两路与 draftTasks 头部文案升级（spec 定稿 + 循环指令）。导出面变化：sentinel-assertions.js 新增导出 resolveBatchTickAction（决策纯函数四态——二轮 P2-1 清偿形态）；detectBatchCheckCadence/readWatcherEvents 既有复用。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 <!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
@@ -32,7 +32,7 @@ flow.js cmdFlowDone 新增 allowBatchTick 参数与 --allow-batch-tick 旗标解
 <!-- MACHINE-DRAFT:design-boundaries:end -->
 
 <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
-不适用：1) 乱序——watcher 事件流只读回放，拒收判据取最大单跳（顺序无关）；2) 并发——门在收口单点执行，事件文件读取 best-effort；3) 切换——拒收后断点续跑幂等（ledger 子步重入），旁路留痕进 flow-state；4) 作用域——事件文件按 change 名隔离，非真相源（缺席不阻断）。
+不适用：1) 乱序——watcher 事件流只读回放，拒收判据取最大单跳（顺序无关）；2) 并发——门在收口单点执行，事件文件读取 best-effort；3) 切换——拒收后断点续跑幂等（ledger 子步重入），旁路留痕进 flow-state；4) 作用域——事件文件按 change 名隔离，非真相源（缺席不阻断）。基线漂移披露（二轮 P3-D）：冻结面含并行会话 2026-09-29-flow-agent-log-report 的提交 50c18719（agent-session-log 文案/amend-draft 白名单/测试⑤）——该提交落在本变更 baseline 与 HEAD 之间，属区间事实非本变更交付；已知边界（二轮 P2-A 遗留）：拒收路径接线侧为源码钉+决策面行为级，未建执行级 fixture（ledger 全链 e2e 成本 vs 决策逻辑已全覆盖——后续如需可按 gate-snapshot 模式补）。
 
 ## 风险与死路
 <!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
