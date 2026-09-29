@@ -350,7 +350,9 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
     const frKnowledgeRoot = specRoot ? join(specRoot, 'knowledge') : join(cwd, '.sillyspec', 'knowledge')
     const req = parseChangeRequirements(changeDir)
     if (!req.missing && req.frs.length > 0) {
-      const domains = resolveTouchedDomains(changeDir, discoverModuleIndex(frKnowledgeRoot))
+      // unmapped 过滤对齐 frDupGateFlow（2026-09-29-rot-retire-inject-cap）：停车场池不进
+      // 跨域标题比对——原全量载入 723 条做 CPU 税且产出跨域误指认
+      const domains = resolveTouchedDomains(changeDir, discoverModuleIndex(frKnowledgeRoot)).filter((d) => d !== 'unmapped')
       const active = readActiveFrDigest(frKnowledgeRoot, domains)
       if (active.length > 0) {
         for (const fr of req.frs) {

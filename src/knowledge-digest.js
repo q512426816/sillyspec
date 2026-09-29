@@ -2,15 +2,15 @@
  * knowledge-digest.js — 知识资产治理信号收集器（2026-09-27-knowledge-digest）
  *
  * 现状：通用知识走 propose→平台人工合并闭环，规格资产（FR 索引/绑定）全自动入库零人审——
- * 四类信号沉睡库内无人工出口（R23-full 载体仓收件箱积压 40 条实证）。本模块把沉睡数据
+ * 信号沉睡库内无人工出口（R23-full 载体仓收件箱积压 40 条实证）。本模块把沉睡数据
  * 变结构化摘要：`sillyspec knowledge digest`（人读文本）/ `--json`（平台 RPC 消费）。
  *
- * 四信号（阈值内静默、超阈才进摘要——安静即健康态，防仪式化）：
- *   ① rot 待复核标记：knowledge/fr/*.md 条目内「待复核：」行，按域计数（阈值 100）
- *   ② 收件箱积压：knowledge/uncategorized.md 的 `## <qlId> | <标题>` 条目（阈值 20）
- *   ③ 伪域落库：auto-* 域文件条目数 + unmapped 池条目数（阈值 0——伪域本不该增长）
- *   ④ 绑定路径解析失败：fr/*.md 绑定行经 resolveTestFileRel（与 repair-paths/门禁读侧
+ * 三信号（阈值内静默、超阈才进摘要——安静即健康态，防仪式化）：
+ *   ① 收件箱积压：knowledge/uncategorized.md 的 `## <qlId> | <标题>` 条目（阈值 20）
+ *   ② 伪域落库：auto-* 域文件条目数 + unmapped 池条目数（阈值 0——伪域本不该增长）
+ *   ③ 绑定路径解析失败：fr/*.md 绑定行经 resolveTestFileRel（与 repair-paths/门禁读侧
  *      同口径单源）无法自仓根解析（阈值 0）
+ *   （rot 待复核标记信号已随标记层拆除——2026-09-29-rot-retire-inject-cap：471 条零消费实证）
  *
  * 只读扫描，零写入——动作（迁移/清账/repair）由消费方另行执行。
  */
@@ -36,17 +36,12 @@ export function suggestDomainFromFiles(files) {
   return null
 }
 
-/** 条目级解析：fr/<域>.md 的 `## <id> <标题>` 段头与「待复核：」行 */
+/** 条目级解析：fr/<域>.md 的 `## <id> <标题>` 段头（rot 待复核行解析已随标记层拆除，2026-09-29-rot-retire-inject-cap） */
 function scanFrFile(text) {
   const entries = []
-  let cur = null
   for (const line of text.split(/\r?\n/)) {
     const h = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/.exec(line)
-    if (h) { cur = { id: h[1], needsReview: null }; entries.push(cur); continue }
-    if (cur) {
-      const r = /^待复核：(.+)$/.exec(line)
-      if (r) cur.needsReview = r[1].trim()
-    }
+    if (h) entries.push({ id: h[1] })
   }
   return entries
 }
@@ -59,9 +54,8 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
   const knowledgeRoot = join(specBase, 'knowledge')
   const frDir = join(knowledgeRoot, 'fr')
   const signals = []
-  const totals = { rot: 0, inbox: 0, pseudo: 0, unresolvedBindings: 0 }
+  const totals = { inbox: 0, pseudo: 0, unresolvedBindings: 0 }
 
-  const rotByDomain = new Map()
   const pseudoByDomain = new Map()
   const unresolved = []
   const frFiles = existsSync(frDir) ? readdirSync(frDir).filter(f => f.endsWith('.md')).sort() : []
@@ -77,8 +71,6 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
     const domain = f.replace(/\.md$/, '')
     const text = readFileSync(join(frDir, f), 'utf8')
     const entries = scanFrFile(text)
-    const rot = entries.filter(e => e.needsReview).length
-    if (rot > 0) { rotByDomain.set(domain, rot); totals.rot += rot }
     if (isPseudoDomain(domain) && entries.length > 0) {
       // 基线内的 unmapped 池不计（历史跨仓基线，非新增堆积）；auto-* 伪域无基线语义恒计
       const count = domain === 'unmapped' ? Math.max(0, entries.length - unmappedBaseline) : entries.length
@@ -114,11 +106,6 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
   const mk = (kind, level, title, count, detail, suggestion) =>
     signals.push({ kind, level, title, count, detail, ...(suggestion ? { suggestion } : {}) })
 
-  if (totals.rot > 100) {
-    mk('rot', 'warn', `rot 待复核批量标记（${totals.rot} 条 > 100）`, totals.rot,
-      [...rotByDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([d, n]) => `${d} ${n}`).join('、'),
-      '批量复核：文案漂移类可批量承接，行为类逐条对账')
-  }
   if (totals.inbox > 20) {
     mk('inbox', 'warn', `知识收件箱积压（${totals.inbox} 条 > 20）`, totals.inbox,
       inboxTitles.slice(0, 5).join('；') + (inboxTitles.length > 5 ? ' 等' : ''),
@@ -148,7 +135,7 @@ export function renderKnowledgeDigestText(d) {
   const lines = []
   lines.push(`📬 知识资产治理摘要（${d.generated_at.slice(0, 16).replace('T', ' ')}）`)
   if (d.healthy) {
-    lines.push('✅ 四类信号全部在阈内（rot/inbox/伪域/坏绑定）——安静即健康态，无需动作')
+    lines.push('✅ 三类信号全部在阈内（inbox/伪域/坏绑定）——安静即健康态，无需动作')
   } else {
     lines.push(`⚠️ ${d.signals.length} 类信号超阈：`)
     for (const s of d.signals) {
@@ -157,6 +144,6 @@ export function renderKnowledgeDigestText(d) {
       if (s.suggestion) lines.push(`     处置：${s.suggestion}`)
     }
   }
-  lines.push(`底数：rot 待复核 ${d.totals.rot}｜收件箱 ${d.totals.inbox}｜伪域条目 ${d.totals.pseudo}｜坏绑定 ${d.totals.unresolvedBindings}`)
+  lines.push(`底数：收件箱 ${d.totals.inbox}｜伪域条目 ${d.totals.pseudo}｜坏绑定 ${d.totals.unresolvedBindings}`)
   return lines.join('\n')
 }

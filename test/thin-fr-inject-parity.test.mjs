@@ -2,9 +2,10 @@
  * thin-fr-inject-parity.test.mjs — 轻量道知识读取面对齐（2026-09-25-thin-fr-inject-parity）
  *
  * 验收面：
- *   ① flowKnowledgeDigest：filesOverride 域路由命中 active FR（待复核 ⚠️ 优先）+ 否决决策命中
+ *   ① flowKnowledgeDigest：filesOverride 域路由命中 active FR（索引序渲染——待复核标记层已拆，
+ *      2026-09-29-rot-retire-inject-cap：存量标记行在文件里也只作惰性文本）+ 否决决策命中
  *      （matchKnowledge 复用）；无域依据/全空退化一行可见；
- *   ② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测 + 待复核打标（quick-done 钩子迁移）；
+ *   ② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测（不落盘标记——收口 advisory 即止）；
  *   ③ frDupGateFlow：新 FR × 同域 active 标题 bigram ≥0.6 → 告警 + fr-duplicate-warning 遥测；
  *   ④ flow start fresh 简报端到端含知识注入段（--input 路径语料域路由）。
  */
@@ -97,7 +98,7 @@ function buildSpecRoot(base) {
   return specBase
 }
 
-test('① flowKnowledgeDigest：域路由命中 active FR（待复核优先）+ 否决决策命中', async () => {
+test('① flowKnowledgeDigest：域路由命中 active FR（索引序、无 ⚠️）+ 否决决策命中', async () => {
   const tmp = mkdtempSync(join(tmpdir(), 'fip1-'))
   try {
     const specBase = buildSpecRoot(tmp)
@@ -105,15 +106,18 @@ test('① flowKnowledgeDigest：域路由命中 active FR（待复核优先）+ 
     mkdirSync(changeDir, { recursive: true })
     const r = await flowKnowledgeDigest({ specBase, change: 'c-digest', changeDir, input: '登录流程重构', filesOverride: ['src/cli/login.js'] })
     assert.ok(r.lines.some((l) => l.includes('触达域')), '应含触达域行')
-    assert.ok(r.lines.some((l) => l.includes('FR-cli-002')), '应含待复核条目')
-    assert.ok(r.lines.some((l) => l.includes('FR-cli-002') && l.includes('⚠️待复核')), '待复核条目应带 ⚠️ 且排在前面')
-    assert.ok(r.lines.some((l) => l.includes('FR-cli-001')), '应含普通 active 条目')
+    assert.ok(r.lines.some((l) => l.includes('FR-cli-001')), '应含首条 active 条目（索引序）')
+    assert.ok(r.lines.some((l) => l.includes('FR-cli-002')), '应含次条 active 条目')
+    // 标记层拆除钉：文件里残留的「待复核：」旧行不再进注入渲染（fixture FR-cli-002 带惰性旧行）
+    // （否决决策段的 ⚠️ 段头是另一机制，不在断言面内）
+    const frLines = r.lines.filter((l) => /- FR-cli-\d+/.test(l))
+    assert.ok(frLines.length >= 2 && !frLines.some((l) => l.includes('⚠️') || l.includes('待复核')), 'FR 条目行不得再渲染 ⚠️待复核（标记层已拆）')
     assert.ok(r.lines.some((l) => l.includes('D-001@v1') && l.includes('否决理由')), '应含否决决策命中及理由')
     assert.equal(r.summary.frCount, 3)
     assert.equal(r.summary.rejectedDecisions, 1)
-    const flaggedIdx = r.lines.findIndex((l) => l.includes('FR-cli-002'))
-    const plainIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))
-    assert.ok(flaggedIdx < plainIdx, '待复核条目应排在普通条目之前')
+    const firstIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))
+    const secondIdx = r.lines.findIndex((l) => l.includes('FR-cli-002'))
+    assert.ok(firstIdx >= 0 && firstIdx < secondIdx, '条目按索引序渲染（不再按标记置前）')
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
@@ -130,24 +134,23 @@ test('① flowKnowledgeDigest：无域依据且语料不命中 → 折叠一行�
   } finally { rmSync(tmp, { recursive: true, force: true }) }
 })
 
-test('② rotSuspectFlow：三分判据（strong 打标/skip 不动/unknown 不打标）+ 遥测 count=strong', async () => {
+test('② rotSuspectFlow：三分判据（strong/skip/unknown）+ 遥测 count=strong + 不落盘', async () => {
   const tmp = mkdtempSync(join(tmpdir(), 'fip3-'))
   try {
     const specBase = buildSpecRoot(tmp)
+    const frPathBefore = readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8')
     const r = await rotSuspectFlow({ specBase, change: 'c-rot', changeDir: join(specBase, 'changes', 'c-rot'), files: ['src/cli/login.js'] })
     // FR-001（hist-a 归档 files 含 src/cli/login.js + 绑定）→ strong；FR-002（hist-b 归档 src/other）→ skip；FR-003（hist-c 无归档无绑定）→ unknown
     assert.equal(r.strong, 1, `strong 应为 1，实际 ${r.strong}`)
     assert.equal(r.skip, 1, `skip 应为 1，实际 ${r.skip}`)
     assert.equal(r.unknown, 1, `unknown 应为 1，实际 ${r.unknown}`)
-    assert.equal(r.marked, 1, '仅 strong 条目打标')
+    assert.ok(!('marked' in r), '返回值不再携带 marked（标记层已拆）')
     const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
     assert.ok(hits.includes('fr-rot-suspect') && hits.includes('"source":"flow-done"'))
     assert.ok(hits.includes('"strong":1') && hits.includes('"count":1'), '遥测 count 语义=strong（防污染 knowledge-stats）')
     assert.ok(hits.includes('"unknown":1'), 'unknown 单列遥测')
-    const fr = readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8')
-    assert.ok(fr.includes('待复核：c-rot'), 'strong 条目应被打待复核标记')
-    assert.ok(fr.split('## FR-cli-002')[1].split('## FR-cli-003')[0].includes('待复核：quick-abc'), 'skip 条目的旧标记不动')
-    assert.ok(!fr.split('## FR-cli-003')[1].includes('待复核：'), 'unknown 条目不打标')
+    // 不落盘钉：strong 命中后 fr 文件 byte 级不变（无新增待复核行，旧惰性行也不动）
+    assert.equal(readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8'), frPathBefore, 'rot 命中不再改写 fr 文件')
     const { readActiveFrDigest } = await import(pathToFileURL(join(ROOT, 'src', 'fr-index.js')).href)
   const dig = readActiveFrDigest(join(specBase, 'knowledge'), ['cli'])
   const fr1 = dig.find((f) => f.id === 'FR-cli-001')

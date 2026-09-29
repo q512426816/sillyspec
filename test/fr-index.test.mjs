@@ -166,27 +166,47 @@ function makeFixture() {
 // ── 10e. CLI 端到端：软门 warning 经 validateBrainstormOutputs 面透出（不阻断）──
 {
   const { root, specBase, mkChange } = makeFixture()
-  mkChange('2026-09-18-soft', '# R\n### FR-01: 归档端到端\n')
+  // 真域夹具（模块卡+design 交付表）：unmapped 停车场已不进软门比对（2026-09-29-rot-retire-inject-cap
+  // 对齐 frDupGateFlow 口径）——旧夹具落 unmapped 的 warning 路径已随过滤消隐
+  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
+  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
+  const dSoft = mkChange('2026-09-18-soft', '# R\n### FR-01: 归档端到端\n')
+  writeFileSync(join(dSoft, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
   const { executeArchiveDistill } = await import('../src/run/archive-distill.js')
   await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-soft' })
   // 新变更标题与 active 条目高相似（bigram 重叠 0.8）、无承接 → 软门 warn 不 error
   const d = mkChange('2026-09-18-soft2', '# R\n### FR-01: 归档端到端增强\n')
+  writeFileSync(join(d, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
   const { runValidators } = await import('../src/stage-contract.js')
   const r = runValidators('brainstorm', root, '2026-09-18-soft2', { specRoot: specBase })
   assert((r.errors || []).every((e) => !String(e).includes('疑似重复 FR')), '10e-1 疑似重复永不进 errors 面（advisory 永不阻断的硬证据）')
   assert((r.warnings || []).some((w) => w.includes('疑似重复 FR')), `10e-2 疑似重复 warning 透出（实际 warnings=${(r.warnings || []).length} 条）`)
   const hits2 = readKnowledgeHits(join(specBase, '.runtime'))
-  assert(hits2.some((h) => h.type === 'fr-duplicate-warning' && h.candidate === 'FR-unmapped-001'), '10e-3 fr-duplicate-warning 遥测落盘')
+  assert(hits2.some((h) => h.type === 'fr-duplicate-warning' && h.candidate === 'FR-cli-001'), '10e-3 fr-duplicate-warning 遥测落盘')
+  // 负路径（2026-09-29-rot-retire-inject-cap FR-06）：unmapped 池条目不进软门比对——
+  // 新 FR 与 unmapped 条目标题完全相同也不产出跨域疑似重复警告
+  const dU1 = mkChange('2026-09-18-unmapped1', '# R\n### FR-01: 孤立文档行为\n')
+  writeFileSync(join(dU1, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | docs/only.md | x |\n')
+  await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-unmapped1' })
+  const dU2 = mkChange('2026-09-18-unmapped2', '# R\n### FR-01: 孤立文档行为\n')
+  writeFileSync(join(dU2, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | docs/only.md | x |\n')
+  const rU = runValidators('brainstorm', root, '2026-09-18-unmapped2', { specRoot: specBase })
+  assert(!(rU.warnings || []).some((w) => w.includes('疑似重复 FR')), `unmapped 池条目不得进软门比对（实际 warnings=${(rU.warnings || []).length} 条）`)
 }
 
 // ── 11. 注入渲染端到端（outputStep → {FR_INDEX_DIGEST} 替换 + fr-inject 遥测）──
 {
   const { root, specBase, mkChange } = makeFixture()
+  // 真域夹具：unmapped 池已不进 digest 注入（2026-09-29-rot-retire-inject-cap——旧断言渲染
+  // FR-unmapped-001 正是整池倾倒 bug 的微缩形态）
+  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
+  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
   const d1 = mkChange('2026-09-18-i1', '# R\n### FR-01: 注入渲染\n')
+  writeFileSync(join(d1, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
   indexRequirements({ changeDir: d1, knowledgeRoot: join(specBase, 'knowledge') })
   // 受注入变更：有 design.md（域解析面）与 requirements.md
   const d2 = mkChange('2026-09-18-i2', '# R\n### FR-01: 新需求\n')
-  writeFileSync(join(d2, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/foo.js | x |\n')
+  writeFileSync(join(d2, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
   const { outputStep } = await import('../src/run/prompt.js')
   const steps = [{ name: '生成规范文件', prompt: '写作前列现行 FR：\n{FR_INDEX_DIGEST}\n然后生成四件套。' }]
   let rendered = ''
@@ -197,7 +217,7 @@ function makeFixture() {
   } finally {
     console.log = origRenderLog
   }
-  assert(rendered.includes('FR-unmapped-001') && rendered.includes('注入渲染'), `11a digest 段替换注入（含 active 条目）`)
+  assert(rendered.includes('FR-cli-001') && rendered.includes('注入渲染'), `11a digest 段替换注入（含 active 条目）`)
   assert(!rendered.includes('{FR_INDEX_DIGEST}'), '11b 占位符消隐')
   const hits = readKnowledgeHits(join(specBase, '.runtime'))
   assert(hits.some((h) => h.type === 'fr-inject' && h.count >= 1 && Array.isArray(h.domains)), `11c fr-inject 遥测落盘（指标①发生器闭环）`)

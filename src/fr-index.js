@@ -79,7 +79,7 @@ export function frCoverageFiles({ archiveRoot, changeName }) {
 /** 条目「测试绑定：」子块的 tests 文件提取（多文件 | 分隔）。边界=下一个 ## 节头（FR 节）——
  * 子块内顶格的 `<!-- test-bindings -->` 机器注释与 `- row:` 行不终止收集（评审 P1 修复：
  * 原「任意顶格行 break」遇子块首行顶格注释即断，生产库 bindings 恒空；缩进 tests: 键名 +
- * 节头边界已足够防条目正文误匹配）。readActiveFrDigest.bindings 与 cleanupStaleReviewMarks 共用。 */
+ * 节头边界已足够防条目正文误匹配）。readActiveFrDigest.bindings 与 activeFrCoverageHits 共用。 */
 function readEntryBindings(lines) {
   const idx = lines.findIndex((l) => l.startsWith('测试绑定：'));
   if (idx === -1) return [];
@@ -467,11 +467,9 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
         const target = st2.sections.find((s) => s.number === refId && !s.lines.some((l) => l.startsWith('superseded_by：')));
         if (!target) continue;
         // 就地补丁：状态翻 superseded + 插 superseded_by + 追取代链注记 + 刷新最近确认（摘要/标题保留）
-        // 待复核行随承接清除（2026-09-20-quick-asset-tail D-003：quick 触达留下的 needs_review 信号
-        // 在条目被正式承接取代时一并清——取代即复核完成，语义自然闭环）
         target.lines = target.lines
           .map((l) => (l.startsWith('状态：') ? `状态：superseded` : l.startsWith('最近确认：') ? `最近确认：${headHash || ''}` : l))
-          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：') && !l.startsWith('待复核：'));
+          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：'));
         const stateIdx = target.lines.findIndex((l) => l.startsWith('状态：'));
         // 退役理由（追平刀②）：承接令牌带（退役理由：…）时写进被取代条目——对标 OpenSpec REMOVED
         // 的 Migration 语义；无理由则省略行（不伪造）。
@@ -775,20 +773,16 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
       const decisionLine = s.lines.find((l) => l.startsWith('依据决策：'));
       const decisions = decisionLine ? decisionLine.replace(/^依据决策：s*/, '').split('、').map((x) => x.trim()).filter(Boolean) : [];
       const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
-      // 待复核标记透传（2026-09-20-quick-asset-tail FR-02）：quick 触达留下的信号，
-      // 注入面带 ⚠️ 提示后续变更核对——是信号非失效，承接翻链时清除。
-      const reviewLine = s.lines.find((l) => l.startsWith('待复核：'));
-      const needsReview = reviewLine ? reviewLine.replace(/^待复核：\s*/, '').trim() : null;
       // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
       // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
+      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
     }
   }
   return out;
 }
 
 // ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────
-// 查询核单源双消费：flow 侧 rotSuspectFlow 打待复核标记（信号面）；verify 侧
+// 查询核单源双消费：flow 侧 rotSuspectFlow 出收口 advisory 与遥测（信号面）；verify 侧
 // collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）。覆盖判定与
 // rot 完全同口径：来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
 
@@ -871,55 +865,10 @@ export function frTitleOverlap(a, b) {
   return inter / (A.size + B.size - inter);
 }
 
-// ── needs_review 标记（2026-09-20-quick-asset-tail，D-003：信号非门禁）─────────────
-
-/** 待复核行前缀（机械解析契约：digest 按此前缀读，条目可多轮标记仅保最新一条）。 */
-const FR_NEEDS_REVIEW_PREFIX = '待复核：';
-
-/**
- * quick 触达域后给 active FR 条目打待复核标记（钩子#1 升级：遥测之外让地图本身诚实）。
- * 幂等：条目已有含同 ref 的待复核行 → 跳过；superseded 条目不标（digest 注入面本就不含）。
- * 只动文件不改语义——行是信号，承接翻链时被 indexRequirements 的 filter 清除。
- * @param {string} knowledgeRoot
- * @param {string[]} frIds - 全局 id 列表（钩子#1 的 readActiveFrDigest 命中集）
- * @param {string} refNote - 标记来源（ql-id 或 change 名）
- * @returns {{ marked: number, warnings: string[] }}
- */
-export function markFrNeedsReview(knowledgeRoot, frIds, refNote) {
-  const warnings = [];
-  let marked = 0;
-  if (!Array.isArray(frIds) || frIds.length === 0 || !refNote) return { marked, warnings };
-  const all = scanAllDomains(knowledgeRoot);
-  const idSet = new Set(frIds);
-  const dirty = new Set();
-  for (const [domain, st] of all.entries()) {
-    for (const s of st.sections) {
-      if (!idSet.has(s.number)) continue;
-      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代不标
-      const line = `${FR_NEEDS_REVIEW_PREFIX}${refNote}`;
-      if (s.lines.some((l) => l === line)) continue; // 幂等：同 ref 已标
-      // 移除旧 ref 的待复核行（多轮标记仅保最新），追加新行到摘要行后
-      s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
-      const sumIdx = s.lines.findIndex((l) => l.startsWith('摘要：'));
-      s.lines.splice(sumIdx === -1 ? s.lines.length : sumIdx + 1, 0, line);
-      dirty.add(domain);
-      marked++;
-    }
-  }
-  if (dirty.size > 0) {
-    mkdirSync(frDirPath(knowledgeRoot), { recursive: true });
-    for (const d of dirty) {
-      const st = all.get(d);
-      writeFileSync(join(frDirPath(knowledgeRoot), `${d}.md`), joinKnowledgeFile(st.preamble, st.sections));
-    }
-  }
-  for (const id of idSet) {
-    let found = false;
-    for (const st of all.values()) if (st.sections.some((s) => s.number === id)) { found = true; break; }
-    if (!found) warnings.push(`markFrNeedsReview：${id} 不在索引中（跳过）`);
-  }
-  return { marked, warnings };
-}
+// ── needs_review 持久标记层（2026-09-20-quick-asset-tail D-003）已拆除 ──────────────
+// 2026-09-29-rot-retire-inject-cap：markFrNeedsReview/FR_NEEDS_REVIEW_PREFIX/cleanupStaleReviewMarks
+// 移除——371 条标记零消费实证（归档全量检索无一次复核行动），信号饱和反噬注入排序。腐烂 suspect
+// 的信号面保留在 flow.js rotSuspectFlow（收口 advisory + fr-rot-suspect 遥测），不再落盘。
 
 /**
  * 归档侧 FR 域路由文件面（greenfield-bootstrap：archive 侧 indexRequirements 此前不传
@@ -948,72 +897,3 @@ export function archiveDeliverableFiles(changeDir) {
   return [...out].filter((p) => !p.startsWith('.sillyspec/'))
 }
 
-/**
- * 存量待复核标记治理（fr-rot-precision 评审修正稿）：按「新判据下 ref 变更收口时该条会不会被
- * 打标」重算——keep iff coverageFiles(FR 来源变更) ∪ bindings 与 coverageFiles(ref 变更) 有文件面
- * 交集。ref 无归档或任一侧 coverage 空 → 删（自然覆盖 quick 侧 ref——quick 永不归档无文件面；
- * 与运行时 unknown 不打标口径一致：宁漏勿滥，漏标只损失注入排序优先级）。
- * 并发安全：写前重读比对快照，盘上已被并行会话改写的文件跳过（幂等可重跑消化）；原子写。
- * superseded 条目不碰（无 active 语义）；**在途变更的标记跳过**（rot 打标在归档前、ref 必无
- * 冻结件——误判面实证后修复：收口落地后重跑清理再判）。
- * @returns {{ removed: number, kept: number, inFlight: number, skipped: string[], files: string[], byRef: Record<string, number> }}
- */
-export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
-  const knowledgeRoot = join(specBase, 'knowledge');
-  const frDir = frDirPath(knowledgeRoot);
-  const snapshot = new Map();
-  try {
-    for (const f of readdirSync(frDir)) {
-      if (f.endsWith('.md')) snapshot.set(f, readFileSync(join(frDir, f), 'utf8'));
-    }
-  } catch { /* 目录不可读=空治理面 */ }
-  const all = scanAllDomains(knowledgeRoot);
-  const covCache = new Map();
-  const coverageOf = (changeName) => {
-    if (!changeName) return [];
-    if (!covCache.has(changeName)) covCache.set(changeName, frCoverageFiles({ archiveRoot, changeName }));
-    return covCache.get(changeName);
-  };
-  let removed = 0, kept = 0, inFlight = 0;
-  const byRef = {};
-  const dirty = new Set();
-  const covHit = (frChange, bindings, refCover) => {
-    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
-    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings.map((b) => testAnchorFile(b)) : [])]);
-    if (frCov.size === 0 || refCover.length === 0) return false;
-    return [...frCov].some((p) => refCover.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/') || p.startsWith(c.endsWith('/') ? c : c + '/')));
-  };
-  for (const [domain, st] of all.entries()) {
-    for (const s of st.sections) {
-      const reviewLines = s.lines.filter((l) => l.startsWith(FR_NEEDS_REVIEW_PREFIX));
-      if (reviewLines.length === 0) continue;
-      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代：翻链自会清，不在此治理
-      const ref = reviewLines[0].slice(FR_NEEDS_REVIEW_PREFIX.length).trim();
-      // 在途变更跳过（第二轮清理实证）：rot 打标发生在 flow done ledger（归档前），ref 指向的
-      // 变更此刻必无归档冻结件——coverage(ref) 恒空会误判全删。跳过，收口落地后重跑再判。
-      if (ref && existsSync(join(specBase, 'changes', ref))) { inFlight++; continue; }
-      const keep = covHit(s.change, readEntryBindings(s.lines), coverageOf(ref));
-      if (keep) { kept++; continue; }
-      s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
-      removed++;
-      byRef[ref] = (byRef[ref] || 0) + 1;
-      dirty.add(domain);
-    }
-  }
-  const files = [];
-  const skipped = [];
-  if (dirty.size > 0) {
-    mkdirSync(frDir, { recursive: true });
-    for (const d of dirty) {
-      const fname = `${d}.md`;
-      try {
-        const before = snapshot.get(fname);
-        const now = existsSync(join(frDir, fname)) ? readFileSync(join(frDir, fname), 'utf8') : null;
-        if (before == null || before !== now) { skipped.push(fname); continue; } // 并行写已发生——跳过，重跑消化
-      } catch { skipped.push(fname); continue; }
-      writeAtomicSync(join(frDir, fname), joinKnowledgeFile(all.get(d).preamble, all.get(d).sections));
-      files.push(fname);
-    }
-  }
-  return { removed, kept, inFlight, skipped, files, byRef };
-}

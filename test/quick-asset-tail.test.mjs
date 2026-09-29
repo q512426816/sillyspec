@@ -2,12 +2,11 @@
  * quick 资产尾测试（2026-09-20-quick-asset-tail，FR-01~03 / D-001~D-005）
  *
  * 覆盖：
- *   1. markFrNeedsReview：写入/幂等/未知id警告/superseded不标
- *   2. readActiveFrDigest：needsReview 透传
- *   3. 承接翻链清除待复核行（indexRequirements filter，S2 阻断①修复的钉）
- *   4. liteArchiveChange：正常归档（rename+unregister 语义）/自愈（已在 archive/）/所有权拒
- *   5. distillLinkedChangeAssets：蒸馏触发/跳过（无文件/纯quick关联）/fail-open
- *   6. prompt 注入行 ⚠️（渲染层直测——经 buildPrompt 不便，直接测 digest→行拼接口径）
+ *   1. 标记层拆除钉（2026-09-29-rot-retire-inject-cap）：fr-index 不再导出打标函数；
+ *      readActiveFrDigest 条目无 needsReview 字段
+ *   2. 承接翻链仍工作（indexRequirements supersede——标记 filter 项移除后的回归钉）
+ *   3. liteArchiveChange：正常归档（rename+unregister 语义）/自愈（已在 archive/）/所有权拒
+ *   4. distillLinkedChangeAssets：蒸馏触发/跳过（无文件/纯quick关联）/fail-open
  *
  * 风格：自研 assert + tmp fixture（同 fr-index.test.mjs 族）。
  */
@@ -15,7 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-import { markFrNeedsReview, readActiveFrDigest, indexRequirements, parseChangeRequirements } from '../src/fr-index.js'
+import { readActiveFrDigest, indexRequirements } from '../src/fr-index.js'
 import { liteArchiveChange, distillLinkedChangeAssets } from '../src/run/complete-handlers.js'
 
 let failed = 0
@@ -66,23 +65,20 @@ function fakePm({ owner = null, active = true } = {}) {
   }
 }
 
-// ── 1-3. needs_review 全链 ──
+// ── 1-2. 标记层拆除钉 + 承接翻链回归 ──
 {
   const root = mk('qat-fr-')
   const k = makeFrIndex(root)
-  const r1 = markFrNeedsReview(k, ['FR-demo-001'], 'ql-20260920-001')
-  assert(r1.marked === 1, `1a 写入标记（${r1.marked}）`)
-  const content = readFileSync(join(k, 'fr', 'demo.md'), 'utf8')
-  assert(content.includes('待复核：ql-20260920-001'), '1b 条目含待复核行')
-  const r2 = markFrNeedsReview(k, ['FR-demo-001'], 'ql-20260920-001')
-  assert(r2.marked === 0, '1c 幂等：同 ref 二跑零新增')
-  const r3 = markFrNeedsReview(k, ['FR-demo-999'], 'x')
-  assert(r3.marked === 0 && r3.warnings.length === 1, `1d 未知 id 警告不抛（${r3.warnings.length}）`)
 
-  const d = readActiveFrDigest(k, ['demo'])
-  assert(d[0] && d[0].needsReview === 'ql-20260920-001', `2 digest 透传 needsReview（${d[0] && d[0].needsReview}）`)
+  // 1. 拆除钉：fr-index 不再导出打标函数；digest 条目无 needsReview 字段
+  const frIndexMod = await import('../src/fr-index.js')
+  assert(typeof frIndexMod.markFrNeedsReview !== 'function', '1a markFrNeedsReview 导出已移除')
+  assert(typeof frIndexMod.cleanupStaleReviewMarks !== 'function', '1b cleanupStaleReviewMarks 导出已移除（死代码一并拆除）')
+  const d0 = readActiveFrDigest(k, ['demo'])
+  assert(d0.length === 1 && !('needsReview' in d0[0]), '1c digest 条目不再携带 needsReview 字段')
 
-  // 承接清除：新变更 requirements 带 承接: FR-demo-001 → 翻链后待复核行消失
+  // 2. 承接翻链回归：新变更 requirements 带 承接: FR-demo-001 → 旧条目翻 superseded
+  //（标记 filter 项移除后，superseded_by/取代链/退役理由 filter 仍在——本节是移除后的回归钉）
   const changeDir = makeChangeDir(root, 'ch-2')
   writeFileSync(join(changeDir, 'requirements.md'),
     '# 需求\n\n## 功能需求\n\n### FR-01: 取代版\n承接: FR-demo-001\nGiven X\nWhen Y\nThen Z\n')
@@ -93,8 +89,8 @@ function fakePm({ owner = null, active = true } = {}) {
   const ir = indexRequirements({ changeDir, knowledgeRoot: k, headHash: 'bbb222' })
   const after = readFileSync(join(k, 'fr', 'demo.md'), 'utf8')
   const oldEntry = after.split('## FR-demo-001')[1] || ''
-  assert(oldEntry.includes('superseded') && !oldEntry.includes('待复核：'), `3 承接翻链清除待复核行（S2阻断①修复钉）`)
-  assert(ir.superseded.length === 1, `3b 翻链计数（${ir.superseded.length}）`)
+  assert(oldEntry.includes('superseded'), `2a 承接翻链仍生效（superseded 在场）`)
+  assert(ir.superseded.length === 1, `2b 翻链计数（${ir.superseded.length}）`)
 }
 
 // ── 4. liteArchiveChange ──
@@ -180,13 +176,13 @@ function fakePm({ owner = null, active = true } = {}) {
   assert(after.startsWith('# modA'), '7c 既有内容不覆盖（append 非 write）')
 }
 
-// ── 6. 注入行 ⚠️ 口径（digest→行拼接同 prompt.js 逻辑的字段级断言）──
+// ── 6. 注入源字段契约（标记层拆除后的钉：digest 只携带行为字段）──
 {
   const root = mk('qat-p-')
   const k = makeFrIndex(root)
-  markFrNeedsReview(k, ['FR-demo-001'], 'ql-9')
   const d = readActiveFrDigest(k, ['demo'])
-  assert(d[0].needsReview === 'ql-9', '6 needsReview 在注入源可用（prompt.js 已接 ⚠️ 渲染——字段契约钉）')
+  assert(d.length === 1 && d[0].id === 'FR-demo-001' && typeof d[0].title === 'string', '6 digest 注入源仍可解析（id/title/scenarios/bindings 契约钉）')
+  assert(!('needsReview' in d[0]), '6b needsReview 字段契约已拆除（prompt.js 渲染面不再消费）')
 }
 
 // ── 8. R4-S-Q 缺陷 A/B 回归（2026-09-21 修复）：真实 import + --done 显式关联并入 guard ──

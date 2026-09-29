@@ -1,6 +1,7 @@
 /**
  * 2026-09-27-knowledge-digest 防回归：
- * ① collectKnowledgeDigest 四信号扫描与阈值（rot>100 / inbox>20 / 伪域>0（unmapped 基线消音）/ 坏绑定>0）
+ * ① collectKnowledgeDigest 三信号扫描与阈值（inbox>20 / 伪域>0（unmapped 基线消音）/ 坏绑定>0）
+ *   （rot 信号臂已随标记层拆除——2026-09-29-rot-retire-inject-cap）
  * ② suggestDomainFromFiles 交付路径→建议域（backend 模块归属最强/daemon/frontend/src 段）
  * ③ renderKnowledgeDigestText 文本出口 + healthy 静默态
  * ④ CLI knowledge digest --json 端到端
@@ -18,25 +19,20 @@ const tmpRoots = []
 function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
 test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
 
-function fixture({ rotCount = 0, inboxCount = 0, autoDomain = false, unmappedCount = 0, unmappedBaseline = null, badBinding = false }) {
+function fixture({ inboxCount = 0, autoDomain = false, unmappedCount = 0, unmappedBaseline = null, badBinding = false }) {
   const root = mk('kd-')
   const specBase = join(root, '.sillyspec')
   mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
   mkdirSync(join(root, 'backend', 'app', 'modules', 'platform_sync', 'tests'), { recursive: true })
   writeFileSync(join(root, 'backend', 'app', 'modules', 'platform_sync', 'tests', 't.py'), 'x = 1\n')
   const frLines = ['---', 'author: t', '---', '', '# FR 索引 — core', '']
-  frLines.push('## FR-core-001 行为一', '状态：active', rotCount > 0 ? '待复核：2026-09-27-某变更' : null,
+  frLines.push('## FR-core-001 行为一', '状态：active',
     '', '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
     '- row: src-change:task-01:FR-01',
     `  tests: ${badBinding ? 'nope-missing.test.ts' : 'backend/app/modules/platform_sync/tests/t.py'}`,
     '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '')
   frLines.filter(Boolean).forEach(l => { })
   writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), frLines.filter(l => l !== null).join('\n') + '\n')
-  if (rotCount > 1) {
-    const extra = []
-    for (let i = 2; i <= rotCount; i++) extra.push(`## FR-core-${String(i).padStart(3, '0')} 行为${i}`, '状态：active', '待复核：2026-09-27-某变更', '')
-    writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), frLines.filter(l => l !== null).join('\n') + '\n' + extra.join('\n') + '\n')
-  }
   if (autoDomain) {
     writeFileSync(join(specBase, 'knowledge', 'fr', 'auto-backend.md'), '---\nauthor: t\n---\n\n# FR 索引 — auto-backend\n\n## FR-auto-backend-001 伪域条目\n状态：active\n')
   }
@@ -56,17 +52,13 @@ function fixture({ rotCount = 0, inboxCount = 0, autoDomain = false, unmappedCou
   return { root, specBase }
 }
 
-test('① 四信号阈值：全在阈内 healthy；各类超阈逐项进摘要；unmapped 基线消音', () => {
+test('① 三信号阈值：全在阈内 healthy；各类超阈逐项进摘要；unmapped 基线消音', () => {
   const q = fixture({})
   const d = collectKnowledgeDigest({ specBase: q.specBase, projectRoot: q.root })
   assert.equal(d.healthy, true, '空库healthy')
   assert.equal(d.signals.length, 0)
   assert.ok(renderKnowledgeDigestText(d).includes('安静即健康态'), 'healthy 文案')
-
-  const r = fixture({ rotCount: 101 })
-  const dr = collectKnowledgeDigest({ specBase: r.specBase, projectRoot: r.root })
-  assert.equal(dr.totals.rot, 101)
-  assert.ok(dr.signals.some(s => s.kind === 'rot' && s.count === 101), 'rot 超阈进摘要')
+  assert.ok(!('rot' in d.totals), 'totals 不再含 rot 键（信号臂已拆）')
 
   const i = fixture({ inboxCount: 21 })
   const di = collectKnowledgeDigest({ specBase: i.specBase, projectRoot: i.root })

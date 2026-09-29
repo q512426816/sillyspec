@@ -392,6 +392,68 @@ export function buildQuickSemanticGuardInjection({ specBase, cwd, changeName } =
 export const KNOWLEDGE_INJECT_MAX_FILES = 3
 export const KNOWLEDGE_INJECT_MAX_LINES = 40
 
+// {FR_INDEX_DIGEST} 注入截断上限（2026-09-29-rot-retire-inject-cap）：brainstorm step8 写作期
+// 现行 FR 清单 top-N + 指针行——与 flow start 注入口径（flow.js slice(0,8)）同数。大域/unmapped
+// 整池倾倒实证：digest 源遥测 11/11 次 count=723@unmapped。
+export const FR_INDEX_DIGEST_MAX_ENTRIES = 8
+
+/**
+ * {FR_INDEX_DIGEST} 段构建（brainstorm step8 写作期现行 FR 清单）——2026-09-29-rot-retire-inject-cap
+ * 从注入装配内联块抽出为可单测函数，并修两缺口：① 滤 unmapped（停车场非行为域，原不滤致整池倾倒
+ * ——遥测 11/11 次 count=723@unmapped 实证）；② top-8 截断 + 指针行（原无上限，与 flow start /
+ * module-inject 两个注入口径对齐）。截断先截条目再追加尾部承接指引 blockquote（naive slice 会把
+ * 指引一起截掉）。遥测 count 保持全量口径（L3 指标①），另加 rendered/truncated/unmappedFiltered。
+ * @param {object} opts
+ * @param {string} opts.frSpecBase - spec 根（.sillyspec）
+ * @param {string} opts.changeName - 变更名（域路由读其 design.md 交付清单；遥测 change 字段）
+ * @returns {Promise<{text: string, telemetry: object}>} text=替换值；telemetry=fr-inject 事件负载（异常时 null）
+ */
+export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+  try {
+    const { discoverModuleIndex } = await import('../decision-distill.js')
+    const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
+    const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
+    const knowledgeRoot = join(frSpecBase, 'knowledge')
+    const domainsAll = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
+    // unmapped 是未归类停车场非行为域，不进写作 prompt——与 flowKnowledgeDigest / frDupGateFlow 同口径
+    const domains = domainsAll.filter((d) => d !== 'unmapped')
+    const entries = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
+    const truncated = Math.max(0, entries.length - FR_INDEX_DIGEST_MAX_ENTRIES)
+    let text
+    if (domains.length === 0) {
+      // 零路由命中两态：有交付清单但零命中（unmapped 兜底被滤）→ 指停车场；无清单 → 通用空态。
+      // 注意 unmapped 是 resolveTouchedDomains 的零命中兜底，真域命中时不与之并存。
+      let hasDeliverableRows = false
+      try {
+        const { deliverableFilesFromDesignText } = await import('../fr-index.js')
+        hasDeliverableRows = deliverableFilesFromDesignText(
+          readFileSync(join(frChangeDir, 'design.md'), 'utf8')).length > 0
+      } catch { /* design 缺席/不可读=无清单态 */ }
+      text = domainsAll.length > 0 && hasDeliverableRows
+        ? '（触达域仅剩 unmapped（未归类停车场，不注入）——存量条目需要时自查 knowledge/fr/unmapped.md；本变更交付文件建议登记进模块卡 paths，让后续变更路由到真域）'
+        : '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
+    } else if (entries.length === 0) {
+      text = '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
+    } else {
+      const lines = entries.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
+      if (truncated > 0) lines.push(`（+${truncated} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read）`)
+      lines.push('')
+      lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
+      text = lines.join('\n')
+    }
+    return {
+      text,
+      telemetry: {
+        type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
+        rendered: entries.length - truncated, truncated,
+        unmappedFiltered: domainsAll.length !== domains.length,
+      },
+    }
+  } catch (e) {
+    return { text: `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`, telemetry: null }
+  }
+}
+
 /** top-N 选取：按 entries 出现序（INDEX 行序）取前 N 个不同 file（matchKnowledge 布尔 filter
  *  无相关度排序，X-009——出现序即唯一稳定序），每 file 取首个命中 entry 作代表。 */
 function pickTopKnowledgeEntries(entries, maxFiles) {
@@ -1215,32 +1277,16 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
 
   // ①c {FR_INDEX_DIGEST}（2026-09-18-fr-index-l1 L1，D-004）：brainstorm step8 的触达域现行 FR 注入
   // ——写作期防重复 FR 的确定性清单（superseded 默认藏）；无触达域索引/索引空 → 段消隐。
-  // fr-inject 遥测（L3 证据发生器指标①）fail-soft；token 本体在 stages/brainstorm.js step8 模板。
+  // 段构建与收敛口径（滤 unmapped + top-8）在 buildFrIndexDigestSection（可单测）；遥测 fail-soft。
   if (stageName === 'brainstorm' && promptText.includes('{FR_INDEX_DIGEST}')) {
-    try {
-      const frSpecBase = resolvePromptSpecBase(platformOpts, cwd)
-      const { discoverModuleIndex } = await import('../decision-distill.js')
-      const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
-      const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
-      const knowledgeRoot = join(frSpecBase, 'knowledge')
-      const domains = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
-      const entries = readActiveFrDigest(knowledgeRoot, domains)
-      if (entries.length === 0) {
-        substitute(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
-      } else {
-        const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）${e.needsReview ? ` ⚠️ 待复核（${e.needsReview}）——该 FR 覆盖的代码近期被 quick 触达，行为可能已变；本变更若触及同域先核对现状再决定承接/新写` : ''}`)
-        lines.push('')
-        lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
-        substitute(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
-      }
+    const frSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+    const sec = await buildFrIndexDigestSection({ frSpecBase, changeName })
+    substitute(/\{FR_INDEX_DIGEST\}/g, sec.text)
+    if (sec.telemetry) {
       try {
         const { appendKnowledgeHit } = await import('../knowledge-hits.js')
-        appendKnowledgeHit(join(frSpecBase, '.runtime'), {
-          type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
-        })
+        appendKnowledgeHit(join(frSpecBase, '.runtime'), sec.telemetry)
       } catch { /* 遥测 fail-soft */ }
-    } catch (e) {
-      substitute(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
     }
   }
 

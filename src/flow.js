@@ -169,16 +169,14 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       if (frs.length === 0) {
         lines.push(`   现行 FR：（该域暂无 active FR 索引条目——本变更大概率是首批需求）`)
       } else {
-        const flagged = frs.filter((f) => f.needsReview)
-        const ordered = [...flagged, ...frs.filter((f) => !f.needsReview)]
-        for (const f of ordered.slice(0, 8)) {
-          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
+        for (const f of frs.slice(0, 8)) {
+          lines.push(`   - ${f.id} ${f.title}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
         }
-        if (ordered.length > 8) lines.push(`   （+${ordered.length - 8} 条见 knowledge/fr/ 对应域文件）`)
+        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件）`)
         // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
         // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
-        const unconfirmed = ordered.filter((f) => f.unconfirmed > 0).slice(0, 2)
+        const unconfirmed = frs.filter((f) => f.unconfirmed > 0).slice(0, 2)
         if (unconfirmed.length > 0) {
           lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
         }
@@ -220,22 +218,22 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
  * quick-done 钩子迁轻量道 + 按文件面交集判相关度（域级全标→三分判据，评审实测基线 131 条 →
  * strong 83 / unknown 8 / skip 40）。对触达域每条 active FR：coverage = frCoverageFiles(来源变更)
  * ∪ bindings，与本次归属文件面单向匹配（changed 恒文件级：相等 || changed.startsWith(cov 补/）：
- * 交集非空 → strong（打待复核标记，下次知识注入带 ⚠️）；coverage 空 → unknown（不打标，遥测
- * 单列——宁漏勿滥：漏标只损失注入排序优先级）；非空无交集 → skip。
+ * 交集非空 → strong（只进收口 advisory 与遥测——2026-09-29-rot-retire-inject-cap 起不再落盘
+ * 待复核标记：371 条零消费实证，持久化已拆）；coverage 空 → unknown（遥测
+ * 单列——宁漏勿滥）；非空无交集 → skip。
  * 遥测 count 语义=strong（防污染 knowledge-stats 的 rotSuspectByDomain 消费读数，评审 P1-1）。
  * advisory 零阻断，fail-open。
- * @returns {{ warn: string|null, warnInfo?: string|null, domains: string[], strong: number, unknown: number, skip: number, marked: number }}
+ * @returns={{ warn: string|null, warnInfo?: string|null, domains: string[], strong: number, unknown: number, skip: number }}
  */
 export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
   // 查询核迁 fr-index.activeFrCoverageHits 单源（2026-09-26-dynamic-test-inference）——
-  // 同一「覆盖面∩触碰文件」查询双消费：本函数打待复核标记（信号面）；verify 门
+  // 同一「覆盖面∩触碰文件」查询双消费：本函数出收口 advisory 与遥测（信号面）；verify 门
   // collectFrLinkedTests 反用为需求关联回归测试面。判据语义逐字不变。
-  const { activeFrCoverageHits, markFrNeedsReview } = await import('./fr-index.js')
+  const { activeFrCoverageHits } = await import('./fr-index.js')
   const q = activeFrCoverageHits({ specBase, change, changeDir, files })
-  const knowledgeRoot = join(specBase, 'knowledge')
   const { domains, hits: strong, unknownSources, unknownFrCount, skip } = q
   if (domains.length === 0) {
-    return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0, marked: 0 }
+    return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0 }
   }
   const { appendKnowledgeHit } = await import('./knowledge-hits.js')
   appendKnowledgeHit(join(specBase, '.runtime'), {
@@ -245,18 +243,13 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
     strong: strong.length, unknown: unknownFrCount, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
     unknownSources: [...unknownSources], source: 'flow-done',
   })
-  let marked = 0
-  if (strong.length > 0) {
-    const mr = markFrNeedsReview(knowledgeRoot, strong.map((f) => f.id), change)
-    marked = mr.marked
-  }
   const warn = strong.length > 0
-    ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${marked} 条；下次知识注入带 ⚠️）`
+    ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（收口提示即止，不留账）`
     : null
   const warnInfo = unknownFrCount > 0
-    ? `ℹ️ 另有 ${unknownFrCount} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
+    ? `ℹ️ 另有 ${unknownFrCount} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
     : null
-  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownFrCount, skip, marked }
+  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownFrCount, skip }
 }
 
 /**
@@ -926,7 +919,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
     try { writeFlowState(changeDir, { gate_summary: gateSummaryText }) } catch { /* 存档 best-effort */ }
     // FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道（quick 退役后
-    // 原侧悬空）——归属文件面触达域的 active FR 打待复核标记，下次知识注入带 ⚠️。advisory 不阻断。
+    // 原侧悬空）——归属文件面触达域的 active FR 出收口 advisory 与遥测（2026-09-29 起不落盘）。advisory 不阻断。
     try {
       const rot = await rotSuspectFlow({ specBase, change, changeDir, files: changedFiles })
       if (rot.warn) console.warn(rot.warn)
