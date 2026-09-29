@@ -781,6 +781,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
     // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
     let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
+    let _autopilotTicked = 0 // 机器代勾格数（>0 时勾选节奏门降 advisory——代勾是单拍多格机械写，非 agent 纪律面）
     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
     // 提交计数不因多行正文失真。
@@ -807,6 +808,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             if (_autoTicked > 0) {
               const { writeAtomicSync } = await import('./fs-atomic.js')
               writeAtomicSync(_tasksMdPath, _tasksMd)
+              _autopilotTicked = _autoTicked
               console.log(`✅ [自动勾选] ${_autoTicked} 个任务有提交证据但未勾——已机器代勾（governance-autopilot）`)
             }
           }
@@ -873,18 +875,23 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     // 观测旁路缺席（无流/读失败）→ 跳过（fail-open，watcher 非真相源）；--allow-batch-tick 显式旁路留痕。
     try {
       const { readWatcherEvents } = await import('./watcher.js')
-      const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
+      const { detectBatchCheckCadence, resolveBatchTickAction } = await import('./sentinel-assertions.js')
       const stream = readWatcherEvents({ runtimeRoot, change })
       const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
-      if (batch && (_sentinelNonMirrorTasks === null || _sentinelNonMirrorTasks > 0)) {
+      if (batch) {
+        // 决策纯函数单源（resolveBatchTickAction）：四态与豁免优先序见其 JSDoc——autopilot 代勾/
+        // 哨兵面未知降 advisory，镜像-only 静默，未旁路的 agent 一把勾拒收
+        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autopilotTicked })
         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
-        if (allowBatchTick === true) {
+        if (v.action === 'bypass') {
           try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }
           console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
-        } else if (_sentinelNonMirrorTasks === null) {
-          // 哨兵 fail-open（git log 不可用等）时非镜像面未知——维持 advisory 不误拒
-          console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选（哨兵面未知，advisory）`)
-        } else {
+        } else if (v.action === 'advisory') {
+          const why = v.reason === 'autopilot-ticked'
+            ? `机器代勾 ${_autopilotTicked} 格（governance-autopilot 单拍机械写，非 agent 纪律面）`
+            : '哨兵非镜像面未知（fail-open 防误拒）'
+          console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
+        } else if (v.action === 'reject') {
           console.error(`🚫 单拍勾选拒收：watcher 观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），非镜像勾选任务 ${_sentinelNonMirrorTasks} 个`)
           console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
           appendTelemetry({ sentinel: 'batch-tick', jump: batch.detail })

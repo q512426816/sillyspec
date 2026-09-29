@@ -153,4 +153,24 @@ export function detectBatchCheckCadence(events) {
   return worst;
 }
 
+/**
+ * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：watcher 检出单拍跳（batchTick 非 null）
+ * 时的收口动作裁决。四态（决策顺序即豁免优先序）：
+ *   'silent'   镜像-only（非镜像勾选面=0）——镜像豁免哲学：镜像批量勾是常态非纪律失守；
+ *   'bypass'   --allow-batch-tick 显式旁路——留痕放行（同意门先例）；
+ *   'advisory' 哨兵面未知（nonMirrorCount=null，fail-open 防误拒）或机器代勾
+ *              （autopilotTicked>0——governance-autopilot 代勾是单拍多格机械写，非 agent 纪律面）；
+ *   'reject'   非镜像面存在、非机器代勾、未旁路——agent 一把勾，拒收。
+ * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number}} args
+ * @returns {{action:'silent'|'advisory'|'bypass'|'reject', reason:string}}
+ */
+export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0 } = {}) {
+  if (!batchTick) return { action: 'silent', reason: 'no-batch-tick' };
+  if (nonMirrorCount === 0) return { action: 'silent', reason: 'mirror-only' };
+  if (allowBatchTick === true) return { action: 'bypass', reason: 'flag' };
+  if (nonMirrorCount === null) return { action: 'advisory', reason: 'sentinel-unknown' };
+  if (autopilotTicked > 0) return { action: 'advisory', reason: 'autopilot-ticked' };
+  return { action: 'reject', reason: 'agent-batch-tick' };
+}
+
 export default { detectFakeCheckCompletion, detectBatchCheckCadence };
