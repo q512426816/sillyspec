@@ -4629,3 +4629,105 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-09-29-rot-retire-inject-cap
   status: active
+
+## FR-cli-entry-249 ②执行阶段 status 心跳——下一任务指针 + 进度 + 循环协议指引
+变更：2026-09-29-flow-task-heartbeat
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-01
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-task-heartbeat:flow:FR-01
+  tests: test/flow-status-heartbeat.test.mjs「① ②执行阶段：下一任务指针 + 进度 + 循环协议指引」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-task-heartbeat
+  status: active
+
+## FR-cli-entry-250 全勾态心跳改指 flow done
+变更：2026-09-29-flow-task-heartbeat
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-02
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-task-heartbeat:flow:FR-02
+  tests: test/flow-status-heartbeat.test.mjs「② 全勾：心跳改指 flow done」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-task-heartbeat
+  status: active
+
+## FR-cli-entry-251 ①spec 阶段不刷心跳
+变更：2026-09-29-flow-task-heartbeat
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-03
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-task-heartbeat:flow:FR-03
+  tests: test/flow-status-heartbeat.test.mjs「③ ①阶段（spec 槽未填）：不刷心跳」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-task-heartbeat
+  status: active
+
+## FR-cli-entry-252 协议文案三处同步
+变更：2026-09-29-flow-task-heartbeat
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-04
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-task-heartbeat:flow:FR-04
+  tests: test/flow-status-heartbeat.test.mjs「④ 协议文案三处同步钉」 | test/tick-loop-nudge.test.mjs「③ 简报交付纪律」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-task-heartbeat
+  status: active
+
+## FR-cli-entry-253 逐 task 证据哨兵行为零变化
+变更：2026-09-29-flow-task-heartbeat
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-05
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-task-heartbeat:flow:FR-05
+  tests: test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-task-heartbeat
+  status: active
+
+## FR-cli-entry-254 测试全绿
+变更：2026-09-29-flow-task-heartbeat
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-flow-task-heartbeat/requirements.md#FR-06
+最近确认：ad6c3fe347b2da0650ee45ccf142129590ab8b06

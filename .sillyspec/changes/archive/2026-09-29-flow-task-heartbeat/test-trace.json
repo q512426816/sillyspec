@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-flow-task-heartbeat",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-29-flow-task-heartbeat:flow:FR-01",
+      "tests": [
+        "test/flow-status-heartbeat.test.mjs「① ②执行阶段：下一任务指针 + 进度 + 循环协议指引」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-flow-task-heartbeat"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-29-flow-task-heartbeat:flow:FR-02",
+      "tests": [
+        "test/flow-status-heartbeat.test.mjs「② 全勾：心跳改指 flow done」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-flow-task-heartbeat"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-29-flow-task-heartbeat:flow:FR-03",
+      "tests": [
+        "test/flow-status-heartbeat.test.mjs「③ ①阶段（spec 槽未填）：不刷心跳」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-flow-task-heartbeat"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-29-flow-task-heartbeat:flow:FR-04",
+      "tests": [
+        "test/flow-status-heartbeat.test.mjs「④ 协议文案三处同步钉」",
+        "test/tick-loop-nudge.test.mjs「③ 简报交付纪律」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-flow-task-heartbeat"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-29-flow-task-heartbeat:flow:FR-05",
+      "tests": [
+        "test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-flow-task-heartbeat"
+    }
+  ]
+}

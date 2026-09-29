@@ -1,0 +1,51 @@
+{
+  "change": "2026-09-29-flow-task-heartbeat",
+  "baseline": "a55bf14d094a696ef39459c9909fa6acbb529d2b",
+  "head": "ad6c3fe347b2da0650ee45ccf142129590ab8b06",
+  "files": [
+    ".sillyspec/changes/2026-09-29-flow-task-heartbeat/design.md",
+    ".sillyspec/changes/2026-09-29-flow-task-heartbeat/flow-state.yaml",
+    ".sillyspec/changes/2026-09-29-flow-task-heartbeat/proposal.md",
+    ".sillyspec/changes/2026-09-29-flow-task-heartbeat/requirements.md",
+    ".sillyspec/changes/2026-09-29-flow-task-heartbeat/tasks.md",
+    "AGENTS.md",
+    "src/flow-draft.js",
+    "src/flow.js",
+    "test/flow-status-heartbeat.test.mjs",
+    "test/tick-loop-nudge.test.mjs",
+    ".sillyspec/changes/2026-09-29-flow-task-heartbeat/review.json"
+  ],
+  "totals": {
+    "files": 11,
+    "additions": 322,
+    "deletions": 29
+  },
+  "savedAt": "2026-09-29T06:48:55.520Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 2
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "47aa96d4dce4f62134604bfe4cf2af42ab9cda6596ba4f1a4d9c0c76a05c3a41",
+  "patchStatus": "ok"
+}

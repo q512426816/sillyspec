@@ -1,0 +1,469 @@
+diff --git a/.sillyspec/changes/2026-09-29-flow-task-heartbeat/flow-state.yaml b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/flow-state.yaml
+new file mode 100644
+index 00000000..71c1bde7
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: a55bf14d094a696ef39459c9909fa6acbb529d2b
++updatedAt: '2026-09-29T06:26:56.199Z'
++baseline_sha256: abec8b2bd4898862863dcc663775d0aa415424d08c90cb116c0fc9b08581c07c
++
+diff --git a/AGENTS.md b/AGENTS.md
+index a6c327e2..27e4038c 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -16,6 +16,7 @@
+ 
+ ## 恢复与查看
+ - 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
++- 执行期节拍器（2026-09-29-flow-task-heartbeat）：thin 变更干活循环走 `flow status --change <名>`——每轮 CLI 给下一个未勾任务与进度，协议=取任务 → 做一件 → 勾一格（`- [ ]`→`- [x]`）→ 重跑取下一个；全勾后 `flow done`。勿攒一把勾（收口哨兵逐 task 核提交 token/review.json 证据）
+ - 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
+ - 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
+ 
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 53dc0bec..481775de 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -458,7 +458,7 @@ function draftTasks({ change, criteria, withTasks }) {
+     '',
+     '> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；',
+     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
+-    '> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。',
++    '> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29-flow-task-heartbeat 心跳协议）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。节拍器：每勾一格重跑 `sillyspec flow status --change <名>` 取下一个任务（②执行阶段 status 给下一任务指针与进度）。本文件收口前随交付显式 pathspec 提交。',
+     '',
+     // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
+     // 勾一条就失配 → 必走 amend → editRatio=1 被判该走厚档——勾选纪律与指纹门自相矛盾。
+diff --git a/src/flow.js b/src/flow.js
+index fbc890ea..98dedcc9 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -402,7 +402,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+           `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+-          `   勾选是收口哨兵的证据面：全勾但零提交 token/review.json 会被拒收；flow status 随时看勾选进度。`,
++          `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；执行走心跳循环协议：`,
++          `   flow status --change ${change} 取下一个任务 → 做一件 → 勾一格 → 重跑取下一个，全勾后 flow done。`,
+           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
+           ``,
+           `【协议调用 2/2（干完后）】sillyspec flow done --change ${change}`,
+@@ -617,7 +618,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
+     `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
+-    `   flow status 随时看勾选进度（②执行阶段勾选滞后时 status 会带提醒行——边干边勾）。`,
++    `   执行期节拍器：flow status --change ${change}——每轮给下一个未勾任务与进度（做一件 → 勾一格 → 重跑取下一个，勿攒一把勾）。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+@@ -1564,27 +1565,36 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     let phase = '① spec（填 FR + design 槽）'
+     if (designFilled && frFilled && bindingsFilled >= bindingsTotal && bindingsTotal > 0) phase = '② 执行（写代码跑测试）→ ①卡点：spec 摘要给用户确认'
+     if (subDone.includes('ledger')) phase = '③ 归档（flow done 收口）'
+-    // 勾选提醒（2026-09-26-tick-loop-nudge，R19 实证：起点简报一次性指令几小时后失效，OS 的
+-    // 边干边勾靠 Guardrails 常驻干活循环——本行把提醒带进 agent 中途必经的 status 面）：
+-    // ②执行阶段且有完成迹象（区间已有提交）但勾选滞后 → 一行轻推（不重复刷——只在滞后时出现）。
+-    let tickNudge = null
++    // 任务心跳（2026-09-29-flow-task-heartbeat，openspec apply 轮询形状移植）：②执行阶段把
++    // 「下一个任务」交给机器指——当场重读 tasks.md（唯一进度源）取第一个未勾行 + 进度 + 循环
++    // 协议指引。agent 不靠自己记进度：做一件 → 勾一格 → 重跑本命令取下一个；全勾改指 flow done。
++    // 勾选证据口径不变（收口哨兵逐 task 核提交 token/review.json）。
++    let heartbeat = null
+     try {
+       if (phase.startsWith('②')) {
+         const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8')
+         const c = (t.match(/^- \[x\]/gm) || []).length
+         const tot = (t.match(/^- \[( |x)\]/gm) || []).length
+-        const commits = st.baseline_commit ? (gitQuiet(cwd, ['rev-list', '--count', `${st.baseline_commit}..HEAD`]) || '0').toString().trim() : '0'
+-        if (tot > 0 && c < tot && parseInt(commits, 10) > 0) {
+-          tickNudge = `   ✅ 勾选提醒：已完成单元请顺手勾（${c}/${tot}，区间已有 ${commits} 提交——边干边勾是哨兵证据面与进度锚，勿攒到收口一把勾）`
++        const next = t.split(/\r?\n/).find((l) => /^- \[ \] (task-\d+):/.test(l))
++        if (tot > 0 && next) {
++          const m = next.match(/^- \[ \] (task-\d+):\s*(.*)$/)
++          heartbeat = [
++            `   ⏭️ 下一任务：${m[1]} ${String(m[2] || '').slice(0, 60)}`,
++            `   ✅ 进度：${c}/${tot}——边干边勾协议：做一件 → 勾一格（- [ ] → - [x]）→ 重跑本命令取下一个；勿攒一把勾（收口哨兵逐 task 核证据）`,
++          ]
++        } else if (tot > 0 && c >= tot) {
++          // 全勾判定用 c>=tot 而非「找不到未勾 task-NN 行」——行形态漂移（未勾行缺 task-NN
++          // 前缀）时宁可静默不出心跳，不误刷「任务全勾」催 flow done（评审 P3）
++          heartbeat = [`   ✅ 任务全勾（${c}/${tot}）——跑 flow done 收口（哨兵逐 task 核对提交 token/review.json 证据）`]
+         }
+       }
+-    } catch { /* 提醒 fail-soft */ }
++    } catch { /* 心跳 fail-soft */ }
+     console.log([
+       `📋 ${change}`,
+       `   阶段：${phase}`,
+       `   design 槽：${designFilled ? '✅ 已填' : '⬜ 未填'}｜FR 区：${frFilled ? '✅ 已填' : '⬜ 未填'}｜绑定槽：${bindingsFilled}/${bindingsTotal}`,
+       (() => { try { const t = readFileSync(join(changeDir, 'tasks.md'), 'utf8'); const c = (t.match(/^- \[x\]/gm) || []).length; const tot = (t.match(/^- \[( |x)\]/gm) || []).length; return `   任务勾选：${c}/${tot}` } catch { return null } })(),
+-      tickNudge,
++      ...(heartbeat || []),
+       `   子步：${subDone.length}/${SUBSTEPS.length}${subDone.length > 0 ? `（${subDone.join('、')}）` : ''}`,
+       subLeft.length > 0 ? `   待办：${subLeft.join('、')}` : '',
+       st.legacy_fallback ? `   ⚠️ 已升厚（legacy_fallback）——剩余流程走 run <stage>` : '',
+diff --git a/test/flow-status-heartbeat.test.mjs b/test/flow-status-heartbeat.test.mjs
+new file mode 100644
+index 00000000..7f60b07f
+--- /dev/null
++++ b/test/flow-status-heartbeat.test.mjs
+@@ -0,0 +1,117 @@
++/**
++ * flow-status-heartbeat.test.mjs — 执行期任务心跳（2026-09-29-flow-task-heartbeat）
++ *
++ * openspec apply 轮询形状移植：②执行阶段 flow status 当场重读 tasks.md（唯一进度源），
++ * 由机器给「下一个未勾任务」指针 + 进度 + 循环协议指引；全勾改指 flow done。
++ *
++ * 覆盖：
++ *   ① ②执行阶段：下一任务=第一个 - [ ] 行（id+标题截断）+ 进度 N/M + 协议指引行
++ *   ② 全勾：心跳改指 flow done（含逐 task 证据口径提示）
++ *   ③ ①阶段（槽未填）：不刷心跳（spec 期无任务面）
++ *   ④ 源码钉：简报/tasks.md 头部/AGENTS.md 三处协议文案同步（tick-loop-nudge ①③ 的接续）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { cmdFlow } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++
++const CHANGE = '2026-09-29-hb'
++
++function fixture({ ticked = ['task-01', 'task-02'], specReady = true } = {}) {
++  const cwd = mkdtempSync(join(tmpdir(), 'fshb-'))
++  const dir = join(cwd, '.sillyspec', 'changes', CHANGE)
++  mkdirSync(dir, { recursive: true })
++  writeFileSync(join(dir, 'flow-state.yaml'), 'tier: thin\nsubsteps: {}\n')
++  writeFileSync(join(dir, 'design.md'), specReady ? [
++    '# D', '',
++    '<!--AGENT:槽1 -->', '答一', '',
++    '<!--AGENT:槽2 -->', '答二', '',
++    '<!--AGENT:槽3 -->', '答三', '',
++    '<!--AGENT:槽4 -->', '答四', '',
++  ].join('\n') : '# D\n')
++  writeFileSync(join(dir, 'requirements.md'), specReady ? [
++    '# R', '',
++    '<!--AGENT:FR区 -->', '### FR-01: 某需求', '- 场景：x', '',
++    '<!--AGENT:测试绑定FR-01 -->', 'test/a.test.mjs「用例」', '',
++  ].join('\n') : '# R\n')
++  const tick = (id) => (ticked.includes(id) ? 'x' : ' ')
++  writeFileSync(join(dir, 'tasks.md'), [
++    '---', 'author: t', '---', '# T', '',
++    `- [${tick('task-01')}] task-01: 第一件`, '',
++    `- [${tick('task-02')}] task-02: 第二件`, '',
++    `- [${tick('task-03')}] task-03: 第三件要做的下一件事`, '',
++    `- [${tick('task-04')}] task-04: 第四件`, '',
++  ].join('\n'))
++  return { cwd, dir }
++}
++
++async function runStatus(cwd) {
++  const orig = console.log
++  let out = ''
++  console.log = (...a) => { out += a.join('\n') + '\n' }
++  try {
++    await cmdFlow(['status', '--change', CHANGE], cwd, null)
++  } finally {
++    console.log = orig
++  }
++  return out
++}
++
++test('① ②执行阶段：下一任务指针 + 进度 + 循环协议指引', async () => {
++  const { cwd } = fixture()
++  try {
++    const out = await runStatus(cwd)
++    assert.ok(out.includes('阶段：②'), `应判②执行阶段，实际：${out}`)
++    assert.ok(out.includes('⏭️ 下一任务：task-03 第三件要做的下一件事'), '下一任务=第一个未勾行（id+标题）')
++    assert.ok(out.includes('进度：2/4'), '进度 N/M 在场')
++    assert.ok(out.includes('做一件 → 勾一格') && out.includes('重跑本命令取下一个'), '循环协议指引在场')
++    assert.ok(out.includes('勿攒一把勾'), '纪律提示在场')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('② 全勾：心跳改指 flow done（含逐 task 证据口径）', async () => {
++  const { cwd } = fixture({ ticked: ['task-01', 'task-02', 'task-03', 'task-04'] })
++  try {
++    const out = await runStatus(cwd)
++    assert.ok(out.includes('任务全勾（4/4）'), '全勾态提示在场')
++    assert.ok(out.includes('flow done'), '改指 flow done 收口')
++    assert.ok(!out.includes('⏭️ 下一任务'), '全勾时无下一任务指针')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('③ ①阶段（spec 槽未填）：不刷心跳', async () => {
++  const { cwd } = fixture({ specReady: false })
++  try {
++    const out = await runStatus(cwd)
++    assert.ok(out.includes('阶段：①'), `应判①spec阶段，实际：${out}`)
++    assert.ok(!out.includes('⏭️ 下一任务'), '①阶段不刷心跳')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('③b 行形态漂移（未勾行缺 task-NN 前缀）：不误刷「任务全勾」（评审 P3 钉）', async () => {
++  const { cwd, dir } = fixture({ ticked: ['task-01', 'task-02'] })
++  try {
++    // 把 task-03 的未勾行改成无前缀形态（行形态漂移模拟）
++    const p = join(dir, 'tasks.md')
++    writeFileSync(p, readFileSync(p, 'utf8').replace('- [ ] task-03: 第三件要做的下一件事', '- [ ] 第三件（前缀漂移）'))
++    const out = await runStatus(cwd)
++    assert.ok(!out.includes('⏭️ 下一任务'), '漂移行不进下一任务指针')
++    assert.ok(!out.includes('任务全勾'), 'c<tot 不得误刷任务全勾（2/4≠全勾）')
++  } finally { rmSync(cwd, { recursive: true, force: true }) }
++})
++
++test('④ 协议文案三处同步钉（简报/tasks 头/AGENTS.md）', () => {
++  const flowSrc = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  assert.ok(flowSrc.includes('heartbeat'), '心跳变量在场')
++  assert.ok(flowSrc.includes('执行期节拍器'), '简报协议文案（fresh+resume 两路其一）')
++  assert.ok(flowSrc.includes('做一件 → 勾一格'), '循环协议文案')
++  const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
++  assert.ok(draftSrc.includes('每勾一格重跑 `sillyspec flow status --change <名>` 取下一个任务'), 'tasks.md 头部节拍器指引')
++  const agents = readFileSync(join(ROOT, '..', 'AGENTS.md'), 'utf8')
++  assert.ok(agents.includes('执行期节拍器'), 'AGENTS.md 恢复与查看段协议行')
++})
+diff --git a/test/tick-loop-nudge.test.mjs b/test/tick-loop-nudge.test.mjs
+index e95f2b88..c97b4232 100644
+--- a/test/tick-loop-nudge.test.mjs
++++ b/test/tick-loop-nudge.test.mjs
+@@ -2,8 +2,8 @@
+  * tick-loop-nudge.test.mjs — 勾选提醒进干活循环（2026-09-26-tick-loop-nudge，R19 行为发现）
+  *
+  * 覆盖验收面：
+- *   ① flow status 勾选提醒：②执行阶段+勾选滞后+区间有提交 → 提醒行在场；
+- *      ①阶段（无完成迹象）或勾齐时不刷（防噪音）；
++ *   ① flow status 心跳（2026-09-29-flow-task-heartbeat 升级自勾选提醒）：②执行阶段恒给
++ *      下一任务指针+进度（行为级用例见 flow-status-heartbeat.test.mjs，此处源码钉）；
+  *   ② tasks.md 头部边干边勾纪律行在场（OS Guardrails 同款——常驻工件面，每次读 tasks 都看到）；
+  *   ③ 简报交付纪律含 tasks.md pathspec 提交要求（R19 发现：untracked 直至归档）；
+  *   ④ 哨兵时点判定：一把勾（tasks.md 首次提交==最后提交）→ warn 放行；untracked → 同款 warn。
+@@ -16,13 +16,12 @@ import { fileURLToPath } from 'node:url'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ 
+-test('① flow status 提醒逻辑钉（源码文本级——条件：②阶段+滞后+有提交）', () => {
++test('① flow status 心跳钉（源码文本级——②执行阶段恒给下一任务；2026-09-29-flow-task-heartbeat 升级）', () => {
+   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
+-  assert.ok(src.includes("phase.startsWith('②')"), '提醒限定②执行阶段')
+-  assert.ok(src.includes('tickNudge'), 'tickNudge 变量在场')
+-  assert.ok(src.includes('勿攒到收口一把勾'), '提醒文案含行为目标')
+-  assert.ok(src.includes('c < tot'), '勾齐后不刷（c<tot 才提醒）')
+-  assert.ok(src.includes('parseInt(commits, 10) > 0'), '区间零提交不刷（①阶段防噪）')
++  assert.ok(src.includes("phase.startsWith('②')"), '心跳限定②执行阶段')
++  assert.ok(src.includes('heartbeat'), 'heartbeat 变量在场')
++  assert.ok(src.includes('勿攒一把勾'), '指引文案含行为目标（勿攒一把勾）')
++  assert.ok(src.includes('⏭️ 下一任务'), '下一任务指针行在场')
+ })
+ 
+ test('② tasks.md 头部纪律行钉（draftTasks 渲染含边干边勾指引）', () => {
+@@ -36,7 +35,7 @@ test('③ 简报交付纪律含 tasks.md 提交要求', () => {
+   const src = readFileSync(join(ROOT, 'src/flow.js'), 'utf8')
+   assert.ok(src.includes('tasks.md 一并显式 pathspec 提交'), '交付纪律行含 tasks.md')
+   assert.ok(src.includes('勾选证据进 git 历史'), '理由（R19 实证）')
+-  assert.ok(src.includes('勾选滞后时 status 会带提醒行'), '简报交叉引用 status 提醒')
++  assert.ok(src.includes('执行期节拍器'), '简报交叉引用 status 心跳（2026-09-29-flow-task-heartbeat 接续）')
+ })
+ 
+ test('④ 哨兵时点判定钉（一把勾 warn / untracked warn / fail-soft）', () => {
+diff --git a/.sillyspec/changes/2026-09-29-flow-task-heartbeat/design.md b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/design.md
+new file mode 100644
+index 00000000..2108c2bf
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T06:26:56.177Z
++---
++# 设计记录（Design Record）— 2026-09-29-flow-task-heartbeat
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++openspec 部件二移植：其「每步好好勾选」靠 skill 剧本+CLI 每轮重读 tasks.md（机器给下一个任务）+archive 阻漏勾三件咬合，sillyspec thin 道缺的正是中继协议调用——start/done 之间 tasks.md 只有 agent 自看（2026-09-29-rot-retire-inject-cap 实证一把勾 0→6，watcher 报假勾选嫌疑）。本变更把 flow status 升为执行期节拍器：②执行阶段当场重读 tasks.md（唯一进度源），输出「下一任务指针（第一个 - [ ] 行）+ 进度 N/M + 循环协议指引（做一件→勾一格→重跑取下一个）」，全勾改指 flow done；协议文案三处同步（flow start 简报 fresh/adopt 两路、tasks.md 头部纪律行、AGENTS.md 恢复与查看段）。逐 task 证据哨兵经源码核验已存在（sentinel-assertions.detectFakeCheckCompletion 的 missing 逐个点名+镜像豁免），本变更不动哨兵——心跳管节拍（openspec 同款软约束），哨兵管真伪（既有硬门）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow status（thin 变更、②执行阶段）输出新增心跳块：未全勾时两行（「⏭️ 下一任务：task-NN <标题截断60字>」「✅ 进度：N/M——边干边勾协议：做一件 → 勾一格 → 重跑本命令取下一个；勿攒一把勾（收口哨兵逐 task 核证据）」）；全勾时一行（任务全勾→flow done 收口+逐 task 证据提示）；①spec 阶段零心跳输出。移除旧「勾选提醒」行（tickNudge：滞后+区间有提交才刷的轻推——被恒在心跳覆盖，条件判断与 baseline git 调用一并退役）。文案变更三处：flow start 简报（fresh 405 行段/620 行段）、draftTasks 头部纪律行、AGENTS.md 恢复与查看段新增节拍器行。无函数签名/导出变化，无 CLI 参数变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：tasks.md 由 agent 单写、心跳每轮当场重读现文件——无缓存无序性问题，勾一格下一拍即生效（最终一致由重读保证）；2. 并发写：status 纯读零写，多会话各自 --change 隔离，无共享可变态；3. 切换/生命周期：心跳无自身状态（每轮重算），中断重跑幂等；flow-state 读写不涉心跳；4. 作用域：specBase 经 resolvePlatformSpecDir（外置根/--spec-dir 同构），tasks.md 路径锚定 changeDir 无穿越（变更名白名单前置校验）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：心跳仍被 agent 无视（不轮询 status 直接干完）——与 openspec 同款的软约束边界，诚实披露：openspec 的剧本约束同样不强制（其 skill 文本也只是指令）；缓解=三处协议文案钉死+AGENTS.md 常驻面+哨兵硬门兜底真伪。弃案1：把「逐个勾」升为 flow done 时序硬门（勾选时刻与证据时刻配对核验）——误伤合法场景（一提交携带多 task token 是规范动作，时序配对会把正常批量提交判假）；逐 task 证据哨兵已存在故不再加码。弃案2：新增独立 flow next 子命令——与 status 职责重叠，AGENTS.md/恢复简报已统一指 status，多一个入口徒增记忆面。
+diff --git a/.sillyspec/changes/2026-09-29-flow-task-heartbeat/proposal.md b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/proposal.md
+new file mode 100644
+index 00000000..866d924e
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/proposal.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T06:26:56.176Z
++---
++# 提案书（Proposal）— 2026-09-29-flow-task-heartbeat
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:98f27760465db7a6e774d563f2424e688fc4ba9c096bd781e4919df1c33d34b2:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++任务原话转写：动机：thin 道两次协议调用（start/done）之间无心跳点——tasks.md 期中只有 agent 自看，「完成一个勾一个」沦为纪律话术（2026-09-29-rot-retire-inject-cap 实证一把勾 0→6，watcher 报假勾选嫌疑）。openspec 的每步好好勾选靠三部件：skill 剧本把勾选写进循环体、CLI 每轮重读 tasks.md 由机器给下一个任务指针、archive 阻断漏勾。本变更把部件二移植进来：flow status 成为执行期心跳——输出下一个未勾任务与进度，协议改为「取任务→做一件→勾一格→重跑」循环；并用逐 task 证据背板补 openspec 没有的假勾防线（非镜像任务须逐个有 token 提交或 review.json 变更）。
++
++成功标准：
++- thin 道执行期 flow status --change <名> 输出心跳块：下一任务指针行（第一个 - [ ] 的 task-NN+标题）+ 进度 N/M + 「勾一格后重跑本命令；全勾后 flow done 收口」指引；全勾时改指 flow done
++- flow start 简报交付纪律段、tasks.md 头部纪律行、AGENTS.md 恢复与查看段三处协议文案同步为心跳循环口径
++- flow done 假勾哨兵收紧为逐 task 证据：非镜像（agent 覆写）任务的每个勾选 task 在区间提交标题/正文或 review.json 变更中须有对应 task-NN token，缺哪个点名哪个；镜像任务维持既有豁免（区间提交非空即放行）
++- 哨兵拒收文案按逐 task 口径更新且给出补证出口
++- 新增心跳渲染与逐 task 哨兵测试，适配既有 fake-check 用例，flow 系与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:fa7ad6d6a92e4c21915aa3935c626d259a8caacc93e4cc2416827748776a5cd2:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. thin 道执行期 flow status --change <名> 输出心跳块：下一任务指针行（第一个 - [ ] 的 task-NN+标题）+ 进度 N/M + 「勾一格后重跑本命令
++2. 全勾后 flow done 收口」指引
++3. 全勾时改指 flow done
++4. flow start 简报交付纪律段、tasks.md 头部纪律行、AGENTS.md 恢复与查看段三处协议文案同步为心跳循环口径
++5. flow done 假勾哨兵收紧为逐 task 证据：非镜像（agent 覆写）任务的每个勾选 task 在区间提交标题/正文或 review.json 变更中须有对应 task-NN token，缺哪个点名哪个
++6. 镜像任务维持既有豁免（区间提交非空即放行）
++7. 哨兵拒收文案按逐 task 口径更新且给出补证出口
++8. 新增心跳渲染与逐 task 哨兵测试，适配既有 fake-check 用例，flow 系与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:98899fec3c40e94eafb7af79d8fe3fc9a5b0bf83ff9c25c05bc3d88cdca0bb47:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-task-heartbeat 留痕重锚 -->
++1. thin 道执行期 flow status --change <名> 输出心跳块：下一任务指针行（第一个 - [ ] 的 task-NN+标题）+ 进度 N/M + 「勾一格后重跑本命令
++2. 全勾后 flow done 收口」指引
++3. 全勾时改指 flow done
++4. flow start 简报交付纪律段、tasks.md 头部纪律行、AGENTS.md 恢复与查看段三处协议文案同步为心跳循环口径
++5. flow done 假勾哨兵收紧为逐 task 证据：非镜像（agent 覆写）任务的每个勾选 task 在区间提交标题/正文或 review.json 变更中须有对应 task-NN token，缺哪个点名哪个
++6. 镜像任务维持既有豁免（区间提交非空即放行）
++7. 哨兵拒收文案按逐 task 口径更新且给出补证出口
++8. 新增心跳渲染与逐 task 哨兵测试，适配既有 fake-check 用例，flow 系与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-flow-task-heartbeat/requirements.md b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/requirements.md
+new file mode 100644
+index 00000000..68da5a03
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/requirements.md
+@@ -0,0 +1,42 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T06:26:56.177Z
++---
++# 需求规格（Requirements）— 2026-09-29-flow-task-heartbeat
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: ②执行阶段 status 心跳——下一任务指针 + 进度 + 循环协议指引
++- 场景：部分勾选 — Given thin 变更处于②执行阶段且 tasks.md 存在未勾行；When 运行 flow status --change <名>；Then 输出含「⏭️ 下一任务：<第一个 - [ ] 行的 task-NN+标题截断>」与「✅ 进度：N/M」及「做一件 → 勾一格 → 重跑本命令取下一个」协议指引
++### FR-02: 全勾态心跳改指 flow done
++- 场景：全部勾选 — Given tasks.md 全部 - [x]；When flow status；Then 输出「任务全勾（N/N）」并指向 flow done 收口（含逐 task 证据口径提示），不再出现下一任务指针
++### FR-03: ①spec 阶段不刷心跳
++- 场景：槽未填 — Given design/requirements 槽未填满（阶段=①）；When flow status；Then 无心跳行（心跳限定②执行阶段）
++### FR-04: 协议文案三处同步
++- 场景：文案钉 — Given flow start 简报（fresh/adopt 两路）、tasks.md 头部纪律行、AGENTS.md 恢复与查看段；When 本变更交付后；Then 三处均含心跳循环协议口径（做一件→勾一格→重跑 status 取下一个）
++### FR-05: 逐 task 证据哨兵行为零变化
++- 场景：既有硬门不动 — Given detectFakeCheckCompletion 的 missing 逐个点名与镜像豁免为既有行为；When 本变更交付后；Then 哨兵判据与拒收文案零改动（既有测试全绿佐证）
++### FR-06: 测试全绿
++- 场景：新增+适配 — Given 新增 flow-status-heartbeat 行为测试四面、适配 tick-loop-nudge 两钉；When 跑 flow 系与 npm run test:core；Then 全绿
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 test/flow-status-heartbeat.test.mjs「① ②执行阶段：下一任务指针 + 进度 + 循环协议指引」 -->
++test/flow-status-heartbeat.test.mjs「① ②执行阶段：下一任务指针 + 进度 + 循环协议指引」
++
++<!--AGENT:测试绑定FR-02 test/flow-status-heartbeat.test.mjs「② 全勾：心跳改指 flow done」 -->
++test/flow-status-heartbeat.test.mjs「② 全勾：心跳改指 flow done」
++
++<!--AGENT:测试绑定FR-03 test/flow-status-heartbeat.test.mjs「③ ①阶段（spec 槽未填）：不刷心跳」 -->
++test/flow-status-heartbeat.test.mjs「③ ①阶段（spec 槽未填）：不刷心跳」
++
++<!--AGENT:测试绑定FR-04 test/flow-status-heartbeat.test.mjs「④ 协议文案三处同步钉」+ test/tick-loop-nudge.test.mjs「③ 简报交付纪律」 -->
++test/flow-status-heartbeat.test.mjs「④ 协议文案三处同步钉」+ test/tick-loop-nudge.test.mjs「③ 简报交付纪律」
++
++<!--AGENT:测试绑定FR-05 test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉」+ 既有 sentinel 系用例零适配全绿佐证 -->
++test/tick-loop-nudge.test.mjs「④ 哨兵时点判定钉」+ 既有 sentinel 系用例零适配全绿佐证
++
++<!--AGENT:测试绑定FR-06 npm test 全量（run-tests.mjs）+ npm run test:core -->
++npm test 全量（run-tests.mjs）+ npm run test:core
++
+diff --git a/.sillyspec/changes/2026-09-29-flow-task-heartbeat/tasks.md b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/tasks.md
+new file mode 100644
+index 00000000..a10ccf57
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++---
++# 任务注册表（Tasks）— 2026-09-29-flow-task-heartbeat
++
++> 任务面归 agent（协议：flow status 取下一个 → 做一件 → 勾一格 → 重跑；全勾后 flow done）。
++
++- [x] task-01: flow status 心跳块——②阶段当场重读 tasks.md 给下一任务指针/进度/循环指引，全勾改指 flow done；移除旧 tickNudge（含 baseline git 调用）
++- [x] task-02: 协议文案三处同步——flow start 简报两路、draftTasks 头部纪律行、AGENTS.md 恢复与查看段
++- [x] task-03: 测试——新增 test/flow-status-heartbeat.test.mjs 行为四面；适配 tick-loop-nudge ①③钉与头注释
++- [x] task-04: 全量验证——flow 系+test:core 全绿；核验逐 task 哨兵既有行为零改动（sentinel 用例全绿佐证）
+diff --git a/.sillyspec/changes/2026-09-29-flow-task-heartbeat/review.json b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-task-heartbeat/review.json
+@@ -0,0 +1,21 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-29-flow-task-heartbeat",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P3",
++      "title": "全勾分支判定用「无 task-NN 形态未勾行」而非 c===tot，tasks.md 形态漂移时部分勾选态误刷「任务全勾」并指向 flow done",
++      "evidence": "心跳块用 /^- \\[ \\] (task-\\d+):/ 找 next，找不到即走 else if (tot > 0) 渲染「任务全勾（c/tot）」；agent 覆写 tasks.md 时若未勾行丢失 task-NN 前缀（简报仅口头要求保持该行形态，无强制），c<tot 场景会输出自相矛盾的「✅ 任务全勾（2/4）」并催 flow done。FR-02 的 Given（全部 - [x]）下行为正确，且同屏「任务勾选：N/M」行仍显示真实比例，误导面有限，故 P3 不阻断",
++      "location": "src/flow.js:1578-1586"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-09-29T06:47:56Z"
++}

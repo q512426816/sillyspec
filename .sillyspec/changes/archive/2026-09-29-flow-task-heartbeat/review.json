@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-flow-task-heartbeat",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "全勾分支判定用「无 task-NN 形态未勾行」而非 c===tot，tasks.md 形态漂移时部分勾选态误刷「任务全勾」并指向 flow done",
+      "evidence": "心跳块用 /^- \\[ \\] (task-\\d+):/ 找 next，找不到即走 else if (tot > 0) 渲染「任务全勾（c/tot）」；agent 覆写 tasks.md 时若未勾行丢失 task-NN 前缀（简报仅口头要求保持该行形态，无强制），c<tot 场景会输出自相矛盾的「✅ 任务全勾（2/4）」并催 flow done。FR-02 的 Given（全部 - [x]）下行为正确，且同屏「任务勾选：N/M」行仍显示真实比例，误导面有限，故 P3 不阻断",
+      "location": "src/flow.js:1578-1586"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-29T06:47:56Z"
+}
