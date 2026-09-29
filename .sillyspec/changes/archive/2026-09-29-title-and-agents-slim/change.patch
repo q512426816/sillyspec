@@ -1,0 +1,583 @@
+diff --git a/.claude/skills/sillyspec-flow/SKILL.md b/.claude/skills/sillyspec-flow/SKILL.md
+index 8be532fb..54824466 100644
+--- a/.claude/skills/sillyspec-flow/SKILL.md
++++ b/.claude/skills/sillyspec-flow/SKILL.md
+@@ -22,6 +22,8 @@ sillyspec flow start --change <变更名> --input "<需求>"
+ `--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
+ 先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
+ 
++变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字——`--input` 首行写这句即成标题（缺省取首行推导），或显式 `--title "<标题>"` 指定（重入 start 可改）。
++
+ 示例：
+ 
+ ```
+@@ -45,7 +47,7 @@ sillyspec flow start --change <变更名> --input "<需求>"
+ sillyspec flow done --change <变更名>
+ ```
+ 
+-CLI 亲自实测 `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（实测失败中断于对应子步、断点续，修好重跑即可）；按危险证据定档独立评审；patch 留档变更级归档。
++CLI 亲自实测（测试面按变更动态推断——本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断；lint 走 `local.yaml` 的 `commands.lint`；实测失败中断于对应子步、断点续，修好重跑即可）；按危险证据定档独立评审；patch 留档变更级归档。
+ 
+ ## 边界
+ 
+diff --git a/.sillyspec/changes/2026-09-29-title-and-agents-slim/flow-state.yaml b/.sillyspec/changes/2026-09-29-title-and-agents-slim/flow-state.yaml
+new file mode 100644
+index 00000000..58e419f6
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-title-and-agents-slim/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 1f0ec6bae9a8c6daeda8f7925b88cbe9353d1c8e
++updatedAt: '2026-09-29T01:15:38.021Z'
++baseline_sha256: b579ee0909fb0995ae2f76ddeb01c2e02bdf70d18d05ea5d59d209541cc06421
++
+diff --git a/AGENTS.md b/AGENTS.md
+index 02ad0249..a6c327e2 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -7,26 +7,16 @@
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+-| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用 |
+-| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
+-| 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
+-| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
++| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
++| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
++| 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
++| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done` 一步收口 |
+ 
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+-## 轻量变更（默认快道）
+-`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
+-
+-`--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
+-先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
+-
+-start 之后：按提示填 design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险，每节至少一行，写「不适用：<理由>」也算答——空槽 flow done 拒收）；干活时逐条勾 tasks.md 的 task-NN（勾选是收口哨兵证据面）；收口前交付代码先用显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交的代码不进审计件）。
+-
+-## 常用命令速查
+-- 看进度：`sillyspec progress show`；轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `sillyspec flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
+-- 跨会话交接：`sillyspec handoff --change <名>`（生成交接块，新会话零背景可续）
+-- 变更列表 / 状态：`sillyspec status`
+-- 自检修复：`sillyspec doctor`
++## 恢复与查看
++- 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
++- 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
+ - 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
+ 
+ ## 核心规则
+diff --git a/src/flow.js b/src/flow.js
+index aad1a554..a3dac6fd 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -151,10 +151,10 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     let domains = []
+     let basis = ''
+     if (Array.isArray(filesOverride) && filesOverride.length > 0) {
+-      domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride).filter((d) => d !== 'unmapped')
++      domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride, knowledgeRoot).filter((d) => d !== 'unmapped')
+       basis = filesOverride.length > 0 ? 'input/diff 路径' : ''
+     } else if (existsSync(join(changeDir, 'design.md'))) {
+-      domains = resolveTouchedDomains(changeDir, moduleIndex).filter((d) => d !== 'unmapped')
++      domains = resolveTouchedDomains(changeDir, moduleIndex, null, knowledgeRoot).filter((d) => d !== 'unmapped')
+       basis = 'design.md 交付清单'
+     }
+     const frs = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
+@@ -323,7 +323,7 @@ function changeArtifactPaths(changeDir) {
+  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
+  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
+  */
+-export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
++export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
+   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
+   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
+   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
+@@ -381,6 +381,17 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+           const w = await spawnWatcher(cwd, change, { specBase })
+           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
+         } catch { /* 观测旁路 best-effort */ }
++        // adopt 标题（用户需求 2026-09-29）：头脑风暴 proposal 的 H1 是人写语义标题，
++        // deriveTitleFromLinkedChange 提取；--title 优先；兜底变更名。adopt 路径此前完全不
++        // 注册 changes 行——initChange 补插（幂等），既有行 title 空时回填。
++        try {
++          const { deriveTitleFromLinkedChange, deriveChangeTitle } = await import('./quicklog.js')
++          const adoptTitle = titleFlag || deriveTitleFromLinkedChange(specBase, change) || deriveChangeTitle(input) || change
++          pm.initChange(cwd, change, { title: adoptTitle })
++          const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
++          if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
++          console.log(`🏷️ 变更标题：${adoptTitle}（收编自头脑风暴产物；重入 --title 可改）`)
++        } catch { /* adopt 标题 best-effort */ }
+         const materials = materialPaths(specBase, change, changeDir)
+         const artifacts = changeArtifactPaths(changeDir)
+         const prototypePaths = artifacts.filter((p) => /\.html$/i.test(p))
+@@ -448,6 +459,19 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+       writeFlowState(changeDir, { review_force: reviewForce })
+       console.log(`⚖️ 已更新评审声明通道：review_force=${reviewForce}（resume 落盘）`)
+     }
++    // 变更标题补写（用户需求 2026-09-29：title=中文概括 ≤50 字，建议 ~20 字）——存量在途
++    // 变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入改标题）；否则从 --input 首
++    // 行推导、仅当库内 title 为空才写（不覆盖已有语义标题）。best-effort 不阻断恢复简报。
++    try {
++      const { deriveChangeTitle } = await import('./quicklog.js')
++      const _row = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
++      const _cur = _row ? (_row.title || '') : ''
++      const _derived = titleFlag || deriveChangeTitle(input)
++      if (_derived && (titleFlag || !_cur)) {
++        pm.updateChangeMeta(cwd, change, { title: _derived })
++        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived}（面板显示用；建议 ~20 字中文概括，重入 --title 可改）`)
++      }
++    } catch { /* 标题补写 best-effort */ }
+     // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
+     // changedFilesSinceBaseline（fr-rot-precision 评审 P2：含未提交工作树/untracked、剔 .sillyspec，
+     // 与收口口径同源；裸 git diff 双提交区间会漏干活期未提交文件）；best-effort 不阻断恢复简报。
+@@ -480,7 +504,16 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
+   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
+   // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
+ 
+-  pm.initChange(cwd, change, {})
++  // 变更标题（用户需求 2026-09-29：title=中文概括 ≤50 字、建议 ~20 字，agent 总结）：
++  // --title 显式指定优先；否则 --input 首行推导（agent 在 input 首行写一句中文概括即为标题）；
++  // 两者皆缺用变更名兜底（可辨识但不达意——横幅提示下次带 --title）。
++  let changeTitle = null
++  try {
++    const { deriveChangeTitle } = await import('./quicklog.js')
++    changeTitle = titleFlag || deriveChangeTitle(input) || change
++  } catch { changeTitle = titleFlag || change }
++  pm.initChange(cwd, change, { title: changeTitle })
++  console.log(`🏷️ 变更标题：${changeTitle}${changeTitle === change ? '（变更名兜底——下次带 --title "<≤20 字中文概括>" 更达意）' : '（面板显示用；建议 ~20 字中文概括，重入 flow start --title 可改）'}`)
+   try {
+     const { resolveSessionIdentity } = await import('./progress.js')
+     const { session } = resolveSessionIdentity({ flagSession: null, cwd })
+@@ -1489,6 +1522,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     return cmdFlowStart({
+       change,
+       input: getFlag('--input') || undefined,
++      title: getFlag('--title') || null,
+       thick: hasFlag('--thick'),
+       withTasks: hasFlag('--with-tasks'),
+       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
+diff --git a/src/progress.js b/src/progress.js
+index cb3eb7d6..beded080 100644
+--- a/src/progress.js
++++ b/src/progress.js
+@@ -582,7 +582,7 @@ export class ProgressManager {
+ 
+     // 1. changes 行（投影流程进度列 + name 标识 + 所有权列 owner_session）
+     const changeRow = sqlDb.prepare(
+-      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts, owner_session
++      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts, owner_session, title
+        FROM changes WHERE name = ?`
+     ).get(changeName);
+     if (changeRow === undefined) return null;
+@@ -595,6 +595,10 @@ export class ProgressManager {
+       last_synced_platform_ts: changeRow.last_synced_platform_ts ?? null,
+       last_local_modified_ts: changeRow.last_local_modified_ts ?? null,
+       owner_session: changeRow.owner_session ?? null,
++      // title 一并上行（用户需求 2026-09-29：变更标题为中文概括 ≤50 字）——平台
++      // _ensure_change_row 占位与既有行收养均消费 changes[].title；此前 SELECT 漏列
++      // → 上行恒无标题，平台只能落 change_key（「英文 key」病灶的同步链一侧）。
++      title: changeRow.title ?? null,
+     };
+ 
+     // 2. project 全局单行（只投影稳定字段 name/schema_version；created_at/updated_at 是本地库元数据，
+diff --git a/src/quicklog.js b/src/quicklog.js
+index ad58cd16..a630c97b 100644
+--- a/src/quicklog.js
++++ b/src/quicklog.js
+@@ -118,6 +118,26 @@ export function sanitizeDesc(description) {
+   return s.length > 120 ? s.slice(0, 120) + '…' : s
+ }
+ 
++/**
++ * 变更标题推导（用户需求 2026-09-29：changes.title 应为中文描述，≤50 字、建议 ~20 字）。
++ * 取 --input 首个非空行（「成功标准：」引导行即止——那是验收面不是标题素材），剥
++ * 「需求：/动机：」类标签前缀，空白折叠单行，超长截断加 …；空输入返回 ''（调用方兜底
++ * change 名）。agent 在 --input 首行写一句中文概括即成标题（flow start 横幅有指引），
++ * --title 显式覆盖一切推导。
++ */
++export function deriveChangeTitle(input, max = 50) {
++  for (const l of String(input || '').replace(/\r\n/g, '\n').split('\n')) {
++    const t = l.trim()
++    if (!t) continue
++    if (/^成功标准\s*[:：]/.test(t)) break
++    const stripped = t.replace(/^(?:需求|动机|背景|任务|标题)\s*[:：]\s*/, '').trim()
++    if (!stripped) continue
++    const one = stripped.replace(/\s+/g, ' ')
++    return one.length > max ? one.slice(0, max) + '…' : one
++  }
++  return ''
++}
++
+ 
+ // ── 平台推送（best-effort，2026-08-16-change-center-quick-tab task-06 / D-003）──
+ 
+diff --git a/src/run/command.js b/src/run/command.js
+index ad2bd172..6ab50e53 100644
+--- a/src/run/command.js
++++ b/src/run/command.js
+@@ -29,7 +29,7 @@ import { resolveQuickLinkedChanges } from './quick-audit.js'
+ import { outputStep, collectStageWaitHistory } from './prompt.js'
+ import { completeStep, completeStepBurst, skipStep, waitStep, continueStep, synthesizeStepOutput } from './complete.js'
+ import { runStage } from './stage.js'
+-import { sanitizeDesc } from '../quicklog.js'
++import { sanitizeDesc, deriveChangeTitle } from '../quicklog.js'
+ import { ProgressManager, resolveSessionIdentity } from '../progress.js'
+ import { validateChangeExists, checkTransition } from '../stage-contract.js'
+ import { READONLY_AUXILIARY_STAGES } from '../constants.js'
+@@ -1225,10 +1225,11 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+     // 如果指定了变更名或有变更目录，自动初始化变更的 progress
+     const autoChange = changeName || resolveChangeNameAuto(cwd, specRoot)
+     if (autoChange) {
+-      // 创建时即写 title（与 name/KEY 同时落 db）：--input 需求描述 sanitizeDesc 优先，无则用 name 兜底。
++      // 创建时即写 title（与 name/KEY 同时落 db）：--input 首行推导 deriveChangeTitle（≤50 字，
++      // 用户需求 2026-09-29）优先，长输入兜底 sanitizeDesc 压行，无则用 name 兜底。
+       // proposal 还没写、无权威标题来源，这是临时值；brainstorm/plan 完成 proposal/design 落盘后由
+       // complete.js 通用完成路径 deriveTitleFromLinkedChange 刷新为真实 # 标题（与 quick 启动 title 同源）。
+-      progress = pm.initChange(cwd, autoChange, { title: inputText ? sanitizeDesc(inputText) : autoChange })
++      progress = pm.initChange(cwd, autoChange, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoChange })
+     } else if (isAuxiliary) {
+       let autoName = changeName || resolveChangeNameAuto(cwd, specRoot) || 'default'
+       // archive 特例：归档后变更从活跃列表排除（listChanges WHERE status='active'），
+@@ -1255,7 +1256,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+       changeName = autoName
+       if (!progress) {
+         // auxiliary 创建也写 title（--input 优先 / name 兜底），同上完整流程语义。
+-        progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
++        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+         // initChange 可能因 project 表为空返回 null
+         if (!progress) {
+           progress = { currentStage: stageName, stages: {}, lastActive: new Date().toLocaleString('zh-CN', { hour12: false }), project: '' }
+@@ -1287,7 +1288,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         console.log(`  提示：可以用 --change <名称> 指定自定义变更名`)
+         console.log(`  或事后重命名：sillyspec change-rename ${autoName} <新名称>`)
+         // brainstorm 自动创建变更也写 title（--input 需求描述优先 / 自动名兜底），proposal 落盘后刷新。
+-        progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
++        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+         changeName = autoName
+       } else if (stageName === 'auto') {
+         // auto 零活跃建变更（2026-09-08-auto-driver D-003@v1，Grill P1-②）：SKILL 启动命令即
+@@ -1303,7 +1304,7 @@ export async function runCommand(args, cwd, specDir = null, opts = {}) {
+         const date = new Date().toISOString().slice(0, 10)
+         const autoName = `${date}-new-change-${randomBytes(4).toString('hex')}`
+         console.log(`🔄 auto 模式自动创建变更：${autoName}（可用 --change 指定名称，或事后 change-rename）`)
+-        progress = pm.initChange(cwd, autoName, { title: inputText ? sanitizeDesc(inputText) : autoName })
++        progress = pm.initChange(cwd, autoName, { title: inputText ? (deriveChangeTitle(inputText) || sanitizeDesc(inputText)) : autoName })
+         changeName = autoName
+       } else {
+         console.error('❌ 未找到进度数据，请先运行 sillyspec init 或指定 --change <变更名>')
+diff --git a/templates/agents-instruction.md b/templates/agents-instruction.md
+index a048d5c5..2fcfb5c3 100644
+--- a/templates/agents-instruction.md
++++ b/templates/agents-instruction.md
+@@ -6,27 +6,17 @@
+ ## 选道（动手前先对号入座）
+ | 需求形态 | 走法 |
+ |---|---|
+-| 需求已含决策（自检通过才走——对本需求，你还有没有必须问用户才能动手的问题？能不假思索答「无」且成功标准可直书，才走本行） | **轻量变更（自检通过才走）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用（start 时 CLI 会同屏再盘问一次；答错事后指标会标记） |
+-| 需求不清晰 / 需要方案探索（负面信号举例——举例非机制、非封闭清单：改哪说不清／成功标准只能写空话／≥2 个方案待取舍／需要人看方案再定） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
+-| 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
+-| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
++| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
++| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
++| 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
++| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done` 一步收口 |
+ 
+ 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
+ 
+-## 轻量变更（默认快道）
+-`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
+-
+-`--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
+-先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
+-
+-start 之后：按提示填 design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险，每节至少一行，写「不适用：<理由>」也算答——空槽 flow done 拒收）；干活时逐条勾 tasks.md 的 task-NN（勾选是收口哨兵证据面）；收口前交付代码先用显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交的代码不进审计件）。
+-
+-## 常用命令速查
+-- 看进度：`sillyspec progress show`；轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `sillyspec flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
+-- 跨会话交接：`sillyspec handoff --change <名>`（生成交接块，新会话零背景可续）
+-- 变更列表 / 状态：`sillyspec status`
+-- 自检修复：`sillyspec doctor`
+-- 知识库：`sillyspec knowledge search --query "<关键词>"`（入口注入不覆盖设计时点——方案/设计引入新机制词时主动检索，命中必读（尤其 status=rejected 的防复潮条目）；方案步 --done 门也会自动检索回显命中）
++## 恢复与查看
++- 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
++- 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
++- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
+ 
+ ## 核心规则
+ 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。
+diff --git a/test/change-title-flow.test.mjs b/test/change-title-flow.test.mjs
+new file mode 100644
+index 00000000..0244350e
+--- /dev/null
++++ b/test/change-title-flow.test.mjs
+@@ -0,0 +1,110 @@
++/**
++ * 变更标题三段链路（用户需求 2026-09-29：changes.title 应为中文概括 ≤50 字、建议 ~20 字，
++ * agent 总结——此前 thin flow start 不传 title（空）、auto 路径兜底英文名、上行 SELECT 漏列
++ * title → 平台只能落 change_key 英文 key）。
++ *
++ * 锁定语义：
++ *   ① deriveChangeTitle：--input 首行推导（标签剥离/成功标准止/≤50 截断/空返回 ''）
++ *   ② flow start：fresh 写 title（--title > input 首行 > 变更名兜底）；resume --title 可改、
++ *      空 title 补写不覆盖；serializeForSync 上行携带 title
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const { deriveChangeTitle } = await import('../src/quicklog.js')
++const { ProgressManager } = await import('../src/progress.js')
++
++const tmpRoots = []
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'title-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'), 'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd }
++}
++function cli(cwd, args) {
++  return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++}
++function readTitle(cwd, name) {
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  const row = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(name)
++  return row ? row.title : undefined
++}
++test.onFinish?.(() => { for (const t of tmpRoots) rmSync(t, { recursive: true, force: true }) })
++
++test('① deriveChangeTitle：首行推导 + 标签剥离 + 成功标准止 + ≤50 截断', () => {
++  assert.equal(deriveChangeTitle('知识页治理卡显示「暂无推荐去向」体验优化\n\n成功标准：\n- x'), '知识页治理卡显示「暂无推荐去向」体验优化')
++  assert.equal(deriveChangeTitle('需求：变更列表加筛选\n\n成功标准：\n- x'), '变更列表加筛选', '标签前缀剥离')
++  assert.equal(deriveChangeTitle('成功标准：\n- x'), '', '首行即成功标准引导行 → 空（调用方兜底）')
++  assert.equal(deriveChangeTitle(''), '', '空输入 → 空串')
++  const long = deriveChangeTitle('一'.repeat(80))
++  assert.equal(long.length, 51, '超长截断加 …（50+1）')
++  assert.ok(long.endsWith('…'))
++})
++
++test('② flow start fresh：--title 优先，否则 input 首行，横幅在场', () => {
++  const { cwd } = makeRepo()
++  const cn = '2026-09-29-title-a'
++  const r = cli(cwd, ['flow', 'start', '--change', cn, '--input', '知识页伪域池一键归位交互\n\n成功标准：\n- 归位后覆盖率回升', '--no-review'])
++  assert.equal(r.status, 0, `start 失败: ${r.stderr}`)
++  assert.match(r.stdout, /🏷️ 变更标题：知识页伪域池一键归位交互/, '横幅展示推导标题')
++  assert.equal(readTitle(cwd, cn), '知识页伪域池一键归位交互', 'db changes.title = input 首行')
++
++  const cn2 = '2026-09-29-title-b'
++  const r2 = cli(cwd, ['flow', 'start', '--change', cn2, '--input', '随便什么输入\n\n成功标准：\n- x', '--title', '变更标题显式指定', '--no-review'])
++  assert.equal(r2.status, 0)
++  assert.equal(readTitle(cwd, cn2), '变更标题显式指定', '--title 显式覆盖')
++  tmpRoots.push(cwd)
++})
++
++test('③ flow start resume：--title 改标题；空 title 时 input 补写；上行携带 title', async () => {
++  const { cwd } = makeRepo()
++  const cn = '2026-09-29-title-c'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '首行就是标题素材\n\n成功标准：\n- x', '--no-review']).status, 0)
++  assert.equal(readTitle(cwd, cn), '首行就是标题素材')
++
++  // resume 带 --title → 更新
++  const r2 = cli(cwd, ['flow', 'start', '--change', cn, '--title', '改后的中文标题'])
++  assert.equal(r2.status, 0)
++  assert.match(r2.stdout, /🏷️ 变更标题已更新：改后的中文标题/)
++  assert.equal(readTitle(cwd, cn), '改后的中文标题')
++
++  // resume 不带 --title → 不覆盖既有标题
++  const r3 = cli(cwd, ['flow', 'start', '--change', cn, '--input', '另一个输入首行\n\n成功标准：\n- y'])
++  assert.equal(r3.status, 0)
++  assert.equal(readTitle(cwd, cn), '改后的中文标题', '无 --title 时不覆盖语义标题')
++
++  // serializeForSync 上行携带（同步链缺口修复锚：此前 SELECT 漏列恒 null）
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  const body = pm.serializeForSync(cwd, cn)
++  assert.equal(body?.changes?.[0]?.title, '改后的中文标题', 'changes[].title 上行在场')
++  tmpRoots.push(cwd)
++})
++
++test('④ 存量空 title 回填：resume 时 input 首行补写（不覆盖已有）', () => {
++  const { cwd } = makeRepo()
++  const cn = '2026-09-29-title-d'
++  assert.equal(cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行\n\n成功标准：\n- x', '--no-review']).status, 0)
++  // 模拟存量空 title 行（旧版本创建的变更）
++  const pm = new ProgressManager({ specDir: join(cwd, '.sillyspec') })
++  pm.updateChangeMeta(cwd, cn, { title: null })
++  assert.equal(readTitle(cwd, cn), null)
++  const r = cli(cwd, ['flow', 'start', '--change', cn, '--input', '原始输入首行\n\n成功标准：\n- x'])
++  assert.equal(r.status, 0)
++  assert.match(r.stdout, /🏷️ 变更标题已补写：原始输入首行/, '空 title 补写横幅')
++  assert.equal(readTitle(cwd, cn), '原始输入首行', '空 title 被 input 首行回填')
++  tmpRoots.push(cwd)
++})
+diff --git a/.sillyspec/changes/2026-09-29-title-and-agents-slim/design.md b/.sillyspec/changes/2026-09-29-title-and-agents-slim/design.md
+new file mode 100644
+index 00000000..a6fd1753
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-title-and-agents-slim/design.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T01:15:37.997Z
++---
++# 设计记录（Design Record）— 2026-09-29-title-and-agents-slim
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++标题三段链路：① 新增 deriveChangeTitle（quicklog.js，--input 首行推导 ≤50 字：剥「需求：/动机：」标签、「成功标准：」引导行止、超长截断）；② flow start 四路接线（fresh 写入并打横幅 / resume 带 --title 可改、空 title 由 input 补写 / adopt 从头脑风暴 proposal H1 提取并补注册 changes 行）；③ serializeForSync SELECT 补 title 列（此前上行恒无标题是「英文 key」病灶的同步链一侧）。
++指引归位：AGENTS.md 只留稳定规则与路由——轻量变更整节并入选道表细胞（细节指向 /sillyspec:flow skill 与 CLI 运行时输出）、速查压缩为「恢复与查看」三行；模板 templates/agents-instruction.md 同源同步（防下版本 init 重新生成肥版）；标题约定与 commands.test 退役修正落 sillyspec-flow skill。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出：deriveChangeTitle(input, max=50)（src/quicklog.js）。CLI 新 flag：flow start --title <标题>。行为变化：flow start 横幅多一行 🏷️ 变更标题；changes.title 由恒 null/名兜底变为中文概括；serializeForSync 载荷 changes[] 增 title 字段（平台 _ensure_change_row 既有消费兼容，另有平台侧收养配套在他仓在途）。AGENTS.md/templates/skill 为纯文档面，无接口。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：title 写入在 initChange（建行即写）与 resume 补写（仅库内空时），迟到重跑幂等——值相同不重写；--title 显式值恒生效。
++2. 并发写：title 是 changes 表单列，updateChangeMeta 走既有 SQLite 事务；两会话并发 start 同名变更被既有唯一约束与 claim 门拦，无新并发面。
++3. 切换/生命周期：resume/adopt 补写 fail-open（try/catch best-effort），标题失败不阻断协议面；归档/rename 沿用既有 title 保留语义（change-title-backfill 既有用例锚定）。
++4. 作用域：title 每仓每变更一行，随 serializeForSync 定向单变更上行，无跨工作区串台面；模板只影响新 init 的仓（本仓 AGENTS.md 独立维护，版本感知幂等不回写）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：AGENTS.md 瘦身后，无 skill 环境（如 codex 只读 AGENTS.md）的 agent 拿不到 --input 格式——已评估：flow start 清晰度门失败时 CLI 自己打印过门格式（运行时教学兜底），可接受。试过放弃：把标题写进 proposal 骨架 H1（# 提案书 — <中文>）——平台 normalize_display_title 把「类型词—任意后缀」全判模板回退英文 key，H1 通道不可靠，改走 body title 通道（SELECT 补列 + 平台侧收养）。已归档变更判无法回填标题（无后续推送面），留待需要时一次性脚本。
+diff --git a/.sillyspec/changes/2026-09-29-title-and-agents-slim/proposal.md b/.sillyspec/changes/2026-09-29-title-and-agents-slim/proposal.md
+new file mode 100644
+index 00000000..33245b73
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-title-and-agents-slim/proposal.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T01:15:37.996Z
++---
++# 提案书（Proposal）— 2026-09-29-title-and-agents-slim
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:e6717841197dd2552edc500fff95f078c533cf43036b38b37fec5eeecd3f1dfd:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++任务原话转写：面板与本地库 changes.title 基本为空或英文 key：thin 流程不写 title、auto 路径兜底变更名、上行 SELECT 漏列；同时 AGENTS.md 混入大量操作教学与 skill/CLI 输出三重冗余，职责不清。
++成功标准：
++- changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底、resume/adopt 补写、serializeForSync 上行携带），新增测试全绿
++- AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templates/agents-instruction.md 同步，模板锚定测试绿
++- 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:6b3b869294dfee70eaca6fe118f778b143ebb167f05a50bfbc0fde00edf3f622:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++按成功标准机械推导，共 3 条验收面：
++1. changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底、resume/adopt 补写、serializeForSync 上行携带），新增测试全绿
++2. AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templates/agents-instruction.md 同步，模板锚定测试绿
++3. 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:91385130f86dfa98bc550fb8648fba17cc7568fe665c9b207135b7224856e37e:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-title-and-agents-slim 留痕重锚 -->
++1. changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底、resume/adopt 补写、serializeForSync 上行携带），新增测试全绿
++2. AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templates/agents-instruction.md 同步，模板锚定测试绿
++3. 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-title-and-agents-slim/requirements.md b/.sillyspec/changes/2026-09-29-title-and-agents-slim/requirements.md
+new file mode 100644
+index 00000000..1dcec9f4
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-title-and-agents-slim/requirements.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T01:15:37.997Z
++---
++# 需求规格（Requirements）— 2026-09-29-title-and-agents-slim
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底
++Given 测试 相关模块就绪
++When changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底、resume/adopt 补写、serializeForS
++Then 行为符合本条标准描述
++
++### FR-02: AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templat
++Given 测试 相关模块就绪
++When AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templates/agents-instruction.md 同步，模板
++Then 行为符合本条标准描述
++
++### FR-03: 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行
++Given 系统就绪
++When 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/change-title-flow.test.mjs 全部 4 用例（deriveChangeTitle 推导单元 + flow start fresh/resume/回填 e2e + serializeForSync 上行携带锚点）+ test/change-title-backfill.test.mjs 既有机制回归
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/quick-retired.test.mjs「R5 模板/仓库 AGENTS.md」锚定用例（轻量变更/flow start 在位、零 quick 表述）+ test/init-agents-injection.test.mjs / init-tool-multi / init-no-skills 注入回归
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：纯文档面（skill 文本与 AGENTS.md 模板），行为锚由 FR-02 的模板锚定测试承担
+diff --git a/.sillyspec/changes/2026-09-29-title-and-agents-slim/tasks.md b/.sillyspec/changes/2026-09-29-title-and-agents-slim/tasks.md
+new file mode 100644
+index 00000000..2671f3f5
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-title-and-agents-slim/tasks.md
+@@ -0,0 +1,13 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T01:15:37.997Z
++---
++# 任务注册表（Tasks）— 2026-09-29-title-and-agents-slim
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: changes.title 三段链路闭合（deriveChangeTitle 助手 + flow start 四路接线 + serializeForSync 补列；test/change-title-flow.test.mjs 4/4 + 回归 27 绿）
++- [x] task-02: AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板同步 43→34 行；quick-retired R5 + init 注入三套件绿
++- [x] task-03: 标题约定落 sillyspec-flow skill（input 格式段）并修正 commands.test 退役过期行（动态推断口径）

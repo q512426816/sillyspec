@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-title-and-agents-slim",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-01 的 adopt（头脑风暴收编）补写路径零测试覆盖，且整块 try/catch 吞错无回归哨兵",
+      "evidence": "test/change-title-flow.test.mjs 仅 4 用例（deriveChangeTitle 单元/fresh/resume+serializeForSync/存量空回填），无一触达 flow.js adopt 分支；该分支整体 try/catch best-effort（吞错静默），未来回归无测试可拦。静态核验实现本身正确：deriveTitleFromLinkedChange 确从 quicklog.js:335 导出（adopt 导入有效）、initChange 对已存在行不动 title（progress.js INSERT-only）+ SELECT 空回填逻辑与设计作答一致——承诺已兑现，属覆盖缺口非违约。",
+      "location": "src/flow.js:383-393; test/change-title-flow.test.mjs"
+    },
+    {
+      "severity": "P3",
+      "title": "title 写入不触发本地脏度（_touchLocalModified），仅改标题场景可能延迟上行",
+      "evidence": "change-registry.js updateChangeMeta 注释明示「不调 _touchLocalModified：title 是本地展示用元信息」（旧语义），而本变更赋予 title 上行展示目的（progress.js serializeForSync 携带 title）。若变更其余面已全部同步、用户仅重入 flow start --title 改标题且无后续动作，新 title 须等下一次其他字段落脏才随行推送。title 为显示字段非键非账，无数据正确性破坏，故 P3；建议后续把 title 纳入脏度或在上行时点直读。",
+      "location": "src/progress/change-registry.js:363-384; src/progress.js:582-598"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（幂等兑现实证：initChange 仅建行 INSERT 写 title、resume 仅库内空时回填（flow.js:459-471 条件 if(_derived && (titleFlag || !_cur))）、--title 显式恒生效，迟到重跑不覆盖语义标题。声明边界「已归档变更不回填标题」——边界已裁决：可接受（归档变更无后续推送面，留待一次性脚本，title 为显示字段无数据正确性风险））",
+    "并发": "ok（设计声明「updateChangeTitle 走既有 SQLite 事务」实证属实：change-registry.js:366-384 db.transaction 包裹白名单 UPDATE；两会话并发 start 同名依赖既有唯一约束/claim 门，本变更未开新并发面。声明边界「H1 通道不可靠改走 body title 通道（SELECT 补列+平台侧收养在他仓在途）」——边界已裁决：可接受（本仓上行链路已闭合并有 test ③ serializeForSync changes[].title 断言锚定，外部平台依赖已显式披露））",
+    "切换": "ok（resume/adopt 两处补写均实证 try/catch fail-open，标题失败不阻断协议面；归档/rename 的 title 保留语义由既有 test/change-title-backfill.test.mjs 回归锚定——该文件在盘实证存在）",
+    "作用域": "ok（title 每仓每变更单行，serializeForSync WHERE name=? 定向单变更上行，无跨工作区串台面；模板/AGENTS.md 同源一致性实证：两文件除 AGENTS.md 首行版本注释（v3.30.0，package.json 为 3.31.0——版本差刷新触发时内容已逐字一致，重写无害）外逐字相同。声明边界「flow.js knowledgeRoot 透传捆绑 hunk」——边界已裁决：可接受（fr-index.js:232 签名实证第四参确为 knowledgeRoot，属 flowKnowledgeDigest 两处调用漏传对齐既有调用点（fr-index.js:423/812）的正确小修，非行为突变）；「command.js platformOpts 透传一行」在冻结 patch 中不存在（platformOpts 仅见 agent-session-log.js 既有代码），无需裁决；风险节「AGENTS.md 瘦身后无 skill 环境 agent 拿不到 --input 格式」防护声明实证真实：flow.js:493-497 清晰度门失败时 CLI 打印过门格式——边界已裁决：可接受）"
+  },
+  "reviewedAt": "2026-09-29T01:24:02Z"
+}
