@@ -1,0 +1,50 @@
+{
+  "change": "2026-09-29-watcher-fakecheck-retire",
+  "baseline": "450f21397eeeea1289a1210ba0d4eab1275944ad",
+  "head": "0972a16c61f70b38c27ee28798adea489f6920e9",
+  "files": [
+    ".sillyspec/changes/2026-09-29-watcher-fakecheck-retire/design.md",
+    ".sillyspec/changes/2026-09-29-watcher-fakecheck-retire/flow-state.yaml",
+    ".sillyspec/changes/2026-09-29-watcher-fakecheck-retire/proposal.md",
+    ".sillyspec/changes/2026-09-29-watcher-fakecheck-retire/requirements.md",
+    ".sillyspec/changes/2026-09-29-watcher-fakecheck-retire/tasks.md",
+    "src/watcher.js",
+    "test/sentinel-mirror-waiver.test.mjs",
+    "test/sentinel-rules.test.mjs",
+    "test/watcher.test.mjs",
+    ".sillyspec/changes/2026-09-29-watcher-fakecheck-retire/review.json"
+  ],
+  "totals": {
+    "files": 10,
+    "additions": 190,
+    "deletions": 98
+  },
+  "savedAt": "2026-09-29T09:20:08.961Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "7054d33dcf767766dba78b7929ef86cc422e422643e45e854e162a7470f6fa89",
+  "patchStatus": "ok"
+}

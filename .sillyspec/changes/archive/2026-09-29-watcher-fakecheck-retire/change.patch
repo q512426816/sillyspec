@@ -1,0 +1,456 @@
+diff --git a/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/flow-state.yaml b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/flow-state.yaml
+new file mode 100644
+index 00000000..864fe9d8
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 450f21397eeeea1289a1210ba0d4eab1275944ad
++updatedAt: '2026-09-29T08:47:31.979Z'
++baseline_sha256: 5ffe7a3b26db5ec828892a64ebaaf654e42320ae6a05d0ba29b41990151e4a76
++
+diff --git a/src/watcher.js b/src/watcher.js
+index adf2cfa7..7c7c32ec 100644
+--- a/src/watcher.js
++++ b/src/watcher.js
+@@ -41,8 +41,6 @@ import {
+ } from 'fs';
+ import { createHash } from 'crypto';
+ import { basename, dirname, join, resolve } from 'path';
+-import { readBaselineTasks } from './route-hindsight.js';
+-import { mirroredTaskIds } from './sentinel-assertions.js';
+ import { gitQuiet } from './git-helper.js';
+ import { normalizePath, globMatch } from './change-list.js';
+ import { resolveTestFileOwners } from './test-bindings.js';
+@@ -202,7 +200,7 @@ export function parsePorcelainCodePaths(porcelain) {
+   return out.sort();
+ }
+ 
+-/** execute-runs 下全部 review.json 的 mtime 面（假勾选证据源二；有界遍历，缺失 → {}）。 */
++/** execute-runs 下全部 review.json 的 mtime 面（有界遍历，缺失 → {}）——R1 退役后无 watcher 规则消费，保留采集维持水位序列化键稳定（2026-09-29-watcher-fakecheck-retire 评审 F1）。 */
+ function collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl) {
+   const reviews = {};
+   let runs = [];
+@@ -297,7 +295,7 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
+   } catch {
+     snap.scanStatus = null;
+   }
+-  // 哨兵源四：review.json mtime 面
++  // 哨兵源四：review.json mtime 面（R1 退役后无规则消费方；水位兼容保留采集）
+   snap.reviews = collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl);
+   // 哨兵源五（2026-09-28-watcher-signal-widen）：门实测结论——verify-runs 下本变更最新
+   // test-result.json（目录名 YYYYMMDDHHMMSS 字典序即时序）。停滞判定的核心活跃信号：
+@@ -405,7 +403,7 @@ export const STALL_EXECUTE_MS = 15 * 60_000;
+ 
+ /** 引擎状态初值（ts=计时锚；task-04 重启回补时取 max(启动时刻, 水位 ts)）。 */
+ export function createSentinelState(ts = Date.now()) {
+-  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null, fakeCheckPending: {} };
++  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null };
+ }
+ 
+ function mkWarning(rule, detail, ts) {
+@@ -443,9 +441,6 @@ export function loadSnapshotWatermark(runtimeRoot, changeName) {
+  */
+ export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null, sentinel = null) {
+   try {
+-    // sentinel 态搭水位车持久（2026-09-28-watcher-signal-widen 评审 P2 清偿：fakeCheckPending
+-    // 纯内存时 watcher 重启即丢——pending 翻格的消解承诺落空。快照键不动，sentinel 挂
+-    // 附加键（loadSnapshotWatermark 的形状校验只看 ts/archived，附加键对旧读方透明）。
+     const json = JSON.stringify(sentinel ? { ...snap, sentinel } : snap);
+     if (cacheObj && cacheObj.last === json) return { written: false };
+     writeFileSync(watcherSnapshotPath(runtimeRoot, changeName), json);
+@@ -456,10 +451,7 @@ export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj =
+   }
+ }
+ 
+-/** task-NN 完整 token 匹配（task-01 不证 task-010，负向前瞻词边界）。 */
+-function taskTokenRe(id) {
+-  return new RegExp(`${id}(?!\\d)`);
+-}
++/** task-NN token 边界判据已随 R1 退役移交收口侧（sentinel-assertions.taskTokenRe 单源）。 */
+ 
+ // ── 事件流读取（2026-09-23 watcher-alerts quick：哨兵告警可视化出口的纯读面）──
+ // 子进程侧 appendFileSync 落盘名与此处读取名同锚（runWatcherFromEnv 内联字符串的唯一对应）。
+@@ -507,60 +499,6 @@ export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
+   return { exists: true, events, warnings, badLines };
+ }
+ 
+-/**
+- * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
+- * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
+- * 消解态（2026-09-28-watcher-signal-widen）：无证据翻格记入 state.fakeCheckPending；
+- * 后续拍位证据补上（提交晚于勾选几十秒是常态——guidance-principles 36 秒实证）→ 发
+- * fake-check-cleared info 事件并清 pending，时间线可见「警告已消解」而非永挂。
+- */
+-function ruleFakeCheck(prev, next, state, ts, changeDir) {
+-  const flipped = [];
+-  const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
+-  for (const key of keys) {
+-    const pIds = new Set(((prev.files[key] || {}).checkedTasks) || []);
+-    for (const id of ((next.files[key] || {}).checkedTasks) || []) {
+-      if (!pIds.has(id)) flipped.push(id);
+-    }
+-  }
+-  const newCommits = newCommitsBetween(prev, next);
+-  const hasEvidence = (id) => {
+-    const re = taskTokenRe(id);
+-    const byCommit = newCommits.some((c) => re.test(c.subject || ''));
+-    const byReview = Object.entries(next.reviews || {}).some(([p, mtime]) => p.includes(`/tasks/${id}/`) && (prev.reviews || {})[p] !== mtime);
+-    return byCommit || byReview;
+-  };
+-  const out = [];
+-  const pending = (state.fakeCheckPending = state.fakeCheckPending || {});
+-  // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选＝成功标准
+-  // 镜像面（非 agent 工作单元），免 per-task 证据——本拍不挂警告不进 pending（收口侧哨兵同判据）。
+-  // 路径源=applySentinelRules 的 changeDir 入参（files 键是裸文件名，推不出路径——审查 P1 实证
+-  // 首版按键推导是从未生效的死代码）。
+-  let _mirroredIds = null
+-  try {
+-    if (changeDir) {
+-      _mirroredIds = mirroredTaskIds({
+-        tasksMd: readFileSync(join(changeDir, 'tasks.md'), 'utf8'),
+-        baselineTasksMd: readBaselineTasks({ specBase: dirname(dirname(changeDir)), change: basename(changeDir) }),
+-      })
+-    }
+-  } catch { /* 镜像判别 best-effort：读失败按无豁免从严 */ }
+-  const flippedReal = _mirroredIds ? flipped.filter((id) => !_mirroredIds.has(id)) : flipped
+-  const unevidenced = flippedReal.filter((id) => !hasEvidence(id));
+-  if (unevidenced.length > 0) {
+-    for (const id of unevidenced) pending[id] = true;
+-    out.push(mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts));
+-  }
+-  // 消解：pending 中证据到位 → info 事件（含证据形态：提交号或 review 变更）
+-  const cleared = Object.keys(pending).filter((id) => hasEvidence(id));
+-  for (const id of cleared) {
+-    delete pending[id];
+-    const c = newCommits.find((x) => taskTokenRe(id).test(x.subject || ''));
+-    out.push({ ts, kind: 'info', stage: null, rule: 'fake-check-cleared', severity: 'info', detail: `task ${id} 勾选证据补齐${c ? `（提交 ${c.hash}）` : '（review.json 变更）'}——前拍假勾选嫌疑消解`, provisional: true });
+-  }
+-  return out;
+-}
+-
+ const testDirtyOf = (dirtyCode) => (Array.isArray(dirtyCode) ? dirtyCode.filter((p) => p.startsWith('test/')) : []);
+ const normPath = (p) => String(p).replace(/\\/g, '/');
+ 
+@@ -755,7 +693,6 @@ export function applySentinelRules({ prev, next, baseEvents = [], state = null,
+     st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
+   }
+   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
+-  try { warnings.push(...ruleFakeCheck(prev, next, st, now, changeDir)); } catch { /* R1 本轮跳过 */ }
+   try { warnings.push(...ruleTestTamper(prev, next, st, now, bindResolveImpl)); } catch { /* R2 本轮跳过 */ }
+   let declaredScope = null;
+   try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }
+@@ -1008,10 +945,6 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+   // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
+   // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
+   let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
+-  // sentinel 态回补（评审 P2 清偿）：水位的 sentinel 附加键恢复 pending（旧水位无此键=空集，零变化）
+-  if (useWatermark && watermark.sentinel && watermark.sentinel.fakeCheckPending) {
+-    sentinelState.fakeCheckPending = { ...watermark.sentinel.fakeCheckPending };
+-  }
+   const watermarkCache = { last: null };
+   // eslint-disable-next-line no-constant-condition
+   while (true) {
+@@ -1069,7 +1002,7 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
+     const batch = events.concat(warnings);
+     prev = snap;
+     // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）
+-    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache, { fakeCheckPending: sentinelState.fakeCheckPending || {} });
++    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache);
+     if (batch.length === 0) {
+       if (Date.now() - lastActivityAt > IDLE_EXIT_MS) {
+         console.log('[watcher] 空闲超时自退（6h 无事件）');
+diff --git a/test/sentinel-mirror-waiver.test.mjs b/test/sentinel-mirror-waiver.test.mjs
+index 96a3337a..56bc77e6 100644
+--- a/test/sentinel-mirror-waiver.test.mjs
++++ b/test/sentinel-mirror-waiver.test.mjs
+@@ -92,7 +92,7 @@ test('④ mirroredTaskIds 边界：改写文本/重编号/基线缺行 → 非
+   assert.deepEqual([...mirroredTaskIds({ tasksMd: cur, baselineTasksMd: null })], [], '无基线 → 空集（从严）')
+ })
+ 
+-test('⑤ watcher R1 端到端：镜像翻格零证据不发 fake-check（changeDir 接线——审查 P1 死代码修正）', async () => {
++test('⑤ watcher R1 已退役（2026-09-29-watcher-fakecheck-retire）：镜像/覆写/无 changeDir 翻格均零实时嫌疑', async () => {
+   const { applySentinelRules } = await import('../src/watcher.js')
+   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
+   const spec = mkdtempSync(join(tmpdir(), 'ss-w-r1-'))
+@@ -103,20 +103,19 @@ test('⑤ watcher R1 端到端：镜像翻格零证据不发 fake-check（change
+   writeFileSync(join(spec, '.runtime', `route-hindsight-baseline-${change}.json`),
+     JSON.stringify({ schemaVersion: 1, change, design: null, tasks: BASELINE }))
+   const snap = (checked) => ({ ts: 1, archived: false, files: { 'tasks.md': { checkedTasks: checked } }, commits: [], reviews: {}, dirtyCode: [] })
++  const NL = String.fromCharCode(10)
+   const run = (tasksMdText) => {
+     writeFileSync(join(changeDir, 'tasks.md'), tasksMdText)
+     return applySentinelRules({ prev: snap([]), next: snap(['task-01']), state: null, changeDir })
+   }
+-  // 镜像勾选（裸键 files + changeDir 路径接线）→ 零 fake-check 警告
+-  const mirror = run(['- [x] task-01: 注入段渲染正确', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join('\n'))
+-  assert.ok(!mirror.warnings.some((w) => w.rule === 'fake-check'), `镜像翻格不应告警（实际：${JSON.stringify(mirror.warnings.map((w) => w.rule))}）`)
+-  // 覆写勾选零证据 → fake-check 警告（守卫在 watcher 面同样有效）
+-  const rewritten = run(['- [x] task-01: 实现行为 X 的真实工作单元', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join('\n'))
+-  assert.ok(rewritten.warnings.some((w) => w.rule === 'fake-check'), '覆写翻格零证据应告警（人判）')
+-  // changeDir=null（调用方未传）→ fail-safe 告警
+-  writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: 注入段渲染正确\n')
++  // 实时嫌疑警告已整体退役：勾选先于提交是协议正常时序，真裁决在收口哨兵（镜像豁免单源）+ 单拍门
++  const mirror = run(['- [x] task-01: 注入段渲染正确', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join(NL))
++  assert.ok(!mirror.warnings.some((w) => w.rule === 'fake-check'), '镜像翻格零警告')
++  const rewritten = run(['- [x] task-01: 实现行为 X 的真实工作单元', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join(NL))
++  assert.ok(!rewritten.warnings.some((w) => w.rule === 'fake-check'), '覆写翻格也零实时警告（终态由收口哨兵判）')
++  writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: 注入段渲染正确' + NL)
+   const nocd = applySentinelRules({ prev: snap([]), next: snap(['task-01']), state: null, changeDir: null })
+-  assert.ok(nocd.warnings.some((w) => w.rule === 'fake-check'), '无 changeDir 按无豁免从严')
++  assert.ok(!nocd.warnings.some((w) => w.rule === 'fake-check'), '无 changeDir 同样零实时警告')
+ })
+ 
+ test('⑥ 零提交不豁免（角度 A）：镜像全勾＋commits=[] → fake（空转变更不许过门）', () => {
+diff --git a/test/sentinel-rules.test.mjs b/test/sentinel-rules.test.mjs
+index e4d9e14d..8d70acda 100644
+--- a/test/sentinel-rules.test.mjs
++++ b/test/sentinel-rules.test.mjs
+@@ -48,13 +48,11 @@ const rulesOf = (warnings) => warnings.map((w) => w.rule)
+ 
+ // ───────────────────────────── R1 假勾选 ─────────────────────────────
+ 
+-test('R1 假勾选 正例：翻格零证据 → fake-check warning', () => {
++test('R1 已退役（2026-09-29-watcher-fakecheck-retire）：翻格零证据不产 fake-check——逐格勾选先于提交是协议正常时序', () => {
+   const prev = snap({ files: { 'tasks.md': { hash: 'h1', stage: 'tasks', checked: 1, total: 2, checkedTasks: ['task-01'] } } })
+   const next = snap({ ts: prev.ts + 3000, files: { 'tasks.md': { hash: 'h2', stage: 'tasks', checked: 2, total: 2, checkedTasks: ['task-01', 'task-02'] } } })
+   const { warnings } = run(prev, next)
+-  const w = warnings.find((x) => x.rule === 'fake-check')
+-  assert.ok(w, '应有 fake-check warning')
+-  assert.match(w.detail, /task-02/)
++  assert.equal(rulesOf(warnings).includes('fake-check'), false, '实时嫌疑警告已退役（真裁决在收口哨兵+单拍门）')
+ })
+ 
+ test('R1 负例：区间新提交 subject 含 task-02 → 不告警', () => {
+@@ -75,7 +73,7 @@ test('R1 负例：review.json mtime 变更构成证据 → 不告警', () => {
+   assert.equal(rulesOf(warnings).includes('fake-check'), false)
+ })
+ 
+-test('R1 token 边界钉：subject 含 task-020 不构成 task-02 证据', () => {
++test('R1 退役钉：token 边界语义移交收口侧（detectFakeCheckCompletion 的 taskTokenRe 同判据），watcher 实时面零产出', () => {
+   const prev = snap({ files: { 'tasks.md': { hash: 'h1', stage: 'tasks', checked: 0, total: 1, checkedTasks: [] } }, commits: [{ hash: 'aaa1111', subject: 'old', files: [] }] })
+   const next = snap({
+     ts: prev.ts + 3000,
+@@ -83,7 +81,7 @@ test('R1 token 边界钉：subject 含 task-020 不构成 task-02 证据', () =>
+     commits: [{ hash: 'bbb2222', subject: 'fix: task-020 typo', files: [] }, { hash: 'aaa1111', subject: 'old', files: [] }],
+   })
+   const { warnings } = run(prev, next)
+-  assert.ok(warnings.some((x) => x.rule === 'fake-check' && /task-02/.test(x.detail)), 'task-020 不得误证 task-02')
++  assert.equal(rulesOf(warnings).includes('fake-check'), false, 'R1 生成器已删（边界判据由收口哨兵单源承担）')
+ })
+ 
+ test('R1 负例：无翻格（checkedTasks 不变）零告警', () => {
+diff --git a/test/watcher.test.mjs b/test/watcher.test.mjs
+index fa5e1790..48dee77d 100644
+--- a/test/watcher.test.mjs
++++ b/test/watcher.test.mjs
+@@ -41,19 +41,13 @@ test('watcher-signal-widen: gate-run 与 config-change 事件', () => {
+   assert.ok(ev.some((e) => e.kind === 'config-change' && e.detail.includes('有变更')));
+ })
+ 
+-test('watcher-signal-widen: 假勾选 pending 消解路径', () => {
++test('fake-check 生成器已退役（2026-09-29-watcher-fakecheck-retire）：勾选零证据不产嫌疑警告', () => {
+   const st = createSentinelState(1000)
+   const filesWith = (ids) => ({ 'tasks.md': { hash: 'h', stage: 'tasks', checked: ids.length, total: 4, checkedTasks: ids } })
+   const snapWith = (ids, commits = []) => ({ ts: 2, archived: false, head: 'a', files: filesWith(ids), scan: null, commits, dirtyCode: [], scanStatus: null, reviews: {} })
+-  let r = applySentinelRules({ prev: snapWith([]), next: snapWith(['task-01']), state: st, now: 2000 })
+-  assert.ok(r.warnings.some((w) => w.rule === 'fake-check' && w.detail.includes('task-01')), JSON.stringify(r.warnings))
+-  assert.ok(st.fakeCheckPending['task-01'])
+-  r = applySentinelRules({ prev: snapWith(['task-01']), next: snapWith(['task-01'], [{ hash: 'abc1234', subject: 'feat: 落地（task-01）', files: [] }]), state: st, now: 3000 })
+-  const cleared = r.warnings.filter((e) => e.rule === 'fake-check-cleared')
+-  assert.ok(cleared.length === 1 && cleared[0].kind === 'info' && cleared[0].detail.includes('abc1234'), JSON.stringify(r.warnings))
+-  assert.ok(!st.fakeCheckPending['task-01'])
+-  r = applySentinelRules({ prev: snapWith(['task-01']), next: snapWith(['task-01']), state: st, now: 4000 })
+-  assert.ok(!r.warnings.some((e) => e.rule && e.rule.startsWith('fake-check')))
++  const r = applySentinelRules({ prev: snapWith([]), next: snapWith(['task-01']), state: st, now: 2000 })
++  assert.ok(!r.warnings.some((w) => w.rule && w.rule.startsWith('fake-check')), JSON.stringify(r.warnings))
++  assert.ok(st.fakeCheckPending === undefined, 'pending 状态面一并退役')
+ })
+ 
+ test('inferEvents: 文件首现带阶段推断 + provisional:true', () => {
+diff --git a/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/design.md b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/design.md
+new file mode 100644
+index 00000000..9fc50cb0
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T08:47:31.957Z
++---
++# 设计记录（Design Record）— 2026-09-29-watcher-fakecheck-retire
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++移除 watcher R1 fake-check 实时嫌疑警告：逐格勾选发生在提交前是现行协议的正常时序（提交=交付期、review.json=评审期），勾选时刻零证据不构成嫌疑；真裁决在收口哨兵（逐 task 证据）与单拍勾选硬门（2026-09-29-batch-tick-gate）。该警告在新协议下对每次合法逐格勾选都误报（用户裁决移除），pending 消解机制（fake-check-cleared）随之失去存在意义一并退役。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++watcher.js 删除 ruleFakeCheck 函数与调用点、state.fakeCheckPending（初始化/水位持久化两处）、仅此处使用的 readBaselineTasks/mirroredTaskIds import；水位写回 writeSnapshotWatermark 去掉 extra 参。读侧（alerts/timeline 命令）规则名无关，历史事件流中的存量 fake-check 行仍可渲染（无破坏）。watcher.test.mjs 生成器用例改写为退役钉（勾选零证据不产警告、pending 面不存在）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯删除只读观测规则——1) 乱序：事件流只追加，历史行渲染不受影响；2) 并发：无新共享态（反而删了一块）；3) 切换：水位旧键残留被忽略（读侧已无消费方）；4) 作用域：仅本仓观测面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险：失去实时人判信号——收口哨兵+单拍门已覆盖同判据的终态裁决，实时层只剩噪音（合法勾选全部闪嫌疑）；历史事件流中的存量 fake-check 事件仍会被 alerts/timeline 渲染（读侧规则名无关）——属历史数据如实展示非新增噪音。弃案：降为 info 级保留——半 retire 徒增状态面。
+diff --git a/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/proposal.md b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/proposal.md
+new file mode 100644
+index 00000000..e3509dec
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/proposal.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T08:47:31.956Z
++---
++# 提案书（Proposal）— 2026-09-29-watcher-fakecheck-retire
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:35fe61eab36fca5b159a7632b4d19e5745056d4fc414b8b509b4c053309f80c8:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++任务原话转写：动机：watcher R1 fake-check 实时警告（「tasks 勾选 task-NN 无对应提交…假勾选嫌疑，人判」）与现行勾选协议系统性冲突——逐格勾选本来就发生在提交之前（提交是交付期动作、review.json 是评审期产物），勾选时刻零证据是正常时序而非嫌疑；真裁决已在收口哨兵（detectFakeCheckCompletion 逐 task 证据）+ 单拍勾选硬门（2026-09-29-batch-tick-gate）。该警告现为纯噪音（每次合法逐格勾选都会闪一条待消解的嫌疑），用户裁决移除。
++
++成功标准：
++- ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.js 移除（含 state.fakeCheckPending 与仅此处使用的 import）；其余 watcher 规则零改动
++- watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm test + test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:4ec4957dcdf434f9d2fbf2cd4e8f3edea3ca3265eeb6aa0d228e78494fdd7695:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++按成功标准机械推导，共 3 条验收面：
++1. ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.js 移除（含 state.fakeCheckPending 与仅此处使用的 import）
++2. 其余 watcher 规则零改动
++3. watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm test + test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:9f6e32b23371ddafbb94539b3825dc4c55c237d1afcef623599d67d342a2ca39:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-watcher-fakecheck-retire 留痕重锚 -->
++1. ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.js 移除（含 state.fakeCheckPending 与仅此处使用的 import）
++2. 其余 watcher 规则零改动
++3. watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm test + test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/requirements.md b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/requirements.md
+new file mode 100644
+index 00000000..ec7bb2a0
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/requirements.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T08:47:31.957Z
++---
++# 需求规格（Requirements）— 2026-09-29-watcher-fakecheck-retire
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.j
++Given 系统就绪
++When ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.js 移除（含 state.fakeCheckPending 
++Then 行为符合本条标准描述
++
++### FR-02: 其余 watcher 规则零改动
++Given 系统就绪
++When 其余 watcher 规
++Then 零改动
++
++### FR-03: watcher-alerts/watcher-timeline/watcher 测试中 fake-c
++Given 测试 相关模块就绪
++When watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm t
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 test/sentinel-rules.test.mjs「R1 已退役…」「R1 退役钉…」+ test/watcher.test.mjs「fake-check 生成器已退役…」 -->
++test/sentinel-rules.test.mjs「R1 已退役…」「R1 退役钉…」+ test/watcher.test.mjs「fake-check 生成器已退役…」
++
++<!--AGENT:测试绑定FR-02 test/sentinel-rules.test.mjs R2 全系（20/20 复活佐证——helper 误伤修复后零回归） -->
++test/sentinel-rules.test.mjs R2 全系（20/20 复活佐证——helper 误伤修复后零回归）
++
++<!--AGENT:测试绑定FR-03 npm test 全量 679/0 + test:core fail 0 + lint 绿 -->
++npm test 全量 679/0 + test:core fail 0 + lint 绿
+diff --git a/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/tasks.md b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/tasks.md
+new file mode 100644
+index 00000000..2fb78caa
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/tasks.md
+@@ -0,0 +1,10 @@
++---
++author: flow-machine-draft
++---
++# 任务注册表（Tasks）— 2026-09-29-watcher-fakecheck-retire
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++
++- [x] task-01: watcher.js 移除 ruleFakeCheck + fakeCheckPending 状态面 + 水位持久化 + 专用 import
++- [x] task-02: 生成器用例改写为退役钉（勾选零证据不产嫌疑警告）；读侧 fixture 类用例核验不受影响
++- [x] task-03: 全量验证——watcher 族 + npm test + test:core + lint 全绿
+diff --git a/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/review.json b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-watcher-fakecheck-retire/review.json
+@@ -0,0 +1,31 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-29-watcher-fakecheck-retire",
++  "reviewer": "subagent",
++  "verdict": "pass",
++  "findings": [
++    {
++      "id": "F1",
++      "severity": "low",
++      "location": "src/watcher.js:455（taskTokenRe）、src/watcher.js:203（collectReviewMtimes 注释）、src/watcher.js:299（哨兵源四 reviews 采集）",
++      "claim": "退役残留：taskTokenRe 在 ruleFakeCheck 删除后全文零调用（仅 455 行定义），成死代码；collectReviewMtimes 注释仍称「假勾选证据源二」、buildSnapshot 仍采集 snap.reviews（哨兵源四），该面已无规则消费方但注释/采集未随退役清理。",
++      "evidence": "grep 全文：taskTokenRe 仅定义行一处命中；ruleTestTamper/ruleScopeDrift/ruleStall/inferEvents 均不消费 taskTokenRe 与 snap.reviews。",
++      "impact": "无行为影响（死代码与快照冗余字段，水位序列化兼容性反需 reviews 键稳定）；属清洁度与注释时效问题，非缺陷。成功标准与 design 未承诺清理此二者，不构成承诺违背。"
++    },
++    {
++      "id": "F2",
++      "severity": "info",
++      "location": "src/watcher.js:442 vs design.md 接口契约槽2",
++      "claim": "design 措辞「水位写回 writeSnapshotWatermark 去掉 extra 参」与代码形态有微出入：函数签名保留 sentinel=null 可选形参，实际是调用点（src/watcher.js:1008）去掉 sentinel 实参。行为面（水位不再持久化 sentinel 键）与声明一致；保留形参正是旧调用方（test/sentinel-rules.test.mjs:319,321 传 3-4 参）签名兼容的实现手段。",
++      "evidence": "src/watcher.js:442 签名 (runtimeRoot, changeName, snap, cacheObj = null, sentinel = null)；JSON.stringify(sentinel ? {...snap, sentinel} : snap) 在 sentinel=null 时退化为纯 snap；全 src 唯一运行时调用点不传第 5 参。",
++      "impact": "零功能影响；仅文档措辞精度备注，无需整改。"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序/迟到到达": "成立。事件流 append-only，读侧（readWatcherEvents src/watcher.js:476-503）按 kind/severity 过滤、规则名无关，存量 fake-check 行渲染不依赖任何已删代码路径；旧水位含 sentinel.fakeCheckPending 附加键时 loadSnapshotWatermark（429 行）形状校验只看 ts/archived，照常通过且消费方已不存在——无崩溃路径，设计声明属实。",
++    "并发写": "成立。本变更是纯删除，共享态只减不增（水位文件不再写 sentinel 键）；writeFileSync 覆盖写语义未动；无新写方、无新锁面。",
++    "切换/生命周期": "双向版本互操作安全：旧水位（含 sentinel.fakeCheckPending）被新代码忽略；新水位（无 sentinel 键）若被旧代码读，旧回补块以 watermark.sentinel 存在性判断短路回退空集（change.patch 删除块可证旧代码形态）。watcher 重启后 state 以 createSentinelState 重建，无 pending 残留态。R2 链路核验：testDirtyOf 现名正确（src/watcher.js:505，非误伤版 testDirtyOff）、ruleTestTamper 定义 520 行、applySentinelRules 699 行调用且 try/catch fail-open 保留——初版 helper 误伤已修复属实。",
++    "作用域": "成立。改动仅 src/watcher.js 观测面与三测试文件；真裁决判据单源在 src/sentinel-assertions.js（detectFakeCheckCompletion:105、detectBatchCheckCadence:142），收口侧 src/flow.js:820/838（哨兵）与 flow.js:881-883（单拍门 detectBatchCheckCadence+resolveBatchTickAction）均在场——「收口哨兵+单拍门覆盖同判据终态」披露属实。src 内 fakeCheck/fake-check 残留命中仅上述收口侧与 quick-audit.js，均系设计声明保留的真裁决面，watcher.js 本体零残留。"
++  },
++  "reviewedAt": "2026-09-29T09:17:08Z"
++}

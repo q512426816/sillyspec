@@ -1,0 +1,17 @@
+{"ts":1790671821967,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790671821967,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790671821967,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790671853366,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790671853366,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1790671853786,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790671864104,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790671864104,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1790671864534,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-02 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790672765134,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1790673190237,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790673190237,"kind":"task-done","stage":"tasks","detail":"checked 2→3","provisional":true}
+{"ts":1790673190410,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-03 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790673193856,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790673213495,"kind":"commit","stage":null,"detail":"5b108725","provisional":true}
+{"ts":1790673223414,"kind":"gate-run","stage":"verify","detail":"门实测 passed（10.4s） · 20260929091342","provisional":true}
+{"ts":1790673608221,"kind":"commit","stage":null,"detail":"0972a16c","provisional":true}

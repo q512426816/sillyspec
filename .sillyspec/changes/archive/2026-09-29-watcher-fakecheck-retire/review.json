@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-watcher-fakecheck-retire",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "退役残留：taskTokenRe 在 ruleFakeCheck 删除后全文零调用（仅 455 行定义），成死代码；collectReviewMtimes 注释仍称「假勾选证据源二」、buildSnapshot 仍采集 snap.revie",
+      "evidence": "grep 全文：taskTokenRe 仅定义行一处命中；ruleTestTamper/ruleScopeDrift/ruleStall/inferEvents 均不消费 taskTokenRe 与 snap.reviews。",
+      "location": "src/watcher.js:455（taskTokenRe）、src/watcher.js:203（collectReviewMtimes 注释）、src/watcher.js:299（哨兵源四 reviews 采集）"
+    },
+    {
+      "severity": "P3",
+      "title": "design 措辞「水位写回 writeSnapshotWatermark 去掉 extra 参」与代码形态有微出入：函数签名保留 sentinel=null 可选形参，实际是调用点（src/watcher.js:1008）去掉 senti",
+      "evidence": "src/watcher.js:442 签名 (runtimeRoot, changeName, snap, cacheObj = null, sentinel = null)；JSON.stringify(sentinel ? {...snap, sentinel} : snap) 在 sentinel=null 时退化为纯 snap；全 src 唯一运行时调用点不传第 5 参。",
+      "location": "src/watcher.js:442 vs design.md 接口契约槽2"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序/迟到到达": "成立。事件流 append-only，读侧（readWatcherEvents src/watcher.js:476-503）按 kind/severity 过滤、规则名无关，存量 fake-check 行渲染不依赖任何已删代码路径；旧水位含 sentinel.fakeCheckPending 附加键时 loadSnapshotWatermark（429 行）形状校验只看 ts/archived，照常通过且消费方已不存在——无崩溃路径，设计声明属实。",
+    "并发写": "成立。本变更是纯删除，共享态只减不增（水位文件不再写 sentinel 键）；writeFileSync 覆盖写语义未动；无新写方、无新锁面。",
+    "切换/生命周期": "双向版本互操作安全：旧水位（含 sentinel.fakeCheckPending）被新代码忽略；新水位（无 sentinel 键）若被旧代码读，旧回补块以 watermark.sentinel 存在性判断短路回退空集（change.patch 删除块可证旧代码形态）。watcher 重启后 state 以 createSentinelState 重建，无 pending 残留态。R2 链路核验：testDirtyOf 现名正确（src/watcher.js:505，非误伤版 testDirtyOff）、ruleTestTamper 定义 520 行、applySentinelRules 699 行调用且 try/catch fail-open 保留——初版 helper 误伤已修复属实。",
+    "作用域": "成立。改动仅 src/watcher.js 观测面与三测试文件；真裁决判据单源在 src/sentinel-assertions.js（detectFakeCheckCompletion:105、detectBatchCheckCadence:142），收口侧 src/flow.js:820/838（哨兵）与 flow.js:881-883（单拍门 detectBatchCheckCadence+resolveBatchTickAction）均在场——「收口哨兵+单拍门覆盖同判据终态」披露属实。src 内 fakeCheck/fake-check 残留命中仅上述收口侧与 quick-audit.js，均系设计声明保留的真裁决面，watcher.js 本体零残留。"
+  },
+  "reviewedAt": "2026-09-29T09:17:08Z"
+}
