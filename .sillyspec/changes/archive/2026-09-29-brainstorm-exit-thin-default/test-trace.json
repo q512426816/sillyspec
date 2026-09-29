@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-brainstorm-exit-thin-default",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-01",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-02",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-03",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-04",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-05",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-06",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-07",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-09-29-brainstorm-exit-thin-default:flow:FR-08",
+      "tests": [
+        "test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-brainstorm-exit-thin-default"
+    }
+  ]
+}

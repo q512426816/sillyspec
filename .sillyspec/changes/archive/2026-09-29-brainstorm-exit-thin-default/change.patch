@@ -1,0 +1,383 @@
+diff --git a/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/flow-state.yaml b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/flow-state.yaml
+new file mode 100644
+index 00000000..e9bc582d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 951b59a51286a7a5028f59c17b7dacefb0e1c0fe
++updatedAt: '2026-09-28T23:27:08.961Z'
++baseline_sha256: dcfca57d62ff40e31bf6e7c338175c3b6822a1fcfc6b5c8d0dba6888d51bd832
++
+diff --git a/src/design-facts.js b/src/design-facts.js
+index 80ba72f1..11c31dd6 100644
+--- a/src/design-facts.js
++++ b/src/design-facts.js
+@@ -295,7 +295,9 @@ export function generateDesignSkeleton({ changeName, decisionsText, author, now
+   // P2-e provenance 戳（noai-ir-roadmap §5）：CLI 骨架出品的可审计标记——铁律 8 收窄为
+   //「骨架优先，仅手写补文档才手填元数据」的依据（validateMetadata 未来可据此只认 CLI 戳）
+   lines.push(`generated_by: sillyspec-design-init`)
+-  lines.push('scale: large')
++  // scale 不预填（2026-09-29-brainstorm-exit-thin-default）：此前预填 large 是静默厚默认——
++  // 不主动改就是五阶段；现由 brainstorm Step 8 规模评估按复杂度/上下文轴落值，拿不准默认 small
++  lines.push('scale: ""  # TODO：Step 8 规模评估落值——单上下文可吞吐=small（flow start 收编）；需 Wave 编排/上下文分片/多阶段治理=large（run plan）；拿不准 small')
+   lines.push('---')
+   lines.push('')
+   lines.push(`# 设计文档（Design）— ${change}`)
+diff --git a/src/run/complete.js b/src/run/complete.js
+index 6df60431..a1167d71 100644
+--- a/src/run/complete.js
++++ b/src/run/complete.js
+@@ -967,10 +967,12 @@ export async function completeStep(pm, progress, stageName, cwd, outputText, inp
+       // 当 scan 未完成时会误推 scan（回头路），与 brainstorm 已完成、应进入 plan/quick 矛盾。
+       // 历史教训：曾因此让 agent 在 brainstorm 完成后被误导去跑 scan。
+       const _bscale = readDesignScale(specBase, changeName)
+-      if (_bscale === 'small') {
+-        console.log(`\n👉 brainstorm 已完成（small）。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口）`)
++      if (_bscale === 'large') {
++        console.log(`\n👉 brainstorm 已完成（large）。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（完整五阶段）`)
+       } else {
+-        console.log(`\n👉 brainstorm 已完成。下一步：sillyspec run plan${changeName ? ` --change ${changeName}` : ''}（scale=large 或未标 small 走完整 plan）`)
++        // 未标/small 默认收编轻量道（2026-09-29-brainstorm-exit-thin-default：此前「未标走完整 plan」
++        // 是缺省即厚；翻转与 thin-default-flip 同哲学——升厚留运行时证据＋用户决策）
++        console.log(`\n👉 brainstorm 已完成（scale=${_bscale || '未标，默认 small'}）。下一步：sillyspec flow start --change ${changeName}（轻量变更收编头脑风暴产物，2 调用收口；实测失败自动升厚 / --upgrade-thick 用户决策）`)
+       }
+     } else if (stageName === 'quick') {
+       // quick 是收尾阶段（辅助流程，不走主链 scan→archive），完成后该提交，而非推 scan。
+diff --git a/src/stages/brainstorm.js b/src/stages/brainstorm.js
+index 99ea2490..78032775 100644
+--- a/src/stages/brainstorm.js
++++ b/src/stages/brainstorm.js
+@@ -54,10 +54,11 @@ export const definition = {
+ - 多项目且用户未指定：列出项目列表，需要用户确认本次需求属于哪个子项目
+ 
+ ### 早期规模筛查（判断是否该走轻量变更）
+-加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模：
+-- **明显 small**（满足：预计改动 ≤ 2 个文件、单模块、无 schema/API/状态机/权限变更；或属于改文案/修 bug/样式调整/配置微调等纯执行类）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
+-- **拿不准或明显 large**（涉及多模块、schema、状态流转、新架构等）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
+-- 这是**粗判**，只为让明显的小变更免走完整设计流程；不确定就继续，后续「生成规范文件」步骤会基于 design.md 文件清单做精判兜底。
++加载上下文后，用需求描述 + 模块上下文**粗判**本次变更规模（判据同 Step 8 复杂度/上下文轴——2026-09-29-brainstorm-exit-thin-default）：
++- **明显 small**（满足：单上下文可吞吐的纯执行类——改文案/修 bug/样式调整/配置微调，预计无 Wave 编排/上下文分片需求）→ 输出：「此变更规模较小，建议直接走轻量变更」+ 一句依据，给出建议命令 \`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"\`（2 调用协议收口）。用户同意则本阶段可在此收尾（\`--done\` 并提示转轻量变更），不必继续走完整设计流程。
++- **明显 large**（需要 Wave 并行编排/上下文分片/多阶段治理，或用户显式要求完整流程）→ 不要提示轻量变更，继续进入下一步「对话式探索与需求澄清」。
++- **拿不准 → 继续探索**（这正是头脑风暴的职责；澄清完成后 Step 8 按同轴精判——注意：经过头脑风暴澄清的需求通常已可单上下文吞吐，出口默认收编轻量道）。
++- 这是**粗判**，只为让明显的纯执行小变更免走设计流程；后续「生成规范文件」步骤做精判兜底。
+ 
+ ### 输出
+ 项目现状理解摘要（3-5 句话，关键约定和架构决策）+ 可能涉及的模块列表 + 本次需求所属子项目 + （如命中）quick 建议
+@@ -517,11 +518,12 @@ status: passed | needs-user-input | blocked | skipped
+       prompt: `按变更规模生成规范文件并给出实现路径建议（设计已在前置步骤确认过，本步不再暂停等确认，生成后展示摘要即可）。
+ 
+ ### 规模评估（展示前先做）
+-读取 design.md 的「文件变更清单」，判断本次变更规模：
+-- **small（小变更）**：改动 ≤ 2 个文件、单模块、无跨模块依赖、无状态机/schema/API 变更
+-- **large（大变更）**：不满足上述任意一条
++按**复杂度/上下文轴**判断本次变更规模（2026-09-29-brainstorm-exit-thin-default：此前文件数轴「≤2 文件才 small」与选道表第 3 行的复杂度措辞不一致，且模糊需求探索完很少只碰 2 文件——出口几乎必然五阶段，实测坐实）：
++- **small（收编轻量道）**：单上下文可吞吐——预计无需 Wave 并行编排、无需上下文分片（单会话吃得下全部任务）、无多阶段治理/设计期人机对抗需求
++- **large（完整五阶段）**：需要 Wave 并行编排、或单任务规模大需上下文分片、或多阶段治理、或用户显式要求完整流程
++- **拿不准 → small**（与 thin-default-flip 同哲学：预判反诱发误升厚——R16 实证；升厚留运行时证据：实测失败自动升厚＋--upgrade-thick 用户决策）
+ 在 design.md frontmatter 写入 \`scale: small\` 或 \`scale: large\`（frontmatter 不存在则补 \`author\`/\`created_at\`/\`scale\`）。规模决定下面的产物范围和实现路径。
+-（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design.md 文件清单做精判兜底。）
++（注：早期「加载项目上下文」步骤已做过一次粗判并可能建议过走 quick；此处基于 design 方案实质做精判兜底——判据同轴。）
+ 
+ ### 操作
+ 1. **按规模生成规范文件**：
+diff --git a/test/brainstorm-exit-thin-default.test.mjs b/test/brainstorm-exit-thin-default.test.mjs
+new file mode 100644
+index 00000000..06679030
+--- /dev/null
++++ b/test/brainstorm-exit-thin-default.test.mjs
+@@ -0,0 +1,66 @@
++/**
++ * brainstorm-exit-thin-default.test.mjs — 头脑风暴出口默认收编轻量道
++ * （2026-09-29-brainstorm-exit-thin-default）
++ *
++ * 覆盖验收面：
++ *   ① design-init 骨架不预填 scale: large（此前静默厚默认）；留 TODO 位由 Step 8 落值；
++ *   ② readDesignScale 三态：`scale: "" # 注释` → null（未标→收编默认）；small/large 正常读取；
++ *   ③ Step 8 规模评估与 Step 2 早期筛查指引换轴——复杂度/上下文措辞在场、文件数轴措辞退场、
++ *      拿不准默认 small（Step 8）/继续探索（Step 2）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { generateDesignSkeleton } from '../src/design-facts.js'
++import { readDesignScale } from '../src/run/gates.js'
++import { getStageSteps } from '../src/run/shared.js'
++import { makeRepo, cleanup } from './_complete-step-harness.mjs'
++
++const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++
++function rmQuiet(p) {
++  try { rmSync(p, { recursive: true, force: true }) } catch { /* Windows EPERM 可接受 */ }
++}
++
++test('① design-init 骨架不预填 large——scale 留 TODO 位由 Step 8 落值', () => {
++  const sk = generateDesignSkeleton({ changeName: '2026-09-29-x', author: 't', now: '2026-09-29 12:00:00' })
++  assert.ok(!/^scale: large$/m.test(sk), '不再预填 scale: large（静默厚默认摘除）')
++  assert.match(sk, /scale: ""/, '留空位＋落值指引注释')
++  assert.match(sk, /拿不准 small/, '注释含默认指引')
++})
++
++test('② readDesignScale 三态：空串注释→null；small/large 正常', () => {
++  const root = mkdtempSync(join(tmpdir(), 'ss-betd-'))
++  const specBase = join(root, '.sillyspec')
++  const cd = join(specBase, 'changes', 'c1')
++  mkdirSync(cd, { recursive: true })
++  const fm = (scale) => writeFileSync(join(cd, 'design.md'), `---\nauthor: t\ncreated_at: 2026-09-29\n${scale}\n---\n# D\n`)
++  fm('scale: ""  # TODO：Step 8 落值——单上下文可吞吐=small；拿不准 small')
++  assert.equal(readDesignScale(specBase, 'c1'), null, '空串注释 → null（未标→收编默认分支）')
++  fm('scale: small')
++  assert.equal(readDesignScale(specBase, 'c1'), 'small')
++  fm('scale: large  # 注释')
++  assert.equal(readDesignScale(specBase, 'c1'), 'large')
++  rmQuiet(root)
++})
++
++test('③ 指引换轴：Step 8 复杂度措辞＋拿不准默认 small；Step 2 拿不准继续探索；文件数轴退场', async () => {
++  const { cwd } = makeRepo('betd-')
++  const defs = await getStageSteps('brainstorm', cwd, null)
++  const step8 = defs.find((s) => s.name === '生成规范文件')
++  const step2 = defs.find((s) => s.name === '加载项目上下文')
++  assert.ok(step8 && step2, '两步定义在场')
++  assert.match(step8.prompt, /单上下文可吞吐/, 'Step 8 复杂度/上下文轴措辞')
++  assert.match(step8.prompt, /拿不准 → small/, 'Step 8 拿不准默认 small')
++  assert.ok(!/≤ 2 个文件/.test(step8.prompt), 'Step 8 文件数轴退场')
++  assert.match(step8.prompt, /轻量变更收编头脑风暴产物，2 调用收口/, 'small 出口=收编')
++  assert.match(step2.prompt, /拿不准 → 继续探索/, 'Step 2 拿不准继续探索（头脑风暴职责）')
++  assert.ok(!/≤ 2 个文件/.test(step2.prompt), 'Step 2 文件数轴退场')
++  assert.match(step2.prompt, /出口默认收编轻量道/, 'Step 2 点明出口默认')
++  rmQuiet(cwd)
++})
++
++process.on('exit', cleanup)
+diff --git a/test/design-facts.test.mjs b/test/design-facts.test.mjs
+index 0566e836..f0d34e89 100644
+--- a/test/design-facts.test.mjs
++++ b/test/design-facts.test.mjs
+@@ -405,8 +405,8 @@ console.log('--- frontmatter / 标题 / 默认值兜底 ---')
+ {
+   const s = generateDesignSkeleton({ changeName: 'demo-change', author: 'alice', now: '2026-09-07 10:00:00' })
+   assert(s.startsWith('---\n'), 'frontmatter 起始')
+-  assert(s.includes('author: alice') && s.includes('created_at: 2026-09-07 10:00:00') && s.includes('scale: large'),
+-    'frontmatter 三字段（author/created_at/scale: large）')
++  assert(s.includes('author: alice') && s.includes('created_at: 2026-09-07 10:00:00') && s.includes('scale: ""'),
++    'frontmatter 三字段（author/created_at/scale 留空待 Step 8 落值——2026-09-29-brainstorm-exit-thin-default 起不预填 large）')
+   assert(s.includes('# 设计文档（Design）— demo-change'), 'H1 标题含变更名')
+   const def = generateDesignSkeleton({})
+   assert(def.includes('# 设计文档（Design）— <变更简述>'), 'changeName 缺省 → <变更简述> 占位')
+diff --git a/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/design.md b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/design.md
+new file mode 100644
+index 00000000..3fa42b2e
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T23:27:08.940Z
++---
++# 设计记录（Design Record）— 2026-09-29-brainstorm-exit-thin-default
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++做法：三处摘厚默认——① design-facts.js generateDesignSkeleton 不再预填 scale: large，留 TODO 位（含落值指引注释）；② brainstorm.js Step 8 精判与 Step 2 粗判判据从文件数轴（≤2 文件）换复杂度/上下文轴（small=单上下文可吞吐：无 Wave 编排/上下文分片/多阶段治理需求；large=有；拿不准→small[Step8]/继续探索[Step2]，与选道表第 3 行复杂度措辞对齐）；③ complete.js 收口提示翻转——large→run plan，small/未标→flow start 收编（readDesignScale 对空串注释返回 null 落默认分支）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++接口契约：readDesignScale 解析不变（/^scale:["']?(\w+)/——空串注释无 word 捕获→null）；design 骨架 frontmatter scale 为 ""；AGENTS.md 模板零改动（选道表本就是复杂度措辞，无版本 bump 需要）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++边界并发四问：不适用：纯文案/默认值改动，无状态无 IO 新面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险：① 拿不准默认 small 可能低估真复杂变更——兜底三层：实测失败自动升厚（既有）、--upgrade-thick 用户决策（既有）、收编后 thin 道自身门禁（实测/评审/patch）；② 模板标题下 agent 忘写 scale→null→默认收编，行为与 small 一致（符合设计）；③ premise-fail 型需求（前提不成立）仍要走满 8 步——行为演习发现的真实摩擦，属早期短路道新课题（记残留在变更报告）。行为级闭环验收：小白鼠带模糊中等规模需求（测试慢优化）走全链——入口选道进头脑风暴（负面信号命中）、Step 8 按新判据落 scale=small、CLI 指路 flow start 收编、下一步命令即收编命令——原始问题「头脑风暴后直奔五阶段」的反例实测成立。
+diff --git a/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/proposal.md b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/proposal.md
+new file mode 100644
+index 00000000..46529147
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/proposal.md
+@@ -0,0 +1,48 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T23:27:08.939Z
++---
++# 提案书（Proposal）— 2026-09-29-brainstorm-exit-thin-default
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:5fa0228aeefcf454496f61e8ea6cd40e621bfa81c94fb258c69d58c686960f40:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++任务原话转写：头脑风暴出口默认收编轻量道：判据轴从文件数换成复杂度/上下文轴。
++
++动机：用户原始问题的另一半——实测头脑风暴完成后 agent 直奔 plan/execute 五阶段而非转轻量收编。三重厚偏向：① design-init 骨架预填 scale: large（不主动改就是厚）；② Step 8/Step 2 规模判据是文件数轴（≤2 文件才 small——模糊需求探索完很少只碰 2 文件，与选道表第 3 行自己的复杂度措辞不一致）；③ 收口提示「scale=large 或未标 small 走完整 plan」缺省即厚。与 thin-default-flip 哲学相悖（R16：预判反诱发误升厚，升厚留运行时证据＋用户决策）。
++
++成功标准：
++- design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规模评估落值）
++- Step 8 精判与 Step 2 粗判的判据换轴：small=单上下文可吞吐（无 Wave 并行编排/上下文分片/多阶段治理需求）→ flow start 收编 2 调用收口；large=需要编排/分片/治理或用户显式要求；拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
++- 收口提示翻转：未标/small → flow start 收编；large → run plan
++- 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿；行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:d12444aed16e9aa5dd55fe459a697e064259c930239430c24550b812047e9350:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++按成功标准机械推导，共 8 条验收面：
++1. design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规模评估落值）
++2. Step 8 精判与 Step 2 粗判的判据换轴：small=单上下文可吞吐（无 Wave 并行编排/上下文分片/多阶段治理需求）→ flow start 收编 2 调用收口
++3. large=需要编排/分片/治理或用户显式要求
++4. 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
++5. 收口提示翻转：未标/small → flow start 收编
++6. large → run plan
++7. 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿
++8. 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:7217c834f89e431a299a7562416220dea14bca5efad01ac9aa6daf73c49a4d61:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-brainstorm-exit-thin-default 留痕重锚 -->
++1. design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规模评估落值）
++2. Step 8 精判与 Step 2 粗判的判据换轴：small=单上下文可吞吐（无 Wave 并行编排/上下文分片/多阶段治理需求）→ flow start 收编 2 调用收口
++3. large=需要编排/分片/治理或用户显式要求
++4. 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
++5. 收口提示翻转：未标/small → flow start 收编
++6. large → run plan
++7. 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿
++8. 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/requirements.md b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/requirements.md
+new file mode 100644
+index 00000000..abc4b3b0
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/requirements.md
+@@ -0,0 +1,74 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T23:27:08.940Z
++---
++# 需求规格（Requirements）— 2026-09-29-brainstorm-exit-thin-default
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规
++Given 系统就绪
++When design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规模评估落值）
++Then 行为符合本条标准描述
++
++### FR-02: Step 8 精判与 Step 2 粗判的判据换轴：small=单上下文可吞吐（无 Wave 并行编
++Given 系统就绪
++When Step 8 精判与 Step 2 粗判的判据换轴：small=单上下文可吞吐（无 Wave 并行编排/上下文分片/多阶段治理需求）
++Then flow start 收编 2 调用收口
++
++### FR-03: large=需要编排/分片/治理或用户显式要求
++Given 系统就绪
++When large=需要编排/分片/治理或用户显式要求
++Then 行为符合本条标准描述
++
++### FR-04: 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
++Given 系统就绪
++When 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
++Then 行为符合本条标准描述
++
++### FR-05: 收口提示翻转：未标/small → flow start 收编
++Given 系统就绪
++When 收口提示翻转：未标/small
++Then flow start 收编
++
++### FR-06: large → run plan
++Given 系统就绪
++When large
++Then run plan
++
++### FR-07: 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿
++Given 系统就绪
++When 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿
++Then 行为符合本条标准描述
++
++### FR-08: 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
++Given 系统就绪
++When 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/brainstorm-exit-thin-default.test.mjs「①骨架不预填／②scale 三态解析／③指引换轴」＋模板与渲染回归 12/12
+diff --git a/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/tasks.md b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/tasks.md
+new file mode 100644
+index 00000000..418571b6
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-brainstorm-exit-thin-default/tasks.md
+@@ -0,0 +1,19 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-28T23:27:08.940Z
++---
++# 任务注册表（Tasks）— 2026-09-29-brainstorm-exit-thin-default
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规模评估落值）
++- [x] task-02: Step 8 精判与 Step 2 粗判的判据换轴：small=单上下文可吞吐（无 Wave 并行编排/上下文分片/多阶段治理需求）→ flow start 收…
++- [x] task-03: large=需要编排/分片/治理或用户显式要求
++- [x] task-04: 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
++- [x] task-05: 收口提示翻转：未标/small → flow start 收编
++- [x] task-06: large → run plan
++- [x] task-07: 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿
++- [x] task-08: 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
++- [x] task-06: 三处厚默认摘除＋判据换轴＋测试三件＋行为级闭环演习（模糊需求→头脑风暴→scale=small→收编指路，2026-09-29 出口演习仓实证）
