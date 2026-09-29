@@ -1318,7 +1318,7 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(), 
   }
   if (!artifact || !Array.isArray(artifact.entries) || artifact.entries.length === 0) {
     console.log(`📭 无 agent 日志登记产物（${toPosix(artifactPath)}）。`);
-    console.log('   run <stage> 命令在 agent 环境内执行时自动登记；或用 agent-log --detect 现场探测。');
+    console.log('   run <stage> / flow <子命令> 在 agent 环境内执行时自动登记；或用 agent-log --detect 现场探测。');
     return;
   }
   console.log(`📄 本地 agent 会话日志登记（${toPosix(artifactPath)}，${artifact.entries.length} 条）`);
@@ -1332,5 +1332,5 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(), 
       .filter(Boolean).join(' / ');
     console.log(`      ${meta} / 见过 ${e.invocations} 次 / 最近 ${e.last_seen_at}${e.last_command ? ` / ${e.last_command}` : ''}`);
   }
-  console.log('   协议: docs/platform-agent-log-protocol.md（run 命令自动 REST 上报平台 POST /api/agent-logs；此产物为本地留底）');
+  console.log('   协议: docs/platform-agent-log-protocol.md（run / flow 命令自动 REST 上报平台 POST /api/agent-logs；此产物为本地留底）');
 }

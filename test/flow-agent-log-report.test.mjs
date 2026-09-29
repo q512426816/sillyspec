@@ -146,3 +146,34 @@ test('④ 非 agent 环境：不写盘不报错，协议面不受影响', () => 
   assert.equal(readArtifact(cwd), null, '无 agent 环境不写 agent-session-log.json')
   rmSync(cwd, { recursive: true, force: true })
 })
+
+test('⑤ flow amend-draft 登记面：last_command=amend-draft 前缀；非法变更名被白名单拦在登记之前（评审 P1/P2 修复）', () => {
+  const { cwd } = makeRepo()
+  const change = '2026-09-29-flow-alr-t5'
+  const agentLog = join(cwd, 'fake-agent-session.jsonl')
+  writeFileSync(agentLog, '{}\n')
+
+  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog }).status, 0)
+  const a = cli(cwd, ['flow', 'amend-draft', '--change', change], { agentLog })
+  assert.equal(a.status, 0, `amend-draft 失败: ${a.stdout}\n${a.stderr}`)
+  assert.match(a.stdout, /留痕重锚/)
+
+  let art = readArtifact(cwd)
+  let e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
+  assert.ok(e, '条目在')
+  assert.equal(e.change_key, change)
+  assert.match(e.last_command, /^amend-draft( --.*)?$/)
+  const invocationsBefore = e.invocations
+
+  // 非法变更名（路径分隔符）在 amend-draft 分支被白名单 exit 2 拦截，登记不发生（invocations 不变）
+  const bad = cli(cwd, ['flow', 'amend-draft', '--change', '../evil'], { agentLog })
+  assert.equal(bad.status, 2, '非法变更名应 exit 2')
+  assert.match(bad.stderr, /非法变更名/)
+  art = readArtifact(cwd)
+  e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
+  assert.ok(e, '条目仍在')
+  assert.equal(e.invocations, invocationsBefore, '被拒调用不递增 invocations（登记先于校验的 P1 已修）')
+  assert.match(e.last_command, /^amend-draft( --.*)?$/, 'last_command 不被非法调用改写')
+  rmSync(cwd, { recursive: true, force: true })
+})
+

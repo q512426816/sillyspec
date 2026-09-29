@@ -399,7 +399,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
           prototypePaths.length > 0
             ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
             : null,
-          `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+          `【你要做的】① spec 阶段先定稿任务面：把 tasks.md 覆写为真实实现步骤（全 \`- [ ]\`——代码开动前工作队列先存在）；`,
+          `② 执行走任务循环（openspec 式）：对 tasks.md 每个 pending 任务——展示「Working on task N/M: <任务>」→ 做 → 勾一格（\`- [ ]\`→\`- [x]\`）→ 下一个；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
           `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
           `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；`,
@@ -618,7 +619,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
     `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
-    `   纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
+    `   纪律：spec 期定稿任务面（覆写为真实实现步骤全 \`- [ ]\`）；执行走任务循环——Working on task N/M → 做一件 → 勾一格 → 下一个（tasks.md 是进度源，勿攒一把勾——收口硬门拒单拍多格）；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -683,7 +684,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot, 
  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
  */
-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false }) {
+export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
   const changeDir = join(specBase, 'changes', change)
   const st = readFlowState(changeDir)
   if (!st) {
@@ -865,23 +866,33 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         }
       }
     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
-    // 勾选节奏 advisory（2026-09-26-thin-check-cadence）：watcher 事件流 task-done 单拍跳 ≥2 格 =
-    // 一把全勾——per-task 时间戳/进度信号面失真（39 条流零例外实证）。warn 不阻断（对齐上方
-    // 「任务勾选缺失」advisory 档位：节奏是习惯问题非造假主张，L0 硬门另有其人）；观测旁路
-    // 缺席（无流/无事件/读失败）静默跳过——fail-open，watcher 非真相源。
+    // 勾选节奏门（2026-09-26-thin-check-cadence 起 advisory；2026-09-29-batch-tick-gate 升硬门）：
+    // watcher 事件流 task-done 单拍跳 ≥2 格 = 一把全勾——per-task 时间戳/进度信号面失真（39 条流零
+    // 例外实证 + 三次复发 0→6/0→3）。openspec 式逐格纪律的机器牙齿：非镜像任务面存在 → 拒收；
+    // 镜像-only（成功标准镜像非 agent 工作单元）批量勾是常态 → advisory 静默（镜像豁免哲学）；
+    // 观测旁路缺席（无流/读失败）→ 跳过（fail-open，watcher 非真相源）；--allow-batch-tick 显式旁路留痕。
     try {
       const { readWatcherEvents } = await import('./watcher.js')
       const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
       const stream = readWatcherEvents({ runtimeRoot, change })
       const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
       if (batch && (_sentinelNonMirrorTasks === null || _sentinelNonMirrorTasks > 0)) {
-        // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：纯镜像任务面（成功标准镜像非 agent 工作单元）
-        // 批量勾选是常态非纪律失守——advisory 静默；仅覆写任务面存在时提示边干边勾。
         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
-        console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选`)
-        console.warn('   规范动作是完成一个工作单元即勾一格（- [ ] → - [x]）；一把全勾使进度信号与 per-task 时间戳失真（本次放行不阻断）')
+        if (allowBatchTick === true) {
+          try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }
+          console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
+        } else if (_sentinelNonMirrorTasks === null) {
+          // 哨兵 fail-open（git log 不可用等）时非镜像面未知——维持 advisory 不误拒
+          console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选（哨兵面未知，advisory）`)
+        } else {
+          console.error(`🚫 单拍勾选拒收：watcher 观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），非镜像勾选任务 ${_sentinelNonMirrorTasks} 个`)
+          console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
+          appendTelemetry({ sentinel: 'batch-tick', jump: batch.detail })
+          reportMidFail('ledger')
+          process.exit(1)
+        }
       }
-    } catch { /* 节奏 advisory best-effort：读流失败静默 */ }
+    } catch { /* 节奏门 best-effort：读流失败静默（fail-open——观测缺席不阻断） */ }
     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
     if (gate && gate.action === 'fail') {
       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
@@ -1641,13 +1652,16 @@ export async function cmdFlow(args, cwd, specDir = null) {
         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
       }
     }
-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
+    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), allowBatchTick: hasFlag('--allow-batch-tick') })
   }
   if (sub === 'amend-draft') {
     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
     // 首版原文 body 永存（切片四 editRatio 基准）。
     const change = getFlag('--change')
     if (!change) { console.error('❌ flow amend-draft 需 --change <名>'); process.exit(2) }
+    // 变更名白名单与 start/status/done 同门（评审 P1 修复：amend-draft 此前无校验，未检字符串
+    // 会经 reportAgentLog 的 context.change_key 进产物与平台上报——与「白名单名无注入面」的设计声明对齐）
+    validateChangeName(change)
     await reportAgentLog(change, sub)
     const changeDir = join(specBase, 'changes', change)
     const runtimeRoot = resolveRuntimeRoot({}, specBase)

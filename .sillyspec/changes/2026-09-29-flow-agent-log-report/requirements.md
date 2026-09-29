@@ -40,7 +40,7 @@ Then 行为符合本条标准描述
 ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
 
 <!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
-test/flow-agent-log-report.test.mjs ①（start 登记 change_key）＋②（status 重入 invocations/change_key 持久）＋③（done 周期 last_command=done）
+test/flow-agent-log-report.test.mjs ①（start 登记 change_key）＋②（status 重入 invocations/change_key 持久）＋③（done 周期 last_command=done）＋⑤（amend-draft 登记 + 非法变更名白名单拦截——评审 P1/P2 修复面）
 
 <!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
 test/flow-agent-log-report.test.mjs ①（quick_id 恒空/change_key 互斥面）＋ test/agent-session-log.test.mjs（recordAgentLogInvocation 通道本体：own 打标/推送收敛/合并语义）

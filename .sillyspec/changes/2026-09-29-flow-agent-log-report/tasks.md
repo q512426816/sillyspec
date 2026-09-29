@@ -14,3 +14,4 @@ created_at: 2026-09-29T07:37:47.369Z
 - [x] task-04: run 族既有行为不变（agent-session-log/cli-top-level-aliases/flow-protocol/flow-status-heartbeat/flow-parity 回归 34/34 绿）
 - [x] task-05: 新增 test/flow-agent-log-report.test.mjs 四用例（红→绿实证：实现前 ①②③ 红）
 - [x] task-06: lint 绿（npm run lint 全过；全量测试面 flow done CLI 亲测）
+- [x] task-07: 独立评审修复——amend-draft 分支补 validateChangeName（P1：未检字符串不再进 change_key/上报）、新增用例⑤覆盖 amend-draft 登记面与非法名拦截（P2）、agent-log 查询面文案补 flow 族（P3）
