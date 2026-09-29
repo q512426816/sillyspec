@@ -92,7 +92,7 @@ test('④ mirroredTaskIds 边界：改写文本/重编号/基线缺行 → 非�
   assert.deepEqual([...mirroredTaskIds({ tasksMd: cur, baselineTasksMd: null })], [], '无基线 → 空集（从严）')
 })
 
-test('⑤ watcher R1 端到端：镜像翻格零证据不发 fake-check（changeDir 接线——审查 P1 死代码修正）', async () => {
+test('⑤ watcher R1 已退役（2026-09-29-watcher-fakecheck-retire）：镜像/覆写/无 changeDir 翻格均零实时嫌疑', async () => {
   const { applySentinelRules } = await import('../src/watcher.js')
   const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
   const spec = mkdtempSync(join(tmpdir(), 'ss-w-r1-'))
@@ -103,20 +103,19 @@ test('⑤ watcher R1 端到端：镜像翻格零证据不发 fake-check（change
   writeFileSync(join(spec, '.runtime', `route-hindsight-baseline-${change}.json`),
     JSON.stringify({ schemaVersion: 1, change, design: null, tasks: BASELINE }))
   const snap = (checked) => ({ ts: 1, archived: false, files: { 'tasks.md': { checkedTasks: checked } }, commits: [], reviews: {}, dirtyCode: [] })
+  const NL = String.fromCharCode(10)
   const run = (tasksMdText) => {
     writeFileSync(join(changeDir, 'tasks.md'), tasksMdText)
     return applySentinelRules({ prev: snap([]), next: snap(['task-01']), state: null, changeDir })
   }
-  // 镜像勾选（裸键 files + changeDir 路径接线）→ 零 fake-check 警告
-  const mirror = run(['- [x] task-01: 注入段渲染正确', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join('\n'))
-  assert.ok(!mirror.warnings.some((w) => w.rule === 'fake-check'), `镜像翻格不应告警（实际：${JSON.stringify(mirror.warnings.map((w) => w.rule))}）`)
-  // 覆写勾选零证据 → fake-check 警告（守卫在 watcher 面同样有效）
-  const rewritten = run(['- [x] task-01: 实现行为 X 的真实工作单元', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join('\n'))
-  assert.ok(rewritten.warnings.some((w) => w.rule === 'fake-check'), '覆写翻格零证据应告警（人判）')
-  // changeDir=null（调用方未传）→ fail-safe 告警
-  writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: 注入段渲染正确\n')
+  // 实时嫌疑警告已整体退役：勾选先于提交是协议正常时序，真裁决在收口哨兵（镜像豁免单源）+ 单拍门
+  const mirror = run(['- [x] task-01: 注入段渲染正确', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join(NL))
+  assert.ok(!mirror.warnings.some((w) => w.rule === 'fake-check'), '镜像翻格零警告')
+  const rewritten = run(['- [x] task-01: 实现行为 X 的真实工作单元', '- [ ] task-02: 门回显可见', '- [ ] task-03: 精度不回归'].join(NL))
+  assert.ok(!rewritten.warnings.some((w) => w.rule === 'fake-check'), '覆写翻格也零实时警告（终态由收口哨兵判）')
+  writeFileSync(join(changeDir, 'tasks.md'), '- [x] task-01: 注入段渲染正确' + NL)
   const nocd = applySentinelRules({ prev: snap([]), next: snap(['task-01']), state: null, changeDir: null })
-  assert.ok(nocd.warnings.some((w) => w.rule === 'fake-check'), '无 changeDir 按无豁免从严')
+  assert.ok(!nocd.warnings.some((w) => w.rule === 'fake-check'), '无 changeDir 同样零实时警告')
 })
 
 test('⑥ 零提交不豁免（角度 A）：镜像全勾＋commits=[] → fake（空转变更不许过门）', () => {

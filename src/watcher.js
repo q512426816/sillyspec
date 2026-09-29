@@ -41,8 +41,6 @@ import {
 } from 'fs';
 import { createHash } from 'crypto';
 import { basename, dirname, join, resolve } from 'path';
-import { readBaselineTasks } from './route-hindsight.js';
-import { mirroredTaskIds } from './sentinel-assertions.js';
 import { gitQuiet } from './git-helper.js';
 import { normalizePath, globMatch } from './change-list.js';
 import { resolveTestFileOwners } from './test-bindings.js';
@@ -405,7 +403,7 @@ export const STALL_EXECUTE_MS = 15 * 60_000;
 
 /** 引擎状态初值（ts=计时锚；task-04 重启回补时取 max(启动时刻, 水位 ts)）。 */
 export function createSentinelState(ts = Date.now()) {
-  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null, fakeCheckPending: {} };
+  return { phase: 'early', lastActivityAt: typeof ts === 'number' ? ts : Date.now(), stallOpen: false, lastDriftFiles: [], testTamper: null };
 }
 
 function mkWarning(rule, detail, ts) {
@@ -443,9 +441,6 @@ export function loadSnapshotWatermark(runtimeRoot, changeName) {
  */
 export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj = null, sentinel = null) {
   try {
-    // sentinel 态搭水位车持久（2026-09-28-watcher-signal-widen 评审 P2 清偿：fakeCheckPending
-    // 纯内存时 watcher 重启即丢——pending 翻格的消解承诺落空。快照键不动，sentinel 挂
-    // 附加键（loadSnapshotWatermark 的形状校验只看 ts/archived，附加键对旧读方透明）。
     const json = JSON.stringify(sentinel ? { ...snap, sentinel } : snap);
     if (cacheObj && cacheObj.last === json) return { written: false };
     writeFileSync(watcherSnapshotPath(runtimeRoot, changeName), json);
@@ -505,60 +500,6 @@ export function readWatcherEvents({ runtimeRoot, change, path: eventsPath }) {
   }
   const warnings = events.filter((e) => e.kind === 'warning' || e.severity === 'warning');
   return { exists: true, events, warnings, badLines };
-}
-
-/**
- * R1 假勾选（FR-02）：checkedTasks 差集=本拍翻格集；证据=区间新提交 subject 含 task-NN
- * （token 边界）或 /tasks/task-NN/ 的 review.json mtime 变化；翻格零证据 → warning。
- * 消解态（2026-09-28-watcher-signal-widen）：无证据翻格记入 state.fakeCheckPending；
- * 后续拍位证据补上（提交晚于勾选几十秒是常态——guidance-principles 36 秒实证）→ 发
- * fake-check-cleared info 事件并清 pending，时间线可见「警告已消解」而非永挂。
- */
-function ruleFakeCheck(prev, next, state, ts, changeDir) {
-  const flipped = [];
-  const keys = new Set([...Object.keys(prev.files || {}), ...Object.keys(next.files || {})]);
-  for (const key of keys) {
-    const pIds = new Set(((prev.files[key] || {}).checkedTasks) || []);
-    for (const id of ((next.files[key] || {}).checkedTasks) || []) {
-      if (!pIds.has(id)) flipped.push(id);
-    }
-  }
-  const newCommits = newCommitsBetween(prev, next);
-  const hasEvidence = (id) => {
-    const re = taskTokenRe(id);
-    const byCommit = newCommits.some((c) => re.test(c.subject || ''));
-    const byReview = Object.entries(next.reviews || {}).some(([p, mtime]) => p.includes(`/tasks/${id}/`) && (prev.reviews || {})[p] !== mtime);
-    return byCommit || byReview;
-  };
-  const out = [];
-  const pending = (state.fakeCheckPending = state.fakeCheckPending || {});
-  // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：与机器稿基线逐字相同的任务勾选＝成功标准
-  // 镜像面（非 agent 工作单元），免 per-task 证据——本拍不挂警告不进 pending（收口侧哨兵同判据）。
-  // 路径源=applySentinelRules 的 changeDir 入参（files 键是裸文件名，推不出路径——审查 P1 实证
-  // 首版按键推导是从未生效的死代码）。
-  let _mirroredIds = null
-  try {
-    if (changeDir) {
-      _mirroredIds = mirroredTaskIds({
-        tasksMd: readFileSync(join(changeDir, 'tasks.md'), 'utf8'),
-        baselineTasksMd: readBaselineTasks({ specBase: dirname(dirname(changeDir)), change: basename(changeDir) }),
-      })
-    }
-  } catch { /* 镜像判别 best-effort：读失败按无豁免从严 */ }
-  const flippedReal = _mirroredIds ? flipped.filter((id) => !_mirroredIds.has(id)) : flipped
-  const unevidenced = flippedReal.filter((id) => !hasEvidence(id));
-  if (unevidenced.length > 0) {
-    for (const id of unevidenced) pending[id] = true;
-    out.push(mkWarning('fake-check', `tasks 勾选 ${unevidenced.join('、')} 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判`, ts));
-  }
-  // 消解：pending 中证据到位 → info 事件（含证据形态：提交号或 review 变更）
-  const cleared = Object.keys(pending).filter((id) => hasEvidence(id));
-  for (const id of cleared) {
-    delete pending[id];
-    const c = newCommits.find((x) => taskTokenRe(id).test(x.subject || ''));
-    out.push({ ts, kind: 'info', stage: null, rule: 'fake-check-cleared', severity: 'info', detail: `task ${id} 勾选证据补齐${c ? `（提交 ${c.hash}）` : '（review.json 变更）'}——前拍假勾选嫌疑消解`, provisional: true });
-  }
-  return out;
 }
 
 const testDirtyOf = (dirtyCode) => (Array.isArray(dirtyCode) ? dirtyCode.filter((p) => p.startsWith('test/')) : []);
@@ -755,7 +696,6 @@ export function applySentinelRules({ prev, next, baseEvents = [], state = null, 
     st.baselineDirty = prev && Array.isArray(prev.dirtyCode) ? [...prev.dirtyCode] : [];
   }
   // 逐规则独立 fail-open：单规则抛异常只丢本轮该规则，其余照跑（引擎绝不杀 watcher）
-  try { warnings.push(...ruleFakeCheck(prev, next, st, now, changeDir)); } catch { /* R1 本轮跳过 */ }
   try { warnings.push(...ruleTestTamper(prev, next, st, now, bindResolveImpl)); } catch { /* R2 本轮跳过 */ }
   let declaredScope = null;
   try { declaredScope = loadDeclaredScope(changeDir, readImpl, readdirImpl); } catch { declaredScope = null; }
@@ -1008,10 +948,6 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
   // 哨兵引擎状态（计时锚=启动时刻；水位回补取 max(启动时刻, 水位 ts)——水位落后即 change
   // 早已停滞，首拍就应告警而非再等满阈值，Grill 修正②）
   let sentinelState = createSentinelState(Math.max(Date.now(), useWatermark ? watermark.ts : 0));
-  // sentinel 态回补（评审 P2 清偿）：水位的 sentinel 附加键恢复 pending（旧水位无此键=空集，零变化）
-  if (useWatermark && watermark.sentinel && watermark.sentinel.fakeCheckPending) {
-    sentinelState.fakeCheckPending = { ...watermark.sentinel.fakeCheckPending };
-  }
   const watermarkCache = { last: null };
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -1069,7 +1005,7 @@ export async function runWatcherFromEnv(env = process.env, opts = {}) {
     const batch = events.concat(warnings);
     prev = snap;
     // 水位每轮前移（内容去重；archived 早退路径已在上方 return 不达此处）
-    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache, { fakeCheckPending: sentinelState.fakeCheckPending || {} });
+    writeSnapshotWatermark(runtimeRoot, changeName, snap, watermarkCache);
     if (batch.length === 0) {
       if (Date.now() - lastActivityAt > IDLE_EXIT_MS) {
         console.log('[watcher] 空闲超时自退（6h 无事件）');

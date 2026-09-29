@@ -48,13 +48,11 @@ const rulesOf = (warnings) => warnings.map((w) => w.rule)
 
 // ───────────────────────────── R1 假勾选 ─────────────────────────────
 
-test('R1 假勾选 正例：翻格零证据 → fake-check warning', () => {
+test('R1 已退役（2026-09-29-watcher-fakecheck-retire）：翻格零证据不产 fake-check——逐格勾选先于提交是协议正常时序', () => {
   const prev = snap({ files: { 'tasks.md': { hash: 'h1', stage: 'tasks', checked: 1, total: 2, checkedTasks: ['task-01'] } } })
   const next = snap({ ts: prev.ts + 3000, files: { 'tasks.md': { hash: 'h2', stage: 'tasks', checked: 2, total: 2, checkedTasks: ['task-01', 'task-02'] } } })
   const { warnings } = run(prev, next)
-  const w = warnings.find((x) => x.rule === 'fake-check')
-  assert.ok(w, '应有 fake-check warning')
-  assert.match(w.detail, /task-02/)
+  assert.equal(rulesOf(warnings).includes('fake-check'), false, '实时嫌疑警告已退役（真裁决在收口哨兵+单拍门）')
 })
 
 test('R1 负例：区间新提交 subject 含 task-02 → 不告警', () => {
@@ -75,7 +73,7 @@ test('R1 负例：review.json mtime 变更构成证据 → 不告警', () => {
   assert.equal(rulesOf(warnings).includes('fake-check'), false)
 })
 
-test('R1 token 边界钉：subject 含 task-020 不构成 task-02 证据', () => {
+test('R1 退役钉：token 边界语义移交收口侧（detectFakeCheckCompletion 的 taskTokenRe 同判据），watcher 实时面零产出', () => {
   const prev = snap({ files: { 'tasks.md': { hash: 'h1', stage: 'tasks', checked: 0, total: 1, checkedTasks: [] } }, commits: [{ hash: 'aaa1111', subject: 'old', files: [] }] })
   const next = snap({
     ts: prev.ts + 3000,
@@ -83,7 +81,7 @@ test('R1 token 边界钉：subject 含 task-020 不构成 task-02 证据', () =>
     commits: [{ hash: 'bbb2222', subject: 'fix: task-020 typo', files: [] }, { hash: 'aaa1111', subject: 'old', files: [] }],
   })
   const { warnings } = run(prev, next)
-  assert.ok(warnings.some((x) => x.rule === 'fake-check' && /task-02/.test(x.detail)), 'task-020 不得误证 task-02')
+  assert.equal(rulesOf(warnings).includes('fake-check'), false, 'R1 生成器已删（边界判据由收口哨兵单源承担）')
 })
 
 test('R1 负例：无翻格（checkedTasks 不变）零告警', () => {
