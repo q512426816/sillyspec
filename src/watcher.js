@@ -200,7 +200,7 @@ export function parsePorcelainCodePaths(porcelain) {
   return out.sort();
 }
 
-/** execute-runs 下全部 review.json 的 mtime 面（假勾选证据源二；有界遍历，缺失 → {}）。 */
+/** execute-runs 下全部 review.json 的 mtime 面（有界遍历，缺失 → {}）——R1 退役后无 watcher 规则消费，保留采集维持水位序列化键稳定（2026-09-29-watcher-fakecheck-retire 评审 F1）。 */
 function collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl) {
   const reviews = {};
   let runs = [];
@@ -295,7 +295,7 @@ export function buildSnapshot({ changeDir, cwd, runtimeRoot, changeName, readFil
   } catch {
     snap.scanStatus = null;
   }
-  // 哨兵源四：review.json mtime 面
+  // 哨兵源四：review.json mtime 面（R1 退役后无规则消费方；水位兼容保留采集）
   snap.reviews = collectReviewMtimes(runtimeRoot, readdirSyncImpl, statSyncImpl);
   // 哨兵源五（2026-09-28-watcher-signal-widen）：门实测结论——verify-runs 下本变更最新
   // test-result.json（目录名 YYYYMMDDHHMMSS 字典序即时序）。停滞判定的核心活跃信号：
@@ -451,10 +451,7 @@ export function writeSnapshotWatermark(runtimeRoot, changeName, snap, cacheObj =
   }
 }
 
-/** task-NN 完整 token 匹配（task-01 不证 task-010，负向前瞻词边界）。 */
-function taskTokenRe(id) {
-  return new RegExp(`${id}(?!\\d)`);
-}
+/** task-NN token 边界判据已随 R1 退役移交收口侧（sentinel-assertions.taskTokenRe 单源）。 */
 
 // ── 事件流读取（2026-09-23 watcher-alerts quick：哨兵告警可视化出口的纯读面）──
 // 子进程侧 appendFileSync 落盘名与此处读取名同锚（runWatcherFromEnv 内联字符串的唯一对应）。
