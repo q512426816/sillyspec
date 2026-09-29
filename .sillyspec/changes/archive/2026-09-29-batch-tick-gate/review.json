@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-batch-tick-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "id": "R3-1",
+      "severity": "P3",
+      "blocking": false,
+      "title": "代勾 advisory 文案在重入路径显示本拍计数而非生效计数",
+      "evidence": "C:/Users/qinyi/IdeaProjects/sillyspec/src/flow.js:887-888 决策取 Math.max(_autopilotTicked, _persistedAuto)，而 :896 的 advisory 文案取 _autopilotTicked（本拍值）——重入场景（本拍代勾 0、持久化 3）决策按 3 豁免、reason=autopilot-ticked，文案却印「机器代勾 0 格」，与同行动作依据自相矛盾。仅文案失真，行为（advisory 不拒）正确，非阻断。",
+      "remediation": "文案改用 _autoN（生效计数）渲染：机器代勾 ${_autoN} 格。"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "拒收判据取 watcher 流最大单跳（顺序无关）；代勾豁免计数 Math.max(本拍,持久化) 融合两拍来源，事件乱序不构成误判面。P2-B 清偿核实：代勾后写 flow-state autopilot_ticked（flow.js:814，writeFlowState 为读-合并-原子写不覆写他键）、门侧取 max（flow.js:887-888）。",
+    "并发": "门在 flow done 收口单点执行；writeFlowState 读-合并-写存在并发同变更收口的合并窗口，属协议外路径且留痕 best-effort 已声明，不另开 finding。P3-E 清偿核实：判据 autopilotTicked >= batchTick.to - batchTick.from 才 advisory（sentinel-assertions.js:174），测试 ②b 钉 1<3→reject、3>=3→advisory，蹭豁免通道关闭。",
+    "切换": "拒收后重跑幂等；代勾持久化使重入豁免成立。两个已接受残留（不重开已裁事项）：①持久化写本身失败被 catch 静默吞时重入仍可能误拒——既有逃生门 --allow-batch-tick 留痕可过；②持久化代勾数不随任务面后续手动勾选清除，同变更生命周期内后续真实一把勾幅 ≤ 持久化数时仍获 advisory——豁免上限被真实代勾数约束且有显式旁路先例兜底，属 P3-E 已裁判据的有界残留。P2-A 清偿核实：design 槽3 已声明接线侧为源码钉+决策面行为级、未建执行级 fixture 的已知边界。",
+    "作用域": "autopilot_ticked / allow_batch_tick 键落在按变更名隔离的 flow-state.yaml，无跨变更串台；watcher 事件文件按 change 名隔离且非真相源。P3-C 清偿核实：design 槽2 改为「新增导出 resolveBatchTickAction」，与 sentinel-assertions.js:169 具名导出及 flow.js:881 具名导入一致，无契约漂移。P3-D 清偿核实：design 槽3 披露并行会话 2026-09-29-flow-agent-log-report 提交 50c18719（agent-session-log 文案 / amend-draft 白名单 / 测试⑤），与 change.patch 中三处非本变更交付的 hunk 逐一对上，冻结面无未披露改动。"
+  },
+  "reviewedAt": "2026-09-29T16:40:53+08:00"
+}

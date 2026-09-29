@@ -1,0 +1,74 @@
+{
+  "change": "2026-09-29-batch-tick-gate",
+  "baseline": "15b7e70cbedad2563cd350cb5a26547315a87493",
+  "head": "79ea50cc7bbe0eee041650277633780416e309a0",
+  "files": [
+    ".sillyspec/changes/2026-09-29-batch-tick-gate/design.md",
+    ".sillyspec/changes/2026-09-29-batch-tick-gate/flow-state.yaml",
+    ".sillyspec/changes/2026-09-29-batch-tick-gate/proposal.md",
+    ".sillyspec/changes/2026-09-29-batch-tick-gate/requirements.md",
+    ".sillyspec/changes/2026-09-29-batch-tick-gate/tasks.md",
+    "src/agent-session-log.js",
+    "src/flow-draft.js",
+    "src/flow.js",
+    "src/sentinel-assertions.js",
+    "test/batch-tick-gate.test.mjs",
+    "test/flow-agent-log-report.test.mjs",
+    "test/flow-status-heartbeat.test.mjs",
+    ".sillyspec/changes/2026-09-29-batch-tick-gate/review.json"
+  ],
+  "totals": {
+    "files": 13,
+    "additions": 334,
+    "deletions": 19
+  },
+  "savedAt": "2026-09-29T08:42:04.410Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 2,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "bin",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/bin.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 3
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "f994ce4a799e0519bb34067560df2cef94caa7b3e77c6ca14a52b1447ae3f421",
+  "patchStatus": "ok"
+}

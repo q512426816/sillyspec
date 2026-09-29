@@ -1,0 +1,515 @@
+diff --git a/.sillyspec/changes/2026-09-29-batch-tick-gate/flow-state.yaml b/.sillyspec/changes/2026-09-29-batch-tick-gate/flow-state.yaml
+new file mode 100644
+index 00000000..4f3196dd
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-batch-tick-gate/flow-state.yaml
+@@ -0,0 +1,17 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++  patch: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 15b7e70cbedad2563cd350cb5a26547315a87493
++updatedAt: '2026-09-29T08:21:47.283Z'
++baseline_sha256: 40bf9f7becd88ec205cbb03e4c9ee4b0c9cfedaa56c9d42123054d1945f0e347
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(46)（11.4s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260929081001\test-result.json｜lint: passed
++  ← npm run lint（38.2s）｜门文件 7 个
++
+diff --git a/src/agent-session-log.js b/src/agent-session-log.js
+index 9e6e47f0..9607fa43 100644
+--- a/src/agent-session-log.js
++++ b/src/agent-session-log.js
+@@ -1318,7 +1318,7 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(),
+   }
+   if (!artifact || !Array.isArray(artifact.entries) || artifact.entries.length === 0) {
+     console.log(`📭 无 agent 日志登记产物（${toPosix(artifactPath)}）。`);
+-    console.log('   run <stage> 命令在 agent 环境内执行时自动登记；或用 agent-log --detect 现场探测。');
++    console.log('   run <stage> / flow <子命令> 在 agent 环境内执行时自动登记；或用 agent-log --detect 现场探测。');
+     return;
+   }
+   console.log(`📄 本地 agent 会话日志登记（${toPosix(artifactPath)}，${artifact.entries.length} 条）`);
+@@ -1332,5 +1332,5 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(),
+       .filter(Boolean).join(' / ');
+     console.log(`      ${meta} / 见过 ${e.invocations} 次 / 最近 ${e.last_seen_at}${e.last_command ? ` / ${e.last_command}` : ''}`);
+   }
+-  console.log('   协议: docs/platform-agent-log-protocol.md（run 命令自动 REST 上报平台 POST /api/agent-logs；此产物为本地留底）');
++  console.log('   协议: docs/platform-agent-log-protocol.md（run / flow 命令自动 REST 上报平台 POST /api/agent-logs；此产物为本地留底）');
+ }
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 188f8288..a3539d79 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -461,7 +461,7 @@ function draftTasks({ change, criteria, withTasks }) {
+     '',
+     '> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；',
+     `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}。`,
+-    '> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。进度源即本文件：做一件 → 勾一格 → 继续下一条；`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。',
++    '> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 `- [ ]`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。',
+     '',
+     // tasks-rows 去指纹化（2026-09-25-feedback-fixes，平台狗粮反馈①）：勾选行在指纹段内导致
+     // 勾一条就失配 → 必走 amend → editRatio=1 被判该走厚档——勾选纪律与指纹门自相矛盾。
+diff --git a/src/flow.js b/src/flow.js
+index 1f1153e2..1cd9e751 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -399,7 +399,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           prototypePaths.length > 0
+             ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
+             : null,
+-          `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
++          `【你要做的】① spec 阶段先定稿任务面：把 tasks.md 覆写为真实实现步骤（全 \`- [ ]\`——代码开动前工作队列先存在）；`,
++          `② 执行走任务循环（openspec 式）：对 tasks.md 每个 pending 任务——展示「Working on task N/M: <任务>」→ 做 → 勾一格（\`- [ ]\`→\`- [x]\`）→ 下一个；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+           `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+           `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；`,
+@@ -618,7 +619,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
+     `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
+-    `   纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
++    `   纪律：spec 期定稿任务面（覆写为真实实现步骤全 \`- [ ]\`）；执行走任务循环——Working on task N/M → 做一件 → 勾一格 → 下一个（tasks.md 是进度源，勿攒一把勾——收口硬门拒单拍多格）；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+@@ -683,7 +684,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
+  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
+  */
+-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false }) {
++export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
+   if (!st) {
+@@ -780,6 +781,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     // 哨兵断言（2026-09-25-sentinel-wiring）：tasks.md 全勾但零完成证据（区间提交消息标题与正文
+     // 均无 task-NN token 且无对应 review.json）→ 拒收——L0 硬门接线，两道收口同一哨兵（quick 侧同判）。
+     let _sentinelNonMirrorTasks = null // 镜像豁免面外的任务数（null=哨兵未跑；0=纯镜像任务面——节奏 advisory 静默）
++    let _autopilotTicked = 0 // 机器代勾格数（>0 时勾选节奏门降 advisory——代勾是单拍多格机械写，非 agent 纪律面）
+     // 证据面=整条提交消息（2026-09-25-thin-done-gate-calibration 坑2：%s 只取标题行，正文里的
+     // token 被判零证据，与文案「提交带 task-NN」口径漂移）——%B%x1e 按提交切记录，advisory 的
+     // 提交计数不因多行正文失真。
+@@ -806,6 +808,10 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+             if (_autoTicked > 0) {
+               const { writeAtomicSync } = await import('./fs-atomic.js')
+               writeAtomicSync(_tasksMdPath, _tasksMd)
++              _autopilotTicked = _autoTicked
++              // 代勾事实持久化（二轮评审 P2-B）：重入时 tasks 已被代勾、本拍 _autoTicked=0，
++              // 但首拍代勾写下的单拍跳事件仍在流里——不持久化会把重入误判成 agent 一把勾拒收
++              try { writeFlowState(changeDir, { autopilot_ticked: _autoTicked }) } catch { /* 留痕 best-effort */ }
+               console.log(`✅ [自动勾选] ${_autoTicked} 个任务有提交证据但未勾——已机器代勾（governance-autopilot）`)
+             }
+           }
+@@ -865,23 +871,40 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+       }
+     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
+-    // 勾选节奏 advisory（2026-09-26-thin-check-cadence）：watcher 事件流 task-done 单拍跳 ≥2 格 =
+-    // 一把全勾——per-task 时间戳/进度信号面失真（39 条流零例外实证）。warn 不阻断（对齐上方
+-    // 「任务勾选缺失」advisory 档位：节奏是习惯问题非造假主张，L0 硬门另有其人）；观测旁路
+-    // 缺席（无流/无事件/读失败）静默跳过——fail-open，watcher 非真相源。
++    // 勾选节奏门（2026-09-26-thin-check-cadence 起 advisory；2026-09-29-batch-tick-gate 升硬门）：
++    // watcher 事件流 task-done 单拍跳 ≥2 格 = 一把全勾——per-task 时间戳/进度信号面失真（39 条流零
++    // 例外实证 + 三次复发 0→6/0→3）。openspec 式逐格纪律的机器牙齿：非镜像任务面存在 → 拒收；
++    // 镜像-only（成功标准镜像非 agent 工作单元）批量勾是常态 → advisory 静默（镜像豁免哲学）；
++    // 观测旁路缺席（无流/读失败）→ 跳过（fail-open，watcher 非真相源）；--allow-batch-tick 显式旁路留痕。
+     try {
+       const { readWatcherEvents } = await import('./watcher.js')
+-      const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
++      const { detectBatchCheckCadence, resolveBatchTickAction } = await import('./sentinel-assertions.js')
+       const stream = readWatcherEvents({ runtimeRoot, change })
+       const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+-      if (batch && (_sentinelNonMirrorTasks === null || _sentinelNonMirrorTasks > 0)) {
+-        // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：纯镜像任务面（成功标准镜像非 agent 工作单元）
+-        // 批量勾选是常态非纪律失守——advisory 静默；仅覆写任务面存在时提示边干边勾。
++      if (batch) {
++        // 代勾计数取「本拍实时代勾 ∨ 持久化代勾」较大者（二轮 P2-B：重入漂移防护）；决策纯函数
++        // 单源（resolveBatchTickAction）四态与豁免优先序见其 JSDoc——代勾须解释整跳才降级
++        const _persistedAuto = Number(st?.autopilot_ticked) || 0
++        const _autoN = Math.max(_autopilotTicked, _persistedAuto)
++        const v = resolveBatchTickAction({ batchTick: batch, nonMirrorCount: _sentinelNonMirrorTasks, allowBatchTick, autopilotTicked: _autoN })
+         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
+-        console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选`)
+-        console.warn('   规范动作是完成一个工作单元即勾一格（- [ ] → - [x]）；一把全勾使进度信号与 per-task 时间戳失真（本次放行不阻断）')
++        if (v.action === 'bypass') {
++          try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }
++          console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
++        } else if (v.action === 'advisory') {
++          const why = v.reason === 'autopilot-ticked'
++            ? `机器代勾 ${_autoN} 格（governance-autopilot 单拍机械写，非 agent 纪律面；本拍 ${_autopilotTicked}/持久化 ${_persistedAuto}）`
++            : '哨兵非镜像面未知（fail-open 防误拒）'
++          console.warn(`⚠️ 勾选节奏：单拍多格勾选（${batch.detail}，${at}）——${why}，降级提醒不拒`)
++        } else if (v.action === 'reject') {
++          console.error(`🚫 单拍勾选拒收：watcher 观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），非镜像勾选任务 ${_sentinelNonMirrorTasks} 个`)
++          console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
++          appendTelemetry({ sentinel: 'batch-tick', jump: batch.detail })
++          reportMidFail('ledger')
++          process.exit(1)
++        }
+       }
+-    } catch { /* 节奏 advisory best-effort：读流失败静默 */ }
++    } catch { /* 节奏门 best-effort：读流失败静默（fail-open——观测缺席不阻断） */ }
+     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
+     if (gate && gate.action === 'fail') {
+       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
+@@ -1641,13 +1664,16 @@ export async function cmdFlow(args, cwd, specDir = null) {
+         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
+       }
+     }
+-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
++    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), allowBatchTick: hasFlag('--allow-batch-tick') })
+   }
+   if (sub === 'amend-draft') {
+     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
+     // 首版原文 body 永存（切片四 editRatio 基准）。
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow amend-draft 需 --change <名>'); process.exit(2) }
++    // 变更名白名单与 start/status/done 同门（评审 P1 修复：amend-draft 此前无校验，未检字符串
++    // 会经 reportAgentLog 的 context.change_key 进产物与平台上报——与「白名单名无注入面」的设计声明对齐）
++    validateChangeName(change)
+     await reportAgentLog(change, sub)
+     const changeDir = join(specBase, 'changes', change)
+     const runtimeRoot = resolveRuntimeRoot({}, specBase)
+diff --git a/src/sentinel-assertions.js b/src/sentinel-assertions.js
+index 59b69a8d..d7ea762b 100644
+--- a/src/sentinel-assertions.js
++++ b/src/sentinel-assertions.js
+@@ -153,4 +153,26 @@ export function detectBatchCheckCadence(events) {
+   return worst;
+ }
+ 
++/**
++ * 单拍勾选门决策（2026-09-29-batch-tick-gate，纯函数）：watcher 检出单拍跳（batchTick 非 null）
++ * 时的收口动作裁决。四态（决策顺序即豁免优先序）：
++ *   'silent'   镜像-only（非镜像勾选面=0）——镜像豁免哲学：镜像批量勾是常态非纪律失守；
++ *   'bypass'   --allow-batch-tick 显式旁路——留痕放行（同意门先例）；
++ *   'advisory' 哨兵面未知（nonMirrorCount=null，fail-open 防误拒）；或机器代勾可解释整跳
++ *              （autopilotTicked >= 跳幅——governance-autopilot 代勾是单拍多格机械写，非 agent
++ *              纪律面；代勾数不可解释最大跳时落到 reject——防「留一格给代勾补、自身大跳蹭豁免」
++ *              的对抗绕过，二轮评审 P3-E）；
++ *   'reject'   非镜像面存在、代勾解释不了整跳、未旁路——agent 一把勾，拒收。
++ * @param {{batchTick:object|null, nonMirrorCount?:number|null, allowBatchTick?:boolean, autopilotTicked?:number}} args
++ * @returns {{action:'silent'|'advisory'|'bypass'|'reject', reason:string}}
++ */
++export function resolveBatchTickAction({ batchTick, nonMirrorCount = null, allowBatchTick = false, autopilotTicked = 0 } = {}) {
++  if (!batchTick) return { action: 'silent', reason: 'no-batch-tick' };
++  if (nonMirrorCount === 0) return { action: 'silent', reason: 'mirror-only' };
++  if (allowBatchTick === true) return { action: 'bypass', reason: 'flag' };
++  if (nonMirrorCount === null) return { action: 'advisory', reason: 'sentinel-unknown' };
++  if (autopilotTicked >= batchTick.to - batchTick.from) return { action: 'advisory', reason: 'autopilot-ticked' };
++  return { action: 'reject', reason: 'agent-batch-tick' };
++}
++
+ export default { detectFakeCheckCompletion, detectBatchCheckCadence };
+diff --git a/test/batch-tick-gate.test.mjs b/test/batch-tick-gate.test.mjs
+new file mode 100644
+index 00000000..a80a5ea6
+--- /dev/null
++++ b/test/batch-tick-gate.test.mjs
+@@ -0,0 +1,64 @@
++/**
++ * batch-tick-gate.test.mjs — 单拍勾选硬门（2026-09-29-batch-tick-gate）
++ *
++ * B 层牙齿：watcher 事件流单拍 checked N→M（跳 ≥2）+ 非镜像勾选面 → flow done 拒收；
++ * --allow-batch-tick 显式旁路留痕；镜像-only / 观测缺席 / 哨兵面未知 → 不拒。
++ * A 层形状：spec 期任务面定稿 + openspec 式执行循环指令（简报两路 + tasks.md 头部）。
++ *
++ * 覆盖：
++ *   ① detectBatchCheckCadence 纯函数已在 sentinel 系覆盖——此处钉接线与文案（源码级）
++ *   ② 硬门三态接线：拒收出口 / --allow-batch-tick 旁路留痕 / 镜像-only 不拒（哨兵非镜像计数=0 静默）
++ *   ③ A 层文案三处钉（fresh 简报循环指令 / resume 简报 / draftTasks 头部）
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++
++test('② 硬门接线钉：拒收出口 + 旁路旗标 + 降级面', () => {
++  const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  assert.ok(src.includes('allowBatchTick'), 'cmdFlowDone 旗标在场')
++  assert.ok(src.includes("hasFlag('--allow-batch-tick')"), 'CLI 旗标解析接线')
++  assert.ok(src.includes('单拍勾选拒收'), '拒收文案在场')
++  assert.ok(src.includes('--allow-batch-tick 显式留痕过门'), '出口指引（旁路留痕）')
++  assert.ok(src.includes('allow_batch_tick: true'), '旁路留痕写 flow-state')
++  assert.ok(src.includes('哨兵非镜像面未知（fail-open 防误拒）'), '哨兵面未知降级 advisory（文案钉）')
++  assert.ok(src.includes("appendTelemetry({ sentinel: 'batch-tick'"), '拒收落遥测')
++})
++
++test('②b 决策纯函数行为级（resolveBatchTickAction 四态 + 豁免优先序）', async () => {
++  const { resolveBatchTickAction } = await import(pathToFileURL(join(ROOT, '..', 'src', 'sentinel-assertions.js')).href)
++  const bt = { from: 0, to: 3, detail: 'checked 0→3', ts: 1 }
++  assert.equal(resolveBatchTickAction({ batchTick: null }).action, 'silent', '无单拍跳→silent')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 0 }).action, 'silent', '镜像-only→silent（豁免哲学）')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 0, allowBatchTick: true }).action, 'silent', '镜像-only 优先于旁路旗标')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, allowBatchTick: true }).action, 'bypass', '非镜像+旗标→bypass')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null }).action, 'advisory', '哨兵面未知→advisory（fail-open）')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: null, allowBatchTick: true }).action, 'bypass', '哨兵面未知仍可显式旁路')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 3 }).action, 'advisory', '机器代勾解释整跳（3>=3）→advisory（autopilot 单拍机械写不误拒）')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'reject', '代勾解释不了整跳（1<3）→reject（防留格蹭豁免——二轮 P3-E）')
++  assert.equal(resolveBatchTickAction({ batchTick: { from: 3, to: 4, detail: 'checked 3→4', ts: 1 }, nonMirrorCount: 3, autopilotTicked: 1 }).action, 'advisory', '小跳+代勾解释（1>=1）→advisory')
++  assert.equal(resolveBatchTickAction({ batchTick: bt, nonMirrorCount: 3 }).action, 'reject', 'agent 一把勾→reject')
++})
++
++test('②c autopilot 交互钉（评审清偿）：代勾计数接线 + 重入持久化 + 解释整跳判据', () => {
++  const src = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  assert.ok(src.includes('_autopilotTicked = _autoTicked'), '代勾格数抬升到门作用域')
++  assert.ok(src.includes('autopilot_ticked: _autoTicked'), '代勾事实持久化写 flow-state（二轮 P2-B 重入漂移防护）')
++  assert.ok(src.includes('Math.max(_autopilotTicked, _persistedAuto)'), '重入取 max(本拍, 持久化)')
++  const sen = readFileSync(join(ROOT, '..', 'src', 'sentinel-assertions.js'), 'utf8')
++  assert.ok(sen.includes('autopilotTicked >= batchTick.to - batchTick.from'), '代勾解释整跳判据在决策函数（P3-E 防蹭豁免）')
++})
++
++test('③ A 层文案钉：spec 定稿 + openspec 式循环（三处）', () => {
++  const flowSrc = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
++  assert.ok(flowSrc.includes('spec 阶段先定稿任务面'), 'fresh 简报：定稿指令')
++  assert.ok(flowSrc.includes('Working on task N/M'), 'fresh 简报：openspec 式循环指令（含输出拍）')
++  assert.ok(flowSrc.includes('执行走任务循环——Working on task N/M'), 'resume 简报：循环口径')
++  const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
++  assert.ok(draftSrc.includes('任务面在 ①spec 阶段定稿'), 'tasks.md 头部：定稿要求')
++  assert.ok(draftSrc.includes('收口硬门拒单拍多格勾选'), 'tasks.md 头部：硬门提示')
++})
+diff --git a/test/flow-agent-log-report.test.mjs b/test/flow-agent-log-report.test.mjs
+index 33609d7d..b85c640c 100644
+--- a/test/flow-agent-log-report.test.mjs
++++ b/test/flow-agent-log-report.test.mjs
+@@ -146,3 +146,34 @@ test('④ 非 agent 环境：不写盘不报错，协议面不受影响', () =>
+   assert.equal(readArtifact(cwd), null, '无 agent 环境不写 agent-session-log.json')
+   rmSync(cwd, { recursive: true, force: true })
+ })
++
++test('⑤ flow amend-draft 登记面：last_command=amend-draft 前缀；非法变更名被白名单拦在登记之前（评审 P1/P2 修复）', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-29-flow-alr-t5'
++  const agentLog = join(cwd, 'fake-agent-session.jsonl')
++  writeFileSync(agentLog, '{}\n')
++
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog }).status, 0)
++  const a = cli(cwd, ['flow', 'amend-draft', '--change', change], { agentLog })
++  assert.equal(a.status, 0, `amend-draft 失败: ${a.stdout}\n${a.stderr}`)
++  assert.match(a.stdout, /留痕重锚/)
++
++  let art = readArtifact(cwd)
++  let e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, '条目在')
++  assert.equal(e.change_key, change)
++  assert.match(e.last_command, /^amend-draft( --.*)?$/)
++  const invocationsBefore = e.invocations
++
++  // 非法变更名（路径分隔符）在 amend-draft 分支被白名单 exit 2 拦截，登记不发生（invocations 不变）
++  const bad = cli(cwd, ['flow', 'amend-draft', '--change', '../evil'], { agentLog })
++  assert.equal(bad.status, 2, '非法变更名应 exit 2')
++  assert.match(bad.stderr, /非法变更名/)
++  art = readArtifact(cwd)
++  e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, '条目仍在')
++  assert.equal(e.invocations, invocationsBefore, '被拒调用不递增 invocations（登记先于校验的 P1 已修）')
++  assert.match(e.last_command, /^amend-draft( --.*)?$/, 'last_command 不被非法调用改写')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+diff --git a/test/flow-status-heartbeat.test.mjs b/test/flow-status-heartbeat.test.mjs
+index 0d2f3a07..54c73c80 100644
+--- a/test/flow-status-heartbeat.test.mjs
++++ b/test/flow-status-heartbeat.test.mjs
+@@ -116,7 +116,7 @@ test('④ 协议文案三处同步钉（简报/tasks 头/AGENTS.md——自愿
+   assert.ok(flowSrc.includes('做一件 → 勾一格'), '循环协议文案')
+   assert.ok(!flowSrc.includes('重跑本命令取下一个') && !flowSrc.includes('每轮给下一个未勾任务'), '不得残留每任务重跑口径（D-007 回退钉）')
+   const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
+-  assert.ok(draftSrc.includes('进度源即本文件'), 'tasks.md 头部进度源口径')
++  assert.ok(draftSrc.includes('任务面在 ①spec 阶段定稿'), 'tasks.md 头部 spec 定稿口径（2026-09-29-batch-tick-gate）')
+   // AGENTS.md 瘦身钉（2026-09-29-title-and-agents-slim 主题）：勾选纪律细节不进 AGENTS.md
+   // （每会话全量注入面）——载体是 tasks.md 头部与 flow start 简报两个恰时面
+   const agents = readFileSync(join(ROOT, '..', 'AGENTS.md'), 'utf8')
+diff --git a/.sillyspec/changes/2026-09-29-batch-tick-gate/design.md b/.sillyspec/changes/2026-09-29-batch-tick-gate/design.md
+new file mode 100644
+index 00000000..90132b36
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-batch-tick-gate/design.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T08:03:28.046Z
++---
++# 设计记录（Design Record）— 2026-09-29-batch-tick-gate
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++A+B 双层：A 层移植 openspec 骨架——任务面定稿提前到 ①spec 阶段（简报与 tasks.md 头部指令：覆写为真实实现步骤全 - [ ] 后再动代码）、执行段指令改任务循环（Working on task N/M → 做 → 勾一格 → 下一个），让勾选成为循环体固有动作而非期末文书；B 层机器牙齿——既有勾选节奏 advisory（watcher 单拍 checked N→M 跳≥2 + 非镜像面）升为 flow done 拒收硬门，--allow-batch-tick 显式旁路留痕（同意门先例），镜像-only 与哨兵面未知维持 advisory（镜像豁免哲学 + fail-open 防误拒），观测缺席静默降级现行判据。三次复发（0→6/0→3/0→3）实证协议文本对 agent 执行习惯无效。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++flow.js cmdFlowDone 新增 allowBatchTick 参数与 --allow-batch-tick 旗标解析；勾选节奏块三态分支（拒收 exit 1 + 遥测 sentinel:batch-tick / 旁路留痕 flow-state allow_batch_tick / 哨兵面未知 advisory）；简报两路与 draftTasks 头部文案升级（spec 定稿 + 循环指令）。导出面变化：sentinel-assertions.js 新增导出 resolveBatchTickAction（决策纯函数四态——二轮 P2-1 清偿形态）；detectBatchCheckCadence/readWatcherEvents 既有复用。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：1) 乱序——watcher 事件流只读回放，拒收判据取最大单跳（顺序无关）；2) 并发——门在收口单点执行，事件文件读取 best-effort；3) 切换——拒收后断点续跑幂等（ledger 子步重入），旁路留痕进 flow-state；4) 作用域——事件文件按 change 名隔离，非真相源（缺席不阻断）。基线漂移披露（二轮 P3-D）：冻结面含并行会话 2026-09-29-flow-agent-log-report 的提交 50c18719（agent-session-log 文案/amend-draft 白名单/测试⑤）——该提交落在本变更 baseline 与 HEAD 之间，属区间事实非本变更交付；已知边界（二轮 P2-A 遗留）：拒收路径接线侧为源码钉+决策面行为级，未建执行级 fixture（ledger 全链 e2e 成本 vs 决策逻辑已全覆盖——后续如需可按 gate-snapshot 模式补）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：误拒合法场景——三层防护（镜像-only 静默、哨兵面未知降级 advisory、--allow-batch-tick 逃生门留痕）；观测旁路事件格式漂移 → detectBatchCheckCadence 解析失配按无证据静默（既有 fail-open）。弃案：逐 task 证据时刻配对（勾选拍与提交拍顺序核验）——git 提交时序与文件编辑时序不可严格配对（一提交多 token 是规范形态），误伤面大；单拍跳幅是唯一机械可靠的一把勾特征。
+diff --git a/.sillyspec/changes/2026-09-29-batch-tick-gate/proposal.md b/.sillyspec/changes/2026-09-29-batch-tick-gate/proposal.md
+new file mode 100644
+index 00000000..3091ec63
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-batch-tick-gate/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T08:03:28.045Z
++---
++# 提案书（Proposal）— 2026-09-29-batch-tick-gate
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:826d6401f832c5c316b355f656f797a7740c08a3b162493b6ff606c8ff27a777:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++任务原话转写：动机：勾选节奏问题三次复发（0→6/0→3，最新 2026-09-29-skill-prompt-retire 时间线 15:37:18 checked 0→3 一拍）——协议文本对 agent 执行习惯无效，需协议形状改造+收口硬门。openspec 骨架移植（A）：任务面定稿提前到 ①spec 阶段（填 FR/design 时一并覆写 tasks.md 为真实实现步骤全 - [ ]，代码开动前队列已存在）、执行段指令改任务循环（对每个 pending 任务：展示→做→勾一格→下一个，含 Working on task N/M 输出拍）。收口硬门（B，D-007 兼容零中继 CLI）：watcher 事件流存在单拍勾选（checked N→M 单跳>=2）且非镜像勾选任务非空 → 拒收点名；镜像-only 勾选维持 advisory（镜像豁免哲学不变）；观测缺席降级现行判据；出口 --allow-batch-tick 显式留痕（同意门先例）。
++
++成功标准：
++- flow start 简报（两路）与 tasks.md 头部含 spec 阶段任务面定稿要求与 openspec 式执行循环指令
++- sentinel 新增 batchTickVerdict 纯函数：单跳>=2 检出/镜像-only 判定/事件缺席降级三态，单测覆盖
++- flow done ledger 接线：非镜像单拍勾选 → 拒收 exit 非零并点名跳幅与非镜像任务；--allow-batch-tick 放行留痕（flow-state 记 allow_batch_tick）
++- 镜像-only 单拍勾选不拒（advisory 文案）
++- 既有哨兵行为零回归（fake-check 系用例全绿），flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:c2df93a11e9ca6ee6a663493c18f0859082ad8a26d29740393c2d3d0d99c65fb:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. flow start 简报（两路）与 tasks.md 头部含 spec 阶段任务面定稿要求与 openspec 式执行循环指令
++2. sentinel 新增 batchTickVerdict 纯函数：单跳>=2 检出/镜像-only 判定/事件缺席降级三态，单测覆盖
++3. flow done ledger 接线：非镜像单拍勾选 → 拒收 exit 非零并点名跳幅与非镜像任务
++4. --allow-batch-tick 放行留痕（flow-state 记 allow_batch_tick）
++5. 镜像-only 单拍勾选不拒（advisory 文案）
++6. 既有哨兵行为零回归（fake-check 系用例全绿），flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:fb7c5757a359592bdc7818dd6a46a2bacfacd2a59d48c8a078a9a42c054ecbd0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-batch-tick-gate 留痕重锚 -->
++1. flow start 简报（两路）与 tasks.md 头部含 spec 阶段任务面定稿要求与 openspec 式执行循环指令
++2. sentinel 新增 batchTickVerdict 纯函数：单跳>=2 检出/镜像-only 判定/事件缺席降级三态，单测覆盖
++3. flow done ledger 接线：非镜像单拍勾选 → 拒收 exit 非零并点名跳幅与非镜像任务
++4. --allow-batch-tick 放行留痕（flow-state 记 allow_batch_tick）
++5. 镜像-only 单拍勾选不拒（advisory 文案）
++6. 既有哨兵行为零回归（fake-check 系用例全绿），flow 系与 test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-batch-tick-gate/requirements.md b/.sillyspec/changes/2026-09-29-batch-tick-gate/requirements.md
+new file mode 100644
+index 00000000..fa5a7878
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-batch-tick-gate/requirements.md
+@@ -0,0 +1,36 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T08:03:28.046Z
++---
++# 需求规格（Requirements）— 2026-09-29-batch-tick-gate
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: A 层协议形状——spec 期任务面定稿 + openspec 式执行循环指令
++- 场景：三处文案 — Given flow start 简报（fresh/adopt 两路）、tasks.md 头部纪律行；When 本变更交付后；Then 含「spec 阶段先定稿任务面（覆写为真实实现步骤全 - [ ]）」与「Working on task N/M → 做 → 勾一格 → 下一个」循环口径
++### FR-02: 单拍勾选门决策纯函数（resolveBatchTickAction 四态）
++- 场景：四态与豁免优先序 — Given watcher 检出单拍跳（checked N→M 跳>=2）；When resolveBatchTickAction 裁决；Then 镜像-only→silent、--allow-batch-tick→bypass、哨兵面未知或机器代勾（autopilot 单拍机械写）→advisory、agent 一把勾→reject，优先序镜像>旗标>未知>代勾>拒收
++### FR-03: flow done ledger 接线——拒收/旁路留痕/降级
++- 场景：拒收 — Given 非镜像单拍勾选且未旁路；When flow done；Then 拒收 exit 非零 + 遥测 sentinel:batch-tick + 出口文案（--allow-batch-tick 留痕 / doctor 核对）；旁路写 flow-state allow_batch_tick；镜像-only 零输出
++### FR-04: 测试与零回归
++- 场景：全绿 — Given 新增 batch-tick-gate 测试（决策函数行为级四态 + 接线钉 + autopilot 交互钉）与 heartbeat ④ 适配；When 跑全量；Then npm test 全绿 + test:core fail 0 + lint 绿，fake-check 系零回归
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 test/batch-tick-gate.test.mjs「③ A 层文案钉」+ test/flow-status-heartbeat.test.mjs「④」 -->
++test/batch-tick-gate.test.mjs「③ A 层文案钉」+ test/flow-status-heartbeat.test.mjs「④」
++test/batch-tick-gate.test.mjs「③ A 层文案钉」+ test/flow-status-heartbeat.test.mjs「④」（定稿口径钉）
++
++<!--AGENT:测试绑定FR-02 test/batch-tick-gate.test.mjs「②b 决策纯函数行为级」 -->
++test/batch-tick-gate.test.mjs「②b 决策纯函数行为级」
++test/batch-tick-gate.test.mjs「② 硬门接线钉」「②b 镜像-only 不拒钉」
++
++<!--AGENT:测试绑定FR-03 test/batch-tick-gate.test.mjs「② 硬门接线钉」「②c autopilot 交互钉」 -->
++test/batch-tick-gate.test.mjs「② 硬门接线钉」「②c autopilot 交互钉」
++test/batch-tick-gate.test.mjs「②」（旁路留痕/降级面源码钉）+ sentinel 系既有用例零回归
++
++<!--AGENT:测试绑定FR-04 npm test 全量 + npm run test:core + lint -->
++npm test 全量 + npm run test:core + lint
++npm test 全量（run-tests.mjs）+ npm run test:core + lint
++
+diff --git a/.sillyspec/changes/2026-09-29-batch-tick-gate/tasks.md b/.sillyspec/changes/2026-09-29-batch-tick-gate/tasks.md
+new file mode 100644
+index 00000000..f8c54a39
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-batch-tick-gate/tasks.md
+@@ -0,0 +1,11 @@
++---
++author: flow-machine-draft
++---
++# 任务注册表（Tasks）— 2026-09-29-batch-tick-gate
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++
++- [x] task-01: B 层硬门——flow done 勾选节奏块升拒收（三态分支：拒收+遥测 / --allow-batch-tick 旁路留痕 / 哨兵面未知降级）
++- [x] task-02: A 层协议形状——简报两路 spec 定稿+任务循环指令、draftTasks 头部升级
++- [x] task-03: 测试——新增 test/batch-tick-gate.test.mjs 三钉、适配 flow-status-heartbeat ④ 定稿口径钉
++- [x] task-04: 全量验证——flow 系 + npm run test:core + lint 全绿；本变更自身以逐格勾选走新协议（门验自身）
+diff --git a/.sillyspec/changes/2026-09-29-batch-tick-gate/review.json b/.sillyspec/changes/2026-09-29-batch-tick-gate/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-batch-tick-gate/review.json
+@@ -0,0 +1,23 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-29-batch-tick-gate",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "id": "R3-1",
++      "severity": "P3",
++      "blocking": false,
++      "title": "代勾 advisory 文案在重入路径显示本拍计数而非生效计数",
++      "evidence": "C:/Users/qinyi/IdeaProjects/sillyspec/src/flow.js:887-888 决策取 Math.max(_autopilotTicked, _persistedAuto)，而 :896 的 advisory 文案取 _autopilotTicked（本拍值）——重入场景（本拍代勾 0、持久化 3）决策按 3 豁免、reason=autopilot-ticked，文案却印「机器代勾 0 格」，与同行动作依据自相矛盾。仅文案失真，行为（advisory 不拒）正确，非阻断。",
++      "remediation": "文案改用 _autoN（生效计数）渲染：机器代勾 ${_autoN} 格。"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "拒收判据取 watcher 流最大单跳（顺序无关）；代勾豁免计数 Math.max(本拍,持久化) 融合两拍来源，事件乱序不构成误判面。P2-B 清偿核实：代勾后写 flow-state autopilot_ticked（flow.js:814，writeFlowState 为读-合并-原子写不覆写他键）、门侧取 max（flow.js:887-888）。",
++    "并发": "门在 flow done 收口单点执行；writeFlowState 读-合并-写存在并发同变更收口的合并窗口，属协议外路径且留痕 best-effort 已声明，不另开 finding。P3-E 清偿核实：判据 autopilotTicked >= batchTick.to - batchTick.from 才 advisory（sentinel-assertions.js:174），测试 ②b 钉 1<3→reject、3>=3→advisory，蹭豁免通道关闭。",
++    "切换": "拒收后重跑幂等；代勾持久化使重入豁免成立。两个已接受残留（不重开已裁事项）：①持久化写本身失败被 catch 静默吞时重入仍可能误拒——既有逃生门 --allow-batch-tick 留痕可过；②持久化代勾数不随任务面后续手动勾选清除，同变更生命周期内后续真实一把勾幅 ≤ 持久化数时仍获 advisory——豁免上限被真实代勾数约束且有显式旁路先例兜底，属 P3-E 已裁判据的有界残留。P2-A 清偿核实：design 槽3 已声明接线侧为源码钉+决策面行为级、未建执行级 fixture 的已知边界。",
++    "作用域": "autopilot_ticked / allow_batch_tick 键落在按变更名隔离的 flow-state.yaml，无跨变更串台；watcher 事件文件按 change 名隔离且非真相源。P3-C 清偿核实：design 槽2 改为「新增导出 resolveBatchTickAction」，与 sentinel-assertions.js:169 具名导出及 flow.js:881 具名导入一致，无契约漂移。P3-D 清偿核实：design 槽3 披露并行会话 2026-09-29-flow-agent-log-report 提交 50c18719（agent-session-log 文案 / amend-draft 白名单 / 测试⑤），与 change.patch 中三处非本变更交付的 hunk 逐一对上，冻结面无未披露改动。"
++  },
++  "reviewedAt": "2026-09-29T16:40:53+08:00"
++}

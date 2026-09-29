@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-29-batch-tick-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-09-29-batch-tick-gate:flow:FR-01",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「③ A 层文案钉」",
+        "test/flow-status-heartbeat.test.mjs「④」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-batch-tick-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-09-29-batch-tick-gate:flow:FR-02",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「② 硬门接线钉」",
+        "test/batch-tick-gate.test.mjs「②b 决策纯函数行为级」",
+        "test/batch-tick-gate.test.mjs「②b 镜像-only 不拒钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-batch-tick-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-09-29-batch-tick-gate:flow:FR-03",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「② 硬门接线钉」",
+        "test/batch-tick-gate.test.mjs「②c autopilot 交互钉」",
+        "test/batch-tick-gate.test.mjs「②」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-09-29-batch-tick-gate"
+    }
+  ]
+}
