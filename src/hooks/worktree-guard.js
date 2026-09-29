@@ -60,7 +60,7 @@ const STAGE_HINTS = {
     '没有检测到活跃的 SillySpec 流程。',
     '你需要先启动一个任务流程才能修改源码（调用对应的 sillyspec skill）：',
     '',
-    '  BUG修复(skill sillyspec-quick)：sillyspec run quick "任务描述"',
+    '  轻量变更/BUG修复（默认快道，skill sillyspec-flow）：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
     '  逻辑变更(skill sillyspec-brainstorm)：sillyspec run brainstorm → plan → execute → verify → archive',
     '  全自动模式(skill sillyspec-auto)：sillyspec run auto "任务描述"',
   ],

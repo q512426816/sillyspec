@@ -15,7 +15,7 @@
 | [execute](./execute.md) | 波次执行 | 主流程 | 12（动态） | 高级工程师 | `src/stages/execute.js` |
 | [verify](./verify.md) | 验证 | 主流程 | 7 | QA 专家 | `src/stages/verify.js` |
 | [scan](./scan.md) | 项目扫描 | 辅助 | 11 | — | `src/stages/scan.js` |
-| [quick](./quick.md) | 快速任务 | 辅助 | 3 | 全栈老兵 | `src/stages/quick.js` |
+| [quick](./quick.md) | 快速任务（通道已退役 v3.30.0——仅存量会话收尾，新工作走 flow start） | 辅助 | 3 | 全栈老兵 | `src/stages/quick.js` |
 | [explore](./explore.md) | 自由探索 | 辅助 | 1 | 技术探索伙伴 | `src/stages/explore.js` |
 | [archive](./archive.md) | 归档 | 辅助 | 6 | — | `src/stages/archive.js` |
 | [status](./status.md) | 项目快照 | 辅助 | 3 | — | `src/stages/status.js` |
