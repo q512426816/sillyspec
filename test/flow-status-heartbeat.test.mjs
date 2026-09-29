@@ -116,7 +116,7 @@ test('④ 协议文案三处同步钉（简报/tasks 头/AGENTS.md——自愿�
   assert.ok(flowSrc.includes('做一件 → 勾一格'), '循环协议文案')
   assert.ok(!flowSrc.includes('重跑本命令取下一个') && !flowSrc.includes('每轮给下一个未勾任务'), '不得残留每任务重跑口径（D-007 回退钉）')
   const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
-  assert.ok(draftSrc.includes('进度源即本文件'), 'tasks.md 头部进度源口径')
+  assert.ok(draftSrc.includes('任务面在 ①spec 阶段定稿'), 'tasks.md 头部 spec 定稿口径（2026-09-29-batch-tick-gate）')
   // AGENTS.md 瘦身钉（2026-09-29-title-and-agents-slim 主题）：勾选纪律细节不进 AGENTS.md
   // （每会话全量注入面）——载体是 tasks.md 头部与 flow start 简报两个恰时面
   const agents = readFileSync(join(ROOT, '..', 'AGENTS.md'), 'utf8')
