@@ -4,13 +4,15 @@ doc_type: module-card
 module_id: cli-entry
 author: qinyi
 created_at: 2026-06-03T07:42:00+08:00
-updated_at: 2026-09-27T00:00:00+08:00
+updated_at: 2026-09-29T00:00:00+08:00
 ---
 # cli-entry
 
 > R7 注记（2026-09-22）：2026-09-22-r7-protocol-surgery：新增 flow 命令族（src/flow.js 2-调用协议 start/done/amend-draft + src/flow-draft.js 机器起草；index.js case flow 接线）
 
 > burst 注记（2026-09-23）：2026-09-22-stage-burst-fold：src/flow.js readFlowConfig 缺省 thin→legacy（:66/:76 两处，用户裁定 flow 族保留实验通道——显式 mode: thin 照旧生效）；协议面/命令面零改动，纯缺省值翻转
+
+> agent-log 注记（2026-09-29）：2026-09-29-flow-agent-log-report：flow 族四子命令（start/status/done/amend-draft）在 change 解析+校验后接入 recordAgentLogInvocation（runCommand 入口同款，src/agent-session-log.js）——agent 会话日志登记 + POST /api/agent-logs 上报；context.change_key=flow change 名、quick_id 恒空；best-effort 失败静默不阻断协议面（协议见 docs/platform-agent-log-protocol.md）
 
 ## 定位
 

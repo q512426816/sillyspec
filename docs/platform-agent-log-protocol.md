@@ -57,7 +57,7 @@ Content-Type: application/json
 }
 ```
 
-- **触发时机与推送范围**：agent 调 `sillyspec run <stage>`（含顶层别名）入口，探测到 agent 环境且本 run **own 集合非空**（会话身份锚定成功，见 §3「会话身份锚定」）才上报；探测不到 / own 解析失败（锚定识别失败宁缺毋滥）不发。**`entries` 只含 own 条目**——本 run 所属 agent 会话的日志（锚定主会话 + zcode parent_id 子代理链）；同 cwd 活跃窗口内其他窗口 / 其他 agent 的日志只进本地留底（§2 仍全量），不进任何上报（hub 会话不再把共享留底里别人的条目整批挂走）。每次调用都推（`invocations`/`last_seen_at` 递增即活跃心跳），服务端按 `(workspace, log_path)` upsert 去重即可。
+- **触发时机与推送范围**：agent 调 `sillyspec run <stage>`（含顶层别名）或 `sillyspec flow <start|status|done|amend-draft>`（2026-09-29-flow-agent-log-report 起 flow 族接入，`context.change_key`=flow change 名、`quick_id` 恒空）入口，探测到 agent 环境且本 run **own 集合非空**（会话身份锚定成功，见 §3「会话身份锚定」）才上报；探测不到 / own 解析失败（锚定识别失败宁缺毋滥）不发。**`entries` 只含 own 条目**——本 run 所属 agent 会话的日志（锚定主会话 + zcode parent_id 子代理链）；同 cwd 活跃窗口内其他窗口 / 其他 agent 的日志只进本地留底（§2 仍全量），不进任何上报（hub 会话不再把共享留底里别人的条目整批挂走）。每次调用都推（`invocations`/`last_seen_at` 递增即活跃心跳），服务端按 `(workspace, log_path)` upsert 去重即可。
 - **认证与 workspace 隔离**：与进度同步端点同规则——`shpsync_` token 服务端派生 `(user, workspace_id)`，**不信任 body 里的 workspace_id**（仅作参考展示）。
 - **响应**：任意 2xx 即成功；body 客户端不读。
 - **best-effort**：无配置静默跳过；网络失败 / 非 2xx / 超时（5s）→ `console.warn` 一行，**绝不阻断 run 主流程**（本地产物已留底，见 §2）。

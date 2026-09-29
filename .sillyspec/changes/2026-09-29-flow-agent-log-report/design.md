@@ -22,6 +22,7 @@ created_at: 2026-09-29T07:37:47.369Z
 
 <!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
 无新导出/无签名变化。对外可见行为：flow 族四个子命令各多一个 best-effort 副作用——agent 环境在场时写 <runtimeRoot>/agent-session-log.json（own 条目携带 change_key=<change 名>、last_command=子命令名+flag 名）并尝试上报平台（POST /api/agent-logs，payload 与 run 族同 schema）；探测不到/上报失败静默，协议面输出与 exit code 不变。
+文件变更清单（自声明）：src/flow.js（cmdFlow helper + 四分支调用）、src/agent-session-log.js（JSDoc 一行「run 命令入口」→「run/flow」口径纠偏）、test/flow-agent-log-report.test.mjs（新增）、docs/platform-agent-log-protocol.md（触发时机补 flow 族）、.sillyspec/docs/sillyspec/modules/cli-entry.md（模块注记）。冻结面里其余文件（src/hooks/worktree-guard.js 等）属并行会话在途交付（9a44c325/77f9049e），非本变更交付——本变更各提交均显式 pathspec 隔离。
 
 ## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
 <!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->

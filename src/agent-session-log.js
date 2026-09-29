@@ -1062,7 +1062,7 @@ export function readAgentLogArtifact(runtimeRoot) {
 }
 
 /**
- * 登记 agent 会话日志路径进 <runtimeRoot>/agent-session-log.json（run 命令入口调用）。
+ * 登记 agent 会话日志路径进 <runtimeRoot>/agent-session-log.json（run/flow 命令入口调用）。
  *
  * 合并语义：按 log_path 去重——同路径 invocations+1 / 刷新 last_seen_at 与文件 stat；
  * 新路径追加；entries 按 last_seen_at 新→旧排序（同毫秒平局按 seq 登记序决胜），
