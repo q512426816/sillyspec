@@ -6,27 +6,17 @@
 ## 选道（动手前先对号入座）
 | 需求形态 | 走法 |
 |---|---|
-| 需求已含决策（自检通过才走——对本需求，你还有没有必须问用户才能动手的问题？能不假思索答「无」且成功标准可直书，才走本行） | **轻量变更（自检通过才走）**：`flow start` → 直接干活 → `flow done`，全程 2 次协议调用（start 时 CLI 会同屏再盘问一次；答错事后指标会标记） |
-| 需求不清晰 / 需要方案探索（负面信号举例——举例非机制、非封闭清单：改哪说不清／成功标准只能写空话／≥2 个方案待取舍／需要人看方案再定） | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（产物自动接管，不重复起草；design 以头脑风暴版为准） |
-| 大改动：跨模块取舍 / 需要 Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程：`run brainstorm → plan → execute → verify → archive` 五阶段（每阶段一次渲染 + 一次 --done 收口；local.yaml 开 stage.burst 时一次下发全部步骤说明书；verify 用 `verify-probes --init --draft` 机器预填） |
-| 代码已先写好（倒推收尾） | 不回头补 brainstorm/plan 装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done`，实测门+测试绑定+patch 留档一步收口 |
+| 需求已含决策（改什么、成功标准说得清） | **轻量变更（默认快道）**：`flow start` → 直接干活 → `flow done`（2 次协议调用；操作细节见 `/sillyspec:flow` skill 与 flow start 输出） |
+| 需求不清晰 / 需要方案探索 | 头脑风暴预段：`run brainstorm --change <名>` → 完成后 `flow start --change <名>` 收编续跑（design 以头脑风暴版为准） |
+| 大改动：跨模块取舍 / Wave 计划编排 / 多阶段治理 / 设计期人机对抗 | 完整流程五阶段：`run brainstorm → plan → execute → verify → archive`（每阶段一次渲染 + 一次 --done 收口；细节见各阶段 skill 与 CLI 输出） |
+| 代码已先写好（倒推收尾） | 不回头补流程装样子：`flow start --change <YYYY-MM-DD-名> --input "<已做改动的描述＋成功标准>"` → `flow done` 一步收口 |
 
 选道看流程形态需求，不看技术关键词——风险面由收口评审按证据（承诺词/diff 原语/盲维作答）判定。轻量→完整转道是用户决策：须征得用户同意并带 `--upgrade-thick`（同意门留痕，无 flag 拒跑）；轻量变更实测失败自动升厚。
 
-## 轻量变更（默认快道）
-`sillyspec flow start --change <YYYY-MM-DD-名> --input "<需求>"` → 改代码、写测试（治理工件 CLI 机器起草，不用你写）→ `sillyspec flow done --change <名>`。
-
-`--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
-先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
-
-start 之后：按提示填 design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险，每节至少一行，写「不适用：<理由>」也算答——空槽 flow done 拒收）；干活时逐条勾 tasks.md 的 task-NN（勾选是收口哨兵证据面）；收口前交付代码先用显式 pathspec 提交（patch 冻结面=baseline..HEAD 提交面，未提交的代码不进审计件）。
-
-## 常用命令速查
-- 看进度：`sillyspec progress show`；轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `sillyspec flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
-- 跨会话交接：`sillyspec handoff --change <名>`（生成交接块，新会话零背景可续）
-- 变更列表 / 状态：`sillyspec status`
-- 自检修复：`sillyspec doctor`
-- 知识库：`sillyspec knowledge search --query "<关键词>"`（入口注入不覆盖设计时点——方案/设计引入新机制词时主动检索，命中必读（尤其 status=rejected 的防复潮条目）；方案步 --done 门也会自动检索回显命中）
+## 恢复与查看
+- 轻量变更恢复：重跑 `sillyspec flow start --change <名>`（输出恢复简报）或 `flow status --change <名>`；完整流程恢复：`run <stage> --change <名>` 续跑。不直接 commit 半成品
+- 跨会话交接：`sillyspec handoff --change <名>`；变更列表：`sillyspec status`；自检修复：`sillyspec doctor`
+- 知识库：`sillyspec knowledge search "<关键词>"`（命中知识 CLI 会自动注入 prompt，勿自行重复检索）
 
 ## 核心规则
 1. **禁止绕过本文件规则和 SillySpec 流程**。所有变更走 sillyspec 流程，不裸改裸提交。

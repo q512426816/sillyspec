@@ -582,7 +582,7 @@ export class ProgressManager {
 
     // 1. changes 行（投影流程进度列 + name 标识 + 所有权列 owner_session）
     const changeRow = sqlDb.prepare(
-      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts, owner_session
+      `SELECT id, name, current_stage, status, last_active, last_synced_platform_ts, last_local_modified_ts, owner_session, title
        FROM changes WHERE name = ?`
     ).get(changeName);
     if (changeRow === undefined) return null;
@@ -595,6 +595,10 @@ export class ProgressManager {
       last_synced_platform_ts: changeRow.last_synced_platform_ts ?? null,
       last_local_modified_ts: changeRow.last_local_modified_ts ?? null,
       owner_session: changeRow.owner_session ?? null,
+      // title 一并上行（用户需求 2026-09-29：变更标题为中文概括 ≤50 字）——平台
+      // _ensure_change_row 占位与既有行收养均消费 changes[].title；此前 SELECT 漏列
+      // → 上行恒无标题，平台只能落 change_key（「英文 key」病灶的同步链一侧）。
+      title: changeRow.title ?? null,
     };
 
     // 2. project 全局单行（只投影稳定字段 name/schema_version；created_at/updated_at 是本地库元数据，

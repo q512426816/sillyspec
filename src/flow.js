@@ -151,10 +151,10 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
     let domains = []
     let basis = ''
     if (Array.isArray(filesOverride) && filesOverride.length > 0) {
-      domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride).filter((d) => d !== 'unmapped')
+      domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride, knowledgeRoot).filter((d) => d !== 'unmapped')
       basis = filesOverride.length > 0 ? 'input/diff 路径' : ''
     } else if (existsSync(join(changeDir, 'design.md'))) {
-      domains = resolveTouchedDomains(changeDir, moduleIndex).filter((d) => d !== 'unmapped')
+      domains = resolveTouchedDomains(changeDir, moduleIndex, null, knowledgeRoot).filter((d) => d !== 'unmapped')
       basis = 'design.md 交付清单'
     }
     const frs = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
@@ -323,7 +323,7 @@ function changeArtifactPaths(changeDir) {
  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
  */
-export async function cmdFlowStart({ change, input, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
+export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
@@ -381,6 +381,17 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
           const w = await spawnWatcher(cwd, change, { specBase })
           if (w.status === 'spawned') console.log(`🔄 [watcher] 观测旁路已拉起：事件流 .sillyspec/.runtime/watcher-events-${change}.jsonl（恒带 provisional:true）`)
         } catch { /* 观测旁路 best-effort */ }
+        // adopt 标题（用户需求 2026-09-29）：头脑风暴 proposal 的 H1 是人写语义标题，
+        // deriveTitleFromLinkedChange 提取；--title 优先；兜底变更名。adopt 路径此前完全不
+        // 注册 changes 行——initChange 补插（幂等），既有行 title 空时回填。
+        try {
+          const { deriveTitleFromLinkedChange, deriveChangeTitle } = await import('./quicklog.js')
+          const adoptTitle = titleFlag || deriveTitleFromLinkedChange(specBase, change) || deriveChangeTitle(input) || change
+          pm.initChange(cwd, change, { title: adoptTitle })
+          const _arow = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
+          if (_arow && !_arow.title) pm.updateChangeMeta(cwd, change, { title: adoptTitle })
+          console.log(`🏷️ 变更标题：${adoptTitle}（收编自头脑风暴产物；重入 --title 可改）`)
+        } catch { /* adopt 标题 best-effort */ }
         const materials = materialPaths(specBase, change, changeDir)
         const artifacts = changeArtifactPaths(changeDir)
         const prototypePaths = artifacts.filter((p) => /\.html$/i.test(p))
@@ -448,6 +459,19 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
       writeFlowState(changeDir, { review_force: reviewForce })
       console.log(`⚖️ 已更新评审声明通道：review_force=${reviewForce}（resume 落盘）`)
     }
+    // 变更标题补写（用户需求 2026-09-29：title=中文概括 ≤50 字，建议 ~20 字）——存量在途
+    // 变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入改标题）；否则从 --input 首
+    // 行推导、仅当库内 title 为空才写（不覆盖已有语义标题）。best-effort 不阻断恢复简报。
+    try {
+      const { deriveChangeTitle } = await import('./quicklog.js')
+      const _row = pm._ensureDB(cwd).getDb().prepare('SELECT title FROM changes WHERE name = ?').get(change)
+      const _cur = _row ? (_row.title || '') : ''
+      const _derived = titleFlag || deriveChangeTitle(input)
+      if (_derived && (titleFlag || !_cur)) {
+        pm.updateChangeMeta(cwd, change, { title: _derived })
+        console.log(`🏷️ 变更标题${titleFlag ? '已更新' : '已补写'}：${_derived}（面板显示用；建议 ~20 字中文概括，重入 --title 可改）`)
+      }
+    } catch { /* 标题补写 best-effort */ }
     // 知识注入（2026-09-25-thin-fr-inject-parity）：resume 路径域路由走基线以来文件面——
     // changedFilesSinceBaseline（fr-rot-precision 评审 P2：含未提交工作树/untracked、剔 .sillyspec，
     // 与收口口径同源；裸 git diff 双提交区间会漏干活期未提交文件）；best-effort 不阻断恢复简报。
@@ -480,7 +504,16 @@ export async function cmdFlowStart({ change, input, thick = false, withTasks = f
   // 形态信号：清晰度门管「需求说不清楚」（预段收编），升厚只留用户决策（--upgrade-thick 同意门）
   // 与运行时证据（实测失败升档/edit_ratio/评审——风险面在收口时点按承诺词/diff 原语/盲维判定）。
 
-  pm.initChange(cwd, change, {})
+  // 变更标题（用户需求 2026-09-29：title=中文概括 ≤50 字、建议 ~20 字，agent 总结）：
+  // --title 显式指定优先；否则 --input 首行推导（agent 在 input 首行写一句中文概括即为标题）；
+  // 两者皆缺用变更名兜底（可辨识但不达意——横幅提示下次带 --title）。
+  let changeTitle = null
+  try {
+    const { deriveChangeTitle } = await import('./quicklog.js')
+    changeTitle = titleFlag || deriveChangeTitle(input) || change
+  } catch { changeTitle = titleFlag || change }
+  pm.initChange(cwd, change, { title: changeTitle })
+  console.log(`🏷️ 变更标题：${changeTitle}${changeTitle === change ? '（变更名兜底——下次带 --title "<≤20 字中文概括>" 更达意）' : '（面板显示用；建议 ~20 字中文概括，重入 flow start --title 可改）'}`)
   try {
     const { resolveSessionIdentity } = await import('./progress.js')
     const { session } = resolveSessionIdentity({ flagSession: null, cwd })
@@ -1489,6 +1522,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
     return cmdFlowStart({
       change,
       input: getFlag('--input') || undefined,
+      title: getFlag('--title') || null,
       thick: hasFlag('--thick'),
       withTasks: hasFlag('--with-tasks'),
       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,

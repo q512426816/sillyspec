@@ -22,6 +22,8 @@ sillyspec flow start --change <变更名> --input "<需求>"
 `--input` 过门格式（清晰度门按此提取，缺「成功标准」条目会被拦下）：
 先写动机/背景；随后独立一行只写「成功标准：」；再每行一条「- <可验证标准>」。
 
+变更标题（面板显示用）：总结一句中文概括，≤50 字、建议 ~20 字——`--input` 首行写这句即成标题（缺省取首行推导），或显式 `--title "<标题>"` 指定（重入 start 可改）。
+
 示例：
 
 ```
@@ -45,7 +47,7 @@ sillyspec flow start --change <变更名> --input "<需求>"
 sillyspec flow done --change <变更名>
 ```
 
-CLI 亲自实测 `.sillyspec/local.yaml` 的 `commands.test` / `commands.lint`（实测失败中断于对应子步、断点续，修好重跑即可）；按危险证据定档独立评审；patch 留档变更级归档。
+CLI 亲自实测（测试面按变更动态推断——本变更测试 ∪ FR 关联回归 ∪ import 依赖，runner 自项目结构推断；lint 走 `local.yaml` 的 `commands.lint`；实测失败中断于对应子步、断点续，修好重跑即可）；按危险证据定档独立评审；patch 留档变更级归档。
 
 ## 边界
 

@@ -118,6 +118,26 @@ export function sanitizeDesc(description) {
   return s.length > 120 ? s.slice(0, 120) + '…' : s
 }
 
+/**
+ * 变更标题推导（用户需求 2026-09-29：changes.title 应为中文描述，≤50 字、建议 ~20 字）。
+ * 取 --input 首个非空行（「成功标准：」引导行即止——那是验收面不是标题素材），剥
+ * 「需求：/动机：」类标签前缀，空白折叠单行，超长截断加 …；空输入返回 ''（调用方兜底
+ * change 名）。agent 在 --input 首行写一句中文概括即成标题（flow start 横幅有指引），
+ * --title 显式覆盖一切推导。
+ */
+export function deriveChangeTitle(input, max = 50) {
+  for (const l of String(input || '').replace(/\r\n/g, '\n').split('\n')) {
+    const t = l.trim()
+    if (!t) continue
+    if (/^成功标准\s*[:：]/.test(t)) break
+    const stripped = t.replace(/^(?:需求|动机|背景|任务|标题)\s*[:：]\s*/, '').trim()
+    if (!stripped) continue
+    const one = stripped.replace(/\s+/g, ' ')
+    return one.length > max ? one.slice(0, max) + '…' : one
+  }
+  return ''
+}
+
 
 // ── 平台推送（best-effort，2026-08-16-change-center-quick-tab task-06 / D-003）──
 
