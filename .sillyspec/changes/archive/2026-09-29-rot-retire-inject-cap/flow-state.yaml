@@ -4,11 +4,16 @@ substeps:
   artifacts: done
   ledger: done
   patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
 born_face: thin
 with_tasks: false
 review_force: null
 baseline_commit: 08b4fe0eaacc8a67175325ce7314bcfa4c875199
-updatedAt: '2026-09-29T05:37:59.806Z'
+updatedAt: '2026-09-29T05:52:19.477Z'
 baseline_sha256: f727c20aeebbd6a7423701d470857b975ffc601184ceef46fa56a0cb4d0cb7e3
 gate_summary: >-
   test: passed ← module[]+deps(js30)+fr(48)（10.3s）

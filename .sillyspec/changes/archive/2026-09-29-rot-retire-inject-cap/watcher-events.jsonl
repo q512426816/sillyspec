@@ -1,0 +1,17 @@
+{"ts":1790659002310,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790659022014,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790659035123,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790659884141,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790659884141,"kind":"task-done","stage":"tasks","detail":"checked 0→6","provisional":true}
+{"ts":1790659884501,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-01、task-02、task-03、task-04、task-05、task-06 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790659887951,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790659887951,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790659957271,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790660077758,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790660077758,"kind":"task-done","stage":"tasks","detail":"checked 6→7","provisional":true}
+{"ts":1790660077983,"kind":"warning","stage":null,"rule":"fake-check","severity":"warning","detail":"tasks 勾选 task-07 无对应提交（消息不含该 task id）且无 review.json 变更——假勾选嫌疑，人判","provisional":true}
+{"ts":1790660165863,"kind":"commit","stage":null,"detail":"a64f2c5e","provisional":true}
+{"ts":1790660192110,"kind":"commit","stage":null,"detail":"afbff16f","provisional":true}
+{"ts":1790660205273,"kind":"gate-run","stage":"verify","detail":"门实测 passed（10.3s） · 20260929053642","provisional":true}
+{"ts":1790660273843,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790660759104,"kind":"commit","stage":null,"detail":"0a4ed3c3","provisional":true}

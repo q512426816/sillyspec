@@ -4489,3 +4489,143 @@ superseded_by：FR-cli-entry-198
 - 场景：默认场景 — Given 系统就绪；When 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-title-and-agents-slim/requirements.md#FR-03
 最近确认：263542670c49870b8376c23395b5d1e58f7cd4b9
+
+## FR-cli-entry-241 {FR_INDEX_DIGEST} 注入收敛——滤 unmapped、top-8 截断、尾部指针行
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-01
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-01
+  tests: test/fr-inject-cap.test.mjs「① unmapped-only 专属空态」 | test/fr-inject-cap.test.mjs「①b 混合交付」 | test/fr-inject-cap.test.mjs「② 大域截断≤8+指针行+blockquote 保留」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active
+
+## FR-cli-entry-242 rot 持久标记层拆除——两处写入点与标记设施从 src 消失
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-02
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-02
+  tests: test/quick-asset-tail.test.mjs「1a/1b 导出移除钉」 | test/thin-fr-inject-parity.test.mjs「② rotSuspectFlow 三分判据+遥测 count=strong+不落盘」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active
+
+## FR-cli-entry-243 readActiveFrDigest 条目不再携带 needsReview 字段，注入排序回到索引序
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-03
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-03
+  tests: test/quick-asset-tail.test.mjs「6/6b needsReview 字段拆除钉」 | test/thin-fr-inject-parity.test.mjs「① flowKnowledgeDigest 索引序、无 ⚠️」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active
+
+## FR-cli-entry-244 knowledge/fr/*.md 现存「待复核：」行全部剥除
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-04
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+## FR-cli-entry-245 knowledge-digest 移除 rot 计数告警臂
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-05
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-05
+  tests: test/knowledge-digest.test.mjs「① 三信号阈值：totals 无 rot 键」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active
+
+## FR-cli-entry-246 stage-contract brainstorm --done 重复软门补 unmapped 过滤
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-06
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-06
+  tests: test/fr-index.test.mjs「10e 软门真域夹具透出」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active
+
+## FR-cli-entry-247 fr-inject 遥测（digest 源）保持全量 count 并新增截断披露字段
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-07
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-07
+  tests: test/fr-inject-cap.test.mjs「② 大域截断遥测全量口径 count=12/rendered=8/truncated=4」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active
+
+## FR-cli-entry-248 测试门与套件零回归
+变更：2026-09-29-rot-retire-inject-cap
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-rot-retire-inject-cap/requirements.md#FR-08
+最近确认：0a4ed3c3a1270ee35e49c7f0d3d876a273499140
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-rot-retire-inject-cap:flow:FR-08
+  tests: test/fr-index.test.mjs「11a/11b/11c 注入渲染端到端」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-rot-retire-inject-cap
+  status: active

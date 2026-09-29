@@ -1,0 +1,1264 @@
+diff --git a/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/flow-state.yaml b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/flow-state.yaml
+new file mode 100644
+index 00000000..bce05aa1
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/flow-state.yaml
+@@ -0,0 +1,17 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++  ledger: done
++  patch: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 08b4fe0eaacc8a67175325ce7314bcfa4c875199
++updatedAt: '2026-09-29T05:37:59.806Z'
++baseline_sha256: f727c20aeebbd6a7423701d470857b975ffc601184ceef46fa56a0cb4d0cb7e3
++gate_summary: >-
++  test: passed ← module[]+deps(js30)+fr(48)（10.3s）
++  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20260929053642\test-result.json｜lint: passed
++  ← npm run lint（37.7s）｜门文件 16 个
++
+diff --git a/src/flow.js b/src/flow.js
+index a3dac6fd..fbc890ea 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -169,16 +169,14 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+       if (frs.length === 0) {
+         lines.push(`   现行 FR：（该域暂无 active FR 索引条目——本变更大概率是首批需求）`)
+       } else {
+-        const flagged = frs.filter((f) => f.needsReview)
+-        const ordered = [...flagged, ...frs.filter((f) => !f.needsReview)]
+-        for (const f of ordered.slice(0, 8)) {
+-          lines.push(`   - ${f.id} ${f.title}${f.needsReview ? ` ⚠️待复核（${f.needsReview}）` : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
++        for (const f of frs.slice(0, 8)) {
++          lines.push(`   - ${f.id} ${f.title}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
+         }
+-        if (ordered.length > 8) lines.push(`   （+${ordered.length - 8} 条见 knowledge/fr/ 对应域文件）`)
++        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件）`)
+         // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
+         // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
+         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
+-        const unconfirmed = ordered.filter((f) => f.unconfirmed > 0).slice(0, 2)
++        const unconfirmed = frs.filter((f) => f.unconfirmed > 0).slice(0, 2)
+         if (unconfirmed.length > 0) {
+           lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
+         }
+@@ -220,22 +218,22 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+  * quick-done 钩子迁轻量道 + 按文件面交集判相关度（域级全标→三分判据，评审实测基线 131 条 →
+  * strong 83 / unknown 8 / skip 40）。对触达域每条 active FR：coverage = frCoverageFiles(来源变更)
+  * ∪ bindings，与本次归属文件面单向匹配（changed 恒文件级：相等 || changed.startsWith(cov 补/）：
+- * 交集非空 → strong（打待复核标记，下次知识注入带 ⚠️）；coverage 空 → unknown（不打标，遥测
+- * 单列——宁漏勿滥：漏标只损失注入排序优先级）；非空无交集 → skip。
++ * 交集非空 → strong（只进收口 advisory 与遥测——2026-09-29-rot-retire-inject-cap 起不再落盘
++ * 待复核标记：371 条零消费实证，持久化已拆）；coverage 空 → unknown（遥测
++ * 单列——宁漏勿滥）；非空无交集 → skip。
+  * 遥测 count 语义=strong（防污染 knowledge-stats 的 rotSuspectByDomain 消费读数，评审 P1-1）。
+  * advisory 零阻断，fail-open。
+- * @returns {{ warn: string|null, warnInfo?: string|null, domains: string[], strong: number, unknown: number, skip: number, marked: number }}
++ * @returns={{ warn: string|null, warnInfo?: string|null, domains: string[], strong: number, unknown: number, skip: number }}
+  */
+ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+   // 查询核迁 fr-index.activeFrCoverageHits 单源（2026-09-26-dynamic-test-inference）——
+-  // 同一「覆盖面∩触碰文件」查询双消费：本函数打待复核标记（信号面）；verify 门
++  // 同一「覆盖面∩触碰文件」查询双消费：本函数出收口 advisory 与遥测（信号面）；verify 门
+   // collectFrLinkedTests 反用为需求关联回归测试面。判据语义逐字不变。
+-  const { activeFrCoverageHits, markFrNeedsReview } = await import('./fr-index.js')
++  const { activeFrCoverageHits } = await import('./fr-index.js')
+   const q = activeFrCoverageHits({ specBase, change, changeDir, files })
+-  const knowledgeRoot = join(specBase, 'knowledge')
+   const { domains, hits: strong, unknownSources, unknownFrCount, skip } = q
+   if (domains.length === 0) {
+-    return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0, marked: 0 }
++    return { warn: null, warnInfo: null, domains, strong: 0, unknown: 0, skip: 0 }
+   }
+   const { appendKnowledgeHit } = await import('./knowledge-hits.js')
+   appendKnowledgeHit(join(specBase, '.runtime'), {
+@@ -245,18 +243,13 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+     strong: strong.length, unknown: unknownFrCount, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
+     unknownSources: [...unknownSources], source: 'flow-done',
+   })
+-  let marked = 0
+-  if (strong.length > 0) {
+-    const mr = markFrNeedsReview(knowledgeRoot, strong.map((f) => f.id), change)
+-    marked = mr.marked
+-  }
+   const warn = strong.length > 0
+-    ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（已打待复核标记 ${marked} 条；下次知识注入带 ⚠️）`
++    ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（收口提示即止，不留账）`
+     : null
+   const warnInfo = unknownFrCount > 0
+-    ? `ℹ️ 另有 ${unknownFrCount} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect，不打标）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
++    ? `ℹ️ 另有 ${unknownFrCount} 条 active FR 无法判定覆盖面（来源变更无归档件且无测试绑定，不计入 suspect）：${unknownSources.slice(0, 5).join('、')}${unknownSources.length > 5 ? ' 等' : ''}`
+     : null
+-  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownFrCount, skip, marked }
++  return { warn, warnInfo, domains, strong: strong.length, unknown: unknownFrCount, skip }
+ }
+ 
+ /**
+@@ -926,7 +919,7 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+     console.log(`🧾 实测面对账 — ${gateSummaryText}`)
+     try { writeFlowState(changeDir, { gate_summary: gateSummaryText }) } catch { /* 存档 best-effort */ }
+     // FR 腐烂 suspect（2026-09-25-thin-fr-inject-parity）：quick-done 钩子迁轻量道（quick 退役后
+-    // 原侧悬空）——归属文件面触达域的 active FR 打待复核标记，下次知识注入带 ⚠️。advisory 不阻断。
++    // 原侧悬空）——归属文件面触达域的 active FR 出收口 advisory 与遥测（2026-09-29 起不落盘）。advisory 不阻断。
+     try {
+       const rot = await rotSuspectFlow({ specBase, change, changeDir, files: changedFiles })
+       if (rot.warn) console.warn(rot.warn)
+diff --git a/src/fr-index.js b/src/fr-index.js
+index 199dc283..70918a9b 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -79,7 +79,7 @@ export function frCoverageFiles({ archiveRoot, changeName }) {
+ /** 条目「测试绑定：」子块的 tests 文件提取（多文件 | 分隔）。边界=下一个 ## 节头（FR 节）——
+  * 子块内顶格的 `<!-- test-bindings -->` 机器注释与 `- row:` 行不终止收集（评审 P1 修复：
+  * 原「任意顶格行 break」遇子块首行顶格注释即断，生产库 bindings 恒空；缩进 tests: 键名 +
+- * 节头边界已足够防条目正文误匹配）。readActiveFrDigest.bindings 与 cleanupStaleReviewMarks 共用。 */
++ * 节头边界已足够防条目正文误匹配）。readActiveFrDigest.bindings 与 activeFrCoverageHits 共用。 */
+ function readEntryBindings(lines) {
+   const idx = lines.findIndex((l) => l.startsWith('测试绑定：'));
+   if (idx === -1) return [];
+@@ -467,11 +467,9 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+         const target = st2.sections.find((s) => s.number === refId && !s.lines.some((l) => l.startsWith('superseded_by：')));
+         if (!target) continue;
+         // 就地补丁：状态翻 superseded + 插 superseded_by + 追取代链注记 + 刷新最近确认（摘要/标题保留）
+-        // 待复核行随承接清除（2026-09-20-quick-asset-tail D-003：quick 触达留下的 needs_review 信号
+-        // 在条目被正式承接取代时一并清——取代即复核完成，语义自然闭环）
+         target.lines = target.lines
+           .map((l) => (l.startsWith('状态：') ? `状态：superseded` : l.startsWith('最近确认：') ? `最近确认：${headHash || ''}` : l))
+-          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：') && !l.startsWith('待复核：'));
++          .filter((l) => !l.startsWith('superseded_by：') && !l.startsWith('取代链：') && !l.startsWith('退役理由：'));
+         const stateIdx = target.lines.findIndex((l) => l.startsWith('状态：'));
+         // 退役理由（追平刀②）：承接令牌带（退役理由：…）时写进被取代条目——对标 OpenSpec REMOVED
+         // 的 Migration 语义；无理由则省略行（不伪造）。
+@@ -775,20 +773,16 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
+       const decisionLine = s.lines.find((l) => l.startsWith('依据决策：'));
+       const decisions = decisionLine ? decisionLine.replace(/^依据决策：s*/, '').split('、').map((x) => x.trim()).filter(Boolean) : [];
+       const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
+-      // 待复核标记透传（2026-09-20-quick-asset-tail FR-02）：quick 触达留下的信号，
+-      // 注入面带 ⚠️ 提示后续变更核对——是信号非失效，承接翻链时清除。
+-      const reviewLine = s.lines.find((l) => l.startsWith('待复核：'));
+-      const needsReview = reviewLine ? reviewLine.replace(/^待复核：\s*/, '').trim() : null;
+       // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
+       // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
+-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, needsReview, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
++      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
+     }
+   }
+   return out;
+ }
+ 
+ // ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────
+-// 查询核单源双消费：flow 侧 rotSuspectFlow 打待复核标记（信号面）；verify 侧
++// 查询核单源双消费：flow 侧 rotSuspectFlow 出收口 advisory 与遥测（信号面）；verify 侧
+ // collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）。覆盖判定与
+ // rot 完全同口径：来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
+ 
+@@ -871,55 +865,10 @@ export function frTitleOverlap(a, b) {
+   return inter / (A.size + B.size - inter);
+ }
+ 
+-// ── needs_review 标记（2026-09-20-quick-asset-tail，D-003：信号非门禁）─────────────
+-
+-/** 待复核行前缀（机械解析契约：digest 按此前缀读，条目可多轮标记仅保最新一条）。 */
+-const FR_NEEDS_REVIEW_PREFIX = '待复核：';
+-
+-/**
+- * quick 触达域后给 active FR 条目打待复核标记（钩子#1 升级：遥测之外让地图本身诚实）。
+- * 幂等：条目已有含同 ref 的待复核行 → 跳过；superseded 条目不标（digest 注入面本就不含）。
+- * 只动文件不改语义——行是信号，承接翻链时被 indexRequirements 的 filter 清除。
+- * @param {string} knowledgeRoot
+- * @param {string[]} frIds - 全局 id 列表（钩子#1 的 readActiveFrDigest 命中集）
+- * @param {string} refNote - 标记来源（ql-id 或 change 名）
+- * @returns {{ marked: number, warnings: string[] }}
+- */
+-export function markFrNeedsReview(knowledgeRoot, frIds, refNote) {
+-  const warnings = [];
+-  let marked = 0;
+-  if (!Array.isArray(frIds) || frIds.length === 0 || !refNote) return { marked, warnings };
+-  const all = scanAllDomains(knowledgeRoot);
+-  const idSet = new Set(frIds);
+-  const dirty = new Set();
+-  for (const [domain, st] of all.entries()) {
+-    for (const s of st.sections) {
+-      if (!idSet.has(s.number)) continue;
+-      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代不标
+-      const line = `${FR_NEEDS_REVIEW_PREFIX}${refNote}`;
+-      if (s.lines.some((l) => l === line)) continue; // 幂等：同 ref 已标
+-      // 移除旧 ref 的待复核行（多轮标记仅保最新），追加新行到摘要行后
+-      s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
+-      const sumIdx = s.lines.findIndex((l) => l.startsWith('摘要：'));
+-      s.lines.splice(sumIdx === -1 ? s.lines.length : sumIdx + 1, 0, line);
+-      dirty.add(domain);
+-      marked++;
+-    }
+-  }
+-  if (dirty.size > 0) {
+-    mkdirSync(frDirPath(knowledgeRoot), { recursive: true });
+-    for (const d of dirty) {
+-      const st = all.get(d);
+-      writeFileSync(join(frDirPath(knowledgeRoot), `${d}.md`), joinKnowledgeFile(st.preamble, st.sections));
+-    }
+-  }
+-  for (const id of idSet) {
+-    let found = false;
+-    for (const st of all.values()) if (st.sections.some((s) => s.number === id)) { found = true; break; }
+-    if (!found) warnings.push(`markFrNeedsReview：${id} 不在索引中（跳过）`);
+-  }
+-  return { marked, warnings };
+-}
++// ── needs_review 持久标记层（2026-09-20-quick-asset-tail D-003）已拆除 ──────────────
++// 2026-09-29-rot-retire-inject-cap：markFrNeedsReview/FR_NEEDS_REVIEW_PREFIX/cleanupStaleReviewMarks
++// 移除——371 条标记零消费实证（归档全量检索无一次复核行动），信号饱和反噬注入排序。腐烂 suspect
++// 的信号面保留在 flow.js rotSuspectFlow（收口 advisory + fr-rot-suspect 遥测），不再落盘。
+ 
+ /**
+  * 归档侧 FR 域路由文件面（greenfield-bootstrap：archive 侧 indexRequirements 此前不传
+@@ -948,72 +897,3 @@ export function archiveDeliverableFiles(changeDir) {
+   return [...out].filter((p) => !p.startsWith('.sillyspec/'))
+ }
+ 
+-/**
+- * 存量待复核标记治理（fr-rot-precision 评审修正稿）：按「新判据下 ref 变更收口时该条会不会被
+- * 打标」重算——keep iff coverageFiles(FR 来源变更) ∪ bindings 与 coverageFiles(ref 变更) 有文件面
+- * 交集。ref 无归档或任一侧 coverage 空 → 删（自然覆盖 quick 侧 ref——quick 永不归档无文件面；
+- * 与运行时 unknown 不打标口径一致：宁漏勿滥，漏标只损失注入排序优先级）。
+- * 并发安全：写前重读比对快照，盘上已被并行会话改写的文件跳过（幂等可重跑消化）；原子写。
+- * superseded 条目不碰（无 active 语义）；**在途变更的标记跳过**（rot 打标在归档前、ref 必无
+- * 冻结件——误判面实证后修复：收口落地后重跑清理再判）。
+- * @returns {{ removed: number, kept: number, inFlight: number, skipped: string[], files: string[], byRef: Record<string, number> }}
+- */
+-export function cleanupStaleReviewMarks({ specBase, archiveRoot }) {
+-  const knowledgeRoot = join(specBase, 'knowledge');
+-  const frDir = frDirPath(knowledgeRoot);
+-  const snapshot = new Map();
+-  try {
+-    for (const f of readdirSync(frDir)) {
+-      if (f.endsWith('.md')) snapshot.set(f, readFileSync(join(frDir, f), 'utf8'));
+-    }
+-  } catch { /* 目录不可读=空治理面 */ }
+-  const all = scanAllDomains(knowledgeRoot);
+-  const covCache = new Map();
+-  const coverageOf = (changeName) => {
+-    if (!changeName) return [];
+-    if (!covCache.has(changeName)) covCache.set(changeName, frCoverageFiles({ archiveRoot, changeName }));
+-    return covCache.get(changeName);
+-  };
+-  let removed = 0, kept = 0, inFlight = 0;
+-  const byRef = {};
+-  const dirty = new Set();
+-  const covHit = (frChange, bindings, refCover) => {
+-    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
+-    const frCov = new Set([...coverageOf(frChange), ...(Array.isArray(bindings) ? bindings.map((b) => testAnchorFile(b)) : [])]);
+-    if (frCov.size === 0 || refCover.length === 0) return false;
+-    return [...frCov].some((p) => refCover.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/') || p.startsWith(c.endsWith('/') ? c : c + '/')));
+-  };
+-  for (const [domain, st] of all.entries()) {
+-    for (const s of st.sections) {
+-      const reviewLines = s.lines.filter((l) => l.startsWith(FR_NEEDS_REVIEW_PREFIX));
+-      if (reviewLines.length === 0) continue;
+-      if (s.lines.some((l) => l.startsWith('superseded_by：'))) continue; // 已取代：翻链自会清，不在此治理
+-      const ref = reviewLines[0].slice(FR_NEEDS_REVIEW_PREFIX.length).trim();
+-      // 在途变更跳过（第二轮清理实证）：rot 打标发生在 flow done ledger（归档前），ref 指向的
+-      // 变更此刻必无归档冻结件——coverage(ref) 恒空会误判全删。跳过，收口落地后重跑再判。
+-      if (ref && existsSync(join(specBase, 'changes', ref))) { inFlight++; continue; }
+-      const keep = covHit(s.change, readEntryBindings(s.lines), coverageOf(ref));
+-      if (keep) { kept++; continue; }
+-      s.lines = s.lines.filter((l) => !l.startsWith(FR_NEEDS_REVIEW_PREFIX));
+-      removed++;
+-      byRef[ref] = (byRef[ref] || 0) + 1;
+-      dirty.add(domain);
+-    }
+-  }
+-  const files = [];
+-  const skipped = [];
+-  if (dirty.size > 0) {
+-    mkdirSync(frDir, { recursive: true });
+-    for (const d of dirty) {
+-      const fname = `${d}.md`;
+-      try {
+-        const before = snapshot.get(fname);
+-        const now = existsSync(join(frDir, fname)) ? readFileSync(join(frDir, fname), 'utf8') : null;
+-        if (before == null || before !== now) { skipped.push(fname); continue; } // 并行写已发生——跳过，重跑消化
+-      } catch { skipped.push(fname); continue; }
+-      writeAtomicSync(join(frDir, fname), joinKnowledgeFile(all.get(d).preamble, all.get(d).sections));
+-      files.push(fname);
+-    }
+-  }
+-  return { removed, kept, inFlight, skipped, files, byRef };
+-}
+diff --git a/src/knowledge-digest.js b/src/knowledge-digest.js
+index 90bb4ad9..27a325df 100644
+--- a/src/knowledge-digest.js
++++ b/src/knowledge-digest.js
+@@ -2,15 +2,15 @@
+  * knowledge-digest.js — 知识资产治理信号收集器（2026-09-27-knowledge-digest）
+  *
+  * 现状：通用知识走 propose→平台人工合并闭环，规格资产（FR 索引/绑定）全自动入库零人审——
+- * 四类信号沉睡库内无人工出口（R23-full 载体仓收件箱积压 40 条实证）。本模块把沉睡数据
++ * 信号沉睡库内无人工出口（R23-full 载体仓收件箱积压 40 条实证）。本模块把沉睡数据
+  * 变结构化摘要：`sillyspec knowledge digest`（人读文本）/ `--json`（平台 RPC 消费）。
+  *
+- * 四信号（阈值内静默、超阈才进摘要——安静即健康态，防仪式化）：
+- *   ① rot 待复核标记：knowledge/fr/*.md 条目内「待复核：」行，按域计数（阈值 100）
+- *   ② 收件箱积压：knowledge/uncategorized.md 的 `## <qlId> | <标题>` 条目（阈值 20）
+- *   ③ 伪域落库：auto-* 域文件条目数 + unmapped 池条目数（阈值 0——伪域本不该增长）
+- *   ④ 绑定路径解析失败：fr/*.md 绑定行经 resolveTestFileRel（与 repair-paths/门禁读侧
++ * 三信号（阈值内静默、超阈才进摘要——安静即健康态，防仪式化）：
++ *   ① 收件箱积压：knowledge/uncategorized.md 的 `## <qlId> | <标题>` 条目（阈值 20）
++ *   ② 伪域落库：auto-* 域文件条目数 + unmapped 池条目数（阈值 0——伪域本不该增长）
++ *   ③ 绑定路径解析失败：fr/*.md 绑定行经 resolveTestFileRel（与 repair-paths/门禁读侧
+  *      同口径单源）无法自仓根解析（阈值 0）
++ *   （rot 待复核标记信号已随标记层拆除——2026-09-29-rot-retire-inject-cap：471 条零消费实证）
+  *
+  * 只读扫描，零写入——动作（迁移/清账/repair）由消费方另行执行。
+  */
+@@ -36,17 +36,12 @@ export function suggestDomainFromFiles(files) {
+   return null
+ }
+ 
+-/** 条目级解析：fr/<域>.md 的 `## <id> <标题>` 段头与「待复核：」行 */
++/** 条目级解析：fr/<域>.md 的 `## <id> <标题>` 段头（rot 待复核行解析已随标记层拆除，2026-09-29-rot-retire-inject-cap） */
+ function scanFrFile(text) {
+   const entries = []
+-  let cur = null
+   for (const line of text.split(/\r?\n/)) {
+     const h = /^## (FR-[\w.-]+-\d+|FR-\d+)\s*(.*)$/.exec(line)
+-    if (h) { cur = { id: h[1], needsReview: null }; entries.push(cur); continue }
+-    if (cur) {
+-      const r = /^待复核：(.+)$/.exec(line)
+-      if (r) cur.needsReview = r[1].trim()
+-    }
++    if (h) entries.push({ id: h[1] })
+   }
+   return entries
+ }
+@@ -59,9 +54,8 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
+   const knowledgeRoot = join(specBase, 'knowledge')
+   const frDir = join(knowledgeRoot, 'fr')
+   const signals = []
+-  const totals = { rot: 0, inbox: 0, pseudo: 0, unresolvedBindings: 0 }
++  const totals = { inbox: 0, pseudo: 0, unresolvedBindings: 0 }
+ 
+-  const rotByDomain = new Map()
+   const pseudoByDomain = new Map()
+   const unresolved = []
+   const frFiles = existsSync(frDir) ? readdirSync(frDir).filter(f => f.endsWith('.md')).sort() : []
+@@ -77,8 +71,6 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
+     const domain = f.replace(/\.md$/, '')
+     const text = readFileSync(join(frDir, f), 'utf8')
+     const entries = scanFrFile(text)
+-    const rot = entries.filter(e => e.needsReview).length
+-    if (rot > 0) { rotByDomain.set(domain, rot); totals.rot += rot }
+     if (isPseudoDomain(domain) && entries.length > 0) {
+       // 基线内的 unmapped 池不计（历史跨仓基线，非新增堆积）；auto-* 伪域无基线语义恒计
+       const count = domain === 'unmapped' ? Math.max(0, entries.length - unmappedBaseline) : entries.length
+@@ -114,11 +106,6 @@ export function collectKnowledgeDigest({ specBase, projectRoot }) {
+   const mk = (kind, level, title, count, detail, suggestion) =>
+     signals.push({ kind, level, title, count, detail, ...(suggestion ? { suggestion } : {}) })
+ 
+-  if (totals.rot > 100) {
+-    mk('rot', 'warn', `rot 待复核批量标记（${totals.rot} 条 > 100）`, totals.rot,
+-      [...rotByDomain.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([d, n]) => `${d} ${n}`).join('、'),
+-      '批量复核：文案漂移类可批量承接，行为类逐条对账')
+-  }
+   if (totals.inbox > 20) {
+     mk('inbox', 'warn', `知识收件箱积压（${totals.inbox} 条 > 20）`, totals.inbox,
+       inboxTitles.slice(0, 5).join('；') + (inboxTitles.length > 5 ? ' 等' : ''),
+@@ -148,7 +135,7 @@ export function renderKnowledgeDigestText(d) {
+   const lines = []
+   lines.push(`📬 知识资产治理摘要（${d.generated_at.slice(0, 16).replace('T', ' ')}）`)
+   if (d.healthy) {
+-    lines.push('✅ 四类信号全部在阈内（rot/inbox/伪域/坏绑定）——安静即健康态，无需动作')
++    lines.push('✅ 三类信号全部在阈内（inbox/伪域/坏绑定）——安静即健康态，无需动作')
+   } else {
+     lines.push(`⚠️ ${d.signals.length} 类信号超阈：`)
+     for (const s of d.signals) {
+@@ -157,6 +144,6 @@ export function renderKnowledgeDigestText(d) {
+       if (s.suggestion) lines.push(`     处置：${s.suggestion}`)
+     }
+   }
+-  lines.push(`底数：rot 待复核 ${d.totals.rot}｜收件箱 ${d.totals.inbox}｜伪域条目 ${d.totals.pseudo}｜坏绑定 ${d.totals.unresolvedBindings}`)
++  lines.push(`底数：收件箱 ${d.totals.inbox}｜伪域条目 ${d.totals.pseudo}｜坏绑定 ${d.totals.unresolvedBindings}`)
+   return lines.join('\n')
+ }
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index b0b75812..b7395c71 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -392,6 +392,68 @@ export function buildQuickSemanticGuardInjection({ specBase, cwd, changeName } =
+ export const KNOWLEDGE_INJECT_MAX_FILES = 3
+ export const KNOWLEDGE_INJECT_MAX_LINES = 40
+ 
++// {FR_INDEX_DIGEST} 注入截断上限（2026-09-29-rot-retire-inject-cap）：brainstorm step8 写作期
++// 现行 FR 清单 top-N + 指针行——与 flow start 注入口径（flow.js slice(0,8)）同数。大域/unmapped
++// 整池倾倒实证：digest 源遥测 11/11 次 count=723@unmapped。
++export const FR_INDEX_DIGEST_MAX_ENTRIES = 8
++
++/**
++ * {FR_INDEX_DIGEST} 段构建（brainstorm step8 写作期现行 FR 清单）——2026-09-29-rot-retire-inject-cap
++ * 从注入装配内联块抽出为可单测函数，并修两缺口：① 滤 unmapped（停车场非行为域，原不滤致整池倾倒
++ * ——遥测 11/11 次 count=723@unmapped 实证）；② top-8 截断 + 指针行（原无上限，与 flow start /
++ * module-inject 两个注入口径对齐）。截断先截条目再追加尾部承接指引 blockquote（naive slice 会把
++ * 指引一起截掉）。遥测 count 保持全量口径（L3 指标①），另加 rendered/truncated/unmappedFiltered。
++ * @param {object} opts
++ * @param {string} opts.frSpecBase - spec 根（.sillyspec）
++ * @param {string} opts.changeName - 变更名（域路由读其 design.md 交付清单；遥测 change 字段）
++ * @returns {Promise<{text: string, telemetry: object}>} text=替换值；telemetry=fr-inject 事件负载（异常时 null）
++ */
++export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
++  try {
++    const { discoverModuleIndex } = await import('../decision-distill.js')
++    const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
++    const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
++    const knowledgeRoot = join(frSpecBase, 'knowledge')
++    const domainsAll = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
++    // unmapped 是未归类停车场非行为域，不进写作 prompt——与 flowKnowledgeDigest / frDupGateFlow 同口径
++    const domains = domainsAll.filter((d) => d !== 'unmapped')
++    const entries = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
++    const truncated = Math.max(0, entries.length - FR_INDEX_DIGEST_MAX_ENTRIES)
++    let text
++    if (domains.length === 0) {
++      // 零路由命中两态：有交付清单但零命中（unmapped 兜底被滤）→ 指停车场；无清单 → 通用空态。
++      // 注意 unmapped 是 resolveTouchedDomains 的零命中兜底，真域命中时不与之并存。
++      let hasDeliverableRows = false
++      try {
++        const { deliverableFilesFromDesignText } = await import('../fr-index.js')
++        hasDeliverableRows = deliverableFilesFromDesignText(
++          readFileSync(join(frChangeDir, 'design.md'), 'utf8')).length > 0
++      } catch { /* design 缺席/不可读=无清单态 */ }
++      text = domainsAll.length > 0 && hasDeliverableRows
++        ? '（触达域仅剩 unmapped（未归类停车场，不注入）——存量条目需要时自查 knowledge/fr/unmapped.md；本变更交付文件建议登记进模块卡 paths，让后续变更路由到真域）'
++        : '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
++    } else if (entries.length === 0) {
++      text = '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
++    } else {
++      const lines = entries.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
++      if (truncated > 0) lines.push(`（+${truncated} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read）`)
++      lines.push('')
++      lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
++      text = lines.join('\n')
++    }
++    return {
++      text,
++      telemetry: {
++        type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
++        rendered: entries.length - truncated, truncated,
++        unmappedFiltered: domainsAll.length !== domains.length,
++      },
++    }
++  } catch (e) {
++    return { text: `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`, telemetry: null }
++  }
++}
++
+ /** top-N 选取：按 entries 出现序（INDEX 行序）取前 N 个不同 file（matchKnowledge 布尔 filter
+  *  无相关度排序，X-009——出现序即唯一稳定序），每 file 取首个命中 entry 作代表。 */
+ function pickTopKnowledgeEntries(entries, maxFiles) {
+@@ -1215,32 +1277,16 @@ export async function outputStep(stageName, stepIndex, steps, cwd, changeName, d
+ 
+   // ①c {FR_INDEX_DIGEST}（2026-09-18-fr-index-l1 L1，D-004）：brainstorm step8 的触达域现行 FR 注入
+   // ——写作期防重复 FR 的确定性清单（superseded 默认藏）；无触达域索引/索引空 → 段消隐。
+-  // fr-inject 遥测（L3 证据发生器指标①）fail-soft；token 本体在 stages/brainstorm.js step8 模板。
++  // 段构建与收敛口径（滤 unmapped + top-8）在 buildFrIndexDigestSection（可单测）；遥测 fail-soft。
+   if (stageName === 'brainstorm' && promptText.includes('{FR_INDEX_DIGEST}')) {
+-    try {
+-      const frSpecBase = resolvePromptSpecBase(platformOpts, cwd)
+-      const { discoverModuleIndex } = await import('../decision-distill.js')
+-      const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
+-      const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
+-      const knowledgeRoot = join(frSpecBase, 'knowledge')
+-      const domains = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
+-      const entries = readActiveFrDigest(knowledgeRoot, domains)
+-      if (entries.length === 0) {
+-        substitute(/\{FR_INDEX_DIGEST\}/g, '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）')
+-      } else {
+-        const lines = entries.map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）${e.needsReview ? ` ⚠️ 待复核（${e.needsReview}）——该 FR 覆盖的代码近期被 quick 触达，行为可能已变；本变更若触及同域先核对现状再决定承接/新写` : ''}`)
+-        lines.push('')
+-        lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
+-        substitute(/\{FR_INDEX_DIGEST\}/g, lines.join('\n'))
+-      }
++    const frSpecBase = resolvePromptSpecBase(platformOpts, cwd)
++    const sec = await buildFrIndexDigestSection({ frSpecBase, changeName })
++    substitute(/\{FR_INDEX_DIGEST\}/g, sec.text)
++    if (sec.telemetry) {
+       try {
+         const { appendKnowledgeHit } = await import('../knowledge-hits.js')
+-        appendKnowledgeHit(join(frSpecBase, '.runtime'), {
+-          type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
+-        })
++        appendKnowledgeHit(join(frSpecBase, '.runtime'), sec.telemetry)
+       } catch { /* 遥测 fail-soft */ }
+-    } catch (e) {
+-      substitute(/\{FR_INDEX_DIGEST\}/g, `（FR 索引注入失败：${e && e.message ? e.message : e}——可自行读 {SPEC_ROOT}/knowledge/fr/）`)
+     }
+   }
+ 
+diff --git a/src/run/shared.js b/src/run/shared.js
+index 03d1590c..c0974406 100644
+--- a/src/run/shared.js
++++ b/src/run/shared.js
+@@ -1875,16 +1875,8 @@ export async function auditQuickCompletion(cwd, guard, options = {}) {
+               type: 'fr-rot-suspect', change: guard.changeName || null,
+               domains: [...touchedDomains], count: frs.length, source: 'quick-done',
+             })
+-            // 地图诚实升级（2026-09-20-quick-asset-tail FR-02/D-003）：遥测之外给条目打
+-            // 待复核标记——下一次 brainstorm 注入行带 ⚠️，承接翻链时清除。fail-open 同块。
+-            const markRef = guard.changeName || 'recent-quick'
+-            try {
+-              const { markFrNeedsReview } = await import('../fr-index.js')
+-              const mr = markFrNeedsReview(join(specBase, 'knowledge'), frs.map(f => f.id), markRef)
+-              if (mr.marked > 0) {
+-                console.warn(`⚠️ [FR 待复核标记] ${mr.marked} 条 active FR 已标「待复核：${markRef}」——下次 brainstorm 注入可见，承接翻链时自动清除`)
+-              }
+-            } catch { /* 标记失败不影响遥测/审计 */ }
++            // 持久打标已拆（2026-09-29-rot-retire-inject-cap：371 条零消费实证）——
++            // 遥测 + 当场 warn 即止，不留账。fail-open 同块。
+             console.warn(`⚠️ [FR 腐烂 suspect·advisory] 本次 quick 触达 ${[...touchedDomains].join('、')} 域的 ${frs.length} 条 active FR——quick 不走归档，若改动影响这些行为，索引不会自动 supersede（L3 声明义务；盲区：unmapped 文件/map 漂移不报警）`)
+           }
+         }
+diff --git a/src/stage-contract.js b/src/stage-contract.js
+index 62836111..28c898cc 100644
+--- a/src/stage-contract.js
++++ b/src/stage-contract.js
+@@ -350,7 +350,9 @@ function validateBrainstormOutputs(cwd, changeName, context = {}) {
+     const frKnowledgeRoot = specRoot ? join(specRoot, 'knowledge') : join(cwd, '.sillyspec', 'knowledge')
+     const req = parseChangeRequirements(changeDir)
+     if (!req.missing && req.frs.length > 0) {
+-      const domains = resolveTouchedDomains(changeDir, discoverModuleIndex(frKnowledgeRoot))
++      // unmapped 过滤对齐 frDupGateFlow（2026-09-29-rot-retire-inject-cap）：停车场池不进
++      // 跨域标题比对——原全量载入 723 条做 CPU 税且产出跨域误指认
++      const domains = resolveTouchedDomains(changeDir, discoverModuleIndex(frKnowledgeRoot)).filter((d) => d !== 'unmapped')
+       const active = readActiveFrDigest(frKnowledgeRoot, domains)
+       if (active.length > 0) {
+         for (const fr of req.frs) {
+diff --git a/test/fr-index.test.mjs b/test/fr-index.test.mjs
+index 7d1d656e..7fe56fa1 100644
+--- a/test/fr-index.test.mjs
++++ b/test/fr-index.test.mjs
+@@ -166,27 +166,47 @@ function makeFixture() {
+ // ── 10e. CLI 端到端：软门 warning 经 validateBrainstormOutputs 面透出（不阻断）──
+ {
+   const { root, specBase, mkChange } = makeFixture()
+-  mkChange('2026-09-18-soft', '# R\n### FR-01: 归档端到端\n')
++  // 真域夹具（模块卡+design 交付表）：unmapped 停车场已不进软门比对（2026-09-29-rot-retire-inject-cap
++  // 对齐 frDupGateFlow 口径）——旧夹具落 unmapped 的 warning 路径已随过滤消隐
++  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
++  const dSoft = mkChange('2026-09-18-soft', '# R\n### FR-01: 归档端到端\n')
++  writeFileSync(join(dSoft, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
+   const { executeArchiveDistill } = await import('../src/run/archive-distill.js')
+   await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-soft' })
+   // 新变更标题与 active 条目高相似（bigram 重叠 0.8）、无承接 → 软门 warn 不 error
+   const d = mkChange('2026-09-18-soft2', '# R\n### FR-01: 归档端到端增强\n')
++  writeFileSync(join(d, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
+   const { runValidators } = await import('../src/stage-contract.js')
+   const r = runValidators('brainstorm', root, '2026-09-18-soft2', { specRoot: specBase })
+   assert((r.errors || []).every((e) => !String(e).includes('疑似重复 FR')), '10e-1 疑似重复永不进 errors 面（advisory 永不阻断的硬证据）')
+   assert((r.warnings || []).some((w) => w.includes('疑似重复 FR')), `10e-2 疑似重复 warning 透出（实际 warnings=${(r.warnings || []).length} 条）`)
+   const hits2 = readKnowledgeHits(join(specBase, '.runtime'))
+-  assert(hits2.some((h) => h.type === 'fr-duplicate-warning' && h.candidate === 'FR-unmapped-001'), '10e-3 fr-duplicate-warning 遥测落盘')
++  assert(hits2.some((h) => h.type === 'fr-duplicate-warning' && h.candidate === 'FR-cli-001'), '10e-3 fr-duplicate-warning 遥测落盘')
++  // 负路径（2026-09-29-rot-retire-inject-cap FR-06）：unmapped 池条目不进软门比对——
++  // 新 FR 与 unmapped 条目标题完全相同也不产出跨域疑似重复警告
++  const dU1 = mkChange('2026-09-18-unmapped1', '# R\n### FR-01: 孤立文档行为\n')
++  writeFileSync(join(dU1, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | docs/only.md | x |\n')
++  await executeArchiveDistill({ cwd: root, specBase, changeName: '2026-09-18-unmapped1' })
++  const dU2 = mkChange('2026-09-18-unmapped2', '# R\n### FR-01: 孤立文档行为\n')
++  writeFileSync(join(dU2, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | docs/only.md | x |\n')
++  const rU = runValidators('brainstorm', root, '2026-09-18-unmapped2', { specRoot: specBase })
++  assert(!(rU.warnings || []).some((w) => w.includes('疑似重复 FR')), `unmapped 池条目不得进软门比对（实际 warnings=${(rU.warnings || []).length} 条）`)
+ }
+ 
+ // ── 11. 注入渲染端到端（outputStep → {FR_INDEX_DIGEST} 替换 + fr-inject 遥测）──
+ {
+   const { root, specBase, mkChange } = makeFixture()
++  // 真域夹具：unmapped 池已不进 digest 注入（2026-09-29-rot-retire-inject-cap——旧断言渲染
++  // FR-unmapped-001 正是整池倾倒 bug 的微缩形态）
++  mkdirSync(join(specBase, 'docs', 'proj', 'modules'), { recursive: true })
++  writeFileSync(join(specBase, 'docs', 'proj', 'modules', '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
+   const d1 = mkChange('2026-09-18-i1', '# R\n### FR-01: 注入渲染\n')
++  writeFileSync(join(d1, 'design.md'), '---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
+   indexRequirements({ changeDir: d1, knowledgeRoot: join(specBase, 'knowledge') })
+   // 受注入变更：有 design.md（域解析面）与 requirements.md
+   const d2 = mkChange('2026-09-18-i2', '# R\n### FR-01: 新需求\n')
+-  writeFileSync(join(d2, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/foo.js | x |\n')
++  writeFileSync(join(d2, 'design.md'), '---\nscale: large\n---\n# D\n\n## 文件变更清单\n\n| 操作 | 文件路径 | 说明 |\n|---|---|---|\n| 修改 | src/cli/a.js | x |\n')
+   const { outputStep } = await import('../src/run/prompt.js')
+   const steps = [{ name: '生成规范文件', prompt: '写作前列现行 FR：\n{FR_INDEX_DIGEST}\n然后生成四件套。' }]
+   let rendered = ''
+@@ -197,7 +217,7 @@ function makeFixture() {
+   } finally {
+     console.log = origRenderLog
+   }
+-  assert(rendered.includes('FR-unmapped-001') && rendered.includes('注入渲染'), `11a digest 段替换注入（含 active 条目）`)
++  assert(rendered.includes('FR-cli-001') && rendered.includes('注入渲染'), `11a digest 段替换注入（含 active 条目）`)
+   assert(!rendered.includes('{FR_INDEX_DIGEST}'), '11b 占位符消隐')
+   const hits = readKnowledgeHits(join(specBase, '.runtime'))
+   assert(hits.some((h) => h.type === 'fr-inject' && h.count >= 1 && Array.isArray(h.domains)), `11c fr-inject 遥测落盘（指标①发生器闭环）`)
+diff --git a/test/fr-inject-cap.test.mjs b/test/fr-inject-cap.test.mjs
+new file mode 100644
+index 00000000..65892c3c
+--- /dev/null
++++ b/test/fr-inject-cap.test.mjs
+@@ -0,0 +1,116 @@
++/**
++ * fr-inject-cap.test.mjs — {FR_INDEX_DIGEST} 注入收敛（2026-09-29-rot-retire-inject-cap）
++ *
++ * 验收面（FR-01/FR-07）：
++ *   ① 滤 unmapped：unmapped-only 变更 → 专属空态文案（不落整池）；混合域 → 仅真域条目
++ *   ② top-8 截断：大域 digest ≤8 条 + 「+N 条见」指针行；尾部承接指引 blockquote 保留
++ *   ③ 遥测口径：count=全量、rendered/truncated 披露截断面、unmappedFiltered 披露滤除
++ *   ④ 小域（≤8 条）：无指针行、blockquote 仍在
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { buildFrIndexDigestSection, FR_INDEX_DIGEST_MAX_ENTRIES } = await import(
++  pathToFileURL(join(ROOT, '..', 'src', 'run', 'prompt.js')).href
++)
++
++/** 夹具：cli 域（src/cli/ 前缀）N 条 active FR + unmapped 池 M 条。design.md 交付表决定域路由。 */
++function buildSpecRoot(base, { cliCount = 0, unmappedCount = 0, designRows = [] } = {}) {
++  const specBase = join(base, '.sillyspec')
++  const knowledge = join(specBase, 'knowledge')
++  const frDir = join(knowledge, 'fr')
++  mkdirSync(frDir, { recursive: true })
++  const mapDir = join(specBase, 'docs', 'proj', 'modules')
++  mkdirSync(mapDir, { recursive: true })
++  writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
++  const mkDomain = (domain, count, change) => {
++    if (count === 0) return
++    const lines = ['---', 'author: sillyspec-fr-index', '---', '', `# FR 索引 — ${domain}`, '']
++    for (let i = 1; i <= count; i++) {
++      lines.push(`## FR-${domain}-${String(i).padStart(3, '0')} 功能${i}`, `变更：${change}`, '状态：active',
++        '摘要：默认场景', '场景正文：', `- 场景：默认场景 — Given G${i} When W${i} Then T${i}`,
++        `全文：${change}/requirements.md#FR-${i}`, `最近确认：aaaa${i}`, '')
++    }
++    writeFileSync(join(frDir, `${domain}.md`), lines.join('\n'))
++  }
++  mkDomain('cli', cliCount, 'hist-cli')
++  mkDomain('unmapped', unmappedCount, 'hist-unmapped')
++  return specBase
++}
++
++function writeChange(specBase, name, designRows) {
++  const changeDir = join(specBase, 'changes', name)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), designRows.map((r) => `| 修改 | ${r} | x |`).join('\n') + '\n')
++  return changeDir
++}
++
++test('① unmapped-only 变更：专属空态文案，整池不进 prompt', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic1-'))
++  try {
++    const specBase = buildSpecRoot(tmp, { unmappedCount: 20 })
++    writeChange(specBase, 'c-unmapped-only', ['docs/zzz.md'])
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-unmapped-only' })
++    assert.ok(r.text.includes('unmapped') && r.text.includes('不注入'), '应给 unmapped 专属空态文案')
++    assert.ok(!r.text.includes('FR-unmapped-'), '不得渲染 unmapped 池条目')
++    assert.deepEqual(r.telemetry.domains, [], '遥测 domains 为滤后空集')
++    assert.equal(r.telemetry.count, 0, 'count=0')
++    assert.equal(r.telemetry.unmappedFiltered, true, 'unmappedFiltered=true')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('② 大域截断：≤8 条渲染 + 指针行 + blockquote 保留；遥测全量口径', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic2-'))
++  try {
++    const specBase = buildSpecRoot(tmp, { cliCount: 12 })
++    writeChange(specBase, 'c-big', ['src/cli/a.js'])
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-big' })
++    const entryLines = r.text.split('\n').filter((l) => l.startsWith('- FR-cli-'))
++    assert.equal(entryLines.length, FR_INDEX_DIGEST_MAX_ENTRIES, `渲染条目应 ≤${FR_INDEX_DIGEST_MAX_ENTRIES}`)
++    assert.ok(r.text.includes(`+${12 - FR_INDEX_DIGEST_MAX_ENTRIES} 条见 knowledge/fr/`), '指针行在场')
++    assert.ok(r.text.includes('> 域解析自本变更 design.md 文件清单'), '尾部承接指引 blockquote 保留')
++    assert.ok(r.text.indexOf('+4 条见') < r.text.indexOf('> 域解析自'), '指针行在 blockquote 之前（先截后追加）')
++    assert.equal(r.telemetry.count, 12, '遥测 count=全量 12')
++    assert.equal(r.telemetry.rendered, 8)
++    assert.equal(r.telemetry.truncated, 4)
++    assert.equal(r.telemetry.unmappedFiltered, false)
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('①b 混合交付：真域命中即路由（unmapped 兜底不叠加）', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic3-'))
++  try {
++    const specBase = buildSpecRoot(tmp, { cliCount: 3, unmappedCount: 5 })
++    writeChange(specBase, 'c-mixed', ['src/cli/a.js', 'docs/zzz.md'])
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-mixed' })
++    assert.ok(r.text.includes('FR-cli-001'), '真域条目在场')
++    assert.ok(!r.text.includes('FR-unmapped-'), 'unmapped 条目不得渲染')
++    // resolveTouchedDomains 的 unmapped 是零命中兜底——真域命中时不与之并存（unmappedFiltered 恒 false）
++    assert.deepEqual(r.telemetry.domains, ['cli'])
++    assert.equal(r.telemetry.unmappedFiltered, false)
++    assert.equal(r.telemetry.count, 3)
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('④ 小域：无指针行、blockquote 仍在、空域清单走通用空态', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic4-'))
++  try {
++    const specBase = buildSpecRoot(tmp, { cliCount: 3 })
++    writeChange(specBase, 'c-small', ['src/cli/a.js'])
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-small' })
++    assert.ok(!r.text.includes('条见 knowledge/fr/'), '未截断时无指针行')
++    assert.ok(r.text.includes('> 域解析自本变更 design.md 文件清单'), 'blockquote 保留')
++    assert.equal(r.telemetry.truncated, 0)
++
++    // 零触达域（design 空表）→ 通用空态（非 unmapped 专属文案）
++    const specBase2 = buildSpecRoot(tmp, { cliCount: 1 })
++    writeChange(specBase2, 'c-none', [])
++    const r2 = await buildFrIndexDigestSection({ frSpecBase: specBase2, changeName: 'c-none' })
++    assert.ok(r2.text.includes('首批需求'), '无域依据走通用空态文案')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
+diff --git a/test/fr-rot-precision.test.mjs b/test/fr-rot-precision.test.mjs
+index 782e8198..5fd6c0a1 100644
+--- a/test/fr-rot-precision.test.mjs
++++ b/test/fr-rot-precision.test.mjs
+@@ -4,7 +4,7 @@
+  * 验收面：
+  *   ① deliverableFilesFromDesignText：交付表行解析 + 反引号剥壳（29.4% 厚道条目带壳不失明）；
+  *   ② frCoverageFiles 三源并集：design 表 ∪ change-patch.json files，统一剔 .sillyspec/；
+- *   ③ cleanupStaleReviewMarks：按文件面交集重算（keep/删/ref 无归档全删）+ 幂等重跑 + 并行写跳过；
++ *   ③（cleanupStaleReviewMarks 套件已随标记层拆除删除——2026-09-29-rot-retire-inject-cap）
+  *   ④ frDupGateFlow：取最高重叠对（非首个过阈）+ 命中行附场景名（过滤（无场景名）占位）；
+  *   ⑤ 常量公共化钉：flow.js 与 stage-contract.js 无裸 >= 0.6 且 FR_TITLE_OVERLAP_THRESHOLD import 在场；
+  *   ⑥ resume 域路由口径钉：复用 changedFilesSinceBaseline（防回潮裸 git diff）。
+@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
+ 
+ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const frIndex = await import(pathToFileURL(join(ROOT, 'src', 'fr-index.js')).href)
+-const { deliverableFilesFromDesignText, frCoverageFiles, cleanupStaleReviewMarks, FR_TITLE_OVERLAP_THRESHOLD } = frIndex
++const { deliverableFilesFromDesignText, frCoverageFiles, FR_TITLE_OVERLAP_THRESHOLD } = frIndex
+ const { frDupGateFlow } = await import(pathToFileURL(join(ROOT, 'src', 'flow.js')).href)
+ 
+ test('① deliverableFilesFromDesignText：交付表行解析 + 反引号剥壳', () => {
+@@ -49,56 +49,6 @@ test('② frCoverageFiles：三源并集 + 剔 .sillyspec/', () => {
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+-/** cleanup 夹具：FR-001 keep（交集）/FR-002 recent-quick 删/FR-003 无交集删/FR-004 FR 侧 coverage 空删。 */
+-function buildCleanupFixture(tmp) {
+-  const specBase = join(tmp, '.sillyspec')
+-  const knowledge = join(specBase, 'knowledge')
+-  mkdirSync(join(knowledge, 'fr'), { recursive: true })
+-  const arc = join(specBase, 'changes', 'archive')
+-  for (const [name, files] of [['hist-a', ['src/x/a.js']], ['hist-b', ['src/x/a.js', 'src/y.js']], ['hist-c', ['src/other.js']]]) {
+-    mkdirSync(join(arc, name), { recursive: true })
+-    writeFileSync(join(arc, name, 'change-patch.json'), JSON.stringify({ change: name, files }))
+-  }
+-  // hist-d 故意无归档（FR-004 来源 coverage 空）
+-  writeFileSync(join(knowledge, 'fr', 'cli.md'), [
+-    '# FR 索引 — cli',
+-    '',
+-    '## FR-cli-001 条目一',
+-    '变更：hist-a',
+-    '状态：active',
+-    '摘要：默认场景',
+-    '全文：hist-a/requirements.md#FR-01',
+-    '最近确认：a1',
+-    '待复核：hist-b',
+-    '',
+-    '## FR-cli-002 条目二',
+-    '变更：hist-a',
+-    '状态：active',
+-    '摘要：默认场景',
+-    '全文：hist-a/requirements.md#FR-02',
+-    '最近确认：a2',
+-    '待复核：recent-quick',
+-    '',
+-    '## FR-cli-003 条目三',
+-    '变更：hist-a',
+-    '状态：active',
+-    '摘要：默认场景',
+-    '全文：hist-a/requirements.md#FR-03',
+-    '最近确认：a3',
+-    '待复核：hist-c',
+-    '',
+-    '## FR-cli-004 条目四',
+-    '变更：hist-d',
+-    '状态：active',
+-    '摘要：默认场景',
+-    '全文：hist-d/requirements.md#FR-04',
+-    '最近确认：a4',
+-    '待复核：hist-b',
+-    '',
+-  ].join('\n'))
+-  return { specBase, arc, frPath: join(knowledge, 'fr', 'cli.md') }
+-}
+-
+ test('②b 目录形态 coverage 的单向前缀匹配（rot 消费口径）', async () => {
+   const tmp = mkdtempSync(join(tmpdir(), 'frp2b-'))
+   try {
+@@ -128,36 +78,6 @@ test('②b 目录形态 coverage 的单向前缀匹配（rot 消费口径）', a
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+-test('③ cleanupStaleReviewMarks：交集重算 + 幂等 + 并行写跳过', () => {
+-  const tmp = mkdtempSync(join(tmpdir(), 'frp3-'))
+-  try {
+-    const { specBase, arc, frPath } = buildCleanupFixture(tmp)
+-    const r = cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
+-    assert.equal(r.kept, 1, 'FR-001（hist-a ∩ hist-b 有 src/x/a.js 交集）保留')
+-    assert.equal(r.removed, 3, 'FR-002（ref 无归档）/FR-003（无交集）/FR-004（FR 侧 coverage 空）删')
+-    assert.equal((r.byRef['recent-quick'] || 0), 1)
+-    const fr = readFileSync(frPath, 'utf8')
+-    assert.ok(fr.includes('待复核：hist-b'), '交集标记保留')
+-    assert.ok(!fr.includes('recent-quick') && !fr.includes('待复核：hist-c'), '无关标记删除')
+-    // 幂等重跑
+-    const r2 = cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
+-    assert.equal(r2.removed, 0)
+-    assert.equal(r2.kept, 1)
+-    // 幂等第三跑：无变化时重跑文件 byte 级不变（skipped 分支在同步实现下窗口为零——
+-    // 写前重读快照比对是异步化/多进程预留的防御面，此处验证可达的幂等语义）
+-    const after1 = readFileSync(frPath, 'utf8')
+-    cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
+-    assert.equal(readFileSync(frPath, 'utf8'), after1, '判定结果不变时重跑不改文件（幂等 byte 级）')
+-    // 在途变更跳过：ref 有活跃变更目录（未归档）→ 不判不删（收口落地后重跑再判——第二轮清理实证的误删面）
+-    writeFileSync(frPath, after1.replace('待复核：hist-b', '待复核：active-wip-change'))
+-    mkdirSync(join(specBase, 'changes', 'active-wip-change'), { recursive: true })
+-    const r4 = cleanupStaleReviewMarks({ specBase, archiveRoot: arc })
+-    assert.equal(r4.inFlight, 1, '在途变更标记跳过（inFlight 计数）')
+-    assert.equal(r4.removed, 0)
+-    assert.ok(readFileSync(frPath, 'utf8').includes('待复核：active-wip-change'), '在途标记保留')
+-  } finally { rmSync(tmp, { recursive: true, force: true }) }
+-})
+-
+ test('④ frDupGateFlow：最高重叠对 + 场景名注入', async () => {
+   const tmp = mkdtempSync(join(tmpdir(), 'frp4-'))
+   try {
+diff --git a/test/knowledge-digest.test.mjs b/test/knowledge-digest.test.mjs
+index 29c0a2ec..ef67e056 100644
+--- a/test/knowledge-digest.test.mjs
++++ b/test/knowledge-digest.test.mjs
+@@ -1,6 +1,7 @@
+ /**
+  * 2026-09-27-knowledge-digest 防回归：
+- * ① collectKnowledgeDigest 四信号扫描与阈值（rot>100 / inbox>20 / 伪域>0（unmapped 基线消音）/ 坏绑定>0）
++ * ① collectKnowledgeDigest 三信号扫描与阈值（inbox>20 / 伪域>0（unmapped 基线消音）/ 坏绑定>0）
++ *   （rot 信号臂已随标记层拆除——2026-09-29-rot-retire-inject-cap）
+  * ② suggestDomainFromFiles 交付路径→建议域（backend 模块归属最强/daemon/frontend/src 段）
+  * ③ renderKnowledgeDigestText 文本出口 + healthy 静默态
+  * ④ CLI knowledge digest --json 端到端
+@@ -18,25 +19,20 @@ const tmpRoots = []
+ function mk(p) { const d = mkdtempSync(join(tmpdir(), p)); tmpRoots.push(d); return d }
+ test.after(() => { for (const d of tmpRoots) { try { rmSync(d, { recursive: true, force: true }) } catch {} } })
+ 
+-function fixture({ rotCount = 0, inboxCount = 0, autoDomain = false, unmappedCount = 0, unmappedBaseline = null, badBinding = false }) {
++function fixture({ inboxCount = 0, autoDomain = false, unmappedCount = 0, unmappedBaseline = null, badBinding = false }) {
+   const root = mk('kd-')
+   const specBase = join(root, '.sillyspec')
+   mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
+   mkdirSync(join(root, 'backend', 'app', 'modules', 'platform_sync', 'tests'), { recursive: true })
+   writeFileSync(join(root, 'backend', 'app', 'modules', 'platform_sync', 'tests', 't.py'), 'x = 1\n')
+   const frLines = ['---', 'author: t', '---', '', '# FR 索引 — core', '']
+-  frLines.push('## FR-core-001 行为一', '状态：active', rotCount > 0 ? '待复核：2026-09-27-某变更' : null,
++  frLines.push('## FR-core-001 行为一', '状态：active',
+     '', '测试绑定：', '<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->',
+     '- row: src-change:task-01:FR-01',
+     `  tests: ${badBinding ? 'nope-missing.test.ts' : 'backend/app/modules/platform_sync/tests/t.py'}`,
+     '  reason: spec', '  state: candidate', '  discovery: machine', '  confirmed_by: null', '  confirmed_at: null', '')
+   frLines.filter(Boolean).forEach(l => { })
+   writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), frLines.filter(l => l !== null).join('\n') + '\n')
+-  if (rotCount > 1) {
+-    const extra = []
+-    for (let i = 2; i <= rotCount; i++) extra.push(`## FR-core-${String(i).padStart(3, '0')} 行为${i}`, '状态：active', '待复核：2026-09-27-某变更', '')
+-    writeFileSync(join(specBase, 'knowledge', 'fr', 'core.md'), frLines.filter(l => l !== null).join('\n') + '\n' + extra.join('\n') + '\n')
+-  }
+   if (autoDomain) {
+     writeFileSync(join(specBase, 'knowledge', 'fr', 'auto-backend.md'), '---\nauthor: t\n---\n\n# FR 索引 — auto-backend\n\n## FR-auto-backend-001 伪域条目\n状态：active\n')
+   }
+@@ -56,17 +52,13 @@ function fixture({ rotCount = 0, inboxCount = 0, autoDomain = false, unmappedCou
+   return { root, specBase }
+ }
+ 
+-test('① 四信号阈值：全在阈内 healthy；各类超阈逐项进摘要；unmapped 基线消音', () => {
++test('① 三信号阈值：全在阈内 healthy；各类超阈逐项进摘要；unmapped 基线消音', () => {
+   const q = fixture({})
+   const d = collectKnowledgeDigest({ specBase: q.specBase, projectRoot: q.root })
+   assert.equal(d.healthy, true, '空库healthy')
+   assert.equal(d.signals.length, 0)
+   assert.ok(renderKnowledgeDigestText(d).includes('安静即健康态'), 'healthy 文案')
+-
+-  const r = fixture({ rotCount: 101 })
+-  const dr = collectKnowledgeDigest({ specBase: r.specBase, projectRoot: r.root })
+-  assert.equal(dr.totals.rot, 101)
+-  assert.ok(dr.signals.some(s => s.kind === 'rot' && s.count === 101), 'rot 超阈进摘要')
++  assert.ok(!('rot' in d.totals), 'totals 不再含 rot 键（信号臂已拆）')
+ 
+   const i = fixture({ inboxCount: 21 })
+   const di = collectKnowledgeDigest({ specBase: i.specBase, projectRoot: i.root })
+diff --git a/test/quick-asset-tail.test.mjs b/test/quick-asset-tail.test.mjs
+index 7e4252a6..66c7dae2 100644
+--- a/test/quick-asset-tail.test.mjs
++++ b/test/quick-asset-tail.test.mjs
+@@ -2,12 +2,11 @@
+  * quick 资产尾测试（2026-09-20-quick-asset-tail，FR-01~03 / D-001~D-005）
+  *
+  * 覆盖：
+- *   1. markFrNeedsReview：写入/幂等/未知id警告/superseded不标
+- *   2. readActiveFrDigest：needsReview 透传
+- *   3. 承接翻链清除待复核行（indexRequirements filter，S2 阻断①修复的钉）
+- *   4. liteArchiveChange：正常归档（rename+unregister 语义）/自愈（已在 archive/）/所有权拒
+- *   5. distillLinkedChangeAssets：蒸馏触发/跳过（无文件/纯quick关联）/fail-open
+- *   6. prompt 注入行 ⚠️（渲染层直测——经 buildPrompt 不便，直接测 digest→行拼接口径）
++ *   1. 标记层拆除钉（2026-09-29-rot-retire-inject-cap）：fr-index 不再导出打标函数；
++ *      readActiveFrDigest 条目无 needsReview 字段
++ *   2. 承接翻链仍工作（indexRequirements supersede——标记 filter 项移除后的回归钉）
++ *   3. liteArchiveChange：正常归档（rename+unregister 语义）/自愈（已在 archive/）/所有权拒
++ *   4. distillLinkedChangeAssets：蒸馏触发/跳过（无文件/纯quick关联）/fail-open
+  *
+  * 风格：自研 assert + tmp fixture（同 fr-index.test.mjs 族）。
+  */
+@@ -15,7 +14,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
+ import { join } from 'path'
+ import { tmpdir } from 'os'
+ 
+-import { markFrNeedsReview, readActiveFrDigest, indexRequirements, parseChangeRequirements } from '../src/fr-index.js'
++import { readActiveFrDigest, indexRequirements } from '../src/fr-index.js'
+ import { liteArchiveChange, distillLinkedChangeAssets } from '../src/run/complete-handlers.js'
+ 
+ let failed = 0
+@@ -66,23 +65,20 @@ function fakePm({ owner = null, active = true } = {}) {
+   }
+ }
+ 
+-// ── 1-3. needs_review 全链 ──
++// ── 1-2. 标记层拆除钉 + 承接翻链回归 ──
+ {
+   const root = mk('qat-fr-')
+   const k = makeFrIndex(root)
+-  const r1 = markFrNeedsReview(k, ['FR-demo-001'], 'ql-20260920-001')
+-  assert(r1.marked === 1, `1a 写入标记（${r1.marked}）`)
+-  const content = readFileSync(join(k, 'fr', 'demo.md'), 'utf8')
+-  assert(content.includes('待复核：ql-20260920-001'), '1b 条目含待复核行')
+-  const r2 = markFrNeedsReview(k, ['FR-demo-001'], 'ql-20260920-001')
+-  assert(r2.marked === 0, '1c 幂等：同 ref 二跑零新增')
+-  const r3 = markFrNeedsReview(k, ['FR-demo-999'], 'x')
+-  assert(r3.marked === 0 && r3.warnings.length === 1, `1d 未知 id 警告不抛（${r3.warnings.length}）`)
+ 
+-  const d = readActiveFrDigest(k, ['demo'])
+-  assert(d[0] && d[0].needsReview === 'ql-20260920-001', `2 digest 透传 needsReview（${d[0] && d[0].needsReview}）`)
++  // 1. 拆除钉：fr-index 不再导出打标函数；digest 条目无 needsReview 字段
++  const frIndexMod = await import('../src/fr-index.js')
++  assert(typeof frIndexMod.markFrNeedsReview !== 'function', '1a markFrNeedsReview 导出已移除')
++  assert(typeof frIndexMod.cleanupStaleReviewMarks !== 'function', '1b cleanupStaleReviewMarks 导出已移除（死代码一并拆除）')
++  const d0 = readActiveFrDigest(k, ['demo'])
++  assert(d0.length === 1 && !('needsReview' in d0[0]), '1c digest 条目不再携带 needsReview 字段')
+ 
+-  // 承接清除：新变更 requirements 带 承接: FR-demo-001 → 翻链后待复核行消失
++  // 2. 承接翻链回归：新变更 requirements 带 承接: FR-demo-001 → 旧条目翻 superseded
++  //（标记 filter 项移除后，superseded_by/取代链/退役理由 filter 仍在——本节是移除后的回归钉）
+   const changeDir = makeChangeDir(root, 'ch-2')
+   writeFileSync(join(changeDir, 'requirements.md'),
+     '# 需求\n\n## 功能需求\n\n### FR-01: 取代版\n承接: FR-demo-001\nGiven X\nWhen Y\nThen Z\n')
+@@ -93,8 +89,8 @@ function fakePm({ owner = null, active = true } = {}) {
+   const ir = indexRequirements({ changeDir, knowledgeRoot: k, headHash: 'bbb222' })
+   const after = readFileSync(join(k, 'fr', 'demo.md'), 'utf8')
+   const oldEntry = after.split('## FR-demo-001')[1] || ''
+-  assert(oldEntry.includes('superseded') && !oldEntry.includes('待复核：'), `3 承接翻链清除待复核行（S2阻断①修复钉）`)
+-  assert(ir.superseded.length === 1, `3b 翻链计数（${ir.superseded.length}）`)
++  assert(oldEntry.includes('superseded'), `2a 承接翻链仍生效（superseded 在场）`)
++  assert(ir.superseded.length === 1, `2b 翻链计数（${ir.superseded.length}）`)
+ }
+ 
+ // ── 4. liteArchiveChange ──
+@@ -180,13 +176,13 @@ function fakePm({ owner = null, active = true } = {}) {
+   assert(after.startsWith('# modA'), '7c 既有内容不覆盖（append 非 write）')
+ }
+ 
+-// ── 6. 注入行 ⚠️ 口径（digest→行拼接同 prompt.js 逻辑的字段级断言）──
++// ── 6. 注入源字段契约（标记层拆除后的钉：digest 只携带行为字段）──
+ {
+   const root = mk('qat-p-')
+   const k = makeFrIndex(root)
+-  markFrNeedsReview(k, ['FR-demo-001'], 'ql-9')
+   const d = readActiveFrDigest(k, ['demo'])
+-  assert(d[0].needsReview === 'ql-9', '6 needsReview 在注入源可用（prompt.js 已接 ⚠️ 渲染——字段契约钉）')
++  assert(d.length === 1 && d[0].id === 'FR-demo-001' && typeof d[0].title === 'string', '6 digest 注入源仍可解析（id/title/scenarios/bindings 契约钉）')
++  assert(!('needsReview' in d[0]), '6b needsReview 字段契约已拆除（prompt.js 渲染面不再消费）')
+ }
+ 
+ // ── 8. R4-S-Q 缺陷 A/B 回归（2026-09-21 修复）：真实 import + --done 显式关联并入 guard ──
+diff --git a/test/thin-fr-inject-parity.test.mjs b/test/thin-fr-inject-parity.test.mjs
+index 132d044c..61ddcb32 100644
+--- a/test/thin-fr-inject-parity.test.mjs
++++ b/test/thin-fr-inject-parity.test.mjs
+@@ -2,9 +2,10 @@
+  * thin-fr-inject-parity.test.mjs — 轻量道知识读取面对齐（2026-09-25-thin-fr-inject-parity）
+  *
+  * 验收面：
+- *   ① flowKnowledgeDigest：filesOverride 域路由命中 active FR（待复核 ⚠️ 优先）+ 否决决策命中
++ *   ① flowKnowledgeDigest：filesOverride 域路由命中 active FR（索引序渲染——待复核标记层已拆，
++ *      2026-09-29-rot-retire-inject-cap：存量标记行在文件里也只作惰性文本）+ 否决决策命中
+  *      （matchKnowledge 复用）；无域依据/全空退化一行可见；
+- *   ② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测 + 待复核打标（quick-done 钩子迁移）；
++ *   ② rotSuspectFlow：触达域 active FR → fr-rot-suspect 遥测（不落盘标记——收口 advisory 即止）；
+  *   ③ frDupGateFlow：新 FR × 同域 active 标题 bigram ≥0.6 → 告警 + fr-duplicate-warning 遥测；
+  *   ④ flow start fresh 简报端到端含知识注入段（--input 路径语料域路由）。
+  */
+@@ -97,7 +98,7 @@ function buildSpecRoot(base) {
+   return specBase
+ }
+ 
+-test('① flowKnowledgeDigest：域路由命中 active FR（待复核优先）+ 否决决策命中', async () => {
++test('① flowKnowledgeDigest：域路由命中 active FR（索引序、无 ⚠️）+ 否决决策命中', async () => {
+   const tmp = mkdtempSync(join(tmpdir(), 'fip1-'))
+   try {
+     const specBase = buildSpecRoot(tmp)
+@@ -105,15 +106,18 @@ test('① flowKnowledgeDigest：域路由命中 active FR（待复核优先）+
+     mkdirSync(changeDir, { recursive: true })
+     const r = await flowKnowledgeDigest({ specBase, change: 'c-digest', changeDir, input: '登录流程重构', filesOverride: ['src/cli/login.js'] })
+     assert.ok(r.lines.some((l) => l.includes('触达域')), '应含触达域行')
+-    assert.ok(r.lines.some((l) => l.includes('FR-cli-002')), '应含待复核条目')
+-    assert.ok(r.lines.some((l) => l.includes('FR-cli-002') && l.includes('⚠️待复核')), '待复核条目应带 ⚠️ 且排在前面')
+-    assert.ok(r.lines.some((l) => l.includes('FR-cli-001')), '应含普通 active 条目')
++    assert.ok(r.lines.some((l) => l.includes('FR-cli-001')), '应含首条 active 条目（索引序）')
++    assert.ok(r.lines.some((l) => l.includes('FR-cli-002')), '应含次条 active 条目')
++    // 标记层拆除钉：文件里残留的「待复核：」旧行不再进注入渲染（fixture FR-cli-002 带惰性旧行）
++    // （否决决策段的 ⚠️ 段头是另一机制，不在断言面内）
++    const frLines = r.lines.filter((l) => /- FR-cli-\d+/.test(l))
++    assert.ok(frLines.length >= 2 && !frLines.some((l) => l.includes('⚠️') || l.includes('待复核')), 'FR 条目行不得再渲染 ⚠️待复核（标记层已拆）')
+     assert.ok(r.lines.some((l) => l.includes('D-001@v1') && l.includes('否决理由')), '应含否决决策命中及理由')
+     assert.equal(r.summary.frCount, 3)
+     assert.equal(r.summary.rejectedDecisions, 1)
+-    const flaggedIdx = r.lines.findIndex((l) => l.includes('FR-cli-002'))
+-    const plainIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))
+-    assert.ok(flaggedIdx < plainIdx, '待复核条目应排在普通条目之前')
++    const firstIdx = r.lines.findIndex((l) => l.includes('FR-cli-001'))
++    const secondIdx = r.lines.findIndex((l) => l.includes('FR-cli-002'))
++    assert.ok(firstIdx >= 0 && firstIdx < secondIdx, '条目按索引序渲染（不再按标记置前）')
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+@@ -130,24 +134,23 @@ test('① flowKnowledgeDigest：无域依据且语料不命中 → 折叠一行
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
+ 
+-test('② rotSuspectFlow：三分判据（strong 打标/skip 不动/unknown 不打标）+ 遥测 count=strong', async () => {
++test('② rotSuspectFlow：三分判据（strong/skip/unknown）+ 遥测 count=strong + 不落盘', async () => {
+   const tmp = mkdtempSync(join(tmpdir(), 'fip3-'))
+   try {
+     const specBase = buildSpecRoot(tmp)
++    const frPathBefore = readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8')
+     const r = await rotSuspectFlow({ specBase, change: 'c-rot', changeDir: join(specBase, 'changes', 'c-rot'), files: ['src/cli/login.js'] })
+     // FR-001（hist-a 归档 files 含 src/cli/login.js + 绑定）→ strong；FR-002（hist-b 归档 src/other）→ skip；FR-003（hist-c 无归档无绑定）→ unknown
+     assert.equal(r.strong, 1, `strong 应为 1，实际 ${r.strong}`)
+     assert.equal(r.skip, 1, `skip 应为 1，实际 ${r.skip}`)
+     assert.equal(r.unknown, 1, `unknown 应为 1，实际 ${r.unknown}`)
+-    assert.equal(r.marked, 1, '仅 strong 条目打标')
++    assert.ok(!('marked' in r), '返回值不再携带 marked（标记层已拆）')
+     const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8')
+     assert.ok(hits.includes('fr-rot-suspect') && hits.includes('"source":"flow-done"'))
+     assert.ok(hits.includes('"strong":1') && hits.includes('"count":1'), '遥测 count 语义=strong（防污染 knowledge-stats）')
+     assert.ok(hits.includes('"unknown":1'), 'unknown 单列遥测')
+-    const fr = readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8')
+-    assert.ok(fr.includes('待复核：c-rot'), 'strong 条目应被打待复核标记')
+-    assert.ok(fr.split('## FR-cli-002')[1].split('## FR-cli-003')[0].includes('待复核：quick-abc'), 'skip 条目的旧标记不动')
+-    assert.ok(!fr.split('## FR-cli-003')[1].includes('待复核：'), 'unknown 条目不打标')
++    // 不落盘钉：strong 命中后 fr 文件 byte 级不变（无新增待复核行，旧惰性行也不动）
++    assert.equal(readFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), 'utf8'), frPathBefore, 'rot 命中不再改写 fr 文件')
+     const { readActiveFrDigest } = await import(pathToFileURL(join(ROOT, 'src', 'fr-index.js')).href)
+   const dig = readActiveFrDigest(join(specBase, 'knowledge'), ['cli'])
+   const fr1 = dig.find((f) => f.id === 'FR-cli-001')
+diff --git a/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/design.md b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/design.md
+new file mode 100644
+index 00000000..a09e9c8d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/design.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T05:15:34.163Z
++---
++# 设计记录（Design Record）— 2026-09-29-rot-retire-inject-cap
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++两件并一变更（三个只读子代理已全仓核证影响面）。其一「拆标记层」：FR 腐烂待复核持久标记零消费实证（471 条无一被复核行动；fr-rot-precision 评审曾误删 72 条无人发现），且信号饱和反噬注入排序（cli-entry 224/238 带标=排序失真）。拆除全部持久化设施（两处写入点：flow.js rotSuspectFlow、run/shared.js auditQuickCompletion；字段与消费：readActiveFrDigest.needsReview 及 flow 注入排序/prompt digest 渲染；设施：markFrNeedsReview、cleanupStaleReviewMarks（已确证死代码）、knowledge-digest rot 告警臂），一次性剥除九个域文件 471 条「待复核：」行；保留 rotSuspectFlow 的覆盖计算+收口 advisory+fr-rot-suspect 遥测（提醒在发生时刻被看见，不留账）。其二「修注入失控」：{FR_INDEX_DIGEST} 是全仓唯一无上限的 prompt 渲染面且不滤 unmapped（遥测 11/11 次全量灌 723 条），修为滤 unmapped+top-8 截断+指针行，同批把 stage-contract 重复软门的同款缺失（口径与孪生 frDupGateFlow 漂移）一并对齐。测试门消费的 activeFrCoverageHits/collectFrLinkedTests 一字不动。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++内部导出面（无 CLI 命令面变化）：① fr-index.js 删除导出 markFrNeedsReview、cleanupStaleReviewMarks，删除常量 FR_NEEDS_REVIEW_PREFIX；② readActiveFrDigest 返回条目移除 needsReview 字段（消费方仅 flow.js/prompt.js 两处，先拆消费后拆字段）；③ rotSuspectFlow 返回对象移除 marked 键，warn 文案去掉「已打待复核标记 N 条」段；④ knowledge-digest 输出移除 rot 信号卡与底数行 rot 段；⑤ {FR_INDEX_DIGEST} 注入值形态：条目行 ≤8、超量含指针行、unmapped-only 时空态文案（指向 fr/unmapped.md）；⑥ fr-inject 遥测（digest 源）加字段 rendered/truncated/unmappedFiltered，count 保持全量口径；⑦ stage-contract 重复软门 domains 加 unmapped 过滤。数据面：knowledge/fr/*.md 的「待复核：」行消失（spec-sync 整文件哈希同步，无 schema 影响）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：无事件序依赖。剥「待复核：」行是一次性幂等重写——重跑时无行可剥即为空操作；标记写入路径删除后不存在迟到补标。
++2. 并发写：本仓多会话并行在途（另一会话有 fr-index.js/knowledge-digest.js 未提交改动，区域与本变更不重叠）。剥离脚本写前快照比对、内容漂移即跳过该文件重跑消化（沿 writeAtomicSync 原子写，不产生交错残行）；提交时对共享文件做逐 hunk 切分，不夹带他会话 hunks。
++3. 切换/生命周期：纯函数级删除+一次性数据重写，任意点中断可重入（剥行幂等、删码以测试绿为完成判据）；flow-state 断点续跑不受影响。
++4. 作用域：仅本仓 .sillyspec 与 src；spec-sync 按文件哈希整传新内容，平台侧无解析依赖（已核证 sync 链路从不解析标记行）；外置 spec 根场景同构。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：needsReview 字段存在未核证的隐性消费方导致运行时 undefined——已由三个只读子代理全仓 grep 核证仅 flow.js:172 与 prompt.js:1231 两处，且拆除顺序钉死「先拆消费、后拆字段」。次风险：剥行误伤条目正文中的「待复核」字样——剥离仅匹配行首前缀「^待复核：」，与机器契约行格式一致，另有测试断言剥后 grep 为零。
++死路（已试弃，防复潮）：① 修 rot 判据精度（枢纽文件 df 降权）保留标记层——零消费实证下把信号修准仍是家具，先拆后看；② unmapped 池整池外移冻结——resolveTouchedDomains 兜底会重建池子、104 个来源变更的幂等闸门只扫 fr/ 会把搬走条目静默写回（子代理核证），本次只做注入排除；③ distill dup 升硬门——存量 active 标题 pairwise 38 对 ≥0.6（「测试覆盖」三条互撞 1.00）全是真独立需求，硬门逼假承接行污染取代链。
+diff --git a/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/proposal.md b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/proposal.md
+new file mode 100644
+index 00000000..75238721
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/proposal.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T05:15:34.162Z
++---
++# 提案书（Proposal）— 2026-09-29-rot-retire-inject-cap
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:ccb006621d787331289a437f4469631046229437376c741053f094ec46186860:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++任务原话转写：动机：FR 腐烂待复核持久标记层零消费实证（371 条标记无一被复核行动，fr-rot-precision 评审曾误删 72 条无人发现）且信号饱和反噬注入排序；brainstorm step8 {FR_INDEX_DIGEST} 注入无上限且不滤 unmapped，遥测 11/11 次全量灌 723 条整池进 prompt。方案（三子代理核证过影响面）：一、删标记层——拆两处写入点（flow.js rotSuspectFlow 打标、run/shared.js auditQuickCompletion 打标）、readActiveFrDigest.needsReview 字段及两处消费（flow 注入排序置前、prompt.js digest 渲染）、markFrNeedsReview 与 cleanupStaleReviewMarks（死代码）、knowledge-digest rot 告警臂；剥除 knowledge/fr/*.md 全部 371 条「待复核：」行；保留 rotSuspectFlow 覆盖计算+收口 advisory+fr-rot-suspect 遥测（count=strong 不变）；勿动决策库 behind 复核与模块卡 needs_review 同名机制。二、修注入——prompt.js digest 滤 unmapped（unmapped-only 给专属空态）、top-8 截断+指针行（不伤尾部承接 blockquote）、遥测加 rendered/truncated；stage-contract.js 重复软门补 unmapped 过滤对齐 frDupGateFlow。
++
++成功标准：
++- 路由进 unmapped 的变更，{FR_INDEX_DIGEST} 注入段条目 <=8 且含「+N 条见」指针行，不再出现整池 723 条倾倒
++- grep -c ^待复核： .sillyspec/knowledge/fr/*.md 全部为 0
++- markFrNeedsReview/cleanupStaleReviewMarks/FR_NEEDS_REVIEW_PREFIX 从 src 消失，rotSuspectFlow 仍产出 fr-rot-suspect 遥测且 count=strong
++- collectFrLinkedTests 测试门行为零变化（既有测试面全绿佐证）
++- 标记相关旧用例删除/适配后 flow 系测试与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:a05854abb484853cd1090a9a0b2f379655604e19f514ddb503a14a388f4ab4b4:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++按成功标准机械推导，共 5 条验收面：
++1. 路由进 unmapped 的变更，{FR_INDEX_DIGEST} 注入段条目 <=8 且含「+N 条见」指针行，不再出现整池 723 条倾倒
++2. grep -c ^待复核： .sillyspec/knowledge/fr/*.md 全部为 0
++3. markFrNeedsReview/cleanupStaleReviewMarks/FR_NEEDS_REVIEW_PREFIX 从 src 消失，rotSuspectFlow 仍产出 fr-rot-suspect 遥测且 count=strong
++4. collectFrLinkedTests 测试门行为零变化（既有测试面全绿佐证）
++5. 标记相关旧用例删除/适配后 flow 系测试与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:e02e13a16334d09829cc190f3e908f86b362f573e607056ea0799039e94435db:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-rot-retire-inject-cap 留痕重锚 -->
++1. 路由进 unmapped 的变更，{FR_INDEX_DIGEST} 注入段条目 <=8 且含「+N 条见」指针行，不再出现整池 723 条倾倒
++2. grep -c ^待复核： .sillyspec/knowledge/fr/*.md 全部为 0
++3. markFrNeedsReview/cleanupStaleReviewMarks/FR_NEEDS_REVIEW_PREFIX 从 src 消失，rotSuspectFlow 仍产出 fr-rot-suspect 遥测且 count=strong
++4. collectFrLinkedTests 测试门行为零变化（既有测试面全绿佐证）
++5. 标记相关旧用例删除/适配后 flow 系测试与 npm run test:core 全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/requirements.md b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/requirements.md
+new file mode 100644
+index 00000000..0dfad00b
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/requirements.md
+@@ -0,0 +1,63 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T05:15:34.163Z
++---
++# 需求规格（Requirements）— 2026-09-29-rot-retire-inject-cap
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: {FR_INDEX_DIGEST} 注入收敛——滤 unmapped、top-8 截断、尾部指针行
++- 场景：brainstorm step8 注入收敛 — Given 知识索引含大域与 unmapped 池；When 变更域路由结果含 unmapped 或某域 active 条目超 8 条；Then {FR_INDEX_DIGEST} 注入值不含 unmapped 条目、每域渲染条目 ≤8、超量时尾部有「+N 条见 knowledge/fr/…」指针行，且尾部承接指引 blockquote 不被截断
++- 场景：unmapped-only 空态 — Given 变更域路由结果仅剩 unmapped（过滤后为空）；When digest 注入渲染；Then 给出指向 knowledge/fr/unmapped.md 的专属空态文案而非整池倾倒
++
++### FR-02: rot 持久标记层拆除——两处写入点与标记设施从 src 消失
++- 场景：写入面清零 — Given flow done 与 quick 审计两条链路原各有一处 markFrNeedsReview 调用；When 本变更交付后；Then markFrNeedsReview、cleanupStaleReviewMarks、FR_NEEDS_REVIEW_PREFIX 不再存在于 src，且无新增调用点
++- 场景：保留项 — Given rotSuspectFlow 仍需在收口时提醒；When flow done 执行；Then 覆盖计算、console advisory、fr-rot-suspect 遥测（count=strong）行为不变，仅不再落盘标记
++
++### FR-03: readActiveFrDigest 条目不再携带 needsReview 字段，注入排序回到索引序
++- 场景：字段拆除 — Given flow start 注入与 brainstorm digest 原按 needsReview 置前排序；When 字段移除后；Then 两处消费点先拆（避免中间态读 undefined），注入条目按索引顺序渲染且无 ⚠️待复核 后缀
++
++### FR-04: knowledge/fr/*.md 现存「待复核：」行全部剥除
++- 场景：存量清零 — Given 九个域文件共 471 条「待复核：」行；When 一次性剥除落盘；Then grep -c '^待复核：' 对全部 fr/*.md 返回 0，且条目其余字段（场景/绑定/承接链）零损伤
++
++### FR-05: knowledge-digest 移除 rot 计数告警臂
++- 场景：信号消隐 — Given digest 原有「rot 待复核批量标记（>100）」warn 信号与底数行 rot 段；When 标记层拆除后；Then 该信号臂与底数 rot 段移除，inbox/pseudo/binding 三臂行为不变
++
++### FR-06: stage-contract brainstorm --done 重复软门补 unmapped 过滤
++- 场景：口径对齐 — Given 该软门原全量载入 unmapped 池做跨域标题比对；When 补过滤后；Then 与 frDupGateFlow 同口径（滤 unmapped），不再对 unmapped 池条目产出跨域疑似重复警告
++
++### FR-07: fr-inject 遥测（digest 源）保持全量 count 并新增截断披露字段
++- 场景：遥测加法 — Given digest 注入截断后 count 若随渲染缩水会破坏 L3 口径；When 落遥测；Then count 仍记全量条数，另加 rendered/truncated 与 unmapped 过滤披露字段
++
++### FR-08: 测试门与套件零回归
++- 场景：测试门不变 — Given collectFrLinkedTests 消费 activeFrCoverageHits；When 本变更交付后；Then 需求关联回归测试面行为零变化（既有测试全绿佐证）
++- 场景：套件全绿 — Given 四个标记相关旧测试文件需适配、一个注入收敛新用例需新增；When 跑 flow 系与 test:core；Then 全绿
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-inject-cap.test.mjs「① unmapped-only 专属空态」「② 大域截断≤8+指针行+blockquote 保留」「①b 混合交付」
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/thin-fr-inject-parity.test.mjs「② rotSuspectFlow 三分判据+遥测 count=strong+不落盘」；test/quick-asset-tail.test.mjs「1a/1b 导出移除钉」
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/thin-fr-inject-parity.test.mjs「① flowKnowledgeDigest 索引序、无 ⚠️」；test/quick-asset-tail.test.mjs「6/6b needsReview 字段拆除钉」
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：数据操作无自动化用例——收口亲测面 grep -c "^待复核：" .sillyspec/knowledge/fr/*.md 全零（本变更内已实测通过）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/knowledge-digest.test.mjs「① 三信号阈值：totals 无 rot 键」
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-index.test.mjs「10e 软门真域夹具透出」（unmapped 比对面已消隐）
++
++<!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-inject-cap.test.mjs「② 大域截断遥测全量口径 count=12/rendered=8/truncated=4」
++
++<!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-index.test.mjs「11a/11b/11c 注入渲染端到端」+ 全量 npm test（run-tests.mjs）
++
++
+diff --git a/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/tasks.md b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/tasks.md
+new file mode 100644
+index 00000000..21c23229
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-rot-retire-inject-cap/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T05:15:34.163Z
++---
++# 任务注册表（Tasks）— 2026-09-29-rot-retire-inject-cap
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge，OS Guardrails 同款纪律）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: 拆消费先行——flow.js 注入排序/⚠️ 渲染去掉 needsReview、prompt.js digest 渲染去 ⚠️ 后缀（避免中间态读 undefined）
++- [x] task-02: 拆写入与设施——flow.js rotSuspectFlow 停止打标（保留计算/advisory/遥测，返回值去 marked）、run/shared.js auditQuickCompletion 打标拆除、fr-index.js 删 markFrNeedsReview/cleanupStaleReviewMarks/FR_NEEDS_REVIEW_PREFIX/indexRequirements 待复核 filter 项/readActiveFrDigest.needsReview 字段
++- [x] task-03: knowledge-digest 去 rot 臂（needsReview 解析、totals.rot、>100 信号、底数行段）
++- [x] task-04: 修注入——prompt.js {FR_INDEX_DIGEST} 滤 unmapped+top-8 截断+指针行+unmapped-only 空态（抽 buildFrIndexDigestSection 可单测），遥测加 rendered/truncated/unmappedFiltered；stage-contract.js 软门补 unmapped 过滤
++- [x] task-05: 剥数据——九个 fr 域文件「^待复核：」行一次性剥除（实际 471 条，比预估 371 多——剥离时点他会话运行又添标；剥后 grep 为零）
++- [x] task-06: 测试适配与新增——quick-asset-tail（拆除断言钉+承接回归钉）/thin-fr-inject-parity（排序改索引序+不落盘钉）/fr-rot-precision（删清理套件）/knowledge-digest（去 rot 臂）/fr-index 10e/11（真域夹具，unmapped 不再进软门与注入——旧断言正是 bug 微缩形态）；新增 test/fr-inject-cap.test.mjs 四面
++- [x] task-07: 全量验证——flow 系测试与 npm run test:core 全绿；collectFrLinkedTests 相关既有测试零回归
