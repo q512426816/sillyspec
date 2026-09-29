@@ -1,0 +1,38 @@
+{
+  "change": "2026-09-29-flow-skill-d007-doc",
+  "baseline": "ab3f470ed6cf967a5678ef2fd43f77a5e46cbf18",
+  "head": "34c04d9dd9249f261f837cf8072516cae83b3ba2",
+  "files": [
+    ".claude/skills/sillyspec-flow/SKILL.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-d007-doc/design.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-d007-doc/flow-state.yaml",
+    ".sillyspec/changes/2026-09-29-flow-skill-d007-doc/proposal.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-d007-doc/requirements.md",
+    ".sillyspec/changes/2026-09-29-flow-skill-d007-doc/tasks.md"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 116,
+    "deletions": 12
+  },
+  "savedAt": "2026-09-29T07:06:55.230Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": ".claude/skills/sillyspec-flow",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "be34e11b1272ca24665a80cd492ffc2a751c1cd0c90c41aecc88d203017d7e61",
+  "patchStatus": "ok"
+}
