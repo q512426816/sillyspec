@@ -96,12 +96,15 @@ test('③ ①阶段（spec 槽未填）：不刷心跳', async () => {
 test('③b 行形态漂移（未勾行缺 task-NN 前缀）：不误刷「任务全勾」（评审 P3 钉）', async () => {
   const { cwd, dir } = fixture({ ticked: ['task-01', 'task-02'] })
   try {
-    // 把 task-03 的未勾行改成无前缀形态（行形态漂移模拟）
+    // 全部未勾行改成无前缀形态（行形态漂移模拟——部分漂移时带前缀的照常指next，全漂移才落本分支）
     const p = join(dir, 'tasks.md')
-    writeFileSync(p, readFileSync(p, 'utf8').replace('- [ ] task-03: 第三件要做的下一件事', '- [ ] 第三件（前缀漂移）'))
+    writeFileSync(p, readFileSync(p, 'utf8')
+      .replace('- [ ] task-03: 第三件要做的下一件事', '- [ ] 第三件（前缀漂移）')
+      .replace('- [ ] task-04: 第四件', '- [ ] 第四件（前缀漂移）'))
     const out = await runStatus(cwd)
     assert.ok(!out.includes('⏭️ 下一任务'), '漂移行不进下一任务指针')
     assert.ok(!out.includes('任务全勾'), 'c<tot 不得误刷任务全勾（2/4≠全勾）')
+    assert.ok(out.includes('任务勾选：2/4'), '真实比例行仍在（同屏纠偏面）')
   } finally { rmSync(cwd, { recursive: true, force: true }) }
 })
 
