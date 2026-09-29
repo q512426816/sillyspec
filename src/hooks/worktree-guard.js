@@ -75,16 +75,16 @@ const STAGE_HINTS = {
   ],
   'verify': [
     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
-    '如需修改，请先回到 execute 阶段或使用 quick 模式：',
-    '  sillyspec run quick "修改描述"',
+    '如需修改，请先回到 execute 阶段，或收口后开轻量变更：',
+    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
   ],
   'archive': [
     '当前在 archive（归档）阶段，不修改源码。',
-    '如需修改，请开启新变更：sillyspec run quick "修改描述"',
+    '如需修改，请开启新变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
   ],
   'explore': [
     '当前在 explore（探索）阶段，只读不写。',
-    '确认方案后使用：sillyspec run brainstorm 或 sillyspec run quick',
+    '确认方案后使用：sillyspec run brainstorm，或小改动直接走轻量变更 sillyspec flow start',
   ],
 }
 
