@@ -32,6 +32,30 @@ test('detectSymlinkStoreLayout：pnpm/bun/lerna 锁文件与 packageManager 字�
   assert.equal(detectSymlinkStoreLayout(d2), 'pnpm(packageManager)', 'packageManager 字段命中')
 })
 
+test('detectSymlinkStoreLayout 子目录扩展（apps 型 monorepo，2026-09-30-snapshot-symlink-store-subdir）：子目录 lockfile 命中带 subdir 标签；根判据优先；无 lockfile 仍 null', () => {
+  const d = mk('laysub-')
+  assert.equal(detectSymlinkStoreLayout(d), null, '空目录 → null（无子目录可扫）')
+  // apps 型：frontend/pnpm-lock.yaml（multi-agent-platform 实证形态）
+  mkdirSync(join(d, 'frontend'), { recursive: true })
+  writeFileSync(join(d, 'frontend', 'pnpm-lock.yaml'), '')
+  assert.equal(detectSymlinkStoreLayout(d), 'pnpm(subdir:frontend)', '子目录 pnpm 锁文件命中（带 subdir 标签）')
+  // 根判据优先于子目录：根出现 bun.lock 后按根报
+  writeFileSync(join(d, 'bun.lock'), '')
+  assert.equal(detectSymlinkStoreLayout(d), 'bun', '根锁文件优先（子目录扫描不遮根判据）')
+  // node_modules/隐藏目录不扫
+  const d3 = mk('laysub3-')
+  mkdirSync(join(d3, 'node_modules', '.pnpm'), { recursive: true })
+  writeFileSync(join(d3, 'node_modules', 'pnpm-lock.yaml'), '')
+  mkdirSync(join(d3, '.ci-cache'), { recursive: true })
+  writeFileSync(join(d3, '.ci-cache', 'pnpm-lock.yaml'), '')
+  assert.equal(detectSymlinkStoreLayout(d3), null, 'node_modules/隐藏目录里的 lockfile 不算布局判据')
+  // 普通子目录无 lockfile → null
+  const d4 = mk('laysub4-')
+  mkdirSync(join(d4, 'docs'), { recursive: true })
+  writeFileSync(join(d4, 'docs', 'note.md'), 'x')
+  assert.equal(detectSymlinkStoreLayout(d4), null, '普通子目录 → 仍 null')
+})
+
 test('createGateSnapshot：pnpm 布局 → null 回退主仓（不再沙箱假败）', () => {
   const proj = mk('lay-e2e-')
   git(proj, ['init', '-q']); git(proj, ['config', 'user.email', 't@t.local']); git(proj, ['config', 'user.name', 't'])

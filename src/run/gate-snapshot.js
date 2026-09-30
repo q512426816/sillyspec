@@ -722,6 +722,21 @@ export function detectSymlinkStoreLayout(cwd) {
     if (existsSync(join(cwd, 'pnpm-lock.yaml'))) return 'pnpm'
     if (existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))) return 'bun'
     if (existsSync(join(cwd, 'lerna.json'))) return 'lerna'
+    // ── 子目录 lockfile（apps 型 monorepo——2026-09-30-snapshot-symlink-store-subdir）──
+    // 实证：multi-agent-platform（frontend/ + sillyhub-daemon/ 各自 pnpm-lock.yaml，根目录无
+    // lockfile）漏检 → 快照照建，verify 收敛循环每轮 ~160s 纯烧快照构建/junction。packages/*
+    // workspace 型不扫（该形态 lockfile 在根，根判据已覆盖）。子目录命中=该 app 的
+    // node_modules 符号链接网同样跨根失效——跳快照回主仓是既有保守裁决（宁主仓口径）。
+    try {
+      for (const e of readdirSync(cwd, { withFileTypes: true })) {
+        if (!e.isDirectory()) continue
+        if (e.name === 'node_modules' || e.name.startsWith('.')) continue
+        const d = join(cwd, e.name)
+        if (existsSync(join(d, 'pnpm-lock.yaml'))) return `pnpm(subdir:${e.name})`
+        if (existsSync(join(d, 'bun.lockb')) || existsSync(join(d, 'bun.lock'))) return `bun(subdir:${e.name})`
+        if (existsSync(join(d, 'lerna.json'))) return `lerna(subdir:${e.name})`
+      }
+    } catch { /* 根不可读（与非仓目录同语义）→ 落到 packageManager 判据 */ }
     try {
       const pkg = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
       const pm = pkg && pkg.packageManager ? String(pkg.packageManager) : ''
