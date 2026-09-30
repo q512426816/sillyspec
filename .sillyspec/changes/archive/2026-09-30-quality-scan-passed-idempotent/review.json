@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-30-quality-scan-passed-idempotent",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "plannedSnapshot 仅由 env 推导：worktree 跳过/快照 fail-soft 回退场景下 passed 闸恒 snapshot-scope-changed 失效",
+      "evidence": "闸输入 plannedSnapshot=!env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF（L668），而记录侧 usedSnapshot=Boolean(snap)——worktree 会话跳快照（L685-691）与快照链路异常 fail-soft 回退（L699）都使 snap=null 且 env 未设 → 每轮 false≠true 恒失配，幂等优化在这些部署形态不生效；方向保守（多重跑、无误复用），与既有失败闸同款继承行为；测试须人为设 SNAPSHOT_OFF=1 闸才可达（test L460-462 注释自证），design 盲维四问未裁决此交互（动机场景 multi-agent 若运行 worktree 模式则收益不落地）",
+      "location": "src/run/verify-quality-scan.js:663-675,682-701"
+    },
+    {
+      "severity": "P3",
+      "title": "rename 行内容键恒 <unreadable>：rename 持续态的同文件未提交内容修改不被 passedKey 感知",
+      "evidence": "porcelainCodeLines 对 `R  old -> new` 取 slice(3) 得 `old -> new` 非真实路径 → 恒读不到恒 <unreadable> 占位；R→RM 状态变化不改变提取串与占位 → 内容键不变（指纹文件集口径同盲），design 注释「状态变化即键变化」对该形态不精确；窗口窄（staged rename 持续存在+同文件后续未提交改+无其他脏变化），rename 落 commit 即 HEAD 变化失配兜底；design 已披露 rename 行按占位处理，边界裁决基本可接受",
+      "location": "src/run/verify-quality-scan.js:57-64,221-237"
+    },
+    {
+      "severity": "P3",
+      "title": "「既有指纹无功能影响」表述略过强：指纹仍用缺省 trim，首行错位路径可逃出非代码过滤",
+      "evidence": "computeQualityScanFingerprint 的 porcelain 仍取缺省 trim（L88），首行 ` M docs/x.md` 错位为 `ocs/x.md` 不匹配 isNonCodePath 的 docs/ 前缀 → 文档首行编辑可扰动指纹引发多余重跑；方向保守（多重跑非误复用）；「git() 公共 trim 行为留独立变更、只在自己调用点 trim:false」的处置本身可接受（爆炸半径论据成立，gitQuiet opts.trim 为既有能力非本变更新增）",
+      "location": "src/run/verify-quality-scan.js:88,53-55"
+    },
+    {
+      "severity": "P3",
+      "title": "冻结件只含变更目录文档：change.patch 无代码 diff，代码事实以评审时工作区现状为准",
+      "evidence": "change.patch 仅含 proposal/design/requirements/tasks 四份变更目录文档（new file），无 src/test diff；实现与测试按工作区现状核验（src/run/verify-quality-scan.js、test/verify-quality-scan.test.mjs、src/git-helper.js）",
+      "location": ".sillyspec/changes/2026-09-30-quality-scan-passed-idempotent/change.patch"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-30T16:15:30+08:00"
+}

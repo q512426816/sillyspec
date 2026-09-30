@@ -118,6 +118,10 @@ export function storeQualityScan({ specBase, cwd, changeName, testResult, lintRe
       // RERUN 失败签名（r5l 方案 4）：dedupKey × 测试面 × 环境探针；同样 additive——存量
       // 记录无此键 → RERUN 签名闸判无签名放行一次（同 no-dedup-key 先例口径）
       rerunSignature: computeRerunSignature({ cwd, specBase, dedupKey, env: process.env }),
+      // passed 幂等闸键（2026-09-30-quality-scan-passed-idempotent）：dedupKey × 非文档脏集
+      // 内容键——内容敏感（dedupKey 文件集口径对同文件未提交修改是盲的，闸会吞真实代码
+      // 修改）；additive——存量记录无此键 → 闸判 no-passed-key 保守重跑一次后携带
+      passedKey: computeQualityScanPassedKey({ cwd, specBase }),
       usedSnapshot: Boolean(usedSnapshot),
       ranAt: new Date().toISOString(),
       testResult,
@@ -209,6 +213,42 @@ export function computeRerunSignature({ cwd, specBase, dedupKey = null, env = pr
 }
 
 /**
+ * 非文档脏文件内容键（2026-09-30-quality-scan-passed-idempotent）：对 porcelain 非文档脏集
+ * 逐文件取内容哈希。存在理由：指纹/dedupKey 的脏集是**文件集**口径（对齐 --done 复用面——
+ * verify 窗口内合法产出=文档，代码交付经 apply/commit 进 HEAD，同文件未提交内容修改的盲区
+ * 历史无害）；passed 幂等闸直接终止本步骤执行，盲区会吞真实代码修改（实证：fixture 同文件
+ * 翻转失败版，dedupKey 全等闸误命中）——闸键必须内容敏感。单文件读不到（rename 行/删除中/
+ * 权限）按 '<unreadable>' 占位（状态变化即键变化，恒占位也稳定）；git 不可用 → null。
+ */
+export function computeQualityScanDirtyContentKey({ cwd }) {
+  // trim:false 保 porcelain 行首状态位（git() 缺省 trim 会吃掉首行前导空格，` M x` → `M x`，
+  // slice(3) 路径错位恒读不到文件——实证：fixture 单文件脏集 digest 恒 <unreadable>）
+  const porcelain = gitQuiet(cwd, ['status', '--porcelain'], { trim: false })
+  if (porcelain === null) return null
+  const paths = porcelainCodeLines(porcelain)
+  const parts = []
+  for (const p of paths) {
+    let digest = '<unreadable>'
+    try {
+      digest = createHash('sha256').update(readFileSync(join(cwd, p)).toString('latin1')).digest('hex')
+    } catch { /* 读不到按占位（内容敏感方向保守） */ }
+    parts.push(p + '\n' + digest)
+  }
+  return createHash('sha256').update(parts.join('\n==\n')).digest('hex')
+}
+
+/**
+ * passed 幂等闸键：dedupKey（配置×豁免面×HEAD×文件集）× 非文档脏集内容键 的合成。
+ * 任一分量不可得 → null（fail-closed：无键即无闸，保守真跑）。
+ */
+export function computeQualityScanPassedKey({ cwd, specBase }) {
+  const dedup = computeQualityScanDedupKey({ cwd, specBase })
+  const content = computeQualityScanDirtyContentKey({ cwd })
+  if (!dedup || !content) return null
+  return createHash('sha256').update(dedup + '\n##dirty-content##\n' + content).digest('hex')
+}
+
+/**
  * 读回最近一条扫描记录（不论成败）——失败去重重放用。loadReusableQualityScan 拒绝
  * failed 记录（复用是优化不是正确性依赖），去重恰恰要消费 failed 态；schema/source/
  * testResult 校验同 load 口径，读不回 → null。
@@ -238,6 +278,31 @@ export function shouldReuseLastFailedScan({ lastRecord, currentDedupKey, planned
   }
   if (!lastRecord.dedupKey || !currentDedupKey) return { reuse: false, reason: 'no-dedup-key（存量记录 / git 不可用）' }
   if (lastRecord.dedupKey !== currentDedupKey) return { reuse: false, reason: 'dedup-key-mismatch（代码/配置/豁免面/HEAD 已变化）' }
+  if (Boolean(lastRecord.usedSnapshot) !== Boolean(plannedSnapshot)) return { reuse: false, reason: 'snapshot-scope-changed' }
+  return { reuse: true, reason: null }
+}
+
+/**
+ * passed 幂等闸（2026-09-30-quality-scan-passed-idempotent，与 shouldReuseLastFailedScan 对称）：
+ * 上次质量扫描 test passed 且 lint 非 failed、passedKey 全等（dedupKey × 非文档脏集内容键
+ * ——dedupKey 的文件集口径对同文件未提交内容修改是盲的，闸直接终止本步骤执行会吞真实代码
+ * 修改，故键必须内容敏感）、快照口径一致 → 免重跑。实证：multi-agent-platform 2026-09-30
+ * verify 收敛循环里 agent 修 verify-result.md 文档反复重入本步，码态恒定（零 commit）下质量
+ * 扫描 11 轮 ×~290s 全量真跑——失败有签名闸防假红重试循环，passed 反而无幂等闸。同键 + 同
+ * 快照口径 ⇒ 测试输入完全相同 ⇒ 重跑结果确定性相同，纯等待。
+ * lint failed 记录不入闸：真跑时 lint 失败会让本步骤 throw 不完成，幂等命中直接完成会吞
+ * 掉 lint 阻断发声——lint 债场景须重跑（修债/加豁免即 dedupKey 失配自动重测，闭环不堵）。
+ */
+export function shouldReuseLastPassedScan({ lastRecord, currentPassedKey, plannedSnapshot, forceRerun = false }) {
+  if (forceRerun) return { reuse: false, reason: 'force-rerun（逃生阀 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN）' }
+  if (!lastRecord || !lastRecord.testResult || lastRecord.testResult.status !== 'passed') {
+    return { reuse: false, reason: 'no-passed-record' }
+  }
+  if (lastRecord.lintResult && lastRecord.lintResult.status === 'failed') {
+    return { reuse: false, reason: 'lint-failed（lint 阻断语义须重跑发声；修债/加豁免即失配自动重测）' }
+  }
+  if (!lastRecord.passedKey || !currentPassedKey) return { reuse: false, reason: 'no-passed-key（存量记录 / git 不可用——保守重跑一次后记录即携带）' }
+  if (lastRecord.passedKey !== currentPassedKey) return { reuse: false, reason: 'passed-key-mismatch（代码内容/文件集/配置/豁免面/HEAD 已变化）' }
   if (Boolean(lastRecord.usedSnapshot) !== Boolean(plannedSnapshot)) return { reuse: false, reason: 'snapshot-scope-changed' }
   return { reuse: true, reason: null }
 }
@@ -587,6 +652,25 @@ export async function executeVerifyQualityScan({ cwd, specBase, changeName, plat
       }
       console.error('   出路（按序）：① 修代码（指纹即失配，下次自动重测）② 补 known_failures 豁免（豁免面即失配）③ 换快照口径（设/删 SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF，口径变化即失配）④ 环境确已修好后强制重跑：SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1（环境探针已入失败签名——环境真变即放行；仍被拒用 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=force）')
       throw new Error(`noAI 质量扫描复用上次失败结果（失败签名未变，跳过重跑）——${(t.reason || '测试失败').split('\n')[0]}。修复后重跑 sillyspec run verify${changeName ? ` --change ${changeName}` : ''}，或按上方出路处置。`)
+    }
+  }
+  // ── passed 幂等闸（2026-09-30-quality-scan-passed-idempotent，与失败签名闸对称）──
+  // 上次 passed 且 passedKey（dedupKey × 非文档脏集内容键——内容敏感，同文件未提交修改
+  // 即失配）/快照口径全等 → 免重跑直接完成本步骤（verify 收敛循环里 agent 修文档反复重入
+  // 本步，码态未变时快照构建+测试+lint 的 ~分钟级全量重跑是纯等待——实证 11 轮 ×~290s）。
+  // 复用只做披露，不重写记录（ranAt 不动，--done 读侧 loadReusableQualityScan 口径不变）；
+  // 逃生阀与失败闸同款 RERUN=1/force。
+  if (rerunMode !== '1' && rerunMode !== 'force') {
+    const lastRecord = loadLastQualityScanRecord({ specBase, changeName })
+    const passedVerdict = shouldReuseLastPassedScan({
+      lastRecord,
+      currentPassedKey: computeQualityScanPassedKey({ cwd, specBase }),
+      plannedSnapshot: !process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF,
+    })
+    if (passedVerdict.reuse) {
+      console.log(`\n♻️ noAI 质量扫描幂等命中：上次实测 passed 且代码指纹/配置/豁免面/快照口径全等${lastRecord.ranAt ? `（实测于 ${lastRecord.ranAt}）` : ''}——本轮免重跑，--done 对账继续复用该记录；确需重跑设 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1。`)
+      console.log(`\n✅ noAI 质量扫描全绿（幂等复用）——本步骤自动完成；代码/配置/豁免面任一变化即 dedupKey 失配自动重测。`)
+      return
     }
   }
   // ── 隔离快照定向跑（2026-09-11 驾驭第十二批，用户第三次撞上：noAI 质量扫描是 verify 的

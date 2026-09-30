@@ -15,7 +15,10 @@ import { execSync } from 'node:child_process'
 import {
   computeQualityScanFingerprint,
   computeQualityScanDedupKey,
+  computeQualityScanDirtyContentKey,
+  computeQualityScanPassedKey,
   shouldReuseLastFailedScan,
+  shouldReuseLastPassedScan,
   qualityScanRecordPath,
   storeQualityScan,
   loadReusableQualityScan,
@@ -447,6 +450,77 @@ test('RERUN 签名闸五态：同签名拒（throw=退出码非0 同源）/ 代�
   } finally {
     delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
     delete process.env.SILLYSPEC_STEP_GUIDE
+    try { rmSync(dir, { recursive: true, force: true }) } catch {}
+  }
+})
+
+
+test('passed 幂等闸（2026-09-30-quality-scan-passed-idempotent）：同 dedupKey+同口径免重跑（ranAt 不刷新）；代码变/RERUN=1 自动重测；纯函数六态', async (t) => {
+  const dir = makeFixtureRepo()
+  // tmpdir fixture 快照建不成（usedSnapshot=false）——SNAPSHOT_OFF=1 对齐 plannedSnapshot 口径，
+  // 闸在集成级可达（与失败闸态⑤注释同因由）
+  process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF = '1'
+  const logs = []
+  const mocked = t.mock.method(console, 'log', (...a) => { logs.push(a.join(' ')) })
+  try {
+    const specBase = join(dir, '.sillyspec')
+    // 动态子集需要测试面（无测试文件 → skip 非 passed）：放 passing 测试 + 未提交触碰（in-diff）
+    // 命中子集——与 RERUN 签名闸测试 c2 放 flip.test.mjs 同手法
+    const okPath = join(dir, 'ok.test.mjs')
+    const okSrc = "import { test } from 'node:test'\nimport assert from 'node:assert/strict'\ntest('ok', () => { assert.ok(true) })\n"
+    writeFileSync(okPath, okSrc)
+    execSync('git add ok.test.mjs && git commit -qm ok-test', { cwd: dir, stdio: 'ignore' })
+    writeFileSync(okPath, okSrc + '// touched\n')
+    // 第一轮：真跑 passed
+    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    const rec1 = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
+    assert.equal(rec1.testResult.status, 'passed', '第一轮真跑 passed 落盘')
+    assert.ok(rec1.dedupKey, '记录携带 dedupKey')
+
+    // 第二轮：码态不动、只改文档（收敛循环实态）→ 幂等命中免重跑
+    appendFileSync(join(specBase, 'changes', 'c1', 'verify-result.md'), '# 第二轮修订\n')
+    logs.length = 0
+    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    const rec2 = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
+    assert.equal(rec2.ranAt, rec1.ranAt, '幂等命中不重写记录（ranAt 不刷新——真跑必刷新）')
+    assert.ok(logs.some((l) => l.includes('幂等命中')), '披露行在场（含免重跑声明）')
+    assert.ok(logs.some((l) => l.includes('幂等复用')), '完成提示在场')
+
+    // 第三轮：代码变化 → dedupKey 失配自动重测（ranAt 刷新）
+    writeFileSync(join(dir, 'src-thing.js'), 'module.exports = 1\n')
+    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    const rec3 = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
+    assert.notEqual(rec3.ranAt, rec2.ranAt, '代码变化 → 重测刷新记录')
+
+    // 第四轮：RERUN=1 逃生阀旁路幂等闸（码态未变也强制重跑，ranAt 刷新）
+    process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN = '1'
+    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    const rec4 = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
+    assert.notEqual(rec4.ranAt, rec3.ranAt, 'RERUN=1 旁路幂等闸 → 强制重跑刷新记录')
+
+    // 第五轮（关键防吞面）：同文件内容修改（文件集不变——dedupKey 盲区）→ passedKey 内容键失配重测
+    const contentKeyBeforeFlip = computeQualityScanDirtyContentKey({ cwd: dir })
+    writeFileSync(okPath, okSrc + '// content flip\n' + 'assert.ok(1)\n')
+    assert.notEqual(computeQualityScanDirtyContentKey({ cwd: dir }), contentKeyBeforeFlip, '内容键函数级：同文件未提交内容修改 → 键变化（trim:false 保行首状态位，路径可读）')
+    assert.ok(computeQualityScanPassedKey({ cwd: dir, specBase }), '合成键函数级：git 仓内非 null')
+    await executeVerifyQualityScan({ cwd: dir, specBase, changeName: 'c1', platformOpts: {} })
+    const rec5 = loadLastQualityScanRecord({ specBase, changeName: 'c1' })
+    assert.notEqual(rec5.ranAt, rec4.ranAt, '同文件未提交内容修改 → 内容键失配自动重测（闸不吞真实代码修改）')
+
+    // 纯函数七态（与 shouldReuseLastFailedScan 对称）
+    const passedRec = { testResult: { status: 'passed' }, lintResult: { status: 'passed' }, passedKey: 'k1', usedSnapshot: false }
+    assert.equal(shouldReuseLastPassedScan({ lastRecord: passedRec, currentPassedKey: 'k1', plannedSnapshot: false }).reuse, true, '全等 → 复用')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: passedRec, currentPassedKey: 'k1', plannedSnapshot: false, forceRerun: true }).reason, /force-rerun/, '逃生阀')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: null, currentPassedKey: 'k1', plannedSnapshot: false }).reason, /no-passed-record/, '无记录')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: { testResult: { status: 'failed' }, passedKey: 'k1' }, currentPassedKey: 'k1', plannedSnapshot: false }).reason, /no-passed-record/, 'failed 记录不入 passed 闸')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: { ...passedRec, lintResult: { status: 'failed' } }, currentPassedKey: 'k1', plannedSnapshot: false }).reason, /lint-failed/, 'lint failed 记录不入闸（阻断语义须重跑发声）')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: passedRec, currentPassedKey: 'other', plannedSnapshot: false }).reason, /passed-key-mismatch/, 'passedKey 失配（内容/文件集/配置/豁免面/HEAD）')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: passedRec, currentPassedKey: 'k1', plannedSnapshot: true }).reason, /snapshot-scope-changed/, '快照口径变化')
+    assert.match(shouldReuseLastPassedScan({ lastRecord: { testResult: { status: 'passed' }, lintResult: { status: 'passed' } }, currentPassedKey: 'k1', plannedSnapshot: false }).reason, /no-passed-key/, '存量记录无 passedKey 保守重跑')
+  } finally {
+    mocked.mock.restore()
+    delete process.env.SILLYSPEC_VERIFY_GATE_SNAPSHOT_OFF
+    delete process.env.SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN
     try { rmSync(dir, { recursive: true, force: true }) } catch {}
   }
 })
