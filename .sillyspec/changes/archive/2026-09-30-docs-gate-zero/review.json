@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-30-docs-gate-zero",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "冻结件 change.patch 缺 .sillyspec/knowledge/uncategorized.md 的交付编辑，设计④的去行号改写不在「代码事实唯一来源」覆盖面内",
+      "evidence": "活树 uncategorized.md:219 现文「sdk.d.ts 的 McpStdioServerConfig.env（SDK 类型声明在 node_modules 依赖包内，行号随包版本漂移不入锚）…repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:407 透传」与 design 做法概述④「原锚 1092 行…去行号留正文提及、:407 转 repo://」逐字对应，属本变更交付且已入 HEAD（docs gate --against HEAD 实测 current:0 全绿）；但 change.patch 的 38 文件清单含零个 knowledge/ 路径，design 接口契约槽又声称改写面含 .sillyspec/knowledge/{decisions,fr,uncategorized,conventions}——冻结 patch 与实际交付/声明面不一致，疑似 patch 生成路径面漏收 knowledge；按 patch 单独复原基线会重现死锚失效",
+      "location": ".sillyspec/knowledge/uncategorized.md:219"
+    },
+    {
+      "severity": "P3",
+      "title": "本仓漂移计数口径不平：design 称 55 处（53 自动+2 人工），提交面称 56 处（54 自动+2 人工）",
+      "evidence": "design 槽1「本仓漂移 55 处：--fix 自动重锚 53 处+2 处人工」（55+211+12+1=279）vs 提交 a7435a01「自动重锚 54 处+2 处人工」（=56，d4ecab68 按 56+223=279 收口）——两口径相差 1，分类账不一致；不影响实测终态（invalid=0 双树验证），仅叙事记账瑕疵",
+      "location": ".sillyspec/changes/2026-09-30-docs-gate-zero/design.md:17"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-09-30T02:46:01Z"
+}

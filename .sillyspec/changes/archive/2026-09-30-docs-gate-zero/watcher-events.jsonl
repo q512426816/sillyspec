@@ -1,0 +1,34 @@
+{"ts":1790734350029,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790734366421,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790734515496,"kind":"file-update","stage":"proposal","detail":"proposal.md 内容变更","provisional":true}
+{"ts":1790734515496,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790734515496,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790734532082,"kind":"file-update","stage":"proposal","detail":"proposal.md 内容变更","provisional":true}
+{"ts":1790734587330,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790734587330,"kind":"task-done","stage":"tasks","detail":"checked 0→1","provisional":true}
+{"ts":1790734739237,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790734739237,"kind":"task-done","stage":"tasks","detail":"checked 1→2","provisional":true}
+{"ts":1790735040306,"kind":"config-change","stage":null,"detail":"本地配置 local.yaml 有变更（内容不上行）","provisional":true}
+{"ts":1790735099446,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735099446,"kind":"task-done","stage":"tasks","detail":"checked 2→6","provisional":true}
+{"ts":1790735174864,"kind":"commit","stage":null,"detail":"87b94bf5","provisional":true}
+{"ts":1790735249975,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735256663,"kind":"commit","stage":null,"detail":"d0b02a4f","provisional":true}
+{"ts":1790735266636,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735266636,"kind":"task-done","stage":"tasks","detail":"checked 2→5","provisional":true}
+{"ts":1790735302919,"kind":"commit","stage":null,"detail":"1d2daf7d","provisional":true}
+{"ts":1790735319241,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735319241,"kind":"task-done","stage":"tasks","detail":"checked 5→7","provisional":true}
+{"ts":1790735339102,"kind":"commit","stage":null,"detail":"d158236c","provisional":true}
+{"ts":1790735414638,"kind":"commit","stage":null,"detail":"dd8fa573","provisional":true}
+{"ts":1790735427921,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735454096,"kind":"commit","stage":null,"detail":"a7435a01","provisional":true}
+{"ts":1790735464078,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735464078,"kind":"task-done","stage":"tasks","detail":"checked 2→5","provisional":true}
+{"ts":1790735477371,"kind":"commit","stage":null,"detail":"61b544ac","provisional":true}
+{"ts":1790735520124,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790735520124,"kind":"task-done","stage":"tasks","detail":"checked 5→7","provisional":true}
+{"ts":1790735526980,"kind":"commit","stage":null,"detail":"d4ecab68","provisional":true}
+{"ts":1790735621753,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790736523918,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1790736536809,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

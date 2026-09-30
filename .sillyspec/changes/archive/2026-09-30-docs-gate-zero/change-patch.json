@@ -1,0 +1,73 @@
+{
+  "change": "2026-09-30-docs-gate-zero",
+  "baseline": "dd8fa5733763ebf298c2140097a3e7b3f2c0e56c",
+  "head": "d4ecab684a9e2410bbb291531f63b130f756dbfc",
+  "files": [
+    ".sillyspec/changes/2026-09-30-docs-gate-zero/tasks.md",
+    ".sillyspec/docs/SillyHub/modules/agent.md",
+    ".sillyspec/docs/SillyHub/modules/llm_provider.md",
+    ".sillyspec/docs/SillyHub/scan/CONCERNS.md",
+    ".sillyspec/docs/SillyHub/scan/CONVENTIONS.md",
+    ".sillyspec/docs/backend/modules/daemon.changelog.md",
+    ".sillyspec/docs/backend/modules/daemon.md",
+    ".sillyspec/docs/backend/scan/CONCERNS.md",
+    ".sillyspec/docs/backend/scan/CONVENTIONS.md",
+    ".sillyspec/docs/backend/scan/PROJECT.md",
+    ".sillyspec/docs/frontend/modules/components-daemon.md",
+    ".sillyspec/docs/frontend/modules/lib-auth-route-guard.md",
+    ".sillyspec/docs/frontend/scan/CONCERNS.md",
+    ".sillyspec/docs/frontend/scan/CONVENTIONS.md",
+    ".sillyspec/docs/frontend/scan/TESTING.md",
+    ".sillyspec/docs/multi-agent-platform/flows/change-lifecycle.md",
+    ".sillyspec/docs/multi-agent-platform/modules/backend.md",
+    ".sillyspec/docs/multi-agent-platform/modules/frontend.md",
+    ".sillyspec/docs/multi-agent-platform/modules/sillyhub-daemon.md",
+    ".sillyspec/docs/multi-agent-platform/scan/CONCERNS.md",
+    ".sillyspec/docs/sillyhub-daemon/modules/adapter-json-rpc.md",
+    ".sillyspec/docs/sillyhub-daemon/modules/daemon.changelog.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/CONCERNS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/CONVENTIONS.md",
+    ".sillyspec/docs/sillyhub-daemon/scan/INTEGRATIONS.md",
+    ".sillyspec/docs/sillyspec/modules/change-management.md",
+    ".sillyspec/docs/sillyspec/modules/core-engine.md",
+    ".sillyspec/docs/sillyspec/modules/runtime.md",
+    ".sillyspec/docs/sillyspec/scan/ARCHITECTURE.md",
+    ".sillyspec/docs/sillyspec/scan/TESTING.md",
+    "docs/sillyspec/architecture-4a.md",
+    "docs/sillyspec/doc-consistency-debt.md",
+    "docs/sillyspec/file-lifecycle.md",
+    "docs/sillyspec/prompt-control-debt.md",
+    "docs/sillyspec/sillyhub-path-a-contract.md",
+    ".sillyspec/changes/2026-09-30-docs-gate-zero/design.md",
+    ".sillyspec/changes/2026-09-30-docs-gate-zero/proposal.md",
+    ".sillyspec/changes/2026-09-30-docs-gate-zero/requirements.md"
+  ],
+  "totals": {
+    "files": 38,
+    "additions": 300,
+    "deletions": 153
+  },
+  "savedAt": "2026-09-30T02:33:58.691Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "docs",
+      "files": 5,
+      "doc": "docs/multi-agent-platform/modules/docs.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "c51ab3740a78233c69c1c26fb2ac5ab199e84f5e04dbd04944a33702936a9414",
+  "patchStatus": "ok"
+}
