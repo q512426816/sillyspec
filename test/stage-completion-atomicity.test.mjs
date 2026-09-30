@@ -56,6 +56,12 @@ if (typeof mock.module !== 'function') {
 import { writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+// green-cache 关闭（2026-09-30-verify-done-green-reuse 接线后）：本文件测 gates 编排逻辑
+// （透传/调用次数），(h) 段 h1/h2 同仓同变更同指纹连跑两轮——不关缓存则 h1 的 passed 会写
+// green-cache，h2 被同指纹复用合法跳过 runVerifyTestCheck，「被调一次」断言失真。缓存行为
+// 由 green-cache.test.mjs 独立锁定。
+process.env.SILLYSPEC_GREEN_CACHE_OFF = '1'
+
 // ── 1. 捕获真实命名空间（先缓存 real，供 mock factory spread + 默认委托）──
 const realStageContract = await import('../src/stage-contract.js')
 const realCompleteHandlers = await import('../src/run/complete-handlers.js')

@@ -245,8 +245,9 @@ test('4c. 锚点分诊（2026-09-23 执行会话实证）：design接口表# 在
     rows: [['GET /api/a', 'covered', 'C1', 'ok', '无任何锚点字样']],
     face: FACE([EP('GET', '/api/a', 1)]), facts: NO_HANDOVER_FACTS(),
   })
-  assert.ok(generic.errors.some((e) => e.includes('证据缺用例依据锚点（五形态之一）')),
-    `无形态字样 → 保持泛化报错不误伤（实际 ${JSON.stringify(generic.errors.map((e) => e.slice(0, 60)))}）`)
+  // 文案口径（2026-09-30-verify-done-green-reuse）：泛化分支须点名「证据列」并排除第 3 列列名歧义
+  assert.ok(generic.errors.some((e) => e.includes('证据列（矩阵第 5 列）缺锚点（五形态之一）') && e.includes('第 3 列「用例依据」不计')),
+    `无形态字样 → 泛化报错点名证据列、排除列名歧义词（实际 ${JSON.stringify(generic.errors.map((e) => e.slice(0, 80)))}）`)
 })
 
 test('4d. 零面分诊（散文式接口定义，2026-09-23 执行会话实证）：sectionHint 在场×零端点 → 骨架注记点名「检测到接口段标题」', () => {
@@ -406,7 +407,7 @@ test('8b. covered-service 缺测试锚点 → error（②）：纯文字证据�
     face: TWO_FACE(), facts: NO_HANDOVER_FACTS(),
   })
   assert.ok(coveredCtl.ok === false
-    && coveredCtl.errors.some((e) => e.includes('GET /api/a') && e.includes('证据缺用例依据锚点（五形态之一）'))
+    && coveredCtl.errors.some((e) => e.includes('GET /api/a') && e.includes('证据列（矩阵第 5 列）缺锚点（五形态之一）'))
     && !coveredCtl.errors.some((e) => e.includes('covered-service 证据缺测试锚点')),
     `对照：covered 行缺锚仍走五形态违规文案（行为不变），不误走 covered-service 测试锚点分支（实际 ${JSON.stringify(coveredCtl.errors.map((e) => e.slice(0, 70)))}）`)
 })

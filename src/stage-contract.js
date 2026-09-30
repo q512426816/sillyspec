@@ -1249,12 +1249,15 @@ export function judgeApiCoverageMatrix(args) {
     if (!apiEvidenceHasAnchorForm(e)) {
       // 分诊（2026-09-23 执行会话实证：design接口表# 字样在场但 # 后非 METHOD /path 形态时，
       // 泛化「缺五形态之一」让人无法区分「形态没写对」与「写了没算数」——三轮试错后 agent 被逼
-      // 换更弱的 DDL@ 形态过门，fail-closed 反而促成了更泛的锚点。定向报出该形态的命中条件。）
+      // 换更弱的 DDL@ 形态过门，fail-closed 反而促成了更泛的锚点。定向报出该形态的命中条件。
+      // 2026-09-30 二次实证（multi-agent-platform tool-report-activation 会话）：泛化分支文案
+      // 「用例依据锚点」里的「用例依据」是第 3 列列名（caseId），而校验只查第 5 列证据列——
+      // 文案把 agent 引向错误的列，再坑三轮。锚点文案一律点名「证据列」，禁用列名歧义词。）
       API_ANCHOR_DESIGN_API_RE.lastIndex = 0
       const bareDesignAnchor = /design接口表#/.test(e) && !API_ANCHOR_DESIGN_API_RE.test(e)
       anchorViolations.push(bareDesignAnchor
         ? `${rowLabel(r)}：证据含 design接口表# 但 # 后未提取到 METHOD /path——该形态仅 \`design接口表#POST /api/xx\` 形态计命中（仅写表名/行号/散文描述不计）`
-        : `${rowLabel(r)}：证据缺用例依据锚点（五形态之一）`)
+        : `${rowLabel(r)}：证据列（矩阵第 5 列）缺锚点（五形态之一）——锚点只认证据列，写在第 3 列「用例依据」不计`)
     }
   }
   if (anchorViolations.length > 0) {

@@ -1,0 +1,8 @@
+{"ts":1790751135843,"kind":"file","stage":"proposal","detail":"proposal.md 出现","provisional":true}
+{"ts":1790751135843,"kind":"file","stage":"requirements","detail":"requirements.md 出现","provisional":true}
+{"ts":1790751135843,"kind":"file","stage":"design","detail":"design.md 出现","provisional":true}
+{"ts":1790751135843,"kind":"file","stage":"tasks","detail":"tasks.md 出现","provisional":true}
+{"ts":1790752338489,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1790753171848,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790753185128,"kind":"gate-run","stage":"verify","detail":"门实测 passed（5.7s） · 20260930072624","provisional":true}
+{"ts":1790753247415,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}

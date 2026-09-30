@@ -34,6 +34,7 @@ import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, unlinkSync,
 import { writeAtomicSync } from '../fs-atomic.js'
 import { triggerSync, resolveChangeDir, resolveRuntimeRoot } from './shared.js'
 import { runValidators } from '../stage-contract.js'
+import { computeGateFingerprint, lookupGreenCache, storeGreenCache, greenCacheNotice } from './green-cache.js'
 import { handleScanStageCompleted, handleExecuteWorktreeCleanup } from './complete-handlers.js'
 
 /**
@@ -956,6 +957,19 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       if (consult.reuse) ledgerReuse = consult
     } catch { /* 账本咨询异常 → 真跑 */ }
     }
+    // ── R8 green-cache 第二层复用（2026-09-30-verify-done-green-reuse）：--done 收敛循环防重复
+    //    真跑。同指纹（HEAD+代码脏面+local.yaml，文档面剔除——green-cache.js 单点口径）30min 内
+    //    真跑绿 → 免重跑。实证：multi-agent-platform 2026-09-30 tool-report-activation 收敛循环
+    //    码态恒定（12:59-14:15 零 commit）下 test 实测 10 轮 ×~290s 全真跑——P2 账本 miss 即裸奔，
+    //    本层兜住。指纹取主仓 cwd/specBase（非快照根：快照目录每轮不同，入指纹永不命中；快照
+    //    内容 = HEAD+变更文件 overlay，主仓指纹等价描述）。优先级：P2 账本（三键精确）>
+    //    P0-1 质量扫描复用 > 本层 > 真跑；fail-open：指纹/缓存任何异常一律回退真跑。──
+    let greenHit = null
+    let gateFingerprint = null
+    try {
+      gateFingerprint = computeGateFingerprint({ cwd, specBase })
+      if (gateFingerprint) greenHit = lookupGreenCache({ runtimeRoot: resolveRuntimeRoot(platformOpts, specBase), scope: changeName, kind: 'test', fingerprint: gateFingerprint })
+    } catch { /* fail-open：缓存链异常回退真跑 */ }
     if (ledgerReuse) {
       testCheck = {
         status: 'passed',
@@ -969,6 +983,16 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     } else if (reusableScan && reusableScan.testResult) {
       testCheck = reusableScan.testResult
       console.log(`\n♻️ Verify 测试对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑；实测于 ${reusableScan.ranAt || '本变更 verify 期间'}${testCheck.resultPath ? `，台账 ${testCheck.resultPath}` : ''}）`)
+      printVerifyTestCheck(testCheck)
+    } else if (greenHit) {
+      testCheck = {
+        status: 'passed',
+        reason: greenCacheNotice(greenHit, 'verify-test'),
+        command: '(green-cache 同指纹复用)',
+        exitCode: 0, durationMs: 0, outputTail: null,
+        resultPath: null, strategy: null, cached: true,
+      }
+      console.log(`\n♻️ Verify 测试对账：green-cache 同指纹复用（HEAD+代码脏面+local.yaml 全等，近期真跑绿——P2 账本未命中时的第二层免重跑；SILLYSPEC_GREEN_CACHE_OFF=1 可关闭）`)
       printVerifyTestCheck(testCheck)
     } else {
       // 测试实测是同步 execSync，长套件可跑 2~10min 且中途无输出——先预告避免 agent 误判卡死
@@ -1038,6 +1062,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
           })
         }
       } catch { /* 记账异常不影响门禁（下次仍真跑） */ }
+      }
+      // green-cache 记绿（R8 接线，与 P2 同口径：只有通过结果入缓存——失败永不缓存）
+      if (testCheck && testCheck.status === 'passed' && gateFingerprint) {
+        try {
+          storeGreenCache({ runtimeRoot: resolveRuntimeRoot(platformOpts, specBase), scope: changeName, kind: 'test', fingerprint: gateFingerprint, result: { status: 'passed', exitCode: 0 } })
+        } catch { /* 写缓存失败不影响门禁（下次真跑） */ }
       }
     }
     // ── trace 晋升（2026-09-24-fr-test-bindings task-04，fr-test-binding §3.2/D-003@v1）：
@@ -1112,8 +1142,16 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
     const { runVerifyLintCheck, printVerifyLintCheck } = await import('../verify-postcheck.js')
     // P0-1 指纹复用：noAI 质量扫描记录同指纹时 lint 一并复用（lint tally 只记真实执行次数）
     let lintCheck = (reusableScan && reusableScan.lintResult) || null
+    let lintGreenHit = null
+    try {
+      lintGreenHit = gateFingerprint ? lookupGreenCache({ runtimeRoot: resolveRuntimeRoot(platformOpts, specBase), scope: changeName, kind: 'lint', fingerprint: gateFingerprint }) : null
+    } catch { /* fail-open：缓存链异常回退真跑 */ }
     if (lintCheck) {
       console.log(`\n♻️ Verify lint 对账：复用 noAI 质量扫描步的实测结果（代码指纹匹配，免重跑）`)
+    } else if (lintGreenHit) {
+      // R8 green-cache 第二层（同 test 段口径）：近期同指纹真跑绿免重跑；tally 只记真实执行
+      lintCheck = { status: 'passed', exitCode: 0, durationMs: 0, failureFiles: [], cached: true, reason: greenCacheNotice(lintGreenHit, 'verify-lint') }
+      console.log(`\n♻️ Verify lint 对账：green-cache 同指纹复用（HEAD+代码脏面+local.yaml 全等，近期真跑绿免重跑；SILLYSPEC_GREEN_CACHE_OFF=1 可关闭）`)
     } else {
       lintCheck = runVerifyLintCheck({ cwd: gateCwd, specBase: gateSpecBase, timeoutMs: verifyGateSnap ? 5 * 60 * 1000 : undefined })
     // 快照 lint 超时回退主仓（2026-09-12 dogfood 两连实证：junction I/O 病态慢，3min/5min 均被
@@ -1122,6 +1160,12 @@ export async function runStageCompletionGates({ stageName, cwd, changeName, plat
       if (verifyGateSnap && lintCheck.status === 'failed' && /超时/.test(String(lintCheck.reason || ''))) {
         console.warn('⚠️ 快照 lint 超时（node_modules junction I/O 慢）→ 主仓复跑 lint（并行噪声可能混入——失败先做归属鉴定）')
         lintCheck = runVerifyLintCheck({ cwd, specBase })
+      }
+      // green-cache 记绿（R8 接线：passed 才缓存——失败永不缓存；快照超时回退的主仓复跑同记）
+      if (lintCheck.status === 'passed' && gateFingerprint) {
+        try {
+          storeGreenCache({ runtimeRoot: resolveRuntimeRoot(platformOpts, specBase), scope: changeName, kind: 'lint', fingerprint: gateFingerprint, result: { status: 'passed', exitCode: 0 } })
+        } catch { /* 写缓存失败不影响门禁（下次真跑） */ }
       }
       if (lintCheck.status !== 'skipped') {
         console.log(`\n⏳ Verify lint 对账：CLI 亲自执行 local.yaml 的 commands.lint…`)

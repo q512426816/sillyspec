@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-30-verify-done-green-reuse",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "change.patch 冻结件未收录任何 src/test 代码 diff，无法作为「代码事实唯一来源」佐证交付",
+      "evidence": "冻结件全 182 行仅含变更目录 4 个文档（design/proposal/requirements/tasks，均 new file），无 src/run/gates.js、src/stage-contract.js、test/* 的 diff；承诺的 green-cache 接线与文案变更只能以工作区现状佐证（已核验在场），冻结件本身不可复现代码交付面，评审可追溯性受损。",
+      "location": ".sillyspec/changes/2026-09-30-verify-done-green-reuse/change.patch:1-182"
+    },
+    {
+      "severity": "P3",
+      "title": "tasks.md 六任务全部未勾选，违背自身「边干边勾」哨兵要求",
+      "evidence": "磁盘与冻结件一致显示 task-01~06 全为 '- [ ]'，而实现（gates.js 接线、文案、测试）已交付且测试绿；tasks.md 机器段要求完成即勾、收口硬门拒单拍多格勾选——进度锚证据面缺失，收口时要么补勾触发单拍多格硬门、要么留痕旁路。",
+      "location": ".sillyspec/changes/2026-09-30-verify-done-green-reuse/tasks.md:11-16"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "作用域": "ok",
+    "切换": "ok"
+  },
+  "reviewedAt": "2026-09-30T07:32:04Z"
+}
