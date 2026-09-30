@@ -1,0 +1,47 @@
+{
+  "change": "2026-09-30-snapshot-symlink-store-subdir",
+  "baseline": "eb058d549df631d724250a4a52e2bb80593c42e6",
+  "head": "2d8dcccd2156a866506da055f7bd9dbd0e847a77",
+  "files": [
+    "src/run/gate-snapshot.js",
+    "test/gate-snapshot-layout-guard.test.mjs",
+    ".sillyspec/changes/2026-09-30-snapshot-symlink-store-subdir/design.md",
+    ".sillyspec/changes/2026-09-30-snapshot-symlink-store-subdir/proposal.md",
+    ".sillyspec/changes/2026-09-30-snapshot-symlink-store-subdir/requirements.md",
+    ".sillyspec/changes/2026-09-30-snapshot-symlink-store-subdir/review.json",
+    ".sillyspec/changes/2026-09-30-snapshot-symlink-store-subdir/tasks.md"
+  ],
+  "totals": {
+    "files": 7,
+    "additions": 224,
+    "deletions": 0
+  },
+  "savedAt": "2026-09-30T08:36:51.745Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "2ef049522f1e47442ed102a8b800edaf0d9ad17cbdcb23a91810a42be53f88b4",
+  "patchStatus": "ok"
+}

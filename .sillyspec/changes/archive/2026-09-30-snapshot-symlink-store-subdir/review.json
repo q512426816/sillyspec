@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-09-30-snapshot-symlink-store-subdir",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "子目录标签形态缺独立 e2e 用例（消费为真值判定，实证无行为差异）",
+      "evidence": "createGateSnapshot 对布局返回值的消费是 `if (layoutHit)` 真值判定 + 模板字符串内嵌（src/run/gate-snapshot.js:501-505），`pnpm(subdir:frontend)` 为非空字符串必走同一路径；全仓 grep 确认 detectSymlinkStoreLayout 返回值无第二个解析方。现有 e2e（createGateSnapshot：pnpm 布局 → null 回退主仓）只覆盖根 'pnpm' 形态，无 subdir 标签形态的端到端用例——但 FR-03 测试绑定显式引用既有 pnpm 布局用例，三方一致成立。信息级：真值消费使两种形态行为可证同构，补用例收益仅是文案回归锚点。",
+      "location": "test/gate-snapshot-layout-guard.test.mjs:58"
+    },
+    {
+      "severity": "P3",
+      "title": "Windows junction/symlink 子目录被 isDirectory() 跳过——保守漏检非误报",
+      "evidence": "readdirSync withFileTypes 的 Dirent 描述链接本身而非目标：指向目录的 symlink/junction e.isDirectory() 为 false（src/run/gate-snapshot.js:732），其内 lockfile 不会被扫到，落 packageManager 判据再落 null——与改前对该布局的行为完全一致（快照照建）。方向保守（漏检=多建快照，不是跳可用快照），且探测发生在主仓 cwd 而非快照内，根级 symlink 子目录本身罕见。无正确性风险。",
+      "location": "src/run/gate-snapshot.js:731-733"
+    },
+    {
+      "severity": "P3",
+      "title": "子目录扫描跳过面不含 venv/env（与文件内 ENV_DIR_NAMES 约定不对称）",
+      "evidence": "子目录扫描仅跳 node_modules 与 '.' 前缀（src/run/gate-snapshot.js:733），而同文件 ENV_DIR_NAMES（:752）还定义了非点号的 venv/env。Python venv 一层是 bin/lib/pyvenv.cfg，不会命中三类判据文件——代价仅每目录 ≤3 次 existsSync（微秒级），无正确性影响。属与自家环境目录约定的微小不对称，非缺陷。",
+      "location": "src/run/gate-snapshot.js:733"
+    }
+  ],
+  "dimensionNotes": {
+    "fr_impl_test_consistency": "五条 FR 逐条核验一致。FR-01：子目录一层 pnpm/bun/lerna 命中带 subdir 标签（gate-snapshot.js:730-738），测试四断言覆盖（test:35-57）；FR-02：根判据先扫先返回（:722-724 在子目录块之前），测试实证根 bun.lock 出现后报 'bun' 不遮根（test:43-44），既有首块回归绿；FR-03：消费面零改动——createGateSnapshot 内 `if (layoutHit)` 真值判 warn+return null（:501-505），createVerifyGateSnapshot 经 `if (!snap) return null`（:905）透传，gates.js:925-926 与 verify-quality-scan.js:694-695 调用方零改；FR-04：空目录/普通子目录/node_modules+隐藏目录 → null（test:37,50-51,55-56），非仓目录落外层 catch return null（:748）；FR-05：评审员实跑 test/gate-snapshot-layout-guard.test.mjs 5/5 绿（含新块），全量套件+lint 未独立重跑、由 flow done 收口门覆盖——如实记档，非缺陷。",
+    "blindspot_authenticity": "盲维四问全部真实且与代码对得上。乱序：纯同步 existsSync/readdirSync 序，无时序面属实；并发：探测全程只读不写，多会话同探同仓结果确定；切换/中断：无状态、无清理面——代码实证 readdirSync 子目录块自带 catch（:739）落 packageManager 判据、其 catch（:746）落 null、外层 catch（:748）兜 null，fail 链与设计描述逐层同构；作用域：以 cwd 为根一层不递归（packages/* 不扫属实），subdir 标签只进警告文案不参与任何分支。",
+    "boundary_adjudication": "design 槽4 三条边界逐条裁决均【可接受】：①误报面扩大（子目录有 bun.lock 而根为标准 npm、快照本可用 → 被跳回主仓）——可接受：与既有『宁主仓口径』同向（消费面 501-505 对任何命中一律 warn+null，本仓 sillyspec 自身即以 pnpm 根判据跳快照运行），且主仓口径失败后有污染归属鉴定兜底；apps 型子目录 lockfile 确意味着该 app 的 node_modules 符号链接网跨根失效，跳过方向正确。②packages/* 型不扫——可接受：pnpm workspace 的 lockfile 在根，根判据（:722-724）已覆盖，代码确未递归。③子目录仅 yarn 不命中——可接受：本探测函数对 yarn 本就无 lockfile 判据（仅 packageManager 字段一路 :744），yarn classic 无 symlink store 坑，维持现状是自我一致而非本变更新增缺口。",
+    "protection_claims": "防护声明全部核验通过：根判据优先级未被遮蔽——代码顺序（根 existsSync 先于子目录块）+ 测试实证（根 bun.lock 出现后按根报）；node_modules/隐藏目录跳过——:733 显式判 + 测试实证（node_modules/pnpm-lock.yaml 与 .ci-cache/ 均不触发）；readdirSync fail 链——子目录扫描异常 catch（:739）→ packageManager 判据 → null，三层 catch 与设计声明同构，测试虽未直接造不可读根，但链路为纯顺序 try/catch 无状态遗漏。性能面（疑点c）：探测每次快照创建仅调一次（:501，早于 mkdtempSync），增量=一次 readdirSync(根) + 每可见子目录 ≤3 次 existsSync，微秒级，对照动机中 ~160s/轮的快照构建成本可忽略，且对命中仓是净节省。生成物同步：n/a——本变更仅触及 src/run/gate-snapshot.js 与 test/gate-snapshot-layout-guard.test.mjs，无生成物。"
+  },
+  "reviewedAt": "2026-09-30T16:30:35+08:00"
+}
