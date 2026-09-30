@@ -1529,3 +1529,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
 理由：最大风险：缓存绿被误复用——「本次没跑但结论是绿的」若指纹口径有洞（如 local.yaml 恰好在两次 --done 间被改）会吃旧绿。防线：local.yaml 整文件哈希入指纹（改命令必 miss）+ TTL 30min + 文档面剔除只影响「文档改动不击穿」（代码改动必击穿）+ OFF 逃生阀。已放弃方案：a) verify 收口实测结果全量缓存（不过期）——违背 fail-closed，环境漂移（DB/网络态）会吃陈旧绿，弃；b) 只修文案不接缓存——文案消掉三轮试错但 10 轮 ×290s 的实测重复真跑原样保留（本次实证的大头），弃。已知残留：multi-agent-platform .runtime/green-cache/ 下有 0 字节 'change' 文件（14:13 产物），非本仓代码与项目代码所写（双仓 grep 零命中），不影响 lookup（文件名精确匹配永远 miss），留观察不入本变更。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-30-quality-scan-passed-idempotent
+锚点：未记录
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+理由：最大风险：幂等闸吞真实重测需求。三层防线：①passedKey 内容敏感（dedupKey 的文件集口径对同文件未提交修改是盲的——开发中被既有 noAI 动作测试当场抓住：fixture 同文件翻转失败版，dedupKey 全等闸误命中；内容键正是为此存在，测试第五轮钉死）②lint failed 记录不入闸（保 lint 阻断发声）③RERUN=1/force 逃生阀与失败闸同阀。已放弃方案：a) 闸键直接用 dedupKey——同文件未提交内容修改盲区会吞真实代码修改（实证如上），弃；b) 闸键用 rerunSignature——其内容敏感面只覆盖 test/ 目录（computeTestFaceDigest(join(cwd,'test'))），仓根/子目录源文件同文件修改仍盲，弃；c) execute 侧复用 loadReusableQualityScan（--done 读侧）——它只校验 fingerprint（文件集口径），同盲区，弃。已知残留：git() 缺省 trim 吃 porcelain 首行前导空格是既有全局行为（影响所有经 porcelainCodeLines 的路径解析首行），本变更只在自己调用点传 trim:false 修正，未动 git-helper 公共行为（影响面大，若修应独立变更）。

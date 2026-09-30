@@ -776,3 +776,57 @@ superseded_by：FR-cli-entry-102
 - 场景：默认场景 — Given 系统就绪；When 未命中用例；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-06
 最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+
+## FR-runtime-060 shouldReuseLastPassedScan 纯函数：passed+dedupKey 全等+快
+变更：2026-09-30-quality-scan-passed-idempotent
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When shouldReuseLastPassedScan 纯函数：passed+dedupKey 全等+快照口径一致；Then reuse:true
+全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-01
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+
+## FR-runtime-061 lint failed 记录 / dedupKey 失配 / 快照口径变化 / 无记录 / forc
+变更：2026-09-30-quality-scan-passed-idempotent
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When lint failed 记录 / dedupKey 失配 / 快照口径变化 / 无记录 / forceRerun；Then 各自 reason 不复用
+全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-02
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+
+## FR-runtime-062 executeVerifyQualityScan 幂等命中时：不建快照、不跑 test/lint/s
+变更：2026-09-30-quality-scan-passed-idempotent
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 幂等 相关模块就绪；When executeVerifyQualityScan 幂等命中时：不建快照、不跑 test/lint/smoke/coverage、不重写扫描记录，打印 ♻️ 披露；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-03
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+
+## FR-runtime-063 码态/known_failures/commands/test_strategy 任一变化 → de
+变更：2026-09-30-quality-scan-passed-idempotent
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 码态/known_failures/commands/test_strategy 任一变化；Then dedupKey 失配自动重测（既有指纹语义零变化）
+全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-04
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+
+## FR-runtime-064 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1/force 时 pass
+变更：2026-09-30-quality-scan-passed-idempotent
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1/force 时 passed 闸旁路（与失败闸同阀）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-05
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+
+## FR-runtime-065 全量测试回归绿 + lint 绿
+变更：2026-09-30-quality-scan-passed-idempotent
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿 + lint 绿；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-06
+最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
