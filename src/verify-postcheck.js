@@ -751,11 +751,16 @@ function parseFlowValue(flowText, key) {
  * @returns {string[]} 相对 cwd 的测试文件路径（posix 形态，已排序；无可发现 → []）
  */
 /**
- * 测试文件判定（polyglot，2026-09-24 deps-auto 泛化）：JS/TS 测试（*.test/spec.[cm]js/ts）
- * + Python 测试（test_*.py / *_test.py），任意目录深度（tests?/ 目录或散置均可）。
+ * 测试文件判定（polyglot，2026-09-24 deps-auto 泛化）：JS/TS 测试
+ * （*.test/spec.[cm]js/ts/jsx/tsx）+ Python 测试（test_*.py / *_test.py），
+ * 任意目录深度（tests?/ 目录或散置均可）。
+ * 2026-09-30 补 jsx|tsx（坑 dynamic-deps-e2e-vitest-exclude-false-red，用户授权修复）：
+ * 原正则漏配 .test.tsx/.spec.jsx——changedTests 拆分把自家 tsx 测试当 src、changedSrc
+ * 内容匹配又因 import 走别名而不中，自家单测反而不进依赖面（而 .spec.ts 的 e2e 文件
+ * 反倒经 changedTests 直入，被 vitest exclude 拦成假红）。
  */
 function isTestFilePath(p) {
-  return /\.(test|spec)\.[cm]?(js|ts)$/.test(p) || /(^|\/)test_[^\/]+\.py$/.test(p) || /(^|\/)[^\/]+_test\.py$/.test(p)
+  return /\.(test|spec)\.[cm]?(js|jsx|ts|tsx)$/.test(p) || /(^|\/)test_[^\/]+\.py$/.test(p) || /(^|\/)[^\/]+_test\.py$/.test(p)
 }
 
 /** 递归收集测试文件（跳过 node_modules/.venv/.git/dist/build/.runtime/.sillyspec，深度帽 6 层防野目录）。 */
@@ -782,6 +787,58 @@ function pythonImportCandidates(changedPy) {
   return [...out]
 }
 
+/**
+ * 剥注释（字符串感知状态机）——依赖命中只认代码内引用（坑
+ * dynamic-deps-e2e-vitest-exclude-false-red，2026-09-30 multi-agent-platform 实证，
+ * 用户授权修复）：原裸子串 content.includes(src) 连注释一起扫——e2e 用例**注释**里
+ * 字面引用源文件完整路径（出处标注）被误判成 import 依赖边，端到端用例进单测运行器
+ * 批又被 exclude 面拦成恒假红。剥注释后匹配：import/require/dynamic import/vi.mock
+ * 等代码内引用（含引号内路径串）照常命中，注释引用不再算依赖边。
+ * 状态机：单双引号/模板串内的注释起始符是字面量不剥；反斜杠转义不闭合串。
+ * 近似边界（可接受，方向=少误报）：模板串 ${} 内嵌套注释/字符串不识别——最坏保留
+ * 一段注释（假阳性边缘存续）或剥掉嵌套串内容（假阴性），主场景（顶层注释块/行注释）全覆盖。
+ * @param {string} content 源文本
+ * @param {boolean} isPy Python 语义（# 行注释）；JS 系走 // 与块注释
+ */
+function stripCommentsForDepMatch(content, isPy = false) {
+  const n = content.length
+  let out = ''
+  let i = 0
+  let quote = null // 当前字符串引号字符（' " `），null=代码态
+  while (i < n) {
+    const c = content[i]
+    const next = i + 1 < n ? content[i + 1] : ''
+    if (quote) {
+      out += c
+      if (c === '\\') {
+        if (i + 1 < n) { out += next; i += 2; continue }
+      } else if (c === quote) {
+        quote = null
+      }
+      i++
+      continue
+    }
+    if (c === '\'' || c === '"' || c === '`') { quote = c; out += c; i++; continue }
+    if (!isPy && c === '/' && next === '/') {
+      while (i < n && content[i] !== '\n') i++
+      continue // 行注释整段剥（换行符留给后续行）
+    }
+    if (!isPy && c === '/' && next === '*') {
+      i += 2
+      while (i < n && !(content[i] === '*' && content[i + 1] === '/')) i++
+      i += 2
+      continue
+    }
+    if (isPy && c === '#') {
+      while (i < n && content[i] !== '\n') i++
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
+}
+
 export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommands = [] }) {
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return []
   const norm = (p) => String(p).replace(/\\/g, '/')
@@ -804,9 +861,13 @@ export function discoverModuleDependentTests({ cwd, changedFiles, coveredCommand
     if (covered.includes(fname) || covered.includes(tf)) continue
     let content = ''
     try { content = readFileSync(join(cwd, tf), 'utf8') } catch { continue }
-    let hit = jsSrc.some(src => content.includes(src))
+    // 2026-09-30（坑 dynamic-deps-e2e-vitest-exclude-false-red，用户授权修复）：依赖命中
+    // 改在剥注释后的内容上做——注释里的路径/导入串字面引用不再算依赖边（字符串感知剥离，
+    // 代码内 import/require/dynamic import/vi.mock 引用照常命中）。
+    const contentCode = stripCommentsForDepMatch(content, tf.endsWith('.py'))
+    let hit = jsSrc.some(src => contentCode.includes(src))
     if (!hit) {
-      hit = [...pyCandidates].some(d => content.includes(`from ${d}`) || content.includes(`import ${d}`))
+      hit = [...pyCandidates].some(d => contentCode.includes(`from ${d}`) || contentCode.includes(`import ${d}`))
     }
     if (hit) found.add(tf)
   }
@@ -2585,14 +2646,22 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const jsNative = jsRun.filter(
     (f) => !NEEDS_PROJECT_RE.test(_norm(f)) && !needsProjectByContent(f),
   )
+  // 端到端目录过滤（坑 dynamic-deps-e2e-vitest-exclude-false-red，2026-09-30 multi-agent-platform
+  // 实证，用户授权修复）：项目运行器（vitest/jest）收集面普遍 exclude e2e/**、cypress/**
+  // （Playwright/Cypress 用例不归单测运行器收）——显式点名传入必「No test files found」
+  // exit 1 恒假红（且无失败行，known_failures 豁免救不了）。与运行器收集面取交集：端到端
+  // 目录文件不进项目运行器批（jsNative 批照旧——node 原生可跑的形态不受影响）。
+  const E2E_DIR_RE = /(^|\/)(e2e|cypress)\//
+  const jsProjectRun = jsProject.filter(f => !E2E_DIR_RE.test(_norm(f)))
+  const e2eDroppedFiles = jsProject.filter(f => E2E_DIR_RE.test(_norm(f)))
   let jsxRunner = null
   for (const h of hits || []) {
     const cmd = String(h.test || '')
     const m = /^((?:cd\s+[^&|;]+&&\s*)*[^&|;]*?(?:vitest|jest))(?=\s|$)/.exec(cmd) || /(?:^|&&|;|\|\|)\s*([^&|;]*(?:vitest|jest)(?:\s|$))/.exec(cmd)
     if (m) { jsxRunner = m[1].trim(); break }
   }
-  if (!jsxRunner && cwd && jsProject.length > 0) {
-    const inferred = inferJsxRunner(cwd, jsProject[0])
+  if (!jsxRunner && cwd && jsProjectRun.length > 0) {
+    const inferred = inferJsxRunner(cwd, jsProjectRun[0])
     if (inferred) { jsxRunner = inferred.command }
   }
   const cdDir = /(?:^|\s)cd\s+(\S+)\s*&&/.exec(pyRunner)?.[1]
@@ -2600,7 +2669,7 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
   const batches = []
   if (pyRun.length > 0) batches.push({ name: 'deps(auto-py)', short: 'py', command: `${pyRunner} ${pyRun.map(rebase).join(' ')}`, count: pyRun.length, dropped: py.length - pyRun.length })
   if (jsNative.length > 0) batches.push({ name: 'deps(auto-js)', short: 'js', command: `node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=tap --test-reporter-destination=stdout ${jsNative.join(' ')}`, count: jsNative.length, dropped: js.length - jsRun.length, tap: true })
-  if (jsProject.length > 0) {
+  if (jsProjectRun.length > 0) {
     if (jsxRunner) {
       const isVitest = /vitest/.test(jsxRunner)
       // jsx 批的 cd 重定基（评审 MEDIUM 清偿）：cdDir 只源 pyRunner——jsxRunner 自带 cd 前缀
@@ -2611,10 +2680,15 @@ function buildDepsBatches({ deps, changedFiles = [], hits = [], cwd = null, prio
       // 括号/方括号/空格的路径（src/app/(dashboard)/workspaces/[id]/...）不加引号会以
       // 「此时不应有 <。」语法错误炸整批——文件参数含特殊字符时逐个 wrap 双引号。
       const quoteWinPath = (f) => (/[()\[\]\s&^%,;!]/.test(f) ? `"${f}"` : f)
-      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProject.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProject.length, dropped: 0 })
+      batches.push({ name: 'deps(auto-jsx)', short: 'jsx', command: `${jsxRunner} ${isVitest ? 'run ' : ''}${jsProjectRun.map(rebaseJsx).map(quoteWinPath).join(' ')}`, count: jsProjectRun.length, dropped: 0 })
     } else {
-      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProject.length, dropped: 0, skip: true, files: jsProject, reason: `JSX 测试文件（tsx/jsx，${jsProject.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
+      batches.push({ name: 'deps(auto-jsx-skip)', short: 'jsx-skip', command: null, count: jsProjectRun.length, dropped: 0, skip: true, files: jsProjectRun, reason: `JSX 测试文件（tsx/jsx，${jsProjectRun.length} 个）node 原生不可跑且项目结构无 vitest/jest 运行器可推断——转项目运行器执行并如实披露，不制造恒败段（R18-SF-full 残差段 11 连败的坑）` })
     }
+  }
+  if (e2eDroppedFiles.length > 0) {
+    // 交集为空也要留痕（skip 批不拦门、点名可见）：端到端用例该走 playwright/cypress
+    // 运行器（test:e2e 类脚本），不归单测依赖批。
+    batches.push({ name: 'deps(auto-jsx-e2e-skip)', short: 'jsx-e2e-skip', command: null, count: e2eDroppedFiles.length, dropped: 0, skip: true, files: e2eDroppedFiles, reason: `端到端目录（e2e/cypress）测试 ${e2eDroppedFiles.length} 个不进项目运行器批——vitest/jest 收集面普遍 exclude 这些目录，点名传入必「No test files found」exit 1 假红（2026-09-30 multi-agent-platform 实证）；如需执行请走对应端到端运行器（playwright/cypress，如 pnpm test:e2e）` })
   }
   return batches
 }
