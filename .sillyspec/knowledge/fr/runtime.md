@@ -830,3 +830,96 @@ superseded_by：FR-cli-entry-102
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿 + lint 绿；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-30-quality-scan-passed-idempotent/requirements.md#FR-06
 最近确认：27fde6b4cec5a73c2b80cf1b9c8970f2129c88ea
+
+## FR-runtime-066 子目录（一层）存在 pnpm/bun/lerna lockfile 而根目录无任何 lockfile
+变更：2026-09-30-snapshot-symlink-store-subdir
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 子目录（一层）存在 pnpm/bun/lerna lockfile 而根目录无任何 lockfile 判据时，detectSymlinkStoreLayout；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-snapshot-symlink-store-subdir/requirements.md#FR-01
+最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-30-snapshot-symlink-store-subdir:flow:FR-01
+  tests: test/gate-snapshot-layout-guard.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-30-snapshot-symlink-store-subdir
+  status: active
+
+## FR-runtime-067 根目录判据行为零变化（根命中优先，标签不带 subdir）
+变更：2026-09-30-snapshot-symlink-store-subdir
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 根目录判据行为零变化（根命中优先，标签不带 subdir）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-snapshot-symlink-store-subdir/requirements.md#FR-02
+最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-30-snapshot-symlink-store-subdir:flow:FR-02
+  tests: test/gate-snapshot-layout-guard.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-30-snapshot-symlink-store-subdir
+  status: active
+
+## FR-runtime-068 createVerifyGateSnapshot 对子目录布局命中时打印跳快照警告并返回 null（
+变更：2026-09-30-snapshot-symlink-store-subdir
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When createVerifyGateSnapshot 对子目录布局命中时打印跳快照警告并返回 null（回退主仓实测），既有调用方（质量扫描/verify 门）零改；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-snapshot-symlink-store-subdir/requirements.md#FR-03
+最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-30-snapshot-symlink-store-subdir:flow:FR-03
+  tests: test/gate-snapshot-layout-guard.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-30-snapshot-symlink-store-subdir
+  status: active
+
+## FR-runtime-069 非仓目录/无子目录/子目录全空的行为零变化（null）
+变更：2026-09-30-snapshot-symlink-store-subdir
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 非仓目录/无子目录/子目录全空的行为零变化（null）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-snapshot-symlink-store-subdir/requirements.md#FR-04
+最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-30-snapshot-symlink-store-subdir:flow:FR-04
+  tests: test/gate-snapshot-layout-guard.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-30-snapshot-symlink-store-subdir
+  status: active
+
+## FR-runtime-070 全量测试回归绿 + lint 绿
+变更：2026-09-30-snapshot-symlink-store-subdir
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿 + lint 绿；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-snapshot-symlink-store-subdir/requirements.md#FR-05
+最近确认：2d8dcccd2156a866506da055f7bd9dbd0e847a77
