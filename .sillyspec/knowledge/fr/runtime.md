@@ -722,3 +722,57 @@ superseded_by：FR-cli-entry-102
 摘要：（无场景名）
 全文：.sillyspec/changes/archive/2026-09-29-batch-tick-gate/requirements.md#FR-04
 最近确认：79ea50cc7bbe0eee041650277633780416e309a0
+
+## FR-runtime-054 报错文案不再含「用例依据」误导词，直接写明锚点须在证据列（第 5 列）
+变更：2026-09-30-verify-done-green-reuse
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 报错文案不再含「用例依据」误导词，直接写明锚点须在证据列（第 5 列）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-01
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+
+## FR-runtime-055 verify --done 的 test 实测在 HEAD+代码脏面+local.yaml 指纹全等
+变更：2026-09-30-verify-done-green-reuse
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When verify --done 的 test 实测在 HEAD+代码脏面+local.yaml 指纹全等且 30min 内有绿记录时复用缓存不真跑，输出明示 cac；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-02
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+
+## FR-runtime-056 verify --done 的 lint 实测同指纹复用（同上口径）
+变更：2026-09-30-verify-done-green-reuse
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When verify --done 的 lint 实测同指纹复用（同上口径）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-03
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+
+## FR-runtime-057 指纹失配/无记录/环境异常一律回退真跑，门禁语义零变化（fail-open）
+变更：2026-09-30-verify-done-green-reuse
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 指纹失配/无记录/环境异常一律回退真跑，门禁语义零变化（fail-open）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-04
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+
+## FR-runtime-058 全量测试回归绿，含新增的文案断言与复用命中
+变更：2026-09-30-verify-done-green-reuse
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿，含新增的文案断言与复用命中；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-05
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+
+## FR-runtime-059 未命中用例
+变更：2026-09-30-verify-done-green-reuse
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 未命中用例；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-30-verify-done-green-reuse/requirements.md#FR-06
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b

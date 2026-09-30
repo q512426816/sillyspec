@@ -1522,3 +1522,10 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：d4ecab684a9e2410bbb291531f63b130f756dbfc
 理由：最大风险：repo:// 转换后本仓 docs gate 与 sillyhub 仓漂移耦合——hub 侧后续演进使已转换引用失效时，配置了映射的设备上本仓推送被 gate 拦。这是 ratchet 的设计内语义（279→0 的清偿本身证明引用当前全部有效；失效即可见即修），未配映射设备零影响。 弃案：① local.yaml skip 藏数——与「真欠账清零」相反，且 local.yaml 是 gitignored 机器配置不随仓传播，他设备失效数反弹；② doc_type: snapshot 豁免——这批是活文档（spec 主场文档），冻结语义失真且豁免面随文档新增不可控；③ 让 docs-check 支持裸路径跨仓自动解析——引入路径猜测歧义（本仓与目标仓存在大量同名 router.py/service.py，预演实测 service.py 86 候选/router.py 86 候选），repo:// 显式前缀正是为消歧而设的既有机制，不应绕过。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-30-verify-done-green-reuse
+锚点：未记录
+最近确认：80491e838e08e19d94dd1a12bbb22294552f575b
+理由：最大风险：缓存绿被误复用——「本次没跑但结论是绿的」若指纹口径有洞（如 local.yaml 恰好在两次 --done 间被改）会吃旧绿。防线：local.yaml 整文件哈希入指纹（改命令必 miss）+ TTL 30min + 文档面剔除只影响「文档改动不击穿」（代码改动必击穿）+ OFF 逃生阀。已放弃方案：a) verify 收口实测结果全量缓存（不过期）——违背 fail-closed，环境漂移（DB/网络态）会吃陈旧绿，弃；b) 只修文案不接缓存——文案消掉三轮试错但 10 轮 ×290s 的实测重复真跑原样保留（本次实证的大头），弃。已知残留：multi-agent-platform .runtime/green-cache/ 下有 0 字节 'change' 文件（14:13 产物），非本仓代码与项目代码所写（双仓 grep 零命中），不影响 lookup（文件名精确匹配永远 miss），留观察不入本变更。
