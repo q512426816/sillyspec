@@ -544,3 +544,117 @@ superseded_by：FR-cli-entry-102
 - 场景：默认场景 — Given 引导文件被修改；When 动态测试推断；Then 断言测试自动入实测面（agent 写完即跑为过程拦、flow done 实测为收口拦）
 全文：.sillyspec/changes/archive/2026-09-28-guidance-principles/requirements.md#FR-07
 最近确认：9d9c822c27a8c0ff498061eecbd156f89aad3ab7
+
+## FR-runtime-044 flow start/done/amend-draft 执行后，runtimeRoot 下 agen
+变更：2026-09-29-flow-agent-log-report
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When flow start/done/amend-draft 执行后，runtimeRoot 下 agent-session-log.json 的本会话 own 条目；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-01
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-agent-log-report:flow:FR-01
+  tests: test/flow-agent-log-report.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-agent-log-report
+  status: active
+
+## FR-runtime-045 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥
+变更：2026-09-29-flow-agent-log-report
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-02
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-agent-log-report:flow:FR-02
+  tests: test/agent-session-log.test.mjs | test/flow-agent-log-report.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-agent-log-report
+  status: active
+
+## FR-runtime-046 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
+变更：2026-09-29-flow-agent-log-report
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-03
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-agent-log-report:flow:FR-03
+  tests: test/flow-agent-log-report.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-agent-log-report
+  status: active
+
+## FR-runtime-047 run 族既有行为不变（既有 run agent-log 测试全绿）
+变更：2026-09-29-flow-agent-log-report
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When run 族既有行为不变（既有 run agent-log 测试全绿）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-04
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-agent-log-report:flow:FR-04
+  tests: test/agent-session-log.test.mjs | test/cli-top-level-aliases.test.mjs | test/flow-parity.test.mjs | test/flow-protocol.test.mjs | test/flow-status-heartbeat.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-agent-log-report
+  status: active
+
+## FR-runtime-048 新增测试覆盖 flow 入口的登记调用面
+变更：2026-09-29-flow-agent-log-report
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 新增测试覆盖 flow 入口的登记调用面；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-05
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-flow-agent-log-report:flow:FR-05
+  tests: test/flow-agent-log-report.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-flow-agent-log-report
+  status: active
+
+## FR-runtime-049 全量测试绿 + lint 绿
+变更：2026-09-29-flow-agent-log-report
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试绿 + lint 绿；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-06
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d

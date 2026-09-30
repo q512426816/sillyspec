@@ -1,0 +1,666 @@
+diff --git a/.sillyspec/changes/2026-09-29-flow-agent-log-report/flow-state.yaml b/.sillyspec/changes/2026-09-29-flow-agent-log-report/flow-state.yaml
+new file mode 100644
+index 00000000..821a14f4
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-agent-log-report/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps:
++  artifacts: done
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 9a048476a67f2af689c7fd30a2dbbb7fc42d3d25
++updatedAt: '2026-09-29T07:49:35.217Z'
++baseline_sha256: 5f73587431235ac42c86fa6c6388f7a02c74fd5dc235df9903194a0965a4c70f
++
+diff --git a/.sillyspec/docs/sillyspec/modules/cli-entry.md b/.sillyspec/docs/sillyspec/modules/cli-entry.md
+index 32bf319b..c8e20de4 100644
+--- a/.sillyspec/docs/sillyspec/modules/cli-entry.md
++++ b/.sillyspec/docs/sillyspec/modules/cli-entry.md
+@@ -4,7 +4,7 @@ doc_type: module-card
+ module_id: cli-entry
+ author: qinyi
+ created_at: 2026-06-03T07:42:00+08:00
+-updated_at: 2026-09-27T00:00:00+08:00
++updated_at: 2026-09-29T00:00:00+08:00
+ ---
+ # cli-entry
+ 
+@@ -12,6 +12,8 @@ updated_at: 2026-09-27T00:00:00+08:00
+ 
+ > burst 注记（2026-09-23）：2026-09-22-stage-burst-fold：src/flow.js readFlowConfig 缺省 thin→legacy（:66/:76 两处，用户裁定 flow 族保留实验通道——显式 mode: thin 照旧生效）；协议面/命令面零改动，纯缺省值翻转
+ 
++> agent-log 注记（2026-09-29）：2026-09-29-flow-agent-log-report：flow 族四子命令（start/status/done/amend-draft）在 change 解析+校验后接入 recordAgentLogInvocation（runCommand 入口同款，src/agent-session-log.js）——agent 会话日志登记 + POST /api/agent-logs 上报；context.change_key=flow change 名、quick_id 恒空；best-effort 失败静默不阻断协议面（协议见 docs/platform-agent-log-protocol.md）
++
+ ## 定位
+ 
+ CLI 入口 + 命令分发 + 阶段执行引擎。`bin/sillyspec.js` 是 shebang 入口，`src/index.js` 负责命令路由（init / setup / progress / run / …），`src/run.js` 是 `sillyspec run` 的核心执行引擎，管理步骤流转、审批门禁、自动模式。不负责数据库层实现（委托 ProgressManager/DB）。
+diff --git a/docs/platform-agent-log-protocol.md b/docs/platform-agent-log-protocol.md
+index f9a725d6..8ceaab6b 100644
+--- a/docs/platform-agent-log-protocol.md
++++ b/docs/platform-agent-log-protocol.md
+@@ -57,7 +57,7 @@ Content-Type: application/json
+ }
+ ```
+ 
+-- **触发时机与推送范围**：agent 调 `sillyspec run <stage>`（含顶层别名）入口，探测到 agent 环境且本 run **own 集合非空**（会话身份锚定成功，见 §3「会话身份锚定」）才上报；探测不到 / own 解析失败（锚定识别失败宁缺毋滥）不发。**`entries` 只含 own 条目**——本 run 所属 agent 会话的日志（锚定主会话 + zcode parent_id 子代理链）；同 cwd 活跃窗口内其他窗口 / 其他 agent 的日志只进本地留底（§2 仍全量），不进任何上报（hub 会话不再把共享留底里别人的条目整批挂走）。每次调用都推（`invocations`/`last_seen_at` 递增即活跃心跳），服务端按 `(workspace, log_path)` upsert 去重即可。
++- **触发时机与推送范围**：agent 调 `sillyspec run <stage>`（含顶层别名）或 `sillyspec flow <start|status|done|amend-draft>`（2026-09-29-flow-agent-log-report 起 flow 族接入，`context.change_key`=flow change 名、`quick_id` 恒空）入口，探测到 agent 环境且本 run **own 集合非空**（会话身份锚定成功，见 §3「会话身份锚定」）才上报；探测不到 / own 解析失败（锚定识别失败宁缺毋滥）不发。**`entries` 只含 own 条目**——本 run 所属 agent 会话的日志（锚定主会话 + zcode parent_id 子代理链）；同 cwd 活跃窗口内其他窗口 / 其他 agent 的日志只进本地留底（§2 仍全量），不进任何上报（hub 会话不再把共享留底里别人的条目整批挂走）。每次调用都推（`invocations`/`last_seen_at` 递增即活跃心跳），服务端按 `(workspace, log_path)` upsert 去重即可。
+ - **认证与 workspace 隔离**：与进度同步端点同规则——`shpsync_` token 服务端派生 `(user, workspace_id)`，**不信任 body 里的 workspace_id**（仅作参考展示）。
+ - **响应**：任意 2xx 即成功；body 客户端不读。
+ - **best-effort**：无配置静默跳过；网络失败 / 非 2xx / 超时（5s）→ `console.warn` 一行，**绝不阻断 run 主流程**（本地产物已留底，见 §2）。
+diff --git a/src/agent-session-log.js b/src/agent-session-log.js
+index f94a1028..9607fa43 100644
+--- a/src/agent-session-log.js
++++ b/src/agent-session-log.js
+@@ -1062,7 +1062,7 @@ export function readAgentLogArtifact(runtimeRoot) {
+ }
+ 
+ /**
+- * 登记 agent 会话日志路径进 <runtimeRoot>/agent-session-log.json（run 命令入口调用）。
++ * 登记 agent 会话日志路径进 <runtimeRoot>/agent-session-log.json（run/flow 命令入口调用）。
+  *
+  * 合并语义：按 log_path 去重——同路径 invocations+1 / 刷新 last_seen_at 与文件 stat；
+  * 新路径追加；entries 按 last_seen_at 新→旧排序（同毫秒平局按 seq 登记序决胜），
+@@ -1318,7 +1318,7 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(),
+   }
+   if (!artifact || !Array.isArray(artifact.entries) || artifact.entries.length === 0) {
+     console.log(`📭 无 agent 日志登记产物（${toPosix(artifactPath)}）。`);
+-    console.log('   run <stage> 命令在 agent 环境内执行时自动登记；或用 agent-log --detect 现场探测。');
++    console.log('   run <stage> / flow <子命令> 在 agent 环境内执行时自动登记；或用 agent-log --detect 现场探测。');
+     return;
+   }
+   console.log(`📄 本地 agent 会话日志登记（${toPosix(artifactPath)}，${artifact.entries.length} 条）`);
+@@ -1332,5 +1332,5 @@ export async function cmdAgentLog(subArgs, { json = false, cwd = process.cwd(),
+       .filter(Boolean).join(' / ');
+     console.log(`      ${meta} / 见过 ${e.invocations} 次 / 最近 ${e.last_seen_at}${e.last_command ? ` / ${e.last_command}` : ''}`);
+   }
+-  console.log('   协议: docs/platform-agent-log-protocol.md（run 命令自动 REST 上报平台 POST /api/agent-logs；此产物为本地留底）');
++  console.log('   协议: docs/platform-agent-log-protocol.md（run / flow 命令自动 REST 上报平台 POST /api/agent-logs；此产物为本地留底）');
+ }
+diff --git a/src/flow.js b/src/flow.js
+index 090519de..9002e571 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -399,7 +399,8 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+           prototypePaths.length > 0
+             ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
+             : null,
+-          `【你要做的】直接干活：改代码、写测试。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
++          `【你要做的】① spec 阶段先定稿任务面：把 tasks.md 覆写为真实实现步骤（全 \`- [ ]\`——代码开动前工作队列先存在）；`,
++          `② 执行走任务循环（openspec 式）：对 tasks.md 每个 pending 任务——展示「Working on task N/M: <任务>」→ 做 → 勾一格（\`- [ ]\`→\`- [x]\`）→ 下一个；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
+           `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+           `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；`,
+@@ -618,7 +619,7 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
+     `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
+     `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
+     `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
+-    `   纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
++    `   纪律：spec 期定稿任务面（覆写为真实实现步骤全 \`- [ ]\`）；执行走任务循环——Working on task N/M → 做一件 → 勾一格 → 下一个（tasks.md 是进度源，勿攒一把勾——收口硬门拒单拍多格）；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
+     ``,
+     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
+     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+@@ -683,7 +684,7 @@ function printRecoveryBriefing({ cwd, specBase, change, changeDir, runtimeRoot,
+  * 子步：artifacts（工件校验）→ ledger（账本对账+亲测）→ probes（探针）→ distill（决策提炼）
+  * → archive（归档经 runArchiveChain，thin 轻量工件面跳过 plan.md 硬校验）→ events（事件收口）。
+  */
+-export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false }) {
++export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null, confirmArchive = true, freezeDirty = false, allowBatchTick = false }) {
+   const changeDir = join(specBase, 'changes', change)
+   const st = readFlowState(changeDir)
+   if (!st) {
+@@ -865,23 +866,33 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
+         }
+       }
+     } catch (e) { console.warn(`⚠️ 哨兵断言失败（fail-open 放行，best-effort）: ${(e && e.message) || e}`) }
+-    // 勾选节奏 advisory（2026-09-26-thin-check-cadence）：watcher 事件流 task-done 单拍跳 ≥2 格 =
+-    // 一把全勾——per-task 时间戳/进度信号面失真（39 条流零例外实证）。warn 不阻断（对齐上方
+-    // 「任务勾选缺失」advisory 档位：节奏是习惯问题非造假主张，L0 硬门另有其人）；观测旁路
+-    // 缺席（无流/无事件/读失败）静默跳过——fail-open，watcher 非真相源。
++    // 勾选节奏门（2026-09-26-thin-check-cadence 起 advisory；2026-09-29-batch-tick-gate 升硬门）：
++    // watcher 事件流 task-done 单拍跳 ≥2 格 = 一把全勾——per-task 时间戳/进度信号面失真（39 条流零
++    // 例外实证 + 三次复发 0→6/0→3）。openspec 式逐格纪律的机器牙齿：非镜像任务面存在 → 拒收；
++    // 镜像-only（成功标准镜像非 agent 工作单元）批量勾是常态 → advisory 静默（镜像豁免哲学）；
++    // 观测旁路缺席（无流/读失败）→ 跳过（fail-open，watcher 非真相源）；--allow-batch-tick 显式旁路留痕。
+     try {
+       const { readWatcherEvents } = await import('./watcher.js')
+       const { detectBatchCheckCadence } = await import('./sentinel-assertions.js')
+       const stream = readWatcherEvents({ runtimeRoot, change })
+       const batch = stream.exists ? detectBatchCheckCadence(stream.events) : null
+       if (batch && (_sentinelNonMirrorTasks === null || _sentinelNonMirrorTasks > 0)) {
+-        // 镜像豁免（2026-09-28-sentinel-mirror-waiver）：纯镜像任务面（成功标准镜像非 agent 工作单元）
+-        // 批量勾选是常态非纪律失守——advisory 静默；仅覆写任务面存在时提示边干边勾。
+         const at = Number.isFinite(batch.ts) ? new Date(batch.ts).toLocaleTimeString() : '未知时刻'
+-        console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选`)
+-        console.warn('   规范动作是完成一个工作单元即勾一格（- [ ] → - [x]）；一把全勾使进度信号与 per-task 时间戳失真（本次放行不阻断）')
++        if (allowBatchTick === true) {
++          try { writeFlowState(changeDir, { allow_batch_tick: true }) } catch { /* 留痕 best-effort */ }
++          console.warn(`⚠️ --allow-batch-tick：单拍多格勾选（${batch.detail}，${at}）硬门显式旁路——留痕 flow-state 与平台时间线`)
++        } else if (_sentinelNonMirrorTasks === null) {
++          // 哨兵 fail-open（git log 不可用等）时非镜像面未知——维持 advisory 不误拒
++          console.warn(`⚠️ 勾选节奏：tasks.md 单拍多格勾选（${batch.detail}，${at}）——未按工作单元逐个勾选（哨兵面未知，advisory）`)
++        } else {
++          console.error(`🚫 单拍勾选拒收：watcher 观测到一拍勾选 ${batch.detail}（${at}）——勾选纪律要求逐格（做一件→勾一格→下一个），非镜像勾选任务 ${_sentinelNonMirrorTasks} 个`)
++          console.error('   出口：①节奏违例已既成——认知后重跑带 --allow-batch-tick 显式留痕过门（平台时间线可见旁路）；②疑观测误判→sillyspec doctor 核对事件流')
++          appendTelemetry({ sentinel: 'batch-tick', jump: batch.detail })
++          reportMidFail('ledger')
++          process.exit(1)
++        }
+       }
+-    } catch { /* 节奏 advisory best-effort：读流失败静默 */ }
++    } catch { /* 节奏门 best-effort：读流失败静默（fail-open——观测缺席不阻断） */ }
+     const gate = await runQuickTestLintGate({ cwd, specBase, changedFiles, changeName: change, skipSentinel: true /* flow 侧已有带 baseline 的哨兵，quick 侧区间不可靠——单判不双判 */ })
+     if (gate && gate.action === 'fail') {
+       console.error(`❌ 测试门 FAIL（整单 FAIL——实测失败/超时=失败，不继续 distill/归档）：`)
+@@ -1497,6 +1508,29 @@ export async function cmdFlow(args, cwd, specDir = null) {
+       process.exit(exitCode)
+     }
+   }
++  // ── agent 会话日志登记 + 上报（2026-09-29-flow-agent-log-report，对齐 run 族）──
++  // runCommand 入口统一调 recordAgentLogInvocation（run/command.js 同款）——run 族全量覆盖；
++  // flow 走本独立入口此前从未接入，轻量变更的本地会话路径不上报平台（平台只见 CLI 阶段信息，
++  // 看不到 agent 实际执行日志）。各子命令 change 解析后 best-effort 调用：探测 agent 环境
++  // （Claude Code / Codex / ZCode transcript / SILLYSPEC_AGENT_LOG 覆盖）登记
++  // <runtimeRoot>/agent-session-log.json 并 REST 上报（POST /api/agent-logs，own 打标/推送
++  // 收敛/互斥语义复用同实现）。context.changeKey=flow change 名（flow 无 quick 会话概念，
++  // quickId 恒空）；hubSessionId 走 env SILLYHUB_SESSION_ID（daemon 注入通道，与 run 同源）。
++  // 推送上限 5s（PUSH_TIMEOUT_MS）、失败静默留底——best-effort，绝不阻断协议面。
++  const reportAgentLog = async (changeKey, subName) => {
++    try {
++      const { recordAgentLogInvocation } = await import('./agent-session-log.js')
++      const hubSessionIdEnv = typeof process.env.SILLYHUB_SESSION_ID === 'string' ? process.env.SILLYHUB_SESSION_ID.trim() : ''
++      await recordAgentLogInvocation({
++        cwd,
++        platformOpts: runtimeRootOpt ? { runtimeRoot: runtimeRootOpt } : {},
++        specBase,
++        context: { hubSessionId: hubSessionIdEnv || null, changeKey: changeKey || null, quickId: null },
++        // 只记 flag 名不记值（对齐 run 口径：--input 等 flag 值是 agent 工作文本，不进产物）
++        command: [subName, ...rest.filter(t => typeof t === 'string' && t.startsWith('--'))].join(' '),
++      })
++    } catch { /* best-effort：登记失败不影响 flow 协议面 */ }
++  }
+   if (sub === 'start') {
+     const change = getFlag('--change') || `${new Date().toISOString().slice(0, 10)}-flow-${Math.random().toString(16).slice(2, 6)}`
+     validateChangeName(change)
+@@ -1513,6 +1547,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+         process.exit(2) // 用法错（净新建变更名缺日期前缀/格式非法）→ exit 2
+       }
+     }
++    await reportAgentLog(change, sub)
+     return cmdFlowStart({
+       change,
+       input: getFlag('--input') || undefined,
+@@ -1529,6 +1564,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow status 需 --change <名>'); process.exit(2) }
+     validateChangeName(change)
++    await reportAgentLog(change, sub)
+     const changeDir = join(specBase, 'changes', change)
+     const st = readFlowState(changeDir)
+     if (!st) {
+@@ -1605,6 +1641,7 @@ export async function cmdFlow(args, cwd, specDir = null) {
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow done 需 --change <名>'); process.exit(2) }
+     validateChangeName(change)
++    await reportAgentLog(change, sub)
+     // --refreeze（2026-09-25-sentinel-evidence-freeze ⑤）：重置 patch 子步标记强制下次重冻结
+     // （冻结面归属有误时的人工逃生口——提交面已不过 foreign 切分，dirty 面排除有警告指引到此）
+     if (hasFlag('--refreeze')) {
+@@ -1615,13 +1652,17 @@ export async function cmdFlow(args, cwd, specDir = null) {
+         console.log('🔄 --refreeze：patch 子步标记已重置，本次 done 将重新冻结（change.patch 按 baseline..HEAD 最新面重建）')
+       }
+     }
+-    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty') })
++    return cmdFlowDone({ change, cwd, specBase, runtimeRootOpt, freezeDirty: hasFlag('--freeze-dirty'), allowBatchTick: hasFlag('--allow-batch-tick') })
+   }
+   if (sub === 'amend-draft') {
+     // 机器稿唯一留痕修改通道（R7 切片三 / FR-08）：重锚哈希 + ledger amendment 审计；
+     // 首版原文 body 永存（切片四 editRatio 基准）。
+     const change = getFlag('--change')
+     if (!change) { console.error('❌ flow amend-draft 需 --change <名>'); process.exit(2) }
++    // 变更名白名单与 start/status/done 同门（评审 P1 修复：amend-draft 此前无校验，未检字符串
++    // 会经 reportAgentLog 的 context.change_key 进产物与平台上报——与「白名单名无注入面」的设计声明对齐）
++    validateChangeName(change)
++    await reportAgentLog(change, sub)
+     const changeDir = join(specBase, 'changes', change)
+     const runtimeRoot = resolveRuntimeRoot({}, specBase)
+     const { amendFlowDraft } = await import('./flow-draft.js')
+diff --git a/src/hooks/worktree-guard.js b/src/hooks/worktree-guard.js
+index ac416d58..1b3430af 100644
+--- a/src/hooks/worktree-guard.js
++++ b/src/hooks/worktree-guard.js
+@@ -75,16 +75,16 @@ const STAGE_HINTS = {
+   ],
+   'verify': [
+     '当前在 verify（验证）阶段，只做代码审查和测试验证，不修改源码。',
+-    '如需修改，请先回到 execute 阶段或使用 quick 模式：',
+-    '  sillyspec run quick "修改描述"',
++    '如需修改，请先回到 execute 阶段，或收口后开轻量变更：',
++    '  sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+   ],
+   'archive': [
+     '当前在 archive（归档）阶段，不修改源码。',
+-    '如需修改，请开启新变更：sillyspec run quick "修改描述"',
++    '如需修改，请开启新变更：sillyspec flow start --change <YYYY-MM-DD-名> --input "<描述+成功标准>"',
+   ],
+   'explore': [
+     '当前在 explore（探索）阶段，只读不写。',
+-    '确认方案后使用：sillyspec run brainstorm 或 sillyspec run quick',
++    '确认方案后使用：sillyspec run brainstorm，或小改动直接走轻量变更 sillyspec flow start',
+   ],
+ }
+ 
+diff --git a/test/flow-agent-log-report.test.mjs b/test/flow-agent-log-report.test.mjs
+new file mode 100644
+index 00000000..b85c640c
+--- /dev/null
++++ b/test/flow-agent-log-report.test.mjs
+@@ -0,0 +1,179 @@
++/**
++ * flow-agent-log-report.test.mjs — flow 族入口接入 agent 会话日志登记+上报
++ * （2026-09-29-flow-agent-log-report；对齐 runCommand 入口 run/command.js 同款调用）
++ *
++ * 覆盖验收面：
++ *   ① flow start → runtimeRoot 下 agent-session-log.json own 条目携带 change_key=<change>，
++ *      last_command 以 start 开头（flag 名级，不含 --input 值）；
++ *   ② flow status 重入 → 同条目 invocations 递增、change_key 持久（flow 无 quick 会话概念，
++ *      quick_id 恒 null）；
++ *   ③ flow done 收口周期 → done 调用面同样登记（last_command 以 done 开头）；
++ *   ④ 非 agent 环境（无 SILLYSPEC_AGENT_LOG、temp cwd 无 harness 会话）→ 不写盘不报错，
++ *      协议面 exit 0 不受影响；
++ *   ⑤ 上报关闭（SILLYSPEC_AGENT_LOG_PUSH=0）不影响登记留底（best-effort 通道语义）。
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { execFileSync, spawnSync } from 'node:child_process'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname, isAbsolute } from 'node:path'
++import { fileURLToPath } from 'node:url'
++
++const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
++const CLI = join(ROOT, 'src', 'index.js')
++const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
++
++/** 造临时 git 仓 + local.yaml（thin 模式 + 快测试命令）+ 基线提交。 */
++function makeRepo() {
++  const cwd = mkdtempSync(join(tmpdir(), 'falr-'))
++  const run = (args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
++  run(['init', '-q'])
++  run(['config', 'user.email', 't@t'])
++  run(['config', 'user.name', 't'])
++  mkdirSync(join(cwd, '.sillyspec'), { recursive: true })
++  writeFileSync(join(cwd, '.sillyspec', 'local.yaml'),
++    'project:\n  type: generic\ncommands:\n  test: "node -e \\"0\\""\nflow:\n  mode: thin\n')
++  writeFileSync(join(cwd, 'base.txt'), 'base\n')
++  run(['add', '.'])
++  run(['commit', '-q', '-m', 'base'])
++  return { cwd, run }
++}
++
++/** 跑一次 CLI。agentEnv 传入则注入 SILLYSPEC_AGENT_LOG（env 覆盖=own 锚定，恒探测命中）。 */
++function cli(cwd, args, { agentLog = null, pushOff = true } = {}) {
++  const env = { ...process.env, SILLYSPEC_WATCHER: '0' }
++  delete env.SILLYSPEC_AGENT_LOG
++  if (agentLog) env.SILLYSPEC_AGENT_LOG = agentLog
++  if (pushOff) env.SILLYSPEC_AGENT_LOG_PUSH = '0'
++  return spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 180_000, env })
++}
++
++/** 读 runtimeRoot 下 agent-session-log.json（缺文件返回 null）。 */
++function readArtifact(cwd) {
++  const p = join(cwd, '.sillyspec', '.runtime', 'agent-session-log.json')
++  if (!existsSync(p)) return null
++  return JSON.parse(readFileSync(p, 'utf8'))
++}
++
++const toPosix = (p) => p.replace(/\\/g, '/')
++
++/** agent 例行动作：design 四槽 + requirements FR 区/绑定槽各写一行作答（done 哨兵要求）。 */
++function fillSlots(cwd, change) {
++  const base = join(cwd, '.sillyspec', 'changes', change)
++  const dp = join(base, 'design.md')
++  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
++  const rp = join(base, 'requirements.md')
++  writeFileSync(rp, readFileSync(rp, 'utf8')
++    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 协议测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
++    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
++}
++
++test('① flow start 登记 own 条目：change_key=change，last_command=start 前缀且不含 flag 值', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-29-flow-alr-t1'
++  const agentLog = join(cwd, 'fake-agent-session.jsonl')
++  writeFileSync(agentLog, '{}\n')
++  assert.ok(isAbsolute(agentLog), 'env 覆盖要求绝对路径（夹具前提）')
++
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog })
++  assert.equal(s.status, 0, `start 失败: ${s.stderr}\n${s.stdout}`)
++
++  const art = readArtifact(cwd)
++  assert.ok(art, 'agent-session-log.json 已落盘')
++  const e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, 'own 条目（env 覆盖路径）在 entries 中')
++  assert.equal(e.harness, 'env-override')
++  assert.equal(e.change_key, change, 'entry 级 change_key=flow change 名')
++  assert.equal(e.quick_id, null, 'flow 无 quick 会话概念，quick_id 恒空')
++  assert.match(e.last_command, /^start( --.*)?$/, 'last_command 以 start 开头')
++  assert.ok(!e.last_command.includes(INPUT_OK), 'flag 值（--input 工作文本）不进产物')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('② flow status 重入：invocations 递增、change_key 持久', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-29-flow-alr-t2'
++  const agentLog = join(cwd, 'fake-agent-session.jsonl')
++  writeFileSync(agentLog, '{}\n')
++
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog }).status, 0)
++  const st = cli(cwd, ['flow', 'status', '--change', change], { agentLog })
++  assert.equal(st.status, 0, `status 失败: ${st.stderr}\n${st.stdout}`)
++  assert.match(st.stdout, /📋/)
++
++  const art = readArtifact(cwd)
++  const e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, '条目在')
++  assert.equal(e.change_key, change, 'change_key 持久（status 调用 change_key 非空→重写同值）')
++  assert.equal(e.invocations, 2, 'start+status 两次调用各计一次')
++  assert.match(e.last_command, /^status( --.*)?$/)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('③ flow done 收口周期：done 调用面同样登记（last_command=done 前缀）', () => {
++  const { cwd, run } = makeRepo()
++  const change = '2026-09-29-flow-alr-t3'
++  const agentLog = join(cwd, 'fake-agent-session.jsonl')
++  writeFileSync(agentLog, '{}\n')
++
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK, '--no-review'], { agentLog }).status, 0)
++  writeFileSync(join(cwd, 'work.txt'), 'done\n')
++  run(['add', 'work.txt'])
++  run(['commit', '-q', '-m', 'work'])
++  fillSlots(cwd, change)
++
++  const d = cli(cwd, ['flow', 'done', '--change', change], { agentLog })
++  assert.equal(d.status, 0, `done 失败: ${d.stdout}\n${d.stderr}`)
++  assert.match(d.stdout, /flow done 完成（2\/2 协议调用收口）/)
++  assert.equal(existsSync(join(cwd, '.sillyspec', 'changes', change)), false, '已归档')
++
++  const art = readArtifact(cwd)
++  const e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, '条目在')
++  assert.equal(e.change_key, change, '归档收口调用仍携带 change_key')
++  assert.match(e.last_command, /^done( --.*)?$/)
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('④ 非 agent 环境：不写盘不报错，协议面不受影响', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-29-flow-alr-t4'
++  // temp cwd 无任何 harness 会话文件，且不注入 SILLYSPEC_AGENT_LOG → 探测 0 条不写盘
++  const s = cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog: null })
++  assert.equal(s.status, 0, `start 应正常: ${s.stderr}\n${s.stdout}`)
++  assert.match(s.stdout, /协议调用 1\/2/)
++  assert.equal(readArtifact(cwd), null, '无 agent 环境不写 agent-session-log.json')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
++test('⑤ flow amend-draft 登记面：last_command=amend-draft 前缀；非法变更名被白名单拦在登记之前（评审 P1/P2 修复）', () => {
++  const { cwd } = makeRepo()
++  const change = '2026-09-29-flow-alr-t5'
++  const agentLog = join(cwd, 'fake-agent-session.jsonl')
++  writeFileSync(agentLog, '{}\n')
++
++  assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog }).status, 0)
++  const a = cli(cwd, ['flow', 'amend-draft', '--change', change], { agentLog })
++  assert.equal(a.status, 0, `amend-draft 失败: ${a.stdout}\n${a.stderr}`)
++  assert.match(a.stdout, /留痕重锚/)
++
++  let art = readArtifact(cwd)
++  let e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, '条目在')
++  assert.equal(e.change_key, change)
++  assert.match(e.last_command, /^amend-draft( --.*)?$/)
++  const invocationsBefore = e.invocations
++
++  // 非法变更名（路径分隔符）在 amend-draft 分支被白名单 exit 2 拦截，登记不发生（invocations 不变）
++  const bad = cli(cwd, ['flow', 'amend-draft', '--change', '../evil'], { agentLog })
++  assert.equal(bad.status, 2, '非法变更名应 exit 2')
++  assert.match(bad.stderr, /非法变更名/)
++  art = readArtifact(cwd)
++  e = (art.entries || []).find(x => x.log_path === toPosix(agentLog))
++  assert.ok(e, '条目仍在')
++  assert.equal(e.invocations, invocationsBefore, '被拒调用不递增 invocations（登记先于校验的 P1 已修）')
++  assert.match(e.last_command, /^amend-draft( --.*)?$/, 'last_command 不被非法调用改写')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+diff --git a/.sillyspec/changes/2026-09-29-flow-agent-log-report/design.md b/.sillyspec/changes/2026-09-29-flow-agent-log-report/design.md
+new file mode 100644
+index 00000000..f3096f1d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-agent-log-report/design.md
+@@ -0,0 +1,47 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:37:47.369Z
++---
++# 设计记录（Design Record）— 2026-09-29-flow-agent-log-report
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++在 cmdFlow（src/flow.js）加 reportAgentLog(changeKey, subName) 内联 helper，四个子命令分支（start/status/done/amend-draft）在 change 名解析+校验之后各调用一次 recordAgentLogInvocation——与 runCommand 入口（run/command.js:913-936）同款：探测 agent 环境登记 <runtimeRoot>/agent-session-log.json 并 POST /api/agent-logs 上报。context.changeKey=flow 的 change 名（flow 无 quick 会话概念，quickId 恒空；hubSessionId 走 env SILLYHUB_SESSION_ID 与 run 同源）；runtimeRootOpt 映射 platformOpts.runtimeRoot 保持 --runtime-root 透传口径。选分支级调用而非塞进 cmdFlowStart/cmdFlowDone 内部：change 在分支内才解析完成（start 的自动生成名尤其如此），且不动两个大函数体、--json 输出面零污染。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++无新导出/无签名变化。对外可见行为：flow 族四个子命令各多一个 best-effort 副作用——agent 环境在场时写 <runtimeRoot>/agent-session-log.json（own 条目携带 change_key=<change 名>、last_command=子命令名+flag 名）并尝试上报平台（POST /api/agent-logs，payload 与 run 族同 schema）；探测不到/上报失败静默，协议面输出与 exit code 不变。
++文件变更清单（自声明）：src/flow.js（cmdFlow helper + 四分支调用）、src/agent-session-log.js（JSDoc 一行「run 命令入口」→「run/flow」口径纠偏）、test/flow-agent-log-report.test.mjs（新增）、docs/platform-agent-log-protocol.md（触发时机补 flow 族）、.sillyspec/docs/sillyspec/modules/cli-entry.md（模块注记）。冻结面里其余文件（src/hooks/worktree-guard.js 等）属并行会话在途交付（9a44c325/77f9049e），非本变更交付——本变更各提交均显式 pathspec 隔离。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：每次调用独立登记，产物合并按 log_path 去重（同路径 invocations+1 刷新时间戳），调用次序不影响正确性；推送失败本地留底下次调用自愈。
++2. 并发写：多会话并行 run/flow 时 agent-session-log.json 的读-改-写在 recordAgentLogInvocation 内部走 withFileLock 文件锁串行化（BUG-17 同款口径），本变更不改该逻辑。
++3. 切换/中断：登记是附带动作，flow-state/冻结面不依赖它；中途断电最多丢一次登记，下次任意 flow 调用重写。
++4. 作用域：own 锚定（env 覆盖/各 harness 会话锚定）保证只改写本会话条目，他人共享留底条目只刷探测事实不改归属（D-001/D-007 复用）；change_key 是 flow 分支内校验过的白名单名，无注入面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：平台慢时 push 拖延协议面首屏。缓解：PUSH_TIMEOUT_MS=5s 硬上限 + 无平台配置即跳过 + 失败静默留底（与 run 族同语义，run --status 已付同代价）。放弃的方案：①挂 cmdFlowStart/cmdFlowDone 尾部（对齐 triggerSync 位置）——需改两个大函数、start 尾部有 --json 纯 JSON 输出面会被登记日志污染；②挂 index.js 分发层——change 未解析，auto 生成的 start 名拿不到，change_key 归属会缺。
+diff --git a/.sillyspec/changes/2026-09-29-flow-agent-log-report/proposal.md b/.sillyspec/changes/2026-09-29-flow-agent-log-report/proposal.md
+new file mode 100644
+index 00000000..ac509f17
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-agent-log-report/proposal.md
+@@ -0,0 +1,43 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:37:47.368Z
++---
++# 提案书（Proposal）— 2026-09-29-flow-agent-log-report
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:d49ac35a5b79e1757ae3cc6239cf73ec89cfb4627657f27c89d9b01c94fbf347:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++任务原话转写：轻量变更（flow 族）入口接入 agent 会话日志上报：runCommand 入口（run/command.js:913-936）已有 recordAgentLogInvocation——探测 agent 环境登记 agent-session-log.json 并 POST /api/agent-logs 推平台；flow 族走 index.js case 'flow' → cmdFlow 独立入口，从未接入，轻量变更本地会话路径从不上报平台。补齐：cmdFlow 子命令解析出 change 名后对齐 run 语义调用，context.changeKey=flow change 名（flow 无 quick 会话概念），best-effort try/catch 不阻断协议面。
++
++成功标准：
++- flow start/done/amend-draft 执行后，runtimeRoot 下 agent-session-log.json 的本会话 own 条目携带 change_key=<change 名>
++- 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子）
++- 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
++- run 族既有行为不变（既有 run agent-log 测试全绿）
++- 新增测试覆盖 flow 入口的登记调用面；全量测试绿 + lint 绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:31c0bcd9fbabc59b429119bd6f1bdc19eb6e5cf332e3ac1d6412a9ef9b2595f0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. flow start/done/amend-draft 执行后，runtimeRoot 下 agent-session-log.json 的本会话 own 条目携带 change_key=<change 名>
++2. 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子）
++3. 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
++4. run 族既有行为不变（既有 run agent-log 测试全绿）
++5. 新增测试覆盖 flow 入口的登记调用面
++6. 全量测试绿 + lint 绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:dffc39b4386946d2e115e3bc9b8abb0adad8034e9d061dacf026a603ec4dd954:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-09-29-flow-agent-log-report 留痕重锚 -->
++1. flow start/done/amend-draft 执行后，runtimeRoot 下 agent-session-log.json 的本会话 own 条目携带 change_key=<change 名>
++2. 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子）
++3. 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
++4. run 族既有行为不变（既有 run agent-log 测试全绿）
++5. 新增测试覆盖 flow 入口的登记调用面
++6. 全量测试绿 + lint 绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-09-29-flow-agent-log-report/requirements.md b/.sillyspec/changes/2026-09-29-flow-agent-log-report/requirements.md
+new file mode 100644
+index 00000000..64444d4d
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-agent-log-report/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:37:47.369Z
++---
++# 需求规格（Requirements）— 2026-09-29-flow-agent-log-report
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: flow start/done/amend-draft 执行后，runtimeRoot 下 agen
++Given 系统就绪
++When flow start/done/amend-draft 执行后，runtimeRoot 下 agent-session-log.json 的本会话 own 条目
++Then 行为符合本条标准描述
++
++### FR-02: 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥
++Given 系统就绪
++When 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子）
++Then 行为符合本条标准描述
++
++### FR-03: 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
++Given 系统就绪
++When 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
++Then 行为符合本条标准描述
++
++### FR-04: run 族既有行为不变（既有 run agent-log 测试全绿）
++Given 测试 相关模块就绪
++When run 族既有行为不变（既有 run agent-log 测试全绿）
++Then 行为符合本条标准描述
++
++### FR-05: 新增测试覆盖 flow 入口的登记调用面
++Given 测试 相关模块就绪
++When 新增测试覆盖 flow 入口的登记调用面
++Then 行为符合本条标准描述
++
++### FR-06: 全量测试绿 + lint 绿
++Given 测试 相关模块就绪
++When 全量测试绿 + lint 绿
++Then 行为符合本条标准描述
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-agent-log-report.test.mjs ①（start 登记 change_key）＋②（status 重入 invocations/change_key 持久）＋③（done 周期 last_command=done）＋⑤（amend-draft 登记 + 非法变更名白名单拦截——评审 P1/P2 修复面）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-agent-log-report.test.mjs ①（quick_id 恒空/change_key 互斥面）＋ test/agent-session-log.test.mjs（recordAgentLogInvocation 通道本体：own 打标/推送收敛/合并语义）
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-agent-log-report.test.mjs ①（SILLYSPEC_AGENT_LOG_PUSH=0 关上报仍留底、exit 0）＋④（非 agent 环境不写盘不报错、协议面 exit 0）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/agent-session-log.test.mjs（run 族登记/上报通道回归全量）＋ test/cli-top-level-aliases.test.mjs（runCommand 入口面）＋ test/flow-protocol.test.mjs / test/flow-status-heartbeat.test.mjs / test/flow-parity.test.mjs（flow 族行为不变）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-agent-log-report.test.mjs 全部四用例（红→绿实证：实现前 ①②③ 红、④ 绿）
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：独立测试文件——全量面由 flow done 收口 CLI 亲测（node --test 全量 + npm run lint，本地预跑 34/34 子集绿 + lint 绿）
+diff --git a/.sillyspec/changes/2026-09-29-flow-agent-log-report/tasks.md b/.sillyspec/changes/2026-09-29-flow-agent-log-report/tasks.md
+new file mode 100644
+index 00000000..3a44e851
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-agent-log-report/tasks.md
+@@ -0,0 +1,17 @@
++---
++author: flow-machine-draft
++created_at: 2026-09-29T07:37:47.369Z
++---
++# 任务注册表（Tasks）— 2026-09-29-flow-agent-log-report
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。进度源即本文件：做一件 → 勾一格 → 继续下一条；`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: cmdFlow 加 reportAgentLog helper，start/status/done/amend-draft 四分支在 change 解析+校验后调用（start 含自动生成名归属）
++- [x] task-02: 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子；context.changeKey=change 名、quickId 恒空、hubSessionId 走 env）
++- [x] task-03: 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响（helper 整体 try/catch 静默 + PUSH_TIMEOUT_MS=5s 上限 + SILLYSPEC_AGENT_LOG_PUSH=0 通道）
++- [x] task-04: run 族既有行为不变（agent-session-log/cli-top-level-aliases/flow-protocol/flow-status-heartbeat/flow-parity 回归 34/34 绿）
++- [x] task-05: 新增 test/flow-agent-log-report.test.mjs 四用例（红→绿实证：实现前 ①②③ 红）
++- [x] task-06: lint 绿（npm run lint 全过；全量测试面 flow done CLI 亲测）
++- [x] task-07: 独立评审修复——amend-draft 分支补 validateChangeName（P1：未检字符串不再进 change_key/上报）、新增用例⑤覆盖 amend-draft 登记面与非法名拦截（P2）、agent-log 查询面文案补 flow 族（P3）
+diff --git a/.sillyspec/changes/2026-09-29-flow-agent-log-report/review.json b/.sillyspec/changes/2026-09-29-flow-agent-log-report/review.json
+new file mode 100644
+--- /dev/null
++++ b/.sillyspec/changes/2026-09-29-flow-agent-log-report/review.json
+@@ -0,0 +1,33 @@
++{
++  "schemaVersion": 1,
++  "change": "2026-09-29-flow-agent-log-report",
++  "reviewer": "subagent",
++  "verdict": "PASS",
++  "findings": [
++    {
++      "severity": "P1",
++      "title": "[已修复/resolved] 防护声明「change 名白名单校验先于调用」在 amend-draft 分支未兑现——未校验字符串直接进入登记产物并上报平台",
++      "evidence": "复审确认（commit 50c18719）：src/flow.js:1662-1664 amend-draft 分支已补 validateChangeName(change)，先于 :1665 await reportAgentLog(change, sub)，与 start(:1536→:1550)/status(:1566→:1567)/done(:1643→:1644) 三分支同门；grep 实证四分支 reportAgentLog 调用面完好。原缺陷（未检字符串经 pickCtxId 进 change_key 并随 POST /api/agent-logs 上报）通道已被白名单关闭，设计「白名单名无注入面」声明现与代码一致。",
++      "location": "src/flow.js:1664"
++    },
++    {
++      "severity": "P2",
++      "title": "[已修复/resolved] FR-01/FR-05 声称覆盖 flow 入口登记调用面，但 amend-draft 分支零测试断言",
++      "evidence": "复审确认：test/flow-agent-log-report.test.mjs:150-178 新增用例⑤——正向断言 amend-draft 登记（status 0 + last_command /^amend-draft( --.*)?$/ + change_key=change），负向断言非法变更名 ../evil exit 2、stderr 匹配「非法变更名」、invocations 不递增、last_command 不被非法调用改写——恰好锚定 P1 修复点（校验先于登记），红→绿盲区消除。",
++      "location": "test/flow-agent-log-report.test.mjs:150"
++    },
++    {
++      "severity": "P3",
++      "title": "[已修复/resolved] 边界裁决备注（三条声明边界裁决「可接受」）+ agent-log 查询面文案口径滞后",
++      "evidence": "文案已修：agent-session-log.js:1321「run <stage> / flow <子命令> 在 agent 环境内执行时自动登记」、:1335「run / flow 命令自动 REST 上报平台」两处均已更新，与协议文档一致。边界裁决维持原判均为可接受：①上报失败静默留底自愈——产物先落盘（writeAtomicSync）、推送失败仅 warn、下次调用重推 own 条目，结构真实成立；②5s 推送超时上限——PUSH_TIMEOUT_MS=5_000 硬上限 + 无配置跳过 + SILLYSPEC_AGENT_LOG_PUSH=0 可关，与 run 族同代价且已披露；③冻结面 src/hooks/worktree-guard.js 属并行会话在途交付——与本变更零功能耦合。另注：flow.js:1655 cmdFlowDone 调用面新出现 allowBatchTick 参数，属并行会话在途交付（同 worktree-guard.js 口径），不在本变更评审面内，非 finding。",
++      "location": "src/agent-session-log.js:1321"
++    }
++  ],
++  "dimensionNotes": {
++    "乱序": "ok",
++    "并发": "ok",
++    "切换": "ok",
++    "作用域": "ok"
++  },
++  "reviewedAt": "2026-09-29T08:07:24Z"
++}
