@@ -274,3 +274,54 @@ created_at: 2026-09-22T09:42:59.537Z
 - 场景：默认场景 — Given 本变更触及 src/ 与 test/；When 运行 npm run test:core 与 npm run lint；Then 全部通过
 全文：.sillyspec/changes/archive/2026-09-26-watcher-timeline-p2/requirements.md#FR-05
 最近确认：6328ddda2229a76c82273efe7743b8efd9ca92cc
+
+## FR-sync-026 ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.j
+变更：2026-09-29-watcher-fakecheck-retire
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.js 移除（含 state.fakeCheckPending；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-watcher-fakecheck-retire/requirements.md#FR-01
+最近确认：0972a16c61f70b38c27ee28798adea489f6920e9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-watcher-fakecheck-retire:flow:FR-01
+  tests: test/sentinel-rules.test.mjs「R1 已退役…」 | test/sentinel-rules.test.mjs「R1 退役钉…」 | test/watcher.test.mjs「fake-check 生成器已退役…」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-watcher-fakecheck-retire
+  status: active
+
+## FR-sync-027 其余 watcher 规则零改动
+变更：2026-09-29-watcher-fakecheck-retire
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 其余 watcher 规；Then 零改动
+全文：.sillyspec/changes/archive/2026-09-29-watcher-fakecheck-retire/requirements.md#FR-02
+最近确认：0972a16c61f70b38c27ee28798adea489f6920e9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-watcher-fakecheck-retire:flow:FR-02
+  tests: test/sentinel-rules.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-watcher-fakecheck-retire
+  status: active
+
+## FR-sync-028 watcher-alerts/watcher-timeline/watcher 测试中 fake-c
+变更：2026-09-29-watcher-fakecheck-retire
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm t；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-09-29-watcher-fakecheck-retire/requirements.md#FR-03
+最近确认：0972a16c61f70b38c27ee28798adea489f6920e9

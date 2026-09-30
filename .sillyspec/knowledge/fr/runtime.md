@@ -658,3 +658,67 @@ superseded_by：FR-cli-entry-102
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试绿 + lint 绿；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-flow-agent-log-report/requirements.md#FR-06
 最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+
+## FR-runtime-050 A 层协议形状——spec 期任务面定稿 + openspec 式执行循环指令
+变更：2026-09-29-batch-tick-gate
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-batch-tick-gate/requirements.md#FR-01
+最近确认：79ea50cc7bbe0eee041650277633780416e309a0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-batch-tick-gate:flow:FR-01
+  tests: test/batch-tick-gate.test.mjs「③ A 层文案钉」 | test/flow-status-heartbeat.test.mjs「④」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-batch-tick-gate
+  status: active
+
+## FR-runtime-051 单拍勾选门决策纯函数（resolveBatchTickAction 四态）
+变更：2026-09-29-batch-tick-gate
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-batch-tick-gate/requirements.md#FR-02
+最近确认：79ea50cc7bbe0eee041650277633780416e309a0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-batch-tick-gate:flow:FR-02
+  tests: test/batch-tick-gate.test.mjs「② 硬门接线钉」 | test/batch-tick-gate.test.mjs「②b 决策纯函数行为级」 | test/batch-tick-gate.test.mjs「②b 镜像-only 不拒钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-batch-tick-gate
+  status: active
+
+## FR-runtime-052 flow done ledger 接线——拒收/旁路留痕/降级
+变更：2026-09-29-batch-tick-gate
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-batch-tick-gate/requirements.md#FR-03
+最近确认：79ea50cc7bbe0eee041650277633780416e309a0
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-09-29-batch-tick-gate:flow:FR-03
+  tests: test/batch-tick-gate.test.mjs「② 硬门接线钉」 | test/batch-tick-gate.test.mjs「②c autopilot 交互钉」 | test/batch-tick-gate.test.mjs「②」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-09-29-batch-tick-gate
+  status: active
+
+## FR-runtime-053 测试与零回归
+变更：2026-09-29-batch-tick-gate
+状态：active
+摘要：（无场景名）
+全文：.sillyspec/changes/archive/2026-09-29-batch-tick-gate/requirements.md#FR-04
+最近确认：79ea50cc7bbe0eee041650277633780416e309a0

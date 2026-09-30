@@ -168,3 +168,4 @@
 - 枚举|开放世界|穷举|分类表|关键词表|任务面|工作分解|机器稿 → [decisions/unmapped.md](decisions/unmapped.md)
 - change-management|FR|需求|承接 → [fr/change-management.md](fr/change-management.md)
 - docs-consistency|FR|需求|承接 → [fr/docs-consistency.md](fr/docs-consistency.md)
+- hooks|FR|需求|承接 → [fr/hooks.md](fr/hooks.md)

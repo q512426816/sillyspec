@@ -1487,3 +1487,31 @@ supersedes：D-004@v1
 锚点：未记录
 最近确认：34c04d9dd9249f261f837cf8072516cae83b3ba2
 理由：风险：与 src 口径再漂移——照抄 flow.js 简报现文案。无弃案。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-skill-prompt-retire
+锚点：未记录
+最近确认：9a44c32586586969def3262a1e5de06919bb08b5
+理由：风险：误删仍有引用的 skill——已 grep 全仓（src/test/templates）零引用核验；resume 的恢复语义由 flow skill+AGENTS.md 承担、查看语义由 state skill 承担（职责无空洞）。弃案：保留 resume 改写为新恢复协议——与 flow skill 职责重叠，删比改省一面。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-flow-agent-log-report
+锚点：未记录
+最近确认：b66d2649e7d462508e6efcacd018266946a37e7d
+理由：最大风险：平台慢时 push 拖延协议面首屏。缓解：PUSH_TIMEOUT_MS=5s 硬上限 + 无平台配置即跳过 + 失败静默留底（与 run 族同语义，run --status 已付同代价）。放弃的方案：①挂 cmdFlowStart/cmdFlowDone 尾部（对齐 triggerSync 位置）——需改两个大函数、start 尾部有 --json 纯 JSON 输出面会被登记日志污染；②挂 index.js 分发层——change 未解析，auto 生成的 start 名拿不到，change_key 归属会缺。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-batch-tick-gate
+锚点：未记录
+最近确认：79ea50cc7bbe0eee041650277633780416e309a0
+理由：最大风险：误拒合法场景——三层防护（镜像-only 静默、哨兵面未知降级 advisory、--allow-batch-tick 逃生门留痕）；观测旁路事件格式漂移 → detectBatchCheckCadence 解析失配按无证据静默（既有 fail-open）。弃案：逐 task 证据时刻配对（勾选拍与提交拍顺序核验）——git 提交时序与文件编辑时序不可严格配对（一提交多 token 是规范形态），误伤面大；单拍跳幅是唯一机械可靠的一把勾特征。
+
+## D-001@v1 风险与死路（design 槽4 收割）
+状态：implemented
+变更：2026-09-29-watcher-fakecheck-retire
+锚点：未记录
+最近确认：0972a16c61f70b38c27ee28798adea489f6920e9
+理由：风险：失去实时人判信号——收口哨兵+单拍门已覆盖同判据的终态裁决，实时层只剩噪音（合法勾选全部闪嫌疑）；历史事件流中的存量 fake-check 事件仍会被 alerts/timeline 渲染（读侧规则名无关）——属历史数据如实展示非新增噪音。弃案：降为 info 级保留——半 retire 徒增状态面。
