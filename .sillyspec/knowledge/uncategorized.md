@@ -41,7 +41,7 @@
 
 - 仅在 `auth/service.py:login()` 检查 `user.login_enabled` 是不够的：用户已持有有效 JWT，管理员调用 `disable-login` 后，旧 token 在自然过期前仍能访问所有 `/api/*` 端点。
 - 必须在 `backend/app/core/auth_deps.py:get_current_user()` 内补一道 `if not getattr(user, "login_enabled", True): raise AuthUserLoginDisabled(...)`，配合 `users_service._revoke_sessions()` 在 disable-login 时把 sessions 全部标记 revoked_at，才能让 token 立即失效。
-- **已修复**（2026-07-05 核实，commit `d62ec975`）：`backend/app/core/auth_deps.py:78-79` 已有 `if not getattr(user, "login_enabled", True): raise AuthUserLoginDisabled(...)`。本条保留作安全模式回溯。
+- **已修复**（2026-07-05 核实，commit `d62ec975`）：`repo://sillyhub/backend/app/core/auth_deps.py:78-79` 已有 `if not getattr(user, "login_enabled", True): raise AuthUserLoginDisabled(...)`。本条保留作安全模式回溯。
 - E2E 验证：disable-login 后立刻拿旧 token GET `/api/auth/me`，期望 401；用密码重新登录，期望 401 + `HTTP_401_AUTH_USER_LOGIN_DISABLED`。
 
 ## 2026-06-19 — alembic.ini 注释含 UTF-8 em-dash 导致 Windows gbk configparser 崩溃 [🟢 已修复]
@@ -70,7 +70,7 @@
 > 来源：2026-06-22-daemon-service-split（DaemonService 3324 行拆 runtime/lease/run_sync/session/patch 5 子包）。decisions.md D-005/D-006。
 
 - **循环 import 坑**：facade 顶部模块级 `from .subpackage.service import SubService` + 子 service 顶部 `from .service import SomeError`（异常类暂留 facade）= 双向模块级循环，import 即 `ImportError`。
-- **解法（D-005）**：facade `__init__` 内**函数级 lazy import** 子 service 类（router.py:624 同款模式），子 service 顶层 import facade 异常类。依赖单向（子→facade），循环解除。
+- **解法（D-005）**：facade `__init__` 内**函数级 lazy import** 子 service 类（repo://sillyhub/backend/app/modules/daemon/group/router.py:53 同款模式），子 service 顶层 import facade 异常类。依赖单向（子→facade），循环解除。
 - **跨域调用（D-006）**：子 service 调未迁/跨域方法持 `self._facade` 引用——facade `__init__` 构造子 service 后注入 `self._x._facade = self`，方法体 `self._facade.cross_domain_method()`。`TYPE_CHECKING` import facade 类型避免运行时循环。全部子域迁完后 facade 保留委托，引用继续兼容，**不耦合 Wave 顺序**。
 - **测试 patch 跟随**：模块级符号（如 `get_redis`）从 facade 迁子 service 后，测试 `patch("...daemon.service.get_redis")` 失效，patch 目标必须跟随到子包模块（`...daemon.run_sync.service.get_redis`）。源码 API 零变化，仅 patch 物理位置变。
 - **grep 调用点范围**：迁移方法时 grep 调用点必须搜 `router.py` + 全 `backend/app/` + `tests/`，不能只搜当前文件——router 可能直接调 service 私有方法。
@@ -134,7 +134,7 @@
 
 - 现象：DTO 含必填派生字段（如 `runtime_count: int` 无 default），用 `Model.model_validate(orm_instance)` + `model_copy(update={派生字段: 值})` 两段式构造时，`model_validate` 在 `model_copy` 填值**前**就抛 `ValidationError: Field required`（ORM 无此属性）。
 - 解法：派生字段在构造时显式传——全字段直构 `Model(field1=orm.x, ..., 派生字段=value)`；或给派生字段加 `default=0`（model_validate 用 default 不崩，model_copy 覆盖真实值，适合派生字段总有组装覆盖的场景）。
-- 对比 `_runtime_read`（router.py:433）用 model_validate + model_copy 不崩，因 DaemonRuntimeRead 所有字段在 ORM 都有或 optional；DaemonMachineRead 崩是因 runtime_count/online_runtime_count 必填且 ORM 无。
+- 对比 `_runtime_read`（repo://sillyhub/backend/app/modules/daemon/router/runtimes.py:260）用 model_validate + model_copy 不崩，因 DaemonRuntimeRead 所有字段在 ORM 都有或 optional；DaemonMachineRead 崩是因 runtime_count/online_runtime_count 必填且 ORM 无。
 - 通用坑：DTO 有"派生/聚合"必填字段（不在源 ORM 上）时，避开 model_validate(ORM) 两段式，用全字段直构或给派生字段 default。
 
 ## 2026-07-13 — backend rebuild apt 连不上 deb.debian.org（base image digest 漂移致 apt 缓存失效裸奔）
@@ -169,10 +169,10 @@
 
 > 来源：ql-20260729-001-b3af（GET /api/llm-providers 500 修复）。
 
-- 现象：GET /api/llm-providers 返回 500（及所有走 `CredentialCipher` 的接口：llm_provider / git_identity / worktree 等）。后端日志 `ValueError: non-hexadecimal number found in fromhex() arg at position 0`，栈顶在 `app/modules/llm_provider/service.py:138 _default_cipher` → `app/core/crypto.py:49 bytes.fromhex`。
+- 现象：GET /api/llm-providers 返回 500（及所有走 `CredentialCipher` 的接口：llm_provider / git_identity / worktree 等）。后端日志 `ValueError: non-hexadecimal number found in fromhex() arg at position 0`，栈顶在 `repo://sillyhub/backend/app/modules/llm_provider/service.py:170 _default_cipher` → `repo://sillyhub/backend/app/core/crypto.py:58 bytes.fromhex`。
 - 根因：`deploy/.env` 的 `SILLYSPEC_MASTER_KEY` 被填成人类可读标识串 `msk-sillyhub-dev-90d223fd-...`（看着像密钥，实则非十六进制）。`crypto._load_master_key()` 只对**空值**抛友好 `MasterKeyMissing`，非空但非 hex 直接走 `bytes.fromhex(hex_key)` → 裸 `ValueError` → `get_cipher()` 构造期崩溃 → 任何 `new LlmProviderService(session)` / `WorktreeService(...)` 立即 500（list 接口构造 service 时就炸，根本到不了 SQL）。
 - 修复（ql-20260729-001-b3af）：`deploy/.env` 第5行换成合法 `v1:<secrets.token_hex(32) 生成的 64位hex>`；`docker compose up -d --force-recreate backend` 重建容器重读 env。零数据风险：`llm_providers`/`git_identities` 表均空、`api_keys` 为 hash 存储不依赖 master key。
-- 通用坑：① `SILLYSPEC_MASTER_KEY` 格式必须是 `<key_id>:<64位hex>`（如 `v1:ab12...`）或裸 64 位 hex，**不能**填标识串/base64/明文密码；生成命令 `python -c "import secrets; print(f'v1:{secrets.token_hex(32)}')"`（`crypto.py:42` MasterKeyMissing 的 hint 已给）。② `deploy/.env` 被 `.gitignore`，改它不进 `git status`，靠重建容器重读 env 落地（`docker compose up -d` 检测到 backend env 变化会自动 recreate，保险用 `--force-recreate backend`）。③ `_load_master_key` 对「非空但格式非法」抛裸 ValueError 是健壮性缺陷——建议后续把 `bytes.fromhex` 包 try/except 转 `MasterKeyMissing`（带 hint），避免 500 时栈里只有裸 fromhex 难定位。
+- 通用坑：① `SILLYSPEC_MASTER_KEY` 格式必须是 `<key_id>:<64位hex>`（如 `v1:ab12...`）或裸 64 位 hex，**不能**填标识串/base64/明文密码；生成命令 `python -c "import secrets; print(f'v1:{secrets.token_hex(32)}')"`（`repo://sillyhub/backend/app/core/crypto.py:42` MasterKeyMissing 的 hint 已给）。② `deploy/.env` 被 `.gitignore`，改它不进 `git status`，靠重建容器重读 env 落地（`docker compose up -d` 检测到 backend env 变化会自动 recreate，保险用 `--force-recreate backend`）。③ `_load_master_key` 对「非空但格式非法」抛裸 ValueError 是健壮性缺陷——建议后续把 `bytes.fromhex` 包 try/except 转 `MasterKeyMissing`（带 hint），避免 500 时栈里只有裸 fromhex 难定位。
 
 ## 2026-08-08 — admin 套件 login 限流 429 致偶发 FAILED（预存，测试态跨用例累计）
 
@@ -216,7 +216,7 @@ ode_modules <主仓>rontend
 ode_modules`（daemon 同理），再跑一次 .bin 存在性检查。backend .venv 不受影响（worktree 自建）。来源：2026-08-22-team-session-unify Wave1（execute step3）。
 
 ## MCP server 子进程不继承 claude.exe 完整环境：env 必须放 mcpServers[*].env
-claude.exe（2.1.x）spawn MCP server 子进程时 env 为「白名单基线（PATH/HOME 等 12 个）+ per-server env 覆盖合并」，不继承完整父环境。给 MCP server 注入自定义变量（如 MCP_SESSION_ID）必须放在 options.mcpServers['<server>'].env（daemon mcp-config.ts 的 server config env 字段），放 SDK 顶层 options.env 无效。证据链：claude-sdk-driver.ts:407 透传 → sdk.d.ts:1092 McpStdioServerConfig.env → sdk.mjs --mcp-config 全量序列化 → claude.exe StdioClientTransport.start spawn env 合并。来源：2026-08-22-team-session-unify spike-01。
+claude.exe（2.1.x）spawn MCP server 子进程时 env 为「白名单基线（PATH/HOME 等 12 个）+ per-server env 覆盖合并」，不继承完整父环境。给 MCP server 注入自定义变量（如 MCP_SESSION_ID）必须放在 options.mcpServers['<server>'].env（daemon mcp-config.ts 的 server config env 字段），放 SDK 顶层 options.env 无效。证据链：repo://sillyhub/sillyhub-daemon/src/interactive/claude-sdk-driver.ts:407 透传 → sdk.d.ts 的 McpStdioServerConfig.env（SDK 类型声明在 node_modules 依赖包内，行号随包版本漂移不入锚）→ sdk.mjs --mcp-config 全量序列化 → claude.exe StdioClientTransport.start spawn env 合并。来源：2026-08-22-team-session-unify spike-01。
 
 ## aiosqlite 不支持 SELECT FOR UPDATE：并发唯一性守卫用部分唯一索引+IntegrityError 捕获
 agent 模块测试跑 SQLite（aiosqlite），FOR UPDATE 语法不被支持（直接报错，不是静默忽略），需要并发防重的场景（如懒建 mission 防同 turn 双建）应：DB 层建部分唯一索引（WHERE 业务活跃条件）兜底 + 应用层捕获 IntegrityError 后 rollback 重查复用先到者。本仓先例：uq_agent_missions_session_active（20260822090000 迁移）+ mcp_tools 懒建守卫。来源：2026-08-22-team-session-unify task-05。
@@ -239,7 +239,7 @@ worktree doctor 静默失败后手动补链时（上一条 junction 坑的修复
 > 来源：2026-08-24-platform-session-feedback-fix Wave 1 执行期（task-01 / task-08 后台子代理）。
 
 - 现象：子代理（`run_in_background: true`）在父 turn 派发后若干分钟完成读码/设计，开始写操作（Edit/Write/Bash 非只读/MCP sillyhub）时，全部被拒绝：`session not in running turn`。只读操作（Read/Grep/Glob/git status/ls/cat）正常。协调者（本 agent）通过监控循环「保活 turn」无法改变子代理绑定的平台 SessionState——子代理的 canUseTool 回调与父 turn 的 currentRunId 解耦，只有真实用户新消息开新 turn 才恢复写权限。
-- 根因：`sillyhub-daemon/src/interactive/session-manager.ts:811` 与 `:1585` 的 canUseTool 回调在 `state.status !== 'running' || !state.currentRunId` 时直接 deny；后台子代理存活到 turn 结束后，currentRunId 失效，所有写操作 fail-closed。当前平台无「子代理权限请求路由到父会话/排队重试」机制。
+- 根因：`repo://sillyhub/sillyhub-daemon/src/interactive/session-manager.ts:811` 与 `:1585` 的 canUseTool 回调在 `state.status !== 'running' || !state.currentRunId` 时直接 deny；后台子代理存活到 turn 结束后，currentRunId 失效，所有写操作 fail-closed。当前平台无「子代理权限请求路由到父会话/排队重试」机制。
 - 规避：execute 阶段派耗时子代理时，改用 `run_in_background: false` 同步子代理，确保子代理在父 turn 的真实 run 窗口内完成全部写操作；若必须后台并行，则把「只读调研」放后台，写操作集中在主 turn 内由同步子代理机械应用。该现象本身也印证了本变更 FR-03（后台 Agent 任务进度可见）的痛点：会话不应在后台子代理仍在工作时提前失去 running 态。
 - 修复建议（平台侧）：canUseTool 对子代理或派生会话引入 grace period / 父会话委托 / 队列重试，避免正常后台工作被 turn 边界切断。
 > 来源：2026-08-24-sessions-live-updates verify 真实运行时冒烟（commit 0c7860f7 修复）。

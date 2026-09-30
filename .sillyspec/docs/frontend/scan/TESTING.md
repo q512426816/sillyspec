@@ -43,8 +43,8 @@ generator: sillyspec-scan
 ## 测试模式
 
 - @testing-library/react ^16 + jest-dom ^6.4.6：render / screen / fireEvent / waitFor / renderHook / act。
-- mock 惯例：统一 `vi.mock("<模块路径>")`。真实例：`frontend/src/components/permissions/session-permission-panel.test.tsx:38` —— `vi.mock("@/lib/api", () => ({ getApiBaseUrl: () => "http://localhost" }))`。
-- 已知 jsdom 坑（`next/dynamic ssr:false` 组件同步渲染 null，须 vi.mock）：`frontend/src/components/ui/markdown-text`（现有 **14 个**测试文件各自 mock）与 `frontend/src/components/charts/index.tsx` 桶导出；图表测试的绕法是直接 import 具体组件文件跳过桶导出（`frontend/src/components/__tests__/work-hour-bar-chart.test.tsx:4-6` 有注释说明）。
+- mock 惯例：统一 `vi.mock("<模块路径>")`。真实例：`repo://sillyhub/frontend/src/components/permissions/session-permission-panel.test.tsx:38` —— `vi.mock("@/lib/api", () => ({ getApiBaseUrl: () => "http://localhost" }))`。
+- 已知 jsdom 坑（`next/dynamic ssr:false` 组件同步渲染 null，须 vi.mock）：`frontend/src/components/ui/markdown-text`（现有 **14 个**测试文件各自 mock）与 `frontend/src/components/charts/index.tsx` 桶导出；图表测试的绕法是直接 import 具体组件文件跳过桶导出（`repo://sillyhub/frontend/src/components/__tests__/work-hour-bar-chart.test.tsx:4-6` 有注释说明）。
 
 ## E2E
 

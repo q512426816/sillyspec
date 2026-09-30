@@ -15,7 +15,7 @@ created_at: 2026-06-23 02:00:00
 
 ## 🟢 daemon 重启 session 恢复已修复（gap-8.3 / commit 40e21d3）
 
-daemon 重启后 interactive session 丢失致 turn 卡死的根因（`sillyhub-daemon/src/cli.ts` 漏传 persistence/recoveryClient）**已修复**（2026-06-20，commit 40e21d3，变更 `2026-06-19-fix-interactive-daemon-lifecycle` gap-8.3）：`sillyhub-daemon/src/cli.ts:773-776` 与 `:1214` 已装配 `JsonSessionPersistence` + `recoveryClient`（client 即 HubClient，实现 RecoveryCoordinator），backend 加 recovery 端点。有 `cli-session-manager-injection.test.ts` 守护。改 daemon session 逻辑可基于此已恢复前提。
+daemon 重启后 interactive session 丢失致 turn 卡死的根因（`sillyhub-daemon/src/cli.ts` 漏传 persistence/recoveryClient）**已修复**（2026-06-20，commit 40e21d3，变更 `2026-06-19-fix-interactive-daemon-lifecycle` gap-8.3）：`repo://sillyhub/sillyhub-daemon/src/cli.ts:773-776` 与 `:1214` 已装配 `JsonSessionPersistence` + `recoveryClient`（client 即 HubClient，实现 RecoveryCoordinator），backend 加 recovery 端点。有 `cli-session-manager-injection.test.ts` 守护。改 daemon session 逻辑可基于此已恢复前提。
 
 ## 🟡 AgentRunLog 无 metadata 列 / 三层日志 metadata 丢失
 
@@ -42,7 +42,7 @@ frontend 容器**已移除 healthcheck 块**（`deploy/docker-compose.yml` 的 f
 
 ## 🟢 frontend react-query 已正式启用（2026-07 OpenAPI 类型迁移，commit fecaa155 / 29b3c86b）
 
-frontend 已在 `frontend/src/lib/providers.tsx:10` 挂载 `QueryClientProvider`，`use-daemon-runtimes.ts` / `use-agent-runs.ts` / `daemon-audit.ts` / `runtimes/page.tsx` 等多处用 `useQuery`。**新数据请求应优先用 react-query**（与 OpenAPI 生成类型 `api-types.ts` 配套）。旧 `apiFetch` + zustand 仍存在于已写页面，改动既有页面时沿用既有模式避免割裂。
+frontend 已在 `repo://sillyhub/frontend/src/lib/providers.tsx:10` 挂载 `QueryClientProvider`，`use-daemon-runtimes.ts` / `use-agent-runs.ts` / `daemon-audit.ts` / `runtimes/page.tsx` 等多处用 `useQuery`。**新数据请求应优先用 react-query**（与 OpenAPI 生成类型 `api-types.ts` 配套）。旧 `apiFetch` + zustand 仍存在于已写页面，改动既有页面时沿用既有模式避免割裂。
 - 注：`@tanstack/react-query` 在 2026-06-23 前确实仅声明未启用，本条由原"未启用"修订（见变更 `2026-07-01-react-query-migration` / `2026-07-04-frontend-openapi-types`）。
 
 ## 🟡 frontend 与 daemon 各自独立 lockfile + 双 UI 库并存
@@ -108,7 +108,7 @@ FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（
 ## 🟡 spec_guardian 死代码与 tool_gateway 注释失配：守护门从未在生产生效
 
 - `backend/app/modules/workflow/spec_guardian.py` 的 `run_guard` 全仓仅被 `tests/test_spec_guardian.py` 引用——G3-G7 质量/文档/组件守护门**从未在生产路径生效**，变更验收别指望它把关。
-- `backend/app/modules/tool_gateway/tool_policy.py:175` docstring 写「loaded by the caller (e.g., ToolGatewayService._load_policy)」但全仓无 `def _load_policy` 定义——注释与实现不一致（项目规则 18），策略装配链路现状以代码为准，勿按 docstring 理解。
+- `repo://sillyhub/backend/app/modules/tool_gateway/tool_policy.py:175` docstring 写「loaded by the caller (e.g., ToolGatewayService._load_policy)」但全仓无 `def _load_policy` 定义——注释与实现不一致（项目规则 18），策略装配链路现状以代码为准，勿按 docstring 理解。
 - 2026-08-18 全量重扫 grep 实测；清理或接线前先确认调用方是否真的缺失。
 
 ## 🟢 daemon 三个 3000+ 行 god 文件（daemon.ts 4047 / session-manager.ts 3897 / task-runner.ts 3156）
@@ -144,7 +144,7 @@ FastAPI 按**路由注册顺序**匹配。字面量路径 `/xxx/export-excel`（
 ## 🟡 后台任务写通道宽限无界（hasBackgroundTaskGrace 无 TTL，R-01 已接受观察项）
 
 - **暴露差**（2026-09-16 风险审查发现）：同类第一放行源 `withinStaleFlipGrace` 有界 60min
-  （`STALE_RUN_WRITE_GRACE_MS = 60 * 60_000`，sillyhub-daemon/src/interactive/session-manager/types.ts:452，
+  （`STALE_RUN_WRITE_GRACE_MS = 60 * 60_000`，repo://sillyhub/sillyhub-daemon/src/interactive/session-manager/types.ts:452，
   permission.ts `withinStaleFlipGrace` 消费），而 bg-task 第三放行源 `hasBackgroundTaskGrace`
   （permission.ts）无时间上限——注册表条目（`mgr._backgroundTasks`）仅 task_notification 终态
   注销与会话终态 `clearBackgroundTasks` 两路注销，条目有 `startedAt`/`lastProgressAt` 但无 TTL；

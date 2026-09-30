@@ -24,4 +24,4 @@ created_at: 2026-08-28 08:28:18
 - R6 liveness 推送 root/workspace 归属修复——harness 日志都在 home 下、claude 项目目录名经 munge 抹掉分隔符，旧「logPath.includes(root)」恒 miss 全落首个有 token 的 root（多 root 跨 workspace 串写）。改：WatchTarget 增 agentCwd（discovery 各 locate* 透传 + fetchRegisteredAgentLogs 解析 agent_cwd），daemon 按 isPathUnderAnyRoot(cwd, root) 归属；无 cwd 命中仅单 token root 才兜底，多 root 无命中跳过并 warn（宁缺勿串写）。
 - R8 discovery readHead fd 泄漏修复——openSync 返回值内联传 readSync 后即弃（每候选每 60s 泄 1 fd，长跑 EMFILE + Windows 上 rollout 文件无法删除）。改 fd try/finally closeSync。
 - R9 内存 Map 有界——DefaultFs stat/range 缓存与 daemon _livenessMetaByPath 在 ended/淘汰/显式移除时 forget/delete + 超限丢最早一批（4096/1024）。
-- R10 CursorDriver shell 兜底补 DA-1 注入守卫——Windows .cmd/.bat shim 解析失败回退 shell:true 时不转义参数，用户 prompt 作位置参数即注入面（批量层 sillyhub-daemon/src/task-runner/spawn-stream.ts:174-189 同款守卫此前未随交互驱动落地）。命中元字符（& | < > ^ % " 空白）硬失败按轮次 error 收敛，不 spawn。
+- R10 CursorDriver shell 兜底补 DA-1 注入守卫——Windows .cmd/.bat shim 解析失败回退 shell:true 时不转义参数，用户 prompt 作位置参数即注入面（批量层 repo://sillyhub/sillyhub-daemon/src/task-runner/spawn-stream.ts:174-189 同款守卫此前未随交互驱动落地）。命中元字符（& | < > ^ % " 空白）硬失败按轮次 error 收敛，不 spawn。

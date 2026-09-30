@@ -33,7 +33,7 @@ created_at: 2026-08-29 22:56:30
 ## 2026-09-04 — 派发失败收链 _row 未绑定修复（quick 修复）
 
 - ql-20260904-003-8e4a | _inject_into_session 派发失败收链 _row 未绑定 UnboundLocalError 修复（24h 审计 H1）
-- de664fb69 在 not control_ok 分支引用仅在非切换分支赋值的 `_row`：切换轮 hub 直推失败与 runtime 解析失败（daemon_id=None）两条路径抛 UnboundLocalError（500 替代 504、run 永久残留 running）。修复为 `_row: DaemonControlCommand | None = None` 预初始化 + 判空后取消；回归用例 test_control_command_dispatch.py::TestInjectDispatchFailureConvergence 两例。
+- de664fb69 在 not control_ok 分支引用仅在非切换分支赋值的 `_row`：切换轮 hub 直推失败与 runtime 解析失败（daemon_id=None）两条路径抛 UnboundLocalError（500 替代 504、run 永久残留 running）。修复为 `_row: DaemonControlCommand | None = None` 预初始化 + 判空后取消；回归用例 repo://sillyhub/backend/app/modules/daemon/tests/test_control_command_dispatch.py::TestInjectDispatchFailureConvergence 两例。
 
 ## 2026-09-04 — sillyspec_update state 取值补 up_to_date（quick ql-20260904-019-b4f4）
 

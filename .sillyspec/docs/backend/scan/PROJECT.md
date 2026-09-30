@@ -26,7 +26,7 @@ generator: sillyspec-scan
 - **认证授权** — JWT 浏览器会话 + API Key（daemon 长凭证）+ RBAC（auth 模块）。
 - **其余域** — release（发布审批/部署窗口）、incident、knowledge、skills、scan_docs、spec_profile、runtime、settings、admin、git_identity、git_gateway、worktree、task、health。
 
-代码组织为 vertical slice：`app/modules/<feature>/` 内含 router + schema + service + models + tests，在 `app/main.py::create_app()` 聚合挂载到 `/api` 前缀。
+代码组织为 vertical slice：`app/modules/<feature>/` 内含 router + schema + service + models + tests，在 `repo://sillyhub/backend/app/main.py::create_app()` 聚合挂载到 `/api` 前缀。
 
 规模（Glob/ls 实测）：**29 个业务模块**（`ls app/modules/`）；`app/**/*.py` 共 640 个（含模块内测试 278）；`backend/tests/` 76 个测试文件；alembic migration 144 个 revision。入口 `app.main:app`，OpenAPI 文档 `/api/docs`（Swagger）与 `/api/redoc`。
 

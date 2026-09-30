@@ -10,8 +10,8 @@ created_at: 2026-09-30T02:10:52.595Z
 
 - [x] task-01: `docs check --fix` 自动重锚本仓漂移 53 处（prompt-control-debt/architecture-4a/docs 域知识库），复跑确认该 53 处清零
 - [x] task-02: prompt-control-debt.md 两处 `complete.js:579` 退役调用点人工改写——草稿兜底已随 2026-09-26-task-review-retire 退役，改指现址 src/index.js:992（backfill-reviews）
-- [ ] task-03: applyFixes 批量转换 211 处跨仓引用为 `repo://sillyhub/` 前缀（197 处直转 + 14 处 token 已验证的行号重锚）
-- [ ] task-04: 人工消歧 12 处结构变迁现址改写（daemon 路由拆分四锚→router/{daemon_rpc,runtimes,machines}.py 现址、repo://sillyhub/backend/app/modules/daemon/model.py:126、repo://sillyhub/backend/app/modules/daemon/service.py:233、repo://sillyhub/backend/app/modules/daemon/runtime/service.py:523、repo://sillyhub/backend/app/modules/daemon/run_sync/service/submit_steps.py:350、[cid] 页 371、pi-rpc-driver 483、daemon.ts spawn 8706）+ sdk.d.ts 死锚（node_modules 依赖文件）去行号留提及
-- [ ] task-05: docs check 复跑迭代至全量 0 失效（扫描面不变：docs/ + .sillyspec/docs/ + .sillyspec/changes/ + .sillyspec/knowledge/）
+- [x] task-03: applyFixes 批量转换 211 处跨仓引用为 `repo://sillyhub/` 前缀（197 处直转 + 14 处 token 已验证的行号重锚）
+- [x] task-04: 人工消歧 12 处结构变迁现址改写（daemon 路由拆分四锚→router/{daemon_rpc,runtimes,machines}.py 现址、repo://sillyhub/backend/app/modules/daemon/model.py:126、repo://sillyhub/backend/app/modules/daemon/service.py:233、repo://sillyhub/backend/app/modules/daemon/runtime/service.py:523、repo://sillyhub/backend/app/modules/daemon/run_sync/service/submit_steps.py:350、[cid] 页 371、pi-rpc-driver 483、daemon.ts spawn 8706）+ sdk.d.ts 死锚（node_modules 依赖文件）去行号留提及
+- [x] task-05: docs check 复跑迭代至全量 0 失效（扫描面不变：docs/ + .sillyspec/docs/ + .sillyspec/changes/ + .sillyspec/knowledge/）
 - [ ] task-06: `docs gate --init-baseline` 372→0 锁定 + local.yaml cross_repo_roots 过时注释更正（「本仓当前无 repo:// 引用」已失真）
 - [ ] task-07: 交付面显式 pathspec 提交（含 tasks.md 勾选证据）+ flow done 收口 + push 验证 pre-push 三道关全绿

@@ -4,7 +4,7 @@
 摘要：默认场景
 依据决策：D-005@v1、D-007@v1
 场景正文：
-- 场景：默认场景 — Given 一个 mission 的所有 Worker Run 进入终态（completed/failed/killed） mission 仍有 pending/runni；When 最后一个 Worker 的 lease 在 complete_lease（backend/app/modules/daemon/lease/service.py:278）完成 某 Worker lease comp；Then complete_lease 末尾 mission 分支检测到 `run.mission_id 非空` 且 `derive_status(mission) in
+- 场景：默认场景 — Given 一个 mission 的所有 Worker Run 进入终态（completed/failed/killed） mission 仍有 pending/runni；When 最后一个 Worker 的 lease 在 complete_lease（repo://sillyhub/backend/app/modules/daemon/lease/service.py:278）完成 某 Worker lease comp；Then complete_lease 末尾 mission 分支检测到 `run.mission_id 非空` 且 `derive_status(mission) in
 全文：.sillyspec/changes/archive/2026-06-28-team-mainline-integration/requirements.md#FR-01
 最近确认：98d3e56dd
 
@@ -24,7 +24,7 @@
 摘要：默认场景
 依据决策：D-008@v1
 场景正文：
-- 场景：默认场景 — Given mission 的 dispatch 循环（backend/app/modules/agent/router.py:680-687）准备 dispatch 下一个 Worker 累计成本 < 预算 且 activ；When 调 can_dispatch_worker(mission_id) 返回 (false, reason) can_dispatch_worker 检查；Then 拒绝 dispatch 该 Worker；剩余未 dispatch 的 pending Run 标记 killed；Mission 进入收敛流程（Finaliz
+- 场景：默认场景 — Given mission 的 dispatch 循环（repo://sillyhub/backend/app/modules/agent/router.py:680-687）准备 dispatch 下一个 Worker 累计成本 < 预算 且 activ；When 调 can_dispatch_worker(mission_id) 返回 (false, reason) can_dispatch_worker 检查；Then 拒绝 dispatch 该 Worker；剩余未 dispatch 的 pending Run 标记 killed；Mission 进入收敛流程（Finaliz
 全文：.sillyspec/changes/archive/2026-06-28-team-mainline-integration/requirements.md#FR-03
 最近确认：98d3e56dd
 

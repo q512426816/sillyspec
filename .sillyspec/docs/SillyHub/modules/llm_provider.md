@@ -9,7 +9,7 @@ created_at: 2026-08-18 01:45:00
 # LLM 供应商凭证管理（llm_provider）
 
 ## 定位
-后端「用户级 LLM 供应商凭证管理」：cc-switch 式启停模型——每用户维护自己的供应商记录（base_url + 加密 api_key + api_format + 模型角色映射），`(user_id, agent_kind)` 内单条 `is_default` 互斥。本模块只管数据与生命周期（CRUD + 加密 + 互斥 + 凭证探测 + 模型列表/用量/配额代查 + LiteLLM 网关注册），不下发凭证——真正注入 daemon 子进程在 `daemon/lease/context.py::_inject_provider_config`。openai_chat 格式经服务器 LiteLLM 网关转 Anthropic↔OpenAI（平台不自己实现协议转换）。
+后端「用户级 LLM 供应商凭证管理」：cc-switch 式启停模型——每用户维护自己的供应商记录（base_url + 加密 api_key + api_format + 模型角色映射），`(user_id, agent_kind)` 内单条 `is_default` 互斥。本模块只管数据与生命周期（CRUD + 加密 + 互斥 + 凭证探测 + 模型列表/用量/配额代查 + LiteLLM 网关注册），不下发凭证——真正注入 daemon 子进程在 `repo://sillyhub/backend/app/modules/daemon/lease/context.py::_inject_provider_config`。openai_chat 格式经服务器 LiteLLM 网关转 Anthropic↔OpenAI（平台不自己实现协议转换）。
 
 ## 契约摘要
 - 端点（prefix=/llm-providers，全部 `get_current_user` + 按 `current_user.id` 过滤，**不走** require_permission_any——owner 级，跨用户 404/403 不泄漏存在性）：

@@ -1889,7 +1889,7 @@
 摘要：默认场景
 依据决策：D-002@v1
 场景正文：
-- 场景：默认场景 — Given `backend/app/modules/daemon/router/__init__.py:55` 的 `from app.modules.daemon.service import (DaemonLeaseNotFound, D；When 异常类定义迁入各子包 execute 阶段以 `grep -rn "from app.modules.daemon.service import"` 全量收集
+- 场景：默认场景 — Given `repo://sillyhub/backend/app/modules/daemon/router/__init__.py:55` 的 `from app.modules.daemon.service import (DaemonLeaseNotFound, D；When 异常类定义迁入各子包 execute 阶段以 `grep -rn "from app.modules.daemon.service import"` 全量收集
 全文：.sillyspec/changes/archive/2026-06-22-2026-06-22-daemon-service-split/requirements.md#FR-05
 最近确认：7db5ab6b3
 
@@ -4525,7 +4525,7 @@
 状态：active
 摘要：默认场景
 场景正文：
-- 场景：默认场景 — Given McpTokenService.get_or_issue 签发；Then scope 必须取 `MCP_SCOPES` 合法值（read/dispatch/converge，backend/app/modules/mcp_gateway/auth.py:44）；init 场景用 `['dispat
+- 场景：默认场景 — Given McpTokenService.get_or_issue 签发；Then scope 必须取 `MCP_SCOPES` 合法值（read/dispatch/converge，repo://sillyhub/backend/app/modules/mcp_gateway/auth.py:44）；init 场景用 `['dispat
 全文：.sillyspec/changes/archive/2026-08-12-init-provision-local-yaml/requirements.md#FR-08
 最近确认：a34d556ff
 
@@ -5153,7 +5153,7 @@
 摘要：默认场景
 依据决策：D-003@v1
 场景正文：
-- 场景：默认场景 — Given frontend/src/components/daemon/turn-timeline.tsx:930-983 TurnStatusBadge 为纯样式 span 胶囊（两模式共用）；When 统一 antd；Then 内部渲染改 antd Badge status：running/interrupting→processing、
+- 场景：默认场景 — Given repo://sillyhub/frontend/src/components/daemon/turn-timeline.tsx:930-983 TurnStatusBadge 为纯样式 span 胶囊（两模式共用）；When 统一 antd；Then 内部渲染改 antd Badge status：running/interrupting→processing、
 全文：.sillyspec/changes/archive/2026-08-22-session-panel-unify/requirements.md#FR-04
 最近确认：4d7adc1d9
 
@@ -5201,7 +5201,7 @@
 状态：active
 摘要：默认场景
 场景正文：
-- 场景：默认场景 — Given 3 个文件注释含适配层历史锚点（frontend/src/components/ask-user-dialog-card.tsx:15、；When 适配层删除；Then 注释中指向已删文件的行号锚点按 CLAUDE.md 规则 18 校正（仅注释零逻辑改动）。
+- 场景：默认场景 — Given 3 个文件注释含适配层历史锚点（repo://sillyhub/frontend/src/components/ask-user-dialog-card.tsx:15、；When 适配层删除；Then 注释中指向已删文件的行号锚点按 CLAUDE.md 规则 18 校正（仅注释零逻辑改动）。
 全文：.sillyspec/changes/archive/2026-08-22-session-panel-unify/requirements.md#FR-09
 最近确认：4d7adc1d9
 

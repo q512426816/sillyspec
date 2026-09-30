@@ -5,7 +5,7 @@
 ## D-004@v1 daemon 经扩展 API 拉取三件套（方案 A）
 状态：implemented
 变更：2026-08-26-workspace-mcp-edit
-锚点：backend/app/modules/daemon/router.py:4027
+锚点：repo://sillyhub/backend/app/modules/daemon/router/daemon_rpc.py:608
 最近确认：c81db1ea
 理由：扩展 GET /api/daemon/mcp/config 支持 workspace_id，返回 platform_default + whitelist + workspace；daemon 会话创建时预取缓存，mergeMcpConfigs 合并注入。
 
@@ -22,7 +22,7 @@ supersedes：D-006@v1
 变更：2026-08-26-workspace-mcp-edit
 锚点：sillyhub-daemon/src/daemon.ts（_startInteractiveSession）
 最近确认：c81db1ea
-理由：daemon.ts _startInteractiveSession（唯一持有 execPayload.workspaceId 的位置，lease/context.py:586-591 仅 tar 传输且 lease_meta.workspace_id 已写时携带）。缓存形态 Map<sessionId, McpBundle>；restore/reload 缓存缺失重取一次，失败回落空 bundle + warn。provider 保持同步签名消费缓存（v1 结论不变）。
+理由：daemon.ts _startInteractiveSession（唯一持有 execPayload.workspaceId 的位置，repo://sillyhub/backend/app/modules/daemon/lease/context.py:586-591 仅 tar 传输且 lease_meta.workspace_id 已写时携带）。缓存形态 Map<sessionId, McpBundle>；restore/reload 缓存缺失重取一次，失败回落空 bundle + warn。provider 保持同步签名消费缓存（v1 结论不变）。
 supersedes：D-007@v1
 
 ## D-008@v1 工作区 MCP 注入覆盖范围：工作区下所有普通/主控会话，分身除外

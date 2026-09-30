@@ -14,18 +14,18 @@ generator: sillyspec-scan
 
 ### 1.1 WebSocket 实时控制通道
 - `ws` `^8.18.0`（package.json dependencies）。
-- 封装 sillyhub-daemon/src/ws-client.ts；端点 `WS_PATH = '/api/daemon/ws'`（`sillyhub-daemon/src/protocol.ts:332`），URL 拼 `?daemon_local_id=<runtimeId>` 查询参数（sillyhub-daemon/src/ws-client.ts:373）。
-- 鉴权：配置 apiKey 时经 ws 库 headers 选项带 `X-API-Key`（backend 校验，缺头 4001）；未配置不带头保持向后兼容（sillyhub-daemon/src/ws-client.ts:378-387）。
+- 封装 sillyhub-daemon/src/ws-client.ts；端点 `WS_PATH = '/api/daemon/ws'`（`repo://sillyhub/sillyhub-daemon/src/protocol.ts:332`），URL 拼 `?daemon_local_id=<runtimeId>` 查询参数（repo://sillyhub/sillyhub-daemon/src/ws-client.ts:373）。
+- 鉴权：配置 apiKey 时经 ws 库 headers 选项带 `X-API-Key`（backend 校验，缺头 4001）；未配置不带头保持向后兼容（repo://sillyhub/sillyhub-daemon/src/ws-client.ts:378-387）。
 - 消息协议 `MSG` 常量集中于 sillyhub-daemon/src/protocol.ts（task_available / heartbeat / register / lease_claim / lease_start / lease_complete / lease_messages / rpc / rpc_result / SESSION_* / PERMISSION_*），值与 backend `protocol.py` 逐字对齐。
 
 ### 1.2 HTTP API（lease 生命周期 + 注册/恢复，`/api/daemon` 前缀）
 - Node 20 原生 `fetch`（零 HTTP 库），封装 sillyhub-daemon/src/hub-client.ts（`REST_PREFIX='/api/daemon'`）。
-- 鉴权优先级：apiKey → `X-API-Key`（daemon 长期凭证）；token → `Authorization: Bearer`（短期 JWT）；都缺不带（sillyhub-daemon/src/hub-client.ts:310-324）。
+- 鉴权优先级：apiKey → `X-API-Key`（daemon 长期凭证）；token → `Authorization: Bearer`（短期 JWT）；都缺不带（repo://sillyhub/sillyhub-daemon/src/hub-client.ts:310-324）。
 - 端点：register / heartbeat / markOffline / claimLease / startLease / leaseHeartbeat / submitMessages / completeLease / getPendingLeases / syncStatus / notifyRunResult / notifySessionEnd / notifySessionReady / recoverSession / confirmReconnected / markRecoveryFailed。
 - 约定：body snake_case 对齐 backend Pydantic；超时 `AbortSignal.timeout(30_000)`；非 2xx 抛 `HubHttpError`。
 
 ### 1.3 HTTP API（agent router 端点，`/api` 前缀，非 `/api/daemon`）
-- `sillyhub-daemon/src/hub-client.ts:1126-1269`：5 个 missions 端点走 `/api` 前缀——`POST /api/workspaces/{ws}/missions/{mid}/dispatch_worker`（dispatchWorker）、`GET .../workers/{wid}/result`（getWorkerResult）、`GET .../workers`（listWorkers）、`POST .../converge`（convergeMission）、`POST .../progress`（reportProgress，进度回传）。
+- `repo://sillyhub/sillyhub-daemon/src/hub-client.ts:1126-1269`：5 个 missions 端点走 `/api` 前缀——`POST /api/workspaces/{ws}/missions/{mid}/dispatch_worker`（dispatchWorker）、`GET .../workers/{wid}/result`（getWorkerResult）、`GET .../workers`（listWorkers）、`POST .../converge`（convergeMission）、`POST .../progress`（reportProgress，进度回传）。
 - 另有 `GET /api/agent-runs/{id}/execution-context`（getExecutionContext）与 spec 端点（见 1.4/1.5），同为 `/api` 前缀。
 
 ### 1.4 spec 全量同步（tar bundle 双向）
@@ -33,7 +33,7 @@ generator: sillyspec-scan
 - sillyhub-daemon/src/spec-sync.ts：pullSpecBundle（含 404 容错 + Tar Slip 防护解包）/ packSpecDir（手动 tar 头打包）/ hasUnsyncedLocalChanges（pull 前回灌检查）。
 
 ### 1.5 spec 增量同步（manifest + 增量 ops）
-- `sillyhub-daemon/src/hub-client.ts:1811`：`postSpecSyncIncremental` → `POST /api/workspaces/{wsId}/spec-workspace/sync-incremental`（spec-file-incremental-sync 变更新的端点；URL 必须 `/api` 前缀，用 REST_PREFIX 恒 404）。
+- `repo://sillyhub/sillyhub-daemon/src/hub-client.ts:1827`：`postSpecSyncIncremental` → `POST /api/workspaces/{wsId}/spec-workspace/sync-incremental`（spec-file-incremental-sync 变更新的端点；URL 必须 `/api` 前缀，用 REST_PREFIX 恒 404）。
 - sillyhub-daemon/src/spec-sync.ts：`syncSpecTreeIfNeeded` 编排、`resolveManifestCachePath` 本地 manifest 缓存（hash/版本对账）、`extractChangeDirs`（ops → change 目录）、`shouldRefreshSpec` / `bumpLocalSpecVersion`（spec_version 保鲜）。
 
 ### 1.6 变更写回 + 同步进度（change-writes）
@@ -46,7 +46,7 @@ generator: sillyspec-scan
 - sillyhub-daemon/src/skill-manager.ts：`GET /api/daemon/skills/latest/manifest`（版本 + 文件清单 + sha256），下载 bundle 校验后落盘 `~/.sillyhub/daemon/skills/`，本地 manifest 记版本。
 
 ### 1.9 MCP 白名单拉取
-- `sillyhub-daemon/src/hub-client.ts:2337`：`GET /api/platform-settings/mcp-whitelist`（admin 全局白名单）。
+- `repo://sillyhub/sillyhub-daemon/src/hub-client.ts:2337`：`GET /api/platform-settings/mcp-whitelist`（admin 全局白名单）。
 
 ### 1.10 关于 shpsync_ 工作区 token
 - `shpsync_` 前缀 token 是 backend `connect` 端点签发给 CLI（sillyspec）侧的工作区凭证（见 sillyhub-daemon/src/api-types.ts schema 注释）；daemon 自身不持有 shpsync_，daemon 侧所有平台调用走 X-API-Key / Bearer（1.2）。daemon 相关的"进度回传"是 1.3 reportProgress 与 1.6 change-writes progress。
@@ -59,8 +59,8 @@ generator: sillyspec-scan
 - sillyhub-daemon/src/interactive/types.ts 以 `import type` 复用 SDK 的 `Query` / `SDKMessage` / `SDKResultMessage`。
 
 ### 2.2 llm-proxy 透传（hub 代理形态）
-- `sillyhub-daemon/src/credential-injector.ts:122-133`：provider_config `litellm_proxy` 形态下，`ANTHROPIC_BASE_URL` 指向 `<hub>/api/daemon/llm-proxy`、`ANTHROPIC_AUTH_TOKEN` 注 daemon apiKey（master key 不下发到 daemon，子进程 Bearer 打 hub 代理）；openai 形态经 LiteLLM 网关（`litellm_base_url`）。
-- 配套：sillyhub-daemon/src/types.ts（ProviderConfig.litellm_base_url / litellm_proxy）、`sillyhub-daemon/src/cli.ts:521-522`、`sillyhub-daemon/src/spawn-env.ts:371`（进程级 _daemonApiKey 覆盖点）。
+- `repo://sillyhub/sillyhub-daemon/src/credential-injector.ts:186`：provider_config `litellm_proxy` 形态下，`ANTHROPIC_BASE_URL` 指向 `<hub>/api/daemon/llm-proxy`、`ANTHROPIC_AUTH_TOKEN` 注 daemon apiKey（master key 不下发到 daemon，子进程 Bearer 打 hub 代理）；openai 形态经 LiteLLM 网关（`litellm_base_url`）。
+- 配套：sillyhub-daemon/src/types.ts（ProviderConfig.litellm_base_url / litellm_proxy）、`repo://sillyhub/sillyhub-daemon/src/cli.ts:521-522`、`repo://sillyhub/sillyhub-daemon/src/spawn-env.ts:371`（进程级 _daemonApiKey 覆盖点）。
 
 ### 2.3 Codex（并列 provider）
 - sillyhub-daemon/src/interactive/codex-app-server-driver.ts（CodexAppServerDriver），`InteractiveProvider = 'claude' | 'codex'`；approval 桥接有专项测试。
@@ -73,8 +73,8 @@ generator: sillyspec-scan
 
 - `@modelcontextprotocol/sdk` `^1.29.0`；sillyhub-daemon/src/mcp-server.ts 用 `McpServer` + `StdioServerTransport` 起 stdio server（import.meta.url 主模块判定后 `runMcpServer()`）。
 - 工具清单（mcp-server.ts registerTool，共 5 个）：`dispatch_worker` / `get_worker_result` / `list_workers` / `converge_mission` / `report_progress`——HubClient 作后端通道（测试可传 mock）。
-- 注入：仅 team 主 agent（`ctx.stage === 'orchestrator'`）经 `sillyhub-daemon/src/cli.ts:982` mainAgentMcpConfigProvider 构造 `command=node + args=[dist/mcp-server.js]`，透传 SDK `options.mcpServers`。
-- 鉴权：`MCP_SERVER_DAEMON_API_KEY`（X-API-Key 优先路径）与 `MCP_SERVER_DAEMON_TOKEN`（Bearer）分开透传（api_key 优先回落 token，sillyhub-daemon/src/cli.ts:978-982）；McpToken 的签发/吊销在平台侧（api-types.ts schema），daemon 内置 server 不消费 McpToken。
+- 注入：仅 team 主 agent（`ctx.stage === 'orchestrator'`）经 `repo://sillyhub/sillyhub-daemon/src/cli.ts:982` mainAgentMcpConfigProvider 构造 `command=node + args=[dist/mcp-server.js]`，透传 SDK `options.mcpServers`。
+- 鉴权：`MCP_SERVER_DAEMON_API_KEY`（X-API-Key 优先路径）与 `MCP_SERVER_DAEMON_TOKEN`（Bearer）分开透传（api_key 优先回落 token，repo://sillyhub/sillyhub-daemon/src/cli.ts:978-982）；McpToken 的签发/吊销在平台侧（api-types.ts schema），daemon 内置 server 不消费 McpToken。
 - 配置合并：sillyhub-daemon/src/mcp-config.ts（平台默认 + workspace `.mcp.json`，白名单过滤，仅允许 stdio 类型防 SSRF）；spike 原型 `spikes/06-mcp-server/`。
 
 ## 4. 本地环境

@@ -5,7 +5,7 @@
 ## D-004@v1 daemon 经扩展 API 拉取三件套（方案 A）
 状态：implemented
 变更：2026-08-26-workspace-mcp-edit
-锚点：backend/app/modules/daemon/router.py:4027
+锚点：repo://sillyhub/backend/app/modules/daemon/router/daemon_rpc.py:608
 最近确认：c81db1ea
 理由：扩展 GET /api/daemon/mcp/config 支持 workspace_id，返回 platform_default + whitelist + workspace；daemon 会话创建时预取缓存，mergeMcpConfigs 合并注入。
 

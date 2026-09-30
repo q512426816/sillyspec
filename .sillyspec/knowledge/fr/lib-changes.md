@@ -78,7 +78,7 @@
 摘要：默认场景
 依据决策：D-002@v1
 场景正文：
-- 场景：默认场景 — Given 迁移后部分字段变 optional（reparseResult.warnings / current_stage / TransitionDispatchRes；When 调用方访问这些字段；Then 按 typecheck 暴露点补 `?.` / `??` guard；`frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/tasks/page.tsx:165` warnings.length 补 `?.`。
+- 场景：默认场景 — Given 迁移后部分字段变 optional（reparseResult.warnings / current_stage / TransitionDispatchRes；When 调用方访问这些字段；Then 按 typecheck 暴露点补 `?.` / `??` guard；`repo://sillyhub/frontend/src/app/(dashboard)/workspaces/[id]/changes/[cid]/tasks/page.tsx:165` warnings.length 补 `?.`。
 全文：.sillyspec/changes/archive/2026-08-09-changes-ts-apitypes-migrate/requirements.md#FR-03
 最近确认：b131cb292
 

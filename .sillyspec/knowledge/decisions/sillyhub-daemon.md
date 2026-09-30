@@ -25,7 +25,7 @@
 ## D-001@v1 自启注册形态：daemon CLI 新增 autostart 子命令
 状态：implemented
 变更：2026-08-30-daemon-autostart
-锚点：sillyhub-daemon/src/cli.ts:340（现有命令注册区，autostart 组追加于此）
+锚点：repo://sillyhub/sillyhub-daemon/src/cli.ts:340（现有命令注册区，autostart 组追加于此）
 最近确认：b243c765
 理由：CLI 子命令（`sillyhub-daemon autostart enable/disable/status`），前端复制一条命令执行即"一键"；安装脚本仅在尾部提示该命令，不内置注册逻辑。
 
@@ -109,7 +109,7 @@
 ## D-004@v1
 状态：implemented
 变更：2026-09-19-tool-report-session-replay
-锚点：sillyhub-daemon/src/agent-log/parse-zcode-model-io.ts:66（NormalizedLogMessage）、backend/app/modules/platform_sync/router.py:849（messages 端点）
+锚点：repo://sillyhub/sillyhub-daemon/src/agent-log/parse-zcode-model-io.ts:66（NormalizedLogMessage）、repo://sillyhub/backend/app/modules/platform_sync/router.py:849（messages 端点）
 最近确认：53c67e02a
 理由：四层打通——daemon 解析器透传 usage/turn/model/耗时 + 全会话累计 → RPC 返回结构 → 平台 GET /agent-logs/{id}/messages schema → gen:types → 前端映射到 SessionTurnView token 字段与会话用量环；老 daemon 字段可选、缺省显示「未知」；cursor-agent 回放 token 恒「未知」（数据不落盘，非解析器可解）
 
@@ -123,7 +123,7 @@
 ## D-006@v1
 状态：implemented
 变更：2026-09-19-tool-report-session-replay
-锚点：sillyhub-daemon/src/agent-log/registry.ts:57（PARSERS 单项注册表——扩展点）
+锚点：repo://sillyhub/sillyhub-daemon/src/agent-log/registry.ts:57（PARSERS 单项注册表——扩展点）
 最近确认：53c67e02a
 理由：claude-code-jsonl 新增解析器并注册（对话化 + usage 一起落地，含 D-003 归一化）；cursor-agent CLI transcript 新增扫描上报（~/.cursor/projects/*/agent-transcripts/，现 96 份零上报）+ 新增解析器（结构干净 {role,message} JSONL + turn_ended，非 Claude Code 同构）；cursor IDE store.db（cursor-chat-sqlite）维持不做对话化（blob 库、无 token），但其 409 死胡同需给出像样说明；zcode 既有解析器补 D-004/D-005 字段
 
@@ -146,7 +146,7 @@
 变更：2026-09-10-review-dispatch-platform-fixes
 锚点：未记录
 最近确认：f1bdbef95
-理由：用户原话「daemon 在 worker 终态时把最终 assistant 消息（或 worker 按约定标记的结构化段）落为 kind=summary/kind=final_output 的 artifact」。实现取：复用 backend worker_done 端点现成语义（AgentArtifact kind=summary 挂分身首 run，可重复置位取最新），kind 沿用 summary——sillyhub-daemon/src/mcp-server.ts:542-547 已向调用方声明该契约，final_output 全仓不存在，新值徒增消费方分支。
+理由：用户原话「daemon 在 worker 终态时把最终 assistant 消息（或 worker 按约定标记的结构化段）落为 kind=summary/kind=final_output 的 artifact」。实现取：复用 backend worker_done 端点现成语义（AgentArtifact kind=summary 挂分身首 run，可重复置位取最新），kind 沿用 summary——repo://sillyhub/sillyhub-daemon/src/mcp-server.ts:542-547 已向调用方声明该契约，final_output 全仓不存在，新值徒增消费方分支。
 
 ## D-002@v1 P0-2 独立配额池的作用域与实现层次
 状态：implemented
@@ -174,14 +174,14 @@
 变更：2026-09-11-session-provider-switch-codex-pi
 锚点：sillyhub-daemon/src/codex-settings.ts, sillyhub-daemon/src/provider-file-settings.ts（新增）
 最近确认：225dd771d
-理由：用户裁决：肯定要开放——本变更的目的就是与 claude 完全对齐。技术落地（保住不丢历史）：codex 切回本机默认**不丢 CODEX_HOME**（thread 历史存在 `$CODEX_HOME/sessions` 下，丢目录即断 resume），改为把宿主 `~/.codex` 的 auth.json / config.toml **镜像拷贝**进 per-session 目录（宿主无文件则清空 = 如实反映宿主未登录）；pi 切回本机默认 = 丢弃 `PI_CODING_AGENT_DIR` env 回宿主 `~/.pi`（pi 会话历史在 daemon 自管 `--session-dir`，pi-rpc-driver.ts:719，不受影响）。
+理由：用户裁决：肯定要开放——本变更的目的就是与 claude 完全对齐。技术落地（保住不丢历史）：codex 切回本机默认**不丢 CODEX_HOME**（thread 历史存在 `$CODEX_HOME/sessions` 下，丢目录即断 resume），改为把宿主 `~/.codex` 的 auth.json / config.toml **镜像拷贝**进 per-session 目录（宿主无文件则清空 = 如实反映宿主未登录）；pi 切回本机默认 = 丢弃 `PI_CODING_AGENT_DIR` env 回宿主 `~/.pi`（pi 会话历史在 daemon 自管 `--session-dir`，repo://sillyhub/sillyhub-daemon/src/interactive/pi-rpc-driver.ts:483?，不受影响）。
 
 ## D-003@v1 daemon 侧接入点 = reload 内核统一接入（方案 A）
 状态：implemented
 变更：2026-09-11-session-provider-switch-codex-pi
 锚点：sillyhub-daemon/src/interactive/session-manager.ts:_reloadSessionNow
 最近确认：225dd771d
-理由：用户裁决方案 A：把 applyProviderFileSettings（+ codex null 切换宿主凭证镜像扩展）从 task-runner.ts 抽到独立共享模块（provider-file-settings.ts），session-manager `_reloadSessionNow` 构造 newEnv 时对 codex/pi kind 调用并把 CODEX_HOME / PI_CODING_AGENT_DIR 并入新 env（文件层 env 最后合并盖过下层，与 daemon.ts:8285 spawn 路径同模式）；顺带删 reloadWithProvider 的 claude-only 守卫（session-manager.ts:1502）使 PROVIDER_CONFIG_CHANGED 默认供应商热切换对 codex/pi 也走确定性 reload。否决 B（payload 携带实现细节字段污染消息契约 + 热切换路径享受不到）、C（破坏 driver provider-neutral 契约）。
+理由：用户裁决方案 A：把 applyProviderFileSettings（+ codex null 切换宿主凭证镜像扩展）从 task-runner.ts 抽到独立共享模块（provider-file-settings.ts），session-manager `_reloadSessionNow` 构造 newEnv 时对 codex/pi kind 调用并把 CODEX_HOME / PI_CODING_AGENT_DIR 并入新 env（文件层 env 最后合并盖过下层，与 repo://sillyhub/sillyhub-daemon/src/daemon.ts:8706? spawn 路径同模式）；顺带删 reloadWithProvider 的 claude-only 守卫（repo://sillyhub/sillyhub-daemon/src/interactive/session-manager.ts:1617）使 PROVIDER_CONFIG_CHANGED 默认供应商热切换对 codex/pi 也走确定性 reload。否决 B（payload 携带实现细节字段污染消息契约 + 热切换路径享受不到）、C（破坏 driver provider-neutral 契约）。
 
 ## D-002@v1 触发时机=仅 turn 空闲可压（轮中禁用）
 状态：implemented
@@ -195,7 +195,7 @@
 变更：2026-09-14-session-ctx-compact
 锚点：未记录
 最近确认：1aacbb3d9
-理由：复用既有 ws RPC 请求-结果通道：backend 端点 ws_hub.send_rpc(daemon_id, 'session_compact', {session_id}, timeout=15)（backend/app/modules/daemon/ws_hub.py:502-560，DaemonRpcTimeout/Offline/RemoteError 异常齐备）；daemon 侧 registerRpcHandler('session_compact')（sillyhub-daemon/src/daemon.ts:6438-6456 既有四先例）→ sessionManager.compact → CompactResult 即 RPC result。SESSION_COMPACT 控制机器三件套（backend protocol.py/control_commands.py + daemon protocol.ts/daemon.ts 三点接线）全部弃用；「无 schema 迁移 / control-dispatcher 零改动」在 v3 下为真。
+理由：复用既有 ws RPC 请求-结果通道：backend 端点 ws_hub.send_rpc(daemon_id, 'session_compact', {session_id}, timeout=15)（repo://sillyhub/backend/app/modules/daemon/ws_hub.py:502-560，DaemonRpcTimeout/Offline/RemoteError 异常齐备）；daemon 侧 registerRpcHandler('session_compact')（repo://sillyhub/sillyhub-daemon/src/daemon.ts:6438-6456 既有四先例）→ sessionManager.compact → CompactResult 即 RPC result。SESSION_COMPACT 控制机器三件套（backend protocol.py/control_commands.py + daemon protocol.ts/daemon.ts 三点接线）全部弃用；「无 schema 迁移 / control-dispatcher 零改动」在 v3 下为真。
 supersedes：D-003@v2（仅回传机制部分，其余维持）
 
 ## D-002@v1 架构=compact 同款 RPC 模式（可选 driver 方法+daemon RPC handler+caps 键）

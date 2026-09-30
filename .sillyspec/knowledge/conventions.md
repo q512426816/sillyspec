@@ -89,7 +89,7 @@ Tailwind 的 `md:` / `lg:` 等前缀按**浏览器视口**宽度生效，与组�
 
 - 桌面视口下，即使组件被塞进 320px 侧栏/折叠卡，`md:grid-cols-2` 仍强制两栏把内容挤崩。已两次踩坑（change-detail-layout-rework + ql-20260811-002：侧栏折叠卡内嵌 md: 两栏文件树/会话区挤崩，最终改宽 Dialog 承载）。
 - 规范：**容器内布局决策不用视口断点前缀**；侧栏里的宽内容改用宽 Dialog（radix Portal 脱离侧栏容器，max-w 可放开）承载，参照 `frontend/src/components/changes/detail/` 的做法。
-- 该认知已固化进代码注释与测试标题（`frontend/src/components/changes/detail/change-sessions-card.tsx:20`、`__tests__/quicklog-drawer.test.tsx:81`），review 时把侧栏内嵌组件里的 `md:` 前缀当坏味道拦。
+- 该认知已固化进代码注释与测试标题（`repo://sillyhub/frontend/src/components/changes/detail/change-sessions-card.tsx:20`、`repo://sillyhub/frontend/src/components/changes/__tests__/quicklog-drawer.test.tsx:81`），review 时把侧栏内嵌组件里的 `md:` 前缀当坏味道拦。
 
 ## 模块卡片 H1 用中文名（module-id）
 

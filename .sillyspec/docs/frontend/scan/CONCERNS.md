@@ -37,7 +37,7 @@ generator: sillyspec-scan
 
 ### 🟢 日期 toLocaleString 无漏网（zh-CN 债保持清零）
 
-- 实证：全 src `toLocaleString(` 命中里，所有 Date 调用均显式传 `"zh-CN"`（含 `frontend/src/components/charts/RuntimeUsageLineChart.tsx:61` 的多行调用）；裸 `.toLocaleString()` 仅 5 处且均为 Number 千分位（turn-timeline、agent/page、图表 tooltip），属约定保留项。来源：Grep 逐条核对。
+- 实证：全 src `toLocaleString(` 命中里，所有 Date 调用均显式传 `"zh-CN"`（含 `repo://sillyhub/frontend/src/components/charts/RuntimeUsageLineChart.tsx:61` 的多行调用）；裸 `.toLocaleString()` 仅 5 处且均为 Number 千分位（turn-timeline、agent/page、图表 tooltip），属约定保留项。来源：Grep 逐条核对。
 - 说明：2026-08-11 清零的「CI en-US 红」债未复发。
 
 ### 🟢 旧债已清：死代码 / 双 lockfile / 遗留标记

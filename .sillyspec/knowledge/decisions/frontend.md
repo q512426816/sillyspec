@@ -118,21 +118,21 @@
 ## D-001@v1
 状态：implemented
 变更：2026-09-19-tool-report-session-replay
-锚点：frontend/src/components/daemon/session-panel/session-panel-page.tsx:3474（isToolReportBody 分支）、frontend/src/components/daemon/turn-timeline.tsx:220（SessionTurnView）
+锚点：repo://sillyhub/frontend/src/components/daemon/session-panel/session-panel-page.tsx:3474（isToolReportBody 分支）、repo://sillyhub/frontend/src/components/daemon/turn-timeline.tsx:220（SessionTurnView）
 最近确认：53c67e02a
 理由：直接按普通会话样式展示会话时间线，数据源换成 agent 日志对话化消息——复用真组件（TurnTimeline）而非自造相似渲染器
 
 ## D-002@v1
 状态：implemented
 变更：2026-09-19-tool-report-session-replay
-锚点：frontend/src/components/daemon/agent-log-card.tsx:877（AgentLogCard 折叠栏——子代理入口可沿用该形态）
+锚点：repo://sillyhub/frontend/src/components/daemon/agent-log-card.tsx:877（AgentLogCard 折叠栏——子代理入口可沿用该形态）
 最近确认：53c67e02a
 理由：主日志 = 回放正文；子代理日志降级为次级「工作会话」入口（不并入正文，避免同一叙事重复两遍）；主日志多条（同 ctx 多次本地会话）时最新为主、更早折叠
 
 ## D-004@v1
 状态：implemented
 变更：2026-09-19-tool-report-session-replay
-锚点：sillyhub-daemon/src/agent-log/parse-zcode-model-io.ts:66（NormalizedLogMessage）、backend/app/modules/platform_sync/router.py:849（messages 端点）
+锚点：repo://sillyhub/sillyhub-daemon/src/agent-log/parse-zcode-model-io.ts:66（NormalizedLogMessage）、repo://sillyhub/backend/app/modules/platform_sync/router.py:849（messages 端点）
 最近确认：53c67e02a
 理由：四层打通——daemon 解析器透传 usage/turn/model/耗时 + 全会话累计 → RPC 返回结构 → 平台 GET /agent-logs/{id}/messages schema → gen:types → 前端映射到 SessionTurnView token 字段与会话用量环；老 daemon 字段可选、缺省显示「未知」；cursor-agent 回放 token 恒「未知」（数据不落盘，非解析器可解）
 
@@ -155,7 +155,7 @@
 变更：2026-09-20-agent-reply-no-bubble
 锚点：未记录
 最近确认：fbbf02f4b
-理由：同步改。旧路径（segments undefined 的孤儿 turn/旧数据）与 v2 路径若形态不一致，同一会话里新旧消息长相分叉，违背"回退不崩不空且行为等价"的既有约定（turn-timeline.tsx:671 注释）。代价仅是多改一处类名。
+理由：同步改。旧路径（segments undefined 的孤儿 turn/旧数据）与 v2 路径若形态不一致，同一会话里新旧消息长相分叉，违背"回退不崩不空且行为等价"的既有约定（repo://sillyhub/frontend/src/components/daemon/turn-timeline.tsx:671 注释）。代价仅是多改一处类名。
 
 ## D-005@v1 实现方案选 B（容器语义重构）
 状态：implemented
@@ -193,7 +193,7 @@ supersedes：D-001@v1
 变更：2026-09-08-session-list-liveness-dot
 锚点：未记录
 最近确认：35f3d6528
-理由：行尾**只加 ~18px 状态小灯**（复用 `liveness-badge.tsx` 的 LivenessDot 与 LIVENESS_META，不重写五态视觉）；**不新增列、不改列表布局**；完整信息只出现在悬停卡；无关联日志的会话不显示灯；色值只用语义阶。悬停卡用 **antd Popover（trigger=hover，默认 portal 渲染）**包住 18px 小灯实现——SessionRow 根节点 `overflow-hidden` 会裁剪 absolute 定位卡片（session-list-panel.tsx:2640，Grill BL-02），portal 渲染是唯一不破行布局的落法；悬停卡内容为**组合渲染**（LIVENESS_META 状态名 + 静默时长相对时间（last_event_at）+ 证据摘要（state_evidence 截断）+ 推导时间（state_derived_at）），不直接用 livenessTitle 单行字符串（其为原生 tooltip 拼接形态）；「关联」行删除（AgentLogListItem 无 change_key/quick_id 数据源，Grill CC-04）。
+理由：行尾**只加 ~18px 状态小灯**（复用 `liveness-badge.tsx` 的 LivenessDot 与 LIVENESS_META，不重写五态视觉）；**不新增列、不改列表布局**；完整信息只出现在悬停卡；无关联日志的会话不显示灯；色值只用语义阶。悬停卡用 **antd Popover（trigger=hover，默认 portal 渲染）**包住 18px 小灯实现——SessionRow 根节点 `overflow-hidden` 会裁剪 absolute 定位卡片（repo://sillyhub/frontend/src/components/sessions/session-list-panel.tsx:2640，Grill BL-02），portal 渲染是唯一不破行布局的落法；悬停卡内容为**组合渲染**（LIVENESS_META 状态名 + 静默时长相对时间（last_event_at）+ 证据摘要（state_evidence 截断）+ 推导时间（state_derived_at）），不直接用 livenessTitle 单行字符串（其为原生 tooltip 拼接形态）；「关联」行删除（AgentLogListItem 无 change_key/quick_id 数据源，Grill CC-04）。
 
 ## D-001@v1 根治方案选 A——全链强制 workspace_id + daemon 映射查根
 状态：implemented
@@ -214,7 +214,7 @@ supersedes：D-001@v1
 变更：2026-09-11-session-provider-switch-codex-pi
 锚点：frontend/src/components/sessions/session-config-bar.tsx
 最近确认：225dd771d
-理由：用户裁决：按引擎过滤。codex 会话只列 codex kind 供应商，pi 只列 pi kind，claude 只列 claude kind。顺手修掉现状「全量展示 + 选错 kind 撞 backend 422（inject_gates.py:556 agent_kind 不匹配）」的坑。
+理由：用户裁决：按引擎过滤。codex 会话只列 codex kind 供应商，pi 只列 pi kind，claude 只列 claude kind。顺手修掉现状「全量展示 + 选错 kind 撞 backend 422（repo://sillyhub/backend/app/modules/daemon/session/service/inject_gates.py:556 agent_kind 不匹配）」的坑。
 
 ## D-002@v1 触发时机=仅 turn 空闲可压（轮中禁用）
 状态：implemented

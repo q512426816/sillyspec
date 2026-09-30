@@ -153,7 +153,7 @@ session / patch / audit / host_fs 子包；另有独立活 service：`lease_serv
     第 4-6 字节 ≠ EF BB BF，违反即构建失败）。dist_router 用 `read_text(utf-8-sig)` 读模板
     以**剥掉 BOM**（防 `\ufeff` 污染 `irm | iex` 管道——残留 BOM 会让用户首行注释被当
     代码执行，报"无法将 Windows 项识别为 cmdlet"），响应
-    `application/x-powershell; charset=utf-8`；测试锚点 `backend/tests/test_daemon_dist.py::test_install_ps1`
+    `application/x-powershell; charset=utf-8`；测试锚点 `repo://sillyhub/backend/tests/test_daemon_dist.py::test_install_ps1`
     （fixture 模板带单 BOM + 断言响应体不以 `\ufeff` 开头）。
   - nginx 部署契约（2026-08-26 修复）：宿主机 nginx（`/etc/nginx/sites-enabled/crrcdt`）
     把整个 `location /daemon/` **代理到后端 8001**（install.sh / install.ps1 / latest.json /
@@ -286,7 +286,7 @@ stage 完成(形态A 留痕): gate task 只落 gate_result + gate_status=decided
 
 ## 2026-09-12-chat-turn-auto-recovery 增量
 
-- **三分支自动恢复**（`session/service/auto_resume.py::maybe_auto_recover_failed_turn`，close_run_steps commit 后调用，取代 ql-20260903-011 auth-transient 专用钩子并入统一判定序）：G0 总门（failed/active/开关 auto_resume_interrupted/主会话 chat/最新轮 created_at+id/非空 user_input/排队∪定时双表 origin 幂等）→ A quota_exceeded+reset_at → 定时消息（dispatch_at=reset+120s，QUOTA_NUDGE_PROMPT，quota 连续链上限 3）；B 瞬时四类（rate_limited/timeout/network/provider_error）或 CLI 合成鉴权 raw → 干净轮 G5 截断/G6 附件守卫+紧邻前 run 同型同输入（前驱取「排除自身后 G4 同款排序首行」——created_at 严格小于在撞值时取错前驱）+auto_resume_of 紧链上限 2（2026-09-13：交替错误类型如 429↔502 永不同型击穿同型守卫，链长兜底停跑并写 hint 交回用户）+同文 pending 防叠加 → 原 prompt 重放；有工具活动 → 紧链上限 2 → RESUME_NUDGE_PROMPT（不带原任务——CLI 进程内上下文完整，重放诱导从头执行）；C 其余不动作。
+- **三分支自动恢复**（`repo://sillyhub/backend/app/modules/daemon/session/service/auto_resume.py::maybe_auto_recover_failed_turn`，close_run_steps commit 后调用，取代 ql-20260903-011 auth-transient 专用钩子并入统一判定序）：G0 总门（failed/active/开关 auto_resume_interrupted/主会话 chat/最新轮 created_at+id/非空 user_input/排队∪定时双表 origin 幂等）→ A quota_exceeded+reset_at → 定时消息（dispatch_at=reset+120s，QUOTA_NUDGE_PROMPT，quota 连续链上限 3）；B 瞬时四类（rate_limited/timeout/network/provider_error）或 CLI 合成鉴权 raw → 干净轮 G5 截断/G6 附件守卫+紧邻前 run 同型同输入（前驱取「排除自身后 G4 同款排序首行」——created_at 严格小于在撞值时取错前驱）+auto_resume_of 紧链上限 2（2026-09-13：交替错误类型如 429↔502 永不同型击穿同型守卫，链长兜底停跑并写 hint 交回用户）+同文 pending 防叠加 → 原 prompt 重放；有工具活动 → 紧链上限 2 → RESUME_NUDGE_PROMPT（不带原任务——CLI 进程内上下文完整，重放诱导从头执行）；C 其余不动作。
 - **scheduled_messages.origin 列**（migration 20260912110000）：'auto_resume:<源 run uuid>' = 系统排期；派发链（scheduled_send._dispatch_scheduled_entry）origin 解析 → G10 超越守卫（source 后有更新 run → cancelled/superseded）→ inject_session_as_service 透传 auto_resume_of（新参，SessionService 壳同步）→ 新 run metadata_.auto_resume_of；忙轮转排队经 _handle_busy_turn 落排队行 origin（R-08）。
 - **ModelErrorDTO.reset_at**（soft-add）：error_detail JSON 携带，quota 分支与前端消费。
 ## 2026-09-14-session-export 增量（ql-20260915-003-7b5f）
