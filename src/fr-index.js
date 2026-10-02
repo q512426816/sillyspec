@@ -789,8 +789,54 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
 
 // ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────
 // 查询核单源双消费：flow 侧 rotSuspectFlow 出收口 advisory 与遥测（信号面）；verify 侧
-// collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）。覆盖判定与
-// rot 完全同口径：来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
+// collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）；2026-10-03 起
+// rankFrDigestForInjection 作第三消费方（注入排序 TierA）。覆盖判定与 rot 完全同口径：
+// 来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
+
+/** 覆盖三分判定（2026-10-03-fr-inject-relevance-rank 自 activeFrCoverageHits 抽取）：
+ *  active FR × 触碰文件 → hits（覆盖相交）/ skip（覆盖可判无交集）/ unknown（覆盖源缺失）。
+ *  判据逐字不变——三消费方（rot/测试门/注入排序）共用同一实现，防口径漂移。
+ *  covCache 供调用方跨查询复用归档读取。 */
+function partitionActiveByCoverage({ archiveRoot, frs, changed, covCache = new Map() }) {
+  const hits = []
+  const unknownSources = new Set()
+  let skip = 0
+  let unknownFrCount = 0
+  for (const f of frs) {
+    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
+    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
+    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
+    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); unknownFrCount++; continue }
+    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
+    if (hit) hits.push({ domain: f.domain, id: f.id, title: f.title, change: f.change, bindings: f.bindings || [], coverage: cov })
+    else skip++
+  }
+  return { hits, skip, unknownFrCount, unknownSources: [...unknownSources] }
+}
+
+/**
+ * 注入排序（2026-10-03-fr-inject-relevance-rank）：取代「文件序前 N」——域增长后注入面恒为
+ * 每域最老 N 条，新立规格与覆盖命中的老规格均不可见（平台 backend 域 480 条实证：9 月新立
+ * 455 条永不出现在注入里）。两档：TierA=覆盖命中（partitionActiveByCoverage 同口径）置前；
+ * TierB=其余按来源变更日期新→旧（`变更：` 字段 YYYY-MM-DD 前缀；无日期/异形来源居尾——存量
+ * 43 条非日期形态实证）；同档 tie-break 全局 id 升序。纯排序不删条目，cap/指针行由消费方裁。
+ * @returns {{ ranked: Array, tierAIds: Set<string> }}
+ */
+export function rankFrDigestForInjection({ archiveRoot, frs, changed = [], covCache = new Map() }) {
+  const normalized = (Array.isArray(changed) ? changed : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
+  const { hits } = partitionActiveByCoverage({ archiveRoot, frs, changed: normalized, covCache })
+  const tierAIds = new Set(hits.map((h) => h.id))
+  const dateOf = (f) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(f.change || '')); return m ? m[1] : '' }
+  const byRecency = (a, b) => {
+    const da = dateOf(a)
+    const db = dateOf(b)
+    if (da !== db) return da < db ? 1 : -1 // 日期新→旧；空串（无日期）居尾
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  }
+  const tierA = frs.filter((f) => tierAIds.has(f.id)).sort(byRecency)
+  const tierB = frs.filter((f) => !tierAIds.has(f.id)).sort(byRecency)
+  return { ranked: [...tierA, ...tierB], tierAIds }
+}
 
 /**
  * 触达域内 active FR 的强命中集。
@@ -807,21 +853,8 @@ export function activeFrCoverageHits({ specBase, change = null, changeDir = null
   if (domains.length === 0) return { domains: [], hits: [], unknownSources: [] }
   const frs = readActiveFrDigest(knowledgeRoot, domains)
   if (frs.length === 0) return { domains, hits: [], unknownSources: [] }
-  const hits = []
-  const unknownSources = new Set()
-  const covCache = new Map()
-  let skip = 0
-  let unknownFrCount = 0
-  for (const f of frs) {
-    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
-    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
-    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
-    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); unknownFrCount++; continue }
-    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
-    if (hit) hits.push({ domain: f.domain, id: f.id, title: f.title, change: f.change, bindings: f.bindings || [], coverage: cov })
-    else skip++
-  }
-  return { domains, hits, unknownSources: [...unknownSources], unknownFrCount, skip, total: frs.length }
+  const { hits, skip, unknownFrCount, unknownSources } = partitionActiveByCoverage({ archiveRoot, frs, changed })
+  return { domains, hits, unknownSources, unknownFrCount, skip, total: frs.length }
 }
 
 /**

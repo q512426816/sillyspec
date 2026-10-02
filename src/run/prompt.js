@@ -411,13 +411,26 @@ export const FR_INDEX_DIGEST_MAX_ENTRIES = 8
 export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
   try {
     const { discoverModuleIndex } = await import('../decision-distill.js')
-    const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
+    const { resolveTouchedDomains, readActiveFrDigest, rankFrDigestForInjection, deliverableFilesFromDesignText } = await import('../fr-index.js')
     const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
     const knowledgeRoot = join(frSpecBase, 'knowledge')
     const domainsAll = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
     // unmapped 是未归类停车场非行为域，不进写作 prompt——与 flowKnowledgeDigest / frDupGateFlow 同口径
     const domains = domainsAll.filter((d) => d !== 'unmapped')
     const entries = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
+    // 注入排序（2026-10-03-fr-inject-relevance-rank）：TierA 覆盖命中（🎯）置前、TierB 日期新→旧
+    // ——取代文件序前 N（域增长后注入面恒为最老 N 条，新立规格永不可见）。触碰文件面与域路由
+    // 同源（design 交付清单）；fail-soft：清单缺席=纯 TierB。
+    let tierAIds = new Set()
+    let ranked = entries
+    if (entries.length > 0) {
+      try {
+        const touched = deliverableFilesFromDesignText(readFileSync(join(frChangeDir, 'design.md'), 'utf8'))
+        if (touched.length > 0) {
+          ({ ranked, tierAIds } = rankFrDigestForInjection({ archiveRoot: join(frSpecBase, 'changes', 'archive'), frs: entries, changed: touched }))
+        }
+      } catch { /* design 缺席/不可读=无触碰面，保持文件序 */ }
+    }
     const truncated = Math.max(0, entries.length - FR_INDEX_DIGEST_MAX_ENTRIES)
     let text
     if (domains.length === 0) {
@@ -425,7 +438,6 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
       // 注意 unmapped 是 resolveTouchedDomains 的零命中兜底，真域命中时不与之并存。
       let hasDeliverableRows = false
       try {
-        const { deliverableFilesFromDesignText } = await import('../fr-index.js')
         hasDeliverableRows = deliverableFilesFromDesignText(
           readFileSync(join(frChangeDir, 'design.md'), 'utf8')).length > 0
       } catch { /* design 缺席/不可读=无清单态 */ }
@@ -435,10 +447,10 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
     } else if (entries.length === 0) {
       text = '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
     } else {
-      const lines = entries.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
+      const lines = ranked.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id}${tierAIds.has(e.id) ? ' 🎯' : ''} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
       if (truncated > 0) lines.push(`（+${truncated} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read）`)
       lines.push('')
-      lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
+      lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。' + (tierAIds.size > 0 ? '🎯=与本次触碰文件有覆盖交集（TierA 优先注入）。' : ''))
       text = lines.join('\n')
     }
     return {
@@ -447,6 +459,7 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
         type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
         rendered: entries.length - truncated, truncated,
         unmappedFiltered: domainsAll.length !== domains.length,
+        tierA: tierAIds.size,
       },
     }
   } catch (e) {

@@ -188,16 +188,39 @@ function draftProposal({ change, input, criteria }) {
  * 成功标准 → GWT 骨架预填（governance-autopilot，R20 实证：agent 手写 FR +12 轮 Edit）——
  * 从标准文本机械推导三段。骨架进场 agent 可覆盖（消灭空槽冷启动，agent 只需改错的不需从零写）。
  */
+/** When/Then 分隔符扫描（2026-10-03-fr-inject-relevance-rank）：只在括号深度 0 处生效——
+ * 括号内箭头/「则/使得」不切（实证：平台仓 2026-09-30-breadcrumb-dedupe-zh FR-03 的
+ * 「（changes→变更中心 等）」被当分隔符，When=半截括号、Then=后半截）。返回 [when, then] 或
+ * null（无深度 0 切分点）。导出供 test 直测。 */
+export function splitGwtSeparator(criterion) {
+  const OPEN = new Set(['（', '(', '【', '[', '「', '『'])
+  const CLOSE = new Set(['）', ')', '】', ']', '」', '』'])
+  const s = String(criterion || '')
+  let depth = 0
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (OPEN.has(ch)) { depth++; continue }
+    if (CLOSE.has(ch)) { if (depth > 0) depth--; continue }
+    if (depth > 0) continue
+    if (ch === '→' || ch === '➜') return [s.slice(0, i), s.slice(i + 1)]
+    if (ch === '则') return [s.slice(0, i), s.slice(i + 1)]
+    if (ch === '使' && s.startsWith('使得', i)) return [s.slice(0, i), s.slice(i + 2)]
+  }
+  return null
+}
+
 function draftGwtSkeleton(criterion, index) {
   const c = String(criterion || '').trim()
   const id = `FR-${String(index + 1).padStart(2, '0')}`
   if (!c) return `### ${id}: （待描述）\nGiven 系统就绪\nWhen 执行目标行为\nThen 达成预期`
   const kw = c.match(/(api|端点|接口|存储|迁移|鉴权|幂等|上限|正序|增量|append-only|前端|组件|折叠|高亮|徽标|轮询|测试|E2E|curl)/gi)
   const given = kw && kw.length > 0 ? `Given ${[...new Set(kw.map(k => k.toLowerCase()))].slice(0, 3).join(' / ')} 相关模块就绪` : 'Given 系统就绪'
-  const arrowSplit = c.split(/[→➜]|则|使得/)
-  const when = (arrowSplit[0] || c).trim().slice(0, 80)
-  const then = (arrowSplit[1] || '行为符合本条标准描述').trim().slice(0, 80)
-  return `### ${id}: ${c.slice(0, 50)}\n${given}\nWhen ${when}\nThen ${then}`
+  const parts = splitGwtSeparator(c)
+  const when = (parts && parts[0] ? parts[0] : c).trim().slice(0, 80)
+  const then = (parts && parts[1] ? parts[1] : '行为符合本条标准描述').trim().slice(0, 80)
+  // 标题不截断（2026-10-03-fr-inject-relevance-rank）：旧 slice(0,50) 硬切留永久残句（平台仓
+  // FR-components-shared-038「…专业术语除」实证）且随归档固化进知识索引——标题全量保留。
+  return `### ${id}: ${c}\n${given}\nWhen ${when}\nThen ${then}`
 }
 
 function draftRequirements({ change, criteria, input }) {

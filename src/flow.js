@@ -146,18 +146,31 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
   try {
     const knowledgeRoot = join(specBase, 'knowledge')
     const { discoverModuleIndex } = await import('./decision-distill.js')
-    const { resolveTouchedDomains, readActiveFrDigest } = await import('./fr-index.js')
+    const { resolveTouchedDomains, readActiveFrDigest, rankFrDigestForInjection, deliverableFilesFromDesignText } = await import('./fr-index.js')
     const moduleIndex = discoverModuleIndex(knowledgeRoot)
     let domains = []
     let basis = ''
+    let touched = []
     if (Array.isArray(filesOverride) && filesOverride.length > 0) {
       domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride, knowledgeRoot).filter((d) => d !== 'unmapped')
       basis = filesOverride.length > 0 ? 'input/diff 路径' : ''
+      touched = filesOverride
     } else if (existsSync(join(changeDir, 'design.md'))) {
       domains = resolveTouchedDomains(changeDir, moduleIndex, null, knowledgeRoot).filter((d) => d !== 'unmapped')
       basis = 'design.md 交付清单'
+      try {
+        touched = deliverableFilesFromDesignText(readFileSync(join(changeDir, 'design.md'), 'utf8'))
+      } catch { /* design 不可读=无触碰面 */ }
     }
     const frs = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
+    // 注入排序（2026-10-03-fr-inject-relevance-rank）：TierA 覆盖命中（🎯）置前、TierB 日期新→旧
+    // ——取代文件序前 8（域增长后注入面恒为最老 8 条，新立规格永不可见）。触碰面与域路由同源；
+    // fail-soft：两面皆缺=纯 TierB（保持 readActiveFrDigest 文件序）。
+    let tierAIds = new Set()
+    let frRanked = frs
+    if (frs.length > 0 && touched.length > 0) {
+      ({ ranked: frRanked, tierAIds } = rankFrDigestForInjection({ archiveRoot: join(specBase, 'changes', 'archive'), frs, changed: touched }))
+    }
     summary.domains = domains
     summary.frCount = frs.length
     lines.push(`🧠 知识注入（轻量道读取面——现行 FR/否决决策/已知坑，动手前扫一眼）：`)
@@ -169,14 +182,14 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input, 
       if (frs.length === 0) {
         lines.push(`   现行 FR：（该域暂无 active FR 索引条目——本变更大概率是首批需求）`)
       } else {
-        for (const f of frs.slice(0, 8)) {
-          lines.push(`   - ${f.id} ${f.title}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
+        for (const f of frRanked.slice(0, 8)) {
+          lines.push(`   - ${f.id} ${f.title}${tierAIds.has(f.id) ? ' 🎯' : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
         }
-        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件）`)
+        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件${tierAIds.size > 0 ? '；🎯=与本次触碰文件有覆盖交集' : ''}）`)
         // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
         // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
-        const unconfirmed = frs.filter((f) => f.unconfirmed > 0).slice(0, 2)
+        const unconfirmed = frRanked.filter((f) => f.unconfirmed > 0).slice(0, 2)
         if (unconfirmed.length > 0) {
           lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
         }

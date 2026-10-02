@@ -303,3 +303,37 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
   assert.equal(r.status, 0, `flow done 应过（AGENT 槽=合法书写）: ${r.stdout}\n${r.stderr}`)
   rmSync(cwd, { recursive: true, force: true })
 })
+
+// ── ⑦ GWT 骨架预填两缺陷修复（2026-10-03-fr-inject-relevance-rank）──────────────────
+// 实证来源：平台仓 2026-09-30-breadcrumb-dedupe-zh——标题 50 字符硬截断留永久残句
+// （FR-components-shared-038「…专业术语除」）；括号内箭头「（changes→变更中心 等）」被当
+// When/Then 分隔符，骨架错位。
+
+test('⑦a GWT 骨架：长标题不截断（全文入 ### FR-NN: 行）', () => {
+  const long = '顶栏面包屑路由段名全部映射为中文（changes→变更中心 等，MCP/Git/API 等专业术语除外）——段名标签与侧边栏菜单既有命名一致不新造叫法'
+  assert.ok(long.length > 50, '夹具前提：标题超 50 字符')
+  const { root, changeDir, runtimeRoot } = makeFixtureDir()
+  try {
+    draftAll({ changeDir, change: 'c1', input: `动机：x\n成功标准：\n- ${long}\n`, withTasks: false, runtimeRoot })
+    const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+    assert.ok(reqs.includes(`### FR-01: ${long}`), '标题保留全文（旧实现 slice(0,50) 截断）')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('⑦b GWT 骨架：括号内 → 不切 When/Then；括号外 →/则/使得 仍切分', () => {
+  const { root, changeDir, runtimeRoot } = makeFixtureDir()
+  try {
+    draftAll({
+      changeDir, change: 'c1', withTasks: false, runtimeRoot,
+      input: '动机：x\n成功标准：\n- 段名映射为中文（changes→变更中心 等，术语除外）\n- 点击变更中心→列表刷新\n- 勾选复选框则按钮激活\n- 术语命中使得高亮生效\n',
+    })
+    const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
+    // 括号内箭头：不切——When 含完整括号内容，Then 占位
+    assert.ok(reqs.includes('When 段名映射为中文（changes→变更中心 等，术语除外）'), '括号内 → 不触发切分')
+    assert.ok(reqs.includes('Then 行为符合本条标准描述'), '无切分点走占位兜底')
+    // 括号外分隔符：既有切分语义保留
+    assert.ok(reqs.includes('When 点击变更中心') && reqs.includes('Then 列表刷新'), '括号外 → 仍切分')
+    assert.ok(reqs.includes('When 勾选复选框') && reqs.includes('Then 按钮激活'), '括号外 则 仍切分')
+    assert.ok(reqs.includes('When 术语命中') && reqs.includes('Then 高亮生效'), '括号外 使得 仍切分')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
