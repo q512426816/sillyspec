@@ -1,0 +1,625 @@
+diff --git a/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/flow-state.yaml b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/flow-state.yaml
+new file mode 100644
+index 00000000..7a8b7c10
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 176363b89a14983266c2feaa98a00b44bbdb0df2
++updatedAt: '2026-10-02T16:04:16.328Z'
++baseline_sha256: a82ef54d828f2017d4c8e40744ec03520cd3e59827369f7637179892f4b6a17b
++
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index a3539d79..c54a98d5 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -188,16 +188,39 @@ function draftProposal({ change, input, criteria }) {
+  * 成功标准 → GWT 骨架预填（governance-autopilot，R20 实证：agent 手写 FR +12 轮 Edit）——
+  * 从标准文本机械推导三段。骨架进场 agent 可覆盖（消灭空槽冷启动，agent 只需改错的不需从零写）。
+  */
++/** When/Then 分隔符扫描（2026-10-03-fr-inject-relevance-rank）：只在括号深度 0 处生效——
++ * 括号内箭头/「则/使得」不切（实证：平台仓 2026-09-30-breadcrumb-dedupe-zh FR-03 的
++ * 「（changes→变更中心 等）」被当分隔符，When=半截括号、Then=后半截）。返回 [when, then] 或
++ * null（无深度 0 切分点）。导出供 test 直测。 */
++export function splitGwtSeparator(criterion) {
++  const OPEN = new Set(['（', '(', '【', '[', '「', '『'])
++  const CLOSE = new Set(['）', ')', '】', ']', '」', '』'])
++  const s = String(criterion || '')
++  let depth = 0
++  for (let i = 0; i < s.length; i++) {
++    const ch = s[i]
++    if (OPEN.has(ch)) { depth++; continue }
++    if (CLOSE.has(ch)) { if (depth > 0) depth--; continue }
++    if (depth > 0) continue
++    if (ch === '→' || ch === '➜') return [s.slice(0, i), s.slice(i + 1)]
++    if (ch === '则') return [s.slice(0, i), s.slice(i + 1)]
++    if (ch === '使' && s.startsWith('使得', i)) return [s.slice(0, i), s.slice(i + 2)]
++  }
++  return null
++}
++
+ function draftGwtSkeleton(criterion, index) {
+   const c = String(criterion || '').trim()
+   const id = `FR-${String(index + 1).padStart(2, '0')}`
+   if (!c) return `### ${id}: （待描述）\nGiven 系统就绪\nWhen 执行目标行为\nThen 达成预期`
+   const kw = c.match(/(api|端点|接口|存储|迁移|鉴权|幂等|上限|正序|增量|append-only|前端|组件|折叠|高亮|徽标|轮询|测试|E2E|curl)/gi)
+   const given = kw && kw.length > 0 ? `Given ${[...new Set(kw.map(k => k.toLowerCase()))].slice(0, 3).join(' / ')} 相关模块就绪` : 'Given 系统就绪'
+-  const arrowSplit = c.split(/[→➜]|则|使得/)
+-  const when = (arrowSplit[0] || c).trim().slice(0, 80)
+-  const then = (arrowSplit[1] || '行为符合本条标准描述').trim().slice(0, 80)
+-  return `### ${id}: ${c.slice(0, 50)}\n${given}\nWhen ${when}\nThen ${then}`
++  const parts = splitGwtSeparator(c)
++  const when = (parts && parts[0] ? parts[0] : c).trim().slice(0, 80)
++  const then = (parts && parts[1] ? parts[1] : '行为符合本条标准描述').trim().slice(0, 80)
++  // 标题不截断（2026-10-03-fr-inject-relevance-rank）：旧 slice(0,50) 硬切留永久残句（平台仓
++  // FR-components-shared-038「…专业术语除」实证）且随归档固化进知识索引——标题全量保留。
++  return `### ${id}: ${c}\n${given}\nWhen ${when}\nThen ${then}`
+ }
+ 
+ function draftRequirements({ change, criteria, input }) {
+diff --git a/src/flow.js b/src/flow.js
+index 1cd9e751..78947a94 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -146,18 +146,31 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+   try {
+     const knowledgeRoot = join(specBase, 'knowledge')
+     const { discoverModuleIndex } = await import('./decision-distill.js')
+-    const { resolveTouchedDomains, readActiveFrDigest } = await import('./fr-index.js')
++    const { resolveTouchedDomains, readActiveFrDigest, rankFrDigestForInjection, deliverableFilesFromDesignText } = await import('./fr-index.js')
+     const moduleIndex = discoverModuleIndex(knowledgeRoot)
+     let domains = []
+     let basis = ''
++    let touched = []
+     if (Array.isArray(filesOverride) && filesOverride.length > 0) {
+       domains = resolveTouchedDomains(changeDir, moduleIndex, filesOverride, knowledgeRoot).filter((d) => d !== 'unmapped')
+       basis = filesOverride.length > 0 ? 'input/diff 路径' : ''
++      touched = filesOverride
+     } else if (existsSync(join(changeDir, 'design.md'))) {
+       domains = resolveTouchedDomains(changeDir, moduleIndex, null, knowledgeRoot).filter((d) => d !== 'unmapped')
+       basis = 'design.md 交付清单'
++      try {
++        touched = deliverableFilesFromDesignText(readFileSync(join(changeDir, 'design.md'), 'utf8'))
++      } catch { /* design 不可读=无触碰面 */ }
+     }
+     const frs = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
++    // 注入排序（2026-10-03-fr-inject-relevance-rank）：TierA 覆盖命中（🎯）置前、TierB 日期新→旧
++    // ——取代文件序前 8（域增长后注入面恒为最老 8 条，新立规格永不可见）。触碰面与域路由同源；
++    // fail-soft：两面皆缺=纯 TierB（保持 readActiveFrDigest 文件序）。
++    let tierAIds = new Set()
++    let frRanked = frs
++    if (frs.length > 0 && touched.length > 0) {
++      ({ ranked: frRanked, tierAIds } = rankFrDigestForInjection({ archiveRoot: join(specBase, 'changes', 'archive'), frs, changed: touched }))
++    }
+     summary.domains = domains
+     summary.frCount = frs.length
+     lines.push(`🧠 知识注入（轻量道读取面——现行 FR/否决决策/已知坑，动手前扫一眼）：`)
+@@ -169,14 +182,14 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+       if (frs.length === 0) {
+         lines.push(`   现行 FR：（该域暂无 active FR 索引条目——本变更大概率是首批需求）`)
+       } else {
+-        for (const f of frs.slice(0, 8)) {
+-          lines.push(`   - ${f.id} ${f.title}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
++        for (const f of frRanked.slice(0, 8)) {
++          lines.push(`   - ${f.id} ${f.title}${tierAIds.has(f.id) ? ' 🎯' : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
+         }
+-        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件）`)
++        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件${tierAIds.size > 0 ? '；🎯=与本次触碰文件有覆盖交集' : ''}）`)
+         // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
+         // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
+         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
+-        const unconfirmed = frs.filter((f) => f.unconfirmed > 0).slice(0, 2)
++        const unconfirmed = frRanked.filter((f) => f.unconfirmed > 0).slice(0, 2)
+         if (unconfirmed.length > 0) {
+           lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
+         }
+diff --git a/src/fr-index.js b/src/fr-index.js
+index f11ad724..e7fa4059 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -789,8 +789,54 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
+ 
+ // ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────
+ // 查询核单源双消费：flow 侧 rotSuspectFlow 出收口 advisory 与遥测（信号面）；verify 侧
+-// collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）。覆盖判定与
+-// rot 完全同口径：来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
++// collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）；2026-10-03 起
++// rankFrDigestForInjection 作第三消费方（注入排序 TierA）。覆盖判定与 rot 完全同口径：
++// 来源变更 patch 文件 ∪ 绑定 tests（剥用例锚）∩ 本次触碰文件 ≠ ∅。
++
++/** 覆盖三分判定（2026-10-03-fr-inject-relevance-rank 自 activeFrCoverageHits 抽取）：
++ *  active FR × 触碰文件 → hits（覆盖相交）/ skip（覆盖可判无交集）/ unknown（覆盖源缺失）。
++ *  判据逐字不变——三消费方（rot/测试门/注入排序）共用同一实现，防口径漂移。
++ *  covCache 供调用方跨查询复用归档读取。 */
++function partitionActiveByCoverage({ archiveRoot, frs, changed, covCache = new Map() }) {
++  const hits = []
++  const unknownSources = new Set()
++  let skip = 0
++  let unknownFrCount = 0
++  for (const f of frs) {
++    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
++    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
++    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
++    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); unknownFrCount++; continue }
++    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
++    if (hit) hits.push({ domain: f.domain, id: f.id, title: f.title, change: f.change, bindings: f.bindings || [], coverage: cov })
++    else skip++
++  }
++  return { hits, skip, unknownFrCount, unknownSources: [...unknownSources] }
++}
++
++/**
++ * 注入排序（2026-10-03-fr-inject-relevance-rank）：取代「文件序前 N」——域增长后注入面恒为
++ * 每域最老 N 条，新立规格与覆盖命中的老规格均不可见（平台 backend 域 480 条实证：9 月新立
++ * 455 条永不出现在注入里）。两档：TierA=覆盖命中（partitionActiveByCoverage 同口径）置前；
++ * TierB=其余按来源变更日期新→旧（`变更：` 字段 YYYY-MM-DD 前缀；无日期/异形来源居尾——存量
++ * 43 条非日期形态实证）；同档 tie-break 全局 id 升序。纯排序不删条目，cap/指针行由消费方裁。
++ * @returns {{ ranked: Array, tierAIds: Set<string> }}
++ */
++export function rankFrDigestForInjection({ archiveRoot, frs, changed = [], covCache = new Map() }) {
++  const normalized = (Array.isArray(changed) ? changed : []).map((f) => String(f || '').replace(/\\/g, '/')).filter(Boolean)
++  const { hits } = partitionActiveByCoverage({ archiveRoot, frs, changed: normalized, covCache })
++  const tierAIds = new Set(hits.map((h) => h.id))
++  const dateOf = (f) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(f.change || '')); return m ? m[1] : '' }
++  const byRecency = (a, b) => {
++    const da = dateOf(a)
++    const db = dateOf(b)
++    if (da !== db) return da < db ? 1 : -1 // 日期新→旧；空串（无日期）居尾
++    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
++  }
++  const tierA = frs.filter((f) => tierAIds.has(f.id)).sort(byRecency)
++  const tierB = frs.filter((f) => !tierAIds.has(f.id)).sort(byRecency)
++  return { ranked: [...tierA, ...tierB], tierAIds }
++}
+ 
+ /**
+  * 触达域内 active FR 的强命中集。
+@@ -807,21 +853,8 @@ export function activeFrCoverageHits({ specBase, change = null, changeDir = null
+   if (domains.length === 0) return { domains: [], hits: [], unknownSources: [] }
+   const frs = readActiveFrDigest(knowledgeRoot, domains)
+   if (frs.length === 0) return { domains, hits: [], unknownSources: [] }
+-  const hits = []
+-  const unknownSources = new Set()
+-  const covCache = new Map()
+-  let skip = 0
+-  let unknownFrCount = 0
+-  for (const f of frs) {
+-    if (!covCache.has(f.change)) covCache.set(f.change, frCoverageFiles({ archiveRoot, changeName: f.change }))
+-    // bindings 可携带用例锚（2026-09-26-binding-anchor-fidelity）——覆盖判定按文件面取值走剥锚
+-    const cov = new Set([...(covCache.get(f.change) || []), ...(Array.isArray(f.bindings) ? f.bindings.map((b) => testAnchorFile(b)) : [])])
+-    if (cov.size === 0) { unknownSources.add(f.change || '（无来源变更）'); unknownFrCount++; continue }
+-    const hit = [...cov].some((p) => changed.some((c) => c === p || c.startsWith(p.endsWith('/') ? p : p + '/')))
+-    if (hit) hits.push({ domain: f.domain, id: f.id, title: f.title, change: f.change, bindings: f.bindings || [], coverage: cov })
+-    else skip++
+-  }
+-  return { domains, hits, unknownSources: [...unknownSources], unknownFrCount, skip, total: frs.length }
++  const { hits, skip, unknownFrCount, unknownSources } = partitionActiveByCoverage({ archiveRoot, frs, changed })
++  return { domains, hits, unknownSources, unknownFrCount, skip, total: frs.length }
+ }
+ 
+ /**
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index b7395c71..00d67330 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -411,13 +411,26 @@ export const FR_INDEX_DIGEST_MAX_ENTRIES = 8
+ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+   try {
+     const { discoverModuleIndex } = await import('../decision-distill.js')
+-    const { resolveTouchedDomains, readActiveFrDigest } = await import('../fr-index.js')
++    const { resolveTouchedDomains, readActiveFrDigest, rankFrDigestForInjection, deliverableFilesFromDesignText } = await import('../fr-index.js')
+     const frChangeDir = join(frSpecBase, 'changes', String(changeName || ''))
+     const knowledgeRoot = join(frSpecBase, 'knowledge')
+     const domainsAll = resolveTouchedDomains(frChangeDir, discoverModuleIndex(knowledgeRoot))
+     // unmapped 是未归类停车场非行为域，不进写作 prompt——与 flowKnowledgeDigest / frDupGateFlow 同口径
+     const domains = domainsAll.filter((d) => d !== 'unmapped')
+     const entries = domains.length > 0 ? readActiveFrDigest(knowledgeRoot, domains) : []
++    // 注入排序（2026-10-03-fr-inject-relevance-rank）：TierA 覆盖命中（🎯）置前、TierB 日期新→旧
++    // ——取代文件序前 N（域增长后注入面恒为最老 N 条，新立规格永不可见）。触碰文件面与域路由
++    // 同源（design 交付清单）；fail-soft：清单缺席=纯 TierB。
++    let tierAIds = new Set()
++    let ranked = entries
++    if (entries.length > 0) {
++      try {
++        const touched = deliverableFilesFromDesignText(readFileSync(join(frChangeDir, 'design.md'), 'utf8'))
++        if (touched.length > 0) {
++          ({ ranked, tierAIds } = rankFrDigestForInjection({ archiveRoot: join(frSpecBase, 'changes', 'archive'), frs: entries, changed: touched }))
++        }
++      } catch { /* design 缺席/不可读=无触碰面，保持文件序 */ }
++    }
+     const truncated = Math.max(0, entries.length - FR_INDEX_DIGEST_MAX_ENTRIES)
+     let text
+     if (domains.length === 0) {
+@@ -425,7 +438,6 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+       // 注意 unmapped 是 resolveTouchedDomains 的零命中兜底，真域命中时不与之并存。
+       let hasDeliverableRows = false
+       try {
+-        const { deliverableFilesFromDesignText } = await import('../fr-index.js')
+         hasDeliverableRows = deliverableFilesFromDesignText(
+           readFileSync(join(frChangeDir, 'design.md'), 'utf8')).length > 0
+       } catch { /* design 缺席/不可读=无清单态 */ }
+@@ -435,10 +447,10 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+     } else if (entries.length === 0) {
+       text = '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
+     } else {
+-      const lines = entries.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
++      const lines = ranked.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id}${tierAIds.has(e.id) ? ' 🎯' : ''} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
+       if (truncated > 0) lines.push(`（+${truncated} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read）`)
+       lines.push('')
+-      lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。')
++      lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。' + (tierAIds.size > 0 ? '🎯=与本次触碰文件有覆盖交集（TierA 优先注入）。' : ''))
+       text = lines.join('\n')
+     }
+     return {
+@@ -447,6 +459,7 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+         type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
+         rendered: entries.length - truncated, truncated,
+         unmappedFiltered: domainsAll.length !== domains.length,
++        tierA: tierAIds.size,
+       },
+     }
+   } catch (e) {
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index f89970a9..97d4ca02 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -303,3 +303,37 @@ test('⑥ 轻量跑道会话内 .sillyspec 写入=仅例外裁决（真 CLI harn
+   assert.equal(r.status, 0, `flow done 应过（AGENT 槽=合法书写）: ${r.stdout}\n${r.stderr}`)
+   rmSync(cwd, { recursive: true, force: true })
+ })
++
++// ── ⑦ GWT 骨架预填两缺陷修复（2026-10-03-fr-inject-relevance-rank）──────────────────
++// 实证来源：平台仓 2026-09-30-breadcrumb-dedupe-zh——标题 50 字符硬截断留永久残句
++// （FR-components-shared-038「…专业术语除」）；括号内箭头「（changes→变更中心 等）」被当
++// When/Then 分隔符，骨架错位。
++
++test('⑦a GWT 骨架：长标题不截断（全文入 ### FR-NN: 行）', () => {
++  const long = '顶栏面包屑路由段名全部映射为中文（changes→变更中心 等，MCP/Git/API 等专业术语除外）——段名标签与侧边栏菜单既有命名一致不新造叫法'
++  assert.ok(long.length > 50, '夹具前提：标题超 50 字符')
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  try {
++    draftAll({ changeDir, change: 'c1', input: `动机：x\n成功标准：\n- ${long}\n`, withTasks: false, runtimeRoot })
++    const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++    assert.ok(reqs.includes(`### FR-01: ${long}`), '标题保留全文（旧实现 slice(0,50) 截断）')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
++
++test('⑦b GWT 骨架：括号内 → 不切 When/Then；括号外 →/则/使得 仍切分', () => {
++  const { root, changeDir, runtimeRoot } = makeFixtureDir()
++  try {
++    draftAll({
++      changeDir, change: 'c1', withTasks: false, runtimeRoot,
++      input: '动机：x\n成功标准：\n- 段名映射为中文（changes→变更中心 等，术语除外）\n- 点击变更中心→列表刷新\n- 勾选复选框则按钮激活\n- 术语命中使得高亮生效\n',
++    })
++    const reqs = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
++    // 括号内箭头：不切——When 含完整括号内容，Then 占位
++    assert.ok(reqs.includes('When 段名映射为中文（changes→变更中心 等，术语除外）'), '括号内 → 不触发切分')
++    assert.ok(reqs.includes('Then 行为符合本条标准描述'), '无切分点走占位兜底')
++    // 括号外分隔符：既有切分语义保留
++    assert.ok(reqs.includes('When 点击变更中心') && reqs.includes('Then 列表刷新'), '括号外 → 仍切分')
++    assert.ok(reqs.includes('When 勾选复选框') && reqs.includes('Then 按钮激活'), '括号外 则 仍切分')
++    assert.ok(reqs.includes('When 术语命中') && reqs.includes('Then 高亮生效'), '括号外 使得 仍切分')
++  } finally { rmSync(root, { recursive: true, force: true }) }
++})
+diff --git a/test/fr-inject-cap.test.mjs b/test/fr-inject-cap.test.mjs
+index 65892c3c..6f095318 100644
+--- a/test/fr-inject-cap.test.mjs
++++ b/test/fr-inject-cap.test.mjs
+@@ -6,6 +6,9 @@
+  *   ② top-8 截断：大域 digest ≤8 条 + 「+N 条见」指针行；尾部承接指引 blockquote 保留
+  *   ③ 遥测口径：count=全量、rendered/truncated 披露截断面、unmappedFiltered 披露滤除
+  *   ④ 小域（≤8 条）：无指针行、blockquote 仍在
++ *   ⑤⑥⑦（2026-10-03-fr-inject-relevance-rank）：两档排序——TierA 覆盖命中（🎯）置前、
++ *   TierB 按来源变更日期新→旧（取代文件序前 8=每域最老 8 条的缺陷）；轻量道
++ *   flowKnowledgeDigest 同步接入；遥测新增 tierA 披露。
+  */
+ import { test } from 'node:test'
+ import assert from 'node:assert/strict'
+@@ -18,6 +21,7 @@ const ROOT = dirname(fileURLToPath(import.meta.url))
+ const { buildFrIndexDigestSection, FR_INDEX_DIGEST_MAX_ENTRIES } = await import(
+   pathToFileURL(join(ROOT, '..', 'src', 'run', 'prompt.js')).href
+ )
++const { flowKnowledgeDigest } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
+ 
+ /** 夹具：cli 域（src/cli/ 前缀）N 条 active FR + unmapped 池 M 条。design.md 交付表决定域路由。 */
+ function buildSpecRoot(base, { cliCount = 0, unmappedCount = 0, designRows = [] } = {}) {
+@@ -114,3 +118,109 @@ test('④ 小域：无指针行、blockquote 仍在、空域清单走通用空
+     assert.ok(r2.text.includes('首批需求'), '无域依据走通用空态文案')
+   } finally { rmSync(tmp, { recursive: true, force: true }) }
+ })
++
++/** 富夹具（2026-10-03-fr-inject-relevance-rank）：逐条指定来源变更名（日期前缀驱动 TierB 排序），
++ *  可选为来源变更落归档 change-patch.json（驱动 TierA 覆盖命中）。module map 复用 buildSpecRoot 骨架。 */
++function buildSpecRootRich(base, { entries = [], archives = {} } = {}) {
++  const specBase = buildSpecRoot(base, {})
++  const frDir = join(specBase, 'knowledge', 'fr')
++  const byDomain = new Map()
++  for (const e of entries) {
++    if (!byDomain.has(e.domain)) byDomain.set(e.domain, [])
++    byDomain.get(e.domain).push(e)
++  }
++  for (const [domain, list] of byDomain) {
++    const lines = ['---', 'author: sillyspec-fr-index', '---', '', `# FR 索引 — ${domain}`, '']
++    for (const e of list) {
++      lines.push(`## FR-${domain}-${String(e.n).padStart(3, '0')} ${e.title}`, `变更：${e.change}`, '状态：active',
++        '摘要：默认场景', '场景正文：', `- 场景：默认场景 — Given G When W Then T`,
++        `全文：${e.change}/requirements.md#FR-${e.n}`, `最近确认：aaaa${e.n}`, '')
++    }
++    writeFileSync(join(frDir, `${domain}.md`), lines.join('\n'))
++  }
++  const archRoot = join(specBase, 'changes', 'archive')
++  for (const [name, files] of Object.entries(archives)) {
++    const d = join(archRoot, name)
++    mkdirSync(d, { recursive: true })
++    writeFileSync(join(d, 'change-patch.json'), JSON.stringify({ files }))
++  }
++  // 知识向量匹配面最小件（matchKnowledgeHybrid fail-soft 依赖 INDEX 在场）
++  writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# 知识索引\n')
++  return specBase
++}
++
++const RICH12 = () => Array.from({ length: 12 }, (_, i) => {
++  const n = i + 1
++  return { domain: 'cli', n, title: `功能${n}`, change: n <= 4 ? '2026-05-01-old-a' : '2026-09-30-new-b' }
++})
++
++test('⑤ 覆盖命中进注入：最老命中条目带 🎯 置首，遥测 tierA 披露', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic5-'))
++  try {
++    const entries = RICH12()
++    // 3 号条目来源变更归档且覆盖 src/cli/old.js；同组其余（1/2/4）来源无归档=coverage 不可判
++    entries[2].change = '2026-05-02-old-c'
++    const specBase = buildSpecRootRich(tmp, { entries, archives: { '2026-05-02-old-c': ['src/cli/old.js'] } })
++    writeChange(specBase, 'c-covhit', ['src/cli/old.js'])
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-covhit' })
++    const entryLines = r.text.split('\n').filter((l) => l.startsWith('- FR-cli-'))
++    assert.equal(entryLines.length, FR_INDEX_DIGEST_MAX_ENTRIES, '渲染条目仍帽 8')
++    assert.ok(r.text.includes('FR-cli-003 🎯'), '覆盖命中的最老条目带 🎯')
++    assert.ok(entryLines[0].startsWith('- FR-cli-003'), 'TierA 置首')
++    assert.ok(!entryLines.some((l) => l.startsWith('- FR-cli-001')), '非命中老条目让位新日期组（旧缺陷：最老 8 恒占席）')
++    assert.ok(!entryLines.some((l) => l.startsWith('- FR-cli-004')), '同上')
++    assert.equal(r.telemetry.tierA, 1, '遥测披露覆盖命中数')
++    assert.equal(r.telemetry.count, 12)
++    assert.equal(r.telemetry.rendered, 8)
++    assert.equal(r.telemetry.truncated, 4)
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('⑥ 无覆盖命中：TierB 按来源变更日期新→旧（新组先行，老组进截断面）', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic6-'))
++  try {
++    const specBase = buildSpecRootRich(tmp, { entries: RICH12() })
++    writeChange(specBase, 'c-recency', ['src/cli/a.js'])
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-recency' })
++    const entryLines = r.text.split('\n').filter((l) => l.startsWith('- FR-cli-'))
++    assert.equal(entryLines.length, FR_INDEX_DIGEST_MAX_ENTRIES)
++    for (let n = 5; n <= 12; n++) assert.ok(entryLines.some((l) => l.startsWith(`- FR-cli-${String(n).padStart(3, '0')}`)), `新组 FR-cli-${n} 应在场`)
++    assert.ok(!entryLines.some((l) => l.startsWith('- FR-cli-001')), '老组被挤出注入面')
++    assert.ok(!r.text.includes('🎯'), '无命中无 🎯')
++    assert.equal(r.telemetry.tierA, 0)
++    assert.ok(r.text.includes('+4 条见 knowledge/fr/'), '指针行保留')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('⑦ 轻量道 flowKnowledgeDigest 接入：filesOverride 命中带 🎯；小域行集合不回归', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fic7-'))
++  try {
++    const entries = RICH12()
++    entries[2].change = '2026-05-02-old-c'
++    const specBase = buildSpecRootRich(tmp, { entries, archives: { '2026-05-02-old-c': ['src/cli/old.js'] } })
++    const changeDir = writeChange(specBase, 'c-thin', [])
++    const r = await flowKnowledgeDigest({ specBase, change: 'c-thin', changeDir, input: '', filesOverride: ['src/cli/old.js'] })
++    const frLines = r.lines.filter((l) => l.includes('- FR-cli-'))
++    assert.equal(frLines.length, 8, '注入行帽 8')
++    assert.ok(frLines.some((l) => l.includes('FR-cli-003') && l.includes('🎯')), '覆盖命中条目带 🎯')
++    assert.ok(frLines[0].includes('FR-cli-003'), 'TierA 置首')
++    assert.ok(r.lines.some((l) => l.includes('+4 条见 knowledge/fr/')), '指针行保留')
++
++    // 小域（6 条）：行集合不回归——6 条全在场、🎯 仅 003（FR-05 既有面）
++    const tmp2 = mkdtempSync(join(tmpdir(), 'fic7b-'))
++    try {
++      const small = Array.from({ length: 6 }, (_, i) => {
++        const n = i + 1
++        return { domain: 'cli', n, title: `功能${n}`, change: n === 3 ? '2026-05-02-old-c' : '2026-09-30-new-b' }
++      })
++      const specBase2 = buildSpecRootRich(tmp2, { entries: small, archives: { '2026-05-02-old-c': ['src/cli/old.js'] } })
++      const changeDir2 = writeChange(specBase2, 'c-thin-small', [])
++      const r2 = await flowKnowledgeDigest({ specBase: specBase2, change: 'c-thin-small', changeDir: changeDir2, input: '', filesOverride: ['src/cli/old.js'] })
++      const frLines2 = r2.lines.filter((l) => l.includes('- FR-cli-'))
++      assert.equal(frLines2.length, 6, '小域全量注入')
++      for (let n = 1; n <= 6; n++) assert.ok(frLines2.some((l) => l.includes(`FR-cli-${String(n).padStart(3, '0')}`)), `FR-cli-${n} 在场`)
++      assert.equal(frLines2.filter((l) => l.includes('🎯')).length, 1, '🎯 仅覆盖命中条目')
++      assert.ok(!r2.lines.some((l) => l.includes('条见 knowledge/fr/')), '小域无指针行')
++    } finally { rmSync(tmp2, { recursive: true, force: true }) }
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/design.md b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/design.md
+new file mode 100644
+index 00000000..de9e3240
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:04:16.302Z
++---
++# 设计记录（Design Record）— 2026-10-03-fr-inject-relevance-rank
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++复用既有覆盖命中口径做排序，零新推断：fr-index.js 把 activeFrCoverageHits 内部的「覆盖三分判定」循环抽为 partitionActiveByCoverage（判据逐字不变，rot/测试门/注入排序三消费方共用），其上新增导出 rankFrDigestForInjection——TierA=覆盖命中置前（与本次触碰文件有覆盖交集），TierB=其余按来源变更日期新→旧（YYYY-MM-DD 前缀，无日期居尾），同档 tie-break 全局 id 升序。两个注入口接入：厚道 buildFrIndexDigestSection（src/run/prompt.js，design 交付面作触碰文件）与轻量道 flowKnowledgeDigest（src/flow.js，input 路径或 design 交付面）。顺带修 flow-draft 机器预填两缺陷：FR 标题去 50 字符硬截断、When/Then 切分改括号深度感知（splitGwtSeparator）。选此方案因为它只加排序不改判定——注入是提示面（fail-open），风险最小而止血直接（旧缺陷：文件序前 8=每域最老 8 条恒占席）。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出：fr-index.js rankFrDigestForInjection({archiveRoot, frs, changed, covCache}) → {ranked, tierAIds}；flow-draft.js splitGwtSeparator(criterion) → [when, then] | null。内部重构：partitionActiveByCoverage 自 activeFrCoverageHits 抽出（模块级私有，无对外签名变化；activeFrCoverageHits 返回结构不变）。消费面行为变化：注入清单顺序变化 + 命中条目带 🎯 标注 + fr-inject 遥测新增 tierA 字段（既有字段 count/rendered/truncated/unmappedFiltered 零改动）；文件格式无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：注入是每次渲染即时计算的纯读函数，无事件序依赖；tierAIds 由触碰文件面决定，同一变更内文件面只增不减，重算幂等。
++2. 并发写：排序只读 knowledge/fr 与 archive（经 frCoverageFiles），无写面；与既有 rot/测试门读取同一数据面，写方仍是 CLI 单一写入方（indexRequirements），无新增竞态。
++3. 切换/生命周期：无状态落盘（排序结果不持久化），会话中断/恢复零残留；失败路径 fail-soft——触碰面缺失时保持 readActiveFrDigest 文件序（既有行为）。
++4. 作用域：rankFrDigestForInjection 以调用方传入的 archiveRoot 为界（specBase 派生），与 worktree 隔离边界一致，不跨仓读取；Windows 路径在入口统一 POSIX 归一。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：注入顺序变化改变 agent 看到的规格面，理论上可能让依赖「最老 8 条」心智的既有流程预期漂移——已用既有断言全绿对冲（fr-inject-cap ②④ 零回归，⑤⑥⑦ 新口径实证）。试过放弃的方案：① 给 readActiveFrDigest 加全局排序参数——污染两个非排序消费方（dup 门要全量、rot 要原序统计），放弃；② TierB 按「最近确认」commit 日期排——需批量 git log 查 hash 日期，I/O 重且 hash 可能不在本仓历史（平台仓实测抽样 3/3 查不到），改用来源变更名内嵌日期前缀（零 I/O）。splitGwtSeparator 已知残留：括号外的「则」嵌在词内（如「原则」）仍会切分——既有语义保留（不在本变更验收面），带护栏方案需要分词，成本不成比例。
+diff --git a/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/proposal.md b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/proposal.md
+new file mode 100644
+index 00000000..38266f24
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/proposal.md
+@@ -0,0 +1,41 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:04:16.300Z
++---
++# 提案书（Proposal）— 2026-10-03-fr-inject-relevance-rank
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:917bc26355a14f96e600e666b18b2427e452b662d3f24d07ccbb23d53bed63c6:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++任务原话转写：注入相关度排序止血。动机：flowKnowledgeDigest 注入面 frs.slice(0,8) 按文件序=永远取每域最老 8 条（平台 backend 域 480 条，9 月新立的 455 条在注入里永不可见——全局审计实证）；且 flow-draft 机器预填两缺陷已留永久痕迹：标题 50 字符硬截断（平台仓 FR-components-shared-038 残句实证）、→ 符号切分 When/Then 误伤括号内箭头（changes→变更中心 实证）。依据：src/fr-index.js activeFrCoverageHits 覆盖命中口径已存在且与测试门同源，注入仅作第三消费方复用，零新推断。
++成功标准：
++- 注入 digest 两档排序：TierA=覆盖命中（与本次触碰文件有覆盖交集的 active FR，🎯 标注，判定与 activeFrCoverageHits 同口径），TierB=其余按来源变更日期新→旧，tie-break 全局 id 升序，每域 cap 8 与「+N 条见」行保留
++- 域内 active >8 条且触碰文件命中其中某条时，注入清单含该条且带 🎯（新增测试用例实证）
++- flow-draft 标题不再 50 字符硬截断；括号内的 → 不再被当 When/Then 分隔符切分（新增测试用例实证）
++- 既有用例不回归：域 ≤8 条时注入内容不减；fr-inject-cap.test.mjs / flow-draft.test.mjs 既有断言全绿
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:243ecca0783c1eb7131531199a6f1cfd913dbe9381d953e6f35a54b63d1993bf:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++按成功标准机械推导，共 6 条验收面：
++1. 注入 digest 两档排序：TierA=覆盖命中（与本次触碰文件有覆盖交集的 active FR，🎯 标注，判定与 activeFrCoverageHits 同口径），TierB=其余按来源变更日期新→旧，tie-break 全局 id 升序，每域 cap 8 与「+N 条见」行保留
++2. 域内 active >8 条且触碰文件命中其中某条时，注入清单含该条且带 🎯（新增测试用例实证）
++3. flow-draft 标题不再 50 字符硬截断
++4. 括号内的 → 不再被当 When/Then 分隔符切分（新增测试用例实证）
++5. 既有用例不回归：域 ≤8 条时注入内容不减
++6. fr-inject-cap.test.mjs / flow-draft.test.mjs 既有断言全绿
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:e25ccdb2b97b672bc2462c9abc5d8e2937917de6821e1485ef7cbf47e68788c3:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-inject-relevance-rank 留痕重锚 -->
++1. 注入 digest 两档排序：TierA=覆盖命中（与本次触碰文件有覆盖交集的 active FR，🎯 标注，判定与 activeFrCoverageHits 同口径），TierB=其余按来源变更日期新→旧，tie-break 全局 id 升序，每域 cap 8 与「+N 条见」行保留
++2. 域内 active >8 条且触碰文件命中其中某条时，注入清单含该条且带 🎯（新增测试用例实证）
++3. flow-draft 标题不再 50 字符硬截断
++4. 括号内的 → 不再被当 When/Then 分隔符切分（新增测试用例实证）
++5. 既有用例不回归：域 ≤8 条时注入内容不减
++6. fr-inject-cap.test.mjs / flow-draft.test.mjs 既有断言全绿
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/requirements.md b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/requirements.md
+new file mode 100644
+index 00000000..244d67d5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/requirements.md
+@@ -0,0 +1,58 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:04:16.302Z
++---
++# 需求规格（Requirements）— 2026-10-03-fr-inject-relevance-rank
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 注入 digest 两档排序——TierA 覆盖命中优先、TierB 按来源变更日期新→旧
++Given 厚道 buildFrIndexDigestSection（src/run/prompt.js）与轻量道 flowKnowledgeDigest（src/flow.js）两条 FR 注入面、触达域内 active 条目数超过注入帽
++When 渲染注入清单
++Then 排序两档：TierA=覆盖命中条目（判定与 activeFrCoverageHits/测试门同口径：来源变更交付面 ∪ 绑定 tests，与本次触碰文件单向匹配）置前并带 🎯 标注；TierB=其余条目按来源变更日期新→旧（无日期者居尾，同档 tie-break 全局 id 升序）；注入帽（8）与「+N 条见」指针行语义不变
++
++### FR-02: 覆盖命中的老条目必进注入面
++Given 域内 active >8 条、其中某条来源变更的覆盖面与本次触碰文件有交集、该条按旧排序永居前 8 之外（缺陷实证：文件序前 8=每域最老 8 条）
++When 渲染注入清单
++Then 该条出现在注入清单内且带 🎯 标注（新增测试用例实证）；无覆盖命中时行为退化为纯 TierB 排序，注入条数与既有断言不回归
++
++### FR-03: FR 标题不再 50 字符硬截断
++Given flow-draft 机器预填 success criterion 长度超过 50 字符（实证：平台仓 FR-components-shared-038 残句「…专业术语除」）
++When draftGwtSkeleton 生成 `### FR-NN: 标题` 行
++Then 标题保留全文不截断（Given/When/Then 行的 80 字符帽维持不变）
++
++### FR-04: When/Then 切分改括号深度感知——括号内分隔符不切
++Given success criterion 含括号内箭头（实证：「changes→变更中心」被当 When/Then 分隔符，骨架错位）
++When draftGwtSkeleton 按 /[→➜]|则|使得/ 切分 When/Then
++Then 仅括号深度 0 处的分隔符生效；括号内的 →/➜/则/使得 不触发切分（无有效切分点时 When=全文、Then=占位句，维持既有兜底）
++
++### FR-05: 域 ≤8 条时注入内容不回归
++Given 触达域 active 条目 ≤8 条（无截断面）
++When 两档排序接入后渲染注入清单
++Then 条目集合与既有测试断言完全一致（仅允许顺序按新排序调整）；unmapped 过滤/空态文案/遥测既有字段（count/rendered/truncated/unmappedFiltered）口径不变
++
++### FR-06: 遥测披露排断面
++Given 注入渲染发生截断或存在覆盖命中
++When fr-inject 遥测事件落盘
++Then 新增 tierA 字段披露本次注入面覆盖命中数（既有字段零改动）；轻量道 summary.frCount 口径不变
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-inject-cap.test.mjs「⑥ 日期新者优先」——12 条两日期组无覆盖命中时渲染新日期组 8 条、老日期组进「+N」截断面
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-inject-cap.test.mjs「⑤ 覆盖命中进注入」——归档源变更 change-patch.json 覆盖 src/cli/old.js、变更 design 触碰同文件时，最老的 FR-cli-003 仍进注入面且带 🎯；遥测 tierA=1
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs「长标题不截断」——60+ 字符 criterion 生成 requirements.md 后 `### FR-01:` 行含全文
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs「括号内箭头不切分」——criterion 含「（changes→变更中心 等）」时 When 行含完整括号内容、Then 行为占位句；括号外 → 仍切分（既有语义保留）
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-inject-cap.test.mjs「④ 小域无截断」既有断言 + 新增「⑦ 轻量道排序接入」——flowKnowledgeDigest 直测：≤8 条域注入行集合不变、>8 条含覆盖命中条目带 🎯
++
++<!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-inject-cap.test.mjs「② 大域截断」遥测断言（count/rendered/truncated/unmappedFiltered 既有字段零回归）+「⑤ 覆盖命中进注入」tierA 新字段断言
+diff --git a/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/tasks.md b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/tasks.md
+new file mode 100644
+index 00000000..6b86e5a0
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-inject-relevance-rank/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:04:16.302Z
++---
++# 任务注册表（Tasks）— 2026-10-03-fr-inject-relevance-rank
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 `- [ ]`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: fr-index 覆盖分区抽内部助手 partitionByCoverage（activeFrCoverageHits 改委托、判据逐字不变）+ 新增导出 rankFrDigestForInjection（TierA 覆盖命中/TierB 来源变更日期新→旧/无日期居尾/tie-break id 升序）
++- [x] task-02: 厚道注入接入：buildFrIndexDigestSection（src/run/prompt.js）按 rank 排序 + 🎯 标注 + 遥测新增 tierA（design 交付面作触碰文件，fail-soft；既有字段零改动）
++- [x] task-03: 轻量道注入接入：flowKnowledgeDigest（src/flow.js）同排序 + 🎯（input 路径或 design 交付面作触碰文件；抽查确认点名随 ranked 序）
++- [x] task-04: flow-draft 修复：draftGwtSkeleton 标题去 50 字符硬截断；切分改括号深度感知（括号内 →/➜/则/使得 不切，无切分点走既有兜底）
++- [x] task-05: 测试扩展全绿：fr-inject-cap.test.mjs ⑤覆盖命中进注入 ⑥日期新者优先 ⑦轻量道直测 + flow-draft.test.mjs 长标题不截断/括号内箭头不切 + 既有断言零回归
++- [ ] task-06: 全量回归（本变更测试 ∪ FR 关联回归）+ flow done 收口 + 显式 pathspec 提交

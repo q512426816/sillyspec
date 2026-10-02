@@ -4839,3 +4839,129 @@ superseded_by：FR-cli-entry-198
 - 场景：默认场景 — Given 测试 相关模块就绪；When 相关测试钉同步（flow-status-heartbeat/tick-loop-nudge），flow 系与 test:core 全绿；Then 行为符合本条标准描述
 全文：.sillyspec/changes/archive/2026-09-29-heartbeat-d007-incontext/requirements.md#FR-04
 最近确认：02a7dca978ae5ec8cdaf59cd38bb3cdcbc7c73d2
+
+## FR-cli-entry-263 注入 digest 两档排序——TierA 覆盖命中优先、TierB 按来源变更日期新→旧
+变更：2026-10-03-fr-inject-relevance-rank
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 厚道 buildFrIndexDigestSection（src/run/prompt.js）与轻量道 flowKnowledgeDigest（src/flow；When 渲染注入清单；Then 排序两档：TierA=覆盖命中条目（判定与 activeFrCoverageHits/测试门同口径：来源变更交付面 ∪ 绑定 tests，与本次触碰文件单向匹配
+全文：.sillyspec/changes/archive/2026-10-03-fr-inject-relevance-rank/requirements.md#FR-01
+最近确认：7588907995ff021d4c5193dda1459f5bde3e7b24
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-inject-relevance-rank:flow:FR-01
+  tests: test/fr-inject-cap.test.mjs「⑥ 日期新者优先」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-inject-relevance-rank
+  status: active
+
+## FR-cli-entry-264 覆盖命中的老条目必进注入面
+变更：2026-10-03-fr-inject-relevance-rank
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 域内 active >8 条、其中某条来源变更的覆盖面与本次触碰文件有交集、该条按旧排序永居前 8 之外（缺陷实证：文件序前 8=每域最老 8 条）；When 渲染注入清单；Then 该条出现在注入清单内且带 🎯 标注（新增测试用例实证）；无覆盖命中时行为退化为纯 TierB 排序，注入条数与既有断言不回归
+全文：.sillyspec/changes/archive/2026-10-03-fr-inject-relevance-rank/requirements.md#FR-02
+最近确认：7588907995ff021d4c5193dda1459f5bde3e7b24
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-inject-relevance-rank:flow:FR-02
+  tests: test/fr-inject-cap.test.mjs「⑤ 覆盖命中进注入」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-inject-relevance-rank
+  status: active
+
+## FR-cli-entry-265 FR 标题不再 50 字符硬截断
+变更：2026-10-03-fr-inject-relevance-rank
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow-draft 机器预填 success criterion 长度超过 50 字符（实证：平台仓 FR-components-shared-038 残句「；When draftGwtSkeleton 生成 `### FR-NN: 标题` 行；Then 标题保留全文不截断（Given/When/Then 行的 80 字符帽维持不变）
+全文：.sillyspec/changes/archive/2026-10-03-fr-inject-relevance-rank/requirements.md#FR-03
+最近确认：7588907995ff021d4c5193dda1459f5bde3e7b24
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-inject-relevance-rank:flow:FR-03
+  tests: test/flow-draft.test.mjs「长标题不截断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-inject-relevance-rank
+  status: active
+
+## FR-cli-entry-266 When/Then 切分改括号深度感知——括号内分隔符不切
+变更：2026-10-03-fr-inject-relevance-rank
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given success criterion 含括号内箭头（实证：「changes→变更中心」被当 When/Then 分隔符，骨架错位）；When draftGwtSkeleton 按 /[→➜]|则|使得/ 切分 When/Then；Then 仅括号深度 0 处的分隔符生效；括号内的 →/➜/则/使得 不触发切分（无有效切分点时 When=全文、Then=占位句，维持既有兜底）
+全文：.sillyspec/changes/archive/2026-10-03-fr-inject-relevance-rank/requirements.md#FR-04
+最近确认：7588907995ff021d4c5193dda1459f5bde3e7b24
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-inject-relevance-rank:flow:FR-04
+  tests: test/flow-draft.test.mjs「括号内箭头不切分」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-inject-relevance-rank
+  status: active
+
+## FR-cli-entry-267 域 ≤8 条时注入内容不回归
+变更：2026-10-03-fr-inject-relevance-rank
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 触达域 active 条目 ≤8 条（无截断面）；When 两档排序接入后渲染注入清单；Then 条目集合与既有测试断言完全一致（仅允许顺序按新排序调整）；unmapped 过滤/空态文案/遥测既有字段（count/rendered/truncated/un
+全文：.sillyspec/changes/archive/2026-10-03-fr-inject-relevance-rank/requirements.md#FR-05
+最近确认：7588907995ff021d4c5193dda1459f5bde3e7b24
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-inject-relevance-rank:flow:FR-05
+  tests: test/fr-inject-cap.test.mjs「④ 小域无截断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-inject-relevance-rank
+  status: active
+
+## FR-cli-entry-268 遥测披露排断面
+变更：2026-10-03-fr-inject-relevance-rank
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 注入渲染发生截断或存在覆盖命中；When fr-inject 遥测事件落盘；Then 新增 tierA 字段披露本次注入面覆盖命中数（既有字段零改动）；轻量道 summary.frCount 口径不变
+全文：.sillyspec/changes/archive/2026-10-03-fr-inject-relevance-rank/requirements.md#FR-06
+最近确认：7588907995ff021d4c5193dda1459f5bde3e7b24
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-inject-relevance-rank:flow:FR-06
+  tests: test/fr-inject-cap.test.mjs「② 大域截断」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-inject-relevance-rank
+  status: active

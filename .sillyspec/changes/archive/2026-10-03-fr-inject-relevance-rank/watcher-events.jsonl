@@ -1,0 +1,13 @@
+{"ts":1790957267005,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790957277266,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790957649069,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790957649069,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1790957678695,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790957688595,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790957691989,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790957698639,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790958197433,"kind":"commit","stage":null,"detail":"a821a13e","provisional":true}
+{"ts":1790958231317,"kind":"gate-run","stage":"verify","detail":"门实测 passed（9.8s） · 20261002162351","provisional":true}
+{"ts":1790958346645,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790958710310,"kind":"commit","stage":null,"detail":"75889079","provisional":true}
+{"ts":1790958710538,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-03-fr-inject-relevance-rank/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}

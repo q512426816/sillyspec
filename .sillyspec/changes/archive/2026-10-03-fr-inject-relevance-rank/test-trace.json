@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-fr-inject-relevance-rank",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-03-fr-inject-relevance-rank:flow:FR-01",
+      "tests": [
+        "test/fr-inject-cap.test.mjs「⑥ 日期新者优先」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-inject-relevance-rank"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-03-fr-inject-relevance-rank:flow:FR-02",
+      "tests": [
+        "test/fr-inject-cap.test.mjs「⑤ 覆盖命中进注入」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-inject-relevance-rank"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-03-fr-inject-relevance-rank:flow:FR-03",
+      "tests": [
+        "test/flow-draft.test.mjs「长标题不截断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-inject-relevance-rank"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-03-fr-inject-relevance-rank:flow:FR-04",
+      "tests": [
+        "test/flow-draft.test.mjs「括号内箭头不切分」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-inject-relevance-rank"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-03-fr-inject-relevance-rank:flow:FR-05",
+      "tests": [
+        "test/fr-inject-cap.test.mjs「④ 小域无截断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-inject-relevance-rank"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-03-fr-inject-relevance-rank:flow:FR-06",
+      "tests": [
+        "test/fr-inject-cap.test.mjs「② 大域截断」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-inject-relevance-rank"
+    }
+  ]
+}
