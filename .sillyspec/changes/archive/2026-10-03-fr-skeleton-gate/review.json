@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-fr-skeleton-gate",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-05 证据锚「frontend 103 居首」数字与所注从句口径错位——HEAD 基线实为 81",
+      "evidence": "design.md「回填留档」段将（frontend 103 居首）括注在「HEAD 基线纯回填 188 条/10 域文件」从句下，但平台仓 HEAD（=0dc1de6bd）frontend.md 的「骨架：thin」实为 81 条（git show 0dc1de6bd --stat frontend +81；git grep -c HEAD 81）；103 是工作区口径（81+并行未提交 diff 中 22 条，numstat frontend +413/-49 内含）。排序结论「居首」两口径下均成立，188/10、253=188+12+53 等承重数字全部精确，仅此括注数字未标口径。",
+      "location": ".sillyspec/changes/2026-10-03-fr-skeleton-gate/design.md:48"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-02T16:59:58Z"
+}

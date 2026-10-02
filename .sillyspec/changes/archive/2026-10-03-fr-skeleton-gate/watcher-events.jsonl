@@ -1,0 +1,18 @@
+{"ts":1790958947922,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790958954588,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790958964521,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790958984184,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790959013700,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790959033391,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790959096007,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/fr-index.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790959128735,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790959314967,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790959314967,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1790959524885,"kind":"commit","stage":null,"detail":"f42a4205","provisional":true}
+{"ts":1790959538420,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-03-fr-skeleton-gate/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790959548836,"kind":"gate-run","stage":"verify","detail":"门实测 passed（9.6s） · 20261002164548","provisional":true}
+{"ts":1790960176499,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：src/flow-draft.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790960189417,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790960199303,"kind":"commit","stage":null,"detail":"9b2ae73d","provisional":true}
+{"ts":1790960199522,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-03-fr-skeleton-gate/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790960421893,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

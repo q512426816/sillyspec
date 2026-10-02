@@ -1,0 +1,547 @@
+diff --git a/.sillyspec/changes/2026-10-03-fr-skeleton-gate/flow-state.yaml b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/flow-state.yaml
+new file mode 100644
+index 00000000..555f4cb7
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: a2bc987fa01071b37b896900ab4fc204e84ddbc4
++updatedAt: '2026-10-02T16:34:26.330Z'
++baseline_sha256: e20b3c4e47ab1cfd775c8c743863bb187c49ee1b20771634ae3dca70d5752edc
++
+diff --git a/src/flow.js b/src/flow.js
+index 78947a94..7e9ec80d 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -171,6 +171,10 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+     if (frs.length > 0 && touched.length > 0) {
+       ({ ranked: frRanked, tierAIds } = rankFrDigestForInjection({ archiveRoot: join(specBase, 'changes', 'archive'), frs, changed: touched }))
+     }
++    // 骨架门（2026-10-03-fr-skeleton-gate）：纯骨架条目不占注入席位（TierA 命中例外——它可能是
++    // 该文件唯一行为痕迹）；指针行披露骨架数。查重/rot/绑定面不滤。
++    const injectable = frRanked.filter((f) => !f.skeleton || tierAIds.has(f.id))
++    const skeletonHidden = frs.filter((f) => f.skeleton && !tierAIds.has(f.id)).length
+     summary.domains = domains
+     summary.frCount = frs.length
+     lines.push(`🧠 知识注入（轻量道读取面——现行 FR/否决决策/已知坑，动手前扫一眼）：`)
+@@ -182,14 +186,16 @@ export async function flowKnowledgeDigest({ specBase, change, changeDir, input,
+       if (frs.length === 0) {
+         lines.push(`   现行 FR：（该域暂无 active FR 索引条目——本变更大概率是首批需求）`)
+       } else {
+-        for (const f of frRanked.slice(0, 8)) {
++        const renderedFr = injectable.slice(0, 8)
++        for (const f of renderedFr) {
+           lines.push(`   - ${f.id} ${f.title}${tierAIds.has(f.id) ? ' 🎯' : ''}${f.unconfirmed > 0 ? ` ⚪${f.unconfirmed}未确认绑定` : ''}`)
+         }
+-        if (frs.length > 8) lines.push(`   （+${frs.length - 8} 条见 knowledge/fr/ 对应域文件${tierAIds.size > 0 ? '；🎯=与本次触碰文件有覆盖交集' : ''}）`)
++        const hiddenCount = frs.length - renderedFr.length
++        if (hiddenCount > 0) lines.push(`   （+${hiddenCount} 条见 knowledge/fr/ 对应域文件${skeletonHidden > 0 ? `；纯骨架 ${skeletonHidden} 条不注入` : ''}${tierAIds.size > 0 ? '；🎯=与本次触碰文件有覆盖交集' : ''}）`)
+         // 抽查确认（2026-09-27-confirm-on-use 三层治理①层）：干活中本来就在消费这些条目——
+         // 相符则收口前翻牌（机械防橡皮图章：--evidence 必须是可解析的真实测试路径），
+         // 不符留给 knowledge digest 信号。至多点名 2 个（抽查式，防全勾仪式化）。
+-        const unconfirmed = frRanked.filter((f) => f.unconfirmed > 0).slice(0, 2)
++        const unconfirmed = injectable.filter((f) => f.unconfirmed > 0).slice(0, 2)
+         if (unconfirmed.length > 0) {
+           lines.push(`   🔍 抽查确认（至多 ${unconfirmed.length} 条，干活中顺带核）：${unconfirmed.map((f) => f.id).join('、')} —— 绑定与实态相符则收口前 \`sillyspec tests confirm --anchor <id> --evidence <真实测试路径>\`（翻 active）；不符则不动，留给 knowledge digest 信号`)
+         }
+diff --git a/src/fr-index.js b/src/fr-index.js
+index e7fa4059..dc2ae217 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -339,6 +339,9 @@ function renderFrLines(entry, headHash) {
+   // （design 接口定义示例中的「来源变更」即本字段，语义等价，取解析器认的字面）
+   lines.push(`变更：${entry.change}`);
+   lines.push(`状态：${entry.supersededBy ? 'superseded' : 'active'}`);
++  // 骨架标记（2026-10-03-fr-skeleton-gate）：纯骨架条目（全部场景体 Then=flow-draft 占位句）
++  // 落「骨架：thin」——注入面据此排除（TierA 覆盖命中例外）；查重/rot/绑定面不受影响。
++  if (entry.skeleton) lines.push('骨架：thin');
+   if (entry.supersededBy) lines.push(`superseded_by：${entry.supersededBy}`);
+   if (entry.supersededOf) lines.push(`取代链：${entry.supersededOf} ← 本条目（${entry.change} 承接）`);
+   lines.push(`摘要：${(entry.scenarios || []).slice(0, 5).join('；') || '（无场景名）'}`);
+@@ -462,7 +465,7 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+       id,
+       title: fr.title,
+       change: changeName,
+-      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies, local: fr.local }, headHash),
++      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies, local: fr.local, skeleton: isThinSkeletonBodies(fr.scenarioBodies) }, headHash),
+     });
+     dirtyDomains.add(primaryDomain);
+     written.push({ file: `${FR_DIR}/${primaryDomain}.md`, id, action: 'added' });
+@@ -779,14 +782,68 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
+       const decisionLine = s.lines.find((l) => l.startsWith('依据决策：'));
+       const decisions = decisionLine ? decisionLine.replace(/^依据决策：s*/, '').split('、').map((x) => x.trim()).filter(Boolean) : [];
+       const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
++      // 骨架位（2026-10-03-fr-skeleton-gate）：「骨架：thin」行在场 → skeleton=true——纯增量字段，
++      // 注入面消费（TierA 例外）；查重/rot/绑定消费方不读此位照旧。
++      const skeleton = s.lines.some((l) => l.startsWith('骨架：thin'));
+       // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
+       // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
+-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
++      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines), skeleton });
+     }
+   }
+   return out;
+ }
+ 
++// ── 骨架信息量门（2026-10-03-fr-skeleton-gate）─────────────────────────────────────
++// 薄道机器预填的空 GWT 骨架（When=标题回显、Then=占位句）永久入索引，挤占注入席位——
++// 判据锚定 flow-draft 占位句字面量，标记（骨架：thin）+ 存量回填 + 注入面排除（TierA 例外）。
++// 只装阀门不删数据：查重/rot/测试绑定/承接面零改动。
++
++/** flow-draft draftGwtSkeleton 的 Then 兜底占位句（字面量锚点——判据与起草端同源防漂移）。 */
++export const SKELETON_THEN_PLACEHOLDER = '行为符合本条标准描述';
++
++/** 纯骨架判据：全部场景体的 Then 均为占位句 → true；任一实质 Then 或无场景体 → false
++ *  （保守，宁漏勿误杀：误标只影响注入可见性，漏标只是继续占席）。 */
++export function isThinSkeletonBodies(scenarioBodies) {
++  const bodies = (Array.isArray(scenarioBodies) ? scenarioBodies : []).filter((b) => b && (b.given || b.when || b.then))
++  if (bodies.length === 0) return false
++  return bodies.every((b) => String(b.then || '').trim() === SKELETON_THEN_PLACEHOLDER)
++}
++
++/** 条目 场景正文 行的 Then 段提取（lastIndexOf——When 文本含「Then」字样不误切）。 */
++function scenarioLineThen(line) {
++  const i = line.lastIndexOf('Then ')
++  return i < 0 ? null : line.slice(i + 5).trim()
++}
++
++/** 存量回填（幂等）：全域扫描，纯骨架（场景正文行的 Then 全为占位句）且未标 → 状态行后插
++ *  「骨架：thin」。已有标记/非骨架/无场景体零变更；二次执行零写盘。
++ *  @returns {{ marked: Array<{domain,id}>, files: string[] }} */
++export function markSkeletonThin(knowledgeRoot) {
++  const marked = []
++  const files = []
++  const all = scanAllDomains(knowledgeRoot)
++  for (const [domain, st] of all.entries()) {
++    if (!st.sections || st.sections.length === 0) continue
++    let dirty = false
++    for (const s of st.sections) {
++      if (s.lines.some((l) => l.startsWith('骨架：thin'))) continue
++      const scenarioLines = s.lines.filter((l) => l.startsWith('- 场景：'))
++      if (scenarioLines.length === 0) continue
++      if (!scenarioLines.every((l) => scenarioLineThen(l) === SKELETON_THEN_PLACEHOLDER)) continue
++      const stateIdx = s.lines.findIndex((l) => l.startsWith('状态：'))
++      if (stateIdx < 0) continue
++      s.lines.splice(stateIdx + 1, 0, '骨架：thin')
++      dirty = true
++      marked.push({ domain, id: s.number || s.id })
++    }
++    if (dirty) {
++      writeFileSync(join(frDirPath(knowledgeRoot), `${domain}.md`), joinKnowledgeFile(st.preamble, st.sections))
++      files.push(`${FR_DIR}/${domain}.md`)
++    }
++  }
++  return { marked, files }
++}
++
+ // ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────
+ // 查询核单源双消费：flow 侧 rotSuspectFlow 出收口 advisory 与遥测（信号面）；verify 侧
+ // collectFrLinkedTests 反用为「需求关联回归测试面」（测试门三源之二）；2026-10-03 起
+diff --git a/src/run/prompt.js b/src/run/prompt.js
+index 00d67330..8cff0304 100644
+--- a/src/run/prompt.js
++++ b/src/run/prompt.js
+@@ -431,7 +431,11 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+         }
+       } catch { /* design 缺席/不可读=无触碰面，保持文件序 */ }
+     }
+-    const truncated = Math.max(0, entries.length - FR_INDEX_DIGEST_MAX_ENTRIES)
++    // 骨架门（2026-10-03-fr-skeleton-gate）：纯骨架条目不占注入席位（TierA 命中例外）；指针行
++    // 披露骨架数。查重/rot/绑定面不滤。
++    const injectable = ranked.filter((e) => !e.skeleton || tierAIds.has(e.id))
++    const skeletonHidden = entries.filter((e) => e.skeleton && !tierAIds.has(e.id)).length
++    const truncated = Math.max(0, injectable.length - FR_INDEX_DIGEST_MAX_ENTRIES)
+     let text
+     if (domains.length === 0) {
+       // 零路由命中两态：有交付清单但零命中（unmapped 兜底被滤）→ 指停车场；无清单 → 通用空态。
+@@ -447,8 +451,10 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+     } else if (entries.length === 0) {
+       text = '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
+     } else {
+-      const lines = ranked.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id}${tierAIds.has(e.id) ? ' 🎯' : ''} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
+-      if (truncated > 0) lines.push(`（+${truncated} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read）`)
++      const renderedEntries = injectable.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES)
++      const hiddenCount = entries.length - renderedEntries.length
++      const lines = renderedEntries.map((e) => `- ${e.id}${tierAIds.has(e.id) ? ' 🎯' : ''} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
++      if (hiddenCount > 0) lines.push(`（+${hiddenCount} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read${skeletonHidden > 0 ? `；纯骨架 ${skeletonHidden} 条不注入` : ''}）`)
+       lines.push('')
+       lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。' + (tierAIds.size > 0 ? '🎯=与本次触碰文件有覆盖交集（TierA 优先注入）。' : ''))
+       text = lines.join('\n')
+@@ -457,9 +463,10 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
+       text,
+       telemetry: {
+         type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
+-        rendered: entries.length - truncated, truncated,
++        rendered: Math.min(injectable.length, FR_INDEX_DIGEST_MAX_ENTRIES), truncated,
+         unmappedFiltered: domainsAll.length !== domains.length,
+         tierA: tierAIds.size,
++        skeletonHidden,
+       },
+     }
+   } catch (e) {
+diff --git a/test/fr-skeleton-gate.test.mjs b/test/fr-skeleton-gate.test.mjs
+new file mode 100644
+index 00000000..27a5e84c
+--- /dev/null
++++ b/test/fr-skeleton-gate.test.mjs
+@@ -0,0 +1,170 @@
++/**
++ * fr-skeleton-gate.test.mjs — 骨架信息量门（2026-10-03-fr-skeleton-gate）
++ *
++ * 验收面（FR-01~FR-04）：
++ *   ① 判据单元：isThinSkeletonBodies 三态（全占位/部分实质/空体块）
++ *   ② 索引标记：indexRequirements 对占位 GWT 的 FR 落「骨架：thin」（状态行后）；实质 Then 不标
++ *   ③ 存量回填幂等：markSkeletonThin 标纯骨架、跳过已标/实质/无场景；二次执行零变更
++ *   ④ 注入排除+TierA 例外（双面）：骨架不进注入行、指针行披露、覆盖命中骨架带 🎯 在场
++ *   ⑤ digest flag：readActiveFrDigest 对标记条目返回 skeleton=true
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const {
++  isThinSkeletonBodies, markSkeletonThin, indexRequirements, readActiveFrDigest,
++} = await import(pathToFileURL(join(ROOT, '..', 'src', 'fr-index.js')).href)
++const { buildFrIndexDigestSection } = await import(pathToFileURL(join(ROOT, '..', 'src', 'run', 'prompt.js')).href)
++const { flowKnowledgeDigest } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++
++/** 骨架：.sillyspec 骨架（module map + knowledge/fr）——域路由同 fr-inject-cap 夹具布局。 */
++function buildSpecBase(base) {
++  const specBase = join(base, '.sillyspec')
++  mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++  const mapDir = join(specBase, 'docs', 'proj', 'modules')
++  mkdirSync(mapDir, { recursive: true })
++  writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
++  writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# 知识索引\n')
++  return specBase
++}
++
++/** 域文件条目段生成。skeleton=true → 场景正文行用占位 Then；marked=true → 落「骨架：thin」行
++ *  （注入消费 flag=标记行；回填用例用 skeleton 未 marked 形态测内容判据）。 */
++function entryLines(id, title, change, { skeleton = false, marked = false, withBody = true } = {}) {
++  const out = [`## ${id} ${title}`, `变更：${change}`, '状态：active']
++  if (marked) out.push('骨架：thin')
++  out.push('摘要：默认场景')
++  if (withBody) {
++    out.push('场景正文：')
++    out.push(skeleton
++      ? '- 场景：默认场景 — Given 系统就绪；When 执行目标行为；Then 行为符合本条标准描述'
++      : '- 场景：默认场景 — Given 列表页在场；When 打开回放；Then 主体渲染对话流而非卡片列表')
++  }
++  out.push(`全文：.sillyspec/changes/archive/${change}/requirements.md#FR-01`, `最近确认：aaaa`, '')
++  return out
++}
++
++function writeDomain(specBase, domain, chunks) {
++  const lines = ['---', 'author: sillyspec-fr-index', '---', '', `# FR 索引 — ${domain}`, '', ...chunks]
++  writeFileSync(join(specBase, 'knowledge', 'fr', `${domain}.md`), lines.join('\n'))
++}
++
++function writeArchive(specBase, name, files) {
++  const d = join(specBase, 'changes', 'archive', name)
++  mkdirSync(d, { recursive: true })
++  writeFileSync(join(d, 'change-patch.json'), JSON.stringify({ files }))
++}
++
++function writeChangeDir(specBase, name, designRows) {
++  const changeDir = join(specBase, 'changes', name)
++  mkdirSync(changeDir, { recursive: true })
++  writeFileSync(join(changeDir, 'design.md'), designRows.map((r) => `| 修改 | ${r} | x |`).join('\n') + '\n')
++  return changeDir
++}
++
++test('① 判据单元：isThinSkeletonBodies 三态', () => {
++  assert.equal(isThinSkeletonBodies([{ name: '默认场景', given: 'G', when: 'W', then: '行为符合本条标准描述' }]), true, '全占位 → 骨架')
++  assert.equal(isThinSkeletonBodies([
++    { name: 'a', given: 'G', when: 'W', then: '行为符合本条标准描述' },
++    { name: 'b', given: 'G', when: 'W', then: '主体渲染对话流' },
++  ]), false, '任一实质 Then → 非骨架')
++  assert.equal(isThinSkeletonBodies([]), false, '空体块 → 不判（保守）')
++})
++
++test('② 索引标记：占位 GWT 入索引带「骨架：thin」，实质 Then 不带', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fsg2-'))
++  try {
++    const specBase = buildSpecBase(tmp)
++    const knowledgeRoot = join(specBase, 'knowledge')
++    const changeDir = join(specBase, 'changes', 'c-idx')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'requirements.md'), [
++      '# R', '',
++      '### FR-01: 骨架条目A', 'Given 系统就绪', 'When 执行目标行为', 'Then 行为符合本条标准描述', '',
++      '### FR-02: 实质条目B', 'Given 列表页在场', 'When 打开回放', 'Then 主体渲染对话流而非卡片列表', '',
++    ].join('\n'))
++    const r = indexRequirements({ changeDir, knowledgeRoot, headHash: 'h1', deliverableFiles: ['src/cli/a.js'] })
++    assert.equal(r.written.length, 2, '两条入索引')
++    const domainText = readFileSync(join(knowledgeRoot, 'fr', 'cli.md'), 'utf8')
++    const aSec = domainText.split('## FR-cli-001')[1].split('## FR-cli-002')[0]
++    const bSec = domainText.split('## FR-cli-002')[1]
++    assert.ok(aSec.includes('骨架：thin'), '占位条目带标记')
++    assert.ok(aSec.indexOf('骨架：thin') > aSec.indexOf('状态：active'), '标记在状态行后')
++    assert.ok(!bSec.includes('骨架：thin'), '实质条目不带标记')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('③ 存量回填幂等：标纯骨架、跳过已标/实质/无场景；二次执行零变更', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fsg3-'))
++  try {
++    const specBase = buildSpecBase(tmp)
++    writeDomain(specBase, 'cli', [
++      ...entryLines('FR-cli-001', '骨架未标', '2026-09-01-a', { skeleton: true }),
++      ...entryLines('FR-cli-002', '实质', '2026-09-01-a', { skeleton: false }),
++      ...entryLines('FR-cli-003', '骨架已标', '2026-09-01-a', { skeleton: true, marked: true }),
++      ...entryLines('FR-cli-004', '无场景体', '2026-09-01-a', { withBody: false }),
++    ])
++    const knowledgeRoot = join(specBase, 'knowledge')
++    const r1 = markSkeletonThin(knowledgeRoot)
++    assert.deepEqual(r1.marked.map((m) => m.id), ['FR-cli-001'], '只标未标纯骨架')
++    const text = readFileSync(join(knowledgeRoot, 'fr', 'cli.md'), 'utf8')
++    assert.equal((text.match(/^骨架：thin$/gm) || []).length, 2, '共 2 个标记（001 新标 + 003 已有）')
++    const r2 = markSkeletonThin(knowledgeRoot)
++    assert.equal(r2.marked.length, 0, '二次执行零变更（幂等）')
++    assert.equal(r2.files.length, 0, '二次执行零写盘')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('④ 注入排除+TierA 例外：骨架不进注入行、指针行披露、覆盖命中骨架带 🎯（厚道+轻量道双面）', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fsg4-'))
++  try {
++    // 12 条：001-004 实质、005-012 骨架（已标记——注入消费 flag）；006 源变更归档覆盖 src/cli/old.js（TierA 命中的骨架）
++    const chunks = []
++    for (let n = 1; n <= 12; n++) {
++      const id = `FR-cli-${String(n).padStart(3, '0')}`
++      const change = n === 6 ? '2026-09-02-hit-src' : '2026-09-01-a'
++      chunks.push(...entryLines(id, `功能${n}`, change, { skeleton: n >= 5, marked: n >= 5 }))
++    }
++    const specBase = buildSpecBase(tmp)
++    writeDomain(specBase, 'cli', chunks)
++    writeArchive(specBase, '2026-09-02-hit-src', ['src/cli/old.js'])
++    const changeDir = writeChangeDir(specBase, 'c-skel', ['src/cli/old.js'])
++
++    const r = await buildFrIndexDigestSection({ frSpecBase: specBase, changeName: 'c-skel' })
++    const entryLinesOut = r.text.split('\n').filter((l) => l.startsWith('- FR-cli-'))
++    assert.equal(entryLinesOut.length, 5, '注入行=4 实质 + 1 命中骨架')
++    assert.ok(entryLinesOut.some((l) => l.startsWith('- FR-cli-006 🎯') || l.startsWith('- FR-cli-006') && l.includes('🎯')), 'TierA 命中骨架带 🎯')
++    for (let n = 7; n <= 12; n++) assert.ok(!entryLinesOut.some((l) => l.startsWith(`- FR-cli-${String(n).padStart(3, '0')}`)), `纯骨架 ${n} 不注入`)
++    assert.ok(!entryLinesOut.some((l) => l.startsWith('- FR-cli-005')), '纯骨架 005 不注入')
++    assert.ok(r.text.includes('纯骨架 7 条不注入'), '指针行披露骨架数（8 骨架 - 1 命中例外）')
++    assert.equal(r.telemetry.skeletonHidden, 7, '遥测 skeletonHidden')
++    assert.equal(r.telemetry.tierA, 1, 'TierA=1')
++    assert.equal(r.telemetry.count, 12, 'count 全量口径不变')
++    assert.equal(r.telemetry.rendered, 5, 'rendered=实际注入行数')
++
++    const rt = await flowKnowledgeDigest({ specBase, change: 'c-skel', changeDir, input: '', filesOverride: ['src/cli/old.js'] })
++    const thinLines = rt.lines.filter((l) => l.includes('- FR-cli-'))
++    assert.equal(thinLines.length, 5, '轻量道同口径')
++    assert.ok(thinLines.some((l) => l.includes('FR-cli-006') && l.includes('🎯')), '轻量道命中骨架带 🎯')
++    assert.ok(rt.lines.some((l) => l.includes('纯骨架 7 条不注入')), '轻量道指针行披露')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('⑤ digest flag：readActiveFrDigest 对标记条目返回 skeleton=true', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fsg5-'))
++  try {
++    const specBase = buildSpecBase(tmp)
++    writeDomain(specBase, 'cli', [
++      ...entryLines('FR-cli-001', '已标骨架', '2026-09-01-a', { skeleton: true, marked: true }),
++      ...entryLines('FR-cli-002', '实质', '2026-09-01-a', { skeleton: false }),
++    ])
++    const frs = readActiveFrDigest(join(specBase, 'knowledge'), ['cli'])
++    assert.equal(frs.find((f) => f.id === 'FR-cli-001').skeleton, true, '标记条目 skeleton=true')
++    assert.equal(frs.find((f) => f.id === 'FR-cli-002').skeleton, false, '无标记条目 skeleton=false')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-10-03-fr-skeleton-gate/design.md b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/design.md
+new file mode 100644
+index 00000000..26532651
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/design.md
+@@ -0,0 +1,52 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:34:26.304Z
++---
++# 设计记录（Design Record）— 2026-10-03-fr-skeleton-gate
++
++## 文件变更清单
++| 修改 | src/fr-index.js | isThinSkeletonBodies 判据 + renderFrLines「骨架：thin」+ readActiveFrDigest skeleton 解析 + markSkeletonThin 回填 |
++| 修改 | src/run/prompt.js | buildFrIndexDigestSection 滤骨架（TierA 例外）+ 指针行披露 + 遥测 skeletonHidden |
++| 修改 | src/flow.js | flowKnowledgeDigest 同款过滤（TierA 例外）+ 指针行披露 |
++| 新增 | test/fr-skeleton-gate.test.mjs | 判据单元/索引标记/回填幂等/注入排除+TierA 例外双面/digest flag |
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++单点判据双端消费：fr-index.js 新增 isThinSkeletonBodies（全部场景体的 Then 均为 flow-draft 占位句「行为符合本条标准描述」→ 纯骨架；任一实质 Then 或无场景体 → 非骨架，保守宁漏勿误杀）。写端：renderFrLines 在状态行后落「骨架：thin」（indexRequirements 归档自动标记，新条目起效）；存量端：markSkeletonThin(knowledgeRoot) 全域扫描回填（解析条目场景正文行的 Then 段，幂等键=标记行在场即跳过）。读端：readActiveFrDigest 解析 skeleton flag（纯增量）。消费端只动注入面：buildFrIndexDigestSection 与 flowKnowledgeDigest 在批次1 排序后滤掉非 TierA 的骨架条目，指针行披露「纯骨架 N 条不注入」，遥测加 skeletonHidden；查重门/rot/测试绑定/承接翻链零改动（骨架的回归与取代价值照旧）。选此方案因为它不删任何数据——只给注入面装信息量阀门，风险最小。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++新增导出：fr-index.js isThinSkeletonBodies(bodies)→bool、SKELETON_THEN_PLACEHOLDER 常量、markSkeletonThin(knowledgeRoot)→{marked, files}。条目文件格式增量：新增可选行「骨架：thin」（状态行后；机械解析契约行族，与「摘要：」「依据决策：」同级）。readActiveFrDigest 条目对象新增 skeleton:boolean。注入行为变化：骨架条目默认不进注入清单（TierA 覆盖命中例外）；fr-inject 遥测新增 skeletonHidden 字段，既有字段（count/rendered/truncated/unmappedFiltered/tierA）零改动。命令/端点无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：标记是条目静态属性（由场景体内容决定），不依赖事件序；回填与索引标记对同一 entry 先后执行无冲突——joinKnowledgeFile 落盘前有「标记行在场即跳过」闸门，且 CLI 单一写入方（indexRequirements/markSkeletonThin 同仓串行）下不构成实际竞态。
++2. 并发写：markSkeletonThin 是本变更唯一新写面（全域知识文件）；与 indexRequirements 同属 CLI 写入方，遵守既有「CLI 单一写入方」纪律，不与 agent 编辑并发（agent 只写变更目录工件）。写失败 fail-soft 返回已标记部分。
++3. 切换/生命周期：回填中断 → 已写文件带标记、未写文件下次重跑补齐（幂等键保证无重复无遗漏）；注入过滤是渲染期纯读计算，无状态残留。
++4. 作用域：markSkeletonThin 以传入 knowledgeRoot 为界，平台仓回填显式传平台 knowledge 路径，不跨仓；骨架判据是纯文本模式匹配，与 locale/平台无关（占位句是 CLI 固定字面量）。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：误杀——agent 手写的真实需求恰巧以「行为符合本条标准描述」收尾会被判骨架而消失于注入面。对冲：该占位句是 flow-draft 专属字面量（design 槽指引要求 agent 写实质断言）；误杀后果有限（条目仍在索引/绑定/rot 面，TierA 命中时仍注入）；判据要求「全部」场景体命中才标。声明边界：①批次1 之前的切分错位条目（Then=箭头后半截，如平台 FR-components-shared-038 场景行）不满足占位句判据 → 不标不滤（漏放，不误杀——保守侧）；②骨架条目的「摘要：默认场景」行照旧（注入面排除以 skeleton flag 为准，非摘要文本）；③unmapped 停车场同样回填（一致性，反正在比对面之外）。试过放弃：在 flow-draft 起草端直接不生成骨架（消灭源头）——但骨架消灭的是空槽冷启动痛点（R20 实证 agent 手写 +12 轮 Edit），改起草端会回退那个决策；正确位置是消费端按信息量过滤。
+diff --git a/.sillyspec/changes/2026-10-03-fr-skeleton-gate/proposal.md b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/proposal.md
+new file mode 100644
+index 00000000..bf535d0d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/proposal.md
+@@ -0,0 +1,44 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:34:26.303Z
++---
++# 提案书（Proposal）— 2026-10-03-fr-skeleton-gate
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:581fe5e585782e5c0a939459cc9ba6d61b5ee107ca691c188b0f9fb16085f5a4:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++任务原话转写：骨架信息量门——治索引信噪比熵增。动机：薄道机器预填的空 GWT 骨架（When=标题回显、Then=占位句「行为符合本条标准描述」）永久入 knowledge/fr 索引（9 月平台仓 +661 条中相当部分为此形态），后续每个触达该域的变更注入面都被零信息条目占席。批次1 的排序止血后，骨架条目还会挤占 TierB 席位。方案：入索引时检测纯骨架（全部场景行含占位 Then）→ 条目落「骨架：thin」标记行；注入面排除骨架条目（TierA 覆盖命中者除外——它可能是该文件唯一行为痕迹）；查重/rot/测试绑定面一律不动（回归价值照旧）；存量一次性回填（幂等）。
++成功标准：
++- 纯骨架条目（全部场景行含「Then 行为符合本条标准描述」）入索引时自动带「骨架：thin」标记行；存量回填函数幂等（二次执行零变更）
++- 注入面（buildFrIndexDigestSection 与 flowKnowledgeDigest）排除骨架条目；TierA 覆盖命中的骨架条目仍注入且带 🎯
++- 注入行数/指针行/遥测既有字段语义不回归（非骨架场景行为与批次1 完全一致）
++- 平台仓存量骨架条目完成回填（数量披露）
++- 新增测试全绿 + 既有断言零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:9f4d55480c63142d065204de30bb408ced5181a64359fa82f9106c8aec0dd7b8:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++按成功标准机械推导，共 7 条验收面：
++1. 纯骨架条目（全部场景行含「Then 行为符合本条标准描述」）入索引时自动带「骨架：thin」标记行
++2. 存量回填函数幂等（二次执行零变更）
++3. 注入面（buildFrIndexDigestSection 与 flowKnowledgeDigest）排除骨架条目
++4. TierA 覆盖命中的骨架条目仍注入且带 🎯
++5. 注入行数/指针行/遥测既有字段语义不回归（非骨架场景行为与批次1 完全一致）
++6. 平台仓存量骨架条目完成回填（数量披露）
++7. 新增测试全绿 + 既有断言零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:216f261135c9ac0d07937c0832b3c1a37650490d49a2627feae8644fcd949e73:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
++1. 纯骨架条目（全部场景行含「Then 行为符合本条标准描述」）入索引时自动带「骨架：thin」标记行
++2. 存量回填函数幂等（二次执行零变更）
++3. 注入面（buildFrIndexDigestSection 与 flowKnowledgeDigest）排除骨架条目
++4. TierA 覆盖命中的骨架条目仍注入且带 🎯
++5. 注入行数/指针行/遥测既有字段语义不回归（非骨架场景行为与批次1 完全一致）
++6. 平台仓存量骨架条目完成回填（数量披露）
++7. 新增测试全绿 + 既有断言零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-10-03-fr-skeleton-gate/requirements.md b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/requirements.md
+new file mode 100644
+index 00000000..686e9aa5
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:34:26.304Z
++---
++# 需求规格（Requirements）— 2026-10-03-fr-skeleton-gate
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: 纯骨架识别与标记——索引条目落「骨架：thin」行
++Given 归档索引处理变更 requirements.md 的 FR 块、其全部场景体（scenarioBodies）的 Then 均为机器预填占位句「行为符合本条标准描述」（flow-draft 骨架未展开形态）
++When indexRequirements/renderFrLines 把条目写入 knowledge/fr/<域>.md
++Then 条目带「骨架：thin」标记行（状态行之后）；任一场景体有实质 Then → 不标（保守判据，宁漏勿误杀）；无场景体 → 不标
++
++### FR-02: 存量回填幂等
++Given knowledge/fr 存量条目中存在未标记的纯骨架（场景正文行的 Then 全为占位句）
++When 执行 markSkeletonThin(knowledgeRoot)（全域扫描）
++Then 纯骨架条目补「骨架：thin」行并返回标记清单；已有标记/非骨架条目零变更；二次执行零变更（幂等）
++
++### FR-03: 注入面排除骨架条目（TierA 覆盖命中例外）
++Given 触达域 active 条目中混有骨架与非骨架条目
++When buildFrIndexDigestSection（厚道）与 flowKnowledgeDigest（轻量道）渲染注入清单
++Then 骨架条目不占注入席位（指针行披露「纯骨架 N 条不注入」）；TierA 覆盖命中的骨架条目仍注入且带 🎯（它可能是该文件唯一行为痕迹）；纯非骨架场景的注入行为与批次1（2026-10-03-fr-inject-relevance-rank）完全一致
++
++### FR-04: digest 解析披露骨架位
++Given 知识条目带「骨架：thin」行
++When readActiveFrDigest 读取该域
++Then 返回条目 skeleton=true（纯增量字段）；查重门/rot suspect/测试绑定面的消费不受影响（不滤不改口径）
++
++### FR-05: 平台仓存量回填完成
++Given multi-agent-platform 仓 knowledge/fr 存量骨架条目（9 月大批量薄道产物）
++When 用本变更实现的 markSkeletonThin 对该仓执行回填
++Then 回填完成且标记数量披露（操作随变更留档）
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-skeleton-gate.test.mjs「② 索引标记」——占位 GWT 的 FR 入索引带「骨架：thin」、实质 Then 的 FR 不带、无场景体不带
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-skeleton-gate.test.mjs「③ 存量回填幂等」——2 纯骨架标记/1 实质/1 已标零变更；二次执行 marked=0
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-skeleton-gate.test.mjs「④ 注入排除+TierA 例外」（厚道 buildFrIndexDigestSection 与轻量道 flowKnowledgeDigest 双面）——骨架不进注入行、指针行披露、覆盖命中骨架带 🎯 在场；fr-inject-cap.test.mjs ①~⑦ 既有断言零回归（非骨架行为不变）
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-skeleton-gate.test.mjs「① 判据单元 + ⑤ digest flag」——isThinSkeletonBodies 三态；readActiveFrDigest 对标记条目返回 skeleton=true
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：跨仓一次性操作（markSkeletonThin 对 multi-agent-platform knowledge 执行），回填数量随变更归档件留档（decisions/design 记录）；本仓回填由「③ 存量回填幂等」同款函数覆盖
+diff --git a/.sillyspec/changes/2026-10-03-fr-skeleton-gate/tasks.md b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/tasks.md
+new file mode 100644
+index 00000000..751cf345
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-skeleton-gate/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T16:34:26.304Z
++---
++# 任务注册表（Tasks）— 2026-10-03-fr-skeleton-gate
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 `- [ ]`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: fr-index 判据与标记——isThinSkeletonBodies（全占位 Then）+ renderFrLines 落「骨架：thin」（状态行后）+ readActiveFrDigest 解析 skeleton flag + markSkeletonThin 存量回填（幂等）
++- [x] task-02: 注入面排除——buildFrIndexDigestSection 与 flowKnowledgeDigest 滤骨架（TierA 命中例外带 🎯）+ 指针行披露「纯骨架 N 条不注入」+ 遥测 skeletonHidden 增量字段
++- [x] task-03: 测试 test/fr-skeleton-gate.test.mjs——判据单元/索引标记/回填幂等/注入排除+TierA 例外双面/digest flag
++- [ ] task-04: 全量回归绿（fr-inject-cap ①~⑦ 零回归）+ flow done 收口 + 显式 pathspec 提交
++- [x] task-05: 平台仓 markSkeletonThin 回填执行 + 数量披露留档

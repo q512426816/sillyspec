@@ -5042,3 +5042,96 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-03-fr-inject-relevance-rank
   status: active
+
+## FR-cli-entry-269 纯骨架识别与标记——索引条目落「骨架：thin」行
+变更：2026-10-03-fr-skeleton-gate
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 归档索引处理变更 requirements.md 的 FR 块、其全部场景体（scenarioBodies）的 Then 均为机器预填占位句「行为符合本条标准描；When indexRequirements/renderFrLines 把条目写入 knowledge/fr/<域>.md；Then 条目带「骨架：thin」标记行（状态行之后）；任一场景体有实质 Then → 不标（保守判据，宁漏勿误杀）；无场景体 → 不标
+全文：.sillyspec/changes/archive/2026-10-03-fr-skeleton-gate/requirements.md#FR-01
+最近确认：9b2ae73d2220a87e54de071f78fe895a10d2316e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-skeleton-gate:flow:FR-01
+  tests: test/fr-skeleton-gate.test.mjs「② 索引标记」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-skeleton-gate
+  status: active
+
+## FR-cli-entry-270 存量回填幂等
+变更：2026-10-03-fr-skeleton-gate
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given knowledge/fr 存量条目中存在未标记的纯骨架（场景正文行的 Then 全为占位句）；When 执行 markSkeletonThin(knowledgeRoot)（全域扫描）；Then 纯骨架条目补「骨架：thin」行并返回标记清单；已有标记/非骨架条目零变更；二次执行零变更（幂等）
+全文：.sillyspec/changes/archive/2026-10-03-fr-skeleton-gate/requirements.md#FR-02
+最近确认：9b2ae73d2220a87e54de071f78fe895a10d2316e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-skeleton-gate:flow:FR-02
+  tests: test/fr-skeleton-gate.test.mjs「③ 存量回填幂等」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-skeleton-gate
+  status: active
+
+## FR-cli-entry-271 注入面排除骨架条目（TierA 覆盖命中例外）
+变更：2026-10-03-fr-skeleton-gate
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 触达域 active 条目中混有骨架与非骨架条目；When buildFrIndexDigestSection（厚道）与 flowKnowledgeDigest（轻量道）渲染注入清单；Then 骨架条目不占注入席位（指针行披露「纯骨架 N 条不注入」）；TierA 覆盖命中的骨架条目仍注入且带 🎯（它可能是该文件唯一行为痕迹）；纯非骨架场景的注入行为
+全文：.sillyspec/changes/archive/2026-10-03-fr-skeleton-gate/requirements.md#FR-03
+最近确认：9b2ae73d2220a87e54de071f78fe895a10d2316e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-skeleton-gate:flow:FR-03
+  tests: test/fr-inject-cap.test.mjs | test/fr-skeleton-gate.test.mjs「④ 注入排除+TierA 例外」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-skeleton-gate
+  status: active
+
+## FR-cli-entry-272 digest 解析披露骨架位
+变更：2026-10-03-fr-skeleton-gate
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 知识条目带「骨架：thin」行；When readActiveFrDigest 读取该域；Then 返回条目 skeleton=true（纯增量字段）；查重门/rot suspect/测试绑定面的消费不受影响（不滤不改口径）
+全文：.sillyspec/changes/archive/2026-10-03-fr-skeleton-gate/requirements.md#FR-04
+最近确认：9b2ae73d2220a87e54de071f78fe895a10d2316e
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-skeleton-gate:flow:FR-04
+  tests: test/fr-skeleton-gate.test.mjs「① 判据单元 + ⑤ digest flag」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-skeleton-gate
+  status: active
+
+## FR-cli-entry-273 平台仓存量回填完成
+变更：2026-10-03-fr-skeleton-gate
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given multi-agent-platform 仓 knowledge/fr 存量骨架条目（9 月大批量薄道产物）；When 用本变更实现的 markSkeletonThin 对该仓执行回填；Then 回填完成且标记数量披露（操作随变更留档）
+全文：.sillyspec/changes/archive/2026-10-03-fr-skeleton-gate/requirements.md#FR-05
+最近确认：9b2ae73d2220a87e54de071f78fe895a10d2316e

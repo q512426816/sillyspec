@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-fr-skeleton-gate",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-03-fr-skeleton-gate:flow:FR-01",
+      "tests": [
+        "test/fr-skeleton-gate.test.mjs「② 索引标记」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-skeleton-gate"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-03-fr-skeleton-gate:flow:FR-02",
+      "tests": [
+        "test/fr-skeleton-gate.test.mjs「③ 存量回填幂等」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-skeleton-gate"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-03-fr-skeleton-gate:flow:FR-03",
+      "tests": [
+        "test/fr-inject-cap.test.mjs",
+        "test/fr-skeleton-gate.test.mjs「④ 注入排除+TierA 例外」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-skeleton-gate"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-03-fr-skeleton-gate:flow:FR-04",
+      "tests": [
+        "test/fr-skeleton-gate.test.mjs「① 判据单元 + ⑤ digest flag」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-fr-skeleton-gate"
+    }
+  ]
+}

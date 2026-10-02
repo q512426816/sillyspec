@@ -1,0 +1,63 @@
+{
+  "change": "2026-10-03-fr-skeleton-gate",
+  "baseline": "a2bc987fa01071b37b896900ab4fc204e84ddbc4",
+  "head": "f42a4205f3b03d656735a0cfd71f451852c75a44",
+  "files": [
+    ".sillyspec/changes/2026-10-03-fr-skeleton-gate/design.md",
+    ".sillyspec/changes/2026-10-03-fr-skeleton-gate/flow-state.yaml",
+    ".sillyspec/changes/2026-10-03-fr-skeleton-gate/proposal.md",
+    ".sillyspec/changes/2026-10-03-fr-skeleton-gate/requirements.md",
+    ".sillyspec/changes/2026-10-03-fr-skeleton-gate/tasks.md",
+    "src/flow.js",
+    "src/fr-index.js",
+    "src/run/prompt.js",
+    "test/fr-skeleton-gate.test.mjs"
+  ],
+  "totals": {
+    "files": 9,
+    "additions": 427,
+    "deletions": 9
+  },
+  "savedAt": "2026-10-02T16:46:32.471Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "runtime",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/runtime.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "cli-entry",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "core-engine",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/core-engine.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "3660be87ee148216315e5e5f2bba62765cfac8113c67ff5eac72049c54e4f1dc",
+  "patchStatus": "ok"
+}
