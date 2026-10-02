@@ -1,0 +1,441 @@
+diff --git a/.sillyspec/changes/2026-10-03-fr-governance-telemetry/flow-state.yaml b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/flow-state.yaml
+new file mode 100644
+index 00000000..d8b90b25
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: aba9ee96e5c212e544eb722d44babc739d1587ba
++updatedAt: '2026-10-02T17:01:53.500Z'
++baseline_sha256: 8182d928c0eb27671850bc41f447e73eaf51588cb994568dbf1af8949a3e62de
++
+diff --git a/src/flow.js b/src/flow.js
+index 7e9ec80d..4428830a 100644
+--- a/src/flow.js
++++ b/src/flow.js
+@@ -261,6 +261,9 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
+     // 非来源变更数）；unknownSources 披露来源名单（FR 多条可共享一个来源变更）
+     strong: strong.length, unknown: unknownFrCount, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
+     unknownSources: [...unknownSources], source: 'flow-done',
++    // frIds（2026-10-03-fr-governance-telemetry）：strong 命中条目 id 帽 20——L3 裁决从域级计数
++    // 升为条目级有的放矢（stats 裁决候选视图的聚合键）。
++    frIds: strong.slice(0, 20).map((h) => h.id),
+   })
+   const warn = strong.length > 0
+     ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（收口提示即止，不留账）`
+diff --git a/src/fr-index.js b/src/fr-index.js
+index dc2ae217..bbfae0dc 100644
+--- a/src/fr-index.js
++++ b/src/fr-index.js
+@@ -529,8 +529,10 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
+       .filter((s) => !s.lines.some((l) => l.startsWith('superseded_by：')))
+       .map((s) => s.number)
+       .filter((n) => n && !written.some((w) => w.id === n));
+-    const count = activeIds.filter((id) => !refIds.has(id)).length;
+-    if (count > 0) unreferenced.push({ domain, count });
++    const unreferencedIds = activeIds.filter((id) => !refIds.has(id));
++    // ids（2026-10-03-fr-governance-telemetry）：条目级信号帽 20——archive-distill 透传进事件，
++    // stats 裁决候选视图按 id 聚合（域级计数保留兼容）。
++    if (unreferencedIds.length > 0) unreferenced.push({ domain, count: unreferencedIds.length, ids: unreferencedIds.slice(0, 20) });
+   }
+ 
+   // 落盘（dirty 集=新条目域 ∪ 翻链命中域——R1 审查阻断②：漏翻链域会返回值谎报成功但盘上丢失）
+diff --git a/src/knowledge-stats.js b/src/knowledge-stats.js
+index a8ccb745..07549b0e 100644
+--- a/src/knowledge-stats.js
++++ b/src/knowledge-stats.js
+@@ -128,6 +128,15 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+   const frInjectBySource = new Map()
+   const rotSuspectByDomain = new Map()
+   const rotSuspectChanges = new Set()
++  // 条目级聚合（2026-10-03-fr-governance-telemetry）：frIds/ids 事件 → id → {suspect, unreferenced}
++  // ——L3 裁决候选视图数据面；存量无字段事件自然跳过（向后兼容零破坏）。
++  const adjudicationById = new Map()
++  const bumpId = (id, key) => {
++    if (typeof id !== 'string' || !id) return
++    const row = adjudicationById.get(id) || { id, suspect: 0, unreferenced: 0 }
++    row[key] += 1
++    adjudicationById.set(id, row)
++  }
+   let frInject = 0
+   let frSupersede = 0
+   let frDuplicateWarning = 0
+@@ -155,6 +164,7 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+         row.count += Number.isFinite(Number(r.count)) ? Number(r.count) : 0
+         rotSuspectByDomain.set(domain, row)
+       }
++      for (const id of Array.isArray(r.frIds) ? r.frIds : []) bumpId(id, 'suspect')
+       if (r.change) rotSuspectChanges.add(r.change)
+     } else if (r.type === 'fr-unreferenced') {
+       const domain = r.domain || 'unknown'
+@@ -162,6 +172,7 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+       row.events += 1
+       row.count += Number.isFinite(Number(r.count)) ? Number(r.count) : 0
+       unreferencedByDomain.set(domain, row)
++      for (const id of Array.isArray(r.ids) ? r.ids : []) bumpId(id, 'unreferenced')
+     }
+   }
+ 
+@@ -174,8 +185,18 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
+   const denominator = sourceChanges.size
+   const supersedeRate = denominator > 0 ? supersedeChanges.size / denominator : null
+ 
++  // 裁决候选（2026-10-03-fr-governance-telemetry）：id 级聚合 → 候选清单（附来源变更名——
++  // scanFrIndex entries 的 id→change join）。候选非裁决：高 suspect 天然来自热文件高频触达，
++  // 处置出口在渲染指引（承接翻链/人工退休）。存量无 id 事件不进聚合（视图零噪音）。
++  const changeById = new Map()
++  for (const e of entries) if (e.id && e.change) changeById.set(e.id, e.change)
++  const adjudicationCandidates = [...adjudicationById.values()]
++    .map((row) => ({ ...row, change: changeById.get(row.id) || null }))
++    .sort((a, b) => ((b.suspect + b.unreferenced) - (a.suspect + a.unreferenced)) || a.id.localeCompare(b.id))
++
+   return {
+     present: frDirExists || frEvents.length > 0,
++    adjudicationCandidates,
+     events: {
+       frInject,
+       frInjectBySource: Object.fromEntries(frInjectBySource),
+@@ -296,6 +317,15 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
+     }
+     lines.push(`  索引面：${i.entries} 条（active ${i.active} / superseded ${i.superseded}）| 来源变更 ${i.sourceChanges} 个 | 域 ${i.domains.join(', ') || '—'}`)
+     lines.push(`  承接引用率：${frIndex.supersedeRate === null ? '—（索引空）' : `${(frIndex.supersedeRate * 100).toFixed(0)}%（${e.frSupersedeChanges}/${i.sourceChanges}，分子窗口内/分母全量——裁决用大窗口）`}`)
++    // 裁决候选视图（2026-10-03-fr-governance-telemetry）：条目级 id 聚合（事件 frIds/ids，帽 20 抽样
++    // 为下界）。候选非裁决——高 suspect 天然来自热文件；处置出口：确认无人承接 → 承接翻链或人工退休。
++    const cand = frIndex.adjudicationCandidates || []
++    if (cand.length > 0) {
++      lines.push('  裁决候选 Top-10（suspect×unref 条目级聚合——候选非裁决，确认无人承接→承接翻链或人工退休）：')
++      for (const c of cand.slice(0, 10)) {
++        lines.push(`    - ${c.id} suspect×${c.suspect} unref×${c.unreferenced}${c.change ? `（来源 ${c.change}）` : ''}`)
++      }
++    }
+   }
+ 
+   console.log(lines.join('\n'))
+diff --git a/src/run/archive-distill.js b/src/run/archive-distill.js
+index c7c68764..d6acff3b 100644
+--- a/src/run/archive-distill.js
++++ b/src/run/archive-distill.js
+@@ -70,7 +70,9 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
+     }
+     // 删除缺口探针（D-008 护栏③）：观察信号，不算 L3 门禁——L1 无删除声明义务，只采趋势数据
+     for (const u of (fr && fr.unreferenced) || []) {
+-      appendKnowledgeHit(runtimeRoot, { type: 'fr-unreferenced', change: changeName, domain: u.domain, count: u.count })
++      // ids（2026-10-03-fr-governance-telemetry）：条目级信号透传（帽 20 已在探针端裁）——
++      // stats 裁决候选视图聚合键；缺席（异常形态）省字段不伪造。
++      appendKnowledgeHit(runtimeRoot, { type: 'fr-unreferenced', change: changeName, domain: u.domain, count: u.count, ...(Array.isArray(u.ids) && u.ids.length > 0 ? { ids: u.ids } : {}) })
+       console.log(`   ℹ️  [观察信号·不算 L3 门禁] 触达域 ${u.domain} 有 ${u.count} 条 active FR 未被本次承接引用（fr-unreferenced 遥测，L3 裁决趋势数据）`)
+     }
+   } catch (e) {
+diff --git a/test/fr-governance-telemetry.test.mjs b/test/fr-governance-telemetry.test.mjs
+new file mode 100644
+index 00000000..2e3d61cd
+--- /dev/null
++++ b/test/fr-governance-telemetry.test.mjs
+@@ -0,0 +1,122 @@
++/**
++ * fr-governance-telemetry.test.mjs — 治理遥测补齐（2026-10-03-fr-governance-telemetry）
++ *
++ * 验收面（FR-01~FR-04）：
++ *   ① rot-suspect 事件带 frIds（帽 20，既有字段零改动）
++ *   ② unreferenced 探针带 ids（帽 20）
++ *   ③ 存量无字段事件兼容（既有读数不变，id 聚合跳过）
++ *   ④ 裁决候选视图：id 聚合 Top 清单 + 来源变更 join；无 id 数据零候选
++ */
++import { test } from 'node:test'
++import assert from 'node:assert/strict'
++import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join, dirname } from 'node:path'
++import { fileURLToPath, pathToFileURL } from 'node:url'
++
++const ROOT = dirname(fileURLToPath(import.meta.url))
++const { indexRequirements } = await import(pathToFileURL(join(ROOT, '..', 'src', 'fr-index.js')).href)
++const { rotSuspectFlow } = await import(pathToFileURL(join(ROOT, '..', 'src', 'flow.js')).href)
++const { buildFrIndexStats } = await import(pathToFileURL(join(ROOT, '..', 'src', 'knowledge-stats.js')).href)
++
++function buildSpecBase(base) {
++  const specBase = join(base, '.sillyspec')
++  mkdirSync(join(specBase, 'knowledge', 'fr'), { recursive: true })
++  mkdirSync(join(specBase, '.runtime'), { recursive: true })
++  const mapDir = join(specBase, 'docs', 'proj', 'modules')
++  mkdirSync(mapDir, { recursive: true })
++  writeFileSync(join(mapDir, '_module-map.yaml'), 'modules:\n  cli:\n    paths:\n      - src/cli/\n')
++  writeFileSync(join(specBase, 'knowledge', 'INDEX.md'), '# 知识索引\n')
++  return specBase
++}
++
++function writeCliDomain(specBase, count, change) {
++  const lines = ['---', 'author: sillyspec-fr-index', '---', '', '# FR 索引 — cli', '']
++  for (let i = 1; i <= count; i++) {
++    lines.push(
++      `## FR-cli-${String(i).padStart(3, '0')} 功能${i}`, `变更：${change}`, '状态：active', '摘要：默认场景',
++      '场景正文：', '- 场景：默认场景 — Given G；When W；Then T', `全文：x#FR-${i}`, '最近确认：a', '',
++    )
++  }
++  writeFileSync(join(specBase, 'knowledge', 'fr', 'cli.md'), lines.join('\n'))
++}
++
++test('① rot-suspect 事件带 frIds 帽 20（既有字段零改动）', async () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fgt1-'))
++  try {
++    const specBase = buildSpecBase(tmp)
++    writeCliDomain(specBase, 25, '2026-09-01-old-a')
++    // 25 条全命中（源变更归档覆盖触碰文件）——frIds 应帽 20
++    const arch = join(specBase, 'changes', 'archive', '2026-09-01-old-a')
++    mkdirSync(arch, { recursive: true })
++    writeFileSync(join(arch, 'change-patch.json'), JSON.stringify({ files: ['src/cli/old.js'] }))
++    const changeDir = join(specBase, 'changes', 'c-rot')
++    mkdirSync(changeDir, { recursive: true })
++    const r = await rotSuspectFlow({ specBase, change: 'c-rot', changeDir, files: ['src/cli/old.js'] })
++    assert.equal(r.strong, 25, '25 条覆盖命中')
++    const hits = readFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
++    const ev = hits.find((h) => h.type === 'fr-rot-suspect')
++    assert.ok(ev, '事件落盘')
++    assert.equal(ev.frIds.length, 20, 'frIds 帽 20')
++    assert.equal(ev.frIds[0], 'FR-cli-001')
++    assert.equal(ev.strong, 25, '既有字段 strong 零改动')
++    assert.equal(ev.count, 25, '既有字段 count 零改动')
++    assert.equal(ev.source, 'flow-done', '既有字段 source 零改动')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('② unreferenced 探针带 ids（帽 20）', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fgt2-'))
++  try {
++    const specBase = buildSpecBase(tmp)
++    writeCliDomain(specBase, 25, '2026-09-01-old-a')
++    const changeDir = join(specBase, 'changes', 'c-unref')
++    mkdirSync(changeDir, { recursive: true })
++    writeFileSync(join(changeDir, 'requirements.md'), [
++      '# R', '', '### FR-01: 新条目', 'Given G', 'When W', 'Then T', '',
++    ].join('\n'))
++    const r = indexRequirements({ changeDir, knowledgeRoot: join(specBase, 'knowledge'), headHash: 'h1', deliverableFiles: ['src/cli/a.js'] })
++    assert.equal(r.unreferenced.length, 1, 'cli 域一条未引用记录')
++    const u = r.unreferenced[0]
++    assert.equal(u.domain, 'cli')
++    assert.equal(u.count, 25, '全部 25 条存量 active 未被承接引用')
++    assert.equal(u.ids.length, 20, 'ids 帽 20')
++    assert.ok(u.ids.every((id) => /^FR-cli-\d{3}$/.test(id)), 'id 形态')
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
++
++test('③④ 裁决候选聚合：id 聚合 + 来源 join；存量无字段事件兼容零破坏', () => {
++  const tmp = mkdtempSync(join(tmpdir(), 'fgt3-'))
++  try {
++    const specBase = buildSpecBase(tmp)
++    writeCliDomain(specBase, 3, '2026-09-01-old-a')
++    const at = new Date().toISOString()
++    const events = [
++      // 存量形态（无 frIds/ids）——既有读数照常、id 聚合跳过
++      { type: 'fr-rot-suspect', change: 'c-legacy', domains: ['cli'], strong: 3, count: 3, source: 'flow-done', at },
++      { type: 'fr-unreferenced', change: 'c-legacy', domain: 'cli', count: 3, at },
++      // 新形态（带 id）
++      { type: 'fr-rot-suspect', change: 'c-new', domains: ['cli'], strong: 2, count: 2, frIds: ['FR-cli-001', 'FR-cli-002'], source: 'flow-done', at },
++      { type: 'fr-unreferenced', change: 'c-new', domain: 'cli', count: 2, ids: ['FR-cli-001', 'FR-cli-003'], at },
++    ]
++    writeFileSync(join(specBase, '.runtime', 'knowledge-hits.jsonl'), events.map((e) => JSON.stringify(e)).join('\n') + '\n')
++    const s = buildFrIndexStats(join(specBase, 'knowledge'), join(specBase, '.runtime'), { sinceDays: 30 })
++    assert.equal(s.events.frRotSuspect, 2, '事件计数含存量（兼容）')
++    assert.equal(s.events.frRotSuspectByDomain.find((r) => r.domain === 'cli').count, 5, '域级求和口径不变（3+2）')
++    assert.equal(s.events.frUnreferenced.length, 1, '域级 unreferenced 聚合不变')
++    const cand = s.adjudicationCandidates
++    assert.equal(cand.length, 3, '三条 id 进聚合')
++    assert.deepEqual([cand[0].id, cand[0].suspect, cand[0].unreferenced], ['FR-cli-001', 1, 1], 'Top=suspect+unref 并列最高者（id 序 tie-break）')
++    assert.equal(cand[0].change, '2026-09-01-old-a', '来源变更 join 自索引')
++    assert.ok(cand.some((c) => c.id === 'FR-cli-002' && c.suspect === 1 && c.unreferenced === 0))
++    assert.ok(cand.some((c) => c.id === 'FR-cli-003' && c.unreferenced === 1))
++
++    // 无 id 数据（纯存量）→ 零候选（视图零噪音）
++    const specBase2 = buildSpecBase(mkdtempSync(join(tmpdir(), 'fgt3b-')))
++    writeCliDomain(specBase2, 2, '2026-09-01-old-a')
++    writeFileSync(join(specBase2, '.runtime', 'knowledge-hits.jsonl'), JSON.stringify({ type: 'fr-rot-suspect', change: 'c', domains: ['cli'], count: 2, at }) + '\n')
++    const s2 = buildFrIndexStats(join(specBase2, 'knowledge'), join(specBase2, '.runtime'), { sinceDays: 30 })
++    assert.equal(s2.adjudicationCandidates.length, 0, '纯存量无 id → 零候选')
++    try { rmSync(dirname(specBase2), { recursive: true, force: true }) } catch { /* Windows */ }
++  } finally { rmSync(tmp, { recursive: true, force: true }) }
++})
+diff --git a/.sillyspec/changes/2026-10-03-fr-governance-telemetry/design.md b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/design.md
+new file mode 100644
+index 00000000..540006c6
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/design.md
+@@ -0,0 +1,53 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T17:01:53.471Z
++---
++# 设计记录（Design Record）— 2026-10-03-fr-governance-telemetry
++
++## 文件变更清单
++| 修改 | src/fr-index.js | unreferenced 探针产出 ids（帽 20） |
++| 修改 | src/flow.js | rotSuspectFlow 事件带 frIds（帽 20） |
++| 修改 | src/run/archive-distill.js | fr-unreferenced 事件透传 ids |
++| 修改 | src/knowledge-stats.js | 裁决候选聚合 + Top-N 渲染（无 id 数据零渲染） |
++| 新增 | test/fr-governance-telemetry.test.mjs | 四用例（事件负载/兼容/视图聚合） |
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++三件小事一件治理：①发射端补 id——fr-index unreferenced 探针把「未被本次承接引用的 active 条目 id」随域计数一起产出（帽 20），archive-distill 透传落盘；flow.js rotSuspectFlow 事件补 frIds（strong 命中 id，帽 20）。②消费端建视图——knowledge-stats 按 id 聚合 suspect 触达次数与 unreferenced 次数，cmdKnowledgeStats 渲染 Top-N 候选（附来源变更名 + 处置指引行：确认无人承接→承接翻链或人工裁决退休），把「证据发生器」接上「裁决动作」。③unmapped 停车场治理——既有 redomain 机器通道干跑评估、机械可迁者 --write 迁移（ID 不换号），残余头注「检索面-only」显式降级。选此方案因为全部复用既有管道（knowledge-hits 落盘/读取、scanFrIndex、redomainFrEntries），只加字段与视图，无新机制。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++indexRequirements 返回的 unreferenced 数组元素增加 ids:string[]（帽 20）；fr-rot-suspect 事件负载新增 frIds:string[]（帽 20）、fr-unreferenced 事件负载新增 ids:string[]（帽 20）——均为纯增量字段，存量事件（无字段）解析零破坏。buildFrIndexStats 返回新增 adjudicationCandidates: Array<{id, suspect, unreferenced, change}>（按 suspect+unreferenced 降序）；cmdKnowledgeStats 输出新增裁决候选段（无 id 数据时整段不渲染）。命令面/文件格式无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++1. 乱序/迟到：遥测是 append-only 事件流，id 聚合是幂等求和——事件先后/迟到不影响最终计数；帽 20 只影响单事件信息量不影响正确性（Top-N 视图本就是抽样指引非精确账）。
++2. 并发写：本变更新增零写面（事件仍走既有 appendKnowledgeHit 单写方；stats 是纯读聚合）。unmapped 治理的 --write 走既有 redomainFrEntries（受其原子写与幂等保护，由既有测试守护）。
++3. 切换/生命周期：stats 视图是即时计算无状态；unmapped 迁移中断 → 已迁条目在新域（ID 不换号，绑定链按 ID 寻址不受影响）、未迁条目留在池中，重跑续迁。
++4. 作用域：事件与索引都以仓内 .sillyspec 为界；聚合按 id 字符串精确匹配（FR-<域>-NNN 全局唯一），无跨仓串读。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++最大风险：候选视图被当门禁用——高 suspect 次数不等于该退休（热文件天然高频被触达）。对冲：渲染文案显式「候选非裁决」，处置指引给出人裁出口（承接翻链/needs_review），视图零阻断。声明边界：①帽 20 截断——超大触达面事件只带前 20 个 id，聚合计数是下界（视图本就是 Top-N 指引）；②存量 64+ 次事件无 id——视图只对新事件生效，历史需积累（不回填伪造）；③unmapped 迁移只做机械可迁面（来源变更可判域者），语义归属不猜。试过放弃：给 unreferenced 探针做全量 id（不帽）——单事件可达数百 id 撑爆 jsonl 行，帽 20 抽样足够指引裁决。
+diff --git a/.sillyspec/changes/2026-10-03-fr-governance-telemetry/proposal.md b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/proposal.md
+new file mode 100644
+index 00000000..6b75128a
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/proposal.md
+@@ -0,0 +1,37 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T17:01:53.470Z
++---
++# 提案书（Proposal）— 2026-10-03-fr-governance-telemetry
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:dc66bf407f142798011753ac13159c4ee5ed77f4c49d299f1b1aeef6c9e6ad9f:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++任务原话转写：治理遥测补齐——让 L3 裁决有的放矢。动机：fr-rot-suspect（72 次）与 fr-unreferenced（64 次，平台仓口径）只带域级计数不带 FR id——裁决「哪些条目该退休」无的放矢，证据发生器在发电没人接电（全局审计实证：两仓 decisions 零 L3 裁决记录）。方案：①两类事件负载补 FR id 清单（帽 20，存量事件无字段向后兼容）；②knowledge stats 新增裁决候选视图（按 id 聚合触达/未引用次数 Top-N，渲染附仪式指引）；③unmapped 停车场（本仓 723 条）治理：planRedomain 机械可迁者迁移、不可迁者头注显式降级「检索面-only」。
++成功标准：
++- fr-rot-suspect 事件带 frIds（覆盖命中条目 id，帽 20）、fr-unreferenced 事件带 ids（同帽）——存量无字段事件解析零破坏
++- knowledge stats 输出新增「裁决候选」视图：按 FR id 聚合 rot-suspect 触达次数与 unreferenced 次数，Top-N 渲染附来源变更与处置指引行
++- 本仓 unmapped 池机械迁移执行（planRedomain 干跑→可迁者 --write），不可迁残余在 unmapped.md 头注「检索面-only」声明，数量披露
++- 新增测试全绿 + 既有断言零回归
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:77e2c4ab505f70dc54e8ad1226893c619adf7ddfb6d1f340508317ddf5279665:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++按成功标准机械推导，共 4 条验收面：
++1. fr-rot-suspect 事件带 frIds（覆盖命中条目 id，帽 20）、fr-unreferenced 事件带 ids（同帽）——存量无字段事件解析零破坏
++2. knowledge stats 输出新增「裁决候选」视图：按 FR id 聚合 rot-suspect 触达次数与 unreferenced 次数，Top-N 渲染附来源变更与处置指引行
++3. 本仓 unmapped 池机械迁移执行（planRedomain 干跑→可迁者 --write），不可迁残余在 unmapped.md 头注「检索面-only」声明，数量披露
++4. 新增测试全绿 + 既有断言零回归
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:66a4773743087ca4361d8d98fa38a68c022fcdda3b244bb4e63ee8ed17de565b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-governance-telemetry 留痕重锚 -->
++1. fr-rot-suspect 事件带 frIds（覆盖命中条目 id，帽 20）、fr-unreferenced 事件带 ids（同帽）——存量无字段事件解析零破坏
++2. knowledge stats 输出新增「裁决候选」视图：按 FR id 聚合 rot-suspect 触达次数与 unreferenced 次数，Top-N 渲染附来源变更与处置指引行
++3. 本仓 unmapped 池机械迁移执行（planRedomain 干跑→可迁者 --write），不可迁残余在 unmapped.md 头注「检索面-only」声明，数量披露
++4. 新增测试全绿 + 既有断言零回归
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-10-03-fr-governance-telemetry/requirements.md b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/requirements.md
+new file mode 100644
+index 00000000..708f3346
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/requirements.md
+@@ -0,0 +1,50 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T17:01:53.471Z
++---
++# 需求规格（Requirements）— 2026-10-03-fr-governance-telemetry
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: rot-suspect 事件携带 FR id 清单
++Given flow done 收口的 fr-rot-suspect 遥测事件（覆盖命中的 strong 条目集）
++When appendKnowledgeHit 落盘事件
++Then 负载含 frIds（strong 条目全局 id，帽 20 条——防单事件膨胀）；既有字段（domains/strong/unknown/skip/count/unknownSources）零改动
++
++### FR-02: unreferenced 事件携带 FR id 清单
++Given indexRequirements 的 unreferenced 探针产出触达域未被本次承接引用的 active 条目
++When archive-distill 落盘 fr-unreferenced 事件
++Then 负载含 ids（该域未引用条目全局 id，帽 20 条）；既有字段（change/domain/count）零改动
++
++### FR-03: 存量事件向后兼容
++Given knowledge-hits.jsonl 存量事件（无 frIds/ids 字段）
++When knowledge-stats 解析
++Then 零破坏——无字段事件不进 id 聚合，域级/事件级既有读数不变
++
++### FR-04: knowledge stats 裁决候选视图
++Given knowledge-hits 中 rot-suspect/unreferenced 事件带 id 清单、knowledge/fr 索引在场
++When buildFrIndexStats 聚合 + cmdKnowledgeStats 渲染
++Then 按 FR id 聚合「suspect 触达次数 × unreferenced 次数」输出候选清单（Top-N 渲染，附来源变更名与处置指引行：确认无人承接 → 承接翻链或人工裁决退休）；无 id 数据时视图零噪音（不渲染空段）
++
++### FR-05: unmapped 停车场治理执行
++Given 本仓 knowledge/fr/unmapped.md 存量 723 条（40% 死库存——比对面已排除）
++When planRedomain 干跑评估机械可迁面 → 可迁者 redomainFrEntries --write 迁移（ID 不换号）
++Then 迁移数量与残余数量披露；不可迁残余在 unmapped.md 头注显式「检索面-only」声明（承认死库存不伪装活跃）
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-governance-telemetry.test.mjs「① rot-suspect 事件带 frIds 帽 20」——rotSuspectFlow 事件负载断言（既有字段零改动）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-governance-telemetry.test.mjs「② unreferenced 探针带 ids」——indexRequirements 产出 unreferenced[].ids 帽 20 断言
++
++<!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-governance-telemetry.test.mjs「③ 存量无字段事件兼容」——buildFrIndexStats 对无 id 字段事件的既有读数断言
++
++<!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/fr-governance-telemetry.test.mjs「④ 裁决候选视图」——带 id 事件聚合 Top-N、来源变更附注、无 id 时零渲染断言
++
++<!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：跨仓/本仓一次性治理操作（planRedomain 干跑+--write 迁移+头注声明），数量随变更归档件留档（design 回填留档段）；redomain 机器通道本身由既有 test/fr-domain-guard-and-redomain-bychange.test.mjs 守护
+diff --git a/.sillyspec/changes/2026-10-03-fr-governance-telemetry/tasks.md b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/tasks.md
+new file mode 100644
+index 00000000..bce2c3b1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-fr-governance-telemetry/tasks.md
+@@ -0,0 +1,16 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-02T17:01:53.472Z
++---
++# 任务注册表（Tasks）— 2026-10-03-fr-governance-telemetry
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 `- [ ]`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: fr-index unreferenced 探针带 ids（帽 20）+ flow.js rotSuspectFlow 事件带 frIds（帽 20）——既有字段零改动
++- [x] task-02: archive-distill fr-unreferenced 事件透传 ids
++- [x] task-03: knowledge-stats 裁决候选聚合（按 id 聚合 suspect/unreferenced 次数）+ cmdKnowledgeStats Top-N 渲染（附来源变更与处置指引；无 id 数据零渲染）
++- [x] task-04: 测试 test/fr-governance-telemetry.test.mjs（四用例）全绿 + 既有断言零回归
++- [x] task-05: 本仓 unmapped 治理执行（planRedomain 干跑→可迁 --write→残余头注「检索面-only」）+ 数量留档 design
++- [ ] task-06: 全量回归 + flow done 收口 + 显式 pathspec 提交

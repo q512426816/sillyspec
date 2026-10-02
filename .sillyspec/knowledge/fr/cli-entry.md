@@ -5135,3 +5135,96 @@ superseded_by：FR-cli-entry-198
 - 场景：默认场景 — Given multi-agent-platform 仓 knowledge/fr 存量骨架条目（9 月大批量薄道产物）；When 用本变更实现的 markSkeletonThin 对该仓执行回填；Then 回填完成且标记数量披露（操作随变更留档）
 全文：.sillyspec/changes/archive/2026-10-03-fr-skeleton-gate/requirements.md#FR-05
 最近确认：9b2ae73d2220a87e54de071f78fe895a10d2316e
+
+## FR-cli-entry-274 rot-suspect 事件携带 FR id 清单
+变更：2026-10-03-fr-governance-telemetry
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow done 收口的 fr-rot-suspect 遥测事件（覆盖命中的 strong 条目集）；When appendKnowledgeHit 落盘事件；Then 负载含 frIds（strong 条目全局 id，帽 20 条——防单事件膨胀）；既有字段（domains/strong/unknown/skip/count/
+全文：.sillyspec/changes/archive/2026-10-03-fr-governance-telemetry/requirements.md#FR-01
+最近确认：91c23bc43362de4c29e3daa499712a73c055eeaa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-governance-telemetry:flow:FR-01
+  tests: test/fr-governance-telemetry.test.mjs「① rot-suspect 事件带 frIds 帽 20」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-governance-telemetry
+  status: active
+
+## FR-cli-entry-275 unreferenced 事件携带 FR id 清单
+变更：2026-10-03-fr-governance-telemetry
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given indexRequirements 的 unreferenced 探针产出触达域未被本次承接引用的 active 条目；When archive-distill 落盘 fr-unreferenced 事件；Then 负载含 ids（该域未引用条目全局 id，帽 20 条）；既有字段（change/domain/count）零改动
+全文：.sillyspec/changes/archive/2026-10-03-fr-governance-telemetry/requirements.md#FR-02
+最近确认：91c23bc43362de4c29e3daa499712a73c055eeaa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-governance-telemetry:flow:FR-02
+  tests: test/fr-governance-telemetry.test.mjs「② unreferenced 探针带 ids」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-governance-telemetry
+  status: active
+
+## FR-cli-entry-276 存量事件向后兼容
+变更：2026-10-03-fr-governance-telemetry
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given knowledge-hits.jsonl 存量事件（无 frIds/ids 字段）；When knowledge-stats 解析；Then 零破坏——无字段事件不进 id 聚合，域级/事件级既有读数不变
+全文：.sillyspec/changes/archive/2026-10-03-fr-governance-telemetry/requirements.md#FR-03
+最近确认：91c23bc43362de4c29e3daa499712a73c055eeaa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-governance-telemetry:flow:FR-03
+  tests: test/fr-governance-telemetry.test.mjs「③ 存量无字段事件兼容」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-governance-telemetry
+  status: active
+
+## FR-cli-entry-277 knowledge stats 裁决候选视图
+变更：2026-10-03-fr-governance-telemetry
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given knowledge-hits 中 rot-suspect/unreferenced 事件带 id 清单、knowledge/fr 索引在场；When buildFrIndexStats 聚合 + cmdKnowledgeStats 渲染
+全文：.sillyspec/changes/archive/2026-10-03-fr-governance-telemetry/requirements.md#FR-04
+最近确认：91c23bc43362de4c29e3daa499712a73c055eeaa
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-fr-governance-telemetry:flow:FR-04
+  tests: test/fr-governance-telemetry.test.mjs「④ 裁决候选视图」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-fr-governance-telemetry
+  status: active
+
+## FR-cli-entry-278 unmapped 停车场治理执行
+变更：2026-10-03-fr-governance-telemetry
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 本仓 knowledge/fr/unmapped.md 存量 723 条（40% 死库存——比对面已排除）；When planRedomain 干跑评估机械可迁面 → 可迁者 redomainFrEntries --write 迁移（ID 不换号）；Then 迁移数量与残余数量披露；不可迁残余在 unmapped.md 头注显式「检索面-only」声明（承认死库存不伪装活跃）
+全文：.sillyspec/changes/archive/2026-10-03-fr-governance-telemetry/requirements.md#FR-05
+最近确认：91c23bc43362de4c29e3daa499712a73c055eeaa

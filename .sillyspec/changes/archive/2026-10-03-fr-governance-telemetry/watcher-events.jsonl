@@ -1,0 +1,10 @@
+{"ts":1790960532999,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1790960543034,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790960588874,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1790960615372,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：rc/flow.js——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790960839928,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1790960839928,"kind":"task-done","stage":"tasks","detail":"checked 0→5","provisional":true}
+{"ts":1790961053542,"kind":"commit","stage":null,"detail":"28ca0ed3","provisional":true}
+{"ts":1790961077237,"kind":"warning","stage":null,"rule":"scope-drift","severity":"warning","detail":"声明面之外的代码文件被改：sillyspec/changes/2026-10-03-fr-governance-telemetry/flow-state.yaml——范围漂移嫌疑（并行会话改动/越界，人判）","provisional":true}
+{"ts":1790961087208,"kind":"gate-run","stage":"verify","detail":"门实测 passed（8.9s） · 20261002171125","provisional":true}
+{"ts":1790961383983,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
