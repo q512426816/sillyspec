@@ -70,7 +70,9 @@ export async function executeArchiveDistill({ cwd, specBase, changeName }) {
     }
     // 删除缺口探针（D-008 护栏③）：观察信号，不算 L3 门禁——L1 无删除声明义务，只采趋势数据
     for (const u of (fr && fr.unreferenced) || []) {
-      appendKnowledgeHit(runtimeRoot, { type: 'fr-unreferenced', change: changeName, domain: u.domain, count: u.count })
+      // ids（2026-10-03-fr-governance-telemetry）：条目级信号透传（帽 20 已在探针端裁）——
+      // stats 裁决候选视图聚合键；缺席（异常形态）省字段不伪造。
+      appendKnowledgeHit(runtimeRoot, { type: 'fr-unreferenced', change: changeName, domain: u.domain, count: u.count, ...(Array.isArray(u.ids) && u.ids.length > 0 ? { ids: u.ids } : {}) })
       console.log(`   ℹ️  [观察信号·不算 L3 门禁] 触达域 ${u.domain} 有 ${u.count} 条 active FR 未被本次承接引用（fr-unreferenced 遥测，L3 裁决趋势数据）`)
     }
   } catch (e) {

@@ -529,8 +529,10 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
       .filter((s) => !s.lines.some((l) => l.startsWith('superseded_by：')))
       .map((s) => s.number)
       .filter((n) => n && !written.some((w) => w.id === n));
-    const count = activeIds.filter((id) => !refIds.has(id)).length;
-    if (count > 0) unreferenced.push({ domain, count });
+    const unreferencedIds = activeIds.filter((id) => !refIds.has(id));
+    // ids（2026-10-03-fr-governance-telemetry）：条目级信号帽 20——archive-distill 透传进事件，
+    // stats 裁决候选视图按 id 聚合（域级计数保留兼容）。
+    if (unreferencedIds.length > 0) unreferenced.push({ domain, count: unreferencedIds.length, ids: unreferencedIds.slice(0, 20) });
   }
 
   // 落盘（dirty 集=新条目域 ∪ 翻链命中域——R1 审查阻断②：漏翻链域会返回值谎报成功但盘上丢失）

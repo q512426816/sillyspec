@@ -128,6 +128,15 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
   const frInjectBySource = new Map()
   const rotSuspectByDomain = new Map()
   const rotSuspectChanges = new Set()
+  // 条目级聚合（2026-10-03-fr-governance-telemetry）：frIds/ids 事件 → id → {suspect, unreferenced}
+  // ——L3 裁决候选视图数据面；存量无字段事件自然跳过（向后兼容零破坏）。
+  const adjudicationById = new Map()
+  const bumpId = (id, key) => {
+    if (typeof id !== 'string' || !id) return
+    const row = adjudicationById.get(id) || { id, suspect: 0, unreferenced: 0 }
+    row[key] += 1
+    adjudicationById.set(id, row)
+  }
   let frInject = 0
   let frSupersede = 0
   let frDuplicateWarning = 0
@@ -155,6 +164,7 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
         row.count += Number.isFinite(Number(r.count)) ? Number(r.count) : 0
         rotSuspectByDomain.set(domain, row)
       }
+      for (const id of Array.isArray(r.frIds) ? r.frIds : []) bumpId(id, 'suspect')
       if (r.change) rotSuspectChanges.add(r.change)
     } else if (r.type === 'fr-unreferenced') {
       const domain = r.domain || 'unknown'
@@ -162,6 +172,7 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
       row.events += 1
       row.count += Number.isFinite(Number(r.count)) ? Number(r.count) : 0
       unreferencedByDomain.set(domain, row)
+      for (const id of Array.isArray(r.ids) ? r.ids : []) bumpId(id, 'unreferenced')
     }
   }
 
@@ -174,8 +185,18 @@ export function buildFrIndexStats(knowledgeDir, runtimeDir, { sinceDays = 30 } =
   const denominator = sourceChanges.size
   const supersedeRate = denominator > 0 ? supersedeChanges.size / denominator : null
 
+  // 裁决候选（2026-10-03-fr-governance-telemetry）：id 级聚合 → 候选清单（附来源变更名——
+  // scanFrIndex entries 的 id→change join）。候选非裁决：高 suspect 天然来自热文件高频触达，
+  // 处置出口在渲染指引（承接翻链/人工退休）。存量无 id 事件不进聚合（视图零噪音）。
+  const changeById = new Map()
+  for (const e of entries) if (e.id && e.change) changeById.set(e.id, e.change)
+  const adjudicationCandidates = [...adjudicationById.values()]
+    .map((row) => ({ ...row, change: changeById.get(row.id) || null }))
+    .sort((a, b) => ((b.suspect + b.unreferenced) - (a.suspect + a.unreferenced)) || a.id.localeCompare(b.id))
+
   return {
     present: frDirExists || frEvents.length > 0,
+    adjudicationCandidates,
     events: {
       frInject,
       frInjectBySource: Object.fromEntries(frInjectBySource),
@@ -296,6 +317,15 @@ export async function cmdKnowledgeStats(dir, args, opts = {}) {
     }
     lines.push(`  索引面：${i.entries} 条（active ${i.active} / superseded ${i.superseded}）| 来源变更 ${i.sourceChanges} 个 | 域 ${i.domains.join(', ') || '—'}`)
     lines.push(`  承接引用率：${frIndex.supersedeRate === null ? '—（索引空）' : `${(frIndex.supersedeRate * 100).toFixed(0)}%（${e.frSupersedeChanges}/${i.sourceChanges}，分子窗口内/分母全量——裁决用大窗口）`}`)
+    // 裁决候选视图（2026-10-03-fr-governance-telemetry）：条目级 id 聚合（事件 frIds/ids，帽 20 抽样
+    // 为下界）。候选非裁决——高 suspect 天然来自热文件；处置出口：确认无人承接 → 承接翻链或人工退休。
+    const cand = frIndex.adjudicationCandidates || []
+    if (cand.length > 0) {
+      lines.push('  裁决候选 Top-10（suspect×unref 条目级聚合——候选非裁决，确认无人承接→承接翻链或人工退休）：')
+      for (const c of cand.slice(0, 10)) {
+        lines.push(`    - ${c.id} suspect×${c.suspect} unref×${c.unreferenced}${c.change ? `（来源 ${c.change}）` : ''}`)
+      }
+    }
   }
 
   console.log(lines.join('\n'))

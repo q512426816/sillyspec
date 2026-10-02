@@ -261,6 +261,9 @@ export async function rotSuspectFlow({ specBase, change, changeDir, files }) {
     // 非来源变更数）；unknownSources 披露来源名单（FR 多条可共享一个来源变更）
     strong: strong.length, unknown: unknownFrCount, skip, count: strong.length, // count=strong：knowledge-stats 消费口径（评审 P1-1）
     unknownSources: [...unknownSources], source: 'flow-done',
+    // frIds（2026-10-03-fr-governance-telemetry）：strong 命中条目 id 帽 20——L3 裁决从域级计数
+    // 升为条目级有的放矢（stats 裁决候选视图的聚合键）。
+    frIds: strong.slice(0, 20).map((h) => h.id),
   })
   const warn = strong.length > 0
     ? `⚠️ [FR 腐烂 suspect·advisory] 触达 ${domains.join('、')} 域的 ${strong.length} 条 active FR 与本次交付文件面有覆盖交集——若改动影响这些行为，请在 requirements 承接/supersede 对账（收口提示即止，不留账）`
