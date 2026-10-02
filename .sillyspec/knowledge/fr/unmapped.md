@@ -6583,6 +6583,7 @@
 ## FR-unmapped-721 watcher 推送改走 POST {base}/api/changes/{name}/events
 变更：2026-09-27-watcher-push-endpoint
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given api 相关模块就绪；When watcher 推送改走 POST {base}/api/changes/{name}/events 单条契约（kind/rule/severity/provi；Then 行为符合本条标准描述
@@ -6604,6 +6605,7 @@
 ## FR-unmapped-722 推送失败语义保持 best-effort（失败即弃本地 jsonl 兜底），去重回退 ts+rule
 变更：2026-09-27-watcher-push-endpoint
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 推送失败语义保持 best-effort（失败即弃本地 jsonl 兜底），去重回退 ts+rule 语义不变；Then 行为符合本条标准描述
@@ -6625,6 +6627,7 @@
 ## FR-unmapped-723 watcher 测试套件同步更新并通过
 变更：2026-09-27-watcher-push-endpoint
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When watcher 测试套件同步更新并通过；Then 行为符合本条标准描述

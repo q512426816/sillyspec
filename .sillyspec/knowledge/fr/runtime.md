@@ -548,6 +548,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-044 flow start/done/amend-draft 执行后，runtimeRoot 下 agen
 变更：2026-09-29-flow-agent-log-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow start/done/amend-draft 执行后，runtimeRoot 下 agent-session-log.json 的本会话 own 条目；Then 行为符合本条标准描述
@@ -569,6 +570,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-045 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥
 变更：2026-09-29-flow-agent-log-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 上报走 recordAgentLogInvocation 同一通道（推送收敛/own 打标/双向互斥语义复用，不另造轮子）；Then 行为符合本条标准描述
@@ -590,6 +592,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-046 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响
 变更：2026-09-29-flow-agent-log-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 上报失败仅 warn/忽略，flow 协议面 exit code 不受影响；Then 行为符合本条标准描述
@@ -611,6 +614,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-047 run 族既有行为不变（既有 run agent-log 测试全绿）
 变更：2026-09-29-flow-agent-log-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When run 族既有行为不变（既有 run agent-log 测试全绿）；Then 行为符合本条标准描述
@@ -632,6 +636,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-048 新增测试覆盖 flow 入口的登记调用面
 变更：2026-09-29-flow-agent-log-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 新增测试覆盖 flow 入口的登记调用面；Then 行为符合本条标准描述
@@ -653,6 +658,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-049 全量测试绿 + lint 绿
 变更：2026-09-29-flow-agent-log-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试绿 + lint 绿；Then 行为符合本条标准描述
@@ -726,6 +732,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-054 报错文案不再含「用例依据」误导词，直接写明锚点须在证据列（第 5 列）
 变更：2026-09-30-verify-done-green-reuse
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 报错文案不再含「用例依据」误导词，直接写明锚点须在证据列（第 5 列）；Then 行为符合本条标准描述
@@ -735,6 +742,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-055 verify --done 的 test 实测在 HEAD+代码脏面+local.yaml 指纹全等
 变更：2026-09-30-verify-done-green-reuse
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When verify --done 的 test 实测在 HEAD+代码脏面+local.yaml 指纹全等且 30min 内有绿记录时复用缓存不真跑，输出明示 cac；Then 行为符合本条标准描述
@@ -744,6 +752,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-056 verify --done 的 lint 实测同指纹复用（同上口径）
 变更：2026-09-30-verify-done-green-reuse
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When verify --done 的 lint 实测同指纹复用（同上口径）；Then 行为符合本条标准描述
@@ -753,6 +762,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-057 指纹失配/无记录/环境异常一律回退真跑，门禁语义零变化（fail-open）
 变更：2026-09-30-verify-done-green-reuse
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 指纹失配/无记录/环境异常一律回退真跑，门禁语义零变化（fail-open）；Then 行为符合本条标准描述
@@ -762,6 +772,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-058 全量测试回归绿，含新增的文案断言与复用命中
 变更：2026-09-30-verify-done-green-reuse
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿，含新增的文案断言与复用命中；Then 行为符合本条标准描述
@@ -771,6 +782,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-059 未命中用例
 变更：2026-09-30-verify-done-green-reuse
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 未命中用例；Then 行为符合本条标准描述
@@ -798,6 +810,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-062 executeVerifyQualityScan 幂等命中时：不建快照、不跑 test/lint/s
 变更：2026-09-30-quality-scan-passed-idempotent
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 幂等 相关模块就绪；When executeVerifyQualityScan 幂等命中时：不建快照、不跑 test/lint/smoke/coverage、不重写扫描记录，打印 ♻️ 披露；Then 行为符合本条标准描述
@@ -816,6 +829,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-064 SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1/force 时 pass
 变更：2026-09-30-quality-scan-passed-idempotent
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When SILLYSPEC_VERIFY_QUALITY_SCAN_RERUN=1/force 时 passed 闸旁路（与失败闸同阀）；Then 行为符合本条标准描述
@@ -825,6 +839,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-065 全量测试回归绿 + lint 绿
 变更：2026-09-30-quality-scan-passed-idempotent
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿 + lint 绿；Then 行为符合本条标准描述
@@ -834,6 +849,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-066 子目录（一层）存在 pnpm/bun/lerna lockfile 而根目录无任何 lockfile
 变更：2026-09-30-snapshot-symlink-store-subdir
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 子目录（一层）存在 pnpm/bun/lerna lockfile 而根目录无任何 lockfile 判据时，detectSymlinkStoreLayout；Then 行为符合本条标准描述
@@ -855,6 +871,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-067 根目录判据行为零变化（根命中优先，标签不带 subdir）
 变更：2026-09-30-snapshot-symlink-store-subdir
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 根目录判据行为零变化（根命中优先，标签不带 subdir）；Then 行为符合本条标准描述
@@ -876,6 +893,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-068 createVerifyGateSnapshot 对子目录布局命中时打印跳快照警告并返回 null（
 变更：2026-09-30-snapshot-symlink-store-subdir
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When createVerifyGateSnapshot 对子目录布局命中时打印跳快照警告并返回 null（回退主仓实测），既有调用方（质量扫描/verify 门）零改；Then 行为符合本条标准描述
@@ -897,6 +915,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-069 非仓目录/无子目录/子目录全空的行为零变化（null）
 变更：2026-09-30-snapshot-symlink-store-subdir
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 非仓目录/无子目录/子目录全空的行为零变化（null）；Then 行为符合本条标准描述
@@ -918,6 +937,7 @@ superseded_by：FR-cli-entry-102
 ## FR-runtime-070 全量测试回归绿 + lint 绿
 变更：2026-09-30-snapshot-symlink-store-subdir
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全量测试回归绿 + lint 绿；Then 行为符合本条标准描述

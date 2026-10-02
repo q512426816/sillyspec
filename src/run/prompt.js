@@ -431,7 +431,11 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
         }
       } catch { /* design 缺席/不可读=无触碰面，保持文件序 */ }
     }
-    const truncated = Math.max(0, entries.length - FR_INDEX_DIGEST_MAX_ENTRIES)
+    // 骨架门（2026-10-03-fr-skeleton-gate）：纯骨架条目不占注入席位（TierA 命中例外）；指针行
+    // 披露骨架数。查重/rot/绑定面不滤。
+    const injectable = ranked.filter((e) => !e.skeleton || tierAIds.has(e.id))
+    const skeletonHidden = entries.filter((e) => e.skeleton && !tierAIds.has(e.id)).length
+    const truncated = Math.max(0, injectable.length - FR_INDEX_DIGEST_MAX_ENTRIES)
     let text
     if (domains.length === 0) {
       // 零路由命中两态：有交付清单但零命中（unmapped 兜底被滤）→ 指停车场；无清单 → 通用空态。
@@ -447,8 +451,10 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
     } else if (entries.length === 0) {
       text = '（触达域暂无 active FR 索引条目——本变更大概率是这些域的首批需求，照常写作）'
     } else {
-      const lines = ranked.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES).map((e) => `- ${e.id}${tierAIds.has(e.id) ? ' 🎯' : ''} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
-      if (truncated > 0) lines.push(`（+${truncated} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read）`)
+      const renderedEntries = injectable.slice(0, FR_INDEX_DIGEST_MAX_ENTRIES)
+      const hiddenCount = entries.length - renderedEntries.length
+      const lines = renderedEntries.map((e) => `- ${e.id}${tierAIds.has(e.id) ? ' 🎯' : ''} ${e.title}（来源 ${e.change}${e.scenarios.length ? '；场景：' + e.scenarios.slice(0, 3).join('，') : ''}${(e.decisions || []).length ? '；依据：' + e.decisions.slice(0, 3).join('、') : ''}）`)
+      if (hiddenCount > 0) lines.push(`（+${hiddenCount} 条见 knowledge/fr/ 对应域文件——未尽条目按需 Read${skeletonHidden > 0 ? `；纯骨架 ${skeletonHidden} 条不注入` : ''}）`)
       lines.push('')
       lines.push('> 域解析自本变更 design.md 文件清单（漏域先核对清单）。改写/取代已有行为 → 对应 FR 块加承接行；新行为 → 新 FR 块。superseded 条目默认不列（历史回溯自行读 knowledge/fr/）。依据决策（L2）= 当年取舍锚——翻案须先读 knowledge/decisions/<域>.md 的否决理由，满足复潮条件走 D-xxx@vN+1，不得静默改行为。承接行可带退役理由：`承接: FR-<域>-NNN（退役理由：一句话）`——归档时写进被取代条目（理由内禁逗号）；条目正文是截断摘要，全文锚（全文：<归档路径>#FR-NN）由 CLI 自动落。' + (tierAIds.size > 0 ? '🎯=与本次触碰文件有覆盖交集（TierA 优先注入）。' : ''))
       text = lines.join('\n')
@@ -457,9 +463,10 @@ export async function buildFrIndexDigestSection({ frSpecBase, changeName }) {
       text,
       telemetry: {
         type: 'fr-inject', change: changeName, domains, count: entries.length, source: 'digest',
-        rendered: entries.length - truncated, truncated,
+        rendered: Math.min(injectable.length, FR_INDEX_DIGEST_MAX_ENTRIES), truncated,
         unmappedFiltered: domainsAll.length !== domains.length,
         tierA: tierAIds.size,
+        skeletonHidden,
       },
     }
   } catch (e) {

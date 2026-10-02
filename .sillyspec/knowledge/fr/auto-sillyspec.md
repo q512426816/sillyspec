@@ -22,6 +22,7 @@ created_at: 2026-09-22T17:32:13.971Z
 ## FR-auto-sillyspec-002 test/state-machine-guards.test.mjs 全绿（1a 守卫恢复拦截）
 变更：2026-09-27-pushgate-birth-tests-sync
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When test/state-machine-guards.test.mjs 全绿（1a 守卫恢复拦截）；Then 行为符合本条标准描述
@@ -43,6 +44,7 @@ created_at: 2026-09-22T17:32:13.971Z
 ## FR-auto-sillyspec-003 仅改测试期望与 fixture，不动 src/stage-contract.js 任何运行逻辑
 变更：2026-09-27-pushgate-birth-tests-sync
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 仅改测试期望与 fixture，不动 src/stage-contract.js 任何运行逻辑；Then 行为符合本条标准描述
@@ -64,6 +66,7 @@ created_at: 2026-09-22T17:32:13.971Z
 ## FR-auto-sillyspec-004 docs check 全量 0 失效（total 扫描面不变：docs/ + .sillyspec/
 变更：2026-09-30-docs-gate-zero
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When docs check 全量 0 失效（total 扫描面不变：docs/ + .sillyspec/docs/ + .sillyspec/changes/ +；Then 行为符合本条标准描述
@@ -82,6 +85,7 @@ created_at: 2026-09-22T17:32:13.971Z
 ## FR-auto-sillyspec-006 跨仓引用全部显式 repo://sillyhub 前缀（不靠 skip/豁免藏数），本机映射下层1+
 变更：2026-09-30-docs-gate-zero
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 跨仓引用全部显式 repo://sillyhub 前缀（不靠 skip/豁免藏数），本机映射下层1+层2 实测通过；Then 行为符合本条标准描述
@@ -91,6 +95,7 @@ created_at: 2026-09-22T17:32:13.971Z
 ## FR-auto-sillyspec-007 pre-push 三道关（lint + 全量测试 + docs gate --against HEA
 变更：2026-09-30-docs-gate-zero
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When pre-push 三道关（lint + 全量测试 + docs gate --against HEAD）全绿；Then 行为符合本条标准描述

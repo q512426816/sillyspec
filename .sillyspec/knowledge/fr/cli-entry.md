@@ -2876,6 +2876,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-159 verify --done 自动绑定：verify 阶段收口测试门之后（test-result.js
 变更：2026-09-26-full-autopilot-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When verify --done 自动绑定：verify 阶段收口测试门之后（test-result.json 已生成），从测试结果自动补全空绑定槽——与 thin；Then 行为符合本条标准描述
@@ -2897,6 +2898,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-160 GWT 预填不迁移（来源不同：full 的 requirements 来自对话演化非 input 文
 变更：2026-09-26-full-autopilot-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 迁移 相关模块就绪；When GWT 预填不迁移（来源不同：full 的 requirements 来自对话演化非 input 文本——brainstorm 步骤 8 已有 design 可；Then 行为符合本条标准描述
@@ -2918,6 +2920,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-161 两条均向后兼容（已有内容不覆盖）
 变更：2026-09-26-full-autopilot-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 两条均向后兼容（已有内容不覆盖）；Then 行为符合本条标准描述
@@ -2927,6 +2930,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-162 测试：execute auto-tick 接线钉+verify auto-bind 接线钉+既有套件
 变更：2026-09-26-full-autopilot-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 测试：execute auto-tick 接线钉+verify auto-bind 接线钉+既有套件零回归；Then 行为符合本条标准描述
@@ -2936,6 +2940,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-163 readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - ro
 变更：2026-09-27-confirm-on-use
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When readActiveFrDigest 条目携带 unconfirmed 绑定计数（读条目内 - row: 块的 confirmed_by≠agent 行）；Then 行为符合本条标准描述
@@ -2957,6 +2962,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-164 知识注入面：未确认条目带 ⚪N未确认 标记
 变更：2026-09-27-confirm-on-use
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 知识注入面：未确认条目带 ⚪N未确认 标记；Then 行为符合本条标准描述
@@ -3020,6 +3026,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-167 已是 active 幂等提示
 变更：2026-09-27-confirm-on-use
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 幂等 相关模块就绪；When 已是 active 幂等提示；Then 行为符合本条标准描述
@@ -3041,6 +3048,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-168 无绑定行
 变更：2026-09-27-confirm-on-use
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 无绑定行；Then 行为符合本条标准描述
@@ -3062,6 +3070,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-169 证据不可解析拒绝 exit 1
 变更：2026-09-27-confirm-on-use
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 证据不可解析拒绝 exit 1；Then 行为符合本条标准描述
@@ -3083,6 +3092,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-170 全仓测试绿
 变更：2026-09-27-confirm-on-use
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全仓测试绿；Then 行为符合本条标准描述
@@ -3092,6 +3102,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-171 patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood
 变更：2026-09-27-tool-debt-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When patch 冻结面提交面过滤保留 .sillyspec 目录下的 docs 交付文档（dogfood 模块卡不再漏），过滤逻辑抽为 flow-parity 导出；Then 行为符合本条标准描述
@@ -3113,6 +3124,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-172 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）
 变更：2026-09-27-tool-debt-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 变更目录遍历排除 flow-state.yaml 运行态（未跟踪机器件不入审计 patch）；Then 行为符合本条标准描述
@@ -3122,6 +3134,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-173 _module-map.yaml 的 cli-entry paths 登记 ui-visual.js
 变更：2026-09-27-tool-debt-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When _module-map.yaml 的 cli-entry paths 登记 ui-visual.js 与 hunk-attribution.js；Then 行为符合本条标准描述
@@ -3131,6 +3144,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-174 test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消
 变更：2026-09-27-tool-debt-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When test-bindings.js 去除 normalizeTestsRootRel 冗余导出（内部消费保留），check-syntax 本仓侧清零；Then 行为符合本条标准描述
@@ -3140,6 +3154,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-175 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）
 变更：2026-09-27-tool-debt-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 单测锁定过滤纯函数行为（模块卡保留、他侧变更目录滤除、本变更目录保留、非 sillyspec 保留）；Then 行为符合本条标准描述
@@ -3161,6 +3176,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-176 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）
 变更：2026-09-27-tool-debt-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 既有冻结语义其余行为零变化（dirty 切分、exclusive 并入、sha256 锚定不动）；Then 行为符合本条标准描述
@@ -3182,6 +3198,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-177 归档链（runArchiveChain，flow done 与 run archive 双入口共用）
 变更：2026-09-28-archive-timeline-bake
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 归档链（runArchiveChain，flow done 与 run archive 双入口共用）在目录搬移成功后、窄化 git add 前，写 archiv；Then 行为符合本条标准描述
@@ -3203,6 +3220,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-178 烤制失败 fail-open（一行警告，不阻断归档）
 变更：2026-09-28-archive-timeline-bake
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 烤制失败 fail-open（一行警告，不阻断归档）；Then 行为符合本条标准描述
@@ -3224,6 +3242,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-179 本机 .runtime 无事件流时，sillyspec watcher timeline --cha
 变更：2026-09-28-archive-timeline-bake
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 本机 .runtime 无事件流时，sillyspec watcher timeline --change <已归档变更> 自动回退读归档包内 watcher-；Then 行为符合本条标准描述
@@ -3245,6 +3264,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-180 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 g
 变更：2026-09-28-archive-timeline-bake
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 事件副本带尺寸帽（超帽跳过副本只烤 timeline.md 并在文件头留注记），防巨型事件流污染 git；Then 行为符合本条标准描述
@@ -3266,6 +3286,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-181 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态
 变更：2026-09-28-archive-timeline-bake
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 新增测试覆盖烤制渲染、烤制编排（fixture 目录）、回退读取（坏行容忍）、无事件跳过态；Then 行为符合本条标准描述
@@ -3287,6 +3308,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-182 全量 npm test 与 npm run lint 绿
 变更：2026-09-28-archive-timeline-bake
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 全量 npm test 与 npm run lint 绿；Then 行为符合本条标准描述
@@ -3296,6 +3318,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-183 .sillyspec/ROADMAP.md 自本仓删除并显式 pathspec 提交
 变更：roadmap-copy-purge
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When .sillyspec/ROADMAP.md 自本仓删除并显式 pathspec 提交；Then 行为符合本条标准描述
@@ -3314,6 +3337,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-185 纯 doc 删除，收口实测自动跳过代码面
 变更：roadmap-copy-purge
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 纯 doc 删除，收口实测自动跳过代码面；Then 行为符合本条标准描述
@@ -3323,6 +3347,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-186 flow start --change friction-signal-hint（净新建、无日期前缀
 变更：2026-09-28-flow-date-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow start --change friction-signal-hint（净新建、无日期前缀）exit 2 且报错含 YYYY-MM-DD-<简短描述>；Then 行为符合本条标准描述
@@ -3344,6 +3369,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-187 flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更
 变更：2026-09-28-flow-date-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow start --change 2026-09-28-xxx（合规名）照常创建轻量变更；Then 行为符合本条标准描述
@@ -3365,6 +3391,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-188 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉
 变更：2026-09-28-flow-date-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 已存在目录（恢复/brainstorm 收编/归档名）时同名 start 不被日期门拦截（存量不追诉）；Then 行为符合本条标准描述
@@ -3386,6 +3413,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-189 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-D
 变更：2026-09-28-flow-date-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 无 --change 时默认自动名符合 DATED_CHANGE_NAME_RE（YYYY-MM-DD-flow-<hex> 形态）；Then 行为符合本条标准描述
@@ -3407,6 +3435,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-190 既有 flow 族测试全部适配通过（test+lint 双绿）
 变更：2026-09-28-flow-date-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有 flow 族测试全部适配通过（test+lint 双绿）；Then 行为符合本条标准描述
@@ -3428,6 +3457,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-191 摘录器斜杠拆分收窄：仅当拆分后每一段都含谓词词元（访问、生效、校验、通过等行为动词词表）才拆
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 摘录器斜杠拆分收窄：仅当拆分后每一段都含谓词词元（访问、生效、校验、通过等行为动词词表）才拆；Then 行为符合本条标准描述
@@ -3449,6 +3479,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-192 成对短名词（节点与边、页面 UI、warn 错误 off 等）保持整条
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 成对短名词（节点与边、页面 UI、warn 错误 off 等）保持整条；Then 行为符合本条标准描述
@@ -3470,6 +3501,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-193 分号拆分与路径形态守卫行为不变
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 分号拆分与路径形态守卫行为不变；Then 行为符合本条标准描述
@@ -3491,6 +3523,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-194 门 FAIL 三件套透传：失败行样本（前五条）、结果 JSON 全路径、可直接粘贴重放的批命令，在测
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 门 FAIL 三件套透传：失败行样本（前五条）、结果 JSON 全路径、可直接粘贴重放的批命令，在测试门 FAIL 输出处一并打印；Then 行为符合本条标准描述
@@ -3500,6 +3533,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-195 快照证据回拷：快照模式测试门 FAIL 时，快照内 verify-runs 结果目录回拷主仓 run
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 快照证据回拷：快照模式测试门 FAIL 时，快照内 verify-runs 结果目录回拷主仓 runtime 后再清理，排障证据不再蒸发；Then 行为符合本条标准描述
@@ -3509,6 +3543,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-196 既有 fr-compound-split 测试扩展锁定新边界：谓词双侧拆分保留、名词对不拆、路径与分
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有 fr-compound-split 测试扩展锁定新边界：谓词双侧拆分保留、名词对不拆、路径与分号行为不变；Then 行为符合本条标准描述
@@ -3530,6 +3565,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-197 同文件他会话在途改动零夹带（flow-draft 与 quick-audit 提交前逐 hunk 核
 变更：2026-09-28-split-guard-and-gate-report
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 同文件他会话在途改动零夹带（flow-draft 与 quick-audit 提交前逐 hunk 核对）；Then 行为符合本条标准描述
@@ -3689,6 +3725,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-201 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHi
 变更：2026-09-28-knowledge-inject-ranking
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 查询含枚举/词表/开放世界时，D-001@v1「枚举开放世界是错误方向」出现在 decisionHits 前 5，且 flow start 知识注入段与 kno；Then 行为符合本条标准描述
@@ -3710,6 +3747,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-202 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染
 变更：2026-09-28-knowledge-inject-ranking
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 理由含「死路：」注记的条目不受 implemented 状态压制，进防复潮优先组并带标记渲染；Then 行为符合本条标准描述
@@ -3731,6 +3769,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-203 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在
 变更：2026-09-28-knowledge-inject-ranking
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 无关查询（如 pnpm 语料）不出现否决/死路误注入——精度不回归，主题相关命中仍在；Then 行为符合本条标准描述
@@ -3773,6 +3812,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-205 既有测试与 npm run test:core 全绿
 变更：2026-09-28-knowledge-inject-ranking
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有测试与 npm run test:core 全绿；Then 行为符合本条标准描述
@@ -3794,6 +3834,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-206 detectFakeCheckCompletion 增任务来源维度：与机器稿基线（route-hin
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When detectFakeCheckCompletion 增任务来源维度：与机器稿基线（route-hindsight-baseline 快照）逐字相同的勾选行＝镜像；Then 行为符合本条标准描述
@@ -3815,6 +3856,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-207 无基线快照时 fail-safe 维持现行判据（全部要求证据）
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 无基线快照时 fail-safe 维持现行判据（全部要求证据）；Then 行为符合本条标准描述
@@ -3836,6 +3878,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-208 flow done 拒收文案与 watcher 人判警告不再对镜像勾选触发
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow done 拒收文案与 watcher 人判警告不再对镜像勾选触发；Then 行为符合本条标准描述
@@ -3857,6 +3900,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-209 覆写任务无证据仍拒收（假勾选守卫不弱化）
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 覆写任务无证据仍拒收（假勾选守卫不弱化）；Then 行为符合本条标准描述
@@ -3878,6 +3922,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-210 勾选节奏 advisory 仅在存在覆写任务面时提示（镜像面批量勾选不提示）
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 勾选节奏 advisory 仅在存在覆写任务面时提示（镜像面批量勾选不提示）；Then 行为符合本条标准描述
@@ -3899,6 +3944,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-211 单测覆盖镜像豁免/覆写守卫/无基线 fail-safe 三态
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 单测覆盖镜像豁免/覆写守卫/无基线 fail-safe 三态；Then 行为符合本条标准描述
@@ -3920,6 +3966,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-212 真实演练：镜像全勾单提交无 token 收口通过、覆写任务无证据仍拒收
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 真实演练：镜像全勾单提交无 token 收口通过、覆写任务无证据仍拒收；Then 行为符合本条标准描述
@@ -3941,6 +3988,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-213 npm test 与 test:core 全绿
 变更：2026-09-28-sentinel-mirror-waiver
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When npm test 与 test:core 全绿；Then 行为符合本条标准描述
@@ -3962,6 +4010,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-214 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）
 变更：2026-09-28-sentinel-waiver-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 镜像豁免仅在区间提交非空时生效——零提交＋镜像全勾仍拒收（空转变更不许过门）；Then 行为符合本条标准描述
@@ -3983,6 +4032,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-215 flow-state 锚定基线文件 sha256（start/adopt 快照时点）
 变更：2026-09-28-sentinel-waiver-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow-state 锚定基线文件 sha256（start/adopt 快照时点）；Then 行为符合本条标准描述
@@ -4025,6 +4075,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-217 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归
 变更：2026-09-28-sentinel-waiver-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 混合面（镜像＋覆写带 token）、重编号从严、CRLF 归一等已验行为零回归；Then 行为符合本条标准描述
@@ -4046,6 +4097,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-218 单测覆盖零提交从严/篡改从严/哈希锚定
 变更：2026-09-28-sentinel-waiver-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 单测覆盖零提交从严/篡改从严/哈希锚定；Then 行为符合本条标准描述
@@ -4076,6 +4128,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-220 npm test 与 test:core 全绿
 变更：2026-09-28-sentinel-waiver-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When npm test 与 test:core 全绿；Then 行为符合本条标准描述
@@ -4085,6 +4138,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-221 matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When matchKnowledge decisionHits 条目新增 score 字段（加法不改既有键）；Then 行为符合本条标准描述
@@ -4106,6 +4160,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-222 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 门/knowledge 注入段/{DECISION_HITS} 三消费方回显过滤——score>0 或 deathPath 才弹，空标题零分 rejected；Then 行为符合本条标准描述
@@ -4127,6 +4182,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-223 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 真实库枚举词表查询下 D-001@v1 仍置顶弹出、D-009/010/011 不再出现在回显；Then 行为符合本条标准描述
@@ -4148,6 +4204,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-224 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.m
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 已回应不重弹：decisions.md 正文含「命中 id＋域文件名」共现（如 unmapped.md D-001@v1 形态）的命中在后续 --done 回显；Then 行为符合本条标准描述
@@ -4169,6 +4226,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-225 未回应命中照常弹
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 未回应命中照常弹；Then 行为符合本条标准描述
@@ -4190,6 +4248,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-226 无命中
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 无命中；Then 行为符合本条标准描述
@@ -4211,6 +4270,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-227 全静默时输出与现状一致
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 全静默时输出与现状一致；Then 行为符合本条标准描述
@@ -4232,6 +4292,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-228 既有知识面测试回归全绿，test:core 全绿
 变更：2026-09-28-knowledge-gate-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有知识面测试回归全绿，test:core 全绿；Then 行为符合本条标准描述
@@ -4274,6 +4335,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-230 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deat
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 平台只做语义召回（spec_path+anchor+score 候选），条目 status/deathPath/回显资格全部本地解析（文件是真相源）；Then 行为符合本条标准描述
@@ -4316,6 +4378,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-232 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 平台未实现期间任何失败（未连接/404/超时/网络）静默降级本地层，检索面永不因平台故障阻断；Then 行为符合本条标准描述
@@ -4337,6 +4400,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-233 local.yaml knowledge.vector_search: off 可关
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When local.yaml knowledge.vector_search: off 可关；Then 行为符合本条标准描述
@@ -4358,6 +4422,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-234 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/kn
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 四消费方（flow 注入段/complete 门/prompt {DECISION_HITS}/knowledge search CLI）走 hybrid；Then 行为符合本条标准描述
@@ -4379,6 +4444,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-235 既有同步 matchKnowledge 行为零变化（其他调用方不动）
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 既有同步 matchKnowledge 行为零变化（其他调用方不动）；Then 行为符合本条标准描述
@@ -4400,6 +4466,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-236 mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When mock 平台服务器实测：命中/404 降级/宕机降级/超时降级/开关关闭/路由命中不触发平台 六面 + 真实库锚点映射正确；Then 行为符合本条标准描述
@@ -4421,6 +4488,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-237 既有测试与 test:core 全绿
 变更：2026-09-29-knowledge-vector-recall
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有测试与 test:core 全绿；Then 行为符合本条标准描述
@@ -4442,6 +4510,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-238 changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底
 变更：2026-09-29-title-and-agents-slim
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When changes.title 三段链路闭合（start 写入 --title>input 首行>名兜底、resume/adopt 补写、serializeForS；Then 行为符合本条标准描述
@@ -4463,6 +4532,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-239 AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templat
 变更：2026-09-29-title-and-agents-slim
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When AGENTS.md 移出操作教学（轻量变更节并入选道、速查压缩为恢复查看三行），模板 templates/agents-instruction.md 同步，模板；Then 行为符合本条标准描述
@@ -4484,6 +4554,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-240 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行
 变更：2026-09-29-title-and-agents-slim
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 标题约定落 sillyspec-flow skill 并修正 commands.test 退役过期行；Then 行为符合本条标准描述
@@ -4744,6 +4815,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-256 全勾后 flow done）
 变更：2026-09-29-flow-skill-heartbeat-doc
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 全勾后 flow done）；Then 行为符合本条标准描述
@@ -4753,6 +4825,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-257 SKILL.md 边界节中断恢复行补节拍器语义（②执行阶段 status 给下一任务指针与进度）
 变更：2026-09-29-flow-skill-heartbeat-doc
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When SKILL.md 边界节中断恢复行补节拍器语义（②执行阶段 status 给下一任务指针与进度）；Then 行为符合本条标准描述
@@ -4762,6 +4835,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-258 其余内容零改动
 变更：2026-09-29-flow-skill-heartbeat-doc
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 其余内容零改动；Then 行为符合本条标准描述
@@ -4792,6 +4866,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-260 flow status 自愿查看（非协议必需，D-007）」口径，不再出现「每勾一格重跑 flow
 变更：2026-09-29-heartbeat-d007-incontext
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow status 自愿查看（非协议必需，D-007）」口径，不再出现「每勾一格重跑 flow status」类指引；Then 行为符合本条标准描述
@@ -4813,6 +4888,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-261 status 心跳渲染本体保留（下一任务指针/进度/全勾指 done——恢复场景价值不变），仅指引文
 变更：2026-09-29-heartbeat-d007-incontext
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When status 心跳渲染本体保留（下一任务指针/进度/全勾指 done——恢复场景价值不变），仅指引文案改口径；Then 行为符合本条标准描述
@@ -4834,6 +4910,7 @@ superseded_by：FR-cli-entry-198
 ## FR-cli-entry-262 相关测试钉同步（flow-status-heartbeat/tick-loop-nudge），flo
 变更：2026-09-29-heartbeat-d007-incontext
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 相关测试钉同步（flow-status-heartbeat/tick-loop-nudge），flow 系与 test:core 全绿；Then 行为符合本条标准描述

@@ -339,6 +339,9 @@ function renderFrLines(entry, headHash) {
   // （design 接口定义示例中的「来源变更」即本字段，语义等价，取解析器认的字面）
   lines.push(`变更：${entry.change}`);
   lines.push(`状态：${entry.supersededBy ? 'superseded' : 'active'}`);
+  // 骨架标记（2026-10-03-fr-skeleton-gate）：纯骨架条目（全部场景体 Then=flow-draft 占位句）
+  // 落「骨架：thin」——注入面据此排除（TierA 覆盖命中例外）；查重/rot/绑定面不受影响。
+  if (entry.skeleton) lines.push('骨架：thin');
   if (entry.supersededBy) lines.push(`superseded_by：${entry.supersededBy}`);
   if (entry.supersededOf) lines.push(`取代链：${entry.supersededOf} ← 本条目（${entry.change} 承接）`);
   lines.push(`摘要：${(entry.scenarios || []).slice(0, 5).join('；') || '（无场景名）'}`);
@@ -462,7 +465,7 @@ export function indexRequirements({ changeDir, knowledgeRoot, headHash = '', del
       id,
       title: fr.title,
       change: changeName,
-      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies, local: fr.local }, headHash),
+      lines: renderFrLines({ id, title: fr.title, change: changeName, scenarios: fr.scenarios, decisions: fr.decisions, scenarioBodies: fr.scenarioBodies, local: fr.local, skeleton: isThinSkeletonBodies(fr.scenarioBodies) }, headHash),
     });
     dirtyDomains.add(primaryDomain);
     written.push({ file: `${FR_DIR}/${primaryDomain}.md`, id, action: 'added' });
@@ -779,12 +782,66 @@ export function readActiveFrDigest(knowledgeRoot, domains) {
       const decisionLine = s.lines.find((l) => l.startsWith('依据决策：'));
       const decisions = decisionLine ? decisionLine.replace(/^依据决策：s*/, '').split('、').map((x) => x.trim()).filter(Boolean) : [];
       const scenarios = scenarioLine ? scenarioLine.replace(/^摘要：\s*/, '').split('；').map((x) => x.trim()).filter(Boolean) : [];
+      // 骨架位（2026-10-03-fr-skeleton-gate）：「骨架：thin」行在场 → skeleton=true——纯增量字段，
+      // 注入面消费（TierA 例外）；查重/rot/绑定消费方不读此位照旧。
+      const skeleton = s.lines.some((l) => l.startsWith('骨架：thin'));
       // bindings（fr-rot-precision）：条目测试绑定的 test 文件——rot coverage 三源之一；纯新增
       // 字段，既有消费方（prompt.js 注入渲染等）不受影响。
-      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines) });
+      out.push({ domain, id: s.number, title: s.title || '', change: s.change || '', scenarios, decisions, bindings: readEntryBindings(s.lines), unconfirmed: readEntryUnconfirmed(s.lines), skeleton });
     }
   }
   return out;
+}
+
+// ── 骨架信息量门（2026-10-03-fr-skeleton-gate）─────────────────────────────────────
+// 薄道机器预填的空 GWT 骨架（When=标题回显、Then=占位句）永久入索引，挤占注入席位——
+// 判据锚定 flow-draft 占位句字面量，标记（骨架：thin）+ 存量回填 + 注入面排除（TierA 例外）。
+// 只装阀门不删数据：查重/rot/测试绑定/承接面零改动。
+
+/** flow-draft draftGwtSkeleton 的 Then 兜底占位句（字面量锚点——判据与起草端同源防漂移）。 */
+export const SKELETON_THEN_PLACEHOLDER = '行为符合本条标准描述';
+
+/** 纯骨架判据：全部场景体的 Then 均为占位句 → true；任一实质 Then 或无场景体 → false
+ *  （保守，宁漏勿误杀：误标只影响注入可见性，漏标只是继续占席）。 */
+export function isThinSkeletonBodies(scenarioBodies) {
+  const bodies = (Array.isArray(scenarioBodies) ? scenarioBodies : []).filter((b) => b && (b.given || b.when || b.then))
+  if (bodies.length === 0) return false
+  return bodies.every((b) => String(b.then || '').trim() === SKELETON_THEN_PLACEHOLDER)
+}
+
+/** 条目 场景正文 行的 Then 段提取（lastIndexOf——When 文本含「Then」字样不误切）。 */
+function scenarioLineThen(line) {
+  const i = line.lastIndexOf('Then ')
+  return i < 0 ? null : line.slice(i + 5).trim()
+}
+
+/** 存量回填（幂等）：全域扫描，纯骨架（场景正文行的 Then 全为占位句）且未标 → 状态行后插
+ *  「骨架：thin」。已有标记/非骨架/无场景体零变更；二次执行零写盘。
+ *  @returns {{ marked: Array<{domain,id}>, files: string[] }} */
+export function markSkeletonThin(knowledgeRoot) {
+  const marked = []
+  const files = []
+  const all = scanAllDomains(knowledgeRoot)
+  for (const [domain, st] of all.entries()) {
+    if (!st.sections || st.sections.length === 0) continue
+    let dirty = false
+    for (const s of st.sections) {
+      if (s.lines.some((l) => l.startsWith('骨架：thin'))) continue
+      const scenarioLines = s.lines.filter((l) => l.startsWith('- 场景：'))
+      if (scenarioLines.length === 0) continue
+      if (!scenarioLines.every((l) => scenarioLineThen(l) === SKELETON_THEN_PLACEHOLDER)) continue
+      const stateIdx = s.lines.findIndex((l) => l.startsWith('状态：'))
+      if (stateIdx < 0) continue
+      s.lines.splice(stateIdx + 1, 0, '骨架：thin')
+      dirty = true
+      marked.push({ domain, id: s.number || s.id })
+    }
+    if (dirty) {
+      writeFileSync(join(frDirPath(knowledgeRoot), `${domain}.md`), joinKnowledgeFile(st.preamble, st.sections))
+      files.push(`${FR_DIR}/${domain}.md`)
+    }
+  }
+  return { marked, files }
 }
 
 // ── active FR 覆盖命中查询（2026-09-26-dynamic-test-inference）─────────────────────

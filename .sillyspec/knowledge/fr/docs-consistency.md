@@ -12,6 +12,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-001 syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词
 变更：2026-09-29-decision-route-vocab
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 增量 / 幂等 相关模块就绪；When syncIndexRoutingLines（decisions 侧）按域从条目标题∪理由行派生稀有词片（出现≤3 次的 CJK bigram／≥4 字符 ASC；Then 行为符合本条标准描述
@@ -33,6 +34,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-002 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 dec
 变更：2026-09-29-decision-route-vocab
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 真实库 reconcile 后：查询「谓词守卫」「顿号拆分」路由命中（matched 且指向 decisions/unmapped.md）；Then 行为符合本条标准描述
@@ -54,6 +56,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-003 「枚举词表」既有命中不回归
 变更：2026-09-29-decision-route-vocab
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 「枚举词表」既有命中不回归；Then 行为符合本条标准描述
@@ -75,6 +78,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-004 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 re
 变更：2026-09-29-decision-route-vocab
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 蒸馏入选条目标题必填：裸号条目（## D-xxx@vN 无标题）needsWait 拦截（对齐 rejected 缺否决理由先例），存量夹具适配或降级为告警以实；Then 行为符合本条标准描述
@@ -96,6 +100,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-005 既有蒸馏/知识测试回归全绿
 变更：2026-09-29-decision-route-vocab
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有蒸馏/知识测试回归全绿；Then 行为符合本条标准描述
@@ -117,6 +122,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-006 test:core 全绿
 变更：2026-09-29-decision-route-vocab
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When test:core 全绿；Then 行为符合本条标准描述
@@ -306,6 +312,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-015 design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规
 变更：2026-09-29-brainstorm-exit-thin-default
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When design-init 骨架不再预填 scale: large（scale 留空由 Step 8 规模评估落值）；Then 行为符合本条标准描述
@@ -348,6 +355,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-017 large=需要编排/分片/治理或用户显式要求
 变更：2026-09-29-brainstorm-exit-thin-default
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When large=需要编排/分片/治理或用户显式要求；Then 行为符合本条标准描述
@@ -369,6 +377,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-018 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）
 变更：2026-09-29-brainstorm-exit-thin-default
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 拿不准默认 small（升厚留运行时证据：实测失败自动升厚＋--upgrade-thick）；Then 行为符合本条标准描述
@@ -432,6 +441,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-021 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿
 变更：2026-09-29-brainstorm-exit-thin-default
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 单测三面（骨架不预填/指引文案含新判据与默认/收口提示翻转）＋既有回归全绿；Then 行为符合本条标准描述
@@ -453,6 +463,7 @@ created_at: 2026-09-28T17:07:05.883Z
 ## FR-docs-consistency-022 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan
 变更：2026-09-29-brainstorm-exit-thin-default
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 行为级闭环实测：小白鼠带模糊需求走头脑风暴至 Step 8，出口收编轻量道而非 run plan；Then 行为符合本条标准描述

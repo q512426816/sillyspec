@@ -12,6 +12,7 @@ created_at: 2026-09-29T07:47:04.323Z
 ## FR-hooks-001 删除 .claude/skills/sillyspec-quick、sillyspec-export
 变更：2026-09-29-skill-prompt-retire
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 删除 .claude/skills/sillyspec-quick、sillyspec-export、sillyspec-resume 三个目录；Then 行为符合本条标准描述
@@ -21,6 +22,7 @@ created_at: 2026-09-29T07:47:04.323Z
 ## FR-hooks-002 其余 skill 零改动
 变更：2026-09-29-skill-prompt-retire
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 其余 skill 零改动；Then 行为符合本条标准描述
@@ -30,6 +32,7 @@ created_at: 2026-09-29T07:47:04.323Z
 ## FR-hooks-003 worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为
 变更：2026-09-29-skill-prompt-retire
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When worktree-guard STAGE_HINTS['(none)'] 菜单：quick 行改为 flow start 轻量道（bug 修复/小改动的默认快道；Then 行为符合本条标准描述
@@ -39,6 +42,7 @@ created_at: 2026-09-29T07:47:04.323Z
 ## FR-hooks-004 docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」
 变更：2026-09-29-skill-prompt-retire
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When docs/prompt/README.md 总览表 quick 行补「（通道已退役——仅存量收尾）」标注；Then 行为符合本条标准描述

@@ -630,6 +630,7 @@
 ## FR-core-engine-053 新增 tests redomain 子命令：--from <域> --to <域> [--ancho
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 迁移 相关模块就绪；When 新增 tests redomain 子命令：--from <域> --to <域> [--anchor <FR-id>]，干跑缺省列出将迁移条目，--write；Then 行为符合本条标准描述
@@ -651,6 +652,7 @@
 ## FR-core-engine-054 条目 ID 保持不变（单一身份——绑定/supersede 链/最近确认锚全靠 ID，迁域不换号
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 条目 ID 保持不变（单一身份——绑定/supersede 链/最近确认锚全靠 ID，迁域不换号；Then 行为符合本条标准描述
@@ -672,6 +674,7 @@
 ## FR-core-engine-055 前缀与域不符属历史痕迹，文档说明）
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 前缀与域不符属历史痕迹，文档说明）；Then 行为符合本条标准描述
@@ -681,6 +684,7 @@
 ## FR-core-engine-056 段切割用 splitKnowledgeSections
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 段切割用 splitKnowledgeSections；Then 行为符合本条标准描述
@@ -702,6 +706,7 @@
 ## FR-core-engine-057 joinKnowledgeFile 单源
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When joinKnowledgeFile 单源；Then 行为符合本条标准描述
@@ -765,6 +770,7 @@
 ## FR-core-engine-060 全域迁移后源域文件剩 0 条目时删除源文件（防空壳域）
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 迁移 相关模块就绪；When 全域迁移后源域文件剩 0 条目时删除源文件（防空壳域）；Then 行为符合本条标准描述
@@ -786,6 +792,7 @@
 ## FR-core-engine-061 anchor 模式精确单条
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When anchor 模式精确单条；Then 行为符合本条标准描述
@@ -807,6 +814,7 @@
 ## FR-core-engine-062 测试：单条迁移/全域迁移/目标文件新建/INDEX 补行/幂等（迁过的不再迁）/干跑不落盘
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 / 迁移 / 幂等 相关模块就绪；When 测试：单条迁移/全域迁移/目标文件新建/INDEX 补行/幂等（迁过的不再迁）/干跑不落盘；Then 行为符合本条标准描述
@@ -828,6 +836,7 @@
 ## FR-core-engine-063 全仓测试绿
 变更：2026-09-27-redomain
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全仓测试绿；Then 行为符合本条标准描述
@@ -858,6 +867,7 @@
 ## FR-core-engine-065 flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块
 变更：2026-09-27-thin-module-scope-persist
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow done 时模块对账结果以结构化数据落盘进 change-patch.json（受影响模块 id/命中文件数/文档相对路径/文档是否随变更更新，及未登；Then 行为符合本条标准描述
@@ -879,6 +889,7 @@
 ## FR-core-engine-066 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）
 变更：2026-09-27-thin-module-scope-persist
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 落盘口径与 console 对账输出口径一致（同一次计算结果，非二次推导）；Then 行为符合本条标准描述
@@ -900,6 +911,7 @@
 ## FR-core-engine-067 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口
 变更：2026-09-27-thin-module-scope-persist
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 无模块图或零命中时向后兼容：不写段或写空数组，不报错不阻断收口；Then 行为符合本条标准描述
@@ -921,6 +933,7 @@
 ## FR-core-engine-068 有测试锁定结构化落盘行为与向后兼容行为
 变更：2026-09-27-thin-module-scope-persist
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 有测试锁定结构化落盘行为与向后兼容行为；Then 行为符合本条标准描述
@@ -963,6 +976,7 @@
 ## FR-core-engine-070 硬失败行保护：测试运行器权威失败标记行（含✖、not ok、--- FAIL、failing tes
 变更：2026-09-28-known-failures-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 硬失败行保护：测试运行器权威失败标记行（含✖、not ok、--- FAIL、failing tests、行首 AssertionError 等形态）只能被锚定；Then 行为符合本条标准描述
@@ -984,6 +998,7 @@
 ## FR-core-engine-071 分层入库：新增入库的 .sillyspec/known-failures.yaml 承载工具债类豁免
 变更：2026-09-28-known-failures-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 分层入库：新增入库的 .sillyspec/known-failures.yaml 承载工具债类豁免（先例 redlines.yaml），loader 合并读取；Then 行为符合本条标准描述
@@ -1005,6 +1020,7 @@
 ## FR-core-engine-072 既有 27 条逐条审计——陈旧垃圾删除、可锚定者锚定、无法与真实失败区分者加临时注记并注明结构化报告
 变更：2026-09-28-known-failures-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 既有 27 条逐条审计——陈旧垃圾删除、可锚定者锚定、无法与真实失败区分者加临时注记并注明结构化报告落地后删；Then 行为符合本条标准描述
@@ -1026,6 +1042,7 @@
 ## FR-core-engine-073 裁判输出可审计：豁免通过时逐行标注命中模式与其形态（锚定或裸子串警告），裸子串命中给出收敛提示
 变更：2026-09-28-known-failures-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 裁判输出可审计：豁免通过时逐行标注命中模式与其形态（锚定或裸子串警告），裸子串命中给出收敛提示；Then 行为符合本条标准描述
@@ -1047,6 +1064,7 @@
 ## FR-core-engine-074 既有 known-failures 测试扩展覆盖：锚定式豁免硬行、裸子串不豁免硬行、合并读取、go
 变更：2026-09-28-known-failures-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有 known-failures 测试扩展覆盖：锚定式豁免硬行、裸子串不豁免硬行、合并读取、go FAIL 行不被吞四个关键行为；Then 行为符合本条标准描述
@@ -1056,6 +1074,7 @@
 ## FR-core-engine-075 跨仓零破坏：消费者仓 local.yaml 裸子串模式语义不变（仅新增硬行保护与其收窄）
 变更：2026-09-28-known-failures-hardening
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 跨仓零破坏：消费者仓 local.yaml 裸子串模式语义不变（仅新增硬行保护与其收窄）；Then 行为符合本条标准描述
@@ -1086,6 +1105,7 @@
 ## FR-core-engine-077 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、
 变更：2026-09-28-tap-judge
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 豁免匹配复用 buildExemptPats 与 matchExemptLine 共用单点（锚定式、裸子串、泛用停用语义与既有完全一致）；Then 行为符合本条标准描述
@@ -1107,6 +1127,7 @@
 ## FR-core-engine-078 P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT
 变更：2026-09-28-tap-judge
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When P1 根因修复：runOneModule execSync 剥离 NODE_TEST_CONTEXT（父级 node:test 进程 env 泄漏致内层 nod；Then 行为符合本条标准描述
@@ -1128,6 +1149,7 @@
 ## FR-core-engine-079 local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）
 变更：2026-09-28-tap-judge
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When local.yaml 豁免 D 组三条按删除条件移除（⑮ 与两条 fixture——根因已修）；Then 行为符合本条标准描述
@@ -1137,6 +1159,7 @@
 ## FR-core-engine-080 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）
 变更：2026-09-28-tap-judge
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 单测六用例含真实双报告器集成（发现并锁定嵌套 env 坑）；Then 行为符合本条标准描述
@@ -1158,6 +1181,7 @@
 ## FR-core-engine-081 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 快照增两源：verify-runs 本变更最新实测结论（目录名 status duration 入 snap.gateRun）；Then 行为符合本条标准描述
@@ -1179,6 +1203,7 @@
 ## FR-core-engine-082 specBase local.yaml mtime 事实（snap.localConfig，内容不上
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When specBase local.yaml mtime 事实（snap.localConfig，内容不上行只留痕）；Then 行为符合本条标准描述
@@ -1200,6 +1225,7 @@
 ## FR-core-engine-083 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivity
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 基础事件增两条：gate-run（实测结论变化——停滞判定的活跃信号，计入 lastActivityAt）与 config-change（本地配置有变更事实）；Then 行为符合本条标准描述
@@ -1221,6 +1247,7 @@
 ## FR-core-engine-084 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 假勾选消解：ruleFakeCheck 改带状态——无证据翻格先记 pending 并警告；Then 行为符合本条标准描述
@@ -1230,6 +1257,7 @@
 ## FR-core-engine-085 后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 后续快照区间新提交或 review mtime 补上证据时发 fake-check-cleared 事件并清 pending（时间线可见消解）；Then 行为符合本条标准描述
@@ -1251,6 +1279,7 @@
 ## FR-core-engine-086 runCrossRepoFullTest 与 runFullCommand 两处 execSync
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When runCrossRepoFullTest 与 runFullCommand 两处 execSync 剥离 NODE_TEST_CONTEXT（与 runOneM；Then 行为符合本条标准描述
@@ -1260,6 +1289,7 @@
 ## FR-core-engine-087 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗
 变更：2026-09-28-watcher-signal-widen
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 既有 watcher 测试全绿并扩展：新源快照字段、两新事件、pending 消解路径、env 清洗单点共用；Then 行为符合本条标准描述
@@ -1269,6 +1299,7 @@
 ## FR-core-engine-088 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条
 变更：2026-09-28-knowledge-reason-overlap
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 查询「穷举」「关键词表」「分类表」等仅出现在理由文本的近义词时，D-001@v1 枚举开放世界死路条目进 decisionHits 前 5；Then 行为符合本条标准描述
@@ -1290,6 +1321,7 @@
 ## FR-core-engine-089 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶
 变更：2026-09-28-knowledge-reason-overlap
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 主场景（标题词如 枚举/开放世界）排序不回归，仍置顶；Then 行为符合本条标准描述
@@ -1311,6 +1343,7 @@
 ## FR-core-engine-090 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目
 变更：2026-09-28-knowledge-reason-overlap
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 空标题 rejected 条目在近义查询下不再以文件序压制相关死路条目；Then 行为符合本条标准描述
@@ -1332,6 +1365,7 @@
 ## FR-core-engine-091 测试钉住近义/主场景/精度三面
 变更：2026-09-28-knowledge-reason-overlap
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 测试钉住近义/主场景/精度三面；Then 行为符合本条标准描述
@@ -1353,6 +1387,7 @@
 ## FR-core-engine-092 npm run test:core 全绿
 变更：2026-09-28-knowledge-reason-overlap
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When npm run test:core 全绿；Then 行为符合本条标准描述
@@ -1395,6 +1430,7 @@
 ## FR-core-engine-094 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归
 变更：2026-09-28-knowledge-score-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 主场景（枚举/开放世界标题词）与近义场景（穷举/关键词表）排序不回归；Then 行为符合本条标准描述
@@ -1416,6 +1452,7 @@
 ## FR-core-engine-095 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶
 变更：2026-09-28-knowledge-score-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 新增用例：ASCII 变更名（unmapped-drill 形态）下 D-001 死路条目置顶；Then 行为符合本条标准描述
@@ -1437,6 +1474,7 @@
 ## FR-core-engine-096 npm test 全量与 test:core 全绿
 变更：2026-09-28-knowledge-score-denoise
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When npm test 全量与 test:core 全绿；Then 行为符合本条标准描述
@@ -1467,6 +1505,7 @@
 ## FR-core-engine-098 flow status 自愿查看/恢复面（D-007）」口径
 变更：2026-09-29-flow-skill-d007-doc
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When flow status 自愿查看/恢复面（D-007）」口径；Then 行为符合本条标准描述
@@ -1476,6 +1515,7 @@
 ## FR-core-engine-099 SKILL.md 54 行「节拍器」措辞改自愿查看语义
 变更：2026-09-29-flow-skill-d007-doc
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When SKILL.md 54 行「节拍器」措辞改自愿查看语义；Then 行为符合本条标准描述
@@ -1485,6 +1525,7 @@
 ## FR-core-engine-100 其余零改动
 变更：2026-09-29-flow-skill-d007-doc
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 其余零改动；Then 行为符合本条标准描述

@@ -309,6 +309,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-022 runner 自项目结构推断（uv run pytest/vitest/jest/node --te
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When runner 自项目结构推断（uv run pytest/vitest/jest/node --test），不依赖 local.yaml 测试配置；Then 行为符合本条标准描述
@@ -330,6 +331,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-023 local.yaml modules.*.test 不再消费（在场打印退役指引）
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When local.yaml modules.*.test 不再消费（在场打印退役指引）；Then 行为符合本条标准描述
@@ -351,6 +353,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-024 commands.test 仅显式 test_strategy: full 时生效作全量逃生阀
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When commands.test 仅显式 test_strategy: full 时生效作全量逃生阀；Then 行为符合本条标准描述
@@ -372,6 +375,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-025 FR 绑定写入侧路径归一为仓根相对（upsertFrBindings 接受 projectRoot
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When FR 绑定写入侧路径归一为仓根相对（upsertFrBindings 接受 projectRoot 归一 tests）；Then 行为符合本条标准描述
@@ -393,6 +397,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-026 新增 tests repair-paths 子命令修复存量错形路径
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 新增 tests repair-paths 子命令修复存量错形路径；Then 行为符合本条标准描述
@@ -414,6 +419,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-027 平台仓 multi-agent-platform 修复后 fr/*.md 内 tests: 全部可自
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 平台仓 multi-agent-platform 修复后 fr/*.md 内 tests: 全部可自仓根解析；Then 行为符合本条标准描述
@@ -423,6 +429,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-028 全仓测试绿
 变更：2026-09-26-dynamic-test-inference
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全仓测试绿；Then 行为符合本条标准描述
@@ -432,6 +439,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-029 runVerifyTestCheck 接受 faceOverride：在场时跳过快照内二次推导（含收
 变更：2026-09-27-gate-face-binding-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When runVerifyTestCheck 接受 faceOverride：在场时跳过快照内二次推导（含收窄），直接用调用方权威面算动态子集——commit-then；Then 行为符合本条标准描述
@@ -453,6 +461,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-030 quick-audit 透传 faceOverride，flow done ledger 门接线（c
 变更：2026-09-27-gate-face-binding-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When quick-audit 透传 faceOverride，flow done ledger 门接线（changedFiles 即权威面）；Then 行为符合本条标准描述
@@ -474,6 +483,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-031 full 流程 brainstorm --done 对有 FR 块而无绑定面的 requiremen
 变更：2026-09-27-gate-face-binding-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When full 流程 brainstorm --done 对有 FR 块而无绑定面的 requirements 追加绑定槽（复用 thin 追加逻辑单源）；Then 行为符合本条标准描述
@@ -495,6 +505,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-032 verify 侧既有 auto-bind 因槽在场而闭环，R23-full 形态（trace 0 行
 变更：2026-09-27-gate-face-binding-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When verify 侧既有 auto-bind 因槽在场而闭环，R23-full 形态（trace 0 行）不再复现；Then 行为符合本条标准描述
@@ -504,6 +515,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-033 renderExample 的 test_strategy 行注释化（主仓与实验快照一致）
 变更：2026-09-27-gate-face-binding-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When renderExample 的 test_strategy 行注释化（主仓与实验快照一致）；Then 行为符合本条标准描述
@@ -525,6 +537,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-034 全仓测试绿
 变更：2026-09-27-gate-face-binding-parity
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全仓测试绿；Then 行为符合本条标准描述
@@ -660,6 +673,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-041 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/
 变更：2026-09-27-knowledge-digest
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 新增 knowledge digest 命令：四类信号扫描（rot 待复核标记按域计数/收件箱积压/伪域 auto-* 与 unmapped 占比/绑定路径解析；Then 行为符合本条标准描述
@@ -702,6 +716,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-043 伪域条目+建议进 digest 信号
 变更：2026-09-27-knowledge-digest
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 伪域条目+建议进 digest 信号；Then 行为符合本条标准描述
@@ -723,6 +738,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-044 digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel
 变更：2026-09-27-knowledge-digest
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When digest 的绑定扫描与 repair-paths 同口径（resolveTestFileRel 单源复用）；Then 行为符合本条标准描述
@@ -744,6 +760,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-045 全仓测试绿
 变更：2026-09-27-knowledge-digest
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 全仓测试绿；Then 行为符合本条标准描述
@@ -753,6 +770,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-046 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When 声明面归集：design 文件变更清单与 requirements 测试绑定路径复用既有解析器合并（parseFileChangeList 与 extractR；Then 行为符合本条标准描述
@@ -774,6 +792,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-047 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 提交面 hunk 对账：flow done 时逐文件统计 baseline..HEAD 的 hunk 数，不在声明面的文件列入未归因清单并警告；Then 行为符合本条标准描述
@@ -795,6 +814,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-048 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 跨变更竞争检测：其他活跃变更的声明面与提交面相交时，列出竞争文件、对方变更名与 hunk 数（同文件无法按行归属，显式暴露）；Then 行为符合本条标准描述
@@ -816,6 +836,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-049 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 在途残留信号：提交面文件当前工作树仍有未提交 diff 时警告活跃并发 WIP；Then 行为符合本条标准描述
@@ -837,6 +858,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-050 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 分级配置：local.yaml hunk_gate 三档（warn 默认、error、off），非 git 环境与异常 fail-soft 降级跳过；Then 行为符合本条标准描述
@@ -858,6 +880,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-051 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 单测覆盖：声明面归集、hunk 对账、竞争检测、残留信号、三档分级、fail-soft 降级；Then 行为符合本条标准描述
@@ -879,6 +902,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-052 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样
 变更：2026-09-27-hunk-attribution-gate
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 不改 worktree 机制与既有「提交面夹带嫌疑 advisory」块（并行会话归属代码，保留原样，本门独立输出）；Then 行为符合本条标准描述
@@ -888,6 +912,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-053 config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与
 变更：2026-09-27-gate-docs-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When config-schema.js 的 hunk_gate 描述改为与实现一致：error 档未归因与跨变更竞争任一在场阻断、在途残留恒仅警告；Then 行为符合本条标准描述
@@ -897,6 +922,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-054 cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow d
 变更：2026-09-27-gate-docs-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When cli-entry.md 补带日期注记：flow start UI 触达注入执行须知与 flow done probes 子步双门执法；Then 行为符合本条标准描述
@@ -906,6 +932,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-055 core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预
 变更：2026-09-27-gate-docs-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When core-engine.md 补带日期注记：verify 探针族增员至 12（UI 视觉证据分级门预填与段渲染）；Then 行为符合本条标准描述
@@ -915,6 +942,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-056 setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hun
 变更：2026-09-27-gate-docs-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When setup.md 补带日期注记：local.yaml 新增 ui_visual_gate 与 hunk_gate 两键及三档语义；Then 行为符合本条标准描述
@@ -924,6 +952,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-057 三卡 updated_at 刷新
 变更：2026-09-27-gate-docs-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 三卡 updated_at 刷新；Then 行为符合本条标准描述
@@ -933,6 +962,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-058 零代码行为改动（config-schema 仅字符串描述）
 变更：2026-09-27-gate-docs-cleanup
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 零代码行为改动（config-schema 仅字符串描述）；Then 行为符合本条标准描述
@@ -942,6 +972,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-059 test/doc-ref-check.test.mjs 全绿（93 处引用 0 失效）
 变更：2026-09-27-pushgate-green-repair
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When test/doc-ref-check.test.mjs 全绿（93 处引用 0 失效）；Then 行为符合本条标准描述
@@ -963,6 +994,7 @@ created_at: 2026-09-20T18:20:21.442Z
 ## FR-setup-060 纯文档+example 模板注释行，不改任何门档位缺省值与运行逻辑
 变更：2026-09-27-pushgate-green-repair
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When 纯文档+example 模板注释行，不改任何门档位缺省值与运行逻辑；Then 行为符合本条标准描述

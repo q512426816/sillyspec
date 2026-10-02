@@ -278,6 +278,7 @@ created_at: 2026-09-22T09:42:59.537Z
 ## FR-sync-026 ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.j
 变更：2026-09-29-watcher-fakecheck-retire
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 系统就绪；When ruleFakeCheck 与 fake-check-cleared 消解机制从 watcher.js 移除（含 state.fakeCheckPending；Then 行为符合本条标准描述
@@ -320,6 +321,7 @@ created_at: 2026-09-22T09:42:59.537Z
 ## FR-sync-028 watcher-alerts/watcher-timeline/watcher 测试中 fake-c
 变更：2026-09-29-watcher-fakecheck-retire
 状态：active
+骨架：thin
 摘要：默认场景
 场景正文：
 - 场景：默认场景 — Given 测试 相关模块就绪；When watcher-alerts/watcher-timeline/watcher 测试中 fake-check 相关 fixture 与断言适配，全量 npm t；Then 行为符合本条标准描述
