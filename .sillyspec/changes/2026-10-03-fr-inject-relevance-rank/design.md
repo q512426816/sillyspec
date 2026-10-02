@@ -4,6 +4,14 @@ created_at: 2026-10-02T16:04:16.302Z
 ---
 # 设计记录（Design Record）— 2026-10-03-fr-inject-relevance-rank
 
+## 文件变更清单
+| 修改 | src/fr-index.js | 覆盖三分判定抽 partitionActiveByCoverage + 新增 rankFrDigestForInjection |
+| 修改 | src/run/prompt.js | 厚道 buildFrIndexDigestSection 接入排序（🎯 标注 + 遥测 tierA） |
+| 修改 | src/flow.js | 轻量道 flowKnowledgeDigest 接入排序（🎯 标注；抽查确认随 ranked 序） |
+| 修改 | src/flow-draft.js | draftGwtSkeleton 标题去 50 字截断 + splitGwtSeparator 括号深度感知切分 |
+| 修改 | test/fr-inject-cap.test.mjs | ⑤覆盖命中进注入 ⑥日期新者优先 ⑦轻量道直测 |
+| 修改 | test/flow-draft.test.mjs | ⑦a 长标题不截断 ⑦b 括号内分隔符不切 |
+
 > 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
 > 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
 

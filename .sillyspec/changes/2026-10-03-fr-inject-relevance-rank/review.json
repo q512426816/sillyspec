@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-fr-inject-relevance-rank",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "splitGwtSeparator 多分隔符时 Then 段语义变化未在 design 声明（旧取第 1-2 分隔段之间，新取首个深度 0 分隔符后全文）",
+      "evidence": "旧实现 c.split(/[→➜]|则|使得/) 取 [1]：『A→B→C』得 Then='B'（『→C』被丢弃）；新实现返回 s.slice(i+1)：Then='B→C'（含后续分隔符与全部文本）。diff 逐行可证；design 槽4 仅声明『括号外则嵌词内仍切分』这一残留，未声明此面，且无测试覆盖。属机器预填草稿面、新行为保留更多内容、无数据正确性风险，故 P3 不阻断",
+      "location": "src/flow-draft.js:204-208（splitGwtSeparator 返回值；对照 change.patch 删除行 52-54 旧 split 语义）"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-02T16:29:03Z"
+}
