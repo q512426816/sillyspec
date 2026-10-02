@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-fr-governance-telemetry",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "change.patch 冻结件缺 FR-05 知识文件迁移 diff——迁移交付面不在「代码事实唯一来源」内",
+      "evidence": "patch 全文止于 tasks.md，含 flow-state.yaml、src 四文件、test 新文件与变更四件套，无 .sillyspec/knowledge/fr/unmapped.md 与 daemon.md 的任何 diff；盘面旁证迁移已执行（unmapped.md 头注：残余 625 + 迁 daemon 98 = 723 与 FR 口径吻合；daemon.md 实测 98 条『## FR-unmapped-』节头、ID 未换号仍可按绑定链寻址），但『迁移只做机械搬移、无语义改动』这一承诺无法从冻结 diff 审计，只能信盘面自述",
+      "location": ".sillyspec/changes/2026-10-03-fr-governance-telemetry/change.patch:421-442（文件末尾，无知识文件 hunks）"
+    },
+    {
+      "severity": "P3",
+      "title": "task-05 勾选声明「数量留档 design」——design.md 无迁移数量留档段",
+      "evidence": "tasks.md task-05 已勾 [x] 且声明数量留档 design，但 design.md（盘面与 patch 内版本一致）无任何迁移数量段；数量实际披露于 unmapped.md 头注。FR-05 只要求「数量披露」未指定留档位置，故降 P3",
+      "location": ".sillyspec/changes/2026-10-03-fr-governance-telemetry/tasks.md:15"
+    },
+    {
+      "severity": "P3",
+      "title": "测试绑定声明面略宽于实际断言面：① 只断 6 个既有字段中 3 个；④ 断零候选而非零渲染",
+      "evidence": "用例①断言 strong/count/source 零改动，未断 domains/unknown/skip/unknownSources（该四字段不变由 diff 纯增量独立证明）；用例④断 adjudicationCandidates.length===0（数据层），「整段不渲染」由 cmdKnowledgeStats 的 cand.length>0 守卫代码保证而非测试直接断言渲染输出",
+      "location": "test/fr-governance-telemetry.test.mjs:44-106"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "ok",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-02T17:15:43Z"
+}
