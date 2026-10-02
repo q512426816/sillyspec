@@ -21,6 +21,9 @@ import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { writeAtomicSync } from './fs-atomic.js'
 import { wrapSection, verifyMarkers, reanchorText, bodyHash, parseMarkerBlocks } from './machine-draft.js'
+// 占位句常量真同源（2026-10-03-fr-skeleton-gate 评审 P3 清偿）：起草端 Then 兜底与骨架判据
+// （fr-index.isThinSkeletonBodies）共用同一字面量——两处独立字符串会被评审实证为「镜像非同源」。
+import { SKELETON_THEN_PLACEHOLDER } from './fr-index.js'
 
 /** 读文件并归一化 CRLF→LF（2026-09-25-feedback-fixes④：Python/编辑器写盘 CRLF 会破坏 
  锚定的槽位识别 regex）。 */
@@ -217,7 +220,7 @@ function draftGwtSkeleton(criterion, index) {
   const given = kw && kw.length > 0 ? `Given ${[...new Set(kw.map(k => k.toLowerCase()))].slice(0, 3).join(' / ')} 相关模块就绪` : 'Given 系统就绪'
   const parts = splitGwtSeparator(c)
   const when = (parts && parts[0] ? parts[0] : c).trim().slice(0, 80)
-  const then = (parts && parts[1] ? parts[1] : '行为符合本条标准描述').trim().slice(0, 80)
+  const then = (parts && parts[1] ? parts[1] : SKELETON_THEN_PLACEHOLDER).trim().slice(0, 80)
   // 标题不截断（2026-10-03-fr-inject-relevance-rank）：旧 slice(0,50) 硬切留永久残句（平台仓
   // FR-components-shared-038「…专业术语除」实证）且随归档固化进知识索引——标题全量保留。
   return `### ${id}: ${c}\n${given}\nWhen ${when}\nThen ${then}`

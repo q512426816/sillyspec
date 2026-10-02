@@ -39,9 +39,13 @@ created_at: 2026-10-02T16:34:26.304Z
 
 <!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
 1. 乱序/迟到：标记是条目静态属性（由场景体内容决定），不依赖事件序；回填与索引标记对同一 entry 先后执行无冲突——joinKnowledgeFile 落盘前有「标记行在场即跳过」闸门，且 CLI 单一写入方（indexRequirements/markSkeletonThin 同仓串行）下不构成实际竞态。
-2. 并发写：markSkeletonThin 是本变更唯一新写面（全域知识文件）；与 indexRequirements 同属 CLI 写入方，遵守既有「CLI 单一写入方」纪律，不与 agent 编辑并发（agent 只写变更目录工件）。写失败 fail-soft 返回已标记部分。
+2. 并发写：markSkeletonThin 是本变更唯一新写面（全域知识文件）；与 indexRequirements 同属 CLI 写入方，遵守既有「CLI 单一写入方」纪律，不与 agent 编辑并发（agent 只写变更目录工件）。写盘异常如实上抛中止本轮（不吞）——已写文件保持标记、未写文件重跑补齐，无半态损坏。
 3. 切换/生命周期：回填中断 → 已写文件带标记、未写文件下次重跑补齐（幂等键保证无重复无遗漏）；注入过滤是渲染期纯读计算，无状态残留。
-4. 作用域：markSkeletonThin 以传入 knowledgeRoot 为界，平台仓回填显式传平台 knowledge 路径，不跨仓；骨架判据是纯文本模式匹配，与 locale/平台无关（占位句是 CLI 固定字面量）。
+4. 作用域：markSkeletonThin 以传入 knowledgeRoot 为界，平台仓回填显式传平台 knowledge 路径，不跨仓；骨架判据是纯文本模式匹配，与 locale/平台无关（占位句是 CLI 固定字面量，且起草端与判据端经 SKELETON_THEN_PLACEHOLDER 常量同源导入）。
+
+### 回填留档（FR-05 证据锚）
+- 本仓（sillyspec）：markSkeletonThin 回填 **195 条 / 9 域文件**（cli-entry 77、core-engine 41、setup 32、runtime 20、docs-consistency 11、auto-sillyspec 5、hooks 4、unmapped 3、sync 2）——随本变更交付提交进本仓 git。
+- 平台仓（multi-agent-platform）：HEAD 基线纯回填 **188 条 / 10 域文件**（frontend 103 居首）——平台仓提交 **0dc1de6bd**（外科手术式：仅 +188 行「骨架：thin」，非骨架变更行数 0，并行会话在途工作零夹带）；另有 2 个并行会话新建未跟踪域文件（change.md/components-changes.md）的 12 条标记留在其工作区，随其变更走。全量回填口径 253 条=188+12+53（53 条仅存在于并行未提交内容，属对方变更面）。
 
 ## 风险与死路
 <!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-fr-skeleton-gate 留痕重锚 -->
