@@ -1,0 +1,177 @@
+diff --git a/.sillyspec/changes/2026-10-03-splitgwt-direct-test/flow-state.yaml b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/flow-state.yaml
+new file mode 100644
+index 00000000..8774b1f1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: a222509c67b6fb2a44e4a54138752b28b4c9f15c
++updatedAt: '2026-10-03T05:37:23.799Z'
++baseline_sha256: 036d081bb8fe3018beba88f2351edef566be02acaa9a5fb6d87357bf871832ba
++
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index 97d4ca02..ae5db637 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -337,3 +337,17 @@ test('⑦b GWT 骨架：括号内 → 不切 When/Then；括号外 →/则/使
+     assert.ok(reqs.includes('When 术语命中') && reqs.includes('Then 高亮生效'), '括号外 使得 仍切分')
+   } finally { rmSync(root, { recursive: true, force: true }) }
+ })
++
++test('⑧ splitGwtSeparator 直测：括号深度感知三态（导出消费——22e-b 死导出清偿）', async () => {
++  const { splitGwtSeparator } = await import('../src/flow-draft.js')
++  // 括号内分隔符不切——返回 null（走 When=全文/Then=占位兜底）
++  assert.equal(splitGwtSeparator('段名映射为中文（changes→变更中心 等，术语除外）'), null, '括号内 → 不切')
++  assert.equal(splitGwtSeparator('对齐（原则一致）后收口'), null, '括号内 则（嵌词）不切')
++  // 括号外分隔符切分——返回 [when, then]
++  assert.deepEqual(splitGwtSeparator('点击变更中心→列表刷新'), ['点击变更中心', '列表刷新'], '括号外 → 切')
++  assert.deepEqual(splitGwtSeparator('勾选复选框则按钮激活'), ['勾选复选框', '按钮激活'], '括号外 则 切')
++  assert.deepEqual(splitGwtSeparator('术语命中使得高亮生效'), ['术语命中', '高亮生效'], '括号外 使得 切')
++  assert.deepEqual(splitGwtSeparator('外层→生效（内层→不切）'), ['外层', '生效（内层→不切）'], '首个深度0分隔符生效、括号内保留')
++  // 空输入返回 null
++  assert.equal(splitGwtSeparator(''), null, '空输入 null')
++})
+diff --git a/.sillyspec/changes/2026-10-03-splitgwt-direct-test/design.md b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/design.md
+new file mode 100644
+index 00000000..33672d95
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:37:23.770Z
++---
++# 设计记录（Design Record）— 2026-10-03-splitgwt-direct-test
++
++## 文件变更清单
++| 修改 | test/flow-draft.test.mjs | 新增「⑧ splitGwtSeparator 直测」用例（import 消费导出，7 组断言） |
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++纯测试追加：batch-1 新增的 splitGwtSeparator 导出零引用触发 pre-push 死导出拦截（22e-b 裁决）。补直测用例使导出获得消费方——不删导出（批次1 design 槽2 已声明该导出、代码注释「导出供 test 直测」本就承诺此用例），不碰 src。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++零接口变化——仅 test/flow-draft.test.mjs 追加一个 test 块（动态 import 消费既有导出）。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯测试追加，无运行时逻辑/写面/状态——四维（乱序/并发/切换/作用域）均无触及面。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++风险趋零（纯断言追加）。试过放弃：删 export 关键字改内部函数——回退批次1 design 的导出声明且丢失直测价值，放弃；补消费方是更优解。
+diff --git a/.sillyspec/changes/2026-10-03-splitgwt-direct-test/proposal.md b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/proposal.md
+new file mode 100644
+index 00000000..9385ef9f
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/proposal.md
+@@ -0,0 +1,31 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:37:23.769Z
++---
++# 提案书（Proposal）— 2026-10-03-splitgwt-direct-test
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:e434e6c5febd818bf8b520994c1c25ba0a01ec56bf221acd305906c7938d0ef6:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++任务原话转写：pre-push lint 门拦截修复：flow-draft.js 的 splitGwtSeparator 导出在 src+test 零引用（死导出，22e-b 裁决）。批次1（2026-10-03-fr-inject-relevance-rank）实现时选择经 draftAll 间接测括号切分行为，导出本体无直测——代码注释「导出供 test 直测」未兑现。补三个直测用例：括号内箭头不切（返回 null）、括号外箭头/则/使得切分（返回两段）、空输入返回 null。
++成功标准：
++- test/flow-draft.test.mjs 新增 splitGwtSeparator 直测（import 消费导出），三态断言全绿
++- pre-push lint 门「未引用导出」清单归零，push 通过
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:e253ed762ed41c337a04ed956113fa1d21afa732886d0d87eff9428802e324ae:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++按成功标准机械推导，共 2 条验收面：
++1. test/flow-draft.test.mjs 新增 splitGwtSeparator 直测（import 消费导出），三态断言全绿
++2. pre-push lint 门「未引用导出」清单归零，push 通过
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:e062df48e513562ce81477549c1abe5d7795c958bc37aca0f836f3cf2f212ac0:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-splitgwt-direct-test 留痕重锚 -->
++1. test/flow-draft.test.mjs 新增 splitGwtSeparator 直测（import 消费导出），三态断言全绿
++2. pre-push lint 门「未引用导出」清单归零，push 通过
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-10-03-splitgwt-direct-test/requirements.md b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/requirements.md
+new file mode 100644
+index 00000000..31c311b9
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/requirements.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:37:23.770Z
++---
++# 需求规格（Requirements）— 2026-10-03-splitgwt-direct-test
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: splitGwtSeparator 直测三态——导出获得消费方
++Given flow-draft.js 导出的 splitGwtSeparator（批次1 新增，括号深度感知 When/Then 分隔扫描）
++When test/flow-draft.test.mjs 以 import 消费该导出并直测
++Then 三态断言全绿：括号内分隔符（→/嵌词则）不切返回 null；括号外 →/则/使得 切分返回两段（首个深度 0 分隔符生效、后续括号内容原样保留）；空输入返回 null
++
++### FR-02: pre-push lint 门「未引用导出」清单归零
++Given 22e-b 死导出裁决的 lint 检查（src+test 其余文件零引用的导出拦截）
++When splitGwtSeparator 有测试消费方后重跑 pre-push
++When lint 门不再拦截 push，「未引用导出」清单不含该符号
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/flow-draft.test.mjs「⑧ splitGwtSeparator 直测：括号深度感知三态」——7 组断言（括号内不切×2、括号外切×3、混合边界×1、空输入×1）
++
++<!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++不适用：push 门实测（flow done 收口后由主会话执行 git push，门过即为验收——lint 检查器为 test/check-syntax.mjs 既有面，不由本变更改动）
+diff --git a/.sillyspec/changes/2026-10-03-splitgwt-direct-test/tasks.md b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/tasks.md
+new file mode 100644
+index 00000000..c4c29ef8
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-splitgwt-direct-test/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:37:23.771Z
++---
++# 任务注册表（Tasks）— 2026-10-03-splitgwt-direct-test
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 `- [ ]`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: test/flow-draft.test.mjs 新增 splitGwtSeparator 直测（import 消费导出），三态断言全绿
++- [ ] task-02: pre-push lint 门「未引用导出」清单归零，push 通过

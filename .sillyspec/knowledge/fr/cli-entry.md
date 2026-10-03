@@ -5228,3 +5228,33 @@ superseded_by：FR-cli-entry-198
 - 场景：默认场景 — Given 本仓 knowledge/fr/unmapped.md 存量 723 条（40% 死库存——比对面已排除）；When planRedomain 干跑评估机械可迁面 → 可迁者 redomainFrEntries --write 迁移（ID 不换号）；Then 迁移数量与残余数量披露；不可迁残余在 unmapped.md 头注显式「检索面-only」声明（承认死库存不伪装活跃）
 全文：.sillyspec/changes/archive/2026-10-03-fr-governance-telemetry/requirements.md#FR-05
 最近确认：91c23bc43362de4c29e3daa499712a73c055eeaa
+
+## FR-cli-entry-279 splitGwtSeparator 直测三态——导出获得消费方
+变更：2026-10-03-splitgwt-direct-test
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow-draft.js 导出的 splitGwtSeparator（批次1 新增，括号深度感知 When/Then 分隔扫描）；When test/flow-draft.test.mjs 以 import 消费该导出并直测；Then 三态断言全绿：括号内分隔符（→/嵌词则）不切返回 null；括号外 →/则/使得 切分返回两段（首个深度 0 分隔符生效、后续括号内容原样保留）；空输入返回 n
+全文：.sillyspec/changes/archive/2026-10-03-splitgwt-direct-test/requirements.md#FR-01
+最近确认：b1bd40888408db06043d6fd6352cb1343ac3a6e9
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-splitgwt-direct-test:flow:FR-01
+  tests: test/flow-draft.test.mjs「⑧ splitGwtSeparator 直测：括号深度感知三态」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-splitgwt-direct-test
+  status: active
+
+## FR-cli-entry-280 pre-push lint 门「未引用导出」清单归零
+变更：2026-10-03-splitgwt-direct-test
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 22e-b 死导出裁决的 lint 检查（src+test 其余文件零引用的导出拦截）；When splitGwtSeparator 有测试消费方后重跑 pre-push lint 门不再拦截 push，「未引用导出」清单不含该符号
+全文：.sillyspec/changes/archive/2026-10-03-splitgwt-direct-test/requirements.md#FR-02
+最近确认：b1bd40888408db06043d6fd6352cb1343ac3a6e9

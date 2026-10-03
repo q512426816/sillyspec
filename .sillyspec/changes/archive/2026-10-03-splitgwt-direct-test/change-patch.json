@@ -1,0 +1,38 @@
+{
+  "change": "2026-10-03-splitgwt-direct-test",
+  "baseline": "a222509c67b6fb2a44e4a54138752b28b4c9f15c",
+  "head": "b1bd40888408db06043d6fd6352cb1343ac3a6e9",
+  "files": [
+    ".sillyspec/changes/2026-10-03-splitgwt-direct-test/design.md",
+    ".sillyspec/changes/2026-10-03-splitgwt-direct-test/flow-state.yaml",
+    ".sillyspec/changes/2026-10-03-splitgwt-direct-test/proposal.md",
+    ".sillyspec/changes/2026-10-03-splitgwt-direct-test/requirements.md",
+    ".sillyspec/changes/2026-10-03-splitgwt-direct-test/tasks.md",
+    "test/flow-draft.test.mjs"
+  ],
+  "totals": {
+    "files": 6,
+    "additions": 145,
+    "deletions": 0
+  },
+  "savedAt": "2026-10-03T05:39:38.687Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 1
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "712eb042dffa1c9b1c006933235e2e7b01bf9d05ce7023a395944dd973508932",
+  "patchStatus": "ok"
+}
