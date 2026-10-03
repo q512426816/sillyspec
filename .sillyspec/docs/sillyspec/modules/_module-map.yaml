@@ -85,6 +85,7 @@ modules:
       - src/stage-review-checklist.js
       - src/task-review.js
       - src/task-done.js
+      - src/task-tick.js
       - src/verify-draft.js
       - src/machine-draft.js
       - src/verify-postcheck.js

@@ -60,6 +60,33 @@ export function mirroredTaskIds({ tasksMd, baselineTasksMd } = {}) {
 }
 
 /**
+ * 镜像未认领判定（2026-10-03-voluntary-task-tick，收口自愈代勾的判别面）：
+ * 当前 tasks.md 与机器稿基线「逐字相同且全未勾」——即 agent 既未覆写任务面（认领）也
+ * 未勾任何一格。此形态下勾选簿记缺失是机器稿镜像的固有留白而非 agent 漏账，收口侧
+ * 可代勾自愈（自愿路径裁决：不升格拒收/重做）。与 mirroredTaskIds 的分界：那是「已勾行
+ * 是否镜像」的豁免判别；这是「整面是否从未被认领」的代勾判别。纯函数；基线空/行集
+ * 不同/任一格已勾 → false（fail-safe 不代勾）。
+ */
+export function isMirrorUntouchedFace({ tasksMd, baselineTasksMd } = {}) {
+  const collect = (md) => {
+    const map = new Map()
+    for (const line of String(md || '').split(/\r?\n/)) {
+      const m = line.match(/^[-*] \[( |x|X)\] (task-\d+)(?::(.*))?$/)
+      if (m) map.set(m[2], { text: (m[2] + (m[3] || '')).trim(), checked: m[1].toLowerCase() === 'x' })
+    }
+    return map
+  }
+  const cur = collect(tasksMd)
+  const base = collect(baselineTasksMd)
+  if (base.size === 0 || cur.size !== base.size) return { untouched: false, claimTotal: cur.size }
+  for (const [id, info] of cur) {
+    const b = base.get(id)
+    if (!b || b.text !== info.text || info.checked || b.checked) return { untouched: false, claimTotal: cur.size }
+  }
+  return { untouched: true, claimTotal: cur.size }
+}
+
+/**
  * review.json 在场证据清单（execute-runs 两级遍历；异常/缺失 → []，commit 证据照判）。
  */
 function listReviewEvidence(changeDir, opts) {

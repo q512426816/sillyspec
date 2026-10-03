@@ -422,10 +422,10 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
             ? `🖼️ 原型在场（${prototypePaths.length} 个 HTML）：实现前必看，界面/交互/流程按原型对齐；有出入以 design.md 承诺为准并在回复中说明。`
             : null,
           `【你要做的】① spec 阶段先定稿任务面：把 tasks.md 覆写为真实实现步骤（全 \`- [ ]\`——代码开动前工作队列先存在）；`,
-          `② 执行走任务循环（openspec 式）：对 tasks.md 每个 pending 任务——展示「Working on task N/M: <任务>」→ 做 → 勾一格（\`- [ ]\`→\`- [x]\`）→ 下一个；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
+          `② 执行走任务循环（openspec 式）：对 tasks.md 每个 pending 任务——展示「Working on task N/M: <任务>」→ 做 → 测试绿后当场勾一格（\`- [ ]\`→\`- [x]\`：sillyspec task tick --change ${change} --task task-NN 或直接 Edit）→ 下一个；全勾后 flow done（收口硬门拒单拍多格勾选）。design/decisions 是本变更的承诺锚（flow done 豁免 design 四节槽，以其为准）。`,
           `requirements 测试绑定槽（收编追加）每条 FR 至少一行作答；写码前后顺手填。`,
-          `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
-          `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；纪律：以 tasks.md 为进度源——做一件 → 勾一格 → 继续下一条，勿攒一把勾；`,
+          `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`（harness 的 TodoWrite 类工具不替代——平台进度/收口证据只读 tasks.md）——`,
+          `   勾选是收口哨兵的证据面（逐 task 核提交 token/review.json）；纪律：以 tasks.md 为进度源——做一件 → 勾一格（task tick 即时回显进度与下一任务）→ 继续下一条，勿攒一把勾；`,
           `   flow status --change ${change} 为自愿查看/恢复面（非协议必需，D-007 中间零必需交互；恢复时给下一任务指针与进度）。`,
           `⚠️ 交付纪律：收口前交付代码显式 pathspec 提交——冻结件范围=baseline..HEAD，未提交不进审计件。`,
           ``,
@@ -639,9 +639,12 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `⚠️ 交付纪律：收口前先把交付代码用显式 pathspec 提交（git add -- <文件> && git commit）——`,
     `   patch 冻结件范围=baseline..HEAD 提交面，未提交的代码不进审计件（R16 评审 P2 实证）；`,
     `   tasks.md 一并显式 pathspec 提交（勾选证据进 git 历史，勿 untracked 直至归档——R19 实证）。`,
-    `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态），完成一个你自己的任务单元即勾 \`- [x]\`——`,
-    `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；`,
-    `   纪律：spec 期定稿任务面（覆写为真实实现步骤全 \`- [ ]\`）；执行走任务循环——Working on task N/M → 做一件 → 勾一格 → 下一个（tasks.md 是进度源，勿攒一把勾——收口硬门拒单拍多格）；flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
+    `✅ 任务面归你（thin-agent-tasks）：tasks.md 是机器预填的标准逐条草稿——按实际实现路径覆写它（增删改组随意，保持 \`- [ ] task-NN:\` 行形态）；`,
+    `   执行循环（边干边勾，自愿纪律）：Working on task N/M → 做一件 → 测试绿后当场勾这一格 → 下一件——勾选即进度锚，watcher 实时上平台（收口恢复/哨兵证据面只读 tasks.md）。`,
+    `   勾法：sillyspec task tick --change ${change} --task task-NN（即时回显进度 N/M 与下一任务指针），或直接 Edit 翻格 \`- [ ]\`→\`- [x]\`；`,
+    `   ⚠️ harness 的 TodoWrite 类工具是会话内便利面，不替代 tasks.md——平台进度/收口证据不读它（0/12 事故实证：todo 全 completed 而 tasks.md 0 勾）；`,
+    `   勾选是收口哨兵的证据面：全勾但区间提交的标题或正文均无 task-NN 且无 review.json 会被拒收；勿攒一把勾（收口硬门拒单拍多格）；`,
+    `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
     `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
@@ -859,16 +862,22 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
         const baselineTasksMd = _bv.tasksMd
         const sent = detectFakeCheckCompletion({ changeDir, tasksMd: readFileSync(tasksPath, 'utf8'), commits: commitMessages, baselineTasksMd })
         if (sent.status === 'fake') {
+          if (st.mirror_autotick === true) {
+            // 收口代勾重入（2026-10-03-voluntary-task-tick）：tasks.md 已被本门机器代勾（镜像未认领面）
+            // ——代勾证据=收口交付门整体背书，非 agent 勾选主张，假勾判定不适用（防重入误拒）。
+            console.log('ℹ️ 哨兵：任务面已由收口代勾（mirror_autotick 留痕）——代勾证据=收口交付门整体背书，跳过假勾判定')
+          } else {
           console.error(`🚫 哨兵断言拒收：tasks.md 全勾（${sent.checked}/${sent.claimTotal}）但 ${sent.missing.length} 个任务零完成证据（区间提交标题与正文均无 token、无 review.json）：${sent.missing.join('、')}`)
           console.error('   补证据（提交标题或正文带 task-NN，或产 review.json）或取消勾选后重跑——假完成主张不许过门')
           appendTelemetry({ sentinel: 'fake', missing: sent.missing.length })
           reportMidFail('ledger')
           process.exit(1)
+          }
         }
         if (sent.mirrored && sent.mirrored.length > 0) {
           console.log(`ℹ️ 哨兵：${sent.mirrored.length} 处镜像任务勾选（与机器稿逐字相同——成功标准镜像面，交付由实测门/patch/review 背书，免 per-task 提交证据）`)
         }
-        _sentinelNonMirrorTasks = sent.claimTotal - ((sent.mirrored || []).length)
+        _sentinelNonMirrorTasks = st.mirror_autotick === true ? 0 : sent.claimTotal - ((sent.mirrored || []).length)
         if (sent.status === 'complete') {
           console.log(`🛡️ 哨兵：全勾 ${sent.checked}/${sent.claimTotal} 证据齐（提交 token/review.json）`)
           // 勾选时点判定（2026-09-26-tick-loop-nudge，R19 行为发现）：tasks.md 的 git 首次提交
@@ -884,11 +893,31 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
             }
           } catch { /* 时点判定 fail-soft */ }
         }
-        // 勾选缺失 advisory（2026-09-25-flow-tick-prototype）：有任务行但全未勾（status='none' 且
-        // claimTotal>0 且 checked===0）而区间有提交 → 记账缺失提醒（不阻断——不勾选不是假勾，是漏账）
-        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0 && commitMessages.length > 0) {
-          console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾（区间已有 ${commitMessages.length} 个提交）——`)
-          console.warn(`   规范动作是把 tasks.md 覆写为自己的工作分解并完成一个单元即勾选（- [ ] → - [x]）；请补勾完成项后再收口（本次放行不阻断）`)
+        // 勾选缺失 advisory（2026-09-25-flow-tick-prototype；2026-10-03-voluntary-task-tick 修零提交
+        // 静默：0/12 事故实证——旧前提「区间有提交」让零提交收口全程无提醒）。不阻断：不勾不是假勾，是漏账。
+        // 镜像未认领面优先走收口自愈代勾（用户裁决自愿路径：勾选簿记缺失不升格拒收/重做）——任务面与
+        // 机器稿逐字相同且全未勾=agent 从未认领该任务面，交付由实测门/patch/评审整体背书（镜像豁免同
+        // 哲学）；代勾留痕 autopilot_ticked（勾选节奏门既有降级机制）+ mirror_autotick（重入跳过假勾判定）。
+        if (sent.status === 'none' && sent.claimTotal > 0 && sent.checked === 0) {
+          const _hasDelivery = commitMessages.length > 0 || (Array.isArray(changedFiles) && changedFiles.length > 0)
+          let _backfilled = false
+          if (baselineTasksMd && _hasDelivery) {
+            const { isMirrorUntouchedFace } = await import('./sentinel-assertions.js')
+            const _mu = isMirrorUntouchedFace({ tasksMd: readFileSync(tasksPath, 'utf8'), baselineTasksMd })
+            if (_mu.untouched) {
+              const _tmd = readFileSync(tasksPath, 'utf8').replace(/^([-*] \[) (\] task-\d+:)/gm, '$1x$2')
+              const { writeAtomicSync } = await import('./fs-atomic.js')
+              writeAtomicSync(tasksPath, _tmd)
+              _autopilotTicked = Math.max(_autopilotTicked, _mu.claimTotal)
+              try { writeFlowState(changeDir, { autopilot_ticked: _autopilotTicked, mirror_autotick: true }) } catch { /* 留痕 best-effort */ }
+              _backfilled = true
+              console.log(`✅ [收口代勾] 任务面为机器镜像稿且全未勾——已代勾 ${_mu.claimTotal} 格（agent 未认领的成功标准镜像面，交付由实测门/patch/评审整体背书；自愿路径：下次边干边勾或用 task tick）`)
+            }
+          }
+          if (!_backfilled) {
+            console.warn(`⚠️ 任务勾选缺失：tasks.md 有 ${sent.claimTotal} 条任务但一条未勾——`)
+            console.warn(`   规范动作是完成一个单元即勾一格：sillyspec task tick --change ${change} --task task-NN（或 Edit 翻格 - [ ] → - [x]）；本次放行不阻断`)
+          }
         }
         }
       }

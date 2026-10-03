@@ -57,7 +57,11 @@ test('③ A 层文案钉：spec 定稿 + openspec 式循环（三处）', () => 
   const flowSrc = readFileSync(join(ROOT, '..', 'src', 'flow.js'), 'utf8')
   assert.ok(flowSrc.includes('spec 阶段先定稿任务面'), 'fresh 简报：定稿指令')
   assert.ok(flowSrc.includes('Working on task N/M'), 'fresh 简报：openspec 式循环指令（含输出拍）')
-  assert.ok(flowSrc.includes('执行走任务循环——Working on task N/M'), 'resume 简报：循环口径')
+  // 2026-10-03-voluntary-task-tick 措辞刷新：循环口径改第一人称时序「做一件→测试绿→当场勾一格」，
+  // 并点名 tick 动词与 TodoWrite 不替代（0/12 事故）——钉随语义走（A 层协议形状不变）
+  assert.ok(flowSrc.includes('执行循环（边干边勾，自愿纪律）：Working on task N/M'), '循环口径（边干边勾时序）')
+  assert.ok(flowSrc.includes('task tick --change'), 'tick 动词用法在场')
+  assert.ok(flowSrc.includes('TodoWrite 类工具是会话内便利面'), 'harness todo 竞争点名')
   const draftSrc = readFileSync(join(ROOT, '..', 'src', 'flow-draft.js'), 'utf8')
   assert.ok(draftSrc.includes('任务面在 ①spec 阶段定稿'), 'tasks.md 头部：定稿要求')
   assert.ok(draftSrc.includes('收口硬门拒单拍多格勾选'), 'tasks.md 头部：硬门提示')

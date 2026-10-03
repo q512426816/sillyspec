@@ -877,6 +877,11 @@ task done 四合一（r5l 方案1）：review write（落 review.json+自动勾�
             }
           }
         } catch { /* 注入 best-effort */ }
+      } else if (taskSub === 'tick') {
+        // ── 轻量勾选动词（2026-10-03-voluntary-task-tick）：翻格+进度回显+下一任务指针——
+        // 纯反馈闭环（watcher task-done 事件自动上平台），自愿使用；幂等，无 review/verdict 仪式。──
+        const { runTaskTick } = await import('./task-tick.js')
+        await runTaskTick({ changeName: tChange, cwd: dir, taskId: tTask, specBase: tSpecBase })
       } else if (taskSub === 'done') {
         // ── task done 四合一（r5l-forensic-verdict 方案 1 / 评审护栏#3）：13 任务 × 4 连收尾
         // 往返（review write+勾选 / finish / wt-commit）合并为单进程串行 + 合并输出——每次省

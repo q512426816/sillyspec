@@ -5,7 +5,7 @@
  *   ① fresh 简报含任务勾选纪律；
  *   ② adopt 简报动态枚举变更目录产物（design/decisions/原型 HTML）并显式点名原型必看；
  *   ③ flow status 显示任务勾选进度；
- *   ④ flow done 勾选缺失 advisory（不阻断）。
+ *   ④ flow done 勾选缺失 advisory（认领面不阻断；镜像未认领面 2026-10-03 起走收口代勾——task-tick.test.mjs）。
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -73,14 +73,19 @@ test('② adopt 简报枚举产物 + 原型点名', () => {
 test('④ 勾选缺失 advisory：有提交未勾任务 → 警告不阻断', () => {
   const { cwd, cli } = makeRepo()
   const change = '2026-09-01-ftp-3'
-  assert.equal(cli(['flow', 'start', '--change', change, '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
+  assert.equal(cli(['flow', 'start', '--change', change, '--no-review', '--input', '任务\n成功标准：\n- 行为 X']).status, 0)
   fillSlots(cwd, change)
+  // 认领面（agent 覆写过任务行）一条未勾 → advisory（2026-10-03-voluntary-task-tick 语义分岔：
+  // 镜像未认领面已改走收口代勾自愈——见 task-tick.test.mjs ④；本钉守住「认领了却没勾」的提醒面）
+  const tp = join(cwd, '.sillyspec', 'changes', change, 'tasks.md')
+  writeFileSync(tp, readFileSync(tp, 'utf8').replace(/^- \[ \] task-01: .*$/m, '- [ ] task-01: agent 认领的步骤'))
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   execFileSync('git', ['add', 'work.js'], { cwd, stdio: 'pipe' })
   execFileSync('git', ['commit', '-q', '-m', 'work（不勾选）'], { cwd, stdio: 'pipe' })
   const d = cli(['flow', 'done', '--change', change])
   assert.equal(d.status, 0, `不阻断: ${d.stdout}\n${d.stderr}`)
   assert.match(d.stdout + d.stderr, /任务勾选缺失/, 'advisory 在场')
-  assert.match(d.stdout + d.stderr, /覆写/, '指引（thin-agent-tasks 覆写语义）')
+  assert.match(d.stdout + d.stderr, /task tick/, '指引含 tick 动词')
+  assert.doesNotMatch(d.stdout + d.stderr, /收口代勾/, '认领面不代勾')
   rmSync(cwd, { recursive: true, force: true })
 })
