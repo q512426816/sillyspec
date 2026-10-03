@@ -5258,3 +5258,24 @@ superseded_by：FR-cli-entry-198
 - 场景：默认场景 — Given 22e-b 死导出裁决的 lint 检查（src+test 其余文件零引用的导出拦截）；When splitGwtSeparator 有测试消费方后重跑 pre-push lint 门不再拦截 push，「未引用导出」清单不含该符号
 全文：.sillyspec/changes/archive/2026-10-03-splitgwt-direct-test/requirements.md#FR-02
 最近确认：b1bd40888408db06043d6fd6352cb1343ac3a6e9
+
+## FR-cli-entry-281 platform-interface-map.md 行号锚与工作区实态对齐——失效引用归零
+变更：2026-10-03-doc-anchor-refresh
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given docs/sillyspec/platform-interface-map.md 四处 src/index.js 行号锚（4145/4097/3910/4007；When 机械刷新锚点到当前符号位（4151 pullList / 4103 collectStatus / 3916 probeSillyHub / 4013 POIN；Then doc-ref-check 失效引用清单 4/93 → 0/93（关键词断言保留不降级——不加 ? 跳过位）
+全文：.sillyspec/changes/archive/2026-10-03-doc-anchor-refresh/requirements.md#FR-01
+最近确认：e366c3aa66c0c3aae4cd8ee267cd90ed8ca581c2
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-doc-anchor-refresh:flow:FR-01
+  tests: test/doc-ref-check.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-doc-anchor-refresh
+  status: active

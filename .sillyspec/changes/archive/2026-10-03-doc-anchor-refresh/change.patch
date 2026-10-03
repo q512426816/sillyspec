@@ -1,0 +1,174 @@
+diff --git a/.sillyspec/changes/2026-10-03-doc-anchor-refresh/flow-state.yaml b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/flow-state.yaml
+new file mode 100644
+index 00000000..dad9b855
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/flow-state.yaml
+@@ -0,0 +1,10 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++baseline_commit: 0e1def350ecd2605e6bc4b181bf59045cdc27195
++updatedAt: '2026-10-03T05:50:33.948Z'
++baseline_sha256: 3235843b69af94bbfbb761239f3e16952dae254eb361bb903f88d257241debae
++
+diff --git a/docs/sillyspec/platform-interface-map.md b/docs/sillyspec/platform-interface-map.md
+index 78e48b5e..bff24c73 100644
+--- a/docs/sillyspec/platform-interface-map.md
++++ b/docs/sillyspec/platform-interface-map.md
+@@ -136,10 +136,10 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ | `platform sync-docs`（手动命令，**唯一触发点**） | A | POST `…/documents` 推四件套全量；run 流程**不**自动推文档（sync.js:30 头注释称由 run 流程触发，已过时） | sync.js:439；index.js:1275 |
+ | `platform approve/reject <change>` | A | **先** `triggerPull`（拉最新防基于旧态决策）→ POST `…/approval`；失败 exitCode=1 | index.js:4225；shared.js:1022 |
+ | **stage 命令启动时**（顶层别名 scan/status/quick/explore/brainstorm/plan/execute/verify/archive + `run <stage>`，ql-20260818-008 补齐 case 'run'） | A | `triggerPullActiveChange`：单活跃变更下行 pull（8s 熔断，未连接静默跳过；本地脏 skipIfLocalDirty 跳过；低频边界点，**不每步 pull**） | index.js:2736/3015；shared.js:1046 |
+-| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4145；sync.js:1491/1525 |
+-| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4097；sync.js:2232 |
++| `platform pull [--change <名>]` | A | 有 `--change` → 单变更完整 pull；无 → `pullList` 轻量列表 + 逐个按需 pull；未连接 `exit(1)` | index.js:4151；sync.js:1491/1525 |
++| `platform status` | A | `collectStatus` 只读展示（连接信息 + 落后标记 + 未决冲突列表），**不 pull** | index.js:4103；sync.js:2232 |
+ | `platform resolve --keep-local/--take-platform/--abort` | 本地 | 读 sync-conflict 三选一，不网络 | sync.js:746 |
+-| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3910/3882；probe.js:133 |
++| `sillyspec dispatch probe` / `dispatch hint --contract <json>` | B | `probeSillyHub`：probeDaemon + listTools(路径A schema) + getRootPath；hint 再经 `renderDispatchInstruction` 出指令 | index.js:3916/3882；probe.js:133 |
+ | **execute Wave prompt 注入** | B | `getDispatchMode()` **同步三态判定**（读 MCP 配置 + 路径A 探测缓存，不发网络）：`sillyhub` → 注入完整派发指令（`{available:true}`）；`local-fallback`（配置但路径A 未落地）→ 短提示走 Local；`local` → 不注入 | execute.js:696/1058-1070 |
+ | **execute Wave 步骤** | B | 指令文本驱动 agent 调 create_mission/dispatch_worker/list_workers/report_progress | backends/sillyhub-mcp.js:136 |
+ | **scan 完成（平台模式）** | C | 落盘 manifest/postcheck + 指针 SCAN_COMPLETED；失败 exit(1) | complete-handlers.js:985 |
+@@ -197,7 +197,7 @@ scan 阶段在**平台模式**（`platformOpts.specRoot/runtimeRoot`）完成时
+ - **人类本地用户**：跑 `sillyspec run <stage>` 不带上述 flag，且 cwd 无 `.sillyspec-platform.json` → `platformOpts` 全 `null` → **本地模式**，走链路 A 的 REST `/api`（前提是 `platform connect` 过）。
+ - **SillyHub daemon**：传 flag 或借指针文件 → 平台模式 → 链路 A 上行回传经 env 凭据照常执行（2026-08-26 放行，daemon 注入 `SILLYHUB_PLATFORM_URL/TOKEN` 即生效）；下行 pull 与审批检查仍跳过（daemon 是权威数据面），链路 C（scan 指针握手）生效。
+ 
+-> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4007`）。
++> pointer 状态机见 `constants.js:18` `POINTER_STATUS`（ACTIVE / SCAN_COMPLETED / STALE / CORRUPTED）；`doctor` 与 `platform status` 会读 `cwd/.sillyspec-platform.json` 展示（`pointerPath` 解析在 `doctor-diagnostics.js:50`、枚举消费在 `index.js:4013`）。
+ 
+ **平台接管声明（`.sillyspec-platform-managed`）**：与指针并存的持久声明（`managed`/`specRoot` 副本/`workspaceId`/`declaredAt` 四字段，**无过期**——24h STALE 只作用指针不作用声明）。堵"指针该在但不在 → 静默建本地进度库"的状态分裂断点：
+ - **写入**：`writePlatformPointer` 三写收敛（`shared.js` 的 `writePlatformPointer`——主文件+指针+声明），init/scan 带平台参数自动落。**自指写入拦截（task-03，单点收口覆盖 run/init 两调用方）**：specRoot 自指回环 → warn 后 `return false` 零落盘（显式自指 flag 也不再投毒）。
+diff --git a/.sillyspec/changes/2026-10-03-doc-anchor-refresh/design.md b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/design.md
+new file mode 100644
+index 00000000..c8c72ba1
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/design.md
+@@ -0,0 +1,46 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:50:33.844Z
++---
++# 设计记录（Design Record）— 2026-10-03-doc-anchor-refresh
++
++## 文件变更清单
++| 修改 | docs/sillyspec/platform-interface-map.md | 四处 index.js 行号锚 +6 刷新（4145→4151/4097→4103/3910→3916/4007→4013） |
++
++> 四节的「问题」是机器段（指纹保护，勿改）；你的回答写在每节问题下方的 AGENT 槽里。
++> 每节至少一行——小改动可写「不适用：<理由>」；flow done 空槽拒收。
++
++## 做法概述
++<!-- MACHINE-DRAFT:design-approach:4fa550e9aac26c5f5a3c89b853d9af0ad0749943358808fbc1196064a42c1173:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++<!-- MACHINE-DRAFT:design-approach:end -->
++
++<!--AGENT:槽1 做法概述作答——例外裁决书写面（机器段之外合法） -->
++纯文档行号锚机械刷新：并行会话在途 src/index.js 改动（3175 区 +5~6 行）致四处锚点漂移、doc-ref-check 失效——按门自身修复指引更新行号到当前符号位。不碰代码、不加 ? 降级断言强度。
++
++## 接口契约
++<!-- MACHINE-DRAFT:design-contract:86ee80e3cad9ae1c299a0c54bf5503a112d318bb2e5490a32fcd5c1724293a0b:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++<!-- MACHINE-DRAFT:design-contract:end -->
++
++<!--AGENT:槽2 接口契约作答——例外裁决书写面（机器段之外合法） -->
++零接口变化——仅文档行号数字。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++<!-- MACHINE-DRAFT:design-boundaries:98046ccf043ed9302175b492d297f70dfd943c39f2e8770e8a6039ea302cbb6a:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++<!-- MACHINE-DRAFT:design-boundaries:end -->
++
++<!--AGENT:槽3 盲维四问作答——例外裁决书写面（机器段之外合法） -->
++不适用：纯文档数字刷新，无逻辑/写面/状态。
++
++## 风险与死路
++<!-- MACHINE-DRAFT:design-risks:03ff22f024c81093b38d2bb78b9d095acf5be70d5c09b17c10da44e4655ddb72:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++<!-- MACHINE-DRAFT:design-risks:end -->
++
++<!--AGENT:槽4 风险与死路作答——例外裁决书写面（机器段之外合法） -->
++已知取舍：锚点对齐的是含并行 WIP 的工作区实态——若对方最终放弃该 WIP 回退，锚点将反向漂移 -6（届时再刷一次即可，doc-ref-check 会拦）。声明边界：这是对共享门禁的前向修复（钩子指引「修复问题后再提交」），非对并行会话工作的归属认领。
+diff --git a/.sillyspec/changes/2026-10-03-doc-anchor-refresh/proposal.md b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/proposal.md
+new file mode 100644
+index 00000000..d290d0a7
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/proposal.md
+@@ -0,0 +1,31 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:50:33.843Z
++---
++# 提案书（Proposal）— 2026-10-03-doc-anchor-refresh
++
++## 动机
++<!-- MACHINE-DRAFT:proposal-motivation:f1290dce84dafb6f0b27c3456fa8ba57ec75d1c5d854545d05a6b1cfd7a84603:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++任务原话转写：pre-push doc-ref-check 门拦截修复：platform-interface-map.md 四处 src/index.js 行号锚漂移 +6（并行会话在 3175 区插行所致——归因实证：HEAD 位在容差窗内、工作区统一 +6）。机械刷新锚点：4145→4151（pullList）、4097→4103（collectStatus）、3910→3916（probeSillyHub）、4007→4013（POINTER_STATUS），关键词断言保留不降级（不加 ? 跳过位）。
++成功标准：
++- doc-ref-check 失效引用清单归零（4/93 → 0/93）
++- pre-push 三门全过、push 成功
++<!-- MACHINE-DRAFT:proposal-motivation:end -->
++
++<!--AGENT:槽1 动机例外裁决——例外裁决书写面（机器段之外合法） -->
++
++## 变更范围
++<!-- MACHINE-DRAFT:proposal-scope:9ba22f009fb027f9bde6cb1e6fffe571921de452a41e5772d67458faee8fb569:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++按成功标准机械推导，共 2 条验收面：
++1. doc-ref-check 失效引用清单归零（4/93 → 0/93）
++2. pre-push 三门全过、push 成功
++<!-- MACHINE-DRAFT:proposal-scope:end -->
++
++
++## 成功标准（可验证）
++<!-- MACHINE-DRAFT:proposal-criteria:90de23e0ed8482697c4841385f7555585e7b85dd6f3a733809328eb9a06c8747:begin 机器预填段——整段改写会被 flow done 拒收；确要修改：sillyspec flow amend-draft --change 2026-10-03-doc-anchor-refresh 留痕重锚 -->
++1. doc-ref-check 失效引用清单归零（4/93 → 0/93）
++2. pre-push 三门全过、push 成功
++<!-- MACHINE-DRAFT:proposal-criteria:end -->
++
++<!--AGENT:槽2 成功标准例外裁决（增删条目在此书写）——例外裁决书写面（机器段之外合法） -->
+diff --git a/.sillyspec/changes/2026-10-03-doc-anchor-refresh/requirements.md b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/requirements.md
+new file mode 100644
+index 00000000..18f8e4f3
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/requirements.md
+@@ -0,0 +1,18 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:50:33.844Z
++---
++# 需求规格（Requirements）— 2026-10-03-doc-anchor-refresh
++
++## 功能需求（GWT 骨架已机器预填——可编辑覆盖；FR 进知识索引）
++
++<!--AGENT:FR区 agent 填写功能需求（GWT 骨架已预填——覆盖/修改/保留均可） -->
++### FR-01: platform-interface-map.md 行号锚与工作区实态对齐——失效引用归零
++Given docs/sillyspec/platform-interface-map.md 四处 src/index.js 行号锚（4145/4097/3910/4007）因并行会话在 3175 区插行统一漂移 +6（HEAD 位原在容差窗内，归因实证）
++When 机械刷新锚点到当前符号位（4151 pullList / 4103 collectStatus / 3916 probeSillyHub / 4013 POINTER_STATUS）
++Then doc-ref-check 失效引用清单 4/93 → 0/93（关键词断言保留不降级——不加 ? 跳过位）
++
++## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
++
++<!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 时自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
++test/doc-ref-check.test.mjs 全件——修复前「4/93 处引用失效」、修复后「93 处引用全通过（68 处带关键词断言）」实测对照
+diff --git a/.sillyspec/changes/2026-10-03-doc-anchor-refresh/tasks.md b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/tasks.md
+new file mode 100644
+index 00000000..916b8ca7
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-03-doc-anchor-refresh/tasks.md
+@@ -0,0 +1,12 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-03T05:50:33.844Z
++---
++# 任务注册表（Tasks）— 2026-10-03-doc-anchor-refresh
++
++> 机器预填草稿（成功标准逐条镜像）——任务面归 agent：按实际实现路径覆写本文件（保持 checkbox 行形态），验收锚在 requirements；
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决。
++> ✅ 边干边勾（2026-09-26-tick-loop-nudge + 2026-09-29 心跳指针）：完成一条 = 实现到位 + 相关测试跑绿 → 立即勾 `[x]`，勿攒到收口一把勾（勾选是进度锚与哨兵证据面）。📌 任务面在 ①spec 阶段定稿：覆写为真实实现步骤（全 `- [ ]`）后再动代码；执行循环：Working on task N/M → 做一件 → 勾一格 → 下一个——收口硬门拒单拍多格勾选（--allow-batch-tick 可显式旁路留痕）。`flow status --change <名>` 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: doc-ref-check 失效引用清单归零（4/93 → 0/93）
++- [ ] task-02: pre-push 三门全过、push 成功

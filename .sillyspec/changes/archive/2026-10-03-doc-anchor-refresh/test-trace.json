@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-doc-anchor-refresh",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-03-doc-anchor-refresh:flow:FR-01",
+      "tests": [
+        "test/doc-ref-check.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-doc-anchor-refresh"
+    }
+  ]
+}
