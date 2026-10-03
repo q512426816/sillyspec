@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-voluntary-task-tick",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-01",
+      "tests": [
+        "test/task-tick.test.mjs「①a 翻格保字节」",
+        "test/task-tick.test.mjs「①b 幂等」",
+        "test/task-tick.test.mjs「①c 未知 id」",
+        "test/task-tick.test.mjs「③a task tick：翻格+进度回显+下一任务指针」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-02",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「③ A 层文案钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-03",
+      "tests": [
+        "test/batch-tick-gate.test.mjs「③ A 层文案钉」",
+        "test/tick-loop-nudge.test.mjs「② tasks.md 头部纪律行钉」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-05",
+      "tests": [
+        "test/flow-tick-prototype.test.mjs「④ 勾选缺失 advisory」",
+        "test/task-tick.test.mjs「⑤ 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-06",
+      "tests": [
+        "test/task-tick.test.mjs「④ 镜像未认领+有交付 → 机器代勾全部镜像行（不阻断、留痕、归档件全勾）」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-07",
+      "tests": [
+        "test/task-tick.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-10-03-voluntary-task-tick:flow:FR-08",
+      "tests": [
+        "test/task-tick.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-03-voluntary-task-tick"
+    }
+  ]
+}

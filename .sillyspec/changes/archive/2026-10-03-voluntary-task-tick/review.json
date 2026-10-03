@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-voluntary-task-tick",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P3",
+      "title": "FR-03 测试绑定未钉新增内容：引用测试只锚既有头注子串，头注新增的 tick 用法与 TodoWrite 点名无断言",
+      "evidence": "flow-draft.js 头注新增「sillyspec task tick --change ${change} --task task-NN」与「TodoWrite 类工具不替代本文件」（diff 已核实在场），但绑定引用的 batch-tick-gate ③ 只断言 draftSrc 含旧锚「任务面在 ①spec 阶段定稿」「收口硬门拒单拍多格勾选」，tick-loop-nudge ② 只断言「边干边勾」「完成一条 = 实现到位 + 相关测试跑绿」——均为改动前已存在的子串，FR-03 的增量面（时序+tick 用法进头注）零断言覆盖",
+      "location": "src/flow-draft.js:490 vs test/batch-tick-gate.test.mjs:329-330 / test/tick-loop-nudge.test.mjs:27-32"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-06「留痕」声称无直接断言：flow-state 键 autopilot_ticked/mirror_autotick 写入是 best-effort try/catch，测试④只验输出与归档件",
+      "evidence": "测试④标题含「留痕」但断言面仅 exit 0 + stdout 含「收口代勾」+ 归档 tasks.md 全勾；src/flow.js:912 的 writeFlowState 包在 try{...}catch{/* 留痕 best-effort */} 里，静默失败任何测试都测不到——键写入属实（代码在场且依赖它的 865 行重入跳过逻辑成立），但「留痕」作为 FR-06 承诺面未被测试钉住",
+      "location": "src/flow.js:912 vs test/task-tick.test.mjs:493-510"
+    },
+    {
+      "severity": "P3",
+      "title": "mirror_autotick 置位后无失效条件：超出设计声明的「重入」场景仍跳过假勾判定",
+      "evidence": "设计只声明「done 代勾后子步失败重跑 done」的重入跳过；实现是 st.mirror_autotick===true 即永久跳过假勾判定（865 行）——若代勾后 done 在后续子步失败（如实测门 FAIL），agent 改写任务面为非镜像行并全勾零证据再跑 done，哨兵本应拒收的假勾面被陈旧标志放行。窄边界（需先经历一次带代勾的失败收口），且交付仍由实测门/patch 背书，故 P3",
+      "location": "src/flow.js:865-875"
+    },
+    {
+      "severity": "P3",
+      "title": "task tick 已归档拒收（exit 2）已实现但无测试，测试文件头注③声称覆盖与实际不符",
+      "evidence": "task-tick.test.mjs 头注③写「CLI 端到端：…+已归档拒收」，但 ③a 只测翻格/幂等/未知 id；runTaskTick 的归档分支（tasksPath 不存在 ∧ archive 目录在场 → exit 2）为设计契约声明的对外行为面，零用例覆盖",
+      "location": "src/task-tick.js:279-285 vs test/task-tick.test.mjs:8-10,471-489"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok",
+    "并发": "ok",
+    "切换": "finding",
+    "作用域": "ok"
+  },
+  "reviewedAt": "2026-10-03T07:12:31Z"
+}

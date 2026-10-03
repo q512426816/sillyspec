@@ -50,17 +50,25 @@ Then 行为符合本条标准描述
 ## 测试绑定（每条 FR 至少一行——空槽将在 flow done 时自动从测试结果补全）
 
 <!--AGENT:测试绑定FR-01 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/task-tick.test.mjs「①a 翻格保字节」「①b 幂等」「①c 未知 id」「③a task tick：翻格+进度回显+下一任务指针」
 
 <!--AGENT:测试绑定FR-02 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/batch-tick-gate.test.mjs「③ A 层文案钉」（执行循环（边干边勾，自愿纪律）／task tick 用法／TodoWrite 点名三钉）
 
 <!--AGENT:测试绑定FR-03 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/batch-tick-gate.test.mjs「③ A 层文案钉」（flow-draft 头注定稿与硬门钉）+ test/tick-loop-nudge.test.mjs「② tasks.md 头部纪律行钉」
 
 <!--AGENT:测试绑定FR-04 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+不适用：模板与仓实例的规则 13 是静态文档行，无行为面——由 FR-02/03 的文案钉机制同族背书（grep 面在 AGENTS.md/templates/agents-instruction.md，测试断言文档行属钉死文档脆断言，不为静态 md 加测）
 
 <!--AGENT:测试绑定FR-05 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/task-tick.test.mjs「⑤ 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形」+ test/flow-tick-prototype.test.mjs「④ 勾选缺失 advisory」
 
 <!--AGENT:测试绑定FR-06 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/task-tick.test.mjs「④ 镜像未认领+有交付 → 机器代勾全部镜像行（不阻断、留痕、归档件全勾）」
 
 <!--AGENT:测试绑定FR-07 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/task-tick.test.mjs 全 9 测（①②③ 纯函数与 CLI + ④⑤ done 行为）
 
 <!--AGENT:测试绑定FR-08 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名；空槽将在 flow done 自动从测试结果补全——预填可加速）——例外裁决书写面（机器段之外合法） -->
+test/task-tick.test.mjs 同跑回归面：flow-tick-prototype / tick-loop-nudge / governance-autopilot / sentinel-mirror-waiver / batch-tick-gate / sentinel-wiring / sentinel-rules / flow-draft / flow-status-heartbeat（92/92 绿）

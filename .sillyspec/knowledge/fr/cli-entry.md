@@ -5279,3 +5279,166 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-03-doc-anchor-refresh
   status: active
+
+## FR-cli-entry-282 轻量勾选动词 task tick：sillyspec task tick --change <名> --task task-NN 翻格幂等（已勾再勾不报错），输出已勾进度 N/M 与下一待办任务指针，未知 task-NN 报错并列可选 id
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 幂等 相关模块就绪；When 轻量勾选动词 task tick：sillyspec task tick --change <名> --task task-NN 翻格幂等（已勾再勾不报错），输；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-01
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-01
+  tests: test/task-tick.test.mjs「①a 翻格保字节」 | test/task-tick.test.mjs「①b 幂等」 | test/task-tick.test.mjs「①c 未知 id」 | test/task-tick.test.mjs「③a task tick：翻格+进度回显+下一任务指针」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
+
+## FR-cli-entry-283 flow start 执行循环文案改第一人称时序「做一件→测试绿→当场勾一格→下一件」，点名 harness TodoWrite 类工具不替代 tasks.md（进度源唯一），并给出 tick 动词用法
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When flow start 执行循环文案改第一人称时序「做一件→测试绿→当场勾一格→下一件」，点名 harness TodoWrite 类工具不替代 tasks.md；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-02
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-02
+  tests: test/batch-tick-gate.test.mjs「③ A 层文案钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
+
+## FR-cli-entry-284 tasks.md 机器稿头注（flow-draft 源）同步该时序与 tick 用法
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When tasks.md 机器稿头注（flow-draft 源）同步该时序与 tick 用法；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-03
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-03
+  tests: test/batch-tick-gate.test.mjs「③ A 层文案钉」 | test/tick-loop-nudge.test.mjs「② tasks.md 头部纪律行钉」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
+
+## FR-cli-entry-285 AGENTS.md 核心规则新增边干边勾常驻条目（init 模板源如在场则同步）
+变更：2026-10-03-voluntary-task-tick
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When AGENTS.md 核心规；Then 新增边干边勾常驻条目（init 模板源如在场则同步）
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-04
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+## FR-cli-entry-286 flow done 勾选缺失 advisory 去掉「区间有提交」前提：全未勾零提交也显形（不阻断）
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When flow done 勾选缺失 advisory 去掉「区间有提交」前提：全未勾零提交也显形（不阻断）；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-05
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-05
+  tests: test/flow-tick-prototype.test.mjs「④ 勾选缺失 advisory」 | test/task-tick.test.mjs「⑤ 认领未勾完（覆写面）→ advisory 不代勾不阻断；零提交也显形」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
+
+## FR-cli-entry-287 任务面仍为机器镜像稿且全未勾时 done 机器代勾全部镜像行（autopilot_ticked 留痕、可辨代勾来源），不拒收
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 系统就绪；When 任务面仍为机器镜像稿且全未勾时 done 机器代勾全部镜像行（autopilot_ticked 留痕、可辨代勾来源），不拒收；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-06
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-06
+  tests: test/task-tick.test.mjs「④ 镜像未认领+有交付 → 机器代勾全部镜像行（不阻断、留痕、归档件全勾）」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
+
+## FR-cli-entry-288 新增聚焦测试：task tick 直测（幂等/指针/未知 id）+ done advisory 与代勾行为测
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 / 幂等 相关模块就绪；When 新增聚焦测试：task tick 直测（幂等/指针/未知 id）+ done advisory 与代勾行为测；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-07
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-07
+  tests: test/task-tick.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
+
+## FR-cli-entry-289 既有测试回归绿
+变更：2026-10-03-voluntary-task-tick
+状态：active
+骨架：thin
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 测试 相关模块就绪；When 既有测试回归绿；Then 行为符合本条标准描述
+全文：.sillyspec/changes/archive/2026-10-03-voluntary-task-tick/requirements.md#FR-08
+最近确认：2ba5c0fc4c96985342635795a99e2b4f6bed1936
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-03-voluntary-task-tick:flow:FR-08
+  tests: test/task-tick.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-03-voluntary-task-tick
+  status: active
