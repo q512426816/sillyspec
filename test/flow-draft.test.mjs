@@ -337,3 +337,17 @@ test('⑦b GWT 骨架：括号内 → 不切 When/Then；括号外 →/则/使�
     assert.ok(reqs.includes('When 术语命中') && reqs.includes('Then 高亮生效'), '括号外 使得 仍切分')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
+
+test('⑧ splitGwtSeparator 直测：括号深度感知三态（导出消费——22e-b 死导出清偿）', async () => {
+  const { splitGwtSeparator } = await import('../src/flow-draft.js')
+  // 括号内分隔符不切——返回 null（走 When=全文/Then=占位兜底）
+  assert.equal(splitGwtSeparator('段名映射为中文（changes→变更中心 等，术语除外）'), null, '括号内 → 不切')
+  assert.equal(splitGwtSeparator('对齐（原则一致）后收口'), null, '括号内 则（嵌词）不切')
+  // 括号外分隔符切分——返回 [when, then]
+  assert.deepEqual(splitGwtSeparator('点击变更中心→列表刷新'), ['点击变更中心', '列表刷新'], '括号外 → 切')
+  assert.deepEqual(splitGwtSeparator('勾选复选框则按钮激活'), ['勾选复选框', '按钮激活'], '括号外 则 切')
+  assert.deepEqual(splitGwtSeparator('术语命中使得高亮生效'), ['术语命中', '高亮生效'], '括号外 使得 切')
+  assert.deepEqual(splitGwtSeparator('外层→生效（内层→不切）'), ['外层', '生效（内层→不切）'], '首个深度0分隔符生效、括号内保留')
+  // 空输入返回 null
+  assert.equal(splitGwtSeparator(''), null, '空输入 null')
+})
