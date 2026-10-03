@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-03-doc-anchor-refresh",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [],
+  "dimensionNotes": {
+    "乱序": "n/a",
+    "并发": "ok",
+    "切换": "n/a",
+    "作用域": "n/a"
+  },
+  "reviewedAt": "2026-10-03T05:57:40Z",
+  "evidence": {
+    "check1_patch": "change.patch 中 docs/sillyspec/platform-interface-map.md 恰好 2 hunks / 4 行变更，均为纯行号刷新（4145→4151 / 4097→4103 / 3910→3916（复合锚 index.js:3916/3882 仅首号变）/ 4007→4013），变更行其余文本与删除行逐字节一致，无其他语义改动；+ 行无任何 ? 后缀。",
+    "check2_symbols": "当前工作区 src/index.js grep 精确命中：pullList@4151（syncModule.pullList 调用）、collectStatus@4103、probeSillyHub@3916（import 解构）、POINTER_STATUS@4013（import 解构）——四处零偏移，均在层2 关键词窗 [start-2, end+5]（src/docs-check.js:433）内且恰在锚点行。",
+    "check2_gate_repro": "以 src/docs-check.js runDocsCheck 定向 paths=['docs/sillyspec/platform-interface-map.md'] 实测：total=93、kwChecked=68、invalid=0、ok=true——逐字复现 FR-01 Then 的「93 处全通过 / 68 处带关键词断言 / 0 失效」；kwChecked=68 反证未加 ? 降级（若四处降级应为 64）。邻近未刷新锚（index.js:3882/4225）同跑全过，无漏刷。",
+    "check3_disclosure_ruling": "可接受：设计槽4 已声明锚点对齐含并行 WIP 的工作区实态及回退反向漂移 -6 的后果；替代方案（对齐 HEAD）将使共享门禁持续红 4/93 阻塞推送，且 pre-push 钩子自身指引即「修复问题后再提交」（AGENTS.md 规则6）；反向漂移非静默——doc-ref-check 每次推送机械复验并给出新行号建议，失败有界（再刷一次）。披露明确不以刷新锚点认领并行会话工作归属。",
+    "check4_artifacts": "patch 恰含 6 文件：目标 docs/sillyspec/platform-interface-map.md + 本变更自身 5 个流程簿记件（flow-state.yaml/design.md/proposal.md/requirements.md/tasks.md，均新增于 .sillyspec/changes/<本变更>/ 下）；无 src/、test/ 面，纯 doc 兑现。工作区 src/index.js 的 M 态为并行会话 WIP（即 +6 漂移源），正确地未被本 patch 卷入。",
+    "read_budget": "Read 调用 3/6（requirements/design/change.patch）；其余以 bash grep/sed/node 定向校验器完成，node 跑 runDocsCheck 为只读校验（无 --fix），未落任何中间文件。"
+  }
+}
