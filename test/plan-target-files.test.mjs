@@ -751,8 +751,15 @@ if (failed > 0) process.exit(1)
 
 // ── D7. declared-rescue：变更分支锚定救赎（2026-09-24 R9/R11 四连拦根治钉）──
 {
-  const dir = mkRepo('tf-rescue-')
+  // 夹具前提修正（2026-10-04-log-window-arity）：救赎路径只在「B1 merge-base 源缺席」形态下
+  // 可达——主干叫 main 时 B1 diff 先命中 declared（rescuedCount=0，note 不发，断言永红：
+  // 纯 HEAD 实证稳定失败）。本块用独立 init -b master 造「merge-base main 失败 → B1 跳过 →
+  // porcelain 恒空 → 仅 B4 分支窗口可救」的真实前提（与注释声明的 isolated worktree 形态一致）。
+  const dir = mkDir('tf-rescue-')
   try {
+    git(dir, 'init -q -b master')
+    git(dir, 'config user.email t@t.t')
+    git(dir, 'config user.name t')
     mkdirSync(join(dir, 'src'), { recursive: true })
     writeFileSync(join(dir, 'src', 'base.js'), 'b')
     commitAll(dir, 'base')

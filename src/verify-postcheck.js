@@ -3714,7 +3714,9 @@ export function resolveReconcileActualFiles({ cwd, specBase, runtimeRoot, change
       // 锚定变更分支/审计 tag（非 blanket 20 提交——base 提交文件不得误救）
       const rescueRef = (typeof branchHash === 'string' && branchHash.trim()) ? branch : (gitQuiet(cwd, ['rev-parse', '--verify', '--quiet', auditTag + '^{commit}'], { timeout: 30 * 1000 }) ? auditTag : null)
       if (!rescueRef) throw new Error('no-rescue-ref')
-      const recent = gitQuiet(cwd, ['log', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
+      // -n 形态计数（2026-10-04-log-window-arity：裸 '20' 在 git ≥2.4x 是 ambiguous argument
+      // fatal——fail-open 静默吞后救赎 note 路径从未生效，plan-target-files D7 在纯 HEAD 稳定红）
+      const recent = gitQuiet(cwd, ['log', '-n', '20', '--name-only', '--format=%h', rescueRef], { timeout: 30 * 1000, trim: false })
       if (typeof recent === 'string' && recent.trim()) {
         const files = recent.split('\n').map(l => l.trim()).filter(l => l && !/^[0-9a-f]{7,40}$/.test(l))
         if (files.length > 0) {
