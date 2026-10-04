@@ -144,11 +144,21 @@ function cli(cwd, args) {
 
 function fillDesignSlots(cwd, change) {
   const base = join(cwd, '.sillyspec', 'changes', change)
-  writeFileSync(join(base, 'design.md'), readFileSync(join(base, 'design.md'), 'utf8')
-    .replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：模块对账落盘夹具——一行作答即合规'))
-  writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 模块对账结果随 change-patch.json 落盘\nGiven 仓内有模块图\nWhen flow done 执行\nThen change-patch.json 含 modules/uncoveredDirs/moduleMaps 三键')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：本变更为 flow done 行为本身（test/flow-parity.test.mjs ④ 集成锁定）'))
+  const dText = readFileSync(join(base, 'design.md'), 'utf8')
+  if (/<!--AGENT:槽\d+/.test(dText)) {
+    writeFileSync(join(base, 'design.md'), dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：模块对账落盘夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 模块对账结果随 change-patch.json 落盘\nGiven 仓内有模块图\nWhen flow done 执行\nThen change-patch.json 含 modules/uncoveredDirs/moduleMaps 三键')
+      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：本变更为 flow done 行为本身（test/flow-parity.test.mjs ④ 集成锁定）'))
+  } else {
+    writeFileSync(join(base, 'design.md'), dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：模块对账落盘夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 使 change-patch.json 含 modules/uncoveredDirs/moduleMaps 三键（模块对账行为句）')
+      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：本变更为 flow done 行为本身（test/flow-parity.test.mjs ④ 集成锁定）'))
+  }
+  // spec 断点批准（v2 起草变更的 done 前提——用户动作，夹具代跑）
+  const ap = cli(cwd, ['flow', 'approve', '--change', change])
+  assert.equal(ap.status, 0, `flow approve 失败: ${ap.stdout}\n${ap.stderr}`)
 }
 
 test('④ 集成：flow done 后归档件 change-patch.json 落盘模块对账三键（console 与落盘同源）', () => {

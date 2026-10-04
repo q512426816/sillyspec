@@ -17,6 +17,8 @@ import { execFileSync } from 'node:child_process'
 import { splitOwnVsForeignDiffFiles } from './foreign-declared.js'
 import { collectModuleMaps, normalizeMapPath } from './module-resolve.js'
 import { writeAtomicSync } from './fs-atomic.js'
+import { readV2SectionAnswer } from './flow-review.js'
+import { DESIGN_QUESTIONS } from './flow-draft.js'
 
 /**
  * 模块文档对账（advisory）+ 结构化落盘面（2026-09-27-thin-module-scope-persist）。
@@ -144,7 +146,13 @@ export function harvestSlot4Decision({ changeDir, change }) {
     if (inSlot && (/^<!--/.test(line) || /^#{1,6}\s/.test(line))) break
     if (inSlot) buf.push(line)
   }
-  const answer = buf.join('\n').trim()
+  let answer = buf.join('\n').trim()
+  // v2 纯 markdown（2026-10-04-thin-docs-v2）：无槽标记时改读「风险与死路」节正文（复用
+  // flow-review 的 v2 节读取——剥离问题原文行；单一源 DESIGN_QUESTIONS 防镜像漂移）
+  if (!inSlot) {
+    const risksSec = DESIGN_QUESTIONS.sections.find((s) => s.key === 'risks')
+    answer = readV2SectionAnswer(dText, risksSec.heading, DESIGN_QUESTIONS)
+  }
   if (!answer || /^不适用/.test(answer)) return { harvested: false, reason: '槽4 空/不适用' }
   const text = [
     '---',

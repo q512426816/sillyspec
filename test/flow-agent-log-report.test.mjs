@@ -58,15 +58,24 @@ function readArtifact(cwd) {
 
 const toPosix = (p) => p.replace(/\\/g, '/')
 
-/** agent 例行动作：design 四槽 + requirements FR 区/绑定槽各写一行作答（done 哨兵要求）。 */
+/** agent 例行动作（双代格式正文作答）+ spec 断点批准（v2 起草变更的 done 前提）。 */
 function fillSlots(cwd, change) {
   const base = join(cwd, '.sillyspec', 'changes', change)
   const dp = join(base, 'design.md')
-  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
-  const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 协议测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
+  const dText = readFileSync(dp, 'utf8')
+  if (/<!--AGENT:槽\d+/.test(dText)) {
+    writeFileSync(dp, dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 协议测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：协议测试夹具——无独立测试面'))
+  } else {
+    writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：协议测试夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（协议夹具行为句）')
+      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：协议测试夹具——无独立测试面'))
+  }
+  const ap = cli(cwd, ['flow', 'approve', '--change', change])
+  assert.equal(ap.status, 0, `flow approve 失败: ${ap.stdout}\n${ap.stderr}`)
 }
 
 test('① flow start 登记 own 条目：change_key=change，last_command=start 前缀且不含 flag 值', () => {
@@ -154,6 +163,9 @@ test('⑤ flow amend-draft 登记面：last_command=amend-draft 前缀；非法�
   writeFileSync(agentLog, '{}\n')
 
   assert.equal(cli(cwd, ['flow', 'start', '--change', change, '--input', INPUT_OK], { agentLog }).status, 0)
+  // v2（2026-10-04-thin-docs-v2）：amend 对「首版全文↔当前全文」算改写比——先做一笔正文改动
+  const _p = join(cwd, '.sillyspec', 'changes', change, 'proposal.md')
+  writeFileSync(_p, readFileSync(_p, 'utf8').replace(/^任务原话转写：/m, '任务原话转写（amend 登记面夹具）：'))
   const a = cli(cwd, ['flow', 'amend-draft', '--change', change], { agentLog })
   assert.equal(a.status, 0, `amend-draft 失败: ${a.stdout}\n${a.stderr}`)
   assert.match(a.stdout, /留痕重锚/)

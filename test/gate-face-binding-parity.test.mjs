@@ -78,14 +78,14 @@ test('② ensureBindingSlots：full 流程绑定面单源行为', () => {
   const dir = mk('slots-')
   const req = join(dir, 'requirements.md')
 
-  // 有 FR 块、无绑定面 → 按 FR 编号追加
+  // 有 FR 块、无绑定面 → 按 FR 编号追加（v2 纯文本行，2026-10-04-thin-docs-v2）
   writeFileSync(req, '# 需求\n\n## FR-01: 行为一\n\n## FR-02: 行为二\n')
   const a = ensureBindingSlots({ changeDir: dir })
   assert.equal(a.appended, true)
   assert.equal(a.slots, 2)
   const text1 = readFileSync(req, 'utf8')
-  assert.match(text1, /AGENT:测试绑定FR-01/, 'FR-01 槽在场')
-  assert.match(text1, /AGENT:测试绑定FR-02/, 'FR-02 槽在场')
+  assert.match(text1, /^FR-01: （待填/m, 'FR-01 绑定行在场（纯文本）')
+  assert.match(text1, /^FR-02: （待填/m, 'FR-02 绑定行在场（纯文本）')
 
   // 幂等：已有槽 no-op
   const b = ensureBindingSlots({ changeDir: dir })

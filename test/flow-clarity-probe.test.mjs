@@ -47,15 +47,24 @@ function cli(cwd, args) {
 
 const INPUT_OK = '加一个文件\n成功标准：\n- work.txt 生成且 flow done 全绿'
 
-/** 槽位作答（同 flow-protocol fillDesignSlots）。 */
+/** 槽位作答（双代格式正文作答）+ spec 断点批准。 */
 function fillSlots(cwd, change) {
   const base = join(cwd, SPEC, 'changes', change)
   const dp = join(base, 'design.md')
-  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：前门测试夹具——一行作答即合规'))
-  const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 前门测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：前门测试夹具——无独立测试面'))
+  const dText = readFileSync(dp, 'utf8')
+  if (/<!--AGENT:槽\d+/.test(dText)) {
+    writeFileSync(dp, dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：前门测试夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 前门测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：前门测试夹具——无独立测试面'))
+  } else {
+    writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：前门测试夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（前门夹具行为句）')
+      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：前门测试夹具——无独立测试面'))
+  }
+  const ap = cli(cwd, ['flow', 'approve', '--change', change])
+  assert.equal(ap.status, 0, `flow approve 失败: ${ap.stdout}\n${ap.stderr}`)
 }
 
 /** 输出确定性头区：起点 →「【你要做的】」之前（前门/提示注入段均在此区，无时间戳类噪声）。 */
@@ -149,7 +158,8 @@ test('③ 清晰度门 exit 2 文案逐字保留（--input 缺失两选一）', 
 test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 start 点名提示（best-effort 接线不阻断收口）', () => {
   const { cwd } = makeRepo()
   const c1 = '2026-09-01-fcp-loop'
-  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', INPUT_OK, '--no-review'])
+  // 三条成功标准（多行镜像面——tasks 改写率的分母是正文行，单行会被标题稀释到阈下）
+  const s1 = cli(cwd, ['flow', 'start', '--change', c1, '--input', '加一组文件\n成功标准：\n- work-a.txt 生成且全绿\n- work-b.txt 生成且全绿\n- work-c.txt 生成且全绿', '--no-review'])
   assert.equal(s1.status, 0, `start 失败: ${s1.stderr}`)
   // 干活：非代码文件（测试门 skip 保持轻量）＋design 机器稿整体重写（>50% 改写比）
   writeFileSync(join(cwd, 'work.txt'), 'done\n')
@@ -159,41 +169,30 @@ test('④ 端到端 FR-02 回路：done 收口超阈指标落库 → 下次 star
   const designV1 = readFileSync(join(cd, 'design.md'), 'utf8')
   const base = readFileSync(join(cwd, SPEC, '.runtime', `route-hindsight-baseline-${c1}.json`), 'utf8')
   assert.ok(JSON.parse(base).design.includes(designV1.split('\n')[0] || ''), '快照锚定起草时点（start 时点内容）')
-  // 终稿：全部正文行换血（frontmatter/标记行保留——指纹门走 amend-draft 留痕通道），槽位作答合规
-  const v1Lines = designV1.split('\n')
-  const finalLines = []
-  let fmClosed = false
-  for (let i = 0; i < v1Lines.length; i++) {
-    const l = v1Lines[i]
-    if (!fmClosed) {
-      finalLines.push(l)
-      if (l === '---' && i > 0) fmClosed = true
-      continue
-    }
-    if (/^<!--/.test(l)) {
-      finalLines.push(l)
-      if (/^<!--AGENT:槽\d/.test(l)) finalLines.push('不适用：回路夹具——一行作答即合规')
-      continue
-    }
-    if (l.trim() === '') { finalLines.push(l); continue }
-    finalLines.push(`【换血 ${i}】用户推翻重述：另一条路径、另一组文件、另一套验证面——事后闭环指标触发形态。`)
-  }
-  writeFileSync(join(cd, 'design.md'), finalLines.join('\n'))
-  // 整写机器段的唯一合法通道：amend-draft 留痕重锚（route_hint 厚档 warn 属预期 advisory）
-  const sa = cli(cwd, ['flow', 'amend-draft', '--change', c1])
-  assert.equal(sa.status, 0, `amend-draft 失败: ${sa.stdout}\n${sa.stderr}`)
+  // v2 触发器=tasks 改写率（2026-10-04-thin-docs-v2：design 四问是锚、proposal/requirements
+  // 书写是合法澄清——hindsight 的「规划翻churn」信号落在 tasks 镜像行大改 >0.6，阈值原生支持）。
+  // 镜像行全量改写为不同实现路径（保留 task-NN 行形态）。
+  const tp = join(cd, 'tasks.md')
+  writeFileSync(tp, readFileSync(tp, 'utf8')
+    .replace(/^- \[ \] (task-\d+): .*$/gm, '- [ ] $1: 形态已改写——另一条实现路径与另一组步骤（事后闭环指标触发形态）'))
+  // design 例行作答 + FR 行为句/绑定行（v2 正文书写面）+ spec 断点批准
+  writeFileSync(join(cd, 'design.md'), readFileSync(join(cd, 'design.md'), 'utf8')
+    .replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：回路夹具——一行作答即合规'))
   const rp = join(cd, 'requirements.md')
   writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 回路夹具行为\nGiven 轻量变更收口\nWhen 指标超阈\nThen 标记落库')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：回路夹具——无独立测试面'))
+    .replace(/^- （待撰写.*$/gm, '- 系统 MUST 使指标超阈标记落库（回路夹具行为句）')
+    .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：回路夹具——无独立测试面'))
+  const sap = cli(cwd, ['flow', 'approve', '--change', c1])
+  assert.equal(sap.status, 0, `flow approve 失败: ${sap.stdout}\n${sap.stderr}`)
   const s2 = cli(cwd, ['flow', 'done', '--change', c1])
   assert.equal(s2.status, 0, `done 失败: ${s2.stdout}\n${s2.stderr}`)
   const markPath = join(cwd, SPEC, '.runtime', 'route-hindsight.json')
   assert.ok(existsSync(markPath), '超阈 → 标记落库')
   const mark = JSON.parse(readFileSync(markPath, 'utf8'))
   assert.equal(mark.change, c1)
-  assert.ok(mark.metrics.designRewriteRatio > 0.5, `design 改写比超阈: ${mark.metrics.designRewriteRatio}`)
-  assert.ok((mark.reasons || []).some((r) => r.includes('design')), `reasons 含 design 路: ${JSON.stringify(mark.reasons)}`)
+  // v2 触发路（2026-10-04-thin-docs-v2）：design 四问是锚不可改写——超阈信号走 tasks 改写率
+  assert.ok(mark.metrics.tasksRewriteRatio > 0.6, `tasks 改写率超阈: ${mark.metrics.tasksRewriteRatio}`)
+  assert.ok((mark.reasons || []).some((r) => r.includes('tasks')), `reasons 含 tasks 路: ${JSON.stringify(mark.reasons)}`)
   assert.match(s2.stderr, /route-hindsight 标记/, 'done 输出含标记 warn（console.warn → stderr）')
   // 下次 start（新变更）点名提示
   const s3 = cli(cwd, ['flow', 'start', '--change', '2026-09-01-fcp-loop-next', '--input', INPUT_OK])

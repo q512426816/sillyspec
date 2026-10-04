@@ -18,6 +18,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { DESIGN_QUESTIONS as DESIGN_QUESTIONS_FALLBACK } from './flow-draft.js'
 
 /** 高危交付语义承诺词（一票升级）。2026-09-25-platform-feedback-batch2 D 收敛：移除「幂等」
  * （实现手段非交付语义，由 diff 原语面覆盖）；保留的七个词均为面向用户的交付语义承诺。 */
@@ -50,12 +51,50 @@ function readSlotAnswer(text, markerRe) {
   return buf.join('\n').trim()
 }
 
+/**
+ * 读 v2 纯 markdown design 节作答（2026-10-04-thin-docs-v2）：节标题行到下一节标题之间的
+ * 非空行，剥离四问原文行（DESIGN_QUESTIONS 单一源同源引入——独立字符串会被评审实证为
+ * 镜像非同源）与引导行（> 开头）。空白返回 ''（调用方按未作答处理）。
+ */
+export function readV2SectionAnswer(text, heading, designQuestions) {
+  const dq = designQuestions || DESIGN_QUESTIONS_FALLBACK
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
+  const start = lines.findIndex((l) => l.trim() === `## ${heading}`)
+  if (start === -1) return ''
+  let end = lines.findIndex((l, i) => i > start && /^##\s/.test(l))
+  if (end === -1) end = lines.length
+  const qLines = new Set()
+  for (const sec of (dq.sections || [])) {
+    if (sec.heading === heading) for (const q of sec.lines) qLines.add(q)
+  }
+  return lines.slice(start + 1, end)
+    .filter((l) => { const t = l.trim(); return t && !t.startsWith('>') && !t.startsWith('##') && !qLines.has(t) })
+    .join('\n').trim()
+}
+
 /** 剥 MACHINE-DRAFT 机器段（design.md 的问题模板自带「串台」等承诺词字样——模板自污染面，
  * 扫描只看 agent 作答面；proposal/requirements 的机器段承载用户原话不剥）。 */
 function stripMachineSections(text) {
   return String(text || '')
     .replace(/<!--\s*MACHINE-DRAFT:[\w.-]+:[0-9a-f]{64}:begin[^\n]*-->[\s\S]*?<!--\s*MACHINE-DRAFT:[\w.-]+:end\s*-->/g, '')
     .replace(/<!--\s*MACHINE-DRAFT:[\w.-]+:[^\n]*:begin[^\n]*-->[\s\S]*?<!--\s*MACHINE-DRAFT:[\w.-]+:end\s*-->/g, '')
+}
+
+/**
+ * 剥 v2 纯 markdown 起草的问题文本行（2026-10-04-thin-docs-v2）：四问原文含「串台」承诺词
+ * 与并发机制词——v1 靠 MACHINE-DRAFT 段剥离防模板自污染，v2 无标记可剥，按行删（四问
+ * 原文=DESIGN_QUESTIONS 单一源逐字；节标题/引导行一并删——作答才是扫描面）。
+ */
+function stripV2QuestionLines(text) {
+  const drop = new Set()
+  for (const sec of (DESIGN_QUESTIONS_FALLBACK.sections || [])) {
+    drop.add(`## ${sec.heading}`)
+    for (const q of sec.lines) drop.add(q)
+  }
+  return String(text || '')
+    .split('\n')
+    .filter((l) => { const t = l.trim(); return !(drop.has(t) || t.startsWith('>')) })
+    .join('\n')
 }
 
 /**
@@ -72,7 +111,7 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
   for (const f of ['proposal.md', 'requirements.md', 'design.md']) {
     try {
       const t = readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n')
-      texts.push(f === 'design.md' ? stripMachineSections(t) : t)
+      texts.push(f === 'design.md' ? stripV2QuestionLines(stripMachineSections(t)) : t)
     } catch { /* 缺件由 redraft/槽位门兜底 */ }
   }
   const all = texts.join('\n')
@@ -86,6 +125,12 @@ export function classifyReviewNeed({ changeDir, input = '', patchText = null, ed
     if (/<!--\s*AGENT:槽3/.test(dText)) {
       const answer = readSlotAnswer(dText, /^<!--\s*AGENT:槽3/)
       if (!answer) exemptEvidence.push('盲维四问未作答（将由槽位门拦收）')
+      else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
+      else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
+    } else if (/^##\s*边界与并发/m.test(dText)) {
+      // v2 纯 markdown（2026-10-04-thin-docs-v2）：边界节正文作答判定（同 v1 三态语义）
+      const answer = readV2SectionAnswer(dText, DESIGN_QUESTIONS_FALLBACK.sections[2].heading, DESIGN_QUESTIONS_FALLBACK)
+      if (!answer) exemptEvidence.push('盲维四问未作答（将由 v2 工件校验拦收）')
       else if (/^不适用/.test(answer)) exemptEvidence.push('盲维四问自述不适用')
       else reasons.push('盲维四问有实质作答（存在时序/并发/切换/作用域风险面）')
     } else if (MECHANISM_RE.test(dText)) {

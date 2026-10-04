@@ -338,7 +338,7 @@ function changeArtifactPaths(changeDir) {
  * flow start —— 第 1 次协议调用（建卡+下发）。已存在 change → 恢复简报（不新建不重置）。
  * @param {{change:string, input?:string, thick?:boolean, withTasks?:boolean, cwd:string, specBase:string, json?:boolean}} p
  */
-export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, cwd, specBase, runtimeRootOpt = null, json = false }) {
+export async function cmdFlowStart({ change, input, title: titleFlag = null, thick = false, withTasks = false, reviewForce = null, autopilot = false, cwd, specBase, runtimeRootOpt = null, json = false }) {
   // local.yaml 缺席 fail-fast（R22 实证：缺 local.yaml 时 flow done 测试门静默兜底裸
   // python -m pytest → aiobotocore 假红/全量 860s 撞 600s 帽 → 11 轮重试 135min）。
   // local.yaml 是 init 的职责面——flow start 在此拒绝，不让 agent 在错误的测试配置上走完全程
@@ -476,6 +476,11 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
       writeFlowState(changeDir, { review_force: reviewForce })
       console.log(`⚖️ 已更新评审声明通道：review_force=${reviewForce}（resume 落盘）`)
     }
+    // autopilot resume 声明（2026-10-04-thin-docs-v2）：重入带 --autopilot 补记豁免
+    if (autopilot && !(readFlowState(changeDir) || {}).autopilot) {
+      writeFlowState(changeDir, { autopilot: true })
+      console.log(`🤖 已声明 autopilot：spec 断点人审豁免（用户显式声明留痕）`)
+    }
     // 变更标题补写（用户需求 2026-09-29：title=中文概括 ≤50 字，建议 ~20 字）——存量在途
     // 变更 title 空/缺失时的回填通道：显式 --title 恒生效（重入改标题）；否则从 --input 首
     // 行推导、仅当库内 title 为空才写（不覆盖已有语义标题）。best-effort 不阻断恢复简报。
@@ -555,6 +560,9 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     born_face: thick ? 'thick' : 'thin',
     with_tasks: Boolean(withTasks),
     review_force: reviewForce,
+    // autopilot（2026-10-04-thin-docs-v2 FR-06）：用户显式声明跳过 spec 断点人审（--autopilot）；
+    // 缺省 false——flow done 要求 flow approve 批准证据（spec 断点机器化，护栏#2：零 prompt 劝说）
+    autopilot: Boolean(autopilot),
     baseline_commit: baseline,
     substeps: {},
   })
@@ -625,11 +633,13 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `【协议调用 1/2（本次）】change 已建 + 基线锚定（baseline_commit=${baseline ? baseline.slice(0, 10) : '（无 git 历史）'}）${withTasks ? ' + 任务卡模式（--with-tasks：中间自愿用 task done，收尾仍 flow done）' : ''}`,
     ``,
     `【你要做的】直接干活：改代码、写测试。治理工件不用你写——flow done 机器做（协议记账单位=change 级）。`,
-    `例外裁决面（唯一合法 .sillyspec 书写）：AGENT 槽填充 / flow amend-draft（确要改机器稿时）。`,
-    `⚠️ design.md 四节 AGENT 槽（做法/接口契约/边界并发四问/风险）动码前后顺手作答——每节至少一行，`,
-    `   写「不适用：<理由>」也算答；flow done 空槽拒收（承诺锚点，评审与 FR 对账都对着它）。`,
-    `📜 requirements 的 FR 是机器摘录候选——语义要改写时直接编辑机器段后跑 flow amend-draft 留痕`,
-    `   （槽里写的不进 FR 索引）；输入含编号行为条目时机器已优先摘编号条目。`,
+    `书写面（2026-10-04-thin-docs-v2 纯 markdown 起草）：requirements FR 正文/design 四节作答/测试绑定行`,
+    `   都直接写正文——文档已无指纹标记与槽注释；标题锚（FR 标题、四问文本、镜像任务行）勿改写，`,
+    `   收口做文档↔锚对比（锚失踪/空答拒收，成功标准漂移出 advisory）。`,
+    `⚠️ design.md 四节（做法/接口契约/边界并发四问/风险）动码前后顺手作答——答案写在问题下方，`,
+    `   每节至少一行，写「不适用：<理由>」也算答；flow done 空节拒收（承诺锚点，评审与 FR 对账都对着它）。`,
+    `📜 requirements 每条 FR = 标题锚 + 一句带强度词的行为规定（必须/禁止/SHOULD/可以）+ 按需场景块`,
+    `   （#### 场景：名 + Given/When/Then）；测试绑定节每条 FR 一行 \`FR-NN: test/路径「用例」\`。`,
     `📦 冻结面在 flow done 时点采集（baseline..HEAD 提交面）：未提交交付文件——会话专属 worktree 自动并入；`,
     `   共享主仓可带 --freeze-dirty 显式声明并入；git 中间提交归档后可 reset --soft 压扁为单提交`,
     `   （审计真相在 change.patch 冻结件 sha256 锚定，不依赖 git 历史形态）。`,
@@ -647,12 +657,14 @@ export async function cmdFlowStart({ change, input, title: titleFlag = null, thi
     `   flow status --change ${change} 为自愿查看/恢复面（恢复时给下一任务指针与进度，非协议必需——D-007）。`,
     ``,
     `🛑 三断点纪律（可控性要求——用户没说「全跑完」就必须在每个断点向用户汇报并等确认）：`,
-    `   ① spec 断点：填完 FR 区和 design 槽后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
-    `      等用户确认方案再动手写代码——方案错了返工最贵。`,
+    `   ① spec 断点【机器门】：填完 FR 区和 design 四节后，把摘要给用户看（FR 条目+盲维作答+方案概述），`,
+    `      用户确认后请其运行 sillyspec flow approve --change ${change}（批准留痕）再动手写代码——`,
+    `      方案错了返工最贵；未批准且未声明 --autopilot 时 flow done 拒收（2026-10-04-thin-docs-v2）。`,
     `   ② 执行断点：写完代码跑完测试后，把测试结果（过了几个/挂了什么）给用户看，`,
     `      等用户确认再跑收口。`,
     `   ③ 归档断点：flow done 跑完后（无论过/拒），把结果（归档成功/被什么拦了）给用户看。`,
-    `   用户明确说「直接跑完/不用问我」→ 三断点全跳过（agent 自主干到底）。`,
+    `   用户明确说「直接跑完/不用问我」→ 重跑 flow start --change ${change} --autopilot 声明豁免（留痕），`,
+    `   ②③断点 agent 自主跳过。`,
     `   随时可查进度：sillyspec flow status --change ${change}`,
     ...(detectUiTouch(input)
       ? [...buildUiGuidanceLines(), '']
@@ -760,31 +772,52 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
     console.error('   重入：修复后重跑同一条命令——已完成子步幂等跳过，从断点续（半态可重入不可假绿：归档子步未完成前 change 仍 active）')
   }
 
-  // ① artifacts：机器稿指纹校验（draft-ledger 在场时三态拒收——标记缺失/哈希失配/手工重锚
-  // 未审计；AGENT 槽是合法书写面不参与指纹；缺 ledger=not-applicable 放行）
-  //    + 设计记录空槽拒收（2026-09-24 v3 设计记录全档化第一片：盲维四问每跑必答——空槽=未答，
-  //    「不适用：<理由>」也是答；纯文档检查前置于实测门，秒级失败秒级返工）
+  // ① artifacts：工件校验（双轨：v2 纯 markdown=文档↔锚对比+spec 断点机器门；v1 指纹=三态拒收）
+  //    + 设计记录空槽拒收（v1；v2 的四节空答在 verifyThinDocsV2 内）。纯文档检查前置于实测门，
+  //    秒级失败秒级返工。
   if (st.substeps?.artifacts === 'done') { skip('artifacts') } else {
     const { verifyFlowDrafts, verifyDesignRecordFilled } = await import('./flow-draft.js')
-    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot })
-    if (r.applicable && r.violations.length > 0) {
-      console.error(`❌ 工件校验拒收（机器稿指纹三态）：`)
-      for (const v of r.violations) console.error(`   - ${v}`)
-      reportMidFail('artifacts')
-      process.exit(1)
-    }
-    // 头脑风暴预段设计豁免（2026-09-25-thin-brainstorm-prestage）：adopted 变更的 design 是
-    // brainstorm 人机交互产物（比四节骨架丰富）——承诺以其为准，槽位门不适用
-    if (st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))) {
-      console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
-    } else {
-      const dr = verifyDesignRecordFilled({ changeDir })
-      if (dr.applicable && dr.emptySlots.length > 0) {
-        console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
-        console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
-        console.error(`   恢复指引：槽标记（<!--AGENT:槽N）被删时，从 .runtime/step-guides/ 的指纹缓存可找骨架原文；或删 design.md 后重入 flow start 补生成（criteria 从 proposal 回提）`)
+    // 头脑风暴预段设计豁免判定前置（v2 以 skipDesign 透传；v1 分支保留原日志）
+    const adoptedDesign = st.adopted_from === 'brainstorm' && existsSync(join(changeDir, 'design.md'))
+    const r = verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign: adoptedDesign })
+    if (r.applicable && r.schema === 2) {
+      // v2 纯 markdown 轨（2026-10-04-thin-docs-v2）：violations 拒收 → 漂移 advisory → spec 断点机器门
+      if (r.violations.length > 0) {
+        console.error(`❌ 工件校验拒收（v2 文档↔锚对比）：`)
+        for (const v of r.violations) console.error(`   - ${v}`)
         reportMidFail('artifacts')
         process.exit(1)
+      }
+      for (const a of r.advisories) console.warn(`⚠️ [门柱漂移 advisory] ${a}`)
+      if (adoptedDesign) console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
+      // spec 断点机器门（FR-06/FR-07，护栏#2 零 prompt 劝说——advisory 断点在 0/12 勾选类事故
+      // 实证下无牙；v2 起批准是收口硬前提，autopilot 是用户显式豁免通道）
+      if (!st.autopilot && !st.spec_approved) {
+        console.error(`❌ spec 断点未批准：本变更（v2 起草）收口需要方案确认留痕`)
+        console.error(`   修复：把 FR 条目+design 四节摘要给用户看，用户确认后由用户运行：`)
+        console.error(`     sillyspec flow approve --change ${change}`)
+        console.error(`   或用户显式豁免（自主跑到底）：重跑 flow start --change ${change} --autopilot（声明留痕）`)
+        reportMidFail('artifacts')
+        process.exit(1)
+      }
+    } else {
+      if (r.applicable && r.violations.length > 0) {
+        console.error(`❌ 工件校验拒收（机器稿指纹三态）：`)
+        for (const v of r.violations) console.error(`   - ${v}`)
+        reportMidFail('artifacts')
+        process.exit(1)
+      }
+      if (adoptedDesign) {
+        console.log('ℹ️ 头脑风暴预段设计在场——豁免 design 四节槽门（adopted_from=brainstorm，设计承诺以 brainstorm design 为准）')
+      } else {
+        const dr = verifyDesignRecordFilled({ changeDir })
+        if (dr.applicable && dr.emptySlots.length > 0) {
+          console.error(`❌ 设计记录未作答：design.md 有 ${dr.emptySlots.length} 个空 AGENT 槽（${dr.emptySlots.join('、')}）`)
+          console.error(`   每节至少写一行（小改动可写「不适用：<理由>」）——设计承诺是评审与 FR 对账的锚点，空槽=承诺未落盘`)
+          console.error(`   恢复指引：槽标记（<!--AGENT:槽N）被删时，从 .runtime/step-guides/ 的指纹缓存可找骨架原文；或删 design.md 后重入 flow start 补生成（criteria 从 proposal 回提）`)
+          reportMidFail('artifacts')
+          process.exit(1)
+        }
       }
     }
     mark('artifacts')
@@ -1037,6 +1070,14 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
               _lines[_li + 1] = _bindingLine
               _autoFilled++
               _li++
+            }
+          }
+          // v2 纯文本绑定行（2026-10-04-thin-docs-v2）：`FR-NN: （待填…）` → 测试结果补全
+          for (let _li = 0; _li < _lines.length; _li++) {
+            const _bm = _lines[_li].match(/^(FR-\d{2}: )（待填[^）]*）\s*$/)
+            if (_bm) {
+              _lines[_li] = _bm[1] + _bindingLine
+              _autoFilled++
             }
           }
           if (_autoFilled > 0) {
@@ -1537,6 +1578,33 @@ export async function cmdFlowDone({ change, cwd, specBase, runtimeRootOpt = null
 }
 
 /** flow 命令族入口（index.js case 'flow' 接线）：flow start|done|amend-draft。 */
+/**
+ * flow approve（2026-10-04-thin-docs-v2 FR-06）：spec 断点用户批准留痕——用户确认 FR+design
+ * 方案后由**用户**运行（不是 agent 代跑）；写 flow-state {spec_approved,spec_approved_at,
+ * spec_approved_by}。flow done 的 v2 机器门消费该证据（未批准且未声明 autopilot → 拒收）。
+ * 诚实边界：同机 agent 理论上也能跑本命令——门的价值是仪式+留痕（谁在何时批的）+评审抽查
+ * 兜底，非绝对防伪；--by 显式署名供平台/脚本侧调用。
+ */
+async function cmdFlowApprove({ change, cwd, specBase, by = null }) {
+  const changeDir = join(specBase, 'changes', change)
+  if (!existsSync(changeDir)) {
+    console.error(`❌ 变更不存在：${change}（flow approve 在 flow start 之后运行）`)
+    process.exit(2)
+  }
+  let approvedBy = by
+  if (!approvedBy) {
+    try {
+      const { resolveSessionIdentity } = await import('./progress.js')
+      approvedBy = (resolveSessionIdentity({ cwd }) || {}).session || 'user'
+    } catch { approvedBy = 'user' }
+  }
+  const at = new Date().toISOString()
+  writeFlowState(changeDir, { spec_approved: true, spec_approved_at: at, spec_approved_by: approvedBy })
+  console.log(`✅ spec 断点已批准（change=${change}）`)
+  console.log(`   批准人：${approvedBy}｜时间：${at}`)
+  console.log(`   flow done 的断点机器门已满足；agent 可继续执行/收口。撤销：编辑 flow-state.yaml 删除 spec_approved 三字段。`)
+}
+
 export async function cmdFlow(args, cwd, specDir = null) {
   const sub = args[0] || ''
   const rest = args.slice(1)
@@ -1618,9 +1686,17 @@ export async function cmdFlow(args, cwd, specDir = null) {
       thick: hasFlag('--thick'),
       withTasks: hasFlag('--with-tasks'),
       reviewForce: hasFlag('--review') ? true : hasFlag('--no-review') ? false : null,
+      autopilot: hasFlag('--autopilot'),
       cwd, specBase,
       json: hasFlag('--json'),
     })
+  }
+  if (sub === 'approve') {
+    const change = getFlag('--change')
+    if (!change) { console.error('❌ flow approve 需 --change <名>'); process.exit(2) }
+    validateChangeName(change)
+    await reportAgentLog(change, sub)
+    return cmdFlowApprove({ change, cwd, specBase, by: getFlag('--by') || null })
   }
   if (sub === 'status') {
     // 三断点配套（2026-09-25-flow-checkpoints）：随时可查当前变更阶段/槽位/子步进度
@@ -1652,13 +1728,30 @@ export async function cmdFlow(args, cwd, specDir = null) {
     let designFilled = false, frFilled = false, bindingsFilled = 0, bindingsTotal = 0
     try {
       const dText = readFileSync(join(changeDir, 'design.md'), 'utf8')
-      designFilled = Array.from(dText.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
+      // 双格式：v1 AGENT 槽计数；v2 纯 markdown 按节「有实质作答」判（复用 flow-review 的
+      // v2 节读取——问题原文行剥离；仅标题在场不算已填，防 spec 相位误跳「②执行」）
+      if (/<!--AGENT:槽\d+/.test(dText)) {
+        designFilled = Array.from(dText.matchAll(/<!--AGENT:槽\d+[^\n]*-->\n(\S)/g)).length >= 3
+      } else {
+        try {
+          const { readV2SectionAnswer } = await import('./flow-review.js')
+          const { DESIGN_QUESTIONS } = await import('./flow-draft.js')
+          designFilled = DESIGN_QUESTIONS.sections.filter((s) => readV2SectionAnswer(dText, s.heading, DESIGN_QUESTIONS)).length >= 3
+        } catch { designFilled = false }
+      }
     } catch { /* 无 design */ }
     try {
       const rText = readFileSync(join(changeDir, 'requirements.md'), 'utf8')
       frFilled = /### FR-\d+:/.test(rText.replace(/<!--[\s\S]*?-->/g, ''))
-      bindingsTotal = (rText.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length
-      bindingsFilled = (rText.match(/<!--AGENT:测试绑定FR-\d+[^\n]*-->\n\S/g) || []).length
+      if (/<!--AGENT:测试绑定FR-\d+/.test(rText)) {
+        bindingsTotal = (rText.match(/<!--AGENT:测试绑定FR-\d+/g) || []).length
+        bindingsFilled = (rText.match(/<!--AGENT:测试绑定FR-\d+[^\n]*-->\n\S/g) || []).length
+      } else {
+        // v2 纯文本行：`FR-NN: 内容`（（待填=未答）
+        const _rows = [...rText.matchAll(/^(FR-\d{2}):\s*(.*)$/gm)]
+        bindingsTotal = _rows.length
+        bindingsFilled = _rows.filter((m) => m[2].trim() && !m[2].trim().startsWith('（待填')).length
+      }
     } catch { /* 无 requirements */ }
     // 阶段推断
     let phase = '① spec（填 FR + design 槽）'

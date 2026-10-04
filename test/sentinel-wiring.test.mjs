@@ -31,11 +31,21 @@ function makeRepo() {
 function fillSlots(cwd, change) {
   const base = join(cwd, '.sillyspec', 'changes', change)
   const dp = join(base, 'design.md')
-  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
-  const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 哨兵夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 哨兵通过')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
+  const dText = readFileSync(dp, 'utf8')
+  if (/<!--AGENT:槽\d+/.test(dText)) {
+    writeFileSync(dp, dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 哨兵夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 哨兵通过')
+      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：哨兵夹具'))
+  } else {
+    writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：哨兵夹具'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 哨兵通过（哨兵夹具行为句）')
+      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：哨兵夹具'))
+  }
+  // spec 断点批准（v2 起草变更的 done 前提）
+  const ap = spawnSync(process.execPath, [CLI, 'flow', 'approve', '--change', change], { cwd, encoding: 'utf8', timeout: 180_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+  assert.equal(ap.status, 0, `flow approve 失败: ${ap.stdout}\n${ap.stderr}`)
 }
 
 test('① flow done 哨兵：覆写全勾零证据拒收 / 镜像全勾零证据豁免 / 全勾+token 放行 / 非全勾放行', () => {

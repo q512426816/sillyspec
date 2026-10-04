@@ -46,31 +46,40 @@ function makeRepo(yamlExtra = '') {
   return { cwd, cli }
 }
 
-/** 对 proposal 机器段做比例可控的 amend 改写（改动机器段正文后走 amend 通道）。 */
+/** 对 proposal 做比例可控的 amend 改写（v2 纯 markdown：改首版正文行后走 amend 通道——
+ *  v2 的 editRatio 对「首版全文↔当前全文」算，基准=ledger.files[].text）。 */
 function amendWithRatio(cwd, change, ratio) {
   const p = join(cwd, '.sillyspec', 'changes', change, 'proposal.md')
-  let text = readFileSync(p, 'utf8')
-  // 定位动机机器段 body 行，按比例改写行内容
-  const lines = text.split('\n')
-  const bIdx = lines.findIndex((l) => l.includes('proposal-motivation'))
-  const bodyStart = bIdx + 1
-  const bodyEnd = lines.findIndex((l, i) => i > bodyStart && l.includes('MACHINE-DRAFT:') && l.includes(':end'))
-  const bodyLen = bodyEnd - bodyStart
-  const nChange = Math.round(bodyLen * ratio)
-  for (let i = 0; i < nChange; i++) lines[bodyStart + i] = `改写行 ${i}（决策覆盖度测试）`
+  const lines = readFileSync(p, 'utf8').split('\n')
+  // 可改写行=非 frontmatter/标题/空行（frontmatter 与 #/## 标题不动——改它们是结构破坏非决策改写）
+  const editable = []
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim()
+    if (!t || t === '---' || t.startsWith('#')) continue
+    editable.push(i)
+  }
+  const nChange = Math.max(1, Math.round(editable.length * ratio))
+  for (let i = 0; i < nChange && i < editable.length; i++) lines[editable[i]] = `改写行 ${i}（决策覆盖度测试）`
   writeFileSync(p, lines.join('\n'))
   return spawnSync(process.execPath, [CLI, 'flow', 'amend-draft', '--change', change], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
 }
 
-/** agent 例行动作（设计记录+测试绑定契约）：槽各写一行，防 artifacts 子步空槽拒收。 */
+/** agent 例行动作（双代格式：v2 纯 markdown 正文作答 / v1 AGENT 槽兼容）。 */
 function fillDesignSlots(cwd, change) {
   const base = join(cwd, '.sillyspec', 'changes', change)
   const dp = join(base, 'design.md')
-  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
-  const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 路由测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
+  const dText = readFileSync(dp, 'utf8')
+  if (/<!--AGENT:槽\d+/.test(dText)) {
+    writeFileSync(dp, dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 路由测试夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：路由测试夹具——无独立测试面'))
+  } else {
+    writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：路由测试夹具——一行作答即合规'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（路由夹具行为句）')
+      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：路由测试夹具——无独立测试面'))
+  }
 }
 
 test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+醒目打印+遥测；小改无 hint', () => {
@@ -89,6 +98,7 @@ test('②③ 阈值两侧：大改 route_hint=thick + advisory 测绿轻量过+�
   // advisory（缺省）：测绿 → flow done exit 0 + 醒目打印 + 遥测记一笔
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   fillDesignSlots(cwd, change)
+  assert.equal(cli(['flow', 'approve', '--change', change]).status, 0, 'spec 断点批准')
   const done = cli(['flow', 'done', '--change', change])
   assert.equal(done.status, 0, `advisory 应轻量档过: ${done.stdout}\n${done.stderr}`)
   assert.match(done.stdout + done.stderr, /route_hint: thick/)
@@ -117,6 +127,7 @@ test('④ enforcement=block：route_hint=thick 阻断 flow done exit 1', () => {
   assert.match(big.stdout + big.stderr, /route_hint: thick|edit_ratio_enforcement/)
   writeFileSync(join(cwd, 'work.js'), 'export const a = 1\n')
   fillDesignSlots(cwd, change)
+  assert.equal(cli(['flow', 'approve', '--change', change]).status, 0, 'spec 断点批准')
   const done = cli(['flow', 'done', '--change', change])
   assert.equal(done.status, 1, 'block 档应阻断')
   assert.match(done.stdout + done.stderr, /edit_ratio_enforcement=block/)

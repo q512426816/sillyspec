@@ -1,21 +1,20 @@
 /**
- * flow-draft.js — 全件机器起草器（R7 切片三 task-05 / D-004 D-005 / FR-07 FR-08）。
+ * flow-draft.js — 轻量道工件起草器（双代并存：指纹 v1 / 纯 markdown v2）。
  *
- * 轻量跑道治理工件全部 CLI 机器起草（工件回填轮=0），agent 只裁例外：
- *   - proposal：--input 机械转写（动机/关键问题/变更范围从任务原话摘段）；
- *   - requirements：机械摘「成功标准」条目 → FR 条目；
- *   - tasks：成功标准 → checkbox 任务行；任务卡分岔（用户裁定#3）：默认 thin+直写零任务卡
- *     （轻量跑=quick 的协议兄弟）；--thick / --with-tasks 才生成 tasks/task-NN.md 卡；
- *   - decisions：只记真实新增（转写任务通常为零——不落文件）。
+ * v2（2026-10-04-thin-docs-v2，OpenSpec 对照 + 厚道结构门禁经验）：文档=纯 markdown 人类
+ * 可读正文——零 MACHINE-DRAFT 指纹标记、零 AGENT 槽注释；FR 骨架只到标题锚（### FR-NN:
+ * <成功标准原文>），SHALL 正文与 Scenario 场景块由 agent 撰写（空答/缺强度词在 flow done
+ * 拒收）；防篡改锚点（成功标准原文 + design 四问文本）搬进 draft ledger 机器态
+ * （schemaVersion:2 的 anchor 字段），flow done 做文档↔锚对比——问题被删/节被清空拒收，
+ * 成功标准在 requirements/tasks 面消失出漂移 advisory。四问文本单一源=DESIGN_QUESTIONS
+ * 常量（起草端与验收端同源，防镜像漂移）。tasks.md：镜像行=成功标准逐条全文本（不截断）
+ * 任务锚 + 显式允许 agent 追加细化行（task-NN 编号顺延）。
  *
- * 机器段经 machine-draft.wrapSection 包裹（sha256 指纹标记对，guardNote 指向 flow done 拒收）；
- * draft-ledger（.runtime/draft-ledger-<change>.json）每段存 hash+**首版原文 body（首版快照永不
- * 覆盖——切片四 editRatio 的基准依赖；amend 只刷 hash 不动 body）**，命名空间按 文件名+段键。
- * AGENT 槽（<!--AGENT:--> 标记对）=合法书写面（验收侧放行，不参与指纹）。
- *
- * 守卫全在验收侧（护栏#2：零 prompt 劝说）：flow done 工件校验子步对 ledger 在案的每文件
- * verifyMarkers 三态拒收（标记缺失/哈希失配/手工重锚未审计）；flow amend-draft 是唯一留痕
- * 修改通道（reanchorText 重锚 + ledger amendments 审计）。
+ * v1（存量在途变更，冻结不改）：全件机器起草 + MACHINE-DRAFT 指纹标记 + AGENT 槽书写面；
+ *   - proposal：--input 机械转写；requirements：GWT 骨架预填；tasks：成功标准→checkbox 镜像；
+ *   - 机器段经 machine-draft.wrapSection 包裹（sha256 指纹），draft-ledger 记段哈希+首版原文；
+ *   - 守卫在验收侧：flow done verifyMarkers 三态拒收；flow amend-draft 唯一留痕修改通道。
+ *   v1 判据=ledger.schemaVersion 缺省（1）；redraft/verify 按 ledger 代别自动选轨（双轨）。
  */
 import { existsSync, readFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -32,6 +31,35 @@ function readText(path) { return readFileSync(path, 'utf8').replace(/\r\n/g, '\n
 const AMEND_CMD = (change) => `sillyspec flow amend-draft --change ${change}`
 const GUARD_NOTE = '整段改写会被 flow done 拒收'
 
+/** v2 ledger 代别标记（draft ledger schemaVersion === 2 → 纯 markdown 轨；缺省=1 指纹轨）。 */
+export const DRAFT_SCHEMA_V2 = 2
+
+/**
+ * design 四问单一源常量（v2）：起草端逐字写入 design.md，验收端（verifyThinDocsV2）对
+ * ledger.anchor.designQuestions 逐字比对——两处独立字符串会被评审实证为「镜像非同源」。
+ * v1 指纹稿的问题文本冻结在其 wrapped 段内（存量在途变更零影响），不回读本常量。
+ */
+export const DESIGN_QUESTIONS = {
+  sections: [
+    { key: 'approach', heading: '做法概述', lines: ['本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。'] },
+    { key: 'contract', heading: '接口契约', lines: ['动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？'] },
+    {
+      key: 'boundaries',
+      heading: '边界与并发（盲维四问——每问必答，答不了即设计缺口）',
+      lines: [
+        '1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？',
+        '2. 并发写：两个执行体同时操作同一数据/文件会发生什么？',
+        '3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？',
+        '4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？',
+      ],
+    },
+    { key: 'risks', heading: '风险与死路', lines: ['本方案最大的风险是什么？试过但放弃的方案及放弃理由？'] },
+  ],
+}
+
+/** FR 行为句强度词判据（v2 验收端与模板指引共用）：正文行含任一 → 视为已撰写行为句。 */
+const FR_STRENGTH_RE = /^\s*-?\s*(系统\s+)?(SHALL|MUST)\b|必须|禁止/
+
 /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
 export function draftLedgerPath(runtimeRoot, changeName) {
   return join(runtimeRoot, `draft-ledger-${changeName}.json`)
@@ -40,37 +68,17 @@ export function draftLedgerPath(runtimeRoot, changeName) {
 const AGENT_SLOT = (n, hint) => `<!--AGENT:槽${n} ${hint}——例外裁决书写面（机器段之外合法） -->`
 
 /**
- * 复合标准拆分（2026-09-25-fr-compound-split）：条目内「A/B」「A；B」的合取标准拆为独立条目
- * （FR 区 agent 书写架构下，摘录一行 A/B 会被直抄成粒度失真的单条 FR）。路径感知：含扩展
- * 名点或超一处斜杠的条目不按斜杠拆（src/flow.js 之类不能劈）。
+ * 复合标准拆分 v2 起退役（2026-10-04-thin-docs-v2 FR-03）：「A/B」「A；B」保持整条——
+ * 拆分是静默变形（谓词词表误判成对短名词/路径形态的历史坑全在同链），一条标准一行是
+ * --input 书写者的责任，机器不做语义猜测。v1 在途变更的 redraft 同享本口径（摘录端
+ * 单一实现，双轨差异只在文档形态不在摘录语义）。
  */
-// 谓词词元（2026-09-28-split-guard-and-gate-report）：斜杠拆分的资格词表——拆分后每一段都
-// 含至少一个行为谓词才拆（「后端端点可访问/鉴权生效」双侧有谓词，拆开粒度才真）；成对短名词
-// （「节点/边」「页面/UI」「语言/框架」）无谓词，保持整条（2026-09-28 三变更实证误拆）。
-// 分号拆分与路径形态守卫（pathLike）不受此限——它们的语义不依赖段内谓词。
-const SEGMENT_PREDICATE_RE = /(访问|生效|可用|一致|通过|校验|支持|包含|输出|返回|存在|命中|阻断|启用|禁用|删除|新增|修改|生成|解析|渲染|编译|提交|回滚|触发|满足|锁定|收敛|幂等|对齐|补齐|清零|入仓|入库)/
-
-function splitCompoundCriteria(item) {
-  const parts = String(item).split(/[；;]/).map((s) => s.trim()).filter(Boolean)
-  const out = []
-  for (const part of parts) {
-    const pathLike = /\.[A-Za-z]{1,5}\b/.test(part) || (part.match(/\//g) || []).length > 1
-    if (!pathLike && /[／/]/.test(part)) {
-      const segs = part.split(/[／/]/).map((s) => s.trim()).filter(Boolean)
-      const everyHasPredicate = segs.length > 1 && segs.every((s) => SEGMENT_PREDICATE_RE.test(s))
-      if (everyHasPredicate) out.push(...segs)
-      else out.push(part)
-    } else out.push(part)
-  }
-  return out
-}
 
 /**
  * 从任务原话摘「成功标准」条目（行级机械提取：「成功标准/验收」节下的条目行；无节则回退列表行）。
- * 编号条目通道（2026-09-25-thin-fr-quality，R16 实证驱动）：输入为完整任务书时行为需求以
- * 「1. …n.」编号列在正文、成功标准节只有总括句（「上述 1-9 全部实现…」入库为 FR 是口号不是
- * 行为语义）——正文编号条目数 ≥3 且多于节条目时取而代之（与节条目去重）。adopt/proposal
- * 回提路径经 opts.numberedChannel=false 关闭（proposal 其他节的编号列表会误劫持）。
+ * 编号劫持通道 v2 起退役（2026-10-04-thin-docs-v2 FR-03）：正文「1. …」编号条目不再取代成功
+ * 标准节（动机/背景节的编号列点被误劫持为 FR 是实证变形）——条目只认「成功标准」节与无节时的
+ * 列表行。opts.numberedChannel 参数保留兼容（redraft 调用面）但恒无效。
  */
 /**
  * 续行合并判定（cli-protocol-trust，R17 实证）：括号/引号未闭合，或行尾悬空连接符
@@ -135,19 +143,8 @@ export function extractSuccessCriteria(input, opts = {}) {
     if (!sawSection && /^[-*•]\s+\S/.test(raw)) { criteria.push(raw.replace(/^[-*•]\s+/, '')); continue }
     if (inSection) {
       const item = raw.replace(/^[-*•\d.)、]+\s*/, '')
-      if (item && !/^#/.test(item)) criteria.push(...splitCompoundCriteria(item))
+      if (item && !/^#/.test(item)) criteria.push(item)
     }
-  }
-  // 编号条目通道：正文「1. …」行为条目（与节条目去重），数 ≥3 且多于节条目时取代
-  if (opts.numberedChannel !== false) {
-    const numbered = []
-    for (const raw of lines) {
-      const m = raw.match(/^\d{1,2}[.、)）]\s*(\S.*)$/)
-      if (!m) continue
-      const t = m[1].trim()
-      if (t && !numbered.includes(t) && !criteria.includes(t)) numbered.push(t)
-    }
-    if (numbered.length >= 3 && numbered.length > criteria.length) return numbered
   }
   return criteria
 }
@@ -182,11 +179,236 @@ function draftProposal({ change, input, criteria }) {
   return { text, sections: collectSections(text) }
 }
 
-/** requirements 机器稿（骨架 + agent 填写 FR + 绑定槽——2026-09-25-fr-agent-writable，
- * 平台狗粮驱动架构修正：FR 内容从机器指纹段改为 agent 书写面（同 design 槽模式）。
- * 机器只搭骨架：节标题 + FR 空区（含参考摘录注释）+ 绑定槽。agent 干活时直接填 FR，
- * 不走 amend、不触发 edit_ratio——机器摘录 FR 太薄（「flow done 全绿」级）是实证痛点，
- * amend 改写被 route_hint:thick 误报打击改善积极性，且 FR 质量仍受限。 */
+// ════════════════════════════ v2 纯 markdown 起草族（2026-10-04-thin-docs-v2）════════════════════════════
+// 文档=人类可读正文（零指纹标记零 AGENT 槽注释）；FR 只给标题锚（成功标准原文逐字），
+// SHALL 正文/Scenario 场景块/绑定行由 agent 撰写，空答在验收端拒收（护栏#2：守卫在验收侧）。
+
+/** proposal v2：动机原话转写 + 范围/成功标准纯文本清单。 */
+function draftProposalV2({ change, input, criteria }) {
+  const crit = criteria || []
+  const lines = [
+    '---',
+    `author: flow-machine-draft`,
+    `created_at: ${new Date().toISOString()}`,
+    '---',
+    `# 提案书（Proposal）— ${change}`,
+    '',
+    '## 动机',
+    '',
+    `任务原话转写：${input || '（未提供 --input）'}`,
+    '',
+    '## 变更范围',
+    '',
+    ...(crit.length > 0
+      ? [`按成功标准机械推导，共 ${crit.length} 条验收面：`, ...crit.map((c, i) => `${i + 1}. ${c}`)]
+      : ['（--input 未含成功标准条目——flow done 测试门与工件校验为默认验收面）']),
+    '',
+    '## 成功标准（可验证）',
+    '',
+    ...(crit.length > 0
+      ? crit.map((c, i) => `${i + 1}. ${c}`)
+      : ['1. flow done 六子步全绿（测试门实测通过+工件校验通过）']),
+    '',
+  ]
+  return lines.join('\n')
+}
+
+/** requirements v2：FR 标题锚（成功标准原文逐字、不截断）+ SHALL/Scenario 撰写指引 + 纯文本绑定行。 */
+function draftRequirementsV2({ change, criteria }) {
+  const crit = criteria && criteria.length > 0 ? criteria : null
+  const n = crit ? crit.length : 1
+  const frBlocks = (crit || ['（按任务语义撰写）']).map((c, i) => {
+    const id = `FR-${String(i + 1).padStart(2, '0')}`
+    return [
+      `### ${id}: ${c}`,
+      '',
+      `- （待撰写：把本条成功标准改写为一句可判定的行为规定并标约束强度——必须/禁止/SHOULD/可以）`,
+      '',
+      '#### 场景：主路径',
+      '',
+      '（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）',
+    ].join('\n')
+  })
+  const bindingRows = Array.from({ length: n }, (_, i) =>
+    `FR-${String(i + 1).padStart(2, '0')}: （待填——哪个测试文件/用例覆盖这条 FR；无测试面写「不适用：理由」）`)
+  return [
+    '---',
+    `author: flow-machine-draft`,
+    `created_at: ${new Date().toISOString()}`,
+    '---',
+    `# 需求规格（Requirements）— ${change}`,
+    '',
+    '## 功能需求',
+    '',
+    '> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；',
+    '> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。',
+    '> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。',
+    '',
+    ...frBlocks.flatMap((b) => [b, '']),
+    '## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）',
+    '',
+    ...bindingRows.join('\n').split('\n'),
+    '',
+  ].join('\n')
+}
+
+/** design v2：四节问题文本（DESIGN_QUESTIONS 单一源逐字）+ 作答区（答案写在问题下方）。 */
+function draftDesignRecordV2({ change }) {
+  const secs = DESIGN_QUESTIONS.sections.map((s) => [
+    `## ${s.heading}`,
+    '',
+    ...s.lines,
+    '',
+  ])
+  return [
+    '---',
+    `author: flow-machine-draft`,
+    `created_at: ${new Date().toISOString()}`,
+    '---',
+    `# 设计记录（Design Record）— ${change}`,
+    '',
+    '> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。',
+    '> 需要列改动文件时在「接口契约」节加「文件变更清单」表（| 新增/修改 | 路径 | 说明 |）。',
+    '',
+    ...secs.flat(),
+  ].join('\n')
+}
+
+/** tasks v2：镜像行=成功标准逐条全文本（不截断）任务锚 + agent 细化行追加指引。 */
+function draftTasksV2({ change, criteria, withTasks }) {
+  const crit = criteria || []
+  const rows = crit.length > 0
+    ? crit.map((c, i) => `- [ ] task-${String(i + 1).padStart(2, '0')}: ${c}`)
+    : ['- [ ] task-01: 完成实现并使 flow done 六子步全绿']
+  return [
+    '---',
+    `author: flow-machine-draft`,
+    `created_at: ${new Date().toISOString()}`,
+    '---',
+    `# 任务注册表（Tasks）— ${change}`,
+    '',
+    '> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径',
+    '> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——',
+    `> ${withTasks ? '任务卡模式（--with-tasks/--thick）：tasks/task-NN.md 卡已生成，中间自愿 task done，收尾仍 flow done' : '默认 thin：无任务卡文件，收口=flow done 唯一裁决'}）。`,
+    `> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change ${change} --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。`,
+    `> \`flow status --change ${change}\` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。`,
+    '',
+    ...rows,
+    '',
+  ].join('\n')
+}
+
+/**
+ * v2 工件校验（flow done artifacts 子步消费面；ledger.schemaVersion===2 时取代指纹三态+槽位门）。
+ * 拒收项（violations）：四问被删/节空答、FR 未撰写行为句（缺强度词）、绑定行空/待填、
+ * 四件缺失/结构缺失。漂移 advisory：锚内成功标准在 requirements FR 标题与 tasks 镜像行中
+ * 失踪（门柱漂移嫌疑——agent 改写是合法例外，advisory 提示审核面核对，不阻断）。
+ * adopted brainstorm 变更（opts.skipDesign）豁免 design 四节门（设计承诺以 brainstorm design 为准）。
+ */
+export function verifyThinDocsV2({ changeDir, ledger, skipDesign = false }) {
+  const violations = []
+  const advisories = []
+  const anchorCriteria = Array.isArray(ledger?.anchor?.criteria) ? ledger.anchor.criteria : []
+  const read = (f) => {
+    try { return readFileSync(join(changeDir, f), 'utf8').replace(/\r\n/g, '\n') } catch { return null }
+  }
+
+  // design 四节：问题在场（对锚逐字）+ 实质作答
+  if (!skipDesign) {
+    const dText = read('design.md')
+    if (dText === null) violations.push('design.md 缺失（v2 起草件在案）——删除后重入 flow start 补生成')
+    else {
+      const anchorSections = ledger?.anchor?.designQuestions?.sections || DESIGN_QUESTIONS.sections
+      const dLines = dText.split('\n')
+      for (const sec of anchorSections) {
+        if (!dLines.some((l) => l.trim() === `## ${sec.heading}`)) {
+          violations.push(`design「${sec.heading}」节被删（标题缺失）——恢复小节与四问原文后作答`)
+          continue
+        }
+        for (const q of sec.lines) {
+          if (!dLines.some((l) => l.trim() === q)) violations.push(`design「${sec.heading}」问题文本被改写：「${q.slice(0, 30)}…」——恢复原文（问题钉死，答案写在下方）`)
+        }
+        // 实质作答：节内非空行 - 标题行 - 问题行 - 引导行（> 开头）≥1
+        const start = dLines.findIndex((l) => l.trim() === `## ${sec.heading}`)
+        let end = dLines.findIndex((l, i) => i > start && /^##\s/.test(l))
+        if (end === -1) end = dLines.length
+        const qSet = new Set(sec.lines)
+        const answered = dLines.slice(start + 1, end).some((l) => {
+          const t = l.trim()
+          return t && !qSet.has(t) && !t.startsWith('>') && !t.startsWith('##')
+        })
+        if (!answered) violations.push(`design「${sec.heading}」未作答——每节至少一行（小改动可写「不适用：<理由>」）`)
+      }
+    }
+  }
+
+  // requirements：FR 行为句 + 绑定行
+  const rText = read('requirements.md')
+  const frIds = []
+  if (rText === null) violations.push('requirements.md 缺失——删除后重入 flow start 补生成')
+  else {
+    const rLines = rText.split('\n')
+    const frHeadRe = /^### (FR-\d{2}):\s*(.*)$/
+    for (let i = 0; i < rLines.length; i++) {
+      const m = rLines[i].match(frHeadRe)
+      if (!m) continue
+      frIds.push(m[1])
+      // 块体：到下一 ### / ## 或文尾
+      let j = i + 1
+      const body = []
+      while (j < rLines.length && !/^(###|##)\s/.test(rLines[j])) { body.push(rLines[j]); j++ }
+      const hasStrength = body.some((l) => FR_STRENGTH_RE.test(l))
+      const pending = body.some((l) => /^\s*-?\s*（待撰写/.test(l.trim()))
+      if (!hasStrength || pending) violations.push(`${m[1]} 行为句未撰写——正文须含强度词（必须/禁止/SHOULD/SHOULD NOT/MUST）的一句可判定行为规定`)
+      i = j - 1
+    }
+    if (frIds.length === 0) violations.push('requirements 功能需求区为空——至少一条 `### FR-NN: 标题` + 行为句')
+    // 绑定行：## 测试绑定 节内 `FR-NN: 内容`
+    const bindStart = rLines.findIndex((l) => /^##\s*测试绑定/.test(l))
+    if (bindStart === -1) violations.push('requirements「## 测试绑定」节缺失——每条 FR 至少一行绑定')
+    else {
+      const bindRows = new Map()
+      for (let i = bindStart + 1; i < rLines.length && !/^##\s/.test(rLines[i]); i++) {
+        const bm = rLines[i].match(/^(FR-\d{2})[：:]\s*(.*)$/)
+        if (bm) bindRows.set(bm[1], bm[2].trim())
+      }
+      for (const id of frIds) {
+        const v = bindRows.get(id)
+        if (v === undefined) violations.push(`${id} 测试绑定行缺失——格式 \`FR-NN: test/路径「用例名」\`（无测试面写「不适用：理由」）`)
+        else if (!v || v.startsWith('（待填')) violations.push(`${id} 测试绑定未作答——空行/待填在收口拒收`)
+      }
+    }
+  }
+
+  // tasks：镜像行在场（缺失 → advisory 漂移；零任务行 → 拒收）
+  const tText = read('tasks.md')
+  if (tText === null) violations.push('tasks.md 缺失——删除后重入 flow start 补生成')
+  else {
+    const taskRows = [...tText.matchAll(/^- \[([ xX])\] (task-\d+):/gm)]
+    if (taskRows.length === 0) violations.push('tasks.md 无任何 task-NN 行——镜像任务锚不可整删（细化可追加，锚行勿删）')
+  }
+
+  // proposal：在场 + 成功标准节非空
+  const pText = read('proposal.md')
+  if (pText === null) violations.push('proposal.md 缺失——删除后重入 flow start 补生成')
+  else if (!/^##\s*成功标准/m.test(pText)) violations.push('proposal「## 成功标准」节缺失——门柱锚（删除会致漂移判定失真）')
+
+  // 漂移 advisory：requirements 的 FR 标题锚是对账面（归档索引用它）——锚文本从 requirements
+  // 消失即 advisory（子串包含语义：轻改写保留原文不误报；agent 合法改写是书写面权利，advisory
+  // 交审核面核对语义未失真，不阻断）。tasks 镜像行同判（仅 requirements 在场时才查——FR 面已
+  // 漂移的不重复报）。proposal 不参与（成功标准节=--input 转写件，非对账面）。
+  for (let i = 0; i < anchorCriteria.length; i++) {
+    const c = String(anchorCriteria[i] || '').trim()
+    if (!c) continue
+    const inFr = rText !== null && rText.includes(c)
+    const inTasks = tText !== null && tText.includes(c)
+    if (!inFr) advisories.push(`成功标准第 ${i + 1} 条原文未在 requirements 见到（FR 标题锚漂移嫌疑——若属有意改写请核对语义未失真）：${c.slice(0, 40)}${c.length > 40 ? '…' : ''}`)
+    else if (!inTasks) advisories.push(`成功标准第 ${i + 1} 条未在 tasks.md 见到镜像行（任务锚漂移嫌疑——镜像行勿删，细化行可追加）`)
+  }
+  return { violations, advisories }
+}
+
+
 /**
  * 成功标准 → GWT 骨架预填（governance-autopilot，R20 实证：agent 手写 FR +12 轮 Edit）——
  * 从标准文本机械推导三段。骨架进场 agent 可覆盖（消灭空槽冷启动，agent 只需改错的不需从零写）。
@@ -226,6 +448,7 @@ function draftGwtSkeleton(criterion, index) {
   return `### ${id}: ${c}\n${given}\nWhen ${when}\nThen ${then}`
 }
 
+/** requirements 机器稿 v1（指纹代，存量在途变更 redraft 专用；新生成走 draftRequirementsV2）。 */
 function draftRequirements({ change, criteria, input }) {
   const crit = criteria || []
   // GWT 骨架预填（governance-autopilot）：FR 区直接生成完整 Given/When/Then 块——agent 可覆盖
@@ -258,15 +481,35 @@ function draftRequirements({ change, criteria, input }) {
 }
 
 /**
- * requirements「测试绑定」槽位门（flow done artifacts 子步消费面）：每条 FR 的绑定槽非空
- * （「不适用：理由」=已答）；FR 机器段在场但零绑定槽 = 骨架早于本机制的旧版——修复路径是
- * 删 requirements.md 重入 flow start（redraft 按 proposal 机器段回提 criteria 重新起草）。
- * 纯读盘面；无 requirements.md → not-applicable（redraft 补生成）。
+ * requirements「测试绑定」槽位门（flow done artifacts 子步消费面）：每条 FR 的绑定行非空
+ * （「不适用：理由」=已答）。双格式：v2 纯文本行（`## 测试绑定` 节内 `FR-NN: 内容`——
+ * 空行/（待填=未答）；v1 AGENT 槽标记（<!--AGENT:测试绑定FR-NN → 下一段非空=已答）。
+ * FR 机器段在场但零绑定面 = 骨架早于本机制的旧版——修复路径是删 requirements.md 重入
+ * flow start。纯读盘面；无 requirements.md → not-applicable（redraft 补生成）。
  */
 export function verifyRequirementBindings({ changeDir }) {
   const path = join(changeDir, 'requirements.md')
   if (!existsSync(path)) return { applicable: false, emptySlots: [] }
   const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+  // v2 纯文本绑定：文档含 ## 测试绑定 节且无 AGENT 绑定槽 → 走行级校验
+  if (/^##\s*测试绑定/m.test(text) && !/<!--\s*AGENT:测试绑定/.test(text)) {
+    const lines = text.split('\n')
+    const frIds = [...text.matchAll(/^### (FR-\d{2}):/gm)].map((m) => m[1])
+    const bindStart = lines.findIndex((l) => /^##\s*测试绑定/.test(l))
+    const rows = new Map()
+    for (let i = bindStart + 1; i < lines.length && !/^##\s/.test(lines[i]); i++) {
+      const bm = lines[i].match(/^(FR-\d{2})[：:]\s*(.*)$/)
+      if (bm) rows.set(bm[1], bm[2].trim())
+    }
+    const emptySlots = []
+    for (const id of frIds.length > 0 ? frIds : ['FR-01']) {
+      const v = rows.get(id)
+      if (v === undefined) emptySlots.push(`测试绑定${id}（行缺失）`)
+      else if (!v || v.startsWith('（待填')) emptySlots.push(`测试绑定${id}`)
+    }
+    if (frIds.length === 0) emptySlots.push('FR区（agent 未填写功能需求——每条 FR 格式 ### FR-NN: 标题 + 强度词行为句）')
+    return { applicable: true, emptySlots }
+  }
   const lines = text.split('\n')
   const emptySlots = []
   let current = null
@@ -390,7 +633,31 @@ function extractTestAnchors(content, root, indexRef) {
 export function extractRequirementBindings({ changeDir, change }) {
   const path = join(changeDir, 'requirements.md')
   if (!existsSync(path)) return []
-  const lines = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').split('\n')
+  const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
+  // v2 纯文本绑定行（`## 测试绑定` 节内 `FR-NN: 内容`）——tests 锚与 v1 同规则
+  // （extractTestAnchors：路径 token＋可选用例锚；「不适用」/「（待填」不产行）。
+  if (/^##\s*测试绑定/m.test(text) && !/<!--\s*AGENT:测试绑定/.test(text)) {
+    let root = null
+    try {
+      const r = dirname(dirname(dirname(changeDir)))
+      root = existsSync(join(r, '.sillyspec')) ? r : process.cwd()
+    } catch { root = process.cwd() }
+    const indexRef = { files: null }
+    const lines = text.split('\n')
+    const bindStart = lines.findIndex((l) => /^##\s*测试绑定/.test(l))
+    const rows = []
+    for (let i = bindStart + 1; i >= 0 && i < lines.length && !/^##\s/.test(lines[i]); i++) {
+      const bm = lines[i].match(/^(FR-\d{2})[：:]\s*(.*)$/)
+      if (!bm) continue
+      const content = bm[2].trim()
+      if (!content || content.startsWith('（待填') || /^不适用/.test(content)) continue
+      const tests = extractTestAnchors(content, root, indexRef)
+      if (tests.length === 0) continue
+      rows.push({ anchor: bm[1], row_id: `${change}:flow:测试绑定${bm[1]}`, tests, reason: 'spec', state: 'candidate', discovery: 'machine', confirmed_by: null, source_change: change })
+    }
+    return rows
+  }
+  const lines = text.split('\n')
   // 仓根推导：changeDir 形如 <root>/.sillyspec/changes/<名>（主仓/worktree 同构，三层上溯）；
   // 推导失效（目录形态异构）回退 cwd
   let root = null
@@ -565,23 +832,32 @@ function collectSections(text) {
 }
 
 /**
- * 起草全件落盘 + draft-ledger 记账（flow start 消费）。
- * @returns {{written: string[], ledgerPath: string}}
+ * 起草全件落盘 + draft-ledger 记账（flow start 消费面）。
+ * v2（新生成）：纯 markdown 文档 + 锚入 ledger（criteria 原文 + 四问文本 + 首版全文——
+ * 漂移对比与 editRatio 的基准）；文档正文零机器标记。
+ * @returns {{written: string[], ledgerPath: string, criteria: string[], schema: number}}
  */
 export function draftAll({ changeDir, change, input, withTasks = false, runtimeRoot }) {
   const criteria = extractSuccessCriteria(input)
   detectFragmentedCriteria(criteria, `flow start --input 摘录（change=${change}）`)
-  const outputs = [
-    { file: 'proposal.md', draft: draftProposal({ change, input, criteria }) },
-    { file: 'requirements.md', draft: draftRequirements({ change, criteria }) },
-    { file: 'design.md', draft: draftDesignRecord({ change }) },
-    { file: 'tasks.md', draft: draftTasks({ change, criteria, withTasks }) },
-  ]
+  const texts = {
+    'proposal.md': draftProposalV2({ change, input, criteria }),
+    'requirements.md': draftRequirementsV2({ change, criteria }),
+    'design.md': draftDesignRecordV2({ change }),
+    'tasks.md': draftTasksV2({ change, criteria, withTasks }),
+  }
   const written = []
-  const ledger = { schemaVersion: 1, change, generatedAt: new Date().toISOString(), files: {}, amendments: [] }
-  for (const { file, draft } of outputs) {
-    writeAtomicSync(join(changeDir, file), draft.text)
-    ledger.files[file] = draft.sections
+  const ledger = {
+    schemaVersion: DRAFT_SCHEMA_V2,
+    change,
+    generatedAt: new Date().toISOString(),
+    anchor: { criteria, designQuestions: DESIGN_QUESTIONS },
+    files: {},
+    amendments: [],
+  }
+  for (const [file, text] of Object.entries(texts)) {
+    writeAtomicSync(join(changeDir, file), text)
+    ledger.files[file] = { text }
     written.push(file)
   }
   if (withTasks) {
@@ -592,7 +868,7 @@ export function draftAll({ changeDir, change, input, withTasks = false, runtimeR
   }
   const ledgerPath = draftLedgerPath(runtimeRoot, change)
   writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
-  return { written, ledgerPath, criteria }
+  return { written, ledgerPath, criteria, schema: DRAFT_SCHEMA_V2 }
 }
 
 /**
@@ -628,6 +904,43 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
   if (!existsSync(ledgerPath)) return { reanchored: [], files: [], editRatio: 0, sectionRatios: {} }
   let ledger
   try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { return { reanchored: [], files: [], editRatio: 0, sectionRatios: {} } }
+  // v2（2026-10-04-thin-docs-v2）：无指纹段可重锚——editRatio 改对「首版全文↔当前全文」算
+  // （决策密度代理延续，基准=ledger.files[].text；口径=内容行——剥空行/frontmatter/标题/引导行，
+  // 结构行会把比例稀释到阈值下失真）。路由信号（返回的 sectionRatios→CLI 取段级最大）只含
+  // 决策载体 proposal/design：requirements 的 FR 撰写=需求澄清、tasks 的勾选/细化=合法日常动作，
+  // 计入会把每个 v2 变更都误报 route_hint:thick（与 v1「FR 段不进决策密度/tasks 去指纹」同裁）
+  // ——审计面在 ledger amendment 全量记录。
+  if (ledger.schemaVersion === DRAFT_SCHEMA_V2) {
+    const contentLines = (t) => String(t || '').split('\n').filter((l) => {
+      const s = l.trim()
+      return s && s !== '---' && !s.startsWith('#') && !s.startsWith('>')
+    })
+    const reanchored = []
+    const sectionRatios = {}
+    const auditRatios = {}
+    let totalOrig = 0
+    let totalChanged = 0
+    for (const [file, rec] of Object.entries(ledger.files || {})) {
+      if (!rec || typeof rec.text !== 'string') continue
+      let cur
+      try { cur = readText(join(changeDir, file)) } catch { continue }
+      const ratio = Math.round(computeEditRatio(contentLines(rec.text).join('\n'), contentLines(cur).join('\n')) * 1000) / 1000
+      auditRatios[file] = ratio
+      if (cur !== rec.text) reanchored.push(file)
+      if (file === 'proposal.md' || file === 'design.md') {
+        sectionRatios[file] = ratio
+        const aLines = contentLines(rec.text).length
+        totalOrig += aLines
+        totalChanged += Math.round(ratio * aLines)
+      }
+    }
+    if (reanchored.length > 0) {
+      ledger.amendments = [...(ledger.amendments || []), { at: new Date().toISOString(), files: reanchored, schema: DRAFT_SCHEMA_V2, sectionRatios: auditRatios }]
+      writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
+    }
+    const editRatio = totalOrig > 0 ? Math.round((totalChanged / totalOrig) * 1000) / 1000 : 0
+    return { reanchored, files: Object.keys(ledger.files || {}), editRatio, sectionRatios }
+  }
   const reanchored = []
   const sectionRatios = {}
   let totalOrig = 0
@@ -664,12 +977,19 @@ export function amendFlowDraft({ changeDir, change, runtimeRoot }) {
   return { reanchored, files: Object.keys(ledger.files || {}), editRatio, sectionRatios }
 }
 
-/** 三态拒收校验（flow done 工件子步消费面；无 ledger=not-applicable）。 */
-export function verifyFlowDrafts({ changeDir, change, runtimeRoot }) {
+/** 三态拒收校验（flow done 工件子步消费面；无 ledger=not-applicable）。双轨：
+ *  schemaVersion===2 → verifyThinDocsV2（文档↔锚对比：问题/节/FR/绑定拒收 + 漂移 advisory）；
+ *  v1（缺省）→ verifyMarkers 指纹三态（存量在途变更零影响）。
+ *  opts.skipDesign：adopted brainstorm 变更豁免 design 四节门（flow.js 判定后透传）。 */
+export function verifyFlowDrafts({ changeDir, change, runtimeRoot, skipDesign = false }) {
   const ledgerPath = draftLedgerPath(runtimeRoot, change)
   if (!existsSync(ledgerPath)) return { applicable: false, violations: [] }
   let ledger
   try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { return { applicable: false, violations: [] } }
+  if (ledger.schemaVersion === DRAFT_SCHEMA_V2) {
+    const r = verifyThinDocsV2({ changeDir, ledger, skipDesign })
+    return { applicable: true, schema: DRAFT_SCHEMA_V2, ...r }
+  }
   const violations = []
   for (const [file, sections] of Object.entries(ledger.files || {})) {
     const mdPath = join(changeDir, file)
@@ -680,7 +1000,7 @@ export function verifyFlowDrafts({ changeDir, change, runtimeRoot }) {
     }
     violations.push(...verifyMarkers({ text, sections, amendCmd: AMEND_CMD(change) }))
   }
-  return { applicable: true, violations }
+  return { applicable: true, schema: 1, violations, advisories: [] }
 }
 
 /**
@@ -749,23 +1069,34 @@ export function redraftMissingArtifacts({ changeDir, change, input, runtimeRoot 
   }
   const crit = Array.isArray(criteria) && criteria.length > 0 ? criteria : null
   const withTasks = existsSync(join(changeDir, 'tasks'))
-  const drafts = [
-    { file: 'proposal.md', make: () => draftProposal({ change, input, criteria: crit }) },
-    { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit, input }) },
-    { file: 'design.md', make: () => draftDesignRecord({ change }) },
-    { file: 'tasks.md', make: () => draftTasks({ change, criteria: crit, withTasks }) },
-  ]
   const ledgerPath = draftLedgerPath(runtimeRoot, change)
   let ledger = null
   try { ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) } catch { ledger = null }
+  // 双轨（2026-10-04-thin-docs-v2 FR-09）：v1 在途变更（ledger.schemaVersion 缺省=1）补件
+  // 沿用指纹稿（否则补件与存量件混代，verifyMarkers 拒收）；无 ledger / v2 → 纯 markdown v2。
+  const legacy = ledger != null && ledger.schemaVersion !== DRAFT_SCHEMA_V2
+  const drafts = legacy
+    ? [
+        { file: 'proposal.md', make: () => draftProposal({ change, input, criteria: crit }) },
+        { file: 'requirements.md', make: () => draftRequirements({ change, criteria: crit, input }) },
+        { file: 'design.md', make: () => draftDesignRecord({ change }) },
+        { file: 'tasks.md', make: () => draftTasks({ change, criteria: crit, withTasks }) },
+      ]
+    : [
+        { file: 'proposal.md', make: () => ({ text: draftProposalV2({ change, input, criteria: crit }) }) },
+        { file: 'requirements.md', make: () => ({ text: draftRequirementsV2({ change, criteria: crit }) }) },
+        { file: 'design.md', make: () => ({ text: draftDesignRecordV2({ change }) }) },
+        { file: 'tasks.md', make: () => ({ text: draftTasksV2({ change, criteria: crit, withTasks }) }) },
+      ]
   const drafted = []
+  const criteriaForAnchor = crit || []
   for (const { file, make } of drafts) {
     if (existsSync(join(changeDir, file))) continue
     const d = make()
     writeAtomicSync(join(changeDir, file), d.text)
     drafted.push(file)
-    if (!ledger) ledger = { schemaVersion: 1, change, generatedAt: new Date().toISOString(), files: {}, amendments: [] }
-    ledger.files[file] = d.sections
+    if (!ledger) ledger = { schemaVersion: DRAFT_SCHEMA_V2, change, generatedAt: new Date().toISOString(), anchor: { criteria: criteriaForAnchor, designQuestions: DESIGN_QUESTIONS }, files: {}, amendments: [] }
+    ledger.files[file] = legacy ? d.sections : { text: d.text }
   }
   if (drafted.length > 0) writeAtomicSync(ledgerPath, JSON.stringify(ledger, null, 2) + '\n')
   return { drafted }
@@ -780,17 +1111,20 @@ export function ensureBindingSlots({ changeDir }) {
   const path = join(changeDir, 'requirements.md')
   if (!existsSync(path)) return { appended: false, slots: 0 }
   let text = readText(path)
-  if (/<!--\s*AGENT:测试绑定/.test(text)) return { appended: false, slots: 0 }
+  // 双格式在场即 no-op：v1 AGENT 槽或 v2 纯文本节任一在场（redraft 先产新稿自带绑定面）
+  if (/<!--\s*AGENT:测试绑定/.test(text) || /^##\s*测试绑定/m.test(text)) return { appended: false, slots: 0 }
   const ids = []
   for (const m of text.matchAll(/(?:^|\n)#{2,4}\s*(FR-\d+)[^\n]*/g)) {
     const id = m[1]
     if (!ids.includes(id)) ids.push(id)
   }
   const list = ids.length > 0 ? ids : ['FR-01']
-  const slots = list.map((id) => `<!--AGENT:测试绑定${id} 哪个测试文件/用例覆盖这条 FR（项目相对全路径＋用例名，如 test/foo.test.mjs「用例组」或 test/foo.test.mjs#用例；无测试面写「不适用：理由」）——例外裁决书写面（机器段之外合法） -->`)
-  const section = `\n## 测试绑定（收编追加——每条 FR 至少一行：test 文件路径或用例名；不适用要写理由；flow done 空槽拒收）\n\n${slots.join('\n\n')}\n`
+  // v2 纯文本绑定节（2026-10-04-thin-docs-v2）：行式 `FR-NN: （待填…）`——与 draftRequirementsV2
+  // 及 verifyRequirementBindings/extractRequirementBindings 的 v2 分支同格式
+  const slots = list.map((id) => `${id}: （待填——哪个测试文件/用例覆盖这条 FR；无测试面写「不适用：理由」）`)
+  const section = `\n## 测试绑定（每条 FR 至少一行：\`FR-NN: test/路径「用例名」\`；不适用要写理由；flow done 空行拒收）\n\n${slots.join('\n')}\n`
   writeAtomicSync(path, text.endsWith('\n') ? text + section : text + '\n' + section)
   return { appended: true, slots: list.length }
 }
 
-export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, extractRequirementBindings, ensureBindingSlots, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath }
+export default { draftAll, amendFlowDraft, verifyFlowDrafts, verifyDesignRecordFilled, verifyRequirementBindings, verifyThinDocsV2, extractRequirementBindings, ensureBindingSlots, draftDesignRecord, redraftMissingArtifacts, draftDecisions, extractSuccessCriteria, draftLedgerPath, DESIGN_QUESTIONS, DRAFT_SCHEMA_V2 }

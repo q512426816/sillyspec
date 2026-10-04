@@ -53,8 +53,10 @@ function norm(text) {
   return String(text || '').replace(/\r\n/g, '\n')
 }
 
-/** diff 面结构归一：剔 frontmatter 块、HTML 注释标记行（<!-- 机器段/槽标记）、空行——
- * 只留正文行（惰性脚手架行不稀释改写比；纯结构过滤，零语义判定）。 */
+/** diff 面结构归一：剔 frontmatter 块、HTML 注释标记行（<!-- 机器段/槽标记）、空行、
+ *  引导行（> 起头——v2 纯 markdown 起草的头注指引是惰性脚手架，与 v1 由 MACHINE-DRAFT
+ *  段剔除覆盖同职责；不剔会把改写比稀释到阈下，2026-10-04-thin-docs-v2 实证）——
+ *  只留正文行（惰性脚手架行不稀释改写比；纯结构过滤，零语义判定）。 */
 function contentSurface(text) {
   const lines = norm(text).split('\n')
   const out = []
@@ -67,6 +69,7 @@ function contentSurface(text) {
       fmDone = true // 首行非 ---：无 frontmatter 的裸文本，全行入面
     }
     if (l.startsWith('<!--')) continue
+    if (l.startsWith('>')) continue
     if (l.trim() === '') continue
     out.push(l)
   }

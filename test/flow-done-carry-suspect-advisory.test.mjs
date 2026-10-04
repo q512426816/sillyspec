@@ -43,11 +43,21 @@ function cli(cwd, args) {
 function fillSlots(cwd, change) {
   const base = join(cwd, '.sillyspec', 'changes', change)
   const dp = join(base, 'design.md')
-  writeFileSync(dp, readFileSync(dp, 'utf8').replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：夹带告警夹具'))
-  const rp = join(base, 'requirements.md')
-  writeFileSync(rp, readFileSync(rp, 'utf8')
-    .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
-    .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：夹带告警夹具——无独立测试面'))
+  const dText = readFileSync(dp, 'utf8')
+  if (/<!--AGENT:槽\d+/.test(dText)) {
+    writeFileSync(dp, dText.replace(/(<!--AGENT:槽\d+[^\n]*-->)/g, '$1\n不适用：夹带告警夹具'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/(<!--AGENT:FR区[^\n]*-->)/g, '$1\n### FR-01: 夹具行为\nGiven 轻量变更在跑\nWhen flow done 执行\nThen 全部子步通过')
+      .replace(/(<!--AGENT:测试绑定FR-\d+[^\n]*-->)/g, '$1\n不适用：夹带告警夹具——无独立测试面'))
+  } else {
+    writeFileSync(dp, dText.replace(/^(本变更怎么解决问题|动了哪些函数|1\. 乱序|2\. 并发写|3\. 切换|4\. 作用域|本方案最大的风险)([^\n]*)$/gm, '$&\n不适用：夹带告警夹具'))
+    writeFileSync(join(base, 'requirements.md'), readFileSync(join(base, 'requirements.md'), 'utf8')
+      .replace(/^- （待撰写.*$/gm, '- 系统 MUST 达成该条标准行为（夹带告警夹具）')
+      .replace(/^FR-\d{2}: （待填.*$/gm, (m) => m.split(':')[0] + ': 不适用：夹带告警夹具——无独立测试面'))
+  }
+  // spec 断点批准（v2 起草变更的 done 前提——用户动作，夹具代跑）
+  const ap = cli(cwd, ['flow', 'approve', '--change', change])
+  assert.equal(ap.status, 0, `flow approve 失败: ${ap.stdout}\n${ap.stderr}`)
 }
 
 test('① 夹带嫌疑：提交面含未声明交付文件 → 点名警告；声明文件不点名；不阻断收口', () => {
