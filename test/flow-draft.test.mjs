@@ -382,6 +382,15 @@ test('⑥b autopilot 豁免：start 声明 --autopilot 后免断点批准直接�
   rmSync(cwd, { recursive: true, force: true })
 })
 
+test('⑥c flow approve 对不存在变更 exit 2（评审 P3 清偿：行为面断言锁定）', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'fd-ap2e-'))
+  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
+  const r = cli(['flow', 'approve', '--change', '2026-09-01-not-exist'])
+  assert.equal(r.status, 2, `不存在变更应 exit 2（实际 ${r.status}）`)
+  assert.match(r.stderr, /变更不存在/, '指错文案在场（approve 在 flow start 之后运行）')
+  rmSync(cwd, { recursive: true, force: true })
+})
+
 // ── ⑦ v2 摘录保真（2026-10-04-thin-docs-v2 FR-03：截断/劈句变形退役）──────────────────
 // 实证来源：voluntary-task-tick 7 条占位 Then + When 80 字腰斩（AGENTS.md 核心规/核心规→输）
 // 归档实证；v2 起草不再机器预填 GWT 场景体——FR 正文与场景块归 agent 撰写。

@@ -96,6 +96,20 @@ test('④ 结构破坏拒收面：design 节整删 / requirements 整删 / 绑�
   rmSync(root, { recursive: true, force: true })
 })
 
+test('⑥ 强度词表含 SHOULD/SHOULD NOT（评审 P2 清偿）：唯一 SHOULD 强度句不再误拒收', () => {
+  const { root, changeDir, runtimeRoot, ledger, fill, fillAll } = fixture(INPUT)
+  fillAll()
+  // 只写 SHOULD 唯一强度句（模板指引列为合法强度词）→ 不因词表缺漏被误拒收
+  fill('requirements.md', (t) => t.replace(/^- （待撰写.*$/gm, '- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）'))
+  let v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 0, `SHOULD 唯一强度句应放行: ${JSON.stringify(v.violations)}`)
+  // SHOULD NOT 红线形态同放行（SHOULD\b 前缀覆盖）
+  fill('requirements.md', (t) => t.replace(/^- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）$/gm, '- 系统 SHOULD NOT 在收口前静默改写锚文本（评审 P2 夹具）'))
+  v = verifyThinDocsV2({ changeDir, ledger })
+  assert.equal(v.violations.length, 0, `SHOULD NOT 形态应放行: ${JSON.stringify(v.violations)}`)
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('⑤ adopted 豁免：skipDesign=true 时 design 缺失/未作答不拒收', () => {
   const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
   fillAll()

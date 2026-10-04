@@ -57,8 +57,11 @@ export const DESIGN_QUESTIONS = {
   ],
 }
 
-/** FR 行为句强度词判据（v2 验收端与模板指引共用）：正文行含任一 → 视为已撰写行为句。 */
-const FR_STRENGTH_RE = /^\s*-?\s*(系统\s+)?(SHALL|MUST)\b|必须|禁止/
+/** FR 行为句强度词判据（v2 验收端与模板指引共用）：正文行含任一 → 视为已撰写行为句。
+ *  词表=SHALL/MUST/SHOULD（评审 P2 清偿：模板指引与拒收文案都列 SHOULD 为合法强度，
+ *  词表缺它会把只写 SHOULD 唯一强度句的 FR 误拒收；SHOULD NOT 由 SHOULD\b 前缀覆盖）
+ *  +中文 必须/禁止。 */
+const FR_STRENGTH_RE = /^\s*-?\s*(系统\s+)?(SHALL|MUST|SHOULD)\b|必须|禁止/
 
 /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
 export function draftLedgerPath(runtimeRoot, changeName) {
