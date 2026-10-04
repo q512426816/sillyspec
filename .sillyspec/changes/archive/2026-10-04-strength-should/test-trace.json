@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-04-strength-should",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-04-strength-should:flow:测试绑定FR-01",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「⑥ 强度词表含 SHOULD/SHOULD NOT」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-strength-should"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-04-strength-should:flow:测试绑定FR-02",
+      "tests": [
+        "test/flow-draft.test.mjs「⑥c flow approve 对不存在变更 exit 2」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-strength-should"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-04-strength-should:flow:测试绑定FR-03",
+      "tests": [
+        "test/check-syntax.mjs",
+        "test/flow-draft.test.mjs",
+        "test/thin-docs-v2.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-strength-should"
+    }
+  ]
+}

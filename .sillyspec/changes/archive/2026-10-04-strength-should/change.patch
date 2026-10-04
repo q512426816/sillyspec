@@ -1,0 +1,224 @@
+diff --git a/.sillyspec/changes/2026-10-04-strength-should/flow-state.yaml b/.sillyspec/changes/2026-10-04-strength-should/flow-state.yaml
+new file mode 100644
+index 00000000..afa40557
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-strength-should/flow-state.yaml
+@@ -0,0 +1,11 @@
++tier: thin
++legacy_fallback: false
++substeps: {}
++born_face: thin
++with_tasks: false
++review_force: null
++autopilot: true
++baseline_commit: f8f54405f187d6ea6e4923a90c44be3e67980e66
++updatedAt: '2026-10-04T15:57:42.498Z'
++baseline_sha256: c43244a1cabe3854eaf531a3a12a24b44d6b85e5e7c7b5b354ae8d90c5ccb02d
++
+diff --git a/src/flow-draft.js b/src/flow-draft.js
+index 80039141..9a4321a8 100644
+--- a/src/flow-draft.js
++++ b/src/flow-draft.js
+@@ -57,8 +57,11 @@ export const DESIGN_QUESTIONS = {
+   ],
+ }
+ 
+-/** FR 行为句强度词判据（v2 验收端与模板指引共用）：正文行含任一 → 视为已撰写行为句。 */
+-const FR_STRENGTH_RE = /^\s*-?\s*(系统\s+)?(SHALL|MUST)\b|必须|禁止/
++/** FR 行为句强度词判据（v2 验收端与模板指引共用）：正文行含任一 → 视为已撰写行为句。
++ *  词表=SHALL/MUST/SHOULD（评审 P2 清偿：模板指引与拒收文案都列 SHOULD 为合法强度，
++ *  词表缺它会把只写 SHOULD 唯一强度句的 FR 误拒收；SHOULD NOT 由 SHOULD\b 前缀覆盖）
++ *  +中文 必须/禁止。 */
++const FR_STRENGTH_RE = /^\s*-?\s*(系统\s+)?(SHALL|MUST|SHOULD)\b|必须|禁止/
+ 
+ /** sidecar 台账路径（.runtime 下，verify-draft sidecar 同族；命名空间=文件:段键）。 */
+ export function draftLedgerPath(runtimeRoot, changeName) {
+diff --git a/test/flow-draft.test.mjs b/test/flow-draft.test.mjs
+index e95d6c40..cf5ee573 100644
+--- a/test/flow-draft.test.mjs
++++ b/test/flow-draft.test.mjs
+@@ -382,6 +382,15 @@ test('⑥b autopilot 豁免：start 声明 --autopilot 后免断点批准直接
+   rmSync(cwd, { recursive: true, force: true })
+ })
+ 
++test('⑥c flow approve 对不存在变更 exit 2（评审 P3 清偿：行为面断言锁定）', () => {
++  const cwd = mkdtempSync(join(tmpdir(), 'fd-ap2e-'))
++  const cli = (args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', timeout: 60_000, env: { ...process.env, SILLYSPEC_WATCHER: '0' } })
++  const r = cli(['flow', 'approve', '--change', '2026-09-01-not-exist'])
++  assert.equal(r.status, 2, `不存在变更应 exit 2（实际 ${r.status}）`)
++  assert.match(r.stderr, /变更不存在/, '指错文案在场（approve 在 flow start 之后运行）')
++  rmSync(cwd, { recursive: true, force: true })
++})
++
+ // ── ⑦ v2 摘录保真（2026-10-04-thin-docs-v2 FR-03：截断/劈句变形退役）──────────────────
+ // 实证来源：voluntary-task-tick 7 条占位 Then + When 80 字腰斩（AGENTS.md 核心规/核心规→输）
+ // 归档实证；v2 起草不再机器预填 GWT 场景体——FR 正文与场景块归 agent 撰写。
+diff --git a/test/thin-docs-v2.test.mjs b/test/thin-docs-v2.test.mjs
+index 22effb58..9f01e503 100644
+--- a/test/thin-docs-v2.test.mjs
++++ b/test/thin-docs-v2.test.mjs
+@@ -96,6 +96,20 @@ test('④ 结构破坏拒收面：design 节整删 / requirements 整删 / 绑
+   rmSync(root, { recursive: true, force: true })
+ })
+ 
++test('⑥ 强度词表含 SHOULD/SHOULD NOT（评审 P2 清偿）：唯一 SHOULD 强度句不再误拒收', () => {
++  const { root, changeDir, runtimeRoot, ledger, fill, fillAll } = fixture(INPUT)
++  fillAll()
++  // 只写 SHOULD 唯一强度句（模板指引列为合法强度词）→ 不因词表缺漏被误拒收
++  fill('requirements.md', (t) => t.replace(/^- （待撰写.*$/gm, '- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）'))
++  let v = verifyThinDocsV2({ changeDir, ledger })
++  assert.equal(v.violations.length, 0, `SHOULD 唯一强度句应放行: ${JSON.stringify(v.violations)}`)
++  // SHOULD NOT 红线形态同放行（SHOULD\b 前缀覆盖）
++  fill('requirements.md', (t) => t.replace(/^- 系统 SHOULD 在边界情形给出建议级行为约束（评审 P2 夹具）$/gm, '- 系统 SHOULD NOT 在收口前静默改写锚文本（评审 P2 夹具）'))
++  v = verifyThinDocsV2({ changeDir, ledger })
++  assert.equal(v.violations.length, 0, `SHOULD NOT 形态应放行: ${JSON.stringify(v.violations)}`)
++  rmSync(root, { recursive: true, force: true })
++})
++
+ test('⑤ adopted 豁免：skipDesign=true 时 design 缺失/未作答不拒收', () => {
+   const { root, changeDir, ledger, fill, fillAll } = fixture(INPUT)
+   fillAll()
+diff --git a/.sillyspec/changes/2026-10-04-strength-should/design.md b/.sillyspec/changes/2026-10-04-strength-should/design.md
+new file mode 100644
+index 00000000..0164b73d
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-strength-should/design.md
+@@ -0,0 +1,34 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T15:57:42.471Z
++---
++# 设计记录（Design Record）— 2026-10-04-strength-should
++
++> 四节每节必答——答案直接写在问题下方；小改动可写「不适用：<理由>」；flow done 空节拒收。
++> 需要列改动文件时在「接口契约」节加「文件变更清单」表（| 新增/修改 | 路径 | 说明 |）。
++
++## 做法概述
++
++本变更怎么解决问题？改哪里、为什么选这个方案（一两段）。
++单行正则词表修补：FR_STRENGTH_RE 的英文分支 (SHALL|MUST) 扩为 (SHALL|MUST|SHOULD)——SHOULD 天然覆盖 SHOULD NOT 形态；中文 必须/禁止 分支不动。配套两条回归：thin-docs-v2 ⑥ 锁 SHOULD/SHOULD NOT 唯一句放行、flow-draft ⑥c 锁 approve 对不存在变更 exit 2（评审 P3 的覆盖缺口）。选最小修法：词表是唯一真源，模板指引与拒收文案已列 SHOULD，无需动文案。
++
++## 接口契约
++
++动了哪些函数/端点/命令/文件格式？对外可见的签名或行为变化是什么（含「无」的说明）？
++src/flow-draft.js 的模块级常量 FR_STRENGTH_RE 判定面扩展（非导出，零签名变化）；test/thin-docs-v2.test.mjs 新增 ⑥、test/flow-draft.test.mjs 新增 ⑥c。命令/端点/文件格式无变化。
++
++## 边界与并发（盲维四问——每问必答，答不了即设计缺口）
++
++1. 乱序/迟到到达：输入或事件乱序时，本设计的假设还成立吗？
++不适用：词表判定是纯文本模式匹配，无时序依赖。
++2. 并发写：两个执行体同时操作同一数据/文件会发生什么？
++不适用：单常量定义与测试文件追加，CLI 单一写入方（writeAtomicSync），无共享可变态。
++3. 切换/生命周期：会话、请求或变更中途切换/中断时状态是否安全？
++不适用：无状态引入；断点续跑语义继承既有幂等子步。
++4. 作用域：跨工作区/跨仓/多实例时数据会不会串台？
++不适用：模块级常量进程内单例；测试用临时目录自隔离。
++
++## 风险与死路
++
++本方案最大的风险是什么？试过但放弃的方案及放弃理由？
++最大风险：无——一行词表扩展语义单调（只放宽不收紧，既有 MUST/SHALL 行为零变化）。试过放弃：把强度词判据改成逐词分立数组+注释文档化（否决——单一正则即单一真源，拆分徒增镜像面）。
+diff --git a/.sillyspec/changes/2026-10-04-strength-should/proposal.md b/.sillyspec/changes/2026-10-04-strength-should/proposal.md
+new file mode 100644
+index 00000000..cd332f47
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-strength-should/proposal.md
+@@ -0,0 +1,26 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T15:57:42.471Z
++---
++# 提案书（Proposal）— 2026-10-04-strength-should
++
++## 动机
++
++任务原话转写：动机：thin-docs-v2 独立评审留档两个非阻断发现——P2：FR_STRENGTH_RE 强度词表缺 SHOULD 与 SHOULD NOT（模板指引列 SHOULD 为合法强度词，但只写 SHOULD 唯一强度句会被 done 误拒收，fail-closed 方向）；P3：flow approve 对不存在变更 exit 2 的行为已实现但零测试断言。两者随本微修清偿。
++成功标准：
++- FR 行为句强度词判定词表纳入 SHOULD（含 SHOULD NOT 形态）——只写 SHOULD 唯一强度句不再误拒收并有回归锁定
++- flow approve 对不存在变更 exit 2 的行为补测试断言锁定
++- 既有测试回归绿且 lint 零死导出
++
++## 变更范围
++
++按成功标准机械推导，共 3 条验收面：
++1. FR 行为句强度词判定词表纳入 SHOULD（含 SHOULD NOT 形态）——只写 SHOULD 唯一强度句不再误拒收并有回归锁定
++2. flow approve 对不存在变更 exit 2 的行为补测试断言锁定
++3. 既有测试回归绿且 lint 零死导出
++
++## 成功标准（可验证）
++
++1. FR 行为句强度词判定词表纳入 SHOULD（含 SHOULD NOT 形态）——只写 SHOULD 唯一强度句不再误拒收并有回归锁定
++2. flow approve 对不存在变更 exit 2 的行为补测试断言锁定
++3. 既有测试回归绿且 lint 零死导出
+diff --git a/.sillyspec/changes/2026-10-04-strength-should/requirements.md b/.sillyspec/changes/2026-10-04-strength-should/requirements.md
+new file mode 100644
+index 00000000..5f360b96
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-strength-should/requirements.md
+@@ -0,0 +1,45 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T15:57:42.471Z
++---
++# 需求规格（Requirements）— 2026-10-04-strength-should
++
++## 功能需求
++
++> FR 由你撰写：每条 = `### FR-NN: 标题` + 一句带强度词的行为规定（必须=硬性；禁止=红线；
++> SHOULD=建议须注理由；可以=可选）；边界情形加场景块 `#### 场景：名` + Given/When/Then 行。
++> 标题行是成功标准锚（勿改写——收口做门柱对比）；正文与场景块归你。
++
++### FR-01: FR 行为句强度词判定词表纳入 SHOULD（含 SHOULD NOT 形态）——只写 SHOULD 唯一强度句不再误拒收并有回归锁定
++
++- 系统 MUST 在 FR 正文含 SHOULD 或 SHOULD NOT 强度词时判定行为句已撰写（SHOULD 前缀覆盖 NOT 形态）——与模板指引/拒收文案的合法词表一致
++
++#### 场景：SHOULD 唯一强度句
++
++Given requirements 某条 FR 正文只含一句「系统 SHOULD …」强度句
++When flow done 执行 verifyThinDocsV2
++Then 该 FR 不因词表缺漏被误拒收（fail-closed 缺口闭合）
++
++### FR-02: flow approve 对不存在变更 exit 2 的行为补测试断言锁定
++
++- 系统 MUST 对不存在的变更名拒收 flow approve 并以 exit 2 退出（用法错面，非内部错误）
++
++#### 场景：变更未建先批
++
++Given changes/<名> 目录不存在
++When 用户运行 flow approve --change <名>
++Then exit 2 且 stderr 指明「变更不存在（approve 在 flow start 之后运行）」
++
++### FR-03: 既有测试回归绿且 lint 零死导出
++
++- 系统 MUST 在既有测试全绿与 lint（未引用导出/module-map/内容规则）零告警状态下交付本微修
++
++#### 场景：主路径
++
++（按需保留或改写：Given 前提 / When 触发 / Then 可判定预期——每边界情形一个场景块，归档索引用场景名作摘要）
++
++## 测试绑定（每条 FR 至少一行——`FR-NN: test/路径「用例名」`；空行/待填在 flow done 拒收）
++
++FR-01: test/thin-docs-v2.test.mjs「⑥ 强度词表含 SHOULD/SHOULD NOT」——SHOULD 唯一句与 SHOULD NOT 双放行断言
++FR-02: test/flow-draft.test.mjs「⑥c flow approve 对不存在变更 exit 2」
++FR-03: test/thin-docs-v2.test.mjs 全 6 用例 + test/flow-draft.test.mjs 全 16 用例 + node test/check-syntax.mjs（收口由 CLI 实测门复跑）
+diff --git a/.sillyspec/changes/2026-10-04-strength-should/tasks.md b/.sillyspec/changes/2026-10-04-strength-should/tasks.md
+new file mode 100644
+index 00000000..c5ac5901
+--- /dev/null
++++ b/.sillyspec/changes/2026-10-04-strength-should/tasks.md
+@@ -0,0 +1,15 @@
++---
++author: flow-machine-draft
++created_at: 2026-10-04T15:57:42.471Z
++---
++# 任务注册表（Tasks）— 2026-10-04-strength-should
++
++> 镜像行（task-01…task-NN）是成功标准逐条镜像=任务锚：勿删勿改写（收口对照它），完成实现路径
++> 需要更细步骤时在镜像行**后追加细化行**（保持 `- [ ] task-NN:` 行形态，编号从镜像行末尾顺延——
++> 默认 thin：无任务卡文件，收口=flow done 唯一裁决）。
++> 边干边勾：完成一条 = 实现到位 + 相关测试跑绿 → 当场勾（sillyspec task tick --change 2026-10-04-strength-should --task task-NN 即时回显进度与下一任务，或 Edit 翻格），勿攒到收口一把勾（收口硬门拒单拍多格勾选；--allow-batch-tick 可显式旁路留痕）。⚠️ harness 的 TodoWrite 类工具不替代本文件——平台进度/收口哨兵只读 tasks.md。
++> `flow status --change 2026-10-04-strength-should` 为自愿查看/恢复面。本文件收口前随交付显式 pathspec 提交。
++
++- [x] task-01: FR 行为句强度词判定词表纳入 SHOULD（含 SHOULD NOT 形态）——只写 SHOULD 唯一强度句不再误拒收并有回归锁定
++- [x] task-02: flow approve 对不存在变更 exit 2 的行为补测试断言锁定
++- [x] task-03: 既有测试回归绿且 lint 零死导出

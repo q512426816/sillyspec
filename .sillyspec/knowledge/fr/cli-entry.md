@@ -5652,3 +5652,64 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-04-thin-docs-v2
   status: active
+
+## FR-cli-entry-300 FR 行为句强度词判定词表纳入 SHOULD（含 SHOULD NOT 形态）——只写 SHOULD 唯一强度句不再误拒收并有回归锁定
+变更：2026-10-04-strength-should
+状态：active
+摘要：SHOULD 唯一强度句
+场景正文：
+- 场景：SHOULD 唯一强度句 — Given requirements 某条 FR 正文只含一句「系统 SHOULD …」强度句；When flow done 执行 verifyThinDocsV2；Then 该 FR 不因词表缺漏被误拒收（fail-closed 缺口闭合）
+全文：.sillyspec/changes/archive/2026-10-04-strength-should/requirements.md#FR-01
+最近确认：fca510ac262707025522f6858ff543ad56de4799
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-strength-should:flow:测试绑定FR-01
+  tests: test/thin-docs-v2.test.mjs「⑥ 强度词表含 SHOULD/SHOULD NOT」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-strength-should
+  status: active
+
+## FR-cli-entry-301 flow approve 对不存在变更 exit 2 的行为补测试断言锁定
+变更：2026-10-04-strength-should
+状态：active
+摘要：变更未建先批
+场景正文：
+- 场景：变更未建先批 — Given changes/<名> 目录不存在；When 用户运行 flow approve --change <名>；Then exit 2 且 stderr 指明「变更不存在（approve 在 flow start 之后运行）」
+全文：.sillyspec/changes/archive/2026-10-04-strength-should/requirements.md#FR-02
+最近确认：fca510ac262707025522f6858ff543ad56de4799
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-strength-should:flow:测试绑定FR-02
+  tests: test/flow-draft.test.mjs「⑥c flow approve 对不存在变更 exit 2」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-strength-should
+  status: active
+
+## FR-cli-entry-302 既有测试回归绿且 lint 零死导出
+变更：2026-10-04-strength-should
+状态：active
+摘要：主路径
+全文：.sillyspec/changes/archive/2026-10-04-strength-should/requirements.md#FR-03
+最近确认：fca510ac262707025522f6858ff543ad56de4799
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-strength-should:flow:测试绑定FR-03
+  tests: test/check-syntax.mjs | test/flow-draft.test.mjs | test/thin-docs-v2.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-strength-should
+  status: active
