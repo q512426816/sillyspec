@@ -1,0 +1,24 @@
+tier: thick
+legacy_fallback: false
+substeps:
+  artifacts: done
+  ledger: done
+  patch: done
+  review: done
+  probes: done
+  distill: done
+  archive: done
+  events: done
+born_face: thin
+with_tasks: false
+review_force: true
+baseline_commit: 316916d328e398010ec43411c73d78b302cc742c
+updatedAt: '2026-10-04T15:48:17.037Z'
+baseline_sha256: 9761cb3f5b920a0315d4319ff1c73d183e41c6e0f1647fb9f320be941ab24ef0
+upgrade_reason: verify 实测失败（实测失败：test（命令与输出尾部见上；修复后重跑 --done 不丢进度））——失败自动升厚
+gate_summary: >-
+  test: passed ← module[]+deps(js30)+fr(65)（40.7s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261004154217\test-result.json｜lint: passed
+  ← npm run lint（41.6s）
+  结果：C:\Users\qinyi\IdeaProjects\sillyspec\.sillyspec\.runtime\verify-runs\20261004154217\test-result.json｜门文件 26 个
+

@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-04-thin-docs-v2",
+  "rows": [
+    {
+      "anchor": "FR-01",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-01",
+      "tests": [
+        "test/flow-draft.test.mjs「① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡分岔」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-02",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-02",
+      "tests": [
+        "test/flow-draft.test.mjs「⑦b GWT 骨架预填退役」",
+        "test/fr-agent-writable.test.mjs「① 骨架形态」",
+        "test/fr-agent-writable.test.mjs「③ 行为句未撰写→拒收」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-03",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-03",
+      "tests": [
+        "test/flow-draft.test.mjs「⑦a 长标准不截断」",
+        "test/flow-draft.test.mjs「⑬ 编号条目不劫持」",
+        "test/fr-compound-split.test.mjs「①②③」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-04",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-04",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「① 四问单一源：起草含常量逐字；问题被改写→拒收」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-05",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-05",
+      "tests": [
+        "test/thin-docs-v2.test.mjs「② 门柱漂移 advisory」",
+        "test/thin-docs-v2.test.mjs「④ 结构破坏拒收面」",
+        "test/thin-docs-v2.test.mjs「⑤ adopted 豁免」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-06",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-06",
+      "tests": [
+        "test/flow-draft.test.mjs「⑥ 轻量跑道 e2e（v2）：spec 断点机器门」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-07",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-07",
+      "tests": [
+        "test/flow-draft.test.mjs「⑥」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-08",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-08",
+      "tests": [
+        "test/flow-draft.test.mjs「⑦a」",
+        "test/thin-docs-v2.test.mjs「③ tasks 镜像+细化行」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-09",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-09",
+      "tests": [
+        "test/flow-draft.test.mjs「③④ v1 指纹三态拒收与 AGENT 槽放行」",
+        "test/flow-draft.test.mjs「⑤ amend 留痕」",
+        "test/flow-draft.test.mjs「⑧b 双轨：v1 在途 ledger 补件走指纹稿」",
+        "test/flow-draft.test.mjs「⑩ v1 槽位门回归」"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    },
+    {
+      "anchor": "FR-10",
+      "row_id": "2026-10-04-thin-docs-v2:flow:FR-10",
+      "tests": [
+        "test/check-syntax.mjs",
+        "test/flow-draft.test.mjs",
+        "test/run-tests.mjs",
+        "test/thin-docs-v2.test.mjs"
+      ],
+      "reason": "spec",
+      "state": "candidate",
+      "discovery": "machine",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "reconfirm": null,
+      "status": "active",
+      "source_change": "2026-10-04-thin-docs-v2"
+    }
+  ]
+}

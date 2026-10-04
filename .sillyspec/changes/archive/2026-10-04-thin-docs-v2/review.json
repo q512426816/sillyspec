@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "change": "2026-10-04-thin-docs-v2",
+  "reviewer": "subagent",
+  "verdict": "PASS",
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "强度词门词表缺 SHOULD/SHOULD NOT——与 FR-02 承诺、起草模板指引、拒收文案三方矛盾",
+      "evidence": "FR_STRENGTH_RE=/^\\s*-?\\s*(系统\\s+)?(SHALL|MUST)\\b|必须|禁止/（src/flow-draft.js:61）不含 SHOULD/SHOULD NOT，但 FR-02 Then 枚举的合法强度词为「必须/禁止/SHOULD/SHOULD NOT/MUST」，draftRequirementsV2 模板指引向 agent 宣告「SHOULD=建议须注理由」，且 flow-draft.js:360 的拒收文案自身也列出 SHOULD/SHOULD NOT 为合法——agent 按模板指引写「- 系统 SHOULD …」唯一强度句会被 verifyThinDocsV2 误判「行为句未撰写」拒收。方向为 fail-closed（过严不漏放、无数据正确性风险），全部交付测试用 MUST/必须 故全绿，故定 P2 而非 P1。",
+      "location": "src/flow-draft.js:61"
+    },
+    {
+      "severity": "P3",
+      "title": "FR-06 子句「approve 对不存在变更 exit 2」无测试覆盖",
+      "evidence": "cmdFlowApprove 对不存在 changeDir 执行 process.exit(2)（实现与 FR 一致），但 grep 全部 test/*.mjs 无任何 flow approve exit 2 / status 2 断言；FR-06 绑定作答也只声称留痕与 autopilot 断言——纯覆盖缺口，非行为缺陷。",
+      "location": "src/flow.js:1591"
+    }
+  ],
+  "dimensionNotes": {
+    "乱序": "ok（边界已裁决：可接受——ledger 代别为文件内单值常量无事件序依赖；升级窗口内旧 CLI 读 v2 ledger 走 v1 分支找不到段结构属 fail-closed 拒收非静默放行，且 v2 合入起才无存量，窗口瞬时，design 槽3 已声明）",
+    "并发": "ok（边界已裁决：可接受——draft-ledger/四件 CLI 单一写入方 writeAtomicSync 原子写，agent 编辑与校验为读时点快照、失败重跑幂等；共享 flow.js 的 stash 窗口策略为过程性声明，配合 pathspec 提交纪律成立）",
+    "切换": "ok（边界已裁决：可接受——approve 留痕持久化 flow-state 跨会话可续；断点拒收后重入 done 从 artifacts 子步续；v2 amend 只追加 amendments 不覆盖 files[].text 基准，实测与代码一致）",
+    "作用域": "ok（边界已裁决：可接受——draft-ledger 按 change 名命名空间隔离；spec_approved 落各 change 自己的 flow-state；DESIGN_QUESTIONS 模块级常量无跨实例串台面）"
+  },
+  "reviewedAt": "2026-10-04T15:46:51Z"
+}

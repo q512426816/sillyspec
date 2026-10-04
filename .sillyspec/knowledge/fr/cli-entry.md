@@ -5442,3 +5442,213 @@ superseded_by：FR-cli-entry-198
   confirmed_at: null
   source_change: 2026-10-03-voluntary-task-tick
   status: active
+
+## FR-cli-entry-290 flow start 起草的四件文档为纯 markdown 零 MACHINE-DRAFT 指纹标记零 AGENT 槽注释
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given flow start 对新变更执行 draftAll 起草（draft ledger schemaVersion=2 轨）；When proposal/requirements/design/tasks 四件落盘；Then 四件为纯 markdown 正文——零 `<!-- MACHINE-DRAFT:` 指纹标记、零 `<!--AGENT:` 槽注释（正文提及这些词不算）；防篡改
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-01
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-01
+  tests: test/flow-draft.test.mjs「① draftAll v2 形态（纯 markdown 零标记+ledger v2 锚）+任务卡分岔」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-291 requirements FR 骨架改为 SHALL 正文加 Scenario WHEN THEN 句式且不再机器预填 GWT 场景体
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 新起草的 requirements.md（v2 轨）；When 起草器生成 FR 块；Then 每条 = `### FR-NN: <成功标准原文>` 标题锚 + 一行待撰写指引（agent 撰写带强度词的行为句：必须/禁止/SHOULD/SHOULD NO
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-02
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-02
+  tests: test/flow-draft.test.mjs「⑦b GWT 骨架预填退役」 | test/fr-agent-writable.test.mjs「① 骨架形态」 | test/fr-agent-writable.test.mjs「③ 行为句未撰写→拒收」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-292 成功标准摘录不再做复合拆分与编号劫持与 80 字截断变形
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given --input 含成功标准节条目、正文编号条目、分号/斜杠复合句、超 80 字符长句；When extractSuccessCriteria 摘录；Then 只有成功标准节条目（与无节时列表行）入选——正文编号条目不劫持；分号/斜杠复合条目整条保留不拆；长条目全文进 FR 标题锚与 tasks 镜像行（clipTas
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-03
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-03
+  tests: test/flow-draft.test.mjs「⑦a 长标准不截断」 | test/flow-draft.test.mjs「⑬ 编号条目不劫持」 | test/fr-compound-split.test.mjs「①②③」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-293 design 四问文本与 flow done 门禁判据由单一源常量同源供给
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given DESIGN_QUESTIONS 常量（flow-draft.js 导出）；When 起草器写 design.md 与验收端 verifyThinDocsV2 校验；Then 两端消费同一常量（验收读 ledger.anchor.designQuestions，缺省回落常量本体）；四问原文被改写 → 拒收「问题文本被改写」；flow-
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-04
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-04
+  tests: test/thin-docs-v2.test.mjs「① 四问单一源：起草含常量逐字；问题被改写→拒收」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-294 起草锚点存入 draft ledger 机器态且 flow done 做文档与锚对比输出漂移 advisory
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given draft ledger schemaVersion=2 的 anchor（criteria 数组+四问文本）；When flow done 工件校验；Then requirements FR 标题锚缺失锚内成功标准原文（子串语义——整段改写才算漂移，轻改写保留原文不误报）→ 输出「门柱漂移 advisory」不阻断；t
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-05
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-05
+  tests: test/thin-docs-v2.test.mjs「② 门柱漂移 advisory」 | test/thin-docs-v2.test.mjs「④ 结构破坏拒收面」 | test/thin-docs-v2.test.mjs「⑤ adopted 豁免」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-295 flow start 支持 autopilot 声明且新增 flow approve 子命令记录 spec 断点用户批准
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 轻量变更在 spec 断点（agent 填完 FR+design 后动工前）；When 用户运行 `sillyspec flow approve --change <名>`（或 flow start 声明 `--autopilot`）；Then flow-state 落 {spec_approved:true, spec_approved_at, spec_approved_by}（approve 留痕
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-06
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-06
+  tests: test/flow-draft.test.mjs「⑥ 轻量跑道 e2e（v2）：spec 断点机器门」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-296 未声明 autopilot 的变更在 flow done 因缺批准证据拒收
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given v2 起草变更（ledger schemaVersion=2）既无 spec_approved 也无 autopilot；When flow done artifacts 子步；Then 拒收（exit 非零）并指引两出路：用户跑 flow approve / 用户显式 --autopilot 重入声明；v1 在途变更（ledger 无 sche
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-07
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-07
+  tests: test/flow-draft.test.mjs「⑥」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-297 tasks.md 保留成功标准镜像任务锚并显式允许 agent 追加细化行
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 新起草的 tasks.md（v2 轨）；When 起草器生成任务面；Then 镜像行 = 成功标准逐条全文本 checkbox 行（不截断）+ 头注明示「镜像行勿删（任务锚）、细化行可追加（task-NN 编号顺延）」；agent 追加细
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-08
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-08
+  tests: test/flow-draft.test.mjs「⑦a」 | test/thin-docs-v2.test.mjs「③ tasks 镜像+细化行」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-298 存量指纹 ledger 在途变更走旧校验双轨不受影响
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 在途变更持有 v1 draft ledger（schemaVersion 缺省）与 MACHINE-DRAFT 指纹文档；When 升级后的 CLI 执行 redraftMissingArtifacts / verifyFlowDrafts / verifyRequirementBindin；Then redraft 按本变更 ledger 代别选 v1 指纹稿补件（不混代）；verifyFlowDrafts 走 verifyMarkers 三态（schema
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-09
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-09
+  tests: test/flow-draft.test.mjs「③④ v1 指纹三态拒收与 AGENT 槽放行」 | test/flow-draft.test.mjs「⑤ amend 留痕」 | test/flow-draft.test.mjs「⑧b 双轨：v1 在途 ledger 补件走指纹稿」 | test/flow-draft.test.mjs「⑩ v1 槽位门回归」
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active
+
+## FR-cli-entry-299 新增聚焦测试覆盖上述行为且既有测试回归绿
+变更：2026-10-04-thin-docs-v2
+状态：active
+摘要：默认场景
+场景正文：
+- 场景：默认场景 — Given 本变更交付的 src 改动（flow-draft/flow/flow-review/flow-parity）；When 全量测试套与 lint 跑；Then 聚焦面全绿：v2 起草形态/摘录保真/锚对比拒收与 advisory/断点门双 e2e（approve 拒收→批准放行、autopilot 豁免）/双轨回归（v
+全文：.sillyspec/changes/archive/2026-10-04-thin-docs-v2/requirements.md#FR-10
+最近确认：f7087a0942e83a9212ce1e0279f78ceec86747e4
+
+测试绑定：
+<!-- test-bindings: 机器字段（sillyspec tests 管理），勿手改 -->
+- row: 2026-10-04-thin-docs-v2:flow:FR-10
+  tests: test/check-syntax.mjs | test/flow-draft.test.mjs | test/run-tests.mjs | test/thin-docs-v2.test.mjs
+  reason: spec
+  state: candidate
+  discovery: machine
+  confirmed_by: null
+  confirmed_at: null
+  source_change: 2026-10-04-thin-docs-v2
+  status: active

@@ -1,0 +1,15 @@
+{"ts":1791126146809,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"brainstorm/plan 期已 20 分钟无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791126150127,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791126153708,"kind":"file-update","stage":"requirements","detail":"requirements.md 内容变更","provisional":true}
+{"ts":1791126193800,"kind":"file-update","stage":"design","detail":"design.md 内容变更","provisional":true}
+{"ts":1791126215274,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791126215274,"kind":"task-done","stage":"tasks","detail":"checked 0→4","provisional":true}
+{"ts":1791126219106,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791126219106,"kind":"task-done","stage":"tasks","detail":"checked 4→9","provisional":true}
+{"ts":1791127121572,"kind":"warning","stage":null,"rule":"stall","severity":"warning","detail":"execute 期已 15 分钟无提交无事件——停滞嫌疑（区分在想/死了，人判）","provisional":true}
+{"ts":1791128291673,"kind":"file-update","stage":"tasks","detail":"tasks.md 内容变更","provisional":true}
+{"ts":1791128291673,"kind":"task-done","stage":"tasks","detail":"checked 9→10","provisional":true}
+{"ts":1791128315132,"kind":"commit","stage":null,"detail":"f7087a09","provisional":true}
+{"ts":1791128393616,"kind":"gate-run","stage":"verify","detail":"门实测 failed（46.1s） · 20261004153952","provisional":true}
+{"ts":1791128540466,"kind":"gate-run","stage":"verify","detail":"门实测 passed（40.7s） · 20261004154217","provisional":true}
+{"ts":1791128896496,"kind":"file","stage":"proposal","detail":"decisions.md 出现","provisional":true}

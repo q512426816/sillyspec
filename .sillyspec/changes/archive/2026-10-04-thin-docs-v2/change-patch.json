@@ -1,0 +1,72 @@
+{
+  "change": "2026-10-04-thin-docs-v2",
+  "baseline": "316916d328e398010ec43411c73d78b302cc742c",
+  "head": "f7087a0942e83a9212ce1e0279f78ceec86747e4",
+  "files": [
+    ".sillyspec/changes/2026-10-04-thin-docs-v2/design.md",
+    ".sillyspec/changes/2026-10-04-thin-docs-v2/flow-state.yaml",
+    ".sillyspec/changes/2026-10-04-thin-docs-v2/proposal.md",
+    ".sillyspec/changes/2026-10-04-thin-docs-v2/requirements.md",
+    ".sillyspec/changes/2026-10-04-thin-docs-v2/tasks.md",
+    "src/flow-draft.js",
+    "src/flow-parity.js",
+    "src/flow-review.js",
+    "src/flow.js",
+    "src/route-hindsight.js",
+    "test/flow-agent-log-report.test.mjs",
+    "test/flow-clarity-probe.test.mjs",
+    "test/flow-done-carry-suspect-advisory.test.mjs",
+    "test/flow-draft.test.mjs",
+    "test/flow-parity.test.mjs",
+    "test/flow-protocol.test.mjs",
+    "test/flow-route.test.mjs",
+    "test/flow-tick-prototype.test.mjs",
+    "test/fr-agent-writable.test.mjs",
+    "test/fr-compound-split.test.mjs",
+    "test/gate-face-binding-parity.test.mjs",
+    "test/governance-autopilot.test.mjs",
+    "test/sentinel-wiring.test.mjs",
+    "test/task-tick.test.mjs",
+    "test/thin-docs-v2.test.mjs"
+  ],
+  "totals": {
+    "files": 25,
+    "additions": 1427,
+    "deletions": 417
+  },
+  "savedAt": "2026-10-04T15:43:00.762Z",
+  "note": "flow done 时点冻结（本变更可归属面：baseline..HEAD 提交面过滤 .sillyspec/ 非本变更目录但保留 .sillyspec/docs/ 交付文档 + 本变更目录工作树件；含未提交与 untracked，排除 flow-state.yaml 运行态）",
+  "modules": [
+    {
+      "id": "cli-entry",
+      "files": 4,
+      "doc": "docs/sillyspec/modules/cli-entry.md",
+      "docTouched": false,
+      "docMissing": false
+    },
+    {
+      "id": "sync",
+      "files": 1,
+      "doc": "docs/sillyspec/modules/sync.md",
+      "docTouched": false,
+      "docMissing": false
+    }
+  ],
+  "uncoveredDirs": [
+    {
+      "dir": "test",
+      "files": 15
+    }
+  ],
+  "moduleMaps": [
+    "docs/backend/modules/_module-map.yaml",
+    "docs/dashboard/modules/_module-map.yaml",
+    "docs/frontend/modules/_module-map.yaml",
+    "docs/multi-agent-platform/modules/_module-map.yaml",
+    "docs/SillyHub/modules/_module-map.yaml",
+    "docs/sillyhub-daemon/modules/_module-map.yaml",
+    "docs/sillyspec/modules/_module-map.yaml"
+  ],
+  "patchSha256": "8fba53f6218a8bfa5440cfd824aba2b4fd8621dbdd5eafeb98992de4e906226f",
+  "patchStatus": "ok"
+}
